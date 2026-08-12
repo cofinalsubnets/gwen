@@ -1202,6 +1202,28 @@ csdefs asserts under-applied to a truthy closure from that commit on — test_mo
 branch and unnoticed, because 5.0's session gated on byte-identity + test_slow and never re-ran
 the law gate. A law page owes a run per SIGNATURE change, not per behavior change.
 
+2026-08-12 · RUNG 5.1b i–iii — THE INTERVAL VERDICT AND THE COALESCE ENGINE (doc/moon-vreg.md
+carries the ladder). The checker instrument resolved every live set through the token map over
+love.c + the corpus on all four targets: **zero conflicts, zero entry-live mints, zero
+mint-mint collisions — the shadow discipline is interval-sound**, and all 37,976 flags were a
+mint over its own token (the vmap's mixed-name continuation, 5.1a's design). Three findings
+that price the rest of the arc: (1) every full-liveness-droppable mov (1,195 of 10,420) has a
+STRAIGHT-LINE span, so the assignment needs no fixpoint in the build tail (a real lvio there
+measured +92% compile — the +78% ghost, dodged by measurement this time); (2) coalescing
+SUBSUMES wnt-threading — 5,010 of the movs are conflict-refused because r0 is genuinely busy
+inside the value's range, where no destination-threading could deliver either, so the ~200-site
+refactor the plan feared dissolves; (3) the pinned 4,103 are the vmap class whole, and only
+step iv frees them. `rasg` then landed the ADOPTION direction (the call-return copy `coal` can
+never reach): grew 0 / shrank 12 insns on love.c, .text −30/−12/−8 B (x64/arm64/riscv),
+compile time in bake noise. Two refusals were bought with regressions and are load-bearing:
+**no argument-register targets** (the ride analysis prices ir1 as built; a mint moved onto an
+arrival drops rides — lvm_band grew a spush cell) and **no bridge direction** (a death-copy
+moved onto r0 robs stld's forwarding through the staging cell — the bridge mov is the HANDOFF
+keeping the value on a stable register, not dead weight). Gates: test, test_moon, test_fixpoint,
+test_ccarm64, test_ccriscv, test_slow. ⚠ iv inherits both refusals as dissolutions: retire the
+mechanisms and there is no ranker to disturb; give the vmap mints and the pinned class becomes
+ordinary intervals.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

@@ -67,6 +67,9 @@
    ; string table ((label . text)..). env: ((name off ty)..) frame locals.
    (nlab g pfx) (: k (peep g 'n 0) _ (pin g 'n (k + 1)) (intern (pfx + show k)))
    argregs '(r6 r5 r2 r1 r7 r8)                      ; the SysV integer/pointer arg registers
+   argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7 (early: rasg reads them
+   argregs-t32 '(r0 r1 r2 r3)                        ; AAPCS32: r0..r3  through argr -- a VALUE
+                                                    ; binding resolves in source order)
    (xmmreg i) (intern ("f" + show i))                ; the SysV double arg registers f0..f7
    (nthr l i) (? (i < 1) <l (nthr >l (i - 1)))
    (nthty l i) (? !(two? l) () (i < 1) <l (nthty >l (i - 1)))      ; the i-th list element or ()
@@ -108,6 +111,7 @@
    ; MACHINE. ⚠ what rp must never mediate is a same-mint id?: an honored hint answers the mint
    ; object itself, and the free list guarantees two live mints never share a physical.
    (rp g rz) (: p9 (peep (peep g 'vrt ()) rz ()) (? p9 p9 rz))
+   (vmint? g x) (? (peep (peep g 'vrt ()) x ()) 1 ())   ; is x a minted nom? (pre-vrfix only)
    ; ⚠ one MACHINE register? every hint-honor test rides this, never bare id?: an UNHELD hint
    ; returns to the pool at a splice body's psreset, a later ralloc re-mints its physical, and
    ; the value comes back wearing the new mint -- honored by ACCIDENT, and the accident is the
@@ -137,15 +141,207 @@
                     (member? r (peep g 'pool0 ()) &&   ; (a borrowed home, a vmap pin or a bind
                      !(member? r (peep g 'vpin ())) && ;  reg is read-only)
                      !(member? r (peep g 'rpin ())))))
+   ; -- the ASSIGNMENT (5.1b): move a mint onto its copy's other side, so the copy
+   ; substitutes to (mov X X) and the sweep drops it. LOCAL by construction: a move is
+   ; licensed only over a straight-line window (measured: every interval-licensed drop in
+   ; love.c already was one), and every rule is a mention-list scan -- no fixpoint rides the
+   ; build tail. the token stays the default, so a refused move changes nothing and a leaked
+   ; mint still dies LOUD at holo. two shapes: the BRIDGE (mov X %m) at %m's death -- the
+   ; classic coalesce, X takes the def -- and the ADOPTION (mov %m X) at %m's birth, the
+   ; call-return mov coal can never reach (its def is a call, rdsp bars it). the rules:
+   ;   window   -- no control/opaque form strictly inside the span
+   ;   tenancy  -- no bare-X mention inside the span but the copy itself, and no co-tenant
+   ;               mint on X whose mention span overlaps
+   ;   release  -- %m's token T still LOOKS occupied downstream (the vmap's mixed-name
+   ;               continuation reads T bare): a bare-T mention inside the span, or a
+   ;               bare-T read after it before a def, refuses -- and a branch/label before
+   ;               the answer refuses too, since control could route to one (a call/ret is
+   ;               the safe stop: T is caller-saved and never in lvret)
+   ;   adoption is %m's ONLY def, so X is never rewritten through it
+   ; most builds carry no candidate at all, and the mention walk is not free in the build
+   ; tail -- so one cheap pass for an adoption-shaped mov gates the whole engine
+   (rasg g fs)
+    (: cfl (rafile g)
+       (any9 l) (? !(two? l) ()
+                   (: f <l
+                      (? (two? f && id? <f 'mov && vmint? g <>f && !(vmint? g <>>f) &&
+                          member? <>>f cfl) 1
+                         (any9 >l))))
+       (? (any9 fs) (rasg2 g fs cfl) ()))
+   ; ⚠ no r4 on the arm family: a4ize retargets a base-slot r4 to fp BY POSITION, and a
+   ; moved mint can sit in a base slot (a pointer riding the pool) -- the a4rider? law.
+   ; ⚠ and no ARGUMENT register anywhere: the ride analysis prices ir1 as built (no
+   ; foreign def of an arrival), so a mint moved onto one drops rides and the regen
+   ; takes worse lanes -- lvm_band grew a spush cell the day this was learned.
+   (rafile g)
+    (filter (\ r9 !(member? r9 (csregs g) || id? r9 (fbase g) || id? r9 'sp ||
+                    member? r9 (argr g) ||
+                    (arm? g && id? r9 'r4)))
+            (lvgp g))
+   (rasg2 g fs cfile)
+    (: t (peep g 'vrt ())
+       mt (tablet 0)                                 ; nom -> ([i kind] ..) descending
+       st (tablet 0)                                 ; position lists (descending) + 'cd
+       (padd k i) (pin st k (i >< peep st k ()))
+       (madd nom i k) (pin mt nom ([i k] >< peep mt nom ()))
+       ; one walk: mentions per nom (rdsp), the control classes, the mov candidates. the
+       ; classes: 'ctl bars a WINDOW (any control or clobber inside a span refuses); for the
+       ; release scans 'jout leaves linearly (refuse), 'stop kills a caller-saved value
+       ; (clear), 'ret ends reading lvret. a label is windows-only: the leftover question is
+       ; linear, and fallthrough carries it straight past one.
+       (w1 l i)
+        (? !(two? l) ()
+           (: f <l
+              _ (? !(two? f) ()
+                   (: op <f
+                      (? (id? op 'label) (padd 'ctl i)
+                         (member? op '(jmp br jmpr sys)) (: _ (padd 'ctl i) (padd 'jout i))
+                         (member? op '(call callr ud2)) (: _ (padd 'ctl i) (padd 'stop i))
+                         (id? op 'ret) (: _ (padd 'ctl i) (padd 'ret i))
+                         (id? op 'align) ()
+                         (: rd9 (rdsp f)
+                            (? (id? rd9 'bar) (: _ (padd 'ctl i) (padd 'jout i))
+                               ; (no per-slot safety net: rdsp enumerates every register
+                               ; slot of every op a mint can ride -- the checker instrument
+                               ; verified the mention model against full liveness over
+                               ; love.c on all four targets, zero aliens)
+                               (: (gr l2) (? !(two? l2) () (: _ (madd <l2 i 'r) (gr >l2)))
+                                  (gd l2) (? !(two? l2) () (: _ (madd <l2 i 'd) (gd >l2)))
+                                  _ (gr <rd9)
+                                  _ (gd <>rd9)
+                                  _ (? (id? op 'mov) (pin st 'cd ([i <>f <>>f] >< peep st 'cd ())) ())
+                                  ()))))))
+              (w1 >l (i + 1))))
+       _ (w1 fs 0)
+       mtr (tablet 0)                                ; nom -> mentions ascending (memoized)
+       (mup nom) (: o (peep mtr nom 'none)
+                    (? (id? o 'none)
+                       (: v (rev (peep mt nom ())) _ (pin mtr nom v) v) o))
+       (fpast l hi) (: (go2 l2 b) (? !(two? l2) b    ; descending bares: the smallest one > hi
+                                     (<l2 > hi) (go2 >l2 <l2)
+                                     b)
+                       (go2 l ()))
+       (posin? l lo hi exc)                          ; an ascending mention in [lo..hi] off exc?
+        (? !(two? l) ()
+           (: p <(<l) (? (p > hi) ()
+                         ((p >= lo) && !(member? p exc)) 1
+                         (posin? >l lo hi exc))))
+       (ctlin? l lo hi) (? !(two? l) ()              ; descending bare list: any strictly inside?
+                           (<l >= hi) (ctlin? >l lo hi)
+                           (<l > lo) 1
+                           ())
+       (minp l) (? !(two? >l) <(<l) (minp >l))
+       ; the release scan: does the register's LEFTOVER matter past `from`? walk linearly:
+       ; the earliest event past `from` decides -- a jump-out refuses (the leftover flows
+       ; where we cannot look), a call clears (caller-saved dies there), a ret clears unless
+       ; the register is in lvret (an invisible read), a mention clears on a def and refuses
+       ; on a read, and no event at all is clear (a route ends AT a mention, so no mention
+       ; anywhere past means no reader anywhere).
+       (rel? nom from)
+        (: (go2 ml)
+            (: p (: (nx l2) (? !(two? l2) ()
+                               (<(<l2) > from) [<(<l2) <>(<l2)]
+                               (nx >l2))
+                    (nx ml))
+               jp (fpast (peep st 'jout ()) from)
+               sp (fpast (peep st 'stop ()) from)
+               rp (fpast (peep st 'ret ()) from)
+               big 1000000000
+               pv (? (two? p) <p big)
+               jv (? jp jp big)
+               sv (? sp sp big)
+               rv (? rp rp big)
+               (? ((pv = big) && (jv = big) && (sv = big) && (rv = big)) 1
+                  ((jv < pv) && (jv < sv) && (jv < rv)) ()
+                  ((sv < pv) && (sv < rv)) 1
+                  ((rv < pv)) !(member? nom (lvret g))
+                  (id? <>p 'd) 1
+                  ()))
+           (go2 (mup nom)))
+       ; co-tenants: every mint's mention span, listed under its CURRENT register
+       tox (tablet 0)
+       (seed ms) (? !(two? ms) ()
+                    (: m9 <ms l (peep mt m9 ())
+                       _ (? (two? l)
+                            (pin tox (peep t m9 ()) ([(minp l) <(<l)] >< peep tox (peep t m9 ()) ()))
+                            ())
+                       (seed >ms)))
+       _ (seed (keys t))
+       (cot? l lo hi)                                ; a co-tenant span overlaps [lo..hi]?
+        (? !(two? l) ()
+           (: s9 <l
+              (? ((<s9 <= hi) && (lo <= <>s9)) 1
+                 (cot? >l lo hi))))
+       mvd (tablet 0)                                ; a mint moves at most once
+       (att l)                                       ; candidates in form order, first wins
+        (? !(two? l) ()
+           (: c9 <l i <c9 D <>c9 S <>>c9
+              dm (vmint? g D) sm (vmint? g S)
+              m (? (dm && !sm) D (sm && !dm) S ())
+              _ (? !m ()
+                   (: X (? dm S D)
+                      cur (peep t m ())
+                      dl (peep mt m ())              ; descending; head is the last mention
+                      (? (id? cur X) ()              ; already identical: the sweep takes it
+                         (peep mvd m ()) ()
+                         !(member? X cfile) ()
+                         !(two? dl) ()
+                         (: ml (mup m)
+                            lo9 (? dm i (minp dl))
+                            hi9 (? dm <(<dl) i)
+                            ndf (: (nd l2 n9) (? !(two? l2) n9
+                                                 (nd >l2 (? (id? <>(<l2) 'd) (n9 + 1) n9)))
+                                  (nd ml 0))
+                            ; adoption: the copy is m's FIRST mention and a def. ⚠ the
+                            ; BRIDGE direction stays off: moving a death-copy onto r0
+                            ; robs stld's forwarding through the staging cell (the value
+                            ; leaves its stable register for the one the target load
+                            ; clobbers) -- lvm_band bought a whole spush pair back
+                            ok (dm && (<(<ml) = i) && id? <>(<ml) 'd)
+                            ; the pair's CLOSING copies are exceptions, not tenants -- the
+                            ; round trip r0 -> %m -> r0 coalesces whole this way. only the
+                            ; closing direction: an adoption's later (mov X %m) hands X the
+                            ; value either way, where a RE-adoption (mov %m X) resets m to
+                            ; X's old value and must stay a refusal.
+                            exc (: (gx l2 a2)
+                                    (? !(two? l2) a2
+                                       (: e9 <l2 p9 <e9
+                                          hit (? dm (id? <>e9 X && id? <>>e9 m && (p9 > i))
+                                                 (id? <>e9 m && id? <>>e9 X && (p9 < i)))
+                                          (gx >l2 (? hit (p9 >< a2) a2))))
+                                   (gx (peep st 'cd ()) [i]))
+                            (? !ok ()
+                               (ctlin? (peep st 'ctl ()) lo9 hi9) ()
+                               (posin? (mup X) lo9 hi9 exc) ()
+                               (cot? (peep tox X ()) lo9 hi9) ()
+                               (posin? (mup cur) lo9 hi9 ()) ()
+                               !(rel? cur hi9) ()
+                               ; a multi-def adoption rewrites X in place, so X's own
+                               ; leftover must be dead past the span too (the pair's
+                               ; closing copy at hi9 is a def of X and clears it)
+                               ((dm && (1 < ndf)) && !(rel? X (hi9 - 1))) ()
+                               (: _ (pin t m X)
+                                  _ (pin mvd m 1)
+                                  _ (pin tox X ([lo9 hi9] >< peep tox X ()))
+                                  1))))))
+              (att >l)))
+       _ (att (rev (peep st 'cd ())))
+       ())
    ; the shadow's other half: substitute every mint over the assembled prologue+body+epilogue,
    ; the INNERMOST build-tail link -- sibcall matches epilogue shapes and soften does register
-   ; arithmetic, so neither may meet a vreg. a build that never minted skips the walk.
+   ; arithmetic, so neither may meet a vreg. a build that never minted skips the walk; one
+   ; that did gets the assignment first, then the identity movs it minted sweep out.
    (vrfix g fs)
     (? !(peep g 'vrn 0) fs
-       (: t (peep g 'vrt ())
+       (: _ (rasg g fs)
+          t (peep g 'vrt ())
           (fix1 x) (? (two? x) (map fix1 x)
                       (: p9 (peep t x ()) (? p9 p9 x)))
-          (map fix1 fs)))
+          (sweep l) (? !(two? l) ()
+                       (: f <l
+                          (? (two? f && id? <f 'mov && id? <>f <>>f) (sweep >l)
+                             (f >< sweep >l))))
+          (sweep (map fix1 fs))))
    (callish? x) (? !(two? x) ()                                ; does the AST reach a call? (an inline splice still may)
                    (<x = 'call) 1
                    (callish? <x || callish? >x))
@@ -559,9 +755,7 @@
                                                     ; fcmp conds read gt/ge/lt/le ordered like VCMP, trap is ebreak,
                                                     ; overflow rides adds/subs + set vs, mul imm materializes)
    (wsize g) (? (t32? g) 4 8)                       ; the machine WORD in bytes (a pointer, a gp scalar, a stack cell)
-   argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7
-   argregs-t32 '(r0 r1 r2 r3)                        ; AAPCS32: r0..r3
-   (argr g) (? (a8? g) argregs-a64 (t32? g) argregs-t32 argregs)   ; riscv a0..a7 map onto the same abstract r0..r7
+   (argr g) (? (a8? g) argregs-a64 (t32? g) argregs-t32 argregs)   ; riscv a0..a7 map onto the same abstract r0..r7; rosters up top (rasg)
    (ngp g) (? (a8? g) 8 (t32? g) 4 6)
    (pkr g) (? (a64? g) 'r15 (t32? g) 'r12 (rv? g) 'r12 'r3)   ; the callr park (x64 rbx; arm64 x15; thumb2 r12/IP -- x3/r3 is the 4th ARG register; riscv t4, clear of args and its pool)
    (ip2 g) (? (a8? g) 'r1 'r2)                      ; an int-pair aggregate's SECOND register (rax:rdx / x0:x1 / a0:a1); thumb2 unused for M1 scalar
@@ -4622,16 +4816,20 @@
                                                     ; sit inside the range that takes one
    lvquiet '(label align ud2 br jmp)                ; no register effect at all
    (lvret g) (? (t32? g) '(r0 r1) '(r0 r1 f0 f1))   ; what an exit owes back, beside the cs file
+   ; ⚠ the blanket cases read the MACHINE, so a mint stays out of them: a call clobbers the
+   ; caller-saved physical file, and a mint live across one must SHOW as crossing -- the
+   ; assignment's whole question -- not be read+def'd into a false kill. inert post-vrfix.
    (lvtx g f u)                                     ; one form's (reads defs) | 'bar
     (? !(two? f) [() ()]
        (: op <f
           (? (member? op lvquiet) [() ()]
-             (member? op '(call callr sys)) (: c (filter (\ r9 !(member? r9 (csregs g))) u) [c c])
+             (member? op '(call callr sys))
+              (: c (filter (\ r9 !(member? r9 (csregs g) || vmint? g r9)) u) [c c])
              (op = 'ret) [((lvret g) + (csregs g)) ()]
              ; ⚠ v6m's exit is POP-PC, not ret (epi-t16) -- an exit the kit cannot see is an
              ; exit where nothing looks live, and coal folded straight through it
              ((op = 'pop) && (id? <>f 'pc)) [((lvret g) + (csregs g)) ()]
-             (op = 'jmpr) [u ()]
+             (op = 'jmpr) [(filter (\ r9 !(vmint? g r9)) u) ()]
              (: d (rdsp f) (? (id? d 'bar) 'bar [<d <>d])))))
    ; ⚠ SEEDED with the whole caller-saved file, and that is load-bearing rather than tidy: the
    ; universe is what a call clobbers, and a seat is chosen from lvgp -- so a register the fn
@@ -4650,8 +4848,9 @@
        (keys t))
    (lvun a b) (? !(two? b) a (lvun (? (member? <b a) a (<b >< a)) >b))     ; set union
    (lvsame a b) ((tally a = tally b) && !(two? (filter (\ r9 !(member? r9 b)) a)))
-   (lvout g fs)                                     ; index -> the registers live OUT of it | 'no
+   (lvio g fs)                                      ; -> [lin lot] (index -> live in/out of it) | 'no
     (: u (lvuniv g fs)
+       um (filter (\ r9 !(vmint? g r9)) u)          ; the machine share: what a blanket case reads
        (bary? l) (? !(two? l) ()
                     (: f <l (? (id? (lvtx g f u) 'bar) 1 (bary? >l))))
        (? (bary? fs) 'no
@@ -4680,7 +4879,7 @@
              (pass l ch)                            ; one backward sweep -> did any live-in grow?
               (? !(two? l) ch
                  (: e <l i <e f <>e
-                    d (? (gone? f) [u ()] (lvtx g f u))
+                    d (? (gone? f) [um ()] (lvtx g f u))
                     lo (foldl (\ a s (lvun a (peep lin s ()))) () (succ f i))
                     li (lvun <d (filter (\ r9 !(member? r9 <>d)) lo))
                     old (peep lin i ())
@@ -4690,7 +4889,9 @@
                     (pass >l (ch || ch2))))
              (fix u9) (? (pass rl ()) (fix ()) 0)
              _ (fix ())
-             lot)))
+             [lin lot])))
+   (lvout g fs)                                     ; index -> the registers live OUT of it | 'no
+    (: r (lvio g fs) (? (id? r 'no) 'no <>r))
 
    ; -- COALESCING: a copy whose source dies at the copy, and whose source was DEFINED by the
    ; form just before it, is not a copy at all -- it is a def that named the wrong register. The

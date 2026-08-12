@@ -253,6 +253,50 @@ just a longer interval, and the vmap has nothing left to do.
 **Retires:** the vmap and its array leg, homes/rides + `pp`, the cs pool, `pcs`/`pmin`/`nrac`,
 the regen dance and its deopt snapshots, `unhome`, most of `rgreset`.
 
+**The internal ladder (steps i–iii CLIMBED 2026-08-12; iv is the remaining rung).** The
+substrate was already in the tree: `lvout` is a per-form backward liveness fixpoint over the
+real CFG, and a mint is just a nom it tracks — so "intervals over the assembled list" is
+liveness read at the vrfix seam, not a new analysis.
+
+* **i — the checker (CLIMBED, instrument-only).** lvtx's blanket cases went mint-aware (a call
+  touches the caller-saved PHYSICAL file; a mint crossing one must SHOW as crossing), `lvio`
+  now answers live-in and live-out both, and an instrumented image resolved every live set
+  through the token map over love.c + the corpus on all four targets. **The verdict: zero
+  conflicts, zero entry-live mints, zero mint-mint token collisions — the shadow discipline is
+  interval-sound, and every one of the 37,976 flags was a mint over its OWN token**: the
+  vmap/rpin/hint machinery continuing a value's life under its bare physical name, by 5.1a's
+  design. The pricing prototype then measured the coalescing prize: 1,195 movs droppable under
+  full-liveness affinity (of 10,420 single-mint movs; 5,010 conflict-refused — the bridge is
+  load-bearing PHYSICS when r0 is busy inside the value's range, so coalescing subsumes
+  wnt-threading and the ~200-site refactor dissolves; 4,103 pinned by the mixed-name class),
+  **and every single droppable mov had a straight-line span** — no label, branch or call
+  inside. That measurement is what makes iii local.
+* **ii — DISSOLVED by i's verdict.** The mixed-name flows are not a fixable catalog; they are
+  the cross-statement mechanism itself. rassign instead refuses any move whose token is still
+  read downstream (the release scan below), and the class converts wholesale in iv.
+* **iii — rassign (CLIMBED as `rasg`, gen.l).** No fixpoint rides the build tail (a full lvio
+  there measured +92% compile — the +78% ghost): the engine is mention-list scans licensed by
+  the straight-line-span fact. ADOPTIONS only — `(mov %m X)` at %m's birth, the call-return
+  copy `coal` can never reach (its def is a call; rdsp bars it) — under: the window rule (no
+  control/clobber inside the span), tenancy (no bare-X mention but the pair's closing copies,
+  no co-tenant mint span on X), the token release scan (a bare-token read past the span before
+  a def/call refuses — the vmap continuation), and an X-release scan when %m redefines. Two
+  refusal classes were paid for in the build and are load-bearing: **no argument register as a
+  target** (the ride analysis prices ir1 as built — a mint moved onto an arrival drops rides
+  and the regen takes worse lanes), and **no bridge direction** (moving a death-copy onto r0
+  robs stld's forwarding through the staging cell — lvm_band bought back a whole spush pair).
+  Yield on love.c: grew 0 / shrank 12 insns, .text −30 B x64 / −12 arm64 / −8 riscv; compile
+  time inside bake noise after the candidate pre-filter. Thin by design — the engine is iv's,
+  and iv is where its freedom arrives. Gates: test, test_moon (laws + 133-program battery),
+  test_fixpoint, test_ccarm64, test_ccriscv, test_slow.
+* **iv — the long intervals (NOT BUILT).** The vmap pins mints instead of physicals, a
+  call-crossing interval takes a cs seat (priced: one save + per-exit reloads vs the reloads
+  it kills), params arrive pre-coloured to their arrival registers, and an interval that wins
+  no seat falls back to per-use reloads (write-through makes that free to construct). This is
+  the step that collects the retirement list and the single build — and it dissolves iii's two
+  big refusal classes at the root: when the mechanisms retire there is no ranker to disturb,
+  and when the vmap holds mints the pinned 4,103 become ordinary intervals.
+
 * **rung 5.4, spilling placed.** Today the slot is the source of truth and the register a
   write-through cache; invert it — the register is the truth, a spill is placed under real
   pressure. `repack` shrinks to packing actual spills; `stld`/`deadst` lose their write-through
