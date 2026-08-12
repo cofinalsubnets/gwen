@@ -36,10 +36,10 @@
    ; representation.
    (capp cl v) ((<>cl) v)
 
-   (vapp f a) (? (id? <f 'lam) (capp <>f a) `('na f a))
+   (vapp f a) (@ f (['lam cl] + _) (capp cl a) ['na f a])
 
-   (dop1 v) (? (id? <v 'chain) <>v `('np1 v))
-   (dop2 v) (? (id? <v 'chain) <>>v `('np2 v))
+   (dop1 v) (@ v (['chain a _] + _) a ['np1 v])
+   (dop2 v) (@ v (['chain _ b] + _) b ['np2 v])
 
    (donr P z s m)
    (? (charm? m) (: (go k acc) (? (k = m) acc (go (k + 1) (vapp (vapp s k) acc)))
@@ -47,13 +47,13 @@
       (id? <m 'succ) (vapp (vapp s <>m) (donr P z s <>m))
       `('nnr P z s m))
 
-   (dobr P x y v) (? (id? v 'true) x (id? v 'false) y `('nbr P x y v))
-   (dour P x v) (? (id? v 'tt) x `('nur P x v))
-   (docr P f g v) (? (id? <v 'i1) (vapp f <>v)
-                     (id? <v 'i2) (vapp g <>v)
-                     `('ncr P f g v))
+   (dobr P x y v) (@ v 'true x  'false y  ['nbr P x y v])
+   (dour P x v) (@ v 'tt x ['nur P x v])
+   (docr P f g v) (@ v (['i1 a] + _) (vapp f a)
+                        (['i2 b] + _) (vapp g b)
+                        ['ncr P f g v])
    (doer P v) `('ner P v)
-   (dojr P r ev) (? (id? <ev 'refl) r `('njr P r ev))
+   (dojr P r ev) (@ ev (['refl _] + _) r ['njr P r ev])
 
    (vof-sym en x)
    ; found-tests are STRUCTURAL (two?): a `?` on the (name value) pair NETS
