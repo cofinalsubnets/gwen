@@ -117,6 +117,32 @@ rung that retires it), the regen dance with its deopt snapshots, `unhome`, most 
 roster, and the pricing walks. That is rung 6 in `doc/moon-alloc.md`; it is listed there and
 should be collected HERE, rung by rung, so no rung ships without a mechanism coming out.
 
+## the register models — rung 5.0's input
+
+In gen.l's ABSTRACT names (holo maps them per target at encode). Verified against each backend's
+own table, not inferred from the ABI documents.
+
+| | x64 SysV | arm64 AAPCS64 | riscv64 LP64 | thumb2 AAPCS32 |
+|---|---|---|---|---|
+| args | r6 r5 r2 r1 r7 r8 | r0..r7 | r0..r7 | r0..r3 |
+| return | r0 r1 / f0 f1 | r0 r1 / f0 f1 | r0 r1 / f0 f1 | r0 r1 |
+| caller-saved (`lvgp`) | r0 r1 r2 r5 r6 r7 r8 r9 r10 | r0..r15 minus reserved | r8..r12 (t0-t4) + args | r0..r3, r12 |
+| **callee-saved (`csregs`)** | r3 r4 r11 r12 r13 r14 | **r19..r28 → x19..x28** | **r13 r14 r15 → s2 s3 s1; r19..r26 → s4..s11** | **r4..r11** |
+| frame base | r4 (rbp) | fp (x29) | fp (s0/x8) | fp (r11) |
+| park (`pkr`) | r3 | r15 | r12 | r12 |
+
+⚠ **the callee-saved column is the whole reason `(cspool g)` answers `()` off x64, and it is NOT
+a holo limitation** — `crew/holo/arm64.l:38` already maps `('r19 >< 19) … ('r24 >< 24)`, and
+`crew/holo/riscv.l:32` says in its own words that `r19..r26 -> s4..s11` is "the callee-saved bank
+(arm64's r19..r28 shape) **for a future glaze**". The registers were mapped in anticipation of
+this rung. gen.l simply never offered them, and the ledger has carried "arm64 x19+ cspool (empty
+there today)" as a residue since.
+
+⚠ **thumb2 is the one to check twice.** Its abstract file is the IDENTITY map onto hardware
+r0..r12, so its callee-saved set r4..r11 OVERLAPS the general pool rather than sitting above it,
+where x64/arm64/riscv keep theirs disjoint. A roster that assumes disjointness is a miscompile
+there. ⚠ and `fp` is r11 on thumb2, inside that range.
+
 ## the rungs
 
 Each ships alone under "pays somewhere, regresses nowhere", each names the mechanism it retires,
