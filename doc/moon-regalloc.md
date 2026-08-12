@@ -767,6 +767,35 @@ mooncc 8.40/8.42/8.50 s against the 8.8 s baseline, so the per-depth foldl costs
 while static walked 1.63→1.47. Every lever this tree has landed is a size lever, and the
 executed stream has not moved. The allocator leg is the first rung owed a corpus A/B as
 its headline, not a .text delta.
+2026-08-12 · RUNGS 1+2, THE LIVENESS KIT AND SLOT PROMOTION 4dd9bc41 (shipped together, rung 1
+having been measured at 736 B alone): rdsp was already the per-form transfer function and the
+missing half was the GRAPH -- per form, not per block, successors being the jmp/br target plus
+the fallthrough, so there are no blocks to build and the fixpoint is repack's own widen1 shape.
+An op neither rdsp nor the rosters name answers 'bar and REFUSES the fn. On it, promotion: an
+object whose every touch is a full-word ld/st at its own base, never addressed, written before
+read, takes a caller-saved register when one is free across its widened window -- free meaning
+live-out nowhere in the range and defined nowhere in it, which a call fails by construction. It
+rides repack's analysis whole (object map, backedge widening, bail discipline). love.o .text
+339,492→**333,177** (−6,315, −1.86%); frame movs 21,964→**19,478** (−2,486, −11.3%), their bytes
+120,007→106,892. ⚠ static insns move by TWENTY-NINE: the trade is a memory mov for a register mov
+at equal count, so this is the first rung in the arc whose case is DYNAMIC -- corpus insns
+**−0.73%**, cycles **−0.93%**, the first movement in that row across four fills. love.c 8.42→9.90 s
+(the fixpoint's cost, inside the 20 s budget). THREE BUGS, each now a comment: a cs save is
+`(st r4 slot r9)` and its restore `(ld r9 r4 slot)` -- the exact shape of a promotable temporary,
+and only the register it moves tells them apart (cskeep caught it at compile, its armor works); a
+sibcall is a jmp to no LOCAL label, and read as a plain transfer it has no successor, so liveness
+called the whole argument file dead at the one place it is most alive; and the universe was built
+from the traffic rdsp names while a SEAT is chosen from the caller-saved file, so a register the
+fn never otherwise mentions was absent from a call's clobber set and read as free ACROSS the call
+-- ai_sleep promoted into rdx over its one call and that answer survived cskeep, the laws and
+every gate but running. A liveness universe must cover the seats, not just the traffic. The kit
+carries its own unit laws (join, backedge, call, sibcall, refusal, universe), hand-laid rather
+than compiled. Two older laws re-anchored off the mechanism onto the invariant (`ldinto`,
+`copyof?`): ci's indirect call now stages through r0 with no frame at all rather than two spush
+cells, and wv's written param takes a register instead of a spill. Gates: test_slow (seven
+zz-fin lines), test_moon, test_fixpoint byte-identical, vmret,
+test_raw/drv/libc/kore/clay. ⚠ OWED: step 0 has not been re-run against this rung, and the
+page's own law says it must be.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

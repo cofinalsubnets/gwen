@@ -103,6 +103,15 @@ probe cost twenty minutes to find out.
   three fills. Every landed lever has been a size lever. ⚠ **re-run step 0 after any rung
   that moves `.text`** — the first re-base was stale within four hours, and the whole page
   was quoting it.
+* **rungs 1+2 CLIMBED 2026-08-12** (4dd9bc41, the regalloc ledger carries the payload) — shipped
+  as one rung, which is what the falsification below asked for. What LANDED is the
+  caller-saved interval class only: −2,486 frame movs, −6,315 B `.text`, and the arc's first
+  dynamic movement (corpus insns −0.73%, cycles −0.93%). What is still OPEN in rung 2 is the
+  **call-crossing class on cs seats** — a value live across a call cannot take a caller-saved
+  register by construction, and the cs seat with its save/restore pair priced like cssv is
+  where the rest of the 93 KB sits. The rung's own measurement says so: 2,928 objects passed
+  the shape test but only a fraction found a free caller-saved seat. ⚠ and step 0 is OWED
+  against this rung.
 * **rung 1, the liveness kit.** Not "build a liveness engine" — three approximations of
   liveness already sit in gen.l and do not talk to each other:
 
