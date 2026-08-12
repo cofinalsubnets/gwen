@@ -1117,6 +1117,48 @@ together are proof that neither address-taking nor multi-word objects are worth 
 ⚠ touches are IR frame touches, not emitted bytes, and a promoted object removes its touches
 while possibly adding movs — so read the shares as where the traffic IS, not as bytes banked.
 
+2026-08-12 · RUNG 5.0 — THE LIVENESS KIT LEARNS ITS MACHINE, and coalescing reaches three targets
+that had no allocator at all. `csregs`, `lvgp` and `lvret` stop being x64 constants and answer
+per target the way `(argr g)`, `(hregs g)`, `(nhome g)` and `(cspool g)` already did; `g` threads
+through `lvtx`, `lvuniv` and `csdefs`, seven call sites, every one already inside a function
+holding `g`. ⚠ each roster is holo's OWN TABLE read back rather than the ABI document, because a
+wrong one is a miscompile and not a missed optimization. **Ships byte-identical on x64** — .text,
+.data and .rodata all identical but for the 8 bytes of git hash the build stamps — which is the
+gate a foundation rung wants: not "the tests pass" but "the compiler did not change its mind".
+
+Then the bail goes. `coal` carried "x64 ONLY, and the roster is why"; the roster now answers, so
+the reason is gone. What replaces it is `lvout`'s own refusal — a form `rdsp` cannot read makes
+the whole answer `'no` and the fold declines that function — so enabling a target is safe before
+all of its ops are modelled.
+
+| love.c `.text` | with bail | without | |
+|---|---|---|---|
+| arm64 | 477,420 | **466,664** | **−10,756 (−2.25%)** |
+| riscv64 | 471,348 | **461,836** | **−9,512 (−2.02%)** |
+| x86-64 | — | — | byte-identical |
+
+Coalescing was −1.83% on x64 when it landed. These targets started from nothing, and this is the
+first allocator pass to reach them.
+
+⚠⚠ **AND IT MISCOMPILED THUMB1 FIRST — the finding worth more than the bytes.** `test_thumb1`
+went red (got 123, want 120) the moment `coal` ran there, and it was not a roster error:
+`epi-t16 '((lea sp fp 0) (pop r4) (pop fp) (pop pc))`. **V6M'S EXIT IS POP-PC, NOT RET.** `lvtx`'s
+exit rule keys on `ret`, so on v6m the function had no exit the kit could SEE — and an exit
+nothing can see is an exit where nothing is live, so the fold went straight through it and the
+caller's registers died. Three lines in `lvtx` fix it by making the kit truer (pop-pc reads what
+a ret reads) rather than by bailing, which would have shipped the same lie one target over.
+
+⚠ **the general form, which the vreg plan must carry: `lvout` silently UNDER-approximates on any
+target whose exit is not `(ret)` or `(jmpr)`.** That is a hole under every consumer of the
+liveness kit, not a thumb1 quirk — and it was invisible for as long as three targets were bailed
+out of the kit entirely. Enabling them is what found it. **A guard that hides a target also hides
+the bugs that target would have caught**, which is the argument for parametric-by-construction
+stated as a cost rather than a preference.
+
+Gates: test_slow (incl. test_virt, the riscv on-hart bake that hung the last time this pass met
+an unmodelled target), test_ccarm64 (129 programs cross-checked against aarch64 gcc), test_ccriscv
+(128 against riscv64 gcc), test_thumb2, test_thumb1, test_kernel_arm64 (4,086 tests), test_kore.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

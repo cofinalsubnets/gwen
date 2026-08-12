@@ -149,7 +149,8 @@ Each ships alone under "pays somewhere, regresses nowhere", each names the mecha
 and each is revertible. ⚠ this arc has refused two increments already — a rung that cannot state
 its mechanism is the refused shape wearing a new hat.
 
-* **rung 5.0, the target descriptor + pre-colouring — no behaviour change.** `lvgp`, `lvret` and
+* **rung 5.0 — CLIMBED 2026-08-12** (f06a93ba + 79af7e42; the regalloc ledger carries the payload).
+  The target descriptor + pre-colouring, no behaviour change on x64: `lvgp`, `lvret` and
   `csregs` stop being x64 constants and become `(x g)` answers like every other roster in the
   file; the liveness kit takes the machine it is on. Make every ABI-fixed register explicit as a
   constraint rather than a bare literal. **Ships byte-identical on x64 — that IS its gate** — and
