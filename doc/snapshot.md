@@ -80,6 +80,17 @@ compiles into the freestanding kernel.
 `love --bake PATH` writes a plain file instead. `love --wake PATH prog.l args..` boots from a
 named image.
 
+**`love-image` says which one woke.** The wake strips the path from `argv`, so a session that
+must key on the identity of the compiler it is running (mooncc's runtime cache) can ask no other
+way; the value is the path, or `"<baked>"` for the binary's own section. It is pinned **only
+when a session actually woke one** — absence is the answer for an egg boot, asked out of band
+with `(member? 'love-image (names ()))`.
+
+⚠ **Read it as `(ev 'love-image)`, never bare.** A baked consumer folds its bare globals at its
+own compile, and the bakes all egg-boot, so a straight read wires that session's answer — a `0` —
+into the image forever. The nom has to reach the lookup as *data*. This is the same law that
+keeps `cmdline` travelling to a baked app through the `-e` string rather than off the book.
+
 The glaze bake is the corpus eval, not a split assert-free lib: `--bake` evals the glaze
 (emit.l+auto.l) before dumping, and the asserts' transient natives die in `gen_major`. emit.l's
 self-test fixtures are local (they would otherwise leak as globals) and auto.l's `memo` cache is

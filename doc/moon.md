@@ -168,11 +168,13 @@ because one file is one generation, whole the moment it lands and countable when
 which to keep. It is holo's own `arbytes`/`arpull` at both ends, the same pair `kore ar` and a
 user-named `.a` on the command line use.
 
-⚠ **The compiler's identity is every `*.image` beside the love**, by name and stat, plus the
-love's own — the wake strips the image path from `cmdline`, so mooncc cannot know which one it
-woke, and taking them all makes a stranger's rebuild a miss rather than a stale hit. Hashing the
-compiler's `.l` sources instead looks tighter and is a hole: edit `gen.l`, link once before the
-image catches up, and the entry filed under the new sources holds the old image's codegen.
+⚠ **The compiler's identity is the image it woke**, by stat, plus the love's own — `love-image`
+(doc/snapshot.md), read as `(ev 'love-image)` because mooncc lives baked and a bare read folds.
+A love that does not say falls back to every `*.image` beside it, which is what this was before
+`love-image` existed: correct but far too eager, since re-baking a `kore.image` the link never
+reads invalidated the runtime and cost a full rebuild. Hashing the compiler's `.l` sources
+instead looks tighter and is a hole: edit `gen.l`, link once before the image catches up, and the
+entry filed under the new sources holds the old image's codegen.
 No identity — a love with no image file in reach — means no cache at all. Nor is anything else
 owed it: no HOME, an unwritable directory, a mangled entry (each is checked for its archive
 magic) all fall back to compiling, silently. Entries land by `rename`, so parallel links cannot

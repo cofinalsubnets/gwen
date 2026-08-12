@@ -1045,6 +1045,22 @@ int main(int argc, char const **argv) {
     g = ai_defv(g, "argv");
     g = ai_defv(g, "cmdline");
     if (ai_ok(g)) ai_core_of(g)->sp++;              // the book holds it now
+    // `love-image`: WHICH image this session woke, by path -- here because here is
+    // the only place it is knowable. The wake strips it from argv, so a consumer
+    // keyed on its own compiler's identity (mooncc's runtime cache) can ask no
+    // other way, and the alternative it settled for was every *.image beside the
+    // binary, which makes a stranger's rebuild a miss. "<baked>" is the binary's
+    // own .image section, whose identity is the binary's.
+    // ⚠ PINNED ONLY WHEN THERE IS ONE, and absence is the answer for the rest: a
+    // plain global is a pure global, and a baked consumer FOLDS its bare refs at
+    // its own compile, so a nom pinned in the egg-booting bake session would ride
+    // that session's value into the image forever. Unpinned, it cannot fold, and
+    // the read stays the lookup it has to be. (This is why `cmdline` reaches an
+    // app through the -e string rather than off the book.) Ask with
+    // (member? 'love-image (names ())) -- presence out of band, never (lit? ..).
+    if (image_load_path && ai_ok(g = ai_strof(g, image_load_path))) {
+      g = ai_defv(g, "love-image");
+      if (ai_ok(g)) ai_core_of(g)->sp++; }
     // take what fd 0 can lend -- a read run, or its blocking bit (above). ⚠ NEVER UNDER
     // --bake: the image would carry a heap port, and flags belong to the run, not the egg.
     if (!bake) g = stdin_take(g);

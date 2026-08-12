@@ -399,10 +399,25 @@
            "" (sort (readdir d)))
    ; ⚠ the exe's PATH rides beside its stat: two worktrees hold the same
    ; cwd-relative include paths, and only the seat tells their headers apart.
+   ; the image is the ONE this session woke, which main.c pins as `love-image`.
+   ; ⚠ THE NOM IS DATA HERE, NEVER A BARE REF: a baked consumer folds its bare
+   ; globals at its own compile, and mooncc lives baked -- read `love-image`
+   ; straight and the image gets the BAKE session's answer wired in forever (a 0,
+   ; the bake egg-boots). (ev 'love-image) is the lookup that survives, and the
+   ; presence ask beside it is the same law -- the nom is pinned only when a
+   ; session woke something. unpinned is an egg boot or a love that does not say,
+   ; and every *.image beside the binary is the honest reading for both.
+   ; "<baked>" is the binary's own section: no file to stat, and the exe stat
+   ; above already carries its identity.
    (mcid home)
     (: x (readlink "/proc/self/exe")
        d (? (string? x) (cdir x) ())
-       ims (? (string? d) ((mcims d) + (mcims (d + "../lib/love/"))) ())
+       w (? (member? 'love-image (names ())) `(1 (ev 'love-image)) ())
+       ims (? (two? w) (: im <>w
+                          (? !(string? im) ()
+                             (im = "<baked>") `("<baked>")
+                             `(`(im (stat im)))))
+              (? (string? d) ((mcims d) + (mcims (d + "../lib/love/"))) ()))
        src (? (two? ims) ((mctree (home + "include/")) + (mctree (home + "lib/"))) "")
        (? !(two? ims) ()
           (sha256 ((("moon-rt 1\n" + x) + ("\n" + show (stat x))) + (("\n" + show ims) + ("\n" + src))))))
