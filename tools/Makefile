@@ -1,7 +1,8 @@
-# The gates for the tools that ride beside the build rather than in it. Two shapes: a
+# The gates for the tools that ride beside the build rather than in it. Three shapes: a
 # GENERATED file diffed against a fresh regeneration (vmret against its frozen python
-# reference under py/, syntax.vim against crew/vi/hue.l), and a library's own law file
-# (cook, tele). Each checks only what is already built.
+# reference under py/), a generator's output weighed for shape rather than byte-compared
+# (hue, whose file the build owns), and a library's own law file (cook, tele). Each checks
+# only what is already built.
 #
 # `make test_tools` from the repo root, or `make -C tools` here. Needs python3 for the
 # vmret reference, and objdump/llvm-objdump for vmret itself.
@@ -38,24 +39,29 @@ test_vmret: | $(m)
 	done; rm -f $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l
 
 
-# vim/syntax.vim is GENERATED from crew/vi/hue.l's class table and the vocabulary the host
-# answers to, so this regenerates and diffs: a rename that moves (names ()), or a new row
-# in the class table, reddens here until the file is re-run. It diffs against THE HOST YOU
-# BUILT -- a differently-configured build answers a different (names ()) and will ask you
-# to regenerate, which is right: your syntax file should describe your love.
-# ⚠ LOVE_NO_IMAGE is CLEARED here. Under it the egg's mop never runs and the compiler's
-# internals (`book` among them) are still on the book; the syntax file describes the
-# SHIPPED language, so the generator gets the shipped boot.
+# the syntax file is BUILT (crew/build.mk) out of crew/vi/hue.l's class table and the
+# vocabulary the host answers to, so there is no checked-in second copy to drift from and
+# nothing left to diff -- a rename that moves (names ()) now just rebuilds it. What is
+# still worth asking is whether the generator ran to the END and meant what it emitted.
+# ⚠ THE EXIT CODE CANNOT ANSWER THAT. the cat rides STDIN, where a scare prints `;; a b`
+# and CARRIES ON at 0, so a condition can land in the middle of the file and still leave a
+# green make. The terminal b:current_syntax is the summary line here -- hue2vim.l writes
+# it last -- and the two shape checks below are what a diff used to say the long way.
 test_hue: | $(m)
 	@echo TEST hue2vim.l
-	@cd $(R) && cat crew/vi/config.l crew/vi/hue.l tools/hue2vim.l \
-	  | $(mwr) > out/host/.syntax.vim 2>&1
-	@cmp -s $(R)/out/host/.syntax.vim $(R)/vim/syntax.vim \
-	  || { echo "  FAIL vim/syntax.vim is stale -- regenerate:"; \
-	       echo "    cat crew/vi/config.l crew/vi/hue.l tools/hue2vim.l | out/host/love > vim/syntax.vim"; \
-	       diff $(R)/vim/syntax.vim $(R)/out/host/.syntax.vim; \
-	       rm -f $(R)/out/host/.syntax.vim; exit 1; }
-	@rm -f $(R)/out/host/.syntax.vim; echo "  ok   vim/syntax.vim"
+	@$(MAKE) --no-print-directory -C $(R) out/host$(hsuf)/syntax.vim
+	@f=$(R)/out/host$(hsuf)/syntax.vim; \
+	  grep -q '^let b:current_syntax = "love"$$' $$f \
+	    || { echo "  FAIL $$f: no terminal b:current_syntax -- the generator stopped short"; exit 1; }; \
+	  grep -n '^;;' $$f && { echo "  FAIL $$f: a scare printed into the syntax file"; exit 1; }; \
+	  grep -q '^syn keyword LoveBook ' $$f \
+	    || { echo "  FAIL $$f: no LoveBook keywords -- the vocabulary probe answered nothing"; exit 1; }; \
+	  for g in `grep -oE '^syn (keyword|match|region) Love[A-Za-z0-9]+' $$f \
+	              | awk '{print $$3}' | grep -v '^LoveList' | sort -u`; do \
+	    grep -q "^hi def link $$g " $$f \
+	      || { echo "  FAIL $$f: $$g is painted but never linked to a highlight group"; exit 1; }; \
+	  done; \
+	  echo "  ok   $$f"
 
 # cook's Makefile-importer suite: test/host/cook.l writes fixture Makefiles to a temp dir and
 # runs cook on them as a subprocess, asserting over the captured output. Paths are relative

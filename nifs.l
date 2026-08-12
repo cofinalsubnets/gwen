@@ -63,6 +63,7 @@
       (nif_cdr           "cup"           1 lvm_cup)
       (nif_sort          "sort"          1 lvm_sort)
       (nif_tally         "tally"         1 lvm_tally)
+      (nif_longp         "long?"         2 lvm_longp)
       (nif_snip          "snip"          3 lvm_snip)
       (nif_sound0        "sound0"        1 lvm_sound0)
       (nif_string        "string"        1 lvm_string)

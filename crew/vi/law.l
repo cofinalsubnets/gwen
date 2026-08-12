@@ -2,7 +2,7 @@
 ; below drives the PURE engine (vstep, one byte at a time) and reads the
 ; tablet back -- no tty, no port, no file. the cat (`make test_vi`):
 ;
-;   cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l \
+;   cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l lib/lint.l \
 ;       crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l | out/host/love
 ;
 ; (vgo lines keys) births a buffer, feeds the TEXT's bytes (27 spelled \e via
@@ -267,6 +267,15 @@
       (= (klass "1.5e-3") '(number))
       (= (klass "1e10") '(number)))
 
+; --- a stop no lane claims still ENDS the token and the walk still moves on.
+;     `,` is one: it reads as a symbol and terminates one ((sound "a,b") answers
+;     a, then ,b), so the lexer meets it bare -- and so is any control byte ----
+   _ (assert
+      (= (klass ",") ())                                     ; no lane claims it
+      (= (runs "," 0) ())
+      (= (runs "map,map" 0) '((book 0 3) (book 4 7)))         ; but it ends the token
+      (= (runs ("map" + (+ "" 1) + "map") 0) '((book 0 3) (book 4 7))))
+
 ; --- the carry: a string spans lines (papel.l's css is forty of them), so a
 ;     line's class depends on where the line BEFORE it ended -----------------
    _ (assert
@@ -326,6 +335,7 @@
    _ (assert
       (twin '("(map (+ 1) '(1 2 3)) ; hi" "(: x 2)") "")
       (twin '("(: css \"a" "b\" 1)") "j")
+      (twin '("(f a, b)") "")
       (twin '("(a really quite long line that clips at the view edge)") "$")
       (twin '("") ""))
 

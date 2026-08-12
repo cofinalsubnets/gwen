@@ -158,3 +158,24 @@ out/dist/love-$(xarch): $(xobjs) out/dist/.dist-cat.l
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@ (the $(xarch) twin, baked under $(xqemu))"
 .PHONY: dist_cross
 dist_cross: out/dist/love-$(xarch)
+
+# ==== the vim syntax for .l -- GENERATED, so there is no copy to keep up to date ====
+# tools/hue2vim.l reads crew/vi/hue.l's class table the other way round (one table, two
+# readers: the painter in vframe and vim) and asks THIS host for its vocabulary -- so the
+# file describes the love you built, which makes it an artifact like any other. It lives
+# under out/ for that reason: a checked-in copy can be stale, a built one cannot.
+# mk/install.mk installs it beside vim/'s two hand-written siblings.
+# ⚠ LOVE_NO_IMAGE is CLEARED. Under it the egg's mop never runs and the compiler's own
+# internals (`book` among them) are still on the book; the syntax file describes the
+# SHIPPED language, so the generator gets the shipped boot -- and hue2vim.l refuses
+# outright rather than freeze build state and call it the language.
+# ⚠ atomic, for $(lcat_h)'s reason: a bare `> $@` truncates first, so a broken generator
+# would leave a 0-byte syntax file make calls up to date.
+huefiles = crew/vi/config.l crew/vi/hue.l tools/hue2vim.l
+$(ho)/syntax.vim: $(huefiles) $(m)
+	@echo HUE	$@
+	@mkdir -p $(dir $@); t=$@.$$$$.tmp; \
+	  cat $(huefiles) | env -u LOVE_NO_IMAGE $(m) > $$t && test -s $$t && mv -f $$t $@ \
+	    || { rm -f $$t; echo "FAIL: $@ empty (hue2vim.l failed)"; exit 1; }
+.PHONY: syntax
+syntax: $(ho)/syntax.vim

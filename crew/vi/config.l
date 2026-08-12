@@ -3,7 +3,7 @@
 ;
 ; the theme is keyed by VIM HIGHLIGHT GROUP, not by syntax class. crew/vi/hue.l
 ; says "a comment is a Comment"; this file says "in molokayo a Comment is 59 /
-; #75715E". that split is what lets the generated vim/syntax.vim emit plain
+; #75715E". that split is what lets the generated vim syntax file emit plain
 ; `hi def link` lines -- a syntax file that hardcoded colours would fight the
 ; reader's own colorscheme -- while pulchritude, which has no colorscheme, still
 ; gets the same molokayo out of the same table. swap the numbers below for

@@ -243,7 +243,8 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ;   opfix -- the operator factor pass: sigil surface -> core source, run first.
 ;   boxfix -- the letrec* capture-by-location rewrite: a forward reference indirects through a
 ;     cell keyed by the binding site's nom; a pre-fill read is the missing condition.
-;   wev -- the pre-pass: expand macros, apply boxfix, fold pure globals, mark apply strategy.
+;   feel -- ev.l's source pre-pass, the one entry here NOT from the prel: expand macros, apply
+;     boxfix, fold pure globals, mark apply strategy. c0's twin is ana_2's macro lane.
 ;   maps -- #(..)/map expand to nested pins.
 ; the *egg* (love/egg.l): warm the egg and the evaluator sits on it twice -- compile the compiler
 ; with the C bootstrap, recompile the corpus through itself -- then the hatchling installs as `ev`
@@ -265,7 +266,7 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; layer (prel ev bao cli egg) drips into every frontend: host, freestanding kernel
 ; (x86_64/aarch64), wasm. prel is the language and stays minimal -- a library is its own love/*.l;
 ; mk/lib.mk lcats it to out/lib/<name>.h automatically, and every post-egg layer is a module
-; (coin, rng, q, kanren, overlay, uu, bao, holo, glaze, rune ..): the frontend registers the lcat'd
+; (coin, rng, q, kanren, overlay, pat, uu, bao, holo, glaze, rune ..): the frontend registers the lcat'd
 ; constant (a row in the frontend's ai_libs table) and its boot text says (use 'x); the boot rebinds the one-name surfaces there
 ; too, ⚠ always under the module'S own name ((: uu (from 'uu)), (: overlay (from 'overlay))) -- an
 ; accessor bound under some other name means one word for both a book and whatever else wears it,

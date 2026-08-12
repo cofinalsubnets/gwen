@@ -1751,6 +1751,9 @@ static char const ktests[] =
 // in the boot text below -- one layer per load, leave registers, the splice serves
 // the bare names (the console editor reads bao's). .rodata: a source the kernel
 // never loads costs a row and not one word of its bounded heap.
+static char const src_pat[] =
+#include "pat.h"
+ ;
 static char const src_uu[] =
 #include "uu.h"
 ;
@@ -1794,7 +1797,7 @@ static char const src_kanren[] =
 ;
 #endif
 static struct ai_lib const libs[] = {
-  {"uu", src_uu}, {"bao", src_bao},
+  {"pat", src_pat}, {"uu", src_uu}, {"bao", src_bao},
 #ifdef K_TEST
   {"coin", src_coin}, {"rng", src_rng}, {"q", src_q}, {"kanren", src_kanren},
 #else
@@ -1868,6 +1871,7 @@ void kmain(void) {
 #include "post.h"
  );
   r = ai_evals_(r,
+ "(use 'pat)"   // ⚠ pat BEFORE uu: uu.l is written in @, and a macro reaches a reader
  "(use 'uu) (: uu (from 'uu))"                         // the uu kernel: the corpus's uu files drive it through the
  "(use 'bao)"                                          //   one-name `uu` surface on this target too
  // the environment (rung 2): a TABLET, the pairs on slot 0, closures over it

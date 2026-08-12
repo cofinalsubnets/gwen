@@ -228,13 +228,15 @@
 ; read (list list a b), a wrong VALUE with nothing to raise. ⚠ ' and \ are not
 ; constructors -- they take the next datum whatever it is, so '[a b] is the form
 ; (list a b) quoted, and a sigil over a SIGIL still stacks (#@(1 2) is unchanged).
-; ⚠ ~ alone reads its opener GLUED (~ (1 2) is conj, as before); the rest do not.
+; ⚠ ~ and @ read GLUE, and only those two: spaced, ~ is conj and @ is the plain
+; symbol -- the head of the match form, which is why a tray never wears a space.
 (assert
  ((rdr "@(1 2 3)") = (rdr "@[1 2 3]")) ((rdr "#(a b)") = (rdr "#[a b]"))
  ((rdr "`(a b)") = (rdr "`[a b]"))     ((rdr "~(1 2)") = (rdr "~[1 2]"))
  ((rdr "@()") = (rdr "@[]"))           ((rdr "#()") = (rdr "#{}"))
- ((rdr "@(a b)") = (rdr "@{a b}"))     ((rdr "@(1 2)") = (rdr "@ [1 2]"))
+ ((rdr "@(a b)") = (rdr "@{a b}"))     ((rdr "@(1 2)") = (rdr "@[1 2]"))
  ('(twin 1 2) = (rdr "~[1 2]")) ('(conj (list 1 2)) = (rdr "~ [1 2]"))  ; ~ still reads glue
+ ('@ = (rdr "@ [1 2]")) ('(@ x (list _a b) b) = (rdr "(@ x [_a b] b)"))  ; ...and so does @
  ('(\ (list a b)) = (rdr "'[a b]"))                   ; ' is not a constructor: it quotes the FORM
  ('(hash tuple 1 2) = (rdr "#@(1 2)"))                ; sigil over sigil still stacks
  ('torn = (rdr "@[")))

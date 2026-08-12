@@ -661,6 +661,8 @@ static char const cli[] =
 #include "rng0.h"
  , src0_kanren[] =
 #include "kanren0.h"
+ , src0_pat[] =
+#include "pat0.h"
  , src0_uu[] =
 #include "uu0.h"
  , src0_coin[] =
@@ -686,7 +688,7 @@ static char const cli[] =
 // self-test's. overlay and peg are listed, never used here: each consumer opens with
 // its own (use ..), the boot owes nothing. an unlisted-for entry costs a row, nothing more.
 static struct ai_lib const libs0[] = {
-  {"bao", src0_bao}, {"rng", src0_rng}, {"kanren", src0_kanren}, {"uu", src0_uu},
+  {"bao", src0_bao}, {"rng", src0_rng}, {"kanren", src0_kanren}, {"pat", src0_pat}, {"uu", src0_uu},
   {"coin", src0_coin}, {"q", src0_q}, {"overlay", src0_overlay}, {"peg", src0_peg},
   {"holo", src0_holo},                                 // which the mooncc cat's cpp/gen read (the self-host build lane)
   {NULL, NULL} };
@@ -723,7 +725,9 @@ static struct ai *boot(struct ai *g, bool argp) {
     "(use 'holo)");                                    // the assembler service: load + register..
   g = ai_unsplice_(g);                                 //   ..and the C unsplice keeps it non-ambient, like the host
   g = ai_evals_(g,
-    "(use 'uu) (: uu (from 'uu))"                      // the library layers, all by name in the old eval order (uu's
+    "(use 'pat)"                                       // ⚠ pat FIRST: uu.l is written in @, and a macro reaches a
+    "(use 'uu) (: uu (from 'uu))"                      //   reader only once its layer is spliced. then the library
+                                                       //   layers, all by name in the old eval order (uu's
     "(use 'coin)"                                      //   one-name surface rebinds like the host); every layer, splice
     "(use 'rng)"                                       //   and registry entry persists across the egg warm below, so one
     "(use 'q)"                                         //   load serves both corpus passes
@@ -841,6 +845,9 @@ static char const src_peg[] =
 static char const src_overlay[] =
 #include "overlay.h"
  ;
+static char const src_pat[] =
+#include "pat.h"
+ ;
 static char const src_uu[] =
 #include "uu.h"
  ;
@@ -884,7 +891,7 @@ static char const src_glaze[] =
 // heap at all -- overlay and peg are here for consumers that open with their own (use ..).
 static struct ai_lib const libs[] = {
   {"coin", src_coin}, {"rng", src_rng}, {"q", src_q}, {"kanren", src_kanren},
-  {"overlay", src_overlay}, {"peg", src_peg}, {"uu", src_uu}, {"bao", src_bao},
+  {"overlay", src_overlay}, {"peg", src_peg}, {"pat", src_pat}, {"uu", src_uu}, {"bao", src_bao},
   {"holo", src_holo},
 #ifdef AI_GLAZED
   {"glaze", src_glaze},
@@ -915,7 +922,9 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
     "(use 'overlay)"                                     // overlay for the ev seam, whose HOOK lands in ORTH -- a module
     "(: overlay (from 'overlay)"                         //   layer cannot write it, the boot can. peg is registered above
     "   ev ((from 'overlay 'ov-hook) ev))"               //   and used by its consumers, not here.
-    "(use 'uu)"                                          // uu's NbE kernel: (: uu (from 'uu)) keeps the one-name surface --
+    "(use 'pat)"                                         // ⚠ pat BEFORE uu: uu.l is written in @, and a macro reaches
+    "(use 'uu)"                                          //   a reader only once its layer is spliced
+                                                         // uu's NbE kernel: (: uu (from 'uu)) keeps the one-name surface --
     "(: uu (from 'uu))"                                  //   the corpus + an overlay reach (uu 'vof) through it
     "(use 'holo)"                                        // the crew/holo/ assembler, a post-egg language SERVICE: load + register,
   );                                                     //   then the C unsplice below keeps it NON-AMBIENT -- (use 'holo)
