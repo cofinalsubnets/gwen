@@ -228,6 +228,8 @@ Learned by measuring, several times each; check a new lever against these before
    COLD-PATH wraps, dynamically right for the early-out profile; the static
    8 KB they represent is already-paid-for at runtime, and beating them needs
    a frequency signal (PGO), not a better static model.
+   SHRINK-WRAP RETIRED 2026-08-12 (rung 3's first half, the ledger): it was worth
+   48 bytes and one grant, against 113 lines and a per-form cost in `sibs`.
 3. **Compare staging want-hints** — HELD for the allocator. Landed for the call-free
    side 2026-08-10: cbranch's left aims at its park before evaluating, so member loads
    deliver and the bridge mov dies. What remains is the callish side (the sp cell across
@@ -236,8 +238,9 @@ Learned by measuring, several times each; check a new lever against these before
    Do not build it separately.
 4. Recorded small residues: leaf sp-fn stldw coverage; a non-positional fallback home
    (mag_cmp's g1 loses its seat and stays slotted); cs-borrow park elision (params on
-   cs regs landed pmin-gated 2026-08-11, the ledger; the fleet's share waits on
-   shrink-wrap); arm64 x19+ cspool (empty there today); register-binding splice
+   cs regs landed pmin-gated 2026-08-11, the ledger; the fleet's share went with
+   shrink-wrap, retired 2026-08-12 — it needs a frequency signal, not more machinery);
+   arm64 x19+ cspool (empty there today); register-binding splice
    depth (map_probe's &-decline); d128 params ("a wide arg: not carried"); variable
    index±k rebase; narrow cmp fusion (632 sites, needs cc-aware licensing); the
    3-address dance emission (encoder territory — the reverted lea-fusion physics, only
@@ -973,6 +976,146 @@ accumulator's own register in `(add rX rX rY)`, and the seat operand — which i
 are actually about — is unmoved in every one. `dv` re-anchored off "the park reads through" onto
 `(div r1 r6 r5)`, since there is no park left at all. Gates: test_slow, test_moon, moon-stage (20
 sigs), test_fixpoint byte-identical, vmret (307 lvm_* ret-free), test_raw/drv/libc/kore/clay.
+
+2026-08-12 · SHRINK-WRAP RETIRED (rung 3, the first half) — the arc's heaviest mechanism, priced
+by ablation and then deleted. Turning the `swcs` guard off costs **48 bytes** of love.o `.text`
+and 12 static insns, and nothing whatever on the corpus. Forty-eight. The plan page had already
+written the reason down without pricing it — shrink-wrap "landed one grant in love.c" — and one
+grant is what 48 bytes looks like from the emission side.
+
+Gone with it: `pminp` (pmin's call-carrying twin, so the wrap could amortize on the cheapest path
+that actually calls), `cgitemx` (a `cgitems` that also answers its final env, which existed solely
+so region 1's decls stayed visible to region 2), `swre` (the env rewrite that re-seats the params
+across the split), the statement-level region split inside `build`, the wrap label with its
+save/reload pair, four `g` slots (`swcs` `swat` `swlab` `epi0`), and — the part that reached
+furthest — the DUAL-EPILOGUE flavor of `sibs`: two parameters (`sj`, the split; `sw`, the
+crossing flag) threaded through all six recursive calls, with `ejc`/`elc`/`sw2` recomputed at
+every form of every function on every target, so that a tail call BEFORE the wrap could take the
+plain epilogue and one after it the long one. That cost was paid per-form, program-wide, for one
+function's benefit. **gen.l 8,125 → 8,012 (−113)** — the arc's first negative-LOC milestone.
+⚠ the deletion is byte-identical to the guard-off ablation (324,920 B / 74,402 insns both ways),
+which is the check that says the mechanism came out whole and nothing else came with it.
+
+⚠ AND THE OTHER HALF IS REFUSED, on its own measurement. `pcs` — the pmin-gated cs-seat grant —
+ablates to **+1,004 B** of `.text` (+0.31%) and **zero** corpus instructions: 39.466 G with it and
+39.466 G without, identical to the digit, against a run-to-run spread of ±5 M that bounds what
+this instrument can even see. So promotion does NOT do generically what this grant does
+specially, which was rung 3's entire premise. Deleting it regresses the size axis and pays on no
+other; under "pays somewhere, regresses nowhere" that is a refusal, and it holds until promotion
+covers those bytes.
+
+**The two halves differ by 42× per line and that is the whole finding.** `swcs`: 113 lines for 48
+bytes, 0.42 B/line. `pcs`: ~57 lines (`pmin`, `nrac`, the grant block, the `pc0` threading;
+`pslots`/`nreads` stay, `pp` reads them) for 1,004 bytes, 17.6 B/line. A rung named for a
+mechanism CLASS hid that spread — the two grants were listed in one breath on the plan page and
+priced in one breath, and they are not one thing. Price the members, not the class.
+
+⚠ what is NOT settled is the clock. Four interleaved runs put `pcs`-off between 0.4% and 2.0%
+FASTER on cycles, medians and minima agreeing in direction every time (base vs both −1.24%/−1.52%;
+base vs pcs −0.96%/−1.98%; swcs-deleted vs +pcs-off, 15 rounds, −1.26%/−0.43%). But the
+instruction count is flat, so that is a layout reading, not a mechanism reading — and the box
+carried two other sessions' gates throughout, with the baseline itself drifting 14.874 → 15.219 G
+across three runs. Interleaving defends against drift within a run and nothing defends against a
+1% claim built on flat insns. It is recorded, it is not the basis of any decision here, and it is
+the one thing that could still overturn the refusal on a quiet machine.
+
+Laws: none added — `law.l` and `stage.l` type `sibcall`, the outer two-argument entry, whose
+signature is unchanged; `sibs` is internal, so the musttail contract laws (a marked ret-position
+call leaves as a jump, `musttail-not-a-tail`, the whole-fn `musttail-escape` decline) hold as
+written and are exactly the laws that cover the deletion. Gates: test_slow, test_moon (its
+"guaranteed sibcalls" leg is the contract this touches), test_gen, test_clay, test_drv, vmret
+(307 lvm_* ret-free), `make test` host + love0 ×2.
+
+2026-08-12 · WHY PROMOTION CANNOT SUBSUME `pcs`, and the arc dependency it inverts (the probe
+behind the refusal above). Two questions: how big is the class, and does promotion decline those
+slots or never see them.
+
+The class is **15 functions of ~640**, net +169 static insns with the grant off, and the benefit
+is **two functions**: `ai_ini_0` 583→744 (+161) and `yield_sw_wait` 731→795 (+64), against
+`gen_please` −40. Fifty-seven lines of `pmin`, `nrac` and the grant block serve two functions in
+love.c. With the grant off the params are not re-seated anywhere — `ai_ini_0`'s frame traffic goes
+**75 → 171 movs**, straight back to memory.
+
+**It is structural, and `gen.l` says so in its own comment.** Promotion's seat roster is `lvgp`
+(4567): "the x64 CALLER-saved gp file — a seat here needs no save/restore pair, and **no call may
+sit inside the range that takes one**." `pseat` draws from nothing else. `lvtx` (4576) has a call
+read AND define everything outside `csregs`, so every candidate register is defined inside any
+interval that spans a call and `pfree?` refuses it. Promotion is caller-saved-only BY
+CONSTRUCTION. `pcs` seats params in the CALLEE-saved file for exactly the reason promotion cannot:
+so they survive calls. Disjoint register files, disjoint interval classes, no overlap to find.
+
+⚠ and `pmin` is the tell that should have been read years earlier: it gates the grant on EVERY
+PATH CONTAINING A CALL. That filter selects precisely the class promotion is structurally unable
+to serve. A mechanism whose entry condition is the other mechanism's exclusion condition was never
+going to be subsumed by it.
+
+⚠⚠ **THE ARC DEPENDENCY IS INVERTED.** doc/moon-alloc.md bound "rung 5 only after rung 3", and
+rung 5's own text bound it to "after rung 3 proves the engine on the easier input". Param slots
+crossing calls were never the easier input — they are the case needing the one capability rung 5
+adds, since rung 5 is where linear scan assigns "the pool + **cs file**". `pcs` can only be
+retired by the rung that can hand out callee-saved seats. It is not rung 3's second half; it is
+rung 5's, and no work at rung 3 collects it. The refusal above stands for a better reason than the
+one it was committed with.
+
+Method note worth keeping: this cost one per-symbol diff of two objects already built for the
+ablation, plus two greps. No instrumented build, no probe in the tree. **Diff the artifacts you
+already have before you instrument** — the ablation binaries answer "which functions and how much"
+for free, and the source answered "why" once the question was narrow enough to ask.
+
+2026-08-12 · WHERE THE FRAME BUCKET IS STUCK — the promotion-rejection census, rung 5's pricing.
+The bucket is 79,538 B and 76.6% of the codegen gap, and three copy-folding rungs left it dead
+flat. Rather than guess which lever reaches it, a temporary probe in `repack` classified every
+frame object in love.c by why it did NOT take a register — 5,216 objects, 14,768 touches:
+
+| reason | objs | touches | share |
+|---|---|---|---|
+| **noseat-call** — a candidate, refused because a CALL sits in its range | **1,696** | **6,573** | **44.5%** |
+| shape — some touch is not a full-word ld/st at the object's own base | 1,420 | 3,711 | 25.1% |
+| **prom** — promoted today | 1,026 | 2,418 | 16.4% |
+| noseat-plain — a candidate, no call in range, still no free seat | 767 | 2,012 | 13.6% |
+| wide (size≠8) / esc (a lea took its address) | 307 | 54 | 0.4% |
+
+**The cs-file class is the single largest bucket and it is 2.7× what promotion currently
+captures.** `noseat-call` is exact rather than inferred: a call defines the whole caller-saved
+file, so a call anywhere in `[lo,hi]` GUARANTEES `pfree?` refuses every seat — those 1,696
+objects are refused BY the call and by nothing else.
+
+⚠⚠ **AND THAT BUCKET IS A TRAP — the class is ALREADY REFUSED** (the coalescing entry above
+carries the verdict), which this census cannot see and which reading it as a work-list will
+rediscover. It was rediscovered: the pass was built a second time on 2026-08-12 off this very
+table, and reproduced the original verdict to the sign. Threshold sweep on `touches >
+M·(1+exits)` — M=2 **+715 insns**, M=3 **+269 insns for −994 B**, M=5 **+102 for −542 B**. That
+IS the refusal's own sentence in numbers: "no pricing gate repairs that; a gate tight enough to
+be safe admits nothing." Reverted, again.
+
+**Why the census over-reads, stated so the third attempt does not happen.** It counts where the
+traffic IS; it cannot count what a lever BANKS. A cs seat rewrites a frame touch into a reg-reg
+mov ONE FOR ONE and adds a save plus a reload per exit, because **a cs seat can never be the
+store's source — sources are caller-saved**. The lvgp class pays precisely because its seat CAN
+be the source (`pseat` tries `pf`, the first store's own register, first) and the store then
+self-movs and drops. Same bucket, opposite economics, and the touch count is blind to the
+difference.
+
+⚠ **But the refusal is a property of RETROFITTING, not of cs seats** — and that is the new thing
+this repeat bought, because it says which rung dissolves it. `repack` runs post-build, where the
+store's source is ALREADY an assigned caller-saved register, so a cs seat can only ever be a copy
+of it. Under rung 5's vreg emission the store's source is a VREG the allocator assigns — it can
+be the cs register itself, and no mov exists to drop. **So the call-crossing class is not
+reachable by any patch to `repack`, and is reachable by rung 5 proper.** That is the argument for
+doing rung 5 as the emission rewrite it was specified as, rather than as an increment on the
+current allocator: the increment is refused twice over, the rewrite is what changes the physics.
+(Also confirmed the third time: `unframe`'s `sv3` reads form 0 of the body BY POSITION, so a save
+spliced AT index 4 displaces `(st r4 -8 r3)` and kills the caller's rbx. Splicing after it is
+what kept this build alive where the first attempt segfaulted in `main`.)
+
+The other three buckets each name a different rung. `shape` (25.1%) is a touch-shape question —
+sub-word and mixed-width access — not an allocation question, and no register file reaches it.
+`noseat-plain` (13.6%) is honest register pressure with no call involved: that one is greedy
+allocation losing to a real linear scan, which is rung 5's OTHER half. `wide`/`esc` at 0.4%
+together are proof that neither address-taking nor multi-word objects are worth a rung.
+
+⚠ touches are IR frame touches, not emitted bytes, and a promoted object removes its touches
+while possibly adding movs — so read the shares as where the traffic IS, not as bytes banked.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
