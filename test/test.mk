@@ -148,7 +148,7 @@ test_hostnif: host out/host$(hsuf)/lush
 # Runnable design companions in doc/ -- pure-love models that pin the shape a C design
 # takes (doc/stream.l ~ doc/io.md part II). Zero-dep, but they leak helper names into the
 # one global scope, so they run standalone. Same contract: exit 0 AND a "<name>: ok".
-doc_tests = doc/stream.l doc/proto/dest.l
+doc_tests = doc/stream.l doc/proto/dest.l doc/proto/spl.l
 test_doc: host
 	@for s in $(doc_tests); do echo "TEST $$s"; \
 	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$(mw)" ": ok" \
@@ -783,6 +783,33 @@ test_uukind: host
 	@cmp -s out/host/.uukind.l.tmp test/uukind.l \
 	  || { echo "FAIL: test/uukind.l is stale (doc/proto/kinds.l moved?) -- run: make uukind"; exit 1; }
 	@rm -f out/host/.uukind.l.tmp
+# test/uuhomgen.l is a COMMITTED GENERATED artifact: doc/proto/dest.l's two code generators
+# run on its law sites, the emissions lifted to uu terms (tools/dest2uu.l), so test/uuhomlaw.l
+# proves the destination-die laws OF THE EMISSIONS at corpus time (doc/hom.md; substrate
+# test/uuhom.l). `make uuhomgen` refreshes it; test_uuhomgen regenerates and diffs.
+uuhomgen: host
+	@echo LOVE	test/uuhomgen.l "(tools/dest2uu.l on $m)"
+	@$(mw) tools/dest2uu.l > test/uuhomgen.l
+test_uuhomgen: host
+	@echo TEST test/uuhomgen.l "(regenerate + diff)"
+	@$(mw) tools/dest2uu.l > out/host/.uuhomgen.l.tmp
+	@cmp -s out/host/.uuhomgen.l.tmp test/uuhomgen.l \
+	  || { echo "FAIL: test/uuhomgen.l is stale (doc/proto/dest.l moved?) -- run: make uuhomgen"; exit 1; }
+	@rm -f out/host/.uuhomgen.l.tmp
+# test/uusplgen.l is a COMMITTED GENERATED artifact: doc/proto/spl.l's three call-site
+# compilers (call, binding splice, substitution splice) run on its samples, the threads
+# lifted to uu terms (tools/spl2uu.l), so test/uuspllaw.l proves the SPLICE LICENSE of
+# the emissions at corpus time (doc/hom.md; substrate test/uuhom.l's stack machine).
+# `make uusplgen` refreshes it; test_uusplgen regenerates and diffs.
+uusplgen: host
+	@echo LOVE	test/uusplgen.l "(tools/spl2uu.l on $m)"
+	@$(mw) tools/spl2uu.l > test/uusplgen.l
+test_uusplgen: host
+	@echo TEST test/uusplgen.l "(regenerate + diff)"
+	@$(mw) tools/spl2uu.l > out/host/.uusplgen.l.tmp
+	@cmp -s out/host/.uusplgen.l.tmp test/uusplgen.l \
+	  || { echo "FAIL: test/uusplgen.l is stale (doc/proto/spl.l moved?) -- run: make uusplgen"; exit 1; }
+	@rm -f out/host/.uusplgen.l.tmp
 # test_wake: the BAKE-THEN-WAKE ROUND TRIP, which no other gate runs -- every other lane
 # wakes an image some earlier recipe baked. A CANDIDATE COPY bakes (love.wake, ETXTBSY-proof)
 # under a timeout the wake storm cannot meet (fresh lane ~1s, storm >90s; doc/wake-storm.md).
