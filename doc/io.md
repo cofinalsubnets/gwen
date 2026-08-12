@@ -503,12 +503,9 @@ Measured on one corpus, `perf -e instructions`, both loves:
 | `love < f.l` | +2,325 M (+50.7% wall) | **+694 M (+1.7% wall** -- 3953 ms vs 3886 ms) | **-4.09%** |
 | `cat f.l \| love` | +2,469 M | +2,557 M | +0.23% |
 
-⚠ READ THE ABSOLUTE COLUMN ON THE PIPE. Its GAP grew 3.6%, which sounds like a regression and is
-mostly an artefact: the gap is a difference between two ~40 G numbers, so a 0.23% move in the
-whole shows up magnified there. The pipe's own love-side path is unchanged -- `start` primes, finds
-no run, and delegates to the same `trickle` -- so +0.23% is the size of a code/data layout shift,
-which adding a nif causes by moving `nifs[]` and the def table. Not free, not algorithmic, and the
-kind of number that only means something next to its absolute.
+⚠ READ THE ABSOLUTE COLUMN. A GAP is a difference between two ~40 G numbers, so the pipe's grew
+3.6% off a 0.23% move in the whole — the size of a layout shift, which adding a nif causes by moving
+`nifs[]` and the def table. A gap only means something next to its absolute.
 
 **3 — the pipe gets a run too, and the handoff carries the residue.** ✅ LANDED. The pipe was the
 whole of the remaining lane, not a leftover: with no bio it paid both costs. Lending it one meant

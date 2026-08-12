@@ -46,11 +46,10 @@ ai_noinline intptr_t ai_nclock(void) {
 // goes through zgetc, which drains the run before the device, so an in-form (slurp in)
 // still sees exactly the bytes our reader has not taken. What runs ahead is only the
 // KERNEL's fd offset, and only an inheritor can see that -- hence the seek.
-// ⚠ NOTHING PUTS A PIPE BACK -- so the residue is not UNDONE, it is DELIVERED: stdin_hand
-// pumps it into a fresh pipe and dup2s that onto fd 0, which is why this door can hold a run
-// at all (bash, with no fork to spare at the handoff, pays per byte instead -- doc/io.md
-// part III/IV). test_stdinbuf runs one program down each door and diffs, so a lane that
-// starts running ahead without delivering fails there.
+// ⚠ NOTHING PUTS A PIPE BACK -- so the residue is not UNDONE, it is DELIVERED (stdin_hand),
+// which is why this door can hold a run at all; bash, with no fork to spare at the handoff,
+// pays per byte instead. test_stdinbuf runs one program down each door and diffs, so a lane
+// that starts running ahead without delivering fails there.
 // ⚠ TWO PLACES HOLD UNREAD BYTES: the borrowed run, and `in`'s OWN pushback -- the ungetc
 // stays on the static because that is the port everyone above reads.
 static void stdin_give(struct ai *g) {
@@ -234,24 +233,19 @@ void ai_fd_close(int fd) { close(fd); }
 // no g machinery -- safe inside run_finalizers.
 void ai_fd_drain(int fd, void const *p, uintptr_t n) { fd_write_all(fd, p, n); }
 
-// --- handing fd 0 to a child (the unseekable half of stdin_give, up top) ---
-// A seekable door is put BACK with an lseek; a pipe has no rewind, so its residue is
-// DELIVERED: a fresh pipe becomes fd 0 and a forked pumper writes the bytes our reader did
-// not take, then splices whatever the old fd 0 still brings. That is what a run costs on
-// this door -- one fork per handoff, and only when a residue exists at all.
+// --- handing fd 0 to a child: the unseekable half of stdin_give, up top ---
+// A forked pumper writes the residue into a fresh pipe, splices whatever the old fd 0 still
+// brings, and the read end becomes fd 0 -- one fork per handoff, only when a residue exists.
 // ⚠ ONLY WHERE A CHILD TAKES fd 0. At our own exit nothing of ours is left to pump and the
 // dup2 would be private to a process about to vanish, so lvm_exit and main's tail call
 // stdin_give alone. A peer holding fd 0 from BEFORE us (`cat f | { love a.l; love b.l; }`)
-// is out of reach on a pipe however we hand off, and that is the one thing this door
-// cannot promise -- doc/io.md part IV.
+// is out of reach on a pipe however we hand off -- the one thing this door cannot promise.
 // ⚠ stdin_give FIRST: the pumper reads fd 0 itself, and an EAGAIN on the bit we borrowed
 // would read there as an end and cut the stream short.
-// ⚠ THE PUSHBACK BYTE LEADS. Two places hold unread bytes and `in`'s ungetc is the earlier
-// one, so it goes in front of the run -- chug_str splits the same way.
-// ⚠ THE PUMPER IS A FORK, so it holds a copy of every fd love had open and nobody reaps it.
-// Narrow on both counts -- it runs only at a handoff, where hark has already closed its pipes
-// and the exec'd program inherits the same fds anyway -- but a live pipe love still held would
-// have a second writer keeping it from EOF. Worth knowing before this grows a caller.
+// ⚠ THE PUSHBACK BYTE LEADS -- `in`'s ungetc is the earlier of the two places holding unread
+// bytes, so it goes in front of the run, as chug_str splits it.
+// ⚠ THE PUMPER IS A FORK: it copies every fd love had open and nobody reaps it. Narrow while
+// exec is the only caller, but a live pipe love still held would keep a second writer on it.
 static void stdin_hand(struct ai *g) {
  stdin_give(g);
  if (!g || !ai_ok(g)) return;

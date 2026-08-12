@@ -92,7 +92,7 @@
                    ; the form DREW on p, so p is the truth and our charlist is stale. ⚠ CARRY THE
                    ; HEAD BYTE: p handed it over already and will not again, so dropping the list
                    ; whole loses it -- and a lost `;` reads a comment as code.
-                   (again (? (two? >r) (link (cap >r) ()) ()) v)))
+                   (start (? (two? >r) (link (cap >r) ()) ()) v)))
              ; ⚠ torn and the clean end are now HONEST: with no window they can only mean the
              ; stream itself ended, so torn scares and a clean end takes the port to the end.
              (id? r 'torn)  (scare 'unfinished-form p)
@@ -108,7 +108,6 @@
                              (? (nil? (inhand p)) (walk (cat pre (trickle p)) z)
                                 (: _ (pin box 0 (tally pre))
                                    (step (cat pre (feed ())) 0 z))))))
-      (again pre z) (start pre z)
       ; ⚠ GULP ONLY WHAT WE OWN. a file (cli.l's load1) and a tap (the baked corpus,
       ; host/main.c's runner) are ours alone -- nobody else reads them, so running ahead is free
       ; and worth it. `in` is SHARED: the forms we eval can read it, and a child can inherit its
