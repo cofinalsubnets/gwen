@@ -30,6 +30,14 @@
     (ncons 0 (ncons 1
     (ncons 6 (ncons 0
     nnil)))))))))))
+ ; sp0subst  (pusha 0)
+ ; sp0subst  (pushk 1)
+ ; sp0subst  (add 0)
+ (defn 'sp0subst 'nlist
+   '(ncons 1 (ncons 0
+    (ncons 0 (ncons 1
+    (ncons 6 (ncons 0
+    nnil)))))))
  ; sp1call  (pusha 0)
  ; sp1call  (emit 0)
  ; sp1call  (sets 0)
@@ -58,6 +66,16 @@
     (ncons 0 (ncons 1
     (ncons 6 (ncons 0
     nnil)))))))))))))
+ ; sp1subst  (pusha 0)
+ ; sp1subst  (emit 0)
+ ; sp1subst  (pushk 1)
+ ; sp1subst  (add 0)
+ (defn 'sp1subst 'nlist
+   '(ncons 1 (ncons 0
+    (ncons 7 (ncons 0
+    (ncons 0 (ncons 1
+    (ncons 6 (ncons 0
+    nnil)))))))))
  ; sp2call  (pusha 0)
  ; sp2call  (emit 0)
  ; sp2call  (sets 0)

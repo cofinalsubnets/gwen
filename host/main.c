@@ -903,6 +903,13 @@ struct ai_lib const *ai_libs(void) { return libs; }
 static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   bool replp = !argp && isatty(STDIN_FILENO);
   if (replp) raw_mode();
+  // THE DEBUG DOOR: LOVE_NO_MOP keeps the compiler's internals on the book (peek/poke/
+  // seek/feels/dis and the raw cell nifs) for introspection -- egg.l skips the birth mop
+  // when `nomop` is set. reaches only a FRESH egg warm, so pair it with LOVE_NO_IMAGE
+  // (a baked image is already swept): `LOVE_NO_MOP=1 LOVE_NO_IMAGE=1 love`. off by
+  // default, so the shipped surface and every gate stay swept.
+  { char const *nm = getenv("LOVE_NO_MOP");
+    if (nm && *nm) g = ai_evals_(g, "(: nomop 1)"); }
   g = ai_egg_(g,
 #include "egg.h"
     ,

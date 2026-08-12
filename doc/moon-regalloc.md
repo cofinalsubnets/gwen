@@ -127,6 +127,23 @@ addresses. `lift.l` refuses such a body rather than lifting one that would jump 
 it happened to be mapped; binding them is a linking step, and holo's `ld-read` (in the
 image since the linker half landed) is the tool for it.
 
+**The automation landed (rungs 1+2, `bench/vmsplice/auto.sh`).** The probe was a
+hand-written body; the pipeline now runs on live closures. `dis` (love/ev.l, the emission
+interface's dual — a reflection primitive built pre-egg from `peek` + the book, like
+`feels`, so it survives the birth mop) reads a compiled thread back to `(op-nom operand..)`
+rows; `compose.l` maps each row to its op's own C body, harvested from love.c's `op11`/
+`fld`/`op` macro arguments with the nif→nom bridge through `nifs.h`; and `bind.l` closes
+what was owed above — it rewrites mooncc's `lea r,[rip+d32]` external refs to a
+same-length `mov` aimed at an appended cell holding the symbol's live address, resolved
+against `/proc/self/exe`'s own symtab plus the load bias from the exe's `/proc/self/maps`
+line. In-process by construction: a separate process has a different ASLR base, so the
+binding is only valid in the `love` that then nifs it. Composed bodies agree with their
+interp twins on every input (the differential is `sl-cross` one level down — one
+denotation, two presentations) and beat them ~1.2–1.3× on short accessor chains today;
+the ceiling is the ~4× the probe measured, and the gap to it is this bucket. Still owed: a
+CALL reloc (once allocating ops are covered — same appendix), and multi-op segments that
+cross a control op (the segment ends where the straight line does, the run-fusion law).
+
 ## the physics — what prices a lever here
 
 Learned by measuring, several times each; check a new lever against these before building:
