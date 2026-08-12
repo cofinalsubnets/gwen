@@ -1,9 +1,13 @@
 # moon-diff — mooncc vs gcc/clang, the running differential
 
-A **living ledger** of the three-compiler race on the love host binary: how fast each
-compiler *runs* (invocation speed), how big the code it lays is (.text), and how fast that
-code *executes* (wall + user instructions on the test corpus and the host-nif suite).
-Rows are dated and appended, newest first — trend is the point, not any single cell.
+The three-compiler race on the love host binary: how fast each compiler *runs* (invocation
+speed), how big the code it lays is (.text), and how fast that code *executes* (wall + user
+instructions on the test corpus). **One current measurement, then the trend table** — every
+fill's headline in a row. Re-measure and REPLACE the current section; add a row.
+
+⚠ this page used to append a full fill per rung and reached eleven of them. They were
+dropped 2026-08-12: the cause of a move belongs in doc/moon-regalloc.md's dated ledger, which
+kept it, and what a fill was for is the trend, which the table keeps. Don't grow it back.
 
 Three harnesses, all over the binaries `bench/ccbench.sh` leaves in `out/bench/cc/`:
 `ccbench.sh` itself for build and corpus wall, `bench/ccsize.sh` for the `.text`
@@ -15,903 +19,132 @@ anything. Method and traps at the bottom — reproduce rather than trust.
 
 This ledger is one of five docs that ride together: doc/moon-regalloc.md (the catalog
 of the gap and the rung ledger — *why* a row moved), doc/moon-alloc.md (the allocator
-arc, whose every rung is priced against a fill here), doc/hom.md (the design the
+arc, whose every rung is priced against this page), doc/hom.md (the design the
 destination-die migration wears), doc/proto/dest.l (that design modeled runnable).
 
 ⚠ **read the both-emit codegen ratio, not the binary ratio, when pricing a codegen
-rung.** The two moved apart on 2026-08-11 and have not come back: the byte levers (the
-dead-static sweep, nolibc's per-function split) took the binary from 1.99× to 1.78×,
-repack and the spush cell to **1.618×**, while the corpus did not move a digit across any
-of it. A fill's headline answers "how big is the artifact"; only the shared-symbol row
-answers "how good is the code".
+rung.** The byte levers (the dead-static sweep, nolibc's per-function split) took the binary
+from 1.99× to 1.78× without moving the corpus a digit, because a byte that is unreachable
+never executes. The headline answers "how big is the artifact"; only the shared-symbol row
+answers "how good is the code", and only the corpus answers "how fast".
 
-## 2026-08-11 — the spush rung re-based: 1.47× codegen, and repack's bar is empty (HEAD a055d279)
+## the current binary — 2026-08-12, rungs 1+2 (HEAD 86fc76ff)
 
-The fill below was measured at 2fc25890 and the spush-cell rung (80ae14f4) landed after
-it, so every headline it quotes was one move stale — including the ones doc/moon-alloc.md
-was steering by. Same instruments, same box, one rung later.
+Step 0 against the allocator arc's first landed rung (4dd9bc41, liveness + slot promotion).
+Two full ccbench passes, because the pair rows swung hard in the first.
 
-### .text — the decomposition
+### .text and the codegen row
 
 | | mooncc | gcc-musl | clang-musl |
 |---|---|---|---|
-| .text (bytes) | **473,198** | 292,448 | 292,832 |
-| love's own C | 441,808 (730 syms) | 252,073 (614) | 252,496 (604) |
-| libc under it | 31,390 (145) | 40,375 (229) | 40,336 (230) |
+| .text (bytes) | **465,406** | 292,448 | 292,832 |
+| love's own C | 434,176 (730 syms) | 252,073 (614) | 252,496 (604) |
+| libc under it | 31,230 (145) | 40,375 (229) | 40,336 (230) |
 
-Whole binary **1.618×**, from 1.702×. And the row that prices a codegen rung:
+Whole binary **1.591×**. And the row a codegen rung is priced against:
 
 | | syms | mooncc | native | |
 |---|---|---|---|---|
-| both lanes emit, vs gcc-musl | 612 | 370,492 | 251,961 | **1.47×** — codegen |
-| both lanes emit, vs clang-musl | 602 | 370,920 | 252,000 | **1.47×** |
-| mooncc-only (the inlining residue) | 118 | 71,316 | — | |
-| gcc-musl-only | 2 | 112 | — | |
+| both lanes emit, vs gcc-musl | 612 | 364,030 | 251,961 | **1.44×** — codegen |
+| both lanes emit, vs clang-musl | 602 | 364,626 | 252,000 | **1.45×** |
+| mooncc-only (the inlining residue) | 118 | 70,146 | — | |
 
-**1.56× → 1.47×; the gap 141,221 → 118,531 B, −22,690.** love.o's `.text` fell 22,381 B
-over the same pair of trees. The two agree to 309 B, which is what says the whole move is
-this one rung and not the fourteen post commits the merge carried with it.
-
-### the divergence widened, and it is now the page's loudest number
-
-| | 32b54ab8 | 2fc25890 | **a055d279** |
-|---|---|---|---|
-| static, both-emit codegen | 1.63× | 1.56× | **1.47×** |
-| dynamic, corpus insns vs clang | 1.63× | 1.625× | **1.629×** |
-
-The dynamic ratio has not moved since the convergence broke — three fills, 1.63 / 1.625 /
-1.629, inside the noise of each other — while the static ratio walked 1.63 → 1.47. Every
-size lever this tree has landed (the dead-static sweep, the 185-member split, repack, the
-spush cell) took bytes off the artifact and **left the executed stream exactly where it
-was**. ⚠ that is not a disappointment, it is the measurement the arc needed: mooncc's
-remaining excess is not spread over its bytes, it is concentrated in the code that runs.
-A size lever cannot reach what is left.
+The gap is **112,069 B**. love.o's `.text` fell 6,315 over this rung and the shared-symbol
+gap 6,462 — they agree to 147 B, which is what says the move is the rung alone.
 
 ### runtime — the corpus, egg-boot subtracted, median of 3
 
 | | mooncc | gcc-musl | clang-musl | mooncc/clang |
 |---|---|---|---|---|
-| corpus insns (G, user) | 42.291 | 23.916 | 25.953 | **1.629×** |
-| corpus cycles (G, user) | 15.835 | 12.796 | 13.099 | **1.209×** |
+| corpus insns (G, user) | **41.984** | 23.923 | 25.965 | **1.617×** |
+| corpus cycles (G, user) | 15.710 | 12.839 | 12.956 | 1.213× |
 
-All three lanes ~2% above the last fill (41.32 / 23.43 / 25.42) — the corpus grew again,
-which is the standing reading when the lanes move together.
+Both natives are flat to 0.05% across this rung while mooncc fell 0.73% — as clean an
+attribution as this page gets. ⚠ the cycles ratio did NOT move (1.209 → 1.213): clang's own
+cycles fell 1.1% in the same run, so that row is the noisy one and insns is the reading.
 
-### frame movs — the count did not move, the bytes did
-
-`love.o`, all three lanes counted the same way:
+### frame movs — lever 2's own gauge
 
 | | insns | frame movs | bytes | of .text |
 |---|---|---|---|---|
-| mooncc | 77,109 | 21,964 | **120,007** | 36.2% |
+| mooncc | 77,080 | **19,478** | **106,892** | 32.8% |
 | gcc | 45,959 | 5,378 | 27,328 | 14.3% |
 | clang | 50,691 | 1,954 | 9,762 | 5.0% |
 
-**21,964 both before the rung and after** — the identical count, 132,849 → 120,007 B. The
-rung's own claim was encoding rather than work (disp8 for disp32), and this is that claim
-from the other side. The excess over gcc is **92,679 B, now 78.2% of the whole codegen
-gap** — a *larger* share of a smaller whole than the 75% measured pre-rung, because the
-gap shrank faster than the frame traffic did.
+The excess over gcc is 79,564 B — **71.0% of the gap**, and this is the first fill where that
+share FALLS (78.2% → 71.0%). It rose at every earlier fill because the gap shrank faster than
+the frame traffic; rungs 1+2 are the first lever aimed at the traffic itself.
 
-### repack's bar is empty
-
-The pre-rung census put **215 of 478 fns and 77.1% of frame traffic** behind the
-unclaimed-touch bail. Re-run over love.c's 640 functions with the four exits separated
-(the probe is temporary instrumentation, reverted):
-
-| verdict | fns | frame-r4 touches | share |
-|---|---|---|---|
-| **packed** | **403** | **23,830** | **92.9%** |
-| barred by the scan | 10 | 991 | 3.9% |
-| analyzed, sub did not shrink | 84 | 658 | 2.6% |
-| refused early (no slots / no prologue) | 143 | 169 | 0.7% |
-
-And every one of the ten bars is `raw` — an inline-asm splice, which repack skips by
-design and always will. **Zero `loose`, zero `unclaimed`.** The 215-fn barred class is
-gone, not reduced. doc/moon-alloc.md's "the population is now the whole 478" was an
-inference from the pre-fix class census; it is now a count, and it reads 487 of 640
-functions carrying 95.5% of the frame traffic inside repack's reach.
-
-⚠ the two censuses count different things and the shares are comparable only in shape:
-this one counts frame-`r4` IR forms (25,648 of them, `lea` included), the pre-rung one
-counted emitted movs. What is exact is the *reason* column, and it is what matters.
-
-### invocation speed
-
-| | mooncc | gcc-musl | clang-musl |
-|---|---|---|---|
-| full build + link, cold tree (s) | 41.1 | 8.8 | 5.1 |
-| love.c single TU, median of 3 | **8.42** | — | — |
-
-8.40 / 8.42 / 8.50 against the 8.8 s baseline (8.53 / 8.62 / 9.17) — the rung's per-depth
-`foldl` costs nothing measurable, and the TU sits well inside the 20 s budget. The build
-row is the cold-tree tax again (the merge invalidated `mcobj`), not a regression; the
-trap at the bottom of this page has it.
-
-### the pair — wall, boot subtracted (⚠ loaded box: ratios only)
-
-| | mooncc | gcc-musl | clang-musl | mooncc/clang |
-|---|---|---|---|---|
-| chacha20 (ms) | 1075 | 300 | 198 | **5.43×** |
-| poly1305 (ms) | 1341 | 1288 | 785 | 1.71× (gcc **1.04×**) |
-
-clang's chacha reads **198.1 against the last fill's 198.1**, which anchors the box — so
-mooncc's 1220 → 1075 is a real move and not a quiet afternoon. The shape is unchanged and
-is the whole reading: chacha wide, poly at gcc parity. Lever 1's array-slot residue is
-untouched by anything in this fill.
-
-## 2026-08-11 — the re-base: repack, the sweep and the split in one binary (HEAD 2fc25890)
-
-doc/moon-alloc.md's **step 0**, run before rung 1 opens gen.l. Every fill below is
-missing something this one has: slot repack landed at 17:21 and no measured tree on this
-page carried it, while the byte levers that followed were measured on trees without it.
-This is the first binary holding all three, and the arc's prices were all quoted against
-a base three moves stale.
-
-### .text — `size -A`, and ccsize's decomposition
-
-| | mooncc | gcc-musl | clang-musl |
-|---|---|---|---|
-| .text (bytes) | **497,838** | 292,448 | 292,896 |
-| love's own C | 466,336 (730 syms) | 252,073 (614) | 252,512 (604) |
-| libc under it | 31,502 (145) | 40,375 (229) | 40,384 (230) |
-
-Whole binary **1.702×**, from 1.99× at the shrink-wrap fill. And the row a codegen rung
-is actually priced against:
-
-| | syms | mooncc | native | |
-|---|---|---|---|---|
-| both lanes emit, vs gcc-musl | 612 | 393,182 | 251,961 | **1.56×** — codegen |
-| both lanes emit, vs clang-musl | 602 | 394,278 | 252,016 | **1.56×** |
-| mooncc-only (the inlining residue) | 118 | 73,154 | — | |
-| gcc-musl-only | 2 | 112 | — | |
-
-**1.63× → 1.56×, and repack is the whole of it.** The byte levers could not have moved
-this row by construction: a swept dead static and an unlinked libc member are not symbols
-both lanes emit. The codegen gap is **141,221 B** where doc/moon-alloc.md quotes 162 KB —
-its buckets (~65-70 KB shuffle + ~23 KB copies + ~13 KB widening) now claim a larger
-share of a smaller whole, which is the arc's business and nobody else's.
-
-The inlining residue halved as a *side effect* of the sweep — 265 syms / 105,774 B →
-**118 / 73,154**. Most of what read as "gcc inlines where we don't" was mooncc emitting
-the out-of-line body of what it HAD inlined. What remains is the real difference, and it
-has never been attacked.
-
-### the convergence broke, and that is the finding
-
-The shrink-wrap fill (32b54ab8) closed on the two ratios meeting at 1.63× — "the
-remaining gap is uniform over hot and cold code alike". They have come apart:
-
-| | at 32b54ab8 | now |
-|---|---|---|
-| static, both-emit codegen | 1.63× | **1.56×** |
-| dynamic, corpus insns vs clang | 1.63× | **1.625×** |
-
-repack is why, and its own ledger entry said so before this fill confirmed it: −4.2%
-`.text` against −0.25% dynamic insns. It is a size lever that barely touches the executed
-stream. So mooncc's remaining excess is now proportionally **hotter than its bytes** — an
-argument for the allocator leg over any further size lever, and a standing warning
-against reading a shrinking `.text` as a faster binary. ⚠ the two ratios are not
-interchangeable and this fill is where that stopped being a pedantic point.
-
-### runtime — the corpus, egg-boot subtracted, median of 3
-
-| | mooncc | gcc-musl | clang-musl | mooncc/clang |
-|---|---|---|---|---|
-| corpus insns (G, user) | 41.32 | 23.43 | 25.42 | **1.625×** |
-| corpus cycles (G, user) | 15.18 | 12.24 | 12.29 | **1.235×** |
-
-All three lanes rose ~1.1–1.5% together against the shrink-wrap fill (40.74 / 23.17 /
-25.04) — the corpus grew again, which is the standing reading when the lanes move as one.
-
-### the libc holds its floor
+### the libc floor
 
 | | syms | shipped | live | dead | |
 |---|---|---|---|---|---|
-| mooncc | 145 | 31,502 | 29,792 | **1,710** | **5.4%** |
+| mooncc | 145 | 31,230 | 29,536 | **1,694** | **5.4%** |
 | gcc-musl | 229 | 40,375 | 37,749 | 2,626 | 6.5% |
-| clang-musl | 230 | 40,384 | 37,758 | 2,626 | 6.5% |
+| clang-musl | 230 | 40,336 | 37,758 | 2,578 | 6.4% |
 
-Unchanged by repack, as it must be — `ccdead` reads the same 5.4% the split's own fill
-recorded, from a binary built two rungs later.
-
-### the pair — wall, boot subtracted (⚠ loaded box: ratios only, two runs shown)
-
-| | mooncc | gcc-musl | clang-musl | mooncc/clang |
-|---|---|---|---|---|
-| chacha20 (ms) | 1220 / 1207 | 322 / 319 | 198 / 193 | 6.2× / 6.3× |
-| poly1305 (ms) | 1535 / 1510 | 1502 / 1486 | 860 / 762 | 1.79× / 1.98× (gcc 1.02× both) |
-
-Every cell reproduced within ~2% across the two runs except clang's poly1305 (860 → 762,
-−11%), which is the one number not to quote. All lanes read ~10-14% above the
-shrink-wrap fill — the box, not the code: a browser at ~17% through run 1, a second
-session's compiles through run 2. Take the SHAPE, which is unmoved: chacha wide, poly at
-**parity with gcc** (1.02×). Nothing in this fill's rungs touches lever 1's array
-residue, so a real move here would have been the surprise.
+Under musl's own floor, and 0.77× its shipped size — the per-function nolibc split's result,
+unmoved by anything since.
 
 ### invocation speed
 
 | | mooncc | gcc-musl | clang-musl |
 |---|---|---|---|
-| full build + link, warm (s) | **15.1** | 10.2 | 6.2 |
-| ..the same, cold tree (s) | 43.1 | 11.0 | 6.1 |
-| love.c single TU, median of 3 | 8.8 | 7.1 | — |
+| full build + link, warm (s) | **15.4** | 9.0 | 5.4 |
+| ..the same, cold tree (s) | 45.2 | 9.0 | 5.3 |
+| love.c single TU, median of 3 | 9.90 | — | — |
 
-15.1 s against 14.2 s two fills ago, with gcc and clang up by the same fraction — the
-sweep and the 185-member split cost the build essentially nothing once warm. The
-single-TU row confirms the one-pass fix from the other side: 8.53 / 8.62 / 9.17 s,
-against the 86 s the sweep's first draft cost.
+The whole build is flat against the previous rung even though the single TU went 8.42 → 9.90 s
+(+18%) for the liveness fixpoint.
 
-⚠ **a fresh worktree's first ccbench overcharges the mooncc build row, and only that
-row.** 43.1 s cold against 15.1 s warm on the same tree, ten minutes apart: 185 cold
-`mcobj` member compiles at ~0.09 s each over a cold tree hash, paid once per tree and
-never again. Nothing else in the fill moves — the natives are flat across the pair
-(11.0 → 10.2, 6.1 → 6.2), which is what identifies the cost as ours and as caching. The
-per-function libc bought its dead-code win and handed back a first-run tax. Warm the
-tree before quoting this row, and never compare it across worktrees.
+### the pair — two passes (⚠ ratios only; the box moves more than the code)
 
-## 2026-08-11 — nolibc, one function to a file: 5.4% dead, under musl's own floor (HEAD a1e12f40)
-
-The per-function split finished. `crew/moon/lib/nolibc/` is **185 members in eleven
-folders** — `sys/` 72, `string/` 28, `net/` 19, `signal/` 14, `ctype/` 14, `mem/` 10,
-`stdio/` 10, `fmt/` 7, `proc/` 5, `env/` 3, `dirent/` 3 — over a `core.c` that is down
-to the startup floor.
-
-| | libc .text | syms | dead | |
+| | mooncc | gcc-musl | clang-musl | mooncc/gcc |
 |---|---|---|---|---|
-| one file (this morning) | 64,110 | 334 | 35,316 | 55.1% |
-| four area members | 39,902 | 234 | 11,108 | 27.8% |
-| **185 per-function members** | **31,662** | 145 | **1,718** | **5.4%** |
-| musl, for scale | 40,375 | 229 | 2,626 | 6.5% |
+| chacha20 (ms) | 1019 / 1025 | 281 / 292 | 170 / 183 | 3.63 / 3.51 |
+| poly1305 (ms) | 1288 / 1301 | 1318 / 1315 | 786 / 779 | **0.98 / 0.99** |
 
-**Under musl's own floor**, and 0.78× its shipped size. .text 524,000 → **519,904**,
-**1.779×**. What is left is twelve functions that share a file with a live sibling
-(`freopen` beside `fopen`, `vasprintf` beside `vsnprintf`).
+**poly1305 passed gcc, and it reproduces** — 1.04× before rungs 1+2, 0.98× and 0.99× after,
+with gcc's own poly stable to 0.3% across both passes. That is the pair's designed reading
+firing exactly as specified: poly keeps its five limbs as scalar LOCALS, promotion is a
+scalar-locals lever, and chacha's array slots — lever 1's residue — are untouched at 3.5–3.6×.
 
-The sweep landed first and that ordering mattered: `er` and `sc0..sc6` are now `static`
-**in impl.h**, so each member inlines the ones it uses and the dead-static sweep drops
-the bodies it did not. Before the sweep that shape would have duplicated seven helpers
-into 185 objects and cost more than the split saved.
+## the trend — every fill's headline, oldest first
 
-### what a per-function split actually costs
+Prose for each of these lived here until 2026-08-12 and was dropped; **doc/moon-regalloc.md's
+dated ledger is where a row's cause lives**, and it is the surviving account. What a fill is
+for is the trend, and the trend is this:
 
-Beyond the three couplings the area split paid, four more, each found by a gate rather
-than by reading:
-
-* **a tentative definition in a shared header** — `char **environ;` rode into impl.h with
-  the syscall numbers and every member then defined it (`link-dup "environ"`). Slice on
-  the symbol, never on the line number.
-* **`#endif` is not a landmark** — patching impl.h by replacing `"#endif"` hit the one
-  inside the arch-gated NR block, not the guard. impl.h is now composed, not patched.
-* **types and macros are members too** — `struct __sctx`, `__mhdr`, `FF_SPC`, the `BD_*`
-  limb geometry. A splitter that only knows functions and objects strands them.
-* **a static helper crossing a region boundary** — `__fmtsgn`, `__pad`, `__fmtnum`,
-  `__femit`, `__semit`. Grouping within a region cannot see it, and `__femit` is passed
-  as a **pointer**, so a `name(` scan misses it where a word scan finds it. Those five
-  are extern now, declared in impl.h; `__stdf` and `__obuf` likewise, since the entry
-  wires stdout's buffer.
-
-Gates: `test_fixpoint` byte-identical, `vmret` 307 ret-free, `test_raw`/`test_drv`/
-`test_libc` (all 116 names) green, corpus + `net`/`fs`/`tlsc` pass.
-
-## 2026-08-11 — the dead-static sweep: mooncc stops laying what it inlined (HEAD fc061fc0)
-
-The biggest single move on this page, and it is not codegen — it is **mooncc laying the
-body of a static it had already spliced into every call site**. gen.l inlines a small
-static and then emits the out-of-line copy anyway; nothing ever calls it. gcc and clang
-inline *and* drop the body, which is most of why they emit 265 symbols fewer.
-
-| | mooncc before | mooncc after | gcc-musl |
-|---|---|---|---|
-| .text | 556,768 | **524,000** | 292,240 |
-| ratio | 1.905× | **1.793×** | — |
-| love's own C | 517,328 (879 syms) | **486,448** (730) | 252,073 |
-| ..of it unreachable | 33,056 — 6.4% | **3,076 — 0.6%** | 6,624 — 2.6% |
-
-**149 static bodies went, 32,768 bytes.** The row that says the sweep is complete rather
-than lucky is the last one: mooncc's own unreachable text is now **0.6%, under gcc's own
-2.6% and clang's 1.7%** — the natives leave a little dead code of their own, and we now
-leave less. Runtime is the expected null (corpus 40.72 G against 40.74; every removed
-byte was unreachable).
-
-The sweep is a mark from roots over the emitted forms, in `gfns` before the per-function
-units are concatenated. ⚠ the roots are what make it safe, and one missing root is a jump
-into the heap rather than a bigger binary: every **exported** function, every **alias
-target**, every **section-named** function (`xfns` — those are placed for their address),
-and every nom the **data lane** names. That last one carries love's kind-indexed dispatch
-tables, which reach `copy_data` and the collector by address and never by call. The
-reference relation is deliberately over-approximate — an opcode and a register name count
-as references too, because a static wrongly kept costs bytes and one wrongly swept costs
-correctness. Only a `static` is ever a candidate; `lnames` drops the swept ones too, since
-a LOCAL FUNC symbol with no body would name whatever followed it.
-
-Gates: `test_fixpoint` byte-identical (the compiler sweeps *itself* and still reproduces),
-`vmret` all 307 `lvm_*` ret-free, `test_raw`/`test_drv`/`test_libc` green, `test_slow`
-green, and the corpus + `net`/`fs`/`tlsc` pass on the swept binary.
-
-What is left: 3,076 in love's own C and 7,838 in the libc — the libc's being the
-inside-a-live-area residue the per-function split has not reached yet.
-
-## 2026-08-11 — nolibc splits by area, and the libc lever is half-climbed (HEAD 6a8f8b68)
-
-The lever the fill below records as open, taken: `crew/moon/lib/nolibc.c` is now
-`crew/moon/lib/nolibc/` — four members (`core` `time` `dns` `num`) plus `impl.h` — and
-**no love link names a nolibc object any more**. The driver's runtime table globs the
-directory the way it already globbed `lib/math/`, so the by-need loop that was always
-there now has something to select: a love owing no calendar and no resolver links
-neither. No linker work, no `--gc-sections`, no new machinery.
-
-### .text — `size -A`
-
-| | mooncc | gcc-musl | clang-musl |
-|---|---|---|---|
-| .text (bytes) | **560,864** | 292,240 | 292,688 |
-| love's own C | 517,328 | 252,073 | 252,512 |
-| libc under it | **39,902** | 40,375 | 40,384 |
-
-**1.99× → 1.92×**, and mooncc's libc lands at **0.99× musl's** where it read 1.59× the
-fill below. love's own C did not move (517,328) and codegen is still **1.63×** over 614
-shared symbols — the whole delta is libc, which is what a granularity change owes.
-
-| | libc syms | shipped | reachable | dead | |
-|---|---|---|---|---|---|
-| mooncc, before | 334 | 64,110 | 28,794 | 35,316 | 55.1% |
-| mooncc, after | 234 | 39,902 | 28,794 | **11,108** | **27.8%** |
-| gcc-musl | 229 | 40,375 | 37,749 | 2,626 | 6.5% |
-
-Reachable is unchanged to the byte — nothing live left, which is the check that says the
-cut was clean rather than lucky. 24,208 bytes of dead went, 11,108 remain, and musl's
-6.5% is still the floor: the rest is dead code sitting *inside* live areas (`fread` in
-stdio, `strncasecmp` in mem/string), which no topical split can reach and which is what
-`-ffunction-sections` + a gc pass in holo would be for. **My earlier estimate that a
-split would capture most of the 35 KB was optimistic — it captures 69%.**
-
-The cut areas were chosen by measurement, not by taste: `time` (513–617), `dns`
-(1394–1558) and `num` + the stdio odds-and-ends (1584–1969) each read **100% dead, zero
-live bytes**. ⚠ `mmap` and `sysconf` sit at 618/624, tacked onto the end of the calendar
-comment block and belonging to neither — they stay in `core`, and a split on the comment
-rather than the symbols would have dragged the whole calendar back in.
-
-### what splitting a libc costs
-
-Three couplings, each the ordinary price of a second translation unit, and each one a
-thing to expect next time:
-
-* **a file-scope static crossing the cut** — `__errno_v` is written directly by `strtol`
-  and friends. The members use `errno` (the macro over `__errno_location()`) instead.
-* **a declaration that was never needed** — `htons` is *defined* above its uses in one
-  file, so nothing declared it. `impl.h` carries `<netinet/in.h>` now.
-* **a struct the public header keeps opaque** — `stdio.h` hands out `FILE` as an
-  incomplete type, so `ferror` and `popen` could not see `->err` or `->pid` from a second
-  TU. `struct _IO_FILE` moved to `impl.h`, which is musl's `stdio_impl.h` arrangement.
-
-### runtime — the expected null
-
-| | mooncc | gcc-musl |
-|---|---|---|
-| corpus insns (G, user) | 40.74 | 23.13 |
-
-Unmoved: 40.74 is the fill below's figure to the digit, and it must be — every byte
-removed was unreachable. The gates say the same from the other side: `test_raw`,
-`test_drv`, `test_fixpoint` (byte-identical rebuild) and `test_libc` all pass, the last
-one still finding all 116 names its headers declare, since a program that *does* call
-`strtol` pulls `num` exactly as it should.
-
-## 2026-08-11 — after shrink-wrap, on the musl lanes (HEAD 32b54ab8)
-
-The first fill wholly on the static-musl method (the section below is its
-justification). Between fills: the shrink-wrap rung landed (doc/moon-regalloc.md's
-ledger — the wrap machinery whole, scoped honestly to the fns whose wraps are not
-already cold-path-right; corpus-exact by its own A/B), and the str-juxt arc's second
-round grew love.c and the corpus again (~30 tests/target). Quiet box, load < 0.5.
-
-### .text — `size -A`, and ccsize's decomposition
-
-| | mooncc | gcc-musl | clang-musl |
-|---|---|---|---|
-| .text (bytes) | 581,438 | 292,448 | 292,832 |
-| love's own C | 517,328 | 252,073 | 252,496 |
-| libc under it | 64,110 | 40,375 | 40,336 |
-
-Whole binary **1.99×**, both-emit codegen **1.63×** (614 shared symbols, 411,554 vs
-252,073 — identical against either native), mooncc-only inlining residue 265 syms /
-105,774 B, nolibc vs musl 1.59×. All three lanes grew a touch with the new love.c;
-the ratios sat still.
-
-⚠ and the libc row is softer than it reads: the reference CLOSURE over the mooncc
-lane's own relocations (probed this fill; seeds = love's undefined syms + the entry
-root, data→text edges traversed) finds only 111 of nolibc's 367 text symbols live —
-26 KB of the 64 is referenced, ~38 KB rides along because holo links objects whole,
-where musl's 40 KB is archive-pulled closure-only. `bench/ccdead.py` (`make ccdead`,
-added the same day) reaches the same verdict from the other end — the linked binary's
-disassembly rather than the objects' relocations. Its figures are the fill below's —
-130 of 334 live, 28,794 B against 35,316 dead, the natives' 6.5% the control floor —
-and they carry here, this fill's libc row being the same 64,110 bytes because nolibc
-did not move. Two independent methods, one answer, and the fill below has the split:
-on the code both lanes actually run, mooncc's libc is not merely competitive but
-**smaller** than musl's (0.76×), nearly all of the difference being musl's mallocng
-against nolibc's K&R first-fit. The comparison charges mooncc for bytes musl's link
-model never pays; per-function sections + a gc pass in holo (both halves ours, the
-sentinel sections exempt) would take the headline to ~1.87× without touching codegen.
-Recorded as its own lever, beside the inlining one — **and half-climbed the same day by
-the fill above**, which got 1.92× out of splitting nolibc into by-need members and no
-linker work at all. What is left of it wants the per-function pass after all.
-
-### runtime — the corpus, egg-boot subtracted, median of 3
-
-| | mooncc | clang-musl | ratio | gcc-musl |
+| HEAD | what landed | binary | codegen | corpus insns |
 |---|---|---|---|---|
-| corpus insns (G, user) | 40.74 | 25.04 | **1.63×** | 23.17 |
-| corpus cycles (G, user) | 15.20 | 12.21 | 1.24× | 11.80 |
-| egg boot insns (G) | 8.92 | 5.70 | 1.56× | 5.25 |
-
-The corpus grew again, and the lanes moved TOGETHER (natives +0.3–0.4%, mooncc
-+0.07%) — the shrink rung's corpus-exactness reading straight through the method.
-And a convergence worth naming: the dynamic corpus ratio and the static both-emit
-codegen ratio now both read **1.63×** — the corpus executes mooncc's excess at
-exactly its static rate, i.e. the remaining gap is uniform over hot and cold code
-alike. (mooncc/gcc-musl is 1.76×, the harder number as ever.)
-
-### the pair — wall, boot subtracted
-
-| | mooncc | gcc-musl | clang-musl | mooncc/clang |
-|---|---|---|---|---|
-| chacha20 (ms) | 1071 | 289 | 191 | 5.6× |
-| poly1305 (ms) | 1343 | 1329 | 804 | 1.67× (gcc 1.01×) |
-
-flat — the expected null for a call-boundary rung. poly sits at parity with
-gcc-musl; chacha's residue remains lever 1's.
-
-### invocation speed
-
-| | mooncc | gcc-musl | clang-musl |
-|---|---|---|---|
-| full build + link (s) | 14.2 | 9.2 | 5.4 |
-
-flat through the whole cs-seat arc — three grant flavors, two pricing walks and the
-build split added no measurable compile cost.
-
-What this fill closes: the size-discrepancy thread that started the day. The
-headline decomposes cleanly now — 1.99× whole binary = 1.63× codegen (uniform,
-dynamic-confirmed) + 106 KB of inlining gcc does and mooncc doesn't + a 1.59× libc
-— and the codegen term's next levers are named in the regalloc ledger with their
-prices: PGO for the fleet's cold-path wraps, the inlining lever the per-symbol
-number cannot see, and lever 1's array residue on the cipher shape.
-
-## 2026-08-11 — static musl, and the libc comes onto the ledger (HEAD b0f92305)
-
-Every size row before this one raced a static mooncc binary carrying its own nolibc
-against *dynamic* gcc/clang binaries whose glibc sat off the ledger entirely — one
-number answering two questions. **The native lanes are now `gcc-musl` and `clang-musl`**:
-the same translation units through the musl wrappers, linked `-static`. Both passed the
-corpus first try, no source change of any kind. (`CCGLIBC=1` puts the old dynamic lanes
-back alongside, and they are kept below because every earlier fill quotes them.)
-
-Measured on the fill below's tree, so the mooncc column is the same pmin-gated compiler
-and the dynamic columns reproduce its numbers exactly — the method changed, not the
-subject.
-
-### .text — `size -A`
-
-| | mooncc | gcc-musl | clang-musl | gcc (dyn) | clang (dyn) |
-|---|---|---|---|---|---|
-| .text (bytes) | 581,344 | 291,792 | 291,216 | 251,763 | 251,123 |
-| mooncc ÷ | — | **1.99×** | **2.00×** | 2.31× | 2.32× |
-
-**1.99× is the apples-to-apples headline, not 2.31×** — ~40 KB of the old gap was never
-mooncc's code, it was glibc being absent from the file. Every fill below quotes the
-dynamic column; read them as that column, not this one.
-
-musl is the right static target and not merely the available one: linked `-static`
-against **glibc** the same units lay 775,213 bytes of `.text` in a 2.8 MB file — 2.66×
-musl's, and **1.33× mooncc's whole binary**. Whatever else this page says about mooncc's
-codegen, its static ELF is 0.75× the size of the one gcc lays when gcc is held to the
-same self-sufficiency. A libc designed to be linked in is the honest opponent.
-
-Decomposed by `bench/ccsize.sh`, each lane judged against **its own objects** (gcc's
-`.isra`/`.part` clones folded back into the parent; sizes address-gap derived, so they
-carry inter-fn padding):
-
-| | love's own C | libc in .text | libc syms |
-|---|---|---|---|
-| mooncc | 515,040 | 64,110 | 334 |
-| gcc-musl | 251,625 | 40,375 | 229 |
-| clang-musl | 251,056 | 40,368 | 230 |
-| gcc (dyn) | 251,584 | 1,936 | 10 |
-| clang (dyn) | 250,976 | 1,904 | 10 |
-
-Two readings, and the second **corrects every fill below**:
-
-* **mooncc's libc is the well-behaved half.** nolibc plus the syscall leaf is 64,110
-  bytes against musl's 40,375 linked in — **1.59×**, the narrowest ratio on this page,
-  and the next section takes that 1.59× apart: almost none of it is code.
-* **love's own C is 2.05×, and mooncc's libc is 64 KB, not ~167.** The fills below read
-  the "own libc/runtime" set off the roster of symbols the *native binary lacked* — but
-  ~106 KB of that roster is love code gcc inlined out of existence, not runtime. Judged
-  against its own objects mooncc's libc is 334 symbols / 64 KB, and the whole love-code
-  comparison is 515,040 vs 251,625 = **2.05×**. The "~170 KB" and "167 KB" figures below
-  are that error, not a measurement that moved.
-
-That 2.05× splits in two, and only one half is codegen:
-
-| | syms | mooncc | native | |
-|---|---|---|---|---|
-| both lanes emit | 612 | 409,256 | 251,625 | **1.63×** — codegen |
-| mooncc emits, gcc doesn't | 265 | 105,784 | 0 | inlining |
-
-The 1.63× is the differential the regalloc and hom arcs move, and it reads 1.63×/1.64×
-whichever libc the native lane rides — as it must, the libc not touching how love.c
-compiles. The other 265 are love statics the natives emit no code for at all (`ana_d`,
-`copy_data`, `cb_csi`, `rbig`, `obin_run`): **21% of mooncc's love .text is functions gcc
-inlines**, a lever the per-symbol number cannot see. No native-only symbols exist — every
-symbol gcc emits is in the shared set.
-
-### the libc's 1.59× is packaging, and reverses when read live
-
-`bench/ccdead.py` (`make ccdead`) asks the other question: not how many libc bytes a lane
-*ships* but how many it can ever *call*. It walks call/jmp/lea targets out of the
-disassembly, seeded from `_start` and from every function address sitting in a data
-section — a vtable entry is reached no other way.
-
-| | libc syms | shipped | reachable | dead | |
-|---|---|---|---|---|---|
-| mooncc | 334 | 64,110 | 28,794 | 35,316 | **55.1%** |
-| gcc-musl | 229 | 40,375 | 37,749 | 2,626 | 6.5% |
-| clang-musl | 230 | 40,368 | 37,758 | 2,610 | 6.5% |
-| gcc (dyn, `CCGLIBC=1`) | 10 | 1,936 | 1,808 | 128 | 6.6% |
-
-**The native rows are the control**, and reading all 28 of gcc-musl's is what says the
-scan works: hardly any of them are scan misses. `pad` (256 B) has *zero* references
-anywhere in the binary — gcc inlined it into `printf_core` and left the out-of-line copy;
-`putenv` is dead while `__putenv` is live, the public entry riding along with the
-`setenv` its object shares; `umount`/`umount2` ride together the same way. The rest is
-crt (`deregister_tm_clones`, `libc_start_init`) and alternates the static link did not
-pick (`__simple_malloc`, `static_init_tls`, `static_dl_iterate_phdr`). So 6.5% is not
-noise — it is mostly real dead code, and it is what a libc *built* for static linking
-still cannot shed. mooncc's 55% is eight times that floor.
-
-The cause is granularity, not code quality. **`nolibc.o` carries one `.text` section of
-63,887 bytes**, and a section is the linker's unit of discard — all or nothing. musl
-compiles roughly one function per object, so its static link drops what love never calls.
-What mooncc therefore ships and cannot reach: `__dnsq` 2,514 · `strftime` 1,634 ·
-`asctime` 1,598 · `popen` 1,506 · `gmtime` 1,158 · `__vfscanf` 1,048, then `qsort`,
-`system`, `mktemp`, the exec family. `getaddrinfo` and `strtol` are on that list and are
-the two worth checking, since love calling either would be a hole in the scan — both
-appear in the tree **only in comments**, each marking its own removal (host/sock.c:15,
-*"getaddrinfo is what used to make connect the exception, and it is gone"*).
-
-Live against live, the ratio turns over:
-
-| | syms | .text | |
-|---|---|---|---|
-| mooncc, reachable | 130 | 28,794 | **0.76×** |
-| gcc-musl, reachable | 201 | 37,749 | — |
-
-and 97% of that 8,955-byte gap is two clusters:
-
-| | mooncc | gcc-musl | |
-|---|---|---|---|
-| malloc | 672 | 8,483 | −7,811 |
-| printf | 11,122 | 12,029 | −907 |
-
-malloc alone is 87% of it, and it is a fit rather than a win: love brings its own
-two-space heap and mallocs pools — big and rare — so nolibc's K&R first-fit over 1 MB
-mmap arenas is right-sized where musl's mallocng buys it nothing but `alloc_slot` (2,528)
-and the meta machinery. printf is the honest read on the same job done twice: `__fmtflo`
-+ `__fmt` + `__fmtnum` against `printf_core` + `pop_arg` + `wcrtomb`, and mooncc's is the
-smaller of the two.
-
-**So on the code both lanes actually run, mooncc's libc is not the well-behaved half by
-courtesy — it is smaller.** The ~35 KB is 3.5% of the whole binary and is recoverable by
-`-ffunction-sections` in mooncc plus `--gc-sections` in holo; neither exists today, and
-how hard either is was not costed. ⚠ the scan's error is one-directional — an indirect
-call it misses marks a live function dead, never the reverse — so 28,794 is a lower bound
-on live and 35,316 an upper bound on dead.
-
-### runtime — musl moves nothing
-
-| | mooncc | gcc-musl | gcc (dyn) | clang-musl | clang (dyn) |
-|---|---|---|---|---|---|
-| corpus insns (G, user) | 40.71 | 23.08 | 23.08 | 24.97 | 24.98 |
-| corpus cycles (G, user) | 15.02 | 11.74 | 11.67 | 12.25 | 12.04 |
-| egg boot insns (G) | 8.92 | 5.25 | 5.25 | 5.70 | 5.70 |
-
-Each libc pair agrees to 0.05% on corpus insns, and the boot rows are identical to three
-digits: love allocates, formats and copies through its own floor, so libc barely runs.
-That is the licence to move the size lane onto static musl and leave the runtime story
-alone — the corpus rows below compare straight across the change. Cycles are looser
-(clang's pair spreads 1.7%), as cycles are; read the insn rows.
-
-The corpus ratio here is mooncc/clang **1.63×**, the fill below's number on the fill
-below's corpus, reached independently — which is the check that matters for a method
-change: the size lane moved, the runtime lane did not.
-
-Behaviour holds where the two libcs actually differ, too — `net`, `tls`, `tlsc`, `pty`
-and `fs` off the hostnif roster pass on both static-musl binaries (static musl carries a
-working resolver, the thing static glibc will not do). The rest of that roster was not
-run on these lanes.
-
-### aside — tcc cannot build love
-
-Probed the same day, since a fourth C compiler would be a fourth column. tcc 0.9.28
-compiles `love.c` and, given musl's headers, every other translation unit — but it does
-not produce a love, and the reasons are structural rather than a missing flag:
-
-* **nine `__builtin_*` it does not have** — `add`/`sub`/`mul_overflow`, `clzll`, `trap`,
-  `inf`, `nanf`, `isinf`, `___clear_cache`. As bare implicit declarations three of them
-  are silently wrong (an implicit declaration returns `int`, so `dv = __builtin_inf()`
-  converts one), though a *prototyped* polyfill header fixes that — and `-include` means
-  no source change is needed to supply one.
-* **no `__int128`** — glibc's `<link.h>` needs it, so `host/image.c` will not preprocess
-  at all against the system headers. musl's headers dodge this one.
-* **no `musttail`** — love.h's guard names mooncc, clang and gcc≥15, so under tcc
-  `ai_musttail` silently expands to nothing and every VM tail becomes a call that
-  returns. The tail-threaded VM is the design (`make vmret` exists to hold it), so this
-  is not a quality-of-implementation gap; it is the one instrument tcc lacks.
-
-⚠ and the `#else` branch love.h keeps for exactly such a compiler — `ai_tco=0`, the
-plain-return interpreter — **does not work under gcc either**: same flags, `-Dai_tco=1`
-runs and `-Dai_tco=0` faults in `ttag` walking off the heap, reached from `eqv` →
-`clo_load`. Not the `love_data.ld` trap below — the sentinel order is correct in both
-lanes. So there is no fallback shape for tcc to take even if the builtins were dealt
-with, and that dead branch is its own bug, not a finding about tcc.
-
-chibicc gets further — with musl's headers and that polyfill it compiles every TU — but
-it has no `_Static_assert` at all, and love.c uses C23 labels before declarations.
-contrib/chibicc/ carries the one thing that was upstream's own bug.
-
-## 2026-08-11 — after the cs-seat rung, pmin-gated (HEAD 3dd9e1fc)
-
-Third fill today. Between it and the last: the callish cs-homes rung, landed
-pmin-GATED after its own A/B — doc/moon-regalloc.md's ledger carries the story (the
-fat grant read −1.6% static insns and measured **+2.7% dynamic**; a per-invocation
-save cannot buy a per-call saving in early-out code) — and the str-juxt arc moved
-love.c/ev/prel and grew the corpus ~70 tests per target. ⚠ So the corpus rows
-RE-BASE here: not comparable backward (the 2026-07-18 lesson again); the clean
-cross-rung statement is the same-corpus A/B in the ledger, which measured the landed
-grant dynamically EXACT (insns flat to the third digit, cycles −0.9%). This fill's
-walls ran on a shared-loaded box (load ~2, another session on the tree): absolute
-walls +10%, ratios stand, insn lanes unaffected (user-scoped).
-
-### text size — `size -A`
-
-| | mooncc | gcc | clang |
-|---|---|---|---|
-| .text (bytes) | 581,344 | 251,763 | 251,123 |
-
-2.32× → **2.31×**, shared-symbol 1.67× (flat): str-juxt's love.c growth and the
-pmin-gated grant's trim (13 symbols, −1,020 B, ai_ini_0 −736 the biggest) net out.
-The unshipped fat grant had read 573,152 / 2.28× / 1.64× — that 8 KB is real and
-waits on shrink-wrap (saves at the callish region's head, so a fast path never
-pays), the allocator leg's next boundary.
-
-### runtime — the corpus (NEW BASE), egg-boot subtracted, median of 3
-
-| | mooncc | clang | ratio | gcc |
-|---|---|---|---|---|
-| corpus insns (G, user) | 40.95 | 25.17 | **1.63×** | 23.23 |
-| corpus cycles (G, user) | 15.23 | 12.04 | 1.27× | 11.92 |
-| egg boot insns (G) | 8.92 | 5.70 | 1.57× | 5.25 |
-
-The 1.60× → 1.63× move against the last fill is the CORPUS moving, not the codegen:
-the str-juxt tests lean on the string lanes (mooncc's 2.4–3× band), and the same-
-corpus A/B pinned the rung itself at exactly flat. 1.63× is the number to beat on
-this corpus.
-
-### the pair — wall, boot subtracted (loaded box: ratios only)
-
-| | mooncc | gcc | clang | mooncc/clang |
-|---|---|---|---|---|
-| chacha20 (ms) | 1173 | 325 | 199 | 5.9× |
-| poly1305 (ms) | 1490 | 1460 | 891 | 1.67× (gcc 1.02×) |
-
-flat, the expected null — the cs-seat rung's levers are call boundaries, not array
-slots.
-
-The methodological catch this fill exists to record: the static ledger (insns, .text,
-per-symbol growers) APPROVED the fat grant unanimously, and only the corpus row
-caught the +2.7% — the differential is the instrument that reads invocation mix,
-which no static count sees. A codegen rung that changes per-invocation costs owes a
-corpus A/B before it ships.
-
-## 2026-08-11 — after the hom ladder (HEAD d83892e3)
-
-Same box, same method, hours after the previous fill. Between them sits the whole
-destination-die migration (doc/moon-hom.md rungs 0–3 and the addrfold residue rungs:
-faces at birth, face-direct loads, stores and post tails, the ptr±const fold, the sp
-cell demoted to last resort) — ~210 net lines of gen.l. love.c moved by one nif
-(lvm_myself), so the native columns are the control: both sat still.
-
-### invocation speed
-
-| | mooncc | gcc | clang |
-|---|---|---|---|
-| full build + link (s) | 14.2 | 9.0 | 5.4 |
-
-flat — the face machinery reads state clval already had; no new passes, no regen.
-
-### text size — `size -A`
-
-| | mooncc | gcc | clang |
-|---|---|---|---|
-| .text (bytes) | 581,344 | 250,931 | 250,515 |
-
-mooncc **−20,480 bytes (−3.4%)** against still natives: 2.40× → **2.32×**. Per symbol
-(same 604-shared-C-symbol comparison): 411 KB vs 245 KB, 1.74× → **1.67×** of genuinely
-emitted code; mooncc's own libc/runtime lane trimmed too (~170 → 167 KB, nolibc is
-compiled by the same faces). ⚠ that 167 KB is the mis-attribution the static-musl
-section at the top corrects — most of it is love code gcc inlines away, and mooncc's
-actual libc is 64 KB. The `.text` rows here stand; the libc split does not. The representative recount: lvm_add_string 1132 → 1086
-insns, its rsp-slot movs 271 → 255 (clang: 6) — the write-through discipline at calls
-is still most of the remaining gap; the faces removed the *address* traffic (the lea +
-seat movs around member access), not the slot traffic.
-
-### runtime — the corpus, egg-boot subtracted, median of 3
-
-| | mooncc | clang | ratio | gcc |
-|---|---|---|---|---|
-| corpus insns (G, user) | 40.63 | 25.43 | **1.60×** | 23.37 |
-| corpus cycles (G, user) | 15.70 | 12.51 | 1.26× | 12.39 |
-| egg boot insns (G) | 8.79 | 5.61 | 1.57× | 5.18 |
-
-**The corpus ratio moved for the first time: 1.71× → 1.60×** (mooncc/gcc 1.86× → 1.74×),
-natives flat to three digits — the delta is all mooncc. The previous fill's reading
-called it: the corpus's hot symbols are the tail-threaded dispatch lanes the keep
-machinery never touches, straight-line member-access code — which is exactly the shape
-the faces compile. The boot row agrees twice over: mooncc's own boot insns dropped 6.3%
-(9.38 → 8.79 G) — the boot IS the compiler compiling, so the arc shrank both the code
-it lays and the work of laying it. The two arcs are complements: the allocator arc moved
-the loop shapes, the hom arc moved the straight-line ones.
-
-### the pair — wall, boot subtracted
-
-| | mooncc | gcc | clang | mooncc/clang |
-|---|---|---|---|---|
-| chacha20 (ms) | 1055.6 | 275.4 | 174.7 | 6.0× |
-| poly1305 (ms) | 1377.0 | 1316.4 | 805.0 | 1.71× (gcc 1.05×) |
-
-both flat within wall wiggle, and that is the expected null: the pair reads array-slot
-residency, and the hom arc's levers are member faces. What remains of chacha's ratio is
-the pre-call park pair and doc/moon-regalloc.md's residues, unchanged by this arc.
-
-## 2026-08-11 — after the allocator arc (HEAD c83b19a8)
-
-Same box, same method. Between the fills the vmap crossed every boundary it had
-(loop heads, calls, seat exhaustion, entry seeding, splices, element pins, the loop
-exit) — doc/moon-regalloc.md's 2026-08-10/11 ledger entries are the why per row.
-
-### invocation speed
-
-| | mooncc | gcc | clang |
-|---|---|---|---|
-| full build + link (s) | 14.7 | 8.7 | 5.1 |
-
-mooncc's own invocation cost +6% over the first fill (13.9 → 14.7 s): the keeps buy
-their soundness with regen attempts (a barred entry rebuilds the fn), and the meet
-machinery rides every loop. The price of the rows below.
-
-### text size — `size -A`
-
-| | mooncc | gcc | clang |
-|---|---|---|---|
-| .text (bytes) | 601,824 | 250,931 | 250,627 |
-
-mooncc +1.4% (cs saves, seat movs, roster reloads lay real bytes), the natives +2.6%
-(love.c itself grew); the ratio nudged 2.43× → 2.40×.
-
-⚠ superseded, same method error as the fill below it — and the 2.40× is against dynamic
-binaries; the static-musl section at the top is the comparison.
-
-Why 2.40× — measured per symbol this fill (nm over the pair; the natives are dynamic
-against glibc, mooncc a static ELF carrying its own nolibc, so only the 614 shared C
-symbols compare): 428 KB vs 246 KB, **1.74×** of genuinely emitted code. The gap is
-instruction COUNT, not encoding: lvm_add_string (a 3× representative) lays 1132 insns
-vs clang's 396 at the same ~4 bytes/insn. Of its 454 movs, **271 are stack-slot
-traffic** (137 reloads + 134 spills; clang: 6) — the write-through discipline in
-call-dense, branch-dense dispatch code: pins die at every call (cs seats ride only
-loop keeps, and these fns have no loops), and a leaf materialization (the lea of a
-type sigil) clobbers the pinned scratch, forcing a reload the next compare. Secondary:
-no CSE (the same tag word reloads per test), no tail merge or identical-code folding
-(clang folds lvm_chain to a 5-byte alias of a twin; mooncc lays every epilogue in
-full), immediates rematerialized per use. The spread is broad — 248 of 614 symbols
-above 2×, but 105 at or under parity (−27 KB: clang paying inlining bytes mooncc
-doesn't). The size gap and the corpus's flat 1.71× insn ratio are one fact seen
-twice: the slot movs are cheap (IPC eats them — cycles sit at 1.23×) but they are
-most of the extra instructions and most of the extra bytes.
-
-### runtime — the corpus, egg-boot subtracted, median of 3
-
-| | mooncc | clang | ratio | gcc |
-|---|---|---|---|---|
-| corpus insns (G, user) | 43.39 | 25.40 | **1.71×** | 23.33 |
-| corpus cycles (G, user) | 15.41 | 12.54 | 1.23× | 12.44 |
-| egg boot insns (G) | 9.38 | 5.60 | 1.68× | 5.18 |
-
-The gcc column fills for the first time (the love_data.ld fix held): gcc lays FEWER
-corpus instructions than clang here — mooncc/gcc is **1.86×**, the harder number.
-**The corpus ratio did not move (1.71× → 1.71×), and that is the honest reading, not
-a null result**: the corpus's hot symbols are the VM dispatch lanes (lvm_cur, lvm_qap,
-lvm_eq) — tail-threaded musttail chains the keep machinery deliberately never touches
-(no loops to keep, scratch dies at every jump). The arc's wins live where loops live:
-
-### the pair that says where the gap is — wall, boot subtracted
-
-| | mooncc | gcc | clang | mooncc/clang |
-|---|---|---|---|---|
-| chacha20 (ms) | 1059.6 | 279.8 | 165.8 | **6.4×** (was ~23×) |
-| poly1305 (ms) | 1424.5 | 1317.9 | 776.9 | 1.83× (gcc 1.08×) |
-
-chacha20 — the array-indexed inner loop, the shape the first fill named as the
-23× outlier — dropped to 6.4× vs clang and 3.8× vs gcc: loop-head survival, element
-pins across calls and the exit meet are exactly that shape's levers. poly1305 (five
-scalar limbs, the shape mooncc already held) sits at 1.08× of gcc. The pair still
-reads array-slots-are-the-gap, but the outlier is now a ratio, not a scandal; what
-remains of it is the pre-call park pair and the residues doc/moon-regalloc.md lists.
-
-
-
-Ryzen 7 5825U, 16 threads, quiet box. gcc 16.1.1, clang 22.1.8, mooncc at HEAD
-(warm off `mooncc.image`).
-
-### invocation speed — source to runnable binary, ccache off
-
-| | mooncc | gcc | clang |
-|---|---|---|---|
-| full build + link (s) | 13.9 | 9.1 | 5.4 |
-| love.c alone, median of 3 (s) | 9.0 | 8.1 | 4.9 |
-
-mooncc compiles the 7.8-kloc love.c in 1.8× clang's time and ~1.1× gcc's — a compiler
-written in love holding within 2× of the natives at their own -O2 job.
-
-### text size — `size -A`, the section, never size(1)
-
-| | mooncc | gcc | clang |
-|---|---|---|---|
-| .text (bytes) | 593,632 | 244,499 | 244,531 |
-| .rodata (bytes) | 364,544 | 360,464 | 361,008 |
-
-⚠ superseded — the decomposition below reads the "own libc/runtime" set off the symbols
-the *native binary* lacked, which files every love static gcc inlined away as mooncc
-runtime. See the static-musl section at the top: 65 KB and 2.12×, not 170 KB and 1.75×.
-
-the 2.43× headline decomposes: 666 symbols (~170 KB) are mooncc's **own libc/runtime**
-(nolibc, `__fmt*`, `__dnsq`, rbig, the am floor) — the clang lane rides shared glibc,
-off its ledger. Over the 610 *shared* C symbols it's 421 KB vs 240 KB — **1.75×** of
-genuinely emitted code, .rodata at parity. 1.75× is the codegen number to track; 2.43×
-is what ships. (File sizes don't compare: the gcc/clang lanes carry `-g`; mooncc
-per-symbol sizes are address-gap derived, so they carry inter-fn padding, ~1–2%.)
-
-### runtime — the corpus, egg-boot subtracted, median of 3
-
-| | mooncc | clang | ratio | gcc |
-|---|---|---|---|---|
-| corpus insns (G, user) | 43.87 | 25.66 | **1.71×** | dnf |
-| corpus wall (ms) | 4706 | 3969 | 1.19× | dnf |
-| egg boot insns (G) | 9.56 | 5.57 | 1.72× | dnf |
-| egg boot wall (ms) | 962 | 823 | 1.17× | dnf |
-
-gcc's dnf was the missing `love_data.ld` (traps below), fixed the same day — the column
-is fillable now and empty only because this fill predates it.
-
-The insn ratio is the codegen differential; the wall ratio is softer because mooncc's
-extra instructions are cheap and run at higher IPC — measured this fill: IPC 2.98 vs
-2.05, cycles 17.9G vs 15.2G (**1.18×**, and wall tracks cycles). The corpus and the
-boot agree at 1.7× — the boot *is* the compiler compiling, so that's one story told
-twice. Per-symbol, the profiles are the same roster (the VM dispatch lanes) and the
-gap is broad, not one villain: lvm_cur and lvm_qap ~2.6× insns each, lvm_eq ~2.1×.
-
-### runtime — host nifs, 28-file roster, 28 boots subtracted, single pass
-
-| | mooncc | clang | ratio |
-|---|---|---|---|
-| hostnif insns (G, user) | 729.7 | 677.4 | 1.08× |
-| hostnif wall (s) | 94.6 | 90.4 | 1.05× |
-
-A smoke-level differential only: the lane is wait-dominated (pty, net, tasks, timers),
-and perf counts the whole process tree — sh.l spawns the *tree's* love + lush, so
-children dilute the ratio. The corpus row is the clean number; this row exists to catch
-a lane that regresses *disproportionately* (nif-heavy paths, syscall glue), not to be
-read as a codegen gap.
+| c83b19a8 | the allocator arc (the first hom ladder) | 1.86× | — | 1.71× |
+| d83892e3 | the hom ladder | 2.32× | 1.67× | 1.60× |
+| 3dd9e1fc | the cs-seat rung, pmin-gated | 2.31× | — | 1.63× |
+| b0f92305 | static musl, libc onto the ledger | 1.99× | 1.63× | 1.63× |
+| 32b54ab8 | shrink-wrap | 1.99× | 1.63× | 1.63× |
+| 6a8f8b68 | nolibc splits by area | — | 1.63× | — |
+| fc061fc0 | the dead-static sweep | 1.793× | 1.63× | — |
+| a1e12f40 | nolibc, one function to a file | 1.779× | — | — |
+| 2fc25890 | re-base: repack + sweep + split | 1.702× | 1.56× | 1.625× |
+| a055d279 | the spush cell joins the slot map | 1.618× | 1.47× | 1.629× |
+| **86fc76ff** | **rungs 1+2: liveness + promotion** | **1.591×** | **1.44×** | **1.617×** |
+
+Two readings the table carries and no single cell does. **The static and dynamic ratios
+converged at 1.63× and then came apart** — four size levers (the sweep, the split, repack, the
+spush cell) walked codegen 1.63 → 1.47 while the corpus did not move a digit, because bytes
+that are unreachable or merely re-encoded are not bytes that execute. **And they closed again
+the moment an allocator rung landed**: rungs 1+2 are the first to move the dynamic row at all.
+That is the whole argument of doc/moon-alloc.md, first stated and then demonstrated.
+
+⚠ two instrument lessons the fills paid for, kept because they still bite:
+
+* **the `mcobj` cache is not "paid once per tree".** 45.2 s cold and 15.4 s warm on the SAME
+  tree, one run after the other, because a rung that changes the compiler rehashes every
+  member. Every codegen fill pays it; only the warm build row is quotable.
+* **clang's chacha is not a box anchor.** It read 198.1 twice and the a055d279 fill took that
+  coincidence for stability, reading a mooncc move off it; it reads 169.9 and 182.7 the next
+  day. That row swings ±8%. Two agreeing samples are not a control — a control is a lane that
+  moves less than the effect, over as many passes as the claim needs.
 
 ## method
 

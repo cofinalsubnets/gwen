@@ -794,8 +794,23 @@ than compiled. Two older laws re-anchored off the mechanism onto the invariant (
 `copyof?`): ci's indirect call now stages through r0 with no frame at all rather than two spush
 cells, and wv's written param takes a register instead of a spill. Gates: test_slow (seven
 zz-fin lines), test_moon, test_fixpoint byte-identical, vmret,
-test_raw/drv/libc/kore/clay. ⚠ OWED: step 0 has not been re-run against this rung, and the
-page's own law says it must be.
+test_raw/drv/libc/kore/clay.
+2026-08-12 · STEP 0 AGAINST RUNGS 1+2 (measurement only, two ccbench passes): both-emit codegen
+1.47×→**1.44×** (gap 118,531→**112,069 B**), binary 1.618→**1.591×**; love.o .text fell 6,315 and
+the shared-symbol gap 6,462 -- agreeing to 147 B, so the move is this rung alone. THE ROW THAT
+MATTERS: corpus insns 42.291→**41.984 G** with BOTH natives flat to 0.05%, so the dynamic ratio
+moved 1.629→**1.617×** -- the first movement in that row after three fills of size levers left it
+untouched. Frame-mov excess over gcc 92,679→79,564 B, **71.0% of the gap, DOWN from 78.2%**: the
+share had risen at every prior fill because the gap shrank faster than the traffic, and this is
+the first lever aimed at the traffic itself. poly1305 PASSED gcc and reproduces (1.04× → 0.98×
+and 0.99× over two passes, gcc's own stable to 0.3%) while chacha holds at 3.5-3.6× -- the pair's
+designed reading firing exactly as specified, poly being scalar locals and chacha array slots.
+Warm build 15.4 s (flat vs 15.1), love.c single TU 8.42→9.90 s. ⚠ TWO INSTRUMENT LESSONS: the
+mcobj cache is not "paid once per tree" -- 45.2 s cold and 15.4 s warm on the SAME tree, because
+a rung that changes the compiler changes every member hash, so every codegen fill pays it; and
+clang's chacha is NOT the box anchor the previous fill called it (198.1 twice was coincidence,
+169.9/182.7 the next day), so that fill's "1220→1075 is a real move" is corrected -- two agreeing
+samples are not a control.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
