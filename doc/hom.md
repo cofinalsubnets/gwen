@@ -42,7 +42,7 @@ The seam comment: love/ev.l, "THE EMISSION INTERFACE".
 gen.l grew up on the other protocol: every expression delivers into r0 and the
 consumer relocates — Hom(−, r0) with every composite forced through one representative
 object, paying a bridge (a mov, an sp cell, a 0/1 reify-and-retest) at each seam. The
-recovery passes (addrfold, cmpfuse, copyprop ..) claw the bridges back after the fact;
+recovery passes (addrfold, cmpfuse, dehusk ..) claw the bridges back after the fact;
 the residency layers (vmap, homes, cspool) shrink how often a value must travel at all.
 
 The migration passes the consumer down instead, as a **destination die** — the
