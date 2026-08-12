@@ -170,7 +170,10 @@ moon0 = $(love0) --wake out/host/mooncc0.image -e '(moon-main (cuup (cup cmdline
 moon_d = $(ho)/moon
 moon_host_o = $(patsubst host/%.c,$(moon_d)/host_%.o,$(wildcard host/*.c))
 moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
-moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_d)/nolibc.o $(moon_math_o) $(moon_d)/sys.o
+# no nolibc object: the link owes its symbols, so the driver's runtime table pulls
+# crew/moon/lib/nolibc/ MEMBER BY NEED -- a love asking for no calendar and no
+# resolver links neither. Naming an object would take every member instead.
+moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_math_o) $(moon_d)/sys.o
 # -D AI_HAVE_VERSION_H + the love_version.h dep: this TU carries the version id into the
 # SHIPPED binary, and mooncc has no __has_include for love.c's fallback probe to use.
 $(moon_d)/love.o: love.c $(love_h) out/host/mooncc0.image out/lib/love_version.h
@@ -183,10 +186,6 @@ $(moon_d)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
 	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
 $(moon_d)/host_main.o: $(baked_h)
 $(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
-$(moon_d)/nolibc.o: crew/moon/lib/nolibc.c out/host/mooncc0.image
-	@echo MOON	$@
-	@mkdir -p $(dir $@)
-	@$(moon0) -Icrew/moon/include -c $< $@
 $(moon_d)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
@@ -216,7 +215,10 @@ $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/love_da
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(host_ldflags) $(image_ldflags) $(data_ld)
 else
-$(ho)/love $(ho)/love.cand: $(moon_o)
+# ⚠ the nolibc sources are a dep of the LINK, not of any object: the driver compiles
+# the members it pulls, so an edit there changes this binary with no .o to notice.
+nolibc_src = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h)
+$(ho)/love $(ho)/love.cand: $(moon_o) $(nolibc_src)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) -o $@

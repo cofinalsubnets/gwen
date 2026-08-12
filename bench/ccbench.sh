@@ -112,7 +112,9 @@ build_mooncc() { # $1=binpath
     "$MC" -D ai_tco=1 -Iout/host -I. -Iout/lib -c love.c "$od/love.o" || exit 1
     for f in host/*.c; do b=$(basename "$f" .c)
       "$MC" -D ai_tco=1 -Iout/host -I. -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
-    "$MC" -Icrew/moon/include -c crew/moon/lib/nolibc.c "$od/nolibc.o" || exit 1
+    # no nolibc object: the link owes its symbols and the driver supplies them
+    # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
+    # read mooncc's libc off the BINARY's complement, not off a nolibc.o.
     for f in crew/moon/lib/math/*.c; do b=$(basename "$f" .c)
       "$MC" -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
     { cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l \

@@ -2,11 +2,11 @@
 """ccdead.py -- how much of each lane's libc the binary can never reach.
 
 ccsize.sh answers how many libc bytes a lane ships. This answers how many
-it can call. The two differ enormously for mooncc and barely at all for
-musl, and that difference is the whole of mooncc's 1.59x libc ratio: musl
-compiles ~one function per object so the static link drops what love never
-calls, while nolibc.o is a SINGLE .text section and a section is the
-linker's unit of discard -- all or nothing.
+it can call, and the gap between them is what granularity buys: a libc that
+arrives as one object arrives whole, where one compiled ~a function (musl)
+or ~an area (crew/moon/lib/nolibc/, pulled member by need) sheds what the
+link never asks for. Run it on any lane that grows a libc to see whether
+its shape still earns its size.
 
 Method: walk call/jmp/lea targets out of `objdump -d`, seeded from _start
 and from every function address found in the data sections (vtables and
@@ -20,8 +20,18 @@ a public entry riding along with the object-mate that is used), not scan
 error, so it is the floor a libc built for static linking still cannot
 get under. A lane well clear of it is reporting something.
 
+⚠ this reports the LIBC column only, but love's OWN C is worth asking about
+too, and the natives are the control that makes the answer readable: mooncc
+leaves 6.4% of its own text unreachable against gcc's 2.6% and clang's 1.7%.
+The excess is not this scan missing a dispatch table -- all three lanes run
+the same tables -- it is that MOONCC INLINES WITHOUT DROPPING THE BODY. Its
+own `static ai_inline` copy_data is spliced into every call site and the
+out-of-line copy still ships, referenced by nothing. Read the natives' figure
+as the floor here exactly as in the libc column.
+
 Usage: ./ccdead.py            (after ./ccbench.sh, or `make ccbench`)
-       ./ccdead.py ELF ...    (any binaries, own-object split skipped)
+       ./ccdead.py ELF ...    (⚠ no own-object split, so every text symbol is
+                               reported as libc -- read with the caveat above)
 """
 import collections, os, re, subprocess, sys
 

@@ -66,8 +66,9 @@ for f in host/*.c; do
   moonc -D ai_tco=1 -I"$ho" -I. -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
 done
 
-moonc -Icrew/moon/include -c crew/moon/lib/nolibc.c "$d/nolibc.o" || fail "mooncc $tflag -c nolibc.c"
-
+# nolibc is NOT compiled here: the link below owes its symbols and the driver's
+# runtime table supplies them member by need (crew/moon/lib/nolibc/, test_drv's
+# lane). Naming the objects would take every member, dead areas included.
 for f in crew/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
   moonc -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || fail "mooncc $tflag -c $f"
