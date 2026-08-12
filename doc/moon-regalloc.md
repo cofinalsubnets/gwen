@@ -811,6 +811,45 @@ a rung that changes the compiler changes every member hash, so every codegen fil
 clang's chacha is NOT the box anchor the previous fill called it (198.1 twice was coincidence,
 169.9/182.7 the next day), so that fill's "1220→1075 is a real move" is corrected -- two agreeing
 samples are not a control.
+2026-08-12 · COALESCING (rung 4, pulled AHEAD of rung 3) — a copy whose source was defined by
+the form before it and dies at the copy is a def that named the wrong register: the def takes the
+destination and the mov never lands. The liveness kit's second consumer, and the first to ask a
+question the window heuristics cannot — not "does this value die soon" but "does it die HERE".
++38 lines. **corpus insns 41.983→41.244 G, −1.76%** (cycles flat, within noise), love.o .text
+333,177→**327,064 B (−1.83%)**, insns 77,080→**75,100 (−2.57%)**, reg-reg movs 12,353→10,391.
+Against clang the dynamic ratio goes 1.617→**1.589×** — more than twice rungs 1+2's move, and the
+largest on this arc.
+
+⚠ WHAT THIS RUNG COST TO FIND, because the route matters more than the result. It was reached by
+building the CALL-CROSSING CLASS on cs seats (rung 2's open half) and measuring that it CANNOT
+PAY. A cs seat can never equal the store's source — sources are caller-saved — so no mov ever
+drops, and the rewrite is a frame touch turned into a reg-reg mov ONE FOR ONE plus the
+save/restore pair: measured +3,073 movs against −1,722 frame movs, +1,349 insns, exactly the pair
+count. The lvgp class paid precisely because its seat CAN be the source. No pricing gate repairs
+that; a gate tight enough to be safe admits nothing. Even with coalescing on top, cs seats stay
++1,077 insns for −1,479 B and retire no mechanism. **The class is refused**, and the plan's
+ordering with it: rung 4 comes BEFORE rung 3, because nothing that turns memory into copies pays
+until the copies can go.
+
+Three traps the attempt paid for. **unframe reads the prologue BY POSITION** — its `sv3` asks
+whether form 4 is exactly `(st r4 -8 r3)` and drops that save with the frame — so saves inserted
+at index 4 displaced it, leaving the rbx save standing while its restores went, and the caller's
+rbx died at the tail; it presented as a segfault in `main` with rbp holding a love fixnum, AFTER
+the corpus had run and printed `tests pass`. **A name-keyed bisect over one TU's functions is not
+a bisect**: the switch matched by name across every TU while the name list came from love.c
+alone, so musl and host/*.c promotions were never disabled and three "culprits" were artifacts.
+What actually cracked it was emitting the pair while rewriting NO touch — still crashed, which
+proved the fault was in emission rather than in the promoted value and pointed straight at
+unframe. **The emitter's own `alias-dst` guard** caught the coalescer renaming a destination onto
+one of the def's sources; the rename must be a stranger to the def on both sides.
+
+Laws: six hand-laid shapes for the fold and its five refusals (source still live, def reads its
+own dest, dest aliases a source, a label between, the prologue). One older law re-anchored off
+the mechanism onto the invariant — ci's indirect call is pinned on "two loads, neither onto an
+arg seat" rather than on counting r0's, because coalescing now gives one argument its scratch at
+birth. Gates: test_slow (seven zz-fin lines), test_moon, test_fixpoint byte-identical, vmret,
+test_raw/drv/libc/kore/clay.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

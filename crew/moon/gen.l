@@ -4646,6 +4646,44 @@
              _ (fix ())
              lot)))
 
+   ; -- COALESCING: a copy whose source dies at the copy, and whose source was DEFINED by the
+   ; form just before it, is not a copy at all -- it is a def that named the wrong register. The
+   ; def takes the destination and the mov drops. dehusk is the FORWARD half of this (rename the
+   ; source onward while it lives); this is the backward one, and it is the first reader to ask
+   ; liveness not "does this die soon" but "does it die HERE". ⚠ soundness rides on ADJACENCY: no label
+   ; can sit between the def and the copy (a label is a form, and rdsp bars it), so nothing
+   ; branches in between; and D cannot be live out of the def, because live-out there is live-in
+   ; at the copy, which reads S and writes D. ⚠ the prologue is off limits: unframe reads it BY
+   ; POSITION (its sv3 asks whether form 4 is the r3 save), so a drop up there moves the ground
+   ; under it. --
+   (coal? p f i lot)                                ; may (mov D S) at i fold into its def p?
+    (? !(two? p && two? f && id? <f 'mov && (5 < i)) ()
+       (: S (nthr f 2)
+          D (nthr f 1)
+          d (rdsp p)
+          (? (id? d 'bar) ()
+             (: dfs <>d
+                ; the def names S ALONE and never reads it -- a read would keep the operand and
+                ; the two-address expansion costs back exactly what the drop wins
+                (two? dfs && !(two? >dfs) && id? <dfs S && id? (nthr p 1) S &&
+                 ; ⚠ D must be a stranger to the def on BOTH sides: absent from its reads (the
+                 ; emitter refuses a destination that aliases a source -- alias-dst) as well as
+                 ; from its defs, or the rename writes over an operand it still needs
+                 !(member? S <d) && !(member? D <d) && !(member? D dfs) &&
+                 !(member? S (peep lot i ())) && !(id? D S))))))
+   (coal g fs)
+    (: lot (lvout g fs)
+       (? (id? lot 'no) fs
+          ; one form of lookbehind: a kept form is emitted when the NEXT one declines it, so a
+          ; folded pair leaves exactly the rewritten def and the copy never lands
+          (: (rn l p i)
+              (? !(two? l) (? (two? p) [p] ())
+                 (: f <l
+                    (? (coal? p f i lot) ((reop p 1 (nthr f 1)) >< rn >l () (i + 1))
+                       (two? p) (p >< rn >l f (i + 1))
+                       (rn >l f (i + 1)))))
+             (rn fs () 0))))
+
    (repack g fs)
     (: slots (peep g 'slots ())
        pro (pro4? fs)
@@ -7721,7 +7759,7 @@
        ; misprices every grant. repack reads the WINNER's slot map (deopt restores ir1's) and
        ; runs after deadlab (a dead region's touches would fatten the windows). this chain's
        ; order is TYPED (stage.l): each pass advances a stage die, so only this composition checks.
-       (? (bad? irf) irf (cskeep g (unhome g (jr0 (unframe g (repack g (deadlab irf))))))))
+       (? (bad? irf) irf (cskeep g (unhome g (jr0 (unframe g (coal g (repack g (deadlab irf)))))))))
 
    ; the data tail: globals in declaration order, then the string table -> (dataforms nifforms
    ; imgforms extras bssforms rodataforms) | 'bad, extras being ((name forms ro?) ..), one per

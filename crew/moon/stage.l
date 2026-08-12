@@ -33,6 +33,7 @@
                 ; rankers read, unframe re-addresses before jr0 retargets, unhome
                 ; renames last, cskeep sees only what ships -- one order types
                 (deadlab (ir-chosen) ir-nolab)
+                (coal (gst ir-nolab) ir-nolab)       ; stage-preserving: it renames, never re-addresses
                 (unframe (gst ir-nolab) ir-noframe)
                 (jr0 (ir-noframe) ir-jmpfix)
                 (unhome (gst ir-jmpfix) ir-final)

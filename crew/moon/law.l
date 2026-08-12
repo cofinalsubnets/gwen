@@ -1691,8 +1691,14 @@
       (member? '(ld r0 r6 8) ca)                     ;   through the face and RIDES r0 across the
       (member? '(mov r5 r0) ca)                      ;   first's delivery -- no cell at all
       !(member? '(ld r6 r5 0) ci)                    ; an indirect call BARS the aim: neither arg
-      !(member? '(ld r5 r5 8) ci)                    ;   is delivered onto its seat -- both STAGE
-      (= 2 (ldinto ci 'r0))))                        ;   through r0 (two spush cells, before
+      !(member? '(ld r5 r5 8) ci)                    ;   is delivered onto its seat, so both must
+      (= 2 (tally (filter (\ f (two? f && id? <f 'ld)) ci)))   ;   stage -- two loads, and
+      (= 0 (ldinto ci 'r6)) (= 0 (ldinto ci 'r5))))  ;   neither lands on a seat. ⚠ anchored there
+                                                     ;   and not on the staging REGISTER, which
+                                                     ;   coalescing moved: one of the two is now
+                                                     ;   born in its scratch instead of copied
+                                                     ;   into it, so counting r0's loads pinned a
+                                                     ;   mechanism rather than a law
                                                      ;   promotion took the staging into registers)
 
 ; -- the destination die reaches the bin value lane (the fourth lane): a LOAD-shaped
@@ -1926,6 +1932,34 @@
                                                      ;   the universe, so the call clobbers it
       (id? (lvout gL '((label fn) (raw 144) (ret))) 'no)))   ; an op rdsp bars refuses the fn
 
+; -- COALESCING, the liveness kit's second consumer and the first to answer a question the
+; window heuristics cannot: not "does this value die soon" but "does it die HERE". A copy whose
+; source was born on the form before it and dies at the copy is a def that named the wrong
+; register. ⚠ the refusals are the law: the prologue is untouchable (unframe reads it by
+; POSITION), a def that reads its own destination would need a two-address expansion that costs
+; back the drop, and the copy's destination must be a stranger to the def on both sides or the
+; rename writes over an operand still in use. --
+(: gC (tablet 0)
+   pro '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3))
+   (co l) (coal gC (pro + l))
+   (: c1 (co '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r5 r7) (ret)))
+      c2 (co '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r6 r7) (ret)))
+      c3 (co '((li r5 1) (add r6 r6 r5) (mov r7 r6) (add r0 r7 r7) (ret)))
+      c4 (co '((li r5 1) (sub r6 r12 r7) (mov r7 r6) (add r0 r7 r7) (ret)))
+      c5 (co '((li r5 1) (li r6 2) (label L9) (mov r7 r6) (add r0 r7 r7) (ret)))
+      c6 (coal gC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (li r6 2)
+                    (mov r7 r6) (add r0 r7 r7) (ret)))
+      (assert
+         (= c1 (pro + '((li r5 1) (li r7 2) (add r0 r5 r7) (ret))))   ; the def takes the copy's name
+         (= (tally c2) (tally (pro + '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r6 r7) (ret)))))
+         (member? '(mov r7 r6) c2)                     ; the source lives on: the copy stays
+         (member? '(mov r7 r6) c3)                     ; a def reading its own dest: no rename
+         (member? '(mov r7 r6) c4)                     ; the new dest is a SOURCE of the def
+         (member? '(mov r7 r6) c5)                     ; a label between them: not adjacent
+         (member? '(mov r7 r6) c6)                     ; index 5 is prologue ground: hands off
+         (id? (coal gC '((label fn) (raw 144) (ret))) '((label fn) (raw 144) (ret)) ||
+          (= (coal gC '((label fn) (raw 144) (ret))) '((label fn) (raw 144) (ret)))))))
+
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die, liveness + promotion) ok")
+(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die, liveness + promotion, coalescing) ok")
 (put err 10)

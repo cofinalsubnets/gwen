@@ -105,11 +105,16 @@ probe cost twenty minutes to find out.
 * **rungs 1+2 CLIMBED 2026-08-12** (4dd9bc41, the regalloc ledger carries the payload) — shipped
   as one rung, which is what the falsification below asked for. What LANDED is the
   caller-saved interval class only: −2,486 frame movs, −6,315 B `.text`, and the arc's first
-  dynamic movement (corpus insns −0.73%, cycles −0.93%). What is still OPEN in rung 2 is the
-  **call-crossing class on cs seats** — a value live across a call cannot take a caller-saved
-  register by construction, and the cs seat with its save/restore pair priced like cssv is
-  where the rest of the ~80 KB sits. The rung's own measurement says so: 2,928 objects passed
-  the shape test but only a fraction found a free caller-saved seat. Step 0 RAN against it
+  dynamic movement (corpus insns −0.73%, cycles −0.93%). ⚠ **the call-crossing class on cs
+  seats is REFUSED, 2026-08-12 — built, measured, and it cannot pay.** A cs seat can never
+  equal the store's source (sources are caller-saved), so no mov ever drops and the rewrite is
+  a frame touch turned into a reg-reg mov ONE FOR ONE plus the save/restore pair: +1,349 insns,
+  exactly the pair count. The lvgp class paid precisely because its seat CAN be the source. No
+  pricing gate repairs it, and even under coalescing it stays +1,077 insns for −1,479 B while
+  retiring nothing. **So the ~80 KB of frame shuffle is not reachable by seating slot objects
+  in callee-saved registers**, and this page's expectation that it was is corrected. What that
+  bucket needs is emission against vregs — phase II — where a value is born in its seat rather
+  than copied into one. Step 0 RAN against rungs 1+2
   (doc/moon-diff.md, HEAD 86fc76ff): codegen 1.47×→**1.44×**, gap **112,069 B**, and the
   dynamic row moved 1.629→**1.617×** with both natives flat — the arc's first.
 * **rung 1, the liveness kit.** Not "build a liveness engine" — three approximations of
@@ -260,9 +265,15 @@ probe cost twenty minutes to find out.
   specially: DELETE pcs, swcs, pmin, pminp, nrac, the dual-epilogue sibs flavor — param
   spill slots promote like any slot. First negative-LOC milestone; the A/B must show
   the granted fns hold their wins.
-* **rung 4, coalescing.** Liveness-driven copy elision over final forms (a mov whose
-  source dies — the +23 KB reg-reg bucket; the movslq churn dies with it, promoted
-  values stay extended). dehusk's window heuristics shrink to the rename sandwich.
+* **rung 4, coalescing. CLIMBED 2026-08-12, AHEAD OF RUNG 3** (the regalloc ledger carries
+  the payload) — a copy whose source was defined by the form before it and dies at the copy
+  folds into that def. Corpus insns **−1.76%**, `.text` **−1.83%**, +38 lines; the dynamic
+  ratio 1.617→**1.589×**, the largest move on this arc. The ordering changed because the
+  refusal below proved it: **nothing that turns memory traffic into copies pays until the
+  copies can go**, so coalescing precedes every rung that creates them, not follows.
+  Still owed here: the backward half is done, `dehusk` is the forward one, and its
+  hand-rolled `dies?`/`swin`/`qdrop` heuristics are what a real liveness answer retires —
+  that shrink is the retirement this rung has not yet collected.
 
 ## phase II — emission against vregs
 
@@ -308,5 +319,15 @@ moved the static ratio 1.63 → 1.47 and the dynamic ratio not at all. Phase I i
 rung that should move the DYNAMIC row, and if it lands another −10% `.text` at 1.629×
 dynamic, it has not done what this arc exists to do. Quote the corpus A/B first.
 
-Sequencing binds at three joints: rung 1 before everything and PRICED WITH rung 2 (its
-own consumers pay 736 B — the probe); rung 5 only after rung 3.
+Sequencing binds at four joints: rung 1 before everything and PRICED WITH rung 2 (its
+own consumers pay 736 B — the probe); **rung 4 before rung 3, not after** — nothing that
+turns memory traffic into copies pays until the copies can go, which is what refused the
+cs-seat class; rung 5 only after rung 3.
+
+⚠ **and a gate this page states but did not apply to itself.** Rungs ship under "pays
+somewhere, regresses nowhere", but that is the SHIPPING rule; the arc's own measure is
+mechanism retired, and rung 1 is on record as infrastructure priced by what it enables. A
+rung aimed at a byte bucket rather than at a named mechanism gets a duplicate rather than a
+replacement — the cs-seat class was aimed at the 79,564 B of frame shuffle and arrived as a
+second spelling of `pcs`, +109 lines, retiring nothing. Name the mechanism a rung retires
+before building it, and gate on whether it comes out.
