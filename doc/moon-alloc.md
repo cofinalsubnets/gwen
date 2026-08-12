@@ -319,7 +319,12 @@ probe cost twenty minutes to find out.
 * **rung 5.** Build emits vregs (r0 becomes just another one). Linear scan assigns the
   pool + cs file; spill under actual pressure, placed, not written through. The regen
   dance collapses: one build, one assignment — no policy attempts, no deopt snapshots
-  beyond bad-shape bail. Only after rung 3 proves the engine on the easier input.
+  beyond bad-shape bail. ⚠ its entry condition was "after rung 3 proves the engine on the
+  easier input" and that was wrong: rung 3's remaining half is BLOCKED ON rung 5, not the
+  reverse (the joint above). Rung 5 inherits `pcs` as a mechanism to retire.
+  **The cs file is the first increment** — promotion's roster is caller-saved only, so an
+  interval crossing a call cannot hold a register today, and that is both what `pcs` hand-serves
+  for params and what leaves the frame-mov bucket untouched by three copy-folding rungs.
 * **rung 6, retirement two.** DELETE the vmap, the shadow/ride policies, unhome, the
   pricing walks, most of the rgreset roster. opool survives only as the register file's
   name; cskeep stays as armor; stage.l re-types the shorter chain.
@@ -361,7 +366,14 @@ dynamic, it has not done what this arc exists to do. Quote the corpus A/B first.
 Sequencing binds at four joints: rung 1 before everything and PRICED WITH rung 2 (its
 own consumers pay 736 B — the probe); **rung 4 before rung 3, not after** — nothing that
 turns memory traffic into copies pays until the copies can go, which is what refused the
-cs-seat class; rung 5 only after rung 3.
+cs-seat class.
+
+⚠ **the fourth joint was backwards and is corrected 2026-08-12.** It read "rung 5 only after
+rung 3". It is the other way for the half of rung 3 that remains: promotion seats from `lvgp`,
+the CALLER-saved file, and no call may sit inside a range that takes one — so an interval
+crossing a call is unreachable to it by construction, and that is exactly the class `pcs`
+serves (`pmin` gates the grant on every path containing a call). `pcs` is retired by the rung
+that can hand out CALLEE-saved seats, which is rung 5. The regalloc ledger carries the probe.
 
 ⚠ **and a gate this page states but did not apply to itself.** Rungs ship under "pays
 somewhere, regresses nowhere", but that is the SHIPPING rule; the arc's own measure is

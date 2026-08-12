@@ -1026,6 +1026,42 @@ written and are exactly the laws that cover the deletion. Gates: test_slow, test
 "guaranteed sibcalls" leg is the contract this touches), test_gen, test_clay, test_drv, vmret
 (307 lvm_* ret-free), `make test` host + love0 ×2.
 
+2026-08-12 · WHY PROMOTION CANNOT SUBSUME `pcs`, and the arc dependency it inverts (the probe
+behind the refusal above). Two questions: how big is the class, and does promotion decline those
+slots or never see them.
+
+The class is **15 functions of ~640**, net +169 static insns with the grant off, and the benefit
+is **two functions**: `ai_ini_0` 583→744 (+161) and `yield_sw_wait` 731→795 (+64), against
+`gen_please` −40. Fifty-seven lines of `pmin`, `nrac` and the grant block serve two functions in
+love.c. With the grant off the params are not re-seated anywhere — `ai_ini_0`'s frame traffic goes
+**75 → 171 movs**, straight back to memory.
+
+**It is structural, and `gen.l` says so in its own comment.** Promotion's seat roster is `lvgp`
+(4567): "the x64 CALLER-saved gp file — a seat here needs no save/restore pair, and **no call may
+sit inside the range that takes one**." `pseat` draws from nothing else. `lvtx` (4576) has a call
+read AND define everything outside `csregs`, so every candidate register is defined inside any
+interval that spans a call and `pfree?` refuses it. Promotion is caller-saved-only BY
+CONSTRUCTION. `pcs` seats params in the CALLEE-saved file for exactly the reason promotion cannot:
+so they survive calls. Disjoint register files, disjoint interval classes, no overlap to find.
+
+⚠ and `pmin` is the tell that should have been read years earlier: it gates the grant on EVERY
+PATH CONTAINING A CALL. That filter selects precisely the class promotion is structurally unable
+to serve. A mechanism whose entry condition is the other mechanism's exclusion condition was never
+going to be subsumed by it.
+
+⚠⚠ **THE ARC DEPENDENCY IS INVERTED.** doc/moon-alloc.md bound "rung 5 only after rung 3", and
+rung 5's own text bound it to "after rung 3 proves the engine on the easier input". Param slots
+crossing calls were never the easier input — they are the case needing the one capability rung 5
+adds, since rung 5 is where linear scan assigns "the pool + **cs file**". `pcs` can only be
+retired by the rung that can hand out callee-saved seats. It is not rung 3's second half; it is
+rung 5's, and no work at rung 3 collects it. The refusal above stands for a better reason than the
+one it was committed with.
+
+Method note worth keeping: this cost one per-symbol diff of two objects already built for the
+ablation, plus two greps. No instrumented build, no probe in the tree. **Diff the artifacts you
+already have before you instrument** — the ablation binaries answer "which functions and how much"
+for free, and the source answered "why" once the question was narrow enough to ask.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
