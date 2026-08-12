@@ -880,3 +880,5 @@ read as a codegen gap.
 * **sub-% deltas are layout luck** — dyn-insn counts carry ±0.05% pad wiggle and wall
   carries BTB-lottery swings measured up to 4%. A ledger row moves when a ratio moves,
   not a third decimal.
+* **love.c compiles in under 20 s** — time the TU whenever a pass lands in mooncc.
+  Nothing else on this page gates the compiler's own speed.
