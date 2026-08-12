@@ -390,8 +390,57 @@ used on `in` for a reason with two halves:
   `tally` and a cons loop around each. `flow in` degenerates to worse than `trickle`. ⚠ `slurp`
   gulps the same way and pays the same handicap.
 
-So the fix is not "use flow on in". It is to let `chug` see the borrowed run, and to give the port
-back the bytes the reader did not use.
+So the fix is not "use flow on in". What it is took three measurements to find, and two of them
+refuted the obvious answers — they are below, because each cost a build and none is guessable.
+
+### three measurements, and what they killed
+
+Instruments: `perf -e instructions` on the 971,922-byte corpus, stable to ~0.01% across runs. Wall
+clock is reported only where syscalls make it diverge, since `instructions:u` cannot see them.
+⚠ Read these off a BAKED love; a relink leaves it unbaked and every figure moves.
+
+**1. The ceiling is FULL PARITY, and the seekable door beats the file.** Flip `chug` to `rbio_of`
+(and `ai_io_pending` and `ai_io_read_drain` with it — all three guard separately, so one alone is
+incoherent) and let `reads` gulp. The redirect gap goes **+2.327 G → −0.060 G**: 37.420 G against
+the file door's 37.480 G, 4157 ms against 4266 ms. The whole gap is recoverable, so parity is the
+right target and nothing about the architecture impedes it.
+
+**2. It is not the `once` TABLET.** `once` mints a whole tablet per byte (`love/prel.l`), which
+looks like the cost and is not. Swapping it for a `spin 1` cell with `poke` made it **WORSE:
++2.327 G → +2.577 G** — `poke`'s write barrier and `spin`'s memset together cost more than an
+empty tablet. The per-byte price is the STRUCTURE, one promise per byte, not the memo's shape.
+⚠ Do not re-open this; the gate is green either way, so only the counter tells you.
+
+**3. The pipe must keep trickling, and gulping it is a catastrophe.** `athand` is NULL for the fd
+port vt, so a port with no bio yields ONE byte per chug — and `flow` around a one-byte gulp costs a
+`see`, an `unsee`, a `tally` and a cons loop for each. Making `reads` gulp everything took the pipe
+**+2.469 G → +6.442 G**. So the fork is not "is it `in`?" but **"does this port hold a run?"**:
+a seekable stdin has a borrowed one and can gulp, a pipe has none and must drip until rung 3
+lends it one.
+
+### ⚠ the constraint is IN-PROCESS readers, not the child
+
+The gulp's failure is not the inherited fd — `unchug` answers that. It is that `reads` holding
+bytes in its charlist makes them invisible to the port. `test_stdinbuf`'s own program says it:
+
+```
+pipe door:      rest: [(say out "tail form")     # correct: slurp takes the remainder
+seekable door:  rest: []tail form                # gulped -- (slurp in) found an EMPTY port
+```
+
+That is part III's bug exactly, and it rules out the give-back-the-residue shape this section first
+proposed. Unchugging before each eval IS correct, but it means one chug per FORM, re-spreading the
+same run every time — order 100 cons per source byte, worse than what it replaces. **Any read-ahead
+held as a value is a second position**, which is the one thing camp 3 does not allow.
+
+So `sound` has to take one form off the port without holding read-ahead. It has no such door: the
+port door is `(p1-flow x)`, a charlist like the others. The only shape that is both fast and safe
+is a POSITION door — read datum `i` out of a text and answer where it ended, so the run is walked
+once without being re-spread and nothing is retained across the eval.
+
+⚠ That is the mechanism of the reverted rung 9, and it is NOT what got rung 9 reverted (the walk's
+representation was). Reaching for it is a deliberate decision, not a slide back into a known
+mistake — see "what must not be repeated" below.
 
 ### the rungs
 
@@ -413,10 +462,25 @@ give-back must hand `cat` ten bytes and nine. Injecting `bio_of` collapses both 
 
 Rung 1 buys no speed on its own — it is the door rung 2 spends.
 
-**2 — `chug` reads through the borrowed run, and `reads` walks a chunk as TEXT.** With rung 1 in
-hand, `chug`'s guard becomes `rbio_of`. Then `reads` on `in` chugs a run, `sound`s the text (the
-string door that landed in `435631a5`), and `unchug`s the residue. The per-byte `once` is gone —
-the cost becomes one chug, one sound and one rewind per FORM. This takes `love < f.l` to parity.
+**2 — a POSITION door on `sound`, and `reads` walks a run once.** ⚠ REWRITTEN after the three
+measurements above; the first draft said "chug a run, sound the text, unchug the residue" and that
+shape is wrong — it re-spreads the run once per form, and while it holds the residue an in-form
+`(slurp in)` sees an empty port.
+
+What the measurements leave is one shape:
+
+* `chug`'s guard becomes `rbio_of` (with `ai_io_pending` and `ai_io_read_drain`, which guard
+  separately), so a borrowed run can be taken as text. Rung 1 is what makes that safe to do.
+* `sound` gains a door that reads datum `i` out of a text and answers **where it ended**, so a run
+  is walked once instead of re-spread per form, and no charlist is retained across an eval.
+* `reads` forks on **whether the port holds a run**, not on `(id? p in)`. A run: walk it, then
+  `unchug` what the walk did not reach before handing control on. No run: `trickle`, exactly as
+  now — measurement 3 is why.
+
+⚠ The `(id? p in)` test cannot simply be deleted: it folded at egg-compile time and `in` is never
+rebound (part II). Whatever replaces it must ask the PORT, not the name.
+
+Target: the redirect door to parity (−2.33 G), the pipe unchanged until rung 3.
 
 **3 — the pipe gets a run too, and the handoff carries the residue.** The pipe is the whole of the
 remaining lane, not a leftover: with no bio it pays both costs. Lending it one means answering the
