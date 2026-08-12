@@ -64,6 +64,11 @@
 ;   your dyadics); quoted lists are data, operators plain.
 ; * arithmetic operators are dyadic: `(+ a b c)` is `((+ a b) c)` -- application, not a 3-way sum,
 ;   so it church-exponentiates ((+ 192 40 5) = (232 5) = 5^232, a bignum).
+; * the CLAUSE forms `?` and `@` are the two N-ARY operators (grip 10): infix, they take the
+;   scrutinee on the left and keep every arm an operand, so (x @ p b .. else) IS (@ x p b .. else)
+;   and (c ? a b) is (? c a b), not (? c (a b)). the leading span is taken whole, so a compound
+;   scrutinee spends no parens. ⚠ an infix ARM still does: a dyadic inside one spans the rest
+;   ((c ? a + b 'e) is (? c (+ a (b 'e)))), which is juxtaposition binding tighter, as everywhere.
 ; * ⚠ `(f)` is not a call -- (f) == f at zero operands, so a nullary helper hands its closure back
 ;   unrun and nothing errors: `(go)` `(loop)` `(step)` never fire -- a silent no-op that keeps
 ;   biting loops and named-lets. fire every thunk with an operand, and let it be the unit:

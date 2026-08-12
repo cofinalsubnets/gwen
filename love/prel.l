@@ -357,12 +357,20 @@
 ; --- reader operators: the two tables + the opfix factor pass ---------------
 ; the valence law's two faces, one form: spaced is dyadic, glued is monadic. the reader leaves a
 ; sigil a plain symbol; opfix factors it against these at compile time.
-; EVERY operator is dyadic -- a row carries no arity, only a grip (higher binds tighter) and a
-; hand (0 right, 1 left -- how a same-grip run folds); op-ent normalizes every written shape to
-; (name grip . hand). undeclared is infix at grip 95 -- above every row here, so the table
-; holds only exceptions. infix is live from this table on.
+; a dyadics row is the whole fold: a grip (higher binds tighter), a hand (0 right, 1 left -- how a
+; same-grip run folds) and an arity (0 dyadic, 1 N-ARY); op-ent normalizes every written shape to
+; (name grip hand . nary), and a shape short of one takes the zero. undeclared is infix at grip 95
+; -- above every row here, so the table holds only exceptions. infix is live from this table on.
 ; a monadics entry maps a run-piece to its monadic word and a run factors greedily, so <>x is
 ; (cap (cup x)) -- glued runs only, and a monadic-only sigil has no dyadics row at all.
+; AN N-ARY OPERATOR collects its operands FLAT where a dyadic spans them into one, so (c ? a b)
+; is (? c a b) and not (? c (a b)). that is what lets a CLAUSE FORM wear its scrutinee on the
+; left: the arms stay operands, exactly as the prefix spelling already has them, so (x @ p b) and
+; (@ x p b) are the SAME form and only one of them was typed. neither `?` nor `@` learns anything
+; -- the special form and the macro are handed the shape they always took.
+; ⚠ arity rides the ROW, not a table beside it, because `fixity` answers a row and pinning it
+; straight back must restore the operator EXACTLY -- a fold parameter kept elsewhere would leak
+; through that door in silence.
 (: dyadics (pins (tablet 0)
  '** 70
  '* (>< 60 1) '/ (>< 60 1) '% (>< 60 1)             ; multiplicative, LEFT
@@ -370,7 +378,7 @@
  '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40             ; comparison
  '| 30 '& 30 '&& 30 '|| 30      ; logical (&& || also macros; the row pins the grip below comparison)
  '>< 25                                                          ; cons -- the loosest builder
- '? 10                                                           ; cond -- infix it is the one-armed form; an else arm is the prefix (? c a b)
+ '? '(10 0 1) '@ '(10 0 1)                                       ; the CLAUSE forms: cond, and match -- n-ary, so every arm stays an operand
  '$ 5)                                                           ; weak apply -- loosest (a $ b = (a b), haskell $); glued $x stays saturate (monadics)
    monadics (pins (tablet 0)
  '< 'cap '> 'cup '+ 'net '* 'prod '| 'abs '- 'negate '/ 'reciprocal
@@ -406,12 +414,13 @@
    (op-grip? g) (&& (charm? g) (< 0 g))
    ; the grip/hand tail, dotted OR as a plain list -- the table writes (60 . 1) but `fixity`'s
    ; caller writes '(60 1), and the door should not make anyone count dots.
-   (op-gh v)  (? (op-grip? v) (>< v 0)                                     ; a grip alone: right-handed
+   (op-gh v)  (? (op-grip? v) (>< v (>< 0 0))                              ; a grip alone: right-handed, dyadic
                  (nil? (two? v)) 0
                  (nil? (op-grip? (cap v))) 0
-                 (charm? (cup v)) v                                          ; (grip . hand), dotted
-                 (&& (two? (cup v)) (charm? (caup v))) (>< (cap v) (caup v))  ; (grip hand), a list
-                 (atom? (cup v)) (>< (cap v) 0))                           ; (grip), a list
+                 (charm? (cup v)) (>< (cap v) (>< (cup v) 0))                ; (grip . hand), dotted
+                 (&& (two? (cup v)) (charm? (caup v)))                       ; (grip hand [nary]), a list
+                  (>< (cap v) (>< (caup v) (? (&& (two? (cuup v)) (charm? (cap (cuup v)))) (cap (cuup v)) 0)))
+                 (atom? (cup v)) (>< (cap v) (>< 0 0)))                    ; (grip), a list
    (op-ent k) (: v (dyadics k)
                  (? (? (two? v) (nom? (cap v)) 0)                            ; nom-led: (name grip[. hand])
                       (: t (op-gh (cup v)) (? (two? t) (>< (cap v) t) 0))
@@ -437,7 +446,8 @@
 ; the walk. a pending-operator frame is (orig name need grip . got): the source symbol, the
 ; resolved name, the operands still wanted, the captured grip, and the operands so far, reversed.
 ; need 0 means filled with the fold deferred, so a later operator can steal the last operand --
-; that deferral is right-associativity. out/pend thread as (out . pend).
+; that deferral is right-associativity. -1 is that steal already spent, the right operand growing
+; as a span; -2 is N-ARY, which never fills and so never spans. out/pend thread as (out . pend).
    (op-fr o nm nd g gt) (>< o (>< nm (>< nd (>< g gt))))
    (op-fro f) (cap f) (op-frn f) (caup f)
    (op-frd f) (cap (cuup f)) (op-frgrip f) (cap (cuuup f)) (op-frg f) (cup (cuuup f))
@@ -459,11 +469,11 @@
    ; the span state rides `need`: 0 = a lone datum, -1 = growing.
    (op-del d out pend)
     (? (atom? pend) (>< (>< d out) pend)
-       (: f (cap pend)
-          (? (< 0 (op-frd f))
-             (>< out (>< (op-frw f (- (op-frd f) 1) (>< d (op-frg f))) (cup pend)))
+       (: f (cap pend) nd (op-frd f)
+          (? (= nd -2) (>< out (>< (op-frw f -2 (>< d (op-frg f))) (cup pend)))  ; n-ary: a new operand, always
+             (< 0 nd)  (>< out (>< (op-frw f (- nd 1) (>< d (op-frg f))) (cup pend)))
              (: op (cap (op-frg f))                          ; the frame's last (right) operand
-                nx (? (= 0 (op-frd f)) (>< op (>< d ())) ; lone -> wrap into (op d)
+                nx (? (= 0 nd) (>< op (>< d ()))         ; lone -> wrap into (op d)
                       (cat op (>< d ())))                  ; span -> append d
                 f2 (op-frw f -1 (>< nx (cup (op-frg f))))
                 (>< out (>< f2 (cup pend)))))))
@@ -471,14 +481,19 @@
    ; against a filled top frame the incomer either steals its last operand or folds it and retries
    ; beneath. at equal grip the incomer's hand decides: right-handed steals, left-handed yields.
    ; at top level the whole leading span is taken: (a b = c) captures (a b), not just b.
+   ; ⚠ an n-ary frame is never filled, so it yields a RIGHT operand or nothing: its left is the
+   ; scrutinee, and a frame holding only that has none to give -- the same refusal an unfilled
+   ; dyadic frame already makes, and what keeps (c ? a + b) reading (? c (+ a b)) instead of
+   ; swallowing the test. a looser operator still folds it, from the branch above.
    (op-steal g h out pend)
     (? (two? pend)
-       (: f (cap pend)
-          (? (< (op-frd f) 1)
+       (: f (cap pend) nd (op-frd f)
+          (? (< nd 1)
              (? (? h (<= g (op-frgrip f)) (< g (op-frgrip f)))
                 (: r (op-del (op-fold f) out (cup pend)) (op-steal g h (cap r) (cup r)))
-                (>< (cap (op-frg f))
-                      (>< out (>< (op-frw f 1 (cup (op-frg f))) (cup pend)))))
+                (? (? (= nd -2) (atom? (cup (op-frg f))) 0) 0
+                   (>< (cap (op-frg f))
+                         (>< out (>< (op-frw f (? (= nd -2) -2 1) (cup (op-frg f))) (cup pend))))))
              0))
        (two? out) (>< (op-span out) (>< () pend))
        0)
@@ -494,11 +509,11 @@
              ; a spaced sigil is ONE name -- an unrowed one takes the house grip, and with no
              ; left operand the infix frame still folds to the plain symbol (op-fold's bare case)
              (: en0 (op-ent e)
-                en (? (two? en0) en0 (>< e (>< 95 0)))   ; fresh punct: the (e house . right) triple
-                nm (cap en) gp (caup en)
-                st (op-steal gp (cuup en) out pend)   ; capture a left operand if one exists (at this grip + hand)
+                en (? (two? en0) en0 (>< e (>< 95 (>< 0 0))))   ; fresh punct: (e house right . dyadic)
+                nm (cap en) gp (caup en) hd (cap (cuup en))
+                st (op-steal gp hd out pend)   ; capture a left operand if one exists (at this grip + hand)
                 (? (two? st) (op-w (cup l) (cap (cup st))
-                            (>< (op-fr e nm 1 gp (>< (cap st) ()))
+                            (>< (op-fr e nm (? (cup (cuup en)) -2 1) gp (>< (cap st) ()))   ; -2 = n-ary: the row's arity, so an alias inherits it
                                   (cup (cup st))))
                    (: r (op-del e out pend)     ; no left operand: the plain symbol
                       (op-w (cup l) (cap r) (cup r)))))
