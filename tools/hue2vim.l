@@ -1,15 +1,15 @@
-; tools/hue2vim.l -- write vim/syntax.vim out of crew/vi/hue.l's class table and
-; the vocabulary the running binary answers to. run it through the same cat the
-; editor's own gate uses:
+; tools/hue2vim.l -- write the vim syntax for .l out of crew/vi/hue.l's class table
+; and the vocabulary the running binary answers to. `make syntax` runs it, into
+; out/host/syntax.vim (crew/build.mk), and mk/install.mk installs that:
 ;
-;   cat crew/vi/config.l crew/vi/hue.l tools/hue2vim.l | out/host/love > vim/syntax.vim
+;   cat crew/vi/config.l crew/vi/hue.l tools/hue2vim.l | out/host/love
 ;
-; and `make -C tools test_hue` regenerates it into a temp file and diffs, the way
-; test_vmret gates the tools it replaced -- so a rename that moves (names ())
-; fails the gate until this is re-run. that gate is the point of the whole file:
-; syntax.vim used to carry a hand-curated copy of the vocabulary, with a comment
+; the file is BUILT and never checked in, which is the point of the whole tool:
+; the syntax used to carry a hand-curated copy of the vocabulary, with a comment
 ; asking a human to re-probe it on every rename. a promise only prose keeps is
-; a promise already breaking.
+; a promise already breaking -- and so is one that needs a human to re-run a
+; command. `make -C tools test_hue` asks the one thing a build cannot: whether
+; this ran to the end and meant it.
 ;
 ; ⚠ THE ONE PLACE THE TWO INTERPRETERS DIFFER. hue-lex takes the FIRST row that
 ; claims a token, so the table reads top-down. vim takes the LAST match that
@@ -134,13 +134,13 @@
 ; --- the file ------------------------------------------------------------------
    _ (line "\" vim syntax for love (.l) -- GENERATED. do not edit.")
    _ (line "\"")
-   _ (line "\"   cat crew/vi/config.l crew/vi/hue.l tools/hue2vim.l | out/host/love > vim/syntax.vim")
+   _ (line "\"   make syntax   --   cat crew/vi/config.l crew/vi/hue.l tools/hue2vim.l | out/host/love")
    _ (line "\"")
    _ (line "\" the source is crew/vi/hue.l's class table -- the same table pulchritude's own")
    _ (line "\" painter reads, so the editor in the tree and the editor outside it agree by")
-   _ (line "\" construction -- plus the vocabulary the running binary answers to. `make -C")
-   _ (line "\" tools test_hue` regenerates this file and diffs it, so a rename that moves")
-   _ (line "\" (names ()) fails the gate until it is re-run.")
+   _ (line "\" construction -- plus the vocabulary the running binary answers to. this file is")
+   _ (line "\" BUILT and never checked in, so a rename that moves (names ()) is picked up by")
+   _ (line "\" make rather than by a human remembering to re-run something.")
    _ (line "\" based on lisp.vim by Charles E Campbell <http://www.drchip.org/astronaut/vim/index.html#SYNTAX_LISP>")
    _ (line "if exists(\"b:current_syntax\")")
    _ (line "  finish")
