@@ -43,12 +43,13 @@ all: love.js
 ../out/lib/p1.h: ../love/p1.l
 ../out/lib/prel.h: ../love/prel.l
 ../out/lib/ev.h: ../love/ev.l
+../out/lib/pat.h: ../love/pat.l
 ../out/lib/uu.h: ../love/uu.l
 ../out/lib/coin.h: ../love/coin.l
 ../out/lib/rng.h: ../love/rng.l
 ../out/lib/q.h: ../love/q.l
 ../out/lib/kanren.h: ../love/kanren.l
-../out/lib/egg.h ../out/lib/post.h ../out/lib/p1.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/coin.h ../out/lib/rng.h ../out/lib/q.h ../out/lib/kanren.h ../out/lib/love_version.h:
+../out/lib/egg.h ../out/lib/post.h ../out/lib/p1.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/pat.h ../out/lib/uu.h ../out/lib/coin.h ../out/lib/rng.h ../out/lib/q.h ../out/lib/kanren.h ../out/lib/love_version.h:
 	$(MAKE) -C .. out/lib/$(notdir $@)
 
 # love.o bakes the version string, so regenerate it through the parent and recompile when
@@ -86,7 +87,7 @@ $(o)/love.js: $(objs)
 .PHONY: gate
 gate: $(o)/love.js
 
-$(o)/host.o: host.c ../out/lib/egg.h ../out/lib/post.h ../out/lib/p1.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/uu.h ../out/lib/coin.h ../out/lib/rng.h ../out/lib/q.h ../out/lib/kanren.h $(g_h)
+$(o)/host.o: host.c ../out/lib/egg.h ../out/lib/post.h ../out/lib/p1.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/pat.h ../out/lib/uu.h ../out/lib/coin.h ../out/lib/rng.h ../out/lib/q.h ../out/lib/kanren.h $(g_h)
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(emcc) $(CFLAGS) -c $< -o $@

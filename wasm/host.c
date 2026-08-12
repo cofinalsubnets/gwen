@@ -30,6 +30,7 @@ static const char src_post[] =
 #include "post.h"
 ;
 static const char boot_ai[] =
+  "(use 'pat)"   // ⚠ pat BEFORE uu: uu.l is written in @, and a macro reaches a reader
   "(use 'uu) (: uu (from 'uu))"   // the library layers, ALL modules (registered in ai_init, loaded by
   "(use 'coin)"                   //   name; the corpus asserts on each): the uu kernel keeps its
   "(use 'rng)"                    //   one-name surface, then coin, rng, q, kanren in the old eval order
@@ -37,6 +38,9 @@ static const char boot_ai[] =
   "(use 'kanren)"
 ;
 // the module sources, name-keyed (see host/main.c): registered before boot_ai evals
+static const char src_pat[] =
+#include "pat.h"
+ ;
 static const char src_uu[] =
 #include "uu.h"
 ;
@@ -123,7 +127,7 @@ static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
 
 // the source library (love.h): .rodata, name -> baked .l text, read by `use`.
 static struct ai_lib const libs[] = {
-  {"uu", src_uu}, {"coin", src_coin}, {"rng", src_rng}, {"q", src_q},
+  {"pat", src_pat}, {"uu", src_uu}, {"coin", src_coin}, {"rng", src_rng}, {"q", src_q},
   {"kanren", src_kanren}, {NULL, NULL} };
 struct ai_lib const *ai_libs(void) { return libs; }
 

@@ -23,12 +23,16 @@
    ; the next complete form of a charlist, re-shown; 0 if none reads cleanly.
    (form1 cs) (: r (sound cs) (? (two? r) (show (cap r)) 0))
    ; a HARD token boundary: whitespace, delimiters, string quote, comment, and
-   ; the value-surface chars. tokens never span these under any lexer law, so
-   ; the redundancy probe's left context resets there.
+   ; the value-surface chars that REACH ACROSS a space (' ` # each skip whitespace
+   ; to find their datum, so nothing a token could span survives them).
+   ; ⚠ @ and ~ are NOT here, though they are sigils: those two READ GLUE, so a
+   ; token CAN end at one (fs@) and gluing CAN change the parse (@ x is the symbol
+   ; @ then x; @x is (tuple x)). resetting the left context there would hide the
+   ; very byte the probe has to weigh -- and opb? then keeps their space outright.
    (hardb c) (? (= c 32) 1 (= c 10) 1 (= c 9) 1
                 (= c 40) 1 (= c 41) 1 (= c 91) 1 (= c 93) 1 (= c 123) 1 (= c 125) 1
                 (= c 34) 1 (= c 59) 1 (= c 39) 1 (= c 96) 1 (= c 44) 1
-                (= c 64) 1 (= c 126) 1 (= c 35) 1
+                (= c 35) 1
                 0)
    ; an operator-run byte: punct that is neither a hard boundary nor a name
    ; char -- \ included, though it never fuses. under the VALENCE LAW a run
