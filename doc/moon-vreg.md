@@ -158,16 +158,35 @@ its mechanism is the refused shape wearing a new hat.
   retires the x64-only guards on `coal` (and the class of bug that hung riscv) rather than adding
   another. ⚠ do this FIRST: every rung below stands on the liveness kit, and a kit that lies
   about the machine is the one failure mode this arc has already shipped.
-* **rung 5.1, the pool mints.** `ralloc` hands out fresh vregs instead of `opool` members; a
-  linear-scan pass maps them back. Everything else stands. The first real measurement, and the
-  smallest thing that can carry the allocator.
-* **rung 5.2, the answer sites mint.** The 133 `mkv … 'r0` lanes mint; `tor0` becomes a bridge to
-  a constraint. `wnt` becomes binding. ⚠ the protocol sites (an operand assumed in r0) are the
-  risk and want the exhaustion instrument, not a build-and-see.
-* **rung 5.3, params and the vmap.** Params become vregs with an entry constraint; a cross-
-  statement value is just a longer interval. **Retires the vmap, homes/rides, `pp`, `pcs`,
-  `pmin`, `nrac`, and the regen dance.** The big negative-LOC rung, and the compile-time one
-  (build stops running twice).
+* **rungs 5.1–5.3 COLLAPSE INTO ONE, priced 2026-08-12 — they are not separable.** The plan had
+  the pool mint first (5.1), then the answer sites (5.2), then params and the vmap (5.3). One
+  probe over love.c killed the split:
+
+  | | |
+  |---|---|
+  | `ralloc` calls | 22,634 |
+  | ...of them DRY, falling back to r0 | **2,618 — 10.4%** |
+  | `tor0` bridges emitted (`mov r0, <pool>`) | **5,222** |
+  | reg-reg movs surviving into the object | 9,674 |
+
+  **5.1's entire headroom is the 10.4% dry rate** — the pool almost always has a register, so
+  minting more of them changes little. The traffic is in the BRIDGES, and a bridge is the
+  accumulator protocol, which is 5.2.
+  ⚠ **and 5.1 cannot be isolated anyway: `vmpin` accepts only `pool0` members (`gen.l:186`), so a
+  `ralloc`'d register is exactly what the vmap pins.** The pool and the vmap share one namespace
+  BY CONSTRUCTION; minting a vreg in `ralloc` hands one to the vmap on the next statement. 5.1 and
+  5.3 are the same rung wearing two numbers.
+  ⚠ nor is there a cheap slice of 5.2: every `tor0` site takes an already-bound value, so making
+  the hint binding means threading it back to whichever `cgexpr` produced it — the ~200-site
+  refactor, not a bounded step.
+
+  **So it ships as ONE rung: the vreg carrier, binding destinations, and the vmap together.**
+  Which is the ledger's rung-1/rung-2 lesson arriving a second time — *"rung 1 is pure
+  infrastructure and must be priced together with rung 2. Ship them as one rung or gate rung 1 on
+  rung 2's prototype."* Same shape, same answer. It retires the vmap, homes/rides, `pp`, `pcs`,
+  `pmin`, `nrac` and the regen dance, and collects the compile-time win when `build` stops running
+  twice — a large rung, but the arc has now refused three increments that tried to be smaller
+  than the thing they were changing.
 * **rung 5.4, spilling placed.** Today the slot is the source of truth and the register a
   write-through cache; invert it — the register is the truth, a spill is placed under real
   pressure. `repack` shrinks to packing actual spills; `stld`/`deadst` lose their write-through
