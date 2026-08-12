@@ -1,9 +1,9 @@
 ; crew/vi/hue.l -- the .l syntax, written down ONCE, for two readers: the
-; painter in crew/vi/core.l's vframe, and vim/syntax.vim, which tools/hue2vim.l
-; GENERATES from the very table below and tools/Makefile's test_hue then diffs,
-; so the two readings cannot drift apart. (they had: syntax.vim used to carry a
-; hand-curated copy of the vocabulary whose own comment asked a human to re-probe
-; it on every rename.)
+; painter in crew/vi/core.l's vframe, and the vim syntax file, which tools/hue2vim.l
+; GENERATES from the very table below -- built by make into out/host/syntax.vim and
+; never checked in, so the two readings cannot drift apart. (they had: the syntax
+; used to carry a hand-curated copy of the vocabulary whose own comment asked a
+; human to re-probe it on every rename.)
 ;
 ; it reads .l by lib/lint.l's rules -- `;` and `#!` comment to end of line,
 ; "..." is the only string with \ escapes, `'` and backtick are READER OPERATORS
@@ -203,6 +203,9 @@
                  (c = hue-quo) (: j (tend (i + 1)) (w j (emit acc 'atom i j)))
                  (c = hue-tick) (w (i + 1) (emit acc 'ctor i (i + 1)))
                  (hue-delim? c) (w (i + 1) (emit acc 'paren i (i + 1)))
+                 ; a stop no lane claims (`,`, a control byte) is one plain
+                 ; char -- and that is what leaves `word` the i<j it walks on
+                 (hue-term? c) (w (i + 1) acc)
                  (word i (tend i) acc))))
        (? in (wstr 0 0 ()) (w 0 ())))
 

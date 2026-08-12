@@ -1268,7 +1268,7 @@
    ; load-free deadst sweeps the write-through stores entirely;
    ; the pointer param a rides a SEEDED seat, so the indexed arg serves from r12
    _ (assert
-      (member? '(add r11 r6 r0) zpf)                 ; s's def lands in its seat
+      (member? '(add r11 r1 r0) zpf)                 ; s's def lands in its seat
       (member? '(mov r0 r11) zpf)                    ; ...and the return reads the seat
       (= 1 (nldrg zpf 'r11))                       ; s's slot is gone: r11 reloads at its cs restore, nowhere else
       (member? '(mov r12 r5) zpf)                    ; a's seed: arrival straight to the seat (stld+deadst)
@@ -1485,9 +1485,9 @@
    xf (fnf 'run <>irX)
    _ (assert
       (two? irX)
-      (member? '(mov r7 r6) xf)                      ; a += b parks off x's ride...
-      !(member? '(add r6 r6 r5) xf)                  ; ...and x's ride never takes the add
-      (member? '(add r7 r7 r5) xf))                  ; b, never written, still aliases y's ride
+      (member? '(add r7 r6 r5) xf)                   ; a += b is BORN in its park, off x's ride...
+      !(member? '(add r6 r6 r5) xf))                 ; ...and x's ride never takes the add (b, never
+                                                     ;   written, aliases y's ride in the same form)
    ; a value-splice park that EARNS the seat: a read inside the body's loop weighs x8 (the
    ; slot bind would reload it every iteration), so the expression arg rides a pool reg
    ; for the splice's whole span and the loop runs off the register
@@ -1497,7 +1497,7 @@
    gf (fnf 'gq <>irG)
    _ (assert
       (two? irG)
-      (member? '(mov r10 r9) gf)                     ; a + 1 lands its park r10...
+      (member? '(add r10 r6 1) gf)                   ; a + 1 is BORN in its park r10 (no bridge)...
       (member? '(add r9 r9 r10) gf)                  ; ...and the loop reads it, no reload
       (member? '(li r9 0) gf)                        ; s's decl bind: the init DELIVERS to the seat
       !(member? '(mov r9 r0) gf)                     ;  (the die: no r0 bridge)
@@ -1538,12 +1538,13 @@
       !(r1safe? '((ld r1 r4 8)))
       !(r1safe? '((label .x))))
    ; the divide always shuttles: a leaf right turns the push/pop pair into one mov -- and
-   ; dehusk reads the park straight through the staging (no r0 round-trip at all)
+   ; copy propagation reads the park straight through the staging, so the dividend arrives
+   ; from its own arrival register and there is no staging copy left at all
    irD (cgn "long dv(long a, long b) { return a / b; } int main() { return (int)dv(10, 2); }")
    df (fnf 'dv <>irD)
    _ (assert
       (two? irD)
-      (member? '(mov r1 r6) df)
+      (member? '(div r1 r6 r5) df)
       !(member? '(mov r1 r0) df)
       (= 0 (splds df))
       (= 0 (spsts df)))
@@ -1563,58 +1564,133 @@
       (= 0 (splds pbf))
       (= 0 (spsts pbf))))
 
-; -- the mov-husk fold: adjacent reg-reg movs squeeze (dehusk -- a back-copy or duplicate
-; drops, a feed reads through and strands its middle def for deaddef), and cfoldir drops a
-; mov whose source chases to the dest's own value at any straight-line distance. the sp
-; family never folds: sp moves through the cell cursor, so its copy records outlive it.
-(: _ (assert
-      ; dehusk units: feed read-through, back-copy, duplicate, self-mov; r3 and a label bar
-      (= (dehusk '((mov r0 r6) (mov r1 r0) (mov r0 r5) (div r1 r1 r0)))
-         '((mov r0 r6) (mov r1 r6) (mov r0 r5) (div r1 r1 r0)))
-      (= (dehusk '((mov r0 r9) (mov r9 r0) (cmp r9 r0))) '((mov r0 r9) (cmp r9 r0)))
-      (= (dehusk '((mov r0 r9) (mov r0 r9) (ret))) '((mov r0 r9) (ret)))
-      (= (dehusk '((mov r0 r0) (mov r3 r0) (mov sp r4))) '((mov r3 r0) (mov sp r4)))
-      (= (dehusk '((mov r0 r6) (label .x9) (mov r1 r0))) '((mov r0 r6) (label .x9) (mov r1 r0))))
-   ; an ALU/compare consumer reads through the same way -- but only where the mov STRANDS
-   ; (dies? past the consumer), never into its own defs (the alu dance), and never for the
-   ; protocol ops (div rides fixed registers)
+; -- COPY PROPAGATION (copyprop): after (mov a b) the two registers hold one value, so a later
+; read of a says b, a copy nothing reads ahead drops, and the two directions compose -- the
+; forward rename strands the copy, coal's backward fold gives the def the copy's name, and what
+; comes out is the two-address form. the map dies at every def and every control edge, but a
+; conditional br rides its fall-through -- no window and no form count anywhere. beside it
+; cfoldir drops a mov whose source chases to the dest's own value at any straight-line distance;
+; the sp family never folds, since sp moves through the cell cursor and its copy records outlive it.
+(: gP (tablet 0)
+   pro '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3) (align 1))
+   (cp l) (drop 6 (coal gP (copyprop (pro + l))))     ; the real chain: the build tail's
+                                                       ; forward walk, then the post-choice fold
+   ; the sandwich, both directions at once: the rename breaks the fusion, coal rebuilds it on
+   ; the copy's register, and both movs are gone -- for sub as much as for add, since it is the
+   ; FIRST source the two-address lowering welcomes
    _ (assert
-      (= (dehusk '((mov r0 r11) (add r2 r2 r0) (mov r0 r5)))
-         '((mov r0 r11) (add r2 r2 r11) (mov r0 r5)))
-      (= (dehusk '((mov r9 r0) (test r9 1) (br ne .x9))) '((mov r9 r0) (test r9 1) (br ne .x9)))
-      (= (dehusk '((mov r9 r0) (add r9 r9 1) (mov r9 r0))) '((mov r9 r0) (add r9 r9 1) (mov r9 r0)))
-      (= (dehusk '((mov r9 r5) (add r5 r5 r9) (mov r9 r0))) '((mov r9 r5) (add r5 r5 r9) (mov r9 r0)))
-      (= (dehusk '((mov r0 r5) (div r1 r1 r0) (mov r0 r9))) '((mov r0 r5) (div r1 r1 r0) (mov r0 r9))))
+      (= (cp '((mov r5 r9) (add r5 r5 8) (mov r9 r5) (ret))) '((add r9 r9 8) (ret)))
+      (= (cp '((mov r5 r9) (sub r5 r5 8) (mov r9 r5) (ret))) '((sub r9 r9 8) (ret)))
+      (= (cp '((mov r5 r9) (mov r6 r5) (add r0 r6 1) (ret))) '((add r0 r9 1) (ret)))
+      (= (cp '((mov r5 r0) (mov r5 r0) (ret))) '((ret))))
+   ; the forward rename reads through an alu consumer and through a mov, and a copy of a value
+   ; the destination already holds is a self-mov that never lands
+   _ (assert
+      (= (cp '((mov r0 r6) (mov r1 r0) (mov r0 r5) (div r1 r1 r0) (ret))) '((div r1 r6 r5) (ret)))
+      (= (cp '((mov r0 r11) (add r2 r2 r0) (mov r0 r5) (ret)))
+         '((add r2 r2 r11) (mov r0 r5) (ret)))
+      (= (cp '((mov r5 r0) (mov r3 r5) (ret))) '((mov r3 r0) (ret))))
+   ; the map's edges: a br rides its fall-through at any distance, a label and a call reset it
+   _ (assert
+      (= (cp '((mov r5 r0) (test r5 1) (br ne .x9) (mov r0 r5) (ret)))
+         '((mov r5 r0) (test r0 1) (br ne .x9) (ret)))
+      (= (cp '((mov r5 r0) (label .x9) (mov r0 r5) (ret)))
+         '((mov r5 r0) (label .x9) (mov r0 r5) (ret)))
+      (= (cp '((mov r5 r0) (call foo) (mov r0 r5) (ret)))
+         '((mov r5 r0) (call foo) (mov r0 r5) (ret))))
+   ; what keeps its operands, and why: la's second operand is a SYMBOL and rdsp never reads it,
+   ; so the probe declines it with no whitelist to keep; the variable shift's count is a seat,
+   ; not a value; and an address form belongs to addrfold
+   _ (assert
+      (= (cp '((mov r5 r0) (la r6 r5) (mov r0 r5) (ret))) '((la r6 r5) (ret)))
+      (= (cp '((mov r1 r0) (shlv r5 r1) (ret))) '((mov r1 r0) (shlv r5 r1) (ret)))
+      (= (cp '((mov r5 r0) (ld r6 r5 8) (ret))) '((mov r5 r0) (ld r6 r5 8) (ret)))
+      (= (cp '((mov r5 r9) (li r9 3) (add r0 r5 r9) (ret)))
+         '((mov r5 r9) (li r9 3) (add r0 r5 r9) (ret))))
    ; cfoldir's root-restore drop rides past reads; the epilogue sp restore stands
-   _ (assert
-      (= (cfoldir '((mov r9 r6) (test r9 1) (mov r6 r9) (ret))) '((mov r9 r6) (test r9 1) (ret)))
-      (member? '(mov sp r4) (cfoldir '((mov r4 sp) (sub sp sp 16) (mov sp r4) (ret)))))
-   ; the rename sandwich: (mov X Y) M.. (mov Y X) with X dead after and Y untouched between
-   ; runs as well in Y alone -- X renames away, both movs drop. declines: X live after,
-   ; a middle touching Y, a 'la symbol spelled like X
-   _ (assert
-      (= (dehusk '((mov r1 r0) (add r1 r1 65536) (mov r0 r1) (sub r0 r0 1) (ret)))
-         '((add r0 r0 65536) (sub r0 r0 1) (ret)))
-      (= (dehusk '((mov r1 r0) (ld r5 r1 8) (add r1 r1 24) (mov r0 r1) (ret)))
-         '((ld r5 r0 8) (add r0 r0 24) (ret)))
-      (= (dehusk '((mov r1 r0) (mov r0 r1) (ret))) '((ret)))
-      (= (dehusk '((mov r1 r0) (add r1 r1 8) (mov r0 r1) (mov r5 r1) (ret)))
-         '((mov r1 r0) (add r1 r1 8) (mov r0 r1) (mov r5 r1) (ret)))
-      (= (dehusk '((mov r1 r0) (add r1 r1 r0) (mov r0 r1) (ret)))
-         '((mov r1 r0) (add r1 r1 r0) (mov r0 r1) (ret)))
-      (= (dehusk '((mov r1 r0) (li r0 5) (mov r0 r1) (ret)))
-         '((mov r1 r0) (li r0 5) (mov r0 r1) (ret)))
-      (= (dehusk '((mov r1 r0) (la r5 r1) (mov r0 r1) (ret)))
-         '((mov r1 r0) (la r5 r1) (mov r0 r1) (ret))))
-   ; the quiet-window back-copy: the restore drops across defs-free forms and conditional
-   ; brs (the drop lives only on the fall-through); a label or a call still bars
    (assert
-      (= (dehusk '((mov r1 r0) (test r1 1) (br ne .x9) (mov r0 r1) (ret)))
-         '((mov r1 r0) (test r1 1) (br ne .x9) (ret)))
-      (= (dehusk '((mov r1 r0) (label .x9) (mov r0 r1) (ret)))
-         '((mov r1 r0) (label .x9) (mov r0 r1) (ret)))
-      (= (dehusk '((mov r1 r0) (call foo) (mov r0 r1) (ret)))
-         '((mov r1 r0) (call foo) (mov r0 r1) (ret)))))
+      (= (cfoldir '((mov r9 r6) (test r9 1) (mov r6 r9) (ret))) '((mov r9 r6) (test r9 1) (ret)))
+      (member? '(mov sp r4) (cfoldir '((mov r4 sp) (sub sp sp 16) (mov sp r4) (ret))))))
+
+; -- THE EXHAUSTION: the rename relation is FINITE -- one shape per op rdsp knows, at most two
+; read positions each, fifteen registers in the gp file -- so "can this pass hand holo a form the
+; assembler refuses?" is DECIDABLE by running the carrier rather than argued from the guards.
+; Every (shape, read position, substitute) goes through the REAL cpwalk and the REAL assembler,
+; and every (shape, new destination) through the REAL coal: a complete proof over the carrier,
+; drift-gated twice -- an op added to a roster with no shape here fails the coverage assert, and a
+; guard relaxed too far fails an emit. ⚠ both refusals copyprop was built against (alias-dst and
+; shiftv-count-not-r1) were found by a build breaking; this is what replaces that.
+(: hb9 (from 'holo 'holo-bytes)
+   ; the label rides along for la's fixup; a scare anywhere in the encode answers 0
+   (emits? f) (trap (\ _ (: _ (hb9 'x64 [f '(label zz9)]) 1)) () (\ a b 0))
+   gX (tablet 0)
+   cpfile '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)
+   pro9 '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3))
+   ; one well-formed form per op in rdsp's table. ⚠ this list IS the carrier: the coverage assert
+   ; below reads the rosters, so an op joining one without a shape here goes red by name.
+   shapes '((li r5 5) (mov r5 r9)
+            (add r5 r9 r10) (sub r5 r9 r10) (and r5 r9 r10) (or r5 r9 r10)
+            (xor r5 r9 r10) (imul r5 r9 r10) (add sp sp 16)
+            (push r5) (pop r5)
+            (shl r5 3) (shr r5 3) (sar r5 3) (rol r5 3) (ror r5 3)
+            (ld r5 r9 8) (ld1 r5 r9 8) (ld2 r5 r9 8) (ld4 r5 r9 8)
+            (ldu1 r5 r9 8) (ldu2 r5 r9 8) (ldu4 r5 r9 8)
+            (st r9 8 r5) (st1 r9 8 r5) (st2 r9 8 r5) (st4 r9 8 r5)
+            (stx r9 r10 8 0 r5) (stxb r9 r10 8 0 r5)
+            (si r9 8 5) (si1 r9 8 5) (si2 r9 8 5) (si4 r9 8 5)
+            (cmpm r9 8 r5) (cmprm r5 r9 8)
+            (lea r5 r9 8) (lean r5 r9 8)
+            (leax r5 r9 r10 8 0) (ldx r5 r9 r10 8 0) (ldxb r5 r9 r10 8 0)
+            (la r5 zz9) (set eq r5) (cmp r5 r9) (test r5 1)
+            (neg r5) (not r5) (sx1 r5) (sx2 r5) (sx4 r5) (zx1 r5) (zx2 r5) (zx4 r5)
+            (movqxr f0 r5) (movqrx r5 f0)
+            (cvtsi2sd f0 r5) (cvttsd2si r5 f0)
+            (ldsd f0 r9 8) (ldss f0 r9 8) (stsd r9 8 f0) (stss r9 8 f0)
+            (addsd f0 f1) (subsd f0 f1) (mulsd f0 f1) (divsd f0 f1) (movsd f0 f1)
+            (ucomisd f0 f1) (cvtss2sd f0 f1) (cvtsd2ss f0 f1)
+            (div r5 r9 r10) (udiv r5 r9 r10) (rem r5 r9 r10 r2) (urem r5 r9 r10 r2)
+            (shlv r5 r1) (shrv r5 r1) (sarv r5 r1))
+   heads (map (\ f9 <f9) shapes)
+   rostered (aluops + divops + vshops + unops + ldops9 + gstops + stxops + siops +
+             leaops + xops + fldops + fstops + xmmops +
+             '(li mov push pop shl shr sar rol ror cmpm cmprm la set cmp test
+               movqxr movqrx cvtsi2sd cvttsd2si))
+   ; the FORWARD carrier: seed the map with (mov orig sub) and let the pass itself rewrite the
+   ; form -- no guard is restated here, cpwalk decides and holo judges
+   (fwd f) (catmap (\ i (catmap (\ r9
+              (: out (cpwalk [['mov (nthr f i) r9] f] (tablet 0))
+                 f2 (nthr out (tally out - 1))
+                 (? (emits? f2) () [[f i r9 f2]])))
+            cpfile)) (cprp f))
+   nfwd ((foldl (\ n f9 (n + tally (cprp f9))) 0 shapes) * tally cpfile)
+   bad1 (catmap fwd shapes)
+   ; the BACKWARD carrier: a copy off the shape's own destination, folded by the real coal
+   (soled f) (: d (rdsp f)                          ; the shapes coal can fold: one gp def
+                (? (id? d 'bar) () (: dfs <>d (? (two? dfs && !(two? >dfs) && member? <dfs cpfile)
+                                                 dfs ()))))
+   (bwd f) (: S (soled f)
+              (? !(two? S) ()
+                 (catmap (\ r9
+                   (: out (coal gX (pro9 + [f ['mov r9 <S] '(ret)]))
+                      f2 (nthr out 5)
+                      (? (emits? f2) () [[f r9 f2]])))
+                  cpfile)))
+   nbwd ((tally (filter (\ f9 (two? (soled f9))) shapes)) * tally cpfile)
+   bad2 (catmap bwd shapes)
+   (assert
+      ; the carrier is what it says it is, and every shape is one both halves already accept
+      (= 75 (tally shapes))
+      !(two? (filter (\ f9 (id? (rdsp f9) 'bar)) shapes))
+      (all emits? shapes)
+      !(two? (filter (\ o9 !(member? o9 heads)) rostered))    ; the drift gate
+      (= 390 nfwd) (= 570 nbwd)                               ; ⚠ a silent narrowing shows up here
+      !(two? bad1)                                            ; forward: 390 renames, all encodable
+      !(two? bad2)                                            ; backward: 570 folds, all encodable
+      ; and the law has TEETH -- these are the two shapes the guards exist for, refused by holo
+      ; itself, plus the alias emit-alu welcomes when the op commutes (coal declines it, and this
+      ; records that the decline is conservative rather than necessary)
+      !(emits? '(sub r0 r12 r0)) !(emits? '(shlv r5 r9))
+      (emits? '(add r0 r12 r0)) (emits? '(add r7 r7 8))))
 
 ; -- the destination die reaches asn/decl (doc/proto/dest.l, the migration's first lane):
 ; a statement-position CONSTANT store into a static slot delivers as ONE store-immediate
@@ -1691,9 +1767,17 @@
       (member? '(ld r0 r6 8) ca)                     ;   through the face and RIDES r0 across the
       (member? '(mov r5 r0) ca)                      ;   first's delivery -- no cell at all
       !(member? '(ld r6 r5 0) ci)                    ; an indirect call BARS the aim: neither arg
-      !(member? '(ld r5 r5 8) ci)                    ;   is delivered onto its seat -- both STAGE
-      (= 2 (ldinto ci 'r0))))                        ;   through r0 (two spush cells, before
-                                                     ;   promotion took the staging into registers)
+      !(member? '(ld r5 r5 8) ci)                    ;   is delivered onto its seat, so both must
+      (= 2 (tally (filter (\ f (two? f && id? <f 'ld && !(id? <>>f 'sp))) ci)))  ; stage -- two loads
+      (= 0 (ldinto ci 'r6)) (= 0 (ldinto ci 'r5))))  ;   and neither lands on a seat. ⚠ anchored on
+                                                     ;   the STRUCT loads, not on the staging
+                                                     ;   register (coalescing moved it: one of the
+                                                     ;   two is born in its scratch now) and not on
+                                                     ;   every load (⚠ copy propagation shrinks the
+                                                     ;   built ir the grants are priced off, and on
+                                                     ;   this shape alone it flips one: ci takes a
+                                                     ;   cs seat and its restore is a third load.
+                                                     ;   no fn in love.o gains or loses a frame)
 
 ; -- the destination die reaches the bin value lane (the fourth lane): a LOAD-shaped
 ; left (dot/moor/deref -- a var/num re-aims free via cgleaf, a nested bin already rides
@@ -1780,7 +1864,7 @@
                                                             ;   head flush empties every ret edge): reloads stand
       (member? '(mov r6 r11) lp4f)                          ; an EXTERN call: i keeps on a borrowed cs seat -- the arg rides it
       (member? '(add r11 r11 1) lp4f)                       ; ...steps in place across the call
-      (member? '(mov r12 r0) lp4f)                          ; s (callish-written) re-establishes in ITS seat -- the aim hold's class
+      (member? '(mov r12 r1) lp4f)                          ; s (callish-written) re-establishes in ITS seat -- the aim hold's class
       (member? '(st sp 8 r12) lp4f)                         ; ...and the pre-call park reads the seat, not the slot
       (member? '(mov r13 r6) lp4f)                          ; n's seed: arrival straight to the last seat (stld+deadst)
       (member? '(cmp r11 r13) lp4f)                         ; ...and the cond runs register-register
@@ -1816,7 +1900,7 @@
       (= 1 (nldrg splf 'r5))                         ; ...then a spills around: the post-call reload into ITS
                                                      ;    pin is a's ONLY load -- the exit meet carries the
                                                      ;    pin out, so even the post-loop read rides the register
-      (member? '(add r8 r8 r5) splf)                 ; the in-loop use reads the register
+      (member? '(add r8 r1 r5) splf)                 ; the in-loop use reads the register
       (member? '(mov r10 r6) splf)                   ; n's SEED, stld'd to the arrival mov
       (member? '(cmp r9 r10) splf)                   ; ...so the cond runs register-register (i seeded too)
       (member? '(mov r14 r9) nrgf)                   ; nrg: a-d seat as before ...
@@ -1841,18 +1925,18 @@
    (assert
       (two? irS)
       (member? '(mov r11 r7) slkf)                   ; slk: a's pin migrates onto a seat...
-      (member? '(add r7 r7 r11) slkf)                ; ...and the use past the call-free splice reads it
+      (member? '(add r7 r1 r11) slkf)                ; ...and the use past the call-free splice reads it
       (member? '(add r7 r10 r11) slkf)               ; the exit meet: the return reads the seat...
       (= 1 (ldc9 slkf)) (= 1 (stc9 slkf))            ; ...so the only sp traffic is the one cs save/restore
       (member? '(mov r11 r7) erkf)                   ; erk: the same keep through an EARLY-RETURN inlinee --
-      (member? '(add r7 r7 r11) erkf)                ;   two ret edges meet at the end label and a still rides
+      (member? '(add r7 r1 r11) erkf)                ;   two ret edges meet at the end label and a still rides
       (member? '(add r7 r9 r11) erkf)                ;   (s's seat: the left now rides its pin through the splice)
       (= 1 (ldc9 erkf)) (= 1 (stc9 erkf))
       (member? '(mov r14 r6) wlkf)                   ; wlk (a CALLISH inlinee): n seats...
       (member? '(cmp r12 r14) wlkf)                  ; ...the cond runs register-register
       (member? '(mov r6 r12) wlkf)                   ; the inner real call's arg served from i's seat
       (member? '(add r12 r12 1) wlkf)                ; i steps in place, its slot never touched
-      (member? '(add r11 r5 r13) wlkf)               ; a reads its seat, s lands in its own
+      (member? '(add r11 r1 r13) wlkf)               ; a reads its seat, s lands in its own
       (member? '(add r0 r11 r13) wlkf)               ; the exit meet: s + a ride out on their seats
       (= 1 (nldrg wlkf 'r1))                         ; s: the pre-call park read (the recorded residue) --
       (= 1 (nldrg wlkf 'r11))))                      ;   its slot and every other in-loop load are gone
@@ -1867,9 +1951,9 @@
    epwf (fnf 'epw <>irP)
    (assert
       (two? irP)
-      (member? '(mov r12 r10) epcf)                  ; epc: x[0]'s pin migrates onto a seat...
+      (member? '(mov r12 r6) epcf)                   ; epc: x[0]'s pin migrates onto a seat...
       (member? '(mov r11 r7) epcf)                   ; ...and x[1]'s
-      (member? '(add r9 r9 r12) epcf)                ; the in-loop element reads ride the seats
+      (member? '(add r9 r1 r12) epcf)                ; the in-loop element reads ride the seats
       (member? '(add r14 r9 r11) epcf)
       (member? ['ld 'r5 'sp (sof epcf 'st 'r6)] epcf)  ; n spills around: the post-call reload into ITS pin
       (member? '(cmp r13 r5) epcf)                   ; ...and the cond runs register-register
@@ -1878,11 +1962,11 @@
       (= 1 (ldsp epcf (sof epcf 'st 'r6)))           ; n: the roster reload is its only load
       (= 1 (nldrg epcf 'r11))                        ; x[1] rides its seat end to end: deadst swept
                                                      ;   the dead store, the slot never exists
-      (member? '(mov r11 r0) epwf)                   ; epw: the mid-loop element write re-establishes IN
+      (member? '(mov r11 r13) epwf)                  ; epw: the mid-loop element write re-establishes IN
                                                      ;   the seat (vaepin)...
       (member? '(add r0 r14 r11) epwf)               ; ...the exit meet rides it out...
       (= 1 (nldrg epwf 'r11))                        ; ...and the WRITTEN element never touches memory either
-      (member? '(add r9 r9 r12) epwf)))              ; x[0] still rides
+      (member? '(add r9 r1 r12) epwf)))              ; x[0] still rides
 
 ; -- the liveness kit, on hand-laid forms rather than through a compile: these are the
 ; kit's OWN laws, and they are unit-shaped on purpose -- every consumer reads it as an
@@ -1926,6 +2010,43 @@
                                                      ;   the universe, so the call clobbers it
       (id? (lvout gL '((label fn) (raw 144) (ret))) 'no)))   ; an op rdsp bars refuses the fn
 
+; -- COALESCING, the liveness kit's second consumer and the first to answer a question the
+; window heuristics cannot: not "does this value die soon" but "does it die HERE". A copy whose
+; source was born on the form before it and dies at the copy is a def that named the wrong
+; register. ⚠ the refusals are the law: the prologue is untouchable (unframe reads it by
+; POSITION), a def that reads its own destination would need a two-address expansion that costs
+; back the drop, and the copy's destination must be a stranger to the def on both sides or the
+; rename writes over an operand still in use. --
+(: gC (tablet 0)
+   pro '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3))
+   (co l) (coal gC (pro + l))
+   (: c1 (co '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r5 r7) (ret)))
+      c2 (co '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r6 r7) (ret)))
+      c3 (co '((li r5 1) (add r6 r6 r5) (mov r7 r6) (add r0 r7 r7) (ret)))
+      c4 (co '((li r5 1) (sub r6 r12 r7) (mov r7 r6) (add r0 r7 r7) (ret)))
+      c5 (co '((li r5 1) (li r6 2) (label L9) (mov r7 r6) (add r0 r7 r7) (ret)))
+      ; the FLOOR is PROLOGUE GROUND and it is flat across targets -- arm and riscv lay a longer
+      ; bring-up than x64 and no x64 shape test can see it (⚠ one derived from pro4? handed them
+      ; a floor of 0 and the riscv boot hung). a dead copy at index 5 stands; one form later it
+      ; goes
+      c6 (coal gC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+                    (mov r7 r6) (li r7 3) (ret)))
+      c8 (coal gC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3) (align 1)
+                    (mov r7 r6) (li r7 3) (ret)))
+      c7 (co '((li r5 1) (add r6 r7 r5) (mov r7 r6) (add r0 r7 r7) (ret)))
+      (assert
+         (= c1 (pro + '((li r5 1) (li r7 2) (add r0 r5 r7) (ret))))   ; the def takes the copy's name
+         (= (tally c2) (tally (pro + '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r6 r7) (ret)))))
+         (member? '(mov r7 r6) c2)                     ; the source lives on: the copy stays
+         (member? '(mov r7 r6) c3)                     ; a def reading its own dest: no rename
+         (member? '(mov r7 r6) c4)                     ; the new dest is the def's SECOND source
+         (= c7 (pro + '((li r5 1) (add r7 r7 r5) (add r0 r7 r7) (ret))))  ; ..its first: the fused form
+         (member? '(mov r7 r6) c5)                     ; a label between them: not adjacent
+         (member? '(mov r7 r6) c6)                     ; a dead copy AT index 5: the floor holds it
+         !(member? '(mov r7 r6) c8)                    ; ...one form later it drops
+         (id? (coal gC '((label fn) (raw 144) (ret))) '((label fn) (raw 144) (ret)) ||
+          (= (coal gC '((label fn) (raw 144) (ret))) '((label fn) (raw 144) (ret)))))))
+
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die, liveness + promotion) ok")
+(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) ok")
 (put err 10)

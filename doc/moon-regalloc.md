@@ -34,7 +34,7 @@ each one priced, gated, and landed separately:
   only — the `rgon` gate).
 * **recovery passes** — addrfold (address arith into addressing modes, ldx/stx/si),
   deadcell (the spush-cell reservation sweep), stld/stldw (store-load residency),
-  dehusk (mov husks: feed/back/dup/self, the rename sandwich, quiet-window back-copy),
+  copyprop (the forward copy walk; coal is its backward twin),
   cmpfuse (`dieb?`, the branching death proof), unframe + jr0/unhome (frame elision and
   home→arrival renames), laylax (branch relaxation, in holo).
 * **the armor** — cskeep (the callee-saved contract checked at emission, path-aware,
@@ -228,6 +228,8 @@ Learned by measuring, several times each; check a new lever against these before
    COLD-PATH wraps, dynamically right for the early-out profile; the static
    8 KB they represent is already-paid-for at runtime, and beating them needs
    a frequency signal (PGO), not a better static model.
+   SHRINK-WRAP RETIRED 2026-08-12 (rung 3's first half, the ledger): it was worth
+   48 bytes and one grant, against 113 lines and a per-form cost in `sibs`.
 3. **Compare staging want-hints** — HELD for the allocator. Landed for the call-free
    side 2026-08-10: cbranch's left aims at its park before evaluating, so member loads
    deliver and the bridge mov dies. What remains is the callish side (the sp cell across
@@ -236,8 +238,9 @@ Learned by measuring, several times each; check a new lever against these before
    Do not build it separately.
 4. Recorded small residues: leaf sp-fn stldw coverage; a non-positional fallback home
    (mag_cmp's g1 loses its seat and stays slotted); cs-borrow park elision (params on
-   cs regs landed pmin-gated 2026-08-11, the ledger; the fleet's share waits on
-   shrink-wrap); arm64 x19+ cspool (empty there today); register-binding splice
+   cs regs landed pmin-gated 2026-08-11, the ledger; the fleet's share went with
+   shrink-wrap, retired 2026-08-12 — it needs a frequency signal, not more machinery);
+   arm64 x19+ cspool (empty there today); register-binding splice
    depth (map_probe's &-decline); d128 params ("a wide arg: not carried"); variable
    index±k rebase; narrow cmp fusion (632 sites, needs cc-aware licensing); the
    3-address dance emission (encoder territory — the reverted lea-fusion physics, only
@@ -811,6 +814,309 @@ a rung that changes the compiler changes every member hash, so every codegen fil
 clang's chacha is NOT the box anchor the previous fill called it (198.1 twice was coincidence,
 169.9/182.7 the next day), so that fill's "1220→1075 is a real move" is corrected -- two agreeing
 samples are not a control.
+2026-08-12 · COALESCING (rung 4, pulled AHEAD of rung 3) — a copy whose source was defined by
+the form before it and dies at the copy is a def that named the wrong register: the def takes the
+destination and the mov never lands. The liveness kit's second consumer, and the first to ask a
+question the window heuristics cannot — not "does this value die soon" but "does it die HERE".
++38 lines. **corpus insns 41.983→41.244 G, −1.76%** (cycles flat, within noise), love.o .text
+333,177→**327,064 B (−1.83%)**, insns 77,080→**75,100 (−2.57%)**, reg-reg movs 12,353→10,391.
+Against clang the dynamic ratio goes 1.617→**1.589×** — more than twice rungs 1+2's move, and the
+largest on this arc.
+
+⚠ WHAT THIS RUNG COST TO FIND, because the route matters more than the result. It was reached by
+building the CALL-CROSSING CLASS on cs seats (rung 2's open half) and measuring that it CANNOT
+PAY. A cs seat can never equal the store's source — sources are caller-saved — so no mov ever
+drops, and the rewrite is a frame touch turned into a reg-reg mov ONE FOR ONE plus the
+save/restore pair: measured +3,073 movs against −1,722 frame movs, +1,349 insns, exactly the pair
+count. The lvgp class paid precisely because its seat CAN be the source. No pricing gate repairs
+that; a gate tight enough to be safe admits nothing. Even with coalescing on top, cs seats stay
++1,077 insns for −1,479 B and retire no mechanism. **The class is refused**, and the plan's
+ordering with it: rung 4 comes BEFORE rung 3, because nothing that turns memory into copies pays
+until the copies can go.
+
+Three traps the attempt paid for. **unframe reads the prologue BY POSITION** — its `sv3` asks
+whether form 4 is exactly `(st r4 -8 r3)` and drops that save with the frame — so saves inserted
+at index 4 displaced it, leaving the rbx save standing while its restores went, and the caller's
+rbx died at the tail; it presented as a segfault in `main` with rbp holding a love fixnum, AFTER
+the corpus had run and printed `tests pass`. **A name-keyed bisect over one TU's functions is not
+a bisect**: the switch matched by name across every TU while the name list came from love.c
+alone, so musl and host/*.c promotions were never disabled and three "culprits" were artifacts.
+What actually cracked it was emitting the pair while rewriting NO touch — still crashed, which
+proved the fault was in emission rather than in the promoted value and pointed straight at
+unframe. **The emitter's own `alias-dst` guard** caught the coalescer renaming a destination onto
+one of the def's sources; the rename must be a stranger to the def on both sides.
+
+Laws: six hand-laid shapes for the fold and its five refusals (source still live, def reads its
+own dest, dest aliases a source, a label between, the prologue). One older law re-anchored off
+the mechanism onto the invariant — ci's indirect call is pinned on "two loads, neither onto an
+arg seat" rather than on counting r0's, because coalescing now gives one argument its scratch at
+birth. Gates: test_slow (seven zz-fin lines), test_moon, test_fixpoint byte-identical, vmret,
+test_raw/drv/libc/kore/clay.
+
+2026-08-12 · COPY PROPAGATION (the forward half; dehusk retired) — `dehusk`'s five hand-cut
+windows onto one law are one pass: a forward walk carrying `reg -> source`, killed at each def and
+at each control edge, with `lvout` answering the drop. Gone with them: the rename sandwich's
+8-form cap, the quiet back-copy's 6-form cap, the adjacent-pair cases, and `huskrd` — the
+whitelist of renamable operand slots. The slots are PROBED off `rdsp` instead: substitute a
+stranger at each nom position and ask whether it lands among the reads and not among the defs, so
+a read-modify-write slot (the shifts, the unops) and `la`'s SYMBOL operand decline by
+construction, and the roster cannot fall out of step with the table it models. What still needs a
+reason rdsp cannot carry is a five-name skip list, each entry a contract rather than a dataflow
+fact: the address families (addrfold consumes a mov feeding a base under its own license),
+`push` (cskeep reads `(push <cs>)` as that register's SAVE), and the variable shifts (holo scares
+if the count is not r1). **corpus insns 39.734→39.464 G (−0.68%)**, cycles 14.871→**14.798 G
+(−0.49%, minima 14.678→14.575)**, love.o .text 327,064→**324,872 B (−0.67%)**, insns
+75,100→**74,390 (−0.95%)**, reg-reg movs 10,634→**9,908 (−6.8%)**; single-TU compile of love.c
+13.72→13.99 s (+2%, flat); gen.l 8,112→8,125. ⚠ the dynamic row wants an interleaved run and
+several: two builds 10 bytes apart read 0.3% apart on corpus insns, so a single pair is not a
+measurement — it is which movs went, not how many.
+
+⚠ THE TWO DIRECTIONS COMPOSE, and that composition is where most of the win is. Forward
+propagation alone REGRESSES the corpus (+0.19% insns) while shrinking `.text`, because renaming
+`(add r1 r1 imm)`'s source breaks the two-address fusion and the emitter buys the mov straight
+back. The fix is not to protect the fusion — measured, and protecting it is 914 B WORSE — it is
+to let the break happen and hand the wreck to `coal`, whose backward fold gives the def the
+copy's name and rebuilds the fusion on the right register. `coal` needed one relaxation to accept
+it: the destination may alias the def's FIRST source, because `(mov d a; op d b)` is the lowering
+and `(add r7 r7 8)` IS the fused form — it is the SECOND source that reads its own wreck. So the
+sandwich `dehusk` did with an 8-form window now falls out of two local passes with no window at
+all.
+
+⚠ AND PLACEMENT IS A REAL CHOICE, not a detail — four were built and measured. The three
+POST-CHOICE ones (varying where `coal` sits around `unframe`/`unhome`) all read BETTER on paper:
+`.text` 323,976-324,430 B and 74,065-74,238 insns, −0.94%/−1.38% at the best, corpus insns
+−0.67%. All three lose on the clock: interleaved cycles put them at **+0.27%, +0.48% and +1.4%**
+against **−0.37%** for the build-tail placement. That is the `emit-alu` lesson holding a second
+time from the other side — a mov the CPU rename-eliminates costs no cycles, so deleting one LATE
+buys instruction count and nothing else, while deleting it EARLY feeds `addrfold`/`cmpfuse`/
+`deaddef` a cleaner input, and that is where the clock moves. The control for reading those
+numbers was ablating `dehusk` entirely (+0.5% insns → +1.1% cycles) and the build-tail candidate
+(−0.20% → −0.37%): both track their instruction counts, the post-choice three do not. ⚠ measure
+cycles interleaved and in rounds, and read the MINIMA beside the median; a single pair is layout
+lottery on a corpus running at IPC 2.7. (Post-choice also needs `coal`'s prologue floor relaxed —
+`(5 < i)` is a proxy for "not the prologue" and there is no prologue left after `unframe`.)
+
+⚠ COPY PROPAGATION MOVES THE PARAM-GRANT PRICING, because `pmin`/`nrac`/`nreads` are all read off
+`ir1` — the IR `build` returns — and a cleanup INSIDE build changes what they measure. On one
+synthetic shape (law.l's `ci`, an indirect tail call) that flips a grant: the fn takes a cs seat
+and grows a frame, 7 forms to 12. Held against the real corpus it is a shape, not a class — **no
+function in love.o gains or loses a frame** (545 `sub $N,%rsp` both sides, 331→330 cs-slot
+stores, 181 fns shrank against 46 grown) — so it ships with the law re-anchored on the struct
+loads rather than on every load. It is also a preview of rung 3: the grants cannot be deleted
+until their pricing moves somewhere that a later pass cannot perturb.
+
+Ablation first, as always: `dehusk` at HEAD was worth 0.52% corpus insns and 0.22% `.text` for 79
+lines. That number is what made a rewrite the right move rather than a deletion.
+
+⚠⚠ AND THE FIRST SHIP OF THIS RUNG COST 78% OF THE COMPILER'S SPEED, unmeasured. The numbers
+above are the SECOND, after step 0 caught it: love.c through mooncc went **13.2 → 23.4 s**
+(interleaved medians, 5 rounds) and no gate says a word, because every gate asks whether the
+output is right and none asks what it cost to produce. **The build tail costs DOUBLE** — `build`
+runs twice per fn, ir1 and the regen — so the two `lvout` fixpoints copyprop put there were paid
+four times over, on top of the one `coal` already paid post-choice: five whole-fn fixpoints where
+there had been one. Isolated by substitution, one variant per build: the pass with no liveness at
+all 12.2 s, plus the drop's lvout 17.1 s, plus coal's 19.6 s. **The forward walk itself is free**
+— its per-slot `rdsp` probing, the part that looked expensive, costs nothing measurable.
+
+The fix is placement, and it makes the rung better rather than merely cheaper. The forward walk
+stays in the build tail, where its renames reach `addrfold`/`cmpfuse`/`deaddef` and where the
+clock actually moves; it asks no liveness, so the double cost is nothing times two. The backward
+fold AND the drop both ride `coal`, post-choice, off the one `lvout` that was already being paid
+there — `cpdead` is gone as a pass, folded into `coal`'s existing walk. One fixpoint in the whole
+pipeline, exactly as before the rung, and the codegen came out BETTER than the version that cost
+78%: −0.67% `.text` against −0.53%, −0.95% static insns against −0.73%, −0.68% corpus insns
+against −0.20%.
+
+Two things that fusion turned up, both of which had been silently costing codegen:
+
+* **the lookbehind must survive a drop.** `coal` holds the previous form to fold the next copy
+  into; clearing that hold when a copy DROPS loses exactly the composition this rung is about,
+  because the dropped copy is gone from the output and the def behind it becomes adjacent to the
+  next one. Caught on `gq`, where `(add r9 r6 1) (mov r0 r9) (mov r10 r9)` needs the dead middle
+  gone AND the pair folded, and got only the first.
+* **`coal` was never x64-gated, and the drop is what made that fatal.** `lvout`'s universe is
+  the x64 files — `lvgp` the caller-saved gp set, `lvret` what an x64 exit owes, `csregs` the
+  x64 borrow — so on an lr/fp target its answer is a different machine's liveness. The FOLD had
+  been riding that unguarded since the coalescing rung and no gate ever said so; the DROP hung
+  riscv's on-hart egg bake (`test_virt`, exit 124, the timeout face) the first time it ran.
+  `coal` now takes the `arm? g` bail that `repack` and `cskeep` already take, and x64 is
+  byte-identical with or without it. ⚠ **a latent unsoundness only shows when something raises
+  the stakes** — the fold's silence for two rungs was luck, not licence.
+* ⚠ **and the floor cannot be read off an x64 shape.** An attempt to derive it from `pro4?` (4
+  when the x64 prologue is there, 0 otherwise) was measured a wash on x64 — and handed arm and
+  riscv, whose prologues are longer and whose `pro4?` is false, a floor of 0. That was the
+  proximate cause of the same hang. It stays flat at 5, one rung more conservative than x64
+  needs, because prologue ground is per-target and this pass cannot see which target it is on.
+
+⚠ the standing lesson: **a codegen rung owes a COMPILE-TIME A/B, not only a codegen one.** "Speed
+is a signal" applies to the compiler as much as to the test suite, nothing in `make test_slow`
+watches it, and this one shipped green. Measure the single TU interleaved, both directions, and
+put the number in the ledger beside the bytes.
+
+⚠ AND THE GUARDS ARE NOW PROVED, NOT ARGUED. The rename relation is FINITE — 75 op shapes (one
+per op `rdsp` knows), at most two read positions each, 15 registers in the gp file — so "can this
+pass hand holo a form the assembler refuses?" is DECIDABLE by running the carrier. `crew/moon/law.l`
+now exhausts it: **390 forward renames** through the real `cpwalk`, **570 backward folds** through
+the real `coal`, every result encoded by the real `holo-bytes`, plus a coverage assert that reads
+the op ROSTERS so an op joining one without a shape goes red by name. This is `test/uukindlaw.l`'s
+instrument — generate the model from the implementation's own table, then exhaust a finite carrier
+— pointed at codegen instead of at the kind lattice. Falsified three ways before being believed:
+`vshops` out of `cpskip`, `cpsub`'s alias guard off, `coal`'s alias guard off — each goes red on
+the matching assert, and the first also moves the carrier-size count, which is the drift signal
+doing its job. It costs nothing: 6.97 s against 7.06 s for the law file without it. ⚠ the two
+refusals this pass was built against (`alias-dst`, `shiftv-count-not-r1`) were each found by a
+BUILD BREAKING and a guess; a complete proof over the carrier is what replaces that, and it is
+available exactly because the carrier is small — reach for exhaustion before reaching for search.
+
+Laws: fourteen shapes over `copyprop` — the sandwich in both directions for `add` and for `sub`,
+the chain, the self-mov, the alu read-through, the br fall-through at any distance, the label and
+call resets, and the four refusals that carry a reason (`la`'s symbol, the shift's count seat, an
+address form, a killed map entry). Nine residency goldens re-anchored: each had pinned the
+accumulator's own register in `(add rX rX rY)`, and the seat operand — which is what those laws
+are actually about — is unmoved in every one. `dv` re-anchored off "the park reads through" onto
+`(div r1 r6 r5)`, since there is no park left at all. Gates: test_slow, test_moon, moon-stage (20
+sigs), test_fixpoint byte-identical, vmret (307 lvm_* ret-free), test_raw/drv/libc/kore/clay.
+
+2026-08-12 · SHRINK-WRAP RETIRED (rung 3, the first half) — the arc's heaviest mechanism, priced
+by ablation and then deleted. Turning the `swcs` guard off costs **48 bytes** of love.o `.text`
+and 12 static insns, and nothing whatever on the corpus. Forty-eight. The plan page had already
+written the reason down without pricing it — shrink-wrap "landed one grant in love.c" — and one
+grant is what 48 bytes looks like from the emission side.
+
+Gone with it: `pminp` (pmin's call-carrying twin, so the wrap could amortize on the cheapest path
+that actually calls), `cgitemx` (a `cgitems` that also answers its final env, which existed solely
+so region 1's decls stayed visible to region 2), `swre` (the env rewrite that re-seats the params
+across the split), the statement-level region split inside `build`, the wrap label with its
+save/reload pair, four `g` slots (`swcs` `swat` `swlab` `epi0`), and — the part that reached
+furthest — the DUAL-EPILOGUE flavor of `sibs`: two parameters (`sj`, the split; `sw`, the
+crossing flag) threaded through all six recursive calls, with `ejc`/`elc`/`sw2` recomputed at
+every form of every function on every target, so that a tail call BEFORE the wrap could take the
+plain epilogue and one after it the long one. That cost was paid per-form, program-wide, for one
+function's benefit. **gen.l 8,125 → 8,012 (−113)** — the arc's first negative-LOC milestone.
+⚠ the deletion is byte-identical to the guard-off ablation (324,920 B / 74,402 insns both ways),
+which is the check that says the mechanism came out whole and nothing else came with it.
+
+⚠ AND THE OTHER HALF IS REFUSED, on its own measurement. `pcs` — the pmin-gated cs-seat grant —
+ablates to **+1,004 B** of `.text` (+0.31%) and **zero** corpus instructions: 39.466 G with it and
+39.466 G without, identical to the digit, against a run-to-run spread of ±5 M that bounds what
+this instrument can even see. So promotion does NOT do generically what this grant does
+specially, which was rung 3's entire premise. Deleting it regresses the size axis and pays on no
+other; under "pays somewhere, regresses nowhere" that is a refusal, and it holds until promotion
+covers those bytes.
+
+**The two halves differ by 42× per line and that is the whole finding.** `swcs`: 113 lines for 48
+bytes, 0.42 B/line. `pcs`: ~57 lines (`pmin`, `nrac`, the grant block, the `pc0` threading;
+`pslots`/`nreads` stay, `pp` reads them) for 1,004 bytes, 17.6 B/line. A rung named for a
+mechanism CLASS hid that spread — the two grants were listed in one breath on the plan page and
+priced in one breath, and they are not one thing. Price the members, not the class.
+
+⚠ what is NOT settled is the clock. Four interleaved runs put `pcs`-off between 0.4% and 2.0%
+FASTER on cycles, medians and minima agreeing in direction every time (base vs both −1.24%/−1.52%;
+base vs pcs −0.96%/−1.98%; swcs-deleted vs +pcs-off, 15 rounds, −1.26%/−0.43%). But the
+instruction count is flat, so that is a layout reading, not a mechanism reading — and the box
+carried two other sessions' gates throughout, with the baseline itself drifting 14.874 → 15.219 G
+across three runs. Interleaving defends against drift within a run and nothing defends against a
+1% claim built on flat insns. It is recorded, it is not the basis of any decision here, and it is
+the one thing that could still overturn the refusal on a quiet machine.
+
+Laws: none added — `law.l` and `stage.l` type `sibcall`, the outer two-argument entry, whose
+signature is unchanged; `sibs` is internal, so the musttail contract laws (a marked ret-position
+call leaves as a jump, `musttail-not-a-tail`, the whole-fn `musttail-escape` decline) hold as
+written and are exactly the laws that cover the deletion. Gates: test_slow, test_moon (its
+"guaranteed sibcalls" leg is the contract this touches), test_gen, test_clay, test_drv, vmret
+(307 lvm_* ret-free), `make test` host + love0 ×2.
+
+2026-08-12 · WHY PROMOTION CANNOT SUBSUME `pcs`, and the arc dependency it inverts (the probe
+behind the refusal above). Two questions: how big is the class, and does promotion decline those
+slots or never see them.
+
+The class is **15 functions of ~640**, net +169 static insns with the grant off, and the benefit
+is **two functions**: `ai_ini_0` 583→744 (+161) and `yield_sw_wait` 731→795 (+64), against
+`gen_please` −40. Fifty-seven lines of `pmin`, `nrac` and the grant block serve two functions in
+love.c. With the grant off the params are not re-seated anywhere — `ai_ini_0`'s frame traffic goes
+**75 → 171 movs**, straight back to memory.
+
+**It is structural, and `gen.l` says so in its own comment.** Promotion's seat roster is `lvgp`
+(4567): "the x64 CALLER-saved gp file — a seat here needs no save/restore pair, and **no call may
+sit inside the range that takes one**." `pseat` draws from nothing else. `lvtx` (4576) has a call
+read AND define everything outside `csregs`, so every candidate register is defined inside any
+interval that spans a call and `pfree?` refuses it. Promotion is caller-saved-only BY
+CONSTRUCTION. `pcs` seats params in the CALLEE-saved file for exactly the reason promotion cannot:
+so they survive calls. Disjoint register files, disjoint interval classes, no overlap to find.
+
+⚠ and `pmin` is the tell that should have been read years earlier: it gates the grant on EVERY
+PATH CONTAINING A CALL. That filter selects precisely the class promotion is structurally unable
+to serve. A mechanism whose entry condition is the other mechanism's exclusion condition was never
+going to be subsumed by it.
+
+⚠⚠ **THE ARC DEPENDENCY IS INVERTED.** doc/moon-alloc.md bound "rung 5 only after rung 3", and
+rung 5's own text bound it to "after rung 3 proves the engine on the easier input". Param slots
+crossing calls were never the easier input — they are the case needing the one capability rung 5
+adds, since rung 5 is where linear scan assigns "the pool + **cs file**". `pcs` can only be
+retired by the rung that can hand out callee-saved seats. It is not rung 3's second half; it is
+rung 5's, and no work at rung 3 collects it. The refusal above stands for a better reason than the
+one it was committed with.
+
+Method note worth keeping: this cost one per-symbol diff of two objects already built for the
+ablation, plus two greps. No instrumented build, no probe in the tree. **Diff the artifacts you
+already have before you instrument** — the ablation binaries answer "which functions and how much"
+for free, and the source answered "why" once the question was narrow enough to ask.
+
+2026-08-12 · WHERE THE FRAME BUCKET IS STUCK — the promotion-rejection census, rung 5's pricing.
+The bucket is 79,538 B and 76.6% of the codegen gap, and three copy-folding rungs left it dead
+flat. Rather than guess which lever reaches it, a temporary probe in `repack` classified every
+frame object in love.c by why it did NOT take a register — 5,216 objects, 14,768 touches:
+
+| reason | objs | touches | share |
+|---|---|---|---|
+| **noseat-call** — a candidate, refused because a CALL sits in its range | **1,696** | **6,573** | **44.5%** |
+| shape — some touch is not a full-word ld/st at the object's own base | 1,420 | 3,711 | 25.1% |
+| **prom** — promoted today | 1,026 | 2,418 | 16.4% |
+| noseat-plain — a candidate, no call in range, still no free seat | 767 | 2,012 | 13.6% |
+| wide (size≠8) / esc (a lea took its address) | 307 | 54 | 0.4% |
+
+**The cs-file class is the single largest bucket and it is 2.7× what promotion currently
+captures.** `noseat-call` is exact rather than inferred: a call defines the whole caller-saved
+file, so a call anywhere in `[lo,hi]` GUARANTEES `pfree?` refuses every seat — those 1,696
+objects are refused BY the call and by nothing else.
+
+⚠⚠ **AND THAT BUCKET IS A TRAP — the class is ALREADY REFUSED** (the coalescing entry above
+carries the verdict), which this census cannot see and which reading it as a work-list will
+rediscover. It was rediscovered: the pass was built a second time on 2026-08-12 off this very
+table, and reproduced the original verdict to the sign. Threshold sweep on `touches >
+M·(1+exits)` — M=2 **+715 insns**, M=3 **+269 insns for −994 B**, M=5 **+102 for −542 B**. That
+IS the refusal's own sentence in numbers: "no pricing gate repairs that; a gate tight enough to
+be safe admits nothing." Reverted, again.
+
+**Why the census over-reads, stated so the third attempt does not happen.** It counts where the
+traffic IS; it cannot count what a lever BANKS. A cs seat rewrites a frame touch into a reg-reg
+mov ONE FOR ONE and adds a save plus a reload per exit, because **a cs seat can never be the
+store's source — sources are caller-saved**. The lvgp class pays precisely because its seat CAN
+be the source (`pseat` tries `pf`, the first store's own register, first) and the store then
+self-movs and drops. Same bucket, opposite economics, and the touch count is blind to the
+difference.
+
+⚠ **But the refusal is a property of RETROFITTING, not of cs seats** — and that is the new thing
+this repeat bought, because it says which rung dissolves it. `repack` runs post-build, where the
+store's source is ALREADY an assigned caller-saved register, so a cs seat can only ever be a copy
+of it. Under rung 5's vreg emission the store's source is a VREG the allocator assigns — it can
+be the cs register itself, and no mov exists to drop. **So the call-crossing class is not
+reachable by any patch to `repack`, and is reachable by rung 5 proper.** That is the argument for
+doing rung 5 as the emission rewrite it was specified as, rather than as an increment on the
+current allocator: the increment is refused twice over, the rewrite is what changes the physics.
+(Also confirmed the third time: `unframe`'s `sv3` reads form 0 of the body BY POSITION, so a save
+spliced AT index 4 displaces `(st r4 -8 r3)` and kills the caller's rbx. Splicing after it is
+what kept this build alive where the first attempt segfaulted in `main`.)
+
+The other three buckets each name a different rung. `shape` (25.1%) is a touch-shape question —
+sub-word and mixed-width access — not an allocation question, and no register file reaches it.
+`noseat-plain` (13.6%) is honest register pressure with no call involved: that one is greedy
+allocation losing to a real linear scan, which is rung 5's OTHER half. `wide`/`esc` at 0.4%
+together are proof that neither address-taking nor multi-word objects are worth a rung.
+
+⚠ touches are IR frame touches, not emitted bytes, and a promoted object removes its touches
+while possibly adding movs — so read the shares as where the traffic IS, not as bytes banked.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

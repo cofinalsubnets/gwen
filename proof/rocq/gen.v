@@ -686,13 +686,5 @@ Theorem gen_310 : true = true.  Proof. vm_compute. reflexivity. Qed.
 Theorem gen_311 : true = true.  Proof. vm_compute. reflexivity. Qed.
 (* (id? (|| () 0) ()) *)
 Theorem gen_312 : true = true.  Proof. vm_compute. reflexivity. Qed.
-(* (tablet? (hash)) *)
-Theorem gen_313 : (tabp Vmap) = true.  Proof. vm_compute. reflexivity. Qed.
-(* (id? () (:)) *)
-Theorem gen_314 : true = true.  Proof. vm_compute. reflexivity. Qed.
-(* (id? () (?)) *)
-Theorem gen_315 : true = true.  Proof. vm_compute. reflexivity. Qed.
-(* (id? () (\)) *)
-Theorem gen_316 : true = true.  Proof. vm_compute. reflexivity. Qed.
 
-(* 316 theorems generated from 808 asserts seen *)
+(* 312 theorems generated from 793 asserts seen *)

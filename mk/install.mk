@@ -233,10 +233,13 @@ $d/share/man/man1/$(BIN).1: $(ho)/love.1 $(ho)/kore
 	@$(ho)/kore sed '1s|"LOVE"|"$(BINUP)"|' $< > $@
 	@chmod 644 $@
 
-# the man pages BIN does not rename, and the three vim files. ⚠ static patterns: an
-# implicit rule would make these intermediate.
+# the man pages BIN does not rename, and the two hand-written vim files. ⚠ static
+# patterns: an implicit rule would make these intermediate.
 $d/share/man/man1/cook.1 $d/share/man/man1/lush.1: $d/share/man/man1/%.1: $(ho)/%.1
 	$(inst644)
-$v/ftdetect/love.vim $v/syntax/love.vim $v/ftplugin/love.vim: $v/%/love.vim: vim/%.vim
+$v/ftdetect/love.vim $v/ftplugin/love.vim: $v/%/love.vim: vim/%.vim
 	$(inst644)
-	@install -D -m 644 $< $@
+# the syntax is GENERATED (crew/build.mk) out of crew/vi/hue.l's class table and the
+# vocabulary this host answers to, so it is installed from out/ like any other artifact.
+$v/syntax/love.vim: $(ho)/syntax.vim
+	$(inst644)

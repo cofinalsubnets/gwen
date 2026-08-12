@@ -490,6 +490,188 @@ Definition uu_nfilt : (forall w : nat, (forall l : uu_nlist, uu_nlist)) :=
   (fun w => (fun l => ((nat_rect (fun q => (forall v : (uu_nvec q), uu_nlist)) (fun v => uu_nnil) (fun k => (fun IH => (fun v => (bool_rect (fun x => uu_nlist) (IH (pr2 v)) (uu_ncons (pr1 v) (IH (pr2 v))) (uu_nateqb w (pr1 v)))))) (pr1 l)) (pr2 l)))).
 Definition uu_mstk : Type :=
   (sum unit uu_stk).
+Definition uu_homcomp : (forall X : Type, (forall Y : Type, (forall Z : Type, (forall f : (forall y : Y, Z), (forall g : (forall x : X, Y), (forall x : X, Z)))))) :=
+  (fun X => (fun Y => (fun Z => (fun f => (fun g => (fun x => (f (g x)))))))).
+Definition uu_hom_lunit : (forall X : Type, (forall Y : Type, (forall f : (forall x : X, Y), (@paths (forall x : X, Y) (uu_homcomp X Y Y (uu_idfun Y) f) f)))) :=
+  (fun X => (fun Y => (fun f => (idpath f)))).
+Definition uu_hom_runit : (forall X : Type, (forall Y : Type, (forall f : (forall x : X, Y), (@paths (forall x : X, Y) (uu_homcomp X X Y f (uu_idfun X)) f)))) :=
+  (fun X => (fun Y => (fun f => (idpath f)))).
+Definition uu_hom_assoc : (forall X : Type, (forall Y : Type, (forall Z : Type, (forall W : Type, (forall f : (forall z : Z, W), (forall g : (forall y : Y, Z), (forall h : (forall x : X, Y), (@paths (forall x : X, W) (uu_homcomp X Y W (uu_homcomp Y Z W f g) h) (uu_homcomp X Z W f (uu_homcomp X Y Z g h)))))))))) :=
+  (fun X => (fun Y => (fun Z => (fun W => (fun f => (fun g => (fun h => (idpath (uu_homcomp X Z W f (uu_homcomp X Y Z g h)))))))))).
+Definition uu_hst : Type :=
+  (forall l : nat, nat).
+Definition uu_hupd : (forall l : nat, (forall v : nat, (forall s : uu_hst, uu_hst))) :=
+  (fun l => (fun v => (fun s => (fun q => (bool_rect (fun x => nat) v (s q) (uu_nateqb q l)))))).
+Definition uu_hmov : (forall a : nat, (forall b : nat, (forall s : uu_hst, uu_hst))) :=
+  (fun a => (fun b => (fun s => (uu_hupd b (s a) s)))).
+Definition uu_hmov_carry : (forall s : uu_hst, (@paths nat (uu_hmov 1 0 s 0) (s 1))) :=
+  (fun s => (idpath (s 1))).
+Definition uu_hmov_frame : (forall s : uu_hst, (@paths nat (uu_hmov 1 0 s 2) (s 2))) :=
+  (fun s => (idpath (s 2))).
+Definition uu_hmov_retract : (forall s : uu_hst, (@paths nat (uu_hmov 0 1 (uu_hmov 1 0 s) 1) (s 1))) :=
+  (fun s => (idpath (s 1))).
+Definition uu_hmov_homcomp : (forall s : uu_hst, (@paths nat (uu_homcomp uu_hst uu_hst uu_hst (uu_hmov 1 2) (uu_hmov 0 1) s 2) (s 0))) :=
+  (fun s => (idpath (s 0))).
+Definition uu_isodd : (forall n : nat, bool) :=
+  (fun n => (nat_rect (fun q => bool) false (fun k => (fun r => (uu_negb r))) n)).
+Definition uu_half : (forall n : nat, nat) :=
+  (fun n => (nat_rect (fun q => nat) 0 (fun k => (fun r => (bool_rect (fun x => nat) (S r) r (uu_isodd k)))) n)).
+Definition uu_mst : Type :=
+  (total2 (fun r : uu_hst => (total2 (fun f : uu_hst => (total2 (fun k : uu_hst => nat)))))).
+Definition uu_mmk : (forall r : uu_hst, (forall f : uu_hst, (forall k : uu_hst, (forall p : nat, uu_mst)))) :=
+  (fun r => (fun f => (fun k => (fun p => (tpair r (tpair f (tpair k p))))))).
+Definition uu_mrg : (forall s : uu_mst, uu_hst) :=
+  (fun s => (pr1 s)).
+Definition uu_mf : (forall s : uu_mst, uu_hst) :=
+  (fun s => (pr1 (pr2 s))).
+Definition uu_mk : (forall s : uu_mst, uu_hst) :=
+  (fun s => (pr1 (pr2 (pr2 s)))).
+Definition uu_msp : (forall s : uu_mst, nat) :=
+  (fun s => (pr2 (pr2 (pr2 s)))).
+Definition uu_rdop : (forall x : nat, (forall s : uu_mst, nat)) :=
+  (fun x => (fun s => (bool_rect (fun q => nat) (uu_half x) (uu_mrg s (uu_half x)) (uu_isodd x)))).
+Definition uu_msetr : (forall d : nat, (forall v : nat, (forall s : uu_mst, uu_mst))) :=
+  (fun d => (fun v => (fun s => (uu_mmk (uu_hupd d v (uu_mrg s)) (uu_mf s) (uu_mk s) (uu_msp s))))).
+Definition uu_msetf : (forall d : nat, (forall v : nat, (forall s : uu_mst, uu_mst))) :=
+  (fun d => (fun v => (fun s => (uu_mmk (uu_mrg s) (uu_hupd d v (uu_mf s)) (uu_mk s) (uu_msp s))))).
+Definition uu_mpush : (forall v : nat, (forall s : uu_mst, uu_mst)) :=
+  (fun v => (fun s => (uu_mmk (uu_mrg s) (uu_mf s) (uu_hupd (uu_msp s) v (uu_mk s)) (S (uu_msp s))))).
+Definition uu_mpop : (forall d : nat, (forall s : uu_mst, uu_mst)) :=
+  (fun d => (fun s => (uu_mmk (uu_hupd d (uu_mk s (uu_npred (uu_msp s))) (uu_mrg s)) (uu_mf s) (uu_mk s) (uu_npred (uu_msp s))))).
+Definition uu_istep : (forall o : nat, (forall d : nat, (forall a : nat, (forall b : nat, (forall s : uu_mst, uu_mst))))) :=
+  (fun o => (fun d => (fun a => (fun b => (fun s => (bool_rect (fun q => uu_mst) (uu_msetr (uu_half d) (uu_rdop a s) s) (bool_rect (fun q => uu_mst) (uu_msetr (uu_half d) (uu_mf s (uu_half b)) s) (bool_rect (fun q => uu_mst) (uu_msetf (uu_half a) (uu_rdop b s) s) (bool_rect (fun q => uu_mst) (uu_msetr (uu_half d) (uu_add (uu_rdop a s) (uu_rdop b s)) s) (bool_rect (fun q => uu_mst) (uu_mpush (uu_rdop d s) s) (bool_rect (fun q => uu_mst) (uu_mpop (uu_half d) s) s (uu_nateqb o 15)) (uu_nateqb o 14)) (uu_nateqb o 5)) (uu_orb (uu_nateqb o 3) (uu_nateqb o 4))) (uu_nateqb o 2)) (uu_orb (uu_nateqb o 0) (uu_nateqb o 1)))))))).
+Definition uu_dgo : (forall q : nat, (forall v : (uu_nvec q), (forall m : nat, (forall o : nat, (forall p : nat, (forall a : nat, (forall s : uu_mst, uu_mst))))))) :=
+  (fun q => (nat_rect (fun n => (forall v : (uu_nvec n), (forall m : nat, (forall o : nat, (forall p : nat, (forall a : nat, (forall s : uu_mst, uu_mst))))))) (fun v => (fun m => (fun o => (fun p => (fun a => (fun s => s)))))) (fun k => (fun IH => (fun v => (fun m => (fun o => (fun p => (fun a => (fun s => (let h := (pr1 v) in (IH (pr2 v) (bool_rect (fun x => nat) 0 (S m) (uu_nateqb m 3)) (bool_rect (fun x => nat) h o (uu_nateqb m 0)) (bool_rect (fun x => nat) h p (uu_nateqb m 1)) (bool_rect (fun x => nat) h a (uu_nateqb m 2)) (bool_rect (fun x => uu_mst) (uu_istep o p a h s) s (uu_nateqb m 3)))))))))))) q)).
+Definition uu_drun : (forall l : uu_nlist, (forall s : uu_mst, uu_mst)) :=
+  (fun l => (fun s => (uu_dgo (pr1 l) (pr2 l) 0 0 0 0 s))).
+Definition uu_opsgo : (forall q : nat, (forall v : (uu_nvec q), (forall m : nat, uu_nlist))) :=
+  (fun q => (nat_rect (fun n => (forall v : (uu_nvec n), (forall m : nat, uu_nlist))) (fun v => (fun m => uu_nnil)) (fun k => (fun IH => (fun v => (fun m => (let r := (IH (pr2 v) (bool_rect (fun y => nat) 0 (S m) (uu_nateqb m 3))) in (bool_rect (fun x => uu_nlist) (uu_ncons (pr1 v) r) r (uu_nateqb m 0))))))) q)).
+Definition uu_opsof : (forall l : uu_nlist, uu_nlist) :=
+  (fun l => (uu_opsgo (pr1 l) (pr2 l) 0)).
+Definition uu_drun_li : (forall R : uu_hst, (forall F : uu_hst, (forall K : uu_hst, (@paths nat (uu_mrg (uu_drun (uu_ncons 0 (uu_ncons 0 (uu_ncons 15 (uu_ncons 0 uu_nnil)))) (uu_mmk R F K 0)) 0) 7)))) :=
+  (fun R => (fun F => (fun K => (idpath 7)))).
+Definition uu_drun_shuttle : (forall R : uu_hst, (forall F : uu_hst, (forall K : uu_hst, (@paths nat (uu_mrg (uu_drun (uu_ncons 14 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 15 (uu_ncons 2 (uu_ncons 0 (uu_ncons 0 uu_nnil)))))))) (uu_mmk R F K 0)) 1) (R 0))))) :=
+  (fun R => (fun F => (fun K => (idpath (R 0))))).
+Definition uu_sst : Type :=
+  (total2 (fun s : uu_hst => (total2 (fun p : nat => (total2 (fun l : uu_hst => (total2 (fun e : uu_hst => (total2 (fun t : uu_hst => nat)))))))))).
+Definition uu_smk : (forall s : uu_hst, (forall p : nat, (forall l : uu_hst, (forall e : uu_hst, (forall t : uu_hst, (forall n : nat, uu_sst)))))) :=
+  (fun s => (fun p => (fun l => (fun e => (fun t => (fun n => (tpair s (tpair p (tpair l (tpair e (tpair t n))))))))))).
+Definition uu_stos : (forall st : uu_sst, nat) :=
+  (fun st => ((pr1 st) (uu_npred (pr1 (pr2 st))))).
+Definition uu_strn : (forall st : uu_sst, nat) :=
+  (fun st => (pr2 (pr2 (pr2 (pr2 (pr2 st)))))).
+Definition uu_strat : (forall k : nat, (forall st : uu_sst, nat)) :=
+  (fun k => (fun st => ((pr1 (pr2 (pr2 (pr2 (pr2 st))))) k))).
+Definition uu_sstep : (forall o : nat, (forall x : nat, (forall A : uu_hst, (forall st : uu_sst, uu_sst)))) :=
+  (fun o => (fun x => (fun A => (fun st => (let SM := (pr1 st) in (let PM := (pr1 (pr2 st)) in (let LM := (pr1 (pr2 (pr2 st))) in (let EM := (pr1 (pr2 (pr2 (pr2 st)))) in (let TM := (pr1 (pr2 (pr2 (pr2 (pr2 st))))) in (let NM := (pr2 (pr2 (pr2 (pr2 (pr2 st))))) in (bool_rect (fun q => uu_sst) (uu_smk (uu_hupd PM x SM) (S PM) LM EM TM NM) (bool_rect (fun q => uu_sst) (uu_smk (uu_hupd PM (A x) SM) (S PM) LM EM TM NM) (bool_rect (fun q => uu_sst) (uu_smk (uu_hupd PM (LM x) SM) (S PM) LM EM TM NM) (bool_rect (fun q => uu_sst) (uu_smk (uu_hupd PM (EM x) SM) (S PM) LM EM TM NM) (bool_rect (fun q => uu_sst) (uu_smk SM (uu_npred PM) (uu_hupd x (SM (uu_npred PM)) LM) EM TM NM) (bool_rect (fun q => uu_sst) (uu_smk SM (uu_npred PM) LM (uu_hupd x (SM (uu_npred PM)) EM) TM NM) (bool_rect (fun q => uu_sst) (uu_smk (uu_hupd (uu_npred (uu_npred PM)) (uu_add (SM (uu_npred (uu_npred PM))) (SM (uu_npred PM))) SM) (uu_npred PM) LM EM TM NM) (bool_rect (fun q => uu_sst) (uu_smk SM PM LM EM (uu_hupd NM (SM (uu_npred PM)) TM) (S NM)) st (uu_nateqb o 7)) (uu_nateqb o 6)) (uu_nateqb o 5)) (uu_nateqb o 4)) (uu_nateqb o 3)) (uu_nateqb o 2)) (uu_nateqb o 1)) (uu_nateqb o 0)))))))))))).
+Definition uu_sgo : (forall q : nat, (forall v : (uu_nvec q), (forall m : nat, (forall o : nat, (forall A : uu_hst, (forall st : uu_sst, uu_sst)))))) :=
+  (fun q => (nat_rect (fun n => (forall v : (uu_nvec n), (forall m : nat, (forall o : nat, (forall A : uu_hst, (forall st : uu_sst, uu_sst)))))) (fun v => (fun m => (fun o => (fun A => (fun st => st))))) (fun k => (fun IH => (fun v => (fun m => (fun o => (fun A => (fun st => (let h := (pr1 v) in (IH (pr2 v) (bool_rect (fun x => nat) 1 0 (uu_nateqb m 0)) (bool_rect (fun x => nat) h o (uu_nateqb m 0)) A (bool_rect (fun x => uu_sst) st (uu_sstep o h A st) (uu_nateqb m 0))))))))))) q)).
+Definition uu_srun : (forall l : uu_nlist, (forall A : uu_hst, (forall st : uu_sst, uu_sst))) :=
+  (fun l => (fun A => (fun st => (uu_sgo (pr1 l) (pr2 l) 0 0 A st)))).
+Definition uu_srun_push : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_stos (uu_srun (uu_ncons 0 (uu_ncons 7 uu_nnil)) A (uu_smk S 0 L E T 0))) 7)))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath 7)))))).
+Definition uu_srun_emit : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_strn (uu_srun (uu_ncons 0 (uu_ncons 5 (uu_ncons 7 (uu_ncons 0 uu_nnil)))) A (uu_smk S 0 L E T 0))) 1)))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath 1)))))).
+Definition uu_ds1cv : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 18 (uu_ncons 0 (uu_ncons 14 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 15 (uu_ncons 0 (uu_ncons 15 (uu_ncons 2 (uu_ncons 0 (uu_ncons 0 (uu_ncons 3 (uu_ncons 2 (uu_ncons 1 (uu_ncons 0 uu_nnil)))))))))))))))))))).
+Definition uu_ds1ck : uu_nlist :=
+  (uu_ncons 4 (uu_ncons 18 (uu_ncons 1 (uu_ncons 15 uu_nnil)))).
+Definition uu_ds2cv : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 16 (uu_ncons 0 (uu_ncons 14 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 3 (uu_ncons 0 (uu_ncons 15 (uu_ncons 2 (uu_ncons 0 (uu_ncons 0 (uu_ncons 5 (uu_ncons 0 (uu_ncons 2 (uu_ncons 0 (uu_ncons 1 (uu_ncons 16 (uu_ncons 0 (uu_ncons 0 uu_nnil)))))))))))))))))))))))).
+Definition uu_ds2ck : uu_nlist :=
+  (uu_ncons 5 (uu_ncons 16 (uu_ncons 16 (uu_ncons 3 uu_nnil)))).
+Definition uu_ds3cv : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 16 (uu_ncons 0 (uu_ncons 14 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 0 (uu_ncons 18 (uu_ncons 0 (uu_ncons 15 (uu_ncons 2 (uu_ncons 0 (uu_ncons 0 (uu_ncons 7 (uu_ncons 2 (uu_ncons 0 (uu_ncons 0 (uu_ncons 8 (uu_ncons 1 (uu_ncons 0 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 1 (uu_ncons 0 (uu_ncons 9 (uu_ncons 9 (uu_ncons 1 (uu_ncons 0 (uu_ncons 1 (uu_ncons 0 (uu_ncons 18 (uu_ncons 0 (uu_ncons 14 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 15 (uu_ncons 2 (uu_ncons 0 (uu_ncons 0 (uu_ncons 7 (uu_ncons 2 (uu_ncons 0 (uu_ncons 0 (uu_ncons 8 (uu_ncons 1 (uu_ncons 0 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 1 (uu_ncons 0 (uu_ncons 9 (uu_ncons 9 (uu_ncons 1 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 3 (uu_ncons 0 (uu_ncons 10 (uu_ncons 3 (uu_ncons 0 (uu_ncons 0 (uu_ncons 11 (uu_ncons 1 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 0 (uu_ncons 11 (uu_ncons 3 (uu_ncons 0 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 1 (uu_ncons 0 (uu_ncons 9 (uu_ncons 9 (uu_ncons 5 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 3 (uu_ncons 0 (uu_ncons 3 (uu_ncons 8 (uu_ncons 3 (uu_ncons 0 (uu_ncons 10 (uu_ncons 7 (uu_ncons 0 (uu_ncons 0 (uu_ncons 11 (uu_ncons 5 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 0 (uu_ncons 3 (uu_ncons 8 (uu_ncons 3 (uu_ncons 0 (uu_ncons 11 (uu_ncons 7 (uu_ncons 0 (uu_ncons 0 uu_nnil)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))).
+Definition uu_ds3ck : uu_nlist :=
+  (uu_ncons 7 (uu_ncons 16 (uu_ncons 18 (uu_ncons 0 (uu_ncons 9 (uu_ncons 3 (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 18 (uu_ncons 7 (uu_ncons 0 (uu_ncons 9 (uu_ncons 3 (uu_ncons 1 (uu_ncons 0 (uu_ncons 4 (uu_ncons 8 (uu_ncons 3 (uu_ncons 3 (uu_ncons 10 (uu_ncons 3 (uu_ncons 0 (uu_ncons 0 (uu_ncons 11 (uu_ncons 1 (uu_ncons 0 (uu_ncons 0 (uu_ncons 4 (uu_ncons 8 (uu_ncons 3 (uu_ncons 1 (uu_ncons 11 (uu_ncons 3 (uu_ncons 0 (uu_ncons 0 uu_nnil)))))))))))))))))))))))))))))))))))).
+Definition uu_ds4cv : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 16 (uu_ncons 0 (uu_ncons 1 (uu_ncons 12 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 1 (uu_ncons 10 (uu_ncons 0 (uu_ncons 0 (uu_ncons 12 (uu_ncons 9 (uu_ncons 0 (uu_ncons 0 (uu_ncons 13 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 uu_nnil)))))))))))))))))))))))).
+Definition uu_ds4ck : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 12 (uu_ncons 16 (uu_ncons 0 (uu_ncons 0 (uu_ncons 10 (uu_ncons 7 (uu_ncons 0 (uu_ncons 10 (uu_ncons 9 (uu_ncons 0 (uu_ncons 0 uu_nnil)))))))))))).
+Definition uu_ds4cvargs : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 16 (uu_ncons 0 (uu_ncons 1 (uu_ncons 12 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 1 (uu_ncons 10 (uu_ncons 0 (uu_ncons 0 uu_nnil)))))))))))))))).
+Definition uu_ds4ckargs : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 12 (uu_ncons 16 (uu_ncons 0 (uu_ncons 0 (uu_ncons 10 (uu_ncons 7 (uu_ncons 0 uu_nnil)))))))).
+Definition uu_de5kcv : uu_nlist :=
+  (uu_ncons 0 (uu_ncons 0 (uu_ncons 15 (uu_ncons 0 uu_nnil)))).
+Definition uu_de5kck : uu_nlist :=
+  (uu_ncons 0 (uu_ncons 0 (uu_ncons 15 (uu_ncons 0 uu_nnil)))).
+Definition uu_de5vcv : uu_nlist :=
+  (uu_ncons 2 (uu_ncons 0 (uu_ncons 8 (uu_ncons 3 uu_nnil)))).
+Definition uu_de5vck : uu_nlist :=
+  (uu_ncons 2 (uu_ncons 0 (uu_ncons 8 (uu_ncons 3 uu_nnil)))).
+Definition uu_de5bcv : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 18 (uu_ncons 0 (uu_ncons 14 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 0 (uu_ncons 3 (uu_ncons 0 (uu_ncons 15 (uu_ncons 2 (uu_ncons 0 (uu_ncons 0 (uu_ncons 5 (uu_ncons 0 (uu_ncons 2 (uu_ncons 0 uu_nnil)))))))))))))))))))).
+Definition uu_de5bck : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 18 (uu_ncons 0 (uu_ncons 5 (uu_ncons 0 (uu_ncons 0 (uu_ncons 3 uu_nnil)))))))).
+Definition uu_dl_onesi : (@paths uu_nlist uu_ds1ck (uu_ncons 4 (uu_ncons 18 (uu_ncons 1 (uu_ncons 15 uu_nnil))))) :=
+  (idpath uu_ds1ck).
+Definition uu_dl_onealu : (@paths nat (uu_nlen uu_ds2ck) 4) :=
+  (idpath 4).
+Definition uu_dl_mig_asn : (forall R : uu_hst, (forall F : uu_hst, (forall K : uu_hst, (@paths nat (uu_mrg (uu_drun uu_ds2ck (uu_mmk R F K 0)) 8) (uu_mrg (uu_drun uu_ds2cv (uu_mmk R F K 0)) 8))))) :=
+  (fun R => (fun F => (fun K => (idpath (uu_mrg (uu_drun uu_ds2ck (uu_mmk R F K 0)) 8))))).
+Definition uu_dl_noset : (@paths bool (uu_memb 8 (uu_opsof uu_ds3ck)) false) :=
+  (idpath false).
+Definition uu_dl_cvset : (@paths bool (uu_memb 8 (uu_opsof uu_ds3cv)) true) :=
+  (idpath true).
+Definition uu_dl_tailjmp : (@paths nat (pr1 (pr2 (uu_lrev (uu_opsof uu_ds4ck)))) 10) :=
+  (idpath 10).
+Definition uu_dl_cvret : (@paths nat (pr1 (pr2 (uu_lrev (uu_opsof uu_ds4cv)))) 13) :=
+  (idpath 13).
+Definition uu_dl_cvcall : (@paths nat (pr1 (pr2 (pr2 (uu_lrev (uu_opsof uu_ds4cv))))) 12) :=
+  (idpath 12).
+Definition uu_dl_seat6 : (forall R : uu_hst, (forall F : uu_hst, (forall K : uu_hst, (@paths nat (uu_mrg (uu_drun uu_ds4ckargs (uu_mmk R F K 0)) 6) (uu_mrg (uu_drun uu_ds4cvargs (uu_mmk R F K 0)) 6))))) :=
+  (fun R => (fun F => (fun K => (idpath (uu_mrg (uu_drun uu_ds4ckargs (uu_mmk R F K 0)) 6))))).
+Definition uu_dl_seat5 : (forall R : uu_hst, (forall F : uu_hst, (forall K : uu_hst, (@paths nat (uu_mrg (uu_drun uu_ds4ckargs (uu_mmk R F K 0)) 5) (uu_mrg (uu_drun uu_ds4cvargs (uu_mmk R F K 0)) 5))))) :=
+  (fun R => (fun F => (fun K => (idpath (uu_mrg (uu_drun uu_ds4ckargs (uu_mmk R F K 0)) 5))))).
+Definition uu_dl_lane_k : (@paths uu_nlist uu_de5kcv uu_de5kck) :=
+  (idpath uu_de5kck).
+Definition uu_dl_lane_v : (@paths uu_nlist uu_de5vcv uu_de5vck) :=
+  (idpath uu_de5vck).
+Definition uu_dl_mig_bin : (forall R : uu_hst, (forall F : uu_hst, (forall K : uu_hst, (@paths nat (uu_mrg (uu_drun uu_de5bck (uu_mmk R F K 0)) 0) (uu_mrg (uu_drun uu_de5bcv (uu_mmk R F K 0)) 0))))) :=
+  (fun R => (fun F => (fun K => (idpath (uu_mrg (uu_drun uu_de5bck (uu_mmk R F K 0)) 0))))).
+Definition uu_dl_fewer : (@paths bool (uu_natgtb (uu_nlen uu_de5bcv) (uu_nlen uu_de5bck)) true) :=
+  (idpath true).
+Definition uu_sp0call : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 5 (uu_ncons 0 (uu_ncons 3 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))))).
+Definition uu_sp0bind : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 4 (uu_ncons 0 (uu_ncons 2 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))))).
+Definition uu_sp1call : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 5 (uu_ncons 0 (uu_ncons 3 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))))))).
+Definition uu_sp1bind : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 4 (uu_ncons 0 (uu_ncons 2 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))))))).
+Definition uu_sp2call : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 5 (uu_ncons 0 (uu_ncons 3 (uu_ncons 0 (uu_ncons 3 (uu_ncons 0 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))))))).
+Definition uu_sp2bind : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 4 (uu_ncons 0 (uu_ncons 2 (uu_ncons 0 (uu_ncons 2 (uu_ncons 0 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))))))).
+Definition uu_sp2subst : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))))).
+Definition uu_sp3call : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 5 (uu_ncons 0 (uu_ncons 0 (uu_ncons 5 (uu_ncons 7 (uu_ncons 0 uu_nnil)))))))))).
+Definition uu_sp3bind : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 4 (uu_ncons 0 (uu_ncons 0 (uu_ncons 5 (uu_ncons 7 (uu_ncons 0 uu_nnil)))))))))).
+Definition uu_sl_lic_0 : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_stos (uu_srun uu_sp0bind A (uu_smk S 0 L E T 0))) (uu_stos (uu_srun uu_sp0call A (uu_smk S 0 L E T 0))))))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath (uu_stos (uu_srun uu_sp0bind A (uu_smk S 0 L E T 0))))))))).
+Definition uu_sl_lic_1 : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_stos (uu_srun uu_sp1bind A (uu_smk S 0 L E T 0))) (uu_stos (uu_srun uu_sp1call A (uu_smk S 0 L E T 0))))))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath (uu_stos (uu_srun uu_sp1bind A (uu_smk S 0 L E T 0))))))))).
+Definition uu_sl_lic_1t : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_strn (uu_srun uu_sp1bind A (uu_smk S 0 L E T 0))) (uu_strn (uu_srun uu_sp1call A (uu_smk S 0 L E T 0))))))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath 1)))))).
+Definition uu_sl_lic_1e : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_strat 0 (uu_srun uu_sp1bind A (uu_smk S 0 L E T 0))) (A 0))))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath (A 0))))))).
+Definition uu_sl_ord_bind : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_strat 0 (uu_srun uu_sp3bind A (uu_smk S 0 L E T 0))) (A 0))))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath (A 0))))))).
+Definition uu_sl_ord_bind2 : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_strat 1 (uu_srun uu_sp3bind A (uu_smk S 0 L E T 0))) 5)))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath 5)))))).
+Definition uu_sl_ord_call : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_strat 0 (uu_srun uu_sp3call A (uu_smk S 0 L E T 0))) (A 0))))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath (A 0))))))).
+Definition uu_sl_flip_value : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_stos (uu_srun uu_sp2subst A (uu_smk S 0 L E T 0))) (uu_stos (uu_srun uu_sp2bind A (uu_smk S 0 L E T 0))))))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath (uu_stos (uu_srun uu_sp2bind A (uu_smk S 0 L E T 0))))))))).
+Definition uu_sl_flip_bind : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_strn (uu_srun uu_sp2bind A (uu_smk S 0 L E T 0))) 1)))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath 1)))))).
+Definition uu_sl_flip_subst : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_strn (uu_srun uu_sp2subst A (uu_smk S 0 L E T 0))) 2)))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath 2)))))).
+Definition uu_sl_cross : (forall v : nat, (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (forall R : uu_hst, (forall F : uu_hst, (forall K : uu_hst, (@paths nat (uu_stos (uu_srun uu_sp0bind (uu_hupd 0 v A) (uu_smk S 0 L E T 0))) (uu_mrg (uu_drun uu_de5bck (uu_mmk (uu_hupd 9 v R) F K 0)) 0))))))))))) :=
+  (fun v => (fun A => (fun S => (fun L => (fun E => (fun T => (fun R => (fun F => (fun K => (idpath (uu_stos (uu_srun uu_sp0bind (uu_hupd 0 v A) (uu_smk S 0 L E T 0))))))))))))).
 Definition uu_ltake : (forall k : nat, (forall l : uu_nlist, uu_nlist)) :=
   (fun k => ((nat_rect (fun q => (forall l : uu_nlist, uu_nlist)) (fun l => uu_nnil) (fun j => (fun IH => (fun l => (bool_rect (fun x => uu_nlist) uu_nnil (uu_ncons (uu_hd0 l) (IH (uu_tl0 l))) (uu_niszero (uu_nlen l)))))) k))).
 Definition uu_ldrop : (forall k : nat, (forall l : uu_nlist, uu_nlist)) :=
@@ -1113,5 +1295,5 @@ Print Assumptions add_comm_std.
 Print Assumptions add_assoc_std.
 Print Assumptions mul_comm_std.
 
-(* 519 exported / 569 corpus entries swept;
+(* 610 exported / 660 corpus entries swept;
    3 headline laws (add_comm, add_assoc, mul_comm) landed on Coq's Nat.* via the bridge *)

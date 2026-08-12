@@ -24,14 +24,15 @@ value sit in a register across this range?* — each with its own license and pr
 3. **homes and rides** — param seats under the 'shadow/ride policies (the pp pricing),
    int homing under canonical extension, unhome renaming after the fact.
 4. **the cs pool** — callee-saved homes for depth>=2 loop locals, borrows, d128 pairs.
-5. **the param grants** — pcs (pmin-gated, dirty-load priced via nrac) and swcs
-   (shrink-wrap, pminp, dual epilogues).
+5. **the param grants** — pcs (pmin-gated, dirty-load priced via nrac). Its second flavor
+   (swcs: shrink-wrap, pminp, dual epilogues) retired 2026-08-12, rung 3's first half.
 
 Plus their supporting cast: the 17-pin rgreset roster, the regen dance (build twice
 under policy, deopt, restore snapshots), the choice guard chain, and the recovery
 peepholes cleaning slot traffic after the fact. The marginal rung got expensive —
-shrink-wrap was the arc's heaviest machinery and landed one grant in love.c — and the
-measured remainder (**79,564 B of frame shuffle, 71.0% of the 112,069 B gap vs gcc** —
+shrink-wrap was the arc's heaviest machinery and landed one grant in love.c, which rung 3
+later priced at 48 bytes and deleted — and the
+measured remainder (**79,538 B of frame shuffle, 76.6% of the 103,839 B gap vs gcc** —
 the estimate that bucket once carried was ~65-70 KB; plus the uncoalesced copies and the
 widening churn; dynamically the ~22% slot-mov bucket; the vmsplice probe's
 store-then-reload op seam) is exactly what per-class licensing cannot reach. The
@@ -42,31 +43,34 @@ ratio, which the same day's byte levers (the dead-static sweep, nolibc's per-fun
 split; regalloc's lever 5) took from 1.99× to 1.591× without moving the corpus a digit.
 Those removed unreachable bytes, which are not shared symbols.
 
-**Step 0 has run three times and re-priced the arc each time** (doc/moon-diff.md, HEAD
-2fc25890, a055d279, 86fc76ff). The byte levers left the codegen row alone as expected;
-repack, the spush cell and now promotion did not: both-emit **1.63× → 1.56× → 1.47× →
-1.44×**, the gap **162 KB → 112,069 B** over 612 shared symbols. So the buckets above are a
-LARGER share of a much SMALLER whole, and the arc's target has moved three times under it.
+**Step 0 has run four times and re-priced the arc each time** (doc/moon-diff.md, HEAD
+2fc25890, a055d279, 86fc76ff, 5e6ba66c). The byte levers left the codegen row alone as expected;
+repack, the spush cell, promotion and the two copy-folding rungs did not: both-emit **1.63× →
+1.56× → 1.47× → 1.44× → 1.41×**, the gap **162 KB → 103,839 B** over 612 shared symbols. So the
+buckets above are a LARGER share of a much SMALLER whole, and the arc's target has moved four
+times under it.
 
 The second reading matters more, and the second run of step 0 is what turned it from an
 observation into a trend. The static and dynamic ratios had converged at 1.63×; they came
 apart and then kept going:
 
-| | 32b54ab8 | 2fc25890 | a055d279 | 86fc76ff |
-|---|---|---|---|---|
-| static, both-emit codegen | 1.63× | 1.56× | 1.47× | **1.44×** |
-| dynamic, corpus insns vs clang | 1.63× | 1.625× | 1.629× | **1.617×** |
+| | 32b54ab8 | 2fc25890 | a055d279 | 86fc76ff | 5e6ba66c |
+|---|---|---|---|---|---|
+| static, both-emit codegen | 1.63× | 1.56× | 1.47× | 1.44× | **1.41×** |
+| dynamic, corpus insns vs clang | 1.63× | 1.625× | 1.629× | 1.617× | **1.577×** |
 
 Three fills of size levers left the executed stream untouched while `.text` walked 10% down;
 **the first allocator rung moved it.** That is this arc's whole case, stated and then
 demonstrated: mooncc's remaining excess is not spread over its bytes, it is concentrated in
 the code that runs, and no size lever can reach it.
 
-And the shuffle bucket is no longer an estimate. **Frame-relative movs are 106,892 B of
-mooncc's love.o against gcc's 27,328 — an excess of 79,564 B, 71.0% of the whole codegen
-gap** (rung 2's pricing has the three-lane table). That share rose at every fill while the
-levers were aimed elsewhere; rungs 1+2 are the first aimed AT it, and the first to bring it
-down (78.2% → 71.0%).
+And the shuffle bucket is no longer an estimate. **Frame-relative movs are 106,866 B of
+mooncc's love.o against gcc's 27,328 — an excess of 79,538 B, 76.6% of the whole codegen
+gap** (rung 2's pricing has the three-lane table). Rungs 1+2 were the first aimed AT it and
+brought the share 78.2% → 71.0%; the two copy-folding rungs after them left the traffic dead
+flat (19,478 movs → 19,474) while shrinking the gap, so the share went back up to 76.6%. That
+is the reading, not a setback: nothing that folds copies reaches this bucket, and phase II is
+what it waits for.
 
 ## the stance
 
@@ -93,9 +97,9 @@ probe cost twenty minutes to find out.
 
 ## phase I — slots become intervals (x64 only; arm rides the old path)
 
-* **step 0, the re-base.** CLIMBED THREE TIMES (2026-08-11 twice, 2026-08-12) —
-  doc/moon-diff.md's trend table. both-emit **1.63× → 1.56× → 1.47× → 1.44×**, the gap 162 KB →
-  **112,069 B** over 612 shared symbols. The reading that outlives the numbers: the static
+* **step 0, the re-base.** CLIMBED FOUR TIMES (2026-08-11 twice, 2026-08-12 twice) —
+  doc/moon-diff.md's trend table. both-emit **1.63× → 1.56× → 1.47× → 1.44× → 1.41×**, the gap
+  162 KB → **103,839 B** over 612 shared symbols, and the dynamic row 1.63× → **1.577×**. The reading that outlives the numbers: the static
   and dynamic ratios converged at 1.63×, came APART under three size levers (1.47× static
   against 1.629× dynamic, the dynamic row unmoved), and closed again the moment an
   allocator rung landed. ⚠ **re-run step 0 after any rung that moves `.text`** — the first
@@ -105,11 +109,16 @@ probe cost twenty minutes to find out.
 * **rungs 1+2 CLIMBED 2026-08-12** (4dd9bc41, the regalloc ledger carries the payload) — shipped
   as one rung, which is what the falsification below asked for. What LANDED is the
   caller-saved interval class only: −2,486 frame movs, −6,315 B `.text`, and the arc's first
-  dynamic movement (corpus insns −0.73%, cycles −0.93%). What is still OPEN in rung 2 is the
-  **call-crossing class on cs seats** — a value live across a call cannot take a caller-saved
-  register by construction, and the cs seat with its save/restore pair priced like cssv is
-  where the rest of the ~80 KB sits. The rung's own measurement says so: 2,928 objects passed
-  the shape test but only a fraction found a free caller-saved seat. Step 0 RAN against it
+  dynamic movement (corpus insns −0.73%, cycles −0.93%). ⚠ **the call-crossing class on cs
+  seats is REFUSED, 2026-08-12 — built, measured, and it cannot pay.** A cs seat can never
+  equal the store's source (sources are caller-saved), so no mov ever drops and the rewrite is
+  a frame touch turned into a reg-reg mov ONE FOR ONE plus the save/restore pair: +1,349 insns,
+  exactly the pair count. The lvgp class paid precisely because its seat CAN be the source. No
+  pricing gate repairs it, and even under coalescing it stays +1,077 insns for −1,479 B while
+  retiring nothing. **So the ~80 KB of frame shuffle is not reachable by seating slot objects
+  in callee-saved registers**, and this page's expectation that it was is corrected. What that
+  bucket needs is emission against vregs — phase II — where a value is born in its seat rather
+  than copied into one. Step 0 RAN against rungs 1+2
   (doc/moon-diff.md, HEAD 86fc76ff): codegen 1.47×→**1.44×**, gap **112,069 B**, and the
   dynamic row moved 1.629→**1.617×** with both natives flat — the arc's first.
 * **rung 1, the liveness kit.** Not "build a liveness engine" — three approximations of
@@ -117,7 +126,7 @@ probe cost twenty minutes to find out.
 
   | | has | lacks |
   |---|---|---|
-  | `rdsp` (~3664) | the per-form transfer function (reads, defs, pure?), already trusted by cskeep, dehusk, cmpfuse | nothing — it is complete |
+  | `rdsp` (~3664) | the per-form transfer function (reads, defs, pure?), already trusted by cskeep, copyprop, cmpfuse | nothing — it is complete |
   | `deadst` (~4493) | 8-byte-granule marks, object-aware through the slot map | control flow: it asks "read ANYWHERE in the fn?" |
   | `repack` (~4556) | backedge-widened spans to a fixpoint, then textbook linear scan — sort by lo, expire actives, reuse a free list | branches: its span is a convex HULL over touches, not a live range |
 
@@ -256,20 +265,68 @@ probe cost twenty minutes to find out.
   1,083 `mov r4,sp` pairs the scan never bars on. The binary held 96 bare rbp movs against
   its 1,083 — the tell was there and was read as a finding instead of as a bug. Validate a
   probe against the thing it models, not only against its own totals.
-* **rung 3, retirement one.** Promotion now does generically what the param grants do
-  specially: DELETE pcs, swcs, pmin, pminp, nrac, the dual-epilogue sibs flavor — param
-  spill slots promote like any slot. First negative-LOC milestone; the A/B must show
-  the granted fns hold their wins.
-* **rung 4, coalescing.** Liveness-driven copy elision over final forms (a mov whose
-  source dies — the +23 KB reg-reg bucket; the movslq churn dies with it, promoted
-  values stay extended). dehusk's window heuristics shrink to the rename sandwich.
+* **rung 3, retirement one. HALF CLIMBED 2026-08-12** (the regalloc ledger carries the payload) —
+  the premise was that promotion does generically what the param grants do specially, so both
+  could go. Ablation split them, and the split is the finding: **`swcs` and its cast are DELETED**
+  (shrink-wrap, `pminp`, `cgitemx`, `swre`, the region split in `build`, four `g` slots, and the
+  dual-epilogue flavor of `sibs` — two parameters threaded through six recursive calls and three
+  locals recomputed per form, program-wide, for one function's benefit). It cost **48 bytes** of
+  `.text` and nothing dynamic, and it is **gen.l 8,125 → 8,012 (−113)**, the first negative-LOC
+  milestone.
+  ⚠ **`pcs` is REFUSED and the arc should stop expecting it.** It ablates to **+1,004 B** (+0.31%)
+  and **zero** corpus instructions — promotion does not recover those bytes, so rung 3's premise
+  is simply false for this half. **The two differ by 42× per line** (0.42 B/line against 17.6),
+  which a rung named for a mechanism CLASS could not have shown: price the members, not the class.
+  The refusal lifts when promotion covers the bytes, not before. (An interleaved cycles read puts
+  `pcs`-off 0.4-2.0% faster in four runs, but with instruction count flat that is layout, and the
+  box was carrying two other sessions — recorded, not relied on.)
+* **rung 4, coalescing. CLIMBED 2026-08-12, AHEAD OF RUNG 3** (the regalloc ledger carries
+  the payload) — a copy whose source was defined by the form before it and dies at the copy
+  folds into that def. Corpus insns **−1.76%**, `.text` **−1.83%**, +38 lines; the dynamic
+  ratio 1.617→**1.589×**, the largest move on this arc. The ordering changed because the
+  refusal below proved it: **nothing that turns memory traffic into copies pays until the
+  copies can go**, so coalescing precedes every rung that creates them, not follows.
+  **The forward half followed, 2026-08-12** — `dehusk`'s five hand-cut windows (a rename
+  sandwich capped at 8 forms, a quiet back-copy capped at 6, an adjacent pair, an alu
+  read-through behind a whitelist) are one `copyprop`: a forward walk carrying `reg ->
+  source`, killed at each def and each control edge, with `lvout` answering the drop. The
+  caps went with them, and the read-position whitelist went too — the renamable slots are
+  PROBED off `rdsp` (substitute a stranger, ask whether it reads and does not write), so
+  `la`'s symbol operand and every read-modify-write slot decline by construction instead of
+  by a roster kept in step by hand. Corpus insns **−0.68%**, cycles **−0.49%**, `.text`
+  **−0.67%**, static insns **−0.95%**, reg-reg movs **−6.8%**, compile time flat; +13 lines. The two
+  directions COMPOSE and that is where most of it comes from: the forward rename breaks an
+  `(add d d b)` fusion, which is exactly what lets `coal` fold the stranded copy back into
+  the def — and the def then wears the fused form. `coal` learned the one alias it may
+  welcome for this (an alu's FIRST source: `(mov d a; op d b)` is the lowering, so
+  `(add r7 r7 8)` IS the fused shape; it is the SECOND source that reads its own wreck).
+  ⚠ **this retires a mechanism, not lines** — five windows became two directions over one
+  substrate and every cap is gone, but gen.l reads thirteen lines LONGER, and that is not what "the
+  allocator deletes machinery" promised. (It also shipped once at 78% of the compiler's speed,
+  which no gate noticed and step 0 did; the ledger has that.) The lines are in rung 3, and this rung says
+  something about why: `copyprop` moves the param-grant pricing merely by shrinking the IR
+  `build` returns (the ledger has the case), so those grants cannot be deleted until their
+  pricing lives somewhere a later pass cannot perturb.
+  **Step 0 RAN against both copy rungs** (doc/moon-diff.md, HEAD 5e6ba66c): codegen
+  1.44×→**1.41×**, the gap 112,069→**103,839 B**, and the dynamic row 1.617→**1.577×** — four
+  times rungs 1+2's dynamic move. ⚠ the natives were NOT flat this fill (−0.6 to −0.7%), so the
+  ratio is the reading and the interleaved per-rung A/Bs are the attribution. And the frame-mov
+  bucket is dead flat across both rungs, which is the honest half: **its share of the gap went
+  71.0% → 76.6%** because the gap shrank around it. Nothing that folds copies reaches it.
 
 ## phase II — emission against vregs
 
 * **rung 5.** Build emits vregs (r0 becomes just another one). Linear scan assigns the
   pool + cs file; spill under actual pressure, placed, not written through. The regen
   dance collapses: one build, one assignment — no policy attempts, no deopt snapshots
-  beyond bad-shape bail. Only after rung 3 proves the engine on the easier input.
+  beyond bad-shape bail. ⚠ its entry condition was "after rung 3 proves the engine on the
+  easier input" and that was wrong: rung 3's remaining half is BLOCKED ON rung 5, not the
+  reverse (the joint above). Rung 5 inherits `pcs` as a mechanism to retire.
+  ⚠ **it must be the EMISSION REWRITE, not an increment on `repack`** — the call-crossing class
+  was built on cs seats twice and refused twice (the ledger carries both). Retrofitting a cs seat
+  post-build can only ever copy the store's already-assigned caller-saved source, so the rewrite
+  is one-for-one plus a save and a reload per exit. Under vreg emission the source IS the vreg the
+  allocator seats, so no copy exists. That is what the rung buys and no patch to `repack` can.
 * **rung 6, retirement two.** DELETE the vmap, the shadow/ride policies, unhome, the
   pricing walks, most of the rgreset roster. opool survives only as the register file's
   name; cskeep stays as armor; stage.l re-types the shorter chain.
@@ -308,5 +365,22 @@ moved the static ratio 1.63 → 1.47 and the dynamic ratio not at all. Phase I i
 rung that should move the DYNAMIC row, and if it lands another −10% `.text` at 1.629×
 dynamic, it has not done what this arc exists to do. Quote the corpus A/B first.
 
-Sequencing binds at three joints: rung 1 before everything and PRICED WITH rung 2 (its
-own consumers pay 736 B — the probe); rung 5 only after rung 3.
+Sequencing binds at four joints: rung 1 before everything and PRICED WITH rung 2 (its
+own consumers pay 736 B — the probe); **rung 4 before rung 3, not after** — nothing that
+turns memory traffic into copies pays until the copies can go, which is what refused the
+cs-seat class.
+
+⚠ **the fourth joint was backwards and is corrected 2026-08-12.** It read "rung 5 only after
+rung 3". It is the other way for the half of rung 3 that remains: promotion seats from `lvgp`,
+the CALLER-saved file, and no call may sit inside a range that takes one — so an interval
+crossing a call is unreachable to it by construction, and that is exactly the class `pcs`
+serves (`pmin` gates the grant on every path containing a call). `pcs` is retired by the rung
+that can hand out CALLEE-saved seats, which is rung 5. The regalloc ledger carries the probe.
+
+⚠ **and a gate this page states but did not apply to itself.** Rungs ship under "pays
+somewhere, regresses nowhere", but that is the SHIPPING rule; the arc's own measure is
+mechanism retired, and rung 1 is on record as infrastructure priced by what it enables. A
+rung aimed at a byte bucket rather than at a named mechanism gets a duplicate rather than a
+replacement — the cs-seat class was aimed at the 79,564 B of frame shuffle and arrived as a
+second spelling of `pcs`, +109 lines, retiring nothing. Name the mechanism a rung retires
+before building it, and gate on whether it comes out.

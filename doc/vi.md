@@ -21,10 +21,12 @@ re.l regex engine):
   quits — which is what makes `kore vi` fully drivable from a pipe: the smokes script whole
   sessions (`printf 'ihello\033:wq\n' | kore vi f`).
 * **crew/vi/hue.l** — the .l syntax written down once, for two readers: the painter in core.l's
-  `vframe`, and `vim/syntax.vim`, which tools/hue2vim.l generates from the same table and then
-  diffs, so the two readings cannot drift.
+  `vframe`, and the vim syntax file, which tools/hue2vim.l generates from the same table, so the
+  two readings cannot drift. `make syntax` builds it into `out/host/syntax.vim` and
+  `make install` puts it in `~/.vim/syntax/love.vim`; it is never checked in, so there is no
+  copy to keep up to date.
 * **crew/vi/config.l** — the theme (molokayo) as plain data, keyed by vim highlight group, so
-  the generated syntax.vim can emit `hi def link` lines rather than hardcoded colours.
+  the generated syntax file can emit `hi def link` lines rather than hardcoded colours.
 * **crew/vi/law.l** — the gate.
 
 The pens are the face's to hand over: they want `$COLORTERM` and the user's theme file, and the
