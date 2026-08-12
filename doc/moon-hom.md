@@ -9,7 +9,7 @@ shape c0 and ev were built to. The runnable model of the target is doc/proto/des
 
 gen.l today: `(cgexpr g env e)` answers a value tuple (ty, THE REGISTER IT LANDED IN,
 forms); the die rides as `g 'want`, a one-shot advisory hint consumed at the top node;
-recovery passes (addrfold, cmpfuse, dehusk, sibcall) claw back the bridges the r0
+recovery passes (addrfold, cmpfuse, copyprop, sibcall) claw back the bridges the r0
 protocol lays. The hom shape for a register machine is dest.l's `ck` — forward
 emission, the continuation in hand *defunctionalized* — never ev's backward thread
 (that shape belongs to the stack machine, which has one object). The deltas:

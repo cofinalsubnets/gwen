@@ -28,86 +28,98 @@ from 1.99× to 1.78× without moving the corpus a digit, because a byte that is 
 never executes. The headline answers "how big is the artifact"; only the shared-symbol row
 answers "how good is the code", and only the corpus answers "how fast".
 
-## the current binary — 2026-08-12, rungs 1+2 (HEAD 86fc76ff)
+## the current binary — 2026-08-12, coalescing + the copy walk (HEAD 5e6ba66c)
 
-Step 0 against the allocator arc's first landed rung (4dd9bc41, liveness + slot promotion).
-Two full ccbench passes, because the pair rows swung hard in the first.
+Step 0 against the two rungs since the last fill: rung 4 (coalescing, c539bd63) and the copy
+walk that finished its forward half (5e6ba66c). Two full ccbench passes, plus interleaved
+re-reads of the pair, because ccbench's own crypto rows disagreed with themselves by 6%.
 
 ### .text and the codegen row
 
 | | mooncc | gcc-musl | clang-musl |
 |---|---|---|---|
-| .text (bytes) | **465,406** | 292,448 | 292,832 |
-| love's own C | 434,176 (730 syms) | 252,073 (614) | 252,496 (604) |
-| libc under it | 31,230 (145) | 40,375 (229) | 40,336 (230) |
+| .text (bytes) | **455,438** | 292,448 | 292,832 |
+| love's own C | 424,512 (730 syms) | 252,073 (614) | 252,496 (604) |
+| libc under it | 30,926 (145) | 40,375 (229) | 40,336 (230) |
 
-Whole binary **1.591×**. And the row a codegen rung is priced against:
+Whole binary **1.557×**. And the row a codegen rung is priced against:
 
 | | syms | mooncc | native | |
 |---|---|---|---|---|
-| both lanes emit, vs gcc-musl | 612 | 364,030 | 251,961 | **1.44×** — codegen |
-| both lanes emit, vs clang-musl | 602 | 364,626 | 252,000 | **1.45×** |
-| mooncc-only (the inlining residue) | 118 | 70,146 | — | |
+| both lanes emit, vs gcc-musl | 612 | 355,800 | 251,961 | **1.41×** — codegen |
+| both lanes emit, vs clang-musl | 602 | 356,438 | 252,000 | **1.41×** |
+| mooncc-only (the inlining residue) | 118 | 68,712 | — | |
 
-The gap is **112,069 B**. love.o's `.text` fell 6,315 over this rung and the shared-symbol
-gap 6,462 — they agree to 147 B, which is what says the move is the rung alone.
+The gap is **103,839 B**, down 8,230 over the two rungs. love.o's own `.text` fell 6,113 across
+coalescing and 2,192 across the copy walk — 8,305 together, against the gap's 8,230. They agree
+to 75 B, which is what says the move is those two rungs and nothing else.
 
 ### runtime — the corpus, egg-boot subtracted, median of 3
 
 | | mooncc | gcc-musl | clang-musl | mooncc/clang |
 |---|---|---|---|---|
-| corpus insns (G, user) | **41.984** | 23.923 | 25.965 | **1.617×** |
-| corpus cycles (G, user) | 15.710 | 12.839 | 12.956 | 1.213× |
+| corpus insns (G, user) | **40.714** | 23.744 | 25.812 | **1.577×** |
+| corpus cycles (G, user) | 15.455 | 12.445 | 12.958 | **1.193×** |
 
-Both natives are flat to 0.05% across this rung while mooncc fell 0.73% — as clean an
-attribution as this page gets. ⚠ the cycles ratio did NOT move (1.209 → 1.213): clang's own
-cycles fell 1.1% in the same run, so that row is the noisy one and insns is the reading.
+⚠ **the natives are NOT flat this fill** — gcc −0.7% and clang −0.6% against their own previous
+absolutes, where the last fill had them inside 0.05%. So the RATIO is the reading here and the
+absolute is not; mooncc's own row fell 3.0% (41.984 → 40.714) and the interleaved per-rung A/Bs
+in doc/moon-regalloc.md are what attribute it. This is the second cycles row on this arc to move
+with its insn row rather than against it.
 
-### frame movs — lever 2's own gauge
+### frame movs — the bucket neither rung touched
 
 | | insns | frame movs | bytes | of .text |
 |---|---|---|---|---|
-| mooncc | 77,080 | **19,478** | **106,892** | 32.8% |
+| mooncc | 74,390 | **19,474** | **106,866** | 33.7% |
 | gcc | 45,959 | 5,378 | 27,328 | 14.3% |
 | clang | 50,691 | 1,954 | 9,762 | 5.0% |
 
-The excess over gcc is 79,564 B — **71.0% of the gap**, and this is the first fill where that
-share FALLS (78.2% → 71.0%). It rose at every earlier fill because the gap shrank faster than
-the frame traffic; rungs 1+2 are the first lever aimed at the traffic itself.
+Flat — 19,478 movs before these two rungs, 19,474 after. Both were reg-reg copy levers and the
+table says so from the emission side. The excess over gcc is 79,538 B, and because the GAP shrank
+while this did not, its share went **71.0% → 76.6%**. That is the arc's remaining prize stating
+itself: nothing that folds copies reaches it, and phase II is what it waits for.
 
 ### the libc floor
 
 | | syms | shipped | live | dead | |
 |---|---|---|---|---|---|
-| mooncc | 145 | 31,230 | 29,536 | **1,694** | **5.4%** |
+| mooncc | 145 | 30,926 | 29,254 | **1,672** | **5.4%** |
 | gcc-musl | 229 | 40,375 | 37,749 | 2,626 | 6.5% |
 | clang-musl | 230 | 40,336 | 37,758 | 2,578 | 6.4% |
 
-Under musl's own floor, and 0.77× its shipped size — the per-function nolibc split's result,
-unmoved by anything since.
+Under musl's own floor and 0.77× its shipped size, unmoved by anything since the split.
 
 ### invocation speed
 
 | | mooncc | gcc-musl | clang-musl |
 |---|---|---|---|
-| full build + link, warm (s) | **15.4** | 9.0 | 5.4 |
-| ..the same, cold tree (s) | 45.2 | 9.0 | 5.3 |
-| love.c single TU, median of 3 | 9.90 | — | — |
+| full build + link, warm (s) | **19.6** | 11.0 | 5.4 |
+| ..the same, cold tree (s) | 68.5 | 9.6 | 5.2 |
+| love.c single TU, median of 3 | 14.0 | — | — |
 
-The whole build is flat against the previous rung even though the single TU went 8.42 → 9.90 s
-(+18%) for the liveness fixpoint.
+⚠ **this row moved and the fill cannot split it.** 15.4 → 19.6 s warm, 9.90 → 14.0 s on the
+single TU, across two rungs — and neither rung carried a compile-time row until now, so this fill
+can only bound it. What IS attributed, interleaved and both directions: the copy walk itself is
++2% on the single TU (13.72 → 13.99 s) after its placement was fixed; it shipped once at **+78%**
+and the ledger has that story. The rest is coalescing's `lvout`, unmeasured at the time. ⚠ and
+note the natives swing ±14% between the two passes here (gcc 9.6 and 11.0), so read this whole
+table as ratios of the same pass, never across.
 
-### the pair — two passes (⚠ ratios only; the box moves more than the code)
+### the pair — ccbench, then interleaved (⚠ the interleaved read is the one to quote)
 
-| | mooncc | gcc-musl | clang-musl | mooncc/gcc |
-|---|---|---|---|---|
-| chacha20 (ms) | 1019 / 1025 | 281 / 292 | 170 / 183 | 3.63 / 3.51 |
-| poly1305 (ms) | 1288 / 1301 | 1318 / 1315 | 786 / 779 | **0.98 / 0.99** |
+| | mooncc | gcc-musl | mooncc/gcc |
+|---|---|---|---|
+| chacha20, interleaved medians of 5 (ms) | 1160 | 330 | **3.52×** |
+| poly1305, interleaved medians of 5 (ms) | 1520 | 1530 | **0.99×** |
 
-**poly1305 passed gcc, and it reproduces** — 1.04× before rungs 1+2, 0.98× and 0.99× after,
-with gcc's own poly stable to 0.3% across both passes. That is the pair's designed reading
-firing exactly as specified: poly keeps its five limbs as scalar LOCALS, promotion is a
-scalar-locals lever, and chacha's array slots — lever 1's residue — are untouched at 3.5–3.6×.
+**poly1305 holds its pass over gcc and chacha holds at 3.5×** — the pair's designed reading, both
+rows unmoved by two copy-folding rungs, exactly as the frame-mov table predicts. ⚠ **ccbench's
+own crypto rows said otherwise and were wrong**: 1463 and 1554 ms for mooncc's poly across its two
+passes against gcc's 1363 and 1344, which reads as 1.07-1.16× and a lost pass. Interleaving the
+same binaries five rounds each puts them level. ccbench times each lane in a block and subtracts a
+separate boot median; that is fine for a 3.5× row and not fine for a 1.0× one. **Quote the
+interleaved number for any row near parity.**
 
 ## the trend — every fill's headline, oldest first
 
@@ -127,20 +139,28 @@ for is the trend, and the trend is this:
 | a1e12f40 | nolibc, one function to a file | 1.779× | — | — |
 | 2fc25890 | re-base: repack + sweep + split | 1.702× | 1.56× | 1.625× |
 | a055d279 | the spush cell joins the slot map | 1.618× | 1.47× | 1.629× |
-| **86fc76ff** | **rungs 1+2: liveness + promotion** | **1.591×** | **1.44×** | **1.617×** |
+| 86fc76ff | rungs 1+2: liveness + promotion | 1.591× | 1.44× | 1.617× |
+| **5e6ba66c** | **coalescing + the copy walk** | **1.557×** | **1.41×** | **1.577×** |
 
 Two readings the table carries and no single cell does. **The static and dynamic ratios
 converged at 1.63× and then came apart** — four size levers (the sweep, the split, repack, the
 spush cell) walked codegen 1.63 → 1.47 while the corpus did not move a digit, because bytes
 that are unreachable or merely re-encoded are not bytes that execute. **And they closed again
-the moment an allocator rung landed**: rungs 1+2 are the first to move the dynamic row at all.
-That is the whole argument of doc/moon-alloc.md, first stated and then demonstrated.
+the moment an allocator rung landed**: rungs 1+2 are the first to move the dynamic row at all,
+and the two copy-folding rungs after them moved it four times as far — 1.617 → 1.577× against a
+static row going 1.44 → 1.41×, the two now walking together. That is the whole argument of
+doc/moon-alloc.md, first stated and then demonstrated twice.
 
 ⚠ two instrument lessons the fills paid for, kept because they still bite:
 
 * **the `mcobj` cache is not "paid once per tree".** 45.2 s cold and 15.4 s warm on the SAME
   tree, one run after the other, because a rung that changes the compiler rehashes every
   member. Every codegen fill pays it; only the warm build row is quotable.
+* **a row near parity needs an INTERLEAVED read.** ccbench times each lane in a block and
+  subtracts a separately-measured boot; on the 5e6ba66c fill that put mooncc's poly1305 at
+  1.07-1.16× gcc across its two passes, and five interleaved rounds of the same binaries put
+  them level (1520 against 1530 ms, 0.99×). The method is fine for a 3.5× row and not for a 1.0×
+  one. Same lesson one rung down: two builds ten bytes apart read 0.3% apart on corpus insns.
 * **clang's chacha is not a box anchor.** It read 198.1 twice and the a055d279 fill took that
   coincidence for stability, reading a mooncc move off it; it reads 169.9 and 182.7 the next
   day. That row swings ±8%. Two agreeing samples are not a control — a control is a lane that
