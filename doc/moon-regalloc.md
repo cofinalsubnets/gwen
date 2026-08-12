@@ -861,9 +861,12 @@ construction, and the roster cannot fall out of step with the table it models. W
 reason rdsp cannot carry is a five-name skip list, each entry a contract rather than a dataflow
 fact: the address families (addrfold consumes a mov feeding a base under its own license),
 `push` (cskeep reads `(push <cs>)` as that register's SAVE), and the variable shifts (holo scares
-if the count is not r1). **corpus insns 39.954→39.873 G (−0.20%)**, cycles 14.794→**14.739 G
-(−0.37%)**, love.o .text 327,064→**325,334 B (−0.53%)**, insns 75,100→**74,554 (−0.73%)**, reg-reg
-movs 10,634→**10,112 (−4.9%)**; gen.l 8,112→8,111, law.l 1,965→1,964.
+if the count is not r1). **corpus insns 39.734→39.464 G (−0.68%)**, cycles 14.871→**14.798 G
+(−0.49%, minima 14.678→14.575)**, love.o .text 327,064→**324,872 B (−0.67%)**, insns
+75,100→**74,390 (−0.95%)**, reg-reg movs 10,634→**9,908 (−6.8%)**; single-TU compile of love.c
+13.72→13.99 s (+2%, flat); gen.l 8,112→8,125. ⚠ the dynamic row wants an interleaved run and
+several: two builds 10 bytes apart read 0.3% apart on corpus insns, so a single pair is not a
+measurement — it is which movs went, not how many.
 
 ⚠ THE TWO DIRECTIONS COMPOSE, and that composition is where most of the win is. Forward
 propagation alone REGRESSES the corpus (+0.19% insns) while shrinking `.text`, because renaming
@@ -901,6 +904,51 @@ until their pricing moves somewhere that a later pass cannot perturb.
 
 Ablation first, as always: `dehusk` at HEAD was worth 0.52% corpus insns and 0.22% `.text` for 79
 lines. That number is what made a rewrite the right move rather than a deletion.
+
+⚠⚠ AND THE FIRST SHIP OF THIS RUNG COST 78% OF THE COMPILER'S SPEED, unmeasured. The numbers
+above are the SECOND, after step 0 caught it: love.c through mooncc went **13.2 → 23.4 s**
+(interleaved medians, 5 rounds) and no gate says a word, because every gate asks whether the
+output is right and none asks what it cost to produce. **The build tail costs DOUBLE** — `build`
+runs twice per fn, ir1 and the regen — so the two `lvout` fixpoints copyprop put there were paid
+four times over, on top of the one `coal` already paid post-choice: five whole-fn fixpoints where
+there had been one. Isolated by substitution, one variant per build: the pass with no liveness at
+all 12.2 s, plus the drop's lvout 17.1 s, plus coal's 19.6 s. **The forward walk itself is free**
+— its per-slot `rdsp` probing, the part that looked expensive, costs nothing measurable.
+
+The fix is placement, and it makes the rung better rather than merely cheaper. The forward walk
+stays in the build tail, where its renames reach `addrfold`/`cmpfuse`/`deaddef` and where the
+clock actually moves; it asks no liveness, so the double cost is nothing times two. The backward
+fold AND the drop both ride `coal`, post-choice, off the one `lvout` that was already being paid
+there — `cpdead` is gone as a pass, folded into `coal`'s existing walk. One fixpoint in the whole
+pipeline, exactly as before the rung, and the codegen came out BETTER than the version that cost
+78%: −0.67% `.text` against −0.53%, −0.95% static insns against −0.73%, −0.68% corpus insns
+against −0.20%.
+
+Two things that fusion turned up, both of which had been silently costing codegen:
+
+* **the lookbehind must survive a drop.** `coal` holds the previous form to fold the next copy
+  into; clearing that hold when a copy DROPS loses exactly the composition this rung is about,
+  because the dropped copy is gone from the output and the def behind it becomes adjacent to the
+  next one. Caught on `gq`, where `(add r9 r6 1) (mov r0 r9) (mov r10 r9)` needs the dead middle
+  gone AND the pair folded, and got only the first.
+* **`coal` was never x64-gated, and the drop is what made that fatal.** `lvout`'s universe is
+  the x64 files — `lvgp` the caller-saved gp set, `lvret` what an x64 exit owes, `csregs` the
+  x64 borrow — so on an lr/fp target its answer is a different machine's liveness. The FOLD had
+  been riding that unguarded since the coalescing rung and no gate ever said so; the DROP hung
+  riscv's on-hart egg bake (`test_virt`, exit 124, the timeout face) the first time it ran.
+  `coal` now takes the `arm? g` bail that `repack` and `cskeep` already take, and x64 is
+  byte-identical with or without it. ⚠ **a latent unsoundness only shows when something raises
+  the stakes** — the fold's silence for two rungs was luck, not licence.
+* ⚠ **and the floor cannot be read off an x64 shape.** An attempt to derive it from `pro4?` (4
+  when the x64 prologue is there, 0 otherwise) was measured a wash on x64 — and handed arm and
+  riscv, whose prologues are longer and whose `pro4?` is false, a floor of 0. That was the
+  proximate cause of the same hang. It stays flat at 5, one rung more conservative than x64
+  needs, because prologue ground is per-target and this pass cannot see which target it is on.
+
+⚠ the standing lesson: **a codegen rung owes a COMPILE-TIME A/B, not only a codegen one.** "Speed
+is a signal" applies to the compiler as much as to the test suite, nothing in `make test_slow`
+watches it, and this one shipped green. Measure the single TU interleaved, both directions, and
+put the number in the ledger beside the bytes.
 
 ⚠ AND THE GUARDS ARE NOW PROVED, NOT ARGUED. The rename relation is FINITE — 75 op shapes (one
 per op `rdsp` knows), at most two read positions each, 15 registers in the gp file — so "can this

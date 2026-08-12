@@ -278,16 +278,17 @@ probe cost twenty minutes to find out.
   caps went with them, and the read-position whitelist went too — the renamable slots are
   PROBED off `rdsp` (substitute a stranger, ask whether it reads and does not write), so
   `la`'s symbol operand and every read-modify-write slot decline by construction instead of
-  by a roster kept in step by hand. Corpus insns **−0.20%**, cycles **−0.37%**, `.text`
-  **−0.53%**, static insns **−0.73%**, reg-reg movs **−4.9%**; gen.l −1 line, law.l −1. The two
+  by a roster kept in step by hand. Corpus insns **−0.68%**, cycles **−0.49%**, `.text`
+  **−0.67%**, static insns **−0.95%**, reg-reg movs **−6.8%**, compile time flat; +13 lines. The two
   directions COMPOSE and that is where most of it comes from: the forward rename breaks an
   `(add d d b)` fusion, which is exactly what lets `coal` fold the stranded copy back into
   the def — and the def then wears the fused form. `coal` learned the one alias it may
   welcome for this (an alu's FIRST source: `(mov d a; op d b)` is the lowering, so
   `(add r7 r7 8)` IS the fused shape; it is the SECOND source that reads its own wreck).
-  ⚠ **this retires a mechanism, not yet lines** — five windows became two directions over one
-  substrate and every cap is gone, but gen.l reads one line shorter, and a one-line rung is not
-  what "the allocator deletes machinery" promised. The lines are in rung 3, and this rung says
+  ⚠ **this retires a mechanism, not lines** — five windows became two directions over one
+  substrate and every cap is gone, but gen.l reads thirteen lines LONGER, and that is not what "the
+  allocator deletes machinery" promised. (It also shipped once at 78% of the compiler's speed,
+  which no gate noticed and step 0 did; the ledger has that.) The lines are in rung 3, and this rung says
   something about why: `copyprop` moves the param-grant pricing merely by shrinking the IR
   `build` returns (the ledger has the case), so those grants cannot be deleted until their
   pricing lives somewhere a later pass cannot perturb.

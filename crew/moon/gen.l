@@ -4655,9 +4655,10 @@
    ; branches in between; and D cannot be live out of the def, because live-out there is live-in
    ; at the copy, which reads S and writes D. ⚠ the prologue is off limits: unframe reads it BY
    ; POSITION (its sv3 asks whether form 4 is the r3 save), so a drop up there moves the ground
-   ; under it. --
-   (coal? p f i lot)                                ; may (mov D S) at i fold into its def p?
-    (? !(two? p && two? f && id? <f 'mov && (5 < i)) ()
+   ; under it -- and the floor is asked of the SHAPE, since a fn unframe left frameless has no
+   ; prologue to protect and a fixed index would skip live code instead. --
+   (coal? p f i lo lot)                             ; may (mov D S) at i fold into its def p?
+    (? !(two? p && two? f && id? <f 'mov && (lo < i)) ()
        (: S (nthr f 2)
           D (nthr f 1)
           d (rdsp p)
@@ -4674,18 +4675,38 @@
                  !(member? S <d) && !(member? D dfs) &&
                  (!(member? D <d) || (member? <p aluops && id? (nthr p 2) D)) &&
                  !(member? S (peep lot i ())) && !(id? D S))))))
+   ; ⚠ x64 ONLY, and the roster is why: lvout's universe is the x64 files -- lvgp the caller-saved
+   ; gp set, lvret what an x64 exit owes, csregs the x64 borrow -- so its answer on an lr/fp
+   ; target is a different machine's liveness. The fold survived that; the DROP did not, and
+   ; riscv's on-hart egg hung until this line existed. repack and cskeep hold the same line.
    (coal g fs)
-    (: lot (lvout g fs)
+    (? (arm? g) fs
+     (: lot (lvout g fs)
+       ; ⚠ the floor is PROLOGUE GROUND on every target, so it cannot be read off an x64 shape:
+       ; pro4? is false on arm and riscv, whose own prologue is longer, and a floor derived from
+       ; it opens their bring-up to the fold. 5 clears the widest one; unframe (which drops four
+       ; forms and asks whether the NEXT is the r3 save) needs only that nothing at index <= 4
+       ; shifts, so this is one rung more conservative than x64 requires and stays flat.
+       lo 5
        (? (id? lot 'no) fs
           ; one form of lookbehind: a kept form is emitted when the NEXT one declines it, so a
           ; folded pair leaves exactly the rewritten def and the copy never lands
-          (: (rn l p i)
+          (: ; the DROP rides the same table and the same walk: a copy whose destination is read
+             ; nowhere ahead is a dead def. ⚠ lot is read PRE-rename and that is exactly
+             ; conservative -- a fold shortens the source's range and leaves the destination's
+             ; alone, so a drop this answers safe stays safe after it
+             (dead9? f i) ((lo < i) && two? f && hmov? f &&
+                           !(member? (nthr f 1) (peep lot i ())))
+             (rn l p i)
               (? !(two? l) (? (two? p) [p] ())
                  (: f <l
-                    (? (coal? p f i lot) ((reop p 1 (nthr f 1)) >< rn >l () (i + 1))
+                    (? (coal? p f i lo lot) ((reop p 1 (nthr f 1)) >< rn >l () (i + 1))
+                       ; a dropped copy KEEPS the lookbehind: it is gone from the output, so the
+                       ; def and the copy behind it become adjacent, which is the composition
+                       (dead9? f i) (rn >l p (i + 1))
                        (two? p) (p >< rn >l f (i + 1))
                        (rn >l f (i + 1)))))
-             (rn fs () 0))))
+             (rn fs () 0)))))
 
    (repack g fs)
     (: slots (peep g 'slots ())
@@ -5336,18 +5357,11 @@
                                (: m2 (cpkill m <>d)
                                   _ (? (hmov? f2) (pin m2 <>f2 <>>f2) 0)
                                   (f2 >< cpwalk >fs m2)))))))))))
-   (cpdead g fs)                                    ; a copy nothing reads ahead is a dead def
-    (: lot (lvout g fs)
-       (? (id? lot 'no) fs
-          (: (go l i)
-              (? !(two? l) ()
-                 (: f <l
-                    (? (hmov? f && !(member? <>f (peep lot i ()))) (go >l (i + 1))
-                       (f >< go >l (i + 1)))))
-             (go fs 0))))
-   ; the two directions, one after the other: the forward rename, then coal's backward fold (the
-   ; copy the rename just stranded is a def that named the wrong register), then the drop.
-   (copyprop g fs) (cpdead g (coal g (cpwalk fs (tablet 0))))
+   ; ⚠ the forward half rides the BUILD TAIL, where its renames reach addrfold/cmpfuse/deaddef,
+   ; and it asks no liveness on purpose: build runs TWICE per fn (ir1 and the regen), so a
+   ; whole-fn fixpoint here is paid four times over. the backward half and the drop both ride
+   ; coal, post-choice, off the one lvout that was already being paid there.
+   (copyprop fs) (cpwalk fs (tablet 0))
 
    ; -- aggregate initializers: ('init (item..)), items plain | ('dfield
    ; name val) | ('didx n val), nesting for arrays of structs. shared bits: --
@@ -7328,7 +7342,7 @@
                         (deaddef      ; rerun: the widened addrfold strands live-dest addr insns
                         (cmpfuse
                         (addrfold
-                        (copyprop g
+                        (copyprop
                         (stld
                         (spmerge
                         (deaddef

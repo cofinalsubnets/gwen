@@ -1573,7 +1573,8 @@
 ; the sp family never folds, since sp moves through the cell cursor and its copy records outlive it.
 (: gP (tablet 0)
    pro '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3) (align 1))
-   (cp l) (drop 6 (copyprop gP (pro + l)))
+   (cp l) (drop 6 (coal gP (copyprop (pro + l))))     ; the real chain: the build tail's
+                                                       ; forward walk, then the post-choice fold
    ; the sandwich, both directions at once: the rename breaks the fusion, coal rebuilds it on
    ; the copy's register, and both movs are gone -- for sub as much as for add, since it is the
    ; FIRST source the two-address lowering welcomes
@@ -2024,8 +2025,14 @@
       c3 (co '((li r5 1) (add r6 r6 r5) (mov r7 r6) (add r0 r7 r7) (ret)))
       c4 (co '((li r5 1) (sub r6 r12 r7) (mov r7 r6) (add r0 r7 r7) (ret)))
       c5 (co '((li r5 1) (li r6 2) (label L9) (mov r7 r6) (add r0 r7 r7) (ret)))
-      c6 (coal gC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (li r6 2)
-                    (mov r7 r6) (add r0 r7 r7) (ret)))
+      ; the FLOOR is PROLOGUE GROUND and it is flat across targets -- arm and riscv lay a longer
+      ; bring-up than x64 and no x64 shape test can see it (⚠ one derived from pro4? handed them
+      ; a floor of 0 and the riscv boot hung). a dead copy at index 5 stands; one form later it
+      ; goes
+      c6 (coal gC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+                    (mov r7 r6) (li r7 3) (ret)))
+      c8 (coal gC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3) (align 1)
+                    (mov r7 r6) (li r7 3) (ret)))
       c7 (co '((li r5 1) (add r6 r7 r5) (mov r7 r6) (add r0 r7 r7) (ret)))
       (assert
          (= c1 (pro + '((li r5 1) (li r7 2) (add r0 r5 r7) (ret))))   ; the def takes the copy's name
@@ -2035,7 +2042,8 @@
          (member? '(mov r7 r6) c4)                     ; the new dest is the def's SECOND source
          (= c7 (pro + '((li r5 1) (add r7 r7 r5) (add r0 r7 r7) (ret))))  ; ..its first: the fused form
          (member? '(mov r7 r6) c5)                     ; a label between them: not adjacent
-         (member? '(mov r7 r6) c6)                     ; index 5 is prologue ground: hands off
+         (member? '(mov r7 r6) c6)                     ; a dead copy AT index 5: the floor holds it
+         !(member? '(mov r7 r6) c8)                    ; ...one form later it drops
          (id? (coal gC '((label fn) (raw 144) (ret))) '((label fn) (raw 144) (ret)) ||
           (= (coal gC '((label fn) (raw 144) (ret))) '((label fn) (raw 144) (ret)))))))
 
