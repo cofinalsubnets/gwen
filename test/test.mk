@@ -38,12 +38,13 @@ test_filemode: $m
 	      && grep -q "^;; missing an-name-the-book-lacks$$" out/host/.test_filemode.out \
 	      && ! grep -q "^past$$" out/host/.test_filemode.out; } \
 	    || { cat out/host/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
-# test_stdinbuf -- WHAT WE BORROW OF fd 0 IS INVISIBLE, and we borrow two things. A
-# seekable fd 0 reads the device in 4096-byte gulps (love.c's rbio_of) where a pipe still
-# drips one byte at a time, so the first law is that BOTH DOORS ANSWER THE SAME: the bytes
-# our reader has not taken are still there for an in-form (slurp in), and still there for a
-# child that inherits the fd -- the second is what stdin_give's seek buys. The pipe lends
-# its O_NONBLOCK bit instead (`inflag`), and the law for that one is read straight off
+# test_stdinbuf -- WHAT WE BORROW OF fd 0 IS INVISIBLE, and we borrow two things. Both doors
+# read the device in 4096-byte gulps (love.c's rbio_of), so the first law is that BOTH ANSWER
+# THE SAME: the bytes our reader has not taken are still there for an in-form (slurp in), and
+# still there for a child that inherits the fd. A seekable door puts them back with an lseek;
+# a pipe has no rewind, so stdin_hand DELIVERS them down a fresh pipe instead -- which is why
+# the handoff laws below are asked of the PIPE output directly and not only of the diff. The
+# pipe also lends its O_NONBLOCK bit (`inflag`), and the law for that one is read straight off
 # /proc: a child must inherit fd 0 BLOCKING, or it takes an empty pipe for an ended one.
 # The corpus cannot gate any of this; it exists only BETWEEN two ways of being fed.
 test_stdinbuf: $m
@@ -57,8 +58,14 @@ test_stdinbuf: $m
 	          diff $$f.pipe $$f.seek; exit 1; }; done
 	@grep -qF 'rest: [(say out "tail form")' out/host/.test_stdinbuf1.l.seek \
 	  || { cat out/host/.test_stdinbuf1.l.seek; echo "FAIL an in-form (slurp in) lost the remainder"; exit 1; }
-	@grep -qF HANDOFF-TAIL out/host/.test_stdinbuf2.l.seek \
-	  || { cat out/host/.test_stdinbuf2.l.seek; echo "FAIL the exec'd child lost the fd position"; exit 1; }
+	@for w in seek pipe; do grep -qF HANDOFF-TAIL out/host/.test_stdinbuf2.l.$$w \
+	  || { cat out/host/.test_stdinbuf2.l.$$w; echo "FAIL the exec'd child lost the fd position ($$w)"; exit 1; }; done
+	@# ..and the residue is only the FIRST gulp: past it the pumper must splice the rest of the
+	@# pipe, whose writer is still going (200000 bytes against a 64K pipe, so cat really blocks).
+	@{ printf '(exec (L "cat"))\n'; yes HANDOFF-BULK | head -c 200000; } > out/host/.test_stdinbuf4.l
+	@cat out/host/.test_stdinbuf4.l | $m 2>/dev/null | wc -c > out/host/.test_stdinbuf4.n
+	@n=`cat out/host/.test_stdinbuf4.n`; [ $$n -eq 200000 ] \
+	  || { echo "FAIL the pumper delivered $$n of 200000 -- the splice past the residue stopped short"; exit 1; }
 	@printf '(exec (L "cat" "/proc/self/fdinfo/0"))\n' > out/host/.test_stdinbuf3.l
 	@cat out/host/.test_stdinbuf3.l | $m > out/host/.test_stdinbuf3.out 2>&1; \
 	  fl=$$(sed -n 's/^flags:[[:space:]]*//p' out/host/.test_stdinbuf3.out); \

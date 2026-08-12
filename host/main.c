@@ -35,21 +35,22 @@ ai_noinline intptr_t ai_nclock(void) {
 // lend decides which it gets:
 //   seekable -- a heap bio parked in `inport`, which love.c's rbio_of reads THROUGH the
 //               static, plus the seek back below. 3.8M -> 23K.
-//   a pipe   -- no run is possible, so the bytes stay one per call; what goes is the
-//               TOGGLE. O_NONBLOCK on for the whole run, the old flags in `inflag`.
-//               3.8M -> 953K, and the reader's position is never a byte ahead.
+//   a pipe   -- the same run, plus the TOGGLE: O_NONBLOCK on for the whole session, the
+//               old flags in `inflag`, so the gulp costs no fcntl at all. It cannot be
+//               seeked back, so its residue is DELIVERED instead (stdin_hand).
 //   a tty    -- neither. A human types, so syscalls-per-byte buys nothing, and a terminal
 //               handed back nonblocking is the one version of this that breaks the
 //               user's shell ("resource temporarily unavailable" on their next line).
+//               With no run, `reads` keeps trickling -- which is what a prompt wants.
 // ⚠ ONE PORT, ONE POSITION -- that is what makes the run safe. Every in-process reader
 // goes through zgetc, which drains the run before the device, so an in-form (slurp in)
 // still sees exactly the bytes our reader has not taken. What runs ahead is only the
 // KERNEL's fd offset, and only an inheritor can see that -- hence the seek.
-// ⚠ NOTHING PUTS A PIPE BACK, which is why it keeps the per-byte lane: a child inheriting
-// fd 0 must find it where our reader stopped (bash pays the same price for the same
-// reason -- doc/io.md part III). Dropping the toggle is free of that, because a one-byte
-// read leaves the fd exactly where the reader is. test_stdinbuf runs one program down
-// each door and diffs, so a lane that starts running ahead fails there.
+// ⚠ NOTHING PUTS A PIPE BACK -- so the residue is not UNDONE, it is DELIVERED: stdin_hand
+// pumps it into a fresh pipe and dup2s that onto fd 0, which is why this door can hold a run
+// at all (bash, with no fork to spare at the handoff, pays per byte instead -- doc/io.md
+// part III/IV). test_stdinbuf runs one program down each door and diffs, so a lane that
+// starts running ahead without delivering fails there.
 // ⚠ TWO PLACES HOLD UNREAD BYTES: the borrowed run, and `in`'s OWN pushback -- the ungetc
 // stays on the static because that is the port everyone above reads.
 static void stdin_give(struct ai *g) {
@@ -57,7 +58,7 @@ static void stdin_give(struct ai *g) {
  struct ai *fc = ai_core_of(g);
  if (fc->inflag)                                          // its blocking bit was ours: back it goes
   fcntl(STDIN_FILENO, F_SETFL, (int) getcharm(fc->inflag)), fc->inflag = 0;
- if (!fc->inport) return;
+ if (!fc->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // an unseekable door: stdin_hand's
  uintptr_t n = ai_io_pending(g, (struct ai_io*) fc->inport)
              + (getcharm(ai_stdin.io.ungetc_buf) != EOF ? 1 : 0);
  if (n) lseek(STDIN_FILENO, -(off_t) n, SEEK_CUR); }
@@ -67,15 +68,14 @@ static void stdin_give(struct ai *g) {
 // to trickle. Neither borrowing is ever named in the book at all.
 static struct ai *stdin_take(struct ai *g) {
  if (!ai_ok(g)) return g;
- if (lseek(STDIN_FILENO, 0, SEEK_CUR) >= 0) {             // a door we can put back: lend it a run
-  if (!ai_ok(g = ai_io_alloc(g, STDIN_FILENO))) return g;
-  struct ai *fc = ai_core_of(g);
-  fc->inport = fc->sp[0], fc->sp++;
-  return g; }
- if (isatty(STDIN_FILENO)) return g;
- int fl = fcntl(STDIN_FILENO, F_GETFL);                   // a pipe: take the bit, not the bytes
- if (fl >= 0 && ((fl & O_NONBLOCK) || fcntl(STDIN_FILENO, F_SETFL, fl | O_NONBLOCK) >= 0))
-  ai_core_of(g)->inflag = putcharm(fl);                   // already-nonblocking restores to itself
+ if (lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) {              // not seekable: a tty, or a pipe
+  if (isatty(STDIN_FILENO)) return g;
+  int fl = fcntl(STDIN_FILENO, F_GETFL);                  // a pipe: take the bit AND the bytes
+  if (fl >= 0 && ((fl & O_NONBLOCK) || fcntl(STDIN_FILENO, F_SETFL, fl | O_NONBLOCK) >= 0))
+   ai_core_of(g)->inflag = putcharm(fl); }                // already-nonblocking restores to itself
+ if (!ai_ok(g = ai_io_alloc(g, STDIN_FILENO))) return g;
+ struct ai *fc = ai_core_of(g);
+ fc->inport = fc->sp[0], fc->sp++;
  return g; }
 
 // for (;;): the standard noreturn-defensive shape -- moon's stdnoreturn.h defines
@@ -187,9 +187,9 @@ static uintptr_t fd_write_all(int fd, unsigned char const *src, uintptr_t n) {
 // and covers the fds love opens itself. The measured price, now that readn is the sole
 // read door: 3 fcntls + 1 read per CALL where it used to be 1 poll + 1 read (love's
 // readiness pre-guard, deleted with getc). ⚠ PER CALL is the whole story -- it was
-// priced when a call meant a byte, and at 953 KB that is 2.9M fcntls. Two answers, both
-// above: a run pays it once per 4096, and a pipe that can have no run has its bit TAKEN
-// for the session instead (`inflag`), which is the one exemption below.
+// priced when a call meant a byte, and at 953 KB that is 2.9M fcntls. The answer is the run
+// above: it pays the pair once per 4096, and a pipe -- whose bit is TAKEN for the session
+// (`inflag`) -- skips it outright, which is the one exemption below.
 static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
  struct ai_io *io = (*fp)->io;
  intptr_t fd = ai_io_fd(io);
@@ -233,6 +233,52 @@ void ai_fd_close(int fd) { close(fd); }
 // the GC-context drain (a collected port's unflushed write run): raw write(2),
 // no g machinery -- safe inside run_finalizers.
 void ai_fd_drain(int fd, void const *p, uintptr_t n) { fd_write_all(fd, p, n); }
+
+// --- handing fd 0 to a child (the unseekable half of stdin_give, up top) ---
+// A seekable door is put BACK with an lseek; a pipe has no rewind, so its residue is
+// DELIVERED: a fresh pipe becomes fd 0 and a forked pumper writes the bytes our reader did
+// not take, then splices whatever the old fd 0 still brings. That is what a run costs on
+// this door -- one fork per handoff, and only when a residue exists at all.
+// ⚠ ONLY WHERE A CHILD TAKES fd 0. At our own exit nothing of ours is left to pump and the
+// dup2 would be private to a process about to vanish, so lvm_exit and main's tail call
+// stdin_give alone. A peer holding fd 0 from BEFORE us (`cat f | { love a.l; love b.l; }`)
+// is out of reach on a pipe however we hand off, and that is the one thing this door
+// cannot promise -- doc/io.md part IV.
+// ⚠ stdin_give FIRST: the pumper reads fd 0 itself, and an EAGAIN on the bit we borrowed
+// would read there as an end and cut the stream short.
+// ⚠ THE PUSHBACK BYTE LEADS. Two places hold unread bytes and `in`'s ungetc is the earlier
+// one, so it goes in front of the run -- chug_str splits the same way.
+// ⚠ THE PUMPER IS A FORK, so it holds a copy of every fd love had open and nobody reaps it.
+// Narrow on both counts -- it runs only at a handoff, where hark has already closed its pipes
+// and the exec'd program inherits the same fds anyway -- but a live pipe love still held would
+// have a second writer keeping it from EOF. Worth knowing before this grows a caller.
+static void stdin_hand(struct ai *g) {
+ stdin_give(g);
+ if (!g || !ai_ok(g)) return;
+ struct ai *fc = ai_core_of(g);
+ if (!fc->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) >= 0) return;   // seekable: the seek said it all
+ unsigned char res[ai_iobuf + 1];
+ uintptr_t n = 0;
+ if (getcharm(ai_stdin.io.ungetc_buf) != EOF)
+  res[n++] = (unsigned char) getcharm(ai_stdin.io.ungetc_buf),
+  ai_stdin.io.ungetc_buf = putcharm(EOF);
+ n += ai_io_read_drain(g, (struct ai_io*) fc->inport, res + n, sizeof res - n);
+ if (!n) return;                                                    // nothing owed: the fd is already exact
+ int p[2];
+ if (pipe(p)) return;
+ pid_t pid = fork();
+ if (pid < 0) { close(p[0]); close(p[1]); return; }
+ if (!pid) {                                                        // the pumper: residue, then the rest
+  close(p[0]);
+  if (fd_write_all(p[1], res, n) == n)
+   for (;;) {
+    unsigned char buf[ai_iobuf];
+    ssize_t k = read(STDIN_FILENO, buf, sizeof buf);
+    if (k < 0 && errno == EINTR) continue;                          // ⚠ a signal is not an end
+    if (k <= 0 || fd_write_all(p[1], buf, (uintptr_t) k) < (uintptr_t) k) break; }
+  _exit(0); }                                                       // ⚠ _exit: no atexit, no flush, no love
+ close(p[1]);
+ if (p[0] != STDIN_FILENO) dup2(p[0], STDIN_FILENO), close(p[0]); }
 
 // (open path mode) — open a file with mode "r"/"w"/"a"; returns a heap port
 // (closed on GC) or zero on error or misuse. mode is a l string; only the
@@ -552,7 +598,7 @@ ai_noinline static struct ai *host_exec(struct ai *g, ai_word argv) {
    cav[argc] = NULL; }
  fflush(stdout); fflush(stderr);
  signal(SIGPIPE, SIG_DFL);                                 // ... nor this one
- stdin_give(g);                                            // the child inherits fd 0: hand it back exact
+ stdin_hand(g);                                            // the child inherits fd 0: hand it over exact
  execvp(cav[0], cav);
  return ai_push(g, 1, putcharm(errno)); }                  // exec failed -> errno
 

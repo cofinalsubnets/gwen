@@ -510,21 +510,60 @@ no run, and delegates to the same `trickle` -- so +0.23% is the size of a code/d
 which adding a nif causes by moving `nifs[]` and the def table. Not free, not algorithmic, and the
 kind of number that only means something next to its absolute.
 
-**3 — the pipe gets a run too, and the handoff carries the residue.** The pipe is the whole of the
-remaining lane, not a leftover: with no bio it pays both costs. Lending it one means answering the
-inheritance question, and part III borrowed its answer from bash along with the framing:
+**3 — the pipe gets a run too, and the handoff carries the residue.** ✅ LANDED. The pipe was the
+whole of the remaining lane, not a leftover: with no bio it paid both costs. Lending it one meant
+answering the inheritance question, and part III had borrowed its answer from bash along with the
+framing:
 
 > nothing puts a pipe back
 
-True, and beside the point. The residue does not need to be *undone*, it needs to be *delivered*.
-**Every love spawn is a `fork`** (host/posix.c, host/main.c) — the parent survives, so it can hand
-the child a fresh pipe and pump `residue ++ rest` into it. bash pays per byte partly because it
-declined to build that; we already own the scheduler and the port machinery.
+True, and beside the point. The residue does not need to be *undone*, it needs to be *delivered* —
+`stdin_hand` forks a pumper, writes the bytes our reader did not take into a fresh pipe, splices
+whatever the old fd 0 still brings, and dup2s the read end onto fd 0. bash pays per byte partly
+because it has no fork to spare at the handoff; we do, and it costs one process per handoff, only
+when a residue exists at all.
 
-⚠ THE ONE HOLDOUT is exec-replacement (`stdin_give` then `execvp` in host/main.c — the lane behind
-`love up`, gdb and the qemu run targets): love overwrites itself, so nothing is left to pump. That
-lane keeps a byte-at-a-time stdin, or drains its residue into a memfd and dup2s it — a bounded cost
-at the handoff either way. It is narrow, and it is not the ordinary script.
+⚠ **RUNG 3 CHANGED NO `.l` AT ALL** — 64 lines of `host/main.c` — and measurement 3 is why. Because
+`reads` forks on *"does this port hold a run?"* rather than *"is it `in`?"*, and because `start`
+primes with a `see` before it asks, lending the pipe a bio routes it into rung 2's counted-flow lane
+by itself. The tty asks the same question, gets `0`, and keeps trickling. Getting that predicate
+right in rung 2 is what made rung 3 a frontend change.
+
+Exec-replacement was written up here as the one holdout, and it isn't: the pumper is a *separate*
+child, so it survives our being overwritten. `host_exec` calls `stdin_hand` and the child reads the
+new fd 0 — and a *failed* exec is now better than before too, since love resumes reading the pumped
+pipe rather than a drained one.
+
+⚠ THE REAL HOLDOUT is narrower and is not about us at all: a peer holding fd 0 from **before** us
+(`cat f | { love a.l; love b.l; }`) has its own descriptor, so no dup2 of ours can reach it. There
+is no rewind and no substitution — a pipe's read offset is shared kernel state. So the give-back
+splits by who is asking, and the split is the law `stdin_hand` states:
+
+| asker | the door's answer |
+|---|---|
+| an in-process reader (`(slurp in)`) | exact, always — zgetc drains the run before the device |
+| a child we fork or exec | exact — the pumper delivers |
+| a peer sharing fd 0 from before us | **past reach on a pipe**, whatever we do |
+
+`lvm_exit` and main's tail therefore call plain `stdin_give`, not `stdin_hand`: at our own exit
+nothing of ours is left to pump and the dup2 would be private to a process about to vanish. A
+pumper forked there would be pure waste and a stray process.
+
+**What it bought** (972,400-byte corpus, both binaries baked, one sitting):
+
+| door | rung 2 | rung 3 | |
+|---|---|---|---|
+| `love f.l` | 37,487,781,134 (4.176 s) | 37,489,976,861 (4.144 s) | the work itself |
+| `love < f.l` | 38,181,520,575 | 38,180,261,078 (4.205 s) | untouched, as intended |
+| `cat f.l \| love` | 40,046,481,350 (6.518 s) | **38,184,042,767 (4.267 s)** | gap +2.559 G → **+0.694 G**, elapsed 1.561× → **1.030×** |
+
+`read(2)` on fd 0 over the corpus: **972,400 → 239**, which is the file door's own count to the
+call. And the two stdin doors now land within 4 M instructions of each other — 0.01%, inside the
+run-to-run spread — so there is one stdin lane again, not two.
+
+**What is left** is the +697 M both stdin doors carry over the file door (~717 instructions/byte),
+which rung 2 also had and neither rung explains. That is its own rung, and it wants `perf` before
+it wants a patch.
 
 ### what must not be repeated
 
@@ -542,8 +581,14 @@ a door and not the reverted rung 9, which tried to make the WALK take a string."
   byte OOM'd it once, and `make test` cannot see that.
 * ⚠ **`in` is never rebound** — `reads` folded its `(id? p in)` at egg-compile time.
 * ⚠ **the tty keeps neither optimization.** A terminal handed back nonblocking breaks the user's
-  next shell line.
+  next shell line — and with no run, `reads` keeps trickling, which is what a prompt wants anyway.
 
-The gates that pin it: `test_stdinbuf` (one program down each door, diffed — a lane that starts
-running ahead fails there), `test/io.l`, `test/host/parked.l`, `test_filemode`, `test_clay` (the
-registry is generated), `test_fixpoint` (a new nif rebuilds the egg), and `test_kernel` for the heap.
+The gates that pin it: `test_stdinbuf` (one program down each door, diffed, *plus* the handoff asked
+of the pipe output directly and a 200,000-byte splice past the first gulp), `test_stdincorpus` (the
+whole corpus down all three doors on both loves), `test/io.l`, `test/host/parked.l`, `test_filemode`,
+`test_clay` (the registry is generated), `test_fixpoint` (a new nif rebuilds the egg), and
+`test_kernel` for the heap.
+
+⚠ Each of the four `test_stdinbuf` handoff laws was proven load-bearing by injection, not by
+reading. Dropping the delivery reddens the diff; delivering the residue and skipping the splice
+reports `4079 of 200000` — which is also the measurement that says the residue is exactly one gulp.
