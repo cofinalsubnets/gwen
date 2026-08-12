@@ -94,18 +94,25 @@
      tail4 (chug p)                     ; ..and the run IS those four, unshifted
      backall (unchug p 99)              ; an over-ask clamps to what was drained
      again (chug p)
+     back10 (unchug p 99)
+     fwd3 (unchug p -3)                 ; NEGATIVE takes: the position steps FORWARD again
+     rest7 (chug p)
      _ (close p)
      ; ⚠ && and never `do` -- do is seqx, so it would answer the LAST clause alone
      (&& (= "abcdefghij" whole)
          (= 4 back4)    (= "ghij" tail4)
-         (= 10 backall) (= "abcdefghij" again))) 1)
+         (= 10 backall) (= "abcdefghij" again)
+         (= 10 back10)  (= 3 fwd3)      (= "defghij" rest7))) 1)
   ; nothing to give back is 0, never a scare -- and a short answer IS the refusal, so
   ; the count is the only check a caller has. a tap carries the ci vt and never a run.
   (= 0 (unchug (tap '(120 121)) 4))
   (= 0 (unchug 42 4))
   (= 0 (unchug "notaport" 4))
   (= 0 (unchug in 0))                   ; the count refuses before the port is touched
-  (= 0 (unchug in -2))
+  ; ⚠ NEVER a nonzero unchug of `in` HERE. The door is SIGNED, so a negative MOVES stdin
+  ; forward -- and this suite is fed through stdin on one of its doors, where that eats its
+  ; own source and reads a comment as code. A run-less port is the safe way to ask.
+  (= 0 (unchug (tap '(120 121)) -2))
 
   ; --- tap: charlist-backed read-only port (the ci vt) ---
   ; tap returns a port whose show rendering is a non-empty string.

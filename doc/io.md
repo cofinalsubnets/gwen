@@ -462,25 +462,53 @@ give-back must hand `cat` ten bytes and nine. Injecting `bio_of` collapses both 
 
 Rung 1 buys no speed on its own — it is the door rung 2 spends.
 
-**2 — a POSITION door on `sound`, and `reads` walks a run once.** ⚠ REWRITTEN after the three
-measurements above; the first draft said "chug a run, sound the text, unchug the residue" and that
-shape is wrong — it re-spreads the run once per form, and while it holds the residue an in-form
-`(slurp in)` sees an empty port.
+**2 — a COUNTED flowing charlist, and the port positioned absolutely. ✅ LANDED, 70%.** ⚠ REWRITTEN
+TWICE. The first draft said "chug a run, sound the text, unchug the residue"; the second aligned
+that window to newlines. Both are wrong, and the reason is worth keeping:
 
-What the measurements leave is one shape:
+> **A finite window cannot carry the reader's state.** `sound` answers a CLEAN END -- not `torn` --
+> when text stops inside a `;` comment, so a window ending mid-comment loses the fact, and the next
+> window reads the prose as code. The corpus answers `;; missing so`, off an English sentence.
+> Aligning windows to newlines fixes one instance and the tail past the last newline is itself a
+> part-line, so it fails again one level down. There is no window size that is safe.
 
-* `chug`'s guard becomes `rbio_of` (with `ai_io_pending` and `ai_io_read_drain`, which guard
-  separately), so a borrowed run can be taken as text. Rung 1 is what makes that safe to do.
-* `sound` gains a door that reads datum `i` out of a text and answers **where it ended**, so a run
-  is walked once instead of re-spread per form, and no charlist is retained across an eval.
-* `reads` forks on **whether the port holds a run**, not on `(id? p in)`. A run: walk it, then
-  `unchug` what the walk did not reach before handing control on. No run: `trickle`, exactly as
-  now — measurement 3 is why.
+What landed instead keeps `flow`'s shape -- a **lazy tail that gulps on demand**, so there is no
+boundary to straddle and `torn` and the clean end mean what they say -- and adds only a count:
 
-⚠ The `(id? p in)` test cannot simply be deleted: it folded at egg-compile time and `in` is never
-rebound (part II). Whatever replaces it must ask the PORT, not the name.
+* every gulp adds its run's length to a tablet slot, so the walk can ask how many bytes have been
+  DRAWN and put the port exactly where the walk stands.
+* consumed per form comes from walking forward to the residue by identity -- O(consumed), so the
+  sum over the stream is the stream. ⚠ never `(tally >r)`: the residue is lazy, so that forces the
+  whole rest of the stream. ⚠ and the walk must FORCE at each step -- a cons holds its tail as an
+  unforced promise, so a plain `cup` walk stops dead at a gulp boundary and spins on `()`.
+* the port is positioned ABSOLUTELY (a delta off `inhand`), because relative does not compose: a
+  caller that gave back is behind its own position and must step forward again. That is why
+  `unchug` is signed. Give-back-only makes the second step a rewind to the run's start, and the
+  reader re-reads the whole stream -- through a green `make test`.
+* after each eval the port goes FORWARD again to the walk's end, or the next gulp draws the bytes
+  we already hold a second time and the charlist grows with duplicates.
+* `inhand` before and after the eval says whether the form itself drew on `p`. If it did, `p` is
+  the truth and our charlist is stale: carry the one lookahead byte `p` will not hand over twice,
+  and read the rest afresh.
 
-Target: the redirect door to parity (−2.33 G), the pipe unchanged until rung 3.
+⚠ ONE BYTE SHORT, ON PURPOSE. The byte-exact lane reads the residue's head before it evals
+(trickle's cons holds it), so it too runs one ahead. Matching that is what keeps the doors
+byte-identical, and rung 2 owes no semantic change.
+
+Measured on one corpus, `perf -e instructions`, both loves:
+
+| door | rung 1 gap | rung 2 gap | absolute |
+|---|---|---|---|
+| `love f.l` | — | — | +0.009% |
+| `love < f.l` | +2,325 M (+50.7% wall) | **+694 M (+1.7% wall** -- 3953 ms vs 3886 ms) | **-4.09%** |
+| `cat f.l \| love` | +2,469 M | +2,557 M | +0.23% |
+
+⚠ READ THE ABSOLUTE COLUMN ON THE PIPE. Its GAP grew 3.6%, which sounds like a regression and is
+mostly an artefact: the gap is a difference between two ~40 G numbers, so a 0.23% move in the
+whole shows up magnified there. The pipe's own love-side path is unchanged -- `start` primes, finds
+no run, and delegates to the same `trickle` -- so +0.23% is the size of a code/data layout shift,
+which adding a nif causes by moving `nifs[]` and the def table. Not free, not algorithmic, and the
+kind of number that only means something next to its absolute.
 
 **3 — the pipe gets a run too, and the handoff carries the residue.** The pipe is the whole of the
 remaining lane, not a leftover: with no bio it pays both costs. Lending it one means answering the

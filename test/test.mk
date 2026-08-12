@@ -67,14 +67,15 @@ test_stdinbuf: $m
 	         echo "FAIL fd 0 handed on nonblocking (flags $$fl) -- stdin_give did not put the bit back"; exit 1; }
 # ..and the GIVE-BACK rides the same seek: `unchug` puts drained bytes back into the run, so
 # ai_io_pending counts them again and the child inherits fd 0 in front of them. ⚠ THE CONTRAST
-# IS THE LAW -- without the unchug the first byte is gone -- and it is what an ai_io_unread
-# reaching by bio_of would break: the run is BORROWED under a static, so only rbio_of finds it
-# and a heap-port-only door would answer 0 here while every file-port law in test/io.l still passed.
+# IS THE LAW: `chug` drains the WHOLE borrowed run, so without the give-back the child inherits
+# NOTHING and with it all ten. It is what an ai_io_unread reaching by bio_of would break -- the
+# run is BORROWED under a static, so only rbio_of finds it, and a heap-port-only door would
+# answer 0 here while every file-port law in test/io.l still passed.
 	@printf 'abcdefghij' > out/host/.test_stdinbuf4.in
 	@p='(: c (see in) _ (unsee in c) t (chug in)'; \
 	  a=`$m -e "$$p k (unchug in 99) (exec (L \"cat\")))" < out/host/.test_stdinbuf4.in`; \
 	  b=`$m -e "$$p (exec (L \"cat\")))" < out/host/.test_stdinbuf4.in`; \
-	  { [ "$$a" = abcdefghij ] && [ "$$b" = bcdefghij ]; } \
+	  { [ "$$a" = abcdefghij ] && [ -z "$$b" ]; } \
 	    || { echo "FAIL unchug is not in the inherited fd offset (with=[$$a] without=[$$b])"; exit 1; }
 # test_host takes the corpus as a FILE, and that is a SPEED choice, not a necessity:
 # stdin works (test/io.l used to poke `in` and eat a byte of whatever fed the suite --
@@ -98,30 +99,36 @@ test_host: $m
 # borrowed run (love.c's rbio_of), a pipe has none and drips.
 # ⚠ the summary line carries a DURATION, so that is normalised away and everything else must
 # match byte for byte -- the dots included, since a dropped assert is exactly what this catches.
+# ⚠ AND BOTH LOVES. $m is the EGG lane (LOVE_NO_IMAGE); $(mw) is the BAKED image, which is
+# what `love` is on a user's PATH. They are not interchangeable here: a reader bug that lost two
+# bytes of the corpus showed on the baked lane and NOT on the egg one, so a gate that ran only
+# $m reported ok while the shipped binary read 2286 of 3959 asserts and quit 1.
 test_stdincorpus: $m
-	@echo TEST the corpus down file, redirect and pipe
+	@echo TEST the corpus down file, redirect and pipe -- egg and baked
 	@cat $t > out/host/.test_sc.l
-	@for d in file seek pipe; do \
+	@for L in "$m" "$(mw)"; do \
+	 for d in file seek pipe; do \
 	   case $$d in \
-	     file) $m out/host/.test_sc.l < /dev/null > out/host/.test_sc.$$d 2>&1;; \
-	     seek) $m < out/host/.test_sc.l > out/host/.test_sc.$$d 2>&1;; \
-	     pipe) cat out/host/.test_sc.l | $m > out/host/.test_sc.$$d 2>&1;; \
+	     file) $$L out/host/.test_sc.l < /dev/null > out/host/.test_sc.$$d 2>&1;; \
+	     seek) $$L < out/host/.test_sc.l > out/host/.test_sc.$$d 2>&1;; \
+	     pipe) cat out/host/.test_sc.l | $$L > out/host/.test_sc.$$d 2>&1;; \
 	   esac; \
 	   r=$$?; \
 	   [ $$r -eq 0 ] \
-	     || { echo "FAIL the $$d door exited $$r"; tail -4 out/host/.test_sc.$$d; exit 1; }; \
+	     || { echo "FAIL [$$L] the $$d door exited $$r"; tail -4 out/host/.test_sc.$$d; exit 1; }; \
 	   grep -q "tests pass" out/host/.test_sc.$$d \
-	     || { echo "FAIL the $$d door printed no summary"; tail -4 out/host/.test_sc.$$d; exit 1; }; \
+	     || { echo "FAIL [$$L] the $$d door printed no summary"; tail -4 out/host/.test_sc.$$d; exit 1; }; \
 	   ! grep -q "^;;" out/host/.test_sc.$$d \
-	     || { echo "FAIL the $$d door scared"; grep -m3 "^;;" out/host/.test_sc.$$d; exit 1; }; \
+	     || { echo "FAIL [$$L] the $$d door scared"; grep -m3 "^;;" out/host/.test_sc.$$d; exit 1; }; \
 	   sed 's/in [0-9.]* seconds/in Xs/' out/host/.test_sc.$$d > out/host/.test_sc.$$d.n; \
-	 done
-	@for d in seek pipe; do \
+	 done; \
+	 for d in seek pipe; do \
 	   cmp -s out/host/.test_sc.file.n out/host/.test_sc.$$d.n \
-	     || { echo "FAIL the $$d door read a different corpus than the file door"; \
+	     || { echo "FAIL [$$L] the $$d door read a different corpus than the file door"; \
 	          diff out/host/.test_sc.file.n out/host/.test_sc.$$d.n | head -8; exit 1; }; \
+	 done; \
 	 done
-	@echo "  ok   file, redirect and pipe all read the corpus identically"
+	@echo "  ok   file, redirect and pipe read the corpus identically on both loves"
 # test_front -- the TEST-ONLY FRONTEND: out/host/front links liblove.a (love.c only)
 # and supplies the frontend contract itself, so its port vt can answer WOULD-BLOCK on
 # cue (doc/io.md). ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.

@@ -31,20 +31,92 @@
 ; and `torn` is no longer a maybe: the reader drank for itself and found the end, so
 ; there is nothing left to try and it is a scare.
 (: (reads p)
-   ((: (g cl z)
+   (: (walk cl z) (: r (sound cl)
+                     (? (two? r)       (walk >r (ev 'ev <r))
+                        (id? r 'torn)  (scare 'unfinished-form p)
+                        z))
+      ; --- the SHARED lane, for `in`: gulp for speed, hold nothing across an eval ---
+      ; box slot 0 counts every byte DRAWN off p into our charlist, so the walk can say where
+      ; the port ought to be and put it there. ⚠ NO WINDOW, and that is the whole design: the
+      ; tail gulps ON DEMAND, so sound crosses a run boundary transparently and `torn` and the
+      ; clean end mean what they say. A finite window cannot -- a `;` comment straddling one
+      ; comes back a CLEAN END rather than torn, so the next window reads the prose as code, and
+      ; the corpus answers `;; missing so` off an English sentence (doc/io.md part IV).
+      box (tablet 0)
+      (drew u) (peep box 0 0)
+      (drop n) (unchug p (n - (inhand p)))     ; the port to n pending; we hold the rest
+      ; flow, plus the count: one chug per gulp, the run laid down as plain conses.
+      (feed u) (: c (see p)
+                  (? (= c -1) ()
+                     (: _ (unsee p c)
+                        t (chug p)
+                        _ (pin box 0 ((drew ()) + (tally t)))
+                        (go k l) (? (nil? (< 0 k)) l (: j (k - 1) (go j (link (t j) l))))
+                        (go (tally t) (once (\ u (feed ())))))))
+      ; consumed, FORWARDS and by identity: O(consumed), so the sum over the stream is the
+      ; stream. ⚠ never (tally >r) -- the residue is lazy, so that would force the whole rest.
+      ; ⚠ FORCE AT EVERY STEP: a cons holds its tail as an unforced PROMISE, so a plain `cup`
+      ; walk stops dead at a gulp boundary, never reaches the residue, and spins on () forever.
+      ; `once` memoizes, so forcing what is already forced is free and the identities line up
+      ; (test/io.l says the same of counting a flow: by forcing, never by tally).
+      (frc x) (? (lit? x) (x ()) x)
+      (upto a b n) (: aa (frc a) bb (frc b)
+                      (? (id? aa bb) n
+                         (two? aa)   (upto (cup aa) bb (n + 1))
+                         n))
+      (step cl walked z)
        (: r (sound cl)
-          (? (two? r)       (g >r (ev 'ev <r))
+          (? (two? r)
+             ; EXACT BEFORE EVERY EVAL: the port goes to where our walk stands, so an in-form
+             ; (slurp in) and an inheriting child both see the truth.
+             ; ⚠ ABSOLUTE, never relative -- the port is already behind us from the last
+             ; positioning, so this is a delta off what it holds now. A plain (unchug p rem)
+             ; rewinds to the run's start every form and re-reads the whole stream.
+             ; ⚠ ONE BYTE SHORT ON PURPOSE: the byte-exact lane reads the residue head before it
+             ; evals (trickle's cons holds it), so it runs one ahead too. Leave that byte and the
+             ; two doors disagree by exactly it, which is what test_stdincorpus diffs.
+             ; ⚠ what we hold is never more than the run p still has, so the give-back always
+             ; reaches: the tail gulps only when sound wants a byte past the current run, and a
+             ; form that straddles ends inside the NEW run, where unchug can go.
+             (: k (upto cl >r 0)
+                w2 (walked + k)
+                rem ((drew ()) - w2)
+                _ (drop (? (< 0 rem) (rem - 1) 0))
+                h (inhand p)
+                v (ev 'ev <r)
+                ; ⚠ AND FORWARD AGAIN once the eval is past: the give-back left p holding bytes
+                ; our charlist already has, so a tail that gulped now would draw them a SECOND
+                ; time and the list would grow with duplicates (an early false `torn`). p goes
+                ; back to our list's end, which is exactly where the next gulp must start.
+                (? (= h (inhand p)) (: _ (drop 0) (step >r w2 v))
+                   ; the form DREW on p, so p is the truth and our charlist is stale. ⚠ CARRY THE
+                   ; HEAD BYTE: p handed it over already and will not again, so dropping the list
+                   ; whole loses it -- and a lost `;` reads a comment as code.
+                   (again (? (two? >r) (link (cap >r) ()) ()) v)))
+             ; ⚠ torn and the clean end are now HONEST: with no window they can only mean the
+             ; stream itself ended, so torn scares and a clean end takes the port to the end.
              (id? r 'torn)  (scare 'unfinished-form p)
-             z)))
-    ; ⚠ GULP ONLY WHAT WE OWN. a file (cli.l's load1) and a tap (the baked corpus,
-    ; host/main.c's runner) are ours alone -- nobody else reads them, so running
-    ; ahead is free and worth it. `in` is SHARED: the forms we eval can read it,
-    ; and a child can inherit its fd. so stdin trickles.
-    ; ⚠ THIS TEST IS WHY `in` IS NEVER REBOUND. it folded at egg-compile time, so a
-    ; frontend handing stdin a read run parks it BEHIND the static (love.c's rbio_of)
-    ; -- bind a fresh port to the name and the identity fails here, in silence, and
-    ; the stream we mean to trickle gets gulped.
-    (? (id? p in) (trickle p) (flow p)) 0))
+             (: _ (drop 0) z)))
+      ; ⚠ THE FORK IS THE PORT'S RUN, asked of the port and never guessed: a seekable stdin has a
+      ; borrowed one; a pipe and a tty have none and must drip, because love.c's athand is NULL
+      ; for the fd vt -- a bio-less port chugs ONE byte, and a gulping walk round a one-byte chug
+      ; is dearer than trickle (doc/io.md part IV, measurement 3).
+      ; the primed byte rides the pushback, so whichever lane wins picks it up with its own `see`.
+      (start pre z) (: c (see p)
+                       (? (= c -1) (? (two? pre) (walk pre z) z)
+                          (: _ (unsee p c)
+                             (? (nil? (inhand p)) (walk (cat pre (trickle p)) z)
+                                (: _ (pin box 0 (tally pre))
+                                   (step (cat pre (feed ())) 0 z))))))
+      (again pre z) (start pre z)
+      ; ⚠ GULP ONLY WHAT WE OWN. a file (cli.l's load1) and a tap (the baked corpus,
+      ; host/main.c's runner) are ours alone -- nobody else reads them, so running ahead is free
+      ; and worth it. `in` is SHARED: the forms we eval can read it, and a child can inherit its
+      ; fd, so it takes the lane above, which gulps and gives back.
+      ; ⚠ THIS TEST IS WHY `in` IS NEVER REBOUND. it folded at egg-compile time, so a frontend
+      ; handing stdin a read run parks it BEHIND the static (love.c's rbio_of) -- bind a fresh
+      ; port to the name and the identity fails here, in silence.
+      (? (id? p in) (start () 0) (walk (flow p) 0))))
 ; forms: every datum of a port, as DATA -- the data twin of `reads`, and the shape half
 ; the tools had each copied out by hand. it takes a PORT, like reads, so it needs neither
 ; open nor close (a fs-less frontend has neither, and a bare mention would raise at the
