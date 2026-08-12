@@ -13,6 +13,15 @@
 ; application's head); at a VALUE position (op=0) REVERT to the un-inlined source. So ((twice (adder
 ; i)) i) -> 3i (a value, fine) but ((\ n ..) 5) stays a capturing closure (it escapes).
 ;
+; This spec is the SUBSTITUTION lane -- args must all be pure (`allp`), or the inline declines.
+; ev.l's cprop carries a second lane this spec predates: the BINDING SPLICE (bspl) -- a saturated
+; call with an impure arg binds that arg ONCE to a fresh nom, in call order, ahead of the body,
+; and substitutes only the pure ones. Its license is a theorem, not a heuristic: test/uuspllaw.l
+; proves splice == call as value AND effect trace forall machine states (sl-lic/sl-ord), and the
+; flip -- substituting an effectful arg read twice keeps the value equal and doubles the trace
+; (sl-flip), which is why an effectful form is bound, never substituted. Same escape law: a
+; lambda body at a value position declines.
+;
 ; lp/lambp/w/macros are MOPPED post-egg, so this spec re-supplies them locally; inside feel/cprop the
 ; real ones are live. Mirrors love/ev.l's feel block. `make` does not run this; it is the why.
 

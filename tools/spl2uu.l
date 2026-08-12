@@ -29,6 +29,7 @@
        _ (puts (+ "\n    nnil" (+ (")" * (2 * (tally th))) ")")))
        ())
    progs (L (L 'sp0call (ecall (e0 0) (e0 1)))  (L 'sp0bind (ebind (e0 0) (e0 1)))
+            (L 'sp0subst (esubst (e0 0) (e0 1)))
             (L 'sp1call (ecall (e1 0) (e1 1)))  (L 'sp1bind (ebind (e1 0) (e1 1)))
             (L 'sp2call (ecall (e2 0) (e2 1)))  (L 'sp2bind (ebind (e2 0) (e2 1)))
             (L 'sp2subst (esubst (e2 0) (e2 1)))

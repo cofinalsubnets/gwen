@@ -74,9 +74,11 @@
  (= 'a  (: (f x) (? (< 5 x) 'a (nil? x) 'c 'b) (f 9)))  ; ... first clause still wins
  (id? () (: (f x) (? (nil? x) 'z) (f 5))))         ; no-else cond falls to the zero point () (nil-ontology)
 
-; --- the PURITY GATE on beta's arguments --- an inlined lambda SUBSTITUTES its args, so a
-; body naming a param twice would run an impure arg twice. `allp`/`purep` is what forbids it,
-; and its failure is silent: the answer is simply wrong, no scare. this pins the gate itself.
+; --- the PURITY GATE on beta's arguments --- an inlined lambda SUBSTITUTES only pure args:
+; a body naming a param twice would run an impure arg twice (the flip, test/uuspllaw.l's
+; sl-flip -- value equal, trace doubled, so the failure is silent: the answer is simply
+; wrong, no scare). `purep` is what forbids it; an impure arg takes the BINDING SPLICE
+; below instead. this pins the gate itself.
 ; ⚠ it caught pure-head? being called under-applied -- a partial is TRUTHY, so every purity
 ; question answered yes and (dbl (bump 0)) bumped the counter twice. the arity IS the protocol.
 (: pg-ctr (cask 1)
@@ -85,6 +87,36 @@
    (assert
     (: _ (pin pg-ctr 0 0) r (pg-dbl (pg-bump 0))
        (&& (= 2 r) (= 1 (peep pg-ctr 0 0))))))       ; evaluated ONCE: 1+1, counter at 1
+
+; --- the BINDING SPLICE (sl-lic/sl-ord, test/uuspllaw.l) --- an impure arg no longer
+; declines the inline whole: it binds ONCE to a fresh nom, in call order, ahead of the
+; body, and the body reads the binding at every use site. pure args still substitute
+; around it. behavioral pins only (whether a splice FIRED is out of band, per the header);
+; each holds under both compilers and under decline, which is the point -- the license.
+(: bs-ctr (cask 1)
+   (bs-bump _) (: v (peep bs-ctr 0 0) _ (pin bs-ctr 0 (+ v 1)) (+ v 1))
+   (bs-mix a b c) (a + b + c)
+   (bs-ord a b) (b - a)                    ; reads its args in REVERSE; eval stays call order
+   (bs-drop a b) b                         ; drops its first param; the effect must still run
+   (bs-esc n) (\ x (x + n))                ; a lambda body -> escapes at value position
+   (assert
+    ; mixed: the constants substitute and the one impure arg binds -- value and trace as the call
+    (: _ (pin bs-ctr 0 0) r (bs-mix 3 (bs-bump 0) 4)
+       (&& (= 8 r) (= 1 (peep bs-ctr 0 0))))
+    ; order: two impure args evaluate in call order however the body reads them
+    (: _ (pin bs-ctr 0 0) r (bs-ord (bs-bump 0) (bs-bump 0))
+       (&& (= 1 r) (= 2 (peep bs-ctr 0 0))))
+    ; a dropped param's effect still runs -- bound, never substituted away
+    (: _ (pin bs-ctr 0 0) r (bs-drop (bs-bump 0) 7)
+       (&& (= 7 r) (= 1 (peep bs-ctr 0 0))))
+    ; identity-minting arg: bound once, so the two reads see ONE mint
+    (: (bs-same t) (id? t t) (bs-same (tablet 0)))
+    ; under-saturated + impure: declined -- the partial's effect fires at build time, once
+    (: _ (pin bs-ctr 0 0) p (bs-mix 3 (bs-bump 0))
+       (&& (= 9 (p 5)) (= 1 (peep bs-ctr 0 0))))
+    ; the escape law: a lambda body at value position declines; the closure still works
+    (: _ (pin bs-ctr 0 0) h (bs-esc (bs-bump 0))
+       (&& (= 3 (h 2)) (= 1 (peep bs-ctr 0 0))))))
 
 ; --- the inliner's under-saturated beta --- a known lambda applied SHORT of its params
 ; substitutes the given args and answers a \ of the rest -- so curried HOFs collapse

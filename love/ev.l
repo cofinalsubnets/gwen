@@ -406,6 +406,26 @@
                                                                                    ;   renames the rest fresh -> capture-free)
        (: bd2 (bsub (zip ps (take np as)) (last lam)) rest (drop np as)
           (? (two? rest) (bd2 >< rest) bd2))))
+   ; --- the BINDING SPLICE (the license's other half; laws: test/uuspllaw.l) --------------
+   ; a saturated known-lambda call with an IMPURE arg no longer declines whole: each impure
+   ; arg binds ONCE to a fresh nom, in call order, ahead of the body -- `:` binds in source
+   ; order, the call's own effect order (sl-ord) -- and the body reads the nom at every use
+   ; site (sl-lic: bind == call, value and trace, forall states). an effectful form is NEVER
+   ; substituted (sl-flip: value equal, trace doubled -- the by-name breach R cannot convict);
+   ; pure args substitute as before and keep folding around the bound ones.
+   (spl ps as se) (? (atom? ps) (() >< ())                                       ; (binds . env), call order
+    (: r (spl >ps >as se) p <ps a <as
+     (? (purep a se) (<r >< ((p >< a) >< >r))
+        (: n (nom 0) ((n >< a >< <r) >< ((p >< n) >< >r))))))
+   (bspl x h2 hr as se fl op bnd) (: r (lp hr) np (tally <r)
+    (? (tally as < np) (keep2 x h2 as)                                           ; under-saturated -> decline (a partial's effects fire at build time; the pure lane's curry bet is not licensed here)
+     (: sp (spl <r (take np as) se)
+        bd (bsub >sp (last hr))
+        rest (drop np as)
+      (? (op || two? rest || !(lambp bd))
+         (cprop (: f (': >< (<sp + `(bd))) (? (two? rest) (f >< rest) f))
+                se (- fl 1) op bnd)
+         (keep2 x h2 as)))))                                                     ; a lambda body escaping at a value position -> decline (the escape law)
    (cplam x se fl op bnd) (? (atom? >>x) x                                       ; (\ v) quote -> leave
     (: r (lp x) (relam x r (cprop >r (rmkeys <r se) fl 0 (<r + bnd)))))          ; the body is a value -> op 0
    (cpbinds bs se fl op bnd) (?
@@ -434,6 +454,8 @@
              (? (&& (< 0 fl) (lambp hr) (two? as) (allp as se))                        ; two? as: (f) is f -- nothing to substitute
                   (: red (cprop (beta hr as) se (- fl 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
                      (? (op || !(lambp red)) red (keep2 x h2 as)))                    ; escaping lambda result -> REVERT (keep the closure)
+                (&& (< 0 fl) (lambp hr) (two? as))                                     ; ... with an IMPURE arg -> the BINDING SPLICE (bspl;
+                  (bspl x h2 hr as se fl op bnd)                                       ;    foldc/cpap are dead for a lambda head, so its decline keeps the call)
                 (nom? h && allk as && !(member? h bnd) && pure-head? h as)            ; pure-fn on consts -> fold. bnd-guarded: a binder
                   (foldc (gv h ()) as)                                                ;   spelled like an op still SHADOWS (the alpha law)
                 (two? as && propk? <as && <hk && pure-ap? >hk (kval <as))             ; a PURE-APPLYING head with a KNOWN operand: fold the whole
