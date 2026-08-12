@@ -1611,6 +1611,86 @@
       (= (cfoldir '((mov r9 r6) (test r9 1) (mov r6 r9) (ret))) '((mov r9 r6) (test r9 1) (ret)))
       (member? '(mov sp r4) (cfoldir '((mov r4 sp) (sub sp sp 16) (mov sp r4) (ret))))))
 
+; -- THE EXHAUSTION: the rename relation is FINITE -- one shape per op rdsp knows, at most two
+; read positions each, fifteen registers in the gp file -- so "can this pass hand holo a form the
+; assembler refuses?" is DECIDABLE by running the carrier rather than argued from the guards.
+; Every (shape, read position, substitute) goes through the REAL cpwalk and the REAL assembler,
+; and every (shape, new destination) through the REAL coal: a complete proof over the carrier,
+; drift-gated twice -- an op added to a roster with no shape here fails the coverage assert, and a
+; guard relaxed too far fails an emit. ⚠ both refusals copyprop was built against (alias-dst and
+; shiftv-count-not-r1) were found by a build breaking; this is what replaces that.
+(: hb9 (from 'holo 'holo-bytes)
+   ; the label rides along for la's fixup; a scare anywhere in the encode answers 0
+   (emits? f) (trap (\ _ (: _ (hb9 'x64 [f '(label zz9)]) 1)) () (\ a b 0))
+   gX (tablet 0)
+   cpfile '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)
+   pro9 '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3))
+   ; one well-formed form per op in rdsp's table. ⚠ this list IS the carrier: the coverage assert
+   ; below reads the rosters, so an op joining one without a shape here goes red by name.
+   shapes '((li r5 5) (mov r5 r9)
+            (add r5 r9 r10) (sub r5 r9 r10) (and r5 r9 r10) (or r5 r9 r10)
+            (xor r5 r9 r10) (imul r5 r9 r10) (add sp sp 16)
+            (push r5) (pop r5)
+            (shl r5 3) (shr r5 3) (sar r5 3) (rol r5 3) (ror r5 3)
+            (ld r5 r9 8) (ld1 r5 r9 8) (ld2 r5 r9 8) (ld4 r5 r9 8)
+            (ldu1 r5 r9 8) (ldu2 r5 r9 8) (ldu4 r5 r9 8)
+            (st r9 8 r5) (st1 r9 8 r5) (st2 r9 8 r5) (st4 r9 8 r5)
+            (stx r9 r10 8 0 r5) (stxb r9 r10 8 0 r5)
+            (si r9 8 5) (si1 r9 8 5) (si2 r9 8 5) (si4 r9 8 5)
+            (cmpm r9 8 r5) (cmprm r5 r9 8)
+            (lea r5 r9 8) (lean r5 r9 8)
+            (leax r5 r9 r10 8 0) (ldx r5 r9 r10 8 0) (ldxb r5 r9 r10 8 0)
+            (la r5 zz9) (set eq r5) (cmp r5 r9) (test r5 1)
+            (neg r5) (not r5) (sx1 r5) (sx2 r5) (sx4 r5) (zx1 r5) (zx2 r5) (zx4 r5)
+            (movqxr f0 r5) (movqrx r5 f0)
+            (cvtsi2sd f0 r5) (cvttsd2si r5 f0)
+            (ldsd f0 r9 8) (ldss f0 r9 8) (stsd r9 8 f0) (stss r9 8 f0)
+            (addsd f0 f1) (subsd f0 f1) (mulsd f0 f1) (divsd f0 f1) (movsd f0 f1)
+            (ucomisd f0 f1) (cvtss2sd f0 f1) (cvtsd2ss f0 f1)
+            (div r5 r9 r10) (udiv r5 r9 r10) (rem r5 r9 r10 r2) (urem r5 r9 r10 r2)
+            (shlv r5 r1) (shrv r5 r1) (sarv r5 r1))
+   heads (map (\ f9 <f9) shapes)
+   rostered (aluops + divops + vshops + unops + ldops9 + gstops + stxops + siops +
+             leaops + xops + fldops + fstops + xmmops +
+             '(li mov push pop shl shr sar rol ror cmpm cmprm la set cmp test
+               movqxr movqrx cvtsi2sd cvttsd2si))
+   ; the FORWARD carrier: seed the map with (mov orig sub) and let the pass itself rewrite the
+   ; form -- no guard is restated here, cpwalk decides and holo judges
+   (fwd f) (catmap (\ i (catmap (\ r9
+              (: out (cpwalk [['mov (nthr f i) r9] f] (tablet 0))
+                 f2 (nthr out (tally out - 1))
+                 (? (emits? f2) () [[f i r9 f2]])))
+            cpfile)) (cprp f))
+   nfwd ((foldl (\ n f9 (n + tally (cprp f9))) 0 shapes) * tally cpfile)
+   bad1 (catmap fwd shapes)
+   ; the BACKWARD carrier: a copy off the shape's own destination, folded by the real coal
+   (soled f) (: d (rdsp f)                          ; the shapes coal can fold: one gp def
+                (? (id? d 'bar) () (: dfs <>d (? (two? dfs && !(two? >dfs) && member? <dfs cpfile)
+                                                 dfs ()))))
+   (bwd f) (: S (soled f)
+              (? !(two? S) ()
+                 (catmap (\ r9
+                   (: out (coal gX (pro9 + [f ['mov r9 <S] '(ret)]))
+                      f2 (nthr out 5)
+                      (? (emits? f2) () [[f r9 f2]])))
+                  cpfile)))
+   nbwd ((tally (filter (\ f9 (two? (soled f9))) shapes)) * tally cpfile)
+   bad2 (catmap bwd shapes)
+   (assert
+      ; the carrier is what it says it is, and every shape is one both halves already accept
+      (= 75 (tally shapes))
+      !(two? (filter (\ f9 (id? (rdsp f9) 'bar)) shapes))
+      (all emits? shapes)
+      !(two? (filter (\ o9 !(member? o9 heads)) rostered))    ; the drift gate
+      (= 390 nfwd) (= 570 nbwd)                               ; ⚠ a silent narrowing shows up here
+      !(two? bad1)                                            ; forward: 390 renames, all encodable
+      !(two? bad2)                                            ; backward: 570 folds, all encodable
+      ; and the law has TEETH -- these are the two shapes the guards exist for, refused by holo
+      ; itself, plus the alias emit-alu welcomes when the op commutes (coal declines it, and this
+      ; records that the decline is conservative rather than necessary)
+      !(emits? '(sub r0 r12 r0)) !(emits? '(shlv r5 r9))
+      (emits? '(add r0 r12 r0)) (emits? '(add r7 r7 8))))
+
 ; -- the destination die reaches asn/decl (doc/proto/dest.l, the migration's first lane):
 ; a statement-position CONSTANT store into a static slot delivers as ONE store-immediate
 ; (no li, no cvt, no r0), a slotted scalar's licensed constant init likewise, and a homed
@@ -1960,5 +2040,5 @@
           (= (coal gC '((label fn) (raw 144) (ret))) '((label fn) (raw 144) (ret)))))))
 
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation, cskeep, the destination die, liveness + promotion, coalescing) ok")
+(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) ok")
 (put err 10)

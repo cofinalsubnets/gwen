@@ -902,6 +902,21 @@ until their pricing moves somewhere that a later pass cannot perturb.
 Ablation first, as always: `dehusk` at HEAD was worth 0.52% corpus insns and 0.22% `.text` for 79
 lines. That number is what made a rewrite the right move rather than a deletion.
 
+⚠ AND THE GUARDS ARE NOW PROVED, NOT ARGUED. The rename relation is FINITE — 75 op shapes (one
+per op `rdsp` knows), at most two read positions each, 15 registers in the gp file — so "can this
+pass hand holo a form the assembler refuses?" is DECIDABLE by running the carrier. `crew/moon/law.l`
+now exhausts it: **390 forward renames** through the real `cpwalk`, **570 backward folds** through
+the real `coal`, every result encoded by the real `holo-bytes`, plus a coverage assert that reads
+the op ROSTERS so an op joining one without a shape goes red by name. This is `test/uukindlaw.l`'s
+instrument — generate the model from the implementation's own table, then exhaust a finite carrier
+— pointed at codegen instead of at the kind lattice. Falsified three ways before being believed:
+`vshops` out of `cpskip`, `cpsub`'s alias guard off, `coal`'s alias guard off — each goes red on
+the matching assert, and the first also moves the carrier-size count, which is the drift signal
+doing its job. It costs nothing: 6.97 s against 7.06 s for the law file without it. ⚠ the two
+refusals this pass was built against (`alias-dst`, `shiftv-count-not-r1`) were each found by a
+BUILD BREAKING and a guess; a complete proof over the carrier is what replaces that, and it is
+available exactly because the carrier is small — reach for exhaustion before reaching for search.
+
 Laws: fourteen shapes over `copyprop` — the sandwich in both directions for `add` and for `sub`,
 the chain, the self-mov, the alu read-through, the br fall-through at any distance, the label and
 call resets, and the four refusals that carry a reason (`la`'s symbol, the shift's count seat, an
