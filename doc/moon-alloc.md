@@ -31,7 +31,7 @@ Plus their supporting cast: the 17-pin rgreset roster, the regen dance (build tw
 under policy, deopt, restore snapshots), the choice guard chain, and the recovery
 peepholes cleaning slot traffic after the fact. The marginal rung got expensive —
 shrink-wrap was the arc's heaviest machinery and landed one grant in love.c — and the
-measured remainder (**79,564 B of frame shuffle, 71.0% of the 112,069 B gap vs gcc** —
+measured remainder (**79,538 B of frame shuffle, 76.6% of the 103,839 B gap vs gcc** —
 the estimate that bucket once carried was ~65-70 KB; plus the uncoalesced copies and the
 widening churn; dynamically the ~22% slot-mov bucket; the vmsplice probe's
 store-then-reload op seam) is exactly what per-class licensing cannot reach. The
@@ -42,31 +42,34 @@ ratio, which the same day's byte levers (the dead-static sweep, nolibc's per-fun
 split; regalloc's lever 5) took from 1.99× to 1.591× without moving the corpus a digit.
 Those removed unreachable bytes, which are not shared symbols.
 
-**Step 0 has run three times and re-priced the arc each time** (doc/moon-diff.md, HEAD
-2fc25890, a055d279, 86fc76ff). The byte levers left the codegen row alone as expected;
-repack, the spush cell and now promotion did not: both-emit **1.63× → 1.56× → 1.47× →
-1.44×**, the gap **162 KB → 112,069 B** over 612 shared symbols. So the buckets above are a
-LARGER share of a much SMALLER whole, and the arc's target has moved three times under it.
+**Step 0 has run four times and re-priced the arc each time** (doc/moon-diff.md, HEAD
+2fc25890, a055d279, 86fc76ff, 5e6ba66c). The byte levers left the codegen row alone as expected;
+repack, the spush cell, promotion and the two copy-folding rungs did not: both-emit **1.63× →
+1.56× → 1.47× → 1.44× → 1.41×**, the gap **162 KB → 103,839 B** over 612 shared symbols. So the
+buckets above are a LARGER share of a much SMALLER whole, and the arc's target has moved four
+times under it.
 
 The second reading matters more, and the second run of step 0 is what turned it from an
 observation into a trend. The static and dynamic ratios had converged at 1.63×; they came
 apart and then kept going:
 
-| | 32b54ab8 | 2fc25890 | a055d279 | 86fc76ff |
-|---|---|---|---|---|
-| static, both-emit codegen | 1.63× | 1.56× | 1.47× | **1.44×** |
-| dynamic, corpus insns vs clang | 1.63× | 1.625× | 1.629× | **1.617×** |
+| | 32b54ab8 | 2fc25890 | a055d279 | 86fc76ff | 5e6ba66c |
+|---|---|---|---|---|---|
+| static, both-emit codegen | 1.63× | 1.56× | 1.47× | 1.44× | **1.41×** |
+| dynamic, corpus insns vs clang | 1.63× | 1.625× | 1.629× | 1.617× | **1.577×** |
 
 Three fills of size levers left the executed stream untouched while `.text` walked 10% down;
 **the first allocator rung moved it.** That is this arc's whole case, stated and then
 demonstrated: mooncc's remaining excess is not spread over its bytes, it is concentrated in
 the code that runs, and no size lever can reach it.
 
-And the shuffle bucket is no longer an estimate. **Frame-relative movs are 106,892 B of
-mooncc's love.o against gcc's 27,328 — an excess of 79,564 B, 71.0% of the whole codegen
-gap** (rung 2's pricing has the three-lane table). That share rose at every fill while the
-levers were aimed elsewhere; rungs 1+2 are the first aimed AT it, and the first to bring it
-down (78.2% → 71.0%).
+And the shuffle bucket is no longer an estimate. **Frame-relative movs are 106,866 B of
+mooncc's love.o against gcc's 27,328 — an excess of 79,538 B, 76.6% of the whole codegen
+gap** (rung 2's pricing has the three-lane table). Rungs 1+2 were the first aimed AT it and
+brought the share 78.2% → 71.0%; the two copy-folding rungs after them left the traffic dead
+flat (19,478 movs → 19,474) while shrinking the gap, so the share went back up to 76.6%. That
+is the reading, not a setback: nothing that folds copies reaches this bucket, and phase II is
+what it waits for.
 
 ## the stance
 
@@ -93,9 +96,9 @@ probe cost twenty minutes to find out.
 
 ## phase I — slots become intervals (x64 only; arm rides the old path)
 
-* **step 0, the re-base.** CLIMBED THREE TIMES (2026-08-11 twice, 2026-08-12) —
-  doc/moon-diff.md's trend table. both-emit **1.63× → 1.56× → 1.47× → 1.44×**, the gap 162 KB →
-  **112,069 B** over 612 shared symbols. The reading that outlives the numbers: the static
+* **step 0, the re-base.** CLIMBED FOUR TIMES (2026-08-11 twice, 2026-08-12 twice) —
+  doc/moon-diff.md's trend table. both-emit **1.63× → 1.56× → 1.47× → 1.44× → 1.41×**, the gap
+  162 KB → **103,839 B** over 612 shared symbols, and the dynamic row 1.63× → **1.577×**. The reading that outlives the numbers: the static
   and dynamic ratios converged at 1.63×, came APART under three size levers (1.47× static
   against 1.629× dynamic, the dynamic row unmoved), and closed again the moment an
   allocator rung landed. ⚠ **re-run step 0 after any rung that moves `.text`** — the first
@@ -292,6 +295,12 @@ probe cost twenty minutes to find out.
   something about why: `copyprop` moves the param-grant pricing merely by shrinking the IR
   `build` returns (the ledger has the case), so those grants cannot be deleted until their
   pricing lives somewhere a later pass cannot perturb.
+  **Step 0 RAN against both copy rungs** (doc/moon-diff.md, HEAD 5e6ba66c): codegen
+  1.44×→**1.41×**, the gap 112,069→**103,839 B**, and the dynamic row 1.617→**1.577×** — four
+  times rungs 1+2's dynamic move. ⚠ the natives were NOT flat this fill (−0.6 to −0.7%), so the
+  ratio is the reading and the interleaved per-rung A/Bs are the attribution. And the frame-mov
+  bucket is dead flat across both rungs, which is the honest half: **its share of the gap went
+  71.0% → 76.6%** because the gap shrank around it. Nothing that folds copies reaches it.
 
 ## phase II — emission against vregs
 
