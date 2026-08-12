@@ -4561,6 +4561,91 @@
    ; claims. only 8-byte cells pool (a wider cell places fresh, its 16-parity held for any
    ; aligned rider); -8 (the r3 cell) and the caller frame (0 <=) ride pinned. ships only when
    ; the sub SHRINKS. x64 only -- arm rides its own frame family. --
+   ; the x64 callee-saved file -- r3 r4 and r11..r14, machine rbx rbp r12..r15. two readers: a
+   ; call spares them (the liveness kit), and a write owes a save/restore pair (cskeep).
+   csregs '(r3 r4 r11 r12 r13 r14)
+
+   ; -- the liveness kit: the control flow gen.l's three liveness approximations lack, and one
+   ; backward fixpoint over it. rdsp is already the per-form transfer function; the missing
+   ; half was the graph, which is why deadst asks "read ANYWHERE in the fn?" and repack's
+   ; window is a convex hull over touches. the graph is per FORM, not per block -- successors
+   ; are the jmp/br target plus the fallthrough, an exit has none -- so there are no blocks to
+   ; build and the fixpoint is repack's widen1 shape. ⚠ the answer must stay an
+   ; OVER-approximation of live: a call reads AND writes the whole caller-saved file (its
+   ; arguments are not in the form), a sibcall reads everything, and an op neither rdsp nor
+   ; the rosters here name answers 'bar -- which refuses the fn rather than guessing. --
+   lvgp '(r0 r1 r2 r5 r6 r7 r8 r9 r10)              ; the x64 CALLER-saved gp file -- a seat here
+                                                    ; needs no save/restore pair, and no call may
+                                                    ; sit inside the range that takes one
+   lvquiet '(label align ud2 br jmp)                ; no register effect at all
+   lvret '(r0 r1 f0 f1)                             ; what an exit owes back, beside the cs file
+   (lvtx f u)                                       ; one form's (reads defs) | 'bar
+    (? !(two? f) [() ()]
+       (: op <f
+          (? (member? op lvquiet) [() ()]
+             (member? op '(call callr sys)) (: c (filter (\ r9 !(member? r9 csregs)) u) [c c])
+             (op = 'ret) [(lvret + csregs) ()]
+             (op = 'jmpr) [u ()]
+             (: d (rdsp f) (? (id? d 'bar) 'bar [<d <>d])))))
+   ; ⚠ SEEDED with the whole caller-saved file, and that is load-bearing rather than tidy: the
+   ; universe is what a call clobbers, and a seat is chosen from lvgp -- so a register the fn
+   ; never otherwise mentions would be absent from the clobber set and read as free ACROSS a
+   ; call. ai_sleep promoted into rdx over its one call and the answer survived every gate but
+   ; running. A liveness universe must cover the seats, not just the traffic.
+   (lvuniv fs)                                      ; every register in play: the seats + rdsp's
+    (: t (tablet 0)
+       (add rs) (? !(two? rs) 0 (: _ (pin t <rs 1) (add >rs)))
+       _ (add lvgp)
+       (scan l) (? !(two? l) 0
+                   (: f <l d (? (two? f) (rdsp f) [() ()])
+                      _ (? (id? d 'bar) 0 (: _ (add <d) (add <>d)))
+                      (scan >l)))
+       _ (scan fs)
+       (keys t))
+   (lvun a b) (? !(two? b) a (lvun (? (member? <b a) a (<b >< a)) >b))     ; set union
+   (lvsame a b) ((tally a = tally b) && !(two? (filter (\ r9 !(member? r9 b)) a)))
+   (lvout g fs)                                     ; index -> the registers live OUT of it | 'no
+    (: u (lvuniv fs)
+       (bary? l) (? !(two? l) ()
+                    (: f <l (? (id? (lvtx f u) 'bar) 1 (bary? >l))))
+       (? (bary? fs) 'no
+          (: labt (tablet 0)
+             (ix l i) (? !(two? l) 0
+                         (: f <l
+                            _ (? (two? f && id? <f 'label) (pin labt <>f i) 0)
+                            (ix >l (i + 1))))
+             _ (ix fs 0)
+             (ixd l i) (? !(two? l) () ([i <l] >< ixd >l (i + 1)))
+             rl (rev (ixd fs 0))
+             (succ f i) (: op (? (two? f) <f 'x)
+                           (? (op = 'jmp) [(peep labt <>f -1)]
+                              (op = 'br) [(peep labt <>>f -1) (i + 1)]
+                              (member? op '(ret jmpr)) ()
+                              [(i + 1)]))
+             lin (tablet 0)
+             lot (tablet 0)
+             ; ⚠ a jmp whose target is no LOCAL label is a sibcall leaving the function, and its
+             ; arguments are in flight -- it reads everything. Read as a plain transfer it has no
+             ; successor, so liveness would call the whole argument file dead at the one place it
+             ; is most alive. The tail-threaded VM is nothing but these.
+             (gone? f) (: op (? (two? f) <f 'x)
+                          tg (? (id? op 'jmp) (nthr f 1) (id? op 'br) (nthr f 2) ())
+                          (member? op '(jmp br) && !(charm? (peep labt tg ()))))
+             (pass l ch)                            ; one backward sweep -> did any live-in grow?
+              (? !(two? l) ch
+                 (: e <l i <e f <>e
+                    d (? (gone? f) [u ()] (lvtx f u))
+                    lo (foldl (\ a s (lvun a (peep lin s ()))) () (succ f i))
+                    li (lvun <d (filter (\ r9 !(member? r9 <>d)) lo))
+                    old (peep lin i ())
+                    ch2 !(lvsame li old)
+                    _ (? ch2 (pin lin i li) 0)
+                    _ (pin lot i lo)
+                    (pass >l (ch || ch2))))
+             (fix u9) (? (pass rl ()) (fix ()) 0)
+             _ (fix ())
+             lot)))
+
    (repack g fs)
     (: slots (peep g 'slots ())
        pro (pro4? fs)
@@ -4568,10 +4653,18 @@
        K (? (two? sf && (<sf = 'sub) && (<>sf = 'sp) && (<>>sf = 'sp) && charm? <>>>sf)
             <>>>sf ())
        (? (!(two? slots) || arm? g || peep g 'hasasm () || !pro || !(charm? K)) fs
-          (: obs (tablet 0)                            ; base -> (size lo hi esc)
-             (touch b n i e9)
+          (: obs (tablet 0)                            ; base -> (size lo hi esc wordy? first-src)
+             ; the last two fields are PROMOTION's, not packing's: an object every one of whose
+             ; touches is a full-word ld/st at its own base is a candidate for a register. the
+             ; last carries two facts in one -- the register the FIRST store took its value
+             ; from, which is also the preferred seat (taking it makes that store a self-mov
+             ; and it drops), and () when the first touch was a LOAD, which reads a value this
+             ; cell was never given.
+             (touch b n i e9 k9 s9)                    ; k9: 'st | 'ld | 'no (an unpromotable shape)
               (: w (peep obs b ())
-                 (pin obs b (? (two? w) [n <>w i (nthr w 3 || e9)] [n i i e9])))
+                 (pin obs b (? (two? w) [n <>w i (nthr w 3 || e9)
+                                           ((nthr w 4) && !(id? k9 'no)) (nthr w 5)]
+                               [n i i e9 !(id? k9 'no) (? (id? k9 'st) s9 ())])))
              labt (tablet 0)
              (loose? e i bp) (? !(two? e) ()
                                 (id? <e 'r4 && !(i = bp)) 1
@@ -4596,7 +4689,20 @@
                                 (? (loose? >f 1 bp) 'no
                                    (two? o9)
                                     (: _ (touch <o9 <>o9 i
-                                                (member? <f (leaops + '(leax))))
+                                                (member? <f (leaops + '(leax)))
+                                                ; ⚠ a cs SAVE is (st r4 slot r9) and its restore
+                                                ; (ld r9 r4 slot) -- the exact shape of a
+                                                ; promotable temporary, and only the register it
+                                                ; moves tells them apart. A caller-saved seat
+                                                ; cannot stand in for a slot whose whole job is
+                                                ; surviving a call, so a cs mover never promotes.
+                                                (? !((<>o9 = 8) && (X = <o9)) 'no
+                                                   (id? <f 'st)
+                                                    (? (member? (nthr f 3) csregs) 'no 'st)
+                                                   (id? <f 'ld)
+                                                    (? (member? (nthr f 1) csregs) 'no 'ld)
+                                                   'no)
+                                                (? (id? <f 'st) (nthr f 3) ()))
                                        (scan >l (i + 1) sp2))
                                    (charm? X && ((X = -8) || (0 <= X))) (scan >l (i + 1) sp2)
                                    'no))
@@ -4608,7 +4714,8 @@
                    bases (keys obs)
                    ; an escape pins the window's tail to the last form
                    _ (foldl (\ _ b (: w (peep obs b ())
-                                      (? (nthr w 3) (pin obs b [<w <>w n2 1]) 0)))
+                                      (? (nthr w 3)
+                                         (pin obs b [<w <>w n2 1 (nthr w 4) (nthr w 5)]) 0)))
                             0 bases)
                    (widen1 bs ch)                      ; one widening sweep -> did anything grow?
                     (? !(two? bs) ch
@@ -4621,11 +4728,58 @@
                                     (grow >ss lo hi))))
                           r (grow spans <>w <>>w)
                           ch2 !((<r = <>w) && (<>r = <>>w))
-                          _ (? ch2 (pin obs b [<w <r <>r (nthr w 3)]) 0)
+                          _ (? ch2 (pin obs b [<w <r <>r (nthr w 3) (nthr w 4) (nthr w 5)]) 0)
                           (widen1 >bs (ch || ch2))))
                    _ (: (fix u) (? (widen1 bases ()) (fix ()) 0) (fix ()))
+                   ; -- PROMOTION: an object whose every touch is a full-word ld/st at its own
+                   ; base, whose address never escapes, and which is written before it is read,
+                   ; is a candidate for a REGISTER instead of a cell. It takes one when some
+                   ; caller-saved seat is free across its widened window -- free meaning live-out
+                   ; nowhere in the range and defined nowhere in it, which a call fails by
+                   ; construction (a call defines the whole caller-saved file). Then the stores
+                   ; become defs, the loads uses, and the cell never places. ⚠ the window is the
+                   ; PACKING hull, and it is sound here for the same reason it is sound there:
+                   ; convex over form indices, widened over every backedge it meets, so no path
+                   ; leaves the range and returns unseen. Greedy by window start, each seat
+                   ; claimed over its range so two promotions can never share one register. --
+                   scand (foldl (\ a b (: w (peep obs b ())
+                                          (? ((<w = 8) && !(nthr w 3) && (nthr w 4) && (nthr w 5))
+                                             ([<>w <>>w b (nthr w 5)] >< a) a)))
+                                () bases)
+                   lot9 (? (two? scand) (lvout g fs) 'no)   ; index -> live-out, or the refusal
+                   dft9 (? (id? lot9 'no) (tablet 0)
+                           (: t (tablet 0)
+                              u9 (lvuniv fs)
+                              (go l i) (? !(two? l) 0
+                                          (: d (lvtx <l u9)
+                                             _ (? (id? d 'bar) 0 (pin t i <>d))
+                                             (go >l (i + 1))))
+                              _ (go fs 0)
+                              t))
+                   taken (tablet 0)                    ; index -> the seats promotion already holds
+                   (pfree? r lo hi)
+                    (: (go i) (? (hi < i) 1
+                                 (member? r (peep lot9 i ())) ()
+                                 (member? r (peep dft9 i ())) ()
+                                 (member? r (peep taken i ())) ()
+                                 (go (i + 1)))
+                       (go lo))
+                   (pseat rs lo hi) (? !(two? rs) () (pfree? <rs lo hi) <rs (pseat >rs lo hi))
+                   (pclaim r lo hi) (: (go i) (? (hi < i) 0
+                                                 (: _ (pin taken i (r >< peep taken i ()))
+                                                    (go (i + 1))))
+                                       (go lo))
+                   pmap (tablet 0)                     ; base -> the register it lives in
+                   _ (? (id? lot9 'no) 0
+                        (foldl (\ _ c (: lo <c hi <>c b (nthr c 2)
+                                         pf (nthr c 3)          ; the first store's own source
+                                         r (pseat (? (member? pf lvgp) (pf >< lvgp) lvgp) lo hi)
+                                         (? r (: _ (pclaim r lo hi) (pin pmap b r)) 0)))
+                               0 (sortby (\ a b (<a < <b)) scand)))
+                   prom (keys pmap)
                    rows (sortby (\ a b (<a < <b))
-                                (map (\ b (: w (peep obs b ()) [<>w b <w <>>w])) bases))
+                                (map (\ b (: w (peep obs b ()) [<>w b <w <>>w]))
+                                     (filter (\ b !(peep pmap b ())) bases)))
                    free (tablet 0)                     ; the retired 8-byte cells
                    nmap (tablet 0)                     ; base -> its packed seat
                    (ret1 act lo)                       ; act ((hi n nb)..) -> the still-live rest
@@ -4654,16 +4808,28 @@
                        o9 (obj9 slots X)
                        nb (? (two? o9) (peep nmap <o9 'no9) 'no9)
                        (? !(charm? nb) f (reop f op9 (nb + (X - <o9)))))
+                   (prw f)                             ; a promoted touch -> its register form | 'no
+                    (: bp (peep a4base <f -1)
+                       o9 (? (0 <= bp && id? (nthr f bp) 'r4)
+                             (obj9 slots (nthr f (peep uoff <f -1))) ())
+                       r (? (two? o9) (peep pmap <o9 ()) ())
+                       (? !r 'no
+                          (id? <f 'st) ['mov r (nthr f 3)]
+                          ['mov (nthr f 1) r]))
                    (rw l i)
                     (? !(two? l) ()
                        (: f <l
-                          f2 (? !(two? f) f
-                                (i = 3) ['sub 'sp 'sp K2]
-                                (: bp (peep a4base <f -1)
-                                   (? (0 <= bp && id? (nthr f bp) 'r4)
-                                      (radj2 f (peep uoff <f -1)) f)))
-                          (f2 >< rw >l (i + 1))))
-                   (? (K2 < K) (rw fs 0) fs))))))
+                          p (? (two? f && (3 < i) && two? prom) (prw f) 'no)
+                          (? (id? p 'no)
+                             (: f2 (? !(two? f) f
+                                      (i = 3) ['sub 'sp 'sp K2]
+                                      (: bp (peep a4base <f -1)
+                                         (? (0 <= bp && id? (nthr f bp) 'r4)
+                                            (radj2 f (peep uoff <f -1)) f)))
+                                (f2 >< rw >l (i + 1)))
+                             (id? <>p <>>p) (rw >l (i + 1))   ; the seat IS the source: no mov at all
+                             (p >< rw >l (i + 1)))))
+                   (? ((K2 < K) || two? prom) (rw fs 0) fs))))))
 
    ; dead label regions: the sibcall rewrite splices its jump BEFORE a shared epilogue and leaves
    ; the label + epi standing for the other arms -- when no arm remains, the region is unreachable
@@ -4703,7 +4869,6 @@
    ; bars are rostered quiet here (control, calls, the d128 r0:r2 family) -- an op on
    ; neither roster REFUSES, so a new op must name its cs effect to land. a fn carrying
    ; inline asm owns its own clobbers: skipped whole. --
-   csregs '(r3 r4 r11 r12 r13 r14)
    csquiet '(label align ud2 br jmp jmpr ret call callr sys mulo
              sx128 n128 a128 a128r s128 s128r m128 m128r mw128 mw128r c128 c128r
              dv128 rm128 inc128 dec128 shl128 shr128 sar128 shl128v shr128v sar128v)

@@ -266,6 +266,14 @@
    (nldrg fs rg) (tally (ldofs fs 'ld rg))          ; slots rg reloads FROM -- 1 = its cs
                                                     ; restore alone, i.e. it has no home
    (wrapon? rg fs) (two? (stofs fs 'st rg))
+   ; ⚠ and a law never spells the SEAT either, for the same reason: promotion chooses which
+   ; register a value takes, so "it got a seat of its own" is the invariant and the register's
+   ; name is repack's business. copyof? is that sentence -- rg is read out into some other
+   ; register, i.e. the value does not alias rg.
+   (copyof? fs rg) (two? (filter (\ f (two? f && id? <f 'mov &&
+                                       id? (nthr f 2) rg && !(id? (nthr f 1) rg)))
+                                 fs))
+   (ldinto fs rg) (tally (filter (\ f (two? f && id? <f 'ld && id? (nthr f 1) rg)) fs))
    (cspair? fs rg)                                    ; some slot holds rg's save/restore pair, once each
     (: so (stofs fs 'st rg) lo (ldofs fs 'ld rg)
        (once k l) (: (go e n) (? !(two? e) n (go >e (? (<e = k) (n + 1) n))) (go l 0))
@@ -1464,13 +1472,13 @@
       (member? '(cmp r7 r5) q2f)                     ; x < lo compares against the ALIAS, no stage
       (= 0 (splds q2f)))
    ; ⚠ a body that ASSIGNS its param cannot alias: the register holds the CALLER's live
-   ; value and the splice's own p++ would walk it. that param takes a slot (value splice) or
-   ; a park (branch splice); a read-only sibling in the same splice still aliases.
+   ; value and the splice's own p++ would walk it. that param takes a seat of its OWN -- a
+   ; slot before promotion, a register since -- and a read-only sibling still aliases.
    irW (cgn "static long walk9(long p, long lim) { for (;; p++) { if (p >= lim) return p; } }\nlong wv(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { s = s + walk9(a, n); } return s; } int main() { return wv(1, 5); }")
    wf (fnf 'wv <>irW)
    _ (assert
       (two? irW)
-      (wrapon? 'r6 wf)                               ; the written param p spills off a's ride...
+      (copyof? wf 'r6)                               ; the written param p copies OUT of a's ride...
       !(member? '(add r6 r6 1) wf)                   ; ...and a's ride is never walked
       (member? '(cmp r7 r5) wf))                     ; lim, never written, still aliases n's ride
    irX (cgn "static int p9(long a, long b) { return (a += b) > 100; }\nlong run(long x, long y) { long s = 0; for (long i = 0; i < 4; i++) { if (p9(x, y)) s = s + 1; s = s + x; } return s; } int main() { return run(3, 5); }")
@@ -1682,7 +1690,10 @@
       (= 0 (cells ca))                               ;   own base's riding home; the second reads
       (member? '(ld r0 r6 8) ca)                     ;   through the face and RIDES r0 across the
       (member? '(mov r5 r0) ca)                      ;   first's delivery -- no cell at all
-      (= 2 (cells ci))))                             ; an indirect call: both cells stand
+      !(member? '(ld r6 r5 0) ci)                    ; an indirect call BARS the aim: neither arg
+      !(member? '(ld r5 r5 8) ci)                    ;   is delivered onto its seat -- both STAGE
+      (= 2 (ldinto ci 'r0))))                        ;   through r0 (two spush cells, before
+                                                     ;   promotion took the staging into registers)
 
 ; -- the destination die reaches the bin value lane (the fourth lane): a LOAD-shaped
 ; left (dot/moor/deref -- a var/num re-aims free via cgleaf, a nested bin already rides
@@ -1873,6 +1884,48 @@
       (= 1 (nldrg epwf 'r11))                        ; ...and the WRITTEN element never touches memory either
       (member? '(add r9 r9 r12) epwf)))              ; x[0] still rides
 
+; -- the liveness kit, on hand-laid forms rather than through a compile: these are the
+; kit's OWN laws, and they are unit-shaped on purpose -- every consumer reads it as an
+; over-approximation of live, so the cases that matter are the ones where a graph is easy
+; to get wrong (a join, a backedge, a call, a jmp that leaves the function). ⚠ the exit
+; cases carry the two bugs this kit shipped with: a sibcall read as a plain transfer has
+; no successor, so the whole argument file reads DEAD at the one place it is most alive;
+; and a universe built from the traffic alone omits a seat the fn never mentions, so a
+; call fails to clobber it and a value promotes straight across the call.
+(: gL (tablet 0)
+   (has? s r) (member? r s)
+   f1 '((label fn) (li r0 1) (mov r5 r0) (add r0 r0 r5) (ret))
+   o1 (lvout gL f1)
+   f2 '((label fn) (li r0 1) (br eq L1) (li r5 2) (label L1) (add r0 r0 r5) (ret))
+   o2 (lvout gL f2)
+   f3 '((label fn) (li r0 1) (label L2) (add r5 r5 r0) (br ne L2) (mov r0 r5) (ret))
+   o3 (lvout gL f3)
+   f4 '((label fn) (li r5 1) (call foo) (mov r0 r5) (ret))
+   o4 (lvout gL f4)
+   f5 '((label fn) (li r6 1) (li r5 2) (jmp foo))
+   o5 (lvout gL f5)
+   f6 '((label fn) (li r6 1) (jmp L3) (li r5 2) (label L3) (ret))
+   o6 (lvout gL f6)
+   (assert
+      (has? (peep o1 1 ()) 'r0)                      ; straight line: a def lives to its read
+      (has? (peep o1 2 ()) 'r5)
+      !(has? (peep o1 3 ()) 'r5)                     ; ...and dies at it
+      (has? (peep o1 3 ()) 'r0)                      ; r0 is what the exit owes back
+      !(has? (peep o1 4 ()) 'r0)                     ; nothing lives out of a ret
+      (has? (peep o2 2 ()) 'r5)                      ; a join: the arm that SKIPS the def still
+      (has? (peep o2 3 ()) 'r5)                      ;   reaches the read, so r5 is live on both
+      (has? (peep o3 2 ()) 'r5)                      ; a backedge: the bottom's def flows around
+      (has? (peep o3 4 ()) 'r5)                      ;   to its own read at the top
+      (has? (peep o4 1 ()) 'r5)                      ; across a call r5 stays live -- which is
+      (has? (peep o4 2 ()) 'r5)                      ;   what bars a caller-saved seat for it
+      (has? (peep o5 2 ()) 'r6)                      ; a sibcall reads the whole argument file
+      (has? (peep o5 2 ()) 'r5)
+      !(has? (peep o6 2 ()) 'r6)                     ; ..a jmp the fn OWNS flows to its label
+      !(has? (peep o6 2 ()) 'r5)                     ;   alone, and the skipped arm is no successor
+      (has? (peep o4 1 ()) 'r2)                      ; ⚠ a seat the fn never mentions is still in
+                                                     ;   the universe, so the call clobbers it
+      (id? (lvout gL '((label fn) (raw 144) (ret))) 'no)))   ; an op rdsp bars refuses the fn
+
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die) ok")
+(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die, liveness + promotion) ok")
 (put err 10)
