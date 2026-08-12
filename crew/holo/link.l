@@ -387,6 +387,63 @@
                  (bind = 1) (go (i + 1) ds (<sy >< us))
                  (go (i + 1) ds us))))    ; a weak undef resolves to 0 (ELF's law): no need
        (go 1 () ()))
+   ; --- WRITING one: `ar rcs` as a function, the same shape read back above, and
+   ; below dusyms because the index is dusyms' own answer. deterministic
+   ; (date/uid/gid 0, mode 644 -- binutils' own -D default) and ALWAYS indexed,
+   ; since the reader refuses an archive without one. `ms` is ((name bytes)..) and
+   ; the names must be UNIQUE: two members spelling one name leave the second
+   ; unreachable through the index, which is the reader's only door. kore's `ar`
+   ; and moon's runtime archive are both this.
+   (ld-arp w s) (? (tally s < w) (ld-arp w (s + " ")) s)      ; ar fields are LEFT-justified
+   (ld-arb4 v) (((("" + ((v >> 24) & 255)) + ((v >> 16) & 255)) + ((v >> 8) & 255)) + (v & 255))
+   (ld-arhdr nm date uid gid mode sz)
+    ((((((ld-arp 16 nm + ld-arp 12 date) + ld-arp 6 uid) + ld-arp 6 gid) + ld-arp 8 mode)
+      + ld-arp 10 (show sz)) + "`\n")
+   (ld-arpad s) (? (& (tally s) 1) (s + "\n") s)              ; members lie on even offsets
+   (ld-arelf? b) ((<= 20 (tally b)) &&
+                  (b 0 = 127) && (b 1 = 69) && (b 2 = 76) && (b 3 = 70))
+   ; a member's defined globals, read by the LEDGER's own eye -- so what the index
+   ; promises and what a pull then finds cannot part. a non-ELF member defines nothing.
+   (ld-ardefs f b) (? (ld-arelf? b) <(dusyms f b (b 18 + (256 * b 19))) ())
+   (arbytes ms)                                               ; ms: ((name bytes)..) -> the archive
+    (: names (map (\ m <m) ms)
+       datas (map (\ m <>m) ms)
+       ; the long-name table: parallel to names, each entry (offset) | ()
+       lofs (: (go l off acc) (? !(two? l) (rev acc)
+                                 (: ln (tally <l)
+                                    (? (< ln 16) (go >l off (() >< acc))
+                                       (go >l ((off + ln) + 2) (`(off) >< acc)))))
+               (go names 0 ()))
+       ltab (: (go ns ls) (? !(two? ns) ""
+                             (? (two? <ls) ((<ns + "/\n") + go >ns >ls) (go >ns >ls)))
+               (go names lofs))
+       syml (map (\ m (ld-ardefs <m <>m)) ms)
+       nsym (foldl (+) 0 (map tally syml))
+       strt (foldl (+) "" (map (\ ss (foldl (\ a s ((a + s) + 0)) "" ss)) syml))
+       ; the index pads to even with a NUL that COUNTS in its size field (GNU's
+       ; spelling -- members pad with "\n" excluded from theirs)
+       isz (: z ((4 + (4 * nsym)) + tally strt) (z + (& z 1)))
+       ; member header offsets: magic, index hdr + data, "//" (when any), then each
+       m0 ((8 + 60) + isz)
+       m1 (? (tally ltab) ((m0 + 60) + (tally ltab + (& (tally ltab) 1))) m0)
+       offs (: (go ds off acc) (? !(two? ds) (rev acc)
+                                  (go >ds ((off + 60) + (: z (tally <ds) (z + (& z 1))))
+                                      (off >< acc)))
+               (go datas m1 ()))
+       idx (: raw ((ld-arb4 nsym
+                    + (: (go os ss) (? !(two? os) ""
+                                       (foldl (\ a _ (a + ld-arb4 <os)) "" <ss + go >os >ss))
+                         (go offs syml)))
+                   + strt)
+              (? (& (tally raw) 1) (raw + 0) raw))
+       body (: (go ns ls ds) (? !(two? ns) ""
+                                (: nf (? (two? <ls) ("/" + show <<ls) (<ns + "/"))
+                                   ((ld-arhdr nf "0" "0" "0" "644" (tally <ds) + ld-arpad <ds)
+                                    + go >ns >ls >ds)))
+               (go names lofs datas))
+       ((("!<arch>\n" + (ld-arhdr "/" "0" "0" "0" "0" isz + idx))
+         + (? (tally ltab) (ld-arhdr "//" "" "" "" "" (tally ltab) + ld-arpad ltab) ""))
+        + body))
    ; THE LEDGER a set of objects leaves: every nom it defines (plus the ones the
    ; linker synthesizes rather than any object defining them), and the strong
    ; undefineds still owed. -> (dt owed), dt a tablet the caller goes on pinning into.

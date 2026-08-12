@@ -77,9 +77,9 @@ sentence. The static-data lane joined the same door: its cause rides a pin (`glo
 `gripe?` and the message string. A message golden earns its churn there — the string IS the
 deliverable.
 
-**The link names its undefined references.** The analysis was always there: `moon.l`'s `rtpull`
-pulls runtime members by need in a worklist, and when no remaining member satisfies anything, the
-still-unsatisfied set is *exactly* the noms nothing anywhere defines. The loop reads it now.
+**The link names its undefined references.** The analysis falls out of the pull: `moon.l`'s
+`rtpull` takes the runtime archive by need, and the owe `arpull` hands back at termination is
+*exactly* the noms nothing anywhere defines.
 
 ```
 cc: undefined reference to 'main.nowhere'

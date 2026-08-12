@@ -157,12 +157,16 @@ the same face.
 * **math/am.c** — our transcendentals. sqrt exact, the seven within a few ulp; `make ulp` is the
   differential gate. `-lm` appears in no link.
 
-**The pull is cached, content-addressed.** A member has to be compiled before the need loop can
-see what it defines, so every link owing a libc nom paid for all of them — ~1.4s of a
-hello-world link's ~1.5s, nolibc.c being 2000 lines. They now ride `~/.love/cache/moon/<sha>.o`,
-keyed on the member's path, the target, the include list, the runtime tree's whole text (headers
-included — an edited `stdio.h` changes what `nolibc.c` means) and the compiler's own identity.
-A warm link is ~0.13s.
+**The pull is cached, content-addressed, as one archive.** A member has to be compiled before the
+pull can see what it defines, so every link owing a libc nom paid for all 190 of them — ~23s of a
+cold hello-world link's ~23s. They now ride `~/.love/cache/moon/<sha>.a`, ONE archive per
+(compiler, target), keyed on the target, the runtime tree's whole text (headers included — an
+edited `stdio.h` changes what `nolibc.c` means) and the compiler's own identity. A warm link is
+~0.15s. An archive and not 190 objects because the ranlib index IS the "what does this member
+define" answer, written once and read back rather than recomputed on every warm link — and
+because one file is one generation, whole the moment it lands and countable when the sweep asks
+which to keep. It is holo's own `arbytes`/`arpull` at both ends, the same pair `kore ar` and a
+user-named `.a` on the command line use.
 
 ⚠ **The compiler's identity is every `*.image` beside the love**, by name and stat, plus the
 love's own — the wake strips the image path from `cmdline`, so mooncc cannot know which one it
@@ -170,10 +174,12 @@ woke, and taking them all makes a stranger's rebuild a miss rather than a stale 
 compiler's `.l` sources instead looks tighter and is a hole: edit `gen.l`, link once before the
 image catches up, and the entry filed under the new sources holds the old image's codegen.
 No identity — a love with no image file in reach — means no cache at all. Nor is anything else
-owed it: no HOME, an unwritable directory, a mangled entry (each is checked for its ELF magic)
-all fall back to compiling, silently. Entries land by `rename`, so parallel links cannot tear
-one, and a miss sweeps anything 30 days unrewritten. The `-c` path is not cached, and neither is
-a `.c` the user named — this is the *implicit* runtime only.
+owed it: no HOME, an unwritable directory, a mangled entry (each is checked for its archive
+magic) all fall back to compiling, silently. Entries land by `rename`, so parallel links cannot
+tear one, and a miss sweeps all but the six newest generations. ⚠ **count, not age**: the rate
+is the tree's own — a day of rebuilds mints more generations than a month of use does, and a
+clock cannot tell the two apart. The `-c` path is not cached, and neither is a `.c` the user
+named — this is the *implicit* runtime only.
 
 **The crt0 switch is one weak symbol.** `__ai_start` is defined WEAK in the crt0 object (the
 bare call-main tail every small link gets), and nolibc overrides it STRONG to unpack

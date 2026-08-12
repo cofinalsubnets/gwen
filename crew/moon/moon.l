@@ -354,9 +354,14 @@
                     paths)
                tgt))
    ; -- THE RUNTIME CACHE. a member must be COMPILED to know what it defines, so
-   ; the need loop below cannot select without paying for all of them, and
-   ; nolibc.c alone is ~1.4s of the ~1.5s a hello-world link costs. so each rides
-   ; ~/.love/cache/moon/<sha256>.o, keyed on everything that decides its bytes.
+   ; the pull below cannot select without paying for all of them -- ~23s of the
+   ; ~23s a cold hello-world link costs. so the whole compiled runtime rides
+   ; ~/.love/cache/moon/<sha256>.a, ONE archive per (compiler, target), keyed on
+   ; everything that decides its bytes. an archive because the ranlib index IS
+   ; what each member defines, written once and read back rather than recomputed
+   ; over 190 objects on every warm link -- and because one file is one
+   ; generation: whole the moment it lands, and countable when mcsweep asks
+   ; which generations to keep.
    ; ⚠ the compiler is one of those inputs and the costly one to get wrong -- a
    ; stale entry is an old codegen worn silently, and the gates that compile
    ; nolibc by hand (test_raw, test_libc, test_fixpoint) would pass against it.
@@ -374,6 +379,11 @@
        _ (? (string? h) (map (\ s (mkdir (h + s) 493)) '("/.love" "/.love/cache" "/.love/cache/moon")) 0)
        d (? (string? h) (h + "/.love/cache/moon/") ())
        (? ((string? d) && (sdir? (stat d))) d ()))
+   ; the input-name predicates, ahead of every reader of them.
+   (dota? p) (: n (tally p) ((2 < n) && (p (n - 2) = 46) && (p (n - 1) = 97)))
+   (dotc? p) (: n (tally p) ((2 < n) && (p (n - 2) = 46) && (p (n - 1) = 99)))
+   (doto? p) (: n (tally p) ((2 < n) && (p (n - 2) = 46) && (p (n - 1) = 111)))
+   (dotim? p) (: n (tally p) ((6 < n) && (snip p (n - 6) n = ".image")))
    ; the build tree keeps the images in the love's own directory, an installed
    ; nest one rung over in lib/love/ -- the two seats mseat already knows.
    (mcims d) (map (\ f `(f (stat (d + f)))) (sort (filter dotim? (readdir d))))
@@ -396,19 +406,19 @@
        src (? (two? ims) ((mctree (home + "include/")) + (mctree (home + "lib/"))) "")
        (? !(two? ims) ()
           (sha256 ((("moon-rt 1\n" + x) + ("\n" + show (stat x))) + (("\n" + show ims) + ("\n" + src))))))
-   ; an entry, read back and checked for its ELF magic: the rename below lands
-   ; each one whole, so a torn file cannot appear, and a mangled one is passed
-   ; over rather than linked. the (1 bytes) wrapper -- an empty entry is absence.
-   (mcget d k)
-    (: r (uread ((d + k) + ".o"))
+   ; an entry, read back and checked for its magic: the rename below lands it
+   ; whole, so a torn file cannot appear, and a mangled one is passed over rather
+   ; than linked. the (1 bytes) wrapper -- an empty entry is absence.
+   (mcget d f mag)
+    (: r (uread (d + f))
        s (? (two? r) <>r "")
-       (? ((3 < tally s) && (s 0 = 127) && (s 1 = 69) && (s 2 = 76) && (s 3 = 70)) `(1 s) ()))
+       (? ((tally mag <= tally s) && (snip s 0 (tally mag) = mag)) `(1 s) ()))
    ; write beside the entry, then rename ONTO it: two links racing under make -j
    ; land the same bytes either way, and neither can read a half-written one.
    ; every failure here is silent by design -- a read-only home costs speed, and
    ; a cache is never owed a link's correctness.
-   (mcput d k bs)
-    (: p ((d + k) + ".o")
+   (mcput d f bs)
+    (: p (d + f)
        t ((p + ".") + show (getpid ()))
        q (open t "w")
        _ (? q (: _ (say q bs) (close q)) 0)
@@ -416,24 +426,58 @@
        0)
    ; the bound, swept on the miss we are already paying for -- without it every
    ; image rebuild mints a generation and abandons the last. nothing here knows
-   ; which entries are dead, so age decides: 30 days unrewritten costs one
-   ; recompile, once.
+   ; which generations are dead, so COUNT decides: the newest few stay and each
+   ; one dropped costs one rebuild, once. count and not age, because the rate is
+   ; the tree's own -- a day of rebuilds mints more generations than a month of
+   ; use, and a clock cannot tell the two apart.
    (mcsweep d)
-    (: cut ((clock ()) - 2592000000)
-       (map (\ f (: st (stat (d + f)) (? ((two? st) && (el st 1 < cut)) (unlink (d + f)) 0)))
-            (readdir d)))
-   ; a member's bytes: the cache when it can answer, the compiler otherwise --
-   ; and the compile is what fills the cache. a cache that cannot open is
-   ; invisible, and the link is the one that happens today, at today's price.
-   (mcobj cd id src is tgt)
-    (: k (? ((string? cd) && (string? id))
-            (sha256 (((id + "\n") + (show tgt + "\n")) + ((src + "\n") + (foldl (\ a i (a + i + "\n")) "" is))))
-            ())
-       hit (? (string? k) (mcget cd k) ())
+    (: mckeep 6                                        ; generations kept
+       fs (foldl (\ a f (: st (stat (d + f))
+                          (? ((dota? f) && (two? st)) (a + `(`((el st 1) f))) a)))
+                 () (readdir d))
+       (go l k) (? !(two? l) 0
+                   (: e <l
+                      _ (? (mckeep <= k) (unlink (d + <>e)) 0)
+                      (go >l (k + 1))))
+       (go (sortby (\ a b (<b <= <a)) fs) 0))
+   ; the compiled runtime as one archive: the cache when it can answer, the
+   ; compiler otherwise -- and the compile is what fills the cache. a cache that
+   ; cannot open is invisible, and the link is the one that happens today, at
+   ; today's price.
+   (rtarch cd id home tgt)
+    (: k (? ((string? cd) && (string? id)) (sha256 ((id + "\n") + show tgt)) ())
+       hit (? (string? k) (mcget cd (k + ".a") "!<arch>\n") ())
        (? (two? hit) <>hit
-          (: bs (string (cc-objbytes src is () tgt ()))
-             _ (? (string? k) (mcput cd k bs) 0)
+          (: bs (arbytes (rtmems home tgt))
+             _ (? (string? k) (mcput cd (k + ".a") bs) 0)
              bs)))
+   ; every member compiled, ready to index. the IMPLICIT runtime compiles with the
+   ; system tail LEFT ON (the () below): these are our own sources reaching only
+   ; our own headers, and the user's -nostdinc is about the user's translation
+   ; units, not this one. nolibc is a TREE: every .c directly under lib/nolibc/ and
+   ; every .c one level down (string/, ..), one function to a file where the
+   ; file-scope state allows. A link owing no calendar takes no calendar
+   ; (doc/moon-diff.md's libc rows). ⚠ one level, not a walk -- the depth is the
+   ; vocabulary, and a deeper tree would say nothing. ⚠ the member names flatten
+   ; that tree with _ and the math ones wear m_: time.c and sys/time.c are two
+   ; members of one basename, and an archive resolves by name alone.
+   (rtmems home tgt)
+    (: ndir (home + "lib/nolibc/") mdir (home + "lib/math/") inc (home + "include/")
+       (dotobj n) (? (dotc? n) ((snip n 0 (tally n - 2)) + ".o") n)
+       (nlmems d)
+        (foldl (\ a e (: p (d + e)
+                         (? (dotc? e) (a + `(`((dotobj e) p)))
+                            (sdir? (stat p))
+                             (a + foldl (\ a2 f (a2 + `(`((dotobj (e + ("_" + f))) (p + ("/" + f))))))
+                                        () (sort (filter dotc? (readdir p))))
+                            a)))
+               () (sort (readdir d)))
+       ((map (\ q `(<q (string (cc-objbytes <>q `(inc) () tgt ()))))
+             (nlmems ndir))
+        + map (\ f `(("m_" + dotobj f) (string (cc-objbytes (mdir + f) `(mdir inc) () tgt ()))))
+              (sort (filter dotc? (readdir (home + "lib/math"))))
+        + (? (member? tgt '(x64 arm64 riscv64))
+             `(`("mksys.o" (string (mksys-bytes tgt)))) ())))
    (rtpull srcs tgt nostd)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
@@ -454,51 +498,14 @@
                      + mfew (mroots ()) + ") -- check the spelling, then the nest"))
             0)
        (? (nostd || !(string? home)) ()
-          (: mdir (home + "lib/math/")
-             ndir (home + "lib/nolibc/")
-             inc (home + "include/")
-             id (mcid home) cd (? (string? id) (mcdir ()) ())   ; no identity, no cache, no directory made
-             ; the IMPLICIT runtime compiles with the system tail LEFT ON (the () below):
-             ; these are our own sources reaching only our own headers, and the user's
-             ; -nostdinc is about the user's translation units, not this one.
-             ; nolibc is a TREE of members: every .c directly under lib/nolibc/ and
-             ; every .c one level down (string/, ..), one function to a file where
-             ; the file-scope state allows. A link owing no calendar takes no
-             ; calendar (doc/moon-diff.md's libc rows). ⚠ one level, not a walk --
-             ; the depth is the vocabulary, and a deeper tree would say nothing.
-             (nlmems d)
-              (foldl (\ a e (: p (d + e)
-                               (? (dotc? e) (a + `(`(e p)))
-                                  (sdir? (stat p))
-                                   (a + foldl (\ a2 f (a2 + `(`((e + ("/" + f)) (p + ("/" + f))))))
-                                              () (sort (filter dotc? (readdir p))))
-                                  a)))
-                     () (sort (readdir d)))
-             mems (map (\ p (p + dusyms <p <>p mach))
-                       (((map (\ q `(<q (mcobj cd id <>q `(inc) tgt)))
-                              (nlmems ndir))
-                         + map (\ f `(f (mcobj cd id (mdir + f) `(mdir inc) tgt)))
-                               (sort (filter dotc? (readdir (home + "lib/math")))))
-                        + (? (member? tgt '(x64 arm64 riscv64))
-                             `(`("sys" (string (mksys-bytes tgt)))) ())))
-             (needs? m u) (foldl (\ a nm (a || member? nm u)) () (el m 2))
-             ; ⚠ `u` AT TERMINATION IS THE ANSWER, and it used to be thrown away.
-             ; no member satisfies anything left in u, so u is exactly the set
-             ; nothing anywhere defines -- computed here, three lines before holo
-             ; would have scared about one of them by surprise. it is already
-             ; filtered against dt each round, so a nom that a pulled member
-             ; defined is gone from it.
-             (go ms u picked)
-              (: hits (filter (\ m (needs? m u)) ms)
-                 (? !(two? hits)
-                    (: _ (? (two? u) (undie u) 0) (map (\ m `(<m <>m)) picked))
-                    (: rest (filter (\ m !(needs? m u)) ms)
-                       _ (map (\ m (map (\ nm (pin dt nm 1)) (el m 2))) hits)
-                       u2 (foldl (\ a m (foldl (\ a2 nm (? (peep dt nm () || member? nm a2) a2 (nm >< a2)))
-                                               a (el m 3)))
-                                 (filter (\ nm !(peep dt nm ())) u) hits)
-                       (go rest u2 (picked + hits)))))
-             (go mems owed ()))))
+          (: id (mcid home) cd (? (string? id) (mcdir ()) ())   ; no identity, no cache, no directory made
+             pr (arpull "moon-runtime" (rtarch cd id home tgt) dt owed mach)
+             ; ⚠ the OWE AT TERMINATION IS THE ANSWER: no member defines anything
+             ; left in it, so it is exactly the set nothing anywhere defines --
+             ; said here, whole, rather than one nom at a time by whichever holo
+             ; scares about first.
+             _ (? (two? <>pr) (undie <>pr) 0)
+             <pr)))
    (cc-link ins dst is ds tgt pie org dorg nostd nsi)
     (: ars (filter dota? ins)
        srcs (map (\ f (? (dotc? f) `(f (string (cc-objbytes f is ds tgt nsi)))
@@ -586,10 +593,6 @@
    (nostd? a) ((a = "-nostdlib") || (a = "-nostartfiles") ||
                (a = "-nodefaultlibs") || (a = "-ffreestanding"))
    (dirn d) (: n (tally d) (? (n = 0) d (d (n - 1) = 47) d (d + "/")))
-   (dota? p) (: n (tally p) ((2 < n) && (p (n - 2) = 46) && (p (n - 1) = 97)))
-   (dotc? p) (: n (tally p) ((2 < n) && (p (n - 2) = 46) && (p (n - 1) = 99)))
-   (doto? p) (: n (tally p) ((2 < n) && (p (n - 2) = 46) && (p (n - 1) = 111)))
-   (dotim? p) (: n (tally p) ((6 < n) && (snip p (n - 6) n = ".image")))
    (obase p) (: n (tally p)                        ; dir/x.c -> x.o (in the cwd, gcc-shaped)
                 (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r (n - 1)))
                 (go 0 0 + "o"))
