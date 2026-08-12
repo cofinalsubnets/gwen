@@ -1325,12 +1325,12 @@
          (mov r0 r13) (ld r13 sp 8) (add sp sp 16) (ret))       ; cleanses before the one exit
    _ (assert
       (= kf1 (cskeep ck9 kf1)) (= kf2 (cskeep ck9 kf2)) (= kf3 (cskeep ck9 kf3))
-      (= '(r12) (csdefs '(mov r12 r0)))
-      (= '(r11) (csdefs '(ld r11 sp 80)))
-      (= '(r12) (csdefs '(div r12 r0 r5)))           ; idiv writes r0 + its dst, never r3 (self-saved r2)
-      !(two? (csdefs '(a128r r11 r12)))              ; the d128 family only speaks r0:r2
-      !(two? (csdefs '(st sp 80 r11)))               ; a save writes memory, not the register
-      (id? 'dark (csdefs '(frob r0))))               ; an op on neither roster is dark -> refuses
+      (= '(r12) (csdefs ck9 '(mov r12 r0)))
+      (= '(r11) (csdefs ck9 '(ld r11 sp 80)))
+      (= '(r12) (csdefs ck9 '(div r12 r0 r5)))       ; idiv writes r0 + its dst, never r3 (self-saved r2)
+      !(two? (csdefs ck9 '(a128r r11 r12)))          ; the d128 family only speaks r0:r2
+      !(two? (csdefs ck9 '(st sp 80 r11)))           ; a save writes memory, not the register
+      (id? 'dark (csdefs ck9 '(frob r0))))           ; an op on neither roster is dark -> refuses
    klog (tablet 0)
    _ (hear (\ p e (: _ (pin klog p (+ 1 (peep klog p 0))) 0)))
    _ (cskeep ck9 '((label f9) (mov r12 r6) (ret)))                 ; written bare: the cs9 shape

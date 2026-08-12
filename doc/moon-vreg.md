@@ -1,6 +1,6 @@
 # moon-vreg — rung 5, the emission rewrite
 
-⚠ **Plan. Rung 5.0 is CLIMBED (2026-08-12); 5.1 onward is not built.** Written out of moon-alloc
+⚠ **Plan. Rungs 5.0 and 5.1a (the shadow) are CLIMBED (2026-08-12); 5.1b onward is not built.** Written out of moon-alloc
 rung 5, after the arc refused two increments aimed at the same prize. Companions:
 `doc/moon-alloc.md` (the arc and its rungs),
 `doc/moon-regalloc.md` (the ledger — every number quoted here has an entry there),
@@ -158,16 +158,101 @@ its mechanism is the refused shape wearing a new hat.
   retires the x64-only guards on `coal` (and the class of bug that hung riscv) rather than adding
   another. ⚠ do this FIRST: every rung below stands on the liveness kit, and a kit that lies
   about the machine is the one failure mode this arc has already shipped.
-* **rung 5.1, the pool mints.** `ralloc` hands out fresh vregs instead of `opool` members; a
-  linear-scan pass maps them back. Everything else stands. The first real measurement, and the
-  smallest thing that can carry the allocator.
-* **rung 5.2, the answer sites mint.** The 133 `mkv … 'r0` lanes mint; `tor0` becomes a bridge to
-  a constraint. `wnt` becomes binding. ⚠ the protocol sites (an operand assumed in r0) are the
-  risk and want the exhaustion instrument, not a build-and-see.
-* **rung 5.3, params and the vmap.** Params become vregs with an entry constraint; a cross-
-  statement value is just a longer interval. **Retires the vmap, homes/rides, `pp`, `pcs`,
-  `pmin`, `nrac`, and the regen dance.** The big negative-LOC rung, and the compile-time one
-  (build stops running twice).
+* **rungs 5.1–5.3 COLLAPSE INTO ONE, priced 2026-08-12 — they are not separable.** The plan had
+  the pool mint first (5.1), then the answer sites (5.2), then params and the vmap (5.3). One
+  probe over love.c killed the split:
+
+  | | |
+  |---|---|
+  | `ralloc` calls | 22,634 |
+  | ...of them DRY, falling back to r0 | **2,618 — 10.4%** |
+  | `tor0` bridges emitted (`mov r0, <pool>`) | **5,222** |
+  | reg-reg movs surviving into the object | 9,674 |
+
+  **5.1's entire headroom is the 10.4% dry rate** — the pool almost always has a register, so
+  minting more of them changes little. The traffic is in the BRIDGES, and a bridge is the
+  accumulator protocol, which is 5.2.
+  ⚠ **and 5.1 cannot be isolated anyway: `vmpin` accepts only `pool0` members (`gen.l:186`), so a
+  `ralloc`'d register is exactly what the vmap pins.** The pool and the vmap share one namespace
+  BY CONSTRUCTION; minting a vreg in `ralloc` hands one to the vmap on the next statement. 5.1 and
+  5.3 are the same rung wearing two numbers.
+  ⚠ nor is there a cheap slice of 5.2: every `tor0` site takes an already-bound value, so making
+  the hint binding means threading it back to whichever `cgexpr` produced it — the ~200-site
+  refactor, not a bounded step.
+
+  **So it ships as ONE rung: the vreg carrier, binding destinations, and the vmap together.**
+  Which is the ledger's rung-1/rung-2 lesson arriving a second time — *"rung 1 is pure
+  infrastructure and must be priced together with rung 2. Ship them as one rung or gate rung 1 on
+  rung 2's prototype."* Same shape, same answer. It retires the vmap, homes/rides, `pp`, `pcs`,
+  `pmin`, `nrac` and the regen dance, and collects the compile-time win when `build` stops running
+  twice — a large rung, but the arc has now refused three increments that tried to be smaller
+  than the thing they were changing.
+### 5.1a — the SHADOW STEP, and it must come first — CLIMBED 2026-08-12
+
+**Mint vregs, then map each one to exactly the register today's discipline would have given it.**
+Byte-identical by construction. It changes nothing and proves everything: that a vreg survives
+`build`, the peepholes and `holo`, and that every predicate which asks a question ABOUT a
+register can still answer.
+
+* **the surface is ~16 predicates and three pin tables**, not the 938 `r0`s. `wr?`, `rfree`,
+  `ralloc`'s own armor, `vmpin`/`vapin`'s `pool0` tests (`gen.l:186`, `:257`), `alsafe?` (`:481`),
+  the two hint tests (`:2122`, `:5891`), plus `vpin` (18 refs), `rpin` (19) and `csbor` (10).
+  Each becomes "resolve the vreg, then ask" — one indirection, no policy.
+
+**Built, and the scope above missed a whole class.** The predicates and pin tables landed as
+written (`rp` resolves, every g-table holds physicals only, `vrfix` substitutes as build's
+innermost tail link). What the byte gate then caught — a 10-byte `.text` diff in two functions of
+love.c, run to ground with a per-site-tagged pool trace over instrumented images — was the
+**machine-identity comparisons**:
+
+* ⚠ **a hint honored by ACCIDENT is the discipline, not a coincidence to fix.** An UNHELD hint
+  (no `rpin` hold — the decl init, `pk`, the fdd lanes) returns to the pool at a splice body's
+  psreset, a later `ralloc` re-mints its physical, and the value comes back wearing the new mint.
+  The old code compared physicals, so the accident counted — the honor test skipped the `rfree`,
+  the register stayed out, and every downstream alloc in the statement shifted. Same-mint `id?`
+  breaks exactly there. `rpeq?` (resolve both sides) is the door, at every hint-honor test AND
+  the two-address alias tests (`id? rd rA` guarding the operand free in `immop` and the bin
+  register lane ×6, `id? wnt rB`, sub's alias-dst dodge) — ~20 sites beyond the scoped list.
+* ⚠ **`psafe?` reads the write set RESOLVED** — a freed mint's store still lands on its physical,
+  and a `spare` borrow licensed past it reads garbage. The one form-scan that runs before `vrfix`.
+* the `ezd` delivered-seat test (`kls`) resolves too: the pool overlaps the x64 arg file
+  (r5 r6 r7 r8), so "the value already sits in its seat" can be an accident of the same kind.
+* **the instrument that found them**: bake the two gen.l variants into images
+  (`love -l <cat> -e '(bake ..)'`, ~40s), compile love.c with both, then drive `cc-parse` +
+  `cgen-obj` through `--wake image -e` for the IR of one function (seconds, vs minutes
+  interpreted), and tag every `ralloc`/`rfree` call site with its line number for the pool
+  trace. The corpus (141 files, test/cc + host) never diverged — only love.c, twice; a corpus
+  sweep alone would have called this rung green while the discipline drifted.
+
+Gate at the climb: `love.o` byte-identical on all four targets (x64/arm64/riscv64/thumb2),
+141-file corpus byte-identical, `make test` + `test_moon` + `test_fixpoint` green.
+* ⚠ **PLACEMENT IS FORCED, and it is not the post-choice chain.** The rewrite is the INNERMOST
+  link of the build tail, applied to the assembled prologue+body+epilogue **before `sibcall`** —
+  because `sibcall` matches epilogue shapes and the park (`pkr`), and on arm `soften` sits inside
+  it doing register ARITHMETIC (`sf-slot` maps r0/r1/r2/r3 to slots, `nxr` answers r0→r1→r2).
+  Those reason about the physical file and cannot meet a vreg. So vregs live INSIDE build only,
+  and the assembled list — the whole function — is what the assignment sees. That is the property
+  the rung wants anyway.
+* **make it a stage die, not a convention.** `stage.l` already types the pipeline; give build's
+  assembled list its own die (`ir-vreg`) and have the assignment advance it to `gst`. Then **"no
+  vreg reaches holo" is a STATIC check** rather than a runtime `x64-crnum` scare — the type
+  system catching a mis-ordered pass at the seam, which is exactly what that leg is for.
+* **the gate is byte-identical `love.o`**, the same one rung 5.0 shipped under: not "the tests
+  pass" but "the compiler did not change its mind". ⚠ compare `.text`/`.data`/`.rodata`
+  separately — `.rodata` carries the git hash the build stamps, so whole-file `cmp` always fails.
+
+### 5.1b — the rung proper: assignment, destinations, and the vmap, together
+
+Only once the shadow holds. Intervals over the assembled list; assign from the target's file
+(rung 5.0 made the rosters answer); **prefer the copy's own source so the mov drops** — that is
+the mechanism `coal` approximates with a one-form lookbehind and the reason cs seats can pay here
+and could not in `repack`. Destinations bind (`wnt` stops being advisory), which is what the
+5,222 bridges are waiting for. Params arrive as pre-coloured vregs; a cross-statement value is
+just a longer interval, and the vmap has nothing left to do.
+
+**Retires:** the vmap and its array leg, homes/rides + `pp`, the cs pool, `pcs`/`pmin`/`nrac`,
+the regen dance and its deopt snapshots, `unhome`, most of `rgreset`.
+
 * **rung 5.4, spilling placed.** Today the slot is the source of truth and the register a
   write-through cache; invert it — the register is the truth, a spill is placed under real
   pressure. `repack` shrinks to packing actual spills; `stld`/`deadst` lose their write-through
@@ -208,6 +293,20 @@ register pressure and IS this rung's other half, greedy-by-window losing to a re
 * ⚠ **the build tail costs double.** Any whole-function fixpoint placed there is paid four times.
   It shipped once at +78% compile time with every gate green, because no gate watches it.
 * ⚠ **a codegen rung owes a COMPILE-TIME A/B**, interleaved, not only a codegen one.
+* ⚠ **the assignment is a whole-function analysis in the build tail, so it is paid TWICE per
+  function** until the regen dance goes — and the build tail's double cost is what shipped a +78%
+  compiler once already. Expect the shadow step to READ slow and do not tune it there; the rung
+  that deletes the second build is the one that pays it back. Measure compile time at 5.1b, not
+  at 5.1a.
+* ⚠ **`soften` and `sibcall` do register ARITHMETIC** (`sf-slot`, `nxr`) and match epilogue
+  shapes. They are the reason the rewrite cannot drift later in the tail. If a future pass wants
+  to move it, that is the constraint to re-check first.
+* ⚠ **pressure only rises when destinations BIND.** Today a dry pool falls back to r0 and the
+  shuttle absorbs it (10.4% of `ralloc` calls). Binding destinations removes that release valve,
+  so 5.1b is where spilling starts to matter — which is why 5.4 exists and why 5.1b should keep
+  the fallback until 5.4 lands.
+* ⚠ **`vmpin` accepts only `pool0` members** (`gen.l:186`). Any design that keeps the vmap while
+  minting vregs has to answer that test, which is the structural reason 5.1–5.3 are one rung.
 
 ## gates
 

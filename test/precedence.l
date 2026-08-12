@@ -25,7 +25,17 @@
  ((opfix '(a < b || c < d)) = '(|| (< a b) (< c d))) ; || likewise
  ((opfix '(a < b & c < d)) = '(& (< a b) (< c d)))   ; bitwise & (30) likewise
  ((opfix '(1 < 2 ? x)) = '(? (< 1 2) x))            ; ? (10) loosest -> the whole comparison is the condition
- ((opfix '(1 < 2 ? x y)) = '(? (< 1 2) (x y)))      ; ...and ? is DYADIC, so a second arm is a span, not an else
+ ; the N-ARY arity: a clause form collects its arms FLAT where a dyadic spans them into one, so
+ ; the infix spelling reaches the SAME form the prefix one does -- an else arm included.
+ ((opfix '(1 < 2 ? x y)) = '(? (< 1 2) x y))        ; ...and every further arm is another operand
+ ((opfix '(c ? a b d e)) = '(? c a b d e))          ; test/result pairs then the else, as `?` always took them
+ ((opfix '(x @ p1 b1 p2 b2)) = '(@ x p1 b1 p2 b2))  ; @ (10) likewise: the scrutinee left, the clauses flat
+ ((opfix '(f y z @ p b)) = '(@ (f y z) p b))        ; ..and the whole leading span is the scrutinee -- no parens owed
+ ((opfix '(c ? x @ p b)) = '(? c (@ x p b)))        ; equal grip, right hand: the inner clause form folds first
+ ((opfix '(x @ p b $ y)) = '($ (@ x p b) y))        ; $ (5) is looser, so it folds the whole match and takes it
+ ((opfix '(c ? a + b)) = '(? c (+ a b)))            ; ⚠ an n-ary frame yields its last RIGHT operand to a tighter op
+ ((opfix '(? c a b)) = '(? c a b))                  ; ..and the prefix spelling is untouched, a fixed point as ever
+ (: r (fixity '? ()) _ (fixity '? r) (r = '(10 0 1)))   ; the arity rides the ROW, so `fixity` restores it exactly
  ((opfix '(a + b >< c)) = '(>< (+ a b) c))          ; >< (25) the loosest builder, below arithmetic
  ((opfix '(a :+ b >< c)) = '(>< (:+ a b) c))        ; a coined op (house 95) beats >< (25)
  ((opfix '(a :+ b + c)) = '(+ (:+ a b) c))          ; ..and arithmetic (50), and every other band:
