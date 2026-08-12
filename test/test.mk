@@ -89,6 +89,39 @@ test_host: $m
 	@{ $m out/host/.test_host.l </dev/null; echo $$? > out/host/.test_host.rc; } | tee out/host/.test_host.out; \
 	  s=$$(cat out/host/.test_host.rc); \
 	  [ $$s -eq 0 ] && grep -q "tests pass" out/host/.test_host.out
+# test_stdincorpus -- THE ORACLE FOR `reads` OVER STDIN, and nothing else was one. test_host
+# takes the corpus as a FILE (the speed choice above) and test_stdinbuf runs two-line programs,
+# so at the scale where a reader's window arithmetic actually breaks, nothing looked: a `reads`
+# that parsed the corpus's own English COMMENTS as code still printed "3959 tests pass" on the
+# file door and exited 0. It was caught by hand-diffing the doors; this is that diff, kept.
+# ⚠ ALL THREE DOORS, because they are three different readers -- a file and a redirect share the
+# borrowed run (love.c's rbio_of), a pipe has none and drips.
+# ⚠ the summary line carries a DURATION, so that is normalised away and everything else must
+# match byte for byte -- the dots included, since a dropped assert is exactly what this catches.
+test_stdincorpus: $m
+	@echo TEST the corpus down file, redirect and pipe
+	@cat $t > out/host/.test_sc.l
+	@for d in file seek pipe; do \
+	   case $$d in \
+	     file) $m out/host/.test_sc.l < /dev/null > out/host/.test_sc.$$d 2>&1;; \
+	     seek) $m < out/host/.test_sc.l > out/host/.test_sc.$$d 2>&1;; \
+	     pipe) cat out/host/.test_sc.l | $m > out/host/.test_sc.$$d 2>&1;; \
+	   esac; \
+	   r=$$?; \
+	   [ $$r -eq 0 ] \
+	     || { echo "FAIL the $$d door exited $$r"; tail -4 out/host/.test_sc.$$d; exit 1; }; \
+	   grep -q "tests pass" out/host/.test_sc.$$d \
+	     || { echo "FAIL the $$d door printed no summary"; tail -4 out/host/.test_sc.$$d; exit 1; }; \
+	   ! grep -q "^;;" out/host/.test_sc.$$d \
+	     || { echo "FAIL the $$d door scared"; grep -m3 "^;;" out/host/.test_sc.$$d; exit 1; }; \
+	   sed 's/in [0-9.]* seconds/in Xs/' out/host/.test_sc.$$d > out/host/.test_sc.$$d.n; \
+	 done
+	@for d in seek pipe; do \
+	   cmp -s out/host/.test_sc.file.n out/host/.test_sc.$$d.n \
+	     || { echo "FAIL the $$d door read a different corpus than the file door"; \
+	          diff out/host/.test_sc.file.n out/host/.test_sc.$$d.n | head -8; exit 1; }; \
+	 done
+	@echo "  ok   file, redirect and pipe all read the corpus identically"
 # test_front -- the TEST-ONLY FRONTEND: out/host/front links liblove.a (love.c only)
 # and supplies the frontend contract itself, so its port vt can answer WOULD-BLOCK on
 # cue (doc/io.md). ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
