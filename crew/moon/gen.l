@@ -4551,9 +4551,16 @@
    ; claims. only 8-byte cells pool (a wider cell places fresh, its 16-parity held for any
    ; aligned rider); -8 (the r3 cell) and the caller frame (0 <=) ride pinned. ships only when
    ; the sub SHRINKS. x64 only -- arm rides its own frame family. --
-   ; the x64 callee-saved file -- r3 r4 and r11..r14, machine rbx rbp r12..r15. two readers: a
-   ; call spares them (the liveness kit), and a write owes a save/restore pair (cskeep).
-   csregs '(r3 r4 r11 r12 r13 r14)
+   ; the callee-saved file, per target. two readers: a call spares them (the liveness kit), and
+   ; a write owes a save/restore pair (cskeep). ⚠ these rosters ARE the machine, and a wrong one
+   ; is a miscompile rather than a missed optimization -- each is holo's own table read back
+   ; (crew/holo/<tgt>.l), never the ABI document. x64 r3 r4 r11..r14 = rbx rbp r12..r15; arm64
+   ; r19..r28 = x19..x28; riscv r13/r14/r15 = s2/s3/s1 (the homes) and r19..r26 = s4..s11;
+   ; thumb2 r4..r10 (AAPCS32 keeps r4..r11, but r11 IS fp and holo maps both names to 11).
+   (csregs g) (? (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
+                 (rv? g) '(r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
+                 (t32? g) '(r4 r5 r6 r7 r8 r9 r10)
+                 '(r3 r4 r11 r12 r13 r14))
 
    ; -- the liveness kit: the control flow gen.l's three liveness approximations lack, and one
    ; backward fixpoint over it. rdsp is already the per-form transfer function; the missing
@@ -4564,17 +4571,20 @@
    ; OVER-approximation of live: a call reads AND writes the whole caller-saved file (its
    ; arguments are not in the form), a sibcall reads everything, and an op neither rdsp nor
    ; the rosters here name answers 'bar -- which refuses the fn rather than guessing. --
-   lvgp '(r0 r1 r2 r5 r6 r7 r8 r9 r10)              ; the x64 CALLER-saved gp file -- a seat here
+   (lvgp g) (? (a64? g) '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15)
+               (rv? g) '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12)
+               (t32? g) '(r0 r1 r2 r3 r12)
+               '(r0 r1 r2 r5 r6 r7 r8 r9 r10))       ; the CALLER-saved gp file -- a seat here
                                                     ; needs no save/restore pair, and no call may
                                                     ; sit inside the range that takes one
    lvquiet '(label align ud2 br jmp)                ; no register effect at all
-   lvret '(r0 r1 f0 f1)                             ; what an exit owes back, beside the cs file
-   (lvtx f u)                                       ; one form's (reads defs) | 'bar
+   (lvret g) (? (t32? g) '(r0 r1) '(r0 r1 f0 f1))   ; what an exit owes back, beside the cs file
+   (lvtx g f u)                                     ; one form's (reads defs) | 'bar
     (? !(two? f) [() ()]
        (: op <f
           (? (member? op lvquiet) [() ()]
-             (member? op '(call callr sys)) (: c (filter (\ r9 !(member? r9 csregs)) u) [c c])
-             (op = 'ret) [(lvret + csregs) ()]
+             (member? op '(call callr sys)) (: c (filter (\ r9 !(member? r9 (csregs g))) u) [c c])
+             (op = 'ret) [((lvret g) + (csregs g)) ()]
              (op = 'jmpr) [u ()]
              (: d (rdsp f) (? (id? d 'bar) 'bar [<d <>d])))))
    ; ⚠ SEEDED with the whole caller-saved file, and that is load-bearing rather than tidy: the
@@ -4582,10 +4592,10 @@
    ; never otherwise mentions would be absent from the clobber set and read as free ACROSS a
    ; call. ai_sleep promoted into rdx over its one call and the answer survived every gate but
    ; running. A liveness universe must cover the seats, not just the traffic.
-   (lvuniv fs)                                      ; every register in play: the seats + rdsp's
+   (lvuniv g fs)                                    ; every register in play: the seats + rdsp's
     (: t (tablet 0)
        (add rs) (? !(two? rs) 0 (: _ (pin t <rs 1) (add >rs)))
-       _ (add lvgp)
+       _ (add (lvgp g))
        (scan l) (? !(two? l) 0
                    (: f <l d (? (two? f) (rdsp f) [() ()])
                       _ (? (id? d 'bar) 0 (: _ (add <d) (add <>d)))
@@ -4595,9 +4605,9 @@
    (lvun a b) (? !(two? b) a (lvun (? (member? <b a) a (<b >< a)) >b))     ; set union
    (lvsame a b) ((tally a = tally b) && !(two? (filter (\ r9 !(member? r9 b)) a)))
    (lvout g fs)                                     ; index -> the registers live OUT of it | 'no
-    (: u (lvuniv fs)
+    (: u (lvuniv g fs)
        (bary? l) (? !(two? l) ()
-                    (: f <l (? (id? (lvtx f u) 'bar) 1 (bary? >l))))
+                    (: f <l (? (id? (lvtx g f u) 'bar) 1 (bary? >l))))
        (? (bary? fs) 'no
           (: labt (tablet 0)
              (ix l i) (? !(two? l) 0
@@ -4624,7 +4634,7 @@
              (pass l ch)                            ; one backward sweep -> did any live-in grow?
               (? !(two? l) ch
                  (: e <l i <e f <>e
-                    d (? (gone? f) [u ()] (lvtx f u))
+                    d (? (gone? f) [u ()] (lvtx g f u))
                     lo (foldl (\ a s (lvun a (peep lin s ()))) () (succ f i))
                     li (lvun <d (filter (\ r9 !(member? r9 <>d)) lo))
                     old (peep lin i ())
@@ -4750,9 +4760,9 @@
                                                 ; surviving a call, so a cs mover never promotes.
                                                 (? !((<>o9 = 8) && (X = <o9)) 'no
                                                    (id? <f 'st)
-                                                    (? (member? (nthr f 3) csregs) 'no 'st)
+                                                    (? (member? (nthr f 3) (csregs g)) 'no 'st)
                                                    (id? <f 'ld)
-                                                    (? (member? (nthr f 1) csregs) 'no 'ld)
+                                                    (? (member? (nthr f 1) (csregs g)) 'no 'ld)
                                                    'no)
                                                 (? (id? <f 'st) (nthr f 3) ()))
                                        (scan >l (i + 1) sp2))
@@ -4801,9 +4811,9 @@
                    lot9 (? (two? scand) (lvout g fs) 'no)   ; index -> live-out, or the refusal
                    dft9 (? (id? lot9 'no) (tablet 0)
                            (: t (tablet 0)
-                              u9 (lvuniv fs)
+                              u9 (lvuniv g fs)
                               (go l i) (? !(two? l) 0
-                                          (: d (lvtx <l u9)
+                                          (: d (lvtx g <l u9)
                                              _ (? (id? d 'bar) 0 (pin t i <>d))
                                              (go >l (i + 1))))
                               _ (go fs 0)
@@ -4825,7 +4835,7 @@
                    _ (? (id? lot9 'no) 0
                         (foldl (\ _ c (: lo <c hi <>c b (nthr c 2)
                                          pf (nthr c 3)          ; the first store's own source
-                                         r (pseat (? (member? pf lvgp) (pf >< lvgp) lvgp) lo hi)
+                                         r (pseat (? (member? pf (lvgp g)) (pf >< (lvgp g)) (lvgp g)) lo hi)
                                          (? r (: _ (pclaim r lo hi) (pin pmap b r)) 0)))
                                0 (sortby (\ a b (<a < <b)) scand)))
                    prom (keys pmap)
@@ -4924,12 +4934,12 @@
    csquiet '(label align ud2 br jmp jmpr ret call callr sys mulo
              sx128 n128 a128 a128r s128 s128r m128 m128r mw128 mw128r c128 c128r
              dv128 rm128 inc128 dec128 shl128 shr128 sar128 shl128v shr128v sar128v)
-   (csdefs f)                                       ; the cs regs one form writes | 'dark
+   (csdefs g f)                                       ; the cs regs one form writes | 'dark
     (? (member? <f csquiet) ()
-       (member? <f divops) (filter (\ r (member? r csregs)) [<>f])
+       (member? <f divops) (filter (\ r (member? r (csregs g))) [<>f])
        (: rd (rdsp f)
           (? (id? rd 'bar) 'dark
-             (filter (\ r (member? r csregs)) <>rd))))
+             (filter (\ r (member? r (csregs g))) <>rd))))
    (cskeep g fs)                                    ; answers fs; a breach scares, naming fn + reg
     (: (rawy? l) (? !(two? l) ()
                     (: f <l (? (two? f && id? <f 'raw) 1 (rawy? >l))))
@@ -4941,17 +4951,17 @@
                  (: f <l
                     _ (? !(two? f) 0
                          (id? <f 'label) (pin labs <>f 1)
-                         (: _ (? (id? <f 'push && member? <>f csregs)
+                         (: _ (? (id? <f 'push && member? <>f (csregs g))
                                  (? (peep saves <>f ()) 0 (pin saves <>f ['push i])) 0)
                             _ (? (id? <f 'st &&
-                                  (id? <>f 'sp || id? <>f 'r4) && member? <>>>f csregs)
+                                  (id? <>f 'sp || id? <>f 'r4) && member? <>>>f (csregs g))
                                  (? (peep saves <>>>f ()) 0 (pin saves <>>>f ['slot <>f <>>f i])) 0)
-                            ds (csdefs f)
+                            ds (csdefs g f)
                             (? (id? ds 'dark) (scare 'cs-dark-op <f)
                                (foldl (\ _ r (? (peep defs r ()) 0 (pin defs r i))) 0 ds))))
                     (note >l (i + 1))))
              _ (note fs 1)
-             dr (filter (\ r (peep defs r ())) csregs)
+             dr (filter (\ r (peep defs r ())) (csregs g))
              (? !(two? dr) fs                       ; no cs writes: most fns leave here
                 (: _ (foldl                         ; every written reg saved, before its first write
                       (\ _ r (: sv (peep saves r ())
@@ -4973,7 +4983,7 @@
                                   new (uni S old)
                                   (? (sub? new old) 0 (: _ (pin lst L new) 1)))
                    (move f S)                       ; one form's transfer on the dirty set
-                    (: ds (csdefs f)
+                    (: ds (csdefs g f)
                        S2 (uni (? (id? ds 'dark) dr (filter (\ r (member? r dr)) ds)) S)
                        (filter (\ r !(f = rest r)) S2))
                    (step l S chg fin)
