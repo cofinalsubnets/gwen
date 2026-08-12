@@ -1,7 +1,8 @@
 # moon-vreg — rung 5, the emission rewrite
 
-⚠ **Plan, not built.** Written 2026-08-12 out of moon-alloc rung 5, after the arc refused two
-increments aimed at the same prize. Companions: `doc/moon-alloc.md` (the arc and its rungs),
+⚠ **Plan. Rung 5.0 is CLIMBED (2026-08-12); 5.1 onward is not built.** Written out of moon-alloc
+rung 5, after the arc refused two increments aimed at the same prize. Companions:
+`doc/moon-alloc.md` (the arc and its rungs),
 `doc/moon-regalloc.md` (the ledger — every number quoted here has an entry there),
 `crew/moon/stage.l` (the pipeline's types, which this rung re-types).
 
