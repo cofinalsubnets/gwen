@@ -403,3 +403,30 @@ for s in "R rotbl" "R romsg" "D mutp" "D fnp" "D wtbl" "B rozero"; do
 done
 
 echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, named-section lanes + their const/writable flag homes, const globals to .rodata, a FOREIGN gcc .o whole, a symbol table nm/gdb read) ok"
+
+
+# ------------------------------------------------ the warm compiler
+# moon-run ANSWERS its status (moon-main is the same compile, quitting), so one
+# image compiles again after a compile that failed -- the cat is read once and
+# every cc after it is free. four compiles in one process: good, a hard error, a
+# usage error, then good again; the process must reach the last say, the statuses
+# must be 0 1 2 0, and the object laid AFTER the two failures must be byte-identical
+# to the same compile run cold. ⚠ a regression to `quit` inside moon-run passes
+# every check above this line.
+printf 'int wa(int x){return x+1;}\n' > "$ho/.wa.c"
+printf 'int wb(void){ return nope; }\n' > "$ho/.wb.c"
+moonrun -c "$ho/.wa.c" -o "$ho/.wa-cold.o" > /dev/null 2>&1 || fail "warm: the cold reference compile"
+warm=$(printf '(: a (moon-run (list "-c" "%s" "-o" "%s"))
+                  b (moon-run (list "-c" "%s" "-o" "/dev/null"))
+                  c (moon-run (list "-zzz"))
+                  d (moon-run (list "-c" "%s" "-o" "%s"))
+                  _ (say out (show a + " " + show b + " " + show c + " " + show d + "\n"))
+                  (quit 0))' \
+             "$ho/.wa.c" "$ho/.wa-warm.o" "$ho/.wb.c" "$ho/.wa.c" "$ho/.wa-warm.o")
+"$m" --wake "$ho/mooncc.image" -e "$warm" > "$ho/.warm.out" 2>/dev/null
+r=$?
+[ $r -eq 0 ] || fail "warm mooncc: the image did not survive a failed compile (exit $r)"
+[ "$(tail -1 "$ho/.warm.out")" = "0 1 2 0" ] || fail "warm mooncc statuses: $(tail -1 "$ho/.warm.out")"
+cmp -s "$ho/.wa-cold.o" "$ho/.wa-warm.o" \
+  || fail "warm mooncc: the object after two failures differs from the cold one"
+echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a failure) ok"

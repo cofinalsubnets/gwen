@@ -44,7 +44,7 @@
         (? (two? g) >g
            (: _ (? (sh-uflag ())
                    (: _ (say err (+ "lush: " (+ nm ": unbound\n")))
-                      (? (sh-tty ()) 0 (quit 2)))
+                      (? (sh-tty ()) 0 (sh-leave 2)))
                    0)
               "")))
    (sh-setvar nm v)                             ; an exported name stays exported
@@ -76,7 +76,7 @@
               (= o "?") (? use? v
                            (: _ (say err (+ "lush: " (+ nm (+ ": " (? (tally text) text "parameter not set")))))
                               _ (put err 10)
-                              (? (sh-tty ()) "" (quit 2))))
+                              (? (sh-tty ()) "" (sh-leave 2))))
               (= o "+") (? use? (sh-voptext text) "")
               (sh-vstrip v o text))))
    ; ${v#pat} ${v##pat} ${v%pat} ${v%%pat}: shortest/longest prefix/suffix strip

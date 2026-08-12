@@ -1930,9 +1930,13 @@ void kmain(void) {
  "              (two? (stat a0)) (link (k-run-file a0) (cup argv))"
  "              ()))))"
  "   (k-spawn1 argv f0 f1 f2) (: pr (k-prog argv)"
- "     p (twirl (\\ _ (: _ (hear (\\ a b (: _ (say err \";; \") _ (print err a)"
- "                                        _ (say err \" \") _ (print err b)"
- "                                        _ (put err 10) (quit 1))))"
+ // ⚠ the help is the seat's exit door too: a kore main leaves deep by scaring 'leave
+ // with its status (crew/kore/core.l), and taking that as a plain scare would flatten
+ // every usage code to 1. every other condition is the died-child face.
+ "     p (twirl (\\ _ (: _ (hear (\\ a b (? (id? a 'leave) (quit b)"
+ "                                        (: _ (say err \";; \") _ (print err a)"
+ "                                           _ (say err \" \") _ (print err b)"
+ "                                           _ (put err 10) (quit 1)))))"
  "                     r (? (two? pr) ((cap pr) (cup pr))"
  "                          (: _ (say err (+ (cap argv) \": not found\"))"
  "                             _ (put err 10) 127))"

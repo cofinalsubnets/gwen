@@ -54,6 +54,20 @@
    ; only its parent can end. so a fork shuts each one down first thing
    ; (sh-dropcaps), and a `( )` under a capture does not fork at all (sh-subsh).
    sh-subfds #0
+   sh-online #0                                ; nesting depth of sh-oneline: a line run HERE for a
+                                               ; caller in this image, so `exit` ends the line not us
+   ; ⚠ THE EXIT DOORS, and there are three: `exit`, errexit (sh-echk) and set -u on
+   ; an unset name. all three END THE SHELL -- and which shell that is depends on
+   ; where we stand. innermost first: under a $( ) capture it is the capture, and the
+   ; pair is what the plan machinery already rides out; under an sh-oneline it is the
+   ; LINE, and the caller lives on in this image -- by SCARE, because set -u fires
+   ; from a word expansion whose value is a string, with no pair to hand back.
+   ; otherwise it is the process, as it always was. one rule said once, so a fourth
+   ; door cannot drift away from it.
+   (sh-leave st)
+     (? (sh-subfds ()) ('xit >< st)
+        (0 < (sh-online ())) (scare 'sh-exit st)
+        (quit st))
    sh-retf #0                                  ; a top-level `return` landed: sh-lines stops its file (dot-return)
 
    ; --- read one line (cooked): bytes until \n; 'eof at immediate EOF. here on

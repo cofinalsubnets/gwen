@@ -38,7 +38,7 @@ $(ho)/kore: $(ho)/kore.image
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
 	   echo 'n=$$(basename -- "$$0")'; \
-	   echo 'exec "$$h/love" --wake "$$h/kore.image" -e "(kore-main (link \"$$n\" (cuup (cup cmdline))))" "$$@"'; } > $@
+	   echo 'exec "$$h/love" --wake "$$h/kore.image" -e "(: r (kore-main (link \"$$n\" (cuup (cup cmdline)))) (quit (? (charm? r) r 0)))" "$$@"'; } > $@
 	@chmod 755 $@
 $(ho)/mooncc: $(ho)/mooncc.image
 	@echo CAT	$(abspath $@)

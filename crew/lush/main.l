@@ -48,12 +48,32 @@
         r (sh-line cmd)
         _ (? (two? r) (: _ (say err "lush: unexpected eof\n") (pin sh-status () 2)) 0)
         (quit (sh-status ())))
+   ; the flag word: c e u x, bundled or apart. `sh -ec CMD` is what a Makefile's
+   ; .SHELLFLAGS writes and what every shell takes, so a bundle is not a courtesy --
+   ; without it lush cannot BE the SHELL of a make. answers (1 c? rest) with e/u/x
+   ; already pinned, or () when a letter is not ours (then the word is not a flag).
+   (sh-flagw a rest)
+     (: n (tally a)
+        (go k c?) (? (<= n k) (L 1 c? rest)
+                     (: ch (a k)
+                        (? (= ch 99) (go (+ k 1) 1)
+                           (= ch 101) (: _ (pin sh-eflag () 1) (go (+ k 1) c?))
+                           (= ch 117) (: _ (pin sh-uflag () 1) (go (+ k 1) c?))
+                           (= ch 120) (: _ (pin sh-xflag () 1) (go (+ k 1) c?))
+                           ())))
+        (go 1 0))
    (sh-main args)
      (? !args (sh 0)
         (: a <args
            (? (= a "--login") (: _ (pin sh-login () 1) (sh-main >args))
-              (= a "-c") (? >args (sh-c <>args >>args)
-                            (: _ (say err "lush: -c needs a command\n") (quit 2)))
+              (&& (< 1 (tally a)) (= (a 0) 45))
+                (: fw (sh-flagw a >args)
+                   (? !(two? fw) (sh-file a >args)          ; a letter not ours: a name
+                      (sh-nth fw 1)
+                        (: r (sh-nth fw 2)
+                           (? r (sh-c <r >r)
+                              (: _ (say err "lush: -c needs a command\n") (quit 2))))
+                      (sh-main (sh-nth fw 2))))            ; flags only: read on
               (sh-file a >args))))
    ; the interactive entry: ignore the tty's job signals (children reset them),
    ; then probe with (raw 1): () = a tty (interactive), an errno = not a tty

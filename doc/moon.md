@@ -96,7 +96,12 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
 **The cc conventions** — `CC=mooncc` drives a gcc-shaped recipe unchanged:
 
 - the **advisory** families (`-W..` `-O..` `-g..` `-std=` `-f..` `-pipe` `-static`) ride through
-  ignored;
+  ignored, and so do glued `-l..`/`-L..`: the runtime is pulled by need, so the libc/libm a
+  recipe asks for is already in the artifact before it asks, and a name we cannot satisfy still
+  lands as a *named* undefined reference at the link rather than going quiet (a real third-party
+  library has its own door — give the `.a` as an input). Lua's own `LIBS=-lm` is why this
+  matters. ⚠ glued only: a bare `-l` refuses, since taking it would eat the next word as a
+  library name and the one after it as an input;
 - an exe link still owing strong symbols pulls the runtime **by need**, archive-fashion — nolibc
   + the am math + the mksys leaf, compiled from the toolchain root and cached under
   `~/.love/cache/moon/` (below), so a set carrying its own `am.o` never meets a twin;
@@ -259,6 +264,20 @@ exists anywhere.
 shim: `love --wake mooncc.image -e "(moon-main (cuup (cup cmdline)))" "$@"`. The whole-cat
 re-eval every compile would otherwise pay (~1.5 s wall) is paid once, at bake — a small-file
 compile drops from ~0.77 s to ~0.02 s, gcc-class invocation latency.
+
+What the shim still pays per compile is the wake and the process: ~56 ms each, measured over
+eight one-function TUs (0.81 s through the shim, 0.37 s for the same eight through one image —
+2.2×). `moon-run` is the door that skips it. It is the same compile as `moon-main` but it
+ANSWERS its status as a charm instead of quitting, so one image compiles again after a compile
+that failed, and a caller who holds the image pays the wake once for a whole build. `moon-main`
+is `(quit (moon-run as))` — every shim above keeps its contract untouched. Objects laid warm
+are byte-identical to the same compile run cold, including the ones laid after a failure;
+test/gate/moon.sh holds both halves.
+
+⚠ `moon-run` traps `'leave`, the u-floor's exit door (a `udie` anywhere in the compile rides it
+out carrying the status), and passes its charm through. Every OTHER condition is a genuine
+internal raise and gets the `cc: internal error:` sentence with status 1 — taking `'leave` for
+one of those would print nonsense over every usage error and flatten its 2 to a 1.
 
 ⚠ The image is binary-specific (anchor-checked) and installs from the same build as `bin/love`
 (strip keeps vaddrs, so the stripped install wakes it); a mismatched pair falls back to a fresh

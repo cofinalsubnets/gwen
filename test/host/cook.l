@@ -131,6 +131,50 @@
                       (+ "$(outs): " (+ dir (+ "/p/%.out: " (+ dir "/p/%.in")))) "\tcp $< $@")) "all")
    _ (ok "static pattern rule builds target" (= 0 <(sh (+ "test -f " (+ dir "/p/y.out")))))
 
+   ; ---------------------------------------------- the BUILTIN implicit rules
+   ; make's own database, which a Makefile never states: lua 5.4 writes recipes for
+   ; three of its 34 objects and leaves the rest to it. ⚠ CC is overridden per-run so
+   ; the test never depends on a host compiler.
+   ; the assertion is on the COMMAND cook issues, not on an object -- so the gate
+   ; needs no host compiler, and it reads the rule's shape (-c -o $@ $<) directly.
+   _ (sh (+ "mkdir -p " (+ dir "/b; echo SRCB > " (+ dir "/b/z.c"))))
+   bi (run-cook (mk `("CC = echo-cc"
+                      (+ "all: " (+ dir "/b/z.o")) "\t@echo BUILTIN-DONE")) "all")
+   _ (ok "builtin %.o: %.c fires" (&& (has bi "echo-cc") (has bi "-c -o") (has bi "z.c")))
+   ; ..and the MATCH-ANYTHING builtins (`%: %.c`, `%: %.o`) must stay OUT: they match
+   ; every target there is, and this resolver does not model the conditions GNU only
+   ; dares them under. with `x.o` on disk, a link target `x` must still be the
+   ; Makefile's own recipe -- not a builtin linking that one object alone.
+   _ (sh (+ "echo O > " (+ dir "/b/lone.o")))
+   ma (run-cook (mk `((+ "all: " (+ dir "/b/lone")) (+ (+ dir "/b/lone: ") (+ dir "/b/lone.o"))
+                      "\t@echo \"MA[mine]\"")) "all")
+   _ (ok "no match-anything builtin hijacks a link" (has ma "MA[mine]"))
+
+   ; -------------------------------------------------- old-style suffix rules
+   ; `.c.o:` IS `%.o: %.c` -- st and every suckless Makefile is written this way, and
+   ; the dot-target drop would otherwise eat it in SILENCE, leaving the builtin above
+   ; to compile the file with default flags instead of the Makefile's own.
+   _ (sh (+ "echo SRCS > " (+ dir "/b/s.c")))
+   _ (run-cook (mk `(".SUFFIXES: .c .o"
+                     ".c.o:" "\tcp $< $@"
+                     (+ "all: " (+ dir "/b/s.o")))) "all")
+   _ (ok "suffix rule .c.o builds the target" (= 0 <(sh (+ "test -f " (+ dir "/b/s.o")))))
+
+   ; ------------------------------------------------------------------ .POSIX
+   ; not decoration: it moves make's DEFAULTS to c99 and -O1, which is where st's
+   ; whole build gets its flags. as defaults, so a file's own CC= still wins.
+   px (run-cook (mk '(".POSIX:" "all:" "\t@echo \"PX[$(CC) $(CFLAGS)]\"")) "all")
+   _ (ok ".POSIX moves CC/CFLAGS" (has px "PX[c99 -O1]"))
+   nx (run-cook (mk '("all:" "\t@echo \"NX[$(CC)]\"")) "all")
+   _ (ok "without .POSIX, CC stays cc" (has nx "NX[cc]"))
+
+   ; ------------------------------------------------- $@ of a PHONY target
+   ; a phony item is a SYMBOL, and an automatic must read as the NAME either way --
+   ; lua's top Makefile is `all: guess` + `cd src && $(MAKE) $@`, and an empty $@
+   ; hands the recursive make no target at all.
+   pa (run-cook (mk '(".PHONY: guess" "all: guess" "guess:" "\t@echo \"PA[$@]\"")) "all")
+   _ (ok "$@ of a phony target is its name" (has pa "PA[guess]"))
+
    ; ------------------------------------------------------------- assignment ops
    ops (run-cook (mk '("a := base" "a += more" "b ?= keep" "b ?= nope"
                         "all:" "\techo \"O[$(a)|$(b)]\"")) "all")

@@ -11,7 +11,7 @@ lush - the love shell, a POSIX command shell 🐚
 
 # SYNOPSIS
 
-**lush** \[**--login**\] \[**-c** *command* \[*name* \[*arg*...\]\] | *script* \[*arg*...\]\]
+**lush** \[**--login**\] \[**-ceux** \[*command* \[*name* \[*arg*...\]\]\] | *script* \[*arg*...\]\]
 
 **kore** **sh** ... (or an **sh** symlink to kore)
 
@@ -25,10 +25,18 @@ The script subset covers pipelines and lists (`| && || ; !`), redirects includin
 
 Command substitution does not fork. A body that only says its piece -- **pwd**, **:**, **true**, **false** -- is taken by a sink this task wears, with no pipe and no child at all; anything else runs in the shell itself with stdout on a pipe a cooperative task drains, so any size flows. POSIX puts the body in a subshell, and forkless there is nobody to copy the state, so lush puts back by hand what a fork would have taken: the working directory, shell variables, functions, positional parameters, `$0`, the `-e -u -x` flags, and the environment. What it does not put back: a job started inside stays the shell's, an fd opened inside stays open, and **umask** and the signal dispositions stand. `exit` inside a body ends the body with that status, as it would in a subshell.
 
+Some commands do not fork either. When a word names a tool whose main rides this very image and PATH's winner for that word *is* the binary already running, lush calls it here instead of exec'ing it: no fork, no exec, no image wake, and the tool answers its exit status as a value (see **kore**(1) on the status charm). The identity test is the point and it is strict: `stat` through the symlink must match `/proc/self/exe`, so one artifact on PATH wearing many names takes the lane, while an *installed twin of our own name* -- same tool, different build -- spawns like anything else. A word with a `/` always spawns; a name PATH resolves to somebody else's binary always spawns. The verdict is taken once per word per session, and it is the simple foreground command only -- pipeline stages still spawn, which is what makes them concurrent.
+
+The list of words that may take it is deliberately short: today, **mooncc**(1). A main only qualifies if running it here is the *same thing* as running it there, and three kinds fail that -- a main that quits (it would end its caller), one holding state a single run owns (a recursive `$(MAKE)`), and one that can block (a spawned `cat` or `sleep` is a child `^C` kills and `kill %1` can name; in here neither is true). The compiler is the one that pays, since a build spends its life calling it. Widening this to the bare coreutil names -- what would make the distro's shadow lane free -- waits on the interrupt and stdin story.
+
+For a caller already in the image there is one more door. `sh-oneline` runs a single line the way a subshell would -- output straight onto the caller's fds, and the state a fork would have copied put back by hand, the same roster the command-substitution paragraph above lists. **cook**(1) uses it for recipe lines, which is what lets a whole `CC=mooncc` build pay one image wake instead of one per translation unit. `exit`, `set -e` and `set -u` all end that line rather than the process.
+
 # OPTIONS
 
 **-c** *command* \[*name* \[*arg*...\]\]
 :   Run *command* and exit. *name* becomes `$0` (default `lush`), the *arg*s the positional parameters. The command may span lines.
+**-e**, **-u**, **-x**
+:   The `set` flags, given at invocation. They bundle with each other and with **-c** in one word: `lush -ec 'cmd'` is what a Makefile's `.SHELLFLAGS` writes, and it is how lush can be the `SHELL` of a make.
 **--login**
 :   A login shell: read */etc/profile*, then *~/.profile*, before anything else. A dash-led `argv[0]` (`-lush`, `-sh`, the mark **login**(1) leaves) is honored too, but the `env -S` shebang usually eats it -- the flag is the reliable door.
 

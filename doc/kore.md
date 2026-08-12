@@ -54,6 +54,16 @@ The file discipline, two shapes:
   uset urev ueach, fs.l's uoct/udirp/udest/ucopy, and proc.l's udur/uwords. `ueach` is the cat
   walk every whole-input tool rides (files or stdin, `-` reads stdin, a miss complains on err
   and the exit code remembers).
+* **the exit door.** A main ANSWERS its status as a charm; it does not quit. A leave from deep
+  inside a walk rides `udie`, which says its sentence and then `uleave` — a scare carrying the
+  status — and `urun` is the driver both faces come back through, flushing the ports and
+  answering the charm. So the seat is the one site that quits (`kore-main` answers, and the
+  tail of kore.l quits with it), and a caller staying in the image lives through a tool that
+  fails: `kore-main` is the in-image door, taking `(link "kore" "ls" "-l")` and answering the
+  status. mooncc rides the same floor with two doors of its own — `moon-run` answers, `moon-main`
+  quits with what it answers (doc/moon.md). ⚠ nothing unwinds through a scare, so a port a tool
+  still holds at the leave is lost, exactly as `quit` lost it. The property is gated in
+  test/gate/kore.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
 * **the nif lane.** fs effects ride host/posix.c (app-glob AI_NIF, no core edit) and its
   `posix_` conventions: an effect op answers () ok | a POSITIVE errno | EINVAL misuse; a value
   op answers the value | (). host/posix.c holds rename symlink readlink chmod chown utime

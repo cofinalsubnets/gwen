@@ -18,7 +18,8 @@
 ; sources beside it -- -nostdlib/-ffreestanding turn that off. errors speak on
 ; err and exit 1; usage exits 2. LAST in the mooncc cat (its own app, doc/moon.md), after
 ; crew/holo/{elf,obj,link}.l and crew/moon/{lex,cpp,parse,gen}.l; rides the
-; u-floor (uread udie). its tail SEAT fires moon-main when mooncc is the program.
+; u-floor (uread udie urun). its tail SEAT fires moon-main when mooncc is the program;
+; moon-run is the same compile ANSWERING its status, for a caller staying in the image.
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""
    (cdir path) (: n (tally path)
@@ -565,9 +566,18 @@
    ; artifact stays loud: -shared, -m.., and -Wl,/-Wa,/-Wp, (their payload is
    ; real arguments; dropping them is the silent no-op wearing a cc face).
    (pfx? a p) (: n (tally p) ((n <= tally a) && (snip a 0 n = p)))
+   ; -lm and its family ride through too, and the reason is particular to us: the
+   ; driver pulls its runtime BY NEED, so the libc/libm/libdl a recipe asks for is
+   ; already in the artifact before it asks. a name we cannot satisfy does not go
+   ; quiet either -- it lands at the link as a named undefined reference, the same
+   ; sentence a missing archive gets -- and a real third-party library still has its
+   ; door: name the .a as an input. -L likewise: we search no library path, and
+   ; saying so by refusing the whole compile helps nobody. ⚠ GLUED only (glu? wants
+   ; a third charm), so a bare `-l` still refuses rather than eating the next word
+   ; as a library name and the word after it as an input.
    (tol? a) ((a = "-pipe") || (a = "-static") ||
              pfx? a "-g" || pfx? a "-O" || pfx? a "-std=" ||
-             pfx? a "-f" ||
+             pfx? a "-f" || glu? a 108 || glu? a 76 ||
              (pfx? a "-W" &&
               !(pfx? a "-Wl," || pfx? a "-Wa," || pfx? a "-Wp,")))
    ; the -nostdlib family: freestanding on any cc's surface -- the driver
@@ -621,17 +631,26 @@
              (tol? a) (flags r c is ds o ins t9 p9 g9 n9 x9 d9)
              ((0 < tally a) && (a 0 = 45)) (udie 2 usage)
              (flags r c is ds o (a >< ins) t9 p9 g9 n9 x9 d9))))
-   ; EVERY cc SAYS ITS SENTENCE, the internal ones too. gen and holo raise noms
-   ; (musttail-not-a-tail, cs-unsaved, link-undef) that reached the reader as a bare
-   ; love debug note -- no cc: prefix, nothing naming the input, and a compiler's own
-   ; spelling to guess at. it goes on HERE and not at the seat: six shims (the -e
-   ; drives, seed's verb table) call moon-main straight, and a compile ends the same
-   ; way through all of them. the pre-checks upstream stay what they are, the better
-   ; sentence for the cases worth naming.
-   (moon-main as)
-    (trap moon-run as
-          (\ a b (udie 1 ("cc: internal error: " + show a + " " + show b))))
+   ; EVERY cc SAYS ITS SENTENCE, the internal ones too: gen and holo raise noms
+   ; (musttail-not-a-tail, cs-unsaved, link-undef) that would otherwise reach the reader
+   ; as a bare love debug note -- no cc: prefix, nothing naming the input. it goes on
+   ; here rather than at the seat so every door below says the same thing.
+   ; moon-run is the IN-IMAGE door: it ANSWERS the status charm, so a caller holding
+   ; this image compiles again after a failed compile instead of dying with it -- the
+   ; warm-compiler lane, where the cat is read once and every cc after it is free.
+   ; ⚠ 'leave is the exit door, not a fault (crew/kore/core.l's u-floor, which a udie
+   ; anywhere in here rides out on): taking it as an internal raise would print a
+   ; nonsense sentence over every usage error and flatten its 2 to a 1.
    (moon-run as)
+    (trap (\ x (: r (moon-cc x) (? (charm? r) r 0))) as
+          (\ a b (? (id? a 'leave) b
+                    (: _ (say err ("cc: internal error: " + show a + " " + show b))
+                       _ (put err 10) _ (flush err) 1))))
+   ; moon-main is the SHIMS' door and quits, exactly as it always has -- the six -e
+   ; drives and seed's verb table call it straight, and a compile ends the same way
+   ; through all of them.
+   (moon-main as) (quit (moon-run as))
+   (moon-cc as)
     ; the default target is the ground we stand on: love-arch (the C boot's pin)
     ; names the running binary's arch, so a native mooncc emits native code and
     ; -t stays what it always was, the CROSS flag. unknown grounds keep x64.
@@ -646,8 +665,8 @@
        ; linker; one exe path is the whole point of having it.
        (? !(two? ins) (udie 2 usage)
           o (? c (? (two? >ins) (udie 2 "cc: -o takes one input")
-                    (: _ (cc-obj <ins o is ds tgt nsi) (quit 0)))
-               (: _ (cc-link ins o is ds tgt pie org dorg nostd nsi) (quit 0)))
+                    (: _ (cc-obj <ins o is ds tgt nsi) 0))
+               (: _ (cc-link ins o is ds tgt pie org dorg nostd nsi) 0))
           ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
           ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT). ⚠ and a
           ; .a is never an OUT: `mooncc a.o libgcc.a` reading as a pair would
@@ -658,12 +677,12 @@
            !(dota? <ins) && !(dota? <>ins) &&
            (c || (!(doto? <ins) && !(doto? <>ins))))
            (: _ (? c (cc-obj <ins <>ins is ds tgt nsi)
-                     (cc-link `(<ins) <>ins is ds tgt pie org dorg nostd nsi)) (quit 0))
-          c (: (go l) (? !(two? l) (quit 0)
+                     (cc-link `(<ins) <>ins is ds tgt pie org dorg nostd nsi)) 0)
+          c (: (go l) (? !(two? l) 0
                          !(dotc? <l) (udie 2 ("cc: not a .c input: " + <l))
                          (: _ (cc-obj <l (obase <l) is ds tgt nsi) (go >l)))
                (go ins))
-          (: _ (cc-link ins "a.out" is ds tgt pie org dorg nostd nsi) (quit 0)))))
+          (: _ (cc-link ins "a.out" is ds tgt pie org dorg nostd nsi) 0))))
 
 ; the SEAT: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the
