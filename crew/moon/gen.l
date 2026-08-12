@@ -4585,6 +4585,9 @@
           (? (member? op lvquiet) [() ()]
              (member? op '(call callr sys)) (: c (filter (\ r9 !(member? r9 (csregs g))) u) [c c])
              (op = 'ret) [((lvret g) + (csregs g)) ()]
+             ; ⚠ v6m's exit is POP-PC, not ret (epi-t16) -- an exit the kit cannot see is an
+             ; exit where nothing looks live, and coal folded straight through it
+             ((op = 'pop) && (id? <>f 'pc)) [((lvret g) + (csregs g)) ()]
              (op = 'jmpr) [u ()]
              (: d (rdsp f) (? (id? d 'bar) 'bar [<d <>d])))))
    ; ⚠ SEEDED with the whole caller-saved file, and that is load-bearing rather than tidy: the
@@ -4675,13 +4678,12 @@
                  !(member? S <d) && !(member? D dfs) &&
                  (!(member? D <d) || (member? <p aluops && id? (nthr p 2) D)) &&
                  !(member? S (peep lot i ())) && !(id? D S))))))
-   ; ⚠ x64 ONLY, and the roster is why: lvout's universe is the x64 files -- lvgp the caller-saved
-   ; gp set, lvret what an x64 exit owes, csregs the x64 borrow -- so its answer on an lr/fp
-   ; target is a different machine's liveness. The fold survived that; the DROP did not, and
-   ; riscv's on-hart egg hung until this line existed. repack and cskeep hold the same line.
+   ; every target: the liveness kit answers for the machine it is on (the rosters take g), so the
+   ; x64-only bail this carried is gone with the reason for it. ⚠ what stands in for it is lvout's
+   ; OWN refusal -- a form rdsp cannot read makes the whole answer 'no and the fold declines the
+   ; function -- which is why enabling a target is safe before its ops are all modelled.
    (coal g fs)
-    (? (arm? g) fs
-     (: lot (lvout g fs)
+    (: lot (lvout g fs)
        ; ⚠ the floor is PROLOGUE GROUND on every target, so it cannot be read off an x64 shape:
        ; pro4? is false on arm and riscv, whose own prologue is longer, and a floor derived from
        ; it opens their bring-up to the fold. 5 clears the widest one; unframe (which drops four
@@ -4706,7 +4708,7 @@
                        (dead9? f i) (rn >l p (i + 1))
                        (two? p) (p >< rn >l f (i + 1))
                        (rn >l f (i + 1)))))
-             (rn fs () 0)))))
+             (rn fs () 0))))
 
    (repack g fs)
     (: slots (peep g 'slots ())
