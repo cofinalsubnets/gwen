@@ -164,4 +164,5 @@
   (find f "\e[38;5;228m" 0)                      ; your hue, respecified on change
   (find f "\r\n" 0)))                            ; frames ride \r\n
 
+(test_fin ())
 (puts "rove: ok")

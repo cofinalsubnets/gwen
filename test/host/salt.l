@@ -106,5 +106,6 @@
  (tablet? (salt 'salt-test-no-such-app))                 ; neither file exists: an empty tablet
  !(salt-all (salt 'salt-test-no-such-app) 'singleton))
 
+(test_fin ())
 (puts "salt: ok")
 (putc 10)

@@ -62,4 +62,5 @@
     (id? (stat f) ()) (id? (readdir d) ())
     (: e (unlink f) (&& (charm? e) (< 0 e)))))
 
+(test_fin ())
 (puts "init: ok") (putc 10)

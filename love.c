@@ -183,7 +183,7 @@ lvm_t lvm_kcall,
  lvm_callk, lvm_scare, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
  lvm_sleep, lvm_donep, lvm_scoop, lvm_hush, lvm_key,
  lvm_await,
- lvm_fgetc, lvm_fungetc, lvm_chug, lvm_fputc, lvm_fputs, lvm_fflush,
+ lvm_fgetc, lvm_fungetc, lvm_chug, lvm_unchug, lvm_inhand, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound0,
  lvm_trayctor, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,   // typed multi-rank arrays
  lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_inner, lvm_outer,
@@ -3108,13 +3108,34 @@ static struct ai *zflush(struct ai*g) {
 // the exported faces (love.h): a host nif consults/drains the read run without
 // knowing the bio shape -- swig's first course rides these.
 uintptr_t ai_io_pending(struct ai *g, struct ai_io *i) {
- struct ai_bio *b = bio_of(g, i);
+ struct ai_bio *b = rbio_of(g, i);
  return bio_rpending(b) ? (uintptr_t)(getcharm(b->rlen) - getcharm(b->rpos)) : 0; }
 uintptr_t ai_io_read_drain(struct ai *g, struct ai_io *i, unsigned char *dst, uintptr_t n) {
- struct ai_bio *b = bio_of(g, i);
+ struct ai_bio *b = rbio_of(g, i);
  if (!bio_rpending(b)) return 0;
  uintptr_t p = getcharm(b->rpos), l = getcharm(b->rlen), k = l - p < n ? l - p : n;
  memcpy(dst, txt(str(b->rbuf)) + p, k);
+ b->rpos = putcharm(p + k);
+ return k; }
+// `unsee` OVER A COUNT: move this port's position inside the run it holds, and answer how many
+// bytes moved -- a short answer IS the refusal, and the caller's only check. n > 0 un-reads
+// (gives back), n < 0 re-reads (takes). It moves the POSITION, so what a give-back returns is
+// whatever the run last gave, not a remembered chug.
+// ⚠ SIGNED BECAUSE RELATIVE DOES NOT COMPOSE. A caller that gave back and then walked on is
+// BEHIND its own position and must step forward again; give-back-only makes that second step a
+// rewind to the run's start, and the reader re-reads the whole stream (bao's `reads`).
+// ⚠ rbio_of, not bio_of: the run BORROWED under a static counts, and that is the whole point
+// -- stdin's seek-back is ai_io_pending, so this is what puts bytes back inside it.
+// ⚠ REACHES ONLY THE CURRENT RUN: a refill replaces rbuf and resets rpos, so the clamp to
+// [0, rlen] is what makes a stale ask answer what is really there instead of trusting n.
+// ⚠ THE RUN ONLY. The pushback byte chug lays in FRONT of it is `unsee`'s to restore.
+uintptr_t ai_io_unread(struct ai *g, struct ai_io *i, intptr_t n) {
+ struct ai_bio *b = rbio_of(g, i);
+ if (!b || !b->rbuf || (b->rbuf & 1)) return 0;
+ uintptr_t p = getcharm(b->rpos), l = getcharm(b->rlen);
+ if (n >= 0) { uintptr_t k = p < (uintptr_t) n ? p : (uintptr_t) n;
+               b->rpos = putcharm(p - k); return k; }
+ uintptr_t want = (uintptr_t) -n, room = l > p ? l - p : 0, k = room < want ? room : want;
  b->rpos = putcharm(p + k);
  return k; }
 // (chug port): everything ALREADY readable, as ONE exact-length text -- the
@@ -3129,7 +3150,7 @@ ai_noinline static struct ai *chug_str(struct ai *g, struct ai_io *i) {
  uintptr_t u = getcharm(i->ungetc_buf) != EOF ? 1 : 0;
  struct ai_port_vt const *vt = i->vt;
  g->io = i;                                   // athand reads it, as readn does
- uintptr_t n = u + (bio_of(g, i) ? ai_io_pending(g, i)
+ uintptr_t n = u + (rbio_of(g, i) ? ai_io_pending(g, i)
                     : vt->athand ? vt->athand(g, ai_iobuf) : 0);
  if (!ai_ok(g = str0(g, n))) return g;
  i = ai_core_of(g)->io;                       // str0 collects: the port may have moved
@@ -3139,7 +3160,7 @@ ai_noinline static struct ai *chug_str(struct ai *g, struct ai_io *i) {
   // the fill splits where the count did: a bio drains its buffer, an at-hand source
   // reads its own text. never a device -- for one, athand answered 0.
   if (n - u) {
-   if (bio_of(g, i)) ai_io_read_drain(g, i, (unsigned char*) d + u, n - u);
+   if (rbio_of(g, i)) ai_io_read_drain(g, i, (unsigned char*) d + u, n - u);
    else vt->readn(g, (unsigned char*) d + u, n - u); } }
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
 
@@ -3150,6 +3171,24 @@ lvm(lvm_chug) {
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
  ai_musttail return Next(1); }
+
+// (inhand port): how many bytes this port holds ready -- the count `chug` would hand over.
+// The borrowed run counts, so a reader can ask whether anyone ELSE has drawn on the port
+// since it last looked, which is the only way to know its own charlist is still the port's.
+lvm(lvm_inhand) {
+ if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
+ Sp[0] = putcharm(iop(Sp[0]) ? (ai_word) ai_io_pending(g, (struct ai_io*) Sp[0]) : 0);
+ ai_musttail return Next(1); }
+
+// (unchug port n): hand back up to n bytes of the run this port already gave out, so a
+// caller that chugged more than it used leaves the rest where the port's position sees it.
+// Answers how many went back -- a short answer IS the refusal (ai_io_unread's ⚠ notes).
+lvm(lvm_unchug) {
+ if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
+ Sp[1] = putcharm(iop(Sp[0]) && charmp(Sp[1]) && getcharm(Sp[1]) != 0
+                  ? (ai_word) ai_io_unread(g, (struct ai_io*) Sp[0],
+                                           (intptr_t) getcharm(Sp[1])) : 0);
+ ai_musttail return Nextp(1, 1); }
 
 struct ai *ai_io_wflush(struct ai *g, struct ai_io *i) { return io_wdrain(g, i); }
 

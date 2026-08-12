@@ -109,4 +109,5 @@
             (: _ (unlink ip) _ (unlink lp) 1)))
         (puts "  (mtools interop skipped: no mdir here)")))
 
+(test_fin ())
 (puts "fat: ok") (putc 10)

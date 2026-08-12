@@ -124,6 +124,12 @@
                  (dedup >bs (? (atom? e) (link b seen) seen)))))
 
    (pand ts) (? (! (two? ts)) 1  (! (two? >ts)) <ts  ('&& >< ts))
+
+   ; ⚠ THE WRAPPER IS ev'S TO REMOVE, not ours. A nom read once could have its accessor
+   ; inlined here, and that is what love/ev.l's read-once refinement already does to the
+   ; whole tree: a lone read of an effectful argument substitutes and the call is gone. A
+   ; second copy in this macro measured 3.5 M on a 32.5 G corpus -- noise -- so the one
+   ; mechanism lives in the compiler, where every caller gets it and not just `@`.
    (bind bs body) (? (two? bs) (link (link '\ (cat (map cap bs) [body])) (map caup bs)) body)
 
    ; --- THE DECISION TREE -------------------------------------------------------
@@ -160,9 +166,12 @@
               ())))
    (nodes x) (? (link? x) (foldl (\ n e (n + (nodes e))) 1 x) 1)
    (flat cs els) (link '? ((catmap (\ c [(pand <c) <>c]) cs) + [els]))
+   ; ⚠ TWO CLAUSES OR MORE, or there is nothing to discriminate: at one clause cpx eats
+   ; ALL of its tests, so factoring would read (? p (? 1 body els) els) -- a vacuous test
+   ; and the else written twice, for nothing. uu's hot sites are exactly that shape.
    (tree cs els)
      (: p (cpx cs)
-        (? (? (two? p) (< (nodes els) 40) ())       ; a common prefix, and an else worth copying
+        (? (&& (two? >cs) (two? p) (< (nodes els) 40))   ; >=2 clauses, a prefix, a small else
            ['? (pand p) (flat (map (\ c [(drop (tally p) <c) <>c]) cs) els) els]
            (flat cs els)))
    _ (:: '@ (\ a

@@ -158,5 +158,6 @@
  ; ... and THAT leg can go red too, so its zero is a measurement as well
  (0 < (peep rd-p0hurtn 'bad 0)))
 
+(test_fin ())
 (puts "rdiff: ok")
 (putc 10)

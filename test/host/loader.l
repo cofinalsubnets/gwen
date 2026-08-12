@@ -55,5 +55,6 @@
         (52 = (from 'zz-fhsprobe 'zz-fhs-pin)))
 (: _ (unlink "out/lib/zz-seatprobe.l") _ (unlink "out/lib/love/zz-fhsprobe.l")
    _ (rmdir "out/lib/love") 0)
+(test_fin ())
 (puts "loader: ok")
 (putc 10)

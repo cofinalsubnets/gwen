@@ -38,12 +38,13 @@ test_filemode: $m
 	      && grep -q "^;; missing an-name-the-book-lacks$$" out/host/.test_filemode.out \
 	      && ! grep -q "^past$$" out/host/.test_filemode.out; } \
 	    || { cat out/host/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
-# test_stdinbuf -- WHAT WE BORROW OF fd 0 IS INVISIBLE, and we borrow two things. A
-# seekable fd 0 reads the device in 4096-byte gulps (love.c's rbio_of) where a pipe still
-# drips one byte at a time, so the first law is that BOTH DOORS ANSWER THE SAME: the bytes
-# our reader has not taken are still there for an in-form (slurp in), and still there for a
-# child that inherits the fd -- the second is what stdin_give's seek buys. The pipe lends
-# its O_NONBLOCK bit instead (`inflag`), and the law for that one is read straight off
+# test_stdinbuf -- WHAT WE BORROW OF fd 0 IS INVISIBLE, and we borrow two things. Both doors
+# read the device in 4096-byte gulps (love.c's rbio_of), so the first law is that BOTH ANSWER
+# THE SAME: the bytes our reader has not taken are still there for an in-form (slurp in), and
+# still there for a child that inherits the fd. A seekable door puts them back with an lseek;
+# a pipe has no rewind, so stdin_hand DELIVERS them down a fresh pipe instead -- which is why
+# the handoff laws below are asked of the PIPE output directly and not only of the diff. The
+# pipe also lends its O_NONBLOCK bit (`inflag`), and the law for that one is read straight off
 # /proc: a child must inherit fd 0 BLOCKING, or it takes an empty pipe for an ended one.
 # The corpus cannot gate any of this; it exists only BETWEEN two ways of being fed.
 test_stdinbuf: $m
@@ -57,14 +58,32 @@ test_stdinbuf: $m
 	          diff $$f.pipe $$f.seek; exit 1; }; done
 	@grep -qF 'rest: [(say out "tail form")' out/host/.test_stdinbuf1.l.seek \
 	  || { cat out/host/.test_stdinbuf1.l.seek; echo "FAIL an in-form (slurp in) lost the remainder"; exit 1; }
-	@grep -qF HANDOFF-TAIL out/host/.test_stdinbuf2.l.seek \
-	  || { cat out/host/.test_stdinbuf2.l.seek; echo "FAIL the exec'd child lost the fd position"; exit 1; }
+	@for w in seek pipe; do grep -qF HANDOFF-TAIL out/host/.test_stdinbuf2.l.$$w \
+	  || { cat out/host/.test_stdinbuf2.l.$$w; echo "FAIL the exec'd child lost the fd position ($$w)"; exit 1; }; done
+	@# ..and the residue is only the FIRST gulp: past it the pumper must splice the rest of the
+	@# pipe, whose writer is still going (200000 bytes against a 64K pipe, so cat really blocks).
+	@{ printf '(exec (L "cat"))\n'; yes HANDOFF-BULK | head -c 200000; } > out/host/.test_stdinbuf4.l
+	@cat out/host/.test_stdinbuf4.l | $m 2>/dev/null | wc -c > out/host/.test_stdinbuf4.n
+	@n=`cat out/host/.test_stdinbuf4.n`; [ $$n -eq 200000 ] \
+	  || { echo "FAIL the pumper delivered $$n of 200000 -- the splice past the residue stopped short"; exit 1; }
 	@printf '(exec (L "cat" "/proc/self/fdinfo/0"))\n' > out/host/.test_stdinbuf3.l
 	@cat out/host/.test_stdinbuf3.l | $m > out/host/.test_stdinbuf3.out 2>&1; \
 	  fl=$$(sed -n 's/^flags:[[:space:]]*//p' out/host/.test_stdinbuf3.out); \
 	  [ -n "$$fl" ] && [ $$(( $$fl & 04000 )) -eq 0 ] \
 	    || { cat out/host/.test_stdinbuf3.out; \
 	         echo "FAIL fd 0 handed on nonblocking (flags $$fl) -- stdin_give did not put the bit back"; exit 1; }
+# ..and the GIVE-BACK rides the same seek: `unchug` puts drained bytes back into the run, so
+# ai_io_pending counts them again and the child inherits fd 0 in front of them. ⚠ THE CONTRAST
+# IS THE LAW: `chug` drains the WHOLE borrowed run, so without the give-back the child inherits
+# NOTHING and with it all ten. It is what an ai_io_unread reaching by bio_of would break -- the
+# run is BORROWED under a static, so only rbio_of finds it, and a heap-port-only door would
+# answer 0 here while every file-port law in test/io.l still passed.
+	@printf 'abcdefghij' > out/host/.test_stdinbuf4.in
+	@p='(: c (see in) _ (unsee in c) t (chug in)'; \
+	  a=`$m -e "$$p k (unchug in 99) (exec (L \"cat\")))" < out/host/.test_stdinbuf4.in`; \
+	  b=`$m -e "$$p (exec (L \"cat\")))" < out/host/.test_stdinbuf4.in`; \
+	  { [ "$$a" = abcdefghij ] && [ -z "$$b" ]; } \
+	    || { echo "FAIL unchug is not in the inherited fd offset (with=[$$a] without=[$$b])"; exit 1; }
 # test_host takes the corpus as a FILE, and that is a SPEED choice, not a necessity:
 # stdin works (test/io.l used to poke `in` and eat a byte of whatever fed the suite --
 # it taps a charlist now), and it is equally strict, quitting 1 on a scare either way.
@@ -78,6 +97,45 @@ test_host: $m
 	@{ $m out/host/.test_host.l </dev/null; echo $$? > out/host/.test_host.rc; } | tee out/host/.test_host.out; \
 	  s=$$(cat out/host/.test_host.rc); \
 	  [ $$s -eq 0 ] && grep -q "tests pass" out/host/.test_host.out
+# test_stdincorpus -- THE ORACLE FOR `reads` OVER STDIN, and nothing else was one. test_host
+# takes the corpus as a FILE (the speed choice above) and test_stdinbuf runs two-line programs,
+# so at the scale where a reader's window arithmetic actually breaks, nothing looked: a `reads`
+# that parsed the corpus's own English COMMENTS as code still printed "3959 tests pass" on the
+# file door and exited 0. It was caught by hand-diffing the doors; this is that diff, kept.
+# ⚠ ALL THREE DOORS, because they are three different readers -- a file and a redirect share the
+# borrowed run (love.c's rbio_of), a pipe has none and drips.
+# ⚠ the summary line carries a DURATION, so that is normalised away and everything else must
+# match byte for byte -- the dots included, since a dropped assert is exactly what this catches.
+# ⚠ AND BOTH LOVES. $m is the EGG lane (LOVE_NO_IMAGE); $(mw) is the BAKED image, which is
+# what `love` is on a user's PATH. They are not interchangeable here: a reader bug that lost two
+# bytes of the corpus showed on the baked lane and NOT on the egg one, so a gate that ran only
+# $m reported ok while the shipped binary read 2286 of 3959 asserts and quit 1.
+test_stdincorpus: $m
+	@echo TEST the corpus down file, redirect and pipe -- egg and baked
+	@cat $t > out/host/.test_sc.l
+	@for L in "$m" "$(mw)"; do \
+	 for d in file seek pipe; do \
+	   case $$d in \
+	     file) $$L out/host/.test_sc.l < /dev/null > out/host/.test_sc.$$d 2>&1;; \
+	     seek) $$L < out/host/.test_sc.l > out/host/.test_sc.$$d 2>&1;; \
+	     pipe) cat out/host/.test_sc.l | $$L > out/host/.test_sc.$$d 2>&1;; \
+	   esac; \
+	   r=$$?; \
+	   [ $$r -eq 0 ] \
+	     || { echo "FAIL [$$L] the $$d door exited $$r"; tail -4 out/host/.test_sc.$$d; exit 1; }; \
+	   grep -q "tests pass" out/host/.test_sc.$$d \
+	     || { echo "FAIL [$$L] the $$d door printed no summary"; tail -4 out/host/.test_sc.$$d; exit 1; }; \
+	   ! grep -q "^;;" out/host/.test_sc.$$d \
+	     || { echo "FAIL [$$L] the $$d door scared"; grep -m3 "^;;" out/host/.test_sc.$$d; exit 1; }; \
+	   sed 's/in [0-9.]* seconds/in Xs/' out/host/.test_sc.$$d > out/host/.test_sc.$$d.n; \
+	 done; \
+	 for d in seek pipe; do \
+	   cmp -s out/host/.test_sc.file.n out/host/.test_sc.$$d.n \
+	     || { echo "FAIL [$$L] the $$d door read a different corpus than the file door"; \
+	          diff out/host/.test_sc.file.n out/host/.test_sc.$$d.n | head -8; exit 1; }; \
+	 done; \
+	 done
+	@echo "  ok   file, redirect and pipe read the corpus identically on both loves"
 # test_front -- the TEST-ONLY FRONTEND: out/host/front links liblove.a (love.c only)
 # and supplies the frontend contract itself, so its port vt can answer WOULD-BLOCK on
 # cue (doc/io.md). ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
@@ -135,7 +193,7 @@ test_embed: host $(ho)/mooncc
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane

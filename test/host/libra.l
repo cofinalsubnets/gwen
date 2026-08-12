@@ -344,5 +344,6 @@
  ; and with no drops in it, -p is the reindenter exactly
  (: s "(: a 1\n   b 2)\n" (s = (libra-fmt (libra-drop s (tablet 0))))))
 
+(test_fin ())
 (puts "libra: ok")
 (putc 10)

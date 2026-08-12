@@ -73,4 +73,5 @@
           (id? (unlink h) ())))
 
    _ (unlink l) _ (unlink b)
+   _ (test_fin ())
    _ (say out "fs: ok") (put out 10))

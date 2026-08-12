@@ -90,5 +90,6 @@
       (<r1 <= gget G_MINHI)                   ; the whole-run peaks cover what we watched
       (<t3 <= gget G_MAJHI))
 
+   _ (test_fin ())
    _ (puts "test/host/gcpause: ok")
  (putc 10))

@@ -73,4 +73,4 @@
     (file? p) (: ds (forms p) (&& (two? ds) (all i-both? ds)))
     (all file? srcs)))
 
-(: _ (puts "infix: ok\n") ())
+(: _ (test_fin ()) _ (puts "infix: ok\n") ())

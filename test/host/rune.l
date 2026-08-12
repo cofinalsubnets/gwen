@@ -768,4 +768,5 @@
         (&& ("(x + (q '(1 2)))" = show (unfix <d))     ; ..rune, splicing the object
             ("(x + q '(1 2))" = infix-spell <d)))))    ; ..infix.l, splicing its spelling
 
+(test_fin ())
 (puts "rune: ok")

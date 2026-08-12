@@ -2484,4 +2484,29 @@
  (id? 'rejected (rejects (\ z (defn 'uu-bad5 'nat '(let x (lam y y) x)))))
  (id? 'rejected (rejects (\ z (defn 'uu-bad6 '(pi x nat 5) '(lam x x)))))  ; a non-type in the codomain
  (id? 'accepted (rejects (\ z (defn 'uu-good '(paths nat 2 2) '(idpath 2))))))
+; --- and the same question asked of CONV, in PAIRS. the six above reach chk/inf; these reach
+; the evaluator, through the one door a wrong answer is silent at: conv applies both closures
+; to a fresh `('nv d)` and compares, so an evaluator that mixed up a captured env or a de
+; bruijn level would ACCEPT an invalid proof while every positive law in this file stayed
+; green. ⚠ EACH NEGATIVE NEEDS ITS POSITIVE: a term that rejects for the wrong reason proves
+; nothing, and the accepted twin is what says conv can still say yes.
+(assert
+ ; the pi codomain, under one binder
+ (id? 'accepted (rejects (\ z (defn 'uu-cv1 '(pi x nat (paths nat x x))
+                    '(the (pi x nat (paths nat x x)) (lam x (idpath x)))))))
+ (id? 'rejected (rejects (\ z (defn 'uu-cv2 '(pi x nat (paths nat x (succ x)))
+                    '(the (pi x nat (paths nat x x)) (lam x (idpath x)))))))
+ ; NESTED binders -- the level law: (paths nat x x) and (paths nat y y) are one shape and
+ ; differ only by WHICH fresh neutral each closure got
+ (id? 'accepted (rejects (\ z (defn 'uu-cv3 '(pi x nat (pi y nat (paths nat x x)))
+                    '(the (pi x nat (pi y nat (paths nat x x))) (lam x (lam y (idpath x))))))))
+ (id? 'rejected (rejects (\ z (defn 'uu-cv4 '(pi x nat (pi y nat (paths nat y y)))
+                    '(the (pi x nat (pi y nat (paths nat x x))) (lam x (lam y (idpath x))))))))
+ ; the sigma codomain takes the same door (conv's sig branch is pi's twin)
+ (id? 'accepted (rejects (\ z (defn 'uu-cv5 '(total2 x nat (paths nat x x))
+                    '(the (total2 x nat (paths nat x x)) (tpair 0 (idpath 0)))))))
+ (id? 'rejected (rejects (\ z (defn 'uu-cv6 '(total2 x nat (paths nat x (succ x)))
+                    '(the (total2 x nat (paths nat x x)) (tpair 0 (idpath 0)))))))
+ ; a constant codomain still has to be compared
+ (id? 'rejected (rejects (\ z (defn 'uu-cv7 '(pi x nat bool) '(the (pi x nat nat) (lam x x)))))))
 (hear 0)
