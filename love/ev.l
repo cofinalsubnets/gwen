@@ -76,6 +76,53 @@
        t))))
    (foldl add #() (catmap keys (books ())))))
 
+; dis: the emission interface's DUAL -- a compiled thread read back as (nom operand..)
+; rows, in order, ending at the ret family. it sits beside feels for the same reason it
+; can exist at all: the rows are built from noms that die at birth (egg.l mops every
+; lvm_* key, and peek itself), so the WORDS folded here are the only door left open.
+; discrimination is the image codec's own law (love.c img_encode): a word matching the
+; op roster is an instruction, what follows one is its operands -- an odd word a charm
+; (a real value, safe to answer), anything else 'x (a raw index, a jump target, a heap
+; quote: never handed out, never netted). an ASSOC, never a tablet -- pin would HASH a
+; raw code word (the spq ⚠). a cur wrapper opens at cell 2; an unknown word at the door
+; (a native cell) answers (). the reader is the splice JIT (doc/moon-regalloc.md, the
+; splice client): a composable segment is a dis prefix whose every row it can say.
+(: dis (:
+   kur (peek 0 (+))
+   ret0 (peek 1 cap)
+   (lvmk? k) (= "lvm_" (snip (string k) 0 4))
+   ; the roster: every lvm_-named book entry, plus every nif's code slots -- iap embeds
+   ; those bare (feels' opof, the same guarded peeks), so a thread carries them as ops.
+   (add rs k) (: v (gv k gone)
+    (? (id? v gone) rs
+       (lvmk? k) ((v >< k) >< rs)
+       (charm? v) rs
+       (: r1 (? (id? ret0 (peek 1 v)) (((peek 0 v) >< k) >< rs) rs)
+          (? (id? kur (peek 0 v) && id? ret0 (peek 3 v)) (((peek 2 v) >< k) >< r1) r1))))
+   rows ((kur >< 'lvm_cur) >< (foldl add () (catmap keys (books ()))))
+   (look w rs) (? (atom? rs) () (id? w <<rs) ><rs (look w >rs))
+   (fin? nm) (? (id? nm 'lvm_ret) 1 (id? nm 'lvm_tap) 1 (id? nm 'lvm_tapn) 1 0)
+   (opd w) (? (charm? w) w 'x)
+   (opds f i n) (? (n = 0) (() >< i)
+    (: w (peek i f)
+     (? (look w rows) (() >< i)
+        (: r (opds f (+ i 1) (- n 1)) (((opd w) >< <r) >< >r)))))
+   (walk f i n) (? (n = 0) ()
+    (: w (peek i f) nm (look w rows)
+     (? (nil? nm) ()
+        (fin? nm) `(`(nm))
+        (: r (opds f (+ i 1) n)
+           ((nm >< <r) >< (walk f >r (- n 1)))))))
+   ; termd?: a walk is only a disassembly if it REACHES a ret-family terminator. a walk
+   ; that runs dry (an unreadable op -- a glazed native cell, a shape a later op leaves
+   ; the straight line on) answers () rather than a malformed headless stub. the contract:
+   ; () or a ret-terminated row list, never a fragment. a cur cell opens at cell 2.
+   (termd? rows) (? (atom? rows) 0 (atom? (cup rows)) (fin? (caap rows)) (termd? (cup rows)))   ; fin? takes the row's HEAD nom
+   (ok rows) (? (termd? rows) rows ())
+   (\ f (? (charm? f) ()
+           (id? kur (peek 0 f)) (: b (ok (walk f 2 4096)) (? (atom? b) () (`('lvm_cur) >< b)))
+           (ok (walk f 0 4096))))))
+
 (:- (\ x (:
  c (sco 0 `(()) ())
  y (feel c (opfix x))    ; opfix (factor sigils), feel (desugar) -- ev = the deserialized-data lane
