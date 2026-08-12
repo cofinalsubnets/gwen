@@ -24,13 +24,14 @@ value sit in a register across this range?* — each with its own license and pr
 3. **homes and rides** — param seats under the 'shadow/ride policies (the pp pricing),
    int homing under canonical extension, unhome renaming after the fact.
 4. **the cs pool** — callee-saved homes for depth>=2 loop locals, borrows, d128 pairs.
-5. **the param grants** — pcs (pmin-gated, dirty-load priced via nrac) and swcs
-   (shrink-wrap, pminp, dual epilogues).
+5. **the param grants** — pcs (pmin-gated, dirty-load priced via nrac). Its second flavor
+   (swcs: shrink-wrap, pminp, dual epilogues) retired 2026-08-12, rung 3's first half.
 
 Plus their supporting cast: the 17-pin rgreset roster, the regen dance (build twice
 under policy, deopt, restore snapshots), the choice guard chain, and the recovery
 peepholes cleaning slot traffic after the fact. The marginal rung got expensive —
-shrink-wrap was the arc's heaviest machinery and landed one grant in love.c — and the
+shrink-wrap was the arc's heaviest machinery and landed one grant in love.c, which rung 3
+later priced at 48 bytes and deleted — and the
 measured remainder (**79,538 B of frame shuffle, 76.6% of the 103,839 B gap vs gcc** —
 the estimate that bucket once carried was ~65-70 KB; plus the uncoalesced copies and the
 widening churn; dynamically the ~22% slot-mov bucket; the vmsplice probe's
@@ -264,10 +265,21 @@ probe cost twenty minutes to find out.
   1,083 `mov r4,sp` pairs the scan never bars on. The binary held 96 bare rbp movs against
   its 1,083 — the tell was there and was read as a finding instead of as a bug. Validate a
   probe against the thing it models, not only against its own totals.
-* **rung 3, retirement one.** Promotion now does generically what the param grants do
-  specially: DELETE pcs, swcs, pmin, pminp, nrac, the dual-epilogue sibs flavor — param
-  spill slots promote like any slot. First negative-LOC milestone; the A/B must show
-  the granted fns hold their wins.
+* **rung 3, retirement one. HALF CLIMBED 2026-08-12** (the regalloc ledger carries the payload) —
+  the premise was that promotion does generically what the param grants do specially, so both
+  could go. Ablation split them, and the split is the finding: **`swcs` and its cast are DELETED**
+  (shrink-wrap, `pminp`, `cgitemx`, `swre`, the region split in `build`, four `g` slots, and the
+  dual-epilogue flavor of `sibs` — two parameters threaded through six recursive calls and three
+  locals recomputed per form, program-wide, for one function's benefit). It cost **48 bytes** of
+  `.text` and nothing dynamic, and it is **gen.l 8,125 → 8,012 (−113)**, the first negative-LOC
+  milestone.
+  ⚠ **`pcs` is REFUSED and the arc should stop expecting it.** It ablates to **+1,004 B** (+0.31%)
+  and **zero** corpus instructions — promotion does not recover those bytes, so rung 3's premise
+  is simply false for this half. **The two differ by 42× per line** (0.42 B/line against 17.6),
+  which a rung named for a mechanism CLASS could not have shown: price the members, not the class.
+  The refusal lifts when promotion covers the bytes, not before. (An interleaved cycles read puts
+  `pcs`-off 0.4-2.0% faster in four runs, but with instruction count flat that is layout, and the
+  box was carrying two other sessions — recorded, not relied on.)
 * **rung 4, coalescing. CLIMBED 2026-08-12, AHEAD OF RUNG 3** (the regalloc ledger carries
   the payload) — a copy whose source was defined by the form before it and dies at the copy
   folds into that def. Corpus insns **−1.76%**, `.text` **−1.83%**, +38 lines; the dynamic

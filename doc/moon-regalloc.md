@@ -228,6 +228,8 @@ Learned by measuring, several times each; check a new lever against these before
    COLD-PATH wraps, dynamically right for the early-out profile; the static
    8 KB they represent is already-paid-for at runtime, and beating them needs
    a frequency signal (PGO), not a better static model.
+   SHRINK-WRAP RETIRED 2026-08-12 (rung 3's first half, the ledger): it was worth
+   48 bytes and one grant, against 113 lines and a per-form cost in `sibs`.
 3. **Compare staging want-hints** — HELD for the allocator. Landed for the call-free
    side 2026-08-10: cbranch's left aims at its park before evaluating, so member loads
    deliver and the bridge mov dies. What remains is the callish side (the sp cell across
@@ -236,8 +238,9 @@ Learned by measuring, several times each; check a new lever against these before
    Do not build it separately.
 4. Recorded small residues: leaf sp-fn stldw coverage; a non-positional fallback home
    (mag_cmp's g1 loses its seat and stays slotted); cs-borrow park elision (params on
-   cs regs landed pmin-gated 2026-08-11, the ledger; the fleet's share waits on
-   shrink-wrap); arm64 x19+ cspool (empty there today); register-binding splice
+   cs regs landed pmin-gated 2026-08-11, the ledger; the fleet's share went with
+   shrink-wrap, retired 2026-08-12 — it needs a frequency signal, not more machinery);
+   arm64 x19+ cspool (empty there today); register-binding splice
    depth (map_probe's &-decline); d128 params ("a wide arg: not carried"); variable
    index±k rebase; narrow cmp fusion (632 sites, needs cc-aware licensing); the
    3-address dance emission (encoder territory — the reverted lea-fusion physics, only
@@ -973,6 +976,55 @@ accumulator's own register in `(add rX rX rY)`, and the seat operand — which i
 are actually about — is unmoved in every one. `dv` re-anchored off "the park reads through" onto
 `(div r1 r6 r5)`, since there is no park left at all. Gates: test_slow, test_moon, moon-stage (20
 sigs), test_fixpoint byte-identical, vmret (307 lvm_* ret-free), test_raw/drv/libc/kore/clay.
+
+2026-08-12 · SHRINK-WRAP RETIRED (rung 3, the first half) — the arc's heaviest mechanism, priced
+by ablation and then deleted. Turning the `swcs` guard off costs **48 bytes** of love.o `.text`
+and 12 static insns, and nothing whatever on the corpus. Forty-eight. The plan page had already
+written the reason down without pricing it — shrink-wrap "landed one grant in love.c" — and one
+grant is what 48 bytes looks like from the emission side.
+
+Gone with it: `pminp` (pmin's call-carrying twin, so the wrap could amortize on the cheapest path
+that actually calls), `cgitemx` (a `cgitems` that also answers its final env, which existed solely
+so region 1's decls stayed visible to region 2), `swre` (the env rewrite that re-seats the params
+across the split), the statement-level region split inside `build`, the wrap label with its
+save/reload pair, four `g` slots (`swcs` `swat` `swlab` `epi0`), and — the part that reached
+furthest — the DUAL-EPILOGUE flavor of `sibs`: two parameters (`sj`, the split; `sw`, the
+crossing flag) threaded through all six recursive calls, with `ejc`/`elc`/`sw2` recomputed at
+every form of every function on every target, so that a tail call BEFORE the wrap could take the
+plain epilogue and one after it the long one. That cost was paid per-form, program-wide, for one
+function's benefit. **gen.l 8,125 → 8,012 (−113)** — the arc's first negative-LOC milestone.
+⚠ the deletion is byte-identical to the guard-off ablation (324,920 B / 74,402 insns both ways),
+which is the check that says the mechanism came out whole and nothing else came with it.
+
+⚠ AND THE OTHER HALF IS REFUSED, on its own measurement. `pcs` — the pmin-gated cs-seat grant —
+ablates to **+1,004 B** of `.text` (+0.31%) and **zero** corpus instructions: 39.466 G with it and
+39.466 G without, identical to the digit, against a run-to-run spread of ±5 M that bounds what
+this instrument can even see. So promotion does NOT do generically what this grant does
+specially, which was rung 3's entire premise. Deleting it regresses the size axis and pays on no
+other; under "pays somewhere, regresses nowhere" that is a refusal, and it holds until promotion
+covers those bytes.
+
+**The two halves differ by 42× per line and that is the whole finding.** `swcs`: 113 lines for 48
+bytes, 0.42 B/line. `pcs`: ~57 lines (`pmin`, `nrac`, the grant block, the `pc0` threading;
+`pslots`/`nreads` stay, `pp` reads them) for 1,004 bytes, 17.6 B/line. A rung named for a
+mechanism CLASS hid that spread — the two grants were listed in one breath on the plan page and
+priced in one breath, and they are not one thing. Price the members, not the class.
+
+⚠ what is NOT settled is the clock. Four interleaved runs put `pcs`-off between 0.4% and 2.0%
+FASTER on cycles, medians and minima agreeing in direction every time (base vs both −1.24%/−1.52%;
+base vs pcs −0.96%/−1.98%; swcs-deleted vs +pcs-off, 15 rounds, −1.26%/−0.43%). But the
+instruction count is flat, so that is a layout reading, not a mechanism reading — and the box
+carried two other sessions' gates throughout, with the baseline itself drifting 14.874 → 15.219 G
+across three runs. Interleaving defends against drift within a run and nothing defends against a
+1% claim built on flat insns. It is recorded, it is not the basis of any decision here, and it is
+the one thing that could still overturn the refusal on a quiet machine.
+
+Laws: none added — `law.l` and `stage.l` type `sibcall`, the outer two-argument entry, whose
+signature is unchanged; `sibs` is internal, so the musttail contract laws (a marked ret-position
+call leaves as a jump, `musttail-not-a-tail`, the whole-fn `musttail-escape` decline) hold as
+written and are exactly the laws that cover the deletion. Gates: test_slow, test_moon (its
+"guaranteed sibcalls" leg is the contract this touches), test_gen, test_clay, test_drv, vmret
+(307 lvm_* ret-free), `make test` host + love0 ×2.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —

@@ -3795,7 +3795,7 @@
                        t2 (elabs fs t ej)
                        (? (tally (keys t2) = n) t2 (elabsx fs t2 ej)))
    (butret es) (? !(two? >es) () (<es >< butret >es))          ; the epilogue's restore forms (the ret drops)
-   (sibjmp g f ejx)                                 ; ejx = the epilogue this tail's REGION owes (shrink-wrap splits them)
+   (sibjmp g f ejx)                                 ; ejx = the epilogue this tail owes, restores first
     ; ⚠ riscv takes the DIRECT tail call through the park too, where the other targets ride `jmp`:
     ; a tail call is the one jmp that leaves its function, and riscv's jal reaches only +-1MB
     ; (rv-jal-range). so it borrows `la`'s reach (+-2GB) and the same t4 park the INDIRECT lane
@@ -3819,30 +3819,23 @@
                 (? (two? h && (<>h = <>>>f)) (skiprel g >fs hs)
                    (member? <>f (peep g 'pool0 ())) (skiprel g >fs hs)
                    fs)))))
-   ; sj = the shrink-wrap split, [ej0 el0 wl] or (): before the wrap label a tail owes the
-   ; PLAIN epilogue (region 1 never saved the seats), after it the long one -- sw tracks the
-   ; crossing. no split: sj (), every region reads ej/el.
-   (sibs g fs lw el hs ej crf sj sw)
+   (sibs g fs lw el hs ej crf)
     (? !(two? fs) ()
        (: f <fs r >fs
-          sw2 (? (sw || !(two? sj)) sw
-                 (two? f && (<f = 'label) && id? <>f (nthr sj 2)))
-          ejc (? (two? sj && !sw2) <sj ej)
-          elc (? (two? sj && !sw2) <>sj el)
           lw2 (? (two? f && (<f = 'lea) && (<>>f = 'r4)) 1 lw)
           cand (!lw2 && two? f && (((<f = 'call) && two? >f) ||
                                      ((<f = 'callr) && id? <>f <>crf)))
           rr (? cand (skiprel g r hs) r)
-          (? (cand && epim? rr ejc)
-              (sibjmp g f ejc + sibs g (drop (tally ejc) rr) () el hs ej crf sj sw2)
-             (cand && lbl-epi? rr ejc)
-              (sibjmp g f ejc + sibs g rr () el hs ej crf sj sw2)
-             (cand && (: nx <rr (two? nx && <nx = 'jmp && peep elc <>nx ())))
-              (sibjmp g f ejc + sibs g >rr () el hs ej crf sj sw2)
-             (cand && lbl-jmp? rr elc)
-              (sibjmp g f ejc + sibs g rr () el hs ej crf sj sw2)
+          (? (cand && epim? rr ej)
+              (sibjmp g f ej + sibs g (drop (tally ej) rr) () el hs ej crf)
+             (cand && lbl-epi? rr ej)
+              (sibjmp g f ej + sibs g rr () el hs ej crf)
+             (cand && (: nx <rr (two? nx && <nx = 'jmp && peep el <>nx ())))
+              (sibjmp g f ej + sibs g >rr () el hs ej crf)
+             (cand && lbl-jmp? rr el)
+              (sibjmp g f ej + sibs g rr () el hs ej crf)
              (: _ (? (must? f) (scare 'musttail-not-a-tail [(g 'fn) f]) 0)   ; a marked call is OWED its jump
-                (f >< sibs g r (? (two? f && member? <f '(call callr raw)) () lw2) el hs ej crf sj sw2)))))       ; raw: a builtin splice consumes its address like a call
+                (f >< sibs g r (? (two? f && member? <f '(call callr raw)) () lw2) el hs ej crf)))))       ; raw: a builtin splice consumes its address like a call
    ; -- the musttail contract: a PRE-slotted ret (clay's (ret e PRE)) marks its call --
    ; (call F must) / (callr PK must) -- and sibs spells the marked jump or SCARES
    ; (musttail-not-a-tail; a whole-fn decline musttail-escape) instead of falling back to a
@@ -3859,10 +3852,7 @@
    (sibcall g fs) (? (peep g 'fesc () || v6m? g)   ; v6m: the pop-pc epilogue can't restore lr for a tail-jmp, so no sibcall (deferred optimization)
                      (: _ (? (anymust? fs) (scare 'musttail-escape (g 'fn)) 0) fs)
                      (: ej (peep g 'epi epi)
-                        e0j (peep g 'epi0 ())
-                        wl (peep g 'swlab ())
-                        sj (? (two? e0j && wl) [e0j (elabsx fs (tablet 0) e0j) wl] ())
-                        (sibs g fs () (elabsx fs (tablet 0) ej) (peep g 'homes ()) ej ['callr (pkr g)] sj ())))
+                        (sibs g fs () (elabsx fs (tablet 0) ej) (peep g 'homes ()) ej ['callr (pkr g)])))
 
    ; -- FRAME ELISION: a fn never needs the frame LINK (the entry push/mov, the sp-restore pair at
    ; every exit), only its SLOTS. the slots re-address off sp: keep (sub sp K9) with K9 = K + the
@@ -6391,10 +6381,6 @@
      'csbu ()    ; ...and the seats a build took (the grant shrinks to the use)
      'saro ()    ; ...and the spill-around roster (vmcflush reloads its pins)
      'pcs ()     ; the param cs-seat grant ((gpi reg)..; the shadow spill reads it)
-     'swcs ()    ; the SHRINK-WRAP grant ((name reg slot gpi)..; build splits on it)
-     'swat ()    ; ...its statement index (region 1 ends there)
-     'swlab ()   ; ...the wrap label build minted (sibs flips its epilogue there)
-     'epi0 ()    ; ...region 1's plain epilogue (sibs matches pre-wrap tails on it)
      'homes ())  ; non-leaf home set (call-fixed + sibs read it)
    ; ...and their ARMED state: a regen build homes locals (lh9, lpick's map)
    ; and wraps per-call off the liveness (av9, alive's answer)
@@ -7214,27 +7200,6 @@
                            (member? k '(ret jmpr)) (go >l 'dead (mnu mn cur))
                            (go >l cur mn))))))
            (go fs 0 big))
-       ; pmin over the CALL-CARRYING paths only (a zero-call end is region 1, free by
-       ; construction): the wrap must amortize on the cheapest path that actually calls
-       (pminp fs)
-        (: best (tablet 0) big 1000000
-           (mnu m c) (? (id? c 'dead || c = 0) m (? (c < m) c m))
-           (bpin lab c) (? (id? c 'dead) ()
-                           (: b (peep best lab big) (? (c < b) (pin best lab c) ())))
-           (go l cur mn)
-            (? !(two? l) (mnu mn cur)
-               (: f <l
-                  (? !(two? f) (go >l cur mn)
-                     (: k <f
-                        (? (k = 'label)
-                            (go >l (: b (peep best <>f big)
-                                      (? (id? cur 'dead) b (? (cur < b) cur b))) mn)
-                           (member? k '(call callr)) (go >l (? (id? cur 'dead) 'dead (cur + 1)) mn)
-                           (k = 'br) (: _ (bpin <>>f cur) (go >l cur mn))
-                           (k = 'jmp) (: _ (bpin <>f cur) (go >l 'dead (mnu mn cur)))
-                           (member? k '(ret jmpr)) (go >l 'dead (mnu mn cur))
-                           (go >l cur mn))))))
-           (go fs 0 big))
        (pslots env acc)                             ; the homable params' PASS-1 frame slots
         (? !(two? env) acc
            (: e2 <env
@@ -7263,50 +7228,10 @@
                       (: _ (pin t <>>>f ()) (go >l (n9 + 1)))
                      (go >l n9))))
            (go fs 0))
-       ; cgitems that also answers its final env: the shrink split needs region 1's decls
-       ; visible to region 2
-       (cgitemx env9 items acc)
-        (? !(two? items) [acc env9]
-           (: it <items
-              (? (<it = 'decl)
-                 (: r (cgdecl g env9 <>it)
-                    (? (bad? r) 'bad (cgitemx <>r >items (acc + <r))))
-                 (<it = 'sdecl)
-                 (: r (cgsdecl g env9 <>it)
-                    (? (bad? r) 'bad (cgitemx <>r >items (acc + <r))))
-                 (: r (cgstmt g env9 it)
-                    (? (bad? r) 'bad (cgitemx env9 >items (acc + r)))))))
        (build sp0)                                  ; assemble prologue + body + epilogue for a spill result
         (? (bad? sp0) 'bad
            (: _ (bldreset g)
-              sw (peep g 'swcs ())
-              body
-              (? !(two? sw) (cgitems g <>sp0 <><>>>f ())
-                 ; the SHRINK WRAP: region 1 runs with params in their slots and the plain
-                 ; epilogue; at the split the wrap saves the seats, loads them FROM the slots,
-                 ; and flips the epilogue -- region 2 rides the seats wrap-free, and only
-                 ; paths that reach the wrap ever pay it. sibs splits its match on the label.
-                 (: its <><>>>f k (peep g 'swat 0)
-                    (tkn l n9) (? ((n9 < 1) || !(two? l)) () (<l >< tkn >l (n9 - 1)))
-                    b1x (cgitemx <>sp0 (tkn its k) ())
-                    (? (bad? b1x) 'bad
-                       (: wl (nlab g ".sw")
-                          e0 (peep g 'epi epi)
-                          sv (map (\ e9 ['st 'r4 (nslot g 8) (nthr e9 1)]) sw)
-                          _ (pins g 'epi ((map (\ f9 ['ld (nthr f9 3) 'r4 (nthr f9 2)]) sv) + e0)
-                                   'epi0 e0 'swlab wl)
-                          lds (map (\ e9 ['ld (nthr e9 1) 'r4 (nthr e9 2)]) sw)
-                          (swre env9) (? !(two? env9) ()
-                             (: e2 <env9
-                                m (: (fnd l9) (? !(two? l9) ()
-                                                 (id? <<l9 <e2) <l9
-                                                 (fnd >l9))
-                                     (fnd sw))
-                                ((? (two? m) [<e2 ['reg (nthr m 1)] <>>e2] e2) >< swre >env9)))
-                          _ (vmflush g)
-                          b2 (cgitems g (swre <>b1x) (dropn its k) ())
-                          (? (bad? b2) 'bad
-                             (<b1x + (['label wl] >< (sv + lds)) + b2))))))
+              body (cgitems g <>sp0 <><>>>f ())
               (? (bad? body) 'bad
                  (: frame (peep g 'off 0 + 15 & -16)
                     (? (arm? g)
@@ -7629,7 +7554,6 @@
        (regen hp st)
         (: lh9 <st lp9 <>>st cs9 (nthr st 3)
            pc0 (peep g 'pcs ())                     ; the param cs grant, captured across fnreset
-           sw0 (peep g 'swcs ()) sk0 (peep g 'swat ())   ; ...and the shrink-wrap grant
            e0 (peep g 'epi epi)
            ; the borrow offer: the cs seats the homes left, when some loop licenses a
            ; callish keep (wb) -- granted whole, then shrunk to what a build took
@@ -7637,14 +7561,13 @@
            _ (pins g 'lobar () 'lonone ())
            (att k9 bor9)
             (: lp2 (lp9 + filter (\ r9 (member? r9 tpool && !(member? r9 lp9)))   ; the granted
-                           (map (\ e9 (homereg <e9)) pc0 +   ; params' homeregs rejoin the pool
-                            map (\ e9 (homereg (nthr e9 3))) sw0))
+                           (map (\ e9 (homereg <e9)) pc0))   ; params' homeregs rejoin the pool
                _ (pins (fnreset g) ; the attempt starts from the clean record at ir1's accumulator snapshot
                   'n n0 'strs strs0
                   'pool0 lp2 'pool lp2)
                _ (rgset g lh9 av au)
                _ (pin g 'csbor bor9)
-               _ (pins g 'pcs pc0 'swcs sw0 'swat sk0)
+               _ (pin g 'pcs pc0)
                ; the callee-saved homes AND borrows: one slot each past the r3 cell, stored by
                ; the prologue (g 'cssv) and reloaded on every exit -- the epilogue PIN carries
                ; the loads through each ret and sib splice, and unframe re-addresses them like
@@ -7725,47 +7648,11 @@
                        <pg)
                     ())
              _ (pin g 'pcs pcs)
-             ; the SHRINK-WRAP grant, for the early-out fns pmin declines: region 1 (the
-             ; call-free statement prefix, the fast paths) keeps params in their slots and
-             ; pays nothing; the wrap seats them where the callish suffix begins. barred by
-             ; goto/lbl (a cross-region jump skips or re-runs the wrap) and granted only
-             ; where nothing else was (pp's homes and the pmin grant keep their fns).
-             (gol? x) (? !(two? x) () (member? <x '(goto lbl)) 1 (gol? <x || gol? >x))
-             (wcl l) (? !(two? l) () (wc? <l || wcl >l))
-             (wc? x) (? !(two? x) ()                ; a call outside ret position (a tail costs nothing)
-                        (id? <x 'ret)
-                         (: e (? (two? >x) <>x ())
-                            (? (two? e && id? <e 'call) (wcl >e) (wc? e)))
-                        (id? <x 'call) 1
-                        (wc? <x || wc? >x))
-             its9 <><>>>f
-             sk (: (go9 l i) (? !(two? l) () (wc? <l) i (go9 >l (i + 1)))
-                   (go9 its9 0))
-             nx2 (: (go9 l c9 n9)                   ; exits at-or-past the first call: the wrap's reloads
-                     (? !(two? l) n9
-                        (: k9 (? (two? <l) <<l ())
-                           (go9 >l (? (member? k9 '(call callr)) 1 c9)
-                                (? (c9 && member? k9 '(ret jmpr)) (n9 + 1) n9))))
-                    (go9 ir1 () 0))
-             ; only where pp declined: a pp fn's wrapped homes are DYNAMICALLY right for the
-             ; early-out profile (registers on the hot fast path, wrap movs only on the cold
-             ; call paths) -- both cs flavors measured dynamic regressions displacing them.
-             ; here region 1 is the pre-rung emission unchanged, so nothing can lose.
-             swcs (? (hm && !wb && !pp && !(two? pcs) && (0 < nh) &&
-                      (nh <= tally free9) && (charm? sk && (0 < sk)) &&
-                      !(gol? its9) && (1 < pminp ir1) && (nh * (2 + nx2) < 2 * nra))
-                     (: pg (homefold g params 0 [() free9]
-                            (\ a2 i9 p9 (? (homable? <>p9 && two? <>a2)
-                                           [([<p9 <<>a2 (poff9 <p9 <>sp1) i9] >< <a2) ><>a2]
-                                           a2)))
-                        <pg)
-                     ())
-             _ (pins g 'swcs swcs 'swat sk)
              ; the array leg licenses its own regen: element pins are priced by neither
              ; nr (param reads) nor the homes -- a non-empty universe is the pay; a callish
              ; loop (wb) licenses too, so its keep can take borrowed cs seats
-             (? (two? pcs || two? swcs || pp || lh || two? au || (wb && two? av && two? <>>av))
-                (regen (? (two? swcs) () (two? pcs || pp) 'shadow ()) st0) ir1)))
+             (? (two? pcs || pp || lh || two? au || (wb && two? av && two? <>>av))
+                (regen (? (two? pcs || pp) 'shadow ()) st0) ir1)))
        ; ⚠ deadlab and repack join unframe in the POST-CHOICE slot and must never touch the ir1
        ; the rankers read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis,
        ; and the rankers price param slots BY BUILD OFFSET (nreads/nrac/pslots), so a packed ir1
