@@ -322,9 +322,11 @@ probe cost twenty minutes to find out.
   beyond bad-shape bail. ⚠ its entry condition was "after rung 3 proves the engine on the
   easier input" and that was wrong: rung 3's remaining half is BLOCKED ON rung 5, not the
   reverse (the joint above). Rung 5 inherits `pcs` as a mechanism to retire.
-  **The cs file is the first increment** — promotion's roster is caller-saved only, so an
-  interval crossing a call cannot hold a register today, and that is both what `pcs` hand-serves
-  for params and what leaves the frame-mov bucket untouched by three copy-folding rungs.
+  ⚠ **it must be the EMISSION REWRITE, not an increment on `repack`** — the call-crossing class
+  was built on cs seats twice and refused twice (the ledger carries both). Retrofitting a cs seat
+  post-build can only ever copy the store's already-assigned caller-saved source, so the rewrite
+  is one-for-one plus a save and a reload per exit. Under vreg emission the source IS the vreg the
+  allocator seats, so no copy exists. That is what the rung buys and no patch to `repack` can.
 * **rung 6, retirement two.** DELETE the vmap, the shadow/ride policies, unhome, the
   pricing walks, most of the rgreset roster. opool survives only as the register file's
   name; cskeep stays as armor; stage.l re-types the shorter chain.

@@ -1078,9 +1078,35 @@ frame object in love.c by why it did NOT take a register — 5,216 objects, 14,7
 **The cs-file class is the single largest bucket and it is 2.7× what promotion currently
 captures.** `noseat-call` is exact rather than inferred: a call defines the whole caller-saved
 file, so a call anywhere in `[lo,hi]` GUARANTEES `pfree?` refuses every seat — those 1,696
-objects are refused BY the call and by nothing else. That is rung 5's first increment priced
-before a line of it was written, and it is the same finding the `pcs` probe reached from the
-other end: the capability missing everywhere is a seat that survives a call.
+objects are refused BY the call and by nothing else.
+
+⚠⚠ **AND THAT BUCKET IS A TRAP — the class is ALREADY REFUSED** (the coalescing entry above
+carries the verdict), which this census cannot see and which reading it as a work-list will
+rediscover. It was rediscovered: the pass was built a second time on 2026-08-12 off this very
+table, and reproduced the original verdict to the sign. Threshold sweep on `touches >
+M·(1+exits)` — M=2 **+715 insns**, M=3 **+269 insns for −994 B**, M=5 **+102 for −542 B**. That
+IS the refusal's own sentence in numbers: "no pricing gate repairs that; a gate tight enough to
+be safe admits nothing." Reverted, again.
+
+**Why the census over-reads, stated so the third attempt does not happen.** It counts where the
+traffic IS; it cannot count what a lever BANKS. A cs seat rewrites a frame touch into a reg-reg
+mov ONE FOR ONE and adds a save plus a reload per exit, because **a cs seat can never be the
+store's source — sources are caller-saved**. The lvgp class pays precisely because its seat CAN
+be the source (`pseat` tries `pf`, the first store's own register, first) and the store then
+self-movs and drops. Same bucket, opposite economics, and the touch count is blind to the
+difference.
+
+⚠ **But the refusal is a property of RETROFITTING, not of cs seats** — and that is the new thing
+this repeat bought, because it says which rung dissolves it. `repack` runs post-build, where the
+store's source is ALREADY an assigned caller-saved register, so a cs seat can only ever be a copy
+of it. Under rung 5's vreg emission the store's source is a VREG the allocator assigns — it can
+be the cs register itself, and no mov exists to drop. **So the call-crossing class is not
+reachable by any patch to `repack`, and is reachable by rung 5 proper.** That is the argument for
+doing rung 5 as the emission rewrite it was specified as, rather than as an increment on the
+current allocator: the increment is refused twice over, the rewrite is what changes the physics.
+(Also confirmed the third time: `unframe`'s `sv3` reads form 0 of the body BY POSITION, so a save
+spliced AT index 4 displaces `(st r4 -8 r3)` and kills the caller's rbx. Splicing after it is
+what kept this build alive where the first attempt segfaulted in `main`.)
 
 The other three buckets each name a different rung. `shape` (25.1%) is a touch-shape question —
 sub-word and mixed-width access — not an allocation question, and no register file reaches it.
