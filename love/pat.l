@@ -121,7 +121,36 @@
                  (dedup >bs (? (atom? e) (link b seen) seen)))))
 
    (pand ts) (? (! (two? ts)) 1  (! (two? >ts)) <ts  ('&& >< ts))
-   (bind bs body) (? (two? bs) (link (link '\ (cat (map cap bs) [body])) (map caup bs)) body)
+
+   ; --- the binder, and the wrapper it does not always need ------------------------
+   ; a nom used ONCE has its accessor INLINED at the use site. cprop cannot do it for us:
+   ; the argument is a call, so it keeps the wrapper rather than risk duplicating work --
+   ; right in general, and wrong for the single use, which is most of them. that wrapper
+   ; is a closure built and applied on every match that succeeds.
+   ; ⚠ A QUOTE IS NOT A REFERENCE. (\ d) at ONE operand is 'd, so neither the count nor
+   ; the substitution may descend into it -- a body reading (list 'np1 v) must not have
+   ; its quoted np1 rewritten. A `\` at two or more IS a binder, and a body carrying one
+   ; (or a `:`) keeps its wrapper whole: substituting under it could capture.
+   ; ⚠ AND NOT IF A NOM WEARS AN ACCESSOR'S NAME. [cap cup] is a legal pattern; inlining
+   ; (cap (cup v)) into a body where `cap` is itself a bound nom would rewrite the
+   ; accessor we just built. The wrapper is correct for those, so they keep it.
+   (quo? x) (? (link? x) (? (id? <x '\) (! (two? (cuup x))) ()) ())
+   (opq? x) (? (link? x) (|| (id? <x ':) (? (id? <x '\) (two? (cuup x)) ())) ())
+   (uses n x) (? (quo? x) 0 (link? x) (foldl (\ k e (k + (uses n e))) 0 x) (? (id? n x) 1 0))
+   (bnds? x) (? (quo? x) () (opq? x) 1
+                (link? x) (foldl (\ k e (? k 1 (bnds? e))) () x) ())
+   (subst n r x) (? (quo? x) x (link? x) (map (\ e (subst n r e)) x) (? (id? n x) r x))
+   (wrap bs body) (? (two? bs) (link (link '\ (cat (map cap bs) [body])) (map caup bs)) body)
+   (bind bs body)
+     (: shy (|| (bnds? body) (any (\ b (member? <b '(cap cup peep))) bs))
+        (go bs body keep)
+         (? (two? bs)
+            (: b <bs
+               (? (? shy () (= 1 (uses <b body)))
+                  (go >bs (subst <b <>b body) keep)
+                  (go >bs body (cat keep [b]))))
+            (wrap keep body))
+        (go bs body ()))
 
    ; --- THE DECISION TREE -------------------------------------------------------
    ; a clause is [tests body]. compiled FLAT, every clause re-runs the tests it
@@ -157,9 +186,12 @@
               ())))
    (nodes x) (? (link? x) (foldl (\ n e (n + (nodes e))) 1 x) 1)
    (flat cs els) (link '? ((catmap (\ c [(pand <c) <>c]) cs) + [els]))
+   ; ⚠ TWO CLAUSES OR MORE, or there is nothing to discriminate: at one clause cpx eats
+   ; ALL of its tests, so factoring would read (? p (? 1 body els) els) -- a vacuous test
+   ; and the else written twice, for nothing. uu's hot sites are exactly that shape.
    (tree cs els)
      (: p (cpx cs)
-        (? (? (two? p) (< (nodes els) 40) ())       ; a common prefix, and an else worth copying
+        (? (&& (two? >cs) (two? p) (< (nodes els) 40))   ; >=2 clauses, a prefix, a small else
            ['? (pand p) (flat (map (\ c [(drop (tally p) <c) <>c]) cs) els) els]
            (flat cs els)))
    _ (:: '@ (\ a
