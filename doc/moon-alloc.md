@@ -31,30 +31,43 @@ Plus their supporting cast: the 17-pin rgreset roster, the regen dance (build tw
 under policy, deopt, restore snapshots), the choice guard chain, and the recovery
 peepholes cleaning slot traffic after the fact. The marginal rung got expensive —
 shrink-wrap was the arc's heaviest machinery and landed one grant in love.c — and the
-measured remainder (post-repack: ~65-70 KB live shuffle + ~23 KB uncoalesced copies +
-~13 KB widening churn of the 162 KB gap vs gcc; dynamically the ~22% slot-mov bucket;
-the vmsplice probe's store-then-reload op seam) is exactly what per-class licensing
-cannot reach. The allocator is the one lever that deletes machinery instead of adding it.
+measured remainder (**92,679 B of frame shuffle, 78.2% of the 118,531 B gap vs gcc** —
+the estimate that bucket once carried was ~65-70 KB; plus the uncoalesced copies and the
+widening churn; dynamically the ~22% slot-mov bucket; the vmsplice probe's
+store-then-reload op seam) is exactly what per-class licensing cannot reach. The
+allocator is the one lever that deletes machinery instead of adding it.
 
-⚠ **the 162 KB is the BOTH-EMIT codegen gap and nothing else** — not the binary ratio,
-which the same day's byte levers (the dead-static sweep, nolibc's per-function split;
-regalloc's lever 5) took from 1.99× to 1.702× without moving the corpus a digit. Those
-removed unreachable bytes, which are not shared symbols.
+⚠ **the gap quoted here is the BOTH-EMIT codegen gap and nothing else** — not the binary
+ratio, which the same day's byte levers (the dead-static sweep, nolibc's per-function
+split; regalloc's lever 5) took from 1.99× to 1.618× without moving the corpus a digit.
+Those removed unreachable bytes, which are not shared symbols.
 
-**Step 0 ran, and it re-priced the arc** (doc/moon-diff.md's re-base fill, HEAD
-2fc25890). The byte levers left the codegen row alone as expected — but repack did not:
-both-emit **1.63× → 1.56×**, the gap **162 KB → 141,221 B** over 612 shared symbols. So
-the buckets above are a LARGER share of a SMALLER whole, and the arc's target moved with
-it. The second reading matters more: the static and dynamic ratios, which had converged
-at 1.63×, came apart (static 1.56×, dynamic 1.625×) because repack is a size lever —
-−4.2% .text against −0.25% dynamic insns. mooncc's remaining excess is now
-proportionally hotter than its bytes, which is the strongest argument this page has.
+**Step 0 ran twice and re-priced the arc both times** (doc/moon-diff.md, HEAD 2fc25890
+then a055d279). The byte levers left the codegen row alone as expected; repack and the
+spush cell did not: both-emit **1.63× → 1.56× → 1.47×**, the gap **162 KB → 118,531 B**
+over 612 shared symbols. So the buckets above are a LARGER share of a much SMALLER whole,
+and the arc's target moved twice under it.
 
-And the shuffle bucket is no longer an estimate. **Frame-relative movs are 132,849 B of
-mooncc's love.o against gcc's 27,328 — an excess of 105,521 B, ~75% of the whole codegen
-gap** (rung 2's pricing has the three-lane table). The arc is aimed at the right thing
-and aimed low; what the same measurement took away is the belief that its early rungs
+The second reading matters more, and the second run of step 0 is what turned it from an
+observation into a trend. The static and dynamic ratios had converged at 1.63×; they came
+apart and then kept going:
+
+| | 32b54ab8 | 2fc25890 | a055d279 |
+|---|---|---|---|
+| static, both-emit codegen | 1.63× | 1.56× | **1.47×** |
+| dynamic, corpus insns vs clang | 1.63× | 1.625× | **1.629×** |
+
+Three fills, and the executed stream has not moved a digit while `.text` walked 10% down.
+Every size lever this tree has landed took bytes off the artifact and left the hot code
+exactly where it was. **mooncc's remaining excess is not spread over its bytes; it is
+concentrated in the code that runs** — which is this arc's whole case, and no size lever
 can reach it.
+
+And the shuffle bucket is no longer an estimate. **Frame-relative movs are 120,007 B of
+mooncc's love.o against gcc's 27,328 — an excess of 92,679 B, 78.2% of the whole codegen
+gap** (rung 2's pricing has the three-lane table). That share went UP as the gap shrank:
+the spush rung took 22 KB out of the binary and 12.8 KB out of the frame traffic, so what
+is left is more frame-shuffle than before, not less.
 
 ## the stance
 
@@ -81,13 +94,15 @@ probe cost twenty minutes to find out.
 
 ## phase I — slots become intervals (x64 only; arm rides the old path)
 
-* **step 0, the re-base.** CLIMBED 2026-08-11 — doc/moon-diff.md's re-base fill. The
-  arc's base was three moves stale: both-emit **1.63× → 1.56×**, the gap 162 KB →
-  **141,221 B** over 612 shared symbols, and repack (not the byte levers) is what moved
-  it. The reading that outlives the number: the static and dynamic ratios, converged at
-  1.63× the fill before, came APART (1.56× static, 1.625× dynamic) because repack trades
-  −4.2% .text for −0.25% dynamic insns. mooncc's remaining excess is proportionally
-  hotter than its bytes, which is this arc's case stated in two numbers.
+* **step 0, the re-base.** CLIMBED TWICE 2026-08-11 — doc/moon-diff.md's two fills. The
+  arc's base was three moves stale, then one move stale again once the spush rung landed
+  after the first re-base: both-emit **1.63× → 1.56× → 1.47×**, the gap 162 KB →
+  **118,531 B** over 612 shared symbols. The reading that outlives the numbers: the
+  static and dynamic ratios, converged at 1.63× before either re-base, came APART and
+  stayed apart — 1.47× static against 1.629× dynamic, with the dynamic row unmoved across
+  three fills. Every landed lever has been a size lever. ⚠ **re-run step 0 after any rung
+  that moves `.text`** — the first re-base was stale within four hours, and the whole page
+  was quoting it.
 * **rung 1, the liveness kit.** Not "build a liveness engine" — three approximations of
   liveness already sit in gen.l and do not talk to each other:
 
@@ -141,17 +156,22 @@ probe cost twenty minutes to find out.
 
   **PRICED 2026-08-11, and the price named a different first rung.** The prize is bigger
   than this page claimed and the reach is far smaller. Frame-relative movs in love.o,
-  counted the same way in all three lanes:
+  counted the same way in all three lanes (pre-rung, and post-rung after the re-base):
 
-  | | frame movs | bytes | of .text |
-  |---|---|---|---|
-  | mooncc | 21,964 | 132,849 | 38.3% |
-  | gcc | 5,378 | 27,328 | 14.3% |
-  | clang | 1,954 | 9,762 | 5.0% |
+  | | frame movs | bytes, pre | bytes, now | of .text |
+  |---|---|---|---|---|
+  | mooncc | 21,964 | 132,849 | **120,007** | 36.2% |
+  | gcc | 5,378 | 27,328 | 27,328 | 14.3% |
+  | clang | 1,954 | 9,762 | 9,762 | 5.0% |
 
-  The excess over gcc is **105,521 B — about 75% of the whole 141,221 B codegen gap**,
-  against the ~65-70 KB the shuffle bucket estimated. But rung 2 as scoped rides repack's
-  population, and that population holds almost none of it:
+  ⚠ **the mov COUNT is identical across the rung** — 21,964 before and after. The rung
+  bought encoding (disp8 for disp32), not work, and this table is that claim from the
+  emission side.
+
+  The excess over gcc is now **92,679 B — 78.2% of the whole 118,531 B codegen gap**,
+  against the ~65-70 KB the shuffle bucket estimated. The share went UP as the gap shrank.
+  But rung 2 as scoped rides repack's population, and pre-rung that population held almost
+  none of it:
 
   | repack's verdict | frame movs | share | fns |
   |---|---|---|---|
@@ -200,9 +220,26 @@ probe cost twenty minutes to find out.
   frames. All gates green, and the laws re-anchored off offsets onto `sof`/`nldrg`,
   verified in both worlds.
 
-  What that leaves for rung 2 proper: the population is now the whole 478, so promotion
-  finally faces the 105 KB prize rather than 18 KB of it. Rung 1 stays infrastructure and
-  stays priced with rung 2.
+  What that leaves for rung 2 proper — **measured 2026-08-11 after the re-base**, the four
+  exits separated over love.c's 640 functions rather than inferred from the pre-rung class
+  census:
+
+  | repack's verdict | fns | frame-r4 touches | share |
+  |---|---|---|---|
+  | **packed** | **403** | **23,830** | **92.9%** |
+  | barred by the scan | 10 | 991 | 3.9% |
+  | analyzed, sub did not shrink | 84 | 658 | 2.6% |
+  | refused early (no slots / no prologue) | 143 | 169 | 0.7% |
+
+  **All ten bars are `raw`** — an inline-asm splice, which repack skips by design and
+  always will. Zero `loose`, zero `unclaimed`: the 215-fn barred class is gone, not
+  reduced. 487 of 640 functions carrying 95.5% of the frame traffic now reach the
+  analysis, so promotion faces the 93 KB prize rather than 18 KB of it. Rung 1 stays
+  infrastructure and stays priced with rung 2.
+
+  ⚠ the two censuses count different things and their shares compare only in shape: this
+  one counts frame-`r4` IR forms (25,648, `lea` included), the pre-rung one counted
+  emitted movs. The *reason* column is what is exact, and it is the column that matters.
 
   ⚠ and a correction worth keeping, because it nearly became the plan: an earlier pass of
   this probe blamed a bare `mov` on r4 and put 77% behind it. That instrument skipped
@@ -252,10 +289,15 @@ JOIN-meet lessons the vmap earned, and the recovery passes until each is subsume
 
 ## expected close
 
-Re-anchored on step 0's fill (both-emit 1.56×, 141,221 B over 612 symbols; dynamic
-1.625× on the corpus). Phase I: roughly half the measured 80-100 KB, codegen 1.56x
-toward ~1.35x. Phase II: the rest, toward ~1.15-1.25x — and the net-negative LOC, the
-five mechanisms
-and their pricing walks out. Sequencing binds at three joints: rung 1 before everything
-and PRICED WITH rung 2 (its own consumers pay 736 B — the probe); rung 5 only after
-rung 3.
+Re-anchored on step 0's second fill (both-emit 1.47×, 118,531 B over 612 symbols; dynamic
+1.629× on the corpus). Phase I: roughly half the measured 93 KB of frame-shuffle, codegen
+1.47× toward ~1.30×. Phase II: the rest, toward ~1.15× — and the net-negative LOC, the
+five mechanisms and their pricing walks out.
+
+⚠ **the static target is not the one to steer by any more.** Three fills of size levers
+moved the static ratio 1.63 → 1.47 and the dynamic ratio not at all. Phase I is the first
+rung that should move the DYNAMIC row, and if it lands another −10% `.text` at 1.629×
+dynamic, it has not done what this arc exists to do. Quote the corpus A/B first.
+
+Sequencing binds at three joints: rung 1 before everything and PRICED WITH rung 2 (its
+own consumers pay 736 B — the probe); rung 5 only after rung 3.

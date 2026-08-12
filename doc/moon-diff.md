@@ -19,12 +19,126 @@ arc, whose every rung is priced against a fill here), doc/hom.md (the design the
 destination-die migration wears), doc/proto/dest.l (that design modeled runnable).
 
 ⚠ **read the both-emit codegen ratio, not the binary ratio, when pricing a codegen
-rung.** The two moved apart on 2026-08-11: the byte levers (the dead-static sweep,
-nolibc's per-function split) took the binary from 1.99× to 1.78× — 1.70× once repack
-joined them — while the corpus did not move a digit, because every byte they removed
-was unreachable. A fill's
-headline answers "how big is the artifact"; only the shared-symbol row answers "how
-good is the code".
+rung.** The two moved apart on 2026-08-11 and have not come back: the byte levers (the
+dead-static sweep, nolibc's per-function split) took the binary from 1.99× to 1.78×,
+repack and the spush cell to **1.618×**, while the corpus did not move a digit across any
+of it. A fill's headline answers "how big is the artifact"; only the shared-symbol row
+answers "how good is the code".
+
+## 2026-08-11 — the spush rung re-based: 1.47× codegen, and repack's bar is empty (HEAD a055d279)
+
+The fill below was measured at 2fc25890 and the spush-cell rung (80ae14f4) landed after
+it, so every headline it quotes was one move stale — including the ones doc/moon-alloc.md
+was steering by. Same instruments, same box, one rung later.
+
+### .text — the decomposition
+
+| | mooncc | gcc-musl | clang-musl |
+|---|---|---|---|
+| .text (bytes) | **473,198** | 292,448 | 292,832 |
+| love's own C | 441,808 (730 syms) | 252,073 (614) | 252,496 (604) |
+| libc under it | 31,390 (145) | 40,375 (229) | 40,336 (230) |
+
+Whole binary **1.618×**, from 1.702×. And the row that prices a codegen rung:
+
+| | syms | mooncc | native | |
+|---|---|---|---|---|
+| both lanes emit, vs gcc-musl | 612 | 370,492 | 251,961 | **1.47×** — codegen |
+| both lanes emit, vs clang-musl | 602 | 370,920 | 252,000 | **1.47×** |
+| mooncc-only (the inlining residue) | 118 | 71,316 | — | |
+| gcc-musl-only | 2 | 112 | — | |
+
+**1.56× → 1.47×; the gap 141,221 → 118,531 B, −22,690.** love.o's `.text` fell 22,381 B
+over the same pair of trees. The two agree to 309 B, which is what says the whole move is
+this one rung and not the fourteen post commits the merge carried with it.
+
+### the divergence widened, and it is now the page's loudest number
+
+| | 32b54ab8 | 2fc25890 | **a055d279** |
+|---|---|---|---|
+| static, both-emit codegen | 1.63× | 1.56× | **1.47×** |
+| dynamic, corpus insns vs clang | 1.63× | 1.625× | **1.629×** |
+
+The dynamic ratio has not moved since the convergence broke — three fills, 1.63 / 1.625 /
+1.629, inside the noise of each other — while the static ratio walked 1.63 → 1.47. Every
+size lever this tree has landed (the dead-static sweep, the 185-member split, repack, the
+spush cell) took bytes off the artifact and **left the executed stream exactly where it
+was**. ⚠ that is not a disappointment, it is the measurement the arc needed: mooncc's
+remaining excess is not spread over its bytes, it is concentrated in the code that runs.
+A size lever cannot reach what is left.
+
+### runtime — the corpus, egg-boot subtracted, median of 3
+
+| | mooncc | gcc-musl | clang-musl | mooncc/clang |
+|---|---|---|---|---|
+| corpus insns (G, user) | 42.291 | 23.916 | 25.953 | **1.629×** |
+| corpus cycles (G, user) | 15.835 | 12.796 | 13.099 | **1.209×** |
+
+All three lanes ~2% above the last fill (41.32 / 23.43 / 25.42) — the corpus grew again,
+which is the standing reading when the lanes move together.
+
+### frame movs — the count did not move, the bytes did
+
+`love.o`, all three lanes counted the same way:
+
+| | insns | frame movs | bytes | of .text |
+|---|---|---|---|---|
+| mooncc | 77,109 | 21,964 | **120,007** | 36.2% |
+| gcc | 45,959 | 5,378 | 27,328 | 14.3% |
+| clang | 50,691 | 1,954 | 9,762 | 5.0% |
+
+**21,964 both before the rung and after** — the identical count, 132,849 → 120,007 B. The
+rung's own claim was encoding rather than work (disp8 for disp32), and this is that claim
+from the other side. The excess over gcc is **92,679 B, now 78.2% of the whole codegen
+gap** — a *larger* share of a smaller whole than the 75% measured pre-rung, because the
+gap shrank faster than the frame traffic did.
+
+### repack's bar is empty
+
+The pre-rung census put **215 of 478 fns and 77.1% of frame traffic** behind the
+unclaimed-touch bail. Re-run over love.c's 640 functions with the four exits separated
+(the probe is temporary instrumentation, reverted):
+
+| verdict | fns | frame-r4 touches | share |
+|---|---|---|---|
+| **packed** | **403** | **23,830** | **92.9%** |
+| barred by the scan | 10 | 991 | 3.9% |
+| analyzed, sub did not shrink | 84 | 658 | 2.6% |
+| refused early (no slots / no prologue) | 143 | 169 | 0.7% |
+
+And every one of the ten bars is `raw` — an inline-asm splice, which repack skips by
+design and always will. **Zero `loose`, zero `unclaimed`.** The 215-fn barred class is
+gone, not reduced. doc/moon-alloc.md's "the population is now the whole 478" was an
+inference from the pre-fix class census; it is now a count, and it reads 487 of 640
+functions carrying 95.5% of the frame traffic inside repack's reach.
+
+⚠ the two censuses count different things and the shares are comparable only in shape:
+this one counts frame-`r4` IR forms (25,648 of them, `lea` included), the pre-rung one
+counted emitted movs. What is exact is the *reason* column, and it is what matters.
+
+### invocation speed
+
+| | mooncc | gcc-musl | clang-musl |
+|---|---|---|---|
+| full build + link, cold tree (s) | 41.1 | 8.8 | 5.1 |
+| love.c single TU, median of 3 | **8.42** | — | — |
+
+8.40 / 8.42 / 8.50 against the 8.8 s baseline (8.53 / 8.62 / 9.17) — the rung's per-depth
+`foldl` costs nothing measurable, and the TU sits well inside the 20 s budget. The build
+row is the cold-tree tax again (the merge invalidated `mcobj`), not a regression; the
+trap at the bottom of this page has it.
+
+### the pair — wall, boot subtracted (⚠ loaded box: ratios only)
+
+| | mooncc | gcc-musl | clang-musl | mooncc/clang |
+|---|---|---|---|---|
+| chacha20 (ms) | 1075 | 300 | 198 | **5.43×** |
+| poly1305 (ms) | 1341 | 1288 | 785 | 1.71× (gcc **1.04×**) |
+
+clang's chacha reads **198.1 against the last fill's 198.1**, which anchors the box — so
+mooncc's 1220 → 1075 is a real move and not a quiet afternoon. The shape is unchanged and
+is the whole reading: chacha wide, poly at gcc parity. Lever 1's array-slot residue is
+untouched by anything in this fill.
 
 ## 2026-08-11 — the re-base: repack, the sweep and the split in one binary (HEAD 2fc25890)
 

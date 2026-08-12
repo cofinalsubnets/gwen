@@ -56,6 +56,7 @@ still stores and why values die at joins the meet can't cross and at every call.
 | 2026-08-03 | gcc | **1.30×** | 1.96× | int128 limbs, inlining honored, non-leaf slotting, cs pool, int homing; IPC 3.07 vs 2.17 |
 | 2026-08-10 | clang | **1.18× cycles** | 1.71× | doc/moon-diff.md first fill; IPC 2.98 vs 2.05; shared-.text 1.75× |
 | 2026-08-11 | clang | 1.24× cycles | 1.63× | the re-base fill (moon-alloc's step 0): static both-emit **1.56×**, 141,221 B — the static and dynamic ratios came APART, repack being a size lever |
+| 2026-08-11 | clang | 1.21× cycles | **1.629×** | step 0 re-run after the spush rung: static both-emit **1.47×**, 118,531 B; binary 1.618×. The dynamic row is UNMOVED across three fills while static walked 1.63→1.47 — every landed lever has been a size lever |
 
 The remaining excess is not idiom-shaped (that catalog closed 2026-08-02: cmp-$0, neg
 dances, load-then-cmp all at parity). It is structural: slot traffic. At the fifth
@@ -163,18 +164,18 @@ Learned by measuring, several times each; check a new lever against these before
    ride calls on seats and their write-through stores sweep). What remains of this
    lever is float/pair elements riding the old walk (afd's whitelist is gp+ptr) —
    the ranking above is the shape's, not the residue's.
-2. **Registers as the source of truth** — MEASURED 2026-08-11: frame-relative movs are
-   132,849 B of mooncc's love.o against gcc's 27,328 and clang's 9,762, so the excess is
-   **105,521 B, ~75% of the 141,221 B codegen gap** — this lever is three quarters of
-   what is left, and the ~22% static-insn figure below now reads 28.5%. ⚠ but the arc's
-   early rungs cannot reach it: repack's population holds 17.6% of that traffic and its
-   scan bar refuses 77.1% — on an UNCLAIMED touch, and the lane is the **spush cell**:
-   spush reserves 16 bytes with its own sub and never nslots, spmerge folds that sub into
-   the prologue's, so the frame grows and the map does not (measured: K exceeds build's
-   frame in 231 of 640 fns, by exactly +16 or +32; 100% of the 1,890 unclaimed touches sit
-   in the deepest 16/32 bytes, nowhere else). So the first real rung is ONE CELL joining
-   the slot map, not liveness — it moves 3.2× the objects and 3.8× the slot traffic into
-   reach, soundly. doc/moon-alloc.md's rung 2 entry carries the census and the trace.
+2. **Registers as the source of truth** — MEASURED 2026-08-11, twice. Frame-relative movs
+   are **120,007 B** of mooncc's love.o against gcc's 27,328 and clang's 9,762, so the
+   excess is **92,679 B, 78.2% of the 118,531 B codegen gap** — this lever is more than
+   three quarters of what is left, and its share ROSE as the gap shrank. The ~22%
+   static-insn figure below reads 28.5%. ⚠ the first reading of this lever said the arc's
+   early rungs could not reach it — repack's scan barred 77.1% of that traffic on an
+   UNCLAIMED touch, the lane being the **spush cell** (spush reserves 16 bytes with its own
+   sub and never nslots; spmerge folds the sub into the prologue's, so the frame grows and
+   the map does not). That rung landed the same day and **the bar is now empty**: 403 of
+   640 fns pack, carrying 92.9% of the frame traffic, and every one of the ten remaining
+   refusals is a raw inline-asm splice repack skips by design. Zero loose, zero unclaimed.
+   doc/moon-alloc.md's rung 2 entry carries both censuses.
    The allocator leg proper: liveness over ir1,
    values surviving labels and calls, spill placement instead of write-through. Kills
    both the def-stores and the post-flush reloads (the ~22% bucket). The vmap, the JOIN
@@ -748,6 +749,24 @@ row that says complete rather than lucky. Corpus unmoved (40.72 G): every remove
 byte was unreachable, so this buys size and invocation speed and NOT the gap levers
 1-4 measure. test_fixpoint byte-identical (the compiler sweeps itself and still
 reproduces), vmret 307 ret-free, test_raw/test_drv/test_libc/test_slow green.
+2026-08-11 · STEP 0 RE-RUN, and the bar census that closes the spush rung (HEAD a055d279,
+no code — measurement only): the re-base fill was four hours old and one rung stale, so
+every number the arc was steering by moved. Both-emit codegen **1.56×→1.47×** (gap
+141,221→**118,531 B**), binary 1.702→**1.618×**; love.o's .text fell 22,381 B over the
+same pair of trees and the shared-symbol gap fell 22,690 — they agree to 309 B, which is
+what says the move is the rung and not the fourteen post commits the merge carried.
+Frame movs **21,964 before and after**, 132,849→120,007 B: the count is identical, so the
+rung bought encoding and the emission side confirms it. The excess over gcc is 92,679 B,
+**78.2% of the gap, up from 75%** — the share rose because the gap shrank faster than the
+traffic. The census, four exits separated over love.c's 640 fns (temporary probe,
+reverted): packed 403/23,830 touches/**92.9%**, barred 10/991, no-shrink 84/658, early
+143/169 — and **all ten bars are `raw`**, an inline-asm splice repack skips by design.
+Zero loose, zero unclaimed: the 215-fn barred class is GONE, not reduced. love.c through
+mooncc 8.40/8.42/8.50 s against the 8.8 s baseline, so the per-depth foldl costs nothing.
+⚠ THE READING THAT OUTLIVES ALL OF IT: dynamic 1.63/1.625/**1.629** across three fills
+while static walked 1.63→1.47. Every lever this tree has landed is a size lever, and the
+executed stream has not moved. The allocator leg is the first rung owed a corpus A/B as
+its headline, not a .text delta.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
