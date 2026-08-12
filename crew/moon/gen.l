@@ -1531,6 +1531,11 @@
                   _ (pin g 'off (peep g 'off 0 + n))
                   _ (pin g 'slots ([off n] >< peep g 'slots ()))
                   off)
+   ; the object under a frame offset, off the slot map -- () when no cell claims it
+   (obj9 sl x) (? !(charm? x) ()
+                  (: (go l) (? !(two? l) ()
+                               (: o <l (? ((<o <= x) && (x < (<o + <>o))) o (go >l))))
+                     (go sl)))
    (ntmp g ty) (nslot g $ (tsz g ty + 7) & -8)
    ; the store-immediate op for (ty, k) | () -- the vi fold's license, shared by the
    ; asn/decl delivery lanes (x64 only: si is C6/C7). st sign-extends imm32, the
@@ -3698,15 +3703,11 @@
              _ (foldl (\ _ o (pin t o 1)) 0 ((stops9 + stxops) + (siops + '(cmpm))))
              t)
    (a4ize fs)
-    (: (swap f i bp)
-        (? !(two? f) ()
-           (link (? ((i = bp) && id? <f 'r4) 'fp <f)
-                 (swap >f (i + 1) bp)))
-       (go l)
+    (: (go l)
         (? !(two? l) ()
            (: f <l
               bp (? (two? f) (peep a4base <f -1) -1)
-              (link (? (bp < 0) f (swap f 0 bp))
+              (link (? (0 <= bp && id? (nthr f bp) 'r4) (reop f bp 'fp) f)
                     (go >l))))
        (go fs))
    ; v6-M slot retarget: slots live at fp-NEGATIVE offsets, but ARMv6-M loads/stores encode only
@@ -3882,12 +3883,19 @@
            _ (foldl (\ _ o (pin t o 2)) 0 (stops9 + siops + '(cmpm)))
            _ (foldl (\ _ o (pin t o 4)) 0 stxops)
            t)
+   ; rebuild a form with the operand at position i9 replaced -- the a4base/uoff seam
+   ; every frame-rewriting pass (a4ize, unframe, repack) lands on
+   (reop f i9 v) (: (go e i) (? !(two? e) ()
+                                (link (? (i = i9) v <e) (go >e (i + 1))))
+                    (go f 0))
+   ; the x64 frame prologue at fs's head (unframe strips it; repack requires it)
+   (pro4? fs) (nthr fs 1 = '(push r4) && nthr fs 2 = '(mov r4 sp))
    (unframe g fs)
     (: a64 (a64? g)
        fb (? a64 'fp 'r4)
        pro (? a64
               (nthr fs 1 = '(push lr) && nthr fs 2 = '(push fp) && nthr fs 3 = '(lea fp sp 0))
-              (nthr fs 1 = '(push r4) && nthr fs 2 = '(mov r4 sp)))
+              (pro4? fs))
        sf (nthr fs (? a64 4 3))
        K (? (two? sf && <sf = 'sub && <>sf = 'sp && <>>sf = 'sp && charm? <>>>sf)
             <>>>sf ())
@@ -3982,10 +3990,7 @@
              vs (<vr || r3f)                         ; the save is a slot: r3f forces the sub
              K9 (K + (? a64 32 8))
              (radj f2 bp op9 D)                      ; the base slot -> sp, its displacement -> off+K+D
-              (: (go e i) (? !(two? e) ()
-                             (link (? (i = bp) 'sp (i = op9) (<e + K + D) <e)
-                                   (go >e (i + 1))))
-                 (go f2 0))
+              (reop (reop f2 bp 'sp) op9 ((nthr f2 op9) + K + D))
              (rw l D)
               (? !(two? l) ()
                  (: n3 (epi3? l)
@@ -4265,7 +4270,7 @@
    ; an op outside the model that MENTIONS sp (or an opaque raw) dirties every open record rather
    ; than bailing -- the (mov sp r4) epilogue is a PATH exit on the linear walk, and its
    ; sp-mention keeps the frame's own record dirty.
-   (deadcell fs)
+   (deadcell g fs)
     (: cand (tablet 0)                               ; st-index -> 1 while still droppable
        clds (tablet 0)                               ; st-index -> its cell's ld indexes
        dirty (tablet 0)                              ; sub-index -> 1: the span observed sp
@@ -4316,7 +4321,7 @@
           (: subdrop (tablet 0) addsh (tablet 0)     ; sub-index -> drop; add-index -> shrink bytes
              stconv (tablet 0) ldconv (tablet 0)     ; st/ld-index -> the slot's positive offset
              pf3 (nthr fs 3)                         ; the prologue's frame sub: (sub sp sp F)
-             cvok ((nthr fs 1 = '(push r4)) && (nthr fs 2 = '(mov r4 sp)) &&
+             cvok (pro4? fs &&
                    two? pf3 && (<pf3 = 'sub) && (<>pf3 = 'sp) && (<>>pf3 = 'sp) && charm? <>>>pf3)
              F (? cvok <>>>pf3 0)
              (mark w cv) (? !(two? w) cv
@@ -4346,6 +4351,14 @@
                                     (peep clds (nthr e 1) ()))
                                  (cvt >l))) cvt) cvl)
              F2 ((F + 8 * tally ds + 15) & -16)
+             ; ⚠ a converted cell is a frame OBJECT and must join the slot map: every pass
+             ; that reads it (deadst's granule marks, repack's scan) meets an r4 touch no
+             ; object claims otherwise and bars the whole fn -- 77% of love.c's frame
+             ; traffic sat behind exactly that. One 8-byte slot per record depth, the same
+             ; offset cvt hands the st/ld.
+             _ (foldl (\ _ d (: o ((F + 8) + (8 * rank d ds 0))
+                                (pin g 'slots ([(0 - o) 8] >< peep g 'slots ()))))
+                      0 ds)
              (drop2 l i) (? !(two? l) ()
                             (? (peep cand i ()) (drop2 >l (i + 1))
                                (peep subdrop i ()) (drop2 >l (i + 1))
@@ -4488,11 +4501,7 @@
    (deadst g fs)
     (: used (tablet 0) esc (tablet 0)
        slots (peep g 'slots ())
-       (obj9 x) (? !(charm? x) ()
-                   (: (go l) (? !(two? l) ()
-                                (: o <l (? ((<o <= x) && (x < (<o + <>o))) o (go >l))))
-                      (go slots)))
-       (obmark x) (: o9 (obj9 x)                     ; the object under x rides whole | the old bar
+       (obmark x) (: o9 (obj9 slots x)               ; the object under x rides whole | the old bar
                      (? (two? o9) (mark <o9 <>o9) (pin esc 'y 1)))
        ; ⚠ a slot is read in BYTES, never at one offset: a 16-byte struct param's second
        ; eightbyte is STORED at off+8 and read at off+12 (that eightbyte's second field),
@@ -4554,16 +4563,12 @@
    ; the sub SHRINKS. x64 only -- arm rides its own frame family. --
    (repack g fs)
     (: slots (peep g 'slots ())
-       pro (nthr fs 1 = '(push r4) && nthr fs 2 = '(mov r4 sp))
+       pro (pro4? fs)
        sf (nthr fs 3)
        K (? (two? sf && (<sf = 'sub) && (<>sf = 'sp) && (<>>sf = 'sp) && charm? <>>>sf)
             <>>>sf ())
        (? (!(two? slots) || arm? g || peep g 'hasasm () || !pro || !(charm? K)) fs
           (: obs (tablet 0)                            ; base -> (size lo hi esc)
-             (obj9 x) (? !(charm? x) ()
-                         (: (go l) (? !(two? l) ()
-                                      (: o <l (? ((<o <= x) && (x < (<o + <>o))) o (go >l))))
-                            (go slots)))
              (touch b n i e9)
               (: w (peep obs b ())
                  (pin obs b (? (two? w) [n <>w i (nthr w 3 || e9)] [n i i e9])))
@@ -4587,7 +4592,7 @@
                           bp (peep a4base <f -1)
                           (? (0 <= bp && id? (nthr f bp) 'r4)
                              (: X (nthr f (peep uoff <f -1))
-                                o9 (obj9 X)
+                                o9 (obj9 slots X)
                                 (? (loose? >f 1 bp) 'no
                                    (two? o9)
                                     (: _ (touch <o9 <>o9 i
@@ -4644,15 +4649,11 @@
                           (place >rs ([hi n <pr] >< act2) <>pr)))
                    high2 (place rows () 8)
                    K2 (high2 + 15 & -16)
-                   (radj2 f bp op9)                    ; a mapped touch -> its packed spelling
+                   (radj2 f op9)                       ; a mapped touch -> its packed spelling
                     (: X (nthr f op9)
-                       o9 (obj9 X)
+                       o9 (obj9 slots X)
                        nb (? (two? o9) (peep nmap <o9 'no9) 'no9)
-                       (? !(charm? nb) f
-                          (: (go e i) (? !(two? e) ()
-                                         (link (? (i = op9) (nb + (X - <o9)) <e)
-                                               (go >e (i + 1))))
-                             (go f 0))))
+                       (? !(charm? nb) f (reop f op9 (nb + (X - <o9)))))
                    (rw l i)
                     (? !(two? l) ()
                        (: f <l
@@ -4660,7 +4661,7 @@
                                 (i = 3) ['sub 'sp 'sp K2]
                                 (: bp (peep a4base <f -1)
                                    (? (0 <= bp && id? (nthr f bp) 'r4)
-                                      (radj2 f bp (peep uoff <f -1)) f)))
+                                      (radj2 f (peep uoff <f -1)) f)))
                           (f2 >< rw >l (i + 1))))
                    (? (K2 < K) (rw fs 0) fs))))))
 
@@ -7129,7 +7130,7 @@
                         (stld
                         (spmerge
                         (deaddef
-                        (deadcell
+                        (deadcell g
                         (cfoldir
                          (sibcall g
                           ([['label (intern <>f)]
@@ -7678,6 +7679,15 @@
    ; would bake past the strong override the linker owes them).
    ; xtra: the parser's (sfns svars sects .. consts) tablets -- static fns, static
    ; globals, name -> section. () reads as three empties (the law harness).
+   ; every nom anywhere in a form tree, pinned into a tablet -- the dead-static sweep's
+   ; reference relation, and OVER-approximate on purpose: an opcode and a register name
+   ; count too. A static wrongly kept costs bytes; one wrongly missed costs a wild jump.
+   ; ⚠ a TABLET, never a list: love.c is 879 functions and a linear member? here made
+   ; the sweep cost more than the compile it rides in.
+   (cg-refs x t)
+    (? (nom? x) (: _ (pin t x 1) t)
+       !(two? x) t
+       (cg-refs >x (cg-refs <x t)))
    (cgen-core ast stbl sigs weaks xtra tgt)
     (: g #('n 0 'brk () 'brkm () 'cnt () 'cases () 'glob #() 'globs () 'strs () 'statics ()
            'laid #()                                 ; names already on 'globs (a tentative repeat lays no twin)
@@ -7736,9 +7746,45 @@
        (gfns fs acc saw)
         (? !(two? fs)
            (: dat (cgdata g)
-              (? !(bad? dat) [g (rev acc) dat saw]
+              (? (bad? dat)
                  (: c (peep g 'datacause ())            ; the static-data refusal, minted here (globs pinned it)
-                    (gripe () () () (? c c "cannot lay the static data (cause unnamed -- see doc/moon-diag.md)")))))
+                    (gripe () () () (? c c "cannot lay the static data (cause unnamed -- see doc/moon-diag.md)")))
+                 ; -- THE DEAD-STATIC SWEEP. we splice a small static into its call sites and
+                 ; still lay the body, so one inlined everywhere ships referenced by nothing
+                 ; (33 KB of love's own text before this: doc/moon-diff.md). Only a static may
+                 ; go, and only when no root names it. ⚠ the roots are every EXPORTED fn, every
+                 ; alias target, the section-named fns (xfns -- placed for their address), and
+                 ; every nom the DATA lane names: love's kind-indexed tables carry fn addresses,
+                 ; and one missed there is a jump into the heap, not a bigger binary.
+                 ; ⚠ every set here is a TABLET and each unit's noms are read ONCE: the
+                 ; list-and-member? spelling re-walked every live body per round and cost
+                 ; 9x the compile it rides in.
+                 (: us (rev acc)                        ; (name forms), emission order
+                    sfns (? (two? xtra) <xtra #())
+                    als (peep g 'alias #())
+                    atg (foldl (\ a k ((peep als k ()) >< a)) () (keys als))
+                    (cut? nm) (!(id? (peep sfns nm 'no) 'no) && !(member? nm atg))
+                    urefs (tablet 0)                    ; fn name -> the noms its forms carry
+                    _ (map (\ u (pin urefs <u (keys (cg-refs <>u (tablet 0))))) us)
+                    unom (tablet 0)                     ; a nom -> the fn of that name
+                    _ (map (\ u (pin unom (intern <u) <u)) us)
+                    live (tablet 0)
+                    (walk q)                            ; worklist over the reference graph
+                     (? !(two? q) ()
+                        (: n <q
+                           (? (peep live n ()) (walk >q)
+                              (: _ (pin live n 1)
+                                 (walk (foldl (\ a r (: t (peep unom r ())
+                                                        (? (t && !(peep live t ())) (t >< a) a)))
+                                              >q (peep urefs n ())))))))
+                    ; the roots: every fn no sweep may touch, then every fn the data lane
+                    ; and the sectioned bodies name by address
+                    _ (walk (foldl (\ a r (: t (peep unom r ()) (? t (t >< a) a)))
+                                   (foldl (\ a u (? (cut? <u) a (<u >< a))) () us)
+                                   (keys (cg-refs (g 'xfns) (cg-refs dat (tablet 0))))))
+                    _ (pin g 'dropped (foldl (\ a u (? (peep live <u ()) a (<u >< a))) () us))
+                    txt (foldl (\ a u (? (peep live <u ()) (revcat <>u a) a)) () us)
+                    [g (rev txt) dat saw])))
            (: f <fs
               (? (member? <f '(proto gdecl xdecl tdef)) (gfns >fs acc saw)
                  (: _ (pin g 'undecl ()) _ (pin g 'nolane ()) _ (pin g 'arity ())   ; fresh per fn: the pins the refusal reads name THIS fn's cause
@@ -7778,7 +7824,9 @@
                           sw (saw || (<>f = "main"))
                           (? sc (: _ (pin g 'xfns ([sc fm an] >< g 'xfns))
                                    (gfns >fs acc sw))
-                             (gfns >fs (revcat fm acc) sw))))))))
+                             ; a UNIT, not a flat splice: the sweep above needs each fn's
+                             ; forms addressable by name before they are concatenated.
+                             (gfns >fs ([<>f fm] >< acc) sw))))))))
        (? ok (gfns <>ast () ()) ()))
    (cgen ast stbl sigs weaks xtra tgt)              ; the STATIC EXECUTABLE: _start (crt0) + text + data -> (1 forms) | () -- needs main
     (: crt0 (? (id? tgt 'arm64)
@@ -7834,9 +7882,13 @@
                           (go2 l a2) (? !(two? l) a2
                                         (go2 >l (? (member? (peep als <l ()) dgl) (<l >< a2) a2)))
                           (base + go2 (keys als) ())))
+             ; ⚠ minus the swept ones: a LOCAL FUNC symbol whose body no longer rides
+             ; would name an address belonging to whatever followed it.
+             gone (peep <r 'dropped ())
              lnames (: (go fs acc) (? !(two? fs) (rev acc)
                                       (: f <fs
-                                         (go >fs (? (<f = 'fn && !(id? (peep sfns <>f 'no) 'no))
+                                         (go >fs (? (<f = 'fn && !(id? (peep sfns <>f 'no) 'no)
+                                                     && !(member? <>f gone))
                                                          (<>f >< acc) acc))))
                        (go <>ast ()))
              dat <>>r
