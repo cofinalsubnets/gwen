@@ -29,7 +29,12 @@
 
 (: (vsucc v) (? (charm? v) (v + 1) `('succ v))
 
-   (capp cl v) (vof (`(<>>cl v) >< <>cl) <>>>cl)
+   ; a uu closure carries a LOVE FUNCTION, so applying one is an application and not a
+   ; re-walk of the body's syntax. ⚠ ('clo f) is opaque above this line: conv reaches a
+   ; closure only through capp (its lam/pi/sig branches all come before the spine case), and
+   ; lof prints TERMS, so these two lines plus comp's three ('clo ..) sites are the whole
+   ; representation.
+   (capp cl v) ((<>cl) v)
 
    (vapp f a) (? (id? <f 'lam) (capp <>f a) `('na f a))
 
@@ -59,46 +64,69 @@
          (: g (peep GLOB x 0)
             (? (two? g) <>g (scare 'uu-unbound x)))))
 
-   (vof en t)
-   (? (charm? t) t
-      (nom? t) (? (member? t '(UU nat bool unit empty tt true false)) t
-                  (id? t 'zero) 0
-                  (vof-sym en t))
+   ; --- comp: the term walked ONCE, into a love function of the env ---
+   ; every case below reads `(\ en ..)` where the old vof read the value directly, and that is
+   ; the whole change: the head dispatch, the destructuring and the arity all happen HERE, once
+   ; per term, where they used to happen once per EVALUATION. a lam's body becomes a love
+   ; closure over the compiled body, so capp is an application.
+   ; ⚠ vof-sym STAYS DYNAMIC. it reads GLOB, and a defn later in the corpus must be visible to
+   ; a term compiled earlier -- so the lookup rides the `(\ en ..)`, never the compile.
+   ; ⚠ ORDERED BY MEASURED FREQUENCY, and the tail is never reached at all: over the UniMath
+   ; corpus lam and succ are 550740 and 526521 of 1102646 head dispatches, while total2 pr1 pr2
+   ; ii1 ii2 are ZERO -- the reader spells them, but every USE arrives through a spine or a
+   ; rect. succ once sat at position 8 behind four of those zeros. The tests are mutually
+   ; exclusive symbols so the order is free; only `(two? h)` must stay first, the spine last.
+   ; ⚠ the order matters LESS than it did (once per term, not per evaluation) and is kept
+   ; because compiling is itself on the hot path: chk and inf compile each subterm they visit.
+   (comp t)
+   (? (charm? t) (\ en t)
+      (nom? t) (? (member? t '(UU nat bool unit empty tt true false)) (\ en t)
+                  (id? t 'zero) (\ en 0)
+                  (\ en (vof-sym en t)))
       (: h <t
-         (? (two? h) (vof-spine en (vof en h) >t)
-            ; ⚠ ORDERED BY MEASURED FREQUENCY, and the tail of this chain is never reached at all:
-            ; over the UniMath corpus lam and succ are 550740 and 526521 of 1102646 head dispatches,
-            ; while total2 pr1 pr2 ii1 ii2 are ZERO -- the reader spells them (total2 ..) but every
-            ; USE goes through a spine or a rect. succ sat at position 8 behind four of those zeros.
-            ; the tests are mutually exclusive symbols, so the order is semantically free; only
-            ; `(two? h)` above must stay first, and the vof-spine fallback last.
-            (id? h 'lam)    `('lam `('clo en <>t <>>t))
-            (id? h 'succ)   (vsucc (vof en <>t))
-            (id? h 'pi)     `('pi  (vof en <>>t) `('clo en <>t <>>>t))
-            (id? h 'paths)  `('paths (vof en <>t) (vof en <>>t) (vof en <>>>t))
-            (id? h 'nat_rect)    (donr (vof en <>t) (vof en <>>t) (vof en <>>>t) (vof en <>>>>t))
-            (id? h 'tpair)  `('chain (vof en <>t) (vof en <>>t))
-            (id? h 'idpath) `('refl (vof en <>t))
-            (id? h 'paths_rect)  (dojr (vof en <>t) (vof en <>>t) (vof en <>>>t))
-            (id? h 'bool_rect)   (dobr (vof en <>t) (vof en <>>t) (vof en <>>>t) (vof en <>>>>t))
-            (id? h 'coprod) `('coprod (vof en <>t) (vof en <>>t))
-            (id? h 'coprod_rect) (docr (vof en <>t) (vof en <>>t) (vof en <>>>t) (vof en <>>>>t))
-            (id? h 'empty_rect)  (doer (vof en <>t) (vof en <>>t))
-            (id? h 'unit_rect)   (dour (vof en <>t) (vof en <>>t) (vof en <>>>t))
-            (id? h 'UU)     (? (<>t = 0) 'UU `('U <>t))         ; (UU level) -> a sort value (UU0 stays the symbol UU; level may be an expr, Stage 2)
-            (id? h 'the)    (vof en <>>t)
-            (id? h 'let)    (vof (link `(<>t (vof en <>>t)) en) <>>>t)
-            (id? h 'total2) `('sig (vof en <>>t) `('clo en <>t <>>>t))
-            (id? h 'pr1)    (dop1 (vof en <>t))
-            (id? h 'pr2)    (dop2 (vof en <>t))
-            (id? h 'ii1)    `('i1 (vof en <>t))
-            (id? h 'ii2)    `('i2 (vof en <>t))
-            (vof-spine en (vof en h) >t))))
+         (? (two? h) (: cf (comp h) cas (comp-args >t) (\ en (spine en (cf en) cas)))
+            (id? h 'lam)    (: x <>t cb (comp <>>t)
+                               (\ en `('lam `('clo (\ v (cb (link `(x v) en)))))))
+            (id? h 'succ)   (: ca (comp <>t) (\ en (vsucc (ca en))))
+            (id? h 'pi)     (: x <>t cA (comp <>>t) cB (comp <>>>t)
+                               (\ en `('pi (cA en) `('clo (\ v (cB (link `(x v) en)))))))
+            (id? h 'paths)  (: cA (comp <>t) ca (comp <>>t) cb (comp <>>>t)
+                               (\ en `('paths (cA en) (ca en) (cb en))))
+            (id? h 'nat_rect)    (: cP (comp <>t) cz (comp <>>t) cs (comp <>>>t) cn (comp <>>>>t)
+                                    (\ en (donr (cP en) (cz en) (cs en) (cn en))))
+            (id? h 'tpair)  (: ca (comp <>t) cb (comp <>>t) (\ en `('chain (ca en) (cb en))))
+            (id? h 'idpath) (: ca (comp <>t) (\ en `('refl (ca en))))
+            (id? h 'paths_rect)  (: cP (comp <>t) cr (comp <>>t) ce (comp <>>>t)
+                                    (\ en (dojr (cP en) (cr en) (ce en))))
+            (id? h 'bool_rect)   (: cP (comp <>t) ct (comp <>>t) cf (comp <>>>t) cb (comp <>>>>t)
+                                    (\ en (dobr (cP en) (ct en) (cf en) (cb en))))
+            (id? h 'coprod) (: cA (comp <>t) cB (comp <>>t) (\ en `('coprod (cA en) (cB en))))
+            (id? h 'coprod_rect) (: cP (comp <>t) cf (comp <>>t) cg (comp <>>>t) cv (comp <>>>>t)
+                                    (\ en (docr (cP en) (cf en) (cg en) (cv en))))
+            (id? h 'empty_rect)  (: cP (comp <>t) ce (comp <>>t) (\ en (doer (cP en) (ce en))))
+            (id? h 'unit_rect)   (: cP (comp <>t) cu (comp <>>t) cx (comp <>>>t)
+                                    (\ en (dour (cP en) (cu en) (cx en))))
+            ; (UU level) -> a sort value (UU0 stays the symbol UU; level may be an expr, Stage 2)
+            (id? h 'UU)     (: l <>t (? (l = 0) (\ en 'UU) (\ en `('U l))))
+            (id? h 'the)    (comp <>>t)                          ; the ascription is the term
+            (id? h 'let)    (: x <>t ca (comp <>>t) cb (comp <>>>t)
+                               (\ en (cb (link `(x (ca en)) en))))
+            (id? h 'total2) (: x <>t cA (comp <>>t) cB (comp <>>>t)
+                               (\ en `('sig (cA en) `('clo (\ v (cB (link `(x v) en)))))))
+            (id? h 'pr1)    (: ca (comp <>t) (\ en (dop1 (ca en))))
+            (id? h 'pr2)    (: ca (comp <>t) (\ en (dop2 (ca en))))
+            (id? h 'ii1)    (: ca (comp <>t) (\ en `('i1 (ca en))))
+            (id? h 'ii2)    (: ca (comp <>t) (\ en `('i2 (ca en))))
+            (: cf (comp h) cas (comp-args >t) (\ en (spine en (cf en) cas))))))
 
-   ; empty-list tests are STRUCTURAL (two?): a love list of zeros NETS zero,
-   ; so !as would call (add n 0)'s final argument list (0) empty -- the net law.
-   (vof-spine en f as)
-   (? !(two? as) f (vof-spine en (vapp f (vof en <as)) >as))
+   ; the argument list compiles once too; `spine` then only applies.
+   ; ⚠ empty-list tests are STRUCTURAL (two?): a love list of zeros NETS zero, so `!cas` would
+   ; call (add n 0)'s final argument list (0) empty -- the net law. Asked in the positive here.
+   (comp-args as) (? (two? as) (link (comp <as) (comp-args >as)) ())
+   (spine en f cas) (? (two? cas) (spine en (vapp f ((<cas) en)) >cas) f)
+
+   ; the old door, kept for every caller (chk, inf, the globals, test/uu.l): compile, then run.
+   (vof en t) ((comp t) en)
 
    (conv d a b)
    (? (id? a b) 1                    ; the same heap object converts to itself:
