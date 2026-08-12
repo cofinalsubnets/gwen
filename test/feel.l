@@ -118,6 +118,30 @@
     (: _ (pin bs-ctr 0 0) h (bs-esc (bs-bump 0))
        (&& (= 3 (h 2)) (= 1 (peep bs-ctr 0 0))))))
 
+; --- the read-once refinement (sl-sub-1) --- the LAST effectful arg substitutes when its
+; param is read exactly once, unconditionally, in an otherwise-pure body -- the call is
+; gone with no let. read-many still binds; a read under ? or \ declines the substitution
+; (it could run zero or many times); order holds across a bind + a substitution.
+(: r1-c1 (cask 1) r1-c2 (cask 1)
+   (r1-b1 _) (: v (peep r1-c1 0 0) _ (pin r1-c1 0 (+ v 1)) (+ v 1))
+   (r1-b2 x) (: v (peep r1-c2 0 0) _ (pin r1-c2 0 (+ v 1)) (+ x v))    ; answers x + own pre-count
+   (r1-mix a b c) (a + c + b)               ; b read once -> substitutes; a c fold
+   (r1-two a b) (a + a + b)                 ; a read twice -> binds; b once -> substitutes
+   (r1-iff p b) (? p b 0)                   ; b read under ? -> declines; still runs ONCE
+   (assert
+    ; read-once: the effect still fires exactly once, value as the call
+    (: _ (pin r1-c1 0 0) r (r1-mix 3 (r1-b1 0) 4)
+       (&& (= 8 r) (= 1 (peep r1-c1 0 0))))
+    ; bind + substitution: a's binding fires BEFORE b's substituted read (call order) --
+    ; b's expression reads a's counter, so a flip changes the VALUE, not just the trace
+    (: _ (pin r1-c1 0 0) _ (pin r1-c2 0 0)
+       r (r1-two (r1-b1 0) (r1-b2 (peep r1-c1 0 0)))
+       (&& (= 3 r) (= 1 (peep r1-c1 0 0)) (= 1 (peep r1-c2 0 0))))
+    ; conditional read: the strict call evaluates b ALWAYS -- substitution under the
+    ; branch would drop the effect on the false arm, so it must bind instead
+    (: _ (pin r1-c1 0 0) r (r1-iff 0 (r1-b1 0))
+       (&& (= 0 r) (= 1 (peep r1-c1 0 0))))))
+
 ; --- the inliner's under-saturated beta --- a known lambda applied SHORT of its params
 ; substitutes the given args and answers a \ of the rest -- so curried HOFs collapse
 ; statically when consumed (op=1), and still REVERT at value position (the escape law).

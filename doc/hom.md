@@ -77,8 +77,9 @@ love presents that monoid rather than modelling it:
   LICENSE forall states — splice ≡ call as value and trace, arg effects before body
   effects — and the flip as a theorem pair: substitution under an effectful arg read
   twice keeps the value equal and doubles the trace, the by-name breach an inliner must
-  not ship. ev.l's inliner now ships under it: cprop's binding-splice lane (bspl) binds
-  each impure arg once, in call order, where the substitution lane used to decline. And
+  not ship. ev.l's inliner now ships under it: cprop's bspl lane substitutes a trailing
+  effectful arg read exactly once (sl-sub-1 — the call vanishes, no let), and binds each
+  remaining impure arg once, in call order, where the lane used to decline whole. And
   `sl-cross` is the cross-machine theorem: one source (y+1), the stack machine's splice
   and the register machine's de5bck, one value, forall states of both — "one design, two
   machines" as a single law.
