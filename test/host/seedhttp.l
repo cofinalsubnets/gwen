@@ -69,4 +69,4 @@
  (two? ref)                                                          ; the ref rode along
  (0 = clean))                                                        ; the tree matches the snap
 
-(: _ (puts "seedhttp: ok") _ (putc 10) 0)
+(: _ (test_fin ()) _ (puts "seedhttp: ok") _ (putc 10) 0)

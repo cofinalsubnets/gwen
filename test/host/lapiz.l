@@ -218,6 +218,7 @@ some literal
                              (! (member? 'rule (map cap d)))))) (L "doc/love.md" "doc/cook.md"))
       0)
 
+ _ (test_fin ())
  _ (puts "crew/lapiz: ok -- the document lens (markdown/html/roff), laws 1 + 2 + the roff domain
 ")
  0)

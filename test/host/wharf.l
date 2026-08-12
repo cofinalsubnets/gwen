@@ -143,4 +143,5 @@
 (: p '(beside 25 1 (stack 75 2 3))
  _ (assert (p = (wharf-shut (wharf-split p 3 'beside 50 4) 4))))
 
+(test_fin ())
 (puts "wharf: ok")

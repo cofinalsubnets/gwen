@@ -224,4 +224,5 @@
           (? (! (&& (= core ws) (= model ws))) (: _ (. (L (\ ledger-diverged) i nm ws core model)) 0)
              (walk (- i 1) s2))))
  _ (assert (walk 40 20260706))
+ _ (test_fin ())
  (puts "overlay leg 7: the tiling ledger holds, model and metal"))

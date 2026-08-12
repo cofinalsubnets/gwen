@@ -128,4 +128,5 @@
     (find (rowtx scr 0) "b1" 0))          ; the formula bar rode the cursor
  (close m))
 
+(test_fin ())
 (puts "manifest: ok")

@@ -81,4 +81,5 @@
 
  _ (strike ())
  _ (close (cup ph)) _ (close (cup xv))
+ _ (test_fin ())
  (puts "luxui: ok"))

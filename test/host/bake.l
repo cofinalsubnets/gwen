@@ -25,4 +25,5 @@
    _ (assert (two? r) (<r = 0) (>r = "4242"))
 
    _ (unlink img) _ (unlink drv)
+   _ (test_fin ())
    (puts "bake: ok\n"))

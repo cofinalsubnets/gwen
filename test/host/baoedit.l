@@ -61,4 +61,5 @@
    ; the live draft survives an up/down round-trip:
    (= `(120) (cap (edln (keys `(120 27 91 65 27 91 66 13)) "" (L abc))))))  ; x, UP, DOWN -> "x"
 
+(test_fin ())
 (puts "baoedit: ok") (putc 10)

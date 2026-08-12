@@ -90,6 +90,7 @@
  _ (waitfor (cap r)))
 (: _ (assert (charm? (ptyecho 5 0))))               ; non-port -> errno (EBADF)
 
+(test_fin ())
 (puts "pty: ok") (putc 10)
 
 ; --- the two-task editor + pump topology (doc/io.md part II, "the symptom") ---

@@ -109,4 +109,5 @@
 (: rc (cap (hark `("sh" "-c" "timeout 20 out/host/love test/host/dns.l")))
    _ (assert (rc = 0)))
 
+(test_fin ())
 (puts "run dns: ok\n")
