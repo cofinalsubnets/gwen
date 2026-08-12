@@ -74,7 +74,12 @@ inst644 = @echo CP	$(abspath $@); install -D -m 644 $< $@
 # /usr/include and the link found no libc at all. ⚠ NOT read out of ~/.love/src: a package
 # has no src tree and `love down` takes one away, so the copy is what makes it stand alone.
 moon_hdrs = $(wildcard crew/moon/include/*.h crew/moon/include/*/*.h)
-moon_srcs = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h crew/moon/lib/math/*.c)
+# ⚠ the nolibc tree is TWO deep since it went one-function-to-a-file: 185 of its 189
+# sources sit under ctype/ dirent/ env/ fmt/ mem/ net/ sys/ .., and a one-level glob
+# installs core.c alone. that reads as a working nest right up to the link -- mhome
+# finds its root by core.c and then owes every member the glob left behind.
+moon_srcs = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
+                       crew/moon/lib/nolibc/*/*.c crew/moon/lib/math/*.c)
 installs += $(patsubst crew/moon/%,$d/lib/love/moon/%,$(moon_hdrs) $(moon_srcs))
 $d/lib/love/moon/include/%: crew/moon/include/%
 	$(inst644)
