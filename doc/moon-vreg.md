@@ -74,6 +74,41 @@ never allocated. **"no vreg reaches holo" is a free correctness gate**, not one 
   varargs and asm constraints keep physical names — as PRE-COLOURED vregs, the standard move. 33
   `argr` sites and a handful of `ip2`/`psc`/`pkr` sites are the whole surface.
 
+## cross-platform, and why it is the DEFAULT here rather than a later rung
+
+⚠ **the non-x64 lanes have essentially no allocator today, and that is the biggest single fact
+about this rung.** `(cspool g)` answers `()` for arm64, thumb2 and riscv — no callee-saved pool
+at all. `(nhome g)` is 0 for thumb2 and riscv, which is "spill every param" in one line. And
+`repack`, `coal`, `unframe`, `cskeep` and `addrfold` each bail on `arm? g`. Those targets are
+spill-everything backends. **An allocator that is parametric from the start hands three targets
+their first one**, from a far lower base than x64's, where five mechanisms already fight over the
+last few per cent.
+
+Three things make parametric the cheap option rather than the expensive one:
+
+* **the target-descriptor work is 19 references and three one-line rosters.** `csregs` (11 refs),
+  `lvgp` (5), `lvret` (3), defined at `gen.l:4556-4571`. And the pattern is already everywhere
+  else in the file — `(argr g)`, `(hregs g)`, `(nhome g)`, `(cspool g)` all answer per target.
+  The liveness kit is the ONE place that hardcoded x64 instead of taking `g`.
+* ⚠ **and that hardcoding has already cost a hang.** `coal` rode unguarded on `lvout`'s x64
+  rosters for two rungs; on an lr/fp target it was answering a different machine's liveness, and
+  it hung riscv's on-hart egg bake the first time something raised the stakes. A parametric kit
+  removes the class, not the instance. **This is rung 5.0's real content.**
+* **arm64 and riscv are THREE-ADDRESS.** `emit-alu`'s `d==a` fusion constraint — the thing that
+  makes x64 coalescing delicate and that the copy-walk rung spent itself on — does not exist
+  there. The allocator has strictly more freedom on those targets. x64 is the HARD one, so an
+  x64-only design would be tuning against the worst case and then generalising from it.
+
+**So: parametric by construction from 5.0, landed x64-first because that is where the gauges
+are** — ccbench, ccsize, the corpus insn/cycle rows and the frame-mov census are all x64
+instruments. That is a measurement constraint, not a design one, and the difference matters: the
+arm lanes are then a roster and a gate rather than a retrofit.
+
+⚠ **owed: an instrument for the other targets.** `test_ccarm64`/`test_ccriscv`/`test_kdiff` are
+CORRECTNESS gates; nothing prices arm codegen the way `bench/ccbench.sh` prices x64. We cannot
+claim an arm win without one, and "it must help, they had nothing" is exactly the reasoning this
+arc has twice had to retract. Build the gauge before claiming the rung.
+
 ## what dies
 
 opool (survives only as the register file's name), the vmap and its array leg, homes/rides and
@@ -88,8 +123,13 @@ Each ships alone under "pays somewhere, regresses nowhere", each names the mecha
 and each is revertible. ⚠ this arc has refused two increments already — a rung that cannot state
 its mechanism is the refused shape wearing a new hat.
 
-* **rung 5.0, pre-colouring — no behaviour change.** Make every ABI-fixed register explicit as a
-  constraint rather than a bare literal. Ships byte-identical; that IS its gate.
+* **rung 5.0, the target descriptor + pre-colouring — no behaviour change.** `lvgp`, `lvret` and
+  `csregs` stop being x64 constants and become `(x g)` answers like every other roster in the
+  file; the liveness kit takes the machine it is on. Make every ABI-fixed register explicit as a
+  constraint rather than a bare literal. **Ships byte-identical on x64 — that IS its gate** — and
+  retires the x64-only guards on `coal` (and the class of bug that hung riscv) rather than adding
+  another. ⚠ do this FIRST: every rung below stands on the liveness kit, and a kit that lies
+  about the machine is the one failure mode this arc has already shipped.
 * **rung 5.1, the pool mints.** `ralloc` hands out fresh vregs instead of `opool` members; a
   linear-scan pass maps them back. Everything else stands. The first real measurement, and the
   smallest thing that can carry the allocator.
@@ -104,8 +144,12 @@ its mechanism is the refused shape wearing a new hat.
   write-through cache; invert it — the register is the truth, a spill is placed under real
   pressure. `repack` shrinks to packing actual spills; `stld`/`deadst` lose their write-through
   assumptions.
-* **rung 5.5, the arm lanes.** arm64/thumb2/riscv take the same assignment with their own pools,
-  kdiff-gated per arch; then the x64-only guards retire.
+* **rung 5.5, the other targets LAND.** Not a port — 5.0 made the allocator parametric and every
+  rung since has been written against a descriptor, so this rung is a roster per target, a gauge,
+  and the gates: `test_kdiff` per arch (~45s each), `test_ccarm64`/`test_ccriscv`, `test_raw_arm64`
+  /`test_raw_riscv` under qemu, `test_virt` on-hart. ⚠ it is also where the biggest number
+  probably is, since these targets start from no allocator at all — which is exactly why it needs
+  the instrument above and not an argument from first principles.
 
 ## why this rung and not another patch
 
