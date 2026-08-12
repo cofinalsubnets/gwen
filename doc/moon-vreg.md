@@ -1,6 +1,6 @@
 # moon-vreg — rung 5, the emission rewrite
 
-⚠ **Plan. Rung 5.0 is CLIMBED (2026-08-12); 5.1 onward is not built.** Written out of moon-alloc
+⚠ **Plan. Rungs 5.0 and 5.1a (the shadow) are CLIMBED (2026-08-12); 5.1b onward is not built.** Written out of moon-alloc
 rung 5, after the arc refused two increments aimed at the same prize. Companions:
 `doc/moon-alloc.md` (the arc and its rungs),
 `doc/moon-regalloc.md` (the ledger — every number quoted here has an entry there),
@@ -187,7 +187,7 @@ its mechanism is the refused shape wearing a new hat.
   `pmin`, `nrac` and the regen dance, and collects the compile-time win when `build` stops running
   twice — a large rung, but the arc has now refused three increments that tried to be smaller
   than the thing they were changing.
-### 5.1a — the SHADOW STEP, and it must come first
+### 5.1a — the SHADOW STEP, and it must come first — CLIMBED 2026-08-12
 
 **Mint vregs, then map each one to exactly the register today's discipline would have given it.**
 Byte-identical by construction. It changes nothing and proves everything: that a vreg survives
@@ -198,6 +198,34 @@ register can still answer.
   `ralloc`'s own armor, `vmpin`/`vapin`'s `pool0` tests (`gen.l:186`, `:257`), `alsafe?` (`:481`),
   the two hint tests (`:2122`, `:5891`), plus `vpin` (18 refs), `rpin` (19) and `csbor` (10).
   Each becomes "resolve the vreg, then ask" — one indirection, no policy.
+
+**Built, and the scope above missed a whole class.** The predicates and pin tables landed as
+written (`rp` resolves, every g-table holds physicals only, `vrfix` substitutes as build's
+innermost tail link). What the byte gate then caught — a 10-byte `.text` diff in two functions of
+love.c, run to ground with a per-site-tagged pool trace over instrumented images — was the
+**machine-identity comparisons**:
+
+* ⚠ **a hint honored by ACCIDENT is the discipline, not a coincidence to fix.** An UNHELD hint
+  (no `rpin` hold — the decl init, `pk`, the fdd lanes) returns to the pool at a splice body's
+  psreset, a later `ralloc` re-mints its physical, and the value comes back wearing the new mint.
+  The old code compared physicals, so the accident counted — the honor test skipped the `rfree`,
+  the register stayed out, and every downstream alloc in the statement shifted. Same-mint `id?`
+  breaks exactly there. `rpeq?` (resolve both sides) is the door, at every hint-honor test AND
+  the two-address alias tests (`id? rd rA` guarding the operand free in `immop` and the bin
+  register lane ×6, `id? wnt rB`, sub's alias-dst dodge) — ~20 sites beyond the scoped list.
+* ⚠ **`psafe?` reads the write set RESOLVED** — a freed mint's store still lands on its physical,
+  and a `spare` borrow licensed past it reads garbage. The one form-scan that runs before `vrfix`.
+* the `ezd` delivered-seat test (`kls`) resolves too: the pool overlaps the x64 arg file
+  (r5 r6 r7 r8), so "the value already sits in its seat" can be an accident of the same kind.
+* **the instrument that found them**: bake the two gen.l variants into images
+  (`love -l <cat> -e '(bake ..)'`, ~40s), compile love.c with both, then drive `cc-parse` +
+  `cgen-obj` through `--wake image -e` for the IR of one function (seconds, vs minutes
+  interpreted), and tag every `ralloc`/`rfree` call site with its line number for the pool
+  trace. The corpus (141 files, test/cc + host) never diverged — only love.c, twice; a corpus
+  sweep alone would have called this rung green while the discipline drifted.
+
+Gate at the climb: `love.o` byte-identical on all four targets (x64/arm64/riscv64/thumb2),
+141-file corpus byte-identical, `make test` + `test_moon` + `test_fixpoint` green.
 * ⚠ **PLACEMENT IS FORCED, and it is not the post-choice chain.** The rewrite is the INNERMOST
   link of the build tail, applied to the assembled prologue+body+epilogue **before `sibcall`** —
   because `sibcall` matches epilogue shapes and the park (`pkr`), and on arm `soften` sits inside

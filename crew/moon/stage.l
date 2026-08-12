@@ -15,7 +15,7 @@
 
 (: ovck (from 'overlay 'ov-check)
    _ (? (lit? ovck) 0 (: _ (puts ";; moon-stage: no overlay module in this love") (quit 1)))
-   stage-dies '(gst ir-chosen ir-nolab ir-noframe ir-jmpfix ir-final ir-emitted)
+   stage-dies '(gst ir-vreg ir-chosen ir-nolab ir-noframe ir-jmpfix ir-final ir-emitted)
    (stage-join x y) (? (= x y) x 'top)
    (stage-tr op x y) 'top
    (stage-lit e) 'bot
@@ -24,7 +24,10 @@
                    'litdie stage-lit 'okr stage-okr)
    stage-sigs '((cgfn (gst top) top)                ; sigged so its body -- both chains -- is walked
                                                     ; (params gradual: a sig VARIABLE there would ride rigid into every concrete seam)
-                ; the build tail: sibcall + the sweeps, each stage-preserving
+                ; the build tail: vrfix ADVANCES (build's assembled list carries mints -- the
+                ; vreg shadow, doc/moon-vreg.md 5.1a -- and no vreg may reach sibcall/soften,
+                ; which reason about the physical file), then sibcall + the sweeps preserve
+                (vrfix (gst ir-vreg) ir-chosen)
                 (sibcall (gst a) a) (soften (gst a) a) (a4ize (a) a)
                 (cfoldir (a) a) (deadcell (a) a) (deaddef (a) a) (spmerge (a) a)
                 (stld (a) a) (copyprop (a) a) (addrfold (a) a) (cmpfuse (a) a)

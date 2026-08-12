@@ -1159,6 +1159,32 @@ Gates: test_slow (incl. test_virt, the riscv on-hart bake that hung the last tim
 an unmodelled target), test_ccarm64 (129 programs cross-checked against aarch64 gcc), test_ccriscv
 (128 against riscv64 gcc), test_thumb2, test_thumb1, test_kernel_arm64 (4,086 tests), test_kore.
 
+2026-08-12 · RUNG 5.1a — THE VREG SHADOW: the pool mints noms, the machine answers as before.
+`ralloc` answers a minted `%vN` mapped in a per-build tablet to the physical the pool picked;
+`vrfix`, build's innermost tail link (before `sibcall`/`soften`, which do register arithmetic),
+substitutes over the assembled function; `stage.l` types the seam (`ir-vreg` → `ir-chosen`).
+Every predicate that asks about the MACHINE resolves through `rp` first, and every g-table
+(vpin, rpin, homes, the vmap) holds physicals only. **Byte-identical `love.o` on all four
+targets, byte-identical 141-file corpus, test_fixpoint holds** — the shadow proves a vreg
+survives build and the peepholes without the compiler changing one decision.
+
+The finding that outlived the diff: **the old discipline compares PHYSICALS, and its accidents
+are load-bearing.** An unheld hint returns to the pool at a splice body's psreset, re-mints, and
+the value comes back "honoring" the hint by coincidence of register — and the coincidence decides
+an rfree, which shifts every later alloc in the statement. Same-mint `id?` broke exactly there
+(a 10-byte .text diff in two functions of love.c, out of 141 files — a corpus sweep alone would
+have called it green). `rpeq?` (resolve both sides) now carries every hint-honor and two-address
+alias test, ~20 sites past the scoped list, and `psafe?` reads write sets resolved (a freed
+mint's store still lands on its physical). Details + the instrument (site-tagged pool traces
+over baked instrumented images): doc/moon-vreg.md §5.1a. ⚠ 5.1b inherits the lesson upstream:
+when destinations BIND, the accidental-honor lane disappears — every place `rpeq?` now sits is a
+place the assignment must make deliberate.
+
+⚠ housekeeping the gate caught: rung 5.0 changed `csdefs` to take `g` and law.l's six one-arg
+csdefs asserts under-applied to a truthy closure from that commit on — test_moon was red on the
+branch and unnoticed, because 5.0's session gated on byte-identity + test_slow and never re-ran
+the law gate. A law page owes a run per SIGNATURE change, not per behavior change.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.
