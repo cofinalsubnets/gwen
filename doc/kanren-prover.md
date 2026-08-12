@@ -71,6 +71,10 @@ uu's term syntax — quoted lists, with kanren vars as the holes.
   yields a candidate that fails `chk`, never a false theorem. This is *why* a hairy search is
   safe here.
 
+⚠ and one thing this design does NOT need, recorded because it was assumed and then checked:
+**disequality**. None of the four risks above is a negative side condition, so a `=/=` rung buys
+this page nothing — see doc/kanren.md, which stops at pricing for exactly that reason.
+
 It complements, not replaces, the differential-oracle leg (`proof/rocq/extract.v`, which ties the
 model to the binary): export ties DISCOVERED laws to independent kernels. See doc/uu-universes.md
 for uu and the two-kernel bridge, doc/verify.md for the whole lattice.
