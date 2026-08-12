@@ -550,9 +550,18 @@
    ; artifact stays loud: -shared, -m.., and -Wl,/-Wa,/-Wp, (their payload is
    ; real arguments; dropping them is the silent no-op wearing a cc face).
    (pfx? a p) (: n (tally p) ((n <= tally a) && (snip a 0 n = p)))
+   ; -lm and its family ride through too, and the reason is particular to us: the
+   ; driver pulls its runtime BY NEED, so the libc/libm/libdl a recipe asks for is
+   ; already in the artifact before it asks. a name we cannot satisfy does not go
+   ; quiet either -- it lands at the link as a named undefined reference, the same
+   ; sentence a missing archive gets -- and a real third-party library still has its
+   ; door: name the .a as an input. -L likewise: we search no library path, and
+   ; saying so by refusing the whole compile helps nobody. ⚠ GLUED only (glu? wants
+   ; a third charm), so a bare `-l` still refuses rather than eating the next word
+   ; as a library name and the word after it as an input.
    (tol? a) ((a = "-pipe") || (a = "-static") ||
              pfx? a "-g" || pfx? a "-O" || pfx? a "-std=" ||
-             pfx? a "-f" ||
+             pfx? a "-f" || glu? a 108 || glu? a 76 ||
              (pfx? a "-W" &&
               !(pfx? a "-Wl," || pfx? a "-Wa," || pfx? a "-Wp,")))
    ; the -nostdlib family: freestanding on any cc's surface -- the driver

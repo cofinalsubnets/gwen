@@ -40,6 +40,18 @@ EOF
 out=$("$d/drv") || fail "the pulled binary did not run"
 [ "$out" = 42 ] || fail "answered '$out', wanted 42"
 
+# 2b: -lm -ldl -L ride through. the driver pulls its runtime BY NEED, so the libc
+# family a recipe asks for is already in the artifact before it asks -- and lua's own
+# Makefile writes LIBS=-lm, which is the whole reason this matters. the object must be
+# UNCHANGED by them: a tolerated flag that moved a byte would not be tolerated at all.
+"$ho/mooncc" "$@" -c "$d/b.c" -o "$d/b2.o" -lm -ldl -L/usr/lib || fail "-l/-L did not ride through"
+cmp -s "$d/b.o" "$d/b2.o" || fail "a tolerated -l/-L changed the object"
+"$ho/mooncc" "$@" -o "$d/drv2" "$d/a.o" "$d/b.o" -lm || fail "link with -lm"
+[ "$("$d/drv2")" = 42 ] || fail "the -lm-linked binary did not answer 42"
+# ..but a BARE -l is still a refusal: taking it would eat the next word as a library
+# name and the word after it as an input, which is the silent no-op wearing a cc face.
+"$ho/mooncc" -c "$d/b.c" -o "$d/b3.o" -l 2>/dev/null && fail "a bare -l did not refuse"
+
 # 3a: -shared refuses loudly
 "$ho/mooncc" -shared "$d/b.o" -o "$d/x.so" 2>/dev/null && fail "-shared did not refuse"
 [ $? -eq 2 ] || fail "-shared refused with the wrong exit"

@@ -96,7 +96,12 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
 **The cc conventions** — `CC=mooncc` drives a gcc-shaped recipe unchanged:
 
 - the **advisory** families (`-W..` `-O..` `-g..` `-std=` `-f..` `-pipe` `-static`) ride through
-  ignored;
+  ignored, and so do glued `-l..`/`-L..`: the runtime is pulled by need, so the libc/libm a
+  recipe asks for is already in the artifact before it asks, and a name we cannot satisfy still
+  lands as a *named* undefined reference at the link rather than going quiet (a real third-party
+  library has its own door — give the `.a` as an input). Lua's own `LIBS=-lm` is why this
+  matters. ⚠ glued only: a bare `-l` refuses, since taking it would eat the next word as a
+  library name and the one after it as an input;
 - an exe link still owing strong symbols pulls the runtime **by need**, archive-fashion — nolibc
   + the am math + the mksys leaf, compiled from the toolchain root and cached under
   `~/.love/cache/moon/` (below), so a set carrying its own `am.o` never meets a twin;
