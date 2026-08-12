@@ -92,7 +92,10 @@
           (id? tag 'char)
            (line ("syn match " + g + " \"" + (string a) + "\""))
           (id? tag 'num)
-           (: _ (line ("syn match " + g + " \"\\<-\\?\\d\\+\\>\""))
+           ; hex FIRST: `0x1f` would otherwise take the plain-integer match on its
+           ; leading 0 and leave the rest bare, which is a worse lie than no colour
+           (: _ (line ("syn match " + g + " \"\\<-\\?0[xX]\\x\\+\\>\""))
+              _ (line ("syn match " + g + " \"\\<-\\?\\d\\+\\>\""))
               _ (line ("syn match " + g + " \"\\<-\\?\\d\\+\\.\\d*\\([eE][-+]\\?\\d\\+\\)\\?\\>\""))
               _ (line ("syn match " + g + " \"\\<-\\?\\.\\d\\+\\([eE][-+]\\?\\d\\+\\)\\?\\>\""))
               (line ("syn match " + g + " \"\\<-\\?\\d\\+[eE][-+]\\?\\d\\+\\>\"")))
@@ -130,6 +133,18 @@
    pgroup (grp <(hue-tagged 'delim))
    cluster (join ((map grp (filter (\ r (! (id? (hue-tag r) 'delim))) hue-classes))
                   + '("LoveTodo")) ",")
+
+   ; the delim row's bytes read as PAIRS -- (0,1) then (2,3) then (4,5) -- and one
+   ; region takes them ALL, so a level is one region however its list is bracketed.
+   ; a region per pair instead would need the rainbow's contains= to name three
+   ; regions a level, and buys only the mis-colouring of `(a]`, which is libra's
+   ; to say and not a highlighter's. ⚠ `[` is the one byte vim's regex would read
+   ; as a collection; `(`, `{` and `}` are literal under default magic.
+   (vim-brk c) (? (c = 91) "\\[" ("" + c))
+   brkpairs
+    (: (go j k a) (? (tally hue-brk <= j) a
+                     (go (j + 2) k (a + ((" " + k) + ("=\"" + (vim-brk (hue-brk j)) + "\"")))))
+       ((go 0 "start" "") + (go 1 "end" "")))
 
 ; --- the file ------------------------------------------------------------------
    _ (line "\" vim syntax for love (.l) -- GENERATED. do not edit.")
@@ -179,7 +194,7 @@
    _ (line "if g:love_rainbow")
    _ (: (go i) (? (9 < i) ()
                   (: _ (line ("  syn region LoveList" + (show i) + " matchgroup=LoveLevel" + (show i)
-                              + " start=\"(\" end=\")\" contains=@LoveListCluster,LoveList"
+                              + brkpairs + " contains=@LoveListCluster,LoveList"
                               + (show (? (i < 9) (i + 1) 0))))
                      (go (i + 1))))
         (go 0))
@@ -191,7 +206,7 @@
    _ (line "  endif")
    _ (line "else")
    _ (line ("  syn region LoveList matchgroup=" + pgroup
-            + " start=\"(\" end=\")\" contains=@LoveListCluster,LoveList"))
+            + brkpairs + " contains=@LoveListCluster,LoveList"))
    _ (line "endif")
    _ (blank ())
    _ (line "let b:current_syntax = \"love\"")

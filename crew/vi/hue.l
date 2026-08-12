@@ -133,14 +133,21 @@
            (tablet ()) (rev (hue-tagged 'word)))
 
    ; --- is this token a number? -----------------------------------------------
-   ; -3  .5  1.  1e10  1.5e-3 -- an optional sign, a mantissa with at least one
-   ; digit, an optional exponent, and NOTHING left over. it runs before the punct
-   ; split so a leading `-` or `.` stays part of the number, which is the order
-   ; syntax.vim gets by defining LoveNumber after the sigil matches.
+   ; -3  .5  1.  1e10  1.5e-3  0x1f -- an optional sign, then either a hex body or
+   ; a mantissa with at least one digit and an optional exponent, and NOTHING left
+   ; over. it runs before the punct split so a leading `-` or `.` stays part of the
+   ; number, which is the order syntax.vim gets by defining LoveNumber after the
+   ; sigil matches. the reader takes 0x, so the painter has to.
    (hue-num? t)
     (: n (tally t)
        (digs i) (? ((i < n) && (48 <= t i) && (t i <= 57)) (digs (i + 1)) i)
+       (hexs i) (? ((i < n) && (: c (t i) (((48 <= c) && (c <= 57)) ||
+                                           ((97 <= c) && (c <= 102)) ||
+                                           ((65 <= c) && (c <= 70)))))
+                   (hexs (i + 1)) i)
        s0 (? ((0 < n) && (t 0 = 45)) 1 0)
+       hx (? (((s0 + 2) < n) && (t s0 = 48) && ((t (s0 + 1) = 120) || (t (s0 + 1) = 88)))
+             (hexs (s0 + 2) = n) ())
        a (digs s0)                                         ; the integer part
        b (? ((a < n) && (t a = 46)) (digs (a + 1)) a)      ; the fraction
        md (? (s0 < a) 1 (? ((a + 1) < b) 1 ()))            ; at least one mantissa digit
@@ -150,7 +157,7 @@
                 e2 (digs e1)
                 (? (e1 < e2) e2 b))
              b)
-       (md && (x = n)))
+       (hx || (md && (x = n))))
 
    ; the word lanes, already folded into one tablet by hue-book; () when no lane
    ; claims the token
