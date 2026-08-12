@@ -4648,9 +4648,9 @@
 
    ; -- COALESCING: a copy whose source dies at the copy, and whose source was DEFINED by the
    ; form just before it, is not a copy at all -- it is a def that named the wrong register. The
-   ; def takes the destination and the mov drops. dehusk is the FORWARD half of this (rename the
-   ; source onward while it lives); this is the backward one, and it is the first reader to ask
-   ; liveness not "does this die soon" but "does it die HERE". ⚠ soundness rides on ADJACENCY: no label
+   ; def takes the destination and the mov drops. copyprop is the FORWARD half of this (rename
+   ; the source onward while it lives); this is the backward one, and it is the first reader to
+   ; ask liveness not "does this die soon" but "does it die HERE". ⚠ soundness rides on ADJACENCY: no label
    ; can sit between the def and the copy (a label is a form, and rdsp bars it), so nothing
    ; branches in between; and D cannot be live out of the def, because live-out there is live-in
    ; at the copy, which reads S and writes D. ⚠ the prologue is off limits: unframe reads it BY
@@ -4666,10 +4666,13 @@
                 ; the def names S ALONE and never reads it -- a read would keep the operand and
                 ; the two-address expansion costs back exactly what the drop wins
                 (two? dfs && !(two? >dfs) && id? <dfs S && id? (nthr p 1) S &&
-                 ; ⚠ D must be a stranger to the def on BOTH sides: absent from its reads (the
-                 ; emitter refuses a destination that aliases a source -- alias-dst) as well as
-                 ; from its defs, or the rename writes over an operand it still needs
-                 !(member? S <d) && !(member? D <d) && !(member? D dfs) &&
+                 ; ⚠ D must be a stranger to the def's DEFS, or the rename writes over an operand
+                 ; it still needs -- and to its reads, where the emitter refuses a destination
+                 ; that aliases a source (alias-dst). the one alias it welcomes is an alu's FIRST
+                 ; source: the two-address lowering is (mov d a; op d b), so (add r7 r7 8) IS the
+                 ; fused form -- it is (sub r7 r9 r7), the second source, that reads its own wreck.
+                 !(member? S <d) && !(member? D dfs) &&
+                 (!(member? D <d) || (member? <p aluops && id? (nthr p 2) D)) &&
                  !(member? S (peep lot i ())) && !(id? D S))))))
    (coal g fs)
     (: lot (lvout g fs)
@@ -5270,85 +5273,81 @@
                          (member? 'r4 <>rd) (f >< stldw r ())
                          (f >< stldw r (filter (\ e9 !(member? <>e9 <>rd)) bs)))))))))
 
-   ; adjacent reg-reg movs FOLD: after (mov a b), a back-copy or a duplicate is a husk and
-   ; drops; a feed (mov d a) reads through to b, stranding the middle def for deaddef's
-   ; rerun. frame anchors and r3 stay out (epim?/sibjmp/unframe anchor on their shapes).
-   ; an ALU/compare/memory consumer reads through the same way, at the WHITELISTED read
-   ; positions only -- div and the shifts ride protocol registers, and la's operand is a
-   ; symbol, so a generic substitution has no license.
+   ; -- COPY PROPAGATION: after (mov a b) the two registers hold ONE value, so every later read
+   ; of a may say b instead, and once nothing reads a the copy is a dead def and drops. one
+   ; forward walk carrying reg -> source, killed at each def and at every control edge, then one
+   ; liveness pass for the drop -- lvout answers "is this copy's destination read anywhere ahead"
+   ; across the whole fn, which the block-local deaddef cannot. no window and no form count
+   ; anywhere: the map lives exactly as long as the dataflow says, and coal folds what it strands.
+   ; ⚠ frame anchors and r3 stay out of the map: pro4?/epim?/sibjmp/unframe all read the prologue
+   ; and epilogue by SHAPE, so a rename up there moves their ground.
    (hmov? f) (two? f && <f = 'mov && nom? <>f && nom? <>>f
                && !(member? <>f '(sp fp r4 r3)) && !(member? <>>f '(sp fp r4 r3)))
-   ; the RENAME SANDWICH: (mov X Y) M.. (mov Y X) with X dead past the back-copy and every
-   ; M a straight-line form that never touches Y -- the region runs as well in Y alone, so
-   ; X renames away and BOTH movs drop. implicit protocol regs ride rdsp's defs, so the Y
-   ; guard covers div and the variable shifts; ⚠ a 'la symbol spelled like X would rename
-   ; as if it were the register -- that collision declines.
-   (swin x y q n acc)
-    (? (n > 8) ()
-       !(two? q) ()
-       (: g <q
-          (? (two? g && <g = 'mov && id? <>g y && id? <>>g x) [acc q]
-             (two? g && <g = 'la && id? <>>g x) ()
-             (: rd (rdsp g)
-                (? (id? rd 'bar) ()
-                   (member? y <rd || member? y <>rd) ()
-                   (swin x y >q (n + 1) (g >< acc)))))))
-   (hren f x y) (? !(two? f) f ((? (id? <f x) y <f) >< hren >f x y))
-   ; a back-copy across a QUIET window (defs-free forms, conditional brs) is still a husk:
-   ; nothing between rewrites either register, and the drop lives only on the fall-through.
-   ; answers the rest with the copy gone, 'no when the window closes.
-   (qdrop a b q n)
-    (? (n > 6) 'no
-       !(two? q) 'no
-       (: g <q
-          (? (two? g && <g = 'mov && id? <>g b && id? <>>g a) >q
-             (: ok (? (two? g && <g = 'br) 1
-                      (: rd (rdsp g)
-                         (? (id? rd 'bar) 0 !(two? <>rd))))
-                (? !ok 'no
-                   (: t (qdrop a b >q (n + 1))
-                      (? (id? t 'no) 'no (g >< t))))))))
-   ; no memory ops here: addrfold CONSUMES a feeding mov into a load's base and deletes
-   ; it under its own license -- a read-through would steal the pattern and strand a mov
-   ; deaddef can't always prove dead
-   huskrd '((add 2 3) (sub 2 3) (and 2 3) (or 2 3) (xor 2 3) (imul 2 3)
-            (cmp 1 2) (test 1 2))
-   (hsub f a b ps i)
-    (? !(two? f) ()
-       ((? (member? i ps && id? <f a) b <f) >< hsub >f a b ps (i + 1)))
-   (dehusk fs)
+   ; the forms that keep their operands, each for a reason rdsp cannot carry: addrfold CONSUMES a
+   ; mov feeding an address under its own license and a read-through here would steal the pattern;
+   ; cskeep reads (push <cs>) as that register's SAVE, so its operand is a contract; and a
+   ; variable shift takes its count in r1 on every backend (holo scares if it does not).
+   cpskip (ldops9 + gstops + stxops + siops + leaops + xops + fldops + fstops + vshops +
+           '(cmpm cmprm push))
+   ; the READ POSITIONS of a form, probed off rdsp itself rather than kept as a whitelist beside
+   ; it: a slot where a stranger reads and does not write renames sound, so a read-modify-write
+   ; slot (the shifts, the unops) and la's SYMBOL both decline by construction.
+   (cprp f)
+    (? (member? <f cpskip) ()
+       (: (go i acc)
+           (? !(i < tally f) (rev acc)
+              (: x (nthr f i)
+                 (? !(nom? x) (go (i + 1) acc)
+                    (: d (rdsp (reop f i 'zq))
+                       (? (id? d 'bar) (go (i + 1) acc)
+                          (member? 'zq <d && !(member? 'zq <>d)) (go (i + 1) (i >< acc))
+                          (go (i + 1) acc))))))
+          (go 1 ())))
+   ; ⚠ the substitute must be a stranger to the form's DEFS: the two-address expansion writes the
+   ; destination before reading the source, so (sub r0 r12 r0) would read its own wreck. a mov is
+   ; the exception and passes ds empty -- there dest = source is the self-mov we are hunting.
+   ; ⚠ an alu's FIRST source is the other exception, and the dest is exactly the substitute it
+   ; welcomes: (mov d a; op d b) is the lowering, so (add r7 r7 8) is the FUSED shape. and the
+   ; converse temptation -- decline a rename that BREAKS a fusion -- was measured and refused:
+   ; breaking it is what lets coal fold the stranded copy and rebuild the fusion on the copy's
+   ; own register, which is the better answer and 914 bytes of love.o.
+   (cpsub f ps m ds)
+    (? !(two? ps) f
+       (: i <ps x (nthr f i)
+          b (peep m x ())
+          two (member? <f aluops && (i = 2))
+          (cpsub (? (nom? b && (two || !(member? b ds))) (reop f i b)
+                    f)
+                 >ps m ds)))
+   (cpkill m ds)                                    ; a def kills its own copy and every copy OF it
+    (: _ (foldl (\ _ k (? (member? k ds || member? (peep m k ()) ds) (pin m k ()) 0)) 0 (keys m))
+       m)
+   (cpwalk fs m)
     (? !(two? fs) ()
-       (: f <fs r >fs
-          nx (? (two? r) <r ())
-          (? !(hmov? f) (f >< dehusk r)
-             (id? <>f <>>f) (dehusk r)
-             (: a <>f b <>>f
-                sw (swin a b r 0 ())
-                ; the (1 x) wrapper: an empty rewritten tail is a legitimate result
-                sk (? !(two? sw) ()
-                      (: ms <sw bq <>sw
-                         (? (dies? a >bq)
-                            (1 >< (map (\ g (hren g a b)) (rev ms) + >bq))
-                            ())))
-                qt (? (two? sk) 'no (qdrop a b r 0))
-                (? (two? sk) (dehusk >sk)
-                   !(id? qt 'no) (f >< dehusk qt)
-                   !(hmov? nx)
-                    (: e9 (? (two? nx) (assoc <nx huskrd) ())
-                       rd9 (? (two? e9) (rdsp nx) 'bar)
-                       ; b must stay clear of the consumer's defs: the alu dance writes its
-                       ; dest before reading the source, so (sub rd ra rd) reads its own wreck.
-                       ; and the rewrite pays only when it STRANDS the mov (a dies past the
-                       ; consumer) -- a live park's read is renamer-free, not worth the churn
-                       (? (id? rd9 'bar || member? a <>rd9 || member? b <>rd9) (f >< dehusk r)
-                          (: nx2 (hsub nx a b >e9 0)
-                             (? ((= nx2 nx) || !(dies? a >r)) (f >< dehusk r)
-                                (f >< dehusk (nx2 >< >r))))))
-                   (: d <>nx s <>>nx
-                      (? (id? s a && id? d b) (dehusk (f >< >r))       ; back-copy: b holds b already
-                         (id? s b && id? d a) (dehusk (f >< >r))       ; a duplicate copy
-                         (id? s a) (f >< dehusk (['mov d b] >< >r))   ; the feed reads through
-                         (f >< dehusk r))))))))
+       (: f <fs
+          (? !(two? f) (f >< cpwalk >fs m)
+             (: op <f
+                (? (member? op '(br align ud2)) (f >< cpwalk >fs m)   ; a br rides its fall-through
+                   (member? op '(label jmp jmpr ret)) (f >< cpwalk >fs (tablet 0))
+                   (: d (rdsp f)                    ; a call and every op off the table land here
+                      (? (id? d 'bar) (f >< cpwalk >fs (tablet 0))
+                         (: f2 (cpsub f (cprp f) m (? (id? op 'mov) () <>d))
+                            (? (hmov? f2 && id? <>f2 <>>f2) (cpwalk >fs m)
+                               (: m2 (cpkill m <>d)
+                                  _ (? (hmov? f2) (pin m2 <>f2 <>>f2) 0)
+                                  (f2 >< cpwalk >fs m2)))))))))))
+   (cpdead g fs)                                    ; a copy nothing reads ahead is a dead def
+    (: lot (lvout g fs)
+       (? (id? lot 'no) fs
+          (: (go l i)
+              (? !(two? l) ()
+                 (: f <l
+                    (? (hmov? f && !(member? <>f (peep lot i ()))) (go >l (i + 1))
+                       (f >< go >l (i + 1)))))
+             (go fs 0))))
+   ; the two directions, one after the other: the forward rename, then coal's backward fold (the
+   ; copy the rename just stranded is a def that named the wrong register), then the drop.
+   (copyprop g fs) (cpdead g (coal g (cpwalk fs (tablet 0))))
 
    ; -- aggregate initializers: ('init (item..)), items plain | ('dfield
    ; name val) | ('didx n val), nesting for arrays of structs. shared bits: --
@@ -7329,7 +7328,7 @@
                         (deaddef      ; rerun: the widened addrfold strands live-dest addr insns
                         (cmpfuse
                         (addrfold
-                        (dehusk
+                        (copyprop g
                         (stld
                         (spmerge
                         (deaddef

@@ -34,7 +34,7 @@ each one priced, gated, and landed separately:
   only — the `rgon` gate).
 * **recovery passes** — addrfold (address arith into addressing modes, ldx/stx/si),
   deadcell (the spush-cell reservation sweep), stld/stldw (store-load residency),
-  dehusk (mov husks: feed/back/dup/self, the rename sandwich, quiet-window back-copy),
+  copyprop (the forward copy walk; coal is its backward twin),
   cmpfuse (`dieb?`, the branching death proof), unframe + jr0/unhome (frame elision and
   home→arrival renames), laylax (branch relaxation, in holo).
 * **the armor** — cskeep (the callee-saved contract checked at emission, path-aware,
@@ -849,6 +849,67 @@ the mechanism onto the invariant — ci's indirect call is pinned on "two loads,
 arg seat" rather than on counting r0's, because coalescing now gives one argument its scratch at
 birth. Gates: test_slow (seven zz-fin lines), test_moon, test_fixpoint byte-identical, vmret,
 test_raw/drv/libc/kore/clay.
+
+2026-08-12 · COPY PROPAGATION (the forward half; dehusk retired) — `dehusk`'s five hand-cut
+windows onto one law are one pass: a forward walk carrying `reg -> source`, killed at each def and
+at each control edge, with `lvout` answering the drop. Gone with them: the rename sandwich's
+8-form cap, the quiet back-copy's 6-form cap, the adjacent-pair cases, and `huskrd` — the
+whitelist of renamable operand slots. The slots are PROBED off `rdsp` instead: substitute a
+stranger at each nom position and ask whether it lands among the reads and not among the defs, so
+a read-modify-write slot (the shifts, the unops) and `la`'s SYMBOL operand decline by
+construction, and the roster cannot fall out of step with the table it models. What still needs a
+reason rdsp cannot carry is a five-name skip list, each entry a contract rather than a dataflow
+fact: the address families (addrfold consumes a mov feeding a base under its own license),
+`push` (cskeep reads `(push <cs>)` as that register's SAVE), and the variable shifts (holo scares
+if the count is not r1). **corpus insns 39.954→39.873 G (−0.20%)**, cycles 14.794→**14.739 G
+(−0.37%)**, love.o .text 327,064→**325,334 B (−0.53%)**, insns 75,100→**74,554 (−0.73%)**, reg-reg
+movs 10,634→**10,112 (−4.9%)**; gen.l 8,112→8,111, law.l 1,965→1,964.
+
+⚠ THE TWO DIRECTIONS COMPOSE, and that composition is where most of the win is. Forward
+propagation alone REGRESSES the corpus (+0.19% insns) while shrinking `.text`, because renaming
+`(add r1 r1 imm)`'s source breaks the two-address fusion and the emitter buys the mov straight
+back. The fix is not to protect the fusion — measured, and protecting it is 914 B WORSE — it is
+to let the break happen and hand the wreck to `coal`, whose backward fold gives the def the
+copy's name and rebuilds the fusion on the right register. `coal` needed one relaxation to accept
+it: the destination may alias the def's FIRST source, because `(mov d a; op d b)` is the lowering
+and `(add r7 r7 8)` IS the fused form — it is the SECOND source that reads its own wreck. So the
+sandwich `dehusk` did with an 8-form window now falls out of two local passes with no window at
+all.
+
+⚠ AND PLACEMENT IS A REAL CHOICE, not a detail — four were built and measured. The three
+POST-CHOICE ones (varying where `coal` sits around `unframe`/`unhome`) all read BETTER on paper:
+`.text` 323,976-324,430 B and 74,065-74,238 insns, −0.94%/−1.38% at the best, corpus insns
+−0.67%. All three lose on the clock: interleaved cycles put them at **+0.27%, +0.48% and +1.4%**
+against **−0.37%** for the build-tail placement. That is the `emit-alu` lesson holding a second
+time from the other side — a mov the CPU rename-eliminates costs no cycles, so deleting one LATE
+buys instruction count and nothing else, while deleting it EARLY feeds `addrfold`/`cmpfuse`/
+`deaddef` a cleaner input, and that is where the clock moves. The control for reading those
+numbers was ablating `dehusk` entirely (+0.5% insns → +1.1% cycles) and the build-tail candidate
+(−0.20% → −0.37%): both track their instruction counts, the post-choice three do not. ⚠ measure
+cycles interleaved and in rounds, and read the MINIMA beside the median; a single pair is layout
+lottery on a corpus running at IPC 2.7. (Post-choice also needs `coal`'s prologue floor relaxed —
+`(5 < i)` is a proxy for "not the prologue" and there is no prologue left after `unframe`.)
+
+⚠ COPY PROPAGATION MOVES THE PARAM-GRANT PRICING, because `pmin`/`nrac`/`nreads` are all read off
+`ir1` — the IR `build` returns — and a cleanup INSIDE build changes what they measure. On one
+synthetic shape (law.l's `ci`, an indirect tail call) that flips a grant: the fn takes a cs seat
+and grows a frame, 7 forms to 12. Held against the real corpus it is a shape, not a class — **no
+function in love.o gains or loses a frame** (545 `sub $N,%rsp` both sides, 331→330 cs-slot
+stores, 181 fns shrank against 46 grown) — so it ships with the law re-anchored on the struct
+loads rather than on every load. It is also a preview of rung 3: the grants cannot be deleted
+until their pricing moves somewhere that a later pass cannot perturb.
+
+Ablation first, as always: `dehusk` at HEAD was worth 0.52% corpus insns and 0.22% `.text` for 79
+lines. That number is what made a rewrite the right move rather than a deletion.
+
+Laws: fourteen shapes over `copyprop` — the sandwich in both directions for `add` and for `sub`,
+the chain, the self-mov, the alu read-through, the br fall-through at any distance, the label and
+call resets, and the four refusals that carry a reason (`la`'s symbol, the shift's count seat, an
+address form, a killed map entry). Nine residency goldens re-anchored: each had pinned the
+accumulator's own register in `(add rX rX rY)`, and the seat operand — which is what those laws
+are actually about — is unmoved in every one. `dv` re-anchored off "the park reads through" onto
+`(div r1 r6 r5)`, since there is no park left at all. Gates: test_slow, test_moon, moon-stage (20
+sigs), test_fixpoint byte-identical, vmret (307 lvm_* ret-free), test_raw/drv/libc/kore/clay.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —

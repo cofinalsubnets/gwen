@@ -122,7 +122,7 @@ probe cost twenty minutes to find out.
 
   | | has | lacks |
   |---|---|---|
-  | `rdsp` (~3664) | the per-form transfer function (reads, defs, pure?), already trusted by cskeep, dehusk, cmpfuse | nothing — it is complete |
+  | `rdsp` (~3664) | the per-form transfer function (reads, defs, pure?), already trusted by cskeep, copyprop, cmpfuse | nothing — it is complete |
   | `deadst` (~4493) | 8-byte-granule marks, object-aware through the slot map | control flow: it asks "read ANYWHERE in the fn?" |
   | `repack` (~4556) | backedge-widened spans to a fixpoint, then textbook linear scan — sort by lo, expire actives, reuse a free list | branches: its span is a convex HULL over touches, not a live range |
 
@@ -271,9 +271,26 @@ probe cost twenty minutes to find out.
   ratio 1.617→**1.589×**, the largest move on this arc. The ordering changed because the
   refusal below proved it: **nothing that turns memory traffic into copies pays until the
   copies can go**, so coalescing precedes every rung that creates them, not follows.
-  Still owed here: the backward half is done, `dehusk` is the forward one, and its
-  hand-rolled `dies?`/`swin`/`qdrop` heuristics are what a real liveness answer retires —
-  that shrink is the retirement this rung has not yet collected.
+  **The forward half followed, 2026-08-12** — `dehusk`'s five hand-cut windows (a rename
+  sandwich capped at 8 forms, a quiet back-copy capped at 6, an adjacent pair, an alu
+  read-through behind a whitelist) are one `copyprop`: a forward walk carrying `reg ->
+  source`, killed at each def and each control edge, with `lvout` answering the drop. The
+  caps went with them, and the read-position whitelist went too — the renamable slots are
+  PROBED off `rdsp` (substitute a stranger, ask whether it reads and does not write), so
+  `la`'s symbol operand and every read-modify-write slot decline by construction instead of
+  by a roster kept in step by hand. Corpus insns **−0.20%**, cycles **−0.37%**, `.text`
+  **−0.53%**, static insns **−0.73%**, reg-reg movs **−4.9%**; gen.l −1 line, law.l −1. The two
+  directions COMPOSE and that is where most of it comes from: the forward rename breaks an
+  `(add d d b)` fusion, which is exactly what lets `coal` fold the stranded copy back into
+  the def — and the def then wears the fused form. `coal` learned the one alias it may
+  welcome for this (an alu's FIRST source: `(mov d a; op d b)` is the lowering, so
+  `(add r7 r7 8)` IS the fused shape; it is the SECOND source that reads its own wreck).
+  ⚠ **this retires a mechanism, not yet lines** — five windows became two directions over one
+  substrate and every cap is gone, but gen.l reads one line shorter, and a one-line rung is not
+  what "the allocator deletes machinery" promised. The lines are in rung 3, and this rung says
+  something about why: `copyprop` moves the param-grant pricing merely by shrinking the IR
+  `build` returns (the ledger has the case), so those grants cannot be deleted until their
+  pricing lives somewhere a later pass cannot perturb.
 
 ## phase II — emission against vregs
 
