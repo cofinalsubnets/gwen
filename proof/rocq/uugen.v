@@ -636,10 +636,14 @@ Definition uu_sp0call : uu_nlist :=
   (uu_ncons 1 (uu_ncons 0 (uu_ncons 5 (uu_ncons 0 (uu_ncons 3 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))))).
 Definition uu_sp0bind : uu_nlist :=
   (uu_ncons 1 (uu_ncons 0 (uu_ncons 4 (uu_ncons 0 (uu_ncons 2 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))))).
+Definition uu_sp0subst : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))).
 Definition uu_sp1call : uu_nlist :=
   (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 5 (uu_ncons 0 (uu_ncons 3 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))))))).
 Definition uu_sp1bind : uu_nlist :=
   (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 4 (uu_ncons 0 (uu_ncons 2 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))))))).
+Definition uu_sp1subst : uu_nlist :=
+  (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 0 (uu_ncons 1 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))).
 Definition uu_sp2call : uu_nlist :=
   (uu_ncons 1 (uu_ncons 0 (uu_ncons 7 (uu_ncons 0 (uu_ncons 5 (uu_ncons 0 (uu_ncons 3 (uu_ncons 0 (uu_ncons 3 (uu_ncons 0 (uu_ncons 6 (uu_ncons 0 uu_nnil)))))))))))).
 Definition uu_sp2bind : uu_nlist :=
@@ -670,6 +674,16 @@ Definition uu_sl_flip_bind : (forall A : uu_hst, (forall S : uu_hst, (forall L :
   (fun A => (fun S => (fun L => (fun E => (fun T => (idpath 1)))))).
 Definition uu_sl_flip_subst : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_strn (uu_srun uu_sp2subst A (uu_smk S 0 L E T 0))) 2)))))) :=
   (fun A => (fun S => (fun L => (fun E => (fun T => (idpath 2)))))).
+Definition uu_sl_sub_0 : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_stos (uu_srun uu_sp0subst A (uu_smk S 0 L E T 0))) (uu_stos (uu_srun uu_sp0call A (uu_smk S 0 L E T 0))))))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath (uu_stos (uu_srun uu_sp0subst A (uu_smk S 0 L E T 0))))))))).
+Definition uu_sl_sub_0t : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_strn (uu_srun uu_sp0subst A (uu_smk S 0 L E T 0))) (uu_strn (uu_srun uu_sp0call A (uu_smk S 0 L E T 0))))))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath (uu_strn (uu_srun uu_sp0subst A (uu_smk S 0 L E T 0))))))))).
+Definition uu_sl_sub_1 : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_stos (uu_srun uu_sp1subst A (uu_smk S 0 L E T 0))) (uu_stos (uu_srun uu_sp1call A (uu_smk S 0 L E T 0))))))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath (uu_stos (uu_srun uu_sp1subst A (uu_smk S 0 L E T 0))))))))).
+Definition uu_sl_sub_1t : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_strn (uu_srun uu_sp1subst A (uu_smk S 0 L E T 0))) (uu_strn (uu_srun uu_sp1call A (uu_smk S 0 L E T 0))))))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath 1)))))).
+Definition uu_sl_sub_1e : (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (@paths nat (uu_strat 0 (uu_srun uu_sp1subst A (uu_smk S 0 L E T 0))) (A 0))))))) :=
+  (fun A => (fun S => (fun L => (fun E => (fun T => (idpath (A 0))))))).
 Definition uu_sl_cross : (forall v : nat, (forall A : uu_hst, (forall S : uu_hst, (forall L : uu_hst, (forall E : uu_hst, (forall T : uu_hst, (forall R : uu_hst, (forall F : uu_hst, (forall K : uu_hst, (@paths nat (uu_stos (uu_srun uu_sp0bind (uu_hupd 0 v A) (uu_smk S 0 L E T 0))) (uu_mrg (uu_drun uu_de5bck (uu_mmk (uu_hupd 9 v R) F K 0)) 0))))))))))) :=
   (fun v => (fun A => (fun S => (fun L => (fun E => (fun T => (fun R => (fun F => (fun K => (idpath (uu_stos (uu_srun uu_sp0bind (uu_hupd 0 v A) (uu_smk S 0 L E T 0))))))))))))).
 Definition uu_ltake : (forall k : nat, (forall l : uu_nlist, uu_nlist)) :=
@@ -1295,5 +1309,5 @@ Print Assumptions add_comm_std.
 Print Assumptions add_assoc_std.
 Print Assumptions mul_comm_std.
 
-(* 610 exported / 660 corpus entries swept;
+(* 617 exported / 667 corpus entries swept;
    3 headline laws (add_comm, add_assoc, mul_comm) landed on Coq's Nat.* via the bridge *)

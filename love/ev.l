@@ -76,6 +76,53 @@
        t))))
    (foldl add #() (catmap keys (books ())))))
 
+; dis: the emission interface's DUAL -- a compiled thread read back as (nom operand..)
+; rows, in order, ending at the ret family. it sits beside feels for the same reason it
+; can exist at all: the rows are built from noms that die at birth (egg.l mops every
+; lvm_* key, and peek itself), so the WORDS folded here are the only door left open.
+; discrimination is the image codec's own law (love.c img_encode): a word matching the
+; op roster is an instruction, what follows one is its operands -- an odd word a charm
+; (a real value, safe to answer), anything else 'x (a raw index, a jump target, a heap
+; quote: never handed out, never netted). an ASSOC, never a tablet -- pin would HASH a
+; raw code word (the spq ⚠). a cur wrapper opens at cell 2; an unknown word at the door
+; (a native cell) answers (). the reader is the splice JIT (doc/moon-regalloc.md, the
+; splice client): a composable segment is a dis prefix whose every row it can say.
+(: dis (:
+   kur (peek 0 (+))
+   ret0 (peek 1 cap)
+   (lvmk? k) (= "lvm_" (snip (string k) 0 4))
+   ; the roster: every lvm_-named book entry, plus every nif's code slots -- iap embeds
+   ; those bare (feels' opof, the same guarded peeks), so a thread carries them as ops.
+   (add rs k) (: v (gv k gone)
+    (? (id? v gone) rs
+       (lvmk? k) ((v >< k) >< rs)
+       (charm? v) rs
+       (: r1 (? (id? ret0 (peek 1 v)) (((peek 0 v) >< k) >< rs) rs)
+          (? (id? kur (peek 0 v) && id? ret0 (peek 3 v)) (((peek 2 v) >< k) >< r1) r1))))
+   rows ((kur >< 'lvm_cur) >< (foldl add () (catmap keys (books ()))))
+   (look w rs) (? (atom? rs) () (id? w <<rs) ><rs (look w >rs))
+   (fin? nm) (? (id? nm 'lvm_ret) 1 (id? nm 'lvm_tap) 1 (id? nm 'lvm_tapn) 1 0)
+   (opd w) (? (charm? w) w 'x)
+   (opds f i n) (? (n = 0) (() >< i)
+    (: w (peek i f)
+     (? (look w rows) (() >< i)
+        (: r (opds f (+ i 1) (- n 1)) (((opd w) >< <r) >< >r)))))
+   (walk f i n) (? (n = 0) ()
+    (: w (peek i f) nm (look w rows)
+     (? (nil? nm) ()
+        (fin? nm) `(`(nm))
+        (: r (opds f (+ i 1) n)
+           ((nm >< <r) >< (walk f >r (- n 1)))))))
+   ; termd?: a walk is only a disassembly if it REACHES a ret-family terminator. a walk
+   ; that runs dry (an unreadable op -- a glazed native cell, a shape a later op leaves
+   ; the straight line on) answers () rather than a malformed headless stub. the contract:
+   ; () or a ret-terminated row list, never a fragment. a cur cell opens at cell 2.
+   (termd? rows) (? (atom? rows) 0 (atom? (cup rows)) (fin? (caap rows)) (termd? (cup rows)))   ; fin? takes the row's HEAD nom
+   (ok rows) (? (termd? rows) rows ())
+   (\ f (? (charm? f) ()
+           (id? kur (peek 0 f)) (: b (ok (walk f 2 4096)) (? (atom? b) () (`('lvm_cur) >< b)))
+           (ok (walk f 0 4096))))))
+
 (:- (\ x (:
  c (sco 0 `(()) ())
  y (feel c (opfix x))    ; opfix (factor sigils), feel (desugar) -- ev = the deserialized-data lane
@@ -406,6 +453,47 @@
                                                                                    ;   renames the rest fresh -> capture-free)
        (: bd2 (bsub (zip ps (take np as)) (last lam)) rest (drop np as)
           (? (two? rest) (bd2 >< rest) bd2))))
+   ; --- the BINDING SPLICE (the license's other half; laws: test/uuspllaw.l) --------------
+   ; a saturated known-lambda call with an IMPURE arg no longer declines whole. pure args
+   ; substitute as before (sl-sub). the LAST effectful arg substitutes too when its param is
+   ; read EXACTLY ONCE, unconditionally, and the body is otherwise pure (sl-sub-1) -- it
+   ; becomes the only body-resident effect, after every binding, so the call can vanish with
+   ; no let at all. every other effectful arg binds ONCE to a fresh nom, in call order,
+   ; ahead of the body -- `:` binds in source order, the call's own effect order (sl-ord) --
+   ; and the body reads the nom at every use site (sl-lic: bind == call, value and trace,
+   ; forall states). a read-many effectful form is never substituted (sl-flip: value equal,
+   ; trace doubled -- the by-name breach R cannot convict).
+   ; rdn: reads of param v in x. an occurrence under \ or ? counts DOUBLE (a site that can
+   ; run zero or many times is never "exactly once"), a shadowing binder zeroes its subtree,
+   ; a quote is data. cprop already desugared any `:` in x, so colnms reads its binders.
+   (rdn v x) (?
+    (nom? x) (? (id? x v) 1 0)
+    (atom? x) 0
+    (id? <x '\) (? (atom? >>x) 0 (: r (lp x) (? (member? v <r) 0 (2 * (rdn v (last x))))))
+    (id? <x '?) (2 * (foldl (\ a e (a + (rdn v e))) 0 >x))
+    (id? <x ':) (? (member? v (colnms >x)) 0 (foldl (\ a e (a + (rdn v e))) 0 >x))
+    (foldl (\ a e (a + (rdn v e))) 0 x))
+   (lasti ps as se) (? (atom? ps) -1                                             ; index of the LAST effectful arg, -1 = none
+    (: k (lasti >ps >as se)
+     (? (0 <= k) (+ 1 k) (purep <as se) -1 0)))
+   (spl ps as se i si bd) (? (atom? ps) (() >< ())                               ; (binds . env), call order; si = the substitutable index
+    (: r (spl >ps >as se (+ i 1) si bd) p <ps a <as
+     (? (purep a se) (<r >< ((p >< a) >< >r))
+        (&& (= i si) (= 1 (rdn p bd))) (<r >< ((p >< a) >< >r))                  ; the licensed effectful substitution
+        (: n (nom 0) ((n >< a >< <r) >< ((p >< n) >< >r))))))
+   (bspl x h h2 hr as se fl op bnd) (: r (lp hr) np (tally <r)
+    (? (tally as < np) (keep2 x h2 as)                                           ; under-saturated -> decline (a partial's effects fire at build time; the pure lane's curry bet is not licensed here)
+     (: bd0 (last hr)
+        ; a nom head resolved through se already passed pbody? at admission -- only a
+        ; literal lambda head pays the walk here.
+        bok (? (nom? h) 1 (pbody? hr ()))
+        sp (spl <r (take np as) se 0 (? bok (lasti <r (take np as) se) -1) bd0)
+        bd (bsub >sp bd0)
+        rest (drop np as)
+      (? (op || two? rest || !(lambp bd))
+         (: f2 (? (atom? <sp) bd (': >< (<sp + `(bd))))                          ; no binding left -> no let: the call is gone
+            (cprop (? (two? rest) (f2 >< rest) f2) se (- fl 1) op bnd))
+         (keep2 x h2 as)))))                                                     ; a lambda body escaping at a value position -> decline (the escape law)
    (cplam x se fl op bnd) (? (atom? >>x) x                                       ; (\ v) quote -> leave
     (: r (lp x) (relam x r (cprop >r (rmkeys <r se) fl 0 (<r + bnd)))))          ; the body is a value -> op 0
    (cpbinds bs se fl op bnd) (?
@@ -434,6 +522,8 @@
              (? (&& (< 0 fl) (lambp hr) (two? as) (allp as se))                        ; two? as: (f) is f -- nothing to substitute
                   (: red (cprop (beta hr as) se (- fl 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
                      (? (op || !(lambp red)) red (keep2 x h2 as)))                    ; escaping lambda result -> REVERT (keep the closure)
+                (&& (< 0 fl) (lambp hr) (two? as))                                     ; ... with an IMPURE arg -> the BINDING SPLICE (bspl;
+                  (bspl x h h2 hr as se fl op bnd)                                     ;    foldc/cpap are dead for a lambda head, so its decline keeps the call)
                 (nom? h && allk as && !(member? h bnd) && pure-head? h as)            ; pure-fn on consts -> fold. bnd-guarded: a binder
                   (foldc (gv h ()) as)                                                ;   spelled like an op still SHADOWS (the alpha law)
                 (two? as && propk? <as && <hk && pure-ap? >hk (kval <as))             ; a PURE-APPLYING head with a KNOWN operand: fold the whole

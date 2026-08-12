@@ -154,6 +154,14 @@ test_doc: host
 	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$(mw)" ": ok" \
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
 	done
+# the vmsplice JIT pipeline end to end (bench/vmsplice/auto.sh): dis a live closure,
+# compose its ops to C, mooncc it, bind against THIS process, nif, differential vs the
+# interp twin. NOT in test_slow (needs mooncc + a host cc, bench-shaped); run by hand.
+# `dis` itself is gated in the corpus by test/dis.l. x86-64 only (compose emits x86 ABI).
+ifeq ($a,x86_64)
+test_vmsplice: host
+	@sh bench/vmsplice/auto.sh
+endif
 # Native-codegen self-tests (the love/glaze/ x86-64 jit): test/glaze-x86.l covers emit
 # (the SSE emitter) + auto (ev's source-recognizer), cats the holo backends ahead of
 # itself, and runs each block through base-ev. Needs the `nat` nif; x86-64 only.

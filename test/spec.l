@@ -364,10 +364,11 @@
 
 ; --- chains & lists --- link builds the chain; cap/cup the two projections (caap..cuuup
 ; the compounds); (long? n l) asks the ARITY -- at least n links, one walk, where `two?` per
-; step spends a cup and a dispatch at each; sort/sortby by the total order; (jot n) the first n charms; the higher-order
-; functions live in the prel. APPLYING a chain is the text law one lattice rung up: a charm
-; INDEXES an element (negatives from the end, out of range the unit 1), a chain JUXTAPOSES --
-; the append, agreeing with + -- and every other operand takes the default action, const-1.
+; step spends a cup and a dispatch at each; sort/sortby by the total order; (jot n) the first n
+; charms; the higher-order functions live in the prel. APPLYING a chain is the text law one
+; lattice rung up: a charm INDEXES an element (negatives from the end, out of range the unit 1),
+; a chain JUXTAPOSES -- the append, agreeing with + -- and every other operand takes the
+; default action, const-1.
 ; ⚠ () is the zero point, not a chain, so (l ()) is the default and not the identity + gives it.
 (assert
  (1 = (cap '(1 2 3))) ('(2 3) = (cup '(1 2 3))) (3 = (caup '(2 3 4))) ('(1 2) = (link 1 (link 2 ())))
