@@ -55,6 +55,7 @@ still stores and why values die at joins the meet can't cross and at every call.
 | 2026-08-02 | gcc | 1.52×→1.34× | 2.78×→ | fresh 3-way re-base, then fleet-slots in one rung |
 | 2026-08-03 | gcc | **1.30×** | 1.96× | int128 limbs, inlining honored, non-leaf slotting, cs pool, int homing; IPC 3.07 vs 2.17 |
 | 2026-08-10 | clang | **1.18× cycles** | 1.71× | doc/moon-diff.md first fill; IPC 2.98 vs 2.05; shared-.text 1.75× |
+| 2026-08-11 | clang | 1.24× cycles | 1.63× | the re-base fill (moon-alloc's step 0): static both-emit **1.56×**, 141,221 B — the static and dynamic ratios came APART, repack being a size lever |
 
 The remaining excess is not idiom-shaped (that catalog closed 2026-08-02: cmp-$0, neg
 dances, load-then-cmp all at parity). It is structural: slot traffic. At the fifth
@@ -157,10 +158,24 @@ Learned by measuring, several times each; check a new lever against these before
    the diagnosis demanded. SECOND RUNG LANDED 2026-08-10 (frame-direct, the ledger):
    the clval fold — a constant index is a static slot, the lea/add/park dance is gone,
    deadst elides write-only element stores in call-free fns, and element fns stopped
-   pinning fesc (sibcall/ride/homing open). What closure still needs: store elision
-   ACROSS calls/labels (the allocator leg's liveness), and float/pair elements ride
-   the old walk (afd's whitelist is gp+ptr).
-2. **Registers as the source of truth** — the allocator leg proper: liveness over ir1,
+   pinning fesc (sibcall/ride/homing open). The store-elision half CLOSED 2026-08-11
+   from lever 2's side (the exit meet, and the element arm before it: element pins now
+   ride calls on seats and their write-through stores sweep). What remains of this
+   lever is float/pair elements riding the old walk (afd's whitelist is gp+ptr) —
+   the ranking above is the shape's, not the residue's.
+2. **Registers as the source of truth** — MEASURED 2026-08-11: frame-relative movs are
+   132,849 B of mooncc's love.o against gcc's 27,328 and clang's 9,762, so the excess is
+   **105,521 B, ~75% of the 141,221 B codegen gap** — this lever is three quarters of
+   what is left, and the ~22% static-insn figure below now reads 28.5%. ⚠ but the arc's
+   early rungs cannot reach it: repack's population holds 17.6% of that traffic and its
+   scan bar refuses 77.1% — on an UNCLAIMED touch, and the lane is the **spush cell**:
+   spush reserves 16 bytes with its own sub and never nslots, spmerge folds that sub into
+   the prologue's, so the frame grows and the map does not (measured: K exceeds build's
+   frame in 231 of 640 fns, by exactly +16 or +32; 100% of the 1,890 unclaimed touches sit
+   in the deepest 16/32 bytes, nowhere else). So the first real rung is ONE CELL joining
+   the slot map, not liveness — it moves 3.2× the objects and 3.8× the slot traffic into
+   reach, soundly. doc/moon-alloc.md's rung 2 entry carries the census and the trace.
+   The allocator leg proper: liveness over ir1,
    values surviving labels and calls, spill placement instead of write-through. Kills
    both the def-stores and the post-flush reloads (the ~22% bucket). The vmap, the JOIN
    meet, the cs pool and cskeep are its substrate; this is the step the peepholes cannot
@@ -212,10 +227,12 @@ Learned by measuring, several times each; check a new lever against these before
    COLD-PATH wraps, dynamically right for the early-out profile; the static
    8 KB they represent is already-paid-for at runtime, and beating them needs
    a frequency signal (PGO), not a better static model.
-3. **Compare staging want-hints** — landed for the call-free side 2026-08-10: cbranch's
-   left aims at its park before evaluating, so member loads deliver and the bridge mov
-   dies. What remains is the callish side (the sp cell across a call — a cs-borrow park
-   would need the wrap pricing) — or the allocator leg subsumes it.
+3. **Compare staging want-hints** — HELD for the allocator. Landed for the call-free
+   side 2026-08-10: cbranch's left aims at its park before evaluating, so member loads
+   deliver and the bridge mov dies. What remains is the callish side (the sp cell across
+   a call — a cs-borrow park would need the wrap pricing), and doc/moon-alloc.md's rung 2
+   subsumes it: a call-crossing interval on a cs seat is the same value by another name.
+   Do not build it separately.
 4. Recorded small residues: leaf sp-fn stldw coverage; a non-positional fallback home
    (mag_cmp's g1 loses its seat and stays slotted); cs-borrow park elision (params on
    cs regs landed pmin-gated 2026-08-11, the ledger; the fleet's share waits on
@@ -224,6 +241,19 @@ Learned by measuring, several times each; check a new lever against these before
    index±k rebase; narrow cmp fusion (632 sites, needs cc-aware licensing); the
    3-address dance emission (encoder territory — the reverted lea-fusion physics, only
    density-neutral shapes need apply).
+5. **Bytes that are not codegen** — CLIMBED 2026-08-11, and named here so the headline
+   ratio is never read as this catalog's score. Two moves, both in doc/moon-diff.md's
+   fills: the dead-static sweep (mooncc laid the out-of-line body of every static it had
+   already spliced — 149 bodies, 32,768 B; love's own unreachable text 6.4% → 0.6%,
+   under gcc's own 2.6%) and nolibc's split to 185 per-function members (libc 64,110 →
+   31,662 B, dead 55.1% → 5.4%, under musl's 6.5% floor — archive granularity, no
+   linker gc). Whole binary 1.99× → 1.779×. ⚠ **the corpus did not move** (40.74 → 40.72 G):
+   every byte was unreachable, so none of it is the gap levers 1-4 measure. The two
+   ratios answer different questions and only the both-emit codegen one prices a rung
+   here. Residue: 12 libc functions sharing a file with a live sibling, ~3 KB
+   unreachable left in love's own C, and the inlining question the sweep re-opened —
+   mooncc's remaining symbol surplus over gcc is now a real inlining difference rather
+   than bookkeeping, and has never been sized.
 
 ## the laws a new rung must hold
 
@@ -684,6 +714,40 @@ repack's to choose), array laws by the lea base (aeb). Residues: 16-byte cells
 never pool (parity insurance), sk-anchored fns keep old layout on any bail, and
 slot canonicalization now makes link-time ICF worth re-measuring (~0.5 KB today
 because offsets de-canonicalized identical bodies).
+2026-08-11 · THE spush CELL JOINS THE SLOT MAP (the rung the arc's pricing named): deadcell
+already CONVERTED a live spush cell into a frame slot -- offset (F+8)+8·rank, the prologue
+sub grown to F2, the st/ld re-based onto r4 -- and never told `g 'slots`. So every pass
+reading the OBJECT map met an r4 touch nothing claimed: repack's scan bars whole on one,
+and it was barring **215 of 478 fns holding 77.1% of love.c's frame traffic** (the census:
+3,716 objects and 16,063 slot ld/st out of reach, their frames packable 62,832→23,440 B).
+One foldl registering `[(0-o) 8]` per converted depth closes it. love.o .text
+361,873→**339,492 B (−22,381, −6.2%)** at FLAT insns (77,106→77,109) — the win is
+ENCODING, disp8 replacing disp32 once repack can shrink those frames; frame-mov bytes
+132,849→120,007. Gates: test_slow (seven zz-fin lines), test_fixpoint byte-identical,
+vmret 307 ret-free, test_raw/test_drv/test_libc/test_kore green. ⚠ THE LAW CHURN was the
+lesson: fifteen laws spelled a frame OFFSET and repack re-chose every number, so they red
+together — and wlkf's `(= 1 (ldsp wlkf 8))` kept PASSING while counting a cs restore in
+place of the park it named, which is the failure mode that matters. Re-anchored on `sof`/
+`nldrg` (a slot named by the register that owns it) and verified in BOTH worlds — the
+laws now pass pre-rung and post-rung, which is what says they describe residency and not
+layout. The two-world run caught one bad anchor: hf's park is r0's slot, not r6's, and
+they coincide only after this rung pools them.
+2026-08-11 · THE DEAD-STATIC SWEEP a1e12f40 (bytes, not codegen — lever 5): gen.l
+spliced a small static into every call site and then emitted the out-of-line body
+anyway, named by nothing. A mark from roots over the emitted forms, in gfns before
+the per-function units concatenate, sweeps the statics nothing reaches. ⚠ the ROOTS
+are the whole safety argument and a missed one is a jump into the heap, not a bigger
+binary: every exported fn, every alias target, every section-named fn (xfns, placed
+for their ADDRESS), and every nom the DATA lane names — love's kind-indexed tables
+reach copy_data and the collector by address and never by call. The reference
+relation over-approximates on purpose (an opcode counts); only a static is ever a
+candidate, and lnames sheds the swept ones so no LOCAL FUNC symbol names a body that
+no longer rides. 149 bodies, 32,768 B: .text 556,768→524,000, love's own unreachable
+6.4%→0.6% against gcc's own 2.6% and clang's 1.7% — under the natives, which is the
+row that says complete rather than lucky. Corpus unmoved (40.72 G): every removed
+byte was unreachable, so this buys size and invocation speed and NOT the gap levers
+1-4 measure. test_fixpoint byte-identical (the compiler sweeps itself and still
+reproduces), vmret 307 ret-free, test_raw/test_drv/test_libc/test_slow green.
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
 each a physics lesson above.

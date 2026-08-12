@@ -258,6 +258,13 @@
                        (: f2 <fs r (ldofs >fs op rg)
                           (? (two? f2 && (<f2 = op) && (<>f2 = rg) && (<>>f2 = 'sp))
                              (<>>>f2 >< r) r)))
+   ; ⚠ a law never spells a frame OFFSET. repack re-chooses every number whenever the slot
+   ; map grows -- the spush cells joining it moved fifteen laws at once -- and a stale
+   ; offset does not reliably red: wlkf's `(= 1 (ldsp wlkf 8))` kept PASSING while counting
+   ; a cs restore in place of the park it named. Name a slot by the register that owns it.
+   (sof fs op rg) (: l (stofs fs op rg) (? (two? l) <l ()))   ; the slot rg stores itself to
+   (nldrg fs rg) (tally (ldofs fs 'ld rg))          ; slots rg reloads FROM -- 1 = its cs
+                                                    ; restore alone, i.e. it has no home
    (wrapon? rg fs) (two? (stofs fs 'st rg))
    (cspair? fs rg)                                    ; some slot holds rg's save/restore pair, once each
     (: so (stofs fs 'st rg) lo (ldofs fs 'ld rg)
@@ -1244,7 +1251,7 @@
    _ (assert
       (member? '(add r11 r6 r0) zpf)                 ; s's def lands in its seat
       (member? '(mov r0 r11) zpf)                    ; ...and the return reads the seat
-      (= 0 (ldsp zpf 32)) (= 0 (stsp zpf 32))      ; s's slot is gone: no loads, so no stores
+      (= 1 (nldrg zpf 'r11))                       ; s's slot is gone: r11 reloads at its cs restore, nowhere else
       (member? '(mov r12 r5) zpf)                    ; a's seed: arrival straight to the seat (stld+deadst)
       (member? '(ldx r6 r12 r0 8 0) zpf))            ; ...and the indexed arg reads the seat
    ; -- priced int-param homes (the leaf lane): an int param whose slot touches pay the
@@ -1641,8 +1648,10 @@
       (member? '(ld r9 r6 8) ef)
       (member? '(cmprm r9 r5 8) ef)
       (= 0 (brid ef))                                ; no (mov X r0) bridge anywhere
-      (member? '(cmpm sp 8 r0) hf)                   ; a callish right bars the aim: the cell stands
-      (member? '(ld4 r0 sp 32) hf)))                 ; ...and the left keeps r0 (no wasted park)
+      (member? ['cmpm 'sp (sof hf 'st 'r0) 'r0] hf)  ; a callish right bars the aim: the cell stands
+                                                     ;   (the PARK is r0's own slot -- with the spush
+                                                     ;   cells mapped repack pools it with the param's)
+      (member? ['ld4 'r0 'sp (sof hf 'st 'r6)] hf)))  ; ...and the left keeps r0 (no wasted park)
 
 ; -- the destination die reaches the arg seats (the third lane): the register group emits
 ; right-to-left, so the FIRST cell arg evaluates last and nothing after it writes its seat
@@ -1681,7 +1690,7 @@
       (member? '(add r0 r9 r5) ba)                   ; ...and the combine 3-address off it
       (= 0 (movs ba))                                ; no bridge mov anywhere
       (member? '(ld r0 r6 0) bc)                     ; a callish right bars the aim: r0 stands
-      (member? '(st sp 8 r0) bc)                     ; ...and the cell holds the left across the call
+      (spillrd? bc 'r0 'ld 'r1)                      ; ...and the cell holds the left across the call
       (member? '(ld r0 r6 0) bi)                     ; a constant right: the immop lane unchanged
       (member? '(add r0 r0 1) bi)))
 
@@ -1782,8 +1791,8 @@
    (assert
       (two? irR)
       (member? '(mov r14 r9) splf)                   ; four seats grant (b the last) ...
-      (member? '(ld r5 sp 72) splf)                  ; ...then a spills around: the post-call reload into ITS pin
-      (= 1 (ldsp splf 72))                           ; a's slot: the reload ONLY -- the exit meet carries the
+      (= 1 (nldrg splf 'r5))                         ; ...then a spills around: the post-call reload into ITS
+                                                     ;    pin is a's ONLY load -- the exit meet carries the
                                                      ;    pin out, so even the post-loop read rides the register
       (member? '(add r8 r8 r5) splf)                 ; the in-loop use reads the register
       (member? '(mov r10 r6) splf)                   ; n's SEED, stld'd to the arrival mov
@@ -1823,8 +1832,8 @@
       (member? '(add r12 r12 1) wlkf)                ; i steps in place, its slot never touched
       (member? '(add r11 r5 r13) wlkf)               ; a reads its seat, s lands in its own
       (member? '(add r0 r11 r13) wlkf)               ; the exit meet: s + a ride out on their seats
-      (= 1 (ldsp wlkf 8))                            ; s: the pre-call park read (the recorded residue) --
-      (= 0 (ldsp wlkf 24))))                         ;   its slot and every other in-loop load are gone
+      (= 1 (nldrg wlkf 'r1))                         ; s: the pre-call park read (the recorded residue) --
+      (= 1 (nldrg wlkf 'r11))))                      ;   its slot and every other in-loop load are gone
 
 ; -- element pins across calls: a constant-indexed element of a non-escaping frame array
 ; is a static slot, so its pin seats and rosters exactly like a scalar's (lomig's element
@@ -1840,18 +1849,19 @@
       (member? '(mov r11 r7) epcf)                   ; ...and x[1]'s
       (member? '(add r9 r9 r12) epcf)                ; the in-loop element reads ride the seats
       (member? '(add r14 r9 r11) epcf)
-      (member? '(ld r5 sp 48) epcf)                  ; n spills around: the post-call reload into ITS pin
+      (member? ['ld 'r5 'sp (sof epcf 'st 'r6)] epcf)  ; n spills around: the post-call reload into ITS pin
       (member? '(cmp r13 r5) epcf)                   ; ...and the cond runs register-register
       (member? '(add r0 r14 r12) epcf)               ; the exit meet: s + x[0] ride out on their seats...
-      (= 0 (ldsp epcf 32)) (= 0 (stsp epcf 32))      ; ...so x[0]'s slot is gone entirely
-      (= 1 (ldsp epcf 48))                           ; n: the roster reload is its only load
-      (= 0 (stsp epcf 40))                           ; x[1] rides its seat end to end: deadst swept
-      (= 0 (ldsp epcf 40))                           ;   the dead store, the slot never exists
+      (= 1 (nldrg epcf 'r12))                        ; ...so x[0]'s slot is gone entirely
+      (= 1 (ldsp epcf (sof epcf 'st 'r6)))           ; n: the roster reload is its only load
+      (= 1 (nldrg epcf 'r11))                        ; x[1] rides its seat end to end: deadst swept
+                                                     ;   the dead store, the slot never exists
       (member? '(mov r11 r0) epwf)                   ; epw: the mid-loop element write re-establishes IN
                                                      ;   the seat (vaepin)...
       (member? '(add r0 r14 r11) epwf)               ; ...the exit meet rides it out...
-      (= 0 (ldsp epwf 40)) (= 0 (stsp epwf 40))      ; ...and the WRITTEN element never touches memory either
+      (= 1 (nldrg epwf 'r11))                        ; ...and the WRITTEN element never touches memory either
       (member? '(add r9 r9 r12) epwf)))              ; x[0] still rides
 
+(test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
 (say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld/dehusk, cskeep, the destination die) ok")
 (put err 10)

@@ -4270,7 +4270,7 @@
    ; an op outside the model that MENTIONS sp (or an opaque raw) dirties every open record rather
    ; than bailing -- the (mov sp r4) epilogue is a PATH exit on the linear walk, and its
    ; sp-mention keeps the frame's own record dirty.
-   (deadcell fs)
+   (deadcell g fs)
     (: cand (tablet 0)                               ; st-index -> 1 while still droppable
        clds (tablet 0)                               ; st-index -> its cell's ld indexes
        dirty (tablet 0)                              ; sub-index -> 1: the span observed sp
@@ -4351,6 +4351,14 @@
                                     (peep clds (nthr e 1) ()))
                                  (cvt >l))) cvt) cvl)
              F2 ((F + 8 * tally ds + 15) & -16)
+             ; ⚠ a converted cell is a frame OBJECT and must join the slot map: every pass
+             ; that reads it (deadst's granule marks, repack's scan) meets an r4 touch no
+             ; object claims otherwise and bars the whole fn -- 77% of love.c's frame
+             ; traffic sat behind exactly that. One 8-byte slot per record depth, the same
+             ; offset cvt hands the st/ld.
+             _ (foldl (\ _ d (: o ((F + 8) + (8 * rank d ds 0))
+                                (pin g 'slots ([(0 - o) 8] >< peep g 'slots ()))))
+                      0 ds)
              (drop2 l i) (? !(two? l) ()
                             (? (peep cand i ()) (drop2 >l (i + 1))
                                (peep subdrop i ()) (drop2 >l (i + 1))
@@ -7107,7 +7115,7 @@
                         (stld
                         (spmerge
                         (deaddef
-                        (deadcell
+                        (deadcell g
                         (cfoldir
                          (sibcall g
                           ([['label (intern <>f)]

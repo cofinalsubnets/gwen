@@ -284,5 +284,6 @@
       (= (uwords "x") '("x"))
       !(uwords "  \n") !(uwords "")))
 
+(test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
 (say err "crew/kore/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
 ")

@@ -13,9 +13,128 @@ instructions:u`. **All three lanes are static** — mooncc against its own nolib
 clang against musl — because that is the only shape in which the size rows mean
 anything. Method and traps at the bottom — reproduce rather than trust.
 
-This ledger is one of four docs that ride together: doc/moon-regalloc.md (the catalog
-of the gap and the rung ledger — *why* a row moved), doc/hom.md (the design the
+This ledger is one of five docs that ride together: doc/moon-regalloc.md (the catalog
+of the gap and the rung ledger — *why* a row moved), doc/moon-alloc.md (the allocator
+arc, whose every rung is priced against a fill here), doc/hom.md (the design the
 destination-die migration wears), doc/proto/dest.l (that design modeled runnable).
+
+⚠ **read the both-emit codegen ratio, not the binary ratio, when pricing a codegen
+rung.** The two moved apart on 2026-08-11: the byte levers (the dead-static sweep,
+nolibc's per-function split) took the binary from 1.99× to 1.78× — 1.70× once repack
+joined them — while the corpus did not move a digit, because every byte they removed
+was unreachable. A fill's
+headline answers "how big is the artifact"; only the shared-symbol row answers "how
+good is the code".
+
+## 2026-08-11 — the re-base: repack, the sweep and the split in one binary (HEAD 2fc25890)
+
+doc/moon-alloc.md's **step 0**, run before rung 1 opens gen.l. Every fill below is
+missing something this one has: slot repack landed at 17:21 and no measured tree on this
+page carried it, while the byte levers that followed were measured on trees without it.
+This is the first binary holding all three, and the arc's prices were all quoted against
+a base three moves stale.
+
+### .text — `size -A`, and ccsize's decomposition
+
+| | mooncc | gcc-musl | clang-musl |
+|---|---|---|---|
+| .text (bytes) | **497,838** | 292,448 | 292,896 |
+| love's own C | 466,336 (730 syms) | 252,073 (614) | 252,512 (604) |
+| libc under it | 31,502 (145) | 40,375 (229) | 40,384 (230) |
+
+Whole binary **1.702×**, from 1.99× at the shrink-wrap fill. And the row a codegen rung
+is actually priced against:
+
+| | syms | mooncc | native | |
+|---|---|---|---|---|
+| both lanes emit, vs gcc-musl | 612 | 393,182 | 251,961 | **1.56×** — codegen |
+| both lanes emit, vs clang-musl | 602 | 394,278 | 252,016 | **1.56×** |
+| mooncc-only (the inlining residue) | 118 | 73,154 | — | |
+| gcc-musl-only | 2 | 112 | — | |
+
+**1.63× → 1.56×, and repack is the whole of it.** The byte levers could not have moved
+this row by construction: a swept dead static and an unlinked libc member are not symbols
+both lanes emit. The codegen gap is **141,221 B** where doc/moon-alloc.md quotes 162 KB —
+its buckets (~65-70 KB shuffle + ~23 KB copies + ~13 KB widening) now claim a larger
+share of a smaller whole, which is the arc's business and nobody else's.
+
+The inlining residue halved as a *side effect* of the sweep — 265 syms / 105,774 B →
+**118 / 73,154**. Most of what read as "gcc inlines where we don't" was mooncc emitting
+the out-of-line body of what it HAD inlined. What remains is the real difference, and it
+has never been attacked.
+
+### the convergence broke, and that is the finding
+
+The shrink-wrap fill (32b54ab8) closed on the two ratios meeting at 1.63× — "the
+remaining gap is uniform over hot and cold code alike". They have come apart:
+
+| | at 32b54ab8 | now |
+|---|---|---|
+| static, both-emit codegen | 1.63× | **1.56×** |
+| dynamic, corpus insns vs clang | 1.63× | **1.625×** |
+
+repack is why, and its own ledger entry said so before this fill confirmed it: −4.2%
+`.text` against −0.25% dynamic insns. It is a size lever that barely touches the executed
+stream. So mooncc's remaining excess is now proportionally **hotter than its bytes** — an
+argument for the allocator leg over any further size lever, and a standing warning
+against reading a shrinking `.text` as a faster binary. ⚠ the two ratios are not
+interchangeable and this fill is where that stopped being a pedantic point.
+
+### runtime — the corpus, egg-boot subtracted, median of 3
+
+| | mooncc | gcc-musl | clang-musl | mooncc/clang |
+|---|---|---|---|---|
+| corpus insns (G, user) | 41.32 | 23.43 | 25.42 | **1.625×** |
+| corpus cycles (G, user) | 15.18 | 12.24 | 12.29 | **1.235×** |
+
+All three lanes rose ~1.1–1.5% together against the shrink-wrap fill (40.74 / 23.17 /
+25.04) — the corpus grew again, which is the standing reading when the lanes move as one.
+
+### the libc holds its floor
+
+| | syms | shipped | live | dead | |
+|---|---|---|---|---|---|
+| mooncc | 145 | 31,502 | 29,792 | **1,710** | **5.4%** |
+| gcc-musl | 229 | 40,375 | 37,749 | 2,626 | 6.5% |
+| clang-musl | 230 | 40,384 | 37,758 | 2,626 | 6.5% |
+
+Unchanged by repack, as it must be — `ccdead` reads the same 5.4% the split's own fill
+recorded, from a binary built two rungs later.
+
+### the pair — wall, boot subtracted (⚠ loaded box: ratios only, two runs shown)
+
+| | mooncc | gcc-musl | clang-musl | mooncc/clang |
+|---|---|---|---|---|
+| chacha20 (ms) | 1220 / 1207 | 322 / 319 | 198 / 193 | 6.2× / 6.3× |
+| poly1305 (ms) | 1535 / 1510 | 1502 / 1486 | 860 / 762 | 1.79× / 1.98× (gcc 1.02× both) |
+
+Every cell reproduced within ~2% across the two runs except clang's poly1305 (860 → 762,
+−11%), which is the one number not to quote. All lanes read ~10-14% above the
+shrink-wrap fill — the box, not the code: a browser at ~17% through run 1, a second
+session's compiles through run 2. Take the SHAPE, which is unmoved: chacha wide, poly at
+**parity with gcc** (1.02×). Nothing in this fill's rungs touches lever 1's array
+residue, so a real move here would have been the surprise.
+
+### invocation speed
+
+| | mooncc | gcc-musl | clang-musl |
+|---|---|---|---|
+| full build + link, warm (s) | **15.1** | 10.2 | 6.2 |
+| ..the same, cold tree (s) | 43.1 | 11.0 | 6.1 |
+| love.c single TU, median of 3 | 8.8 | 7.1 | — |
+
+15.1 s against 14.2 s two fills ago, with gcc and clang up by the same fraction — the
+sweep and the 185-member split cost the build essentially nothing once warm. The
+single-TU row confirms the one-pass fix from the other side: 8.53 / 8.62 / 9.17 s,
+against the 86 s the sweep's first draft cost.
+
+⚠ **a fresh worktree's first ccbench overcharges the mooncc build row, and only that
+row.** 43.1 s cold against 15.1 s warm on the same tree, ten minutes apart: 185 cold
+`mcobj` member compiles at ~0.09 s each over a cold tree hash, paid once per tree and
+never again. Nothing else in the fill moves — the natives are flat across the pair
+(11.0 → 10.2, 6.1 → 6.2), which is what identifies the cost as ours and as caching. The
+per-function libc bought its dead-code win and handed back a first-run tax. Warm the
+tree before quoting this row, and never compare it across worktrees.
 
 ## 2026-08-11 — nolibc, one function to a file: 5.4% dead, under musl's own floor (HEAD a1e12f40)
 
@@ -711,6 +830,13 @@ read as a codegen gap.
 
 ## ⚠ traps — each one ate a run before it was written down
 
+* **a fresh worktree's first ccbench overcharges the mooncc BUILD row** (2026-08-11, the
+  re-base fill): 43.1 s cold against 15.1 s warm on the same tree ten minutes apart —
+  185 cold `mcobj` member compiles over a cold tree hash, paid once per tree. It reads
+  exactly like a 3× build regression and is not one. The tell is the natives: they sit
+  flat across the same pair, so a cost only mooncc pays and only once is caching, not
+  codegen. Warm the tree, and never compare this row across worktrees. Nothing else in a
+  fill is affected — sizes and insn counts are cache-independent.
 * **the corpus arrives by REDIRECT, never down a pipe** — both feed it on stdin and both
   answer 3811 pass, so this is timing hygiene, not correctness: only a seekable fd 0 gets
   a read run, and a pipe drips the 953K bytes one syscall each. That's ~0.5 s of kernel
