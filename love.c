@@ -183,7 +183,7 @@ lvm_t lvm_kcall,
  lvm_callk, lvm_scare, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
  lvm_sleep, lvm_donep, lvm_scoop, lvm_hush, lvm_key,
  lvm_await,
- lvm_fgetc, lvm_fungetc, lvm_chug, lvm_fputc, lvm_fputs, lvm_fflush,
+ lvm_fgetc, lvm_fungetc, lvm_chug, lvm_unchug, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound0,
  lvm_trayctor, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,   // typed multi-rank arrays
  lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_inner, lvm_outer,
@@ -3114,6 +3114,20 @@ uintptr_t ai_io_read_drain(struct ai *g, struct ai_io *i, unsigned char *dst, ui
  memcpy(dst, txt(str(b->rbuf)) + p, k);
  b->rpos = putcharm(p + k);
  return k; }
+// `unsee` at n bytes: UN-READ the last n this port handed out, and answer how many went back
+// -- a short answer IS the refusal, and the caller's only check. It rewinds the position, so
+// what returns is whatever the run last gave, not a remembered chug.
+// ⚠ rbio_of, not bio_of: the run BORROWED under a static counts, and that is the whole point
+// -- stdin's seek-back is ai_io_pending, so this is what puts bytes back inside it.
+// ⚠ RECOVERABLE ONLY UNTIL THE NEXT READ here: a refill replaces rbuf and resets rpos, so the
+// clamp to rpos is what makes a stale ask answer what is really there instead of trusting n.
+// ⚠ THE RUN ONLY. The pushback byte chug lays in FRONT of it is `unsee`'s to restore.
+uintptr_t ai_io_unread(struct ai *g, struct ai_io *i, uintptr_t n) {
+ struct ai_bio *b = rbio_of(g, i);
+ if (!b || !b->rbuf || (b->rbuf & 1)) return 0;
+ uintptr_t p = getcharm(b->rpos), k = p < n ? p : n;
+ b->rpos = putcharm(p - k);
+ return k; }
 // (chug port): everything ALREADY readable, as ONE exact-length text -- the
 // pushback byte if there is one, then the run. it never touches the device and
 // never parks, so the gulp is: draw the first byte with `see` (which refills, and
@@ -3147,6 +3161,16 @@ lvm(lvm_chug) {
  if (!ai_ok(g)) return ghelp(g);
  Unpack(g);
  ai_musttail return Next(1); }
+
+// (unchug port n): hand back up to n bytes of the run this port already gave out, so a
+// caller that chugged more than it used leaves the rest where the port's position sees it.
+// Answers how many went back -- a short answer IS the refusal (ai_io_unread's ⚠ notes).
+lvm(lvm_unchug) {
+ if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
+ Sp[1] = putcharm(iop(Sp[0]) && charmp(Sp[1]) && getcharm(Sp[1]) > 0
+                  ? (ai_word) ai_io_unread(g, (struct ai_io*) Sp[0],
+                                           (uintptr_t) getcharm(Sp[1])) : 0);
+ ai_musttail return Nextp(1, 1); }
 
 struct ai *ai_io_wflush(struct ai *g, struct ai_io *i) { return io_wdrain(g, i); }
 

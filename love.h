@@ -352,6 +352,9 @@ struct ai_bio { struct ai_fio f; ai_word rbuf, rpos, rlen, wbuf, wlen; };
 // pending = bytes waiting in the read buffer; drain pops up to n of them into dst
 uintptr_t ai_io_pending(struct ai*, struct ai_io*);
 uintptr_t ai_io_read_drain(struct ai*, struct ai_io*, unsigned char*, uintptr_t);
+// unread gives up to n drained bytes BACK to the run, and answers how many -- the borrowed
+// run included, so stdin's seek-back (which is pending) counts them again
+uintptr_t ai_io_unread(struct ai*, struct ai_io*, uintptr_t);
 struct ai *ai_io_wflush(struct ai*, struct ai_io*);   // TRY to push the write run out
 uintptr_t ai_io_wpending(struct ai*, struct ai_io*);  // ... and what the device would not take.
 // close and seal call the pair: wflush, then park on a nonzero wpending (see

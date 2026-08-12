@@ -144,6 +144,7 @@
       (nif_fgetc         "see"           1 lvm_fgetc)
       (nif_fungetc       "unsee"         2 lvm_fungetc)
       (nif_chug          "chug"          1 lvm_chug)
+      (nif_unchug        "unchug"        2 lvm_unchug)
       (nif_fputc         "put"           2 lvm_fputc)
       (nif_fputs         "say"           2 lvm_fputs)
       (nif_fflush        "flush"         1 lvm_fflush)

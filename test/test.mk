@@ -65,6 +65,17 @@ test_stdinbuf: $m
 	  [ -n "$$fl" ] && [ $$(( $$fl & 04000 )) -eq 0 ] \
 	    || { cat out/host/.test_stdinbuf3.out; \
 	         echo "FAIL fd 0 handed on nonblocking (flags $$fl) -- stdin_give did not put the bit back"; exit 1; }
+# ..and the GIVE-BACK rides the same seek: `unchug` puts drained bytes back into the run, so
+# ai_io_pending counts them again and the child inherits fd 0 in front of them. ⚠ THE CONTRAST
+# IS THE LAW -- without the unchug the first byte is gone -- and it is what an ai_io_unread
+# reaching by bio_of would break: the run is BORROWED under a static, so only rbio_of finds it
+# and a heap-port-only door would answer 0 here while every file-port law in test/io.l still passed.
+	@printf 'abcdefghij' > out/host/.test_stdinbuf4.in
+	@p='(: c (see in) _ (unsee in c) t (chug in)'; \
+	  a=`$m -e "$$p k (unchug in 99) (exec (L \"cat\")))" < out/host/.test_stdinbuf4.in`; \
+	  b=`$m -e "$$p (exec (L \"cat\")))" < out/host/.test_stdinbuf4.in`; \
+	  { [ "$$a" = abcdefghij ] && [ "$$b" = bcdefghij ]; } \
+	    || { echo "FAIL unchug is not in the inherited fd offset (with=[$$a] without=[$$b])"; exit 1; }
 # test_host takes the corpus as a FILE, and that is a SPEED choice, not a necessity:
 # stdin works (test/io.l used to poke `in` and eat a byte of whatever fed the suite --
 # it taps a charlist now), and it is equally strict, quitting 1 on a scare either way.
