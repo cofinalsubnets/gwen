@@ -139,7 +139,7 @@
  _ (assert
     (sub? f2 "\e[1;1H" 0)                 ; pane 1's first row
     (sub? f2 "\e[1;11H" 0)                ; the bar's own column
-    (sub? f2 hdown 0)                     ; ... drawn with it
+    (sub? f2 limn-down 0)                     ; ... drawn with it
     ; ⚠ anchor on a row the CURSOR never addresses: it lands on pane 2's origin
     ; too, so "\e[1;12H" alone passes even with the pane painter ignoring it
     (sub? f2 "\e[2;12H" 0)                ; pane 2's second row, one past the bar
@@ -188,9 +188,10 @@
  outb (slurp m)                           ; ... until both children leave and berth ends
  _ (assert
     (sub? outb "\e[1;40H" 0)              ; the bar's column, 39 zero-based
-    (sub? outb hdown 0)                   ; ... drawn with the box glyph
+    (sub? outb limn-down 0)                   ; ... drawn with the box glyph
     (sub? outb "\e[2;41H" 0))             ; the new pane's second row, past the bar
  _ (: (wf p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wf p)))) (wf (cap md)))
  (close m))
 
+(test_fin ())
 (puts "berth: ok")

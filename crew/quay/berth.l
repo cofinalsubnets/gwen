@@ -10,8 +10,11 @@
 ;
 ; WHERE THE PANES COME FROM: lib/wharf.l, and nothing about it is berth's. it is
 ; a plan tree in and rectangles in CELLS out -- no nif, no pty, no framebuffer --
-; so the kernel console can lay its own panes with the same arithmetic. that
-; sharing is the point; berth is just the first seat to ask.
+; so the kernel console can lay its own panes with the same arithmetic. WHERE THE
+; PAINT COMES FROM: lib/limn.l, the same bargain one layer down -- a grid and an
+; origin in, escapes out, and it knows no more about a pty than wharf does. that
+; sharing is the point; berth is just the first seat to ask. what is left here is
+; which grid goes where, which is the only half berth actually owns.
 ;
 ; C-a is the prefix, and the intercept sits in the key pump, BELOW every guest:
 ;   C-a s / C-a v   split the focused berth, stacked or beside
@@ -27,41 +30,9 @@
 ; berth never joins the corpus; the moor core needs no tty and is smoke-
 ; tested end to end over a real pty by test/host/berth.l.
 (use 'wharf)
+(use 'limn)
 
 (:
- ; --- the painter: one frame of the grid, said into a jug as escape codes ---
- ; a pen is a cell's high bytes ((>> cell 8): fg, bg, font+faces); one SGR per
- ; pen CHANGE, respecified from zero each time -- cheap, and never stale
- (sgr p) (: fg (& 255 p) bg (& 255 (>> p 8)) fa (& 15 (>> p 20))
-          (+ "\e[0"
-           (+ (? (& 1 fa) ";1" "")
-            (+ (? (& 2 fa) ";4" "")
-             (+ (? (& 4 fa) ";7" "")
-              (+ ";38;5;" (+ (show fg) (+ ";48;5;" (+ (show bg) "m")))))))))
-
- ; glyph bytes go OUT as utf-8: the grid holds cp437 (the fold), the outer
- ; terminal speaks unicode (the unfold), each face rendered once and cached
- glyphs #()
- (utf8 cp) (? (< cp 128) ("" + cp)
-              (< cp 2048) (+ ("" + (| 192 (>> cp 6))) ("" + (| 128 (& 63 cp))))
-              (+ ("" + (| 224 (>> cp 12)))
-                 (+ ("" + (| 128 (& 63 (>> cp 6)))) ("" + (| 128 (& 63 cp))))))
- (gl b) (: g (peep glyphs b ())
-           (? (string? g) g
-            (: cp (? ((<= 32 b) && (< b 127)) b (unfold b))
-               s (utf8 (? (charm? cp && (< 0 cp)) cp 63))
-               _ (pin glyphs b s)
-               s)))
-
- ; paint row i cell by cell, threading the pen; a blank cell is a space
- (prow j s c i q p) (? (< q c)
-                     (: g (glass s (+ (* i c) q))
-                        p2 (>> g 8)
-                        _ (? (= p p2) 0 (say j (sgr p2)))
-                        _ (say j (gl (: ch (& 255 g) (? (= 0 ch) 32 ch))))
-                        (prow j s c i (+ q 1) p2))
-                     p)
-
  ; --- the moor: pump the master through the screen until the child hangs up.
  ; the screen lives in box bx (a relay swaps it); replies pour straight back;
  ; a dirty box (when given) cues the painter
@@ -133,28 +104,9 @@
                 (hsoil hb))
 
  ; --- the frame -------------------------------------------------------------
- (hgo row col) (+ "\e[" (+ (show (row + 1)) (+ ";" (+ (show (col + 1)) "H"))))
- hdown (utf8 9474)                      ; │
- hacross (utf8 9472)                    ; ─
-
- ; one pane: every grid row addressed at its own origin, which is the whole
- ; difference between painting a rectangle and painting a run of full lines
- (hrows j s r c row0 col0 i p)
-  (? (< i r)
-     (: _ (say j (hgo (row0 + i) col0))
-        p2 (prow j s c i 0 p)
-        (hrows j s r c row0 col0 (i + 1) p2))
-     p)
-
- (hbar j n s) (? (< 0 n) (: _ (say j s) (hbar j (n - 1) s)) 0)
- (hbars j hb)
-  (map (\ b (: d <b row <>b col <>>b n <>>>b
-               (? (= d 'across) (: _ (say j (hgo row col)) (hbar j n hacross))
-                (: (down i) (? (< i n)
-                               (: _ (say j (hgo (row + i) col)) _ (say j hdown) (down (i + 1)))
-                               0)
-                   (down 0)))))
-       (wharf-bars (hb 'plan) (hb 'rows) (hb 'cols)))
+ ; the painting is lib/limn.l's: cells at an origin, and the bars off wharf-bars.
+ ; what stays here is which grid goes where, which is the only half berth owns
+ (hbars j hb) (limn-bars j (wharf-bars (hb 'plan) (hb 'rows) (hb 'cols)))
 
  ; ⚠ nothing is erased between frames, and nothing needs to be: panes and bars
  ; TILE the wharf exactly (lib/wharf.l's standing law), so every cell is written
@@ -164,15 +116,15 @@
      _ (say j "\e[?25l")
      _ (map (\ b (: p (hpane hb (wharf-id b))
                     (? (wharf-show? b && two? p)
-                       (hrows j (peep (hbox p) () 0) (wharf-rows b) (wharf-cols b)
-                                (wharf-row b) (wharf-col b) 0 -1)
+                       (limn-rows j (peep (hbox p) () 0) (wharf-rows b) (wharf-cols b)
+                                    (wharf-row b) (wharf-col b) 0 -1)
                        0)))
             (hb 'lay))
      _ (hbars j hb)
      _ (: p (hpane hb (hb 'focus)) b (hfind (hb 'lay) (hb 'focus))
           (? (two? p && two? b)
              (: s (peep (hbox p) () 0) w (gaze s 0) c (gaze s 2) f (gaze s 3)
-                _ (say j (hgo (wharf-row b + (// w c)) (wharf-col b + (% w c))))
+                _ (say j (limn-go (wharf-row b + (// w c)) (wharf-col b + (% w c))))
                 (? (& 1 f) (say j "\e[?25h") 0))          ; the guest's cursor wish
              0))
      (slurp j))
