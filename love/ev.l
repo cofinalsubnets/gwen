@@ -101,14 +101,17 @@
           (? (id? kur (peek 0 v) && id? ret0 (peek 3 v)) (((peek 2 v) >< k) >< r1) r1))))
    rows ((kur >< 'lvm_cur) >< (foldl add () (catmap keys (books ()))))
    (look w rs) (? (atom? rs) () (id? w <<rs) ><rs (look w >rs))
-   (fin? nm) (? (id? nm 'lvm_ret) 1 (id? nm 'lvm_tap) 1 (id? nm 'lvm_tapn) 1 0)
+   ; ⚠ ret0 ends every nif run but is read by VALUE, never joined to rows: nifs.l's nif-insts
+   ; omits its nom, and a raw code word parked in a heap cell is a pointer to the collector.
+   (op? w) (? (id? ret0 w) 'lvm_ret0 (look w rows))
+   (fin? nm) (? (id? nm 'lvm_ret) 1 (id? nm 'lvm_ret0) 1 (id? nm 'lvm_tap) 1 (id? nm 'lvm_tapn) 1 0)
    (opd w) (? (charm? w) w 'x)
    (opds f i n) (? (n = 0) (() >< i)
     (: w (peek i f)
-     (? (look w rows) (() >< i)
+     (? (op? w) (() >< i)
         (: r (opds f (i + 1) (n - 1)) (((opd w) >< <r) >< >r)))))
    (walk f i n) (? (n = 0) ()
-    (: w (peek i f) nm (look w rows)
+    (: w (peek i f) nm (op? w)
      (? (nil? nm) ()
         (fin? nm) [[nm]]
         (: r (opds f (i + 1) n)
