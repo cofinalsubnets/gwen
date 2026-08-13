@@ -37,18 +37,18 @@
 ; secrecy (from reaches any member) but a QUIET BASE: the state key never
 ; touches orth, in a session or a baked image.
 (: rng-box #0
-   (random st n) (? (gem? n) (: r (turnf st) (link (* n (cap r)) (cup r)))
-                    (< 0 n)  (: r (turn st)  (link (% (cap r) n) (cup r)))
+   (random st n) (? (gem? n) (: r (turnf st) ((n * <r) >< >r))
+                    (0 < n)  (: r (turn st)  ((<r % n) >< >r))
                     (turn st))
    (rng-get _) (: st (peep rng-box () 0)
                   (? (tray? st) st (: f (wheel (clock 0)) _ (pin rng-box () f) f)))
    ; valid state = rank-1, length 4, and the platform's own limb type -- 64-bit
    ; limbs ride a Z array on a 64-bit word but a C (8-byte) array on a 32-bit
    ; one, so compare against a fresh seed's type, never a baked-in `z`.
-   (rng-set st) (? (&& (tray? st) (= 1 (rank st)) (= 4 (tally st)) (= (tier (wheel 0)) (tier st)))
+   (rng-set st) (? (tray? st && rank st = 1 && tally st = 4 && tier (wheel 0) = tier st)
                    (: _ (pin rng-box () st) st)
                    0)
-   (rand n) (: r (turn (rng-get 0)) _ (pin rng-box () (cup r))
-               (? (&& (charm? n) (< 0 n)) (% (cap r) n) (cap r)))
-   (randf n) (: r (turnf (rng-get 0)) _ (pin rng-box () (cup r))
-               (? (&& (constellation? n) (< 0 n)) (* n (cap r)) (cap r))))
+   (rand n) (: r (turn (rng-get 0)) _ (pin rng-box () >r)
+               (? (charm? n && 0 < n) (<r % n) <r))
+   (randf n) (: r (turnf (rng-get 0)) _ (pin rng-box () >r)
+               (? (constellation? n && 0 < n) (n * <r) <r)))

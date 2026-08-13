@@ -18,17 +18,17 @@
 ; answers () -- the undefined-op law, and the fence that keeps a foreign operand (a
 ; chain of coins, say) from dragging gcd into a loop. `reduce`/`ok?` are local
 ; plumbing; q is the only name this leaks.
-(: q (: reduce (\ n d (? (= 0 n) (L 0 1)                        ; gcd out, sign on num, den > 0
-                        (: g (gcd (abs n) (abs d)) s (? (< d 0) -1 1)
-                           (L (// (* s n) g) (// (* s d) g)))))
+(: q (: (reduce n d) (? (0 = n) [0 1]                           ; gcd out, sign on num, den > 0
+                        (: g (gcd (abs n) (abs d)) s (? (d < 0) -1 1)
+                           [(s * n // g) (s * d // g)]))
         ; the domain test is the CLOSED star (the fixpoint minus coins): star?
         ; is open now, and an open star as an (n d) component would drag gcd
         ; off the tower it terminates on -- a coin is never a coefficient.
         (nstar? v) (? (coin? v) 0 (id? v (net v)))
         (ok? v) (? (nstar? v) 1
-                   (two? v) (&& (nstar? (cap v)) (nstar? (caup v)))
+                   (two? v) (nstar? <v && nstar? <>v)
                    0)
-        st #(0 'q 7 1 6 2)                                      ; slot 7: a rational IS a star;
+        st {0 'q 7 1 6 2}                                       ; slot 7: a rational IS a star;
                                                                 ; slot 6 mode 2: C truth by VALUE
         ; the four methods land in ONE `pins` (the mutable-accumulator twin of #(..)) -- but as a
         ; SEPARATE step, not folded into the literal above: a method names `st` back, and binding a
@@ -36,20 +36,20 @@
         ; came out unequal to (q 5 6)). bind the die, THEN pin onto it. 1 + / 2 * / 5 - / 8 /.
         _ (pins st
              1 (\ a b (: x (load a) y (load b)                  ; (n1 d1) + (n2 d2)
-                  (? (&& (ok? x) (ok? y))
-                     (coin st (reduce (+ (* (cap x) (caup y)) (* (cap y) (caup x))) (* (caup x) (caup y))))
+                  (? (ok? x && ok? y)
+                     (coin st (reduce (<x * <>y + <y * <>x) (<>x * <>y)))
                      ())))
              2 (\ a b (: x (load a) y (load b)                  ; (n1 d1) * (n2 d2)
-                  (? (&& (ok? x) (ok? y))
-                     (coin st (reduce (* (cap x) (cap y)) (* (caup x) (caup y))))
+                  (? (ok? x && ok? y)
+                     (coin st (reduce (<x * <y) (<>x * <>y)))
                      ())))
              5 (\ a b (: x (load a) y (load b)                  ; (n1 d1) - (n2 d2)
-                  (? (&& (ok? x) (ok? y))
-                     (coin st (reduce (- (* (cap x) (caup y)) (* (cap y) (caup x))) (* (caup x) (caup y))))
+                  (? (ok? x && ok? y)
+                     (coin st (reduce (<x * <>y - <y * <>x) (<>x * <>y)))
                      ())))
              8 (\ a b (: x (load a) y (load b)                  ; (n1 d1) / (n2 d2): invert and
-                  (? (&& (ok? x) (ok? y) (nil? (= 0 (cap y))))  ; multiply; by zero -> () (no inf in Q)
-                     (coin st (reduce (* (cap x) (caup y)) (* (caup x) (cap y))))
+                  (? (ok? x && ok? y && <y != 0)                ; multiply; by zero -> () (no inf in Q)
+                     (coin st (reduce (<x * <>y) (<>x * <y)))
                      ()))))
-        (\ n (? (two? n) (coin st (reduce (cap n) (caup n)))    ; (q (n d)) -- the show form
+        (\ n (? (two? n) (coin st (reduce <n <>n))              ; (q (n d)) -- the show form
                 (\ d (coin st (reduce n d)))))))               ; (q n d) -- the ergonomic curried form
