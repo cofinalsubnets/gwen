@@ -609,6 +609,16 @@ read off an x64 shape — deriving it from `pro4?` handed arm and riscv a floor 
 op censuses over the CORPUS, not one program: A-1's eleven ops were twelve, because love.c never
 converts a double to an unsigned.
 
+**Open, not mine, and diagnosed (2026-08-13).** `test_embed`'s rp2040 lane has been red for
+several commits: `cc: internal error: lea-far-hi r12`, reproducible in one command —
+`mooncc -t thumb1 -c crew/moon/lib/math/am.c`. The operands are **`lea r12, r4, 896`**: a far
+address compute off the frame base into a HIGH register, and v6-M's `t1-li` is low-register-only,
+so `t1-lea`'s far lane scares. ⚠ **the fix is upstream, not in the encoder** — holo has no scratch
+to invent, and inventing one there is how a roster becomes a miscompile. `pkr` answers `r12` on
+t32 (`gen.l:779`) and v6m already special-cases r12 away in two other lanes
+(`(? (v6m? g) 'r0 'r12)`), so the shape of the answer is a v6m register choice. Confirmed
+independent of `stldp` by reproducing with that pass neutered.
+
 **Process.** ⚠ the shell's cwd silently reset to the POST tree mid-session and a falsification
 flip quietly read the pre-rung sources and answered plausibly — absolute paths for every gate in a
 worktree session, and treat a flip that agrees too easily as a tree check first.
