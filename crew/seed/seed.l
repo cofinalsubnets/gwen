@@ -692,15 +692,6 @@ usage: seed VERB ..
 ; this file and have nothing fire. seed-main reads BARE: whichever layer holds
 ; this file's binds (the loader's, or the script's session) is still the head
 ; when this form compiles. body-having: the seat leaks nothing.
-(: (bn p) (: n (tally p)
-             (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
-             (go 0 0))
-   (me? w) (: b (bn w) ((b = "seed") || (b = "seed.l")))
-   (seat a) (? !(two? a) ()
-               (<a = "-l") (? (two? >a)
-                              (? (me? <>a) (1 >< >>a) (seat >>a))
-                              ())
-               (me? <a) (1 >< >a)
-               ())
-   s (seat >cmdline)
+(: _ (pins (from 'verbs 'tab) 'seed seed-main)
+   s ((from 'verbs 'fire) ["seed" "seed.l"])
    (? (two? s) (seed-main >s) ()))

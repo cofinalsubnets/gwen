@@ -349,13 +349,6 @@ usage: kiosko [-p PORT] [-q] [DIR]
 ; script -- sits in the program seat of the real command line. kiosko-main reads BARE:
 ; whichever layer holds this file's binds is still the head here. body-having, so
 ; nothing leaks.
-(: (bn p) (: n (tally p)
-             (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
-             (go 0 0))
-   (me? w) (: b (bn w) ((b = "kiosko") || (b = "kiosko.l")))
-   (seat a) (? !(two? a) ()
-               (<a = "-l") (? (two? >a) (? (me? <>a) (1 >< >>a) (seat >>a)) ())
-               (me? <a) (1 >< >a)
-               ())
-   s (seat >cmdline)
+(: _ (pins (from 'verbs 'tab) 'kiosko kiosko-main)
+   s ((from 'verbs 'fire) ["kiosko" "kiosko.l"])
    (? (two? s) (kiosko-main >s) ()))

@@ -38,4 +38,32 @@
                                    + " -- it is read before the session exists"))
                        _ (put err 10) 2))
    _ (pin tab 'wake (prime 'wake))
-   _ (pin tab 'bake (prime 'bake)))
+   _ (pin tab 'bake (prime 'bake))
+
+   ; --- the SEAT SCAN, the third door ---
+   ; a file that IS the program seats itself: `love crew/moon/moon.l foo.c`, the installed
+   ; shebang's `-l`, a catted script under its own name. That is not the registry's two
+   ; doors -- no name was typed, a PATH was -- and it is why six apps each wrote this walk
+   ; out for themselves. one walk now; the spellings stay with the app, which is the only
+   ; thing that ever knew them.
+   ;   (fire ws)      -> (SEAT-WORD . args-after) off the real command line, else ()
+   ;   (seatof ws a)  the same over a list you hand it -- kore's in-image door, which
+   ;                  dispatches (link "kore" "ls" "-l") and never reads a command line.
+   ; the seat WORD rides back because a multi-name app reads it: lush's login dash, an
+   ; applet symlink. ⚠ () means "not seated", the presence answer -- ask it with two?.
+   (dash w)    (? ((0 < tally w) && (w 0 = 45)) (snip w 1 (tally w)) w)   ; -sh: login(1)'s mark
+   (any? w ws) (? (atom? ws) 0 ((<ws = w) || (any? w >ws)))
+   (mine? ws w) (any? (dash (bn w)) ws)
+   ; the primes lead, and they are the COMMAND LINE's word, never the program's -- step
+   ; over them so `love wake IMAGE app ..` seats app. wake always carries its path; bake
+   ; may, and a bake with none seats nobody anyway (it exits before a session exists).
+   (unprime a) (? !(two? a) a
+                  ((<a = "wake") || (<a = "bake")) (? (two? >a) >>a ())
+                  a)
+   (seatof ws a) (? !(two? a) ()
+                    (<a = "-l") (? (two? >a)                     ; a preload NAMED for me seats
+                                   (? (mine? ws <>a) (<>a >< >>a) (seatof ws >>a))   ; me -- the shebang's lane
+                                   ())
+                    (mine? ws <a) (<a >< >a)
+                    ())                                          ; seats someone else: not me
+   (fire ws) (seatof ws (unprime >cmdline)))

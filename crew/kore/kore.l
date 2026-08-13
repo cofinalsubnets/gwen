@@ -267,33 +267,41 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
              (go 0 0))
 
    ; -- the dispatch (this form's body) --
-   ; the program seat off the true command line (cmdline is never rebound, so the
-   ; read is the same whether kore loaded positionally or as a -l preload): drop the
-   ; -l pairs, and the first element left is the seat. its BASENAME picks the face
-   ; -- a tool name (the symlink lane) runs that tool on the rest; anything else
-   ; (kore itself, a dev path) reads the next word as the tool.
-   (seat a) (? !(two? a) ()
-               (<a = "-l") (? (two? >a) (seat >>a) ())
-               a)
-   ; me?: is this seat word kore itself, or a tool name (the symlink lane)? the
-   ; dispatch fires only when it is -- so a `-l` preload that seats a flag (the bake
-   ; loads the cat as `love -l .kore-cat.l -e ..`) stays quiet, like moon.l's me?.
-   (me? w) (: b (bn w) ((b = "kore") || (b = "kore.l") || applets (intern b)))
+   ; the SPELLINGS kore answers to: itself, its file, and every applet -- the symlink
+   ; lane is just an applet name in the program seat, so the table IS the list. the
+   ; scan is love/verbs.l's `seatof` (over the list we are handed, never a command
+   ; line: the in-image door dispatches (link "kore" "ls" "-l")), which drops the -l
+   ; pairs and answers (SEAT-WORD . rest), () when the seat is someone else's -- so a
+   ; bake loading the cat as `love -l .kore-cat.l -e ..` stays quiet.
+   ; the seat word's BASENAME picks the face: a tool name runs that tool on the rest;
+   ; anything else (kore itself, a dev path) reads the next word as the tool.
+   mynames (("kore" >< "kore.l" >< map string (keys applets)))
+   ; the VERBS: kore's applet table IS a verb collection, and the registry is where one
+   ; goes. every row lands twice over -- `love ls -l` (the word door) and an `ls` symlink
+   ; onto the artifact (the seat door) -- while `love kore ls` still nests through the
+   ; dispatch below. pinned HERE rather than by whoever cats the file, so every image
+   ; carrying this cat carries the names: the dist artifact, and the kernel, whose
+   ; userland this IS.
+   ; ⚠ each row closes over ITS OWN f -- the inner `:` is a fresh scope per step, so the
+   ; closures do not all end up holding the last applet.
+   _ (: T (from 'verbs 'tab)
+        _ (pin T 'kore (\ as (kore-main ("kore" >< as))))
+        (go ks) (? (two? ks) (: f (applets <ks) _ (pin T <ks (\ as (urun f as))) (go >ks)) 0)
+        (go (keys applets)))
    ; kore-main is the ONE leaked global, and the in-image door too: it dispatches a
    ; program-relative arg list -- argv0 a tool symlink, or `kore`/a dev path then the
    ; tool word -- and ANSWERS the status charm, () when kore is not seated (the bake
    ; stays quiet; an unknown tool is usage's 2, a status like any other). the baked
    ; kore.image wakes to it with a synthetic "kore" argv0, so a caller holding the
    ; image runs a tool by handing it (link "kore" "ls" "-l") and reading the charm.
-   (\ a (: s (seat a)
+   (\ a (: s ((from 'verbs 'seatof) mynames a)
            (? !(two? s) ()
-              !(me? <s) ()
               (: f0 (applets (intern (bn <s)))
                  (? f0 (urun f0 >s)
                     (: t >s
                        f (? (two? t) (applets (intern <t)) ())
                        (? f (urun f >t) (usage ()))))))))))
 ; the SEAT: file mode (cat | love) dispatches on the real command line and quits with
-; the status; the -l bake preload seats a flag, not kore, so me? is false and kore-main
-; answers () -- the presence guard, and the one answer that is not a status.
-(: r (kore-main >cmdline) (? (charm? r) (quit r) ()))
+; the status. the -l bake preload seats a flag, not kore, so the scan answers () and
+; kore-main answers () -- the presence guard, and the one answer that is not a status.
+(: r (kore-main ((from 'verbs 'unprime) >cmdline)) (? (charm? r) (quit r) ()))

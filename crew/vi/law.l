@@ -267,14 +267,16 @@
       (= (klass "1.5e-3") '(number))
       (= (klass "1e10") '(number)))
 
-; --- a stop no lane claims still ENDS the token and the walk still moves on.
-;     `,` is one: it reads as a symbol and terminates one ((sound "a,b") answers
-;     a, then ,b), so the lexer meets it bare -- and so is any control byte ----
+; --- a stop still ENDS the token and the walk still moves on. `,` is one: it
+;     reads as a symbol and terminates one ((sound "a,b") answers a, then ,b),
+;     so the lexer meets it bare. it wears the `comma` class (hue.l's `sep` tag)
+;     because it is its own case everywhere else too. a control byte is the case
+;     that stays UNCLAIMED, and it ends a token exactly the same way ----------
    _ (assert
-      (= (klass ",") ())                                     ; no lane claims it
-      (= (runs "," 0) ())
-      (= (runs "map,map" 0) '((book 0 3) (book 4 7)))         ; but it ends the token
-      (= (runs ("map" + (+ "" 1) + "map") 0) '((book 0 3) (book 4 7))))
+      (= (klass ",") '(comma))
+      (= (runs "," 0) '((comma 0 1)))
+      (= (runs "map,map" 0) '((book 0 3) (comma 3 4) (book 4 7)))
+      (= (runs ("map" + (+ "" 1) + "map") 0) '((book 0 3) (book 4 7))))   ; unclaimed: no run of its own
 
 ; --- the carry: a string spans lines (papel.l's css is forty of them), so a
 ;     line's class depends on where the line BEFORE it ended -----------------
@@ -350,4 +352,5 @@
       (st? (vgob '("a") ((bytes ":hl") + (L CR))) 'hl)
       !(st? (vgob '("a") ((bytes ":hl") + (L CR) + (bytes ":hl") + (L CR))) 'hl))
 
+   _ (test_fin ())                                    ; ⚠ no zz-fin here: quit before claiming ok
    _ (say err "crew/vi/law: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue ok") _ (put err 10) 0)

@@ -1751,6 +1751,12 @@ static char const ktests[] =
 // in the boot text below -- one layer per load, leave registers, the splice serves
 // the bare names (the console editor reads bao's). .rodata: a source the kernel
 // never loads costs a row and not one word of its bounded heap.
+// verbs: the verb REGISTRY (love/verbs.l). the kernel wants one for the plainest
+// reason -- its userland IS a verb table, and the boot cmdline's program seat reads
+// it. cook.l and lush ride the cat and seat themselves through the same door.
+static char const src_verbs[] =
+#include "verbs.h"
+ ;
 static char const src_pat[] =
 #include "pat.h"
  ;
@@ -1797,7 +1803,7 @@ static char const src_kanren[] =
 ;
 #endif
 static struct ai_lib const libs[] = {
-  {"pat", src_pat}, {"uu", src_uu}, {"bao", src_bao},
+  {"verbs", src_verbs}, {"pat", src_pat}, {"uu", src_uu}, {"bao", src_bao},
 #ifdef K_TEST
   {"coin", src_coin}, {"rng", src_rng}, {"q", src_q}, {"kanren", src_kanren},
 #else
@@ -1871,6 +1877,7 @@ void kmain(void) {
 #include "post.h"
  );
   r = ai_evals_(r,
+ "(use 'verbs)" // the registry FIRST: the cat's apps pin their own names at load
  "(use 'pat)"   // ⚠ pat BEFORE uu: uu.l is written in @, and a macro reaches a reader
  "(use 'uu) (: uu (from 'uu))"                         // the uu kernel: the corpus's uu files drive it through the
  "(use 'bao)"                                          //   one-name `uu` surface on this target too

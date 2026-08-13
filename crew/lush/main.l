@@ -100,20 +100,15 @@
 ; order-independent inside any cat; init/boot.l's `-l /lib/sh.l -e "(sh 0)"`
 ; lane stays quiet here ("sh.l" is deliberately NOT a me? name) and fires
 ; through its -e instead.
-(: (bn p) (: n (tally p)
+; a dash-led basename (-lush, -sh: login(1)'s mark) seats us too and makes a LOGIN
+; shell -- the scan strips the dash to match and hands the RAW word back, which is
+; the whole reason it hands one back. (the env -S shebang usually eats the dash, so
+; --login is the reliable door, doc/lush.md.)
+(: _ (pins (from 'verbs 'tab) 'sh sh-main 'lush sh-main)
+   (bn p) (: n (tally p)
              (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
-   ; a dash-led basename (-lush, -sh: login(1)'s mark) matches too and makes a
-   ; LOGIN shell -- though the env -S shebang usually eats the dash, so --login
-   ; is the reliable door (doc/lush.md)
-   (me? w) (: b (bn w)
-              b (? (tally b && (b 0 = 45)) (snip b 1 (tally b)) b)
-              (|| (b = "lush") (b = "lush.l") (b = "sh")))
-   (seat a) (? !(two? a) ()
-               (<a = "-l") (? (two? >a) (? (me? <>a) (<>a >< >>a) (seat >>a)) ())
-               (me? <a) (<a >< >a)
-               ())
-   s (seat >cmdline)
+   s ((from 'verbs 'fire) ["lush" "lush.l" "sh"])
    (? (two? s) (: w (bn <s)
                   _ (? (tally w && (w 0 = 45)) (pin sh-login () 1) 0)
                   (sh-main >s))

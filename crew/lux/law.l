@@ -387,5 +387,6 @@
       (tally <(lay-tile (lay-msg M '(restore-window 20) z3) r z3) = 3)           ; named restore brings it back
       !(lay-msg M '(restore-window 30) z3)))                                     ; not minimized -> unhandled ()
 
+(test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
 (say err "crew/lux/law: StackSet zipper + sheaf + floating + layout + modifier + manage + keymap + ewmh + config laws ok
 ")

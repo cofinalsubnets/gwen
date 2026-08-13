@@ -98,22 +98,16 @@
                 + "\n"))
        (quit 0)))
 
-; the artifact's own verbs, pinned straight into the registry (love/verbs.l). the tablet is
-; the real one -- a module IS its tablet -- so this is the whole registration: no table to
-; hand over, nothing to rebind, and a frontend that never registered `verbs` fails LOUDLY
-; here, which is what a bake wants. FN takes the args AFTER the name and ANSWERS a status
-; charm; both rails quit with it, so a verb that returns needs no exit of its own. kore keeps
-; its own inner dispatch, so `love kore sed ..` nests -- the artifact is multi-call before any
-; symlink is laid, and a symlink named for a verb (the argv[0] door) works too.
+; up and down, pinned straight into the registry (love/verbs.l). the tablet is the real one
+; -- a module IS its tablet -- so this is the whole registration: no table to hand over,
+; nothing to rebind, and a frontend that never registered `verbs` fails LOUDLY here, which is
+; what a bake wants. FN takes the args AFTER the name and ANSWERS a status charm; both rails
+; quit with it, so a verb that returns needs no exit of its own.
+; ⚠ ONLY these two. seed, cook, kore (and its whole applet table), kiosko, mooncc, sh and
+; lush each pin their own name at their own foot now -- an app owns the word it answers to,
+; and this file owning them meant the artifact was multi-call only because up.l happened to
+; be catted last. up and down are up.l's own, and there is nothing else here to know.
 (: T (from 'verbs 'tab)
    _ (pins T
       'up up-main
-      'down down-main
-      'seed seed-main
-      'cook cook-main
-      ; kore ANSWERS its status (crew/kore/core.l's urun) -- exactly the rail's convention now
-      'kore (\ as (kore-main ("kore" >< as)))
-      'kiosko kiosko-main
-      'mooncc moon-main
-      'sh sh-main                      ; lush: the dist answers `love sh ..`, and an
-      'lush sh-main))                  ; sh/lush symlink lands it (the argv0 door)
+      'down down-main))
