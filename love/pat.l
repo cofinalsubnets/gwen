@@ -71,21 +71,21 @@
    ; (pw p v) -- one walk, two answers: the TESTS over the access form v, and the
    ; (nom access) pairs its body binds.
    (pw p v)
-     (? (nom? p) (? (= p '_) wnil [() [[p v]]])
+     (? (nom? p) (? (p = '_) wnil [() [[p v]]])
         (! (link? p)) (wts [['= p v]])
         (: h <p as >p
-           (? (= h '\) (? (two? >as) (scare '@ p) (wts (weq <as v)))
-              (= h 'list) (wlist as v)
-              (h = 'link || h = '><) (? (= 2 (tally as))    ; ONE tag: >< IS link, prefix or infix
+           (? (h = '\) (? (two? >as) (scare '@ p) (wts (weq <as v)))
+              (h = 'list) (wlist as v)
+              (h = 'link || h = '><) (? (tally as = 2)    ; ONE tag: >< IS link, prefix or infix
                                         (wcat (wts [['two? v]])
                                               (wcat (pw <as ['cap v]) (pw <>as ['cup v])))
                                         (scare '@ p))
-              (= h '+) (? (= 2 (tally as))                ; a SPLIT: the left run, then the rest
+              (h = '+) (? (tally as = 2)                ; a SPLIT: the left run, then the rest
                           (: l <as
-                             (? (? (link? l) (= <l 'list) ()) (wrest >l <>as v) (scare '@ p)))
+                             (? (? (link? l) (<l = 'list) ()) (wrest >l <>as v) (scare '@ p)))
                           (scare '@ p))
-              (= h 'hash) (wcat (wts [['tablet? v]]) (wkv as v))
-              (= h 'tuple) (wcat (wts [['tray? v] ['= (tally as) ['tally v]]])
+              (h = 'hash) (wcat (wts [['tablet? v]]) (wkv as v))
+              (h = 'tuple) (wcat (wts [['tray? v] ['= (tally as) ['tally v]]])
                                  (widx as v 0))
               (scare '@ p))))
    ; ⚠ a pattern longer than its value must never reach a `cap`, so the WHOLE run is
@@ -121,10 +121,10 @@
      (? (! (two? bs)) wnil
         (: b <bs e (assoc <b seen)
            (wcat (? (atom? e) [() [b]] (wts [['= <>e <>b]]))
-                 (dedup >bs (? (atom? e) (link b seen) seen)))))
+                 (dedup >bs (? (atom? e) (b >< seen) seen)))))
 
    (pand ts) (? (! (two? ts)) 1  (! (two? >ts)) <ts  ('&& >< ts))
-   (bind bs body) (? (two? bs) (link (link '\ (cat (map cap bs) [body])) (map caup bs)) body)
+   (bind bs body) (? (two? bs) (('\ >< cat (map cap bs) [body]) >< map caup bs) body)
 
    ; --- THE DECISION TREE -------------------------------------------------------
    ; a clause is [tests body]. compiled FLAT, every clause re-runs the tests it
@@ -156,13 +156,13 @@
         (! (two? <(<cs))) ()                        ; a clause with no tests left: stop
         (: t <<(<cs)
            (? (all (\ c (? (two? <c) (same? <<c t) ())) cs)
-              (link t (cpx (map (\ c [>(<c) <>c]) cs)))
+              (t >< cpx (map (\ c [>(<c) <>c]) cs))
               ())))
    (nodes x) (? (link? x) (foldl (\ n e (n + (nodes e))) 1 x) 1)
-   (flat cs els) (link '? ((catmap (\ c [(pand <c) <>c]) cs) + [els]))
+   (flat cs els) ('? >< ((catmap (\ c [(pand <c) <>c]) cs) + [els]))
    (tree cs els)
      (: p (cpx cs)
-        (? (? (two? p) (< (nodes els) 40) ())       ; a common prefix, and an else worth copying
+        (? (? (two? p) (nodes els < 40) ())       ; a common prefix, and an else worth copying
            ['? (pand p) (flat (map (\ c [(drop (tally p) <c) <>c]) cs) els) els]
            (flat cs els)))
    _ (:: '@ (\ a
@@ -171,7 +171,7 @@
                      (! (two? >r)) [() <r]             ; the odd tail IS the else
                      (: w (pw <r v) d (dedup <>w ())
                         rest (cls (cuup r))
-                        [(link [(cat <w <d) (bind <>d <>r)] <rest) <>rest]))
+                        [([(cat <w <d) (bind <>d <>r)] >< <rest) <>rest]))
           cl (cls >a)
           [['\ v (tree <cl <>cl)] <a])))
    ())

@@ -29,14 +29,14 @@
  (:
 
   ; --- integers: the digits of a non-negative charm/sun/big, most significant first
-  (dch n a) (: q (n // 10) d (48 + (n - (q * 10))) (? (0 < q) (dch q (link d a)) (link d a)))
+  (dch n a) (: q (n // 10) d (48 + (n - (q * 10))) (? (0 < q) (dch q (d >< a)) (d >< a)))
   (dstr n) (string (dch n ()))
   (ndig n) (: q (n // 10) (? (0 < q) (1 + (ndig q)) 1))          ; the count, without building the list
   (pnum o n) (? (n < 0) (: _ (put o 45) (say o (dstr (0 - n)))) (say o (dstr n)))
 
   ; --- text ---
   (hexd d) (? (d < 10) (48 + d) (87 + d))
-  (esc o c) (? (|| (c = 92) (c = 34)) (: _ (put o 92) (put o c))
+  (esc o c) (? (c = 92 || c = 34) (: _ (put o 92) (put o c))
                (c = 10) (say o "\\n")   (c = 9)  (say o "\\t")
                (c = 13) (say o "\\r")   (c = 27) (say o "\\e")
                (c = 0)  (say o "\\0")
@@ -53,27 +53,27 @@
   ; denormal floor, where the true spacing stops halving and one more step would hand
   ; the search an interval far too narrow.
   (norm m e) (? (p53 <= m) (norm (m / 2.0) (1 + e))
-                (&& (m < p52) (emin < e)) (norm (m * 2.0) (e - 1))
-                (link (int m) e))
+                (m < p52 && emin < e) (norm (m * 2.0) (e - 1))
+                ((int m) >< e))
   ; inside the rounding interval? a midpoint counts only for an even mantissa --
   ; round-to-nearest-even is what reads it back.
-  (fits c lo hi evn) (&& (? (lo < c) 1 (&& evn (c = lo)))
-                        (? (c < hi) 1 (&& evn (c = hi))))
+  (fits c lo hi evn) ((? (lo < c) 1 (evn && c = lo))
+                   && (? (c < hi) 1 (evn && c = hi)))
   ; the fewest digits whose rounded form sits inside: pk is the place being cut,
   ; walking DOWN by ten a step, and at each one try the truncation and the bump,
   ; the nearer first (a display nicety). at pk = 1 it terminates, dv itself being
   ; inside by construction.
   (pick dv lo hi evn pk) (? (pk < 1) dv
     (: t ((dv // pk) * pk)
-       up (&& (1 < pk) (5 <= ((dv // (pk // 10)) - (10 * (dv // pk)))))
+       up (1 < pk && 5 <= ((dv // (pk // 10)) - (10 * (dv // pk))))
        c1 (? up (t + pk) t) c2 (? up t (t + pk))
        (? (fits c1 lo hi evn) c1 (fits c2 lo hi evn) c2 (pick dv lo hi evn (pk // 10)))))
   ; strip trailing zeros, keeping one digit
-  (strip n) (: q (n // 10) (? (&& (0 < q) ((n - (q * 10)) = 0)) (strip q) n))
+  (strip n) (: q (n // 10) (? (0 < q && (n - (q * 10)) = 0) (strip q) n))
   (zeros o n) (? (0 < n) (: _ (put o 48) (zeros o (n - 1))) 0)
-  (pgem2 o a) (: me (norm a 0) m (cap me) e2 (cup me) sh (e2 - 2)
+  (pgem2 o a) (: me (norm a 0) m <me e2 >me sh (e2 - 2)
     up (? (sh < 0) (** 5 (0 - sh)) (** 2 sh))   ; one shared scale: 2^sh, or 5^-sh with the point moved
-    flo (&& (m = p52) (emin < e2))                ; at a binade floor the gap below is already half
+    flo (m = p52 && emin < e2)                ; at a binade floor the gap below is already half
     dv ((4 * m) * up)
     dlo (((4 * m) - (? flo 1 2)) * up)
     dhi (((4 * m) + 2) * up)
@@ -82,7 +82,7 @@
     lead (ndig dc)
     ss (dstr (strip dc)) sig (tally ss)
     dxp (lead + (? (sh < 0) sh 0))
-    (? (|| (1e16 <= a) (a < 1e-4))
+    (? (1e16 <= a || a < 1e-4)
        (: e (dxp - 1)
           _ (put o (peep ss 0 0))
           _ (? (1 < sig) (: _ (put o 46) (say o (snip ss 1 sig))) 0)
@@ -97,31 +97,31 @@
   (pgem o v) (? !(v <= v) (say o "ieee-nan")
      ; the sign is the BIT, not v < 0: -0.0 < 0 is FALSE, and a comparison there
      ; printed "0.0" -- the one value the roundtrip law lost.
-     (: _ (? (|| (v < 0) (&& (v = 0) ((1.0 / v) < 0))) (put o 45) 0) a (abs v)
+     (: _ (? (v < 0 || (v = 0 && (1.0 / v) < 0)) (put o 45) 0) a (abs v)
         (? (a = inf) (say o "ieee-inf") (a = 0) (say o "0.0") (pgem2 o a))))
   (ptwin o x) (: _ (say o "~(") _ (pgem o (re x)) _ (put o 32) _ (pgem o (im x)) (put o 41))
 
   ; --- chains. a one-operand `\` is quote, and a `(mono (run datum))` is a GLUED
   ; monadic -- print run+datum back the way opfix fused them.
-  (plist o x sn) (: (go l) (: _ (px o (cap l) sn)
-                              (? (two? (cup l)) (: _ (put o 32) (go (cup l))) 0))
+  (plist o x sn) (: (go l) (: _ (px o <l sn)
+                              (? (two? >l) (: _ (put o 32) (go >l)) 0))
                     _ (put o 40) _ (go x) (put o 41))
-  (pchain o x sn) (: h (cap x) t (cup x) one (&& (two? t) !(two? (cup t)))
-    (? (&& (id? h '\) one) (: _ (put o 39) (px o (cap t) sn))
-       (&& (id? h 'mono) (&& one (: m (cap t) (&& (two? m) (&& (two? (cup m)) !(two? (cuup m)))))))
-         (: m (cap t) _ (px o (cap m) sn) (px o (caup m) sn))
+  (pchain o x sn) (: h <x t >x one (two? t && !(two? >t))
+    (? (id? h '\ && one) (: _ (put o 39) (px o <t sn))
+       (id? h 'mono && one && (: m <t (two? m && two? >m && !(two? >>m))))
+         (: m <t _ (px o <m sn) (px o <>m sn))
        (plist o x sn)))
 
   ; --- trays. rank 1 is @(…); past that (array '(shape) elem…), since @ has no
   ; shape spelling. an object tray quotes what would otherwise re-evaluate.
   ; a tray is read by COORDINATE, so walk the flat index back into one, row-major
-  (coord sh i) (? !(two? (cup sh)) (link i ())
-                  (: r (foldl (*) 1 (cup sh)) q (i // r) (link q (coord (cup sh) (i - (q * r))))))
+  (coord sh i) (? !(two? >sh) (i >< ())
+                  (: r (foldl (*) 1 >sh) q (i // r) (q >< coord >sh (i - (q * r)))))
   (ptray o v sn) (: ty (atype v) sh (shape v) n (foldl (*) 1 sh)
     (pel i) (: e (peep v (coord sh i) 0)
-               _ (? (&& (ty = 3) (|| (nom? e) (two? e))) (put o 39) 0) (px o e sn))
+               _ (? (ty = 3 && (nom? e || two? e)) (put o 39) 0) (px o e sn))
     (go i f) (? (i < n) (: _ (? f 0 (put o 32)) _ (pel i) (go (1 + i) 0)) 0)
-    (gs l f) (? (two? l) (: _ (? f 0 (put o 32)) _ (pnum o (cap l)) (gs (cup l) 0)) 0)
+    (gs l f) (? (two? l) (: _ (? f 0 (put o 32)) _ (pnum o <l) (gs >l 0)) 0)
     (? ((rank v) = 1) (: _ (say o "@(") _ (go 0 1) (put o 41))
        (: _ (say o "(array '(") _ (gs sh 1) _ (put o 41)
           (ge i) (? (i < n) (: _ (put o 32) _ (pel i) (ge (1 + i))) 0)
@@ -129,12 +129,12 @@
 
   ; --- maps print #(k v …), the empty one #(); both read straight back. a map is
   ; mutable and can hold itself, so the path is carried and matched by IDENTITY.
-  (onpath? x l) (? !(two? l) 0 (id? x (cap l)) 1 (onpath? x (cup l)))
+  (onpath? x l) (? !(two? l) 0 (id? x <l) 1 (onpath? x >l))
   (pmap o m sn) (? (onpath? m sn) (say o "<cycle>")
-    (: ks (keys m) s2 (link m sn)
+    (: ks (keys m) s2 (m >< sn)
        (go l f) (? (two? l) (: _ (? f 0 (put o 32))
-                                _ (px o (cap l) s2) _ (put o 32) _ (px o (peep m (cap l) ()) s2)
-                                (go (cup l) 0)) 0)
+                                _ (px o <l s2) _ (put o 32) _ (px o (peep m <l ()) s2)
+                                (go >l 0)) 0)
        (? !(two? ks) (say o "#()") (: _ (say o "#(") _ (go ks 1) (put o 41)))))
 
   ; --- coins show as (name 'payload): the arity-1 ctor love/coin.l hands out, applied
@@ -144,12 +144,12 @@
   ; q applied to 2, which is not the number and was never a coin.
   (pcoin o x sn) (: nm (peep (die-of x) 0 ()) p (load x)
     _ (put o 40) _ (? (nil? nm) (say o "coin") (px o nm sn))
-    _ (put o 32) _ (? (|| (two? p) (nom? p)) (put o 39) 0)
+    _ (put o 32) _ (? (two? p || nom? p) (put o 39) 0)
     _ (px o p sn) (put o 41))
 
   ; --- closures. a partial's every unc cell holds its arg at [1] and the link at
   ; [2], so the base value sits at link-2.
-  (partp v) (|| (id? unc (peek 0 v)) (&& (id? cur (peek 0 v)) (id? unc (peek 2 v))))
+  (partp v) (id? unc (peek 0 v) || (id? cur (peek 0 v) && id? unc (peek 2 v)))
   (unc0 v) (? (id? cur (peek 0 v)) (seek 2 v) v)
   (nargs v) (: (go u n) (: l (peek 2 u) (? (id? unc (peek 0 l)) (go l (1 + n)) n)) (go (unc0 v) 1))
   (fbase v) (: (go u) (: l (peek 2 u) (? (id? unc (peek 0 l)) (go l) (seek -2 l))) (go (unc0 v)))
@@ -157,15 +157,15 @@
   ; --- a lambda's source, de Bruijn renamed: a \-bound variable prints d<level>,
   ; so a-equivalent lambdas print alike and inspect agrees with `=`. free, global
   ; and :-bound names keep their spelling; quoted data is shared verbatim.
-  (dnom d) (name (+ "d" (dstr d)))
-  (lam? x) (&& (two? x) (&& (id? (cap x) '\) (&& (two? (cup x)) (two? (cuup x)))))
-  (qot? x) (&& (two? x) (&& (id? (cap x) '\) (&& (two? (cup x)) !(two? (cuup x)))))
-  (canon x sc d) (? !(two? x) (? (nom? x) (: r (assoc x sc) (? r (cup r) x)) x)
+  (dnom d) (name ("d" + dstr d))
+  (lam? x) (two? x && id? <x '\ && two? >x && two? >>x)
+  (qot? x) (two? x && id? <x '\ && two? >x && !(two? >>x))
+  (canon x sc d) (? !(two? x) (? (nom? x) (: r (assoc x sc) (? r >r x)) x)
                     (qot? x) x
-                    (lam? x) (link '\ (cops (cup x) sc d))
-                    (link (canon (cap x) sc d) (canon (cup x) sc d)))
-  (cops l sc d) (? !(two? (cup l)) (link (canon (cap l) sc d) ())     ; the last operand is the body
-                   (: nm (dnom d) (link nm (cops (cup l) (link (link (cap l) nm) sc) (1 + d)))))
+                    (lam? x) ('\ >< cops >x sc d)
+                    (canon <x sc d >< canon >x sc d))
+  (cops l sc d) (? !(two? >l) ((canon <l sc d) >< ())                ; the last operand is the body
+                   (: nm (dnom d) (nm >< cops >l ((<l >< nm) >< sc) (1 + d))))
 
   (pfn o v sn) (? (partp v)
     (: n (nargs v)
@@ -189,7 +189,7 @@
                 (gem? x) (pgem o x)
                 (tray? x) (ptray o x sn)
                 (twin? x) (ptwin o x)
-                (|| (sun? x) (big? x)) (pnum o x)
+                (sun? x || big? x) (pnum o x)
                 o)
   px)))
 
@@ -199,7 +199,7 @@
 ; is the NOM, so a glued `.x` resolves through whatever `.` names at the use site.
 (: (print o x) (: _ (px o x ()) x)
    (show x) (: o (jug 0) _ (px o x ()) (slurp o))
-   (dot x) (: _ (? (|| (string? x) (&& (hot? x) !(port? x))) (say out x) (px out x ())) _ (flush out) x))
+   (dot x) (: _ (? (string? x || (hot? x && !(port? x))) (say out x) (px out x ())) _ (flush out) x))
 (: putx (print out)
    . dot
    _ (pin monadics '. '.))
