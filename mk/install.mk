@@ -48,7 +48,8 @@ binnames = $(BIN) kore seed mooncc moonfmt cook papel kiosko libra ain lux bao l
 mannames = $(BIN) cook lush
 installs = $(patsubst %,$d/bin/%,$(binnames)) \
   $(patsubst %,$d/share/man/man1/%.1,$(mannames)) \
-  $d/lib/love/prel.l $d/lib/love/ev.l $d/lib/love/bao.l $d/lib/love/mooncc.image \
+  $d/lib/love/prel.l $d/lib/love/ev.l $d/lib/love/bao.l \
+  $d/lib/love/mooncc.image $d/lib/love/kore.image \
   $(patsubst %,$d/lib/love/%.l,$(libmods)) \
   $v/ftdetect/love.vim $v/syntax/love.vim $v/ftplugin/love.vim
 
@@ -169,15 +170,24 @@ $d/bin/ain: tools/ain.l $(ho)/kore
 	@$(ho)/kore sed '1s|env -S love|env -S $(BIN)|' $< > $@
 	@chmod 755 $@
 
-# kore, the multi-call toolbox: ONE catted script, the util picked off the command line or
-# off argv[0] through a tool-named symlink. It shadows nothing here -- only `kore` lands on
-# PATH, and the distro symlinks the tool names where shadowing is the point. The member
-# SEATs stay quiet inside the cat, so kore.l's dispatcher is the one thing firing.
-$d/bin/kore: $(korefiles) $(ho)/kore
+# kore, the multi-call toolbox: the util picked off the command line or off argv[0] through
+# a tool-named symlink. It shadows nothing here -- only `kore` lands on PATH, and the distro
+# symlinks the tool names where shadowing is the point.
+# A WAKE SHIM on the baked image, mooncc's lane below: the cat this used to inline re-evals
+# on EVERY spawn, which is 0.5-1.4s before a tool says anything (crew/build.mk's ~1.3s, paid
+# by the install lane alone -- out/host/kore has woken an image all along).
+# ⚠ `n` comes off $0 UNCHASED where `h` is the chased path: a tool symlink must arrive as its
+# own name for the argv[0] door, and only the real file's dir has the lib/ sibling.
+$d/bin/kore: $(MAKEFILE_LIST)
 	@echo CAT	$(abspath $@)
 	@install -d $(dir $@)
-	@{ echo '#!/usr/bin/env -S $(BIN)'; $(ho)/kore sed 's|^#!/usr/bin/env -S love|#!/usr/bin/env -S $(BIN)|' $(korefiles); } > $@
+	@{ echo '#!/bin/sh'; \
+	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
+	   echo 'n=$$(basename -- "$$0")'; \
+	   echo 'exec "$$h/$(BIN)" wake "$$h/../lib/love/kore.image" "$$n" "$$@"'; } > $@
 	@chmod 755 $@
+$d/lib/love/kore.image: $(ho)/kore.image
+	$(inst644)
 
 # seed 🌱 and lush 🐚, each its own catted script: their sources carry no shebangs, so the
 # interpreter line then a plain cat. Each SEAT fires on the installed name -- lush's on its

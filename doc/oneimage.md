@@ -1,8 +1,15 @@
 # one image — the whole crew in one binary
 
-A plan (chosen, revisable), not a record: nothing here has landed. The aim is to retire the
-three-image build and the shim/`wake` zoo around it, so `love` is the one artifact and the
-crew rides inside it — dispatched by argv[0], or by a verb in the first argument.
+A plan (chosen, revisable). The aim is to retire the three-image build and the shim/`wake`
+zoo around it, so `love` is the one artifact and the crew rides inside it — dispatched by
+argv[0], or by a verb in the first argument.
+
+**Landed so far: rungs 1 and 2, and the shim half of 5.** love/verbs.l is the one registry
+and every app pins its own name into it, kore's applet table included (51 rows); cli.l's rail
+refuses a positional carrying `/` or `.l`, which is rung 2 exactly. Rung 5 got its cheap half
+without rung 3: `bin/kore` installs as a wake shim on an installed `kore.image`, mooncc's lane,
+where it used to inline the cat and re-eval it per spawn — 1526 ms to 47 ms. The expensive
+half (rung 3, one binary, no images) is untouched and still costs what the table below says.
 
 Most of this is a **promotion**, not an invention. `make dist` already bakes exactly this
 binary; the work is making it the default and widening the verb table. Read crew/build.mk's

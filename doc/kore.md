@@ -8,9 +8,11 @@ kernel + a static `love` + .l files, and kore is busybox's multi-call trick done
 
 ## the shape
 
-ONE catted script (`out/host/kore`, `bin/kore` installs), the `$(korefiles)` cat in
-crew/build.mk — kore's own toolboxes, lib/lint.l, crew/vi/, tools/ain.l, the lush files,
-crew/cook/cook.l and the holo linker files — behind a `#!/usr/bin/env -S love` shebang.
+ONE cat — the `$(korefiles)` list in crew/build.mk: kore's own toolboxes, lib/lint.l,
+crew/vi/, tools/ain.l, the lush files, crew/cook/cook.l and the holo linker files. It is
+baked once into `kore.image`, and both `out/host/kore` and the installed `bin/kore` are
+three-line `/bin/sh` wrappers that `wake` it — re-evaling the cat per spawn costs ~1.3s, so
+only the distro, which has no image to ship, still runs it as a shebang script.
 `crew/kore/kore.l` loads LAST and dispatches off the program seat of `cmdline`: `kore TOOL
 ARGS..`, or symlink a tool's name to kore and argv[0] picks it (how the distro shadows at
 will). The registry is a tablet, so tool names never collide with the globals they call (the
