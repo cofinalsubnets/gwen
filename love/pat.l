@@ -42,9 +42,25 @@
 ;                          value a pattern, and the match is by SUBSET (the one
 ;                          place a pattern is looser than its constructor)
 ;   @(a b)  (tuple a b)    a tray of exactly two
+;   (? g pat)              a GUARD: pat must fit AND g must hold
+;   (? g)                  the guard alone -- fits anything g holds for
 ; ⚠ a map key is read for PRESENCE, not truth: a pinned () matches, an absent
 ; key does not. an unknown tag is a scare AT EXPAND TIME -- a pattern is code, so
 ; a typo in one is a compile error, never a clause that quietly never fires.
+;
+; THE GUARD IS THE ONE PATTERN THAT IS NOT A CONSTRUCTOR, and it wears `?` because
+; a side condition is what `?` already means everywhere else -- test then shape,
+; where `?` elsewhere reads test then value. `&&` and `||` stay unspent, so an
+; and-pattern and an or-pattern can have them.
+; g is an ORDINARY EXPRESSION, not a pattern: it is read for truth, it binds
+; nothing, and it sees every nom THE WHOLE ARM binds -- `(? (a < b) [a b])` reads
+; the pair it is testing. That is because guards do not run where they are written:
+; like the non-linear `=` tests, they ride at the END of the conjunction, in source
+; order, once the structural tests have earned every accessor. So a guard costs
+; nothing on an arm whose shape already failed, and a positional one
+; (`[a (? (a > 0) b)]`) is a placement for the READER -- it does not short-circuit
+; any earlier. It is the body's own binder wrapped around g, so a nom the arm does
+; not bind still resolves outward, in the scope the `@` was written in.
 ;
 ; A REPEATED NOM MATCHES NON-LINEARLY: the second sighting is an `=` against the
 ; first's access form, not a second binding, so [a a] fits a pair of equals and
@@ -64,17 +80,22 @@
    ; nothing else: = on a charm is numeric ACROSS the band (5 matches the gem 5.0),
    ; and id? would quietly narrow that to one representation.
    (weq d v) (? (nom? d) [['id? (lit d) v]] [['= (lit d) v]])
-   wnil [() ()]
-   (wts ts) [ts ()]
-   (wcat x y) [(cat <x <y) (cat <>x <>y)]
+   wnil [() () ()]
+   (wts ts) [ts () ()]
+   (wgd g) [() () [g]]
+   (wcat x y) [(cat <x <y) (cat <>x <>y) (cat <>>x <>>y)]
 
-   ; (pw p v) -- one walk, two answers: the TESTS over the access form v, and the
-   ; (nom access) pairs its body binds.
+   ; (pw p v) -- one walk, three answers: the TESTS over the access form v, the
+   ; (nom access) pairs its body binds, and the GUARDS, which are neither.
    (pw p v)
-     (? (nom? p) (? (= p '_) wnil [() [[p v]]])
+     (? (nom? p) (? (= p '_) wnil [() [[p v]] ()])
         (! (link? p)) (wts [['= p v]])
         (: h <p as >p
-           (? (= h '\) (? (two? >as) (scare '@ p) (wts (weq <as v)))
+           (? (= h '?) (? (! (two? as)) (scare '@ p)          ; a GUARD: (? g pat), or (? g) alone
+                          (! (two? >as)) (wgd <as)
+                          (two? >>as) (scare '@ p)
+                          (wcat (wgd <as) (pw <>as v)))
+              (= h '\) (? (two? >as) (scare '@ p) (wts (weq <as v)))
               (= h 'list) (wlist as v)
               (h = 'link || h = '><) (? (= 2 (tally as))    ; ONE tag: >< IS link, prefix or infix
                                         (wcat (wts [['two? v]])
@@ -179,8 +200,9 @@
           (cls r) (? (! (two? r)) [() ()]              ; no clause and no else: the zero point
                      (! (two? >r)) [() <r]             ; the odd tail IS the else
                      (: w (pw <r v) d (dedup <>w ())
+                        gs (map (\ g (bind <>d g)) <>>w)   ; a guard is the body's binder over g
                         rest (cls (cuup r))
-                        [(link [(cat <w <d) (bind <>d <>r)] <rest) <>rest]))
+                        [(link [(cat (cat <w <d) gs) (bind <>d <>r)] <rest) <>rest]))
           cl (cls >a)
           [['\ v (tree <cl <>cl)] <a])))
    ())

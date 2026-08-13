@@ -78,7 +78,29 @@
  (6 = (@ @(1 @(3 4)) @(a @(b c)) (b + c - a) 0))
  ; --- the shapes nest, and a nested literal still binds nothing
  ('hit = (@ ['k #('f 1)] ['k {'f 1}] 'hit 'no))    ; ⚠ the ` ctor: a quoted #(..) is a FORM, not a map
- ('no = (@ ['k #('f 2)] ['k {'f 1}] 'hit 'no)))
+ ('no = (@ ['k #('f 2)] ['k {'f 1}] 'hit 'no))
+ ; --- a GUARD: (? g pat) is the shape AND the side condition, (? g) the condition alone.
+ ; g is an expression read for truth, never a pattern -- it binds nothing.
+ ('up = (@ [1 2] (? (a < b) [a b]) 'up 'down))     ; ..and it sees what its own arm binds
+ ('down = (@ [2 1] (? (a < b) [a b]) 'up 'down))
+ ('small = (@ 3 (? (3 < 0)) 'neg (? (3 < 10)) 'small 'big))   ; ..alone, it is a conditional arm
+ ('big = (@ 99 (? (99 < 0)) 'neg (? (99 < 10)) 'small 'big))
+ (0 = (@ 5 (? (5 = 6)) 1 0))                       ; ..a guard that fails falls THROUGH, like a shape
+ ; ⚠ THE ORDER LAW: guards ride at the END of the conjunction, so an arm whose SHAPE
+ ; failed never runs its guard -- the accessors it reads have all been earned.
+ ('no = (@ 5 (? (0 < a) [a]) 'yes 'no))
+ ('no = (@ () (? (0 < a) [a b]) 'yes 'no))
+ ; ..which is why a positional guard is a placement for the reader, not an earlier test
+ (3 = (: lim 5 (@ [1 2] [a (? (a < lim) b)] (a + b) 'no)))    ; ..an outer nom resolves outward
+ ('no = (: lim 5 (@ [9 2] [a (? (a < lim) b)] (a + b) 'no)))
+ ('y = (@ '(1 1) (? (0 < a) [a a]) 'y 'n))         ; ..it composes with the non-linear nom
+ ('n = (@ '(0 0) (? (0 < a) [a a]) 'y 'n))
+ ('k = (@ '(2 3) (? (a < b) (? (0 < a) [a b])) 'k 'no))       ; ..and guards stack
+ ('no = (@ '(2 1) (? (a < b) (? (0 < a) [a b])) 'k 'no))
+ (2 = (@ @(1 2) @(a (? (1 < b) b)) b 0))           ; ..anywhere a pattern goes
+ (0 = (@ @(1 1) @(a (? (1 < b) b)) b 0))
+ ('(3 4) = (@ '(1 2 3 4) (? (a < b) ([a b] + t)) t 'short))     ; ..a split included
+ ('short = (@ '(1 2 3 4) (? (b < a) ([a b] + t)) t 'short)))
 
 ; ⚠ ONE LAW IS UNGATED: an unknown tag scares at EXPAND time, and the only way to
 ; defer an expansion into a test is (ev '(@ 1 (bogus a) a)) under a trap -- which
