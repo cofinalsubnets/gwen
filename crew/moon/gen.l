@@ -894,8 +894,19 @@
    ; llong/ullong exist only on t32 (canon folds `long long` to 'long on the 64-bit targets):
    ; the 8-byte REGISTER PAIR, lo in r0, hi in r1 -- the one type wider than the accumulator.
    (llt? ty) ((ty = 'llong) || (ty = 'ullong))
-   (ubin ta tb) (? (llt? ta || llt? tb) (? (usg? ta || usg? tb) 'ullong 'llong)
-                   (usg? ta || usg? tb) 'ulong 'long)
+   ; ⚠ THE SIGNEDNESS IS C'S, and C's is not "either operand is unsigned". 6.3.1.8 is a
+   ; RANK rule, and `puac` (parse.l) is the tree's one spelling of it: where the signed
+   ; type is strictly wider it represents every value of the unsigned one, so the common
+   ; type stays SIGNED -- `long long` meets `unsigned int` at long long. Reading that pair
+   ; as unsigned made a 64-bit signed divide go logical, and sqlite is where it showed:
+   ; LARGEST_INT64 is `0xffffffff | ((i64)0x7fffffff<<32)`, so sqlite3MulInt64's
+   ; INT64_MIN/2 came back POSITIVE, every multiply looked like an overflow, and
+   ; `SELECT 4294967296*2` answered a REAL where every other sqlite answers an integer.
+   ; the WIDTH is still the accumulator's, not C's -- that part was always deliberate.
+   (ubin w64 ta tb)
+    (: c (puac w64 ta tb)
+       (? (llt? ta || llt? tb) (? (tusg? c) 'ullong 'llong)
+          (tusg? c) 'ulong 'long))
    ; ..and `ubin` deliberately WIDENS: it answers the accumulator's type, not C's. right for every
    ; op whose result cannot leave its operands' range, wrong for the four that CAN carry past bit
    ; 31 -- `+ - * <<` on a 32-bit unsigned result, which C wraps and a 64-bit register does not.
@@ -913,7 +924,7 @@
      !(member? ta '(long ulong llong ullong) ||
        member? tb '(long ulong llong ullong)) &&
      (u32? g ta || u32? g tb))
-   (rbin g ta tb) (? (u32bin? g ta tb) 'uint (ubin ta tb))
+   (rbin g ta tb) (? (u32bin? g ta tb) 'uint (ubin !(t32? g) ta tb))
    ; ⚠ and ASK THE LITERAL what C would call it. a bare number's value tuple types 'long on the
    ; 64-bit targets (the register is 64-bit and every other consumer wants that), but C says an
    ; unsuffixed literal that fits is an `int` -- and u32bin? DISQUALIFIES on a long operand, so
@@ -1050,10 +1061,13 @@
                  _ (? (rpeq? g rd rA) () (rfree g rA))
                  (mkv 'long rd fs)))
           (member? op '(/ %))
-           ; an unsigned participant licenses the strength-reduction: an unsigned LEFT is
-           ; nonnegative in its register (canonical zero-extension), an unsigned CONSTANT
-           ; makes the common type unsigned -- either way shr/and read the pattern right
-           (? !((usg? aty || usg? nty) && pow2? n) 'no
+           ; ⚠ what licenses shr/and here is the COMMON TYPE being unsigned, which is not
+           ; the same as either operand being unsigned: an unsigned CONSTANT does NOT make
+           ; the common type unsigned when the signed side is wider (C 6.3.1.8, and cmpu
+           ; is the same read the general divide below takes). `(long)-8 / 2u` is -4, and
+           ; reducing it to a LOGICAL shift answered 9223372036854775804 -- a whole
+           ; quadrant off, silently, for the one divisor shape that looks safest.
+           (? !((cmpu g aty nty) && pow2? n) 'no
               (op = '/) (? (n = 1) (mkv (rbin g aty nty) rA (vfs av))
                            (? (wr? g rA)
                               (mkv (rbin g aty nty) rA (vfs av + [['shr rA (lg2 n)]]))
@@ -3611,7 +3625,7 @@
                                     ; (the __aeabi_(u)ldivmod protocol); mov is the hi-form, flag-silent
                                     mid2d (asll g av + spush2 + asll g b
                                            + '((mov r2 r0) (mov r3 r1)) + spop2 'r0 'r1)
-                                    rt (ubin ta tb)
+                                    rt (ubin !(t32? g) ta tb)
                                     (? (op = '+) (mkv rt 'r0 (mid2 + '((adds r0 r2 r0) (adc r1 r3 r1))))
                                        (op = '-) (mkv rt 'r0 (mid2 + '((subs r0 r2 r0) (sbc r1 r3 r1))))
                                        (op = '*)
