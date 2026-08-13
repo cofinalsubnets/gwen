@@ -80,6 +80,23 @@ for f in test/cc/*.c; do
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
 done
 
+# --------------------------------------------- -fno-inline: real, and neutral
+# TWO halves, and both are the point: the flag must BITE (more functions reach
+# the object, always_inline included -- the driver's word outranks the source's)
+# and it must not CHANGE THE ANSWER. 112 is the inline law's own program, so the
+# splice-off run walks the same checks the splice-on run does.
+moonrun            test/cc/112-alwaysinline.c "$ho/.ni-on"  > /dev/null 2>&1 || fail "-fno-inline: splice-on compile"
+moonrun -fno-inline test/cc/112-alwaysinline.c "$ho/.ni-off" > /dev/null 2>&1 || fail "-fno-inline: splice-off compile"
+"$ho/.ni-on";  a=$?
+"$ho/.ni-off"; b=$?
+[ $a -eq $b ] || fail "-fno-inline changed the answer (on $a, off $b)"
+moonrun -c            test/cc/112-alwaysinline.c "$ho/.ni-on.o"  > /dev/null 2>&1 || fail "-fno-inline: -c splice-on"
+moonrun -c -fno-inline test/cc/112-alwaysinline.c "$ho/.ni-off.o" > /dev/null 2>&1 || fail "-fno-inline: -c splice-off"
+non=$(nm "$ho/.ni-on.o"  | grep -c ' [tT] ')
+nof=$(nm "$ho/.ni-off.o" | grep -c ' [tT] ')
+[ "$nof" -gt "$non" ] || fail "-fno-inline barred no splice ($non text syms either way)"
+echo "mooncc: -fno-inline bars every splice ($non functions emitted, $nof with it) and answers the same"
+
 # ------------------------------------------------------- the failure exits
 moonrun "$ho/.cc-none.c" "$ho/.ccx" > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "mooncc missing input exit (rc $r)"
