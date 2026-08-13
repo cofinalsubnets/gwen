@@ -60,9 +60,8 @@ typedef int64_t ai_sdlimb;
 #define limb_clz(x) (__builtin_clzll((unsigned long long) (x)) - (8 * (int) sizeof(unsigned long long) - limb_bits))  // leading zeros of a nonzero limb, at limb width
 #define wlimbs (Bits / limb_bits)   // limbs to hold one machine word: 1 (native-width limbs) or 2 (32-bit limbs on a 64-bit word)
 // decimal digits a limb spans: floor(limb_bits * log10 2), 30103 = round(1e5 log10 2).
-// the reader packs chunk digits per mul-add pass; the printer bounds bytes by chunk+1.
+// the reader packs chunk digits per mul-add pass.
 #define limb_dec_chunk  (limb_bits * 30103 / 100000)
-#define limb_dec_digits (limb_dec_chunk + 1)
 // the binary-radix twins: the most digits whose product still fits a limb
 #define limb_hex_chunk  ((limb_bits - 1) / 4)
 #define limb_oct_chunk  ((limb_bits - 1) / 3)
@@ -311,7 +310,6 @@ int ai_big_cmp(word, word);                  // -1/0/1 over two integer operands
 struct ai
  *ai_big_binop(struct ai*, int vop),  // vop_add..vop_rem, packed; pops one operand
  *ai_big_quot_true(struct ai*),       // `/` bignum lane: exact quotient when b | a, else a float box
- *ai_big_dec(struct ai*),             // sp[0] bignum -> decimal string
  *ai_big_read_dec(struct ai*),        // sp[0] [+-]?digits token -> canonical value
  *ai_big_read_hex(struct ai*),        // ..and its [+-]?0x<hexdigits> twin
  *ai_big_read_oct(struct ai*);        // ..and [+-]?0<octdigits>, the third
@@ -6063,12 +6061,6 @@ static ai_inline ai_dlimb div128by64(ai_limb hi, ai_limb lo, ai_limb d, ai_limb 
  ai_limb qlo = div2by1(r1, lo, d, rem);
  return ((ai_dlimb) qhi << limb_bits) | qlo; }
 
-// a /= d in place (d != 0), returning the remainder. Used by the printer.
-static ai_noinline ai_limb mag_divmod_small(ai_limb *a, int n, ai_limb d) {
- ai_limb rem = 0;
- for (int i = n - 1; i >= 0; i--) { ai_limb r; a[i] = div2by1(rem, a[i], d, &r); rem = r; }
- return rem; }
-
 // Knuth Algorithm D long division (Hacker's Delight divmnu): u (m limbs) / v (n
 // limbs, m >= n) -> q (m-n+1 limbs), r (n limbs); un/vn are normalization scratch.
 static ai_noinline void mag_divmod(ai_limb *q, ai_limb *r,
@@ -6618,36 +6610,6 @@ static struct ai *big_read_radix(struct ai *g, ai_limb radix, int chunk, uintptr
 struct ai *ai_big_read_dec(struct ai *g) { return big_read_radix(g, 10, limb_dec_chunk, 0); }
 struct ai *ai_big_read_hex(struct ai *g) { return big_read_radix(g, 16, limb_hex_chunk, 2); }
 struct ai *ai_big_read_oct(struct ai *g) { return big_read_radix(g,  8, limb_oct_chunk, 1); }
-
-// g->sp[0] bignum -> its base-10 string, by repeated divide-by-10 of a heap-local
-// copy; no allocation once the single Have lands
-struct ai *ai_big_dec(struct ai *g) {
- struct ai_big *a = big(g->sp[0]);
- intptr_t sl = a->slen;
- bool neg = sl < 0;
- int n = (int) (neg ? -sl : sl),
-     cap = n * limb_dec_digits + 2 + (neg ? 1 : 0);   // upper-bound bytes (a limb prints in < limb_dec_digits digits)
- uintptr_t str_words = str_type_width + b2w((size_t) cap),
-           scratch_words = b2w((size_t) n * sizeof(ai_limb));
- if (!ai_ok(g = ai_have(g, str_words + scratch_words))) return g;
- a = big(g->sp[0]);                   // re-fetch post-GC
- struct ai_str *st = str(g->hp);
- ai_limb *work = (ai_limb*) (g->hp + str_words);
- for (int i = 0; i < n; i++) work[i] = a->limb[i];
- char *out = txt(st);                            // bytes area (offset only; st not yet inited)
- int m = n, pos = cap;
- while (m > 0) {
-  ai_limb r = mag_divmod_small(work, m, 10);
-  while (m > 0 && work[m-1] == 0) m--;
-  out[--pos] = (char) ('0' + r); }
- if (pos == cap) out[--pos] = '0';               // (a bignum is never zero; defensive)
- if (neg) out[--pos] = '-';
- int dl = cap - pos;
- for (int i = 0; i < dl; i++) out[i] = out[pos + i];   // shift digits to the front
- ini_str(st, dl);
- g->hp += str_type_width + b2w((size_t) dl);
- g->sp[0] = word(st);
- return g; }
 
 // --- (tray witness shape-list vals): THE typed array constructor (mopped; the
 // prel's *-tray wrap it). the witness names its tier by example (0/0.0/~(0 0)/()
