@@ -12,7 +12,7 @@
 ;
 ; --- the table ---------------------------------------------------------------
 ; a row is `(class vim-group rule)`. the rule's head is its TAG, and the tag set
-; is CLOSED at eight: eol span mark char delim num word punct. each tag has
+; is CLOSED at nine: eol span mark char delim num word punct sep. each tag has
 ; exactly two interpreters -- hue-lex below (bytes -> runs) and hue-vim in the
 ; generator (tag -> syn lines) -- and neither is a regex engine. when a class
 ; wants a shape neither can say, that is the signal to add a TAG, not to hand-
@@ -35,6 +35,12 @@
       (atom       Identifier (mark 39))                    ; 'foo -- the mark and its token
       (ctor       Special    (char 96))                    ; ` -- the list ctor
       (paren      Delimiter  (delim "()[]{}"))
+      ; `,` earns a tag of its own because it is its own case everywhere else too:
+      ; the C reader stops ON it like a quote or a tick, and opfix SPLITS a form at
+      ; it (prel's op-cm?/op-take/op-drop). it is in no vocabulary -- (member? ',
+      ; (names ())) is nothing -- so no word lane claims it; it is not a sigil, so
+      ; no punct lane does; and it has no partner, so it cannot ride the pair above.
+      (comma      Operator   (sep 44))
       (number     Number     (num))
       (form       Statement  (word (":" "?" "\\")))        ; letrec* / cond / lambda
       (macro      Operator   (word macros))                ; prel's macro-names
@@ -61,6 +67,7 @@
    hue-brk  (hue-arg (hue-one 'delim))                     ; the bracket bytes
    hue-quo  (hue-arg (hue-one 'mark))
    hue-tick (hue-arg (hue-one 'char))
+   hue-sep  (hue-arg (hue-one 'sep))                       ; the byte the grammar splits at
    hue-str  (hue-arg (hue-one 'span))                      ; the quote byte
    hue-esc  (hue-nth (hue-rule (hue-one 'span)) 2)         ; the escape byte
    ; a token ends only on whitespace, a bracket, or a reader operator
@@ -210,8 +217,9 @@
                  (c = hue-quo) (: j (tend (i + 1)) (w j (emit acc 'atom i j)))
                  (c = hue-tick) (w (i + 1) (emit acc 'ctor i (i + 1)))
                  (hue-delim? c) (w (i + 1) (emit acc 'paren i (i + 1)))
-                 ; a stop no lane claims (`,`, a control byte) is one plain
-                 ; char -- and that is what leaves `word` the i<j it walks on
+                 (c = hue-sep) (w (i + 1) (emit acc 'comma i (i + 1)))
+                 ; a stop no lane claims (a control byte) is one plain char --
+                 ; and that is what leaves `word` the i<j it walks on
                  (hue-term? c) (w (i + 1) acc)
                  (word i (tend i) acc))))
        (? in (wstr 0 0 ()) (w 0 ())))

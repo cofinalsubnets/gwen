@@ -91,6 +91,11 @@
            (line ("syn match " + g + " \"" + (string a) + "[^" + stop + "]*\""))
           (id? tag 'char)
            (line ("syn match " + g + " \"" + (string a) + "\""))
+          ; sep: one byte standing alone, the same shape as char and a separate tag
+          ; because both readings reach a tag through its FIRST row, so a second
+          ; `char` row would be read by neither
+          (id? tag 'sep)
+           (line ("syn match " + g + " \"" + (string a) + "\""))
           (id? tag 'num)
            ; hex FIRST: `0x1f` would otherwise take the plain-integer match on its
            ; leading 0 and leave the rest bare, which is a worse lie than no colour
