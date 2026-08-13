@@ -80,7 +80,7 @@ piece. ~11k lines of love.
 ## the driver
 
 ```
-mooncc [-c] [-pie] [-nostdinc] [-t TARGET] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
+mooncc [-c] [-pie] [-nostdinc] [-fno-inline] [-t TARGET] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
 ```
 
 Several inputs need `-c` and land each in the cwd as `x.o` (gcc-shaped); the old positional pair
@@ -96,7 +96,7 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
 **The cc conventions** — `CC=mooncc` drives a gcc-shaped recipe unchanged:
 
 - the **advisory** families (`-W..` `-O..` `-g..` `-std=` `-f..` `-pipe` `-static`) ride through
-  ignored, and so do glued `-l..`/`-L..`: the runtime is pulled by need, so the libc/libm a
+  ignored -- less `-fno-inline`, which is real here (below) -- and so do glued `-l..`/`-L..`: the runtime is pulled by need, so the libc/libm a
   recipe asks for is already in the artifact before it asks, and a name we cannot satisfy still
   lands as a *named* undefined reference at the link rather than going quiet (a real third-party
   library has its own door — give the `.a` as an input). Lua's own `LIBS=-lm` is why this
@@ -114,6 +114,15 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
   only our own headers answer. It is **loud, not advisory**: with the tail on, a header we do
   not carry resolves to glibc's, and a freestanding build taking a hosted declaration is the
   wrong artifact wearing a green face;
+- `-fno-inline` (and gcc's `-fno-inline-functions`) is the one member of the `-f` family that is
+  **real** here: it bars every splice for the whole TU, the same door
+  `__attribute__((noinline))` opens one name at a time, and it **outranks `always_inline`** —
+  the flag is an instrument before it is an optimization switch, and a source attribute that
+  could override it would leave the reader with no way to say *read this function as written*.
+  Splicing is semantics-neutral, so the answer never moves; what moves is what you can read.
+  That is what it is for: comparing one function's codegen against another cc's is impossible
+  when a splice has rewritten it into its caller. Gated by `test_moon`, both halves — that it
+  bites, and that the answer is unchanged;
 - the **semantic** refusals stay loud (`-shared`, `-Wl,`'s payload, `-m..`) — an ignored one
   would be the silent-no-op trap in a cc suit. ⚠ mooncc **refuses** a `-m` rather than ignoring
   it.

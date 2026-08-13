@@ -8222,10 +8222,15 @@
        ; (the lvm fleet and the designed-ret seams stay out-of-line by the C's own word).
        ainls (? (two? xtra && 5 < tally xtra) (nthr xtra 5) ())
        noinls (? (two? xtra && 6 < tally xtra) (nthr xtra 6) ())
+       ; -fno-inline: the driver's own noinline, said once for the whole TU. it outranks
+       ; always_inline -- the flag is an INSTRUMENT (read this fn as written, not as some
+       ; caller wears it), and an attribute that could override it would leave the reader
+       ; with no way to say what it meant.
+       nolin (? (two? xtra && 9 < tally xtra) (nthr xtra 9) ())
        (recfns fs) (? !(two? fs) 1
                       (: f <fs
                          _ (? (member? <f '(fn proto)) (pin (g 'fns) <>f 1) ())
-                         _ (? (<f = 'fn &&
+                         _ (? (<f = 'fn && !nolin &&
                                !(member? <>f weaks) &&
                                !(member? <>f noinls) &&
                                inlok? f (peep sigs <>f ()) (member? <>f ainls))
