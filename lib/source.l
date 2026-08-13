@@ -31,6 +31,21 @@
                    (: c (src-head (tar-get <es 'nom ""))
                       (? ((c = ".") || (c = "")) (src-top >es) c)))
 
+   ; ⚠ THE ARCHIVE ITSELF RIDES ALONG, at the path $(dist_src_tgz) names. An extracted
+   ; tree has no .git, and the stage is `git checkout-index` -- so it cannot RE-CUT the
+   ; tarball, and `make dist` there dies "not a git repository". Laying the very bytes we
+   ; carried means the rebuilt seed binary embeds the SAME archive, so it comes out
+   ; byte-identical by construction rather than by a re-pack that has to coincide.
+   (src-lay-tgz root top gz)
+    (: _ (mkdir (root + "/out") 493)
+       _ (mkdir (root + "/out/dist") 493)
+       p (root + "/out/dist/" + top + ".tar.gz")
+       q (open p "w")
+       _ (? q 0 (src-die ("cannot write " + p)))
+       _ (say q gz)
+       _ (close q)
+       p)
+
    ; the running binary, laid where the unpacked tree's `make` looks for it
    (src-lay-love root)
     (: exe (readlink "/proc/self/exe")
@@ -63,8 +78,9 @@
        _ (? (two? w) 0 (src-die ("cannot write under " + dir)))
        root (? (dir = ".") top (dir + "/" + top))
        _ (src-lay-love root)
+       _ (src-lay-tgz root top gz)
        _ (puts ("source: " + show <>w + " files in " + root
-                + ", with bin/love -- `cd " + root + " && make`\n"))
+                + ", with bin/love and the archive -- `cd " + root + " && make`\n"))
        0)
 
    ; ⚠ one function, two words: `src` is the short spelling and nothing more, so a

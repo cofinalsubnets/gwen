@@ -204,10 +204,24 @@ out/dist/.staged-$(dist_ver): force_stage $(ho)/love
 	@printf '%s\n' "$(dist_ver)" > $(dist_stage)/love-$(dist_ver)/VERSION
 	@touch $@
 
+# ⚠ AN EXTRACTED TREE CANNOT CUT ONE. The stage is `git checkout-index`, and a tree laid
+# by `love source` has no .git -- so there the tarball is not built, it is ALREADY THERE:
+# the artifact wrote the bytes it carried to exactly this path. Reusing them is what makes
+# a seed binary rebuilt out there byte-identical rather than merely equivalent, since the
+# blob it embeds is the same archive and not a re-pack that has to coincide.
+have_git := $(shell git -C $(R) rev-parse --is-inside-work-tree 2>/dev/null)
+ifneq ($(have_git),)
 $(dist_src_tgz): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l tools/tgz.l
 	@echo TGZ	$(abspath $@)
 	@rm -f $@
 	@$(ho)/love tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
+else
+$(dist_src_tgz):
+	@echo "dist: no .git here and no $@ --" >&2
+	@echo "dist: an extracted tree rebuilds from the archive 'love source' laid;" >&2
+	@echo "dist: re-extract if it went missing." >&2
+	@exit 1
+endif
 
 # THE SOURCE BLOB: the lean tarball laid into an object (tools/mksrc.l), so the
 # artifact hands out its own source with no second download and no `tar xf` -- love

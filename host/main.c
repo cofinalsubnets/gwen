@@ -1012,7 +1012,15 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   // tablet), and nif/nifx go because they install raw bytes as executable code: the glaze
   // folded them into its closures at the load above, and keeps them as module members
   // (love/glaze/emit.l), so (from 'glaze 'nif) is the one door left onto that.
-  g = ai_evals_(g, "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
+  // ⚠ AND `born` COMES OFF WHEN BAKING, because it is the one thing above that a
+  // snapshot must not carry: it is the HATCH DURATION (egg.l's (clock now)), so a
+  // baked one would freeze one machine's ~220 ms into every future wake and report it
+  // as this run's. It is also the last content in the image that varies run to run,
+  // which is what makes a bake reproducible at all. The waker re-pins it below, at
+  // its own cost -- per invocation, which is the only reading that was ever true.
+  g = ai_evals_(g, bake
+    ? "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) _ (pull book 'born 0) (pull book 'book 0))"
+    : "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
 
   if (bake) {                                            // the bake verb: snapshot the post-warm heap, then exit
     // LOVE_BAKE_LOAD: read-eval one more .l file before the snapshot -- the dist
@@ -1097,8 +1105,11 @@ int main(int argc, char const **argv) {
   // through to the normal egg boot. Never wrong.
   // (love0's reserve is 2 words and never baked, so its auto-load always falls through.)
   char const *noimg = getenv("LOVE_NO_IMAGE");
+  uintptr_t woke_ms = 0;                       // what the wake cost, for `born` below
   if (!g && !bake && !(noimg && *noimg)) {
+   uintptr_t t0 = ai_clock();
    if (ai_baked_image_len && (g = ai_image_load(ai_baked_image, ai_baked_image_len)))
+    woke_ms = ai_clock() - t0,
     image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
   if (!g) g = ai_ini();
   g = env_budget(g);                               // the LOVE_BUDGET_MB cap, on whichever g won (fresh or woken image)
@@ -1139,6 +1150,14 @@ int main(int argc, char const **argv) {
     // (member? 'love-image (names ())) -- presence out of band, never (lit? ..).
     if (image_load_path && ai_ok(g = ai_strof(g, image_load_path))) {
       g = ai_defv(g, "love-image");
+      if (ai_ok(g)) ai_core_of(g)->sp++; }
+    // `born` -- WHAT THIS INVOCATION COST TO START, in ms, and it belongs to the run and
+    // not to the heap. The egg pins the HATCH duration (egg.l) and the bake pulls it back
+    // off (the seal), so a woken love arrives without one and re-pins the WAKE duration
+    // here. Both readings answer the same question; only the number differs, and the gap
+    // between them is the whole point of baking (~220 ms hatched against ~4 ms woken).
+    if (image_load_path && ai_ok(g = ai_push(g, 1, putcharm((intptr_t) woke_ms)))) {
+      g = ai_defv(g, "born");
       if (ai_ok(g)) ai_core_of(g)->sp++; }
     // take what fd 0 can lend -- a read run, or its blocking bit (above). ⚠ NEVER UNDER
     // a bake: the image would carry a heap port, and a run's state belongs to the run, not the egg.
