@@ -206,7 +206,7 @@
 (assert
  (5 = 5 - ()) (5 = () - 5) (2.5 = () - 2.5) ((64 2) = (64 2) - ())     ; - : both sides, every width
  (5 = 5 / ()) (5 = () / 5) (5 = (// 5 ())) (5 = 5 % ()) (5 = (% () 5)) ; / // %
- (5 = (5 | ())) (5 = (() & 5)) (5 = (^ 5 ())) (5 = (<< 5 ())) (5 = (>> () 5))  ; the bitwise lanes -- | & (grip 30) sit BELOW =, so parenthesize
+ (5 = (5 | ())) (5 = (() & 5)) (5 = (^ 5 ())) (5 = (<< 5 ())) (5 = (>> () 5))  ; the bitwise lanes -- | & (band 30) sit BELOW =, so parenthesize
  (~(1 2) = ~(1 2) - ()) ("@(1 2 3)" = show (@(1 2 3) - ()))            ; complex + array pass through
  (2 = (5 - ()) - 3) (5 = ((- 5) ()))                    ; chains heal; a partial fired with the unit yields its held operand
  !('ef - 3) !("a" - "b") (5 = ('a - 'b) - 5)            ; undefined still answers (): it now vanishes through - too
@@ -507,21 +507,23 @@
 ; char: a name token (alnum/_) keeps - ? ! and the prime inside (kebab law; a LEADING ' is still
 ; quote), a punctuation-led token is a SIGIL -- a maximal run of operator chars, ONE PLAIN SYMBOL
 ; when spaced, fused to its datum as (mono (run datum)) when GLUED mid-list. code then factors
-; sigils at COMPILE time via `opfix` against the ONE `dyadics` table (symbol -> grip[. hand], or
-; (name grip[. hand]) an alias -- EVERY operator is dyadic, so no row carries an arity, and a grip
-; must be POSITIVE since a table miss answers 0; the DEFAULT is house grip, right-handed, so a fresh punct
-; operator needs no entry -- the tables themselves are book-private since birth, the egg mops them,
-; and `fixity` is the one door left onto them: (fixity nm v) pins nm's row and answers the row it
-; REPLACED in the same shape, so (fixity nm (fixity nm new)) restores and () both clears a row and
-; reports an absent one. a shape the table refuses is rolled back and SCARED, never pinned. the
+; sigils at COMPILE time via `opfix` against the ONE `operators` table, keyed by ARITY -- the
+; operands a sigil takes from the form around it: 0 GLUED (symbol -> the word it names), 2 SPACED
+; (symbol -> band[. hand], or (name band[. hand]) an alias), -1 spaced with NO BOUND. so the
+; valence law is the lookup, and a nom lives in as many lanes as it has faces. a band
+; must be POSITIVE since a table miss answers 0; the DEFAULT is house band, right-handed, so a fresh punct
+; operator needs no entry -- the table itself is book-private since birth, the egg mops it,
+; and `grip` is the one door left onto it: (grip ar nm v) pins nm's row in lane ar and answers
+; the row it REPLACED in the same shape, so (grip ar nm (grip ar nm new)) restores and () both
+; clears a row and reports an absent one. a shape the table refuses is rolled back and SCARED, never pinned. the
 ; table is read live, so a declaration governs every form compiled after it -- haskell's rule). a
 ; SPACED sigil is ONE WHOLE NAME: it carries a row or takes the default and never splits, so
 ; != && >>= :- ?- are each one operator. with a left operand it captures the whole APPLICATION SPAN
 ; on that side, because juxtaposition binds tighter than any infix operator ((a b = c d) is
-; (= (a b) (c d)), (5 = abs -3) is (= 5 (abs -3))), nesting by GRIP and, at equal grip, by the
+; (= (a b) (c d)), (5 = abs -3) is (= 5 (abs -3))), nesting by BAND and, at equal band, by the
 ; operator's HAND -- arithmetic is LEFT-handed ((1 - 2 - 3) is -4) and everything else RIGHT;
 ; with none it reads plain, so (+ 1 2), '+, (+)-as-a-value all work. FACTORIZATION is the GLUED
-; lane's alone: a run splits greedily, longest-prefix, no backtracking, against monadics, and a
+; lane's alone: a run splits greedily, longest-prefix, no backtracking, against arity 0, and a
 ; glued run binds TIGHTEST. the CURRY LAW folds operands
 ; missing at the end of a list to the partial application. the VALENCE LAW: glued is monadic,
 ; spaced is dyadic -- everywhere, HEAD INCLUDED ((<x = y) is (= (cap x) y)); only : ? \ stay the
@@ -539,7 +541,7 @@
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = ~(0 1)) (~(2 3) = (twin 2 3)) ('~x = '(conj x)) (lit? dot)
  ("(. x)" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
- (: was (fixity '^ '(60 1)) t (opfix '(a ^= b)) _ (fixity '^ was)        ; a SPACED sigil is one whole
+ (: was (grip 2 '^ -60) t (opfix '(a ^= b)) _ (grip 2 '^ was)        ; a SPACED sigil is one whole
     (&& (was = ()) (t = '(^= a b))))                                     ;   name: ^'s row never splits ^=
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (5 = --5) (5 = ++5) (-5 = ---5) (: x 5 (-5 = -x))   ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
@@ -551,12 +553,12 @@
  ('(\ (list a b)) = (cap (sound "'[a b]")))                  ; ...but ' is not one: it quotes the form
  (3 = 1 + 2) (7 = 1 + 2 * 3) (1 < 2 ? 'big) ('small = (? (2 < 1) 'big 'small))  ; ? is dyadic: infix takes ONE arm ((< 1 2) binds first at 40), an else arm is the prefix cond
  (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                ; the LEFT hand: ((1 - 2) - 3), ((8 / 4) / 2)
- (: was (fixity '<+> '(60 1)) t (opfix '(a <+> b <+> c)) _ (fixity '<+> was)   ; the fixity door,
+ (: was (grip 2 '<+> -60) t (opfix '(a <+> b <+> c)) _ (grip 2 '<+> was)   ; the grip door,
     (&& (was = ()) (t = '(<+> (<+> a b) c))))     ;   restored inside the form: the next one reparses
  ('(1 2 3) = 1 >< 2 >< '(3))                     ; ... while a right-handed band still folds right
  (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix: (= 3 (abs -3)), (+ 2 (3 4))
  (1 = (3 != 4)) (0 = (3 != 3)) (: t (opfix '(a != b && c)) (t = '(&& (!= a b) c)))  ; != is a plain
- (: was (fixity '! ()) _ (fixity '! was) (was = ()))   ;   dyad at the comparison grip, and ! -- monadic
+ (: was (grip 2 '! ()) _ (grip 2 '! was) (was = ()))  ; dyad at the comparison band, and ! -- glued-lane
  ("(! x)" = (show (opfix '(! x)))) (id? (!) nil?) (id? (.) dot)   ; and nothing else -- carries NO row:
  (1 = (! 0)) (0 = (! 5)) (1 = (! ""))            ;   the walk hands the symbol to an ordinary function
  (197 = ($"ab" + 2))                             ; one binds tightest: (+ ($ "ab") 2)
@@ -569,7 +571,7 @@
  ('(mono (< x)) = (caup (cap (sound '(40 102 32 60 120 41)))))  ; the emission, data-lane
  (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))   ; the comma layer: clauses in sequence, the last answers; empties drop
  (12 = (foldl (+) 0 '(3 4 5))))
-; the compile tables (dyadics/monadics/pureset) are OFF the book post-birth --
+; the compile tables (operators/pureset) are OFF the book post-birth --
 ; mopped beside macros (a live pin into a compile table would poison every later
 ; compile); the guarded asserts live in the bootstrapping section's welp window.
 
@@ -700,7 +702,7 @@
         (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
         (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
         (? born !spin 1)                        ;  hence the born guards)
-        (? born !dyadics 1) (? born !monadics 1) (? born !pureset 1)  ; the compile tables too (2026-07-07)
+        (? born !operators 1) (? born !pureset 1)   ; the compile tables too (2026-07-07)
         (? born !enter 1) (? born !leave 1) (? born !lib 1))  ; the layer door + the source library: the runtime's, off the surface
 (hear 0)
 

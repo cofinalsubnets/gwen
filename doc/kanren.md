@@ -73,8 +73,8 @@ because that search is intractable. So: a reason to revisit, not a reason to bui
   constraint is permanently satisfied and drops; success with no new bindings means it is
   violated and the goal fails; anything else keeps the residual bindings as the constraint. Every
   later `est` re-verifies the store. ~30-40 lines. Laws in `test/kanren.l`.
-  ⚠ `=/=` is all-punct, so it is infix-dyadic at house grip for free, exactly as `===` is — no
-  `dyadics` row, and none available anyway (the table is mopped at the hatch). It shares grip
+  ⚠ `=/=` is all-punct, so it is infix-dyadic at house band for free, exactly as `===` is — no
+  `operators` row, and none available anyway (the table is mopped at the hatch). It shares band
   with `===`, so a chain folds by hand and wants parens.
 * **rung 2, ordered disjunction.** `s_app` beside `s_plus`, left-biased. ⚠ incomplete by
   construction — that is the point, and every use site owes the word.

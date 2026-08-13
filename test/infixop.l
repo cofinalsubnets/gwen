@@ -1,5 +1,5 @@
-; infix -- an entry at two or more in the `dyadics` table. in operand position with a
-; left operand available, the sigil captures it and collects ONE more datum,
+; infix -- an entry in a SPACED lane of the `operators` table (arity 2, or -1 for no
+; bound). in operand position with a left operand available, the sigil captures it and collects ONE more datum,
 ; nesting RIGHT-associatively (a following operator steals the nearest operand).
 ; with no left operand it reads as the plain symbol, so (+ 1 2) prefix, '+ quote,
 ; and (+)-as-a-value all keep working. parenthesized infix double-wraps -- (1 + 2)
@@ -22,10 +22,10 @@
  (1 = (5 = 2 + 3))                              ; (= 5 (+ 2 3))
 
  ; ? is DYADIC like every other row -- infix it is the one-armed cond, and its
- ; grip (10, the loosest declared) still decides what the condition is
+ ; band (10, the loosest declared) still decides what the condition is
  ('a = (1 ? 'a)) (() = (0 ? 'a))
  ('big = ((1 < 2) ? 'big))
- ('big = (1 < 2 ? 'big))                        ; (1 < 2) binds first at grip 40 -> (? (< 1 2) 'big)
+ ('big = (1 < 2 ? 'big))                        ; (1 < 2) binds first at band 40 -> (? (< 1 2) 'big)
  ; an else arm is the PREFIX cond -- which is n-ary, where the infix form takes one arm
  ('small = (? (2 < 1) 'big 'small)) ('c = (? 0 'a 0 'b 'c))
 

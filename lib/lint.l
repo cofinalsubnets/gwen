@@ -82,7 +82,8 @@
        ("deprecated " + (string nm) + (? (string? h) (" -- " + h) "")))
 
    ; --- the shadow rule ------------------------------------------------------
-   ; the words a `monadics` row names. a glued sigil factors to ONE of these and then
+   ; the words a glued row names (`operators` at arity 0). a glued sigil factors to ONE of these
+   ; and then
    ; resolves like any other name, so a binding of one IN SCOPE quietly re-aims every
    ; `<x` / `!x` / `+x` under it -- rare, real and silent, which is what a rule is for.
    ; ⚠ this does NOT reserve the names: the rule speaks, the binding stands.

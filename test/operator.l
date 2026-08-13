@@ -1,19 +1,22 @@
-; the operator table -- ONE table, `dyadics`: sigil symbol -> grip[ hand[ nary]] (the
-; symbol names itself) | (name grip[ hand[ nary]]) (an alias). a row is the whole fold,
-; arity included: 0 dyadic, 1 N-ARY (the clause forms ? and @, whose arms stay operands
-; rather than spanning into one). the reader is structural
+; the operator table -- ONE table, `operators`, keyed by ARITY: the operands a sigil
+; takes from the form around it. 0 is the glued lane (sigil -> the word it names), 2 is
+; spaced (sigil -> band[ hand] | (name band[ hand]), an alias), -1 is spaced with no
+; bound -- the clause forms ? and @ and the binder :, whose operands stay flat rather
+; than spanning into one. arity 1 has a key and no walk yet. a nom lives in as many lanes
+; as it has faces, and `?` is the pair -- `bit` glued, cond spaced -- so the valence law
+; IS the lookup. the reader is structural
 ; (a sigil -- a maximal all-punct token -- reads as one plain symbol); code looks
 ; sigils up in the table at COMPILE time (the opfix pass). the table is opfix's
-; OWN -- book-private since birth (the egg mops it beside monadics/pureset: a live
+; OWN -- book-private since birth (the egg mops it beside pureset: a live
 ; pin into a compile table would poison every later compile) -- so its laws read
-; through BEHAVIOR: ? at its grip lives in test/infixop.l, its n-ary fold in
+; through BEHAVIOR: ? at its band lives in test/infixop.l, its n-ary fold in
 ; test/precedence.l, the nom-led alias
-; shape and the grip refusals in test/precedence.l's fixity door, greedy longest-prefix
-; factorization (the GLUED lane, against monadics) in the valence laws, and a FRESH
+; shape and the band refusals in test/precedence.l's grip door, greedy longest-prefix
+; factorization (the GLUED lane, arity 0) in the valence laws, and a FRESH
 ; punct operator needs no entry at all (default dyadic; test/infixop.l's DEFAULT
 ; INFIX section).
 (hear welp)                                    ; welp answers the misses quietly
-(assert (? born !dyadics 1) (? born !monadics 1) (? born !pureset 1))
+(assert (? born !operators 1) (? born !pureset 1))
 (hear 0)
 
 ; reading is structural: a sigil from a port is just the symbol, no table consulted

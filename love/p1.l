@@ -218,7 +218,7 @@
 
    ; THE VALENCE LAW, reader half: a run GLUED to the datum after it is MONADIC
    ; -- the run becomes a wrap UNDER a mono wrap, so the emission is the nested
-   ; (mono (run d)), which opfix factors against book['monadics] -- and a spaced
+   ; (mono (run d)), which opfix factors against book['operators] arity 0 -- a spaced
    ; run is the plain symbol, dyadic by opfix's default. head
    ; fuses too, so (<x = y) is (= (cap x) y); the exceptions are \ (which never
    ; fuses, form space) and : / ? at head (they consume the whole list, where

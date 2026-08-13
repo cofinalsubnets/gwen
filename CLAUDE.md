@@ -14,10 +14,16 @@
 ; --- how to work here (read this first) ---
 ; * `make test` is the fast default gate, run it as a quick check. `make test_slow` is the slow gate,
 ;   run it before committing. `make test_extra` is the really slow gate, run it before merging to main.
-;   ⚠ read the summary, not the exit code: host and love0 must each print the zz-fin "tests pass"
-;   line (love0 twice) -- a silent reader stop exits 0, so green proves nothing on its own.
+;   ⚠ PIPE THE READING, KEEP THE EXIT: a pipeline's status is the LAST command's, so
+;   `make test | grep ..` reports GREP's success and a red gate reads green -- the filter matching
+;   an EARLIER lane's summary is exactly how. `set -o pipefail; make test 2>&1 | grep -aE
+;   "tests pass|FAIL|Error [0-9]|No rule"` is the reading, and the prefix is not optional.
 ;   ⚠ never `| tail` a gate: each target prints its summary as it finishes, and the dot stream
-;   buries them. `make test 2>&1 | grep -aE "tests pass|FAIL|Error [0-9]|No rule"` is the reading.
+;   buries them. with pipefail the exit code IS trustworthy -- every lane already holds itself to
+;   exit 0 AND its sentinel (test/gate/run.sh for ~34 of them, an .rc file for host/love0, and
+;   run.sh also reads the recorded X, since a failed assert carries on and prints one). so the
+;   summary and the status agree: host and love0 each print the zz-fin "tests pass" line (love0
+;   twice), and a lane that stops silently fails the recipe rather than passing quietly.
 ;   between the tiers run the test_* targets covering what you touched (test/test.mk; most are
 ;   subsecond off the baked image, the egg gates test_host/test_love0/test_gcheck + test_sat stay
 ;   cold). `make valg` for memory, `make vmret` for the tail-jump law, `make waits` for the blocking
@@ -61,18 +67,36 @@
 ;   from memory -- re-probe on every rename or semantic change.
 ; * a bare all-punct symbol mid-list captures its left operand when code compiles (opfix) -- escape
 ;   in parens ((+) is + as a value); glued to a datum it is monadic instead (the valence law: space
-;   your dyadics); quoted lists are data, operators plain.
+;   your dyadics); quoted lists are data, operators plain. a sigil's GRIP is how it takes hold, and
+;   it is three words: the LANE (`operators`' arity key -- 0 glued, 2 spaced, -1 spaced with no
+;   bound; 1 has a key and no walk), the BAND (the level, higher binds tighter) and the HAND (which
+;   way a same-band run folds). neither of the last two is a slot: a row IS a signed band, and the
+;   MINUS is the left hand -- arithmetic being the only left-handed band in the tree, so the sign
+;   marks the exception. ⚠ that makes a left-handed row RED, so every test on one is by kind or by
+;   identity: (nil? -60) is true, and a truth test reads every left-handed row as absent.
+;   `(grip ar nm v)` is the door, one signature at every lane -- a curried door of two arities
+;   would hand back a closure and write nothing. doc/precedence.md.
 ; * arithmetic operators are dyadic: `(+ a b c)` is `((+ a b) c)` -- application, not a 3-way sum,
 ;   so it church-exponentiates ((+ 192 40 5) = (232 5) = 5^232, a bignum).
+; * three traps for a primed hand, all deliberate, all siblings of (x) = x. ⚠ LISP: THERE ARE NO
+;   DOTTED PAIRS. `.` is an ordinary punct symbol, so '(a . b) is the THREE-element list (a . b)
+;   -- and in code it opfixes to (. a b), post.l's dot, since a spaced sigil is an operator. a
+;   pair is BUILT (`><`), never written, so any table row wanting one takes the list spelling.
+;   ⚠ HASKELL: THERE ARE NO RIGHT SECTIONS. the curry law hands you the left one and nothing else,
+;   and (1 -) folds to (- 1) -- the SAME function, -4 at 5. so (- 1) is not `subtract 1`; the
+;   right section is a lambda, and now a short one: (x \ x - 1).
+;   ⚠ C AND PYTHON: COMPARISONS DO NOT CHAIN, and the wrong answer is SILENT. one band, one hand,
+;   so (1 < 2 < 3) is (< 1 (< 2 3)) = (< 1 1) = 0 -- false -- while (3 > 2 > 1) is 1 and
+;   (0 = 1 = 2) is 1, each right by accident. spell the conjunction: (1 < 2 && 2 < 3).
 ; * the BINDERS read infix too, and each folds back THROUGH its own lowering, so a spelling is
-;   the same FORM and never a lookalike: `\` is dyadic at $'s grip -- (a \ b \ c) IS (\ a b c),
-;   the chain flattened to one closure -- and `:` is n-ary at the loosest grip there is, so
+;   the same FORM and never a lookalike: `\` is dyadic at $'s band -- (a \ b \ c) IS (\ a b c),
+;   the chain flattened to one closure -- and `:` is n-ary at the loosest band there is, so
 ;   (a : 1 b : 2 (a + b)) IS (: a 1 b 2 (a + b)), A CHAIN BEING ONE SCOPE. patterns lower in
 ;   every position either way, and nothing is added: (a : b) is the plain body-less (: a b), so
 ;   a top-level one PINS -- `sq x := x * x` is a definition. `:=` is an alias row on `:`, the
 ;   same word spelled the other way. ⚠ `:` is n-ary: (x : f a) binds x to f with body a, not
 ;   to (f a) -- an applied value spends the parens.
-; * the CLAUSE forms `?` and `@` are the two N-ARY operators (grip 10): infix, they take the
+; * the CLAUSE forms `?` and `@` are the two N-ARY operators (band 10): infix, they take the
 ;   scrutinee on the left and keep every arm an operand, so (x @ p b .. else) IS (@ x p b .. else)
 ;   and (c ? a b) is (? c a b), not (? c (a b)). the leading span is taken whole, so a compound
 ;   scrutinee spends no parens. ⚠ an infix ARM still does: a dyadic inside one spans the rest
@@ -206,7 +230,7 @@
 ; --- everything is a function --- (f x y) == ((f x) y) and (f) == f, so application is just
 ; left-to-right currying. numbers are church numerals, a list of numbers an exponential tower, and
 ; data self-applies (indexes). asserts in spec.l read infix -- (3 = 1 + 2) is ((= 3 (+ 1 2))),
-; folding by grip and, at equal grip, by the operator's hand -- arithmetic is left-handed
+; folding by band and, at equal band, by the operator's hand -- arithmetic is left-handed
 ; ((1 - 2 - 3) is -4), everything else right -- sound by (f) == f. the two pillars:
 ; demo:
 (0 5)                ; 1       0 is const-1
@@ -320,7 +344,7 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; (inle rung 3: the boot cmdline's program seat dispatches it). every frontend opens its session with
 ; ai_layer_ after boot (bakers never push; wakers always do). ⚠ a layer leans only on what
 ; survives birth -- wrapping a mopped nif means taking it off egg.l's mop list. ⚠ a post-egg
-; layer cannot add an operator: `dyadics` is mopped, the grammar closes at the hatch; `fixity`
+; layer cannot add an operator: `operators` is mopped, the grammar closes at the hatch; `grip`
 ; is the one door left onto the table (it answers the row it replaced, and a refused shape rolls
 ; back and scares). build codegen lives in love under tools/; the C is freestanding,
 ; -Wall -Wextra -Werror.

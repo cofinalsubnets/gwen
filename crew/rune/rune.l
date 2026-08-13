@@ -1023,27 +1023,27 @@
 ; other child wraps at the band and below. so (- (- 10 4) 3) renders 10 - 4 - 3
 ; while (- 10 (- 4 3)) renders 10 - (4 - 3). an application splices bare unless
 ; its head is an operator, and application arguments wrap whenever compound.
-; `dyadics` is mopped post-egg, so ugrip carries the bands AND hands rune
-; renders (grip . hand, 1 = left); an op off the table stays prefix, which reads
+; `operators` is mopped post-egg, so uband carries the bands AND hands rune
+; renders (band . hand, 1 = left); an op off the table stays prefix, which reads
 ; back unchanged.
-(: ugrip '((+ 1 1) (- 1 1) (* 2 1) (/ 2 1) (** 3 0))
+(: uband '((+ 1 1) (- 1 1) (* 2 1) (/ 2 1) (** 3 0))
    (glook o gs) (? (0 = tally gs) ()
                    (<(<gs) = o) <>(<gs)
                    (glook o >gs))
    (hlook o gs) (? (0 = tally gs) 0
                    (<(<gs) = o) <>>(<gs)
                    (hlook o >gs))
-   (ophead? x) (? (nom? <x) (? (glook <x ugrip) 1 0) 0)
+   (ophead? x) (? (nom? <x) (? (glook <x uband) 1 0) 0)
    (infix3? t) (? (3 = tally t) (ophead? t) 0)
    (uxw x) (? (nom? x) x (two? x) (unfix x) x)
    (uxs x g) (? (nom? x) `(x)
                 !(two? x) `(x)
-                (infix3? x) (? (glook <x ugrip < g) `((unfix x)) (unfix x))
+                (infix3? x) (? (glook <x uband < g) `((unfix x)) (unfix x))
                 (ophead? x) `((unfix x))
                 (unfix x))
    (unfix t) (? (nom? t) t
                 !(two? t) t
-                (infix3? t) (: g (glook <t ugrip) h (hlook <t ugrip)
+                (infix3? t) (: g (glook <t uband) h (hlook <t uband)
                                (uxs <>t (? h g (g + 1)) + `(<t)
                                 + uxs <>(>t) (? h (g + 1) g)))
                 (uxw <t >< map uxw >t)))

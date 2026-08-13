@@ -55,12 +55,14 @@ monadic, spaced is dyadic*, and it holds everywhere, head position included, so
 `(<x = y)` reads `(= (cap x) y)`. only the three special forms keep the whole list at
 head, so minified `(:(co ..)` still reads `(: (co ..))`.
 
-**an undeclared sigil is infix at grip 95 -- above every declared row -- so the tables
-hold only the exceptions.** the declared bands, loosest to tightest: weak apply `$`,
+**an undeclared sigil is infix at band 95 -- above every declared row -- so the table
+holds only the exceptions.** one table, `operators`, keyed by ARITY -- the operands a
+sigil takes from the form around it: 0 glued, 2 spaced, -1 spaced with no bound. the
+declared bands, loosest to tightest: the binder `:`, weak apply `$` and the lambda `\`,
 cond `?`, cons `><`, logical, comparison, additive, multiplicative, `**`. arithmetic
-folds left (`1 - 2 - 3` is -4), everything else right. `fixity` is the live door onto
-the table: it takes a nom and a grip, answers the row it replaced, and a refused shape
-rolls back and scares.
+folds left (`1 - 2 - 3` is -4), everything else right. `grip` is the live door onto
+the table: it takes a lane, a nom and a band, answers the row it replaced, and a refused
+shape rolls back and scares.
 
 a glued run factors greedily, longest prefix first -- `!!` double-negates, `<>` is
 `cap` of `cup` -- while a spaced sigil is one whole name and never splits (`!=`, `&&`,

@@ -195,11 +195,12 @@
 
 ; the surface. `dot` takes a string or cask VERBATIM -- the `.` sigil's raw face --
 ; and everything else in external form; it answers its operand, so it drops into
-; any sequence. the monadics table gets its `.` row here, where dot exists; the row
-; is the NOM, so a glued `.x` resolves through whatever `.` names at the use site.
+; any sequence. the glued lane -- `operators` at arity 0 -- gets its `.` row here,
+; where dot exists; the row is the NOM, so a glued `.x` resolves through whatever
+; `.` names at the use site.
 (: (print o x) (: _ (px o x ()) x)
    (show x) (: o (jug 0) _ (px o x ()) (slurp o))
    (dot x) (: _ (? (string? x || (hot? x && !(port? x))) (say out x) (px out x ())) _ (flush out) x))
 (: putx (print out)
    . dot
-   _ (pin monadics '. '.))
+   _ (pin (operators 0) '. '.))

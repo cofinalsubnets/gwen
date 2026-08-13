@@ -90,8 +90,8 @@ flagging them is the point.
 comments and strings are not code and are skipped; a quoted `'foo` names `foo`
 just as much as bare `foo` does, so it counts.
 
-**shadow** (off by default) -- a binding of one of the dozen words a `monadics`
-row names: `cap cup net prod abs negate reciprocal fraction bit saturate nil?
+**shadow** (off by default) -- a binding of one of the dozen words a glued row
+(`operators` at arity 0) names: `cap cup net prod abs negate reciprocal fraction bit saturate nil?
 dot`. a glued sigil factors to one of these and then resolves like any other
 name, so `(: net (a + b) .. )` quietly re-aims every `+x` in its scope. rare,
 real, and silent -- which is the whole case for saying it at the binding. it
@@ -244,7 +244,7 @@ it refuses matters as much as what it takes:
 ```love
 (f (show x))        an application OPERAND -- (f show x) is ((f show) x)
 ("a" + f (show x))  the group shares its span with f
-(x * (a + b))       grip
+(x * (a + b))       band
 (x + (a + b))       arithmetic is LEFT-handed, so + cannot yield to +
 (f + `(a b))        reader sugar owns those parens
 (? (! (two? l)) ..) a PUNCT HEAD folds the same and reads far worse

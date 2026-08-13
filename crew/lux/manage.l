@@ -12,12 +12,14 @@
 ; the new window, the screen rect (0 0 W H), and the window's current geometry.
 
 ; the two combinators are spelled as operators, so they read as the rules they
-; are: `pred -?> act`, `p <||> q`. `fixity` is the one door onto the grammar left
+; are: `pred -?> act`, `p <||> q`. `grip` is the one door onto the grammar left
 ; open after the hatch, and it must stand in its OWN form -- opfix factors a whole
 ; form at once, so a row pinned inside the `:` below would land too late for it.
-; <||> sits in the logical band with ||, -?> just under it, both right-handed.
-(fixity '<||> '(30 0))
-(fixity '-?> '(25 0))
+; <||> sits in the logical band with ||, -?> just under it, both right-handed. the
+; leading 2 is the LANE -- a left operand and a right, which is what an infix one takes;
+; the band is a bare charm, positive for the right hand these two want.
+(grip 2 '<||> 30)
+(grip 2 '-?> 25)
 (:
    (mg-ctx s win screen geom) `(s win screen geom)
    (mg-sock c) (nthl c 0)  (mg-win c) (nthl c 1)  (mg-screen c) (nthl c 2)  (mg-geom c) (nthl c 3)

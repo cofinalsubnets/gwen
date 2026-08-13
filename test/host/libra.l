@@ -258,7 +258,8 @@
  !(lint-of "(f old-thing-x)" lt-dep)                            ; a longer name is another name
  (2 = (tally (lint-of "(old-thing worse-thing)" lt-dep))))
 
-; the SHADOW rule: a glued sigil factors against `monadics` to one of a dozen plain
+; the SHADOW rule: a glued sigil factors against the GLUED LANE (`operators` at arity 0)
+; to one of a dozen plain
 ; names and then resolves like any other name, so a binding of one re-aims every <x /
 ; !x / +x in its scope. the rule speaks at the BINDING, and reserves nothing.
 (assert
@@ -304,13 +305,13 @@
  ("(\"exit \" + show ec + \")\")" = (lt-drop "(\"exit \" + (show ec) + \")\")"))
  ("(\"a\" + show x)"  = (lt-drop "(\"a\" + (show x))"))       ; trailing
  ("(show x + \"a\")"  = (lt-drop "((show x) + \"a\")"))       ; and leading
- ("(x + a * b)"       = (lt-drop "(x + (a * b))")))           ; grip, the plain case
+ ("(x + a * b)"       = (lt-drop "(x + (a * b))")))           ; band, the plain case
 
 ; ⚠ and the refusals, which are the whole safety of it
 (assert
  (: s "(f (show x))"        (s = (lt-drop s)))    ; an application OPERAND: (f show x) is ((f show) x)
  (: s "(\"a\" + f (show x))" (s = (lt-drop s)))   ; the group shares its span with f
- (: s "(x * (a + b))"       (s = (lt-drop s)))    ; grip the other way
+ (: s "(x * (a + b))"       (s = (lt-drop s)))    ; band the other way
  (: s "(x + (a + b))"       (s = (lt-drop s)))    ; arithmetic is LEFT-handed: + cannot yield to +
  (: s "(f + `(a b))"        (s = (lt-drop s)))    ; reader sugar owns those parens
  (: s "(f + @(1 2))"        (s = (lt-drop s)))

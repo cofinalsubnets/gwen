@@ -16,12 +16,15 @@
 ; is ALWAYS a right inverse. what is below is the maximizing one, and it is CHECKED -- every
 ; datum is read back and factored before it is handed out, so a proposal that would re-group
 ; differently costs parens, never correctness.
-(: ; the glued-sigil map, keyed by the nom a monadics row names (love/prel.l, and `.` from
-   ; love/post.l). ⚠ a second source of truth: `monadics` is mopped at birth and has no read
-   ; door, so this is copied. test/host/infix.l holds it honest BEHAVIOURALLY -- it asks the
-   ; live compiler what each sigil factors to rather than reading the table.
-   imono '((cap "<") (cup ">") (net "+") (prod "*") (abs "|") (negate "-")
-           (reciprocal "/") (fraction "%") (bit "?") (saturate "$") (nil? "!") (. "."))
+(: ; the glued-sigil map. the SIGILS are listed here; the nom each one names is read LIVE out
+   ; of the operators table's arity-0 lane, through the same clear-and-restore door the grips
+   ; use. so what a sigil MEANS has one source of truth (love/prel.l, and `.` from love/post.l)
+   ; and this list only says which ones exist -- a sigil the table has dropped drops out here too.
+   ; ⚠ `.` sits LAST: between two elements a dot is the pair marker, before the closer it is
+   ; the plain symbol -- which is the only reason this is a list and not a run of them.
+   imonos '(< > + * | - / % ? $ ! .)
+   (irow0 s) (: r (grip 0 s ()) _ (grip 0 s r) r)
+   imono (filter (\ e (nom? <e)) (map (\ s (list (irow0 s) (string s))) imonos))
 
    ; --- the punct test. op-puncp is book-private; these are its four ranges, in its order
    ; (commonest first -- most heads bail on the first byte).
@@ -32,23 +35,27 @@
                     (? (0 < n) ((: (go i) (? (i < n) (? (ipb (s i)) (go (i + 1)) 0) 1)) 0) 0))
                  0)
 
-   ; --- the grip door. `dyadics` is mopped too, so a row is read THROUGH fixity: it answers the
-   ; row it replaced, so pinning that straight back is a non-destructive read. this one needs no
-   ; copy -- the live table is the answer, and a file's own (fixity ..) is already in it.
-   (irow nm) (: r (fixity nm ()) _ (fixity nm r) r)
-   (igrip? g) (&& (charm? g) (0 < g))
-   (igh v) (? (igrip? v) (>< v 0)
-              (! (two? v)) 0
-              (! (igrip? (cap v))) 0
-              (charm? (cup v)) v
-              (&& (two? (cup v)) (charm? (caup v))) (>< (cap v) (caup v))
-              (atom? (cup v)) (>< (cap v) 0))
-   ; -> (grip . hand). an absent or unreadable row is the house default: 95, right-handed.
+   ; --- the grip door. `operators` is mopped, so a row is read THROUGH grip: it answers the
+   ; row it replaced, so pinning that straight back is a non-destructive read. no copy anywhere --
+   ; the live table is the answer, and a file's own (grip ..) is already in it.
+   ; ⚠ the SPACED lanes, tightest first, exactly as op-ent asks them.
+   ; ⚠ IDENTITY, never truth: a left-handed band is a NEGATIVE charm and nets red, so a truth
+   ; test here would send every left-handed row on to the next lane as though it were absent.
+   (irow nm) (: r (grip 2 nm ()) _ (grip 2 nm r)
+                (? (id? () r) (: q (grip -1 nm ()) _ (grip -1 nm q) q) r))
+   ; a BAND is a SIGNED charm -- magnitude the level, sign the hand (negative is LEFT) -- and the
+   ; row wears one of op-lane's three kinds: a charm, a nom (an ALIAS, one hop), or (nom band).
+   (iband? b) (&& (charm? b) (0 != b))
+   (itail v) (? (charm? >v) >v  (&& (two? >v) (charm? <>v)) <>v  0)
+   ; -> (band . hand). an absent or unreadable row is the house default: 95, right-handed.
    (ient nm) (: v (irow nm)
-                t (? (? (two? v) (nom? (cap v)) 0) (igh (cup v)) (igh v))
-                (? (two? t) t (>< 95 0)))
+                b (? (iband? v) v
+                     (nom? v) (: r (irow v) (? (iband? r) r 0))
+                     (? (two? v) (nom? <v) 0) (itail v)
+                     0)
+                (? (iband? b) (>< |b (? (b < 0) 1 0)) (>< 95 0)))
    ; op-steal's predicate, verbatim: an incoming (g,h) takes the pending frame's last operand
-   ; iff its grip beats that frame's -- and at equal grip the incomer's hand decides.
+   ; iff its band beats that frame's -- and at equal band the incomer's hand decides.
    (isteal g h pg) (? h (pg < g) (pg <= g))
 
    ; --- shapes. a binder is neither infix nor a span; glue outranks a span (max glue); infix

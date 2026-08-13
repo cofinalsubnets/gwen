@@ -53,7 +53,7 @@ closure issue — the product would type-escape the string kind.)
 
 1. **Monadic `*` = `prod`, uniformly.** `*x` is `*` turned inward, the multiplicative fold:
    aggregate → product of cells, scalar → itself (vacuous, so `*5 = 5`) — the rank-uniform dual
-   of `+x`, exactly as `+5 = 5`. Every `monadics` entry keeps that invariant: the sigil is its
+   of `+x`, exactly as `+5 = 5`. Every glued row keeps that invariant: the sigil is its
    own dyadic op, turned monadic. (Binding `*` → `tally` would break it — `tally` is not "`*`
    folded inward" — so tally stays a named word.)
 2. **`tally` is net's measure-twin** — the cardinality rig-hom, with both hom laws.

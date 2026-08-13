@@ -1,5 +1,5 @@
 ; prel.l -- love prel: data + function + macro definitions.
-; prefix only down to the `dyadics` table: c0 compiles this before opfix and before the church
+; prefix only down to the `operators` table: c0 compiles this before opfix and before the church
 ; add/mul hooks exist. an operator up here cores the egg.
 ; FIXME move ev support functions to ev where possible
 (: id 1
@@ -356,48 +356,59 @@
                     (slashy? (string m)) (: _ (rdev q) ())
                     (: _ (enter m) _ (rdev q) _ (leave ()) (prior m))))))))
 
-; --- reader operators: the two tables + the opfix factor pass ---------------
-; the valence law's two faces, one form: spaced is dyadic, glued is monadic. the reader leaves a
-; sigil a plain symbol; opfix factors it against these at compile time.
-; a dyadics row is the whole fold: a grip (higher binds tighter), a hand (0 right, 1 left -- how a
-; same-grip run folds) and an arity (0 dyadic, 1 N-ARY); op-ent normalizes every written shape to
-; (name grip hand . nary), and a shape short of one takes the zero. undeclared is infix at grip 95
-; -- above every row here, so the table holds only exceptions. infix is live from this table on.
-; a monadics entry maps a run-piece to its monadic word and a run factors greedily, so <>x is
-; (cap (cup x)) -- glued runs only, and a monadic-only sigil has no dyadics row at all.
+; --- reader operators: the operators tablet + the opfix factor pass ---------
+; ONE tablet, keyed by ARITY -- the operands a sigil takes FROM THE FORM AROUND IT -- and the
+; valence law is that lookup: 0 is the glued lane, which takes none (it wraps the datum it is
+; already stuck to); 2 is spaced, a left operand and a right; -1 is spaced with NO BOUND, a left
+; and then all of them. so a nom lives in as many lanes as it has faces -- `?` is `bit` glued and
+; cond spaced -- and the two faces of the law are two keys of one table rather than two tables.
+; ⚠ arity 1, a right operand and no left, has a key and no walk yet: a row there is inert and its
+; sigil reads undeclared. the reader leaves a sigil a plain symbol; opfix factors it here.
+; a SPACED row is the whole fold: a band (higher binds tighter) and a hand (0 right, 1 left -- how
+; a same-band run folds); op-ent normalizes every written shape to (name band hand . arity), and a
+; shape short of one takes the zero. undeclared is infix at band 95 -- above every row here, so the
+; table holds only exceptions. infix is live from this table on. a GLUED row maps a run-piece to
+; its monadic word, and a run factors greedily, so <>x is (cap (cup x)).
 ; AN N-ARY OPERATOR collects its operands FLAT where a dyadic spans them into one, so (c ? a b)
 ; is (? c a b) and not (? c (a b)). that is what lets a CLAUSE FORM wear its scrutinee on the
 ; left: the arms stay operands, exactly as the prefix spelling already has them, so (x @ p b) and
 ; (@ x p b) are the SAME form and only one of them was typed. neither `?` nor `@` learns anything
 ; -- the special form and the macro are handed the shape they always took.
-; ⚠ arity rides the ROW, not a table beside it, because `fixity` answers a row and pinning it
-; straight back must restore the operator EXACTLY -- a fold parameter kept elsewhere would leak
-; through that door in silence.
-(: dyadics (pins (tablet 0)
- '** 70
- '* (>< 60 1) '/ (>< 60 1) '% (>< 60 1) '// (>< 60 1)   ; multiplicative, LEFT -- // is floor divide,
-                                                    ; and it sits with its siblings: undeclared it took
-                                                    ; the 95 default, ABOVE *, so (s * n // g) read as
-                                                    ; (* s (// n g)) -- right only where g divides n
- '+ (>< 50 1) '- (>< 50 1)                          ; additive, LEFT
- '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40             ; comparison
- '| 30 '& 30 '&& 30 '|| 30      ; logical (&& || also macros; the row pins the grip below comparison)
- '>< 25                                                          ; cons -- the loosest builder
- '? '(10 0 1) '@ '(10 0 1)                                       ; the CLAUSE forms: cond, and match -- n-ary, so every arm stays an operand
- '$ 5 '\ 5                                                       ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate), and the lambda
- ': '(3 0 1) ':= '(: 3 0 1))                                     ; the binder -- n-ary and loosest of all, so every operand stays one.
-                                                                 ; := is an ALIAS row: it names `:` and inherits the whole fold
-   monadics (pins (tablet 0)
+; ⚠ the arity is the KEY, so the door takes it -- (grip ar nm v) -- and pinning a row straight
+; back restores the operator EXACTLY. a lane named anywhere else would leak through that door.
+(: operators (pins (tablet 0)
+ 0 (pins (tablet 0)                                 ; --- ARITY 0: glued. takes nothing from the form
  '< 'cap '> 'cup '+ 'net '* 'prod '| 'abs '- 'negate '/ 'reciprocal
- '% 'fraction '? 'bit '$ 'saturate '! 'nil?))   ; `.` is pinned here by post.l, whose dot it is
+ '% 'fraction '? 'bit '$ 'saturate '! 'nil?)   ; `.` is pinned here by post.l, whose dot it is
+ 1 (tablet 0)                                       ; --- ARITY 1: a right operand and no left. no walk yet
+ 2 (pins (tablet 0)                                 ; --- ARITY 2: spaced. a left operand and a right
+ '** 70
+ '* -60 '/ -60 '% -60 '// -60                       ; multiplicative, LEFT -- the MINUS is the hand, and
+                                                    ; // is floor divide, sitting with its siblings:
+                                                    ; undeclared it took the 95 default, ABOVE *, so
+                                                    ; (s * n // g) read as (* s (// n g)) -- right only
+                                                    ; where g divides n
+ '+ -50 '- -50                                      ; additive, LEFT -- arithmetic is the whole exception,
+                                                    ; and the sign is where it shows
+ '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40             ; comparison
+ '| 30 '& 30 '&& 30 '|| 30      ; logical (&& || also macros; the row pins the band below comparison)
+ '>< 25                                             ; cons -- the loosest builder
+ '$ 5 '\ 5)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate), and the lambda
+ -1 (pins (tablet 0)                                ; --- ARITY -1: spaced, no bound. a left, then all of them
+ '? 10 '@ 10                                        ; the CLAUSE forms: cond, and match -- every arm stays an operand
+ ': 3 ':= ':)))                                     ; the binder, loosest of all; := is a bare nom, so it NAMES
+                                                    ; `:` and takes its band -- an alias cannot drift from it
  ; ⚠ the rows are NOMS, not values: a value would be unwritable, and an unwritable head is a
  ; form no text can spell -- which is what keeps opfix invertible (lib/infix.l). a row resolves
  ; at the use site like any name, so libra's `shadow` rule speaks where one is rebound.
 ; factorization is the GLUED lane's alone: a run splits greedily, longest-prefix, no backtracking,
-; against monadics. a SPACED sigil is one whole name -- it either carries a dyadics row or takes
-; the fresh-punct default -- so != && >>= :- ?- each stay one operator.
+; against arity 0. a SPACED sigil is one whole name -- it either carries a row in a spaced lane or
+; takes the fresh-punct default -- so != && >>= :- ?- each stay one operator.
 ; everything to (seal-hook 4 opfix) stays prefix -- the first pass compiles prel with no opfix.
-(: (op-punc-byte c) (? (&& (<= 97 c) (<= c 122)) 0
+(: ; the lanes, by their arity key. LOCAL: the tablets are the ones in `operators`, not copies,
+   ; so a `grip` write through the door is seen here at once and there is nothing beside it.
+   monadics (operators 0) dyadics (operators 2) naries (operators -1)
+   (op-punc-byte c) (? (&& (<= 97 c) (<= c 122)) 0
                        (&& (<= 48 c) (<= c 57)) 0
                        (&& (<= 65 c) (<= c 90)) 0
                        (= c 95) 0
@@ -414,24 +425,30 @@
                    0))
              0))
        0)
-   ; normalize a table entry for key k -> the triple (name grip . hand), or 0. a nom-led row is an
-   ; ALIAS (it names another word), anything else is self-named; a bad tail answers 0.
-   ; ⚠ the grip must be POSITIVE: a tablet MISS answers 0, and a grip of 0 would read that miss
-   ; as a live row at the loosest grip there is.
-   (op-grip? g) (&& (charm? g) (< 0 g))
-   ; the grip/hand tail, dotted OR as a plain list -- the table writes (60 . 1) but `fixity`'s
-   ; caller writes '(60 1), and the door should not make anyone count dots.
-   (op-gh v)  (? (op-grip? v) (>< v (>< 0 0))                              ; a grip alone: right-handed, dyadic
-                 (nil? (two? v)) 0
-                 (nil? (op-grip? (cap v))) 0
-                 (charm? (cup v)) (>< (cap v) (>< (cup v) 0))                ; (grip . hand), dotted
-                 (&& (two? (cup v)) (charm? (caup v)))                       ; (grip hand [nary]), a list
-                  (>< (cap v) (>< (caup v) (? (&& (two? (cuup v)) (charm? (cap (cuup v)))) (cap (cuup v)) 0)))
-                 (atom? (cup v)) (>< (cap v) (>< 0 0)))                    ; (grip), a list
-   (op-ent k) (: v (dyadics k)
-                 (? (? (two? v) (nom? (cap v)) 0)                            ; nom-led: (name grip[. hand])
-                      (: t (op-gh (cup v)) (? (two? t) (>< (cap v) t) 0))
-                    (: t (op-gh v) (? (two? t) (>< k t) 0))))                ; self-named: the tail itself
+   ; a BAND is a SIGNED charm: the magnitude is the level (higher binds tighter) and the sign is
+   ; the hand -- positive right, negative LEFT. arithmetic is the only left-handed band there is,
+   ; so the minus marks the exception and the hand stops being a slot anyone has to count to.
+   ; ⚠ zero can never be a band: a tablet MISS answers 0, and a 0 band would read that miss as a
+   ; live row at the loosest level there is.
+   (op-band? b) (&& (charm? b) (nil? (= 0 b)))   ; ⚠ prefix-only region: != is not a function yet
+   (op-row nm b ar) (>< nm (>< (abs b) (>< (? (< b 0) 1 0) ar)))       ; -> (name band hand . arity)
+   ; an alias tail. ⚠ SOURCE can only spell the list form -- love has no dotted-pair syntax, so a
+   ; written (pin . 20) is the three-element list (pin . 20) -- but a pair BUILT with >< reads too.
+   (op-tail v) (? (charm? (cup v)) (cup v) (&& (two? (cup v)) (charm? (caup v))) (caup v) 0)
+   ; k's row in the SPACED lane t of arity ar -> (name band hand . ar), or 0. the row is read BY
+   ; KIND, three shapes and no positions: a CHARM is the band and the sigil names itself; a NOM is
+   ; an ALIAS -- the sigil means that word and takes its band, ONE HOP, so no alias can drift from
+   ; its target and no cycle can be spelled; a (nom band) pair is an alias carrying a band of its
+   ; own, for a target that has no row to lend (`pin` and its kind).
+   (op-lane k t ar)
+    (: v (t k)
+       (? (op-band? v) (op-row k v ar)
+          (nom? v) (: b (t v) (? (op-band? b) (op-row v b ar) 0))
+          (? (two? v) (nom? (cap v)) 0) (: b (op-tail v) (? (op-band? b) (op-row (cap v) b ar) 0))
+          0))
+   ; the SPACED lanes, TIGHTEST FIRST -- so a nom sitting in both reads as the dyadic one. arity 1
+   ; has no walk, so it is never asked and a row there stays inert.
+   (op-ent k) (: d (op-lane k dyadics 2) (? (two? d) d (op-lane k naries -1)))
    ; longest prefix of nm[i..n) with a monadic meaning -> (len . word), or 0. the table holds word
    ; values, so a hit is asked out of band against the miss answer -- a truth test would drop any
    ; word that nets nothing.
@@ -450,22 +467,35 @@
                     (? (= (+ i (cap m)) n) (>< (caup m) ())
                        (: r (go (+ i (cap m))) (? (two? r) (>< (caup m) r))))))))
         0))
-; the walk. a pending-operator frame is (orig name need grip . got): the source symbol, the
-; resolved name, the operands still wanted, the captured grip, and the operands so far, reversed.
+; the walk. a pending-operator frame is (orig name need band . got): the source symbol, the
+; resolved name, the operands still wanted, the captured band, and the operands so far, reversed.
 ; need 0 means filled with the fold deferred, so a later operator can steal the last operand --
 ; that deferral is right-associativity. -1 is that steal already spent, the right operand growing
 ; as a span; -2 is N-ARY, which never fills and so never spans. out/pend thread as (out . pend).
    (op-fr o nm nd g gt) (>< o (>< nm (>< nd (>< g gt))))
    (op-fro f) (cap f) (op-frn f) (caup f)
-   (op-frd f) (cap (cuup f)) (op-frgrip f) (cap (cuuup f)) (op-frg f) (cup (cuuup f))
-   ; a frame is only ever rebuilt with a new need + got -- orig, name and grip are fixed the
+   (op-frd f) (cap (cuup f)) (op-frband f) (cap (cuuup f)) (op-frg f) (cup (cuuup f))
+   ; a frame is only ever rebuilt with a new need + got -- orig, name and band are fixed the
    ; moment the operator is read.
-   (op-frw f nd g) (op-fr (op-fro f) (op-frn f) nd (op-frgrip f) g)
+   (op-frw f nd g) (op-fr (op-fro f) (op-frn f) nd (op-frband f) g)
    ; wrap a chain of monadic words around a datum, outermost first
    (op-fin ch x) (? (two? ch) (>< (cap ch) (>< (op-fin (cup ch) x) ())) x)
    ; fold a collected span (out, reversed) into ONE operand: a lone datum stays itself, two-or-more
    ; become the application (juxtaposition binds tighter than any infix operator).
    (op-span out) (? (two? (cup out)) (rev out) (cap out))
+   ; the two BINDERS fold back through op-core, so an infix spelling lowers exactly as the prefix
+   ; one does -- patterns to noms, the nested lambda flattened, the body factored. nothing is
+   ; added: (a : b) is the plain (: a b), body-less and leaking its binding, as it reads.
+   ; ⚠ a `:` CHAIN IS ONE SCOPE: the nesting op-steal builds is spliced flat here, so
+   ; (a : 1 b : 2 (a + b)) and (: a 1 b 2 (a + b)) are the same form, and a chain of bare
+   ; definitions is one body-less `:` carrying every pair. it is the BODY position that splices,
+   ; however that body was spelled -- and a wholly prefix `:` never reaches this fold, so no
+   ; extant form moves.
+   (op-cl-splice fs)
+    (? (atom? (cup fs))
+       (: b (cap fs)
+          (? (&& (two? b) (id? (cap b) ':)) (cup b) fs))
+       (>< (cap fs) (op-cl-splice (cup fs))))
    ; fold a frame with what it has: nothing collected gives the plain symbol, a shortfall the
    ; partial application -- the curry law, with no case of its own.
    ; kind tests throughout the walk, never truth -- an operand list like (0) or ("") nets zero.
@@ -487,22 +517,9 @@
                       (cat op (>< d ())))                  ; span -> append d
                 f2 (op-frw f -1 (>< nx (cup (op-frg f))))
                 (>< out (>< f2 (cup pend)))))))
-   ; take a left operand for an incoming operator of grip g and hand h -> (. (out' . pend')), or 0.
-   ; the two BINDERS fold back through op-core, so an infix spelling lowers exactly as the prefix
-   ; one does -- patterns to noms, the nested lambda flattened, the body factored. nothing is
-   ; added: (a : b) is the plain (: a b), body-less and leaking its binding, as it reads.
-   ; ⚠ a `:` CHAIN IS ONE SCOPE: the nesting op-steal builds is spliced flat here, so
-   ; (a : 1 b : 2 (a + b)) and (: a 1 b 2 (a + b)) are the same form, and a chain of bare
-   ; definitions is one body-less `:` carrying every pair. it is the BODY position that splices,
-   ; however that body was spelled -- and a wholly prefix `:` never reaches this fold, so no
-   ; extant form moves.
-   (op-cl-splice fs)
-    (? (atom? (cup fs))
-       (: b (cap fs)
-          (? (&& (two? b) (id? (cap b) ':)) (cup b) fs))
-       (>< (cap fs) (op-cl-splice (cup fs))))
+   ; take a left operand for an incoming operator of band g and hand h -> (. (out' . pend')), or 0.
    ; against a filled top frame the incomer either steals its last operand or folds it and retries
-   ; beneath. at equal grip the incomer's hand decides: right-handed steals, left-handed yields.
+   ; beneath. at equal band the incomer's hand decides: right-handed steals, left-handed yields.
    ; at top level the whole leading span is taken: (a b = c) captures (a b), not just b.
    ; ⚠ an n-ary frame is never filled, so it yields a RIGHT operand or nothing: its left is the
    ; scrutinee, and a frame holding only that has none to give -- the same refusal an unfilled
@@ -512,7 +529,7 @@
     (? (two? pend)
        (: f (cap pend) nd (op-frd f)
           (? (< nd 1)
-             (? (? h (<= g (op-frgrip f)) (< g (op-frgrip f)))
+             (? (? h (<= g (op-frband f)) (< g (op-frband f)))
                 (: r (op-del (op-fold f) out (cup pend)) (op-steal g h (cap r) (cup r)))
                 (? (? (= nd -2) (atom? (cup (op-frg f))) 0) 0
                    (>< (cap (op-frg f))
@@ -529,14 +546,14 @@
     (? (atom? l) (op-drain out pend)
        (: e (cap l)
           (? (op-puncp e)
-             ; a spaced sigil is ONE name -- an unrowed one takes the house grip, and with no
+             ; a spaced sigil is ONE name -- an unrowed one takes the house band, and with no
              ; left operand the infix frame still folds to the plain symbol (op-fold's bare case)
              (: en0 (op-ent e)
-                en (? (two? en0) en0 (>< e (>< 95 (>< 0 0))))   ; fresh punct: (e house right . dyadic)
+                en (? (two? en0) en0 (>< e (>< 95 (>< 0 2))))   ; fresh punct: (e house right . arity 2)
                 nm (cap en) gp (caup en) hd (cap (cuup en))
-                st (op-steal gp hd out pend)   ; capture a left operand if one exists (at this grip + hand)
+                st (op-steal gp hd out pend)   ; capture a left operand if one exists (at this band + hand)
                 (? (two? st) (op-w (cup l) (cap (cup st))
-                            (>< (op-fr e nm (? (cup (cuup en)) -2 1) gp (>< (cap st) ()))   ; -2 = n-ary: the row's arity, so an alias inherits it
+                            (>< (op-fr e nm (? (= -1 (cup (cuup en))) -2 1) gp (>< (cap st) ()))   ; -2 = n-ary: the row's LANE, so an alias inherits it
                                   (cup (cup st))))
                    (: r (op-del e out pend)     ; no left operand: the plain symbol
                       (op-w (cup l) (cap r) (cup r)))))
@@ -594,6 +611,8 @@
    (op-mem? y l)      (? (atom? l) 0 (id? y (cap l)) 1 (op-mem? y (cup l)))
    (op-disjoint? a b) (? (atom? b) 1 (op-mem? (cap b) a) 0 (op-disjoint? a (cup b)))
    (op-params ol)     (? (atom? (cup ol)) () (>< (cap ol) (op-params (cup ol))))
+   ; ⚠ the inner lambda LOWERS BEFORE the shadow check, never after the merge: a pattern carried up
+   ; as a param binds nothing, and the check compares noms -- (\ [a b] (\ a x)) must not merge.
    (op-flat-ol ol seen)                                      ; -> the flattened operand list, body left RAW (op-lam factors it after)
     (? (atom? (cup ol))
        (: b (cap ol)
@@ -614,8 +633,6 @@
    ; everything else walks. idempotent. has-top-op? asks whether the original form carried a
    ; top-level operator -- only then may a lone folded operand splice up, since a bare
    ; list-of-one like ((mov r3 r12)) is data and stays wrapped.
-   ; ⚠ the inner lambda LOWERS BEFORE the shadow check, never after the merge: a pattern carried up
-   ; as a param binds nothing, and the check compares noms -- (\ [a b] (\ a x)) must not merge.
    (has-top-op? x) (? (atom? x) 0 (op-puncp (cap x)) 1 (has-top-op? (cup x)))
    (op-core x)
     (? (atom? x) x
@@ -638,29 +655,41 @@
                 (? (&& (has-top-op? x) (two? res) (atom? (cup res)) (two? (cap res))) (cap res) res))))) ; (a = b) -> (= a b), not ((= a b))
    (opfix x) (op-core x)
 
-   ; the fixity door: the one sanctioned write into the compile table, and the only reach to
-   ; `dyadics` once birth mops the nom. it answers the row it replaced in the shape it takes, so
-   ; (fixity nm (fixity nm new)) restores exactly; () clears a row. v is any shape op-ent takes,
-   ; a refused one rolls back and scares. the table is read live.
-   (fixity nm v)
-    (? (nil? (nom? nm)) (scare 'bad-fixity nm)
-       (: old (peep dyadics nm ())
-          (? (nil? v) (: _ (pull dyadics nm 0) old)                ; () clears the row
-             (: _ (pin dyadics nm v)
-                (? (two? (op-ent nm)) old                            ; op-ent itself is the acceptor
-                   (: _ (? (nil? old) (pull dyadics nm 0) (pin dyadics nm old))
-                      (scare 'bad-fixity nm)))))))
+   ; the grip door: the one sanctioned write into the compile table, and the only reach to
+   ; `operators` once birth mops the nom. ONE signature at every lane, (grip ar nm v), because a
+   ; curried door of two arities would hand back a closure and write nothing -- and it is curried,
+   ; so (grip 2) is the dyadic lane's own door and (grip 0) the glued one, which the sigil map never
+   ; had. it answers the row it replaced in the shape it takes, so (grip ar nm (grip ar nm new))
+   ; restores exactly; () clears a row. a shape the lane refuses rolls back and scares, and a lane
+   ; with no key is refused rather than minted -- a lane the walk never asks is a silent no-op
+   ; wearing a live row's face. the table is read live.
+   ; ⚠ the GLUED lane accepts anything: its row becomes the emitted head, so a closure there evals
+   ; perfectly well and only costs the round trip -- opfix's output stops being spellable for that
+   ; sigil, and libra's two directions with it. a nom is what the tree writes; the rest is yours.
+   (op-lane-ok? t ar nm) (? (= ar 0) 1 (two? (op-lane nm t ar)))
+   (grip ar nm v)
+    (: t (operators ar)
+       (? (nil? (nom? nm)) (scare 'bad-grip nm)
+          (nil? (tablet? t)) (scare 'bad-grip ar)
+          (: old (peep t nm ())
+             ; ⚠ IDENTITY, never truth: a left-handed band is a NEGATIVE charm, which nets red --
+             ; (nil? -60) is true, and this door would read every left-handed row as a clear.
+             (? (id? () v) (: _ (pull t nm 0) old)                   ; () clears the row
+                (: _ (pin t nm v)
+                   (? (op-lane-ok? t ar nm) old                      ; the lane's own read is the acceptor
+                      (: _ (? (id? () old) (pull t nm 0) (pin t nm old))
+                         (scare 'bad-grip nm))))))))
 
    ; --- this `:` has a body, so the helpers above are local ------------------
-   ; opfix and fixity are the door; the rest is the factor pass's scaffolding.
-   ; `dyadics`, `monadics` and `pureset` stay global-and-mopped instead: ev.l holds them, and a
+   ; opfix and grip are the door; the rest is the factor pass's scaffolding.
+   ; `operators` and `pureset` stay global-and-mopped instead: ev.l holds them, and a
    ; cross-file capture has only the book to go through.
-   _ (pin book 'fixity fixity)
+   _ (pin book 'grip grip)
    (pin book 'opfix opfix))
 ; the LAST seal: opfix joins the other four in the g->hot_* fields, so no later rebind can reach it.
 (seal-hook 4 opfix)
-; the two self-named apply operators: ** flips (a ** b = (b a), tightest grip), $ is the identity
-; so a $ b = (a b), weak-binding application at the loosest grip. glued $x is saturate.
+; the two self-named apply operators: ** flips (a ** b = (b a), tightest band), $ is the identity
+; so a $ b = (a b), weak-binding application at the loosest band. glued $x is saturate.
 (: (** a b) (b a))
 (: $ 1)
 ; ! . != are ordinary functions under their punct names. ! and . are monadic and nothing else, so

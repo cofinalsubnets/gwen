@@ -1,6 +1,6 @@
 ; the VALENCE LAW: a glued operator run is MONADIC -- the reader emits
-; (mono (run datum)) and opfix factors the run against its own monadic
-; table (book-private since birth, as `dyadics` is).
+; (mono (run datum)) and opfix factors the run against arity 0 of the
+; `operators` table (book-private since birth, the whole table mopped).
 ; spaced, a run keeps its dyadic/infix life. this holds EVERYWHERE, head
 ; position included: (<x = y) reads (= (cap x) y). the ONE exception is the
 ; special forms : and ? at head (\ too) -- they consume the whole list, so

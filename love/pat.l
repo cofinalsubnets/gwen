@@ -12,9 +12,9 @@
 ; trailing operand is the else, and no match with no else is the zero point.
 ; the reader hands `@` over SPACED (test/reader.l); glued it is still the tray
 ; sigil, so @(1 2) never changed hands and `(@ @(a b) ..)` says both in a breath.
-; and it is INFIX at grip 10, n-ary like `?`: (x @ p b .. else) is the same form,
+; and it is INFIX at band 10, n-ary like `?`: (x @ p b .. else) is the same form,
 ; scrutinee on the left, where a compound one spends no parens -- (vof en <t @ ..)
-; not (@ (vof en <t) ..). love/prel.l's dyadics row; this file sees neither.
+; not (@ (vof en <t) ..). love/prel.l's `operators` row; this file sees neither.
 ;
 ; A PATTERN ALSO GOES IN A \ PARAM, and that half is opfix's, not this file's: a param
 ; that is not a nom becomes a fresh one and the body takes it apart, so (\ [a b] x) IS
