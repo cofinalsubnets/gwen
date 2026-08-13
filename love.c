@@ -4861,7 +4861,6 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
   uintptr_t sz;
   union u *p = (union u*)(base + off);
   word const *s = src + off;
-  if (!(off & 0xFFFFu)) ai_image_note(0x100 + (off >> 16));                       // walk progress, per 64K words
   base[off] = (word) img_decode((intptr_t) s[0], base, hb, delta);                // word0 first: the ap (kinding needs it real)
   if (in_data(p->ap)) { sz = image_datasize(p, s);                                // data kinds: size by ai_typ + the SOURCE's raw length words
    switch (ai_typ(p)) {
