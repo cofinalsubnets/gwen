@@ -74,6 +74,14 @@ what it waits for.
 
 ## the stance
 
+⚠ **SUPERSEDED 2026-08-13 for sequencing and for the ship gate — see THE LADDER in
+`doc/moon-regalloc.md`'s convergence plan, the arc's only live plan.** Two things changed. The
+phase I/II split below is not how the work is ordered any more (the live ladder is one list, and
+it covers the splice JIT with it). And "pays somewhere, regresses nowhere" has been demoted: the
+goal is that mooncc becomes a program with more of a sense of what it is doing, and a number is a
+FALSIFIER rather than an authorization. The physics and the measured phase evidence below stay.
+
+
 Not a sixth mechanism beside the five — one substrate under them, in two phases:
 
 * **phase I: slots become intervals.** Allocation over slot objects on the final forms,

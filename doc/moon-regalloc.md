@@ -204,35 +204,8 @@ S-1's number as a cross-target result.
 
 ### the ladder they share
 
-The two plans converge on ONE primitive, and it was already ladder step 4 for an unrelated reason:
-**residency keyed by LOCATION — (base, offset, width) — under a base whose aliasing is known.**
-
-* the array leg already does this at one indirection: a `vuarr` local's element is a static frame
-  slot, recovered by `aeoff` parsing digits back out of a minted `"x[3]"` key.
-* a `restrict` pointer parameter is the SAME fact one indirection out: `Sp[k]` at constant k is a
-  static location under a base nothing else may touch.
-* under a location key, frame slots, array elements and restrict-base cells stop being three
-  mechanisms with three key spaces and become one.
-
-So the shared ladder, in dependency order:
-
-1. **S-1, `stldp`** — landed above. Needs nothing from either plan; pays both.
-2. **class the vmap entry** (moon ladder step 1) — a `restrict` base becomes a residency class
-   beside pool/cs/rostered/home, which is what lets a cell under it be PINNED rather than merely
-   forwarded pairwise.
-3. **`restrict` survives the parser** — the one frontend change, and the only place the JIT's
-   knowledge has to travel. It buys the half `stldp` cannot: **dead interior stores**. In the ten
-   line probe four stores remain and three are dead; only an alias promise retires them.
-4. **location keys** (moon ladder step 4) — folds the array leg and the restrict-base cells into
-   one residency, and is what makes 2+3 sayable rather than special-cased.
-5. **the die reaches the seam** — with `Sp[0]` holdable across an op boundary, an interior seam
-   emits no traffic at all: op i delivers where op i+1 wants it, hom.md's "no relocation" at the
-   thread level. Only a body exit must materialize.
-
-⚠ **and the exits are the same law the flush census already found.** A spliced body's deopt-to-twin
-and nif-cell epilogue are foreign edges: residency ends there, exactly as it ends at a `case` or a
-switch join. The JIT's run-fusion law ("the segment ends where the straight line does") and moon's
-residency-class boundary are the same boundary said twice.
+⚠ merged into **THE LADDER** in the convergence plan below — one list for both levels. The
+steps this section used to carry are numbers 1, 2, 4, 6 and 7 there.
 
 ### what moon gets back
 
@@ -389,7 +362,12 @@ Learned by measuring, several times each; check a new lever against these before
    mooncc's remaining symbol surplus over gcc is now a real inlining difference rather
    than bookkeeping, and has never been sized.
 
-## the convergence plan — where gen.l is going, and why not a rewrite
+## the convergence plan — gen.l and the splice JIT, as one plan
+
+⚠ **START HERE.** This section and THE LADDER inside it are the arc's only live plan, covering
+both levels: gen.l's residency machinery and the splice JIT over the threaded VM. They are one
+problem — see "the splice JIT and the moon arc" above for why — and were two plans until
+2026-08-13. Read, in order: the criterion, the flush census, the root, THE LADDER.
 
 Recon verdict, 2026-08-13: **incremental, and a from-scratch rewrite is refused.** Three findings
 settle it.
@@ -473,37 +451,35 @@ That is what the two big rows above are:
 
 **Together, 339 of 514 pin kills — 66% — are one missing field.**
 
-### the ladder, in order
+### THE LADDER — one list, both levels
 
-⚠ this ladder and the splice JIT's converge — see "the splice JIT and the moon arc" above. Steps 1
-and 4 here are steps 2 and 4 there, and `restrict` surviving the parser is the one frontend change
-that only the JIT's side asks for. Do not sequence them separately.
+⚠ **this is the arc's only live plan.** It supersedes `doc/moon-vreg.md`'s phase 1–4 (whose
+censuses stay as evidence) and `doc/moon-alloc.md`'s phase I/II stance. Two ladders used to live
+here, one per level; they were the same ladder and are now merged. A step's **serves** column says
+which level asks for it — most are asked by both, which is the point.
 
-1. **give the vmap entry its class** (next). Then `vmcflush` = drop the pool class, a loop head =
-   drop the loop class, `rgreset` = drop all (honest — a new function), `case`/switch-join = drop
-   all (honest — foreign edges carry an unknown map). 29 deciding sites become a handful of named
-   verbs over a classified map, and two thirds of the flushing stops being over-kill. ⚠ gate:
-   byte-identity wherever the class-aware verb is provably equal to the flush it replaces; a stated
-   dynamic floor where it is not.
-2. **`fcb` gets the verb it actually wanted** — snapshot/rollback, not flush. Re-opened: it was
-   refused on +8/+12/+8 bytes, which is a PRICING answer to a VOCABULARY question. Land the verb
-   that states the intent and let residency pricing decide separately whether to keep the pin.
-3. **residency priced as one product** — extent × class × reload term, replacing five gate stacks.
-   Class (step 1) is the axis this is a function of, which is why it comes second. Phase 1 step 2
-   was a down-payment and paid −206,000.
-4. **one key space** — key by location (base, offset, width) so the array leg folds into the
-   scalar path and `aeoff` stops parsing digits back out of a minted `"x[3]"`. ~80 lines,
-   separable, zero loop-keep customers.
-5. **a module boundary.** `gen.l` is 8,342 lines and 355 top-level defs with no internal seam,
-   and the tree's own module system is used nowhere in it. Residency behind a declared surface
-   makes the 14.5% visible AS the 14.5%, and "which pass may ask this?" a checkable question.
-6. **spend nothing on packing.** The span census says ranges are near-whole-function and interval
-   SHARING buys +4%. Simplest assignment that works.
+**The floor already under it:** S-1 `stldp` · iv phase 1 steps 1–2 (spans, the admission
+repricing) · rungs A-0/A-1/A-2 (the cs file real on arm64, riscv, thumb2) · 5.0/5.1a/5.1b i–iii.
 
-⚠ **the naming tell, worth watching as its own signal**: `lokeep`/`loseed`/`lomig`/`lochk`/
-`lomiss`/`lobar`/`lonone` is seven names for the phases of one mechanism's UNCERTAINTY. Names that
-exist only to describe failure modes say the mechanism should not have those failure modes. If the
-ladder is working, most of those names disappear; if they survive, it is not.
+| # | step | serves | what the program gets to SAY | gate |
+|---|---|---|---|---|
+| 1 | **class the vmap entry** | both | *pool residency ends here* — instead of 29 sites each reaching for flush-everything | byte-identity where the class verb provably equals the flush it replaces; dynamic floor where not |
+| 2 | **`restrict` survives the parser** | splice first | *this base is unaliased* — the promise `love.h` already makes on `Sp` and `pquals` discards | the ten-line seam probe loses its dead interior stores; `test_fixpoint` |
+| 3 | **`fcb` gets rollback** | moon | *discard the emission, keep what predates it* — a transaction, not a clobber | misses 81→69 reproduced; text delta owned by step 5, not by this verb |
+| 4 | **S-1b — reach the arm/riscv pipeline** | both | that `stldp` has *work* on three targets where it silently finds none | a store print that fires on all four targets; the seam probe folds on each |
+| 5 | **residency priced as extent × class × reload** | both | *why* a value lives where it lives, once, instead of five gate stacks with stale proxies | corpus dynamic, and mechanism count DOWN |
+| 6 | **location keys — (base, offset, width)** | both | one key space: frame slots, array elements and restrict-base cells stop being three mechanisms | the array leg folds; `aeoff` stops parsing digits out of `"x[3]"` |
+| 7 | **the die reaches the seam** | splice | *deliver where the consumer wants it* — an interior op boundary emits nothing at all | `bench/vmsplice/check.l` against its interp twin; the ~4× ceiling the probe measured |
+| 8 | **a module boundary for residency** | moon | which pass may ask what — the 14.5% visible AS the 14.5% | it compiles; the surface is declared |
+
+⚠ **step 9 is a standing decision, not a rung: spend nothing on packing.** The span census says
+ranges are near-whole-function and interval SHARING buys +4%. Use the simplest assignment that
+works, and put the complexity budget in steps 1–6.
+
+**Dependency notes.** 1 before 5 (class is the axis pricing is a function of). 2 before 7 (an
+interior store cannot be dropped without the alias promise). 6 makes 1/2/5 sayable rather than
+special-cased, but does not block them. 3 and 4 are independent and can go any time. 8 last, or
+whenever the churn is low.
 
 ### what stays, and why
 
@@ -516,8 +492,13 @@ wrong, and this one did.
 
 But the SHAPE is still owed better: "emit, learn the clobber set, decide" is a program that knows
 what it is doing; four retry attempts under progressively weaker assumptions is the same two
-passes without the self-knowledge. Same cost, different program. Write the fixpoint down as a
-fixpoint even if it stays.
+passes without the self-knowledge. Same cost, different program. **Write the fixpoint down as a
+fixpoint even if it stays** — that is a step 5 deliverable, not a separate rung.
+
+⚠ **the naming tell, the arc's own progress bar**: `lokeep`/`loseed`/`lomig`/`lochk`/`lomiss`/
+`lobar`/`lonone` is seven names for the phases of one mechanism's UNCERTAINTY. Names that exist
+only to describe failure modes say the mechanism should not have those failure modes. If the
+ladder is working, most of those names disappear; if they survive, it is not.
 
 ## refusals — priced, closed, do not rebuild
 

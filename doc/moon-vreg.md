@@ -317,25 +317,13 @@ the loop reads (no fixpoint), computed once per fn — it just DISCARDS most of 
 from a walk that already computes the numbers. And write-through is a free spill fallback: an
 interval that gets no register reads and writes its slot, which is today's code.
 
-* **phase 1 — the named vreg.** A universe local gets a mint at its declaration; reads answer it
-  with zero forms, writes define it, the slot store stays. Structural residency instead of a
-  memo, so the whole loop-keep apparatus (`lokeep`/`lochk`/`lomig`/`loseed`/`lomt`, the edge
-  verification and its retry bars) has no job: a mint spans a back edge by construction where a
-  memo had to prove it survived. ⚠ the content-collision trap dies here too — a mint is bound at
-  the declaration site, so a spliced callee's `n` gets its own and the miscompile above is
-  unspellable.
-* **phase 2 — assignment, the prize.** Endpoints for named vregs from alive's statement grain,
-  mapped to form indices through the statement tick that already runs in lock-step (the
-  numbering guard exists); temporaries keep today's per-statement pool, which is already correct
-  and cheap. Linear scan, with call-crossing intervals eligible for the callee-saved file; a
-  taken register joins `cssv` + the epilogue pin exactly as the regen's grant does, and `cskeep`
-  verifies every exit. Unassigned → slot, i.e. today.
-* **phase 3 — retirement, in dependency order.** vmap pins + array leg, then loop keeps + `saro`
-  + `csbor`/`csbu`, then homes/rides/`pp`/`pcs` as params become pre-coloured intervals, and the
-  regen dance LAST — it exists to price the mechanisms above it, and killing it is what returns
-  the compile-time budget (roughly 200 mentions of vmap machinery and 180 of homes/rides/regen).
-* **phase 4 — 5.4.** One mechanism instead of five, so write-through can invert: stores placed
-  at real spill points and the def-store bucket dies.
+⚠ **the phase 1–4 list that stood here is SUPERSEDED (2026-08-13) by THE LADDER in
+`doc/moon-regalloc.md`'s convergence plan**, which merges this level with the splice JIT's into
+one numbered plan. What the phases got right survives there (residency at BIRTH, not at the call;
+`alive` is already the interval analysis; write-through is a free spill fallback). What they got
+wrong is recorded below as evidence: phase 1 step 3 and phase 2 were both REFUSED on measurement,
+and phase 3's retirement ordering is wrong as written. The censuses in the rest of this section
+are the evidence base and stay.
 
 ⚠ **the compile-time law for this arc**: intervals come from `alive` (once per fn), never from a
 form-grain fixpoint in the build tail, which is paid per regen attempt. The +78% that shipped
