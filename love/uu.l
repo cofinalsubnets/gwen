@@ -36,10 +36,10 @@
    ; representation.
    (capp cl v) ((<>cl) v)
 
-   (vapp f a) (@ f (['lam cl] + _) (capp cl a) ['na f a])
+   (vapp f a) (@ f ('lam cl) (capp cl a) ['na f a])
 
-   (dop1 v) (@ v (['chain a _] + _) a ['np1 v])
-   (dop2 v) (@ v (['chain _ b] + _) b ['np2 v])
+   (dop1 v) (@ v ('chain a _) a ['np1 v])
+   (dop2 v) (@ v ('chain _ b) b ['np2 v])
 
    (donr P z s m)
    (? (charm? m) (: (go k acc) (? (k = m) acc (go (k + 1) (vapp (vapp s k) acc)))
@@ -49,11 +49,11 @@
 
    (dobr P x y v) (@ v 'true x  'false y  ['nbr P x y v])
    (dour P x v) (@ v 'tt x ['nur P x v])
-   (docr P f g v) (@ v (['i1 a] + _) (vapp f a)
-                        (['i2 b] + _) (vapp g b)
+   (docr P f g v) (@ v ('i1 a) (vapp f a)
+                        ('i2 b) (vapp g b)
                         ['ncr P f g v])
    (doer P v) `('ner P v)
-   (dojr P r ev) (@ ev (['refl _] + _) r ['njr P r ev])
+   (dojr P r ev) (@ ev ('refl _) r ['njr P r ev])
 
    (vof-sym en x)
    ; found-tests are STRUCTURAL (two?): a `?` on the (name value) pair NETS
@@ -90,38 +90,38 @@
       ; never id? to a tag, so a spine falls through every arm to the else on its own -- and
       ; it is 259 of those 14778, which is not worth a branch or a second copy of the body.
       (@ t
-         (['lam x b] + _)             (: cb (comp b)
+         ('lam x b)             (: cb (comp b)
                                          (\ en `('lam `('clo (\ v (cb (link `(x v) en)))))))
-         (['succ a] + _)              (: ca (comp a) (\ en (vsucc (ca en))))
-         (['pi x A B] + _)            (: cA (comp A) cB (comp B)
+         ('succ a)              (: ca (comp a) (\ en (vsucc (ca en))))
+         ('pi x A B)            (: cA (comp A) cB (comp B)
                                          (\ en `('pi (cA en) `('clo (\ v (cB (link `(x v) en)))))))
-         (['paths A a b] + _)         (: cA (comp A) ca (comp a) cb (comp b)
+         ('paths A a b)         (: cA (comp A) ca (comp a) cb (comp b)
                                          (\ en `('paths (cA en) (ca en) (cb en))))
-         (['nat_rect P z s n] + _)    (: cP (comp P) cz (comp z) cs (comp s) cn (comp n)
+         ('nat_rect P z s n)    (: cP (comp P) cz (comp z) cs (comp s) cn (comp n)
                                          (\ en (donr (cP en) (cz en) (cs en) (cn en))))
-         (['tpair a b] + _)           (: ca (comp a) cb (comp b) (\ en `('chain (ca en) (cb en))))
-         (['idpath a] + _)            (: ca (comp a) (\ en `('refl (ca en))))
-         (['paths_rect P r e] + _)    (: cP (comp P) cr (comp r) ce (comp e)
+         ('tpair a b)           (: ca (comp a) cb (comp b) (\ en `('chain (ca en) (cb en))))
+         ('idpath a)            (: ca (comp a) (\ en `('refl (ca en))))
+         ('paths_rect P r e)    (: cP (comp P) cr (comp r) ce (comp e)
                                          (\ en (dojr (cP en) (cr en) (ce en))))
-         (['bool_rect P x y w] + _)   (: cP (comp P) cx (comp x) cy (comp y) cw (comp w)
+         ('bool_rect P x y w)   (: cP (comp P) cx (comp x) cy (comp y) cw (comp w)
                                          (\ en (dobr (cP en) (cx en) (cy en) (cw en))))
-         (['coprod A B] + _)          (: cA (comp A) cB (comp B) (\ en `('coprod (cA en) (cB en))))
-         (['coprod_rect P f g w] + _) (: cP (comp P) cf (comp f) cg (comp g) cw (comp w)
+         ('coprod A B)          (: cA (comp A) cB (comp B) (\ en `('coprod (cA en) (cB en))))
+         ('coprod_rect P f g w) (: cP (comp P) cf (comp f) cg (comp g) cw (comp w)
                                          (\ en (docr (cP en) (cf en) (cg en) (cw en))))
-         (['empty_rect P e] + _)      (: cP (comp P) ce (comp e) (\ en (doer (cP en) (ce en))))
-         (['unit_rect P u x] + _)     (: cP (comp P) cu (comp u) cx (comp x)
+         ('empty_rect P e)      (: cP (comp P) ce (comp e) (\ en (doer (cP en) (ce en))))
+         ('unit_rect P u x)     (: cP (comp P) cu (comp u) cx (comp x)
                                          (\ en (dour (cP en) (cu en) (cx en))))
          ; (UU level) -> a sort value (UU0 stays the symbol UU; level may be an expr, Stage 2)
-         (['UU l] + _)                (? (l = 0) (\ en 'UU) (\ en `('U l)))
-         (['the T u] + _)             (comp u)                    ; the ascription is the term
-         (['let x a b] + _)           (: ca (comp a) cb (comp b)
+         ('UU l)                (? (l = 0) (\ en 'UU) (\ en `('U l)))
+         ('the T u)             (comp u)                    ; the ascription is the term
+         ('let x a b)           (: ca (comp a) cb (comp b)
                                          (\ en (cb (link `(x (ca en)) en))))
-         (['total2 x A B] + _)        (: cA (comp A) cB (comp B)
+         ('total2 x A B)        (: cA (comp A) cB (comp B)
                                          (\ en `('sig (cA en) `('clo (\ v (cB (link `(x v) en)))))))
-         (['pr1 w] + _)               (: ca (comp w) (\ en (dop1 (ca en))))
-         (['pr2 w] + _)               (: ca (comp w) (\ en (dop2 (ca en))))
-         (['ii1 a] + _)               (: ca (comp a) (\ en `('i1 (ca en))))
-         (['ii2 b] + _)               (: ca (comp b) (\ en `('i2 (ca en))))
+         ('pr1 w)               (: ca (comp w) (\ en (dop1 (ca en))))
+         ('pr2 w)               (: ca (comp w) (\ en (dop2 (ca en))))
+         ('ii1 a)               (: ca (comp a) (\ en `('i1 (ca en))))
+         ('ii2 b)               (: ca (comp b) (\ en `('i2 (ca en))))
          (: cf (comp <t) cas (comp-args >t) (\ en (spine en (cf en) cas)))))
 
    ; the argument list compiles once too; `spine` then only applies.

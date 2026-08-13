@@ -22,6 +22,10 @@
 ; opfix runs before macros, so the walk below sees core forms and never re-parses.
 ; a nom binds, `_` swallows, any other atom matches itself, and a form's HEAD is
 ; its destructuring tag:
+;   (a b c)                a FORM: the shape of a chain, lax on the tail -- so it fits
+;                          at three OR LONGER, and ([a b c] + _) is what it says. this
+;                          is the UNTAGGED case, the one a head that names no tag falls
+;                          to, and it is the common one: ('lam x b) fits (lam x b ..).
 ;   [a b]  (list a b)      a chain of exactly two        <- a bracket IS its wrap
 ;   (a >< t)  (link a t)   the cons: head a, tail t. it CHAINS, which is how a
 ;                          pattern says "and more" -- ('lam >< x >< b >< _) fits
@@ -46,8 +50,20 @@
 ;   (? g)                  the guard alone -- fits anything g holds for
 ;   (p1 || p2)             ALTERNATIVES: either shape fits. `|` is the same tag
 ; ⚠ a map key is read for PRESENCE, not truth: a pinned () matches, an absent
-; key does not. an unknown tag is a scare AT EXPAND TIME -- a pattern is code, so
-; a typo in one is a compile error, never a clause that quietly never fires.
+; key does not.
+;
+; PARENS ARE THE FORM, BRACKETS ARE THE LIST, and the pair is the whole of it:
+; [a b c] fits a chain of EXACTLY three, (a b c) one of three or longer. Both read
+; as their constructor -- for the paren it is the constructor of the domain pat is
+; mostly used on, SYNTAX: uu.l matches terms, a term IS a form, and ('lam x b)
+; against (lam x b) is that form written down. lax on the tail because a term wears
+; annotations there, which is why every one of those arms used to end `+ _`.
+; `+` stays for the tail you want to NAME ((['a b] + t)); parens only drop the `_`.
+; this RETIRES the unknown-tag scare, and that is the better half of the change: a
+; head naming no tag used to be a rejected program, and we do not reject programs --
+; the language is defined so every form can be READ ((f) is f, an empty form is its
+; head, an undefined op answers the unit). A tag was the one place a pattern refused
+; to mean anything, and now it means the plain thing it looks like.
 ;
 ; THE GUARD IS THE ONE PATTERN THAT IS NOT A CONSTRUCTOR, and it wears `?` because
 ; a side condition is what `?` already means everywhere else -- test then shape,
@@ -114,7 +130,7 @@
               (= h 'hash) (wcat (wts [['tablet? v]]) (wkv as v))
               (= h 'tuple) (wcat (wts [['tray? v] ['= (tally as) ['tally v]]])
                                  (widx as v 0))
-              (scare '@ p))))
+              (wrest p '_ v))))                            ; UNTAGGED: the form's own shape, lax
    ; ⚠ a pattern longer than its value must never reach a `cap`, so the WHOLE run is
    ; claimed before any of it is read: `two?` on the head, then ONE `long?` for the rest
    ; of the depth. asking `two?` per step instead spends a cup, a load and a dispatch at

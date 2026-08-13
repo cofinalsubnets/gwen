@@ -121,11 +121,28 @@
  ('no = (@ ['a -1] (? (0 < n) (['a n] || ['b _ n])) n 'no))
  ; ⚠ a branch that BINDS may not nest (['k (a || [a b])]), and the branches must bind
  ; the SAME NOMS ((['a x] || ['b y])) -- both scare at expand time, see the file foot.
+ ; --- PARENS ARE THE FORM: the shape of a chain, LAX on the tail. brackets are the
+ ; list and stay exact, so [a b c] is three and (a b c) is three OR MORE.
+ (4 = (@ '(1 2 3) (a b c) (a + c)))
+ ('one = (@ '(1 2 3) (a) 'one 'no))                 ; ..shorter fits: the tail is not asked about
+ ('two = (@ '(1 2 3) (a b) 'two 'no))
+ ('no = (@ '(1 2) (a b c) 'three 'no))              ; ..but it is still AT LEAST, never fewer
+ ('no = (@ 5 (a b) 'chain 'no))                     ; ..and a non-chain is not a form
+ ('x = (@ '(lam x b extra) ('lam n _) n 'no))       ; ..which is the whole point: a term's tag+args
+ ('no = (@ '(pi x b) ('lam n _) n 'no))
+ (3 = (@ '(1 2 3) [a b c] c 0))                     ; ..the bracket next to it, still exact
+ (0 = (@ '(1 2 3 4) [a b c] c 0))
+ ; ..(X..) IS ([X..] + _), so `+` is only for a tail you want to NAME
+ ('(3 4) = (@ '(1 2 3 4) ([a b] + t) t 'no))
+ ; ..and the nesting is ordinary -- a form inside a form, a bracket inside a form
+ ('deep = (@ '(a (b c) d) (_ (_ 'c) _) 'deep 'no))
+ ('no = (@ '(a (b q) d) (_ (_ 'c) _) 'deep 'no))
  )
 
-; ⚠ THE EXPAND-TIME SCARES ARE UNGATED, all of them: an unknown tag, a guard at the
-; wrong arity, a binding alternative NESTED, and branches that bind different noms.
-; Each holds by hand. The reason is one lane, not four: the only way to defer an
+; ⚠ THE EXPAND-TIME SCARES ARE UNGATED, all of them: a guard at the wrong arity, a
+; binding alternative NESTED, and branches that bind different noms. (There is no
+; unknown-tag scare any more -- an untagged head is the lax form pattern, above.)
+; Each holds by hand. The reason is one lane, not three: the only way to defer an
 ; expansion into a test is (ev '(@ 1 (bogus a) a)) under a trap -- which
 ; costs love0 its second compiler pass. it is not this macro's doing: three lines,
 ;   (:: 'zz (\ a (scare 'zz (cap a))))
