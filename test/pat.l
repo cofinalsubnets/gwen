@@ -119,8 +119,15 @@
  (5 = (@ ['a 5] (? (0 < n) (['a n] || ['b _ n])) n 'no))
  (7 = (@ ['b 'q 7] (? (0 < n) (['a n] || ['b _ n])) n 'no))
  ('no = (@ ['a -1] (? (0 < n) (['a n] || ['b _ n])) n 'no))
- ; ⚠ a branch that BINDS may not nest (['k (a || [a b])]), and the branches must bind
- ; the SAME NOMS ((['a x] || ['b y])) -- both scare at expand time, see the file foot.
+ ; ..THE FIRST BRANCH THAT MATCHES WINS, and supplies EVERY nom: one it does not bind
+ ; reads (), it does not fall through to a later branch. so a body never wears bindings
+ ; from two shapes at once, and the branches need not bind the same noms.
+ ('(1 ()) = (@ ['a 1] (['a x] || ['b y]) [x y] 'n))
+ ('(() 1) = (@ ['b 1] (['a x] || ['b y]) [x y] 'n))
+ ; ..and one that binds may NEST -- same law, one clause, the nom read from the winner
+ ('(7 ()) = (@ ['k 7] ['k (a || [a b])] [a b] 'n))
+ ('(7 8) = (@ ['k [7 8]] ['k ([a b] || a)] [a b] 'n))
+ ('((7 8) ()) = (@ ['k [7 8]] ['k (a || [a b])] [a b] 'n))   ; ..`a` fits first, so `a` it is
  ; --- PARENS ARE THE FORM: the shape of a chain, LAX on the tail. brackets are the
  ; list and stay exact, so [a b c] is three and (a b c) is three OR MORE.
  (4 = (@ '(1 2 3) (a b c) (a + c)))
@@ -134,18 +141,24 @@
  (0 = (@ '(1 2 3 4) [a b c] c 0))
  ; ..(X..) IS ([X..] + _), so `+` is only for a tail you want to NAME
  ('(3 4) = (@ '(1 2 3 4) ([a b] + t) t 'no))
+ ; ..and `+` is LEFT-handed, so a multi-split arrives as a + whose left is a +: cat is
+ ; associative and so is this -- ([a b] + [c] + t) is three runs, the last one named.
+ ('(4 5) = (@ '(1 2 3 4 5) ([a b] + [c] + t) t 'no))
+ (3 = (@ '(1 2 3 4 5) ([a b] + [c] + t) c 0))
+ ('no = (@ '(1 2) ([a b] + [c] + t) t 'no))
+ ; --- guards STACK without nesting: every operand but the last is a condition
+ (4 = (@ '(1 2 3) (? (1 < 2) (2 < 3) (a b c)) (a + c) 'no))
+ ('no = (@ '(1 2 3) (? (1 < 2) (3 < 2) (a b c)) (a + c) 'no))
+ ; --- a lambda is a FORM like any other: (\ x b) builds one, so it matches one
+ ('form = (@ '(\ x b) (\ q r) 'form 'no))
+ ('lit = (@ 'x (\ x) 'lit 'no))                     ; ..at ONE operand it is still the literal
+ ('no = (@ 'y (\ x) 'lit 'no))
  ; ..and the nesting is ordinary -- a form inside a form, a bracket inside a form
  ('deep = (@ '(a (b c) d) (_ (_ 'c) _) 'deep 'no))
  ('no = (@ '(a (b q) d) (_ (_ 'c) _) 'deep 'no))
  )
 
-; ⚠ THE EXPAND-TIME SCARES ARE UNGATED, all of them: a guard at the wrong arity, a
-; binding alternative NESTED, and branches that bind different noms. (There is no
-; unknown-tag scare any more -- an untagged head is the lax form pattern, above.)
-; Each holds by hand. The reason is one lane, not three: the only way to defer an
-; expansion into a test is (ev '(@ 1 (bogus a) a)) under a trap -- which
-; costs love0 its second compiler pass. it is not this macro's doing: three lines,
-;   (:: 'zz (\ a (scare 'zz (cap a))))
-;   ('zz = (trap (\ _ (ev '(zz 1))) () (\ a b a)))
-; print ONE "tests pass" where a scare from EVALUATED code under the same trap
-; prints two. the law holds by hand; it waits on that lane.
+; THERE IS NOTHING UNGATED HERE ANY MORE, because `@` no longer scares at all: every
+; pattern is READ. A head that names no tag, or names one and misses its shape, is the
+; lax form pattern; an alternative binds the union with the winner's values. What used
+; to need a deferred-expansion lane to test is now an ordinary law above.

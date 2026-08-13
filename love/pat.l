@@ -108,29 +108,51 @@
      (? (nom? p) (? (= p '_) wnil [() [[p v]] ()])
         (! (link? p)) (wts [['= p v]])
         (: h <p as >p
-           (? (= h '?) (? (! (two? as)) (scare '@ p)          ; a GUARD: (? g pat), or (? g) alone
-                          (! (two? >as)) (wgd <as)
-                          (two? >>as) (scare '@ p)
-                          (wcat (wgd <as) (pw <>as v)))
-              ((h = '||) || (h = '|))                        ; ALTERNATIVES that bind nothing
-              (: ws (map (\ q (pw q v)) as)                  ; ..fold to ONE test, so they nest
-                 (? (all (\ w (! (two? <>w))) ws)
-                    (wts [('|| >< (map (\ w (pand (cat <w <>>w))) ws))])
-                    (scare '@ p)))                           ; ..a binding one belongs at the top
-              (= h '\) (? (two? >as) (scare '@ p) (wts (weq <as v)))
+           (? (= h '?) (? (! (two? as)) (wrest p '_ v)        ; a GUARD: (? g1 .. gn pat), or (? g)
+                          (! (two? >as)) (wgd <as)           ; ..one operand IS the lone guard
+                          (wq as v))                         ; ..else every one but the last guards
+              ; ALTERNATIVES, anywhere: ONE test, the branches ||ed. each branch owns its own
+              ; equalities and its own guards, so a disjunct is that branch entire.
+              ; ⚠ a nom lives at a DIFFERENT PLACE in each branch, so it cannot be one access
+              ; form -- it is read from whichever branch matched, and () where none binds it.
+              ; ⚠ that conditional re-asks the branch tests. A branch that binds nothing adds
+              ; no nom and so asks nothing again, which is why the literal alternative -- the
+              ; common one -- stays exactly one test with no second look.
+              ((h = '||) || (h = '|))
+              (: ws (map (\ q (pw q v)) as)
+                 ds (map (\ w (dedup <>w ())) ws)
+                 ts (map (\ e (: w <e d <>e
+                                  (pand (cat (cat <w <d) (map (\ g (bind <>d g)) <>>w)))))
+                         (zip ws ds))
+                 bss (map (\ d <>d) ds)
+                 uni (foldl (\ u bs (adds u (map cap bs))) () bss)
+                 [[('|| >< ts)] (map (\ n [n (pick n bss ts)]) uni) ()])
+              (= h '\) (? (two? >as) (wrest p '_ v) (wts (weq <as v)))   ; (\ x b) is a LAMBDA, a form
               (= h 'list) (wlist as v)
               (h = 'link || h = '><) (? (= 2 (tally as))    ; ONE tag: >< IS link, prefix or infix
                                         (wcat (wts [['two? v]])
                                               (wcat (pw <as ['cap v]) (pw <>as ['cup v])))
-                                        (scare '@ p))
-              (= h '+) (? (= 2 (tally as))                ; a SPLIT: the left run, then the rest
-                          (: l <as
-                             (? (? (link? l) (= <l 'list) ()) (wrest >l <>as v) (scare '@ p)))
-                          (scare '@ p))
+                                        (wrest p '_ v))
+              (= h '+) (? (! (= 2 (tally as))) (wrest p '_ v)   ; a SPLIT: the left run, then the rest
+                          (: l <as t <>as
+                             (? (? (link? l) (= <l 'list) ()) (wrest >l t v)
+                                ; ⚠ `+` is LEFT-handed, so ([a b] + [c] + t) arrives as a + whose
+                                ; LEFT is a +. cat is associative and so is the split: re-associate
+                                ; right and the ordinary rule reads it. this is the multi-split.
+                                (? (link? l) (= <l '+) ()) (pw ['+ <>l ['+ <>>l t]] v)
+                                (wrest p '_ v))))
               (= h 'hash) (wcat (wts [['tablet? v]]) (wkv as v))
               (= h 'tuple) (wcat (wts [['tray? v] ['= (tally as) ['tally v]]])
                                  (widx as v 0))
               (wrest p '_ v))))                            ; UNTAGGED: the form's own shape, lax
+   (wq as v) (? (two? >as) (wcat (wgd <as) (wq >as v)) (pw <as v))   ; guards, then the shape
+   ; a nom's access across an alternative. ⚠ THE FIRST BRANCH THAT MATCHES WINS, and it
+   ; supplies EVERY nom -- one it does not bind reads (), it does not fall through to a
+   ; later branch. Otherwise one body could wear bindings from two different shapes at
+   ; once, and the arm would answer for a value no single branch described.
+   (pick n bss ts) (? (! (two? bss)) (lit ())
+                      (: e (assoc n <bss)
+                         ['? <ts (? (atom? e) (lit ()) <>e) (pick n >bss >ts)]))
    ; ⚠ a pattern longer than its value must never reach a `cap`, so the WHOLE run is
    ; claimed before any of it is read: `two?` on the head, then ONE `long?` for the rest
    ; of the depth. asking `two?` per step instead spends a cup, a load and a dispatch at
@@ -231,9 +253,10 @@
    ; ⚠ the shared body is written once PER BRANCH -- the same trade `tree` makes for the
    ; else, and the reason the alternative is not the cheaper spelling of two arms; it is
    ; the spelling that says the bodies are THE SAME one.
-   ; ⚠ EVERY BRANCH BINDS THE SAME NOMS or it scares. a looser rule lets a body read a
-   ; nom one branch never bound, which does not fail -- it reaches whatever wears that
-   ; name OUTSIDE, and answers.
+   ; ⚠ THE BODY BINDS THE UNION, and a nom this branch did not bind is THE UNIT. That is
+   ; the whole of the different-noms question: binding it to () is what stops the body
+   ; reaching whatever wears that name OUTSIDE, which is the one way this could answer
+   ; something wrong. absence reads as nothing here exactly as it does everywhere else.
    ; the arm, normalised: its BRANCHES, each with the guards standing over it. a guard
    ; wrapping an alternative belongs to every branch, so (? g (p1 || p2)) is two branches
    ; guarded alike -- the guard is written once and asked once per branch.
@@ -244,20 +267,24 @@
                        (map (\ b [<b (link <as <>b)]) (arms <>as))
                      [[p ()]])))
    (wgds w gs) (foldl (\ x g (wcat x (wgd g))) w gs)
-   (sameset? xs ys) (? (all (\ x (member? x ys)) xs) (all (\ y (member? y xs)) ys) ())
+   (adds u ns) (cat u (filter (\ n (! (member? n u))) ns))    ; u, then what it did not have
    _ (:: '@ (\ a
        (: v (nom 0)
-          (clof w b) (: d (dedup <>w ())
-                        gs (map (\ g (bind <>d g)) <>>w)   ; a guard is the body's binder over g
-                        [(cat (cat <w <d) gs) (bind <>d b)])
+          ; the clause a walk answers: its tests, then its non-linear equalities, then its
+          ; guards -- and a body bound over `uni`, whatever this branch did not bind reading ().
+          (clofu w uni b)
+            (: d (dedup <>w ())
+               bs (cat <>d (map (\ n [n (lit ())]) (filter (\ n (! (assoc n <>d))) uni)))
+               gs (map (\ g (bind bs g)) <>>w)
+               [(cat (cat <w <d) gs) (bind bs b)])
+          (clof w b) (clofu w () b)
           (arm p b)                                    ; the clauses ONE arm answers for
             (: qs (arms p)
                (? (! (two? >qs)) [(clof (pw p v) b)]   ; one branch: pw takes any guard itself
                   (: ws (map (\ q (wgds (pw <q v) <>q)) qs)
                      (? (all (\ w (! (two? <>w))) ws) [(clof (pw p v) b)]   ; none binds: pw's one test
-                        (: ns (map (\ w (map cap <>(dedup <>w ()))) ws)
-                           _ (? (all (\ n (sameset? n <ns)) ns) 0 (scare '@ p))
-                           (map (\ w (clof w b)) ws))))))
+                        (: uni (foldl (\ u w (adds u (map cap <>(dedup <>w ())))) () ws)
+                           (map (\ w (clofu w uni b)) ws))))))
           (cls r) (? (! (two? r)) [() ()]              ; no clause and no else: the zero point
                      (! (two? >r)) [() <r]             ; the odd tail IS the else
                      (: rest (cls (cuup r))
