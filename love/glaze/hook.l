@@ -55,7 +55,7 @@
                     ((tally (grpfix gds cands)) = (tally gds)))
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op <e
-                               (? (member? op '(+ - * // % & | ^ < <= > >= =)) (&& (exprn ps <>e) (exprn ps <>>e))
+                               (? (member? op '(+ - * // % & | ^ < <= > >= =)) (exprn ps <>e && exprn ps <>>e)
                                   (op = '?) (&& (two? >>>e) !(two? >>>>e)
                                                (exprn ps <>e) (exprn ps <>>e) (exprn ps <>>>e))
                                   0))
@@ -95,7 +95,7 @@
                                                            ; for NAMED frames and name?/nil? seams bite (adesug's net-0
                                                            ; unwrap was a real miscompile). bytecode is always sound,
                                                            ; and this is exactly the coverage the lanes had before.
-          (&& (two? s) (two? >>s) (exprn ps body))         ; >=1 param, a body, leaf grammar
+          (two? s && two? >>s && exprn ps body)         ; >=1 param, a body, leaf grammar
           (: _ (pin fires () (1 + (peep fires () 0)))                  ; compile via the neutral-IR lane (coreir); deopt target = e
              (nif (emit (peep (assemble arch (coreir arch ps body (deoptir arch (? (a = 1) 0 1)))) 'bytes 0)) e s a))
           ; FLOAT-RESULT leaf -- (\ x <fexpr>) that BOXES a gem (auto-ev's qualfr/jitfr lane).
@@ -127,8 +127,8 @@
                     ; after ~4k cumulative iters. Callout also beats falling to group-swallow here (~1.5 vs ~1.8
                     ; ns/iter, measured), so the recognizer order (callout before group) is already the cheap one.
                     (: ci (calloutinfo s)                                        ; ci = (F op iv ARG); resolve F via gv --
-                       fv (? (&& ci !(farq <ci)) (gv <ci 0) 0)         ; NEVER for a farq name (a wire-resolved local; the book namesake is stale)
-                       (? (&& ci (lit? fv))
+                       fv (? (ci && !(farq <ci)) (gv <ci 0) 0)         ; NEVER for a farq name (a wire-resolved local; the book namesake is stale)
+                       (? (ci && lit? fv)
                           (: _ (pin fires () (1 + (peep fires () 0))) (jitcalloutx fv s <>ci <>>ci <>>>ci arch))   ; op iv ARG
                      ; CAPTURED / multi-arg call-out: F (and the bound) are FRAME params -> read from the
                      ; [imps args] frame, no bake; deopt to value[1]=e (the bytecode twin, which captures F).
@@ -149,16 +149,16 @@
                       ; /computed-arg call, tree recursion) -- synthesize an entry ((__outer . frame) . tail) and
                       ; make IT the group entry, so the outer closure evaluates the tail then dispatches. opnd-ok?
                       ; rejects a tail that reads a captured var (jgir binds only the frame); jgir-ok? gates ops.
-                      (: pd (? (&& (two? body) (id? <body ':)) (anat-defs >body) ())
+                      (: pd (? (two? body && id? <body ':) (anat-defs >body) ())
                          dds (? pd <pd ())  tail (? pd <>pd ())
-                         okshape (&& pd (two? tail) (all (\ dd (&& (two? dd) (name? <dd) (two? >dd) (id? <>dd '\) (two? >>dd))) dds))   ; every def is name (\ p.. B)
-                         gdefs (? okshape (map (\ dd (: lam >dd (link (`(<dd) + (init >lam)) (last >lam)))) dds) ())   ; ((name p..) . B)
+                         okshape (pd && two? tail && all (\ dd (two? dd && name? <dd && two? >dd && id? <>dd '\ && two? >>dd)) dds)   ; every def is name (\ p.. B)
+                         gdefs (? okshape (map (\ dd (: lam >dd (`(<dd) + (init >lam) >< last >lam))) dds) ())   ; ((name p..) . B)
                          gnames (map (\ d <<d) gdefs)
-                         flat? (&& okshape (member? <tail gnames) (>tail = ps))       ; tail IS (entry frame..)
-                         osym '__outer  agdefs (? okshape (gdefs + `((link (link osym ps) tail))) ())   ; group + synthetic ((__outer . frame) . tail)
-                         (? (&& flat? (grp-ok? gdefs) (jgir-ok? gdefs) (gdefs-ok? gdefs))                         ; FLAT: entry direct, zero indirection
+                         flat? (okshape && member? <tail gnames && >tail = ps)       ; tail IS (entry frame..)
+                         osym '__outer  agdefs (? okshape (gdefs + `(((osym >< ps) >< tail))) ())   ; group + synthetic ((__outer . frame) . tail)
+                         (? (flat? && grp-ok? gdefs && jgir-ok? gdefs && gdefs-ok? gdefs)                         ; FLAT: entry direct, zero indirection
                             (: _ (pin fires () (1 + (peep fires () 0))) (jitgroupirx gdefs <tail arch e s))   ; stamp the OUTER src s -> =/show transparent vs the bytecode twin
-                            (&& okshape !(member? osym gnames) (opnd-ok? ps tail) (grp-ok? agdefs) (jgir-ok? agdefs) (gdefs-ok? gdefs))   ; GENERAL tail via the synthetic entry
+                            (okshape && !(member? osym gnames) && opnd-ok? ps tail && grp-ok? agdefs && jgir-ok? agdefs && gdefs-ok? gdefs)   ; GENERAL tail via the synthetic entry
                             (: _ (pin fires () (1 + (peep fires () 0))) (jitgroupirx agdefs osym arch e s))
                             ; AMBLE lane (LAST): the universal boring-tier translation -- tagged values, Sp-slot
                             ; temporaries, drive call-outs, restart deopt. njit-amble answers 0 on decline.

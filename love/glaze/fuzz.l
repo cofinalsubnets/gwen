@@ -51,7 +51,7 @@
    (gnth l i) (? (i < 1) (cap l) (gnth (cup l) (i - 1)))
    (pick l) (gnth l (rand (tally l)))
    ; ⚠ HOISTED (see the header) -- never a nested single-binding `:`
-   (uptogo i acc) (? (i < 0) acc (uptogo (i - 1) (link i acc)))
+   (uptogo i acc) (? (i < 0) acc (uptogo (i - 1) (i >< acc)))
    (upto n) (uptogo (n - 1) ())
    ; the leaf pools. `bleaf` is the hostile one: k/acc are frame params where they are
    ; bound and FREE elsewhere (a free read is a helpless scare, which rides to stderr and
