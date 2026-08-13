@@ -289,13 +289,33 @@ liveness read at the vrfix seam, not a new analysis.
   time inside bake noise after the candidate pre-filter. Thin by design — the engine is iv's,
   and iv is where its freedom arrives. Gates: test, test_moon (laws + 133-program battery),
   test_fixpoint, test_ccarm64, test_ccriscv, test_slow.
-* **iv — the long intervals (NOT BUILT).** The vmap pins mints instead of physicals, a
-  call-crossing interval takes a cs seat (priced: one save + per-exit reloads vs the reloads
-  it kills), params arrive pre-coloured to their arrival registers, and an interval that wins
-  no seat falls back to per-use reloads (write-through makes that free to construct). This is
-  the step that collects the retirement list and the single build — and it dissolves iii's two
-  big refusal classes at the root: when the mechanisms retire there is no ranker to disturb,
-  and when the vmap holds mints the pinned 4,103 become ordinary intervals.
+* **iv — the long intervals. iv-a CLIMBED 2026-08-12 (branch only, not merged): the vmap
+  holds mints.** An entry carries the NOM THE FORMS USE — a mint where the value arrived
+  minted, a physical where it was seeded or seated bare; every register question about an
+  entry resolves through `rp`, and a MEET answers the physical (the arms may have re-pinned
+  one name on different mints of one machine register, and the join needs the one nom both
+  paths defined — the φ dodge). Byte-identical on love.c except three iii adoptions that now
+  refuse over their honestly-longer spans (+6 insns, the enabling cost). Residency laws
+  unchanged, fixpoint holds.
+* **iv-b onward (NOT BUILT) — the design, settled while iv-a was live:**
+  * **vmcflush goes optimistic**: instead of dropping pool pins at a call, it KEEPS the entry
+    and marks the mint CROSSING (a g-list of (mint slot-off ty) — the slot is already the
+    write-through truth). Post-call reads then emit the mint (zero forms). ⚠ this is the
+    step where the token fallback DIES: a crossing mint's token is caller-saved garbage after
+    the call, so the assignment becomes MANDATORY — a crossing mint either takes a free cs
+    seat or gets the RELOAD REWRITE (insert `ld MINT r4 off` after each call it crosses —
+    exactly the spill-around roster's shape, generalized, constructible at the tail because
+    write-through holds until 5.4).
+  * **the seat decision runs BEFORE assembly** (not at vrfix): the seat set must feed cssv +
+    the epilogue pin + nslot exactly as the regen's grant does today — deciding after
+    assembly would need frame surgery. So build's tail grows a `rseat` link between body
+    completion and assembly; vrfix keeps the substitution role.
+  * **pricing carries the ledger's lessons**: seats for loop-crossing mints first (the borrow's
+    license, subsumed), straight-line crossings only where reads beat the save + per-exit
+    reloads (the pmin/pmax ghosts), and the whole thing behind an interleaved A/B before any
+    claim. Retires: csbor/csbu + the grant-shrink regen loop first; pp/pcs and homes/rides
+    when params join (pre-coloured arrivals); the regen dance last, once every policy has a
+    tail-time equivalent.
 
 * **rung 5.4, spilling placed.** Today the slot is the source of truth and the register a
   write-through cache; invert it — the register is the truth, a spill is placed under real

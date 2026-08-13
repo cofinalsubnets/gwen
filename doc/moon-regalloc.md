@@ -1222,7 +1222,10 @@ moved onto r0 robs stld's forwarding through the staging cell — the bridge mov
 keeping the value on a stable register, not dead weight). Gates: test, test_moon, test_fixpoint,
 test_ccarm64, test_ccriscv, test_slow. ⚠ iv inherits both refusals as dissolutions: retire the
 mechanisms and there is no ranker to disturb; give the vmap mints and the pinned class becomes
-ordinary intervals.
+ordinary intervals. iv-a (the vmap holds mints) landed the same day on the branch —
+byte-identical but three adoptions refusing over honestly-longer spans (+6 insns, the enabling
+cost); iv-b's design (vmcflush optimism, the mandatory-assignment seam where the token fallback
+dies, the pre-assembly seat link) is in doc/moon-vreg.md.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
