@@ -13,7 +13,7 @@
   test_rp2040 moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
-  test_holo test_as test_elf32 test_objcopy test_gz
+  test_holo test_as test_elf32 test_objcopy test_gz test_distboot
 
 # $(mw) -- the WARM love: the freshly-baked image woken instead of the egg compiled
 # from source (12 ms against 1.05 s). Both lanes carry the same vocabulary, so warm
@@ -635,6 +635,14 @@ $(eval $(call moon_pkg,lua,LUASRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 $(eval $(call moon_pkg,gzip,GZIPSRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,bzip2,BZIP2SRC,host out/host$(hsuf)/mooncc))
+# test_distboot -- THE RELEASE CLAIM: unpack either artifact, type make, get the same
+# binary. Two complete bootstraps (minutes, not seconds), and the full lane runs with
+# cc/gcc/clang shadowed by scripts that fail loudly, so "the bundled love was the
+# toolchain" is proved rather than assumed. Opt-in, by name -- and the reason it can
+# hold at all is that the local cc builds love0 and nothing else (see the script).
+test_distboot: dist-rel
+	@echo TEST test/gate/distboot.sh
+	@sh test/gate/distboot.sh $(dist_src_tgz) $(dist_full_tgz) $(ho)/love
 # test_gz -- lib/tar.l + lib/gz.l against the two programs they replace. The LAWS are
 # test/host/gz.l (in test_hostnif, needing nothing outside the tree); this is the half
 # only the outside world can say, and it is a separate gate because a coder and a

@@ -105,25 +105,105 @@ out/dist/love-$a: $(ho)/love $(ho)/love.baked out/dist/.dist-cat.l
 	@cp $(ho)/love $@
 	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l ./$@ bake
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
-.PHONY: dist dist-tgz
+.PHONY: dist dist-src dist-full dist-rel
 dist: out/dist/love-$a
 
-# ==== dist-tgz: the release tarball, packed by us ====
-# The artifact plus its man page, as a .tar.gz -- and the point is WHO MADE IT: the
-# archive comes out of lib/tar.l and the DEFLATE stream out of lib/gz.l, so a
-# release needs neither `tar` nor `gzip` on the box that cuts it. test_gz is what
-# says the bytes are the ones GNU tar and GNU gzip would accept.
-# ⚠ our coder writes the FIXED Huffman code, so this lands ~24% above `gzip -9`
-# (lib/gz.l carries the measured numbers). That is a real cost on a download and
-# the reason a dynamic coder is the next rung, not a footnote.
-dist_tgz = out/dist/love-$a.tar.gz
-dist-tgz: $(dist_tgz)
-$(dist_tgz): out/dist/love-$a $(ho)/love lib/tar.l lib/gz.l tools/tgz.l
+# ==== THE RELEASE ARTIFACTS (doc/dist.md) ====
+# A release is not a program, it is TWO TARBALLS, and they sit on the one axis that
+# actually matters to somebody unpacking them: do you have a C toolchain?
+#
+#   love-<ver>.tar.gz          LEAN -- sources only. `make` bootstraps through the
+#                              local cc, which builds love0 and NOTHING else.
+#   love-<ver>-<arch>.tar.gz   FULL -- the same tree plus a baked love for <arch>.
+#                              `make` bootstraps through THAT and the local cc is
+#                              never called at all.
+#
+# ⚠ AND BOTH ANSWER THE SAME BINARY, which is the whole claim and is not a thing we
+# had to engineer: the local cc only ever builds `love0` (host/build.mk), and every
+# object in the shipped binary is mooncc's, compiled by love0 waking mooncc0.image.
+# So the bootstrap compiler is a scaffold that leaves no trace in the product --
+# which is exactly what test_fixpoint already asserts to the byte, and what its DDC
+# leg (a foreign-compiled love0) was audited for. `make test_distboot` is that claim
+# stated over the artifacts rather than over the tree.
+#
+# The archive is OURS end to end -- lib/tar.l and lib/gz.l -- so cutting a release
+# needs neither `tar` nor `gzip` on the box. ⚠ our coder writes the FIXED Huffman
+# code, ~24% above `gzip -9` (lib/gz.l carries the numbers): a real cost on a
+# download, and the reason a dynamic coder is the next rung.
+#
+# ⚠ REPRODUCIBLE BY CONSTRUCTION: the pack pins every mtime/uid/gid to $(dist_stamp)
+# and the gzip header's own MTIME is 0, so two cuts of one revision are the same
+# bytes and "this is that release" is something anyone can check with sha256sum.
+# the SAME two-part id mk/lib.mk computes -- base from ./VERSION, VCS only a suffix --
+# because the tarball is named for it AND ships it, and a release whose filename and
+# `love --version` disagreed would be its own kind of lie.
+dist_base := $(shell cat $(R)/VERSION 2>/dev/null || echo 0)
+dist_vcs  := $(shell git -C $(R) describe --always --dirty 2>/dev/null)
+dist_ver  := $(dist_base)$(if $(dist_vcs),+g$(dist_vcs),)
+dist_stamp ?= 0
+dist_stage = out/dist/stage
+dist_src_tgz  = out/dist/love-$(dist_ver).tar.gz
+dist_full_tgz = out/dist/love-$(dist_ver)-$a.tar.gz
+dist-src:  $(dist_src_tgz)
+dist-full: $(dist_full_tgz)
+dist-rel:  dist-src dist-full        # both, the usual cut
+
+# ⚠ wasm/love.js is EMSCRIPTEN'S OUTPUT, committed so github pages can serve a repl
+# (wasm/Makefile calls it "the COMMITTED artifact"). It stays in the repo for exactly
+# that, and stays OUT of the release: 103 KB gz in one file -- more than both generated
+# proof terms together -- and it is the one thing here a reader could not regenerate
+# without installing a foreign toolchain, inside an artifact whose whole claim is that
+# it needs none. Dropping it from the TARBALL costs the repl nothing.
+dist_drop = wasm/love.js
+# the stage: every TRACKED file, minus dl/ (third-party downloads that `make
+# distclean` fetches again -- shipping them would triple the tarball and stale them).
+# ⚠ checkout-index reads the INDEX, so a release is cut from what is tracked, not
+# from whatever is lying in the working tree.
+# ⚠ and the staged VERSION is OVERWRITTEN with the fully computed id -- base AND vcs
+# suffix -- because an extracted tarball has no .git to describe. The checked-in VERSION
+# carries only the base; freezing the whole id here is what lets a build from the tarball
+# stamp the same string the tree stamped, and that string compiles into love.o.
+# ⚠ ALWAYS RE-STAGED, never cached on a stamp. The stage's real input is the INDEX, and
+# make cannot depend on that: a `git add` changes what a release contains while every file
+# make watches keeps its mtime, so a stamped stage happily serves a tarball cut before the
+# edit you are trying to test. That is silent, and it looks exactly like the fix not
+# working -- it cost three distboot rounds here before the artifact was opened and found to
+# predate the change. A checkout-index of the tree is a second; correctness is worth it.
+.PHONY: force_stage
+force_stage: ;
+out/dist/.staged-$(dist_ver): force_stage $(ho)/love
+	@echo STAGE	$(abspath $(dist_stage))/love-$(dist_ver)
+	@# ⚠ SAY SO WHEN THE INDEX AND THE WORKING TREE DISAGREE. Cutting from the index is
+	@# right for a release -- it is what makes an artifact reproducible from a revision --
+	@# but it means an uncommitted edit is NOT in what you just built, and a gate run
+	@# against it is testing the old code while you read the new. That failure is silent
+	@# and looks exactly like the fix not working; it cost two full distboot rounds here.
+	@if [ -n "$$(git -C $(R) status --porcelain 2>/dev/null)" ]; then \
+	   echo "  /warn the tree is DIRTY and this artifact comes from the INDEX --"; \
+	   echo "  /warn uncommitted edits are NOT in it. 'git add' them first:"; \
+	   git -C $(R) status --porcelain | sed 's/^/        /' | head -8; fi
+	@rm -rf $(dist_stage)
+	@mkdir -p $(dist_stage)/love-$(dist_ver)
+	@git -C $(R) checkout-index -a --prefix=$(abspath $(dist_stage))/love-$(dist_ver)/
+	@rm -rf $(dist_stage)/love-$(dist_ver)/dl
+	@rm -f $(dist_stage)/love-$(dist_ver)/$(dist_drop)
+	@printf '%s\n' "$(dist_ver)" > $(dist_stage)/love-$(dist_ver)/VERSION
+	@touch $@
+
+$(dist_src_tgz): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l tools/tgz.l
 	@echo TGZ	$(abspath $@)
-	@rm -rf out/dist/pack && mkdir -p out/dist/pack/love-$a
-	@cp out/dist/love-$a out/dist/pack/love-$a/love
-	@cp README.md out/dist/pack/love-$a/ 2>/dev/null || true
-	@$(ho)/love tools/tgz.l c $@ out/dist/pack
+	@rm -f $@
+	@$(ho)/love tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
+
+# the full artifact is the lean one plus ONE FILE, so it is the same stage with the
+# baked binary laid beside it -- not a second pipeline.
+$(dist_full_tgz): out/dist/.staged-$(dist_ver) out/dist/love-$a lib/tar.l lib/gz.l tools/tgz.l
+	@echo TGZ	$(abspath $@)
+	@rm -f $@
+	@mkdir -p $(dist_stage)/love-$(dist_ver)/bin
+	@cp out/dist/love-$a $(dist_stage)/love-$(dist_ver)/bin/love
+	@$(ho)/love tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
+	@rm -rf $(dist_stage)/love-$(dist_ver)/bin
 
 # ==== dist_cross: the TWIN artifact (the other elf arch) ====
 # the same door for the machine you are not on: every TU through `mooncc -t`,

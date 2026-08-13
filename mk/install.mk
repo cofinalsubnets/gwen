@@ -100,6 +100,29 @@ $(compat)/share/man/man1/%.1: $d/share/man/man1/%.1
 	$(inln)
 endif
 
+# --- the SOURCE nest: ~/.love/src/love-<ver>/ + the tarball it came from ------------
+# An installed love keeps its own source, and the archive it was cut from beside it: a
+# pristine baseline to diff a working tree against, and the thing `love up` can rebuild
+# from without asking the network. The tarball's top directory is already love-<ver>, so
+# the version keying costs nothing -- it IS the archive's own name.
+#
+# ⚠ IT NEVER CLOBBERS ANOTHER VERSION. Installing 0.2 must leave 0.1 exactly where it
+# stands, so an existing love-<ver>/ is LEFT ALONE rather than written into -- a
+# half-overwritten source tree is worse than either version. Re-installing the same
+# version is therefore a no-op on the tree; delete it by hand to force a fresh lay.
+# ⚠ and there is deliberately NO `current` symlink yet: which version is live is a
+# decision we have not made, and quietly picking one here would make it by accident.
+.PHONY: install-src
+install-src: $(dist_src_tgz)
+	@mkdir -p $d/pkg $d/src
+	@cp -p $(dist_src_tgz) $d/pkg/
+	@echo INSTALL	$(abspath $d)/pkg/$(notdir $(dist_src_tgz))
+	@if [ -d "$d/src/love-$(dist_ver)" ]; then \
+	   echo "  install-src: $d/src/love-$(dist_ver) exists -- left alone (delete it to re-lay)"; \
+	 else \
+	   $(ho)/love tools/tgz.l x $(dist_src_tgz) $d/src >/dev/null \
+	     && echo "  install-src: source laid at $d/src/love-$(dist_ver)"; fi
+
 install: $(installs)
 uninstall:
 	@echo RM	$(abspath $(installs))

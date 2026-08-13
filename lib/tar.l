@@ -247,15 +247,34 @@
    (tar-there? p) (? (two? (stat p)) 1 0)
    (tar-strip nom)                          ; the "./" GNU tar stores on a `-C dir .`
     (? (((tally nom) > 1) && (((nom 0) = 46) && ((nom 1) = 47))) (snip nom 2 (tally nom)) nom)
+   ; ⚠ A RELEASE TARBALL MUST NOT CARRY THE CLOCK OR THE PACKER'S UID. Two cuts of
+   ; one tree would hash differently, and "this is that release" stops being a thing
+   ; anyone can check. mtime, uid and gid are the three fields that drift with who
+   ; ran the pack and when; MODE is deliberately left alone, because the executable
+   ; bit is content (a binary that unpacks unrunnable is a broken artifact).
+   (tar-level es stamp)
+    (map (\ e (: t (tablet 0)
+                 _ (map (\ k (pin t k (peep e k ()))) (keys e))
+                 _ (pin t 'mtime stamp) _ (pin t 'uid 0) _ (pin t 'gid 0)
+                 _ (pin t 'uname "root") _ (pin t 'gname "root")
+                 t))
+         es)
    (tar-scatter root es)                    ; -> (1 count) | ()
     (: (go xs k) (? (! (two? xs)) `(1 k)
                     (: e <xs
                        nom (tar-strip (tar-get e 'nom ""))
                        p (? (tally nom) (? (tally root) (root + "/" + nom) nom) root)
                        kind (tar-get e 'kind 'file)
+                       ; ⚠ THE MODE IS CONTENT, and it must be laid back EXPLICITLY: `open`
+                       ; creates at the umask's pleasure, so a file written here comes out
+                       ; 0644 whatever the header said, and an extracted BINARY is not
+                       ; executable. The archive carried 0755 and we dropped it -- which
+                       ; `diff -r` cannot see, because it compares bytes and not modes.
                        ok (? (id? kind 'dir)  (: _ (mkdir p (tar-get e 'mode 493)) (tar-there? p))
                              (id? kind 'link) (: _ (symlink (tar-get e 'to "") p)
                                                   (? (string? (readlink p)) 1 0))
-                             (: _ (tar-blurt p (tar-get e 'body "")) (tar-there? p)))
+                             (: _ (tar-blurt p (tar-get e 'body ""))
+                                _ (? (tar-there? p) (chmod p (tar-get e 'mode 420)) 0)
+                                (tar-there? p)))
                        (? (! ok) () (go >xs (k + 1)))))
        (go es 0)))
