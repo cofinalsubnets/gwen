@@ -375,7 +375,10 @@
 ; through that door in silence.
 (: dyadics (pins (tablet 0)
  '** 70
- '* (>< 60 1) '/ (>< 60 1) '% (>< 60 1)             ; multiplicative, LEFT
+ '* (>< 60 1) '/ (>< 60 1) '% (>< 60 1) '// (>< 60 1)   ; multiplicative, LEFT -- // is floor divide,
+                                                    ; and it sits with its siblings: undeclared it took
+                                                    ; the 95 default, ABOVE *, so (s * n // g) read as
+                                                    ; (* s (// n g)) -- right only where g divides n
  '+ (>< 50 1) '- (>< 50 1)                          ; additive, LEFT
  '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40             ; comparison
  '| 30 '& 30 '&& 30 '|| 30      ; logical (&& || also macros; the row pins the grip below comparison)
