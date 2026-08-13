@@ -510,22 +510,27 @@ rule that could not miss would have to model every flush the subtree can reach, 
 lowering-internal ones — the same enumeration trap that made A-2's eleven ops turn out to be
 twelve. `lochk`/`lomiss`/`lobar` stay.
 
-**the `fcb` narrowing — BUILT, MEASURED, NOT LANDED (2026-08-13).** `fcb` opened with a full
+**the `fcb` narrowing — BUILT, MEASURED, then LANDED (2026-08-13) as THE LADDER's step 3;** the
+pricing verdict below stands and is no longer the whole reading — see doc/moon-regalloc.md's
+criterion, under which a mechanism that lets the program state something it was guessing can be
+worth a small regression. `fcb` opened with a full
 `vmflush`, and the comment over it states why: the float lane discards the int-flavored emission,
 so a pin born in the dropped forms would survive with its establishing load gone. ⚠ that
 invariant is narrower than the flush that served it — pins from BEFORE the lane are not from
 dropped forms. So: snapshot the map at the relational lane's entry (`m9`, before any `cgexpr`)
 and have `fcb` `vmset` it back. Sound by the stated invariant, and it works: misses 81 → 69,
-distinct 34 → 32. It still does not ship.
+distinct 34 → 32.
 
 | | x64 | arm64 | riscv64 | dynamic (spec.l) | compile |
 |---|---|---|---|---|---|
 | `.text` delta | **+8** | **+12** | **+8** | +180 insns (spread ±440) | +0.05s |
 
 Worse on every target's text, neutral everywhere else — it fails "pays somewhere, regresses
-nowhere". The physics is the same one step 3 found: a preserved pin holds a register out of the
-pool for the rest of the loop, and the two names recovered were not worth their register. ⚠ do
-not re-propose this without a payer; the reason it loses is capacity, not correctness.
+nowhere", which is why it sat unlanded for a week. The physics: a preserved pin holds a register
+out of the pool for the rest of the loop, and the two names recovered were not worth their
+register **at this pool width**. ⚠ the cost is capacity, not correctness — which is exactly why
+the pricing belongs to the ladder's step 5 and not to this verb, and why the rung shipped under
+the criterion once the numbers were reproduced (thumb2, with no pool to preserve into, moves +0).
 
 ⚠ an earlier reading of this same site — "pins can never live in r0–r3 (`opool` is
 `r6 r5 r9 r10 r7 r8`, riscv's is `r8..r11`, t32's is empty), so the flush defends nothing and can

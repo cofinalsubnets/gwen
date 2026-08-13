@@ -467,15 +467,15 @@ censuses stay as evidence) and `doc/moon-alloc.md`'s phase I/II stance. Two ladd
 here, one per level; they were the same ladder and are now merged. A step's **serves** column says
 which level asks for it — most are asked by both, which is the point.
 
-**The floor already under it:** step 1 (the entry carries its class) · S-1 `stldp` · iv phase 1
-steps 1–2 (spans, the admission repricing) · rungs A-0/A-1/A-2 (the cs file real on arm64, riscv,
-thumb2) · 5.0/5.1a/5.1b i–iii.
+**The floor already under it:** step 1 (the entry carries its class) · step 3 (`fcb` rolls back) ·
+S-1 `stldp` · iv phase 1 steps 1–2 (spans, the admission repricing) · rungs A-0/A-1/A-2 (the cs
+file real on arm64, riscv, thumb2) · 5.0/5.1a/5.1b i–iii.
 
 | # | step | serves | what the program gets to SAY | gate |
 |---|---|---|---|---|
 | 1 | **class the vmap entry** — LANDED 2026-08-13 | both | *pool residency ends here* — instead of 29 sites each reaching for flush-everything | byte-identity where the class verb provably equals the flush it replaces; dynamic floor where not |
 | 2 | **`restrict` survives the parser** | splice first | *this base is unaliased* — the promise `love.h` already makes on `Sp` and `pquals` discards | the ten-line seam probe loses its dead interior stores; `test_fixpoint` |
-| 3 | **`fcb` gets rollback** | moon | *discard the emission, keep what predates it* — a transaction, not a clobber | misses 81→69 reproduced; text delta owned by step 5, not by this verb |
+| 3 | **`fcb` gets rollback** — LANDED 2026-08-13 | moon | *discard the emission, keep what predates it* — a transaction, not a clobber | misses 81→69 reproduced; text delta owned by step 5, not by this verb |
 | 4 | **S-1b — reach the arm/riscv pipeline** | both | that `stldp` has *work* on three targets where it silently finds none | a store print that fires on all four targets; the seam probe folds on each |
 | 5 | **residency priced as extent × class × reload** | both | *why* a value lives where it lives, once, instead of five gate stacks with stale proxies | corpus dynamic, and mechanism count DOWN |
 | 6 | **location keys — (base, offset, width)** | both | one key space: frame slots, array elements and restrict-base cells stop being three mechanisms | the array leg folds; `aeoff` stops parsing digits out of `"x[3]"` |
@@ -519,7 +519,7 @@ census table that could not see the verdict. Read this list before proposing a m
 or instructions.** Under the criterion in the convergence plan above, a refusal on those grounds
 is not automatically a refusal: a mechanism that lets the program STATE something it was guessing
 can be worth a small regression. Two have already been re-opened on that basis (`fcb`'s rewind,
-now ladder step 2; and `pcs`, whose 1,004 bytes is a weak reason to keep 57 lines the program
+ladder step 3, landed; and `pcs`, whose 1,004 bytes is a weak reason to keep 57 lines the program
 cannot explain). The rest stand — they were refused for physics, not for bytes.
 
 * **cs seats for the call-crossing class, retrofitted onto `repack`** — refused twice (2026-08-12,
@@ -546,13 +546,15 @@ cannot explain). The rest stand — they were refused for physics, not for bytes
 * **subsuming the keeps' optimism by a coverage rule** (2026-08-13, phase 2) — the census aiming it
   was an instrument artifact; corrected, only 12 of 34 misses are the coverage case and 9 of the 14
   head flushes that kill a live keep are inner loops `loscan` correctly REFUSED.
-* **`fcb`'s pre-lane rewind** — ⚠ **RE-OPENED 2026-08-13, now ladder step 2.** Refused the same day
-  on +8/+12/+8 bytes x64/arm64/riscv64 at dynamic and compile-time neutral — but that is a PRICING
-  answer to a VOCABULARY question. The flush is a rollback wearing a clobber's clothes, and the
-  bytes come from the preserved pin holding a register out of a four-wide pool, which is the
-  pricing ladder's business and not the verb's. Land the verb; price the pin separately. ⚠ what
-  stays refused is the register argument for DELETING the flush ("pins can never live in r0–r3") —
-  true about registers, wrong about the flush, which exists for the DISCARDED emission.
+* **`fcb`'s pre-lane rewind** — ⚠ **RE-OPENED and then LANDED 2026-08-13 as ladder step 3.** It had
+  been refused the same week on +8/+12/+8 bytes x64/arm64/riscv64 at dynamic and compile-time
+  neutral — a PRICING answer to a VOCABULARY question. The flush was a rollback wearing a
+  clobber's clothes, and the bytes come from the preserved pin holding a register out of a
+  four-wide pool, which is the pricing ladder's business and not the verb's. Every number
+  reproduced on the re-build (misses 81 → 69; +8/+12/+8, thumb2 +0 — it has no pool to preserve
+  into). ⚠ what stays refused is the register argument for DELETING the flush ("pins can never
+  live in r0–r3") — true about registers, wrong about the flush, which exists for the DISCARDED
+  emission.
 * **the loop borrow on a64** — a net loss there (−187 alone, dragging both-on to −236). Verdict on
   insns only; the x64 win was WALL CLOCK at flat insns and there is no cross-target wall
   instrument. Owed before this is settled.
@@ -1034,6 +1036,19 @@ not occur. Probed with `quit`, and the zero validated by firing the complement. 
 (`vnm`/`vrg`/`vcls`) and every reader destructures, so a wrong-arity entry answers `()` rather
 than a silently shifted field. love0's build-tool boot does not splice `pat`, hence the file's own
 `use` — the module is already in `libs0`, so no frontend changed.
+
+**2026-08-13 — THE LADDER step 3: `fcb` rolls back.** The float-compare lane discards its
+int-flavored emission and re-evaluates both sides, and it opened with a full `vmflush` for a
+reason its own comment stated: a pin born in the dropped forms would survive with its establishing
+load gone. ⚠ **that invariant is narrower than the flush that served it** — a pin from BEFORE the
+lane keeps both its load and its truth. So the lane snapshots at entry (`m9`, before any `cgexpr`)
+and `fcb` `vmset`s it back: births die, predecessors live, and the re-evaluation's own drops and
+pins land on the rolled-back map exactly as they would have on a fresh entry. **Misses 81 → 69**
+on love.c/x64, reproduced to the figure. Priced: `.text` +8/+12/+8 x64/arm64/riscv64 and **+0 on
+thumb2, which has no pool to preserve into** — the tell that the bytes ARE the preserved pin
+holding a register out of a four-wide pool, and that is step 5's to price, not this verb's.
+Dynamic neutral: three interleaved corpus-minus-boot rounds put every delta (−0.06M, +2.2M,
++1.1M insns on 33.3G) inside the baseline's own 3.9M spread.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) — each a

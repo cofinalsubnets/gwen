@@ -1379,17 +1379,21 @@
        ((<e = 'bin) && member? <>e '(eq ne lt le gt ge))
         (: op <>e
            lhs <>>e rhs <>>>e
+           m9 (vmsnap g)                                ; the pre-lane map: fcb's ROLLBACK point
            ; ⚠ LAZY left-then-right: the left PARKS (allocates) before the right evaluates --
            ; allocation order must match execution order, or the right's freed inner temps alias
-           ; the parked left. the float lane FUSES: discard the int-flavored emission (⚠ the map
-           ; flushes first -- a pin born in the dropped forms would survive with its establishing
-           ; load gone), re-evaluate both sides through the double shuttle, then branch off the
-           ; compare. UNORDERED (a NaN side) is false for every relation and true only for !=.
+           ; the parked left. the float lane FUSES: discard the int-flavored emission (⚠ and the
+           ; map ROLLS BACK to m9 -- a pin born in the dropped forms would survive with its
+           ; establishing load gone, while a pin from BEFORE the lane keeps its load and its
+           ; truth. a transaction, not a clobber), re-evaluate both sides through the double
+           ; shuttle, then branch off the compare. the re-evaluation's own drops and pins land
+           ; on the rolled-back map exactly as they would have on a fresh entry.
+           ; UNORDERED (a NaN side) is false for every relation and true only for !=.
            ; x64: above/ae read CF=0, which unordered sets, so < and <= compare SWAPPED, and
            ; ==/!= carry the parity bit in the BRANCH STRUCTURE. arm64: fcmp's gt/ge/eq/ne are
            ; unordered-false natively, so every relation is ONE branch and negrel spells false.
            (fcb z9)
-            (: _ (vmflush g)
+            (: _ (vmset g m9)
                a (cgexpr g env lhs ())
                (? (bad? a) 'bad
                   (: af (? (t32? g)                      ; the gp shuttle moves the PAIR on t32
