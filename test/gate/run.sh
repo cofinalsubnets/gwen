@@ -20,17 +20,8 @@ a=
 n=$1 love=$2 sen=$3
 shift 3
 
-# ⚠ `-l /dev/stdin`, not the bare stdin lane -- the corpus still arrives on the SAME pipe,
-# in one stream, in one scope. What changes is which port reads it: a pipe is deliberately
-# unbuffered (host/main.c's stdin_take lends a read run only to a SEEKABLE stdin, since you
-# cannot put back what you over-read from a pipe), so the reader gulps a piped corpus ONE
-# BYTE AT A TIME -- ~1940 instructions a byte against ~175 through an ordinary buffered
-# port. Opened by name it gets its own buffer: ~3.4% off each gate, and the ownership
-# contract does not apply because a gate hands stdin to nobody afterwards.
-# (Strictness is UNCHANGED -- both lanes quit 1 on a scare, a missing name and a failed
-# assert alike. Only the read path differs.)
 o=out/host/.test_$n.out
-if [ -n "$a" ]; then $love "$@" < /dev/null > "$o" 2>&1; else $love -l /dev/stdin > "$o" 2>&1; fi
+if [ -n "$a" ]; then $love "$@" < /dev/null > "$o" 2>&1; else $love > "$o" 2>&1; fi
 r=$?
 cat "$o"
 [ $r -eq 0 ] || { echo "FAIL $n (exit $r)"; exit 1; }
