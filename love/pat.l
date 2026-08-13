@@ -241,18 +241,17 @@
            (flat cs els)))
    ; --- ALTERNATIVES, and why they split two ways ------------------------------
    ; (p1 || p2) fits when either does -- `|` too, the way `><` and `link` are one tag.
-   ; ⚠ BRANCHES THAT BIND CANNOT SHARE A CLAUSE: a nom's access form is where it sat,
-   ; and it sits somewhere else in every branch, so one test cannot serve two shapes.
-   ; so there are two lanes, and which one runs is decided by the branches, not by
-   ; where they are written:
-   ;   binds nothing -> ONE clause, the branches `||`ed into a single test (pw above).
-   ;     nests anywhere, costs nothing, and is what a literal alternative wants.
-   ;   binds         -> ONE CLAUSE PER BRANCH, sharing the body. only at the top of an
-   ;     arm, where a clause is a thing there can be more than one of; nested, it is an
-   ;     expand-time scare rather than a shape that quietly binds the wrong accessor.
-   ; ⚠ the shared body is written once PER BRANCH -- the same trade `tree` makes for the
-   ; else, and the reason the alternative is not the cheaper spelling of two arms; it is
-   ; the spelling that says the bodies are THE SAME one.
+   ; ⚠ A NOM'S ACCESS FORM IS WHERE IT SAT, and it sits somewhere else in every branch,
+   ; so one access cannot serve two shapes. Two lanes answer that, and which one runs is
+   ; decided by WHERE the alternative is, both obeying first-branch-wins:
+   ;   at the top of an arm -> ONE CLAUSE PER BRANCH, sharing the body. A clause is a
+   ;     thing there can be more than one of, so each branch keeps its own plain accesses
+   ;     and nothing is asked twice. The body is then written once per branch -- the same
+   ;     trade `tree` makes for the else, and the reason an alternative is not the cheaper
+   ;     spelling of two arms: it is the spelling that says the bodies are THE SAME one.
+   ;   nested          -> ONE clause, the branches `||`ed, each nom read from the winner
+   ;     (pw above). Costs a re-ask per BOUND nom, and a literal alternative binds none --
+   ;     so the common one is exactly one test, at any depth.
    ; ⚠ THE BODY BINDS THE UNION, and a nom this branch did not bind is THE UNIT. That is
    ; the whole of the different-noms question: binding it to () is what stops the body
    ; reaching whatever wears that name OUTSIDE, which is the one way this could answer
