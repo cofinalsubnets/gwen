@@ -287,6 +287,149 @@ Learned by measuring, several times each; check a new lever against these before
    mooncc's remaining symbol surplus over gcc is now a real inlining difference rather
    than bookkeeping, and has never been sized.
 
+## the convergence plan — where gen.l is going, and why not a rewrite
+
+Recon verdict, 2026-08-13: **incremental, and a from-scratch rewrite is refused.** Three findings
+settle it.
+
+**The defect is 14.5% of the file.** The machinery this plan touches is 1,211 lines — the
+vmap/pins/keeps/`loscan`/`lomig`/`loseed` region (390), `lpick`/`ntouch`/the regen driver (400),
+`alive`+`rgset` (350), `rdsp` (71). The other **7,131 lines are target lowering, ABI, type layout
+and four backends**, which have no design problem and carry every hard-won cross-target fact.
+
+**And a rewrite cannot inherit the safety net.** `test_fixpoint` rebuilds `love` BYTE-IDENTICALLY,
+`test_ccarm64`/`test_ccriscv` differential 129/128 programs against gcc on two arches,
+`test_raw_arm64`/`test_raw_riscv` run ~4,150 tests each. Byte-identity is the anchor every rung on
+this arc has steered by, and a new `gen.l` has none — while still needing the old one to build it,
+since mooncc is self-hosting.
+
+**One constraint does not dissolve either way.** The keep decision must PRECEDE the emission that
+determines whether it is valid, so optimism-with-verification is a reasonable answer to a real
+phase-order problem, not accumulated cruft. ⚠ `rdsp` is a MACHINE-form transfer function (`li`,
+`mov`, `push`, the alu roster) — it cannot supply the parse-tree clobber fact `loscan` needs
+before emission. Any plan that assumes it can is wrong; this one did, and was corrected.
+
+### the target shape
+
+* **One clobber fact, many queries.** Ten analyses walk the code today — `alive`, `nreads`,
+  `nrdse`, `rdscan`, `ncls`, `loscan`, `blscan`, `aelem`/`aeoff` over the parse tree, `rdsp` and
+  `ntouch` over emitted forms. ⚠ "how often is this touched?" has TWO answers depending on which
+  gate asks, against two representations. The step that pays is narrower than unification: make
+  `loscan`'s refusal set and the lowerings' flushes **derive from one parse-node→effect table**
+  instead of two hand-kept lists that drift. The drift is what the regen spends four whole-function
+  attempts discovering.
+* **Residency as one product, not five mechanisms.** A home is (function × cs), a pool pin
+  (statement × pool), a loop keep (loop × pool), a cs borrow (loop × cs), a roster spill-around
+  (loop × pool + per-call reload). They already share `g 'vmap` as substrate and already carry
+  cost terms (`nc <= nreads`, `tc <= 1 + nx9`). Collapsing the PRICING into one frequency-weighted
+  formula touches the 390+400 line regions and no target lowering. Phase 1 step 2 was a
+  down-payment on exactly this and paid −206,000 dynamic.
+* **Retire the `vmflush` verb.** 30 call sites, against 6 `vmcflush` (the precise call flush) and
+  13 `vmeet` (the precise join): "kill everything" is the default because it is the only verb a
+  lowering can reach for without thinking. Each site should declare what it clobbers. ⚠ this has
+  an ideal incremental gate — convert one site, and `test_fixpoint` either proves byte-identity or
+  the change is real and must be priced. `fcb` is the worked example: it wanted transaction
+  ROLLBACK (its int-flavored emission is discarded) and spelled it as a full flush because no
+  rollback verb exists.
+* **One key space.** Scalars key by name, elements by a minted `"x[3]"` string that `aeoff` parses
+  the digits back out of. Key by location (base, offset, width) and the array leg collapses into
+  the scalar path — ~80 lines, separable (measured: zero of the 165 loop-keep customers are element
+  pins).
+* **Spend the complexity budget on admission, not packing.** The span census says ranges are
+  near-whole-function and interval SHARING buys +4%. Use the simplest assignment that works.
+
+### what stays, and why
+
+`lochk`/`lomiss`/`lobar` and the regen retries STAY — the 2026-08-13 miss census priced the
+optimism as load-bearing (the keeps are +184,000 dynamic) and found it discovering genuine
+conflicts, not papering over a decidable rule. Removing it is not reachable by rewrite either.
+⚠ and every step here is gated on `perf stat -e instructions` over the corpus, never on `.text`:
+static size is not a weak signal on loop-body work, it is an INVERTED one.
+
+## refusals — priced, closed, do not rebuild
+
+⚠ this section exists because chronology buried one of them and it was built a SECOND time off a
+census table that could not see the verdict. Read this list before proposing a mechanism.
+
+* **cs seats for the call-crossing class, retrofitted onto `repack`** — refused twice (2026-08-12,
+  then rebuilt from the frame-bucket census and re-refused to the sign; threshold sweep M=2 +715
+  insns, M=3 +269, M=5 +102). **A cs seat can never be the store's source — sources are
+  caller-saved** — so the rewrite is a frame touch turned into a reg-reg mov one for one, plus the
+  save/restore pair. The `lvgp` class pays precisely because its seat CAN be the source. No pricing
+  gate repairs it: a gate tight enough to be safe admits nothing. ⚠ **but the refusal is a property
+  of RETROFITTING, not of cs seats** — under vreg emission the store's source is a vreg the
+  allocator assigns, so it can BE the cs register and no mov exists to drop. Reachable by rung 5
+  proper, by no patch to `repack`.
+* **deleting `pcs`** (2026-08-12) — ablates to +1,004 B of .text and ZERO corpus instructions
+  (39.466 G both ways against a ±5 M instrument floor). Regresses size, pays nowhere. Holds until
+  promotion covers those bytes — and promotion structurally cannot (see the ledger).
+* **iv-b, call-crossing optimism at `vmcflush`** (2026-08-12) — built whole, +545 insns, 56
+  functions worse and 2 better. The census is the verdict: 1,088 crossings, **630 die unread**, 454
+  want a reload, 4 found a seat. Optimism trades loads for pressure and pressure wins. ⚠ the flush
+  cannot tell the 454 from the 630 — the read count is in the AST, the crossing is found in the IR
+  — so the signal that would price the decision is exactly the one the site lacks. **The vmap must
+  retire, not be extended.**
+* **ablating the loop keeps** (2026-08-13, phase 1 step 3) — static said delete (−300/−275/−391 B,
+  thumb2 byte-identical); dynamic said **+184,000 insns**. Text size is structurally blind to a
+  mechanism whose whole output is loads removed from loop BODIES.
+* **subsuming the keeps' optimism by a coverage rule** (2026-08-13, phase 2) — the census aiming it
+  was an instrument artifact; corrected, only 12 of 34 misses are the coverage case and 9 of the 14
+  head flushes that kill a live keep are inner loops `loscan` correctly REFUSED.
+* **`fcb`'s pre-lane rewind** (2026-08-13) — sound and it works (misses 81→69), and still loses:
+  +8/+12/+8 bytes x64/arm64/riscv64, dynamically and compile-time neutral. Capacity, not
+  correctness. ⚠ do not re-propose it on the register argument ("pins can never live in r0–r3") —
+  true about registers, wrong about the flush, which exists for the DISCARDED emission.
+* **the loop borrow on a64** — a net loss there (−187 alone, dragging both-on to −236). Verdict on
+  insns only; the x64 win was WALL CLOCK at flat insns and there is no cross-target wall
+  instrument. Owed before this is settled.
+* **`rasg`: argument-register targets, and the bridge direction** — each bought with a regression.
+  A mint moved onto an arrival drops rides; a death-copy moved onto r0 robs stld's forwarding.
+
+## traps paid for
+
+**Instruments.** ⚠ a "last X before Y" record is an attribution only if something CLEARS X when
+the thing is re-established — otherwise it reports staleness with a straight face, and plausibly
+enough to be written into a doc (the 2026-08-13 miss census, seeded per function while the regen
+re-runs each function four times). ⚠ `make out/host/mooncc.image` relinks love through the CURRENT
+gen.l, so a reproducer can crash in the instrument rather than the subject — hand-bake on a
+saved-healthy binary. ⚠ the make lane compiles through `mooncc0.image`, love0-baked from the
+TREE's gen.l, so a variant test leaning on `make` is testing the tree, not the variant. ⚠ an
+image skews against a rebuilt `love` — symptoms are a segfault or `;; missing moon-main`, not a
+diagnostic. ⚠ **diff the artifacts you already have before you instrument**: ablation binaries
+answer "which functions and how much" for free.
+
+**Measurement.** ⚠ a codegen rung owes a COMPILE-TIME A/B, not only a codegen one — the first ship
+of copy propagation cost **78% of the compiler's speed** (13.2 → 23.4 s) and every gate stayed
+green, because gates ask whether the output is right and none asks what it cost to produce.
+⚠ `build` runs TWICE per fn (ir1 and the regen), so a fixpoint in the build tail is paid four
+times. ⚠ measure cycles interleaved and in rounds, read the MINIMA beside the median: two builds
+10 bytes apart read 0.3% apart on a corpus at IPC 2.7. ⚠ two agreeing samples are not a control
+(clang's chacha read 198.1 twice by coincidence, then 169.9/182.7). ⚠ the mcobj cache is not paid
+once per tree — a rung that changes the compiler changes every member hash.
+
+**Positional and name-keyed reasoning.** ⚠ `unframe` reads the prologue BY POSITION (`sv3` asks
+whether form 4 is exactly `(st r4 -8 r3)`), so a save spliced at index 4 displaces it and kills the
+caller's rbx — presenting as a segfault in `main` AFTER the corpus printed `tests pass`. ⚠ a
+name-keyed bisect over one TU's functions is not a bisect when the switch matches across every TU.
+⚠ a law spelling a frame OFFSET keeps PASSING while counting the wrong thing — `(= 1 (ldsp wlkf
+8))` counted a cs restore in place of the park it named. Anchor laws on SHAPE, and verify in both
+worlds: a law that passes pre-rung and post-rung describes residency rather than layout. ⚠ a law
+page owes a run per SIGNATURE change, not per behavior change (six one-arg `csdefs` asserts
+under-applied to a truthy closure and test_moon was red unnoticed).
+
+**Targets and coverage.** ⚠ **a guard that hides a target also hides the bugs that target would
+have caught** — `coal`'s x64 bail hid that `lvout` silently UNDER-approximates on any target whose
+exit is not `(ret)`/`(jmpr)`; v6m's exit is POP-PC, so the function had no exit the kit could see,
+and an exit nothing can see is one where nothing is live. ⚠ a latent unsoundness only shows when
+something raises the stakes (the fold rode unguarded for two rungs by luck). ⚠ a floor cannot be
+read off an x64 shape — deriving it from `pro4?` handed arm and riscv a floor of 0. ⚠ enumerate
+op censuses over the CORPUS, not one program: A-1's eleven ops were twelve, because love.c never
+converts a double to an unsigned.
+
+**Process.** ⚠ the shell's cwd silently reset to the POST tree mid-session and a falsification
+flip quietly read the pre-rung sources and answered plausibly — absolute paths for every gate in a
+worktree session, and treat a flip that agrees too easily as a tree check first.
+
 ## the laws a new rung must hold
 
 * **unframe is correctness, not optimization** — the glaze ABI rides Ip in rbp, so a
@@ -333,6 +476,11 @@ Learned by measuring, several times each; check a new lever against these before
 
 ## the rungs, dated (git log is the full story; these are the shas)
 
+⚠ condensed 2026-08-13, 1,431 → ~780 lines. Landed work collapses to its sha and the number that
+moved; what a future session would ACT on — the priced refusals and the traps — was pulled OUT of
+chronology into the two sections above, because burial in this ledger is what let a refused
+mechanism get built a second time.
+
 2026-07-16 · vmap+addrfold pair 3110edcd (the pair is the lever; each alone loses) ·
 branch fusion 1ea516b3 · leaf-frame elision 4ea1ba3c.
 2026-07-17 · reservation-orphan sweep bc6da67d (the arc's biggest: cycles −8.5%) · park
@@ -352,991 +500,195 @@ mov-husk fold 6793a12b · alu read-through 3d11770c · rename sandwich d836b230 
 cginl park 591593fc (payload: the pears miscompile fix) · body-decl binds 1317b30e ·
 priced int-param homes 33af3413 · cskeep b1ac6f03 · stage sigs ba5af92c · seat table
 6c6cbcb9 · g-pin record bdc7e886.
-2026-08-10 · the destination die's asn/decl lane: constant statement stores and slotted
-inits deliver as store-immediates, a homed init lands in its home with no r0 bridge
-(dyn insns −0.72% exact/disjoint, .text −0.69%; the payload: unhome's pre-entry rename
-hole — H read before its (mov H A) pair carries an arrival — fixed and law-pinned;
-test_libc's memchr differential was the catch, the third time that gate earned its keep).
-2026-08-10 · the destination die's compare lane: cbranch's left pre-aims at its park
-(pin the want before it evaluates; vpark recognizes the delivered value), so a member
-compare loads straight into the pool register — lvm_eq's per-member bridge mov gone
-(dyn insns −1.50% exact/disjoint 53.140G→52.344G, .text −4096B/−0.69%, cycles −1.9%
-disjoint but under the layout floor; a call on either side bars the aim, both faces
-law-pinned and falsified).
-2026-08-10 · the destination die's arg-seat lane: the register group emits right-to-left,
-so the FIRST cell arg evaluates last and nothing after it writes its seat — it aims
-there and an honored load skips the whole push/pop cell (the frame drops too when the
-staging was its only use). dies? learned the call door alongside (a call reads only the
-argument file; a tail target is a function symbol, labels dot-interned), so the address
-walk's r0 husks fold. Modest by design — unframe's adjacent st/ld→mov fold already
-served the common shape — dyn insns −0.07% exact/disjoint 48.815G→48.781G, .text
-size-neutral. dir only; a HOME seat keeps the cell (it spills after the staging evals,
-and an ezm may read it); a zero-form delivery (riding home, vmap pin) keeps the cell
-(its value predates the staging). All three guards law-pinned, two falsified by flip.
-2026-08-10 · the destination die's bin value lane (the fourth, closing the emission
-side): a LOAD-shaped left (dot/moor/deref) aims at its park before it evaluates, vpark
-sees a delivered value, and the combine runs 3-address off the park — the bridge mov
-gone. ONE aim per spine: the first build aimed at every level, drained the pool
-top-down, and pass 1's wide roster handed out param homes — the wraps law caught it
-(b spilled in a fn owed zero wraps); a var/num left re-aims free via cgleaf and a
-nested-bin left already rides a pool register, so load shapes are the whole win
-profile. A call on either side bars it; a constant right rides immop unchanged.
-dyn insns −0.04% exact/disjoint 48.778G→48.760G, .text size-neutral. Law-pinned
-(delivered park + 3-address combine + both bars), two flips falsified.
-2026-08-10 · array slots, first rung (lever 1: the vmap's ARRAY LEG): a once-declared
-1-D gp-scalar array whose every appearance is x[e] gets element pins under minted
-content-compared keys ("x[3]"). READS pin (want-aimed load into a pool register, the
-next read zero forms); WRITES take residency too (the rhs aims at a fresh pool
-register, cvt IN PLACE — canonical like an int home's def — store from it, re-pin:
-the read-after-write is zero forms) or, unhonored, drop; a variable-index write (or
-post/rmw/fill) drops the whole array by key prefix. The ESCAPE gate is the soundness
-anchor: any bare x is decay and excludes the array — so no pointer can alias an
-eligible one and no pointer analysis exists; the non-retaining mem trio
-(memcpy/memset/memcmp) is licensed by name (cc_block's fill is THE idiom; the call's
-own vmflush retires every pin anyway). chacha −19% wall (5.40→4.38s), poly −10%
-(1.81→1.63s), moving together per the gauge; corpus dyn insns a wash (love.c's hot
-arrays are heap trays through pointers — ineligible by design); .text size-neutral.
-Five law shapes (multi-read pins, write residency, unhonored drop, variable-index
-drop-all, the escape gate), two flips falsified, and a six-shape torture C
-differential vs clang. The catch worth keeping: the first probe's chacha number
-barely moved — the state array was ESCAPED by its own memcpy fill, and the licence
-list is what unlocked the motivating shape.
-2026-08-10 · array slots, second rung (the FRAME-DIRECT element lvalue, the clval
-fold lever 1 named): a constant-indexed frame-array element is a STATIC slot
-(off + k*elsize), so afd answers the folded offset and three lanes stop computing
-addresses — clval's deref answers ONE lean (consumed like a scalar's, so element
-reads stop pinning fesc), the asn arm stores st r4 off' straight (no park, no
-shuttle — even past a call on the right; the write residency rides unchanged), and
-post gets the store-direct twin (direct ld/add/st). Escaping arrays fold too (the
-address is the same address; no vuarr gate) — only pair/d128/float elements keep
-the walk. Payload one: with no lea/lean left in such fns, deadst's whole-fn gate
-OPENS and a write-only slot's store drops — the store-elision closure need arrives
-free in the call-free case. Payload two: fesc unpoisoned unlocks leaf ride/sibcall/
-homing for element fns — which surfaced that the regen was never licensed by the
-leg itself (it rode nr>0 or fesc side effects): the array universe now licenses
-its own regen (two? au on both gates; q0, the no-param law fn, is the witness —
-without it the vmap never arms there). Corpus verdict, measured honestly: love.c +
-host compile BYTE-IDENTICAL (the cipher stores were already collapsed by
-pins+addrfold once the rhs went zero-form) — the pay is long/callish-rhs stores,
-escaped arrays, no-param fns, the elision, and the structural unlock; regression
-zero by construction. Laws: no-lea + elided-store + kept-store on f, q0's
-self-licensed pins; three flips falsified; the torture differential grew five
-shapes (callish rhs, escaped, narrow cvt, au license, ptr elements).
-2026-08-10 · loop-head survival (the vmap's first boundary): at a loop head the pinned
-map KEEPS, under OPTIMISM WITH VERIFICATION — every arriving edge (back jmp, continues,
-the cont/cond label fall-throughs, breaks vs the enclosing keeps) checks map ⊇ keep; a
-miss records (headlab nm) and the regen retries with it barred, so only a zero-miss
-build ships. Writes re-establish IN the pinned register: the store hints aim at the
-existing pin (honored free), unhonored int writes FORCE (store + one mov + re-pin;
-dead if never re-read), and ++/-- steps in place (the kept post twin). A loop whose
-subtree carries a call/asm/goto/label/switch/case keeps nothing (statically, zero
-cost); a variable-index element write drops mid-loop and the check bars it. With
-deadst, a call-free loop fn goes fully register-resident, frame gone (lp1/lp2/lo6).
-chacha20 −24.5% dyn insns, −74% wall (4.74s→1.25s) — the QR state words and counter
-ride pins across iterations; poly1305 flat as the gauge demands (already homed).
-THE EXCAVATION (the keeps forced two latent bugs into the light): (1) vmdrop filtered
-by id? while scalar map keys are parse-minted per-site strings — the drop was INERT
-across statements always; harmless while every keep died at the next label, fatal once
-maps survived loops (p0chars's strlen kept a counter whose ++ never retired the pin).
-Now content-=, like the array leg always was. (2) the post twins read the raw map
-ungated — an inlinee's i++ would find the CALLER's pin under the colliding name and
-step the caller's register; now vmon?/argseal-gated. And ONE bar with an open why:
-pinning a CALLISH write's result (a class the shipped compiler never pinned — always
-unhonored+freed) miscompiles the context-threading shape (g = ai_push(g ..) in
-love.c's analyzer); barred that day, EXCAVATED AND LIFTED 2026-08-10 (the aim hold,
-below). Laws: lp1/lp2 (registerized loops), lp3 (call refusal),
-lo6 (nested), lo7 (the bar engages — sharp against a disabled check), lo8 (force +
-kept-post under a post-loop call); four flips falsified; five loop shapes in the
-torture differential; fixpoint byte-identical, fuzz, kernel, full battery green.
-2026-08-10 · the cs borrow (the vmap's second boundary — values across CALLS): a loop
-whose subtree carries calls (and nothing darker: asm/goto/lbl/switch still refuse)
-keeps its SCALAR pins by migrating them onto free callee-saved seats at loop entry
-(`lomig`: one mov per pin, laid before the head label), and the call flush learns to
-spare them (`vmcflush`: pool pins die, borrowed seats ride — the callee preserves
-them). The grant is the regen's: a prescan (`blscan`) licenses the offer of every
-seat the cs homes left, the attempt loop saves/restores them exactly like cs homes
-(same cssv/epi forms, so cskeep accepts by construction), and a zero-miss build that
-took fewer seats than offered rebuilds once on the used set — no idle saves ship.
-Soundness is UNCHANGED machinery: the same lochk edges verify map ⊇ keep, a lane
-that clobbers or full-flushes (splices do) just misses and bars — which is also why
-an INLINED call still refuses the keep (lp3's law, reworded) while an extern one
-keeps (lp4). Writes re-establish through `vmrepin` (the force movs into the seat);
-the targeted-arg lane serves a kept name from its seat (`mov rT seat` for `ld` —
-sound because a sibling's call spares cs and staging never allocates one). Gauge:
-the two-TU call-loop shape −19.6% wall at FLAT insns — the win is the broken
-store→load chain through the slot, not count; the corpus and spec.l flat; ql's
-depth-1 counter now rides a borrowed seat with its slot stores swept. Laws: lp4
-(seat-served arg, in-place step, cond on the seat, one post-loop slot read), ql's
-borrow save/restore pair; three flips falsified (no spare, no grant, no arg ride).
-The callish-write pin bar stayed one more rung (its why then still open); s in
-`s += f(i)` refused by the bar — until the aim hold (the next entry) lifted it. Ten call-crossing
-torture shapes (fn-pointer calls, nested, break/continue, global-writing callee,
-address-taken, seat pressure, goto refusal) agree with gcc; fixpoint byte-identical,
-fuzz, kernel, full battery green.
-2026-08-10 · the aim hold (the callish why, found — the bar lifts): the ana_d
-miscompile was never about pinning call results — it was THE FREE-LIST/PIN SPLIT.
-'pool and 'vpin agree only at psreset boundaries; the callish aim opened a window
-between them: hint = the existing pin's register, the rhs's call flush unpins it
-(vmcflush), a SPLICE body's own statements then psreset with vpin empty — handing
-the aim register to the free pool — and the force re-pins it with 'pool never
-re-filtered. A statement boundary heals the split (the next psreset re-excludes
-vpin), which is why plain statements never reproduced: the reachable shape was
-ana_d's COMMA CHAINS, where leg N+1's ralloc double-books the register leg N still
-pins — the spliced ai_ok's AND landed ON g's pin (`and r7 r7 7`) and pop1 walked
-g&7. Twenty lines reproduce it; the fix is three-fold and principled: (1) the aim
-HOLD — the hint rides 'rpin across the rhs, the splice binds' own discipline, so no
-reset can free it and no ralloc can take it (load-bearing: eviction alone cannot
-stop a mid-rhs claimant living past the force); (2) the pin doors evict their
-register from 'pool outright — "a pinned reg is never on the free list" was the
-comment's claim, now it is the code's, continuously; (3) ralloc SCARES on handing
-out a vpin/rpin member — the whole class is loud forever. Both bars lifted (scalar
-+ element): callish writes aim and pin, `s += ext(a[i]) + n` keeps its accumulator
-on a borrowed seat THROUGH the call (zpf's new law), lp4's s re-establishes in its
-seat with even the pre-call park reading it. Laws: the aim-hold shape (the spliced
-AND must not land on the pin, pop reads through the LIVE pin) — the plain lift
-reds it; calltort t11 (the ana_d shape, runnable); corpus flat, all gates green
-(battery, fixpoint byte-identical, fuzz, kernel). The excavation cost one more
-taint lesson: `make out/host/mooncc.image` relinks love through the CURRENT gen.l,
-so the "reproducer" first crashed in the instrument, not the subject — hand-bake
-on a saved-healthy binary before trusting any compiler-under-test.
-2026-08-10 · spill-around (the keep past seat exhaustion): when a callish loop holds
-more scalar pins than the borrow grant has seats, the surplus no longer drops — a pin
-still worth its reloads stays on its POOL register, rostered (g 'saro), and every call
-in the loop reloads it from its slot (`vmcflush` keeps the pin and ANSWERS the reload
-forms; the call lanes lay them after the clean, beside the home relods). Write-through
-makes the spill half free — the slot already holds the value at every call — so the
-whole cost is one ld per call per rostered pin, and the license prices exactly that:
-reads in the loop subtree >= its calls (`nreads`, an asn's own lhs excluded, vs `ncls`,
-a nested loop's calls ×8), so a written-only pin or one read less often than the loop
-calls refuses and no dead reload ever ships. Soundness is again UNCHANGED machinery:
-the reload re-establishes the exact pair the keep claims, lochk verifies the same
-edges, a splice's full flush still misses and bars. The roster nests (saved/restored
-per loop, enclosing entries ride inner keeps as-is) and dies with its loop. Two
-knock-ons: `skiprel` learned to peel roster reloads after a ret-position call
-(pool-reg lds only — the first draft peeled cspool too and ATE THE EPILOGUE'S OWN cs
-reloads, refusing every marked musttail; epim? verification keeps the loose peel
-honest); and `vmset` became a pin door (its regs leave the pool) — the riscv64 love.c
-build proved the armor's worth: a rostered pool pin dropped by a splice, freed at
-psreset, then re-asserted by the step label's vmset split the free list from the pin
-set, and ralloc SCARED where pre-armor it would have silently double-booked. Gauge: the two-reads-per-var seat-exhausted call loop −5.0% insns (2/iter),
-cycles flat-to-better (the host hides removed work as slack — the ship gate's
-wall-neutral-insn-cut clause); the one-read shape byte-identical (the license refuses
-the wash), corpus flat. The nested shape shows the standing conservatism: a pin the
-OUTER loop drops is dead to the inner keep — outer rostering is correctly refused by
-the ×8, but the inner loop can't rescue what vmset already killed (the keep-depth
-residue, recorded). Laws: spl (four seats then the post-call reload into the pin, the
-in-loop use reads the register, two slot reads total) reds on the license flip; nrg
-(write-only x refuses: no dead reload). Eight spill-around torture shapes (two calls,
-nesting, continue/break, cond calls, tail-from-loop, callish for-step, do-while)
-agree with gcc at -O0/-O1; battery, fixpoint byte-identical, fuzz green. And a
-process lesson beside the taint one: the shell's cwd silently reset to the POST tree
-mid-session, so a "falsification flip" and a law run quietly read the pre-rung
-sources and answered plausibly — absolute paths for every gate and probe in a
-worktree session, and treat a flip that agrees too easily as a tree check first.
-2026-08-11 · entry seeding (keep depth — the keep learns to CREATE): a keep only ever
-preserved existing pins, so a hot scalar arriving at a loop unpinned — an outer keep
-dropped it, or its reads sit mid-expression and never pinned, or a pre-loop call
-killed it — stayed a per-use load forever. Now the loop entry SEEDS it: `loseed`
-walks the subtree once (`rdscan`, a tablet of interned read counts — the first draft's
-per-candidate string-compare walks were quadratic and crawled on love.c), and each
-unpinned vuniv scalar with reads takes one slot load laid beside the seat movs:
-callish loops seat first then the roster's own pricing, clean loops pin the pool.
-The free file is pool0 minus the KEEP's regs — not g 'pool, whose dying-pin regs
-wait for psreset; the seed's vmpin evicts the corpse (one reg, one name) and the
-seed load lays after the movs that read it. One reg stays for the body's aim. The
-same lochk edges verify; a clobber misses and bars a seed like any entry — and the
-one genuine trap was the CAP'S CONTRACT: the keep-nothing lonone attempt "cannot
-miss", but a seed that ignored lonone still could, so no bar ever accumulated and
-the attempt loop spun forever (vbin_fill's twenty splicey loops; the fix is one
-gate: lonone seeds nothing). The peepholes compose: stld turns a seed whose store
-is still downstream into the arrival mov and deadst sweeps the spill, so a seeded
-param or fresh local often never touches memory at all (ql's n, lp4's n, cln's b).
-Gauge: the seat-covered call-loop fn −10.3% insns, the two-reads shape −7.9%, the
-nested main-level shape +0.015% insns for −1.1% cycles (roster reloads trade 1:1
-with use loads there; the win is the broken chain), cbm and the corpus flat. Laws:
-ql (n's seat by seed, both conds register-register), irB/irBa (the call-killed
-param re-enters by seed, x64 + arm64), lp4/zpf/spl re-truthed with their seeds —
-the seed-off flip reds them; five-shape seed torture (trip-0, nested rediscovery,
-call-killed, seeded-then-written, continue/break) agrees with gcc; battery,
-fixpoint byte-identical, fuzz, virt-on-hart all green.
-2026-08-11 · splice-crossing keeps (the end-label meet): a loop keep survived a real
-call (seats ride, rostered pins reload) but died at an INLINED one -- cginl ended
-every splice with an unconditional vmflush at its end label, so inlining a call, an
-improvement, cost the loop its register residency (the old lp3 refusal). The flush
-was over-conservative: the end label is a forward JOIN whose arriving edges are all
-known (the body's fall-through plus one jmp per mid-body return), no pin is ever
-BORN inside a splice (vmon? is false while inlining), and no store in the body can
-alias a pinned slot (vuniv already excludes address-taken names) -- so every edge
-map descends from the entry map by deaths only and the meet holds. The machinery is
-the if/else join's, worn by the splice: the ret door snapshots the map on each jmp
-edge into inlret (g 'inlsnp, saved/restored per splice like inlret itself), and
-cginl replaces the end flush with vmset over the vmeet of the fall-through (gated by
-vmout?) and every snap; a DECLINE still flushes (the discarded-emission hygiene
-law). What rides: a call-free inlinee costs the pins nothing at all; an early-return
-body meets its edges (a pin killed on ONE path dies -- the intersection is exactly
-the soundness); a callish inlinee's real call is spared by the same vmcflush as an
-extern call (seats ride, outer rostered pins reload inside the splice); an inlinee
-carrying its own LOOP still refuses honestly -- the inner head flush empties every
-edge map, which is why lp3's law survives with its why reworded. Gauge: the
-call-free-inlinee loop −4.3% insns, the callish-inlinee loop −21.7% insns (i/s/a/n
-all seat through the inlined wrapper: cmp register-register, the arg served from
-the seat, the step in place -- ~4 loads + 2 stores per iteration down to the s park
-pair), cycles flat on the host (removed work hides as slack -- the ship gate's
-wall-neutral-insn-cut clause), the loop-inlinee wash count-identical, cbm twins
-byte-identical, corpus flat. The aim-hold law re-truthed: g in the ana_d shape now
-rides a borrowed seat through calls AND splices (the and-not-on-pin claim held, on
-new registers). Laws: slk (seat mov + seat read past a call-free splice, one
-post-loop slot read), erk (the same through two ret edges), wlk (callish inlinee:
-seated cond, seat-served arg, in-place step) -- the meet-to-flush flip reds them
-and un-seats the aim-hold law's g; ten splice-crossing torture shapes (one-sided
-call, param-writing, depth-3 nesting, loop-carrying, continue/break, fesc,
-seeded-then-written) agree with gcc -O0/-O1 across two arg sets; battery (now 132),
-fixpoint byte-identical, fuzz green. And an excavation beside the rung: the bench
-harness found the weak crt0 tail passing the RAW SP to an arg-taking main in a
-libc-free link (argc read stack noise -- nondeterministic segfaults on the shipped
-compiler; nolibc's strong __ai_start had hidden it everywhere else). Fixed in its
-own commit (fdbd7aba): the weak tail unpacks argc/argv on all three arches, and
-test/cc/131-argv.c pins it in the battery.
-2026-08-11 · element pins across calls (the element arm): a constant-indexed element
-pin ("x[3]", the vmap's array leg) died at every call -- lomig's walk refused any
-name outside vuniv, so a callish loop reloaded its hot elements per use while seats
-sat free. But a vuarr array is local and non-escaping, so an element's slot is a
-STATIC frame offset recoverable from the minted key itself (`aeoff`: prefix-match
-the array over vuarr, sound the digits, afd's own width gate) -- and with the slot
-static, the element arm in lomig seats and rosters exactly like a scalar's: free cs
-seats first, then the spill-around license priced by a per-key read counter
-(`nrdse`, an asn's own element lhs excluded), the reload one direct ld. vmcflush,
-lochk, lobar and the regen ride unchanged -- a variable-index write still drops the
-whole array and the edge check bars it (lo7's law untouched). One knock-on: the
-frame-direct element write re-pinned through vapin, which refuses non-pool
-registers, so a written element on a SEAT lost its keep -- `vaepin` (the
-borrow-aware re-pin: csbor → vmbpin, else vapin) closes it, and epw's law pins the
-write-through + re-establish-in-seat pair. The peepholes compose as with seeds: a
-seat-riding element whose slot is never re-read loses the slot entirely (deadst
-sweeps the dead write-through store -- epc's x[1] never touches memory). Gauge: the
-two-element call loop −9.5% insns and −14.5% CYCLES (the element loads leave the
-loop's dependency chain -- a genuine wall win, not just count), the variable-index
-wash insn-flat, cbm twins byte-identical, corpus flat. Laws: epc (both elements
-seated, n spills around, x[0] one post-loop read, x[1] memory-free) and epw (the
-mid-loop element write stores through and re-establishes in its seat) -- the
-element-arm-off flip reds them; eight element torture shapes (written, variable-
-index barred, six-element seat exhaustion, element RMW, nested, continue/break,
-element-through-splice) agree with gcc -O0/-O1 across two arg sets; battery 132,
-fixpoint byte-identical, fast gate flat.
-2026-08-11 · store elision across calls (the exit meet -- the loop exit is the third
-join): every keep died at ld, so a kept var paid a post-loop reload AND kept its
-write-through stores alive (the slot's loads made them undead to deadst) -- the
-count's whole residue on call-loop shapes. Now ld MEETS its arriving edges: the cond's
-false branch (g 'brkm-free) and this loop's breaks (each break snaps its line map onto
-g 'brkm, a stack in lock-step with g 'brk; switches push/pop in lock-step and their
-snaps are discarded). The surviving pins make post-loop reads zero forms; with the
-slot load-free, deadst sweeps the write-through stores AND the entry spill -- lp4's
-i and s never touch memory at all now, and the loop runs register-pure but for the
-park pair. TWO SOUNDNESS HOLES found and closed on the way, the second latent in the
-tree: (1) the cond edge must carry kp-VERIFIED pairs only (vmeet with kp, all three
-lanes) -- a short-circuit cond exits to ld from EVERY false leg, and a pin born in a
-later leg never ran on an earlier leg's edge; kills are monotone along the cond, so
-kp survivors hold on all. (2) `pex`, the &-taken prepass, never descended into an
-element in HEAD position -- every AST node heads with a tag symbol so it never
-mattered, but an init list's first element is an EXPRESSION in head position, and
-`&lam` as a compound literal's first initializer (love.c's mm() root shape, exactly)
-escaped the scan: mm-rooted locals stayed in vuniv, pinnable, and the collector's
-root rewrite made any kept register STALE across a GC-ing call. Latent since the cs
-borrow made pins call-crossing; the exit meet's wider survival let ana_d's closure
-fixpoint hit it (an unbounded shash recursion on the corrupt analysis chain, at egg
-boot). One line closes it (pex walks two? heads), and test/cc/132-clitaddr.c pins the
-shape in the battery -- the callee writes through the registered root, so gcc is the
-oracle. Gauge: the lp4 call-loop shape −12.5% insns and −16.6% CYCLES, the
-locals+elements shape −9.1% insns, cbm −16.3% cycles at FLAT insns (the inner loop's
-slot store→load dependence chain broke -- wall, not count), fast gate flat. Laws:
-lp4 re-truthed (s+i ride out, `(= 4 ldc/stc)` -- park pair + cs saves are the WHOLE
-frame traffic), zpf (the return reads the seat, s's slot gone), spl/nrg/epc/epw/
-slk/erk/wlk re-truthed the same way -- the meet-off flip reds them; ten exit-shape
-tortures (breaks with divergent pin states, short-circuit while/do conds, for(;;),
-nested, post-loop calls, the ana_d fixpoint skeleton) agree with gcc -O0/-O1 across
-two arg sets; battery 133, fixpoint byte-identical, fuzz green. And a process lesson
-paid for twice: the make lane compiles through mooncc0.image (love0-baked from the
-TREE'S gen.l) -- swapping out/host/mooncc.image changes nothing it builds, so a
-variant test that leans on `make` is testing the tree, not the variant; hand-baked
-images + hand-linked hybrids (moon0 -pie love.o host_*.o ...) are the honest bisect,
-and a boot probe that "works" right after a cp of a known-good binary is testing
-the cp.
-2026-08-11 · params on cs seats, pmin-gated (the callish cs homes — the residue
-list's "lvm_eq a/b"): a priced callish fn's homable params take callee-saved seats
-instead of wrapped hregs — the per-call wrap pair retires for one prologue save + a
-reload per exit (the cssv/epi machinery unchanged, unframe and cskeep ride as-is),
-the home stays off g 'homes (no wrap, no shadow slot), and the granted params'
-homeregs REJOIN the regen's pool. Fn-wide grant or none; seats from what lpick left;
-never beside the loop borrow (a keep's claim wins the seat); x64 by construction
-(a64's cspool is empty). The pricing took three cuts, each caught by the per-symbol
-grower audit: raw slot reads (nr) overcount — stld/dehusk erase pre-call reads free,
-so lvm_eval paid 12 movs to save nothing; reads-after-a-call still overcount — a
-redefining store re-arms stld (g = c0(..) feeds the loads behind it); the honest
-static signal is the DIRTY LOAD — a call dirties every param slot, a store cleans
-its own, and the first dirty load per window is the reload no recovery pass erases.
-Priced nh·(1+nrets)+em < 2·ndirty. THEN THE DYNAMIC VERDICT REVERSED THE HEADLINE:
-the static grant read love.c −1,574 insns / .text −8 KB (lvm_eq 841→586,
-lvm_add_string's wrap quads gone), but the corpus A/B — same merged tree, same
-corpus, pre-rung vs rung binaries — measured **+2.7% dynamic insns** (40.95→42.06 G;
-cycles −0.9%, under the layout floor). The pmax lesson wearing the params face: the
-save/reload is a PER-INVOCATION cost and the wraps were a PER-CALL cost, so every
-early-out fast path — the dispatch fleet's whole hot profile, lvm_eq's fixnum lane
-first — pays the prologue and earns nothing. The landed gate is `pmin`, pmax's twin
-(the forward-path call MINIMUM): a grant needs every path through the fn to call.
-What survives is small and true — 13 symbols, −1,020 B, ai_ini_0 −736 the biggest
-(straight-line call-dense init, the exact shape) — and dynamically EXACT: corpus
-insns 40.95 G to the third digit, cycles −0.9%. The machinery (grant plumbing,
-dirty-load pricing, pmin) is the substrate; the fleet's 8 KB waits on SHRINK-WRAP —
-saves at the callish region's head instead of the prologue, so a fast path never
-pays — which is this leg's next boundary.
-2026-08-11 · shrink-wrap (the cs grant's second flavor, for the early-out fns pmin
-declines): the wrap moves off the prologue — region 1 (the call-free statement
-prefix) runs the pre-rung emission unchanged, params in slots and the PLAIN
-epilogue; at the split build lays a minted label + seat saves + slot→seat loads and
-flips the epilogue pin; region 2 rides the seats wrap-free. The machinery: build
-splits the statement list (cgitemx threads region-1 decls' env across), sibs
-matches tails against TWO epilogues picked by which side of the wrap label the
-candidate sits (sibjmp emits the one that matched — a region-1 tail reloading
-unsaved seats would corrupt the caller), goto/lbl bars the grant (a cross-region
-jump skips or re-runs the wrap), and cskeep verifies unchanged — its dirty-set
-fixpoint was built for path-dependent saves. The recovery passes then finish the
-job unasked: stld folds the wrap's slot loads to arrival movs and deadst sweeps
-the entry stores, so the probe's fast path is byte-identical to pre-rung. THE
-EMPIRICAL LADDER is the story: contending pp for the dispatch fleet measured
-+1.0% dynamic insns (fat grant: +2.7%) — lvm_eq alone +0.55 G — because pp's
-per-call wraps are COLD-PATH wraps: the hot early-out path keeps its registers
-and the wrap movs execute only where calls do. Every static model tried (dirty
-loads, wrap-benefit, region-1 read debit) approved grants the corpus refuted;
-the pp fleet's 8 KB of wrap bytes is dynamically already-paid-for, and only a
-frequency signal (PGO) can beat a cold-path wrap. The landed scope: !pp, every
-call-carrying path ≥ 2 calls (pminp, pmin's positive twin), dirty-load priced —
-one grant in love.c (ai_big_quot_true) plus the ez cs arm (a seat param arg is
-targetable unconditionally: staging never writes callee-saved and no sibling's
-call clobbers it), net −39 static insns, corpus insns EXACT to four digits
-(40.95 G), cycles flat. Pays a little, regresses nowhere; the machinery is the
-substrate the frequency-driven grant will ride. Residues: sk=0 shapes (cmp3 —
-first statement callish, needs a form-level wrap point), big_addsub-shaped
-declines (call-carrying paths whose dirty loads are thin), and the fleet itself
-(waits on PGO).
-2026-08-11 · SLOT REPACK + object-precise deadst (the frame lever the fifth
-diff fill named: nslot never hands a cell twice, so a frame is the COUNT of its
-temporaries — 27% of love.c's fns carried >128 B frames and 11 K stack movs paid
-disp32; deadst's whole-fn lea bar hid 11 KB of dead stores, ALL of them in the 160
-lea-carrying fns). Two pieces on one substrate, the slot map: nslot registers every
-cell in g 'slots ((off n)..), deadst's lea arm marks the OBJECT under the lea live
-(the granule refinement its own ⚠ said would lie — the map is what makes it honest;
-an unclaimed lea still bars whole), and repack — POST-CHOICE, between deadlab and
-unframe — packs objects whose live windows never meet into shared cells and shrinks
-the sub. Windows are form-index spans widened over every backedge to a fixpoint
-(linear-scan's loop extension); an address-taken object relocates whole (the lea
-moves with it) but lives to the last form and only 8-byte cells pool (wider cells
-place fresh, 16-parity held); bars mirror unframe's law (raw, loose r4, unclaimed
-touch, -8 pinned); ships only when the sub shrinks. THE PLACEMENT is the payload
-lesson: the first build ran repack inside the per-attempt pipeline and the corpus
-laws caught ql's cs lane wrapping — the rankers price param slots BY BUILD OFFSET
-(nreads/nrac/pslots), so a packed ir1 misprices every grant. Post-choice, with
-deopt restoring ir1's slot map beside the accumulators, the rankers read unpacked
-ir and the winner packs once. .text 585,440→560,864 (−24.6 KB, −4.2%), the movq
-$imm fold-residue stores −6.4 KB, dead stores −4.6 KB, median frame 72→40 B,
-disp32 stack movs 11,055→9,711; corpus dyn insns −0.25% (40.746→40.646 G), boot
-−0.60%, corpus green through the packed binary, fixpoint + vmret + the moon
-battery green. The law churn was the offsets: save/restore laws re-anchored by
-SHAPE (cspair?/spillrd?/wrapon? — the offset binds within the pair, the seat is
-repack's to choose), array laws by the lea base (aeb). Residues: 16-byte cells
-never pool (parity insurance), sk-anchored fns keep old layout on any bail, and
-slot canonicalization now makes link-time ICF worth re-measuring (~0.5 KB today
-because offsets de-canonicalized identical bodies).
-2026-08-11 · THE spush CELL JOINS THE SLOT MAP (the rung the arc's pricing named): deadcell
-already CONVERTED a live spush cell into a frame slot -- offset (F+8)+8·rank, the prologue
-sub grown to F2, the st/ld re-based onto r4 -- and never told `g 'slots`. So every pass
-reading the OBJECT map met an r4 touch nothing claimed: repack's scan bars whole on one,
-and it was barring **215 of 478 fns holding 77.1% of love.c's frame traffic** (the census:
-3,716 objects and 16,063 slot ld/st out of reach, their frames packable 62,832→23,440 B).
-One foldl registering `[(0-o) 8]` per converted depth closes it. love.o .text
-361,873→**339,492 B (−22,381, −6.2%)** at FLAT insns (77,106→77,109) — the win is
-ENCODING, disp8 replacing disp32 once repack can shrink those frames; frame-mov bytes
-132,849→120,007. Gates: test_slow (seven zz-fin lines), test_fixpoint byte-identical,
-vmret 307 ret-free, test_raw/test_drv/test_libc/test_kore green. ⚠ THE LAW CHURN was the
-lesson: fifteen laws spelled a frame OFFSET and repack re-chose every number, so they red
-together — and wlkf's `(= 1 (ldsp wlkf 8))` kept PASSING while counting a cs restore in
-place of the park it named, which is the failure mode that matters. Re-anchored on `sof`/
-`nldrg` (a slot named by the register that owns it) and verified in BOTH worlds — the
-laws now pass pre-rung and post-rung, which is what says they describe residency and not
-layout. The two-world run caught one bad anchor: hf's park is r0's slot, not r6's, and
-they coincide only after this rung pools them.
-2026-08-11 · THE DEAD-STATIC SWEEP a1e12f40 (bytes, not codegen — lever 5): gen.l
-spliced a small static into every call site and then emitted the out-of-line body
-anyway, named by nothing. A mark from roots over the emitted forms, in gfns before
-the per-function units concatenate, sweeps the statics nothing reaches. ⚠ the ROOTS
-are the whole safety argument and a missed one is a jump into the heap, not a bigger
-binary: every exported fn, every alias target, every section-named fn (xfns, placed
-for their ADDRESS), and every nom the DATA lane names — love's kind-indexed tables
-reach copy_data and the collector by address and never by call. The reference
-relation over-approximates on purpose (an opcode counts); only a static is ever a
-candidate, and lnames sheds the swept ones so no LOCAL FUNC symbol names a body that
-no longer rides. 149 bodies, 32,768 B: .text 556,768→524,000, love's own unreachable
-6.4%→0.6% against gcc's own 2.6% and clang's 1.7% — under the natives, which is the
-row that says complete rather than lucky. Corpus unmoved (40.72 G): every removed
-byte was unreachable, so this buys size and invocation speed and NOT the gap levers
-1-4 measure. test_fixpoint byte-identical (the compiler sweeps itself and still
-reproduces), vmret 307 ret-free, test_raw/test_drv/test_libc/test_slow green.
-2026-08-11 · STEP 0 RE-RUN, and the bar census that closes the spush rung (HEAD a055d279,
-no code — measurement only): the re-base fill was four hours old and one rung stale, so
-every number the arc was steering by moved. Both-emit codegen **1.56×→1.47×** (gap
-141,221→**118,531 B**), binary 1.702→**1.618×**; love.o's .text fell 22,381 B over the
-same pair of trees and the shared-symbol gap fell 22,690 — they agree to 309 B, which is
-what says the move is the rung and not the fourteen post commits the merge carried.
-Frame movs **21,964 before and after**, 132,849→120,007 B: the count is identical, so the
-rung bought encoding and the emission side confirms it. The excess over gcc is 92,679 B,
-**78.2% of the gap, up from 75%** — the share rose because the gap shrank faster than the
-traffic. The census, four exits separated over love.c's 640 fns (temporary probe,
-reverted): packed 403/23,830 touches/**92.9%**, barred 10/991, no-shrink 84/658, early
-143/169 — and **all ten bars are `raw`**, an inline-asm splice repack skips by design.
-Zero loose, zero unclaimed: the 215-fn barred class is GONE, not reduced. love.c through
-mooncc 8.40/8.42/8.50 s against the 8.8 s baseline, so the per-depth foldl costs nothing.
-⚠ THE READING THAT OUTLIVES ALL OF IT: dynamic 1.63/1.625/**1.629** across three fills
-while static walked 1.63→1.47. Every lever this tree has landed is a size lever, and the
-executed stream has not moved. The allocator leg is the first rung owed a corpus A/B as
-its headline, not a .text delta.
-2026-08-12 · RUNGS 1+2, THE LIVENESS KIT AND SLOT PROMOTION 4dd9bc41 (shipped together, rung 1
-having been measured at 736 B alone): rdsp was already the per-form transfer function and the
-missing half was the GRAPH -- per form, not per block, successors being the jmp/br target plus
-the fallthrough, so there are no blocks to build and the fixpoint is repack's own widen1 shape.
-An op neither rdsp nor the rosters name answers 'bar and REFUSES the fn. On it, promotion: an
-object whose every touch is a full-word ld/st at its own base, never addressed, written before
-read, takes a caller-saved register when one is free across its widened window -- free meaning
-live-out nowhere in the range and defined nowhere in it, which a call fails by construction. It
-rides repack's analysis whole (object map, backedge widening, bail discipline). love.o .text
-339,492→**333,177** (−6,315, −1.86%); frame movs 21,964→**19,478** (−2,486, −11.3%), their bytes
-120,007→106,892. ⚠ static insns move by TWENTY-NINE: the trade is a memory mov for a register mov
-at equal count, so this is the first rung in the arc whose case is DYNAMIC -- corpus insns
-**−0.73%**, cycles **−0.93%**, the first movement in that row across four fills. love.c 8.42→9.90 s
-(the fixpoint's cost, inside the 20 s budget). THREE BUGS, each now a comment: a cs save is
-`(st r4 slot r9)` and its restore `(ld r9 r4 slot)` -- the exact shape of a promotable temporary,
-and only the register it moves tells them apart (cskeep caught it at compile, its armor works); a
-sibcall is a jmp to no LOCAL label, and read as a plain transfer it has no successor, so liveness
-called the whole argument file dead at the one place it is most alive; and the universe was built
-from the traffic rdsp names while a SEAT is chosen from the caller-saved file, so a register the
-fn never otherwise mentions was absent from a call's clobber set and read as free ACROSS the call
--- ai_sleep promoted into rdx over its one call and that answer survived cskeep, the laws and
-every gate but running. A liveness universe must cover the seats, not just the traffic. The kit
-carries its own unit laws (join, backedge, call, sibcall, refusal, universe), hand-laid rather
-than compiled. Two older laws re-anchored off the mechanism onto the invariant (`ldinto`,
-`copyof?`): ci's indirect call now stages through r0 with no frame at all rather than two spush
-cells, and wv's written param takes a register instead of a spill. Gates: test_slow (seven
-zz-fin lines), test_moon, test_fixpoint byte-identical, vmret,
-test_raw/drv/libc/kore/clay.
-2026-08-12 · STEP 0 AGAINST RUNGS 1+2 (measurement only, two ccbench passes): both-emit codegen
-1.47×→**1.44×** (gap 118,531→**112,069 B**), binary 1.618→**1.591×**; love.o .text fell 6,315 and
-the shared-symbol gap 6,462 -- agreeing to 147 B, so the move is this rung alone. THE ROW THAT
-MATTERS: corpus insns 42.291→**41.984 G** with BOTH natives flat to 0.05%, so the dynamic ratio
-moved 1.629→**1.617×** -- the first movement in that row after three fills of size levers left it
-untouched. Frame-mov excess over gcc 92,679→79,564 B, **71.0% of the gap, DOWN from 78.2%**: the
-share had risen at every prior fill because the gap shrank faster than the traffic, and this is
-the first lever aimed at the traffic itself. poly1305 PASSED gcc and reproduces (1.04× → 0.98×
-and 0.99× over two passes, gcc's own stable to 0.3%) while chacha holds at 3.5-3.6× -- the pair's
-designed reading firing exactly as specified, poly being scalar locals and chacha array slots.
-Warm build 15.4 s (flat vs 15.1), love.c single TU 8.42→9.90 s. ⚠ TWO INSTRUMENT LESSONS: the
-mcobj cache is not "paid once per tree" -- 45.2 s cold and 15.4 s warm on the SAME tree, because
-a rung that changes the compiler changes every member hash, so every codegen fill pays it; and
-clang's chacha is NOT the box anchor the previous fill called it (198.1 twice was coincidence,
-169.9/182.7 the next day), so that fill's "1220→1075 is a real move" is corrected -- two agreeing
-samples are not a control.
-2026-08-12 · COALESCING (rung 4, pulled AHEAD of rung 3) — a copy whose source was defined by
-the form before it and dies at the copy is a def that named the wrong register: the def takes the
-destination and the mov never lands. The liveness kit's second consumer, and the first to ask a
-question the window heuristics cannot — not "does this value die soon" but "does it die HERE".
-+38 lines. **corpus insns 41.983→41.244 G, −1.76%** (cycles flat, within noise), love.o .text
-333,177→**327,064 B (−1.83%)**, insns 77,080→**75,100 (−2.57%)**, reg-reg movs 12,353→10,391.
-Against clang the dynamic ratio goes 1.617→**1.589×** — more than twice rungs 1+2's move, and the
-largest on this arc.
-
-⚠ WHAT THIS RUNG COST TO FIND, because the route matters more than the result. It was reached by
-building the CALL-CROSSING CLASS on cs seats (rung 2's open half) and measuring that it CANNOT
-PAY. A cs seat can never equal the store's source — sources are caller-saved — so no mov ever
-drops, and the rewrite is a frame touch turned into a reg-reg mov ONE FOR ONE plus the
-save/restore pair: measured +3,073 movs against −1,722 frame movs, +1,349 insns, exactly the pair
-count. The lvgp class paid precisely because its seat CAN be the source. No pricing gate repairs
-that; a gate tight enough to be safe admits nothing. Even with coalescing on top, cs seats stay
-+1,077 insns for −1,479 B and retire no mechanism. **The class is refused**, and the plan's
-ordering with it: rung 4 comes BEFORE rung 3, because nothing that turns memory into copies pays
-until the copies can go.
-
-Three traps the attempt paid for. **unframe reads the prologue BY POSITION** — its `sv3` asks
-whether form 4 is exactly `(st r4 -8 r3)` and drops that save with the frame — so saves inserted
-at index 4 displaced it, leaving the rbx save standing while its restores went, and the caller's
-rbx died at the tail; it presented as a segfault in `main` with rbp holding a love fixnum, AFTER
-the corpus had run and printed `tests pass`. **A name-keyed bisect over one TU's functions is not
-a bisect**: the switch matched by name across every TU while the name list came from love.c
-alone, so musl and host/*.c promotions were never disabled and three "culprits" were artifacts.
-What actually cracked it was emitting the pair while rewriting NO touch — still crashed, which
-proved the fault was in emission rather than in the promoted value and pointed straight at
-unframe. **The emitter's own `alias-dst` guard** caught the coalescer renaming a destination onto
-one of the def's sources; the rename must be a stranger to the def on both sides.
-
-Laws: six hand-laid shapes for the fold and its five refusals (source still live, def reads its
-own dest, dest aliases a source, a label between, the prologue). One older law re-anchored off
-the mechanism onto the invariant — ci's indirect call is pinned on "two loads, neither onto an
-arg seat" rather than on counting r0's, because coalescing now gives one argument its scratch at
-birth. Gates: test_slow (seven zz-fin lines), test_moon, test_fixpoint byte-identical, vmret,
-test_raw/drv/libc/kore/clay.
-
-2026-08-12 · COPY PROPAGATION (the forward half; dehusk retired) — `dehusk`'s five hand-cut
-windows onto one law are one pass: a forward walk carrying `reg -> source`, killed at each def and
-at each control edge, with `lvout` answering the drop. Gone with them: the rename sandwich's
-8-form cap, the quiet back-copy's 6-form cap, the adjacent-pair cases, and `huskrd` — the
-whitelist of renamable operand slots. The slots are PROBED off `rdsp` instead: substitute a
-stranger at each nom position and ask whether it lands among the reads and not among the defs, so
-a read-modify-write slot (the shifts, the unops) and `la`'s SYMBOL operand decline by
-construction, and the roster cannot fall out of step with the table it models. What still needs a
-reason rdsp cannot carry is a five-name skip list, each entry a contract rather than a dataflow
-fact: the address families (addrfold consumes a mov feeding a base under its own license),
-`push` (cskeep reads `(push <cs>)` as that register's SAVE), and the variable shifts (holo scares
-if the count is not r1). **corpus insns 39.734→39.464 G (−0.68%)**, cycles 14.871→**14.798 G
-(−0.49%, minima 14.678→14.575)**, love.o .text 327,064→**324,872 B (−0.67%)**, insns
-75,100→**74,390 (−0.95%)**, reg-reg movs 10,634→**9,908 (−6.8%)**; single-TU compile of love.c
-13.72→13.99 s (+2%, flat); gen.l 8,112→8,125. ⚠ the dynamic row wants an interleaved run and
-several: two builds 10 bytes apart read 0.3% apart on corpus insns, so a single pair is not a
-measurement — it is which movs went, not how many.
-
-⚠ THE TWO DIRECTIONS COMPOSE, and that composition is where most of the win is. Forward
-propagation alone REGRESSES the corpus (+0.19% insns) while shrinking `.text`, because renaming
-`(add r1 r1 imm)`'s source breaks the two-address fusion and the emitter buys the mov straight
-back. The fix is not to protect the fusion — measured, and protecting it is 914 B WORSE — it is
-to let the break happen and hand the wreck to `coal`, whose backward fold gives the def the
-copy's name and rebuilds the fusion on the right register. `coal` needed one relaxation to accept
-it: the destination may alias the def's FIRST source, because `(mov d a; op d b)` is the lowering
-and `(add r7 r7 8)` IS the fused form — it is the SECOND source that reads its own wreck. So the
-sandwich `dehusk` did with an 8-form window now falls out of two local passes with no window at
-all.
-
-⚠ AND PLACEMENT IS A REAL CHOICE, not a detail — four were built and measured. The three
-POST-CHOICE ones (varying where `coal` sits around `unframe`/`unhome`) all read BETTER on paper:
-`.text` 323,976-324,430 B and 74,065-74,238 insns, −0.94%/−1.38% at the best, corpus insns
-−0.67%. All three lose on the clock: interleaved cycles put them at **+0.27%, +0.48% and +1.4%**
-against **−0.37%** for the build-tail placement. That is the `emit-alu` lesson holding a second
-time from the other side — a mov the CPU rename-eliminates costs no cycles, so deleting one LATE
-buys instruction count and nothing else, while deleting it EARLY feeds `addrfold`/`cmpfuse`/
-`deaddef` a cleaner input, and that is where the clock moves. The control for reading those
-numbers was ablating `dehusk` entirely (+0.5% insns → +1.1% cycles) and the build-tail candidate
-(−0.20% → −0.37%): both track their instruction counts, the post-choice three do not. ⚠ measure
-cycles interleaved and in rounds, and read the MINIMA beside the median; a single pair is layout
-lottery on a corpus running at IPC 2.7. (Post-choice also needs `coal`'s prologue floor relaxed —
-`(5 < i)` is a proxy for "not the prologue" and there is no prologue left after `unframe`.)
-
-⚠ COPY PROPAGATION MOVES THE PARAM-GRANT PRICING, because `pmin`/`nrac`/`nreads` are all read off
-`ir1` — the IR `build` returns — and a cleanup INSIDE build changes what they measure. On one
-synthetic shape (law.l's `ci`, an indirect tail call) that flips a grant: the fn takes a cs seat
-and grows a frame, 7 forms to 12. Held against the real corpus it is a shape, not a class — **no
-function in love.o gains or loses a frame** (545 `sub $N,%rsp` both sides, 331→330 cs-slot
-stores, 181 fns shrank against 46 grown) — so it ships with the law re-anchored on the struct
-loads rather than on every load. It is also a preview of rung 3: the grants cannot be deleted
-until their pricing moves somewhere that a later pass cannot perturb.
-
-Ablation first, as always: `dehusk` at HEAD was worth 0.52% corpus insns and 0.22% `.text` for 79
-lines. That number is what made a rewrite the right move rather than a deletion.
-
-⚠⚠ AND THE FIRST SHIP OF THIS RUNG COST 78% OF THE COMPILER'S SPEED, unmeasured. The numbers
-above are the SECOND, after step 0 caught it: love.c through mooncc went **13.2 → 23.4 s**
-(interleaved medians, 5 rounds) and no gate says a word, because every gate asks whether the
-output is right and none asks what it cost to produce. **The build tail costs DOUBLE** — `build`
-runs twice per fn, ir1 and the regen — so the two `lvout` fixpoints copyprop put there were paid
-four times over, on top of the one `coal` already paid post-choice: five whole-fn fixpoints where
-there had been one. Isolated by substitution, one variant per build: the pass with no liveness at
-all 12.2 s, plus the drop's lvout 17.1 s, plus coal's 19.6 s. **The forward walk itself is free**
-— its per-slot `rdsp` probing, the part that looked expensive, costs nothing measurable.
-
-The fix is placement, and it makes the rung better rather than merely cheaper. The forward walk
-stays in the build tail, where its renames reach `addrfold`/`cmpfuse`/`deaddef` and where the
-clock actually moves; it asks no liveness, so the double cost is nothing times two. The backward
-fold AND the drop both ride `coal`, post-choice, off the one `lvout` that was already being paid
-there — `cpdead` is gone as a pass, folded into `coal`'s existing walk. One fixpoint in the whole
-pipeline, exactly as before the rung, and the codegen came out BETTER than the version that cost
-78%: −0.67% `.text` against −0.53%, −0.95% static insns against −0.73%, −0.68% corpus insns
-against −0.20%.
-
-Two things that fusion turned up, both of which had been silently costing codegen:
-
-* **the lookbehind must survive a drop.** `coal` holds the previous form to fold the next copy
-  into; clearing that hold when a copy DROPS loses exactly the composition this rung is about,
-  because the dropped copy is gone from the output and the def behind it becomes adjacent to the
-  next one. Caught on `gq`, where `(add r9 r6 1) (mov r0 r9) (mov r10 r9)` needs the dead middle
-  gone AND the pair folded, and got only the first.
-* **`coal` was never x64-gated, and the drop is what made that fatal.** `lvout`'s universe is
-  the x64 files — `lvgp` the caller-saved gp set, `lvret` what an x64 exit owes, `csregs` the
-  x64 borrow — so on an lr/fp target its answer is a different machine's liveness. The FOLD had
-  been riding that unguarded since the coalescing rung and no gate ever said so; the DROP hung
-  riscv's on-hart egg bake (`test_virt`, exit 124, the timeout face) the first time it ran.
-  `coal` now takes the `arm? g` bail that `repack` and `cskeep` already take, and x64 is
-  byte-identical with or without it. ⚠ **a latent unsoundness only shows when something raises
-  the stakes** — the fold's silence for two rungs was luck, not licence.
-* ⚠ **and the floor cannot be read off an x64 shape.** An attempt to derive it from `pro4?` (4
-  when the x64 prologue is there, 0 otherwise) was measured a wash on x64 — and handed arm and
-  riscv, whose prologues are longer and whose `pro4?` is false, a floor of 0. That was the
-  proximate cause of the same hang. It stays flat at 5, one rung more conservative than x64
-  needs, because prologue ground is per-target and this pass cannot see which target it is on.
-
-⚠ the standing lesson: **a codegen rung owes a COMPILE-TIME A/B, not only a codegen one.** "Speed
-is a signal" applies to the compiler as much as to the test suite, nothing in `make test_slow`
-watches it, and this one shipped green. Measure the single TU interleaved, both directions, and
-put the number in the ledger beside the bytes.
-
-⚠ AND THE GUARDS ARE NOW PROVED, NOT ARGUED. The rename relation is FINITE — 75 op shapes (one
-per op `rdsp` knows), at most two read positions each, 15 registers in the gp file — so "can this
-pass hand holo a form the assembler refuses?" is DECIDABLE by running the carrier. `crew/moon/law.l`
-now exhausts it: **390 forward renames** through the real `cpwalk`, **570 backward folds** through
-the real `coal`, every result encoded by the real `holo-bytes`, plus a coverage assert that reads
-the op ROSTERS so an op joining one without a shape goes red by name. This is `test/uukindlaw.l`'s
-instrument — generate the model from the implementation's own table, then exhaust a finite carrier
-— pointed at codegen instead of at the kind lattice. Falsified three ways before being believed:
-`vshops` out of `cpskip`, `cpsub`'s alias guard off, `coal`'s alias guard off — each goes red on
-the matching assert, and the first also moves the carrier-size count, which is the drift signal
-doing its job. It costs nothing: 6.97 s against 7.06 s for the law file without it. ⚠ the two
-refusals this pass was built against (`alias-dst`, `shiftv-count-not-r1`) were each found by a
-BUILD BREAKING and a guess; a complete proof over the carrier is what replaces that, and it is
-available exactly because the carrier is small — reach for exhaustion before reaching for search.
-
-Laws: fourteen shapes over `copyprop` — the sandwich in both directions for `add` and for `sub`,
-the chain, the self-mov, the alu read-through, the br fall-through at any distance, the label and
-call resets, and the four refusals that carry a reason (`la`'s symbol, the shift's count seat, an
-address form, a killed map entry). Nine residency goldens re-anchored: each had pinned the
-accumulator's own register in `(add rX rX rY)`, and the seat operand — which is what those laws
-are actually about — is unmoved in every one. `dv` re-anchored off "the park reads through" onto
-`(div r1 r6 r5)`, since there is no park left at all. Gates: test_slow, test_moon, moon-stage (20
-sigs), test_fixpoint byte-identical, vmret (307 lvm_* ret-free), test_raw/drv/libc/kore/clay.
-
-2026-08-12 · SHRINK-WRAP RETIRED (rung 3, the first half) — the arc's heaviest mechanism, priced
-by ablation and then deleted. Turning the `swcs` guard off costs **48 bytes** of love.o `.text`
-and 12 static insns, and nothing whatever on the corpus. Forty-eight. The plan page had already
-written the reason down without pricing it — shrink-wrap "landed one grant in love.c" — and one
-grant is what 48 bytes looks like from the emission side.
-
-Gone with it: `pminp` (pmin's call-carrying twin, so the wrap could amortize on the cheapest path
-that actually calls), `cgitemx` (a `cgitems` that also answers its final env, which existed solely
-so region 1's decls stayed visible to region 2), `swre` (the env rewrite that re-seats the params
-across the split), the statement-level region split inside `build`, the wrap label with its
-save/reload pair, four `g` slots (`swcs` `swat` `swlab` `epi0`), and — the part that reached
-furthest — the DUAL-EPILOGUE flavor of `sibs`: two parameters (`sj`, the split; `sw`, the
-crossing flag) threaded through all six recursive calls, with `ejc`/`elc`/`sw2` recomputed at
-every form of every function on every target, so that a tail call BEFORE the wrap could take the
-plain epilogue and one after it the long one. That cost was paid per-form, program-wide, for one
-function's benefit. **gen.l 8,125 → 8,012 (−113)** — the arc's first negative-LOC milestone.
-⚠ the deletion is byte-identical to the guard-off ablation (324,920 B / 74,402 insns both ways),
-which is the check that says the mechanism came out whole and nothing else came with it.
-
-⚠ AND THE OTHER HALF IS REFUSED, on its own measurement. `pcs` — the pmin-gated cs-seat grant —
-ablates to **+1,004 B** of `.text` (+0.31%) and **zero** corpus instructions: 39.466 G with it and
-39.466 G without, identical to the digit, against a run-to-run spread of ±5 M that bounds what
-this instrument can even see. So promotion does NOT do generically what this grant does
-specially, which was rung 3's entire premise. Deleting it regresses the size axis and pays on no
-other; under "pays somewhere, regresses nowhere" that is a refusal, and it holds until promotion
-covers those bytes.
-
-**The two halves differ by 42× per line and that is the whole finding.** `swcs`: 113 lines for 48
-bytes, 0.42 B/line. `pcs`: ~57 lines (`pmin`, `nrac`, the grant block, the `pc0` threading;
-`pslots`/`nreads` stay, `pp` reads them) for 1,004 bytes, 17.6 B/line. A rung named for a
-mechanism CLASS hid that spread — the two grants were listed in one breath on the plan page and
-priced in one breath, and they are not one thing. Price the members, not the class.
-
-⚠ what is NOT settled is the clock. Four interleaved runs put `pcs`-off between 0.4% and 2.0%
-FASTER on cycles, medians and minima agreeing in direction every time (base vs both −1.24%/−1.52%;
-base vs pcs −0.96%/−1.98%; swcs-deleted vs +pcs-off, 15 rounds, −1.26%/−0.43%). But the
-instruction count is flat, so that is a layout reading, not a mechanism reading — and the box
-carried two other sessions' gates throughout, with the baseline itself drifting 14.874 → 15.219 G
-across three runs. Interleaving defends against drift within a run and nothing defends against a
-1% claim built on flat insns. It is recorded, it is not the basis of any decision here, and it is
-the one thing that could still overturn the refusal on a quiet machine.
-
-Laws: none added — `law.l` and `stage.l` type `sibcall`, the outer two-argument entry, whose
-signature is unchanged; `sibs` is internal, so the musttail contract laws (a marked ret-position
-call leaves as a jump, `musttail-not-a-tail`, the whole-fn `musttail-escape` decline) hold as
-written and are exactly the laws that cover the deletion. Gates: test_slow, test_moon (its
-"guaranteed sibcalls" leg is the contract this touches), test_gen, test_clay, test_drv, vmret
-(307 lvm_* ret-free), `make test` host + love0 ×2.
-
-2026-08-12 · WHY PROMOTION CANNOT SUBSUME `pcs`, and the arc dependency it inverts (the probe
-behind the refusal above). Two questions: how big is the class, and does promotion decline those
-slots or never see them.
-
-The class is **15 functions of ~640**, net +169 static insns with the grant off, and the benefit
-is **two functions**: `ai_ini_0` 583→744 (+161) and `yield_sw_wait` 731→795 (+64), against
-`gen_please` −40. Fifty-seven lines of `pmin`, `nrac` and the grant block serve two functions in
-love.c. With the grant off the params are not re-seated anywhere — `ai_ini_0`'s frame traffic goes
-**75 → 171 movs**, straight back to memory.
-
-**It is structural, and `gen.l` says so in its own comment.** Promotion's seat roster is `lvgp`
-(4567): "the x64 CALLER-saved gp file — a seat here needs no save/restore pair, and **no call may
-sit inside the range that takes one**." `pseat` draws from nothing else. `lvtx` (4576) has a call
-read AND define everything outside `csregs`, so every candidate register is defined inside any
-interval that spans a call and `pfree?` refuses it. Promotion is caller-saved-only BY
-CONSTRUCTION. `pcs` seats params in the CALLEE-saved file for exactly the reason promotion cannot:
-so they survive calls. Disjoint register files, disjoint interval classes, no overlap to find.
-
-⚠ and `pmin` is the tell that should have been read years earlier: it gates the grant on EVERY
-PATH CONTAINING A CALL. That filter selects precisely the class promotion is structurally unable
-to serve. A mechanism whose entry condition is the other mechanism's exclusion condition was never
-going to be subsumed by it.
-
-⚠⚠ **THE ARC DEPENDENCY IS INVERTED.** doc/moon-alloc.md bound "rung 5 only after rung 3", and
-rung 5's own text bound it to "after rung 3 proves the engine on the easier input". Param slots
-crossing calls were never the easier input — they are the case needing the one capability rung 5
-adds, since rung 5 is where linear scan assigns "the pool + **cs file**". `pcs` can only be
-retired by the rung that can hand out callee-saved seats. It is not rung 3's second half; it is
-rung 5's, and no work at rung 3 collects it. The refusal above stands for a better reason than the
-one it was committed with.
-
-Method note worth keeping: this cost one per-symbol diff of two objects already built for the
-ablation, plus two greps. No instrumented build, no probe in the tree. **Diff the artifacts you
-already have before you instrument** — the ablation binaries answer "which functions and how much"
-for free, and the source answered "why" once the question was narrow enough to ask.
-
-2026-08-12 · WHERE THE FRAME BUCKET IS STUCK — the promotion-rejection census, rung 5's pricing.
-The bucket is 79,538 B and 76.6% of the codegen gap, and three copy-folding rungs left it dead
-flat. Rather than guess which lever reaches it, a temporary probe in `repack` classified every
-frame object in love.c by why it did NOT take a register — 5,216 objects, 14,768 touches:
-
-| reason | objs | touches | share |
-|---|---|---|---|
-| **noseat-call** — a candidate, refused because a CALL sits in its range | **1,696** | **6,573** | **44.5%** |
-| shape — some touch is not a full-word ld/st at the object's own base | 1,420 | 3,711 | 25.1% |
-| **prom** — promoted today | 1,026 | 2,418 | 16.4% |
-| noseat-plain — a candidate, no call in range, still no free seat | 767 | 2,012 | 13.6% |
-| wide (size≠8) / esc (a lea took its address) | 307 | 54 | 0.4% |
-
-**The cs-file class is the single largest bucket and it is 2.7× what promotion currently
-captures.** `noseat-call` is exact rather than inferred: a call defines the whole caller-saved
-file, so a call anywhere in `[lo,hi]` GUARANTEES `pfree?` refuses every seat — those 1,696
-objects are refused BY the call and by nothing else.
-
-⚠⚠ **AND THAT BUCKET IS A TRAP — the class is ALREADY REFUSED** (the coalescing entry above
-carries the verdict), which this census cannot see and which reading it as a work-list will
-rediscover. It was rediscovered: the pass was built a second time on 2026-08-12 off this very
-table, and reproduced the original verdict to the sign. Threshold sweep on `touches >
-M·(1+exits)` — M=2 **+715 insns**, M=3 **+269 insns for −994 B**, M=5 **+102 for −542 B**. That
-IS the refusal's own sentence in numbers: "no pricing gate repairs that; a gate tight enough to
-be safe admits nothing." Reverted, again.
-
-**Why the census over-reads, stated so the third attempt does not happen.** It counts where the
-traffic IS; it cannot count what a lever BANKS. A cs seat rewrites a frame touch into a reg-reg
-mov ONE FOR ONE and adds a save plus a reload per exit, because **a cs seat can never be the
-store's source — sources are caller-saved**. The lvgp class pays precisely because its seat CAN
-be the source (`pseat` tries `pf`, the first store's own register, first) and the store then
-self-movs and drops. Same bucket, opposite economics, and the touch count is blind to the
-difference.
-
-⚠ **But the refusal is a property of RETROFITTING, not of cs seats** — and that is the new thing
-this repeat bought, because it says which rung dissolves it. `repack` runs post-build, where the
-store's source is ALREADY an assigned caller-saved register, so a cs seat can only ever be a copy
-of it. Under rung 5's vreg emission the store's source is a VREG the allocator assigns — it can
-be the cs register itself, and no mov exists to drop. **So the call-crossing class is not
-reachable by any patch to `repack`, and is reachable by rung 5 proper.** That is the argument for
-doing rung 5 as the emission rewrite it was specified as, rather than as an increment on the
-current allocator: the increment is refused twice over, the rewrite is what changes the physics.
-(Also confirmed the third time: `unframe`'s `sv3` reads form 0 of the body BY POSITION, so a save
-spliced AT index 4 displaces `(st r4 -8 r3)` and kills the caller's rbx. Splicing after it is
-what kept this build alive where the first attempt segfaulted in `main`.)
-
-The other three buckets each name a different rung. `shape` (25.1%) is a touch-shape question —
-sub-word and mixed-width access — not an allocation question, and no register file reaches it.
-`noseat-plain` (13.6%) is honest register pressure with no call involved: that one is greedy
-allocation losing to a real linear scan, which is rung 5's OTHER half. `wide`/`esc` at 0.4%
-together are proof that neither address-taking nor multi-word objects are worth a rung.
-
-⚠ touches are IR frame touches, not emitted bytes, and a promoted object removes its touches
-while possibly adding movs — so read the shares as where the traffic IS, not as bytes banked.
-
-2026-08-12 · RUNG 5.0 — THE LIVENESS KIT LEARNS ITS MACHINE, and coalescing reaches three targets
-that had no allocator at all. `csregs`, `lvgp` and `lvret` stop being x64 constants and answer
-per target the way `(argr g)`, `(hregs g)`, `(nhome g)` and `(cspool g)` already did; `g` threads
-through `lvtx`, `lvuniv` and `csdefs`, seven call sites, every one already inside a function
-holding `g`. ⚠ each roster is holo's OWN TABLE read back rather than the ABI document, because a
-wrong one is a miscompile and not a missed optimization. **Ships byte-identical on x64** — .text,
-.data and .rodata all identical but for the 8 bytes of git hash the build stamps — which is the
-gate a foundation rung wants: not "the tests pass" but "the compiler did not change its mind".
-
-Then the bail goes. `coal` carried "x64 ONLY, and the roster is why"; the roster now answers, so
-the reason is gone. What replaces it is `lvout`'s own refusal — a form `rdsp` cannot read makes
-the whole answer `'no` and the fold declines that function — so enabling a target is safe before
-all of its ops are modelled.
-
-| love.c `.text` | with bail | without | |
-|---|---|---|---|
-| arm64 | 477,420 | **466,664** | **−10,756 (−2.25%)** |
-| riscv64 | 471,348 | **461,836** | **−9,512 (−2.02%)** |
-| x86-64 | — | — | byte-identical |
-
-Coalescing was −1.83% on x64 when it landed. These targets started from nothing, and this is the
-first allocator pass to reach them.
-
-⚠⚠ **AND IT MISCOMPILED THUMB1 FIRST — the finding worth more than the bytes.** `test_thumb1`
-went red (got 123, want 120) the moment `coal` ran there, and it was not a roster error:
-`epi-t16 '((lea sp fp 0) (pop r4) (pop fp) (pop pc))`. **V6M'S EXIT IS POP-PC, NOT RET.** `lvtx`'s
-exit rule keys on `ret`, so on v6m the function had no exit the kit could SEE — and an exit
-nothing can see is an exit where nothing is live, so the fold went straight through it and the
-caller's registers died. Three lines in `lvtx` fix it by making the kit truer (pop-pc reads what
-a ret reads) rather than by bailing, which would have shipped the same lie one target over.
-
-⚠ **the general form, which the vreg plan must carry: `lvout` silently UNDER-approximates on any
-target whose exit is not `(ret)` or `(jmpr)`.** That is a hole under every consumer of the
-liveness kit, not a thumb1 quirk — and it was invisible for as long as three targets were bailed
-out of the kit entirely. Enabling them is what found it. **A guard that hides a target also hides
-the bugs that target would have caught**, which is the argument for parametric-by-construction
-stated as a cost rather than a preference.
-
-Gates: test_slow (incl. test_virt, the riscv on-hart bake that hung the last time this pass met
-an unmodelled target), test_ccarm64 (129 programs cross-checked against aarch64 gcc), test_ccriscv
-(128 against riscv64 gcc), test_thumb2, test_thumb1, test_kernel_arm64 (4,086 tests), test_kore.
-
-2026-08-12 · RUNG 5.1a — THE VREG SHADOW: the pool mints noms, the machine answers as before.
-`ralloc` answers a minted `%vN` mapped in a per-build tablet to the physical the pool picked;
-`vrfix`, build's innermost tail link (before `sibcall`/`soften`, which do register arithmetic),
-substitutes over the assembled function; `stage.l` types the seam (`ir-vreg` → `ir-chosen`).
-Every predicate that asks about the MACHINE resolves through `rp` first, and every g-table
-(vpin, rpin, homes, the vmap) holds physicals only. **Byte-identical `love.o` on all four
-targets, byte-identical 141-file corpus, test_fixpoint holds** — the shadow proves a vreg
-survives build and the peepholes without the compiler changing one decision.
-
-The finding that outlived the diff: **the old discipline compares PHYSICALS, and its accidents
-are load-bearing.** An unheld hint returns to the pool at a splice body's psreset, re-mints, and
-the value comes back "honoring" the hint by coincidence of register — and the coincidence decides
-an rfree, which shifts every later alloc in the statement. Same-mint `id?` broke exactly there
-(a 10-byte .text diff in two functions of love.c, out of 141 files — a corpus sweep alone would
-have called it green). `rpeq?` (resolve both sides) now carries every hint-honor and two-address
-alias test, ~20 sites past the scoped list, and `psafe?` reads write sets resolved (a freed
-mint's store still lands on its physical). Details + the instrument (site-tagged pool traces
-over baked instrumented images): doc/moon-vreg.md §5.1a. ⚠ 5.1b inherits the lesson upstream:
-when destinations BIND, the accidental-honor lane disappears — every place `rpeq?` now sits is a
-place the assignment must make deliberate.
-
-⚠ housekeeping the gate caught: rung 5.0 changed `csdefs` to take `g` and law.l's six one-arg
-csdefs asserts under-applied to a truthy closure from that commit on — test_moon was red on the
-branch and unnoticed, because 5.0's session gated on byte-identity + test_slow and never re-ran
-the law gate. A law page owes a run per SIGNATURE change, not per behavior change.
-
+2026-08-10 · the DESTINATION DIE, four lanes (asn/decl, compare, arg-seat, bin value): a
+destination pre-aims at its park before the value evaluates, so the bridge mov never exists.
+dyn insns −0.72% / −1.50% / −0.07% / −0.04%; a call on either side bars every lane. ONE aim per
+spine — the first bin build aimed at every level and drained the pool.
+2026-08-10 · ARRAY SLOTS, rungs 1+2 (the vmap's ARRAY LEG, and the frame-direct element lvalue):
+element pins under minted content-compared keys ("x[3]"), then a constant-indexed element read as
+a STATIC slot (off + k·elsize) so three lanes stop computing addresses. chacha −19% wall, poly
+−10%; rung 2 byte-identical on love.c (the pay is escaped arrays, callish-rhs stores, no-param
+fns). ⚠ the ESCAPE gate is the whole soundness argument — any bare `x` is decay and excludes the
+array, so no pointer analysis exists; the mem trio is licensed BY NAME.
+2026-08-10 · LOOP-HEAD SURVIVAL (the vmap's first boundary) — optimism with verification: the
+pinned map keeps at a loop head, every arriving edge checks map ⊇ keep, a miss bars and the regen
+retries, so only a zero-miss build ships. chacha20 −24.5% dyn insns, −74% wall.
+2026-08-10 · THE CS BORROW (the second boundary — values across CALLS): a callish loop migrates
+scalar pins onto free callee-saved seats at entry (`lomig`), and `vmcflush` spares them. Gauge
+−19.6% wall at FLAT insns — the win is the broken store→load chain, not count.
+2026-08-10 · THE AIM HOLD (the callish bar lifts): the ana_d miscompile was the FREE-LIST/PIN
+SPLIT — `pool` and `vpin` agree only at psreset boundaries and the callish aim opened a window
+between them. Three-fold fix: the hint rides `rpin`; pin doors evict from `pool` outright;
+`ralloc` SCARES on handing out a vpin/rpin member.
+2026-08-10 · SPILL-AROUND (the keep past seat exhaustion): a surplus pin stays on its pool
+register, rostered (`saro`), and every call reloads it — priced at reads ≥ calls (a nested loop's
+calls ×8). −5.0% insns on the seat-exhausted shape; the one-read shape byte-identical.
+2026-08-11 · ENTRY SEEDING (the keep learns to CREATE): a hot scalar arriving unpinned takes one
+slot load laid beside the seat movs. −10.3% insns on the seat-covered call loop. ⚠ the trap was
+the CAP'S CONTRACT — `lonone` "cannot miss", but a seed that ignored it could, so no bar ever
+accumulated and the attempt loop spun forever.
+2026-08-11 · SPLICE-CROSSING KEEPS (the end-label meet): `cginl`'s unconditional end flush was
+over-conservative — the end label is a forward join whose edges are all known. −21.7% insns on
+the callish-inlinee loop. Excavation beside it: the weak crt0 tail passed the RAW SP to an
+arg-taking main in a libc-free link (fdbd7aba).
+2026-08-11 · ELEMENT PINS ACROSS CALLS: an element's slot is a static frame offset recoverable
+from the minted key (`aeoff`), so the element arm seats and rosters like a scalar. −9.5% insns
+and −14.5% CYCLES.
+2026-08-11 · STORE ELISION ACROSS CALLS (the exit meet, the third join): `ld` meets its arriving
+edges, so post-loop reads are zero forms and deadst sweeps the write-through stores. −12.5%
+insns / −16.6% cycles. TWO SOUNDNESS HOLES closed: the cond edge must carry kp-VERIFIED pairs
+only; and `pex`, the &-taken prepass, never descended into an element in HEAD position — an init
+list's first element is an expression there, so `&lam` as a compound literal's first initializer
+escaped the scan and any kept register went STALE across a GC-ing call (test/cc/132-clitaddr.c).
+2026-08-11 · PARAMS ON CS SEATS, pmin-gated: a priced callish fn's homable params take seats
+instead of wrapped hregs. ⚠ THE DYNAMIC VERDICT REVERSED THE STATIC HEADLINE — −1,574 static
+insns / −8 KB read as a win, and the corpus measured **+2.7% dynamic**: the save/reload is
+PER-INVOCATION and the wraps were PER-CALL, so every early-out fast path pays the prologue and
+earns nothing. `pmin` (every path through the fn calls) is what survived: 13 symbols, −1,020 B,
+corpus exact.
+2026-08-11 · SHRINK-WRAP (retired 2026-08-12, below): saves at the callish region's head rather
+than the prologue. ⚠ every static model tried (dirty loads, wrap-benefit, region-1 read debit)
+approved grants the corpus refuted — a cold-path wrap is dynamically already paid for, and only
+a frequency signal (PGO) beats one.
+2026-08-11 · SLOT REPACK + object-precise deadst: `nslot` registers every cell in `g 'slots`,
+deadst's lea arm marks the OBJECT live, and repack packs objects whose live windows never meet.
+.text −24.6 KB (−4.2%), median frame 72→40 B. ⚠ PLACEMENT was the payload lesson: the first build
+ran repack inside the per-attempt pipeline and the rankers price param slots BY BUILD OFFSET, so
+a packed ir1 misprices every grant. Post-choice, the winner packs once.
+2026-08-11 · THE spush CELL JOINS THE SLOT MAP: deadcell converted a live spush cell into a frame
+slot and never told `g 'slots`, so repack's scan barred whole on one unclaimed r4 touch — **215
+of 478 fns holding 77.1% of love.c's frame traffic**. One foldl closes it: .text −22,381 B
+(−6.2%) at FLAT insns — the win is ENCODING, disp8 replacing disp32.
+2026-08-11 · THE DEAD-STATIC SWEEP a1e12f40 (bytes, lever 5): a mark from roots over the emitted
+forms sweeps statics nothing reaches. 149 bodies, 32,768 B; love's unreachable 6.4%→0.6% against
+gcc's 2.6% and clang's 1.7%. ⚠ the ROOTS are the whole safety argument — every exported fn, alias
+target, section-named fn, and every nom the DATA lane names (kind-indexed tables reach the
+collector by ADDRESS, never by call).
+2026-08-11 · STEP 0 RE-RUN (measurement only, HEAD a055d279): both-emit codegen 1.56×→1.47×,
+binary 1.702→1.618×. ⚠ THE READING THAT OUTLIVES IT: dynamic held at 1.63/1.625/1.629 across
+three fills while static walked 1.63→1.47. **Every lever the tree had landed to that point was a
+size lever, and the executed stream had not moved.** The allocator leg is the first rung owed a
+corpus A/B as its headline.
+2026-08-12 · RUNGS 1+2, THE LIVENESS KIT AND SLOT PROMOTION 4dd9bc41: `rdsp` was already the
+per-form transfer function and the missing half was the GRAPH — per form, not per block, so there
+are no blocks to build and the fixpoint is repack's own widen shape. On it, promotion: an object
+whose every touch is a full-word ld/st at its own base takes a caller-saved register across its
+widened window. .text −6,315 B; frame movs −11.3%. ⚠ static insns move by TWENTY-NINE — the trade
+is a memory mov for a register mov at equal count, so this is the arc's first rung whose case is
+DYNAMIC: corpus insns −0.73%, cycles −0.93%. ⚠ **a liveness universe must cover the SEATS, not
+just the traffic** — the universe was built from what `rdsp` names while a seat is chosen from the
+caller-saved file, so a register the fn never mentions was absent from a call's clobber set and
+read as free ACROSS the call (ai_sleep promoted into rdx; it survived cskeep, the laws and every
+gate but running). Two more, each now a comment: a cs save is `(st r4 slot r9)` and its restore
+`(ld r9 r4 slot)` — the exact shape of a promotable temporary; and a sibcall is a jmp to no LOCAL
+label, so read as a plain transfer it has no successor and liveness called the whole argument file
+dead where it is most alive.
+2026-08-12 · STEP 0 AGAINST RUNGS 1+2 (measurement only): codegen 1.47→1.44×, and THE ROW THAT
+MATTERS — corpus insns 42.291→41.984 G with both natives flat, so the dynamic ratio moved
+1.629→1.617×, the first movement in that row after three fills of size levers. poly1305 PASSED
+gcc while chacha held at 3.5×, the pair's designed reading firing exactly as specified.
+2026-08-12 · COALESCING (rung 4, pulled AHEAD of rung 3): a copy whose source was defined by the
+form before it and dies at the copy is a def that named the wrong register. The liveness kit's
+first consumer to ask "does it die HERE" rather than "does it die soon". +38 lines. **corpus insns
+−1.76%**, .text −1.83%, reg-reg movs 12,353→10,391 — the largest single move on this arc. ⚠ the
+plan's ordering inverted with it: rung 4 comes BEFORE rung 3, because nothing that turns memory
+into copies pays until the copies can go.
+2026-08-12 · COPY PROPAGATION (the forward half; `dehusk` retired): `dehusk`'s five hand-cut
+windows onto one law are one pass — a forward walk carrying `reg -> source`, killed at each def
+and control edge. The renamable slots are PROBED off `rdsp` rather than whitelisted, so the roster
+cannot fall out of step with the table it models. corpus insns −0.68%, cycles −0.49%, .text
+−0.67%. ⚠⚠ **THE TWO DIRECTIONS COMPOSE, and that is where most of the win is**: forward
+propagation ALONE regresses the corpus (+0.19%) while shrinking .text, because renaming
+`(add r1 r1 imm)`'s source breaks two-address fusion. Protecting the fusion is 914 B WORSE; the
+fix is to let the break happen and hand the wreck to `coal`, whose backward fold rebuilds it on
+the right register. ⚠ AND PLACEMENT IS A REAL CHOICE — four were built. The three post-choice
+placements all read BETTER on paper (−0.94%/−1.38% .text) and all LOSE on the clock (+0.27%,
++0.48%, +1.4% cycles against −0.37% for the build tail). A mov the CPU rename-eliminates costs no
+cycles, so deleting one LATE buys instruction count and nothing else, while deleting it EARLY
+feeds addrfold/cmpfuse/deaddef a cleaner input — that is where the clock moves. ⚠ AND THE GUARDS
+ARE PROVED, NOT ARGUED: the rename relation is FINITE (75 op shapes, ≤2 read positions, 15
+registers), so law.l exhausts it — 390 forward renames and 570 backward folds through the real
+carriers, encoded by the real holo-bytes, with a coverage assert reading the op ROSTERS so an op
+joining one without a shape goes red by name. Falsified three ways. **Reach for exhaustion before
+reaching for search** when the carrier is small.
+2026-08-12 · SHRINK-WRAP RETIRED (rung 3, first half): ablation priced the arc's heaviest
+mechanism at **48 bytes** and nothing on the corpus. Gone with it: `pminp`, `cgitemx`, `swre`, the
+statement-level region split, four `g` slots, and the DUAL-EPILOGUE flavor of `sibs` — two
+parameters threaded through six recursive calls and recomputed at every form of every function on
+every target, for one function's benefit. **gen.l 8,125 → 8,012, the arc's first negative-LOC
+milestone.** ⚠ the deletion is byte-identical to the guard-off ablation, which is the check that
+says the mechanism came out whole. ⚠ **the two halves differ by 42× per line**: `swcs` 113 lines
+for 48 B (0.42 B/line); `pcs` ~57 lines for 1,004 B (17.6 B/line). A rung named for a mechanism
+CLASS hid that spread — **price the members, not the class.**
+2026-08-12 · WHY PROMOTION CANNOT SUBSUME `pcs` (the probe behind that refusal). The class is 15
+functions of ~640 and the benefit is TWO. It is structural and gen.l says so in its own comment:
+promotion's seat roster is `lvgp`, the CALLER-saved file, and `lvtx` has a call define everything
+outside `csregs`, so **promotion is caller-saved-only BY CONSTRUCTION** while `pcs` seats params
+callee-saved for exactly the reason promotion cannot. ⚠ `pmin` is the tell — it gates the grant on
+EVERY PATH CONTAINING A CALL, precisely the class promotion is structurally unable to serve. **A
+mechanism whose entry condition is another's exclusion condition was never going to be subsumed by
+it.** ⚠⚠ THE ARC DEPENDENCY IS INVERTED: `pcs` can only be retired by the rung that hands out
+callee-saved seats — it is not rung 3's second half, it is rung 5's.
+2026-08-12 · WHERE THE FRAME BUCKET IS STUCK — the promotion-rejection census (5,216 objects,
+14,768 touches): noseat-call 44.5%, shape 25.1%, prom 16.4%, noseat-plain 13.6%, wide/esc 0.4%.
+⚠⚠ **AND THAT BUCKET IS A TRAP — see the refusals section; it was rediscovered and the pass built
+a SECOND time off this very table**, reproducing the original verdict to the sign. ⚠ **why the
+census over-reads, stated so a third attempt does not happen**: it counts where the traffic IS and
+cannot count what a lever BANKS. The other three buckets each name a different rung — `shape` is a
+touch-shape question no register file reaches, `noseat-plain` is honest pressure (greedy losing to
+a real scan), and wide/esc at 0.4% proves neither address-taking nor multi-word objects are worth
+a rung.
+2026-08-12 · RUNG 5.0 — THE LIVENESS KIT LEARNS ITS MACHINE: `csregs`, `lvgp` and `lvret` answer
+per target the way `(argr g)` and `(cspool g)` already did. ⚠ each roster is holo's OWN TABLE read
+back rather than the ABI document, because a wrong one is a miscompile and not a missed
+optimization. Ships byte-identical on x64 — the gate a foundation rung wants is not "the tests
+pass" but "the compiler did not change its mind". Then `coal`'s x64 bail goes: arm64 .text
+−2.25%, riscv64 −2.02%, the first allocator pass to reach those targets.
+2026-08-12 · RUNG 5.1a — THE VREG SHADOW: `ralloc` answers a minted `%vN` mapped to the physical
+the pool picked, and `vrfix` substitutes at build's innermost tail. Byte-identical on all four
+targets. ⚠ the finding that outlived the diff: **the old discipline compares PHYSICALS, and its
+accidents are load-bearing** — an unheld hint returns to the pool at a splice psreset, re-mints,
+and the value comes back "honoring" the hint by coincidence of register, and that coincidence
+decides an rfree. `rpeq?` now carries every hint-honor and two-address alias test. ⚠ when
+destinations BIND, the accidental-honor lane disappears — every place `rpeq?` sits is a place the
+assignment must make deliberate.
 2026-08-12 · RUNG 5.1b i–iii — THE INTERVAL VERDICT AND THE COALESCE ENGINE (doc/moon-vreg.md
-carries the ladder). The checker instrument resolved every live set through the token map over
-love.c + the corpus on all four targets: **zero conflicts, zero entry-live mints, zero
-mint-mint collisions — the shadow discipline is interval-sound**, and all 37,976 flags were a
-mint over its own token (the vmap's mixed-name continuation, 5.1a's design). Three findings
-that price the rest of the arc: (1) every full-liveness-droppable mov (1,195 of 10,420) has a
-STRAIGHT-LINE span, so the assignment needs no fixpoint in the build tail (a real lvio there
-measured +92% compile — the +78% ghost, dodged by measurement this time); (2) coalescing
-SUBSUMES wnt-threading — 5,010 of the movs are conflict-refused because r0 is genuinely busy
-inside the value's range, where no destination-threading could deliver either, so the ~200-site
-refactor the plan feared dissolves; (3) the pinned 4,103 are the vmap class whole, and only
-step iv frees them. `rasg` then landed the ADOPTION direction (the call-return copy `coal` can
-never reach): grew 0 / shrank 12 insns on love.c, .text −30/−12/−8 B (x64/arm64/riscv),
-compile time in bake noise. Two refusals were bought with regressions and are load-bearing:
-**no argument-register targets** (the ride analysis prices ir1 as built; a mint moved onto an
-arrival drops rides — lvm_band grew a spush cell) and **no bridge direction** (a death-copy
-moved onto r0 robs stld's forwarding through the staging cell — the bridge mov is the HANDOFF
-keeping the value on a stable register, not dead weight). Gates: test, test_moon, test_fixpoint,
-test_ccarm64, test_ccriscv, test_slow. ⚠ iv inherits both refusals as dissolutions: retire the
-mechanisms and there is no ranker to disturb; give the vmap mints and the pinned class becomes
-ordinary intervals. iv-a (the vmap holds mints) landed the same day on the branch —
-byte-identical but three adoptions refusing over honestly-longer spans (+6 insns, the enabling
-cost); iv-b's design (vmcflush optimism, the mandatory-assignment seam where the token fallback
-dies, the pre-assembly seat link) is in doc/moon-vreg.md.
-
-2026-08-12 · RUNG 5.1b iv-b — CALL-CROSSING OPTIMISM, BUILT AND REFUSED. The design was
-vmcflush keeping its pool pins across a call (naming them on the call's own `(cross (rz off
-ty)..)` marker) and a `rseat` link, between body completion and assembly, settling each one:
-a free callee-saved seat — save into `cssv`, load into every epilogue, re-pin in `g 'vrt` —
-or the reload rewrite `ld rz r4 off` where the marker sat, priced by a release scan and
-`pmin`. It was built whole and measured on love.c: **+545 instructions, 56 functions worse
-and 2 better.** The census is the verdict — **1,088 crossings: 630 die unread, 454 want a
-reload, 4 found a seat** — and three physics read straight off it. (1) **The lever aimed at
-the frame bucket and grew it**: +498 of the +545 is frame traffic (loads 9,485 → 9,706,
-stores 5,919 → 6,068). The reload half worked — 454 eager reloads retired ~233 lazy ones —
-but netted +221, because a lazy load only runs on the path that reads while 630 crossings
-are never read at all; and the +149 stores are a surviving pin holding one of six pool
-registers past the call until the squeeze spills. Optimism trades loads for pressure and
-pressure wins. (2) **The flush cannot tell the 454 from the 630** — the read count is in the
-AST, the crossing is found in the IR, so the signal that would price the decision is exactly
-the one the site lacks. That is the shape of the refusal, not a missing rule. (3) **A seat
-bought at the call is a copy**, which is the refusal this rung exists to escape: one mov +
-one save + a reload per exit against the k loads retired needs k ≳ 4, and only a
-LOOP-crossing value has that k — and those are already seated by `csbor`/`lomig`. The seat
-supply was never the binding constraint; the pricing was. So the lesson is about iv, not
-about calls: **the vmap must retire, not be extended** — the physics change only where the
-value is BORN callee-saved (a whole interval coloured, params pre-coloured), which is iv's
-own charter. ⚠ and one correctness law, paid for with a miscompiled `love`: **a slot read out
-of `env` at a call inside an inline splice is the CALLEE's slot** — vmap names compare by
-content, a spliced parameter `n` shadowed the pin's `n`, the reload took the argument's cell,
-and `p0chars` looped `n*3` times into its own `ud2`. `vmget` blinds itself on `g 'inlbody`
-for exactly this; anything resolving a slot for a pin owes the same blind.
-
-2026-08-12 · THE CALL-CROSSING CENSUS — what iv proper is worth, and on which target FIRST
-(love.c, four targets; doc/moon-vreg.md carries the table and the phase plan). Demand:
-**~97% of loop-weighted reads sit on names that cross at least one call** on every target —
-this is not a niche class, it is the class. x64 543 fns / 2,648 crossing names, arm64 544 /
-2,654 — the same program, so the same demand. Supply: **the callee-saved file is entirely
-idle**, and the number is identical in EVERY function of a target (pass 1 never touches a cs
-register, and `cspool` is empty on every arm and riscv target — the residency machinery has
-never offered a seat there at all): 4 usable on x64, 10 arm64, 11 riscv64, 7 thumb2. Fit:
-every crossing name of a function holds simultaneously in 505 of 544 fns on arm64 (93%)
-against 338 of 543 on x64 (62%). **So build the interval allocator's assignment against arm64
-first** — identical demand, 2.5× the file, and nothing competing for it. ⚠ SUPERSEDED
-2026-08-13 by the span census below: the file being idle is what made arm64 first, but the
-spans then said the file is not the binding constraint there at all, so what arm64 is first
-FOR is the admission rule, not the scan. ⚠ riscv64/thumb2 read
-low only because `nhome` is 0 there (params are never homed), so their universes are
-locals-only and their demand is understated by exactly the parameters — pre-coloured arrivals
-would be the first param residency those backends ever get.
-
-2026-08-12 · IV RUNG A-0 — THE CALLEE-SAVED FILE BECOMES REAL ON ARM64. The census said build
-iv against arm64; the file there could not be used at all. `cspool` was () for every arm and
-riscv target, the a64 prologue in `build` never spliced `peep g 'cssv ()`, and `cskeep` — the
-verifier — bailed on `arm? g`. Baseline proof: **zero callee-saved operands in love.o for
-arm64**, in every function. So three landed, priced mechanisms (param cs homes, lpick's
-callee-saved overflow, the loop borrow) had never run on the target where the file is 10
-registers wide. Wiring it took four things, three of them latent bugs the file's absence had
-hidden: (1) cspool gets a64's r19–r28; (2) the a64 prologue splices cssv after the frame is up,
-past unframe's positional read; (3) ⚠ **`sibjmp` read the `epi-a64` CONSTANT instead of the
-passed-in `ejx`**, so a tail call jumped with the callee's seats still dirty — 18 functions, and
-`cskeep` caught every one the moment it was allowed to look; (4) ⚠ **`rdsp` did not model
-`adds`/`subs`**, the arm overflow lane, so it answered 'bar and every analysis silently declined
-those functions — now a `flagops` roster with the aluops shape but NEVER pure, since the flags
-feed the `set vs` behind it and deaddef would otherwise lift it away. Result on love.c/arm64:
-**−941 insns, −3,758 B text, 28 fns better and 5 worse**, x64 `.text` byte-identical, and the
-whole corpus runs under qemu (test_raw_arm64, 4,161 tests). ⚠ the file's three consumers do NOT
-transfer their x64 pricing: measured alone against no-cs-at-all, lpick's overflow is the prize
-(≈ −755), param homes pay, and **the loop borrow is a net LOSS on a64 (−187 alone, and it drags
-both-on to −236 because `wb` denies the param homes their seats)** — so a64 does not take the
-borrow yet. That is a verdict on insns, not on the mechanism: the borrow's x64 win was measured
-in WALL CLOCK at flat insns, and there is no cross-target wall instrument. Named residue:
-`vbin_fill` takes all ten seats and pays +166, exactly the failure its own pricing comment
-predicts ("static touch counts keep lying about the payback") — the rule was implicitly capped
-by x64 having four registers, and iv's interval assignment is what replaces it.
-
-2026-08-13 · IV RUNG A-1 — RISCV JOINS, AND THE CS OVERFLOW LEARNS ITS EXITS. riscv64's file
-(11 s-registers, its operand pool r8–r11 disjoint) needed only cspool + cskeep: its prologue
-already rode A-0's shared arm splice and its `sibjmp` already read `(peep g 'epi epi-a64)`
-rather than the constant, so it compiled clean first try. But it landed at **−5 insns** — the
-file was used (827 operands, from zero) and `vbin_fill` alone gave back +232 of it. That forced
-the pricing question A-0 had recorded as a residue. **`lpick`'s cs overflow had no
-per-invocation term at all**: it ranks candidates by nested-loop touches and `pick` drains the
-file, which was invisible while x64 offered four seats. The fix is `pcs`'s own accounting worn
-by the locals — a seat costs one save plus one reload per EXIT, so its touches must clear
-`1 + nx`. Four variants measured (net / worst single fn, arm64 and riscv64): no term
-−941/+166 and −5/+232; **per-item −798/+119 and −179/+92**; per-item with an `ln >= 2` escape
-−978/+166 and −45/+232 (the escape readmits exactly the pathological set — vbin_fill's homes
-ARE nested-loop touches, the problem is that it takes ten); set-level (cumulative cost against
-cumulative touches) −863/+119 and −163/+92. **Per-item ships**: it is the only variant that
-both makes riscv worth enabling and improves arm64's worst case, and it costs arm64 143 insns
-of aggregate to do it. ⚠ the term is NOT target-gated and x64 moves too — **−43, worst +18** —
-which is the real argument for it: the accounting was missing, not arm-specific. Also fixed:
-`sibjmp`'s t32 line read the `epi-a64` constant, which for a VARARG t32 function drops its
-`(add sp sp 16)` and leaks the arriving block on a tail call (narrow — va_start sets fesc and
-bars sibcalls — but wrong; t32 codegen is byte-identical after the fix, so only the vararg
-lane moves). **thumb2 stays off**: its file needs eleven ops modelled in `rdsp` first — the
-64-bit pair lane (`adc` `sbc` `sbcs` `umull` `smull` `mla`) plus `ors`, `clz`, `cvtui2sd` and
-the `udivll`/`uremll` helpers — on the least-exercised target, so it earns its own rung. The
-enumeration itself is cheap and repeatable: let cskeep print instead of scare and read the
-census. ⚠ CORRECTED at A-2: it is TWELVE, and the miscount is the method's — this census was
-read off love.c alone, which never converts a double to an unsigned, so `cvttsd2ui` never
-appeared and only test/thumb2/libd.c found it. Sweep the corpus, not one program.
-
+carries the ladder). The checker resolved every live set over love.c + the corpus on four targets:
+**zero conflicts, zero entry-live mints, zero mint-mint collisions — the shadow discipline is
+interval-sound.** Three findings priced the rest: every full-liveness-droppable mov has a
+STRAIGHT-LINE span, so the assignment needs no fixpoint in the build tail (a real one measured
++92% compile — the +78% ghost, dodged by measurement this time); coalescing SUBSUMES
+wnt-threading, dissolving a feared ~200-site refactor; and the pinned 4,103 are the vmap class
+whole, which only step iv frees. `rasg` landed the ADOPTION direction: −12 insns, .text −30/−12/−8
+B. Two refusals bought with regressions are load-bearing — **no argument-register targets** and
+**no bridge direction** (a death-copy moved onto r0 robs stld's forwarding; the bridge mov is the
+HANDOFF, not dead weight). iv-a (the vmap holds mints) landed on the branch: byte-identical but
++6 insns from three adoptions refusing over honestly-longer spans.
+2026-08-12 · THE CALL-CROSSING CENSUS (love.c, four targets). Demand: **~97% of loop-weighted
+reads sit on names that cross at least one call**, on every target — not a niche class, THE class.
+Supply: the callee-saved file was entirely idle, identically in every function (4 usable on x64,
+10 arm64, 11 riscv64, 7 thumb2). ⚠ SUPERSEDED 2026-08-13 by the span census: the idle file is what
+made arm64 first, but the spans then said the file is not the binding constraint there at all, so
+what arm64 is first FOR is the admission rule, not the scan. ⚠ riscv64/thumb2 read low only
+because `nhome` is 0 there, so their demand is understated by exactly the parameters.
+2026-08-12 · IV RUNG A-0 — THE CS FILE BECOMES REAL ON ARM64. `cspool` was () for every arm and
+riscv target, the a64 prologue never spliced `cssv`, and `cskeep` bailed on `arm? g` — so three
+landed, priced mechanisms had never run where the file is 10 registers wide. ⚠ two latent bugs the
+file's absence had hidden: `sibjmp` read the `epi-a64` CONSTANT instead of the passed-in `ejx`, so
+a tail call jumped with the callee's seats dirty (18 functions, and `cskeep` caught every one the
+moment it was allowed to look); and `rdsp` did not model `adds`/`subs`, so it answered 'bar and
+every analysis silently declined those functions. love.c/arm64 −941 insns, −3,758 B. ⚠ **the
+file's three consumers do NOT transfer their x64 pricing** — lpick's overflow is the prize
+(≈ −755), and the loop borrow is a net LOSS on a64, so a64 does not take it. That is a verdict on
+insns, not on the mechanism: the borrow's x64 win was measured in WALL CLOCK at flat insns, and
+there is no cross-target wall instrument. **Owed: an arm/riscv wall instrument.**
+2026-08-13 · IV RUNG A-1 — RISCV JOINS, AND THE CS OVERFLOW LEARNS ITS EXITS. riscv landed at −5
+insns with `vbin_fill` alone giving back +232, which forced the pricing question A-0 had recorded:
+**`lpick`'s cs overflow had no per-invocation term at all** — invisible while x64 offered four
+seats. The fix is `pcs`'s own accounting worn by the locals: a seat costs one save plus one reload
+per EXIT, so its touches must clear `1 + nx`. Four variants measured; per-item ships (−798 arm64 /
+−179 riscv64). ⚠ the term is NOT target-gated and x64 moves too (−43) — the accounting was
+missing, not arm-specific.
 **2026-08-13 — iv phase 1 step 1: alive answers a per-name live SPAN, and the span census
 refuses the packing argument.** `rec` recorded only call-bearing statements; `spn` now folds
 every statement's live set into a `[lo hi]` tick extent (the control-only lanes record too, so
@@ -1427,5 +779,6 @@ int-flavored emission, restore it rather than flush to nothing — misses 81 →
 correctness — a preserved pin holds a register out of the pool for the rest of the loop.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
-read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build),
-5.1b iv-b call-crossing optimism — each a physics lesson above.
+read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) — each a
+physics lesson in the sections above. The priced refusals are pulled out under **refusals**, which
+is where to look before proposing a mechanism; the chronology is not.
