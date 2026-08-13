@@ -386,6 +386,105 @@ interval that gets no register reads and writes its slot, which is today's code.
 form-grain fixpoint in the build tail, which is paid per regen attempt. The +78% that shipped
 unwatched and the +92% measured at step i are the same trap twice.
 
+**phase 1 step 1 CLIMBED 2026-08-13 — alive answers the span it already computed.** `rec` recorded
+only call-bearing statements; `spn` now folds every statement's live set into a per-name `[lo hi]`
+tick extent, answered as alive's sixth element. min/max, so a hole inside costs nothing — but the
+extent must be a SUPERSET of the true live range, which is why the control-only lanes (`blk` `brk`
+`cont` `goto` `lbl` `sdecl`, the nop default) record too: a `goto` reads the whole universe and a
+break's set is its target's, and neither is bounded by the ticks that carry a def or a use. Gate:
+`.text` and `.data` byte-identical on all four targets (only `.rodata`'s 6-byte `-dirty` stamp
+moves), compile time flat (12.44s vs 12.45s, interleaved ×4 on love.c/x64).
+
+**and the span census REFUSES the packing argument.** Two numbers off the new table, love.c:
+
+| target | universe names | mean max-overlap | ≤4 | ≤7 | ≤10 | median span / fn length |
+|---|---|---|---|---|---|---|
+| x64 | 3,031 | 4.3 | 64% | 87% | 96% | 0.95 |
+| arm64 | 3,050 | 4.3 | 64% | 87% | 96% | 0.95 |
+| riscv64 | 1,321 | 1.7 | 87% | 95% | 98% | 0.56 |
+| thumb2 | 1,275 | 1.7 | 87% | 96% | 98% | 0.56 |
+
+(1) **The file is not the binding constraint.** On arm64's ten seats, 96% of functions could hold
+their ENTIRE universe — every homable param and local at once. A linear-scan simulation that lets
+disjoint spans share a register seats only +110 names of 3,050 (+4%) over one-register-per-name;
+x64's four seats gain +147 of 3,031 (+7%), riscv +45, thumb2 +94. (2) **and the reason is that the
+spans do not end**: the median universe name is live across 95% of its function on x64/arm64, p75
+is the whole body. The physics is C's own shape — a param is live from entry by definition, and a
+local is declared at the top of its scope — so at the statement grain this universe has no short
+ranges to pack. riscv/thumb2 read shorter (median 0.56) only because `nhome` is 0 there and the
+universe is locals-only.
+
+⚠ so **phase 2's scan is not the prize on arm64**, and the census that ranked arm64 first ranked it
+on supply the allocator turns out not to need. What keeps names out of the file there is `lpick`'s
+ADMISSION rule — the `tc <= 2` floor, the `1 + nx9` per-invocation term A-1 added, the nested-loop
+`ln` licence, and the zero-crossing bar on the pool lane — not capacity. The interval's useful
+content for that rule is not `[lo hi]` but the weighted reads over it, which is a different number
+than the one this step built. Price the admission gates before building the scan.
+
+**phase 1 step 2 CLIMBED 2026-08-13 — the nested-loop licence retires; it was a proxy for a term
+that now exists.** Tagging every rejection point and counting over love.c: **69% of names reach
+neither candidate list** on arm64/riscv, all barred from the POOL lane by `crossing` (correct
+physics — pool registers are caller-saved), so the cs lane is the only door. What shuts it:
+
+| denied by | arm64 | share |
+|---|---|---|
+| `ln < 1` (the nested-loop licence) | 579 | 49% |
+| `tc <= 1 + nx9` (A-1's per-invocation term) | 367 | 31% |
+| `tc <= 2` | 158 | 13% |
+| `lea` (address-taken) | 52 | 4% |
+
+The licence was introduced as a PROXY for "the save/restore pair amortizes", when a tc-only gate
+measured +0.2% insns and an any-loop gate turned loads +0.2%. Both predate A-1, which added the
+real accounting. With the actual cost charged the proxy charges twice. Four variants against
+today, in insns:
+
+| variant | arm64 | riscv64 | x64 |
+|---|---|---|---|
+| b — drop the licence, keep `ln` as the rank | −1,206 (worst +92) | −944 (+162) | −966 |
+| c — licence and rank on ANY-loop touches | −951 (+38) | −409 (+149) | −384 |
+| **d — drop the licence, rank by `tc`** | **−1,185 (+92)** | **−1,109 (+136)** | **−1,509** |
+
+**d ships.** Dropping the licence degenerates the RANK — most candidates then score `ln` = 0 and
+the pick order is arbitrary — which is why d ranks on total slot touches and beats b on riscv64
+and x64 both net and worst-case. −2.0% of love.c's x64 `.text`. ⚠ and the dynamic gate is the one
+that mattered, since this rule's whole provenance is static counts lying: **271.87M vs 272.08M
+instructions retired on the corpus, −206,000 against ±500 run-to-run noise.** Pays statically and
+dynamically, regresses on neither.
+
+⚠ **31 shape anchors in `law.l` broke, and none of them hid a regression** — checked, not assumed:
+across all 172 law snippets the change is −17 insns, sp-loads unchanged, sp-stores −2, with two
+snippets increasing at all. Per function the loops shorten because a counter or accumulator gains
+a cs home it never had — `h3` 18 → 14 insns/iteration, `nrg` 21 → 19, `lo8` 13 → 10. Most anchors
+were register renames (`s` and `i` swapping seats). Two were not: **`lo8`'s law asserted something
+now false** ("a call AFTER the loop bars the homes, so the counters ride the vmap" — the cs lane
+does not care about crossing, the callee preserves the seat), and `nrg`'s `(= 1 (ldsp nrgf 56))`
+was still PASSING while counting a cs restore instead of the `x` slot it was written for, the
+exact accident `law.l:263` warns about. Both rewritten rather than renamed.
+
+**rung A-2 CLIMBED 2026-08-13 — thumb2's file opens, and the op census was short by one.**
+Twelve ops modelled in `rdsp`: the arm32 carry family joins `flagops` (adcs/sbcs/ors set the
+flags, adc/sbc READ the carry a preceding adds/subs left — none may be lifted), `(umull dl dh
+a b)` is the first form in the table defining TWO registers, `(mla d a b acc)` reads three, and
+`udivll`/`uremll` are the first NULLARY ones — the whole 64-step restoring shift-subtract IS
+the form, owning the r0..r3 protocol quad while r4..r7 are pushed and popped inside it, so a
+seat there survives. Plus a `cspool` row for t32 (r4..r10) and one for **v6m starting at r5**,
+which keeps r4 as a bottom frame base planted after the sub. **−14,728 B on love.c/thumb2 (80
+fns better, 55 worse, worst +256 in lvm_hush); x64, arm64 and riscv64 BYTE-IDENTICAL** — so
+clz and the carry family, which those targets do emit, changed nothing there. lvm_aprod goes
+4,634 → 4,201 insns and the byte delta is exactly 4× the insn delta, so every removed form was
+a 32-bit wide one.
+
+⚠ **the eleven-op census was wrong, and the method is the lesson.** It was enumerated over
+love.c, which never converts a double to an unsigned — so `cvttsd2ui` never appeared, and only
+test/thumb2/libd.c found it once the gate was live. Re-swept with `cskeep` printing instead of
+scaring over 133 test/cc files plus the thumb corpus on all four targets: clean. **A census
+over one program describes that program.**
+
+And **`cskeep` stopped naming targets**: its gate was `arm? g && !(a64? g || rv? g)`, a list
+that grew once per rung, and now reads `!(two? (cspool g))` — a target with no file has nothing
+to breach. a8 bails for the true reason, t32/v6m are covered automatically, and the next
+backend to get a file is covered before anyone writes it.
+
 **The census (love.c, all four targets, 2026-08-12)** — demand is call-crossing names and their
 loop-weighted reads; supply is the callee-saved file minus frame base, sp and the callr park:
 
@@ -436,7 +535,7 @@ gated, and this is the argument for the term — to **−43**. Measured alternat
 `ln >= 2` escape readmits the whole pathological set, and a set-level cumulative test matches
 the worst case at a slightly better net but costs more machinery. thumb2 stays off until eleven
 ops are modelled in `rdsp` (the 64-bit pair lane plus `ors`/`clz`/`cvtui2sd`/`udivll`), which
-is its own rung.
+is its own rung. ⚠ A-2 found it is TWELVE — see below.
 
 ⚠ phase 1 alone will likely be FLAT on codegen: it replaces a memo with a structure and keeps
 write-through. Under the standing ship gate ("pays somewhere, regresses nowhere") flat does not

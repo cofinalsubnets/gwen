@@ -60,8 +60,15 @@
    ; right behind it -- so never pure (deaddef would lift it away) and never in aluops itself,
    ; where the two-address rewrites live. ⚠ without this rdsp answers 'bar and every analysis
    ; declines the whole function.
-   flagops '(adds subs)
+   ; the arm32 CARRY family rides here too: adcs/sbcs/ors set the flags, and adc/sbc READ the
+   ; carry a preceding adds/subs left -- neither may be lifted, so the whole family is impure.
+   flagops '(adds subs adcs sbcs adc sbc ors)
    divops '(div rem udiv urem)                      ; the division protocol (r0..r3 clobber)
+   ; the t32 pair lane's widening multiply: (umull dl dh a b) defines TWO, (mla d a b acc)
+   ; reads three. udivll/uremll are NULLARY -- the whole 64-step expansion is the form, and it
+   ; owns the r0..r3 protocol quad (r4..r7 are pushed and popped inside it, so they survive).
+   wmops '(umull smull)
+   llops '(udivll uremll)
    vshops '(shlv shrv sarv)                         ; the variable shifts (count via r1)
    unops '(neg not sx1 sx2 sx4 zx1 zx2 zx4)         ; one-register rewrites
    xmmops '(addsd subsd mulsd divsd movsd ucomisd cvtss2sd cvtsd2ss)   ; xmm-only: no gp effect
@@ -779,8 +786,12 @@
    ; the seats residency may borrow: a subset of csregs, saved by the prologue (g 'cssv) and
    ; reloaded on every exit. ⚠ a target belongs here only once its prologue SPLICES cssv and
    ; cskeep verifies it -- t32/v6m still owe the second, which is why their file reads empty.
+   ; ⚠ v6m keeps r4 as its BOTTOM frame base (the extra push planted after the sub), so the
+   ; file there starts at r5; plain t32 has the whole AAPCS32 callee-saved bank bar fp.
    (cspool g) (? (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                  (rv? g) '(r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
+                 (v6m? g) '(r5 r6 r7 r8 r9 r10)
+                 (t32? g) '(r4 r5 r6 r7 r8 r9 r10)
                  (arm? g) ()
                  '(r11 r12 r13 r14))
    (deep? pl) (two? >>pl)                           ; a pool affords a PRICED seat: two remain after the take
@@ -3961,13 +3972,17 @@
           (member? op unops) [[<>f] [<>f] 1]
           (op = 'movqxr) [[<>>f] () ()]
           (op = 'movqrx) [() [<>f] 1]
-          (op = 'cvtsi2sd) [[<>>f] () ()]
-          (op = 'cvttsd2si) [() [<>f] ()]
+          (member? op '(cvtsi2sd cvtui2sd)) [[<>>f] () ()]
+          (member? op '(cvttsd2si cvttsd2ui)) [() [<>f] ()]
           (member? op fldops) [[<>>f] () ()]
           (member? op fstops) [[<>f] () ()]
           (member? op xmmops) [() () ()]
           (member? op divops)
            [(rg1 <>>f + rg1 <>>>f) '(r0 r1 r2 r3) ()]
+          (member? op llops) ['(r0 r1 r2 r3) '(r0 r1 r2 r3) ()]
+          (member? op wmops) [[(nthr f 3) (nthr f 4)] [<>f <>>f] 1]
+          (op = 'mla) [[<>>f <>>>f (nthr f 4)] [<>f] 1]
+          (op = 'clz) [[<>>f] [<>f] 1]
           (member? op vshops) [[<>f <>>f] [<>f 'r1] ()]
           'bar))
    ; the arm64 RETARGET: gen speaks r4 for the frame base throughout, but ⚠ x4 is ALSO an AAPCS
@@ -5231,10 +5246,10 @@
    (cskeep g fs)                                    ; answers fs; a breach scares, naming fn + reg
     (: (rawy? l) (? !(two? l) ()
                     (: f <l (? (two? f && id? <f 'raw) 1 (rawy? >l))))
-       ; ⚠ a64 and riscv ride this too (their file is real -- cspool): the shapes are the same,
-       ; only the frame base differs (fp there, and a4ize has already retargeted by the time
-       ; this runs). t32/v6m still bail -- they have no cs file to breach.
-       (? ((arm? g && !(a64? g || rv? g)) || !(two? fs) || peep g 'hasasm () || rawy? fs) fs
+       ; ⚠ every target with a real file rides this (a64, riscv, t32/v6m): the shapes are the
+       ; same, only the frame base differs (fp on arm, and a4ize has already retargeted by the
+       ; time this runs). a8 alone bails -- it has no cs file to breach.
+       (? (!(two? (cspool g)) || !(two? fs) || peep g 'hasasm () || rawy? fs) fs
           (: fn (nthr <fs 1)
              labs (tablet 0) saves (tablet 0) defs (tablet 0)
              (note l i)
@@ -6378,11 +6393,12 @@
    ; cross name -> static call crossings, univ the analyzed names -- ⚠ a gate must never trust
    ; cross for an outsider -- total the statement count (the regen's numbering guard), ncw the
    ; fn's loop-weighted IN-LOOP call count (the payoff gate's per-iteration price; a depth-0
-   ; call sits in the path maximum instead -- it runs at most once per invocation).
+   ; call sits in the path maximum instead -- it runs at most once per invocation), spa the
+   ; per-name live SPAN in tick numbers (see spn).
    (alive g f)
     (: params <>>f
        items <><>>>f
-       dcl #() tak #() n9 #() liv #() crs #()
+       dcl #() tak #() n9 #() liv #() crs #() spa #()
        ; -- prepass: &-taken names, one generic sweep (sizeof's unevaluated
        ; &v over-records -- harmless, the name just keeps the blanket) --
        (pex e) (? !(two? e) ()
@@ -6429,15 +6445,27 @@
                        (<s2 = nm) >s2
                        (<s2 >< sdel >s2 nm))
        (tick u) (: q (peep n9 'q 0) _ (pin n9 'q (q - 1)) q)
+       ; the INTERVAL leg (doc/moon-vreg.md iv phase 1): every statement folds its live set into
+       ; a per-name [lo hi] tick span. min/max, so a hole inside costs nothing -- but the extent
+       ; must be a SUPERSET of the true live range, so the control-only lanes record too: a goto
+       ; reads the whole universe and a break's set is its target's, and neither is bounded by
+       ; the ticks that carry a def or a use.
+       (spn sq l)
+        (? !(two? l) ()
+           (: nm <l o (peep spa nm ())
+              _ (pin spa nm (? !(two? o) [sq sq]
+                                (: a <o b <>o [(? (sq < a) sq a) (? (b < sq) sq b)])))
+              (spn sq >l)))
        ; nclw = the statement's IN-LOOP share of ncl (0 at depth 0): the fn total n9 'ncw feeds
        ; the payoff gate -- a depth-0 call runs at most once per invocation
        (rec sq w ncl nclw)                          ; a call-bearing statement's record
-        (? (ncl < 1) ()
+        (: _ (spn sq w)
+         (? (ncl < 1) ()
            (: _ (pin liv sq (sun w pales))          ; the outside-universe homes ride every wrap
               _ (pin n9 'ncw (nclw + peep n9 'ncw 0))
               (bump l) (? !(two? l) ()
                           (: _ (pin crs <l (ncl + peep crs <l 0)) (bump >l)))
-              (bump w)))
+              (bump w))))
        ; -- reads of an expression, restricted to the universe -> (set ncalls). a var WRITE is not
        ; a read (the home register takes the value directly), sizeof's operand never evaluates,
        ; and an unknown head reads EVERYTHING and counts a call (future grammar fails safe) --
@@ -6506,7 +6534,7 @@
        (lst s out brk cnt w9)
         (? !(two? s) out
            (: k <s
-              (? (k = 'blk) (: in (litems <>s out brk cnt w9) _ (tick ()) in)
+              (? (k = 'blk) (: in (litems <>s out brk cnt w9) sq (tick ()) _ (spn sq in) in)
                  (k = 'expr)
                   (: e9 <>s
                      kv (? ((<e9 = 'asn) &&
@@ -6534,7 +6562,7 @@
                      sq (tick ()) _ (rec sq (sun (sun <pr out) ks) (* <>pr w9)
                                          (? (1 < w9) (* <>pr w9) 0))
                      <pr)
-                 (k = 'sdecl) (: _ (tick ()) out)   ; statics: no runtime init, no kill
+                 (k = 'sdecl) (: sq (tick ()) _ (spn sq out) out)   ; statics: no runtime init, no kill
                  (k = 'if)
                   (: inE (? (two? <>>>s) (lst <>>>s out brk cnt w9) out)   ; else FIRST (reverse order)
                      inT (lst <>>s out brk cnt w9)
@@ -6594,19 +6622,19 @@
                  (member? k '(case dflt))
                   (: sw (peep n9 'sw ())
                      _ (? (two? sw) (pin n9 'sw (sun <sw out >< >sw)) ())
-                     _ (tick ()) out)
-                 (k = 'brk) (: _ (tick ()) brk)
-                 (k = 'cont) (: _ (tick ()) cnt)
-                 (k = 'goto) (: _ (tick ()) univ)   ; any target: everything
-                 (k = 'lbl) (: _ (tick ()) out)
+                     sq (tick ()) _ (spn sq out) out)
+                 (k = 'brk) (: sq (tick ()) _ (spn sq brk) brk)
+                 (k = 'cont) (: sq (tick ()) _ (spn sq cnt) cnt)
+                 (k = 'goto) (: sq (tick ()) _ (spn sq univ) univ)   ; any target: everything
+                 (k = 'lbl) (: sq (tick ()) _ (spn sq out) out)
                  (k = 'asm) (: sq (tick ()) _ (rec sq univ w9 (? (1 < w9) w9 0)) univ)   ; homing is off anyway (hasasm)
-                 (: _ (tick ()) out))))             ; nop tdef
+                 (: sq (tick ()) _ (spn sq out) out))))   ; nop tdef
        ; -- run: liveout at the fn end is empty; the counter descends from the prepass total so
        ; lst's numbers land forward pre-order. ⚠ pre and lst disagreeing on the statement set is a
        ; compiler bug, so the counter must land exactly on zero or alive answers () --
        _ (pin n9 'q (peep n9 'n 0))
        _ (litems items () () () 1)
-       (? (0 = peep n9 'q 0) [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0)] ()))
+       (? (0 = peep n9 'q 0) [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0) spa] ()))
    ; -- the array universe (the vmap's array leg): once-declared 1-D arrays of a gp
    ; scalar whose every appearance is the element shape (deref (bin + (var x) idx)).
    ; the scan LICENSES exactly that shape -- recursing into the index only -- and any
@@ -7759,9 +7787,7 @@
                   (? (peep lt off () || peep taken sq ()) (walk2 >rs acc)
                      (: tc (ntouch ir1x off 0)
                         (? (tc <= 2 || tc <= (1 + nx9)) (walk2 >rs acc)
-                           (: ln (lntouch ir1x off 0 0)
-                              (? (ln < 1) (walk2 >rs acc)
-                                 (walk2 >rs ([ln sq (? (d128? <>>e2) 2 1)] >< acc)))))))))
+                           (walk2 >rs ([tc sq (? (d128? <>>e2) 2 1)] >< acc)))))))
            ; choose HOTTEST-first while seats remain (a pair spends two; one that can't fit
            ; skips so a scalar may still take the last seat) -- the choose-order link restores
            ; ascending heat, so seat ASSIGNMENT stays the old positional walk (register

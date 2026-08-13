@@ -1276,7 +1276,10 @@ register, and `cspool` is empty on every arm and riscv target — the residency 
 never offered a seat there at all): 4 usable on x64, 10 arm64, 11 riscv64, 7 thumb2. Fit:
 every crossing name of a function holds simultaneously in 505 of 544 fns on arm64 (93%)
 against 338 of 543 on x64 (62%). **So build the interval allocator's assignment against arm64
-first** — identical demand, 2.5× the file, and nothing competing for it. ⚠ riscv64/thumb2 read
+first** — identical demand, 2.5× the file, and nothing competing for it. ⚠ SUPERSEDED
+2026-08-13 by the span census below: the file being idle is what made arm64 first, but the
+spans then said the file is not the binding constraint there at all, so what arm64 is first
+FOR is the admission rule, not the scan. ⚠ riscv64/thumb2 read
 low only because `nhome` is 0 there (params are never homed), so their universes are
 locals-only and their demand is understated by exactly the parameters — pre-coloured arrivals
 would be the first param residency those backends ever get.
@@ -1330,7 +1333,63 @@ lane moves). **thumb2 stays off**: its file needs eleven ops modelled in `rdsp` 
 64-bit pair lane (`adc` `sbc` `sbcs` `umull` `smull` `mla`) plus `ors`, `clz`, `cvtui2sd` and
 the `udivll`/`uremll` helpers — on the least-exercised target, so it earns its own rung. The
 enumeration itself is cheap and repeatable: let cskeep print instead of scare and read the
-census.
+census. ⚠ CORRECTED at A-2: it is TWELVE, and the miscount is the method's — this census was
+read off love.c alone, which never converts a double to an unsigned, so `cvttsd2ui` never
+appeared and only test/thumb2/libd.c found it. Sweep the corpus, not one program.
+
+**2026-08-13 — iv phase 1 step 1: alive answers a per-name live SPAN, and the span census
+refuses the packing argument.** `rec` recorded only call-bearing statements; `spn` now folds
+every statement's live set into a `[lo hi]` tick extent (the control-only lanes record too, so
+the extent is a superset of the true range — a `goto` reads the whole universe). Byte-identical
+`.text`/`.data` on all four targets, compile time flat. What the table then said stopped the
+scan: mean max-overlap is 4.3 on x64/arm64 and 1.7 on riscv/thumb2, so **96% of arm64 functions
+could seat their whole universe in the ten-register file** — and letting disjoint spans share a
+register buys only +4% more names seated (+7% on x64's four). The reason is that **the median
+universe name is live across 95% of its function**, p75 the whole body: a param is live from
+entry by definition and a C local is declared at the top of its scope, so at the statement
+grain there are no short ranges to pack. ⚠ therefore the file is not the binding constraint on
+arm64 — `lpick`'s ADMISSION rule is — and the census that ranked arm64 first ranked it on
+supply the allocator does not need. Price the admission gates before building the scan.
+
+**2026-08-13 — iv phase 1 step 2: the nested-loop licence retires.** The admission census (tag
+every rejection point, count over love.c) said **69% of names reach neither candidate list** on
+arm64/riscv — all barred from the pool lane by `crossing`, which is correct physics, so the cs
+lane is the only door — and that `lpick`'s `ln < 1` nested-loop licence shuts it on 49% of them
+(the `1 + nx9` term 31%, `tc <= 2` 13%, `lea` 4%). That licence was a PROXY for "the save/restore
+pair amortizes", from before A-1 added the real per-invocation accounting; with the actual cost
+charged it charges twice. Dropping it and ranking candidates by total slot touches (rather than
+by `ln`, which degenerates to 0 for most candidates once the gate is gone): **arm64 −1,185,
+riscv64 −1,109, x64 −1,509 insns — −2.0% of love.c's x64 .text** — and the dynamic gate, which is
+the one that matters when the rule's whole provenance is static counts lying, reads **271.87M vs
+272.08M instructions retired on the corpus, −206,000 against ±500 noise.** ⚠ 31 shape anchors in
+law.l broke; across all 172 law snippets the change is −17 insns, sp-loads flat, sp-stores −2, so
+they were re-anchorings — loops shorten because a counter gains a cs home (`h3` 18 → 14
+insns/iteration, `nrg` 21 → 19, `lo8` 13 → 10). Two anchors were rewritten rather than renamed:
+lo8's law asserted the post-loop call bars the homes (the cs lane does not care — the callee
+preserves the seat), and nrg's `(= 1 (ldsp nrgf 56))` was PASSING while counting a cs restore
+instead of the slot it was written for — the offset-anchor accident law.l:263 warns about.
+
+**2026-08-13 — iv rung A-2: thumb2's file opens, and the op census was short by one.** Twelve
+ops modelled in `rdsp` (the carry family joins `flagops` — adcs/sbcs/ors set the flags, adc/sbc
+READ the carry a preceding adds/subs left, so none may be lifted; `(umull dl dh a b)` is the
+first form defining TWO registers; `udivll`/`uremll` are the first NULLARY ones, the whole
+64-step expansion being the form, owning the r0..r3 quad while r4..r7 are pushed and popped
+inside it), plus a cspool row for t32 (r4..r10) and one for **v6m starting at r5** — it keeps
+r4 as a bottom frame base, pushed after the sub. **−14,728 bytes on love.c/thumb2, 80 fns
+better and 55 worse (worst +256, lvm_hush); x64, arm64 and riscv64 all BYTE-IDENTICAL**, so
+modelling clz and the carry family — which the other targets do emit — changed nothing there.
+lvm_aprod alone goes 4,634 → 4,201 insns, and the byte delta is exactly 4x the insn delta, so
+every form removed was a 32-bit wide one.
+
+⚠ **the eleven-op census was wrong, and the method is the lesson**: it was enumerated over
+love.c, which never emits `cvttsd2ui`, so the twelfth op only surfaced when test/thumb2/libd.c
+hit the live gate. Re-swept with cskeep printing instead of scaring over 133 test/cc files plus
+the thumb corpus on all four targets — clean. A census over one program describes that program.
+
+Also: **cskeep stopped naming targets.** Its gate was `arm? g && !(a64? g || rv? g)`, a list
+that grew once per rung; it now asks `!(two? (cspool g))` — a target with no file has nothing
+to breach — so a8 bails for the true reason and the next backend to get a file is covered
+before anyone writes it.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build),
