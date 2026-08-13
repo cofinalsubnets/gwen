@@ -158,12 +158,44 @@ addresses. `lift.l` refuses such a body rather than lifting one that would jump 
 it happened to be mapped; binding them is a linking step, and holo's `ld-read` (in the
 image since the linker half landed) is the tool for it.
 
-**The automation landed (rungs 1+2, `bench/vmsplice/auto.sh`).** The probe was a
-hand-written body; the pipeline now runs on live closures. `dis` (love/ev.l, the emission
+⚠ **and since 2026-08-13 the JIT is a DOOR IN THE IMAGE, not a pipeline of scripts:
+`lib/splice.l`, `(use 'splice)` then `(jit f)` — compose, compile, bind, nif, all in one
+process, gated by `make test_splice` (four samples jitted and differentialled against their
+own twins, the fifth declining by name).** It needs an image carrying the compiler
+(`love wake out/host/mooncc.image`), which the dist artifact does.
+
+⚠ **and the source of truth moved into the binary the same day: `mooncc -fir=PREFIX` writes the
+machine-form IR of every matching function into `.rodata` under `ai_lvm_ir`, as one readable
+datum.** The default `love` is built with `-fir=lvm_` and carries **91 op handlers, 28 KB**, which
+a plain `love` reads back out of `/proc/self/exe` with no compiler, no source tree and no
+disassembler — `(use 'splice)` then `(jit-irtab ())`, gated by `test_splice`. This is the answer
+to the question the C route was asking wrong: an op's body was being scraped out of **love.c's
+text**, which a shipped love does not carry, and the alternative — disassembling our own
+`lvm_` functions — would hand back bytes the splicer could not reason about. holo assembles
+these forms as they stand, because that is what they are.
+⚠ **the cap is the splice budget and is read off the curve**, not chosen: over love.c's 195
+handlers, 64 forms takes 93 of them for 29 KB where 128 takes 124 for 67 KB and the whole set
+weighs 821 KB. A handler over it is absent, and the JIT declines an op it has no IR for by name.
+⚠ **two flags now mirror between `host/build.mk` and `test/gate/fixpoint.sh`** — the gate's own
+comment predicted this one: a flag on love.c in make's rule and not in the fixpoint's rebuild is
+a byte difference that reads as a broken compiler.
+
+**What stands between the two routes is the SPLICER**, and its one non-mechanical trap is written
+at `jit-ir`: a handler carries its own room guard, that guard jumps to `lvm_gc`, and `lvm_gc`
+resumes at `Ip` — which in a spliced body is the nif cell. A collection halfway through would
+re-run the ops that already ran. The requirements must be summed and hoisted into one guard ahead
+of any `Sp` motion, deopting to the twin the way the C route's guard does. A per-op guard left in
+place is a silent double-apply, not a crash. The rest is mechanical: strip the fixed dispatch
+triple off every copy but the last, rename internal labels per copy, and bind `la`/`call` targets
+to live addresses through `assemble-at`'s seeded label table — a runtime splice needs no
+relocation at all, because it knows the answers.
+
+**The automation landed first (rungs 1+2, now folded into the module above).** The probe was a
+hand-written body; the pipeline runs on live closures. `dis` (love/ev.l, the emission
 interface's dual — a reflection primitive built pre-egg from `peek` + the book, like
 `feels`, so it survives the birth mop) reads a compiled thread back to `(op-nom operand..)`
-rows; `compose.l` maps each row to its op's own C body, harvested from love.c's `op11`/
-`fld`/`op` macro arguments with the nif→nom bridge through `nifs.h`; and `bind.l` closes
+rows; the composer maps each row to its op's own C body, harvested from love.c's `op11`/
+`fld`/`op` macro arguments with the nif→nom bridge through `nifs.h`; and the bind closes
 what was owed above — it rewrites mooncc's `lea r,[rip+d32]` external refs to a
 same-length `mov` aimed at an appended cell holding the symbol's live address, resolved
 against `/proc/self/exe`'s own symtab plus the load bias from the exe's `/proc/self/maps`
@@ -186,7 +218,7 @@ pays the representative-object bridge at every op seam for the same reason gen.l
 expression seam. `sl-cross` (test/uuspllaw.l) already proves the two machines are one design; this
 is that theorem's engineering face.
 
-**Where the information passes.** The composed body (`bench/vmsplice/compose.l`) is ONE C function
+**Where the information passes.** The composed body (`lib/splice.l`'s composer) is ONE C function
 over one base with constant offsets, and love.h already declares that base non-aliasing:
 
 ```c
@@ -242,7 +274,7 @@ steps this section used to carry are numbers 1, 2, 4, 6 and 7 there.
 
 * **a gauge the corpus cannot give.** A composed body is a pure dependent chain of store→load
   seams — it isolates lever 2 with nothing else in it, where `spec.l` averages the effect away to
-  four digits. `bench/vmsplice/check.l` already times it against its interp twin.
+  four digits. `bench/vmsplice/auto.l` already times it against its interp twin.
 * **a second SHAPE of C.** love.c is hand-written; composed bodies are machine-generated,
   straight-line, one base, no locals. ⚠ this is the A-2 lesson as an instrument — the op census
   that was short by one was read off love.c alone, and a corpus with different physics is what
@@ -547,7 +579,7 @@ file real on arm64, riscv, thumb2) · 5.0/5.1a/5.1b i–iii.
 | 4 | **S-1b — reach the arm/riscv pipeline** | both | that `stldp` has *work* on three targets where it silently finds none | a store print that fires on all four targets; the seam probe folds on each |
 | 5 | **residency priced as extent × class × reload** — phase A LANDED 2026-08-13 | both | *why* a value lives where it lives, once, instead of seven gate stacks with stale proxies | phase A: byte-identity, the cost side in one table. phase B: corpus dynamic, mechanism count DOWN |
 | 6 | **location keys — (base, offset, width)** | both | one key space: frame slots, array elements and restrict-base cells stop being three mechanisms | the array leg folds; `aeoff` stops parsing digits out of `"x[3]"` |
-| 7 | **the die reaches the seam** | splice | *deliver where the consumer wants it* — an interior op boundary emits nothing at all | `bench/vmsplice/check.l` against its interp twin; the ~4× ceiling the probe measured |
+| 7 | **the die reaches the seam** | splice | *deliver where the consumer wants it* — an interior op boundary emits nothing at all | `make test_splice` against the interp twins; the ~4× ceiling the probe measured |
 | 8 | **a module boundary for residency** | moon | which pass may ask what — the 14.5% visible AS the 14.5% | it compiles; the surface is declared |
 
 ⚠ **step 9 is a standing decision, not a rung: spend nothing on packing.** The span census says

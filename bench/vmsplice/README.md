@@ -2,55 +2,61 @@
 
 Decode a thread into its named handlers, splice their bodies into one function with the
 dispatch deleted, compile, install through `nif`. This started as a probe pricing the
-shape (`run.sh`, below) and is now an **end-to-end pipeline that runs on live closures**
-(`auto.sh`): `dis` reads a compiled closure back to op rows, `compose.l` maps each row to
-its op's own C body, mooncc compiles it, `bind.l` links it against the running process,
-`check.l` differentials it against the interp twin.
+shape (`run.sh`, below); **the JIT itself has moved into the image as `lib/splice.l`, a
+module with one door** — `(use 'splice)` then `(jit f)`, which answers a native closure
+agreeing with `f`, or `()` naming the row it could not say. What is left here is the
+pricing.
 
 ```sh
-sh bench/vmsplice/auto.sh          # the pipeline on live closures (samples.l)
+make test_splice                   # the gate: jit the samples, differential each against its twin
+LOVE_NO_GLAZE=1 out/host/love wake out/host/mooncc.image \
+  -l bench/vmsplice/samples.l bench/vmsplice/auto.l    # the same, timed
 sh bench/vmsplice/run.sh           # the original probe (splice.c + the hand-made body.c)
 ```
 
-Both need `make host` first. Results and the argument live in **doc/moon-regalloc.md**: "the splice client" for the numbers,
-"the splice JIT and the moon arc" for why this pipeline and the compiler's residency work are one
-problem, and THE LADDER for the shared plan (steps 2, 4 and 7 are the ones this pipeline asks
-for).
+All need `make host` first, and the JIT half needs the **woken mooncc image**: `jit` compiles
+in the process it is jitting for, so the compiler has to be in the same image. Results and the
+argument live in **doc/moon-regalloc.md**: "the splice client" for the numbers, "the splice JIT
+and the moon arc" for why this and the compiler's residency work are one problem, and THE LADDER
+for the shared plan (steps 4 and 7 are the ones this asks for).
 
-## the pipeline (auto.sh) — dis → compose → mooncc → bind → nif → differential
+## the door — dis → compose → mooncc → bind → nif, in one process
 
 Every side is ours, so the reflection is direct — no objcopy, no foreign ELF walk, no
-`/proc` guessing:
+`/proc` guessing. `lib/splice.l` carries all of it; the pieces named here are its sections.
 
 * **`dis`** (in `love/ev.l`, not here) — the emission interface's DUAL: a compiled
   thread read back as `(op-nom operand..)` rows, terminated at the ret family. It is
   built pre-egg from `peek` + the book, exactly like `feels`, so the op-word→name table
   survives the birth mop that deletes those noms. The op roster and the operand/opcode
   discrimination are the image codec's own law (`img_encode`). `test/dis.l` gates it.
-* **compose.l** — `dis` a sample, then map each row to its op's C body. The bodies are
+* **the composer** — `dis` a closure, then map each row to its op's C body. The bodies are
   literally macro arguments in `love.c` (`op11(lvm_cup, chainp(Sp[0]) ? B(Sp[0]) :
   ZeroPoint)`), harvested from the source text; a nif name is bridged to its `lvm_` nom
   through `nifs.h`'s array rows. Operands bake as immediates, one room guard leads, the
   glaze's deopt-to-twin and the nif-cell epilogue close it. A row the table cannot say
-  DECLINES the sample and names the op — that report is what prices the next extraction
+  DECLINES the closure and names the op — that report is what prices the next extraction
   rung (today `two?`, a non-`op11` nif, is the first uncovered one).
-* **bind.l** — rung 2, the relocation step `lift.l` refuses, done IN-PROCESS. mooncc
-  emits an external ref as a 7-byte `lea r,[rip+d32]`; `bindcode` flips it to a
+  ⚠ **reading those bodies out of `love.c`'s text is what keeps this a dev-tree tier**: a
+  shipped `love` carries `mooncc` and `love.h` but no `love.c`. Baking the table is the
+  rung that makes `jit` work off-tree.
+* **the bind** — the relocation step `lift.l` refuses, done IN-PROCESS. mooncc
+  emits an external ref as a 7-byte `lea r,[rip+d32]`; `jit-bind` flips it to a
   same-length `mov r,[rip+d32]` aimed at an 8-byte cell appended to the blob holding the
   symbol's LIVE address — so every ref is blob-internal and `nif`'s mmap can land the
   bytes anywhere. Symbols come from our own binary's symtab (`/proc/self/exe`, holo
   linked it) plus the load bias from the exe's own `/proc/self/maps` line (matched by
   `readlink` path + zero file-offset, never the first line — that is often an unrelated
-  anon `r-xp` region). ⚠ this is a library, not a tool that writes a `.l` for later: a
-  separate process has a different ASLR base, so the binding is only valid in the
-  process that then nifs it. That is how a real in-process JIT works.
-* **check.l** — bind + nif + differential + timing, all in one `love`. The twin is the
-  SAME closure (samples.l compiled by ev), so a composed body is never wrong, only
-  faster — the differential is `sl-cross` one level down: one denotation, two
-  presentations, checked forall inputs.
+  anon `r-xp` region). ⚠ **in-process by construction**: a separate process has a different
+  ASLR base, so the bytes are valid only in the love that made them. That is what a JIT is,
+  and it is why none of this can be written out for later.
+* **the differential** (`test/gate/splice.l`) — the twin is the SAME closure, so a composed
+  body is never wrong, only faster: `sl-cross` one level down, one denotation and two
+  presentations, checked forall inputs. A disagreement is a mooncc codegen bug, a bad
+  extraction or a bad bind, and all three are silent otherwise.
 
 Measured today (LOVE_NO_GLAZE, short accessor chains): the composed bodies beat their
-interp twins ~1.2–1.3×. That is the floor, not the ceiling — the doc's probe shows the
+interp twins ~1.1–1.2×. That is the floor, not the ceiling — the doc's probe shows the
 tier is ~4× on a 64-op body, and the whole distance from here to there is mooncc's
 op-boundary slot reload (lever 2), which lands with the allocator arc.
 
@@ -63,19 +69,19 @@ op-boundary slot reload (lever 2), which lands with the allocator arc.
 
 ## the pieces
 
-The pipeline half is `samples.l` → `compose.l` → `bind.l` → `check.l`, driven by
-`auto.sh` (documented above). The probe half:
+The JIT half is `lib/splice.l` (the door), `test/gate/splice.l` (the differential) and
+`samples.l` → `auto.l` (the timing). The probe half:
 
 * **splice.c** — three lanes over one 64-op sequence: a real thread dispatched the
   normal way, the same bodies spliced, and the spliced ones each carrying a `Have1`.
   Both lanes do an identical chain walk, so the pointer-chase latency is common-mode
   and the difference is the dispatch.
 * **body.c** — a self-contained composed body, written so its `.text` carries no
-  relocation. `bind.l` lifts that constraint (above); `body.c` keeps it so the probe
+  relocation. `jit-bind` lifts that constraint (above); `body.c` keeps it so the probe
   stays a pure dispatch-vs-composed reading.
 * **lift.l** — pulls a relocation-free body's bytes out of the `.o` with holo's own
   reader (`ld-read`), writing them as love source pinning `jitcode`. The address-free
-  fast path `bind.l` generalizes; `run.sh` still uses it for `body.c`.
+  fast path `jit-bind` generalizes; `run.sh` still uses it for `body.c`.
 * **install.l** — `nif`s the bytes, checks the native agrees with its interp twin on
   five inputs, then times both.
 

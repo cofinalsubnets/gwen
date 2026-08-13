@@ -80,7 +80,7 @@ piece. ~11k lines of love.
 ## the driver
 
 ```
-mooncc [-c] [-pie] [-nostdinc] [-fno-inline] [-t TARGET] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
+mooncc [-c] [-pie] [-nostdinc] [-fno-inline] [-fir=PREFIX] [-t TARGET] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
 ```
 
 Several inputs need `-c` and land each in the cwd as `x.o` (gcc-shaped); the old positional pair
@@ -123,6 +123,17 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
   That is what it is for: comparing one function's codegen against another cc's is impossible
   when a splice has rewritten it into its caller. Gated by `test_moon`, both halves — that it
   bites, and that the answer is unchanged;
+- `-fir=PREFIX` is the second real one, and it is the compiler **writing down what it built**:
+  the machine-form IR of every function whose name starts with PREFIX, laid in `.rodata` under
+  `ai_lvm_ir` as one readable datum — `((name form..) ..)`, which `sound` reads and holo
+  assembles back as it stands, because that is what those forms are. The splice JIT
+  (`lib/splice.l`) is the reader: a `love` built with `-fir=lvm_` carries its own op handlers
+  and can compose them with **no compiler, no source tree and no disassembler**. ⚠ a cap of 64
+  forms rides with it — a splice-able op is a short straight-line handler, and love.c's biggest
+  `lvm_` is 102 KB of IR on its own; over the cap a function is simply absent, which is what
+  lets the JIT decline it by name. On love.c: 91 handlers, 28 KB of `.rodata`, `.text` unmoved.
+  ⚠ it must MIRROR into `test/gate/fixpoint.sh` — a flag on love.c in one rebuild and not the
+  other is a byte difference that reads as a broken compiler;
 - the **semantic** refusals stay loud (`-shared`, `-Wl,`'s payload, `-m..`) — an ignored one
   would be the silent-no-op trap in a cc suit. ⚠ mooncc **refuses** a `-m` rather than ignoring
   it.
