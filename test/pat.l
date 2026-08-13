@@ -170,6 +170,29 @@
  ('no = (@ '(a (b q) d) (_ (_ 'c) _) 'deep 'no))
  )
 
+; --- a pattern in a \ PARAM, which is opfix's doing and not this macro's: a param that is
+; not a nom becomes a fresh one and the body takes it apart. (\ [a b] x) IS (\ v (@ v [a b] x)),
+; so every shape above works there, and a define-sugar binder is a \ like any other.
+(assert
+ (7 = ((\ [a b] (a + b)) '(3 4)))
+ ('(6 20) = (map (\ [a b] (a * b)) '((2 3) (4 5))))      ; ..the everyday one
+ ('q = ((\ ['lam x b] x) '(lam q r)))
+ (5 = ((\ [a b] [c d] (a + d)) '(1 2) '(3 4)))           ; ..several, in order
+ (11 = ((\ x [a b] (x + a)) 10 '(1 2)))                  ; ..mixed with ordinary noms
+ (() = ((\ [a b] a) 5))                                  ; ..no fit, no else: the zero point
+ ('up = ((\ (? (a < b) [a b]) 'up) '(1 2)))              ; ..guards compose
+ (() = ((\ (? (a < b) [a b]) 'up) '(2 1)))
+ ('q = ((\ (['lam x] || ['pi x]) x) '(pi q)))            ; ..so do alternatives
+ ('z = ((\ ('lam n _) n) '(lam z b extra)))              ; ..and the lax form
+ ; ..an inner param still shadows: the rewrite is a binder, not a splice
+ (9 = (((\ [a b] (\ a a)) '(1 2)) 9))
+ ; ..a define-sugar binder is one too, at every level of a curried one. POSITION 0 is the
+ ; name (or the binder carrying it) and is never a pattern, which is why the two cannot clash.
+ (7 = (: (f [a b]) (a + b) (f '(3 4))))
+ (11 = (: (g x [a b]) (x + a) (g 10 '(1 2))))
+ ('(1 2 3 4) = (: ((k [a b]) [c d]) [a b c d] ((k '(1 2)) '(3 4))))
+ (7 = (: ((k a) b) (a + b) ((k 3) 4))))                  ; ..and an all-nom binder is untouched
+
 ; THERE IS NOTHING UNGATED HERE ANY MORE, because `@` no longer scares at all: every
 ; pattern is READ. A head that names no tag, or names one and misses its shape, is the
 ; lax form pattern; an alternative binds the union with the winner's values. What used

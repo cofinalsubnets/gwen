@@ -215,6 +215,8 @@
 (: a 1 b 2 (a + b))          ; 3     : binds in source order; the last form is the result
 ((\ x y (x + y)) 3 4)        ; 7     \ args.. body -- a lambda, auto-curried
 (\ (1 2))                    ; (1 2) one operand: \ is quote, so 'x is just (\ x)
+((\ [a b] (a + b)) '(3 4))   ; 7     a \ param that is NOT a nom is a PATTERN (love/pat.l's @):
+                             ;       opfix lowers it to (\ v (@ v [a b] ..)), define-sugar too
 (? 0 'a (1 < 2) 'big 'else)  ; big   ? -- test/result pairs, then a final else
 ; `:` doubles as sequencing (bind `_` for effect); `(f x)` on the left is define-sugar; a body-less
 ; top-level `:` leaks its bindings to the global scope (how tests share helpers). a body-having `:`

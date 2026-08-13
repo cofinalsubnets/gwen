@@ -16,6 +16,11 @@
 ; scrutinee on the left, where a compound one spends no parens -- (vof en <t @ ..)
 ; not (@ (vof en <t) ..). love/prel.l's dyadics row; this file sees neither.
 ;
+; A PATTERN ALSO GOES IN A \ PARAM, and that half is opfix's, not this file's: a param
+; that is not a nom becomes a fresh one and the body takes it apart, so (\ [a b] x) IS
+; (\ v (@ v [a b] x)) and (map (\ [a b] (a * b)) ..) reads the way it should. A
+; define-sugar binder is a \ too, at every level. love/prel.l's op-depat / op-dpb.
+;
 ; A PATTERN IS ITS CONSTRUCTOR, READ BACKWARDS: the same text that BUILDS a value
 ; MATCHES it, so nothing has to be learned twice and a bracket is as closed in a
 ; pattern as it is in a value. it is also ordinary surface, ALREADY FACTORED --

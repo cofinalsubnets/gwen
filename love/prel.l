@@ -529,14 +529,48 @@
    (op-colon fs)
     (? (atom? fs) fs
        (atom? (cup fs)) (>< (op-core (cap fs)) ())        ; a lone form is the body
-       (>< (cap fs)                                       ; the name: verbatim
-             (>< (op-core (caup fs))                      ; the value: factored
-                   (op-colon (cuup fs)))))                  ; the rest: pairs on
+       (: r (op-dpb (cap fs))                             ; define-sugar binds a \ too: lower its patterns
+          (>< (cap r)                                     ; the name: verbatim, its params lowered
+                (>< (op-core (op-wrap (cup r) (caup fs))) ; the value: wrapped where they were, then factored
+                      (op-colon (cuup fs))))))              ; the rest: pairs on
    ; a \ lambda is a binder too: the args stay verbatim, only the body factors.
    ; (\ x) -- one operand -- is quote, kept whole by op-core's first clause.
    (op-lam fs)
     (? (atom? (cup fs)) (>< (op-core (cap fs)) ())        ; the last operand is the body
        (>< (cap fs) (op-lam (cup fs))))                    ; an arg: verbatim, recurse
+   ; ⚠ A PARAM THAT IS NOT A NOM IS A PATTERN, and the body takes it apart: (\ [a b] x) is
+   ; (\ v (@ v [a b] x)), v fresh. Nothing is displaced -- such a param used to bind NOTHING
+   ; (the body read `missing a`), so no code can have meant anything by one.
+   ; ⚠ it emits the `@` SYMBOL and stops: pat is a module and expands it at the reader's own
+   ; compile, so neither compiler learns what a pattern is. A seat with no pat spliced has an
+   ; unbound `@` -- which is the seat's tiering answering, not this pass's business.
+   ; ⚠ and it runs BEFORE the nested-lambda flatten, so that pass still only ever sees noms
+   ; and its shadow check stays a comparison of names. (\ [a b] (\ a x)) must not merge.
+   (op-wrap ws b) (? (atom? ws) b
+                     (op-wrap (cup ws) (>< (intern "@") (>< (cap (cap ws)) (>< (caup (cap ws))
+                                                       (>< b ()))))))
+   (op-depat ol ws)
+    (? (atom? (cup ol)) (>< (op-wrap ws (cap ol)) ())          ; the body: wrapped outermost-last
+       (: p (cap ol)
+          (? (nom? p) (>< p (op-depat (cup ol) ws))
+             (: v (nom 0) (>< v (op-depat (cup ol) (>< (>< v (>< p ())) ws)))))))
+   ; the same over a param list with NO body -- answers (params . wraps), for the binder below.
+   (op-dp ol ws)
+    (? (atom? ol) (>< () ws)
+       (: p (cap ol)
+          (? (nom? p) (: r (op-dp (cup ol) ws) (>< (>< p (cap r)) (cup r)))
+             (: v (nom 0) r (op-dp (cup ol) (>< (>< v (>< p ())) ws))
+                (>< (>< v (cap r)) (cup r))))))
+   ; a define-sugar binder IS a lambda: (: (f [a b]) V ..) is (: (f v) (@ v [a b] V) ..).
+   ; ⚠ POSITION 0 IS NEVER A PATTERN -- it is the name, or (curried) the binder that carries it --
+   ; so every LATER position at every level is a param and lowers. That is also why the two
+   ; features cannot collide: `:` does not match patterns in an assignment, only under a binder.
+   ; ⚠ a curried binder's levels are separate argument positions, and the inner binder's params
+   ; are the EARLIER arguments -- so its wraps go OUTSIDE this level's. ws is innermost-first.
+   (op-dpb b)
+    (? (atom? b) (>< b ())
+       (: hr (op-dpb (cap b)) pr (op-dp (cup b) ())
+          (>< (>< (cap hr) (cap pr)) (cat (cup pr) (cup hr)))))
    ; flatten a directly-nested lambda body -- (\ a (\ b B)) -> (\ a b B) -- so neither compiler
    ; builds the extra closure. shadowing stays nested: (\ x (\ x x)) must not merge.
    (op-mem? y l)      (? (atom? l) 0 (id? y (cap l)) 1 (op-mem? y (cup l)))
@@ -571,7 +605,7 @@
                  (? (atom? cs) ()                            ; commas alone: nothing
                     (atom? (cup cs)) (op-core (cap cs))      ; one clause: the commas composed away
                     (>< (intern ",") (map op-core cs))))
-             (id? h '\) (>< '\ (op-lam (op-flat-ol (cup x) ())))   ; (\ a.. body): flatten nested lambdas, then factor the body
+             (id? h '\) (>< '\ (op-lam (op-flat-ol (op-depat (cup x) ()) ())))   ; (\ a.. body): patterns to noms, flatten nested lambdas, factor the body
              (id? h ':) (>< ': (op-colon (cup x)))         ; (: n v ..): binders verbatim
              ; the reader's glued-run emission (mono (run d)): factor the run monadically around
              ; the (recursively opfixed) datum; an unfactorable run is the plain application (run d)
