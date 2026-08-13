@@ -48,7 +48,7 @@
    (gfz2 i) (? (i < 2) " " i)
    (gfz3 i) (? (i < 2) '(1 2) i)
    _ (rng-set (wheel 20260729))                    ; fixed seed: the two runs must generate the SAME forms
-   (gnth l i) (? (i < 1) (cap l) (gnth (cup l) (i - 1)))
+   (gnth l i) (? (i < 1) <l (gnth >l (i - 1)))
    (pick l) (gnth l (rand (tally l)))
    ; ⚠ HOISTED (see the header) -- never a nested single-binding `:`
    (uptogo i acc) (? (i < 0) acc (uptogo (i - 1) (i >< acc)))

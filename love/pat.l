@@ -111,7 +111,7 @@
    (wkv as v) (? (two? >as)
                  (: g ['peep v <as (lit gone)]
                     (wcat (wcat (wts [['! ['id? (lit gone) g]]]) (pw <>as g))
-                          (wkv (cuup as) v)))
+                          (wkv >>as v)))
                  wnil)
    (widx as v i) (? (two? as) (wcat (pw <as ['peep v i ()]) (widx >as v (i + 1))) wnil)
 
@@ -170,7 +170,7 @@
           (cls r) (? (! (two? r)) [() ()]              ; no clause and no else: the zero point
                      (! (two? >r)) [() <r]             ; the odd tail IS the else
                      (: w (pw <r v) d (dedup <>w ())
-                        rest (cls (cuup r))
+                        rest (cls >>r)
                         [([(cat <w <d) (bind <>d <>r)] >< <rest) <>rest]))
           cl (cls >a)
           [['\ v (tree <cl <>cl)] <a])))

@@ -51,7 +51,7 @@
    ; compiled as `acc + k` and answered triangular numbers for three spaces. The two free-capture guards
    ; below (opnd-ok?, gdefs-ok?) are earlier patches of this same class, one shape at a time; grpfix closes
    ; it whole -- the recognizer and the codegen are one pair again, wherever the lane is entered from.
-   (grp-ok? gds) (: cands (map (\ gd `((cap (cap gd)) ((tally (cap gd)) - 1))) gds)   ; (name arity), autogroup's armap
+   (grp-ok? gds) (: cands (map (\ gd `(<<gd (tally <gd - 1))) gds)   ; (name arity), autogroup's armap
                     ((tally (grpfix gds cands)) = (tally gds)))
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op <e

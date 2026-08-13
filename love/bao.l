@@ -82,7 +82,7 @@
    ; application `(a b c)`, so `f x` applies and `1 = 1` factors infix. returns m if
    ; the line ends inside an unfinished shape, () for a blank line, else a one-form list.
    (rdall cl acc) (: r (sound cl)
-                    (? (two? r)     (rdall (cup r) (<r >< acc))
+                    (? (two? r)     (rdall >r (<r >< acc))
                        (id? r 'torn) m             ; unfinished shape -> more
                        (rev acc)))                 ; a clean end -> the datums, in order
    (parseall cl)
@@ -315,11 +315,11 @@
    (do_eval v)
      (: pid (twirl ev v)
         (poll _)
-          (? (landed? pid) (: r (catch pid) _ (putx r) -1)   ; the answer
+          (? (landed? pid) (putx (catch pid), -1)   ; the answer
              (cue? 0)    (: c (getc 0)
-                            (? (c = 3) (do (puts "^C") (freeze pid) -1)
+                            (? (c = 3) (puts "^C", freeze pid, -1)
                                (poll ())))
-             (do (rest 0) (poll ())))
+             (rest 0, poll ()))
         (poll ()))
 
    ; the read-eval-print loop proper. the host and kernel frontends start the
@@ -339,7 +339,7 @@
    ; absorbed condition is the point, the held inhabitant of nothing, so
    ; (i love you) stays 1. any policy that runs out of cases delegates here:
    ; (\ a b (? (mine? a) .. (welp a b))).
-   welp (\ a b ())
+   (welp a b) ()
 
    ; the face a raise wears -- ;; a b -- ⚠ ON ERR: a DIAGNOSTIC, and a script's stdout is the
    ; script's (the C print this stands in for always went there). the two defaults share it and
@@ -351,8 +351,8 @@
    ; nif (wasm) folds the name to the point at this define, so (quit 1) is a no-op there and
    ; the floor is what answers. never let the quit be the answer -- it would be 1.
    (hface a b) (: _ (say err ";; ") _ (print err a) _ (say err " ") _ (print err b) (put err 10))
-   shell-help (\ a b (: _ (hface a b) (welp a b)))
-   file-help  (\ a b (: _ (hface a b) _ (quit 1) (welp a b)))
+   (shell-help a b) (hface a b, welp a b)
+   (file-help a b) (hface a b, quit 1, welp a b)
 
    ; INSTALLED AT LOAD, not at the prompt: file mode is where nobody was listening. an unbound
    ; global already surfaced from C, a `:` read before its pin did not, and both answer the zero
@@ -364,10 +364,10 @@
    ; ⚠ raw the tty BEFORE reading: the editor is the sole echo, so cooked-mode echo
    ; must be off or every line doubles.
    (shell _)
-     (: _ (hear shell-help)             ; the prompt survives every raise; a script must not
-        _ (raw 1)
-        _ (puts (";3 love " + love-version + "\n"))
-        (repl 0 0))
+    (hear shell-help,             ; the prompt survives every raise; a script must not
+     raw 1,
+     puts $ ";3 love " love-version "\n",
+     repl 0 0)
 
    ; --- the host-only pty wrapper (wrap) ---
    ; reachable from the bao prompt to pty-wrap a host program -- (wrap (L
@@ -379,12 +379,12 @@
    ; pump bytes from port `src` to port `dst`, one at a time, until src hits EOF
    ; (see -> -1); flush after each byte keeps the far side prompt. (Same shape as
    ; ain's pump -- prel stays socket/pty-free, so each app carries its own.)
-   (pump src dst) (: ch (see src) (? (ch = -1) 0 (: _ (put dst ch) _ (flush dst) (pump src dst))))
+   (pump src dst) (: ch (see src) (? (ch = -1) 0 (put dst ch, flush dst, pump src dst)))
 
    ; poll a non-blocking (gather pid) to its exited PAIR. the pair is told from
    ; still-running (0) STRUCTURALLY (two?), never by net: the status pair (0)
    ; nets blue, so ! / nil? can't tell it from 0 -- only two? can.
-   (waitfor pid) (: s (gather pid) (? (two? s) s (0 = s) (do (rest 2) (waitfor pid)) s))
+   (waitfor pid) (: s (gather pid) (? (two? s) s (0 = s) (rest 2, waitfor pid) s))
 
    ; (wrap argv) -- run argv on a fresh pty and become a TRANSPARENT bidirectional
    ; pump: stdin -> the child, the child's output -> stdout, both live at once
@@ -396,17 +396,14 @@
    ; EOF lands, join `up` -- wait if it already finished, else chill it (the child is
    ; dead, so dropping pending input is right). returns the exited status pair, or
    ; the errno fixnum on hatch failure.
-   (wrap argv)
-     (: r (tether argv)
-        (? (two? r)
-           (: pid <r m >r
-              up (twirl (\ _ (: _ (pump in m) (put m 4))) 0)   ; stdin -> child; VEOF on user EOF
-              _ (pump m out)                                      ; child -> stdout; ends when the child dies
-              _ (? (landed? up) (catch up) (freeze up))                ; join the input pump through the one death
-              _ (flush out)
-              _ (close m)
-              (waitfor pid))                                      ; gather the child
-           r))
+   (wrap argv) (: r (tether argv) (atom? r ? r (:
+    pid <r m >r
+    up (twirl (\ _ (pump in m, put m 4)) 0)   ; stdin -> child; VEOF on user EOF
+    (pump m out,
+     landed? up ? (catch up) (freeze up),
+     flush out,
+     close m,
+     waitfor pid))))
 
    ; --- the raw-line editor (bao's own line reader) ---
    ; repl's `edline` is wrong for wrapping a host program: it parses the buffer
@@ -417,8 +414,10 @@
    ; the logic), but with PORT-PARAMETERIZED event decode so the input is any
    ; port: `in` for the tty, a (tap ..) for tests. bev/besc/besc1 are
    ; edev/edesc/edesc1 reading (see ip) instead of the global getc.
+   ; ⚠ NOT the @ clause form: @ is pat's macro, and mps2 + teensy41 bake bao with no pat
+   ; at all (one lib row each). bao rides every seat, so it stays in the common subset.
    (besc1 ip c) (? (c = 126) -5
-                   (c = 59) (: _ (see ip) (peep arrow (see ip) 0)))  ; a line reader never jumps the buffer: the PLAIN finals
+                   (c = 59) (see ip, peep arrow (see ip) 0))  ; a line reader never jumps the buffer: the PLAIN finals
    (besc ip) (? !(91 = see ip) 0
      (: c (see ip) e (peep arrow c 0)
         (? !(id? e 0) e
@@ -439,13 +438,13 @@
    ; (l . r) halves of the zipper with the line count (u d) pinned empty, so the
    ; single-line primitives drive it unchanged.
    (edraw ip pr)
-     (: _ (puts pr) pl (tally pr)
+     (: pl (tally (puts pr))
         (loop l r)
           (: _ (edrender pl 0 () l r ())
              c (bev ip)
              (km uu ll rr dd) (loop ll rr)         ; motion: edleft/.. give (k u l r d), keep l r
              (? (c = -7) eofsym                     ; ^D / EOF -> the sentinel
-                (c = 10) (: _ (putc 10) (revcat l r)); Enter -> submit the raw line, in order
+                (c = 10) (putc 10, revcat l r); Enter -> submit the raw line, in order
                 (0 < c)  (loop (c >< l) r)           ; insert a printable
                 (c = -1) (edleft  km () l r ())
                 (c = -2) (edright km () l r ())
@@ -476,7 +475,7 @@
    ; disables the key -- edln IS edlnc with no comp, so every old consumer
    ; rides unchanged.
    (edlnc ip pr hist comp)
-     (: _ (puts pr) pl (tally pr) hn (tally hist)
+     (: pl (tally (puts pr)) hn (tally hist)
         (hnth k) <(drop k hist)                       ; hist[k], 0-based (k < hn)
         (loop l r i draft)
           (: _ (edrender pl 0 () l r ())
@@ -500,10 +499,9 @@
                            (: l2 (foldl (\ a ch (ch >< a)) l <t)
                               cs >t
                               _ (? (two? cs && two? >cs)
-                                   (: _ (putc 10)
-                                      _ (puts (foldl (\ a s (? (tally a) (a + "  " + s) s)) "" cs))
-                                      (putc 10))
-                                   0)
+                                   (putc 10,
+                                    puts $ foldl (\ a s (? (tally a) (a + "  " + s) s)) "" cs,
+                                    putc 10))
                               (loop l2 r i draft)))))
                 (c = -1) (edleft  km () l r ())
                 (c = -2) (edright km () l r ())
@@ -525,17 +523,16 @@
    ; the CHECKS live with the tests while the NAMES stay closure-private, off the
    ; book. the tablet is built ON THE CALL, so a shell that never asks never pays.
    (bao a) (? (a = 'parts)
-              (: p #('edleft edleft 'edright edright 'edbsp edbsp 'eddel eddel
-                     'edhome edhome 'edend edend 'edtop edtop 'edbot edbot
-                     'edup edup 'eddown eddown 'uphist uphist 'downhist downhist
-                     'detach detach 'emptybuf emptybuf 'mkframe mkframe
-                     'parses parses 'joinln joinln 'flatten flatten
-                     'splitat splitat 'parseall parseall)
-                 p)                                    ; the tablet itself -- it indexes itself
+              {'edleft edleft 'edright edright 'edbsp edbsp 'eddel eddel
+               'edhome edhome 'edend edend 'edtop edtop 'edbot edbot
+               'edup edup 'eddown eddown 'uphist uphist 'downhist downhist
+               'detach detach 'emptybuf emptybuf 'mkframe mkframe
+               'parses parses 'joinln joinln 'flatten flatten
+               'splitat splitat 'parseall parseall}
               (shell ()))
 
 
-   `(shell welp edraw wrap bao edln edlnc))
+   [shell welp edraw wrap bao edln edlnc])
 
 ;;; FIXME no other file in the codebase that exports names this way
  shell <_

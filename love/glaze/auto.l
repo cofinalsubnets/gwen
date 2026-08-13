@@ -987,7 +987,7 @@
    ; as an int -- the <t stores putcharm(v), not v); it may only flow to two?/cap/cup or a callee's
    ; CHAIN slot. ck stays sound because <t/>t feed only the recursive ck (a chain param).
    (cok? cm cands cps ps e) (? (member? e cps) 1
-                               (two? e && member? <e '(cap cup) && 2 = (tally e)) (cok? cm cands cps ps <>e)
+                               (two? e && member? <e '(cap cup) && tally e = 2) (cok? cm cands cps ps <>e)
                                0)
    ; pwcar? -- w is a raw chain-CAR word: <CE/>CE over a chain-valued operand. The one
    ; place such a word may reach a compare: the POINT-= production below (raw word identity).
