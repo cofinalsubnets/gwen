@@ -534,6 +534,28 @@ the compile time is), not the residency itself. The remaining 47 are the other h
 capacity pressure on a four-register file, which is the interval-sharing case the span census
 priced at +147 names.
 
+**and the miss census AIMS it (love.c/x64).** The optimism is right almost always: **81 misses
+across 10 functions of ~640**, 34 distinct (fn, name). Two facts make the replacement tractable:
+
+* **every miss is ABSENT-ENTIRELY**, never present-in-another-register (0 of 81). A pinned reg
+  leaves the free list, so nothing can steal it — a pin only ever dies by a drop.
+* **all 34 trace to a full `vmflush`** (a few also touched by the call or co-tenant paths), and
+  the reason is one line: `vmcflush` DEGENERATES to a whole-map flush when a loop has a call but
+  `csbor` is empty and `saro` is empty. So the miss condition is exactly *a call inside a loop
+  whose keep holds names that neither a cs seat nor the roster covers* — and `lomig`/`loseed`
+  already compute both sets. What is missing is that an ENCLOSING keep's names are never
+  re-checked against an inner loop's call coverage.
+
+⚠ so the up-front rule is **coverage, not optimism**: keep only what the seat set plus the
+roster can carry across every call the loop's subtree reaches. That is statically decidable from
+data the build already has, it cannot miss by construction, and `lochk`/`lomiss`/`lobar` and the
+four regen retry attempts go with it. The residency — the thing worth +184,000 — is untouched.
+
+⚠ **the array leg is NOT in the way and stays.** Its universe on love.c/x64 is exactly three
+functions — `as_big`, `rng_seed_into`, `rng_step` — so it serves the rng/bignum lanes, and
+**zero of the 165 loop-keep customers are element pins**. It neither blocks this rung nor
+depends on it.
+
 **The census (love.c, all four targets, 2026-08-12)** — demand is call-crossing names and their
 loop-weighted reads; supply is the callee-saved file minus frame base, sp and the callr park:
 
