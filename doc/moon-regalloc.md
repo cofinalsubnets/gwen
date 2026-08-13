@@ -1349,6 +1349,24 @@ grain there are no short ranges to pack. ⚠ therefore the file is not the bindi
 arm64 — `lpick`'s ADMISSION rule is — and the census that ranked arm64 first ranked it on
 supply the allocator does not need. Price the admission gates before building the scan.
 
+**2026-08-13 — iv phase 1 step 2: the nested-loop licence retires.** The admission census (tag
+every rejection point, count over love.c) said **69% of names reach neither candidate list** on
+arm64/riscv — all barred from the pool lane by `crossing`, which is correct physics, so the cs
+lane is the only door — and that `lpick`'s `ln < 1` nested-loop licence shuts it on 49% of them
+(the `1 + nx9` term 31%, `tc <= 2` 13%, `lea` 4%). That licence was a PROXY for "the save/restore
+pair amortizes", from before A-1 added the real per-invocation accounting; with the actual cost
+charged it charges twice. Dropping it and ranking candidates by total slot touches (rather than
+by `ln`, which degenerates to 0 for most candidates once the gate is gone): **arm64 −1,185,
+riscv64 −1,109, x64 −1,509 insns — −2.0% of love.c's x64 .text** — and the dynamic gate, which is
+the one that matters when the rule's whole provenance is static counts lying, reads **271.87M vs
+272.08M instructions retired on the corpus, −206,000 against ±500 noise.** ⚠ 31 shape anchors in
+law.l broke; across all 172 law snippets the change is −17 insns, sp-loads flat, sp-stores −2, so
+they were re-anchorings — loops shorten because a counter gains a cs home (`h3` 18 → 14
+insns/iteration, `nrg` 21 → 19, `lo8` 13 → 10). Two anchors were rewritten rather than renamed:
+lo8's law asserted the post-loop call bars the homes (the cs lane does not care — the callee
+preserves the seat), and nrg's `(= 1 (ldsp nrgf 56))` was PASSING while counting a cs restore
+instead of the slot it was written for — the offset-anchor accident law.l:263 warns about.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build),
 5.1b iv-b call-crossing optimism — each a physics lesson above.

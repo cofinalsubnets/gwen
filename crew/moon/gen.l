@@ -7772,9 +7772,7 @@
                   (? (peep lt off () || peep taken sq ()) (walk2 >rs acc)
                      (: tc (ntouch ir1x off 0)
                         (? (tc <= 2 || tc <= (1 + nx9)) (walk2 >rs acc)
-                           (: ln (lntouch ir1x off 0 0)
-                              (? (ln < 1) (walk2 >rs acc)
-                                 (walk2 >rs ([ln sq (? (d128? <>>e2) 2 1)] >< acc)))))))))
+                           (walk2 >rs ([tc sq (? (d128? <>>e2) 2 1)] >< acc)))))))
            ; choose HOTTEST-first while seats remain (a pair spends two; one that can't fit
            ; skips so a scalar may still take the last seat) -- the choose-order link restores
            ; ascending heat, so seat ASSIGNMENT stays the old positional walk (register

@@ -421,6 +421,46 @@ ADMISSION rule — the `tc <= 2` floor, the `1 + nx9` per-invocation term A-1 ad
 content for that rule is not `[lo hi]` but the weighted reads over it, which is a different number
 than the one this step built. Price the admission gates before building the scan.
 
+**phase 1 step 2 CLIMBED 2026-08-13 — the nested-loop licence retires; it was a proxy for a term
+that now exists.** Tagging every rejection point and counting over love.c: **69% of names reach
+neither candidate list** on arm64/riscv, all barred from the POOL lane by `crossing` (correct
+physics — pool registers are caller-saved), so the cs lane is the only door. What shuts it:
+
+| denied by | arm64 | share |
+|---|---|---|
+| `ln < 1` (the nested-loop licence) | 579 | 49% |
+| `tc <= 1 + nx9` (A-1's per-invocation term) | 367 | 31% |
+| `tc <= 2` | 158 | 13% |
+| `lea` (address-taken) | 52 | 4% |
+
+The licence was introduced as a PROXY for "the save/restore pair amortizes", when a tc-only gate
+measured +0.2% insns and an any-loop gate turned loads +0.2%. Both predate A-1, which added the
+real accounting. With the actual cost charged the proxy charges twice. Four variants against
+today, in insns:
+
+| variant | arm64 | riscv64 | x64 |
+|---|---|---|---|
+| b — drop the licence, keep `ln` as the rank | −1,206 (worst +92) | −944 (+162) | −966 |
+| c — licence and rank on ANY-loop touches | −951 (+38) | −409 (+149) | −384 |
+| **d — drop the licence, rank by `tc`** | **−1,185 (+92)** | **−1,109 (+136)** | **−1,509** |
+
+**d ships.** Dropping the licence degenerates the RANK — most candidates then score `ln` = 0 and
+the pick order is arbitrary — which is why d ranks on total slot touches and beats b on riscv64
+and x64 both net and worst-case. −2.0% of love.c's x64 `.text`. ⚠ and the dynamic gate is the one
+that mattered, since this rule's whole provenance is static counts lying: **271.87M vs 272.08M
+instructions retired on the corpus, −206,000 against ±500 run-to-run noise.** Pays statically and
+dynamically, regresses on neither.
+
+⚠ **31 shape anchors in `law.l` broke, and none of them hid a regression** — checked, not assumed:
+across all 172 law snippets the change is −17 insns, sp-loads unchanged, sp-stores −2, with two
+snippets increasing at all. Per function the loops shorten because a counter or accumulator gains
+a cs home it never had — `h3` 18 → 14 insns/iteration, `nrg` 21 → 19, `lo8` 13 → 10. Most anchors
+were register renames (`s` and `i` swapping seats). Two were not: **`lo8`'s law asserted something
+now false** ("a call AFTER the loop bars the homes, so the counters ride the vmap" — the cs lane
+does not care about crossing, the callee preserves the seat), and `nrg`'s `(= 1 (ldsp nrgf 56))`
+was still PASSING while counting a cs restore instead of the `x` slot it was written for, the
+exact accident `law.l:263` warns about. Both rewritten rather than renamed.
+
 **The census (love.c, all four targets, 2026-08-12)** — demand is call-crossing names and their
 loop-weighted reads; supply is the callee-saved file minus frame base, sp and the callr park:
 
