@@ -8187,6 +8187,9 @@
        _ (recfns <>ast)
        _ (: (go ns) (? !(two? ns) 1 (: _ (pin (g 'fns) <ns 1) (go >ns)))
             (go (keys sigs)))
+       ; an array declared `[]` -- parse spells the open bound 0, and it is the one
+       ; type a later declaration of the same name may COMPLETE.
+       (openarr? ty) (? (two? ty && (<ty = 'arr) && (<>>ty = 0)) 1 0)
        ; pass 1: record every global (name -> (label ty init)); cgimage
        ; validates the initializer at data-emission time (a label-valued image
        ; refuses the whole compile -- 4d)
@@ -8201,8 +8204,13 @@
                            old (peep (g 'glob) <p ())
                            ; C's tentative rule (6.9.2): `int x; int x = 5;` in one TU is ONE
                            ; object -- an INITIALIZED def always wins the entry; a tentative
-                           ; repeat keeps whatever stands, and lays no second symbol
-                           _ (? (!(two? old) || two? <>>p)
+                           ; repeat keeps whatever stands, and lays no second symbol.
+                           ; ⚠ a COMPLETE type outranks an incomplete one (6.2.7, the composite
+                           ; type): `extern char x[];` then `char x[1024];` is ONE object of
+                           ; 1024 bytes. Keeping the [] would lay it at SIZE ZERO, and the next
+                           ; global then shares its address -- a link that succeeds and an
+                           ; alias at run time (gzip's ifname/ofname, doc/moon-c-gaps).
+                           _ (? (!(two? old) || two? <>>p || (openarr? <>old && !(openarr? <>p)))
                                 (pin (g 'glob) <p [(intern <p) <>p <>>p]) ())
                            _ (? (!xd && !(peep (g 'laid) <p ()))
                                 (: _ (pin (g 'laid) <p 1) (pin g 'globs (<p >< g 'globs))) ())
