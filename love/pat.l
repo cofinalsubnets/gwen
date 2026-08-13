@@ -44,6 +44,7 @@
 ;   @(a b)  (tuple a b)    a tray of exactly two
 ;   (? g pat)              a GUARD: pat must fit AND g must hold
 ;   (? g)                  the guard alone -- fits anything g holds for
+;   (p1 || p2)             ALTERNATIVES: either shape fits. `|` is the same tag
 ; ⚠ a map key is read for PRESENCE, not truth: a pinned () matches, an absent
 ; key does not. an unknown tag is a scare AT EXPAND TIME -- a pattern is code, so
 ; a typo in one is a compile error, never a clause that quietly never fires.
@@ -95,6 +96,11 @@
                           (! (two? >as)) (wgd <as)
                           (two? >>as) (scare '@ p)
                           (wcat (wgd <as) (pw <>as v)))
+              ((h = '||) || (h = '|))                        ; ALTERNATIVES that bind nothing
+              (: ws (map (\ q (pw q v)) as)                  ; ..fold to ONE test, so they nest
+                 (? (all (\ w (! (two? <>w))) ws)
+                    (wts [('|| >< (map (\ w (pand (cat <w <>>w))) ws))])
+                    (scare '@ p)))                           ; ..a binding one belongs at the top
               (= h '\) (? (two? >as) (scare '@ p) (wts (weq <as v)))
               (= h 'list) (wlist as v)
               (h = 'link || h = '><) (? (= 2 (tally as))    ; ONE tag: >< IS link, prefix or infix
@@ -141,7 +147,7 @@
    (dedup bs seen)
      (? (! (two? bs)) wnil
         (: b <bs e (assoc <b seen)
-           (wcat (? (atom? e) [() [b]] (wts [['= <>e <>b]]))
+           (wcat (? (atom? e) [() [b] ()] (wts [['= <>e <>b]]))
                  (dedup >bs (? (atom? e) (link b seen) seen)))))
 
    (pand ts) (? (! (two? ts)) 1  (! (two? >ts)) <ts  ('&& >< ts))
@@ -195,14 +201,51 @@
         (? (&& (two? >cs) (two? p) (< (nodes els) 40))   ; >=2 clauses, a prefix, a small else
            ['? (pand p) (flat (map (\ c [(drop (tally p) <c) <>c]) cs) els) els]
            (flat cs els)))
+   ; --- ALTERNATIVES, and why they split two ways ------------------------------
+   ; (p1 || p2) fits when either does -- `|` too, the way `><` and `link` are one tag.
+   ; ⚠ BRANCHES THAT BIND CANNOT SHARE A CLAUSE: a nom's access form is where it sat,
+   ; and it sits somewhere else in every branch, so one test cannot serve two shapes.
+   ; so there are two lanes, and which one runs is decided by the branches, not by
+   ; where they are written:
+   ;   binds nothing -> ONE clause, the branches `||`ed into a single test (pw above).
+   ;     nests anywhere, costs nothing, and is what a literal alternative wants.
+   ;   binds         -> ONE CLAUSE PER BRANCH, sharing the body. only at the top of an
+   ;     arm, where a clause is a thing there can be more than one of; nested, it is an
+   ;     expand-time scare rather than a shape that quietly binds the wrong accessor.
+   ; ⚠ the shared body is written once PER BRANCH -- the same trade `tree` makes for the
+   ; else, and the reason the alternative is not the cheaper spelling of two arms; it is
+   ; the spelling that says the bodies are THE SAME one.
+   ; ⚠ EVERY BRANCH BINDS THE SAME NOMS or it scares. a looser rule lets a body read a
+   ; nom one branch never bound, which does not fail -- it reaches whatever wears that
+   ; name OUTSIDE, and answers.
+   ; the arm, normalised: its BRANCHES, each with the guards standing over it. a guard
+   ; wrapping an alternative belongs to every branch, so (? g (p1 || p2)) is two branches
+   ; guarded alike -- the guard is written once and asked once per branch.
+   (arms p) (? (! (link? p)) [[p ()]]
+               (: h <p as >p
+                  (? ((h = '||) || (h = '|)) (catmap arms as)
+                     ((h = '?) && (= 2 (tally as)))
+                       (map (\ b [<b (link <as <>b)]) (arms <>as))
+                     [[p ()]])))
+   (wgds w gs) (foldl (\ x g (wcat x (wgd g))) w gs)
+   (sameset? xs ys) (? (all (\ x (member? x ys)) xs) (all (\ y (member? y xs)) ys) ())
    _ (:: '@ (\ a
        (: v (nom 0)
+          (clof w b) (: d (dedup <>w ())
+                        gs (map (\ g (bind <>d g)) <>>w)   ; a guard is the body's binder over g
+                        [(cat (cat <w <d) gs) (bind <>d b)])
+          (arm p b)                                    ; the clauses ONE arm answers for
+            (: qs (arms p)
+               (? (! (two? >qs)) [(clof (pw p v) b)]   ; one branch: pw takes any guard itself
+                  (: ws (map (\ q (wgds (pw <q v) <>q)) qs)
+                     (? (all (\ w (! (two? <>w))) ws) [(clof (pw p v) b)]   ; none binds: pw's one test
+                        (: ns (map (\ w (map cap <>(dedup <>w ()))) ws)
+                           _ (? (all (\ n (sameset? n <ns)) ns) 0 (scare '@ p))
+                           (map (\ w (clof w b)) ws))))))
           (cls r) (? (! (two? r)) [() ()]              ; no clause and no else: the zero point
                      (! (two? >r)) [() <r]             ; the odd tail IS the else
-                     (: w (pw <r v) d (dedup <>w ())
-                        gs (map (\ g (bind <>d g)) <>>w)   ; a guard is the body's binder over g
-                        rest (cls (cuup r))
-                        [(link [(cat (cat <w <d) gs) (bind <>d <>r)] <rest) <>rest]))
+                     (: rest (cls (cuup r))
+                        [(cat (arm <r <>r) <rest) <>rest]))
           cl (cls >a)
           [['\ v (tree <cl <>cl)] <a])))
    ())

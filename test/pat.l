@@ -100,10 +100,33 @@
  (2 = (@ @(1 2) @(a (? (1 < b) b)) b 0))           ; ..anywhere a pattern goes
  (0 = (@ @(1 1) @(a (? (1 < b) b)) b 0))
  ('(3 4) = (@ '(1 2 3 4) (? (a < b) ([a b] + t)) t 'short))     ; ..a split included
- ('short = (@ '(1 2 3 4) (? (b < a) ([a b] + t)) t 'short)))
+ ('short = (@ '(1 2 3 4) (? (b < a) ([a b] + t)) t 'short))
+ ; --- ALTERNATIVES: (p1 || p2) fits when either does. `|` is the same tag, the way
+ ; `><` and `link` are -- so neither spelling has to be the one that was right.
+ ('binder = (@ 'sig ('lam || 'pi || 'sig) 'binder 'other))
+ ('other = (@ 'app ('lam || 'pi || 'sig) 'binder 'other))
+ ('base = (@ 'nat ('nat | 'bool) 'base 'other))                ; ..| says it too
+ ('bit = (@ 1 (0 || 1) 'bit 'big)) ('big = (@ 2 (0 || 1) 'bit 'big))
+ ('hit = (@ ['k 'b] ['k ('a || 'b)] 'hit 'no))                 ; ..one that binds nothing NESTS
+ ('no = (@ ['k 'c] ['k ('a || 'b)] 'hit 'no))
+ ; ..and one that BINDS is one clause per branch, so a nom may sit somewhere else in each
+ ('x = (@ '(lam x q) (['lam n _] || ['pi n _ _] || ['let n _]) n 'none))
+ ('y = (@ '(pi y q r) (['lam n _] || ['pi n _ _] || ['let n _]) n 'none))
+ ('none = (@ '(app f) (['lam n _] || ['pi n _ _] || ['let n _]) n 'none))
+ ('(2 1) = (@ ['b 1 2] (['a x y] || ['b y x]) [x y] 'n))       ; ..the SET is the law, not the order
+ ('(1 2) = (@ ['a 1 2] (['a x y] || ['b y x]) [x y] 'n))
+ ; ..a guard over an alternative stands over every branch
+ (5 = (@ ['a 5] (? (0 < n) (['a n] || ['b _ n])) n 'no))
+ (7 = (@ ['b 'q 7] (? (0 < n) (['a n] || ['b _ n])) n 'no))
+ ('no = (@ ['a -1] (? (0 < n) (['a n] || ['b _ n])) n 'no))
+ ; ⚠ a branch that BINDS may not nest (['k (a || [a b])]), and the branches must bind
+ ; the SAME NOMS ((['a x] || ['b y])) -- both scare at expand time, see the file foot.
+ )
 
-; ⚠ ONE LAW IS UNGATED: an unknown tag scares at EXPAND time, and the only way to
-; defer an expansion into a test is (ev '(@ 1 (bogus a) a)) under a trap -- which
+; ⚠ THE EXPAND-TIME SCARES ARE UNGATED, all of them: an unknown tag, a guard at the
+; wrong arity, a binding alternative NESTED, and branches that bind different noms.
+; Each holds by hand. The reason is one lane, not four: the only way to defer an
+; expansion into a test is (ev '(@ 1 (bogus a) a)) under a trap -- which
 ; costs love0 its second compiler pass. it is not this macro's doing: three lines,
 ;   (:: 'zz (\ a (scare 'zz (cap a))))
 ;   ('zz = (trap (\ _ (ev '(zz 1))) () (\ a b a)))
