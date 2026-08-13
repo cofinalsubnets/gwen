@@ -111,6 +111,37 @@ seen from the client side: a splice's every op boundary is exactly the write-thr
 allocator leg exists to remove, and closing it is worth ~2.5× **on the spliced body** —
 about the distance to the glaze.
 
+### the seam's root — ONE POINTER UNDER TWO NAMES (2026-08-13)
+
+⚠ Read this before touching the seam: four fixes were built against it that day and all four
+missed, three of them because the diagnosis was read off pre-peephole IR (see *how to measure
+honestly*). What survives is short.
+
+**`Sp` is carried in two registers, and the store and the load name different ones.**
+
+```
+mov %rcx,%r11         ; the copy, at entry
+...
+mov %rax,(%rcx)       ; store Sp[0]  — base %rcx, the ARRIVAL
+mov (%r11),%rax       ; load  Sp[0]  — base %r11, ADJACENT, same address, other name
+```
+
+`stldp` folds an adjacent store/load pair **by base-register name**, so it is handed one
+pointer under two names and never fires. Hence a reload per seam, hence a 64-deep
+store-to-load-forward chain, hence 0.84×. Note what this is *not*: mooncc emits 837
+instructions to cc's 713 for the same body (1.17×) against 2.6× in time — **the seam is a
+dependency chain, not a density problem**, and any instrument that counts instructions will
+say this body is nearly fine.
+
+The copy exists because **`Sp` does not ride**. `ride` for `composed` is `(2)` — `Hp` only.
+`rst-defok` rejects `r1` on a foreign def, so `Sp` spills, and in a frameless function the
+spill collapses into that entry copy. The chain, end to end: *ride denied → second register
+→ two names → no fold → reload per seam → serialized forwards.*
+
+**So the fix is upstream: make `Sp` ride.** One register for one value, and the pair folds
+itself. That is the ride analysis's business, not a peephole's — which is why all four
+peephole-level attempts below failed. Untested as of 2026-08-13.
+
 Two things the probe settled that the design had worried about:
 
 * **`Have1` is free.** A safepoint in every spliced body cost nothing on either compiler
@@ -528,6 +559,25 @@ interior store cannot be dropped without the alias promise). 6 makes 1/2/5 sayab
 special-cased, but does not block them. 3 and 4 are independent and can go any time. 8 last, or
 whenever the churn is low.
 
+**Where to pick up (as of 2026-08-13).** Three doors, smallest first:
+
+1. **step 5 phase B, the tie.** `rpays?` refuses a tie, `rclears?` accepts one, four gates use
+   the first and two the second, and which gate got which reads as history rather than a
+   decision — gen.l's own comment says *"an inconsistency, visible here and unsettled."* It is
+   now measured, not just suspected: `pcs` refuses the `withcall` reproducer at `cost 2 gain 2`,
+   and inspection says the gate is **right** — one home at one call is a genuine wash (`push`
+   +`pop`+entry mov against a spill, a reload and a mov). ⚠ so settling this **will not move a
+   benchmark, by construction**; what it buys is a tie-break rule that is stated. Do it for the
+   criterion, not for a number, and do not let a flat result read as a failure.
+2. **step 7's real blocker: make `Sp` ride.** See *the seam's root* — one pointer under two
+   names, and four peephole fixes already refused. This is the ride analysis's business.
+   Worth ~2.5× on a spliced body if it lands.
+3. **steps 4 and 6**, both independent and untouched.
+
+⚠ and a standing caution earned the hard way that week: **this arc's numbers are dependency
+chains as often as they are counts.** 837 instructions against 713 explained none of a 2.6×.
+Reach for `perf stat` cycles-vs-instructions before believing any insn-count story here.
+
 ### what stays, and why
 
 `lochk`/`lomiss`/`lobar` and the regen retries STAY. The miss census priced the optimism as
@@ -577,6 +627,32 @@ cannot explain). The rest stand — they were refused for physics, not for bytes
   cannot tell the 454 from the 630 — the read count is in the AST, the crossing is found in the IR
   — so the signal that would price the decision is exactly the one the site lacks. **The vmap must
   retire, not be extended.**
+* **the splice seam, four peephole-level fixes** (2026-08-13) — all built, all measured, all
+  missed, and each one is cheap to re-imagine, so: **the seam is not reachable from a peephole.**
+  Its root is one pointer under two register names (see *the seam's root*), and every pass named
+  here compares bases by name.
+  1. **`restrict` → interior-store elision.** The promise is real and now survives the parser
+     (ladder step 2 phase A, landed), but aliasing is not what the seam pays. Not refuted as a
+     lever — refuted as *this* lever.
+  2. **the store-address park past a spliced call** — `callish?` answers on the **pre-splice
+     AST**, so a call node that inlines away still refuses the park. Making the park optimistic
+     (take it, then read the emission and hand it back if a call survived) is *sound* and gated
+     green — 134-program battery, `test_clay`, `test_fixpoint` — and on love.c moves 8 `lvm_*`
+     functions, 3 shrinking by 7 and **5 growing by 2**. Net −11 insns. Fails *pays somewhere,
+     regresses nowhere*; kept at `scratchpad/park-v2.diff`, not landed. ⚠ It does **not** help
+     `composed`: it only swaps which side of the seam uses the copy. Three sub-traps found
+     inside it, each worth a rebuild if forgotten: a park must ride **`rpin`** (a splice body's
+     `psreset` returns an unheld register to the pool and its own `ralloc` takes it); the
+     decision must be made **before** `ralloc`, because a park handed back has already advanced
+     the `%vN` mint; and **the mint is never rolled back** — a *nested* store that declines
+     would rename registers its own rhs already emitted under the old names (`badreg %v1`).
+  3. **`(mov A B)` + `(ld A A o)` → `(ld A B o)` before `stld`** — byte-identical output.
+     `addrfold` already performs exactly this fusion later in the chain.
+  4. **reconciling the ride with `stldkeep`** — `stldw`'s keep arm displaces an existing slot
+     binding instead of joining it, which is a real defect and worth fixing on its own merits;
+     it is **not** this one. `composed` is **frameless** — no prologue, no slot — so the pass
+     is not involved at all. ⚠ general lesson: check whether the function even *has* a frame
+     before reasoning about its slots.
 * **ablating the loop keeps** (2026-08-13, phase 1 step 3) — static said delete (−300/−275/−391 B,
   thumb2 byte-identical); dynamic said **+184,000 insns**. Text size is structurally blind to a
   mechanism whose whole output is loads removed from loop BODIES.
@@ -728,6 +804,24 @@ lets it state something it was guessing.
   push-rbp per symbol, comm vs a twin) finds frame regressions; dump pre-fold IR via the
   in-process cc-parse/cgen-obj recipe. A probe's INPUT gets validated before its verdict
   is believed.
+* ⚠ **A PROBE INSIDE A PASS READS THAT PASS'S INPUT, NOT THE OUTPUT.** The single most
+  expensive mistake of 2026-08-13, and it looks exactly like a finding. An instrument
+  placed in `stld` dumped `composed`'s seam as `(ld r0 r4 -40)` / `(st r4 -56 r0)` /
+  `(ld r1 r4 -56)` — four frame ops per seam, an obvious residency bug, and a whole day
+  of work aimed at it. **`stldw` erases all four before emission.** The shipped binary
+  never had them, which the disassembly says in one command:
+  `objdump -d x.o | awk '/<fn>:/{p=1} p{print} p&&/^$/{exit}'`.
+  The rule: an intermediate representation is evidence about the pass you are standing
+  in and nothing further downstream. **A claim about what the program COSTS is a claim
+  about the emitted bytes, so read the emitted bytes.** Same shape as the `say err`
+  trap below — both are instruments answering a different question than the one asked.
+* And the instrument that finally worked was the plain one: **compile the same TU with
+  both compilers and diff the disassembly per symbol.** Sizes first
+  (`awk` the insn count per symbol, `join` the two lists, print the rows that differ) —
+  it names the handful of functions a change actually touched, out of hundreds, and it
+  is the only reading that cannot be wrong about what shipped. `-fno-inline` (landed
+  2026-08-13) exists to make that diff possible at all: a spliced function has no symbol
+  to compare.
 
 ## the rungs, dated (git log is the full story; these are the shas)
 
@@ -1135,6 +1229,18 @@ qualifies the pointer, not the pointee.
 ⚠ **left unresolved, named at the site, and phase B's to settle before it consumes**: block-scope
 shadowing. Two blocks in one function may declare the same name, one restrict and one not, and the
 roster would over-promise. Phase A cannot be wrong about it; a consumer can.
+
+2026-08-13 · **`-fno-inline` fc429bf8** — the instrument, and the day's only unambiguous
+payer. mooncc swallowed the whole `-f` family by the advisory rule; the flag is now real and bars
+the splice table TU-wide (the door `__attribute__((noinline))` opens one name at a time), riding
+the gen's option bag at `pxtra`'s tail. It **outranks `always_inline`**: an instrument a source
+attribute could override leaves the reader with no way to say *read this function as written*.
+`test_fixpoint` holds the default path byte-identical. Gated both halves in `test_moon` — that it
+bites (7 functions emitted, 11 with it) and that the answer is unchanged.
+⚠ **why it matters beyond the flag:** the day's four dead ends were all diagnosed off intermediate
+IR, and what finally settled the question was diffing two finished binaries per symbol — which is
+impossible for a spliced function, because it has no symbol. The reason the arc lacked that
+reading for a year was a missing flag.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) — each a
