@@ -239,6 +239,16 @@ test_lux: host
 	@cat test/00-init.l crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l \
 	    crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/law.l \
 	  | sh test/gate/run.sh lux "$(mw)" "crew/lux/law: StackSet"
+# the SEAT lane -- an app fired by its own FILE NAME (positional, or a -l preload), which
+# is the one dispatch door no other gate reaches: every app gate below drives its subject
+# through the verb rail or a baked image instead. ~2.5s, most of it one bake, and it rides
+# test_slow because the failure it catches is silent by construction (a seat that answers
+# () is indistinguishable from an app with nothing to say).
+.PHONY: test_seat
+test_seat: host
+	@echo TEST test/gate/seat.sh "(the file-seat lane)"
+	@sh test/gate/seat.sh $m
+
 test_seed: host out/host$(hsuf)/seed
 	@echo TEST crew/seed/seed.l + test/host/seed.l
 	@rm -rf out/host/.seedtest
