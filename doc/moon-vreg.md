@@ -461,6 +461,30 @@ does not care about crossing, the callee preserves the seat), and `nrg`'s `(= 1 
 was still PASSING while counting a cs restore instead of the `x` slot it was written for, the
 exact accident `law.l:263` warns about. Both rewritten rather than renamed.
 
+**rung A-2 CLIMBED 2026-08-13 — thumb2's file opens, and the op census was short by one.**
+Twelve ops modelled in `rdsp`: the arm32 carry family joins `flagops` (adcs/sbcs/ors set the
+flags, adc/sbc READ the carry a preceding adds/subs left — none may be lifted), `(umull dl dh
+a b)` is the first form in the table defining TWO registers, `(mla d a b acc)` reads three, and
+`udivll`/`uremll` are the first NULLARY ones — the whole 64-step restoring shift-subtract IS
+the form, owning the r0..r3 protocol quad while r4..r7 are pushed and popped inside it, so a
+seat there survives. Plus a `cspool` row for t32 (r4..r10) and one for **v6m starting at r5**,
+which keeps r4 as a bottom frame base planted after the sub. **−14,728 B on love.c/thumb2 (80
+fns better, 55 worse, worst +256 in lvm_hush); x64, arm64 and riscv64 BYTE-IDENTICAL** — so
+clz and the carry family, which those targets do emit, changed nothing there. lvm_aprod goes
+4,634 → 4,201 insns and the byte delta is exactly 4× the insn delta, so every removed form was
+a 32-bit wide one.
+
+⚠ **the eleven-op census was wrong, and the method is the lesson.** It was enumerated over
+love.c, which never converts a double to an unsigned — so `cvttsd2ui` never appeared, and only
+test/thumb2/libd.c found it once the gate was live. Re-swept with `cskeep` printing instead of
+scaring over 133 test/cc files plus the thumb corpus on all four targets: clean. **A census
+over one program describes that program.**
+
+And **`cskeep` stopped naming targets**: its gate was `arm? g && !(a64? g || rv? g)`, a list
+that grew once per rung, and now reads `!(two? (cspool g))` — a target with no file has nothing
+to breach. a8 bails for the true reason, t32/v6m are covered automatically, and the next
+backend to get a file is covered before anyone writes it.
+
 **The census (love.c, all four targets, 2026-08-12)** — demand is call-crossing names and their
 loop-weighted reads; supply is the callee-saved file minus frame base, sp and the callr park:
 
@@ -511,7 +535,7 @@ gated, and this is the argument for the term — to **−43**. Measured alternat
 `ln >= 2` escape readmits the whole pathological set, and a set-level cumulative test matches
 the worst case at a slightly better net but costs more machinery. thumb2 stays off until eleven
 ops are modelled in `rdsp` (the 64-bit pair lane plus `ors`/`clz`/`cvtui2sd`/`udivll`), which
-is its own rung.
+is its own rung. ⚠ A-2 found it is TWELVE — see below.
 
 ⚠ phase 1 alone will likely be FLAT on codegen: it replaces a memo with a structure and keeps
 write-through. Under the standing ship gate ("pays somewhere, regresses nowhere") flat does not

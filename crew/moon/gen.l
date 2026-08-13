@@ -60,8 +60,15 @@
    ; right behind it -- so never pure (deaddef would lift it away) and never in aluops itself,
    ; where the two-address rewrites live. ⚠ without this rdsp answers 'bar and every analysis
    ; declines the whole function.
-   flagops '(adds subs)
+   ; the arm32 CARRY family rides here too: adcs/sbcs/ors set the flags, and adc/sbc READ the
+   ; carry a preceding adds/subs left -- neither may be lifted, so the whole family is impure.
+   flagops '(adds subs adcs sbcs adc sbc ors)
    divops '(div rem udiv urem)                      ; the division protocol (r0..r3 clobber)
+   ; the t32 pair lane's widening multiply: (umull dl dh a b) defines TWO, (mla d a b acc)
+   ; reads three. udivll/uremll are NULLARY -- the whole 64-step expansion is the form, and it
+   ; owns the r0..r3 protocol quad (r4..r7 are pushed and popped inside it, so they survive).
+   wmops '(umull smull)
+   llops '(udivll uremll)
    vshops '(shlv shrv sarv)                         ; the variable shifts (count via r1)
    unops '(neg not sx1 sx2 sx4 zx1 zx2 zx4)         ; one-register rewrites
    xmmops '(addsd subsd mulsd divsd movsd ucomisd cvtss2sd cvtsd2ss)   ; xmm-only: no gp effect
@@ -779,8 +786,12 @@
    ; the seats residency may borrow: a subset of csregs, saved by the prologue (g 'cssv) and
    ; reloaded on every exit. ⚠ a target belongs here only once its prologue SPLICES cssv and
    ; cskeep verifies it -- t32/v6m still owe the second, which is why their file reads empty.
+   ; ⚠ v6m keeps r4 as its BOTTOM frame base (the extra push planted after the sub), so the
+   ; file there starts at r5; plain t32 has the whole AAPCS32 callee-saved bank bar fp.
    (cspool g) (? (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                  (rv? g) '(r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
+                 (v6m? g) '(r5 r6 r7 r8 r9 r10)
+                 (t32? g) '(r4 r5 r6 r7 r8 r9 r10)
                  (arm? g) ()
                  '(r11 r12 r13 r14))
    (deep? pl) (two? >>pl)                           ; a pool affords a PRICED seat: two remain after the take
@@ -3961,13 +3972,17 @@
           (member? op unops) [[<>f] [<>f] 1]
           (op = 'movqxr) [[<>>f] () ()]
           (op = 'movqrx) [() [<>f] 1]
-          (op = 'cvtsi2sd) [[<>>f] () ()]
-          (op = 'cvttsd2si) [() [<>f] ()]
+          (member? op '(cvtsi2sd cvtui2sd)) [[<>>f] () ()]
+          (member? op '(cvttsd2si cvttsd2ui)) [() [<>f] ()]
           (member? op fldops) [[<>>f] () ()]
           (member? op fstops) [[<>f] () ()]
           (member? op xmmops) [() () ()]
           (member? op divops)
            [(rg1 <>>f + rg1 <>>>f) '(r0 r1 r2 r3) ()]
+          (member? op llops) ['(r0 r1 r2 r3) '(r0 r1 r2 r3) ()]
+          (member? op wmops) [[(nthr f 3) (nthr f 4)] [<>f <>>f] 1]
+          (op = 'mla) [[<>>f <>>>f (nthr f 4)] [<>f] 1]
+          (op = 'clz) [[<>>f] [<>f] 1]
           (member? op vshops) [[<>f <>>f] [<>f 'r1] ()]
           'bar))
    ; the arm64 RETARGET: gen speaks r4 for the frame base throughout, but ⚠ x4 is ALSO an AAPCS
@@ -5231,10 +5246,10 @@
    (cskeep g fs)                                    ; answers fs; a breach scares, naming fn + reg
     (: (rawy? l) (? !(two? l) ()
                     (: f <l (? (two? f && id? <f 'raw) 1 (rawy? >l))))
-       ; ⚠ a64 and riscv ride this too (their file is real -- cspool): the shapes are the same,
-       ; only the frame base differs (fp there, and a4ize has already retargeted by the time
-       ; this runs). t32/v6m still bail -- they have no cs file to breach.
-       (? ((arm? g && !(a64? g || rv? g)) || !(two? fs) || peep g 'hasasm () || rawy? fs) fs
+       ; ⚠ every target with a real file rides this (a64, riscv, t32/v6m): the shapes are the
+       ; same, only the frame base differs (fp on arm, and a4ize has already retargeted by the
+       ; time this runs). a8 alone bails -- it has no cs file to breach.
+       (? (!(two? (cspool g)) || !(two? fs) || peep g 'hasasm () || rawy? fs) fs
           (: fn (nthr <fs 1)
              labs (tablet 0) saves (tablet 0) defs (tablet 0)
              (note l i)

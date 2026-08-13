@@ -1333,7 +1333,9 @@ lane moves). **thumb2 stays off**: its file needs eleven ops modelled in `rdsp` 
 64-bit pair lane (`adc` `sbc` `sbcs` `umull` `smull` `mla`) plus `ors`, `clz`, `cvtui2sd` and
 the `udivll`/`uremll` helpers — on the least-exercised target, so it earns its own rung. The
 enumeration itself is cheap and repeatable: let cskeep print instead of scare and read the
-census.
+census. ⚠ CORRECTED at A-2: it is TWELVE, and the miscount is the method's — this census was
+read off love.c alone, which never converts a double to an unsigned, so `cvttsd2ui` never
+appeared and only test/thumb2/libd.c found it. Sweep the corpus, not one program.
 
 **2026-08-13 — iv phase 1 step 1: alive answers a per-name live SPAN, and the span census
 refuses the packing argument.** `rec` recorded only call-bearing statements; `spn` now folds
@@ -1366,6 +1368,28 @@ insns/iteration, `nrg` 21 → 19, `lo8` 13 → 10). Two anchors were rewritten r
 lo8's law asserted the post-loop call bars the homes (the cs lane does not care — the callee
 preserves the seat), and nrg's `(= 1 (ldsp nrgf 56))` was PASSING while counting a cs restore
 instead of the slot it was written for — the offset-anchor accident law.l:263 warns about.
+
+**2026-08-13 — iv rung A-2: thumb2's file opens, and the op census was short by one.** Twelve
+ops modelled in `rdsp` (the carry family joins `flagops` — adcs/sbcs/ors set the flags, adc/sbc
+READ the carry a preceding adds/subs left, so none may be lifted; `(umull dl dh a b)` is the
+first form defining TWO registers; `udivll`/`uremll` are the first NULLARY ones, the whole
+64-step expansion being the form, owning the r0..r3 quad while r4..r7 are pushed and popped
+inside it), plus a cspool row for t32 (r4..r10) and one for **v6m starting at r5** — it keeps
+r4 as a bottom frame base, pushed after the sub. **−14,728 bytes on love.c/thumb2, 80 fns
+better and 55 worse (worst +256, lvm_hush); x64, arm64 and riscv64 all BYTE-IDENTICAL**, so
+modelling clz and the carry family — which the other targets do emit — changed nothing there.
+lvm_aprod alone goes 4,634 → 4,201 insns, and the byte delta is exactly 4x the insn delta, so
+every form removed was a 32-bit wide one.
+
+⚠ **the eleven-op census was wrong, and the method is the lesson**: it was enumerated over
+love.c, which never emits `cvttsd2ui`, so the twelfth op only surfaced when test/thumb2/libd.c
+hit the live gate. Re-swept with cskeep printing instead of scaring over 133 test/cc files plus
+the thumb corpus on all four targets — clean. A census over one program describes that program.
+
+Also: **cskeep stopped naming targets.** Its gate was `arm? g && !(a64? g || rv? g)`, a list
+that grew once per rung; it now asks `!(two? (cspool g))` — a target with no file has nothing
+to breach — so a8 bails for the true reason and the next backend to get a file is covered
+before anyone writes it.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build),
