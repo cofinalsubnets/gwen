@@ -250,7 +250,7 @@
   (poke -1 (peek 0 in) (poke -1 to-vt (poke -1 -1 (poke -1 "" (poke 4 0 (spin 5))))))
  ; hot? names the zoo (a buf or a port), the head's ap word the species -- the recognition C's iop
  ; does. hot? goes first so the peek only ever lands on a heap cell.
- (port? o) (? (hot? o) (id? (peek 0 o) (peek 0 in)))
+ (port? o) (? (hot? o) (id? (peek 0 o) (peek 0 in)) 0)   ; ⚠ the else arm is the BIT: a two-armed ? answers the zero point
  ; drain a vessel to a value: a jug reads its backing buffer, everything else A GULP AT A TIME.
  ; the drain accumulates, it does not recurse -- a recursion's stack depth is the gulp count, and
  ; on a parking port every task switch copies that stack.

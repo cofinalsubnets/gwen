@@ -24,7 +24,7 @@
    has_s dict_has
    ext_s dict_set
    (mintp x) (mint? x)
-   (var? x) (two? x && mintp <>x)
+   (var? x) (? (two? x) (mintp <>x) 0)          ; ⚠ not &&: it answers () for a false LEFT, and a predicate owes a bit
    (var x) (x >< nom 0)                         ; (label . fresh-nom) -- identity by the nom
    (walk s u) (? (nil? (var? u)) u (: t (has_s s u) (? (two? t) (walk s <t) u)))
    ufail (nom 0)

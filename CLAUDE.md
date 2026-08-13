@@ -78,6 +78,13 @@
 ;   would hand back a closure and write nothing. doc/precedence.md.
 ; * arithmetic operators are dyadic: `(+ a b c)` is `((+ a b) c)` -- application, not a 3-way sum,
 ;   so it church-exponentiates ((+ 192 40 5) = (232 5) = 5^232, a bignum).
+; * ⚠ A PREDICATE ANSWERS A BIT -- 0 on false, never the zero point. both are blue, so nothing
+;   that TESTS one can tell, which is why it drifts: `&&` and `||` are VALUE-PRESERVING and so are
+;   not predicates ((5 && 7) is 7, (0 && 1) is ()), and every leak found so far was a predicate
+;   whose body was a connective wearing its return value, or a two-armed `?` with no else. glued
+;   `?(..)` is the clamp. spec.l sweeps every `?`-named global in (names ()) and NAMES its
+;   offenders before failing -- the seat that fails is often not the one you are sitting in
+;   (`dotl?` only exists in the kernel's book, and test_kernel is what found it).
 ; * three traps for a primed hand, all deliberate, all siblings of (x) = x. ⚠ LISP: THERE ARE NO
 ;   DOTTED PAIRS. `.` is an ordinary punct symbol, so '(a . b) is the THREE-element list (a . b)
 ;   -- and in code it opfixes to (. a b), post.l's dot, since a spaced sigil is an operator. a

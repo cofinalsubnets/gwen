@@ -132,7 +132,7 @@
    (ld-arsz s off) (ld-arnum (ld-arfld s (off + 48) 10))
    (ld-arnext s off) (: z (ld-arsz s off) ((off + 60) + (z + (z % 2))))
    (ld-be32 s i) ((((s i << 8) | s (i + 1)) << 16) | ((s (i + 2) << 8) | s (i + 3)))
-   (ld-ar? s) ((8 <= tally s) && (snip s 0 8 = "!<arch>\n"))
+   (ld-ar? s) ?((8 <= tally s) && (snip s 0 8 = "!<arch>\n"))   ; ⚠ glued ?( is the BIT: && answers () for a false LEFT
    ; nom -> the member header offset that defines it. a nom defined by two members
    ; keeps the FIRST, which is the order a linker resolves in.
    (ld-arsyms id s)
@@ -168,7 +168,7 @@
    ; section TYPE) plus the .ARM.extab it points into on arm -- and gcc splits each
    ; into one section per function, so both are prefix tests. see `drop?`.
    (ld-unwind? nm)
-    (ld-pre nm ".eh_frame" || ld-pre nm ".ARM.exidx" || ld-pre nm ".ARM.extab")
+    ?(ld-pre nm ".eh_frame" || ld-pre nm ".ARM.exidx" || ld-pre nm ".ARM.extab")
    ; the lanes the linker knows by name; anything else allocated is a named lane
    ld-lanes '(text rodata data nifs bss image note boot limreq)
    ; a COMPILER-NAMED section -- one the list below has no word for -- becomes its
@@ -400,8 +400,8 @@
     ((((((ld-arp 16 nm + ld-arp 12 date) + ld-arp 6 uid) + ld-arp 6 gid) + ld-arp 8 mode)
       + ld-arp 10 (show sz)) + "`\n")
    (ld-arpad s) (? (& (tally s) 1) (s + "\n") s)              ; members lie on even offsets
-   (ld-arelf? b) ((<= 20 (tally b)) &&
-                  (b 0 = 127) && (b 1 = 69) && (b 2 = 76) && (b 3 = 70))
+   (ld-arelf? b) ?((<= 20 (tally b)) &&
+                   (b 0 = 127) && (b 1 = 69) && (b 2 = 76) && (b 3 = 70))
    ; a member's defined globals, read by the LEDGER's own eye -- so what the index
    ; promises and what a pull then finds cannot part. a non-ELF member defines nothing.
    (ld-ardefs f b) (? (ld-arelf? b) <(dusyms f b (b 18 + (256 * b 19))) ())
@@ -1089,7 +1089,7 @@
    ; put among them -- a lane is an atom and the word a pair, so neither reads as the
    ; other. ⚠ the assertion OVERRIDES: a lane written at RUN time under a read-only
    ; run is an image that faults wherever permissions are enforced.
-   (ld-fword? x) (two? x && id? <x 'flags)
+   (ld-fword? x) ?(two? x && id? <x 'flags)
    (ld-runlanes r) (filter (\ x !(ld-fword? x)) >>r)
    (ld-runflags r) (: f (filter ld-fword? >>r)
                       (? !(two? f) ()

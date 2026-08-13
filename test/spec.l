@@ -83,6 +83,14 @@
 
 ; --- types & predicates --- storage: charm? big? sun? gem? twin? tray? string? nom? name? mint? two? tablet?;
 ; derived constellation? whole? atom?; lit? = a top-region reference (tablet/fn/hot, ai_kind>=KTablet); hot? the opaque cask/port subset.
+; ⚠ A PREDICATE ANSWERS A BIT -- 0 on false, never the zero point. both are blue, so nothing that
+; TESTS one can tell them apart, which is precisely why this is a law and not a habit: the two that
+; drifted (port? on a two-armed `?`, var? on an `&&`, whose false LEFT is ()) had done it in
+; silence. the sweep is GENERIC, so a predicate written later is held to it with nobody
+; remembering to: every `?`-named global takes four false-ish probes, and an answer identical to
+; () is the failure. a multi-arity name answers a closure and passes, having said nothing.
+; ⚠ `&&`/`||` are NOT predicates -- they are value-preserving ((5 && 7) is 7, (5 || 7) is 5), so
+; the zero point is the right answer there and stays.
 (assert
  (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tablet? #(1 2))
  (big? (100 2)) ((? word sun? big?) (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))
@@ -94,6 +102,16 @@
  (charm? (: p (twirl (\ x x) 0) _ (catch p) p))  ; a task id is a number, not a handle
  ((64 2) = 2 * (63 2))                           ; charm overflow -> exact big ((k b) = b**k)
  (5.0 = (abs ~(3 4))) (~(2.0 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
+
+(hear welp)                                      ; the misses answer quietly; the sweep asks about names, not values
+(: (q-nom? n) (: s (string n) t (tally s) (? (0 < t) (= 63 (peep s (t - 1) 0)) 0))
+   (q-bit? n) (: f (ev n)
+                 (ok v) (nil? (id? () (f v)))
+                 (&& (ok 'zz) (&& (ok 0) (&& (ok "") (ok ())))))
+   bad (filter (\ n (nil? (q-bit? n))) (filter q-nom? (names ())))
+   _ (? (two? bad) (: _ (puts ("bit-law offenders: " + (show bad) + "\n")) 0) 0)   ; NAME them: the
+   (assert (nil? (two? bad))))                                     ; seat that fails is not always this one
+(hear 0)
 
 ; --- arithmetic --- + - * / // % infix; charm fast path, overflow grows charm->sun->big;
 ; `/` is true division (inexact int quotient -> float); 0/0 = 0; bitwise << >> & | ^ ride the

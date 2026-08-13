@@ -24,7 +24,7 @@
    (bn p)    (: n (tally p)
                 (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
                 (go 0 0))
-   (dotl? w) (: n (tally w) ((2 < n) && (snip w (n - 2) n = ".l")))
+   (dotl? w) (: n (tally w) ?((2 < n) && (snip w (n - 2) n = ".l")))   ; ⚠ glued ?( : && answers () for a false LEFT
    (sl? w)   (: n (tally w) (go i) (? (n <= i) 0 (w i = 47) 1 (go (i + 1))) (go 0))
    (word w)  (? ((sl? w) || (dotl? w)) () (get (intern w)))
    (seat p)  (get (intern (bn p)))
