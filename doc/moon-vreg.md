@@ -386,6 +386,41 @@ interval that gets no register reads and writes its slot, which is today's code.
 form-grain fixpoint in the build tail, which is paid per regen attempt. The +78% that shipped
 unwatched and the +92% measured at step i are the same trap twice.
 
+**phase 1 step 1 CLIMBED 2026-08-13 — alive answers the span it already computed.** `rec` recorded
+only call-bearing statements; `spn` now folds every statement's live set into a per-name `[lo hi]`
+tick extent, answered as alive's sixth element. min/max, so a hole inside costs nothing — but the
+extent must be a SUPERSET of the true live range, which is why the control-only lanes (`blk` `brk`
+`cont` `goto` `lbl` `sdecl`, the nop default) record too: a `goto` reads the whole universe and a
+break's set is its target's, and neither is bounded by the ticks that carry a def or a use. Gate:
+`.text` and `.data` byte-identical on all four targets (only `.rodata`'s 6-byte `-dirty` stamp
+moves), compile time flat (12.44s vs 12.45s, interleaved ×4 on love.c/x64).
+
+**and the span census REFUSES the packing argument.** Two numbers off the new table, love.c:
+
+| target | universe names | mean max-overlap | ≤4 | ≤7 | ≤10 | median span / fn length |
+|---|---|---|---|---|---|---|
+| x64 | 3,031 | 4.3 | 64% | 87% | 96% | 0.95 |
+| arm64 | 3,050 | 4.3 | 64% | 87% | 96% | 0.95 |
+| riscv64 | 1,321 | 1.7 | 87% | 95% | 98% | 0.56 |
+| thumb2 | 1,275 | 1.7 | 87% | 96% | 98% | 0.56 |
+
+(1) **The file is not the binding constraint.** On arm64's ten seats, 96% of functions could hold
+their ENTIRE universe — every homable param and local at once. A linear-scan simulation that lets
+disjoint spans share a register seats only +110 names of 3,050 (+4%) over one-register-per-name;
+x64's four seats gain +147 of 3,031 (+7%), riscv +45, thumb2 +94. (2) **and the reason is that the
+spans do not end**: the median universe name is live across 95% of its function on x64/arm64, p75
+is the whole body. The physics is C's own shape — a param is live from entry by definition, and a
+local is declared at the top of its scope — so at the statement grain this universe has no short
+ranges to pack. riscv/thumb2 read shorter (median 0.56) only because `nhome` is 0 there and the
+universe is locals-only.
+
+⚠ so **phase 2's scan is not the prize on arm64**, and the census that ranked arm64 first ranked it
+on supply the allocator turns out not to need. What keeps names out of the file there is `lpick`'s
+ADMISSION rule — the `tc <= 2` floor, the `1 + nx9` per-invocation term A-1 added, the nested-loop
+`ln` licence, and the zero-crossing bar on the pool lane — not capacity. The interval's useful
+content for that rule is not `[lo hi]` but the weighted reads over it, which is a different number
+than the one this step built. Price the admission gates before building the scan.
+
 **The census (love.c, all four targets, 2026-08-12)** — demand is call-crossing names and their
 loop-weighted reads; supply is the callee-saved file minus frame base, sp and the callr park:
 

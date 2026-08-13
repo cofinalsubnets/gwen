@@ -6378,11 +6378,12 @@
    ; cross name -> static call crossings, univ the analyzed names -- ⚠ a gate must never trust
    ; cross for an outsider -- total the statement count (the regen's numbering guard), ncw the
    ; fn's loop-weighted IN-LOOP call count (the payoff gate's per-iteration price; a depth-0
-   ; call sits in the path maximum instead -- it runs at most once per invocation).
+   ; call sits in the path maximum instead -- it runs at most once per invocation), spa the
+   ; per-name live SPAN in tick numbers (see spn).
    (alive g f)
     (: params <>>f
        items <><>>>f
-       dcl #() tak #() n9 #() liv #() crs #()
+       dcl #() tak #() n9 #() liv #() crs #() spa #()
        ; -- prepass: &-taken names, one generic sweep (sizeof's unevaluated
        ; &v over-records -- harmless, the name just keeps the blanket) --
        (pex e) (? !(two? e) ()
@@ -6429,15 +6430,27 @@
                        (<s2 = nm) >s2
                        (<s2 >< sdel >s2 nm))
        (tick u) (: q (peep n9 'q 0) _ (pin n9 'q (q - 1)) q)
+       ; the INTERVAL leg (doc/moon-vreg.md iv phase 1): every statement folds its live set into
+       ; a per-name [lo hi] tick span. min/max, so a hole inside costs nothing -- but the extent
+       ; must be a SUPERSET of the true live range, so the control-only lanes record too: a goto
+       ; reads the whole universe and a break's set is its target's, and neither is bounded by
+       ; the ticks that carry a def or a use.
+       (spn sq l)
+        (? !(two? l) ()
+           (: nm <l o (peep spa nm ())
+              _ (pin spa nm (? !(two? o) [sq sq]
+                                (: a <o b <>o [(? (sq < a) sq a) (? (b < sq) sq b)])))
+              (spn sq >l)))
        ; nclw = the statement's IN-LOOP share of ncl (0 at depth 0): the fn total n9 'ncw feeds
        ; the payoff gate -- a depth-0 call runs at most once per invocation
        (rec sq w ncl nclw)                          ; a call-bearing statement's record
-        (? (ncl < 1) ()
+        (: _ (spn sq w)
+         (? (ncl < 1) ()
            (: _ (pin liv sq (sun w pales))          ; the outside-universe homes ride every wrap
               _ (pin n9 'ncw (nclw + peep n9 'ncw 0))
               (bump l) (? !(two? l) ()
                           (: _ (pin crs <l (ncl + peep crs <l 0)) (bump >l)))
-              (bump w)))
+              (bump w))))
        ; -- reads of an expression, restricted to the universe -> (set ncalls). a var WRITE is not
        ; a read (the home register takes the value directly), sizeof's operand never evaluates,
        ; and an unknown head reads EVERYTHING and counts a call (future grammar fails safe) --
@@ -6506,7 +6519,7 @@
        (lst s out brk cnt w9)
         (? !(two? s) out
            (: k <s
-              (? (k = 'blk) (: in (litems <>s out brk cnt w9) _ (tick ()) in)
+              (? (k = 'blk) (: in (litems <>s out brk cnt w9) sq (tick ()) _ (spn sq in) in)
                  (k = 'expr)
                   (: e9 <>s
                      kv (? ((<e9 = 'asn) &&
@@ -6534,7 +6547,7 @@
                      sq (tick ()) _ (rec sq (sun (sun <pr out) ks) (* <>pr w9)
                                          (? (1 < w9) (* <>pr w9) 0))
                      <pr)
-                 (k = 'sdecl) (: _ (tick ()) out)   ; statics: no runtime init, no kill
+                 (k = 'sdecl) (: sq (tick ()) _ (spn sq out) out)   ; statics: no runtime init, no kill
                  (k = 'if)
                   (: inE (? (two? <>>>s) (lst <>>>s out brk cnt w9) out)   ; else FIRST (reverse order)
                      inT (lst <>>s out brk cnt w9)
@@ -6594,19 +6607,19 @@
                  (member? k '(case dflt))
                   (: sw (peep n9 'sw ())
                      _ (? (two? sw) (pin n9 'sw (sun <sw out >< >sw)) ())
-                     _ (tick ()) out)
-                 (k = 'brk) (: _ (tick ()) brk)
-                 (k = 'cont) (: _ (tick ()) cnt)
-                 (k = 'goto) (: _ (tick ()) univ)   ; any target: everything
-                 (k = 'lbl) (: _ (tick ()) out)
+                     sq (tick ()) _ (spn sq out) out)
+                 (k = 'brk) (: sq (tick ()) _ (spn sq brk) brk)
+                 (k = 'cont) (: sq (tick ()) _ (spn sq cnt) cnt)
+                 (k = 'goto) (: sq (tick ()) _ (spn sq univ) univ)   ; any target: everything
+                 (k = 'lbl) (: sq (tick ()) _ (spn sq out) out)
                  (k = 'asm) (: sq (tick ()) _ (rec sq univ w9 (? (1 < w9) w9 0)) univ)   ; homing is off anyway (hasasm)
-                 (: _ (tick ()) out))))             ; nop tdef
+                 (: sq (tick ()) _ (spn sq out) out))))   ; nop tdef
        ; -- run: liveout at the fn end is empty; the counter descends from the prepass total so
        ; lst's numbers land forward pre-order. ⚠ pre and lst disagreeing on the statement set is a
        ; compiler bug, so the counter must land exactly on zero or alive answers () --
        _ (pin n9 'q (peep n9 'n 0))
        _ (litems items () () () 1)
-       (? (0 = peep n9 'q 0) [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0)] ()))
+       (? (0 = peep n9 'q 0) [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0) spa] ()))
    ; -- the array universe (the vmap's array leg): once-declared 1-D arrays of a gp
    ; scalar whose every appearance is the element shape (deref (bin + (var x) idx)).
    ; the scan LICENSES exactly that shape -- recursing into the index only -- and any

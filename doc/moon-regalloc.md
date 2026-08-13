@@ -1276,7 +1276,10 @@ register, and `cspool` is empty on every arm and riscv target — the residency 
 never offered a seat there at all): 4 usable on x64, 10 arm64, 11 riscv64, 7 thumb2. Fit:
 every crossing name of a function holds simultaneously in 505 of 544 fns on arm64 (93%)
 against 338 of 543 on x64 (62%). **So build the interval allocator's assignment against arm64
-first** — identical demand, 2.5× the file, and nothing competing for it. ⚠ riscv64/thumb2 read
+first** — identical demand, 2.5× the file, and nothing competing for it. ⚠ SUPERSEDED
+2026-08-13 by the span census below: the file being idle is what made arm64 first, but the
+spans then said the file is not the binding constraint there at all, so what arm64 is first
+FOR is the admission rule, not the scan. ⚠ riscv64/thumb2 read
 low only because `nhome` is 0 there (params are never homed), so their universes are
 locals-only and their demand is understated by exactly the parameters — pre-coloured arrivals
 would be the first param residency those backends ever get.
@@ -1331,6 +1334,20 @@ lane moves). **thumb2 stays off**: its file needs eleven ops modelled in `rdsp` 
 the `udivll`/`uremll` helpers — on the least-exercised target, so it earns its own rung. The
 enumeration itself is cheap and repeatable: let cskeep print instead of scare and read the
 census.
+
+**2026-08-13 — iv phase 1 step 1: alive answers a per-name live SPAN, and the span census
+refuses the packing argument.** `rec` recorded only call-bearing statements; `spn` now folds
+every statement's live set into a `[lo hi]` tick extent (the control-only lanes record too, so
+the extent is a superset of the true range — a `goto` reads the whole universe). Byte-identical
+`.text`/`.data` on all four targets, compile time flat. What the table then said stopped the
+scan: mean max-overlap is 4.3 on x64/arm64 and 1.7 on riscv/thumb2, so **96% of arm64 functions
+could seat their whole universe in the ten-register file** — and letting disjoint spans share a
+register buys only +4% more names seated (+7% on x64's four). The reason is that **the median
+universe name is live across 95% of its function**, p75 the whole body: a param is live from
+entry by definition and a C local is declared at the top of its scope, so at the statement
+grain there are no short ranges to pack. ⚠ therefore the file is not the binding constraint on
+arm64 — `lpick`'s ADMISSION rule is — and the census that ranked arm64 first ranked it on
+supply the allocator does not need. Price the admission gates before building the scan.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build),
