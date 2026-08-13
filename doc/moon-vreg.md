@@ -485,6 +485,34 @@ that grew once per rung, and now reads `!(two? (cspool g))` — a target with no
 to breach. a8 bails for the true reason, t32/v6m are covered automatically, and the next
 backend to get a file is covered before anyone writes it.
 
+**phase 1 step 3 REFUSED 2026-08-13 — the loop keeps do not retire, and static codegen said
+they did.** With the file real on every target and `lpick`'s admission widened, the obvious next
+move was to check whether the homes had absorbed the keeps' job. `lonone` is the existing
+keep-nothing knob, so the ablation is one line. **Every static instrument said delete it:**
+
+| target | ablating the loop keeps |
+|---|---|
+| x64 | −300 insns (43 fns better, 42 worse; worst +310 B in `ana_v`) |
+| arm64 | −275 insns (28 better, 14 worse; worst +10) |
+| riscv64 | −391 insns (27 better, 15 worse; worst +9) |
+| thumb2 | byte-identical — already inert there |
+
+**The dynamic gate refused it by a factor of 600: 272,056,500 instructions retired against
+271,872,500, +184,000.** (Baseline reproduced to ±400 before and after the experiment.)
+
+⚠ **the physics, and it is the third firing of this arc's oldest trap.** The keeps remove LOADS
+FROM LOOP BODIES. A load deleted from a loop running a thousand times is one byte of text and a
+thousand instructions of execution — so text size is not merely a noisy proxy here, it is
+STRUCTURALLY BLIND to the thing the mechanism does. The magnitude makes the point: +184,000 is
+comparable to the −206,000 that step 2's entire admission fix bought. The keeps are worth about
+as much as everything else landed the same day.
+
+⚠ so **phase 3's ordering is wrong as written.** The retirement of the loop keeps cannot come
+from deletion — delete-and-measure will look free on every static instrument and be wrong every
+time. It has to come from SUBSUMPTION: a name that is loop-kept today must instead take a real
+interval seat from the assignment, so the keep has no customer left. Until the assignment can
+carry what they carry, the 51 lines are load-bearing and stay.
+
 **The census (love.c, all four targets, 2026-08-12)** — demand is call-crossing names and their
 loop-weighted reads; supply is the callee-saved file minus frame base, sp and the callr park:
 
