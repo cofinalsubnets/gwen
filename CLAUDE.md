@@ -133,6 +133,20 @@
 ;   port` is a dev server). apps add nifs through the host/*.c glob + AI_NIF (no core edit);
 ;   love.c/love.h/host/main.c are core -- an app session needing a core change stops and asks the
 ;   core thread, never reaches in. the runnable ones install on PATH via `make install`.
+; * verbs (love/verbs.l): the ONE registry every app dispatch goes through, three doors --
+;   `word` a leading positional (cli.l's rail; a `/` or a `.l` is ALWAYS the file, so a verb
+;   never shadows a script), `seat` argv[0] (a `sed` symlink onto the artifact), and `fire`
+;   the seat SCAN, for a file that is itself the program (`love crew/x/x.l ..`, or its `-l`
+;   preload -- ten apps each wrote that walk before). an app pins its own name at its own
+;   foot, so the image carrying the app carries the word for it (kore's applet table is 51
+;   rows of it) and `love -h` prints the table rather than a written-down list. `wake IMAGE`
+;   and `bake [PATH]` are the PRIME verbs -- bare words parsed in C before any love exists
+;   (wake picks WHICH heap, bake must precede the session layer), holding rows anyway so a
+;   misplaced one is an honest error; `cmdline` keeps them and `argv` does not.
+;   ⚠ fire takes the LINE IT SCANS: verbs.l rides the egg, so a bare `cmdline` read there
+;   folds to the BAKE's command line and every caller silently scans that instead.
+;   gate: test_seat -- the file lane is the one door no other gate reaches, and a seat that
+;   answers () looks exactly like an app with nothing to say.
 ; * modules: a baked service keeps its names off the global book, and the layers are the
 ;   runtime'S -- no user-facing enter/leave. the chain: top is the defglob target, under it a
 ;   use-stack, orth last and read-only; run_program pushes the session layer, one load = one
