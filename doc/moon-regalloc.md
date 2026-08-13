@@ -590,6 +590,25 @@ read off an x64 shape — deriving it from `pro4?` handed arm and riscv a floor 
 op censuses over the CORPUS, not one program: A-1's eleven ops were twelve, because love.c never
 converts a double to an unsigned.
 
+**FIXED 2026-08-13 — the rp2040 lane, and where the diagnosis kept being wrong.** `test_embed`
+had been red for several commits: `cc: internal error: lea-far-hi r12`, one command to reproduce
+(`mooncc -t thumb1 -c crew/moon/lib/math/am.c`). ⚠ **the good error message did most of the work**
+— it named the constraint, and one extra operand in the scare made it decisive: `lea r12, r4,
+896`, a far frame-relative address compute into a HIGH register, where v6-M's `t1-li` is
+low-register-only.
+
+⚠ **but three plausible origins were wrong, each refuted by a probe rather than by argument**: not
+`cgexpr`'s two `rT` array-decay lea sites (instrumented — neither fires), not anything visible at
+`cskeep` (instrumented — silent for the failing function), not present at `t16slots`'s entry
+(instrumented — silent). It is not emitted by `gen.l` at all. **holo synthesizes it**, and the
+answer was already in the file: `t1-mem-far` has a borrowed-low-scratch lane for exactly this
+shape — `push s; li s,off; add s,base; …; pop s` — and its comment even names `ld r12,r4,slot` as
+a classic customer. `t1-lea` never got that lane and gave up instead. Nine lines give it one,
+reusing the same helpers; `sp` base stays barred (the push would shift it). ⚠ `t1-li` sets flags,
+as it already did in the low-dest lane, so a lea between a cmp and its branch would breach on
+both — inherited, not introduced, and now written down. rp2040 links; `test_thumb1` (qemu
+Cortex-M0, am.c bit-exact) and `test_thumb2` (Cortex-M7) green.
+
 **Open, not mine, and diagnosed (2026-08-13).** `test_embed`'s rp2040 lane has been red for
 several commits: `cc: internal error: lea-far-hi r12`, reproducible in one command —
 `mooncc -t thumb1 -c crew/moon/lib/math/am.c`. The operands are **`lea r12, r4, 896`**: a far

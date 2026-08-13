@@ -285,9 +285,15 @@
             (: _ (? ((0 = (off & 3)) && ((off >> 2) <= 255)) 0 (scare 'lea-sp-off-range off)) _ (need-lo d 'lea-hi)
                (t16 (0xA800 | ((rn d << 8) | (off >> 2)))))
          (off > 0 && (off <= 255)) (t1-addsub-imm 'add d base off)     ; imm3 3-addr, or mov+imm8 2-addr
-         !(reg-eq d base)                                  ; far (or negative): build the offset in d, fold the base in
-            (: _ (need-lo d 'lea-far-hi)
-               (catall `((t1-li d off) (t1-add-any d base))))
+         (!(reg-eq d base) && lo? d)                       ; far (or negative): build the offset in d, fold the base in
+            (catall `((t1-li d off) (t1-add-any d base)))
+         ;; a HI dest cannot hold the offset (t1-li is low-only), so borrow a saved low scratch --
+         ;; t1-mem-far's own lane, worn by lea. sp base is barred: the push would shift it under us.
+         ;; ⚠ t1-li sets flags, as it already did in the low-dest lane above -- so a lea between a
+         ;; cmp and its branch would breach, on both lanes. inherited, not introduced here.
+         !(reg-eq base 'sp)
+            (: s (t1-lowscratch d base '(r0 r1 r2 r3 r4 r5 r6 r7))
+               (catall `((t1-push s) (t1-li s off) (t1-add-any s base) (t1-movr d s) (t1-pop s))))
          (scare 'lea-range `(d base off)))
 
    ;; push/pop are register-LIST 16-bit forms; single-reg lists cover r0..r7 (+ lr on push / pc on pop).
