@@ -353,12 +353,239 @@ rather than choosing between them — and `trickle` is that: the charlist is sti
 the port never runs ahead of it.
 
 What is left is a COST, not a question: trickle mints a `once` per byte, which is now the whole
-of the gap between stdin and a file (~2.2 µs/byte over the corpus) — the device is at parity.
-A run-at-a-time charlist that stays attached to its port would close it. Everything else in
-this document is standing design.
+of the gap between stdin and a file (~2.2 µs/byte over the corpus) — the device is at parity on
+the seekable door. A run-at-a-time charlist that stays attached to its port closes it; that is
+part IV. Everything else in this part is standing design.
 
-⚠ The pipe keeps camp 2's per-byte *read* and always will, for camp 2's reason: a child must find
-fd 0 where our reader stopped, and nothing puts a pipe back. But that is one syscall per byte, not
-four — the `O_NONBLOCK` toggle beside it was never part of the bargain and no longer runs (part II).
-Where bash's row above says "one `read()` per byte on pipes, forever", ours now says exactly that
-and nothing more.
+⚠ The pipe additionally keeps camp 2's per-byte *read*, for camp 2's reason: a child must find fd 0
+where our reader stopped, and nothing puts a pipe back. But that is one syscall per byte, not four —
+the `O_NONBLOCK` toggle beside it was never part of the bargain and no longer runs (part II). Where
+bash's row above says "one `read()` per byte on pipes, forever", ours says it without the forever:
+part IV's rung 3 is why.
+
+## part IV — closing the gap to a file
+
+Part III left one cost. The goal is **parity with a file argument on both stdin doors**, and the
+gap is two independent costs with two independent fixes.
+
+| door | 970 KB corpus | over a file | what the excess is |
+|---|---|---|---|
+| `love f.l` | 5.59s | — | the work itself |
+| `love < f.l` | 7.66s | +2.07s | **all** of it love-level: one `once` — a whole tablet — per byte. The device is already at parity; the borrowed run (part II) sees to that. |
+| `cat f.l \| love` | 8.31s | +2.72s | that same 2.07s, **plus** ~0.65s of one-byte `read(2)`: `stdin_take` lends a run to a *seekable* door only, so a pipe has no buffer to read through |
+
+Three instruments agree on the per-byte figure: the table above, ~2.2 µs/byte measured directly,
+and moon-diff's ~0.5s of kernel time on the pipe lane.
+
+### why `flow` is not already the answer
+
+`flow` **is** the run-at-a-time port-backed charlist part III asks for, and it landed. It is not
+used on `in` for a reason with two halves:
+
+* **it would be wrong.** `chug` hands out a head detached from the port, so `ai_io_pending` stops
+  counting those bytes and `stdin_give`'s seek-back comes up short — two positions where there was
+  one, which is part III's bug arriving by the other door.
+* **it would also be SLOWER.** `chug` guards with `bio_of`, not `rbio_of`, so it refuses the
+  borrowed run and counts only the pushback byte: one byte per gulp, with a `see`, an `unsee`, a
+  `tally` and a cons loop around each. `flow in` degenerates to worse than `trickle`. ⚠ `slurp`
+  gulps the same way and pays the same handicap.
+
+So the fix is not "use flow on in". What it is took three measurements to find, and two of them
+refuted the obvious answers — they are below, because each cost a build and none is guessable.
+
+### three measurements, and what they killed
+
+Instruments: `perf -e instructions` on the 971,922-byte corpus, stable to ~0.01% across runs. Wall
+clock is reported only where syscalls make it diverge, since `instructions:u` cannot see them.
+⚠ Read these off a BAKED love; a relink leaves it unbaked and every figure moves.
+
+**1. The ceiling is FULL PARITY, and the seekable door beats the file.** Flip `chug` to `rbio_of`
+(and `ai_io_pending` and `ai_io_read_drain` with it — all three guard separately, so one alone is
+incoherent) and let `reads` gulp. The redirect gap goes **+2.327 G → −0.060 G**: 37.420 G against
+the file door's 37.480 G, 4157 ms against 4266 ms. The whole gap is recoverable, so parity is the
+right target and nothing about the architecture impedes it.
+
+**2. It is not the `once` TABLET.** `once` mints a whole tablet per byte (`love/prel.l`), which
+looks like the cost and is not. Swapping it for a `spin 1` cell with `poke` made it **WORSE:
++2.327 G → +2.577 G** — `poke`'s write barrier and `spin`'s memset together cost more than an
+empty tablet. The per-byte price is the STRUCTURE, one promise per byte, not the memo's shape.
+⚠ Do not re-open this; the gate is green either way, so only the counter tells you.
+
+**3. The pipe must keep trickling, and gulping it is a catastrophe.** `athand` is NULL for the fd
+port vt, so a port with no bio yields ONE byte per chug — and `flow` around a one-byte gulp costs a
+`see`, an `unsee`, a `tally` and a cons loop for each. Making `reads` gulp everything took the pipe
+**+2.469 G → +6.442 G**. So the fork is not "is it `in`?" but **"does this port hold a run?"**:
+a seekable stdin has a borrowed one and can gulp, a pipe has none and must drip until rung 3
+lends it one.
+
+### ⚠ the constraint is IN-PROCESS readers, not the child
+
+The gulp's failure is not the inherited fd — `unchug` answers that. It is that `reads` holding
+bytes in its charlist makes them invisible to the port. `test_stdinbuf`'s own program says it:
+
+```
+pipe door:      rest: [(say out "tail form")     # correct: slurp takes the remainder
+seekable door:  rest: []tail form                # gulped -- (slurp in) found an EMPTY port
+```
+
+That is part III's bug exactly, and it rules out the give-back-the-residue shape this section first
+proposed. Unchugging before each eval IS correct, but it means one chug per FORM, re-spreading the
+same run every time — order 100 cons per source byte, worse than what it replaces. **Any read-ahead
+held as a value is a second position**, which is the one thing camp 3 does not allow.
+
+So `sound` has to take one form off the port without holding read-ahead. It has no such door: the
+port door is `(p1-flow x)`, a charlist like the others. The only shape that is both fast and safe
+is a POSITION door — read datum `i` out of a text and answer where it ended, so the run is walked
+once without being re-spread and nothing is retained across the eval.
+
+⚠ That is the mechanism of the reverted rung 9, and it is NOT what got rung 9 reverted (the walk's
+representation was). Reaching for it is a deliberate decision, not a slide back into a known
+mistake — see "what must not be repeated" below.
+
+### the rungs
+
+**1 — `unchug`, the give-back. ✅ LANDED.** `b->rpos` already IS the reader's position and
+`ai_io_pending` is derived from it, so handing bytes back is a rewind of one word. `(unchug p n)`
+is **`unsee` at n bytes**: it un-reads the last `n` this port gave out and answers how many went
+back, a short answer being the refusal. It reaches through `rbio_of`, so the run borrowed under a
+static counts — which is the entire point, since `stdin_give`'s seek reads `ai_io_pending`.
+
+⚠ It rewinds the POSITION, so what comes back is whatever the run last gave, not a remembered
+chug; a refill replaces `rbuf` and resets `rpos`, so bytes are recoverable only until the next
+read here. The clamp to `rpos` is what makes a stale ask answer what is really there.
+
+⚠ **`bio_of` would pass every file-port law and still be wrong.** A heap file port *is* a bio, so
+the unit laws in `test/io.l` cannot tell the two lookups apart — only an inherited fd can. Hence
+the `test_stdinbuf` clause, whose law is the CONTRAST: the same program with and without the
+give-back must hand `cat` ten bytes and nine. Injecting `bio_of` collapses both to nine while
+`test/io.l` stays green, which is what that clause exists to catch.
+
+Rung 1 buys no speed on its own — it is the door rung 2 spends.
+
+**2 — a COUNTED flowing charlist, and the port positioned absolutely. ✅ LANDED, 70%.** ⚠ REWRITTEN
+TWICE. The first draft said "chug a run, sound the text, unchug the residue"; the second aligned
+that window to newlines. Both are wrong, and the reason is worth keeping:
+
+> **A finite window cannot carry the reader's state.** `sound` answers a CLEAN END -- not `torn` --
+> when text stops inside a `;` comment, so a window ending mid-comment loses the fact, and the next
+> window reads the prose as code. The corpus answers `;; missing so`, off an English sentence.
+> Aligning windows to newlines fixes one instance and the tail past the last newline is itself a
+> part-line, so it fails again one level down. There is no window size that is safe.
+
+What landed instead keeps `flow`'s shape -- a **lazy tail that gulps on demand**, so there is no
+boundary to straddle and `torn` and the clean end mean what they say -- and adds only a count:
+
+* every gulp adds its run's length to a tablet slot, so the walk can ask how many bytes have been
+  DRAWN and put the port exactly where the walk stands.
+* consumed per form comes from walking forward to the residue by identity -- O(consumed), so the
+  sum over the stream is the stream. ⚠ never `(tally >r)`: the residue is lazy, so that forces the
+  whole rest of the stream. ⚠ and the walk must FORCE at each step -- a cons holds its tail as an
+  unforced promise, so a plain `cup` walk stops dead at a gulp boundary and spins on `()`.
+* the port is positioned ABSOLUTELY (a delta off `inhand`), because relative does not compose: a
+  caller that gave back is behind its own position and must step forward again. That is why
+  `unchug` is signed. Give-back-only makes the second step a rewind to the run's start, and the
+  reader re-reads the whole stream -- through a green `make test`.
+* after each eval the port goes FORWARD again to the walk's end, or the next gulp draws the bytes
+  we already hold a second time and the charlist grows with duplicates.
+* `inhand` before and after the eval says whether the form itself drew on `p`. If it did, `p` is
+  the truth and our charlist is stale: carry the one lookahead byte `p` will not hand over twice,
+  and read the rest afresh.
+
+⚠ ONE BYTE SHORT, ON PURPOSE. The byte-exact lane reads the residue's head before it evals
+(trickle's cons holds it), so it too runs one ahead. Matching that is what keeps the doors
+byte-identical, and rung 2 owes no semantic change.
+
+Measured on one corpus, `perf -e instructions`, both loves:
+
+| door | rung 1 gap | rung 2 gap | absolute |
+|---|---|---|---|
+| `love f.l` | — | — | +0.009% |
+| `love < f.l` | +2,325 M (+50.7% wall) | **+694 M (+1.7% wall** -- 3953 ms vs 3886 ms) | **-4.09%** |
+| `cat f.l \| love` | +2,469 M | +2,557 M | +0.23% |
+
+⚠ READ THE ABSOLUTE COLUMN. A GAP is a difference between two ~40 G numbers, so the pipe's grew
+3.6% off a 0.23% move in the whole — the size of a layout shift, which adding a nif causes by moving
+`nifs[]` and the def table. A gap only means something next to its absolute.
+
+**3 — the pipe gets a run too, and the handoff carries the residue.** ✅ LANDED. The pipe was the
+whole of the remaining lane, not a leftover: with no bio it paid both costs. Lending it one meant
+answering the inheritance question, and part III had borrowed its answer from bash along with the
+framing:
+
+> nothing puts a pipe back
+
+True, and beside the point. The residue does not need to be *undone*, it needs to be *delivered* —
+`stdin_hand` forks a pumper, writes the bytes our reader did not take into a fresh pipe, splices
+whatever the old fd 0 still brings, and dup2s the read end onto fd 0. bash pays per byte partly
+because it has no fork to spare at the handoff; we do, and it costs one process per handoff, only
+when a residue exists at all.
+
+⚠ **RUNG 3 CHANGED NO `.l` AT ALL** — 64 lines of `host/main.c` — and measurement 3 is why. Because
+`reads` forks on *"does this port hold a run?"* rather than *"is it `in`?"*, and because `start`
+primes with a `see` before it asks, lending the pipe a bio routes it into rung 2's counted-flow lane
+by itself. The tty asks the same question, gets `0`, and keeps trickling. Getting that predicate
+right in rung 2 is what made rung 3 a frontend change.
+
+Exec-replacement was written up here as the one holdout, and it isn't: the pumper is a *separate*
+child, so it survives our being overwritten. `host_exec` calls `stdin_hand` and the child reads the
+new fd 0 — and a *failed* exec is now better than before too, since love resumes reading the pumped
+pipe rather than a drained one.
+
+⚠ THE REAL HOLDOUT is narrower and is not about us at all: a peer holding fd 0 from **before** us
+(`cat f | { love a.l; love b.l; }`) has its own descriptor, so no dup2 of ours can reach it. There
+is no rewind and no substitution — a pipe's read offset is shared kernel state. So the give-back
+splits by who is asking, and the split is the law `stdin_hand` states:
+
+| asker | the door's answer |
+|---|---|
+| an in-process reader (`(slurp in)`) | exact, always — zgetc drains the run before the device |
+| a child we fork or exec | exact — the pumper delivers |
+| a peer sharing fd 0 from before us | **past reach on a pipe**, whatever we do |
+
+`lvm_exit` and main's tail therefore call plain `stdin_give`, not `stdin_hand`: at our own exit
+nothing of ours is left to pump and the dup2 would be private to a process about to vanish. A
+pumper forked there would be pure waste and a stray process.
+
+**What it bought** (972,400-byte corpus, both binaries baked, one sitting):
+
+| door | rung 2 | rung 3 | |
+|---|---|---|---|
+| `love f.l` | 37,487,781,134 (4.176 s) | 37,489,976,861 (4.144 s) | the work itself |
+| `love < f.l` | 38,181,520,575 | 38,180,261,078 (4.205 s) | untouched, as intended |
+| `cat f.l \| love` | 40,046,481,350 (6.518 s) | **38,184,042,767 (4.267 s)** | gap +2.559 G → **+0.694 G**, elapsed 1.561× → **1.030×** |
+
+`read(2)` on fd 0 over the corpus: **972,400 → 239**, which is the file door's own count to the
+call. And the two stdin doors now land within 4 M instructions of each other — 0.01%, inside the
+run-to-run spread — so there is one stdin lane again, not two.
+
+**What is left** is the +697 M both stdin doors carry over the file door (~717 instructions/byte),
+which rung 2 also had and neither rung explains. That is its own rung, and it wants `perf` before
+it wants a patch.
+
+### what must not be repeated
+
+Rung 9 (`65359706`) did a version of this, went green on `test_slow` at −5.2% instructions, and was
+**reverted** (`0306fdea`). `435631a5` landed the narrow string door instead and says why: *"this is
+a door and not the reverted rung 9, which tried to make the WALK take a string."*
+
+* ⚠ **the residue stays a charlist, and the charlist door stays open.** Rungs 1–3 change who walks
+  a chunk, never what a charlist IS. Rung 9 changed the representation; that is what broke.
+* ⚠ **`crew/moon/lex.l`'s `dec2flo` rides `sound`.** Break that door and every mooncc float
+  constant becomes an infinity, four layers down, wearing mooncc's face.
+* ⚠ **`love/p1.l` carries its OWN `flow`** — the pure-lisp reader that runs before prel exists. A
+  change to prel's copy that skips p1's is a difference between the two readers.
+* ⚠ **the kernel's heap is budgeted.** K_TEST explodes the baked corpus under a tap; one cons per
+  byte OOM'd it once, and `make test` cannot see that.
+* ⚠ **`in` is never rebound** — `reads` folded its `(id? p in)` at egg-compile time.
+* ⚠ **the tty keeps neither optimization.** A terminal handed back nonblocking breaks the user's
+  next shell line — and with no run, `reads` keeps trickling, which is what a prompt wants anyway.
+
+The gates that pin it: `test_stdinbuf` (one program down each door, diffed, *plus* the handoff asked
+of the pipe output directly and a 200,000-byte splice past the first gulp), `test_stdincorpus` (the
+whole corpus down all three doors on both loves), `test/io.l`, `test/host/parked.l`, `test_filemode`,
+`test_clay` (the registry is generated), `test_fixpoint` (a new nif rebuilds the egg), and
+`test_kernel` for the heap.
+
+⚠ Each of the four `test_stdinbuf` handoff laws was proven load-bearing by injection, not by
+reading. Dropping the delivery reddens the diff; delivering the residue and skipping the splice
+reports `4079 of 200000` — which is also the measurement that says the residue is exactly one gulp.

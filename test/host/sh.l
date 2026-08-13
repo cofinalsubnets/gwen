@@ -346,4 +346,5 @@
    t (cup r)
    (assert (< 800000 (sh-int (snip t 0 (- (tally t) 1))))))
 
+(test_fin ())
 (puts "sh: ok") (putc 10)

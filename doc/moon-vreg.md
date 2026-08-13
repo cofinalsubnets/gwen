@@ -253,6 +253,89 @@ just a longer interval, and the vmap has nothing left to do.
 **Retires:** the vmap and its array leg, homes/rides + `pp`, the cs pool, `pcs`/`pmin`/`nrac`,
 the regen dance and its deopt snapshots, `unhome`, most of `rgreset`.
 
+**The internal ladder (steps i–iii CLIMBED 2026-08-12; iv is the remaining rung).** The
+substrate was already in the tree: `lvout` is a per-form backward liveness fixpoint over the
+real CFG, and a mint is just a nom it tracks — so "intervals over the assembled list" is
+liveness read at the vrfix seam, not a new analysis.
+
+* **i — the checker (CLIMBED, instrument-only).** lvtx's blanket cases went mint-aware (a call
+  touches the caller-saved PHYSICAL file; a mint crossing one must SHOW as crossing), `lvio`
+  now answers live-in and live-out both, and an instrumented image resolved every live set
+  through the token map over love.c + the corpus on all four targets. **The verdict: zero
+  conflicts, zero entry-live mints, zero mint-mint token collisions — the shadow discipline is
+  interval-sound, and every one of the 37,976 flags was a mint over its OWN token**: the
+  vmap/rpin/hint machinery continuing a value's life under its bare physical name, by 5.1a's
+  design. The pricing prototype then measured the coalescing prize: 1,195 movs droppable under
+  full-liveness affinity (of 10,420 single-mint movs; 5,010 conflict-refused — the bridge is
+  load-bearing PHYSICS when r0 is busy inside the value's range, so coalescing subsumes
+  wnt-threading and the ~200-site refactor dissolves; 4,103 pinned by the mixed-name class),
+  **and every single droppable mov had a straight-line span** — no label, branch or call
+  inside. That measurement is what makes iii local.
+* **ii — DISSOLVED by i's verdict.** The mixed-name flows are not a fixable catalog; they are
+  the cross-statement mechanism itself. rassign instead refuses any move whose token is still
+  read downstream (the release scan below), and the class converts wholesale in iv.
+* **iii — rassign (CLIMBED as `rasg`, gen.l).** No fixpoint rides the build tail (a full lvio
+  there measured +92% compile — the +78% ghost): the engine is mention-list scans licensed by
+  the straight-line-span fact. ADOPTIONS only — `(mov %m X)` at %m's birth, the call-return
+  copy `coal` can never reach (its def is a call; rdsp bars it) — under: the window rule (no
+  control/clobber inside the span), tenancy (no bare-X mention but the pair's closing copies,
+  no co-tenant mint span on X), the token release scan (a bare-token read past the span before
+  a def/call refuses — the vmap continuation), and an X-release scan when %m redefines. Two
+  refusal classes were paid for in the build and are load-bearing: **no argument register as a
+  target** (the ride analysis prices ir1 as built — a mint moved onto an arrival drops rides
+  and the regen takes worse lanes), and **no bridge direction** (moving a death-copy onto r0
+  robs stld's forwarding through the staging cell — lvm_band bought back a whole spush pair).
+  Yield on love.c: grew 0 / shrank 12 insns, .text −30 B x64 / −12 arm64 / −8 riscv; compile
+  time inside bake noise after the candidate pre-filter. Thin by design — the engine is iv's,
+  and iv is where its freedom arrives. Gates: test, test_moon (laws + 133-program battery),
+  test_fixpoint, test_ccarm64, test_ccriscv, test_slow.
+* **iv — the long intervals. iv-a CLIMBED 2026-08-12 (branch only, not merged): the vmap
+  holds mints.** An entry carries the NOM THE FORMS USE — a mint where the value arrived
+  minted, a physical where it was seeded or seated bare; every register question about an
+  entry resolves through `rp`, and a MEET answers the physical (the arms may have re-pinned
+  one name on different mints of one machine register, and the join needs the one nom both
+  paths defined — the φ dodge). Byte-identical on love.c except three iii adoptions that now
+  refuse over their honestly-longer spans (+6 insns, the enabling cost). Residency laws
+  unchanged, fixpoint holds. ⚠ it STAYS on the branch: iv-b was to be its payer and iv-b is
+  refused (below), so the +6 now waits on the interval allocator that retires the vmap.
+* **iv-b — BUILT, MEASURED, REFUSED (2026-08-12). The design was vmcflush optimism + a
+  `rseat` link; it was built whole, and the numbers killed it.** What shipped for the
+  measurement: vmcflush kept its pool pins across a call and named them on the call's own
+  marker form `(cross (rz off ty)..)`; a `rseat` link between body completion and assembly
+  settled each one — a free callee-saved seat (re-pinning in `g 'vrt`, its save joining
+  `cssv` and its load every epilogue) or the RELOAD REWRITE `ld rz r4 off` where the marker
+  sat, priced by a release scan (`needs?`, rel?'s shape) and `pmin`. On love.c: **+545
+  instructions, 56 functions worse and 2 better**, and the census says why —
+  **1,088 crossings: 630 die unread, 454 want a reload, 4 found a seat.**
+  * ⚠ **the lever aimed at the frame bucket and GREW it.** Of the +545, **+498 is frame
+    traffic**: loads 9,485 → 9,706, stores 5,919 → 6,068. The reload half worked as designed
+    — 454 eager reloads retired ~233 lazy ones — but netting +221 loads, because a lazy load
+    only runs on the path that reads, and **630 of the 1,088 crossings are never read again**
+    (their pin is pure cost). The +149 stores are the tell: a surviving pin holds one of the
+    six pool registers past the call, and the squeeze spills. Optimism trades loads for
+    pressure and pressure wins.
+  * ⚠ **the flush cannot tell the 454 from the 630** — the read-count lives in the AST and
+    the crossing is discovered in the IR, so the only signal that would price this decision
+    is the one the site does not have. That is the shape of the refusal, not a missing rule.
+  * ⚠ **a seat bought at the call is a copy, which is the refusal this whole rung exists to
+    escape.** Seating a crossing mid-function costs one mov + one save + a reload per exit,
+    against the k loads it retires — so it needs k ≳ 4, and only a LOOP-crossing value has
+    that k. Loop crossings are already seated, by `csbor`/`lomig`. The straight-line
+    population is exactly the one where the arithmetic fails, and no supply of seats fixes it
+    (the 4-seat x64 file was not the binding constraint; the pricing was).
+  * **so iv-b's real lesson is about iv, not about calls**: the vmap must RETIRE, not be
+    extended. The physics only change when the value is BORN in the callee-saved register —
+    the allocator colouring a whole interval, params pre-coloured on arrival — which is
+    iv's own charter ("a cross-statement value is just a longer interval"). Any step that
+    keeps the vmap and bolts seats onto its flush is re-deriving the same refusal the ledger
+    already records twice.
+  * one correctness lesson worth keeping, paid for with a miscompiled `love`: **a slot read
+    out of `env` at a call inside an inline splice is the CALLEE's slot.** Scalar vmap names
+    compare by content, a spliced parameter `n` shadows the pin's own `n`, and the reload
+    took the argument's cell — `p0chars` then looped `n*3` times and hit its own `ud2`.
+    `vmget` blinds itself on `g 'inlbody` for precisely this reason; anything reading a slot
+    for a pin owes the same blind.
+
 * **rung 5.4, spilling placed.** Today the slot is the source of truth and the register a
   write-through cache; invert it — the register is the truth, a spill is placed under real
   pressure. `repack` shrinks to packing actual spills; `stld`/`deadst` lose their write-through
@@ -263,6 +346,103 @@ the regen dance and its deopt snapshots, `unhome`, most of `rgreset`.
   /`test_raw_riscv` under qemu, `test_virt` on-hart. ⚠ it is also where the biggest number
   probably is, since these targets start from no allocator at all — which is exactly why it needs
   the instrument above and not an argument from first principles.
+
+## iv proper — the interval allocator, and the census that priced it
+
+iv-b's refusal is the whole argument for this shape: every mechanism the arc has tried buys
+residency **at the call**, and by then the value already sits in a caller-saved register, so
+the purchase is a copy. An interval allocator buys **at birth** — the value is born in the
+callee-saved register and there is no copy to fold. That is the only place the physics differ.
+
+**The substrate is already here.** 5.1a's mints + `vrfix` broke the "register known at emission
+time" constraint, which was the hard part. `alive` is already an interval analysis: a backward
+statement-grain walk over exactly the right universe, loops handled by seeding with everything
+the loop reads (no fixpoint), computed once per fn — it just DISCARDS most of its answer, since
+`rec` records a statement only when `ncl >= 1`. Recording every statement is one guard removed
+from a walk that already computes the numbers. And write-through is a free spill fallback: an
+interval that gets no register reads and writes its slot, which is today's code.
+
+* **phase 1 — the named vreg.** A universe local gets a mint at its declaration; reads answer it
+  with zero forms, writes define it, the slot store stays. Structural residency instead of a
+  memo, so the whole loop-keep apparatus (`lokeep`/`lochk`/`lomig`/`loseed`/`lomt`, the edge
+  verification and its retry bars) has no job: a mint spans a back edge by construction where a
+  memo had to prove it survived. ⚠ the content-collision trap dies here too — a mint is bound at
+  the declaration site, so a spliced callee's `n` gets its own and the miscompile above is
+  unspellable.
+* **phase 2 — assignment, the prize.** Endpoints for named vregs from alive's statement grain,
+  mapped to form indices through the statement tick that already runs in lock-step (the
+  numbering guard exists); temporaries keep today's per-statement pool, which is already correct
+  and cheap. Linear scan, with call-crossing intervals eligible for the callee-saved file; a
+  taken register joins `cssv` + the epilogue pin exactly as the regen's grant does, and `cskeep`
+  verifies every exit. Unassigned → slot, i.e. today.
+* **phase 3 — retirement, in dependency order.** vmap pins + array leg, then loop keeps + `saro`
+  + `csbor`/`csbu`, then homes/rides/`pp`/`pcs` as params become pre-coloured intervals, and the
+  regen dance LAST — it exists to price the mechanisms above it, and killing it is what returns
+  the compile-time budget (roughly 200 mentions of vmap machinery and 180 of homes/rides/regen).
+* **phase 4 — 5.4.** One mechanism instead of five, so write-through can invert: stores placed
+  at real spill points and the def-store bucket dies.
+
+⚠ **the compile-time law for this arc**: intervals come from `alive` (once per fn), never from a
+form-grain fixpoint in the build tail, which is paid per regen attempt. The +78% that shipped
+unwatched and the +92% measured at step i are the same trap twice.
+
+**The census (love.c, all four targets, 2026-08-12)** — demand is call-crossing names and their
+loop-weighted reads; supply is the callee-saved file minus frame base, sp and the callr park:
+
+| target | fns w/ crossings | crossing names | weighted reads on them | file | fns where all fit |
+|---|---|---|---|---|---|
+| x64 | 543 | 2,648 | 102,601 of 106,081 (97%) | 4 | 338 (62%) |
+| arm64 | 544 | 2,654 | 104,189 of 108,107 (96%) | 10 | 505 (93%) |
+| riscv64 | 301 | 1,095 | 66,688 of 69,504 (96%) | 11 | 286 (95%) |
+| thumb2 | 299 | 1,074 | 64,784 of 66,952 (97%) | 7 | 263 (88%) |
+
+Three readings. (1) **Nearly all residency traffic is call-crossing** — ~97% of loop-weighted
+reads sit on names that cross at least one call, so this is not a niche class, it is the class.
+(2) **The file is entirely idle**: the supply column is the same in EVERY function of a target,
+because pass 1 never touches a callee-saved register and `cspool` is empty on every arm and
+riscv target — the residency machinery has never offered a seat there at all. (3) **Demand is
+identical on x64 and arm64 and the supply is 2.5×**, which decides the order: build phase 2
+against **arm64 first**, where 93% of functions can hold every crossing name at once against
+x64's 62%, and where nothing competes for the registers.
+
+⚠ riscv64 and thumb2 read low only because `nhome` is 0 there — params are never homed, so their
+universes are locals-only. Their demand is understated by exactly the parameters, and phase 3's
+pre-coloured arrivals would be the first param residency those backends ever get.
+
+**rung A-0 CLIMBED 2026-08-12 — the file becomes real on arm64.** The census's "build against
+arm64" had a prerequisite it did not state: the file there was unusable. `cspool` answered ()
+for every arm/riscv target, the a64 prologue never spliced `cssv`, and `cskeep` bailed on
+`arm? g` — so the baseline really did carry **zero callee-saved operands**. Wiring it exposed
+two latent bugs the absence had hidden: `sibjmp` read the `epi-a64` CONSTANT rather than the
+passed-in `ejx`, so a tail call left the callee's seats dirty (18 fns, all caught by cskeep the
+moment it could look), and `rdsp` did not model `adds`/`subs` — the arm overflow lane — so it
+answered 'bar and every analysis declined those functions (now `flagops`: the aluops shape, but
+never pure, since the flags feed the `set vs` behind it). **−941 insns / −3,758 B on
+love.c/arm64, 28 fns better and 5 worse, x64 .text byte-identical, test_raw_arm64 green under
+qemu.** ⚠ the three consumers of the file do not transfer their x64 pricing: lpick's overflow
+is the prize (≈ −755 alone), param homes pay, and the loop borrow is a net loss on a64 (−187
+alone, dragging both-on to −236 because `wb` denies the homes their seats) — so a64 does not
+take the borrow yet, and that is a verdict on insns, not on a mechanism whose x64 win was
+measured in wall clock. Residue: `vbin_fill` takes all ten seats for +166.
+
+**rung A-1 CLIMBED 2026-08-13 — riscv joins, and the overflow learns its exits.** riscv64
+needed only cspool + cskeep (its prologue rode A-0's splice, its sibjmp already read `g 'epi`)
+and compiled clean — but landed at **−5 insns**, because `vbin_fill` gave back +232 of it. The
+cause was the residue A-0 named: **`lpick`'s cs overflow had no per-invocation term**, so
+`pick` drained whatever file it was offered — invisible at four seats, ruinous at ten. Giving
+it `pcs`'s accounting (a seat costs one save plus one reload per exit, so touches must clear
+`1 + nx`) moves arm64 to −798 (worst regression +166 → +119), riscv to **−179**, and x64 — not
+gated, and this is the argument for the term — to **−43**. Measured alternatives that lost: an
+`ln >= 2` escape readmits the whole pathological set, and a set-level cumulative test matches
+the worst case at a slightly better net but costs more machinery. thumb2 stays off until eleven
+ops are modelled in `rdsp` (the 64-bit pair lane plus `ors`/`clz`/`cvtui2sd`/`udivll`), which
+is its own rung.
+
+⚠ phase 1 alone will likely be FLAT on codegen: it replaces a memo with a structure and keeps
+write-through. Under the standing ship gate ("pays somewhere, regresses nowhere") flat does not
+land, so phase 1 needs an explicit consolidation gate — flat-or-better codegen, no compile-time
+regression, N mechanisms deleted — or it must be bundled with phase 2. Decide that BEFORE
+building, not after; iv-b is what the other order looks like.
 
 ## why this rung and not another patch
 

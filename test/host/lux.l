@@ -14,4 +14,5 @@
 (assert !(connectu ""))                            ; empty path -> nil
 (assert !(connectu "/tmp"))                        ; a directory, not a socket -> nil
 (assert !(connectu 7))                             ; not a string -> nil
+(test_fin ())
 (say err "test/host/lux: ok\n")

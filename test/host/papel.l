@@ -204,6 +204,7 @@ Only a paragraph, so the title has to come from the meta block.
                                 (anchored? h)))))
         0)
 
+   _ (test_fin ())
    _ (puts "crew/papel: ok -- the static site (anchors, slugs, relink, titles, freshness)
 ")
    0)

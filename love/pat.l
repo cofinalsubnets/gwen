@@ -71,21 +71,21 @@
    ; (pw p v) -- one walk, two answers: the TESTS over the access form v, and the
    ; (nom access) pairs its body binds.
    (pw p v)
-     (? (nom? p) (? (p = '_) wnil [() [[p v]]])
+     (? (nom? p) (? (= p '_) wnil [() [[p v]]])
         (! (link? p)) (wts [['= p v]])
         (: h <p as >p
-           (? (h = '\) (? (two? >as) (scare '@ p) (wts (weq <as v)))
-              (h = 'list) (wlist as v)
-              (h = 'link || h = '><) (? (tally as = 2)    ; ONE tag: >< IS link, prefix or infix
+           (? (= h '\) (? (two? >as) (scare '@ p) (wts (weq <as v)))
+              (= h 'list) (wlist as v)
+              (h = 'link || h = '><) (? (= 2 (tally as))    ; ONE tag: >< IS link, prefix or infix
                                         (wcat (wts [['two? v]])
                                               (wcat (pw <as ['cap v]) (pw <>as ['cup v])))
                                         (scare '@ p))
-              (h = '+) (? (tally as = 2)                ; a SPLIT: the left run, then the rest
+              (= h '+) (? (= 2 (tally as))                ; a SPLIT: the left run, then the rest
                           (: l <as
-                             (? (? (link? l) (<l = 'list) ()) (wrest >l <>as v) (scare '@ p)))
+                             (? (? (link? l) (= <l 'list) ()) (wrest >l <>as v) (scare '@ p)))
                           (scare '@ p))
-              (h = 'hash) (wcat (wts [['tablet? v]]) (wkv as v))
-              (h = 'tuple) (wcat (wts [['tray? v] ['= (tally as) ['tally v]]])
+              (= h 'hash) (wcat (wts [['tablet? v]]) (wkv as v))
+              (= h 'tuple) (wcat (wts [['tray? v] ['= (tally as) ['tally v]]])
                                  (widx as v 0))
               (scare '@ p))))
    ; ⚠ a pattern longer than its value must never reach a `cap`, so the WHOLE run is
@@ -111,7 +111,7 @@
    (wkv as v) (? (two? >as)
                  (: g ['peep v <as (lit gone)]
                     (wcat (wcat (wts [['! ['id? (lit gone) g]]]) (pw <>as g))
-                          (wkv >>as v)))
+                          (wkv (cuup as) v)))
                  wnil)
    (widx as v i) (? (two? as) (wcat (pw <as ['peep v i ()]) (widx >as v (i + 1))) wnil)
 
@@ -121,10 +121,16 @@
      (? (! (two? bs)) wnil
         (: b <bs e (assoc <b seen)
            (wcat (? (atom? e) [() [b]] (wts [['= <>e <>b]]))
-                 (dedup >bs (? (atom? e) (b >< seen) seen)))))
+                 (dedup >bs (? (atom? e) (link b seen) seen)))))
 
    (pand ts) (? (! (two? ts)) 1  (! (two? >ts)) <ts  ('&& >< ts))
-   (bind bs body) (? (two? bs) (('\ >< cat (map cap bs) [body]) >< map caup bs) body)
+
+   ; ⚠ THE WRAPPER IS ev'S TO REMOVE, not ours. A nom read once could have its accessor
+   ; inlined here, and that is what love/ev.l's read-once refinement already does to the
+   ; whole tree: a lone read of an effectful argument substitutes and the call is gone. A
+   ; second copy in this macro measured 3.5 M on a 32.5 G corpus -- noise -- so the one
+   ; mechanism lives in the compiler, where every caller gets it and not just `@`.
+   (bind bs body) (? (two? bs) (link (link '\ (cat (map cap bs) [body])) (map caup bs)) body)
 
    ; --- THE DECISION TREE -------------------------------------------------------
    ; a clause is [tests body]. compiled FLAT, every clause re-runs the tests it
@@ -156,13 +162,16 @@
         (! (two? <(<cs))) ()                        ; a clause with no tests left: stop
         (: t <<(<cs)
            (? (all (\ c (? (two? <c) (same? <<c t) ())) cs)
-              (t >< cpx (map (\ c [>(<c) <>c]) cs))
+              (link t (cpx (map (\ c [>(<c) <>c]) cs)))
               ())))
    (nodes x) (? (link? x) (foldl (\ n e (n + (nodes e))) 1 x) 1)
-   (flat cs els) ('? >< ((catmap (\ c [(pand <c) <>c]) cs) + [els]))
+   (flat cs els) (link '? ((catmap (\ c [(pand <c) <>c]) cs) + [els]))
+   ; ⚠ TWO CLAUSES OR MORE, or there is nothing to discriminate: at one clause cpx eats
+   ; ALL of its tests, so factoring would read (? p (? 1 body els) els) -- a vacuous test
+   ; and the else written twice, for nothing. uu's hot sites are exactly that shape.
    (tree cs els)
      (: p (cpx cs)
-        (? (? (two? p) (nodes els < 40) ())       ; a common prefix, and an else worth copying
+        (? (&& (two? >cs) (two? p) (< (nodes els) 40))   ; >=2 clauses, a prefix, a small else
            ['? (pand p) (flat (map (\ c [(drop (tally p) <c) <>c]) cs) els) els]
            (flat cs els)))
    _ (:: '@ (\ a
@@ -170,8 +179,8 @@
           (cls r) (? (! (two? r)) [() ()]              ; no clause and no else: the zero point
                      (! (two? >r)) [() <r]             ; the odd tail IS the else
                      (: w (pw <r v) d (dedup <>w ())
-                        rest (cls >>r)
-                        [([(cat <w <d) (bind <>d <>r)] >< <rest) <>rest]))
+                        rest (cls (cuup r))
+                        [(link [(cat <w <d) (bind <>d <>r)] <rest) <>rest]))
           cl (cls >a)
           [['\ v (tree <cl <>cl)] <a])))
    ())

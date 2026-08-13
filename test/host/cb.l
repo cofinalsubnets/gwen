@@ -354,4 +354,5 @@
  _ (scribe s "\e[2;1H\e[L")
  _ (assert (= 14 (& 14 (wet s 0)))))      ; IL at row 1: rows 1..3
 
+(test_fin ())
 (puts "cb: ok")

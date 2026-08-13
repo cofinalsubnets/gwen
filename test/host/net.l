@@ -127,4 +127,5 @@
  _ (catch srv)
  _ (close l))                             ; reaching here at all IS the law
 
+(test_fin ())
 (puts "net: ok") (putc 10)

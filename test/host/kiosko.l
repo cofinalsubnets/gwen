@@ -187,6 +187,7 @@
    _ (catch srv)                                       ; no orphan task
    _ (close l)
 
+   _ (test_fin ())
    _ (puts "crew/kiosko: ok -- the static web server (guard, methods, paths, types)
 ")
    0)

@@ -93,6 +93,7 @@
     (16 = (tally (poly1305 ckey "")))
     ((poly1305 ckey "") = (po-mac ckey ""))))
 
-(: _ (puts "crew/tls: ok -- the C twins agree with love (vectors, lengths, counters, misuse)
+(: _ (test_fin ())
+   _ (puts "crew/tls: ok -- the C twins agree with love (vectors, lengths, counters, misuse)
 ")
    0)

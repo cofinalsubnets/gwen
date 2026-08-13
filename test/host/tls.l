@@ -127,6 +127,7 @@
 
 ; the harness greps for this line, and that is the point: a reader stop exits 0
 ; with the asserts above never read, so only reaching HERE proves the file ran.
-(: _ (puts "crew/tls: ok -- chacha20 + poly1305 (rfc 8439 block, stream, counter, cipher, mac)
+(: _ (test_fin ())
+   _ (puts "crew/tls: ok -- chacha20 + poly1305 (rfc 8439 block, stream, counter, cipher, mac)
 ")
    0)

@@ -321,5 +321,6 @@ here")) = ("// two lines" + nl + "// here" + nl)))
     ((ec '(bin eq (deref (bin + (dot (deref (var "n")) "bytes") (num 0))) (chr 92)))
      = ("int r = n->bytes[0] == '\\\\';" + nl))))
 
+(test_fin ())
 (puts "clay: ok")
 (putc 10)

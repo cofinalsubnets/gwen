@@ -121,4 +121,5 @@
    ; vacuously pass the each above).
    _ (assert (< 50 (tally results))))
 
+(test_fin ())
 (puts "baotest: ok") (putc 10)

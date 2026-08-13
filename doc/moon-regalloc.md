@@ -247,6 +247,17 @@ Learned by measuring, several times each; check a new lever against these before
    a frequency signal (PGO), not a better static model.
    SHRINK-WRAP RETIRED 2026-08-12 (rung 3's first half, the ledger): it was worth
    48 bytes and one grant, against 113 lines and a per-form cost in `sibs`.
+   STRAIGHT-LINE CALL CROSSINGS ANSWERED **NO** 2026-08-12 (5.1b iv-b, built and
+   reverted; the ledger): keeping a pool pin across a call costs +545 insns, +498 of
+   it frame traffic — the lever aimed at this bucket and grew it. 630 of 1,088
+   crossings are never read again, the flush cannot tell them from the 454 that are,
+   and a seat bought mid-function is a copy. The loop crossings above are the whole
+   prize; the rest waits on a value BORN callee-saved, which needs the vmap retired,
+   not extended. Do not rebuild it. THE CENSUS THAT PRICES THE REPLACEMENT ran the
+   same day (the ledger): ~97% of loop-weighted reads are on call-crossing names, the
+   callee-saved file is idle in every function of every target, and arm64 holds every
+   crossing name at once in 93% of fns against x64's 62% — so iv's assignment gets
+   built against **arm64 first**. doc/moon-vreg.md carries the four-phase plan.
 3. **Compare staging want-hints** — HELD for the allocator. Landed for the call-free
    side 2026-08-10: cbranch's left aims at its park before evaluating, so member loads
    deliver and the bridge mov dies. What remains is the callish side (the sp cell across
@@ -1202,6 +1213,125 @@ csdefs asserts under-applied to a truthy closure from that commit on — test_mo
 branch and unnoticed, because 5.0's session gated on byte-identity + test_slow and never re-ran
 the law gate. A law page owes a run per SIGNATURE change, not per behavior change.
 
+2026-08-12 · RUNG 5.1b i–iii — THE INTERVAL VERDICT AND THE COALESCE ENGINE (doc/moon-vreg.md
+carries the ladder). The checker instrument resolved every live set through the token map over
+love.c + the corpus on all four targets: **zero conflicts, zero entry-live mints, zero
+mint-mint collisions — the shadow discipline is interval-sound**, and all 37,976 flags were a
+mint over its own token (the vmap's mixed-name continuation, 5.1a's design). Three findings
+that price the rest of the arc: (1) every full-liveness-droppable mov (1,195 of 10,420) has a
+STRAIGHT-LINE span, so the assignment needs no fixpoint in the build tail (a real lvio there
+measured +92% compile — the +78% ghost, dodged by measurement this time); (2) coalescing
+SUBSUMES wnt-threading — 5,010 of the movs are conflict-refused because r0 is genuinely busy
+inside the value's range, where no destination-threading could deliver either, so the ~200-site
+refactor the plan feared dissolves; (3) the pinned 4,103 are the vmap class whole, and only
+step iv frees them. `rasg` then landed the ADOPTION direction (the call-return copy `coal` can
+never reach): grew 0 / shrank 12 insns on love.c, .text −30/−12/−8 B (x64/arm64/riscv),
+compile time in bake noise. Two refusals were bought with regressions and are load-bearing:
+**no argument-register targets** (the ride analysis prices ir1 as built; a mint moved onto an
+arrival drops rides — lvm_band grew a spush cell) and **no bridge direction** (a death-copy
+moved onto r0 robs stld's forwarding through the staging cell — the bridge mov is the HANDOFF
+keeping the value on a stable register, not dead weight). Gates: test, test_moon, test_fixpoint,
+test_ccarm64, test_ccriscv, test_slow. ⚠ iv inherits both refusals as dissolutions: retire the
+mechanisms and there is no ranker to disturb; give the vmap mints and the pinned class becomes
+ordinary intervals. iv-a (the vmap holds mints) landed the same day on the branch —
+byte-identical but three adoptions refusing over honestly-longer spans (+6 insns, the enabling
+cost); iv-b's design (vmcflush optimism, the mandatory-assignment seam where the token fallback
+dies, the pre-assembly seat link) is in doc/moon-vreg.md.
+
+2026-08-12 · RUNG 5.1b iv-b — CALL-CROSSING OPTIMISM, BUILT AND REFUSED. The design was
+vmcflush keeping its pool pins across a call (naming them on the call's own `(cross (rz off
+ty)..)` marker) and a `rseat` link, between body completion and assembly, settling each one:
+a free callee-saved seat — save into `cssv`, load into every epilogue, re-pin in `g 'vrt` —
+or the reload rewrite `ld rz r4 off` where the marker sat, priced by a release scan and
+`pmin`. It was built whole and measured on love.c: **+545 instructions, 56 functions worse
+and 2 better.** The census is the verdict — **1,088 crossings: 630 die unread, 454 want a
+reload, 4 found a seat** — and three physics read straight off it. (1) **The lever aimed at
+the frame bucket and grew it**: +498 of the +545 is frame traffic (loads 9,485 → 9,706,
+stores 5,919 → 6,068). The reload half worked — 454 eager reloads retired ~233 lazy ones —
+but netted +221, because a lazy load only runs on the path that reads while 630 crossings
+are never read at all; and the +149 stores are a surviving pin holding one of six pool
+registers past the call until the squeeze spills. Optimism trades loads for pressure and
+pressure wins. (2) **The flush cannot tell the 454 from the 630** — the read count is in the
+AST, the crossing is found in the IR, so the signal that would price the decision is exactly
+the one the site lacks. That is the shape of the refusal, not a missing rule. (3) **A seat
+bought at the call is a copy**, which is the refusal this rung exists to escape: one mov +
+one save + a reload per exit against the k loads retired needs k ≳ 4, and only a
+LOOP-crossing value has that k — and those are already seated by `csbor`/`lomig`. The seat
+supply was never the binding constraint; the pricing was. So the lesson is about iv, not
+about calls: **the vmap must retire, not be extended** — the physics change only where the
+value is BORN callee-saved (a whole interval coloured, params pre-coloured), which is iv's
+own charter. ⚠ and one correctness law, paid for with a miscompiled `love`: **a slot read out
+of `env` at a call inside an inline splice is the CALLEE's slot** — vmap names compare by
+content, a spliced parameter `n` shadowed the pin's `n`, the reload took the argument's cell,
+and `p0chars` looped `n*3` times into its own `ud2`. `vmget` blinds itself on `g 'inlbody`
+for exactly this; anything resolving a slot for a pin owes the same blind.
+
+2026-08-12 · THE CALL-CROSSING CENSUS — what iv proper is worth, and on which target FIRST
+(love.c, four targets; doc/moon-vreg.md carries the table and the phase plan). Demand:
+**~97% of loop-weighted reads sit on names that cross at least one call** on every target —
+this is not a niche class, it is the class. x64 543 fns / 2,648 crossing names, arm64 544 /
+2,654 — the same program, so the same demand. Supply: **the callee-saved file is entirely
+idle**, and the number is identical in EVERY function of a target (pass 1 never touches a cs
+register, and `cspool` is empty on every arm and riscv target — the residency machinery has
+never offered a seat there at all): 4 usable on x64, 10 arm64, 11 riscv64, 7 thumb2. Fit:
+every crossing name of a function holds simultaneously in 505 of 544 fns on arm64 (93%)
+against 338 of 543 on x64 (62%). **So build the interval allocator's assignment against arm64
+first** — identical demand, 2.5× the file, and nothing competing for it. ⚠ riscv64/thumb2 read
+low only because `nhome` is 0 there (params are never homed), so their universes are
+locals-only and their demand is understated by exactly the parameters — pre-coloured arrivals
+would be the first param residency those backends ever get.
+
+2026-08-12 · IV RUNG A-0 — THE CALLEE-SAVED FILE BECOMES REAL ON ARM64. The census said build
+iv against arm64; the file there could not be used at all. `cspool` was () for every arm and
+riscv target, the a64 prologue in `build` never spliced `peep g 'cssv ()`, and `cskeep` — the
+verifier — bailed on `arm? g`. Baseline proof: **zero callee-saved operands in love.o for
+arm64**, in every function. So three landed, priced mechanisms (param cs homes, lpick's
+callee-saved overflow, the loop borrow) had never run on the target where the file is 10
+registers wide. Wiring it took four things, three of them latent bugs the file's absence had
+hidden: (1) cspool gets a64's r19–r28; (2) the a64 prologue splices cssv after the frame is up,
+past unframe's positional read; (3) ⚠ **`sibjmp` read the `epi-a64` CONSTANT instead of the
+passed-in `ejx`**, so a tail call jumped with the callee's seats still dirty — 18 functions, and
+`cskeep` caught every one the moment it was allowed to look; (4) ⚠ **`rdsp` did not model
+`adds`/`subs`**, the arm overflow lane, so it answered 'bar and every analysis silently declined
+those functions — now a `flagops` roster with the aluops shape but NEVER pure, since the flags
+feed the `set vs` behind it and deaddef would otherwise lift it away. Result on love.c/arm64:
+**−941 insns, −3,758 B text, 28 fns better and 5 worse**, x64 `.text` byte-identical, and the
+whole corpus runs under qemu (test_raw_arm64, 4,161 tests). ⚠ the file's three consumers do NOT
+transfer their x64 pricing: measured alone against no-cs-at-all, lpick's overflow is the prize
+(≈ −755), param homes pay, and **the loop borrow is a net LOSS on a64 (−187 alone, and it drags
+both-on to −236 because `wb` denies the param homes their seats)** — so a64 does not take the
+borrow yet. That is a verdict on insns, not on the mechanism: the borrow's x64 win was measured
+in WALL CLOCK at flat insns, and there is no cross-target wall instrument. Named residue:
+`vbin_fill` takes all ten seats and pays +166, exactly the failure its own pricing comment
+predicts ("static touch counts keep lying about the payback") — the rule was implicitly capped
+by x64 having four registers, and iv's interval assignment is what replaces it.
+
+2026-08-13 · IV RUNG A-1 — RISCV JOINS, AND THE CS OVERFLOW LEARNS ITS EXITS. riscv64's file
+(11 s-registers, its operand pool r8–r11 disjoint) needed only cspool + cskeep: its prologue
+already rode A-0's shared arm splice and its `sibjmp` already read `(peep g 'epi epi-a64)`
+rather than the constant, so it compiled clean first try. But it landed at **−5 insns** — the
+file was used (827 operands, from zero) and `vbin_fill` alone gave back +232 of it. That forced
+the pricing question A-0 had recorded as a residue. **`lpick`'s cs overflow had no
+per-invocation term at all**: it ranks candidates by nested-loop touches and `pick` drains the
+file, which was invisible while x64 offered four seats. The fix is `pcs`'s own accounting worn
+by the locals — a seat costs one save plus one reload per EXIT, so its touches must clear
+`1 + nx`. Four variants measured (net / worst single fn, arm64 and riscv64): no term
+−941/+166 and −5/+232; **per-item −798/+119 and −179/+92**; per-item with an `ln >= 2` escape
+−978/+166 and −45/+232 (the escape readmits exactly the pathological set — vbin_fill's homes
+ARE nested-loop touches, the problem is that it takes ten); set-level (cumulative cost against
+cumulative touches) −863/+119 and −163/+92. **Per-item ships**: it is the only variant that
+both makes riscv worth enabling and improves arm64's worst case, and it costs arm64 143 insns
+of aggregate to do it. ⚠ the term is NOT target-gated and x64 moves too — **−43, worst +18** —
+which is the real argument for it: the accounting was missing, not arm-specific. Also fixed:
+`sibjmp`'s t32 line read the `epi-a64` constant, which for a VARARG t32 function drops its
+`(add sp sp 16)` and leaks the arriving block on a tail call (narrow — va_start sets fesc and
+bars sibcalls — but wrong; t32 codegen is byte-identical after the fix, so only the vararg
+lane moves). **thumb2 stays off**: its file needs eleven ops modelled in `rdsp` first — the
+64-bit pair lane (`adc` `sbc` `sbcs` `umull` `smull` `mla`) plus `ors`, `clz`, `cvtui2sd` and
+the `udivll`/`uremll` helpers — on the least-exercised target, so it earns its own rung. The
+enumeration itself is cheap and repeatable: let cskeep print instead of scare and read the
+census.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
-read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
-each a physics lesson above.
+read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build),
+5.1b iv-b call-crossing optimism — each a physics lesson above.
