@@ -1281,6 +1281,31 @@ low only because `nhome` is 0 there (params are never homed), so their universes
 locals-only and their demand is understated by exactly the parameters — pre-coloured arrivals
 would be the first param residency those backends ever get.
 
+2026-08-12 · IV RUNG A-0 — THE CALLEE-SAVED FILE BECOMES REAL ON ARM64. The census said build
+iv against arm64; the file there could not be used at all. `cspool` was () for every arm and
+riscv target, the a64 prologue in `build` never spliced `peep g 'cssv ()`, and `cskeep` — the
+verifier — bailed on `arm? g`. Baseline proof: **zero callee-saved operands in love.o for
+arm64**, in every function. So three landed, priced mechanisms (param cs homes, lpick's
+callee-saved overflow, the loop borrow) had never run on the target where the file is 10
+registers wide. Wiring it took four things, three of them latent bugs the file's absence had
+hidden: (1) cspool gets a64's r19–r28; (2) the a64 prologue splices cssv after the frame is up,
+past unframe's positional read; (3) ⚠ **`sibjmp` read the `epi-a64` CONSTANT instead of the
+passed-in `ejx`**, so a tail call jumped with the callee's seats still dirty — 18 functions, and
+`cskeep` caught every one the moment it was allowed to look; (4) ⚠ **`rdsp` did not model
+`adds`/`subs`**, the arm overflow lane, so it answered 'bar and every analysis silently declined
+those functions — now a `flagops` roster with the aluops shape but NEVER pure, since the flags
+feed the `set vs` behind it and deaddef would otherwise lift it away. Result on love.c/arm64:
+**−941 insns, −3,758 B text, 28 fns better and 5 worse**, x64 `.text` byte-identical, and the
+whole corpus runs under qemu (test_raw_arm64, 4,161 tests). ⚠ the file's three consumers do NOT
+transfer their x64 pricing: measured alone against no-cs-at-all, lpick's overflow is the prize
+(≈ −755), param homes pay, and **the loop borrow is a net LOSS on a64 (−187 alone, and it drags
+both-on to −236 because `wb` denies the param homes their seats)** — so a64 does not take the
+borrow yet. That is a verdict on insns, not on the mechanism: the borrow's x64 win was measured
+in WALL CLOCK at flat insns, and there is no cross-target wall instrument. Named residue:
+`vbin_fill` takes all ten seats and pays +166, exactly the failure its own pricing comment
+predicts ("static touch counts keep lying about the payback") — the rule was implicitly capped
+by x64 having four registers, and iv's interval assignment is what replaces it.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build),
 5.1b iv-b call-crossing optimism — each a physics lesson above.

@@ -409,6 +409,22 @@ x64's 62%, and where nothing competes for the registers.
 universes are locals-only. Their demand is understated by exactly the parameters, and phase 3's
 pre-coloured arrivals would be the first param residency those backends ever get.
 
+**rung A-0 CLIMBED 2026-08-12 — the file becomes real on arm64.** The census's "build against
+arm64" had a prerequisite it did not state: the file there was unusable. `cspool` answered ()
+for every arm/riscv target, the a64 prologue never spliced `cssv`, and `cskeep` bailed on
+`arm? g` — so the baseline really did carry **zero callee-saved operands**. Wiring it exposed
+two latent bugs the absence had hidden: `sibjmp` read the `epi-a64` CONSTANT rather than the
+passed-in `ejx`, so a tail call left the callee's seats dirty (18 fns, all caught by cskeep the
+moment it could look), and `rdsp` did not model `adds`/`subs` — the arm overflow lane — so it
+answered 'bar and every analysis declined those functions (now `flagops`: the aluops shape, but
+never pure, since the flags feed the `set vs` behind it). **−941 insns / −3,758 B on
+love.c/arm64, 28 fns better and 5 worse, x64 .text byte-identical, test_raw_arm64 green under
+qemu.** ⚠ the three consumers of the file do not transfer their x64 pricing: lpick's overflow
+is the prize (≈ −755 alone), param homes pay, and the loop borrow is a net loss on a64 (−187
+alone, dragging both-on to −236 because `wb` denies the homes their seats) — so a64 does not
+take the borrow yet, and that is a verdict on insns, not on a mechanism whose x64 win was
+measured in wall clock. Residue: `vbin_fill` takes all ten seats for +166.
+
 ⚠ phase 1 alone will likely be FLAT on codegen: it replaces a memo with a structure and keeps
 write-through. Under the standing ship gate ("pays somewhere, regresses nowhere") flat does not
 land, so phase 1 needs an explicit consolidation gate — flat-or-better codegen, no compile-time

@@ -56,6 +56,11 @@
    siops '(si si1 si2 si4)                          ; the store-immediates (the addressing fold + the asn/decl delivery lanes)
    cmpmops '(cmpm cmprm)                            ; the memory cmps (made only by cmpfuse)
    aluops '(add sub and or xor imul)
+   ; the arm overflow lane (add/sub_overflow): an aluops SHAPE, but the flags feed the `set vs`
+   ; right behind it -- so never pure (deaddef would lift it away) and never in aluops itself,
+   ; where the two-address rewrites live. ⚠ without this rdsp answers 'bar and every analysis
+   ; declines the whole function.
+   flagops '(adds subs)
    divops '(div rem udiv urem)                      ; the division protocol (r0..r3 clobber)
    vshops '(shlv shrv sarv)                         ; the variable shifts (count via r1)
    unops '(neg not sx1 sx2 sx4 zx1 zx2 zx4)         ; one-register rewrites
@@ -771,7 +776,12 @@
    ; the x64 CALLEE-SAVED pool (r11..r14 -> machine r12..r15): overflow homes for locals in
    ; non-leaf fns. a home here rides THROUGH calls unwrapped -- the callee preserves it -- at
    ; the price of one save/restore pair in the owner's frame (arm64's x19+ rungs: unclimbed)
-   (cspool g) (? (arm? g) () '(r11 r12 r13 r14))
+   ; the seats residency may borrow: a subset of csregs, saved by the prologue (g 'cssv) and
+   ; reloaded on every exit. ⚠ a target belongs here only once its prologue SPLICES cssv and
+   ; cskeep verifies it -- t32/v6m/riscv still owe both, which is why their file reads empty.
+   (cspool g) (? (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
+                 (arm? g) ()
+                 '(r11 r12 r13 r14))
    (deep? pl) (two? >>pl)                           ; a pool affords a PRICED seat: two remain after the take
    (fbase g) (? (arm? g) 'fp 'r4)                   ; the frame base as post-build ir1 spells it (a4ize); arm64+thumb2 fp, x64 r4
    ; -- a DELIBERATE refusal names itself (doc/moon-diag.md). `'bad` here is TWO answers wearing
@@ -3932,6 +3942,7 @@
           (member? op aluops)
            (? (<>f = 'sp) [() () ()]      ; sp motion touches no gp register
               [(rg1 <>>f + rg1 <>>>f) [<>f] 1])
+          (member? op flagops) [(rg1 <>>f + rg1 <>>>f) [<>f] ()]
           (op = 'push) [[<>f] () ()]
           (op = 'pop) [() [<>f] ()]
           (member? op '(shl shr sar rol ror)) [[<>f] [<>f] 1]
@@ -4066,7 +4077,10 @@
     (? (rv? g && (<f = 'call))
        (butret (peep g 'epi epi-a64) + [['la (pkr g) <>f] ['jmpr (pkr g)]])
        (<f = 'call) (butret ejx + [['jmp <>f]])
-       (a64? g) (butret epi-a64 + '((jmpr r15)))               ; the arm64 epilogue never touches the x15 park
+       ; ⚠ ejx, never the epi-a64 CONSTANT: a cs regen pins its restores into g 'epi, and the
+       ; constant drops them -- the tail would jump with the callee's seats still dirty. (t32
+       ; still reads the constant; its cspool is empty, and enabling it owes this line too.)
+       (a64? g) (butret ejx + '((jmpr r15)))                   ; the arm64 epilogue never touches the x15 park
        (rv? g) (butret (peep g 'epi epi-a64) + [['jmpr (pkr g)]])     ; riscv: the park (t4) survives the epilogue
        (t32? g) (butret epi-a64 + [['jmpr (pkr g)]])         ; thumb2: the callr target parks in r12 (pkr), untouched by the epilogue
        ('((mov r10 r3)) + butret ejx + '((jmpr r10))))            ; park first: the x64 epilogue reloads r3
@@ -5203,7 +5217,7 @@
    ; bars are rostered quiet here (control, calls, the d128 r0:r2 family) -- an op on
    ; neither roster REFUSES, so a new op must name its cs effect to land. a fn carrying
    ; inline asm owns its own clobbers: skipped whole. --
-   csquiet '(label align ud2 br jmp jmpr ret call callr sys mulo
+   csquiet '(label align ud2 trap br jmp jmpr ret call callr sys mulo   ; trap = a64's brk #0, ud2's twin
              sx128 n128 a128 a128r s128 s128r m128 m128r mw128 mw128r c128 c128r
              dv128 rm128 inc128 dec128 shl128 shr128 sar128 shl128v shr128v sar128v)
    (csdefs g f)                                       ; the cs regs one form writes | 'dark
@@ -5215,7 +5229,10 @@
    (cskeep g fs)                                    ; answers fs; a breach scares, naming fn + reg
     (: (rawy? l) (? !(two? l) ()
                     (: f <l (? (two? f && id? <f 'raw) 1 (rawy? >l))))
-       (? (arm? g || !(two? fs) || peep g 'hasasm () || rawy? fs) fs
+       ; ⚠ a64 rides this too (its file is real -- cspool): the shapes are the same, only the
+       ; frame base differs (fp there, and a4ize has already retargeted by the time this runs).
+       ; t32/v6m/riscv still bail -- they have no cs file to breach.
+       (? ((arm? g && !(a64? g)) || !(two? fs) || peep g 'hasasm () || rawy? fs) fs
           (: fn (nthr <fs 1)
              labs (tablet 0) saves (tablet 0) defs (tablet 0)
              (note l i)
@@ -5226,7 +5243,8 @@
                          (: _ (? (id? <f 'push && member? <>f (csregs g))
                                  (? (peep saves <>f ()) 0 (pin saves <>f ['push i])) 0)
                             _ (? (id? <f 'st &&
-                                  (id? <>f 'sp || id? <>f 'r4) && member? <>>>f (csregs g))
+                                  (id? <>f 'sp || id? <>f 'r4 || id? <>f (fbase g)) &&
+                                  member? <>>>f (csregs g))
                                  (? (peep saves <>>>f ()) 0 (pin saves <>>>f ['slot <>f <>>f i])) 0)
                             ds (csdefs g f)
                             (? (id? ds 'dark) (scare 'cs-dark-op <f)
@@ -7547,6 +7565,9 @@
                                      '(st sp 32 r4) '(st sp 40 r5) '(st sp 48 r6) '(st sp 56 r7)]
                                   ()) +
                                ['(push lr) '(push fp) '(lea fp sp 0) ['sub 'sp 'sp frame]])) +
+                           ; the cs saves ride AFTER the frame is up (their slots are fp-relative)
+                           ; and BEFORE the body -- ⚠ past unframe's positional prologue read
+                           peep g 'cssv () +
                            <sp0 + body + '((li r0 0)) + peep g 'epi epi-a64))))))
                        (deadst g
                         (deaddef      ; rerun: the widened addrfold strands live-dest addr insns
@@ -7799,7 +7820,13 @@
        ng (sr6f || vararg || bad? ir1 || peep g 'hasasm () || anyop? ir1 'sys)
        av (? ng () (alive g f))
        au (? ng () (auniv g f))                     ; the array leg's universe rides the same gate
-       wb (? (ng || !(two? (cspool g))) () (blscan f))   ; a callish loop somewhere licenses the borrow offer
+       ; a callish loop somewhere licenses the borrow offer. ⚠ NOT on a64, where the file is new:
+       ; measured on love.c, insns against no-cs-at-all -- borrow alone −187, param homes alone
+       ; −1,077, both −236, both sharing the file −246. The borrow costs there AND takes the seats
+       ; (wb denies free9), so a64 spends its file on homes until iv's allocator subsumes both.
+       ; ⚠ the x64 borrow's own win was measured in WALL CLOCK at flat insns, so this is not a
+       ; verdict on the mechanism -- it is one on a metric we have no cross-target instrument for.
+       wb (? (ng || a64? g || !(two? (cspool g))) () (blscan f))
        ; -- priced int-param homes (the leaf lane): an int/uint param earns its POSITIONAL
        ; seat only when its ir1 slot touches pay the entry cvt (tc >= 2), the locals picked
        ; first (a hot local's claim wins the register), and an x64 pool seat stays deep
