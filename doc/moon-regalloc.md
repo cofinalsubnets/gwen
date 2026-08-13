@@ -572,6 +572,14 @@ image skews against a rebuilt `love` — symptoms are a segfault or `;; missing 
 diagnostic. ⚠ **diff the artifacts you already have before you instrument**: ablation binaries
 answer "which functions and how much" for free.
 
+⚠ **`say err` from inside gen.l prints NOTHING during a compile** (2026-08-13, an hour). A probe
+written that way reports "this path is never taken" across 536 compiles while being silent itself
+— the failure mode the doc already warns about, wearing a new face, and the probe text WAS in the
+image (`strings` confirmed it). **Use `quit <code>` and read the exit status**: it cannot be
+swallowed, `make` surfaces it as `Error <code>` on the very TU that hit it, and a sweep is one
+`[ $? = 7 ]`. And validate any zero by **firing the probe on the COMPLEMENT** — if the negated
+condition does not fire either, the instrument is dead, not the path.
+
 **Measurement.** ⚠ a codegen rung owes a COMPILE-TIME A/B, not only a codegen one — the first ship
 of copy propagation cost **78% of the compiler's speed** (13.2 → 23.4 s) and every gate stayed
 green, because gates ask whether the output is right and none asks what it cost to produce.
@@ -1012,6 +1020,16 @@ special case. **Byte-identical love.o on x64/arm64/riscv64/thumb2, `test_fixpoin
 (`vmpin`/`vmbpin`/`vmrepin`/`vapin`/`vaepin`) became one body under three gates, because "where
 does this pin live" was the question the three-way dispatch was asking without a word for it.
 ⚠ what did NOT come out is the census's second row — see the falsification under the flush census.
+
+**2026-08-13 — and the element doors squish to one.** `vapin` (pool-only) and `vaepin` (seat-aware)
+differed in one gate, so "may an element take a cs seat?" had two answers depending on which door
+a site happened to call. The pool gate looked load-bearing — one-reg-one-name means an element
+taking a seat EVICTS whatever scalar holds it, and a seated scalar's loop keep would then miss,
+bar and regen. It is not: **the seat-class element pin is unreached by the tree's own C and by
+539 corpus compiles across four targets, and on a synthetic shape that does reach it (an element
+read whose want is a loop-seated register) the object is byte-identical** — the register an
+element takes is never one another name is claiming, so the gate defended an eviction that does
+not occur. Probed with `quit`, and the zero validated by firing the complement. One door.
 ⚠ gen.l now opens `(use 'pat)`: the entry's shape is stated in three pattern-headed accessors
 (`vnm`/`vrg`/`vcls`) and every reader destructures, so a wrong-arity entry answers `()` rather
 than a silently shifted field. love0's build-tool boot does not splice `pat`, hence the file's own

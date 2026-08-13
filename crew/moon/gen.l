@@ -497,10 +497,13 @@
        (? !(two? ae) ()
           (id? <ae 'el) (vadrop9 g <>ae)
           (vadrop9 g (<>ae + "["))))
-   (vapin g nm rz)                                  ; the element pin: sans the universe check (the key's
-    (: r (rp g rz)                                  ; array was gated by vuarr when it was minted)
-       (? (vmborn? g && member? r (peep g 'pool0 ()))
-          (vmpin9 g nm r (vpcls g nm r) vadrop9) ()))
+   ; the element pin: sans the universe check (the key's array was gated by vuarr when it was
+   ; minted). ⚠ ONE door, seats included: the pool-only twin it used to have was reachable but
+   ; changed nothing -- a seat an element takes is never one another name is claiming, so the
+   ; gate was defending an eviction that does not occur (the census under `traps paid for`).
+   (vapin g nm rz)
+    (: r (rp g rz) cls (vpcls g nm r)
+       (? (vmborn? g && cls) (vmpin9 g nm r cls vadrop9) ()))
    ; -- frame-direct: a constant-indexed frame-array element is a STATIC slot (off + k*elsize) --
    ; no address compute at all. the address is consumed by its own load/store, so this holds for
    ; ESCAPING arrays too (no vuarr gate); pair/d128 elements keep the address lanes. --
@@ -604,9 +607,6 @@
              (: a2 (aelem g env <>e)
                 (? (two? a2 && id? <a2 'el && (= <>a2 key)) (t9 - 1) t9))
              t9)))
-   (vaepin g nm rz)                                 ; the element RE-pin: a borrowed seat re-establishes too
-    (: r (rp g rz) cls (vpcls g nm r)
-       (? (vmborn? g && cls) (vmpin9 g nm r cls vadrop9) ()))
    (lomig g env sub lab)                            ; a CALLISH keep: scalar pool pins migrate onto
     (: base (lokeep g lab)                          ; granted cs seats -> (kp movs); the movs lay
        bs (peep g 'csbor ())                        ; before the head label. seats gone, a pin still
@@ -624,7 +624,7 @@
                      (? !(two? eo) (go >l free kp mvs sr)
                         (two? free)
                          (: c <free
-                            _ (vaepin g nm c)
+                            _ (vapin g nm c)
                             (go >l >free ((vke g nm c) >< kp) (['mov c r] >< mvs) sr))
                         (nc <= nrdse g env sub nm)
                          (go >l free (e9 >< kp) mvs ([nm r [(ldop <>eo) r 'r4 <eo]] >< sr))
@@ -2313,8 +2313,10 @@
                  'bad))
           (k = 'deref)
            ; the array leg: a pinned element reads as ZERO forms; a miss loads into a
-           ; pinnable register (the consumer's want if it pools, else a fresh one) and
-           ; pins, so the NEXT read is free. pin refused (splice, staging) -> today's path.
+           ; pinnable register (the consumer's want, else a fresh one) and pins if that
+           ; register carries residency, so the NEXT read is free -- deliver where the
+           ; consumer asked, pin where the class permits, and the two are separate
+           ; questions. pin refused (splice, staging) -> today's path.
            (: ae (aelem g env e)
               (? (two? ae && id? <ae 'el)
                   (: rM (vmget g <>ae)
@@ -2433,7 +2435,7 @@
                         (: _ (adrop9 g env <>e)     ; the write retires its pin(s)
                            (? (hint && rpeq? g (vreg r) hint && !(flo? (vty r)))
                                (: fs (vfs r + cvt ty hint + [[(stop ty) 'r4 off hint]])
-                                  _ (vaepin g <>ael hint)
+                                  _ (vapin g <>ael hint)
                                   (mkv ty hint fs))
                               (hint && !(flo? (vty r)))
                                ; forced re-establishment: the canonical value also lands in
@@ -2441,7 +2443,7 @@
                                ; when the element rides a loop)
                                (: fs (asintt g r ty + cvt ty 'r0 +
                                       [[(stop ty) 'r4 off 'r0] ['mov hint 'r0]])
-                                  _ (vaepin g <>ael hint)
+                                  _ (vapin g <>ael hint)
                                   (mkv ty 'r0 fs))
                               (: _ (? hint (rfree g hint) ())
                                  ; a register-riding value stores ITSELF (no r0 bridge; the
