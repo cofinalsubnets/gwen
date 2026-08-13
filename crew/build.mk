@@ -105,8 +105,25 @@ out/dist/love-$a: $(ho)/love $(ho)/love.baked out/dist/.dist-cat.l
 	@cp $(ho)/love $@
 	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l ./$@ bake
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
-.PHONY: dist
+.PHONY: dist dist-tgz
 dist: out/dist/love-$a
+
+# ==== dist-tgz: the release tarball, packed by us ====
+# The artifact plus its man page, as a .tar.gz -- and the point is WHO MADE IT: the
+# archive comes out of lib/tar.l and the DEFLATE stream out of lib/gz.l, so a
+# release needs neither `tar` nor `gzip` on the box that cuts it. test_gz is what
+# says the bytes are the ones GNU tar and GNU gzip would accept.
+# ⚠ our coder writes the FIXED Huffman code, so this lands ~24% above `gzip -9`
+# (lib/gz.l carries the measured numbers). That is a real cost on a download and
+# the reason a dynamic coder is the next rung, not a footnote.
+dist_tgz = out/dist/love-$a.tar.gz
+dist-tgz: $(dist_tgz)
+$(dist_tgz): out/dist/love-$a $(ho)/love lib/tar.l lib/gz.l tools/tgz.l
+	@echo TGZ	$(abspath $@)
+	@rm -rf out/dist/pack && mkdir -p out/dist/pack/love-$a
+	@cp out/dist/love-$a out/dist/pack/love-$a/love
+	@cp README.md out/dist/pack/love-$a/ 2>/dev/null || true
+	@$(ho)/love tools/tgz.l c $@ out/dist/pack
 
 # ==== dist_cross: the TWIN artifact (the other elf arch) ====
 # the same door for the machine you are not on: every TU through `mooncc -t`,

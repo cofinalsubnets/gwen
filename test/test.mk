@@ -12,7 +12,8 @@
   test_mps2_wake test_thumb2sp test_playdate test_teensy41 test_nucleo446 test_nucleo446_smoke \
   test_rp2040 moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
-  test_holo test_as test_elf32 test_objcopy
+  moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
+  test_holo test_as test_elf32 test_objcopy test_gz
 
 # $(mw) -- the WARM love: the freshly-baked image woken instead of the egg compiled
 # from source (12 ms against 1.05 s). Both lanes carry the same vocabulary, so warm
@@ -193,7 +194,7 @@ test_embed: host $(ho)/mooncc
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -632,6 +633,16 @@ $(eval $(call moon_pkg,tar,TARSRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,m4,M4SRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,lua,LUASRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
+$(eval $(call moon_pkg,gzip,GZIPSRC,host out/host$(hsuf)/mooncc))
+$(eval $(call moon_pkg,bzip2,BZIP2SRC,host out/host$(hsuf)/mooncc))
+# test_gz -- lib/tar.l + lib/gz.l against the two programs they replace. The LAWS are
+# test/host/gz.l (in test_hostnif, needing nothing outside the tree); this is the half
+# only the outside world can say, and it is a separate gate because a coder and a
+# decoder written by one hand round-trip cleanly through a format nobody else speaks.
+# Skips where either system tool is missing.
+test_gz: host
+	@echo TEST test/gate/targz.sh
+	@sh test/gate/targz.sh $(ho)/love
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (test/holo/golden.l). A host-only app -- it adds no nif and is NOT
 # baked into love0. The sources are cat'd in because the host bakes its NATIVE backend

@@ -19,10 +19,24 @@ it, then move it onto nolibc/holo as its libc surface fills in.
 
 ## what runs
 
-Six packages build and run: **bzip2 1.0.8**, **gzip**, **tar 1.13**, **m4 1.4**, **Lua 5.4.7**
-and **SQLite 3.45.3** (the amalgamation). Four of them — lua, sqlite, m4, tar — also
-**cross-build and run for aarch64 and riscv64**, each with a `make moon-<pkg>[-arm64|-riscv]`
-target over `tools/moon-<pkg>.sh`, and each skipping cleanly without qemu.
+Six packages build and run: **bzip2 1.0.8**, **gzip 1.2.4**, **tar 1.13**, **m4 1.4**,
+**Lua 5.4.7** and **SQLite 3.45.3** (the amalgamation). All six now have a
+`make moon-<pkg>[-arm64|-riscv]` target over `tools/moon-<pkg>.sh`, each skipping cleanly
+without a source tree or without qemu.
+
+⚠ **A dead gate says nothing, and four of these were dead.** `crew/moon/lib/nolibc.c` became
+the directory `crew/moon/lib/nolibc/` when the libc was split into by-need members, and every
+harness still compiled the old single file — so `make moon-tar` and its three siblings failed
+at the first object rather than running. Nothing noticed, because these targets are opt-in and
+no tier runs them. The link owes nolibc's symbols and the driver pulls the members itself, so
+the fix is to name **no** nolibc object at all (host/build.mk says the same of `love`). The
+lesson is the ordinary one about opt-in gates: **their silence is not a pass**, and the
+interval in which one can rot is the interval since somebody last typed its name.
+
+**And a gate that was not running was not catching anything either.** Repairing the four and
+running them turned up a real miscompile that had been sitting behind the dead `moon-sqlite`:
+`SELECT 4294967296*2` answered `8589934592.0` where every other sqlite in the world answers
+the integer `8589934592`. It is fixed — see below — and all six rungs now pass.
 
 Beside them, seven **applications** built 2026-08-08 — not LFS rungs, but the widest sweep of
 ordinary third-party C the compiler has met, and the one that found the `deadst` miscompile:
@@ -62,6 +76,52 @@ Notes worth not re-deriving:
   `config.guess`/`config.sub` predate x86-64 (copy the system automake's over), and modern gcc
   makes the implicit-int `main(){return(0);}` of its probes a hard error
   (`CC="gcc -std=gnu89"`). mooncc compiles every actual source either way.
+- **gzip 1.2.4** wants one app-side edit and it is a real 64-bit portability bug in *gzip*,
+  not a mooncc gap: `gzip.c` calls `ctime` with no declaration in scope, and on x86-64 the
+  implicit `int` return truncates the returned pointer. The harness prepends `<time.h>` to a
+  copy, leaving the imported tree pristine.
+
+### the three bugs the packages found
+
+All three were silent, all three were found by *running* the program rather than compiling
+it, and none was reachable from a single-file test — which is the argument for package rungs
+stated once more.
+
+- **gzip: a tentative definition did not complete an earlier `extern T x[];`** (`crew/moon/gen.l`).
+  C's composite-type rule (6.2.7) says an array of unknown size and one with a size compose to
+  the sized type; gen's tentative rule (6.9.2) kept whichever entry already stood unless the
+  newcomer carried an initializer. So `extern char a[];` followed by `char a[1024];` left `a`
+  laid in `.bss` **at size zero**, and the next global took the same address. `gzip.h` declares
+  `extern char ifname[], ofname[];` and `gzip.c` defines both, so gzip's input and output
+  filename buffers were one buffer. It built, linked, ran, printed its version and its
+  compilation options, and then opened its *output* name for reading — `open("stdout")` under
+  `-c`, `open("V.gz")` otherwise. Five lines reproduce it; `test/cc/134-tentative.c` pins it.
+- **bzip2: `fread` ignored the `ungetc` pushback** (`crew/moon/lib/nolibc/`). C says the next
+  input of any kind sees an ungetc'd byte. bzip2's `myfeof` is the portable EOF probe —
+  `fgetc`, then `ungetc` if that was not EOF — so with `fread` reading *past* the pushback,
+  every probe re-served the same stale byte and EOF never arrived: **compressing any non-empty
+  file spun forever**, and the first byte of the file was quietly missing besides. `fgets` had
+  the same gap and now runs over `getc`. ⚠ the diagnosis came straight from `strace`:
+  `read(3,"h",1)` then `read(3,"ello hello\n",5000)=11` — eleven bytes where twelve were
+  asked for names the dropped byte and the bad EOF in one line.
+- **sqlite: the usual arithmetic conversions read as "either operand is unsigned"**
+  (`crew/moon/gen.l`, two places). C 6.3.1.8 is a **rank** rule: where the signed operand's
+  rank is strictly greater and its type represents every value of the unsigned one, the
+  common type stays **signed** — on LP64 that is `long long` meeting `unsigned int`. `puac`
+  in parse.l already spells this correctly, and both offenders were code that did not ask it:
+  `ubin` typed every mixed binary result unsigned, and the constant strength-reduction lane
+  fired on "either operand unsigned" plus a power-of-two divisor, turning a **signed** divide
+  into a **logical** shift. sqlite's `LARGEST_INT64` is `0xffffffff|((i64)0x7fffffff<<32)`,
+  so that unsigned-int literal made the whole 64-bit constant unsigned; `sqlite3MulInt64`
+  then read `INT64_MIN/2` as positive, every multiply looked like an overflow, and sqlite
+  fell back to floating point. ⚠ **the power-of-two divisor is what made it nasty**: `/3u`
+  was always right and `/2u` and `/4u` were wrong, so the shape that looks safest is the one
+  that broke. Pinned by `test/cc/135-uac.c`.
+  - ⚠ two traps in *writing* that test, both caught by running gcc first: the same rank rule
+    means `~0u` widens to `+4294967295` rather than sign-extending (so `(i64)-8 & ~0u` is
+    `4294967288`, not `-8`), and `return bad` on a bitmask of failures is taken **mod 256** —
+    8192 would have exited 0. The status is now just nonzero; the printed line is the
+    differential.
 
 ## the battery is a differential payload, not a smoke test
 
@@ -140,7 +200,7 @@ Every package rung is opt-in on an imported source tree. All the harnesses look 
 places before giving up:
 
 ```
-$LUASRC / $SQLSRC / $M4SRC / $TARSRC   (explicit, always wins)
+$LUASRC / $SQLSRC / $M4SRC / $TARSRC / $GZIPSRC / $BZIP2SRC   (explicit, always wins)
 dl/<glob>                              (tree-local; `make distclean` takes it)
 $MOONSRC/<glob>                        (the cache — ~/src when MOONSRC is unset)
 ```
@@ -151,8 +211,32 @@ and **a missing tree is still a clean SKIP, never a failure** — these stay opt
 `make test_slow` says nothing about them. The exact `curl` line for each lives in the header of
 its `tools/moon-*.sh`.
 
-⚠ m4 and tar want a `./configure`'d tree (they read `config.h`); Lua and the SQLite
-amalgamation want only an extracted one.
+⚠ m4 and tar want a `./configure`'d tree (they read `config.h`); Lua, bzip2 and the SQLite
+amalgamation want only an extracted one. gzip's configure writes three `-D`s the harness
+passes by hand, so an unconfigured tree builds too — the file is kept as the witness that the
+tree was prepared, not because it is load-bearing.
+
+## and then we stopped needing them
+
+`lib/gz.l` and `lib/tar.l` are gzip and tar **in love**: the RFC 1952 container with crc32,
+DEFLATE as a coder and a decoder, and the ustar archive read and written. `tools/tgz.l` is the
+`c`/`x`/`t` door over both, and `make dist-tgz` cuts a release tarball with neither `tar` nor
+`gzip` on the box.
+
+Reading gzip's C first is what made that a short job rather than a long one — `deflate.c` and
+`trees.c` are the canonical statement of the format, and having a **mooncc-built gzip sitting
+right there** meant every stage had an oracle a directory away.
+
+The division of proof is deliberate. `test/host/gz.l` holds what needs nothing outside the
+tree; `test/gate/targz.sh` (`make test_gz`) holds what only GNU tar and GNU gzip can say.
+⚠ **A round trip through our own pair proves nothing about the format** — a coder and a
+decoder written by one hand invert each other happily over a format nobody else speaks, so
+the system tools are not a nicety there, they are the entire oracle.
+
+⚠ our coder emits the **fixed** Huffman code only. On this tree's sources that is a shade
+behind `gzip -1` and about 24% behind `gzip -9` (137965 → 49241, against 39713 and 47876).
+The decoder is complete — stored, fixed and dynamic — because the far side is not ours to
+choose. A dynamic coder is the next real win and roughly all of the gap.
 
 ## the gnulib layer
 

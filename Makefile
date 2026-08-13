@@ -61,7 +61,7 @@ test_extra: test_embed test_filemode waits test_kernel_arm64 test_mps2 test_mps2
 	test_moon test_clay test_moonfuzz test_ccarm64 test_ccriscv \
 	test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp test_raw \
 	test_drv test_asmops test_fixpoint test_dist nettest test_thumb1 test_thumb2 test_thumb2sp \
-	test_virt test_kernel test_uefi test_wasm test_wake
+	test_virt test_kernel test_uefi test_wasm test_wake test_gz
 
 all: host kernel wasm
 
