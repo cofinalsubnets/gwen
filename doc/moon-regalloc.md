@@ -247,6 +247,13 @@ Learned by measuring, several times each; check a new lever against these before
    a frequency signal (PGO), not a better static model.
    SHRINK-WRAP RETIRED 2026-08-12 (rung 3's first half, the ledger): it was worth
    48 bytes and one grant, against 113 lines and a per-form cost in `sibs`.
+   STRAIGHT-LINE CALL CROSSINGS ANSWERED **NO** 2026-08-12 (5.1b iv-b, built and
+   reverted; the ledger): keeping a pool pin across a call costs +545 insns, +498 of
+   it frame traffic — the lever aimed at this bucket and grew it. 630 of 1,088
+   crossings are never read again, the flush cannot tell them from the 454 that are,
+   and a seat bought mid-function is a copy. The loop crossings above are the whole
+   prize; the rest waits on a value BORN callee-saved, which needs the vmap retired,
+   not extended. Do not rebuild it.
 3. **Compare staging want-hints** — HELD for the allocator. Landed for the call-free
    side 2026-08-10: cbranch's left aims at its park before evaluating, so member loads
    deliver and the bridge mov dies. What remains is the callish side (the sp cell across
@@ -1227,6 +1234,34 @@ byte-identical but three adoptions refusing over honestly-longer spans (+6 insns
 cost); iv-b's design (vmcflush optimism, the mandatory-assignment seam where the token fallback
 dies, the pre-assembly seat link) is in doc/moon-vreg.md.
 
+2026-08-12 · RUNG 5.1b iv-b — CALL-CROSSING OPTIMISM, BUILT AND REFUSED. The design was
+vmcflush keeping its pool pins across a call (naming them on the call's own `(cross (rz off
+ty)..)` marker) and a `rseat` link, between body completion and assembly, settling each one:
+a free callee-saved seat — save into `cssv`, load into every epilogue, re-pin in `g 'vrt` —
+or the reload rewrite `ld rz r4 off` where the marker sat, priced by a release scan and
+`pmin`. It was built whole and measured on love.c: **+545 instructions, 56 functions worse
+and 2 better.** The census is the verdict — **1,088 crossings: 630 die unread, 454 want a
+reload, 4 found a seat** — and three physics read straight off it. (1) **The lever aimed at
+the frame bucket and grew it**: +498 of the +545 is frame traffic (loads 9,485 → 9,706,
+stores 5,919 → 6,068). The reload half worked — 454 eager reloads retired ~233 lazy ones —
+but netted +221, because a lazy load only runs on the path that reads while 630 crossings
+are never read at all; and the +149 stores are a surviving pin holding one of six pool
+registers past the call until the squeeze spills. Optimism trades loads for pressure and
+pressure wins. (2) **The flush cannot tell the 454 from the 630** — the read count is in the
+AST, the crossing is found in the IR, so the signal that would price the decision is exactly
+the one the site lacks. That is the shape of the refusal, not a missing rule. (3) **A seat
+bought at the call is a copy**, which is the refusal this rung exists to escape: one mov +
+one save + a reload per exit against the k loads retired needs k ≳ 4, and only a
+LOOP-crossing value has that k — and those are already seated by `csbor`/`lomig`. The seat
+supply was never the binding constraint; the pricing was. So the lesson is about iv, not
+about calls: **the vmap must retire, not be extended** — the physics change only where the
+value is BORN callee-saved (a whole interval coloured, params pre-coloured), which is iv's
+own charter. ⚠ and one correctness law, paid for with a miscompiled `love`: **a slot read out
+of `env` at a call inside an inline splice is the CALLEE's slot** — vmap names compare by
+content, a spliced parameter `n` shadowed the pin's `n`, the reload took the argument's cell,
+and `p0chars` looped `n*3` times into its own `ud2`. `vmget` blinds itself on `g 'inlbody`
+for exactly this; anything resolving a slot for a pin owes the same blind.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
-read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) —
-each a physics lesson above.
+read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build),
+5.1b iv-b call-crossing optimism — each a physics lesson above.

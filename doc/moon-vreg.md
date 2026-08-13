@@ -296,26 +296,45 @@ liveness read at the vrfix seam, not a new analysis.
   one name on different mints of one machine register, and the join needs the one nom both
   paths defined — the φ dodge). Byte-identical on love.c except three iii adoptions that now
   refuse over their honestly-longer spans (+6 insns, the enabling cost). Residency laws
-  unchanged, fixpoint holds.
-* **iv-b onward (NOT BUILT) — the design, settled while iv-a was live:**
-  * **vmcflush goes optimistic**: instead of dropping pool pins at a call, it KEEPS the entry
-    and marks the mint CROSSING (a g-list of (mint slot-off ty) — the slot is already the
-    write-through truth). Post-call reads then emit the mint (zero forms). ⚠ this is the
-    step where the token fallback DIES: a crossing mint's token is caller-saved garbage after
-    the call, so the assignment becomes MANDATORY — a crossing mint either takes a free cs
-    seat or gets the RELOAD REWRITE (insert `ld MINT r4 off` after each call it crosses —
-    exactly the spill-around roster's shape, generalized, constructible at the tail because
-    write-through holds until 5.4).
-  * **the seat decision runs BEFORE assembly** (not at vrfix): the seat set must feed cssv +
-    the epilogue pin + nslot exactly as the regen's grant does today — deciding after
-    assembly would need frame surgery. So build's tail grows a `rseat` link between body
-    completion and assembly; vrfix keeps the substitution role.
-  * **pricing carries the ledger's lessons**: seats for loop-crossing mints first (the borrow's
-    license, subsumed), straight-line crossings only where reads beat the save + per-exit
-    reloads (the pmin/pmax ghosts), and the whole thing behind an interleaved A/B before any
-    claim. Retires: csbor/csbu + the grant-shrink regen loop first; pp/pcs and homes/rides
-    when params join (pre-coloured arrivals); the regen dance last, once every policy has a
-    tail-time equivalent.
+  unchanged, fixpoint holds. ⚠ it STAYS on the branch: iv-b was to be its payer and iv-b is
+  refused (below), so the +6 now waits on the interval allocator that retires the vmap.
+* **iv-b — BUILT, MEASURED, REFUSED (2026-08-12). The design was vmcflush optimism + a
+  `rseat` link; it was built whole, and the numbers killed it.** What shipped for the
+  measurement: vmcflush kept its pool pins across a call and named them on the call's own
+  marker form `(cross (rz off ty)..)`; a `rseat` link between body completion and assembly
+  settled each one — a free callee-saved seat (re-pinning in `g 'vrt`, its save joining
+  `cssv` and its load every epilogue) or the RELOAD REWRITE `ld rz r4 off` where the marker
+  sat, priced by a release scan (`needs?`, rel?'s shape) and `pmin`. On love.c: **+545
+  instructions, 56 functions worse and 2 better**, and the census says why —
+  **1,088 crossings: 630 die unread, 454 want a reload, 4 found a seat.**
+  * ⚠ **the lever aimed at the frame bucket and GREW it.** Of the +545, **+498 is frame
+    traffic**: loads 9,485 → 9,706, stores 5,919 → 6,068. The reload half worked as designed
+    — 454 eager reloads retired ~233 lazy ones — but netting +221 loads, because a lazy load
+    only runs on the path that reads, and **630 of the 1,088 crossings are never read again**
+    (their pin is pure cost). The +149 stores are the tell: a surviving pin holds one of the
+    six pool registers past the call, and the squeeze spills. Optimism trades loads for
+    pressure and pressure wins.
+  * ⚠ **the flush cannot tell the 454 from the 630** — the read-count lives in the AST and
+    the crossing is discovered in the IR, so the only signal that would price this decision
+    is the one the site does not have. That is the shape of the refusal, not a missing rule.
+  * ⚠ **a seat bought at the call is a copy, which is the refusal this whole rung exists to
+    escape.** Seating a crossing mid-function costs one mov + one save + a reload per exit,
+    against the k loads it retires — so it needs k ≳ 4, and only a LOOP-crossing value has
+    that k. Loop crossings are already seated, by `csbor`/`lomig`. The straight-line
+    population is exactly the one where the arithmetic fails, and no supply of seats fixes it
+    (the 4-seat x64 file was not the binding constraint; the pricing was).
+  * **so iv-b's real lesson is about iv, not about calls**: the vmap must RETIRE, not be
+    extended. The physics only change when the value is BORN in the callee-saved register —
+    the allocator colouring a whole interval, params pre-coloured on arrival — which is
+    iv's own charter ("a cross-statement value is just a longer interval"). Any step that
+    keeps the vmap and bolts seats onto its flush is re-deriving the same refusal the ledger
+    already records twice.
+  * one correctness lesson worth keeping, paid for with a miscompiled `love`: **a slot read
+    out of `env` at a call inside an inline splice is the CALLEE's slot.** Scalar vmap names
+    compare by content, a spliced parameter `n` shadows the pin's own `n`, and the reload
+    took the argument's cell — `p0chars` then looped `n*3` times and hit its own `ud2`.
+    `vmget` blinds itself on `g 'inlbody` for precisely this reason; anything reading a slot
+    for a pin owes the same blind.
 
 * **rung 5.4, spilling placed.** Today the slot is the source of truth and the register a
   write-through cache; invert it — the register is the truth, a spill is placed under real
