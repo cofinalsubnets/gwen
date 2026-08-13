@@ -3,7 +3,9 @@
 ⚠ **Plan. Rungs 5.0 and 5.1a (the shadow) are CLIMBED (2026-08-12); 5.1b onward is not built.** Written out of moon-alloc
 rung 5, after the arc refused two increments aimed at the same prize. Companions:
 `doc/moon-alloc.md` (the arc and its rungs),
-`doc/moon-regalloc.md` (the ledger — every number quoted here has an entry there),
+`doc/moon-regalloc.md` (the ledger, the **refusals** and **traps** pull-outs, and the
+**convergence plan** — which settled 2026-08-13 that this is an incremental rewrite of ~14.5% of
+`gen.l`, not a from-scratch one; every number quoted here has an entry there),
 `crew/moon/stage.l` (the pipeline's types, which this rung re-types).
 
 ## the one sentence
@@ -187,59 +189,37 @@ its mechanism is the refused shape wearing a new hat.
   `pmin`, `nrac` and the regen dance, and collects the compile-time win when `build` stops running
   twice — a large rung, but the arc has now refused three increments that tried to be smaller
   than the thing they were changing.
+
 ### 5.1a — the SHADOW STEP, and it must come first — CLIMBED 2026-08-12
 
 **Mint vregs, then map each one to exactly the register today's discipline would have given it.**
-Byte-identical by construction. It changes nothing and proves everything: that a vreg survives
-`build`, the peepholes and `holo`, and that every predicate which asks a question ABOUT a
-register can still answer.
+Byte-identical by construction: it changes nothing and proves everything — that a vreg survives
+`build`, the peepholes and `holo`, and that every predicate asking a question ABOUT a register can
+still answer. The surface was ~16 predicates and three pin tables, each becoming "resolve the
+vreg, then ask".
 
-* **the surface is ~16 predicates and three pin tables**, not the 938 `r0`s. `wr?`, `rfree`,
-  `ralloc`'s own armor, `vmpin`/`vapin`'s `pool0` tests (`gen.l:186`, `:257`), `alsafe?` (`:481`),
-  the two hint tests (`:2122`, `:5891`), plus `vpin` (18 refs), `rpin` (19) and `csbor` (10).
-  Each becomes "resolve the vreg, then ask" — one indirection, no policy.
-
-**Built, and the scope above missed a whole class.** The predicates and pin tables landed as
-written (`rp` resolves, every g-table holds physicals only, `vrfix` substitutes as build's
-innermost tail link). What the byte gate then caught — a 10-byte `.text` diff in two functions of
-love.c, run to ground with a per-site-tagged pool trace over instrumented images — was the
-**machine-identity comparisons**:
+**The scope missed a whole class, and the byte gate caught it** — a 10-byte `.text` diff in two
+functions of love.c:
 
 * ⚠ **a hint honored by ACCIDENT is the discipline, not a coincidence to fix.** An UNHELD hint
-  (no `rpin` hold — the decl init, `pk`, the fdd lanes) returns to the pool at a splice body's
-  psreset, a later `ralloc` re-mints its physical, and the value comes back wearing the new mint.
-  The old code compared physicals, so the accident counted — the honor test skipped the `rfree`,
-  the register stayed out, and every downstream alloc in the statement shifted. Same-mint `id?`
-  breaks exactly there. `rpeq?` (resolve both sides) is the door, at every hint-honor test AND
-  the two-address alias tests (`id? rd rA` guarding the operand free in `immop` and the bin
-  register lane ×6, `id? wnt rB`, sub's alias-dst dodge) — ~20 sites beyond the scoped list.
-* ⚠ **`psafe?` reads the write set RESOLVED** — a freed mint's store still lands on its physical,
-  and a `spare` borrow licensed past it reads garbage. The one form-scan that runs before `vrfix`.
-* the `ezd` delivered-seat test (`kls`) resolves too: the pool overlaps the x64 arg file
-  (r5 r6 r7 r8), so "the value already sits in its seat" can be an accident of the same kind.
-* **the instrument that found them**: bake the two gen.l variants into images
-  (`love -l <cat> -e '(bake ..)'`, ~40s), compile love.c with both, then drive `cc-parse` +
-  `cgen-obj` through `wake image -e` for the IR of one function (seconds, vs minutes
-  interpreted), and tag every `ralloc`/`rfree` call site with its line number for the pool
-  trace. The corpus (141 files, test/cc + host) never diverged — only love.c, twice; a corpus
-  sweep alone would have called this rung green while the discipline drifted.
+  returns to the pool at a splice body's psreset, a later `ralloc` re-mints its physical, and the
+  value comes back wearing the new mint. The old code compared PHYSICALS, so the accident counted
+  — the honor test skipped the `rfree`, the register stayed out, and every downstream alloc in
+  the statement shifted. `rpeq?` (resolve both sides) is the door, at every hint-honor and
+  two-address alias test — ~20 sites beyond the scoped list.
+* ⚠ **`psafe?` reads the write set RESOLVED** — a freed mint's store still lands on its physical.
+* ⚠ **a corpus sweep alone would have called this green**: 141 files never diverged, only love.c,
+  twice. (The image-baking instrument that found it is in the regalloc doc's traps section.)
 
-Gate at the climb: `love.o` byte-identical on all four targets (x64/arm64/riscv64/thumb2),
-141-file corpus byte-identical, `make test` + `test_moon` + `test_fixpoint` green.
-* ⚠ **PLACEMENT IS FORCED, and it is not the post-choice chain.** The rewrite is the INNERMOST
-  link of the build tail, applied to the assembled prologue+body+epilogue **before `sibcall`** —
-  because `sibcall` matches epilogue shapes and the park (`pkr`), and on arm `soften` sits inside
-  it doing register ARITHMETIC (`sf-slot` maps r0/r1/r2/r3 to slots, `nxr` answers r0→r1→r2).
-  Those reason about the physical file and cannot meet a vreg. So vregs live INSIDE build only,
-  and the assembled list — the whole function — is what the assignment sees. That is the property
-  the rung wants anyway.
-* **make it a stage die, not a convention.** `stage.l` already types the pipeline; give build's
-  assembled list its own die (`ir-vreg`) and have the assignment advance it to `gst`. Then **"no
-  vreg reaches holo" is a STATIC check** rather than a runtime `x64-crnum` scare — the type
-  system catching a mis-ordered pass at the seam, which is exactly what that leg is for.
-* **the gate is byte-identical `love.o`**, the same one rung 5.0 shipped under: not "the tests
-  pass" but "the compiler did not change its mind". ⚠ compare `.text`/`.data`/`.rodata`
-  separately — `.rodata` carries the git hash the build stamps, so whole-file `cmp` always fails.
+⚠ **PLACEMENT IS FORCED**: the rewrite is the innermost link of the build tail, **before
+`sibcall`** — `sibcall` matches epilogue shapes and the park, and on arm `soften` sits inside it
+doing register ARITHMETIC. Those reason about the physical file and cannot meet a vreg. So vregs
+live INSIDE build only, and the assembled whole function is what the assignment sees — the
+property the rung wants anyway. `stage.l` types the seam (`ir-vreg` → `ir-chosen`), so "no vreg
+reaches holo" is a STATIC check rather than a runtime scare.
+
+⚠ the gate is byte-identical `love.o` — not "the tests pass" but "the compiler did not change its
+mind". Compare `.text`/`.data`/`.rodata` separately; `.rodata` carries the git hash.
 
 ### 5.1b — the rung proper: assignment, destinations, and the vmap, together
 
@@ -298,43 +278,18 @@ liveness read at the vrfix seam, not a new analysis.
   refuse over their honestly-longer spans (+6 insns, the enabling cost). Residency laws
   unchanged, fixpoint holds. ⚠ it STAYS on the branch: iv-b was to be its payer and iv-b is
   refused (below), so the +6 now waits on the interval allocator that retires the vmap.
-* **iv-b — BUILT, MEASURED, REFUSED (2026-08-12). The design was vmcflush optimism + a
-  `rseat` link; it was built whole, and the numbers killed it.** What shipped for the
-  measurement: vmcflush kept its pool pins across a call and named them on the call's own
-  marker form `(cross (rz off ty)..)`; a `rseat` link between body completion and assembly
-  settled each one — a free callee-saved seat (re-pinning in `g 'vrt`, its save joining
-  `cssv` and its load every epilogue) or the RELOAD REWRITE `ld rz r4 off` where the marker
-  sat, priced by a release scan (`needs?`, rel?'s shape) and `pmin`. On love.c: **+545
-  instructions, 56 functions worse and 2 better**, and the census says why —
-  **1,088 crossings: 630 die unread, 454 want a reload, 4 found a seat.**
-  * ⚠ **the lever aimed at the frame bucket and GREW it.** Of the +545, **+498 is frame
-    traffic**: loads 9,485 → 9,706, stores 5,919 → 6,068. The reload half worked as designed
-    — 454 eager reloads retired ~233 lazy ones — but netting +221 loads, because a lazy load
-    only runs on the path that reads, and **630 of the 1,088 crossings are never read again**
-    (their pin is pure cost). The +149 stores are the tell: a surviving pin holds one of the
-    six pool registers past the call, and the squeeze spills. Optimism trades loads for
-    pressure and pressure wins.
-  * ⚠ **the flush cannot tell the 454 from the 630** — the read-count lives in the AST and
-    the crossing is discovered in the IR, so the only signal that would price this decision
-    is the one the site does not have. That is the shape of the refusal, not a missing rule.
-  * ⚠ **a seat bought at the call is a copy, which is the refusal this whole rung exists to
-    escape.** Seating a crossing mid-function costs one mov + one save + a reload per exit,
-    against the k loads it retires — so it needs k ≳ 4, and only a LOOP-crossing value has
-    that k. Loop crossings are already seated, by `csbor`/`lomig`. The straight-line
-    population is exactly the one where the arithmetic fails, and no supply of seats fixes it
-    (the 4-seat x64 file was not the binding constraint; the pricing was).
-  * **so iv-b's real lesson is about iv, not about calls**: the vmap must RETIRE, not be
-    extended. The physics only change when the value is BORN in the callee-saved register —
-    the allocator colouring a whole interval, params pre-coloured on arrival — which is
-    iv's own charter ("a cross-statement value is just a longer interval"). Any step that
-    keeps the vmap and bolts seats onto its flush is re-deriving the same refusal the ledger
-    already records twice.
-  * one correctness lesson worth keeping, paid for with a miscompiled `love`: **a slot read
-    out of `env` at a call inside an inline splice is the CALLEE's slot.** Scalar vmap names
-    compare by content, a spliced parameter `n` shadows the pin's own `n`, and the reload
-    took the argument's cell — `p0chars` then looped `n*3` times and hit its own `ud2`.
-    `vmget` blinds itself on `g 'inlbody` for precisely this reason; anything reading a slot
-    for a pin owes the same blind.
+* **iv-b — BUILT, MEASURED, REFUSED (2026-08-12).** vmcflush optimism plus an `rseat` link,
+  built whole: **+545 instructions, 56 functions worse and 2 better**, and the census says why —
+  **1,088 crossings: 630 die unread, 454 want a reload, 4 found a seat.** Full verdict and the
+  three physics in the regalloc doc's refusals section. The lesson that governs iv: **the vmap
+  must RETIRE, not be extended** — the physics only change where the value is BORN callee-saved
+  (a whole interval coloured, params pre-coloured), which is iv's own charter. Any step that
+  keeps the vmap and bolts seats onto its flush re-derives a refusal the ledger records twice.
+  ⚠ one correctness law, paid for with a miscompiled `love`: **a slot read out of `env` at a call
+  inside an inline splice is the CALLEE's slot** — vmap names compare by content, a spliced
+  parameter `n` shadows the pin's `n`, and `p0chars` looped `n*3` times into its own `ud2`.
+  `vmget` blinds itself on `g 'inlbody` for exactly this; anything resolving a slot for a pin
+  owes the same blind.
 
 * **rung 5.4, spilling placed.** Today the slot is the source of truth and the register a
   write-through cache; invert it — the register is the truth, a spill is placed under real
@@ -362,25 +317,13 @@ the loop reads (no fixpoint), computed once per fn — it just DISCARDS most of 
 from a walk that already computes the numbers. And write-through is a free spill fallback: an
 interval that gets no register reads and writes its slot, which is today's code.
 
-* **phase 1 — the named vreg.** A universe local gets a mint at its declaration; reads answer it
-  with zero forms, writes define it, the slot store stays. Structural residency instead of a
-  memo, so the whole loop-keep apparatus (`lokeep`/`lochk`/`lomig`/`loseed`/`lomt`, the edge
-  verification and its retry bars) has no job: a mint spans a back edge by construction where a
-  memo had to prove it survived. ⚠ the content-collision trap dies here too — a mint is bound at
-  the declaration site, so a spliced callee's `n` gets its own and the miscompile above is
-  unspellable.
-* **phase 2 — assignment, the prize.** Endpoints for named vregs from alive's statement grain,
-  mapped to form indices through the statement tick that already runs in lock-step (the
-  numbering guard exists); temporaries keep today's per-statement pool, which is already correct
-  and cheap. Linear scan, with call-crossing intervals eligible for the callee-saved file; a
-  taken register joins `cssv` + the epilogue pin exactly as the regen's grant does, and `cskeep`
-  verifies every exit. Unassigned → slot, i.e. today.
-* **phase 3 — retirement, in dependency order.** vmap pins + array leg, then loop keeps + `saro`
-  + `csbor`/`csbu`, then homes/rides/`pp`/`pcs` as params become pre-coloured intervals, and the
-  regen dance LAST — it exists to price the mechanisms above it, and killing it is what returns
-  the compile-time budget (roughly 200 mentions of vmap machinery and 180 of homes/rides/regen).
-* **phase 4 — 5.4.** One mechanism instead of five, so write-through can invert: stores placed
-  at real spill points and the def-store bucket dies.
+⚠ **the phase 1–4 list that stood here is SUPERSEDED (2026-08-13) by THE LADDER in
+`doc/moon-regalloc.md`'s convergence plan**, which merges this level with the splice JIT's into
+one numbered plan. What the phases got right survives there (residency at BIRTH, not at the call;
+`alive` is already the interval analysis; write-through is a free spill fallback). What they got
+wrong is recorded below as evidence: phase 1 step 3 and phase 2 were both REFUSED on measurement,
+and phase 3's retirement ordering is wrong as written. The censuses in the rest of this section
+are the evidence base and stay.
 
 ⚠ **the compile-time law for this arc**: intervals come from `alive` (once per fn), never from a
 form-grain fixpoint in the build tail, which is paid per regen attempt. The +78% that shipped
@@ -539,17 +482,56 @@ across 10 functions of ~640**, 34 distinct (fn, name). Two facts make the replac
 
 * **every miss is ABSENT-ENTIRELY**, never present-in-another-register (0 of 81). A pinned reg
   leaves the free list, so nothing can steal it — a pin only ever dies by a drop.
-* **all 34 trace to a full `vmflush`** (a few also touched by the call or co-tenant paths), and
-  the reason is one line: `vmcflush` DEGENERATES to a whole-map flush when a loop has a call but
-  `csbor` is empty and `saro` is empty. So the miss condition is exactly *a call inside a loop
-  whose keep holds names that neither a cs seat nor the roster covers* — and `lomig`/`loseed`
-  already compute both sets. What is missing is that an ENCLOSING keep's names are never
-  re-checked against an inner loop's call coverage.
+⚠ **the `vmcflush` attribution below was WRONG — corrected 2026-08-13, and the correction kills
+the cheap subsumption.** The first instrument recorded, per name, the last flush site that ever
+dropped it; a miss then read back whatever site happened to be latest. But the killer tablet is
+seeded per FUNCTION while the regen re-runs each function up to four times, so the site named
+was routinely a flush from an earlier attempt, long before the pin that actually missed. ⚠ the
+fix is **clear-on-pin**: every pin door (`vmpin`/`vmbpin`/`vapin`) and `vmset` wipes the name's
+entry, so the tablet holds the flush that removed the LIVE pin and nothing else. Attribution
+before that is an artifact — `vmcflush`'s degeneration accounts for **zero** misses, and `case`
+(7 apparent) collapsed to zero once the record was tightened.
 
-⚠ so the up-front rule is **coverage, not optimism**: keep only what the seat set plus the
-roster can carry across every call the loop's subtree reaches. That is statically decidable from
-data the build already has, it cannot miss by construction, and `lochk`/`lomiss`/`lobar` and the
-four regen retry attempts go with it. The residency — the thing worth +184,000 — is untouched.
+**The corrected census (love.c/x64, 81 misses / 34 distinct pairs)** — four causes, not one:
+
+| killer | distinct (fn, name) | is the flush correct? |
+|---|---|---|
+| a `for` head whose own keep is empty | 13 | mostly YES — 9 of 14 live-keep kills are refused-licence inner loops |
+| a selective drop, no flush at all (call / co-tenant) | 12 | this alone is the "coverage" case, and it is 12/34, not 34/34 |
+| `fcb`, the float-compare branch lowering | 8 | narrowable, and it was narrowed — see below |
+| a `while`/`do` head whose keep is empty | 5 | same as the `for` head |
+
+⚠ so **coverage-not-optimism does not subsume the keeps.** Only 14 head-flush events kill a live
+enclosing keep at all, and 9 of those are inner loops whose licence `loscan` REFUSED (a goto,
+label, switch or case in the subtree admits foreign edges) — flushing there is correct, not a
+missed opportunity. The optimism apparatus is not papering over a rule that could be decided
+up front; on ~1.5% of functions it is discovering genuine conflicts, which is its job. A static
+rule that could not miss would have to model every flush the subtree can reach, including the
+lowering-internal ones — the same enumeration trap that made A-2's eleven ops turn out to be
+twelve. `lochk`/`lomiss`/`lobar` stay.
+
+**the `fcb` narrowing — BUILT, MEASURED, NOT LANDED (2026-08-13).** `fcb` opened with a full
+`vmflush`, and the comment over it states why: the float lane discards the int-flavored emission,
+so a pin born in the dropped forms would survive with its establishing load gone. ⚠ that
+invariant is narrower than the flush that served it — pins from BEFORE the lane are not from
+dropped forms. So: snapshot the map at the relational lane's entry (`m9`, before any `cgexpr`)
+and have `fcb` `vmset` it back. Sound by the stated invariant, and it works: misses 81 → 69,
+distinct 34 → 32. It still does not ship.
+
+| | x64 | arm64 | riscv64 | dynamic (spec.l) | compile |
+|---|---|---|---|---|---|
+| `.text` delta | **+8** | **+12** | **+8** | +180 insns (spread ±440) | +0.05s |
+
+Worse on every target's text, neutral everywhere else — it fails "pays somewhere, regresses
+nowhere". The physics is the same one step 3 found: a preserved pin holds a register out of the
+pool for the rest of the loop, and the two names recovered were not worth their register. ⚠ do
+not re-propose this without a payer; the reason it loses is capacity, not correctness.
+
+⚠ an earlier reading of this same site — "pins can never live in r0–r3 (`opool` is
+`r6 r5 r9 r10 r7 r8`, riscv's is `r8..r11`, t32's is empty), so the flush defends nothing and can
+be deleted" — is TRUE about registers and WRONG about the flush, which exists for the discarded
+emission, not for clobbering. Deleting it produces a working love.c by luck. The comment over the
+code said so; read it before trusting a register argument.
 
 ⚠ **the array leg is NOT in the way and stays.** Its universe on love.c/x64 is exactly three
 functions — `as_big`, `rng_seed_into`, `rng_step` — so it serves the rng/bignum lanes, and
@@ -579,34 +561,26 @@ x64's 62%, and where nothing competes for the registers.
 universes are locals-only. Their demand is understated by exactly the parameters, and phase 3's
 pre-coloured arrivals would be the first param residency those backends ever get.
 
-**rung A-0 CLIMBED 2026-08-12 — the file becomes real on arm64.** The census's "build against
-arm64" had a prerequisite it did not state: the file there was unusable. `cspool` answered ()
-for every arm/riscv target, the a64 prologue never spliced `cssv`, and `cskeep` bailed on
-`arm? g` — so the baseline really did carry **zero callee-saved operands**. Wiring it exposed
-two latent bugs the absence had hidden: `sibjmp` read the `epi-a64` CONSTANT rather than the
-passed-in `ejx`, so a tail call left the callee's seats dirty (18 fns, all caught by cskeep the
-moment it could look), and `rdsp` did not model `adds`/`subs` — the arm overflow lane — so it
-answered 'bar and every analysis declined those functions (now `flagops`: the aluops shape, but
-never pure, since the flags feed the `set vs` behind it). **−941 insns / −3,758 B on
-love.c/arm64, 28 fns better and 5 worse, x64 .text byte-identical, test_raw_arm64 green under
-qemu.** ⚠ the three consumers of the file do not transfer their x64 pricing: lpick's overflow
-is the prize (≈ −755 alone), param homes pay, and the loop borrow is a net loss on a64 (−187
-alone, dragging both-on to −236 because `wb` denies the homes their seats) — so a64 does not
-take the borrow yet, and that is a verdict on insns, not on a mechanism whose x64 win was
-measured in wall clock. Residue: `vbin_fill` takes all ten seats for +166.
+**rung A-0 CLIMBED 2026-08-12 — the file becomes real on arm64** (−941 insns / −3,758 B on
+love.c/arm64; x64 byte-identical). The census's "build against arm64" had an unstated
+prerequisite: the file there was unusable — `cspool` answered () for every arm/riscv target, the
+a64 prologue never spliced `cssv`, and `cskeep` bailed on `arm? g`, so the baseline carried **zero
+callee-saved operands**. Two latent bugs the absence had hidden (`sibjmp` reading the `epi-a64`
+constant; `rdsp` not modelling `adds`/`subs`) are in the regalloc ledger. ⚠ **the file's three
+consumers do NOT transfer their x64 pricing**: lpick's overflow is the prize (≈ −755), and the
+loop borrow is a net LOSS on a64, so a64 does not take it — a verdict on insns, for a mechanism
+whose x64 win was measured in WALL CLOCK. **Owed: an arm/riscv wall instrument.** Residue:
+`vbin_fill` takes all ten seats for +166.
 
-**rung A-1 CLIMBED 2026-08-13 — riscv joins, and the overflow learns its exits.** riscv64
-needed only cspool + cskeep (its prologue rode A-0's splice, its sibjmp already read `g 'epi`)
-and compiled clean — but landed at **−5 insns**, because `vbin_fill` gave back +232 of it. The
-cause was the residue A-0 named: **`lpick`'s cs overflow had no per-invocation term**, so
-`pick` drained whatever file it was offered — invisible at four seats, ruinous at ten. Giving
-it `pcs`'s accounting (a seat costs one save plus one reload per exit, so touches must clear
-`1 + nx`) moves arm64 to −798 (worst regression +166 → +119), riscv to **−179**, and x64 — not
-gated, and this is the argument for the term — to **−43**. Measured alternatives that lost: an
-`ln >= 2` escape readmits the whole pathological set, and a set-level cumulative test matches
-the worst case at a slightly better net but costs more machinery. thumb2 stays off until eleven
-ops are modelled in `rdsp` (the 64-bit pair lane plus `ors`/`clz`/`cvtui2sd`/`udivll`), which
-is its own rung. ⚠ A-2 found it is TWELVE — see below.
+**rung A-1 CLIMBED 2026-08-13 — riscv joins, and the overflow learns its exits.** riscv needed
+only cspool + cskeep and compiled clean, but landed at **−5 insns** because `vbin_fill` gave back
++232 — which forced the residue A-0 had named: **`lpick`'s cs overflow had no per-invocation term
+at all**, invisible at four seats and ruinous at ten. Giving it `pcs`'s accounting (a seat costs
+one save plus one reload per exit, so touches must clear `1 + nx`) moves arm64 to −798 (worst
++166 → +119), riscv to **−179**, and x64 — not gated, which is the argument for the term — to
+**−43**. Losing alternatives: an `ln >= 2` escape readmits the whole pathological set; a
+set-level cumulative test matches the worst case for more machinery. ⚠ A-2 found the thumb2 op
+census was TWELVE, not eleven — see below.
 
 ⚠ phase 1 alone will likely be FLAT on codegen: it replaces a memo with a structure and keeps
 write-through. Under the standing ship gate ("pays somewhere, regresses nowhere") flat does not

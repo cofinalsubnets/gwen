@@ -5544,7 +5544,24 @@
     (: (esc? l) (? !(two? l) ()
                    (: f <l
                       (? (two? f && member? <f '(lea lean) && <>>f = 'r4) 1 (esc? >l))))
-       (? (esc? fs) (stlda fs) (stldw fs ())))
+       fs2 (stldp fs)
+       (? (esc? fs2) (stlda fs2) (stldw fs2 ())))
+   ; the adjacent pair on ANY base but r4 -- a store then a load of the SAME address, nothing
+   ; between, needs no aliasing story at all (stlda's own law, which only ever asked r4). r4
+   ; stays with the lanes below so the slot map, stldkeep and the epilogue anchors are untouched.
+   ; the client is a spliced VM body: every op boundary writes Sp[0] and the next op reads it.
+   (stldp fs)
+    (? !(two? fs) ()
+       (: f <fs r >fs
+          (? !(two? r && two? f && (<f = 'st) && !(<>f = 'r4))
+             (f >< stldp r)
+             (: nx <r
+                rX <>>>f
+                (? !(two? nx && (<nx = 'ld) && (<>>nx = <>f) && (<>>>nx = <>>f))
+                   (f >< stldp r)
+                   (: rY <>nx
+                      (? (rY = rX) (f >< stldp >r)
+                         (f >< ['mov rY rX] >< stldp >r))))))))
    (stlda fs)                                        ; the escape lane: only the pair with nothing between is aliasing-proof
     (? !(two? fs) ()
        (: f <fs r >fs

@@ -12,8 +12,10 @@ sh bench/vmsplice/auto.sh          # the pipeline on live closures (samples.l)
 sh bench/vmsplice/run.sh           # the original probe (splice.c + the hand-made body.c)
 ```
 
-Both need `make host` first. Results and the argument live in **doc/moon-regalloc.md**,
-"the splice client".
+Both need `make host` first. Results and the argument live in **doc/moon-regalloc.md**: "the splice client" for the numbers,
+"the splice JIT and the moon arc" for why this pipeline and the compiler's residency work are one
+problem, and THE LADDER for the shared plan (steps 2, 4 and 7 are the ones this pipeline asks
+for).
 
 ## the pipeline (auto.sh) — dis → compose → mooncc → bind → nif → differential
 
