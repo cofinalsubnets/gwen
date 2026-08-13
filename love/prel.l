@@ -390,14 +390,15 @@
                                                     ; where g divides n
  '+ -50 '- -50                                      ; additive, LEFT -- arithmetic is the whole exception,
                                                     ; and the sign is where it shows
- '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40             ; comparison
  '| 30 '& 30 '&& 30 '|| 30      ; logical (&& || also macros; the row pins the band below comparison)
  '>< 25                                             ; cons -- the loosest builder
  '$ 5 '\ 5)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate), and the lambda
  -1 (pins (tablet 0)                                ; --- ARITY -1: spaced, no bound. a left, then all of them
  '? 10 '@ 10                                        ; the CLAUSE forms: cond, and match -- every arm stays an operand
- ': 3 ':= ':)))                                     ; the binder, loosest of all; := is a bare nom, so it NAMES
+ ': 3 ':= ':)                                       ; the binder, loosest of all; := is a bare nom, so it NAMES
                                                     ; `:` and takes its band -- an alias cannot drift from it
+ -2 (pins (tablet 0)                                ; --- ARITY -2: spaced, and it CHAINS. a left and a right, but
+ '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40)))          ; a same-band neighbour JOINS the run instead of nesting
  ; ⚠ the rows are NOMS, not values: a value would be unwritable, and an unwritable head is a
  ; form no text can spell -- which is what keeps opfix invertible (lib/infix.l). a row resolves
  ; at the use site like any name, so libra's `shadow` rule speaks where one is rebound.
@@ -407,7 +408,7 @@
 ; everything to (seal-hook 4 opfix) stays prefix -- the first pass compiles prel with no opfix.
 (: ; the lanes, by their arity key. LOCAL: the tablets are the ones in `operators`, not copies,
    ; so a `grip` write through the door is seen here at once and there is nothing beside it.
-   monadics (operators 0) dyadics (operators 2) naries (operators -1)
+   monadics (operators 0) dyadics (operators 2) naries (operators -1) chains (operators -2)
    (op-punc-byte c) (? (&& (<= 97 c) (<= c 122)) 0
                        (&& (<= 48 c) (<= c 57)) 0
                        (&& (<= 65 c) (<= c 90)) 0
@@ -446,9 +447,11 @@
           (nom? v) (: b (t v) (? (op-band? b) (op-row v b ar) 0))
           (? (two? v) (nom? (cap v)) 0) (: b (op-tail v) (? (op-band? b) (op-row (cap v) b ar) 0))
           0))
-   ; the SPACED lanes, TIGHTEST FIRST -- so a nom sitting in both reads as the dyadic one. arity 1
+   ; the SPACED lanes, TIGHTEST FIRST -- so a nom sitting in two reads as the earliest. arity 1
    ; has no walk, so it is never asked and a row there stays inert.
-   (op-ent k) (: d (op-lane k dyadics 2) (? (two? d) d (op-lane k naries -1)))
+   (op-ent k) (: d (op-lane k dyadics 2)
+                 (? (two? d) d (: c (op-lane k chains -2) (? (two? c) c (op-lane k naries -1)))))
+   (op-chain? k) (two? (op-lane k chains -2))
    ; longest prefix of nm[i..n) with a monadic meaning -> (len . word), or 0. the table holds word
    ; values, so a hit is asked out of band against the miss answer -- a truth test would drop any
    ; word that nets nothing.
@@ -496,13 +499,46 @@
        (: b (cap fs)
           (? (&& (two? b) (id? (cap b) ':)) (cup b) fs))
        (>< (cap fs) (op-cl-splice (cup fs))))
+   ; a CHAIN, arity -2: (a < b <= c) is (a < b) AND (b <= c), and the shared operand is evaluated
+   ; ONCE. the binds NEST INSIDE the conjunction so all three of python's promises hold at once --
+   ; left to right, once each, and && still short-circuits, so a false first link never reaches c.
+   ; the operators may differ per link; each carries its own. ⚠ the emission is a `:` and an `&&`
+   ; and stops -- && is a macro `feel` expands later, which is where the laziness comes from.
+   ; os is (a b op c op d ..): the head operator is the frame's name, every later one is inline.
+   ; ⚠ ONLY A COMPOUND OPERAND IS BOUND. an atom -- a nom, a numeral, a string -- has no effect
+   ; and no cost to read twice, so binding it would buy nothing and spend an UNWRITABLE nom: a
+   ; fresh nom has no spelling, and a factored form carrying one is a form no text can say
+   ; (lib/infix.l, and the same reason the table's rows are noms). so (a < b < c) stays plain.
+   (op-chn-rest pv r)                                        ; r = (op z op z ..), or a dangling op
+    (? (atom? r) 0
+       (: op (cap r)
+          (? (atom? (cup r)) (>< op (>< pv ()))              ; a trailing operator: the curry law, per link
+             (: z (caup r) v (? (atom? z) z (nom 0))
+                e (>< op (>< pv (>< v ()))) t (op-chn-rest v (cuup r))
+                bd (? (two? t) (>< '&& (>< e (>< t ()))) e)
+                (? (id? v z) bd (>< ': (>< v (>< z (>< bd ())))))))))
+   ; ⚠ the whole run wears a `bit`, because A COMPARISON ANSWERS A BIT and a chain is still one.
+   ; `&&` hands back () for a false LEFT and the failing operand otherwise, so a bare chain would
+   ; answer () when the first link failed, 0 when a later one did, and 1 when none did -- three
+   ; faces for one predicate. the clamp is outside the binds, so nothing about the short-circuit
+   ; or the evaluation order moves; only the answer is normalized.
+   (op-chn nm os)
+    (: a (cap os) b (caup os) u (? (atom? a) a (nom 0)) v (? (atom? b) b (nom 0))
+       e (>< nm (>< u (>< v ()))) t (op-chn-rest v (cuup os))
+       bd (? (two? t) (>< '&& (>< e (>< t ()))) e)
+       b2 (? (id? v b) bd (>< ': (>< v (>< b (>< bd ())))))
+       b3 (? (id? u a) b2 (>< ': (>< u (>< a (>< b2 ())))))
+       (>< 'bit (>< b3 ())))
    ; fold a frame with what it has: nothing collected gives the plain symbol, a shortfall the
    ; partial application -- the curry law, with no case of its own.
    ; kind tests throughout the walk, never truth -- an operand list like (0) or ("") nets zero.
+   ; ⚠ a chainable frame with only its two operands is a PLAIN comparison and folds as one -- the
+   ; chain is the join's doing, and it shows as the interleaved operators the join left in `got`.
    (op-fold f) (? (atom? (op-frg f)) (op-fro f)
                   (: nm (op-frn f) os (rev (op-frg f))
                      (? (id? nm '\) (op-core (>< '\ os))
                         (id? nm ':) (op-core (>< ': (op-cl-splice os)))
+                        (&& (two? (cup os)) (&& (two? (cuup os)) (op-chain? nm))) (op-chn nm os)
                         (>< nm os))))
    ; deliver datum d -> (out' . pend'). a collecting frame takes it; a filled infix frame extends
    ; its right operand into a span, since juxtaposition binds tighter: (a = b c) is (= a (b c)).
@@ -537,6 +573,16 @@
              0))
        (two? out) (>< (op-span out) (>< () pend))
        0)
+   ; fold every pending frame TIGHTER than an incoming (g,h) and answer (out . pend) -- the climb
+   ; op-steal makes before it can take anything, split out so the chain JOIN can see the frame it
+   ; will actually meet. ⚠ an operator BETWEEN two links is such a frame: (a < b + c < d) reaches
+   ; the second `<` with the multiplicative frame on top, and without this the join never fires.
+   ; op-steal repeats the climb and finds nothing left to do, so nothing else changes.
+   (op-climb g h out pend)
+    (? (&& (two? pend) (&& (< (op-frd (cap pend)) 1)
+                           (? h (<= g (op-frband (cap pend))) (< g (op-frband (cap pend))))))
+       (: r (op-del (op-fold (cap pend)) out (cup pend)) (op-climb g h (cap r) (cup r)))
+       (>< out pend))
    ; drain at end of list: fold every pending frame innermost-out
    (op-drain out pend)
     (? (atom? pend) (rev out)
@@ -551,11 +597,26 @@
              (: en0 (op-ent e)
                 en (? (two? en0) en0 (>< e (>< 95 (>< 0 2))))   ; fresh punct: (e house right . arity 2)
                 nm (cap en) gp (caup en) hd (cap (cuup en))
-                st (op-steal gp hd out pend)   ; capture a left operand if one exists (at this band + hand)
-                (? (two? st) (op-w (cup l) (cap (cup st))
+                ; ⚠ fresh noms: this `:` is ONE SCOPE, so rebinding out/pend here would make the
+                ; op-climb call read its own later binding and raise `missing out`.
+                cl (op-climb gp hd out pend) ou (cap cl) pd (cup cl)   ; fold what is tighter, THEN look
+                st (op-steal gp hd ou pd)   ; capture a left operand if one exists (at this band + hand)
+                ; ⚠ THE JOIN, and it is the only place a chain can be seen. a chainable sigil
+                ; meeting a FILLED chainable frame at its own band does not steal the left operand
+                ; and nest -- it pushes its own nom into that frame's got and asks for one more,
+                ; so the run stays flat and op-fold reads the whole of it. a parenthesized
+                ; (a < (b < c)) arrives as ONE folded datum and never enters this list, which is
+                ; exactly why it stays the nested comparison -- the escape hatch is the parens,
+                ; and the factored form alone could never have told the two apart.
+                (? (&& (= -2 (cup (cuup en)))
+                       (&& (two? pd)
+                           (&& (= 0 (op-frd (cap pd)))
+                               (&& (= gp (op-frband (cap pd))) (op-chain? (op-frn (cap pd)))))))
+                    (op-w (cup l) ou (>< (op-frw (cap pd) 1 (>< nm (op-frg (cap pd)))) (cup pd)))
+                   (two? st) (op-w (cup l) (cap (cup st))
                             (>< (op-fr e nm (? (= -1 (cup (cuup en))) -2 1) gp (>< (cap st) ()))   ; -2 = n-ary: the row's LANE, so an alias inherits it
                                   (cup (cup st))))
-                   (: r (op-del e out pend)     ; no left operand: the plain symbol
+                   (: r (op-del e ou pd)     ; no left operand: the plain symbol
                       (op-w (cup l) (cap r) (cup r)))))
              (: r (op-del (op-core e) out pend)
                 (op-w (cup l) (cap r) (cup r))))))

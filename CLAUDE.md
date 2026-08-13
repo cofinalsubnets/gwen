@@ -85,9 +85,10 @@
 ;   ⚠ HASKELL: THERE ARE NO RIGHT SECTIONS. the curry law hands you the left one and nothing else,
 ;   and (1 -) folds to (- 1) -- the SAME function, -4 at 5. so (- 1) is not `subtract 1`; the
 ;   right section is a lambda, and now a short one: (x \ x - 1).
-;   ⚠ C AND PYTHON: COMPARISONS DO NOT CHAIN, and the wrong answer is SILENT. one band, one hand,
-;   so (1 < 2 < 3) is (< 1 (< 2 3)) = (< 1 1) = 0 -- false -- while (3 > 2 > 1) is 1 and
-;   (0 = 1 = 2) is 1, each right by accident. spell the conjunction: (1 < 2 && 2 < 3).
+;   ⚠ C: COMPARISONS DO CHAIN, python's way -- (1 < 2 < 3) is 1, (0 = 1 = 2) is (), and the
+;   shared operand runs ONCE, left to right, with && still short-circuiting. so the trap runs the
+;   OTHER way here: to compare AGAINST a comparison, spend the parens -- (a < (b < c)) arrives as
+;   one folded datum and stays nested, and prefix (< a (< b c)) is untouched.
 ; * the BINDERS read infix too, and each folds back THROUGH its own lowering, so a spelling is
 ;   the same FORM and never a lookalike: `\` is dyadic at $'s band -- (a \ b \ c) IS (\ a b c),
 ;   the chain flattened to one closure -- and `:` is n-ary at the loosest band there is, so
@@ -280,7 +281,7 @@
 ; demo:
 !0  !""  !()  !-5  !'(-2 1)   ; nothing -> false: zero, empty, red at any rank
 $'(1 2 3)            ; 6       $ sums the nets, then clamps once
-(!"" = 0 = $"")      ; true    the invariant !x == (0 = $x)
+(!"" = (0 = $""))    ; true    the invariant !x == (0 = $x) -- the parens are load-bearing
 
 ; --- the reference --- test/spec.l carries the whole surface, section by section -- types &
 ; predicates, arithmetic (an undefined op answers (), the unit rides through every lane), order &

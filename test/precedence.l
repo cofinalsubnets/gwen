@@ -102,7 +102,33 @@
  (!(catch (\ _ (grip 2 '^^ '(a b)))))                 ; a shape that is neither charm, nom nor (nom band)
  (!(catch (\ _ (grip 2 '^^ 'zzz))))                   ; an ALIAS to a word with no row of its own
  (!(catch (\ _ (grip 2 'plain 60))))                  ; and the name must be an all-punct sigil
- ((opfix '(x ^^ y ^^ z)) = '(^^ x (^^ y z)))          ; the table survived all four intact
+ ((opfix '(x ^^ y ^^ z)) = '(^^ x (^^ y z))))         ; the table survived all four intact
+
+(assert
+ ; --- CHAINING, arity -2: a comparison run is the CONJUNCTION of its links, and the operand two
+ ; links share is evaluated ONCE. the binds nest inside the && rather than sitting in front of it,
+ ; so all three of python's promises hold together -- left to right, once each, and the && still
+ ; short-circuits, so a false link never reaches what follows it. each link carries its own
+ ; operator, so a run may mix them. ⚠ THE ESCAPE HATCH IS THE PARENS: (a < (b < c)) arrives as ONE
+ ; folded datum and never enters the operator list, so it stays the nested comparison -- and the
+ ; FACTORED form cannot tell the two apart, which is why the join lives in the walk and could
+ ; never have been a rewrite over op-core's output. ---
+ (1 < 2 < 3) !(2 < 1 < 3) !(1 < 3 < 2)                ; every link must hold
+ (1 < 2 <= 2 < 5)                                     ; ..and they may differ, link by link
+ (3 > 2 > 1) !(0 = 1 = 2)                             ; the two that used to be right by accident
+ (1 < 1 + 1 < 3)                                      ; a TIGHTER frame between links folds first
+ (0 = (1 < (2 < 3)))                                  ; parens opt out: (< 2 3) is 1, and (< 1 1) is 0
+ ((show (opfix '(a < b))) = (show '(< a b)))          ; one link is a plain comparison, untouched
+ ((show (opfix '(< a (< b c)))) = (show '(< a (< b c))))   ; ..and the prefix spelling stays a fixed point
+ (: t (tablet 0) _ (pin t 0 0)                        ; the SHARED operand runs once, not twice
+    (bump v) (: _ (pin t 0 (1 + (peep t 0 0))) 2)
+    r (1 < (bump ()) < 3)
+    (&& r (1 = (peep t 0 0))))
+ (: t (tablet 0) _ (pin t 0 0)                        ; ..and a false link never reaches the rest
+    (bump v) (: _ (pin t 0 999) 9)
+    r (2 < 1 < (bump ()))
+    (&& !r (0 = (peep t 0 0)))))
+(assert
  (!(catch (\ _ (grip 7 '^^ 60))))                   ; ..and a lane with no key is refused, never minted
 
  ; --- the GLUED lane through the same door: arity 0, where a row is the WORD the sigil names.

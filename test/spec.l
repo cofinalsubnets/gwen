@@ -78,7 +78,8 @@
  (galaxy? @(1 2 3)) !(galaxy? @("a" "b"))                   ; a GALAXY is a NUMERIC tray (a tray of stars); a tray of strings is not
  (galaxy? (array '(2) (200 2) (200 2)))                    ; a tray of BIGS is a galaxy -- bignum cells are stars (keyed on cells, not the O code)
  !(star? @(1 2 3)) !(galaxy? 5) !(galaxy? '(1 2))            ; star?/galaxy? are DISJOINT; a scalar / a list is neither a galaxy nor a tray
- (!"" = 0 = $"") (!-5 = 0 = $-5))                ; the invariant !x == (0 = $x), as an = chain
+ (!"" = (0 = $"")) (!-5 = (0 = $-5)))            ; the invariant !x == (0 = $x). ⚠ the parens are
+                                                 ; LOAD-BEARING now: bare, an = run CHAINS
 
 ; --- types & predicates --- storage: charm? big? sun? gem? twin? tray? string? nom? name? mint? two? tablet?;
 ; derived constellation? whole? atom?; lit? = a top-region reference (tablet/fn/hot, ai_kind>=KTablet); hot? the opaque cask/port subset.

@@ -41,8 +41,10 @@
    ; ⚠ the SPACED lanes, tightest first, exactly as op-ent asks them.
    ; ⚠ IDENTITY, never truth: a left-handed band is a NEGATIVE charm and nets red, so a truth
    ; test here would send every left-handed row on to the next lane as though it were absent.
-   (irow nm) (: r (grip 2 nm ()) _ (grip 2 nm r)
-                (? (id? () r) (: q (grip -1 nm ()) _ (grip -1 nm q) q) r))
+   (irow1 ar nm) (: r (grip ar nm ()) _ (grip ar nm r) r)
+   (irow nm) (: r (irow1 2 nm)
+                (? !(id? () r) r
+                   (: c (irow1 -2 nm) (? !(id? () c) c (irow1 -1 nm)))))
    ; a BAND is a SIGNED charm -- magnitude the level, sign the hand (negative is LEFT) -- and the
    ; row wears one of op-lane's three kinds: a charm, a nom (an ALIAS, one hop), or (nom band).
    (iband? b) (&& (charm? b) (0 != b))

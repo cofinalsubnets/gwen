@@ -187,11 +187,13 @@ second source of truth.
 - Idempotence: `(op-core (op-core form)) = (op-core form)`. op-core is idempotent because
   factored output carries operators only in head position; band changes *which* tree is built,
   not that property, but the climb is checked not to reintroduce a factorable surface.
-- ⚠ **Every existing assert in the corpus is a regression test for the band bands.** The
+- ⚠ **Every existing assert in the corpus is a regression test for the bands.** The
   acceptance bar is `make test` green with zero assert edits; anything that flips is either a
-  band-band bug or a genuinely surprising precedence that must be blessed. The at-risk shapes are
-  chained relations (`(!"" = 0 = $"")`), anything mixing `|`/`&`/`&&`/`||` with arithmetic or
-  comparison, and unparenthesized `><`-with-band expressions.
+  band bug or a genuinely surprising precedence that must be blessed. The at-risk shapes are
+  anything mixing `|`/`&`/`&&`/`||` with arithmetic or comparison, and unparenthesized
+  `><`-with-band expressions. Chained relations were on that list and are now their own
+  feature: `(a < b < c)` CHAINS, and the two corpus sites that meant the nested reading
+  (`!x == (0 = $x)`) had to say so with parens — the only two the change moved.
 
 opfix is a source→source pass upstream of analysis and codegen, so a correct re-grouping is
 transparent downstream — but `make test_slow` (glaze-x86.l, arm64, kernel) is the proof, not the
@@ -205,7 +207,9 @@ Four words, each naming exactly one thing, and none of them borrowed:
   the door that declares one. It frames the concept in the green (what the operator *does*)
   rather than "fixity," which is Haskell's and has no glued case at all.
 - **lane** — the arity: the operands the sigil takes from the form around it. `0` glued, `2`
-  spaced, `-1` spaced with no bound. `1` — a right operand and no left — has a key and no walk yet.
+  spaced, `-1` spaced with no bound, `-2` spaced and **chaining** (a same-band neighbour joins the
+  run instead of nesting, so `a < b <= c` is the conjunction of its links with `b` evaluated once).
+  `1` — a right operand and no left — has a key and no walk yet.
 - **band** — the precedence level, a **signed** charm. The magnitude is how tightly it holds; the
   sign is the hand. Higher binds tighter, and zero can never be a band because a tablet miss
   answers `0`.

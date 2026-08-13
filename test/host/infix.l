@@ -1,5 +1,8 @@
 ; --- test/host/infix.l: lib/infix.l, the right inverse to opfix ---
-; the law under test is (opfix (sound (infix-spell x))) = (opfix x). it is checked three
+; the law under test is (opfix (sound (infix-spell x))) = (opfix x), on every form whose
+; FACTORED IMAGE IS SAYABLE -- opfix mints fresh noms for a pattern binder and for a chain's
+; shared operand, and a fresh nom has no spelling at all, so such a form is outside the law by
+; construction (the sweep below states that domain and skips it). it is checked three
 ; ways: on the shapes that pin the algorithm, on the sigil map (BEHAVIOURALLY -- infix now
 ; READS the glued lane through the grip door, and this asks the compiler whether that read
 ; agrees with what the sigil actually factors to), and over real source, every top-level form of a handful of files that between them use every
@@ -71,7 +74,16 @@
                    (? (two? r) (rdall >r (link <r a)) (id? r 'torn) 'torn (rev a)))
     (forms p) (: q (open p "r") s (? q (slurp q) ())
                  (? (string? s) (: ds (rdall s ()) (? (id? ds 'torn) () ds)) ()))
-    (file? p) (: ds (forms p) (&& (two? ds) (all i-both? ds)))
+    ; ⚠ THE LAW'S DOMAIN. opfix deliberately emits FRESH NOMS -- a pattern lambda's binder
+    ; (prel's op-depat) and a comparison chain's shared operand (op-chn) -- and a fresh nom has
+    ; NO SPELLING: it prints as (mint N), which reads back as a call. a form whose FACTORED image
+    ; carries one is a form no text can say, so the round trip cannot hold for it by construction,
+    ; here or anywhere. skip exactly those; every other form is held to the law.
+    (minty? x) (? (two? x) (|| (minty? <x) (minty? >x)) (mint? x))
+    (sayable? x) (! (minty? (opfix x)))
+    ; ⚠ the (two? ds) guard is on the READ, not on the filtered list: a file every form of which
+    ; is unsayable would otherwise read as an unreadable file. `all` over none is vacuously true.
+    (file? p) (: ds (forms p) (&& (two? ds) (all i-both? (filter sayable? ds))))
     (all file? srcs)))
 
 (: _ (test_fin ()) _ (puts "infix: ok\n") ())
