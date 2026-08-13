@@ -629,9 +629,9 @@ static struct ai *env_budget(struct ai *g) {
   if (g && b && atol(b) > 0) g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(ai_word));
   return g; }
 
-// --bake [PATH] / --wake PATH: the heap-image snapshot (doc/snapshot.md) -- declared
+// bake [PATH] / wake PATH: the heap-image snapshot (doc/snapshot.md) -- declared
 // ABOVE the bootstrap split, because love0 links host/image.c too now: it bakes
-// image FILES (the `bake` nif) and wakes them (--wake), which is how the self-host
+// image FILES (the `bake` nif) and wakes them (wake), which is how the self-host
 // build gets a warm mooncc under love0. The .image-section self-patch stays the
 // full binary's lane.
 extern int image_dump(struct ai*, char const*);          // host/image.c (file I/O around love.c's codec)
@@ -770,15 +770,15 @@ static char const cli[] =
 #include "cli.h"
  ;
 
-// `--bake` boots fully, then lays the post-warm image back into the binary's OWN
+// `bake` boots fully, then lays the post-warm image back into the binary's OWN
 // .image section (host/image.c's copy + patch + atomic-rename -- no objcopy,
-// ETXTBSY-proof) and exits; `--bake PATH` writes a plain image file instead (the
-// debug/inspection lane). `--wake PATH` boots from an image file (any mismatch
+// ETXTBSY-proof) and exits; `bake PATH` writes a plain image file instead (the
+// debug/inspection lane). `wake PATH` boots from an image file (any mismatch
 // falls back to a normal egg boot). Opt-in flags; a normal run is the same code path.
 // The baked post-boot image: a reserve in its own .image section (host/image.c), filled by
-// `love --bake` (the binary boots, snapshots itself, and lays the result back into its own body).
+// `love bake` (the binary boots, snapshots itself, and lays the result back into its own body).
 // Loaded at startup when its magic validates; else a normal egg boot.
-// the post-warm dispatch (shared by boot() and the --wake path, which skips the warm).
+// the post-warm dispatch (shared by boot() and the wake path, which skips the warm).
 static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   // THE SESSION LAYER. Boot is over; from here the base (orth -- prel/ev, the nifs,
   // every module the frontend warmed) is READ-ONLY, and it is read-only for the
@@ -787,14 +787,14 @@ static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   // line's, the corpus's -- lands here instead of in the base. Reads still walk
   // down (bookget, head-first), so prel resolves exactly as before.
   //
-  // Pushed here because this is where boot() and the --wake path converge, so both
+  // Pushed here because this is where boot() and the wake path converge, so both
   // get it; and it is never popped, because its lifetime IS the session. That is
   // what keeps a CATTED app working: lux's eight files, the kore cat's fifteen and
   // the whole test corpus each arrive as ONE stream, so they share this layer and
   // the cross-file leaking they are built on (crew/lux/core.l's "every binding
   // LEAKS ... so the other files see this vocabulary") still resolves.
   //
-  // --bake exits before run_program, so the image carries the base with no session
+  // bake exits before run_program, so the image carries the base with no session
   // layer on top; each woken session pushes its own. C-side: enter is a mopped nom
   // now, and a stashless layer is exactly what a session is.
   g = ai_layer_(g);
@@ -802,7 +802,7 @@ static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the glaze
   // module book) and the natjit creation hook cleared. The forensics twin of LOVE_NO_IMAGE.
   // Checked here, the convergence of the egg-boot and image-wake paths: a body-less
-  // top-level : pins even where the book nom is sealed away (an image). --bake never
+  // top-level : pins even where the book nom is sealed away (an image). bake never
   // sees it -- the knob governs a session, not the baked artifact.
   if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, "(: ev (from 'glaze 'base-ev) natjit ())");
 #endif
@@ -904,7 +904,7 @@ static struct ai_lib const libs[] = {
   {NULL, NULL} };
 struct ai_lib const *ai_libs(void) { return libs; }
 
-// bake: NULL = no snapshot; "" = --bake (patch the binary's own .image); else --bake PATH (write an image file).
+// bake: NULL = no snapshot; "" = `love bake` (patch the binary's own .image); else `bake PATH` (an image file).
 static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   bool replp = !argp && isatty(STDIN_FILENO);
   if (replp) raw_mode();
@@ -974,7 +974,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   // (love/glaze/emit.l), so (from 'glaze 'nif) is the one door left onto that.
   g = ai_evals_(g, "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
 
-  if (bake) {                                            // --bake: snapshot the post-warm heap, then exit
+  if (bake) {                                            // the bake verb: snapshot the post-warm heap, then exit
     // LOVE_BAKE_LOAD: read-eval one more .l file before the snapshot -- the dist
     // artifact's door (crew/build.mk): the crew cats + the verb table go in WARM,
     // ahead of the same cache-empty + seal every bake gets, and the image still
@@ -985,7 +985,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
       char xb[4352];
       snprintf(xb, sizeof xb,
         "(: q (open \"%s\" \"r\")"
-        " (? q (reads q) (: _ (say err \"love: --bake: cannot open %s\") _ (put err 10) (quit 1))))",
+        " (? q (reads q) (: _ (say err \"love: bake: cannot open %s\") _ (put err 10) (quit 1))))",
         xtra, xtra);
       g = ai_evals_(g, xb); }
 #ifdef AI_GLAZED
@@ -1003,20 +1003,33 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
 int main(int argc, char const **argv) {
   signal(SIGPIPE, SIG_IGN);        // a hung-up peer is an ANSWER, not a death (fd_writen)
   struct ai *g = NULL;
-  // --bake [PATH] / --wake PATH must lead the args; strip them (keep argv[0]).
+  // THE PRIME VERBS. `bake [PATH]` / `wake PATH` must LEAD the command line, and by
+  // physics rather than habit: wake decides which heap there is (image_load precedes
+  // ai_ini), and bake must snapshot before run_program pushes the session layer. So they
+  // are read here, in C, before any love exists to read them -- which is exactly why they
+  // are the two the registry cannot own. love/verbs.l holds their rows anyway, so one
+  // manifest answers for help and the shadow rule and a MISPLACED one is an honest error
+  // instead of falling through to "run the file named bake".
+  // Bare words, not flags: a verb is a verb. The escape hatches are the registry's own --
+  // `love ./bake` and `love -- bake` are the file, since neither is this strcmp.
   // Both lanes now: love0 links host/image.c too, so it wakes an image FILE
   // (its own mooncc0.image bake -- the self-host build's ~ms compiler starts);
-  // --bake (the self-patch) stays host-only (love0 lays no .image section rule,
+  // `bake` (the self-patch) stays host-only (love0 lays no .image section rule,
   // and its file bakes ride the `bake` nif from -e).
   char const *image_load_path = NULL, *bake = NULL; // see boot(): "" = self-bake, a path = image file
 #ifndef GL_BOOTSTRAP
-  if (argc >= 2 && !strcmp(argv[1], "--bake")) {
+  if (argc >= 2 && !strcmp(argv[1], "bake")) {
    if (argc >= 3) bake = argv[2], argv[2] = argv[0], argv += 2, argc -= 2;
    else bake = "", argv[1] = argv[0], argv += 1, argc -= 1; }
   else
 #endif
-  if (argc >= 3 && !strcmp(argv[1], "--wake"))
+  if (argc >= 3 && !strcmp(argv[1], "wake"))
    image_load_path = argv[2], argv[2] = argv[0], argv += 2, argc -= 2;
+  // a LEADING wake with nothing to wake. Its arity error is C's because its parse is:
+  // the registry's row would say "must lead the command line", which is the one thing
+  // this invocation got right.
+  else if (argc == 2 && !strcmp(argv[1], "wake"))
+   return fprintf(stderr, "love: wake needs an image path\n"), 2;
   if (image_load_path && !(g = image_load(image_load_path))) image_load_path = NULL;   // NULL -> normal boot
   // AUTO-LOAD: with no image flag, wake the image baked into the binary's own .image section, so a
   // plain `love` is glazed-by-default at ~4 ms cold start instead of the ~230 ms egg eval. Opt out with
@@ -1069,14 +1082,14 @@ int main(int argc, char const **argv) {
       g = ai_defv(g, "love-image");
       if (ai_ok(g)) ai_core_of(g)->sp++; }
     // take what fd 0 can lend -- a read run, or its blocking bit (above). ⚠ NEVER UNDER
-    // --bake: the image would carry a heap port, and flags belong to the run, not the egg.
+    // a bake: the image would carry a heap port, and a run's state belongs to the run, not the egg.
     if (!bake) g = stdin_take(g);
 #ifdef GL_BOOTSTRAP
     if (!image_load_path) g = boot(g, argp);
     else g = ai_evals_(ai_layer_(g), cli);   // woken: the image carries the warm base; push the session layer, run the CLI
 #else
     if (!image_load_path) g = boot(g, argp, bake);
-    else {              // --wake: skip the egg warm, dispatch straight to the program
+    else {              // wake: skip the egg warm, dispatch straight to the program
       bool replp = !argp && isatty(STDIN_FILENO);
       if (replp) raw_mode();
       g = run_program(g, argp, replp); }

@@ -243,10 +243,10 @@ test_seed: host out/host$(hsuf)/seed
 	@echo TEST crew/seed/seed.l + test/host/seed.l
 	@rm -rf out/host/.seedtest
 	@cat test/00-init.l test/host/seed.l | sh test/gate/run.sh seed "$(mw)" "seed: ok"
-# the kore smokes drive the BAKED image (`--wake kore.image`), ~0.02s vs ~0.75s per spawn
+# the kore smokes drive the BAKED image (`wake kore.image`), ~0.02s vs ~0.75s per spawn
 # over the ~68 tool runs; the argv0-symlink smoke execs the real shim, whose basename-$0
 # dispatch the wake bypasses. the synthetic "kore" argv0 keeps the exit faces unchanged.
-korerun = $m --wake $(ho)/kore.image -e '(: r (kore-main (link "kore" >>>cmdline)) (quit (? (charm? r) r 0)))'
+korerun = $m wake $(ho)/kore.image -e '(: r (kore-main (link "kore" >>>cmdline)) (quit (? (charm? r) r 0)))'
 test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/kore.sh $(ho) $m
 # the install nest, three ways (make / cook / cook+kore PATH lane) -- one shape.
@@ -284,7 +284,7 @@ test_vi: host out/host$(hsuf)/kore.image
 # The C compiler (crew/moon/, doc/moon.md): the pure pipeline's goldens, then stage-0 end
 # to end through the real `mooncc` -- compile, run, exit 42, against a gcc -O0 differential
 # on the same source. Drives the WARM image (~0.68s -> ~0.02s per compile, 88 of them).
-moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main >>>cmdline)'
+moonrun = $m wake $(ho)/mooncc.image -e '(moon-main >>>cmdline)'
 # love0 rides along for the inline-asm checks: templates parse through holo/text.l, whose
 # combinators come off the bare `post` each frontend's boot binds ITSELF, so the bootstrap
 # lane can lose the feature while this one keeps it.
@@ -321,7 +321,7 @@ mx: host
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
 test_clay: host out/host$(hsuf)/mooncc.image
 	@echo TEST test/gate/clay.l "(clay G1: (cparse (clay-show c)) == c over test/cc)"
-	@$m --wake $(ho)/mooncc.image -l test/gate/clay.l < /dev/null
+	@$m wake $(ho)/mooncc.image -l test/gate/clay.l < /dev/null
 # ...and the CONSUMERS: the generated headers regenerate and DIFF here -- a hand edit to any,
 # or a table edit with no regen, is a red. The roster is mx_gen above; `cmp`, not rtk diff.
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
@@ -338,7 +338,7 @@ test_clay: host out/host$(hsuf)/mooncc.image
 # still parses, and a printed CENSUS of named-vs-bare refusals. stderr is KEPT: cpp speaks there.
 test_moonfuzz: host out/host$(hsuf)/mooncc.image
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 888 mutants of test/cc)"
-	@$m --wake $(ho)/mooncc.image -l test/gate/moonfuzz.l < /dev/null
+	@$m wake $(ho)/mooncc.image -l test/gate/moonfuzz.l < /dev/null
 # test_ccarm64 / test_ccriscv -- the battery on a CROSS TARGET (two targets, one procedure
 # in ccarch.sh): every test/cc/*.c built by `mooncc -t <arch>`, run under qemu-user, required
 # to answer what x64 answers. The three programs no cross lane can build must REFUSE, not skip.
@@ -823,7 +823,7 @@ test_uusplgen: host
 # under a timeout the wake storm cannot meet (fresh lane ~1s, storm >90s; doc/wake-storm.md).
 test_wake: $(ho)/love
 	@echo TEST wake "(the woken-image lane, doc/wake-storm.md)"
-	@cp $(ho)/love $(ho)/love.wake && $(ho)/love.wake --bake
+	@cp $(ho)/love $(ho)/love.wake && $(ho)/love.wake bake
 	@cat test/00-init.l test/uu.l > $(ho)/wake-corpus.l
 	@if env -u LOVE_NO_IMAGE timeout 60 $(ho)/love.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
 	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; \

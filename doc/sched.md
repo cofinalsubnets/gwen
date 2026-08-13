@@ -156,7 +156,7 @@ and a catcher told otherwise stops waiting.
 ## measuring this
 
 ⚠ **`make out/host/love` leaves the binary UNBAKED** — naming the target directly skips the
-`--bake` stamp that only `make host`/`make test` reach. The content is right; the STARTUP is
+`bake` stamp that only `make host`/`make test` reach. The content is right; the STARTUP is
 1.10 s against 0.03 s, an egg boot every run. That alone wrecks a timing measurement, and it
 looks like nothing.
 

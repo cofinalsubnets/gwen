@@ -848,7 +848,7 @@
        ; out to `bend` where its p_filesz stops at r1, and the kernel hands over
        ; the difference already zeroed -- which is the whole meaning of .bss.
        bend (ldlayn 'bss (ldlay1 'bss r1 objs) objs)
-       ; .image last of all -- past .bss, on a page, so `love --bake` can GROW it at
+       ; .image last of all -- past .bss, on a page, so `love bake` can GROW it at
        ; the tail of the file (host/image.c: the section that ENDS the segment is the
        ; one that can grow without moving anything). ⚠ it takes a SEGMENT of its own,
        ; because .bss sits between it and everything written: one segment would have to

@@ -18,7 +18,7 @@ holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/arm64.h  out/lib/riscv.h
 ld_h = out/lib/holo-elf.h out/lib/holo-obj.h out/lib/holo-link.h
 asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h
 # the glaze (native JIT): raw-text headers, no lcat round-trip. Evaled ONLY before a
-# --bake, so a normal boot never pays the ~810 ms and the baked snapshot carries an
+# `love bake`, so a normal boot never pays the ~810 ms and the baked snapshot carries an
 # always-on JIT at zero startup. doc/snapshot.md.
 glaze_h = out/lib/emit.h out/lib/auto.h out/lib/hook.h
 # love0's bootstrap headers: raw source wrapped by tools/lit.c, a text->C-literal needing

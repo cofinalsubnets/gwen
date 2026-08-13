@@ -219,7 +219,7 @@ love.c, run to ground with a per-site-tagged pool trace over instrumented images
   (r5 r6 r7 r8), so "the value already sits in its seat" can be an accident of the same kind.
 * **the instrument that found them**: bake the two gen.l variants into images
   (`love -l <cat> -e '(bake ..)'`, ~40s), compile love.c with both, then drive `cc-parse` +
-  `cgen-obj` through `--wake image -e` for the IR of one function (seconds, vs minutes
+  `cgen-obj` through `wake image -e` for the IR of one function (seconds, vs minutes
   interpreted), and tag every `ralloc`/`rfree` call site with its line number for the pool
   trace. The corpus (141 files, test/cc + host) never diverged — only love.c, twice; a corpus
   sweep alone would have called this rung green while the discipline drifted.

@@ -12,7 +12,7 @@ trailing declaration):
 
 ```sh
 printf 'int m(void){ return 0; }\n' >> q.c
-out/host/love --wake out/host/mooncc.image -e '(moon-main (cuup (cup cmdline)))' \
+out/host/love wake out/host/mooncc.image -e '(moon-main (cuup (cup cmdline)))' \
   -c -t x64 -o /dev/null q.c
 ```
 

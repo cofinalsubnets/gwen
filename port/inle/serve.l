@@ -73,7 +73,7 @@
    ; egg move at process AND filesystem scale. build the NEXT generation at a
    ; SIDE PATH `out/host/love.cand` (`make candidate`): nothing executes that name,
    ; so the relink can never ETXTBSY, no matter who runs `love` (a repl, a test,
-   ; even the dock's own client; the --bake itself is rename-safe). gate the
+   ; even the dock's own client; the bake itself is rename-safe). gate the
    ; candidate (`make test m=.../love.cand`). ONLY on green PROMOTE by atomic
    ; RENAME -- love.cand -> love (the image travels INSIDE the binary) plus its bake
    ; stamp, then refresh the dock's stable copy -- a rename gives a NEW inode,

@@ -20,7 +20,7 @@
 #            leaf, our linker (crew/holo/) binds. It egg-boots (no baked image).
 #   gcc-musl / clang-musl : the same translation units at the host's real -O2 cflags,
 #            through the musl-gcc/musl-clang wrappers and linked -static. Also
-#            egg-boot -- no `--bake`, so all three lanes run the identical corpus off
+#            egg-boot -- no `bake`, so all three lanes run the identical corpus off
 #            the freshly-eval'd egg (a level field).
 #
 # ⚠ the natives are STATIC MUSL, not the distro's dynamic glibc, and the size rows are

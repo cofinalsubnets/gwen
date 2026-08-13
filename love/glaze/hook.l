@@ -172,7 +172,7 @@
 ; is a W^X mmap address, which cannot serialize -- empties before the snapshot. The cache is the
 ; glaze's, so the wrapper is the glaze's: it closes over the tablet DIRECTLY and reads no `book`,
 ; which is what lets it ride into a baked image (where `book` is sealed) and still flush. The
-; --bake FLAG has its own flush in host/main.c on the way past; this is the door for love code
+; the bake VERB has its own flush in host/main.c on the way past; this is the door for love code
 ; calling (bake p) -- the image recipes in crew/build.mk, test/gate/fixpoint.sh, test/host/bake.l.
 ; ⚠ its own top-level form, so the sequence law gives `b0` the NIF: inside the leaking `:` above,
 ; `bake` would be the enclosing letrec's own unfilled binding.

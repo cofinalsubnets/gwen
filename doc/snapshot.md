@@ -74,10 +74,10 @@ The core owns the stdio-free buffer codec `ai_image_save` / `ai_image_load` (lov
 lives in `host/image.c`. The codec sits OUTSIDE the one `#if __STDC_HOSTED__` region, so it
 compiles into the freestanding kernel.
 
-## `--bake` and `--wake`
+## `bake` and `wake`
 
-`love --bake` boots fully and lays the image into the binary's own `.image` section;
-`love --bake PATH` writes a plain file instead. `love --wake PATH prog.l args..` boots from a
+`love bake` boots fully and lays the image into the binary's own `.image` section;
+`love bake PATH` writes a plain file instead. `love wake PATH prog.l args..` boots from a
 named image.
 
 **`love-image` says which one woke.** The wake strips the path from `argv`, so a session that
@@ -91,7 +91,7 @@ own compile, and the bakes all egg-boot, so a straight read wires that session's
 into the image forever. The nom has to reach the lookup as *data*. This is the same law that
 keeps `cmdline` travelling to a baked app through the `-e` string rather than off the book.
 
-The glaze bake is the corpus eval, not a split assert-free lib: `--bake` evals the glaze
+The glaze bake is the corpus eval, not a split assert-free lib: `bake` evals the glaze
 (emit.l+auto.l) before dumping, and the asserts' transient natives die in `gen_major`. emit.l's
 self-test fixtures are local (they would otherwise leak as globals) and auto.l's `memo` cache is
 cleared pre-dump.
@@ -122,7 +122,7 @@ Three seams make mid-eval dumping honest where the boot bake could assume purity
   serialize, and entries re-JIT lazily in the woken session. Any OTHER live native at bake time
   is on the caller — the same contract as the boot bake.
 
-Smoke: test/host/bake.l (`test_hostnif`) round-trips a pinned marker through `bake` + `--wake`
+Smoke: test/host/bake.l (`test_hostnif`) round-trips a pinned marker through `bake` + `wake`
 in a child process.
 
 ## open

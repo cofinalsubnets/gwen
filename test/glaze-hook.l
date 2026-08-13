@@ -2,7 +2,7 @@
 ; the hook is love/glaze/hook.l -- ev.l's `ala` reads it via (gv 'natjit) on EVERY closure
 ; built, top-level and embedded, and a qualifying leaf is native-backed AT CREATION. these
 ; laws lived inside that source as an `_ (assert)` pair, so they ran at every egg boot and
-; every --bake; they are a test, and this is where a test goes.
+; every bake; they are a test, and this is where a test goes.
 ;
 ; NOT in the arch-neutral corpus (common.mk's $t filters it out, beside glaze-x86.l): it
 ; EXECUTES native machine code. `make test_hook` runs it on the arches the hook emits for

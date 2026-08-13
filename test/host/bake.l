@@ -1,9 +1,9 @@
 ; --- test/host/bake.l: smoke test for the bake nif (host/image.c + ai_image_save_) ---
 ; (bake path) snapshots the LIVE session to an image file MID-EVAL -- the running
 ; stack rides along as wake-unreachable ballast, live finalizer nodes forge into
-; dead chains, and a NULL bio-buffer word encodes as an immortal -- and `love --wake
+; dead chains, and a NULL bio-buffer word encodes as an immortal -- and `love wake
 ; PATH prog.l` boots a session carrying every global pinned before the bake.
-; host-only (the nif + hark + --wake), so it runs standalone against the built
+; host-only (the nif + hark + wake), so it runs standalone against the built
 ; binary like test/host/fs.l:
 ;   cat test/00-init.l test/host/bake.l | out/host/love
 ; the marker the woken child reads back. its own TOP-LEVEL body-less `:`, so it leaks to the
@@ -21,7 +21,7 @@
 
    ; the woken child reads the marker this session pinned before its bake
    _ (: p (open drv "w") _ (say p "(: _ (putn bake-smoke-marker) (quit 0))") (close p))
-   r (hark `("out/host/love" "--wake" img drv))
+   r (hark `("out/host/love" "wake" img drv))
    _ (assert (two? r) (<r = 0) (>r = "4242"))
 
    _ (unlink img) _ (unlink drv)

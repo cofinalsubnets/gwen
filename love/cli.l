@@ -51,13 +51,23 @@
           ()))                                       ; no datums: nothing to run
     (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (quit 0))   ; print a line to out, flush, exit 0
     (version _) (bye ("love " + love-version))       ; _ arg: love has no nullary calls
-    (usage _) (bye ("usage: love [-l FILE] [-e EXPR] [-n] [-v] [-h] [--] [FILE ...]\n"
+    ; the verb line comes off the TABLE, never a written-down list -- the registry is the
+    ; one manifest, so a binary carries the help its own image earns (a plain love says
+    ; `bake wake`, the dist artifact names its whole crew).
+    (vwords ks) (? (atom? ks) "" (atom? >ks) (string <ks) (string <ks + " " + vwords >ks))
+    (verbline _) (: ks (: V (from 'verbs) (? (tablet? V) (keys (V 'tab)) ()))
+                    (? (atom? ks) "" ("verbs: " + vwords ks + "\n")))
+    (usage _) (bye ("usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-n] [-v] [-h] [--] [VERB|FILE] [ARG ...]\n"
                   + "  -l, --load FILE   preload FILE (read-eval) before the program\n"
                   + "  -e, --eval EXPR   eval EXPR as one expression (infix works), print the answer\n"
                   + "  -n, --silent      with -e: do not print the answer\n"
                   + "  -v, --version     print the version and exit\n"
                   + "  -h, --help        print this help and exit\n"
                   + "  --                end of options; the rest are files\n"
+                  + verbline 0
+                  + "a leading word the table knows is a VERB, and it takes the args after its name;\n"
+                  + "a `/` or a `.l` is always the file, so `love ./up` and `love -- up` still run one.\n"
+                  + "wake IMAGE and bake [PATH] must LEAD the line -- they are read before a session exists.\n"
                   + "with no program (no -e, no FILE), read-eval stdin to EOF."))
     (need h t) (? (two? t) 0 (: _ (say err ("love: " + h + " needs an argument")) (quit 2)))
     ; ⚠ tablet?, never a bare truth test: an unregistered module reads () and (() 'word) is the

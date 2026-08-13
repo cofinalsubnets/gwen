@@ -17,9 +17,9 @@ love0=$3
 
 fail() { echo "FAIL $*" >&2; exit 1; }
 # the compiler under test: the baked mooncc image, woken per invocation
-moonrun() { "$m" --wake "$ho/mooncc.image" -e '(moon-main >>>cmdline)' "$@"; }
+moonrun() { "$m" wake "$ho/mooncc.image" -e '(moon-main >>>cmdline)' "$@"; }
 # ..and the BOOTSTRAP one, the lane that compiles love.c: love0 waking mooncc0.image
-moon0() { "$love0" --wake out/host/mooncc0.image -e '(moon-main >>>cmdline)' "$@"; }
+moon0() { "$love0" wake out/host/mooncc0.image -e '(moon-main >>>cmdline)' "$@"; }
 
 # ---------------------------------------------------------------- the laws
 echo "CC crew/moon/{lex,cpp,parse,gen,law}.l"
@@ -174,7 +174,7 @@ EOF
 printf 'int f() { return 40; }\n' > "$ho/.mi2.c"
 # -c with several inputs writes each .o beside its source, so it runs IN $ho
 mabs="$PWD/$ho"
-( cd "$ho" && "$mabs/love" --wake "$mabs/mooncc.image" \
+( cd "$ho" && "$mabs/love" wake "$mabs/mooncc.image" \
     -e '(moon-main >>>cmdline)' -c .mi1.c .mi2.c ) > /dev/null 2>&1 \
   || fail "mooncc multi-input -c"
 $cc_g -no-pie -o "$ho/.mi" "$ho/.mi1.o" "$ho/.mi2.o" > /dev/null 2>&1 \
@@ -423,7 +423,7 @@ warm=$(printf '(: a (moon-run (list "-c" "%s" "-o" "%s"))
                   _ (say out (show a + " " + show b + " " + show c + " " + show d + "\n"))
                   (quit 0))' \
              "$ho/.wa.c" "$ho/.wa-warm.o" "$ho/.wb.c" "$ho/.wa.c" "$ho/.wa-warm.o")
-"$m" --wake "$ho/mooncc.image" -e "$warm" > "$ho/.warm.out" 2>/dev/null
+"$m" wake "$ho/mooncc.image" -e "$warm" > "$ho/.warm.out" 2>/dev/null
 r=$?
 [ $r -eq 0 ] || fail "warm mooncc: the image did not survive a failed compile (exit $r)"
 [ "$(tail -1 "$ho/.warm.out")" = "0 1 2 0" ] || fail "warm mooncc statuses: $(tail -1 "$ho/.warm.out")"

@@ -1,9 +1,9 @@
 // host/image.c -- file I/O around the core's stdio-free image codec (ai_image_save /
 // ai_image_load, love.c). The CORE owns the heap serialization (compact + range-encode a
 // {header, blob} buffer, and its inverse); the HOST owns stdio -- so love.c stays
-// freestanding-clean. main.c calls image_bake (--bake: lay the image back into the
-// binary's own .image section), image_dump (--bake PATH: write a plain image file), and
-// image_load (--wake PATH). Conventions: bake/dump 0 ok / <0 error; load NULL on any
+// freestanding-clean. main.c calls image_bake (bake: lay the image back into the
+// binary's own .image section), image_dump (bake PATH: write a plain image file), and
+// image_load (wake PATH). Conventions: bake/dump 0 ok / <0 error; load NULL on any
 // problem so the caller falls back to a normal egg boot.
 #define _GNU_SOURCE
 #include "love.h"
@@ -53,7 +53,7 @@ int image_dump(struct ai *g, char const *path) {
   struct image_segs segs;
   struct ai_image_guard gd = image_guard(&segs);
   uintptr_t len = 0;
-  void *buf = ai_image_save(g, &len, &gd);        // g->alloc'd; --bake exits right after, so we don't free it
+  void *buf = ai_image_save(g, &len, &gd);        // g->alloc'd; bake exits right after, so we don't free it
   if (!buf) return -2;
   FILE *f = fopen(path, "wb");
   int rc = !f ? -4 : (fwrite(buf, 1, len, f) == len) ? 0 : -4;
@@ -220,7 +220,7 @@ int image_bake(struct ai *g) {
 
 // (bake path) -- snapshot the LIVE session to an image file, mid-eval: the running
 // stack's objects ride into the blob as wake-unreachable ballast and the load side
-// resets sp/ip, so `love --wake path prog.l ..` boots a session carrying every global
+// resets sp/ip, so `love wake path prog.l ..` boots a session carrying every global
 // this one had pinned (an app baked warm: the mooncc image erases its per-run load).
 // natives cannot serialize -- the glaze's own bake wrapper (love/glaze/hook.l) empties its cache
 // first (they re-JIT lazily in the woken session); any OTHER live native closure at

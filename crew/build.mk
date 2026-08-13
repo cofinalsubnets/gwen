@@ -38,13 +38,13 @@ $(ho)/kore: $(ho)/kore.image
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
 	   echo 'n=$$(basename -- "$$0")'; \
-	   echo 'exec "$$h/love" --wake "$$h/kore.image" -e "(: r (kore-main (link \"$$n\" >>>cmdline)) (quit (? (charm? r) r 0)))" "$$@"'; } > $@
+	   echo 'exec "$$h/love" wake "$$h/kore.image" -e "(: r (kore-main (link \"$$n\" >>>cmdline)) (quit (? (charm? r) r 0)))" "$$@"'; } > $@
 	@chmod 755 $@
 $(ho)/mooncc: $(ho)/mooncc.image
 	@echo CAT	$(abspath $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
-	   echo 'exec "$$h/love" --wake "$$h/mooncc.image" -e "(moon-main >>>cmdline)" "$$@"'; } > $@
+	   echo 'exec "$$h/love" wake "$$h/mooncc.image" -e "(moon-main >>>cmdline)" "$$@"'; } > $@
 	@chmod 755 $@
 # seed 🌱 the patch-set vcs, and lush 🐚 the love shell -- also the distro's console shell,
 # whose SEAT in main.l fires on its own basename. Both are catted shebang scripts, PATH
@@ -76,7 +76,7 @@ out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 # its cat) + mooncc (all five backends) + seed + kiosko -- and crew/seed/up.l's
 # verb table, which love/cli.l's verb rail reads: `love up URL` syncs ~/.love/src
 # and cook-installs the nest; `love seed|cook|kore|kiosko|mooncc ..` are the same
-# binary being multi-call. the bake rides --bake's own lane (main.c's
+# binary being multi-call. the bake rides `love bake`'s own lane (main.c's
 # LOVE_BAKE_LOAD evals the cat ahead of the cache-empty + seal), so the artifact
 # is the default binary with a bigger image -- no session layer, same sealing.
 # member order is the scope: kore's floor first, asbook before the backends
@@ -103,7 +103,7 @@ out/dist/.dist-cat.l: $(distfiles)
 out/dist/love-$a: $(ho)/love $(ho)/love.baked out/dist/.dist-cat.l
 	@echo DIST	$(abspath $@)
 	@cp $(ho)/love $@
-	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l ./$@ --bake
+	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l ./$@ bake
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
 .PHONY: dist
 dist: out/dist/love-$a
@@ -111,7 +111,7 @@ dist: out/dist/love-$a
 # ==== dist_cross: the TWIN artifact (the other elf arch) ====
 # the same door for the machine you are not on: every TU through `mooncc -t`,
 # the twin's mksys leaf, our -pie link -- and the bake RUNS the twin under
-# qemu-user (the one foreign tool here, and only at build time: --bake boots
+# qemu-user (the one foreign tool here, and only at build time: `bake` boots
 # the egg, warms, and seals the twin's own heap, glaze emitting the twin's
 # native code the whole way). so one x86 laptop bakes the pi's download, and
 # a pi with qemu-user bakes the laptop's -- each host can serve both doors.
@@ -154,7 +154,7 @@ $(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
 out/dist/love-$(xarch): $(xobjs) out/dist/.dist-cat.l
 	@echo DIST	$(abspath $@)
 	@$(moonx) -pie $(xobjs) -o $@
-	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l $(xqemu) ./$@ --bake
+	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l $(xqemu) ./$@ bake
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@ (the $(xarch) twin, baked under $(xqemu))"
 .PHONY: dist_cross
 dist_cross: out/dist/love-$(xarch)

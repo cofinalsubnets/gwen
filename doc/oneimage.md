@@ -1,7 +1,7 @@
 # one image — the whole crew in one binary
 
 A plan (chosen, revisable), not a record: nothing here has landed. The aim is to retire the
-three-image build and the shim/`--wake` zoo around it, so `love` is the one artifact and the
+three-image build and the shim/`wake` zoo around it, so `love` is the one artifact and the
 crew rides inside it — dispatched by argv[0], or by a verb in the first argument.
 
 Most of this is a **promotion**, not an invention. `make dist` already bakes exactly this
@@ -14,7 +14,7 @@ Four images, three of them shipped:
 
 | image | built by | woken by | what's in it |
 |---|---|---|---|
-| `out/host/love`'s `.image` | `love --bake` | itself, automatically | the egg + glaze |
+| `out/host/love`'s `.image` | `love bake` | itself, automatically | the egg + glaze |
 | `out/host/kore.image` | `$m -l .kore-cat.l -e (bake ..)` | the `out/host/kore` shim | kore, vi, lush, cook, ain, holo's linker half |
 | `out/host/mooncc.image` | ditto, `.mooncc-cat.l` | the `out/host/mooncc` shim | moon + all five holo backends |
 | `out/host/mooncc0.image` | **love0** | `$(moon0)` | the same cat, one generation back |
@@ -28,8 +28,8 @@ The cost of the split shows up as invocation patterns. Fifteen-odd gate scripts 
 hand-rolled `moonrun()`/`korerun()`:
 
 ```sh
-moonrun() { "$m" --wake "$ho/mooncc.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
-korerun() { "$m" --wake "$ho/kore.image" -e '(: r (kore-main (link "kore" (cuup (cup cmdline)))) (quit (? (charm? r) r 0)))' "$@"; }
+moonrun() { "$m" wake "$ho/mooncc.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
+korerun() { "$m" wake "$ho/kore.image" -e '(: r (kore-main (link "kore" (cuup (cup cmdline)))) (quit (? (charm? r) r 0)))' "$@"; }
 ```
 
 and ~30 test.mk targets carry `out/host$(hsuf)/mooncc.image` prerequisites to match.
@@ -64,7 +64,7 @@ down seed cook kore kiosko mooncc sh lush), so `love cat` and a `cat` symlink fa
 ## the rungs
 
 Rung 0 is **preliminary — the decode walk**, below: it is not part of the unification, it pays
-on today's `--wake` gates whether or not any of this lands, and it is what stops the fat
+on today's `wake` gates whether or not any of this lands, and it is what stops the fat
 image's boot cost being an argument against the rest.
 
 1. **widen the verb table.** Splice kore's applet registry into `verbs` so every applet is a
@@ -97,7 +97,7 @@ On this box, booting `(quit 0)`:
 A full unified bake is **8.6 s**. For contrast, test.mk:207 records the lane the shims exist to
 avoid: `~0.02s vs ~0.75s per spawn`.
 
-Where that 22 MB goes, measured a piece at a time (`--bake PATH` over a `LOVE_BAKE_LOAD` cat,
+Where that 22 MB goes, measured a piece at a time (`bake PATH` over a `LOVE_BAKE_LOAD` cat,
 x86_64) — worth having before arguing about what to carry, because the two candidates are not
 the same size at all:
 
@@ -126,12 +126,12 @@ recipe egg-boots on purpose and a fatter baked image is invisible to the gate. �
 is a conversion trap: under that export `$m kore cat` egg-boots *without* kore, so every
 converted runner must go through `mw` (`env -u LOVE_NO_IMAGE $m`, test.mk:20), not `$m`.
 
-The +20 ms lands on `--wake` lanes and on real user invocations, and it is **linear in image
+The +20 ms lands on `wake` lanes and on real user invocations, and it is **linear in image
 size, not a property of unification**: ~47% of a unified boot is the image decode walk
 (`img_decode` 37.9% self, `ai_image_load_m` 9.2%, `gcp` 5.3%). See doc/snapshot.md — the wire
 format is symbolic, so waking means touching every word. Three times the heap is three times
 the walk. Anything dropped from the cat comes straight off the boot, and any speedup to the
-walk pays here, on today's `--wake` gates, and on `love up`'s nest alike.
+walk pays here, on today's `wake` gates, and on `love up`'s nest alike.
 
 ## what a smaller seat carries
 
@@ -284,7 +284,7 @@ reproducible today and not a regression signal — it was a different cat (1.37 
 their word mix is denser in decoded words than the mooncc image's — per-Mword costs
 compare lanes, not images.
 
-**baked-in vs `--wake`: the same.** One binary, one session content through both doors:
+**baked-in vs `wake`: the same.** One binary, one session content through both doors:
 33.2 ms / 166.4 M instructions from the `.image` section, 33.4 ms / 165.1 M from the file
 — equal within noise, as the code says it must be (one `ai_image_load_m`, only the blob's
 source pages differ). A mid-gate measurement showed a 27 ms gap; that was a busy box, not

@@ -37,8 +37,8 @@ $ho/mooncc -pie "$d"/*.o -o "$ho/love-raw-pie" || fail "-pie link love-raw-pie"
 
 # bake a COPY, so the un-baked pie binary stays around
 cp "$ho/love-raw-pie" "$ho/love-raw-baked"
-"$ho/love-raw-baked" --bake >/dev/null 2>&1 \
-  || fail "--bake (the mooncc-PIE binary refused to snapshot its own image)"
+"$ho/love-raw-baked" bake >/dev/null 2>&1 \
+  || fail "bake (the mooncc-PIE binary refused to snapshot its own image)"
 
 # the corpus runs CONCATENATED in one global scope
 out=$ho/.test_raw_bake.out

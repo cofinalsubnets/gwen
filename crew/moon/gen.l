@@ -7725,7 +7725,7 @@
    ; OTHER named section -- ro? saying the section may go read-only (xro?, below).
    ; a __attribute__((section(NAME))) global lays in a stream of its own. three streams have a
    ; meaning the writer knows: `ai_nifs` needs the linker's __start_/__stop_ bracket around a
-   ; packed run for main()'s boot drain, `.image` must be LAST so `love --bake` can grow it at the
+   ; packed run for main()'s boot drain, `.image` must be LAST so `love bake` can grow it at the
    ; tail, and `.data` takes an unattributed global. every OTHER name carries through to the .o as
    ; a real section -- a bootloader SCANS for .limine_requests, and ⚠ DECLARATION ORDER is the
    ; protocol's order, not ours, which is what xnames keeps.

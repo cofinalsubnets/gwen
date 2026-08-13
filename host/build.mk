@@ -32,7 +32,7 @@ so_undef = -Wl,-undefined,dynamic_lookup
 else
 so_archive = -Wl,--whole-archive $(ho)/liblove.a -Wl,--no-whole-archive
 endif
-# the boot image gets its OWN segment at the top of the address space so `love --bake` can
+# the boot image gets its OWN segment at the top of the address space so `love bake` can
 # GROW it: the blob appends at the tail of the file and only that phdr + shdr are rewritten,
 # nothing else moving (host/image.c's bake_tail). --section-start is what buys it -- ld
 # gives a section at a far address a PT_LOAD to itself, above .bss and alone in it.
@@ -76,7 +76,7 @@ DOCK_PORT ?= 7620
 dock: host
 	@cp $(ho)/love $(ho)/dock
 	exec $(ho)/dock -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -l port/inle/patch.l -e "(dock $(DOCK_PORT))"
-# the default BOOT IMAGE: `$< --bake` boots the fresh binary, snapshots the post-warm heap
+# the default BOOT IMAGE: `$< bake` boots the fresh binary, snapshots the post-warm heap
 # and lays it back into that binary's OWN .image section -- host/image.c copies the exe,
 # pwrites the blob at the section's file offset and renames over the original, so a new
 # inode leaves anyone still executing on the old one. A plain `love` then wakes in ~4 ms
@@ -85,7 +85,7 @@ dock: host
 # carries the dependency, since the bake mutates the binary itself.
 $(ho)/love.baked $(ho)/love.cand.baked: %.baked: %
 	@echo LOVE	$< "(bake)"
-	@$< --bake
+	@$< bake
 	@touch $@
 
 
@@ -114,7 +114,7 @@ $(ho)/liblove.so: $(ho)/liblove.a $(R)/love_data.ld
 # -I$(ho)), and -Dai_tco=0, which is also the trampoline-coverage lane. It RUNS the .l
 # tools that generate the lcat headers, so it cannot depend on them -- it #includes the
 # lit-wrapped $(gl0_h) instead, produced without an interpreter. It links the whole
-# host/*.c glob: the posix nifs and host/image.c's bake/--wake are what let love0 bake and
+# host/*.c glob: the posix nifs and host/image.c's bake/wake are what let love0 bake and
 # wake mooncc0.image and so drive the mooncc-built default `love`.
 # ⚠ -DAI_VERSION="bootstrap" on purpose: love0 bakes the lcat headers every frontend shares,
 # so a love0 that relinks re-lays all of them and rebuilds every object behind them -- a
@@ -166,7 +166,7 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # liblove.a/.so lane, since a shared object wants PIC codegen and a dynamic section holo
 # does not lay. STATIC=1 keeps the musl-cc link below; the raw default is already fully
 # static, so that flavor is opt-in. One link rule, two names -- `love` and the candidate.
-moon0 = $(love0) --wake out/host/mooncc0.image -e '(moon-main >>>cmdline)' $(GCDBG)
+moon0 = $(love0) wake out/host/mooncc0.image -e '(moon-main >>>cmdline)' $(GCDBG)
 moon_d = $(ho)/moon
 moon_host_o = $(patsubst host/%.c,$(moon_d)/host_%.o,$(wildcard host/*.c))
 moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
