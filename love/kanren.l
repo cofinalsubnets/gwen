@@ -18,7 +18,7 @@
 ; the dict kit; (keys (from 'kanren)) introspects. love/overlay.l's engine
 ; reads subst through the registry, so kanren must be REGISTERED before overlay
 ; evals (boot order, not just splice order).
-(: (dict_has d k) (: (loop k ks vs) (? ks (? (= k <ks) vs (loop k >ks >vs))) (loop k <d >d))
+(: (dict_has d k) (: (loop k ks vs) (? ks (? (k = <ks) vs (loop k >ks >vs))) (loop k <d >d))
    (dict_set d k v) ((k >< <d) >< v >< >d)
    empty_dict '(())
    has_s dict_has
@@ -64,7 +64,7 @@
           (pins d 1 (\ A B (coin d (\ s (s_plus ((load A) s) ((load B) s)))))
                   2 (\ A B (coin d (\ s (s_star ((load A) s) (load B)))))))
    rel (coin g-die))                     ; wrap a goal as a ring element
-(: === (\ u v (rel (est u v))))                       ; the relation's infix unify -- and it needs no
+(: (=== u v) (rel (est u v)))                       ; the relation's infix unify -- and it needs no
 ; row in prel's `dyadics`: that table holds only the EXCEPTIONS, and any all-punct head is already
 ; infix-dyadic at house grip. (It did pin one while this lived in prel. A post-egg layer could not
 ; anyway -- `dyadics` is mopped at birth, so the operator GRAMMAR closes when the egg hatches.)
@@ -76,4 +76,4 @@
 (:: 'zz (\ x (: s (nom 0) n (nom 0) m (nom 0) y (nom 0) x2 <x `('\ s n m y `(m `(x2 s))))))  ; delay a goal (inverse-eta)
 (:: 'et (\ xs (: x <xs r >xs (foldl (\ a b `((\ a b s (s_star (a s) b)) a b)) x r))))   ; conj of goals
 (:: 'vel (\ xs (: x <xs r >xs (foldl (\ a b `((\ a b s (s_plus (a s) (b s))) a b)) x r)))) ; disj of goals
-(:: '\\ (\ a (link (link '\ a) (map (\ a `(var `('\ a))) (init a)))))                             ; lambda w/ fresh logic vars
+(:: '\\ (\ a (('\ >< a) >< map (\ a `(var `('\ a))) (init a))))                             ; lambda w/ fresh logic vars
