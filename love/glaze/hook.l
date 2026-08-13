@@ -56,8 +56,8 @@
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op <e
                                (? (member? op '(+ - * // % & | ^ < <= > >= =)) (exprn ps <>e && exprn ps <>>e)
-                                  (op = '?) (&& (two? >>>e) !(two? >>>>e)
-                                               (exprn ps <>e) (exprn ps <>>e) (exprn ps <>>>e))
+                                  (op = '?) ((two? >>>e) && !(two? >>>>e)
+                                            && (exprn ps <>e) && (exprn ps <>>e) && (exprn ps <>>>e))
                                   0))
                    0)
    ; opnd-ok? -- every OPERAND-position leaf symbol in e is a frame param. heads are op-checked by

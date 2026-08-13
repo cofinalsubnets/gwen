@@ -93,10 +93,10 @@
    (buse? e P) (? (two? e) (? (id? <e 'pin && id? <>e P) 1 (foldl (\ a x (a || buse? x P)) 0 >e)) 0)   ; P used as a CASK -- (pin P..) -- so its guard wants the buf kind, not str
    (cuse? e P) (? (two? e) (? (member? <e '(cap cup two?) && id? <>e P) 1 (foldl (\ a x (a || cuse? x P)) 0 >e)) 0)   ; P used as a CHAIN -- <P/>P/(two? P) -- raw pointer, NO entry guard (two? is total: a non-chain reads false)
    (muse? e P) (? (two? e) (? ((id? <e 'mpeep || id? <e 'mpin) && id? <>e P) 1 (foldl (\ a x (a || muse? x P)) 0 >e)) 0)   ; P used as a MAP -- (mpeep P k d) READ or (mpin P k v) UPDATE -- raw pointer, guarded as a map
-   (nuse? e P) (? (two? e) (? (&& (id? <e '=) (3 = (tally e))
-                                  (: x1 <>e y1 <>>e
-                                     (|| (id? x1 P && two? y1 && member? <y1 '(cap cup))
-                                         (id? y1 P && two? x1 && member? <x1 '(cap cup)))))
+   (nuse? e P) (? (two? e) (? ((id? <e '=) && (3 = (tally e))
+                               && (: x1 <>e y1 <>>e
+                                     ((id? x1 P && two? y1 && member? <y1 '(cap cup))
+                                      || (id? y1 P && two? x1 && member? <x1 '(cap cup)))))
                                1 (foldl (\ a x (a || nuse? x P)) 0 >e)) 0)   ; P a POINT key -- (P = <..)/(<.. = P): raw word identity, entry-guarded nom|mint (a point equals only itself; a charm could bridge (2 = 2.0) so charms deopt to interp)
    ; INTERPROCEDURAL string-param inference: a param is a string if used in peep/tally OR passed as the arg
    ; to a sibling's string param. (strhash's `s` is a string because it flows into strhash_go's peep.) A
@@ -358,8 +358,8 @@
    (ahascall? env go e)                                                  ; does e contain a call (any non-op head)? (the bisect knob's test)
     (? (aquote? e) 0
        (two? e) (: op <e
-          (|| (name? op && !(id? op go) && !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
-              (foldl (\ a x (a || ahascall? env go x)) 0 >e)))
+          ((name? op && !(id? op go) && !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
+           || (foldl (\ a x (a || ahascall? env go x)) 0 >e)))
        0)
    ; aheads: collect the FREE call heads of e -- the global-callee candidates. within the ACCEPTED
    ; grammar the only binders are the frame and the ONE named-let, so a head outside env/go IS a
@@ -371,8 +371,8 @@
     (? (aquote? e) acc
        (two? e)
         (: op <e                                                    ; a2, not a rebind of acc: a `:` is ONE SCOPE, so `acc (.. acc ..)`
-           a2 (? (&& (name? op) !(id? op go) !(member? op env) !(member? op acc)
-                     !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
+           a2 (? ((name? op) && !(id? op go) && !(member? op env) && !(member? op acc)
+                  && !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
                  (op >< acc) acc)                                      ; reads the UNPINNED local -- a silent missing per node (help.l heard 14)
            (foldl (\ ac x (aheads env go x ac)) a2 >e))
        acc)
@@ -385,15 +385,15 @@
        (aquote? e) 1
        (two? e)
         (: op <e  as >e  n (tally as)
-           (? (id? op '?) (&& (n = 3) (amble-ok? env gn go k 0 <as)
-                              (amble-ok? env gn go k tl <>as)
-                              (amble-ok? env gn go k tl <>>as))
+           (? (id? op '?) ((n = 3) && (amble-ok? env gn go k 0 <as)
+                           && (amble-ok? env gn go k tl <>as)
+                           && (amble-ok? env gn go k tl <>>as))
               (member? op '(two? cap cup)) (n = 1 && amble-ok? env gn go k 0 <as)
               (aop2? op) (n = 2 && amble-ok? env gn go k 0 <as && amble-ok? env gn go k 0 <>as)
               (id? op '|| && !(member? op env)) (2 <= n && all (\ x (amble-ok? env gn go k 0 x)) as)
               (id? op go) (tl && n = k && all (\ x (amble-ok? env gn go k 0 x)) as)
-              (name? op) (&& (0 < n) (member? op env || member? op gn)
-                             (all (\ x (amble-ok? env gn go k 0 x)) as))
+              (name? op) ((0 < n) && (member? op env || member? op gn)
+                          && (all (\ x (amble-ok? env gn go k 0 x)) as))
               0))
        0)
    ; amble-depth: an upper bound on the spill slots e needs (operand nesting rides VM slots).
@@ -534,14 +534,14 @@
        cx   (\ op (? (member? op cn) (tally (cimp op)) 0))
        nd   (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits))
        kn   (gn + cn)                                     ; every resolvable free head (amble-ok?'s membership test)
-       lpok (? lp (&& (all name? vars) (adistinct vars) (k = (tally inits))
-                      !(member? go vars) !(member? go ps)) 1)
-       ok (&& (two? s) (two? >s) (all name? ps) (adistinct ps)
-              (a = (tally ps)) (0 < a) lpok (two? body)
-              (? (getenv "LOVE_AMBLE_NOCALL") !(ahascall? env go body) 1)              ; the call-lane bisect knob (forensics: splits call machinery from the rest)
-              (all lit? gvals) (nd < 48) ((k + (tally gn) + (tally cn) + nq) < 48)   ; slots are cheap once the prologue GUARDS the room (below)
-              (all (\ i (amble-ok? ps kn 0 0 0 i)) inits)
-              (amble-ok? env kn go k 1 body))
+       lpok (? lp ((all name? vars) && (adistinct vars) && (k = (tally inits))
+                   && !(member? go vars) && !(member? go ps)) 1)
+       ok ((two? s) && (two? >s) && (all name? ps) && (adistinct ps)
+           && (a = (tally ps)) && (0 < a) && lpok && (two? body)
+           && (? (getenv "LOVE_AMBLE_NOCALL") !(ahascall? env go body) 1)              ; the call-lane bisect knob (forensics: splits call machinery from the rest)
+           && (all lit? gvals) && (nd < 48) && ((k + (tally gn) + (tally cn) + nq) < 48)   ; slots are cheap once the prologue GUARDS the room (below)
+           && (all (\ i (amble-ok? ps kn 0 0 0 i)) inits)
+           && (amble-ok? env kn go k 1 body))
        (? ok
           (: _ (? (getenv "LOVE_AMBLE_TRACE") (puts ("amble: " + (show s) + "\n")) 0)   ; the compile trace (forensics: names every ambled source)
              ng (1 + (tally gn) + (tally cn) + nq)          ; extras region = [() | globals | sibling entries | quoted data]: () is
@@ -891,9 +891,9 @@
        [forms rg])
    (cmppd-imm op) (? (op = '<=) 2 (op = '<) 1 ())                                        ; cmppd predicate: LE / LT (the "continue while small" escape tests)
    (grid2-ok? dims invs fvars updates testexpr cmpop bound)                              ; the packed shape fits?
-    (&& (member? cmpop '(< <=)) ((tally dims) < 3) (1 < (last dims)) (0 = ((last dims) % 2))
-        (((tally invs) + (tally fvars)) < 5)
-        ((tally (htbl (fcc bound (fccl updates (fcc testexpr ()))) 2)) < 3))
+    ((member? cmpop '(< <=)) && ((tally dims) < 3) && (1 < (last dims)) && (0 = ((last dims) % 2))
+     && (((tally invs) + (tally fvars)) < 5)
+     && ((tally (htbl (fcc bound (fccl updates (fcc testexpr ()))) 2)) < 3))
    ; the kernel as a neutral crew/holo/ IR PROGRAM (asmx): control flow is LABELS (no hand-counted offsets),
    ; the SSE ops are NAMED (no raw opcode bytes). GP IR regs: r0=rax(scratch), r5=rsi(Ip, the deopt
    ; tail), r7=k(iter), r8=acc, r9../r10..=the grid counters. XMM: f2,f3=consts, f4=count, f5=alive,
