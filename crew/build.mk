@@ -91,20 +91,28 @@ distfiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
             crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l \
             crew/holo/link.l crew/holo/copy.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
             crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/seed/merge.l \
-            crew/seed/http.l crew/seed/seed.l crew/kiosko/kiosko.l crew/seed/up.l
+            crew/seed/http.l crew/seed/seed.l crew/kiosko/kiosko.l crew/seed/up.l \
+            lib/gz.l lib/tar.l lib/source.l
 DIST_ORIGIN ?=
-out/dist/.dist-cat.l: $(distfiles)
+# ⚠ THE MEMBERSHIP IS AN INPUT, and make cannot see it. Adding a file to distfiles
+# changes what the artifact CARRIES while every file make watches keeps its mtime, so
+# a cat older than the new member is "up to date" and the binary links without it --
+# silently, and it looks exactly like the feature not working. (mk/lib.mk's
+# corpus.list is the same guard for $t, and for the same reason.) Depend on the LIST:
+# rewritten only when membership moves, so the cat re-lays on an add OR a delete.
+.PHONY: force_dist_list
+force_dist_list: ;
+out/dist/.dist.list: force_dist_list
+	@mkdir -p out/dist
+	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+out/dist/.dist-cat.l: $(distfiles) out/dist/.dist.list
 	@echo CAT	$(abspath $@)
 	@mkdir -p out/dist
 	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(distfiles); } > $@
 # the artifact is named for its arch ($a = uname -m): love-x86_64 here,
 # love-aarch64 on a pi -- the moon lane is native on both (mooncc defaults to
 # the ground it stands on), so `make dist` anywhere bakes that machine's door.
-out/dist/love-$a: $(ho)/love $(ho)/love.baked out/dist/.dist-cat.l
-	@echo DIST	$(abspath $@)
-	@cp $(ho)/love $@
-	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l ./$@ bake
-	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
 .PHONY: dist dist-src dist-full dist-rel
 dist: out/dist/love-$a
 
@@ -178,10 +186,16 @@ out/dist/.staged-$(dist_ver): force_stage $(ho)/love
 	@# but it means an uncommitted edit is NOT in what you just built, and a gate run
 	@# against it is testing the old code while you read the new. That failure is silent
 	@# and looks exactly like the fix not working; it cost two full distboot rounds here.
-	@if [ -n "$$(git -C $(R) status --porcelain 2>/dev/null)" ]; then \
-	   echo "  /warn the tree is DIRTY and this artifact comes from the INDEX --"; \
-	   echo "  /warn uncommitted edits are NOT in it. 'git add' them first:"; \
-	   git -C $(R) status --porcelain | sed 's/^/        /' | head -8; fi
+	@# ⚠ THE WORKTREE COLUMN IS THE ONE THAT MATTERS. `status --porcelain` reports a
+	@# STAGED edit as dirty too, and those are exactly the ones that DO ride -- warning
+	@# on them cries wolf on every correct release and teaches you to read past it. The
+	@# second column is the worktree against the index: ` M` and `??` are absent from
+	@# the artifact, `M ` is in it.
+	@out=$$(git -C $(R) status --porcelain 2>/dev/null | awk 'substr($$0,2,1) != " "'); \
+	 if [ -n "$$out" ]; then \
+	   echo "  /warn this artifact comes from the INDEX and these are NOT in it --"; \
+	   echo "  /warn 'git add' them first:"; \
+	   printf '%s\n' "$$out" | sed 's/^/        /' | head -8; fi
 	@rm -rf $(dist_stage)
 	@mkdir -p $(dist_stage)/love-$(dist_ver)
 	@git -C $(R) checkout-index -a --prefix=$(abspath $(dist_stage))/love-$(dist_ver)/
@@ -194,6 +208,35 @@ $(dist_src_tgz): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l tools/tgz.l
 	@echo TGZ	$(abspath $@)
 	@rm -f $@
 	@$(ho)/love tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
+
+# THE SOURCE BLOB: the lean tarball laid into an object (tools/mksrc.l), so the
+# artifact hands out its own source with no second download and no `tar xf` -- love
+# `source` inflates it. host/src.c defines the pair WEAK and empty, so this object's
+# STRONG definitions override them at the link and a plain `make host` needs none of
+# it. ⚠ holo names its arches ($a is uname's, and they disagree on x86_64).
+# ⚠ AND THESE TWO RULES MUST SIT BELOW $(dist_src_tgz)'s DEFINITION. A prerequisite
+# list is expanded where it is WRITTEN: above the definition it expands to nothing,
+# make never builds the tarball, and only the recipe -- expanded later, when the
+# variable is set -- names a file that was never cut. It fails as a missing archive,
+# which reads as the tarball rule being broken rather than this line being early.
+ifeq ($a,aarch64)
+src_arch = arm64
+else
+src_arch = x64
+endif
+out/dist/src-$a.o: $(dist_src_tgz) tools/mksrc.l $(ho)/love
+	@$(ho)/love tools/mksrc.l $(dist_src_tgz) $@ $(src_arch)
+# ⚠ THIS LINKS, where it used to `cp` the host binary. A section cannot be injected
+# into a finished ELF, so the artifact is now its own link -- $(moon_o) plus the blob
+# -- and only then baked. The layout stays load-bearing the other way: .image must
+# still END the segment for `bake` to grow it at the tail (host/image.c's bake_tail
+# refuses otherwise), which it does, the blob riding .rodata well below it.
+out/dist/love-$a: $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l $(ho)/love
+	@echo DIST	$(abspath $@)
+	@mkdir -p $(dir $@)
+	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -o $@
+	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l ./$@ bake
+	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
 
 # the full artifact is the lean one plus ONE FILE, so it is the same stage with the
 # baked binary laid beside it -- not a second pipeline.

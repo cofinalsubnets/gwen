@@ -25,13 +25,20 @@
 # quietly did it: both produce a working binary. So cc/gcc/clang are shadowed by
 # scripts that fail loudly, and the full build has to come out the far side anyway.
 #
-# Two complete bootstraps -- minutes, not seconds. Opt-in, by name.
-# usage: distboot.sh SRC_TGZ FULL_TGZ [REFERENCE_LOVE]
+# ⚠ AND THE THIRD ARTIFACT CARRIES ITS OWN SOURCE. The self-extracting binary holds
+# the lean tarball in .rodata (tools/mksrc.l, host/src.c) and `love source` lays it
+# out with bin/love already inside, so one downloaded file needs no tar and no second
+# fetch. Its leg is the same shape as the full one -- poison the compilers, build, and
+# require the same bytes -- because "it unpacked something" is not the claim.
+#
+# Three complete bootstraps -- minutes, not seconds. Opt-in, by name.
+# usage: distboot.sh SRC_TGZ FULL_TGZ SELF_EXE [REFERENCE_LOVE]
 set -u
 
 src=$1
 full=$2
-ref=${3:-}
+selfexe=$3
+ref=${4:-}
 
 for t in "$src" "$full"; do
   [ -f "$t" ] || { echo "distboot: no $t -- run 'make dist-rel'"; exit 1; }
@@ -47,7 +54,7 @@ fail() { echo "FAIL distboot: $*" >&2; exit 1; }
 love=$R/out/host/love
 [ -x "$love" ] || fail "no $love"
 
-echo "distboot: two full bootstraps, this takes a few minutes"
+echo "distboot: three full bootstraps, this takes a few minutes"
 
 # ---- 1. the LEAN artifact, through the machine's own compiler ----------------
 mkdir -p "$w/lean"
@@ -77,12 +84,36 @@ fulld=$(echo "$w"/full/love-*/)
 grep -q "was called" "$w/full.log" && { grep "was called" "$w/full.log" | head -3; fail "the full build reached for an ambient compiler"; }
 echo "  OK full: builds with cc/gcc/clang poisoned -- the bundled love was the toolchain"
 
-# ---- 3. THE CLAIM ------------------------------------------------------------
-if cmp -s "$lean/out/host/love" "$fulld/out/host/love"; then
-  echo "  OK both artifacts answer the SAME binary ($(wc -c < "$lean/out/host/love") bytes)"
+# ---- 3. the SELF-EXTRACTING binary, which needs no tarball at all -------------
+# ⚠ run it from a COPY in the scratch dir. `love source` lays its tree beside the
+# binary's cwd, and the tree we are testing must not land in the repo.
+mkdir -p "$w/self"
+cp "$selfexe" "$w/self/love" || fail "cannot copy $selfexe"
+# ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads. The root Makefile EXPORTS it for the corpus,
+# and an egg-booted love has no verb table at all -- `source` then reads as a FILENAME
+# and the artifact answers "cannot open source", which looks like a missing verb
+# rather than a missing image. The build lanes lead with the same thing for `mooncc`.
+( cd "$w/self" && LOVE_NO_IMAGE= ./love source ) > "$w/self.log" 2>&1 \
+  || { tail -20 "$w/self.log"; fail "the self-extracting binary could not lay its source"; }
+selfd=$(echo "$w"/self/love-*/)
+[ -d "$selfd" ] || fail "'love source' unpacked no love-<ver>/ directory"
+[ -f "$selfd/VERSION" ] || fail "the embedded source carries no VERSION"
+# ⚠ bin/love is the whole point: without it the unpacked tree falls back to the
+# ambient cc and the one-file claim quietly becomes a two-tool one.
+[ -x "$selfd/bin/love" ] || fail "'love source' laid no runnable bin/love"
+( cd "$selfd" && PATH="$w/nocc:$PATH" make -j"$(nproc 2>/dev/null || echo 4)" out/host/love ) \
+  > "$w/selfb.log" 2>&1 \
+  || { tail -20 "$w/selfb.log"; fail "the self-extracted tree does not build without an ambient compiler"; }
+grep -q "was called" "$w/selfb.log" && { grep "was called" "$w/selfb.log" | head -3; fail "the self-extracted build reached for an ambient compiler"; }
+echo "  OK self: one binary lays its own source and builds it, no tar and no ambient cc"
+
+# ---- 4. THE CLAIM ------------------------------------------------------------
+if cmp -s "$lean/out/host/love" "$fulld/out/host/love" \
+   && cmp -s "$lean/out/host/love" "$selfd/out/host/love"; then
+  echo "  OK all three artifacts answer the SAME binary ($(wc -c < "$lean/out/host/love") bytes)"
 else
-  ls -l "$lean/out/host/love" "$fulld/out/host/love"
-  fail "the two artifacts built DIFFERENT binaries -- the release claim is false"
+  ls -l "$lean/out/host/love" "$fulld/out/host/love" "$selfd/out/host/love"
+  fail "the artifacts built DIFFERENT binaries -- the release claim is false"
 fi
 
 # ..and against the tree they were cut from, when the tree is one thing (see the
@@ -97,4 +128,4 @@ if [ -n "$ref" ] && [ -f "$ref" ]; then
   fi
 fi
 
-echo "distboot: lean and full bootstrap to the same love -- ok"
+echo "distboot: lean, full and self-extracting bootstrap to the same love -- ok"
