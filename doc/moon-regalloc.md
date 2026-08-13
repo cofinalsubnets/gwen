@@ -17,10 +17,10 @@ each one priced, gated, and landed separately:
 * **the operand pool** (`opool`, six caller-saved regs) — statement-scoped staging;
   `ralloc`/`rfree`, reset at every statement. A pool value never crosses a call.
 * **the vmap** — the cross-statement leg: a universe local's value, once written through
-  a pool register, maps name → reg so re-reads are zero forms. Write-through: the slot
-  stays the single source of truth, so a flush forgets, never spills. Flushes at every
-  label and call emission; if/?: join labels survive by pair-INTERSECTION over arriving
-  edges (the forward-JOIN meet).
+  a pool register, maps name → reg → **class** so re-reads are zero forms. Write-through: the
+  slot stays the single source of truth, so a flush forgets, never spills. Flushes at every
+  label emission; a CALL kills the pool class only (the class is what says so). if/?: join
+  labels survive by pair-INTERSECTION over arriving edges (the forward-JOIN meet).
 * **homes and rides** — a param's positional seat (`homefold`), the self-assign ride
   license (a param whose only arrival-defs are self-updates rides its arrival register
   end-to-end), int/uint locals and params admitted under canonical extension (`lhomable?`,
@@ -451,6 +451,15 @@ That is what the two big rows above are:
 
 **Together, 339 of 514 pin kills — 66% — are one missing field.**
 
+⚠ **the second bullet was wrong, and step 1 building it is what said so** (2026-08-13). Those 116
+fires are `(? (two? kp) (vmset g kp) (vmflush g))` — a loop head **installing its keep**, and the
+flush arm is the install of an empty one, not a kill site with a vocabulary problem. Sparing a
+class there is unsound: `lokeep`/`lochk` verify the head's arriving edges only for the entries in
+`kp`, so a pin spared outside it rides a back edge nothing checked — a body that re-pins the name
+elsewhere then makes a top-of-body read wrong on the first arrival. The flush is that join's
+correctness. **Step 1's honest reach is the 223-fire row alone, 43.4%**, and the conditional
+retires because `vmset` of an empty map already IS the flush.
+
 ### THE LADDER — one list, both levels
 
 ⚠ **this is the arc's only live plan.** It supersedes `doc/moon-vreg.md`'s phase 1–4 (whose
@@ -458,12 +467,13 @@ censuses stay as evidence) and `doc/moon-alloc.md`'s phase I/II stance. Two ladd
 here, one per level; they were the same ladder and are now merged. A step's **serves** column says
 which level asks for it — most are asked by both, which is the point.
 
-**The floor already under it:** S-1 `stldp` · iv phase 1 steps 1–2 (spans, the admission
-repricing) · rungs A-0/A-1/A-2 (the cs file real on arm64, riscv, thumb2) · 5.0/5.1a/5.1b i–iii.
+**The floor already under it:** step 1 (the entry carries its class) · S-1 `stldp` · iv phase 1
+steps 1–2 (spans, the admission repricing) · rungs A-0/A-1/A-2 (the cs file real on arm64, riscv,
+thumb2) · 5.0/5.1a/5.1b i–iii.
 
 | # | step | serves | what the program gets to SAY | gate |
 |---|---|---|---|---|
-| 1 | **class the vmap entry** | both | *pool residency ends here* — instead of 29 sites each reaching for flush-everything | byte-identity where the class verb provably equals the flush it replaces; dynamic floor where not |
+| 1 | **class the vmap entry** — LANDED 2026-08-13 | both | *pool residency ends here* — instead of 29 sites each reaching for flush-everything | byte-identity where the class verb provably equals the flush it replaces; dynamic floor where not |
 | 2 | **`restrict` survives the parser** | splice first | *this base is unaliased* — the promise `love.h` already makes on `Sp` and `pquals` discards | the ten-line seam probe loses its dead interior stores; `test_fixpoint` |
 | 3 | **`fcb` gets rollback** | moon | *discard the emission, keep what predates it* — a transaction, not a clobber | misses 81→69 reproduced; text delta owned by step 5, not by this verb |
 | 4 | **S-1b — reach the arm/riscv pipeline** | both | that `stldp` has *work* on three targets where it silently finds none | a store print that fires on all four targets; the seam probe folds on each |
@@ -989,6 +999,23 @@ than dispatch — where cc gets 1.91×. Reproduced in a ten-line probe; the inte
 gone and the dependent path is register-to-register. ⚠ what `stldp` cannot reach is the dead
 interior STORES, and those need the alias promise love.h already makes (`ai_word *restrict Sp`)
 and `parse.l` discards at the token level. That is the shared ladder's one frontend step.
+
+**2026-08-13 — THE LADDER step 1: the vmap entry carries its CLASS.** An entry is `(nm reg class)`
+now, the class read off the grants in force (`vpcls`: `csbor` → 'bor, else `pool0` and the roster
+→ 'ros or 'pool, else `()` — **no residency, so the class doubles as the eligibility**). `vmset`
+is the one stamp point, which is what makes a scope-end sayable: a map outlives the grant it was
+pinned under, so the exit meet rides a loop's rostered pins out and they arrive unrostered instead
+of claiming a reload that no longer exists. `vmcflush` then says *pool residency ends here* and
+the `(!(two? bs) && !(two? sr))` degenerate branch is gone — 223 of 514 pin kills stop being a
+special case. **Byte-identical love.o on x64/arm64/riscv64/thumb2, `test_fixpoint`, `test_moon`,
+`test_ccarm64`, `test_ccriscv`, `test_slow`.** The naming tell moved the right way: five pin doors
+(`vmpin`/`vmbpin`/`vmrepin`/`vapin`/`vaepin`) became one body under three gates, because "where
+does this pin live" was the question the three-way dispatch was asking without a word for it.
+⚠ what did NOT come out is the census's second row — see the falsification under the flush census.
+⚠ gen.l now opens `(use 'pat)`: the entry's shape is stated in three pattern-headed accessors
+(`vnm`/`vrg`/`vcls`) and every reader destructures, so a wrong-arity entry answers `()` rather
+than a silently shifted field. love0's build-tool boot does not splice `pat`, hence the file's own
+`use` — the module is already in `libs0`, so no frontend changed.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) — each a
