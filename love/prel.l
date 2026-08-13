@@ -384,7 +384,9 @@
  '| 30 '& 30 '&& 30 '|| 30      ; logical (&& || also macros; the row pins the grip below comparison)
  '>< 25                                                          ; cons -- the loosest builder
  '? '(10 0 1) '@ '(10 0 1)                                       ; the CLAUSE forms: cond, and match -- n-ary, so every arm stays an operand
- '$ 5)                                                           ; weak apply -- loosest (a $ b = (a b), haskell $); glued $x stays saturate (monadics)
+ '$ 5 '\ 5                                                       ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate), and the lambda
+ ': '(3 0 1) ':= '(: 3 0 1))                                     ; the binder -- n-ary and loosest of all, so every operand stays one.
+                                                                 ; := is an ALIAS row: it names `:` and inherits the whole fold
    monadics (pins (tablet 0)
  '< 'cap '> 'cup '+ 'net '* 'prod '| 'abs '- 'negate '/ 'reciprocal
  '% 'fraction '? 'bit '$ 'saturate '! 'nil?))   ; `.` is pinned here by post.l, whose dot it is
@@ -468,7 +470,10 @@
    ; partial application -- the curry law, with no case of its own.
    ; kind tests throughout the walk, never truth -- an operand list like (0) or ("") nets zero.
    (op-fold f) (? (atom? (op-frg f)) (op-fro f)
-                  (>< (op-frn f) (rev (op-frg f))))
+                  (: nm (op-frn f) os (rev (op-frg f))
+                     (? (id? nm '\) (op-core (>< '\ os))
+                        (id? nm ':) (op-core (>< ': (op-cl-splice os)))
+                        (>< nm os))))
    ; deliver datum d -> (out' . pend'). a collecting frame takes it; a filled infix frame extends
    ; its right operand into a span, since juxtaposition binds tighter: (a = b c) is (= a (b c)).
    ; the span state rides `need`: 0 = a lone datum, -1 = growing.
@@ -483,6 +488,19 @@
                 f2 (op-frw f -1 (>< nx (cup (op-frg f))))
                 (>< out (>< f2 (cup pend)))))))
    ; take a left operand for an incoming operator of grip g and hand h -> (. (out' . pend')), or 0.
+   ; the two BINDERS fold back through op-core, so an infix spelling lowers exactly as the prefix
+   ; one does -- patterns to noms, the nested lambda flattened, the body factored. nothing is
+   ; added: (a : b) is the plain (: a b), body-less and leaking its binding, as it reads.
+   ; ⚠ a `:` CHAIN IS ONE SCOPE: the nesting op-steal builds is spliced flat here, so
+   ; (a : 1 b : 2 (a + b)) and (: a 1 b 2 (a + b)) are the same form, and a chain of bare
+   ; definitions is one body-less `:` carrying every pair. it is the BODY position that splices,
+   ; however that body was spelled -- and a wholly prefix `:` never reaches this fold, so no
+   ; extant form moves.
+   (op-cl-splice fs)
+    (? (atom? (cup fs))
+       (: b (cap fs)
+          (? (&& (two? b) (id? (cap b) ':)) (cup b) fs))
+       (>< (cap fs) (op-cl-splice (cup fs))))
    ; against a filled top frame the incomer either steals its last operand or folds it and retries
    ; beneath. at equal grip the incomer's hand decides: right-handed steals, left-handed yields.
    ; at top level the whole leading span is taken: (a b = c) captures (a b), not just b.
@@ -579,8 +597,9 @@
    (op-flat-ol ol seen)                                      ; -> the flattened operand list, body left RAW (op-lam factors it after)
     (? (atom? (cup ol))
        (: b (cap ol)
-          (? (&& (two? b) (id? (cap b) '\) (two? (cuup b)) (op-disjoint? seen (op-params (cup b))))   ; (two? (cuup b)) = a real lambda, not quote
-             (op-flat-ol (cup b) seen)                       ; disjoint inner lambda -> merge its operands up
+          (? (&& (two? b) (id? (cap b) '\) (two? (cuup b)))  ; (two? (cuup b)) = a real lambda, not quote
+             (: ol2 (op-depat (cup b) ())
+                (? (op-disjoint? seen (op-params ol2)) (op-flat-ol ol2 seen) ol))   ; disjoint inner lambda -> merge its operands up
              ol))                                             ; else the body stays raw
        (>< (cap ol) (op-flat-ol (cup ol) (>< (cap ol) seen))))   ; a param: keep + accumulate for the shadow check
    ; the comma layer, the loosest grouping, above infix. datums split at top-level commas and the
@@ -595,6 +614,8 @@
    ; everything else walks. idempotent. has-top-op? asks whether the original form carried a
    ; top-level operator -- only then may a lone folded operand splice up, since a bare
    ; list-of-one like ((mov r3 r12)) is data and stays wrapped.
+   ; ⚠ the inner lambda LOWERS BEFORE the shadow check, never after the merge: a pattern carried up
+   ; as a param binds nothing, and the check compares noms -- (\ [a b] (\ a x)) must not merge.
    (has-top-op? x) (? (atom? x) 0 (op-puncp (cap x)) 1 (has-top-op? (cup x)))
    (op-core x)
     (? (atom? x) x

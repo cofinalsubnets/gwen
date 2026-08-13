@@ -84,3 +84,43 @@
  ((show '(\ a b (+ a b))) = (show (opfix '(\ a b (a + b)))))                                  ; \ args verbatim, body factored
  ((show '(: a 1 b 2 (+ a b))) = (show (opfix '(: a 1 b 2 (a + b)))))                          ; : values/body factored, names kept
  (2 = (: x 1 x (x + 1) x)))                                                                     ; the sequence law, intact
+
+; --- and the two binders read INFIX too. `\` is dyadic and sits with $; `:` is n-ary at the
+; loosest band there is, so every operand stays one and a lambda value needs no parens. both
+; fold back THROUGH the lowering above -- patterns lower, a nested lambda flattens, the body
+; factors -- so an infix spelling is the same FORM as the prefix one, never a lookalike, and
+; nothing is added: (a : b) is the plain body-less (: a b). `:=` is an ALIAS row on `:`, the
+; same word by another spelling. the one rule the infix spelling owns is that a `:` CHAIN IS
+; ONE SCOPE -- the nest op-steal builds is spliced flat, never left standing.
+(assert
+ ((show '(\ a b c))           = (show (opfix '(a \ b \ c))))             ; the chain flattens: one closure, not two
+ ((show '(\ x (+ x 1)))       = (show (opfix '(x \ x + 1))))             ; the body extends right, under every tighter op
+ ((show '(\ x (? c a b)))     = (show (opfix '(x \ c ? a b))))           ; ..a clause form included
+ ((show '(: a b c))           = (show (opfix '(a : b c))))               ; n-ary: every operand stays one
+ ((show '(: a b))             = (show (opfix '(a : b))))                 ; ..and at two it is the body-less form, which PINS
+ ((show '(: (f x) (+ x 1)))   = (show (opfix '(f x : x + 1))))           ; define-sugar: the leading SPAN is the binder
+ ((show '(: a 1 b 2 (+ a b))) = (show (opfix '(a : 1 b : 2 (a + b)))))   ; the chain is ONE scope -- the prefix form exactly
+ ((show '(: a b c d))         = (show (opfix '(a : b c : d))))           ; ..so a chain of bare definitions is one body-less :
+ ((show '(: f (\ x (+ x 1)))) = (show (opfix '(f : x \ x + 1))))         ; \ grips tighter than :, so a lambda is one value
+ ((show (opfix '(a : b c)))   = (show (opfix '(a := b c))))              ; := names `:` and inherits the whole fold
+ ((show (opfix '(a : 1 b : 2 (a + b)))) = (show (opfix '(a : 1 b := 2 (a + b)))))   ; ..either spelling, same chain
+ (3 = ((x \ x + 1) 2)) (7 = ((x \ y \ x + y) 3 4))
+ (9 = (a : 4 b : 5 (a + b))))                                            ; a body-HAVING : is one scope and pins nothing
+
+; so an infix definition at top level pins, which is what a file of them is for. ⚠ distinct
+; names: a body-less `:` leaks to the global book, and the corpus is one scope.
+(ifx-sq x := x * x)
+(ifx-hyp a b : (ifx-sq a + ifx-sq b))
+(ifx-fst [a b] := a)                                    ; a define-sugar param is a pattern here too
+(assert (9 = (ifx-sq 3)) (25 = (ifx-hyp 3 4)) (5 = (ifx-fst '(5 7)))
+        (7 = (ifx-z : 7)))                              ; ..and the form answers what it bound
+
+; a param that is not a nom is a PATTERN wherever it sits: infix, prefix, or merged up out of
+; a nested lambda -- that last one used to carry it up as a param, where it bound nothing.
+; ⚠ these read through BEHAVIOUR and not through show: each lowering mints its own fresh nom,
+; so two spellings of one form never print the same text however identical they are.
+(assert
+ (7 = ((\ x [a b] (x + a + b)) 0 '(3 4)))                                ; prefix
+ (7 = ((x \ [a b] \ x + a + b) 0 '(3 4)))                                ; ..infix
+ (7 = ((\ x (\ [a b] (x + a + b))) 0 '(3 4)))                            ; ..and merged up out of a nested lambda
+ (2 = ((\ [a b] (\ a a)) '(1 2) 2)))                                     ; the shadow still refuses to merge

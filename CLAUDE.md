@@ -64,6 +64,14 @@
 ;   your dyadics); quoted lists are data, operators plain.
 ; * arithmetic operators are dyadic: `(+ a b c)` is `((+ a b) c)` -- application, not a 3-way sum,
 ;   so it church-exponentiates ((+ 192 40 5) = (232 5) = 5^232, a bignum).
+; * the BINDERS read infix too, and each folds back THROUGH its own lowering, so a spelling is
+;   the same FORM and never a lookalike: `\` is dyadic at $'s grip -- (a \ b \ c) IS (\ a b c),
+;   the chain flattened to one closure -- and `:` is n-ary at the loosest grip there is, so
+;   (a : 1 b : 2 (a + b)) IS (: a 1 b 2 (a + b)), A CHAIN BEING ONE SCOPE. patterns lower in
+;   every position either way, and nothing is added: (a : b) is the plain body-less (: a b), so
+;   a top-level one PINS -- `sq x := x * x` is a definition. `:=` is an alias row on `:`, the
+;   same word spelled the other way. ⚠ `:` is n-ary: (x : f a) binds x to f with body a, not
+;   to (f a) -- an applied value spends the parens.
 ; * the CLAUSE forms `?` and `@` are the two N-ARY operators (grip 10): infix, they take the
 ;   scrutinee on the left and keep every arm an operand, so (x @ p b .. else) IS (@ x p b .. else)
 ;   and (c ? a b) is (? c a b), not (? c (a b)). the leading span is taken whole, so a compound
@@ -218,6 +226,9 @@
 ((\ [a b] (a + b)) '(3 4))   ; 7     a \ param that is NOT a nom is a PATTERN (love/pat.l's @):
                              ;       opfix lowers it to (\ v (@ v [a b] ..)), define-sugar too
 (? 0 'a (1 < 2) 'big 'else)  ; big   ? -- test/result pairs, then a final else
+((x \ y \ x + y) 3 4)        ; 7     \ INFIX, the chain flattened: this IS (\ x y (x + y))
+(a : 4 b : 5 (a + b))        ; 9     : INFIX and n-ary; a chain is ONE scope, not a nest
+((sq x := x * x) 5)          ; 25    : at two is body-less, so a top-level one PINS sq; := aliases :
 ; `:` doubles as sequencing (bind `_` for effect); `(f x)` on the left is define-sugar; a body-less
 ; top-level `:` leaks its bindings to the global scope (how tests share helpers). a body-having `:`
 ; is one scope: every name binds over the whole form, so a read before the pin is the missing
