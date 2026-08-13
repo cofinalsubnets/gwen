@@ -38,13 +38,13 @@ $(ho)/kore: $(ho)/kore.image
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
 	   echo 'n=$$(basename -- "$$0")'; \
-	   echo 'exec "$$h/love" --wake "$$h/kore.image" -e "(: r (kore-main (link \"$$n\" (cuup (cup cmdline)))) (quit (? (charm? r) r 0)))" "$$@"'; } > $@
+	   echo 'exec "$$h/love" --wake "$$h/kore.image" -e "(: r (kore-main (link \"$$n\" >>>cmdline)) (quit (? (charm? r) r 0)))" "$$@"'; } > $@
 	@chmod 755 $@
 $(ho)/mooncc: $(ho)/mooncc.image
 	@echo CAT	$(abspath $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
-	   echo 'exec "$$h/love" --wake "$$h/mooncc.image" -e "(moon-main (cuup (cup cmdline)))" "$$@"'; } > $@
+	   echo 'exec "$$h/love" --wake "$$h/mooncc.image" -e "(moon-main >>>cmdline)" "$$@"'; } > $@
 	@chmod 755 $@
 # seed 🌱 the patch-set vcs, and lush 🐚 the love shell -- also the distro's console shell,
 # whose SEAT in main.l fires on its own basename. Both are catted shebang scripts, PATH

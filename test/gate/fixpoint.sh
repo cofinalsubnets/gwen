@@ -34,7 +34,7 @@ rm -f "$d"/*.o "$d"/love1 "$d"/love2 "$d"/mooncc1.image
 # ⚠ the list arrives FROM make ($(moon_o), source-derived) and is never globbed out of
 # the odir: a deleted host/*.c leaves its .o sitting there, and a glob relinks the ghost --
 # love1 carrying a TU love2 never compiles, which reads as a broken fixpoint.
-moon0() { "$love0" --wake "$ho/mooncc0.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
+moon0() { "$love0" --wake "$ho/mooncc0.image" -e '(moon-main >>>cmdline)' "$@"; }
 moon0 -pie "$@" -o "$d/love1" || fail "love1 relink"
 
 echo "FIX  $d/love1 rebuilds itself"
@@ -44,7 +44,7 @@ LOVE_NO_IMAGE=1 "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (q
   || fail "love1 bakes mooncc1.image"
 
 # ...and rebuilds every TU with it, in the exact order make links them
-moon1() { "$d/love1" --wake "$d/mooncc1.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
+moon1() { "$d/love1" --wake "$d/mooncc1.image" -e '(moon-main >>>cmdline)' "$@"; }
 # ⚠ love.c's flags must MIRROR make's ($(moon_d)/love.o in host/build.mk), not just its
 # order: -D AI_HAVE_VERSION_H is what puts the version id in this TU, and love1 was linked
 # from make's object. Drop it here and love2 carries "unknown" -- the compare fails at the

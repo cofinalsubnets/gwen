@@ -84,7 +84,7 @@ fi
 "
 
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
-moonrun() { "$m" --wake "$ho/mooncc.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
+moonrun() { "$m" --wake "$ho/mooncc.image" -e '(moon-main >>>cmdline)' "$@"; }
 # the roster read two ways: which kind a number is on, and what its cause says
 kindof() {
   case "$roster_refuses" in *"

@@ -246,7 +246,7 @@ test_seed: host out/host$(hsuf)/seed
 # the kore smokes drive the BAKED image (`--wake kore.image`), ~0.02s vs ~0.75s per spawn
 # over the ~68 tool runs; the argv0-symlink smoke execs the real shim, whose basename-$0
 # dispatch the wake bypasses. the synthetic "kore" argv0 keeps the exit faces unchanged.
-korerun = $m --wake $(ho)/kore.image -e '(: r (kore-main (link "kore" (cuup (cup cmdline)))) (quit (? (charm? r) r 0)))'
+korerun = $m --wake $(ho)/kore.image -e '(: r (kore-main (link "kore" >>>cmdline)) (quit (? (charm? r) r 0)))'
 test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/kore.sh $(ho) $m
 # the install nest, three ways (make / cook / cook+kore PATH lane) -- one shape.
@@ -284,7 +284,7 @@ test_vi: host out/host$(hsuf)/kore.image
 # The C compiler (crew/moon/, doc/moon.md): the pure pipeline's goldens, then stage-0 end
 # to end through the real `mooncc` -- compile, run, exit 42, against a gcc -O0 differential
 # on the same source. Drives the WARM image (~0.68s -> ~0.02s per compile, 88 of them).
-moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main (cuup (cup cmdline)))'
+moonrun = $m --wake $(ho)/mooncc.image -e '(moon-main >>>cmdline)'
 # love0 rides along for the inline-asm checks: templates parse through holo/text.l, whose
 # combinators come off the bare `post` each frontend's boot binds ITSELF, so the bootstrap
 # lane can lose the feature while this one keeps it.

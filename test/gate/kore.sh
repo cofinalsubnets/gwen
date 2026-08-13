@@ -18,7 +18,7 @@ ho=$1
 m=$2
 
 fail() { echo "FAIL $*" >&2; exit 1; }
-korerun() { "$m" --wake "$ho/kore.image" -e '(: r (kore-main (link "kore" (cuup (cup cmdline)))) (quit (? (charm? r) r 0)))' "$@"; }
+korerun() { "$m" --wake "$ho/kore.image" -e '(: r (kore-main (link "kore" >>>cmdline)) (quit (? (charm? r) r 0)))' "$@"; }
 
 g=$ho/.kore-g
 o=$ho/.kore-o

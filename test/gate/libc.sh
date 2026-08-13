@@ -34,7 +34,7 @@ mkdir -p "$d"
 
 fail() { echo "FAIL test_libc: $*" >&2; exit 1; }
 # the compiler under test: the baked mooncc image, woken per invocation
-moonrun() { "$m" --wake "$ho/mooncc.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
+moonrun() { "$m" --wake "$ho/mooncc.image" -e '(moon-main >>>cmdline)' "$@"; }
 
 arch=$(uname -m)
 if [ "$arch" != x86_64 ]; then

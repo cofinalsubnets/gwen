@@ -68,7 +68,7 @@ d=$ho/cc-$arch
 mkdir -p "$d"
 
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
-moonrun() { "$m" --wake "$ho/mooncc.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
+moonrun() { "$m" --wake "$ho/mooncc.image" -e '(moon-main >>>cmdline)' "$@"; }
 
 # $unsupported comes from the case above: the features THIS target has no lane
 # for yet -- refusal is the asserted behaviour, per target, not per gate.
