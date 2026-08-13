@@ -200,7 +200,7 @@ $d/bin/mooncc: $(MAKEFILE_LIST)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
-	   echo 'exec "$$h/$(BIN)" wake "$$h/../lib/love/mooncc.image" -e "(moon-main >>>cmdline)" "$$@"'; } > $@
+	   echo 'exec "$$h/$(BIN)" wake "$$h/../lib/love/mooncc.image" mooncc "$$@"'; } > $@
 	@chmod 755 $@
 $d/lib/love/mooncc.image: $(ho)/mooncc.image
 	$(inst644)

@@ -44,7 +44,7 @@ $(ho)/mooncc: $(ho)/mooncc.image
 	@echo CAT	$(abspath $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
-	   echo 'exec "$$h/love" wake "$$h/mooncc.image" -e "(moon-main >>>cmdline)" "$$@"'; } > $@
+	   echo 'exec "$$h/love" wake "$$h/mooncc.image" mooncc "$$@"'; } > $@
 	@chmod 755 $@
 # seed 🌱 the patch-set vcs, and lush 🐚 the love shell -- also the distro's console shell,
 # whose SEAT in main.l fires on its own basename. Both are catted shebang scripts, PATH

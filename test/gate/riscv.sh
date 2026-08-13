@@ -15,7 +15,7 @@ ho=$1
 m=$2
 
 fail() { echo "FAIL $*" >&2; exit 1; }
-moonrun() { "$m" wake "$ho/mooncc.image" -e '(moon-main >>>cmdline)' "$@"; }
+moonrun() { "$m" wake "$ho/mooncc.image" mooncc "$@"; }
 
 echo "RISCV test/cc battery (mooncc -t riscv64 vs native x64, under qemu-riscv64)"
 if ! command -v qemu-riscv64 > /dev/null 2>&1 || [ "$(uname -m)" != x86_64 ]; then

@@ -284,7 +284,7 @@ test_vi: host out/host$(hsuf)/kore.image
 # The C compiler (crew/moon/, doc/moon.md): the pure pipeline's goldens, then stage-0 end
 # to end through the real `mooncc` -- compile, run, exit 42, against a gcc -O0 differential
 # on the same source. Drives the WARM image (~0.68s -> ~0.02s per compile, 88 of them).
-moonrun = $m wake $(ho)/mooncc.image -e '(moon-main >>>cmdline)'
+moonrun = $m wake $(ho)/mooncc.image mooncc
 # love0 rides along for the inline-asm checks: templates parse through holo/text.l, whose
 # combinators come off the bare `post` each frontend's boot binds ITSELF, so the bootstrap
 # lane can lose the feature while this one keeps it.

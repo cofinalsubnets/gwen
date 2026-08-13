@@ -28,7 +28,7 @@ The cost of the split shows up as invocation patterns. Fifteen-odd gate scripts 
 hand-rolled `moonrun()`/`korerun()`:
 
 ```sh
-moonrun() { "$m" wake "$ho/mooncc.image" -e '(moon-main (cuup (cup cmdline)))' "$@"; }
+moonrun() { "$m" wake "$ho/mooncc.image" mooncc "$@"; }
 korerun() { "$m" wake "$ho/kore.image" -e '(: r (kore-main (link "kore" (cuup (cup cmdline)))) (quit (? (charm? r) r 0)))' "$@"; }
 ```
 

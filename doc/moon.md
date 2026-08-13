@@ -269,7 +269,7 @@ exists anywhere.
 
 `make install` does not ship the cat as `bin/mooncc`. The compiler bakes WARM into
 `lib/love/mooncc.image` (the live bake nif, doc/snapshot.md) and `bin/mooncc` is a three-line sh
-shim: `love wake mooncc.image -e "(moon-main (cuup (cup cmdline)))" "$@"`. The whole-cat
+shim: `love wake mooncc.image mooncc "$@"`. The whole-cat
 re-eval every compile would otherwise pay (~1.5 s wall) is paid once, at bake — a small-file
 compile drops from ~0.77 s to ~0.02 s, gcc-class invocation latency.
 

@@ -44,7 +44,7 @@ d=$ho/ulpgate            # NOT $ho/ulp -- that name is `make ulp`'s binary
 mkdir -p "$d"
 
 fail() { echo "FAIL test_ulp: $*" >&2; exit 1; }
-moonrun() { "$m" wake "$ho/mooncc.image" -e '(moon-main >>>cmdline)' "$@"; }
+moonrun() { "$m" wake "$ho/mooncc.image" mooncc "$@"; }
 
 arch=$(uname -m)
 if [ "$arch" != x86_64 ]; then

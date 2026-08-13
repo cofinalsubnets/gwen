@@ -716,7 +716,12 @@
 ; mooncc is its OWN app (its own catted shebang script, doc/moon.md): it does NOT ride the
 ; au multi-call cat, so a cc edit rebuilds only mooncc, never au. matching mooncc/moon.l here
 ; keeps the seat quiet under any other program name.
-(: (bn p) (: n (tally p)
+; and the VERB, pinned HERE rather than by whoever cats this file: the app owns its own
+; name, so every image carrying moon.l answers `love mooncc ..` and the baked mooncc.image
+; is a compiler without an `-e` shim to make it one. FN takes the args after the name and
+; answers a status charm -- moon-main quits instead, which is the same contract kept early.
+(: _ (pins (from 'verbs 'tab) 'mooncc moon-main)
+   (bn p) (: n (tally p)
              (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
    (me? w) (: b (bn w) ((b = "mooncc") || (b = "mooncc.l") || (b = "moon.l")))

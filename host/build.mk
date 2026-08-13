@@ -166,7 +166,7 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # liblove.a/.so lane, since a shared object wants PIC codegen and a dynamic section holo
 # does not lay. STATIC=1 keeps the musl-cc link below; the raw default is already fully
 # static, so that flavor is opt-in. One link rule, two names -- `love` and the candidate.
-moon0 = $(love0) wake out/host/mooncc0.image -e '(moon-main >>>cmdline)' $(GCDBG)
+moon0 = $(love0) wake out/host/mooncc0.image mooncc $(GCDBG)
 moon_d = $(ho)/moon
 moon_host_o = $(patsubst host/%.c,$(moon_d)/host_%.o,$(wildcard host/*.c))
 moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
