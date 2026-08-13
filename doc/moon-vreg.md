@@ -513,6 +513,27 @@ time. It has to come from SUBSUMPTION: a name that is loop-kept today must inste
 interval seat from the assignment, so the keep has no customer left. Until the assignment can
 carry what they carry, the 51 lines are load-bearing and stay.
 
+**and the customer census says what subsumption has to BE** (love.c/x64, 165 distinct kept
+names): 59 (36%) are denied a home by the `1 + nx9` term, 49 (30%) by the `tc <= 2` floor, 47
+(28%) WERE cs candidates and lost to capacity or rank, 10 (6%) never reached `lpick` — and
+**zero are element pins**, so the array leg has no loop-keep customer at all here.
+
+⚠ **the two residencies price differently, and that is why one cannot simply replace the
+other.** A home is FUNCTION-scoped on a callee-saved register and costs a save/restore pair per
+invocation. A keep is LOOP-scoped on a caller-saved pool register and costs nothing per
+invocation — it only has to survive the back edge. So the 108 names the cs gates turn away are
+turned away CORRECTLY: a whole-function seat really is a bad deal for a name with few total
+touches, and the keep is the right instrument for it. They are not substitutes competing for
+one job; they are two prices, and each class picks the cheaper.
+
+So subsumption is not "make these names home". It is **the assignment learning to grant a POOL
+register over a LOOP-scoped interval** — reproducing exactly what the keep buys, but decided
+once from alive's data instead of by memo plus per-edge verification. What retires then is the
+optimism apparatus (`lochk`/`lomiss`/`lobar` and the regen retry attempts, which is also where
+the compile time is), not the residency itself. The remaining 47 are the other half — genuine
+capacity pressure on a four-register file, which is the interval-sharing case the span census
+priced at +147 names.
+
 **The census (love.c, all four targets, 2026-08-12)** — demand is call-crossing names and their
 loop-weighted reads; supply is the callee-saved file minus frame base, sp and the callr park:
 
