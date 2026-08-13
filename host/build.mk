@@ -251,7 +251,13 @@ $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/love_da
 else
 # ⚠ the nolibc sources are a dep of the LINK, not of any object: the driver compiles
 # the members it pulls, so an edit there changes this binary with no .o to notice.
-nolibc_src = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h)
+# ⚠ AND THE TREE IS TWO DEEP since it went one-function-to-a-file -- all but a handful
+# sit under ctype/ dirent/ env/ fmt/ mem/ net/ stdio/ sys/ .., so a one-level glob names
+# five of them and every libc edit that matters relinks NOTHING. It reads as an
+# up-to-date binary carrying the code from before the edit. (mk/install.mk's moon_srcs
+# is the same glob for the same reason -- keep the two in step.)
+nolibc_src = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
+                        crew/moon/lib/nolibc/*/*.c crew/moon/lib/nolibc/*/*.h)
 $(ho)/love $(ho)/love.cand: $(moon_o) $(nolibc_src)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)

@@ -80,7 +80,8 @@ moon_hdrs = $(wildcard crew/moon/include/*.h crew/moon/include/*/*.h)
 # installs core.c alone. that reads as a working nest right up to the link -- mhome
 # finds its root by core.c and then owes every member the glob left behind.
 moon_srcs = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
-                       crew/moon/lib/nolibc/*/*.c crew/moon/lib/math/*.c)
+                       crew/moon/lib/nolibc/*/*.c crew/moon/lib/nolibc/*/*.h \
+                       crew/moon/lib/math/*.c)
 installs += $(patsubst crew/moon/%,$d/lib/love/moon/%,$(moon_hdrs) $(moon_srcs))
 $d/lib/love/moon/include/%: crew/moon/include/%
 	$(inst644)
