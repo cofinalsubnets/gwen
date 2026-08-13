@@ -144,6 +144,108 @@ the ceiling is the ~4× the probe measured, and the gap to it is this bucket. St
 CALL reloc (once allocating ops are covered — same appendix), and multi-op segments that
 cross a control op (the segment ends where the straight line does, the run-fusion law).
 
+## the splice JIT and the moon arc — one boundary, aligned
+
+⚠ **the splice JIT is not a second consumer of this arc's output; it is the same problem one
+abstraction level up, and `doc/hom.md` already says so.** The VM's threaded code is
+Hom(−,R) with R = `Sp[0]`: every op body ends by delivering its value into the stack cell and the
+next op reads it back. That is exactly gen.l's own historical protocol — every expression delivers
+into r0 and the consumer relocates — which the destination die exists to retire. The composed body
+pays the representative-object bridge at every op seam for the same reason gen.l paid it at every
+expression seam. `sl-cross` (test/uuspllaw.l) already proves the two machines are one design; this
+is that theorem's engineering face.
+
+**Where the information passes.** The composed body (`bench/vmsplice/compose.l`) is ONE C function
+over one base with constant offsets, and love.h already declares that base non-aliasing:
+
+```c
+#define _lvm(n, ...) struct ai *n(struct ai *restrict g, union u *Ip, ai_word *Hp, ai_word *restrict Sp, ...)
+```
+
+⚠ so the promise the JIT would want to make is **already in the source, and mooncc throws it
+away**: `parse.l`'s `pquals` skips `restrict` at the token level ("cc keeps no linkage/qualifier
+state"), so `gen.l` never learns it. That is the boundary — not a new channel to build, an
+existing one that is closed.
+
+**The measured seam, reproduced in ten lines** (2026-08-13). Four `Sp[0] = f(Sp[0])` statements:
+
+| | instructions | the dependent path |
+|---|---|---|
+| mooncc before | 13 | `mov %rax,(%r11)` / `mov (%r11),%rax` — **four full round trips** |
+| cc -O2 | 7 | one load, one store, everything else in registers |
+| **mooncc after (below)** | **11** | **register-to-register: add, imul, add, imul** |
+
+That is the `0.83×` row in "the splice client" above — the composed body running SLOWER than
+dispatch where cc gets 1.91× — isolated to a file you can read in one breath.
+
+### rung S-1 — `stldp`, the adjacent pair on any base — LANDED 2026-08-13
+
+`stld` folds a store followed by a load of the same slot, and its own comment already carries the
+law: *"only the pair with nothing between is aliasing-proof"*. ⚠ **it needed no aliasing story and
+was asking for one anyway** — both lanes gate the base on `r4`, the frame. A store to an address
+immediately followed by a load from that same address yields the stored value whatever else may
+alias it, because nothing runs in between. `stldp` is that pass over any base BUT `r4` (r4 stays
+with the existing lanes, so the slot map, `stldkeep` and the epilogue anchors cannot move).
+
+Twelve lines. love.c `.text` −20 B, corpus **−1,509 dynamic instructions** (five runs, range
+disjoint from the baseline's), `test_fixpoint` byte-identical, `test_moon` green including its own
+`stld` residency law, `test_slow` seven zz-fin lines. The client it was built for gets its whole
+interior reload chain back.
+
+⚠ **and it is an x64 win ONLY, which the size columns hid.** arm64 and riscv64 `.text` did not
+move — not because the pass is neutral there but because **it never sees an `st` form at all**: a
+print at `stldp`'s store test fires on x64 and is silent on arm64 for the same probe, whose arm64
+emission still carries every `str`/`ldr` round trip. So the seam the splice JIT pays is untouched
+on three of four targets. ⚠ this is the tree's own "a guard that hides a target also hides the bugs
+that target would have caught" wearing a quieter face — there is no guard here, the pass simply
+finds nothing, and a size delta of zero reads identically to a pass that ran and had no work.
+**Rung S-1b: find where the arm/riscv pipeline puts those pairs and reach them.** Do not quote
+S-1's number as a cross-target result.
+
+### the ladder they share
+
+The two plans converge on ONE primitive, and it was already ladder step 4 for an unrelated reason:
+**residency keyed by LOCATION — (base, offset, width) — under a base whose aliasing is known.**
+
+* the array leg already does this at one indirection: a `vuarr` local's element is a static frame
+  slot, recovered by `aeoff` parsing digits back out of a minted `"x[3]"` key.
+* a `restrict` pointer parameter is the SAME fact one indirection out: `Sp[k]` at constant k is a
+  static location under a base nothing else may touch.
+* under a location key, frame slots, array elements and restrict-base cells stop being three
+  mechanisms with three key spaces and become one.
+
+So the shared ladder, in dependency order:
+
+1. **S-1, `stldp`** — landed above. Needs nothing from either plan; pays both.
+2. **class the vmap entry** (moon ladder step 1) — a `restrict` base becomes a residency class
+   beside pool/cs/rostered/home, which is what lets a cell under it be PINNED rather than merely
+   forwarded pairwise.
+3. **`restrict` survives the parser** — the one frontend change, and the only place the JIT's
+   knowledge has to travel. It buys the half `stldp` cannot: **dead interior stores**. In the ten
+   line probe four stores remain and three are dead; only an alias promise retires them.
+4. **location keys** (moon ladder step 4) — folds the array leg and the restrict-base cells into
+   one residency, and is what makes 2+3 sayable rather than special-cased.
+5. **the die reaches the seam** — with `Sp[0]` holdable across an op boundary, an interior seam
+   emits no traffic at all: op i delivers where op i+1 wants it, hom.md's "no relocation" at the
+   thread level. Only a body exit must materialize.
+
+⚠ **and the exits are the same law the flush census already found.** A spliced body's deopt-to-twin
+and nif-cell epilogue are foreign edges: residency ends there, exactly as it ends at a `case` or a
+switch join. The JIT's run-fusion law ("the segment ends where the straight line does") and moon's
+residency-class boundary are the same boundary said twice.
+
+### what moon gets back
+
+* **a gauge the corpus cannot give.** A composed body is a pure dependent chain of store→load
+  seams — it isolates lever 2 with nothing else in it, where `spec.l` averages the effect away to
+  four digits. `bench/vmsplice/check.l` already times it against its interp twin.
+* **a second SHAPE of C.** love.c is hand-written; composed bodies are machine-generated,
+  straight-line, one base, no locals. ⚠ this is the A-2 lesson as an instrument — the op census
+  that was short by one was read off love.c alone, and a corpus with different physics is what
+  catches that class.
+* **a client whose win is WALL CLOCK at flat-ish insn counts**, which is the reading the a64 loop
+  borrow verdict is still owed an instrument for.
+
 ## the physics — what prices a lever here
 
 Learned by measuring, several times each; check a new lever against these before building:
@@ -372,6 +474,10 @@ That is what the two big rows above are:
 **Together, 339 of 514 pin kills — 66% — are one missing field.**
 
 ### the ladder, in order
+
+⚠ this ladder and the splice JIT's converge — see "the splice JIT and the moon arc" above. Steps 1
+and 4 here are steps 2 and 4 there, and `restrict` surviving the parser is the one frontend change
+that only the JIT's side asks for. Do not sequence them separately.
 
 1. **give the vmap entry its class** (next). Then `vmcflush` = drop the pool class, a loop head =
    drop the loop class, `rgreset` = drop all (honest — a new function), `case`/switch-join = drop
@@ -859,6 +965,20 @@ The `fcb` narrowing that came out of the census was sound (snapshot the map befo
 int-flavored emission, restore it rather than flush to nothing — misses 81 → 69) and still lost:
 +8/+12/+8 bytes on x64/arm64/riscv64, dynamically and compile-time neutral. Capacity, not
 correctness — a preserved pin holds a register out of the pool for the rest of the loop.
+
+**2026-08-13 — rung S-1: `stldp`, and the splice JIT's seam.** `stld` folds a store followed by a
+load of the same slot and its own comment already carried the law — *"only the pair with nothing
+between is aliasing-proof"* — while both lanes gated the base on `r4`. ⚠ **the adjacent pair needs
+no aliasing story and was asking for one anyway.** `stldp` runs it over any base but `r4` (r4 stays
+with the existing lanes, so the slot map, `stldkeep` and the epilogue anchors cannot move). Twelve
+lines. love.c `.text` −20 B, corpus **−1,509 dynamic insns** (five runs, range disjoint from
+baseline), arm64/riscv64/thumb2 unmoved, test_fixpoint byte-identical, test_moon green including
+its own `stld` law. The client is the splice JIT: a composed body writes `Sp[0]` at every op
+boundary and the next op reads it, and that chain was why the composed body ran at 0.83× — SLOWER
+than dispatch — where cc gets 1.91×. Reproduced in a ten-line probe; the interior reloads are now
+gone and the dependent path is register-to-register. ⚠ what `stldp` cannot reach is the dead
+interior STORES, and those need the alias promise love.h already makes (`ai_word *restrict Sp`)
+and `parse.l` discards at the token level. That is the shared ladder's one frontend step.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) — each a

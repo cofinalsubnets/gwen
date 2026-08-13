@@ -128,6 +128,12 @@ the cbranch compare, the call's arg seats, the bin value park (doc/moon-regalloc
 lever 2 and the rung ledger) — closing the emission side; what remains of the die
 rides the allocator leg. The gap the rungs close is scored in doc/moon-diff.md.
 
+⚠ **and the two machines meet in engineering, not only in `sl-cross`.** A spliced VM body is
+Hom(−,R) with R = `Sp[0]`: each op delivers into the stack cell and the next reads it back, which
+is gen.l's own r0 protocol one level up. So the splice JIT's op seam and the destination die's
+expression seam are one bridge, and closing it is one ladder — doc/moon-regalloc.md, "the splice
+JIT and the moon arc".
+
 The literature calls the register-machine face *destination-driven code generation*
 (Dybvig & Burger, 1990). The runnable model — both protocols over one AST, the
 before/after shapes law-pinned — is doc/proto/dest.l, gated by test_doc. The plan for
