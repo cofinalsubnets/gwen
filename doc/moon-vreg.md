@@ -347,6 +347,74 @@ liveness read at the vrfix seam, not a new analysis.
   probably is, since these targets start from no allocator at all — which is exactly why it needs
   the instrument above and not an argument from first principles.
 
+## iv proper — the interval allocator, and the census that priced it
+
+iv-b's refusal is the whole argument for this shape: every mechanism the arc has tried buys
+residency **at the call**, and by then the value already sits in a caller-saved register, so
+the purchase is a copy. An interval allocator buys **at birth** — the value is born in the
+callee-saved register and there is no copy to fold. That is the only place the physics differ.
+
+**The substrate is already here.** 5.1a's mints + `vrfix` broke the "register known at emission
+time" constraint, which was the hard part. `alive` is already an interval analysis: a backward
+statement-grain walk over exactly the right universe, loops handled by seeding with everything
+the loop reads (no fixpoint), computed once per fn — it just DISCARDS most of its answer, since
+`rec` records a statement only when `ncl >= 1`. Recording every statement is one guard removed
+from a walk that already computes the numbers. And write-through is a free spill fallback: an
+interval that gets no register reads and writes its slot, which is today's code.
+
+* **phase 1 — the named vreg.** A universe local gets a mint at its declaration; reads answer it
+  with zero forms, writes define it, the slot store stays. Structural residency instead of a
+  memo, so the whole loop-keep apparatus (`lokeep`/`lochk`/`lomig`/`loseed`/`lomt`, the edge
+  verification and its retry bars) has no job: a mint spans a back edge by construction where a
+  memo had to prove it survived. ⚠ the content-collision trap dies here too — a mint is bound at
+  the declaration site, so a spliced callee's `n` gets its own and the miscompile above is
+  unspellable.
+* **phase 2 — assignment, the prize.** Endpoints for named vregs from alive's statement grain,
+  mapped to form indices through the statement tick that already runs in lock-step (the
+  numbering guard exists); temporaries keep today's per-statement pool, which is already correct
+  and cheap. Linear scan, with call-crossing intervals eligible for the callee-saved file; a
+  taken register joins `cssv` + the epilogue pin exactly as the regen's grant does, and `cskeep`
+  verifies every exit. Unassigned → slot, i.e. today.
+* **phase 3 — retirement, in dependency order.** vmap pins + array leg, then loop keeps + `saro`
+  + `csbor`/`csbu`, then homes/rides/`pp`/`pcs` as params become pre-coloured intervals, and the
+  regen dance LAST — it exists to price the mechanisms above it, and killing it is what returns
+  the compile-time budget (roughly 200 mentions of vmap machinery and 180 of homes/rides/regen).
+* **phase 4 — 5.4.** One mechanism instead of five, so write-through can invert: stores placed
+  at real spill points and the def-store bucket dies.
+
+⚠ **the compile-time law for this arc**: intervals come from `alive` (once per fn), never from a
+form-grain fixpoint in the build tail, which is paid per regen attempt. The +78% that shipped
+unwatched and the +92% measured at step i are the same trap twice.
+
+**The census (love.c, all four targets, 2026-08-12)** — demand is call-crossing names and their
+loop-weighted reads; supply is the callee-saved file minus frame base, sp and the callr park:
+
+| target | fns w/ crossings | crossing names | weighted reads on them | file | fns where all fit |
+|---|---|---|---|---|---|
+| x64 | 543 | 2,648 | 102,601 of 106,081 (97%) | 4 | 338 (62%) |
+| arm64 | 544 | 2,654 | 104,189 of 108,107 (96%) | 10 | 505 (93%) |
+| riscv64 | 301 | 1,095 | 66,688 of 69,504 (96%) | 11 | 286 (95%) |
+| thumb2 | 299 | 1,074 | 64,784 of 66,952 (97%) | 7 | 263 (88%) |
+
+Three readings. (1) **Nearly all residency traffic is call-crossing** — ~97% of loop-weighted
+reads sit on names that cross at least one call, so this is not a niche class, it is the class.
+(2) **The file is entirely idle**: the supply column is the same in EVERY function of a target,
+because pass 1 never touches a callee-saved register and `cspool` is empty on every arm and
+riscv target — the residency machinery has never offered a seat there at all. (3) **Demand is
+identical on x64 and arm64 and the supply is 2.5×**, which decides the order: build phase 2
+against **arm64 first**, where 93% of functions can hold every crossing name at once against
+x64's 62%, and where nothing competes for the registers.
+
+⚠ riscv64 and thumb2 read low only because `nhome` is 0 there — params are never homed, so their
+universes are locals-only. Their demand is understated by exactly the parameters, and phase 3's
+pre-coloured arrivals would be the first param residency those backends ever get.
+
+⚠ phase 1 alone will likely be FLAT on codegen: it replaces a memo with a structure and keeps
+write-through. Under the standing ship gate ("pays somewhere, regresses nowhere") flat does not
+land, so phase 1 needs an explicit consolidation gate — flat-or-better codegen, no compile-time
+regression, N mechanisms deleted — or it must be bundled with phase 2. Decide that BEFORE
+building, not after; iv-b is what the other order looks like.
+
 ## why this rung and not another patch
 
 The call-crossing class — **44.5% of the frame bucket**, the largest single lever — was built on

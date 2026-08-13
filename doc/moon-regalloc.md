@@ -253,7 +253,11 @@ Learned by measuring, several times each; check a new lever against these before
    crossings are never read again, the flush cannot tell them from the 454 that are,
    and a seat bought mid-function is a copy. The loop crossings above are the whole
    prize; the rest waits on a value BORN callee-saved, which needs the vmap retired,
-   not extended. Do not rebuild it.
+   not extended. Do not rebuild it. THE CENSUS THAT PRICES THE REPLACEMENT ran the
+   same day (the ledger): ~97% of loop-weighted reads are on call-crossing names, the
+   callee-saved file is idle in every function of every target, and arm64 holds every
+   crossing name at once in 93% of fns against x64's 62% — so iv's assignment gets
+   built against **arm64 first**. doc/moon-vreg.md carries the four-phase plan.
 3. **Compare staging want-hints** — HELD for the allocator. Landed for the call-free
    side 2026-08-10: cbranch's left aims at its park before evaluating, so member loads
    deliver and the bridge mov dies. What remains is the callish side (the sp cell across
@@ -1261,6 +1265,21 @@ of `env` at a call inside an inline splice is the CALLEE's slot** — vmap names
 content, a spliced parameter `n` shadowed the pin's `n`, the reload took the argument's cell,
 and `p0chars` looped `n*3` times into its own `ud2`. `vmget` blinds itself on `g 'inlbody`
 for exactly this; anything resolving a slot for a pin owes the same blind.
+
+2026-08-12 · THE CALL-CROSSING CENSUS — what iv proper is worth, and on which target FIRST
+(love.c, four targets; doc/moon-vreg.md carries the table and the phase plan). Demand:
+**~97% of loop-weighted reads sit on names that cross at least one call** on every target —
+this is not a niche class, it is the class. x64 543 fns / 2,648 crossing names, arm64 544 /
+2,654 — the same program, so the same demand. Supply: **the callee-saved file is entirely
+idle**, and the number is identical in EVERY function of a target (pass 1 never touches a cs
+register, and `cspool` is empty on every arm and riscv target — the residency machinery has
+never offered a seat there at all): 4 usable on x64, 10 arm64, 11 riscv64, 7 thumb2. Fit:
+every crossing name of a function holds simultaneously in 505 of 544 fns on arm64 (93%)
+against 338 of 543 on x64 (62%). **So build the interval allocator's assignment against arm64
+first** — identical demand, 2.5× the file, and nothing competing for it. ⚠ riscv64/thumb2 read
+low only because `nhome` is 0 there (params are never homed), so their universes are
+locals-only and their demand is understated by exactly the parameters — pre-coloured arrivals
+would be the first param residency those backends ever get.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build),
