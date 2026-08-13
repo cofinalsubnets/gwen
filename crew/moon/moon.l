@@ -251,7 +251,8 @@
        _ (? (okv? ps) () (ccdie ps src ("cc: parse error in " + src)))
        ps)
    ; the parser's static/section tablets, threaded to the gen as one list
-   (pxtra ps) `((el ps 5) (el ps 6) (el ps 7) (el ps 8) (el ps 9) (el ps 10) (el ps 11) (el ps 12))   ; sfns svars sects aliases aligns AINLS NOINLS CONSTS
+   (pxtra ps) `((el ps 5) (el ps 6) (el ps 7) (el ps 8) (el ps 9) (el ps 10) (el ps 11) (el ps 12)
+                (el ps 13))   ; sfns svars sects aliases aligns AINLS NOINLS CONSTS RSTRS
    ; a relocatable object: text/data/.bss/ai_nifs/.image sections + symbols + relocations
    ; -- the bytes (`-c` writes them; the link path feeds them to ldlink).
    ; both targets: obj.l picks the reloc vocabulary by tgt.

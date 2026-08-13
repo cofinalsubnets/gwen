@@ -8208,6 +8208,11 @@
            'alias (? (two? xtra && 3 < tally xtra) (nthr xtra 3) #())
            'aligns (? (two? xtra && 4 < tally xtra) (nthr xtra 4) #())
            'consts (? (two? xtra && 7 < tally xtra) (nthr xtra 7) #())
+           ; the parser's restrict roster, fn name -> its `T *restrict` param names: an ALIAS
+           ; PROMISE, which is why it rides beside the AST instead of in the type -- and the
+           ; type tree has never carried a qualifier node. ⚠ nothing reads it yet: the consumer
+           ; is the interior-store elision at a splice seam (THE LADDER step 7)
+           'rstrs (? (two? xtra && 8 < tally xtra) (nthr xtra 8) #())
            'xfns ()                                  ; (secname forms) per fn that named a section, newest first
            'romemo #())                              ; a const candidate's image, laid once and read by both walks
        ; pass 0: every function name -- so a bare use of one is its address (la). the sig table

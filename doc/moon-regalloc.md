@@ -511,7 +511,7 @@ file real on arm64, riscv, thumb2) · 5.0/5.1a/5.1b i–iii.
 | # | step | serves | what the program gets to SAY | gate |
 |---|---|---|---|---|
 | 1 | **class the vmap entry** — LANDED 2026-08-13 | both | *pool residency ends here* — instead of 29 sites each reaching for flush-everything | byte-identity where the class verb provably equals the flush it replaces; dynamic floor where not |
-| 2 | **`restrict` survives the parser** | splice first | *this base is unaliased* — the promise `love.h` already makes on `Sp` and `pquals` discards | the ten-line seam probe loses its dead interior stores; `test_fixpoint` |
+| 2 | **`restrict` survives the parser** — phase A LANDED 2026-08-13 | splice first | *this base is unaliased* — the promise `love.h` already makes on `Sp` and `pquals` discards | phase A: the roster exists, byte-identity. phase B: the ten-line seam probe loses its dead interior stores; `test_fixpoint` |
 | 3 | **`fcb` gets rollback** — LANDED 2026-08-13 | moon | *discard the emission, keep what predates it* — a transaction, not a clobber | misses 81→69 reproduced; text delta owned by step 5, not by this verb |
 | 4 | **S-1b — reach the arm/riscv pipeline** | both | that `stldp` has *work* on three targets where it silently finds none | a store print that fires on all four targets; the seam probe folds on each |
 | 5 | **residency priced as extent × class × reload** — phase A LANDED 2026-08-13 | both | *why* a value lives where it lives, once, instead of seven gate stacks with stale proxies | phase A: byte-identity, the cost side in one table. phase B: corpus dynamic, mechanism count DOWN |
@@ -1111,6 +1111,30 @@ it needs the extents to carry their own frame, which is a phase-B question.
 ⚠ **one inconsistency surfaced and is left standing, deliberately**: the two loop gates grant at a
 TIE (`nc <= reads`), the four others demand a strict win. Phase A preserves both — hence two
 testers where there should be one — and names it. Settling it moves verdicts, so it is phase B's.
+
+**2026-08-13 — THE LADDER step 2, phase A: the promise survives the parser.** `pquals` drops the
+qualifier run at the token level, so `love.h`'s `ai_word *restrict Sp` reached the codegen as a
+plain pointer. It now rides out of band: fn name → its restrict param names, scraped where the run
+is dropped and filed under the function. **243 of love.c's functions carry one; `lvm_add` records
+`("g" "Sp")`, exactly what `love.h` promises.** Byte-identical ×4 — nothing reads it yet.
+
+⚠ **the fact deliberately does NOT go in the type.** clay already has a `(restrict t)` node and a
+law that it qualifies only pointers, so that looked like the obvious home — but clay's own header
+says `(const t)` is a form *with no cparse counterpart*: **the compiler's type tree has never
+carried a qualifier node at all.** Introducing one would put an unfamiliar shape in front of 56
+`'ptr`/`ptr?` dispatch sites in gen.l and break clay's G1 round-trip. `weaks` is the precedent end
+to end (scraped in parse.l, carried on `ps`, handed to `cgen`), and `pxtra` was already a bag of
+eight tablets, so a ninth cost no signature change — gen's unpack is length-guarded, so callers
+passing eight still work.
+
+⚠ **keyed per FUNCTION, which is the one place the `weaks` precedent does not transfer**: weaks is
+global, restrict is not. A bare name set would promise no-alias about a `p` that is restrict in one
+function and plain in the next. ⚠ and only a qualifier run FOLLOWING a star counts — restrict
+qualifies the pointer, not the pointee.
+
+⚠ **left unresolved, named at the site, and phase B's to settle before it consumes**: block-scope
+shadowing. Two blocks in one function may declare the same name, one restrict and one not, and the
+roster would over-promise. Phase A cannot be wrong about it; a consumer can.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) — each a
