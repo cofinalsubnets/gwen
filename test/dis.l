@@ -17,7 +17,8 @@
 ; leak, so dis is absent there. the guard skips rather than fail (the uu/glaze idiom) --
 ; and every `dis` reference sits INLINE under the guard, since a HELPER that closes over
 ; an absent global scares at load even when never called (only a direct reference defers).
-(: (dis-fin? r) (: h (cap r) (? (id? h 'lvm_ret) 1 (id? h 'lvm_tap) 1 (id? h 'lvm_tapn) 1 0))
+(: (dis-fin? r) (: h (cap r) (? (id? h 'lvm_ret) 1 (id? h 'lvm_ret0) 1 (id? h 'lvm_tap) 1
+                                (id? h 'lvm_tapn) 1 0))
    (dis-wf? rows) (? (atom? rows) 0                      ; a non-empty row list ...
     (: (walk l) (? (atom? (cup l)) (dis-fin? (caap l))   ; ... whose last row's head is a ret-family nom
                    (&& (nom? (caap l)) (walk (cup l))))    ; ... and every earlier head is an op nom
@@ -30,6 +31,12 @@
    (di-pr x) (two? (cup x))
    (di-seq x) (: z (cup x) (cap z))
    (di-2 x y) (cup (cap x))
+   ; ⚠ the NIF lane, which no closure above reaches -- both shapes, {impl, ret0} and
+   ; {cur, n, impl, ret0}. the LENGTH is the law: a run is two cells or four, so cur + impl +
+   ; ret0 is every row a nif can have. neither dis-okr nor dis-wf? alone can see an overrun --
+   ; it reads the NEXT run as more rows and answers a perfectly well-formed 127-row lie.
+   (dis-nifs f l) (? (atom? l) 1
+    (: r (f <l) (&& (dis-wf? r) (&& (>= 3 (tally r)) (dis-nifs f >l)))))
    ; ⚠ assert is `_`-bound with a trailing () body, NOT the bare tail of this `:`: an
    ; assert in tail position resolves its names eagerly, and love0 (no `dis`) scares
    ; before the runtime guard can skip. as a sequence step the guard defers as intended.
@@ -39,6 +46,7 @@
     (? (member? 'dis (names ()))
        (&& (dis-okr (dis di-k1)) (&& (dis-okr (dis di-k4)) (&& (dis-okr (dis di-pr))
        (&& (dis-okr (dis di-seq)) (&& (dis-okr (dis di-2))
-       (&& (id? () (dis 5)) (id? () (dis ()))))))))     ; an atom is no thread -> ()
+       (&& (dis-nifs dis [cap cup tally sat mint snip peep])
+       (&& (id? () (dis 5)) (id? () (dis ())))))))))    ; an atom is no thread -> ()
        1))
    ())
