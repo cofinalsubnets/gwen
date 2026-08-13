@@ -562,6 +562,34 @@ run-to-run spread — so there is one stdin lane again, not two.
 which rung 2 also had and neither rung explains. That is its own rung, and it wants `perf` before
 it wants a patch.
 
+**4 — the per-byte promise. NOT STARTED; here is the `perf` it asked for.** Re-measured on a
+1,021,645-byte corpus, both loves baked:
+
+| door | absolute | over the file door |
+|---|---|---|
+| `love f.l` | 32,484,675,263 | — |
+| `love < f.l` | 33,415,991,237 | +931 M (+2.87%, 912 ins/byte) |
+| `cat f.l \| love` | 33,416,129,526 | +931 M — **0.0004% off the redirect** |
+
+So rung 3 holds: there is one stdin lane, not two, and it stays one. The gap per byte is a little
+above rung 3's 717 because the corpus grew; it is the same cost.
+
+⚠ **THERE IS NO HOTSPOT, AND THAT IS THE FINDING.** A profile of both doors over the same corpus
+puts the same VM ops at the same shares — no io routine appears on the pipe side at all. The whole
++2.87% is spread, and what moves is the shape of the spread:
+
+| what moves | file | pipe |
+|---|---|---|
+| kernel time | 0.00% | 0.83% |
+| `evac_data` + `evac_thread` (the collector COPYING) | 0.50% | 0.87% |
+| `lvm_litp`, `lvm_ret`, `lvm_eq`, `lvm_aa`, `lvm_add` | — | each +0.25..0.45 |
+
+The collector copying more, plus a flat tax on every op, is one promise per byte living long enough
+to be a major's problem — measurement 2's conclusion arriving by the other instrument. It is not a
+routine to optimise, so there is nothing here a patch can aim at: closing it means not building the
+structure, which is the position door part IV already named, and the deliberate reach that section
+flags. Do not read this rung as cheap because no hotspot was found.
+
 ### what must not be repeated
 
 Rung 9 (`65359706`) did a version of this, went green on `test_slow` at −5.2% instructions, and was
