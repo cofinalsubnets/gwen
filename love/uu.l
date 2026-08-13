@@ -92,7 +92,7 @@
          (['paths A a b] + _)          ['paths (vof en A) (vof en a) (vof en b)]
          (['idpath a] + _)             ['refl (vof en a)]
          (['the T tm] + _)             (vof en tm)
-         (['let x a b] + _)            (vof (link [x (vof en a)] en) b)
+         (['let x a b] + _)            (vof ([x (vof en a)] >< en) b)
          (['nat_rect P z s n] + _)     (donr (vof en P) (vof en z) (vof en s) (vof en n))
          (['bool_rect P x y b] + _)    (dobr (vof en P) (vof en x) (vof en y) (vof en b))
          (['unit_rect P u x] + _)      (dour (vof en P) (vof en u) (vof en x))
@@ -108,27 +108,27 @@
 
    (conv d a b)
    (? (id? a b) 1                    ; the same heap object converts to itself:
-      (&& (charm? a) (charm? b)) (a = b) ; O(1) across the shared neutral towers
-      (&& (nom? a) (nom? b)) (id? a b)
-      (|| (id? <a 'lam) (id? <b 'lam))
+      (charm? a && charm? b) (a = b)     ; O(1) across the shared neutral towers
+      (nom? a && nom? b) (id? a b)
+      (id? <a 'lam || id? <b 'lam)
       (: fr ['nv d] (conv (d + 1) (vapp a fr) (vapp b fr)))
-      (&& (id? <a 'chain) (two? b) !(id? <b 'chain))
-      (&& (conv d <>a (dop1 b)) (conv d <>>a (dop2 b)))
-      (&& (id? <b 'chain) (two? a) !(id? <a 'chain))
-      (&& (conv d (dop1 a) <>b) (conv d (dop2 a) <>>b))
-      (&& (id? <a 'pi) (id? <b 'pi))
-      (&& (conv d <>a <>b)
-          (: fr ['nv d] (conv (d + 1) (capp <>>a fr) (capp <>>b fr))))
-      (&& (id? <a 'sig) (id? <b 'sig))
-      (&& (conv d <>a <>b)
-          (: fr ['nv d] (conv (d + 1) (capp <>>a fr) (capp <>>b fr))))
-      (&& (two? a) (two? b) (id? <a <b)) (conv-args d >a >b)
+      (id? <a 'chain && two? b && !(id? <b 'chain))
+      (conv d <>a (dop1 b) && conv d <>>a (dop2 b))
+      (id? <b 'chain && two? a && !(id? <a 'chain))
+      (conv d (dop1 a) <>b && conv d (dop2 a) <>>b)
+      (id? <a 'pi && id? <b 'pi)
+      (conv d <>a <>b
+          && (: fr ['nv d] (conv (d + 1) (capp <>>a fr) (capp <>>b fr))))
+      (id? <a 'sig && id? <b 'sig)
+      (conv d <>a <>b
+          && (: fr ['nv d] (conv (d + 1) (capp <>>a fr) (capp <>>b fr))))
+      (two? a && two? b && id? <a <b) (conv-args d >a >b)
       0)
 
    (conv-args d as bs)
-   (? (&& !(two? as) !(two? bs)) 1
-      (|| !(two? as) !(two? bs)) 0
-      (&& (conv d <as <bs) (conv-args d >as >bs)))
+   (? (!(two? as) && !(two? bs)) 1
+      (!(two? as) || !(two? bs)) 0
+      (conv d <as <bs && conv-args d >as >bs))
 
    (inf-sym cx x)
    (? (id? x 'UU) 'UU
@@ -155,7 +155,7 @@
    (@ t
       (['lam x b] + _)
         (@ T (['pi A cl] + _) (: fr ['nv d]
-                           (chk (link [x A] cx) (link [x fr] en) (d + 1) b (capp cl fr)))
+                           (chk ([x A] >< cx) ([x fr] >< en) (d + 1) b (capp cl fr)))
            (scare 'uu-lam-needs-pi t))
       (['tpair a b] + _)
         (@ T (['sig A cl] + _) (: _ (chk cx en d a A)
@@ -167,12 +167,12 @@
         (@ T (['paths A x y] + _)
              (: _ (chk cx en d a A)
                 v (vof en a)
-                (? (&& (conv d v x) (conv d v y)) 1 (scare 'uu-idpath-mismatch t)))
+                (? (conv d v x && conv d v y) 1 (scare 'uu-idpath-mismatch t)))
            (scare 'uu-idpath-needs-paths t))
       (['let x a b] + _)
         (: Av (inf cx en d a)
            va (vof en a)
-           (chk (link [x Av] cx) (link [x va] en) d b T))
+           (chk ([x Av] >< cx) ([x va] >< en) d b T))
       (: Ti (inf cx en d t)
          (? (conv d T Ti) 1 (scare 'uu-type-mismatch t))))
 
@@ -184,12 +184,12 @@
          (['pi x A B] + _)
            (: _ (chk cx en d A 'UU)
               fr ['nv d]
-              _ (chk (link [x (vof en A)] cx) (link [x fr] en) (d + 1) B 'UU)
+              _ (chk ([x (vof en A)] >< cx) ([x fr] >< en) (d + 1) B 'UU)
               'UU)
          (['total2 x A B] + _)
            (: _ (chk cx en d A 'UU)
               fr ['nv d]
-              _ (chk (link [x (vof en A)] cx) (link [x fr] en) (d + 1) B 'UU)
+              _ (chk ([x (vof en A)] >< cx) ([x fr] >< en) (d + 1) B 'UU)
               'UU)
          (['coprod A B] + _) (: _ (chk cx en d A 'UU) _ (chk cx en d B 'UU) 'UU)
          (['paths A a b] + _)
@@ -211,7 +211,7 @@
          (['let x a b] + _)
            (: Av (inf cx en d a)
               va (vof en a)
-              (inf (link [x Av] cx) (link [x va] en) d b))
+              (inf ([x Av] >< cx) ([x va] >< en) d b))
          (['nat_rect P z s n] + _)
            (: _ (chk cx en d n 'nat)
               _ (chk cx en d P (vof 0 '(pi x nat UU)))
@@ -265,7 +265,7 @@
       Tv (vof 0 T)
       _ (chk 0 0 0 t Tv)
       _ (pin GLOB nm [Tv (vof 0 t)])
-      _ (pin SRC nm (link t ()))
+      _ (pin SRC nm [t])
       nm)
    (axm nm T)
    (: _ (chk 0 0 0 T 'UU)
@@ -331,8 +331,8 @@
                      ['nv nm]))))))
 
    (u2app t bs)
-   (: (walk as) (? !(two? as) () (link (u2 <as bs) (walk >as)))
-      (link (u2 <t bs) (walk >t)))
+   (: (walk as) (? !(two? as) () ((u2 <as bs) >< walk >as))
+      ((u2 <t bs) >< walk >t))
 
    (u2 t bs)
    (? (charm? t) t
@@ -343,9 +343,8 @@
          (qlit (uglo t)))
       (: h <t
          (? (two? h) (u2app t bs)
-            (id? h 'lam) (link Q (link <>t (link (u2 <>>t (link <>t bs)) ())))
-            (id? h 'let) (link C (link <>t (link (u2 <>>t bs)
-                           (link (u2 <>>>t (link <>t bs)) ()))))
+            (id? h 'lam) [Q <>t (u2 <>>t (<>t >< bs))]
+            (id? h 'let) [C <>t (u2 <>>t bs) (u2 <>>>t (<>t >< bs))]
             (id? h 'the) (u2 <>>t bs)
             (member? h '(pi total2 coprod paths)) (qlit ['ty h])
             (id? h 'tpair) [(qlit kchain) (u2 <>t bs) (u2 <>>t bs)]
@@ -376,7 +375,7 @@
 ; --- heads (1 defn) -- the identity's head is no macro, so no re-expansion --
 ; --- and the functions keep their names, so the baked book still serves them
 ; --- ((uu 'defn) is boot/overlay.l's door, and book calls bypass the macro).
-(: _ (:: 'defn (\ l (? (= 3 (tally l)) (link '(1 defn) l) ['scare ['\ 'uu-defn-arity] ['\ l]])))
-   _ (:: 'defq (\ l (? (= 3 (tally l)) (link '(1 defq) l) ['scare ['\ 'uu-defq-arity] ['\ l]])))
-   _ (:: 'axm  (\ l (? (= 2 (tally l)) (link '(1 axm)  l) ['scare ['\ 'uu-axm-arity]  ['\ l]])))
+(: _ (:: 'defn (\ l (? (tally l = 3) ('(1 defn) >< l) ['scare ['\ 'uu-defn-arity] ['\ l]])))
+   _ (:: 'defq (\ l (? (tally l = 3) ('(1 defq) >< l) ['scare ['\ 'uu-defq-arity] ['\ l]])))
+   _ (:: 'axm  (\ l (? (tally l = 2) ('(1 axm)  >< l) ['scare ['\ 'uu-axm-arity]  ['\ l]])))
    0)
