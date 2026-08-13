@@ -309,47 +309,121 @@ phase-order problem, not accumulated cruft. ⚠ `rdsp` is a MACHINE-form transfe
 `mov`, `push`, the alu roster) — it cannot supply the parse-tree clobber fact `loscan` needs
 before emission. Any plan that assumes it can is wrong; this one did, and was corrected.
 
-### the target shape
+### the criterion — what this arc is actually for
 
-* **One clobber fact, many queries.** Ten analyses walk the code today — `alive`, `nreads`,
-  `nrdse`, `rdscan`, `ncls`, `loscan`, `blscan`, `aelem`/`aeoff` over the parse tree, `rdsp` and
-  `ntouch` over emitted forms. ⚠ "how often is this touched?" has TWO answers depending on which
-  gate asks, against two representations. The step that pays is narrower than unification: make
-  `loscan`'s refusal set and the lowerings' flushes **derive from one parse-node→effect table**
-  instead of two hand-kept lists that drift. The drift is what the regen spends four whole-function
-  attempts discovering.
-* **Residency as one product, not five mechanisms.** A home is (function × cs), a pool pin
-  (statement × pool), a loop keep (loop × pool), a cs borrow (loop × cs), a roster spill-around
-  (loop × pool + per-call reload). They already share `g 'vmap` as substrate and already carry
-  cost terms (`nc <= nreads`, `tc <= 1 + nx9`). Collapsing the PRICING into one frequency-weighted
-  formula touches the 390+400 line regions and no target lowering. Phase 1 step 2 was a
-  down-payment on exactly this and paid −206,000 dynamic.
-* **Retire the `vmflush` verb.** 30 call sites, against 6 `vmcflush` (the precise call flush) and
-  13 `vmeet` (the precise join): "kill everything" is the default because it is the only verb a
-  lowering can reach for without thinking. Each site should declare what it clobbers. ⚠ this has
-  an ideal incremental gate — convert one site, and `test_fixpoint` either proves byte-identity or
-  the change is real and must be priced. `fcb` is the worked example: it wanted transaction
-  ROLLBACK (its int-flavored emission is discarded) and spelled it as a full flush because no
-  rollback verb exists.
-* **One key space.** Scalars key by name, elements by a minted `"x[3]"` string that `aeoff` parses
-  the digits back out of. Key by location (base, offset, width) and the array leg collapses into
-  the scalar path — ~80 lines, separable (measured: zero of the 165 loop-keep customers are element
-  pins).
-* **Spend the complexity budget on admission, not packing.** The span census says ranges are
-  near-whole-function and interval SHARING buys +4%. Use the simplest assignment that works.
+⚠ **the goal is that mooncc becomes intrinsically a better program, with more of a sense of what
+it is doing** — its representations should carry the facts its decisions depend on, rather than
+those decisions being guessed, re-derived, or discovered by being wrong. Performance is NOT the
+objective here.
+
+⚠ but neither is "stop measuring". This tree measures because plausible stories were wrong
+repeatedly, including three times this week. The shift is that **measurement is demoted from
+objective to FALSIFIER**: a number's job is to catch you being wrong about what the program knows,
+not to authorize a change. The census below did exactly that — it killed the hypothesis this
+section was first written around.
+
+So the ship gate for this leg is: **did the program stop guessing something? did a mechanism come
+out? is performance not badly regressed** (a floor, not a payment). That is already latent in the
+arc's own rules — `gen.l` 8,125 → 8,012 was recorded as a milestone in its own right, and the plan
+already says no rung ships without a mechanism coming out — it was the perf gate that overrode it.
+
+### the flush census — 29 sites, and what actually kills a live pin
+
+Every `vmflush` call site numbered and counted over love.c on four targets plus the 133-file
+`test/cc` corpus (2026-08-13, temporary instrument, reverted). **16 of 29 sites never kill a live
+pin anywhere measured** — the expression-level lowerings (`dtoul`, the t32 pair shifts, `clz`/`ctz`
+on rv, `va_arg`'s walk, the VLA lane) sit on targets or paths where the vmap is empty. ⚠ thumb2
+fires ZERO of them: its `pool0` is empty, so it has no residency to lose at all.
+
+Of the 514 fires that DO kill a live map on love.c/x64:
+
+| what fires | fires | share |
+|---|---|---|
+| **`vmcflush` "degenerating"** — a call with `csbor` and `saro` both empty | **223** | **43.4%** |
+| **the loop machinery flushing ITSELF** — head/step/cond with an empty keep | **116** | **22.6%** |
+| foreign-edge statements — `case`, the switch end join | 88 | 17.1% |
+| lifecycle — `rgreset`/`rgset`, per-fn entry and regen teardown | 69 | 13.4% |
+| `fcb`'s leading flush — a ROLLBACK, not a clobber | 10 | 1.9% |
+| loop exit / splice end with no arriving edges | 8 | 1.6% |
+
+⚠ **this FALSIFIED the plan's first draft.** That draft said the root was a knowledge gap at
+expression grain — `loscan` enumerating seven statement constructs while the flushes live in
+lowerings it has never heard of. The static reading supported it; the dynamic count does not.
+Exactly ONE expression-level lowering ever kills a live pin (`clz` on riscv), and `fcb`'s is a
+rollback. **The two-drifting-lists story is real but nearly worthless**, and an effect table built
+to fix it would have been correct and bought almost nothing.
+
+### the root: the map has no notion of CLASS
+
+A pin's residency class — pool, cs seat, rostered, home — is known at pin time and **is not
+recorded on the entry**. The information exists (`pool0`, `csbor`, `saro`, `homes` all hold it);
+it just is not attached to the thing it describes. So the honest sentence *"pool residency ends
+here"* is unsayable, and 29 sites each decide what to kill with the only verb available.
+
+That is what the two big rows above are:
+
+* `vmcflush` does not "degenerate" — it correctly kills the pool class at a call. It reaches for
+  `vmflush` only because with no cs seats and no roster there is nothing to *spare*, and sparing
+  is the only way it can express the class. Given a class, there is no special case at all.
+* a loop head whose own loop-scoped keep is empty flushes **every** class, including
+  function-scoped cs seats it has no business touching. It is the residency mechanism flushing
+  itself for want of a way to say which scope ended.
+
+**Together, 339 of 514 pin kills — 66% — are one missing field.**
+
+### the ladder, in order
+
+1. **give the vmap entry its class** (next). Then `vmcflush` = drop the pool class, a loop head =
+   drop the loop class, `rgreset` = drop all (honest — a new function), `case`/switch-join = drop
+   all (honest — foreign edges carry an unknown map). 29 deciding sites become a handful of named
+   verbs over a classified map, and two thirds of the flushing stops being over-kill. ⚠ gate:
+   byte-identity wherever the class-aware verb is provably equal to the flush it replaces; a stated
+   dynamic floor where it is not.
+2. **`fcb` gets the verb it actually wanted** — snapshot/rollback, not flush. Re-opened: it was
+   refused on +8/+12/+8 bytes, which is a PRICING answer to a VOCABULARY question. Land the verb
+   that states the intent and let residency pricing decide separately whether to keep the pin.
+3. **residency priced as one product** — extent × class × reload term, replacing five gate stacks.
+   Class (step 1) is the axis this is a function of, which is why it comes second. Phase 1 step 2
+   was a down-payment and paid −206,000.
+4. **one key space** — key by location (base, offset, width) so the array leg folds into the
+   scalar path and `aeoff` stops parsing digits back out of a minted `"x[3]"`. ~80 lines,
+   separable, zero loop-keep customers.
+5. **a module boundary.** `gen.l` is 8,342 lines and 355 top-level defs with no internal seam,
+   and the tree's own module system is used nowhere in it. Residency behind a declared surface
+   makes the 14.5% visible AS the 14.5%, and "which pass may ask this?" a checkable question.
+6. **spend nothing on packing.** The span census says ranges are near-whole-function and interval
+   SHARING buys +4%. Simplest assignment that works.
+
+⚠ **the naming tell, worth watching as its own signal**: `lokeep`/`loseed`/`lomig`/`lochk`/
+`lomiss`/`lobar`/`lonone` is seven names for the phases of one mechanism's UNCERTAINTY. Names that
+exist only to describe failure modes say the mechanism should not have those failure modes. If the
+ladder is working, most of those names disappear; if they survive, it is not.
 
 ### what stays, and why
 
-`lochk`/`lomiss`/`lobar` and the regen retries STAY — the 2026-08-13 miss census priced the
-optimism as load-bearing (the keeps are +184,000 dynamic) and found it discovering genuine
-conflicts, not papering over a decidable rule. Removing it is not reachable by rewrite either.
-⚠ and every step here is gated on `perf stat -e instructions` over the corpus, never on `.text`:
-static size is not a weak signal on loop-body work, it is an INVERTED one.
+`lochk`/`lomiss`/`lobar` and the regen retries STAY. The miss census priced the optimism as
+load-bearing (the keeps are +184,000 dynamic) and found it discovering genuine conflicts.
+⚠ the constraint under it is phase ordering — **the keep decision must PRECEDE the emission that
+determines whether it is valid** — which no rewrite dissolves. ⚠ `rdsp` is a MACHINE-form transfer
+function and cannot supply a parse-tree clobber fact before emission; any plan assuming it can is
+wrong, and this one did.
+
+But the SHAPE is still owed better: "emit, learn the clobber set, decide" is a program that knows
+what it is doing; four retry attempts under progressively weaker assumptions is the same two
+passes without the self-knowledge. Same cost, different program. Write the fixpoint down as a
+fixpoint even if it stays.
 
 ## refusals — priced, closed, do not rebuild
 
 ⚠ this section exists because chronology buried one of them and it was built a SECOND time off a
 census table that could not see the verdict. Read this list before proposing a mechanism.
+
+⚠ **every entry here was priced under the old gate — "pays somewhere, regresses nowhere" in bytes
+or instructions.** Under the criterion in the convergence plan above, a refusal on those grounds
+is not automatically a refusal: a mechanism that lets the program STATE something it was guessing
+can be worth a small regression. Two have already been re-opened on that basis (`fcb`'s rewind,
+now ladder step 2; and `pcs`, whose 1,004 bytes is a weak reason to keep 57 lines the program
+cannot explain). The rest stand — they were refused for physics, not for bytes.
 
 * **cs seats for the call-crossing class, retrofitted onto `repack`** — refused twice (2026-08-12,
   then rebuilt from the frame-bucket census and re-refused to the sign; threshold sweep M=2 +715
@@ -375,9 +449,12 @@ census table that could not see the verdict. Read this list before proposing a m
 * **subsuming the keeps' optimism by a coverage rule** (2026-08-13, phase 2) — the census aiming it
   was an instrument artifact; corrected, only 12 of 34 misses are the coverage case and 9 of the 14
   head flushes that kill a live keep are inner loops `loscan` correctly REFUSED.
-* **`fcb`'s pre-lane rewind** (2026-08-13) — sound and it works (misses 81→69), and still loses:
-  +8/+12/+8 bytes x64/arm64/riscv64, dynamically and compile-time neutral. Capacity, not
-  correctness. ⚠ do not re-propose it on the register argument ("pins can never live in r0–r3") —
+* **`fcb`'s pre-lane rewind** — ⚠ **RE-OPENED 2026-08-13, now ladder step 2.** Refused the same day
+  on +8/+12/+8 bytes x64/arm64/riscv64 at dynamic and compile-time neutral — but that is a PRICING
+  answer to a VOCABULARY question. The flush is a rollback wearing a clobber's clothes, and the
+  bytes come from the preserved pin holding a register out of a four-wide pool, which is the
+  pricing ladder's business and not the verb's. Land the verb; price the pin separately. ⚠ what
+  stays refused is the register argument for DELETING the flush ("pins can never live in r0–r3") —
   true about registers, wrong about the flush, which exists for the DISCARDED emission.
 * **the loop borrow on a64** — a net loss there (−187 alone, dragging both-on to −236). Verdict on
   insns only; the x64 win was WALL CLOCK at flat insns and there is no cross-target wall
@@ -452,6 +529,11 @@ worktree session, and treat a flip that agrees too easily as a tree check first.
 * a64 raw splices scratch r2/r3/r9/r15 ONLY — r10-r14 are homes.
 
 ## how to measure honestly
+
+⚠ **and read the convergence plan's criterion first: on this leg a number is a FALSIFIER, not an
+objective.** Every instrument below stays; what changed is what a good reading authorizes. A win
+does not license a mechanism the program cannot explain, and a small loss does not veto one that
+lets it state something it was guessing.
 
 * Build twins from the repo root (the seat walk; a scratchpad mooncc can't link), same
   TU set, ccache off. Bench under LOVE_NO_IMAGE=1 on both sides, corpus as a FILE, or
