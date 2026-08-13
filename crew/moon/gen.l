@@ -437,6 +437,29 @@
        (: o (assoc nm (peep g 'saro ()))
           (? (two? o && id? <>o r) 'ros 'pool)))
    (vmborn? g) (vmon? g && !(0 < peep g 'argseal 0))
+   ; -- WHAT A REGISTER COSTS, per class, in memory operations. every gate that grants one
+   ; weighs its own EXTENT -- the traffic the residency erases -- against this. the extents
+   ; differ on purpose and stay where they are (ir1 touches, weighted source reads, unerasable
+   ; reloads: each gate knows something the others do not); the COST is one table. `n` counts
+   ; the events that class pays AT, and is the gate's own too -- a roster pays per call in
+   ; scope, a seat per exit, a home per call its path passes.
+   ; ⚠ a gate's n and ext must be counted on the same CLOCK, per invocation or per iteration.
+   ; this door cannot check it -- both numbers arrive from the one caller -- so every call
+   ; below names its clock, and mixing them is the error this arc has paid for twice.
+   (rcost cls n)                                    ; -> memory ops per register, or 'never
+    (cls @ 'ros  n                                  ; a rostered pin reloads at every call in scope
+           'bor  (1 + n)                            ; a seat: one save, then one reload per exit
+           'home (2 * n)                            ; a caller-saved home: the wrap PAIR per call
+           'pool (? (0 < n) 'never 1)               ; ⚠ not a price: a pool home cannot cross a call
+           'bind 7                                  ; a splice bind's park. ⚠ MEASURED (loads +0.36%
+           'never)                                  ;   below it), not derived like the rows above
+   (rprice cls n ext)                               ; the MARGIN: ops saved, net of ops spent
+    (: c (rcost cls n) (? (id? c 'never) 'never (ext - c)))
+   (rpays? cls n ext)                               ; ...and it must WIN
+    (: m (rprice cls n ext) (? (id? m 'never) 0 (? (0 < m) 1 0)))
+   (rclears? cls n ext)                             ; ⚠ ...or merely TIE, which the two loop gates
+    (: m (rprice cls n ext)                         ; accept and the four others refuse. an
+       (? (id? m 'never) 0 (? (0 <= m) 1 0)))       ; inconsistency, visible here and unsettled
    ; -- the cs BORROW (call-crossing keeps): a free callee-saved seat, granted by the regen
    ; (g 'csbor) and saved like any cs home, carries a loop keep THROUGH calls -- the callee
    ; preserves it, the slot stays the source of truth, and the same lochk edges verify the
@@ -626,7 +649,8 @@
                          (: c <free
                             _ (vapin g nm c)
                             (go >l >free ((vke g nm c) >< kp) (['mov c r] >< mvs) sr))
-                        (nc <= nrdse g env sub nm)
+                        ; per loop iteration: element reads against one reload per call
+                        (rclears? 'ros nc (nrdse g env sub nm))
                          (go >l free (e9 >< kp) mvs ([nm r [(ldop <>eo) r 'r4 <eo]] >< sr))
                         (go >l free kp mvs sr)))
                  (two? free)
@@ -634,9 +658,10 @@
                      _ (vmpin g nm c)
                      (go >l >free ((vke g nm c) >< kp) (['mov c r] >< mvs) sr))
                  ; the spill-around license: reads outstrip the calls, so the per-call
-                 ; reload beats the per-use load it replaces
+                 ; reload beats the per-use load it replaces (per loop iteration)
                  (: en (vent g env nm)
-                    (? (two? en && id? <en 'loc && homable? <>>en && (nc <= nreads sub nm))
+                    (? (two? en && id? <en 'loc && homable? <>>en &&
+                        rclears? 'ros nc (nreads sub nm))
                        (go >l free (e9 >< kp) mvs ([nm r [(ldop <>>en) r 'r4 <>en]] >< sr))
                        (go >l free kp mvs sr))))))
        (go base (filter (\ r9 !(member? r9 used)) bs) () () (peep g 'saro ())))
@@ -683,7 +708,8 @@
                        (? (two? fs)
                            (: r <fs _ (vmpin g nm r)
                               (go >l >fs pf ((vke g nm r) >< kp2) ([(ldop ty) r 'r4 off] >< mvs) sr2))
-                          ((nc <= nr) && two? >pf)
+                          ; per loop iteration: the seed's reads against one reload per call
+                          (rclears? 'ros nc nr && two? >pf)
                            (: r <pf _ (vmpin g nm r)
                               (go >l fs >pf ((vke g nm r) >< kp2) ([(ldop ty) r 'r4 off] >< mvs)
                                   ([nm r [(ldop ty) r 'r4 off]] >< sr2)))
@@ -7141,7 +7167,8 @@
        ; loop, where the slot bind reloads every iteration -- and cbinl's deep-pool gate.
        (anyc l) (? !(two? l) () (? (callish? <l) 1 (anyc >l)))
        body9 <><>>>f
-       (paid? nm) (7 < rdw nm body9 1)              ; the seat pricing: weighted body reads earn a register
+       ; the bind pricing, per loop iteration: weighted body reads earn the park
+       (paid? nm) (rpays? 'bind 0 (rdw nm body9 1))
        nocall (!(callish? body9) && !(anyc args))
        (bind ps as benv acc rbs)                     ; arg values -> the alias register, a priced park, else slots
         (? !(two? ps) [benv acc rbs]
@@ -7743,10 +7770,12 @@
                (: e2 <rs sq <e2 off <>e2
                   (? (peep lt off ()) (walk >rs acc)
                      (d128? <>>e2) (walk >rs acc)     ; a pair homes off the CS pool only (never the operand pool)
-                     ((0 < nc) && !(free? <>>>e2)) (walk >rs acc)
+                     ; per invocation: ir1 touches against a pool home, which no call survives --
+                     ; a zero-crossing local pays at no call at all, so it prices as a call-free one
                      (: tc (ntouch ir1x off 0)
-                        (? (tc <= 1) (walk >rs acc)
-                           (walk >rs ([tc sq] >< acc)))))))
+                        (? (rpays? 'pool (? (free? <>>>e2) 0 nc) tc)
+                           (walk >rs ([tc sq] >< acc))
+                           (walk >rs acc))))))
            cs (? (navl < 1) () (lastn (imsort (walk (peep g 'lrec ()) ())) navl))
            ; the CALLEE-SAVED overflow: a home there needs no wrap -- the callee preserves
            ; it -- so a CROSSING local qualifies too, and a call-free fn whose param homes
@@ -7808,9 +7837,12 @@
             (? !(two? rs) acc
                (: e2 <rs sq <e2 off <>e2
                   (? (peep lt off () || peep taken sq ()) (walk2 >rs acc)
+                     ; per invocation: ir1 touches against a seat. ⚠ the floor of 2 is MEASURED,
+                     ; not physics -- a seat never pays under three touches whatever nx9 says
                      (: tc (ntouch ir1x off 0)
-                        (? (tc <= 2 || tc <= (1 + nx9)) (walk2 >rs acc)
-                           (walk2 >rs ([tc sq (? (d128? <>>e2) 2 1)] >< acc)))))))
+                        (? ((2 < tc) && rpays? 'bor nx9 tc)
+                           (walk2 >rs ([tc sq (? (d128? <>>e2) 2 1)] >< acc))
+                           (walk2 >rs acc))))))
            ; choose HOTTEST-first while seats remain (a pair spends two; one that can't fit
            ; skips so a scalar may still take the last seat) -- the choose-order link restores
            ; ascending heat, so seat ASSIGNMENT stays the old positional walk (register
@@ -7999,8 +8031,10 @@
              em (homefold g params 0 0
                  (\ n2 i9 p9 (? (homable? <>p9 &&
                                  !(id? (nthr (argr g) i9) (homereg i9))) (n2 + 1) n2)))
-             pp (hm && (2 * nc * nh < nr ||
-                        (two? av && (2 * nh * (pmax ir1 + nthr av 4) + em < nr))))
+             ; per invocation, nh homes at the caller-saved rate: the flat count, or the PATH
+             ; price (only the calls one path passes, plus in-loop calls at alive's weight)
+             pp (hm && ((nh * rcost 'home nc < nr) ||
+                        (two? av && ((nh * rcost 'home (pmax ir1 + nthr av 4)) + em < nr))))
              ; the cs-home grant: the homes take callee-saved seats and the per-call wraps
              ; retire for one save + a reload per EXIT (the epilogue rides every ret) --
              ; fn-wide, the whole set or none (the law above), seats from what lpick left,
@@ -8012,7 +8046,9 @@
              nra (nrac ir1 (pslots <>sp1 ()))
              pcs (? (hm && (0 < nh) && (nh <= tally free9) &&
                      (0 < pmin ir1) &&
-                     (nh * (1 + nx) + em < 2 * nra))
+                     ; per invocation, nh homes at the SEAT rate -- no wraps, one save and a
+                     ; reload per exit -- and every path must call, or the entry work earns nothing
+                     ((nh * rcost 'bor nx) + em < 2 * nra))
                     (: pg (homefold g params 0 [() free9]
                            (\ a2 i9 p9 (? (homable? <>p9 && two? <>a2)
                                           [([i9 <<>a2] >< <a2) ><>a2]

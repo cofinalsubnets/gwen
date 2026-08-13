@@ -460,6 +460,43 @@ elsewhere then makes a top-of-body read wrong on the first arrival. The flush is
 correctness. **Step 1's honest reach is the 223-fire row alone, 43.4%**, and the conditional
 retires because `vmset` of an empty map already IS the flush.
 
+### the gate census — the seven never disagree, and that is the finding
+
+⚠ run 2026-08-13 to aim step 5, and it **falsified the premise it was run on**. The plan said one
+pricing would resolve contradictions between the gates. Over love.c/x64 — 4,934 verdicts from the
+seven gates, deduped to each function's last regen attempt — there are no contradictions:
+
+| | |
+|---|---|
+| `lpick` **grants**, a loop gate **refuses** | **0** |
+| `lpick` **refuses**, a loop gate **grants** | **143** |
+| `lomig` vs `loseed`, either direction | 0 / 4 |
+
+The relation is one-directional and structural. What reads as disagreement is the gates pricing
+**different classes for the same value** with nothing in the program saying so, and the honest
+sentence — *"does not pay as a pool home; does pay as a borrowed seat"* — was unsayable. So the
+table does not arbitrate. It makes the class the axis, and that sentence sayable.
+
+⚠ **two instrument artifacts nearly buried this, and the raw census read 61% disagreement.**
+`loseed`'s `nocand` is not a refusal — it is declining to CONSIDER a name that already holds a
+register (a homed local is `regv`, not `loc`), and all 311 "lpick grants, loseed refuses" rows were
+exactly that. `paid?` records under the caller's function but prices the INLINEE's parameter
+namespace, so its rows fake collisions. Neither is visible without asking what a verdict means.
+
+And the census named the axis that actually decides. Of `lpick`'s 1,036 refusals:
+
+| why | |
+|---|---|
+| `tc ≥ 2` but the function CALLS — the `free?` bar | **776** |
+| `tc ≤ 1` — too cold for any class | 151 |
+| `tc ≥ 2`, call-free, lost the seat cap | 109 |
+
+**Three quarters of all refusals are the crossing bar, which is not a price at all** — a structural
+veto that pre-empts pricing. In the table it becomes one cell: the pool row costs `'never` across a
+call. ⚠ and the ~633 warm crossing values the loop gates do NOT rescue are not step 5's to win:
+5.1b iv-b already measured that granting them costs +545 insns. Saying why they are refused, once,
+is the whole prize.
+
 ### THE LADDER — one list, both levels
 
 ⚠ **this is the arc's only live plan.** It supersedes `doc/moon-vreg.md`'s phase 1–4 (whose
@@ -477,7 +514,7 @@ file real on arm64, riscv, thumb2) · 5.0/5.1a/5.1b i–iii.
 | 2 | **`restrict` survives the parser** | splice first | *this base is unaliased* — the promise `love.h` already makes on `Sp` and `pquals` discards | the ten-line seam probe loses its dead interior stores; `test_fixpoint` |
 | 3 | **`fcb` gets rollback** — LANDED 2026-08-13 | moon | *discard the emission, keep what predates it* — a transaction, not a clobber | misses 81→69 reproduced; text delta owned by step 5, not by this verb |
 | 4 | **S-1b — reach the arm/riscv pipeline** | both | that `stldp` has *work* on three targets where it silently finds none | a store print that fires on all four targets; the seam probe folds on each |
-| 5 | **residency priced as extent × class × reload** | both | *why* a value lives where it lives, once, instead of five gate stacks with stale proxies | corpus dynamic, and mechanism count DOWN |
+| 5 | **residency priced as extent × class × reload** — phase A LANDED 2026-08-13 | both | *why* a value lives where it lives, once, instead of seven gate stacks with stale proxies | phase A: byte-identity, the cost side in one table. phase B: corpus dynamic, mechanism count DOWN |
 | 6 | **location keys — (base, offset, width)** | both | one key space: frame slots, array elements and restrict-base cells stop being three mechanisms | the array leg folds; `aeoff` stops parsing digits out of `"x[3]"` |
 | 7 | **the die reaches the seam** | splice | *deliver where the consumer wants it* — an interior op boundary emits nothing at all | `bench/vmsplice/check.l` against its interp twin; the ~4× ceiling the probe measured |
 | 8 | **a module boundary for residency** | moon | which pass may ask what — the 14.5% visible AS the 14.5% | it compiles; the surface is declared |
@@ -1049,6 +1086,31 @@ thumb2, which has no pool to preserve into** — the tell that the bytes ARE the
 holding a register out of a four-wide pool, and that is step 5's to price, not this verb's.
 Dynamic neutral: three interleaved corpus-minus-boot rounds put every delta (−0.06M, +2.2M,
 +1.1M insns on 33.3G) inside the baseline's own 3.9M spread.
+
+**2026-08-13 — THE LADDER step 5, phase A: what a register COSTS is one table.** Seven gates each
+carried their own inline cost arithmetic — `2·nc·nh`, `1+nx`, `nc`, a bare `7`, and a structural
+veto — for the same handful of physical facts. `rcost` states them once, per class: a roster
+reloads at every call in scope (`n`), a seat pays one save and a reload per exit (`1+n`), a
+caller-saved home pays the wrap PAIR per call (`2n`), a splice bind's park costs a measured 7, and
+**a pool home across a call is `'never` — not expensive, unavailable**, which is where the census's
+776-refusal `free?` bar went. `rprice` answers the margin; `rpays?` and `rclears?` test it.
+**Byte-identical on x64/arm64/riscv64/thumb2 — no verdict moved.** `test_slow`, `test_fixpoint`,
+both cross differentials.
+
+⚠ **the extents deliberately stayed put**, one per gate: `ntouch` reads ir1 (machine traffic),
+`rdw` reads the AST (source use, loop-weighted), `nrac` counts only the reloads `stld` cannot
+remat — that last one knows what a LATER pass will erase, and no generic counter carries it.
+Unifying extents would be the program knowing less. What unified is the cost, which is one physics.
+
+⚠ **and the shape gave up a claim it could not keep.** The plan was to key the table by class ×
+FRAME (per invocation vs per iteration) so a mismatched pair could not be written — the error this
+arc paid for twice. It cannot: both numbers arrive from the one caller, so a frame argument would
+be decoration that checks nothing. Each call site names its clock in a comment instead; enforcing
+it needs the extents to carry their own frame, which is a phase-B question.
+
+⚠ **one inconsistency surfaced and is left standing, deliberately**: the two loop gates grant at a
+TIE (`nc <= reads`), the four others demand a strict win. Phase A preserves both — hence two
+testers where there should be one — and names it. Settling it moves verdicts, so it is phase B's.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) — each a
