@@ -194,8 +194,10 @@ int main(void) {
 EOF
 $mc $tflag -Icrew/moon/include -I"$SQLSRC" -c "$d/drv.c" "$d/drv.o" || { echo "FAIL mooncc -c drv.c"; exit 1; }
 
-# the rung-4 libc floor: nolibc + am math + the syscall leaf (mksys lays sys.o).
-$mc $tflag -Icrew/moon/include -c crew/moon/lib/nolibc.c "$d/nolibc.o" || { echo "FAIL mooncc -c nolibc.c"; exit 1; }
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
+# object -- the link owes its symbols and the driver's runtime table pulls
+# crew/moon/lib/nolibc/ MEMBER BY NEED (host/build.mk says the same of love itself).
+# Naming an object would take every member instead.
 for f in crew/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
   $mc $tflag -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
@@ -206,7 +208,7 @@ done
   cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
   echo "($mksys \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
-$mc $tflag "$d/sqlite3.o" "$d/drv.o" "$d/nolibc.o" "$d"/m_*.o "$d/sys.o" -o "$d/sq" || { echo "FAIL holo link"; exit 1; }
+$mc $tflag "$d/sqlite3.o" "$d/drv.o" "$d"/m_*.o "$d/sys.o" -o "$d/sq" || { echo "FAIL holo link"; exit 1; }
 echo "  linked $(wc -c < "$d/sq") bytes -> $d/sq"
 
 (cd "$d" && $run ./sq) > "$d/out.txt" || { echo "FAIL battery did not run"; cat "$d/out.txt"; exit 1; }
@@ -232,7 +234,12 @@ if [ "$target" = x64 ]; then
       if cmp -s "$d/out.txt" "$d/g/out.txt"; then
         echo "  OK every answer byte-identical to the same source built by $cc_g"
       else
-        echo "--- mooncc vs $cc_g (first 20 differing lines) ---" >&2
+        # ⚠ the LABEL must name the argument order, because the first thing anyone
+        # does with this output is decide which side is the bug. `<` is the ORACLE
+        # here, not us -- reading it the other way sent one session off explaining
+        # why gcc must be wrong. (The tiebreaker when in doubt is a third opinion:
+        # ask the system sqlite3 what `SELECT typeof(...)` says.)
+        echo "--- < $cc_g (the oracle)   vs   > mooncc (first 20 differing lines) ---" >&2
         diff "$d/g/out.txt" "$d/out.txt" | head -20 >&2
         echo "FAIL $name: mooncc and $cc_g answer differently" >&2
         exit 1

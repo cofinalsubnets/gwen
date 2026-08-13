@@ -26,7 +26,7 @@
 # saying why: both targets are little-endian LP64, and the answers that differ
 # between them are the ones the header already corrects by hand.
 #
-# ⚠ THE CHECK SUITE NEEDS A WRAPPER on the cross target. check-them is a shell
+# â  THE CHECK SUITE NEEDS A WRAPPER on the cross target. check-them is a shell
 # script that finds `m4` on PATH and execs it, and an aarch64 binary is not
 # executable here (no binfmt_misc registration for qemu). So the cross lane
 # puts a one-line `m4` script on PATH that execs qemu with the real binary --
@@ -107,8 +107,10 @@ for b in $LIB; do
   objs="$objs $d/lib_$b.o"
 done
 
-# the rung-4 libc floor: nolibc + am math + the syscall leaf (mksys lays sys.o).
-$mc $tflag -Icrew/moon/include -c crew/moon/lib/nolibc.c "$d/nolibc.o" || { echo "FAIL mooncc -c nolibc.c"; exit 1; }
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
+# object -- the link owes its symbols and the driver's runtime table pulls
+# crew/moon/lib/nolibc/ MEMBER BY NEED (host/build.mk says the same of love itself).
+# Naming an object would take every member instead.
 for f in crew/moon/lib/math/*.c; do
   b=`basename "$f" .c`
   $mc $tflag -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
@@ -119,7 +121,7 @@ done
   cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
   echo "($mksys \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
-$mc $tflag $objs "$d/nolibc.o" "$d"/m_*.o "$d/sys.o" -o "$d/m4" || { echo "FAIL holo link m4"; exit 1; }
+$mc $tflag $objs "$d"/m_*.o "$d/sys.o" -o "$d/m4" || { echo "FAIL holo link m4"; exit 1; }
 echo "  linked $(wc -c < "$d/m4") bytes -> $d/m4"
 
 # ---- prove it runs (absolute binary path -- the checks cd into work dirs) ----
@@ -130,7 +132,7 @@ m4dir=$(cd "$d" && pwd)
 if [ -n "$run" ]; then
   m4dir=$(cd "$d" && pwd)/bin
   mkdir -p "$m4dir"
-  # ⚠ -0 m4 matters: m4 prints its own argv[0] in every error message, and two
+  # â  -0 m4 matters: m4 prints its own argv[0] in every error message, and two
   # of the suite's checks compare stderr against a text that names it. without
   # it the wrapper's full path lands there and those two fail for a reason that
   # has nothing to do with the compiler.

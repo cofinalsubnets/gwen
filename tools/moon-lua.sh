@@ -92,8 +92,10 @@ for f in "$LUASRC"/src/*.c; do
   objs="$objs $d/$b.o"
 done
 
-# the rung-4 libc floor: nolibc + am math + the syscall leaf (mksys lays sys.o).
-$MC $tflag -Icrew/moon/include -c crew/moon/lib/nolibc.c "$d/nolibc.o" || { echo "FAIL mooncc -c nolibc.c"; exit 1; }
+# the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
+# object -- the link owes its symbols and the driver's runtime table pulls
+# crew/moon/lib/nolibc/ MEMBER BY NEED (host/build.mk says the same of love itself).
+# Naming an object would take every member instead.
 for f in crew/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
   $MC $tflag -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || { echo "FAIL mooncc -c $f"; exit 1; }
@@ -104,7 +106,7 @@ done
   cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
   echo "($mksys \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
-$MC $tflag $objs "$d/nolibc.o" "$d"/m_*.o "$d/sys.o" -o "$d/lua" || { echo "FAIL holo link lua"; exit 1; }
+$MC $tflag $objs "$d"/m_*.o "$d/sys.o" -o "$d/lua" || { echo "FAIL holo link lua"; exit 1; }
 echo "  linked $(wc -c < "$d/lua") bytes -> $d/lua"
 
 # ---- prove it runs ----
