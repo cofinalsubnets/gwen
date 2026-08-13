@@ -1306,6 +1306,32 @@ in WALL CLOCK at flat insns, and there is no cross-target wall instrument. Named
 predicts ("static touch counts keep lying about the payback") — the rule was implicitly capped
 by x64 having four registers, and iv's interval assignment is what replaces it.
 
+2026-08-13 · IV RUNG A-1 — RISCV JOINS, AND THE CS OVERFLOW LEARNS ITS EXITS. riscv64's file
+(11 s-registers, its operand pool r8–r11 disjoint) needed only cspool + cskeep: its prologue
+already rode A-0's shared arm splice and its `sibjmp` already read `(peep g 'epi epi-a64)`
+rather than the constant, so it compiled clean first try. But it landed at **−5 insns** — the
+file was used (827 operands, from zero) and `vbin_fill` alone gave back +232 of it. That forced
+the pricing question A-0 had recorded as a residue. **`lpick`'s cs overflow had no
+per-invocation term at all**: it ranks candidates by nested-loop touches and `pick` drains the
+file, which was invisible while x64 offered four seats. The fix is `pcs`'s own accounting worn
+by the locals — a seat costs one save plus one reload per EXIT, so its touches must clear
+`1 + nx`. Four variants measured (net / worst single fn, arm64 and riscv64): no term
+−941/+166 and −5/+232; **per-item −798/+119 and −179/+92**; per-item with an `ln >= 2` escape
+−978/+166 and −45/+232 (the escape readmits exactly the pathological set — vbin_fill's homes
+ARE nested-loop touches, the problem is that it takes ten); set-level (cumulative cost against
+cumulative touches) −863/+119 and −163/+92. **Per-item ships**: it is the only variant that
+both makes riscv worth enabling and improves arm64's worst case, and it costs arm64 143 insns
+of aggregate to do it. ⚠ the term is NOT target-gated and x64 moves too — **−43, worst +18** —
+which is the real argument for it: the accounting was missing, not arm-specific. Also fixed:
+`sibjmp`'s t32 line read the `epi-a64` constant, which for a VARARG t32 function drops its
+`(add sp sp 16)` and leaks the arriving block on a tail call (narrow — va_start sets fesc and
+bars sibcalls — but wrong; t32 codegen is byte-identical after the fix, so only the vararg
+lane moves). **thumb2 stays off**: its file needs eleven ops modelled in `rdsp` first — the
+64-bit pair lane (`adc` `sbc` `sbcs` `umull` `smull` `mla`) plus `ors`, `clz`, `cvtui2sd` and
+the `udivll`/`uremll` helpers — on the least-exercised target, so it earns its own rung. The
+enumeration itself is cheap and repeatable: let cskeep print instead of scare and read the
+census.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build),
 5.1b iv-b call-crossing optimism — each a physics lesson above.

@@ -425,6 +425,19 @@ alone, dragging both-on to −236 because `wb` denies the homes their seats) —
 take the borrow yet, and that is a verdict on insns, not on a mechanism whose x64 win was
 measured in wall clock. Residue: `vbin_fill` takes all ten seats for +166.
 
+**rung A-1 CLIMBED 2026-08-13 — riscv joins, and the overflow learns its exits.** riscv64
+needed only cspool + cskeep (its prologue rode A-0's splice, its sibjmp already read `g 'epi`)
+and compiled clean — but landed at **−5 insns**, because `vbin_fill` gave back +232 of it. The
+cause was the residue A-0 named: **`lpick`'s cs overflow had no per-invocation term**, so
+`pick` drained whatever file it was offered — invisible at four seats, ruinous at ten. Giving
+it `pcs`'s accounting (a seat costs one save plus one reload per exit, so touches must clear
+`1 + nx`) moves arm64 to −798 (worst regression +166 → +119), riscv to **−179**, and x64 — not
+gated, and this is the argument for the term — to **−43**. Measured alternatives that lost: an
+`ln >= 2` escape readmits the whole pathological set, and a set-level cumulative test matches
+the worst case at a slightly better net but costs more machinery. thumb2 stays off until eleven
+ops are modelled in `rdsp` (the 64-bit pair lane plus `ors`/`clz`/`cvtui2sd`/`udivll`), which
+is its own rung.
+
 ⚠ phase 1 alone will likely be FLAT on codegen: it replaces a memo with a structure and keeps
 write-through. Under the standing ship gate ("pays somewhere, regresses nowhere") flat does not
 land, so phase 1 needs an explicit consolidation gate — flat-or-better codegen, no compile-time

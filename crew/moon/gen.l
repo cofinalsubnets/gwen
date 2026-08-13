@@ -778,8 +778,9 @@
    ; the price of one save/restore pair in the owner's frame (arm64's x19+ rungs: unclimbed)
    ; the seats residency may borrow: a subset of csregs, saved by the prologue (g 'cssv) and
    ; reloaded on every exit. ⚠ a target belongs here only once its prologue SPLICES cssv and
-   ; cskeep verifies it -- t32/v6m/riscv still owe both, which is why their file reads empty.
+   ; cskeep verifies it -- t32/v6m still owe the second, which is why their file reads empty.
    (cspool g) (? (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
+                 (rv? g) '(r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
                  (arm? g) ()
                  '(r11 r12 r13 r14))
    (deep? pl) (two? >>pl)                           ; a pool affords a PRICED seat: two remain after the take
@@ -4078,11 +4079,12 @@
        (butret (peep g 'epi epi-a64) + [['la (pkr g) <>f] ['jmpr (pkr g)]])
        (<f = 'call) (butret ejx + [['jmp <>f]])
        ; ⚠ ejx, never the epi-a64 CONSTANT: a cs regen pins its restores into g 'epi, and the
-       ; constant drops them -- the tail would jump with the callee's seats still dirty. (t32
-       ; still reads the constant; its cspool is empty, and enabling it owes this line too.)
+       ; constant drops them -- the tail would jump with the callee's seats still dirty. the
+       ; t32 line below owed the same read for a second reason: a VARARG t32 epilogue is
+       ; epi-t32va, and the constant drops its `(add sp sp 16)` with the arriving block.
        (a64? g) (butret ejx + '((jmpr r15)))                   ; the arm64 epilogue never touches the x15 park
        (rv? g) (butret (peep g 'epi epi-a64) + [['jmpr (pkr g)]])     ; riscv: the park (t4) survives the epilogue
-       (t32? g) (butret epi-a64 + [['jmpr (pkr g)]])         ; thumb2: the callr target parks in r12 (pkr), untouched by the epilogue
+       (t32? g) (butret ejx + [['jmpr (pkr g)]])             ; thumb2: the callr target parks in r12 (pkr), untouched by the epilogue
        ('((mov r10 r3)) + butret ejx + '((jmpr r10))))            ; park first: the x64 epilogue reloads r3
    ; a home reload run ((ld rH r4 slot)..) after a ret-position call is DEAD, and so is a
    ; roster reload into a POOL reg (caller-saved dies at the ret) -- the tail-jump hands the
@@ -5229,10 +5231,10 @@
    (cskeep g fs)                                    ; answers fs; a breach scares, naming fn + reg
     (: (rawy? l) (? !(two? l) ()
                     (: f <l (? (two? f && id? <f 'raw) 1 (rawy? >l))))
-       ; ⚠ a64 rides this too (its file is real -- cspool): the shapes are the same, only the
-       ; frame base differs (fp there, and a4ize has already retargeted by the time this runs).
-       ; t32/v6m/riscv still bail -- they have no cs file to breach.
-       (? ((arm? g && !(a64? g)) || !(two? fs) || peep g 'hasasm () || rawy? fs) fs
+       ; ⚠ a64 and riscv ride this too (their file is real -- cspool): the shapes are the same,
+       ; only the frame base differs (fp there, and a4ize has already retargeted by the time
+       ; this runs). t32/v6m still bail -- they have no cs file to breach.
+       (? ((arm? g && !(a64? g || rv? g)) || !(two? fs) || peep g 'hasasm () || rawy? fs) fs
           (: fn (nthr <fs 1)
              labs (tablet 0) saves (tablet 0) defs (tablet 0)
              (note l i)
@@ -7744,12 +7746,19 @@
                          (member? <f2 gstops) ((<>f2 = fb9) && (<>>f2 = off))
                          ())
                   (lntouch >fs off (i + 1) (? (hit && (1 < nspan i)) (n + 1) n))))
+           ; the per-invocation price, pcs's accounting worn by the locals: a seat costs one
+           ; save plus one reload per EXIT, every call, so its touches must outnumber that.
+           ; ⚠ without the term the pick just drains the file -- invisible while x64 offered
+           ; four seats, +166/+232 insns in vbin_fill the day arm64 offered ten.
+           nx9 (: (go9 l n9) (? !(two? l) n9
+                                (go9 >l (? (two? <l && id? <<l 'ret) (n9 + 1) n9)))
+                  (go9 ir1x 0))
            (walk2 rs acc)                             ; cs candidates carry a WIDTH: a d128 pair takes two seats
             (? !(two? rs) acc
                (: e2 <rs sq <e2 off <>e2
                   (? (peep lt off () || peep taken sq ()) (walk2 >rs acc)
                      (: tc (ntouch ir1x off 0)
-                        (? (tc <= 2) (walk2 >rs acc)
+                        (? (tc <= 2 || tc <= (1 + nx9)) (walk2 >rs acc)
                            (: ln (lntouch ir1x off 0 0)
                               (? (ln < 1) (walk2 >rs acc)
                                  (walk2 >rs ([ln sq (? (d128? <>>e2) 2 1)] >< acc)))))))))
@@ -7820,13 +7829,14 @@
        ng (sr6f || vararg || bad? ir1 || peep g 'hasasm () || anyop? ir1 'sys)
        av (? ng () (alive g f))
        au (? ng () (auniv g f))                     ; the array leg's universe rides the same gate
-       ; a callish loop somewhere licenses the borrow offer. ⚠ NOT on a64, where the file is new:
-       ; measured on love.c, insns against no-cs-at-all -- borrow alone −187, param homes alone
-       ; −1,077, both −236, both sharing the file −246. The borrow costs there AND takes the seats
-       ; (wb denies free9), so a64 spends its file on homes until iv's allocator subsumes both.
-       ; ⚠ the x64 borrow's own win was measured in WALL CLOCK at flat insns, so this is not a
-       ; verdict on the mechanism -- it is one on a metric we have no cross-target instrument for.
-       wb (? (ng || a64? g || !(two? (cspool g))) () (blscan f))
+       ; a callish loop somewhere licenses the borrow offer. ⚠ on NO arm/riscv target, where the
+       ; file is new: measured on love.c/a64, insns against no-cs-at-all -- borrow alone −187,
+       ; param homes alone −1,077, both −236, both sharing the file −246. The borrow costs there
+       ; AND takes the seats (wb denies free9), so the new files go to homes until iv's allocator
+       ; subsumes both. ⚠ the x64 borrow's own win was measured in WALL CLOCK at flat insns, so
+       ; this is not a verdict on the mechanism -- it is one on a metric we have no cross-target
+       ; instrument for.
+       wb (? (ng || arm? g || !(two? (cspool g))) () (blscan f))
        ; -- priced int-param homes (the leaf lane): an int/uint param earns its POSITIONAL
        ; seat only when its ir1 slot touches pay the entry cvt (tc >= 2), the locals picked
        ; first (a hot local's claim wins the register), and an x64 pool seat stays deep
