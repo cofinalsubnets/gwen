@@ -2059,6 +2059,32 @@
                         (mov r1 r0) (shr r1 16) (and r1 r1 r2)
                         (and r0 r0 r2) (shl r0 16) (or r0 r0 r1)
                         (mov r1 r0) (shr r1 32) (shl r0 32) (or r0 r0 r1))))))))
+       ; popcount: the SWAR fold -- pairs, then nibbles, then the byte counts summed
+       ; by shifts alone. masks and adds only, like the bswap trio above, so it rides
+       ; every target and assumes no ISA feature (x64's POPCNT is SSE4.2, a64's is
+       ; SIMD; a raw lane for either is a later rung, not a correctness one). the
+       ; 64-bit forms fall to the undeclared refusal on t32, whose pair lane has no
+       ; taker. ⚠ the 32-bit form MASKS FIRST: the operand is an unsigned int and the
+       ; word above bit 31 may carry a wider value's garbage, which would be counted.
+       (member? bi '("__builtin_popcount" "__builtin_popcountl" "__builtin_popcountll"))
+        (? ((bi != "__builtin_popcount") && t32? g)
+            (nolane g ("no lane for " + bi + (ontgt g)))
+           (: e1 (cgexpr g env <args ())
+              w32 (|| (bi = "__builtin_popcount") (t32? g))
+              fold (\ k ['(mov r1 r0) ['shr 'r1 k] '(add r0 r0 r1)])
+              ; ⚠ each arm is ONE parenthesized span: a bare `+` inside a clause arm
+              ; captures the rest of the clause (the valence law), not the arm.
+              w32ops ((? (t32? g) () '((li r2 4294967295) (and r0 r0 r2)))   ; the word above bit 31 is not ours to count
+                      + '((li r2 1431655765) (mov r1 r0) (shr r1 1) (and r1 r1 r2) (sub r0 r0 r1)
+                          (li r2 858993459) (mov r1 r0) (shr r1 2) (and r1 r1 r2) (and r0 r0 r2) (add r0 r0 r1)
+                          (li r2 252645135) (mov r1 r0) (shr r1 4) (add r0 r0 r1) (and r0 r0 r2))
+                      + (fold 8) + (fold 16) + '((li r2 63) (and r0 r0 r2)))
+              w64ops ('((li r2 6148914691236517205) (mov r1 r0) (shr r1 1) (and r1 r1 r2) (sub r0 r0 r1)
+                        (li r2 3689348814741910323) (mov r1 r0) (shr r1 2) (and r1 r1 r2) (and r0 r0 r2) (add r0 r0 r1)
+                        (li r2 1085102592571150095) (mov r1 r0) (shr r1 4) (add r0 r0 r1) (and r0 r0 r2))
+                      + (fold 8) + (fold 16) + (fold 32) + '((li r2 127) (and r0 r0 r2)))
+              (? (bad? e1) 'bad
+                 (mkv 'long 'r0 (asint g e1 + (? w32 w32ops w64ops))))))
        ; the __sync spin-lock pair (dlmalloc's CAS_LOCK/CLEAR_LOCK): test_and_set is
        ; the atomic exchange with acquire -- x64 xchg (implicitly locked), a64 the
        ; ldaxr/stxr retry, rv amoswap.{w,d}.aq -- and release a release-ordered store

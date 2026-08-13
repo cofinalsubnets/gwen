@@ -318,6 +318,11 @@
                 _ (pin (t 'sigs) "__builtin_bswap16" '(ushort (ushort) ()))
                 _ (pin (t 'sigs) "__builtin_bswap32" '(uint (uint) ()))
                 _ (pin (t 'sigs) "__builtin_bswap64" '(ulong (ulong) ()))
+                ; the popcount trio. the OPERAND is unsigned (a set high bit is a bit
+                ; like any other); the result is a plain int, gcc's own signature
+                _ (pin (t 'sigs) "__builtin_popcount" '(int (uint) ()))
+                _ (pin (t 'sigs) "__builtin_popcountl" '(int (ulong) ()))
+                _ (pin (t 'sigs) "__builtin_popcountll" '(int (ulong) ()))
                 ; C99 _Complex, seeded as two-member structs (canon maps the
                 ; specifier run onto these tags): layout, copy, union membership
                 ; and the SysV (sse sse) / one-sse ABI all ride the struct lanes
