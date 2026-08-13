@@ -252,11 +252,5 @@
    ; line -- the positional program (dev: `love crew/moon/fmt.l ..`), or a `-l` preload
    ; (the installed shebang: `love -l .../moonfmt ..`) -- taking the args after the seat.
    ; stays quiet under any other program name. (the mooncc/ain precedent.)
-   (bn p) (: n (tally p) (g k r) (? (k < n) (g (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n)) (g 0 0))
-   (me? w) (: b (bn w) ((b = "moonfmt") || (b = "moonfmt.l") || (b = "fmt.l")))
-   (seat a) (? !(two? a) ()
-               (<a = "-l") (? (two? >a) (? (me? <>a) (1 >< >>a) (seat >>a)) ())
-               (me? <a) (1 >< >a)
-               ())
-   s (seat >cmdline)
+   s ((from 'verbs 'fire) ["moonfmt" "moonfmt.l" "fmt.l"] >cmdline)
    (? (two? s) (fmt-main >s) ()))

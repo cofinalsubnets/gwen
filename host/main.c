@@ -1000,6 +1000,17 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
   return run_program(g, argp, replp); }
 #endif
 
+// Marshal a word list onto the stack as ONE chain, left on top. `skip` drops that many
+// words AFTER argv[0] -- the prime verb's own, which belong to the command line and not
+// to the program. Each string is pushed before any is consed, so the ones already there
+// are rooted on the stack through every ai_strof that might collect.
+ai_noinline static struct ai *argv_chain(struct ai *g, char const **v, int argc, int skip) {
+  int n = 0;
+  if (argc > 0) g = ai_strof(g, v[0]), n++;                  // argv[0] is always the program
+  for (int i = 1 + skip; i < argc; i++) g = ai_strof(g, v[i]), n++;
+  for (g = ai_push(g, 1, ai_zero); n--; g = gxr(g));
+  return g; }
+
 int main(int argc, char const **argv) {
   signal(SIGPIPE, SIG_IGN);        // a hung-up peer is an ANSWER, not a death (fd_writen)
   struct ai *g = NULL;
@@ -1016,15 +1027,20 @@ int main(int argc, char const **argv) {
   // (its own mooncc0.image bake -- the self-host build's ~ms compiler starts);
   // `bake` (the self-patch) stays host-only (love0 lays no .image section rule,
   // and its file bakes ride the `bake` nif from -e).
+  // `skip` counts the words that are the PRIME's and not the program's. It is a count
+  // and not a shift because the shift used to CLOBBER (argv[2] = argv[0]) -- which is
+  // how `cmdline` came to be a command line nobody typed. Nothing is written now, so
+  // both readings stay available: the whole invocation, and the program's view of it.
   char const *image_load_path = NULL, *bake = NULL; // see boot(): "" = self-bake, a path = image file
+  int skip = 0;
 #ifndef GL_BOOTSTRAP
   if (argc >= 2 && !strcmp(argv[1], "bake")) {
-   if (argc >= 3) bake = argv[2], argv[2] = argv[0], argv += 2, argc -= 2;
-   else bake = "", argv[1] = argv[0], argv += 1, argc -= 1; }
+   if (argc >= 3) bake = argv[2], skip = 2;
+   else bake = "", skip = 1; }
   else
 #endif
   if (argc >= 3 && !strcmp(argv[1], "wake"))
-   image_load_path = argv[2], argv[2] = argv[0], argv += 2, argc -= 2;
+   image_load_path = argv[2], skip = 2;
   // a LEADING wake with nothing to wake. Its arity error is C's because its parse is:
   // the registry's row would say "must lead the command line", which is the one thing
   // this invocation got right.
@@ -1046,23 +1062,26 @@ int main(int argc, char const **argv) {
     image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
   if (!g) g = ai_ini();
   g = env_budget(g);                               // the LOVE_BUDGET_MB cap, on whichever g won (fresh or woken image)
-  bool argp = argc > 1;
-  // The WHOLE C argv (incl. argv[0]/program name): cli.l drops the head for its own
-  // use, while `cmdline` keeps the full list, pinned for user visibility.
-  char const **av = argv;
-  int ac = argc;
-  for (; *av; g = ai_strof(g, *av++));
-  for (g = ai_push(g, 1, ai_zero); ac--; g = gxr(g));
+  bool argp = argc - skip > 1;
+  // TWO chains, because there are two honest readings and they differ by the primes:
+  //   cmdline  the WHOLE invocation, exactly as typed -- `wake IMAGE` included
+  //   argv     the PROGRAM's view: argv[0], then the words past the prime
+  // cli.l drops argv's head for its own use and rebinds argv again to the program's
+  // own argv; cmdline is never rebound by anyone, which is what makes it the thing a
+  // seat scan can read in any load order (love/verbs.l's `unprime` steps the primes).
+  g = argv_chain(g, argv, argc, 0);                 // cmdline, first: it ends up deeper
+  g = argv_chain(g, argv, argc, skip);              // argv, on top -- sp[0]
   if (ai_ok(g)) {
     // the static nifs (exit/open/close/run/getenv + any host/*.c app nifs) come
     // from the ai_nifs section -- immortal addresses, so the array door serves.
     // (This also re-pins them into a loaded image's book.)
     g = ai_defn(g, __start_ai_nifs, __stop_ai_nifs - __start_ai_nifs);
-    // ⚠ THE ARGV CHAIN NEVER LEAVES THE STACK. It is a live heap value, so it cannot
-    // ride a struct ai_def: C cannot re-root what it holds in an array, and the defn
-    // above interns a hundred names -- a hundred chances to move it. ai_defv reads it
-    // off sp[0] and leaves it there, so both names bind the one chain.
+    // ⚠ NEITHER CHAIN LEAVES THE STACK. They are live heap values, so they cannot ride
+    // a struct ai_def: C cannot re-root what it holds in an array, and the defn above
+    // interns a hundred names -- a hundred chances to move them. ai_defv reads sp[0]
+    // and leaves it, so each pop hands the next chain up.
     g = ai_defv(g, "argv");
+    if (ai_ok(g)) ai_core_of(g)->sp++;              // the book holds argv; cmdline is sp[0] now
     g = ai_defv(g, "cmdline");
     if (ai_ok(g)) ai_core_of(g)->sp++;              // the book holds it now
     // `love-image`: WHICH image this session woke, by path -- here because here is

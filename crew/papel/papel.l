@@ -402,13 +402,5 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
 ; script -- sits in the program seat of the real command line, on the args after it.
 ; body-having, so the machinery leaks nothing; papel-main reads BARE -- whichever
 ; layer holds this file's binds is still the head here.
-(: (bn p) (: n (tally p)
-             (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
-             (go 0 0))
-   (me? w) (: b (bn w) ((b = "papel") || (b = "papel.l")))
-   (seat a) (? !(two? a) ()
-               (<a = "-l") (? (two? >a) (? (me? <>a) (1 >< >>a) (seat >>a)) ())
-               (me? <a) (1 >< >a)
-               ())
-   s (seat >cmdline)
+(: s ((from 'verbs 'fire) ["papel" "papel.l"] >cmdline)
    (? (two? s) (papel-main >s) ()))

@@ -46,9 +46,12 @@
    ; doors -- no name was typed, a PATH was -- and it is why six apps each wrote this walk
    ; out for themselves. one walk now; the spellings stay with the app, which is the only
    ; thing that ever knew them.
-   ;   (fire ws)      -> (SEAT-WORD . args-after) off the real command line, else ()
-   ;   (seatof ws a)  the same over a list you hand it -- kore's in-image door, which
-   ;                  dispatches (link "kore" "ls" "-l") and never reads a command line.
+   ;   (fire ws a)    -> (SEAT-WORD . args-after) over the word list a, else ()
+   ;   (seatof ws a)  the same without the prime step -- the raw scan.
+   ; ⚠ `a` IS A PARAMETER and reading `cmdline` here instead would be the bug that cost
+   ; an afternoon: this module is COMPILED INTO THE EGG, so a bare global read folds to
+   ; the BAKE session's value and every caller then scans the command line that baked
+   ; the image. the caller reads `>cmdline` in its own file, where its own compile is.
    ; the seat WORD rides back because a multi-name app reads it: lush's login dash, an
    ; applet symlink. ⚠ () means "not seated", the presence answer -- ask it with two?.
    (dash w)    (? ((0 < tally w) && (w 0 = 45)) (snip w 1 (tally w)) w)   ; -sh: login(1)'s mark
@@ -66,4 +69,4 @@
                                    ())
                     (mine? ws <a) (<a >< >a)
                     ())                                          ; seats someone else: not me
-   (fire ws) (seatof ws (unprime >cmdline)))
+   (fire ws a) (seatof ws (unprime a)))

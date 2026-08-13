@@ -721,5 +721,5 @@
 ; is a compiler without an `-e` shim to make it one. FN takes the args after the name and
 ; answers a status charm -- moon-main quits instead, which is the same contract kept early.
 (: _ (pins (from 'verbs 'tab) 'mooncc moon-main)
-   s ((from 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"])
+   s ((from 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"] >cmdline)
    (? (two? s) (moon-main >s) ()))

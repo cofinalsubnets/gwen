@@ -422,15 +422,7 @@
 ; the SEAT (kiosko's shape): fire libra-main iff this file -- or the installed
 ; `libra` script -- sits in the program seat of the real command line. body-having,
 ; so nothing leaks.
-(: (bn p) (: n (tally p)
-             (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
-             (go 0 0))
-   (me? w) (: b (bn w) ((b = "libra") || (b = "libra.l")))
-   (seat a) (? !(two? a) ()
-               (<a = "-l") (? (two? >a) (? (me? <>a) (1 >< >>a) (seat >>a)) ())
-               (me? <a) (1 >< >a)
-               ())
-   s (seat >cmdline)
+(: s ((from 'verbs 'fire) ["libra" "libra.l"] >cmdline)
    ; ⚠ QUIT, never return: the shebang's -l makes this file a PRELOAD, so every
    ; path that merely answers -- a clean check, fmt, infix, serve, -h -- leaves
    ; cli holding the tool's own arguments and it LOADS the first one as a love

@@ -350,5 +350,5 @@ usage: kiosko [-p PORT] [-q] [DIR]
 ; whichever layer holds this file's binds is still the head here. body-having, so
 ; nothing leaks.
 (: _ (pins (from 'verbs 'tab) 'kiosko kiosko-main)
-   s ((from 'verbs 'fire) ["kiosko" "kiosko.l"])
+   s ((from 'verbs 'fire) ["kiosko" "kiosko.l"] >cmdline)
    (? (two? s) (kiosko-main >s) ()))

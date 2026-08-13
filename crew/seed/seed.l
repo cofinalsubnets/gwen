@@ -693,5 +693,5 @@ usage: seed VERB ..
 ; this file's binds (the loader's, or the script's session) is still the head
 ; when this form compiles. body-having: the seat leaks nothing.
 (: _ (pins (from 'verbs 'tab) 'seed seed-main)
-   s ((from 'verbs 'fire) ["seed" "seed.l"])
+   s ((from 'verbs 'fire) ["seed" "seed.l"] >cmdline)
    (? (two? s) (seed-main >s) ()))
