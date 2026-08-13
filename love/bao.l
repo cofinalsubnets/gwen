@@ -531,7 +531,7 @@
                      'detach detach 'emptybuf emptybuf 'mkframe mkframe
                      'parses parses 'joinln joinln 'flatten flatten
                      'splitat splitat 'parseall parseall)
-                 (\ q (? (id? q 'keys) (keys p) (peep p q 0))))
+                 p)                                    ; the tablet itself -- it indexes itself
               (shell ()))
 
 

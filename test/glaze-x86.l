@@ -25,7 +25,7 @@
 ; BEFORE the binds below: that form is a body-less top-level `:`, so ITS names land on the
 ; book, and half the roster here would answer its own copies.
 (assert (member? 'glaze (from ()))
-        (400 < (tally (from 'glaze 'keys)))
+        (400 < (tally (keys (from 'glaze))))
         (: nm (names ()) (&& (! (member? 'autogroup nm)) (! (member? 'jitir nm)) (! (member? 'glaze nm)))))
 (: assemble (from 'holo 'assemble)
    bcat (\ ps (foldl (\ a b (+ a b)) () ps))

@@ -5,8 +5,8 @@
 ; They live INSIDE bao's closure (love/bao.l), off the global book -- and the CHECKS
 ; live here, where checks belong, reaching them through bao's test door:
 ;
-;   (bao 'parts) -- an opaque accessor over the editor primitives, the shape `from`
-;   hands back for a module. (B 'edleft) reaches one, (B 'keys) lists them. Nothing
+;   (bao 'parts) -- the editor primitives as a tablet, the shape `from`
+;   hands back for a module. (B 'edleft) reaches one, (keys B) lists them. Nothing
 ;   is defined globally to make this work, and the battery reads as ordinary asserts.
 ;
 ; bao is the BAKED shell core (in the host egg) and `bao` is public, so this file

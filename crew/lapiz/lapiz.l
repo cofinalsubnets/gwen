@@ -64,7 +64,7 @@
 ; papel's want does), and reads bare down the splice, or reaches one member through
 ; the accessor: (from 'lapiz 'md->ht). the six faces are
 ; mdread/mdshow/htread/htshow/md->ht/ht->md; everything else is machinery,
-; reachable for a probe ((from 'lapiz 'keys)) but not meant for the eye.
+; reachable for a probe ((keys (from 'lapiz))) but not meant for the eye.
 
 ; the combinators (love/peg.l) -- its own top-level form; lapiz wants only the lenient `runp`.
 (use 'peg)

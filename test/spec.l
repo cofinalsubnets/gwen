@@ -719,13 +719,16 @@
 ; fixtures, so it lives outside this corpus); here the boot-loaded modules prove the registry
 ; surface, since every corpus frontend registers rng and kanren (bao too, except the wasm
 ; shim, whose test harness feeds bao.l bare -- the page is its own repl).
-; (from 'name) is the OPAQUE accessor -- currying reaches a member, 'keys introspects, a
-; missing module answers () (the presence guard), (from ()) lists the registered names.
+; (from 'name) IS the module's tablet -- currying reaches a member because a tablet indexes
+; itself, `keys` introspects it like any other, a missing module answers () (the presence
+; guard: `lit?` is true of a tablet even when empty and false of (), so it is the one honest
+; test), and (from ()) lists the registered names.
 (assert
   (lit? (from 'rng)) (lit? (from 'kanren))                      ; boot-loaded, registered
   (member? 'kanren (from ())) (member? 'rng (from ()))          ; the registry lists them
   (nil? (from 'spec-nope))                                      ; the presence guard
-  (member? 'walk (from 'kanren 'keys))                          ; 'keys introspects the internals
+  (tablet? (from 'kanren))                                      ; a module IS its tablet
+  (member? 'walk (keys (from 'kanren)))                         ; so `keys` introspects it
   (8 = ((from 'kanren 'subst) '(()) 8))                         ; curried member reach
   (nil? (from 'kanren 'spec-missing))                           ; a member miss reads the zero point
   (lit? unify) (lit? rand) (lit? reads))                        ; the boot splices serve the bare names

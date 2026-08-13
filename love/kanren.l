@@ -15,7 +15,7 @@
 ; which loads, registers and splices in one motion. the splice serves every
 ; bare consumer (unify/ufail?/var/s_plus/s_star/===, and the goal macros'
 ; expansions); internals answer to (from 'kanren ..) -- subst, walk, query,
-; the dict kit; (from 'kanren 'keys) introspects. love/overlay.l's engine
+; the dict kit; (keys (from 'kanren)) introspects. love/overlay.l's engine
 ; reads subst through the registry, so kanren must be REGISTERED before overlay
 ; evals (boot order, not just splice order).
 (: (dict_has d k) (: (loop k ks vs) (? ks (? (= k <ks) vs (loop k >ks >vs))) (loop k <d >d))

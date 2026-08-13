@@ -17,7 +17,7 @@
 ; --- the module seam: rune registered, the splice + accessor both reach ----
 (assert
  (member? 'rune (from ()))                ; the registry lists it
- (member? 'deriv (from 'rune 'keys))      ; 'keys introspects the layer
+ (member? 'deriv (keys (from 'rune)))      ; keys introspects the layer
  (1 = ((from 'rune 'cnorm) (q 3 3)))      ; the opaque accessor reaches a member
  (lit? (from 'rune))                      ; presence: the accessor is a closure
  (! (from 'ruin)))                        ; a missing module answers ()

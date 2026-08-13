@@ -145,8 +145,10 @@
 ;   the current head -- no layer, no registration. module files carry no brackets; their macros
 ;   land in their own book's macro slot and ride the splice (macroget walks the chain). the boot
 ;   splices keep rng/kanren/bao ambient so the corpus reads rand/unify/reads bare; holo registers
-;   non-ambient. (from 'holo 'assemble) is the opaque accessor: currying reaches a member, 'keys
-;   introspects, a missing module answers () (the presence guard), (from ()) lists the registry.
+;   non-ambient. A MODULE IS ITS TABLET: (from 'holo) hands the real one, and (from 'holo
+;   'assemble) reaches a member because a tablet indexes itself. `keys` introspects it as the
+;   ordinary function, `pin` writes it -- surgery on a live runtime, yours to do. a missing
+;   module answers () (the presence guard; `lit?`, never `!`), (from ()) lists the registry.
 ;   baked consumers fold their bare refs at their own compile, so load order is the scope: a use
 ;   must precede its readers' compiles. laws: spec.l's modules section + test/host/loader.l.
 ;   ⚠ a body-less-`:` binding whose name collides with a module nom leaks and clobbers the binding.
@@ -259,7 +261,7 @@ $'(1 2 3)            ; 6       $ sums the nets, then clamps once
 ; references were folded, so only the noms die; noms the printer/reader/expanders emit stay, as do
 ; the C-resolved hooks (num-ap add mul). the shell core (love/bao.l) is a registered module: the
 ; user verbs (read reads welp wrap) re-pin at its foot, the plumbing stays sealed -- frontends
-; eval ((from 'bao 'bao) 0) / ((from 'bao 'shell) 0), (from 'bao 'keys) is the manifest.
+; eval ((from 'bao 'bao) 0) / ((from 'bao 'shell) 0), (keys (from 'bao)) is the manifest.
 ; demo:
 (lit? ev)            ; true    ev is installed in the image
 born                 ; a fixnum (the hatch time) post-egg; unbound pre-egg

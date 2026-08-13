@@ -25,8 +25,8 @@
 
 (assert
  (member? 'tls (from ()))
- (member? 'cc-block (from 'tls 'keys))
- (member? 'po-mac (from 'tls 'keys))
+ (member? 'cc-block (keys (from 'tls)))
+ (member? 'po-mac (keys (from 'tls)))
  (lit? (from 'tls 'cc-xor)))
 
 ; --- BYTES ------------------------------------------------------------------------

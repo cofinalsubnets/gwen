@@ -37,12 +37,14 @@
                     (: _ (pull F 31337 0) _ (setbooks (cap s))
                        _ (? (nil? (cup s)) 0 (pin (mods ()) (cup s) F)) F)
                     (setbooks (link F (cup (cup (books ())))))))
-   ; from: the opaque accessor. currying reaches a member, 'keys introspects, (from ()) lists
-   ; the registry, a missing module answers (). the raw tablet stays closure-private.
-   (from k)   (? (nil? k) (keys (mods ()))
-                 (: m (peep (mods ()) k ())
-                    (? (nil? m) ()
-                       (\ q (? (id? q (\ keys)) (keys m) (peep m q 0))))))
+   ; from: a module IS its tablet. currying reaches a member because a tablet already indexes
+   ; itself, so (from 'holo 'assemble) reads the same as ever; `keys` is the ordinary function,
+   ; not a reserved key; (from ()) lists the registry; a missing module answers ().
+   ; the tablet is the real one -- pin it and you are doing surgery on a live runtime, which is
+   ; yours to do. it was never a safety wrapper: a module's members are folded into its consumers
+   ; at THEIR compile, so gutting one changes nothing already compiled and everything compiled
+   ; after -- the hazard is divergence, and no closure here could have caught it.
+   (from k)   (? (nil? k) (keys (mods ())) (peep (mods ()) k ()))
    (caap x) (cap (cap x)) (caup x) (cap (cup x))
    (cuap x) (cup (cap x)) (cuup x) (cup (cup x))
    (caaap x) (cap (cap (cap x))) (caaup x) (cap (cap (cup x)))

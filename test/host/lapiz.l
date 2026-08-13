@@ -17,7 +17,7 @@
 ; --- the module seam: lapiz registered, the splice + accessor both reach -------
 (assert
  (member? 'lapiz (from ()))                   ; the registry lists it
- (member? 'md->ht (from 'lapiz 'keys))        ; 'keys introspects the layer
+ (member? 'md->ht (keys (from 'lapiz)))        ; keys introspects the layer
  ("<h1>hi</h1>" = ((from 'lapiz 'md->ht) "# hi"))   ; the opaque accessor reaches a face
  (lit? (from 'lapiz))                         ; presence: the accessor is a closure
  (! (from 'lapis)))                           ; a missing module answers ()

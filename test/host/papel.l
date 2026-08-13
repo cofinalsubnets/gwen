@@ -29,7 +29,7 @@
  (member? 'papel (from ()))
  (member? 'lapiz (from ()))
  (member? 'cook (from ()))
- (member? 'build (from 'papel 'keys))
+ (member? 'build (keys (from 'papel)))
  (lit? (from 'papel 'papel-main))
  (! (from 'papyrus))                          ; a missing module answers ()
  ; the combinators are a MODULE nobody splices at boot: lapiz and cook each said (use 'peg),

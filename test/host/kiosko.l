@@ -23,7 +23,7 @@
 
 (assert
  (member? 'kiosko (from ()))
- (member? 'serve1 (from 'kiosko 'keys))
+ (member? 'serve1 (keys (from 'kiosko)))
  (lit? (from 'kiosko 'kiosko-main))
  (! (from 'kiosco)))
 
