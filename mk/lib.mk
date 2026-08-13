@@ -31,7 +31,7 @@ $(lit): tools/lit.c
 	@mkdir -p $(dir $@)
 	@echo CC	$@
 	@$(CC) -std=$(ai_std) -O2 -Wall -Wextra -Werror -o $@ $<
-gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/post0.h out/lib/p10.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/pat0.h out/lib/uu0.h out/lib/coin0.h out/lib/rng0.h out/lib/q0.h out/lib/kanren0.h out/lib/overlay0.h out/lib/peg0.h out/lib/tests0.h $(asm0_h)
+gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/post0.h out/lib/p10.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/pat0.h out/lib/uu0.h out/lib/coin0.h out/lib/rng0.h out/lib/q0.h out/lib/kanren0.h out/lib/overlay0.h out/lib/peg0.h out/lib/verbs0.h out/lib/tests0.h $(asm0_h)
 .PHONY: lib
 lib: $(lib_h) $(gl0_h)
 # ⚠ lcat a .l into its header ATOMICALLY -- temp, require non-empty, then mv. A bare `> $@`

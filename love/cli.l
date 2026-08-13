@@ -9,21 +9,23 @@
 ; with no program (no -e, no file), read-eval stdin to EOF. Loaded by main.c when args are
 ; present.
 ;
-; the VERB RAIL: `verbs` -- ((NAME FN) ..), pinned () by every boot and rebound
-; with the table by an artifact's bake (the dist lane's cat, crew/seed/up.l) --
-; turns a first positional NAME into (FN args). a verb wins over a same-named
-; file; `love -- up` and `love ./up` still read the file. the table's OTHER door
-; -- argv[0] naming a verb (a `seed` symlink onto the artifact) -- lives in
-; main.c's run_program: it must fire even at argc 1, where this file never runs.
+; the VERB RAIL: the registry is the `verbs` MODULE (love/verbs.l), so it rides the image and
+; needs no global -- a frontend that never registers it simply has none, and the presence guard
+; below is that answer. (V 'word h) turns a first positional NAME into its FN, applying the
+; shadow rule in one place: a verb wins over a same-named file, but a `/` or a `.l` is always
+; the file, so `love -- up` and `love ./up` still read one. the table's OTHER door -- argv[0]
+; naming a verb (a `seed` symlink onto the artifact) -- lives in main.c's run_program: it must
+; fire even at argc 1, where this file never runs.
 ;
 ; `pre` handles leading -l preloads + -v/-h and returns (kind . rest); the global
 ; argv is then rebound (top-level (: argv ..) DEFGLOB -- book is mopped post-egg, so a
 ; pin/peep on it is a no-op; defglob writes g->book directly) to the program's view
-; (program . args). cli.l is compiled by c0 BEFORE -l loads prel, so the always-run path
-; (pre/load1) uses only nifs/special-forms, NOT prel fns (two? not atom?; |, the
-; bitwise-or nif, not the || macro; link not the L macro for the export list).
+; (program . args). every lane that evals this file has the prel up already -- the build-tool
+; lane loads prel0 ahead of it, the woken lane carries it in the image -- so prel fns, the
+; macros (|| list) and the bracket ctors are all in hand. ⚠ NOT `pat`: the build-tool lane
+; never uses it, so `@` is the one modern spelling this file cannot reach.
 ;
-; the helpers (load1 eval1 bye version usage need pre) are CLOSURE-PRIVATE in the inner
+; the helpers (load1 eval1 bye version usage need vfind pre) are CLOSURE-PRIVATE in the inner
 ; body-having `:`, OFF the global book -- only `parsed` and `argv` (the kept publics; argv is
 ; read by test/run.l + host/main.c) are defglob'd out, the cli sibling of the repl->bao
 ; consolidation. The triple holder is bound to `_`, NOT a name: a top-level body-less `:`
@@ -35,51 +37,54 @@
 ; be rebound before the load fires. (-v/-h still exit inside `pre`, before the rebind, as before.)
 (: _
  (: (load1 p) (: q (open p "r")
-       (? q (reads q) (: _ (say err (+ "love: cannot open " p)) (quit 1))))
+       (? q (reads q) (: _ (say err ("love: cannot open " + p)) (quit 1))))
     (eval1 s) (: m (nom 0)                           ; a fresh nom: unfinished-shape, id?-safe
        (rdl x acc) (: r (sound x)                    ; every top-level datum off the string, in order
-          (? (two? r)     (rdl (cup r) (link (cap r) acc))
+          (? (two? r)     (rdl >r (<r >< acc))
              (id? r 'torn) m                         ; an unfinished shape
              (rev acc)))
        ds (rdl s ())
-       (? (id? ds m)       (: _ (say err "love: -e: unfinished form") (quit 2))
+       (? (id? ds m)  (: _ (say err "love: -e: unfinished form") (quit 2))
           (two? ds)
-          (? (two? (cup ds)) (ev 'ev ds)             ; MANY datums: the ONE application -- infix factors, like a repl line
-             (ev 'ev (cap ds)))                      ; ONE datum: as-is (a leading monadic stays fused)
+          (? (two? >ds) (ev 'ev ds)                  ; MANY datums: the ONE application -- infix factors, like a repl line
+             (ev 'ev <ds))                           ; ONE datum: as-is (a leading monadic stays fused)
           ()))                                       ; no datums: nothing to run
     (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (quit 0))   ; print a line to out, flush, exit 0
-    (version _) (bye (+ "love " love-version))                       ; _ arg: love has no nullary calls
-    (usage _) (bye (+ "usage: love [-l FILE] [-e EXPR] [-n] [-v] [-h] [--] [FILE ...]\n"
-               (+ "  -l, --load FILE   preload FILE (read-eval) before the program\n"
-               (+ "  -e, --eval EXPR   eval EXPR as one expression (infix works), print the answer\n"
-               (+ "  -n, --silent      with -e: do not print the answer\n"
-               (+ "  -v, --version     print the version and exit\n"
-               (+ "  -h, --help        print this help and exit\n"
-               (+ "  --                end of options; the rest are files\n"
-                  "with no program (no -e, no FILE), read-eval stdin to EOF."))))))))
-    (need h t) (? (two? t) 0 (: _ (say err (+ "love: " (+ h " needs an argument"))) (quit 2)))
-    (vfind h t) (? (two? t)                          ; the verb table walk: NAME -> FN, () on a miss
-                   (? (= h (cap (cap t))) (cap (cup (cap t))) (vfind h (cup t)))
-                   ())
+    (version _) (bye ("love " + love-version))       ; _ arg: love has no nullary calls
+    (usage _) (bye ("usage: love [-l FILE] [-e EXPR] [-n] [-v] [-h] [--] [FILE ...]\n"
+                  + "  -l, --load FILE   preload FILE (read-eval) before the program\n"
+                  + "  -e, --eval EXPR   eval EXPR as one expression (infix works), print the answer\n"
+                  + "  -n, --silent      with -e: do not print the answer\n"
+                  + "  -v, --version     print the version and exit\n"
+                  + "  -h, --help        print this help and exit\n"
+                  + "  --                end of options; the rest are files\n"
+                  + "with no program (no -e, no FILE), read-eval stdin to EOF."))
+    (need h t) (? (two? t) 0 (: _ (say err ("love: " + h + " needs an argument")) (quit 2)))
+    ; ⚠ tablet?, never a bare truth test: an unregistered module reads () and (() 'word) is the
+    ; church const 1, so an unguarded (V 'word h) would answer h -- the string itself, truthy,
+    ; and the rail would call a command word as a function.
+    (vfind h) (: V (from 'verbs) (? (tablet? V) (V 'word h) ()))
     (pre a) (? (two? a)                              ; -> (kind . rest): 'eval code.args / 'verb fn.args / 'file prog.args / 'stdin
-     (: h (cap a) t (cup a) (?
-      (| (= h "-l") (= h "--load"))    (: _ (need h t) _ (load1 (cap t)) (pre (cup t)))
-      (| (= h "-v") (= h "--version")) (version 0)
-      (| (= h "-h") (= h "--help"))    (usage 0)
-      (| (= h "-e") (= h "--eval"))    (: _ (need h t) (link 'eval t))
-      (| (= h "-n") (= h "--silent"))  (: r (pre t) (? (= (cap r) 'eval) (link 'evalq (cup r)) r))
-      (= h "--")                        (? (two? t) (link 'file t) (link 'stdin ()))
-      (: f (vfind h verbs)              ; a positional: a baked verb first, else the program file
-         (? f (link 'verb (link f a)) (link 'file a)))))
-     (link 'stdin ()))
-    p (pre (cup argv))                  ; runs -l preloads + -v/-h; the program kind
-    av (? (| (= (cap p) 'eval) (| (= (cap p) 'evalq) (= (cap p) 'verb))) (cup (cup p)) (cup p))  ; the program's view of argv
-    run (\ _ (? (= (cap p) 'eval) (: v (eval1 (caup p)) _ (print out v) (put out 10))  ; -e ANSWERS OUT LOUD, a repl line
-              (= (cap p) 'evalq) (eval1 (caup p))   ; printing like one: `print`, the repl's face, not dot's raw one. -n mutes.
-              (= (cap p) 'verb) (: _ ((caup p) (cup (cuup p))) (quit 0))   ; FN takes the args after the name
-              (= (cap p) 'file) (load1 (caup p))
+     (: h <a t >a (?
+      (h = "-l" || h = "--load")    (: _ (need h t) _ (load1 <t) (pre >t))
+      (h = "-v" || h = "--version") (version 0)
+      (h = "-h" || h = "--help")    (usage 0)
+      (h = "-e" || h = "--eval")    (: _ (need h t) ('eval >< t))
+      (h = "-n" || h = "--silent")  (: r (pre t) (? (<r = 'eval) ('evalq >< >r) r))
+      (h = "--")                    (? (two? t) ('file >< t) ('stdin >< ()))
+      (: f (vfind h)                ; a positional: a registered verb first, else the program file
+         (? f ('verb >< f >< a) ('file >< a)))))
+     ('stdin >< ()))
+    p (pre >argv)                    ; runs -l preloads + -v/-h; the program kind
+    k <p                             ; ..and the kind alone, read six times below
+    av (? (k = 'eval || k = 'evalq || k = 'verb) >>p >p)   ; the program's view of argv
+    run (\ _ (? (k = 'eval)  (: v (eval1 <>p) _ (print out v) (put out 10))  ; -e ANSWERS OUT LOUD, a repl line
+              (k = 'evalq) (eval1 <>p)      ; printing like one: `print`, the repl's face, not dot's raw one. -n mutes.
+              (k = 'verb)  (: r (<>p >>>p)  ; FN takes the args after the name and ANSWERS a status;
+                              (quit (? (charm? r) r 0)))   ;   one that quits internally never returns here
+              (k = 'file)  (load1 <>p)
               (reads in)))
-    (link p (link av (link run ()))))   ; the body: return (parsed program-argv run)
- parsed (cap _)                         ; DEFGLOB the kept publics out of the triple (the prev `_`)
- argv   (cap (cup _))                   ; rebind argv to the program's view, BEFORE the run
- _ ((caup (cup _)) ()))                 ; (run ()): dispatch now that argv is the program's view (the unit -- run ignores its arg)
+    [p av run])                      ; the body: return (parsed program-argv run)
+ parsed <_                           ; DEFGLOB the kept publics out of the triple (the prev `_`)
+ argv   <>_                          ; rebind argv to the program's view, BEFORE the run
+ _ (<>>_ ()))                        ; (run ()): dispatch now that argv is the program's view (the unit -- run ignores its arg)

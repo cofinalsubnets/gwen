@@ -677,6 +677,8 @@ static char const cli[] =
 #include "holo0.h"
 #include "x640.h"
 #include "arm640.h"
+ , src0_verbs[] =
+#include "verbs0.h"
  ;
 
 // With args, run the build tool (lcat / gen_data) through the CLI driver.
@@ -691,6 +693,7 @@ static struct ai_lib const libs0[] = {
   {"bao", src0_bao}, {"rng", src0_rng}, {"kanren", src0_kanren}, {"pat", src0_pat}, {"uu", src0_uu},
   {"coin", src0_coin}, {"q", src0_q}, {"overlay", src0_overlay}, {"peg", src0_peg},
   {"holo", src0_holo},                                 // which the mooncc cat's cpp/gen read (the self-host build lane)
+  {"verbs", src0_verbs},                               // the verb registry: love0 runs the same cli.l rail
   {NULL, NULL} };
 struct ai_lib const *ai_libs(void) { return libs0; }
 
@@ -706,8 +709,9 @@ static struct ai *boot(struct ai *g, bool argp) {
     "(use 'bao)"                                       // p1 goes FIRST: this lane never hatches an egg, and prel's
     "(use 'kanren)"                                    // loader folds `sound` at its own compile; kanren splices
                                                        //   because the corpus reads unify/ufail bare
-    "(: verbs ())"                                     // the CLI's verb rail reads `verbs`: bound-empty = no verbs, quietly
-    );
+    "(use 'verbs)"                                     // the verb registry the cli rail walks -- registered, then
+    );                                                 //   unspliced below: this lane runs the SAME cli.l
+    g = ai_unsplice_(g);
     return ai_evals_(g, cli); }
   g = ai_strof(g, tests0);                            // the baked corpus, as a string
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
@@ -805,18 +809,16 @@ static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   // the ARGV[0] DOOR of the verb rail (love/cli.l has the positional door): when the
   // binary was invoked under a verb's name -- a `seed` symlink onto the dist artifact
   // -- that verb fires on the args, even at argc 1 (a bare `seed` wants its usage),
-  // which is exactly where the cli never runs. `verbs` is pinned () by every boot, so
-  // a plain binary walks an empty table and falls straight through; only a bake whose
-  // cat rebound the table (crew/seed/up.l) ever dispatches here.
+  // which is exactly where the cli never runs. the basename decides, so no shadow rule
+  // applies here; the whole walk lives in the module (love/verbs.l's `seat`) and this is
+  // the call. ⚠ tablet?, never a bare truth test -- an unregistered module reads () and
+  // (() 'seat) is the church const 1, which would answer argv[0] itself and dispatch it.
+  // a verb ANSWERS a status charm and we quit with it; one that quits internally never
+  // returns here. that is kore's convention, and it is why `love kore sed ..` nests.
   g = ai_evals_(g,
-    "(: s (cap cmdline) n (tally s)"
-    "   (sx w) (: m (tally w)"                       // s ends in w, whole or at a / boundary
-    "      (? (< n m) ()"
-    "         (: (go i) (? (= i m) 1 (? (= (s (+ (- n m) i)) (w i)) (go (+ i 1)) ()))"
-    "            (? (go 0) (? (= n m) 1 (= (s (- (- n m) 1)) 47)) ()))))"
-    "   (fnd t) (? (link? t) (? (sx (cap (cap t))) (cap (cup (cap t))) (fnd (cup t))) ())"
-    "   f (fnd verbs)"
-    "   (? f (: _ (f (cup cmdline)) (quit 0)) 0))");
+    "(: V (from 'verbs)"
+    "   f (? (tablet? V) (V 'seat (cap cmdline)) ())"
+    "   (? f (: r (f (cup cmdline)) (quit (? (charm? r) r 0))) 0))");
   if (argp) return ai_evals_(g, cli);
   if (!replp) return ai_evals_(g, "(reads in)");         // non-tty stdin: the stream shell (love/bao.l) drinks the in port
   return ai_evals_(g, "((from 'bao 'bao) 0)"); }                      // a tty: bao (the baked shell core) is DEFINE-ONLY -- installs
@@ -853,6 +855,9 @@ static char const src_uu[] =
  ;
 static char const src_bao[] =
 #include "bao.h"
+ ;
+static char const src_verbs[] =
+#include "verbs.h"
  ;
 // holo, the crew/holo/ assembler: ONE entry = the arch-neutral core plus the NATIVE
 // backend (C string concatenation; the glaze emits for the running arch only --
@@ -892,7 +897,7 @@ static char const src_glaze[] =
 static struct ai_lib const libs[] = {
   {"coin", src_coin}, {"rng", src_rng}, {"q", src_q}, {"kanren", src_kanren},
   {"overlay", src_overlay}, {"peg", src_peg}, {"pat", src_pat}, {"uu", src_uu}, {"bao", src_bao},
-  {"holo", src_holo},
+  {"holo", src_holo}, {"verbs", src_verbs},
 #ifdef AI_GLAZED
   {"glaze", src_glaze},
 #endif
@@ -940,8 +945,10 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
                                                          //   test_glaze/test_raw_arm64 recipes), mooncc's cat joins ALL of them
   g = ai_evals_(g,
     "(use 'bao)"                                         // the shell core: loaded, registered, spliced (read/reads/welp/wrap bare)
-    "(: verbs ())"                                       // the CLI's verb rail reads `verbs`: bound-EMPTY here, so a plain binary
-  );                                                     //   answers no verbs quietly; a dist bake's cat rebinds it with the table
+    "(use 'verbs)"                                       // the verb registry, holo's shape: registered, then NON-AMBIENT below --
+  );                                                     //   tab/word/seat are not names to reach bare, and `get` would shadow half
+  g = ai_unsplice_(g);                                   //   the tree. a plain binary carries wake+bake and nothing else; a dist
+                                                         //   bake's cat pins the rest into (from 'verbs 'tab)
 #ifdef AI_GLAZED
   // the glaze, in three moves. (use 'glaze) loads emit.l + auto.l into their own layer and
   // registers it -- ~415 codegen names the book never sees. holo is spliced UNDER that layer
