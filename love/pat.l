@@ -49,6 +49,10 @@
 ;   (? g pat)              a GUARD: pat must fit AND g must hold
 ;   (? g)                  the guard alone -- fits anything g holds for
 ;   (p1 || p2)             ALTERNATIVES: either shape fits. `|` is the same tag
+;   (p1 && p2)             AND: both fit. `&` too -- the dual, and the way to name
+;                          the whole while taking it apart: (v && ['lam x b])
+;   ()                     the form at ZERO length: asks nothing, so it fits anything
+;   []                     the LIST at zero length: the empty chain, exactly
 ; ⚠ a map key is read for PRESENCE, not truth: a pinned () matches, an absent
 ; key does not.
 ;
@@ -106,11 +110,19 @@
    ; (nom access) pairs its body binds, and the GUARDS, which are neither.
    (pw p v)
      (? (nom? p) (? (= p '_) wnil [() [[p v]] ()])
+        (id? p ()) wnil                                      ; () is the form at ZERO: it asks nothing
         (! (link? p)) (wts [['= p v]])
         (: h <p as >p
            (? (= h '?) (? (! (two? as)) (wrest p '_ v)        ; a GUARD: (? g1 .. gn pat), or (? g)
                           (! (two? >as)) (wgd <as)           ; ..one operand IS the lone guard
                           (wq as v))                         ; ..else every one but the last guards
+              ; AND-PATTERNS, the dual of ||: both shapes must fit, and the walks simply
+              ; CONCATENATE -- one conjunction, and no winner to pick, because both branches
+              ; read the SAME value and their access forms are already rooted there.
+              ; ⚠ so a nom in both is the ORDINARY non-linear nom, and dedup makes the second
+              ; sighting an equality: ([a _] && [_ a]) fits a pair of equals, for free.
+              ; the everyday one is naming the whole while taking it apart: (v && ['lam x b]).
+              ((h = '&&) || (h = '&)) (foldl wcat wnil (map (\ q (pw q v)) as))
               ; ALTERNATIVES, anywhere: ONE test, the branches ||ed. each branch owns its own
               ; equalities and its own guards, so a disjunct is that branch entire.
               ; ⚠ a nom lives at a DIFFERENT PLACE in each branch, so it cannot be one access

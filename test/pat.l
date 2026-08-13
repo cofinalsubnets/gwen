@@ -15,7 +15,7 @@
  ; --- a literal matches itself; 'a is the SYMBOL, never a binding
  ('sym = (@ 'a 'a 'sym 'other)) ('other = (@ 'b 'a 'sym 'other))
  (7 = (@ 5 5 7 0)) (7 = (@ "hi" "hi" 7 0)) (0 = (@ "hi" "ho" 7 0))
- ('empty = (@ () () 'empty 'no)) ('no = (@ 0 () 'empty 'no))   ; () and 0 are distinct nothings
+ ('empty = (@ () [] 'empty 'no)) ('no = (@ 0 [] 'empty 'no))   ; () and 0 are distinct nothings
  ('lst = (@ '(1 2) '(1 2) 'lst 'no))       ; a quoted LIST is one literal, not a shape
  ; --- clauses, in source order, like ?
  (72 = (@ '(sum 32 40) ['sum a b] (a + b) ['product a b] (a * b) 0))
@@ -149,6 +149,18 @@
  ; --- guards STACK without nesting: every operand but the last is a condition
  (4 = (@ '(1 2 3) (? (1 < 2) (2 < 3) (a b c)) (a + c) 'no))
  ('no = (@ '(1 2 3) (? (1 < 2) (3 < 2) (a b c)) (a + c) 'no))
+ ; ..and the pair bottoms out consistently: [] is the LIST at zero, exactly the empty
+ ; chain; () is the FORM at zero, which asks nothing and so fits ANYTHING, like `_`.
+ ('any = (@ 5 () 'any 'no)) ('any = (@ '(1 2) () 'any 'no)) ('any = (@ () () 'any 'no))
+ ('empty = (@ () [] 'empty 'no)) ('no = (@ '(1) [] 'empty 'no)) ('no = (@ 5 [] 'empty 'no))
+ (1 = (@ '(1 2) [a ()] a 'no))                     ; ..so () is the don't-care in a position
+ ; --- AND-patterns, the dual of ||: both must fit. `&` says it too.
+ ('(lam x b) = (@ '(lam x b) (v && ['lam p q]) v 'no))   ; ..name the whole, take it apart
+ ('b = (@ '(lam x b) (v && ['lam p q]) q 'no))
+ ('no = (@ '(pi x b) (v && ['lam p q]) v 'no))
+ ('(1 2) = (@ '(1 2) (x & [a b]) x 'no))
+ ; ..both branches read the SAME value, so a nom in both is the ordinary non-linear one
+ (3 = (@ '(3 3) ([a _] && [_ a]) a 'no)) ('no = (@ '(3 4) ([a _] && [_ a]) a 'no))
  ; --- a lambda is a FORM like any other: (\ x b) builds one, so it matches one
  ('form = (@ '(\ x b) (\ q r) 'form 'no))
  ('lit = (@ 'x (\ x) 'lit 'no))                     ; ..at ONE operand it is still the literal
