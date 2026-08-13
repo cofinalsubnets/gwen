@@ -542,7 +542,7 @@ file real on arm64, riscv, thumb2) · 5.0/5.1a/5.1b i–iii.
 | # | step | serves | what the program gets to SAY | gate |
 |---|---|---|---|---|
 | 1 | **class the vmap entry** — LANDED 2026-08-13 | both | *pool residency ends here* — instead of 29 sites each reaching for flush-everything | byte-identity where the class verb provably equals the flush it replaces; dynamic floor where not |
-| 2 | **`restrict` survives the parser** — phase A LANDED 2026-08-13 | splice first | *this base is unaliased* — the promise `love.h` already makes on `Sp` and `pquals` discards | phase A: the roster exists, byte-identity. phase B: the ten-line seam probe loses its dead interior stores; `test_fixpoint` |
+| 2 | **`restrict` survives the parser** — phase A LANDED 2026-08-13; ⚠ **phase B BUILT AND REFUSED the same day** | splice first | *this base is unaliased* — the promise `love.h` already makes on `Sp` and `pquals` discards | phase A: the roster exists, byte-identity. ⚠ phase B's gate was a PROXY: the probe loses its stores and nothing else does — see the refusals |
 | 3 | **`fcb` gets rollback** — LANDED 2026-08-13 | moon | *discard the emission, keep what predates it* — a transaction, not a clobber | misses 81→69 reproduced; text delta owned by step 5, not by this verb |
 | 4 | **S-1b — reach the arm/riscv pipeline** | both | that `stldp` has *work* on three targets where it silently finds none | a store print that fires on all four targets; the seam probe folds on each |
 | 5 | **residency priced as extent × class × reload** — phase A LANDED 2026-08-13 | both | *why* a value lives where it lives, once, instead of seven gate stacks with stale proxies | phase A: byte-identity, the cost side in one table. phase B: corpus dynamic, mechanism count DOWN |
@@ -554,8 +554,9 @@ file real on arm64, riscv, thumb2) · 5.0/5.1a/5.1b i–iii.
 ranges are near-whole-function and interval SHARING buys +4%. Use the simplest assignment that
 works, and put the complexity budget in steps 1–6.
 
-**Dependency notes.** 1 before 5 (class is the axis pricing is a function of). 2 before 7 (an
-interior store cannot be dropped without the alias promise). 6 makes 1/2/5 sayable rather than
+**Dependency notes.** 1 before 5 (class is the axis pricing is a function of). ⚠ **2 before 7 is
+DEAD** — it read "an interior store cannot be dropped without the alias promise", and 7 does not
+want an interior store dropped: `composed` reads every one of them back. 7 is unblocked by 2. 6 makes 1/2/5 sayable rather than
 special-cased, but does not block them. 3 and 4 are independent and can go any time. 8 last, or
 whenever the churn is low.
 
@@ -633,7 +634,23 @@ cannot explain). The rest stand — they were refused for physics, not for bytes
   here compares bases by name.
   1. **`restrict` → interior-store elision.** The promise is real and now survives the parser
      (ladder step 2 phase A, landed), but aliasing is not what the seam pays. Not refuted as a
-     lever — refuted as *this* lever.
+     lever — refuted as *this* lever. ⚠ **BUILT ANYWAY on 2026-08-13 as ladder step 2 phase B,
+     and the emission says the same thing from the client's side.** `stst` — a store the same
+     cell overwrites with nothing touching memory between — closes the ten-line probe exactly
+     as the ladder's gate named (13 insns → 11 after S-1 → **7**, three dead stores gone) and
+     finds **ZERO work anywhere else**: love.c on four targets, the 133-file `test/cc` corpus,
+     `body.c`, `splice.c`, `host/main.c`, `host/posix.c` — every `.text` byte-identical.
+     **`composed`'s `Sp[0]` stores are not dead; every one is READ by the next op** through the
+     other name (`mov %rax,(%rcx)` / `mov (%r11),%rax`, adjacent). No dead-store pass reaches
+     that at any tier, and the roster is not even the consumer: with nothing between, the tier
+     that closes the probe needs no aliasing story — **S-1's own lesson a second time**.
+     ⚠ and what a rung here MUST carry first: **`volatile` does not survive `pquals` either**,
+     so the compiler has no notion of it (only `asm volatile` parses) — every store-touching
+     sweep today is safe only because `deadst` is r4-only and `stld`/`stldp` are adjacency-only.
+     A pass over a non-frame store without that word is a silent MMIO miscompile in
+     `port/inle/blk.c` and the port mains, which `KCC ?= mooncc` compiles. The answer is twelve
+     lines and it is TU-WIDE, not per-function: the inliner splices `static inline` device
+     accessors into unmarked callers, and with no LTO the TU is the real edge.
   2. **the store-address park past a spliced call** — `callish?` answers on the **pre-splice
      AST**, so a call node that inlines away still refuses the park. Making the park optimistic
      (take it, then read the emission and hand it back if a call survived) is *sound* and gated
@@ -815,6 +832,13 @@ lets it state something it was guessing.
   in and nothing further downstream. **A claim about what the program COSTS is a claim
   about the emitted bytes, so read the emitted bytes.** Same shape as the `say err`
   trap below — both are instruments answering a different question than the one asked.
+* ⚠ **a gate that names a PROBE is not a gate on the client, and this ladder wrote one.** Step 2
+  phase B's gate said *the ten-line seam probe loses its dead interior stores* — it does, and the
+  client shares none of that shape: the probe's four statements have no control flow, so its seam
+  is an adjacency (`stldp`) with a dead store behind it, while every op body in `composed` carries
+  a branch, so its store and the next op's load are adjacent but its stores are LIVE. **Read the
+  client's own emission before building to the reduction's shape** — one `objdump` of the function
+  the rung is for, first, not after.
 * And the instrument that finally worked was the plain one: **compile the same TU with
   both compilers and diff the disassembly per symbol.** Sizes first
   (`awk` the insn count per symbol, `join` the two lists, print the rows that differ) —
