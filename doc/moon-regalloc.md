@@ -1405,6 +1405,27 @@ delete-and-measure looks free on every static instrument and is wrong every time
 SUBSUMPTION — a loop-kept name taking a real interval seat from the assignment, so the keep has
 no customer — which reorders phase 3 as written.
 
+**2026-08-13 — the miss census CORRECTED, and the subsumption refused.** The 2026-08-12 reading
+("all 34 misses trace to `vmcflush` degenerating to a whole-map flush") was an INSTRUMENT
+ARTIFACT. ⚠ the killer tablet recorded the last flush that ever dropped a name, but it is seeded
+per function while the regen re-runs each function up to four times — so the site it named was
+routinely a flush from an earlier attempt, before the pin that actually missed was even
+established. Clear-on-pin (every pin door plus `vmset` wipes the name's entry) is what makes the
+record mean what it says, and under it `vmcflush` accounts for **zero** misses and `case` for
+zero. The real distribution is four causes: a `for` head 13, a selective non-flush drop 12,
+`fcb` 8, a `while`/`do` head 5. ⚠ the lesson generalizes past this arc: a "last X before Y"
+instrument is only an attribution if something clears X when the thing it describes is
+re-established — otherwise it reports staleness with a straight face, and the story it tells is
+plausible enough to write into a doc.
+
+The correction kills the rung it was aiming. Only 14 head-flush events kill a live enclosing
+keep, and 9 are inner loops whose licence `loscan` REFUSED — flushing there is correct. So
+"coverage, not optimism" covers 12 of 34, not 34 of 34, and `lochk`/`lomiss`/`lobar` stay.
+The `fcb` narrowing that came out of the census was sound (snapshot the map before the discarded
+int-flavored emission, restore it rather than flush to nothing — misses 81 → 69) and still lost:
++8/+12/+8 bytes on x64/arm64/riscv64, dynamically and compile-time neutral. Capacity, not
+correctness — a preserved pin holds a register out of the pool for the rest of the loop.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build),
 5.1b iv-b call-crossing optimism — each a physics lesson above.

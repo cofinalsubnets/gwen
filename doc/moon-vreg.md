@@ -539,17 +539,56 @@ across 10 functions of ~640**, 34 distinct (fn, name). Two facts make the replac
 
 * **every miss is ABSENT-ENTIRELY**, never present-in-another-register (0 of 81). A pinned reg
   leaves the free list, so nothing can steal it — a pin only ever dies by a drop.
-* **all 34 trace to a full `vmflush`** (a few also touched by the call or co-tenant paths), and
-  the reason is one line: `vmcflush` DEGENERATES to a whole-map flush when a loop has a call but
-  `csbor` is empty and `saro` is empty. So the miss condition is exactly *a call inside a loop
-  whose keep holds names that neither a cs seat nor the roster covers* — and `lomig`/`loseed`
-  already compute both sets. What is missing is that an ENCLOSING keep's names are never
-  re-checked against an inner loop's call coverage.
+⚠ **the `vmcflush` attribution below was WRONG — corrected 2026-08-13, and the correction kills
+the cheap subsumption.** The first instrument recorded, per name, the last flush site that ever
+dropped it; a miss then read back whatever site happened to be latest. But the killer tablet is
+seeded per FUNCTION while the regen re-runs each function up to four times, so the site named
+was routinely a flush from an earlier attempt, long before the pin that actually missed. ⚠ the
+fix is **clear-on-pin**: every pin door (`vmpin`/`vmbpin`/`vapin`) and `vmset` wipes the name's
+entry, so the tablet holds the flush that removed the LIVE pin and nothing else. Attribution
+before that is an artifact — `vmcflush`'s degeneration accounts for **zero** misses, and `case`
+(7 apparent) collapsed to zero once the record was tightened.
 
-⚠ so the up-front rule is **coverage, not optimism**: keep only what the seat set plus the
-roster can carry across every call the loop's subtree reaches. That is statically decidable from
-data the build already has, it cannot miss by construction, and `lochk`/`lomiss`/`lobar` and the
-four regen retry attempts go with it. The residency — the thing worth +184,000 — is untouched.
+**The corrected census (love.c/x64, 81 misses / 34 distinct pairs)** — four causes, not one:
+
+| killer | distinct (fn, name) | is the flush correct? |
+|---|---|---|
+| a `for` head whose own keep is empty | 13 | mostly YES — 9 of 14 live-keep kills are refused-licence inner loops |
+| a selective drop, no flush at all (call / co-tenant) | 12 | this alone is the "coverage" case, and it is 12/34, not 34/34 |
+| `fcb`, the float-compare branch lowering | 8 | narrowable, and it was narrowed — see below |
+| a `while`/`do` head whose keep is empty | 5 | same as the `for` head |
+
+⚠ so **coverage-not-optimism does not subsume the keeps.** Only 14 head-flush events kill a live
+enclosing keep at all, and 9 of those are inner loops whose licence `loscan` REFUSED (a goto,
+label, switch or case in the subtree admits foreign edges) — flushing there is correct, not a
+missed opportunity. The optimism apparatus is not papering over a rule that could be decided
+up front; on ~1.5% of functions it is discovering genuine conflicts, which is its job. A static
+rule that could not miss would have to model every flush the subtree can reach, including the
+lowering-internal ones — the same enumeration trap that made A-2's eleven ops turn out to be
+twelve. `lochk`/`lomiss`/`lobar` stay.
+
+**the `fcb` narrowing — BUILT, MEASURED, NOT LANDED (2026-08-13).** `fcb` opened with a full
+`vmflush`, and the comment over it states why: the float lane discards the int-flavored emission,
+so a pin born in the dropped forms would survive with its establishing load gone. ⚠ that
+invariant is narrower than the flush that served it — pins from BEFORE the lane are not from
+dropped forms. So: snapshot the map at the relational lane's entry (`m9`, before any `cgexpr`)
+and have `fcb` `vmset` it back. Sound by the stated invariant, and it works: misses 81 → 69,
+distinct 34 → 32. It still does not ship.
+
+| | x64 | arm64 | riscv64 | dynamic (spec.l) | compile |
+|---|---|---|---|---|---|
+| `.text` delta | **+8** | **+12** | **+8** | +180 insns (spread ±440) | +0.05s |
+
+Worse on every target's text, neutral everywhere else — it fails "pays somewhere, regresses
+nowhere". The physics is the same one step 3 found: a preserved pin holds a register out of the
+pool for the rest of the loop, and the two names recovered were not worth their register. ⚠ do
+not re-propose this without a payer; the reason it loses is capacity, not correctness.
+
+⚠ an earlier reading of this same site — "pins can never live in r0–r3 (`opool` is
+`r6 r5 r9 r10 r7 r8`, riscv's is `r8..r11`, t32's is empty), so the flush defends nothing and can
+be deleted" — is TRUE about registers and WRONG about the flush, which exists for the discarded
+emission, not for clobbering. Deleting it produces a working love.c by luck. The comment over the
+code said so; read it before trusting a register argument.
 
 ⚠ **the array leg is NOT in the way and stays.** Its universe on love.c/x64 is exactly three
 functions — `as_big`, `rng_seed_into`, `rng_step` — so it serves the rng/bignum lanes, and
