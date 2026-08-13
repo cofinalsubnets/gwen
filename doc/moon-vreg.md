@@ -485,6 +485,55 @@ that grew once per rung, and now reads `!(two? (cspool g))` — a target with no
 to breach. a8 bails for the true reason, t32/v6m are covered automatically, and the next
 backend to get a file is covered before anyone writes it.
 
+**phase 1 step 3 REFUSED 2026-08-13 — the loop keeps do not retire, and static codegen said
+they did.** With the file real on every target and `lpick`'s admission widened, the obvious next
+move was to check whether the homes had absorbed the keeps' job. `lonone` is the existing
+keep-nothing knob, so the ablation is one line. **Every static instrument said delete it:**
+
+| target | ablating the loop keeps |
+|---|---|
+| x64 | −300 insns (43 fns better, 42 worse; worst +310 B in `ana_v`) |
+| arm64 | −275 insns (28 better, 14 worse; worst +10) |
+| riscv64 | −391 insns (27 better, 15 worse; worst +9) |
+| thumb2 | byte-identical — already inert there |
+
+**The dynamic gate refused it by a factor of 600: 272,056,500 instructions retired against
+271,872,500, +184,000.** (Baseline reproduced to ±400 before and after the experiment.)
+
+⚠ **the physics, and it is the third firing of this arc's oldest trap.** The keeps remove LOADS
+FROM LOOP BODIES. A load deleted from a loop running a thousand times is one byte of text and a
+thousand instructions of execution — so text size is not merely a noisy proxy here, it is
+STRUCTURALLY BLIND to the thing the mechanism does. The magnitude makes the point: +184,000 is
+comparable to the −206,000 that step 2's entire admission fix bought. The keeps are worth about
+as much as everything else landed the same day.
+
+⚠ so **phase 3's ordering is wrong as written.** The retirement of the loop keeps cannot come
+from deletion — delete-and-measure will look free on every static instrument and be wrong every
+time. It has to come from SUBSUMPTION: a name that is loop-kept today must instead take a real
+interval seat from the assignment, so the keep has no customer left. Until the assignment can
+carry what they carry, the 51 lines are load-bearing and stay.
+
+**and the customer census says what subsumption has to BE** (love.c/x64, 165 distinct kept
+names): 59 (36%) are denied a home by the `1 + nx9` term, 49 (30%) by the `tc <= 2` floor, 47
+(28%) WERE cs candidates and lost to capacity or rank, 10 (6%) never reached `lpick` — and
+**zero are element pins**, so the array leg has no loop-keep customer at all here.
+
+⚠ **the two residencies price differently, and that is why one cannot simply replace the
+other.** A home is FUNCTION-scoped on a callee-saved register and costs a save/restore pair per
+invocation. A keep is LOOP-scoped on a caller-saved pool register and costs nothing per
+invocation — it only has to survive the back edge. So the 108 names the cs gates turn away are
+turned away CORRECTLY: a whole-function seat really is a bad deal for a name with few total
+touches, and the keep is the right instrument for it. They are not substitutes competing for
+one job; they are two prices, and each class picks the cheaper.
+
+So subsumption is not "make these names home". It is **the assignment learning to grant a POOL
+register over a LOOP-scoped interval** — reproducing exactly what the keep buys, but decided
+once from alive's data instead of by memo plus per-edge verification. What retires then is the
+optimism apparatus (`lochk`/`lomiss`/`lobar` and the regen retry attempts, which is also where
+the compile time is), not the residency itself. The remaining 47 are the other half — genuine
+capacity pressure on a four-register file, which is the interval-sharing case the span census
+priced at +147 names.
+
 **The census (love.c, all four targets, 2026-08-12)** — demand is call-crossing names and their
 loop-weighted reads; supply is the callee-saved file minus frame base, sp and the callr park:
 

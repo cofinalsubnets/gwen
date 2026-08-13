@@ -1391,6 +1391,20 @@ that grew once per rung; it now asks `!(two? (cspool g))` — a target with no f
 to breach — so a8 bails for the true reason and the next backend to get a file is covered
 before anyone writes it.
 
+**2026-08-13 — iv phase 1 step 3 REFUSED: the loop keeps are load-bearing, and static codegen
+said they were not.** With the cs file real everywhere and lpick's admission widened, ablate the
+keeps (`lonone`, the existing keep-nothing knob) and see whether the homes absorbed them. Static
+said yes on every target: **x64 −300 insns, arm64 −275, riscv64 −391, thumb2 byte-identical**
+(already inert there). **Dynamic said no by 600x: +184,000 instructions retired** (272,056,500
+vs 271,872,500; baseline reproduced to ±400 either side of the experiment). ⚠ the physics is
+that the keeps remove loads from LOOP BODIES — a load out of a thousand-iteration loop is one
+byte of text and a thousand executed instructions, so text size is structurally blind to the
+mechanism's whole output, not merely noisy about it. +184,000 is comparable to the −206,000
+that the same day's admission fix bought. ⚠ **therefore the retirement cannot be a deletion**:
+delete-and-measure looks free on every static instrument and is wrong every time. It must be
+SUBSUMPTION — a loop-kept name taking a real interval seat from the assignment, so the keep has
+no customer — which reorders phase 3 as written.
+
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build),
 5.1b iv-b call-crossing optimism — each a physics lesson above.
