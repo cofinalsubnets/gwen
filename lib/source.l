@@ -110,26 +110,65 @@
    ; PATH, split -- "" is the cwd, the way execvp reads an empty field
    (src-dirs _)
     (: p ("" + (getenv "PATH")) n (tally p)
-       (go k st acc) (? (n <= k) (rev ((snip p st k) >< acc))
-                        (p k = 58) (go (k + 1) (k + 1) ((snip p st k) >< acc))
+       (go k st acc) (? (n <= k) (rev (snip p st k >< acc))
+                        (p k = 58) (go (k + 1) (k + 1) (snip p st k >< acc))
                         (go (k + 1) st acc))
        (go 0 0 ()))
    ; ⚠ AND IT MUST NOT BE US. An installed love wearing the name `cc` is our own mooncc,
    ; so building through it proves nothing a self build does not -- the whole value of
    ; the ambient lane is that a DIFFERENT compiler held the scaffold. stat says which.
-   (src-foreign? p) (: a (stat p) b (stat "/proc/self/exe") (? (two? a) !(a = b) 0))
-   (src-cc _)                                  ; the first ambient cc that is not us -> (1 path)
+   (src-foreign? p) (: a (stat p) b (stat "/proc/self/exe") (two? a ? !(a = b) 0))
+   ; ⚠ AND IT IS PROBED, not merely found. A `cc` on PATH that cannot compile hello-world
+   ; -- a stub, a wrong-arch install, a shim whose backend is gone -- would otherwise take
+   ; the lane and fail the whole verb, when this binary could have done the job. One tiny
+   ; compile is what configure has always spent to learn the same thing.
+   (src-ccworks? cc dir)
+    (: c (dir + "/.ccprobe.c") o (dir + "/.ccprobe.o")
+       q (open c "w")
+       (? !q 0
+          (: _ (say q "int main(void){return 0;}\n")
+             _ (close q)
+             s (herald [cc "-c" "-o" o c])
+             st (? (two? s) <s s)
+             _ (unlink c) _ (unlink o)
+             (0 = st))))
+   (src-cc dir)                                ; the first ambient cc that is not us AND works
     (: (try ws) (? !(two? ws) ()
                    (: w <ws
                       (go ds) (? !(two? ds) (try >ws)
                                  (: d (? (tally <ds) <ds ".") p (d + "/" + w)
-                                    (? (src-foreign? p) [1 p] (go >ds))))
+                                    (? (src-foreign? p && src-ccworks? p dir) [1 p] (go >ds))))
                       (go (src-dirs ()))))
        (try '("cc" "gcc" "clang")))
+   ; OUR OWN TOOLS, as a directory of argv[0] symlinks -- every verb this binary answers,
+   ; wearing its own name, so a build that reaches for `sed` or `make` or `cc` can land on
+   ; us through PATH like any other program.
+   (src-farm root exe)
+    ; ⚠ the `:` is PARENTHESISED inside the lambda. It is the loosest band there is, so a
+    ; bare `k \ p : ..` folds to (: (\ k p) ..) -- the binder takes the LAMBDA as its name
+    ; and the body never binds p at all. `;; missing p`, at the first symlink.
+    (d : (root + "/out/.seedbin")
+       (mkdir d 493,
+        each (keys (from 'verbs 'tab))
+             (k \ (p : (d + "/" + string k) (unlink p, symlink exe p))),
+        d))
+   ; ..and which of the tools a build spends have NO ambient provider, so we supplied them
+   src-needs '("cc" "make" "sh" "sed" "grep" "tr" "cat" "mkdir" "mv" "rm" "ln"
+               "test" "uname" "printf" "install" "cmp" "chmod" "touch" "echo")
+   (src-ours ns)                               ; -> the names PATH answers only from us
+    (: (go l acc) (? !(two? l) (rev acc)
+                     (: w <l
+                        (any ds) (? !(two? ds) 0
+                                    (: d (tally <ds ? <ds ".") p (d + "/" + w)
+                                       (src-foreign? p ? 1 (any >ds))))
+                        (go >l (any (src-dirs ()) ? acc (w >< acc)))))
+       (go ns ()))
    (seed-main as0)
-    (: self? (? (two? as0) (<as0 = "-self") 0)          ; -self: never defer, we are the toolchain
-       as (? self? >as0 as0)
-       r (src-lay (? (two? as) <as "."))
+    (: first? (two? as0 ? (<as0 = "-first") 0)        ; -first: OUR tools win (the gate's own lane)
+       as1 (first? ? >as0 as0)
+       self? (two? as1 ? (<as1 = "-self") 0)          ; -self: never defer to an ambient cc
+       as (? self? >as1 as1)
+       r (src-lay (two? as ? <as "."))
        root <>r
        exe (readlink "/proc/self/exe")
        _ (? (string? exe) 0 (src-die "cannot find my own path"))
@@ -139,13 +178,29 @@
        ; say, since a compiler carrying a Thompson attack reproduces itself byte for byte
        ; too. It costs nothing to prefer: the ambient cc builds love0 and NOTHING else,
        ; and both lanes were measured to the same artifact hash.
+       ; ⚠ OUR TOOLS GO LAST ON PATH BY DEFAULT. The ambient system wins wherever it can,
+       ; and we fill only what it does not have -- so `love seed` on an ordinary box is a
+       ; check against the machine's own toolchain, not against ourselves. `-first` puts us
+       ; ahead of it, which is the lane this project's own gates want.
+       farm (src-farm root exe)
+       path ("" + getenv "PATH")
+       _ (setenv "PATH" (? first? (farm + ":" + path) (path + ":" + farm)))
        env (getenv "CC")
-       amb (? (|| self? (string? env)) () (src-cc ()))
+       amb (!self? && !first? && !(string? env) ? (src-cc $ root + "/out"))
        _ (? (two? amb) (setenv "CC" <>amb) 0)
+       ours (src-ours src-needs)                ; what the box could not supply
        lane (? (string? env) ("CC=" + env + ", from the environment")
                (two? amb) (<>amb + " -- a FOREIGN compiler, so this is diverse double compiling")
+               first? "this binary (-first: our own tools ahead of the system's)"
                self? "this binary (-self)"
-               "this binary (no ambient cc found)")
+               "this binary -- no working ambient cc")
+       ; ⚠ SAY SO WHEN WE STOOD IN. Falling back is the point of carrying a toolchain, but a
+       ; fixpoint checked entirely against ourselves is a weaker claim than one a foreign
+       ; compiler helped make -- and a gate that quietly swapped the thing under test would
+       ; be spending the user's trust without telling them. It still exits 0: the artifact
+       ; is sound, only the claim is narrower.
+       _ (? (two? ours)
+          (say err $ ";; seed: default " + ujoin ours + "\n"))
        here (cwd 0)
        ; ⚠ charm?, never a truth test: chdir answers () on success and the ERRNO on
        ; failure, and an errno is negative -- so it is RED and a truth test reads the
@@ -158,7 +213,7 @@
        _ (? (0 = st) 0 (src-die ("the build failed (exit " + show st + ")")))
        out (root + "/out/dist/love-" + seed-arch ())
        a (src-slurp exe)
-       _ (? (two? a) 0 (src-die ("cannot read " + exe)))
+       _ (atom? a ? (src-die $ "cannot read " + exe))
        ha (sha256 <>a)
        b (src-slurp out)
        _ (? (two? b) 0 (src-die ("cannot read " + out)))
@@ -169,12 +224,15 @@
           (: _ (say err ("seed: FIXPOINT FAILED -- what it built is NOT this binary\n"
                          + "seed:   running " + ha + "\n"
                          + "seed:   built   " + hb + "\n"))
-             (quit 1))))
+             ; ⚠ A CHARM, NOT A QUIT. The verb table's contract is that a main ANSWERS its
+             ; status (moon.l:752), and this one is a gate -- so a script wants to read the
+             ; verdict, and the in-image lane would have a quit end the shell that asked.
+             ; src-die still quits: those are setup failures with nothing to report on.
+             1)))
 
    ; ⚠ one function, two words: `src` is the short spelling and nothing more, so a
    ; reader meeting either finds the same row rather than a wrapper to chase.
-   T (from 'verbs 'tab)
-   _ (pins T
+   (pins (from 'verbs 'tab)
       'source source-main
       'src    source-main
       'seed   seed-main))
