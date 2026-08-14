@@ -87,6 +87,13 @@
 ; a side condition is what `?` already means everywhere else -- test then shape,
 ; where `?` elsewhere reads test then value. `&&` and `||` stay unspent, so an
 ; and-pattern and an or-pattern can have them.
+; ⚠ SO `?` IS THE ONLY THING THAT SAYS "EXPRESSION", and it is never decoration: a
+; pattern is its constructor, so pattern text IS expression text -- (two? x) is a fine
+; untagged pattern AND a fine call, and nothing else can pick. `&&` therefore conjoins
+; two SHAPES, never a shape and a condition: (x && (two? x)) asks for a two-list whose
+; head binds to `two?` and whose next element must equal the whole, which nothing is.
+; it fits nothing, in SILENCE, and it is the shape a hand reaches for first. write the
+; guard: (x && (? (two? x))), or the same thing shorter, (? (two? x) x).
 ; g is an ORDINARY EXPRESSION, not a pattern: it is read for truth, it binds
 ; nothing, and it sees every nom THE WHOLE ARM binds -- `(? (a < b) [a b])` reads
 ; the pair it is testing. That is because guards do not run where they are written:

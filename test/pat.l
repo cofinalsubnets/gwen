@@ -98,6 +98,19 @@
  ('k = (@ '(2 3) (? (a < b) (? (0 < a) [a b])) 'k 'no))       ; ..and guards stack
  ('no = (@ '(2 1) (? (a < b) (? (0 < a) [a b])) 'k 'no))
  (2 = (@ @(1 2) @(a (? (1 < b) b)) b 0))           ; ..anywhere a pattern goes
+ ; ⚠ `?` IS NOT DECORATION -- IT IS THE ONLY THING THAT SAYS "EXPRESSION". a pattern is
+ ; its constructor, so pattern text and expression text are THE SAME TEXT: (two? x) is a
+ ; fine untagged pattern (a form of two, binding both) and a fine call, and nothing but
+ ; the `?` can pick. so `&&` conjoins two SHAPES, never a shape and a condition --
+ ; (x && (two? x)) asks for a two-list whose head is bound to `two?` and whose tail's
+ ; head must EQUAL the whole, which nothing is. it matches nothing, in silence.
+ (0 = (@ 5 (x && (two? x)) 1 0))                   ; ..the mistyped guard: never fits
+ (0 = (@ '(1 2) (x && (two? x)) 1 0))              ; ..not even the shape it names
+ (0 = (@ 5 (c && (c > 0)) 1 0))                    ; ..nor the comparison spelling
+ ; ..and the marked one, which is the same conjunction and DOES fit
+ (1 = (@ 5 (x && (? (0 < x))) 1 0))
+ (0 = (@ -5 (x && (? (0 < x))) 1 0))
+ (1 = (@ 5 (? (0 < x) x) 1 0))                     ; ..(? g pat) is that, spelled shorter
  (0 = (@ @(1 1) @(a (? (1 < b) b)) b 0))
  ('(3 4) = (@ '(1 2 3 4) (? (a < b) ([a b] + t)) t 'short))     ; ..a split included
  ('short = (@ '(1 2 3 4) (? (b < a) ([a b] + t)) t 'short))
