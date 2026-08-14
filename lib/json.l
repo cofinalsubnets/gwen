@@ -41,40 +41,42 @@
 ; hex digit can legitimately be 0.
 (use 'coin)
 
-(: json-die   #(0 'json-bool)
+(: json-die   {0 'json-bool}
    json-true  (coin json-die 1)
    json-false (coin json-die 0)
-   (json-bool? v) (&& (coin? v) (id? (die-of v) json-die))
-   (json-bool v)  (? v json-true json-false)
+   ; ⚠ `&&` is value-preserving, so the bare conjunction answers () and not the bit a
+   ; predicate owes; `!!` is the clamp. same for json-null? below.
+   (json-bool? v) !!(coin? v && id? (die-of v) json-die)
+   (json-bool v)  (v ? json-true json-false)
 
    ; null, on its OWN die -- payload 0 so it nets blue like the nothing it is, but
    ; never `=` json-false.
-   json-null-die  #(0 'json-null)
+   json-null-die  {0 'json-null}
    json-null      (coin json-null-die 0)
-   (json-null? v) (&& (coin? v) (id? (die-of v) json-null-die))
+   (json-null? v) !!(coin? v && id? (die-of v) json-null-die)
 
    ; --- reading --------------------------------------------------------------------
-   (jws s i n)  (? (&& (i < n) (member? (s i) '(32 9 10 13))) (jws s (i + 1) n) i)
+   (jws s i n)  (i < n && member? (s i) '(32 9 10 13) ? (jws s (i + 1) n) i)
 
-   (jdigv c)    (? (&& (48 <= c) (c <= 57)) (c - 48) -1)
-   (jhexv c)    (? (&& (48 <= c) (c <= 57))  (c - 48)
-                   (&& (97 <= c) (c <= 102)) (c - 87)
-                   (&& (65 <= c) (c <= 70))  (c - 55)
+   (jdigv c)    (? (48 <= c <= 57) (c - 48) -1)
+   (jhexv c)    (? (48 <= c <= 57)  (c - 48)
+                   (97 <= c <= 102) (c - 87)
+                   (65 <= c <= 70)  (c - 55)
                    -1)
 
    ; a run of decimals -> `(value end). end = start means there were none, which the
    ; callers check: json wants at least one digit everywhere it wants a digit.
    (jdigits s i n) ((: (go k acc)
-                       (? (&& (k < n) (-1 < (jdigv (s k))))
-                          (go (k + 1) ((acc * 10) + (jdigv (s k))))
-                          `(acc k)))
+                       (? (k < n && -1 < jdigv (s k))
+                          (go (k + 1) (acc * 10 + jdigv (s k)))
+                          [acc k]))
                     i 0)
 
    (jhex4 s i n)   ((: (go k acc d)
-                       (? (d = 0)      `(acc k)
-                          (! (k < n))  ()
+                       (? (d = 0)      [acc k]
+                          (k >= n)  ()
                           (: v (jhexv (s k))
-                             (? (v < 0) () (go (k + 1) ((acc * 16) + v) (d - 1))))))
+                             (v >= 0 ? (go (k + 1) (acc * 16 + v) (d - 1))))))
                     i 0 4)
 
    ; a code point out as utf-8 bytes, laid down by the byte law (string + charm appends).
@@ -92,16 +94,17 @@
                    (? (! (two? h)) ()
                       (: u <h
                          k <>h
-                         (? (! (&& (55296 <= u) (u <= 56319)))            `((jutf8 u) k)
-                            (! (&& ((k + 1) < n)
-                                   (&& ((s k) = 92) ((s (k + 1)) = 117)))) `((jutf8 u) k)
+                         (? !(55296 <= u <= 56319)            [(jutf8 u) k]
+                            !((k + 1) < n &&
+                              s k = 92 &&
+                              s (k + 1) = 117) [(jutf8 u) k]
                             (: l (jhex4 s (k + 2) n)
-                               (? (! (two? l)) `((jutf8 u) k)
+                               (? (atom? l) [(jutf8 u) k]
                                   (: v <l
                                      (? (&& (56320 <= v) (v <= 57343))
-                                        `((jutf8 (65536 + (((u - 55296) * 1024)
-                                                           + (v - 56320)))) <>l)
-                                        `((jutf8 u) k)))))))))
+                                        [(jutf8 (65536 + (((u - 55296) * 1024)
+                                                           + (v - 56320)))) <>l]
+                                        [(jutf8 u) k]))))))))
 
    ; the byte AFTER the backslash. -1 for "no such escape", never () -- 0 is a fine byte.
    (jesc s i n) (? (! (i < n)) ()
@@ -111,12 +114,12 @@
                                  (c = 98)  8    (c = 102) 12   (c = 110) 10
                                  (c = 114) 13   (c = 116) 9
                                  -1)
-                            (? (b < 0) () `(("" + b) (i + 1)))))))
+                            (? (b < 0) () [("" + b) (i + 1)])))))
 
    (jstr s i n) ((: (go k acc)
                      (? (! (k < n)) ()
                         (: c (s k)
-                           (? (c = 34) `(acc (k + 1))
+                           (? (c = 34) [acc (k + 1)]
                               (c = 92) (: e (jesc s (k + 1) n)
                                           (? (two? e) (go <>e (acc + <e)) ()))
                               (c < 32) ()            ; a raw control byte is not json
@@ -127,7 +130,7 @@
    (jexp s i n) (: g  (? (&& (i < n) ((s i) = 45)) -1 1)
                    a  (? (&& (i < n) (member? (s i) '(43 45))) (i + 1) i)
                    dg (jdigits s a n)
-                   (? (<>dg = a) () `((g * <dg) <>dg)))
+                   (? (<>dg = a) () [(g * <dg) <>dg]))
 
    (jpow10 e) (? (e < 0) (1.0 / ((0 - e) 10)) (1.0 * (e 10)))
 
@@ -177,38 +180,31 @@
 
    ; a later duplicate key wins, which is what pin does and what every other reader does.
    (jobj s i n) (: a (jws s (i + 1) n)
-                   (? (&& (a < n) ((s a) = 125)) `((tablet 0) (a + 1))
+                   (? (a < n && s a = 125) [{} (a + 1)]
                       ((: (go k acc)
                           (: ks (jws s k n)
-                             (? (! (&& (ks < n) ((s ks) = 34))) ()
+                             (? !(ks < n && s ks = 34) ()
                                 (: kr (jstr s ks n)
-                                   (? (! (two? kr)) ()
+                                   (? (atom? kr) ()
                                       (: cn (jws s <>kr n)
-                                         (? (! (&& (cn < n) ((s cn) = 58))) ()
+                                         (? !(cn < n && s cn = 58) ()
                                             (: vr (jval s (cn + 1) n)
-                                               (? (! (two? vr)) ()
+                                               (? (atom? vr) ()
                                                   (: _ (pin acc <kr <vr)
                                                      e (jws s <>vr n)
-                                                     (? (! (e < n))    ()
-                                                        ((s e) = 44)   (go (e + 1) acc)
-                                                        ((s e) = 125)  `(acc (e + 1))
-                                                        ())))))))))))
-                       a (tablet 0))))
+                                                     (? (e >= n)    ()
+                                                        (s e = 44)   (go (e + 1) acc)
+                                                        (s e = 125)  [acc (e + 1)])))))))))))
+                       a {})))
 
    (jval s i n) (: a (jws s i n)
-                   (? (! (a < n)) ()
-                      (: c (s a)
-                         (? (c = 34)  (jstr s a n)
-                            (c = 91)  (jarr s a n)
-                            (c = 123) (jobj s a n)
-                            (jlit s a n)))))
+                  (a < n ? (s a @ 34 (jstr s a n) 91 (jarr s a n) 123 (jobj s a n) (jlit s a n))))
 
    ; --- the door in ----------------------------------------------------------------
    ; (1 value), or () -- trailing junk after the document is a refusal, not a shrug.
    (json-read s) (: n (tally s)
                     r (jval s 0 n)
-                    (? (! (two? r)) ()
-                       (: e (jws s <>r n) (? (e < n) () `(1 <r)))))
+                    (? (two? r) (: e (jws s <>r n) (? (e < n) () [1 <r]))))
 
    ; --- writing --------------------------------------------------------------------
    (jhexd v) ("" + (? (v < 10) (48 + v) (87 + v)))
@@ -216,21 +212,20 @@
    ; bytes >= 128 ride out untouched: love strings are byte strings and json is utf-8, so
    ; already-utf-8 text is already right. only the seven named escapes and the control
    ; bytes need saying.
-   (jqc c) (? (c = 34) ("" + 92 + 34)
-              (c = 92) ("" + 92 + 92)
-              (c = 10) ("" + 92 + 110)
-              (c = 13) ("" + 92 + 114)
-              (c = 9)  ("" + 92 + 116)
-              (c = 8)  ("" + 92 + 98)
-              (c = 12) ("" + 92 + 102)
-              (c < 32) ((("" + 92 + 117 + 48 + 48) + (jhexd (c // 16))) + (jhexd (c % 16)))
-              ("" + c))
+   ; ⚠ the escape is SPELLED, never built: `+` appends a charm as a byte, so the old
+   ; ("" + 92 + 34) leaned on the band's left hand to mean \" -- one re-association and
+   ; it is the byte 126. only the two computed nibbles ride the byte law now.
+   (jqc c) (c @ 34 "\\\""  92 "\\\\"
+                10 "\\n"   13 "\\r"   9 "\\t"
+                8  "\\b"   12 "\\f"
+                (c < 32 ? ("\\u00" + (jhexd (c // 16)) + (jhexd (c % 16)))
+                          ("" + c)))
 
    (jqt s) (: n (tally s)
               ((: (go k acc) (? (k < n) (go (k + 1) (acc + (jqc (s k)))) (acc + 34)))
                0 ("" + 34)))
 
-   (jjoin xs) (? (! (two? xs)) ""
+   (jjoin xs) (? (atom? xs) ""
                  ((: (go l acc) (? (two? l) (go >l ((acc + 44) + <l)) acc)) >xs <xs))
 
    ; show is the whole number lane -- it already lays a charm, a sun, a big and a gem down

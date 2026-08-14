@@ -173,7 +173,7 @@
    (scanline s inb)
     (: n (tally s)
        (w i st d p ls)
-        (? (n <= i) `(d p ls (id? st 'blk))
+        (? (n <= i) [d p ls (id? st 'blk)]
            (: c (s i)
               (? (id? st 'blk)                                          ; inside /* .. */
                   (? (((i + 1) < n) && (c = 42) && (s (i + 1) = 47)) (w (i + 2) 'code d p ls)
@@ -186,7 +186,7 @@
                   (? (c = 92) (w (i + 2) 'chr d p ls)
                      (c = 39) (w (i + 1) 'code d p ls)
                      (w (i + 1) 'chr d p ls))
-                 ((c = 47) && ((i + 1) < n) && (s (i + 1) = 47)) `(d p ls ())       ; // -> rest ignored
+                 ((c = 47) && ((i + 1) < n) && (s (i + 1) = 47)) [d p ls ()]       ; // -> rest ignored
                  ((c = 47) && ((i + 1) < n) && (s (i + 1) = 42)) (w (i + 2) 'blk d p ls)       ; /*
                  (c = 34) (w (i + 1) 'str d p ls)
                  (c = 39) (w (i + 1) 'chr d p ls)
@@ -233,7 +233,7 @@
 
    ; --- driver: moonfmt [-w] FILE ..  -> formatted text on stdout (gofmt-style),
    ; or with -w rewritten in place. ---
-   (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))
+   (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) [1 t]) ()))
    (fmt-each fs fix) (? !(two? fs) 0
                         (: r (rdf <fs)
                            _ (? (two? r)
@@ -241,7 +241,7 @@
                                    (? fix (: q (open <fs "w") _ (say q txt) (close q)) (puts txt)))
                                 (say err ("moonfmt: cannot open " + <fs + "\n")))
                            (fmt-each >fs fix)))
-   (flags as fix acc) (? !(two? as) `(fix (rev acc))
+   (flags as fix acc) (? !(two? as) [fix (rev acc)]
                          (<as = "-w") (flags >as 1 acc)
                          (flags >as fix (<as >< acc)))
    (fmt-main as) (: f (flags as () ())                          ; run on the args AFTER the program seat

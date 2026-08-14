@@ -36,12 +36,17 @@
 
   ; --- text ---
   (hexd d) (? (d < 10) (48 + d) (87 + d))
-  (esc o c) (? (c = 92 || c = 34) (: _ (put o 92) (put o c))
-               (c = 10) (say o "\\n")   (c = 9)  (say o "\\t")
-               (c = 13) (say o "\\r")   (c = 27) (say o "\\e")
-               (c = 0)  (say o "\\0")
-               (c < 32) (: _ (say o "\\x") _ (put o (hexd (c // 16))) (put o (hexd (c - (16 * (c // 16))))))
-               (put o c))
+  ; ⚠ `@` WORKS HERE ONLY BECAUSE pat.h RIDES THIS TEXT at every embed site -- post is
+  ; compiled before any layer is spliced, so an unaccompanied `@` folds to a plain
+  ; application and a run of charms church-towers into an apcap naming no seat.
+  (esc o c)
+   (c @ (92 | 34) (put o 92, put o c)
+        10 (say o "\\n")   9  (say o "\\t")
+        13 (say o "\\r")   27 (say o "\\e")
+        0  (say o "\\0")
+        (c >= 32 ? (put o c)
+                   (say o "\\x", put o (hexd (c // 16)),
+                    put o (hexd (c - (16 * (c // 16)))))))
   (pstr o s) (: n (tally s)
                 (go i) (? (i < n) (: _ (esc o (peep s i 0)) (go (1 + i))) 0)
                 _ (put o 34) _ (go 0) (put o 34))
@@ -54,41 +59,41 @@
   ; the search an interval far too narrow.
   (norm m e) (? (p53 <= m) (norm (m / 2.0) (1 + e))
                 (m < p52 && emin < e) (norm (m * 2.0) (e - 1))
-                ((int m) >< e))
+                (int m >< e))
   ; inside the rounding interval? a midpoint counts only for an even mantissa --
   ; round-to-nearest-even is what reads it back.
-  (fits c lo hi evn) ((? (lo < c) 1 (evn && c = lo))
-                   && (? (c < hi) 1 (evn && c = hi)))
+  (fits c lo hi evn) ((lo < c ? 1 (evn && c = lo)) &&
+                      (c < hi ? 1 (evn && c = hi)))
   ; the fewest digits whose rounded form sits inside: pk is the place being cut,
   ; walking DOWN by ten a step, and at each one try the truncation and the bump,
   ; the nearer first (a display nicety). at pk = 1 it terminates, dv itself being
   ; inside by construction.
   (pick dv lo hi evn pk) (? (pk < 1) dv
     (: t ((dv // pk) * pk)
-       up (1 < pk && 5 <= ((dv // (pk // 10)) - (10 * (dv // pk))))
+       up (1 < pk && 5 <= (dv // (pk // 10) - (10 * (dv // pk))))
        c1 (? up (t + pk) t) c2 (? up t (t + pk))
        (? (fits c1 lo hi evn) c1 (fits c2 lo hi evn) c2 (pick dv lo hi evn (pk // 10)))))
   ; strip trailing zeros, keeping one digit
-  (strip n) (: q (n // 10) (? (0 < q && (n - (q * 10)) = 0) (strip q) n))
-  (zeros o n) (? (0 < n) (: _ (put o 48) (zeros o (n - 1))) 0)
+  (strip n) (: q (n // 10) (0 < q && (n - (q * 10)) = 0 ? (strip q) n))
+  (zeros o n) (0 < n ? (put o 48, zeros o (n - 1)) 0)
   (pgem2 o a) (: me (norm a 0) m <me e2 >me sh (e2 - 2)
-    up (? (sh < 0) (** 5 (0 - sh)) (** 2 sh))   ; one shared scale: 2^sh, or 5^-sh with the point moved
+    up (sh < 0 ? (5 ** -sh) (2 ** sh))   ; one shared scale: 2^sh, or 5^-sh with the point moved
     flo (m = p52 && emin < e2)                ; at a binade floor the gap below is already half
-    dv ((4 * m) * up)
-    dlo (((4 * m) - (? flo 1 2)) * up)
-    dhi (((4 * m) + 2) * up)
-    evn ((m - (2 * (m // 2))) = 0)
+    dv (4 * m * up)
+    dlo ((4 * m - (flo ? 1 2)) * up)
+    dhi ((4 * m + 2) * up)
+    evn (m = 2 * (m // 2))
     dc (pick dv dlo dhi evn (** 10 ((ndig dv) - 1)))
     lead (ndig dc)
     ss (dstr (strip dc)) sig (tally ss)
-    dxp (lead + (? (sh < 0) sh 0))
+    dxp (lead + (sh < 0 ? sh 0))
     (? (1e16 <= a || a < 1e-4)
        (: e (dxp - 1)
           _ (put o (peep ss 0 0))
-          _ (? (1 < sig) (: _ (put o 46) (say o (snip ss 1 sig))) 0)
+          _ (1 < sig ? (put o 46, say o (snip ss 1 sig)))
           _ (put o 101)
-          _ (? (e < 0) (put o 45) 0)
-          (say o (dstr (? (e < 0) (0 - e) e))))
+          _ (e < 0 ? (put o 45) 0)
+          (say o (dstr (e < 0 ? -e e))))
        (0 < dxp)                                  ; 1 <= v < 1e16: the point sits inside or after
        (: (go i) (? (i < dxp) (: _ (put o (? (i < sig) (peep ss i 0) 48)) (go (1 + i))) 0)
           _ (go 0) _ (put o 46)
@@ -143,9 +148,9 @@
   ; reads as an application and a nom as a variable. without that (q (1 2)) read back as
   ; q applied to 2, which is not the number and was never a coin.
   (pcoin o x sn) (: nm (peep (die-of x) 0 ()) p (load x)
-    _ (put o 40) _ (? (nil? nm) (say o "coin") (px o nm sn))
-    _ (put o 32) _ (? (two? p || nom? p) (put o 39) 0)
-    _ (px o p sn) (put o 41))
+    (put o 40, nil? nm ? (say o "coin") (px o nm sn),
+     put o 32, two? p || nom? p ? (put o 39) 0,
+     px o p sn, put o 41))
 
   ; --- closures. a partial's every unc cell holds its arg at [1] and the link at
   ; [2], so the base value sits at link-2.

@@ -83,7 +83,7 @@
    (join l) (foldl (+) "" l)
    (sepby s l) (? !(two? l) "" (foldl (\ a x (a + s + x)) <l >l))
    nl (string 10)
-   (gripe msg) `('gripe () () () msg)
+   (gripe msg) ['gripe () () () msg]
    (gripe? x) (two? x && id? <x 'gripe)
    ; look answers a row's FIRST value (the precedence tables' shape); lookr answers
    ; the whole tail, which is what an arity RANGE needs.
@@ -160,10 +160,10 @@
                                 (: e <l
                                    (? (two? e) (: v (? (name? <e) (go e) (kids e)) (? v v (kids >l)))
                                       (kids >l))))
-                    (kids (? (member? h '(gdecl xdecl)) `(<>x)
+                    (kids (? (member? h '(gdecl xdecl)) [<>x]
                              (id? h 'edef) ()
-                             (id? h 'fn && (4 < n)) `((el x 2) (el x 3) (el x 4))
-                             (id? h 'proto && (3 < n)) `((el x 2) (el x 3))
+                             (id? h 'fn && (4 < n)) [(el x 2) (el x 3) (el x 4)]
+                             (id? h 'proto && (3 < n)) [(el x 2) (el x 3)]
                              >x))))))
        v (go c)
        (? v v 1))

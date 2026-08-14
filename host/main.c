@@ -745,7 +745,10 @@ static struct ai *boot(struct ai *g, bool argp) {
     g = ai_evals_(g,                                   // ⚠ ITS OWN CALL: readtext picks its reader ONCE per text, and
 #include "prel0.h"                                     // p1 seals hook 0 only when the call above EVALUATES
     " "
-#include "post0.h"                                     // the printer: this lane hatches no egg, so post rides prel
+#include "pat0.h"                                      // ⚠ pat RIDES THE POST TEXT: post is written in @, and a macro
+    " "                                                //   reaches a reader only once it is in the book. the `use`
+#include "post0.h"                                     //   below still registers the MODULE, for cli and uu
+        
     "(use 'bao)"                                       // p1 goes FIRST: this lane never hatches an egg, and prel's
     "(use 'kanren)"                                    // loader folds `sound` at its own compile; kanren splices
                                                        //   because the corpus reads unify/ufail bare
@@ -765,6 +768,8 @@ static struct ai *boot(struct ai *g, bool argp) {
   );                                                  // reader in love has to exist before prel compiles
   g = ai_evals_(g,
 #include "prel0.h"                                    // prel, read by p1 now that hook 0 is sealed
+    " "
+#include "pat0.h"                                     // ⚠ pat RIDES THE POST TEXT (see the argp lane above)
     " "
 #include "post0.h"                                    // ..and the printer, which pass 1 below already needs
   );
@@ -792,6 +797,8 @@ static struct ai *boot(struct ai *g, bool argp) {
     " "
 #include "ev0.h"
     ,
+#include "pat0.h"                                     // ⚠ pat rides the post text here too: the egg compiles post
+    " "                                               //   after the hatch and before the mop, and @ must be in hand
 #include "post0.h"
 );
   return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
@@ -968,7 +975,9 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     " "
 #include "ev.h"
     ,
-#include "post.h"
+#include "pat.h"                                        // ⚠ pat RIDES THE POST TEXT: post is written in @, and the egg
+    " "                                                 //   is the FIRST thing this lane runs -- there is no seam to
+#include "post.h"                                       //   splice a layer into. (use 'pat) below still registers it.
     );
   g = ai_evals_(g,
     "(use 'coin)"                                        // the library layers, ALL modules now, in the old eval order: coin

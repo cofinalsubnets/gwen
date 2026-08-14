@@ -461,7 +461,7 @@
        w (? (member? 'love-image (names ())) [1 (ev 'love-image)] ())
        ims (? (two? w) (: im <>w
                           (? !(string? im) ()
-                             (im = "<baked>") `("<baked>")
+                             (im = "<baked>") ["<baked>"]
                              [[im (stat im)]]))
               (? (string? d) ((mcims d) + (mcims (d + "../lib/love/"))) ()))
        src (? (two? ims) ((mctree (home + "include/")) + (mctree (home + "lib/"))) "")
