@@ -134,6 +134,17 @@
                                            `(v m))
                                (hx (k + 1) 0))
                             ())
+                        ; \uXXXX / \UXXXXXXXX (C99 6.4.3): EXACTLY 4 or 8 hex digits, a short
+                        ; run refusing rather than taking what it found. the THIRD element
+                        ; marks it a UCN -- it names a code POINT, so a narrow string owes the
+                        ; utf-8 encoding of it where \xHH lays the one byte it named.
+                        ((d = 117) || (d = 85))
+                         (: w (? (d = 117) 4 8)
+                            (uc m v cnt) (? (cnt = w) `(v m 1)
+                                            ((m < n) && hexd? (src m))
+                                             (uc (m + 1) (+ (* v 16) (hexv (src m))) (cnt + 1))
+                                            ())
+                            (uc (k + 1) 0 0))
                         (: v (escv d) (? (charm? v) `(v (k + 1)) ()))))
        ; the body of a string-shaped literal, from qi (after the opening quote) to the
        ; closing `term` -> (content endpos) | (). one lane under the narrow, wide and
@@ -157,7 +168,9 @@
                         (c2 = 10) ()
                         ((c2 = 92) && ((e + 1) < n))
                          (: r (escseq (e + 1))
-                            (? (two? r) (: _ (? wide (utf8put sink <r) (put sink <r)) (eat <>r)) ()))
+                            ; ⚠ a UCN (two? >>r) encodes even in a NARROW string: gcc lays
+                            ; "ä" as two utf-8 bytes, where "\xE4" is the one byte E4
+                            (? (two? r) (: _ (? (wide || two? >>r) (utf8put sink <r) (put sink <r)) (eat <>r)) ()))
                         ; a stop `run` made that none of the above claims: one byte,
                         ; then on. the trailing \ lands here, and so would any future
                         ; stop -- which is what keeps a widened `run` from looping.

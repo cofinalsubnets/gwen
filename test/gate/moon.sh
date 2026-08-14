@@ -104,6 +104,15 @@ moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 || fail "a TU of o
 printf '_Static_assert(0, "boom");' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 && fail "a FAILING lone _Static_assert passed"
 
+# a UCN takes EXACTLY 4 (or 8) hex digits -- a short run must REFUSE, not take what
+# it found. test/cc/138 holds the well-formed side; only the refusals live here.
+# \134 is the backslash, written in octal so the sequence survives this file.
+for bad in '\134u00E' '\134U0001F60' '\134u' '\134uZZZZ'; do
+  printf "char *s = \"$bad\";\nint m(void){return 0;}\n" > "$ho/.feat.c"
+  moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+    && fail "a malformed universal character name was accepted: $bad"
+done
+
 # the freestanding header set is C11 4p6: these two were the ones we did not ship
 printf '#include <iso646.h>\n#include <stdalign.h>\nint m(void){return (1 and 2) + alignof(int);}\n' \
   > "$ho/.feat.c"

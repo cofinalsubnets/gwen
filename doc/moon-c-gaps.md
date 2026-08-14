@@ -40,7 +40,8 @@ What genuinely stands between here and freestanding C11, each row live above:
   excuses `<threads.h>` and not the storage class. A single-threaded freestanding
   implementation can map it to plain static and be observationally right; that is the cheap
   road, and it should be taken deliberately rather than by accident.
-- **universal character names** — `\uXXXX`/`\UXXXXXXXX`, mandatory since C99, absent in the lexer.
+- **universal character names in an identifier** — the literal half landed 2026-08-14; an
+  identifier still refuses, which is the remaining half of a C99-mandatory row.
 - **`#if` arithmetic is signed throughout** where C11 demands intmax/uintmax, and `&`/`|`/`^`
   die on a big. (`#line` landed 2026-08-14; the `#line "file"` half did not — it wants
   `__FILE__` to stop being one name per TU first.)
@@ -68,7 +69,7 @@ All of C89 passes. What remains is C99/C11/GNU.
 |---|---|
 | `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
 | `_Thread_local` | `_Thread_local int e;` — no TLS anywhere, so the refusal is honest. ⚠ this one has **no** `__STDC_NO_*` macro: `__STDC_NO_THREADS__` excuses `<threads.h>` and nothing else |
-| a universal character name | `Å` in an identifier or a literal — the escape refuses, loudly |
+| a universal character name in an IDENTIFIER | `int \u00C5;` — the literal half landed 2026-08-14 (below); an identifier still refuses at lex, as does a raw UTF-8 one |
 | statement expressions | `({ … })` |
 | computed goto | `&&label`, `goto *p` |
 | plain `typeof` | `typeof(x) y;` — ⚠ only `__typeof` / `__typeof__` are recognized |
@@ -129,13 +130,19 @@ Four of them carry an edge worth knowing:
   storage is the compound literal's — automatic inside a function where C says static duration,
   so a pointer kept past the frame dangles, and `wchar_t *p = L"x"` at file scope refuses on the
   static-clit row above. A mixed-prefix concatenation `u"a" U"b"` takes the first prefix where
-  gcc refuses, and universal character names `\uXXXX`/`\UXXXXXXXX` stay absent — the escape
-  refuses, loudly.
+  gcc refuses.
 - **`__extension__`** is a no-op at a declaration's head (file scope, block, member, before
   `typedef`) and as a cast-expression prefix, the typedef declarator's trailing attribute run
   skipping alongside — which is what opens `#include <pthread.h>`. gcc-refused spots like
   `int __extension__ x;` still refuse; ⚠ `sizeof(__extension__ T)` is accepted where gcc
   refuses, the one tolerance.
+- **universal character names landed 2026-08-14** in every literal face
+  (test/cc/138-ucn.c). ⚠ a UCN names a CODE POINT, not a byte, and that is the whole
+  trap: `"\u00E4"` in a **narrow** string is the two utf-8 bytes `C3 A4`, where
+  `"\xE4"` is the one byte `E4` — so `escseq` reports whether the escape was a UCN
+  and the narrow lane encodes on that. Exactly 4 (or 8) hex digits: a short run refuses
+  rather than taking what it found, matching gcc's *incomplete universal character name*.
+  ⚠ an identifier spelled with one still refuses — the row above.
 
 ### the directives, and which are ignored on purpose
 
