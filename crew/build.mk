@@ -77,7 +77,7 @@ out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 # verb table, which love/cli.l's verb rail reads: `love up URL` syncs ~/.love/src
 # and cook-installs the nest; `love sb|cook|kore|kiosko|mooncc ..` are the same
 # binary being multi-call. the bake rides `love bake`'s own lane (main.c's
-# LOVE_BAKE_LOAD evals the cat ahead of the cache-empty + seal), so the artifact
+# `bake -l CAT` evals it ahead of the cache-empty + seal), so the artifact
 # is the default binary with a bigger image -- no session layer, same sealing.
 # member order is the scope: kore's floor first, asbook before the backends
 # (defbackend mutates the spliced holo), every main before kore.l's applet
@@ -255,7 +255,7 @@ $(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l $(ho)/love
 	@echo DIST	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -o $@
-	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l ./$@ bake
+	@./$@ bake -l out/dist/.dist-cat.l
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
 
 # ==== dist_cross: the TWIN artifact (the other elf arch) ====
@@ -304,7 +304,7 @@ $(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
 out/dist/love-$(xarch): $(xobjs) out/dist/.dist-cat.l
 	@echo DIST	$(abspath $@)
 	@$(moonx) -pie $(xobjs) -o $@
-	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l $(xqemu) ./$@ bake
+	@$(xqemu) ./$@ bake -l out/dist/.dist-cat.l
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@ (the $(xarch) twin, baked under $(xqemu))"
 .PHONY: dist_cross
 dist_cross: out/dist/love-$(xarch)

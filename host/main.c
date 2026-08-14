@@ -949,7 +949,7 @@ static struct ai_lib const libs[] = {
 struct ai_lib const *ai_libs(void) { return libs; }
 
 // bake: NULL = no snapshot; "" = `love bake` (patch the binary's own .image); else `bake PATH` (an image file).
-static struct ai *boot(struct ai *g, bool argp, char const *bake) {
+static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load) {
   bool replp = !argp && isatty(STDIN_FILENO);
   if (replp) raw_mode();
   // THE DEBUG DOOR: LOVE_NO_MOP keeps the compiler's internals on the book (peek/poke/
@@ -1027,25 +1027,40 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
     : "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
 
   if (bake) {                                            // the bake verb: snapshot the post-warm heap, then exit
-    // LOVE_BAKE_LOAD: read-eval one more .l file before the snapshot -- the dist
+    // `bake -l FILE`: read-eval one more .l file before the snapshot -- the dist
     // artifact's door (crew/build.mk): the crew cats + the verb table go in WARM,
     // ahead of the same cache-empty + seal every bake gets, and the image still
     // carries no session layer. a raise in the cat is helpless here (no shell
     // help), so a broken cat is a LOUD failed bake, never a quiet artifact.
-    char const *xtra = getenv("LOVE_BAKE_LOAD");
+    // ⚠ it was an ENVIRONMENT VARIABLE, and this tree spends exactly one of those
+    // (HOME). An argument is visible in the command that ran, survives being read
+    // back out of a log, and cannot be inherited by something that never asked.
+    char const *xtra = bake_load;
     if (xtra) {
+      // ⚠ THE PATH IS A VALUE, NEVER SPLICED INTO THE SOURCE. Interpolating it built a love
+      // program by string concatenation, so a path carrying a quote closed the literal and
+      // the rest was CODE: a cat named 'a" (puts "INJECTED") "b' ran, exit 0, and
+      // whatever it ran would have been sealed into the artifact. Bound as a name the text
+      // is data whatever it holds, the eval'd form is a constant, and the buffer that had
+      // to be big enough for two copies of a path simply goes.
       // ⚠ and it CLOSES q: an open heap port registers a finalizer, so an unclosed one is
       // still reachable at the seal -- and what rides into the image with it is its FD.
-      // ⚠ the path lands TWICE, so the bound is the snippet plus two of it; a truncated
-      // snprintf would hand ai_evals_ a half-written form, which reads as a broken cat.
-      char xb[4352];
-      if (snprintf(xb, sizeof xb,
-            "(: q (open \"%s\" \"r\")"
-            " (? q (: _ (reads q) (close q))"
-            "      (: _ (say err \"love: bake: cannot open %s\") _ (put err 10) (quit 1))))",
-            xtra, xtra) >= (int) sizeof xb) {
-        fprintf(stderr, "love: bake: LOVE_BAKE_LOAD path too long\n"); return 1; }
-      g = ai_evals_(g, xb); }
+      uintptr_t xn = strlen(xtra);
+      if (!ai_ok(g = str0(g, xn))) return 1;
+      if (xn) memcpy(txt(g->sp[0]), xtra, xn);
+      g = ai_defv(g, "bake-load");
+      if (!ai_ok(g)) return 1;
+      ai_core_of(g)->sp++;
+      g = ai_evals_(g,
+        "(: q (open bake-load \"r\")"
+        " (? q (: _ (reads q) (close q))"
+        "      (: _ (say err (\"love: bake: cannot open \" + bake-load)) _ (put err 10) (quit 1))))");
+      // ⚠ rebound to (), not PULLED: the seal above ends with (pull book 'book 0), so the
+      // book is already off the book by here and naming it answers `;; missing book`. A
+      // body-less top-level `:` pins without it. The name has to stop holding the path
+      // either way -- an absolute `bake -l` path would otherwise bake the baker's
+      // directory into the image, which is the class of bug this arc just finished.
+      g = ai_evals_(g, "(: bake-load ())"); }
 #ifdef AI_GLAZED
     // auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif
     // closures (ap = a W^X mmap addr) that can't be serialized. Empty it: the image boots
@@ -1089,13 +1104,18 @@ int main(int argc, char const **argv) {
   // and not a shift because the shift used to CLOBBER (argv[2] = argv[0]) -- which is
   // how `cmdline` came to be a command line nobody typed. Nothing is written now, so
   // both readings stay available: the whole invocation, and the program's view of it.
-  char const *image_load_path = NULL, *bake = NULL; // see boot(): "" = self-bake, a path = image file
+  char const *image_load_path = NULL, *bake = NULL;  // see boot(): "" = self-bake, a path = image file
+#ifndef GL_BOOTSTRAP
+  char const *bake_load = NULL;                     // bake -l CAT: read-eval it before the seal
+#endif
   int skip = 0;
 
 #ifndef GL_BOOTSTRAP
   if (argc >= 2 && !strcmp(argv[1], "bake")) {
-   if (argc >= 3) bake = argv[2], skip = 2;
-   else bake = "", skip = 1; }
+   int i = 2;                                      // bake [-l CAT] [PATH]
+   if (i + 1 < argc && !strcmp(argv[i], "-l")) bake_load = argv[i + 1], i += 2;
+   bake = i < argc ? argv[i] : "";
+   skip = (i < argc ? i + 1 : i) - 1; }
   else
 #endif
   if (argc >= 3 && !strcmp(argv[1], "wake"))
@@ -1177,7 +1197,7 @@ int main(int argc, char const **argv) {
     if (!image_load_path) g = boot(g, argp);
     else g = ai_evals_(ai_layer_(g), cli);   // woken: the image carries the warm base; push the session layer, run the CLI
 #else
-    if (!image_load_path) g = boot(g, argp, bake);
+    if (!image_load_path) g = boot(g, argp, bake, bake_load);
     else {              // wake: skip the egg warm, dispatch straight to the program
       bool replp = !argp && isatty(STDIN_FILENO);
       if (replp) raw_mode();

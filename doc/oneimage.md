@@ -104,7 +104,7 @@ On this box, booting `(quit 0)`:
 A full unified bake is **8.6 s**. For contrast, test.mk:207 records the lane the shims exist to
 avoid: `~0.02s vs ~0.75s per spawn`.
 
-Where that 22 MB goes, measured a piece at a time (`bake PATH` over a `LOVE_BAKE_LOAD` cat,
+Where that 22 MB goes, measured a piece at a time (`bake PATH` over a `bake -l` cat,
 x86_64) — worth having before arguing about what to carry, because the two candidates are not
 the same size at all:
 
