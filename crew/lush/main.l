@@ -30,7 +30,7 @@
    ; ~/.lushrc) on top, in (sh _) below. the chsh story lives in doc/lush.md.
    (sh-profiles _)
      (? (sh-login ())
-        (: _ (sh-src "/etc/profile") (sh-src (+ (+ "" (getenv "HOME")) "/.profile")))
+        (: _ (sh-src "/etc/profile") (sh-src (("" + (getenv "HOME")) + "/.profile")))
         0)
    ; the script lane rides eval.l's sh-lines ('more gathers continuations,
    ; `exit` quits from inside); $0 and the positionals land before the run
@@ -40,7 +40,7 @@
            _ (pin sh-pos () args)
            _ (sh-profiles 0)
            p (open path "r") _ (sh-lines p "") _ (close p) (quit (sh-status ())))
-        (: _ (say err (+ (+ "lush: " path) ": not found\n")) (quit 127)))
+        (: _ (say err (("lush: " + path) + ": not found\n")) (quit 127)))
    (sh-c cmd rest)                              ; -c CMD [name [args..]], POSIX
      (: _ (pin sh-arg0 () (? (two? rest) <rest "lush"))
         _ (pin sh-pos () (? (two? rest) >rest ()))
@@ -54,19 +54,19 @@
    ; already pinned, or () when a letter is not ours (then the word is not a flag).
    (sh-flagw a rest)
      (: n (tally a)
-        (go k c?) (? (<= n k) (L 1 c? rest)
+        (go k c?) (? (n <= k) [1 c? rest]
                      (: ch (a k)
-                        (? (= ch 99) (go (+ k 1) 1)
-                           (= ch 101) (: _ (pin sh-eflag () 1) (go (+ k 1) c?))
-                           (= ch 117) (: _ (pin sh-uflag () 1) (go (+ k 1) c?))
-                           (= ch 120) (: _ (pin sh-xflag () 1) (go (+ k 1) c?))
+                        (? (ch = 99) (go (k + 1) 1)
+                           (ch = 101) (: _ (pin sh-eflag () 1) (go (k + 1) c?))
+                           (ch = 117) (: _ (pin sh-uflag () 1) (go (k + 1) c?))
+                           (ch = 120) (: _ (pin sh-xflag () 1) (go (k + 1) c?))
                            ())))
         (go 1 0))
    (sh-main args)
      (? !args (sh 0)
         (: a <args
-           (? (= a "--login") (: _ (pin sh-login () 1) (sh-main >args))
-              (&& (< 1 (tally a)) (= (a 0) 45))
+           (? (a = "--login") (: _ (pin sh-login () 1) (sh-main >args))
+              ((1 < (tally a)) && ((a 0) = 45))
                 (: fw (sh-flagw a >args)
                    (? !(two? fw) (sh-file a >args)          ; a letter not ours: a name
                       (sh-nth fw 1)
@@ -85,11 +85,11 @@
    (sh _) (: _ (signal sig-int 1) _ (signal sig-quit 1) _ (signal sig-tstp 1)
              _ (signal sig-ttou 1) _ (signal sig-ttin 1)
              ok (raw 1)
-             (? (nil? ok)
-                (: _ (? (nil? (heard ())) (hear lush-help))
+             (? !ok
+                (: _ (? !(heard ()) (hear lush-help))
                    _ (pin sh-tty () 1)
-                   erc (+ "" (getenv "ENV"))
-                   rc (? (tally erc) erc (+ (+ "" (getenv "HOME")) "/.lushrc"))
+                   erc ("" + (getenv "ENV"))
+                   rc (? (tally erc) erc (("" + (getenv "HOME")) + "/.lushrc"))
                    _ (raw 0) _ (sh-profiles 0) _ (sh-src rc) _ (raw 1)
                    (sh-loop "" (sh-histload 0)))
                 (: _ (sh-profiles 0) (sh-cooked "")))))

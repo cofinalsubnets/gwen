@@ -87,7 +87,7 @@
 ; raw code word (the spq ⚠). a cur wrapper opens at cell 2; an unknown word at the door
 ; (a native cell) answers (). the reader is the splice JIT (doc/moon-regalloc.md, the
 ; splice client): a composable segment is a dis prefix whose every row it can say.
-(: dis (:
+(: dis-pair (:
    kur (peek 0 (+))
    ret0 (peek 1 cap)
    (lvmk? k) ("lvm_" = snip (string k) 0 4)
@@ -122,9 +122,65 @@
    ; () or a ret-terminated row list, never a fragment. a cur cell opens at cell 2.
    (termd? rows) (? (atom? rows) 0 (atom? >rows) (fin? <<rows) (termd? >rows))   ; fin? takes the row's HEAD nom
    (ok rows) (? (termd? rows) rows ())
-   (\ f (? (charm? f) ()
-           (id? kur (peek 0 f)) (: b (ok (walk f 2 4096)) (? (atom? b) () (['lvm_cur] >< b)))
-           (ok (walk f 0 4096))))))
+   (dlin f) (? (charm? f) ()
+               ; ⚠ the cur row CARRIES ITS ARITY: cell 1 is the saturation count lvm_cur reads,
+               ; and a reader that drops it has no other door to the closure's arity -- the rows
+               ; below index a frame whose width is exactly this number.
+               (id? kur (peek 0 f)) (: b (ok (walk f 2 4096))
+                                       (? (atom? b) () ([['lvm_cur (opd (peek 1 f))]] + b)))
+               (ok (walk f 0 4096)))
+
+   ; --- the same reading as a GRAPH -----------------------------------------------------
+   ; ⚠ A THREAD'S CONTROL FLOW IS ENTIRELY INTERNAL TO IT. Every branch target is a
+   ; same-thread cell pointer -- love.c's lvm_jump, lvm_cond, lvm_argcond and lvm_argtwocond
+   ; all take Ip[k].m -- so a closure carries its whole graph and nothing about reading one
+   ; asks the VM to change. What the linear reader refuses to hand out is the POINTER; the
+   ; INDEX is a charm and perfectly safe, and `seek` (the address OF a cell) is the door
+   ; between them. So a target is relativized HERE, at read time, where the base is known.
+   ; ⚠ both sides are re-read at every step of the scan: a collection between two
+   ; comparisons moves the thread, and a held address would then quietly match a neighbour
+   ; rather than fail. This is the one place in the walk that must not cache.
+   (tgt-at nm) (? (id? nm 'lvm_jump) 1  (id? nm 'lvm_cond) 1
+                  (id? nm 'lvm_argcond) 2  (id? nm 'lvm_argtwocond) 2  0)
+   (findc f a) (: (go j n) (? (n = 0) () (id? (peek a f) (seek j f)) [1 j] (go (j + 1) (n - 1)))
+                  (go 0 4096))
+   (put1 l k v) (? (k = 1) (v >< >l) (<l >< put1 >l (k - 1) v))
+   (gseen? acc i) (? (atom? acc) 0 (id? i <<acc) 1 (gseen? >acc i))
+   (gins r acc) (? (atom? acc) [r] (<r < <<acc) (r >< acc) (<acc >< gins r >acc))  ; kept index-sorted
+   ; the rows a closure can REACH, index-sorted, each [idx nom operand..]. 'torn anywhere
+   ; is 'torn everywhere: a graph read is all of it or none, since a splicer laying out an
+   ; arm it could not read would lay out a jump into nothing.
+   (gwalk f i acc lim)
+    (? (nil? lim) 'torn
+       (gseen? acc i) acc
+       (: w (peek i f) nm (op? w)
+          (? (nil? nm) 'torn
+             (fin? nm) (gins [i nm] acc)
+             (: r (opds f (i + 1) 8)  os <r  nx >r
+                k (tgt-at nm)
+                t9 (? (0 < k) (findc f (i + k)) [1 0])
+                (? (nil? t9) 'torn
+                   (: t <>t9
+                      a2 (gins ([i nm] + (? (0 < k) (put1 os k t) os)) acc)
+                      (? (id? nm 'lvm_jump) (gwalk f t a2 (lim - 1))
+                         (0 < k) (: a3 (gwalk f nx a2 (lim - 1))
+                                    (? (id? a3 'torn) 'torn (gwalk f t a3 (lim - 1))))
+                         (gwalk f nx a2 (lim - 1)))))))))
+   (dgrf f) (? (charm? f) ()
+               (: e (? (id? kur (peek 0 f)) 2 0)
+                  g (gwalk f e () 4096)
+                  (? (id? g 'torn) ()
+                     (atom? g) ()
+                     (= e 2) ([[0 'lvm_cur (opd (peek 1 f))]] + g)
+                     g)))
+   ; ⚠ ONE top-level leak, not two: both readers share the roster, so they come out of one
+   ; inner scope as a pair and are taken apart HERE, inside the same body-less `:`. A second
+   ; top-level form looks equivalent and is not -- love0 surfaces ev.l's late leak differently,
+   ; and splitting it bound `dis`/`disg` to () there, which reads as PRESENT and broken rather
+   ; than absent. `dis-pair` itself is runtime-internal and rides egg.l's mop list.
+   [dlin dgrf])
+   dis <dis-pair
+   disg <>dis-pair)
 
 (:- (\ x (:
  c (sco 0 [()] ())
@@ -513,7 +569,13 @@
    (cprop x se fl op bnd) (: h <x (?
     (h = x) (? (nom? x) (: e (assq x se) (? (atom? e) x <>e)) x)               ; const/known-lambda var -> value
     (h = '\) (cplam x se fl op bnd)
-    (h = ':) (keep x (cpbinds >x se fl op (cat (ln >x) bnd)) ':)       ; a let's names all shadow throughout (one scope)
+    ; a let's names all shadow throughout (one scope) -- so they leave `se` too, exactly as
+    ; cplam drops its params. ⚠ bnd alone is not enough: without the rmkeys an OUTER constant
+    ; of the same name propagates into a binding's own RHS, where letrec* says the name is the
+    ; unpinned INNER one. that is a let* kill on a letrec* form, and it read (: x 42 (: x (x + 1) x))
+    ; as 43 where c0 said the pre-fill read. a rebind WITHIN one chain still folds: the name is
+    ; stripped once at entry and re-enters se as each binding pins, so (: x 1 x (x + 1) x) is 2.
+    (h = ':) (: ns (ln >x) (keep x (cpbinds >x (rmkeys ns se) fl op (cat ns bnd)) ':))
     (h = '?) (keep x (mapi (\ e (cprop e se fl op bnd)) >x) '?)              ; no prune here -- wxc does it
     (: m (? (nom? h) (macros h) 0)                                          ; macro head, not shadowed? expand on RAW args -- a
        (? (m && !(member? h bnd)) (cprop (m >x) se fl op bnd)                  ; structural macro (a two?/cap probe) must see them

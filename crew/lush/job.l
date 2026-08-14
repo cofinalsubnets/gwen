@@ -15,7 +15,7 @@
 ; sh-unwords) and the shell state (sh-jobs sh-status sh-tty).
 
 (: (sh-rev l) (foldl (\ a x (x >< a)) () l)
-   (sh-nth l i) (? (= i 0) <l (sh-nth >l (- i 1)))
+   (sh-nth l i) (? (i = 0) <l (sh-nth >l (i - 1)))
 
    sig-int 2 sig-quit 3 sig-tstp 20 sig-cont 18 sig-ttou 22 sig-ttin 21
    sh-jobs (tablet 0)
@@ -72,46 +72,46 @@
 
    ; --- read one line (cooked): bytes until \n; 'eof at immediate EOF. here on
    ; the shared floor: eval's `.`/read builtins and the loops all drink from it
-   (sh-getline port) (: c (see port) (? (< c 0) 'eof (= c 10) "" (+ (+ "" c) (sh-rest port))))
-   (sh-rest port)    (: c (see port) (? (< c 0) ""   (= c 10) "" (+ (+ "" c) (sh-rest port))))
+   (sh-getline port) (: c (see port) (? (c < 0) 'eof (c = 10) "" (("" + c) + (sh-rest port))))
+   (sh-rest port)    (: c (see port) (? (c < 0) ""   (c = 10) "" (("" + c) + (sh-rest port))))
 
-   (sh-unwords ws) (foldl (\ a w (? (tally a) (+ (+ a " ") w) w)) "" ws)
+   (sh-unwords ws) (foldl (\ a w (? (tally a) ((a + " ") + w) w)) "" ws)
    (sh-addjob pids state cmd)
-     (: n (+ 1 (sh-njob ())) _ (pin sh-njob () n) _ (pin sh-jobs n (L pids state cmd)) n)
+     (: n (1 + (sh-njob ())) _ (pin sh-njob () n) _ (pin sh-jobs n [pids state cmd]) n)
    (sh-jobline n j)
-     (+ "[" (+ (show n) (+ "] " (+ (show (sh-nth j 1)) (+ "  " (+ (sh-nth j 2) "\n"))))))
-   (sh-stopped? sts) (foldl (\ a x (? a a (< 255 x))) 0 sts)
+     ("[" + ((show n) + ("] " + ((show (sh-nth j 1)) + ("  " + ((sh-nth j 2) + "\n"))))))
+   (sh-stopped? sts) (foldl (\ a x (? a a (255 < x))) 0 sts)
    ; wait a foreground job; a stop registers + reports it instead of hanging the prompt
    (sh-waitfg pids cmd)
      (: sts (map (\ p (wait p)) pids)
         _   (? (sh-tty ()) (ttyfg 0) 0)                ; the shell takes the terminal back
         _   (pin sh-status ()                          ; $?: the last stage; a stop folds to 128+sig
-             (: st (last sts) (? (charm? st && (< 255 st)) (- st 128) st)))
+             (: st (last sts) (? (charm? st && (255 < st)) (st - 128) st)))
         (? (sh-stopped? sts)
            (: n (sh-addjob pids 'stopped cmd)
               _ (puts (sh-jobline n (sh-jobs n))) 0)
            0))
    ; background bookkeeping: drain glean at each prompt; a reaped pid leaves its job,
    ; an emptied job prints done and goes
-   (sh-unpid l p) (? !l () (? (= <l p) >l (<l >< sh-unpid >l p)))
+   (sh-unpid l p) (? !l () (? (<l = p) >l (<l >< sh-unpid >l p)))
    (sh-bgnote pid)
      (each (keys sh-jobs)
        (\ n (: j (sh-jobs n)
                (? !j 0
                   (: ps (sh-unpid (sh-nth j 0) pid)
-                     (? (= ps (sh-nth j 0)) 0
+                     (? (ps = (sh-nth j 0)) 0
                         !ps (: _ (? (sh-tty ())          ; notices are the tty's; scripts stay quiet
-                                    (puts (+ "[" (+ (show n) (+ "] done  " (+ (sh-nth j 2) "\n"))))) 0)
+                                    (puts ("[" + ((show n) + ("] done  " + ((sh-nth j 2) + "\n"))))) 0)
                                (pull sh-jobs n 0))
-                        (pin sh-jobs n (L ps (sh-nth j 1) (sh-nth j 2)))))))))
+                        (pin sh-jobs n [ps (sh-nth j 1) (sh-nth j 2)])))))))
    (sh-reapbg _)
      (: r (glean 0) (? (two? r) (: _ (sh-bgnote <r) (sh-reapbg 0)) 0))
    ; job addressing: "fg 2" by number, bare "fg" the latest
    ; string membership: member? tests IDENTITY (uninterned strings never hit)
-   (sh-smem? x l) (? !(two? l) 0 (? (= x <l) 1 (sh-smem? x >l)))
+   (sh-smem? x l) (? !(two? l) 0 (? (x = <l) 1 (sh-smem? x >l)))
    (sh-int s) (sh-intl s 0 0)
-   (sh-intl s i a) (? (= i (tally s)) a (sh-intl s (+ i 1) (+ (* a 10) (- (s i) 48))))
-   (sh-lastjob _) (foldl (\ a k (? (< a k) k a)) 0 (keys sh-jobs))
+   (sh-intl s i a) (? (i = (tally s)) a (sh-intl s (i + 1) ((a * 10) + ((s i) - 48))))
+   (sh-lastjob _) (foldl (\ a k (? (a < k) k a)) 0 (keys sh-jobs))
    (sh-jobn argv) (? >argv (sh-int <>argv) (sh-lastjob 0))
    (sh-fg n)
      (: j (sh-jobs n)
@@ -125,6 +125,6 @@
      (: j (sh-jobs n)
         (? !j (: _ (puts "bg: no such job\n") 0)
            (: _ (each (sh-nth j 0) (\ p (still p sig-cont)))
-              _ (pin sh-jobs n (L (sh-nth j 0) 'running (sh-nth j 2)))
+              _ (pin sh-jobs n [(sh-nth j 0) 'running (sh-nth j 2)])
               _ (puts (sh-jobline n (sh-jobs n)))
               0))))

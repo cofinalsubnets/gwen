@@ -208,7 +208,7 @@ moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_math_o) $(moon_d)/sys.o
 $(moon_d)/love.o: love.c $(love_h) $(moon0_dep) out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H -I$(ho) -I. -Iout/lib -c $< $@
+	@$(moon0) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H -fir=lvm_ -I$(ho) -I. -Iout/lib -c $< $@
 $(moon_d)/host_%.o: host/%.c $(love_h) $(moon0_dep)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)

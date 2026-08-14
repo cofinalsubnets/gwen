@@ -161,6 +161,23 @@
  ('(1 2) = (@ '(1 2) (x & [a b]) x 'no))
  ; ..both branches read the SAME value, so a nom in both is the ordinary non-linear one
  (3 = (@ '(3 3) ([a _] && [_ a]) a 'no)) ('no = (@ '(3 4) ([a _] && [_ a]) a 'no))
+ ; --- the AS-pattern: (v @ pat) is that same conjunction in haskell's spelling, so every
+ ; && law above holds of it. ⚠ SPACED -- glued v@pat is ONE nom (opfix splits only a leading
+ ; sigil) and glued @( is the tray, so the space is what tells the three apart.
+ ('(lam x b) = (@ '(lam x b) (v @ ['lam p q]) v 'no))
+ ('b = (@ '(lam x b) (v @ ['lam p q]) q 'no))
+ ('no = (@ '(pi x b) (v @ ['lam p q]) v 'no))
+ (3 = (@ '(3 3) ([a _] @ [_ a]) a 'no))            ; ..non-linear through it too
+ ; --- the PIN, elixir's ^x: glued ^ names jot, and jot in a pattern is an EQUALITY against
+ ; x read from OUTSIDE -- the one way a pattern spends a nom without binding it.
+ (: a 1 (9 = (@ '(1 9) (^a b) b 'no)))             ; ..fits when the value equals the outer a
+ (: a 1 ('no = (@ '(7 9) (^a b) b 'no)))           ; ..and misses when it does not
+ (: a 1 (7 = (@ '(7 9) (a b) a 'no)))              ; ..unpinned, the same nom REBINDS instead
+ (: a 5 ('both = (@ '(5 5) (x ^a) 'both 'no)))     ; ..so (x ^a) is a pair equal to an outer a
+ (: a 5 ('no = (@ '(5 6) (x ^a) 'both 'no)))
+ (9 = (@ '(5 9) (^(2 + 3) b) b 'no))               ; ..and what is pinned is any expression
+ ('(0 1 2) = ^3)                                   ; ..while outside a pattern ^ is plain jot
+ (7 = (3 ^ 4))                                     ; ..and SPACED ^ is still xor: the lane is the key
  ; --- a lambda is a FORM like any other: (\ x b) builds one, so it matches one
  ('form = (@ '(\ x b) (\ q r) 'form 'no))
  ('lit = (@ 'x (\ x) 'lit 'no))                     ; ..at ONE operand it is still the literal

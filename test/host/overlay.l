@@ -130,15 +130,15 @@
 
 ; leg 6 (stage 3 of the translator ladder): tools/wm2uu.l reads core.l's ops
 ; AS DATA, kind-directed by the sig table, and emits uu terms -- which the
-; kernel then defn-CERTIFIES right here (dependency order: gens answers
-; reversed, so rev it), and which must answer the fuzz exactly as core.l
+; kernel then defn-CERTIFIES right here (⚠ dependency order: certify in the
+; order gens answers), and which must answer the fuzz exactly as core.l
 ; does. the translated terms live in the model's vocabulary, so stage 4's
 ; idpath bridges can tie gen-* to the proved ops.
 (reads (open "tools/wm2uu.l" "r"))
 (:    cforms (map opfix (forms (open "crew/lux/core.l" "r")))                    ; the surface factored to the core, as above
    gens (wm2uu cforms lux-sigs)
  _ (assert (= 10 (tally gens)))
- _ (map (\ g (defn (cap g) (nthl g 1) (nthl g 2))) (rev gens))   ; the kernel certifies each
+ _ (map (\ g (defn (cap g) (nthl g 1) (nthl g 2))) gens)   ; the kernel certifies each, in order
  _ (puts "overlay leg 6: translated + certified ")
 
  ; stage 4: the idpath bridges. for every op, the theorem

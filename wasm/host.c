@@ -138,6 +138,12 @@ EMSCRIPTEN_KEEPALIVE
 int ai_init(void) {
   F = ai_ini();
   if (!ai_ok(F)) return ai_code_of(F);
+  // BOUND the collector (the Appel knob): wasm32 has a HARD 2 GB ceiling and
+  // ALLOW_MEMORY_GROWTH cannot pass it, so an unbounded pair of pools walks off the end --
+  // and it does it at a DOUBLING, where a few percent more live asks for twice the pool.
+  // a quarter of the ceiling, like every other bounded seat: the transient peak while a
+  // resize holds both halves is double the budget.
+  if (ai_ok(F)) ai_core_of(F)->budget = (2048u << 20) / sizeof(ai_word) / 4;
   struct ai_def d[] = {{"exit", (ai_word) nif_exit}};
   F = ai_defn(F, d, countof(d));
   if (!ai_ok(F)) return ai_code_of(F);

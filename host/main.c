@@ -1034,11 +1034,17 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake) {
     // help), so a broken cat is a LOUD failed bake, never a quiet artifact.
     char const *xtra = getenv("LOVE_BAKE_LOAD");
     if (xtra) {
+      // ⚠ and it CLOSES q: an open heap port registers a finalizer, so an unclosed one is
+      // still reachable at the seal -- and what rides into the image with it is its FD.
+      // ⚠ the path lands TWICE, so the bound is the snippet plus two of it; a truncated
+      // snprintf would hand ai_evals_ a half-written form, which reads as a broken cat.
       char xb[4352];
-      snprintf(xb, sizeof xb,
-        "(: q (open \"%s\" \"r\")"
-        " (? q (reads q) (: _ (say err \"love: bake: cannot open %s\") _ (put err 10) (quit 1))))",
-        xtra, xtra);
+      if (snprintf(xb, sizeof xb,
+            "(: q (open \"%s\" \"r\")"
+            " (? q (: _ (reads q) (close q))"
+            "      (: _ (say err \"love: bake: cannot open %s\") _ (put err 10) (quit 1))))",
+            xtra, xtra) >= (int) sizeof xb) {
+        fprintf(stderr, "love: bake: LOVE_BAKE_LOAD path too long\n"); return 1; }
       g = ai_evals_(g, xb); }
 #ifdef AI_GLAZED
     // auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif
