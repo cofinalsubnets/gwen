@@ -151,8 +151,14 @@ out/dist/.dist-cat.l: $(distfiles) out/dist/.dist.list
 # the SAME two-part id mk/lib.mk computes -- base from ./VERSION, VCS only a suffix --
 # because the tarball is named for it AND ships it, and a release whose filename and
 # `love --version` disagreed would be its own kind of lie.
+# ⚠ AND THE .git MUST BE THIS TREE'S: `git -C DIR` walks UP, so an extracted tree sitting
+# inside a checkout -- which is where `love seed` puts one, the cwd -- described the
+# ENCLOSING repo. A second +g on an id that already carried one, and a stage cut from the
+# wrong index: a 158-byte tarball and an artifact with no source in it. mk/lib.mk's
+# love_version has always guarded on exactly this, and the two ids must agree.
+in_git    := $(wildcard $(R)/.git)
 dist_base := $(shell cat $(R)/VERSION 2>/dev/null || echo 0)
-dist_vcs  := $(shell git -C $(R) describe --always --dirty 2>/dev/null)
+dist_vcs  := $(if $(in_git),$(shell git -C $(R) describe --always --dirty 2>/dev/null),)
 dist_ver  := $(dist_base)$(if $(dist_vcs),+g$(dist_vcs),)
 dist_stamp ?= 0
 dist_stage = out/dist/stage
@@ -215,8 +221,7 @@ out/dist/.staged-$(dist_ver): force_stage $(ho)/love
 # the artifact wrote the bytes it carried to exactly this path. Reusing them is what makes
 # a seed binary rebuilt out there byte-identical rather than merely equivalent, since the
 # blob it embeds is the same archive and not a re-pack that has to coincide.
-have_git := $(shell git -C $(R) rev-parse --is-inside-work-tree 2>/dev/null)
-ifneq ($(have_git),)
+ifneq ($(in_git),)
 $(dist_source): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l tools/tgz.l
 	@echo TGZ	$(abspath $@)
 	@rm -f $@
