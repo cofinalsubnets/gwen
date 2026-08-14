@@ -6,9 +6,11 @@ vgcore.*
 # leaves it -- `make distclean` is what takes it.
 /dl/
 # proof/rocq/coqc build artifacts (proof/rocq/spec.v is checked by `make test_proof`).
-# proof/rocq/gen.v, proof/rocq/uugen.v, proof/lean/uugen.lean are GENERATED proof artifacts but are now
-# CHECKED IN (they regen + re-check in seconds) and regenerated every run -- drift-proof:
-# the gate fails if a checked-in copy is stale. Only the compiled outputs below are ignored.
+# proof/rocq/gen.v is GENERATED and TEST-ONLY: test_gen lays it from test/spec.l and checks it in
+# the same recipe, so a copy in the tree proves nothing the run does not. proof/rocq/uugen.v and
+# proof/lean/uugen.lean are still checked in -- they regen + re-check in seconds and the diff is
+# the drift signal. Only the compiled outputs below are ignored.
+proof/rocq/gen.v
 # (Benches are the exception -- regenerated manually, too slow for per-commit.)
 proof/lean/*.olean
 *.vo

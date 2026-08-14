@@ -569,7 +569,13 @@
    (cprop x se fl op bnd) (: h <x (?
     (h = x) (? (nom? x) (: e (assq x se) (? (atom? e) x <>e)) x)               ; const/known-lambda var -> value
     (h = '\) (cplam x se fl op bnd)
-    (h = ':) (keep x (cpbinds >x se fl op (cat (ln >x) bnd)) ':)       ; a let's names all shadow throughout (one scope)
+    ; a let's names all shadow throughout (one scope) -- so they leave `se` too, exactly as
+    ; cplam drops its params. ⚠ bnd alone is not enough: without the rmkeys an OUTER constant
+    ; of the same name propagates into a binding's own RHS, where letrec* says the name is the
+    ; unpinned INNER one. that is a let* kill on a letrec* form, and it read (: x 42 (: x (x + 1) x))
+    ; as 43 where c0 said the pre-fill read. a rebind WITHIN one chain still folds: the name is
+    ; stripped once at entry and re-enters se as each binding pins, so (: x 1 x (x + 1) x) is 2.
+    (h = ':) (: ns (ln >x) (keep x (cpbinds >x (rmkeys ns se) fl op (cat ns bnd)) ':))
     (h = '?) (keep x (mapi (\ e (cprop e se fl op bnd)) >x) '?)              ; no prune here -- wxc does it
     (: m (? (nom? h) (macros h) 0)                                          ; macro head, not shadowed? expand on RAW args -- a
        (? (m && !(member? h bnd)) (cprop (m >x) se fl op bnd)                  ; structural macro (a two?/cap probe) must see them

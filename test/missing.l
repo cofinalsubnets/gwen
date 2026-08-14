@@ -52,6 +52,20 @@
  (2 = (: a an-local an-local 2 an-local))        ; the body reads the local, post-pin
  (id? (:) (: f (\ _ an-cell) v (f 0) an-cell 5 v))  ; the boxed lane reads the same point
  (5 = (: f (\ _ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the cell, once pinned
+; AT EVERY DEPTH means NESTED too, and a SHADOWED name is the sharp case: an outer binding of
+; the same nom must not answer for the inner one's pre-fill read. ⚠ cprop is the lane that used
+; to: it killed a shadowed name let*-wise (after the RHS) on a form that is letrec*, so an outer
+; CONSTANT propagated into the RHS where the name is the unpinned inner one. only a constant did,
+; which is why it read one way here and another under a lambda param -- and c0, which has no
+; cprop, disagreed with ev. the assert pins the two shapes that told them apart.
+(: an-outer2 42)
+(assert
+ ; 1 is (() + 1): the RHS read the point, NOT the outer 42 -- 43 is what a leak answers
+ (1 = (: q 1 (: an-outer2 (an-outer2 + 1) an-outer2)))       ; shadowed CONSTANT, nested
+ (1 = ((\ p (: p (p + 1) p)) 42))                            ; ..and a shadowed lambda PARAM, alike
+ (id? (:) (: an-o3 99 (: f (\ _ an-o3) r (f 0) an-o3 42 r))) ; ..the boxed lane, outer in scope
+ (2 = (: b 1 b (b + 1) b))                                   ; ⚠ a rebind WITHIN one chain still
+ (43 = (: c 42 d (c + 1) d)))                                ;   reads the previous value, and folds
 
 ; the help hears the cell miss too; the payload is the binding-site nom
 (hear (\ a b (? (&& (id? a 'missing) (nom? b) ("an-fwd" = (string b))) 'cell-nom 0)))
