@@ -51,14 +51,16 @@
 ;                          value a pattern, and the match is by SUBSET (the one
 ;                          place a pattern is looser than its constructor)
 ;   @(a b)  (tuple a b)    a tray of exactly two
-;   (? g pat)              a GUARD: pat must fit AND g must hold
+;   (pat & g)              a GUARD, left to right: pat must fit AND g must hold.
+;                          THE ONE OPERAND A PATTERN READS AS AN EXPRESSION, and it
+;                          chains: (c & 0 < c & c < 10). `&&` is the same tag.
+;   (? g pat)              the guard the other way round -- (& ..) lowers to exactly
+;                          this, so they are one thing with two spellings
 ;   (? g)                  the guard alone -- fits anything g holds for
-;   (p1 || p2)             ALTERNATIVES: either shape fits. `|` is the same tag
-;   (p1 && p2)             AND: both fit. `&` too -- the dual, and the way to name
-;                          the whole while taking it apart: (v && ['lam x b])
-;   (v @ pat)              the AS-pattern, haskell's v@pat: name the whole AND take
-;                          it apart. it IS the && above under another spelling, so
-;                          both sides are patterns and neither is privileged.
+;   (p1 | p2)              ALTERNATIVES: either shape fits. `||` is the same tag
+;   (v @ pat)              the AS-pattern, haskell's v@pat, and the ONLY and-pattern:
+;                          name the whole AND take it apart, both sides patterns,
+;                          neither privileged. ([a _] @ [_ a]) is a pair of equals.
 ;                          ⚠ SPACED. glued v@pat is one nom -- opfix splits only a
 ;                          LEADING sigil -- and glued @( is already the tray below.
 ;   ^x  (jot x)            the PIN, elixir's ^x: x is read from OUTSIDE and the value
@@ -83,17 +85,14 @@
 ; head, an undefined op answers the unit). A tag was the one place a pattern refused
 ; to mean anything, and now it means the plain thing it looks like.
 ;
-; THE GUARD IS THE ONE PATTERN THAT IS NOT A CONSTRUCTOR, and it wears `?` because
-; a side condition is what `?` already means everywhere else -- test then shape,
-; where `?` elsewhere reads test then value. `&&` and `||` stay unspent, so an
-; and-pattern and an or-pattern can have them.
-; ⚠ SO `?` IS THE ONLY THING THAT SAYS "EXPRESSION", and it is never decoration: a
-; pattern is its constructor, so pattern text IS expression text -- (two? x) is a fine
-; untagged pattern AND a fine call, and nothing else can pick. `&&` therefore conjoins
-; two SHAPES, never a shape and a condition: (x && (two? x)) asks for a two-list whose
-; head binds to `two?` and whose next element must equal the whole, which nothing is.
-; it fits nothing, in SILENCE, and it is the shape a hand reaches for first. write the
-; guard: (x && (? (two? x))), or the same thing shorter, (? (two? x) x).
+; THE GUARD IS THE ONE PATTERN THAT IS NOT A CONSTRUCTOR -- the one operand read for
+; TRUTH where every other is read for SHAPE -- and that is why it needs a tag of its
+; own at all. a pattern is its constructor, so pattern text IS expression text: (two? x)
+; is a fine untagged pattern (a form of two, binding both) as well as a fine call, and
+; nothing but the tag can pick. `&` is that tag, because (c & 0 < c) is the shape a hand
+; reaches for; `?` is the same thing written the other way, for a guard that reads better
+; in front. THE AND-PATTERN IS `@` AND ONLY `@` -- it had three spellings and needed one,
+; so the other two went to the guard, where a wrong reading used to fit nothing in silence.
 ; g is an ORDINARY EXPRESSION, not a pattern: it is read for truth, it binds
 ; nothing, and it sees every nom THE WHOLE ARM binds -- `(? (a < b) [a b])` reads
 ; the pair it is testing. That is because guards do not run where they are written:
@@ -127,6 +126,18 @@
    (wgd g) [() () [g]]
    (wcat x y) [(cat <x <y) (cat <>x <>y) (cat <>>x <>>y)]
 
+   ; `&` IS THE GUARD, LEFT TO RIGHT: (p & g ..) IS (? g .. p) and nothing else, so the
+   ; one operand a pattern reads as an EXPRESSION is the one after the `&`. `&&` aliases it.
+   ; ⚠ `&` is RIGHT-HANDED at band 30, so a chain arrives NESTED -- (p & a & b) is
+   ; (& p (& a b)) -- and that inner `&` is the chain, never a guard on its own. flatten
+   ; it, or the guard becomes the bitwise-and of two bits and (& 1 2) is 0.
+   (gand? x) (? (link? x) (? (id? <x '&) 1 (id? <x '&&)) ())
+   (gchain as) (? (! (two? >as)) as
+                  (gand? <>as) (link <as (gchain (cup <>as)))
+                  as)
+   (gwrap p gs) (? (two? gs) ['? <gs (gwrap p >gs)] p)   ; nested, so `arms` still distributes
+   (gnorm p) (: fl (gchain (cup p)) (gwrap <fl >fl))
+
    ; (pw p v) -- one walk, three answers: the TESTS over the access form v, the
    ; (nom access) pairs its body binds, and the GUARDS, which are neither.
    (pw p v)
@@ -137,16 +148,16 @@
            (? (= h '?) (? (! (two? as)) (wrest p '_ v)        ; a GUARD: (? g1 .. gn pat), or (? g)
                           (! (two? >as)) (wgd <as)           ; ..one operand IS the lone guard
                           (wq as v))                         ; ..else every one but the last guards
-              ; AND-PATTERNS, the dual of ||: both shapes must fit, and the walks simply
-              ; CONCATENATE -- one conjunction, and no winner to pick, because both branches
-              ; read the SAME value and their access forms are already rooted there.
+              ; THE GUARD, in the spelling a hand reaches for: (c & 0 < c) is (? (0 < c) c).
+              ((h = '&) || (h = '&&)) (pw (gnorm p) v)
+              ; THE AND-PATTERN, haskell's v@pat and the ONLY spelling of it: both shapes must
+              ; fit, and the walks simply CONCATENATE -- one conjunction, no winner to pick,
+              ; because both sides read the SAME value and their access forms are already
+              ; rooted there. neither side is privileged, so both stay patterns.
               ; ⚠ so a nom in both is the ORDINARY non-linear nom, and dedup makes the second
-              ; sighting an equality: ([a _] && [_ a]) fits a pair of equals, for free.
-              ; the everyday one is naming the whole while taking it apart: (v && ['lam x b]).
-              ; ..and `@` is that same conjunction under haskell's spelling: (v @ pat) names
-              ; the whole while taking it apart, which is the everyday && above. no arm is
-              ; privileged, so both sides stay patterns.
-              ((h = '&&) || (h = '&) || (h = '@)) (foldl wcat wnil (map (\ q (pw q v)) as))
+              ; sighting an equality: ([a _] @ [_ a]) fits a pair of equals, for free.
+              ; the everyday one is naming the whole while taking it apart: (v @ ['lam x b]).
+              (h = '@) (foldl wcat wnil (map (\ q (pw q v)) as))
               ; the PIN (elixir's ^x, glued to jot by the operators table): NOT a binding but
               ; an equality against x read from OUTSIDE -- the same shape a bare literal takes
               ; above, which is what a pin is. one operand only; anything else is a plain form.
@@ -302,6 +313,7 @@
    (arms p) (? (! (link? p)) [[p ()]]
                (: h <p as >p
                   (? ((h = '||) || (h = '|)) (catmap arms as)
+                     ((h = '&) || (h = '&&)) (arms (gnorm p))   ; the guard, normalised first
                      ((h = '?) && (= 2 (tally as)))
                        (map (\ b [<b (link <as <>b)]) (arms <>as))
                      [[p ()]])))

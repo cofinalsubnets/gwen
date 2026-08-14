@@ -346,7 +346,7 @@
                       putc 10,
                       [vs (!vs ? (revcat hd (detach hu cur))
                            (take 100 (mkframe u l r d >< revcat hd (detach hu cur)))) ]))
-              (? (0 < c) c) (loop npra u (c >< l) r d (detach hu cur) hd ())
+              (c & 0 < c) (loop npra u (c >< l) r d (detach hu cur) hd ())
               -1 (edleft  kloop u l r d)
               -2 (edright kloop u l r d)
               -3 (edbsp   kedit u l r d)
@@ -500,7 +500,7 @@
              (bev ip @
              -7 eofsym
                 10 (putc 10, revcat l r)
-                (? (0 < c) c) (loop (c >< l) r)          ; insert a printable
+                (c & 0 < c) (loop (c >< l) r)            ; insert a printable
                 -1 (edleft  km () l r ())
                 -2 (edright km () l r ())
                 -3 (edbsp   km () l r ())
@@ -545,7 +545,7 @@
                             ln (revcat l r)
                             nh (? !ln hist (take 100 (ln >< hist)))
                             (ln >< nh))
-                (? (0 < c) c) (loop (c >< l) r i draft)
+                (c & 0 < c) (loop (c >< l) r i draft)
                 -12 (: _ (puts "^C") _ (putc 10) (() >< hist))   ; ^C: abandon the line, hist untouched
                 -13
                   (? !comp (loop l r i draft)
