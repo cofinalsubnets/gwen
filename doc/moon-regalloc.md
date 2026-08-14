@@ -414,11 +414,49 @@ non-charm**: `dis` answers `'x` for a heap quote, which the blocker scan counts 
 splicer correctly refuses — the word is a heap pointer and moves under the collector. Honest, and
 worth about nineteen closures.
 
+### the ev inliner is already on, and it is the same rung as calls (2026-08-13)
+
+`feel`'s `cprop` (love/ev.l) is a real beta-reduction inliner and it runs on **everything** —
+`(wx (cprop x () 64 0 0) 0)`, fuel 64, no switch. So the 87% above was measured *with* it. Three
+threads say where its boundary is:
+
+```
+same-scope, pure body:   ((lvm_aa 0 1) (*) (lvm_aa 1 2) (*) (*) (lvm_ret))    ; inlined, no call
+global callee:           ((lvm_quote x) (lvm_qap x 2) (lvm_tap))              ; a call
+same-scope, impure body: ((lvm_quote x) (lvm_quote x) (lvm_argap 2) (lvm_tap)); a call
+```
+
+**Where it fires it produces exactly the thread the splicer wants** — `sq (sq y)` becomes
+straight-line arithmetic with no call at all. ⚠ but the lever is **admission, not fuel**: 64 → 4096
+moves the census by one closure (call 2557 → 2558, everything else identical) and was reverted.
+Admission has two halves:
+
+* **global callees are never attempted.** `cprop` resolves a head only through `se`, the local
+  static env, which carries `:`-scope bindings. In a corpus nearly every call is to a global — and
+  `lvm_qap` (push quote, push arg, apply: a **statically known** callee) is the largest single
+  blocker at 765.
+* **the purity gate is ~50 primitives**, and `pbody?` needs every call head in the body inside it.
+  ⚠ do not widen it casually: `tally` is absent for the same stated reason `peep` is — the
+  container doors are pure-or-not depending on what they are handed, and `tally` on a tablet reads
+  mutable state. That exclusion is correct.
+
+**So the inliner question and the call rung are ONE rung.** Inlining a global callee inside `feel`
+would make every compile redefinition-stale, which changes the language and breaks the repl. But
+the glaze's callout lanes already resolve their callee via `gv` at compile time and are documented
+as *"redefinition-stale like any baked global"*, and the splicer installs natives with a bytecode
+twin to deopt into. **A splice-time inline of a quoted callee is the same bet in the one place that
+already makes it** — and `lvm_qap`'s 765 says a large share of the 87% is the statically-known end,
+which is the easy half of that rung and does not need a stackless drive at all.
+
 **So the rungs, ranked by the blocker-set census — which is the one to trust:**
 
-1. **calls** — 87%, and nothing else comes close. The `p` variants (`qap`, `qqp`, `aap`, `aqp`)
-   plus `ap`/`apn`/`tapn`/`argap` enter a callee's thread with a return address. Amble solved this
-   shape already (stackless callout drive, restart deopt); this is that, over the compiled thread.
+1. **calls** — 87%, and nothing else comes close. ⚠ and it splits, which is the useful part: a
+   **quoted callee** (`qap` 765, `qqp`) is statically known, so the splicer can INLINE its thread
+   the way `cprop` inlines a local — no drive, no resume label, just more rows — on the same
+   redefinition bet the glaze's callout lanes already take and with the bytecode twin already
+   there to deopt into. A **dynamic callee** (`ap` 585, `tapn` 527, `argap`) is the harder half
+   and wants amble's shape: a stackless drive out, a resume label, restart deopt. Do the quoted
+   half first: it is bigger, cheaper, and reuses a bet the tree has already priced.
 2. **the no-IR ops behind `other`** — 8%, and `=`/`><`/`peep`/`nil?` are ordinary generic ops
    whose handlers are over the `-fir` cap. ⚠ note this is NOT the cap rung refused above: that one
    was priced on first-blocker counts and bought zero firings. Price it on this table instead.
