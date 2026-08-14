@@ -13,7 +13,7 @@
    ; a chain, so okv? -- a real stage result -- excludes it explicitly. it lives
    ; HERE, the first moon file in both load orders (crew/build.mk, test/test.mk),
    ; so every later stage can answer one.
-   (gripe file line col msg) `('gripe file line col msg)
+   (gripe file line col msg) ['gripe file line col msg]
    (gripe? x) (two? x && id? <x 'gripe)
    (okv? x) (two? x && !(gripe? x))
    ; clexat: lex with the FIRST line numbered ln0 -- the driver's door. its -D
@@ -27,15 +27,15 @@
    ; survives the round trip as the one element C says it is.
    (utf8dec s)
     (: m (tally s)
-       (cb? c) ((128 <= c) && (c < 192))
+       (cb? c) (128 <= c < 192)
        (go i acc)
         (? (m <= i) (rev acc)
            (: c (s i)
-              (? ((194 <= c) && (c < 224) && ((i + 1) < m) && cb? (s (i + 1)))
-                  (go (i + 2) ((| (<< (c - 192) 6) (& (s (i + 1)) 63)) >< acc))
-                 ((224 <= c) && (c < 240) && ((i + 2) < m) && cb? (s (i + 1)) && cb? (s (i + 2)))
+              (? (194 <= c < 224 && i + 1 < m && cb? (s (i + 1)))
+                  (go (i + 2) ((((c - 192) << 6) | (s (i + 1) & 63)) >< acc))
+                 (224 <= c < 240 && (i + 2 < m) && cb? (s (i + 1)) && cb? (s (i + 2)))
                   (go (i + 3) ((| (<< (c - 224) 12) (| (<< (& (s (i + 1)) 63) 6) (& (s (i + 2)) 63))) >< acc))
-                 ((240 <= c) && (c < 245) && ((i + 3) < m) && cb? (s (i + 1)) && cb? (s (i + 2)) && cb? (s (i + 3)))
+                 (240 <= c < 245 && (i + 3 < m) && cb? (s (i + 1)) && cb? (s (i + 2)) && cb? (s (i + 3)))
                   (go (i + 4) ((| (<< (c - 240) 18) (| (<< (& (s (i + 1)) 63) 12) (| (<< (& (s (i + 2)) 63) 6) (& (s (i + 3)) 63)))) >< acc))
                  (go (i + 1) (c >< acc)))))
        (go 0 ()))
@@ -52,13 +52,13 @@
        ; the multi-char punctuators BUCKETED BY FIRST CHAR. firstat walked all
        ; 21 of them on every punctuator token, each `at?` minting a closure and a
        ; tally; a `(` now looks at none of them and a `<` at three.
-       pmap (: t (tablet 0)
+       pmap (: t {}
                (add l) (? !(two? l) t
                           (: pat <l  h (pat 0)
                              _ (pin t h (peep t h () + L pat))
                              (add >l)))
                (add (p3 + p2)))
-       kwt (: t (tablet 0) (go l) (? !(two? l) t (: _ (pin t <l 1) (go >l))) (go kws))
+       kwt (: t {} (go l) (? !(two? l) t (: _ (pin t <l 1) (go >l))) (go kws))
        p1 "()[]{};,.:?~!+-*/%<>=&|^#"
        ; --- THE CLASS TABLE: one 256-byte string, a bitmask per char ------
        ; a membership test becomes an index and an `&` where it was a scan
@@ -68,22 +68,20 @@
        ; with it empty, (& 1 m) is 0 for every mask here. `oct?` rides dig?
        ; rather than taking the eighth bit.
        ;   2 ws  4 dig  8 idh  16 idc  32 hexd  64 suf  128 punct1
-       (cbit c) (+ (? ((c = 32) || (c = 9) || (c = 13) || (c = 12) || (c = 11)) 2 0)
-                 (+ (? ((48 <= c) && (c <= 57)) 4 0)
-                 (+ (? (((97 <= c) && (c <= 122)) || ((65 <= c) && (c <= 90)) || (c = 95)) 8 0)
-                 (+ (? (((48 <= c) && (c <= 57)) ||
-                        ((97 <= c) && (c <= 122)) || ((65 <= c) && (c <= 90)) || (c = 95)) 16 0)
-                 (+ (? (((48 <= c) && (c <= 57)) ||
-                        ((97 <= c) && (c <= 102)) || ((65 <= c) && (c <= 70))) 32 0)
-                 (+ (? ((c = 117) || (c = 85) || (c = 108) || (c = 76)) 64 0)
-                    (? (member? c '(40 41 91 93 123 125 59 44 46 58 63 126 33 43 45 42 47 37 60 62 61 38 124 94 35)) 128 0)))))))
+       (cbit c) ((c = 32 || c = 9 || c = 13 || c = 12 || c = 11 ? 2 0) +
+                 (48 <= c <= 57 ? 4 0) +
+                 (97 <= c <= 122 || 65 <= c <= 90 || c = 95 ? 8 0) +
+                 (48 <= c <= 57 || 97 <= c <= 122 || 65 <= c <= 90 || c = 95 ? 16 0) +
+                 (48 <= c <= 57 || 97 <= c <= 102 || 65 <= c <= 70 ? 32 0) +
+                 (c = 117 || c = 85 || c = 108 || c = 76 ? 64 0) +
+                 (member? c '(40 41 91 93 123 125 59 44 46 58 63 126 33 43 45 42 47 37 60 62 61 38 124 94 35) ? 128 0))
        ctbl (: (go k acc) (? (k < 0) (string acc) (go (k - 1) (cbit k >< acc))) (go 255 ()))
-       (ws? c) (& (ctbl c) 2)
-       (dig? c) (& (ctbl c) 4)
-       (hexd? c) (& (ctbl c) 32)
-       (hexv c) (? (dig? c) (c - 48) ((97 <= c) && (c <= 102)) (c - 87) (c - 55))         ; a=10 A=10
-       (suf? c) (& (ctbl c) 64)
-       (skipsuf j) (? ((j < n) && suf? (src j)) (skipsuf (j + 1)) j)                      ; eat an int-literal suffix run
+       (ws? c) (ctbl c & 2)
+       (dig? c) (ctbl c & 4)
+       (hexd? c) (ctbl c & 32)
+       (hexv c) (? (dig? c) (c - 48) (97 <= c <= 102) (c - 87) (c - 55))         ; a=10 A=10
+       (suf? c) (ctbl c & 64)
+       (skipsuf j) (? (j < n && suf? (src j)) (skipsuf (j + 1)) j)                      ; eat an int-literal suffix run
        ; a WIDE/prefixed literal marker before ' or " : L (C89 wchar_t), u/U (C11 char16/32),
        ; u8 (C11 UTF-8 string, byte semantics). -> prefix length (1|2), else 0; the
        ; prefixed lane below picks the token kind.
