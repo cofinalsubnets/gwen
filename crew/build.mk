@@ -77,7 +77,7 @@ out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 # verb table, which love/cli.l's verb rail reads: `love up URL` syncs ~/.love/src
 # and cook-installs the nest; `love sb|cook|kore|kiosko|mooncc ..` are the same
 # binary being multi-call. the bake rides `love bake`'s own lane (main.c's
-# LOVE_BAKE_LOAD evals the cat ahead of the cache-empty + seal), so the artifact
+# `bake -l CAT` evals it ahead of the cache-empty + seal), so the artifact
 # is the default binary with a bigger image -- no session layer, same sealing.
 # member order is the scope: kore's floor first, asbook before the backends
 # (defbackend mutates the spliced holo), every main before kore.l's applet
@@ -151,8 +151,14 @@ out/dist/.dist-cat.l: $(distfiles) out/dist/.dist.list
 # the SAME two-part id mk/lib.mk computes -- base from ./VERSION, VCS only a suffix --
 # because the tarball is named for it AND ships it, and a release whose filename and
 # `love --version` disagreed would be its own kind of lie.
+# ⚠ AND THE .git MUST BE THIS TREE'S: `git -C DIR` walks UP, so an extracted tree sitting
+# inside a checkout -- which is where `love seed` puts one, the cwd -- described the
+# ENCLOSING repo. A second +g on an id that already carried one, and a stage cut from the
+# wrong index: a 158-byte tarball and an artifact with no source in it. mk/lib.mk's
+# love_version has always guarded on exactly this, and the two ids must agree.
+in_git    := $(wildcard $(R)/.git)
 dist_base := $(shell cat $(R)/VERSION 2>/dev/null || echo 0)
-dist_vcs  := $(shell git -C $(R) describe --always --dirty 2>/dev/null)
+dist_vcs  := $(if $(in_git),$(shell git -C $(R) describe --always --dirty 2>/dev/null),)
 dist_ver  := $(dist_base)$(if $(dist_vcs),+g$(dist_vcs),)
 dist_stamp ?= 0
 dist_stage = out/dist/stage
@@ -215,8 +221,7 @@ out/dist/.staged-$(dist_ver): force_stage $(ho)/love
 # the artifact wrote the bytes it carried to exactly this path. Reusing them is what makes
 # a seed binary rebuilt out there byte-identical rather than merely equivalent, since the
 # blob it embeds is the same archive and not a re-pack that has to coincide.
-have_git := $(shell git -C $(R) rev-parse --is-inside-work-tree 2>/dev/null)
-ifneq ($(have_git),)
+ifneq ($(in_git),)
 $(dist_source): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l tools/tgz.l
 	@echo TGZ	$(abspath $@)
 	@rm -f $@
@@ -255,7 +260,7 @@ $(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l $(ho)/love
 	@echo DIST	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -o $@
-	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l ./$@ bake
+	@./$@ bake -l out/dist/.dist-cat.l
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
 
 # ==== dist_cross: the TWIN artifact (the other elf arch) ====
@@ -304,7 +309,7 @@ $(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
 out/dist/love-$(xarch): $(xobjs) out/dist/.dist-cat.l
 	@echo DIST	$(abspath $@)
 	@$(moonx) -pie $(xobjs) -o $@
-	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l $(xqemu) ./$@ bake
+	@$(xqemu) ./$@ bake -l out/dist/.dist-cat.l
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@ (the $(xarch) twin, baked under $(xqemu))"
 .PHONY: dist_cross
 dist_cross: out/dist/love-$(xarch)

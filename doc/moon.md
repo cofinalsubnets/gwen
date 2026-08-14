@@ -179,6 +179,37 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
 
 Errors speak on err and exit 1; usage exits 2.
 
+## `.comment`, the producer record
+
+Every executable our linker writes carries a `.comment` section — the same one gcc and clang
+write, NUL-separated strings, no `SHF_ALLOC`, laid past `p_filesz` beside the symbol table, so
+the program is the same program and the kernel maps not a byte of it. It answers the first
+question anyone opening a strange binary asks: **what built this?**
+
+It is a **union**, not a claim. Every input object's own `.comment` rides in ahead of ours,
+first-seen order, deduped, and only then does the linker add its own word (`mooncc` when the
+driver linked, `holo` when kore's `ld` applet did). So a link mixing a foreign object says both
+names and neither claims the other's code:
+
+```sh
+$ mooncc m.o gcc-built.o -o mix && readelf -p .comment mix
+  [     0]  GCC: (GNU) 16.1.1 20260625
+  [    1b]  mooncc
+```
+
+⚠ **ours carries no version, and that is a law rather than an omission.** `love0` is stamped
+`bootstrap` on purpose (a real id there re-lays every lcat header on every commit), so a version
+in `.comment` would make `love1` — built by love0's mooncc — and `love2` — built by love1's —
+differ at `e_shoff` and name a broken fixpoint where the two compilers agree on every byte they
+*emit*. A self-hosted compiler's own build id is circular anyway; the tree's id is in
+`love-version`, in `.rodata`, where a reader gets it either way.
+
+Read it back without any binutils at all: `lib/irec.l`'s `(irec-secof PATH ".comment")` is the
+same ELF walk one table over, and answers the `(1 bytes)` wrapper — an empty section is a real
+section. It works on gcc's objects and on every target mooncc emits, cross-machine, for the
+reason the IR record does: a section table is a table. Gated by `test_moon`, both halves — the
+union over a foreign `.o`, and the exact string on an all-ours link.
+
 ## the toolchain root
 
 mooncc's own files — our headers (`crew/moon/include/`, glibc-ABI-faithful but NOT glibc's) and
