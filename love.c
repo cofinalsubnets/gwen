@@ -150,7 +150,7 @@ uintptr_t hash(struct ai*, intptr_t);
 static ai_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
  lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, // the data sentinels; each tail-jumps to its apply handler
- lvm_putn, lvm_gauge,    lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_heard, lvm_worn, lvm_myself, lvm_books, lvm_setbooks, lvm_mods, lvm_lib,
+ lvm_putn, lvm_gauge, lvm_tune, lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_heard, lvm_worn, lvm_myself, lvm_books, lvm_setbooks, lvm_mods, lvm_lib,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_saturate, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_casknew, lvm_bcopy,
  lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
@@ -715,6 +715,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  g->major_pool = g->rem ? g->alloc(g, NULL, 2 * g->major_len * sizeof(word)) : NULL;
  if (!g->major_pool) { if (g->rem) g->alloc(g, g->rem, 0); return encode(g, ai_status_scare); }
  g->major_base = g->major_hp = g->major_pool, g->rem_cap = AI_REM_CAP, g->budget = ai_budget;
+ g->minor0 = ai_minor0, g->major0 = ai_major0, g->ratio = ai_gc_ratio;   // the live knobs; `tune` moves them
  g->next_wait_events = ai_wait_in;
  // book + macro maps (lookup-lambdas) then the main task thread.
  if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 9))) {
@@ -1061,7 +1062,7 @@ static struct ai *gen_major(struct ai *g) {
  uintptr_t need = used + young;
  // grow/shrink by a whole STEP (= ai_major0), need + 25% headroom: one step at a
  // time prevents thrash, and snapping DOWN reclaims floated dead promotions.
- uintptr_t step = ai_major0, want = need + (need >> 2) + 16;
+ uintptr_t step = g->major0, want = need + (need >> 2) + 16;
  uintptr_t to_len = ((want + step - 1) / step) * step;
  if (to_len < step) to_len = step;
  uintptr_t need_step = ((need + step - 1) / step) * step;       // the TIGHT size: smallest step-multiple holding `need`
@@ -1170,7 +1171,7 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  // MINOR resize, deterministic (words copied / words allocated -- no wall clock, so
  // the schedule is reproducible): keep the copy overhead inside a band, accumulated
  // over a sliding window; ai_budget caps the footprint by appel's rule.
- enum { ratio = ai_gc_ratio };                  // target band: grow above 1/ratio overhead, shrink below 1/(4*ratio)
+ uintptr_t const ratio = g->ratio;              // target band: grow above 1/ratio overhead, shrink below 1/(4*ratio)
 #ifdef AI_GC_STRESS
  // ⚠ the band is meaningless on a forced schedule (`allocated` ~0 -> the nursery
  // doubles every collection, a 256 MB oom); the HARD FLOOR stays -- it guarantees
@@ -1200,7 +1201,7 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
   // (live + this whole nursery): the nursery gets ~(budget - 2*live)/4
   uintptr_t lv = 2 * g->major_live0, room = g->budget > lv ? (g->budget - lv) / 4 : 0;
   if (arena > room) arena = room; }
- if (arena < (uintptr_t) ai_minor0) arena = ai_minor0;         // floor
+ if (arena < g->minor0) arena = g->minor0;                     // floor
  if (arena < req) arena = req;                                 // hard floor: hold the pending allocation
  return arena == len1 ? g : gen_grow(g, arena); }
 
@@ -3957,6 +3958,40 @@ lvm(lvm_gauge) {
  tray_put_int(v, 13, (intptr_t) g->n_resize);
  tray_put_int(v, 14, (intptr_t) g->minor_hi);
  tray_put_int(v, 15, (intptr_t) g->major_hi);
+ ai_musttail return Answer(word(v)); }
+
+// (tune v) -> the four live GC knobs as a rank-1 Z array, in WORDS:
+//   [0] budget  total footprint cap (2*minor + 2*major); 0 = unbounded (appel's rule)
+//   [1] minor0  the nursery FLOOR every resize clamps up to
+//   [2] major0  the major pool's grow/shrink STEP (never 0: it divides)
+//   [3] ratio   copy-overhead setpoint -- hold copied/allocated inside [1/(4*ratio), 1/ratio]
+// (tune ()) reads; a rank-1 4-array WRITES and answers what it REPLACED, so a probe
+// can put the knobs back. seeded at ai_ini from ai_minor0/ai_major0/ai_gc_ratio.
+// a knob lands at the NEXT collection -- tightening budget frees nothing until then,
+// so pair it with (please 1). a wrong shape is a silent no-op answering the current
+// knobs (pin's misuse convention). ⚠ these are untraced scalars ahead of v0, so a bake
+// does NOT carry them: a woken image tunes again (host's LOVE_BUDGET_MB does exactly that).
+lvm(lvm_tune) {
+ enum { N = 4 };
+ uintptr_t const bytes = sizeof(struct ai_tray) + 1 * sizeof(word) + N * ai_T[ai_Z];
+ Have(b2w(bytes));
+ word x = Sp[0];                             // read POST-Have: a collection forwards the operand
+ struct ai_tray *v = (struct ai_tray*) Hp;
+ Hp += b2w(bytes);
+ ini_tray(v, ai_Z, 1);
+ v->shape[0] = N;
+ tray_put_int(v, 0, (intptr_t) g->budget);
+ tray_put_int(v, 1, (intptr_t) g->minor0);
+ tray_put_int(v, 2, (intptr_t) g->major0);
+ tray_put_int(v, 3, (intptr_t) g->ratio);
+ if (galaxyp(x) && tray(x)->rank == 1 && tray(x)->shape[0] == N) {
+  struct ai_tray *w = tray(x);
+  intptr_t b = tray_get_int(w, 0), mi = tray_get_int(w, 1),
+           ma = tray_get_int(w, 2), ra = tray_get_int(w, 3);
+  g->budget = b > 0 ? (uintptr_t) b : 0;     // <= 0 is the unbounded spelling, not a refusal
+  if (mi > 0) g->minor0 = (uintptr_t) mi;    // a 0 floor would let the nursery vanish
+  if (ma > 0) g->major0 = (uintptr_t) ma;    // the step divides
+  if (ra > 0) g->ratio = (uintptr_t) ra; }   // 0 would never grow and always shrink
  ai_musttail return Answer(word(v)); }
 
 // (apof x): x's kind pointer (cell[0]) as a fixnum, 0 for a fixnum/immediate. The string-lane glaze

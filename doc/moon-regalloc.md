@@ -17,10 +17,10 @@ each one priced, gated, and landed separately:
 * **the operand pool** (`opool`, six caller-saved regs) — statement-scoped staging;
   `ralloc`/`rfree`, reset at every statement. A pool value never crosses a call.
 * **the vmap** — the cross-statement leg: a universe local's value, once written through
-  a pool register, maps name → reg so re-reads are zero forms. Write-through: the slot
-  stays the single source of truth, so a flush forgets, never spills. Flushes at every
-  label and call emission; if/?: join labels survive by pair-INTERSECTION over arriving
-  edges (the forward-JOIN meet).
+  a pool register, maps name → reg → **class** so re-reads are zero forms. Write-through: the
+  slot stays the single source of truth, so a flush forgets, never spills. Flushes at every
+  label emission; a CALL kills the pool class only (the class is what says so). if/?: join
+  labels survive by pair-INTERSECTION over arriving edges (the forward-JOIN meet).
 * **homes and rides** — a param's positional seat (`homefold`), the self-assign ride
   license (a param whose only arrival-defs are self-updates rides its arrival register
   end-to-end), int/uint locals and params admitted under canonical extension (`lhomable?`,
@@ -110,6 +110,37 @@ Sixty-four store→load round trips on the dependent path. This is lever 2's ~22
 seen from the client side: a splice's every op boundary is exactly the write-through the
 allocator leg exists to remove, and closing it is worth ~2.5× **on the spliced body** —
 about the distance to the glaze.
+
+### the seam's root — ONE POINTER UNDER TWO NAMES (2026-08-13)
+
+⚠ Read this before touching the seam: four fixes were built against it that day and all four
+missed, three of them because the diagnosis was read off pre-peephole IR (see *how to measure
+honestly*). What survives is short.
+
+**`Sp` is carried in two registers, and the store and the load name different ones.**
+
+```
+mov %rcx,%r11         ; the copy, at entry
+...
+mov %rax,(%rcx)       ; store Sp[0]  — base %rcx, the ARRIVAL
+mov (%r11),%rax       ; load  Sp[0]  — base %r11, ADJACENT, same address, other name
+```
+
+`stldp` folds an adjacent store/load pair **by base-register name**, so it is handed one
+pointer under two names and never fires. Hence a reload per seam, hence a 64-deep
+store-to-load-forward chain, hence 0.84×. Note what this is *not*: mooncc emits 837
+instructions to cc's 713 for the same body (1.17×) against 2.6× in time — **the seam is a
+dependency chain, not a density problem**, and any instrument that counts instructions will
+say this body is nearly fine.
+
+The copy exists because **`Sp` does not ride**. `ride` for `composed` is `(2)` — `Hp` only.
+`rst-defok` rejects `r1` on a foreign def, so `Sp` spills, and in a frameless function the
+spill collapses into that entry copy. The chain, end to end: *ride denied → second register
+→ two names → no fold → reload per seam → serialized forwards.*
+
+**So the fix is upstream: make `Sp` ride.** One register for one value, and the pair folds
+itself. That is the ride analysis's business, not a peephole's — which is why all four
+peephole-level attempts below failed. Untested as of 2026-08-13.
 
 Two things the probe settled that the design had worried about:
 
@@ -451,6 +482,52 @@ That is what the two big rows above are:
 
 **Together, 339 of 514 pin kills — 66% — are one missing field.**
 
+⚠ **the second bullet was wrong, and step 1 building it is what said so** (2026-08-13). Those 116
+fires are `(? (two? kp) (vmset g kp) (vmflush g))` — a loop head **installing its keep**, and the
+flush arm is the install of an empty one, not a kill site with a vocabulary problem. Sparing a
+class there is unsound: `lokeep`/`lochk` verify the head's arriving edges only for the entries in
+`kp`, so a pin spared outside it rides a back edge nothing checked — a body that re-pins the name
+elsewhere then makes a top-of-body read wrong on the first arrival. The flush is that join's
+correctness. **Step 1's honest reach is the 223-fire row alone, 43.4%**, and the conditional
+retires because `vmset` of an empty map already IS the flush.
+
+### the gate census — the seven never disagree, and that is the finding
+
+⚠ run 2026-08-13 to aim step 5, and it **falsified the premise it was run on**. The plan said one
+pricing would resolve contradictions between the gates. Over love.c/x64 — 4,934 verdicts from the
+seven gates, deduped to each function's last regen attempt — there are no contradictions:
+
+| | |
+|---|---|
+| `lpick` **grants**, a loop gate **refuses** | **0** |
+| `lpick` **refuses**, a loop gate **grants** | **143** |
+| `lomig` vs `loseed`, either direction | 0 / 4 |
+
+The relation is one-directional and structural. What reads as disagreement is the gates pricing
+**different classes for the same value** with nothing in the program saying so, and the honest
+sentence — *"does not pay as a pool home; does pay as a borrowed seat"* — was unsayable. So the
+table does not arbitrate. It makes the class the axis, and that sentence sayable.
+
+⚠ **two instrument artifacts nearly buried this, and the raw census read 61% disagreement.**
+`loseed`'s `nocand` is not a refusal — it is declining to CONSIDER a name that already holds a
+register (a homed local is `regv`, not `loc`), and all 311 "lpick grants, loseed refuses" rows were
+exactly that. `paid?` records under the caller's function but prices the INLINEE's parameter
+namespace, so its rows fake collisions. Neither is visible without asking what a verdict means.
+
+And the census named the axis that actually decides. Of `lpick`'s 1,036 refusals:
+
+| why | |
+|---|---|
+| `tc ≥ 2` but the function CALLS — the `free?` bar | **776** |
+| `tc ≤ 1` — too cold for any class | 151 |
+| `tc ≥ 2`, call-free, lost the seat cap | 109 |
+
+**Three quarters of all refusals are the crossing bar, which is not a price at all** — a structural
+veto that pre-empts pricing. In the table it becomes one cell: the pool row costs `'never` across a
+call. ⚠ and the ~633 warm crossing values the loop gates do NOT rescue are not step 5's to win:
+5.1b iv-b already measured that granting them costs +545 insns. Saying why they are refused, once,
+is the whole prize.
+
 ### THE LADDER — one list, both levels
 
 ⚠ **this is the arc's only live plan.** It supersedes `doc/moon-vreg.md`'s phase 1–4 (whose
@@ -458,16 +535,17 @@ censuses stay as evidence) and `doc/moon-alloc.md`'s phase I/II stance. Two ladd
 here, one per level; they were the same ladder and are now merged. A step's **serves** column says
 which level asks for it — most are asked by both, which is the point.
 
-**The floor already under it:** S-1 `stldp` · iv phase 1 steps 1–2 (spans, the admission
-repricing) · rungs A-0/A-1/A-2 (the cs file real on arm64, riscv, thumb2) · 5.0/5.1a/5.1b i–iii.
+**The floor already under it:** step 1 (the entry carries its class) · step 3 (`fcb` rolls back) ·
+S-1 `stldp` · iv phase 1 steps 1–2 (spans, the admission repricing) · rungs A-0/A-1/A-2 (the cs
+file real on arm64, riscv, thumb2) · 5.0/5.1a/5.1b i–iii.
 
 | # | step | serves | what the program gets to SAY | gate |
 |---|---|---|---|---|
-| 1 | **class the vmap entry** | both | *pool residency ends here* — instead of 29 sites each reaching for flush-everything | byte-identity where the class verb provably equals the flush it replaces; dynamic floor where not |
-| 2 | **`restrict` survives the parser** | splice first | *this base is unaliased* — the promise `love.h` already makes on `Sp` and `pquals` discards | the ten-line seam probe loses its dead interior stores; `test_fixpoint` |
-| 3 | **`fcb` gets rollback** | moon | *discard the emission, keep what predates it* — a transaction, not a clobber | misses 81→69 reproduced; text delta owned by step 5, not by this verb |
+| 1 | **class the vmap entry** — LANDED 2026-08-13 | both | *pool residency ends here* — instead of 29 sites each reaching for flush-everything | byte-identity where the class verb provably equals the flush it replaces; dynamic floor where not |
+| 2 | **`restrict` survives the parser** — phase A LANDED 2026-08-13 | splice first | *this base is unaliased* — the promise `love.h` already makes on `Sp` and `pquals` discards | phase A: the roster exists, byte-identity. phase B: the ten-line seam probe loses its dead interior stores; `test_fixpoint` |
+| 3 | **`fcb` gets rollback** — LANDED 2026-08-13 | moon | *discard the emission, keep what predates it* — a transaction, not a clobber | misses 81→69 reproduced; text delta owned by step 5, not by this verb |
 | 4 | **S-1b — reach the arm/riscv pipeline** | both | that `stldp` has *work* on three targets where it silently finds none | a store print that fires on all four targets; the seam probe folds on each |
-| 5 | **residency priced as extent × class × reload** | both | *why* a value lives where it lives, once, instead of five gate stacks with stale proxies | corpus dynamic, and mechanism count DOWN |
+| 5 | **residency priced as extent × class × reload** — phase A LANDED 2026-08-13 | both | *why* a value lives where it lives, once, instead of seven gate stacks with stale proxies | phase A: byte-identity, the cost side in one table. phase B: corpus dynamic, mechanism count DOWN |
 | 6 | **location keys — (base, offset, width)** | both | one key space: frame slots, array elements and restrict-base cells stop being three mechanisms | the array leg folds; `aeoff` stops parsing digits out of `"x[3]"` |
 | 7 | **the die reaches the seam** | splice | *deliver where the consumer wants it* — an interior op boundary emits nothing at all | `bench/vmsplice/check.l` against its interp twin; the ~4× ceiling the probe measured |
 | 8 | **a module boundary for residency** | moon | which pass may ask what — the 14.5% visible AS the 14.5% | it compiles; the surface is declared |
@@ -480,6 +558,25 @@ works, and put the complexity budget in steps 1–6.
 interior store cannot be dropped without the alias promise). 6 makes 1/2/5 sayable rather than
 special-cased, but does not block them. 3 and 4 are independent and can go any time. 8 last, or
 whenever the churn is low.
+
+**Where to pick up (as of 2026-08-13).** Three doors, smallest first:
+
+1. **step 5 phase B, the tie.** `rpays?` refuses a tie, `rclears?` accepts one, four gates use
+   the first and two the second, and which gate got which reads as history rather than a
+   decision — gen.l's own comment says *"an inconsistency, visible here and unsettled."* It is
+   now measured, not just suspected: `pcs` refuses the `withcall` reproducer at `cost 2 gain 2`,
+   and inspection says the gate is **right** — one home at one call is a genuine wash (`push`
+   +`pop`+entry mov against a spill, a reload and a mov). ⚠ so settling this **will not move a
+   benchmark, by construction**; what it buys is a tie-break rule that is stated. Do it for the
+   criterion, not for a number, and do not let a flat result read as a failure.
+2. **step 7's real blocker: make `Sp` ride.** See *the seam's root* — one pointer under two
+   names, and four peephole fixes already refused. This is the ride analysis's business.
+   Worth ~2.5× on a spliced body if it lands.
+3. **steps 4 and 6**, both independent and untouched.
+
+⚠ and a standing caution earned the hard way that week: **this arc's numbers are dependency
+chains as often as they are counts.** 837 instructions against 713 explained none of a 2.6×.
+Reach for `perf stat` cycles-vs-instructions before believing any insn-count story here.
 
 ### what stays, and why
 
@@ -509,7 +606,7 @@ census table that could not see the verdict. Read this list before proposing a m
 or instructions.** Under the criterion in the convergence plan above, a refusal on those grounds
 is not automatically a refusal: a mechanism that lets the program STATE something it was guessing
 can be worth a small regression. Two have already been re-opened on that basis (`fcb`'s rewind,
-now ladder step 2; and `pcs`, whose 1,004 bytes is a weak reason to keep 57 lines the program
+ladder step 3, landed; and `pcs`, whose 1,004 bytes is a weak reason to keep 57 lines the program
 cannot explain). The rest stand — they were refused for physics, not for bytes.
 
 * **cs seats for the call-crossing class, retrofitted onto `repack`** — refused twice (2026-08-12,
@@ -530,19 +627,47 @@ cannot explain). The rest stand — they were refused for physics, not for bytes
   cannot tell the 454 from the 630 — the read count is in the AST, the crossing is found in the IR
   — so the signal that would price the decision is exactly the one the site lacks. **The vmap must
   retire, not be extended.**
+* **the splice seam, four peephole-level fixes** (2026-08-13) — all built, all measured, all
+  missed, and each one is cheap to re-imagine, so: **the seam is not reachable from a peephole.**
+  Its root is one pointer under two register names (see *the seam's root*), and every pass named
+  here compares bases by name.
+  1. **`restrict` → interior-store elision.** The promise is real and now survives the parser
+     (ladder step 2 phase A, landed), but aliasing is not what the seam pays. Not refuted as a
+     lever — refuted as *this* lever.
+  2. **the store-address park past a spliced call** — `callish?` answers on the **pre-splice
+     AST**, so a call node that inlines away still refuses the park. Making the park optimistic
+     (take it, then read the emission and hand it back if a call survived) is *sound* and gated
+     green — 134-program battery, `test_clay`, `test_fixpoint` — and on love.c moves 8 `lvm_*`
+     functions, 3 shrinking by 7 and **5 growing by 2**. Net −11 insns. Fails *pays somewhere,
+     regresses nowhere*; kept at `scratchpad/park-v2.diff`, not landed. ⚠ It does **not** help
+     `composed`: it only swaps which side of the seam uses the copy. Three sub-traps found
+     inside it, each worth a rebuild if forgotten: a park must ride **`rpin`** (a splice body's
+     `psreset` returns an unheld register to the pool and its own `ralloc` takes it); the
+     decision must be made **before** `ralloc`, because a park handed back has already advanced
+     the `%vN` mint; and **the mint is never rolled back** — a *nested* store that declines
+     would rename registers its own rhs already emitted under the old names (`badreg %v1`).
+  3. **`(mov A B)` + `(ld A A o)` → `(ld A B o)` before `stld`** — byte-identical output.
+     `addrfold` already performs exactly this fusion later in the chain.
+  4. **reconciling the ride with `stldkeep`** — `stldw`'s keep arm displaces an existing slot
+     binding instead of joining it, which is a real defect and worth fixing on its own merits;
+     it is **not** this one. `composed` is **frameless** — no prologue, no slot — so the pass
+     is not involved at all. ⚠ general lesson: check whether the function even *has* a frame
+     before reasoning about its slots.
 * **ablating the loop keeps** (2026-08-13, phase 1 step 3) — static said delete (−300/−275/−391 B,
   thumb2 byte-identical); dynamic said **+184,000 insns**. Text size is structurally blind to a
   mechanism whose whole output is loads removed from loop BODIES.
 * **subsuming the keeps' optimism by a coverage rule** (2026-08-13, phase 2) — the census aiming it
   was an instrument artifact; corrected, only 12 of 34 misses are the coverage case and 9 of the 14
   head flushes that kill a live keep are inner loops `loscan` correctly REFUSED.
-* **`fcb`'s pre-lane rewind** — ⚠ **RE-OPENED 2026-08-13, now ladder step 2.** Refused the same day
-  on +8/+12/+8 bytes x64/arm64/riscv64 at dynamic and compile-time neutral — but that is a PRICING
-  answer to a VOCABULARY question. The flush is a rollback wearing a clobber's clothes, and the
-  bytes come from the preserved pin holding a register out of a four-wide pool, which is the
-  pricing ladder's business and not the verb's. Land the verb; price the pin separately. ⚠ what
-  stays refused is the register argument for DELETING the flush ("pins can never live in r0–r3") —
-  true about registers, wrong about the flush, which exists for the DISCARDED emission.
+* **`fcb`'s pre-lane rewind** — ⚠ **RE-OPENED and then LANDED 2026-08-13 as ladder step 3.** It had
+  been refused the same week on +8/+12/+8 bytes x64/arm64/riscv64 at dynamic and compile-time
+  neutral — a PRICING answer to a VOCABULARY question. The flush was a rollback wearing a
+  clobber's clothes, and the bytes come from the preserved pin holding a register out of a
+  four-wide pool, which is the pricing ladder's business and not the verb's. Every number
+  reproduced on the re-build (misses 81 → 69; +8/+12/+8, thumb2 +0 — it has no pool to preserve
+  into). ⚠ what stays refused is the register argument for DELETING the flush ("pins can never
+  live in r0–r3") — true about registers, wrong about the flush, which exists for the DISCARDED
+  emission.
 * **the loop borrow on a64** — a net loss there (−187 alone, dragging both-on to −236). Verdict on
   insns only; the x64 win was WALL CLOCK at flat insns and there is no cross-target wall
   instrument. Owed before this is settled.
@@ -561,6 +686,14 @@ TREE's gen.l, so a variant test leaning on `make` is testing the tree, not the v
 image skews against a rebuilt `love` — symptoms are a segfault or `;; missing moon-main`, not a
 diagnostic. ⚠ **diff the artifacts you already have before you instrument**: ablation binaries
 answer "which functions and how much" for free.
+
+⚠ **`say err` from inside gen.l prints NOTHING during a compile** (2026-08-13, an hour). A probe
+written that way reports "this path is never taken" across 536 compiles while being silent itself
+— the failure mode the doc already warns about, wearing a new face, and the probe text WAS in the
+image (`strings` confirmed it). **Use `quit <code>` and read the exit status**: it cannot be
+swallowed, `make` surfaces it as `Error <code>` on the very TU that hit it, and a sweep is one
+`[ $? = 7 ]`. And validate any zero by **firing the probe on the COMPLEMENT** — if the negated
+condition does not fire either, the instrument is dead, not the path.
 
 **Measurement.** ⚠ a codegen rung owes a COMPILE-TIME A/B, not only a codegen one — the first ship
 of copy propagation cost **78% of the compiler's speed** (13.2 → 23.4 s) and every gate stayed
@@ -671,6 +804,24 @@ lets it state something it was guessing.
   push-rbp per symbol, comm vs a twin) finds frame regressions; dump pre-fold IR via the
   in-process cc-parse/cgen-obj recipe. A probe's INPUT gets validated before its verdict
   is believed.
+* ⚠ **A PROBE INSIDE A PASS READS THAT PASS'S INPUT, NOT THE OUTPUT.** The single most
+  expensive mistake of 2026-08-13, and it looks exactly like a finding. An instrument
+  placed in `stld` dumped `composed`'s seam as `(ld r0 r4 -40)` / `(st r4 -56 r0)` /
+  `(ld r1 r4 -56)` — four frame ops per seam, an obvious residency bug, and a whole day
+  of work aimed at it. **`stldw` erases all four before emission.** The shipped binary
+  never had them, which the disassembly says in one command:
+  `objdump -d x.o | awk '/<fn>:/{p=1} p{print} p&&/^$/{exit}'`.
+  The rule: an intermediate representation is evidence about the pass you are standing
+  in and nothing further downstream. **A claim about what the program COSTS is a claim
+  about the emitted bytes, so read the emitted bytes.** Same shape as the `say err`
+  trap below — both are instruments answering a different question than the one asked.
+* And the instrument that finally worked was the plain one: **compile the same TU with
+  both compilers and diff the disassembly per symbol.** Sizes first
+  (`awk` the insn count per symbol, `join` the two lists, print the rows that differ) —
+  it names the handful of functions a change actually touched, out of hundreds, and it
+  is the only reading that cannot be wrong about what shipped. `-fno-inline` (landed
+  2026-08-13) exists to make that diff possible at all: a spliced function has no symbol
+  to compare.
 
 ## the rungs, dated (git log is the full story; these are the shas)
 
@@ -989,6 +1140,107 @@ than dispatch — where cc gets 1.91×. Reproduced in a ten-line probe; the inte
 gone and the dependent path is register-to-register. ⚠ what `stldp` cannot reach is the dead
 interior STORES, and those need the alias promise love.h already makes (`ai_word *restrict Sp`)
 and `parse.l` discards at the token level. That is the shared ladder's one frontend step.
+
+**2026-08-13 — THE LADDER step 1: the vmap entry carries its CLASS.** An entry is `(nm reg class)`
+now, the class read off the grants in force (`vpcls`: `csbor` → 'bor, else `pool0` and the roster
+→ 'ros or 'pool, else `()` — **no residency, so the class doubles as the eligibility**). `vmset`
+is the one stamp point, which is what makes a scope-end sayable: a map outlives the grant it was
+pinned under, so the exit meet rides a loop's rostered pins out and they arrive unrostered instead
+of claiming a reload that no longer exists. `vmcflush` then says *pool residency ends here* and
+the `(!(two? bs) && !(two? sr))` degenerate branch is gone — 223 of 514 pin kills stop being a
+special case. **Byte-identical love.o on x64/arm64/riscv64/thumb2, `test_fixpoint`, `test_moon`,
+`test_ccarm64`, `test_ccriscv`, `test_slow`.** The naming tell moved the right way: five pin doors
+(`vmpin`/`vmbpin`/`vmrepin`/`vapin`/`vaepin`) became one body under three gates, because "where
+does this pin live" was the question the three-way dispatch was asking without a word for it.
+⚠ what did NOT come out is the census's second row — see the falsification under the flush census.
+
+**2026-08-13 — and the element doors squish to one.** `vapin` (pool-only) and `vaepin` (seat-aware)
+differed in one gate, so "may an element take a cs seat?" had two answers depending on which door
+a site happened to call. The pool gate looked load-bearing — one-reg-one-name means an element
+taking a seat EVICTS whatever scalar holds it, and a seated scalar's loop keep would then miss,
+bar and regen. It is not: **the seat-class element pin is unreached by the tree's own C and by
+539 corpus compiles across four targets, and on a synthetic shape that does reach it (an element
+read whose want is a loop-seated register) the object is byte-identical** — the register an
+element takes is never one another name is claiming, so the gate defended an eviction that does
+not occur. Probed with `quit`, and the zero validated by firing the complement. One door.
+⚠ gen.l now opens `(use 'pat)`: the entry's shape is stated in three pattern-headed accessors
+(`vnm`/`vrg`/`vcls`) and every reader destructures, so a wrong-arity entry answers `()` rather
+than a silently shifted field. love0's build-tool boot does not splice `pat`, hence the file's own
+`use` — the module is already in `libs0`, so no frontend changed.
+
+**2026-08-13 — THE LADDER step 3: `fcb` rolls back.** The float-compare lane discards its
+int-flavored emission and re-evaluates both sides, and it opened with a full `vmflush` for a
+reason its own comment stated: a pin born in the dropped forms would survive with its establishing
+load gone. ⚠ **that invariant is narrower than the flush that served it** — a pin from BEFORE the
+lane keeps both its load and its truth. So the lane snapshots at entry (`m9`, before any `cgexpr`)
+and `fcb` `vmset`s it back: births die, predecessors live, and the re-evaluation's own drops and
+pins land on the rolled-back map exactly as they would have on a fresh entry. **Misses 81 → 69**
+on love.c/x64, reproduced to the figure. Priced: `.text` +8/+12/+8 x64/arm64/riscv64 and **+0 on
+thumb2, which has no pool to preserve into** — the tell that the bytes ARE the preserved pin
+holding a register out of a four-wide pool, and that is step 5's to price, not this verb's.
+Dynamic neutral: three interleaved corpus-minus-boot rounds put every delta (−0.06M, +2.2M,
++1.1M insns on 33.3G) inside the baseline's own 3.9M spread.
+
+**2026-08-13 — THE LADDER step 5, phase A: what a register COSTS is one table.** Seven gates each
+carried their own inline cost arithmetic — `2·nc·nh`, `1+nx`, `nc`, a bare `7`, and a structural
+veto — for the same handful of physical facts. `rcost` states them once, per class: a roster
+reloads at every call in scope (`n`), a seat pays one save and a reload per exit (`1+n`), a
+caller-saved home pays the wrap PAIR per call (`2n`), a splice bind's park costs a measured 7, and
+**a pool home across a call is `'never` — not expensive, unavailable**, which is where the census's
+776-refusal `free?` bar went. `rprice` answers the margin; `rpays?` and `rclears?` test it.
+**Byte-identical on x64/arm64/riscv64/thumb2 — no verdict moved.** `test_slow`, `test_fixpoint`,
+both cross differentials.
+
+⚠ **the extents deliberately stayed put**, one per gate: `ntouch` reads ir1 (machine traffic),
+`rdw` reads the AST (source use, loop-weighted), `nrac` counts only the reloads `stld` cannot
+remat — that last one knows what a LATER pass will erase, and no generic counter carries it.
+Unifying extents would be the program knowing less. What unified is the cost, which is one physics.
+
+⚠ **and the shape gave up a claim it could not keep.** The plan was to key the table by class ×
+FRAME (per invocation vs per iteration) so a mismatched pair could not be written — the error this
+arc paid for twice. It cannot: both numbers arrive from the one caller, so a frame argument would
+be decoration that checks nothing. Each call site names its clock in a comment instead; enforcing
+it needs the extents to carry their own frame, which is a phase-B question.
+
+⚠ **one inconsistency surfaced and is left standing, deliberately**: the two loop gates grant at a
+TIE (`nc <= reads`), the four others demand a strict win. Phase A preserves both — hence two
+testers where there should be one — and names it. Settling it moves verdicts, so it is phase B's.
+
+**2026-08-13 — THE LADDER step 2, phase A: the promise survives the parser.** `pquals` drops the
+qualifier run at the token level, so `love.h`'s `ai_word *restrict Sp` reached the codegen as a
+plain pointer. It now rides out of band: fn name → its restrict param names, scraped where the run
+is dropped and filed under the function. **243 of love.c's functions carry one; `lvm_add` records
+`("g" "Sp")`, exactly what `love.h` promises.** Byte-identical ×4 — nothing reads it yet.
+
+⚠ **the fact deliberately does NOT go in the type.** clay already has a `(restrict t)` node and a
+law that it qualifies only pointers, so that looked like the obvious home — but clay's own header
+says `(const t)` is a form *with no cparse counterpart*: **the compiler's type tree has never
+carried a qualifier node at all.** Introducing one would put an unfamiliar shape in front of 56
+`'ptr`/`ptr?` dispatch sites in gen.l and break clay's G1 round-trip. `weaks` is the precedent end
+to end (scraped in parse.l, carried on `ps`, handed to `cgen`), and `pxtra` was already a bag of
+eight tablets, so a ninth cost no signature change — gen's unpack is length-guarded, so callers
+passing eight still work.
+
+⚠ **keyed per FUNCTION, which is the one place the `weaks` precedent does not transfer**: weaks is
+global, restrict is not. A bare name set would promise no-alias about a `p` that is restrict in one
+function and plain in the next. ⚠ and only a qualifier run FOLLOWING a star counts — restrict
+qualifies the pointer, not the pointee.
+
+⚠ **left unresolved, named at the site, and phase B's to settle before it consumes**: block-scope
+shadowing. Two blocks in one function may declare the same name, one restrict and one not, and the
+roster would over-promise. Phase A cannot be wrong about it; a consumer can.
+
+2026-08-13 · **`-fno-inline` fc429bf8** — the instrument, and the day's only unambiguous
+payer. mooncc swallowed the whole `-f` family by the advisory rule; the flag is now real and bars
+the splice table TU-wide (the door `__attribute__((noinline))` opens one name at a time), riding
+the gen's option bag at `pxtra`'s tail. It **outranks `always_inline`**: an instrument a source
+attribute could override leaves the reader with no way to say *read this function as written*.
+`test_fixpoint` holds the default path byte-identical. Gated both halves in `test_moon` — that it
+bites (7 functions emitted, 11 with it) and that the answer is unchanged.
+⚠ **why it matters beyond the flag:** the day's four dead ends were all diagnosed off intermediate
+IR, and what finally settled the question was diffing two finished binaries per symbol — which is
+impossible for a spliced function, because it has no symbol. The reason the arc lacked that
+reading for a year was a missing flag.
 
 Reverted with verdicts worth keeping: lea fusion c618c3d9, fn alignment 4e8bb80c, E5
 read-establishment 132a9599, store-side addrfold copy-prop, cmp-mem (the first build) — each a

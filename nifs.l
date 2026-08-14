@@ -15,6 +15,8 @@
 ; (b), the one place a macro genuinely goes.
 ;
 ; ⚠ EDIT THIS FILE, NOT nifs.h. `make test_clay` regenerates it and fails on drift.
+; ⚠ nifs.h is COMMITTED and no make rule depends on this file: a new row builds clean and
+; gates GREEN while its nom is still missing from the book. `make mx` is the refresh.
 (:
    ; clay is a module: `use` splices it, so clay-show / clay-ok? -- and the el/join it
    ; stands on -- all read bare. no accessor, and it has to come first.
@@ -32,6 +34,7 @@
       (nif_nclock        "nclock"        1 lvm_nclock)
       (nif_please        "please"        1 lvm_please)
       (nif_gauge         "gauge"         1 lvm_gauge)
+      (nif_tune          "tune"          1 lvm_tune)
       (nif_apof          "apof"          1 lvm_apof)
       (nif_seal          "seal-hook"     2 lvm_seal)
       (nif_heard         "heard"         1 lvm_heard)

@@ -140,6 +140,20 @@
    ; run of qualifier + type-specifier keywords (and balance-skips attribute ids),
    ; the same tokens pquals drops. the run is order-free, so `static char const`
    ; and `const static char` answer alike -- which C says and main.c writes.
+   ; does the qualifier run pquals is about to drop carry `restrict`? the one qualifier the
+   ; codegen has a use for -- it is a PROMISE about aliasing, not a property of the type, and
+   ; love.h already makes it on every lvm_'s Sp. read-only: pquals still drops the run, and
+   ; the fact rides out of band (ps 'rstrs) rather than in the type, which has never carried
+   ; a qualifier node and would need all 56 of gen.l's ptr dispatch sites to learn one.
+   (rstrq? ts)
+    (? !(two? ts) ()
+       (: t <ts
+          (? ((tkk t = 'kw) && (tkv t = 'restrict)) 1
+             ((tkk t = 'id) && member? (tkv t) '("__restrict" "__restrict__")) 1
+             ((tkk t = 'kw) && member? (tkv t) qualkw) (rstrq? >ts)
+             ((tkk t = 'id) && member? (tkv t) qualid)
+              (: r >ts (? (peekp r "(") (rstrq? (skipbal >r 1)) (rstrq? r)))
+             ())))
    (leadkw? ts k)
     (? !(two? ts) ()
        (: t <ts
@@ -298,6 +312,8 @@
                 _ (pin t 'svars (tablet 0))         ; top-level `static` globals: internal linkage, never exported
                 _ (pin t 'sects (tablet 0))         ; global name -> its __attribute__((section "..")) string
                 _ (pin t 'consts (tablet 0))        ; global name -> 1 when `const` names the OBJECT and it has an initializer
+                _ (pin t 'rstrs (tablet 0))         ; fn name -> its `T *restrict` PARAM names (the alias promise, out of band)
+                _ (pin t 'currstr ())               ; ...accumulating for the declaration being parsed, like curweak
                 _ (pin t 'aligns (tablet 0))        ; global name -> its __attribute__((aligned(N))) boundary
                 _ (pin t 'locals (tablet 0))        ; local/param name -> its declared type (for parse-time sizeof folding)
                 _ (pin t 'globals (tablet 0))       ; file-scope name -> ty, so sizeof over a GLOBAL settles at parse too
@@ -598,8 +614,13 @@
                    (? !(two? r) ()
                       (psufs ps r <e (\ t (<>e (ptrk k t))) <>>e (<>>>e && (k = 0)))))))))
    (pdtor ps ts base)                               ; ps threads to adims for const-expr array dims; -> ((name ty) rest) | ()
-    (: (stars ts2 ty) (: s (pquals ts2) (? (peekp s "*") (stars >s ['ptr ty]) [ty s]))
-       sr (stars ts base)
+    ; ⚠ k marks a run that FOLLOWS a star: only there does restrict qualify the pointer.
+    ; the flag is the declarator's report; the caller decides what it means (pparams files it)
+    (: (stars ts2 ty k)
+        (: s (pquals ts2)
+           _ (? (k && rstrq? ts2) (pin ps 'sawrstr 1) 0)
+           (? (peekp s "*") (stars >s ['ptr ty] 1) [ty s]))
+       sr (stars ts base 0)
        ty <sr ts2 (pquals <>sr)           ; attrs may sit before the name
        (? (peekp ts2 "(")                            ; a parenthesized declarator -- pdirect recurses,
            ; its wrap lays the declared type over ty; dat (the name's own params)
@@ -1639,12 +1660,15 @@
        !(tkbty? ps <(pquals ts)) ()
        (: br (pbty ps ts)
           (? !(two? br) ()
-             (: dr (pdtor ps <>br <br)
+             (: _ (pin ps 'sawrstr ())          ; clear before the report, so it cannot leak between params
+                dr (pdtor ps <>br <br)
                 (? !(two? dr) ()
                    ; a parameter of ARRAY type decays to a pointer (the C rule) --
                    ; so `int a[]`, and a va_list (an array typedef), ride as pointers
                    (: e0 <dr ty0 <>e0
                       entry (? (arr? ty0) [<e0 ['ptr <>ty0]] e0)
+                      _ (? (peep ps 'sawrstr () && <e0)   ; a NAMED restrict param: file it for note
+                           (pin ps 'currstr (<e0 >< peep ps 'currstr ())) 0)
                       ts3 <>dr
                       (? (peekp ts3 ",")
                           (? (peekp >ts3 "...")              ; ... after this param -> variadic
@@ -1983,6 +2007,12 @@
                 (pin ps 'ainl (<>f >< ps 'ainl)) ())
            _ (? (peep ps 'curnoinl () && member? <f '(proto fn))
                 (pin ps 'noinl (<>f >< ps 'noinl)) ())
+           ; the restrict params, filed under THIS function -- ⚠ per-function, never a bare
+           ; name set: `p` may be restrict in one function and plain in the next, and a set
+           ; that forgets which would promise no-alias about a pointer that never promised it
+           _ (: rs (peep ps 'currstr ())
+                (? (rs && member? <f '(proto fn)) (pin (ps 'rstrs) <>f (rev rs)) ()))
+           _ (pin ps 'currstr ())
            _ (pin ps 'curstat ())
            _ (pin ps 'curalias ())
            _ (pin ps 'curweak ())
@@ -1993,7 +2023,7 @@
        (tops ts2 acc)
         (? !(two? ts2) [1 ['prog (rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)      ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure
                               (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                              (ps 'consts)]
+                              (ps 'consts) (ps 'rstrs)]
            (: r (ptop ps ts2)
               (? (two? r) (: _ (note <r) (tops <>r (<r >< acc))) (pfail ps ts2 spans toks))))
        (tops toks ())))
