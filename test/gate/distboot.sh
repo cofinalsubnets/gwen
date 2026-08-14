@@ -137,14 +137,23 @@ else
 fi
 
 # ..and against the tree they were cut from, when the tree is one thing (see the
-# header: a dirty tree legitimately differs, because the tarballs come from the index)
+# header: a dirty tree legitimately differs, because a release comes from the index).
+# ⚠ AND ONLY WHILE THE TREE'S BINARY IS UNBAKED. `make host` bakes $(ho)/love IN PLACE
+# (host/build.mk's .baked stamp), and an artifact lane builds out/host/love alone, so
+# the two are a 2.4M baked binary against a 935K linked one. Baking both would not
+# rescue it either: a bake carries the binary's OWN PATH, which is why test_bakerep
+# insists its two bakes run at one path. So this leg is opportunistic by nature -- it
+# rides after a relink and stands aside after a `make`, and it SAYS WHICH, because a
+# comparison that quietly passed only when nobody had run `make` is worth nothing.
 if [ -n "$ref" ] && [ -f "$ref" ]; then
-  if [ -z "$(git -C "$R" status --porcelain 2>/dev/null)" ]; then
+  if [ -f "$ref.baked" ] && [ ! "$ref" -nt "$ref.baked" ]; then
+    echo "  (the in-tree binary is BAKED -- skipping the comparison, see the header)"
+  elif [ -n "$(git -C "$R" status --porcelain 2>/dev/null)" ]; then
+    echo "  (tree is dirty -- skipping the in-tree comparison, see the header)"
+  else
     cmp -s "$ref" "$lean/out/host/love" \
       && echo "  OK and identical to the in-tree binary" \
       || fail "the artifacts differ from the in-tree binary on a CLEAN tree"
-  else
-    echo "  (tree is dirty -- skipping the in-tree comparison, see the header)"
   fi
 fi
 
