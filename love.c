@@ -4657,10 +4657,10 @@ static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin
 static intptr_t image_imm_index(word v) {
  for (uintptr_t i = 0; i < countof(image_immortals); i++) if (image_immortals[i] == v) return (intptr_t) i;
  return -1; }
-// ai_image_save / ai_image_load, the BUFFER codec: save compacts g and
-// serializes {header, blob}; load validates, reconstructs, decodes in place.
+// ai_image_save / ai_image_load, the BUFFER codec: save compacts g and serializes
+// {header, dictionary, token stream}; load validates, expands, decodes in place.
 // a mismatched buffer -> NULL, so the caller boots normally -- never wrong.
-#define IMAGE_MAGIC 0x32304f4e53494119ULL   /* bump if the wire format changes ("..02": absolutes went anchor-relative) */
+#define IMAGE_MAGIC 0x33304f4e53494119ULL   /* bump if the wire format changes ("..03": the blob rides as a token stream) */
 #if defined(__x86_64__)
 #define IMAGE_ARCH 1
 #elif defined(__aarch64__)
@@ -4672,10 +4672,10 @@ static intptr_t image_imm_index(word v) {
 #endif
 // the image is binary-SPECIFIC: its indices and kept absolutes mean anything only
 // in the binary that dumped it. two guards reject a mismatch -> NULL -> normal
-// boot: `arch`, and `anchor` -- under ASLR the whole binary shifts by one delta,
-// so the refsym delta must equal the anchor delta; a different binary disagrees.
+// boot: `arch`, and `anchor` -- the GAP between two of the binary's own symbols,
+// which a cross-arch or stale build lays out differently.
 struct image_hdr {
- uint64_t magic, wordsize, nwords, arch, anchor, nroot, rsv1, refsym, next_serial;
+ uint64_t magic, wordsize, nwords, arch, anchor, nroot, rsv1, nstream, next_serial;
  uint64_t root_tag[24], root_val[24];        /* symbols, tasks, then the entire v0..end region walked
                                                 GENERICALLY -- a new v0 field rides with no codec change */
 };
@@ -4822,17 +4822,90 @@ static ai_inline intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intpt
  if (uv < hb + 2 * IMAGE_NLVM) return image_ap_resolve((intptr_t)((uv - hb) / 2));
  if (uv < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM)) return (intptr_t) image_immortals[(uv - hb - 2 * IMAGE_NLVM) / 2];
  return img_decode_cold(v, hb, delta); }
-// serialize g -> a fresh g->alloc'd {header, blob} buffer; NULL on failure. the
+// ============================================================================
+// the TOKEN STREAM: an encoded word rides as one byte when it is one of the 248
+// commonest words in the image, else as an escape naming its own width. Half an
+// image is 25 distinct words and the single commonest -- lvm_chain's index, the ap
+// every pair wears -- is 23% of it, so the stream lands near a quarter of the blob.
+// ⚠ CHOSEN BY COUNT, NOT BY LANE. A fixed token budget per lane is the obvious design, the
+// encoding being a lane ladder already -- it is also 3.63x against this 3.82x, and tuned to
+// whichever image was measured; counts follow a kernel's or an artifact's wherever those go.
+// ⚠ ALWAYS IMAGE_NDICT WORDS -- a short image repeats its commonest into the spare seats. That
+// costs nothing, spares the wake a bound test per word, and lets the loader read the dictionary
+// WHERE IT LIES: the header is a whole number of words and a shebang is padded to one.
+#define IMAGE_NDICT 248u   /* tokens 0..247 name a dictionary word, 248..255 a 1..8-byte literal */
+#define IMAGE_DHASH 512u   /* the encoder's value -> token map (open-addressed, 0xff = free) */
+// ⚠ the encoder's tables ride the ALLOCATOR, never the frame: together they are kilobytes, and
+// an arm32 load has 12 bits of displacement -- port/mps2 refused to compile them onto the stack.
+struct img_dic { word dict[IMAGE_NDICT], key[IMAGE_DHASH]; unsigned char tk[IMAGE_DHASH]; };
+static uintptr_t img_hash(word v) {
+ uintptr_t h = (uintptr_t) v; h ^= h >> 17; h *= 0x9e3779b1u; h ^= h >> 13; return h; }
+static void img_sift(word *a, uintptr_t i, uintptr_t n) {
+ for (uintptr_t c; (c = 2 * i + 1) < n; i = c) {
+  if (c + 1 < n && a[c + 1] > a[c]) c++;
+  if (a[i] >= a[c]) break;
+  word t = a[i]; a[i] = a[c]; a[c] = t; } }
+// the commonest words of the blob, most frequent first. ⚠ EXACT, and the tie-break is
+// total: two machines baking one tree must choose the SAME 248 words or the images differ
+// in every token (test_bakerep). A sorted copy costs a pass and answers exactly; the
+// approximate counters that would save it have a tie order, which is the thing to avoid.
+static uintptr_t img_dict(word *sorted, uintptr_t nw, word *dict) {
+ uintptr_t cnt[IMAGE_NDICT], nd = 0;
+ for (uintptr_t i = nw / 2; i-- > 0; ) img_sift(sorted, i, nw);            // heapsort: no recursion,
+ for (uintptr_t n = nw; n > 1; ) {                                         // no scratch, no worst case
+  word t = sorted[0]; sorted[0] = sorted[--n]; sorted[n] = t; img_sift(sorted, 0, n); }
+ for (uintptr_t i = 0; i < nw; ) {
+  uintptr_t j = i; while (j < nw && sorted[j] == sorted[i]) j++;
+  uintptr_t n = j - i;
+  if (nd < IMAGE_NDICT || n > cnt[nd - 1]) {                               // beats the weakest seat
+   uintptr_t k = nd < IMAGE_NDICT ? nd++ : IMAGE_NDICT - 1;
+   for (; k && cnt[k - 1] < n; k--) dict[k] = dict[k - 1], cnt[k] = cnt[k - 1];
+   dict[k] = sorted[i], cnt[k] = n; }
+  i = j; }
+ return nd; }
+static int img_tok(word const *key, unsigned char const *tk, word v) {
+ for (uintptr_t h = img_hash(v) & (IMAGE_DHASH - 1); tk[h] != 0xff; h = (h + 1) & (IMAGE_DHASH - 1))
+  if (key[h] == v) return tk[h];
+ return -1; }
+// one token per blob word. out == NULL sizes the stream instead of writing it, so the
+// buffer is allocated at its true length rather than at a worst case nine times the blob.
+static uintptr_t img_stream(unsigned char *out, word const *blob, uintptr_t nw,
+                            word const *key, unsigned char const *tk) {
+ uintptr_t n = 0;
+ for (uintptr_t i = 0; i < nw; i++) {
+  int t = img_tok(key, tk, blob[i]);
+  if (t >= 0) { if (out) out[n] = (unsigned char) t; n++; continue; }
+  uintptr_t uv = (uintptr_t) blob[i], q = uv; unsigned wd = 0;
+  do wd++, q >>= 8; while (q);                             // ⚠ unsigned: word is signed, and a
+  if (out) { out[n] = (unsigned char)(IMAGE_NDICT + wd - 1);   // negative one would shift forever
+   for (unsigned k = 0; k < wd; k++) out[n + 1 + k] = (unsigned char)(uv >> (8 * k)); }
+  n += 1 + wd; }
+ return n; }
+// ..and back, into the pool. 0 = a stream that ran short or ran long -- a foreign
+// buffer either way, so the caller boots normally.
+static int img_expand(word *out, uintptr_t nw, unsigned char const *p, unsigned char const *end,
+                      word const *dict) {
+ for (uintptr_t i = 0; i < nw; i++) {
+  if (p >= end) return 0;
+  unsigned t = *p++;
+  if (t < IMAGE_NDICT) { out[i] = dict[t]; continue; }
+  unsigned wd = t - IMAGE_NDICT + 1;
+  if ((uintptr_t)(end - p) < wd) return 0;
+  uintptr_t v = 0;
+  if (wd == 3) v = (uintptr_t) p[0] | (uintptr_t) p[1] << 8 | (uintptr_t) p[2] << 16;  // 4 escapes in 5 are a
+  else for (unsigned k = 0; k < wd; k++) v |= (uintptr_t) p[k] << (8 * k);             // heap offset, three wide
+  p += wd, out[i] = (word) v; }
+ return p == end; }
+// serialize g -> a fresh g->alloc'd {header, dictionary, token stream} buffer; NULL on failure. the
 // worker dumps WHEREVER it's called (a mid-eval dump's continuation rides as
 // wake-unreachable ballast); the guarded entry keeps the boot path honest.
 void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
  if (!g->major_pool) return NULL;                        // needs the major pool (it holds the compacted live half)
  if (!ai_ok(gen_major(g))) return NULL;                  // COMPACT: live half -> [major_base, major_hp) (OOM -> no image)
  word *base = g->major_base, *hp = g->major_hp;
- uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word), total = sizeof(struct image_hdr) + bytes;
- char *buf = g->alloc(g, NULL, total);
- if (!buf) return NULL;
- word *blob = (word*) (buf + sizeof(struct image_hdr));  // the blob follows the header in one buffer
+ uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word);
+ word *blob = g->alloc(g, NULL, bytes);                  // the encoded words: scratch, not the file
+ if (!blob) return NULL;
  memcpy(blob, base, bytes);
  struct img_ctx X = { base, hp, bytes, 0, 0, 0, 0, 0, guard }, *x = &X;
  for (union u *p = (union u*) base; (word*) p < hp; ) {   // walk the LIVE heap (ttag works on it), encode into blob
@@ -4869,37 +4942,64 @@ void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard cons
   else for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(x, ((word*) p)[i]);   // thread interior + terminator
   x->suppress = 0;
   p = (union u*) ((word*) p + sz); }
- if (x->fail) { g->alloc(g, buf, 0); return NULL; }      // a binary pointer landed in the index range -> refuse (caller boots normally)
+ if (x->fail) { g->alloc(g, blob, 0); return NULL; }     // a binary pointer landed in the index range -> refuse (caller boots normally)
  // rsv1 carries the kept-absolute count, ODD-tagged ((n<<1)|1) so a pre-field image
  // (rsv1 == 0) never reads as "zero absolutes" -- those keep the strict anchor check.
- // ⚠ `anchor` is the GAP between the two symbols, not either address, and `refsym` is
- // retired to 0 -- see the load. Addresses would write this run's ASLR base into the
- // header, which is the whole of what a reproducible bake must not carry.
+ // ⚠ `anchor` is the GAP between the two symbols, not either address. Addresses would
+ // write this run's ASLR base into the header, which is the whole of what a
+ // reproducible bake must not carry.
  struct image_hdr H = { IMAGE_MAGIC, sizeof(word), nw, IMAGE_ARCH, (uint64_t)((word) &ai_image_save - (word) image_immortals), 0, (uint64_t)(x->nabs << 1) | 1u, 0, g->next_serial, {0}, {0} };
  // roots = symbols + tasks (live OUTSIDE v0), then the whole GC-traced v0..end block, GENERICALLY: any
  // field added to struct ai's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
  uintptr_t nv = (word*) g->end - (word*) &g->v0, nr = 2 + nv;
- if (nr > countof(H.root_tag)) { g->alloc(g, buf, 0); return NULL; }     // grew past the header table -> bump root_tag[]
+ if (nr > countof(H.root_tag)) { g->alloc(g, blob, 0); return NULL; }    // grew past the header table -> bump root_tag[]
  image_root_enc(x, g->symbols,      &H.root_tag[0], &H.root_val[0]);
  image_root_enc(x, (word) g->tasks, &H.root_tag[1], &H.root_val[1]);
  for (uintptr_t i = 0; i < nv; i++) image_root_enc(x, ((word*) &g->v0)[i], &H.root_tag[2 + i], &H.root_val[2 + i]);
+ if (x->fail) { g->alloc(g, blob, 0); return NULL; }     // ..a ROOT refused: the walk's own check is behind us
  H.nroot = nr;
+ // the dictionary wants a sorted copy and the copy is the blob's size again -- transient,
+ // and bake-time, which is the side of this trade nobody waits on.
+ struct img_dic *d = g->alloc(g, NULL, sizeof *d);
+ if (!d) { g->alloc(g, blob, 0); return NULL; }
+ word *sorted = g->alloc(g, NULL, bytes);
+ if (!sorted) { g->alloc(g, d, 0); g->alloc(g, blob, 0); return NULL; }
+ memcpy(sorted, blob, bytes);
+ uintptr_t nd = img_dict(sorted, nw, d->dict);
+ g->alloc(g, sorted, 0);
+ memset(d->tk, 0xff, sizeof d->tk);
+ for (uintptr_t i = 0; i < nd; i++) {
+  uintptr_t h = img_hash(d->dict[i]) & (IMAGE_DHASH - 1);
+  while (d->tk[h] != 0xff) h = (h + 1) & (IMAGE_DHASH - 1);
+  d->key[h] = d->dict[i], d->tk[h] = (unsigned char) i; }
+ for (uintptr_t i = nd; i < IMAGE_NDICT; i++) d->dict[i] = nd ? d->dict[0] : 0;   // the spare seats
+ uintptr_t ns = img_stream(NULL, blob, nw, d->key, d->tk), db = IMAGE_NDICT * sizeof(word);
+ H.nstream = ns;
+ uintptr_t total = sizeof H + db + ns;
+ char *buf = g->alloc(g, NULL, total);
+ if (!buf) { g->alloc(g, d, 0); g->alloc(g, blob, 0); return NULL; }
  memcpy(buf, &H, sizeof H);
+ memcpy(buf + sizeof H, d->dict, db);
+ img_stream((unsigned char*)(buf + sizeof H + db), blob, nw, d->key, d->tk);
+ g->alloc(g, d, 0), g->alloc(g, blob, 0);
  return *outlen = total, buf; }
 void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
  if ((word*) g->sp != topof(g)) return NULL;             // quiescent: an empty AI stack at the dump point
  return ai_image_save_(g, outlen, guard); }
 // the image-wake progress hook: weak no-op, overridden by a port bringing the
 // wake up on new metal (a crashed wake with no debugger is otherwise invisible).
-// stages: 1 header, 2 pool, 3 blob, 0x100+k walk (per 64K words), 5 walk, 6 roots.
+// stages: 1 header, 2 pool, 3 blob, 4 the token stream expanded, 0x100+k walk (per 64K words), 5 walk, 6 roots.
 __attribute__((weak)) void ai_image_note(uintptr_t stage) { (void) stage; }
 struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t)) {
  struct image_hdr H;
  if (len < sizeof H) return NULL;
  memcpy(&H, buf, sizeof H);
  if (H.magic != IMAGE_MAGIC || H.wordsize != sizeof(word) || H.arch != IMAGE_ARCH) return NULL;
- uintptr_t nw = H.nwords, bytes = nw * sizeof(word);
- if (len < sizeof H + bytes) return NULL;                // truncated buffer
+ uintptr_t nw = H.nwords, bytes = nw * sizeof(word), db = IMAGE_NDICT * sizeof(word), ns = H.nstream;
+ // ⚠ the stream's length is the HEADER's, never the buffer's: a baked image arrives inside a
+ // reserved section and a file may carry a shebang, so "the rest of what you handed me" is
+ // the one reading that would make a good image look foreign and fall silently back to the egg.
+ if (len < sizeof H + db + ns) return NULL;                       // truncated buffer
  ai_image_note(1);
  struct ai *g = ai_ini_m(al);
  if (!g) return NULL;
@@ -4932,8 +5032,14 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  if (!((H.rsv1 & 1) && !(H.rsv1 >> 1))                                           // zero kept absolutes: fully symbolic, nothing to check
      && (intptr_t)((word) &ai_image_save - (word) image_immortals) != (intptr_t) H.anchor)
   return NULL;                                                                   // a DIFFERENT binary (cross-arch/stale) -> normal boot
- word const *src = (word const*)((char const*) buf + sizeof H);                   // walk the blob IN PLACE, decoding into the pool --
- for (uintptr_t off = 0; off < nw; ) {                                            // one pass of writes, no staging copy
+ // EXPAND the token stream into the pool, then decode it there IN PLACE. The two passes
+ // read and write one word at a time at the same index, so src and base are the same array
+ // -- and a payload word arrives already seated, which is why the flat-leaf memcpys are gone.
+ { unsigned char const *p0 = (unsigned char const*) buf + sizeof H + db;
+   if (!img_expand(base, nw, p0, p0 + ns, (word const*)((char const*) buf + sizeof H))) return NULL; }
+ ai_image_note(4);
+ word const *src = base;
+ for (uintptr_t off = 0; off < nw; ) {
   uintptr_t sz;
   union u *p = (union u*)(base + off);
   word const *s = src + off;
@@ -4942,13 +5048,11 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
    switch (ai_typ(p)) {
     case DChain: base[off + 1] = (word) img_decode((intptr_t) s[1], base, hb, delta);
                  base[off + 2] = (word) img_decode((intptr_t) s[2], base, hb, delta); break;
-    case DNom:   base[off + 1] = (word) img_decode((intptr_t) s[1], base, hb, delta);
-                 base[off + 2] = s[2], base[off + 3] = s[3]; break;               // code + dig ride raw
-    case DTray:  memcpy(base + off + 1, s + 1, (sz - 1) * sizeof(word));
-                 if (tray(p)->type == ai_O) { word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p));
+    case DNom:   base[off + 1] = (word) img_decode((intptr_t) s[1], base, hb, delta); break;   // code + dig ride raw
+    case DTray:  if (tray(p)->type == ai_O) { word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p));
                   for (uintptr_t i = 0; i < ne; i++) e[i] = img_decode(e[i], base, hb, delta); }
                  break;
-    default:     memcpy(base + off + 1, s + 1, (sz - 1) * sizeof(word)); }        // flat leaves: payload rides raw
+    default:     break; }                                                         // flat leaves: payload is already seated
   } else {                                                                        // thread: the ENCODED terminator is its head's byte offset | tag
    word term = (word)(off * sizeof(word) + ai_thread_tag); uintptr_t k = 1;
    uintptr_t kmax = nw - off;                                                     // BOUND the walk: a mis-decoded word0 must refuse

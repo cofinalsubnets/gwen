@@ -29,19 +29,31 @@ relocation tables. Every pointer-bearing word is RANGE-encoded in place:
 - **an immortal** → `hb + 2·NLVM + 2·ii`;
 - **a binary pointer** → absolute, ≥ TBOUND.
 
-Even-vs-odd separates pointer from fixnum, so the load re-derives relocation by re-walking. File
-= header + heap. Thread sizing at load scans the encoded terminator (`off·8+2`, unique since
-object starts are 8-aligned), not `ttag`.
+Even-vs-odd separates pointer from fixnum, so the load re-derives relocation by re-walking.
+Thread sizing at load scans the encoded terminator (`off·8+2`, unique since object starts are
+8-aligned), not `ttag`.
+
+File = header + dictionary + **token stream**. The encoded words are wildly repetitive — half an
+image is 25 distinct words, and the commonest single one is `lvm_chain`'s index at 23%, the `ap`
+every pair wears — so each rides as one byte naming one of the 248 commonest, or as an escape
+naming its own width. 3.8x off the file; the wake expands into the pool and then decodes there in
+place. The dictionary is chosen by COUNT and not by lane: a fixed token budget per lane is the
+obvious thing and it is also worse (3.63x), because the split would be tuned to whichever image
+was measured, and the counts follow a kernel's image or an artifact's wherever those go.
 
 ⚠ **NULL is an immortal.** A live bio port carries undressed `rbuf`/`wbuf` zero words; a raw
 zero is even and below the index bound, so it needs its own slot in `image_immortals`.
 
-## the stamp is two-anchor
+## the stamp is a DISTANCE
 
-Not a build hash: `arch` (a compile-time tag) + `anchor` (the dump-time address of
-`ai_image_save`). Under ASLR the whole binary shifts by one base delta, so the immortals/refsym
-delta must equal the `ai_image_save`/anchor delta. A different binary — cross-arch, or a stale
-rebuild — lays symbols out differently, the deltas disagree, and the image is refused.
+Not a build hash: `arch` (a compile-time tag) + `anchor`, the **gap** between `ai_image_save` and
+`image_immortals`. A different binary — cross-arch, or a stale rebuild — lays symbols out
+differently, the gap changes, and the image is refused.
+
+⚠ it was two addresses, compared to check their ASLR deltas agreed — which is that gap being
+preserved, said the long way round and at the price of writing the baker's mmap base into every
+image. Two bakes of one tree then differed there and nowhere else. The distance discriminates
+exactly as well and is the same number every run; `test_bakerep` is what holds it.
 
 ## the section is GROWN, not reserved
 

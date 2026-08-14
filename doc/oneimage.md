@@ -304,14 +304,46 @@ doc/snapshot.md names as the reason to have a snapshot at all). Both look like b
 they are listed so they get refused on purpose rather than rediscovered.
 
 Gates: `test_wake` (test.mk:754, the only bake-then-wake round trip), `test_kore`, `test_moon`,
-and an image-equivalence check — ⚠ a bake is never byte-stable, so compare offset sets or the
-`.o`, never the image bytes.
+and `test_bakerep` — ⚠ a bake **is** byte-stable now (2026-08-13), so compare the image bytes and
+nothing softer. The line here used to say the opposite, and it was true when written: an image
+carried the baker's ASLR base three ways over and its hatch duration besides.
 
 Gates ran green on rungs 1+2 (2026-08-10): `make test` (all three zz-fin lines), `test_wake`,
 `test_kore`, `test_moon`. No equivalence check owed: every edit is load-side (`img_decode`,
 the load walk); `img_encode` and the save walk are untouched, so the bake is unchanged by
 construction. Ladder total on the mooncc.image wake: 38.8 → 33.1 ms, 240.5 → 226.0 M
 instructions — the walk's share of a fat wake down from ~46% to ~39%.
+
+**the blob became a TOKEN STREAM** (2026-08-13). The encoded words are wildly repetitive — 28%
+of an image's words are distinct at all, half of it is 25 values, and the commonest single one is
+`lvm_chain`'s index at 23.5%, the `ap` every pair wears. So a word now rides as one byte naming
+one of the 248 commonest, or as an escape naming its own width (four escapes in five are three
+bytes wide: a heap offset). Sizes, host cat: image 5 583 432 → 1 463 782 (**3.81x**), baked
+binary 6 513 856 → 2 398 536 (2.72x), and the download door — `out/dist/love-x86_64`, which
+carries the crew and its own source — 29 256 280 → 11 486 224 (**2.55x**).
+
+⚠ **this re-introduces the staging pass that "the copy fused too" removed**, on purpose. Expansion
+writes the pool once and the decode walk then rewrites it in place, so `src` and `base` are the
+same array — which is sound because both passes read and write one word at a time at the same
+index, and is why the flat-leaf memcpys are gone (a payload word arrives already seated). Wake
+pays 110.9 → 131.5 M instructions (+18.5%), +1.2 ms warm and +0.5 ms cold on whole-process wall;
+`img_expand` is 13% of the wake at ~25 instructions a word, of which gcc says ~20 is inherent and
+the rest is the regalloc arc's. The trade is deliberate and it is the one this arc had not costed:
+every earlier rung bought wake time and left the file alone.
+
+⚠ **the dictionary is chosen by COUNT, never by lane.** Spending a fixed token budget per lane is
+the obvious design — the codec is already a range ladder — and it measures 3.63x against the
+dictionary's 3.82x. Worse, the split would be tuned to whichever image was measured: index slots
+cluster at 192–255 in this cat and want the whole token space to themselves. Counts follow a
+kernel's image or an artifact's wherever those go.
+
+⚠ **the encoder's tables ride the allocator, not the frame.** They are kilobytes together, and
+port/mps2 refused to compile them onto the stack — `cc: internal error: imm12-range 4480`, an
+arm32 load having 12 bits of displacement. The smallest seat in the tree said what every seat
+wanted. The loader reads the dictionary **where it lies** in the source buffer: the header is a
+whole number of words and a shebang line is padded to one, so the seats are already aligned, and
+a fixed 248-word dictionary (short images repeat their commonest into the spare seats) buys the
+hot loop out of a bound test per word.
 
 ## what to watch
 
