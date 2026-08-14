@@ -385,6 +385,24 @@ mx: host
 	   $(mw) -l mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
 	   cmp -s $$t $$f || { mv $$t $$f; echo "LOVE	$$f"; }; \
 	 done; rm -f $$t
+# ...and the DEPENDENCY, off the same roster: a committed generated file is stale the moment
+# its table moves, and the objects that include it then rebuild from the fresh one. Without
+# this a new nifs.l row builds clean and gates GREEN with its nom still off the book -- the
+# drift diff lives in test_clay, which only test_extra reaches.
+# ⚠ the prerequisite is the TABLE ALONE, never $(m): love is built FROM these headers, so
+# naming it as a prerequisite closes the loop and make drops the lot. The recipe instead takes
+# whatever love ALREADY exists -- sound because the generator is nifs.l/mx.l themselves, and a
+# stale love lays a fresh table. A tree with no love yet is the bootstrap case: the committed
+# file is what builds the first one, so the rule stands aside and only marks it seen.
+define mx_dep
+$(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
+	@if test -x $$(m); then \
+	   $$(mw) -l $$< -e "(: _ (? $(word 4,$(subst :, ,$(1))) 0 (quit 1)) _ (puts $(word 3,$(subst :, ,$(1)))) (quit 0))" > out/.$$(@F) || exit 1; \
+	   cmp -s out/.$$(@F) $$@ || echo "LOVE	$$@ (relaid -- $$< moved)"; \
+	   mv out/.$$(@F) $$@; \
+	 else touch $$@; fi
+endef
+$(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 # test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/clay.md): for every file
 # in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. ⚠ the run PARTITIONS and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
