@@ -2323,7 +2323,12 @@
  ((vof 0 '(uu-fromsum (ii2 true))) = (lof '(uu-fromsum (ii2 true))))
  ((vof 0 '(memb 9 (ncons 7 (ncons 9 nnil)))) = (lof '(memb 9 (ncons 7 (ncons 9 nnil)))))
  ((vof 0 '(lrev (ncons 1 (ncons 2 nnil)))) = (lof '(lrev (ncons 1 (ncons 2 nnil)))))
- ((vof 0 '(idpath (add 1 2))) = (lof '(idpath (add 1 2)))))
+ ((vof 0 '(idpath (add 1 2))) = (lof '(idpath (add 1 2))))
+ ; the two eliminators no bridged global reaches: both compile to kseq, whose
+ ; operands the translator hands over in the other order from the term's
+ ((vof 0 '(unit_rect (lam x nat) 7 tt)) = (lof '(unit_rect (lam x nat) 7 tt)))
+ ((vof 0 '(paths_rect (lam b (lam p nat)) 5 (idpath 2)))
+  = (lof '(paths_rect (lam b (lam p nat)) 5 (idpath 2)))))
 
 ; --- the stack SUBSTRATE: focus x up x down, a stk nonempty BY CONSTRUCTION;
 ; --- the representation vocabulary the translator targets (zmk/zfoc/zup/zdn,
