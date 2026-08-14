@@ -101,7 +101,7 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 # really really really slow gate. test_embed is here too, cheap insurance: the thumb lanes
 # below SKIP without arm-none-eabi, so on a bare box this tier would otherwise compile none
 # of them either.
-test_extra: test_embed test_filemode waits test_kernel_arm64 test_mps2 test_mps2_t1 \
+test_extra: test_embed test_embed_boards test_filemode waits test_kernel_arm64 test_mps2 test_mps2_t1 \
 	test_mps2_wake test_teensy41 test_nucleo446 test_nucleo446_smoke test_rp2040 test_playdate test_arm64 \
 	test_vec test_front test_proof test_gen test_uugen test_uulean test_uuwm \
 	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
