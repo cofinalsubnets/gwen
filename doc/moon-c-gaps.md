@@ -41,14 +41,15 @@ What genuinely stands between here and freestanding C11, each row live above:
   implementation can map it to plain static and be observationally right; that is the cheap
   road, and it should be taken deliberately rather than by accident.
 - **universal character names** — `\uXXXX`/`\UXXXXXXXX`, mandatory since C99, absent in the lexer.
-- **`#line` does not move `__LINE__`**, and `#if` arithmetic is signed throughout where C11
-  demands intmax/uintmax (`&`/`|`/`^` also die on a big). Both are preprocessor rows.
+- **`#if` arithmetic is signed throughout** where C11 demands intmax/uintmax, and `&`/`|`/`^`
+  die on a big. (`#line` landed 2026-08-14; the `#line "file"` half did not — it wants
+  `__FILE__` to stop being one name per TU first.)
 - **an `f` suffix does not make a `float` constant** — a constraint on the value of a literal,
   and the row below already has a consumer turning it into a wrong answer.
-- **block-scope `struct` tags** and the four small syntax rows in the absent table. Of those,
-  `switch (x) case 0: ;` is the one that is not a small fix: the switch parser takes `{` at its
-  root and its `items` loop runs to the matching `}`, so a non-compound body is a restructure,
-  not a widened terminator.
+- **block-scope `struct` tags**, and the two remaining small syntax rows. Neither is the
+  one-line widening the first two were: `switch (x) case 0: ;` wants the switch parser off its
+  `{`-at-the-root shape, and `int f(int), a;` wants `more`/`one` hoisted out of the top-level
+  dispatch's inner scope. Both are costed in the table.
 - **the diagnostic obligation**: a non-constant `_Static_assert` is let by today, which is a
   constraint violation passing in silence — the one class §4 names outright.
 
@@ -73,10 +74,8 @@ All of C89 passes. What remains is C99/C11/GNU.
 | plain `typeof` | `typeof(x) y;` — ⚠ only `__typeof` / `__typeof__` are recognized |
 | `asm goto` | costed below — the one refusal carrying an estimate |
 | a block-scope `struct` tag | `{ struct T { int z; }; }` inside a function — tags are file-scoped here, so an inner one collides with the outer |
-| a declarator list mixing a function and an object | `int f(int), a;` — two functions in one list is fine |
+| a declarator list mixing a function and an object | `int f(int), a;` — two functions in one list is fine, and `int a, f(int);` passes: it is the FUNCTION-FIRST order alone. `mproto` takes the comma continuation and answers `()` on a non-function declarator; the object lane below it already handles a mixed list (`regs` files the sigs, `vps` drops them), but `more`/`one` live in an inner scope the dispatch cannot reach, so the fix is to hoist them, not to widen a test |
 | a `case` label as a switch's whole body | `switch (x) case 0: ;` — a compound body is fine |
-| a `*` bound in an array parameter | `void f(int x[*])` — `[static 3]` and `[const 3]` both pass |
-| a function-typed parameter with a non-empty parameter list | `int f(int (int), int)` — `int f(int (), int)` passes |
 | `__attribute__((packed))` **before** a union tag | `union __attribute__((packed)) U { … }` — after the body it passes |
 | designated RANGE initializers | `[1 ... 5] = 9`, gcc's extension |
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
@@ -85,7 +84,7 @@ All of C89 passes. What remains is C99/C11/GNU.
 | a `##` paste with an empty operand and trailing tokens | `#define P(A,B) A ## B ; bob` |
 | a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
 
-The last twelve are what `test_cts` found (doc/moon.md); `test/gate/cts.sh` names the program
+The last ten are what `test_cts` found (doc/moon.md); `test/gate/cts.sh` names the program
 each one came from.
 
 ### what passes, for contrast
@@ -119,7 +118,6 @@ Four of them carry an edge worth knowing:
   asks the linker for the same boundary. ⚠ on a **local or a struct member it is still
   skipped in silence** — the row below.
 
-
 - **variable-length arrays** ride x64 and arm64 only; every other target says `no lane for a
   variable-length array on <tgt>`. ⚠ a VLA with an *initializer* refuses everywhere
   (`parse error near =`) — C's own rule, not a gap. `__builtin_alloca` is absent on every
@@ -141,7 +139,7 @@ Four of them carry an edge worth knowing:
 
 ### the directives, and which are ignored on purpose
 
-`#pragma`, `#line`, `#ident`, `#sccs`, `#assert`, `#unassert`, a bare `#` (the null directive,
+`#pragma`, `#ident`, `#sccs`, `#assert`, `#unassert`, a bare `#` (the null directive,
 C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing — except
 **`#pragma push_macro("X")` / `pop_macro("X")`**, which save and restore the definition
 (gcc's semantics: a per-name stack, a saved-undefined pops back to undefined, a pop with
@@ -151,9 +149,14 @@ text and continues. **Everything else refuses** (C11 6.10p1) — the catch-all t
 an unknown directive let `#cmakedefine X 1` sail through, so an unconfigured template header
 compiled clean and the name it owed was simply absent.
 
-⚠ One of those ignores costs a right answer rather than a feature, so "on purpose" is the
-cheaper reading of it than the true one: **`#line` never moves the line number** a later
-diagnostic or `__LINE__` reports.
+**`#line` MOVES the line number** as of 2026-08-14 — `__LINE__` and every later diagnostic
+report the mapped line, matching gcc (test/cc/137-line.c). The delta rides `macs`, the one
+state already threaded through every arm of `cppgo`, so no signature moved; it is applied
+where active tokens accumulate, and again on a directive's own body, which is what makes
+`#if __LINE__` right. `doinc` saves and restores it, so a header's `#line` does not follow the
+return. ⚠ the **file operand is parsed and dropped**: `#line 700 "generated.y"` reports line
+700 of the *real* path, where gcc says `generated.y`. `__FILE__` is the TU's name throughout
+(cpp shares one macro table across includes), so the file half wants that lifted first.
 
 ⚠ `#include_next` refuses *because* it is unimplemented — ignoring it drops a header in silence,
 which is worse. doc/moon-userland.md carries when it becomes load-bearing.
@@ -198,7 +201,7 @@ in the userland ladder reads them yet.
 Landing the table also made **`__LINE__` true**: the `-D` text used to skew it by its line
 count (nothing compensated). `clexat` now stamps the prepended lines `1-k..0` so the TU's own
 numbering starts at 1, and moon.l's `deskew` pay-back pass retired with the skew. `#line`
-still does not move it (the row above stands).
+moves it too now (the directive section above).
 
 ### the `_Static_assert` quirks
 

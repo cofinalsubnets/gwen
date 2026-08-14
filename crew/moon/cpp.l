@@ -12,8 +12,9 @@
 ; directives: #define (object + function, # stringize, ## paste, ... variadic
 ; __VA_ARGS__), #undef, #if/#ifdef/#ifndef/#elif/#else/#endif (with defined and
 ; an integer constant-expression evaluator, undefined names -> 0), #include,
-; #error, #pragma/#line (ignored -- except #pragma push_macro/pop_macro, which
-; save and restore a definition). predefined __LINE__ __FILE__ __STDC__.
+; #error, #line (it MOVES the reported line; the file operand is dropped),
+; #pragma (ignored -- except push_macro/pop_macro, which save and restore a
+; definition). predefined __LINE__ __FILE__ __STDC__.
 ; adjacent string literals concatenate (phase 6). fenced: _Pragma, __COUNTER__,
 ; the GNU ,##__VA_ARGS__ comma elision, #if with character constants.
 (:
@@ -29,6 +30,16 @@
    ; where the value IS the spelling. ⚠ parse reuses this slot once cpp is done.
    (sof t) (? (4 < tally t) <>>>>t ())
    (tok k v l) `(k v l)
+   ; -- #line (C11 6.10.4) -- the delta rides `macs`, the one state already threaded
+   ; through every arm of cppgo, so no signature moves. applied where active tokens
+   ; accumulate, which is once; __LINE__ and a parse gripe both read (lof t) and so
+   ; take it for free. ⚠ REPLACE the line, never rebuild with tok: a token may carry
+   ; a 5th element (sof, the spelling # owes) and a rebuild would drop it.
+   (lndel macs) (: d (peep macs 'lndelta 0) (? (charm? d) d 0))
+   (lnbump d t) (<t >< (<>t >< ((<>>t + d) >< >>>t)))
+   (lnshift macs l)
+    (: d (lndel macs)
+       (? (d = 0) l (: (go k) (? !(two? k) () (lnbump d <k >< go >k)) (go l))))
    ; -- include markers (doc/moon-diag.md rung 2) -- an #include splices the
    ; header's OWN line numbering into the one flat output stream, so a line
    ; number alone can't say which file it is (and isn't monotone across the
@@ -361,9 +372,14 @@
                  dir (? (two? >line) (dirname <>line) ())   ; if/else are keywords; the rest ids
                  dirk (? (two? >line) (kof <>line) ())      ; ..and its kind, which is how a line marker is known
                  body >>line
+                 ; ⚠ a DIRECTIVE line never reaches the accumulator below, so the
+                 ; #line shift lands here or `#if __LINE__` reads the physical line.
+                 ; `line` itself stays raw -- the #line arm computes its delta from it.
+                 sline (lnshift macs line)
+                 sbody (? (two? sline) >>sline ())
                  (? (member? dir '("if" "ifdef" "ifndef" "elif" "else" "endif"))
-                     (: cond2 (docond dir body line macs cond)
-                        (? (id? cond2 'err) (gripeat line ("#" + dir + " without #if"))   ; unbalanced -- FATAL, not empty
+                     (: cond2 (docond dir sbody sline macs cond)
+                        (? (id? cond2 'err) (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- FATAL, not empty
                            (cppgo rest macs cond2 () out1 incf)))
                     !(condactive cond) (cppgo rest macs cond () out1 incf)      ; skipped: ignore non-cond directives
                     (dir = "define") (: _ (defmacro macs body) (cppgo rest macs cond () out1 incf))
@@ -373,7 +389,7 @@
                     ; its own words, and "#error directive" throws that away -- pdclib's
                     ; config prints which type it could not match, and the bare form left
                     ; 232 refused files with nothing to read.
-                    (dir = "error") (gripeat line ("#error: " + spellcat body))
+                    (dir = "error") (gripeat sline ("#error: " + spellcat body))
                     ; a #warning is not fatal to gcc and must not be to us: glibc
                     ; and gnulib deprecate through it, mid-header, on purpose. it
                     ; says the text unlocated -- the driver's channel is for fatal
@@ -383,6 +399,13 @@
                         (cppgo rest macs cond () out1 incf))
                     ((dir = "pragma") && pragmac? body)
                      (: _ (dopragmac macs body) (cppgo rest macs cond () out1 incf))
+                    ; #line N ["file"]: the NEXT line becomes N, so a token at
+                    ; physical P reports P + (N - L - 1). ⚠ the file operand is
+                    ; parsed and DROPPED -- __FILE__ is the TU's name throughout.
+                    ; a non-literal operand falls to the ignore below, as before.
+                    ((dir = "line") && two? body && (kof <body = 'num))
+                     (: _ (pin macs 'lndelta (vof <body - lof <line - 1))
+                        (cppgo rest macs cond () out1 incf))
                     ; ignored on purpose, and each is one gcc also accepts: a bare
                     ; `#` is the null directive (C11 6.10.7), and a numeric one is
                     ; gcc -E's line marker.
@@ -395,9 +418,9 @@
                     ; name it owed is simply absent (C11 6.10p1 wants the
                     ; diagnostic). #include_next lands here too: unimplemented, and
                     ; now it says so rather than dropping a header.
-                    (gripeat line ("invalid preprocessing directive #" + spellcat `(<>line)))))
+                    (gripeat sline ("invalid preprocessing directive #" + spellcat `(<>line)))))
              !(condactive cond) (cppgo rest macs cond buf out incf)                    ; skipped code: drop
-             (cppgo rest macs cond (revcat line buf) out incf))))                       ; active code: accumulate (reversed)
+             (cppgo rest macs cond (revcat (lnshift macs line) buf) out incf))))         ; active code: accumulate (reversed)
 
    ; a directive that manages the conditional stack. dir keyword symbols. a frame
    ; is (active taken line), the line being the #if's own -- an #elif or #else
@@ -451,7 +474,12 @@
                       ; accumulator, so a link onto it appends in source order:
                       ; the 'in mark lands before the header's tokens, the 'out
                       ; mark onto (rev done) lands after them.
+                      ; ⚠ the #line delta is the header's OWN: macs is shared, so save
+                      ; it across the recursion or a header's #line follows the return
+                      sv (lndel macs)
+                      _ (pin macs 'lndelta 0)
                       done (cppgo itoks macs () () (fmin name >< out) chf)       ; recurse with FRESH cond; shares macs; accumulates
+                      _ (pin macs 'lndelta sv)
                       ; a nested failure PROPAGATES up, wearing the file it happened
                       ; in (never wipe `out` for it, and never answer () -- an empty
                       ; answer masks as an empty include, and the ancestor doinc then

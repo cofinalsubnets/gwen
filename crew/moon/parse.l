@@ -576,6 +576,9 @@
    (adims ps ts2 acc) (? !(peekp ts2 "[") [(rev acc) ts2]
                          (: t2 (pquals >ts2)
                             (? (peekp t2 "]") (adims ps >t2 (0 >< acc))
+                               ; C11 6.7.6.2p4: `[*]` is a prototype's UNSPECIFIED VLA
+                               ; bound, and a parameter decays to a pointer either way
+                               ((peekp t2 "*") && peekp >t2 "]") (adims ps >>t2 (0 >< acc))
                                (: er (pexpr ps t2)
                                   (? !(two? er) ()
                                      (: dv (cfold <er)
@@ -613,6 +616,10 @@
        (ptrk k t) (? (k < 1) t (ptrk (k - 1) ['ptr t]))
        (? (two? ts && (tkk <ts = 'id)) (psufs ps >ts (tkv <ts) (\ t t) () 1)
           !(peekp ts "(") (psufs ps ts () (\ t t) () ())
+          ; ⚠ a `(` with a TYPE inside opens a PARAMETER LIST, not a nested declarator
+          ; (C11 6.7.7): `int f(int (int), int)`. psufs takes it from here, where the
+          ; star branch below would read `int` as a declarator and die on the `)`.
+          (tkbty? ps <(pquals >ts)) (psufs ps ts () (\ t t) () ())
           (: sr (nstars >ts 0)
              k <sr t2 <>sr
              dr (pdirect ps t2)
