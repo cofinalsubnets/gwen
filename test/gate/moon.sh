@@ -97,6 +97,13 @@ for t in x64 arm64 riscv64 thumb2 thumb2sp thumb1; do
   case $t in x64|arm64) c11feat "$t" __STDC_NO_VLA__ 0 ;; *) c11feat "$t" __STDC_NO_VLA__ 1 ;; esac
   case $t in x64)       c11feat "$t" __STDC_NO_COMPLEX__ 0 ;; *) c11feat "$t" __STDC_NO_COMPLEX__ 1 ;; esac
 done
+# a TU that is ONLY a _Static_assert -- want answers the remainder, which is () at
+# EOF, and that read as "no `;` found". a failing assert must still refuse.
+printf '_Static_assert(1, "ok");' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 || fail "a TU of one _Static_assert"
+printf '_Static_assert(0, "boom");' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 && fail "a FAILING lone _Static_assert passed"
+
 # the freestanding header set is C11 4p6: these two were the ones we did not ship
 printf '#include <iso646.h>\n#include <stdalign.h>\nint m(void){return (1 and 2) + alignof(int);}\n' \
   > "$ho/.feat.c"

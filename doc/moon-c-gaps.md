@@ -7,8 +7,7 @@ history.
 Everything below was probed against `out/host/mooncc`. The recipes are included — reproduce
 rather than trust, and re-verify any `parse.l`/`gen.l` anchor before editing.
 
-Probe recipe (a TU containing only a `_Static_assert` is its own quirk — see below — so add a
-trailing declaration):
+Probe recipe:
 
 ```sh
 printf 'int m(void){ return 0; }\n' >> q.c
@@ -46,8 +45,10 @@ What genuinely stands between here and freestanding C11, each row live above:
   demands intmax/uintmax (`&`/`|`/`^` also die on a big). Both are preprocessor rows.
 - **an `f` suffix does not make a `float` constant** — a constraint on the value of a literal,
   and the row below already has a consumer turning it into a wrong answer.
-- **block-scope `struct` tags**, the four small syntax rows in the absent table, and the
-  statement-only `_Static_assert` TU.
+- **block-scope `struct` tags** and the four small syntax rows in the absent table. Of those,
+  `switch (x) case 0: ;` is the one that is not a small fix: the switch parser takes `{` at its
+  root and its `items` loop runs to the matching `}`, so a non-compound body is a restructure,
+  not a widened terminator.
 - **the diagnostic obligation**: a non-constant `_Static_assert` is let by today, which is a
   constraint violation passing in silence — the one class §4 names outright.
 
@@ -201,12 +202,6 @@ still does not move it (the row above stands).
 
 ### the `_Static_assert` quirks
 
-- ⚠ **A translation unit containing ONLY a `_Static_assert` is a parse error**; adding any
-  declaration makes it compile. `want` answers the remaining token list, which is `()` when the
-  matched token was the last one, so `pstatic` cannot distinguish "consumed the final `;`" from
-  "no `;` found". The house-style fix is already written for the same situation in `tdeflist`
-  (*"the remainder may be EMPTY (a typedef at EOF)"*): peek for the `;`, then take the tail
-  unconditionally.
 - ⚠ **A failed static assert reports as `parse error near ;`.** The refusal is correct; the
   wording names the compiler's position rather than the program's fault. See doc/moon-diag.md.
 - **`cfold` is deliberately partial** (no floats, no comma, no address constants) and `pstatic`

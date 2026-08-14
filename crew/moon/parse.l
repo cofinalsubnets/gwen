@@ -1400,10 +1400,12 @@
        r3 (? (two? r2 && (tkk <r2 = 'str)) >r2 ())
        r4 (? (two? r3) (want r3 ")")                ; the long form: expr, "message"
              (two? re) (want <>re ")") ())          ; ..and the short one: expr alone
-       rest (? (two? r4) (want r4 ";") ())
-       (? !(two? rest) ()
+       ; ⚠ PEEK for the `;`, then take the tail: want answers the REMAINDER, which is
+       ; () when the matched token was the last one -- so a TU that is only an assert
+       ; read as "no `;` found" and refused (tdeflist carries the same idiom).
+       (? !(two? r4 && peekp r4 ";") ()
           (: v (cfold <re)
-             (? (charm? v && (v <= 0)) () ['(tdef) rest]))))
+             (? (charm? v && (v <= 0)) () ['(tdef) >r4]))))
    (static? ts) (two? ts && (tkk <ts = 'id) && (tkv <ts = "_Static_assert"))
 
    ; decl := TYPE [dtor [= asn] (, dtor [= asn])*] ;
