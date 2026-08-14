@@ -22,7 +22,7 @@
    ; and this list only says which ones exist -- a sigil the table has dropped drops out here too.
    ; ⚠ `.` sits LAST: between two elements a dot is the pair marker, before the closer it is
    ; the plain symbol -- which is the only reason this is a list and not a run of them.
-   imonos '(< > + * | - / % ? $ ! .)
+   imonos '(< > + * | - / % ? $ ! ^ .)
    (irow0 s) (: r (grip 0 s ()) _ (grip 0 s r) r)
    imono (filter (\ e (nom? <e)) (map (\ s (list (irow0 s) (string s))) imonos))
 

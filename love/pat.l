@@ -56,6 +56,15 @@
 ;   (p1 || p2)             ALTERNATIVES: either shape fits. `|` is the same tag
 ;   (p1 && p2)             AND: both fit. `&` too -- the dual, and the way to name
 ;                          the whole while taking it apart: (v && ['lam x b])
+;   (v @ pat)              the AS-pattern, haskell's v@pat: name the whole AND take
+;                          it apart. it IS the && above under another spelling, so
+;                          both sides are patterns and neither is privileged.
+;                          ⚠ SPACED. glued v@pat is one nom -- opfix splits only a
+;                          LEADING sigil -- and glued @( is already the tray below.
+;   ^x  (jot x)            the PIN, elixir's ^x: x is read from OUTSIDE and the value
+;                          must EQUAL it. the one way a pattern spends a nom without
+;                          binding it, so (a ^a) fits a pair of equals against an
+;                          outer a, where (a a) would fit any pair.
 ;   ()                     the form at ZERO length: asks nothing, so it fits anything
 ;   []                     the LIST at zero length: the empty chain, exactly
 ; ⚠ a map key is read for PRESENCE, not truth: a pinned () matches, an absent
@@ -127,7 +136,14 @@
               ; ⚠ so a nom in both is the ORDINARY non-linear nom, and dedup makes the second
               ; sighting an equality: ([a _] && [_ a]) fits a pair of equals, for free.
               ; the everyday one is naming the whole while taking it apart: (v && ['lam x b]).
-              ((h = '&&) || (h = '&)) (foldl wcat wnil (map (\ q (pw q v)) as))
+              ; ..and `@` is that same conjunction under haskell's spelling: (v @ pat) names
+              ; the whole while taking it apart, which is the everyday && above. no arm is
+              ; privileged, so both sides stay patterns.
+              ((h = '&&) || (h = '&) || (h = '@)) (foldl wcat wnil (map (\ q (pw q v)) as))
+              ; the PIN (elixir's ^x, glued to jot by the operators table): NOT a binding but
+              ; an equality against x read from OUTSIDE -- the same shape a bare literal takes
+              ; above, which is what a pin is. one operand only; anything else is a plain form.
+              ((h = 'jot) && (= 1 (tally as))) (wts [['= <as v]])
               ; ALTERNATIVES, anywhere: ONE test, the branches ||ed. each branch owns its own
               ; equalities and its own guards, so a disjunct is that branch entire.
               ; ⚠ a nom lives at a DIFFERENT PLACE in each branch, so it cannot be one access

@@ -4939,7 +4939,12 @@ void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard cons
                  word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p)), eo = (uintptr_t)(e - (word*) p);
                  for (uintptr_t i = 0; i < ne; i++) blob[off + eo + i] = img_encode(x, e[i]); }
                 break;
-   default: break; }                                     // DMint/DString/DBig/DGem/DSun/DTwin: flat leaves
+   // ⚠ the tail padding is uninitialized heap -- a stale POINTER FRAGMENT, ASLR-varying
+   case DString: { uintptr_t n = ((struct ai_str*) p)->len, w = b2w(n);
+                   if (w) memset((char*)(blob + off + str_type_width) + n, 0,
+                                 w * sizeof(word) - n);
+                   break; }
+   default: break; }                                     // DMint/DBig/DGem/DSun/DTwin: flat leaves
   else for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(x, ((word*) p)[i]);   // thread interior + terminator
   x->suppress = 0;
   p = (union u*) ((word*) p + sz); }

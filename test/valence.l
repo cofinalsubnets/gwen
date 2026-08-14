@@ -54,6 +54,12 @@
  ((net '(1 2 3)) = (foldl (+) 0 '(1 2 3)))
  ((prod '(2 3 4)) = (prod @(2 3 4))) (24 = (prod '(2 3 4)))
  (5 = tally (jot 5)) (10 = +(jot 5))          ; jot counts what it jots; gauss agrees
+ ; ..and jot LIFTS over a list, so the glued run composes -- a run factors greedily, so
+ ; ^^n is (jot (jot n)) and the nesting is the depth of the run.
+ (^5 = (jot 5)) (^^3 = (jot (jot 3))) (^^^3 = (jot (jot (jot 3))))
+ ('(0 1 2 3 4) = ^5) ('(() (0) (0 1)) = ^^3) ('(() (()) (() (0))) = ^^^3)
+ (3 = tally ^^3) ((map tally ^^3) = (jot 3))  ; ..the k-th list is the k-th jot
+ (7 = (3 ^ 4))                                ; ..while SPACED ^ is xor: the lane is the key
  (fraction 5.25 = 5.25 % 1) (bit 9 = !!9) (!!9 = ?9)
  ; a glued monadic prints back as its source -- byte-exact, like ' / ~ / @
  ("*5" = show (\ *5)) ("+(-3)" = show (\ +(-3))) ("$$0" = show (\ $$0))

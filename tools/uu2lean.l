@@ -189,7 +189,8 @@
       + nl + (? mb mb ("  " + (u2l (e4 e)))) + nl)
      _ (pin bases 'UU "(Type _)")
      out)
-   exports (foldl (\ a e (? (peep keep (e2 e) 0) (link e a) a)) () ents)   ; foldl reverses -> source order
+   ; ⚠ foldr KEEPS ents' order, and lean wants every definition before its uses (foldl flips)
+   exports (foldr (\ e a (? (peep keep (e2 e) 0) (link e a) a)) () ents)
 
    _ (. (lines `(
        "/- proof/lean/uugen.lean -- GENERATED from test/uu.l by tools/uu2lean.l. Do not edit;"
