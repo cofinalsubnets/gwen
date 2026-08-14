@@ -4901,6 +4901,7 @@ static int img_expand(word *out, uintptr_t nw, unsigned char const *p, unsigned 
 // wake-unreachable ballast); the guarded entry keeps the boot path honest.
 void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
  if (!g->major_pool) return NULL;                        // needs the major pool (it holds the compacted live half)
+ ai_core_of(g)->io = NULL;                               // clear the non-deterministic fd before the bake
  if (!ai_ok(gen_major(g))) return NULL;                  // COMPACT: live half -> [major_base, major_hp) (OOM -> no image)
  word *base = g->major_base, *hp = g->major_hp;
  uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word);
