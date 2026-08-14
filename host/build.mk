@@ -220,20 +220,25 @@ moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/
 moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_math_o) $(moon_d)/sys.o
 # -D AI_HAVE_VERSION_H + the love_version.h dep: this TU carries the version id into the
 # SHIPPED binary, and mooncc has no __has_include for love.c's fallback probe to use.
+# THE RECORD: bare -fir is every function of every TU, each object naming its own
+# ai_ir_<basename>, so the shipped binary carries the machine-form IR of everything it
+# is. ~1.4 MB of .rodata for a binary that can be read without a disassembler, and the
+# splice JIT takes its op bodies out of it (lib/splice.l, which owns the size budget).
+moon_fir = -fir
 $(moon_d)/love.o: love.c $(love_h) $(moon0_dep) out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H -fir=lvm_ -I$(ho) -I. -Iout/lib -c $< $@
+	@$(moon0) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H $(moon_fir) -I$(ho) -I. -Iout/lib -c $< $@
 $(moon_d)/host_%.o: host/%.c $(love_h) $(moon0_dep)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
+	@$(moon0) -D ai_tco=$(tco) $(moon_fir) -I$(ho) -I. -Iout/lib -c $< $@
 $(moon_d)/host_main.o: $(baked_h)
 $(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(moon_d)/m_%.o: crew/moon/lib/math/%.c $(moon0_dep)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
+	@$(moon0) $(moon_fir) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
 # sys.o is LAID, not compiled: the syscall trampoline and our sigsetjmp/longjmp have no C
 # spelling. love0 runs the lay, its holo carrying every backend. ⚠ the entry is picked by
 # $(hosta), the HOST's arch, never $a -- a cross lane overrides $a, and this object is

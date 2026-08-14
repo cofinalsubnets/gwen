@@ -88,21 +88,28 @@
                                                       (link (caup f) acc) acc))))
                       (go fs ()))
    (ir-ret? fs) (: (go l) (? (atom? l) 0 (id? (cap (cap l)) 'ret) 1 (go (cup l))) (go fs))
+   ; ⚠ THE TAIL-JUMP LAW IS THE VM'S, NOT EVERY FUNCTION'S, and the record now holds every
+   ; function -- `-fir` bare, so the binary can be read without a disassembler. An ordinary C
+   ; function ENDS in a ret and must; only an lvm_ handler owes the jump. So the ret law reads
+   ; the lvm_ family and the one-function law reads them all, which is what each ever meant.
+   (lvm? k) (: s (string k) ?((5 <= tally s) && ("lvm_" = snip s 0 4)))
    _ (: t (jit-irtab ())
         tb (? (two? t) (caup t) ())
         ks (? (two? t) (keys tb) ())
+        vs (filter lvm? ks)
         fo (filter (\ k (two? (ir-foreign (peep tb k ())))) ks)
-        rt (filter (\ k (ir-ret? (peep tb k ()))) ks)
+        rt (filter (\ k (ir-ret? (peep tb k ()))) vs)
         _ (? (two? fo) (die ("an IR record carries a foreign function label: " + show fo)) 0)
-        _ (? (two? rt) (die ("an IR record contains a ret -- the tail-jump law: " + show rt)) 0)
-        (say out ("  ai_lvm_ir: " + show (tally ks)
-                  + " records, each one function and ret-free (vmret's law, off the record)\n")))
+        _ (? (two? rt) (die ("an lvm_ record contains a ret -- the tail-jump law: " + show rt)) 0)
+        _ (? (two? vs) 0 (die "the record names no lvm_ handler at all"))
+        (say out ("  record: " + show (tally ks) + " functions, each ONE function; "
+                  + show (tally vs) + " lvm_ handlers, all ret-free (vmret's law, off the record)\n")))
    it (jit-irtab ())
-   _ (? (two? it) 0 (die "no ai_lvm_ir in this binary -- was love.o built with -fir=lvm_?"))
+   _ (? (two? it) 0 (die "no IR record in this binary -- was it built with -fir?"))
    _ (: cf (jit-ir 'lvm_cup)
-        (? (two? cf) (say out ("  ai_lvm_ir: " + show (caup (cup it)) + " handlers, lvm_cup at "
+        (? (two? cf) (say out ("  record: " + show (caup (cup it)) + " splice-able bodies, lvm_cup at "
                                + show (tally cf) + " forms\n"))
-           (die "ai_lvm_ir carries no lvm_cup")))
+           (die "the record carries no lvm_cup")))
    r (foldl (\ a s (one s a)) (0 >< 0) samples)
    n (cap r) d (cuup r)
    _ (say out ("splice: " + show n + " of " + show (tally samples) + " samples jitted and agree"

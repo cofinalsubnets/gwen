@@ -179,7 +179,7 @@ irwant "$ho/.ir-d.o" aa_one "negative"; irnot "$ho/.ir-d.o" aa_two "negative"
 irbuild "$ho/.ir-e.o" -fno-ir=aa_                     # no positive -> everything but
 irwant "$ho/.ir-e.o" bb_one "bare negative"; irnot "$ho/.ir-e.o" aa_one "bare negative"
 irbuild "$ho/.ir-f.o"                                 # and absent when never asked
-nm "$ho/.ir-f.o" 2>/dev/null | grep -q ai_lvm_ir && fail "-fir: a record with no flag"
+nm "$ho/.ir-f.o" 2>/dev/null | grep -q " ai_ir_" && fail "-fir: a record with no flag"
 # BARE, and the algebra gives them their meaning: -fir is the empty POSITIVE (every name has
 # it as a prefix, so it opens the set from anywhere) and -fno-ir the empty NEGATIVE (and the
 # negatives carve after the positives whatever the order, so it wins from either end without
@@ -189,12 +189,12 @@ irbuild "$ho/.ir-g.o" -fir
 for n in aa_one aa_two bb_one; do irwant "$ho/.ir-g.o" $n "bare -fir is everything"; done
 for args in "-fno-ir" "-fir=aa_ -fno-ir" "-fno-ir -fir=aa_"; do
   irbuild "$ho/.ir-h.o" $args
-  nm "$ho/.ir-h.o" 2>/dev/null | grep -q ai_lvm_ir && fail "-fno-ir did not empty the record ($args)"
+  nm "$ho/.ir-h.o" 2>/dev/null | grep -q " ai_ir_" && fail "-fno-ir did not empty the record ($args)"
 done
 # ⚠ and the empty set lays NO SYMBOL, not one holding "()": a reader finding the symbol would
 # conclude the compiler wrote down that there was nothing, which is a different claim.
 irbuild "$ho/.ir-i.o" -fir=zz_no_such_prefix
-nm "$ho/.ir-i.o" 2>/dev/null | grep -q ai_lvm_ir && fail "-fir: an empty set still laid a symbol"
+nm "$ho/.ir-i.o" 2>/dev/null | grep -q " ai_ir_" && fail "-fir: an empty set still laid a symbol"
 echo "mooncc: -fir collects, -fno-ir carves, a comma list IS the repeated flag (byte-identical),"
 echo "        bare -fir is all and bare -fno-ir is none from either end, and empty lays nothing"
 

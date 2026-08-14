@@ -8403,18 +8403,17 @@
    ; symbol table + relocations. the DEFINED static functions ride the tail as lnames, laid as
    ; LOCAL FUNC symbols so nm/gdb/vmret see real function boundaries.
    ; -- WHAT THE COMPILER BUILT, WRITTEN DOWN (-fir=PREFIX): the machine-form IR of every
-   ; function whose name starts with PREFIX, laid in .rodata under `ai_lvm_ir` as ONE readable
-   ; datum -- ((name form..) ..) -- so a runtime holding this binary can splice its own op
-   ; bodies without a compiler, a source tree, or a disassembler. holo assembles these forms
-   ; as they stand (that is what they are), and the reader is `sound`. doc/moon-regalloc.md.
-   ; ⚠ THE CAP IS THE SPLICE BUDGET, and it is why this is not the whole file: a splice-able
-   ; op is a short straight-line handler, and the JIT will never inline love.c's biggest lvm_
-   ; (102 KB of IR on its own). Read off the curve over love.c's 195 handlers, which is the
-   ; only place this number can come from: 64 forms takes 93 of them for 29 KB, where 128
-   ; takes 124 for 67 KB and 32 takes 70 for 14 KB -- the knee is here.
-   ; A handler over the cap is simply ABSENT, which is the one honest thing to be: the JIT
-   ; declines an op it has no IR for, by name, exactly as it declines one it cannot lower.
-   ir-cap 64
+   ; function whose name starts with PREFIX, laid in .rodata under this TU's own `ai_ir_<tu>`
+   ; as ONE readable datum -- ((name form..) ..) -- so a runtime holding this binary can splice
+   ; its own op bodies without a compiler, a source tree, or a disassembler. holo assembles these
+   ; forms as they stand (that is what they are), and the reader is `sound`. doc/moon-regalloc.md.
+   ; ⚠ PER-TU, and it is not cosmetic: one fixed symbol made -fir a ONE-TU flag, since a second
+   ; object carrying it died at the link with `link-dup "ai_lvm_ir"`. The name says which TU,
+   ; so `nm | grep ai_ir_` is the manifest and a reader never has to guess where a body came from.
+   ; ⚠ NO CAP HERE. The record is COMPLETE -- a function too big to splice is exactly the one a
+   ; reader most wants, having no chance of following it in a disassembler. The splice budget
+   ; that used to live here belongs to the splicer and now sits in lib/splice.l, which declines
+   ; an over-budget body by name just as it declines one it cannot lower.
    (irblob fs fnames pfx)
     (: ft (: t (tablet 0) _ (foldl (\ _ n (pin t (intern n) 1)) 0 fnames) t)
        ; ⚠ MANY prefixes, comma-joined, and a `-` one SUBTRACTS: the positives are collected
@@ -8455,7 +8454,7 @@
                      !(two? x) x
                      (relab <x >< relab >x))
        (row nm acc rows) (: fs (trim acc)
-                            (? (want? nm && (tally fs <= ir-cap)) ((nm >< relab (rev fs)) >< rows) rows))
+                            (? (want? nm) ((nm >< relab (rev fs)) >< rows) rows))
        (go l nm acc rows)
         (? !(two? l) (? (nil? nm) rows (row nm acc rows))
            (: f <l
@@ -8529,11 +8528,16 @@
                         (map (\ nm [nm (forsec nm src) (grain nm src)]) (noms src ()))))
              ; the IR blob rides .rodata as an ordinary global, so the runtime finds it the
              ; way it finds any symbol -- no section walk, and a compiler that was not asked
-             ; simply lays nothing (a gcc-built love has no `ai_lvm_ir`, and says so).
+             ; simply lays nothing (a gcc-built love has no record, and says so).
+             ; ⚠ the driver names it (moon.l, off the source's basename); "ai_lvm_ir" is the
+             ; fallback for a caller reaching cgen-obj without one, and one such caller per
+             ; link is the most that can hold -- the collision is the whole reason for the slot.
              firp (? (two? xtra && 10 < tally xtra) (nthr xtra 10) ())
+             irsym (: s (? (two? xtra && 11 < tally xtra) (nthr xtra 11) ())
+                      (? (string? s) s "ai_lvm_ir"))
              irb (? (string? firp) (irblob <>r fnames firp) ())
-             [1 <>r <dat fnames (? (two? irb) (gnames + '("ai_lvm_ir")) gnames)
+             [1 <>r <dat fnames (? (two? irb) (gnames + [irsym]) gnames)
                 <>dat <>>dat lnames <>>>dat <>>>>dat
-                (? (two? irb) (<>>>>>dat + [['align 8] ['label 'ai_lvm_ir] ['raw irb]])
+                (? (two? irb) (<>>>>>dat + [['align 8] ['label (intern irsym)] ['raw irb]])
                    <>>>>>dat)
                 xfns]))))

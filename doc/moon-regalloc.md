@@ -165,7 +165,7 @@ own twins, the fifth declining by name).** It needs an image carrying the compil
 (`love wake out/host/mooncc.image`), which the dist artifact does.
 
 ⚠ **and the source of truth is the binary itself: `mooncc -fir=PREFIX` writes the machine-form
-IR of every matching function into `.rodata` under `ai_lvm_ir`, as one readable datum, and
+IR of every matching function into `.rodata` under `ai_ir_<tu>`, as one readable datum, and
 `nifs.l` lays the book-name→`lvm_` bridge (`ai_nif_lvm`) beside it — the registry is the only
 thing that holds both names, which is the whole argument for that file.** The default `love` is built with `-fir=lvm_` and carries **91 op handlers, 28 KB**, which
 a plain `love` reads back out of `/proc/self/exe` with no compiler, no source tree and no
@@ -182,7 +182,7 @@ comment predicted this one: a flag on love.c in make's rule and not in the fixpo
 a byte difference that reads as a broken compiler.
 
 ⚠ **THE SPLICER LANDED 2026-08-13 and the C route is gone.** `(jit f)` now reads its op rows,
-takes each op's IR out of `ai_lvm_ir`, splices, assembles with holo and nifs it — **no compiler,
+takes each op's IR out of the record, splices, assembles with holo and nifs it — **no compiler,
 no source tree, no object file**, and `test_splice` runs on a plain `love`. What made it
 mechanical is the VM's own convention: `g=r6, Ip=r5, Hp=r2, Sp=r1`, every op takes its argument
 from `Sp[0]` and leaves its answer there, so two handler bodies laid end to end already agree

@@ -286,11 +286,24 @@
    ; a refusal naming the file rather than every site quietly reading its NEIGHBOUR.
    ; the gen's option list is the parser's nine tablets plus the driver's own two words
    ; (-fno-inline, then -fir's prefix list).
+   ; THE RECORD'S SYMBOL, one per TU: `ai_ir_` and the source's basename, every character
+   ; outside [A-Za-z0-9_] becoming _ so a path or a dash cannot mint an unspellable nom.
+   ; ⚠ one fixed name made -fir a one-TU flag (`link-dup "ai_lvm_ir"` the moment a second
+   ; object carried it), and the basename is what a reader wants anyway: `nm | grep ai_ir_`
+   ; names the translation units, in the order the link laid them.
+   (irsym src)
+    (: b (ubase src ".c") n (tally b)
+       (go i acc) (? (n <= i) acc
+                     (: c (b i)
+                        ok ?(((97 <= c) && (c <= 122)) || ((65 <= c) && (c <= 90))
+                             || ((48 <= c) && (c <= 57)) || (c = 95))
+                        (go (i + 1) (acc + (? ok (snip b i (i + 1)) "_")))))
+       (go 0 "ai_ir_"))
    (cc-objbytes src is ds tgt nsi ni fir)
     (@ (cc-parse src is ds tgt nsi)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs]
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni fir] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni fir (irsym src)] tgt)
           _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
           (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns]
              (: xs (map (\ [nm forms ro] (objsec-named nm forms ro)) xsecs

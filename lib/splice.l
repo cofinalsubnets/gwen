@@ -19,9 +19,9 @@
 ; COMPILED THREAD and says whatever the compiler emitted, so what it adds is exactly amble's
 ; leavings. The two costs it must stay affordable against are both cached below.
 ;
-; ⚠ NO COMPILER, NO SOURCE TREE, NO OBJECT FILE. `mooncc -fir=lvm_` lays each op handler's IR
-; into `ai_lvm_ir` at compile time and nifs.l lays the book-name bridge beside it, so a plain
-; love reads what it is made of. That is the whole design: the alternative was scraping op
+; ⚠ NO COMPILER, NO SOURCE TREE, NO OBJECT FILE. `mooncc -fir` lays every function's IR into the
+; per-TU `ai_ir_*` records at compile time and nifs.l lays the book-name bridge beside them, so a
+; plain love reads what it is made of. That is the whole design: the alternative was scraping op
 ; bodies out of love.c's TEXT (which a shipped love does not carry) or disassembling our own
 ; machine code (which would hand back bytes the splicer could not reason about). These forms
 ; are what the compiler emitted, so holo assembles them as they stand.
@@ -70,19 +70,25 @@
    (jit-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) s) ()))
 
    ; --- WHAT THE COMPILER WROTE DOWN: this binary's own op handlers, as IR ---------------
-   ; mooncc -fir=lvm_ lays the machine-form IR of every op handler under the splice cap into
-   ; .rodata as `ai_lvm_ir`, one readable datum. So the JIT's source of truth is the BINARY
+   ; mooncc -fir lays the machine-form IR of every function into .rodata, one readable datum per
+   ; TU under `ai_ir_<basename>`. So the JIT's source of truth is the BINARY
    ; IT IS RUNNING IN -- not love.c's text, which a shipped love does not carry, and not a
    ; disassembly, which would hand back bytes it could not reason about. holo assembles these
    ; forms as they stand; that is what they are.
-   ; ⚠ a love built by another compiler has no `ai_lvm_ir` and this answers () -- which is the
+   ; ⚠ a love built by another compiler carries no record and this answers () -- which is the
    ; honest report, not a failure: gcc was never asked to write anything down.
+   ; ⚠ THE SPLICE BUDGET LIVES HERE, and it used to live in gen.l as the record's cap -- which
+   ; made the compiler's provenance record answer to the JIT's appetite. The record is complete
+   ; now; a body over budget is declined by name, exactly like one the table cannot lower.
+   ; The number is read off the curve over love.c's op handlers, the only place it can come
+   ; from: 64 forms takes 93 of them, where 128 takes 124 and 32 takes 70 -- the knee is here.
+   jit-cap 64
    (jit-irtab _)                                     ; nom -> its forms | () when nothing wrote it down
     (: t (peep jit-memo 'irtab ())
        (? (two? t) t
           (: exe (bind-rd "/proc/self/exe")
-             rows (irec-at exe "ai_lvm_ir")
-             (? (nil? rows) (jit-no ['no-irtab] "this love carries no ai_lvm_ir (built without -fir=lvm_)")
+             rows (filter (\ w (tally >w <= jit-cap)) (irec-bytes exe))
+             (? (nil? rows) (jit-no ['no-irtab] "this love carries no IR record (built without -fir)")
                 (:
                    v (: tb (tablet 0)
                         _ (map (\ w (pin tb <w >w)) rows)
