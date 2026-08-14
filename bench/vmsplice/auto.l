@@ -1,9 +1,9 @@
-; auto.l -- the splice JIT on live closures, priced. ONE process: `(jit f)` (lib/splice.l)
-; composes the closure's op bodies, compiles them with the mooncc in this image, binds the
-; object against this very process and nifs it -- then this times the native against the
-; closure it came from. The correctness half is test_splice; this half is the number.
+; auto.l -- the splice JIT on live closures, priced. ONE process and NO COMPILER: `(jit f)`
+; (lib/splice.l) takes each op's own IR out of this binary's .rodata, splices, assembles with
+; holo and nifs it -- then this times the native against the closure it came from. The
+; correctness half is test_splice; this half is the number.
 ;
-;   LOVE_NO_GLAZE=1 love wake out/host/mooncc.image -l bench/vmsplice/samples.l bench/vmsplice/auto.l
+;   LOVE_NO_GLAZE=1 out/host/love -l bench/vmsplice/samples.l bench/vmsplice/auto.l
 ;
 ; ⚠ LOVE_NO_GLAZE or the baseline is not the interpreter: the samples are shapes
 ; love/glaze/auto.l recognizes, and a glazed twin reads ~9x too fast. The glaze is the
@@ -18,7 +18,7 @@
    (one s) (: nm (cap s) f (cup s) j (jit f)
               (? (nil? j) (say out (string nm + ": declined\n"))
                  (: _ (say out (string nm + ":\n"))
-                    a (bench "composed (mooncc, bound, nif'd)" j)
+                    a (bench "spliced (own IR, holo, nif'd)" j)
                     b (bench "thread   (the same ops, interp) " f)
                     (say out ("  speedup " + show (b / a) + "x\n")))))
    _ (map one samples)

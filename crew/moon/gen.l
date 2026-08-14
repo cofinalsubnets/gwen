@@ -8412,8 +8412,16 @@
        ; ⚠ acc arrives REVERSED, so the padding that belongs to the NEXT function sits at its
        ; head -- drop it, or every row ends in a stranger's alignment
        (trim l) (? (two? l && two? <l && (<<l = 'align)) (trim >l) l)
+       ; ⚠ AND THE LABELS ARE RESPELLED, because a leading dot does not survive the reader:
+       ; `.e5044` reads back as the two-element list (. e5044) -- `.` is an ordinary punct
+       ; symbol here and there are no dotted pairs. A serialization that cannot be read is
+       ; not one, so the dot becomes `jl` and the name stays a nom on the way home.
+       (relab x) (? (nom? x) (: s (string x)
+                                (? ("." = snip s 0 1) (intern ("jl" + snip s 1 (tally s))) x))
+                     !(two? x) x
+                     (relab <x >< relab >x))
        (row nm acc rows) (: fs (trim acc)
-                            (? (want? nm && (tally fs <= ir-cap)) ((nm >< rev fs) >< rows) rows))
+                            (? (want? nm && (tally fs <= ir-cap)) ((nm >< relab (rev fs)) >< rows) rows))
        (go l nm acc rows)
         (? !(two? l) (? (nil? nm) rows (row nm acc rows))
            (: f <l

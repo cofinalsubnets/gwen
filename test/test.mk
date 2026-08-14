@@ -408,16 +408,16 @@ test_clay: host out/host$(hsuf)/mooncc.image
 test_moonfuzz: host out/host$(hsuf)/mooncc.image
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 888 mutants of test/cc)"
 	@$m wake $(ho)/mooncc.image -l test/gate/moonfuzz.l < /dev/null
-# test_splice -- the splice JIT end to end, in ONE process (lib/splice.l, bench/vmsplice/README.md):
-# a live closure's op bodies composed into one C function, compiled by the mooncc in this
-# image, bound against this process's own symbols, nif'd -- and required to agree with the
-# closure it came from. ⚠ the woken mooncc image is not a convenience: `jit` needs a compiler
-# in the same image, and the bind is only valid in the process that made it. LOVE_NO_GLAZE
-# because a glazed closure is a native cell `dis` reads as a husk. A declined sample is a
-# named coverage gap, not a red; a DISAGREEMENT is, and so is zero samples composed.
-test_splice: host out/host$(hsuf)/mooncc.image
-	@echo TEST test/gate/splice.l "(splice JIT: compose -> mooncc -> bind -> nif -> differential)"
-	@LOVE_NO_GLAZE=1 $m wake $(ho)/mooncc.image -l test/gate/splice.l < /dev/null
+# test_splice -- the splice JIT end to end (lib/splice.l, bench/vmsplice/README.md): a live
+# closure's op rows, each op's own IR taken out of THIS BINARY's .rodata (mooncc -fir=lvm_ put
+# it there), spliced into one body, assembled by holo, its one external reference bound to a
+# live address, nif'd -- and required to agree with the closure it came from. ⚠ a PLAIN love:
+# no compiler, no source tree, no object file, which is the whole point of the IR being in the
+# binary. LOVE_NO_GLAZE because a glazed closure is a native cell `dis` reads as a husk. A
+# declined sample is a named coverage gap, not a red; a DISAGREEMENT is, and so is zero spliced.
+test_splice: host
+	@echo TEST test/gate/splice.l "(splice JIT: own IR -> holo -> nif -> differential)"
+	@LOVE_NO_GLAZE=1 $m -l test/gate/splice.l < /dev/null
 # test_ccarm64 / test_ccriscv -- the battery on a CROSS TARGET (two targets, one procedure
 # in ccarch.sh): every test/cc/*.c built by `mooncc -t <arch>`, run under qemu-user, required
 # to answer what x64 answers. The three programs no cross lane can build must REFUSE, not skip.

@@ -164,9 +164,10 @@ process, gated by `make test_splice` (four samples jitted and differentialled ag
 own twins, the fifth declining by name).** It needs an image carrying the compiler
 (`love wake out/host/mooncc.image`), which the dist artifact does.
 
-⚠ **and the source of truth moved into the binary the same day: `mooncc -fir=PREFIX` writes the
-machine-form IR of every matching function into `.rodata` under `ai_lvm_ir`, as one readable
-datum.** The default `love` is built with `-fir=lvm_` and carries **91 op handlers, 28 KB**, which
+⚠ **and the source of truth is the binary itself: `mooncc -fir=PREFIX` writes the machine-form
+IR of every matching function into `.rodata` under `ai_lvm_ir`, as one readable datum, and
+`nifs.l` lays the book-name→`lvm_` bridge (`ai_nif_lvm`) beside it — the registry is the only
+thing that holds both names, which is the whole argument for that file.** The default `love` is built with `-fir=lvm_` and carries **91 op handlers, 28 KB**, which
 a plain `love` reads back out of `/proc/self/exe` with no compiler, no source tree and no
 disassembler — `(use 'splice)` then `(jit-irtab ())`, gated by `test_splice`. This is the answer
 to the question the C route was asking wrong: an op's body was being scraped out of **love.c's
@@ -180,15 +181,41 @@ weighs 821 KB. A handler over it is absent, and the JIT declines an op it has no
 comment predicted this one: a flag on love.c in make's rule and not in the fixpoint's rebuild is
 a byte difference that reads as a broken compiler.
 
-**What stands between the two routes is the SPLICER**, and its one non-mechanical trap is written
-at `jit-ir`: a handler carries its own room guard, that guard jumps to `lvm_gc`, and `lvm_gc`
-resumes at `Ip` — which in a spliced body is the nif cell. A collection halfway through would
-re-run the ops that already ran. The requirements must be summed and hoisted into one guard ahead
-of any `Sp` motion, deopting to the twin the way the C route's guard does. A per-op guard left in
-place is a silent double-apply, not a crash. The rest is mechanical: strip the fixed dispatch
-triple off every copy but the last, rename internal labels per copy, and bind `la`/`call` targets
-to live addresses through `assemble-at`'s seeded label table — a runtime splice needs no
-relocation at all, because it knows the answers.
+⚠ **THE SPLICER LANDED 2026-08-13 and the C route is gone.** `(jit f)` now reads its op rows,
+takes each op's IR out of `ai_lvm_ir`, splices, assembles with holo and nifs it — **no compiler,
+no source tree, no object file**, and `test_splice` runs on a plain `love`. What made it
+mechanical is the VM's own convention: `g=r6, Ip=r5, Hp=r2, Sp=r1`, every op takes its argument
+from `Sp[0]` and leaves its answer there, so two handler bodies laid end to end already agree
+about everything. The load family is *said* (three forms), the fld family is **unfused** into a
+push and an op — that fusion is the VM's, not the meaning's — and everything else is spliced.
+
+⚠ **the splice condition is CHECKED, not assumed**: no frame, no `Ip` read, no leaving. The last
+one is the sharp edge and it is the trap this section predicted: a handler carries its own room
+guard, that guard jumps to `lvm_gc`, and gc **resumes at `Ip`**, which in a spliced body is the
+nif cell — so a collection halfway through would re-run the ops that already ran. One hoisted
+guard leads instead, ahead of any `Sp` motion, deopting to the twin. A per-op guard left in place
+is a silent double-apply, not a crash.
+
+⚠ **and no relocations at all, because a JIT knows the answers**: the one external reference a
+clean handler carries is `(la rX sym)`, and at splice time that symbol's live address is a
+*number* — so it becomes `(li rX addr)`, a movabs, and the body is position-independent.
+
+**THE REFLOW is where the seam finally comes out, and it is two lines.** A handler delivers with
+`(st r1 0 rX)` and the next opens by reading it straight back with `(ld rY r1 0)`; laid end to end
+those are adjacent — one base, one name, nothing between. That is `stldp`'s law with none of its
+aliasing question, because both sides are ours. **Measured: ~1.2× on short accessor chains and
+1.6× on a 32-op body, where a mooncc-compiled composed body of the same closure also reads 1.6×**
+— the splicer matches the compiler's own output while needing none of it. The remaining distance
+to the probe's ~4× is now the splicer's own business: keep `Sp[0]` in a register across a whole
+segment instead of storing and reloading at every op. That is the destination die (step 7) at the
+splice level, and it is no longer waiting on the allocator.
+
+⚠ **three traps paid on the way, each cheap to re-learn the hard way.** A leading dot does not
+survive the reader — `.e5044` reads back as the two-element list `(. e5044)`, since `.` is an
+ordinary punct symbol and there are no dotted pairs — so the serializer respells labels `jl…`.
+`two?` on a nom is false (it tests cons pairs), which turned a covered op into a silent decline.
+And **operand 0 is the commonest operand there is**, so a bare `(nil? i)` presence test read
+`arg 0` as absence and declined every closure in silence; presence rides the `(1 x)` wrapper.
 
 **The automation landed first (rungs 1+2, now folded into the module above).** The probe was a
 hand-written body; the pipeline runs on live closures. `dis` (love/ev.l, the emission

@@ -1,8 +1,9 @@
-; test/gate/splice.l -- the splice JIT's gate: `(jit f)` composes a live closure's op
-; bodies into one C function, compiles it with the mooncc in this very image, binds it
-; against this process's own symbols and nifs it -- and the result must agree with the
-; closure it came from on every input. run inside a woken mooncc image (the compiler has
-; to be here) with LOVE_NO_GLAZE=1 (a glazed closure is a native cell `dis` reads as a husk).
+; test/gate/splice.l -- the splice JIT's gate: `(jit f)` reads a live closure's op rows, takes
+; each op's own IR out of THIS BINARY's .rodata (where `mooncc -fir=lvm_` wrote it), splices
+; them into one body, assembles it with holo, binds the one external reference to a live
+; address and nifs it -- and the result must agree with the closure it came from on every
+; input. ⚠ a PLAIN love runs this: no compiler, no source tree, no object file. LOVE_NO_GLAZE=1
+; because a glazed closure is a native cell `dis` reads as a husk.
 ;
 ; ⚠ THE DIFFERENTIAL IS THE WHOLE GATE. A composed body is never allowed to be wrong, only
 ; faster: the twin is the SAME closure, so this is `sl-cross` one level down -- one
