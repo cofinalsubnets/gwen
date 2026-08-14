@@ -182,8 +182,7 @@
  _ (assert (two? md))
  m (cup md)
  _ (rest 1200)                            ; let berth come up and moor its first child
- ; ⚠ two puts in sequence, never (map (put m) ..): map walks right to left, and
- ; "v C-a" is not the prefix -- the same trap this file's DSR law now pins down
+ ; ⚠ the ORDER is the content: "v C-a" is not the prefix, so the two puts are sequenced
  _ (put m 1) _ (put m 118) _ (flush m)     ; C-a v: split beside
  outb (slurp m)                           ; ... until both children leave and berth ends
  _ (assert

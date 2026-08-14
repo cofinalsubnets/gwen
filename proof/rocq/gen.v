@@ -180,9 +180,9 @@ Theorem gen_57 : (Z.leb (Z.b2z (fixp Vflo)) 0) = true.  Proof. vm_compute. refle
 Theorem gen_58 : (Z.leb (Z.b2z (fixp Varr)) 0) = true.  Proof. vm_compute. reflexivity. Qed.
 (* !(charm? 'a) *)
 Theorem gen_59 : (Z.leb (Z.b2z (fixp Vsym)) 0) = true.  Proof. vm_compute. reflexivity. Qed.
-(* (!"" = 0 = $"") *)
+(* (!"" = (0 = $"")) *)
 Theorem gen_60 : (Z.eqb (Z.b2z (Z.leb (asum []) 0)) (Z.b2z (Z.eqb 0 (Z.max 0 (asum []))))) = true.  Proof. vm_compute. reflexivity. Qed.
-(* (!-5 = 0 = $-5) *)
+(* (!-5 = (0 = $-5)) *)
 Theorem gen_61 : (Z.eqb (Z.b2z (Z.leb (-5) 0)) (Z.b2z (Z.eqb 0 (Z.max 0 (-5))))) = true.  Proof. vm_compute. reflexivity. Qed.
 (* (charm? 5) *)
 Theorem gen_62 : (fixp Vz) = true.  Proof. vm_compute. reflexivity. Qed.

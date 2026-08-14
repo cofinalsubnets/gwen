@@ -156,10 +156,8 @@
    (compose f g x) (f (g x))                      ; (* f g)
    _ (seal-hook 2 stack)
    _ (seal-hook 3 compose))
-; map runs HEAD FIRST, so a mapped effect (a print, a pin) comes out in list order.
-; the mapped value is computed AS AN ARGUMENT, which is what puts it before the recursion:
-; link's own two operands still go right to left, so nothing inside link can order them. the
-; inner takes f and l as PARAMS rather than closing over them -- three operands, no capture.
+; map runs LEFT TO RIGHT: a mapped effect fires in list order. ⚠ the value is computed as an
+; ARGUMENT -- link's own two operands go right to left, so nothing inside link could order them.
 (: (map f l) (? (two? l) ((\ f x l (link x (map f l))) f (f (cap l)) (cup l)))
    (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
    (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z)

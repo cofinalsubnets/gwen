@@ -149,7 +149,8 @@
    ; --- emit, in source order ---
    (emit e) (cat (L "Definition " (rocqn (e2 e)) " : " (u2c (e3 e)) " :=" (string 10)
                     "  " (u2c (e4 e)) "." (string 10)))
-   exports (foldl (\ a e (? (peep keep (e2 e) 0) (link e a) a)) () ents)   ; foldl reverses -> source order
+   ; ⚠ foldr KEEPS ents' order, and coq wants every definition before its uses (foldl flips)
+   exports (foldr (\ e a (? (peep keep (e2 e) 0) (link e a) a)) () ents)
 
    _ (. (cat (L
        "(* proof/rocq/uugen.v -- GENERATED from test/uu.l by tools/uu2coq.l. Do not edit;" (string 10)

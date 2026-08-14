@@ -179,8 +179,7 @@
        keep (filter (\ sy (? (g && (at sy 1 = 0)) () (u && !(at sy 3 = 0)) () 1)) all)
        ord (? srt keep (sortby (\ a b (<a <= <b)) keep))
        _ (? wide (: _ (puts ("\n" + p + ":\n")) 0) 0)
-       ; ⚠ foldl, never map: map's side effects fire RIGHT TO LEFT (it conses on the
-       ; way back up), so a map that prints hands the list back reversed
+       ; foldl is the printing walk: it answers the accumulator, so nothing is built
        _ (foldl (\ _ sy (puts ((? (at sy 3 = 0) (nm-sp w) (nm-hex (at sy 4) w))
                                + " " + nm-let sy + " " + <sy + "\n")))
                 0 ord)
