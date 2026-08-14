@@ -1,5 +1,5 @@
 // asmops -- the aarch64 privileged instructions, one static inline each, in
-// BOTH inline-asm spellings. the x86_64 twin (port/inle/x86_64/asmops.h) opens
+// BOTH inline-asm spellings. the x86_64 twin (free/x86_64/asmops.h) opens
 // with the why; the short version is that the kernel has to say the same thing
 // to two compilers, clang in GNU's ARM template and mooncc in holo's NEUTRAL
 // text (crew/holo/text.l -- mnemonic, then operands, one instruction per LINE,

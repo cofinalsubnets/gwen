@@ -17,7 +17,7 @@
 ; `ldkern` is the second door out: the same objects laid for the BARE METAL --
 ; several page-aligned PT_LOADs, each carrying p_paddr = p_vaddr - bias, so one
 ; ELF serves a loader that copies physical and a bootloader that maps virtual.
-; port/inle/klink.l drives it; the inle kernel rides it on both arches. `ldbare32`
+; free/klink.l drives it; the inle kernel rides it on both arches. `ldbare32`
 ; is the third: one ELF32 segment for a part with no MMU at all (an M-profile
 ; board), where the image lays at the address the core boots from.
 ; loads after crew/holo/obj.l in the mooncc cat -- reads elf-base / elf-machines /
@@ -193,7 +193,7 @@
        ((nm = ".data") || ld-pre nm ".data.") 'data
        (nm = "ai_nifs") 'nifs
        (nm = ".love_image") 'image
-       ; the KERNEL lanes (ldkern's, port/inle/<a>/<a>.lds's names): the boot
+       ; the KERNEL lanes (ldkern's, free/<a>/<a>.lds's names): the boot
        ; stub's page tables and bring-up ladder, the limine request block --
        ; its three sections bracket a scan, so they lay in header order, which
        ; is the order kmain.c writes them -- and the PVH note qemu reads to
@@ -997,7 +997,7 @@
    ; PT_LOAD carries p_paddr = p_vaddr - bias, which is what lets `qemu -kernel`
    ; copy by p_paddr with the MMU off while limine (and our own BOOTX64.EFI) maps
    ; by p_vaddr with it on -- one file, and mkboot.l bridges the two. that split,
-   ; and the several segments it needs, is the whole of what port/inle/<a>/<a>.lds
+   ; and the several segments it needs, is the whole of what free/<a>/<a>.lds
    ; says that ldlink's one-segment shape cannot.
    ;
    ; the lanes, each page-aligned and each its own segment: `boot` (the stub's

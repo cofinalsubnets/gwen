@@ -4,7 +4,7 @@
  * nolibc's strtol used to WRAP on overflow where glibc saturates, so one source
  * text read as two different numbers depending on which libc the binary carried;
  * love.c's reader leaned on the wrap to carry hex kernel addresses
- * (port/inle/klink.l). the reader now reads all three integer bases itself and
+ * (free/klink.l). the reader now reads all three integer bases itself and
  * never calls strtol, which is exactly why this needs a gate of its own: nothing
  * else in the tree observes the difference any more.
  *

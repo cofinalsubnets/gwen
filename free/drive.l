@@ -3,7 +3,7 @@
 ; the WRITE half (propose a source CHANGE, gate it, keep it or revert). rides the
 ; dock's verbs (look/lay/rebuild/sh) -- load it beside serve.l + judge.l.
 ;
-;   out/host/love -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -e "(dock 7620)"
+;   out/host/love -l free/judge.l -l free/serve.l -l free/drive.l -e "(dock 7620)"
 ;   > (drive 1)            ; one iteration with the current proposer/grader
 ;
 ; TWO SEAMS, both slots you can retune live -- this is what makes it agnostic:
@@ -68,7 +68,7 @@
    ;; improve anything. it proposes ONCE, then goes idle (so `(drive 5)` runs once
    ;; and stops). replace this with a mutation of real source, or a model patch. --
    demo-slot (tablet 0)
-   demo-path "port/inle/drive-scratch.txt"
+   demo-path "free/drive-scratch.txt"
    (demo-propose _)
      (? (peep demo-slot 0 0) ()                          ; already proposed -> idle
         (: _ (pin demo-slot 0 1)

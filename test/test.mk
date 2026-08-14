@@ -383,7 +383,7 @@ test_moon: host $(love0) out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 # whole set lays, so a shape check that quits leaves every committed file untouched.
 # love_data.ld is laid WHOLE; a board's own script is its own memory map, so mx.l takes that
 # text and answers it with the marked block relaid -- the .lds recipe's IO is a pipe.
-mx_lds = port/inle/x86_64/x86_64.lds port/inle/aarch64/aarch64.lds
+mx_lds = free/x86_64/x86_64.lds free/aarch64/aarch64.lds
 mx_lay = (: _ (? mx-ok 0 (quit 1)) _ (puts (mx-lds \"$$f\" (slurp in))) (quit 0))
 # dest:source:value:shape-check -- ONE roster, read by `make mx` (which writes) and by
 # test_clay (which regenerates and diffs). Two spellings of this list is how they drift.
@@ -519,19 +519,19 @@ test_raw: host out/host$(hsuf)/mooncc
 # stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_slow.
 test_drv: host out/host$(hsuf)/mooncc
 	@sh test/gate/drv.sh $(ho) $(ai_cflags)
-# the kernel's inline-asm SEAM (doc/moon-kernel.md): port/inle/<a>/asmops.h says every
+# the kernel's inline-asm SEAM (doc/moon-kernel.md): free/<a>/asmops.h says every
 # privileged instruction twice -- holo's neutral template for mooncc, GNU's for clang -- so
 # the gate compiles one probe with both and compares op by op. Skips without llvm-objdump.
 test_asmops: host out/host$(hsuf)/mooncc
 	@sh test/gate/asmops.sh $(ho)
 # test_vec -- the INTERRUPT gate: raises a real CPU exception with (fault n) and reads the
-# report, the only way to reach port/inle/mkvec.l's 32 stubs and the fault vector, then
+# report, the only way to reach free/mkvec.l's 32 stubs and the fault vector, then
 # checks the stubs no boot can reach against the architecture's own error-code list.
 test_vec: host
 	@$(MAKE) -s a=x86_64 kernel
-	@sh test/gate/vec.sh x86_64 out/free/love-x86_64.elf out/free/x86_64/port/inle/x86_64/vec.o
+	@sh test/gate/vec.sh x86_64 out/free/love-x86_64.elf out/free/x86_64/free/x86_64/vec.o
 	@$(MAKE) -s a=aarch64 kernel
-	@sh test/gate/vec.sh aarch64 out/free/love-aarch64.elf out/free/aarch64/port/inle/aarch64/vec.o
+	@sh test/gate/vec.sh aarch64 out/free/love-aarch64.elf out/free/aarch64/free/aarch64/vec.o
 # THE FIXPOINT: the default love IS mooncc-built, so this gate has it rebuild ITSELF --
 # love1 (love0's lane, relinked) bakes its own compiler image, recompiles every TU, links
 # love2, and the two must be byte-identical. A headline invariant -- but it runs in

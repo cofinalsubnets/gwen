@@ -72,7 +72,7 @@ include mk/lib.mk
 include host/build.mk
 include crew/build.mk
 include mk/distro.mk
-include port/inle/kernel.mk
+include free/kernel.mk
 include test/test.mk
 include mk/install.mk
 

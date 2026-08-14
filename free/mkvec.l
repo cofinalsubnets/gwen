@@ -1,4 +1,4 @@
-; port/inle/mkvec.l -- lay vec.o, the kernel's INTERRUPT tail (doc/moon-kernel.md
+; free/mkvec.l -- lay vec.o, the kernel's INTERRUPT tail (doc/moon-kernel.md
 ; rung 4): the exception and IRQ entry points, which are register-exact leaves C
 ; cannot say. mksys.l is the precedent and the shape is the same -- one scaffold,
 ; a payload per ISA -- but this one is generated rather than transcribed: the 32
@@ -10,7 +10,7 @@
 ;   (lay-vec dst "aarch64")  the 2 KiB-aligned 16 x 0x80 vector table, the IRQ
 ;                            save/restore path, the fault report path
 ;
-; runs after crew/holo/{elf,obj}.l in a (use 'holo) cat; port/inle/kernel.mk
+; runs after crew/holo/{elf,obj}.l in a (use 'holo) cat; free/kernel.mk
 ; drives it. register vocabulary is holo's -- x86: r0=rax r1=rcx r2=rdx r3=rbx
 ; r4=rbp r5=rsi r6=rdi r7..r14=r8..r15; aarch64: rN = xN.
 ;

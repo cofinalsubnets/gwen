@@ -2,12 +2,12 @@
 # emit compile_commands.json -- the compilation database clangd wants.
 #
 # WHY THIS EXISTS: clangd runs its fallback command from THE FILE'S OWN DIRECTORY, so a
-# relative -I in .clangd resolves against host/ or port/inle/ and `love.h` is not found.
+# relative -I in .clangd resolves against host/ or free/ and `love.h` is not found.
 # that miss is FATAL, the parse stops, and every name after it reports undeclared -- a
 # flood of diagnostics that says nothing about the code. a database carries absolute
 # directories per entry, so the paths land where they mean.
 #
-# the flag groups mirror the real builds: host/build.mk (hcc) and port/inle/kernel.mk
+# the flag groups mirror the real builds: host/build.mk (hcc) and free/kernel.mk
 # (kcflags + kcppflags). they are few and they are stable; when one moves, move it here.
 #
 # the generated file is machine-specific (absolute paths) and gitignored. regenerate with
@@ -34,7 +34,7 @@ INLE = [
     "-ffreestanding", "-nostdinc",
     "-DLIMINE_API_REVISION=3", "-DK_TEST",
     f"-I{R}", f"-I{R}/out/lib", f"-I{R}/out/host", f"-I{R}/crew/quay",
-    f"-I{R}/port/inle", f"-I{R}/crew/moon/include", f"-I{R}/libc",
+    f"-I{R}/free", f"-I{R}/crew/moon/include", f"-I{R}/libc",
 ]
 
 # moon's replacement libc -- compiled against its OWN headers, so glibc's declarations
@@ -59,9 +59,9 @@ EMSCRIPTEN = os.environ.get("EMSDK")
 def flags_for(path):
     if path.startswith("crew/moon/lib/"):
         return MOONLIBC
-    if path.startswith("port/inle/"):
+    if path.startswith("free/"):
         f = list(INLE)
-        if path.startswith("port/inle/aarch64/"):
+        if path.startswith("free/aarch64/"):
             f.append("--target=aarch64-unknown-none-elf")
         return f
     if path.startswith("port/playdate/"):

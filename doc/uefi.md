@@ -1,6 +1,6 @@
 # the uefi door
 
-`port/inle/uefi/` is our own `BOOTX64.EFI`: the loader that puts the inle kernel
+`free/uefi/` is our own `BOOTX64.EFI`: the loader that puts the inle kernel
 on real hardware without limine, gnu-efi, or any foreign toolchain. mooncc
 compiles it, holo lays the PE32+ the firmware runs, and the whole thing is under
 200 lines of C (`loader.c`) plus three thunks of holo IR (`mkefi.l`).
@@ -9,7 +9,7 @@ compiles it, holo lays the PE32+ the firmware runs, and the whole thing is under
     make test_uefi     # the same door under qemu, corpus over serial
 
 `test_uefi` rides `make test_extra`. It is the only gate that hands the kernel a
-framebuffer, so it is the only one that runs `fbdraw` (`port/inle/kmain.c`) at all
+framebuffer, so it is the only one that runs `fbdraw` (`free/kmain.c`) at all
 -- which is worth knowing when this lane and `test_kernel` disagree about how long
 the same corpus takes.
 
@@ -24,12 +24,12 @@ differs.
 
 | door | brought up by | what it needs | where it shines |
 | --- | --- | --- | --- |
-| PVH | `port/inle/mkboot.l` | nothing (`qemu -kernel`) | the gate: no downloads, ~4.5s |
+| PVH | `free/mkboot.l` | nothing (`qemu -kernel`) | the gate: no downloads, ~4.5s |
 | UEFI | this loader | the machine's own firmware | real hardware, framebuffer console |
 | limine | limine | a downloaded bootloader + firmware image | the historical lane, aarch64 |
 
 `kmain` cannot tell them apart: each door fills the same `struct k_boot`
-(`port/inle/k.h`) and jumps. The limine request section answers NULL when
+(`free/k.h`) and jumps. The limine request section answers NULL when
 nothing filled it, so the limine path costs the other two doors nothing.
 
 ## what the loader does

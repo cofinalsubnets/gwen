@@ -89,7 +89,7 @@ love0: $(love0)
 DOCK_PORT ?= 7620
 dock: host
 	@cp $(ho)/love $(ho)/dock
-	exec $(ho)/dock -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -l port/inle/patch.l -e "(dock $(DOCK_PORT))"
+	exec $(ho)/dock -l free/judge.l -l free/serve.l -l free/drive.l -l free/patch.l -e "(dock $(DOCK_PORT))"
 # the default BOOT IMAGE: `$< bake` boots the fresh binary, snapshots the post-warm heap
 # and lays it back into that binary's OWN .image section -- host/image.c copies the exe,
 # pwrites the blob at the section's file offset and renames over the original, so a new

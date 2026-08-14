@@ -185,7 +185,7 @@ friendliest case the fairness cost has. Re-sweep against a concurrent one.
   measurements: the curve is flat across 400 held clients, and the sweep is not the visible
   cost. host/posix.c already carries Darwin branches, and the poll path stays as the fallback.
 - **inle's one-shot timer** — `ai_wait_fds` re-polls every source on every tick
-  (port/inle/kmain.c); its own comment names the fix.
+  (free/kmain.c); its own comment names the fix.
 - **wake catchers at exit.** An exiting task knows its own pid and can hand a waiting catcher
   straight back to the run ring, retiring `task_live` and the `lvm_wait` clause in
   `find_runnable` together.
@@ -211,7 +211,7 @@ Safepoint preemption avoids all three, and the tree is ready for it:
 - **the long-primitive problem has a house answer** — the bignum ops chunk their work, persist
   state and re-dispatch through `YieldCheck`: the exact discipline preemption needs, with a
   precedent to copy.
-- **the ISR exists and does one thing** — bump `kticks` (port/inle/mkvec.l). The addition is one
+- **the ISR exists and does one thing** — bump `kticks` (free/mkvec.l). The addition is one
   store, and mkvec.l LAYS that assembly from a love loop, so it is a lay change and not a `.S`
   edit (there are no `.S` files).
 

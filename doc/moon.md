@@ -360,7 +360,7 @@ exists anywhere.
   as a comment to end of line, so a `;`-joined template assembles its first instruction and
   SILENTLY DROPS the rest. `\n` is also what GNU wants, so it is the separator that serves a
   two-spelling header.
-* The first consumer is the kernel's `port/inle/<a>/asmops.h` (doc/moon-kernel.md), which
+* The first consumer is the kernel's `free/<a>/asmops.h` (doc/moon-kernel.md), which
   carries both spellings behind the `__mooncc__` predefine. Worth reading for how far the two
   dialects agree: a bare mnemonic and a `mnemonic op, op` line are the SAME text in both.
 * Deferred until a consumer demands them: an AT&T template front-end, `"f"` float operands, asm

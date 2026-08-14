@@ -33,7 +33,7 @@ isolated binary does. when they differ, the binary wins.
 ## the loop
 
 1. **pick work.** self-directed: run the differential fuzzer to find where the
-   two compilers disagree -- `(look "port/inle/fuzz.l")`, `(look "port/inle/mutate.l")`.
+   two compilers disagree -- `(look "free/fuzz.l")`, `(look "free/mutate.l")`.
    `(judge "PROG")` grades a candidate on a ladder (parses / runs / hangs /
    host-vs-love0 agree) and returns two lenses: `reward` (high = a correct,
    portable program) and `bug` (high = an interesting divergence or crash to
@@ -66,8 +66,8 @@ isolated binary does. when they differ, the binary wins.
 
 ## improving this brief
 
-this brief is `port/inle/brief.md` -- a tree file. if you learn something a
-future pilot needs, `(lay "port/inle/brief.md" ...)` it in and gate the change
+this brief is `free/brief.md` -- a tree file. if you learn something a
+future pilot needs, `(lay "free/brief.md" ...)` it in and gate the change
 like any other. the system rewrites its own prompt under the same law it
 rewrites its own compiler. that is the point: the crew drives the ship to write
 the ship.

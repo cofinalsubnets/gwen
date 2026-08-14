@@ -2,7 +2,7 @@
 ; loop (propose -> grade -> keep/revert); this makes the proposal a real MODEL
 ; PATCH -- ask claude for the new contents of a file, hand it to drive as
 ; (path body). load after judge/serve/drive:
-;   out/host/dock -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -l port/inle/patch.l -e "(dock 7620)"
+;   out/host/dock -l free/judge.l -l free/serve.l -l free/drive.l -l free/patch.l -e "(dock 7620)"
 ;   > (improve "add a `double` helper to the prelude" "love/prel.l")   ; one guarded iteration
 ;
 ; SAFE BY CONSTRUCTION: the model only ever proposes a file body; drive.l applies

@@ -193,8 +193,8 @@
    ; object declares, which IS this tiling -- so a holo-linked board owes no script
    ; at all. the three thumb seats left that way; the two kernel ones stay while
    ; KLINK=lld remains the comparison lane and ld.lld still needs telling.
-   mx-seats '(("port/inle/x86_64/x86_64.lds"    lean 8)
-              ("port/inle/aarch64/aarch64.lds"  lean 8))
+   mx-seats '(("free/x86_64/x86_64.lds"    lean 8)
+              ("free/aarch64/aarch64.lds"  lean 8))
    (mx-stride cls) (: (go l) (? (! (two? l)) (scare 'mx-stride cls)
                                  (: r <l (? (id? <r cls) <>r (go >l))))
                       (go mx-strides))

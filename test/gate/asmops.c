@@ -5,7 +5,7 @@
 // which is what proves the templates encode to what they say rather than to
 // something that merely assembled.
 //
-// this file is deliberately NOT under port/inle/<a>/ -- kernel.mk globs that
+// this file is deliberately NOT under free/<a>/ -- kernel.mk globs that
 // directory, and a probe living there would join the kernel build.
 #include <stdint.h>
 #include "asmops.h"

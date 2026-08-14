@@ -165,7 +165,7 @@ static inline void k_cpuid(uint32_t leaf, uint32_t *b, uint32_t *c, uint32_t *d)
 #endif
   *b = rb; *c = rc; *d = rd; }
 
-// --- SVM, the AMD-V lane (port/inle/x86_64/svm.c) ---------------------
+// --- SVM, the AMD-V lane (free/x86_64/svm.c) ---------------------
 // vmrun/vmload/vmsave take the VMCB's PHYSICAL address in rax and name no
 // operand on holo's surface; AT&T names %rax and LLVM prints it back bare, so
 // the two halves disassemble alike.
@@ -222,7 +222,7 @@ static inline void k_vmload(uint64_t vmcb_pa) {
 static inline void k_stgi(void) { asm volatile ("stgi" ::: "memory"); }
 static inline void k_clgi(void) { asm volatile ("clgi" ::: "memory"); }
 
-// --- VMX, the Intel lane (port/inle/x86_64/vmx.c) ---------------------
+// --- VMX, the Intel lane (free/x86_64/vmx.c) ---------------------
 // Nothing here is register-contracted the way SVM's ops are: vmxon, vmclear and
 // vmptrld take a MEMORY operand holding a physical address. Both dialects spell
 // those three the SAME way, with no #ifdef between them -- mooncc grew the "m"

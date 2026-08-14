@@ -1188,7 +1188,7 @@ static lvm(lvm_procseat) {
   Sp += 3; ai_musttail return Next(1); }
 
 // --- rung 5: the disk -- the block door love's filesystem (lib/fat.l) rides.
-// the driver is port/inle/blk.c (virtio-blk, polled, synchronous); DMA rides
+// the driver is free/blk.c (virtio-blk, polled, synchronous); DMA rides
 // the love string's own bytes -- heap memory, and nothing allocates between
 // post and completion, so the collector cannot move the buffer under the device.
 // (disk _)         -> the sector count, 0 when no disk: presence by the green.
@@ -1229,7 +1229,7 @@ static lvm(lvm_disk_write) {
   Sp[1] = k_disk_write(Sp[0], Sp[1]);
   Sp += 1; ai_musttail return Next(1); }
 
-// --- the SVM spike (x86_64 only; port/inle/x86_64/svm.c, doc/svm.md). (svm ())
+// --- the SVM spike (x86_64 only; free/x86_64/svm.c, doc/svm.md). (svm ())
 // is the capability and (svm-run ()) runs one guest, answering (exitcode rax
 // rip) or (). Nothing else in the kernel asks for a guest yet: the whole job of
 // these two rows is to prove that a guest can run and that the exit lands back
@@ -1267,7 +1267,7 @@ static lvm(lvm_svm_run) {
   Unpack(g);
   ai_musttail return Next(1); }
 
-// ..and its Intel twin (port/inle/x86_64/vmx.c, doc/vmx.md). (vmx-run ())
+// ..and its Intel twin (free/x86_64/vmx.c, doc/vmx.md). (vmx-run ())
 // answers FOUR numbers where the SVM door answers three: the last is the
 // VM-instruction error, which is the only thing a refused entry has to say and
 // is worth carrying out to where a human reads it.

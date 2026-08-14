@@ -24,7 +24,7 @@ the nom is not in the book and the file skips with a word.
 know about. That is the whole reason the spike is ~160 lines: the property being tested turned out
 to be free on this vendor.
 
-It also cost nothing structural. `port/inle/x86_64/*.c` is wildcarded by `kernel.mk`, so the file
+It also cost nothing structural. `free/x86_64/*.c` is wildcarded by `kernel.mk`, so the file
 joined the build with no makefile edit; the guest's pages ride a love string's own bytes (blk.c's
 DMA trick, safe for the same reason — nothing allocates between the carve and the `vmrun`, so the
 collector cannot move the VMCB out from under the CPU); and there is no new global anywhere.
@@ -65,7 +65,7 @@ them, which is the checklist for the next one:
 * `crew/holo/holo.l`'s `ir-arity` — **an op absent here is `bad-op` at bake time**, before the
   emitter table is ever consulted. This is the row that is easy to forget.
 * `crew/holo/x64.l`'s emitter table, and `test/holo/golden.l` to freeze the bytes.
-* `port/inle/x86_64/asmops.h`, both dialects, plus a call in `test/gate/asmops.c` — and
+* `free/x86_64/asmops.h`, both dialects, plus a call in `test/gate/asmops.c` — and
   `asmops.sh`'s x64 filter, which is a **whitelist** of privileged mnemonics: an op missing from
   it reads as "emitted no privileged instruction" rather than as an unknown op.
 

@@ -1,6 +1,6 @@
 ; quay.l -- the xterm-256 palette, laid as C through clay (crew/quay/xterm256.h).
 ; the recipe is xterm's own: 16 classics, a 6x6x6 cube, a 24-step grey ramp. it was
-; written TWICE -- host/cb.c's xpal and port/inle/kmain.c's palette -- each a mutable
+; written TWICE -- host/cb.c's xpal and free/kmain.c's palette -- each a mutable
 ; global a seat filled at boot from a copy of these same three loops. laid here it is
 ; one .rodata table both read, and a cell means the same pixels on a framebuffer and
 ; in a window BY CONSTRUCTION rather than by two recipes agreeing.
