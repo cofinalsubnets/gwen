@@ -17,6 +17,8 @@
 ; ⚠ EDIT THIS FILE, NOT nifs.h. `make test_clay` regenerates it and fails on drift.
 ; ⚠ nifs.h is COMMITTED and no make rule depends on this file: a new row builds clean and
 ; gates GREEN while its nom is still missing from the book. `make mx` is the refresh.
+; ⚠ and a MERGE drifts them apart with no conflict -- git merges the artifact and its source
+; independently, so a branch that adds a lay from a roster missing your row lands both halves.
 (:
    ; clay is a module: `use` splices it, so clay-show / clay-ok? -- and the el/join it
    ; stands on -- all read bare. no accessor, and it has to come first.
