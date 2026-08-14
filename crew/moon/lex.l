@@ -117,6 +117,12 @@
            (hasll? i j) 'ullnum
            (hasl? i j || (4294967296 <= v)) 'ulnum
            'unum)
+       ; C11 6.4.3p2: a UCN may NOT name a basic-set character (short identifier under
+       ; 00A0, bar $ @ `), nor a surrogate, nor anything past the last code point. So
+       ; a UCN naming 'A' is a constraint violation, not a long way to spell it --
+       ; gcc 13 refuses it where newer ones take C23's relaxation.
+       (ucnok? v) ?((v = 36) || (v = 64) || (v = 96) ||
+                    ((160 <= v) && (v <= 1114111) && !((55296 <= v) && (v <= 57343))))
        (escv d) (? (d = 110) 10 (d = 116) 9 (d = 114) 13 (d = 97) 7 (d = 98) 8            ; \n \t \r \a \b
                    (d = 102) 12 (d = 118) 11 (d = 48) 0 (d = 92) 92                       ; \f \v \0 backslash
                    (d = 34) 34 (d = 39) 39 (d = 63) 63 (d = 101) 27 ())                   ; \" \' \? \e
@@ -134,6 +140,17 @@
                                            `(v m))
                                (hx (k + 1) 0))
                             ())
+                        ; \uXXXX / \UXXXXXXXX (C99 6.4.3): EXACTLY 4 or 8 hex digits, a short
+                        ; run refusing rather than taking what it found. the THIRD element
+                        ; marks it a UCN -- it names a code POINT, so a narrow string owes the
+                        ; utf-8 encoding of it where \xHH lays the one byte it named.
+                        ((d = 117) || (d = 85))
+                         (: w (? (d = 117) 4 8)
+                            (uc m v cnt) (? (cnt = w) (? (ucnok? v) `(v m 1) ())
+                                            ((m < n) && hexd? (src m))
+                                             (uc (m + 1) (+ (* v 16) (hexv (src m))) (cnt + 1))
+                                            ())
+                            (uc (k + 1) 0 0))
                         (: v (escv d) (? (charm? v) `(v (k + 1)) ()))))
        ; the body of a string-shaped literal, from qi (after the opening quote) to the
        ; closing `term` -> (content endpos) | (). one lane under the narrow, wide and
@@ -157,7 +174,9 @@
                         (c2 = 10) ()
                         ((c2 = 92) && ((e + 1) < n))
                          (: r (escseq (e + 1))
-                            (? (two? r) (: _ (? wide (utf8put sink <r) (put sink <r)) (eat <>r)) ()))
+                            ; ⚠ a UCN (two? >>r) encodes even in a NARROW string: gcc lays
+                            ; "ä" as two utf-8 bytes, where "\xE4" is the one byte E4
+                            (? (two? r) (: _ (? (wide || two? >>r) (utf8put sink <r) (put sink <r)) (eat <>r)) ()))
                         ; a stop `run` made that none of the above claims: one byte,
                         ; then on. the trailing \ lands here, and so would any future
                         ; stop -- which is what keeps a widened `run` from looping.
@@ -227,8 +246,11 @@
                  (: k (j3 + 1)
                     (? ((k < n) && member? (src k) '(102 70 108 76)) (k + 1) k)))
            dxp (exp - fd)
+           ; C11 6.4.4.2: an f/F suffix makes the constant a FLOAT, not a double kept
+           ; at 53 bits. the 4th element reports it; the caller picks the kind.
+           fsu (? (isflo && (j2 < n) && member? (src j2) '(102 70)) 1 0)
            val (? isflo (dec2flo mant dxp) iv)
-           `(j4 (? im 'imag isflo) val))
+           `(j4 (? im 'imag isflo) val fsu))
        ; -- hex literals: 0x integer (0xff), OR a hex FLOAT 0x H.H p [+-] D (a binary
        ; exponent, base 2): 0x1.0p-53, 0x1p4, 0x.8p1. i points at the '0'. -> (endj isflo? value). --
        (hxrun j v nd) (? ((j < n) && hexd? (src j)) (hxrun (j + 1) ((* 16 v) + hexv (src j)) (nd + 1)) `(j v nd))
@@ -263,7 +285,7 @@
                  val (? (bexp < 0) (dec2flo (* mant (ipow 5 (0 - bexp))) bexp)
                         (dec2flo (* mant (ipow 2 bexp)) 0))
                  j3 (? ((j2 < n) && member? (src j2) '(102 70 108 76)) (j2 + 1) j2)
-                 `(j3 1 val))))
+                 `(j3 1 val (? ((j2 < n) && member? (src j2) '(102 70)) 1 0)))))
        (go i line acc)
         (? (n <= i) `(1 (rev acc))
            (: c (src i)
@@ -315,7 +337,7 @@
                                    (go j line (`('num v line () (snip src i j)) >< acc)))))
                  ((c = 48) && ((i + 1) < n) && ((src (i + 1) = 120) || (src (i + 1) = 88)))        ; 0x / 0X hex (int or float)
                   (: r (hexlit i)
-                     k (? <>r 'flo (ukind i <r <>>r ()))   ; a u/U in the suffix run marks it UNSIGNED (1U / 1ULL)
+                     k (? <>r (? <>>>r 'flof 'flo) (ukind i <r <>>r ()))   ; a u/U in the suffix run marks it UNSIGNED (1U / 1ULL)
                      (go <r line (`(k <>>r line () (snip src i <r)) >< acc)))
                  ((c = 48) && ((i + 2) < n) && ((src (i + 1) = 98) || (src (i + 1) = 66)) &&
                   ((src (i + 2) = 48) || (src (i + 2) = 49)))                                            ; 0b / 0B binary
@@ -332,7 +354,7 @@
                   (: r (flolit i)                        ; a digit run, or .digit -- integer or float
                      j2 (? <>r <r (skipsuf <r))    ; an integer eats its u/U/l/L suffix
                      k (? (id? <>r 'imag) 'iflo    ; the imaginary float (1.0fi): its own kind
-                          <>r 'flo (ukind i j2 <>>r 1))
+                          <>r (? <>>>r 'flof 'flo) (ukind i j2 <>>r 1))
                      (go j2 line (`(k <>>r line () (snip src i j2)) >< acc)))
                  ; a prefixed literal: the kind carries the width (L -> 'wstr, u -> 'str16,
                  ; U -> 'str32; u8 stays narrow), the value is canonical UTF-8, the

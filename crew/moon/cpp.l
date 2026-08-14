@@ -12,11 +12,20 @@
 ; directives: #define (object + function, # stringize, ## paste, ... variadic
 ; __VA_ARGS__), #undef, #if/#ifdef/#ifndef/#elif/#else/#endif (with defined and
 ; an integer constant-expression evaluator, undefined names -> 0), #include,
-; #error, #pragma/#line (ignored -- except #pragma push_macro/pop_macro, which
-; save and restore a definition). predefined __LINE__ __FILE__ __STDC__.
+; #error, #line (it MOVES the reported line; the file operand is dropped),
+; #pragma (ignored -- except push_macro/pop_macro, which save and restore a
+; definition). predefined __LINE__ __FILE__ __STDC__.
 ; adjacent string literals concatenate (phase 6). fenced: _Pragma, __COUNTER__,
 ; the GNU ,##__VA_ARGS__ comma elision, #if with character constants.
 (:
+   ; ⚠ AT THE HEAD, and they have to be: love0's compiler is single-pass and folds a
+   ; pure global at each definition's own compile, so one of these bound mid-list reads
+   ; as `;; missing m64` when the #if evaluator below is compiled. The default love
+   ; takes it either way, which is exactly why it must be written down -- only the
+   ; mooncc0 bake (love0's lane) fails, and it fails at the bake, not at the edit.
+   m64 18446744073709551616                        ; 2^64: #if arithmetic is 64-bit (C11 6.10.1)
+   h64 9223372036854775808                         ; 2^63: intmax's top, so the sign boundary
+   b32 4294967296                                  ; 2^32: the limb cbit splits on
    ; -- token parts (a clex token is (kind val line); expansion adds a hideset) --
    (kof t) <t
    (vof t) <>t
@@ -29,6 +38,16 @@
    ; where the value IS the spelling. ⚠ parse reuses this slot once cpp is done.
    (sof t) (? (4 < tally t) <>>>>t ())
    (tok k v l) `(k v l)
+   ; -- #line (C11 6.10.4) -- the delta rides `macs`, the one state already threaded
+   ; through every arm of cppgo, so no signature moves. applied where active tokens
+   ; accumulate, which is once; __LINE__ and a parse gripe both read (lof t) and so
+   ; take it for free. ⚠ REPLACE the line, never rebuild with tok: a token may carry
+   ; a 5th element (sof, the spelling # owes) and a rebuild would drop it.
+   (lndel macs) (: d (peep macs 'lndelta 0) (? (charm? d) d 0))
+   (lnbump d t) (<t >< (<>t >< ((<>>t + d) >< >>>t)))
+   (lnshift macs l)
+    (: d (lndel macs)
+       (? (d = 0) l (: (go k) (? !(two? k) () (lnbump d <k >< go >k)) (go l))))
    ; -- include markers (doc/moon-diag.md rung 2) -- an #include splices the
    ; header's OWN line numbering into the one flat output stream, so a line
    ; number alone can't say which file it is (and isn't monotone across the
@@ -49,7 +68,7 @@
                 (go l ()))
 
    ; -- the spelling of a token, for ## paste and # stringize --
-   numks '(num unum ulnum llnum ullnum flo iflo)
+   numks '(num unum ulnum llnum ullnum flo flof iflo)
    (spell t) (: k (kof t) s (sof t)
                 (? (0 < tally s) s                            ; the spelling the lexer kept
                    (member? k numks) (show (vof t))           ; ..or a cpp-minted decimal
@@ -204,17 +223,59 @@
                       r2 (zero-ids r1)
                       (ceval r2))
 
-   ; a tiny precedence-climbing evaluator over cpp number tokens -> integer.
+   ; -- #if's value model (C11 6.10.1) -- every operand has type intmax_t or
+   ; uintmax_t, so a value is a 64-bit BIT PATTERN plus a signedness, carried as
+   ; (v u) with v in [0,2^64). ⚠ none of this falls out of love's integers, which
+   ; are exact and unbounded: `1UL - 2` must WRAP to a huge unsigned, not answer -1.
+   (w64 x) (: r (x - (m64 * (x // m64))) (? (r < 0) (r + m64) r))
+   (cv v u) `((w64 v) (? u 1 0))
+   (cvv p) <p
+   (cvu p) <>p
+   (csg p) (: v <p (? ((cvu p) || (v < h64)) v (v - m64)))   ; the value as C reads it
+   ; ⚠ TRUTH IS `!= 0`, never `0 <`: reading it as positive made every negative #if
+   ; take the wrong arm in silence -- `#if -1` was FALSE, and so was `#if -1 && 1`.
+   (ctrue p) (? (0 = <p) 0 1)
+   ; ⚠ love's bit ops answer NOTHING on a big, and every pattern past the fixnum is
+   ; one -- so split into 32-bit limbs, which bigs do take, and recombine. << and >>
+   ; route around the same hole through multiply and divide.
+   (cbit fn x y) (: xh (x // b32) yh (y // b32)
+                    (((fn xh yh) * b32) + fn (x - (xh * b32)) (y - (yh * b32))))
+   (cru a b) (? ((cvu a) || (cvu b)) 1 0)          ; the usual arithmetic conversions, one rank
+   (cbin f a b) (cv (f (cvv a) (cvv b)) (cru a b)) ; + - * and the bitwise trio: two's complement is blind to sign
+   (cabs x) (? (x < 0) (0 - x) x)
+   (ctdiv a b) (: q ((cabs a) // (cabs b)) (? ((a < 0) = (b < 0)) q (0 - q)))    ; C truncates toward zero
+   (cdiv a b) (: va (cvv a) vb (cvv b) u (cru a b)
+                 (? (vb = 0) (cv 0 u)              ; a divide by zero is UB; answer 0 rather than raise
+                    u (cv (va // vb) 1)
+                    (cv (ctdiv (csg a) (csg b)) 0)))
+   (cmod a b) (: va (cvv a) vb (cvv b) u (cru a b)
+                 (? (vb = 0) (cv 0 u)
+                    u (cv (va - ((va // vb) * vb)) 1)
+                    (: x (csg a) y (csg b) (cv (x - ((ctdiv x y) * y)) 0))))
+   ; ⚠ a shift takes the LEFT operand's type -- no conversion pairs the two here
+   (cshift a b left)
+    (: p (: k (cvv b) (? (64 <= k) 0 (k 2)))       ; 2**k, and a shift past the word is 0
+       (? (p = 0) (cv 0 (cvu a))
+          left (cv ((cvv a) * p) (cvu a))
+          ((cvu a) || (0 <= csg a)) (cv ((cvv a) // p) (cvu a))
+          (: s (csg a) (cv (0 - (((0 - s) + p - 1) // p)) 0))))   ; arithmetic: floor, gcc's answer
+   (ccmp f a b) (: u (cru a b)
+                   (cv (? (f (? u (cvv a) (csg a)) (? u (cvv b) (csg b))) 1 0) 0))
+
+   ; a tiny precedence-climbing evaluator over cpp number tokens -> a (v u) value.
    (cprim ts)
-    (? !(two? ts) `(0 ())
+    (? !(two? ts) `((cv 0 0) ())
        (: t <ts
-          (? (member? (kof t) '(num unum ulnum llnum ullnum)) `((vof t) >ts)
+          (? (member? (kof t) '(num unum ulnum llnum ullnum))
+              ; a U suffix says unsigned, and so does a value past intmax's top --
+              ; 0xffffffffffffffff has no signed type to land in (C11 6.4.4.1)
+              `((cv (vof t) (member? (kof t) '(unum ulnum ullnum) || (h64 <= vof t))) >ts)
              (pv? t "(") (: r (ccond >ts) (? (two? <>r && pv? <<>r ")") `(<r ><>r) r))
-             (pv? t "!") (: r (cprim >ts) `((? (nil? <r) 1 0) <>r))
-             (pv? t "~") (: r (cprim >ts) `(((0 - <r) - 1) <>r))
-             (pv? t "-") (: r (cprim >ts) `((0 - <r) <>r))
+             (pv? t "!") (: r (cprim >ts) `((cv (? (ctrue <r) 0 1) 0) <>r))
+             (pv? t "~") (: r (cprim >ts) `((cv ((m64 - 1) - (cvv <r)) (cvu <r)) <>r))
+             (pv? t "-") (: r (cprim >ts) `((cv (0 - (cvv <r)) (cvu <r)) <>r))
              (pv? t "+") (cprim >ts)
-             `(0 >ts))))
+             `((cv 0 0) >ts))))
    (clevel sub ops ts)
     (: r (sub ts)
        (go v rest) (: t (? (two? rest) <rest ())
@@ -224,39 +285,38 @@
        (go <r <>r))
    (cassoc k v ops) (: (go l) (? !(two? l) () ((<<l = k) && (<><l = v)) <>><l (go >l))
                        (go ops))
-   (cmul ts) (clevel cprim `(`('p "*" (\ a b (* a b))) `('p "/" (\ a b (? (b = 0) 0 (// a b)))) `('p "%" (\ a b (? (b = 0) 0 (a - (* (// a b) b)))))) ts)
-   (cadd ts) (clevel cmul `(`('p "+" (\ a b (a + b))) `('p "-" (\ a b (a - b)))) ts)
-   ; ⚠ love's shifts answer NOTHING on a big, and an unsigned 64-bit literal IS one
-   ; (18446744073709551615 is past the word) -- so `#if ULONG_MAX >> 63 == 1`, the
-   ; idiom every portable header uses to ask a type's width, read false and took the
-   ; #error arm. a non-negative big shifts by divide/multiply, which is what an
-   ; unsigned shift MEANS. (the same hole is still open for & | ^ on a big.)
-   (cshl ts) (clevel cadd `(`('p "<<" (\ a b (? (big? a && (0 <= a)) (* a (b 2)) (<< a b))))
-                            `('p ">>" (\ a b (? (big? a && (0 <= a)) (// a (b 2)) (>> a b))))) ts)
-   (crel ts) (clevel cshl `(`('p "<" (\ a b (? (a < b) 1 0))) `('p "<=" (\ a b (? (a <= b) 1 0)))
-                            `('p ">" (\ a b (? (b < a) 1 0))) `('p ">=" (\ a b (? (b <= a) 1 0)))) ts)
-   (ceq ts) (clevel crel `(`('p "==" (\ a b (? (a = b) 1 0))) `('p "!=" (\ a b (? (a = b) 0 1)))) ts)
-   (cband ts) (clevel ceq `(`('p "&" (\ a b (& a b)))) ts)
-   (cbxor ts) (clevel cband `(`('p "^" (\ a b (^ a b)))) ts)
-   (cbor ts) (clevel cbxor `(`('p "|" (\ a b (| a b)))) ts)
+   (cmul ts) (clevel cprim `(`('p "*" (\ a b (cbin (\ x y (* x y)) a b)))
+                             `('p "/" cdiv) `('p "%" cmod)) ts)
+   (cadd ts) (clevel cmul `(`('p "+" (\ a b (cbin (\ x y (x + y)) a b)))
+                            `('p "-" (\ a b (cbin (\ x y (x - y)) a b)))) ts)
+   (cshl ts) (clevel cadd `(`('p "<<" (\ a b (cshift a b 1))) `('p ">>" (\ a b (cshift a b 0)))) ts)
+   (crel ts) (clevel cshl `(`('p "<" (\ a b (ccmp (\ x y (x < y)) a b)))
+                            `('p "<=" (\ a b (ccmp (\ x y (x <= y)) a b)))
+                            `('p ">" (\ a b (ccmp (\ x y (y < x)) a b)))
+                            `('p ">=" (\ a b (ccmp (\ x y (y <= x)) a b)))) ts)
+   (ceq ts) (clevel crel `(`('p "==" (\ a b (ccmp (\ x y (x = y)) a b)))
+                           `('p "!=" (\ a b (ccmp (\ x y (? (x = y) 0 1)) a b)))) ts)
+   (cband ts) (clevel ceq `(`('p "&" (\ a b (cbin (\ x y (cbit (\ p q (& p q)) x y)) a b)))) ts)
+   (cbxor ts) (clevel cband `(`('p "^" (\ a b (cbin (\ x y (cbit (\ p q (^ p q)) x y)) a b)))) ts)
+   (cbor ts) (clevel cbxor `(`('p "|" (\ a b (cbin (\ x y (cbit (\ p q (| p q)) x y)) a b)))) ts)
    (cland ts) (: r (cbor ts)
                  (go v rest) (? (two? rest && pv? <rest "&&")
-                                (: r2 (cbor >rest) (go (? ((0 < v) && (0 < <r2)) 1 0) <>r2))
+                                (: r2 (cbor >rest) (go (cv (? ((ctrue v) && ctrue <r2) 1 0) 0) <>r2))
                                 `(v rest))
                  (go <r <>r))
    (clor ts) (: r (cland ts)
                 (go v rest) (? (two? rest && pv? <rest "||")
-                               (: r2 (cland >rest) (go (? ((0 < v) || (0 < <r2)) 1 0) <>r2))
+                               (: r2 (cland >rest) (go (cv (? ((ctrue v) || ctrue <r2) 1 0) 0) <>r2))
                                `(v rest))
                 (go <r <>r))
    (ccond ts) (: r (clor ts)
                  (? (two? <>r && pv? <<>r "?")
                     (: rt (ccond ><>r)
                        (? (two? <>rt && pv? <<>rt ":")
-                          (: re (ccond ><>rt) `((? (0 < <r) <rt <re) <>re))
+                          (: re (ccond ><>rt) `((? (ctrue <r) <rt <re) <>re))
                           r))
                     r))
-   (ceval ts) <(ccond ts)
+   (ceval ts) (ctrue <(ccond ts))                  ; the BIT -- docond only ever wanted truth
 
    ; -- parse a #define body into a macro entry --
    (defmacro macs line-toks)                        ; line-toks: after the leading (# define)
@@ -361,9 +421,14 @@
                  dir (? (two? >line) (dirname <>line) ())   ; if/else are keywords; the rest ids
                  dirk (? (two? >line) (kof <>line) ())      ; ..and its kind, which is how a line marker is known
                  body >>line
+                 ; ⚠ a DIRECTIVE line never reaches the accumulator below, so the
+                 ; #line shift lands here or `#if __LINE__` reads the physical line.
+                 ; `line` itself stays raw -- the #line arm computes its delta from it.
+                 sline (lnshift macs line)
+                 sbody (? (two? sline) >>sline ())
                  (? (member? dir '("if" "ifdef" "ifndef" "elif" "else" "endif"))
-                     (: cond2 (docond dir body line macs cond)
-                        (? (id? cond2 'err) (gripeat line ("#" + dir + " without #if"))   ; unbalanced -- FATAL, not empty
+                     (: cond2 (docond dir sbody sline macs cond)
+                        (? (id? cond2 'err) (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- FATAL, not empty
                            (cppgo rest macs cond2 () out1 incf)))
                     !(condactive cond) (cppgo rest macs cond () out1 incf)      ; skipped: ignore non-cond directives
                     (dir = "define") (: _ (defmacro macs body) (cppgo rest macs cond () out1 incf))
@@ -373,7 +438,7 @@
                     ; its own words, and "#error directive" throws that away -- pdclib's
                     ; config prints which type it could not match, and the bare form left
                     ; 232 refused files with nothing to read.
-                    (dir = "error") (gripeat line ("#error: " + spellcat body))
+                    (dir = "error") (gripeat sline ("#error: " + spellcat body))
                     ; a #warning is not fatal to gcc and must not be to us: glibc
                     ; and gnulib deprecate through it, mid-header, on purpose. it
                     ; says the text unlocated -- the driver's channel is for fatal
@@ -383,6 +448,13 @@
                         (cppgo rest macs cond () out1 incf))
                     ((dir = "pragma") && pragmac? body)
                      (: _ (dopragmac macs body) (cppgo rest macs cond () out1 incf))
+                    ; #line N ["file"]: the NEXT line becomes N, so a token at
+                    ; physical P reports P + (N - L - 1). ⚠ the file operand is
+                    ; parsed and DROPPED -- __FILE__ is the TU's name throughout.
+                    ; a non-literal operand falls to the ignore below, as before.
+                    ((dir = "line") && two? body && (kof <body = 'num))
+                     (: _ (pin macs 'lndelta (vof <body - lof <line - 1))
+                        (cppgo rest macs cond () out1 incf))
                     ; ignored on purpose, and each is one gcc also accepts: a bare
                     ; `#` is the null directive (C11 6.10.7), and a numeric one is
                     ; gcc -E's line marker.
@@ -395,9 +467,9 @@
                     ; name it owed is simply absent (C11 6.10p1 wants the
                     ; diagnostic). #include_next lands here too: unimplemented, and
                     ; now it says so rather than dropping a header.
-                    (gripeat line ("invalid preprocessing directive #" + spellcat `(<>line)))))
+                    (gripeat sline ("invalid preprocessing directive #" + spellcat `(<>line)))))
              !(condactive cond) (cppgo rest macs cond buf out incf)                    ; skipped code: drop
-             (cppgo rest macs cond (revcat line buf) out incf))))                       ; active code: accumulate (reversed)
+             (cppgo rest macs cond (revcat (lnshift macs line) buf) out incf))))         ; active code: accumulate (reversed)
 
    ; a directive that manages the conditional stack. dir keyword symbols. a frame
    ; is (active taken line), the line being the #if's own -- an #elif or #else
@@ -451,7 +523,12 @@
                       ; accumulator, so a link onto it appends in source order:
                       ; the 'in mark lands before the header's tokens, the 'out
                       ; mark onto (rev done) lands after them.
+                      ; ⚠ the #line delta is the header's OWN: macs is shared, so save
+                      ; it across the recursion or a header's #line follows the return
+                      sv (lndel macs)
+                      _ (pin macs 'lndelta 0)
                       done (cppgo itoks macs () () (fmin name >< out) chf)       ; recurse with FRESH cond; shares macs; accumulates
+                      _ (pin macs 'lndelta sv)
                       ; a nested failure PROPAGATES up, wearing the file it happened
                       ; in (never wipe `out` for it, and never answer () -- an empty
                       ; answer masks as an empty include, and the ancestor doinc then

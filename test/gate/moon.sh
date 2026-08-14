@@ -80,6 +80,55 @@ for f in test/cc/*.c; do
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
 done
 
+# -------------------------------- C11 conditional features (6.10.8.3), per target
+# gcc cannot be the oracle here -- it HAS atomics -- so these are ours alone, and
+# each row must track the parity table: a claimed absence we do not have sends a
+# portable source down a fallback for nothing.
+c11feat() {                        # TGT MACRO want(1 present | 0 absent)
+  if [ "$3" = 1 ]; then b="#ifndef $2"; else b="#ifdef $2"; fi
+  printf '%s\n#error no\n#endif\nint m(void){return 0;}\n' "$b" > "$ho/.feat.c"
+  moonrun -c -t "$1" -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+    || fail "C11 feature macro $2 on $1 (want present=$3)"
+}
+for t in x64 arm64 riscv64 thumb2 thumb2sp thumb1; do
+  for mac in __STDC_NO_ATOMICS__ __STDC_NO_THREADS__ __STDC_UTF_16__ __STDC_UTF_32__; do
+    c11feat "$t" "$mac" 1
+  done
+  case $t in x64|arm64) c11feat "$t" __STDC_NO_VLA__ 0 ;; *) c11feat "$t" __STDC_NO_VLA__ 1 ;; esac
+  case $t in x64)       c11feat "$t" __STDC_NO_COMPLEX__ 0 ;; *) c11feat "$t" __STDC_NO_COMPLEX__ 1 ;; esac
+done
+# a TU that is ONLY a _Static_assert -- want answers the remainder, which is () at
+# EOF, and that read as "no `;` found". a failing assert must still refuse.
+printf '_Static_assert(1, "ok");' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 || fail "a TU of one _Static_assert"
+printf '_Static_assert(0, "boom");' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 && fail "a FAILING lone _Static_assert passed"
+
+# a UCN takes EXACTLY 4 (or 8) hex digits -- a short run must REFUSE, not take what
+# it found. test/cc/138 holds the well-formed side; only the refusals live here.
+# \134 is the backslash, written in octal so the sequence survives this file.
+# ..and C11 6.4.3p2 bars a UCN from naming a BASIC-SET character (under 00A0, bar
+# $ @ `), a surrogate, or anything past the last code point -- so A for 'A' is a
+# constraint violation, not a long spelling. gcc 13 refuses it; newer ones take C23's
+# relaxation, which is why the cross gcc caught this and the host one did not.
+for bad in '\134u00E' '\134U0001F60' '\134u' '\134uZZZZ' \
+           '\134u0041' '\134u0000' '\134u009F' '\134uD800' '\134uDFFF' '\134U00110000'; do
+  printf "char *s = \"$bad\";\nint m(void){return 0;}\n" > "$ho/.feat.c"
+  moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+    && fail "a malformed universal character name was accepted: $bad"
+done
+for ok in '\134u0024' '\134u0040' '\134u0060' '\134u00A0' '\134U0010FFFF'; do
+  printf "char *s = \"$ok\";\nint m(void){return 0;}\n" > "$ho/.feat.c"
+  moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+    || fail "a legal universal character name was refused: $ok"
+done
+
+# the freestanding header set is C11 4p6: these two were the ones we did not ship
+printf '#include <iso646.h>\n#include <stdalign.h>\nint m(void){return (1 and 2) + alignof(int);}\n' \
+  > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 || fail "iso646.h + stdalign.h"
+echo "mooncc: C11 conditional features track the parity table on all six targets"
+
 # --------------------------------------------- -fno-inline: real, and neutral
 # TWO halves, and both are the point: the flag must BITE (more functions reach
 # the object, always_inline included -- the driver's word outranks the source's)

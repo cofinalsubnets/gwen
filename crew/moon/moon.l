@@ -116,6 +116,16 @@
           'riscv64                        '("__riscv")
           ('thumb2 | 'thumb2sp | 'thumb1) '("__arm__" "__arm")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
+   ; C11's CONDITIONAL FEATURES (6.10.8.3) -- saying an absence out loud is what makes
+   ; it conforming rather than a hole, and lets a portable source pick its other lane.
+   ; ⚠ every row is TARGET-true: complex and VLAs each ride a subset (the parity table),
+   ; so claiming an absence we don't have would send a consumer down a fallback for
+   ; nothing. the UTF pair is the positive claim: u"" IS UTF-16, U"" UTF-32.
+   (featdefs tgt)
+    ('("__STDC_NO_ATOMICS__=1" "__STDC_NO_THREADS__=1"
+       "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
+     + (? (id? tgt 'x64) () '("__STDC_NO_COMPLEX__=1"))
+     + (? (member? tgt '(x64 arm64)) () '("__STDC_NO_VLA__=1")))
    ; the gcc-shaped predefine table (doc/moon-c-gaps: the predefine surface) --
    ; the <stdint>/<limits>/<float.h> family a library config reads instead of
    ; probing: pdclib, gnulib and musl typedef straight off these names. one
@@ -252,7 +262,7 @@
    ; stamped line (a gripe, __LINE__) is TRUE with no pay-back pass. an
    ; #include lexes fresh at its own line 1 either way.
    (cc-parse src is ds tgt nsi)
-    (: ds9 (archdefs tgt + stddefs tgt +               ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
+    (: ds9 (archdefs tgt + featdefs tgt + stddefs tgt +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
                  (? (id? tgt 'x64) ("__SIZEOF_INT128__=16" >< ds) ds))     ; x64 alone carries the wide pair (gen's d128 lane); love.c's limb seam reads it
        r (uread src)
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))

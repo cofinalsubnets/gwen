@@ -7,14 +7,54 @@ history.
 Everything below was probed against `out/host/mooncc`. The recipes are included — reproduce
 rather than trust, and re-verify any `parse.l`/`gen.l` anchor before editing.
 
-Probe recipe (a TU containing only a `_Static_assert` is its own quirk — see below — so add a
-trailing declaration):
+Probe recipe:
 
 ```sh
 printf 'int m(void){ return 0; }\n' >> q.c
 out/host/love wake out/host/mooncc.image mooncc \
   -c -t x64 -o /dev/null q.c
 ```
+
+---
+
+## is it a conforming implementation?
+
+Not yet, and the bar is worth stating exactly, because mooncc has answered
+**`__STDC_VERSION__ 201112L` since before any of C11 was in it** — that claim is the thing to
+make true or stop making.
+
+C11 §4 asks two things of a *freestanding* implementation: accept every strictly conforming
+program, and produce a **diagnostic** for every violation of a syntax rule or constraint. Nine
+headers come with it — `<float.h> <iso646.h> <limits.h> <stdalign.h> <stdarg.h> <stdbool.h>
+<stddef.h> <stdint.h> <stdnoreturn.h>`. All nine ship as of 2026-08-14 (`iso646.h` and
+`stdalign.h` were the two missing). **Hosted** conformance is a different arc entirely — it is
+a question about the C library, not the compiler (doc/moon-userland.md).
+
+Four of the biggest holes are not holes at all once declared, and that is now done: atomics,
+threads, complex and VLAs each have a `__STDC_NO_*` macro, and C11 counts an implementation
+that says so as conforming without them.
+
+What genuinely stands between here and freestanding C11, each row live above:
+
+- **`_Thread_local`** — the one absent keyword with **no** opt-out macro. `__STDC_NO_THREADS__`
+  excuses `<threads.h>` and not the storage class. A single-threaded freestanding
+  implementation can map it to plain static and be observationally right; that is the cheap
+  road, and it should be taken deliberately rather than by accident.
+- **universal character names in an identifier** — the literal half landed 2026-08-14; an
+  identifier still refuses, which is the remaining half of a C99-mandatory row.
+- **the `#line "file"` half** — the line half landed 2026-08-14, but the file operand is still
+  dropped; it wants `__FILE__` to stop being one name per TU first. (The `#if` evaluator landed
+  the same day, below.)
+- (the `f`-suffix row **landed 2026-08-14** — and the deeper bug under it, below.)
+- **block-scope `struct` tags**, and the two remaining small syntax rows. Neither is the
+  one-line widening the first two were: `switch (x) case 0: ;` wants the switch parser off its
+  `{`-at-the-root shape, and `int f(int), a;` wants `more`/`one` hoisted out of the top-level
+  dispatch's inner scope. Both are costed in the table.
+- **the diagnostic obligation**: a non-constant `_Static_assert` is let by today, which is a
+  constraint violation passing in silence — the one class §4 names outright.
+
+None of these is large on its own. The honest summary is that conformance here is a **ladder of
+small rungs, not a rewrite** — and that the ledger below is the ladder.
 
 ---
 
@@ -26,18 +66,16 @@ All of C89 passes. What remains is C99/C11/GNU.
 
 | construct | probe |
 |---|---|
-| `_Alignof` | `_Alignof(int)` |
-| `_Generic` | `_Generic(x, int: 1, default: 0)` |
-| `_Thread_local` | `_Thread_local int e;` — no TLS anywhere, so the refusal is honest |
+| `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
+| `_Thread_local` | `_Thread_local int e;` — no TLS anywhere, so the refusal is honest. ⚠ this one has **no** `__STDC_NO_*` macro: `__STDC_NO_THREADS__` excuses `<threads.h>` and nothing else |
+| a universal character name in an IDENTIFIER | `int \u00C5;` — the literal half landed 2026-08-14 (below); an identifier still refuses at lex, as does a raw UTF-8 one |
 | statement expressions | `({ … })` |
 | computed goto | `&&label`, `goto *p` |
 | plain `typeof` | `typeof(x) y;` — ⚠ only `__typeof` / `__typeof__` are recognized |
 | `asm goto` | costed below — the one refusal carrying an estimate |
 | a block-scope `struct` tag | `{ struct T { int z; }; }` inside a function — tags are file-scoped here, so an inner one collides with the outer |
-| a declarator list mixing a function and an object | `int f(int), a;` — two functions in one list is fine |
+| a declarator list mixing a function and an object | `int f(int), a;` — two functions in one list is fine, and `int a, f(int);` passes: it is the FUNCTION-FIRST order alone. `mproto` takes the comma continuation and answers `()` on a non-function declarator; the object lane below it already handles a mixed list (`regs` files the sigs, `vps` drops them), but `more`/`one` live in an inner scope the dispatch cannot reach, so the fix is to hoist them, not to widen a test |
 | a `case` label as a switch's whole body | `switch (x) case 0: ;` — a compound body is fine |
-| a `*` bound in an array parameter | `void f(int x[*])` — `[static 3]` and `[const 3]` both pass |
-| a function-typed parameter with a non-empty parameter list | `int f(int (int), int)` — `int f(int (), int)` passes |
 | `__attribute__((packed))` **before** a union tag | `union __attribute__((packed)) U { … }` — after the body it passes |
 | designated RANGE initializers | `[1 ... 5] = 9`, gcc's extension |
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
@@ -46,7 +84,7 @@ All of C89 passes. What remains is C99/C11/GNU.
 | a `##` paste with an empty operand and trailing tokens | `#define P(A,B) A ## B ; bob` |
 | a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
 
-The last twelve are what `test_cts` found (doc/moon.md); `test/gate/cts.sh` names the program
+The last ten are what `test_cts` found (doc/moon.md); `test/gate/cts.sh` names the program
 each one came from.
 
 ### what passes, for contrast
@@ -56,13 +94,29 @@ otherwise: designated initialisers (both `.field =` and `[i] =`), compound liter
 definitions, bitfields including compound assignment, flexible array members, variadic macros,
 `long long`, hex floats, anonymous unions, `restrict`, `static inline`, mixed declarations,
 `for`-scoped declarations, `_Static_assert` (including `&&`/`||`/`?:` in the constant),
+`_Generic` and `_Alignof` (landed 2026-08-14, below),
 string-literal concatenation, self-referential structs, enum trailing commas, multidimensional
 arrays, brace elision in nested initialisers, pointer-to-array declarators, functions returning
 function pointers, multi-character constants (`'ab'` is 0x6162, gcc's packing, signed at four
 chars), binary literals (`0b1010`, gcc's extension and C23's spelling), `__func__`, and
 `__typeof__` over locals, globals, struct members, dereferences and function names.
 
-Three of them carry an edge worth knowing:
+**`_Generic` and `_Alignof` landed 2026-08-14** (test/cc/136-c11.c, held to gcc). `_Generic`
+picks on the controlling expression's lvalue-converted type (`pdecay`) and lowers to the
+selected arm alone, so no other arm reaches gen — a call to an undefined function in one links
+clean. `_Alignof` answers `talign`, the door `playout` lays members with, so the operator
+cannot drift from the layout it describes; gcc's `__alignof__` rides the same lane and keeps
+its expression operand. ⚠ association matching is **structural over the resolved type**, so the
+qualifiers cc drops cannot separate two rows — `const int:` and `int:` read as one, where C11
+counts two.
+
+Four of them carry an edge worth knowing:
+
+- **`_Alignas`** is honored at **file scope only**, on the one door gcc's
+  `__attribute__((aligned(N)))` already used (`alignat?` → `ps 'aligns` → `cgdata`); both the
+  constant and the type-name operand (`_Alignas(double)`) work, and the `.o`'s section header
+  asks the linker for the same boundary. ⚠ on a **local or a struct member it is still
+  skipped in silence** — the row below.
 
 - **variable-length arrays** ride x64 and arm64 only; every other target says `no lane for a
   variable-length array on <tgt>`. ⚠ a VLA with an *initializer* refuses everywhere
@@ -75,17 +129,29 @@ Three of them carry an edge worth knowing:
   storage is the compound literal's — automatic inside a function where C says static duration,
   so a pointer kept past the frame dangles, and `wchar_t *p = L"x"` at file scope refuses on the
   static-clit row above. A mixed-prefix concatenation `u"a" U"b"` takes the first prefix where
-  gcc refuses, and universal character names `\uXXXX`/`\UXXXXXXXX` stay absent — the escape
-  refuses, loudly.
+  gcc refuses.
 - **`__extension__`** is a no-op at a declaration's head (file scope, block, member, before
   `typedef`) and as a cast-expression prefix, the typedef declarator's trailing attribute run
   skipping alongside — which is what opens `#include <pthread.h>`. gcc-refused spots like
   `int __extension__ x;` still refuse; ⚠ `sizeof(__extension__ T)` is accepted where gcc
   refuses, the one tolerance.
+- **universal character names landed 2026-08-14** in every literal face
+  (test/cc/138-ucn.c). ⚠ a UCN names a CODE POINT, not a byte, and that is the whole
+  trap: `"\u00E4"` in a **narrow** string is the two utf-8 bytes `C3 A4`, where
+  `"\xE4"` is the one byte `E4` — so `escseq` reports whether the escape was a UCN
+  and the narrow lane encodes on that. Exactly 4 (or 8) hex digits: a short run refuses
+  rather than taking what it found, matching gcc's *incomplete universal character name*.
+  C11 6.4.3p2's **validity rule** is enforced: a UCN may not name a basic-set character
+  (under `00A0`, bar `$ @ ` `), a surrogate, or anything past the last code point — so
+  `\u0041` for `A` refuses. ⚠ that rule was found by the **cross** gcc (13.2), which
+  refuses it where the newer host gcc takes C23's relaxation and says nothing: a
+  single-oracle check would have shipped the hole. ⚠ we also refuse past-`10FFFF` where
+  gcc only warns — a refusal, so it costs no right answer.
+  ⚠ an identifier spelled with one still refuses — the row above.
 
 ### the directives, and which are ignored on purpose
 
-`#pragma`, `#line`, `#ident`, `#sccs`, `#assert`, `#unassert`, a bare `#` (the null directive,
+`#pragma`, `#ident`, `#sccs`, `#assert`, `#unassert`, a bare `#` (the null directive,
 C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing — except
 **`#pragma push_macro("X")` / `pop_macro("X")`**, which save and restore the definition
 (gcc's semantics: a per-name stack, a saved-undefined pops back to undefined, a pop with
@@ -95,9 +161,14 @@ text and continues. **Everything else refuses** (C11 6.10p1) — the catch-all t
 an unknown directive let `#cmakedefine X 1` sail through, so an unconfigured template header
 compiled clean and the name it owed was simply absent.
 
-⚠ One of those ignores costs a right answer rather than a feature, so "on purpose" is the
-cheaper reading of it than the true one: **`#line` never moves the line number** a later
-diagnostic or `__LINE__` reports.
+**`#line` MOVES the line number** as of 2026-08-14 — `__LINE__` and every later diagnostic
+report the mapped line, matching gcc (test/cc/137-line.c). The delta rides `macs`, the one
+state already threaded through every arm of `cppgo`, so no signature moved; it is applied
+where active tokens accumulate, and again on a directive's own body, which is what makes
+`#if __LINE__` right. `doinc` saves and restores it, so a header's `#line` does not follow the
+return. ⚠ the **file operand is parsed and dropped**: `#line 700 "generated.y"` reports line
+700 of the *real* path, where gcc says `generated.y`. `__FILE__` is the TU's name throughout
+(cpp shares one macro table across includes), so the file half wants that lifted first.
 
 ⚠ `#include_next` refuses *because* it is unimplemented — ignoring it drops a header in silence,
 which is worse. doc/moon-userland.md carries when it becomes load-bearing.
@@ -126,6 +197,15 @@ Three deliberate deviations, all in the compiler's favor of honesty:
 - `__SIZEOF_INT128__` stays **x64-only** where real gcc also defines it on aarch64/riscv64 —
   only gen's x64 lane carries d128, and claiming it elsewhere invites code we refuse.
 
+**C11's conditional-feature macros landed 2026-08-14** (`featdefs`, moon.l; the gate sweeps all
+six targets). Saying an absence out loud is what makes it *conforming* rather than a hole, and
+it lets a portable source take its other lane instead of hitting a parse error:
+`__STDC_NO_ATOMICS__` and `__STDC_NO_THREADS__` everywhere, `__STDC_NO_COMPLEX__` off x64,
+`__STDC_NO_VLA__` off x64/arm64 — each row tracking the parity table below, because claiming an
+absence we do not have sends a consumer down a fallback for nothing. `__STDC_UTF_16__` and
+`__STDC_UTF_32__` are the positive twins: `u""` is UTF-16 and `U""` UTF-32, which is exactly
+what those two assert.
+
 A user `-D` lands after the table and wins. What remains absent is the exotic tail: the
 `__FLT16/32/64/128*` extended-float families, `__CHAR16/32_TYPE__`, decimal floats — nothing
 in the userland ladder reads them yet.
@@ -133,16 +213,10 @@ in the userland ladder reads them yet.
 Landing the table also made **`__LINE__` true**: the `-D` text used to skew it by its line
 count (nothing compensated). `clexat` now stamps the prepended lines `1-k..0` so the TU's own
 numbering starts at 1, and moon.l's `deskew` pay-back pass retired with the skew. `#line`
-still does not move it (the row above stands).
+moves it too now (the directive section above).
 
 ### the `_Static_assert` quirks
 
-- ⚠ **A translation unit containing ONLY a `_Static_assert` is a parse error**; adding any
-  declaration makes it compile. `want` answers the remaining token list, which is `()` when the
-  matched token was the last one, so `pstatic` cannot distinguish "consumed the final `;`" from
-  "no `;` found". The house-style fix is already written for the same situation in `tdeflist`
-  (*"the remainder may be EMPTY (a typedef at EOF)"*): peek for the `;`, then take the tail
-  unconditionally.
 - ⚠ **A failed static assert reports as `parse error near ;`.** The refusal is correct; the
   wording names the compiler's position rather than the program's fault. See doc/moon-diag.md.
 - **`cfold` is deliberately partial** (no floats, no comma, no address constants) and `pstatic`
@@ -188,6 +262,26 @@ rather than in a commit.
   side), and **`offsetof` still folds signed** where every other `sizeof` wears the unsigned
   coat.
 
+### an alignment ask on a LOCAL or a MEMBER is dropped in silence
+
+`_Alignas(64) char buf[8];` inside a function, and `__attribute__((aligned(N)))` on a local or
+a struct member, compile clean and align nothing — `alignat?` runs from `ptop` only, so it
+never sees a block-scope or member declaration, and `pquals` balance-skips the tokens on the
+way past. The classic use is the one that breaks: a 16-byte-aligned buffer for an SSE load.
+
+Costing the fix: the frame side is small — `nslot` is the one cell allocator and the offsets
+are its own arithmetic, so an aligned variant is a `aup` on the running high-water, and x64/
+AAPCS64 hand every frame a 16-aligned base, which covers every ask up to 16. What is not small
+is **threading the ask from parse to that allocator**: the align would ride the `('decl ..)`
+entry, and every positional consumer of a decl entry in `gen.l` moves with it — the same shape
+of cost `asm goto`'s surface row carries. Past 16 the frame must be realigned at run time, and
+that should refuse rather than land wrong.
+
+⚠ Until it lands the tree cannot use either spelling on a local, and neither can a header it
+compiles. A struct **member** is a second rung: `playout` computes a member's alignment from
+its type alone, and an over-aligned member also moves the tag's own alignment (`asalign`'s
+16+-guard, gen.l, is written for exactly that day).
+
 ### what the %f hunt actually found — and the trap in it
 
 ⚠ **`printf("%f", 1.23e12)` answering `9AB0000000000.000000` under a mooncc-built PDCLib is
@@ -206,24 +300,54 @@ wide (doc/moon.md, `calm?`) — and only visible once both builds ran the *same*
 
 Same build, same file family, still open: `strtod("-0.000123e+6")` does not answer -123.0.
 
-### an `f` suffix does not make a float constant
+### an `f` suffix, and A CAST TO float — both landed 2026-08-14
 
-Already filed (a literal keeps 53 bits in an expression). It now has a consumer that turns it
-into a wrong ANSWER rather than lost precision: PDCLib spells `INFINITY` as
-`(_PDCLIB_FLT_MAX * 2)`, which in mooncc multiplies in **double** to a finite 6.8e38, so
-`fmaxf(x, INFINITY) == INFINITY` is false and fdim/fmax/fmin all fail their own suites.
+Two bugs wearing one symptom, and the second was the real one. C11 6.4.4.2 makes an
+`f`-suffixed constant a **float**; ours kept 53 bits, so `sizeof(1.5f)` was 8 and
+`0.1f == 0.1` was **true**. The lexer now answers a distinct `'flof` kind (the suffix was
+being skipped and thrown away) and parse lowers it to `('cast float ..)`.
 
-### `#if` bit operations still die on a big
+That fixed the *type* and not the *value*, which exposed the one underneath:
 
-`>>` and `<<` handle a non-negative big now (`ULONG_MAX >> 63 == 1`, the idiom every portable
-header uses to ask a type's width, used to read false and take the `#error` arm). **`&`, `|`
-and `^` do not** — love's bit ops answer nothing on a big, so `#if (0xffffffffffffffffUL & 0xff)
-== 0xff` is false. Same root as the open item in the reader-bootstrap arc.
+⚠ **a cast to `float` never rounded.** gen keeps every float as a double in a register and
+narrows only at a **store** (`fstf`), so the cast lane's `(flo? tgt)` arm passed the value
+straight through — `(float)d == d` read true for an ordinary double **variable**, not just
+for a literal. The cast now round-trips `cvtsd2ss`/`cvtss2sd`, which is where the rounding
+becomes observable; both ops were already in the vocabulary and all six targets take it.
 
-And the evaluator is **signed throughout**: C11 says `#if` arithmetic runs in intmax/uintmax
-with a `U`-suffixed operand making the operation unsigned, so `#if 1UL - 2 < 0` must be false
-(the subtraction wraps to huge) — ours reads the values and answers true. Found writing the
-predefine table's t32 checker (`__UINT64_C(1) - 2 < 0`); no real header has tripped it yet.
+Held by test/cc/140-fsuffix.c. The old note here said the consumer was PDCLib's `INFINITY`
+spelled `(_PDCLIB_FLT_MAX * 2)` — ⚠ that reading was wrong twice over: PDCLib is not this
+tree's libc (`crew/moon/lib/nolibc/` is), and we do not define `INFINITY` at all. The real
+consumer is every `float` expression in the tree.
+
+### the `#if` evaluator — LANDED 2026-08-14, and one of its three bugs cost right answers
+
+`#if` arithmetic is intmax_t/uintmax_t (C11 6.10.1), so a value is a 64-bit **bit pattern plus
+a signedness** — `(v u)`, v in `[0,2^64)`. Love's integers are exact and unbounded, which is
+why none of this fell out for free. Three separate wrongs lived here, and the first is the one
+worth remembering:
+
+- ⚠ **truth was `0 <`, where C is `!= 0`** — so `#if -1` read **false**, and so did
+  `#if -1 && 1`, `#if -1 ? 1 : 0`, while `#if !(-1)` read true. Any header branching on a
+  negative constant took the wrong arm in silence. This was not in the ledger; the signedness
+  row is what led to it.
+- **no signedness at all**, so `1UL - 2` answered -1 where C wraps it to a huge unsigned, and
+  `-1 < 1U` read true where C reads false.
+- **`&`, `|`, `^` answered nothing on a big.** love's bit ops stop at the fixnum and every
+  pattern past 2^62 is a big, so `#if (0xffffffffffffffffUL & 0xff) == 0xff` was false.
+  `cbit` splits into 32-bit limbs, operates, and recombines — arithmetic, which bigs do take.
+  `<<`/`>>` had already routed around the same hole through multiply and divide.
+
+Held to gcc by test/cc/139-ifexpr.c, seventeen conditions across truth, signedness, the
+conversions, truncating division, arithmetic shift and the bitwise trio. ⚠ the one place gcc
+still says more: it *warns* on signed overflow in a `#if` (`0x7fffffffffffffff + 1`); we wrap
+silently and agree on the value.
+
+⚠ **The constants live at the HEAD of cpp.l's top-level `:` and must stay there.** love0's
+compiler is single-pass and folds a pure global at each definition's own compile, so one of
+them bound mid-list reads as `;; missing m64` — and only in the **mooncc0** bake, which is
+love0's lane. The default love takes it either way, so the edit looks clean and the build
+fails two targets later.
 
 ---
 
