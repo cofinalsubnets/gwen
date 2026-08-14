@@ -28,6 +28,9 @@ int setvbuf(FILE *f, char *buf, int mode, size_t size) {
   if (buf && size) { f->buf = (unsigned char *) buf; f->cap = (int) size; }
   f->line = mode == _IOLBF;
   return 0; }
+/* ⚠ a buffered stream is NEVER LEFT FULL -- len < cap between calls, so the store is in
+ * bounds and the == below catches the fill. fwrite drains at <= for exactly this: left
+ * exactly full, it writes one past the end AND this == never matches again. */
 int fputc(int c, FILE *f) {
   unsigned char b = (unsigned char) c;
   if (!f->cap) { if (__wall(f->fd, &b, 1) < 0) { f->err = 1; return EOF; } return b; }
@@ -42,7 +45,7 @@ size_t fwrite(void const *p, size_t sz, size_t n, FILE *f) {
     if (__fdrain(f)) return 0;
     if (__wall(f->fd, p, (long) total) < 0) { f->err = 1; return 0; }
     return n; }
-  if ((size_t) (f->cap - f->len) < total && __fdrain(f)) return 0;
+  if ((size_t) (f->cap - f->len) <= total && __fdrain(f)) return 0;
   memcpy(f->buf + f->len, p, total);
   f->len += (int) total;
   if (f->line) { unsigned char const *q = p; for (size_t i = 0; i < total; i++) if (q[i] == 10) { __fdrain(f); break; } }

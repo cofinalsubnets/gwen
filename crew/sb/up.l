@@ -1,12 +1,12 @@
-; crew/seed/up.l -- the up/down verbs + the verb table: the dist artifact's rail
-; (doc/seed.md, the install answer: install = sync + cook build). this file rides
-; the dist cat LAST (crew/build.mk distfiles), so it reads the crew bare -- seed's
-; seed-sync/dirty, kore's dir?, cook/kiosko/moon mains -- and its tail pins
+; crew/sb/up.l -- the up/down verbs + the verb table: the dist artifact's rail
+; (doc/sb.md, the install answer: install = sync + cook build). this file rides
+; the dist cat LAST (crew/build.mk distfiles), so it reads the crew bare -- svalbard.s
+; sb-sync/dirty, kore's dir?, cook/kiosko/moon mains -- and its tail pins
 ; `verbs`, the table love/cli.l's verb rail walks. `verbs` is unbound everywhere
 ; else, so the rail is a property of what is BAKED, not of the language: only an
 ; artifact whose bake evaluated this file answers `love up`.
 ;
-; up [URL]: seed-sync ~/.love/src from URL (an http .seed/ tree or a directory),
+; up [URL]: sb-sync ~/.love/src from URL (an http .sb/ tree or a directory),
 ; then `self cook install` INSIDE it -- cook parses the repo Makefile and lands
 ; the ~/.love nest (rung 1's cook-native install). re-running up IS the update:
 ; sync pulls only what is new, cook rebuilds only what is stale. the URL default
@@ -16,7 +16,7 @@
 ;
 ; down [-f]: the uninstall twin -- the nest whole, plus only those ~/.local
 ; links that resolve into it. unrecorded work in src REFUSES without -f (down
-; eats the tree; seed knows whether it holds anything unsaved). ~/.vim is the
+; eats the tree; svalbard knows whether it holds anything unsaved). ~/.vim is the
 ; user's; down leaves it alone.
 (: (oops m) (: _ (say err m) _ (put err 10) (quit 1))
 
@@ -34,7 +34,7 @@
        _ (mkdir nest 493) _ (mkdir src 493)              ; EEXIST from a prior up is fine
        _ (? (charm? (chdir src)) (oops ("up: cannot enter " + src)) 0)
        _ (puts ("up: syncing " + src + " from " + url + "\n"))
-       r (seed-sync url)
+       r (sb-sync url)
        _ (? r 0 (oops "up: the sync did not land"))
        exe (readlink "/proc/self/exe")
        ; the toolchain is US: unless the environment names a CC, the nest
@@ -49,7 +49,7 @@
        s (herald (list exe "cook" "install"))
        st (? (two? s) <s s)
        _ (? (0 = st) 0 (oops ("up: cook install failed (exit " + show st + ")")))
-       _ (puts ("up: the nest is " + nest + " -- love (and seed, cook, kore ..) on ~/.local/bin\n"))
+       _ (puts ("up: the nest is " + nest + " -- love (and sb, cook, kore ..) on ~/.local/bin\n"))
        (quit 0))
 
    ; --- down -------------------------------------------------------------
@@ -81,12 +81,12 @@
        nest (nestof ()) src (nest + "/src")
        here (cwd 0)
        d (? f? 0
-            (? (two? (stat (src + "/.seed/snap")))     ; presence by stat, never by emptiness
+            (? (two? (stat (src + "/.sb/snap")))     ; presence by stat, never by emptiness
                (: _ (chdir src) n (dirty ()) _ (chdir here) n)
                0))
        _ (? (0 < d)
             (oops ("down: " + show d + " unrecorded change(s) in " + src
-                   + " -- seed record them, or love down -f"))
+                   + "  -- sb record them, or love down -f"))
             0)
        _ (? (two? (stat nest)) 0 (: _ (puts ("down: no nest at " + nest + "\n")) (quit 0)))
        _ (chdir (getenv "HOME"))                       ; never rm the tree we stand in
@@ -103,7 +103,7 @@
 ; nothing to rebind, and a frontend that never registered `verbs` fails LOUDLY here, which is
 ; what a bake wants. FN takes the args AFTER the name and ANSWERS a status charm; both rails
 ; quit with it, so a verb that returns needs no exit of its own.
-; ⚠ ONLY these two. seed, cook, kore (and its whole applet table), kiosko, mooncc, sh and
+; ⚠ ONLY these two. sb, cook, kore (and its whole applet table), kiosko, mooncc, sh and
 ; lush each pin their own name at their own foot now -- an app owns the word it answers to,
 ; and this file owning them meant the artifact was multi-call only because up.l happened to
 ; be catted last. up and down are up.l's own, and there is nothing else here to know.

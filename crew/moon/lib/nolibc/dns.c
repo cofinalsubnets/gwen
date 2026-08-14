@@ -20,7 +20,7 @@ static int __quad(char const *s, unsigned int *out) {
   return 0; }
 /* ---- the NAME half: /etc/hosts, then a UDP A query to /etc/resolv.conf's
  * nameservers -- the smallest resolver that keeps `connect host port` (ain)
- * and seed's http pull real on the raw default binary. IPv4 A records only,
+ * and svalbard's http pull real on the raw default binary. IPv4 A records only,
  * first answer wins; 2 tries x ~2.5s per nameserver, up to 3 nameservers,
  * 127.0.0.1 when resolv.conf names none (musl's fallback). all addresses
  * move in HOST order here; getaddrinfo's htonl is the one wire flip. ---- */

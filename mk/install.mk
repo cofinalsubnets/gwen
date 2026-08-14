@@ -29,7 +29,7 @@ v = $(DESTDIR)/$(VIMPREFIX)
 # with line 1 rewritten -- which is what a package wants anyway. The pattern matches both
 # shebang forms, leaving a trailing ` -l` alone.
 ifeq ($(BIN),love)
-# ⚠ the chmod repairs the target when the source came through seed, which does not carry
+# ⚠ the chmod repairs the target when the source came through svalbard, which does not carry
 # the executable bit -- without it the link resolves to a 644 file and every exec EACCESes.
 instool = ln -sf $(abspath $1) $2 && chmod 755 $(abspath $1)
 instag = LN
@@ -41,10 +41,10 @@ endif
 # the module sources the seat walk serves: (use 'cook) and friends from ANY session of this
 # love resolve here. Installed DEREFERENCED, since install(1) follows the repo lib/
 # symlinks, so the nest stands alone.
-libmods = cook dns json lint salt libra kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
+libmods = cook dns json lint salt libra kiosko lapiz papel rune sb sb/text sb/diff sb/merge sb/http sb/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
 # ⚠ ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
-binnames = $(BIN) kore seed mooncc moonfmt cook papel kiosko libra ain lux bao lush
+binnames = $(BIN) kore sb mooncc moonfmt cook papel kiosko libra ain lux bao lush
 mannames = $(BIN) cook lush
 installs = $(patsubst %,$d/bin/%,$(binnames)) \
   $(patsubst %,$d/share/man/man1/%.1,$(mannames)) \
@@ -80,7 +80,8 @@ moon_hdrs = $(wildcard crew/moon/include/*.h crew/moon/include/*/*.h)
 # installs core.c alone. that reads as a working nest right up to the link -- mhome
 # finds its root by core.c and then owes every member the glob left behind.
 moon_srcs = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
-                       crew/moon/lib/nolibc/*/*.c crew/moon/lib/math/*.c)
+                       crew/moon/lib/nolibc/*/*.c crew/moon/lib/nolibc/*/*.h \
+                       crew/moon/lib/math/*.c)
 installs += $(patsubst crew/moon/%,$d/lib/love/moon/%,$(moon_hdrs) $(moon_srcs))
 $d/lib/love/moon/include/%: crew/moon/include/%
 	$(inst644)
@@ -99,6 +100,29 @@ $(compat)/bin/%: $d/bin/%
 $(compat)/share/man/man1/%.1: $d/share/man/man1/%.1
 	$(inln)
 endif
+
+# --- the SOURCE nest: ~/.love/src/love-<ver>/ + the tarball it came from ------------
+# An installed love keeps its own source, and the archive it was cut from beside it: a
+# pristine baseline to diff a working tree against, and the thing `love up` can rebuild
+# from without asking the network. The tarball's top directory is already love-<ver>, so
+# the version keying costs nothing -- it IS the archive's own name.
+#
+# ⚠ IT NEVER CLOBBERS ANOTHER VERSION. Installing 0.2 must leave 0.1 exactly where it
+# stands, so an existing love-<ver>/ is LEFT ALONE rather than written into -- a
+# half-overwritten source tree is worse than either version. Re-installing the same
+# version is therefore a no-op on the tree; delete it by hand to force a fresh lay.
+# ⚠ and there is deliberately NO `current` symlink yet: which version is live is a
+# decision we have not made, and quietly picking one here would make it by accident.
+.PHONY: install-src
+install-src: $(dist_source)
+	@mkdir -p $d/pkg $d/src
+	@cp -p $(dist_source) $d/pkg/
+	@echo INSTALL	$(abspath $d)/pkg/$(notdir $(dist_source))
+	@if [ -d "$d/src/love-$(dist_ver)" ]; then \
+	   echo "  install-src: $d/src/love-$(dist_ver) exists -- left alone (delete it to re-lay)"; \
+	 else \
+	   $(ho)/love tools/tgz.l x $(dist_source) $d/src >/dev/null \
+	     && echo "  install-src: source laid at $d/src/love-$(dist_ver)"; fi
 
 install: $(installs)
 uninstall:
@@ -189,12 +213,12 @@ $d/bin/kore: $(MAKEFILE_LIST)
 $d/lib/love/kore.image: $(ho)/kore.image
 	$(inst644)
 
-# seed 🌱 and lush 🐚, each its own catted script: their sources carry no shebangs, so the
+# sb 🌱 and lush 🐚, each its own catted script: their sources carry no shebangs, so the
 # interpreter line then a plain cat. Each SEAT fires on the installed name -- lush's on its
 # basename, so `sh` through a symlink lands too.
-$d/bin/seed: $(seedfiles)
+$d/bin/sb: $(sbfiles)
 $d/bin/lush: $(lushfiles)
-$d/bin/seed $d/bin/lush:
+$d/bin/sb $d/bin/lush:
 	@echo CAT	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S $(BIN)'; cat $^; } > $@

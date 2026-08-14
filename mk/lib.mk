@@ -39,9 +39,17 @@ lib: $(lib_h) $(gl0_h)
 # SILENTLY drops a baked service (an empty holo.h => `assemble` unbound => the glaze emits
 # nothing => a corrupt native). ⚠ and the temp takes the PID: the ports RECURSE onto these,
 # so -j runs the recipe twice at once and one shared temp is renamed out from under the other.
+# ⚠ the lcat is run by love0 NORMALLY and by the BUNDLED love when a seed laid one
+# beside the tree: love0 is not built at all there (see ./Makefile's bundled_love).
+# ⚠ AND THE PRELOAD BELONGS TO LOVE0 ALONE. `-l love/prel.l` feeds prel's SOURCE to a
+# pre-egg love, which is the only kind that can read it: prel.l:19 calls `(tray 0)`, and
+# `tray` is one of the raw ctors THE EGG MOPS AT BIRTH -- so a baked love handed its own
+# prel source dies `;; missing tray`. A baked love does not need it either, having prel in
+# the image already. Both lanes then lcat the same bytes.
+lcat_love = $(if $(bundled_love),$(bundled_love),$(love0) -l love/prel.l)
 lcat_h = @mkdir -p out/lib; echo LOVE	$@; t=$@.$$$$.tmp; \
-  $(love0) -l love/prel.l tools/lcat.l $< > $$t && test -s $$t && mv -f $$t $@ \
-    || { rm -f $$t; echo "FAIL: $@ empty (love0 lcat failed -- broken bootstrap?)"; exit 1; }
+  $(lcat_love) tools/lcat.l $< > $$t && test -s $$t && mv -f $$t $@ \
+    || { rm -f $$t; echo "FAIL: $@ empty (lcat failed -- broken bootstrap?)"; exit 1; }
 $(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(love0), stated below
 	$(lcat_h)
 # the lit twin of $(lcat_h): a text->C-literal that needs no interpreter.
@@ -79,22 +87,42 @@ out/lib/tests0.h: $t out/lib/corpus.list $(lit)
 	@echo CAT	$@
 	@cat $t | $(lit) > $@
 
-# love_version.h: the build's version-control id, surfaced as the `love-version` global.
-# VCS-agnostic -- a _darcs/ repo stamps its patch hash, else git describe, else "unknown" --
-# so a darcs snapshot import carries this rule verbatim and stamps itself. ⚠ rewritten only
-# when the id CHANGES, so l.o relinks on a new revision and not on every build. A frontend
-# without it on the include path falls back to "unknown".
+# love_version.h: the build's version, surfaced as the `love-version` global.
+#
+# TWO PARTS, and the split is the point: the checked-in ./VERSION is the BASE -- an
+# arbitrary string, ours to bump deliberately -- and the VCS only ever adds a SUFFIX.
+# A version-control id alone cannot say whether one build is newer than another, or
+# what it is; a base alone cannot say which revision you have. So `0.1` in a release
+# tarball, `0.1+g701f864d-dirty` in a working checkout.
+#
+# ⚠ AND A TARBALL IS VCS-INDEPENDENT BY CONSTRUCTION, which is the whole reason the base
+# is a FILE rather than a tag: an unpacked release has no .git to describe, and this id
+# compiles into love.o, so a tarball that could not name itself would differ from the
+# tree it was cut from by exactly one string -- and the release claim rests on those two
+# being the same bytes (doc/dist.md). The dist stage freezes the FULL computed id into
+# the staged VERSION, so an extracted build reproduces it exactly with no VCS present.
+#
+# VCS-agnostic: darcs stamps its patch hash, git describes, neither leaves the base bare.
+# ⚠ rewritten only when the id CHANGES, so l.o relinks on a new revision and not on every
+# build. A frontend without it on the include path falls back to "unknown".
 .PHONY: force_version
 force_version: ;
 out/lib/love_version.h: force_version
 	@mkdir -p out/lib
-	@if [ -d $(R)/_darcs ]; then \
-	  v="darcs-$$(darcs log --repodir $(R) --last 1 2>/dev/null | awk '/^patch/{print substr($$2,1,12)}')"; \
-	  darcs whatsnew --repodir $(R) >/dev/null 2>&1 && v="$$v-dirty"; \
+	@b="$$(cat $(R)/VERSION 2>/dev/null || echo 0)"; \
+	if [ -d $(R)/_darcs ]; then \
+	  s="+darcs.$$(darcs log --repodir $(R) --last 1 2>/dev/null | awk '/^patch/{print substr($$2,1,12)}')"; \
+	  darcs whatsnew --repodir $(R) >/dev/null 2>&1 && s="$$s.dirty"; \
+	  v="$$b$$s"; \
+	elif [ -e $(R)/.git ]; then \
+	  s="$$(git -C $(R) describe --always --dirty 2>/dev/null)"; \
+	  v="$$b$${s:++g$$s}"; \
 	else \
-	  v="$$(git -C $(R) describe --always --dirty 2>/dev/null || echo unknown)"; \
+	  v="$$b"; \
 	fi; tf=$@.$$$$.tmp; printf '#define AI_VERSION "%s"\n' "$$v" > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
 
-# the lcat'd headers are PRODUCED BY running love0, so re-lay them whenever love0 moves.
-$(lib_h) $(holo_h) $(ld_h) out/lib/rune.h: $(love0)
+# the lcat'd headers are PRODUCED BY running the lcat love, so re-lay them whenever it
+# moves. ⚠ EMPTY when a seed bundled one: love0 is never built there, and naming
+# it as a prerequisite would build it for no reason -- the lane the artifact exists to skip.
+$(lib_h) $(holo_h) $(ld_h) out/lib/rune.h: $(if $(bundled_love),,$(love0))

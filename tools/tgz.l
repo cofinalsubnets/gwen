@@ -18,10 +18,14 @@
    (tgz-blurt p s) (: q (open p "w") (? q (: _ (say q s) _ (close q) 1) ()))
    (tgz-die m) (: _ (say err ("tgz: " + m + "\n")) (quit 1))
 
-   (tgz-c arch dir)
+   ; STAMP present = a REPRODUCIBLE pack: every entry's mtime/uid/gid pinned to it,
+   ; so two cuts of one tree are the same bytes. The gzip header's own MTIME is
+   ; already 0 here for the same reason. Absent, the tree's own times ride.
+   (tgz-c arch dir stamp)
     (: g (tar-gather dir "")
        _ (? (! g) (tgz-die ("cannot read " + dir)) 0)
-       a (tar-pack (<(>g)))
+       es (? (two? stamp) (tar-level (<(>g)) (<stamp)) (<(>g)))
+       a (tar-pack es)
        _ (? (! a) (tgz-die "cannot pack (a path too long for ustar?)") 0)
        z (gz-zip a "" 0)
        _ (? (tgz-blurt arch z) 0 (tgz-die ("cannot write " + arch)))
@@ -56,8 +60,11 @@
    (tgz-main av)
     (: n (tally av)
        v (? n (<av) "")
-       (? (! n) (tgz-die "usage: tgz c|x|t ARCHIVE.tar.gz [DIR]")
-          ((v = "c") & (3 <= n)) (tgz-c (<(>av)) (<(>(>av))))
+       (? (! n) (tgz-die "usage: tgz c|x|t ARCHIVE.tar.gz [DIR] | c .. DIR STAMP")
+          ; the stamp arrives as text, and `sound` IS the number reader -- it answers
+          ; the datum consed onto the rest, so the car is the charm.
+          ((v = "c") & (3 <= n)) (tgz-c (<(>av)) (<(>(>av)))
+                                        (? (4 <= n) `((<(sound (<(>(>(>av))))))) ()))
           ((v = "x") & (2 <= n)) (tgz-x (<(>av)) (? (3 <= n) (<(>(>av))) "."))
           ((v = "t") & (2 <= n)) (tgz-t (<(>av)))
           (tgz-die "usage: tgz c|x|t ARCHIVE.tar.gz [DIR]")))

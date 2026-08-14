@@ -1,4 +1,4 @@
-; crew/seed/merge.l -- diff3: the three-way line merge seed falls to when two
+; crew/sb/merge.l -- diff3: the three-way line merge svalbard falls to when two
 ; patches write ONE path from a shared base. the base is free: a hunk records the
 ; content hash it expected (its `old`), so the common ancestor is already in the
 ; store -- no ancestry search, just a blob read.
@@ -20,8 +20,8 @@
 ; textbook diff3, the same call git makes.
 ;
 ; NO BRACKETS HERE: the runtime supplies the layer. a module consumer says
-; (use 'seed) -- lib/seed.l assembles the whole stack (kore text + diff, then
-; merge/http/seed) into one loader-wrapped layer; the standalone script is the
+; (use 'sb) -- lib/sb.l assembles the whole stack (kore text + diff, then
+; merge/http/core) into one loader-wrapped layer; the standalone script is the
 ; same files catted into the session layer, nothing sealed, the seat reading
 ; bare. loads after crew/kore/{text,diff}.l either way. it captures
 ; lines/unlines and myers at its define -- the capture law. the round trip

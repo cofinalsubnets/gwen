@@ -1,4 +1,4 @@
-# crew/build.mk -- the crew app builds: the kore/mooncc/seed/lush scripts, their baked
+# crew/build.mk -- the crew app builds: the kore/mooncc/sb/lush scripts, their baked
 # images, and the dist artifact. Included by ./Makefile after host/build.mk, so $(ho) is
 # already spelled; shared vars are common.mk.
 
@@ -46,13 +46,13 @@ $(ho)/mooncc: $(ho)/mooncc.image
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
 	   echo 'exec "$$h/love" wake "$$h/mooncc.image" mooncc "$$@"'; } > $@
 	@chmod 755 $@
-# seed 🌱 the patch-set vcs, and lush 🐚 the love shell -- also the distro's console shell,
+# sb 🌱 the patch-set vcs (svalbard), and lush 🐚 the love shell -- also the distro's console shell,
 # whose SEAT in main.l fires on its own basename. Both are catted shebang scripts, PATH
 # picking the love that runs them.
-seedfiles = crew/kore/text.l crew/kore/diff.l lib/dns.l crew/seed/merge.l crew/seed/http.l crew/seed/seed.l
-$(ho)/seed: $(seedfiles)
+sbfiles = crew/kore/text.l crew/kore/diff.l lib/dns.l crew/sb/merge.l crew/sb/http.l crew/sb/sb.l
+$(ho)/sb: $(sbfiles)
 $(ho)/lush: $(lushfiles)
-$(ho)/seed $(ho)/lush:
+$(ho)/sb $(ho)/lush:
 	@echo CAT	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $^; } > $@
@@ -73,9 +73,9 @@ out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 # ==== dist: the ONE artifact (self-host rung 3) ====
 # out/dist/love-<arch> is the download door whole: the default love (mooncc-built,
 # static PIE, nolibc) re-baked with the crew warm -- cook + kore + lush (vi and ain ride
-# its cat) + mooncc (all five backends) + seed + kiosko -- and crew/seed/up.l's
+# its cat) + mooncc (all five backends) + sb + kiosko -- and crew/sb/up.l's
 # verb table, which love/cli.l's verb rail reads: `love up URL` syncs ~/.love/src
-# and cook-installs the nest; `love seed|cook|kore|kiosko|mooncc ..` are the same
+# and cook-installs the nest; `love sb|cook|kore|kiosko|mooncc ..` are the same
 # binary being multi-call. the bake rides `love bake`'s own lane (main.c's
 # LOVE_BAKE_LOAD evals the cat ahead of the cache-empty + seal), so the artifact
 # is the default binary with a bigger image -- no session layer, same sealing.
@@ -90,40 +90,173 @@ distfiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
             crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l \
             crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l \
             crew/holo/link.l crew/holo/copy.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
-            crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/seed/merge.l \
-            crew/seed/http.l crew/seed/seed.l crew/kiosko/kiosko.l crew/seed/up.l
+            crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/sb/merge.l \
+            crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l crew/sb/up.l \
+            lib/gz.l lib/tar.l lib/source.l
 DIST_ORIGIN ?=
-out/dist/.dist-cat.l: $(distfiles)
+# ⚠ THE MEMBERSHIP IS AN INPUT, and make cannot see it. Adding a file to distfiles
+# changes what the artifact CARRIES while every file make watches keeps its mtime, so
+# a cat older than the new member is "up to date" and the binary links without it --
+# silently, and it looks exactly like the feature not working. (mk/lib.mk's
+# corpus.list is the same guard for $t, and for the same reason.) Depend on the LIST:
+# rewritten only when membership moves, so the cat re-lays on an add OR a delete.
+.PHONY: force_dist_list
+force_dist_list: ;
+out/dist/.dist.list: force_dist_list
+	@mkdir -p out/dist
+	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+out/dist/.dist-cat.l: $(distfiles) out/dist/.dist.list
 	@echo CAT	$(abspath $@)
 	@mkdir -p out/dist
 	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(distfiles); } > $@
 # the artifact is named for its arch ($a = uname -m): love-x86_64 here,
 # love-aarch64 on a pi -- the moon lane is native on both (mooncc defaults to
 # the ground it stands on), so `make dist` anywhere bakes that machine's door.
-out/dist/love-$a: $(ho)/love $(ho)/love.baked out/dist/.dist-cat.l
+.PHONY: dist dist-source dist-seed
+
+# ==== THE RELEASE ARTIFACTS (doc/dist.md) ====
+# A release is TWO THINGS, and they sit on the one axis that actually matters to
+# somebody who just downloaded one: do you have a C toolchain?
+#
+#   SOURCE   love-<ver>.tar.gz   sources only. `make` bootstraps through the local
+#                                cc, which builds love0 and NOTHING else.
+#   SEED     love-<arch>         one executable that CARRIES its own source and IS
+#                                its own toolchain. `love source` lays the tree with
+#                                bin/love already in it; `make` there calls no
+#                                ambient compiler at all.
+#
+# ⚠ AND THEY ANSWER THE SAME BINARY, which is the whole claim and is not a thing we
+# had to engineer: the local cc only ever builds `love0` (host/build.mk), and every
+# object in the shipped binary is mooncc's, compiled by love0 waking mooncc0.image.
+# So the bootstrap compiler is a scaffold that leaves no trace in the product --
+# which is exactly what test_fixpoint already asserts to the byte, and what its DDC
+# leg (a foreign-compiled love0) was audited for. `make test_distboot` is that claim
+# stated over the artifacts rather than over the tree.
+#
+# ⚠ THERE WAS A THIRD, and it is retired: a FULL tarball, the source tree with a
+# baked love laid into bin/. The seed does that job strictly better -- one file
+# instead of an archive, nothing to unpack it with, and the same bytes at the far
+# end -- so the fat tarball was a second way to say what the seed already says, and
+# a third leg of every release gate to keep honest.
+#
+# The archive is OURS end to end -- lib/tar.l and lib/gz.l -- so cutting a release
+# needs neither `tar` nor `gzip` on the box. ⚠ our coder writes the FIXED Huffman
+# code, ~24% above `gzip -9` (lib/gz.l carries the numbers): a real cost on a
+# download, and the reason a dynamic coder is the next rung.
+#
+# ⚠ REPRODUCIBLE BY CONSTRUCTION: the pack pins every mtime/uid/gid to $(dist_stamp)
+# and the gzip header's own MTIME is 0, so two cuts of one revision are the same
+# bytes and "this is that release" is something anyone can check with sha256sum.
+# the SAME two-part id mk/lib.mk computes -- base from ./VERSION, VCS only a suffix --
+# because the tarball is named for it AND ships it, and a release whose filename and
+# `love --version` disagreed would be its own kind of lie.
+dist_base := $(shell cat $(R)/VERSION 2>/dev/null || echo 0)
+dist_vcs  := $(shell git -C $(R) describe --always --dirty 2>/dev/null)
+dist_ver  := $(dist_base)$(if $(dist_vcs),+g$(dist_vcs),)
+dist_stamp ?= 0
+dist_stage = out/dist/stage
+dist_source = out/dist/love-$(dist_ver).tar.gz
+dist_seed   = out/dist/love-$a
+dist-source: $(dist_source)
+dist-seed:   $(dist_seed)
+dist:        dist-source dist-seed   # a release is both
+
+# ⚠ wasm/love.js is EMSCRIPTEN'S OUTPUT, committed so github pages can serve a repl
+# (wasm/Makefile calls it "the COMMITTED artifact"). It stays in the repo for exactly
+# that, and stays OUT of the release: 103 KB gz in one file -- more than both generated
+# proof terms together -- and it is the one thing here a reader could not regenerate
+# without installing a foreign toolchain, inside an artifact whose whole claim is that
+# it needs none. Dropping it from the TARBALL costs the repl nothing.
+dist_drop = wasm/love.js
+# the stage: every TRACKED file, minus dl/ (third-party downloads that `make
+# distclean` fetches again -- shipping them would triple the tarball and stale them).
+# ⚠ checkout-index reads the INDEX, so a release is cut from what is tracked, not
+# from whatever is lying in the working tree.
+# ⚠ and the staged VERSION is OVERWRITTEN with the fully computed id -- base AND vcs
+# suffix -- because an extracted tarball has no .git to describe. The checked-in VERSION
+# carries only the base; freezing the whole id here is what lets a build from the tarball
+# stamp the same string the tree stamped, and that string compiles into love.o.
+# ⚠ ALWAYS RE-STAGED, never cached on a stamp. The stage's real input is the INDEX, and
+# make cannot depend on that: a `git add` changes what a release contains while every file
+# make watches keeps its mtime, so a stamped stage happily serves a tarball cut before the
+# edit you are trying to test. That is silent, and it looks exactly like the fix not
+# working -- it cost three distboot rounds here before the artifact was opened and found to
+# predate the change. A checkout-index of the tree is a second; correctness is worth it.
+.PHONY: force_stage
+force_stage: ;
+out/dist/.staged-$(dist_ver): force_stage $(ho)/love
+	@echo STAGE	$(abspath $(dist_stage))/love-$(dist_ver)
+	@# ⚠ SAY SO WHEN THE INDEX AND THE WORKING TREE DISAGREE. Cutting from the index is
+	@# right for a release -- it is what makes an artifact reproducible from a revision --
+	@# but it means an uncommitted edit is NOT in what you just built, and a gate run
+	@# against it is testing the old code while you read the new. That failure is silent
+	@# and looks exactly like the fix not working; it cost two full distboot rounds here.
+	@# ⚠ THE WORKTREE COLUMN IS THE ONE THAT MATTERS. `status --porcelain` reports a
+	@# STAGED edit as dirty too, and those are exactly the ones that DO ride -- warning
+	@# on them cries wolf on every correct release and teaches you to read past it. The
+	@# second column is the worktree against the index: ` M` and `??` are absent from
+	@# the artifact, `M ` is in it.
+	@out=$$(git -C $(R) status --porcelain 2>/dev/null | awk 'substr($$0,2,1) != " "'); \
+	 if [ -n "$$out" ]; then \
+	   echo "  /warn this artifact comes from the INDEX and these are NOT in it --"; \
+	   echo "  /warn 'git add' them first:"; \
+	   printf '%s\n' "$$out" | sed 's/^/        /' | head -8; fi
+	@rm -rf $(dist_stage)
+	@mkdir -p $(dist_stage)/love-$(dist_ver)
+	@git -C $(R) checkout-index -a --prefix=$(abspath $(dist_stage))/love-$(dist_ver)/
+	@rm -rf $(dist_stage)/love-$(dist_ver)/dl
+	@rm -f $(dist_stage)/love-$(dist_ver)/$(dist_drop)
+	@printf '%s\n' "$(dist_ver)" > $(dist_stage)/love-$(dist_ver)/VERSION
+	@touch $@
+
+# ⚠ AN EXTRACTED TREE CANNOT CUT ONE. The stage is `git checkout-index`, and a tree laid
+# by `love source` has no .git -- so there the tarball is not built, it is ALREADY THERE:
+# the artifact wrote the bytes it carried to exactly this path. Reusing them is what makes
+# a seed binary rebuilt out there byte-identical rather than merely equivalent, since the
+# blob it embeds is the same archive and not a re-pack that has to coincide.
+have_git := $(shell git -C $(R) rev-parse --is-inside-work-tree 2>/dev/null)
+ifneq ($(have_git),)
+$(dist_source): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l tools/tgz.l
+	@echo TGZ	$(abspath $@)
+	@rm -f $@
+	@$(ho)/love tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
+else
+$(dist_source):
+	@echo "dist: no .git here and no $@ --" >&2
+	@echo "dist: an extracted tree rebuilds from the archive 'love source' laid;" >&2
+	@echo "dist: re-extract if it went missing." >&2
+	@exit 1
+endif
+
+# THE SOURCE BLOB: the source tarball laid into an object (tools/mksrc.l), so the
+# artifact hands out its own source with no second download and no `tar xf` -- love
+# `source` inflates it. host/src.c defines the pair WEAK and empty, so this object's
+# STRONG definitions override them at the link and a plain `make host` needs none of
+# it. ⚠ holo names its arches ($a is uname's, and they disagree on x86_64).
+# ⚠ AND THESE TWO RULES MUST SIT BELOW $(dist_source)'s DEFINITION. A prerequisite
+# list is expanded where it is WRITTEN: above the definition it expands to nothing,
+# make never builds the tarball, and only the recipe -- expanded later, when the
+# variable is set -- names a file that was never cut. It fails as a missing archive,
+# which reads as the tarball rule being broken rather than this line being early.
+ifeq ($a,aarch64)
+src_arch = arm64
+else
+src_arch = x64
+endif
+out/dist/src-$a.o: $(dist_source) tools/mksrc.l $(ho)/love
+	@$(ho)/love tools/mksrc.l $(dist_source) $@ $(src_arch)
+# ⚠ THIS LINKS, where it used to `cp` the host binary. A section cannot be injected
+# into a finished ELF, so the artifact is now its own link -- $(moon_o) plus the blob
+# -- and only then baked. The layout stays load-bearing the other way: .image must
+# still END the segment for `bake` to grow it at the tail (host/image.c's bake_tail
+# refuses otherwise), which it does, the blob riding .rodata well below it.
+$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l $(ho)/love
 	@echo DIST	$(abspath $@)
-	@cp $(ho)/love $@
+	@mkdir -p $(dir $@)
+	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -o $@
 	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l ./$@ bake
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
-.PHONY: dist dist-tgz
-dist: out/dist/love-$a
-
-# ==== dist-tgz: the release tarball, packed by us ====
-# The artifact plus its man page, as a .tar.gz -- and the point is WHO MADE IT: the
-# archive comes out of lib/tar.l and the DEFLATE stream out of lib/gz.l, so a
-# release needs neither `tar` nor `gzip` on the box that cuts it. test_gz is what
-# says the bytes are the ones GNU tar and GNU gzip would accept.
-# ⚠ our coder writes the FIXED Huffman code, so this lands ~24% above `gzip -9`
-# (lib/gz.l carries the measured numbers). That is a real cost on a download and
-# the reason a dynamic coder is the next rung, not a footnote.
-dist_tgz = out/dist/love-$a.tar.gz
-dist-tgz: $(dist_tgz)
-$(dist_tgz): out/dist/love-$a $(ho)/love lib/tar.l lib/gz.l tools/tgz.l
-	@echo TGZ	$(abspath $@)
-	@rm -rf out/dist/pack && mkdir -p out/dist/pack/love-$a
-	@cp out/dist/love-$a out/dist/pack/love-$a/love
-	@cp README.md out/dist/pack/love-$a/ 2>/dev/null || true
-	@$(ho)/love tools/tgz.l c $@ out/dist/pack
 
 # ==== dist_cross: the TWIN artifact (the other elf arch) ====
 # the same door for the machine you are not on: every TU through `mooncc -t`,

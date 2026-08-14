@@ -162,7 +162,7 @@
 ; * python \b-sweeps treat - as a boundary: kebab names with capital segments mangle.
 ; * the crew (crew/, the apps) rides over the core, each owning non-overlapping files so a session
 ;   can take one in parallel: lux (the X11 window manager), inle (the freestanding kernel,
-;   port/inle/), seed (the patch-set vcs, doc/seed.md; `make dist` bakes out/dist/love-x86_64,
+;   port/inle/), svalbard (the patch-set vcs `sb`, doc/sb.md; `make dist` bakes out/dist/love-x86_64,
 ;   the one-file download door -- `love up` defaults CC to the artifact's own mooncc verb, no
 ;   ambient toolchain needed), moon (the C compiler in love -- compiles love.c + host/*.c, holo
 ;   links, no gcc/glibc/ld: test_raw; `CC=mooncc` drives gcc-shaped recipes unchanged, test_drv),

@@ -44,7 +44,7 @@
    (fsize p)    (: st (stat p) (? (two? st) <st ()))
    ; ⚠ fsize answers () for MISSING and 0 for EMPTY, and both are nil -- so it
    ; cannot double as an existence test. a 0-byte file is a perfectly good file
-   ; and served 404 for it until `seed` tried to pull an empty blob over http.
+   ; and served 404 for it until `sb` tried to pull an empty blob over http.
    ; presence is the wrapper, never the net.
    (fhere? p)   (two? (stat p))
    ; read a whole file. prel's `slurp` draws one character at a time off the port, ~50ns a

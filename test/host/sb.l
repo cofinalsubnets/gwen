@@ -1,18 +1,18 @@
-; the seed gate (crew/seed/): a sandbox store driven end to end
+; the svalbard gate (crew/sb/): a sandbox store driven end to end
 ; (record / log / diff, tips + snap + deps + the content addresses). runs under
-; `make test_seed`: cat test/00-init.l THIS | out/host/love -- host nifs
+; `make test_sb`: cat test/00-init.l THIS | out/host/love -- host nifs
 ; (sha256, readdir, chdir), so it stays OFF the corpus like the other hostnif
 ; tests. the make target clears the sandbox first; cwd is the repo root, and
-; everything here happens inside out/host/.seedtest.
-; the use below LOADS seed (lib/seed.l assembles the whole stack) and splices
+; everything here happens inside out/host/.sbtest.
+; the use below LOADS svalbard (lib/sb.l assembles the whole stack) and splices
 ; it under the session layer: every internal reads bare, and the test's own
 ; helpers stay above in the session.
-(use 'seed)
+(use 'sb)
 
 (: _ (mkdir "out" 493) _ (mkdir "out/host" 493)
-   _ (mkdir "out/host/.seedtest" 493)
-   cd (chdir "out/host/.seedtest")
-   _ (? !cd () (: _ (puts "seedtest: chdir failed\n") (quit 1)))
+   _ (mkdir "out/host/.sbtest" 493)
+   cd (chdir "out/host/.sbtest")
+   _ (? !cd () (: _ (puts "sbtest: chdir failed\n") (quit 1)))
    ; the same-text equality for list-shaped store values
    (seq a b) (show a = show b)
    ; the tree: two files, one ignored dir
@@ -22,10 +22,10 @@
    _ (mkdir "junk" 493)
    _ (lay "junk/x" "never\n")
    _ (mk ())
-   _ (lay ".seed/ignore" "junk\npr\nnest2\nmrg\n")   ; junk/ + the nests we sync with
-   p1 (seed-record "first")
+   _ (lay ".sb/ignore" "junk\npr\nnest2\nmrg\n")   ; junk/ + the nests we sync with
+   p1 (sb-record "first")
    s1 (snap ())
-   again (seed-record "again"))
+   again (sb-record "again"))
 
 (assert
  (64 = tally p1)                                       ; a real content address
@@ -34,14 +34,14 @@
  ("a.txt" = <<s1)                                      ; path-sorted
  (blob <><s1 = "one\ntwo\nthree\n")                 ; the blob rides its hash
  !again                                                ; a clean tree records nothing
- (p1 = sha256 <>(look (".seed/patch/" + p1))))      ; the id IS the file's hash
+ (p1 = sha256 <>(look (".sb/patch/" + p1))))      ; the id IS the file's hash
 
 ; mutate: one changed, one born, one dead
 (: _ (lay "a.txt" "one\ntwo point five\nthree\n")
    _ (lay "c.txt" "born\n")
    _ (unlink "sub/b.txt")
-   nd (seed-diff ())
-   p2 (seed-record "second")
+   nd (sb-diff ())
+   p2 (sb-record "second")
    f2 (patch p2))
 
 (assert
@@ -51,18 +51,18 @@
  (seq (tips ()) `(p2))                              ; p1 is no longer maximal
  !(member? "sub/b.txt" (: (go m acc) (? (two? m) (go >m (<<m >< acc)) acc)
                           (go (snap ()) ())))       ; the death left the snap
- (0 = seed-diff ()))                                   ; recorded = working again
+ (0 = sb-diff ()))                                   ; recorded = working again
 
 ; a patch of only births depends on nothing: a second tip (the DAG, locally)
 (: _ (lay "d.txt" "free\n")
-   p3 (seed-record "third")
+   p3 (sb-record "third")
    f3 (patch p3))
 
 (assert
  !(fld f3 'deps)                                    ; no context anywhere
  (2 = tally (tips ()))                              ; two maximal patches
  (member? p2 (tips ())) (member? p3 (tips ()))
- (3 = seed-log ()))                                    ; three patches told
+ (3 = sb-log ()))                                    ; three patches told
 
 ; --- sync: a peer nest (built inside ./pr, ignored) shares d.txt's births and
 ;     adds its own, plus edits a.txt on a common base. union it in: the store
@@ -74,12 +74,12 @@
    _ (lay "d.txt" "free\n")                            ; same births as p3 -> dedups
    _ (lay "peer.txt" "from the other machine\n")       ; the peer's own file
    _ (mk ())
-   pp (seed-record "peer work")
+   pp (sb-record "peer work")
    _ (chdir "..")
-   nbefore (tally (readdir ".seed/patch"))
+   nbefore (tally (readdir ".sb/patch"))
    pdirty (dirty ())                                   ; the main tree is clean pre-sync
-   got (seed-sync "pr")
-   nafter (tally (readdir ".seed/patch")))
+   got (sb-sync "pr")
+   nafter (tally (readdir ".sb/patch")))
 
 (assert
  (0 = pdirty)                                             ; clean, so sync will materialize
@@ -90,8 +90,8 @@
  (4 = got)                                                ; p1 p2 p3 + the peer's pp
  ((<>(look "peer.txt")) = "from the other machine\n")  ; materialized into the working tree
  ((<>(look "a.txt")) = "one\ntwo point five\nthree\n") ; local edits untouched
- (0 = seed-diff ())                                       ; working tree == the recomputed snap
- !(seed-record "noop"))                                   ; ...so nothing is left to record
+ (0 = sb-diff ())                                       ; working tree == the recomputed snap
+ !(sb-record "noop"))                                   ; ...so nothing is left to record
 
 ; --- an EMPTY file is content, not absence. it slurps to () -- the zero point --
 ;     so a scan that reads the net hashes it to () and it never reaches the snap:
@@ -100,13 +100,13 @@
 ;     the snap under the honest empty digest, and materialize 0-byte through a
 ;     sync (where blob presence is likewise the wrapper, never the net) ---
 (: _ (lay "e.txt" "")
-   pe (seed-record "an empty file")
+   pe (sb-record "an empty file")
    esnap (: (go m) (? !(two? m) () ("e.txt" = <<m) <m (go >m)) (go (snap ())))
    clean (dirty ())
    _ (mkdir "nest2" 493)
    _ (chdir "nest2")
    _ (mk ())
-   got2 (seed-sync "..")
+   got2 (sb-sync "..")
    et (look "e.txt")
    _ (chdir ".."))
 
@@ -115,7 +115,7 @@
  (two? esnap)                                             ; ...and reached the snap
  ((<>esnap) = sha256 "")                                  ; ...under the honest empty digest
  (0 = clean)                                              ; ...so the tree came back clean
- !(seed-record "noop")                                    ; ...and stays clean -- no junk tip
+ !(sb-record "noop")                                    ; ...and stays clean -- no junk tip
  (0 < got2)                                               ; the fresh nest took the whole store
  (two? et)                                                ; ...materializing e.txt: present...
  (0 = tally <>et))                                        ; ...and 0 bytes
@@ -130,25 +130,25 @@
    _ (chdir "mrg/a")
    _ (lay "f" "one\ntwo\nthree\nfour\nfive\n")
    _ (mk ())
-   _ (seed-record "the base")
+   _ (sb-record "the base")
    _ (mkdir "../b" 493) _ (chdir "../b") _ (mk ())
-   _ (seed-sync "../a")
+   _ (sb-sync "../a")
    ; a moves the head, b moves the tail -- one file, disjoint regions
-   _ (chdir "../a") _ (lay "f" "ONE\ntwo\nthree\nfour\nfive\n") _ (seed-record "a: the head")
-   _ (chdir "../b") _ (lay "f" "one\ntwo\nthree\nfour\nFIVE\n") _ (seed-record "b: the tail")
-   gotm (seed-sync "../a")
+   _ (chdir "../a") _ (lay "f" "ONE\ntwo\nthree\nfour\nfive\n") _ (sb-record "a: the head")
+   _ (chdir "../b") _ (lay "f" "one\ntwo\nthree\nfour\nFIVE\n") _ (sb-record "b: the tail")
+   gotm (sb-sync "../a")
    mtext (<>(look "f"))
-   cfm (<>(derive-snap (readdir ".seed/patch")))
+   cfm (<>(derive-snap (readdir ".sb/patch")))
    ; now both move the SAME line -- a real overlap
-   _ (chdir "../a") _ (lay "f" "ONE\nA-TWO\nthree\nfour\nFIVE\n") _ (seed-record "a: two")
-   _ (chdir "../b") _ (lay "f" "ONE\nB-TWO\nthree\nfour\nFIVE\n") _ (seed-record "b: two")
-   gotc (seed-sync "../a")
+   _ (chdir "../a") _ (lay "f" "ONE\nA-TWO\nthree\nfour\nFIVE\n") _ (sb-record "a: two")
+   _ (chdir "../b") _ (lay "f" "ONE\nB-TWO\nthree\nfour\nFIVE\n") _ (sb-record "b: two")
+   gotc (sb-sync "../a")
    ctext (<>(look "f"))
-   cfc (<>(derive-snap (readdir ".seed/patch")))
+   cfc (<>(derive-snap (readdir ".sb/patch")))
    ; the resolution is just a record
    _ (lay "f" "ONE\nRESOLVED\nthree\nfour\nFIVE\n")
-   _ (seed-record "resolve the overlap")
-   cfr (<>(derive-snap (readdir ".seed/patch")))
+   _ (sb-record "resolve the overlap")
+   cfr (<>(derive-snap (readdir ".sb/patch")))
    ndirty (dirty ())
    _ (chdir "../.."))
 
@@ -167,13 +167,13 @@
 ; --- the two sides that cannot line-merge: a delete meeting an edit keeps the
 ;     CONTENT (a deletion would be the one lossy answer), and flags it ---
 (: _ (chdir "mrg/a")
-   _ (lay "g" "keep\nme\n") _ (seed-record "g is born")
-   _ (chdir "../b") _ (seed-sync "../a")
-   _ (chdir "../a") _ (unlink "g") _ (seed-record "a: g dies")
-   _ (chdir "../b") _ (lay "g" "keep\nme too\n") _ (seed-record "b: g edited")
-   gotd (seed-sync "../a")
+   _ (lay "g" "keep\nme\n") _ (sb-record "g is born")
+   _ (chdir "../b") _ (sb-sync "../a")
+   _ (chdir "../a") _ (unlink "g") _ (sb-record "a: g dies")
+   _ (chdir "../b") _ (lay "g" "keep\nme too\n") _ (sb-record "b: g edited")
+   gotd (sb-sync "../a")
    gtext (look "g")
-   cfd (<>(derive-snap (readdir ".seed/patch")))
+   cfd (<>(derive-snap (readdir ".sb/patch")))
    _ (chdir "../.."))
 
 (assert
@@ -188,12 +188,12 @@
 ;     end needed no attendance. a peer that is dirty takes no push at all (its
 ;     store is left whole, never half-fed) and sync says so ---
 (: _ (mkdir "mrg/c" 493) _ (chdir "mrg/c") _ (mk ())
-   _ (lay "shared" "base\n") _ (seed-record "c: the base")
+   _ (lay "shared" "base\n") _ (sb-record "c: the base")
    _ (mkdir "../d" 493) _ (chdir "../d") _ (mk ())
-   _ (seed-sync "../c")
-   _ (lay "d-only" "from d\n") _ (seed-record "d: its own file")
-   _ (chdir "../c") _ (lay "c-only" "from c\n") _ (seed-record "c: its own file")
-   gotx (seed-sync "../d")                               ; ONE sync, run from c
+   _ (sb-sync "../c")
+   _ (lay "d-only" "from d\n") _ (sb-record "d: its own file")
+   _ (chdir "../c") _ (lay "c-only" "from c\n") _ (sb-record "c: its own file")
+   gotx (sb-sync "../d")                               ; ONE sync, run from c
    csnap (snap ()) cdirty (dirty ())
    dhere (look "d-only")                              ; d's file walked in
    _ (chdir "../d")
@@ -201,10 +201,10 @@
    chere (look "c-only")                              ; ...and c's walked out, unattended
    _ (lay "scratch" "unrecorded\n")                   ; now dirty the peer
    _ (chdir "../c")
-   nb4 (tally (readdir ".seed/patch"))
-   _ (lay "late" "late work\n") _ (seed-record "c: late")
-   goty (seed-sync "../d")
-   dstore (tally (readdir "../d/.seed/patch"))
+   nb4 (tally (readdir ".sb/patch"))
+   _ (lay "late" "late work\n") _ (sb-record "c: late")
+   goty (sb-sync "../d")
+   dstore (tally (readdir "../d/.sb/patch"))
    _ (chdir "../.."))
 
 (assert
@@ -222,18 +222,18 @@
 ;     patch whose context-writer is absent, so leaving one behind would quietly
 ;     realize less than you asked for ---
 (: _ (mkdir "mrg/e" 493) _ (chdir "mrg/e") _ (mk ())
-   _ (lay "a" "v1\n") pa (seed-record "a born")
-   _ (lay "a" "v2\n") pb (seed-record "a edited")
-   _ (lay "b" "x\n")  pc (seed-record "b born -- independent")
-   n1 (seed-apply `(pa))                                 ; checkout: the tree AS OF pa
+   _ (lay "a" "v1\n") pa (sb-record "a born")
+   _ (lay "a" "v2\n") pb (sb-record "a edited")
+   _ (lay "b" "x\n")  pc (sb-record "b born -- independent")
+   n1 (sb-apply `(pa))                                 ; checkout: the tree AS OF pa
    a1 (<>(look "a")) b1 (look "b")
-   n2 (seed-apply `(pa pc))                              ; cherry-pick: pc taken, pb SKIPPED
+   n2 (sb-apply `(pa pc))                              ; cherry-pick: pc taken, pb SKIPPED
    a2 (<>(look "a")) b2 (look "b")
-   n3 (seed-apply `(pb))                                 ; the closure drags pa in behind pb
-   n4 (seed-apply ())                                    ; no id: the way back
+   n3 (sb-apply `(pb))                                 ; the closure drags pa in behind pb
+   n4 (sb-apply ())                                    ; no id: the way back
    a4 (<>(look "a"))
-   bad (seed-apply '("deadbeef"))                        ; a prefix that resolves to nothing
-   nstore (tally (readdir ".seed/patch"))                ; read HERE -- the assert runs after the chdir back
+   bad (sb-apply '("deadbeef"))                        ; a prefix that resolves to nothing
+   nstore (tally (readdir ".sb/patch"))                ; read HERE -- the assert runs after the chdir back
    clean (dirty ())
    _ (chdir "../.."))
 
@@ -253,23 +253,23 @@
 ;     now, theirs = what it replaced -- so the later edits survive and only that
 ;     patch's write is lifted out. a true overlap records NOTHING ---
 (: _ (mkdir "mrg/u" 493) _ (chdir "mrg/u") _ (mk ())
-   _ (lay "f" "one\ntwo\nthree\n") _ (seed-record "base")
-   _ (lay "f" "one\nBAD\nthree\n") pbad (seed-record "the bad edit, line 2")
-   _ (lay "f" "one\nBAD\nTHREE!\n") _ (seed-record "later work, line 3")
-   n0 (tally (readdir ".seed/patch"))
-   u1 (seed-undo `(pbad))
+   _ (lay "f" "one\ntwo\nthree\n") _ (sb-record "base")
+   _ (lay "f" "one\nBAD\nthree\n") pbad (sb-record "the bad edit, line 2")
+   _ (lay "f" "one\nBAD\nTHREE!\n") _ (sb-record "later work, line 3")
+   n0 (tally (readdir ".sb/patch"))
+   u1 (sb-undo `(pbad))
    ftext (<>(look "f"))
-   n1 (tally (readdir ".seed/patch"))
+   n1 (tally (readdir ".sb/patch"))
    clean (dirty ())
-   _ (lay "g" "born\n") pg (seed-record "g born")       ; a birth undone is a death
-   u2 (seed-undo `(pg))
+   _ (lay "g" "born\n") pg (sb-record "g born")       ; a birth undone is a death
+   u2 (sb-undo `(pg))
    gone (look "g")
-   _ (lay "h" "a\nb\n") _ (seed-record "h base")        ; the OVERLAP: same line, later patch
-   _ (lay "h" "a\nB2\n") pq (seed-record "h -> B2")
-   _ (lay "h" "a\nB3\n") _ (seed-record "h -> B3")
-   n2 (tally (readdir ".seed/patch"))
-   u3 (seed-undo `(pq))
-   n3 (tally (readdir ".seed/patch"))
+   _ (lay "h" "a\nb\n") _ (sb-record "h base")        ; the OVERLAP: same line, later patch
+   _ (lay "h" "a\nB2\n") pq (sb-record "h -> B2")
+   _ (lay "h" "a\nB3\n") _ (sb-record "h -> B3")
+   n2 (tally (readdir ".sb/patch"))
+   u3 (sb-undo `(pq))
+   n3 (tally (readdir ".sb/patch"))
    _ (lay "h" "a\nB3\n")                                ; settle the markers by hand
    _ (chdir "../.."))
 
@@ -289,21 +289,21 @@
 ;     TIP SET instead -- the head DAG state whatever its shape, and the same
 ;     thing psid hashes, so a release and its goods line up ---
 (: _ (mkdir "mrg/k" 493) _ (chdir "mrg/k") _ (mk ())
-   _ (lay "a" "1\n") _ (seed-record "a born")
-   _ (lay "b" "2\n") _ (seed-record "b born -- independent, so BOTH stay tips")
+   _ (lay "a" "1\n") _ (sb-record "a born")
+   _ (lay "b" "2\n") _ (sb-record "b born -- independent, so BOTH stay tips")
    ntip (tally (tips ()))
-   b1 (seed-bank '("v1"))
-   b2 (seed-bank '("v1"))                                ; the same head again: idempotent
+   b1 (sb-bank '("v1"))
+   b2 (sb-bank '("v1"))                                ; the same head again: idempotent
    r1 (refof "v1")
-   _ (lay "c" "3\n") _ (seed-record "work after the release")
-   b3 (seed-bank '("v1"))                                ; a DIFFERENT head: immutable, refuses
-   b4 (seed-bank '("v2"))
-   n1 (seed-apply '("v1"))                               ; realize the release BY NAME
+   _ (lay "c" "3\n") _ (sb-record "work after the release")
+   b3 (sb-bank '("v1"))                                ; a DIFFERENT head: immutable, refuses
+   b4 (sb-bank '("v2"))
+   n1 (sb-apply '("v1"))                               ; realize the release BY NAME
    cgone (look "c")
-   n2 (seed-apply '("v2"))
+   n2 (sb-apply '("v2"))
    cback (look "c")
-   bad (seed-bank '(""))
-   _ (lay "a" "dirty\n") bdirty (seed-bank '("v3"))      ; a dirty tree refuses too
+   bad (sb-bank '(""))
+   _ (lay "a" "dirty\n") bdirty (sb-bank '("v3"))      ; a dirty tree refuses too
    _ (lay "a" "1\n")
    _ (chdir "../.."))
 
@@ -323,17 +323,17 @@
 ;     human error, since a banked name is immutable and neither nest may repoint
 ;     the other's -- so EACH SIDE KEEPS ITS OWN and the clash is told once ---
 (: _ (mkdir "mrg/r" 493) _ (mkdir "mrg/r/l" 493) _ (chdir "mrg/r/l") _ (mk ())
-   _ (lay "f" "base\n") _ (seed-record "base") _ (seed-bank '("v1"))
+   _ (lay "f" "base\n") _ (sb-record "base") _ (sb-bank '("v1"))
    _ (mkdir "../d" 493) _ (chdir "../d") _ (mk ())
-   got (seed-sync "../l")
+   got (sb-sync "../l")
    travelled (refof "v1")                                ; ...it arrived, unbanked here
-   n1 (seed-apply '("v1"))                               ; ...and realizes BY NAME
+   n1 (sb-apply '("v1"))                               ; ...and realizes BY NAME
    ; now bank the SAME name on each side at DIFFERENT heads
-   _ (lay "g" "d\n") _ (seed-record "d work") _ (seed-bank '("rel"))
+   _ (lay "g" "d\n") _ (sb-record "d work") _ (sb-bank '("rel"))
    drel (refof "rel")
-   _ (chdir "../l") _ (lay "h" "l\n") _ (seed-record "l work") _ (seed-bank '("rel"))
+   _ (chdir "../l") _ (lay "h" "l\n") _ (sb-record "l work") _ (sb-bank '("rel"))
    lrel (refof "rel")
-   clash (seed-sync "../d")
+   clash (sb-sync "../d")
    lkept (refof "rel")                                   ; l kept ITS rel...
    _ (chdir "../d") dkept (refof "rel")                  ; ...and d kept ITS
    _ (chdir "../../.."))
@@ -346,4 +346,4 @@
  (show lkept = show lrel)                                ; each side KEPT ITS OWN -- no silent loss
  (show dkept = show drel))
 
-(: _ (puts "seed: ok") _ (putc 10) 0)
+(: _ (puts "sb: ok") _ (putc 10) 0)

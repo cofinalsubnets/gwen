@@ -1,11 +1,11 @@
-# seed 🌱 — the patch-set vcs
+# svalbard 🌱 — the patch-set vcs (`sb`)
 
 A version control system whose object is a **set** of patches, not a chain of snapshots.
 The tree is a pure function of the patch set, so order is not part of the state, "the state as
 of P" and "what I have plus P" differ only in the set you name, and a union in either direction
-just fills gaps. [`crew/seed/seed.l`](../crew/seed/seed.l) is the tool, `make test_seed` the
+just fills gaps. [`crew/sb/sb.l`](../crew/sb/sb.l) is the tool, `make test_sb` the
 gate; a hunk is test/patch.l's proven `chg` at file grain (slot = path, context = old content
-hash), and the store is content-addressed under `.seed/`.
+hash), and the store is content-addressed under `.sb/`.
 
 The model — the patch DAG, the derivation, the nest, refs — is [`doc/hatch.md`](hatch.md);
 this doc is the interface over it. hatch.md says *what the objects are*; this says *what you
@@ -31,7 +31,7 @@ tree), which the network exchange isn't.
 
 ### sync
 
-`sync PEER` **exchanges** patch sets with a peer nest (a directory holding a `.seed/`) — it is
+`sync PEER` **exchanges** patch sets with a peer nest (a directory holding a `.sb/`) — it is
 not a fetch: pull the blobs + patches we lack, push the ones the peer lacks (content-addressed,
 so a union in either direction just fills gaps), then **settle both nests** — re-derive tips +
 snap from the *whole* patch set (order-free — the DAG is a pure function of its patches) and
@@ -40,7 +40,7 @@ a pure function of the patch set, both ends land on the *same* snap: after one s
 trees are identical, from whichever side you ran it. The peer's half needs its tree clean and
 writable; when it is not, sync still pulls (always safe), leaves the peer's store **whole**
 rather than half-fed, and says so with exit 1. An `http://` remote is pull-only — any static
-file tree serving a `.seed/` is a complete remote, and it takes no push.
+file tree serving a `.sb/` is a complete remote, and it takes no push.
 
 **Refs travel too.** A ref is a single file rather than a content-addressed one, so sync
 **unions it by name** instead of gap-filling: the same name at the same head is idempotent, and
@@ -51,7 +51,7 @@ That is what makes a release the unit you propagate rather than a local bookmark
 A *convergent* write (two nests reach the same content) is silent. Same-path divergence
 **merges**: the incoming hunk names the content hash it expected, so the common ancestor is
 already in the store and the three sides go to a diff3 line merge
-([`crew/seed/merge.l`](../crew/seed/merge.l)) — disjoint edits to one file both survive, and
+([`crew/sb/merge.l`](../crew/sb/merge.l)) — disjoint edits to one file both survive, and
 only a true overlap lands in `<<<<<<<` markers naming both patches, whereupon sync reports and
 exits 1. The resolution is an ordinary `record`, so no new verb: the fix is a patch like any
 other, and it settles the clash for good. A delete meeting an edit, or a binary file, cannot
@@ -100,11 +100,11 @@ shape — which is exactly what `psid` hashes.
 ## install is a composition, not a verb
 
 Install is `sync` + `cook install`: binaries go in the `~/.love` nest, `make install`'s layout
-owns them, and the unit of distribution is a `.seed/` store any static host serves. The
-composition lives *outside* seed's verb set — `love up [URL]` (crew/seed/up.l, a verb of the
-dist artifact's rail, not of seed) syncs `~/.love/src` and cook-installs the nest; run again,
+owns them, and the unit of distribution is a `.sb/` store any static host serves. The
+composition lives *outside* sb's verb set — `love up [URL]` (crew/sb/up.l, a verb of the
+dist artifact's rail, not of sb) syncs `~/.love/src` and cook-installs the nest; run again,
 it is the upgrade. `love down` is its twin — the nest and its `~/.local` links removed, with
-seed refusing for unrecorded work in `~/.love/src`. The build's CC defaults to the artifact's
+sb refusing for unrecorded work in `~/.love/src`. The build's CC defaults to the artifact's
 own `mooncc` verb, so the download door carries its whole toolchain; an explicit env `CC` (the
 git door's leg) always wins, and the embedding goods (liblove, love.h) are the cc lane's, so up
 installs with `EMBED=0`. Gate: test/gate/dist.sh (`make test_up`).
@@ -114,10 +114,12 @@ That install stays a composition rather than an irreducible verb is the design r
 compositions of those.** `clone` = `sync` from empty; `install` and `upgrade` are one
 composition. The smell to watch for is "install" or "upgrade" turning back into a verb.
 
-## why seed (the metaphor earns the invariants)
+## why svalbard (the metaphor earns the invariants)
 
-`seed` is not decoration; a seed vault names the model's two hardest invariants more accurately
-than "tree" or "reef" would.
+The seed vault is not decoration; it names the model's two hardest invariants more accurately
+than "tree" or "reef" would. The tool was called `seed` first and is named for the vault now —
+which is the same metaphor said one level up, and it hands `seed` back to the word's other job
+here (the seed binary a bootstrap starts from, crew/build.mk's dist lane).
 
 - **Append-only cold storage is the inverse-patch law.** The core discipline is "removal is an
   inverse patch, never a deletion; the patch set only ever grows," which is what makes the
@@ -135,8 +137,12 @@ than "tree" or "reef" would.
 The vocabulary comes with it rather than being invented for it: what a vault keeps is a
 **germ**, what it does to one is a **viability test**, and to freeze a release is to **bank**
 it — one word for putting a thing somewhere safe and for the institution that keeps it. The one
-thing traded is that `tree` read as "version control" on sight; `seed` leans on the persona to
-carry that, and since the model isn't a tree, that's the right trade.
+thing traded is that `tree` read as "version control" on sight; `svalbard` leans on the persona
+to carry that, and since the model isn't a tree, that's the right trade.
+
+The command is **`sb`** — two letters, and antimony beside mercury's `hg`. Everything typed or
+imported is `sb` (`crew/sb/`, `(use 'sb)`, `.sb/`, `make test_sb`); *svalbard* is the prose name,
+the way Mercurial is the project and `hg` is the thing you run.
 
 `hatch` is not a plant word, deliberately: egg / hatch / `born` is love's own bootstrap cluster,
 and the installer *re-runs the hatch* on your machine. The vault half is `sync`; `hatch` is the
@@ -146,13 +152,13 @@ bootstrap half; install is the two composed.
 
 - Does a nest need an explicit `pick`/`use` to switch its live ref, or is that just
   `apply <ref>`? Leaning fold-into-`apply`, skip the verb.
-- The command surface: bare `seed <url>` as install, or a front-of-house alias.
+- The command surface: bare `sb <url>` as install, or a front-of-house alias.
 - `spin` is **not available** as a verb flavor — love.c registers a nif under that string and
   the egg mops the nom, so it reads free on the book while the table entry stands.
 
 ## where it lives
 
-`crew/seed/` + `lib/seed/` (the holo/kore all-the-way-down precedent). The dock cluster
+`crew/sb/` + `lib/sb/` (the holo/kore all-the-way-down precedent). The dock cluster
 ([`port/inle/`](../port/inle/)) does the hard half — apply a patch, gate it (rebuild +
 `make test`, red reverts), adopt it (re-exec onto the new generation); `sync`/`record` are the
 DAG surface over the same store.
