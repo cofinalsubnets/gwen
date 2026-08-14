@@ -379,7 +379,10 @@
 (: operators (pins (tablet 0)
  0 (pins (tablet 0)                                 ; --- ARITY 0: glued. takes nothing from the form
  '< 'cap '> 'cup '+ 'net '* 'prod '| 'abs '- 'negate '/ 'reciprocal
- '% 'fraction '? 'bit '$ 'saturate '! 'nil?)   ; `.` is pinned here by post.l, whose dot it is
+ '% 'fraction '? 'bit '$ 'saturate '! 'nil? '^ 'jot)   ; `.` is pinned here by post.l, whose dot it is
+                                               ; ⚠ ^ ALSO rides arity 2 as xor: the lane is the
+                                               ; key, so glued ^x counts up and spaced a ^ b does
+                                               ; not -- $ is the same two-lane sigil (saturate/apply)
  1 (tablet 0)                                       ; --- ARITY 1: a right operand and no left. no walk yet
  2 (pins (tablet 0)                                 ; --- ARITY 2: spaced. a left operand and a right
  '** 70

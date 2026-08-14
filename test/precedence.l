@@ -136,9 +136,11 @@
  ; a copy of the sigil map. one nom lives in as many lanes as it has faces, and `?` is the pair:
  ; `bit` glued, cond spaced -- the valence law as two keys of one table. ---
  (: r (grip 0 '? ()) _ (grip 0 '? r) (r = 'bit))  ; a clear-and-restore is the non-destructive READ
- (: was (grip 0 '^ 'cup)                            ; coin a glued sigil ..
-    tree (opfix '^x)
-    _ (grip 0 '^ was)
+ ; ⚠ the fixture needs a sigil whose GLUED row is empty -- `was = ()` is half the law. it was
+ ; `^` until ^ became jot; `&` and `=` are what is left free. fill one and move this.
+ (: was (grip 0 '& 'cup)                            ; coin a glued sigil ..
+    tree (opfix '&x)
+    _ (grip 0 '& was)
     (&& (was = ()) (tree = '(cup x))))                 ; .. it factors, then clears
  ((opfix '?5) = '(bit 5))                             ; the glued lane survived intact
 
