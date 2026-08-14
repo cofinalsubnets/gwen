@@ -42,9 +42,9 @@ What genuinely stands between here and freestanding C11, each row live above:
   road, and it should be taken deliberately rather than by accident.
 - **universal character names in an identifier** — the literal half landed 2026-08-14; an
   identifier still refuses, which is the remaining half of a C99-mandatory row.
-- **`#if` arithmetic is signed throughout** where C11 demands intmax/uintmax, and `&`/`|`/`^`
-  die on a big. (`#line` landed 2026-08-14; the `#line "file"` half did not — it wants
-  `__FILE__` to stop being one name per TU first.)
+- **the `#line "file"` half** — the line half landed 2026-08-14, but the file operand is still
+  dropped; it wants `__FILE__` to stop being one name per TU first. (The `#if` evaluator landed
+  the same day, below.)
 - **an `f` suffix does not make a `float` constant** — a constraint on the value of a literal,
   and the row below already has a consumer turning it into a wrong answer.
 - **block-scope `struct` tags**, and the two remaining small syntax rows. Neither is the
@@ -302,17 +302,34 @@ into a wrong ANSWER rather than lost precision: PDCLib spells `INFINITY` as
 `(_PDCLIB_FLT_MAX * 2)`, which in mooncc multiplies in **double** to a finite 6.8e38, so
 `fmaxf(x, INFINITY) == INFINITY` is false and fdim/fmax/fmin all fail their own suites.
 
-### `#if` bit operations still die on a big
+### the `#if` evaluator — LANDED 2026-08-14, and one of its three bugs cost right answers
 
-`>>` and `<<` handle a non-negative big now (`ULONG_MAX >> 63 == 1`, the idiom every portable
-header uses to ask a type's width, used to read false and take the `#error` arm). **`&`, `|`
-and `^` do not** — love's bit ops answer nothing on a big, so `#if (0xffffffffffffffffUL & 0xff)
-== 0xff` is false. Same root as the open item in the reader-bootstrap arc.
+`#if` arithmetic is intmax_t/uintmax_t (C11 6.10.1), so a value is a 64-bit **bit pattern plus
+a signedness** — `(v u)`, v in `[0,2^64)`. Love's integers are exact and unbounded, which is
+why none of this fell out for free. Three separate wrongs lived here, and the first is the one
+worth remembering:
 
-And the evaluator is **signed throughout**: C11 says `#if` arithmetic runs in intmax/uintmax
-with a `U`-suffixed operand making the operation unsigned, so `#if 1UL - 2 < 0` must be false
-(the subtraction wraps to huge) — ours reads the values and answers true. Found writing the
-predefine table's t32 checker (`__UINT64_C(1) - 2 < 0`); no real header has tripped it yet.
+- ⚠ **truth was `0 <`, where C is `!= 0`** — so `#if -1` read **false**, and so did
+  `#if -1 && 1`, `#if -1 ? 1 : 0`, while `#if !(-1)` read true. Any header branching on a
+  negative constant took the wrong arm in silence. This was not in the ledger; the signedness
+  row is what led to it.
+- **no signedness at all**, so `1UL - 2` answered -1 where C wraps it to a huge unsigned, and
+  `-1 < 1U` read true where C reads false.
+- **`&`, `|`, `^` answered nothing on a big.** love's bit ops stop at the fixnum and every
+  pattern past 2^62 is a big, so `#if (0xffffffffffffffffUL & 0xff) == 0xff` was false.
+  `cbit` splits into 32-bit limbs, operates, and recombines — arithmetic, which bigs do take.
+  `<<`/`>>` had already routed around the same hole through multiply and divide.
+
+Held to gcc by test/cc/139-ifexpr.c, seventeen conditions across truth, signedness, the
+conversions, truncating division, arithmetic shift and the bitwise trio. ⚠ the one place gcc
+still says more: it *warns* on signed overflow in a `#if` (`0x7fffffffffffffff + 1`); we wrap
+silently and agree on the value.
+
+⚠ **The constants live at the HEAD of cpp.l's top-level `:` and must stay there.** love0's
+compiler is single-pass and folds a pure global at each definition's own compile, so one of
+them bound mid-list reads as `;; missing m64` — and only in the **mooncc0** bake, which is
+love0's lane. The default love takes it either way, so the edit looks clean and the build
+fails two targets later.
 
 ---
 
