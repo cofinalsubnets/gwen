@@ -61,6 +61,27 @@
              (? (two? r) <r ()))))
    (irec-bytes exe) (irec-at exe "ai_lvm_ir")
    (irec-read path) (: s (irec-slurp path) (? (string? s) (irec-bytes s) ()))
+   ; a SECTION's bytes by name -- the same walk one table over, for `.comment` (the
+   ; producer record) or any other named blob. ⚠ answers the (1 bytes) WRAPPER: an
+   ; empty section is a real section, and `()` alone would call it absent.
+   ; ⚠ e_shstrndx sits two past e_shnum in both classes, so it needs no row of its own.
+   (irec-sec exe nm)
+    (: (le i n) (irec-le exe i n)
+       (el l i) (? (i < 1) <l (el >l (i - 1)))
+       t (? (1 = peep exe 4 0) irec-e32 irec-e64)
+       (f i) (el t i)
+       shoff (le (f 0) (f 1)) shentsz (le (f 2) 2) shnum (le (f 3) 2)
+       shstrx (le ((f 3) + 2) 2)
+       (sh i o w) (le (shoff + ((i * shentsz) + o)) w)
+       (shf i k) (sh i (f k) (f (k + 1)))
+       stro (shf shstrx 6)
+       (cstr i) (: (go j) (? (peep exe j 0 = 0) (snip exe i j) (go (j + 1))) (go i))
+       (go i) (? (i = shnum) ()
+                 (= nm (cstr (stro + (sh i 0 4))))
+                  (: o (shf i 6) `((snip exe o (o + (shf i 8)))))
+                 (go (i + 1)))
+       (go 0))
+   (irec-secof path nm) (: s (irec-slurp path) (? (string? s) (irec-sec s nm) ()))
    ; a symbol's VIRTUAL ADDRESS, the other half of the same walk -- what a live binding wants
    ; (that plus the load bias is where the symbol actually IS), where irec-sym answers where
    ; to READ it. lib/splice.l is the caller, and it is why this walk lives in one place.

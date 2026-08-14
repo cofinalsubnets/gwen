@@ -268,7 +268,12 @@
                                                 (ld-f fs s h 'sh-align) (ld-home lane fl ty)))
                                 _ (pin lanes lane (i >< peep lanes lane ()))
                                 (class (i + 1) symt rls))
-                        (drop? i ty fl nm sz) (class (i + 1) symt rls)
+                        ; ⚠ .comment is dropped like any non-alloc section and KEPT anyway:
+                        ; it is the producer record, and the output's is the union of its
+                        ; inputs' (so a foreign .o is credited rather than claimed).
+                        (drop? i ty fl nm sz)
+                         (: _ (? (nm = ".comment") (pin ob 'comment (snip s off (off + sz))) 0)
+                            (class (i + 1) symt rls))
                         (scare 'link-section nm)))
                  (ty = 2) (: _ (ld-esz fs s h 'sy-ent nm)
                              (class (i + 1) `(off sz (ld-f fs s h 'sh-link)) rls))
@@ -809,6 +814,22 @@
               a (peep ob 'relas ())))
        0 objs)
 
+   ; -- .comment, THE PRODUCER RECORD: NUL-separated strings, no SHF_ALLOC, laid
+   ; past p_filesz beside the symbol table. `prod` is what wrote this file; the
+   ; inputs' own records ride in ahead of it, first-seen order, deduped -- so a
+   ; link mixing a foreign .o says both names and neither claims the other's code.
+   ; ⚠ a blob need not end in NUL, so the split is BOUNDED, never ld-cstr's walk.
+   (ld-cmsplit s)
+    (: n (tally s)
+       (go i j acc) (? (n <= j) (rev (? (j <= i) acc (snip s i j >< acc)))
+                       (s j = 0) (go (j + 1) (j + 1) (? (j <= i) acc (snip s i j >< acc)))
+                       (go i (j + 1) acc))
+       (go 0 0 ()))
+   (ld-comment objs prod)
+    (: (add acc t) (? (member? t acc) acc (acc + `(t)))
+       ins (foldl (\ a ob (a + ld-cmsplit (peep ob 'comment ""))) () objs)
+       (catall (map (\ t (o-strbytes t + '(0))) (foldl add () (ins + `(prod))))))
+
    ; link a set of objects -- ((id bytes-text)..) -- into a static-exe PIECE
    ; list (texts + byte lists; ld-write lays them down). entry = the first
    ; object's text. three segments map the file -- R+X code, R literals, R+W
@@ -820,7 +841,17 @@
    ; org: () takes the default base (pie 0 / elf-base); a number lays the image
    ; THERE -- the bare-metal lane (qemu -M virt wants its RAM base, 0x80000000),
    ; where `qemu -kernel` loads the segment at p_vaddr and enters at e_entry.
-   (ldlink target pie org srcs)
+   ; prod: the producer string for .comment -- what wrote THIS file, the caller
+   ; being the only one that can say (mooncc when its driver linked, holo's ld
+   ; when the applet did).
+   ; ⚠ NO VERSION IN IT, and the reason is the fixpoint: love0 is stamped
+   ; "bootstrap" on purpose (a real id there re-lays every lcat header on every
+   ; commit), so love1 -- built by love0's mooncc -- and love2 -- built by love1's
+   ; -- would carry different producer strings and differ at e_shoff, naming a
+   ; broken fixpoint where the compilers agree on every byte they EMIT. a
+   ; self-hosted compiler's own build id is circular anyway; the tree's id is in
+   ; love-version, in .rodata, where a reader can read it either way.
+   (ldlink target pie org srcs prod)
     (: mach (peep elf-machines target 0)
        _ (? (0 < mach) 0 (scare 'link-target target))
        objs (map (\ p (ld-read <p <>p mach)) srcs)
@@ -895,13 +926,17 @@
        ; binary a segfault at the first unrebased pointer.
        lanesx (tabof `(('text >< 1) ('rodata >< 2) ('data >< 3) ('nifs >< 4) ('bss >< 6) ('image >< 7)))
        st (ldstab objs glo lanesx ld-sym 24)
+       ; ⚠ .comment goes LAST so no index moves: e_shstrndx and .symtab's sh_link
+       ; are written down as 10 and 9, and a section spliced in ahead would silently
+       ; point both at the wrong table.
        shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" "ai_rela" ".bss" ".image"
-                         ".symtab" ".strtab" ".shstrtab"))
+                         ".symtab" ".strtab" ".shstrtab" ".comment"))
        (snm k) (at <>shstr k)
        symo (ld-align 8 endf) symz (tally <st)
        stro (symo + symz) strz (tally <>st)
        ssto (stro + strz) sstz (tally <shstr)
-       shto (ld-align 8 (ssto + sstz))
+       cmt (ld-comment objs prod) cmto (ssto + sstz) cmtz (tally cmt)
+       shto (ld-align 8 (cmto + cmtz))
        sht (catall `((ld-shdr 0 0 0 0 0 0 0 0 0 0)                                   ; the reserved null header
                      ; each lane runs to the page the next one starts on, so a split's pad
                      ; rides a section instead of the orphan gap the note above warns of
@@ -914,7 +949,8 @@
                      (ld-shdr (snm 6) 1 3 iaddr ioff isz 0 0 16 0)                   ; .image, the grow slot -- its own segment
                      (ld-shdr (snm 7) 2 0 0 symo symz 9 (at st 2) 8 24)              ; link=.strtab info=first global
                      (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
-                     (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)))
+                     (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)
+                     (ld-shdr (snm 10) 1 48 0 cmto cmtz 0 0 1 1)))                   ; .comment: MERGE|STRINGS, no alloc
        ; W^X: segment one is the header and the code, READ+EXECUTE; segment two the
        ; literals, READ; segment three .data through ai_rela, running out to bss in memsz
        ; alone, READ+WRITE; a fourth carries the image when there is one, RW (a heap
@@ -936,10 +972,10 @@
                      (elf64-phdr 1 6 (d0 - base) d0 d0 (r1 - d0) (bend - d0) 4096))
                  `((elf64-phdr 1 7 0 base base (r1 - base) (bend - base) 4096)))
             + (? img? `((elf64-phdr 1 6 ioff iaddr iaddr isz isz 4096)) ()))
-       hdr (elf64-hdrn (? pie 3 2) ent mach `(shto 11 10) phs)
+       hdr (elf64-hdrn (? pie 3 2) ent mach `(shto 12 10) phs)
        (hdr >< (>en + tail + (? pie `(rtab) ()) + ipad + >ei
-                + `((ld-zeros (symo - endf)) <st <>st <shstr
-                    (ld-zeros (shto - (ssto + sstz))) sht))))
+                + `((ld-zeros (symo - endf)) <st <>st <shstr cmt
+                    (ld-zeros (shto - (cmto + cmtz))) sht))))
 
    ; --- the KERNEL lane: one ELF, three doors ---------------------------------
    ; a freestanding image is laid where it RUNS and loaded where it LANDS: every

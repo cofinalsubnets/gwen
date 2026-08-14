@@ -454,6 +454,25 @@ for mode in -fno-pie -fPIE; do
     || fail "foreign gcc .o link $mode (.bss arrives zeroed + .rodata/.data.rel.ro + abs32 relocs, got $a want 42)"
 done
 
+# ------------------------------------------------------- .comment, the producer
+# what wrote the file, in the section every toolchain writes it in -- read back
+# with our own ELF walk, so this holds on any machine and needs no readelf.
+# the UNION is the point: .fgnx is our link over a gcc object, and it must credit
+# gcc for the code gcc compiled rather than claiming the whole binary.
+# ⚠ ours is "mooncc" with NO VERSION, and that is a law, not an omission: love0 is
+# stamped "bootstrap" on purpose, so a version here would make love1 and love2
+# differ and name a broken fixpoint (crew/holo/link.l says it at the door).
+cmt() { "$m" -l lib/irec.l \
+          -e "(: r (irec-secof \"$1\" \".comment\") _ (? (two? r) (puts <r) 0) _ (flush out) (quit 0))"; }
+c=$(cmt "$ho/.fgnx" | tr '\0' ' ')
+case "$c" in
+  *GCC*mooncc*) ;;
+  *) fail "mooncc link over a gcc .o must credit both in .comment, got '$c'" ;;
+esac
+c=$(cmt "$ho/.sibx" | tr '\0' ' ')
+[ "$c" = "mooncc " ] \
+  || fail "an all-ours link says exactly 'mooncc' in .comment (no version -- the fixpoint law), got '$c'"
+
 # ..and our own binaries carry a symbol table nm and gdb can read
 nm "$ho/.fgnx" > "$ho/.fgn.nm" 2>&1 || fail "nm on our exe (no symbol table)"
 for s in "T main" "T fill" "B bigbuf" "B zed" "R tbl"; do
@@ -486,7 +505,7 @@ for s in "R rotbl" "R romsg" "D mutp" "D fnp" "D wtbl" "B rozero"; do
     || fail "const lane: '$s' is not where it belongs ($(grep " ${s#* }\$" "$ho/.ro.nm"))"
 done
 
-echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, named-section lanes + their const/writable flag homes, const globals to .rodata, a FOREIGN gcc .o whole, a symbol table nm/gdb read) ok"
+echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, named-section lanes + their const/writable flag homes, const globals to .rodata, a FOREIGN gcc .o whole, a symbol table nm/gdb read, a .comment naming every producer) ok"
 
 
 # ------------------------------------------------ the warm compiler

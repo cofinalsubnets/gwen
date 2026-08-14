@@ -134,7 +134,7 @@
        _ (? (two? fs) () (die "usage: kore ld [-pie] [-t x64|arm64|riscv64] [-Ttext ADDR] A.o.. -o OUT"))
        _ (? (tally o) () (die "ld: no -o OUT"))
        srcs (map (\ f (: r2 (uread f) (? (two? r2) `(f <>r2) (die ("ld: cannot open " + f))))) fs)
-       ps (ldlink tgt pie org srcs)
+       ps (ldlink tgt pie org srcs "holo")
        _ (ld-write o ps)
        _ (chmod o 493)
        0)
