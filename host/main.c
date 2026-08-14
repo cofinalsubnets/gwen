@@ -749,6 +749,10 @@ static struct ai *boot(struct ai *g, bool argp) {
     "(use 'bao)"                                       // p1 goes FIRST: this lane never hatches an egg, and prel's
     "(use 'kanren)"                                    // loader folds `sound` at its own compile; kanren splices
                                                        //   because the corpus reads unify/ufail bare
+    "(use 'pat)"                                       // ⚠ pat BEFORE cli (cli.l is written in @, and a macro
+                                                       //   reaches a reader only once its layer is spliced) and
+                                                       //   before verbs: the unsplice below pops the LAST splice,
+                                                       //   which has to stay verbs
     "(use 'verbs)"                                     // the verb registry the cli rail walks -- registered, then
     );                                                 //   unspliced below: this lane runs the SAME cli.l
     g = ai_unsplice_(g);
