@@ -383,22 +383,55 @@ is in the IR table; **`lvm_cond` and `lvm_argcond` are absent from it**, because
 `ai_nilp` and a call needs the frame that puts them over the cap. Folding `Ip` gets `argtwocond`
 (28 declines) and `jump` for free and leaves `cond`/`argcond` (27) wanting a callable predicate.
 
-**So the rungs, ranked by the census as it now stands:**
+### ⚠ the blocker-SET census, which refutes the ranking above (2026-08-13)
 
-1. **fold `Ip`** — now the single biggest lever, and the census's `operand` bucket and its branch
-   bucket are the *same* problem: every `Ip` read in a handler is a cell `disg` can name. Do
-   `lvm_jump` first (no analysis), then the symbolic pass.
-2. **calls** — the `p` variants (`qap` 231, `qqp` 204, `aap`, `aqp`) plus `ap`/`apn`/`argap`, which
-   enter a callee's thread with a return address. Amble solved this shape already (a stackless
-   callout drive, restart deopt); this is that, over the compiled thread.
-3. **the `no-bridge` sixteen, and it is not the one-liner it looks like.** `two?`, `sat`, `><`,
+**A first-blocker table cannot say whether removing a rung moves a closure to native or merely to
+its next wall**, and this doc twice ranked rungs off one anyway. `jit-blockers` walks the whole
+graph and tallies *every* op the splicer cannot say; `jit-class` then asks the only question that
+matters — what would have to be built for THIS closure to splice. Over the corpus, 2939 closures
+reaching the last lane:
+
+| class | count | share | what it means |
+|---|---|---|---|
+| **call** | **2557** | **87%** | contains an apply. No branch or operand work reaches it. |
+| other | 233 | 8% | no-IR ops only: `=` 440, `><` 198, `peep` 137, `nil?` 135, `sat` 28 … |
+| branch-plus | 99 | 3.4% | a branch *and* something else |
+| none | 30 | 1% | blocked by nothing — and only 11 fire (see below) |
+| **branch-only** | **20** | **0.7%** | **the entire payoff of folding `Ip`** |
+
+**So `Ip` was about to be built for twenty closures.** The rung was ranked #1 an hour earlier off
+`qap` 231 + `qqp` 204 + the cond family, and every one of those first-blocker counts was a closure
+that would have hit a call two rows later. The Ip fold is still the right *mechanism* — the
+analysis in the section above holds — but it is a 0.7% rung and must not be built next.
+
+⚠ **calls are not one rung among several; they are 87% of the entire question.** Nothing else in
+this table is worth building first, and a splice tier that cannot cross an apply cannot be fast on
+this corpus at any coverage of anything else. The shape is known and is amble's: a stackless drive
+out, a resume label, deopt by restart. That is the next real piece of work, and it is a large one.
+
+⚠ the `none` 30 against `fired` 11 is the one cheap gap left, and most of it is **a quote of a
+non-charm**: `dis` answers `'x` for a heap quote, which the blocker scan counts sayable and the
+splicer correctly refuses — the word is a heap pointer and moves under the collector. Honest, and
+worth about nineteen closures.
+
+**So the rungs, ranked by the blocker-set census — which is the one to trust:**
+
+1. **calls** — 87%, and nothing else comes close. The `p` variants (`qap`, `qqp`, `aap`, `aqp`)
+   plus `ap`/`apn`/`tapn`/`argap` enter a callee's thread with a return address. Amble solved this
+   shape already (stackless callout drive, restart deopt); this is that, over the compiled thread.
+2. **the no-IR ops behind `other`** — 8%, and `=`/`><`/`peep`/`nil?` are ordinary generic ops
+   whose handlers are over the `-fir` cap. ⚠ note this is NOT the cap rung refused above: that one
+   was priced on first-blocker counts and bought zero firings. Price it on this table instead.
+3. **fold `Ip`** — the mechanism is right and the payoff is 0.7%. Build it when calls are done and
+   it is the thing in the way, not before.
+4. **the `no-bridge` sixteen, and it is not the one-liner it looks like.** `two?`, `sat`, `><`,
    `quit` are prel **aliases** — `(: two? link? … sat saturate)`, one value under two spellings,
    `id?`-identical at runtime. `dis` names by book key and gets the alias; `ai_nif_lvm` is derived
    from `nif-rows` and only knows the original. So the fix belongs where the alias is made, not in
    a lookup table inside the JIT — and a written-down `two? → link?` row in `lib/splice.l` is
    exactly the duplication `nifs.l` exists to prevent. ⚠ this is why the gate's `sm-pred` sample
    still declines: it is the only sample whose op is an alias.
-4. everything else in the table is one or two closures apiece and is not worth a rung.
+5. everything else in the table is one or two closures apiece and is not worth a rung.
 
 ⚠ **the lane must decline CHEAPLY, and today it does the opposite**: the first thing `jit` does is
 `dis`, the most expensive thing it does, and 1770 of the 1969 declines then throw that walk away

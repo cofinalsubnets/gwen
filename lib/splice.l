@@ -61,6 +61,7 @@
    ; rows; LOVE_SPLICE_TRACE says them as they happen.
    jit-tally (tablet 0)
    jit-trace (? (getenv "LOVE_SPLICE_TRACE") 1 0)
+   jit-cens (? (getenv "LOVE_SPLICE_CENSUS") 1 0)   ; the blocker-SET census, census runs only
    (jit-no k m) (: _ (pin jit-tally k (1 + peep jit-tally k 0))
                    _ (? jit-trace (say err ("splice: " + m + "\n")) 0) ())
    (jit-why _) (map (\ k (k >< peep jit-tally k 0)) (keys jit-tally))
@@ -351,6 +352,44 @@
                   (: bs (peep ((from 'holo 'assemble) 'x64 (jit-abs fs (jit-live 0))) 'bytes 0)
                      (? (two? bs) [1 bs] (jit-no ['holo] "holo assembled nothing") [0])))
              _ (pin jit-blobs rows v) v)))
+   ; --- the census's second question ------------------------------------------------------
+   ; ⚠ `jit-why` counts FIRST blockers, and a first-blocker table cannot say whether removing
+   ; one rung moves a closure to native or merely to its next wall. This walks the whole GRAPH
+   ; (disg, so the arms count too) and tallies EVERY op the splicer cannot say, plus -- the row
+   ; that actually decides where to spend -- how many closures are blocked by nothing but the
+   ; op class you are about to build. Census-only: nothing on the hot path calls it.
+   (jit-sayable? nm os)
+    (? (member? nm '(lvm_arg lvm_arg0 lvm_arg1 lvm_arg2 lvm_arg3 lvm_quote lvm_quo0 lvm_quo1
+                     lvm_quo2 lvm_quo3 lvm_quom1 lvm_quom2 lvm_aa lvm_aq lvm_qa lvm_qq
+                     lvm_argcap lvm_argcup lvm_argtwo lvm_ret lvm_cur)) 1
+       (two? os) 0                                    ; any other operand-taking op: not yet
+       (: h (jit-lvmof nm) (? (nil? h) 0 <(jit-body h)))) ; ..else it needs clean IR
+   ; the classes, and the split that decides where to spend: a closure blocked ONLY by
+   ; branches is one the Ip fold converts; a closure containing a CALL is one no amount of
+   ; branch or operand work reaches.
+   jit-branch-ops '(lvm_cond lvm_argcond lvm_argtwocond lvm_jump)
+   jit-call-ops '(lvm_ap lvm_apn lvm_tap lvm_tapn lvm_argap lvm_argtap lvm_quoteap
+                  lvm_aap lvm_aqp lvm_qap lvm_qqp)
+   (jit-class bs)                                     ; a blocker SET -> what would unblock it
+    (? (atom? bs) 'none
+       (any (\ b (member? b jit-call-ops)) bs) 'call
+       (all (\ b (member? b jit-branch-ops)) bs) 'branch-only
+       (any (\ b (member? b jit-branch-ops)) bs) 'branch-plus
+       'other)
+   (jit-census f)                                     ; census only, behind its own env gate
+    (: bs (jit-blockers f)
+       k (jit-class bs)
+       _ (pin jit-tally ['class k] (1 + peep jit-tally ['class k] 0))
+       _ (map (\ b (pin jit-tally ['blocks b] (1 + peep jit-tally ['blocks b] 0))) bs) ())
+   (jit-blockers f)                                   ; the distinct ops a closure is blocked by
+    (: rows (? (member? 'disg (names ())) (disg f) ())
+       (go l acc) (@ l (r >< more)
+                       (: nm <>r os >>r
+                          (go more (? (jit-sayable? nm os) acc
+                                      (member? nm acc) acc  (nm >< acc))))
+                     acc)
+       (? (atom? rows) '(unreadable) (go rows ())))
+
    ; ⚠ RE-ENTRANCY, and it is not optional once this rides the creation hook: everything below
    ; is love, so splicing BUILDS closures -- dis's walk, holo's assembler, the tablets -- and
    ; each of those creations re-enters ala, the hook, and this door. The guard makes the splicer
@@ -370,6 +409,7 @@
    (jit-s f s) (? (0 < peep jit-busy () 0) ()
                   (: _ (pin jit-busy () 1)
                      r (jit-1 f s)
+                     _ (? jit-cens (jit-census f) 0)
                      _ (pin jit-busy () 0)
                      _ (? (nil? r) 0 (pin jit-fires () (1 + peep jit-fires () 0)))
                      r))
