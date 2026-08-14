@@ -422,7 +422,30 @@ worth about nineteen closures.
 kernel's `$(KCC)` lane, wasm, the device ports — do not, so the seats where bytes actually matter
 pay nothing. `dist` re-bakes the host binary, so the download door carries it.
 
-**Kept, and the deciding argument is not the 0.45%.** The IR table and the **symbol table** are a
+**⚠ and the splicer is not the only reader — which is the argument that actually settles it.** The
+compiler's IR sitting beside the code it emitted is a **provenance record**, useful to anyone
+opening the binary, and the moment it was read *as* one it found a bug in itself. `make vmret`
+checks the VM's central invariant — every `lvm_` ap tail-jumps, never returns — by shelling out to
+**objdump**, picking a return mnemonic per `e_machine`, calling itself "a first-pass heuristic" in
+its own header, and **skipping silently when no disassembler is installed**. In a tree whose boast
+is that the link, the assembly and the compiler are all ours, that one instrument borrowed
+binutils. The record states the same law with no tool and no arch knowledge at all — and when the
+two readings were put side by side they **disagreed**: objdump said all 310 functions were
+ret-free, the record said `lvm_scare` had a `ret`.
+
+**objdump was right and the record was wrong.** `irblob` broke its slice only on an *exported*
+name, so a file-scope **static**'s body rode into the previous row: `lvm_scare` carried
+`missing_tag`, `lvm_eval` carried `ap_next`, each row ending in a stranger's `ret`. Fixed by
+ending a function at any label that is not dot-prefixed (dot-prefixed ones are gen.l's internal
+labels), which pays twice — the two bad records are correct now, and **91 → 105 handlers**, because
+fourteen had been inflated past the form cap by a neighbour they had swallowed, for +4 KB. ⚠ **the
+splicer had survived this by luck**: its "ends in the dispatch tail" check happened to reject both,
+and a swallowed neighbour that ended the right way would have spliced foreign code in whole. Both
+laws — one record, one function; no record contains a `ret` — are now `test/gate/splice.l`, a
+second reading of `vmret` that needs no tool. ⚠ it covers the 105 under the cap where vmret covers
+all 310, so it does not replace vmret; they are two presentations and are meant to agree.
+
+**Kept, and the price argument is secondary to that one.** The IR table and the **symbol table** are a
 matched pair: the IR says what an op does, the symtab binds its one `la` reference to a live
 address, and either alone is useless to a splicer. The tree has *already* made this exact call for
 the other half — `mk/install.mk` ships **unstripped on purpose**, paying ~2% (four times this) to

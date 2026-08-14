@@ -8408,7 +8408,15 @@
     (: ft (: t (tablet 0) _ (foldl (\ _ n (pin t (intern n) 1)) 0 fnames) t)
        np (tally pfx)
        (want? nm) (= pfx (snip (string nm) 0 np))
-       (fnlab? f) (two? f && (<f = 'label) && peep ft <>f ())
+       ; ⚠ ANY bare label ends a function, not only an exported one. `ft` holds the emitted
+       ; names, and a file-scope STATIC is not among them -- so its entry label did not break
+       ; the slice and its whole body rode into the previous row: lvm_scare carried missing_tag
+       ; and lvm_eval carried ap_next, each row then ending in a stranger's `ret`. Internal
+       ; labels are the dot-prefixed ones, so a label without a dot IS an entry. ⚠ the splicer
+       ; only survived this by luck -- its `ends in the dispatch tail` check happened to reject
+       ; both, and a swallowed neighbour that ended the right way would have spliced in whole.
+       (dotlab? nm) ?(nom? nm && ("." = snip (string nm) 0 1))
+       (fnlab? f) ?(two? f && (<f = 'label) && (peep ft <>f () || !(dotlab? <>f)))
        ; ⚠ acc arrives REVERSED, so the padding that belongs to the NEXT function sits at its
        ; head -- drop it, or every row ends in a stranger's alignment
        (trim l) (? (two? l && two? <l && (<<l = 'align)) (trim >l) l)

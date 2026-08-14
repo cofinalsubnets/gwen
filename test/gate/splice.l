@@ -72,6 +72,31 @@
                      + show (tally (dis sm-brn)) + " rows -> " + show (tally (disg sm-brn)) + ")\n"))
            (die "disg does not outreach dis, or a branch target names no row"))
         (say out "  disg: absent on this build\n"))
+   ; ⚠ THE RECORD MUST BE ONE FUNCTION, and this is a SECOND READING of the tail-jump law --
+   ; `make vmret` reads it off a disassembly (objdump, per-arch return mnemonics, its own header
+   ; calling it a heuristic, and a silent skip when no disassembler is installed); this reads it
+   ; off what the compiler WROTE DOWN, needing no tool and no arch knowledge. Two presentations,
+   ; one denotation. ⚠ they disagreed once, and the record was wrong: irblob broke its slice
+   ; only on an EXPORTED name, so a file-scope static's body rode into the previous row --
+   ; lvm_scare carried missing_tag, lvm_eval carried ap_next, each ending in a stranger's `ret`.
+   ; It cost 14 handlers too, inflated past the form cap by a neighbour they had swallowed. And
+   ; the splicer survived it only by luck: its `ends in the dispatch tail` check happened to
+   ; reject both, where a swallowed neighbour ending the right way would have spliced in whole.
+   (ir-foreign fs) (: (go l acc) (? (atom? l) acc
+                                    (: f (cap l)
+                                       (go (cup l) (? (&& (id? (cap f) 'label) (! (jit-lbl? (caup f))))
+                                                      (link (caup f) acc) acc))))
+                      (go fs ()))
+   (ir-ret? fs) (: (go l) (? (atom? l) 0 (id? (cap (cap l)) 'ret) 1 (go (cup l))) (go fs))
+   _ (: t (jit-irtab ())
+        tb (? (two? t) (caup t) ())
+        ks (? (two? t) (keys tb) ())
+        fo (filter (\ k (two? (ir-foreign (peep tb k ())))) ks)
+        rt (filter (\ k (ir-ret? (peep tb k ()))) ks)
+        _ (? (two? fo) (die ("an IR record carries a foreign function label: " + show fo)) 0)
+        _ (? (two? rt) (die ("an IR record contains a ret -- the tail-jump law: " + show rt)) 0)
+        (say out ("  ai_lvm_ir: " + show (tally ks)
+                  + " records, each one function and ret-free (vmret's law, off the record)\n")))
    it (jit-irtab ())
    _ (? (two? it) 0 (die "no ai_lvm_ir in this binary -- was love.o built with -fir=lvm_?"))
    _ (: cf (jit-ir 'lvm_cup)
