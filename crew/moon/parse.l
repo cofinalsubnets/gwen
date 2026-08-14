@@ -107,8 +107,10 @@
    ; begin or a declarator may carry them -- __attribute__((..)) / _Alignas(..)
    ; balance-skip their parens; _Noreturn / __inline stand alone.
    qualkw '(const volatile restrict register auto inline extern static)
+   ; ⚠ _Alignof/__alignof__ are NOT here: they are operators (punary), and a skip ate
+   ; the parenthesized operand whole.
    qualid '("__attribute__" "__inline" "__inline__" "__restrict" "__restrict__"
-            "__volatile__" "__const" "_Noreturn" "_Alignas" "__alignof__" "__extension__")
+            "__volatile__" "__const" "_Noreturn" "_Alignas" "__extension__")
    (pquals ts)
     (? !(two? ts) ts
        (: t <ts
@@ -260,24 +262,30 @@
                              (go >s d))
                          (go >s d))))
        (go ts 0))
-   ; the declaration's ALIGNED attribute: `aligned ( N )` (or bare `aligned` --
-   ; gcc's "biggest useful", 16) anywhere in the form, scanned to the first
-   ; depth-0 `;` or `{` like secat?. HONORED, not skipped: cgdata lays the
-   ; global on the boundary and the .o's .data header asks the linker for the
-   ; same -- a skipped aligned(N) would silently MISALIGN (page tables, DMA),
-   ; which is worse than a refusal. N must be a literal number; any other
-   ; argument shape is ignored like the hint attributes. -> N | ()
-   (alignat? ts)
+   ; the declaration's ALIGNMENT ask, both spellings at one door: gcc's `aligned(N)`
+   ; (bare `aligned` is its "biggest useful", 16) and C11's `_Alignas(N|type-name)`,
+   ; scanned to the first depth-0 `;` or `{` like secat?. HONORED, not skipped --
+   ; cgdata lays the global on the boundary and the .o header asks the linker for the
+   ; same, where a skipped ask MISALIGNS in silence (page tables, DMA). -> N | ()
+   ; ⚠ `aligned` counts only INSIDE parens: at depth 0 it is an ordinary identifier,
+   ; and reading it there over-aligned every global named `aligned`.
+   (alignat? ps ts)
     (: (go s d) (? !(two? s) ()
                    (: t <s
                       (? ((d < 1) && (tp? t ";" || tp? t "{")) ()
                          (tp? t "(") (go >s (d + 1))
                          (tp? t ")") (go >s (d - 1))
-                         ((tkk t = 'id) &&
+                         ((0 < d) && (tkk t = 'id) &&
                           ((tkv t = "aligned") || (tkv t = "__aligned__")))
                           (? (peekp >s "(")
                              (? (two? >>s && (tkk <>>s = 'num)) (tkv <>>s) (go >s d))
                              16)
+                         ; C11 6.7.5: `_Alignas(T)` IS `_Alignof(T)`, so the type lane
+                         ; answers through talign like the operator does
+                         ((tkk t = 'id) && (tkv t = "_Alignas") && peekp >s "(")
+                          (? (two? >>s && (tkk <>>s = 'num)) (tkv <>>s)
+                             (: tr (pcty ps >>s)
+                                (? (two? tr) (talign ps <tr) (go >s d))))
                          (go >s d))))
        (go ts 0))
    (anyat? ts)                                       ; ANY leading __attribute__((..)): the rest | ()
@@ -633,7 +641,9 @@
            (? (peekp ts2 "[")                          ; abstract ARRAY `T [n]..` (e.g. `struct timespec const[2]`)
                (: dr (adims ps ts2 ())                 ; -> nested arr of ty; pparams decays it to a pointer
                   (? !(two? dr) () [[() (mkarr ty <dr)] <>dr]))
-              (peekp ts2 ")" || peekp ts2 ",") [[() ty] ts2]
+              ; ⚠ ":" is _Generic's association -- an anonymous bitfield never reaches
+              ; here (pmembers takes its own ":" arm first), so the widening costs it nothing
+              (peekp ts2 ")" || peekp ts2 "," || peekp ts2 ":") [[() ty] ts2]
               ())
           (: name (tkv <ts2)
              ts3 >ts2
@@ -828,6 +838,26 @@
           (: dr (pdtor ps <>br <br)
              (? (two? dr) [<><dr <>dr] ()))))
 
+   (pdecay ty) (? (arr? ty) ['ptr <>ty] (fn? ty) ['ptr ty] ty)   ; _Generic's lvalue conversion
+   ; _Generic's associations: `type-name : expr` rows, `default` wearing 'dflt.
+   ; -> (rows rest) | ()
+   (pgarms ps ts)
+    (: tr (? (tkw? <ts 'default) ['dflt >ts] (pcty ps ts))
+       rk (? (two? tr) (want <>tr ":") ())
+       er (? (two? rk) (pasn ps rk) ())
+       (? !(two? er) ()
+          (: r <>er row [<tr <er]
+             (? !(peekp r ",") [[row] r]
+                (: more (pgarms ps >r)
+                   (? (two? more) [(row >< <more) <>more] ()))))))
+   ; the selected expression, presence-wrapped. ⚠ equality is STRUCTURAL over the
+   ; resolved type, so a `const int:`/`int:` pair reads as one row -- cc drops quals.
+   (gpick rows ty)
+    (: (go l w) (? !(two? l) w                       ; w carries the default: one pass settles it
+                   (: t <<l e <><l
+                      (? (t = ty) [1 e] (go >l (? (t = 'dflt) [1 e] w)))))
+       (go rows ()))
+
    ; complex usual-arithmetic conversion (C99 6.3.1.8): exactly one side
    ; complex, the other arithmetic-real -> the real side rises to {x, 0}
    ; (a clit, single-eval), so gen's complex lane only meets complex operands
@@ -894,6 +924,16 @@
                  cps (: raw (utf8dec (tkv t)) (? (tkk t = 'str16) (s16 raw) raw))
                  (nums l) (? !(two? l) [['num 0]] (['num <l] >< nums >l))
                  [['clit ['arr ety (tally cps + 1)] ['init (nums cps)]] >ts])
+             ; _Generic (C11 6.5.1.1): the controlling expression is TYPED, never
+             ; evaluated -- only the selected arm reaches gen. no match, no default: refuse.
+             ((tkk t = 'id) && (tkv t = "_Generic"))
+              (: r1 (want >ts "(")
+                 rc (? (two? r1) (pasn ps r1) ())
+                 r2 (? (two? rc) (want <>rc ",") ())
+                 ga (? (two? r2) (pgarms ps r2) ())
+                 rest (? (two? ga) (want <>ga ")") ())
+                 hit (? (two? rest) (gpick <ga (pdecay (ptype ps <rc))) ())
+                 (? (two? hit) [<>hit rest] ()))
              ; the varargs builtins (my stdarg.h maps va_* onto these): va_arg's
              ; second operand is a TYPE, so they can't ride the ordinary call path
              ((tkk t = 'id) && (tkv t = "__builtin_va_arg"))
@@ -1047,6 +1087,20 @@
                        (? (two? r) (: ty (ptype ps <r)
                                       (? (ty && !(varr? ty))      ; a VLA's size is RUNTIME: defer to gen's szof
                                          [['cast (szty ps) ['num (tsz ps ty)]] <>r] [['szof <r] <>r])) ()))))
+             ; _Alignof (C11 6.5.3.4) through talign, the door playout lays members with,
+             ; so it cannot drift from the layout it describes. ⚠ the EXPRESSION operand
+             ; is gcc's __alignof__ alone; C11's spelling takes a type-name only.
+             ((tkk t = 'id) && member? (tkv t) '("_Alignof" "__alignof__"))
+              (: r1 >ts
+                 (? (peekp r1 "(" && tkbty? ps <(pquals >r1))
+                     (: tr (pcty ps >r1)
+                        rest (? (two? tr) (want <>tr ")") ())
+                        (? (two? rest) [['cast (szty ps) ['num (talign ps <tr)]] rest] ()))
+                    !(tkv t = "__alignof__") ()
+                    (: r (punary ps r1)
+                       (? !(two? r) ()
+                          (: ty (ptype ps <r)
+                             (? ty [['cast (szty ps) ['num (talign ps ty)]] <>r] ()))))))
              ; __extension__ (gcc) prefixes a cast-expression as a no-op
              ((tkk t = 'id) && (tkv t = "__extension__")) (punary ps >ts)
              (tp? t "*") (: r (punary ps >ts)
@@ -1759,7 +1813,7 @@
        _ (? (peep ps 'curweak ()) () (? (wkany? ts) (pin ps 'curweak 1) ()))
        _ (? (peep ps 'curinl ()) () (? (inlany? ts) (pin ps 'curinl 1) ()))
        _ (? (peep ps 'curnoinl ()) () (? (noinlany? ts) (pin ps 'curnoinl 1) ()))
-       _ (? (peep ps 'curalign ()) () (: an (alignat? ts) (? an (pin ps 'curalign an) ())))
+       _ (? (peep ps 'curalign ()) () (: an (alignat? ps ts) (? an (pin ps 'curalign an) ())))
        (ptop9 ps ts))
    (ptop9 ps ts)
     (? (peekp ts ";") ['(tdef) >ts]           ; a stray top-level `;` -- an empty declaration

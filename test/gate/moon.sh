@@ -80,6 +80,29 @@ for f in test/cc/*.c; do
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
 done
 
+# -------------------------------- C11 conditional features (6.10.8.3), per target
+# gcc cannot be the oracle here -- it HAS atomics -- so these are ours alone, and
+# each row must track the parity table: a claimed absence we do not have sends a
+# portable source down a fallback for nothing.
+c11feat() {                        # TGT MACRO want(1 present | 0 absent)
+  if [ "$3" = 1 ]; then b="#ifndef $2"; else b="#ifdef $2"; fi
+  printf '%s\n#error no\n#endif\nint m(void){return 0;}\n' "$b" > "$ho/.feat.c"
+  moonrun -c -t "$1" -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+    || fail "C11 feature macro $2 on $1 (want present=$3)"
+}
+for t in x64 arm64 riscv64 thumb2 thumb2sp thumb1; do
+  for mac in __STDC_NO_ATOMICS__ __STDC_NO_THREADS__ __STDC_UTF_16__ __STDC_UTF_32__; do
+    c11feat "$t" "$mac" 1
+  done
+  case $t in x64|arm64) c11feat "$t" __STDC_NO_VLA__ 0 ;; *) c11feat "$t" __STDC_NO_VLA__ 1 ;; esac
+  case $t in x64)       c11feat "$t" __STDC_NO_COMPLEX__ 0 ;; *) c11feat "$t" __STDC_NO_COMPLEX__ 1 ;; esac
+done
+# the freestanding header set is C11 4p6: these two were the ones we did not ship
+printf '#include <iso646.h>\n#include <stdalign.h>\nint m(void){return (1 and 2) + alignof(int);}\n' \
+  > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 || fail "iso646.h + stdalign.h"
+echo "mooncc: C11 conditional features track the parity table on all six targets"
+
 # --------------------------------------------- -fno-inline: real, and neutral
 # TWO halves, and both are the point: the flag must BITE (more functions reach
 # the object, always_inline included -- the driver's word outranks the source's)

@@ -18,6 +18,44 @@ out/host/love wake out/host/mooncc.image mooncc \
 
 ---
 
+## is it a conforming implementation?
+
+Not yet, and the bar is worth stating exactly, because mooncc has answered
+**`__STDC_VERSION__ 201112L` since before any of C11 was in it** — that claim is the thing to
+make true or stop making.
+
+C11 §4 asks two things of a *freestanding* implementation: accept every strictly conforming
+program, and produce a **diagnostic** for every violation of a syntax rule or constraint. Nine
+headers come with it — `<float.h> <iso646.h> <limits.h> <stdalign.h> <stdarg.h> <stdbool.h>
+<stddef.h> <stdint.h> <stdnoreturn.h>`. All nine ship as of 2026-08-14 (`iso646.h` and
+`stdalign.h` were the two missing). **Hosted** conformance is a different arc entirely — it is
+a question about the C library, not the compiler (doc/moon-userland.md).
+
+Four of the biggest holes are not holes at all once declared, and that is now done: atomics,
+threads, complex and VLAs each have a `__STDC_NO_*` macro, and C11 counts an implementation
+that says so as conforming without them.
+
+What genuinely stands between here and freestanding C11, each row live above:
+
+- **`_Thread_local`** — the one absent keyword with **no** opt-out macro. `__STDC_NO_THREADS__`
+  excuses `<threads.h>` and not the storage class. A single-threaded freestanding
+  implementation can map it to plain static and be observationally right; that is the cheap
+  road, and it should be taken deliberately rather than by accident.
+- **universal character names** — `\uXXXX`/`\UXXXXXXXX`, mandatory since C99, absent in the lexer.
+- **`#line` does not move `__LINE__`**, and `#if` arithmetic is signed throughout where C11
+  demands intmax/uintmax (`&`/`|`/`^` also die on a big). Both are preprocessor rows.
+- **an `f` suffix does not make a `float` constant** — a constraint on the value of a literal,
+  and the row below already has a consumer turning it into a wrong answer.
+- **block-scope `struct` tags**, the four small syntax rows in the absent table, and the
+  statement-only `_Static_assert` TU.
+- **the diagnostic obligation**: a non-constant `_Static_assert` is let by today, which is a
+  constraint violation passing in silence — the one class §4 names outright.
+
+None of these is large on its own. The honest summary is that conformance here is a **ladder of
+small rungs, not a rewrite** — and that the ledger below is the ladder.
+
+---
+
 ## the syntax ledger
 
 All of C89 passes. What remains is C99/C11/GNU.
@@ -26,9 +64,9 @@ All of C89 passes. What remains is C99/C11/GNU.
 
 | construct | probe |
 |---|---|
-| `_Alignof` | `_Alignof(int)` |
-| `_Generic` | `_Generic(x, int: 1, default: 0)` |
-| `_Thread_local` | `_Thread_local int e;` — no TLS anywhere, so the refusal is honest |
+| `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
+| `_Thread_local` | `_Thread_local int e;` — no TLS anywhere, so the refusal is honest. ⚠ this one has **no** `__STDC_NO_*` macro: `__STDC_NO_THREADS__` excuses `<threads.h>` and nothing else |
+| a universal character name | `Å` in an identifier or a literal — the escape refuses, loudly |
 | statement expressions | `({ … })` |
 | computed goto | `&&label`, `goto *p` |
 | plain `typeof` | `typeof(x) y;` — ⚠ only `__typeof` / `__typeof__` are recognized |
@@ -56,13 +94,30 @@ otherwise: designated initialisers (both `.field =` and `[i] =`), compound liter
 definitions, bitfields including compound assignment, flexible array members, variadic macros,
 `long long`, hex floats, anonymous unions, `restrict`, `static inline`, mixed declarations,
 `for`-scoped declarations, `_Static_assert` (including `&&`/`||`/`?:` in the constant),
+`_Generic` and `_Alignof` (landed 2026-08-14, below),
 string-literal concatenation, self-referential structs, enum trailing commas, multidimensional
 arrays, brace elision in nested initialisers, pointer-to-array declarators, functions returning
 function pointers, multi-character constants (`'ab'` is 0x6162, gcc's packing, signed at four
 chars), binary literals (`0b1010`, gcc's extension and C23's spelling), `__func__`, and
 `__typeof__` over locals, globals, struct members, dereferences and function names.
 
-Three of them carry an edge worth knowing:
+**`_Generic` and `_Alignof` landed 2026-08-14** (test/cc/136-c11.c, held to gcc). `_Generic`
+picks on the controlling expression's lvalue-converted type (`pdecay`) and lowers to the
+selected arm alone, so no other arm reaches gen — a call to an undefined function in one links
+clean. `_Alignof` answers `talign`, the door `playout` lays members with, so the operator
+cannot drift from the layout it describes; gcc's `__alignof__` rides the same lane and keeps
+its expression operand. ⚠ association matching is **structural over the resolved type**, so the
+qualifiers cc drops cannot separate two rows — `const int:` and `int:` read as one, where C11
+counts two.
+
+Four of them carry an edge worth knowing:
+
+- **`_Alignas`** is honored at **file scope only**, on the one door gcc's
+  `__attribute__((aligned(N)))` already used (`alignat?` → `ps 'aligns` → `cgdata`); both the
+  constant and the type-name operand (`_Alignas(double)`) work, and the `.o`'s section header
+  asks the linker for the same boundary. ⚠ on a **local or a struct member it is still
+  skipped in silence** — the row below.
+
 
 - **variable-length arrays** ride x64 and arm64 only; every other target says `no lane for a
   variable-length array on <tgt>`. ⚠ a VLA with an *initializer* refuses everywhere
@@ -126,6 +181,15 @@ Three deliberate deviations, all in the compiler's favor of honesty:
 - `__SIZEOF_INT128__` stays **x64-only** where real gcc also defines it on aarch64/riscv64 —
   only gen's x64 lane carries d128, and claiming it elsewhere invites code we refuse.
 
+**C11's conditional-feature macros landed 2026-08-14** (`featdefs`, moon.l; the gate sweeps all
+six targets). Saying an absence out loud is what makes it *conforming* rather than a hole, and
+it lets a portable source take its other lane instead of hitting a parse error:
+`__STDC_NO_ATOMICS__` and `__STDC_NO_THREADS__` everywhere, `__STDC_NO_COMPLEX__` off x64,
+`__STDC_NO_VLA__` off x64/arm64 — each row tracking the parity table below, because claiming an
+absence we do not have sends a consumer down a fallback for nothing. `__STDC_UTF_16__` and
+`__STDC_UTF_32__` are the positive twins: `u""` is UTF-16 and `U""` UTF-32, which is exactly
+what those two assert.
+
 A user `-D` lands after the table and wins. What remains absent is the exotic tail: the
 `__FLT16/32/64/128*` extended-float families, `__CHAR16/32_TYPE__`, decimal floats — nothing
 in the userland ladder reads them yet.
@@ -187,6 +251,26 @@ rather than in a commit.
 - **the VLA lane's runtime `dim * sizeof(elt)`** still multiplies bare (the dim is the runtime
   side), and **`offsetof` still folds signed** where every other `sizeof` wears the unsigned
   coat.
+
+### an alignment ask on a LOCAL or a MEMBER is dropped in silence
+
+`_Alignas(64) char buf[8];` inside a function, and `__attribute__((aligned(N)))` on a local or
+a struct member, compile clean and align nothing — `alignat?` runs from `ptop` only, so it
+never sees a block-scope or member declaration, and `pquals` balance-skips the tokens on the
+way past. The classic use is the one that breaks: a 16-byte-aligned buffer for an SSE load.
+
+Costing the fix: the frame side is small — `nslot` is the one cell allocator and the offsets
+are its own arithmetic, so an aligned variant is a `aup` on the running high-water, and x64/
+AAPCS64 hand every frame a 16-aligned base, which covers every ask up to 16. What is not small
+is **threading the ask from parse to that allocator**: the align would ride the `('decl ..)`
+entry, and every positional consumer of a decl entry in `gen.l` moves with it — the same shape
+of cost `asm goto`'s surface row carries. Past 16 the frame must be realigned at run time, and
+that should refuse rather than land wrong.
+
+⚠ Until it lands the tree cannot use either spelling on a local, and neither can a header it
+compiles. A struct **member** is a second rung: `playout` computes a member's alignment from
+its type alone, and an over-aligned member also moves the tag's own alignment (`asalign`'s
+16+-guard, gen.l, is written for exactly that day).
 
 ### what the %f hunt actually found — and the trap in it
 
