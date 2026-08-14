@@ -13,7 +13,7 @@
   test_rp2040 moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
-  test_holo test_as test_elf32 test_objcopy test_gz test_distboot
+  test_holo test_as test_elf32 test_objcopy test_gz test_distboot test_bakerep
 
 # $(mw) -- the WARM love: the freshly-baked image woken instead of the egg compiled
 # from source (12 ms against 1.05 s). Both lanes carry the same vocabulary, so warm
@@ -642,6 +642,12 @@ $(eval $(call moon_pkg,bzip2,BZIP2SRC,host out/host$(hsuf)/mooncc))
 # third artifact carries its own source in .rodata and lays it with `love source`.
 # Opt-in, by name -- and the reason the claim can hold at all is that the local cc
 # builds love0 and nothing else (see the script).
+# test_bakerep -- A BAKE IS A FUNCTION OF THE TREE. Seconds, and it rides the slow gate
+# because test_distboot proves the same law over the whole circle but is opt-in and
+# minutes long; a regression would otherwise wait for a release to surface.
+test_bakerep: host
+	@echo TEST test/gate/bakerep.sh
+	@sh test/gate/bakerep.sh $(ho)
 test_distboot: dist-rel dist
 	@echo TEST test/gate/distboot.sh
 	@sh test/gate/distboot.sh $(dist_src_tgz) $(dist_full_tgz) out/dist/love-$a $(ho)/love

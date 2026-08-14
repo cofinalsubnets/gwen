@@ -31,7 +31,13 @@
 # fetch. Its leg is the same shape as the full one -- poison the compilers, build, and
 # require the same bytes -- because "it unpacked something" is not the claim.
 #
-# Three complete bootstraps -- minutes, not seconds. Opt-in, by name.
+# ⚠ AND THE CIRCLE IS THE WHOLE CLAIM. The self-extracting artifact rebuilds ITSELF from
+# the source it laid, byte for byte -- so it carries everything it was made from and
+# nothing of the machine that made it. That leg only became possible once a bake stopped
+# writing the baker's ASLR base and hatch time into the image (test_bakerep guards the
+# same law cheaply, in the slow gate, so a regression does not wait for a release).
+#
+# Three complete bootstraps and a self-rebuild -- minutes, not seconds. Opt-in, by name.
 # usage: distboot.sh SRC_TGZ FULL_TGZ SELF_EXE [REFERENCE_LOVE]
 set -u
 
@@ -54,7 +60,7 @@ fail() { echo "FAIL distboot: $*" >&2; exit 1; }
 love=$R/out/host/love
 [ -x "$love" ] || fail "no $love"
 
-echo "distboot: three full bootstraps, this takes a few minutes"
+echo "distboot: three bootstraps and a self-rebuild, this takes a few minutes"
 
 # ---- 1. the LEAN artifact, through the machine's own compiler ----------------
 mkdir -p "$w/lean"
@@ -107,6 +113,31 @@ selfd=$(echo "$w"/self/love-*/)
 grep -q "was called" "$w/selfb.log" && { grep "was called" "$w/selfb.log" | head -3; fail "the self-extracted build reached for an ambient compiler"; }
 echo "  OK self: one binary lays its own source and builds it, no tar and no ambient cc"
 
+# ---- 3b. THE CIRCLE CLOSES: the artifact rebuilds ITSELF, to the byte ---------
+# The chain whole: cut a tarball, bootstrap it, build the artifact, extract the source
+# back OUT of the artifact, and rebuild -- and the second artifact is the first one's
+# bytes. That is a stronger claim than "it builds": it says the artifact carries
+# everything it was made from and nothing about the machine it was made on leaked in.
+#
+# ⚠ IT NEEDS A REPRODUCIBLE BAKE, and that is the only reason this leg can exist. An
+# image used to carry the baker's ASLR base (raw kept absolutes, the header's address
+# pair, a dead JIT husk's W^X pointer) and `born`, the hatch duration -- so two bakes of
+# one tree differed by 180012 bytes and no artifact could ever equal another.
+# ⚠ and the archive rides ALONG: `love source` lays the very bytes it carried, because
+# an extracted tree has no .git and cannot re-cut one. Same blob in, same binary out.
+( cd "$selfd" && PATH="$w/nocc:$PATH" make -j"$(nproc 2>/dev/null || echo 4)" dist ) \
+  > "$w/selfd.log" 2>&1 \
+  || { tail -20 "$w/selfd.log"; fail "the self-extracted tree cannot rebuild the artifact"; }
+grep -q "was called" "$w/selfd.log" && { grep "was called" "$w/selfd.log" | head -3; fail "the artifact rebuild reached for an ambient compiler"; }
+again=$selfd/out/dist/love-$(uname -m)
+[ -f "$again" ] || fail "the artifact rebuild produced no $again"
+if cmp -s "$selfexe" "$again"; then
+  echo "  OK circle: the artifact rebuilds ITSELF byte-for-byte ($(sha256sum < "$again" | cut -c1-16)..)"
+else
+  ls -l "$selfexe" "$again"
+  fail "the rebuilt artifact differs from the one that laid its source ($(cmp -l "$selfexe" "$again" 2>/dev/null | wc -l) bytes)"
+fi
+
 # ---- 4. THE CLAIM ------------------------------------------------------------
 if cmp -s "$lean/out/host/love" "$fulld/out/host/love" \
    && cmp -s "$lean/out/host/love" "$selfd/out/host/love"; then
@@ -128,4 +159,4 @@ if [ -n "$ref" ] && [ -f "$ref" ]; then
   fi
 fi
 
-echo "distboot: lean, full and self-extracting bootstrap to the same love -- ok"
+echo "distboot: three artifacts, one love -- and the self-extracting one rebuilds itself to the byte -- ok"
