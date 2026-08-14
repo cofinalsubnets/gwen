@@ -4625,7 +4625,7 @@ static intptr_t image_imm_index(word v) {
 // ai_image_save / ai_image_load, the BUFFER codec: save compacts g and
 // serializes {header, blob}; load validates, reconstructs, decodes in place.
 // a mismatched buffer -> NULL, so the caller boots normally -- never wrong.
-#define IMAGE_MAGIC 0x31304f4e53494119ULL   /* bump if the wire format changes */
+#define IMAGE_MAGIC 0x32304f4e53494119ULL   /* bump if the wire format changes ("..02": absolutes went anchor-relative) */
 #if defined(__x86_64__)
 #define IMAGE_ARCH 1
 #elif defined(__aarch64__)
@@ -4703,6 +4703,21 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 #define IMAGE_NLVM ((uintptr_t)(countof(image_extra_aps) + countof(def1)))
 #define IMAGE_NIMM ((uintptr_t) countof(image_immortals))
 #define IMAGE_CELLW 16u   /* max nif-cell span (words) an interior link can sit in */
+// TBOUND: the top of the index region. Every rung above encodes below it, so anything
+// at or over it is a binary pointer -- which is why one spelling, not three.
+#define IMAGE_TBOUND(hb) ((hb) + 2 * (IMAGE_NLVM + IMAGE_NIMM) \
+                               + 2 * IMAGE_NLVM * IMAGE_CELLW + 2 * countof(def1))
+// ⚠ A KEPT ABSOLUTE IS STORED RELATIVE TO THE ANCHOR, and that is what makes a bake
+// REPRODUCIBLE. It used to ride as the raw address and get +delta'd on load: correct
+// either way, but the stored bytes then moved with ASLR, so two bakes of one tree
+// differed in every one of them (7050 words of a host image, 22501 of the artifact's)
+// and no release could be checked by its hash. The offset from image_immortals is the
+// same number on every run. The BIAS re-centres it: the offset is signed (rodata sits
+// either side of the anchor) and the encoding is unsigned and must land above TBOUND,
+// so half a bias of headroom each way, and a pointer farther than that refuses the
+// dump rather than aliasing an index. Parity still discriminates: TBOUND, the bias and
+// the offset are all even, so an encoded absolute is never mistaken for a fixnum.
+#define IMAGE_ABS_BIAS ((uintptr_t) 1 << (sizeof(uintptr_t) == 8 ? 40 : 26))
 static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  uintptr_t hb = x->hb;
  // the ap table FIRST, before parity: on thumb every fn address is ODD and would
@@ -4731,12 +4746,13 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
         && (bj < 0 || x > (uintptr_t) def1[bj].x)) bj = (intptr_t) j, boff = d / sizeof(word); }
    if (bj >= 0) return (intptr_t)(hb + 2 * (IMAGE_NLVM + IMAGE_NIMM)
                                      + 2 * (((uintptr_t)(countof(image_extra_aps) + (uintptr_t) bj)) * IMAGE_CELLW + boff)); }
- if ((uintptr_t) v < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM) + 2 * IMAGE_NLVM * IMAGE_CELLW
-                   + 2 * countof(def1))
+ if ((uintptr_t) v < IMAGE_TBOUND(hb))
   x->fail = 1;                                                                   // a binary ptr in the index range: unencodable
  if (!x->suppress && img_wxp(x, (word) v)) x->fail = 1;                          // un-wakeable absolute (JIT/W^X/mmap)
- x->nabs++;                                                                      // kept absolute: the image is now binary-specific
- return v; }                                                                     // binary (host nif/.rodata): absolute, +delta on load
+ { uintptr_t r = (uintptr_t) v - (uintptr_t) image_immortals + IMAGE_ABS_BIAS;   // wraps below the anchor; the bias re-centres
+   if (r >= 2 * IMAGE_ABS_BIAS) { x->fail = 1; return v; }                       // farther from the anchor than the bias carries
+   x->nabs++;                                                                    // kept absolute: the image is now binary-specific
+   return (intptr_t)(IMAGE_TBOUND(hb) + r); } }                                  // binary (host nif/.rodata), anchor-relative
 // the decode ladder, split hot/cold by the rung-0 census (doc/oneimage.md): odd,
 // heap offset, lvm index and immortal are 98.7% of decodes; the cold tail keeps
 // the nif-cell interior, bare-fn and kept-absolute rungs out of the walk's way.
@@ -4749,7 +4765,11 @@ static ai_noinline intptr_t img_decode_cold(intptr_t v, uintptr_t hb, intptr_t d
          + 2 * countof(def1))                                                    // bare-fn lane: the cell's code slot
   return image_fn_resolve((intptr_t)((uv - hb - 2 * (IMAGE_NLVM + IMAGE_NIMM)
                                          - 2 * IMAGE_NLVM * IMAGE_CELLW) / 2));
- return v + delta; }
+ // the kept absolute, rebuilt against THIS run's anchor -- so the stored bytes never
+ // held an address and `delta` has no part in it (the anchor check upstream is the
+ // only thing left that reads one).
+ (void) delta;
+ return (intptr_t)((uintptr_t) image_immortals + uv - IMAGE_TBOUND(hb) - IMAGE_ABS_BIAS); }
 static ai_inline intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intptr_t delta) {
  if (oddp(v)) return v;
  uintptr_t uv = (uintptr_t) v;
@@ -4807,7 +4827,10 @@ void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard cons
  if (x->fail) { g->alloc(g, buf, 0); return NULL; }      // a binary pointer landed in the index range -> refuse (caller boots normally)
  // rsv1 carries the kept-absolute count, ODD-tagged ((n<<1)|1) so a pre-field image
  // (rsv1 == 0) never reads as "zero absolutes" -- those keep the strict anchor check.
- struct image_hdr H = { IMAGE_MAGIC, sizeof(word), nw, IMAGE_ARCH, (uint64_t)(word) &ai_image_save, 0, (uint64_t)(x->nabs << 1) | 1u, (uint64_t)(word) image_immortals, g->next_serial, {0}, {0} };
+ // ⚠ `anchor` is the GAP between the two symbols, not either address, and `refsym` is
+ // retired to 0 -- see the load. Addresses would write this run's ASLR base into the
+ // header, which is the whole of what a reproducible bake must not carry.
+ struct image_hdr H = { IMAGE_MAGIC, sizeof(word), nw, IMAGE_ARCH, (uint64_t)((word) &ai_image_save - (word) image_immortals), 0, (uint64_t)(x->nabs << 1) | 1u, 0, g->next_serial, {0}, {0} };
  // roots = symbols + tasks (live OUTSIDE v0), then the whole GC-traced v0..end block, GENERICALLY: any
  // field added to struct ai's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
  uintptr_t nv = (word*) g->end - (word*) &g->v0, nr = 2 + nv;
@@ -4852,10 +4875,18 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  g->major_hp = base + nw;
  ai_image_note(3);
  uintptr_t hb = bytes;
- intptr_t delta = (intptr_t)(word) image_immortals - (intptr_t) H.refsym;        // the ASLR shift dump->load (same binary, one PIE base)
- if ((H.rsv1 & 1) && !(H.rsv1 >> 1)) delta = 0;                                  // ZERO kept absolutes: fully symbolic image (offsets +
-                                                                                 // table indices only) -- binary-PORTABLE, no delta to check
- else if ((intptr_t)((word) &ai_image_save - (intptr_t) H.anchor) != delta) return NULL; // anchor delta != refsym delta -> a DIFFERENT binary (cross-arch/stale) -> normal boot
+ // ⚠ THE CHECK IS A DISTANCE, NEVER TWO ADDRESSES, and that is the last thing between a
+ // bake and a hash anyone can check: the two symbols shift together under ASLR, so storing
+ // where they LANDED wrote this run's mmap base into the header and two bakes of one tree
+ // differed there and nowhere else. The gap between them is the same number every run and
+ // discriminates exactly as well -- it is what the old pair was compared FOR (the deltas
+ // agreeing IS the gap being preserved), and a stale or cross-arch binary moves one symbol
+ // without the other. delta is 0 now in every lane: absolutes are stored anchor-relative,
+ // so nothing on the decode side wants a shift at all.
+ intptr_t delta = 0;
+ if (!((H.rsv1 & 1) && !(H.rsv1 >> 1))                                           // zero kept absolutes: fully symbolic, nothing to check
+     && (intptr_t)((word) &ai_image_save - (word) image_immortals) != (intptr_t) H.anchor)
+  return NULL;                                                                   // a DIFFERENT binary (cross-arch/stale) -> normal boot
  word const *src = (word const*)((char const*) buf + sizeof H);                   // walk the blob IN PLACE, decoding into the pool --
  for (uintptr_t off = 0; off < nw; ) {                                            // one pass of writes, no staging copy
   uintptr_t sz;
