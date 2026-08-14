@@ -31,8 +31,10 @@
 (:
    ; token readers: t = (kind val line)
    (tkk t) <t (tkv t) <>t
-   (tp? t s) (two? t && (tkk t = 'p) && (tkv t = s))
-   (tkw? t k) (two? t && (tkk t = 'kw) && (tkv t = k))
+   ; ⚠ the value is a GUARD: a nom in a pattern is a fresh BINDER, so a second
+   ; `s` there would shadow the parameter rather than demand the two agree.
+   (tp? ('p v) s) ?(v = s)
+   (tkw? ('kw v) k) ?(v = k)
    ; -- where a refusal stood (doc/moon-diag.md rung 2) --
    ; cpp hands the SPANS -- ((index file)..), which file each stretch of the
    ; flat stream came from -- on a marker token at the stream's head, laid by
@@ -364,12 +366,12 @@
        ())
 
    ; -- the type floor (parse side; gen re-derives with the same stag) --
-   (ptr? ty) (two? ty && (<ty = 'ptr))
-   (arr? ty) (two? ty && (<ty = 'arr))
-   (fn? ty) (two? ty && (<ty = 'fn))
-   (stru? ty) (two? ty && (<ty = 'struct))
+   (ptr? ('ptr)) 1
+   (arr? ('arr)) 1
+   (fn? ('fn)) 1
+   (stru? ('struct)) 1
    (cplxty? ty) (stru? ty && member? <>ty '("__cplx_double" "__cplx_float"))       ; a seeded complex
-   (bitf? ty) (two? ty && (<ty = 'bitfield))       ; a bitfield member: (bitfield uty bitoff width)
+   (bitf? ('bitfield)) 1       ; a bitfield member: (bitfield uty bitoff width)
    ; the machine WORD (bytes): a pointer and a gp scalar (long) ride it. 4 on the 32-bit thumb ABI,
    ; 8 otherwise. MUST match gen's (wsize g) (gen.l) -- a divergence mislays every pointer-bearing
    ; struct SILENTLY, since playout bakes offsets here at parse and gen trusts the stag table.
@@ -593,7 +595,7 @@
                        (: d <dims
                           (? (two? d && id? <d 'vdim) ['varr (mkarr ety >dims) <>d]
                              ['arr (mkarr ety >dims) d])))
-   (varr? ty) (two? ty && (<ty = 'varr))
+   (varr? ('varr)) 1
    ; the (params)/[dims] suffix run on a direct declarator. each suffix wraps
    ; INSIDE w (the wrap-so-far: eventual-pointee -> declared type), so the type
    ; grows inside-out; the name's OWN (params) ride out as dat (a fn DEF binds
