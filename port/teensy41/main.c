@@ -284,6 +284,8 @@ int main(void) {
     " "
 #include "ev.h"
     ,
+#include "pat.h"                                     // ⚠ pat RIDES THE POST TEXT: post is written in @, and a
+    " "                                              //   macro reaches a reader only once it is in the book
 #include "post.h"
     );
     g = ai_evals_(g, "(use 'bao) 0"); }

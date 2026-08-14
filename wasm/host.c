@@ -27,6 +27,8 @@ static const char src_corpus[] =
 #include "ev.h"
 ;
 static const char src_post[] =
+#include "pat.h"                                     // ⚠ pat RIDES THE POST TEXT: post is written in @, and a
+    " "                                              //   macro reaches a reader only once it is in the book
 #include "post.h"
 ;
 static const char boot_ai[] =

@@ -36,16 +36,17 @@
 
   ; --- text ---
   (hexd d) (? (d < 10) (48 + d) (87 + d))
-  ; ⚠ NO `@` IN THIS FILE: post rides prel, and pat is spliced long after -- a `@`
-  ; here folds to a plain application, so the arms are APPLIED and a run of charms
-  ; church-towers into an apcap that names no seat.
+  ; ⚠ `@` WORKS HERE ONLY BECAUSE pat.h RIDES THIS TEXT at every embed site -- post is
+  ; compiled before any layer is spliced, so an unaccompanied `@` folds to a plain
+  ; application and a run of charms church-towers into an apcap naming no seat.
   (esc o c)
-   (? (c = 92 || c = 34) (put o 92, put o c)
-      (c = 10) (say o "\\n")   (c = 9)  (say o "\\t")
-      (c = 13) (say o "\\r")   (c = 27) (say o "\\e")
-      (c = 0)  (say o "\\0")
-      (c >= 32) (put o c)
-      (say o "\\x", put o (hexd (c // 16)), put o (hexd (c - (16 * (c // 16))))))
+   (c @ (92 | 34) (put o 92, put o c)
+        10 (say o "\\n")   9  (say o "\\t")
+        13 (say o "\\r")   27 (say o "\\e")
+        0  (say o "\\0")
+        (c >= 32 ? (put o c)
+                   (say o "\\x", put o (hexd (c // 16)),
+                    put o (hexd (c - (16 * (c // 16)))))))
   (pstr o s) (: n (tally s)
                 (go i) (? (i < n) (: _ (esc o (peep s i 0)) (go (1 + i))) 0)
                 _ (put o 34) _ (go 0) (put o 34))
