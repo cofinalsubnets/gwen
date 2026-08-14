@@ -414,6 +414,30 @@ non-charm**: `dis` answers `'x` for a heap quote, which the blocker scan counts 
 splicer correctly refuses — the word is a heap pointer and moves under the collector. Honest, and
 worth about nineteen closures.
 
+### keeping `-fir` — chosen (revisable), and what would change it (2026-08-13)
+
+**Price, measured, not estimated:** `love.o` is 447,502 bytes with `-fir=lvm_` and 417,733 without
+— **29,769 bytes**, matching the cap-64 curve exactly (93 handlers / 29 KB), and **0.45%** of the
+6.57 MB binary. ⚠ **only `host/build.mk` carries the flag.** The freestanding targets — the
+kernel's `$(KCC)` lane, wasm, the device ports — do not, so the seats where bytes actually matter
+pay nothing. `dist` re-bakes the host binary, so the download door carries it.
+
+**Kept, and the deciding argument is not the 0.45%.** The IR table and the **symbol table** are a
+matched pair: the IR says what an op does, the symtab binds its one `la` reference to a live
+address, and either alone is useless to a splicer. The tree has *already* made this exact call for
+the other half — `mk/install.mk` ships **unstripped on purpose**, paying ~2% (four times this) to
+keep the table holo lays. Dropping `-fir` would be paying that 2% for nothing. And it is the whole
+design: the alternatives were scraping `love.c`'s text, which a shipped love does not carry, and
+disassembling our own machine code, which hands back bytes the splicer cannot reason about. A love
+that can read what it is made of is of a piece with `dis`/`disg` — reflection doors the mop leaves
+open deliberately.
+
+⚠ **what would change it:** the splicer's payoff, not the table's price. If the call rung lands and
+the corpus number is *still* negative, `-fir`, the splice lane and `lib/splice.l` go together — one
+decision, not three. Until then the 29 KB is the cost of the tier being possible at all. ⚠ and do
+not re-open this as "shrink the cap": that was refused on its own evidence (128 costs +40 KB and
+buys zero firings) and the `other` 8% is the table to re-price a cap *raise* on, if ever.
+
 ### the ev inliner is already on, and it is the same rung as calls (2026-08-13)
 
 `feel`'s `cprop` (love/ev.l) is a real beta-reduction inliner and it runs on **everything** —
