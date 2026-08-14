@@ -750,6 +750,9 @@
 ; name, so every image carrying moon.l answers `love mooncc ..` and the baked mooncc.image
 ; is a compiler without an `-e` shim to make it one. FN takes the args after the name and
 ; answers a status charm -- moon-main quits instead, which is the same contract kept early.
-(: _ (pins (from 'verbs 'tab) 'mooncc moon-main)
+; ⚠ `cc` IS THE SAME ROW. A Makefile's default CC is `cc`, so without this word an
+; artifact carrying a whole compiler still could not answer the name every recipe
+; reaches for -- and `CC=cc` on a box with no toolchain found nothing at all.
+(: _ (pins (from 'verbs 'tab) 'mooncc moon-main 'cc moon-main)
    s ((from 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"] >cmdline)
    (? (two? s) (moon-main >s) ()))

@@ -287,6 +287,128 @@
    (true-main _) 0
    (false-main _) 1
 
+   ; -- test / [ : the POSIX condition. ⚠ IT MUST EXIST AS A PROGRAM. cook's in-image
+   ; lane execs a recipe's words DIRECTLY, so `test` is no shell builtin there: a
+   ; `.. > $t && test -s $t && mv $t $@` recipe looks it up on PATH, and a missing one
+   ; fails the link with the tmp file already swept -- which is exactly how a 0-byte
+   ; lcat header reads as a broken bootstrap. 0 true, 1 false, 2 a bad expression.
+   t-fops '("-e" "-f" "-d" "-s" "-r" "-w" "-x")
+   t-nops '("-eq" "-ne" "-lt" "-le" "-gt" "-ge")
+   (t-int s)                                   ; "-12" -> (1 -12); anything else -> ()
+    (: n (tally s)
+       neg (? (0 < n) (s 0 = 45) 0)
+       st (? neg 1 0)
+       (go k acc) (? (n <= k) `(1 acc)
+                     (: c (s k) (? ((c < 48) || (57 < c)) ()
+                                   (go (k + 1) (acc * 10 + c - 48)))))
+       (? (n <= st) () (: r (go st 0)
+                          (? (two? r) `(1 (? neg (0 - <>r) <>r)) ()))))
+   ; the stat tuple is (size mtime mode ..); 61440 masks the kind, 32768 a file, 16384 a dir
+   (t-file op p)                               ; a file test, or 'no if op is not one
+    (: s (stat p) m (? (two? s) <>>s 0)
+       (? !(member? op t-fops) 'no
+          !(two? s) 0
+          (op = "-e") 1
+          (op = "-f") (32768 = (& m 61440))
+          (op = "-d") (16384 = (& m 61440))
+          (op = "-s") (0 < <s)
+          (op = "-r") (0 < (& m 292))
+          (op = "-w") (0 < (& m 146))
+          (0 < (& m 73))))
+   (t-not v) (? (id? v 'no) 'no !v)
+   (t-eval as)                                 ; a BIT, or 'no for a malformed expression
+    (: n (tally as)
+       (? (0 = n) 0
+          ((1 < n) && (<as = "!")) (t-not (t-eval >as))
+          (1 = n) (0 < tally <as)
+          (2 = n) (: op <as p <>as r (t-file op p)
+                     (? !(id? r 'no) r
+                        (op = "-z") (0 = tally p)
+                        (op = "-n") (0 < tally p)
+                        'no))
+          (3 = n) (: a <as op <>as b <>>as
+                     (? (op = "=") (a = b)
+                        (op = "!=") !(a = b)
+                        !(member? op t-nops) 'no
+                        (: x (t-int a) y (t-int b)
+                           (? (!(two? x) || !(two? y)) 'no
+                              (: p <>x q <>y
+                                 (? (op = "-eq") (p = q) (op = "-ne") !(p = q)
+                                    (op = "-lt") (p < q)  (op = "-le") (p <= q)
+                                    (op = "-gt") (q < p)  (q <= p)))))))
+          'no))
+   (test-main as) (: v (t-eval as)
+                     (? (id? v 'no) (udie 2 "test: bad expression") (? v 0 1)))
+   (t-clip l) (? !(two? >l) () (<l >< t-clip >l))    ; every element but the last
+   (bracket-main as)                           ; `[` is test that insists on its bracket
+    (: n (tally as)
+       (? ((0 = n) || !(as (n - 1) = "]")) (udie 2 "[: missing ]")
+          (test-main (t-clip as))))
+
+   ; -- uname: -s -n -r -m, or -a for all four. ⚠ THE MACHINE IS love-arch RESPELLED --
+   ; holo says x64 where uname says x86_64, and a build naming an artifact off the wrong
+   ; one names it for an arch nothing else calls. The other three come off /proc, so a
+   ; seat without one answers "unknown" rather than a guess.
+   (u-1line p d)                               ; a proc file's first line, or the default
+    (: r (uread p)
+       (? !(two? r) d
+          (: t <>r n (tally t)
+             (go k) (? (n <= k) k (t k < 33) k (go (k + 1)))
+             e (go 0)
+             (? (0 = e) d (snip t 0 e)))))
+   (u-mach _) (? (love-arch = "x64") "x86_64" (love-arch = "arm64") "aarch64" love-arch)
+   (u-join ws) (? !(two? ws) "" !(two? >ws) <ws (<ws + " " + u-join >ws))
+   (uname-main as)
+    (: fl (? (two? as) as '("-s"))
+       (want f) (? (member? "-a" fl) 1 (member? f fl))
+       ws ((? (want "-s") `((u-1line "/proc/sys/kernel/ostype" "Linux")) ())
+           + (? (want "-n") `((u-1line "/proc/sys/kernel/hostname" "unknown")) ())
+           + (? (want "-r") `((u-1line "/proc/sys/kernel/osrelease" "unknown")) ())
+           + (? (want "-m") `((u-mach ())) ()))
+       (? !(two? ws) (udie 2 "usage: uname [-snrma]")
+          (: _ (say out (u-join ws)) _ (put out 10) _ (flush out) 0)))
+
+   ; -- printf: the escapes, then %s %d %c %%. The format is REUSED while args remain
+   ; (POSIX), and an exhausted %s is "" / %d is 0 rather than a stop. No field widths:
+   ; nothing in this tree spends one, and a half-implemented %-5.2f would be a lie.
+   ; ⚠ (1 charm) or (), never a bare charm: `\0` IS 0, so a charm answer cannot say
+   ; "not an escape" -- presence has to ride out of band or \0 reads as an unknown.
+   (pf-esc d) (? (d = 110) '(1 10) (d = 116) '(1 9) (d = 114) '(1 13) (d = 92) '(1 92)
+                 (d = 97) '(1 7) (d = 98) '(1 8) (d = 102) '(1 12) (d = 118) '(1 11)
+                 (d = 48) '(1 0) ())
+   ; ⚠ the escape is resolved HERE, in the format walk, and not per character: `\` and
+   ; `n` are two charms, so a helper handed one at a time can never see a pair -- which
+   ; is exactly how `printf '%s\n'` printed a literal backslash-n.
+   (pf-one f as)                               ; one pass of the format -> the args left
+    (: n (tally f)
+       (go k l) (? (n <= k) l
+                   (: c (f k)
+                      (? ((c = 92) && (k + 1 < n))
+                         (: e (pf-esc (f (k + 1)))
+                            (? (two? e) (: _ (put out <>e) (go (k + 2) l))
+                               (: _ (put out 92) (go (k + 1) l))))
+                         !((c = 37) && (k + 1 < n)) (: _ (put out c) (go (k + 1) l))
+                         (: d (f (k + 1))
+                            (? (d = 37) (: _ (put out 37) (go (k + 2) l))
+                               (d = 115) (: _ (say out (? (two? l) <l "")) (go (k + 2) >l))
+                               ((d = 100) || (d = 105))
+                                (: v (? (two? l) (t-int <l) ())
+                                   _ (say out (show (? (two? v) <>v 0)))
+                                   (go (k + 2) >l))
+                               (d = 99) (: w (? (two? l) <l "")
+                                            _ (? (0 < tally w) (put out (w 0)) 0)
+                                            (go (k + 2) >l))
+                               (: _ (put out 37) (go (k + 1) l)))))))
+       (go 0 as))
+   (printf-main as)
+    (? !(two? as) (udie 2 "usage: printf FORMAT [ARG..]")
+       (: f <as
+          (go l) (: r (pf-one f l)                 ; POSIX: repeat while the args advance
+                    (? ((two? r) && !(r = l)) (go r) 0))
+          _ (go >as)
+          _ (flush out) 0))
+
+
    ; -- basename and dirname: the two path clips --
    (basename-main as)
     (? !(two? as) (udie 2 "usage: basename NAME [SUFFIX]")

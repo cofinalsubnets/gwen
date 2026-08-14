@@ -41,8 +41,16 @@ endif
 # bootstrap interpreter
 love0 = out/host/love0
 
-# maybe we can change this
+# the corpus egg-boots on purpose: a gate wants a fresh egg, not whatever image the
+# binary happens to carry.
+# ⚠ BUT NEVER WHERE A BUNDLED LOVE IS THE TOOLCHAIN. An egg-booted love has no verb
+# table at all, and in a seed-laid tree the verbs ARE the toolchain -- sh, make, cc,
+# test, uname. Exported there, every recipe line cook spawns lands on the file lane
+# and answers `love: cannot open -c`, 196 times in one build, which reads as a broken
+# shell rather than a blinded one.
+ifeq ($(bundled_love),)
 export LOVE_NO_IMAGE := 1
+endif
 
 # every verb here is phony: one roster, so adding one is one line and not two. (the gates
 # each fragment owns are rostered in that fragment.)
