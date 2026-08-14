@@ -6,7 +6,8 @@
 ;
 ;   love source [DIR]    lay ./love-<ver>/ and build in it
 ;   love seed   [DIR]    lay it, BUILD it, and refuse unless the seed it produces is
-;                        this binary byte for byte -- the whole fixpoint, one word
+;                        this binary byte for byte -- the whole fixpoint, one word.
+;                        prefers an ambient cc (diverse double compiling); -self forbids it
 ;
 ; ⚠ IT LAYS bin/love TOO, and that is not a convenience -- it is the point. ./Makefile
 ; takes a bin/love beside the tree as the C compiler ($(origin CC), bundled_love), so
@@ -94,11 +95,10 @@
    ; it, and REFUSES unless what comes out is this binary byte for byte. That is the
    ; release claim -- doc/dist.md's circle, test/gate/distboot.sh's fourth leg -- said as
    ; one word, so somebody holding one file can check it on their own machine.
-   ; ⚠ IT SETS NO CC, and that is the opposite of the obvious thing. The laid tree already
-   ; points its own CC at the bin/love beside it (./Makefile's bundled_love) -- and setting
-   ; CC in the ENVIRONMENT is precisely the test that turns that branch OFF, since the
-   ; guard is `$(origin CC)`, with CCACHE left uncleared besides. An override meant to
-   ; guarantee "the toolchain is us" would disable the mechanism that guarantees it.
+   ; ⚠ SETTING CC IS HOW IT DEFERS, and the mechanism is the same one that made an earlier
+   ; well-meant override wrong: CC in the ENVIRONMENT turns OFF ./Makefile's bundled_love
+   ; branch ($(origin CC) is the guard). Wrong when the point was "the toolchain is us",
+   ; exactly right when the point is "let a foreign compiler hold the scaffold".
    ; ⚠ THE FIXPOINT ONLY HOLDS ON A COMMITTED TREE, and that is a property of the artifact
    ; rather than a limit of this verb: a release is cut from the git INDEX, so an artifact
    ; built from a dirty tree carries source that is not what built it, and rebuilding from
@@ -107,18 +107,51 @@
    ; ⚠ and it is a REFUSAL, not a report: a fixpoint that failed and exited 0 would be a
    ; worse artifact than one that never claimed it.
    (seed-arch _) (? (love-arch = "arm64") "aarch64" (love-arch = "x64") "x86_64" love-arch)
-   (seed-main as)
-    (: r (src-lay (? (two? as) <as "."))
+   ; PATH, split -- "" is the cwd, the way execvp reads an empty field
+   (src-dirs _)
+    (: p ("" + (getenv "PATH")) n (tally p)
+       (go k st acc) (? (n <= k) (rev ((snip p st k) >< acc))
+                        (p k = 58) (go (k + 1) (k + 1) ((snip p st k) >< acc))
+                        (go (k + 1) st acc))
+       (go 0 0 ()))
+   ; ⚠ AND IT MUST NOT BE US. An installed love wearing the name `cc` is our own mooncc,
+   ; so building through it proves nothing a self build does not -- the whole value of
+   ; the ambient lane is that a DIFFERENT compiler held the scaffold. stat says which.
+   (src-foreign? p) (: a (stat p) b (stat "/proc/self/exe") (? (two? a) !(a = b) 0))
+   (src-cc _)                                  ; the first ambient cc that is not us -> (1 path)
+    (: (try ws) (? !(two? ws) ()
+                   (: w <ws
+                      (go ds) (? !(two? ds) (try >ws)
+                                 (: d (? (tally <ds) <ds ".") p (d + "/" + w)
+                                    (? (src-foreign? p) [1 p] (go >ds))))
+                      (go (src-dirs ()))))
+       (try '("cc" "gcc" "clang")))
+   (seed-main as0)
+    (: self? (? (two? as0) (<as0 = "-self") 0)          ; -self: never defer, we are the toolchain
+       as (? self? >as0 as0)
+       r (src-lay (? (two? as) <as "."))
        root <>r
        exe (readlink "/proc/self/exe")
        _ (? (string? exe) 0 (src-die "cannot find my own path"))
+       ; WHOSE COMPILER: an explicit CC wins, then an ambient one unless -self, then us.
+       ; ⚠ deferring is the STRONGER claim, not a concession. A foreign cc holding the
+       ; scaffold makes this diverse double compiling -- the one thing a self build cannot
+       ; say, since a compiler carrying a Thompson attack reproduces itself byte for byte
+       ; too. It costs nothing to prefer: the ambient cc builds love0 and NOTHING else,
+       ; and both lanes were measured to the same artifact hash.
+       env (getenv "CC")
+       amb (? (|| self? (string? env)) () (src-cc ()))
+       _ (? (two? amb) (setenv "CC" <>amb) 0)
+       lane (? (string? env) ("CC=" + env + ", from the environment")
+               (two? amb) (<>amb + " -- a FOREIGN compiler, so this is diverse double compiling")
+               self? "this binary (-self)"
+               "this binary (no ambient cc found)")
        here (cwd 0)
        ; ⚠ charm?, never a truth test: chdir answers () on success and the ERRNO on
        ; failure, and an errno is negative -- so it is RED and a truth test reads the
        ; failure as the success. The kind is the only thing that tells them apart.
        _ (? (charm? (chdir root)) (src-die ("cannot enter " + root)) 0)
-       _ (puts ("seed: " + show <>>r + " files in " + root
-                + " -- building, and the toolchain is the bin/love it just laid\n"))
+       _ (puts ("seed: " + show <>>r + " files in " + root + "\nseed: toolchain -- " + lane + "\n"))
        s (herald [exe "make" "dist"])
        st (? (two? s) <s s)
        _ (chdir here)
@@ -132,7 +165,7 @@
        hb (sha256 <>b)
        (? (ha = hb)
           (: _ (puts ("seed: FIXPOINT -- " + out + "\nseed: is this binary, byte for byte ("
-                      + (snip ha 0 16) + "..)\n")) 0)
+                      + (snip ha 0 16) + "..), built by " + lane + "\n")) 0)
           (: _ (say err ("seed: FIXPOINT FAILED -- what it built is NOT this binary\n"
                          + "seed:   running " + ha + "\n"
                          + "seed:   built   " + hb + "\n"))
