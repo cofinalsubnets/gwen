@@ -41,8 +41,16 @@ endif
 # bootstrap interpreter
 love0 = out/host/love0
 
-# maybe we can change this
+# the corpus egg-boots on purpose: a gate wants a fresh egg, not whatever image the
+# binary happens to carry.
+# ⚠ BUT NEVER WHERE A BUNDLED LOVE IS THE TOOLCHAIN. An egg-booted love has no verb
+# table at all, and in a seed-laid tree the verbs ARE the toolchain -- sh, make, cc,
+# test, uname. Exported there, every recipe line cook spawns lands on the file lane
+# and answers `love: cannot open -c`, 196 times in one build, which reads as a broken
+# shell rather than a blinded one.
+ifeq ($(bundled_love),)
 export LOVE_NO_IMAGE := 1
+endif
 
 # every verb here is phony: one roster, so adding one is one line and not two. (the gates
 # each fragment owns are rostered in that fragment.)
@@ -92,7 +100,7 @@ test_extra: test_embed test_filemode waits test_kernel_arm64 test_mps2 test_mps2
 	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
 	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_elf32 test_objcopy \
 	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_sb test_vi \
-	test_moon test_clay test_moonfuzz test_ccarm64 test_ccriscv \
+	test_moon test_clay test_moonfuzz test_splice test_ccarm64 test_ccriscv \
 	test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp test_raw \
 	test_drv test_asmops test_fixpoint test_dist nettest test_thumb1 test_thumb2 test_thumb2sp \
 	test_virt test_kernel test_uefi test_wasm test_wake test_gz

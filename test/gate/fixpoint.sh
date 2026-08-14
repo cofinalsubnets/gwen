@@ -48,8 +48,9 @@ moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
 # ⚠ love.c's flags must MIRROR make's ($(moon_d)/love.o in host/build.mk), not just its
 # order: -D AI_HAVE_VERSION_H is what puts the version id in this TU, and love1 was linked
 # from make's object. Drop it here and love2 carries "unknown" -- the compare fails at the
-# string, naming a broken fixpoint where the only difference is a build flag.
-moon1 -D ai_tco=1 -D AI_HAVE_VERSION_H -I"$ho" -I. -Iout/lib -c love.c "$d/love.o" || fail "love1 mooncc -c love.c"
+# string, naming a broken fixpoint where the only difference is a build flag. -fir=lvm_ is
+# the same trap wearing its second face: it lays 28 KB of .rodata love1 has and love2 would not.
+moon1 -D ai_tco=1 -D AI_HAVE_VERSION_H -fir=lvm_ -I"$ho" -I. -Iout/lib -c love.c "$d/love.o" || fail "love1 mooncc -c love.c"
 for f in host/*.c; do
   b=$(basename "$f" .c)
   moon1 -D ai_tco=1 -I"$ho" -I. -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"

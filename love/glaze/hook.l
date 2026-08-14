@@ -164,7 +164,19 @@
                             ; temporaries, drive call-outs, restart deopt. njit-amble answers 0 on decline.
                             (: aj (njit-amble s a e gv farq lams arch)
                                (? aj (: _ (pin fires () (1 + (peep fires () 0))) aj)
-                                  (: _ (? (getenv "LOVE_AMBLE_TRACE2") (puts ("amble-DECLINE: " + (show s) + "\n")) 0) e)))))))))))))))   ; the decline trace (forensics: what the last lane passed on)
+                      ; SPLICE lane (LAST, and DORMANT unless lib/splice.l is loaded): the
+                      ; template JIT reads the COMPILED THREAD `e` back with dis and splices each
+                      ; op's own machine-form IR out of .rodata, so it says whatever the compiler
+                      ; emitted rather than what an emitter was written for -- which makes its
+                      ; coverage exactly amble's leavings (strings, gems, //%, &|^, effects).
+                      ; Read through `from` at FIRE time, not closed over: the module is loaded
+                      ; post-boot and (use 'splice) is the whole switch. ⚠ it takes `e`, never s
+                      ; -- there is no source lane here -- and it re-enters this hook on its own
+                      ; every closure, which its own busy guard is what handles.
+                                  (: sm (from 'splice)
+                                     sj (? (nil? sm) () ((sm 'jit-s) e s))     ; s, so =/show see the source like every other lane
+                                     (? sj (: _ (pin fires () (1 + (peep fires () 0))) sj)
+                                        (: _ (? (getenv "LOVE_AMBLE_TRACE2") (puts ("amble-DECLINE: " + (show s) + "\n")) 0) e)))))))))))))))))   ; the decline trace (forensics: what the last lane passed on)
       natjit)                                          ; inner `:` BODY = the natjit closure (its ~20 glaze aliases stay private); close the inner scope
    (fired? n) (n < (peep fires () 0)))                ; did the hook fire since count n? (outer, leaked with natjit/fires)
 

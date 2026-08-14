@@ -13,7 +13,7 @@
   test_rp2040 moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
-  test_holo test_as test_elf32 test_objcopy test_gz test_distboot test_bakerep
+  test_holo test_as test_elf32 test_objcopy test_gz test_splice test_distboot test_bakerep
 
 # $(mw) -- the WARM love: the freshly-baked image woken instead of the egg compiled
 # from source (12 ms against 1.05 s). Both lanes carry the same vocabulary, so warm
@@ -426,6 +426,16 @@ test_clay: host out/host$(hsuf)/mooncc.image
 test_moonfuzz: host out/host$(hsuf)/mooncc.image
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 888 mutants of test/cc)"
 	@$m wake $(ho)/mooncc.image -l test/gate/moonfuzz.l < /dev/null
+# test_splice -- the splice JIT end to end (lib/splice.l, bench/vmsplice/README.md): a live
+# closure's op rows, each op's own IR taken out of THIS BINARY's .rodata (mooncc -fir=lvm_ put
+# it there), spliced into one body, assembled by holo, its one external reference bound to a
+# live address, nif'd -- and required to agree with the closure it came from. ⚠ a PLAIN love:
+# no compiler, no source tree, no object file, which is the whole point of the IR being in the
+# binary. LOVE_NO_GLAZE because a glazed closure is a native cell `dis` reads as a husk. A
+# declined sample is a named coverage gap, not a red; a DISAGREEMENT is, and so is zero spliced.
+test_splice: host
+	@echo TEST test/gate/splice.l "(splice JIT: own IR -> holo -> nif -> differential)"
+	@LOVE_NO_GLAZE=1 $m -l test/gate/splice.l < /dev/null
 # test_ccarm64 / test_ccriscv -- the battery on a CROSS TARGET (two targets, one procedure
 # in ccarch.sh): every test/cc/*.c built by `mooncc -t <arch>`, run under qemu-user, required
 # to answer what x64 answers. The three programs no cross lane can build must REFUSE, not skip.

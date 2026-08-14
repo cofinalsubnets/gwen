@@ -293,6 +293,15 @@
    (assert (= "[/][/]\n" (cup r))))
 (: r (hark (L "out/host/love" "out/host/lush" "-c" "x=$(false); echo $?; y=$(true); echo $?"))
    (assert (= "1\n0\n" (cup r))))
+
+; ⚠ A FAILED cd MUST SAY SO. chdir answers () on success and the ERRNO on failure, and
+; an errno is NEGATIVE -- so it is red, so a truth test reads the failure as a success:
+; `cd nowhere` returned 0 with no word said, and `cd build && make` ran make wherever you
+; already stood. The kind is what separates them (charm?, never !).
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "cd /definitely-not-here; echo $?"))
+   (assert (= "1\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "cd /definitely-not-here && echo moved; echo done"))
+   (assert (= "done\n" (cup r))))
 (: r (hark (L "out/host/love" "out/host/lush" "-c" "pwd() { echo shadow; }; echo $(pwd)"))
    (assert (= "shadow\n" (cup r))))
 
