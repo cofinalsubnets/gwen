@@ -97,6 +97,42 @@ nof=$(nm "$ho/.ni-off.o" | grep -c ' [tT] ')
 [ "$nof" -gt "$non" ] || fail "-fno-inline barred no splice ($non text syms either way)"
 echo "mooncc: -fno-inline bars every splice ($non functions emitted, $nof with it) and answers the same"
 
+# ------------------------------------- -fir / -fno-ir: the record, and its set algebra
+# The compiler writing down what it built, for whoever opens the binary. The laws are the
+# SET ALGEBRA: positives collect (repeated flag == comma list, and they must agree), then
+# negatives carve, and with no positive at all the set opens so -fno-ir= alone means
+# everything-but. ⚠ -fno-inline rides along on purpose -- these functions are small enough
+# that a splice would fold them into main and there would be no record to ask about.
+cat > "$ho/.ir.c" <<'EOF'
+int aa_one(int x) { return x + 1; }
+int aa_two(int x) { return x + 2; }
+int bb_one(int x) { return x + 3; }
+int main(void) { return aa_one(1) + aa_two(2) + bb_one(3) - 12; }
+EOF
+irbuild () { o="$1"; shift; moonrun -c -fno-inline "$@" "$ho/.ir.c" "$o" >/dev/null 2>&1 \
+             || fail "-fir: compile ($*)"; }
+# a record is written as `(name form..)`, so the name followed by a space is the probe
+irhas () { grep -qa "($2 " "$1"; }
+irwant () { irhas "$1" "$2" || fail "-fir: $3 -- expected $2 in the record"; }
+irnot ()  { ! irhas "$1" "$2" || fail "-fir: $3 -- did NOT expect $2 in the record"; }
+
+irbuild "$ho/.ir-a.o" -fir=aa_
+irwant "$ho/.ir-a.o" aa_one "one prefix"; irwant "$ho/.ir-a.o" aa_two "one prefix"
+irnot  "$ho/.ir-a.o" bb_one "one prefix"
+irbuild "$ho/.ir-b.o" -fir=aa_,bb_                    # comma list
+irbuild "$ho/.ir-c.o" -fir=aa_ -fir=bb_               # ..and the repeated flag
+for n in aa_one aa_two bb_one; do
+  irwant "$ho/.ir-b.o" $n "comma list"; irwant "$ho/.ir-c.o" $n "repeated flag"
+done
+cmp -s "$ho/.ir-b.o" "$ho/.ir-c.o" || fail "-fir: a comma list and a repeated flag differ"
+irbuild "$ho/.ir-d.o" -fir=aa_ -fno-ir=aa_t           # positives, then the carve
+irwant "$ho/.ir-d.o" aa_one "negative"; irnot "$ho/.ir-d.o" aa_two "negative"
+irbuild "$ho/.ir-e.o" -fno-ir=aa_                     # no positive -> everything but
+irwant "$ho/.ir-e.o" bb_one "bare negative"; irnot "$ho/.ir-e.o" aa_one "bare negative"
+irbuild "$ho/.ir-f.o"                                 # and absent when never asked
+nm "$ho/.ir-f.o" 2>/dev/null | grep -q ai_lvm_ir && fail "-fir: a record with no flag"
+echo "mooncc: -fir collects, -fno-ir carves, a comma list IS the repeated flag (byte-identical)"
+
 # ------------------------------------------------------- the failure exits
 moonrun "$ho/.cc-none.c" "$ho/.ccx" > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "mooncc missing input exit (rc $r)"

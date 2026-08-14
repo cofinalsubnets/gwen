@@ -600,6 +600,16 @@
    ; artifact stays loud: -shared, -m.., and -Wl,/-Wa,/-Wp, (their payload is
    ; real arguments; dropping them is the silent no-op wearing a cc face).
    (pfx? a p) (: n (tally p) ((n <= tally a) && (snip a 0 n = p)))
+   ; -fir= / -fno-ir= accumulate into ONE comma list, a leading `-` on a part being the
+   ; subtraction gen.l reads. ⚠ presence is the wrapper's job here too: an unset f9 is (),
+   ; and `-fir=` with an empty prefix is a legitimate value meaning EVERY function -- so the
+   ; join tests the slot, never the string's length.
+   (irjoin old new) (? (string? old) (old + "," + new) new)
+   (irneg s) (: n (tally s)                                 ; "a,b" -> "-a,-b"
+                (go i j acc) (? (n <= i) (rev (("-" + snip s j i) >< acc))
+                                (= 44 (s i)) (go (i + 1) (i + 1) (("-" + snip s j i) >< acc))
+                                (go (i + 1) j acc))
+                (foldl (\ a p (? (string? a) (a + "," + p) p)) () (go 0 0 ())))
    ; -lm and its family ride through too, and the reason is particular to us: the
    ; driver pulls its runtime BY NEED, so the libc/libm/libdl a recipe asks for is
    ; already in the artifact before it asks. a name we cannot satisfy does not go
@@ -643,12 +653,19 @@
              ; needs a way to say don't. gcc's -fno-inline-functions is the same word.
              ((a = "-fno-inline") || (a = "-fno-inline-functions"))
               (flags r c is ds o ins t9 p9 g9 n9 x9 d9 1 f9)
-             ; -fir=PREFIX -- WRITE DOWN WHAT WE BUILT: the machine-form IR of every function
-             ; whose name starts with PREFIX, laid in .rodata under `ai_lvm_ir` as one readable
-             ; datum. The splice JIT is the reader: holo assembles those forms as they stand,
-             ; so a love holding this object can compose its own op bodies with no compiler and
-             ; no source tree. ⚠ ahead of tol?, which swallows every other -f.
-             (pfx? a "-fir=") (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9 (snip a 5 (tally a)))
+             ; -fir=PREFIX[,PREFIX..] -- WRITE DOWN WHAT WE BUILT: the machine-form IR of every
+             ; function whose name starts with one of them, laid in .rodata as one readable
+             ; datum. -fno-ir=PREFIX[,..] carves back out, gcc's -fno- word and this file's own
+             ; -fno-inline beside it. BOTH REPEAT, and both are just appended to one comma list
+             ; -- gen.l's irblob splits it and reads a leading `-` as the subtraction, so the
+             ; CLI has two flags and the compiler one string. Positives collect first, then the
+             ; negatives cut; with no positive at all the set opens, so -fno-ir= alone means
+             ; everything but. It is a debugging instrument before it is a JIT input: the
+             ; compiler's IR beside the code it emitted, for whoever opens the binary.
+             ; ⚠ both ahead of tol?, which swallows every other -f.
+             (pfx? a "-fir=") (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9 (irjoin f9 (snip a 5 (tally a))))
+             (pfx? a "-fno-ir=") (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9
+                                        (irjoin f9 (irneg (snip a 8 (tally a)))))
              (glu? a 73) (flags r c (snip a 2 (tally a) >< is) ds o ins t9 p9 g9 n9 x9 d9 i9 f9)
              (glu? a 68) (flags r c is (snip a 2 (tally a) >< ds) o ins t9 p9 g9 n9 x9 d9 i9 f9)
              (glu? a 116) (flags r c is ds o ins (totgt (snip a 2 (tally a))) p9 g9 n9 x9 d9 i9 f9)

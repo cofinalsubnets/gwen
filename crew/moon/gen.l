@@ -8406,8 +8406,23 @@
    ir-cap 64
    (irblob fs fnames pfx)
     (: ft (: t (tablet 0) _ (foldl (\ _ n (pin t (intern n) 1)) 0 fnames) t)
-       np (tally pfx)
-       (want? nm) (= pfx (snip (string nm) 0 np))
+       ; ⚠ MANY prefixes, comma-joined, and a `-` one SUBTRACTS: the positives are collected
+       ; first and the negatives carved out of them, so `-fir=lvm_,ai_,-ai_gc` is every lvm_
+       ; and ai_ function except the collector's. With NO positive the set opens and only the
+       ; negatives cut, so `-fir=-ai_` is everything but ai_ -- and the empty prefix stays
+       ; everything, which is what it already meant. The flag repeats, moon.l joining the
+       ; occurrences with the same comma.
+       (irsplit s) (: n (tally s)
+                      (go i j acc) (? (n <= i) (rev ((snip s j i) >< acc))
+                                      (= 44 (s i)) (go (i + 1) (i + 1) ((snip s j i) >< acc))
+                                      (go (i + 1) j acc))
+                      (go 0 0 ()))
+       (neg? p) ?(0 < tally p && "-" = snip p 0 1)
+       parts (irsplit pfx)
+       negs (map (\ p (snip p 1 (tally p))) (filter neg? parts))
+       poss (filter (\ p !(neg? p)) parts)
+       (hasp? ps nm) (any (\ p (= p (snip (string nm) 0 (tally p)))) ps)
+       (want? nm) ?((? (two? poss) (hasp? poss nm) 1) && !(hasp? negs nm))
        ; ⚠ ANY bare label ends a function, not only an exported one. `ft` holds the emitted
        ; names, and a file-scope STATIC is not among them -- so its entry label did not break
        ; the slice and its whole body rode into the previous row: lvm_scare carried missing_tag
