@@ -156,10 +156,11 @@
    (compose f g x) (f (g x))                      ; (* f g)
    _ (seal-hook 2 stack)
    _ (seal-hook 3 compose))
-; ⚠ map is for VALUES: link takes its two operands right to left, so a mapped EFFECT
-; (a print, a pin) fires from the tail back and the page comes out reversed -- silently,
-; every element having run. ordered effects want foldl, which is a left fold by shape.
-(: (map f l) (? (two? l) (link (f (cap l)) (map f (cup l))))
+; map runs HEAD FIRST, so a mapped effect (a print, a pin) comes out in list order.
+; the mapped value is computed AS AN ARGUMENT, which is what puts it before the recursion:
+; link's own two operands still go right to left, so nothing inside link can order them. the
+; inner takes f and l as PARAMS rather than closing over them -- three operands, no capture.
+(: (map f l) (? (two? l) ((\ f x l (link x (map f l))) f (f (cap l)) (cup l)))
    (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
    (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z)
    ; (rev l) glued onto acc in one pass. a cat per step re-copies the whole accumulation;
@@ -232,7 +233,11 @@
                                              (catmap (\ b (: m (peep b 0 ())
                                                              (? (tablet? m) (keys m) ())))
                                                      (books ())))))
-   (jot x) ((: (go i) (? (< i x) (link i (go (+ i 1))))) 0)   ; the range 0..x-1 (iota its array twin)
+   ; the range 0..x-1 (iota its array twin), and LIFTED over a list so the glued run
+   ; composes: ^^3 is (jot (jot 3)), a list of lists, since a run factors greedily.
+   ; ⚠ no glued sigil in here -- this sits ABOVE the operators table, where infix is not
+   ; yet live, so a `$x` would stay a bare nom and holo's fregs would lose a register.
+   (jot x) (? (two? x) (map jot x) (: n (saturate x) (go i) (? (< i n) (link i (go (+ i 1)))) (go 0)))
    (drop n l) (? n (drop (- n 1) (cup l)) l)
    (take n l) (? n (? (two? l) (link (cap l) (take (- n 1) (cup l)))))   ; stop at end-of-list (else it pads past it)
    (part p) (foldr (\ a m (? (p a) (link (link a (cap m)) (cup m))
@@ -395,7 +400,9 @@
                                                     ; and the sign is where it shows
  '| 30 '& 30 '&& 30 '|| 30      ; logical (&& || also macros; the row pins the band below comparison)
  '>< 25                                             ; cons -- the loosest builder
- '$ 5 '\ 5)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate), and the lambda
+ '$ 5 '\ 6)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate), and the
+                                                    ; lambda a hair ABOVE it, so ([a b] \ a * b $ [2 3]) closes the body at
+                                                    ; the $ and then applies -- at one band the right hand ate the apply
  -1 (pins (tablet 0)                                ; --- ARITY -1: spaced, no bound. a left, then all of them
  '? 10 '@ 10                                        ; the CLAUSE forms: cond, and match -- every arm stays an operand
  ': 3 ':= ':)                                       ; the binder, loosest of all; := is a bare nom, so it NAMES
