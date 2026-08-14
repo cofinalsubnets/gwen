@@ -4,8 +4,9 @@
 ; host/src.c answers it), so there is no second download and no `tar xf`: the binary
 ; you ran IS the source distribution. doc/dist.md.
 ;
-;   love source          lay ./love-<ver>/ and build in it
-;   love source DIR      the same under DIR
+;   love source [DIR]    lay ./love-<ver>/ and build in it
+;   love seed   [DIR]    lay it, BUILD it, and refuse unless the seed it produces is
+;                        this binary byte for byte -- the whole fixpoint, one word
 ;
 ; ⚠ IT LAYS bin/love TOO, and that is not a convenience -- it is the point. ./Makefile
 ; takes a bin/love beside the tree as the C compiler ($(origin CC), bundled_love), so
@@ -61,9 +62,10 @@
        _ (chmod p 493)
        p)
 
-   (source-main as)
-    (: dir (? (two? as) <as ".")
-       gz (source-gz "x")
+   ; the lay itself, answering (1 root files) -- `seed` builds on exactly this, so the
+   ; two verbs cannot drift on where the tree lands or what it contains.
+   (src-lay dir)
+    (: gz (source-gz "x")
        ; ⚠ `string?`, not `!`: an artifact with no source and one carrying an empty
        ; archive are both nil by net, and only the KIND tells them apart (host/src.c).
        _ (? (string? gz) 0 (src-die "this love carries no source"))
@@ -79,13 +81,67 @@
        root (? (dir = ".") top (dir + "/" + top))
        _ (src-lay-love root)
        _ (src-lay-tgz root top gz)
-       _ (puts ("source: " + show <>w + " files in " + root
-                + ", with bin/love and the archive -- `cd " + root + " && make`\n"))
+       [1 root <>w])
+
+   (source-main as)
+    (: r (src-lay (? (two? as) <as "."))
+       _ (puts ("source: " + show <>>r + " files in " + <>r
+                + ", with bin/love and the archive -- `cd " + <>r + " && make`\n"))
        0)
+
+   ; --- seed: the whole fixpoint, run by the artifact ON ITSELF -------------------
+   ; `love seed [DIR]` lays the source, builds a new seed with the binary that carried
+   ; it, and REFUSES unless what comes out is this binary byte for byte. That is the
+   ; release claim -- doc/dist.md's circle, test/gate/distboot.sh's fourth leg -- said as
+   ; one word, so somebody holding one file can check it on their own machine.
+   ; ⚠ IT SETS NO CC, and that is the opposite of the obvious thing. The laid tree already
+   ; points its own CC at the bin/love beside it (./Makefile's bundled_love) -- and setting
+   ; CC in the ENVIRONMENT is precisely the test that turns that branch OFF, since the
+   ; guard is `$(origin CC)`, with CCACHE left uncleared besides. An override meant to
+   ; guarantee "the toolchain is us" would disable the mechanism that guarantees it.
+   ; ⚠ THE FIXPOINT ONLY HOLDS ON A COMMITTED TREE, and that is a property of the artifact
+   ; rather than a limit of this verb: a release is cut from the git INDEX, so an artifact
+   ; built from a dirty tree carries source that is not what built it, and rebuilding from
+   ; that source cannot land on the same bytes. It comes out megabytes apart, not one byte
+   ; -- which is the shape that tells this apart from a reproducibility bug.
+   ; ⚠ and it is a REFUSAL, not a report: a fixpoint that failed and exited 0 would be a
+   ; worse artifact than one that never claimed it.
+   (seed-arch _) (? (love-arch = "arm64") "aarch64" (love-arch = "x64") "x86_64" love-arch)
+   (seed-main as)
+    (: r (src-lay (? (two? as) <as "."))
+       root <>r
+       exe (readlink "/proc/self/exe")
+       _ (? (string? exe) 0 (src-die "cannot find my own path"))
+       here (cwd 0)
+       ; ⚠ charm?, never a truth test: chdir answers () on success and the ERRNO on
+       ; failure, and an errno is negative -- so it is RED and a truth test reads the
+       ; failure as the success. The kind is the only thing that tells them apart.
+       _ (? (charm? (chdir root)) (src-die ("cannot enter " + root)) 0)
+       _ (puts ("seed: " + show <>>r + " files in " + root
+                + " -- building, and the toolchain is the bin/love it just laid\n"))
+       s (herald [exe "make" "dist"])
+       st (? (two? s) <s s)
+       _ (chdir here)
+       _ (? (0 = st) 0 (src-die ("the build failed (exit " + show st + ")")))
+       out (root + "/out/dist/love-" + seed-arch ())
+       a (src-slurp exe)
+       _ (? (two? a) 0 (src-die ("cannot read " + exe)))
+       ha (sha256 <>a)
+       b (src-slurp out)
+       _ (? (two? b) 0 (src-die ("cannot read " + out)))
+       hb (sha256 <>b)
+       (? (ha = hb)
+          (: _ (puts ("seed: FIXPOINT -- " + out + "\nseed: is this binary, byte for byte ("
+                      + (snip ha 0 16) + "..)\n")) 0)
+          (: _ (say err ("seed: FIXPOINT FAILED -- what it built is NOT this binary\n"
+                         + "seed:   running " + ha + "\n"
+                         + "seed:   built   " + hb + "\n"))
+             (quit 1))))
 
    ; ⚠ one function, two words: `src` is the short spelling and nothing more, so a
    ; reader meeting either finds the same row rather than a wrapper to chase.
    T (from 'verbs 'tab)
    _ (pins T
       'source source-main
-      'src    source-main))
+      'src    source-main
+      'seed   seed-main))

@@ -16,13 +16,13 @@
 ; set -e rides sh-eflag with sh-noe guarding conditions and && || arms.
 
 (: ; export NAME=VAL -> setenv; export NAME promotes the shell var
-   (sh-eqpos s i) (? (= i (tally s)) () (? (= (s i) 61) i (sh-eqpos s (+ i 1))))
+   (sh-eqpos s i) (? (i = (tally s)) () (? ((s i) = 61) i (sh-eqpos s (i + 1))))
    (sh-export w)
      (: p (sh-eqpos w 0)
-        (? (nil? p) (setenv w (sh-vval w))
-           (setenv (snip w 0 p) (snip w (+ p 1) (tally w)))))
+        (? !p (setenv w (sh-vval w))
+           (setenv (snip w 0 p) (snip w (p + 1) (tally w)))))
 
-   (cmderr msg) (: _ (say err (+ "lush: " (+ msg "\n"))) _ (pin sh-status () 1) 1)
+   (cmderr msg) (: _ (say err ("lush: " + (msg + "\n"))) _ (pin sh-status () 1) 1)
 
    ; --- redirects -> the fdmap ------------------------------------------------
    ; (sh-rdmap redirs) -> (1 fdmap opens writes) | ('err . msg). opens close in
@@ -32,9 +32,9 @@
    (rderr opens msg) (: _ (each opens fdclose) ('err >< msg))
    (sh-rdmap rs) (rdm rs () () ())
    (rdm rs fdmap opens writes)
-     (? !rs (L 1 (sh-rev fdmap) opens writes)
+     (? !rs [1 (sh-rev fdmap) opens writes]
         (: r <rs ion (sh-nth r 0) op (sh-nth r 1)
-           (? (= op "<h")
+           (? (op = "<h")
               (: pp (pipe 0)
                  (? (charm? pp) (rderr opens "cannot pipe")
                     (rdm >rs
@@ -44,20 +44,20 @@
               (: tf (sh-fields (sh-nth r 2))
                  (? (!(two? tf) || two? >tf) (rderr opens "ambiguous redirect")
                     (: t <tf
-                       (? (= op "<")
+                       (? (op = "<")
                             (: fd (openfd t 0)
-                               (? (< fd 0) (rderr opens (+ t ": cannot open"))
+                               (? (fd < 0) (rderr opens (t + ": cannot open"))
                                   (rdm >rs ((dfd ion 0 >< fd) >< fdmap) (fd >< opens) writes)))
-                          ((= op ">") || (= op ">>"))
-                            (: fd (openfd t (? (= op ">") 1 2))
-                               (? (< fd 0) (rderr opens (+ t ": cannot open"))
+                          ((op = ">") || (op = ">>"))
+                            (: fd (openfd t (? (op = ">") 1 2))
+                               (? (fd < 0) (rderr opens (t + ": cannot open"))
                                   (rdm >rs ((dfd ion 1 >< fd) >< fdmap) (fd >< opens) writes)))
-                          ((= op ">&") || (= op "<&"))
-                            (: d (dfd ion (? (= op "<&") 0 1))
-                               (? (= t "-") (rdm >rs ((d >< ()) >< fdmap) opens writes)
+                          ((op = ">&") || (op = "<&"))
+                            (: d (dfd ion (? (op = "<&") 0 1))
+                               (? (t = "-") (rdm >rs ((d >< ()) >< fdmap) opens writes)
                                   (sh-digits? t) (rdm >rs ((d >< sh-int t) >< fdmap) opens writes)
-                                  (rderr opens (+ t ": bad fd"))))
-                          (rderr opens (+ op ": unsupported")))))))))
+                                  (rderr opens (t + ": bad fd"))))
+                          (rderr opens (op + ": unsupported")))))))))
    (sh-hwrite wrs)
      (each wrs (\ e (: p (fdopen <e) _ (say p >e) (close p))))
 
@@ -65,16 +65,16 @@
    (sh-asnname? s)
      (: n (tally s)
         (? !n 0 !(sh-name1? (s 0)) 0
-           (: (go i) (? (= i n) 1 (? (sh-name? (s i)) (go (+ i 1)) 0)) (go 1))))
+           (: (go i) (? (i = n) 1 (? (sh-name? (s i)) (go (i + 1)) 0)) (go 1))))
    (sh-asn? segs)
      (? !(two? segs) ()
         (: h <segs
            (? !(id? <h 'lit) ()
               (: t >h p (sh-eqpos t 0)
-                 (? (nil? p) ()
+                 (? !p ()
                     !(sh-asnname? (snip t 0 p)) ()
                     (link (snip t 0 p)
-                          (: rest (snip t (+ p 1) (tally t))
+                          (: rest (snip t (p + 1) (tally t))
                              (? (tally rest) (('lit >< rest) >< >segs) >segs))))))))
    (sh-peel ws acc)
      (? (two? ws)
@@ -114,29 +114,48 @@
    ;   * a main that BLOCKS. a spawned `cat`, `yes`, `sleep`, `tee` is a child ^C
    ;     kills; in here ^C would kill the shell, and there is no pid for `kill %1`
    ;     to name. that is the job-control half, and it wants tasks before it widens.
-   ; that leaves the compiler, which is the one that pays: a make spends its whole
-   ; life calling it. `kore` is NOT here either, though kore-main answers -- its own
-   ; dispatcher reaches sh-main, cook-main and vi-main, so `kore sh ..` in here would
-   ; walk straight into the first failure above through a side door. widening this --
-   ; to the bare coreutil names, which is what would make the distro's shadow lane
-   ; free -- waits on the interrupt and stdin story, not on anything in this file.
-   sh-imgok '("mooncc")
+   ; `kore` is NOT here either, though kore-main answers -- its own dispatcher reaches
+   ; sh-main, cook-main and vi-main, so `kore sh ..` in here would walk straight into the
+   ; first failure above through a side door.
+   ; SO THE QUALIFYING TEST IS "CANNOT BLOCK, QUITS NOTHING, KEEPS NOTHING": bounded by
+   ; its own arguments, waiting on no fd it did not open. That is what the list below is,
+   ; and it is most of a build -- 152 of the 249 self-execs one seed-only bootstrap spent.
+   ; ⚠ one more class stays out and it is not in the three above: the tools that read
+   ; STDIN when handed no file operand (cat head tail wc sort uniq cut tr nl rev grep sed
+   ; tee xargs). Those are the next tier and they wait on the stdin story, which is a
+   ; question about ^C and a terminal rather than about anything in this file.
+   sh-imgok '("mooncc" "cc"
+              "test" "[" "true" "false" "echo" "printf" "uname" "pwd"
+              "basename" "dirname" "readlink" "seq" "ls" "cmp" "diff"
+              "mkdir" "rmdir" "rm" "ln" "touch" "chmod" "mv" "cp" "install"
+              "objcopy")
+   ; ⚠ nm/ar/ld/as are NOT here and could not be: the lane resolves a word to a GLOBAL by
+   ; name, and those four reach kore's applet table as folded values from a `:` scope that
+   ; never pins them. The guard already refuses them, so this is a note, not a bug -- but
+   ; an allow-list naming words the lane cannot reach would read as a wider claim.
    ; the words whose main is not spelled <word>-main. kore-main wants the WHOLE argv
    ; (it reads its own program seat); the rest take the args after the name.
-   sh-imgalias '(("mooncc" "moon-run") ("kore" "kore-main"))
+   sh-imgalias '(("mooncc" "moon-run") ("cc" "moon-run") ("kore" "kore-main")
+                 ("[" "bracket-main") ("objcopy" "objcopy"))
    (sh-pathdirs _)
-     (: p (+ "" (getenv "PATH")) n (tally p)
-        (go from k acc) (? (<= n k) (sh-rev (snip p from k >< acc))
-                           (= (p k) 58) (go (+ k 1) (+ k 1) (snip p from k >< acc))
-                           (go from (+ k 1) acc))
+     (: p ("" + (getenv "PATH")) n (tally p)
+        (go from k acc) (? (n <= k) (sh-rev (snip p from k >< acc))
+                           ((p k) = 58) (go (k + 1) (k + 1) (snip p from k >< acc))
+                           (go from (k + 1) acc))
         (go 0 0 ()))
    (sh-slashed? w) (: n (tally w)
-                      (go k) (? (<= n k) 0 (= (w k) 47) 1 (go (+ k 1)))
+                      (go k) (? (n <= k) 0 ((w k) = 47) 1 (go (k + 1)))
                       (go 0))
-   (sh-self? p) (: a (stat p) (&& (two? a) (= a (stat "/proc/self/exe"))))
+   (sh-self? p) (: a (stat p) ((two? a) && (a = (stat "/proc/self/exe"))))
+   (sh-whichp w)                                ; PATH's winner for w -> (1 path), or ()
+     (? (sh-slashed? w) (? (two? (stat w)) [1 w] ())
+        (: (go l) (? !(two? l) ()
+                     (: d (? (tally <l) <l ".") p (d + ("/" + w))
+                        (? (two? (stat p)) [1 p] (go >l))))
+           (go (sh-pathdirs ()))))
    (sh-onpath? w)                               ; is PATH's winner for w this binary
      (: (go l) (? !(two? l) 0
-                  (: d (? (tally <l) <l ".") p (+ d (+ "/" w))
+                  (: d (? (tally <l) <l ".") p (d + ("/" + w))
                      (? (two? (stat p)) (sh-self? p) (go >l))))
         (go (sh-pathdirs ())))
    ; would spawning this word land on the binary we are already running? the one
@@ -144,24 +163,31 @@
    (sh-ours? w) (? (sh-slashed? w) (sh-self? w) (sh-onpath? w))
    (sh-imgask w)
      (: al (sh-assoc w sh-imgalias)
-        mn (? (two? al) <>al (+ w "-main"))
+        mn (? (two? al) <>al (w + "-main"))
         nm (intern mn)
         (? (&& (sh-smem? w sh-imgok) !(sh-slashed? w) (member? nm (names ())) (sh-ours? w))
-           (L 1 (ev nm) (= mn "kore-main"))
+           [1 (sh-imgwrap (ev nm) mn) (mn = "kore-main")]
            0))
-   (sh-assoc w l) (? !(two? l) 0 (= w <<l) <l (sh-assoc w >l))
+   ; ⚠ THE APPLET IS WRAPPED, because udie RAISES rather than exiting: `(scare 'leave c)`
+   ; is what the verb table's own `urun` catches, and the in-image lane reaches the applet
+   ; BARE. Unwrapped, one `test` on a bad expression escapes as an unhandled raise and
+   ; takes the whole shell down instead of failing one command. moon-run wants no wrap --
+   ; it answers its status by construction, which is why it was the safe single entry.
+   (sh-imgwrap f mn) (? ((mn = "moon-run") || !(member? 'urun (names ()))) f
+                        (\ as ((ev 'urun) f as)))
+   (sh-assoc w l) (? !(two? l) 0 (w = <<l) <l (sh-assoc w >l))
    (sh-imgfn w) (: v (peep sh-imgc w 'no)
                    (? !(id? v 'no) v
                       (: f (sh-imgask w) _ (pin sh-imgc w f) f)))
 
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
-   sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false"
+   sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false" "command"
                 "read" "set" "shift" "unset" "eval" "." "wait" "local"
                 "break" "continue" "return")
    (sh-bi? nm) (sh-smem? nm sh-binames)
    (sh-readb args)
-     (: args2 (? (two? args && (= <args "-r")) >args args)
-        nms (? (two? args2) args2 (L "REPLY"))
+     (: args2 (? (two? args && (<args = "-r")) >args args)
+        nms (? (two? args2) args2 ["REPLY"])
         ln (sh-getline in)
         (? (id? ln 'eof) 1 (: _ (sh-readset nms ln 0 (tally ln)) 0)))
    (sh-readset nms ln i n)
@@ -171,21 +197,21 @@
               _ (sh-setvar <nms (snip ln i2 j))
               (sh-readset >nms ln j n))))
    (sh-rtrim s)
-     (: (go k) (? ((< 0 k) && sh-ifs? (s (- k 1))) (go (- k 1)) (snip s 0 k))
+     (: (go k) (? ((0 < k) && sh-ifs? (s (k - 1))) (go (k - 1)) (snip s 0 k))
         (go (tally s)))
    (sh-setb args)
      (? !(two? args) 0
         (: a <args
-           (? (= a "--") (: _ (pin sh-pos () >args) 0)
-              ((< 1 (tally a)) && ((= (a 0) 45) || (= (a 0) 43)))
-                (: on (? (= (a 0) 45) 1 0)
-                   (go i) (? (= i (tally a)) (sh-setb >args)
+           (? (a = "--") (: _ (pin sh-pos () >args) 0)
+              ((1 < (tally a)) && (((a 0) = 45) || ((a 0) = 43)))
+                (: on (? ((a 0) = 45) 1 0)
+                   (go i) (? (i = (tally a)) (sh-setb >args)
                              (: b (a i)
-                                _ (? (= b 101) (pin sh-eflag () on)
-                                     (= b 117) (pin sh-uflag () on)
-                                     (= b 120) (pin sh-xflag () on)
+                                _ (? (b = 101) (pin sh-eflag () on)
+                                     (b = 117) (pin sh-uflag () on)
+                                     (b = 120) (pin sh-xflag () on)
                                      0)
-                                (go (+ i 1))))
+                                (go (i + 1))))
                    (go 1))
               (: _ (pin sh-pos () args) 0))))
    (sh-dotb args)
@@ -194,17 +220,17 @@
            (? (two? (stat f))
               (: _ (pin sh-retf () 0)            ; a stale interactive `return` must not clip the file
                  p (open f "r") _ (sh-lines p "") _ (close p) (sh-status ()))
-              (cmderr (+ f ": not found")))))
+              (cmderr (f + ": not found")))))
    (sh-localb args)
      (: _ (each args (\ w (: p (sh-eqpos w 0)
-                             (? (nil? p) (pin sh-vars w "")
-                                (pin sh-vars (snip w 0 p) (snip w (+ p 1) (tally w)))))))
+                             (? !p (pin sh-vars w "")
+                                (pin sh-vars (snip w 0 p) (snip w (p + 1) (tally w)))))))
         0)
    (sh-waitb args)                              ; wait [pid..] -> the LAST one's status
      (? (two? args)
         (foldl (\ a p (: st (wait (sh-int p))
                          _ (sh-bgnote (sh-int p))
-                         (? (charm? st && (< st 0)) 127 st)))
+                         (? (charm? st && (st < 0)) 127 st)))
                0 args)
         (: _ (each (keys sh-jobs)
                    (\ nn (: j (sh-jobs nn)
@@ -213,38 +239,56 @@
            0))
    (sh-builtin argv)
      (: cmd <argv
-        (? (= cmd "exit")
+        (? (cmd = "exit")
              (: st (? >argv (sh-int <>argv) (sh-status ()))
                 (sh-leave st))
-           (= cmd "cd")
-             (: t (? >argv <>argv (+ "" (getenv "HOME")))
+           (cmd = "cd")
+             ; ⚠ CHARM?, NEVER A TRUTH TEST. chdir answers () on success and the ERRNO on
+             ; failure -- and an errno is negative, so it is RED, so `!r` reads a failure as
+             ; a success and `cd nowhere` returned 0 with no word said. `cd build && make`
+             ; then ran make wherever you already were. The KIND is what separates them.
+             (: t (? >argv <>argv ("" + (getenv "HOME")))
                 r (chdir t)
-                (? (nil? r) 0 (: _ (say err (+ "lush: cd: " (+ t "\n"))) 1)))
-           (= cmd "export") (: _ (each >argv sh-export) 0)
-           (= cmd "pwd")  (: _ (puts (+ (cwd 0) "\n")) 0)
-           (= cmd "jobs") (: _ (each (sort (keys sh-jobs))
+                (? (charm? r) (: _ (say err ("lush: cd: " + (t + "\n"))) 1) 0))
+           (cmd = "export") (: _ (each >argv sh-export) 0)
+           ; `command -v W` -- the probe every configure-shaped script opens with, and a
+           ; SPECIAL BUILTIN, so it was forking and answering ENOENT: 12 of them in one
+           ; build, each reading as "the tool is absent". Absent is the honest answer for
+           ; ccache and objdump, which is why nothing looked broken -- but a probe that is
+           ; wrong by accident is wrong. A builtin answers its own name; a PATH word its path.
+           (cmd = "command")
+             (: a >argv
+                (? ((two? a) && (<a = "-v"))
+                   (: w (? (two? >a) <>a "")
+                      (? (w = "") 1
+                         (sh-bi? w) (: _ (puts (w + "\n")) 0)
+                         (: p (sh-whichp w) (? (two? p) (: _ (puts (<>p + "\n")) 0) 1))))
+                   !(two? a) 1
+                   (sh-simple2 a ())))                 ; `command W ..` -- run W, no function lookup
+           (cmd = "pwd")  (: _ (puts ((cwd 0) + "\n")) 0)
+           (cmd = "jobs") (: _ (each (sort (keys sh-jobs))
                                      (\ n (puts (sh-jobline n (sh-jobs n))))) 0)
-           (= cmd "fg")   (: _ (sh-fg (sh-jobn argv)) (sh-status ()))
-           (= cmd "bg")   (sh-bg (sh-jobn argv))
-           (= cmd ":")    0
-           (= cmd "true") 0
-           (= cmd "false") 1
-           (= cmd "read") (sh-readb >argv)
-           (= cmd "set")  (sh-setb >argv)
-           (= cmd "shift") (: n (? >argv (sh-int <>argv) 1)
+           (cmd = "fg")   (: _ (sh-fg (sh-jobn argv)) (sh-status ()))
+           (cmd = "bg")   (sh-bg (sh-jobn argv))
+           (cmd = ":")    0
+           (cmd = "true") 0
+           (cmd = "false") 1
+           (cmd = "read") (sh-readb >argv)
+           (cmd = "set")  (sh-setb >argv)
+           (cmd = "shift") (: n (? >argv (sh-int <>argv) 1)
                               _ (pin sh-pos () (drop n (sh-pos ()))) 0)
-           (= cmd "unset") (: _ (each >argv
+           (cmd = "unset") (: _ (each >argv
                                       (\ nm (: _ (pull sh-vars nm 0) (setenv nm ())))) 0)
-           (= cmd "eval") (: c (sh-unwords >argv)
+           (cmd = "eval") (: c (sh-unwords >argv)
                              (? (tally c)
                                 (: r (sh-line c) (? (two? r) (cmderr "eval: unexpected eof") r))
                                 0))
-           (= cmd ".")    (sh-dotb >argv)
-           (= cmd "local") (sh-localb >argv)
-           (= cmd "wait") (sh-waitb >argv)
-           (= cmd "break") ('brk >< (? >argv (sh-int <>argv) 1))
-           (= cmd "continue") ('cnt >< (? >argv (sh-int <>argv) 1))
-           (= cmd "return") ('ret >< (? >argv (sh-int <>argv) (sh-status ())))
+           (cmd = ".")    (sh-dotb >argv)
+           (cmd = "local") (sh-localb >argv)
+           (cmd = "wait") (sh-waitb >argv)
+           (cmd = "break") ('brk >< (? >argv (sh-int <>argv) 1))
+           (cmd = "continue") ('cnt >< (? >argv (sh-int <>argv) 1))
+           (cmd = "return") ('ret >< (? >argv (sh-int <>argv) (sh-status ())))
            'nope))
 
    ; --- the function book -------------------------------------------------------
@@ -254,25 +298,25 @@
    (sh-fn? nm) !(id? sh-nofn (sh-fnof nm))
 
    ; --- stage expansion + the spawn engines ------------------------------------
-   (sh-makepipes n) (? (< n 1) () (pipe 0 >< sh-makepipes (- n 1)))
+   (sh-makepipes n) (? (n < 1) () (pipe 0 >< sh-makepipes (n - 1)))
    (sh-flat ps) (? !ps () (<<ps >< (><ps >< sh-flat >ps)))
    ; a stage: ('x argv fdmap opens writes) spawns; ('a ast () () ()) forks --
    ; compounds, builtins, functions and assignment-bearing commands all fork
    ; (the child re-expands, so its env sees its own assignments)
    (sh-stagex cmds acc)
-     (? !cmds (L 1 (sh-rev acc))
+     (? !cmds [1 (sh-rev acc)]
         (: c <cmds
            (? !(id? <c 'cmd)
-              (sh-stagex >cmds (L 'a c () () () >< acc))
+              (sh-stagex >cmds ['a c () () () >< acc])
               (: pk (sh-peel (sh-nth c 1) ())
                  argv (catmap sh-fields >pk)
                  (? (|| (two? <pk) !(two? argv)
                         (sh-bi? <argv) (sh-fn? <argv))
-                    (sh-stagex >cmds (L 'a c () () () >< acc))
+                    (sh-stagex >cmds ['a c () () () >< acc])
                     (: rm (sh-rdmap (sh-nth c 2))
                        (? (id? <rm 'err) (: _ (stclean acc) rm)
                           (sh-stagex >cmds
-                                     (L 'x argv (sh-nth rm 1) (sh-nth rm 2) (sh-nth rm 3) >< acc)))))))))
+                                     ['x argv (sh-nth rm 1) (sh-nth rm 2) (sh-nth rm 3) >< acc]))))))))
    (stclean acc) (each acc (\ st (each (sh-nth st 3) fdclose)))
    ; spawn one stage: external -> spawnmap; anything else -> fork, the child
    ; lays the pipe map on itself (dup2), closes the plumbing, evals, quits
@@ -282,13 +326,13 @@
    (sh-spawn1 st base allclose pg fgi)
      (: _ (flush out) _ (flush err)
         (? (id? (sh-nth st 0) 'x)
-           (spawnmap (sh-nth st 1) (+ base (sh-nth st 2)) allclose pg fgi)
+           (spawnmap (sh-nth st 1) (base + (sh-nth st 2)) allclose pg fgi)
            (: p (fork 0)
-              (? (= p 0)
+              (? (p = 0)
                  (: _ (wear ())                   ; ⚠ a child wears the CONSOLE: its fds are the dup2 below, and a jug is not one
                     _ (sh-dropcaps ())            ; ...and it is inside no capture of ours
                     _ (each base (\ e (dup2 >e <e)))
-                    _ (each allclose (\ fd (? (< 2 fd) (fdclose fd) 0)))
+                    _ (each allclose (\ fd (? (2 < fd) (fdclose fd) 0)))
                     s (sh-eval (sh-nth st 1))
                     (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
                  p))))
@@ -298,33 +342,33 @@
    (sh-spawnst sts pipes allclose lastout i last pg fg pids)
      (? !sts (sh-rev pids)
         (: st <sts
-           base (+ (? (< 0 i) (L (0 >< <(sh-nth pipes (- i 1)))) ())
-                   (? (< i last) (L (1 >< >(sh-nth pipes i)))
-                      (? (< lastout 0) () (L (1 >< lastout)))))
-           pid (sh-spawn1 st base allclose pg (? (= i 0) fg 0))
-           (sh-spawnst >sts pipes allclose lastout (+ i 1) last
-                       (? (< pg 0) pg (? (= i 0) pid pg)) fg (pid >< pids))))
+           base (+ (? (0 < i) [(0 >< <(sh-nth pipes (i - 1)))] ())
+                   (? (i < last) [(1 >< >(sh-nth pipes i))]
+                      (? (lastout < 0) () [(1 >< lastout)])))
+           pid (sh-spawn1 st base allclose pg (? (i = 0) fg 0))
+           (sh-spawnst >sts pipes allclose lastout (i + 1) last
+                       (? (pg < 0) pg (? (i = 0) pid pg)) fg (pid >< pids))))
    (sh-echk st)
-     (? (&& (charm? st) !(= st 0) (sh-eflag ()) (= 0 (sh-noe ())) !(sh-tty ()))
+     (? (&& (charm? st) !(st = 0) (sh-eflag ()) (0 = (sh-noe ())) !(sh-tty ()))
         (sh-leave st) st)
    (sh-pipeline cmds bg)
      (: sx (sh-stagex cmds ())
         (? (id? <sx 'err) (cmderr >sx)
            (: sts (sh-nth sx 1)
-              n (- (tally sts) 1)
+              n ((tally sts) - 1)
               pipes (sh-makepipes n)
               pfds (sh-flat pipes)
               ofds (catmap (\ st (sh-nth st 3)) sts)
               wrs (catmap (\ st (sh-nth st 4)) sts)
-              allclose (+ pfds (+ ofds (map cap wrs)))
+              allclose (pfds + (ofds + (map cap wrs)))
               pids (sh-spawnst sts pipes allclose (0 - 1) 0 n
                                (sh-pgm 0) (? bg 0 (sh-fgm 0)) ())
-              _ (each (+ pfds ofds) fdclose)
+              _ (each (pfds + ofds) fdclose)
               _ (sh-hwrite wrs)
               (? bg
-                 (: jn (sh-addjob pids 'running (+ (sh-curline ()) " &"))
+                 (: jn (sh-addjob pids 'running ((sh-curline ()) + " &"))
                     _ (pin sh-lastbg () (last pids))      ; $!
-                    _ (? (sh-tty ()) (puts (+ "[" (+ (show jn) (+ "] " (+ (sh-unwords (map show pids)) "\n"))))) 0)
+                    _ (? (sh-tty ()) (puts ("[" + ((show jn) + ("] " + ((sh-unwords (map show pids)) + "\n"))))) 0)
                     0)
                  (: _ (sh-waitfg pids (sh-curline ())) (sh-echk (sh-status ())))))))
    ; one simple foreground command: assignments, function, builtin, or a spawn.
@@ -359,11 +403,11 @@
                  _ (each opens fdclose)
                  s (th ())
                  _ (flush out) _ (flush err)
-                 _ (each saves (\ e (? (< >e 0) (fdclose <e)
+                 _ (each saves (\ e (? (>e < 0) (fdclose <e)
                                        (: _ (dup2 >e <e) (fdclose >e)))))
                  s))))
    (sh-simple2 argv rs)
-     (: _ (? (sh-xflag ()) (say err (+ "+ " (+ (sh-unwords argv) "\n"))) 0)
+     (: _ (? (sh-xflag ()) (say err ("+ " + ((sh-unwords argv) + "\n"))) 0)
         fn (sh-fnof <argv)
         (? !(id? sh-nofn fn) (sh-withrs rs (\ _ (sh-fncall fn argv)))
            (sh-bi? <argv)
@@ -382,12 +426,12 @@
               (? (id? <rm 'err) (cmderr >rm)
                  (: opens (sh-nth rm 2) wrs (sh-nth rm 3)
                     _ (flush out) _ (flush err)      ; see sh-spawn1: the child writes the fd straight
-                    pid (spawnmap argv (sh-nth rm 1) (+ opens (map cap wrs))
+                    pid (spawnmap argv (sh-nth rm 1) (opens + (map cap wrs))
                                   (sh-pgm 0) (sh-fgm 0))
                     _ (each opens fdclose)
                     _ (sh-hwrite wrs)
-                    (? (< pid 0) (cmderr (+ <argv ": cannot spawn"))
-                       (: _ (sh-waitfg (L pid) (sh-unwords argv))
+                    (? (pid < 0) (cmderr (<argv + ": cannot spawn"))
+                       (: _ (sh-waitfg [pid] (sh-unwords argv))
                           (sh-echk (sh-status ())))))))))
    (sh-fncall body argv)
      (: op (sh-pos ())
@@ -408,9 +452,9 @@
    (sh-eval a) ((sh-plan a) ())          ; the raw-AST door: a forked stage, a line
    ; a condition (or an && || arm, or a ! body) runs with errexit off
    (sh-guarded p)
-     (: _ (pin sh-noe () (+ 1 (sh-noe ())))
+     (: _ (pin sh-noe () (1 + (sh-noe ())))
         s (p ())
-        _ (pin sh-noe () (- (sh-noe ()) 1))
+        _ (pin sh-noe () ((sh-noe ()) - 1))
         s)
    (sh-plan a)
      (? !a (\ _ (sh-status ()))
@@ -420,18 +464,18 @@
                    (\ _ (: s (p ()) (? (two? s) s (q ())))))
               (id? k 'and)
                 (: p (sh-plan (sh-nth a 1)) q (sh-plan (sh-nth a 2))
-                   (\ _ (: s (sh-guarded p) (? (two? s) s (= s 0) (q ()) s))))
+                   (\ _ (: s (sh-guarded p) (? (two? s) s (s = 0) (q ()) s))))
               (id? k 'or)
                 (: p (sh-plan (sh-nth a 1)) q (sh-plan (sh-nth a 2))
-                   (\ _ (: s (sh-guarded p) (? (two? s) s (= s 0) s (q ())))))
+                   (\ _ (: s (sh-guarded p) (? (two? s) s (s = 0) s (q ())))))
               (id? k 'not)
                 (: p (sh-plan (sh-nth a 1))
                    (\ _ (: s (sh-guarded p)
                            (? (two? s) s
-                              (: ns (? (= s 0) 1 0) _ (pin sh-status () ns) ns)))))
+                              (: ns (? (s = 0) 1 0) _ (pin sh-status () ns) ns)))))
               (id? k 'bg)                        ; a lone command backgrounds as a
                 (: b (sh-nth a 1)                ; pipeline of one
-                   cmds (? (id? <b 'pipe) (sh-nth b 1) (L b))
+                   cmds (? (id? <b 'pipe) (sh-nth b 1) [b])
                    (\ _ (sh-pipeline cmds 1)))
               (id? k 'pipe) (: cmds (sh-nth a 1) (\ _ (sh-pipeline cmds 0)))
               (id? k 'cmd)  (: pk (sh-peel (sh-nth a 1) ()) rs (sh-nth a 2)
@@ -467,18 +511,18 @@
         (: c <clauses
            s (sh-guarded <c)
            (? (two? s) s
-              (= s 0) (>c ())
+              (s = 0) (>c ())
               (sh-if >clauses els))))
    (sh-wloop inv cond body last)
      (: s (sh-guarded cond)
         (? (two? s) s
-           (: go? (? inv !(= s 0) (= s 0))
+           (: go? (? inv !(s = 0) (s = 0))
               (? !go? (: _ (pin sh-status () last) last)
                  (: b (body ())
                     (? (two? b)
                        (: kk <b nn >b
-                          (? (id? kk 'brk) (? (< 1 nn) ('brk >< (- nn 1)) (sh-zero ()))
-                             (id? kk 'cnt) (? (< 1 nn) ('cnt >< (- nn 1))
+                          (? (id? kk 'brk) (? (1 < nn) ('brk >< (nn - 1)) (sh-zero ()))
+                             (id? kk 'cnt) (? (1 < nn) ('cnt >< (nn - 1))
                                               (sh-wloop inv cond body last))
                              b))
                        (sh-wloop inv cond body b)))))))
@@ -488,8 +532,8 @@
            b (body ())
            (? (two? b)
               (: kk <b nn >b
-                 (? (id? kk 'brk) (? (< 1 nn) ('brk >< (- nn 1)) (sh-zero ()))
-                    (id? kk 'cnt) (? (< 1 nn) ('cnt >< (- nn 1)) (sh-floop nm >fs body last))
+                 (? (id? kk 'brk) (? (1 < nn) ('brk >< (nn - 1)) (sh-zero ()))
+                    (id? kk 'cnt) (? (1 < nn) ('cnt >< (nn - 1)) (sh-floop nm >fs body last))
                     b))
               (sh-floop nm >fs body b))))
    (sh-anymatch t pats)
@@ -509,12 +553,12 @@
      (? (sh-subfds ()) (sh-subhere b)
         (: _ (flush out) _ (flush err)
            p (fork 0)
-           (? (= p 0) (: _ (wear ())         ; the child's stdio is its fds, never a jug this task wears
+           (? (p = 0) (: _ (wear ())         ; the child's stdio is its fds, never a jug this task wears
                          _ (sh-dropcaps ())  ; ...and it is inside no capture of ours
                          s (b ())
                          (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
-              (< p 0) (cmderr "cannot fork")
-              (: _ (sh-waitfg (L p) (sh-curline ())) (sh-echk (sh-status ()))))))
+              (p < 0) (cmderr "cannot fork")
+              (: _ (sh-waitfg [p] (sh-curline ())) (sh-echk (sh-status ()))))))
    ; ⚠ the roster sh-subback puts back IS the subshell's contract, so it has to ride
    ; the raised way out too: a scare under the body would leak the body's cwd, vars,
    ; funcs, positionals, $0, flags and environment into the shell that ran it.
@@ -536,7 +580,7 @@
                                     (fdclose <e))))
               _ (each opens fdclose)
               s (b ())
-              _ (each saves (\ e (? (< >e 0) (fdclose <e)
+              _ (each saves (\ e (? (>e < 0) (fdclose <e)
                                     (: _ (dup2 >e <e) (fdclose >e)))))
               s)))
 
@@ -544,23 +588,23 @@
    ; an all-external pipeline spawns with the LAST stdout on our pipe; drain
    ; through fdopen, THEN reap -- any body size flows, and nothing forks.
    (sh-capsimple a wfd)                        ; -> pids, unwaited
-     (: cmds (? (id? <a 'pipe) (sh-nth a 1) (L a))
+     (: cmds (? (id? <a 'pipe) (sh-nth a 1) [a])
         sx (sh-stagex cmds ())
         (? (id? <sx 'err) (: _ (cmderr >sx) ())
            (: sts (sh-nth sx 1)
-              n (- (tally sts) 1)
+              n ((tally sts) - 1)
               pipes (sh-makepipes n)
               pfds (sh-flat pipes)
               ofds (catmap (\ st (sh-nth st 3)) sts)
               wrs (catmap (\ st (sh-nth st 4)) sts)
-              allclose (wfd >< (+ pfds (+ ofds (map cap wrs))))
+              allclose (wfd >< (pfds + (ofds + (map cap wrs))))
               pids (sh-spawnst sts pipes allclose wfd 0 n (0 - 1) 0 ())
-              _ (each (+ pfds ofds) fdclose)
+              _ (each (pfds + ofds) fdclose)
               _ (sh-hwrite wrs)
               pids)))
    (sh-capst sts)                              ; the LAST stage's status, a signal folded down
      (? !(two? sts) 1
-        (: st (last sts) (? (charm? st && (< 255 st)) (- st 128) st)))
+        (: st (last sts) (? (charm? st && (255 < st)) (st - 128) st)))
    ; --- which lane takes this body ----------------------------------------------
    ; three, and ONE look picks: the peel and the name are the same question for
    ; all of them, so sh-lane asks once and answers a nom.
@@ -581,7 +625,7 @@
         (: h <w
            (? !(id? <h 'lit) ()
               (: t >h
-                 (? (!(tally t) || (= (t 0) 126) || sh-anyglob t) () t)))))
+                 (? (!(tally t) || ((t 0) = 126) || sh-anyglob t) () t)))))
    (sh-cmdname a)                              ; a 'cmd's bare name, or () if it has none to read
      (: pk (sh-peel (sh-nth a 1) ())
         (? (two? <pk) ()                       ; assignments want a subshell
@@ -603,12 +647,12 @@
    ; task already wears has to ride along by name
    (sh-wearout o)
      (: w (worn ())
-        (wear (L (? (two? w) <w ())
+        (wear [(? (two? w) <w ())
                  o
-                 (? (&& (two? w) (two? >w) (two? >>w)) <>>w ()))))
+                 (? (&& (two? w) (two? >w) (two? >>w)) <>>w ())]))
    (sh-capstat st)                             ; a plan's answer read as a $( ) status
      (? (charm? st) st
-        (&& (two? st) (|| (id? <st 'ret) (id? <st 'xit))) >st
+        ((two? st) && ((id? <st 'ret) || (id? <st 'xit))) >st
         0)
    ; the re-seat is MINDED: a scare under the body leaves this task wearing a jug
    ; nobody drains, and every later word the shell says lands in it instead of the
@@ -652,17 +696,17 @@
         0)
    (sh-envback old)                            ; unset what appeared, then re-lay the old
      (: now (environ 0)
-        (? (= now old) 0
+        (? (now = old) 0
            (: _ (each now (\ e (? (sh-smem? e old) 0
                                   (: p (sh-eqpos e 0)
-                                     (setenv (? (nil? p) e (snip e 0 p)) ())))))
+                                     (setenv (? !p e (snip e 0 p)) ())))))
               _ (each old (\ e (: p (sh-eqpos e 0)
-                                  (? (nil? p) 0
-                                     (setenv (snip e 0 p) (snip e (+ p 1) (tally e)))))))
+                                  (? !p 0
+                                     (setenv (snip e 0 p) (snip e (p + 1) (tally e)))))))
               0)))
    (sh-subsave _)
-     (L (cwd 0) (sh-tabsnap sh-vars) (sh-tabsnap sh-funcs) (sh-pos ()) (sh-arg0 ())
-        (L (sh-eflag ()) (sh-uflag ()) (sh-xflag ())) (environ 0))
+     [(cwd 0) (sh-tabsnap sh-vars) (sh-tabsnap sh-funcs) (sh-pos ()) (sh-arg0 ())
+        [(sh-eflag ()) (sh-uflag ()) (sh-xflag ())] (environ 0)]
    (sh-subback s)
      (: _ (chdir (sh-nth s 0))
         _ (sh-tabback sh-vars (sh-nth s 1))
@@ -689,16 +733,16 @@
    ; ⚠ the restore rides `mind`, so a scare under the line still puts the shell back.
    (sh-oneflags fl)                            ; ("-ec") -> (1 e u x) | () not ours
      (: (go l e u x)
-         (? !(two? l) (L 1 e u x)
+         (? !(two? l) [1 e u x]
             (: w <l n (tally w)
-               (? (|| (< n 2) !(= (w 0) 45)) ()
+               (? (|| (n < 2) !((w 0) = 45)) ()
                   (: (ch k e2 u2 x2)
-                      (? (<= n k) (go >l e2 u2 x2)
+                      (? (n <= k) (go >l e2 u2 x2)
                          (: c (w k)
-                            (? (= c 99) (ch (+ k 1) e2 u2 x2)      ; c, the command marker
-                               (= c 101) (ch (+ k 1) 1 u2 x2)
-                               (= c 117) (ch (+ k 1) e2 1 x2)
-                               (= c 120) (ch (+ k 1) e2 u2 1)
+                            (? (c = 99) (ch (k + 1) e2 u2 x2)      ; c, the command marker
+                               (c = 101) (ch (k + 1) 1 u2 x2)
+                               (c = 117) (ch (k + 1) e2 1 x2)
+                               (c = 120) (ch (k + 1) e2 u2 1)
                                ())))                              ; anything else is not ours
                      (ch 1 e u x)))))
         (go fl 0 0 0))
@@ -706,7 +750,7 @@
      (: fs (sh-oneflags fl)
         (? !(two? fs) ()
            (: sv (sh-subsave ())
-              _ (pin sh-online () (+ 1 (sh-online ())))
+              _ (pin sh-online () (1 + (sh-online ())))
               _ (pin sh-eflag () (sh-nth fs 1))
               _ (pin sh-uflag () (sh-nth fs 2))
               _ (pin sh-xflag () (sh-nth fs 3))
@@ -715,19 +759,19 @@
               ; into the line's status. any OTHER condition is a real fault -- say it
               ; and let the line fail, so a caller aborts loudly rather than silently.
               r (trap (\ _ (mind (\ _ (sh-line src)) ()
-                                 (\ _ (: _ (pin sh-online () (- (sh-online ()) 1))
+                                 (\ _ (: _ (pin sh-online () ((sh-online ()) - 1))
                                          _ (flush out) _ (flush err)
                                          (sh-subback sv)))))
                       ()
                       (\ a b (? (id? a 'sh-exit) (? (charm? b) b 1)
                                 (: _ (say err ";; ") _ (print err a) _ (say err " ")
                                    _ (print err b) _ (put err 10) _ (flush err) 1))))
-              (L 1 (? (two? r) (? (id? <r 'more)
+              [1 (? (two? r) (? (id? <r 'more)
                                    (: _ (say err "lush: unexpected eof in a recipe line")
                                       _ (put err 10) 2)
                                    (? (charm? >r) >r 1))
                       (charm? r) r
-                      0)))))
+                      0)])))
    (sh-capsub a)
      (: pp (pipe 0)
         (? (charm? pp) (: _ (cmderr "cannot pipe") "")
@@ -798,7 +842,7 @@
            (? (tally buf)
               (: _ (say err "lush: unexpected eof\n") _ (pin sh-status () 2) 0)
               0)
-           (: full (? (tally buf) (+ buf (+ "\n" line)) line)
+           (: full (? (tally buf) (buf + ("\n" + line)) line)
               r (sh-line full)
               (? (two? r) (sh-lines port full)
                  (sh-retf ()) (: _ (pin sh-retf () 0) 0)   ; dot-return: stop THIS file
@@ -820,5 +864,5 @@
      (: pr (sh-parse-line src)
         (? (id? <pr 'more) pr
            (id? <pr 'err)
-             (: _ (say err (+ "lush: " (+ >pr "\n"))) _ (pin sh-status () 2) 2)
+             (: _ (say err ("lush: " + (>pr + "\n"))) _ (pin sh-status () 2) 2)
            (sh-eval-top src >pr))))

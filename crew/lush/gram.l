@@ -17,7 +17,7 @@
 ; into "the list so far ends here" -- the compound parsers then expect their
 ; own closer by name. an empty rest where a compound needs more is 'more.
 
-(: (tk-op? t o) (id? <t 'op && (= >t o))
+(: (tk-op? t o) (id? <t 'op && (>t = o))
    (tk-w? t) (id? <t 'w)
    (tk-rd? t) (id? <t 'rd)
    (tk-nl? t) (tk-op? t "nl")
@@ -28,8 +28,8 @@
    ; the bare text of a plain unquoted one-segment word, "" otherwise
    (litw t) (? (&& (two? t) (tk-w? t) (two? >t) !>>t
                   (id? <<>t 'lit))
-               (+ "" ><>t) "")
-   (rw? t w) (tally (litw t) && (= w (litw t)))
+               ("" + ><>t) "")
+   (rw? t w) (tally (litw t) && (w = (litw t)))
    stopw '("then" "else" "elif" "fi" "do" "done" "esac" "}")
 
    (sh-parse ts)
@@ -38,7 +38,7 @@
            (: r (plist ts2)
               (? (id? <r 'stop)
                    (: t <>r w (litw t)
-                      ('err >< (+ "unexpected " (? (tally w) w (+ "" >t)))))
+                      ('err >< ("unexpected " + (? (tally w) w ("" + >t)))))
                  (bad? r) r
                  >r ('err >< "trailing tokens")
                  ('ok >< <r)))))
@@ -48,7 +48,7 @@
    (plrest a ts)
      (? !(two? ts) (a >< ())
         (: t <ts
-           (? (tk-op? t "&") (plnext (L 'bg a) >ts)
+           (? (tk-op? t "&") (plnext ['bg a] >ts)
               (tk-op? t ";" || tk-nl? t) (plnext a >ts)
               (a >< ts))))
    (plnext a ts)
@@ -57,7 +57,7 @@
            (: r (plist ts2)
               (? (id? <r 'stop) (a >< >r)                ; a closer: the list ends here
                  (bad? r) r
-                 (L 'seq a <r >< >r)))))
+                 ['seq a <r >< >r]))))
 
    ; and_or: && / ||, left-assoc; newlines after the op continue the line
    (pao ts) (: r (ppipe ts) (? (bad? r) r (paomore <r >r)))
@@ -71,20 +71,20 @@
      (: ts2 (skipnl ts)
         (? !(two? ts2) ('more >< 'op)
            (: r (ppipe ts2)
-              (? (bad? r) r (paomore (L k a <r) >r)))))
+              (? (bad? r) r (paomore [k a <r] >r)))))
 
    ; pipeline: a leading bare ! word negates the whole thing
    (ppipe ts)
      (? (rw? <ts "!")
-        (: r (ppipe1 >ts) (? (bad? r) r (L 'not <r >< >r)))
+        (: r (ppipe1 >ts) (? (bad? r) r ['not <r >< >r]))
         (ppipe1 ts))
-   (ppipe1 ts) (: r (pcomm ts) (? (bad? r) r (ppmore (L <r) >r)))
+   (ppipe1 ts) (: r (pcomm ts) (? (bad? r) r (ppmore [<r] >r)))
    (ppmore cmds ts)
      (? (ts && tk-op? <ts "|")
         (: ts2 (skipnl >ts)
            (? !(two? ts2) ('more >< 'op)
               (: r (pcomm ts2) (? (bad? r) r (ppmore (<r >< cmds) >r)))))
-        ((? >cmds (L 'pipe (sh-rev cmds)) <cmds) >< ts))
+        ((? >cmds ['pipe (sh-rev cmds)] <cmds) >< ts))
 
    ; command: a compound by its reserved word, a function def, else simple
    (pcomm ts)
@@ -94,12 +94,12 @@
               ; a closer OP at command position stops the list too -- it is how a
               ; multi-line subshell's `)` (or a case item's `;;`) lands on its own line
               (tk-op? t ")" || tk-op? t ";;") ('stop >< ts)
-              (= w "if") (pif >ts)
-              (= w "while") (ploop 'while >ts)
-              (= w "until") (ploop 'until >ts)
-              (= w "for") (pfor >ts)
-              (= w "case") (pcase >ts)
-              (= w "{") (pgroup >ts)
+              (w = "if") (pif >ts)
+              (w = "while") (ploop 'while >ts)
+              (w = "until") (ploop 'until >ts)
+              (w = "for") (pfor >ts)
+              (w = "case") (pcase >ts)
+              (w = "{") (pgroup >ts)
               (tk-op? t "(") (psubsh >ts)
               (fundef? ts) (pfun ts)
               (pcmd ts))))
@@ -119,9 +119,9 @@
      (? (two? ts && tk-rd? <ts)
         (: t <ts ts2 >ts
            (? (two? ts2 && tk-w? <ts2)
-              (prd ast >ts2 (L <>t >>t ><ts2 >< rs))
+              (prd ast >ts2 [<>t >>t ><ts2 >< rs])
               ('err >< "redirect wants a target")))
-        (? (two? rs) (L 'rdr ast (sh-rev rs) >< ts) (ast >< ts)))
+        (? (two? rs) ['rdr ast (sh-rev rs) >< ts] (ast >< ts)))
 
    (pif ts)
      (: c (plist (skipnl ts))
@@ -132,13 +132,13 @@
                  (: b (plist (skipnl >t1))
                     (? (id? <b 'stop) ('err >< "if: empty body")
                        (bad? b) b
-                       (pifrest (L (<c >< <b)) >b)))))))
+                       (pifrest [(<c >< <b)] >b)))))))
    (pifrest clauses ts)
      (: ts2 (skipsep ts)
         (? !(two? ts2) ('more >< 'compound)
            (: w (litw <ts2)
-              (? (= w "fi") (predir (L 'if (sh-rev clauses) ()) >ts2)
-                 (= w "elif")
+              (? (w = "fi") (predir ['if (sh-rev clauses) ()] >ts2)
+                 (w = "elif")
                    (: c (plist (skipnl >ts2))
                       (? (bad? c) c
                          (: t1 (expw >c "then" "elif wants `then`")
@@ -146,12 +146,12 @@
                                (: b (plist (skipnl >t1))
                                   (? (bad? b) b
                                      (pifrest ((<c >< <b) >< clauses) >b)))))))
-                 (= w "else")
+                 (w = "else")
                    (: b (plist (skipnl >ts2))
                       (? (bad? b) b
                          (: f (expw >b "fi" "else wants `fi`")
                             (? !(charm? <f) f
-                               (predir (L 'if (sh-rev clauses) <b) >f)))))
+                               (predir ['if (sh-rev clauses) <b] >f)))))
                  ('err >< "if wants `fi`")))))
    (ploop k ts)
      (: c (plist (skipnl ts))
@@ -163,7 +163,7 @@
                     (? (bad? b) b
                        (: e (expw >b "done" "loop wants `done`")
                           (? !(charm? <e) e
-                             (predir (L k <c <b) >e)))))))))
+                             (predir [k <c <b] >e)))))))))
    (pfor ts)
      (? !(two? ts) ('more >< 'compound)
         (: nm (litw <ts)
@@ -176,14 +176,14 @@
                                        (sh-rev acc >< t))
                          r (go >ts2 ())
                          (pfordo nm <r >r))
-                    (pfordo nm (L (L ('var >< "@"))) ts2))))))
+                    (pfordo nm [[('var >< "@")]] ts2))))))
    (pfordo nm ws ts)
      (: d (expw ts "do" "for wants `do`")
         (? !(charm? <d) d
            (: b (plist (skipnl >d))
               (? (bad? b) b
                  (: e (expw >b "done" "for wants `done`")
-                    (? !(charm? <e) e (predir (L 'for nm ws <b) >e)))))))
+                    (? !(charm? <e) e (predir ['for nm ws <b] >e)))))))
    (pcase ts)
      (? !(two? ts) ('more >< 'compound)
         (: wt <ts
@@ -193,7 +193,7 @@
    (pcitems w items ts)
      (: ts2 (skipnl ts)
         (? !(two? ts2) ('more >< 'compound)
-           (rw? <ts2 "esac") (predir (L 'case w (sh-rev items)) >ts2)
+           (rw? <ts2 "esac") (predir ['case w (sh-rev items)] >ts2)
            (: ts3 (? (tk-op? <ts2 "(") >ts2 ts2)
               (go t acc)                          ; patterns: word (| word)*
                 (? !(two? t) ('more >< 'compound)
@@ -227,20 +227,20 @@
            (pgend <b >b)))
    (pgend body ts)
      (: e (expw ts "}" "{ wants `}`")
-        (? !(charm? <e) e (predir (L 'group body) >e)))
+        (? !(charm? <e) e (predir ['group body] >e)))
    (psubsh ts)
      (: b (plist (skipnl ts))
         (? (bad? b) b
            (: ts2 (skipnl >b)
               (? !(two? ts2) ('more >< 'compound)
-                 (tk-op? <ts2 ")") (predir (L 'subsh <b) >ts2)
+                 (tk-op? <ts2 ")") (predir ['subsh <b] >ts2)
                  ('err >< "( wants `)`")))))
    (pfun ts)                                     ; NAME ( ) [nl] command
      (: nm (litw <ts)
         ts3 (skipnl >>>ts)
         (? !(two? ts3) ('more >< 'compound)
            (: b (pcomm ts3)
-              (? (bad? b) b (L 'fun nm <b >< >b)))))
+              (? (bad? b) b ['fun nm <b >< >b]))))
 
    ; simple command: words + redirects, any order; a redirect eats its target
    (pcmd ts) (pcm ts () ())
@@ -251,11 +251,11 @@
               (tk-rd? t)
                 (: ts2 >ts
                    (? (two? ts2 && tk-w? <ts2)
-                      (pcm >ts2 ws (L <>t >>t ><ts2 >< rs))
+                      (pcm >ts2 ws [<>t >>t ><ts2 >< rs])
                       !(two? ts2) ('err >< "redirect wants a target")
                       ('err >< "redirect wants a word")))
               (tk-op? t "(") ('err >< "unexpected parenthesis")
               (pcfin ts ws rs))))
    (pcfin ts ws rs)
      (? (!ws && !rs) ('err >< "expected a command")
-        (L 'cmd (sh-rev ws) (sh-rev rs) >< ts)))
+        ['cmd (sh-rev ws) (sh-rev rs) >< ts]))
