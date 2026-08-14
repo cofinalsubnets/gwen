@@ -152,7 +152,7 @@ lvm_t lvm_kcall,
  lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, // the data sentinels; each tail-jumps to its apply handler
  lvm_putn, lvm_gauge, lvm_tune, lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_heard, lvm_worn, lvm_myself, lvm_books, lvm_setbooks, lvm_mods, lvm_lib,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
- lvm_saturate, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_casknew, lvm_bcopy,
+ lvm_saturate, lvm_ceil, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_casknew, lvm_bcopy,
  lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
  lvm_charmp,  lvm_nomp,   lvm_namep,  lvm_mintp,  lvm_strp,   lvm_tabp, lvm_band,   lvm_bor,  lvm_gem,  lvm_gemp,
  lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
@@ -2916,6 +2916,18 @@ static intptr_t ai_saturate(struct ai *g, word x) {
   intptr_t i = (intptr_t) re;
   return i + (re > (ai_flo_t) i ? 1 : 0); }
 lvm(lvm_saturate) { Sp[0] = putcharm(ai_saturate(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
+// THE TOWER'S THIRD RUNG: ceil(re(net x)) -- the measure retracted onto the integers, where
+// saturate is this one with its floor raised to 0 and bit is it with the ceiling lowered to 1.
+// ⚠ it SATURATES at the charm bounds like every rung below it: a charm is the codomain, so a
+// measure that will not fit lands on the edge rather than wrapping or widening.
+static intptr_t ai_ceilnet(struct ai *g, word x) {
+  if (charmp(x)) return getcharm(x);
+  ai_flo_t re = ai_net(g, x).re;
+  if (re >= (ai_flo_t) maxcharm) return maxcharm;
+  if (re <= (ai_flo_t) mincharm) return mincharm;
+  intptr_t i = (intptr_t) re;
+  return i + (re > (ai_flo_t) i ? 1 : 0); }
+lvm(lvm_ceil) { Sp[0] = putcharm(ai_ceilnet(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
 
 // ============================================================================
 // io

@@ -93,6 +93,15 @@
    ; function ENDS in a ret and must; only an lvm_ handler owes the jump. So the ret law reads
    ; the lvm_ family and the one-function law reads them all, which is what each ever meant.
    (lvm? k) (: s (string k) ?((5 <= tally s) && ("lvm_" = snip s 0 4)))
+   ; ⚠ A LOVE WITH NO RECORD HAS NO SUBJECT HERE, and the default build is one: the shipped
+   ; artifact is -fno-ir (host/build.mk's $(moon_fir)), because its own SOURCE is already
+   ; aboard and a second description of the same program was not worth 1.5 MB. The JIT reads
+   ; the record, so with none there is nothing to gate -- named and skipped, never silent,
+   ; the way asmops names a missing objdump. `make moon_fir=-fir` puts the subject back.
+   _ (? (two? (jit-irtab ())) 0
+        (: _ (say out ("splice: this love carries no IR record (-fno-ir) -- "
+                       + "rebuild with `make moon_fir=-fir` to gate the JIT\n"))
+           _ (flush out) (quit 0)))
    _ (: t (jit-irtab ())
         tb (? (two? t) (caup t) ())
         ks (? (two? t) (keys tb) ())

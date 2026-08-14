@@ -83,6 +83,7 @@
       (nif_trim          "trim"          1 lvm_trim)
       (nif_seek          "seek"          2 lvm_seek)
       (nif_saturate      "saturate"      1 lvm_saturate)
+      (nif_ceil          "ceil"          1 lvm_ceil)
       (nif_peep          "peep"          3 lvm_peep)
       (nif_pin           "pin"           3 lvm_pin)
       (nif_pull          "pull"          3 lvm_pull)

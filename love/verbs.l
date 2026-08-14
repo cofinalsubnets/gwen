@@ -39,6 +39,14 @@
                        _ (put err 10) 2))
    _ (pin tab 'wake (prime 'wake))
    _ (pin tab 'bake (prime 'bake))
+   ; `love verbs` -- the table naming itself, one per line for a pipe where -h's blob is for
+   ; a human. sorted: a tablet's key order is its own business and would read like a change.
+   (vsort ws) (? (atom? ws) ws
+                 (: p <ws r (vsort >ws)
+                    (ins x l) (? (atom? l) [x] (string x < string <l) (x >< l) (<l >< ins x >l))
+                    (ins p r)))
+   _ (pin tab 'verbs (\ as (: _ (map (\ k (: _ (puts (string k)) (putc 10))) (vsort (keys tab)))
+                              _ (flush out) 0)))
 
    ; --- the SEAT SCAN, the third door ---
    ; a file that IS the program seats itself: `love crew/moon/moon.l foo.c`, the installed

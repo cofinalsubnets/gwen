@@ -21,5 +21,5 @@
            `('raw (map (\ i (s i)) (jot n)))
            `('label '_binary_love_img_end))
       (write-bytes dst
-       (objsecs32 'thumb2 `(`(".image" 1 2 8 ir)) ()
+       (objsecs32 'thumb2 `(`(".love_image" 1 2 8 ir)) ()
         '("_binary_love_img_start" "_binary_love_img_end") ()))))

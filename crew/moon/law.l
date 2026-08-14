@@ -692,7 +692,7 @@
 
 ; --- __attribute__((section(NAME))): a named section is a STREAM of its own.
 ; three names have a meaning the object writer knows -- ai_nifs (bracketed by
-; the linker for main()'s boot drain), .image (laid last, for the bake) and
+; the linker for main()'s boot drain), .love_image (laid last, for the bake) and
 ; .data (where an unattributed global goes). every OTHER name rides out as its
 ; own section, because WHERE those bytes land is the point: the kernel's
 ; .limine_requests is SCANNED for by a bootloader, and a request block quietly
@@ -730,7 +730,7 @@
          '((label e) (raw (200 173 0 0 0 0 0 0))))
       ; the two SPECIAL names keep their own streams and stay out of the extras
       (= (el (cobx "__attribute__((section(\"ai_nifs\"))) static long n = 1; int main() { return 0; }") 8) ())
-      (= (el (cobx "__attribute__((section(\".image\"))) static long i = 1; int main() { return 0; }") 8) ())))
+      (= (el (cobx "__attribute__((section(\".love_image\"))) static long i = 1; int main() { return 0; }") 8) ())))
 
 ; --- the preprocessor (stage 5): object/function macros, rescan, hidesets,
 ; # stringize, ## paste, variadics, and #if/#ifdef conditional const-expr eval.

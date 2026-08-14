@@ -192,7 +192,7 @@
        ((nm = ".rodata") || ld-pre nm ".rodata.") 'rodata
        ((nm = ".data") || ld-pre nm ".data.") 'data
        (nm = "ai_nifs") 'nifs
-       (nm = ".image") 'image
+       (nm = ".love_image") 'image
        ; the KERNEL lanes (ldkern's, port/inle/<a>/<a>.lds's names): the boot
        ; stub's page tables and bring-up ladder, the limine request block --
        ; its three sections bracket a scan, so they lay in header order, which
@@ -851,7 +851,11 @@
    ; on every byte they EMIT. the base moves with a release, which both generations
    ; share (love0 is stamped $(love_base)+bootstrap for exactly this). the full id
    ; is in love-version, in .rodata, for a reader who wants the commit.
-   (ldlink target pie org srcs prod)
+   ; readme: plain text for whoever OPENS this file, laid in `.README` beside .comment and
+   ; mapped by nothing. `readelf -p .README` prints it and `strings` finds it. It is the one
+   ; annotation that pays for itself at any size: the source is already in the artifact, so
+   ; what a reader lacks is not more data but a page telling them where to stand. "" lays none.
+   (ldlink target pie org srcs prod readme)
     (: mach (peep elf-machines target 0)
        _ (? (0 < mach) 0 (scare 'link-target target))
        objs (map (\ p (ld-read <p <>p mach)) srcs)
@@ -929,14 +933,24 @@
        ; ⚠ .comment goes LAST so no index moves: e_shstrndx and .symtab's sh_link
        ; are written down as 10 and 9, and a section spliced in ahead would silently
        ; point both at the wrong table.
-       shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" "ai_rela" ".bss" ".image"
-                         ".symtab" ".strtab" ".shstrtab" ".comment"))
+       ; ⚠ AND ai_nifs KEEPS ITS UNDOTTED NAME while its neighbours are .love_*: GNU ld
+       ; synthesizes __start_X/__stop_X only where X is a C IDENTIFIER, and love.h has to
+       ; SPELL those two in C -- `extern struct ai_def const __start_ai_nifs[]`. A dot makes
+       ; the name unwritable (gcc: expected ';' before '.'), the encap goes unsynthesized,
+       ; and the gcc-built love0 drains no nifs at all. .love_rela is dotted because nothing
+       ; declares it: our linker INVENTS that section, and ldsynth defines its bracket by
+       ; hand, so the section name and the symbol name are free of each other there.
+       shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" ".love_rela" ".bss" ".love_image"
+                         ".symtab" ".strtab" ".shstrtab" ".comment" ".README"))
        (snm k) (at <>shstr k)
        symo (ld-align 8 endf) symz (tally <st)
        stro (symo + symz) strz (tally <>st)
        ssto (stro + strz) sstz (tally <shstr)
        cmt (ld-comment objs prod) cmto (ssto + sstz) cmtz (tally cmt)
-       shto (ld-align 8 (cmto + cmtz))
+       rdm (? (string? readme) (o-strbytes readme) ())
+       rdmo (cmto + cmtz) rdmz (tally rdm)
+       nsh (? (0 < rdmz) 13 12)
+       shto (ld-align 8 (rdmo + rdmz))
        sht (catall `((ld-shdr 0 0 0 0 0 0 0 0 0 0)                                   ; the reserved null header
                      ; each lane runs to the page the next one starts on, so a split's pad
                      ; rides a section instead of the orphan gap the note above warns of
@@ -950,7 +964,8 @@
                      (ld-shdr (snm 7) 2 0 0 symo symz 9 (at st 2) 8 24)              ; link=.strtab info=first global
                      (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
                      (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)
-                     (ld-shdr (snm 10) 1 48 0 cmto cmtz 0 0 1 1)))                   ; .comment: MERGE|STRINGS, no alloc
+                     (ld-shdr (snm 10) 1 48 0 cmto cmtz 0 0 1 1)                    ; .comment: MERGE|STRINGS, no alloc
+                     (? (0 < rdmz) (ld-shdr (snm 11) 1 32 0 rdmo rdmz 0 0 1 0) ())))  ; .README: STRINGS, no alloc
        ; W^X: segment one is the header and the code, READ+EXECUTE; segment two the
        ; literals, READ; segment three .data through ai_rela, running out to bss in memsz
        ; alone, READ+WRITE; a fourth carries the image when there is one, RW (a heap
@@ -972,10 +987,10 @@
                      (elf64-phdr 1 6 (d0 - base) d0 d0 (r1 - d0) (bend - d0) 4096))
                  `((elf64-phdr 1 7 0 base base (r1 - base) (bend - base) 4096)))
             + (? img? `((elf64-phdr 1 6 ioff iaddr iaddr isz isz 4096)) ()))
-       hdr (elf64-hdrn (? pie 3 2) ent mach `(shto 12 10) phs)
+       hdr (elf64-hdrn (? pie 3 2) ent mach `(shto nsh 10) phs)
        (hdr >< (>en + tail + (? pie `(rtab) ()) + ipad + >ei
-                + `((ld-zeros (symo - endf)) <st <>st <shstr cmt
-                    (ld-zeros (shto - (cmto + cmtz))) sht))))
+                + `((ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
+                    (ld-zeros (shto - (rdmo + rdmz))) sht))))
 
    ; --- the KERNEL lane: one ELF, three doors ---------------------------------
    ; a freestanding image is laid where it RUNS and loaded where it LANDS: every
@@ -1106,7 +1121,7 @@
    ; MCU linker script writes by hand. moon.l's ldsynth lists them.
    ; ⚠ no -pie: a freestanding board image has nothing to slide.
    ld-lanenames (ld-cls '((text ".text") (rodata ".rodata") (data ".data")
-                          (nifs "ai_nifs") (bss ".bss") (image ".image")))
+                          (nifs "ai_nifs") (bss ".bss") (image ".love_image")))
    (ld-lanenm l) (: r (peep ld-lanenames l ()) (? (two? r) <r (string l)))
    ; a lane's HOME across the set -- what its sections' own flags said it travels
    ; with (ld-home). a lane the linker knows by name is its own home.

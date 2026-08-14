@@ -407,7 +407,7 @@
       `(".data"   1 3 (o-dalign dataforms) dataforms)
       `(".bss"    8 3 (o-dalign bssforms) bssforms)
       `("ai_nifs" 1 3 8 nifforms)
-      `(".image"  1 3 16 imgforms))
+      `(".love_image"  1 3 16 imgforms))
    ; a named section a COMPILER emits: PROGBITS on the widest grain its own globals
    ; ask for, allocated, and writable unless ro says the compiler found every global
    ; in it const and reloc-free. the descriptor a hand-written lay needs is its own

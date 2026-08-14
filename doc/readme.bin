@@ -1,0 +1,11 @@
+this is the .README section of the love seed binary.
+love is a self-reproducing programming environment.
+this binary contains;
+- an interpreter for the love programming language (when invoked as love)
+- a compiler for the C programming language (when invoked as cc)
+- a self-contained cross-platform GNU-like userland and toolchain
+- a compressed copy of its own source code
+useful verbs:
+- `love source` dump a source tarball
+- `love seed` bootstrap an identical seed binary through the ambient C toolchain
+- `love cc` `love tar` `love sh` `love make` etc.

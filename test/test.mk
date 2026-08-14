@@ -522,7 +522,7 @@ test_vec: host
 # test_extra only, so a deleted host/*.c goes green through test_slow either way.
 # $(moon_o) is the link list: the gate is handed make's objects, it never globs the odir.
 test_fixpoint: host $(love0) out/host/mooncc0.image
-	@sh test/gate/fixpoint.sh $(ho) $(love0) $(moon_o)
+	@sh test/gate/fixpoint.sh $(ho) $(love0) $(moon_fir) $(moon_o)
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
 # the WHOLE corpus. Opt-in: needs the -pie toolchain, x86-64 only.

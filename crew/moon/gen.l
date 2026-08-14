@@ -8147,7 +8147,7 @@
               ; an aligned(N) global lands ON its boundary: this pad places it within the stream,
               ; and the .o's section header carries the max N so the linker grants the same grain.
               ; the two SPECIAL streams are packed by construction and take no pad.
-              an (? (member? want '("ai_nifs" ".image")) 0 (peep (g 'aligns) <gs 0))
+              an (? (member? want '("ai_nifs" ".love_image")) 0 (peep (g 'aligns) <gs 0))
               ; the cause rides a PIN, not a puts: cgdata's callers thread a bare 'bad through a
               ; dozen (bad? x) joins and a gripe is not one, so gfns's tail mints it from the pin
               (? ((zm = 'r) && !roq) (globs >gs want zm acc)
@@ -8187,7 +8187,7 @@
        ; the OTHER section names, first-seen in declaration order
        xnames (: (go gs acc) (? !(two? gs) (rev acc)
                                 (: s (strm <gs)
-                                   (go >gs (? (member? s '(".data" ".rodata" "ai_nifs" ".image") ||
+                                   (go >gs (? (member? s '(".data" ".rodata" "ai_nifs" ".love_image") ||
                                                member? s acc)
                                               acc (s >< acc)))))
                  (go (rev (g 'globs)) ()))
@@ -8203,7 +8203,7 @@
           cg (? (bad? rg || bad? rs) 'bad (globs (rev (g 'globs)) ".data" 'r ()))
           cs (? (bad? cg) 'bad (globs (rev (g 'statics)) ".data" 'r ()))
           nb (? (bad? cg || bad? cs) 'bad (globs (rev (g 'globs)) "ai_nifs" () ()))
-          ib (? (bad? nb) 'bad (globs (rev (g 'globs)) ".image" () ()))
+          ib (? (bad? nb) 'bad (globs (rev (g 'globs)) ".love_image" () ()))
           xb (? (bad? ib) 'bad
                 (map (\ nm [nm (globs (rev (g 'globs)) nm () ()) (xro? nm)]) xnames))
           (? (foldl (\ a x (a || bad? x)) () [gb sb zg zs rg rs cg cs nb ib xb]) 'bad

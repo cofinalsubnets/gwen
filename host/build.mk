@@ -46,7 +46,7 @@ endif
 # its own way, so both toolchains bake alike. ⚠ no mach-o branch because nothing here
 # builds there: host/image.c wants <link.h> and dl_iterate_phdr, and on Apple silicon a
 # self-patching binary would have to re-sign itself before it could exec again.
-image_ldflags = -Wl,--section-start=.image=0x2000000
+image_ldflags = -Wl,--section-start=.love_image=0x2000000
 # STATIC=1 links fully static against musl and skips liblove.so (a static build cannot
 # produce one) -- the Linux portable-binary lane, opt-in; common.mk's flavor block says why
 # it is not the default. It runs on any distro regardless of glibc version AND still does
@@ -220,11 +220,15 @@ moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/
 moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_math_o) $(moon_d)/sys.o
 # -D AI_HAVE_VERSION_H + the love_version.h dep: this TU carries the version id into the
 # SHIPPED binary, and mooncc has no __has_include for love.c's fallback probe to use.
-# THE RECORD: bare -fir is every function of every TU, each object naming its own
-# ai_ir_<basename>, so the shipped binary carries the machine-form IR of everything it
-# is. ~1.4 MB of .rodata for a binary that can be read without a disassembler, and the
-# splice JIT takes its op bodies out of it (lib/splice.l, which owns the size budget).
-moon_fir = -fir
+# THE RECORD, and it is OFF: `-fir` lays the machine-form IR of every function into
+# .rodata (per-TU `ai_ir_<basename>`), ~1.5 MB, +12.8% on the artifact. It was on for
+# exactly one commit, and the argument that took it off again is the good one: THE
+# SOURCE IS ALREADY IN HERE. A second description of the same program, at a level
+# almost nobody reads, when what a reader lacks is orientation -- and .README buys that
+# for 3 KB. ⚠ the cost is the splice JIT: with no record it declines every op and the
+# natjit lane is dead weight, so `make moon_fir=-fir` is how you get it back (and
+# `rm -rf out/host/moon` first -- make tracks files, not flag strings).
+moon_fir = -fno-ir
 $(moon_d)/love.o: love.c $(love_h) $(moon0_dep) out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)

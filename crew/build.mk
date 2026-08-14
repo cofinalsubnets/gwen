@@ -256,10 +256,14 @@ out/dist/src-$a.o: $(dist_source) tools/mksrc.l $(ho)/love
 # -- and only then baked. The layout stays load-bearing the other way: .image must
 # still END the segment for `bake` to grow it at the tail (host/image.c's bake_tail
 # refuses otherwise), which it does, the blob riding .rodata well below it.
-$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l $(ho)/love
+# ⚠ -freadme is the ARTIFACT'S, not the tree's: it rides this link and NOT out/host/love's,
+# so test_fixpoint's relink of $(moon_o) needs no mirror of it. doc/readme.bin is the page a
+# reader lands on -- `readelf -p .README`, mapped by nothing, and the one annotation worth
+# its bytes now that the source itself is in here.
+$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l doc/readme.bin $(ho)/love
 	@echo DIST	$(abspath $@)
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -o $@
+	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -freadme=doc/readme.bin -o $@
 	@./$@ bake -l out/dist/.dist-cat.l
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
 
