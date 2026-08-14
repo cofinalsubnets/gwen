@@ -32,6 +32,13 @@
 ; ⚠ LOVE_NO_GLAZE=1 while jitting: a glazed closure is a native cell, and `dis` reads its husk.
 ; The glaze is the specializing tier this one sits UNDER, not its competition.
 ;
+; ⚠ THE BRANCH IS NOT THE OBSTACLE, `Ip` IS. A thread's control flow is entirely internal to it
+; -- every target is a same-thread cell pointer -- and `disg` (love/ev.l) hands back the whole
+; graph with targets as cell indices. What stops a cond from being spliced is that its handler
+; READS Ip, and every one of those reads is a cell disg can name: the operand, `Ip+3` (the
+; fallthrough) and `Ip[2]` (the target). Folding Ip is one rung that dissolves the branch family
+; and the whole operand family together. doc/moon-regalloc.md, `branches`.
+;
 ; Covered: ANY ARITY (the cur row carries it), the load family (arg/argN/quote-of-charm/quoN/
 ; quomN) said directly, the push-PAIR family (aa/aq/qa/qq) said as two pushes, the fld family
 ; (argcap/argcup/argtwo) UNFUSED into a push and an op, and every handler whose IR the compiler

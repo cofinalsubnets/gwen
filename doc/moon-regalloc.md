@@ -325,19 +325,80 @@ is what makes them big. **The splicer is never going to say generic arithmetic**
 need to: the glaze's own arithmetic lanes are for exactly that, and they run first. Do not rebuild
 this rung on the strength of the `no-ir` names.
 
+### branches: the thread already carries its whole graph (2026-08-13)
+
+The line above — "a spliced body is a straight line, and the corpus's closures are not" — was
+right about closures and **wrong about threads**, and the difference is the whole rung. *A thread's
+control flow is entirely internal to it.* `lvm_jump`, `lvm_cond`, `lvm_argcond` and
+`lvm_argtwocond` all take `Ip[k].m`, a **same-thread cell pointer**, so a closure carries its
+entire CFG and nothing about reading one asks the VM to change — in particular **`lvm_jump` does
+not need to become relative**. What `dis` refuses to hand out is the *pointer*; the *index* is a
+charm and perfectly safe, and `seek` (the address **of** a cell) is the door between them. So a
+target is relativized at **read** time, where the base is known.
+
+**`disg` (love/ev.l, `dis`'s sibling in the same scope) — LANDED.** The rows a closure can reach,
+index-sorted, each `[idx nom operand..]`, every branch target a cell index:
+
+```
+(f x) (? (two? x) (cup x) 0)
+dis   ((lvm_argtwocond 0 x) (lvm_argcup 0) (lvm_ret))                      ; the linear prefix
+disg  ((0 lvm_argtwocond 0 7) (3 lvm_argcup 0) (5 lvm_ret) (7 lvm_quo0) (8 lvm_ret))
+```
+
+⚠ **both sides are re-read at every step of the scan.** A collection between two comparisons moves
+the thread, and a held target address would then quietly match a *neighbour* rather than fail —
+a well-formed answer naming the wrong cell. ⚠ `'torn` anywhere is `'torn` everywhere: a graph read
+is all of it or none, since laying out an arm you could not read means laying out a jump into
+nothing. ⚠ and `dis` keeps its own contract, unchanged and independently gated: a graph walk that
+dies on one unreadable arm must not cost the linear reader the prefix it can still deliver.
+The law that matters is **closure** — every target names a row that IS there (`test/dis.l`).
+
+Two gate lessons, both paid on the way in and both about *where a law can be said*. The closure
+law was first written with `cuap` (`cup∘cap`) for a row's nom, which takes the cup of the **index**
+— so no target ever matched, closure was never tested, and the gate read green. It reads green on
+the host either way, because the glaze natives those closures and both readers correctly answer
+`()`. **love0 has no glaze**, real rows reached the law, and it failed there — which is the whole
+reason that differential is kept. The mirror-image mistake came first: the *reach* law (a branching
+closure's graph is strictly bigger than its linear prefix) is a **positive** claim and cannot live
+in a glaze-invariant gate at all, where both readers answer `()` and `(< 0 0)` is false. It lives
+in `test/gate/splice.l`, under `LOVE_NO_GLAZE`. ⚠ and `dis`/`disg` come out of **one** top-level
+leak, taken apart inside it: a second top-level form looks equivalent and is not — love0 surfaces
+ev.l's late leak differently, and the split bound both names to `()` there, which reads as PRESENT
+and broken rather than absent.
+
+**And the real obstacle turns out not to be the branch at all — it is `Ip`.** `lvm_argtwocond`'s
+own IR is 33 forms with no call and no frame: it reads its operand at `(ld r0 r5 8)`, tests tags
+against `lvm_chain`/`lvm_sym`/`lvm_nom` (`la` refs, which the splicer already turns absolute), and
+picks between `(add r8 r5 24)` — `Ip+3`, the fallthrough — and `(ld r0 r5 16)` — `Ip[2]`, the
+target. **Every one of those is a compile-time-known cell**, because `disg` just handed us the
+whole thread. So the lever is not "say the branch ops"; it is **constant-fold `Ip`** — and the
+same fold dissolves the *entire* `operand` bucket at once, including the hand-written push family
+already spent on `aa`/`aq`/`qa`/`qq`, and `lvm_index`, and the `p` variants' operand halves. It
+wants a small symbolic domain over the handler IR (`{known word, cell j, unknown}`) with a join at
+labels, and `(mov r5 rX)` + `(jmpr r0)` becoming `jmp` to the label for cell j. ⚠ `lvm_jump` is
+the free case and needs no analysis at all: 3 forms, target known, one `jmp`.
+
+⚠ the family splits by its *predicate*, not by its shape: `lvm_argtwocond` is inline tag tests and
+is in the IR table; **`lvm_cond` and `lvm_argcond` are absent from it**, because both call
+`ai_nilp` and a call needs the frame that puts them over the cap. Folding `Ip` gets `argtwocond`
+(28 declines) and `jump` for free and leaves `cond`/`argcond` (27) wanting a callable predicate.
+
 **So the rungs, ranked by the census as it now stands:**
 
-1. **calls and branches, together** — 90% of what is left, and one mechanism: a drive out with a
-   resume label, plus thread-offset → spliced-label for the `cond` family. Amble solved this shape
-   already (stackless callout drive, restart deopt); this is that, over the compiled thread.
-2. **the `no-bridge` sixteen, and it is not the one-liner it looks like.** `two?`, `sat`, `><`,
+1. **fold `Ip`** — now the single biggest lever, and the census's `operand` bucket and its branch
+   bucket are the *same* problem: every `Ip` read in a handler is a cell `disg` can name. Do
+   `lvm_jump` first (no analysis), then the symbolic pass.
+2. **calls** — the `p` variants (`qap` 231, `qqp` 204, `aap`, `aqp`) plus `ap`/`apn`/`argap`, which
+   enter a callee's thread with a return address. Amble solved this shape already (a stackless
+   callout drive, restart deopt); this is that, over the compiled thread.
+3. **the `no-bridge` sixteen, and it is not the one-liner it looks like.** `two?`, `sat`, `><`,
    `quit` are prel **aliases** — `(: two? link? … sat saturate)`, one value under two spellings,
    `id?`-identical at runtime. `dis` names by book key and gets the alias; `ai_nif_lvm` is derived
    from `nif-rows` and only knows the original. So the fix belongs where the alias is made, not in
    a lookup table inside the JIT — and a written-down `two? → link?` row in `lib/splice.l` is
    exactly the duplication `nifs.l` exists to prevent. ⚠ this is why the gate's `sm-pred` sample
    still declines: it is the only sample whose op is an alias.
-3. everything else in the table is one or two closures apiece and is not worth a rung.
+4. everything else in the table is one or two closures apiece and is not worth a rung.
 
 ⚠ **the lane must decline CHEAPLY, and today it does the opposite**: the first thing `jit` does is
 `dis`, the most expensive thing it does, and 1770 of the 1969 declines then throw that walk away

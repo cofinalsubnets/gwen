@@ -47,6 +47,31 @@
    ; cap into .rodata, and this love reads its OWN. ⚠ the count is not asserted (it moves with
    ; love.c); what is asserted is that the table exists, sounds back, and carries a known op --
    ; a table that read as empty would look exactly like a compiler that was never asked.
+   ; ⚠ THE REACH LAW, and this is the only gate that can say it: nothing is glazed here, so a
+   ; closure has a readable thread. A thread's control flow is entirely internal to it, so
+   ; `disg` sees rows the linear `dis` cannot -- an ELSE arm sits past the ret that stops the
+   ; linear walk. Equal counts would mean the arms went unread, and every well-formedness law
+   ; in test/dis.l would still hold. The other half is CLOSURE: a target names a row that is
+   ; there, which is what a collection moving the thread mid-scan would silently break.
+   (sm-br x) (? (two? x) (cup x) 0)
+   (sm-brn x) (? (two? x) (? (two? (cup x)) 1 2) 3)
+   ; ⚠ a row is (idx nom opnd..): the nom is cap(cup(r)). `cuap` is cup∘cap and would take
+   ; the cup of the INDEX -- a target then never matches and the closure law holds vacuously.
+   (gtgt r) (: h (cap (cup r)) o (cup (cup r))
+               (? (id? h 'lvm_argtwocond) (cap (cup o))  (id? h 'lvm_cond) (cap o)  ()))
+   (gidx? rows i) (? (atom? rows) 0 (= i (caap rows)) 1 (gidx? (cup rows) i))
+   (greach f) (: l (tally (dis f)) g (tally (disg f)) (? (l < g) 1 0))
+   (gclosed? f) (: rows (disg f)
+                   (go l) (? (atom? l) 1
+                             (: t (gtgt (cap l)) (? (whole? t) (? (gidx? rows t) (go (cup l)) 0)
+                                                     (go (cup l)))))
+                   (go rows))
+   _ (? (member? 'disg (names ()))
+        (? (all (\ b b) [(greach sm-br) (greach sm-brn) (gclosed? sm-br) (gclosed? sm-brn)])
+           (say out ("  disg: the graph outreaches the linear prefix, every target closed ("
+                     + show (tally (dis sm-brn)) + " rows -> " + show (tally (disg sm-brn)) + ")\n"))
+           (die "disg does not outreach dis, or a branch target names no row"))
+        (say out "  disg: absent on this build\n"))
    it (jit-irtab ())
    _ (? (two? it) 0 (die "no ai_lvm_ir in this binary -- was love.o built with -fir=lvm_?"))
    _ (: cf (jit-ir 'lvm_cup)
