@@ -48,17 +48,18 @@ moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
 # ⚠ love.c's flags must MIRROR make's ($(moon_d)/love.o in host/build.mk), not just its
 # order: -D AI_HAVE_VERSION_H is what puts the version id in this TU, and love1 was linked
 # from make's object. Drop it here and love2 carries "unknown" -- the compare fails at the
-# string, naming a broken fixpoint where the only difference is a build flag. -fir=lvm_ is
-# the same trap wearing its second face: it lays 28 KB of .rodata love1 has and love2 would not.
-moon1 -D ai_tco=1 -D AI_HAVE_VERSION_H -fir=lvm_ -I"$ho" -I. -Iout/lib -c love.c "$d/love.o" || fail "love1 mooncc -c love.c"
+# string, naming a broken fixpoint where the only difference is a build flag. -fir is
+# the same trap wearing its second face: it lays ~1.4 MB of .rodata love1 has and love2
+# would not -- and it rides EVERY TU here, exactly as $(moon_fir) does over there.
+moon1 -D ai_tco=1 -D AI_HAVE_VERSION_H -fir -I"$ho" -I. -Iout/lib -c love.c "$d/love.o" || fail "love1 mooncc -c love.c"
 for f in host/*.c; do
   b=$(basename "$f" .c)
-  moon1 -D ai_tco=1 -I"$ho" -I. -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
+  moon1 -D ai_tco=1 -fir -I"$ho" -I. -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
 done
 # nolibc rides the implicit runtime, as in raw.sh -- pulled member by need.
 for f in crew/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
-  moon1 -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
+  moon1 -fir -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
 done
 LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "(mksys \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"

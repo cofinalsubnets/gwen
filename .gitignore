@@ -40,3 +40,7 @@ __pycache__/
 # clangd's compilation database -- absolute paths, so it is per-machine. `make ccdb`.
 compile_commands.json
 .cache/clangd/
+
+# `love seed` extracts its own source into the CWD and leaves the tree behind when the
+# fixpoint fails -- untracked, and one `git add -A` from riding into the next release.
+/love-*/

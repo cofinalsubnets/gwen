@@ -59,7 +59,35 @@
           (: txt (: (go j) (? (= 0 (peep exe j 0)) (snip exe off j) (go (j + 1))) (go off))
              r (sound txt)
              (? (two? r) <r ()))))
-   (irec-bytes exe) (irec-at exe "ai_lvm_ir")
+   ; THE RECORD IS PER-TU: mooncc names each object's `ai_ir_<basename>`, so reading a whole
+   ; binary is a symtab SCAN, not one lookup. irec-syms answers the names in symtab order --
+   ; the manifest of translation units that wrote anything down -- and irec-bytes concatenates
+   ; their rows. ⚠ a name is taken by PREFIX, so ai_ir_love and ai_ir_main both ride and a
+   ; binary mixing a foreign object simply contributes fewer.
+   (irec-syms exe pfx)
+    (: (le i n) (irec-le exe i n)
+       (el l i) (? (i < 1) <l (el >l (i - 1)))
+       t (? (1 = peep exe 4 0) irec-e32 irec-e64)
+       (f i) (el t i)
+       shoff (le (f 0) (f 1)) shentsz (le (f 2) 2) shnum (le (f 3) 2)
+       (sh i o w) (le (shoff + ((i * shentsz) + o)) w)
+       (shf i k) (sh i (f k) (f (k + 1)))
+       symi (: (go i) (? (i = shnum) -1 (? ((sh i 4 4) = 2) i (go (i + 1)))) (go 0))
+       (? (symi < 0) ()
+          (: stroff (shf (shf symi 10) 6)
+             symoff (shf symi 6) syment (shf symi 12) nsyms (shf symi 8 // syment)
+             (cstr i) (: (go j) (? (peep exe j 0 = 0) (snip exe i j) (go (j + 1))) (go i))
+             np (tally pfx)
+             (go i acc)
+              (? (i = nsyms) (rev acc)
+                 (: nm (cstr (stroff + (le (symoff + (i * syment)) 4)))
+                    (go (i + 1) (? ((np <= tally nm) && (pfx = snip nm 0 np) && !(member? nm acc))
+                                   (nm >< acc) acc))))
+             (go 0 ()))))
+   (irec-bytes exe)
+    (: ns (irec-syms exe "ai_ir_")
+       (? (two? ns) (foldl (\ a n (a + irec-at exe n)) () ns)
+          (irec-at exe "ai_lvm_ir")))          ; the pre-per-TU spelling, still read
    (irec-read path) (: s (irec-slurp path) (? (string? s) (irec-bytes s) ()))
    ; a SECTION's bytes by name -- the same walk one table over, for `.comment` (the
    ; producer record) or any other named blob. ⚠ answers the (1 bytes) WRAPPER: an

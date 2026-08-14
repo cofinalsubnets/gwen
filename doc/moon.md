@@ -125,8 +125,9 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
   bites, and that the answer is unchanged;
 - `-fir=PREFIX[,PREFIX..]` and `-fno-ir=PREFIX[,PREFIX..]` are the second real one, and they are
   the compiler **writing down what it built**: the machine-form IR of the functions you name,
-  laid in `.rodata` under `ai_lvm_ir` as one readable datum — `((name form..) ..)`, which `sound`
-  reads and holo assembles back as it stands, because that is what those forms are.
+  laid in `.rodata` under this TU's own `ai_ir_<basename>` as one readable datum —
+  `((name form..) ..)`, which `sound` reads and holo assembles back as it stands, because that is
+  what those forms are.
 
   **The set algebra**: positives collect, then negatives carve, and with no positive at all the
   set opens — so `-fno-ir=` alone means *everything but*. Both flags repeat, and a repeated flag
@@ -164,13 +165,21 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
   the code it emitted, for whoever opens the binary. Read as one it already found a bug in
   itself: cross-checked against `make vmret`'s objdump reading of the tail-jump law, the two
   disagreed, and the record was wrong (doc/moon-regalloc.md). The splice JIT (`lib/splice.l`) is
-  the other reader: a `love` built with `-fir=lvm_` carries its own op handlers and composes them
-  with **no compiler, no source tree and no disassembler**. ⚠ a cap of 64 forms rides with it —
-  a splice-able op is a short straight-line handler, and love.c's biggest `lvm_` is 102 KB of IR
-  on its own; over the cap a function is simply absent, which is what lets the JIT decline it by
-  name. On love.c: **105 handlers, 30 KB** of `.rodata`, `.text` unmoved. ⚠ the emitted symbol is
-  `ai_lvm_ir` whatever prefixes you pass — a name from its first consumer, worth renaming if a
-  second one outside this tree ever wants it.
+  the other reader: a `love` carries its own op handlers and composes them with **no compiler, no
+  source tree and no disassembler**.
+
+  **The shipped build spends bare `-fir` on every TU** (`$(moon_fir)`), so the artifact carries the
+  machine-form IR of *everything it is* — 757 functions, ~1.4 MB of `.rodata`, `.text` unmoved.
+  ⚠ **the symbol is per-TU**, `ai_ir_<basename>`: one fixed name made `-fir` a one-TU flag, since a
+  second object carrying it died at the link with `link-dup "ai_lvm_ir"`. `nm | grep ai_ir_` is now
+  the manifest of translation units, in link order.
+  ⚠ **no cap at record time.** The splice budget used to live in `gen.l` and cut the record at 64
+  forms, which made the compiler's provenance answer to the JIT's appetite — and a function too big
+  to splice is exactly the one a reader most wants, having no chance of following it in a
+  disassembler. The 64-form budget now sits in `lib/splice.l`, which declines an over-budget body
+  by name just as it declines one it cannot lower. Side effect worth knowing: the JIT went from
+  **105 splice-able handlers to 167**, because the record now covers the host TUs' nifs
+  (`host/posix.c` alone carries 45) and not just love.c's.
   ⚠ it must MIRROR into `test/gate/fixpoint.sh` — a flag on love.c in one rebuild and not the
   other is a byte difference that reads as a broken compiler;
 - the **semantic** refusals stay loud (`-shared`, `-Wl,`'s payload, `-m..`) — an ignored one
@@ -194,15 +203,17 @@ names and neither claims the other's code:
 ```sh
 $ mooncc m.o gcc-built.o -o mix && readelf -p .comment mix
   [     0]  GCC: (GNU) 16.1.1 20260625
-  [    1b]  mooncc
+  [    1b]  mooncc 0.1
 ```
 
-⚠ **ours carries no version, and that is a law rather than an omission.** `love0` is stamped
-`bootstrap` on purpose (a real id there re-lays every lcat header on every commit), so a version
-in `.comment` would make `love1` — built by love0's mooncc — and `love2` — built by love1's —
-differ at `e_shoff` and name a broken fixpoint where the two compilers agree on every byte they
-*emit*. A self-hosted compiler's own build id is circular anyway; the tree's id is in
-`love-version`, in `.rodata`, where a reader gets it either way.
+⚠ **the version is `love-version`'s BASE half, never the whole id, and that is a law.** The VCS
+suffix names the commit that built *the compiler*, so it would make `love1` — built by love0's
+mooncc — and `love2` — built by love1's — differ at `e_shoff` and name a broken fixpoint where
+the two compilers agree on every byte they *emit*. The base moves with a release, which both
+generations share; `love0` is stamped `$(love_base)+bootstrap` for exactly this, and
+`out/host/0/.love0cc` content-stamps that compile line so a `./VERSION` bump rebuilds it (make
+tracks files, not flag strings, and a stale love0 would fail the fixpoint at a byte offset with
+nothing to say about the cause). A reader wanting the commit reads `love-version` in `.rodata`.
 
 Read it back without any binutils at all: `lib/irec.l`'s `(irec-secof PATH ".comment")` is the
 same ELF walk one table over, and answers the `(1 bytes)` wrapper — an empty section is a real

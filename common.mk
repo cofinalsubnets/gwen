@@ -12,6 +12,12 @@ hosta := $(shell uname -m)
 # to the simply-expanded $(hosta) keeps the override and spends one fork for the tree.
 a ?= $(hosta)
 
+# THE BASE VERSION, the checked-in ./VERSION with no VCS suffix on it -- what a release
+# is called, moving only when a release does. mk/lib.mk's love_version adds the suffix,
+# dist names the tarball for the whole id, and `.comment` carries THIS half alone (which
+# is what lets love0's stamp agree with a real one -- see gl0_cc).
+love_base := $(shell cat $R/VERSION 2>/dev/null || echo 0)
+
 # clang is the default host/love0 compiler. ⚠ `CC ?= clang` would be a NO-OP: make ships a
 # built-in default `CC = cc` whose origin is `default`, not `undefined`, so `?=` never
 # fires -- the origin test is what overrides it while still honoring `make CC=gcc`.

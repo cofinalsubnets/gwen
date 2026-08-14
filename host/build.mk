@@ -130,15 +130,19 @@ $(ho)/liblove.so: $(ho)/liblove.a $(R)/love_data.ld
 # lit-wrapped $(gl0_h) instead, produced without an interpreter. It links the whole
 # host/*.c glob: the posix nifs and host/image.c's bake/wake are what let love0 bake and
 # wake mooncc0.image and so drive the mooncc-built default `love`.
-# ⚠ -DAI_VERSION="bootstrap" on purpose: love0 bakes the lcat headers every frontend shares,
-# so a love0 that relinks re-lays all of them and rebuilds every object behind them -- a
-# ~25 s cascade fired by nothing but a new commit hash. The bootstrap is not a release
-# artifact; the shipped `love` carries the real id (the love.o dep below).
+# ⚠ -DAI_VERSION='$(love_base)+bootstrap' on purpose, and BOTH halves earn their place.
+# The suffix: love0 bakes the lcat headers every frontend shares, so a love0 that relinks
+# re-lays all of them and rebuilds every object behind them -- a ~25 s cascade fired by
+# nothing but a new commit hash. The bootstrap is not a release artifact; the shipped
+# `love` carries the real id (the love.o dep below). The BASE, though, must be the real
+# one: `.comment` writes the pre-+ half of love-version, so love1 (built by love0's
+# mooncc) and love2 (built by love1's) agree only if love0 names the same release.
+# It moves when ./VERSION moves -- a release, not a commit -- so the cascade stays away.
 # ⚠ -Dai_data_section=0: the bootstrap asks the sentinels BY NAME and owes no linker
 # script. Both ai_typ bodies answer the same enum d for the same ap, and the one place a
 # data object crosses between differently-built binaries -- the heap image -- carries an ap
 # as its INDEX, never an address. So the layout never crosses.
-gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -Dai_data_section=0 -DAI_VERSION='"bootstrap"' -I. -Iout/lib
+gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -Dai_data_section=0 -DAI_VERSION='"$(love_base)+bootstrap"' -I. -Iout/lib
 love0_host_o = $(patsubst host/%.c,out/host/0/host/%.o,$(wildcard host/*.c))
 love0_o = $(love0_host_o) $(love_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
 out/host/0/host/main.o: $(gl0_h)
@@ -146,7 +150,18 @@ out/host/0/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # ⚠ the LOVE_NO_IMAGE= prefix (empty = unset) hands the compiler its baked image back from
 # under the blanket corpus export: when CC is the dist artifact's own mooncc verb, the verb
 # table lives in that image and an egg boot would read "mooncc" as a filename.
-out/host/0/%.o: $(R)/%.c $(love_h)
+# ⚠ .love0cc content-stamps THIS compile line, .hostcc's trick one lane over, and the base
+# version is why it had to exist: love0's id is now load-bearing (it must name the same
+# release a real love does, or .comment differs and test_fixpoint fails at a byte offset
+# with nothing to say about the cause). make tracks files, not flag strings, so a ./VERSION
+# bump would otherwise leave love0 stamped with the previous release forever.
+.PHONY: force_love0cc
+force_love0cc: ;
+out/host/0/.love0cc: force_love0cc
+	@mkdir -p $(dir $@)
+	@tf=$@.$$$$.tmp; printf '%s\n' '$(gl0_cc)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+out/host/0/%.o: $(R)/%.c $(love_h) out/host/0/.love0cc
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(gl0_cc) -c $< -o $@
@@ -205,20 +220,25 @@ moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/
 moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_math_o) $(moon_d)/sys.o
 # -D AI_HAVE_VERSION_H + the love_version.h dep: this TU carries the version id into the
 # SHIPPED binary, and mooncc has no __has_include for love.c's fallback probe to use.
+# THE RECORD: bare -fir is every function of every TU, each object naming its own
+# ai_ir_<basename>, so the shipped binary carries the machine-form IR of everything it
+# is. ~1.4 MB of .rodata for a binary that can be read without a disassembler, and the
+# splice JIT takes its op bodies out of it (lib/splice.l, which owns the size budget).
+moon_fir = -fir
 $(moon_d)/love.o: love.c $(love_h) $(moon0_dep) out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H -fir=lvm_ -I$(ho) -I. -Iout/lib -c $< $@
+	@$(moon0) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H $(moon_fir) -I$(ho) -I. -Iout/lib -c $< $@
 $(moon_d)/host_%.o: host/%.c $(love_h) $(moon0_dep)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
+	@$(moon0) -D ai_tco=$(tco) $(moon_fir) -I$(ho) -I. -Iout/lib -c $< $@
 $(moon_d)/host_main.o: $(baked_h)
 $(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(moon_d)/m_%.o: crew/moon/lib/math/%.c $(moon0_dep)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
+	@$(moon0) $(moon_fir) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
 # sys.o is LAID, not compiled: the syscall trampoline and our sigsetjmp/longjmp have no C
 # spelling. love0 runs the lay, its holo carrying every backend. ⚠ the entry is picked by
 # $(hosta), the HOST's arch, never $a -- a cross lane overrides $a, and this object is
