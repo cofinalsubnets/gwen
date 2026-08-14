@@ -65,7 +65,7 @@
    (pv? ('p v) s) ?(v = s)
    (kwv? ('kw v) s) ?(v = s)
    (addhide t hs)                                   ; union hs into t's hideset
-    `((kof t) (vof t) (lof t) (dedup (hof t + hs)) (sof t))
+    [(kof t) (vof t) (lof t) (dedup (hof t + hs)) (sof t)]
    (dedup l) (: (go l seen) (? !(two? l) ()
                               (member? <l seen) (go >l seen)
                               (<l >< go >l (<l >< seen)))
@@ -101,9 +101,9 @@
 
    ; -- split off the first LOGICAL line (tokens sharing the head's line no.) --
    (linesplit toks) (: ln (lof <toks)
-                       (go ts acc) (? !(two? ts) `((rev acc) ())
+                       (go ts acc) (? !(two? ts) [(rev acc) ()]
                                       (lof <ts = ln) (go >ts (<ts >< acc))
-                                      `((rev acc) ts))
+                                      [(rev acc) ts])
                        (go toks ()))
 
    ; -- collect function-macro arguments: TS is positioned just after '('.
@@ -270,7 +270,7 @@
               ; a U suffix says unsigned, and so does a value past intmax's top --
               ; 0xffffffffffffffff has no signed type to land in (C11 6.4.4.1)
               [(cv (vof t) (member? (kof t) '(unum ulnum ullnum) || h64 <= vof t)) >ts]
-             (pv? t "(") (: r (ccond >ts) (? (two? <>r && pv? <<>r ")") `(<r ><>r) r))
+             (pv? t "(") (: r (ccond >ts) (? (two? <>r && pv? <<>r ")") [<r ><>r] r))
              (pv? t "!") (: r (cprim >ts) [(cv !(ctrue <r) 0) <>r])
              (pv? t "~") (: r (cprim >ts) [(cv (m64 - 1 - cvv <r) (cvu <r)) <>r])
              (pv? t "-") (: r (cprim >ts) [(cv -(cvv <r) (cvu <r)) <>r])
@@ -285,35 +285,35 @@
        (go <r <>r))
    (cassoc k v ops) (: (go l) (? !(two? l) () ((<<l = k) && (<><l = v)) <>><l (go >l))
                        (go ops))
-   (cmul ts) (clevel cprim `(`('p "*" (\ a b (cbin (\ x y (* x y)) a b)))
-                             `('p "/" cdiv) `('p "%" cmod)) ts)
-   (cadd ts) (clevel cmul `(`('p "+" (\ a b (cbin (\ x y (x + y)) a b)))
-                            `('p "-" (\ a b (cbin (\ x y (x - y)) a b)))) ts)
-   (cshl ts) (clevel cadd `(`('p "<<" (\ a b (cshift a b 1))) `('p ">>" (\ a b (cshift a b 0)))) ts)
-   (crel ts) (clevel cshl `(`('p "<" (\ a b (ccmp (\ x y (x < y)) a b)))
-                            `('p "<=" (\ a b (ccmp (\ x y (x <= y)) a b)))
-                            `('p ">" (\ a b (ccmp (\ x y (y < x)) a b)))
-                            `('p ">=" (\ a b (ccmp (\ x y (y <= x)) a b)))) ts)
-   (ceq ts) (clevel crel `(`('p "==" (\ a b (ccmp (\ x y (x = y)) a b)))
-                           `('p "!=" (\ a b (ccmp (\ x y (? (x = y) 0 1)) a b)))) ts)
-   (cband ts) (clevel ceq `(`('p "&" (\ a b (cbin (\ x y (cbit (\ p q (& p q)) x y)) a b)))) ts)
-   (cbxor ts) (clevel cband `(`('p "^" (\ a b (cbin (\ x y (cbit (\ p q (^ p q)) x y)) a b)))) ts)
-   (cbor ts) (clevel cbxor `(`('p "|" (\ a b (cbin (\ x y (cbit (\ p q (| p q)) x y)) a b)))) ts)
+   (cmul ts) (clevel cprim [['p "*" (\ a b (cbin (\ x y (* x y)) a b))]
+                             ['p "/" cdiv] ['p "%" cmod]] ts)
+   (cadd ts) (clevel cmul [['p "+" (\ a b (cbin (\ x y (x + y)) a b))]
+                            ['p "-" (\ a b (cbin (\ x y (x - y)) a b))]] ts)
+   (cshl ts) (clevel cadd [['p "<<" (\ a b (cshift a b 1))] ['p ">>" (\ a b (cshift a b 0))]] ts)
+   (crel ts) (clevel cshl [['p "<" (\ a b (ccmp (\ x y (x < y)) a b))]
+                            ['p "<=" (\ a b (ccmp (\ x y (x <= y)) a b))]
+                            ['p ">" (\ a b (ccmp (\ x y (y < x)) a b))]
+                            ['p ">=" (\ a b (ccmp (\ x y (y <= x)) a b))]] ts)
+   (ceq ts) (clevel crel [['p "==" (\ a b (ccmp (\ x y (x = y)) a b))]
+                           ['p "!=" (\ a b (ccmp (\ x y (? (x = y) 0 1)) a b))]] ts)
+   (cband ts) (clevel ceq [['p "&" (\ a b (cbin (\ x y (cbit (\ p q (p & q)) x y)) a b))]] ts)
+   (cbxor ts) (clevel cband [['p "^" (\ a b (cbin (\ x y (cbit (\ p q (p ^ q)) x y)) a b))]] ts)
+   (cbor ts) (clevel cbxor [['p "|" (\ a b (cbin (\ x y (cbit (\ p q (p | q)) x y)) a b))]] ts)
    (cland ts) (: r (cbor ts)
                  (go v rest) (? (two? rest && pv? <rest "&&")
                                 (: r2 (cbor >rest) (go (cv (? ((ctrue v) && ctrue <r2) 1 0) 0) <>r2))
-                                `(v rest))
+                                [v rest])
                  (go <r <>r))
    (clor ts) (: r (cland ts)
                 (go v rest) (? (two? rest && pv? <rest "||")
                                (: r2 (cland >rest) (go (cv (? ((ctrue v) || ctrue <r2) 1 0) 0) <>r2))
-                               `(v rest))
+                               [v rest])
                 (go <r <>r))
    (ccond ts) (: r (clor ts)
                  (? (two? <>r && pv? <<>r "?")
                     (: rt (ccond ><>r)
                        (? (two? <>rt && pv? <<>rt ":")
-                          (: re (ccond ><>rt) `((? (ctrue <r) <rt <re) <>re))
+                          (: re (ccond ><>rt) [(? (ctrue <r) <rt <re) <>re])
                           r))
                     r))
    (ceval ts) (ctrue <(ccond ts))                  ; the BIT -- docond only ever wanted truth
@@ -330,16 +330,16 @@
               (: pr (defparams >r () ())
                  (? !(two? pr) ()
                     (: params <pr var? <>pr body <>>pr
-                       _ (pin macs name `('fun params body var?)) 1)))
-             (: _ (pin macs name `('obj r)) 1))))
+                       _ (pin macs name ['fun params body var?]) 1)))
+             (: _ (pin macs name ['obj r]) 1))))
    (defparams ts params var?)                        ; -> (params variadic? body) | () ; ts after '('
     (? !(two? ts) ()
-       (pv? <ts ")") `((rev params) var? >ts)    ; F() -- empty params; body follows the )
-       (pv? <ts "...") (: r >ts (? (two? r && pv? <r ")") `((rev params) 1 >r) ()))
+       (pv? <ts ")") [(rev params) var? >ts]    ; F() -- empty params; body follows the )
+       (pv? <ts "...") (: r >ts (? (two? r && pv? <r ")") [(rev params) 1 >r] ()))
        (idt? <ts)
         (: nm (vof <ts) r >ts
            (? (two? r && pv? <r ",") (defparams >r (nm >< params) var?)
-              (two? r && pv? <r ")") `((rev (nm >< params)) var? >r)
+              (two? r && pv? <r ")") [(rev (nm >< params)) var? >r]
               ()))
        ())
 
@@ -380,11 +380,11 @@
    (fmark? ('fmark)) 1
    (fmpush t files) (? (vof t = 'in) (lof t >< files) >files)
    (fmtop files) (two? files ? <files)
-   spanacc (tablet 0)                               ; the spans, REVERSED, of the strcat-pass now running
-   (spanat n files) (pin spanacc 'l (`(n (fmtop files)) >< peep spanacc 'l ()))
+   spanacc {}                               ; the spans, REVERSED, of the strcat-pass now running
+   (spanat n files) (pin spanacc 'l ([n (fmtop files)] >< peep spanacc 'l ()))
    ; -> the rest after a run of marks, the file stack they leave, and whether
    ; the next real token is a string (so the caller knows to join)
-   (skipfm ts files) (? (two? ts && fmark? <ts) (skipfm >ts (fmpush <ts files)) `(ts files))
+   (skipfm ts files) (? (two? ts && fmark? <ts) (skipfm >ts (fmpush <ts files)) [ts files])
    (strcat-pass ts n files)
     (? !(two? ts) ()
        (: t <ts
@@ -467,7 +467,7 @@
                     ; name it owed is simply absent (C11 6.10p1 wants the
                     ; diagnostic). #include_next lands here too: unimplemented, and
                     ; now it says so rather than dropping a header.
-                    (gripeat sline ("invalid preprocessing directive #" + spellcat `(<>line)))))
+                    (gripeat sline ("invalid preprocessing directive #" + spellcat [<>line]))))
              !(condactive cond) (cppgo rest macs cond buf out incf)                    ; skipped code: drop
              (cppgo rest macs cond (revcat (lnshift macs line) buf) out incf))))         ; active code: accumulate (reversed)
 
@@ -543,7 +543,7 @@
 
    (cpp toks incf fname)                              ; -> (1 out) | a gripe (test with okv?, never two?)
     (: macs (: t {}
-               _ (pin t "__STDC__" `('obj [(tok 'num 1 0)]))
+               _ (pin t "__STDC__" ['obj [(tok 'num 1 0)]])
                ; WHO IS COMPILING. every other predefine here says something about
                ; the language or the machine; this one says the compiler, and it is
                ; the seam a source uses to pick a spelling only we accept -- the
@@ -551,22 +551,22 @@
                ; template for us and GNU's AT&T/ARM string for clang, one header,
                ; both builds. cpp's, not the driver's: it is true of every mooncc
                ; compile, target and flags alike.
-               _ (pin t "__mooncc__" `('obj `((tok 'num 1 0))))
+               _ (pin t "__mooncc__" ['obj [(tok 'num 1 0)]])
                ; __FILE__ -> the TU path as a string literal. pinned as an object
                ; macro (not per-token) so it costs nothing until used; includes
                ; share this table, so it reads the top file's name throughout --
                ; fine for assert/error diagnostics, which live in the .c anyway.
-               _ (pin t "__FILE__" `('obj `((tok 'str fname 0))))
+               _ (pin t "__FILE__" ['obj [(tok 'str fname 0)]])
                ; C11: cc has _Static_assert (+ _Alignas/varargs). advertising 201112
                ; lets gnulib take its _Static_assert lane (verify.h) not a fallback trick.
-               _ (pin t "__STDC_VERSION__" `('obj `((tok 'num 201112 0))))
+               _ (pin t "__STDC_VERSION__" ['obj [(tok 'num 201112 0)]])
                ; HOSTED: a cc-built object links against libc into a hosted program,
                ; so love.c must take its hosted lanes -- the W^X mmap+mprotect code
                ; arena (toast/nif), NOT the freestanding heap copy (which is NX, so
                ; a glazed native body jumped into non-executable heap and faulted).
                ; the whole tco=0 corpus missed it: the glaze is the only arena user
                ; and it's gated off on trampoline builds.
-               _ (pin t "__STDC_HOSTED__" `('obj `((tok 'num 1 0))))
+               _ (pin t "__STDC_HOSTED__" ['obj [(tok 'num 1 0)]])
                ; the ARCH predefine (__x86_64__ / __aarch64__) is the DRIVER's:
                ; cc.l prepends it as a -D-style define by target (love.c's AI_ARCH/
                ; IMAGE_ARCH read it -- a build without one believed its arch was
@@ -583,27 +583,27 @@
                ; a header silently not included. the unprefixed `linux`/`unix`
                ; stay out -- gcc drops them outside gnu89, and they collide with
                ; ordinary identifiers.
-               _ (pin t "__linux__" `('obj `((tok 'num 1 0))))
-               _ (pin t "__linux" `('obj `((tok 'num 1 0))))
-               _ (pin t "__unix__" `('obj `((tok 'num 1 0))))
-               _ (pin t "__unix" `('obj `((tok 'num 1 0))))
+               _ (pin t "__linux__" ['obj [(tok 'num 1 0)]])
+               _ (pin t "__linux" ['obj [(tok 'num 1 0)]])
+               _ (pin t "__unix__" ['obj [(tok 'num 1 0)]])
+               _ (pin t "__unix" ['obj [(tok 'num 1 0)]])
                ; gcc's limit predefines, the ones the host seam reads. only the
                ; target-blind ones live here -- __LONG_MAX__ and the whole
                ; <stdint>-shaped family fork on the word width, so they ride the
                ; driver's table (moon.l stddefs) down the -D channel.
-               _ (pin t "__INT_MAX__" `('obj `((tok 'num 2147483647 0))))
+               _ (pin t "__INT_MAX__" ['obj [(tok 'num 2147483647 0)]])
                ; FLT_MAX exactly: (2 - 2^-23) * 2^127 = 2^128 - 2^104, double-exact
                ; (love.c's 32-bit dtoa branch reads it; gcc predefines it everywhere)
-               _ (pin t "__FLT_MAX__" `('obj `((tok 'flo ((2.0 - (/ 1.0 8388608.0)) * 127 2.0) 0))))
+               _ (pin t "__FLT_MAX__" ['obj [(tok 'flo ((2.0 - (/ 1.0 8388608.0)) * 127 2.0) 0)]])
                ; ..and the DOUBLE twin, (2 - 2^-52) * 2^1023, built the same exact way
                ; (love.c's dtoa reads it as its finite ceiling)
-               _ (pin t "__DBL_MAX__" `('obj `((tok 'flo ((2.0 - (/ 1.0 4503599627370496.0)) * 1023 2.0) 0))))
+               _ (pin t "__DBL_MAX__" ['obj [(tok 'flo ((2.0 - (/ 1.0 4503599627370496.0)) * 1023 2.0) 0)]])
                ; bool/true/false BUILTIN (C23-style, no <stdbool.h> needed): modern C
                ; (gnulib, gzip) uses them bare. bool IS _Bool -- one byte, stores
                ; normalize to 0/1; true/false the 1/0 constants.
-               _ (pin t "bool"  `('obj `((tok 'kw '_Bool 0))))
-               _ (pin t "true"  `('obj `((tok 'num 1 0))))
-               _ (pin t "false" `('obj `((tok 'num 0 0))))
+               _ (pin t "bool"  ['obj [(tok 'kw '_Bool 0)]])
+               _ (pin t "true"  ['obj [(tok 'num 1 0)]])
+               _ (pin t "false" ['obj [(tok 'num 0 0)]])
                t)
        r (cppgo toks macs () () () incf)
        ; the spans ride the stream's HEAD as one marker token, so cpp keeps its
@@ -615,4 +615,4 @@
        (? (gripe? r) r
           (: _ (pin spanacc 'l ())
              out (strcat-pass r 0 ())
-             `(1 (tok 'fspans (rev (peep spanacc 'l ())) 0 >< out))))))       ; an EMPTY token list is a valid empty TU, not a failure -- only a gripe fails
+             [1 (tok 'fspans (rev (peep spanacc 'l ())) 0 >< out)]))))       ; an EMPTY token list is a valid empty TU, not a failure -- only a gripe fails

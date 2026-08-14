@@ -322,16 +322,16 @@
                                 (src k = 39) (? (cnt = 0) () [k v cnt])
                                 (src k = 92)
                                  (: r (escseq (k + 1))
-                                    (? (two? r) (mc <>r (| (<< v 8) (& <r 255)) (cnt + 1)) ()))
-                                (mc (k + 1) (| (<< v 8) (& (src k) 255)) (cnt + 1)))
+                                    (? (two? r) (mc <>r (| (v << 8) (<r & 255)) (cnt + 1)) ()))
+                                (mc (k + 1) (| (v << 8) (& (src k) 255)) (cnt + 1)))
                              r (mc (i + 1) 0 0)
                              (? !(two? r) ()
                                 (: j (+ <r 1)
                                    ; one char keeps the raw byte it always had; a wider one
                                    ; is int-wide and signed, so '\xff\xff\xff\xff' is -1.
                                    v (? (<>>r = 1) <>r
-                                        (: w (& <>r 4294967295)
-                                           (? (0 < (& w 2147483648)) (w - 4294967296) w)))
+                                        (: w (<>r & 4294967295)
+                                           (? (0 < (w & 2147483648)) (w - 4294967296) w)))
                                    (go j line (['num v line () (snip src i j)] >< acc)))))
                  ((c = 48) && ((i + 1) < n) && ((src (i + 1) = 120) || (src (i + 1) = 88)))        ; 0x / 0X hex (int or float)
                   (: r (hexlit i)
