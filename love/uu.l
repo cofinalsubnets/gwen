@@ -27,7 +27,7 @@
 (: GLOB (tablet 0) HELPC (tablet 0)
    SRC (tablet 0) CMEM (tablet 0) BRIDGE (tablet 0))
 
-(: (vsucc v) (? (charm? v) (v + 1) ['succ v])
+(: (vsucc v) (charm? v ? (v + 1) ['succ v])
 
    ; a uu closure carries a LOVE FUNCTION, so applying one is an application and not a
    ; re-walk of the body's syntax. ⚠ ('clo f) is opaque above this line: conv reaches a
@@ -36,24 +36,23 @@
    ; representation.
    (capp cl v) ((<>cl) v)
 
-   (vapp f a) (@ f ('lam cl) (capp cl a) ['na f a])
+   (vapp f a) (f @ ('lam cl) (capp cl a) ['na f a])
 
-   (dop1 v) (@ v ('chain a _) a ['np1 v])
-   (dop2 v) (@ v ('chain _ b) b ['np2 v])
+   (dop1 v) (v @ ('chain a _) a ['np1 v])
+   (dop2 v) (v @ ('chain _ b) b ['np2 v])
 
    (donr P z s m)
-   (? (charm? m) (: (go k acc) (? (k = m) acc (go (k + 1) (vapp (vapp s k) acc)))
+   (? (charm? m) (: (go k acc) (k = m ? acc (go (k + 1) (vapp (vapp s k) acc)))
                   (go 0 z))
-      (id? <m 'succ) (vapp (vapp s <>m) (donr P z s <>m))
-      ['nnr P z s m])
+      (m @ ('succ n) (vapp (vapp s n) (donr P z s n)) ['nnr P z s m]))
 
-   (dobr P x y v) (@ v 'true x  'false y  ['nbr P x y v])
-   (dour P x v) (@ v 'tt x ['nur P x v])
-   (docr P f g v) (@ v ('i1 a) (vapp f a)
+   (dobr P x y v) (v @ 'true x  'false y  ['nbr P x y v])
+   (dour P x v) (v @ 'tt x ['nur P x v])
+   (docr P f g v) (v @ ('i1 a) (vapp f a)
                         ('i2 b) (vapp g b)
                         ['ncr P f g v])
    (doer P v) ['ner P v]
-   (dojr P r ev) (@ ev ('refl _) r ['njr P r ev])
+   (dojr P r ev) (ev @ ('refl _) r ['njr P r ev])
 
    (vof-sym en x)
    ; found-tests are STRUCTURAL (two?): a `?` on the (name value) pair NETS
@@ -89,7 +88,7 @@
       ; 1.3% of one capp's traffic. ⚠ THE (two? h) FAST PATH IS GONE with it: a LIST head is
       ; never id? to a tag, so a spine falls through every arm to the else on its own -- and
       ; it is 259 of those 14778, which is not worth a branch or a second copy of the body.
-      (@ t
+      (t @
          ('lam x b)             (: cb (comp b)
                                          (\ en ['lam ['clo (\ v (cb ([x v] >< en)))]]))
          ('succ a)              (: ca (comp a) (\ en (vsucc (ca en))))
@@ -127,182 +126,160 @@
    ; the argument list compiles once too; `spine` then only applies.
    ; ⚠ empty-list tests are STRUCTURAL (two?): a love list of zeros NETS zero, so `!cas` would
    ; call (add n 0)'s final argument list (0) empty -- the net law. Asked in the positive here.
-   (comp-args as) (? (two? as) ((comp <as) >< (comp-args >as)) ())
-   (spine en f cas) (? (two? cas) (spine en (vapp f ((<cas) en)) >cas) f)
+   (comp-args as) (two? as ? (comp <as >< comp-args >as))
+   (spine en f cas) (two? cas ? (spine en (vapp f (<cas en)) >cas) f)
 
    ; the old door, kept for every caller (chk, inf, the globals, test/uu.l): compile, then run.
    (vof en t) ((comp t) en)
 
+   ; ⚠ THE SCRUTINEE IS A PAIR, which is why this one stays a `?`: an arm reads both
+   ; sides, and a pattern would build the [a b] per call to say less than the tests do.
+   ; the two atom arms are GUARDS -- equal charms and equal noms are id? above, so
+   ; reaching one means unequal, and it keeps `<a` off a non-list below.
    (conv d a b)
-   (? (id? a b) 1                    ; the same heap object converts to itself:
-      ((charm? a) && (charm? b)) (a = b) ; O(1) across the shared neutral towers
-      ((nom? a) && (nom? b)) (id? a b)
-      ((id? <a 'lam) || (id? <b 'lam))
+   (? (id? a b) 1                    ; the same heap object converts to itself
+      (charm? a && charm? b) ()
+      (nom? a && nom? b) ()
+      (id? <a 'lam || id? <b 'lam)
       (: fr ['nv d] (conv (d + 1) (vapp a fr) (vapp b fr)))
-      ((id? <a 'chain) && (two? b) && !(id? <b 'chain))
-      ((conv d <>a (dop1 b)) && (conv d <>>a (dop2 b)))
-      ((id? <b 'chain) && (two? a) && !(id? <a 'chain))
-      ((conv d (dop1 a) <>b) && (conv d (dop2 a) <>>b))
-      ((id? <a 'pi) && (id? <b 'pi))
-      ((conv d <>a <>b) && (: fr ['nv d] (conv (d + 1) (capp <>>a fr) (capp <>>b fr))))
-      ((id? <a 'sig) && (id? <b 'sig))
-      ((conv d <>a <>b) && (: fr ['nv d] (conv (d + 1) (capp <>>a fr) (capp <>>b fr))))
-      ((two? a) && (two? b) && (id? <a <b)) (conv-args d >a >b)
+      (id? <a 'chain && two? b && !(id? <b 'chain))
+      (conv d <>a (dop1 b) && conv d <>>a (dop2 b))
+      (id? <b 'chain && two? a && !(id? <a 'chain))
+      (conv d (dop1 a) <>b && conv d (dop2 a) <>>b)
+      (id? <a 'pi && id? <b 'pi)
+      (conv d <>a <>b && (: fr ['nv d] (conv (d + 1) (capp <>>a fr) (capp <>>b fr))))
+      (id? <a 'sig && id? <b 'sig)
+      (conv d <>a <>b && (: fr ['nv d] (conv (d + 1) (capp <>>a fr) (capp <>>b fr))))
+      (two? a && two? b && id? <a <b) (conv-args d >a >b)
       0)
 
    (conv-args d as bs)
-   (? (!(two? as) && !(two? bs)) 1
-      (!(two? as) || !(two? bs)) 0
-      ((conv d <as <bs) && (conv-args d >as >bs)))
+   (? (atom? as && atom? bs) 1
+      (atom? as || atom? bs) 0
+      (conv d <as <bs && conv-args d >as >bs))
 
    (inf-sym cx x)
-   (? (id? x 'UU) 'UU
-      (member? x '(nat bool unit empty)) 'UU
-      (id? x 'zero) 'nat
-      (id? x 'tt) 'unit
-      (member? x '(true false)) 'bool
-      (: e (assoc x cx)
-         (? (two? e) <>e
-            (: g (peep GLOB x 0)
-               (? (two? g) <g (scare 'uu-unbound x))))))
+   (x @ ('UU | 'nat | 'bool | 'unit | 'empty) 'UU
+        'zero 'nat
+        'tt 'unit
+        ('true | 'false) 'bool
+        (assoc x cx @ (_ T) T
+           (: g (peep GLOB x 0) (two? g ? <g (scare 'uu-unbound x)))))
 
    (inf-spine cx en d f as)
    (? !(two? as) f
-      (id? <f 'pi)
-      (: a <as
-         _ (chk cx en d a <>f)
-         (inf-spine cx en d (capp <>>f (vof en a)) >as))
-      (scare 'uu-not-a-pi as))
+      (f @ ('pi A q)
+             (: a <as
+                _ (chk cx en d a A)
+                (inf-spine cx en d (capp q (vof en a)) >as))
+             (scare 'uu-not-a-pi as)))
 
+   ; ⚠ CHECKING IS TWO SHAPES AT ONCE -- the term's and the type's -- so every arm here
+   ; is an `@` inside an `@`, and the inner else is the mismatch that names both.
    (chk cx en d t T)
-   (? ((two? t) && (id? <t 'lam))
-      (? (id? <T 'pi)
-         (: x <>t fr ['nv d]
-            (chk ([x <>T] >< cx) ([x fr] >< en) (d + 1)
-                 <>>t (capp <>>T fr)))
-         (scare 'uu-lam-needs-pi t))
-      ((two? t) && (id? <t 'tpair))
-      (? (id? <T 'sig)
-         (: _ (chk cx en d <>t <>T)
-            (chk cx en d <>>t (capp <>>T (vof en <>t))))
-         (scare 'uu-tpair-needs-total2 t))
-      ((two? t) && (id? <t 'ii1))
-      (? (id? <T 'coprod) (chk cx en d <>t <>T) (scare 'uu-ii1-needs-coprod t))
-      ((two? t) && (id? <t 'ii2))
-      (? (id? <T 'coprod) (chk cx en d <>t <>>T) (scare 'uu-ii2-needs-coprod t))
-      ((two? t) && (id? <t 'idpath))
-      (? (id? <T 'paths)
-         (: _ (chk cx en d <>t <>T)
-            v (vof en <>t)
-            (? ((conv d v <>>T) && (conv d v <>>>T)) 1 (scare 'uu-idpath-mismatch t)))
-         (scare 'uu-idpath-needs-paths t))
-      ((two? t) && (id? <t 'let))
-      (: x <>t
-         Av (inf cx en d <>>t)
-         va (vof en <>>t)
-         (chk ([x Av] >< cx) ([x va] >< en) d <>>>t T))
+   (t @
+      ('lam x b)   (T @ ('pi A q) (: fr ['nv d]
+                                     (chk ([x A] >< cx) ([x fr] >< en) (d + 1) b (capp q fr)))
+                        (scare 'uu-lam-needs-pi t))
+      ('tpair a b) (T @ ('sig A q) (: _ (chk cx en d a A)
+                                      (chk cx en d b (capp q (vof en a))))
+                        (scare 'uu-tpair-needs-total2 t))
+      ('ii1 a)     (T @ ('coprod A _) (chk cx en d a A) (scare 'uu-ii1-needs-coprod t))
+      ('ii2 b)     (T @ ('coprod _ B) (chk cx en d b B) (scare 'uu-ii2-needs-coprod t))
+      ('idpath a)  (T @ ('paths A av bv)
+                          (: _ (chk cx en d a A)
+                             v (vof en a)
+                             (conv d v av && conv d v bv ? 1 (scare 'uu-idpath-mismatch t)))
+                        (scare 'uu-idpath-needs-paths t))
+      ('let x a b) (: Av (inf cx en d a)
+                      va (vof en a)
+                      (chk ([x Av] >< cx) ([x va] >< en) d b T))
       (: Ti (inf cx en d t)
-         (? (conv d T Ti) 1 (scare 'uu-type-mismatch t))))
+         (conv d T Ti ? 1 (scare 'uu-type-mismatch t))))
 
+   ; ⚠ THE ELSE IS THE SPINE and needs no head test in front of it: a LIST head is never
+   ; id? to a tag, and (inf .. <t) answers for a nom head and a nested spine alike.
+   ; ⚠ a pattern carries the ARITY the old head test did not, so a tag at the wrong
+   ; length reaches the spine and comes back unbound instead of reading () for operands.
    (inf cx en d t)
    (? (charm? t) 'nat
       (nom? t) (inf-sym cx t)
-      (: h <t
-         (? (two? h) (inf-spine cx en d (inf cx en d h) >t)
-            (id? h 'pi)
-            (: x <>t
-               _ (chk cx en d <>>t 'UU)
-               fr ['nv d]
-               _ (chk ([x (vof en <>>t)] >< cx) ([x fr] >< en) (d + 1) <>>>t 'UU)
-               'UU)
-            (id? h 'total2)
-            (: x <>t
-               _ (chk cx en d <>>t 'UU)
-               fr ['nv d]
-               _ (chk ([x (vof en <>>t)] >< cx) ([x fr] >< en) (d + 1) <>>>t 'UU)
-               'UU)
-            (id? h 'coprod)
-            (: _ (chk cx en d <>t 'UU) _ (chk cx en d <>>t 'UU) 'UU)
-            (id? h 'paths)
-            (: _ (chk cx en d <>t 'UU)
-               Av (vof en <>t)
-               _ (chk cx en d <>>t Av)
-               _ (chk cx en d <>>>t Av)
-               'UU)
-            (id? h 'succ) (: _ (chk cx en d <>t 'nat) 'nat)
-            (id? h 'idpath)
-            (: Av (inf cx en d <>t) v (vof en <>t) ['paths Av v v])
-            (id? h 'pr1)
-            (: S (inf cx en d <>t)
-               (? (id? <S 'sig) <>S (scare 'uu-pr1-needs-total2 t)))
-            (id? h 'pr2)
-            (: S (inf cx en d <>t)
-               (? (id? <S 'sig) (capp <>>S (dop1 (vof en <>t)))
-                  (scare 'uu-pr2-needs-total2 t)))
-            (id? h 'the)
-            (: _ (chk cx en d <>t 'UU)
-               Tv (vof en <>t)
-               _ (chk cx en d <>>t Tv)
-               Tv)
-            (id? h 'let)
-            (: x <>t
-               Av (inf cx en d <>>t)
-               va (vof en <>>t)
-               (inf ([x Av] >< cx) ([x va] >< en) d <>>>t))
-            (id? h 'nat_rect)
-            (: P <>t
-               _ (chk cx en d <>>>>t 'nat)
-               _ (chk cx en d P (vof 0 '(pi x nat UU)))
-               Pv (vof en P)
-               _ (chk cx en d <>>t (vapp Pv 0))
-               _ (chk cx en d <>>>t
-                      (vof [['P Pv]] '(pi k nat (pi r (P k) (P (succ k))))))
-               (vapp Pv (vof en <>>>>t)))
-            (id? h 'bool_rect)
-            (: P <>t
-               _ (chk cx en d <>>>>t 'bool)
-               _ (chk cx en d P (vof 0 '(pi x bool UU)))
-               Pv (vof en P)
-               _ (chk cx en d <>>t (vapp Pv 'true))
-               _ (chk cx en d <>>>t (vapp Pv 'false))
-               (vapp Pv (vof en <>>>>t)))
-            (id? h 'unit_rect)
-            (: P <>t
-               _ (chk cx en d <>>>t 'unit)
-               _ (chk cx en d P (vof 0 '(pi x unit UU)))
-               Pv (vof en P)
-               _ (chk cx en d <>>t (vapp Pv 'tt))
-               (vapp Pv (vof en <>>>t)))
-            (id? h 'empty_rect)
-            (: P <>t
-               _ (chk cx en d <>>t 'empty)
-               _ (chk cx en d P (vof 0 '(pi x empty UU)))
-               (vapp (vof en P) (vof en <>>t)))
-            (id? h 'coprod_rect)
-            (: S (inf cx en d <>>>>t)
-               (? (id? <S 'coprod)
-                  (: A <>S B <>>S P <>t
-                     _ (chk cx en d P
-                            (vof [['A A] ['B B]] '(pi x (coprod A B) UU)))
-                     Pv (vof en P)
-                     _ (chk cx en d <>>t
-                            (vof [['A A] ['P Pv]] '(pi a A (P (ii1 a)))))
-                     _ (chk cx en d <>>>t
-                            (vof [['B B] ['P Pv]] '(pi b B (P (ii2 b)))))
-                     (vapp Pv (vof en <>>>>t)))
+      (t @
+         (('pi | 'total2) x A B)
+          (: _ (chk cx en d A 'UU)
+             fr ['nv d]
+             _ (chk ([x (vof en A)] >< cx) ([x fr] >< en) (d + 1) B 'UU)
+             'UU)
+         ('coprod A B)
+          (: _ (chk cx en d A 'UU) _ (chk cx en d B 'UU) 'UU)
+         ('paths A a b)
+          (: _ (chk cx en d A 'UU)
+             Av (vof en A)
+             _ (chk cx en d a Av)
+             _ (chk cx en d b Av)
+             'UU)
+         ('succ n) (: _ (chk cx en d n 'nat) 'nat)
+         ('idpath a)
+          (: Av (inf cx en d a) v (vof en a) ['paths Av v v])
+         ('pr1 w)
+          (: S (inf cx en d w)
+             (S @ ('sig A _) A (scare 'uu-pr1-needs-total2 t)))
+         ('pr2 w)
+          (: S (inf cx en d w)
+             (S @ ('sig _ q) (capp q (dop1 (vof en w))) (scare 'uu-pr2-needs-total2 t)))
+         ('the T u)
+          (: _ (chk cx en d T 'UU)
+             Tv (vof en T)
+             _ (chk cx en d u Tv)
+             Tv)
+         ('let x a b)
+          (: Av (inf cx en d a)
+             va (vof en a)
+             (inf ([x Av] >< cx) ([x va] >< en) d b))
+         ('nat_rect P z s n)
+          (: _ (chk cx en d n 'nat)
+             _ (chk cx en d P (vof 0 '(pi x nat UU)))
+             Pv (vof en P)
+             _ (chk cx en d z (vapp Pv 0))
+             _ (chk cx en d s (vof [['P Pv]] '(pi k nat (pi r (P k) (P (succ k))))))
+             (vapp Pv (vof en n)))
+         ('bool_rect P x y w)
+          (: _ (chk cx en d w 'bool)
+             _ (chk cx en d P (vof 0 '(pi x bool UU)))
+             Pv (vof en P)
+             _ (chk cx en d x (vapp Pv 'true))
+             _ (chk cx en d y (vapp Pv 'false))
+             (vapp Pv (vof en w)))
+         ('unit_rect P u w)
+          (: _ (chk cx en d w 'unit)
+             _ (chk cx en d P (vof 0 '(pi x unit UU)))
+             Pv (vof en P)
+             _ (chk cx en d u (vapp Pv 'tt))
+             (vapp Pv (vof en w)))
+         ('empty_rect P e)
+          (: _ (chk cx en d e 'empty)
+             _ (chk cx en d P (vof 0 '(pi x empty UU)))
+             (vapp (vof en P) (vof en e)))
+         ('coprod_rect P f g w)
+          (: S (inf cx en d w)
+             (S @ ('coprod A B)
+                    (: _ (chk cx en d P (vof [['A A] ['B B]] '(pi x (coprod A B) UU)))
+                       Pv (vof en P)
+                       _ (chk cx en d f (vof [['A A] ['P Pv]] '(pi a A (P (ii1 a)))))
+                       _ (chk cx en d g (vof [['B B] ['P Pv]] '(pi b B (P (ii2 b)))))
+                       (vapp Pv (vof en w)))
                   (scare 'uu-coprod_rect t)))
-            (id? h 'paths_rect)
-            (: E (inf cx en d <>>>t)
-               (? (id? <E 'paths)
-                  (: A <>E av <>>E bv <>>>E P <>t
-                     _ (chk cx en d P
-                            (vof [['A A] ['a av]] '(pi b A (pi e (paths A a b) UU))))
-                     Pv (vof en P)
-                     _ (chk cx en d <>>t (vapp (vapp Pv av) ['refl av]))
-                     (vapp (vapp Pv bv) (vof en <>>>t)))
+         ('paths_rect P r e)
+          (: E (inf cx en d e)
+             (E @ ('paths A av bv)
+                    (: _ (chk cx en d P
+                              (vof [['A A] ['a av]] '(pi b A (pi e (paths A a b) UU))))
+                       Pv (vof en P)
+                       _ (chk cx en d r (vapp (vapp Pv av) ['refl av]))
+                       (vapp (vapp Pv bv) (vof en e)))
                   (scare 'uu-paths_rect t)))
-            (member? h '(lam tpair ii1 ii2)) (scare 'uu-cannot-infer t)
-            (inf-spine cx en d (inf-sym cx h) >t)))))
+         (('lam | 'tpair | 'ii1 | 'ii2) >< _) (scare 'uu-cannot-infer t)
+         (inf-spine cx en d (inf cx en d <t) >t))))
 
 ; --- drivers: a definition is checked then pinned; an axiom is a book entry
 ; --- with a type and no value (its value is its own neutral name); rejects
@@ -353,34 +330,32 @@
    (qlit v) [Q v]
 
    (kchain a b) ['chain a b]
-   (kp1 v) (? (two? v) (? (id? <v 'chain) <>v ['np1 v]) ['np1 v])
-   (kp2 v) (? (two? v) (? (id? <v 'chain) <>>v ['np2 v]) ['np2 v])
+   (kp1 v) (v @ ('chain a _) a ['np1 v])
+   (kp2 v) (v @ ('chain _ b) b ['np2 v])
    (ksucc v) (v + 1)
    (ki1 a) ['i1 a]
    (ki2 a) ['i2 a]
    (krefl a) ['refl a]
-   (knrec s z n) (: (go k acc) (? (k = n) acc (go (k + 1) (s k acc))) (go 0 z))
-   (kbrec x y b) (? (id? b 'true) x y)
-   (kcrec f g v) (? (id? <v 'i1) (f <>v) (g <>v))
+   (knrec s z n) (: (go k acc) (k = n ? acc (go (k + 1) (s k acc))) (go 0 z))
+   (kbrec x y b) (b @ 'true x y)
+   (kcrec f g v) (v @ ('i1 a) (f a) (g <>v))
    (kseq e r) r
 
-   (bound? x bs) (? !(two? bs) 0 (? (id? x <bs) 1 (bound? x >bs)))
+   (bound? x bs) (two? bs ? (id? x <bs || bound? x >bs) 0)
 
    (uglo nm)
-   (: c (peep CMEM nm 0)
-      (? (two? c) <>c
-         (: b (peep BRIDGE nm 0)
-            (? (two? b) <>b
-               (: sc (peep SRC nm 0)
-                  (? (two? sc) (: v (ev (u2 <sc ()))
-                           _ (pin CMEM nm ['hit v])
-                           v)
-                     ['nv nm]))))))
+   (peep CMEM nm 0 @ (_ v) v
+      (peep BRIDGE nm 0 @ (_ v) v
+         ; ⚠ a SRC row is the ONE-element (t), not a ['hit v] pair: defn pins the term itself.
+         (peep SRC nm 0 @ (src) (: v (ev (u2 src ())) _ (pin CMEM nm ['hit v]) v)
+                         ['nv nm])))
 
    (u2app t bs)
-   (: (walk as) (? !(two? as) () ((u2 <as bs) >< (walk >as)))
-      ((u2 <t bs) >< (walk >t)))
+   (: (walk as) (two? as ? (u2 <as bs >< walk >as))
+      (u2 <t bs >< walk >t))
 
+   ; ⚠ THE TAG DOES NOT PICK THE ORDER: nat_rect and friends take their operands
+   ; the way knrec wants them, not the way the term spells them.
    (u2 t bs)
    (? (charm? t) t
       (nom? t)
@@ -388,26 +363,25 @@
          (member? t '(UU nat bool unit empty tt true false)) (qlit t)
          (bound? t bs) t
          (qlit (uglo t)))
-      (: h <t
-         (? (two? h) (u2app t bs)
-            (id? h 'lam) (Q >< (<>t >< ((u2 <>>t (<>t >< bs)) >< ())))
-            (id? h 'let) (C >< (<>t >< ((u2 <>>t bs) >< ((u2 <>>>t (<>t >< bs)) >< ()))))
-            (id? h 'the) (u2 <>>t bs)
-            (member? h '(pi total2 coprod paths)) (qlit ['ty h])
-            (id? h 'tpair) [(qlit kchain) (u2 <>t bs) (u2 <>>t bs)]
-            (id? h 'pr1)   [(qlit kp1) (u2 <>t bs)]
-            (id? h 'pr2)   [(qlit kp2) (u2 <>t bs)]
-            (id? h 'succ)  [(qlit ksucc) (u2 <>t bs)]
-            (id? h 'ii1)   [(qlit ki1) (u2 <>t bs)]
-            (id? h 'ii2)   [(qlit ki2) (u2 <>t bs)]
-            (id? h 'idpath) [(qlit krefl) (u2 <>t bs)]
-            (id? h 'nat_rect)    [(qlit knrec) (u2 <>>>t bs) (u2 <>>t bs) (u2 <>>>>t bs)]
-            (id? h 'bool_rect)   [(qlit kbrec) (u2 <>>t bs) (u2 <>>>t bs) (u2 <>>>>t bs)]
-            (id? h 'unit_rect)   [(qlit kseq) (u2 <>>>t bs) (u2 <>>t bs)]
-            (id? h 'coprod_rect) [(qlit kcrec) (u2 <>>t bs) (u2 <>>>t bs) (u2 <>>>>t bs)]
-            (id? h 'paths_rect)  [(qlit kseq) (u2 <>>>t bs) (u2 <>>t bs)]
-            (id? h 'empty_rect)  [(qlit kseq) (u2 <>>t bs) (qlit 'ner)]
-            (u2app t bs))))
+      (t @
+         ('lam x b)   (Q >< (x >< (u2 b (x >< bs) >< ())))
+         ('let x a b) (C >< (x >< (u2 a bs >< (u2 b (x >< bs) >< ()))))
+         ('the T u)   (u2 u bs)
+         (('pi | 'total2 | 'coprod | 'paths) >< _) (qlit ['ty <t])
+         ('tpair a b) [(qlit kchain) (u2 a bs) (u2 b bs)]
+         ('pr1 w)     [(qlit kp1) (u2 w bs)]
+         ('pr2 w)     [(qlit kp2) (u2 w bs)]
+         ('succ n)    [(qlit ksucc) (u2 n bs)]
+         ('ii1 a)     [(qlit ki1) (u2 a bs)]
+         ('ii2 b)     [(qlit ki2) (u2 b bs)]
+         ('idpath a)  [(qlit krefl) (u2 a bs)]
+         ('nat_rect _ z s n)     [(qlit knrec) (u2 s bs) (u2 z bs) (u2 n bs)]
+         ('bool_rect _ x y w)    [(qlit kbrec) (u2 x bs) (u2 y bs) (u2 w bs)]
+         ('unit_rect _ u w)      [(qlit kseq) (u2 w bs) (u2 u bs)]
+         ('coprod_rect _ f g w)  [(qlit kcrec) (u2 f bs) (u2 g bs) (u2 w bs)]
+         ('paths_rect _ r e)     [(qlit kseq) (u2 e bs) (u2 r bs)]
+         ('empty_rect _ e)       [(qlit kseq) (u2 e bs) (qlit 'ner)]
+         (u2app t bs)))
 
    (uu2l t) (u2 t ())
    (lof t) (ev (u2 t ()))

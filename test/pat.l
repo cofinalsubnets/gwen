@@ -98,6 +98,25 @@
  ('k = (@ '(2 3) (? (a < b) (? (0 < a) [a b])) 'k 'no))       ; ..and guards stack
  ('no = (@ '(2 1) (? (a < b) (? (0 < a) [a b])) 'k 'no))
  (2 = (@ @(1 2) @(a (? (1 < b) b)) b 0))           ; ..anywhere a pattern goes
+ ; --- `&` IS THE GUARD, left to right, and lowers to exactly the `?` above. the tag is
+ ; what says EXPRESSION: (two? x) is a fine untagged pattern as well as a fine call, so
+ ; a bare operand could never be read for truth. `&&` is the same tag.
+ (0 = (@ 5 (x & two? x) 1 0))     (1 = (@ 5 (x & atom? x) 1 0))
+ (1 = (@ '(1 2) (x & two? x) 1 0))
+ (1 = (@ 5 (c & c > 0) 1 0))      (0 = (@ -5 (c & c > 0) 1 0))
+ (1 = (@ 5 (c && c > 0) 1 0))     (0 = (@ -5 (c && c > 0) 1 0))   ; ..&& aliases &
+ ('y = (@ 5 (? (0 < c) c) 'y 'n)) ('y = (@ 5 (c & 0 < c) 'y 'n))  ; ..the two spellings
+ ; ⚠ `&` is RIGHT-HANDED at band 30, so a chain arrives NESTED and is FLATTENED: every
+ ; operand past the first is its own guard. left as one expression the guard would be
+ ; the BITWISE and of two bits, and (& 1 2) is 0 -- true and true reading false.
+ (1 = (@ 5 (c & 0 < c & c < 10) 1 0))
+ (0 = (@ 50 (c & 0 < c & c < 10) 1 0))   (0 = (@ -5 (c & 0 < c & c < 10) 1 0))
+ (2 = (@ [1 2] ([a b] & a < b) b 0))     (0 = (@ [2 1] ([a b] & a < b) b 0))
+ ; ..a guard over an alternative still stands over every branch
+ ('y = (@ 5 ((3 | 5) & 1) 'y 'n))        ('n = (@ 5 ((3 | 5) & 0) 'y 'n))
+ ; ..and the SHAPE is earned first, so a guard reading an accessor the shape did not
+ ; earn is never run
+ (0 = (@ 5 ([a b] & a < b) 1 0))
  (0 = (@ @(1 1) @(a (? (1 < b) b)) b 0))
  ('(3 4) = (@ '(1 2 3 4) (? (a < b) ([a b] + t)) t 'short))     ; ..a split included
  ('short = (@ '(1 2 3 4) (? (b < a) ([a b] + t)) t 'short))
@@ -155,12 +174,12 @@
  ('empty = (@ () [] 'empty 'no)) ('no = (@ '(1) [] 'empty 'no)) ('no = (@ 5 [] 'empty 'no))
  (1 = (@ '(1 2) [a ()] a 'no))                     ; ..so () is the don't-care in a position
  ; --- AND-patterns, the dual of ||: both must fit. `&` says it too.
- ('(lam x b) = (@ '(lam x b) (v && ['lam p q]) v 'no))   ; ..name the whole, take it apart
- ('b = (@ '(lam x b) (v && ['lam p q]) q 'no))
- ('no = (@ '(pi x b) (v && ['lam p q]) v 'no))
- ('(1 2) = (@ '(1 2) (x & [a b]) x 'no))
+ ('(lam x b) = (@ '(lam x b) (v @ ['lam p q]) v 'no))   ; ..name the whole, take it apart
+ ('b = (@ '(lam x b) (v @ ['lam p q]) q 'no))
+ ('no = (@ '(pi x b) (v @ ['lam p q]) v 'no))
+ ('(1 2) = (@ '(1 2) (x @ [a b]) x 'no))
  ; ..both branches read the SAME value, so a nom in both is the ordinary non-linear one
- (3 = (@ '(3 3) ([a _] && [_ a]) a 'no)) ('no = (@ '(3 4) ([a _] && [_ a]) a 'no))
+ (3 = (@ '(3 3) ([a _] @ [_ a]) a 'no)) ('no = (@ '(3 4) ([a _] @ [_ a]) a 'no))
  ; --- the AS-pattern: (v @ pat) is that same conjunction in haskell's spelling, so every
  ; && law above holds of it. ⚠ SPACED -- glued v@pat is ONE nom (opfix splits only a leading
  ; sigil) and glued @( is the tray, so the space is what tells the three apart.

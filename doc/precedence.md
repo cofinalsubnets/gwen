@@ -81,6 +81,23 @@ exceptions:
 
 Gaps are left so a level can slot in later.
 
+⚠ **The two rows that catch a C-primed hand, both by being where C is not.**
+
+**`<< >>` are not in the table** — they are coined punct, so they ride **house band 95**, above
+every declared row. C puts the shifts *below* `+ -`; here they are above `* /`. So
+`c - 192 << 6` is `c - (192 << 6)`, not `(c - 192) << 6` — which is how a UTF-8 decoder came to
+compute garbage from a line that reads correctly in C. Parenthesize the arithmetic operand of a
+shift, always.
+
+**`| & && || ` are ONE band**, not four, and band 30 is right-handed like every band but
+arithmetic. So they do not order against each other at all: `x & y && z` folds to
+`x & (y && z)`, and `(ctbl c & 4 && c <= 55)` asks `ctbl c & (4 && c <= 55)` — a mask against a
+truth bit, which read every octal digit wrong and surfaced three files away as a lex error.
+C's `&` -above- `&&` ordering does not exist here; spend the parens: `((ctbl c & 4) && c <= 55)`.
+
+Comparison (40) does bind tighter than the logical band (30), so `1 < 2 && 3 < 4` is the pair of
+comparisons you meant — that one matches C, and it is the reason the other two surprise.
+
 `**` and `$` are the two **apply** operators, both self-named (the reader emits `(** a b)` /
 `($ a b)`, backed by the prel globals `(: (** a b) (b a))` and `(: $ 1)` — `$` *is* the identity,
 so `($ a b) = (a b)`). They bracket the range: `**` flip-applies at the tightest band (a

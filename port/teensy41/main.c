@@ -205,7 +205,13 @@ static uintptr_t pool[384 * (1 << 10) / sizeof(uintptr_t)];   // word-typed: nat
 static char const src_bao[] =
 #include "bao.h"
 ;
-static struct ai_lib const libs[] = {{"bao", src_bao}, {NULL, NULL}};
+static char const src_pat[] =
+#include "pat.h"
+;
+// ⚠ pat is a SECOND copy of the text the egg's post already carries: the egg text is a
+// literal concatenation and cannot name an array. bao is written in @, and its `use`
+// lands after the mop, so the MODULE has to be here for the macro to be live.
+static struct ai_lib const libs[] = {{"pat", src_pat}, {"bao", src_bao}, {NULL, NULL}};
 struct ai_lib const *ai_libs(void) { return libs; }
 
 int main(void) {
@@ -284,9 +290,11 @@ int main(void) {
     " "
 #include "ev.h"
     ,
+#include "pat.h"                                     // ⚠ pat RIDES THE POST TEXT: post is written in @, and a
+    " "                                              //   macro reaches a reader only once it is in the book
 #include "post.h"
     );
-    g = ai_evals_(g, "(use 'bao) 0"); }
+    g = ai_evals_(g, "(use 'pat) (use 'bao) 0"); }
   // THE SESSION: a fresh writable layer, C-side -- the shell's defglobs land
   // here, never in the base (bakes carry none; every boot or wake pushes its own).
   g = ai_layer_(g);

@@ -31,8 +31,10 @@
 (:
    ; token readers: t = (kind val line)
    (tkk t) <t (tkv t) <>t
-   (tp? t s) (two? t && (tkk t = 'p) && (tkv t = s))
-   (tkw? t k) (two? t && (tkk t = 'kw) && (tkv t = k))
+   ; ⚠ the value is a GUARD: a nom in a pattern is a fresh BINDER, so a second
+   ; `s` there would shadow the parameter rather than demand the two agree.
+   (tp? ('p v) s) ?(v = s)
+   (tkw? ('kw v) k) ?(v = k)
    ; -- where a refusal stood (doc/moon-diag.md rung 2) --
    ; cpp hands the SPANS -- ((index file)..), which file each stretch of the
    ; flat stream came from -- on a marker token at the stream's head, laid by
@@ -66,7 +68,7 @@
    ; an unstamped one (every token of every parse that is going to succeed)
    ; costs mark a length test and nothing else. diagnostics are paid for out
    ; of the failure path, where there is all the time in the world.
-   far (tablet 0)
+   far {}
    (mark ts)
     (: _ (? !(two? ts) ()
             (: t <ts s (seqof t)
@@ -304,27 +306,27 @@
                      (passoc s >tbl))
 
    ; -- the parse state --
-   (psnew tgt) (: t (tablet 0)
+   (psnew tgt) (: t {}
                 _ (pin t 'tgt tgt)                  ; the codegen target: 32-bit widths (thumb1/thumb2) vs 64-bit
-                _ (pin t 'types (tablet 0))         ; typedef name -> ty
+                _ (pin t 'types {})         ; typedef name -> ty
                 _ (pin t 'weaks ())                 ; __attribute__((weak)) function names
                 _ (pin t 'ainl ())                  ; always_inline function names (love.h's ai_inline)
                 _ (pin t 'noinl ())                 ; noinline function names (love.h's ai_noinline)
-                _ (pin t 'enums (tablet 0))         ; enum constant -> value
-                _ (pin t 'etag (tablet 0))          ; enum tag -> 1 when no enumerator is negative (an unsigned underlying type)
-                _ (pin t 'stag (tablet 0))          ; tag -> (fields size align)
-                _ (pin t 'utag (tablet 0))          ; the tags of that table that are UNIONS (the layout flattens them alike)
-                _ (pin t 'sigs (tablet 0))          ; fn/proto name -> (rettype (paramty..)) for the call ABI
+                _ (pin t 'enums {})         ; enum constant -> value
+                _ (pin t 'etag {})          ; enum tag -> 1 when no enumerator is negative (an unsigned underlying type)
+                _ (pin t 'stag {})          ; tag -> (fields size align)
+                _ (pin t 'utag {})          ; the tags of that table that are UNIONS (the layout flattens them alike)
+                _ (pin t 'sigs {})          ; fn/proto name -> (rettype (paramty..)) for the call ABI
                 _ (pin t 'anon 0)                   ; the anonymous-tag counter
-                _ (pin t 'sfns (tablet 0))          ; top-level `static` fn names: LOCAL symbols in the .o
-                _ (pin t 'svars (tablet 0))         ; top-level `static` globals: internal linkage, never exported
-                _ (pin t 'sects (tablet 0))         ; global name -> its __attribute__((section "..")) string
-                _ (pin t 'consts (tablet 0))        ; global name -> 1 when `const` names the OBJECT and it has an initializer
-                _ (pin t 'rstrs (tablet 0))         ; fn name -> its `T *restrict` PARAM names (the alias promise, out of band)
+                _ (pin t 'sfns {})          ; top-level `static` fn names: LOCAL symbols in the .o
+                _ (pin t 'svars {})         ; top-level `static` globals: internal linkage, never exported
+                _ (pin t 'sects {})         ; global name -> its __attribute__((section "..")) string
+                _ (pin t 'consts {})        ; global name -> 1 when `const` names the OBJECT and it has an initializer
+                _ (pin t 'rstrs {})         ; fn name -> its `T *restrict` PARAM names (the alias promise, out of band)
                 _ (pin t 'currstr ())               ; ...accumulating for the declaration being parsed, like curweak
-                _ (pin t 'aligns (tablet 0))        ; global name -> its __attribute__((aligned(N))) boundary
-                _ (pin t 'locals (tablet 0))        ; local/param name -> its declared type (for parse-time sizeof folding)
-                _ (pin t 'globals (tablet 0))       ; file-scope name -> ty, so sizeof over a GLOBAL settles at parse too
+                _ (pin t 'aligns {})        ; global name -> its __attribute__((aligned(N))) boundary
+                _ (pin t 'locals {})        ; local/param name -> its declared type (for parse-time sizeof folding)
+                _ (pin t 'globals {})       ; file-scope name -> ty, so sizeof over a GLOBAL settles at parse too
                 ; gcc's builtin va_list, seeded so `typedef __builtin_va_list va_list;`
                 ; (musl's alltypes.h) parses: the SAME per-target tag stdarg.h lays --
                 ; gen bakes the va offsets, so only size/align/decay ride the type here
@@ -353,7 +355,7 @@
                 _ (pin (t 'stag) "__cplx_double" '((("re" 0 double) ("im" 8 double)) 16 8))
                 _ (pin (t 'stag) "__cplx_float" '((("re" 0 float) ("im" 4 float)) 8 4))
                 _ (pin t 'vlan 0)                   ; the VLA decl-site counter (stamps each site's slot index)
-                _ (pin t 'alias (tablet 0))         ; __attribute__((alias("t"))) : name -> its target (musl's weak_alias)
+                _ (pin t 'alias {})         ; __attribute__((alias("t"))) : name -> its target (musl's weak_alias)
                 t)
    ; does a type begin here?
    (tkbty? ps t)
@@ -364,12 +366,12 @@
        ())
 
    ; -- the type floor (parse side; gen re-derives with the same stag) --
-   (ptr? ty) (two? ty && (<ty = 'ptr))
-   (arr? ty) (two? ty && (<ty = 'arr))
-   (fn? ty) (two? ty && (<ty = 'fn))
-   (stru? ty) (two? ty && (<ty = 'struct))
+   (ptr? ('ptr)) 1
+   (arr? ('arr)) 1
+   (fn? ('fn)) 1
+   (stru? ('struct)) 1
    (cplxty? ty) (stru? ty && member? <>ty '("__cplx_double" "__cplx_float"))       ; a seeded complex
-   (bitf? ty) (two? ty && (<ty = 'bitfield))       ; a bitfield member: (bitfield uty bitoff width)
+   (bitf? ('bitfield)) 1       ; a bitfield member: (bitfield uty bitoff width)
    ; the machine WORD (bytes): a pointer and a gp scalar (long) ride it. 4 on the 32-bit thumb ABI,
    ; 8 otherwise. MUST match gen's (wsize g) (gen.l) -- a divergence mislays every pointer-bearing
    ; struct SILENTLY, since playout bakes offsets here at parse and gen trusts the stag table.
@@ -593,7 +595,7 @@
                        (: d <dims
                           (? (two? d && id? <d 'vdim) ['varr (mkarr ety >dims) <>d]
                              ['arr (mkarr ety >dims) d])))
-   (varr? ty) (two? ty && (<ty = 'varr))
+   (varr? ('varr)) 1
    ; the (params)/[dims] suffix run on a direct declarator. each suffix wraps
    ; INSIDE w (the wrap-so-far: eventual-pointee -> declared type), so the type
    ; grows inside-out; the name's OWN (params) ride out as dat (a fn DEF binds
@@ -720,7 +722,7 @@
                     (scan >s d pk))
                 r2 (scan >r 1 0)
                 nx (pattpk <>r2)
-                [(| <r2 <nx) <>nx]))))
+                [(<r2 | <nx) <>nx]))))
    (playout ps ms uni pk)                           ; -> (fields size align); pk: packed, every member aligns 1
     (: (go l bit mx acc)
         (? !(two? l)
@@ -735,7 +737,7 @@
                        uni (: fld (? name [name 0 ['bitfield ty 0 w]] ())
                               (go >l (? (bit < ubits) ubits bit) nmx (? name (fld >< acc) acc)))
                        (: bit2 (? (((& bit (ubits - 1)) + w) > ubits) (aup bit ubits) bit)   ; bump to avoid straddling the unit
-                          uoff (& (>> bit2 3) (0 - usz))              ; the declared-type-aligned word holding these bits
+                          uoff (& (bit2 >> 3) (0 - usz))              ; the declared-type-aligned word holding these bits
                           bitoff (bit2 - (uoff * 8))
                           fld (? name [name uoff ['bitfield ty bitoff w]] ())   ; anonymous -> reserve bits, no field
                           (go >l (bit2 + w) nmx (? name (fld >< acc) acc)))))
@@ -744,7 +746,7 @@
                     ia (? pk 1 <>>inner)
                     isz <>inner
                     sbit (? uni 0 (aup bit (ia * 8)))
-                    at (>> sbit 3)
+                    at (sbit >> 3)
                     (spl fs acc2) (? !(two? fs) acc2
                                      (: f <fs
                                         (spl >fs ([<f (at + <>f) <>>f] >< acc2))))
@@ -754,7 +756,7 @@
                  (: a (? pk 1 (talign ps ty))
                     sz (tsz ps ty)
                     abit (? uni 0 (aup bit (a * 8)))
-                    at (>> abit 3)
+                    at (abit >> 3)
                     nmx (? (mx < a) a mx)
                     nbit (? uni (? (bit < (sz * 8)) (sz * 8) bit) (abit + (sz * 8)))
                     (go >l nbit nmx ([name at ty] >< acc))))))
@@ -930,7 +932,7 @@
                         'int)
                  (s16 l) (? !(two? l) ()
                             (65536 <= <l) (: v (<l - 65536)
-                                             ((55296 + (>> v 10)) >< ((56320 + (& v 1023)) >< s16 >l)))
+                                             ((55296 + (v >> 10)) >< ((56320 + (v & 1023)) >< s16 >l)))
                             (<l >< s16 >l))
                  cps (: raw (utf8dec (tkv t)) (? (tkk t = 'str16) (s16 raw) raw))
                  (nums l) (? !(two? l) [['num 0]] (['num <l] >< nums >l))
@@ -1350,7 +1352,7 @@
                (<e = 'bin) (uic? <>>e || uic? <>>>e)
                (<e = 'un) (uic? <>>e)
                ())
-   (u32w e v) (? (uic? e && !(w64c? e)) (& v 4294967295) v)
+   (u32w e v) (? (uic? e && !(w64c? e)) (v & 4294967295) v)
    (cfold e)
     (? !(two? e) ()
        (<e = 'num) <>e
@@ -1362,12 +1364,12 @@
               (op = 'eq) (? (a = b) 1 0) (op = 'ne) (? (a = b) 0 1)
               (op = 'lt) (? (a < b) 1 0) (op = 'le) (? (a <= b) 1 0)
               (op = 'gt) (? (b < a) 1 0) (op = 'ge) (? (b <= a) 1 0)
-              (op = '&) (& a b) (op = '|) (| a b) (op = '^) (^ a b)
+              (op = '&) (a & b) (op = '|) (a | b) (op = '^) (a ^ b)
               ; shl multiplies by 2^b (the church exponent): love's << wraps at the word, and a
               ; u128 constant (limb_base) must fold EXACT -- a bignum result rides, its guarded
               ; consumers (charm?/cint?) decide; an unfoldable count answers no-fold
               (op = 'shl) (? ((0 <= b) && (b <= 256)) (u32w e (* a (b 2))) ())
-              (op = 'shr) (? (uext? <>>e) (& (>> a b) ((<< 1 (64 - b)) - 1)) (>> a b))
+              (op = 'shr) (? (uext? <>>e) (& (a >> b) ((<< 1 (64 - b)) - 1)) (a >> b))
               ()))
        (<e = 'un)
         (: v (cfold <>>e)
@@ -1377,13 +1379,13 @@
         (: v (cfold <>>e) ty <>e
            (? !(cint? v) v                          ; non-integer / non-const: fold through
               (ty = 'bool) (? (v = 0) 0 1)          ; conversion to _Bool compares with 0 (C11 6.3.1.2)
-              (ty = 'uchar) (& v 255)
-              (ty = 'ushort) (& v 65535)
-              (ty = 'uint) (& v 4294967295)
+              (ty = 'uchar) (v & 255)
+              (ty = 'ushort) (v & 65535)
+              (ty = 'uint) (v & 4294967295)
               (member? ty '(char short int))
                (: w (? (ty = 'char) 8 (ty = 'short) 16 32)
-                  r (& v ((<< 1 w) - 1))
-                  (? (r < (<< 1 (w - 1))) r (r - (<< 1 w))))
+                  r (& v ((1 << w) - 1))
+                  (? (r < (<< 1 (w - 1))) r (r - (1 << w))))
               v))                                   ; word-sized: the pattern is the value
        ; land/lor are 3-element ('land l r), so l=<>e r=<>>e (NOT the 4-element bin accessors);
        ; truthiness is != 0, not > 0 -- a negative operand is true in C (-1 && 1 == 1).

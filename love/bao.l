@@ -31,10 +31,9 @@
 ; and `torn` is no longer a maybe: the reader drank for itself and found the end, so
 ; there is nothing left to try and it is a scare.
 (: (reads p)
-   (: (walk cl z) (: r (sound cl)
-                     (? (two? r)       (walk >r (ev 'ev <r))
-                        (id? r 'torn)  (scare 'unfinished-form p)
-                        z))
+   (: (walk cl z) (sound cl @ 'torn (scare 'unfinished-form p)
+                              (a >< b) (walk b (ev 'ev a))
+                              z)
       ; --- the SHARED lane, for `in`: gulp for speed, hold nothing across an eval ---
       ; box slot 0 counts every byte DRAWN off p into our charlist, so the walk can say where
       ; the port ought to be and put it there. ⚠ NO WINDOW, and that is the whole design: the
@@ -47,10 +46,10 @@
       (drop n) (unchug p (n - (inhand p)))     ; the port to n pending; we hold the rest
       ; flow, plus the count: one chug per gulp, the run laid down as plain conses.
       (feed u) (: c (see p)
-                  (? (= c -1) ()
+                  (c = -1 ? ()
                      (: _ (unsee p c)
                         t (chug p)
-                        _ (pin box 0 ((drew ()) + (tally t)))
+                        _ (pin box 0 (drew () + tally t))
                         (go k l) (? (nil? (< 0 k)) l (: j (k - 1) (go j (link (t j) l))))
                         (go (tally t) (once (\ u (feed ())))))))
       ; consumed, FORWARDS and by identity: O(consumed), so the sum over the stream is the
@@ -59,44 +58,43 @@
       ; walk stops dead at a gulp boundary, never reaches the residue, and spins on () forever.
       ; `once` memoizes, so forcing what is already forced is free and the identities line up
       ; (test/io.l says the same of counting a flow: by forcing, never by tally).
-      (frc x) (? (lit? x) (x ()) x)
+      (frc x) (lit? x ? (x ()) x)
       (upto a b n) (: aa (frc a) bb (frc b)
                       (? (id? aa bb) n
                          (two? aa)   (upto (cup aa) bb (n + 1))
                          n))
+      ; ⚠ torn and the clean end are HONEST here: with no window they can only mean the
+      ; stream itself ended, so torn scares and a clean end takes the port to the end.
       (step cl walked z)
-       (: r (sound cl)
-          (? (two? r)
-             ; EXACT BEFORE EVERY EVAL: the port goes to where our walk stands, so an in-form
-             ; (slurp in) and an inheriting child both see the truth.
-             ; ⚠ ABSOLUTE, never relative -- the port is already behind us from the last
-             ; positioning, so this is a delta off what it holds now. A plain (unchug p rem)
-             ; rewinds to the run's start every form and re-reads the whole stream.
-             ; ⚠ ONE BYTE SHORT ON PURPOSE: the byte-exact lane reads the residue head before it
-             ; evals (trickle's cons holds it), so it runs one ahead too. Leave that byte and the
-             ; two doors disagree by exactly it, which is what test_stdincorpus diffs.
-             ; ⚠ what we hold is never more than the run p still has, so the give-back always
-             ; reaches: the tail gulps only when sound wants a byte past the current run, and a
-             ; form that straddles ends inside the NEW run, where unchug can go.
-             (: k (upto cl >r 0)
-                w2 (walked + k)
-                rem ((drew ()) - w2)
-                _ (drop (? (< 0 rem) (rem - 1) 0))
-                h (inhand p)
-                v (ev 'ev <r)
-                ; ⚠ AND FORWARD AGAIN once the eval is past: the give-back left p holding bytes
-                ; our charlist already has, so a tail that gulped now would draw them a SECOND
-                ; time and the list would grow with duplicates (an early false `torn`). p goes
-                ; back to our list's end, which is exactly where the next gulp must start.
-                (? (= h (inhand p)) (: _ (drop 0) (step >r w2 v))
-                   ; the form DREW on p, so p is the truth and our charlist is stale. ⚠ CARRY THE
-                   ; HEAD BYTE: p handed it over already and will not again, so dropping the list
-                   ; whole loses it -- and a lost `;` reads a comment as code.
-                   (start (? (two? >r) (link (cap >r) ()) ()) v)))
-             ; ⚠ torn and the clean end are now HONEST: with no window they can only mean the
-             ; stream itself ended, so torn scares and a clean end takes the port to the end.
-             (id? r 'torn)  (scare 'unfinished-form p)
-             (: _ (drop 0) z)))
+       (sound cl @
+         'torn (scare 'unfinished-form p)
+         ; EXACT BEFORE EVERY EVAL: the port goes to where our walk stands, so an in-form
+         ; (slurp in) and an inheriting child both see the truth.
+         ; ⚠ ABSOLUTE, never relative -- the port is already behind us from the last
+         ; positioning, so this is a delta off what it holds now. A plain (unchug p rem)
+         ; rewinds to the run's start every form and re-reads the whole stream.
+         ; ⚠ ONE BYTE SHORT ON PURPOSE: the byte-exact lane reads the residue head before it
+         ; evals (trickle's cons holds it), so it runs one ahead too. Leave that byte and the
+         ; two doors disagree by exactly it, which is what test_stdincorpus diffs.
+         ; ⚠ what we hold is never more than the run p still has, so the give-back always
+         ; reaches: the tail gulps only when sound wants a byte past the current run, and a
+         ; form that straddles ends inside the NEW run, where unchug can go.
+         (a >< b) (: k (upto cl b 0)
+                     w2 (walked + k)
+                     rem (drew () - w2)
+                     _ (drop (0 < rem ? (rem - 1) 0))
+                     h (inhand p)
+                     v (ev 'ev a)
+                     ; ⚠ AND FORWARD AGAIN once the eval is past: the give-back left p holding
+                     ; bytes our charlist already has, so a tail that gulped now would draw them
+                     ; a SECOND time and the list would grow with duplicates (an early false
+                     ; `torn`). p goes back to our list's end, where the next gulp must start.
+                     ; ⚠ else the form DREW on p, so p is the truth and our charlist is stale.
+                     ; CARRY THE HEAD BYTE: p handed it over already and will not again, so
+                     ; dropping the list whole loses it -- and a lost `;` reads a comment as code.
+                     (h = inhand p ? (drop 0, step b w2 v)
+                                     (start (two? b ? [<b]) v)))
+         (drop 0, z))
       ; ⚠ THE FORK IS THE PORT'S RUN, asked of the port and never guessed: a seekable stdin has a
       ; borrowed one; a pipe and a tty have none and must drip, because love.c's athand is NULL
       ; for the fd vt -- a bio-less port chugs ONE byte, and a gulping walk round a one-byte chug
@@ -122,11 +120,9 @@
 ; define). ⚠ a torn tail SCARES: the other choice is handing back the forms that happened
 ; to land, which reads exactly like a whole file and is the bug every one of those had.
 (: (forms p)
-   ((: (g cl acc)
-       (: r (sound cl)
-          (? (two? r)       (g >r (<r >< acc))
-             (id? r 'torn)  (scare 'unfinished-form p)
-             (rev acc))))
+   ((: (g cl acc) (sound cl @ 'torn (scare 'unfinished-form p)
+                              (a >< b) (g b (a >< acc))
+                              (rev acc)))
     (flow p) ()))
 
 ; --- the shell core: editor + repl + welp + the pty wrapper, all closure-private.
@@ -152,26 +148,20 @@
    ; fuses -- the old `(+(-3))` -> `(+ -3)` bug); MULTIPLE datums become the
    ; application `(a b c)`, so `f x` applies and `1 = 1` factors infix. returns m if
    ; the line ends inside an unfinished shape, () for a blank line, else a one-form list.
-   (rdall cl acc) (: r (sound cl)
-                    (? (two? r)     (rdall >r (<r >< acc))
-                       (id? r 'torn) m             ; unfinished shape -> more
-                       (rev acc)))                 ; a clean end -> the datums, in order
+   (rdall cl acc)
+    (sound cl @ 'torn m                            ; unfinished shape -> more
+                (a >< b) (rdall b (a >< acc))
+                (rev acc))                         ; a clean end -> the datums, in order
    (parseall cl)
-     (: ds (rdall cl ())
-        (? (id? ds m)        m                     ; unfinished shape
-           !(two? ds)        ()                    ; blank line: no datums
-           !(two? >ds)       `(<ds)                ; ONE datum: as-is (leading monadic preserved)
-           `(ds)))                                ; MANY: the application (a b c)
+    (rdall cl () @ ^m  m                           ; unfinished shape
+                   [a] [a]                         ; ONE datum: as-is (leading monadic preserved)
+                   ds  (two? ds ? [ds]))           ; MANY: the application; a blank line: ()
 
    ; --- editor ---
 
    ; intersperse a list of charlists with newlines, in order
    (joinln ls)
-     (? (two? ls)
-        (? (two? >ls)
-           (<ls + (10 >< joinln >ls))
-           <ls)
-        ())
+    (ls @ (a >< b) (two? b ? (a + (10 >< joinln b)) a))
 
    ; flatten the editor state into one charlist suitable for parseall
    (flatten u l r d)
@@ -185,7 +175,7 @@
         (k acc xs))
 
    ; map non-printables to space; otherwise pass through
-   (prc c) (putc (? (32 <= c && c < 127) c 32))
+   (prc c) (putc $ 32 <= c < 127 ? c 32)
 
    ; CPS editor primitives. each takes the loop as continuation k
    ; and forwards a new (u l r d) to it; helpers are no-ops at their
@@ -279,11 +269,11 @@
    ; the byte -> code tables, shared by both decoders (edesc/edev for the tty,
    ; besc/bev for a port). ⚠ 0 is the miss, read with id?: an event code nets
    ; RED, so truthiness cannot tell hit from miss.
-   arrow    #(68 -1 67 -2 65 -8 66 -9 72 -5 70 -6)    ; ESC [ F -- the plain finals
-   modarrow #(68 -1 67 -2 65 -8 66 -9 72 -10 70 -11)  ; ESC [ 1 ; M F -- modified home/end jump the buffer
-   evk      #(-1 -7 4 -7 3 -12 13 10 10 10 8 -3 127 -3 1 -5 5 -6)   ; the raw control bytes
+   arrow    {68 -1 67 -2 65 -8 66 -9 72 -5 70 -6}    ; ESC [ F -- the plain finals
+   modarrow {68 -1 67 -2 65 -8 66 -9 72 -10 70 -11}  ; ESC [ 1 ; M F -- modified home/end jump the buffer
+   evk      {-1 -7 4 -7 3 -12 13 10 10 10 8 -3 127 -3 1 -5 5 -6}   ; the raw control bytes
    (edesc1 c) (? (c = 126) -5
-                 (c = 59)  (: _ (getc 0) (peep modarrow (getc 0) 0)))
+                 (c = 59)  (getc 0, peep modarrow (getc 0) 0))
    (edesc x) (? !(91 = getc 0) 0
      (: c (getc 0) e (peep arrow c 0)
         (? !(id? e 0) e
@@ -336,7 +326,6 @@
         pl (tally pr)
         (loop pra u l r d hu hd cur)
           (: _ (edrender pl pra u l r d)
-             c (edev 0)
              npra (tally u)
              (kloop uu lz rr dd) (loop npra uu lz rr dd hu hd cur)
              (kedit uu lz rr dd) (loop npra uu lz rr dd (detach hu cur) hd ())
@@ -344,37 +333,34 @@
              ; the dispatch stays a CHAIN, not a table: every arm runs a different
              ; continuation over the live buffer, so a table would hold closures
              ; built per keystroke. the tables above work because their arms are constants.
-             (? (c = -7) eofsym
-                ; enter CASHES the buffer wherever the cursor sits, as long as
-                ; it parses complete; only an unfinished shape splits the line
-                ; at the cursor and keeps editing. on submit the buffer goes to
-                ; the END of history (the zipper re-merged in original order --
-                ; an edited recall's pristine original was already restored by
-                ; detach at the first edit), capped at 100 entries.
-                (c = 10) (: vs (parseall (flatten u l r d))
-                            (? (vs = m)
-                               (loop npra (rev l >< u) () r d (detach hu cur) hd ())
-                               (: _ (? (two? d) (csi (tally d) 66) ())
-                                  _ (putc 10)
-                                  nhu (? !vs (revcat hd (detach hu cur))
-                                         (take 100 (mkframe u l r d >< revcat hd (detach hu cur))))
-                                  `(vs nhu))))
-                (0 < c)  (loop npra u (c >< l) r d (detach hu cur) hd ())
-                (c = -1) (edleft  kloop u l r d)
-                (c = -2) (edright kloop u l r d)
-                (c = -3) (edbsp   kedit u l r d)
-                (c = -4) (eddel   kedit u l r d)
-                (c = -5) (edhome  kloop u l r d)
-                (c = -6) (edend   kloop u l r d)
-                (c = -8) (? (two? u) (edup    kloop u l r d)
-                            (uphist   khist u l r d hu hd cur))
-                (c = -9) (? (two? d) (eddown  kloop u l r d)
-                            (downhist khist u l r d hu hd cur))
-                (c = -10) (edtop kloop u l r d)
-                (c = -11) (edbot kloop u l r d)
-                (c = -12) (: _ (puts "^C") _ (putc 10)
-                             (? (emptybuf u l r d) eofsym (edline hu hd)))
-                (loop npra u l r d hu hd cur)))
+             (edev 0 @
+              -7 eofsym
+              ; enter CASHES the buffer wherever the cursor sits, as long as it parses
+              ; complete; only an unfinished shape splits the line at the cursor and keeps
+              ; editing. on submit the buffer goes to the END of history (the zipper re-merged
+              ; in original order -- an edited recall's pristine original was already restored
+              ; by detach at the first edit), capped at 100 entries.
+              10 (parseall (flatten u l r d) @
+                  ^m (loop npra (rev l >< u) () r d (detach hu cur) hd ())
+                  vs (two? d ? (csi (tally d) 66) (),
+                      putc 10,
+                      [vs (!vs ? (revcat hd (detach hu cur))
+                           (take 100 (mkframe u l r d >< revcat hd (detach hu cur)))) ]))
+              (c & 0 < c) (loop npra u (c >< l) r d (detach hu cur) hd ())
+              -1 (edleft  kloop u l r d)
+              -2 (edright kloop u l r d)
+              -3 (edbsp   kedit u l r d)
+              -4 (eddel   kedit u l r d)
+              -5 (edhome  kloop u l r d)
+              -6 (edend   kloop u l r d)
+              -8 (two? u ? (edup    kloop u l r d)
+                           (uphist   khist u l r d hu hd cur))
+              -9 (two? d ? (eddown  kloop u l r d)
+                           (downhist khist u l r d hu hd cur))
+              -10 (edtop kloop u l r d)
+              -11 (edbot kloop u l r d)
+              -12 (puts "^C\n", emptybuf u l r d ? eofsym (edline hu hd))
+              (loop npra u l r d hu hd cur)))
         (loop 0 () () () () hu hd ()))
 
    ; evaluate a single parsed datum cooperatively. (ev v) is spawned as a
@@ -387,22 +373,16 @@
      (: pid (twirl ev v)
         (poll _)
           (? (landed? pid) (putx (catch pid), -1)   ; the answer
-             (cue? 0)    (: c (getc 0)
-                            (? (c = 3) (puts "^C", freeze pid, -1)
-                               (poll ())))
+             (cue? 0) 
+             (getc 0 @ 3 (puts "^C", freeze pid, -1) (poll ()))
              (rest 0, poll ()))
         (poll ()))
 
    ; the read-eval-print loop proper. the host and kernel frontends start the
    ; shell via (shell 0), which calls (repl 0 0).
    (repl hu hd)
-     (: r (edline hu hd)
-        (? (r = eofsym) 0
-           (: vs  <r
-              nhu <>r
-              nhd >>r
-              _ (each vs (\ v (: _ (do_eval v) (putc 10))))
-              (repl nhu nhd))))
+    (edline hu hd @ ^eofsym 0
+                    (vs >< nhu >< nhd) (each vs (\ v (do_eval v, putc 10)), repl nhu nhd))
 
    ; welp -- the floor handler, help that has given up: answer the zero point,
    ; whatever the condition. this is the fromempty the introductions (scare,
@@ -421,7 +401,7 @@
    ; ⚠ file-help welps AFTER the quit, and that line is not dead: a frontend with no `quit`
    ; nif (wasm) folds the name to the point at this define, so (quit 1) is a no-op there and
    ; the floor is what answers. never let the quit be the answer -- it would be 1.
-   (hface a b) (: _ (say err ";; ") _ (print err a) _ (say err " ") _ (print err b) (put err 10))
+   (hface a b) (say err ";; ", print err a, say err " ", print err b, put err 10)
    (shell-help a b) (hface a b, welp a b)
    (file-help a b) (hface a b, quit 1, welp a b)
 
@@ -431,7 +411,7 @@
    ; (heard ()) is the live read of the installed help (the hot_help slot), so the
    ; question is what it IS, not whether it is there -- and an already-heard help
    ; (a frontend's own) is respected, never clobbered.
-   _ (? (nil? (heard ())) (hear file-help))
+   _ (!(heard ()) ? (hear file-help))
    ; ⚠ raw the tty BEFORE reading: the editor is the sole echo, so cooked-mode echo
    ; must be off or every line doubles.
    (shell _)
@@ -485,22 +465,26 @@
    ; the logic), but with PORT-PARAMETERIZED event decode so the input is any
    ; port: `in` for the tty, a (tap ..) for tests. bev/besc/besc1 are
    ; edev/edesc/edesc1 reading (see ip) instead of the global getc.
-   ; ⚠ NOT the @ clause form: @ is pat's macro, and mps2 + teensy41 bake bao with no pat
-   ; at all (one lib row each). bao rides every seat, so it stays in the common subset.
-   (besc1 ip c) (? (c = 126) -5
-                   (c = 59) (see ip, peep arrow (see ip) 0))  ; a line reader never jumps the buffer: the PLAIN finals
-   (besc ip) (? !(91 = see ip) 0
+   ; ⚠ `@` COSTS mps2 + teensy41 A LIB ROW EACH: bao's `use` lands after the mop, so the
+   ; macro has to be live as a MODULE there, not just ridden in on the post text.
+   (besc1 ip c) (c @ 126 -5                     ; a line reader never jumps the buffer:
+                     59  (see ip, peep arrow (see ip) 0))   ;   the PLAIN finals
+   (besc ip) (see ip @ 91
      (: c (see ip) e (peep arrow c 0)
         (? !(id? e 0) e
-           (c = 49) (besc1 ip (see ip))
-           (c = 55) (: _ (see ip) -5)
-           (c = 52 || c = 56) (: _ (see ip) -6)
-           (c = 51) (: _ (see ip) -4) 0)))
+           (c @ 49        (besc1 ip (see ip))
+                55        (see ip, -5)
+                (52 | 56) (see ip, -6)
+                51        (see ip, -4)
+                0)))
+     0)
+   ; ⚠ THE `see` COMES FIRST and exactly once: evk is indexed BY the byte, so a walk that
+   ; peeps before it reads has nothing to peep with.
    (bev ip) (: c (see ip) e (peep evk c 0)
-     (? !(id? e 0) e
-        (c = 27) (besc ip)
-        (c = 9) -13                                   ; Tab -> the completion event (edlnc's; others ignore)
-        (32 <= c && c < 127 && c)))
+               (? !(id? e 0) e
+                  (c @ 27 (besc ip)
+                       9  -13          ; Tab -> the completion event (edlnc's; others ignore)
+                       (32 <= c < 127 ? c))))
 
    ; (edraw ip pr) -- read ONE line off port `ip`, with in-line editing, prompt pr
    ; echoed to out. Enter submits the raw line (its bytes, in order); ^D / port EOF
@@ -512,18 +496,18 @@
      (: pl (tally (puts pr))
         (loop l r)
           (: _ (edrender pl 0 () l r ())
-             c (bev ip)
              (km uu ll rr dd) (loop ll rr)         ; motion: edleft/.. give (k u l r d), keep l r
-             (? (c = -7) eofsym                     ; ^D / EOF -> the sentinel
-                (c = 10) (putc 10, revcat l r); Enter -> submit the raw line, in order
-                (0 < c)  (loop (c >< l) r)           ; insert a printable
-                (c = -1) (edleft  km () l r ())
-                (c = -2) (edright km () l r ())
-                (c = -3) (edbsp   km () l r ())
-                (c = -4) (eddel   km () l r ())
-                (c = -5) (edhome  km () l r ())
-                (c = -6) (edend   km () l r ())
-                (loop l r)))                         ; up/down/^C/unknown: ignore in a line reader
+             (bev ip @
+             -7 eofsym
+                10 (putc 10, revcat l r)
+                (c & 0 < c) (loop (c >< l) r)            ; insert a printable
+                -1 (edleft  km () l r ())
+                -2 (edright km () l r ())
+                -3 (edbsp   km () l r ())
+                -4 (eddel   km () l r ())
+                -5 (edhome  km () l r ())
+                -6 (edend   km () l r ())
+                (loop l r)))
         (loop () ()))
 
    ; --- the shell line reader: edraw + command history -------------------------
@@ -550,20 +534,20 @@
         (hnth k) <(drop k hist)                       ; hist[k], 0-based (k < hn)
         (loop l r i draft)
           (: _ (edrender pl 0 () l r ())
-             c (bev ip)
              (km uu ll rr dd) (loop ll rr i draft)     ; motion: index + draft kept
              (recall ni)                               ; jump to view index ni (0 = the draft)
-               (: nd (? (i = 0) (revcat l r) draft)    ; save the live draft once, the instant up leaves it
-                  ln (? (ni = 0) nd (hnth (ni - 1)))
+               (: nd (i = 0 ? (revcat l r) draft)    ; save the live draft once, the instant up leaves it
+                  ln (ni = 0 ? nd (hnth (ni - 1)))
                   (loop (rev ln) () ni nd))
-             (? (c = -7) 'eof
-                (c = 10) (: _ (putc 10)
+
+             (bev ip @ -7 'eof
+                10 (: _ (putc 10)
                             ln (revcat l r)
                             nh (? !ln hist (take 100 (ln >< hist)))
                             (ln >< nh))
-                (0 < c)  (loop (c >< l) r i draft)
-                (c = -12) (: _ (puts "^C") _ (putc 10) (() >< hist))   ; ^C: abandon the line, hist untouched
-                (c = -13)
+                (c & 0 < c) (loop (c >< l) r i draft)
+                -12 (: _ (puts "^C") _ (putc 10) (() >< hist))   ; ^C: abandon the line, hist untouched
+                -13
                   (? !comp (loop l r i draft)
                      (: t (comp (revcat l ()))
                         (? !(two? t) (loop l r i draft)
@@ -574,14 +558,14 @@
                                     puts $ foldl (\ a s (? (tally a) (a + "  " + s) s)) "" cs,
                                     putc 10))
                               (loop l2 r i draft)))))
-                (c = -1) (edleft  km () l r ())
-                (c = -2) (edright km () l r ())
-                (c = -3) (edbsp   km () l r ())
-                (c = -4) (eddel   km () l r ())
-                (c = -5) (edhome  km () l r ())
-                (c = -6) (edend   km () l r ())
-                (c = -8) (recall (? (i < hn) (i + 1) i))   ; up: older
-                (c = -9) (recall (? (0 < i) (i - 1) i))    ; down: newer
+                -1 (edleft  km () l r ())
+                -2 (edright km () l r ())
+                -3 (edbsp   km () l r ())
+                -4 (eddel   km () l r ())
+                -5 (edhome  km () l r ())
+                -6 (edend   km () l r ())
+                -8 (recall (? (i < hn) (i + 1) i))   ; up: older
+                -9 (recall (? (0 < i) (i - 1) i))    ; down: newer
                 (loop l r i draft)))
         (loop () () 0 ()))
    (edln ip pr hist) (edlnc ip pr hist ())
@@ -593,7 +577,7 @@
    ; the same shape `from` hands back for a module. the battery writes against it, so
    ; the CHECKS live with the tests while the NAMES stay closure-private, off the
    ; book. the tablet is built ON THE CALL, so a shell that never asks never pays.
-   (bao a) (? (a = 'parts)
+   (bao a) (a @ 'parts
               {'edleft edleft 'edright edright 'edbsp edbsp 'eddel eddel
                'edhome edhome 'edend edend 'edtop edtop 'edbot edbot
                'edup edup 'eddown eddown 'uphist uphist 'downhist downhist

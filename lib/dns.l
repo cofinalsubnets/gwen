@@ -137,60 +137,56 @@
    ; every line it yields means 53, but a stub on another port is a real thing to
    ; want and the walk carries the pair either way.
    (dns-ask ns port h ms)
-    (: p (udp-bind 0)
-       (? (! p) ()
-          (: id ((clock 0) & 65535)
-             q (dns-query id h)
-             (? (! (string? q)) (: _ (close p) ())
-                (: _ (udp-send p ((ns * 65536) + port) q)
-                   r (twirl (\ _ (udp-recv p)) ())
-                   w (twirl (\ _ (: _ (rest ms) (freeze r))) ())
-                   d (catch r)
-                   _ (freeze w)
-                   _ (close p)
-                   (? (two? d) (dns-answers (cup d) id) ()))))))
+    (udp-bind 0 @ (p & p)
+     (: id ((clock 0) & 65535)
+        q (dns-query id h)
+      (? !(string? q) (close p, ())
+       (udp-send p (ns * 65536 + port) q,
+        (: r (twirl (\ _ (udp-recv p)) ())
+           w (twirl (\ _ (rest ms, freeze r)) ())
+           d (catch r)
+         (freeze w,
+          close p,
+          two? d ? (dns-answers >d id)))))))
 
    ; --- the two config files -----------------------------------------------------
    ; every word after `k` on every line that starts with it, in file order. this
    ; reads both `nameserver` (one address a line) and `search` (many a line).
    (dns-conf path k)
-    (: (go ls) (? (! (two? ls)) ()
-                  (: w (dns-words <ls)
-                     (? (&& (two? w) (<w = k)) (cat >w (go >ls)) (go >ls))))
-       (go (dns-lines (dns-look path))))
+    (: (go (a >< u)) (dns-words a @ (^k >< w) (w + go u) (go u))
+     (go (dns-lines (dns-look path))))
 
    ; /etc/hosts: the first line whose address parses and one of whose names is an
    ; exact match -> a ONE-LIST of the address. no packet is sent at all, which is
    ; what makes localhost and every LAN name free.
    (dns-hosts path h)
-    (: (go ls) (? (! (two? ls)) ()
-                  (: w (dns-words <ls)
-                     (? (! (two? w)) (go >ls)
-                        (: a (dns-quad <w)
-                           (? (&& (two? a) (member? h >w)) a (go >ls))))))
-       (go (dns-lines (dns-look path))))
+    (: (go (l >< u))
+     (: w (dns-words l)
+      (? (atom? w) (go u)
+       (: a (dns-quad <w)
+        (two? a && member? h >w ? a (go u)))))
+     (go (dns-lines (dns-look path))))
 
    ; the nameservers, in order. ⚠ 127.0.0.1 when the file names NONE -- musl's
    ; fallback and nolibc's, and the reason a machine with an empty resolv.conf
    ; still reaches a local stub rather than answering "no such host".
    (dns-servers conf)
-    (: ns (: (go l) (? (! (two? l)) ()
-                       (: a (dns-quad <l) (? (two? a) (link (link <a 53) (go >l)) (go >l))))
+    (: ns (: (go l) (? (two? l)
+                     (: a (dns-quad <l)
+                      (two? a ? ((<a >< 53) >< go >l) (go >l))))
              (go (dns-conf conf "nameserver")))
-       (? (two? ns) ns `((link 2130706433 53))))
+       (two? ns ? ns [(2130706433 >< 53)]))
 
    ; --- the door -----------------------------------------------------------------
    dns-ms 2500                            ; nolibc's per-server deadline, kept
 
    ; ask every server in turn for one name. a server that ANSWERS ends the walk,
    ; even to say no -- only silence moves on to the next.
-   (dns-walk servers h)
-    (? (! (two? servers)) ()
-       (: s <servers
-          a (dns-ask <s >s h dns-ms)
-          (? (id? a 'torn) (scare 'torn `('dns h))
-             (two? a) a
-             (dns-walk >servers h))))
+   (dns-walk ((a >< u) >< su) h)
+    (dns-ask a u h dns-ms @
+     'torn (scare 'torn ['dns h])
+     (x & two? x) x
+     (dns-walk su h))
 
    ; hosts first, then the name as given, then each search domain appended.
    (resolve-in conf hosts h)
@@ -199,7 +195,7 @@
           (: servers (dns-servers conf)
              a (dns-walk servers h)
              (? (two? a) a
-                (: (go ds) (? (! (two? ds)) ()
+                (: (go ds) (? (atom? ds) ()
                               (: b (dns-walk servers ((h + ".") + <ds))
                                  (? (two? b) b (go >ds))))
                    (go (dns-conf conf "search")))))))
@@ -209,11 +205,10 @@
    ; resolve, then connect to each address in turn until one takes. a dotted quad
    ; costs no lookup at all -- `resolve` hands it straight back.
    (dial h port)
-    (: (go as) (? (! (two? as)) ()
-                  (: s (connect (dns-show <as) port) (? s s (go >as))))
-       (go (resolve h)))
+    (: (go (a >< u)) (connect (dns-show a) port || go u)
+     (go (resolve h)))
 
    ; an address back to its dotted quad, which is the only spelling `connect` takes.
    (dns-show a)
-    (: (o k) (show ((a >> k) & 255))
-       ((o 24) + "." + (o 16) + "." + (o 8) + "." + (o 0))))
+    (: (o k) (show $ (a >> k) & 255)
+     (o 24 + "." + o 16 + "." + o 8 + "." + o 0)))

@@ -22,10 +22,10 @@
 
 ; --- the lexer: kinds, values, lines, comments, maximal munch ---
 (: (tn ts k) (? (< k 1) <ts (tn >ts (- k 1)))
-(tn3 ts k) (: t (tn ts k) `(<t <>t <>>t))   ; kind/value/line: not the slot-4 spelling
+(tn3 ts k) (: t (tn ts k) [<t <>t <>>t])   ; kind/value/line: not the slot-4 spelling
    ; kind/value/line alone: a numeric or string token also carries its SOURCE
    ; SPELLING (cpp's sof, what # owes), which these laws are not about
-   (tn3 ts k) (: t (tn ts k) `(<t <>t <>>t))   ; lists don't index by application
+   (tn3 ts k) (: t (tn ts k) [<t <>t <>>t])   ; lists don't index by application
    r (clex "int main() { return 42; }")
    ts <>r
    (assert
@@ -40,10 +40,10 @@
       (= (tn ts 7) (L 'p ";" 1))
       (= (tn ts 8) (L 'p "}" 1))))
 (: (tn ts k) (? (< k 1) <ts (tn >ts (- k 1)))
-(tn3 ts k) (: t (tn ts k) `(<t <>t <>>t))   ; kind/value/line: not the slot-4 spelling
+(tn3 ts k) (: t (tn ts k) [<t <>t <>>t])   ; kind/value/line: not the slot-4 spelling
    ; kind/value/line alone: a numeric or string token also carries its SOURCE
    ; SPELLING (cpp's sof, what # owes), which these laws are not about
-   (tn3 ts k) (: t (tn ts k) `(<t <>t <>>t))
+   (tn3 ts k) (: t (tn ts k) [<t <>t <>>t])
    (spl r k) (: t (tn <>r k) (? (4 < tally t) <>>>>t ()))          ; the token's slot-4 spelling
    c1 <>(clex "a // x\nb")
    c2 <>(clex "a /* x\ny */ b")
@@ -232,7 +232,7 @@
               (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
    ; one fn's own forms, label to the next align seam (the inliner copies bodies into
    ; main, where a folded store may read a home register legitimately)
-   (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l `('label nm)) >l (seek >l)))
+   (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l ['label nm]) >l (seek >l)))
                   (take l) (? !(two? l) ()
                               (= <l '(align 2)) ()
                               (<l >< take >l))
@@ -501,7 +501,7 @@
 ; the xmm value path, int<->double conversions, and the calling convention. ---
 (: (cast src) <>(cparse <>(clex src))
    (tn ts k) (? (< k 1) <ts (tn >ts (- k 1)))
-   (tn3 ts k) (: t (tn ts k) `(<t <>t <>>t))   ; kind/value/line: not the slot-4 spelling
+   (tn3 ts k) (: t (tn ts k) [<t <>t <>>t])   ; kind/value/line: not the slot-4 spelling
    irbits <>(cgn "int main() { double d = 1.0; return (int)d; }")
    (has op forms) (: (go l) (? !(two? l) () (two? <l && (= <<l op)) 1 (go >l)) (go forms))
    (assert
@@ -701,7 +701,7 @@
 (: (cobx src)
     (: r (cparse <>(clex src))
        (? (okv? r) (cgen-obj (el r 1) (el r 2) (el r 3) (el r 4)
-                             `((el r 5) (el r 6) (el r 7) (el r 8) (el r 9)) 'x64) ()))
+                             [(el r 5) (el r 6) (el r 7) (el r 8) (el r 9)] 'x64) ()))
    (el l i) (? (< i 1) <l (el >l (- i 1)))
    ob (cobx "__attribute__((used, section(\".limine_requests\"))) static volatile long m = 7;
              __attribute__((section(\".limine_requests_end\"))) static volatile long e = 1;
@@ -807,7 +807,7 @@
 ; --- diagnostics: a parse refusal names where it stood (doc/moon-diag.md rung 2) ---
 ; the gripe carrier is ('gripe file line col msg); file () means the TU itself,
 ; which the driver (moon.l ccdie) fills the source path in for.
-(: (inc txt) (\ n s `(1 txt))
+(: (inc txt) (\ n s [1 txt])
    (ppi src txt) (: r (cpp <>(clex src) (inc txt) "<law>") (? (two? r) <>r 'FAIL))
    (pgi src txt) (cparse (ppi src txt))
    (gfile g) <>g (gline g) <>>g
@@ -1314,7 +1314,7 @@
 ; (the stld-folded restore) passes, and the cs9 shape (written bare) scares. the
 ; breach probes ride a counting help; the checker RESUMES through it, so one run
 ; logs every scare it meets.
-(: ck9 (tablet 0) _ (pin ck9 'tgt 'x64)
+(: ck9 {} _ (pin ck9 'tgt 'x64)
    kf1 '((label f9) (push r4) (mov r4 sp) (sub sp sp 32) (st r4 -8 r3) (st r4 -16 r11)
          (mov r11 r6) (mov r3 r11) (ld r3 r4 -8) (ld r11 r4 -16) (mov sp r4) (pop r4) (ret))
    kf2 '((label f9) (sub sp sp 16) (st sp 8 r12)                ; the early exit's path never
@@ -1331,7 +1331,7 @@
       !(two? (csdefs ck9 '(a128r r11 r12)))          ; the d128 family only speaks r0:r2
       !(two? (csdefs ck9 '(st sp 80 r11)))           ; a save writes memory, not the register
       (id? 'dark (csdefs ck9 '(frob r0))))           ; an op on neither roster is dark -> refuses
-   klog (tablet 0)
+   klog {}
    _ (hear (\ p e (: _ (pin klog p (+ 1 (peep klog p 0))) 0)))
    _ (cskeep ck9 '((label f9) (mov r12 r6) (ret)))                 ; written bare: the cs9 shape
    _ (cskeep ck9 '((label f9) (sub sp sp 16) (st sp 8 r11) (mov r11 r6)
@@ -1351,15 +1351,15 @@
 ; the tail jmp and the marker dies with the rewrite; a shape that cannot tail SCARES
 ; (musttail-not-a-tail), and a fn sibcall declines whole (fesc) scares musttail-escape.
 ; the breach probes ride the counting help, like the cs breaches above.
-(: mg9 (tablet 0) _ (pin mg9 'tgt 'x64) _ (pin mg9 'fn "f9")
+(: mg9 {} _ (pin mg9 'tgt 'x64) _ (pin mg9 'fn "f9")
    mepi '((ld r3 r4 -8) (mov sp r4) (pop r4) (ret))
    _ (assert
       (member? '(jmp g9) (sibcall mg9 ('((label f9) (call g9 must)) + mepi)))
       !(member? '(call g9 must) (sibcall mg9 ('((label f9) (call g9 must)) + mepi))))
-   mlog (tablet 0)
+   mlog {}
    _ (hear (\ p e (: _ (pin mlog p (+ 1 (peep mlog p 0))) 0)))
    _ (sibcall mg9 ('((label f9) (call g9 must) (mov r0 r5)) + mepi))   ; a live insn after the call: no tail
-   _ (: t9 (tablet 0) _ (pin t9 'tgt 'x64) _ (pin t9 'fesc 1) _ (pin t9 'fn "f9")
+   _ (: t9 {} _ (pin t9 'tgt 'x64) _ (pin t9 'fesc 1) _ (pin t9 'fn "f9")
         (sibcall t9 '((label f9) (call g9 must) (ret))))               ; the whole-fn decline
    _ (hear ())
    (assert
@@ -1571,7 +1571,7 @@
 ; conditional br rides its fall-through -- no window and no form count anywhere. beside it
 ; cfoldir drops a mov whose source chases to the dest's own value at any straight-line distance;
 ; the sp family never folds, since sp moves through the cell cursor and its copy records outlive it.
-(: gP (tablet 0)
+(: gP {}
    pro '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3) (align 1))
    (cp l) (drop 6 (coal gP (copyprop (pro + l))))     ; the real chain: the build tail's
                                                        ; forward walk, then the post-choice fold
@@ -1623,7 +1623,7 @@
 (: hb9 (from 'holo 'holo-bytes)
    ; the label rides along for la's fixup; a scare anywhere in the encode answers 0
    (emits? f) (trap (\ _ (: _ (hb9 'x64 [f '(label zz9)]) 1)) () (\ a b 0))
-   gX (tablet 0)
+   gX {}
    cpfile '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)
    pro9 '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3))
    ; one well-formed form per op in rdsp's table. ⚠ this list IS the carrier: the coverage assert
@@ -1658,7 +1658,7 @@
    ; the FORWARD carrier: seed the map with (mov orig sub) and let the pass itself rewrite the
    ; form -- no guard is restated here, cpwalk decides and holo judges
    (fwd f) (catmap (\ i (catmap (\ r9
-              (: out (cpwalk [['mov (nthr f i) r9] f] (tablet 0))
+              (: out (cpwalk [['mov (nthr f i) r9] f] {})
                  f2 (nthr out (tally out - 1))
                  (? (emits? f2) () [[f i r9 f2]])))
             cpfile)) (cprp f))
@@ -1719,7 +1719,7 @@
 ; ANOTHER value (an arrival -- memchr's c spilled from r5 while s homed r5, and the
 ; delivery lane's zero-form init unshielded the rename); such a pair declines. with
 ; no pre-pair mention the rename still fires and the pair drops.
-(: g9 (tablet 0) _ (pin g9 'tgt 'x64)
+(: g9 {} _ (pin g9 'tgt 'x64)
    keep '((st sp 16 r5) (mov r5 r6) (ldu1 r0 r5 0) (ret))
    ren9 '((mov r5 r6) (ldu1 r0 r5 0) (ret))
    _ (assert
@@ -1978,7 +1978,7 @@
 ; no successor, so the whole argument file reads DEAD at the one place it is most alive;
 ; and a universe built from the traffic alone omits a seat the fn never mentions, so a
 ; call fails to clobber it and a value promotes straight across the call.
-(: gL (tablet 0)
+(: gL {}
    (has? s r) (member? r s)
    f1 '((label fn) (li r0 1) (mov r5 r0) (add r0 r0 r5) (ret))
    o1 (lvout gL f1)
@@ -2019,7 +2019,7 @@
 ; POSITION), a def that reads its own destination would need a two-address expansion that costs
 ; back the drop, and the copy's destination must be a stranger to the def on both sides or the
 ; rename writes over an operand still in use. --
-(: gC (tablet 0)
+(: gC {}
    pro '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3))
    (co l) (coal gC (pro + l))
    (: c1 (co '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r5 r7) (ret)))
