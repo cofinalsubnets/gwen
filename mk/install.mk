@@ -29,7 +29,7 @@ v = $(DESTDIR)/$(VIMPREFIX)
 # with line 1 rewritten -- which is what a package wants anyway. The pattern matches both
 # shebang forms, leaving a trailing ` -l` alone.
 ifeq ($(BIN),love)
-# ⚠ the chmod repairs the target when the source came through seed, which does not carry
+# ⚠ the chmod repairs the target when the source came through svalbard, which does not carry
 # the executable bit -- without it the link resolves to a 644 file and every exec EACCESes.
 instool = ln -sf $(abspath $1) $2 && chmod 755 $(abspath $1)
 instag = LN
@@ -41,10 +41,10 @@ endif
 # the module sources the seat walk serves: (use 'cook) and friends from ANY session of this
 # love resolve here. Installed DEREFERENCED, since install(1) follows the repo lib/
 # symlinks, so the nest stands alone.
-libmods = cook dns json lint salt libra kiosko lapiz papel rune seed seed/text seed/diff seed/merge seed/http seed/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
+libmods = cook dns json lint salt libra kiosko lapiz papel rune sb sb/text sb/diff sb/merge sb/http sb/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
 # ⚠ ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
-binnames = $(BIN) kore seed mooncc moonfmt cook papel kiosko libra ain lux bao lush
+binnames = $(BIN) kore sb mooncc moonfmt cook papel kiosko libra ain lux bao lush
 mannames = $(BIN) cook lush
 installs = $(patsubst %,$d/bin/%,$(binnames)) \
   $(patsubst %,$d/share/man/man1/%.1,$(mannames)) \
@@ -213,12 +213,12 @@ $d/bin/kore: $(MAKEFILE_LIST)
 $d/lib/love/kore.image: $(ho)/kore.image
 	$(inst644)
 
-# seed 🌱 and lush 🐚, each its own catted script: their sources carry no shebangs, so the
+# sb 🌱 and lush 🐚, each its own catted script: their sources carry no shebangs, so the
 # interpreter line then a plain cat. Each SEAT fires on the installed name -- lush's on its
 # basename, so `sh` through a symlink lands too.
-$d/bin/seed: $(seedfiles)
+$d/bin/sb: $(sbfiles)
 $d/bin/lush: $(lushfiles)
-$d/bin/seed $d/bin/lush:
+$d/bin/sb $d/bin/lush:
 	@echo CAT	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S $(BIN)'; cat $^; } > $@

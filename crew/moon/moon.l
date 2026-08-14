@@ -703,7 +703,7 @@
                     (: _ (say err ("cc: internal error: " + show a + " " + show b))
                        _ (put err 10) _ (flush err) 1))))
    ; moon-main is the SHIMS' door and quits, exactly as it always has -- the six -e
-   ; drives and seed's verb table call it straight, and a compile ends the same way
+   ; drives and svalbard's verb table call it straight, and a compile ends the same way
    ; through all of them.
    (moon-main as) (quit (moon-run as))
    (moon-cc as)

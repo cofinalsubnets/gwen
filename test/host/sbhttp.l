@@ -1,33 +1,33 @@
-; --- test/host/seedhttp.l: seed pulling a store over a real socket ---
+; --- test/host/sbhttp.l: svalbard pulling a store over a real socket ---
 ; NOT in the test/*.l corpus: the socket nifs live in host/sock.c, which love0 does
 ; not link, and this loads two crew files and splices their modules.
 ;
 ; the whole thing runs in ONE process, test/host/kiosko.l's shape: kiosko twirled
-; onto a listener over the origin nest's .seed/, seed's client in the main task,
+; onto a listener over the origin nest's .sb/, svalbard.s client in the main task,
 ; the two interleaving through the cooperative scheduler. so this is a real HTTP
 ; pull off a real socket, and the two crew members meet the way they would in
 ; anger -- love serving love.
 ;
-; what it proves is the claim the design rests on: a seed remote needs NO server
+; what it proves is the claim the design rests on: an sb remote needs NO server
 ; logic. the store is content-addressed and immutable, there is no listing
 ; endpoint, and the walk discovers everything by reading what it already fetched
 ; -- /tips names the heads, each patch names its `deps` and its `hunks`. an
 ; EMPTY blob rides through too, which is the case that found kiosko's 404.
-(use 'seed)                                 ; the loader: lib/seed.l assembles the whole stack
+(use 'sb)                                 ; the loader: lib/sb.l assembles the whole stack
 (use 'kiosko)
 
-(: SD (from 'seed)
-   record (SD 'seed-record) sync (SD 'seed-sync) bank (SD 'seed-bank)
+(: SD (from 'sb)
+   record (SD 'sb-record) sync (SD 'sb-sync) bank (SD 'sb-bank)
    look (SD 'look) lay (SD 'lay) mk (SD 'mk) dirty (SD 'dirty) refof (SD 'refof)
    urlsplit (SD 'url-split) urlp (SD 'url?) digits (SD 'digits) readform (SD 'readform)
-   root "out/host/.seedhttp"
+   root "out/host/.sbhttp"
    _ (hark (list "rm" "-rf" root))
    _ (mkdir "out" 493) _ (mkdir "out/host" 493) _ (mkdir root 493)
    _ (mkdir (root + "/origin") 493) _ (mkdir (root + "/clone") 493)
    home (cwd 0)
    ; the server task shares this process's cwd, and the client chdirs into the
    ; clone before pulling -- so the root it serves must be ABSOLUTE
-   oroot (home + "/" + root + "/origin/.seed")
+   oroot (home + "/" + root + "/origin/.sb")
    ; --- the origin nest: a nested path and an EMPTY file, then a release ---
    _ (chdir (root + "/origin"))
    _ (mkdir "sub" 493)
@@ -35,9 +35,9 @@
    _ (mk ()) _ (record "first")
    _ (lay "a.txt" "v2\n") _ (record "second")
    _ (bank '("v1"))
-   nblob (tally (readdir ".seed/blob"))
+   nblob (tally (readdir ".sb/blob"))
    _ (chdir home)
-   ; --- kiosko over the origin's .seed/, in a task ---
+   ; --- kiosko over the origin's .sb/, in a task ---
    port 7433
    l (listen port)
    srv (twirl (\ _ ((: (g k) (: _ (await l)
@@ -52,7 +52,7 @@
    a (look "a.txt") b (look "sub/b.txt") e (look "empty.txt")
    clean (dirty ())
    ref (refof "v1")
-   npat (tally (readdir ".seed/patch"))
+   npat (tally (readdir ".sb/patch"))
    _ (chdir home))
 
 (assert
@@ -69,4 +69,4 @@
  (two? ref)                                                          ; the ref rode along
  (0 = clean))                                                        ; the tree matches the snap
 
-(: _ (test_fin ()) _ (puts "seedhttp: ok") _ (putc 10) 0)
+(: _ (test_fin ()) _ (puts "sbhttp: ok") _ (putc 10) 0)

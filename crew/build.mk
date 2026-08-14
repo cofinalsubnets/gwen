@@ -1,4 +1,4 @@
-# crew/build.mk -- the crew app builds: the kore/mooncc/seed/lush scripts, their baked
+# crew/build.mk -- the crew app builds: the kore/mooncc/sb/lush scripts, their baked
 # images, and the dist artifact. Included by ./Makefile after host/build.mk, so $(ho) is
 # already spelled; shared vars are common.mk.
 
@@ -46,13 +46,13 @@ $(ho)/mooncc: $(ho)/mooncc.image
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
 	   echo 'exec "$$h/love" wake "$$h/mooncc.image" mooncc "$$@"'; } > $@
 	@chmod 755 $@
-# seed 🌱 the patch-set vcs, and lush 🐚 the love shell -- also the distro's console shell,
+# sb 🌱 the patch-set vcs (svalbard), and lush 🐚 the love shell -- also the distro's console shell,
 # whose SEAT in main.l fires on its own basename. Both are catted shebang scripts, PATH
 # picking the love that runs them.
-seedfiles = crew/kore/text.l crew/kore/diff.l lib/dns.l crew/seed/merge.l crew/seed/http.l crew/seed/seed.l
-$(ho)/seed: $(seedfiles)
+sbfiles = crew/kore/text.l crew/kore/diff.l lib/dns.l crew/sb/merge.l crew/sb/http.l crew/sb/sb.l
+$(ho)/sb: $(sbfiles)
 $(ho)/lush: $(lushfiles)
-$(ho)/seed $(ho)/lush:
+$(ho)/sb $(ho)/lush:
 	@echo CAT	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $^; } > $@
@@ -73,9 +73,9 @@ out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 # ==== dist: the ONE artifact (self-host rung 3) ====
 # out/dist/love-<arch> is the download door whole: the default love (mooncc-built,
 # static PIE, nolibc) re-baked with the crew warm -- cook + kore + lush (vi and ain ride
-# its cat) + mooncc (all five backends) + seed + kiosko -- and crew/seed/up.l's
+# its cat) + mooncc (all five backends) + sb + kiosko -- and crew/sb/up.l's
 # verb table, which love/cli.l's verb rail reads: `love up URL` syncs ~/.love/src
-# and cook-installs the nest; `love seed|cook|kore|kiosko|mooncc ..` are the same
+# and cook-installs the nest; `love sb|cook|kore|kiosko|mooncc ..` are the same
 # binary being multi-call. the bake rides `love bake`'s own lane (main.c's
 # LOVE_BAKE_LOAD evals the cat ahead of the cache-empty + seal), so the artifact
 # is the default binary with a bigger image -- no session layer, same sealing.
@@ -90,8 +90,8 @@ distfiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
             crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l \
             crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l \
             crew/holo/link.l crew/holo/copy.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
-            crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/seed/merge.l \
-            crew/seed/http.l crew/seed/seed.l crew/kiosko/kiosko.l crew/seed/up.l \
+            crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/sb/merge.l \
+            crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l crew/sb/up.l \
             lib/gz.l lib/tar.l lib/source.l
 DIST_ORIGIN ?=
 # ⚠ THE MEMBERSHIP IS AN INPUT, and make cannot see it. Adding a file to distfiles

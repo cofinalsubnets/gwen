@@ -91,7 +91,7 @@ test_extra: test_embed test_filemode waits test_kernel_arm64 test_mps2 test_mps2
 	test_vec test_front test_proof test_gen test_uugen test_uulean test_uuwm \
 	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
 	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_elf32 test_objcopy \
-	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_seed test_vi \
+	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_sb test_vi \
 	test_moon test_clay test_moonfuzz test_ccarm64 test_ccriscv \
 	test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp test_raw \
 	test_drv test_asmops test_fixpoint test_dist nettest test_thumb1 test_thumb2 test_thumb2sp \

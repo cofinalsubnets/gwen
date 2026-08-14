@@ -45,7 +45,7 @@ mk/install.mk's `binnames` is fourteen commands plus `lib/love/mooncc.image`.
 ## what already exists — do not rebuild it
 
 * **the unified bake.** `out/dist/love-$a` (crew/build.mk) is the default love re-baked with
-  cook + kore + lush + vi + mooncc + all five backends + seed + kiosko: 22 MB, one file. Its
+  cook + kore + lush + vi + mooncc + all five backends + sb + kiosko: 22 MB, one file. Its
   `$(distfiles)` roster **is** the correct load order — asbook before the backends (defbackend
   mutates the spliced holo), every main before kore.l's applet table, up.l last. Reuse the
   roster; do not re-derive it.
@@ -64,8 +64,8 @@ mk/install.mk's `binnames` is fourteen commands plus `lib/love/mooncc.image`.
   their own copies regardless: love0's holo carries no linker, and love0 is what bakes
   `mooncc0.image`.
 
-What is missing is only the **width** of the table: crew/seed/up.l's `verbs` is nine names (up
-down seed cook kore kiosko mooncc sh lush), so `love cat` and a `cat` symlink fall through to
+What is missing is only the **width** of the table: crew/sb/up.l's `verbs` is nine names (up
+down sb cook kore kiosko mooncc sh lush), so `love cat` and a `cat` symlink fall through to
 "run this file as a love program".
 
 ## the rungs
@@ -116,7 +116,7 @@ the same size at all:
 | holo's linker half | 5.14 MB | **+780 KB** |
 | all five backends *and* the linker | 7.13 MB | +2.4 MB |
 | moon (lex/cpp/parse/gen/mksys/moon) | 17.6 MB | **+10.5 MB** |
-| the rest of the crew (kore/vi/lush/cook/seed/kiosko) | 20.9 MB | +3.3 MB |
+| the rest of the crew (kore/vi/lush/cook/sb/kiosko) | 20.9 MB | +3.3 MB |
 
 Image runs about **10× the canonical `.l` source** it came from, steadily (153 KB of source →
 1.44 MB of image). So the linker half is noise and **moon is four times the whole current

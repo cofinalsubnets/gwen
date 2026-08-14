@@ -1,9 +1,9 @@
 # hatch — distribution is cloning, install is a local rebuild
 
-The **model** under [`doc/seed.md`](seed.md): what the objects are, and why installing and
-cloning are one act. seed.md is the interface over it; this is the shape it implements.
+The **model** under [`doc/sb.md`](sb.md): what the objects are, and why installing and
+cloning are one act. sb.md is the interface over it; this is the shape it implements.
 `hatch` names the derivation step, not a program — there is no `hatch` binary, and the install
-door that exists is `love up` (crew/seed/up.l = `sync` + `cook install`).
+door that exists is `love up` (crew/sb/up.l = `sync` + `cook install`).
 
 ## The thesis
 
@@ -107,7 +107,7 @@ Two things do **not** go away when `main` does:
 
 ⚠ **A release freezes the tip SET, not a single tip.** Deps are per-path, so an independent
 birth is never depended upon and stays maximal; a multi-tip head is the normal steady state,
-not a fork to repair. See seed.md §bank.
+not a fork to repair. See sb.md §bank.
 
 ## The near-term population is one
 

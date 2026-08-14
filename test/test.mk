@@ -5,7 +5,7 @@
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \
   test_filemode test_stdinbuf test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
-  test_seed test_kore test_nest test_dist test_up test_vi test_moon test_clay test_moonfuzz \
+  test_sb test_kore test_nest test_dist test_up test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_vec test_fixpoint test_raw_bake test_riscv \
   test_raw_riscv test_raw_arm64 test_thumb1 test_thumb2 test_virt test_mps2 test_mps2_t1 \
@@ -194,7 +194,7 @@ test_embed: host $(ho)/mooncc
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -308,10 +308,10 @@ test_seat: host
 	@echo TEST test/gate/seat.sh "(the file-seat lane)"
 	@sh test/gate/seat.sh $m
 
-test_seed: host out/host$(hsuf)/seed
-	@echo TEST crew/seed/seed.l + test/host/seed.l
-	@rm -rf out/host/.seedtest
-	@cat test/00-init.l test/host/seed.l | sh test/gate/run.sh seed "$(mw)" "seed: ok"
+test_sb: host out/host$(hsuf)/sb
+	@echo TEST crew/sb/sb.l + test/host/sb.l
+	@rm -rf out/host/.sbtest
+	@cat test/00-init.l test/host/sb.l | sh test/gate/run.sh sb "$(mw)" "sb: ok"
 # the kore smokes drive the BAKED image (`wake kore.image`), ~0.02s vs ~0.75s per spawn
 # over the ~68 tool runs; the argv0-symlink smoke execs the real shim, whose basename-$0
 # dispatch the wake bypasses. the synthetic "kore" argv0 keeps the exit faces unchanged.

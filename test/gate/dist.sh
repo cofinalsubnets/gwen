@@ -5,9 +5,9 @@
 #          kore dispatch, up's no-origin refusal, down's no-nest answer, -e still
 #          evals, `--` still forces the file. seconds; rides test_slow (test_dist).
 #
-#   up     the whole door in anger, test/host/seedhttp.l's shape writ large: the
-#          repo tree seed-recorded into a scratch origin, kiosko (the artifact's
-#          own verb) serving that .seed/ on loopback, then `love up URL` into a
+#   up     the whole door in anger, test/host/sbhttp.l's shape writ large: the
+#          repo tree sb-recorded into a scratch origin, kiosko (the artifact's
+#          own verb) serving that .sb/ on loopback, then `love up URL` into a
 #          scratch HOME -- sync materializes ~/.love/src, cook install builds and
 #          lands the nest -- and a second up proves the no-op. minutes (a full
 #          from-source build); opt-in (make test_up).
@@ -34,7 +34,7 @@ smoke)
   rm -rf "$s"; mkdir -p "$s"
 
   run "$dist" kore true                            || fail "kore true (the nested dispatch)"
-  run "$dist" seed 2>&1 | grep -q "patch-set vcs"  || fail "seed usage"
+  run "$dist" sb 2>&1 | grep -q "patch-set vcs"  || fail "sb usage"
   run "$dist" mooncc 2>&1 | grep -q "usage: mooncc" || fail "mooncc verb usage"
   # the CC-under-make lane: the Makefile blanket-exports LOVE_NO_IMAGE=1, and
   # the love0 recipes hand THIS command its image back with `LOVE_NO_IMAGE=`
@@ -47,8 +47,8 @@ smoke)
   HOME=$dabs.nowhere run "$dist" down 2>&1 | grep -q "no nest" || fail "down without a nest"
   run "$dist" -e '(? (2 = (1 + 1)) (quit 0) (quit 1))' || fail "-e still evals"
 
-  ln -sf "$dabs" "$s/seed"
-  run "$s/seed" 2>&1 | grep -q "usage: seed"       || fail "the argv[0] door"
+  ln -sf "$dabs" "$s/sb"
+  run "$s/sb" 2>&1 | grep -q "usage: sb"       || fail "the argv[0] door"
   echo '(quit 7)' > "$s/up"
   ( cd "$s" && run "$dabs" -- up ); [ $? -eq 7 ]   || fail "-- should force the file lane"
 
@@ -117,7 +117,7 @@ MK
   ( cd "$sabs/w" && PATH=/usr/bin:/bin run "$dabs" sh -c 'ls Makefile' ) 2>&1 | grep -q Makefile \
     || fail "a foreign ls must still spawn"
 
-  echo "test_dist: the artifact is multi-call -- up/down/seed/cook/kore/kiosko/mooncc dispatch, files and -e untouched"
+  echo "test_dist: the artifact is multi-call -- up/down/sb/cook/kore/kiosko/mooncc dispatch, files and -e untouched"
   echo "test_dist: the in-image lane -- cook's lines and mooncc run in THIS image, byte-for-byte and semantics-for-semantics what a spawned sh gives"
   ;;
 
@@ -126,16 +126,16 @@ up)
   rm -rf "$s"; mkdir -p "$s/home" "$s/origin"
   port=7434
 
-  # the origin: this repo's TRACKED tree, seed-recorded fresh. git names the
+  # the origin: this repo's TRACKED tree, sb-recorded fresh. git names the
   # files (the same rim use as `make lint`); the working copies ride, so an
   # uncommitted fix is in the release the gate tests. NOT the whole directory:
   # untracked local state (a .claude/ of session logs weighs ~700M here) is
   # nobody's release.
   echo "DIST origin: recording the tree"
   git ls-files -z | tar --null -T - -cf - | tar -C "$s/origin" -xf - || fail "tree copy"
-  ( cd "$s/origin" && run "$dabs" seed record "dist gate origin" ) || fail "seed record"
+  ( cd "$s/origin" && run "$dabs" sb record "dist gate origin" ) || fail "sb record"
 
-  oroot=$(CDPATH= cd -- "$s/origin" && pwd)/.seed
+  oroot=$(CDPATH= cd -- "$s/origin" && pwd)/.sb
   # the explicit `exec` is load-bearing: backgrounding the `run` FUNCTION left
   # $! naming the subshell, not the server -- the kill hit the wrapper and the
   # kiosko lived on reparented to init, holding the gate's stdout pipe open
@@ -153,8 +153,8 @@ up)
   nest=$home/.love
   [ -x "$nest/bin/love" ] || fail "no $nest/bin/love"
   HOME=$home run "$nest/bin/love" -e '(? (2 = (1 + 1)) (quit 0) (quit 1))' || fail "the installed love does not answer"
-  [ -x "$nest/bin/seed" ] || fail "no $nest/bin/seed"
-  HOME=$home run "$nest/bin/seed" >/dev/null 2>&1
+  [ -x "$nest/bin/sb" ] || fail "no $nest/bin/sb"
+  HOME=$home run "$nest/bin/sb" >/dev/null 2>&1
   [ -e "$home/.local/bin/love" ] || fail "no ~/.local/bin/love compat link"
 
   m1=$(stat -c %Y "$nest/bin/love")

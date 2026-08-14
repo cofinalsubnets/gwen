@@ -14,7 +14,7 @@
 ;
 ; ~2 MB/s at any batch width from 256 blocks up (the plateau is the lane's
 ; per-cell cost, ~14ns, not per-op overhead) -- ample for a handshake and for
-; seed's pulls. the serving path has the C twin instead: host/tls.c's `chacha20`
+; sb's pulls. the serving path has the C twin instead: host/tls.c's `chacha20`
 ; nif, which sits BEHIND this interface. this file stays the oracle, and
 ; test/host/tlsc.l holds the twin to it -- never the other way round.
 ; crew/tls/bench.l prints the two side by side.
