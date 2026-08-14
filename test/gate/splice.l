@@ -23,14 +23,23 @@
    (sm-caps x) (cap (cup (cap (cup x))))
    (sm-deep x) (cup (cup (cup (cup (cup (cup (cup (cup x))))))))
    (sm-mix x) (cap (cup (cup (cap x))))
-   samples (L ('sm-cup4 >< sm-cup4) ('sm-pred >< sm-pred) ('sm-caps >< sm-caps)
-              ('sm-deep >< sm-deep) ('sm-mix >< sm-mix))
+   ; ⚠ the MULTI-ARG rows, and they are not decoration: arity was 90% of the corpus census,
+   ; and the frame they index is the one thing an arity-1 sample can never exercise -- a
+   ; `cur` row misread would land the whole body one slot off and still answer for sm-cup4.
+   ; ⚠ the second reads its SECOND parameter on purpose: an off-by-one frame reads the first.
+   (sm-two a b) (cup (cap a))
+   (sm-2nd a b) (cup (cup b))
+   (sm-thr a b c) (cap (cup b))
+   samples [['sm-cup4 1 sm-cup4] ['sm-pred 1 sm-pred] ['sm-caps 1 sm-caps]
+            ['sm-deep 1 sm-deep] ['sm-mix 1 sm-mix]
+            ['sm-two 2 sm-two] ['sm-2nd 2 sm-2nd] ['sm-thr 3 sm-thr]]
+   (sat-ap f n x) (? (n = 1) (f x) (n = 2) (f x '(8 9)) (f x '(8 9) 5))   ; saturate at the row's arity
    (die m) (: _ (say err ("splice-gate: " + m + "\n")) _ (flush err) (quit 1))
    (one s a)                                     ; a is (composed declined)
-    (: nm (cap s) f (cup s) j (jit f)
+    (: nm <s ar <>s f <>>s j (jit f)
        (? (nil? j) (: _ (say out ("  " + string nm + ": declined (a row the table cannot say)\n"))
                       ((cap a) >< ((cuap a) + 1)))
-          (: bad (filter (\ x !(= (j x) (f x))) ins)
+          (: bad (filter (\ x !(= (sat-ap j ar x) (sat-ap f ar x))) ins)
              _ (? (nil? bad) 0 (die (string nm + " DISAGREES with its twin on " + show bad)))
              _ (say out ("  " + string nm + ": agrees with its twin on " + show (tally ins) + " inputs\n"))
              (((cap a) + 1) >< (cuap a)))))

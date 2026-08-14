@@ -4,7 +4,16 @@ Decode a thread into its named handlers, splice their bodies into one function w
 dispatch deleted, install through `nif`. This started as a probe pricing the shape
 (`run.sh`, below); **the JIT itself is now `lib/splice.l`, a module with one door** —
 `(use 'splice)` then `(jit f)`, which answers a native closure agreeing with `f`, or `()`
-naming the row it could not say. What is left here is the pricing.
+tallying the row it could not say. What is left here is the pricing.
+
+**It fires by itself.** `(use 'splice)` is the whole switch: `love/glaze/hook.l`'s `natjit`
+reads `(from 'splice)` at fire time and gives the splicer the last lane, under amble. So a
+love that does not load the module has no lane at all. ⚠ put the `use` in **its own top-level
+form** — a `:` builds its lambda bindings before its body runs, so a `use` sharing a form with
+the closures it means to cover lights the lane after they are already made. `(jit-why ())` is
+the coverage census (`LOVE_SPLICE_TRACE=1` says the declines as they happen), and the ranked
+table over the whole corpus — with what it says to build next — is in **doc/moon-regalloc.md**,
+*the auto lane*.
 
 **It needs no compiler.** Each op's own machine-form IR is in the binary: `mooncc -fir=lvm_`
 writes it to `.rodata` at compile time, `nifs.l` lays the book-name bridge beside it, and holo

@@ -123,7 +123,11 @@
    (termd? rows) (? (atom? rows) 0 (atom? >rows) (fin? <<rows) (termd? >rows))   ; fin? takes the row's HEAD nom
    (ok rows) (? (termd? rows) rows ())
    (\ f (? (charm? f) ()
-           (id? kur (peek 0 f)) (: b (ok (walk f 2 4096)) (? (atom? b) () (['lvm_cur] >< b)))
+           ; ⚠ the cur row CARRIES ITS ARITY: cell 1 is the saturation count lvm_cur reads,
+           ; and a reader that drops it has no other door to the closure's arity -- the rows
+           ; below index a frame whose width is exactly this number.
+           (id? kur (peek 0 f)) (: b (ok (walk f 2 4096))
+                                   (? (atom? b) () ([['lvm_cur (opd (peek 1 f))]] + b)))
            (ok (walk f 0 4096))))))
 
 (:- (\ x (:

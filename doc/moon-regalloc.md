@@ -221,18 +221,140 @@ And **operand 0 is the commonest operand there is**, so a bare `(nil? i)` presen
 hand-written body; the pipeline runs on live closures. `dis` (love/ev.l, the emission
 interface's dual — a reflection primitive built pre-egg from `peek` + the book, like
 `feels`, so it survives the birth mop) reads a compiled thread back to `(op-nom operand..)`
-rows; the composer maps each row to its op's own C body, harvested from love.c's `op11`/
-`fld`/`op` macro arguments with the nif→nom bridge through `nifs.h`; and the bind closes
-what was owed above — it rewrites mooncc's `lea r,[rip+d32]` external refs to a
-same-length `mov` aimed at an appended cell holding the symbol's live address, resolved
-against `/proc/self/exe`'s own symtab plus the load bias from the exe's `/proc/self/maps`
-line. In-process by construction: a separate process has a different ASLR base, so the
-binding is only valid in the `love` that then nifs it. Composed bodies agree with their
-interp twins on every input (the differential is `sl-cross` one level down — one
-denotation, two presentations) and beat them ~1.2–1.3× on short accessor chains today;
-the ceiling is the ~4× the probe measured, and the gap to it is this bucket. Still owed: a
-CALL reloc (once allocating ops are covered — same appendix), and multi-op segments that
-cross a control op (the segment ends where the straight line does, the run-fusion law).
+rows; the splicer maps each row to its op's own **machine-form IR**, read out of the running
+binary's `.rodata` where `mooncc -fir=lvm_` wrote it, with the nif→nom bridge through
+`nifs.l`'s third derivation; holo assembles it; and there is no relocation step at all,
+because a JIT knows the answers — the one external reference a clean handler carries,
+`(la rX sym)`, becomes `(li rX addr)` against `/proc/self/exe`'s own symtab plus the load
+bias from the exe's `/proc/self/maps` line. In-process by construction: a separate process
+has a different ASLR base, so the bytes are valid only in the `love` that made them.
+Spliced bodies agree with their interp twins on every input (the differential is `sl-cross`
+one level down — one denotation, two presentations) and beat them ~1.2× on short accessor
+chains, **1.6× on a 32-op body — where a mooncc-compiled composed body of the same closure
+also reads 1.6×**, so the splicer matches the compiler's output while needing none of it.
+The ceiling is the ~4× the probe measured, and the gap to it is this bucket.
+
+### the auto lane, and the coverage census that ranks everything left (2026-08-13)
+
+The splicer is wired to fire by itself: `love/glaze/hook.l`'s `natjit` gets one more arm, **last,
+under amble**, reading `(from 'splice)` at fire time — so `(use 'splice)` is the entire switch and
+the lane is dormant in every love that does not load the module. It sits under amble on purpose.
+Amble is *already* the glaze's universal per-op native tier, and it translates from the **source**,
+declining a written list of shapes (strings, gems, `//` `%` `&` `|` `^`, inner `\`, effects, a
+global read in operand position). The splicer translates from the **compiled thread** and says
+whatever the compiler emitted. So what it adds is exactly amble's leavings, and putting it first
+would only take work away from a lane that already does it.
+
+⚠ **`(use 'splice)` must be its own top-level form.** A `:` builds its lambda bindings before its
+body runs, so a `use` sharing a form with the closures it means to cover lights the lane after they
+are already made — which reads exactly like a lane that is off, and did for an hour.
+
+⚠ **the splicer re-enters itself.** Everything in `lib/splice.l` is love, so splicing *builds*
+closures — dis's walk, holo's assembler, the tablets — and each creation re-enters `ala`, the hook,
+and the door. A busy cell makes the splicer invisible to itself. It is not an optimisation: without
+it the runtime cannot build a closure without recursing.
+
+**The whole corpus, lane on** (`test_host`'s 18.5k lines, one process): **4289 tests pass** — the
+differential holds at corpus scale, which is the result that matters most — **8 closures spliced,
+1969 declined**, and the run costs **+25% wall clock** (4.65 s against 3.71 s). That is the honest
+before-and-after today and it is *negative*: the tier buys eight closures for a quarter of the run.
+The census says why, and it is one number:
+
+| declines | reason | what it is |
+|---|---|---|
+| **1770** | `multi-arg` | arity ≥ 2 — refused at `lvm_cur` before a single row is read |
+| 175 | `operand` | the **fused two-operand loads**: `qq` 41, `qqp` 35, `qa` 25, `qap` 25, `aq` 15, `aqp` 7, `aa` 2 — plus the branch ops `argtwocond` 13, `argcond` 5, `cond` 4, `argtap` 2 |
+| 16 | `no-ir` | `add` `mul` `lt` `le` `eq` `string` `snip` `tally` `nilp` `litp` `rem` `shape` `hush` `wait` `scoop` `tablet` — **the `-fir` 64-form cap**, not a splice failure |
+| 7 | `no-tail` | `ap` `sleep` `tap` `mint` `charmp` `tally` — a handler that does not end in the dispatch triple |
+| 2 | `no-bridge` | `sat` — `$` has no `lvm_` row in `nifs.l` |
+| **0** | `unclean` | — |
+
+**Two findings, and the second refutes what this doc predicted.** First, 90% of the loss is
+*arity*, decided before any op is looked at: whatever the splicer can or cannot say about op bodies
+is untested against nine tenths of the corpus. Second, **not one handler was rejected by the splice
+condition** — no frame, no call, no `Ip` read, no gc jump, in the 199 closures that got past arity.
+The gc-resume trap was worth building the hoisted guard for, and the guard is right, but the wall
+here is the operand and arity plumbing, not the condition. ⚠ read the `no-ir` counts as *first
+blocker* counts, never frequencies: a closure declines at its first bad row, so an op that always
+sits behind `lvm_cur` reads as 1.
+
+### the two rungs the census asked for, and what they moved (2026-08-13)
+
+**Arity — LANDED, and it cost almost nothing**, because love.c had already arranged for it.
+`dis` now carries the count on its `cur` row (cell 1 is the saturation number `lvm_cur` reads;
+a reader that drops it leaves the closure's arity with no door), the splicer strips that row and
+hands the arity to `nif` — and *nothing else changed*. `lvm_arg i` indexes `Sp[i]` whatever the
+frame's width; the collapse `Sp[net] = Sp[0]; Sp += net` restores the entry `Sp` and so is
+arity-blind; and `nif`'s arity ≥ 2 cell puts `lvm_ret` and the interp twin **at the same offsets
+as the arity-1 cell** — love.c's own stated law — so the dispatch tail and the guard's deopt need
+no arity of their own. ⚠ the gate's multi-arg rows read the *second* parameter on purpose: an
+off-by-one frame still answers correctly for every arity-1 sample.
+
+**The push-pair family — LANDED**: `aa`/`aq`/`qa`/`qq` are pure push-push fusions (`frun2`), so
+they are said as two pushes, the fld family's trick a second time. The operands ride in source
+order off a *moving* `Sp`, so two pushes laid in order come out right with no arithmetic — love.c
+says this over `PushA`/`PushQ` and `jit-push-a` inherits it. ⚠ only a **charm** quote: `dis`
+answers `'x` for a heap quote or a raw index, which is the roster refusing to hand a code word
+out, and those decline.
+
+**Corpus, after both: 1969 → 626 declines, 8 → 11 spliced, +25% → +18% wall clock.** The declines
+collapsed and the firings barely moved, which is the finding:
+
+| declines | reason |
+|---|---|
+| **508** | the **apply** variants — `qap` 231, `qqp` 204, `aap` 25, `aqp` 24, `apn` 17, `argap` 7 |
+| 59 | the **branch** ops — `argtwocond` 28, `argcond` 20, `cond` 7, `argtap` 4 |
+| 16 | `no-bridge` — `sat` 6, `two?` 5, `><` 3, `quit` 2: **prel ALIASES**, `(: two? link? … sat saturate)` |
+| 12 | `operand lvm_index` |
+| ~31 | `no-ir` / `no-tail`, one apiece across ~25 handlers |
+
+**90% of everything left is a call or a branch, and that is one statement: a spliced body is a
+straight line, and the corpus's closures are not.** `frun2p` (the `p` in `qap`/`qqp`) is a
+push-push *with the apply on the second load* — it enters the callee's thread with a return
+address — and the `cond` family reads a **thread offset** as its operand, which a splice does not
+have. Both want the same thing amble already built for itself: a stackless drive out and a resume
+label. Until that lands the splicer covers whole closures only when they are pure accessor chains,
+and the corpus has few of those *as whole closures*.
+
+⚠ **REFUSED the same day: raising the `-fir` cap.** The `no-ir` row looked like a cheap rung — one
+number in `gen.l`. At 128 it takes 118 handlers instead of 93 and costs **+40 KB** of binary, and
+the corpus reads **629 declines and 11 firings against 626 and 11 at 64**: worse by noise, zero
+firings bought. The reason is legible once measured — generic `+` is 0 forms at *either* cap
+(`lvm_add`, `lvm_mul`, `lvm_eq` are over 128; `lvm_lt` is 89), because the NxN kind-dispatch table
+is what makes them big. **The splicer is never going to say generic arithmetic**, and it does not
+need to: the glaze's own arithmetic lanes are for exactly that, and they run first. Do not rebuild
+this rung on the strength of the `no-ir` names.
+
+**So the rungs, ranked by the census as it now stands:**
+
+1. **calls and branches, together** — 90% of what is left, and one mechanism: a drive out with a
+   resume label, plus thread-offset → spliced-label for the `cond` family. Amble solved this shape
+   already (stackless callout drive, restart deopt); this is that, over the compiled thread.
+2. **the `no-bridge` sixteen, and it is not the one-liner it looks like.** `two?`, `sat`, `><`,
+   `quit` are prel **aliases** — `(: two? link? … sat saturate)`, one value under two spellings,
+   `id?`-identical at runtime. `dis` names by book key and gets the alias; `ai_nif_lvm` is derived
+   from `nif-rows` and only knows the original. So the fix belongs where the alias is made, not in
+   a lookup table inside the JIT — and a written-down `two? → link?` row in `lib/splice.l` is
+   exactly the duplication `nifs.l` exists to prevent. ⚠ this is why the gate's `sm-pred` sample
+   still declines: it is the only sample whose op is an alias.
+3. everything else in the table is one or two closures apiece and is not worth a rung.
+
+⚠ **the lane must decline CHEAPLY, and today it does the opposite**: the first thing `jit` does is
+`dis`, the most expensive thing it does, and 1770 of the 1969 declines then throw that walk away
+over an arity the hook already knew and could have passed. Rung 1 dissolves this particular case by
+covering it, but the ordering law stands for every rung after: a tier that fires on every closure
+the runtime builds pays its decline cost on all of them.
+
+**What is cached, and what that cost.** Three memos, all load-bearing rather than tidy: the live
+symbol table (one build per process — it slurps a 6 MB `/proc/self/exe` to get there — plus a memo
+per name, since the symtab walk is linear and string-compares every entry), the checked clean body
+per handler nom (the checking is per handler, the splicing per copy), and **the blob, keyed on the
+op rows themselves** — the same rows denote the same bytes, so a second closure of a shape already
+spliced pays a tablet lookup and a `nif`, not an assemble. That is the glaze's own arrangement
+(compile per source site, creation reuses the blob) and it is what makes a creation-time tier
+affordable at all: **31 ms → 216 µs** for a repeat shape, 438 µs for a fresh one. ⚠ the bytes carry
+live addresses, so the cache is as in-process as they are — a field of this love, never written
+out, and nothing here may ride into a baked image.
 
 ## the splice JIT and the moon arc — one boundary, aligned
 
