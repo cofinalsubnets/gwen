@@ -107,10 +107,20 @@ moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 && fail "a FAILING
 # a UCN takes EXACTLY 4 (or 8) hex digits -- a short run must REFUSE, not take what
 # it found. test/cc/138 holds the well-formed side; only the refusals live here.
 # \134 is the backslash, written in octal so the sequence survives this file.
-for bad in '\134u00E' '\134U0001F60' '\134u' '\134uZZZZ'; do
+# ..and C11 6.4.3p2 bars a UCN from naming a BASIC-SET character (under 00A0, bar
+# $ @ `), a surrogate, or anything past the last code point -- so A for 'A' is a
+# constraint violation, not a long spelling. gcc 13 refuses it; newer ones take C23's
+# relaxation, which is why the cross gcc caught this and the host one did not.
+for bad in '\134u00E' '\134U0001F60' '\134u' '\134uZZZZ' \
+           '\134u0041' '\134u0000' '\134u009F' '\134uD800' '\134uDFFF' '\134U00110000'; do
   printf "char *s = \"$bad\";\nint m(void){return 0;}\n" > "$ho/.feat.c"
   moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
     && fail "a malformed universal character name was accepted: $bad"
+done
+for ok in '\134u0024' '\134u0040' '\134u0060' '\134u00A0' '\134U0010FFFF'; do
+  printf "char *s = \"$ok\";\nint m(void){return 0;}\n" > "$ho/.feat.c"
+  moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+    || fail "a legal universal character name was refused: $ok"
 done
 
 # the freestanding header set is C11 4p6: these two were the ones we did not ship

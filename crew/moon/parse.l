@@ -522,6 +522,7 @@
              ; a plain decimal past int32 is a long (suffixed forms arrive cast)
              (k = 'num) (? ((-2147483648 <= <>e) && (<>e <= 2147483647)) 'int 'long)
              (k = 'flo) 'double
+             (k = 'flof) 'float
              ; arithmetic rides the typing door: ptr - ptr is ptrdiff_t (a long
              ; here, the 4-byte word on t32 -- same answer either way), ptr +- int
              ; the decayed pointer, and a both-arithmetic result is puac of the
@@ -907,6 +908,9 @@
              (tkk t = 'llnum)                                   ; 1LL: llong on t32, plain elsewhere
               (? (pst32? ps) [['cast 'llong ['num (tkv t)]] >ts] [['num (tkv t)] >ts])
              (tkk t = 'flo) [['flo (tkv t)] >ts]
+             ; an f suffix makes a FLOAT constant (C11 6.4.4.2) -- the cast is what
+             ; narrows it, so `0.1f == 0.1` is false and sizeof(1.5f) is 4
+             (tkk t = 'flof) [['cast 'float ['flo (tkv t)]] >ts]
              ; an imaginary literal (1.0fi, _Complex_I's spelling) is the complex
              ; constant {0, v} -- complex-double: complex FLOATS compute as
              ; doubles too (the float model), narrowing only at typed stores

@@ -2784,6 +2784,12 @@
                      (t32? g && usg? tgt)                                    ; t32 unsigned: the U-converter
                       (mkv tgt 'r0 (vfs r + '((cvttsd2ui r0 f0)) + cvt tgt 'r0))
                      (mkv tgt 'r0 (asintt g r tgt + cvt tgt 'r0)))
+                 ; (float) of a double ROUNDS. the register model keeps every float as a
+                 ; double and narrows only at a STORE (fstf), so a cast that just passed the
+                 ; value through lost the rounding entirely -- `(float)0.1 == 0.1` read true,
+                 ; and so did `0.1f == 0.1` once the f suffix started typing as float.
+                 ((tgt = 'float) && flo? (vty r))
+                  (mkv 'double 'r0 (vfs r + '((cvtsd2ss f0 f0) (cvtss2sd f0 f0))))
                  (flo? tgt) (mkv 'double 'r0 (vfs r))                            ; double -> double
                  (pair? g tgt && !(llt? (vty r)))                           ; widen to the pair (source signedness)
                   (mkv tgt 'r0 (asll g r))

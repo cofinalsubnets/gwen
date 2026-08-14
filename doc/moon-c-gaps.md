@@ -45,8 +45,7 @@ What genuinely stands between here and freestanding C11, each row live above:
 - **the `#line "file"` half** — the line half landed 2026-08-14, but the file operand is still
   dropped; it wants `__FILE__` to stop being one name per TU first. (The `#if` evaluator landed
   the same day, below.)
-- **an `f` suffix does not make a `float` constant** — a constraint on the value of a literal,
-  and the row below already has a consumer turning it into a wrong answer.
+- (the `f`-suffix row **landed 2026-08-14** — and the deeper bug under it, below.)
 - **block-scope `struct` tags**, and the two remaining small syntax rows. Neither is the
   one-line widening the first two were: `switch (x) case 0: ;` wants the switch parser off its
   `{`-at-the-root shape, and `int f(int), a;` wants `more`/`one` hoisted out of the top-level
@@ -142,6 +141,12 @@ Four of them carry an edge worth knowing:
   `"\xE4"` is the one byte `E4` — so `escseq` reports whether the escape was a UCN
   and the narrow lane encodes on that. Exactly 4 (or 8) hex digits: a short run refuses
   rather than taking what it found, matching gcc's *incomplete universal character name*.
+  C11 6.4.3p2's **validity rule** is enforced: a UCN may not name a basic-set character
+  (under `00A0`, bar `$ @ ` `), a surrogate, or anything past the last code point — so
+  `\u0041` for `A` refuses. ⚠ that rule was found by the **cross** gcc (13.2), which
+  refuses it where the newer host gcc takes C23's relaxation and says nothing: a
+  single-oracle check would have shipped the hole. ⚠ we also refuse past-`10FFFF` where
+  gcc only warns — a refusal, so it costs no right answer.
   ⚠ an identifier spelled with one still refuses — the row above.
 
 ### the directives, and which are ignored on purpose
@@ -295,12 +300,25 @@ wide (doc/moon.md, `calm?`) — and only visible once both builds ran the *same*
 
 Same build, same file family, still open: `strtod("-0.000123e+6")` does not answer -123.0.
 
-### an `f` suffix does not make a float constant
+### an `f` suffix, and A CAST TO float — both landed 2026-08-14
 
-Already filed (a literal keeps 53 bits in an expression). It now has a consumer that turns it
-into a wrong ANSWER rather than lost precision: PDCLib spells `INFINITY` as
-`(_PDCLIB_FLT_MAX * 2)`, which in mooncc multiplies in **double** to a finite 6.8e38, so
-`fmaxf(x, INFINITY) == INFINITY` is false and fdim/fmax/fmin all fail their own suites.
+Two bugs wearing one symptom, and the second was the real one. C11 6.4.4.2 makes an
+`f`-suffixed constant a **float**; ours kept 53 bits, so `sizeof(1.5f)` was 8 and
+`0.1f == 0.1` was **true**. The lexer now answers a distinct `'flof` kind (the suffix was
+being skipped and thrown away) and parse lowers it to `('cast float ..)`.
+
+That fixed the *type* and not the *value*, which exposed the one underneath:
+
+⚠ **a cast to `float` never rounded.** gen keeps every float as a double in a register and
+narrows only at a **store** (`fstf`), so the cast lane's `(flo? tgt)` arm passed the value
+straight through — `(float)d == d` read true for an ordinary double **variable**, not just
+for a literal. The cast now round-trips `cvtsd2ss`/`cvtss2sd`, which is where the rounding
+becomes observable; both ops were already in the vocabulary and all six targets take it.
+
+Held by test/cc/140-fsuffix.c. The old note here said the consumer was PDCLib's `INFINITY`
+spelled `(_PDCLIB_FLT_MAX * 2)` — ⚠ that reading was wrong twice over: PDCLib is not this
+tree's libc (`crew/moon/lib/nolibc/` is), and we do not define `INFINITY` at all. The real
+consumer is every `float` expression in the tree.
 
 ### the `#if` evaluator — LANDED 2026-08-14, and one of its three bugs cost right answers
 

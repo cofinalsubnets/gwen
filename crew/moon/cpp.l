@@ -68,7 +68,7 @@
                 (go l ()))
 
    ; -- the spelling of a token, for ## paste and # stringize --
-   numks '(num unum ulnum llnum ullnum flo iflo)
+   numks '(num unum ulnum llnum ullnum flo flof iflo)
    (spell t) (: k (kof t) s (sof t)
                 (? (0 < tally s) s                            ; the spelling the lexer kept
                    (member? k numks) (show (vof t))           ; ..or a cpp-minted decimal
