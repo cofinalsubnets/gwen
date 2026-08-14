@@ -584,7 +584,7 @@
        ; line NAMED is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
        set (lib + rtpull lib tgt nostd)
-       ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set "mooncc"))
+       ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set ("mooncc " + <(usplit 43 love-version))))
        _ (ld-write dst ps)
        (chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [-nostdinc] [-t x64|arm64] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o|lib.a .."

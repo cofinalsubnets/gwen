@@ -194,15 +194,17 @@ names and neither claims the other's code:
 ```sh
 $ mooncc m.o gcc-built.o -o mix && readelf -p .comment mix
   [     0]  GCC: (GNU) 16.1.1 20260625
-  [    1b]  mooncc
+  [    1b]  mooncc 0.1
 ```
 
-⚠ **ours carries no version, and that is a law rather than an omission.** `love0` is stamped
-`bootstrap` on purpose (a real id there re-lays every lcat header on every commit), so a version
-in `.comment` would make `love1` — built by love0's mooncc — and `love2` — built by love1's —
-differ at `e_shoff` and name a broken fixpoint where the two compilers agree on every byte they
-*emit*. A self-hosted compiler's own build id is circular anyway; the tree's id is in
-`love-version`, in `.rodata`, where a reader gets it either way.
+⚠ **the version is `love-version`'s BASE half, never the whole id, and that is a law.** The VCS
+suffix names the commit that built *the compiler*, so it would make `love1` — built by love0's
+mooncc — and `love2` — built by love1's — differ at `e_shoff` and name a broken fixpoint where
+the two compilers agree on every byte they *emit*. The base moves with a release, which both
+generations share; `love0` is stamped `$(love_base)+bootstrap` for exactly this, and
+`out/host/0/.love0cc` content-stamps that compile line so a `./VERSION` bump rebuilds it (make
+tracks files, not flag strings, and a stale love0 would fail the fixpoint at a byte offset with
+nothing to say about the cause). A reader wanting the commit reads `love-version` in `.rodata`.
 
 Read it back without any binutils at all: `lib/irec.l`'s `(irec-secof PATH ".comment")` is the
 same ELF walk one table over, and answers the `(1 bytes)` wrapper — an empty section is a real

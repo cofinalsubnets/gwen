@@ -130,15 +130,19 @@ $(ho)/liblove.so: $(ho)/liblove.a $(R)/love_data.ld
 # lit-wrapped $(gl0_h) instead, produced without an interpreter. It links the whole
 # host/*.c glob: the posix nifs and host/image.c's bake/wake are what let love0 bake and
 # wake mooncc0.image and so drive the mooncc-built default `love`.
-# ⚠ -DAI_VERSION="bootstrap" on purpose: love0 bakes the lcat headers every frontend shares,
-# so a love0 that relinks re-lays all of them and rebuilds every object behind them -- a
-# ~25 s cascade fired by nothing but a new commit hash. The bootstrap is not a release
-# artifact; the shipped `love` carries the real id (the love.o dep below).
+# ⚠ -DAI_VERSION='$(love_base)+bootstrap' on purpose, and BOTH halves earn their place.
+# The suffix: love0 bakes the lcat headers every frontend shares, so a love0 that relinks
+# re-lays all of them and rebuilds every object behind them -- a ~25 s cascade fired by
+# nothing but a new commit hash. The bootstrap is not a release artifact; the shipped
+# `love` carries the real id (the love.o dep below). The BASE, though, must be the real
+# one: `.comment` writes the pre-+ half of love-version, so love1 (built by love0's
+# mooncc) and love2 (built by love1's) agree only if love0 names the same release.
+# It moves when ./VERSION moves -- a release, not a commit -- so the cascade stays away.
 # ⚠ -Dai_data_section=0: the bootstrap asks the sentinels BY NAME and owes no linker
 # script. Both ai_typ bodies answer the same enum d for the same ap, and the one place a
 # data object crosses between differently-built binaries -- the heap image -- carries an ap
 # as its INDEX, never an address. So the layout never crosses.
-gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -Dai_data_section=0 -DAI_VERSION='"bootstrap"' -I. -Iout/lib
+gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -Dai_data_section=0 -DAI_VERSION='"$(love_base)+bootstrap"' -I. -Iout/lib
 love0_host_o = $(patsubst host/%.c,out/host/0/host/%.o,$(wildcard host/*.c))
 love0_o = $(love0_host_o) $(love_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
 out/host/0/host/main.o: $(gl0_h)
@@ -146,7 +150,18 @@ out/host/0/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # ⚠ the LOVE_NO_IMAGE= prefix (empty = unset) hands the compiler its baked image back from
 # under the blanket corpus export: when CC is the dist artifact's own mooncc verb, the verb
 # table lives in that image and an egg boot would read "mooncc" as a filename.
-out/host/0/%.o: $(R)/%.c $(love_h)
+# ⚠ .love0cc content-stamps THIS compile line, .hostcc's trick one lane over, and the base
+# version is why it had to exist: love0's id is now load-bearing (it must name the same
+# release a real love does, or .comment differs and test_fixpoint fails at a byte offset
+# with nothing to say about the cause). make tracks files, not flag strings, so a ./VERSION
+# bump would otherwise leave love0 stamped with the previous release forever.
+.PHONY: force_love0cc
+force_love0cc: ;
+out/host/0/.love0cc: force_love0cc
+	@mkdir -p $(dir $@)
+	@tf=$@.$$$$.tmp; printf '%s\n' '$(gl0_cc)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+out/host/0/%.o: $(R)/%.c $(love_h) out/host/0/.love0cc
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(gl0_cc) -c $< -o $@

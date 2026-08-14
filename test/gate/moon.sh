@@ -459,9 +459,10 @@ done
 # with our own ELF walk, so this holds on any machine and needs no readelf.
 # the UNION is the point: .fgnx is our link over a gcc object, and it must credit
 # gcc for the code gcc compiled rather than claiming the whole binary.
-# ⚠ ours is "mooncc" with NO VERSION, and that is a law, not an omission: love0 is
-# stamped "bootstrap" on purpose, so a version here would make love1 and love2
-# differ and name a broken fixpoint (crew/holo/link.l says it at the door).
+# ⚠ ours is the BASE half of love-version and never the whole id, and that is a law:
+# the VCS suffix names the commit that built the COMPILER, so it would make love1 and
+# love2 differ and name a broken fixpoint (crew/holo/link.l says it at the door).
+# read ./VERSION rather than writing 0.1 down -- a release bump must not fail here.
 cmt() { "$m" -l lib/irec.l \
           -e "(: r (irec-secof \"$1\" \".comment\") _ (? (two? r) (puts <r) 0) _ (flush out) (quit 0))"; }
 c=$(cmt "$ho/.fgnx" | tr '\0' ' ')
@@ -470,8 +471,8 @@ case "$c" in
   *) fail "mooncc link over a gcc .o must credit both in .comment, got '$c'" ;;
 esac
 c=$(cmt "$ho/.sibx" | tr '\0' ' ')
-[ "$c" = "mooncc " ] \
-  || fail "an all-ours link says exactly 'mooncc' in .comment (no version -- the fixpoint law), got '$c'"
+[ "$c" = "mooncc $(cat VERSION) " ] \
+  || fail "an all-ours link says 'mooncc <base>' in .comment (base only -- the fixpoint law), got '$c'"
 
 # ..and our own binaries carry a symbol table nm and gdb can read
 nm "$ho/.fgnx" > "$ho/.fgn.nm" 2>&1 || fail "nm on our exe (no symbol table)"

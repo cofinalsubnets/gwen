@@ -844,13 +844,13 @@
    ; prod: the producer string for .comment -- what wrote THIS file, the caller
    ; being the only one that can say (mooncc when its driver linked, holo's ld
    ; when the applet did).
-   ; ⚠ NO VERSION IN IT, and the reason is the fixpoint: love0 is stamped
-   ; "bootstrap" on purpose (a real id there re-lays every lcat header on every
-   ; commit), so love1 -- built by love0's mooncc -- and love2 -- built by love1's
-   ; -- would carry different producer strings and differ at e_shoff, naming a
-   ; broken fixpoint where the compilers agree on every byte they EMIT. a
-   ; self-hosted compiler's own build id is circular anyway; the tree's id is in
-   ; love-version, in .rodata, where a reader can read it either way.
+   ; ⚠ THE BASE HALF OF love-version, never the whole id, and the fixpoint is why:
+   ; the VCS suffix names the COMMIT that built the compiler, so love1 (built by
+   ; love0's mooncc) and love2 (built by love1's) would carry different producer
+   ; strings and differ at e_shoff -- a broken fixpoint where the compilers agree
+   ; on every byte they EMIT. the base moves with a release, which both generations
+   ; share (love0 is stamped $(love_base)+bootstrap for exactly this). the full id
+   ; is in love-version, in .rodata, for a reader who wants the commit.
    (ldlink target pie org srcs prod)
     (: mach (peep elf-machines target 0)
        _ (? (0 < mach) 0 (scare 'link-target target))
