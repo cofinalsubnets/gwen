@@ -811,13 +811,18 @@
    ; the price of one save/restore pair in the owner's frame (arm64's x19+ rungs: unclimbed)
    ; the seats residency may borrow: a subset of csregs, saved by the prologue (g 'cssv) and
    ; reloaded on every exit. ⚠ a target belongs here only once its prologue SPLICES cssv and
-   ; cskeep verifies it -- t32/v6m still owe the second, which is why their file reads empty.
-   ; ⚠ v6m keeps r4 as its BOTTOM frame base (the extra push planted after the sub), so the
-   ; file there starts at r5; plain t32 has the whole AAPCS32 callee-saved bank bar fp.
+   ; cskeep verifies it.
+   ; ⚠ NO r4 IN ANY ARM POOL -- the law is at the top of this file, and a pool is exactly where
+   ; it bites: a4ize renames a base-slot r4 to fp BY POSITION, and a resident mint riding the
+   ; pool CAN sit in a base slot, so the rename turns a live pointer into the frame pointer.
+   ; t32 held r4 here for a day on the reading that AAPCS32 gives it the whole bank bar fp; it
+   ; does, and the bank is not the question -- every other pool starts clear of r4 for this
+   ; reason (a64 r19+, riscv r13+, x64 r11+), and v6m for its own (it plants r4 as a BOTTOM
+   ; frame base after the sub). the M7 reset before it could print a second line.
    (cspool g) (? (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                  (rv? g) '(r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
                  (v6m? g) '(r5 r6 r7 r8 r9 r10)
-                 (t32? g) '(r4 r5 r6 r7 r8 r9 r10)
+                 (t32? g) '(r5 r6 r7 r8 r9 r10)
                  (arm? g) ()
                  '(r11 r12 r13 r14))
    (deep? pl) (two? >>pl)                           ; a pool affords a PRICED seat: two remain after the take
