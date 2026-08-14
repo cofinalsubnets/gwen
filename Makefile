@@ -8,7 +8,7 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 # A release tarball that ships `bin/love` carries its whole C toolchain in that one
 # file: love wears a `mooncc` verb, and mooncc drives gcc-shaped recipes unchanged
 # (test_drv). So when the bundled binary is here and the user named no compiler, IT
-# is the compiler -- `make` on an unpacked full artifact touches no ambient cc.
+# is the compiler -- `make` on a seed-laid tree touches no ambient cc.
 # ⚠ `CC ?=` CANNOT SAY THIS. make defines CC=cc itself, so `?=` never fires and the
 # ambient compiler would win silently; $(origin CC) is the only way to ask whether a
 # HUMAN set it. An explicit CC= still outranks the bundle, which is what the lean
@@ -23,7 +23,7 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 # environment. The tree's own clang default is exactly what the bundle should displace.
 # ⚠ AND A BUNDLED love IS ALREADY PAST THE SELF-HOST CIRCLE. love0 exists for exactly one
 # reason: to be *some* love that can wake mooncc0.image, because the default love is
-# mooncc-built and so cannot drive its own build. A tree unpacked beside a full artifact
+# mooncc-built and so cannot drive its own build. A tree the seed laid
 # has no such circle -- that binary IS a love with mooncc baked in as a verb. So it
 # compiles with the binary it shipped with, and love0 / mooncc0.image / the lit-laid 0.h
 # twins are never built at all. Not an optimisation: building them is how a bootstrap that

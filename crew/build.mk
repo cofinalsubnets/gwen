@@ -113,26 +113,32 @@ out/dist/.dist-cat.l: $(distfiles) out/dist/.dist.list
 # the artifact is named for its arch ($a = uname -m): love-x86_64 here,
 # love-aarch64 on a pi -- the moon lane is native on both (mooncc defaults to
 # the ground it stands on), so `make dist` anywhere bakes that machine's door.
-.PHONY: dist dist-src dist-full dist-rel
-dist: out/dist/love-$a
+.PHONY: dist dist-source dist-seed
 
 # ==== THE RELEASE ARTIFACTS (doc/dist.md) ====
-# A release is not a program, it is TWO TARBALLS, and they sit on the one axis that
-# actually matters to somebody unpacking them: do you have a C toolchain?
+# A release is TWO THINGS, and they sit on the one axis that actually matters to
+# somebody who just downloaded one: do you have a C toolchain?
 #
-#   love-<ver>.tar.gz          LEAN -- sources only. `make` bootstraps through the
-#                              local cc, which builds love0 and NOTHING else.
-#   love-<ver>-<arch>.tar.gz   FULL -- the same tree plus a baked love for <arch>.
-#                              `make` bootstraps through THAT and the local cc is
-#                              never called at all.
+#   SOURCE   love-<ver>.tar.gz   sources only. `make` bootstraps through the local
+#                                cc, which builds love0 and NOTHING else.
+#   SEED     love-<arch>         one executable that CARRIES its own source and IS
+#                                its own toolchain. `love source` lays the tree with
+#                                bin/love already in it; `make` there calls no
+#                                ambient compiler at all.
 #
-# ⚠ AND BOTH ANSWER THE SAME BINARY, which is the whole claim and is not a thing we
+# ⚠ AND THEY ANSWER THE SAME BINARY, which is the whole claim and is not a thing we
 # had to engineer: the local cc only ever builds `love0` (host/build.mk), and every
 # object in the shipped binary is mooncc's, compiled by love0 waking mooncc0.image.
 # So the bootstrap compiler is a scaffold that leaves no trace in the product --
 # which is exactly what test_fixpoint already asserts to the byte, and what its DDC
 # leg (a foreign-compiled love0) was audited for. `make test_distboot` is that claim
 # stated over the artifacts rather than over the tree.
+#
+# ⚠ THERE WAS A THIRD, and it is retired: a FULL tarball, the source tree with a
+# baked love laid into bin/. The seed does that job strictly better -- one file
+# instead of an archive, nothing to unpack it with, and the same bytes at the far
+# end -- so the fat tarball was a second way to say what the seed already says, and
+# a third leg of every release gate to keep honest.
 #
 # The archive is OURS end to end -- lib/tar.l and lib/gz.l -- so cutting a release
 # needs neither `tar` nor `gzip` on the box. ⚠ our coder writes the FIXED Huffman
@@ -150,11 +156,11 @@ dist_vcs  := $(shell git -C $(R) describe --always --dirty 2>/dev/null)
 dist_ver  := $(dist_base)$(if $(dist_vcs),+g$(dist_vcs),)
 dist_stamp ?= 0
 dist_stage = out/dist/stage
-dist_src_tgz  = out/dist/love-$(dist_ver).tar.gz
-dist_full_tgz = out/dist/love-$(dist_ver)-$a.tar.gz
-dist-src:  $(dist_src_tgz)
-dist-full: $(dist_full_tgz)
-dist-rel:  dist-src dist-full        # both, the usual cut
+dist_source = out/dist/love-$(dist_ver).tar.gz
+dist_seed   = out/dist/love-$a
+dist-source: $(dist_source)
+dist-seed:   $(dist_seed)
+dist:        dist-source dist-seed   # a release is both
 
 # ⚠ wasm/love.js is EMSCRIPTEN'S OUTPUT, committed so github pages can serve a repl
 # (wasm/Makefile calls it "the COMMITTED artifact"). It stays in the repo for exactly
@@ -211,24 +217,24 @@ out/dist/.staged-$(dist_ver): force_stage $(ho)/love
 # blob it embeds is the same archive and not a re-pack that has to coincide.
 have_git := $(shell git -C $(R) rev-parse --is-inside-work-tree 2>/dev/null)
 ifneq ($(have_git),)
-$(dist_src_tgz): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l tools/tgz.l
+$(dist_source): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l tools/tgz.l
 	@echo TGZ	$(abspath $@)
 	@rm -f $@
 	@$(ho)/love tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
 else
-$(dist_src_tgz):
+$(dist_source):
 	@echo "dist: no .git here and no $@ --" >&2
 	@echo "dist: an extracted tree rebuilds from the archive 'love source' laid;" >&2
 	@echo "dist: re-extract if it went missing." >&2
 	@exit 1
 endif
 
-# THE SOURCE BLOB: the lean tarball laid into an object (tools/mksrc.l), so the
+# THE SOURCE BLOB: the source tarball laid into an object (tools/mksrc.l), so the
 # artifact hands out its own source with no second download and no `tar xf` -- love
 # `source` inflates it. host/src.c defines the pair WEAK and empty, so this object's
 # STRONG definitions override them at the link and a plain `make host` needs none of
 # it. ⚠ holo names its arches ($a is uname's, and they disagree on x86_64).
-# ⚠ AND THESE TWO RULES MUST SIT BELOW $(dist_src_tgz)'s DEFINITION. A prerequisite
+# ⚠ AND THESE TWO RULES MUST SIT BELOW $(dist_source)'s DEFINITION. A prerequisite
 # list is expanded where it is WRITTEN: above the definition it expands to nothing,
 # make never builds the tarball, and only the recipe -- expanded later, when the
 # variable is set -- names a file that was never cut. It fails as a missing archive,
@@ -238,29 +244,19 @@ src_arch = arm64
 else
 src_arch = x64
 endif
-out/dist/src-$a.o: $(dist_src_tgz) tools/mksrc.l $(ho)/love
-	@$(ho)/love tools/mksrc.l $(dist_src_tgz) $@ $(src_arch)
+out/dist/src-$a.o: $(dist_source) tools/mksrc.l $(ho)/love
+	@$(ho)/love tools/mksrc.l $(dist_source) $@ $(src_arch)
 # ⚠ THIS LINKS, where it used to `cp` the host binary. A section cannot be injected
 # into a finished ELF, so the artifact is now its own link -- $(moon_o) plus the blob
 # -- and only then baked. The layout stays load-bearing the other way: .image must
 # still END the segment for `bake` to grow it at the tail (host/image.c's bake_tail
 # refuses otherwise), which it does, the blob riding .rodata well below it.
-out/dist/love-$a: $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l $(ho)/love
+$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l $(ho)/love
 	@echo DIST	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -o $@
 	@LOVE_BAKE_LOAD=out/dist/.dist-cat.l ./$@ bake
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
-
-# the full artifact is the lean one plus ONE FILE, so it is the same stage with the
-# baked binary laid beside it -- not a second pipeline.
-$(dist_full_tgz): out/dist/.staged-$(dist_ver) out/dist/love-$a lib/tar.l lib/gz.l tools/tgz.l
-	@echo TGZ	$(abspath $@)
-	@rm -f $@
-	@mkdir -p $(dist_stage)/love-$(dist_ver)/bin
-	@cp out/dist/love-$a $(dist_stage)/love-$(dist_ver)/bin/love
-	@$(ho)/love tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
-	@rm -rf $(dist_stage)/love-$(dist_ver)/bin
 
 # ==== dist_cross: the TWIN artifact (the other elf arch) ====
 # the same door for the machine you are not on: every TU through `mooncc -t`,

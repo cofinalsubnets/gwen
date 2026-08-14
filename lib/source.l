@@ -1,6 +1,6 @@
 ; lib/source.l -- `love source [DIR]`, the artifact handing out its own source.
 ;
-; the full artifact carries the lean tarball in .rodata (tools/mksrc.l lays it,
+; the seed carries the source tarball in .rodata (tools/mksrc.l lays it,
 ; host/src.c answers it), so there is no second download and no `tar xf`: the binary
 ; you ran IS the source distribution. doc/dist.md.
 ;
@@ -11,7 +11,7 @@
 ; takes a bin/love beside the tree as the C compiler ($(origin CC), bundled_love), so
 ; the unpacked tree builds with the binary that carried it and touches no ambient cc.
 ; Source alone would unpack fine and then fall back to whatever compiler the box had,
-; which is exactly the claim the full artifact exists to make good on.
+; which is exactly the claim the seed exists to make good on.
 ;
 ; ⚠ the top directory comes from THE ARCHIVE, never from love-version: the tarball's
 ; own name is what the paths inside it say, and deriving it twice is how the two come
@@ -31,7 +31,7 @@
                    (: c (src-head (tar-get <es 'nom ""))
                       (? ((c = ".") || (c = "")) (src-top >es) c)))
 
-   ; ⚠ THE ARCHIVE ITSELF RIDES ALONG, at the path $(dist_src_tgz) names. An extracted
+   ; ⚠ THE ARCHIVE ITSELF RIDES ALONG, at the path $(dist_source) names. An extracted
    ; tree has no .git, and the stage is `git checkout-index` -- so it cannot RE-CUT the
    ; tarball, and `make dist` there dies "not a git repository". Laying the very bytes we
    ; carried means the rebuilt seed binary embeds the SAME archive, so it comes out

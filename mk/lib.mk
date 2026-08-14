@@ -39,7 +39,7 @@ lib: $(lib_h) $(gl0_h)
 # SILENTLY drops a baked service (an empty holo.h => `assemble` unbound => the glaze emits
 # nothing => a corrupt native). ⚠ and the temp takes the PID: the ports RECURSE onto these,
 # so -j runs the recipe twice at once and one shared temp is renamed out from under the other.
-# ⚠ the lcat is run by love0 NORMALLY and by the BUNDLED love when a full artifact laid one
+# ⚠ the lcat is run by love0 NORMALLY and by the BUNDLED love when a seed laid one
 # beside the tree: love0 is not built at all there (see ./Makefile's bundled_love).
 # ⚠ AND THE PRELOAD BELONGS TO LOVE0 ALONE. `-l love/prel.l` feeds prel's SOURCE to a
 # pre-egg love, which is the only kind that can read it: prel.l:19 calls `(tray 0)`, and
@@ -123,6 +123,6 @@ out/lib/love_version.h: force_version
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
 
 # the lcat'd headers are PRODUCED BY running the lcat love, so re-lay them whenever it
-# moves. ⚠ EMPTY when a full artifact bundled one: love0 is never built there, and naming
+# moves. ⚠ EMPTY when a seed bundled one: love0 is never built there, and naming
 # it as a prerequisite would build it for no reason -- the lane the artifact exists to skip.
 $(lib_h) $(holo_h) $(ld_h) out/lib/rune.h: $(if $(bundled_love),,$(love0))

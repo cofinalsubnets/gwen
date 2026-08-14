@@ -653,22 +653,22 @@ $(eval $(call moon_pkg,lua,LUASRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 $(eval $(call moon_pkg,gzip,GZIPSRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,bzip2,BZIP2SRC,host out/host$(hsuf)/mooncc))
-# test_distboot -- THE RELEASE CLAIM: take any of the three artifacts, type make, get
-# the same binary. Three complete bootstraps (minutes, not seconds), and the two that
-# claim to need no toolchain run with cc/gcc/clang shadowed by scripts that fail
-# loudly, so "the bundled love was the compiler" is proved rather than assumed. The
-# third artifact carries its own source in .rodata and lays it with `love source`.
-# Opt-in, by name -- and the reason the claim can hold at all is that the local cc
-# builds love0 and nothing else (see the script).
+# test_distboot -- THE RELEASE CLAIM: take either artifact, type make, get the same
+# binary. SOURCE bootstraps through the machine's own cc; SEED carries its source in
+# .rodata, lays it with `love source`, and builds with cc/gcc/clang shadowed by scripts
+# that fail loudly -- so "the bundled love was the compiler" is proved, not assumed.
+# Then the circle: the seed rebuilds ITSELF, byte for byte. Minutes, opt-in, by name --
+# and the reason the claim can hold at all is that the local cc builds love0 and
+# nothing else (see the script).
 # test_bakerep -- A BAKE IS A FUNCTION OF THE TREE. Seconds, and it rides the slow gate
 # because test_distboot proves the same law over the whole circle but is opt-in and
 # minutes long; a regression would otherwise wait for a release to surface.
 test_bakerep: host
 	@echo TEST test/gate/bakerep.sh
 	@sh test/gate/bakerep.sh $(ho)
-test_distboot: dist-rel dist
+test_distboot: dist
 	@echo TEST test/gate/distboot.sh
-	@sh test/gate/distboot.sh $(dist_src_tgz) $(dist_full_tgz) out/dist/love-$a $(ho)/love
+	@sh test/gate/distboot.sh $(dist_source) $(dist_seed) $(ho)/love
 # test_gz -- lib/tar.l + lib/gz.l against the two programs they replace. The LAWS are
 # test/host/gz.l (in test_hostnif, needing nothing outside the tree); this is the half
 # only the outside world can say, and it is a separate gate because a coder and a

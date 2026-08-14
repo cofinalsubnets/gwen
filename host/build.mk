@@ -182,7 +182,7 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # static, so that flavor is opt-in. One link rule, two names -- `love` and the candidate.
 # ⚠ TWO SHAPES, and the second builds no bootstrap at all. Normally love0 wakes
 # mooncc0.image, the image that breaks the self-host circle. With a BUNDLED love beside the
-# tree (a full artifact's own binary -- ./Makefile's bundled_love) there is no circle: that
+# tree (the binary a seed laid beside itself -- ./Makefile's bundled_love) there is no circle: that
 # binary already carries mooncc as a verb, so it compiles the tree directly and love0,
 # mooncc0.image and the lit-laid 0.h twins are never made. moon0_dep carries the difference
 # into the rules below, so nothing names an image that will not exist.

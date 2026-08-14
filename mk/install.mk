@@ -114,14 +114,14 @@ endif
 # ⚠ and there is deliberately NO `current` symlink yet: which version is live is a
 # decision we have not made, and quietly picking one here would make it by accident.
 .PHONY: install-src
-install-src: $(dist_src_tgz)
+install-src: $(dist_source)
 	@mkdir -p $d/pkg $d/src
-	@cp -p $(dist_src_tgz) $d/pkg/
-	@echo INSTALL	$(abspath $d)/pkg/$(notdir $(dist_src_tgz))
+	@cp -p $(dist_source) $d/pkg/
+	@echo INSTALL	$(abspath $d)/pkg/$(notdir $(dist_source))
 	@if [ -d "$d/src/love-$(dist_ver)" ]; then \
 	   echo "  install-src: $d/src/love-$(dist_ver) exists -- left alone (delete it to re-lay)"; \
 	 else \
-	   $(ho)/love tools/tgz.l x $(dist_src_tgz) $d/src >/dev/null \
+	   $(ho)/love tools/tgz.l x $(dist_source) $d/src >/dev/null \
 	     && echo "  install-src: source laid at $d/src/love-$(dist_ver)"; fi
 
 install: $(installs)
