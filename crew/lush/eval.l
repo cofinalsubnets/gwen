@@ -243,9 +243,13 @@
              (: st (? >argv (sh-int <>argv) (sh-status ()))
                 (sh-leave st))
            (cmd = "cd")
+             ; ⚠ CHARM?, NEVER A TRUTH TEST. chdir answers () on success and the ERRNO on
+             ; failure -- and an errno is negative, so it is RED, so `!r` reads a failure as
+             ; a success and `cd nowhere` returned 0 with no word said. `cd build && make`
+             ; then ran make wherever you already were. The KIND is what separates them.
              (: t (? >argv <>argv ("" + (getenv "HOME")))
                 r (chdir t)
-                (? !r 0 (: _ (say err ("lush: cd: " + (t + "\n"))) 1)))
+                (? (charm? r) (: _ (say err ("lush: cd: " + (t + "\n"))) 1) 0))
            (cmd = "export") (: _ (each >argv sh-export) 0)
            ; `command -v W` -- the probe every configure-shaped script opens with, and a
            ; SPECIAL BUILTIN, so it was forking and answering ENOENT: 12 of them in one
