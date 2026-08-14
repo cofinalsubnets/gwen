@@ -139,7 +139,18 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
   mooncc -fir=lvm_ -fno-ir=lvm_arg,lvm_quo # all but the load family
   mooncc -fno-ir=ai_ …                     # everything except ai_
   mooncc -fir= …                           # everything, no exceptions
+  mooncc -fir …                            # ..the same, bare
+  mooncc -fir=lvm_ -fno-ir …               # nothing: bare -fno-ir wins from either end
   ```
+
+  **Bare, they fall out of the algebra rather than needing a rule.** `-fir` is the empty
+  *positive*, which every name carries as a prefix, so it opens the set from anywhere;
+  `-fno-ir` is the empty *negative*, and since negatives carve after positives whatever their
+  order, it empties the record from either end and beats a later `-fir=`. ⚠ before they were
+  named they matched the advisory `-f` family and were accepted in **silence**, answering a
+  binary with no record at all. ⚠ an empty set lays **no symbol**, never one holding `()` — a
+  reader finding the symbol would conclude the compiler had written down that there was
+  nothing, which is a different claim.
 
   **It is a debugging instrument before it is a JIT input** — the compiler's IR sitting beside
   the code it emitted, for whoever opens the binary. Read as one it already found a bug in

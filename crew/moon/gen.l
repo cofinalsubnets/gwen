@@ -8451,9 +8451,13 @@
               (? (fnlab? f) (go >l <>f () (? (nil? nm) rows (row nm acc rows)))
                  (nil? nm) (go >l nm acc rows)
                  (go >l nm (f >< acc) rows))))
-       txt (show (rev (go fs () () ())))
+       rows (rev (go fs () () ()))
+       txt (show rows)
        (bts i acc) (? (i < 0) acc (bts (i - 1) (txt i >< acc)))
-       (bts (tally txt - 1) '(0)))
+       ; ⚠ an EMPTY set lays no symbol at all, rather than one holding "()". `-fno-ir` asks
+       ; for no record, and a record saying it has nothing is not the same answer -- a reader
+       ; would find the symbol and conclude the compiler wrote down that there was nothing.
+       (? (two? rows) (bts (tally txt - 1) '(0)) ()))
    (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs) | ()
     (: r (cgen-core ast stbl sigs weaks xtra tgt)
        (? (gripe? r) r                               ; a named cause rides out (guard before two?, a gripe is a chain)

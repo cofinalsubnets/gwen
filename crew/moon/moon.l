@@ -42,7 +42,7 @@
    ; hard way (the installed love walked out/lib instead of its own nest).
    (mseat _) (: x (readlink "/proc/self/exe")
                 (? (string? x) (cdir x + "../lib/love/moon/") ()))
-   (mroots _) (: s (mseat ()) (? (string? s) `("crew/moon/" s) '("crew/moon/")))
+   (mroots _) (: s (mseat ()) (? (string? s) ["crew/moon/" s] '("crew/moon/")))
    ; the runtime home: the FIRST root that actually carries the sources. by
    ; READ, not by a name test -- presence is the wrapper (uread answers
    ; (1 text), an absent file the zero point), and an empty core.c would be
@@ -69,12 +69,12 @@
     (: ours (map (\ r (r + "include/")) (mroots ())                          ; our headers (stdarg.h ..) win for <>
              + (? nsi () '("/usr/include/")))                                ; -nostdinc: no glibc tail at all
        dirs (? sys? (is + ours)
-                (`(srcdir "") + is + ours))
+                ([srcdir ""] + is + ours))
        (go ds) (? !(two? ds) ()
                   (: r (uread (<ds + name))
                      (? (two? r)
                         (: hd (cdir (<ds + name))
-                           `(1 <>r (\ n2 s2 (incload nsi is hd n2 s2))))
+                           [1 <>r (\ n2 s2 (incload nsi is hd n2 s2))])
                         (go >ds))))
        (go dirs))
    (el l i) (? (i < 1) <l (el >l (i - 1)))
@@ -90,20 +90,23 @@
    ; the target: 'x64 (the default), 'arm64, or 'thumb2 (ARMv7E-M / Cortex-M7),
    ; picked by -t. the arch predefine (__x86_64__ / __aarch64__ / __arm__) rides
    ; the -D channel so cpp stays target-blind.
-   (totgt s) (? ((s = "x64") || (s = "amd64")) 'x64
-                ((s = "arm64") || (s = "aarch64")) 'arm64
-                ((s = "thumb2") || (s = "cortex-m7")) 'thumb2
-                ((s = "thumb1") || (s = "cortex-m0")) 'thumb1   ; ARMv6-M (RP2040 / Cortex-M0+)
-                ((s = "thumb2sp") || (s = "playdate")) 'thumb2sp   ; ARMv7E-M with an SP-only FPU (STM32F746): f64 softens to __aeabi_*
-                ((s = "riscv64") || (s = "riscv") || (s = "rv64")) 'riscv64     ; RV64IMFD LP64 (the pine64 ox64 / qemu-virt)
-                (udie 2 ("cc: unknown target " + s + " (x64 | arm64 | thumb2 | thumb2sp | thumb1 | riscv64)")))
+   (totgt s) (name s @
+    ('x64 | 'amd64)             'x64
+    ('arm64 | 'aarch64)         'arm64
+    ('thumb2 | 'cortex-m7)      'thumb2
+    ('thumb1 | 'cortex-m0)      'thumb1
+    ('thumb2sp | 'playdate)     'thumb2sp
+    ('riscv64 | 'riscv | 'rv64) 'riscv64
+                                (udie 2 ("cc: unknown target " + s)))
+
    ; the arch predefines, BOTH spellings where gcc gives two -- pdclib's config asks
    ; `defined(__x86_64)` for its varargs lane, and one spelling missing reads as an
    ; unsupported machine rather than as a compiler that only knows the other word.
-   (archdefs tgt) (? (id? tgt 'arm64) '("__aarch64__")
-                     (member? tgt '(thumb2 thumb2sp thumb1)) '("__arm__" "__arm")
-                     (id? tgt 'riscv64) '("__riscv")
-                     '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
+   (archdefs tgt)
+   (tgt @ 'arm64                          '("__aarch64__")
+          'riscv64                        '("__riscv")
+          ('thumb2 | 'thumb2sp | 'thumb1) '("__arm__" "__arm")
+                                          '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
    ; the gcc-shaped predefine table (doc/moon-c-gaps: the predefine surface) --
    ; the <stdint>/<limits>/<float.h> family a library config reads instead of
    ; probing: pdclib, gnulib and musl typedef straight off these names. one
@@ -252,8 +255,8 @@
        _ (? (okv? ps) () (ccdie ps src ("cc: parse error in " + src)))
        ps)
    ; the parser's static/section tablets, threaded to the gen as one list
-   (pxtra ps) `((el ps 5) (el ps 6) (el ps 7) (el ps 8) (el ps 9) (el ps 10) (el ps 11) (el ps 12)
-                (el ps 13))   ; sfns svars sects aliases aligns AINLS NOINLS CONSTS RSTRS
+   (pxtra ps) [(el ps 5) (el ps 6) (el ps 7) (el ps 8) (el ps 9) (el ps 10) (el ps 11) (el ps 12)
+                (el ps 13)]   ; sfns svars sects aliases aligns AINLS NOINLS CONSTS RSTRS
    ; ..and the driver's own word rides on the end of that same bag (-fno-inline, index 9):
    ; the gen's option list is what this is, the parser just supplies most of it
    ; a relocatable object: text/data/.bss/ai_nifs/.image sections + symbols + relocations
@@ -266,10 +269,10 @@
    ; the protocol's. objsecs is the door that takes them.
    (cc-objbytes src is ds tgt nsi ni fir)
     (: ps (cc-parse src is ds tgt nsi)
-       ob (cgen-obj <>ps <>>ps <>>>ps (el ps 4) ((pxtra ps) + [ni] + [fir]) tgt)
+       ob (cgen-obj <>ps <>>ps <>>>ps (el ps 4) (pxtra ps + [ni] + [fir]) tgt)
        _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
-       xs (map (\ x (objsec-named <x <>x <>>x)) (el ob 8)
-           + map (\ x (objsec-code <x <>x <>>x)) (el ob 11))     ; ..and the fns that named a section
+       xs (map (\ [a b c] (objsec-named a b c)) (el ob 8)
+           + map (\ [a b c] (objsec-code a b c)) (el ob 11))     ; ..and the fns that named a section
        ; the two writers, one shape: the standard set for the width, plus whatever
        ; the TU named. ⚠ arm32 has no .image lane and no LOCAL FUNC symbols for
        ; statics -- objsecs3 refuses the first, and (el ob 7) simply doesn't ride.
@@ -354,7 +357,7 @@
                (map (\ p (: r (uread p)
                             _ (? (two? r) 0 (udie 1 ("cc: cannot open " + p)))
                             _ (? (ld-ar? <>r) 0 (udie 1 ("cc: not an archive: " + p)))
-                            `(p <>r)))
+                            [p <>r]))
                     paths)
                tgt))
    ; -- THE RUNTIME CACHE. a member must be COMPILED to know what it defines, so
@@ -384,13 +387,15 @@
        d (? (string? h) (h + "/.love/cache/moon/") ())
        (? ((string? d) && (sdir? (stat d))) d ()))
    ; the input-name predicates, ahead of every reader of them.
-   (dota? p) (: n (tally p) ((2 < n) && (p (n - 2) = 46) && (p (n - 1) = 97)))
-   (dotc? p) (: n (tally p) ((2 < n) && (p (n - 2) = 46) && (p (n - 1) = 99)))
-   (doto? p) (: n (tally p) ((2 < n) && (p (n - 2) = 46) && (p (n - 1) = 111)))
-   (dotim? p) (: n (tally p) ((6 < n) && (snip p (n - 6) n = ".image")))
+   (dota? p) (: n (tally p) (2 < n && p (n - 2) = 46 && p (n - 1) = 97))
+   (dotc? p) (: n (tally p) (2 < n && p (n - 2) = 46 && p (n - 1) = 99))
+   (doto? p) (: n (tally p) (2 < n && p (n - 2) = 46 && p (n - 1) = 111))
+   (dotim? p) (: n (tally p) (6 < n && snip p (n - 6) n = ".image"))
    ; the build tree keeps the images in the love's own directory, an installed
    ; nest one rung over in lib/love/ -- the two seats mseat already knows.
-   (mcims d) (map (\ f `(f (stat (d + f)))) (sort (filter dotim? (readdir d))))
+   ; ⚠ NOT point-free: the mapped lambda reads `d` to build the path it stats, so dropping
+   ; the parameter leaves that read free -- `;; missing d`, at the mooncc0 bake.
+   (mcims d) (map (\ f [f (stat (d + f))]) (sort (filter dotim? (readdir d))))
    ; a directory's whole text, names and bytes, sorted and recursive. ⚠ the
    ; HEADERS are an input too: an edited stdio.h changes what nolibc.c means, and
    ; hashing the .c alone would not see it.
@@ -416,11 +421,11 @@
    (mcid home)
     (: x (readlink "/proc/self/exe")
        d (? (string? x) (cdir x) ())
-       w (? (member? 'love-image (names ())) `(1 (ev 'love-image)) ())
+       w (? (member? 'love-image (names ())) [1 (ev 'love-image)] ())
        ims (? (two? w) (: im <>w
                           (? !(string? im) ()
                              (im = "<baked>") `("<baked>")
-                             `(`(im (stat im)))))
+                             [[im (stat im)]]))
               (? (string? d) ((mcims d) + (mcims (d + "../lib/love/"))) ()))
        src (? (two? ims) ((mctree (home + "include/")) + (mctree (home + "lib/"))) "")
        (? !(two? ims) ()
@@ -431,18 +436,18 @@
    (mcget d f mag)
     (: r (uread (d + f))
        s (? (two? r) <>r "")
-       (? ((tally mag <= tally s) && (snip s 0 (tally mag) = mag)) `(1 s) ()))
+       (? ((tally mag <= tally s) && (snip s 0 (tally mag) = mag)) [1 s] ()))
    ; write beside the entry, then rename ONTO it: two links racing under make -j
    ; land the same bytes either way, and neither can read a half-written one.
    ; every failure here is silent by design -- a read-only home costs speed, and
    ; a cache is never owed a link's correctness.
    (mcput d f bs)
     (: p (d + f)
-       t ((p + ".") + show (getpid ()))
+       t (p + "." + show (getpid ()))
        q (open t "w")
-       _ (? q (: _ (say q bs) (close q)) 0)
-       _ (? (q && !(rename t p)) 0 (unlink t))
-       0)
+       _ (q ? (say q bs, close q))
+       _ (q && !(rename t p) ? () (unlink t))
+       ())
    ; the bound, and the cache keeps it ITSELF: swept on every link, hit or miss,
    ; so a folder grown fat under an older policy trims on the next one rather than
    ; waiting for a rebuild to notice it. nothing here knows which generations are
@@ -457,7 +462,7 @@
        ; carries the shim's love+mooncc.image and the build's love0+mooncc0.image
        ; as two distinct compilers -- so the room here is deliberate, not slack.
        fs (foldl (\ a f (: st (stat (d + f))
-                          (? ((dota? f) && (two? st)) (a + `(`((el st 1) f))) a)))
+                          (? (dota? f && two? st) (a + [[(el st 1) f]]) a)))
                  () (readdir d))
        (go l k) (? !(two? l) 0
                    (: e <l
@@ -469,9 +474,9 @@
    ; cannot open is invisible, and the link is the one that happens today, at
    ; today's price.
    (rtarch cd id home tgt)
-    (: k (? ((string? cd) && (string? id)) (sha256 ((id + "\n") + show tgt)) ())
+    (: k (? (string? cd && string? id) (sha256 $ id + "\n" + show tgt) ())
        hit (? (string? k) (mcget cd (k + ".a") "!<arch>\n") ())
-       _ (? (two? hit) (utime ((cd + k) + ".a") (clock ())) 0)   ; the sweep orders by use
+       _ (? (two? hit) (utime (cd + k + ".a") (clock ())) 0)   ; the sweep orders by use
        bs (? (two? hit) <>hit
              (: b (arbytes (rtmems home tgt))
                 _ (? (string? k) (mcput cd (k + ".a") b) 0)
@@ -490,21 +495,20 @@
    ; members of one basename, and an archive resolves by name alone.
    (rtmems home tgt)
     (: ndir (home + "lib/nolibc/") mdir (home + "lib/math/") inc (home + "include/")
-       (dotobj n) (? (dotc? n) ((snip n 0 (tally n - 2)) + ".o") n)
+       (dotobj n) (? (dotc? n) (snip n 0 (tally n - 2) + ".o") n)
        (nlmems d)
         (foldl (\ a e (: p (d + e)
-                         (? (dotc? e) (a + `(`((dotobj e) p)))
+                         (? (dotc? e) (a + [[(dotobj e) p]])
                             (sdir? (stat p))
-                             (a + foldl (\ a2 f (a2 + `(`((dotobj (e + ("_" + f))) (p + ("/" + f))))))
+                             (a + foldl (\ a2 f (a2 + [[(dotobj $ e + "_" + f) (p + "/" + f)]]))
                                         () (sort (filter dotc? (readdir p))))
                             a)))
                () (sort (readdir d)))
-       ((map (\ q `(<q (string (cc-objbytes <>q `(inc) () tgt () () ()))))
+       ((map ((a b) \ [a (string (cc-objbytes b [inc] () tgt () () ()))])
              (nlmems ndir))
-        + map (\ f `(("m_" + dotobj f) (string (cc-objbytes (mdir + f) `(mdir inc) () tgt () () ()))))
+        + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) [mdir inc] () tgt () () ()))])
               (sort (filter dotc? (readdir (home + "lib/math"))))
-        + (? (member? tgt '(x64 arm64 riscv64))
-             `(`("mksys.o" (string (mksys-bytes tgt)))) ())))
+        + (member? tgt '(x64 arm64 riscv64) ? [["mksys.o" (string (mksys-bytes tgt))]])))
    (rtpull srcs tgt nostd)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
@@ -535,9 +539,9 @@
              <pr)))
    (cc-link ins dst is ds tgt pie org dorg nostd nsi ni fir)
     (: ars (filter dota? ins)
-       srcs (map (\ f (? (dotc? f) `(f (string (cc-objbytes f is ds tgt nsi ni fir)))
+       srcs (map (\ f (? (dotc? f) [f (string (cc-objbytes f is ds tgt nsi ni fir))]
                          (doto? f) (: r (uread f)
-                                      (? (two? r) `(f <>r)
+                                      (? (two? r) [f <>r]
                                          (udie 1 ("cc: cannot open " + f))))
                          (udie 2 ("cc: not a .c/.o/.a input: " + f))))
                  (filter (\ f !(dota? f)) ins))
@@ -556,12 +560,12 @@
        ; it across at boot off __data_load__. a board with a real map (a ROM
        ; header at a fixed offset, a lane order of its own) writes its own link
        ; driver over ldbare32 instead, the way port/inle/klink.l does over ldkern.
-       runs (? (charm? dorg) `(`('at org 'text 'rodata 'nifs)
-                               `('copy dorg 'data 'bss))
-              `(`('at org 'text 'rodata 'data 'nifs 'bss)))
-       c9 (? (id? tgt 'arm64) crt0-a64 (id? tgt 'riscv64) crt0-rv crt0)
+       runs (? (charm? dorg) [['at org 'text 'rodata 'nifs]
+                              ['copy dorg 'data 'bss]]
+              [['at org 'text 'rodata 'data 'nifs 'bss]])
+       c9 (tgt @ 'arm64 crt0-a64 'riscv64 crt0-rv crt0)
        all (? arm? srcs
-              (`("crt0" (string (objelf tgt c9 () '("__ai_start") () '("__ai_start") () () () () ()))) >< srcs))
+              (["crt0" (string (objelf tgt c9 () '("__ai_start") () '("__ai_start") () () () () ()))] >< srcs))
        ; the archives first, then whatever the runtime still owes: a library the
        ; line NAMED is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
@@ -573,12 +577,12 @@
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n (tally s)
-       hex ((2 < n) && (s 0 = 48) && ((s 1 = 120) || (s 1 = 88)))
+       hex (2 < n && s 0 = 48 && (s 1 = 120 || s 1 = 88))
        (go i acc b) (? (n <= i) acc
                        (: c (s i)
-                          d (? ((48 <= c) && (c <= 57)) (c - 48)
-                               ((97 <= c) && (c <= 102)) (c - 87)
-                               ((65 <= c) && (c <= 70)) (c - 55)
+                          d (? (48 <= c <= 57) (c - 48)
+                               (97 <= c <= 102) (c - 87)
+                               (65 <= c <= 70) (c - 55)
                                (udie 2 usage))
                           _ (? (d < b) 0 (udie 2 usage))
                           (go (i + 1) ((acc * b) + d) b)))
@@ -592,14 +596,14 @@
    ; -nostdlib family turns the driver's libc off (n9 -- the runtime pull in
    ; cc-link), and any other dash arg refuses. -> (c idirs defs out ins tgt
    ; pie org nostd).
-   (glu? a ch) ((2 < tally a) && (a 0 = 45) && (a 1 = ch))
+   (glu? a ch) (2 < tally a && a 0 = 45 && a 1 = ch)
    ; the cc-driver tolerance: every cc accepts the advisory families -- warnings,
    ; -O, -g, -pipe, -std= (we speak the one dialect we speak), -static (the
    ; output already is), the -f codegen-hygiene family -- so `CC=mooncc` drives
    ; a make recipe written for gcc/clang unchanged. what would CHANGE the
    ; artifact stays loud: -shared, -m.., and -Wl,/-Wa,/-Wp, (their payload is
    ; real arguments; dropping them is the silent no-op wearing a cc face).
-   (pfx? a p) (: n (tally p) ((n <= tally a) && (snip a 0 n = p)))
+   (pfx? a p) (: n (tally p) (n <= tally a && snip a 0 n = p))
    ; -fir= / -fno-ir= accumulate into ONE comma list, a leading `-` on a part being the
    ; subtraction gen.l reads. ⚠ presence is the wrapper's job here too: an unset f9 is (),
    ; and `-fir=` with an empty prefix is a legitimate value meaning EVERY function -- so the
@@ -619,7 +623,7 @@
    ; saying so by refusing the whole compile helps nobody. ⚠ GLUED only (glu? wants
    ; a third charm), so a bare `-l` still refuses rather than eating the next word
    ; as a library name and the word after it as an input.
-   (tol? a) ((a = "-pipe") || (a = "-static") ||
+   (tol? a) (a = "-pipe" || a = "-static" ||
              pfx? a "-g" || pfx? a "-O" || pfx? a "-std=" ||
              pfx? a "-f" || glu? a 108 || glu? a 76 ||
              (pfx? a "-W" &&
@@ -634,7 +638,7 @@
                 (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r (n - 1)))
                 (go 0 0 + "o"))
    (flags as c is ds o ins t9 p9 g9 n9 x9 d9 i9 f9)
-    (? !(two? as) `(c (rev is) (rev ds) o (rev ins) t9 p9 g9 n9 x9 d9 i9 f9)
+    (? !(two? as) [c (rev is) (rev ds) o (rev ins) t9 p9 g9 n9 x9 d9 i9 f9]
        (: a <as r >as
           (? (a = "-c") (flags r 1 is ds o ins t9 p9 g9 n9 x9 d9 i9 f9)
              (a = "-pie") (flags r c is ds o ins t9 1 g9 n9 x9 d9 i9 f9)
@@ -666,6 +670,16 @@
              (pfx? a "-fir=") (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9 (irjoin f9 (snip a 5 (tally a))))
              (pfx? a "-fno-ir=") (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9
                                         (irjoin f9 (irneg (snip a 8 (tally a)))))
+             ; ⚠ BARE, and the algebra gives them their meaning rather than a rule doing it:
+             ; `-fir` is the EMPTY POSITIVE, which every name has as a prefix, so it opens the
+             ; set wherever it sits -- `-fir=` in front. `-fno-ir` is the empty NEGATIVE, and
+             ; since the negatives carve after the positives whatever their order, it empties
+             ; the set from anywhere -- `-fno-ir=` at the end, and it beats a later `-fir=`
+             ; without anyone writing down that it wins. ⚠ they must be named HERE: `tol?`
+             ; swallows the whole advisory -f family, so before this both were accepted in
+             ; silence and answered a binary with no record at all.
+             (a = "-fir") (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9 (irjoin f9 ""))
+             (a = "-fno-ir") (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9 (irjoin f9 "-"))
              (glu? a 73) (flags r c (snip a 2 (tally a) >< is) ds o ins t9 p9 g9 n9 x9 d9 i9 f9)
              (glu? a 68) (flags r c is (snip a 2 (tally a) >< ds) o ins t9 p9 g9 n9 x9 d9 i9 f9)
              (glu? a 116) (flags r c is ds o ins (totgt (snip a 2 (tally a))) p9 g9 n9 x9 d9 i9 f9)
@@ -704,8 +718,9 @@
    (moon-run as)
     (trap (\ x (: r (moon-cc x) (? (charm? r) r 0))) as
           (\ a b (? (id? a 'leave) b
-                    (: _ (say err ("cc: internal error: " + show a + " " + show b))
-                       _ (put err 10) _ (flush err) 1))))
+                    (say err ("cc: internal error: " + show a + " " + show b + "\n"),
+                     flush err,
+                     1))))
    ; moon-main is the SHIMS' door and quits, exactly as it always has -- the six -e
    ; drives and seed's verb table call it straight, and a compile ends the same way
    ; through all of them.
@@ -723,26 +738,29 @@
        ; hello.c -o hello`, the most canonical cc line there is and what every
        ; configure script writes, answered undef-label printf. rung 3 gave us a
        ; linker; one exe path is the whole point of having it.
-       (? !(two? ins) (udie 2 usage)
-          o (? c (? (two? >ins) (udie 2 "cc: -o takes one input")
-                    (: _ (cc-obj <ins o is ds tgt nsi ni firp) 0))
-               (: _ (cc-link ins o is ds tgt pie org dorg nostd nsi ni firp) 0))
-          ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
-          ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT). ⚠ and a
-          ; .a is never an OUT: `mooncc a.o libgcc.a` reading as a pair would
-          ; write the library it was asked to read FROM.
-          (two? >ins &&
-           !(two? >>ins) &&
-           !(dotc? <>ins) &&
-           !(dota? <ins) && !(dota? <>ins) &&
-           (c || (!(doto? <ins) && !(doto? <>ins))))
-           (: _ (? c (cc-obj <ins <>ins is ds tgt nsi ni firp)
-                     (cc-link `(<ins) <>ins is ds tgt pie org dorg nostd nsi ni firp)) 0)
-          c (: (go l) (? !(two? l) 0
-                         !(dotc? <l) (udie 2 ("cc: not a .c input: " + <l))
-                         (: _ (cc-obj <l (obase <l) is ds tgt nsi ni firp) (go >l)))
-               (go ins))
-          (: _ (cc-link ins "a.out" is ds tgt pie org dorg nostd nsi ni firp) 0))))
+       ; ⚠ the arms are ORDERED and two of them are not about `ins` at all, so the scrutinee
+       ; carries flag guards beside its shapes -- `(? g)` fits anything g holds for, and a
+       ; guard that fails falls through, which is the whole reason this can be one form.
+       ; What the match buys is the pair: `[a b]` IS "exactly two inputs", where the test
+       ; spelled it (two? >ins && !(two? >>ins)) and then read both back out by hand.
+       (ins @
+        []      (udie 2 usage)
+        (? o)   (? c (? (two? >ins) (udie 2 "cc: -o takes one input")
+                        (: _ (cc-obj <ins o is ds tgt nsi ni firp) 0))
+                   (: _ (cc-link ins o is ds tgt pie org dorg nostd nsi ni firp) 0))
+        ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
+        ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT). ⚠ and a
+        ; .a is never an OUT: `mooncc a.o libgcc.a` reading as a pair would
+        ; write the library it was asked to read FROM.
+        (? (!(dotc? b) && !(dota? a) && !(dota? b)
+            && (c || (!(doto? a) && !(doto? b)))) [a b])
+                (: _ (? c (cc-obj a b is ds tgt nsi ni firp)
+                          (cc-link [a] b is ds tgt pie org dorg nostd nsi ni firp)) 0)
+        (? c)   (: (go l) (? !(two? l) 0
+                             !(dotc? <l) (udie 2 ("cc: not a .c input: " + <l))
+                             (: _ (cc-obj <l (obase <l) is ds tgt nsi ni firp) (go >l)))
+                   (go ins))
+                (: _ (cc-link ins "a.out" is ds tgt pie org dorg nostd nsi ni firp) 0))))
 
 ; the SEAT: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the
