@@ -114,16 +114,29 @@
    ;   * a main that BLOCKS. a spawned `cat`, `yes`, `sleep`, `tee` is a child ^C
    ;     kills; in here ^C would kill the shell, and there is no pid for `kill %1`
    ;     to name. that is the job-control half, and it wants tasks before it widens.
-   ; that leaves the compiler, which is the one that pays: a make spends its whole
-   ; life calling it. `kore` is NOT here either, though kore-main answers -- its own
-   ; dispatcher reaches sh-main, cook-main and vi-main, so `kore sh ..` in here would
-   ; walk straight into the first failure above through a side door. widening this --
-   ; to the bare coreutil names, which is what would make the distro's shadow lane
-   ; free -- waits on the interrupt and stdin story, not on anything in this file.
-   sh-imgok '("mooncc")
+   ; `kore` is NOT here either, though kore-main answers -- its own dispatcher reaches
+   ; sh-main, cook-main and vi-main, so `kore sh ..` in here would walk straight into the
+   ; first failure above through a side door.
+   ; SO THE QUALIFYING TEST IS "CANNOT BLOCK, QUITS NOTHING, KEEPS NOTHING": bounded by
+   ; its own arguments, waiting on no fd it did not open. That is what the list below is,
+   ; and it is most of a build -- 152 of the 249 self-execs one seed-only bootstrap spent.
+   ; ⚠ one more class stays out and it is not in the three above: the tools that read
+   ; STDIN when handed no file operand (cat head tail wc sort uniq cut tr nl rev grep sed
+   ; tee xargs). Those are the next tier and they wait on the stdin story, which is a
+   ; question about ^C and a terminal rather than about anything in this file.
+   sh-imgok '("mooncc" "cc"
+              "test" "[" "true" "false" "echo" "printf" "uname" "pwd"
+              "basename" "dirname" "readlink" "seq" "ls" "cmp" "diff"
+              "mkdir" "rmdir" "rm" "ln" "touch" "chmod" "mv" "cp" "install"
+              "objcopy")
+   ; ⚠ nm/ar/ld/as are NOT here and could not be: the lane resolves a word to a GLOBAL by
+   ; name, and those four reach kore's applet table as folded values from a `:` scope that
+   ; never pins them. The guard already refuses them, so this is a note, not a bug -- but
+   ; an allow-list naming words the lane cannot reach would read as a wider claim.
    ; the words whose main is not spelled <word>-main. kore-main wants the WHOLE argv
    ; (it reads its own program seat); the rest take the args after the name.
-   sh-imgalias '(("mooncc" "moon-run") ("kore" "kore-main"))
+   sh-imgalias '(("mooncc" "moon-run") ("cc" "moon-run") ("kore" "kore-main")
+                 ("[" "bracket-main") ("objcopy" "objcopy"))
    (sh-pathdirs _)
      (: p (+ "" (getenv "PATH")) n (tally p)
         (go from k acc) (? (<= n k) (sh-rev (snip p from k >< acc))
@@ -134,6 +147,12 @@
                       (go k) (? (<= n k) 0 (= (w k) 47) 1 (go (+ k 1)))
                       (go 0))
    (sh-self? p) (: a (stat p) (&& (two? a) (= a (stat "/proc/self/exe"))))
+   (sh-whichp w)                                ; PATH's winner for w -> (1 path), or ()
+     (? (sh-slashed? w) (? (two? (stat w)) `(1 w) ())
+        (: (go l) (? !(two? l) ()
+                     (: d (? (tally <l) <l ".") p (+ d (+ "/" w))
+                        (? (two? (stat p)) `(1 p) (go >l))))
+           (go (sh-pathdirs ()))))
    (sh-onpath? w)                               ; is PATH's winner for w this binary
      (: (go l) (? !(two? l) 0
                   (: d (? (tally <l) <l ".") p (+ d (+ "/" w))
@@ -147,15 +166,22 @@
         mn (? (two? al) <>al (+ w "-main"))
         nm (intern mn)
         (? (&& (sh-smem? w sh-imgok) !(sh-slashed? w) (member? nm (names ())) (sh-ours? w))
-           (L 1 (ev nm) (= mn "kore-main"))
+           (L 1 (sh-imgwrap (ev nm) mn) (= mn "kore-main"))
            0))
+   ; ⚠ THE APPLET IS WRAPPED, because udie RAISES rather than exiting: `(scare 'leave c)`
+   ; is what the verb table's own `urun` catches, and the in-image lane reaches the applet
+   ; BARE. Unwrapped, one `test` on a bad expression escapes as an unhandled raise and
+   ; takes the whole shell down instead of failing one command. moon-run wants no wrap --
+   ; it answers its status by construction, which is why it was the safe single entry.
+   (sh-imgwrap f mn) (? ((mn = "moon-run") || !(member? 'urun (names ()))) f
+                        (\ as ((ev 'urun) f as)))
    (sh-assoc w l) (? !(two? l) 0 (= w <<l) <l (sh-assoc w >l))
    (sh-imgfn w) (: v (peep sh-imgc w 'no)
                    (? !(id? v 'no) v
                       (: f (sh-imgask w) _ (pin sh-imgc w f) f)))
 
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
-   sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false"
+   sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false" "command"
                 "read" "set" "shift" "unset" "eval" "." "wait" "local"
                 "break" "continue" "return")
    (sh-bi? nm) (sh-smem? nm sh-binames)
@@ -221,6 +247,20 @@
                 r (chdir t)
                 (? (nil? r) 0 (: _ (say err (+ "lush: cd: " (+ t "\n"))) 1)))
            (= cmd "export") (: _ (each >argv sh-export) 0)
+           ; `command -v W` -- the probe every configure-shaped script opens with, and a
+           ; SPECIAL BUILTIN, so it was forking and answering ENOENT: 12 of them in one
+           ; build, each reading as "the tool is absent". Absent is the honest answer for
+           ; ccache and objdump, which is why nothing looked broken -- but a probe that is
+           ; wrong by accident is wrong. A builtin answers its own name; a PATH word its path.
+           (= cmd "command")
+             (: a >argv
+                (? (&& (two? a) (= <a "-v"))
+                   (: w (? (two? >a) <>a "")
+                      (? (= w "") 1
+                         (sh-bi? w) (: _ (puts (+ w "\n")) 0)
+                         (: p (sh-whichp w) (? (two? p) (: _ (puts (+ <>p "\n")) 0) 1))))
+                   !(two? a) 1
+                   (sh-simple2 a ())))                 ; `command W ..` -- run W, no function lookup
            (= cmd "pwd")  (: _ (puts (+ (cwd 0) "\n")) 0)
            (= cmd "jobs") (: _ (each (sort (keys sh-jobs))
                                      (\ n (puts (sh-jobline n (sh-jobs n))))) 0)
