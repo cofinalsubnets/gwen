@@ -4748,7 +4748,17 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
                                      + 2 * (((uintptr_t)(countof(image_extra_aps) + (uintptr_t) bj)) * IMAGE_CELLW + boff)); }
  if ((uintptr_t) v < IMAGE_TBOUND(hb))
   x->fail = 1;                                                                   // a binary ptr in the index range: unencodable
- if (!x->suppress && img_wxp(x, (word) v)) x->fail = 1;                          // un-wakeable absolute (JIT/W^X/mmap)
+ if (img_wxp(x, (word) v)) {
+  if (!x->suppress) x->fail = 1;                                                 // un-wakeable absolute (JIT/W^X/mmap)
+  // ⚠ A REVERTED HUSK'S DEAD JIT ADDRESS BAKES AS A CONSTANT. The husk is ballast --
+  // every reference was redirected to the interp twin, so nothing reaches this word
+  // after a wake -- and it pointed into the glaze's W^X mmap, whose distance from the
+  // binary is ASLR-randomized. Written through, it was the LAST thing making a bake
+  // unreproducible (1110 words of the artifact, 5.5 GB from the anchor and moving by
+  // up to 933 MB a run). It is no less correct than it was: the old lane stored the
+  // address and added the BINARY's delta at wake, which never named the JIT page
+  // either. Now it is deterministic garbage instead of random garbage.
+  else return 1; }                                                               // tagged 0: decodes as a fixnum, executes never
  { uintptr_t r = (uintptr_t) v - (uintptr_t) image_immortals + IMAGE_ABS_BIAS;   // wraps below the anchor; the bias re-centres
    if (r >= 2 * IMAGE_ABS_BIAS) { x->fail = 1; return v; }                       // farther from the anchor than the bias carries
    x->nabs++;                                                                    // kept absolute: the image is now binary-specific

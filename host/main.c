@@ -1081,6 +1081,7 @@ int main(int argc, char const **argv) {
   // both readings stay available: the whole invocation, and the program's view of it.
   char const *image_load_path = NULL, *bake = NULL; // see boot(): "" = self-bake, a path = image file
   int skip = 0;
+
 #ifndef GL_BOOTSTRAP
   if (argc >= 2 && !strcmp(argv[1], "bake")) {
    if (argc >= 3) bake = argv[2], skip = 2;

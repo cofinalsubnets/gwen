@@ -49,15 +49,43 @@ static struct ai_image_guard image_guard(struct image_segs *segs) {
   return gd;
 }
 
+// `bake PATH` lays the image DIRECTLY EXECUTABLE -- ./img runs `love wake ./img args..`,
+// which is the one shape a shebang can carry (a single argument, then the file itself).
+// `env -S` rather than a baked-in path, the same spelling the tree's other shebang tools
+// install with, so the image follows love on PATH instead of pinning one build.
+// ⚠ ALWAYS WRITTEN, never a flag: a #! line the reader steps over costs the file 32 bytes
+// and an option costs every caller a decision it has no grounds to make. Reading is the
+// half that stays tolerant -- an image with no shebang loads exactly as it always did,
+// which is what keeps an already-dumped one working across this change.
+// ⚠ PADDED TO A WORD. The core reads its header at offset 0 of whatever it is handed
+// and takes the blob as `word*` straight after; an odd-length line would hand it an
+// unaligned header, which x86 tolerates and aarch64 faults on. Spaces before the
+// newline cost nothing and keep every later field where the codec expects it.
+// ⚠ and the load side skips it in the HOST, never the core: a shebang is a POSIX exec
+// convention, and love.c stays freestanding-clean. The .image section lane never has one.
+#define IMAGE_SHEBANG "#!/usr/bin/env -S love wake"
+static size_t image_shebang(char *sb, size_t cap) {
+  size_t n = (size_t) snprintf(sb, cap, "%s", IMAGE_SHEBANG);
+  while ((n + 1) % sizeof(uintptr_t)) sb[n++] = ' ';
+  sb[n++] = '\n';
+  return n;
+}
 int image_dump(struct ai *g, char const *path) {
   struct image_segs segs;
   struct ai_image_guard gd = image_guard(&segs);
   uintptr_t len = 0;
   void *buf = ai_image_save(g, &len, &gd);        // g->alloc'd; bake exits right after, so we don't free it
   if (!buf) return -2;
+  char sb[64];
+  size_t sn = image_shebang(sb, sizeof sb);
   FILE *f = fopen(path, "wb");
-  int rc = !f ? -4 : (fwrite(buf, 1, len, f) == len) ? 0 : -4;
+  int rc = !f ? -4
+         : (fwrite(sb, 1, sn, f) != sn) ? -4
+         : (fwrite(buf, 1, len, f) == len) ? 0 : -4;
   if (f) fclose(f);
+  if (!rc) {                                      // an executable image, or the #! is decoration
+    struct stat st;
+    if (!stat(path, &st)) chmod(path, (st.st_mode | 0111) & 07777); }
   return rc;
 }
 
@@ -264,7 +292,13 @@ struct ai *image_load(char const *path) {
     size_t n = (size_t) st.st_size;               // out of the page cache -- one pass, no file buffer
     void *buf = mmap(NULL, n, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
     if (buf != MAP_FAILED) {
-      g = ai_image_load(buf, (uintptr_t) n);
+      // step over a `bake -x` shebang, if the image wears one (image_dump pads the line
+      // so what follows is still word-aligned). A plain image starts at the magic.
+      size_t off = 0;
+      if (n > 2 && ((char*) buf)[0] == '#' && ((char*) buf)[1] == '!') {
+        char *nl = memchr(buf, '\n', n);
+        if (nl) off = (size_t)(nl - (char*) buf) + 1; }
+      if (off < n) g = ai_image_load((char*) buf + off, (uintptr_t)(n - off));
       munmap(buf, n); } }
   close(fd);
   return g;
