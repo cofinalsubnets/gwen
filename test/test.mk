@@ -5,7 +5,7 @@
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \
   test_filemode test_stdinbuf test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
-  test_seed test_kore test_nest test_dist test_up test_vi test_moon test_clay test_moonfuzz \
+  test_sb test_kore test_nest test_dist test_up test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_vec test_fixpoint test_raw_bake test_riscv \
   test_raw_riscv test_raw_arm64 test_thumb1 test_thumb2 test_virt test_mps2 test_mps2_t1 \
@@ -13,7 +13,7 @@
   test_rp2040 moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
-  test_holo test_as test_elf32 test_objcopy test_gz test_splice
+  test_holo test_as test_elf32 test_objcopy test_gz test_splice test_distboot test_bakerep
 
 # $(mw) -- the WARM love: the freshly-baked image woken instead of the egg compiled
 # from source (12 ms against 1.05 s). Both lanes carry the same vocabulary, so warm
@@ -194,7 +194,7 @@ test_embed: host $(ho)/mooncc
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/seedhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -308,10 +308,10 @@ test_seat: host
 	@echo TEST test/gate/seat.sh "(the file-seat lane)"
 	@sh test/gate/seat.sh $m
 
-test_seed: host out/host$(hsuf)/seed
-	@echo TEST crew/seed/seed.l + test/host/seed.l
-	@rm -rf out/host/.seedtest
-	@cat test/00-init.l test/host/seed.l | sh test/gate/run.sh seed "$(mw)" "seed: ok"
+test_sb: host out/host$(hsuf)/sb
+	@echo TEST crew/sb/sb.l + test/host/sb.l
+	@rm -rf out/host/.sbtest
+	@cat test/00-init.l test/host/sb.l | sh test/gate/run.sh sb "$(mw)" "sb: ok"
 # the kore smokes drive the BAKED image (`wake kore.image`), ~0.02s vs ~0.75s per spawn
 # over the ~68 tool runs; the argv0-symlink smoke execs the real shim, whose basename-$0
 # dispatch the wake bypasses. the synthetic "kore" argv0 keeps the exit faces unchanged.
@@ -385,6 +385,24 @@ mx: host
 	   $(mw) -l mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
 	   cmp -s $$t $$f || { mv $$t $$f; echo "LOVE	$$f"; }; \
 	 done; rm -f $$t
+# ...and the DEPENDENCY, off the same roster: a committed generated file is stale the moment
+# its table moves, and the objects that include it then rebuild from the fresh one. Without
+# this a new nifs.l row builds clean and gates GREEN with its nom still off the book -- the
+# drift diff lives in test_clay, which only test_extra reaches.
+# ⚠ the prerequisite is the TABLE ALONE, never $(m): love is built FROM these headers, so
+# naming it as a prerequisite closes the loop and make drops the lot. The recipe instead takes
+# whatever love ALREADY exists -- sound because the generator is nifs.l/mx.l themselves, and a
+# stale love lays a fresh table. A tree with no love yet is the bootstrap case: the committed
+# file is what builds the first one, so the rule stands aside and only marks it seen.
+define mx_dep
+$(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
+	@if test -x $$(m); then \
+	   $$(mw) -l $$< -e "(: _ (? $(word 4,$(subst :, ,$(1))) 0 (quit 1)) _ (puts $(word 3,$(subst :, ,$(1)))) (quit 0))" > out/.$$(@F) || exit 1; \
+	   cmp -s out/.$$(@F) $$@ || echo "LOVE	$$@ (relaid -- $$< moved)"; \
+	   mv out/.$$(@F) $$@; \
+	 else touch $$@; fi
+endef
+$(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 # test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/clay.md): for every file
 # in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. ⚠ the run PARTITIONS and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
@@ -645,6 +663,22 @@ $(eval $(call moon_pkg,lua,LUASRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 $(eval $(call moon_pkg,gzip,GZIPSRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,bzip2,BZIP2SRC,host out/host$(hsuf)/mooncc))
+# test_distboot -- THE RELEASE CLAIM: take either artifact, type make, get the same
+# binary. SOURCE bootstraps through the machine's own cc; SEED carries its source in
+# .rodata, lays it with `love source`, and builds with cc/gcc/clang shadowed by scripts
+# that fail loudly -- so "the bundled love was the compiler" is proved, not assumed.
+# Then the circle: the seed rebuilds ITSELF, byte for byte. Minutes, opt-in, by name --
+# and the reason the claim can hold at all is that the local cc builds love0 and
+# nothing else (see the script).
+# test_bakerep -- A BAKE IS A FUNCTION OF THE TREE. Seconds, and it rides the slow gate
+# because test_distboot proves the same law over the whole circle but is opt-in and
+# minutes long; a regression would otherwise wait for a release to surface.
+test_bakerep: host
+	@echo TEST test/gate/bakerep.sh
+	@sh test/gate/bakerep.sh $(ho)
+test_distboot: dist
+	@echo TEST test/gate/distboot.sh
+	@sh test/gate/distboot.sh $(dist_source) $(dist_seed) $(ho)/love
 # test_gz -- lib/tar.l + lib/gz.l against the two programs they replace. The LAWS are
 # test/host/gz.l (in test_hostnif, needing nothing outside the tree); this is the half
 # only the outside world can say, and it is a separate gate because a coder and a

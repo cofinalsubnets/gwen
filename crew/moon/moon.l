@@ -21,6 +21,15 @@
 ; crew/holo/{elf,obj,link}.l and crew/moon/{lex,cpp,parse,gen}.l; rides the
 ; u-floor (uread udie urun). its tail SEAT fires moon-main when mooncc is the program;
 ; moon-run is the same compile ANSWERING its status, for a caller staying in the image.
+;
+; ⚠ THE `use` IS LOAD-BEARING, and love0 is why. This cat is read TWICE -- once by the
+; full love to bake mooncc.image, and once by LOVE0 to bake mooncc0.image, the image that
+; breaks the self-host circle. pat rides love0's library (pat0.h is in gl0_h) but the boot
+; splices it for neither, so `@` is simply an unbound name there: without this line moon.l
+; reads fine under `love` and answers `;; missing @` under love0 -- at BAKE time, in the
+; one lane the compiler cannot be built without. asbook.l's (use 'holo) is the same shape.
+(use 'pat)
+
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""
    (cdir path) (: n (tally path)
@@ -254,11 +263,6 @@
        ps (cparse-t <>pp tgt)                 ; thread the target so parse sizes pointers/longs at the ABI width
        _ (? (okv? ps) () (ccdie ps src ("cc: parse error in " + src)))
        ps)
-   ; the parser's static/section tablets, threaded to the gen as one list
-   (pxtra ps) [(el ps 5) (el ps 6) (el ps 7) (el ps 8) (el ps 9) (el ps 10) (el ps 11) (el ps 12)
-                (el ps 13)]   ; sfns svars sects aliases aligns AINLS NOINLS CONSTS RSTRS
-   ; ..and the driver's own word rides on the end of that same bag (-fno-inline, index 9):
-   ; the gen's option list is what this is, the parser just supplies most of it
    ; a relocatable object: text/data/.bss/ai_nifs/.image sections + symbols + relocations
    ; -- the bytes (`-c` writes them; the link path feeds them to ldlink).
    ; both targets: obj.l picks the reloc vocabulary by tgt.
@@ -267,20 +271,30 @@
    ; .limine_requests is why: a bootloader SCANS for that section by name, and
    ; three of them bracket the scan, so both their EXISTENCE and their order are
    ; the protocol's. objsecs is the door that takes them.
+   ; ⚠ THE TWO WIDE TUPLES ARE NAMED ONCE, HERE -- parse.l's `tops` answers fourteen fields
+   ; and gen.l's cgen-obj twelve. `[]` is the strict arity, so a shape that gains a member is
+   ; a refusal naming the file rather than every site quietly reading its NEIGHBOUR.
+   ; the gen's option list is the parser's nine tablets plus the driver's own two words
+   ; (-fno-inline, then -fir's prefix list).
    (cc-objbytes src is ds tgt nsi ni fir)
-    (: ps (cc-parse src is ds tgt nsi)
-       ob (cgen-obj <>ps <>>ps <>>>ps (el ps 4) (pxtra ps + [ni] + [fir]) tgt)
-       _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
-       xs (map (\ [a b c] (objsec-named a b c)) (el ob 8)
-           + map (\ [a b c] (objsec-code a b c)) (el ob 11))     ; ..and the fns that named a section
-       ; the two writers, one shape: the standard set for the width, plus whatever
-       ; the TU named. ⚠ arm32 has no .image lane and no LOCAL FUNC symbols for
-       ; statics -- objsecs3 refuses the first, and (el ob 7) simply doesn't ride.
-       (? (arm32? tgt)
-          (objsecs32 tgt (objsecs3 tgt (el ob 1) (el ob 2) (el ob 5) (el ob 6) (el ob 9) (el ob 10) + xs)
-                     (el ob 3) (el ob 4) (el ps 4))
-          (objsecs tgt (objsecs4 (el ob 1) (el ob 2) (el ob 5) (el ob 6) (el ob 9) (el ob 10) + xs)
-                   (el ob 3) (el ob 4) (el ps 4) (el ob 7))))
+    (@ (cc-parse src is ds tgt nsi)
+       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs]
+       (: ob (cgen-obj ast stag sigs weaks
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni fir] tgt)
+          _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
+          (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns]
+             (: xs (map (\ [nm forms ro] (objsec-named nm forms ro)) xsecs
+                        + map (\ [nm forms al] (objsec-code nm forms al)) xfns)   ; ..and the fns that named a section
+                ; the two writers, one shape: the standard set for the width, plus whatever
+                ; the TU named. ⚠ arm32 has no .image lane and no LOCAL FUNC symbols for
+                ; statics -- objsecs3 refuses the first, and `lnames` simply doesn't ride.
+                (? (arm32? tgt)
+                   (objsecs32 tgt (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs)
+                              fnames gnames weaks)
+                   (objsecs tgt (objsecs4 tforms dforms nforms iforms bforms rforms + xs)
+                            fnames gnames weaks lnames)))
+             (udie 1 ("cc: the code generator answered an unexpected shape for " + src))))
+       (udie 1 ("cc: the parser answered an unexpected shape for " + src)))
    (cc-obj src dst is ds tgt nsi ni fir) (write-bytes dst (cc-objbytes src is ds tgt nsi ni fir))
    ; the LINK path (rung 3, crew/holo/link.l): every input lands as object
    ; bytes (a .c compiled here, a .o read off disk), crt0 rides FIRST (its
@@ -641,6 +655,12 @@
     (? !(two? as) [c (rev is) (rev ds) o (rev ins) t9 p9 g9 n9 x9 d9 i9 f9]
        (: a <as r >as
           (? (a = "-c") (flags r 1 is ds o ins t9 p9 g9 n9 x9 d9 i9 f9)
+             ; ⚠ the SAME string love answers, because they are one artifact: mooncc is a
+             ; verb on the love binary, not a separate program, and a build that reported
+             ; two versions would be reporting a thing that cannot happen. `love-version`
+             ; is that one id (mk/lib.mk computes it: ./VERSION plus a VCS suffix).
+             ((a = "--version") || (a = "-v"))
+              (: _ (puts ("mooncc " + love-version)) _ (putc 10) (quit 0))
              (a = "-pie") (flags r c is ds o ins t9 1 g9 n9 x9 d9 i9 f9)
              (a = "-I") (? (two? r) (flags >r c (<r >< is) ds o ins t9 p9 g9 n9 x9 d9 i9 f9) (udie 2 usage))
              (a = "-D") (? (two? r) (flags >r c is (<r >< ds) o ins t9 p9 g9 n9 x9 d9 i9 f9) (udie 2 usage))
@@ -722,7 +742,7 @@
                      flush err,
                      1))))
    ; moon-main is the SHIMS' door and quits, exactly as it always has -- the six -e
-   ; drives and seed's verb table call it straight, and a compile ends the same way
+   ; drives and svalbard's verb table call it straight, and a compile ends the same way
    ; through all of them.
    (moon-main as) (quit (moon-run as))
    (moon-cc as)
@@ -772,6 +792,9 @@
 ; name, so every image carrying moon.l answers `love mooncc ..` and the baked mooncc.image
 ; is a compiler without an `-e` shim to make it one. FN takes the args after the name and
 ; answers a status charm -- moon-main quits instead, which is the same contract kept early.
-(: _ (pins (from 'verbs 'tab) 'mooncc moon-main)
+; ⚠ `cc` IS THE SAME ROW. A Makefile's default CC is `cc`, so without this word an
+; artifact carrying a whole compiler still could not answer the name every recipe
+; reaches for -- and `CC=cc` on a box with no toolchain found nothing at all.
+(: _ (pins (from 'verbs 'tab) 'mooncc moon-main 'cc moon-main)
    s ((from 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"] >cmdline)
    (? (two? s) (moon-main >s) ()))

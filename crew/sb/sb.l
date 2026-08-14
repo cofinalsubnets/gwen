@@ -1,10 +1,10 @@
-; crew/seed/seed.l -- the seed: the patch-set vcs (doc/seed.md the interface,
+; crew/sb/sb.l -- svalbard: the patch-set vcs (doc/sb.md the interface,
 ; doc/hatch.md the model, test/patch.l + proof/rocq/patch.v the laws). this cut
 ; is the MVP's local half: `record` (working changes -> a patch in the store),
 ; `log`, `diff`; `sync` rides the same store next (patches + blobs are immutable
 ; content-addressed files, so union = copy what's missing + re-derive tips).
 ;
-; the store (.seed/ at the working root):
+; the store (.sb/ at the working root):
 ;   blob/<sha256>    file content, immutable
 ;   patch/<sha256>   one patch, immutable -- (patch (note S) (time MS)
 ;                    (deps ID..) (hunks (PATH OLD NEW)..)), id = sha256 of the
@@ -12,7 +12,7 @@
 ;                    is deterministic and the address honest
 ;   tips             the maximal patches (the growth ends) -- (ID ..)
 ;   snap             the recorded state -- ((PATH CHASH PATCHID) ..) path-sorted
-;   ignore           optional: one path prefix per line, atop (".seed" ".git" "out")
+;   ignore           optional: one path prefix per line, atop (".sb" ".git" "out")
 ;
 ; a hunk is the PROVEN named-slot patch (test/patch.l's chg): slot = the path,
 ; context = the old content hash, value = the new -- () for absent (a birth or a
@@ -22,7 +22,7 @@
 ; context. finer-than-file hunks slot in later (the sequence slices are proven
 ; too); the store format doesn't care what a hunk's old/new mean.
 ;
-; loads after crew/kore/text.l (lines) + crew/kore/diff.l (udiff) in the seed
+; loads after crew/kore/text.l (lines) + crew/kore/diff.l (udiff) in the svalbard
 ; cat. body-less top-level `:` (the tool shape): the engine leaks into the cat's
 ; scope; the SEAT form at the tail is the only thing that fires as a program.
 (:
@@ -43,23 +43,23 @@
                      ()))
 
    ; --- the store ---
-   (mk _) (: _ (mkdir ".seed" 493) _ (mkdir ".seed/blob" 493) _ (mkdir ".seed/patch" 493) ())
-   (snap _) (form ".seed/snap")                            ; ((path chash pid) ..) sorted
-   (tips _) (form ".seed/tips")                            ; (id ..)
+   (mk _) (: _ (mkdir ".sb" 493) _ (mkdir ".sb/blob" 493) _ (mkdir ".sb/patch" 493) ())
+   (snap _) (form ".sb/snap")                            ; ((path chash pid) ..) sorted
+   (tips _) (form ".sb/tips")                            ; (id ..)
    ; the PATCH-SET ID: the name of a head DAG state. the tips are a SET -- sort
    ; before hashing, or the same head reads two ways.
    (psid tp) (sha256 (show (sort tp)))
-   (blob h) (: t (look (".seed/blob/" + h)) (? (two? t) <>t ()))
-   (keep s) (: h (sha256 s) _ (lay (".seed/blob/" + h) s) h)
-   (patch id) (form (".seed/patch/" + id))
+   (blob h) (: t (look (".sb/blob/" + h)) (? (two? t) <>t ()))
+   (keep s) (: h (sha256 s) _ (lay (".sb/blob/" + h) s) h)
+   (patch id) (form (".sb/patch/" + id))
    (fld f k) (: (go m) (? !(two? m) ()                        ; a patch field's tail
                              (two? <m && id? <<m k) ><m
                              (go >m))
                    (go >f))
 
-   ; --- ignores: path prefixes; a line in .seed/ignore adds to the built-ins ---
-   igs0 '(".seed" ".git" "out")
-   (igs _) (: t (look ".seed/ignore")
+   ; --- ignores: path prefixes; a line in .sb/ignore adds to the built-ins ---
+   igs0 '(".sb" ".git" "out")
+   (igs _) (: t (look ".sb/ignore")
                  (? (two? t) (igs0 + filter (\ l (0 < tally l)) (lines <>t))
                     igs0))
    (ign? p igs) (? !(two? igs) 0
@@ -102,13 +102,13 @@
              (scan ps >sn (`((<e) (<>e) ()) >< acc)))))       ; snap-only: dead
 
    ; --- record ---
-   (seed-record note)
+   (sb-record note)
     (: _ (mk ())
        sn (snap ())
        st (tablet 0)                                             ; path -> (chash pid)
        _ (: (go m) (? (two? m) (: _ (pin st <<m ><m) (go >m)) ()) (go sn))
        hunks (scan (sort (walk () (igs ()) ())) sn ())
-       (? !(two? hunks) (: _ (puts "seed: nothing to record\n") ())
+       (? !(two? hunks) (: _ (puts "sb: nothing to record\n") ())
           (: ; the blobs: keep every hunk's new content
              _ (: (go m) (? (two? m)
                             (: h <m _ (? !<>>h () (keep <>(look <h))) (go >m))
@@ -127,11 +127,11 @@
              ptext (show (list 'patch (list 'note note) (list 'time (clock 0))
                                ('deps >< deps) ('hunks >< hunks)))
              pid (sha256 ptext)
-             _ (lay (".seed/patch/" + pid) ptext)
-             _ (lay ".seed/snap" (show (snap+ sn hunks pid ())))
+             _ (lay (".sb/patch/" + pid) ptext)
+             _ (lay ".sb/snap" (show (snap+ sn hunks pid ())))
              tp (filter (\ t !(member? t deps)) (tips ()))
-             _ (lay ".seed/tips" (show (sort (pid >< tp))))
-             _ (puts ("seed: recorded " + snip pid 0 12 + " (" + show (tally hunks) + " paths)\n"))
+             _ (lay ".sb/tips" (show (sort (pid >< tp))))
+             _ (puts ("sb: recorded " + snip pid 0 12 + " (" + show (tally hunks) + " paths)\n"))
              pid)))
 
    ; --- snap under a patch's hunks (both path-sorted) ---
@@ -150,7 +150,7 @@
    (ins e l) (? !(two? l) `(e)                                ; insert desc by time (seat 0)
                    ((<<l) <= <e) (e >< l)
                    (<l >< ins e >l))
-   (seed-log _)
+   (sb-log _)
     (: tp (tips ())
        (go m acc)
         (? !(two? m) acc
@@ -160,7 +160,7 @@
                                       <(fld f 'note)
                                       (tally (fld f 'hunks)))
                                 acc)))))
-       es (go (readdir ".seed/patch") ())
+       es (go (readdir ".sb/patch") ())
        (pr m)
         (? !(two? m) ()
            (: e <m id <>e
@@ -182,7 +182,7 @@
        (tally es))
 
    ; --- diff: working tree vs the recorded state, unified; answers how many differ ---
-   (seed-diff _)
+   (sb-diff _)
     (: sn (snap ())
        hunks (scan (sort (walk () (igs ()) ())) sn ())
        (pr m n)
@@ -201,14 +201,14 @@
    ;     content-addressed, so the union is just "copy what's missing"; then
    ;     re-derive tips + snap from the WHOLE patch set (order-free -- the DAG is
    ;     a pure function of its patches) and materialize the merged snap onto a
-   ;     clean working tree. peer = a directory holding a .seed/ (a peer or a
+   ;     clean working tree. peer = a directory holding a .sb/ (a peer or a
    ;     cutting); same-path divergence warns and the topo-latest write wins ---
    (dirty _) (tally (scan (sort (walk () (igs ()) ())) (snap ()) ()))
    ; one direction of the store exchange: copy the sha256-named files `to` lacks,
    ; verifying every address on the way. a nest root is "." or a peer path.
    ; answers (ncopied nfailed) -- a failed write is a peer we cannot push to.
    (copy sub from to)
-    (: fd (from + "/.seed/" + sub + "/") td (to + "/.seed/" + sub + "/")
+    (: fd (from + "/.sb/" + sub + "/") td (to + "/.sb/" + sub + "/")
        (go m n bad)
         (? !(two? m) `(n bad)
            (: h <m
@@ -217,7 +217,7 @@
                  (: t (look (fd + h))
                     (? !(two? t) (go >m n bad)
                        !(sha256 <>t = h)
-                          (: _ (say err ("seed: bad address " + h + "\n")) (go >m n (bad + 1)))
+                          (: _ (say err ("sb: bad address " + h + "\n")) (go >m n (bad + 1)))
                        (lay (td + h) <>t) (go >m (n + 1) bad)
                        (go >m n (bad + 1)))))))
        (go (readdir fd) 0 0))
@@ -234,12 +234,12 @@
     (: (go m n) (? !(two? m) n
           (: e <m p <e k <>e
              _ (say (? (0 = k) out err)
-                    ("seed: " + (? (0 = k) "merged " "CONFLICT in ") + p + " -- " + (<>>e) + "\n"))
+                    ("sb: " + (? (0 = k) "merged " "CONFLICT in ") + p + " -- " + (<>>e) + "\n"))
              (go >m (? (0 = k) n (n + 1)))))
        (go cfs 0))
    (settle ids)
     (: oldsnap (snap ())
-       _ (lay ".seed/tips" (show (derive-tips ids)))
+       _ (lay ".sb/tips" (show (derive-tips ids)))
        dr (derive-snap ids)
        newsnap <dr
        ; the derive replays the WHOLE set every time, so a merge settled long ago
@@ -248,7 +248,7 @@
        ix (: (go m t) (? (two? m) (: _ (pin t <<m <><m) (go >m t)) t))
        op (ix oldsnap (tablet 0)) np (ix newsnap (tablet 0))
        cfs (filter (\ e ((0 < (<>e)) || !(peep op <e () = peep np <e ()))) (<>dr))
-       _ (lay ".seed/snap" (show newsnap))
+       _ (lay ".sb/snap" (show newsnap))
        nf (mater oldsnap newsnap)
        `((tally ids) nf cfs))
    (derive-tips ids)                                          ; the ids nobody depends on
@@ -278,14 +278,14 @@
    ; --- a diverged write: two patches wrote one path from a shared base. the
    ;     base is FREE -- the incoming hunk names the content hash it expected --
    ;     so the three-way merge has all three sides in the store and most
-   ;     divergence resolves itself (crew/seed/merge.l). answers
+   ;     divergence resolves itself (crew/sb/merge.l). answers
    ;     (chash nconflicts note): nconflicts 0 is a clean merge, and the note is
    ;     what the report tells. a side that is ABSENT (a delete meeting an edit)
    ;     or BINARY cannot line-merge: keep the CONTENT, never the deletion, and
    ;     call it a conflict -- the loser stays addressable in the store ---
    (bin? s) (: n (tally s) (go i) (? (n <= i) 0 (s i = 0) 1 (go (i + 1))) (go 0))
    (sh h) (? h (snip h 0 12) "()")
-   (bl h) (? !h '(1 "") (look (".seed/blob/" + h)))        ; (1 text) | () -- presence, not net
+   (bl h) (? !h '(1 "") (look (".sb/blob/" + h)))        ; (1 text) | () -- presence, not net
    (mend old curh nw curpid pid)
     (: bw (bl old) ow (bl curh) tw (bl nw)
        (? !nw `(curh 1 ("kept the edit -- " + sh pid + " deletes what " + sh curpid + " wrote"))
@@ -333,9 +333,9 @@
     (: np (tablet 0)
        _ (: (go m) (? (two? m) (: _ (pin np <<m <><m) (go >m)) ()) (go newsnap))
        w (: (go m n) (? !(two? m) n
-              (: e <m p <e ch <>e bl (look (".seed/blob/" + ch))   ; presence, not net: an empty blob is real
+              (: e <m p <e ch <>e bl (look (".sb/blob/" + ch))   ; presence, not net: an empty blob is real
                  cur (look p) curh (? (two? cur) (sha256 <>cur) ())
-                 (? !(two? bl) (: _ (say err ("seed: missing blob " + ch + "\n")) (go >m n))
+                 (? !(two? bl) (: _ (say err ("sb: missing blob " + ch + "\n")) (go >m n))
                     (curh = ch) (go >m n)
                     (: _ (mkparents p) _ (lay p <>bl) (go >m (n + 1))))))
             (go newsnap 0))
@@ -363,19 +363,19 @@
        (bump k) (pin n k (1 + peep n k 0))
        (getblob h)                                     ; ensure a blob is local
         (? !h 1
-           (two? (look (".seed/blob/" + h))) 1
+           (two? (look (".sb/blob/" + h))) 1
            (: b (http-fetch base ("/blob/" + h))
-              (? !(two? b) (: _ (say err ("seed: cannot fetch blob " + sh h + "\n")) 0)
-                 (sha256 (<>b) = h) (: _ (lay (".seed/blob/" + h) (<>b)) _ (bump 'b) 1)
-                 (: _ (say err ("seed: bad address on blob " + sh h + "\n")) 0))))
+              (? !(two? b) (: _ (say err ("sb: cannot fetch blob " + sh h + "\n")) 0)
+                 (sha256 (<>b) = h) (: _ (lay (".sb/blob/" + h) (<>b)) _ (bump 'b) 1)
+                 (: _ (say err ("sb: bad address on blob " + sh h + "\n")) 0))))
        (getpatch id)                                   ; ensure a patch is local; answer its form
-        (: local (look (".seed/patch/" + id))
+        (: local (look (".sb/patch/" + id))
            (? (two? local) (readform (<>local))
               (: b (http-fetch base ("/patch/" + id))
-                 (? !(two? b) (: _ (say err ("seed: cannot fetch patch " + sh id + "\n")) ())
-                    (sha256 (<>b) = id) (: _ (lay (".seed/patch/" + id) (<>b)) _ (bump 'p)
+                 (? !(two? b) (: _ (say err ("sb: cannot fetch patch " + sh id + "\n")) ())
+                    (sha256 (<>b) = id) (: _ (lay (".sb/patch/" + id) (<>b)) _ (bump 'p)
                                               (readform (<>b)))
-                    (: _ (say err ("seed: bad address on patch " + sh id + "\n")) ())))))
+                    (: _ (say err ("sb: bad address on patch " + sh id + "\n")) ())))))
        (walk ids ok)                                   ; the transitive closure, by reading as we go
         (? !(two? ids) ok
            (: id <ids
@@ -394,33 +394,33 @@
                                 (hb hs 1))
                           (walk (fld f 'deps + >ids) (ok && bo))))))))
        tt (http-fetch base "/tips")
-       (? !(two? tt) (: _ (say err ("seed: no store at " + base + " (no /tips)\n")) ())
+       (? !(two? tt) (: _ (say err ("sb: no store at " + base + " (no /tips)\n")) ())
           (: tips (readform (<>tt))
-             (? !(two? tips) (: _ (say err ("seed: " + base + " has no tips\n")) ())
+             (? !(two? tips) (: _ (say err ("sb: " + base + " has no tips\n")) ())
                 (: ok (walk tips 1)
                    rt (http-fetch base "/refs")             ; the refs ride along
                    theirs (? (two? rt) (readform (<>rt)) ())
                    ru (refadd (refs ()) theirs 1)
-                   _ (? (two? <ru) (lay ".seed/refs" (show <ru)) ())
+                   _ (? (two? <ru) (lay ".sb/refs" (show <ru)) ())
                    `(ok (peep n 'p 0) (peep n 'b 0) (<>ru)))))))
 
    (sync-url peer)
     (: _ (mk ())
        (? (0 < dirty ())
-          (: _ (say err "seed: working tree has changes; record or revert first\n") 0)
+          (: _ (say err "sb: working tree has changes; record or revert first\n") 0)
           (: base (? (snip peer (tally peer - 1) (tally peer) = "/")
                      (snip peer 0 (tally peer - 1)) peer)        ; one trailing slash, ours to add
              r (pull-http base)
              (? !(two? r) 0
-                (: st (settle (readdir ".seed/patch"))
+                (: st (settle (readdir ".sb/patch"))
                    nleft (tell (<>>st))
                    nref (<>>>r)
-                   _ (puts ("seed: pulled -- " + show <st + " patches (" + show (<>r)
+                   _ (puts ("sb: pulled -- " + show <st + " patches (" + show (<>r)
                             + " in), " + show (<>>r) + " blobs, " + show (<>st) + " files here"
                             + (? (0 = nleft) "" (", " + show nleft + " conflicted"))
                             + (? (0 = nref) "" (", " + show nref + " ref clash")) + "\n"))
-                   _ (? <r () (say err "seed: some objects did not arrive -- the pull is INCOMPLETE\n"))
-                   _ (say err "seed: pulled only -- an http remote takes no push\n")
+                   _ (? <r () (say err "sb: some objects did not arrive -- the pull is INCOMPLETE\n"))
+                   _ (say err "sb: pulled only -- an http remote takes no push\n")
                    (? (<r && (0 = nleft) && (0 = nref)) <st 0))))))
 
    ; sync is the EXCHANGE, and an exchange has two ends: pull what the peer has
@@ -430,11 +430,11 @@
    ; "distribution == cloning" claim made good. the peer's half needs its tree
    ; CLEAN and writable; when it is not we still pull (always safe) and say so,
    ; leaving the peer's store untouched rather than half-fed.
-   (seed-sync peer)
+   (sb-sync peer)
     (? (url? peer) (sync-url peer)
     (: _ (mk ())
        (? (0 < dirty ())
-          (: _ (say err "seed: working tree has changes; record or revert first\n") 0)
+          (: _ (say err "sb: working tree has changes; record or revert first\n") 0)
           (: home (cwd 0)
              ; chdir answers () on success and -errno on failure -- BOTH nil, and
              ; () even sorts BELOW 0, so neither `!` nor `< 0` tells them apart.
@@ -442,7 +442,7 @@
              pd (: c (chdir peer)
                    (? (charm? c) -1
                       (: _ (mk ()) d (dirty ()) _ (chdir home) d)))
-             (? (pd < 0) (: _ (say err ("seed: cannot reach " + peer + "\n")) 0)
+             (? (pd < 0) (: _ (say err ("sb: cannot reach " + peer + "\n")) 0)
                 (: inb (copy "blob" peer ".") inp (copy "patch" peer ".")
                    ; the push: only onto a clean peer, and only if every write lands
                    out1 (? (0 = pd) (copy "blob" "." peer) '(0 0))
@@ -450,18 +450,18 @@
                    pushed ((0 = pd) && (0 = (<>out1)) && (0 = (<>out2)))
                    ; the refs travel too -- a release is only "the unit you
                    ; propagate" if the NAME reaches the other nest with it
-                   theirs (form (peer + "/.seed/refs"))
+                   theirs (form (peer + "/.sb/refs"))
                    ru (refadd (refs ()) theirs 1)
-                   _ (? (two? <ru) (lay ".seed/refs" (show <ru)) ())
+                   _ (? (two? <ru) (lay ".sb/refs" (show <ru)) ())
                    _ (? !pushed ()
                         (: pu (refadd theirs (refs ()) ())
-                           (? (two? <pu) (lay (peer + "/.seed/refs") (show <pu)) ())))
-                   st (settle (readdir ".seed/patch"))
+                           (? (two? <pu) (lay (peer + "/.sb/refs") (show <pu)) ())))
+                   st (settle (readdir ".sb/patch"))
                    nleft (tell (<>>st))
                    nref (<>ru)
                    pst (? !pushed ()                             ; settle the far end too
-                          (: c (chdir peer) r (settle (readdir ".seed/patch")) _ (chdir home) r))
-                   _ (puts ("seed: synced -- " + show <st + " patches ("
+                          (: c (chdir peer) r (settle (readdir ".sb/patch")) _ (chdir home) r))
+                   _ (puts ("sb: synced -- " + show <st + " patches ("
                             + show <inp + " in, " + show <out2 + " out), "
                             + show (<inb + <out1) + " blobs, " + show (<>st) + " files here"
                             + (? (two? pst) (", " + show (<>pst) + " files there") "")
@@ -469,13 +469,13 @@
                             + (? (0 = nref) "" (", " + show nref + " ref clash"
                                                 + (? (1 = nref) "" "es"))) + "\n"))
                    _ (? pushed ()
-                        (say err ("seed: pulled only -- the peer "
+                        (say err ("sb: pulled only -- the peer "
                                   + (? (0 < pd) "has unrecorded changes" "would not take the write")
                                   + "; run sync from its side to finish\n")))
                    _ (? (0 = nleft) ()
-                        (say err "seed: settle the flagged paths, then record -- the resolution is a patch\n"))
+                        (say err "sb: settle the flagged paths, then record -- the resolution is a patch\n"))
                    _ (? (0 = nref) ()
-                        (say err "seed: a banked name is immutable, so each nest kept its own -- rename one, then sync\n"))
+                        (say err "sb: a banked name is immutable, so each nest kept its own -- rename one, then sync\n"))
                    (? (pushed && (0 = nleft) && (0 = nref)) <st 0)))))))
 
    ; --- apply: realize a dep-consistent SUBSET of the store into the working
@@ -491,10 +491,10 @@
    ;     which grows an inverse rather than forgetting ---
    (idpfx pfx)                                                   ; one patch from a prefix | ()
     (: n (tally pfx)
-       hits (filter (\ i ((tally i = 64) && (snip i 0 n = pfx))) (readdir ".seed/patch"))
+       hits (filter (\ i ((tally i = 64) && (snip i 0 n = pfx))) (readdir ".sb/patch"))
        (? (1 = tally hits) <hits
-          !(two? hits) (: _ (say err ("seed: no ref or patch matches " + pfx + "\n")) ())
-          (: _ (say err ("seed: " + show (tally hits) + " patches match " + pfx + "\n")) ())))
+          !(two? hits) (: _ (say err ("sb: no ref or patch matches " + pfx + "\n")) ())
+          (: _ (say err ("sb: " + show (tally hits) + " patches match " + pfx + "\n")) ())))
    (idsof a)                                                     ; a REF -> its whole tip set;
     (: r (refof a)                                               ; else one patch from a prefix
        (? (two? r) r (: i (idpfx a) (? i `(i) ()))))
@@ -508,11 +508,11 @@
                           (go >m)))))
        _ (go ids)
        (sort (keys seen)))
-   (seed-apply args)
+   (sb-apply args)
     (: _ (mk ())
        (? (0 < dirty ())
-          (: _ (say err "seed: working tree has changes; record or revert first\n") 0)
-          (: all (readdir ".seed/patch")
+          (: _ (say err "sb: working tree has changes; record or revert first\n") 0)
+          (: all (readdir ".sb/patch")
              want (: (go m acc) (? !(two? m) acc
                        (: l (idsof <m) (? (two? l) (go >m (acc + l)) ())))
                      (go args ()))
@@ -520,12 +520,12 @@
                 (: ids (? (two? args) (closure want) all)
                    st (settle ids)
                    nleft (tell (<>>st))
-                   _ (puts ("seed: applied " + show <st + " of " + show (tally all)
+                   _ (puts ("sb: applied " + show <st + " of " + show (tally all)
                             + " patches, " + show (<>st) + " files updated"
                             + (? (tally ids = tally all) " (the whole store)" "")
                             + (? (0 = nleft) "" (", " + show nleft + " conflicted")) + "\n"))
                    _ (? (0 = nleft) ()
-                        (say err "seed: settle the flagged paths, then record -- the resolution is a patch\n"))
+                        (say err "sb: settle the flagged paths, then record -- the resolution is a patch\n"))
                    (? (0 = nleft) (tally ids) 0))))))
 
    ; --- bank: freeze the current head under a NAME -- an immutable release, the
@@ -547,7 +547,7 @@
    ;     tips, so `apply NAME` realizes the release and needs nothing stored but
    ;     the tips. refs TRAVEL: sync unions them by name, which is what makes a
    ;     release the unit you propagate rather than a local bookmark ---
-   (refs _) (form ".seed/refs")                                  ; ((name (id..) time)..) | ()
+   (refs _) (form ".sb/refs")                                  ; ((name (id..) time)..) | ()
    (refof nm) (refof-in (refs ()) nm)
    ; --- the ref exchange. a ref is a single FILE, not a content-addressed one,
    ;     so sync cannot gap-fill it the way it does blobs and patches: it has to
@@ -564,28 +564,28 @@
            (: e <m mine (refof-in base <e)
               (? !(two? mine) (go >m (e >< acc) n)               ; theirs alone: take it
                  (show mine = show (<>e)) (go >m acc n)          ; the same head: already ours
-                 (: _ (? loud (say err ("seed: REF CLASH on " + <e
+                 (: _ (? loud (say err ("sb: REF CLASH on " + <e
                                         + " -- banked to different heads\n")) ())
                     (go >m acc (n + 1))))))
        (go extra base 0))
    (refof-in rs nm) (: (go m) (? !(two? m) () ((<<m) = nm) (<><m) (go >m)) (go rs))
 
-   (seed-bank args)
+   (sb-bank args)
     (: _ (mk ())
        nm (? (two? args) <args "")
        (? !(0 < tally nm)
-          (: _ (say err "seed: bank needs a name\n") 0)
+          (: _ (say err "sb: bank needs a name\n") 0)
           (0 < dirty ())
-          (: _ (say err "seed: working tree has changes; record or revert first\n") 0)
+          (: _ (say err "sb: working tree has changes; record or revert first\n") 0)
           (: tp (sort (tips ()))
-             (? !(two? tp) (: _ (say err "seed: nothing recorded to bank\n") 0)
+             (? !(two? tp) (: _ (say err "sb: nothing recorded to bank\n") 0)
                 (: old (refof nm)
                    (? (two? old && !(show old = show tp))
-                      (: _ (say err ("seed: " + nm + " is already banked at a different head"
+                      (: _ (say err ("sb: " + nm + " is already banked at a different head"
                                      + " -- a banked name is immutable\n")) 0)
-                      (two? old) (: _ (puts ("seed: " + nm + " is already banked\n")) 1)
-                      (: _ (lay ".seed/refs" (show (sort (list nm tp (clock 0) >< refs ()))))
-                         _ (puts ("seed: banked " + nm + " at " + show (tally tp) + " tip"
+                      (two? old) (: _ (puts ("sb: " + nm + " is already banked\n")) 1)
+                      (: _ (lay ".sb/refs" (show (sort (list nm tp (clock 0) >< refs ()))))
+                         _ (puts ("sb: banked " + nm + " at " + show (tally tp) + " tip"
                                   + (? (1 = tally tp) "" "s") + " -- " + sh <tp + "\n"))
                          1)))))))
 
@@ -606,10 +606,10 @@
    ;     three sides are already named: base = what P WROTE, ours = what the path
    ;     holds NOW, theirs = what P REPLACED. that keeps the later edits and lifts
    ;     out P's, which is what a revert means; a true overlap lands in markers ---
-   (seed-undo args)
+   (sb-undo args)
     (: _ (mk ())
        (? (0 < dirty ())
-          (: _ (say err "seed: working tree has changes; record or revert first\n") 0)
+          (: _ (say err "sb: working tree has changes; record or revert first\n") 0)
           (: id (idpfx (? (two? args) <args ""))
              (? !id 0                                          ; idpfx already said why
                 (: hs (fld (patch id) 'hunks)
@@ -626,35 +626,35 @@
                                    ; it moved on -- merge P's write OUT of what is there now
                                    (: bw (bl pnew) ow (bl cur) tw (bl pold)
                                       (? !(two? bw && two? ow && two? tw)
-                                         (: _ (say err ("seed: CONFLICT on " + p
+                                         (: _ (say err ("sb: CONFLICT on " + p
                                                         + " -- a birth or death moved on; kept what is there\n"))
                                             (go >m (n + 1)))
                                          (bin? <>bw || bin? <>ow || bin? <>tw)
-                                         (: _ (say err ("seed: CONFLICT on " + p
+                                         (: _ (say err ("sb: CONFLICT on " + p
                                                         + " -- binary, cannot merge; kept what is there\n"))
                                             (go >m (n + 1)))
                                          (: r (diff3 <>bw <>ow <>tw "here now" ("undone " + sh id))
                                             _ (lay p <r)
                                             k (<>r)
-                                            _ (? (0 = k) (puts ("seed: merged " + p + " -- the later edits kept\n"))
-                                                 (say err ("seed: CONFLICT in " + p + " -- " + show k
+                                            _ (? (0 = k) (puts ("sb: merged " + p + " -- the later edits kept\n"))
+                                                 (say err ("sb: CONFLICT in " + p + " -- " + show k
                                                            + " region" + (? (1 = k) "" "s") + " left in markers\n")))
                                             (go >m (+ n k))))))))
                         (go hs 0))
                    _ (? (0 = nc) ()
-                        (say err "seed: settle the flagged paths before recording the undo\n"))
+                        (say err "sb: settle the flagged paths before recording the undo\n"))
                    (? (0 < nc) 0
-                      (: r (seed-record ((? (two? >args) <>args "undo ") + sh id))
-                         (? r 1 (: _ (puts "seed: nothing to undo -- that patch is already lifted\n") 0))))))))))
+                      (: r (sb-record ((? (two? >args) <>args "undo ") + sh id))
+                         (? r 1 (: _ (puts "sb: nothing to undo -- that patch is already lifted\n") 0))))))))))
 
 ; --- the CLI face: usage + the verb dispatcher (cook-main's shape) ---
 (:
-   (usage _) (: _ (say err "seed -- the patch-set vcs (doc/seed.md)
-usage: seed VERB ..
-  record [NOTE]   working changes -> a patch in the store (.seed/)
-  sync PEER       EXCHANGE patch sets with a peer nest (a dir holding .seed/),
+   (usage _) (: _ (say err "sb -- svalbard, the patch-set vcs (doc/sb.md)
+usage: sb VERB ..
+  record [NOTE]   working changes -> a patch in the store (.sb/)
+  sync PEER       EXCHANGE patch sets with a peer nest (a dir holding .sb/),
                   or PULL from an http:// remote -- any static file tree serving
-                  a .seed/ is a complete one, and it takes no push.
+                  a .sb/ is a complete one, and it takes no push.
                   pull what it has, push what it lacks, settle BOTH trees to
                   the union. two patches on one path three-way merge; a true
                   overlap lands in markers and exits 1 -- resolve, then record
@@ -671,27 +671,27 @@ usage: seed VERB ..
   diff            working tree vs the recorded state (unified; exit 1 on change)
 ")
                 (quit 2))
-   (seed-main as)
+   (sb-main as)
     (? !(two? as) (usage ())
        (: v <as
-          (? (v = "record") (: _ (seed-record (? (two? >as) <>as "")) (quit 0))
-             (v = "sync") (? (two? >as) (: r (seed-sync <>as) (quit (? r 0 1))) (usage ()))
-             (v = "apply") (: r (seed-apply >as) (quit (? r 0 1)))
-             (v = "bank") (? (two? >as) (: r (seed-bank >as) (quit (? r 0 1))) (usage ()))
-             (v = "undo") (? (two? >as) (: r (seed-undo >as) (quit (? r 0 1))) (usage ()))
-             (v = "log") (: _ (seed-log ()) (quit 0))
-             (v = "diff") (: n (seed-diff ()) (quit (? (0 < n) 1 0)))
+          (? (v = "record") (: _ (sb-record (? (two? >as) <>as "")) (quit 0))
+             (v = "sync") (? (two? >as) (: r (sb-sync <>as) (quit (? r 0 1))) (usage ()))
+             (v = "apply") (: r (sb-apply >as) (quit (? r 0 1)))
+             (v = "bank") (? (two? >as) (: r (sb-bank >as) (quit (? r 0 1))) (usage ()))
+             (v = "undo") (? (two? >as) (: r (sb-undo >as) (quit (? r 0 1))) (usage ()))
+             (v = "log") (: _ (sb-log ()) (quit 0))
+             (v = "diff") (: n (sb-diff ()) (quit (? (0 < n) 1 0)))
              (usage ()))))
 )
 
-; the SEAT (cook.l's shape): fire seed-main iff this file -- or the installed
-; `seed` binary -- sits in the program seat of the real command line (the
+; the SEAT (cook.l's shape): fire sb-main iff this file -- or the installed
+; `sb` binary -- sits in the program seat of the real command line (the
 ; positional program or a -l preload), taking the args AFTER the seat. cmdline
 ; is the full C argv, never rebound, so the read is the same in both load orders
 ; and the cat stays quiet under any other name -- which is why the gate can cat
-; this file and have nothing fire. seed-main reads BARE: whichever layer holds
+; this file and have nothing fire. sb-main reads BARE: whichever layer holds
 ; this file's binds (the loader's, or the script's session) is still the head
 ; when this form compiles. body-having: the seat leaks nothing.
-(: _ (pins (from 'verbs 'tab) 'seed seed-main)
-   s ((from 'verbs 'fire) ["seed" "seed.l"] >cmdline)
-   (? (two? s) (seed-main >s) ()))
+(: _ (pins (from 'verbs 'tab) 'sb sb-main)
+   s ((from 'verbs 'fire) ["sb" "sb.l"] >cmdline)
+   (? (two? s) (sb-main >s) ()))

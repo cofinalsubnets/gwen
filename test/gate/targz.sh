@@ -86,7 +86,14 @@ cat > "$w/unpack.l" <<EOF
 EOF
 "$love" "$w/unpack.l" || fail "love could not read the system's .tar.gz"
 diff -r "$w/tree" "$w/ours" || fail "our extraction of the system archive differs"
-echo "  OK GNU tar + gzip write, we read -- tree identical"
+# ⚠ diff -r COMPARES BYTES, NOT MODES, and that blind spot shipped a real bug: our
+# extractor read the mode out of every header and never applied it, so everything
+# landed 0644 and an extracted BINARY would not run. Content-identical and useless.
+# So the modes are compared as their own list, both directions.
+( cd "$w/tree" && find . -type f | sort | xargs stat -c '%a %n' ) > "$w/modes.want"
+( cd "$w/ours" && find . -type f | sort | xargs stat -c '%a %n' ) > "$w/modes.got"
+diff "$w/modes.want" "$w/modes.got" || fail "our extraction did not preserve file modes"
+echo "  OK GNU tar + gzip write, we read -- tree identical, modes preserved"
 
 # ---- 3. the gzip container alone, both ways, over shapes that break coders --
 for f in tree/text.l tree/sub/deep/blob.bin tree/empty; do

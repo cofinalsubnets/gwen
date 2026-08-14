@@ -82,8 +82,8 @@ these evaluate to 1, try them in the repl
 - `make wasm` the browser image, `make site` the static site
 - `make dist` the one-file artifact: `out/dist/love-<arch>` is the default love re-baked
   with the crew warm. `love up URL` clones + builds + installs the whole nest from a
-  served `.seed/` tree, and the same binary is multi-call
-  (`love seed|cook|kore|mooncc ..`); `love down` uninstalls
+  served `.sb/` tree, and the same binary is multi-call
+  (`love sb|cook|kore|mooncc ..`); `love down` uninstalls
 - `out/host/love` is the binary. `love file.l` runs a file, `love -e expr` an
   expression, `love -l lib` preloads one; with no program and a terminal on stdin it is
   a repl. `man love`, or [doc/love.md](doc/love.md)
@@ -108,8 +108,8 @@ via `make install`.
   assembler and linker. [crew/moon/](crew/moon/)
 - 🐀 **cook** -- the build system: a gnu make clone that reads a real Makefile, g's own
   included. [doc/cook.md](doc/cook.md)
-- 🌱 **seed** -- the vcs: a patch-set DAG folded together with the installer.
-  [doc/seed.md](doc/seed.md)
+- 🌱 **svalbard** (`sb`) -- the vcs: a patch-set DAG folded together with the installer.
+  [doc/sb.md](doc/sb.md)
 - 🦨 **kore** -- the utility skunk: one multi-call coreutils binary, busybox's trick.
   [crew/kore/](crew/kore/)
 - 🐕 **bao** -- the shell: an rlwrap clone. raw `love` shrinks to a read/eval/write

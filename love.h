@@ -205,6 +205,10 @@ struct ai {
  uintptr_t n_resize;                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
  uintptr_t budget;                        // total memory CAP in words (2*minor + 2*major); 0 = unbounded.
                                           // appel's rule: the nursery gets the free budget after the major pool.
+ uintptr_t minor0, major0, ratio;         // the other three live knobs: nursery floor, the major pool's
+                                          // grow/shrink STEP, the copy-overhead setpoint. seeded at ai_ini
+                                          // from ai_minor0/ai_major0/ai_gc_ratio; `tune` moves all four.
+                                          // ⚠ untraced scalars: a bake does not carry them (see lvm_tune)
  union {
   intptr_t v0;
   struct {

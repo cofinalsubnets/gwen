@@ -221,6 +221,13 @@
              'uniq uniq-main 'tee tee-main
              'seq seq-main 'yes yes-main
              'true true-main 'false false-main
+             ; ⚠ test/[ are PROGRAMS here, not just shell builtins: cook's in-image lane
+             ; execs a recipe's words directly, so a `test -s $t && mv ..` looks them up
+             ; on PATH. uname and printf are the other two a bootstrap cannot start without.
+             ; ⚠ `[` cannot be QUOTED -- it opens a bracket in the reader -- so the nom
+             ; is interned by name; the map ctor evaluates its keys, which is the door.
+             'test test-main (name "[") bracket-main
+             'uname uname-main 'printf printf-main
              'basename basename-main 'dirname dirname-main
              'cut cut-main 'tr tr-main
              'nl nl-main 'rev rev-main

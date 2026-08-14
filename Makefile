@@ -4,11 +4,53 @@ include common.mk
 
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
+# ==== THE FULL-FAT ARTIFACT'S OWN TOOLCHAIN (doc/dist.md) ====
+# A release tarball that ships `bin/love` carries its whole C toolchain in that one
+# file: love wears a `mooncc` verb, and mooncc drives gcc-shaped recipes unchanged
+# (test_drv). So when the bundled binary is here and the user named no compiler, IT
+# is the compiler -- `make` on a seed-laid tree touches no ambient cc.
+# ⚠ `CC ?=` CANNOT SAY THIS. make defines CC=cc itself, so `?=` never fires and the
+# ambient compiler would win silently; $(origin CC) is the only way to ask whether a
+# HUMAN set it. An explicit CC= still outranks the bundle, which is what the lean
+# artifact's whole point is and what the DDC leg needs.
+# ⚠ AND CCACHE MUST GO WITH IT. The compile lanes spell $(CCACHE) $(CC), and ccache
+# takes the compiler as its FIRST argument -- handing it a two-word `love mooncc`
+# makes it run `love` and treat `mooncc` as a source-file argument. Nothing here is
+# cacheable by it anyway: mooncc is not a compiler ccache knows how to hash.
+# ⚠ and the test is NOT `origin CC == default`: common.mk says `CC = clang`, so by the
+# time this runs the origin is "file" and a default-only guard never fires. What we
+# actually mean is "unless a HUMAN named a compiler for this run" -- command line or
+# environment. The tree's own clang default is exactly what the bundle should displace.
+# ⚠ AND A BUNDLED love IS ALREADY PAST THE SELF-HOST CIRCLE. love0 exists for exactly one
+# reason: to be *some* love that can wake mooncc0.image, because the default love is
+# mooncc-built and so cannot drive its own build. A tree the seed laid
+# has no such circle -- that binary IS a love with mooncc baked in as a verb. So it
+# compiles with the binary it shipped with, and love0 / mooncc0.image / the lit-laid 0.h
+# twins are never built at all. Not an optimisation: building them is how a bootstrap that
+# has nothing to bootstrap goes wrong (distboot found the mooncc-built lane segfaulting
+# laying prel0.h), and the lane simply has no reason to exist here.
+bundled_love := $(if $(wildcard $(R)/bin/love),$(abspath $(R)/bin/love),)
+
+ifeq ($(filter command line environment override,$(origin CC)),)
+ifneq ($(bundled_love),)
+CC := $(bundled_love) mooncc
+CCACHE :=
+endif
+endif
+
 # bootstrap interpreter
 love0 = out/host/love0
 
-# maybe we can change this
+# the corpus egg-boots on purpose: a gate wants a fresh egg, not whatever image the
+# binary happens to carry.
+# ⚠ BUT NEVER WHERE A BUNDLED LOVE IS THE TOOLCHAIN. An egg-booted love has no verb
+# table at all, and in a seed-laid tree the verbs ARE the toolchain -- sh, make, cc,
+# test, uname. Exported there, every recipe line cook spawns lands on the file lane
+# and answers `love: cannot open -c`, 196 times in one build, which reads as a broken
+# shell rather than a blinded one.
+ifeq ($(bundled_love),)
 export LOVE_NO_IMAGE := 1
+endif
 
 # every verb here is phony: one roster, so adding one is one line and not two. (the gates
 # each fragment owns are rostered in that fragment.)
@@ -17,7 +59,7 @@ export LOVE_NO_IMAGE := 1
   uuwm test_gc test_gcheck test_gcstress test_hostnif test_doc test_glaze test_hook test_sat \
   test_holo test_as test_elf32 test_objcopy test_holofuzz test_glazefuzz test_encver test_lux \
   test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 \
-  test_virt test_wake test_embed test_rp2040 valg disasm flame cat cata catav perf repl gdb \
+  test_virt test_wake test_embed embed test_rp2040 valg disasm flame cat cata catav perf repl gdb \
   vmret waits bench nettest lint ccdb ulp
 
 .DEFAULT_GOAL := test
@@ -46,7 +88,7 @@ test:
 # because linking every frontend means compiling love.c once per target). What it adds HERE
 # is the frontends the booting lanes below never reach -- mps2, teensy41, nucleo446,
 # playdate, and kmain.c at aarch64 -- which otherwise wait for test_extra.
-test_slow: test_host test_love0 vmret test_stdinbuf test_stdincorpus test_seat test_wasm test_kernel test_disk test_virt test_embed
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_wasm test_kernel test_disk test_virt test_embed
 	
 
 # really really really slow gate. test_embed is here too, cheap insurance: the thumb lanes
@@ -57,7 +99,7 @@ test_extra: test_embed test_filemode waits test_kernel_arm64 test_mps2 test_mps2
 	test_vec test_front test_proof test_gen test_uugen test_uulean test_uuwm \
 	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
 	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_elf32 test_objcopy \
-	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_seed test_vi \
+	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_nest test_sb test_vi \
 	test_moon test_clay test_moonfuzz test_splice test_ccarm64 test_ccriscv \
 	test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp test_raw \
 	test_drv test_asmops test_fixpoint test_dist nettest test_thumb1 test_thumb2 test_thumb2sp \

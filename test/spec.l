@@ -714,15 +714,21 @@
 
 ; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap,
 ; add/mul, opfix, boxfix, feel, maps); the egg is WARMED and the evaluator sits on it twice;
-; `born` records the hatch (unbound pre-egg); just before birth the egg mops up runtime names.
+; `born` is WHAT THIS INVOCATION COST TO START in ms -- the hatch on an egg boot, the wake
+; on a woken one -- and it is unbound pre-egg; just before birth the egg mops up runtime names.
 ; the mopped names are GONE post-birth; the floor handler welp answers the miss with the zero point (no warning)
+; ⚠ `hatched` ASKS PRESENCE, never born's net. The guards below mean "is born BOUND", and
+; born is a DURATION: a wake fast enough to answer 0 is blue, so a net test would read the
+; post-egg runtime as pre-egg and pass every law under it vacuously. It measured 6 ms here
+; and 0 is one quiet machine away.
+(: hatched (member? 'born (names ())))
 (hear welp)
-(assert (lit? ev) (? born (charm? born) 1)
-        (? born !macros 1) (? born !poke 1)     ; post-birth the names are gone
-        (? born !boxfix 1) (? born !lvm_ret 1) ; (pre-egg they still exist,
-        (? born !spin 1)                        ;  hence the born guards)
-        (? born !operators 1) (? born !pureset 1)   ; the compile tables too (2026-07-07)
-        (? born !enter 1) (? born !leave 1) (? born !lib 1))  ; the layer door + the source library: the runtime's, off the surface
+(assert (lit? ev) (? hatched (charm? born) 1)
+        (? hatched !macros 1) (? hatched !poke 1)     ; post-birth the names are gone
+        (? hatched !boxfix 1) (? hatched !lvm_ret 1) ; (pre-egg they still exist,
+        (? hatched !spin 1)                        ;  hence the born guards)
+        (? hatched !operators 1) (? hatched !pureset 1)   ; the compile tables too (2026-07-07)
+        (? hatched !enter 1) (? hatched !leave 1) (? hatched !lib 1))  ; the layer door + the source library: the runtime's, off the surface
 (hear 0)
 
 ; --- modules --- one layer per load, the registry, and `use` the loader -- all the runtime's.
@@ -765,3 +771,20 @@
         (16 = tally (gauge 0)) (0 <= nclock (nclock 0)))
 (: c1 (please ()) c2 (please 1)                  ; the sequence law orders the two asks
  (assert (c1 < c2)))
+; (tune v) is gauge's WRITE twin -- the four live GC knobs as a rank-1 Z array, in words:
+; [0] budget (total footprint cap, 2*minor + 2*major; 0 = unbounded -- appel's rule gives the
+; nursery what is left after the major pool) [1] minor0 (the nursery floor) [2] major0 (the
+; major pool's grow/shrink step) [3] ratio (the copy-overhead setpoint). (tune ()) reads; a
+; 4-array WRITES and answers what it REPLACED, so a probe restores with one call. a knob lands
+; at the next collection. a wrong shape is a silent no-op answering the current knobs (pin's
+; misuse convention), so a refused write is readable as "nothing moved".
+(: k0 (tune ())                                  ; whatever this seat booted with
+   old (tune @(2097152 32768 131072 16))
+   now (tune ())
+   bad (tune 'nonsense)                          ; refused: not an array
+   back (tune k0)                                ; ..and put the seat back for the rest of the corpus
+ (assert (4 = tally k0) (tray? k0)
+         (k0 = old)                              ; a write answers what it replaced
+         (2097152 = peep now 0 0) (16 = peep now 3 0)
+         (now = bad)                             ; a refused shape wrote nothing
+         (now = back) (k0 = (tune ()))))         ; the restore lands: the seat is as it booted

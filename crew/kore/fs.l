@@ -49,16 +49,32 @@
        (go (? (two? fs) fs '(".")) 1))
 
    ; -- cp and mv: a directory destination pulls the basename in beside --
+   ; ⚠ -f is TAKEN AND IGNORED, and that is not a silent lie: -f means "do not prompt",
+   ; and nothing here ever prompts, so forced IS the behaviour. -p is the other kind --
+   ; it changes what lands, so it is honoured. (ucopy already carries the mode; the
+   ; mtime is the half that was missing.) A recipe saying `mv -f` fails without this.
+   (cpf-split as)                              ; -> (p? rest) off a leading -f/-p cluster
+    (: (fl a p) (? !(two? a) `(p a)
+                    (member? <a '("-f" "-p" "-fp" "-pf"))
+                     (fl >a (? (member? <a '("-p" "-fp" "-pf")) 1 p))
+                    `(p a))
+       (fl as 0))
    (cp-main as)
-    (? !(two? >as) (udie 2 "usage: cp SRC DST")
-       (: _ (ucopy "cp" <as (udest <as <>as)) 0))
+    (: q (cpf-split as) p? <q rest <>q
+       (? !(two? >rest) (udie 2 "usage: cp [-f] [-p] SRC DST")
+          (: src <rest dst (udest src <>rest)
+             _ (ucopy "cp" src dst)
+             s (? p? (stat src) ())
+             _ (? (two? s) (utime dst <>s) 0)
+             0)))
    (mv-main as)
-    (? !(two? >as) (udie 2 "usage: mv SRC DST")
-       (: src <as dst (udest <as <>as)
-          e (rename src dst)
-          (? !e 0
-             (e = 18) (: _ (ucopy "mv" src dst) _ (unlink src) 0)   ; EXDEV: the long way
-             (udie 1 ("mv: cannot move " + src)))))
+    (: rest (<>(cpf-split as))
+       (? !(two? >rest) (udie 2 "usage: mv [-f] SRC DST")
+          (: src <rest dst (udest src <>rest)
+             e (rename src dst)
+             (? !e 0
+                (e = 18) (: _ (ucopy "mv" src dst) _ (unlink src) 0)   ; EXDEV: the long way
+                (udie 1 ("mv: cannot move " + src))))))
 
    ; -- rm: unlink, -r walks a tree bottom-up, -f keeps quiet about misses --
    (rm-main as)

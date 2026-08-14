@@ -114,6 +114,13 @@ bounded frontend (the kernel, a microcontroller) sets it to its RAM, else two gr
 exhaust the allocator. At `ai_budget = 2²¹` (~16 MB) total reservation settles at the budget
 exactly.
 
+**`(tune v)`** is `gauge`'s write twin — all four knobs live, as a rank-1 Z array in words:
+`[0]` budget `[1]` minor0 `[2]` major0 `[3]` ratio. `(tune ())` reads; a 4-array writes and
+answers what it replaced, so a probe restores with one call. A knob lands at the next
+collection, so pair a tightened budget with `(please 1)`. The four are untraced scalars ahead
+of `v0`: a bake does not carry them, which is why the host re-applies `LOVE_BUDGET_MB` after
+an image wake. `ai_minor0`/`ai_major0`/`ai_gc_ratio`/`ai_budget` seed them at `ai_ini`.
+
 All gen allocation routes through `g->alloc` (freestanding — no raw malloc), so the collector
 activates wherever the frontend's allocator supplies the major pool: host, wasm, and the kernel
 all run generational and pass the whole corpus.

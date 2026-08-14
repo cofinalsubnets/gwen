@@ -1,19 +1,19 @@
-; crew/seed/http.l -- the smallest HTTP/1.1 GET that can walk a store, over the
+; crew/sb/http.l -- the smallest HTTP/1.1 GET that can walk a store, over the
 ; `connect` socket floor (host/sock.c, the same one tools/ain.l dials with).
 ;
-; it is a CLIENT only, and only GET: a seed remote needs nothing else. the store
+; it is a CLIENT only, and only GET: an sb remote needs nothing else. the store
 ; is content-addressed and immutable, so every fetch is a plain cacheable GET on
 ; a name the client already knows, verified by sha256 on arrival -- there is no
 ; protocol to speak, no index to publish, and a hostile or broken mirror is
 ; DETECTABLE rather than trusted. any static file server is a complete remote,
-; kiosko included (`seed -s PORT` would serve .seed/ the way papel serves a site).
+; kiosko included (`sb -s PORT` would serve .sb/ the way papel serves a site).
 ;
 ; we send `Connection: close` and read to EOF, which is what makes `slurp` safe
 ; on a socket -- prel's slurp draws to end-of-stream, so a keep-alive response
 ; would park the task forever. kiosko closes after one request for the same
 ; reason from the other side.
 ;
-; loads inside the `seed` layer (merge.l opened it), so these names never reach
+; loads inside the `sb` layer (merge.l opened it), so these names never reach
 ; the book.
 (:
    ; "80" -> 80. `int` is a truncation, not a parser, so digits are ours.
@@ -57,7 +57,7 @@
     (: s (dial host port)
        (? !s ()
           (: _ (say s ("GET " + path + " HTTP/1.1\r\nHost: " + host
-                       + "\r\nConnection: close\r\nUser-Agent: seed\r\n\r\n"))
+                       + "\r\nConnection: close\r\nUser-Agent: sb\r\n\r\n"))
              _ (flush s)
              r (slurp s)
              _ (close s)

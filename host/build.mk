@@ -20,7 +20,12 @@ host_cc = $(if $(STATIC),$(if $(cc_user),$(CC),musl-clang),$(CC))
 # $(moon0) at all, so test_gcheck would run a corpus on a binary that never had the check
 # in it; and love0 is shared and unsuffixed, so a flag reaching it leaks out of the debug
 # lane -- a stress-built love0 segfaults baking mooncc0.image and takes the tree with it.
-hcc = $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
+# ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads, and it is load-bearing whenever CC is the dist
+# artifact's own `love mooncc` verb: the root Makefile exports LOVE_NO_IMAGE=1 for the
+# corpus, an egg-booted love has no verb table, and `mooncc` then reads as a FILENAME
+# ("love: cannot open mooncc"). The love0 lane and the lit rule already lead with it; this
+# puts it on every $(hcc) site at once rather than three times.
+hcc = LOVE_NO_IMAGE= $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
 # the whole-archive flag differs by linker, and mach-o takes no love_data.ld either -- it
 # spells sections `segment,section`, so kinds.h's roster asks the sentinels by name.
 ifeq ($(shell uname -s),Darwin)
@@ -65,7 +70,16 @@ $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
 	@tf=$@.$$$$.tmp; printf '%s\n' '$(host_cc) $(host_ldflags) $(image_ldflags)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
-host: $(ho)/love $(ho)/love.baked $(if $(STATIC),,$(ho)/liblove.so) $(ho)/love.1 $(ho)/cook.1
+# ⚠ liblove.so is NOT here, and that is the whole point: it was the one thing on this
+# target that a foreign toolchain had to build. holo lays no dynamic section, so a shared
+# object is genuinely CC's job (and the archive is `ar`'s) -- which meant `make host` could
+# never run without an ambient compiler, however self-hosting everything else became.
+# Nothing in the default lane links against it: `love` comes from $(moon_o), and liblove is
+# an EMBEDDING product -- for a C program linking love, installed by mk/install.mk, which
+# builds its own glibc-tree copies anyway. `make embed` when you want them.
+host: $(ho)/love $(ho)/love.baked $(ho)/love.1 $(ho)/cook.1
+.PHONY: embed
+embed: $(if $(STATIC),$(ho)/liblove.a,$(ho)/liblove.so)
 love0: $(love0)
 
 # dock: the steering dock, launched from a stable COPY so `adopt` can relink the canonical
@@ -166,7 +180,22 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # liblove.a/.so lane, since a shared object wants PIC codegen and a dynamic section holo
 # does not lay. STATIC=1 keeps the musl-cc link below; the raw default is already fully
 # static, so that flavor is opt-in. One link rule, two names -- `love` and the candidate.
+# ⚠ TWO SHAPES, and the second builds no bootstrap at all. Normally love0 wakes
+# mooncc0.image, the image that breaks the self-host circle. With a BUNDLED love beside the
+# tree (the binary a seed laid beside itself -- ./Makefile's bundled_love) there is no circle: that
+# binary already carries mooncc as a verb, so it compiles the tree directly and love0,
+# mooncc0.image and the lit-laid 0.h twins are never made. moon0_dep carries the difference
+# into the rules below, so nothing names an image that will not exist.
+# boot_love: whoever runs a build-time .l tool -- love0 normally, the bundled artifact
+# when one is here. Every such site must ask for it by this name, or it resurrects love0.
+boot_love = $(if $(bundled_love),$(bundled_love),$(love0))
+ifneq ($(bundled_love),)
+moon0 = LOVE_NO_IMAGE= $(bundled_love) mooncc $(GCDBG)
+moon0_dep =
+else
 moon0 = $(love0) wake out/host/mooncc0.image mooncc $(GCDBG)
+moon0_dep = out/host/mooncc0.image
+endif
 moon_d = $(ho)/moon
 moon_host_o = $(patsubst host/%.c,$(moon_d)/host_%.o,$(wildcard host/*.c))
 moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
@@ -176,17 +205,17 @@ moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/
 moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_math_o) $(moon_d)/sys.o
 # -D AI_HAVE_VERSION_H + the love_version.h dep: this TU carries the version id into the
 # SHIPPED binary, and mooncc has no __has_include for love.c's fallback probe to use.
-$(moon_d)/love.o: love.c $(love_h) out/host/mooncc0.image out/lib/love_version.h
+$(moon_d)/love.o: love.c $(love_h) $(moon0_dep) out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H -fir=lvm_ -I$(ho) -I. -Iout/lib -c $< $@
-$(moon_d)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
+$(moon_d)/host_%.o: host/%.c $(love_h) $(moon0_dep)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
 $(moon_d)/host_main.o: $(baked_h)
 $(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
-$(moon_d)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
+$(moon_d)/m_%.o: crew/moon/lib/math/%.c $(moon0_dep)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
@@ -205,10 +234,15 @@ $(ho)/.mksys-cat.l: $(mksys_l)
 	@echo CAT	$@
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
-$(moon_d)/sys.o: $(ho)/.mksys-cat.l $(love0)
+# ⚠ THE LAST love0 IN THE DEFAULT LANE. sys.o is LAID by running a love over the mksys
+# cat, and naming love0 here was enough to drag the whole bootstrap back in -- love0 wants
+# $(gl0_h), gl0_h wants tests0.h, and tests0.h is `cat $t | lit`, the corpus through lit's
+# stdin, which is where distboot kept dying at 139. A bundled love lays it just as well:
+# the cat carries holo itself, so the layer needs nothing of the bootstrap.
+$(moon_d)/sys.o: $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
 	@echo HOLO	$@
 	@mkdir -p $(dir $@)
-	@$(love0) -l $(ho)/.mksys-cat.l -n -e '($(mksys_e) "$@")' && test -s $@
+	@LOVE_NO_IMAGE= $(boot_love) -l $(ho)/.mksys-cat.l -n -e '($(mksys_e) "$@")' && test -s $@
 ifneq ($(STATIC),)
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/love_data.ld $(baked_h)
 	@echo LD	$@
@@ -217,7 +251,13 @@ $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/love_da
 else
 # ⚠ the nolibc sources are a dep of the LINK, not of any object: the driver compiles
 # the members it pulls, so an edit there changes this binary with no .o to notice.
-nolibc_src = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h)
+# ⚠ AND THE TREE IS TWO DEEP since it went one-function-to-a-file -- all but a handful
+# sit under ctype/ dirent/ env/ fmt/ mem/ net/ stdio/ sys/ .., so a one-level glob names
+# five of them and every libc edit that matters relinks NOTHING. It reads as an
+# up-to-date binary carrying the code from before the edit. (mk/install.mk's moon_srcs
+# is the same glob for the same reason -- keep the two in step.)
+nolibc_src = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
+                        crew/moon/lib/nolibc/*/*.c crew/moon/lib/nolibc/*/*.h)
 $(ho)/love $(ho)/love.cand: $(moon_o) $(nolibc_src)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)

@@ -4,10 +4,13 @@
 R ?= .
 
 m = $R/out/host$(hsuf)/love
-a ?= $(shell uname -m)
 # ⚠ the HOST's arch, which $a is NOT: a cross lane overrides $a on the command line, and
 # anything under out/host reading $a then lays a cross artifact into the host tree.
 hosta := $(shell uname -m)
+# ⚠ `?=` MAKES A RECURSIVE VARIABLE, so `a ?= $(shell uname -m)` re-forks uname at every
+# single reference -- 203 of them before this build even reached out/lib/egg.h. Deferring
+# to the simply-expanded $(hosta) keeps the override and spends one fork for the tree.
+a ?= $(hosta)
 
 # clang is the default host/love0 compiler. ⚠ `CC ?= clang` would be a NO-OP: make ships a
 # built-in default `CC = cc` whose origin is `default`, not `undefined`, so `?=` never
