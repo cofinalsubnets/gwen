@@ -51,6 +51,7 @@
 ; layer is spliced -- and a `use` inside the form runs when the form is already compiled.
 ; gen.l carries the same line for the same reason.
 (use 'pat)
+(use 'irec)
 (:
    jit-memo (tablet 0)                               ; the two tables, read once and kept
    jit-bodies (tablet 0)                             ; a handler nom -> its checked clean body
@@ -76,31 +77,13 @@
    ; forms as they stand; that is what they are.
    ; ⚠ a love built by another compiler has no `ai_lvm_ir` and this answers () -- which is the
    ; honest report, not a failure: gcc was never asked to write anything down.
-   (irsym-off exe nm)                                ; a symbol's FILE offset in our own exe | ()
-    (: (le i n) (bind-le exe i n)
-       shoff (le 40 8) shentsz (le 58 2) shnum (le 60 2)
-       (sh i f w) (le (shoff + ((i * shentsz) + f)) w)
-       symi (: (go i) (? (i = shnum) -1 (? ((sh i 4 4) = 2) i (go (i + 1)))) (go 0))
-       (? (symi < 0) ()
-          (: stroff (sh (sh symi 40 4) 24 8)
-             symoff (sh symi 24 8) syment (sh symi 56 8) nsyms (sh symi 32 8 // syment)
-             (cstr i) (: (go j) (? (peep exe j 0 = 0) (snip exe i j) (go (j + 1))) (go i))
-             (go i) (? (i = nsyms) ()
-                       (: o (symoff + (i * syment))
-                          (? (= nm (cstr (stroff + (le o 4))))
-                             (: va (le (o + 8) 8) sx (le (o + 6) 2)   ; st_value, st_shndx
-                                ((sh sx 24 8) + (va - (sh sx 16 8))))  ; sh_offset + (va - sh_addr)
-                             (go (i + 1)))))
-             (go 0))))
    (jit-irtab _)                                     ; nom -> its forms | () when nothing wrote it down
     (: t (peep jit-memo 'irtab ())
        (? (two? t) t
           (: exe (bind-rd "/proc/self/exe")
-             off (irsym-off exe "ai_lvm_ir")
-             (? (nil? off) (jit-no ['no-irtab] "this love carries no ai_lvm_ir (built without -fir=lvm_)")
-                (: txt (: (go j) (? (= 0 (peep exe j 0)) (snip exe off j) (go (j + 1))) (go off))
-                   r (sound txt)
-                   rows (? (two? r) <r ())
+             rows (irec-at exe "ai_lvm_ir")
+             (? (nil? rows) (jit-no ['no-irtab] "this love carries no ai_lvm_ir (built without -fir=lvm_)")
+                (:
                    v (: tb (tablet 0)
                         _ (map (\ w (pin tb <w >w)) rows)
                         [1 tb (tally rows)])
@@ -127,11 +110,9 @@
     (: t (peep jit-memo 'lvmtab ())
        (? (two? t) t
           (: exe (bind-rd "/proc/self/exe")
-             off (irsym-off exe "ai_nif_lvm")
-             (? (nil? off) (jit-no ['no-lvmtab] "this love carries no ai_nif_lvm (nifs.h is older than lib/splice.l)")
-                (: txt (: (go j) (? (= 0 (peep exe j 0)) (snip exe off j) (go (j + 1))) (go off))
-                   r (sound txt)
-                   v [1 (? (two? r) <r ())]
+             rows (irec-at exe "ai_nif_lvm")
+             (? (nil? rows) (jit-no ['no-lvmtab] "this love carries no ai_nif_lvm (nifs.h is older than lib/splice.l)")
+                (: v [1 rows]
                    _ (pin jit-memo 'lvmtab v) v)))))
    (jit-lvmof nm)                                    ; a dis row's nom -> its handler nom | ()
     (? ("lvm_" = snip (string nm) 0 4) nm
@@ -286,17 +267,6 @@
    (bind-rd p) (: s (jit-slurp p) (? (string? s) s (bind-die ("cannot open " + p))))
    (bind-le s i n) (: (go k a m) (? (k = n) a (go (k + 1) (a + peep s (i + k) 0 * m) (m * 256))) (go 0 0 1))
    (bind-live-tab _) (: exe (bind-rd "/proc/self/exe")
-      shoff (bind-le exe 40 8) shentsz (bind-le exe 58 2) shnum (bind-le exe 60 2)
-      (sh i f w) (bind-le exe (shoff + i * shentsz + f) w)
-      symi (: (go i) (? (i = shnum) -1 (? ((sh i 4 4) = 2) i (go (i + 1)))) (go 0))
-      _ (? (0 <= symi) 0 (bind-die "no symtab in /proc/self/exe"))
-      stroff (sh (sh symi 40 4) 24 8)
-      symoff (sh symi 24 8) syment (sh symi 56 8) nsyms (sh symi 32 8 // syment)
-      (cstr i) (: (go j) (? (peep exe j 0 = 0) (snip exe i j) (go (j + 1))) (go i))
-      (symva nm) (: (go i) (? (i = nsyms) -1
-                     (: o (symoff + i * syment)
-                        (? (nm = cstr (stroff + bind-le exe o 4)) (bind-le exe (o + 8) 8) (go (i + 1)))))
-                   (go 0))
       symemo (tablet 0)
       exepath (? (member? 'readlink (names ())) (readlink "/proc/self/exe") (bind-die "no readlink nif"))
       base (: mp (bind-rd "/proc/self/maps") n (tally mp)
@@ -322,8 +292,8 @@
       ; milliseconds -- per `la`, per copy. Both memos are load-bearing, not tidiness.
       (\ nm (: c (peep symemo nm 0)
                (? (0 < c) c
-                  (: v (symva nm)
-                     _ (? (v < 0) (bind-die ("no live symbol " + nm)) 0)
+                  (: v (irec-va exe nm)                 ; ONE ELF walk in the tree, lib/irec.l's
+                     _ (? (nil? v) (bind-die ("no live symbol " + nm)) 0)
                      a (base + v) _ (pin symemo nm a) a)))))
    ; ..and the table itself is built ONCE: it slurps a 6 MB /proc/self/exe to get there.
    (jit-live _) (: t (peep jit-memo 'live ())

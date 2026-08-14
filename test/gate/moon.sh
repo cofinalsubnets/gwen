@@ -149,6 +149,21 @@ nm "$ho/.ir-i.o" 2>/dev/null | grep -q ai_lvm_ir && fail "-fir: an empty set sti
 echo "mooncc: -fir collects, -fno-ir carves, a comma list IS the repeated flag (byte-identical),"
 echo "        bare -fir is all and bare -fno-ir is none from either end, and empty lays nothing"
 
+# ------------------------------- the record READS BACK, on every target, from this machine
+# ⚠ THIS IS THE CLAIM WORTH GATING: a record is text and an ELF is a table, so reading one
+# asks nothing of the machine underneath -- no disassembler, no per-arch mnemonic table, no
+# objdump built with the right target list. All six targets, read here on the host, through
+# lib/irec.l (which is NOT lib/splice.l on purpose: the hook lights its lane on `from 'splice`,
+# and looking at a binary must not start a JIT). ⚠ three of the six lay ELF32, where every
+# header offset moves -- thumb2 read as "no record at all" until irec carried both classes.
+for t in x64 arm64 riscv64 thumb2 thumb2sp thumb1; do
+  moonrun -c -fno-inline -t $t -fir= "$ho/.ir.c" "$ho/.ir-$t.o" >/dev/null 2>&1 \
+    || fail "-fir: compile for $t"
+  n=$($m tools/ir.l "$ho/.ir-$t.o" aa_one 2>/dev/null | head -1)
+  case "$n" in aa_one*) ;; *) fail "-fir: $t record does not read back ($n)" ;; esac
+done
+echo "mooncc: the record reads back on all six targets from this one machine (ELF32 and ELF64)"
+
 # ------------------------------------------------------- the failure exits
 moonrun "$ho/.cc-none.c" "$ho/.ccx" > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "mooncc missing input exit (rc $r)"

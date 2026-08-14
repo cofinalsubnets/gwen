@@ -152,6 +152,14 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
   reader finding the symbol would conclude the compiler had written down that there was
   nothing, which is a different claim.
 
+  **Reading one back**: `love tools/ir.l FILE [NAME | -l]`, over `lib/irec.l`. ⚠ **any file, any
+  target, from any machine** — a record is text and an ELF is a table, so an aarch64 object
+  reads on x86-64 with no disassembler, no per-arch mnemonic table and no objdump that has to
+  have been built with the right target list. All six targets and both ELF classes are gated
+  (three of the six are 32-bit ARM, where every header offset moves). ⚠ the reader is
+  deliberately **not** `lib/splice.l`: the creation hook lights its lane on `(from 'splice)`,
+  and looking at a binary must not start a JIT.
+
   **It is a debugging instrument before it is a JIT input** — the compiler's IR sitting beside
   the code it emitted, for whoever opens the binary. Read as one it already found a bug in
   itself: cross-checked against `make vmret`'s objdump reading of the tail-jump law, the two
