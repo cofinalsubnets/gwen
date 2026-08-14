@@ -88,7 +88,14 @@ test:
 # because linking every frontend means compiling love.c once per target). What it adds HERE
 # is the frontends the booting lanes below never reach -- mps2, teensy41, nucleo446,
 # playdate, and kmain.c at aarch64 -- which otherwise wait for test_extra.
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_wasm test_kernel test_disk test_virt test_embed
+# the SEED is the product (doc/dist.md), so the tier that gates a commit is the tier that
+# builds one -- test_dist links the artifact and smokes it. It stays OUT of the default goal on
+# the clock: dist is ~2 min after a crew edit and 43 s even as a no-op, where the fast gate is
+# ~15 s, and the edit loop is what makes this tree workable.
+# ⚠ it BUILDS and smokes the artifact and does not run the seed fixpoint, because the tarball is
+# cut from the git INDEX -- on a dirty tree that would compare the artifact against source you
+# are not looking at, and report the difference as a broken fixpoint.
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_wasm test_kernel test_disk test_virt test_embed test_dist
 	
 
 # really really really slow gate. test_embed is here too, cheap insurance: the thumb lanes
@@ -105,7 +112,7 @@ test_extra: test_embed test_filemode waits test_kernel_arm64 test_mps2 test_mps2
 	test_drv test_asmops test_fixpoint test_dist nettest test_thumb1 test_thumb2 test_thumb2sp \
 	test_virt test_kernel test_uefi test_wasm test_wake test_gz
 
-all: host kernel wasm
+all: host kernel wasm dist
 
 # lint: libra ⚖ over every tracked .l -- paren/bracket/brace balance and unclosed strings,
 # a .l-aware scan. Balance is libra's default verb, so the bare file list is the whole
