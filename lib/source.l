@@ -94,9 +94,16 @@
    ; it, and REFUSES unless what comes out is this binary byte for byte. That is the
    ; release claim -- doc/dist.md's circle, test/gate/distboot.sh's fourth leg -- said as
    ; one word, so somebody holding one file can check it on their own machine.
-   ; ⚠ THE COMPILER IS US. CC is set to this binary's own mooncc verb unless the caller
-   ; named one, so the build reaches for no ambient toolchain -- which is the half of the
-   ; claim a merely-green build would not prove.
+   ; ⚠ IT SETS NO CC, and that is the opposite of the obvious thing. The laid tree already
+   ; points its own CC at the bin/love beside it (./Makefile's bundled_love) -- and setting
+   ; CC in the ENVIRONMENT is precisely the test that turns that branch OFF, since the
+   ; guard is `$(origin CC)`, with CCACHE left uncleared besides. An override meant to
+   ; guarantee "the toolchain is us" would disable the mechanism that guarantees it.
+   ; ⚠ THE FIXPOINT ONLY HOLDS ON A COMMITTED TREE, and that is a property of the artifact
+   ; rather than a limit of this verb: a release is cut from the git INDEX, so an artifact
+   ; built from a dirty tree carries source that is not what built it, and rebuilding from
+   ; that source cannot land on the same bytes. It comes out megabytes apart, not one byte
+   ; -- which is the shape that tells this apart from a reproducibility bug.
    ; ⚠ and it is a REFUSAL, not a report: a fixpoint that failed and exited 0 would be a
    ; worse artifact than one that never claimed it.
    (seed-arch _) (? (love-arch = "arm64") "aarch64" (love-arch = "x64") "x86_64" love-arch)
@@ -110,9 +117,8 @@
        ; failure, and an errno is negative -- so it is RED and a truth test reads the
        ; failure as the success. The kind is the only thing that tells them apart.
        _ (? (charm? (chdir root)) (src-die ("cannot enter " + root)) 0)
-       _ (? (getenv "CC") 0 (setenv "CC" (exe + " mooncc")))
        _ (puts ("seed: " + show <>>r + " files in " + root
-                + " -- building, and the toolchain is this binary\n"))
+                + " -- building, and the toolchain is the bin/love it just laid\n"))
        s (herald [exe "make" "dist"])
        st (? (two? s) <s s)
        _ (chdir here)
