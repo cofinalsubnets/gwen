@@ -44,7 +44,7 @@
                      (go (tally s - 1) ()))         ; a string -> its byte list. this one
                      ; is a real ENCODE, not a bytes-through-text leak: an ELF string
                      ; table holds NAMES, which are text. when the charm widens this
-                     ; becomes an explicit utf-8 encode (doc/archive/widen.md).
+                     ; becomes an explicit utf-8 encode.
 
    ; walk an assembled section's items (bytes + fixups) -> (bytes relocs). a fixup
    ; is resolved in place when the section may (text-internal, a kind in rset --

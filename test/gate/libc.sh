@@ -14,11 +14,11 @@
 # names the function and the case. that is the whole reason this is its own gate
 # and not more programs in test/cc.
 #
-# WHY IT EXISTS: the tree carries two libcs (doc/archive/libc.md), and they drifted --
+# WHY IT EXISTS: the tree carries two libcs, and they drifted --
 # nolibc's strtol wrapped on overflow where glibc saturates, so one source text
 # read as two different numbers depending on which binary carried it. it went
 # unnoticed because nothing gated the pure floor against anything. this is that
-# gate, and it is rung 0 of doc/archive/libc.md for a reason: it is worth having whether
+# gate, and it is rung 0 of for a reason: it is worth having whether
 # or not the two libcs are ever merged.
 #
 # make owns the dependency graph; this owns the procedure.

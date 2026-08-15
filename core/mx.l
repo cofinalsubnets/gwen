@@ -8,7 +8,7 @@
 ; kind" any other way -- and proof/rocq/mx.v reached them through tools/mxdump.c, a
 ; 47-line translation unit that #include'd love.c WHOLE to read its own statics back
 ; out, naming each lane by comparing function pointers and printing UNKNOWN when it
-; could not. that is doc/archive/verify.md's bridge 3, a differential against a dump.
+; could not. that is's bridge 3, a differential against a dump.
 ;
 ; now the love table is the source and both the C and the model are generated from
 ; it. that is bridge 1 -- shared source, one text two checkers, the discipline

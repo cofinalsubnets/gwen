@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/vec.sh -- the INTERRUPT gate (doc/archive/moon-kernel.md rung 4).
+# test/gate/vec.sh -- the INTERRUPT gate.
 #
 # free/mkvec.l lays the exception and IRQ entry points that used to be
 # x86_64/x86_64.S and aarch64/aarch64.S. a green `make test_kernel` already

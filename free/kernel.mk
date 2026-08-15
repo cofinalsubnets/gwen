@@ -22,7 +22,7 @@ ifdef K_TEST
 ksuf := -test
 endif
 
-# The COMPILER is ours (doc/archive/moon-kernel.md rung 5): mooncc compiles every TU, holo lays
+# The COMPILER is ours: mooncc compiles every TU, holo lays
 # the assembly and links, so nothing foreign is left. KCC=clang is the comparison lane,
 # exactly like CC on the host side; a GCC cross toolchain also works:
 #   make kernel a=aarch64 KCC=aarch64-linux-gnu-gcc KLINK=lld KLD=aarch64-linux-gnu-ld
@@ -62,7 +62,7 @@ k_elf = $(ko)/love-$a$(ksuf)$(kvsuf).elf
 k_shared_o = $(k_shared_c:$(R)/%.c=$(k_odir)/%.o)
 k_arch_o = $(k_arch_c:$(R)/%.c=$(k_odir)/%.o)
 k_free_o = $(k_free_c:$(R)/%.c=$(k_odir)/%.o)
-# the two LAYS: what used to be four .S files (doc/archive/moon-kernel.md rung 4).
+# the two LAYS: what used to be four .S files.
 # boot.o is the bring-up, vec.o the interrupt tail; both are holo IR written in
 # love (free/mk{boot,vec}.l), so no assembler runs in this build at all.
 k_lay_o = $(k_odir)/free/$a/boot.o $(k_odir)/free/$a/vec.o

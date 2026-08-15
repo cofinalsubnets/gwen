@@ -1041,7 +1041,7 @@ Theorem cnilp_real : forall r, cnilp (cof r) = (r <=? 0).
 Proof. reflexivity. Qed.
 
 (* ============================================================ *)
-(* the crew as FACES of `top` (doc/archive/faces.md)                    *)
+(* the crew as FACES of `top`                    *)
 (* ============================================================ *)
 (* ai (the language) is `top` -- the universal object (everything applies; top is vacuous).
    The apps are FACES of it, in dual pairs glued by DIFFERENT universal shapes. The

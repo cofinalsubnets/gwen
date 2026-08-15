@@ -149,4 +149,4 @@ baseline to re-extract and to diff a local tree against.
 directory is both, an install fights your working tree.
 
 Related: `mk/lib.mk` (the version stamp), `crew/build.mk` (the recipes),
-`test/gate/distboot.sh` (the claim), doc/archive/moon-userland.md (what builds the packages).
+`test/gate/distboot.sh` (the claim) (what builds the packages).

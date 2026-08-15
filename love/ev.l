@@ -85,8 +85,7 @@
 ; (a real value, safe to answer), anything else 'x (a raw index, a jump target, a heap
 ; quote: never handed out, never netted). an ASSOC, never a tablet -- pin would HASH a
 ; raw code word (the spq ⚠). a cur wrapper opens at cell 2; an unknown word at the door
-; (a native cell) answers (). the reader is the splice JIT (doc/archive/moon-regalloc.md, the
-; splice client): a composable segment is a dis prefix whose every row it can say.
+; (a native cell) answers (). the reader is the splice JIT: a composable segment is a dis prefix whose every row it can say.
 (: dis-pair (:
    kur (peek 0 (+))
    ret0 (peek 1 cap)
@@ -189,7 +188,7 @@
   lvm_cur (peek 0 (+))
   (sco p a i) #('arg a 'imp i 'par p)
   (rootc c) (? (c 'par) (rootc (c 'par)) c)        ; top scope: where feel stashes 'src
-  ; --- THE EMISSION INTERFACE (the codegen seam; the design in one page: doc/archive/hom.md) ---
+  ; --- THE EMISSION INTERFACE (the codegen seam; the design in one page:) ---
   ; ana walks the analyzed form and emits code through these primitives. an EMITTER is a curried
   ; (\ k n ..): k = the continuation emitter, n = the current cell index (the thread builds
   ; BACKWARD, poke -1 prepending). `compose` sequences emitters -- (compose A B) emits A, then B,

@@ -50,7 +50,7 @@
    (lnshift macs l)
     (: d (lndel macs)
        (? (d = 0) l (: (go k) (? !(two? k) () (lnbump d <k >< go >k)) (go l))))
-   ; -- include markers (doc/archive/moon-diag.md rung 2) -- an #include splices the
+   ; -- include markers -- an #include splices the
    ; header's OWN line numbering into the one flat output stream, so a line
    ; number alone can't say which file it is (and isn't monotone across the
    ; splice). doinc brackets each included run with these; parse's ctag pass
@@ -402,7 +402,7 @@
    ; cond is a stack of (active taken line) frames; buf accumulates active code
    ; tokens, flushed (expanded) whenever a directive or EOF interrupts. --
    (dirname t) (t @ ('kw q) (show q) (_ q) q) ; #if/#else lex as keywords -> their text
-   ; the refusal channel: a gripe (doc/archive/moon-diag.md), which the driver locates.
+   ; the refusal channel: a gripe, which the driver locates.
    ; gripeat mints one at the directive that failed; gripein stamps the file on
    ; the way out of an #include, which lexed from its OWN line 1.
    (gripeat line msg) (gripe () (two? line ? (lof <line) ()) () msg)

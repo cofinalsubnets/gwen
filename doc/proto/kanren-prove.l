@@ -1,5 +1,4 @@
-; kanren-prove -- the PRODUCER leg of the verification bridge (doc/archive/kanren-prover.md,
-; phases 0-2). the bridge so far makes ai a proof CHECKER (uu's `chk`) that two
+; kanren-prove -- the PRODUCER leg of the verification bridge. the bridge so far makes ai a proof CHECKER (uu's `chk`) that two
 ; kernels re-certify (rocq/lean). this spike makes ai a proof PRODUCER: given a goal
 ; type T, kanren SEARCHES for a term e with e : T -- the relational typechecker run
 ; BACKWARD is the prover (miniKanren's inhabitation trick), specialized to uu's term

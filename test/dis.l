@@ -1,6 +1,6 @@
 ; test/dis.l -- `dis` (love/ev.l), the emission interface's DUAL: a compiled thread
-; read back as (op-nom operand..) rows. it is the splice JIT's decoder (bench/vmsplice,
-; doc/archive/moon-regalloc.md's splice client) and the reflection door the mop leaves open --
+; read back as (op-nom operand..) rows. it is the splice JIT's decoder (bench/vmsplice)
+; and the reflection door the mop leaves open --
 ; built pre-egg from peek + the book, like `feels`, so the words survive.
 ;
 ; ⚠ these are the GLAZE-INVARIANT laws. the corpus runs with the glaze live, and the

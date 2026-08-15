@@ -5,7 +5,7 @@
 # Two halves:
 #   splice.c  composed-vs-dispatched over a non-folding chain walk, built by BOTH
 #             compilers -- the cc column is what the shape is worth, the mooncc column
-#             is what we get today. The difference is the lever (doc/archive/moon-regalloc.md).
+#             is what we get today. The difference is the lever.
 #   body.c    a self-contained composed body: mooncc it, lift the bytes out of the .o
 #             with holo's own reader (lift.l), install through `nif`, check it agrees
 #             with its interp twin and time it (install.l).

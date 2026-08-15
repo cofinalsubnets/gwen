@@ -288,7 +288,7 @@ a device that is spent are asked the same way.
 
 ⚠ **A task must not sleep on a quiet fd over a full buffer.** Readiness is a question about the
 port, not about the device: bytes already in `rbuf` make the task runnable no matter what the fd
-says (the scheduler's side of this is doc/archive/sched.md's syscall-free wake pass).
+says (the scheduler's side of this is's syscall-free wake pass).
 
 ---
 

@@ -14,7 +14,7 @@
 
 ; A REFUSAL, however it says so. A stage answers a bare () when it refused
 ; without a cause it could name, and a gripe when it could -- and since rung 4
-; (doc/archive/moon-diag.md) every codegen refusal names SOMETHING, if only the function
+; every codegen refusal names SOMETHING, if only the function
 ; it gave up in. So a law that means "this source is refused" says `refused?`;
 ; the laws that mean "refused, and here is exactly what it said" pin `gripe?`
 ; and the message, in the diagnostics sections below.
@@ -314,7 +314,7 @@
       ; declines, and the kept call leaves as the jmp
       (member? '(jmp f) <>(cgn "int f(int n) { return n + 1; } int h(int n) { __attribute__((musttail)) return f(n); } int main() { return h(3); }"))
       (refused? (cgn "int f() { return 1; }"))                      ; no main, no program
-      (gripe? (cgn "int main() { return y; }"))              ; undeclared name -- a NAMED refusal now (rung 1, doc/archive/moon-diag.md)
+      (gripe? (cgn "int main() { return y; }"))              ; undeclared name -- a NAMED refusal now (rung 1)
       (refused? (cgn "int main() { return 5=3; }"))                 ; not an lvalue
       (refused? (cgn "int main() { break; }"))                      ; no loop to leave
       (two? (cgn "int main() { int a=1; int b=2; return a<<b; }"))  ; variable shifts ride shlv now
@@ -804,7 +804,7 @@
       (= (pps "#pragma push_macro(\"U\")\n#define U 7\n#pragma pop_macro(\"U\")\n#ifdef U\ny\n#else\nn\n#endif") "n")  ; a saved UNDEFINED pops back to undefined
       (= (pps "#define pop_macro x\n#define A 1\n#pragma push_macro(\"A\")\n#undef A\n#pragma pop_macro(\"A\")\nA") "1")))  ; the body reads RAW -- a macro named pop_macro cannot interfere (cts 00206)
 
-; --- diagnostics: a parse refusal names where it stood (doc/archive/moon-diag.md rung 2) ---
+; --- diagnostics: a parse refusal names where it stood ---
 ; the gripe carrier is ('gripe file line col msg); file () means the TU itself,
 ; which the driver (moon.l ccdie) fills the source path in for.
 (: (inc txt) (\ n s [1 txt])
@@ -835,7 +835,7 @@
       (okv? (pgi "int main(void) { return 0; }\n" hdr))))
 
 ; --- diagnostics: a DELIBERATE refusal names the feature it has no lane for
-; (doc/archive/moon-diag.md rung 4). the whole point is the DISTINCTION: a `'bad` meaning
+;. the whole point is the DISTINCTION: a `'bad` meaning
 ; "I decline, take another lane" (an inline decline, a policy deopt) must stay
 ; SILENT, and only "there is no lane for this, anywhere" speaks. so every law
 ; below pins BOTH directions -- the refusal names itself, AND the same source on
@@ -1800,7 +1800,7 @@
       (member? '(ld r0 r6 0) bi)                     ; a constant right: the immop lane unchanged
       (member? '(add r0 r0 1) bi)))
 
-; -- array slots (doc/archive/moon-regalloc.md lever 1, the vmap's array leg): a once-declared
+; -- array slots: a once-declared
 ; 1-D gp-scalar array whose every appearance is x[e] gets element pins under minted
 ; keys -- a READ pins (the next read is zero forms), a WRITE drops (a constant index
 ; its own key, a variable index the whole array), the slot stays the source of truth.

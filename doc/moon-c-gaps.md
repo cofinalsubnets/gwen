@@ -28,7 +28,7 @@ program, and produce a **diagnostic** for every violation of a syntax rule or co
 headers come with it — `<float.h> <iso646.h> <limits.h> <stdalign.h> <stdarg.h> <stdbool.h>
 <stddef.h> <stdint.h> <stdnoreturn.h>`. All nine ship as of 2026-08-14 (`iso646.h` and
 `stdalign.h` were the two missing). **Hosted** conformance is a different arc entirely — it is
-a question about the C library, not the compiler (doc/archive/moon-userland.md).
+a question about the C library, not the compiler.
 
 Four of the biggest holes are not holes at all once declared, and that is now done: atomics,
 threads, complex and VLAs each have a `__STDC_NO_*` macro, and C11 counts an implementation
@@ -171,7 +171,7 @@ return. ⚠ the **file operand is parsed and dropped**: `#line 700 "generated.y"
 (cpp shares one macro table across includes), so the file half wants that lifted first.
 
 ⚠ `#include_next` refuses *because* it is unimplemented — ignoring it drops a header in silence,
-which is worse. doc/archive/moon-userland.md carries when it becomes load-bearing.
+which is worse. carries when it becomes load-bearing.
 
 ### the predefine surface
 
@@ -218,7 +218,7 @@ moves it too now (the directive section above).
 ### the `_Static_assert` quirks
 
 - ⚠ **A failed static assert reports as `parse error near ;`.** The refusal is correct; the
-  wording names the compiler's position rather than the program's fault. See doc/archive/moon-diag.md.
+  wording names the compiler's position rather than the program's fault. See.
 - **`cfold` is deliberately partial** (no floats, no comma, no address constants) and `pstatic`
   **lets a non-constant assertion by**. Making non-foldable an error would convert every
   remaining fold gap into a hard failure across the userland ladder for no gain. Tightening it
@@ -236,7 +236,7 @@ moves it too now (the directive section above).
 
 A refusal is cheap; these are not. Everything here compiles clean and hands back the wrong
 value, so nothing announces them but a differential — which is why they arrive in batches,
-each batch behind an outside package or an outside corpus (doc/archive/moon-userland.md, `test_cts`)
+each batch behind an outside package or an outside corpus
 rather than behind a test we thought to write.
 
 ### from an outside corpus
@@ -434,7 +434,7 @@ each refusal's cause). Regenerate it rather than editing a cell by hand.
 reads the object's symbols, and only x64/arm64/riscv64 have running gates behind them. ⚠ several of
 these refusals arrive as `cannot compile 'f' (cause unnamed)` rather than a named cause —
 `__int128` and every composite-argument row among them. The refusal is real either way; what is
-missing is the sentence naming it (doc/archive/moon-diag.md's bare-diagnostic debt).
+missing is the sentence naming it.
 
 ⚠ **`libgcc` is a cell value, and the two targets wearing it borrow for different reasons.**
 thumb1 (v6-M) has no UMULL, no long shifts and no FPU, so 64-bit `*`/shifts/divide, int↔double
@@ -585,4 +585,4 @@ harness exists; this is a corpus question, not an infrastructure one.
   are not realistically obtainable. Noted so nobody goes looking twice.
 
 Nearer real-world targets that exercise this surface without the Linux cliff: busybox, sqlite,
-lua, zlib, musl — see doc/archive/moon-userland.md.
+lua, zlib, musl — see.

@@ -12,7 +12,7 @@
 #      And -nostdlib's refusal is pinned by its SENTENCE, not just its exit
 #      code: it used to arrive as `;; link-undef "printf"`, a love debug note
 #      escaping from inside holo, and an exit-code-only check is exactly what
-#      let that stand for as long as it did (doc/archive/moon-diag.md, the refusal probe).
+#      let that stand for as long as it did.
 #
 # usage: drv.sh OUTDIR CFLAGS..
 set -u

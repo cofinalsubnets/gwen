@@ -156,5 +156,5 @@ in a child process.
    non-PIE, so absolute pointers stay valid only if nothing moves); or a layout-stable shared TU.
    Resolves cold start on the MCU too.
 
-Relates: doc/archive/gengc.md (the collector and the immortal region), doc/archive/glaze-arm64.md (the bake's
+Relates: (the collector and the immortal region) (the bake's
 codegen).

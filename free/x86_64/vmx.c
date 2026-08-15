@@ -1,4 +1,4 @@
-// vmx -- the Intel twin of svm.c (doc/archive/vmx.md), answering the same question on
+// vmx -- the Intel twin of svm.c, answering the same question on
 // the other vendor: can a guest run under inle, and does the exit land back in
 // ordinary C? Enable VMX, build one VMCS, run a seven-byte 32-bit guest that
 // loads a sentinel and executes CPUID, and take the exit.

@@ -1,5 +1,4 @@
-; free/mkvec.l -- lay vec.o, the kernel's INTERRUPT tail (doc/archive/moon-kernel.md
-; rung 4): the exception and IRQ entry points, which are register-exact leaves C
+; free/mkvec.l -- lay vec.o, the kernel's INTERRUPT tail: the exception and IRQ entry points, which are register-exact leaves C
 ; cannot say. mksys.l is the precedent and the shape is the same -- one scaffold,
 ; a payload per ISA -- but this one is generated rather than transcribed: the 32
 ; x86 stubs and the 16 aarch64 vector slots were `.macro`/`.rept` loops in GAS,

@@ -1,4 +1,4 @@
-// svm -- the AMD-V spike (doc/archive/svm.md): can a guest run under inle, and does the
+// svm -- the AMD-V spike: can a guest run under inle, and does the
 // exit land back in ordinary C? Enable SVM, build one VMCB, run a six-byte
 // real-mode guest that loads a sentinel and executes CPUID, and take the
 // intercept. The answer comes back as three numbers the gate can read.

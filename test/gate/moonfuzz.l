@@ -15,7 +15,7 @@
 ;      installed help) and none may hang. this is the hard red -- a compiler that
 ;      falls over on bad input has no diagnostics to speak of.
 ;   P2 a refusal NAMES ITS CAUSE. every stage that says no must answer a gripe
-;      (doc/archive/moon-diag.md's carrier), not a bare bad. this is NOT a red -- lex and cpp
+;, not a bare bad. this is NOT a red -- lex and cpp
 ;      still answer bare (rungs left undone), so it is a CENSUS, printed by stage
 ;      every run. the number falling IS the rung landing.
 ;   P3 clay and the parser agree, on trees the corpus never had. for every mutant

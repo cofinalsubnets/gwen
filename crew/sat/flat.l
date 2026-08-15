@@ -19,7 +19,7 @@
 ; equality. lisp keeps only the cold path: restarts, learnt-DB reduction, decay/rescale.
 ; Run AFTER sat.l (it reuses the leaked oracle + instances):
 ;   cat crew/sat/sat.l crew/sat/flat.l | love
-; the story, the kernel contract, and the measured results: doc/archive/sat-kernels.md.
+; the story, the kernel contract, and the measured results:.
 ;
 ; a literal is ENCODED: +v -> 2v, -v -> 2v+1 (neg = xor 1, var = >>1). val[v] holds
 ; the TRUE encoded literal itself (0 = free) so lit-val is a load + a compare. VSIDS
@@ -923,7 +923,7 @@
    (fextract s nvars) (: fx (peep s 'fx ()) vao (peep s 'vao 0)
                          (map (\ v (v >< (? (0 = (getw fx (vao + v) & 1)) 1 -1))) (rng 1 (nvars + 1))))
    ; --- BVA: bounded variable ADDITION (clause factoring), the preprocessing pass ---
-   ; the ablation-found pigeonhole killer (doc/archive/sat-kernels.md): cadical minus factoring
+   ; the ablation-found pigeonhole killer: cadical minus factoring
    ; collapses to minisat-class. for a literal l, GROW a set of literals M_lit and a set
    ; of clauses M_cls (all containing l) such that (m | C\{l}) is in the formula for
    ; every pairing; then a fresh variable x replaces the |M_lit|*|M_cls| clauses with

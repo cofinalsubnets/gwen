@@ -25,7 +25,7 @@
    stage-sigs '((cgfn (gst top) top)                ; sigged so its body -- both chains -- is walked
                                                     ; (params gradual: a sig VARIABLE there would ride rigid into every concrete seam)
                 ; the build tail: vrfix ADVANCES (build's assembled list carries mints -- the
-                ; vreg shadow, doc/archive/moon-vreg.md 5.1a -- and no vreg may reach sibcall/soften,
+                ; vreg shadow 5.1a -- and no vreg may reach sibcall/soften,
                 ; which reason about the physical file), then sibcall + the sweeps preserve
                 (vrfix (gst ir-vreg) ir-chosen)
                 (sibcall (gst a) a) (soften (gst a) a) (a4ize (a) a)

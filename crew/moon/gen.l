@@ -98,7 +98,7 @@
    (vfs v) <>>v
    (mkv ty reg fs) [ty reg fs]
    ; the MEM face: an lvalue as a symbolic (base, offset) memory operand -- the ('mem b o)
-   ; die's read side (doc/archive/moon-hom.md rung 2). a consumer lays ONE fused form; matv is the
+   ; die's read side. a consumer lays ONE fused form; matv is the
    ; degenerate face (the address on r0, exactly what clval used to lay) for unmigrated lanes.
    (mkm ty b o fs) [ty ['m b o] fs]
    (vm? v) (? (bad? v) () (two? (vreg v)))
@@ -118,7 +118,7 @@
    ; ⚠ a pool value NEVER lives across a call: pool registers are caller-saved and, unlike the
    ; homes, have no spill wrap -- the callish? gate holds that line. --
    opool '(r6 r5 r9 r10 r7 r8)
-   ; the vreg SHADOW (doc/archive/moon-vreg.md 5.1a): ralloc answers a minted nom (%v0 %v1 ..) mapped in
+   ; the vreg SHADOW: ralloc answers a minted nom (%v0 %v1 ..) mapped in
    ; g 'vrt to the physical register today's discipline picked, and vrfix substitutes over the
    ; assembled function as build's last link -- so no vreg reaches sibcall, and holo would refuse
    ; one LOUD. the mint is the pool's alone (homes, seats, pins, borrows stay physical), every
@@ -489,7 +489,7 @@
              (go m2 ()))
        _ (pins g 'vmap m2 'vpin (vmregs m2 ()))
        rl)
-   ; -- the ARRAY leg of the vmap (doc/archive/moon-regalloc.md lever 1): a once-declared 1-D
+   ; -- the ARRAY leg of the vmap: a once-declared 1-D
    ; gp-scalar array whose EVERY appearance is x[e] (any bare x is decay -- an escape,
    ; and under & or sizeof nothing licenses) gets element pins under MINTED keys ("x[3]").
    ; minted keys have no shared object identity, so this leg compares by CONTENT (=)
@@ -827,7 +827,7 @@
                  '(r11 r12 r13 r14))
    (deep? pl) (two? >>pl)                           ; a pool affords a PRICED seat: two remain after the take
    (fbase g) (? (arm? g) 'fp 'r4)                   ; the frame base as post-build ir1 spells it (a4ize); arm64+thumb2 fp, x64 r4
-   ; -- a DELIBERATE refusal names itself (doc/archive/moon-diag.md). `'bad` here is TWO answers wearing
+   ; -- a DELIBERATE refusal names itself. `'bad` here is TWO answers wearing
    ; one face: "I decline, take another lane" (a policy deopt, ordinary and recoverable) and
    ; "there is no lane for this, anywhere" (a target gate, an ABI class never built). only the
    ; second is a DIAGNOSIS, so only the second speaks -- `nolane` pins the phrase and answers the
@@ -2238,7 +2238,7 @@
        'no)
 
    ; -- expressions: answers a value tuple | 'bad. wnt is the DESTINATION HINT, the die's
-   ; advisory face (doc/archive/moon-hom.md): a consumer that knows where the value must land (an asn
+   ; advisory face: a consumer that knows where the value must land (an asn
    ; into a home, a ret's r0) passes it; a subexpression only gets one its consumer chose; and
    ; it is ADVISORY -- a lane that ignores it answers its usual register and the consumer
    ; bridges. --
@@ -6508,7 +6508,7 @@
                        (<s2 = nm) >s2
                        (<s2 >< sdel >s2 nm))
        (tick u) (: q (peep n9 'q 0) _ (pin n9 'q (q - 1)) q)
-       ; the INTERVAL leg (doc/archive/moon-vreg.md iv phase 1): every statement folds its live set into
+       ; the INTERVAL leg: every statement folds its live set into
        ; a per-name [lo hi] tick span. min/max, so a hole inside costs nothing -- but the extent
        ; must be a SUPERSET of the true live range, so the control-only lanes record too: a goto
        ; reads the whole universe and a break's set is its target's, and neither is bounded by
@@ -8291,10 +8291,10 @@
            (: dat (cgdata g)
               (? (bad? dat)
                  (: c (peep g 'datacause ())            ; the static-data refusal, minted here (globs pinned it)
-                    (gripe () () () (? c c "cannot lay the static data (cause unnamed -- see doc/archive/moon-diag.md)")))
+                    (gripe () () () (? c c "cannot lay the static data (cause unnamed)")))
                  ; -- THE DEAD-STATIC SWEEP. we splice a small static into its call sites and
                  ; still lay the body, so one inlined everywhere ships referenced by nothing
-                 ; (33 KB of love's own text before this: doc/archive/moon-diff.md). Only a static may
+                 ; (33 KB of love's own text before this:). Only a static may
                  ; go, and only when no root names it. ⚠ the roots are every EXPORTED fn, every
                  ; alias target, the section-named fns (xfns -- placed for their address), and
                  ; every nom the DATA lane names: love's kind-indexed tables carry fn addresses,
@@ -8341,7 +8341,7 @@
                           (? u (gripe () () () ("undeclared '" + u + "' (in " + <>f + ")"))
                              ar (gripe () () () (ar + (" (in " + <>f + ")")))
                              nl (gripe () () () (nl + (" (in " + <>f + ")")))
-                             (gripe () () () ("cannot compile '" + <>f + "' (cause unnamed -- see doc/archive/moon-diag.md)"))))
+                             (gripe () () () ("cannot compile '" + <>f + "' (cause unnamed)"))))
                        ; ⚠ fn-start alignment to EVEN (2): a function's address can ride into the
                        ; heap as an object's ap, and the image codec's pointer/fixnum
                        ; discriminator is PARITY -- an odd-addressed fn pointer reads back as a
@@ -8395,7 +8395,7 @@
    ; function whose name starts with PREFIX, laid in .rodata under this TU's own `ai_ir_<tu>`
    ; as ONE readable datum -- ((name form..) ..) -- so a runtime holding this binary can splice
    ; its own op bodies without a compiler, a source tree, or a disassembler. holo assembles these
-   ; forms as they stand (that is what they are), and the reader is `sound`. doc/archive/moon-regalloc.md.
+   ; forms as they stand (that is what they are), and the reader is `sound`..
    ; ⚠ PER-TU, and it is not cosmetic: one fixed symbol made -fir a ONE-TU flag, since a second
    ; object carrying it died at the link with `link-dup "ai_lvm_ir"`. The name says which TU,
    ; so `nm | grep ai_ir_` is the manifest and a reader never has to guess where a body came from.

@@ -4,7 +4,7 @@
 # the math floor (am.c under the libc faces), integer/bitwise ops, pcall +
 # coroutines (setjmp/longjmp through sys.o's leaves), metatables, gc, os
 # time/date (gmtime/mktime/strftime), io, and load. The fifth moon-userland
-# rung (doc/archive/moon-userland.md), after bzip2, gzip, tar and m4 -- and the first
+# rung, after bzip2, gzip, tar and m4 -- and the first
 # where EVERY package source compiles unpatched (35/35 after the paren-
 # declarator + braced-string-literal rungs).
 #

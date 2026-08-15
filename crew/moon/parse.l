@@ -35,7 +35,7 @@
    ; `s` there would shadow the parameter rather than demand the two agree.
    (tp? ('p v) s) ?(v = s)
    (tkw? ('kw v) k) ?(v = k)
-   ; -- where a refusal stood (doc/archive/moon-diag.md rung 2) --
+   ; -- where a refusal stood --
    ; cpp hands the SPANS -- ((index file)..), which file each stretch of the
    ; flat stream came from -- on a marker token at the stream's head, laid by
    ; the pass that was already rebuilding the spine. peel it in O(1); a caller

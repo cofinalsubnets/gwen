@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/asmops.sh -- the inline-asm SEAM gate (doc/archive/moon-kernel.md rung 3).
+# test/gate/asmops.sh -- the inline-asm SEAM gate.
 #
 # free/<a>/asmops.h says every privileged instruction the kernel needs
 # TWICE: holo's neutral template for mooncc, GNU's AT&T/ARM string for clang.

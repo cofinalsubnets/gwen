@@ -49,7 +49,7 @@ Three mappings, all of them already half-built:
 * **ports are the fds.** `ai_io_alloc(g, fd)` is core, not host — it wraps an fd as a port with a
   close finalizer, and read/write come free.
 * **tasks are the processes.** `twirl` answers a pid, `catch` waits on one, and the scheduler
-  already parks a task on an fd and wakes the ready one (`doc/archive/sched.md`).
+  already parks a task on an fd and wakes the ready one (``).
 
 ⚠ **The kernel links no `host/*.c`** — `k_shared_c` is love.c + am.c + quay + libc only. The
 `AI_NIF` section glob is the host's trick; a kernel nif is a row in `kmain.c`'s `defs[]` table,
@@ -303,7 +303,7 @@ sectors — mkfs, mount, ls/stat/read/write/mkdir/rm, LFN both directions, prese
 
 ### rung 6 — preemption  (~1–2 weeks)
 
-Already fully scoped in `doc/archive/sched.md`, down to the field: **the timer must not switch tasks — it
+Already fully scoped in ``, down to the field: **the timer must not switch tasks — it
 sets a flag the next `YieldCheck` honors.** Switching in the ISR is barred three ways over (the
 snapshot allocates, `g` is coherent only at Pack/Unpack, ring mutations are two steps).
 

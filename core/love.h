@@ -561,7 +561,7 @@ lvm_t _lvm_ghelp;
 // ⚠ ai_have IS the phrase "this call may collect"; under AI_GC_STRESS every one
 // DOES, so a raw local held across it goes stale on the first run, not years
 // later. AI_GC_CHECK is the other half: it checks the collector where this
-// checks the mutator (doc/archive/verify.md).
+// checks the mutator.
 static ai_inline struct ai *ai_have(struct ai *g, uintptr_t n) {
 #ifdef AI_GC_STRESS
  return !ai_ok(g) ? g : ai_please(g, n);

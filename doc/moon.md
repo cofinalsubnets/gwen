@@ -11,8 +11,7 @@ The closure it buys: love-in-love compiles the compiler that compiles love.c.
 
 `make test_moon` is the gate; `make test_raw` runs the whole corpus on a gcc/glibc/ld-free build;
 `make test_fixpoint` proves `mooncc(mooncc(love))` byte-identical to `mooncc(love)`;
-`make test_drv` gates the driver conventions; `make test_libc` differentials the library
-(doc/archive/libc.md). See doc/archive/moon-kernel.md for the kernel lane, doc/archive/moon-diag.md for diagnostics and
+`make test_drv` gates the driver conventions; `make test_libc` differentials the library. See for the kernel lane for diagnostics and
 doc/moon-c-gaps.md for the dialect's edges.
 
 ## the subset, measured off love.c
@@ -73,7 +72,7 @@ piece. ~11k lines of love.
   `('rmw ...)` reuse every store lane there is without evaluating its target twice. The ALU
   stays 64-bit —
   sound because signed overflow is UB — and widths bite only at memory and casts. This is also
-  where the register story lives (doc/archive/moon-regalloc.md).
+  where the register story lives.
 * **fmt.l** — diagnostics.
 * **clay.l** — C as love data (doc/clay.md).
 * **stage.l** — the pipeline's stages, typed: each pass's signature (input stage → output
@@ -226,7 +225,7 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
   **It is a debugging instrument before it is a JIT input** — the compiler's IR sitting beside
   the code it emitted, for whoever opens the binary. Read as one it already found a bug in
   itself: cross-checked against `make vmret`'s objdump reading of the tail-jump law, the two
-  disagreed, and the record was wrong (doc/archive/moon-regalloc.md). The splice JIT (`lib/splice.l`) is
+  disagreed, and the record was wrong. The splice JIT (`lib/splice.l`) is
   the other reader: a `love` carries its own op handlers and composes them with **no compiler, no
   source tree and no disassembler**.
 
@@ -311,7 +310,7 @@ the same face.
 * **nolibc.c** — the raw libc over one `__ai_sys` trampoline: a mini stdio (a FILE is a fd plus
   a flush buffer), a K&R first-fit malloc over mmap arenas, dirent over getdents64, the
   glibc-152B-to-kernel-32B sigaction fold with our own restorer, a numeric getaddrinfo,
-  env/exec/termios/pty. Single-threaded like love: errno is one int, no locks. See doc/archive/libc.md.
+  env/exec/termios/pty. Single-threaded like love: errno is one int, no locks. See.
 * **mksys.l** — lays `sys.o`, the things C cannot say: the 7-slot syscall trampoline,
   `__sigsetjmp`/`siglongjmp` over our own layout inside the glibc-sized 25-long buffer (the
   signal mask in `buf[8]`, saved/restored by rt_sigprocmask — love.c's fault barrier is
@@ -422,7 +421,7 @@ exists anywhere.
   as a comment to end of line, so a `;`-joined template assembles its first instruction and
   SILENTLY DROPS the rest. `\n` is also what GNU wants, so it is the separator that serves a
   two-spelling header.
-* The first consumer is the kernel's `free/<a>/asmops.h` (doc/archive/moon-kernel.md), which
+* The first consumer is the kernel's `free/<a>/asmops.h`, which
   carries both spellings behind the `__mooncc__` predefine. Worth reading for how far the two
   dialects agree: a bare mnemonic and a `mnemonic op, op` line are the SAME text in both.
 * Deferred until a consumer demands them: an AT&T template front-end, `"f"` float operands, asm

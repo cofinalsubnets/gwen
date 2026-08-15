@@ -1,4 +1,4 @@
-; test/uuhom.l -- doc/archive/hom.md's monoid, checked: the composition band of love's `*`
+; test/uuhom.l's monoid, checked: the composition band of love's `*`
 ; (prel's compose, End(R)'s multiplication) as a uu term, its monoid laws BY IDPATH.
 ; at the binary `=` is alpha+structural, so ((1 * f) = f) and assoc read FALSE and the
 ; laws hold only applied; here conv is NbE with pi-eta, so the SAME laws check

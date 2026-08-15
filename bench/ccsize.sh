@@ -13,7 +13,7 @@
 #     symbol the native binary lacks is NOT thereby mooncc runtime: gcc inlines 265 of
 #     love's statics out of existence, and a set difference taken against the binary
 #     reads every one of them as libc. That mistake put ~110 KB of love code in
-#     mooncc's libc column for two fills of doc/archive/moon-diff.md.
+#     mooncc's libc column for two fills of.
 #   * names are canonicalized first -- gcc ships `c0_lambda.isra.0` where mooncc ships
 #     `c0_lambda`, and the clone's bytes belong to the parent. 53 symbols (7.5 KB) land
 #     in the wrong column without it.

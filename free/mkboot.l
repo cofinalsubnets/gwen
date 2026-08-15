@@ -1,5 +1,4 @@
-; free/mkboot.l -- lay boot.o, the kernel's BRING-UP (doc/archive/moon-kernel.md
-; rung 4): the code that runs before there is a C environment to run in. mkvec.l's
+; free/mkboot.l -- lay boot.o, the kernel's BRING-UP: the code that runs before there is a C environment to run in. mkvec.l's
 ; sibling and mksys.l's class -- register-exact leaves C cannot say.
 ;
 ;   (lay-boot dst "x86_64")   the PVH note qemu reads to find the 32-bit entry,
