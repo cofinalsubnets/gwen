@@ -336,7 +336,27 @@ printf 'a\n' | korerun sed 's/a' > /dev/null 2>&1; b=$?
 sed p "$ho/.sd-nope" "$ho/.sd1" > "$g" 2>&1; a=$?
 korerun sed p "$ho/.sd-nope" "$ho/.sd1" > "$o" 2>&1; b=$?
 cmp -s "$g" "$o" && [ $a -eq 2 ] && [ $b -eq 2 ] || fail "kore sed missing file vs GNU"
+# ⚠ A MISSING FINAL NEWLINE IS DATA. GNU drops it after the LAST WRITE and not after
+# every one, so `-n 'p;p'` keeps the inner newline and loses only the outer -- which is
+# why the line rides a jug rather than a per-write flag. The whole line lane answers to
+# this: sed, rev and the two clips (head that CUT before the last line does not).
+printf 'a\nx' > "$ho/.nonl"
+for sc in '' 'p' 's/a/A/' 's/x/Y/'; do
+  sed "$sc" "$ho/.nonl" > "$g"; korerun sed "$sc" "$ho/.nonl" > "$o"
+  same "sed '$sc' on a source with no final newline"
+done
+for sc in 'p' 'p;p'; do
+  sed -n "$sc" "$ho/.nonl" > "$g"; korerun sed -n "$sc" "$ho/.nonl" > "$o"
+  same "sed -n '$sc' on a source with no final newline"
+done
+for t in "rev" "head -n 5" "tail -n 5" "head -n 1" "head -1" "tail -1" "head -2"; do
+  # shellcheck disable=SC2086
+  $t "$ho/.nonl" > "$g"; korerun $t "$ho/.nonl" > "$o"
+  same "$t on a source with no final newline"
+done
+rm -f "$ho/.nonl"
 echo "kore: sed (s///gp + d/p/q + addresses + -E/-e/-i, the per-file model, GNU-identical, exits 1/2) ok"
+echo "kore: the missing final newline is data (sed/rev/head/tail, and head -N) ok"
 
 # --------------------------------------------------------- the process tools
 pipe "xargs"     'a b

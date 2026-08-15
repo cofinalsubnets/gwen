@@ -72,9 +72,15 @@
                 (<a + " " + ujoin >a))
    ; the many-file banner head and tail share: none before the first, a blank between
    (uhdr first f) (? first ("==> " + f + " <==\n") ("\n==> " + f + " <==\n"))
-   ; the two pure line clips (lawed in law.l)
-   (uhead n t) (: ls (lines t) (unlines (? (n < tally ls) (take n ls) ls)))
-   (utail n t) (: ls (lines t) k (tally ls) (unlines (? (n < k) (drop (k - n) ls) ls)))
+   ; the two pure line clips (lawed in law.l). ⚠ each chomps only when the SOURCE's last
+   ; line actually rode through: head that cut before it ends on a line the text itself
+   ; terminated, so it keeps its newline whatever the far end of the input looked like.
+   (uhead n t) (: ls (lines t) k (tally ls) cut (n < k)
+                  o (unlines (? cut (take n ls) ls))
+                  (? (cut || (nl-end? t)) o (chomp o)))
+   (utail n t) (: ls (lines t) k (tally ls)
+                  o (unlines (? (n < k) (drop (k - n) ls) ls))
+                  (? (nl-end? t) o (chomp o)))
    ; the wc counter: text -> (lines words bytes), a word a maximal ink run
    (ucount t)
     (: n (tally t)

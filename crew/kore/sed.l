@@ -141,8 +141,9 @@
 
    ; -- the cycle. op is the output PORT, which is how -i captures a file's own
    ; edit instead of saying it into out --
-   ; (srun cmds lines n? op) -> the exit remembered, 0
-   (srun cmds all n? op)
+   ; (srun cmds lines n? op end?) -> the exit remembered, 0. end? is whether the SOURCE
+   ; ended in a newline; a 0 there is data, and the last line must go out without one.
+   (srun cmds all n? op end?)
     (: nl (tally all)
        t (tablet 0)                                  ; the range toggles, keyed by command index
        (amatch a no ln)
@@ -165,27 +166,33 @@
                   1)
               ()))
        ; one line through the commands -> (kind ps): 0 flows, 1 deleted, 2 quits
-       (rline cs idx ps no)
+       (rline cs idx ps no q)
         (cs @ (c >< more)
-           (? !(sel? c idx no ps) (rline more (idx + 1) ps no)
+           (? !(sel? c idx no ps) (rline more (idx + 1) ps no q)
               (: v <>>c
                  (? (v = 'd) [1 ps]
                     (v = 'q) [2 ps]
-                    (v = 'p) (: _ (say op ps) _ (put op 10)
-                                (rline more (idx + 1) ps no))
+                    (v = 'p) (: _ (say q ps) _ (put q 10)
+                                (rline more (idx + 1) ps no q))
                     (: pay <>>>c
                        pr >>pay
                        r (usub <pay <>pay ps <pr)
                        ps2 <>r
-                       _ (? (<r && <>pr) (: _ (say op ps2) (put op 10)) ())
-                       (rline more (idx + 1) ps2 no)))))
+                       _ (? (<r && <>pr) (: _ (say q ps2) (put q 10)) ())
+                       (rline more (idx + 1) ps2 no q)))))
            [0 ps])
+       ; ⚠ THE LAST LINE OF AN UNTERMINATED SOURCE RIDES A JUG. the newline goes missing
+       ; after the LAST WRITE and not after every one -- `sed -n 'p;p'` keeps the inner
+       ; one -- so the line is rendered whole and chomped once, whatever the commands did.
        (mline ls no)
         (ls @ (x >< more)
-           (rline cmds 0 x no @ [kind ps]
-             (: _ (? (kind = 1) () (? n? () (: _ (say op ps) (put op 10))))
-                (? (kind = 2) 0 (mline more (no + 1))))
-             0)
+           (: hold (? ((two? more) || end?) () (jug 0))
+              q (? hold hold op)
+              (rline cmds 0 x no q @ [kind ps]
+                (: _ (? (kind = 1) () (? n? () (: _ (say q ps) (put q 10))))
+                   _ (? hold (say op (chomp (slurp hold))) 0)
+                   (? (kind = 2) 0 (mline more (no + 1))))
+                0))
            0)
        (mline all 1))
 
@@ -209,7 +216,7 @@
         (a @ (f >< more)
            (uread f @ [_ txt]
              (: j (jug 0)
-                _ (srun cmds (lines txt) n? j)
+                _ (srun cmds (lines txt) n? j (nl-end? txt))
                 _ (? (uwrite f (slurp j)) ()
                      (: _ (say err ("sed: couldn't open " + f)) (put err 10)))
                 (inplace more bad))
@@ -228,6 +235,7 @@
            [(rev acc) bad])
        (? (i? && two? fs) (inplace fs ())
           (: rd (? (two? fs) (rdall fs () ()) [[(slurp in)] ()])
-             _ (srun cmds (catmap lines <rd) n? out)
+             _ (srun cmds (catmap lines <rd) n? out
+                     (? (two? <rd) (nl-end? (last <rd)) 1))
              _ (flush out) _ (flush err)
              (? <>rd 2 0)))))

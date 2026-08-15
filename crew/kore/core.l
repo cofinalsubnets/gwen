@@ -24,10 +24,20 @@
        (: _ (say out (ujoin as)) _ (put out 10) _ (flush out) 0))
 
    ; -- head and tail: one driver, two clips; -n N (10 the default) --
+   ; ⚠ `-5` is the OBSOLESCENT spelling and every script still writes it, so it is not
+   ; optional: a bare -DIGITS is the count. `-` alone stays the stdin name, and a flag
+   ; that is neither reaches uread as a filename, exactly as it did before.
+   (digits? w) (: n (tally w)
+                  (go k) (? (n <= k) (1 < n)
+                            (47 < (w k) < 58) (go (k + 1))
+                            0)
+                  (go 1))
    (uclip who clip as)
     (: nr (? (two? as && (<as = "-n"))
              (? (two? >as) `((uatoi <>as) >>as)
                 (udie 2 (who + ": -n wants a count")))
+             (two? as && ((<as 0) = 45) && (digits? <as))
+             `((uatoi (snip <as 1 (tally <as))) >as)
              `(10 as))
        n <nr fs <>nr
        many (two? fs && two? >fs)
@@ -385,7 +395,10 @@
 
    ; -- rev: every line back to front --
    (rev-main as)
-    (: (dot txt) (: (go m) (? !(two? m) ()
-                              (: _ (say out (urev <m)) _ (put out 10) (go >m)))
+    (: (dot txt) (: e (nl-end? txt)                     ; the last line keeps the source's end
+                    (go m) (? !(two? m) ()
+                              (: _ (say out (urev <m))
+                                 _ (? (e || two? >m) (put out 10) 0)
+                                 (go >m)))
                     (go (lines txt)))
        (ueach "rev" dot as)))

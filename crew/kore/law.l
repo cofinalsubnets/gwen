@@ -121,6 +121,13 @@
       (= (uhead 2 "a\nb\nc\n") "a\nb\n") (= (uhead 9 "a\nb\n") "a\nb\n")
       !(uhead 0 "a\n")
       (= (utail 2 "a\nb\nc\n") "b\nc\n") (= (utail 9 "a\nb\n") "a\nb\n")
+      ; ⚠ A MISSING FINAL NEWLINE IS DATA, and both clips answer to it: a clip that
+      ; reaches the source's last line ends as the source did, one that CUT before it
+      ; ends on a line the text terminated itself.
+      (nl-end? "a\n") !(nl-end? "a") !(nl-end? "")
+      (= (chomp "a\n") "a") (= (chomp "a") "a") (= (chomp "") "")
+      (= (uhead 9 "a\nb") "a\nb") (= (uhead 1 "a\nb") "a\n")
+      (= (utail 9 "a\nb") "a\nb") (= (utail 1 "a\nb") "b")
       (= (ucount "a b\nc\n") '(2 3 6)) (= (ucount "") '(0 0 0))    ; (lines words bytes)
       (= (ucount "  a  b  ") '(0 2 8))                             ; a word is a maximal ink run
       (= (ubase "/a/b.txt" "") "b.txt") (= (ubase "/a/b.txt" ".txt") "b")

@@ -1,8 +1,9 @@
 ; crew/kore/text.l -- the shared text layer: lines/unlines, the list<->text bridge every
 ; line tool rides (diff's udiff, the coming wc/head/tail). the convention: a line is a
 ; string WITHOUT its newline; `unlines` terminates every line, so the round trip is exact
-; on newline-terminated texts (a final unterminated line gains its newline -- the tool
-; layer's one normalization). a body-less top-level `:` (the wm's app shape); loads
+; only on a newline-terminated text. ⚠ A MISSING FINAL NEWLINE IS DATA -- every GNU line
+; tool preserves it, so a tool whose output can carry the source's LAST line asks
+; `nl-end?` of its input and `chomp`s when the answer is no. a body-less top-level `:` (the wm's app shape); loads
 ; BEFORE diff.l in the gate (udiff captures `lines` at its define -- the capture law).
 (:
    ; text -> the list of its lines, split at charm 10
@@ -17,4 +18,9 @@
    (unlines ls)
     (: o (jug 0)
        (go m) (? (two? m) (: _ (say o <m) _ (put o 10) (go >m)) (slurp o))
-       (go ls)))
+       (go ls))
+   ; the two that put back what `unlines` cannot know: did this text end in a newline,
+   ; and drop one if it is there. ⚠ an empty text ends in nothing, so it answers 0 and
+   ; chomps to itself -- neither is a special case anywhere above.
+   (nl-end? s) (: n (tally s) ((0 < n) && (s (n - 1) = 10)))
+   (chomp t) (: n (tally t) (? (nl-end? t) (snip t 0 (n - 1)) t)))
