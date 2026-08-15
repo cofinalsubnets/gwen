@@ -10,7 +10,7 @@ overlay over the love base system. Two payoffs at once:
   love/mooncc/holo.
 
 The base is the gcc-free, glibc-free static `love` (`make test_raw`) booting as pid 1 on the
-Linux kernel via `init/boot.l` + `mk/distro.mk` (`make distro-run`, or `distro-smoke` for the
+Linux kernel via `crew/init/boot.l` + `mk/distro.mk` (`make distro-run`, or `distro-smoke` for the
 headless check). The overlay is these packages, laid beside kore under /usr.
 
 ⚠ **Skip the two-pass cross-toolchain ritual entirely** — mooncc/holo/nolibc already ARE the
@@ -263,4 +263,4 @@ describes nolibc honestly. doc/moon-diag.md carries the two paths.
 bzip2 → gzip → less → m4 → make → sed/grep (gnulib-heavy, harder) → bash → coreutils.
 
 Related: doc/moon.md (the compiler), doc/moon-kernel.md (which is no longer this ladder's far
-end — the kernel is built by mooncc already), `init/boot.l` + `mk/distro.mk` (the base).
+end — the kernel is built by mooncc already), `crew/init/boot.l` + `mk/distro.mk` (the base).

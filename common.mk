@@ -54,9 +54,9 @@ tco ?= 1
 # code, so they ride their own arch-guarded targets, never the arch-neutral corpus.
 t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
-love_h = $(wildcard $R/*.h)
+love_h = $(wildcard $R/core/*.h)
 # the core rides with its math floor: our own transcendentals, no libm anywhere
-love_c = $R/love.c $R/crew/moon/lib/math/am.c
+love_c = $R/core/love.c $R/crew/moon/lib/math/am.c
 # the quay engine every seat carries. paint.c (32bpp) and nif.c (the love door) are
 # per-seat -- a 1-bit device wants neither, the host unity-includes nif.c -- so a seat that
 # wants one NAMES it rather than taking it here.
@@ -76,10 +76,10 @@ ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
 # rides every non-Darwin build and macOS does without -- it has no CET to turn off.
 ifneq ($(shell uname -s),Darwin)
 ai_cflags += -fcf-protection=none -D_POSIX_C_SOURCE=200809L
-# the data-sentinel tiling love.h's ai_typ reads (love.c's DSENT), on every ld/lld link.
-# mach-o goes without: it names sections `segment,section`, so love.h asks them by name.
-data_ld = -Wl,-T,$R/love_data.ld
-# ⚠ AN EMPTY BRACKET IS STILL A BRACKET. love.c indexes the host nif slice off
+# the data-sentinel tiling core/love.h's ai_typ reads (core/love.c's DSENT), on every ld/lld link.
+# mach-o goes without: it names sections `segment,section`, so core/love.h asks them by name.
+data_ld = -Wl,-T,$R/core/love_data.ld
+# ⚠ AN EMPTY BRACKET IS STILL A BRACKET. core/love.c indexes the host nif slice off
 # [__start_ai_nifs, __stop_ai_nifs), which the toolchain synthesises only where the
 # SECTION exists -- so an embedder registering its defs by hand owns no AI_NIF and the
 # pair goes undefined at the link. weak declarations do not answer it: ld leaves a weak

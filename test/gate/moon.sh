@@ -18,7 +18,7 @@ love0=$3
 fail() { echo "FAIL $*" >&2; exit 1; }
 # the compiler under test: the baked mooncc image, woken per invocation
 moonrun() { "$m" wake "$ho/mooncc.image" mooncc "$@"; }
-# ..and the BOOTSTRAP one, the lane that compiles love.c: love0 waking mooncc0.image
+# ..and the BOOTSTRAP one, the lane that compiles core/love.c: love0 waking mooncc0.image
 moon0() { "$love0" wake out/host/mooncc0.image mooncc "$@"; }
 
 # ---------------------------------------------------------------- the laws
@@ -37,7 +37,7 @@ cat "$out"
 # frontend's boot binds to that module's accessor. a lane that leaves something else
 # there curries every combinator into a silent partial: no scare, no wrong answer,
 # just every template failing to parse. love0's build-tool lane is the one that
-# compiles love.c, and it is the only lane the laws above never walk.
+# compiles core/love.c, and it is the only lane the laws above never walk.
 echo "CC crew/holo/text.l (love0 lane)"
 "$love0" -l crew/holo/text.l -e '(? (two? (asm-text "li r0, 60")) (quit 0) (quit 1))' </dev/null \
   || fail "asm-text under love0 -- is bare \`post\` the module accessor there?"

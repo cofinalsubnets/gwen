@@ -10,7 +10,7 @@
 // double-bake under emulation -- then the driver tail asserts a few spec
 // laws and exits through vexit, so `make test_virt` sees 42 (98 = a trap,
 // reported by start.o's mtvec tail through fault_report below).
-#include "../../love.h"
+#include "../../core/love.h"
 
 #ifndef EOF
 #define EOF (-1)

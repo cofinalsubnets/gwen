@@ -1,14 +1,14 @@
 #!/bin/sh
 # ccbench.sh -- the COMPILER shootout (the page's FOURTH table). Builds the love host
 # binary with three C compilers and, for each, reports four wall-clock costs:
-#   build : compile every C translation unit (love.c + host/*.c + the am math floor)
+#   build : compile every C translation unit (core/love.c + host/*.c + the am math floor)
 #           and link a working `love` -- source to runnable binary.
 #   test  : run the full arch-neutral corpus ($t, the same files test_host/test_raw
 #           feed) through the binary that build produced, with egg-boot EXCLUDED
 #           (subtracted) so it times the suite executing, not the compiler self-install.
 #   chacha / poly1305 : one C function each, same subtraction (bench/ccrypto.l).
 #           These are here because the corpus row averages a compiler's work over all
-#           of love.c, and the average is flattering: mooncc/clang reads ~1.1x there
+#           of core/love.c, and the average is flattering: mooncc/clang reads ~1.1x there
 #           and ~23x on chacha. chacha20 indexes a 16-word state ARRAY in its inner
 #           loop, poly1305 keeps five limbs as scalar LOCALS, and mooncc has register
 #           residency for the second shape only -- so the PAIR is the reading. Wide
@@ -44,7 +44,7 @@
 #   build is timed once (a stable multi-second cost, and the artifact is reused);
 #   test subtracts two medians of `samples` runs each (corpus, then empty boot), default 3.
 # resolve the repo root ABSOLUTELY: the build lanes cd into it to reach the source
-# globs (love.c, host/*.c, crew/...), so every output/include path below must be absolute.
+# globs (core/love.c, host/*.c, crew/...), so every output/include path below must be absolute.
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TIMEOUT=${1:-180}
 SAMPLES=${2:-3}
@@ -74,15 +74,15 @@ if [ -z "$LOVE_CFLAGS" ]; then
 fi
 # drop -Werror: this table times compile+link, and -Werror is a lint GATE, not a
 # codegen or speed factor. Keeping it would bench a compiler's warning set, not its
-# throughput -- gcc's -Wall flags a benign construct in love.c (-Wmisleading-indentation)
+# throughput -- gcc's -Wall flags a benign construct in core/love.c (-Wmisleading-indentation)
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
 CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/out/lib"
 # common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
-# sentinels' tiling IS love.h's ai_typ, and ld left to itself keeps each love_data.N an
+# sentinels' tiling IS core/love.h's ai_typ, and ld left to itself keeps each love_data.N an
 # orphan in first-encountered order -- gcc emits love_data.7 first, so lvm_str lands
 # below lvm_sym and every string reads as a closure. mach-o goes without, as there.
 LDFLAGS=
-[ "$(uname -s)" = Darwin ] || LDFLAGS="-Wl,-T,$R/love_data.ld"
+[ "$(uname -s)" = Darwin ] || LDFLAGS="-Wl,-T,$R/core/love_data.ld"
 
 # wall-clock (ms) of a command; echoes just the number. Runs in a subshell so a cd can't leak.
 wall() { t0=$(date +%s.%N); ( eval "$1" ) >/dev/null 2>&1; t1=$(date +%s.%N)
@@ -91,13 +91,13 @@ wall() { t0=$(date +%s.%N); ( eval "$1" ) >/dev/null 2>&1; t1=$(date +%s.%N)
 med() { i=0; while [ "$i" -lt "$SAMPLES" ]; do wall "$1"; echo; i=$((i+1)); done \
         | sort -n | awk '{v[NR]=$0} END{print v[int((NR+1)/2)]}'; }
 
-# -- gcc / clang: the ordinary lane. Compile the liblove.a translation units (love.c +
+# -- gcc / clang: the ordinary lane. Compile the liblove.a translation units (core/love.c +
 #    am.c) and the host/*.c glob (main.c carries the egg), then link the objects. --
 build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<binname>
   cc=$1; bin=$2; xf=$3; od=$WORK/o-$(basename "$bin")   # o- prefix: $bin itself lives in $WORK
   rm -rf "$od"; mkdir -p "$od/host"
   ( cd "$R" || exit 1
-    $cc $CFLAGS $xf -c love.c                    -o "$od/love.o" || exit 1
+    $cc $CFLAGS $xf -c core/love.c                    -o "$od/love.o" || exit 1
     $cc $CFLAGS $xf -c crew/moon/lib/math/am.c -o "$od/am.o" || exit 1
     for f in host/*.c; do b=$(basename "$f" .c)
       $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
@@ -110,7 +110,7 @@ MC="$ho/mooncc"
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
-    "$MC" -D ai_tco=1 -Iout/host -I. -Iout/lib -c love.c "$od/love.o" || exit 1
+    "$MC" -D ai_tco=1 -Iout/host -I. -Iout/lib -c core/love.c "$od/love.o" || exit 1
     for f in host/*.c; do b=$(basename "$f" .c)
       "$MC" -D ai_tco=1 -Iout/host -I. -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
     # no nolibc object: the link owes its symbols and the driver supplies them

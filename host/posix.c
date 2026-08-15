@@ -100,7 +100,7 @@ static struct ai *argv_marshal(struct ai *g, char ***cavp) {
 // (glean _)     -> (pid . status) of one reaped child
 //                | ()                 none pending
 //                | a NEGATIVE fixnum  (-errno, e.g. -ECHILD: no children left)
-// init/init.l drives REAL processes with these plus the generic `still` (kill):
+// crew/init/init.l drives REAL processes with these plus the generic `still` (kill):
 // spawn returns a pid to track, glean is the SIGCHLD core (poll it, map the pid
 // back to a unit, restart per policy). On a real pid1 glean also collects
 // reparented orphans (waitpid(-1)).

@@ -97,7 +97,7 @@
 ; --- the SEAT (kiosko's): fire only when this file IS the program -- the catted
 ; bin (`lush ..`), an sh-named symlink to it, or a -l load of the assembly.
 ; `cmdline` is the raw C argv and is never rebound, so the read is
-; order-independent inside any cat; init/boot.l's `-l /lib/sh.l -e "(sh 0)"`
+; order-independent inside any cat; crew/init/boot.l's `-l /lib/sh.l -e "(sh 0)"`
 ; lane stays quiet here ("sh.l" is deliberately NOT a me? name) and fires
 ; through its -e instead.
 ; a dash-led basename (-lush, -sh: login(1)'s mark) seats us too and makes a LOGIN

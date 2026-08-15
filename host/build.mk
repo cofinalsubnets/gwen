@@ -24,9 +24,9 @@ host_cc = $(CC)
 # corpus, an egg-booted love has no verb table, and `mooncc` then reads as a FILENAME
 # ("love: cannot open mooncc"). The love0 lane already leads with it; this puts it on
 # every $(hcc) site at once rather than three times.
-hcc = LOVE_NO_IMAGE= $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
-# the whole-archive flag differs by linker, and mach-o takes no love_data.ld either -- it
-# spells sections `segment,section`, so kinds.h's roster asks the sentinels by name.
+hcc = LOVE_NO_IMAGE= $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Icore -Iout/lib
+# the whole-archive flag differs by linker, and mach-o takes no core/love_data.ld either -- it
+# spells sections `segment,section`, so core/kinds.h's roster asks the sentinels by name.
 ifeq ($(shell uname -s),Darwin)
 so_archive = -Wl,-force_load,$(ho)/liblove.a       # ld64's whole-archive
 # ⚠ the host contract (ai_clock, ai_fd_port_vt, ai_stdin/out/err: in host/main.c, linked
@@ -104,7 +104,7 @@ $(ho)/liblove.a: $(h_o)
 	@mkdir -p $(dir $@)
 	@rm -f $@; ar rcs $@ $^
 
-$(ho)/liblove.so: $(ho)/liblove.a $(R)/love_data.ld
+$(ho)/liblove.so: $(ho)/liblove.a $(R)/core/love_data.ld
 	@echo LD	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -shared -o $@ $(so_archive) $(so_undef) $(data_ld)
@@ -127,7 +127,7 @@ $(ho)/liblove.so: $(ho)/liblove.a $(R)/love_data.ld
 # script. Both ai_typ bodies answer the same enum d for the same ap, and the one place a
 # data object crosses between differently-built binaries -- the heap image -- carries an ap
 # as its INDEX, never an address. So the layout never crosses.
-gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -Dai_data_section=0 -DAI_VERSION='"$(love_base)+bootstrap"' -I. -Iout/lib
+gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -Dai_data_section=0 -DAI_VERSION='"$(love_base)+bootstrap"' -I. -Icore -Iout/lib
 love0_host_o = $(patsubst host/%.c,out/host/0/host/%.o,$(wildcard host/*.c))
 love0_o = $(love0_host_o) $(love_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
 out/host/0/host/main.o: $(gl0_h)
@@ -158,7 +158,7 @@ $(love0): $(love0_o)
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
 
-# love.c -> out/host/*.o
+# core/love.c -> out/host/*.o
 $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 	@echo CC	$@
 	@mkdir -p $(dir $@)
@@ -205,7 +205,7 @@ moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/
 # resolver links neither. Naming an object would take every member instead.
 moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_math_o) $(moon_d)/sys.o
 # -D AI_HAVE_VERSION_H + the love_version.h dep: this TU carries the version id into the
-# SHIPPED binary, and mooncc has no __has_include for love.c's fallback probe to use.
+# SHIPPED binary, and mooncc has no __has_include for core/love.c's fallback probe to use.
 # THE RECORD, and it is OFF: `-fir` lays the machine-form IR of every function into
 # .rodata (per-TU `ai_ir_<basename>`), ~1.5 MB, +12.8% on the artifact. It was on for
 # exactly one commit, and the argument that took it off again is the good one: THE
@@ -215,14 +215,14 @@ moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_math_o) $(moon_d)/sys.o
 # natjit lane is dead weight, so `make moon_fir=-fir` is how you get it back (and
 # `rm -rf out/host/moon` first -- make tracks files, not flag strings).
 moon_fir = -fno-ir
-$(moon_d)/love.o: love.c $(love_h) $(moon0_dep) out/lib/love_version.h
+$(moon_d)/love.o: core/love.c $(love_h) $(moon0_dep) out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H $(moon_fir) -I$(ho) -I. -Iout/lib -c $< $@
+	@$(moon0) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H $(moon_fir) -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(moon_d)/host_%.o: host/%.c $(love_h) $(moon0_dep)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) $(moon_fir) -I$(ho) -I. -Iout/lib -c $< $@
+	@$(moon0) -D ai_tco=$(tco) $(moon_fir) -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(moon_d)/host_main.o: $(baked_h)
 $(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(moon_d)/m_%.o: crew/moon/lib/math/%.c $(moon0_dep)
@@ -258,7 +258,7 @@ $(moon_d)/sys.o: $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_love) -l $(ho)/.mksys-cat.l -n -e '($(mksys_e) "$@")' && test -s $@
 ifneq ($(HCC),)
-$(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/love_data.ld $(baked_h)
+$(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/core/love_data.ld $(baked_h)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(image_ldflags) $(data_ld)

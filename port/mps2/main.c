@@ -8,7 +8,7 @@
 // The boot bakes the egg from source on the M7 -- the whole self-hosting
 // double-bake runs under emulation -- then the driver tail asserts a few
 // spec laws and exits through m7exit, so `make test_mps2` sees 42.
-#include "../../love.h"
+#include "../../core/love.h"
 
 #ifndef EOF
 #define EOF (-1)

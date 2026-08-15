@@ -9,7 +9,7 @@
 // timer, and GPIO; this file is just the love glue plus a few GPIO nifs. The
 // shell line editor (love/bao.l, the baked shell core) drives the console
 // exactly as it drives the kernel's.
-#include "../../love.h"
+#include "../../core/love.h"
 #include "teensy41.h"
 #include "psram.h"
 

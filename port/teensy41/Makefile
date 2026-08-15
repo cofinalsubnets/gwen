@@ -1,5 +1,5 @@
 # Teensy 4.1 (i.MX RT1062) build -- love compiled END TO END by mooncc. `make -C
-# port/teensy41` from the project root. Every C file -- love.c, the am math floor, libc,
+# port/teensy41` from the project root. Every C file -- core/love.c, the am math floor, libc,
 # teensy41.c, main.c -- goes through `mooncc -t thumb2`; boot.o (the ROM-facing
 # FlexSPI/IVT/vector blocks + crt0 + the asm helpers) is laid from holo IR by mkboot.l, the
 # baked heap image by mkimg.l, tlink.l LINKS over holo's ldbare32 and ocopy.l writes the
@@ -16,7 +16,7 @@ p_be  = thumb2
 lib_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h out/lib/love_version.h
 include ../port.mk
 
-te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
+te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Icore -Iout/lib
 
 objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
   $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
@@ -26,11 +26,11 @@ objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o \
 default: teensy41
 teensy41: $(R)/$(o)/love.hex
 
-$(eval $(call p_obj,love,love.c,$(R)/love.c $(R)/love.h $(lib_hR) $(mc),$(te_cc)))
-$(eval $(call p_obj,mem,libc/mem.c,$(R)/libc/mem.c $(R)/love.h $(mc),$(te_cc)))
-$(eval $(call p_obj,str,libc/str.c,$(R)/libc/str.c $(R)/love.h $(mc),$(te_cc)))
-$(eval $(call p_obj,teensy41,port/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/love.h $(mc),$(te_cc)))
-$(eval $(call p_obj,main,port/teensy41/main.c,main.c teensy41.h $(R)/love.h $(lib_hR) $(mc),$(te_cc)))
+$(eval $(call p_obj,love,core/love.c,$(R)/core/love.c $(R)/core/love.h $(lib_hR) $(mc),$(te_cc)))
+$(eval $(call p_obj,mem,libc/mem.c,$(R)/libc/mem.c $(R)/core/love.h $(mc),$(te_cc)))
+$(eval $(call p_obj,str,libc/str.c,$(R)/libc/str.c $(R)/core/love.h $(mc),$(te_cc)))
+$(eval $(call p_obj,teensy41,port/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/core/love.h $(mc),$(te_cc)))
+$(eval $(call p_obj,main,port/teensy41/main.c,main.c teensy41.h $(R)/core/love.h $(lib_hR) $(mc),$(te_cc)))
 
 # boot.o: the ROM-facing FlexSPI/IVT/vector blocks, crt0 and the asm helpers, laid from
 # holo IR -- no gas. port/mps2/mkstart.l is the same shape with one section,

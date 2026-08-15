@@ -21,17 +21,17 @@ mkdir -p $o
 [ -x $mc ] || { echo "vmsplice: no $mc -- run make host first" >&2; exit 1; }
 
 echo "== splice.c: composed vs dispatched =="
-# love.c per compiler: the probe links against the real VM, so each column is
+# core/love.c per compiler: the probe links against the real VM, so each column is
 # self-consistent. liblove.a carries the am_* math floor.
 if command -v $CC >/dev/null 2>&1; then
-  $CC -O2 -std=c2x -I. -Iout/lib -c love.c            -o $o/love-cc.o
+  $CC -O2 -std=c2x -I. -Iout/lib -c core/love.c            -o $o/love-cc.o
   $CC -O2 -std=c2x -I. -Iout/lib -c bench/vmsplice/splice.c -o $o/splice-cc.o
   $CC $o/splice-cc.o $o/love-cc.o out/host/liblove.a -o $o/splice-cc -lm 2>/dev/null
   echo "-- $CC --"; $o/splice-cc
 else
   echo "-- $CC not on PATH, skipped --"
 fi
-$mc -I. -Iout/lib -c love.c                  $o/love-mc.o
+$mc -I. -Iout/lib -c core/love.c                  $o/love-mc.o
 $mc -I. -Iout/lib -c bench/vmsplice/splice.c $o/splice-mc.o
 $CC $o/splice-mc.o $o/love-mc.o out/host/liblove.a -o $o/splice-mc -lm 2>/dev/null
 echo "-- mooncc --"; $o/splice-mc

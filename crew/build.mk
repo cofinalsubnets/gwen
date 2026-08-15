@@ -336,14 +336,14 @@ xmath_o = $(patsubst crew/moon/lib/math/%.c,$(xd)/m_%.o,$(wildcard crew/moon/lib
 # no nolibc.o: the link owes its symbols and the driver pulls the members by need
 # (crew/moon/lib/nolibc/), so a dist takes no calendar and no resolver.
 xobjs = $(xd)/love.o $(xhost_o) $(xmath_o) $(xd)/sys.o
-$(xd)/love.o: love.c $(love_h) out/host/mooncc0.image
+$(xd)/love.o: core/love.c $(love_h) out/host/mooncc0.image
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
+	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(xd)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Iout/lib -c $< $@
+	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(xd)/host_main.o: $(baked_h)
 $(xd)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(xd)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image

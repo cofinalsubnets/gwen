@@ -50,13 +50,13 @@ LOVE_NO_IMAGE=1 "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (q
 
 # ...and rebuilds every TU with it, in the exact order make links them
 moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
-# ⚠ love.c's flags must MIRROR make's ($(moon_d)/love.o in host/build.mk), not just its
+# ⚠ core/love.c's flags must MIRROR make's ($(moon_d)/love.o in host/build.mk), not just its
 # order: -D AI_HAVE_VERSION_H is what puts the version id in this TU, and love1 was linked
 # from make's object. Drop it here and love2 carries "unknown" -- the compare fails at the
 # string, naming a broken fixpoint where the only difference is a build flag. $fir is the
 # same trap wearing its second face -- it decides whether ~1.5 MB of IR record rides -- and
 # it arrives from make for exactly that reason.
-moon1 -D ai_tco=1 -D AI_HAVE_VERSION_H $fir -I"$ho" -I. -Iout/lib -c love.c "$d/love.o" || fail "love1 mooncc -c love.c"
+moon1 -D ai_tco=1 -D AI_HAVE_VERSION_H $fir -I"$ho" -I. -Iout/lib -c core/love.c "$d/love.o" || fail "love1 mooncc -c core/love.c"
 for f in host/*.c; do
   b=$(basename "$f" .c)
   moon1 -D ai_tco=1 $fir -I"$ho" -I. -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"

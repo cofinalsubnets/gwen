@@ -8,8 +8,8 @@ emcc = $(CCACHE) $(EMCC)
 o = ../out/wasm
 
 # g.c was split into per-concern translation units (kernel/*.c); build them all.
-g_c = ../love.c ../crew/moon/lib/math/am.c
-g_h = $(wildcard ../*.h)
+g_c = ../core/love.c ../crew/moon/lib/math/am.c
+g_h = $(wildcard ../core/*.h)
 
 # One object per source, so an edit recompiles just that TU and ccache can cache each.
 # Local host.c stays rooted in cwd; shared kernel/*.c carry ../, mapped in by the patsubst.
@@ -20,7 +20,7 @@ objs = $(host_o) $(core_o)
 CFLAGS = -std=gnu2x -O2 -g0 -Dai_tco=0 \
   -Wall -Wno-unused-parameter -Wno-shift-negative-value \
   -fno-exceptions \
-  -I.. -I../out/lib
+  -I.. -I../core -I../out/lib
 
 EMFLAGS = \
   -sMODULARIZE=1 -sEXPORT_NAME=Love \
@@ -63,7 +63,7 @@ $(o)/love_version.h: ../out/lib/love_version.h
 	@mkdir -p $(dir $@)
 	@sed 's/-dirty"/-wasm"/' $< > $@
 
-$(o)/love.o: ../love.c $(g_h) $(o)/love_version.h
+$(o)/love.o: ../core/love.c $(g_h) $(o)/love_version.h
 	@echo CC	$@
 	@mkdir -p $(dir $@)
 	@$(emcc) -I$(o) $(CFLAGS) -c $< -o $@

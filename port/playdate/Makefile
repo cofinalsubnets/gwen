@@ -26,10 +26,10 @@ pd_opt = -Os -falign-functions=16 -fomit-frame-pointer
 # soft helpers -- the same __aeabi_* calls mooncc's soft-double pass emits.
 pd_fpu = -mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
 pd_mcflags = -mthumb -mcpu=cortex-m7 $(pd_fpu)
-pd_incdir = -I. -I$(o) -I$(R) -I$(R)/out/lib -I$(R)/crew/quay -I$(pd_sdk)/C_API
-# ai_data_section=0: the sentinel tiling love.h's ai_typ reads needs the link to
+pd_incdir = -I. -Icore -I$(o) -I$(R) -I$(R)/out/lib -I$(R)/crew/quay -I$(pd_sdk)/C_API
+# ai_data_section=0: the sentinel tiling core/love.h's ai_typ reads needs the link to
 # place love_data.NN, and this seat links through the SDK's own link_map.ld --
-# not ours to write a block into. love.h asks the sentinels by name here.
+# not ours to write a block into. core/love.h asks the sentinels by name here.
 pd_defs = -DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dai_data_section=0
 pd_cpflags = $(pd_mcflags) $(pd_opt) $(pd_defs) -std=gnu2x -ffreestanding \
   -gdwarf-2 -Wall -Wno-unused -Wstrict-prototypes -Wno-unknown-pragmas \
@@ -42,14 +42,14 @@ pd_ldflags = -nostartfiles $(pd_mcflags) -T$(pd_lds) \
 # mooncc's flags for the device C (run from $(R): its system include dir is
 # CWD-relative). TARGET_PLAYDATE gates main.c's newlib stubs.
 mc_flags = -t thumb2sp -D ai_tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 -D ai_data_section=0 \
-  -Iport/playdate -Iout/playdate -I. -Iout/lib -Icrew/quay
+  -Iport/playdate -Iout/playdate -I. -Icore -Iout/lib -Icrew/quay
 
 # the lcat lib headers this frontend bakes (produced by the root's rules on
 # love0, delegated below so a standalone make works from a clean tree)
 lib_hs = $(patsubst %,$(R)/out/lib/%.h,egg prel ev q kanren rune)
 pd_h = $(love_h) $(wildcard $(R)/crew/quay/*.h) $(o)/cas.h $(lib_hs)
 
-# the split: mooncc carries love.c + am + quay + main.c; gcc carries pdglue.c
+# the split: mooncc carries core/love.c + am + quay + main.c; gcc carries pdglue.c
 # (the pd_api.h owner) + the SDK's setup.c. the sim build compiles everything
 # hosted, so pd_src keeps the full wildcard.
 pd_local_c = $(wildcard *.c)
@@ -148,7 +148,7 @@ $(o)/pdex.so: $(pd_src) $(o)/cas.h
 	@echo CC	$@
 	@mkdir -p $(o)
 	@$(CCACHE) gcc -g -O1 -shared -fPIC -Dai_tco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 \
-	  -I. -I$(o) -I$(R) -I$(R)/out/lib -I$(R)/crew/quay -I$(pd_sdk)/C_API \
+	  -I. -Icore -I$(o) -I$(R) -I$(R)/out/lib -I$(R)/crew/quay -I$(pd_sdk)/C_API \
 	  -o $@ $(pd_src) -lm
 
 .PRECIOUS: $(o)/%.elf

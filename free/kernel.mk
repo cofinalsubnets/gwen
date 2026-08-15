@@ -71,13 +71,13 @@ k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_lay_o)
 # The kernel runs the GENERATIONAL collector bounded by g->budget: kmain sums the boot
 # memmap into kram_words and sets budget = kram_words/8 after ai_ini (the Appel knob).
 # ⚠ unbounded, the nursery's copy-overhead resizer grows until gen_major's all-survive
-# sizing asks kmallocw for a block bigger than any physical RAM range. gen_please, love.c.
+# sizing asks kmallocw for a block bigger than any physical RAM range. gen_please, core/love.c.
 kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
   -ffunction-sections -fdata-sections
 kldflags := -static -nostdlib --gc-sections -T $(R)/free/$a/$a.lds -z max-page-size=0x1000
 kcppflags := \
   -I$(k_odir) \
-  -I. -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/free \
+  -I. -Icore -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/free \
   -I$(R)/free/$a \
   -I$(R)/crew/moon/include \
   -Ilibc \
@@ -164,7 +164,7 @@ out/lib/korecat.l: $(korefiles)
 	@mkdir -p out/lib
 	@cat $(korefiles) > $@
 
-# Shared C sources (love.c, crew/quay/, libc/) + per-arch free/<a>/.
+# Shared C sources (core/love.c, crew/quay/, libc/) + per-arch free/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
 $(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h out/lib/kfs.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h,out/lib/korecat.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h)
 	@echo $(kcctag)	$@
@@ -177,7 +177,7 @@ $(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p
 kmain_o: $(k_free_o)
 
 # l.o carries the version string; recompile it when the id changes. ⚠ the -D is what MAKES
-# it carry one -- mooncc has no __has_include for love.c's fallback probe, so without it
+# it carry one -- mooncc has no __has_include for core/love.c's fallback probe, so without it
 # the dep tracks a header the object cannot read and the kernel answers "unknown".
 $(k_odir)/love.o: out/lib/love_version.h
 $(k_odir)/love.o: kcppflags += -DAI_HAVE_VERSION_H
@@ -280,7 +280,7 @@ run-headless: $(ko)/love-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
 init-container: host
 	@command -v unshare >/dev/null || { echo "init-container: needs unshare (util-linux)"; exit 1; }
 	@echo "-- love as PID 1 in a pid+user+mount namespace --"
-	unshare --pid --fork --mount-proc --user --map-root-user -- $m -l init/init.l -e "(pid1 0)"
+	unshare --pid --fork --mount-proc --user --map-root-user -- $m -l crew/init/init.l -e "(pid1 0)"
 
 # --- headless serial test (wired into test_slow; x86_64 + qemu only) ------------
 # The K_TEST corpus: the host $t minus what this seat cannot run, plus the laws that can

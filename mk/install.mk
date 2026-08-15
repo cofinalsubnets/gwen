@@ -17,7 +17,7 @@ DESTDIR ?= $(HOME)/
 # (Arch's extra/love owns /usr/bin/love and man1/love.1 outright). Nothing below hardcodes
 # the command name, so `make install BIN=lovelang` moves the binary, both shims, every
 # shebang and the man page together. ⚠ the PROJECT is still love: lib/love/, liblove,
-# love.h and love/*.l keep the name -- data paths, not PATH entries.
+# core/love.h and love/*.l keep the name -- data paths, not PATH entries.
 BIN ?= love
 BINUP = $(shell echo '$(BIN)' | tr '[:lower:]' '[:upper:]')
 d = $(DESTDIR)/$(PREFIX)
@@ -129,8 +129,8 @@ uninstall:
 	@echo RM	$(abspath $(installs))
 	@rm -f $(installs)
 
-# the embedding surface is TWO files: love.h includes kinds.h (the kind lattice,
-# laid by mx.l), so an installed love.h without it does not compile.
+# the embedding surface is TWO files: core/love.h includes core/kinds.h (the kind lattice,
+# laid by core/mx.l), so an installed core/love.h without it does not compile.
 $d/include/%.h: %.h
 	$(inst644)
 

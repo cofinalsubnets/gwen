@@ -1,5 +1,5 @@
 # qemu MPS2+ AN500 (Cortex-M7) build -- love compiled END TO END by mooncc. `make -C
-# port/mps2` from the project root. Every C file -- love.c, the am math floor, libc, main.c
+# port/mps2` from the project root. Every C file -- core/love.c, the am math floor, libc, main.c
 # -- goes through `mooncc -t thumb2`, start.o is laid from holo IR by mkstart.l, and
 # mooncc's own -Ttext/-Tdata drive the link over holo's 32-bit lane: no arm-none-eabi
 # anywhere.
@@ -13,7 +13,7 @@ lib_h  = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h o
 p_hdrs = out/lib/rune.h
 include ../port.mk
 
-mps2_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Iout/lib
+mps2_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Icore -Iout/lib
 # our own link: -Ttext 0 is the board's origin, -nostdlib says an owed nom is a diagnostic
 # rather than a hunt for a runtime this board would not want.
 mps2_ld = $(MOONCC) -t thumb2 -Ttext 0 -Tdata 0x20000000 -nostdlib
@@ -32,12 +32,12 @@ default: mps2
 mps2: $(R)/$(o)/love.elf
 mps2t1: $(R)/$(o)/love-t1.elf
 
-$(eval $(call p_obj,love,love.c,$(R)/love.c $(R)/love.h $(lib_hR) $(mc),$(mps2_cc)))
-$(eval $(call p_obj,mem,libc/mem.c,$(R)/libc/mem.c $(R)/love.h $(mc),$(mps2_cc)))
-$(eval $(call p_obj,str,libc/str.c,$(R)/libc/str.c $(R)/love.h $(mc),$(mps2_cc)))
+$(eval $(call p_obj,love,core/love.c,$(R)/core/love.c $(R)/core/love.h $(lib_hR) $(mc),$(mps2_cc)))
+$(eval $(call p_obj,mem,libc/mem.c,$(R)/libc/mem.c $(R)/core/love.h $(mc),$(mps2_cc)))
+$(eval $(call p_obj,str,libc/str.c,$(R)/libc/str.c $(R)/core/love.h $(mc),$(mps2_cc)))
 
 # main.c, once per face -- the -D is the whole difference.
-mainc = main.c $(R)/love.h $(lib_hR) $(mc)
+mainc = main.c $(R)/core/love.h $(lib_hR) $(mc)
 $(eval $(call p_obj,main,port/mps2/main.c,$(mainc),$(mps2_cc)))
 $(eval $(call p_obj,main-baker,port/mps2/main.c,$(mainc),$(mps2_cc) -D BAKER))
 $(eval $(call p_obj,main-waker,port/mps2/main.c,$(mainc),$(mps2_cc) -D WAKER))
@@ -75,7 +75,7 @@ imgpd: $(R)/$(o)/love-pd.img
 $(R)/out/playdate/cas.h:
 	@$(MAKE) -C $(R)/port/playdate ../../out/playdate/cas.h
 
-pdmainc = main.c $(R)/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
+pdmainc = main.c $(R)/core/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
 $(eval $(call p_obj,main-baker-pd,port/mps2/main.c,$(pdmainc),$(mps2_cc) -D BAKER -D BAKER_RUNE -Iout/playdate))
 $(eval $(call p_obj,main-waker-pd,port/mps2/main.c,$(pdmainc),$(mps2_cc) -D WAKER -D BAKER_RUNE -Iout/playdate))
 
@@ -102,14 +102,14 @@ $(R)/$(o)/love-pd.img: $(R)/$(o)/baker-pd.elf $(R)/$(o)/waker-pd.elf
 # floor, this proves the whole runtime. ai_tco=0: v6-M has no sibcalls (the pop-pc
 # epilogue), so the VM rides the trampoline -- the lane the clang rp2040 build uses. The
 # __aeabi soft-float/64-bit helpers come from gcc's v6-m multilib.
-mps2t1_cc = $(MOONCC) -t thumb1 -D ai_tco=0 -D __STDC_HOSTED__=0 -I. -Iout/lib
+mps2t1_cc = $(MOONCC) -t thumb1 -D ai_tco=0 -D __STDC_HOSTED__=0 -I. -Icore -Iout/lib
 t1_lg = `arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -print-libgcc-file-name`
 t1_objs = $(R)/$(o)/start.o $(R)/$(o)/love-t1.o $(R)/$(o)/am-t1.o $(R)/$(o)/mem-t1.o \
   $(R)/$(o)/str-t1.o $(R)/$(o)/main-t1.o
 
-$(eval $(call p_obj,love-t1,love.c,$(R)/love.c $(R)/love.h $(lib_hR) $(mc),$(mps2t1_cc)))
-$(eval $(call p_obj,mem-t1,libc/mem.c,$(R)/libc/mem.c $(R)/love.h $(mc),$(mps2t1_cc)))
-$(eval $(call p_obj,str-t1,libc/str.c,$(R)/libc/str.c $(R)/love.h $(mc),$(mps2t1_cc)))
+$(eval $(call p_obj,love-t1,core/love.c,$(R)/core/love.c $(R)/core/love.h $(lib_hR) $(mc),$(mps2t1_cc)))
+$(eval $(call p_obj,mem-t1,libc/mem.c,$(R)/libc/mem.c $(R)/core/love.h $(mc),$(mps2t1_cc)))
+$(eval $(call p_obj,str-t1,libc/str.c,$(R)/libc/str.c $(R)/core/love.h $(mc),$(mps2t1_cc)))
 $(eval $(call p_obj,main-t1,port/mps2/main.c,$(mainc),$(mps2t1_cc)))
 $(eval $(call p_obj,am-t1,crew/moon/lib/math/am.c,$(R)/crew/moon/lib/math/am.c $(mc),\
   $(MOONCC) -t thumb1 -Icrew/moon/lib/math -Icrew/moon/include))

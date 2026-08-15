@@ -142,7 +142,10 @@ for f in "$cts"/tests/single-exec/*.c; do
   # announcing that on stderr would read as the gate itself dying. ⚠ the trailing
   # `exit $?` is load-bearing -- a lone command in a subshell is exec'd into it, so
   # the SIGSEGV lands on the subshell and the parent does the announcing instead.
-  ( timeout 60 ${QEMU:-} "$d/$b.bin" > "$d/$b.out" 2>&1; exit $? ) 2>/dev/null; r=$?
+  # ⚠ AND IN $d, not here: 00154 writes fred.txt beside itself and 00196/00199 read it
+  # back, so a run from the tree root litters the tree root (fred.txt was .gitignore'd
+  # rather than confined). the subshell's cd keeps the outer paths below unchanged.
+  ( cd "$d" && timeout 60 ${QEMU:-} "./$b.bin" > "$b.out" 2>&1; exit $? ) 2>/dev/null; r=$?
   [ $r -ne 124 ] || fail "$b: timed out"
   if [ $r -eq 0 ] && cmp -s "$f.expected" "$d/$b.out"; then
     [ "$want" != wrong ] \

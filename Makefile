@@ -92,8 +92,8 @@ test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
 # slow gate. test_embed rides here rather than in `test`: ~7 s on a tree nothing touched,
-# and it earns them only when love.h or a frontend moved (a love.h edit puts it at ~2.5 min,
-# because linking every frontend means compiling love.c once per target). What it adds HERE
+# and it earns them only when core/love.h or a frontend moved (a core/love.h edit puts it at ~2.5 min,
+# because linking every frontend means compiling core/love.c once per target). What it adds HERE
 # is the frontends the booting lanes below never reach -- mps2, teensy41, nucleo446,
 # playdate, and kmain.c at aarch64 -- which otherwise wait for test_extra.
 # the SEED is the product (doc/dist.md), so the tier that gates a commit is the tier that
@@ -130,7 +130,7 @@ lint: $(ho)/love
 	@$(ho)/love $R/crew/libra/libra.l $$(git ls-files '*.l') && echo "lint: .l balance clean"
 
 # ccdb: emit compile_commands.json so clangd reads the flags the build actually uses --
-# without it the missed love.h cascades into a flood of undeclared-name noise. ⚠ the
+# without it the missed core/love.h cascades into a flood of undeclared-name noise. ⚠ the
 # generated headers under out/ must exist, so build first. Machine-specific, gitignored.
 ccdb:
 	@python3 $R/tools/ccdb.py
@@ -197,7 +197,7 @@ out/host/flamegraph.svg: out/host/perf.data
 repl: host
 	@exec $m
 cloc:
-	cloc --by-file love love.c love.h main.c port tools test vim crew
+	cloc --by-file love core/love.c core/love.h main.c port tools test vim crew
 cat: clean all test
 cata: clean all test_slow
 # Full clean rebuild, every frontend, all tests, then the corpus under valgrind.

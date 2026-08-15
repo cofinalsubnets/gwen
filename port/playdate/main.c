@@ -14,7 +14,7 @@
 // single-precision, so every f64 op softens to __aeabi_* -- the same libgcc
 // helpers Panic's own toolchain leans on). The SDK lives behind pdglue.c's
 // word-only surface; nothing here sees pd_api.h, a float ABI, or a variadic.
-#include "../../love.h"
+#include "../../core/love.h"
 #include "quay.h"
 #include "pdglue.h"
 
