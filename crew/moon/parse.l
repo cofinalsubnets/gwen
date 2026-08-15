@@ -306,12 +306,12 @@
                      (passoc s >tbl))
 
    ; -- the parse state --
-   (psnew tgt) (psnew-d tgt 'c)                   ; the short spelling: plain C, what every law test wants
+   (psnew tgt) (psnew-d tgt 'moon)                ; the short spelling: the default language
    ; ⚠ a NEW DOOR rather than a wider one. psnew/cparse-t keep the arity every caller
    ; already spells (law.l alone holds dozens), so nothing shifts by a position -- and
    ; under (f) == f a shifted call would hand back a closure without a word.
    (psnew-d tgt dia) (: t {}
-                _ (pin t 'dia dia)                  ; the DIALECT: what grammar the front reads (c | holyc)
+                _ (pin t 'dia dia)                  ; the DIALECT: what grammar the front reads (moon | c)
                 _ (pin t 'tgt tgt)                  ; the codegen target: 32-bit widths (thumb1/thumb2) vs 64-bit
                 _ (pin t 'types {})         ; typedef name -> ty
                 _ (pin t 'weaks ())                 ; __attribute__((weak)) function names
@@ -623,7 +623,8 @@
                     (: er (pasn ps >ts)
                        (? !(two? er) ()
                           (: cv (cfold <er) (? (charm? cv) [cv <>er] ())))))
-   (holyc? ps) (id? (peep ps 'dia 'c) 'holyc)
+   ; the extensions ride the `moon` dialect -- ours, and the default. `-std=c` is the fence.
+   (moon? ps) (id? (peep ps 'dia 'moon) 'moon)
    ; a label is an identifier then `:` -- and NOT `::`, which nothing here spells but a
    ; reader might, so the test is on the pair rather than the first token alone.
    (plabel? ts) (: t <ts
@@ -634,10 +635,11 @@
     (? !(two? ts) ()
        (peekp ts "}") [(rev acc) >ts]
        ; A STRUCT LABEL: `name:` where a member declaration would start -- a virtual member
-       ; naming an OFFSET, holding nothing and taking no space (HolyC's, doc/moon-c-gaps.md).
+       ; naming an OFFSET, holding nothing and taking no space. borrowed from HolyC, but the
+       ; first client is our own C, so it rides `moon` (the default) and not a HolyC front.
        ; ⚠ it is read BEFORE the type parse because a label has no type to parse; and only
-       ; where the dialect says so, since in C this is a syntax error and must stay one.
-       (holyc? ps && plabel? ts)
+       ; where the dialect says so, since under -std=c this is a syntax error and stays one.
+       (moon? ps && plabel? ts)
         (: nm (tkv <ts)
            (? (two? (want >ts ":")) (pmembers ps >>ts ([nm 'label] >< acc)) ()))
        (: br (pbty ps ts)
@@ -2004,7 +2006,7 @@
           (gripe (? (two? dt) (filof t) (filat spans i0)) <>>t ()
                  ("parse error near " + spell t))))
    (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
-   (cparse-t ts tgt) (cparse-d ts tgt 'c)  ; ..and plain C, which is what every one of them means
+   (cparse-t ts tgt) (cparse-d ts tgt 'moon)  ; ..and the default dialect, which is what a bare caller means
    (cparse-d ts tgt dia)
     (: ps (psnew-d tgt dia)
        toks (fsbody ts) spans (fspans ts)

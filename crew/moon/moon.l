@@ -548,9 +548,9 @@
                                         () (sort (filter dotc? (readdir p))))
                             a)))
                () (sort (readdir d)))
-       ((map ((a b) \ [a (string (cc-objbytes b (pin (fseed tgt 'c) 'is [inc])))])
+       ((map ((a b) \ [a (string (cc-objbytes b (pin (fseed tgt 'moon) 'is [inc])))])
              (nlmems ndir))
-        + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) (pin (fseed tgt 'c) 'is [mdir inc])))])
+        + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) (pin (fseed tgt 'moon) 'is [mdir inc])))])
               (sort (filter dotc? (readdir (home + "lib/math"))))
         + (member? tgt '(x64 arm64 riscv64) ? [["mksys.o" (string (mksys-bytes tgt))]])))
    (rtpull srcs tgt nostd)
@@ -670,13 +670,22 @@
    ; as a library name and the word after it as an input.
    ; -- THE DIALECTS ----------------------------------------------------------------
    ; ⚠ -std= is LOUD, and used to ride the tolerated family. That is the wrong answer for
-   ; the one flag that says what LANGUAGE the input is: reading HolyC as C, or an unknown
-   ; word as either, is worse than refusing. The ISO names are ONE dialect here (doc/moon.md
-   ; -- we do not distinguish them from a codegen point of view), so they differ only in
-   ; what we can say we accept.
-   stds {"c89" 'c "c90" 'c "c99" 'c "c11" 'c "c17" 'c "c18" 'c "c23" 'c
-         "gnu89" 'c "gnu90" 'c "gnu99" 'c "gnu11" 'c "gnu17" 'c "gnu18" 'c "gnu23" 'c
-         "holyc" 'holyc}
+   ; the one flag that says what LANGUAGE the input is: reading one dialect as another, or
+   ; an unknown word as either, is worse than refusing.
+   ; `moon` is OURS and it is the DEFAULT -- modern C plus the extensions we can add without
+   ; contradicting it (struct labels today, borrowed from HolyC). Every one of them is
+   ; syntax C rejects outright, so moon is a strict SUPERSET: no C program means anything
+   ; different here, which is the whole licence for defaulting to it.
+   ; `c` is the fence for when that matters: strict C, no extensions, at whatever iteration
+   ; we hover around (C11, doc/moon-c-gaps.md). The ISO names are all one dialect -- we do
+   ; not distinguish them from a codegen point of view -- so they differ only in what we can
+   ; say we accept, and the bare `c` is the honest spelling of that.
+   ; ⚠ NO `holyc` ROW. It named one borrowed extension and would have refused U0, I64 and
+   ; class -- a parse error on line 1 of anything actually HolyC, which is the one input
+   ; that would reach for the name. It comes back when it is true.
+   stds {"moon" 'moon
+         "c" 'c "c89" 'c "c90" 'c "c99" 'c "c11" 'c "c17" 'c "c18" 'c "c23" 'c
+         "gnu89" 'c "gnu90" 'c "gnu99" 'c "gnu11" 'c "gnu17" 'c "gnu18" 'c "gnu23" 'c}
    (stdof w) (peep stds w ())                    ; a tablet indexes itself; () is the miss
    ; ⚠ SORTED, because `keys` answers HASH order -- a usage line that reshuffles itself
    ; between builds is a worse sentence than an alphabetical one.
@@ -695,7 +704,7 @@
                     _ (? d 0 (udie 2 ("cc: unknown -std=" + w + " -- mooncc reads: " + (stdnames ()))))
                     (go >l d acc))
                  (go >l dia (a >< acc)))))
-       (go as 'c ()))
+       (go as 'moon ()))          ; unsaid means moon: our C, extensions and all
    (tol? a) (a = "-pipe" || a = "-static" ||
              pfx? a "-g" || pfx? a "-O" ||
              pfx? a "-f" || glu? a 108 || glu? a 76 ||

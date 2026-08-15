@@ -109,18 +109,22 @@ int main(void) {
          (int)offsetof(struct S,b), (int)offsetof(struct S,c), (int)sizeof(union U));
   return 0; }
 EOF
-moonrun -std=holyc -o "$ho/.lbl" "$ho/.lbl.c" > /dev/null 2>&1 || fail "-std=holyc: struct labels did not compile"
+# ⚠ NO FLAG: `moon` is the DEFAULT dialect, so the extension is what a bare mooncc reads.
+moonrun -o "$ho/.lbl" "$ho/.lbl.c" > /dev/null 2>&1 || fail "struct labels did not compile by default"
 a=$("$ho/.lbl"); ra=$?
 $cc_g -O0 -o "$ho/.lblg" "$ho/.lblg.c" > /dev/null 2>&1 && b=$("$ho/.lblg")
 [ $ra -eq 0 ] || fail "struct labels: the labelled program refused itself (exit $ra)"
 [ "$a" = "$b" ] || fail "struct labels changed the layout (ours [$a] gcc [$b])"
-# ..and the dialect is a FENCE, both ways: C must refuse the label, and an unknown -std=
-# must refuse the whole compile rather than ride through ignored the way it used to.
-moonrun -c -o /dev/null "$ho/.lbl.c" > /dev/null 2>&1 && fail "a struct label was accepted as plain C"
+moonrun -std=moon -c -o /dev/null "$ho/.lbl.c" > /dev/null 2>&1 || fail "-std=moon refused its own extension"
+# ..and `c` is the FENCE: strict C takes no extension, which is the whole reason to ask for
+# it. an unknown -std= refuses the compile rather than riding through ignored as it used to.
+moonrun -std=c -c -o /dev/null "$ho/.lbl.c" > /dev/null 2>&1 && fail "a struct label was accepted under -std=c"
 moonrun -std=c11 -c -o /dev/null "$ho/.lbl.c" > /dev/null 2>&1 && fail "a struct label was accepted under -std=c11"
 moonrun -std=nosuchlang -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "an unknown -std= was tolerated"
+moonrun -std=holyc -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-std=holyc was accepted -- it names a dialect we do not read"
+moonrun -std=c -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 || fail "-std=c refused a plain C file"
 moonrun -std=gnu11 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 || fail "-std=gnu11 refused a plain C file"
-echo "mooncc: -std= is a rail (holyc struct labels lay gcc's own layout; c refuses them; an unknown one refuses)"
+echo "mooncc: -std= is a rail (moon is the default and lays gcc's own layout; c fences the extensions out; an unknown one refuses)"
 
 # -------------------------------- C11 conditional features (6.10.8.3), per target
 # gcc cannot be the oracle here -- it HAS atomics -- so these are ours alone, and

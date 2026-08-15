@@ -97,22 +97,27 @@ Targets: `x64`/`amd64`, `arm64`/`aarch64`, `riscv64`, `thumb2`/`cortex-m7`,
 `thumb1`/`cortex-m0`, `thumb2sp`/`playdate`.
 
 **`-std=` is a rail, not an advisory.** It is the one flag that says what *language* the
-input is, so an unknown value refuses the compile rather than riding through ignored —
-reading HolyC as C, or an unrecognised word as either, is worse than saying no. The ISO
-names are all one dialect here (we do not distinguish them from a codegen point of view),
-so they differ only in what we can claim to accept:
+input is, so an unknown value refuses the compile rather than riding through ignored.
 
 | `-std=` | dialect |
 |---|---|
-| `c89 c90 c99 c11 c17 c18 c23`, and each `gnu*` | `c` — the default |
-| `holyc` | `c` plus the HolyC extensions below |
+| *(unsaid)*, `moon` | **moon — the default.** Modern C plus the extensions below. |
+| `c`, and `c89 c90 c99 c11 c17 c18 c23`, and each `gnu*` | strict C, no extensions, at whatever iteration we hover around (C11; doc/moon-c-gaps.md) |
 
-⚠ it is lifted off the command line by a **pre-pass**, never a sixteenth accumulator on
-the flag walk: that walk carries fifteen curried slots across twenty-four call sites, and
-`(f) == f`, so one mistyped site would answer a *closure* instead of a result in silence.
-`-std=` interacts with nothing else on the line, so it comes off it first.
+Every moon extension is syntax C **rejects outright**, so moon is a strict superset: no C
+program means anything different under it, which is the whole licence for defaulting to it.
+`-std=c` is the fence for when that matters.
 
-### `-std=holyc` — struct labels
+⚠ there is deliberately **no `holyc`**. Struct labels are borrowed from HolyC, but a flag by
+that name would refuse `U0`, `I64` and `class` — a parse error on line 1 of anything actually
+written in HolyC, which is the one input that would reach for it. The name comes back when
+it is true.
+
+⚠ `-std=` is lifted off the command line by a **pre-pass**, never an accumulator on the flag
+walk: that walk keeps one tablet now, and `-std=` names the *language* rather than a flag, so
+it belongs before the line is read at all.
+
+### struct labels
 
 A label where a member declaration would start names an **offset**: a virtual member that
 holds nothing and takes no space.
@@ -122,17 +127,21 @@ struct S { int a; hdr: long b; int c; tail: };
 ```
 
 `&s.hdr` is `&s.b` — the label takes the type of the member it precedes, so it reads at the
-same width and `offsetof` answers that member's own offset. ⚠ it also *aligns* as that
-member will: the cursor sits where the previous field ended, so a label reading it raw
-would name the padding rather than the field. A trailing label (or a run of them) has no
-member to stand for and falls back to `char`, naming the end of the data. In a union every
-label flattens to 0 like every other member.
+same width and `offsetof` answers that member's own offset. ⚠ it also *aligns* as that member
+will: the cursor sits where the previous field ended, so a label reading it raw would name the
+padding rather than the field.
 
-This is not C — gcc answers `expected specifier-qualifier-list` — which is exactly why it
-is safe to add: no valid program can contain one, so the extension cannot change the
-meaning of anything that already compiles. `gen.l` never learned about it: a label is one
-more row in the stag table, which is the seam holding. The gate's oracle is the same struct
-with the labels deleted, compiled by gcc: identical size, identical offsets.
+⚠ this is exactly where it differs from the idiom it replaces. The portable-ish trick is a
+zero-length array marker, `char hdr[0];` — a GCC/Clang extension — and that lands on the
+**unaligned** cursor: for the struct above gcc answers `hdr=4` where `b=8`. A struct label
+answers 8. They are not interchangeable, and the label is the one that means what it says.
+
+A trailing label (or a run of them) has no member to stand for and falls back to `char`,
+naming the end of the data. In a union every label flattens to 0 like every other member.
+
+`gen.l` never learned about any of this: a label is one more row in the stag table, which is
+the seam holding. The gate's oracle is the same struct with the labels deleted, compiled by
+gcc: identical size, identical offsets.
 
 Anything without `-c` is a **link**, through `crew/holo/link.l`.
 
