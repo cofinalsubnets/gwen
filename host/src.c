@@ -38,7 +38,7 @@ ai_noinline static struct ai *host_srcgz(struct ai *g) {
  return g; }
 static lvm(lvm_srcgz) {
  Pack(g); g = host_srcgz(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 

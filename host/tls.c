@@ -158,7 +158,7 @@ ai_noinline static struct ai *host_chacha20(struct ai *g) {
  return g; }
 static lvm(lvm_chacha20) {
  Pack(g); g = host_chacha20(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 
@@ -175,7 +175,7 @@ ai_noinline static struct ai *host_poly1305(struct ai *g) {
  return g; }
 static lvm(lvm_poly1305) {
  Pack(g); g = host_poly1305(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 

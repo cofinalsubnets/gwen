@@ -129,7 +129,7 @@ ai_noinline static struct ai *host_spawn(struct ai *g) {
 static lvm(lvm_spawn) {
  Pack(g);
  g = host_spawn(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[1] = Sp[0];                                              // pid over argv
  Sp += 1; Ip += 1;
@@ -154,7 +154,7 @@ ai_noinline static struct ai *host_reapany(struct ai *g) {
 static lvm(lvm_reapany) {
  Pack(g);
  g = host_reapany(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Ip += 1; ai_musttail return Continue(); }
 
@@ -210,7 +210,7 @@ static lvm(lvm_sigtake) {
  if (fd < 0) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
  Pack(g);
  g = host_sigtake(g, fd);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Ip += 1; ai_musttail return Continue(); }
 #else
@@ -283,7 +283,7 @@ ai_noinline static struct ai *host_cwd(struct ai *g) {
  return g->sp[1] = g->sp[0], g->sp += 1, g; }           // cwd string over the dummy arg
 static lvm(lvm_cwd) {
  Pack(g); g = host_cwd(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 
@@ -318,7 +318,7 @@ ai_noinline static struct ai *host_pipe(struct ai *g) {
  return g->sp[0] = word(w), g; }
 static lvm(lvm_pipe) {
  Pack(g); g = host_pipe(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 
@@ -367,7 +367,7 @@ static lvm(lvm_spawnio) {
  intptr_t fg = (Sp[6] & 1) ? getcharm(Sp[6]) : 0;
  Pack(g);
  g = host_spawnio(g, in, out, err, pg, fg);  // argv at sp[0], closes at sp[4]
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[7] = Sp[0];                              // pid over the 7 args
  Sp += 7; Ip += 1;
@@ -441,7 +441,7 @@ static lvm(lvm_spawnmap) {
  intptr_t fg = (Sp[4] & 1) ? getcharm(Sp[4]) : 0;
  Pack(g);
  g = host_spawnmap(g, pg, fg);               // argv at sp[0], fdmap sp[1], closes sp[2]
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[5] = Sp[0];                              // pid over the 5 args
  Sp += 5; Ip += 1;
@@ -560,7 +560,7 @@ ai_noinline static struct ai *host_posix_stat(struct ai *g) {
  return g; }
 static lvm(lvm_posix_stat) {
  Pack(g); g = host_posix_stat(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 
@@ -583,7 +583,7 @@ ai_noinline static struct ai *host_posix_readdir(struct ai *g) {
  return g; }
 static lvm(lvm_posix_readdir) {
  Pack(g); g = host_posix_readdir(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 
@@ -620,7 +620,7 @@ ai_noinline static struct ai *host_posix_environ(struct ai *g) {
  return g; }
 static lvm(lvm_posix_environ) {
  Pack(g); g = host_posix_environ(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 
@@ -733,7 +733,7 @@ ai_noinline static struct ai *host_posix_readlink(struct ai *g) {
  return g; }
 static lvm(lvm_posix_readlink) {
  Pack(g); g = host_posix_readlink(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 
@@ -897,7 +897,7 @@ ai_noinline static struct ai *host_tether(struct ai *g) {
 static lvm(lvm_tether) {
  Pack(g);
  g = host_tether(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[1] = Sp[0];                                    // result over argv
  Sp += 1; Ip += 1;
@@ -927,7 +927,7 @@ ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
 static lvm(lvm_reap) {
  Pack(g);
  g = host_reap(g, Sp[0]);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Ip += 1; ai_musttail return Continue(); }
 
@@ -957,7 +957,7 @@ ai_noinline static struct ai *host_winsize(struct ai *g) {
 static lvm(lvm_winsize) {
  Pack(g);
  g = host_winsize(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Ip += 1; ai_musttail return Continue(); }
 

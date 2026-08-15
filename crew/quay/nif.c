@@ -153,7 +153,7 @@ ai_noinline static struct ai *host_reply(struct ai *g) {
 static lvm(lvm_reply) {
  Pack(g);
  g = host_reply(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Ip += 1; ai_musttail return Continue(); }
 

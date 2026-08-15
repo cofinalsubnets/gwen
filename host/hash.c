@@ -79,7 +79,7 @@ ai_noinline static struct ai *host_sha256(struct ai *g) {
  return g; }
 static lvm(lvm_sha256) {
  Pack(g); g = host_sha256(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 

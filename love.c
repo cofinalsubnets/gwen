@@ -1892,7 +1892,7 @@ lvm(lvm_defglob) {
 // miss path is the missing condition and borrows the whole help apparatus.
 
 lvm(lvm_eval) { Ip++; Pack(g);
- if (!ai_ok(g = c0(g, lvm_jump))) return ghelp(g);
+ if (!ai_ok(g = c0(g, lvm_jump))) ai_musttail return Ap(_lvm_ghelp, g);
  ai_musttail return Resume(); }
 
 // ai_evals_ lives with the boot stitch it shares its machinery with, at the
@@ -1985,6 +1985,7 @@ static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K) {
 }
 // re-raise a failed op's scare: bare data, observe-then-terminal.
 struct ai *ghelp(struct ai *g) { return ai_raise(ai_core_of(g), zero, zero, help_scare_k); }
+lvm(_lvm_ghelp) { return ai_raise(ai_core_of(g), zero, zero, help_scare_k); }
 // (scare a b): the deliberate raise. the raise point is a clean boundary, so the
 // help's result is delivered back as the value via the more continuation; helpless
 // it is terminal.
@@ -2038,7 +2039,7 @@ lvm(lvm_index) {
   *--Sp = ZeroPoint; ai_musttail return Next(2); }
  Pack(g);                          // the tag is minted only on the lane that carries it
  word a = missing_tag(g);          // may collect
- if (!a) return ghelp(g);   // no tag to be had: the bare scare, still packed
+ if (!a) ai_musttail return Ap(_lvm_ghelp, g);   // no tag to be had: the bare scare, still packed
  Unpack(g);
  Have(3);                          // AFTER the intern: a collect here re-dispatches the
                                    // whole op, so `a` is either untouched or never read
@@ -2049,7 +2050,7 @@ lvm(lvm_index) {
 // the fused aps bump Ip so it points at an operand, not a re-runnable instruction --
 // a plain Have() would re-dispatch into it. gc by hand and re-Ap (idempotent up to here).
 #define NumapHave(self) if (Sp < Hp + 2) { \
- Pack(g); g = ai_please(g, 2); if (!ai_ok(g)) return ghelp(g); \
+ Pack(g); g = ai_please(g, 2); if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g); \
  Unpack(g); ai_musttail return Ap(self, g); }
 static lvm(lvm_numap) {
  NumapHave(lvm_numap);
@@ -2495,7 +2496,7 @@ lvm(lvm_yield_sw) {
            need = my_height + restore_h + 9;
  if (Sp < Hp + need) {
   Pack(g);
-  if (!ai_ok(g = ai_please(ai_push(g, 1, next), need))) return ghelp(g);
+  if (!ai_ok(g = ai_please(ai_push(g, 1, next), need))) ai_musttail return Ap(_lvm_ghelp, g);
   next = cell(pop1(g));
   Unpack(g);
   next_stack = next + 8; }   // recompute: next was forwarded by gc
@@ -3179,7 +3180,7 @@ lvm(lvm_chug) {
  if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
  if (!iop(Sp[0])) { Sp[0] = EmptyString; ai_musttail return Next(1); }
  Pack(g); g = chug_str(g, (struct ai_io*) Sp[0]);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 
@@ -3291,12 +3292,12 @@ lvm(lvm_fputc) {
   // every put would turn a put loop into one write(2) per byte
   if (ai_io_wpending(g, (struct ai_io*) g->sp[0]) >= ai_iobuf) {
    g = io_wdrain(g, (struct ai_io*) g->sp[0]);
-   if (!ai_ok(g)) return ghelp(g);
+   if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
    if (ai_io_wpending(g, (struct ai_io*) g->sp[0]) >= ai_iobuf) {
     Unpack(g);
     g->next_wake_at = ai_clock() + 1;
     ai_musttail return Ap(lvm_yield_sw, g); } }
-  if (!ai_ok(g = ioputc(g, getcharm(g->sp[1])))) return ghelp(g);
+  if (!ai_ok(g = ioputc(g, getcharm(g->sp[1])))) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g); }
  ai_musttail return Nextp(1, 1); }
 
@@ -3307,7 +3308,7 @@ lvm(lvm_fflush) {
  if (iop(Sp[0])) {
   g->io = (struct ai_io*) Sp[0];
   Pack(g);
-  if (!ai_ok(g = zflush(g))) return ghelp(g);
+  if (!ai_ok(g = zflush(g))) ai_musttail return Ap(_lvm_ghelp, g);
   if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {
    Unpack(g);
    g->next_wake_at = ai_clock() + 1;      // the write residue's poll -- see io_wdrain
@@ -3343,7 +3344,7 @@ lvm(lvm_fputs) {
    g = w;
    if (k > 0) i += (uintptr_t) k;
    else g = ioputc(g, txt(bytes_of(g->sp[1]))[i++]); }
-  if (!ai_ok(g = zflush(g))) return ghelp(g);
+  if (!ai_ok(g = zflush(g))) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g); }
  ai_musttail return Nextp(1, 1); }
 
@@ -3353,7 +3354,7 @@ lvm(lvm_fputbn) {
  if (iop(Sp[0])) {
    Pack(g);
    g = gfputbn(g, getcharm(Sp[1]), getcharm(Sp[2]), (struct ai_io*) Sp[0]);
-   if (!ai_ok(g)) return ghelp(g);
+   if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
    Unpack(g);
    Sp[2] = Sp[1]; }
  ai_musttail return Nextp(1, 2); }
@@ -3477,14 +3478,14 @@ lvm(lvm_fgetc) {
   if (bio_wpending(bb)) {                 // our unsent ask goes out before we wait for the answer
    g->io = i;
    Pack(g);
-   if (!ai_ok(g = io_wdrain(g, i))) return ghelp(g);
+   if (!ai_ok(g = io_wdrain(g, i))) ai_musttail return Ap(_lvm_ghelp, g);
    Unpack(g); }
   // ⚠ no readiness pre-guard: zgetc already makes that test, and asking first
   // lied on the kernel (reading an output fd parked forever where it now reads
   // the END). cue?/await still ask -- they have no read to answer them.
   Pack(g);
   g->io = i;
-  if (!ai_ok(g = zgetc(g))) return ghelp(g);
+  if (!ai_ok(g = zgetc(g))) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   if (g->b == IO_WOULDBLOCK) {          // the refill raced and lost -- park, don't spin
    g->next_wait_fd = ai_io_fd((struct ai_io*) Sp[0]);   // re-read: the gc may have moved it
@@ -3513,7 +3514,7 @@ lvm(lvm_fungetc) {
   struct ai_io *i = (struct ai_io*) Sp[0];
   Pack(g);
   g->io = i;
-  if (!ai_ok(g = zungetc(g, getcharm(g->sp[1])))) return ghelp(g);
+  if (!ai_ok(g = zungetc(g, getcharm(g->sp[1])))) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g); }
  ai_musttail return Nextp(1, 1); }
 
@@ -3798,7 +3799,7 @@ ai_noinline static struct ai *p0text(struct ai *g) {
 
 lvm(lvm_sound0) {
  Pack(g);
- if (!ai_ok(g = p0text(g))) return ghelp(g);
+ if (!ai_ok(g = p0text(g))) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g); ai_musttail return Next(1); }
 
 ////
@@ -3922,7 +3923,7 @@ lvm(lvm_please) {
  uintptr_t wa = g->win_alloc, wc = g->win_copied;
  intptr_t ln = g->lean;
  g->win_alloc = g->win_copied = 0, g->lean = 0;
- if (!ai_ok(g = ai_please(g, 0))) return ghelp(g);
+ if (!ai_ok(g = ai_please(g, 0))) ai_musttail return Ap(_lvm_ghelp, g);
  g->win_alloc = wa, g->win_copied = wc, g->lean = ln;
  Unpack(g);
  Sp[0] = putcharm((intptr_t) g->n_gc);
@@ -4246,7 +4247,7 @@ lvm(lvm_pin) {
  if (tabp(x)) {
   Sp[0] = Sp[1], Sp[1] = Sp[2], Sp[2] = x;       // ai_mapput wants (sp0,sp1,sp2)=(key,val,coll)
   Pack(g);
-  if (!ai_ok(g = ai_mapput(g))) return ghelp(g);
+  if (!ai_ok(g = ai_mapput(g))) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   ai_musttail return Next(1); }
  if (caskp(x)) {
@@ -5323,7 +5324,7 @@ lvm(lvm_link) {
    ai_musttail return Push(_res); } } \
  if ((vop) == vop_mul) ai_musttail return Ap(lvm_bmul_start, g); /* O(n^2): run yieldable */ \
  Pack(g); g = ai_big_binop(g, vop); \
- if (!ai_ok(g)) return ghelp(g); \
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g); \
  ai_musttail return Resume(); }
 #define avm_slowdiv(op, vop, c_op, fexpr) static lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
@@ -5393,7 +5394,7 @@ static lvm(lvm_quotn) {
    emit_gem(_res, (ai_flo_t) av / (ai_flo_t) bv);
    ai_musttail return Push(_res); } }
  Pack(g); g = ai_big_quot_true(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  ai_musttail return Resume(); }
 
 // `-`: fixnum fast path, the () unit, then coins (`-` has no kind matrix, so the
@@ -6682,14 +6683,14 @@ lvm(lvm_bmul_start) {
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
  if (na <= bmul_chunk / nb) {
   Pack(g); g = ai_big_binop(g, vop_mul);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   ai_musttail return Resume(); }
  if (bigp(a) && bigp(b) && na == nb) {           // equal-length large: subquadratic Karatsuba
   Pack(g); g = ai_kmul_setup(g);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   ai_musttail return Resume(); }
  Pack(g); g = ai_bmul_setup(g);                  // unequal-length large: chunked schoolbook
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  ai_musttail return Resume(); }
 
 lvm(lvm_bmul) {
@@ -6941,7 +6942,7 @@ lvm(lvm_asum) {
  if (!packp(x)) ai_musttail return Next(1);        // scalar: (asum 5) = 5
  if (tray(x)->type == ai_O) {
   Pack(g); g = ored(g, 0);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   ai_musttail return Resume(); }
  if (tray(x)->type == ai_C) {                   // complex sum -> a complex box
   struct ai_tray *v = tray(x); uintptr_t n = tray_nelem(v);  // K=4 accumulators (see aprod)
@@ -6976,7 +6977,7 @@ lvm(lvm_aprod) {
  if (!packp(x)) ai_musttail return Next(1);
  if (tray(x)->type == ai_O) {
   Pack(g); g = ored(g, 1);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   ai_musttail return Resume(); }
  if (tray(x)->type == ai_C) {                   // complex product -> a complex box
   // K=4 independent accumulators break the multiply latency chain (~3x);

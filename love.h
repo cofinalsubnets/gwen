@@ -553,6 +553,12 @@ static ai_inline struct ai *encode(struct ai *g, enum ai_status s) { return
 // core straight back to C (love.c)
 struct ai *ghelp(struct ai*),
           *grbufg(struct ai *g, uintptr_t len);
+// ghelp lvm-SHAPED, so an lvm_ reaches it with a jump instead of spending a frame on
+// the way out of a failure. ⚠ _lvm_ by the house rule (_lvm_help_scare's): ai_raise
+// takes a different shape, so this one's own return is a designed `ret` and vmret
+// sounds lvm_* only. an lvm carrying EXTRA args keeps plain `return ghelp(g)` --
+// musttail wants matching prototypes, and theirs no longer match.
+lvm_t _lvm_ghelp;
 // ⚠ ai_have IS the phrase "this call may collect"; under AI_GC_STRESS every one
 // DOES, so a raw local held across it goes stale on the first run, not years
 // later. AI_GC_CHECK is the other half: it checks the collector where this

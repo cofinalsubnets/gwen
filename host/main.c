@@ -331,7 +331,7 @@ static lvm(lvm_close) {
       g->io = io;
       Pack(g);
       g = ai_io_wflush(g, io);   // buffered bytes land before the fd dies
-      if (!ai_ok(g)) return ghelp(g);
+      if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
       // the device would not take the whole run: PARK and come back. nothing has
       // been mutated yet -- the fd is open and Ip unadvanced -- so the re-run is
       // this same close from the top. it used to deliver by blocking, which stops
@@ -537,7 +537,7 @@ ai_noinline static struct ai *host_harkdrain(struct ai *g) {
 static lvm(lvm_hark) {
  Pack(g);
  g = host_harkstart(g, 0);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 
@@ -547,7 +547,7 @@ static lvm(lvm_hark) {
 static lvm(lvm_herald) {
  Pack(g);
  g = host_harkstart(g, 1);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
 
@@ -556,7 +556,7 @@ static lvm(lvm_herald) {
 static lvm(lvm_harkdrain) {
  Pack(g);
  g = host_harkdrain(g);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  if (Sp[2] != putcharm(-1)) ai_musttail return Ap(lvm_yield_sw, g);
  Sp[4] = Sp[0];                                           // the answer over the state
@@ -599,7 +599,7 @@ ai_noinline static struct ai *host_exec(struct ai *g, ai_word argv) {
 static lvm(lvm_exec) {
  Pack(g);
  g = host_exec(g, Sp[0]);                                  // returns only on failure
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[1] = Sp[0];                                            // errno fixnum over argv
  Sp += 1; Ip += 1;
@@ -620,7 +620,7 @@ static lvm(lvm_getenv) {
  char const *v = ai_strp(Sp[0]) ? host_getenv((struct ai_str*) Sp[0]) : NULL;
  if (!v) { Sp[0] = ZeroPoint; Ip += 1; ai_musttail return Continue(); }
  Pack(g);
- if (!ai_ok(g = ai_strof(g, v))) return ghelp(g);
+ if (!ai_ok(g = ai_strof(g, v))) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1;

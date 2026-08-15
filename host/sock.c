@@ -253,7 +253,7 @@ static lvm(lvm_shutdown) {
    g->io = io;
    Pack(g);
    g = ai_io_wflush(g, io);
-   if (!ai_ok(g)) return ghelp(g);
+   if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
    if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {   // park; nothing shut yet
     Unpack(g);
     g->next_wake_at = ai_clock() + 1;
@@ -344,14 +344,14 @@ static lvm(lvm_udprecv) {
  Pack(g);                                            // bytes + chain allocate -> Pack
  if (n > 0) {                                        // datagram -> a fresh love string
   g = str0(g, (uintptr_t) n);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   memcpy(txt(g->sp[0]), buf, (uintptr_t) n);
   len(g->sp[0]) = (uintptr_t) n;
  } else {                                            // empty datagram -> the singleton
   g = ai_push(g, 1, (uintptr_t) EmptyString);
-  if (!ai_ok(g)) return ghelp(g); }
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g); }
  g = ai_have(g, Width(struct ai_chain));             // (peerfix . bytes)
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  struct ai_chain *w = bump(g, Width(struct ai_chain));
  ini_chain(w, putcharm(peerfix), g->sp[0]);          // read sp[0] AFTER ai_have (may move)
  g->sp[0] = word(w);
@@ -469,7 +469,7 @@ ai_noinline static struct ai *hv_shore(struct ai *g, ai_word pw) {
 static lvm(lvm_shore) {
  Pack(g);
  g = hv_shore(g, g->sp[0]);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[1] = Sp[0];
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
