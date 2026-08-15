@@ -2,7 +2,7 @@
 ; laws in the comment and proves them in the asserts below, on every target. the workflow
 ; narrative -- how to work here, the traps, the vocabulary, the architecture -- lives in
 ; CLAUDE.md; deeper rationale in doc/ (doc/measures.md the net/tally design). it runs in the
-; corpus SECOND (common.mk, right after test/00-init.l sets up the assert harness), so keep it
+; corpus SECOND (mk/common.mk, right after test/00-init.l sets up the assert harness), so keep it
 ; green -- `make test` (host + love0, which must print the zz-fin summary twice). when in doubt,
 ; PROBE THE BINARY: never trust a prior over a one-line experiment.
 

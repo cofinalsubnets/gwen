@@ -33,8 +33,8 @@ mps2: $(R)/$(o)/love.elf
 mps2t1: $(R)/$(o)/love-t1.elf
 
 $(eval $(call p_obj,love,core/love.c,$(R)/core/love.c $(R)/core/love.h $(lib_hR) $(mc),$(mps2_cc)))
-$(eval $(call p_obj,mem,libc/mem.c,$(R)/libc/mem.c $(R)/core/love.h $(mc),$(mps2_cc)))
-$(eval $(call p_obj,str,libc/str.c,$(R)/libc/str.c $(R)/core/love.h $(mc),$(mps2_cc)))
+$(eval $(call p_obj,mem,free/libc/mem.c,$(R)/free/libc/mem.c $(R)/core/love.h $(mc),$(mps2_cc)))
+$(eval $(call p_obj,str,free/libc/str.c,$(R)/free/libc/str.c $(R)/core/love.h $(mc),$(mps2_cc)))
 
 # main.c, once per face -- the -D is the whole difference.
 mainc = main.c $(R)/core/love.h $(lib_hR) $(mc)
@@ -108,8 +108,8 @@ t1_objs = $(R)/$(o)/start.o $(R)/$(o)/love-t1.o $(R)/$(o)/am-t1.o $(R)/$(o)/mem-
   $(R)/$(o)/str-t1.o $(R)/$(o)/main-t1.o
 
 $(eval $(call p_obj,love-t1,core/love.c,$(R)/core/love.c $(R)/core/love.h $(lib_hR) $(mc),$(mps2t1_cc)))
-$(eval $(call p_obj,mem-t1,libc/mem.c,$(R)/libc/mem.c $(R)/core/love.h $(mc),$(mps2t1_cc)))
-$(eval $(call p_obj,str-t1,libc/str.c,$(R)/libc/str.c $(R)/core/love.h $(mc),$(mps2t1_cc)))
+$(eval $(call p_obj,mem-t1,free/libc/mem.c,$(R)/free/libc/mem.c $(R)/core/love.h $(mc),$(mps2t1_cc)))
+$(eval $(call p_obj,str-t1,free/libc/str.c,$(R)/free/libc/str.c $(R)/core/love.h $(mc),$(mps2t1_cc)))
 $(eval $(call p_obj,main-t1,port/mps2/main.c,$(mainc),$(mps2t1_cc)))
 $(eval $(call p_obj,am-t1,crew/moon/lib/math/am.c,$(R)/crew/moon/lib/math/am.c $(mc),\
   $(MOONCC) -t thumb1 -Icrew/moon/lib/math -Icrew/moon/include))

@@ -1,6 +1,6 @@
 # project root makefile
 R := .
-include common.mk
+include mk/common.mk
 
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
@@ -17,7 +17,7 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 # takes the compiler as its FIRST argument -- handing it a two-word `love mooncc`
 # makes it run `love` and treat `mooncc` as a source-file argument. Nothing here is
 # cacheable by it anyway: mooncc is not a compiler ccache knows how to hash.
-# ⚠ and the test is NOT `origin CC == default`: common.mk says `CC = clang`, so by the
+# ⚠ and the test is NOT `origin CC == default`: mk/common.mk says `CC = clang`, so by the
 # time this runs the origin is "file" and a default-only guard never fires. What we
 # actually mean is "unless a HUMAN named a compiler for this run" -- command line or
 # environment. The tree's own clang default is exactly what the bundle should displace.

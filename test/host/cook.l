@@ -108,8 +108,8 @@
    ; -------------------------------------------------------------------- include
    ; (make resolves an include relative to the cwd; the fixture lives elsewhere,
    ; so name it absolutely.)
-   _ (write-file (+ dir "/common.mk") "FROM_INC = included-ok\n")
-   inc (run-cook (mk `((+ "include " (+ dir "/common.mk")) "all:" "\techo \"I[$(FROM_INC)]\"")) "all")
+   _ (write-file (+ dir "/mk/common.mk") "FROM_INC = included-ok\n")
+   inc (run-cook (mk `((+ "include " (+ dir "/mk/common.mk")) "all:" "\techo \"I[$(FROM_INC)]\"")) "all")
    _ (ok "include" (has inc "I[included-ok]"))
 
    ; ----------------------------------------------------- automatic vars + dir

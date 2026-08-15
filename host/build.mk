@@ -1,5 +1,5 @@
 # host/build.mk -- the host (POSIX CLI) build, into out/host. Included by ./Makefile from
-# the project root, so paths resolve from there; shared vars are common.mk.
+# the project root, so paths resolve from there; shared vars are mk/common.mk.
 #
 # ⚠ the DEFAULT flavor owns out/host and HCC builds in its own hsuf'd tree, so the $(CC)
 # lane never overwrites a mooncc object -- the two disagree on nothing a linker can see, and
@@ -180,7 +180,7 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # liblove.a/.so lane, since a shared object wants PIC codegen and a dynamic section holo
 # does not lay. HCC=1 takes the $(CC) link below instead -- the foreign-cc differential,
 # opt-in, and the only lane that puts one on the vm at ai_tco=1 where ai_musttail is live
-# (common.mk says why). One link rule, two names -- `love` and the candidate.
+# (mk/common.mk says why). One link rule, two names -- `love` and the candidate.
 # ⚠ TWO SHAPES, and the second builds no bootstrap at all. Normally love0 wakes
 # mooncc0.image, the image that breaks the self-host circle. With a BUNDLED love beside the
 # tree (the binary a seed laid beside itself -- ./Makefile's bundled_love) there is no circle: that

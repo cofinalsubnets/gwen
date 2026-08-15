@@ -1,7 +1,7 @@
 ; glaze-x86 -- the x86-64 native-codegen self-tests for the glaze (love/glaze/{emit,auto}.l), the
 ; EXECUTING counterpart to the arch-neutral test/glaze.l (which only checks the substrate). HOST-
 ; x86-ONLY: these INSTALL and EXECUTE native machine code, so they're run only by the x86-guarded
-; `make test_glaze` (never the arch-neutral corpus -- common.mk filters this file out). It runs against
+; `make test_glaze` (never the arch-neutral corpus -- mk/common.mk filters this file out). It runs against
 ; the binary's BAKED glaze (boot loads emit.l+auto.l), so jit/jitsum/jitgroupir/.../base-ev/autogroup are
 ; bound -- cat'd straight through, NOT re-cat'd (that double-loads the glaze under auto-ev, clobbering base-ev).
 ;

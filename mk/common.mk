@@ -61,7 +61,7 @@ love_c = $R/core/love.c $R/crew/moon/lib/math/am.c
 # per-seat -- a 1-bit device wants neither, the host unity-includes nif.c -- so a seat that
 # wants one NAMES it rather than taking it here.
 f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/crew/quay/*.c))
-c_c = $(wildcard $R/libc/*.c)
+c_c = $(wildcard $R/free/libc/*.c)
 
 # ⚠ CANCEL MAKE'S LEX RULE. `.l` is Lex's extension to make, so a built-in `%.c: %.l`
 # stands over every source file in this tree -- and where a `<name>.l` sits beside a real

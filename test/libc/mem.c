@@ -1,7 +1,7 @@
 /* the mem* five. nolibc copies WORD-WIDE where the pointers agree and falls to
  * bytes where they do not, so every case here is run at several alignments and
  * across the word boundary -- an off-by-one in the wide lane hides completely at
- * offset 0. libc/mem.c (the freestanding twin) is plain byte loops, and these
+ * offset 0. free/libc/mem.c (the freestanding twin) is plain byte loops, and these
  * are the five that must stay in it: a compiler synthesizes calls to them. */
 #include <string.h>
 #include "say.h"

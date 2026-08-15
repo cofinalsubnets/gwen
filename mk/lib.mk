@@ -1,5 +1,5 @@
 # mk/lib.mk -- the out/lib/*.h egg + service headers. Included by ./Makefile from the
-# project root; shared vars are common.mk.
+# project root; shared vars are mk/common.mk.
 #
 # Each love/*.l is serialized to a C string literal by tools/lcat.l, run on the bootstrap
 # love0. Frontends #include these and assemble the bootstrap with G_EGG_PRE/POST. Drop a .l

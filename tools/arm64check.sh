@@ -46,7 +46,7 @@ done
 LD_ARGS="-Wl,-T,core/love_data.ld"
 $GCC -static $LD_ARGS -o $O/love $O/*.o 2>/dev/null || $GCC -static $LD_ARGS -o $O/love $O/*.o
 
-# the corpus (or the files named on the command line), under qemu. Mirror common.mk's
+# the corpus (or the files named on the command line), under qemu. Mirror mk/common.mk's
 # $t EXACTLY: 00-init, spec, then uu.l HOISTED to 3rd (uu's test files uukind/uukindlaw
 # assume uu is set up early), then the C-sorted rest with those filtered out. A bare
 # `ls` (locale-sorted, uu.l NOT hoisted) loads ~40 files before uu.l -> uukindlaw.l's

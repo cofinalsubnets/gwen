@@ -2,7 +2,7 @@
  * HEADERS promised (sscanf, ferror, popen). */
 #include "impl.h"
 
-/* ---- strtol / strtod: the reader's number path. the bodies keep libc/str.c's
+/* ---- strtol / strtod: the reader's number path. the bodies keep free/libc/str.c's
  * exact semantics, SATURATION INCLUDED (the kernel corpus runs them; the naive
  * strtod measured corpus-green against glibc's in the rung-4 differential). ---- */
 static int __digval(int c) {

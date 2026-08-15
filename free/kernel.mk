@@ -1,5 +1,5 @@
 # free/kernel.mk -- the inle kernel, freestanding, into out/free. Included by
-# ./Makefile from the project root, so paths resolve from there; shared vars are common.mk.
+# ./Makefile from the project root, so paths resolve from there; shared vars are mk/common.mk.
 #
 # Arch-independent glue is free/{kmain.c,k.h}, per-arch code free/<a>/. Each
 # arch brings itself up under `qemu -kernel` with no bootloader or firmware at all (the
@@ -43,7 +43,7 @@ ifeq ($(KCC_IS_MOON),1)
 k_arch_c := $(filter-out %/builtins.c,$(k_arch_c))
 endif
 k_free_c = $R/free/kmain.c $R/free/blk.c
-# paint.c is named rather than wildcarded (common.mk): the console renders 32bpp,
+# paint.c is named rather than wildcarded (mk/common.mk): the console renders 32bpp,
 # so this seat wants the shared painter. nif.c stays out until the kernel grows
 # defs[] rows for it -- bodies nothing calls are bytes the image cannot spend.
 k_shared_c = $(love_c) $(f_c) $R/crew/quay/paint.c $(c_c)

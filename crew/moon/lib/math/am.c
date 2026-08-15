@@ -430,7 +430,7 @@ float am_powf(float x, float y) { return (float) am_pow(x, y); }
 // steps one ulp at a time by bit arithmetic until the input falls inside.
 // exact and the same answer on every target: glibc's strtod leaves the
 // trusted base, and the naive accumulators that read "0.3" one ulp off
-// (libc/str.c, crew/moon/lib/nolibc.c) both delegate here now.
+// (free/libc/str.c, crew/moon/lib/nolibc.c) both delegate here now.
 enum { am_dgmax = 800 };   // a boundary expansion: 17 digits + one per x5 step (<= 1076)
 static void am_dgmul(unsigned char *d, int *n, int k) {   // k = 2 or 5
  int c = 0;

@@ -10,7 +10,7 @@ Nothing here is copyleft. Nothing here constrains what you do with love.
 
 --- code ---
 
-libc/limine.h
+free/libc/limine.h
   Copyright (C) 2022-2025 Mintsuki and contributors.
   BSD Zero Clause License (0BSD) -- the same terms as love itself.
   The limine boot protocol header. Notice preserved at the head of the file.

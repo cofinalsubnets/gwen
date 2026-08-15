@@ -1,6 +1,6 @@
 # test/test.mk -- the test_* gates (and the uuwm/uukind corpus generators).
 # A fragment of the root Makefile, included by ./Makefile and invoked from the
-# project root; paths resolve from there. Shared vars live in common.mk.
+# project root; paths resolve from there. Shared vars live in mk/common.mk.
 
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \

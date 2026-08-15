@@ -27,8 +27,8 @@ default: teensy41
 teensy41: $(R)/$(o)/love.hex
 
 $(eval $(call p_obj,love,core/love.c,$(R)/core/love.c $(R)/core/love.h $(lib_hR) $(mc),$(te_cc)))
-$(eval $(call p_obj,mem,libc/mem.c,$(R)/libc/mem.c $(R)/core/love.h $(mc),$(te_cc)))
-$(eval $(call p_obj,str,libc/str.c,$(R)/libc/str.c $(R)/core/love.h $(mc),$(te_cc)))
+$(eval $(call p_obj,mem,free/libc/mem.c,$(R)/free/libc/mem.c $(R)/core/love.h $(mc),$(te_cc)))
+$(eval $(call p_obj,str,free/libc/str.c,$(R)/free/libc/str.c $(R)/core/love.h $(mc),$(te_cc)))
 $(eval $(call p_obj,teensy41,port/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/core/love.h $(mc),$(te_cc)))
 $(eval $(call p_obj,main,port/teensy41/main.c,main.c teensy41.h $(R)/core/love.h $(lib_hR) $(mc),$(te_cc)))
 

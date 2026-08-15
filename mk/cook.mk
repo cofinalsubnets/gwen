@@ -1,5 +1,5 @@
-# cook.mk -- a make-shaped front door to cook (crew/cook/cook.l over this tree's Makefile).
-# `make -f cook.mk <goal>` makes sure the love binary exists, then hands the goal to cook.
+# mk/cook.mk -- a make-shaped front door to cook (crew/cook/cook.l over this tree's Makefile).
+# `make -f mk/cook.mk <goal>` makes sure the love binary exists, then hands the goal to cook.
 #
 # The real Makefile stays the source of truth for the irreducible C bootstrap: cook RUNS on
 # love, so it cannot build love. That one rung is make's, cook ports everything above it,

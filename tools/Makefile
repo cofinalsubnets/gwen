@@ -8,7 +8,7 @@
 # vmret reference, and objdump/llvm-objdump for vmret itself.
 
 R := ..
-include $(R)/common.mk
+include $(R)/mk/common.mk
 
 # the WARM love (test/test.mk's $(mw), same bargain): the baked image woken rather than the
 # egg compiled from source. The root exports LOVE_NO_IMAGE so the EGG gates boot cold;

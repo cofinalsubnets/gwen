@@ -1,5 +1,5 @@
 # mk/install.mk -- install / uninstall. Included by ./Makefile from the project root;
-# shared vars are common.mk.
+# shared vars are mk/common.mk.
 #
 # THE NEST: the default install is ~/.love, a self-implying home -- the loader's seat walk
 # derives <seat>/../lib and its love/ subfolder from the running binary's own path, so

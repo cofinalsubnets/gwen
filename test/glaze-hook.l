@@ -4,7 +4,7 @@
 ; laws lived inside that source as an `_ (assert)` pair, so they ran at every egg boot and
 ; every bake; they are a test, and this is where a test goes.
 ;
-; NOT in the arch-neutral corpus (common.mk's $t filters it out, beside glaze-x86.l): it
+; NOT in the arch-neutral corpus (mk/common.mk's $t filters it out, beside glaze-x86.l): it
 ; EXECUTES native machine code. `make test_hook` runs it on the arches the hook emits for
 ; (x86-64 + aarch64), against the WOKEN IMAGE's hook and the EGG BOOT's -- two different
 ; closures, the first what ships and the second what an edit to hook.l moves.

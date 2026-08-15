@@ -13,7 +13,7 @@
 # delegated to the root), crew/rune/ as a registered module, and cas.l (this
 # folder, lcat'd locally) driving the workbench. See main.c + pdglue.c.
 R := ../..
-include $(R)/common.mk
+include $(R)/mk/common.mk
 
 o = $(R)/out/playdate
 n = love

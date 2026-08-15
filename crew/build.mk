@@ -1,6 +1,6 @@
 # crew/build.mk -- the crew app builds: the kore/mooncc/sb/lush scripts, their baked
 # images, and the dist artifact. Included by ./Makefile after host/build.mk, so $(ho) is
-# already spelled; shared vars are common.mk.
+# already spelled; shared vars are mk/common.mk.
 
 # kore: the diff engines, the text/tool surface, the line tools, and `kore` itself -- the
 # multi-call toolbox picking its util off the command line or an argv[0] symlink. lush

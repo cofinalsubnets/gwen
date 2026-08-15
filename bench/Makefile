@@ -27,7 +27,7 @@
 # listed in SKIP (below) and dropped up front so the build never pays the timeout
 # wall for them. The per-language run logic lives in run.sh.
 R := ..
-include $(R)/common.mk
+include $(R)/mk/common.mk
 
 GL   := $(R)/out/host/love
 HARN := bench.l
