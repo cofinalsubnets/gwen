@@ -22,15 +22,13 @@
    (src-lay-love root)
     (: exe (readlink "/proc/self/exe")
        _ (string? exe ? 0 (src-die "can't read seed path"))
-       b (dslurp exe)
        _ (mkdir (root + "/bin") 493)
        p (root + "/bin/love")
-       q (open p "w")
-       (!q ? (src-die ("can't write " + p)),
-        say q b,
-        close q,
-        chmod p 493,
-        p))
+       ; ⚠ the SIGN is the test, not truth: copyfile answers the byte count, and an empty
+       ; source would answer 0 -- which reads false exactly as a -errno does.
+       e (copyfile exe p)
+       _ (e < 0 ? (src-die ("can't write " + p)))
+       (chmod p 493, p))
 
    (src-lay dir)
     (: gz (source-gz "x")

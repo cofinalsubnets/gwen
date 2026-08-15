@@ -782,6 +782,43 @@ static lvm(lvm_posix_hardlink) {
  Sp[1] = host_posix_hardlink(Sp[0], Sp[1]);
  Sp += 1; ai_musttail return Next(1); }
 
+// (copyfile src dst) -> BYTES COPIED | a NEGATIVE fixnum (-errno / -1 misuse).
+// SRC's bytes into DST, without either passing through the heap.
+// The one that wanted it is the seed: `love source` lays bin/love by copying the running
+// artifact, ~12 MB, and slurping that made a love string the collector then had to carry
+// through a two-space flip. BYTES ONLY -- mode is the caller's to set, which is what both
+// callers already did (kore's ucopy chmods from its own stat, src-lay-love wants 493).
+// ⚠ a plain read/write loop, and NOT because copy_file_range is unavailable: that call is
+// linux-only (4.5, cross-fs 5.3) and may short-copy or refuse with EXDEV/EINVAL anyway, so
+// a correct use needs this loop under it regardless. the loop is the contract; the syscall
+// would be one guarded branch inside it, worth adding when a profile asks.
+// ⚠ AND THE BUFFER LIVES IN A HELPER, not in the lvm_ -- 64K owed at a tail turns the jump
+// into a ret and grows the stack every dispatch (love.h's no-scratch rule).
+ai_noinline static ai_word host_posix_copyfile(ai_word sw, ai_word dw) {
+ char s[4096], d[4096];
+ if (!str_cbuf(sw, s, sizeof s) || !str_cbuf(dw, d, sizeof d)) return putcharm(-1);
+ int in = open(s, O_RDONLY);
+ if (in < 0) return putcharm(-errno);
+ int out = open(d, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+ if (out < 0) { int e = errno; close(in); return putcharm(-e); }
+ char buf[1 << 15];                               // the helper's own frame, never a global
+ intptr_t done = 0, err = 0;
+ for (;;) {
+  ssize_t n = read(in, buf, sizeof buf);
+  if (n < 0) { if (errno == EINTR) continue; err = errno; break; }
+  if (n == 0) break;
+  for (ssize_t off = 0; off < n; ) {              // a short write is not an error
+   ssize_t w = write(out, buf + off, (size_t) (n - off));
+   if (w < 0) { if (errno == EINTR) continue; err = errno; goto shut; }
+   off += w, done += w; } }
+shut:
+ close(in);
+ if (close(out) && !err) err = errno;             // the write may land only here
+ return putcharm(err ? -err : done); }
+static lvm(lvm_posix_copyfile) {
+ Sp[1] = host_posix_copyfile(Sp[0], Sp[1]);
+ Sp += 1; ai_musttail return Next(1); }
+
 static lvm(lvm_posix_umask) {
  Sp[0] = (Sp[0] & 1) ? putcharm((intptr_t) umask((mode_t) getcharm(Sp[0])))
                      : putcharm(-1);
@@ -796,7 +833,8 @@ static union u const
   nif_posix_utime[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_utime}, {lvm_ret0}},
   nif_posix_umask[]    = {{lvm_posix_umask}, {lvm_ret0}},
   nif_posix_rmdir[]    = {{lvm_posix_rmdir}, {lvm_ret0}},
-  nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}};
+  nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}},
+  nif_posix_copyfile[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_copyfile}, {lvm_ret0}};
 AI_NIF("rename",   nif_posix_rename);
 AI_NIF("symlink",  nif_posix_symlink);
 AI_NIF("readlink", nif_posix_readlink);
@@ -806,6 +844,7 @@ AI_NIF("utime",    nif_posix_utime);
 AI_NIF("umask",    nif_posix_umask);
 AI_NIF("rmdir",    nif_posix_rmdir);
 AI_NIF("hardlink", nif_posix_hardlink);
+AI_NIF("copyfile", nif_posix_copyfile);
 // --- the pty wrapper: bao's rlwrap/debugger muscle ------------------------------
 // spawn a program on a fresh pseudo-terminal, reap it without blocking, signal
 // it, and read/write its window size. The keystone, (tether argv), is hark

@@ -17,14 +17,27 @@
    ; a file destination: into a directory the source's basename lands beside
    (udest src dst) (? (udirp dst) (dst + "/" + ubase src "") dst)
    ; copy bytes + permission bits (cp's heart; mv's cross-device leg)
+   ; the bytes, by whichever door this love has. ⚠ KORE RUNS IN TWO WORLDS AND THEY DO NOT
+   ; CARRY THE SAME NIFS: free/kernel.mk bakes this whole cat verbatim (korecat) and the
+   ; kernel compiles no host/*.c, so `copyfile` is hosted-only and the slurp stays as the
+   ; freestanding leg. ⚠ ASKED AT THE CALL, never bound at the top: the kernel's image is
+   ; baked by a HOST love, so a load-time answer would freeze this world's nif set into
+   ; that one's.
+   (ucopy-bytes src dst)
+    (? (member? 'copyfile (names ()))
+       (0 <= copyfile src dst)
+       (: r (uread src)
+          (? (two? r) (: q (open dst "w")
+                         (? q (: _ (say q <>r) _ (close q) 1) 0))
+             0)))
+   ; ⚠ the stat leads so the two failures stay tellable apart: one errno covers either end,
+   ; and `cp: cannot open X` vs `cannot create Y` is the whole diagnostic. it is the same
+   ; stat the mode comes from, so it costs nothing it did not already spend.
    (ucopy who src dst)
-    (: r (uread src)
-       _ (? (two? r) () (udie 1 (who + ": cannot open " + src)))
-       q (open dst "w")
-       _ (? q () (udie 1 (who + ": cannot create " + dst)))
-       _ (say q <>r) _ (close q)
-       st (stat src)
-       _ (? (two? st) (chmod dst (& 4095 <>>st)) ())
+    (: st (stat src)
+       _ (? (two? st) () (udie 1 (who + ": cannot open " + src)))
+       _ (? (ucopy-bytes src dst) () (udie 1 (who + ": cannot create " + dst)))
+       _ (chmod dst (& 4095 <>>st))
        1)
 
    ; -- pwd: where we stand --
