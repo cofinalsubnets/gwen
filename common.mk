@@ -82,6 +82,13 @@ ai_cflags += -fcf-protection=none -D_POSIX_C_SOURCE=200809L
 # the data-sentinel tiling love.h's ai_typ reads (love.c's DSENT), on every ld/lld link.
 # mach-o goes without: it names sections `segment,section`, so love.h asks them by name.
 data_ld = -Wl,-T,$R/love_data.ld
+# ⚠ AN EMPTY BRACKET IS STILL A BRACKET. love.c indexes the host nif slice off
+# [__start_ai_nifs, __stop_ai_nifs), which the toolchain synthesises only where the
+# SECTION exists -- so an embedder registering its defs by hand owns no AI_NIF and the
+# pair goes undefined at the link. weak declarations do not answer it: ld leaves a weak
+# undefined at 0 even where the section IS there, which silently unregisters every host
+# nif. naming the empty pair at the one link that wants it keeps the host lane untouched.
+nifs_ld = -Wl,--defsym=__start_ai_nifs=0,--defsym=__stop_ai_nifs=0
 else
 # apple's is one word for the whole surface, so it needs no _POSIX_C_SOURCE beside it.
 ai_cflags += -D_DARWIN_C_SOURCE
