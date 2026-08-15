@@ -44,10 +44,10 @@
 ;   thinks fresh, leaving a native lane unbound -- one bug, two faces (infinite loop or crash).
 ; * the kernel has three boot doors, one ELF per arch: -kernel (x86_64 PVH stub, aarch64 EL1 MMU
 ;   stub; test_kernel + test_kernel_arm64, nothing downloaded), UEFI (free/uefi/, our own
-;   BOOTX64.EFI; doc/uefi.md), limine (iso/hdd + the run-* lanes; dl/ survives `make clean`).
+;   BOOTX64.EFI; doc/archive/uefi.md), limine (iso/hdd + the run-* lanes; dl/ survives `make clean`).
 ; * the kernel is OURS end to end: the link (holo's ldkern via free/klink.l, `KLINK=lld` to
 ;   compare), the assembly (no .S -- mkboot.l lays bring-up, mkvec.l the interrupt tail), the
-;   compiler (`KCC ?= mooncc`, doc/moon-kernel.md; `KCC=clang` + test_kdiff the differential).
+;   compiler (`KCC ?= mooncc`, doc/archive/moon-kernel.md; `KCC=clang` + test_kdiff the differential).
 ; * ⚠ each KCC variant has its own odir and ELF (kccsuf/klsuf), and mooncc REFUSES a -m flag ;   rather than ignoring it. `make test_vec` faults on purpose -- the one way to reach a stub.
 ;   editing love.h needs no clean (every object deps on $(love_h)).
 ; * check a .l edit for balance before trusting it: `out/host/love crew/libra/libra.l <file>`, or

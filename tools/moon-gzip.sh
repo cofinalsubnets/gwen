@@ -3,7 +3,7 @@
 # gcc/glibc/ld) and prove it RUNS: round-trips over four shapes of input, `-t`
 # integrity, the `-l` listing, and -- the one that matters -- FORMAT ACCURACY
 # both ways against the system gzip. The second moon-userland rung
-# (doc/moon-userland.md), after bzip2.
+# (doc/archive/moon-userland.md), after bzip2.
 #
 # 1.2.4 is the pre-gnulib gzip: 14 plain C89/K&R files, no gnulib link tree and
 # no C23 header cascade, which is why it is the version that reaches a RUNNABLE

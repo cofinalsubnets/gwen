@@ -121,5 +121,5 @@
 
    ;; write a byte list to a file. the blob rides a CASK, not a string: a cask is the
    ;; byte array and says raw, where a string is text that merely happens to be bytes
-   ;; today (doc/proto/widen.md -- every ELF used to go out through one).
+   ;; today (doc/archive/widen.md -- every ELF used to go out through one).
    (write-bytes path bs) (: q (open path "w") _ (say q (cask bs)) (close q)))

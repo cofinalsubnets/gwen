@@ -12,7 +12,7 @@ love that does not load the module has no lane at all. ⚠ put the `use` in **it
 form** — a `:` builds its lambda bindings before its body runs, so a `use` sharing a form with
 the closures it means to cover lights the lane after they are already made. `(jit-why ())` is
 the coverage census (`LOVE_SPLICE_TRACE=1` says the declines as they happen), and the ranked
-table over the whole corpus — with what it says to build next — is in **doc/moon-regalloc.md**,
+table over the whole corpus — with what it says to build next — is in **doc/archive/moon-regalloc.md**,
 *the auto lane*.
 
 **It needs no compiler.** Each op's own machine-form IR is in the binary: `mooncc -fir=lvm_`
@@ -26,7 +26,7 @@ LOVE_NO_GLAZE=1 out/host/love \
 sh bench/vmsplice/run.sh           # the original probe (splice.c + the hand-made body.c)
 ```
 
-All need `make host` first. Results and the argument live in **doc/moon-regalloc.md**: "the splice client" for the numbers, "the splice JIT
+All need `make host` first. Results and the argument live in **doc/archive/moon-regalloc.md**: "the splice client" for the numbers, "the splice JIT
 and the moon arc" for why this and the compiler's residency work are one problem, and THE LADDER
 for the shared plan (steps 4 and 7 are the ones this asks for).
 

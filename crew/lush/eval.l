@@ -450,7 +450,7 @@
    ; descent and the assignment peel happen HERE, so a loop body, a function and a
    ; case arm pay them once instead of once per run. a plan still ANSWERS its
    ; control pair rather than jumping, so the fd restores between a `break` and
-   ; its loop all run -- the reason this is not call-cc (doc/honest-face.md).
+   ; its loop all run -- the reason this is not call-cc (doc/archive/honest-face.md).
    (sh-zero _) (: _ (pin sh-status () 0) 0)
    (sh-eval a) ((sh-plan a) ())          ; the raw-AST door: a forked stage, a line
    ; a condition (or an && || arm, or a ! body) runs with errexit off

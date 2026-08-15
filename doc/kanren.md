@@ -3,7 +3,7 @@
 ⚠ **Plan, not built.** Written 2026-08-12, out of the moon-alloc arc asking whether kanren could
 carry an allocator's alias partition. The answer was no, for a reason worth keeping (below), but
 the asking exposed three things the module is actually missing. Companions: `love/kanren.l` (79
-lines, the module), `test/kanren.l` (the gate), `doc/kanren-prover.md` (the sketch that would be
+lines, the module), `test/kanren.l` (the gate), `doc/archive/kanren-prover.md` (the sketch that would be
 the obvious consumer and, on reading, is not), `doc/proto/datalog.l` (one that rolled its own).
 
 ## what exists
@@ -27,7 +27,7 @@ an argument in its own copy.
 1. **Disequality (`=/=`).** There is no constraint store: `unify` answers a substitution or
    `ufail`, and that is the whole surface. So "these two must never be equal" is unsayable, and
    every relation with a negative side condition has to be written around it.
-   ⚠ and note what does NOT ask for it: `doc/kanren-prover.md` names four risks — search
+   ⚠ and note what does NOT ask for it: `doc/archive/kanren-prover.md` names four risks — search
    explosion, termination, higher-order unification, trust — and disequality is none of them.
    That is the strongest argument against this rung, so it belongs here rather than buried.
 2. **Ordered disjunction.** `s_plus` interleaves, which is right for a prover (completeness) and

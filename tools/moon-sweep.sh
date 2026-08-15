@@ -2,7 +2,7 @@
 # moon-sweep.sh -- measure the DISTANCE between mooncc and a gnulib-using GNU
 # package: compile every lib/*.c, score against the object list automake
 # actually builds on this platform, and bucket the failures by first cause.
-# The before/after harness for doc/moon-diag.md; the method the tar rung used
+# The before/after harness for doc/archive/moon-diag.md; the method the tar rung used
 # (nm-diff the link set) applied to compilation instead of linking.
 #
 # ⚠ THE DENOMINATOR IS THE POINT. A gnulib lib/ carries every platform's lane
@@ -34,7 +34,7 @@ fi
 [ -x "$mc" ] || { echo "moon-sweep: missing $mc -- run 'make $ho/mooncc'"; exit 1; }
 
 # absolute: the compile runs from inside lib/, and a relative -I silently
-# mis-resolves the moment we cd (the bisection trap in doc/moon-userland.md)
+# mis-resolves the moment we cd (the bisection trap in doc/archive/moon-userland.md)
 G=$(pwd); MC=$G/$mc; INC=$G/$inc
 T=$(cd "$PKGSRC" && pwd)
 d=$ho/moonsweep
@@ -76,7 +76,7 @@ done
 cause() { head -1 "$d/logs/$1.log" 2>/dev/null | sed -e 's#/[^ ]*/##g'; }
 # its KIND = the cause with the varying identifier folded out, so the census
 # counts shapes of failure. The parenthetical is the finding: today most kinds
-# name a symptom and not a cause -- that gap is what doc/moon-diag.md closes.
+# name a symptom and not a cause -- that gap is what doc/archive/moon-diag.md closes.
 kind() { cause "$1" |
          sed -e 's/^;; cgfn refuses .*/;; cgfn refuses <fn>   (undeclared identifier, unnamed)/' \
              -e 's/^cc: cannot resolve #include.*/cc: cannot resolve #include <hdr>/' \

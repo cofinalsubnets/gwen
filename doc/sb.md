@@ -7,7 +7,7 @@ just fills gaps. [`crew/sb/sb.l`](../crew/sb/sb.l) is the tool, `make test_sb` t
 gate; a hunk is test/patch.l's proven `chg` at file grain (slot = path, context = old content
 hash), and the store is content-addressed under `.sb/`.
 
-The model — the patch DAG, the derivation, the nest, refs — is [`doc/hatch.md`](hatch.md);
+The model — the patch DAG, the derivation, the nest, refs — is [`doc/archive/hatch.md`](hatch.md);
 this doc is the interface over it. hatch.md says *what the objects are*; this says *what you
 type*.
 

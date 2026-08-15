@@ -8,7 +8,7 @@
 ; would ship under, stated before any inliner exists. sl-cross is the
 ; cross-machine theorem: the stack machine's y+1 under the binding splice
 ; meets the register machine's de5bck (test/uuhomgen.l) at the same value,
-; forall states of BOTH machines -- doc/hom.md's "one design, two machines"
+; forall states of BOTH machines -- doc/archive/hom.md's "one design, two machines"
 ; as one law. exports to Rocq + Lean with the corpus.
 ; guard: substrate + generated terms must land in GLOB first; fail by name if not.
 (assert (member? 'vof (names ())) (two? (peep GLOB 'srun 0)) (two? (peep GLOB 'sp0call 0)))

@@ -2,7 +2,7 @@
 
 > The full ladder (this fuzz rung + the machine-checked prove rung in
 > `proof/rocq/enc*.v`) and the roadmap for further slices live in
-> [`doc/holo-verify.md`](../../../doc/holo-verify.md).
+> [`doc/archive/holo-verify.md`](../../../doc/archive/holo-verify.md).
 
 The verification frontier stops at holo today: `crew/holo/` (the x86-64 + aarch64 assembler)
 has no formal proof, only the frozen goldens in `test/holo/golden.l`/`test/holo/as.l`. Those goldens were

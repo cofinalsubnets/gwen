@@ -3,7 +3,7 @@
 # gcc/glibc/ld) and prove it RUNS: the package's OWN check suite (57 checks
 # lifted from the m4 manual) green against our binary, plus a direct battery
 # (define/eval/divert/esyscmd through popen/format floats). The fourth
-# moon-userland rung (doc/moon-userland.md), after bzip2, gzip and tar.
+# moon-userland rung (doc/archive/moon-userland.md), after bzip2, gzip and tar.
 #
 # m4's source is the one imported artifact. Point M4SRC at a CONFIGURED
 # m4-1.4 tree (./configure already run, so config.h exists). Without one the

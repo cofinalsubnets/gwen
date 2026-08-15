@@ -3,7 +3,7 @@
 # gcc/glibc/ld) and prove it RUNS: a cf/xf roundtrip byte-identical to the tree
 # it archived, a czf/xzf roundtrip (tar forks gzip through a pipe), and interop
 # with the system tar reading our archive. The third moon-userland rung
-# (doc/moon-userland.md), after bzip2 and gzip.
+# (doc/archive/moon-userland.md), after bzip2 and gzip.
 #
 # tar's source is the one imported artifact. Point TARSRC at a CONFIGURED
 # tar-1.13 tree (./configure already run, so config.h exists). Without one the

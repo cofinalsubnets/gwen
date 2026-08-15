@@ -1710,7 +1710,7 @@
  (defn 'uu-app-3-2 '(paths nat (uu-app 3 2) 8) '(idpath 8))
  (defn 'uu-app-tower '(paths nat (uu-app (uu-app 2 3) 4) 262144) '(idpath 262144)))
 
-; === predicative universes + Stage 2 polymorphism (doc/uu-universes.md) ===============
+; === predicative universes + Stage 2 polymorphism (doc/archive/uu-universes.md) ===============
 ; A SOUND checker beside the type-in-type one above, SHARING the evaluator (vof, now aware
 ; of (UU level)) and conversion (conv) verbatim -- universes are a TYPING-rule change.
 ; Levels are EXPRESSIONS -- a charm i, (lsuc l), or a level VARIABLE (lv x) -- so a

@@ -1,6 +1,6 @@
 ; --- doc/proto/dest.l: the DESTINATION vocabulary, modeled -- a gen.l design spike ---
-; a runnable companion to doc/moon-regalloc.md (the catalog; the gap it chases is
-; scored in doc/moon-diff.md): TWO code generators over one C-shaped AST, emitting
+; a runnable companion to doc/archive/moon-regalloc.md (the catalog; the gap it chases is
+; scored in doc/archive/moon-diff.md): TWO code generators over one C-shaped AST, emitting
 ; one holo-flavored IR. `cv` is the r0 protocol as gen.l has it today --
 ; every expression lands its value in r0 and the consumer relocates it. `ck` passes the
 ; CONSUMER down instead, a destination die:
@@ -17,7 +17,7 @@
 ; value" and work in Hom(-, R); passing the die down is the hom functor's contravariant
 ; leg, defunctionalized (a C expression's continuations form this small closed set).
 ; the literature calls it destination-driven code generation (Dybvig & Burger).
-; the design said once, both machines: doc/hom.md.
+; the design said once, both machines: doc/archive/hom.md.
 ;
 ; run: cat test/00-init.l doc/proto/dest.l | out/host/love    ; dots, then `dest: ok`
 ;

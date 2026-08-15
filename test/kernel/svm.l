@@ -1,4 +1,4 @@
-; --- test/kernel/svm.l: the AMD-V spike (doc/svm.md) -- one guest, one exit.
+; --- test/kernel/svm.l: the AMD-V spike (doc/archive/svm.md) -- one guest, one exit.
 ; GUARDED TWICE, and both guards are the tree's own laws. The nom is in the book
 ; only on x86_64, so presence is asked of (names ()) and never by reading it (a
 ; read would be a missing condition, not an absence); and the CPU under that

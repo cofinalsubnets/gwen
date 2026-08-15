@@ -1,4 +1,4 @@
-; free/mkboot.l -- lay boot.o, the kernel's BRING-UP (doc/moon-kernel.md
+; free/mkboot.l -- lay boot.o, the kernel's BRING-UP (doc/archive/moon-kernel.md
 ; rung 4): the code that runs before there is a C environment to run in. mkvec.l's
 ; sibling and mksys.l's class -- register-exact leaves C cannot say.
 ;

@@ -898,7 +898,7 @@ static ai_inline void evac_data(struct ai *g, word const *const p0, word const*c
 // ===== generational write barrier =====
 // a minor scavenges only [minor, hp) and finds old->young edges through the REM
 // SET: every edge execution mints (a map pin, a store) goes through gen_wb, so a
-// minor under a complete set is sound (proof/rocq/gc.v barrier_sound; doc/gengc.md).
+// minor under a complete set is sound (proof/rocq/gc.v barrier_sound; doc/archive/gengc.md).
 // the one escape is overflow (rem_miss): a dropped entry forces the next collection
 // MAJOR, which traces from roots and needs no rem set.
 // young?: the ADDRESS is the generation (no age bits) -- in [minor, hp).
@@ -4848,7 +4848,7 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
    if (r >= 2 * IMAGE_ABS_BIAS) { x->fail = 1; return v; }                       // farther from the anchor than the bias carries
    x->nabs++;                                                                    // kept absolute: the image is now binary-specific
    return (intptr_t)(IMAGE_TBOUND(hb) + r); } }                                  // binary (host nif/.rodata), anchor-relative
-// the decode ladder, split hot/cold by the rung-0 census (doc/oneimage.md): odd,
+// the decode ladder, split hot/cold by the rung-0 census (doc/archive/oneimage.md): odd,
 // heap offset, lvm index and immortal are 98.7% of decodes; the cold tail keeps
 // the nif-cell interior, bare-fn and kept-absolute rungs out of the walk's way.
 static ai_noinline intptr_t img_decode_cold(intptr_t v, uintptr_t hb, intptr_t delta) {

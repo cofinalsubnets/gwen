@@ -9,7 +9,7 @@
 ; ⚠ REFUSES a body carrying a relocation. A lifted body runs at an address the linker
 ; never saw, so a pc-relative reference to lvm_chain or a call to ai_please would land
 ; wherever the JIT happened to map it. Binding those to the LIVE process's addresses is
-; a linking step this does not do -- see doc/moon-regalloc.md's splice-client section.
+; a linking step this does not do -- see doc/archive/moon-regalloc.md's splice-client section.
 (: (nth l i) (? (= i 0) (cap l) (nth (cup l) (- i 1)))
    (die m) (: _ (say err ("lift: " m "\n")) (quit 1))
    as (cuup cmdline)                                   ; drop argv[0] and this script

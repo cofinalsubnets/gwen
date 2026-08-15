@@ -37,7 +37,7 @@
 ; graph with targets as cell indices. What stops a cond from being spliced is that its handler
 ; READS Ip, and every one of those reads is a cell disg can name: the operand, `Ip+3` (the
 ; fallthrough) and `Ip[2]` (the target). Folding Ip is one rung that dissolves the branch family
-; and the whole operand family together. doc/moon-regalloc.md, `branches`.
+; and the whole operand family together. doc/archive/moon-regalloc.md, `branches`.
 ;
 ; Covered: ANY ARITY (the cur row carries it), the load family (arg/argN/quote-of-charm/quoN/
 ; quomN) said directly, the push-PAIR family (aa/aq/qa/qq) said as two pushes, the fld family
@@ -45,7 +45,7 @@
 ; carried and which passes the splice condition. NOT covered, and it is 90% of the corpus: an
 ; op that APPLIES (the p variants -- qap/qqp/aap/aqp -- plus ap/apn/argap) or BRANCHES (the cond
 ; family, whose operand is a thread offset a splice does not have). A row it cannot say declines
-; the closure and tallies why -- that report is the coverage census (doc/moon-regalloc.md, the
+; the closure and tallies why -- that report is the coverage census (doc/archive/moon-regalloc.md, the
 ; auto lane), and it is what ranks the rungs.
 ; ⚠ AHEAD OF THE FORM, never inside it: `@` is a macro, so it is in the chain only once its
 ; layer is spliced -- and a `use` inside the form runs when the form is already compiled.

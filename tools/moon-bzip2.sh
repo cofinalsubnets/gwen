@@ -2,7 +2,7 @@
 # moon-bzip2.sh -- build bzip2 1.0.8 with mooncc + nolibc + the holo linker (no
 # gcc/glibc/ld) and prove it RUNS: round-trips at both block-size ends, `-t`
 # integrity, and format accuracy both ways against the system bzip2. The FIRST
-# moon-userland rung (doc/moon-userland.md), and still the best-shaped one.
+# moon-userland rung (doc/archive/moon-userland.md), and still the best-shaped one.
 #
 # bzip2 is the ideal first package and the reason is structural, not historical:
 # ~7.3k lines of plain C89 and NO ./configure, so it isolates mooncc's C coverage

@@ -28,8 +28,6 @@ proof/rocq/oracle_drive
 *.cmo
 proof/rocq/*.o
 
-# private dev notes / squeezed memory archive (keep local, out of the public cut)
-doc/archive/
 
 # python bytecode caches (bench ports) -- build artifacts, never tracked
 __pycache__/

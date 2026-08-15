@@ -1,4 +1,4 @@
-; --- test/kernel/vmx.l: the Intel twin of svm.l (doc/vmx.md) -- one guest, one
+; --- test/kernel/vmx.l: the Intel twin of svm.l (doc/archive/vmx.md) -- one guest, one
 ; exit, the other vendor. Guarded the same two ways: the nom is in the book only
 ; on x86_64, so presence is asked of (names ()); and the silicon under that seat
 ; may be AMD's, so (vmx ()) answers for the CPU.

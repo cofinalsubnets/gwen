@@ -4,7 +4,7 @@
 # (aggregates, ORDER BY, expressions) and a FILE-BACKED one through the whole
 # unix VFS -- journaled transaction, index, close/reopen persistence, prepared
 # statements, and PRAGMA integrity_check answering ok. The sixth moon-userland
-# rung (doc/moon-userland.md), after bzip2, gzip, tar, m4 and lua.
+# rung (doc/archive/moon-userland.md), after bzip2, gzip, tar, m4 and lua.
 #
 # TWO TARGETS, one procedure (raw.sh's shape, as moon-lua.sh does it):
 # `moon-sqlite.sh` builds the native x86-64 lane, `moon-sqlite.sh arm64`

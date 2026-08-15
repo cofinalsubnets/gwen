@@ -247,7 +247,7 @@
        '("__WCHAR_TYPE__=unsigned int" "__WCHAR_MAX__=0xffffffffU" "__WCHAR_MIN__=0U" "__WCHAR_WIDTH__=32")
        '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"))
    (stddefs tgt) ((? (arm32? tgt) stdt32 stdlp64) + wchdefs tgt + stdcommon)
-   ; the diagnostic driver (doc/moon-diag.md): a stage answered a gripe (a cause
+   ; the diagnostic driver (doc/archive/moon-diag.md): a stage answered a gripe (a cause
    ; it named itself) or a bare bad. a gripe prints "cc: <file>:<line>:<col>: msg"
    ; -- an unknown file takes the source path, an unknown line/col elides; anything
    ; else falls back to <plain>, so a not-yet-converted stage keeps today's line.
@@ -385,7 +385,7 @@
    ; member could add: a misspelled name, a function declared and never defined, or
    ; a `goto` to a label that is not there (gen spells the label main.<lbl> and it
    ; reaches the symbol table as an undefined GLOBAL, so an unresolvable label
-   ; arrives here rather than at the refusal it should be -- doc/moon-diag.md).
+   ; arrives here rather than at the refusal it should be -- doc/archive/moon-diag.md).
    ; ⚠ this used to be holo's `(scare 'link-undef nm)` arriving raw: `;; link-undef
    ; "main.nowhere"`, which is a love DEBUG NOTE and not a diagnostic -- no cc:
    ; prefix, no sentence, and the reader is left to guess that a compiler-internal
@@ -542,7 +542,7 @@
    ; units, not this one. nolibc is a TREE: every .c directly under lib/nolibc/ and
    ; every .c one level down (string/, ..), one function to a file where the
    ; file-scope state allows. A link owing no calendar takes no calendar
-   ; (doc/moon-diff.md's libc rows). ⚠ one level, not a walk -- the depth is the
+   ; (doc/archive/moon-diff.md's libc rows). ⚠ one level, not a walk -- the depth is the
    ; vocabulary, and a deeper tree would say nothing. ⚠ the member names flatten
    ; that tree with _ and the math ones wear m_: time.c and sys/time.c are two
    ; members of one basename, and an archive resolves by name alone.

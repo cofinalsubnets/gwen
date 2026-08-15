@@ -12,7 +12,7 @@
 ;
 ; ⚠ it reads what the compiler INTENDED at the end of gen; holo assembles those forms, so a
 ; cross-check against the emitted bytes is a real differential and has already earned its
-; keep once (test/gate/splice.l's tail-jump law, doc/moon-regalloc.md).
+; keep once (test/gate/splice.l's tail-jump law, doc/archive/moon-regalloc.md).
 (: _ (use 'irec)
    (die m) (: _ (say err ("ir: " + m + "\n")) _ (flush err) (quit 2))
    as (cup argv)                                  ; ⚠ argv is a BINDING, not a nullary door: (argv ()) is

@@ -17,7 +17,7 @@ two constraints earlier drafts treated as binding are lifted, and both were load
   limit at all, and hand-paring them would be the inverse of the criterion -- see §macros,
   which is the section to read if you read one.
 
-the payoff sought is still VERIFICATION. `doc/verify.md` says love.c is "near its floor"
+the payoff sought is still VERIFICATION. `doc/archive/verify.md` says love.c is "near its floor"
 for shrinking and the remaining lever is verifying pieces against references. its LINE
 count is near its floor; its TRUSTED surface is not, and that is where clay pays. a love
 -> JS backend is a second consumer of the same datum rather than a second implementation,
@@ -307,7 +307,7 @@ for `vbin_fill` the table is one row per (op, domain):
 * **verification** -- the SAME ROWS become `vop_denote : vop -> R -> R -> R` in Rocq, and
   the theorem to reach for is the one the comment already claims. both C and model
   regenerate from the table on every gate run, so they cannot drift. this is
-  `doc/verify.md`'s bridge 1 (shared source: one text, two checkers) -- the discipline
+  `doc/archive/verify.md`'s bridge 1 (shared source: one text, two checkers) -- the discipline
   `gen.v` already lives under.
 * **native, no C text** -- clay also goes straight to `(cgen-obj ..)`, giving a third leg
   the tree does not have: the same clay compiled two ways must agree.
@@ -369,7 +369,7 @@ value test. and watch the clock: a generator that crawls is a bug announcing its
 
 the theorem is about the datum; the binary is about what a C compiler did to clay's
 rendering of it. the bridge proves "the datum says X" ∧ "the C is a faithful rendering".
-the C compiler remains unproven -- the same trusted-base story `doc/verify.md` already
+the C compiler remains unproven -- the same trusted-base story `doc/archive/verify.md` already
 tells about moon. state it this way or not at all.
 
 ## what has landed
@@ -381,7 +381,7 @@ tells about moon. state it this way or not at all.
    dot cast szof init dfield didx clit land lor vastart vaarg vaend`; types `ptr arr varr
    struct named const`. `rmw` is `lv op= rhs` KEPT WHOLE -- the desugar to
    `(asn lv (bin op lv rhs))` would evaluate `lv` twice (doc/moon.md, `calm?`). `clay-ok?`, a validator, because `gen.l` currently TRUSTS its input. honors the
-   `gripe` protocol (`doc/moon-diag.md`).
+   `gripe` protocol (`doc/archive/moon-diag.md`).
 1. **`clay-show` and G1.** AST -> C text, plus the round-trip gate over `test/cc/`.
 2. **the dispatch matrices; deleted `tools/mxdump.c`.** `mx.l` is the table; `mx.h` is
    laid from it through clay and `#include`d by love.c (its first generated region);

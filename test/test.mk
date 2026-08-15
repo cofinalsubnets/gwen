@@ -456,7 +456,7 @@ test_clay: host out/host$(hsuf)/mooncc.image
 	 done; rm -f $$t
 	@echo "clay-mx: core/mx.h, core/kinds.h, core/nifs.h, xterm256.h and the 6 love_data scripts regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
-# test_moonfuzz -- moon's REFUSAL surface (doc/moon-diag.md): each test/cc file broken
+# test_moonfuzz -- moon's REFUSAL surface (doc/archive/moon-diag.md): each test/cc file broken
 # eight ways from a fixed seed. Two reds -- no SCARE, no hang -- plus G1 on every mutant that
 # still parses, and a printed CENSUS of named-vs-bare refusals. stderr is KEPT: cpp speaks there.
 test_moonfuzz: host out/host$(hsuf)/mooncc.image
@@ -497,7 +497,7 @@ test_cts_riscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 $(dl)/c-testsuite:
 	@echo MK	c-testsuite
 	@git clone --depth=1 https://github.com/c-testsuite/c-testsuite.git $@ > /dev/null 2>&1
-# test_libc -- OUR C LIBRARY against the system's, function by function (doc/libc.md):
+# test_libc -- OUR C LIBRARY against the system's, function by function (doc/archive/libc.md):
 # test/libc/*.c built by mooncc (pulling crew/moon/lib/nolibc.c by need) and by gcc, run,
 # and the two OUTPUTS compared, so a drift names the function and the case.
 test_libc: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
@@ -546,7 +546,7 @@ test_hdiff: host
 # stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_slow.
 test_drv: host out/host$(hsuf)/mooncc
 	@sh test/gate/drv.sh $(ho) $(ai_cflags)
-# the kernel's inline-asm SEAM (doc/moon-kernel.md): free/<a>/asmops.h says every
+# the kernel's inline-asm SEAM (doc/archive/moon-kernel.md): free/<a>/asmops.h says every
 # privileged instruction twice -- holo's neutral template for mooncc, GNU's for clang -- so
 # the gate compiles one probe with both and compares op by op. Skips without llvm-objdump.
 test_asmops: host out/host$(hsuf)/mooncc
@@ -682,7 +682,7 @@ test_rp2040: host out/host$(hsuf)/mooncc
 	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
 	  $(MAKE) -C port/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker and flatten, flash R|X, boot surface verified"
-# the userland packages (doc/moon-userland.md): each built by mooncc + nolibc + the holo
+# the userland packages (doc/archive/moon-userland.md): each built by mooncc + nolibc + the holo
 # linker -- no gcc/glibc/ld anywhere -- then RUN and held to the package's own answers:
 # tar 1.13 cf/xf + czf/xzf roundtrips and system-tar interop, m4 1.4's own 57-check suite,
 # lua 5.4's interpreter battery, sqlite's amalgamation + VFS battery. Opt-in: point the
@@ -832,7 +832,7 @@ test_uugen: host
 	@$(COQC) -q proof/rocq/uugen.v
 	@$(call vclean,uugen)
 # core/mx.l IS the +/* dispatch matrices; core/mx.h is laid from it through clay and tools/mx2coq.l models
-# it in Rocq -- two derivations of ONE datum (doc/verify.md's bridge 1).
+# it in Rocq -- two derivations of ONE datum (doc/archive/verify.md's bridge 1).
 test_mx: host
 	@echo TEST proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
 	@cat core/mx.l tools/mx2coq.l | $(mw) > proof/rocq/mx.v
@@ -959,7 +959,7 @@ test_uukind: host
 	@rm -f out/host/.uukind.l.tmp
 # test/uuhomgen.l is a COMMITTED GENERATED artifact: doc/proto/dest.l's two code generators
 # run on its law sites, the emissions lifted to uu terms (tools/dest2uu.l), so test/uuhomlaw.l
-# proves the destination-die laws OF THE EMISSIONS at corpus time (doc/hom.md; substrate
+# proves the destination-die laws OF THE EMISSIONS at corpus time (doc/archive/hom.md; substrate
 # test/uuhom.l). `make uuhomgen` refreshes it; test_uuhomgen regenerates and diffs.
 uuhomgen: host
 	@echo LOVE	test/uuhomgen.l "(tools/dest2uu.l on $m)"
@@ -973,7 +973,7 @@ test_uuhomgen: host
 # test/uusplgen.l is a COMMITTED GENERATED artifact: doc/proto/spl.l's three call-site
 # compilers (call, binding splice, substitution splice) run on its samples, the threads
 # lifted to uu terms (tools/spl2uu.l), so test/uuspllaw.l proves the SPLICE LICENSE of
-# the emissions at corpus time (doc/hom.md; substrate test/uuhom.l's stack machine).
+# the emissions at corpus time (doc/archive/hom.md; substrate test/uuhom.l's stack machine).
 # `make uusplgen` refreshes it; test_uusplgen regenerates and diffs.
 uusplgen: host
 	@echo LOVE	test/uusplgen.l "(tools/spl2uu.l on $m)"
