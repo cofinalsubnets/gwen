@@ -315,7 +315,6 @@
       (all (\ w !(lit? (ev (intern w)))) (hue-words 'values))
       !(member? "argv" (hue-words 'names))
       !(member? "argv" (hue-words 'values))
-      !(member? "cmdline" (hue-words 'names))
       ; earlier row wins in the one tablet, exactly as the table reads top-down
       (: b (hue-book ()) (id? (b "assert") 'macro && id? (b "tau") 'const &&
                           id? (b "map") 'book)))

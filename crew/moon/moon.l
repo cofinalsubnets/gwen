@@ -930,5 +930,5 @@
 ; artifact carrying a whole compiler still could not answer the name every recipe
 ; reaches for -- and `CC=cc` on a box with no toolchain found nothing at all.
 (: _ (pins (from 'verbs 'tab) 'mooncc moon-main 'cc moon-main)
-   s ((from 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"] >cmdline)
+   s ((from 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"] >(cmdline 0))
    (? (two? s) (moon-main >s) ()))

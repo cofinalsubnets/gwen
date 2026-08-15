@@ -182,8 +182,8 @@ since that is the one door proven on full-surface text. `holo` and `peg` join th
 `ai_libs` beside uu and bao, because asbook.l opens with `(use 'holo)` and cook.l with
 `(use 'peg)`. The cmdline rides `kboot` from every door — limine's request, PVH's
 `start_info`, the DTB's `/chosen` `bootargs` — and the boot text splits it quote-aware into
-the host's argv shape (`cmdline` = `("love" word..)`, `argv` the twin). Nothing more is
-needed: the members' own seats and kore.l's tail dispatch read `cmdline` exactly as on the
+the host's argv shape (`love-cmdline` = `("love" word..)`, `argv` the twin). Nothing more is
+needed: the members' own seats and kore.l's tail dispatch call `(cmdline 0)` exactly as on the
 host, so `-append "kore ls lib"` runs the tool, `-append "sh"` boots lush, `-append "vi
 lib/json.l"` boots the editor, and an empty cmdline loads it all quietly and falls to the
 console shell, the toolbox warm in its session.

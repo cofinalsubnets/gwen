@@ -58,7 +58,7 @@
    ; ..and follow a SYMLINK to it. `papel` installs the way cook does, as a link on PATH
    ; pointing at this source file, so the name we were invoked by lives in ~/.local/bin
    ; and the siblings do not. readlink is what turns the link back into the source tree.
-   root (: me (findme >cmdline)
+   root (: me (findme >(cmdline 0))
              tgt (? me (: r (readlink me) (? r r me)) ())
              (? tgt (up (dirof tgt)) "crew/"))                           ; crew/papel/papel.l -> crew/
    ; want: the sibling module, wherever this papel lives -- beside this file in
@@ -402,5 +402,5 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
 ; script -- sits in the program seat of the real command line, on the args after it.
 ; body-having, so the machinery leaks nothing; papel-main reads BARE -- whichever
 ; layer holds this file's binds is still the head here.
-(: s ((from 'verbs 'fire) ["papel" "papel.l"] >cmdline)
+(: s ((from 'verbs 'fire) ["papel" "papel.l"] >(cmdline 0))
    (? (two? s) (papel-main >s) ()))

@@ -761,6 +761,12 @@
 ; so a $ b = (a b), weak-binding application at the loosest band. glued $x is saturate.
 (: (** a b) (b a))
 (: $ 1)
+; the whole invocation, exactly as typed. ⚠ A DOOR AND NOT A BINDING, which is the whole point:
+; a frontend pins the list as `love-cmdline` and this reads it at the CALL. a bare global read
+; folds at its reader's compile, so a baked one would carry the BAKE's line into every wake --
+; the trap love/verbs.l's `fire` is shaped around. ⚠ and so it needs its operand: (cmdline) is
+; the closure, unrun and true, exactly as `argv`'s three ⚠s warn for the list.
+(: (cmdline _) (ev 'love-cmdline))
 ; ! . != are ordinary functions under their punct names. ! and . are monadic and nothing else, so
 ; the walk has no row to fold and hands the plain symbol through. != carries the comparison row,
 ; the one thing a binding cannot say. escape mid-list as (!) (.), like any bare operator.

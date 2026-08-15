@@ -12,7 +12,7 @@
 ; a linking step this does not do -- see doc/moon-regalloc.md's splice-client section.
 (: (nth l i) (? (= i 0) (cap l) (nth (cup l) (- i 1)))
    (die m) (: _ (say err ("lift: " m "\n")) (quit 1))
-   as (cuup cmdline)                                   ; drop argv[0] and this script
+   as (cuup (cmdline 0))                                   ; drop argv[0] and this script
    _ (? ((tally as) >= 3) 0 (die "usage: love lift.l <obj> <symbol> <out.l>"))
    obj (nth as 0) nom (string (nth as 1)) dst (nth as 2)   ; ⚠ never `out`: that is the stdout PORT
    q (open obj "r")

@@ -315,4 +315,4 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
 ; the SEAT: file mode (cat | love) dispatches on the real command line and quits with
 ; the status. the -l bake preload seats a flag, not kore, so the scan answers () and
 ; kore-main answers () -- the presence guard, and the one answer that is not a status.
-(: r (kore-main >cmdline) (? (charm? r) (quit r) ()))
+(: r (kore-main >(cmdline 0)) (? (charm? r) (quit r) ()))
