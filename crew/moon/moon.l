@@ -763,7 +763,7 @@
    ; moon-run is the IN-IMAGE door: it ANSWERS the status charm, so a caller holding
    ; this image compiles again after a failed compile instead of dying with it -- the
    ; warm-compiler lane, where the cat is read once and every cc after it is free.
-   ; ⚠ 'leave is the exit door, not a fault (crew/kore/core.l's u-floor, which a udie
+   ; ⚠ 'leave is the exit door, not a fault (crew/kore/u.l's floor, which a udie
    ; anywhere in here rides out on): taking it as an internal raise would print a
    ; nonsense sentence over every usage error and flatten its 2 to a 1.
    (moon-run as)

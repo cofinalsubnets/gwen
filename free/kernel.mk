@@ -115,9 +115,13 @@ kernel: $(k_elf)
 # boot what it writes. KLINK=lld puts ld.lld and the .lds back, the comparison lane, so
 # the .lds files stay in the tree as its statement of the layout. --gc-sections has no
 # twin here: the image carries some dead code, and it is RAM the kernel has plenty of.
-klink_l = $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/asbook.l \
+klink_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/free/klink.l
-$(k_odir)/klink.l: $(klink_l)
+$(k_odir)/klink.list: force_dist_list
+	@mkdir -p "$(dir $@)"
+	@tf=$@.$$$$.tmp; echo '$(klink_l)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+$(k_odir)/klink.l: $(klink_l) $(k_odir)/klink.list
 	@echo CAT	$@
 	@mkdir -p "$(dir $@)"
 	@{ echo "(use 'holo)"; cat $(klink_l); } > $@
@@ -184,7 +188,7 @@ $(k_odir)/love.o: kcppflags += -DAI_HAVE_VERSION_H
 # frontend bakes holo with the NATIVE one only, and this build must not care where it runs.
 k_be_x86_64 = x64
 k_be_aarch64 = arm64
-klay_l = $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/asbook.l \
+klay_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/$(k_be_$a).l $R/crew/holo/elf.l $R/crew/holo/obj.l
 # klink.l's shape, twice. ⚠ STATIC pattern, never an implicit one: a pattern-MADE
 # prerequisite is an INTERMEDIATE make deletes after the link, and the cat would then run
@@ -296,7 +300,7 @@ init-container: host
 # silicon may be Intel's). zz-fin.l goes last: it prints the summary and quits.
 kt = $(filter-out %/run.l %/bell.l %/zz-fin.l,$t) \
   $R/test/kernel/ramfs.l $R/test/kernel/fs.l $R/test/kernel/wfs.l \
-  $R/test/kernel/kore0.l $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/fs.l \
+  $R/test/kernel/kore0.l $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/core.l $R/crew/kore/fs.l \
   $R/test/kernel/kore.l $R/test/kernel/pipe.l \
   $R/test/kernel/sh0.l $R/crew/lush/job.l $R/crew/lush/lex.l $R/crew/lush/gram.l \
   $R/crew/lush/glob.l $R/crew/lush/word.l $R/crew/lush/eval.l $R/test/kernel/sh.l \
@@ -304,7 +308,11 @@ kt = $(filter-out %/run.l %/bell.l %/zz-fin.l,$t) \
   $R/test/zz-fin.l
 # out/lib/corpus.list carries the MEMBERSHIP, rewritten only when the set changes
 # (mk/lib.mk) -- so an edit to any makefile in the tree does not relay this header.
-out/lib/ktests.l: $(kt) out/lib/corpus.list
+out/lib/ktests.list: force_dist_list
+	@mkdir -p out/lib
+	@tf=$@.$$$$.tmp; echo '$(kt)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+out/lib/ktests.l: $(kt) out/lib/corpus.list out/lib/ktests.list
 	@echo CAT	$@
 	@mkdir -p out/lib
 	@cat $(kt) > $@
@@ -362,7 +370,7 @@ endif
 # tables, jumps kmain), mkefi.l lays the ms_abi<->SysV seam in holo IR, and holo's PE lane
 # links the PE32+ the firmware runs. This is the LAPTOP door, what replaces limine on real
 # hardware; the ESP is two files.
-uefi_l = $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/asbook.l \
+uefi_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/crew/holo/pe.l \
   $R/free/uefi/mkefi.l
 $(ko)/uefi$(ksuf)/loader.o: $R/free/uefi/loader.c $(ho)/mooncc

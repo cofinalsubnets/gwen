@@ -118,7 +118,7 @@ done
 # sys.o is LAID, not compiled -- and a CROSS lay needs holo's backend loaded
 # first (the host bake carries only the native one), exactly as raw.sh does it.
 { if [ -n "$backend" ]; then echo "(use 'holo)"; cat "$backend"; fi
-  cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
+  cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
   echo "($mksys \"$d/sys.o\")"; } | $love || { echo "FAIL $mksys sys.o"; exit 1; }
 
 $mc $tflag $objs "$d"/m_*.o "$d/sys.o" -o "$d/m4" || { echo "FAIL holo link m4"; exit 1; }

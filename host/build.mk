@@ -253,8 +253,12 @@ mksys_e = mksys-arm64
 else
 mksys_e = mksys
 endif
-mksys_l = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
-$(ho)/.mksys-cat.l: $(mksys_l)
+mksys_l = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
+$(ho)/.mksys-cat.list: force_dist_list
+	@mkdir -p $(dir $@)
+	@tf=$@.$$$$.tmp; echo '$(mksys_l)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+$(ho)/.mksys-cat.l: $(mksys_l) $(ho)/.mksys-cat.list
 	@echo CAT	$@
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@

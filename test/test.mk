@@ -349,7 +349,7 @@ test_up: out/dist/love-$a
 # stdin, frames onto a captured stdout, :wq writes), driven through the baked kore.image.
 test_vi: host out/host$(hsuf)/kore.image
 	@echo TEST crew/vi/{hue,core,law}.l
-	@cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l lib/lint.l \
+	@cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/re.l lib/lint.l \
 	    crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l \
 	  | sh test/gate/run.sh vi "$(mw)" "crew/vi/law:"
 	@rm -f $(ho)/.vi1; \

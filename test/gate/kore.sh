@@ -34,7 +34,7 @@ pipe() { n=$1; i=$2; shift 2
 # ------------------------------------------------------------------- the laws
 echo "UTILS crew/kore/{text,core,fs,re,sed,diff,law}.l"
 out=$ho/.test_kore.out
-cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
+cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
     crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l \
     crew/vi/vi.l crew/kore/diff.l \
     crew/kore/law.l | "$m" > "$out" 2>&1
@@ -87,7 +87,19 @@ if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/mooncc" ]; then
   [ -s "$ho/.kore-crt0.o" ] || fail "kore ld: crt0 lay"
   "$ho/mooncc" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-mc.elf" >/dev/null 2>&1 || fail "kore ld: mooncc link"
   korerun ld "$ho/.kore-crt0.o" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-ld.elf" || fail "kore ld"
-  cmp -s "$ho/.kore-mc.elf" "$ho/.kore-ld.elf" || fail "kore ld vs mooncc link (bytes)"
+  # ⚠ THE PROGRAM, NOT THE FILE. Both drive the same linker, so the loaded image must be
+  # identical to the byte -- but `.comment` names WHICH PROGRAM WROTE THE FILE, and those
+  # differ honestly ("mooncc 0.1" against "holo 0.1"), shifting every header after it. So the
+  # comparison is objcopy'd: exactly the bytes that get mapped, and none of the metadata about
+  # who mapped them.
+  korerun objcopy -O binary "$ho/.kore-mc.elf" "$ho/.kore-mc.bin" || fail "kore ld: objcopy mc"
+  korerun objcopy -O binary "$ho/.kore-ld.elf" "$ho/.kore-ld.bin" || fail "kore ld: objcopy ld"
+  cmp -s "$ho/.kore-mc.bin" "$ho/.kore-ld.bin" || fail "kore ld vs mooncc link (program bytes)"
+  for e in "$ho/.kore-mc.elf:mooncc" "$ho/.kore-ld.elf:holo"; do
+    f=${e%%:*}; w=${e##*:}
+    "$m" -l lib/irec.l -e "(: r (irec-secof \"$f\" \".comment\") _ (? (two? r) (puts <r) 0) _ (flush out) (quit 0))" \
+      | grep -q "^$w " || fail "kore ld: .comment does not name $w"
+  done
   "$ho/.kore-ld.elf"; r=$?
   [ $r -eq 42 ] || fail "kore ld run (exit $r)"
   # and the archive as a LINK INPUT: `mooncc main.o libf.a` must bind the exe the

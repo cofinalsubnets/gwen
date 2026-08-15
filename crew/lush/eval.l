@@ -90,7 +90,7 @@
 
    ; --- the in-image lane: a tool whose main rides THIS image -------------------
    ; a main in this image runs HERE -- no fork, no exec, no image wake -- and answers
-   ; its status as a charm (crew/kore/core.l's urun, the door every kore tool and
+   ; its status as a charm (crew/kore/u.l's urun, the door every kore tool and
    ; mooncc leave through). ⚠ we take it ONLY when the thing we would have exec'd IS
    ; the thing we already hold: PATH's winner for the word must be this very binary,
    ; which stat answers through the symlink (size mode mtime-ns -- the distro's shadow

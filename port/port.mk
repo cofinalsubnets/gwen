@@ -51,9 +51,9 @@ $(mc): FORCE
 p_link_be ?= $(p_be)
 p_be_l    = $(addprefix $(R)/crew/holo/,$(addsuffix .l,$(p_be)))
 p_lnbe_l  = $(addprefix $(R)/crew/holo/,$(addsuffix .l,$(p_link_be)))
-lay_l  = $(R)/crew/kore/text.l $(R)/crew/kore/core.l $(R)/crew/kore/asbook.l \
+lay_l  = $(R)/crew/kore/text.l $(R)/crew/kore/u.l $(R)/crew/kore/asbook.l \
   $(R)/crew/holo/elf.l $(R)/crew/holo/obj.l
-link_l = $(R)/crew/kore/text.l $(R)/crew/kore/core.l $(R)/crew/kore/asbook.l \
+link_l = $(R)/crew/kore/text.l $(R)/crew/kore/u.l $(R)/crew/kore/asbook.l \
   $(p_lnbe_l) $(R)/crew/holo/elf.l $(R)/crew/holo/obj.l $(R)/crew/holo/link.l
 copy_l = $(link_l) $(R)/crew/holo/copy.l
 # the same two lists spelled from $(R), which is where the cats run

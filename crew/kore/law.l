@@ -112,7 +112,7 @@
       (= (udiff "a" "b" "" "x\n") "--- a\n+++ b\n@@ -0,0 +1 @@\n+x\n")
       (= (udiff "a" "b" "x\n" "") "--- a\n+++ b\n@@ -1 +0,0 @@\n-x\n")))
 
-; --- the u-floor (crew/kore/core.l): the pure helpers under the line tools, each
+; --- the u-floor (crew/kore/u.l): the pure helpers under the line tools, each
 ; held to its GNU face -- the clips, the counter, the two path clips ---
 (: (assert
       (= (uatoi "42") 42) (= (uatoi "-7") -7) (= (uatoi "0") 0)
