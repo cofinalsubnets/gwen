@@ -28,21 +28,18 @@ in_git := $(wildcard $R/.git)
 # clang is the default host/love0 compiler. ⚠ `CC ?= clang` would be a NO-OP: make ships a
 # built-in default `CC = cc` whose origin is `default`, not `undefined`, so `?=` never
 # fires -- the origin test is what overrides it while still honoring `make CC=gcc`.
-# cc_user marks an explicit choice, and opts out of the host block's musl-clang pick.
 ifeq ($(origin CC),default)
 CC = clang
-else
-cc_user := 1
 endif
 
-# The host binary's FLAVOR: the default is dynamic glibc (plus liblove.so, which the crew
-# shares). STATIC=1 links fully static against musl, the OPT-IN portable lane -- not the
-# default, because valgrind emulates x87 at 64 bits where musl's strtod leans on the full
-# 80, so under memcheck every float literal misparsed ~1e-13, and a static build cannot
-# produce liblove.so. STATIC gets its own out/host-musl tree so the two libcs never share
-# objects, and $m follows it, so a test runs the flavor you asked for.
-override STATIC := $(filter-out 0,$(STATIC))
-hsuf := $(if $(STATIC),-musl,)
+# WHO LINKS `love`: mooncc by default, and the whole vm with it. HCC=1 takes the $(CC) lane
+# instead -- the differential the kernel spells KCC, worn at the host. It is the only build
+# that puts a foreign cc on the vm at ai_tco=1, which is where ai_musttail is live and where
+# a prototype mismatch our own sibcall pass waves through is refused (doc/moon-c-gaps.md).
+# ⚠ ITS OWN TREE, because the two loves are the same path otherwise: out/host-cc keeps the
+# objects and the binary apart, and $m follows it so a test runs the one you asked for.
+override HCC := $(filter-out 0,$(HCC))
+hsuf := $(if $(HCC),-cc,)
 
 # ai_tco for the builds that can take it: 1 = the tail-threaded VM (aps tail-jump, never
 # return -- `make vmret` verifies it per binary), 0 = the trampoline loop. The host runs

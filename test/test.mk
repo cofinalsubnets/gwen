@@ -534,6 +534,13 @@ test_selfhost: host out/host$(hsuf)/mooncc
 # no glibc, no ld anywhere. In test_slow, x86-64 only; supersedes test_selfhost.
 test_raw: host out/host$(hsuf)/mooncc
 	@sh test/gate/raw.sh x64 $(ho) $m $t
+# test_hdiff -- the FOREIGN-CC differential at the host (KCC's twin one level up). gcc and
+# clang each link the whole vm at ai_tco=1, which the default mooncc lane never does, and
+# each must build, answer, pass the quick host suite and come out ret-free. NOT the corpus
+# twice over: semantics are the interpreter's, and they do not move with the compiler.
+test_hdiff: host
+	@echo TEST test/gate/hdiff.sh
+	@sh test/gate/hdiff.sh gcc clang
 # the cc-DRIVER conventions (the `CC=mooncc` door's floor): the REAL $(ai_cflags) soup
 # rides through -c, a link owing libc symbols pulls the runtime by need, and the loud edges
 # stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_slow.

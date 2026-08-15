@@ -141,13 +141,13 @@ $d/lib/love/%.l: love/%.l
 $d/lib/love/%.l: lib/%.l
 	$(inst644)
 
-# ⚠ the embeddable libs install GLIBC always: a musl-compiled archive poisons a glibc link
-# (the sigsetjmp note in host/build.mk) and a musl .so is useless to a dynamic consumer.
-# Under STATIC=1 the canonical out/host tree is built on demand by a sub-make.
+# ⚠ the embeddable libs install from the CANONICAL tree always -- an HCC build lays its own
+# out/host-cc, and what a consumer links against should not depend on which cc we were
+# differentialling that day. Built on demand by a sub-make when we are not in it.
 glibc_ho = out/host
 ifneq ($(glibc_ho),$(ho))
 $(glibc_ho)/liblove.a $(glibc_ho)/liblove.so: force_hostcc
-	@$(MAKE) --no-print-directory STATIC=0 $@
+	@$(MAKE) --no-print-directory HCC=0 $@
 endif
 
 $d/lib/liblove.a: $(glibc_ho)/liblove.a

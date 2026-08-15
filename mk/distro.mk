@@ -11,9 +11,10 @@
 distro_dir   = out/distro
 distro_root  = $(distro_dir)/root
 distro_img   = $(distro_dir)/initramfs.cpio.gz
-# ⚠ the base love MUST be static -- a bare initramfs has no ld.so or glibc. Prefer the
-# gcc-free love-raw, the true love base; fall back to a static-musl host love.
-distro_love    = $(firstword $(wildcard out/host/love-raw out/host-musl/love))
+# ⚠ the base love MUST be static -- a bare initramfs has no ld.so or glibc. love-raw is it:
+# gcc-free, our own linker over nolibc, and 935K against the baked love's ~11M, which is
+# what an initramfs wants carried into RAM. `make test_raw` lays it.
+distro_love    = $(wildcard out/host/love-raw)
 # kore applets to expose as argv[0] symlinks (kore dispatches on the basename).
 distro_applets = ls cat head tail wc sort uniq grep sed cut tr nl rev cp mv rm \
                  mkdir rmdir ln touch pwd chmod basename dirname seq yes true \
@@ -25,7 +26,7 @@ BZIMAGE ?= /boot/vmlinuz-linux
 .PHONY: distro-initramfs distro-run distro-smoke
 distro-initramfs: $(distro_img)
 $(distro_img): init/boot.l $(lushfiles) $(korefiles) $(distro_love)
-	@test -n "$(distro_love)" || { echo "distro: need a STATIC love -- run 'make test_raw' (love-raw) or 'make STATIC=1'"; exit 1; }
+	@test -n "$(distro_love)" || { echo "distro: no out/host/love-raw -- run 'make test_raw' to lay it"; exit 1; }
 	@echo DISTRO	$(abspath $@)  '(base: $(distro_love))'
 	@rm -rf $(distro_root)
 	@mkdir -p $(distro_root)/bin $(distro_root)/lib $(distro_root)/proc $(distro_root)/sys $(distro_root)/dev $(distro_root)/tmp

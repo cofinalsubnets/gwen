@@ -1,20 +1,19 @@
 # host/build.mk -- the host (POSIX CLI) build, into out/host. Included by ./Makefile from
 # the project root, so paths resolve from there; shared vars are common.mk.
 #
-# ⚠ the DEFAULT flavor owns out/host and the other builds in its own hsuf'd tree, so a musl
-# build never overwrites glibc objects -- musl's bare `sigsetjmp` against glibc's
-# `__sigsetjmp` macro would poison a cross-libc relink. The .hostcc stamp below catches the
-# IN-PLACE flips. love0 and the generated out/lib/*.h stay pinned to canonical out/host
-# paths and plain $(CC): love0 never goes musl.
+# ⚠ the DEFAULT flavor owns out/host and HCC builds in its own hsuf'd tree, so the $(CC)
+# lane never overwrites a mooncc object -- the two disagree on nothing a linker can see, and
+# a mixed relink would read as an up-to-date binary. The .hostcc stamp catches IN-PLACE
+# flips. love0 and the generated out/lib/*.h stay pinned to canonical out/host paths.
 ho = out/host$(hsuf)
 h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 # host/*.c: per-app host-nif files, auto-globbed and auto-registered via AI_NIF. ⚠ linked
 # DIRECTLY into the binary, never via liblove.a, so the ai_nifs section is not
 # archive-collected. Drop a host/<app>.c in and it builds -- no rule edit.
 host_o = $(patsubst host/%.c,$(ho)/host/%.o,$(wildcard host/*.c))
-# STATIC picks musl-clang unless CC was set explicitly; love0 and the lib tools stay on
-# plain $(CC) either way. (-I$(ho) -Iout/lib reach the generated egg/cli headers.)
-host_cc = $(if $(STATIC),$(if $(cc_user),$(CC),musl-clang),$(CC))
+# love0 and the lib tools ride this too, HCC or not.
+# (-I$(ho) -Iout/lib reach the generated egg/cli headers.)
+host_cc = $(CC)
 # ⚠ GCDBG is the GC debug lanes' knob and deliberately NOT $(EXTRA_CFLAGS): it must reach
 # the SHIPPED love under both compilers and never love0. EXTRA_CFLAGS does not reach
 # $(moon0) at all, so test_gcheck would run a corpus on a binary that never had the check
@@ -47,20 +46,6 @@ endif
 # builds there: host/image.c wants <link.h> and dl_iterate_phdr, and on Apple silicon a
 # self-patching binary would have to re-sign itself before it could exec again.
 image_ldflags = -Wl,--section-start=.love_image=0x2000000
-# STATIC=1 links fully static against musl and skips liblove.so (a static build cannot
-# produce one) -- the Linux portable-binary lane, opt-in; common.mk's flavor block says why
-# it is not the default. It runs on any distro regardless of glibc version AND still does
-# DNS: static *glibc* cannot resolve (getaddrinfo needs NSS via dlopen), musl resolves
-# itself, so ain's `connect host port` works. Costs ~55K of text against a ~4M baked image.
-# FALLBACK: `STATIC=1 CC=musl-gcc` works but is a gcc wrapper, and on Arch its spec injects
-# a phantom `-latomic_asneeded` (we use no real atomics), so it wants an empty stub:
-#   ar rcs /tmp/libatomic_asneeded.a; make STATIC=1 CC=musl-gcc EXTRA_CFLAGS=-L/tmp
-ifneq ($(STATIC),)
-host_ldflags = -static
-# the musl-clang wrapper injects LINK flags into every clang call, -c compiles included,
-# where the "unused during compilation" warning meets our -Werror. Silence that one.
-ai_cflags += -Wno-unused-command-line-argument
-endif
 # .hostcc -- the tree's compiler+link identity, content-stamped (cmp keeps the mtime when
 # nothing moved). Every host object and the link depend on it, so an in-place flavor flip
 # rebuilds the tree instead of relinking mixed-libc objects.
@@ -68,7 +53,7 @@ endif
 force_hostcc: ;
 $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
-	@tf=$@.$$$$.tmp; printf '%s\n' '$(host_cc) $(host_ldflags) $(image_ldflags)' > $$tf; \
+	@tf=$@.$$$$.tmp; printf '%s\n' '$(host_cc) $(image_ldflags)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
 # ⚠ liblove.so is NOT here, and that is the whole point: it was the one thing on this
 # target that a foreign toolchain had to build. holo lays no dynamic section, so a shared
@@ -79,7 +64,7 @@ $(ho)/.hostcc: force_hostcc
 # builds its own glibc-tree copies anyway. `make embed` when you want them.
 host: $(ho)/love $(ho)/love.baked $(ho)/love.1 $(ho)/cook.1
 .PHONY: embed
-embed: $(if $(STATIC),$(ho)/liblove.a,$(ho)/liblove.so)
+embed: $(ho)/liblove.so
 love0: $(love0)
 
 # dock: the steering dock, launched from a stable COPY so `adopt` can relink the canonical
@@ -183,7 +168,7 @@ $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 # deliberately NOT here -- see the -DAI_VERSION note on gl0_cc.
 $(ho)/love.o: out/lib/love_version.h
 # the lcat'd headers host/main.c bakes inline. ONE roster: the mooncc twin and the
-# STATIC link below read the same name, and three spellings is how they drift.
+# HCC link below read the same name, and three spellings is how they drift.
 baked_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/overlay.h out/lib/peg.h out/lib/pat.h out/lib/uu.h out/lib/verbs.h $(holo_h) $(ld_h) $(glaze_h)
 $(ho)/host/main.o: $(baked_h)
 # host/cb.c rides the crew/quay sources by unity include -- recompile when they move.
@@ -193,8 +178,9 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # Every TU compiles under love0 waking mooncc0.image, our own nolibc + am math + mksys
 # sys.o replace glibc, and holo links it -pie. CC's remaining jobs here are love0 and the
 # liblove.a/.so lane, since a shared object wants PIC codegen and a dynamic section holo
-# does not lay. STATIC=1 keeps the musl-cc link below; the raw default is already fully
-# static, so that flavor is opt-in. One link rule, two names -- `love` and the candidate.
+# does not lay. HCC=1 takes the $(CC) link below instead -- the foreign-cc differential,
+# opt-in, and the only lane that puts one on the vm at ai_tco=1 where ai_musttail is live
+# (common.mk says why). One link rule, two names -- `love` and the candidate.
 # ⚠ TWO SHAPES, and the second builds no bootstrap at all. Normally love0 wakes
 # mooncc0.image, the image that breaks the self-host circle. With a BUNDLED love beside the
 # tree (the binary a seed laid beside itself -- ./Makefile's bundled_love) there is no circle: that
@@ -271,11 +257,11 @@ $(moon_d)/sys.o: $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
 	@echo HOLO	$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_love) -l $(ho)/.mksys-cat.l -n -e '($(mksys_e) "$@")' && test -s $@
-ifneq ($(STATIC),)
+ifneq ($(HCC),)
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/love_data.ld $(baked_h)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
-	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(host_ldflags) $(image_ldflags) $(data_ld)
+	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(image_ldflags) $(data_ld)
 else
 # ⚠ the nolibc sources are a dep of the LINK, not of any object: the driver compiles
 # the members it pulls, so an edit there changes this binary with no .o to notice.

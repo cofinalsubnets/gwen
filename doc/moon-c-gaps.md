@@ -375,7 +375,8 @@ Not hypothetical: `host/main.c`'s four-arg `boot` carried `return 1` on two bake
 paths for as long as mooncc has built this tree, and its caller does `g = boot(..)` then
 `ai_code_of(g)` — a dereference of address 1, where the path existed to reach the scare face.
 Neither lane that compiles it looks: `GL_BOOTSTRAP` selects the two-arg `boot`, so love0's
-clang never sees this one, and we say nothing. `STATIC=1` is what found it.
+clang never sees this one, and we say nothing. The foreign-cc lane is what found it —
+`make test_hdiff`, which is now the gate for exactly this.
 
 ### a `musttail` into an incompatible prototype
 
