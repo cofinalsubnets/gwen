@@ -44,3 +44,8 @@ compile_commands.json
 
 # the engineering narratives: read through and purged locally, never shipped
 doc/archive/
+
+# the two generated proof terms: test_uugen and test_uulean write them from the uu
+# corpus on EVERY run, so a committed copy is 810 KB nothing ever reads
+proof/rocq/uugen.v
+proof/lean/uugen.lean
