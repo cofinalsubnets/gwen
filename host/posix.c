@@ -32,6 +32,12 @@
 #include <sys/mount.h>      // mount(2)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
 #endif
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>    // _NSGetExecutablePath (selfpath)
+#include <limits.h>         // PATH_MAX -- realpath's buffer is not ours to size
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
+#include <sys/sysctl.h>     // KERN_PROC_PATHNAME (selfpath)
+#endif
 
 // A wait(2) status word -> the value a reaper hands back: the exit code, or
 // 128+signal for a signalled death (the shell convention), or -1 for the
@@ -283,6 +289,50 @@ ai_noinline static struct ai *host_cwd(struct ai *g) {
  return g->sp[1] = g->sp[0], g->sp += 1, g; }           // cwd string over the dummy arg
 static lvm(lvm_cwd) {
  Pack(g); g = host_cwd(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ Unpack(g);
+ ai_musttail return Next(1); }
+
+// (selfpath _) -> the path of the RUNNING BINARY, or () where the seat cannot say.
+// The one door for it: the prel's library walk, the seed's bin/love, moon's include
+// root, lux's re-exec and lush's am-I-that-tool test all start here.
+// ⚠ NO ARGV[0] FALLBACK, and not for want of argv[0] -- the book has it as `cmdline`.
+// It is that a bare `cmdline` read from BAKED code folds to the BAKE's line, and the
+// callers here are baked, so the operand would arrive already wrong. A seat with no
+// door below writes the walk where the line is read live.
+ai_noinline static size_t host_selfpath(char *b, size_t n) {
+#if defined(__APPLE__)
+ char raw[4096], can[PATH_MAX];                        // ⚠ realpath writes PATH_MAX, not n
+ uint32_t sz = sizeof raw;
+ if (_NSGetExecutablePath(raw, &sz)) return 0;         // dyld's answer is not canonical
+ char const *p = realpath(raw, can) ? can : raw;
+ size_t l = strlen(p);
+ if (l >= n) return 0;
+ return memcpy(b, p, l + 1), l;
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
+ int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+ size_t sz = n;
+ if (sysctl(mib, 4, b, &sz, NULL, 0) || !sz) return 0;
+ return strlen(b);
+#else
+ char const *link =
+#if defined(__NetBSD__)
+  "/proc/curproc/exe";
+#else
+  "/proc/self/exe";                                    // linux, and every /proc that copies it
+#endif
+ ssize_t r = readlink(link, b, n - 1);
+ if (r <= 0) return 0;
+ return b[r] = 0, (size_t) r;
+#endif
+}
+ai_noinline static struct ai *host_selfpath_ap(struct ai *g) {
+ char buf[4096];
+ if (!host_selfpath(buf, sizeof buf)) return g->sp[0] = ZeroPoint, g;
+ if (!ai_ok(g = ai_strof(g, buf))) return g;
+ return g->sp[1] = g->sp[0], g->sp += 1, g; }
+static lvm(lvm_selfpath) {
+ Pack(g); g = host_selfpath_ap(g);
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
@@ -642,6 +692,7 @@ static union u const
   nif_waitpid[] = {{lvm_waitpid}, {lvm_ret0}},
   nif_chdir[]   = {{lvm_chdir}, {lvm_ret0}},
   nif_cwd[]     = {{lvm_cwd}, {lvm_ret0}},
+  nif_selfpath[] = {{lvm_selfpath}, {lvm_ret0}},
   nif_pipe[]    = {{lvm_pipe}, {lvm_ret0}},
   nif_openfd[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_openfd}, {lvm_ret0}},
   nif_spawnio[] = {{lvm_cur}, {.x = putcharm(7)}, {lvm_spawnio}, {lvm_ret0}},
@@ -670,6 +721,7 @@ AI_NIF("sigtake", nif_sigtake);
 AI_NIF("wait",  nif_waitpid);
 AI_NIF("chdir", nif_chdir);
 AI_NIF("cwd",   nif_cwd);
+AI_NIF("selfpath", nif_selfpath);
 AI_NIF("pipe",  nif_pipe);
 AI_NIF("openfd", nif_openfd);
 AI_NIF("spawnio", nif_spawnio);

@@ -86,7 +86,7 @@
    (jit-irtab _)                                     ; nom -> its forms | () when nothing wrote it down
     (: t (peep jit-memo 'irtab ())
        (? (two? t) t
-          (: exe (bind-rd "/proc/self/exe")
+          (: exe (bind-rd (bind-seat 0))
              rows (filter (\ w (tally >w <= jit-cap)) (irec-bytes exe))
              (? (nil? rows) (jit-no ['no-irtab] "this love carries no IR record (built without -fir)")
                 (:
@@ -115,7 +115,7 @@
    (jit-lvmtab _)
     (: t (peep jit-memo 'lvmtab ())
        (? (two? t) t
-          (: exe (bind-rd "/proc/self/exe")
+          (: exe (bind-rd (bind-seat 0))
              rows (irec-at exe "ai_nif_lvm")
              (? (nil? rows) (jit-no ['no-lvmtab] "this love carries no ai_nif_lvm (nifs.h is older than lib/splice.l)")
                 (: v [1 rows]
@@ -266,15 +266,16 @@
 
    ; --- the live symbol table: this process's own symtab plus its own load bias -----------
    ; we own both sides, so a JIT here resolves a symbol the way a debugger would and never the
-   ; way a loader does: /proc/self/exe carries the table holo wrote, and the maps line whose
+   ; way a loader does: our own binary carries the table holo wrote, and the maps line whose
    ; path is ours and whose file offset is zero carries the bias. ⚠ never the FIRST maps line
    ; -- that is often an unrelated anonymous r-xp region.
    (bind-die m) (: _ (jit-say m) (welp '(bind)))
+   (bind-seat _) (? (member? 'selfpath (names ())) (selfpath 0) (bind-die "no selfpath nif"))
    (bind-rd p) (: s (jit-slurp p) (? (string? s) s (bind-die ("cannot open " + p))))
    (bind-le s i n) (: (go k a m) (? (k = n) a (go (k + 1) (a + peep s (i + k) 0 * m) (m * 256))) (go 0 0 1))
-   (bind-live-tab _) (: exe (bind-rd "/proc/self/exe")
+   (bind-live-tab _) (: exe (bind-rd (bind-seat 0))
       symemo (tablet 0)
-      exepath (? (member? 'readlink (names ())) (readlink "/proc/self/exe") (bind-die "no readlink nif"))
+      exepath (bind-seat 0)
       base (: mp (bind-rd "/proc/self/maps") n (tally mp)
               (sp? j) (peep mp j 0 = 32)
               (eol? j) ((j = n) || (peep mp j 0 = 10))
@@ -301,7 +302,7 @@
                   (: v (irec-va exe nm)                 ; ONE ELF walk in the tree, lib/irec.l's
                      _ (? (nil? v) (bind-die ("no live symbol " + nm)) 0)
                      a (base + v) _ (pin symemo nm a) a)))))
-   ; ..and the table itself is built ONCE: it slurps a 6 MB /proc/self/exe to get there.
+   ; ..and the table itself is built ONCE: it slurps our own 6 MB binary to get there.
    (jit-live _) (: t (peep jit-memo 'live ())
                    (? (two? t) <>t
                       (: v (bind-live-tab 0) _ (pin jit-memo 'live [1 v]) v)))

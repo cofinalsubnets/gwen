@@ -38,7 +38,7 @@
                   (? (0 < d) (snip path 0 d) ""))
    ; THE TOOLCHAIN ROOT -- where our own headers and the runtime sources live.
    ; two rungs, tried in order: the dev tree off the cwd, then the INSTALLED
-   ; nest through the seat (love/prel.l's own walk -- readlink /proc/self/exe,
+   ; nest through the seat (love/prel.l's own walk -- selfpath,
    ; then <seat>/../lib/love/moon/, so ~/.love/bin/love finds ~/.love/lib/love/
    ; moon/ and a distro's /usr/bin/love finds /usr/lib/love/moon/). without the
    ; second rung mooncc only works with the repo root as the cwd: every path
@@ -49,7 +49,7 @@
    ; captured seat would fold the BUILD tree's path into that image and ride it
    ; forever -- prel.l carries the same warning because it learned this one the
    ; hard way (the installed love walked out/lib instead of its own nest).
-   (mseat _) (: x (readlink "/proc/self/exe")
+   (mseat _) (: x (selfpath 0)
                 (? (string? x) (cdir x + "../lib/love/moon/") ()))
    (mroots _) (: s (mseat ()) (? (string? s) ["crew/moon/" s] '("crew/moon/")))
    ; the runtime home: the FIRST root that actually carries the sources. by
@@ -465,7 +465,7 @@
    ; "<baked>" is the binary's own section: no file to stat, and the exe stat
    ; above already carries its identity.
    (mcid home)
-    (: x (readlink "/proc/self/exe")
+    (: x (selfpath 0)
        d (? (string? x) (cdir x) ())
        w (? (member? 'love-image (names ())) [1 (ev 'love-image)] ())
        ims (? (two? w) (: im <>w

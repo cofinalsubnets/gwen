@@ -146,7 +146,10 @@
    (sh-slashed? w) (: n (tally w)
                       (go k) (? (n <= k) 0 ((w k) = 47) 1 (go (k + 1)))
                       (go 0))
-   (sh-self? p) (: a (stat p) ((two? a) && (a = (stat "/proc/self/exe"))))
+   ; ⚠ asked at the call: the kernel bakes this file and carries no host nif, where a
+   ; top-level bind would fold the BAKING love's own seat in and call every tool ours.
+   (sh-seat _) (? (member? 'selfpath (names ())) (selfpath 0) ())
+   (sh-self? p) (: a (stat p) ((two? a) && (a = (stat (sh-seat ())))))
    (sh-whichp w)                                ; PATH's winner for w -> (1 path), or ()
      (? (sh-slashed? w) (? (two? (stat w)) [1 w] ())
         (: (go l) (? !(two? l) ()

@@ -131,7 +131,7 @@
                           (le (symoff + (i * syment) + (f 14)) (f 15))
                           (go (i + 1))))
              (go 0))))
-   (irec-self _) (irec-read "/proc/self/exe")
+   (irec-self _) (irec-read (selfpath 0))
    (irec-of rows nm) (: (go l) (@ l (r >< more) (? (id? <r nm) >r (go more)) ())
                         (go rows))
    ; the names a record carries, in the order the compiler laid them

@@ -325,10 +325,10 @@
                    (intern (snip s b e)))
       fsopen (peep book 'open ())      ; the host's open nif, by peep -- see above
       ; the seat root: where the running binary lives. <seat>/../lib/ is the nest shape, its
-      ; love/ subfolder the FHS one. no readlink gives (), and the rungs miss.
+      ; love/ subfolder the FHS one. no selfpath nif gives (), and the rungs miss.
       ; read at each miss, never captured -- a binding folds the build tree's seat into the image.
-      rlink (peep book 'readlink ())
-      (seatlib _) (: x (? (nil? rlink) () (rlink "/proc/self/exe"))
+      spath (peep book 'selfpath ())
+      (seatlib _) (: x (? (nil? spath) () (spath 0))
                      (? (string? x)
                         (: n (tally x)
                            b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep x k 0)) (+ k 1) r)) r)) 0 0)

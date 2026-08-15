@@ -20,7 +20,7 @@
 
    (dslurp p) (src-slurp p @ [1 r] r (src-die $ "can't read " p))
    (src-lay-love root)
-    (: exe (readlink "/proc/self/exe")
+    (: exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't read seed path"))
        _ (mkdir (root + "/bin") 493)
        p (root + "/bin/love")
@@ -60,7 +60,7 @@
                         (p k = 58) (go (k + 1) (k + 1) (snip p st k >< acc))
                         (go (k + 1) st acc))
        (go 0 0 ()))
-   (src-foreign? p) (: a (stat p) b (stat "/proc/self/exe") (two? a ? !(a = b) 0))
+   (src-foreign? p) (: a (stat p) b (stat (selfpath 0)) (two? a ? !(a = b) 0))
    (src-ccworks? cc dir)
     (: c (dir + "/.ccprobe.c") o (dir + "/.ccprobe.o")
        q (open c "w")
@@ -105,7 +105,7 @@
        cross? !(want = seed-arch ())
        r (src-lay (two? as ? <as "."))
        root <>r
-       exe (readlink "/proc/self/exe")
+       exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't find seed path"))
        farm (src-farm root exe)
        path ("" + getenv "PATH")

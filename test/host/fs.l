@@ -72,6 +72,31 @@
           (: _ (unlink b) (= 5 (cap (stat h))))
           (id? (unlink h) ())))
 
+   ; copyfile: a VALUE op, so it answers the byte count and encodes errno negative.
+   ; ⚠ an empty source answers 0 -- a falsy success, which is why every caller tests
+   ; the SIGN and never the truth.
+   _ (: c (+ d "/c") z (+ d "/z")
+        _ (: p (open c "w") _ (say p "five!") (close p))
+        _ (: p (open z "w") (close p))
+        (assert
+          (= 5 (copyfile c (+ d "/c2")))
+          (= 5 (cap (stat (+ d "/c2"))))
+          (= 0 (copyfile z (+ d "/z2")))            ; empty in, empty out, and 0 is the count
+          (= -2 (copyfile (+ d "/nope") (+ d "/c3")))
+          (= -1 (copyfile 7 c))                     ; misuse: a non-string path
+          (id? (unlink c) ()) (id? (unlink z) ())
+          (id? (unlink (+ d "/c2")) ()) (id? (unlink (+ d "/z2")) ())))
+
+   ; selfpath: the running binary's own path, the seat every library walk starts
+   ; from. no cwd and no argv here -- an ABSOLUTE path at a real regular file is
+   ; the whole contract, and it is what the per-OS doors have to agree on.
+   _ (: s (selfpath 0)
+        (assert
+          (string? s)
+          (= 47 (peep s 0 0))                       ; absolute, whatever the cwd was
+          (= 32768 (& 61440 (cauup (stat s))))      ; S_IFREG: a file, not the /proc link
+          (< 0 (cap (stat s)))))
+
    _ (unlink l) _ (unlink b)
    _ (test_fin ())
    _ (say out "fs: ok") (put out 10))

@@ -81,11 +81,11 @@
    ; the redirect releases, the new generation adopts every window. same pid.
    ; the exact original argv first (exec is execvp, so `love` re-resolves off
    ; PATH -- an upgraded binary lands on the FIRST restart, and a dev pile of
-   ; -l modules re-runs whole); the script and /proc/self/exe as fallbacks.
+   ; -l modules re-runs whole); the script and the seat itself as fallbacks.
    (lux-restart u) (: _ (say out "lux: restart over the moor -- exec\n") _ (flush out)
                       _ (exec argv)
                       _ (exec `((lux-self ())))
-                      _ (exec `("/proc/self/exe" (lux-self ())))
+                      _ (exec `((selfpath 0) (lux-self ())))
                       'restart-failed)
    ; the session reads LINES (see parks the TASK -- the reader's park law) and
    ; sounds the TEXT: `sound` walks a charlist, so a socket running dry mid-skip
@@ -249,8 +249,8 @@
           (k = 'restart)                                                         ; restart-in-place: exec the original argv (execvp, so love
           (: _ (line ("lux: restart -- exec, pid " + show (getpid 0)))            ; re-resolves off PATH -- an upgraded binary lands first try,
              _ (exec argv)                                                        ; and a dev pile of -l modules re-runs whole; exec'ing
-             _ (exec `((lux-self ())))                                            ; /proc/self/exe would pin a deleted build forever). the
-             _ (exec `("/proc/self/exe" (lux-self ())))                           ; CLOEXEC'd socket drops, the redirect releases, the new
+             _ (exec `((lux-self ())))                                            ; the seat path would pin a deleted build forever). the
+             _ (exec `((selfpath 0) (lux-self ())))                               ; CLOEXEC'd socket drops, the redirect releases, the new
              _ (line "lux: restart failed") (loop sh lay hist ffoc))              ; generation ADOPTS the survivors
           (k = 'refresh) (relay sh lay ffoc)
           (k = 'reset-layout) (relay sh lux-layout ffoc)

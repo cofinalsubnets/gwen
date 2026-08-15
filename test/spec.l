@@ -739,7 +739,7 @@
 ; resolve on the walk but can never shadow the top's own -- and LOADS it on a miss: the baked
 ; source library (the frontend's static ai_libs table), or the filesystem walk -- lib/<x>.l off the cwd, then the SEAT
 ; rungs, <seat>/../lib/ and its love/ subfolder, the seat being the running binary's own home
-; (readlink /proc/self/exe): PATH picks the love, the love carries its library. a STRING is an
+; (the selfpath nif): PATH picks the love, the love carries its library. a STRING is an
 ; explicit path
 ; (the module named by its basename); a SLASHED name ('x/y) INCLUDES lib/x/y.l into the current
 ; head instead, no new layer, no registration. test/host/loader.l is the load law in anger (fs

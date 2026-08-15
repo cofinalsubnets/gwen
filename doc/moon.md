@@ -289,8 +289,8 @@ mooncc's own files — our headers (`crew/moon/include/`, glibc-ABI-faithful but
 the runtime sources the implicit link pulls — are found through a two-rung walk, tried in order:
 
 1. **the dev tree**, `crew/moon/` off the cwd;
-2. **the installed nest**, `<seat>/../lib/love/moon/` — the loader's own seat walk, readlink
-   `/proc/self/exe`. So `~/.love/bin/love` finds `~/.love/lib/love/moon/`, and a distro's
+2. **the installed nest**, `<seat>/../lib/love/moon/` — the loader's own seat walk, the
+   `selfpath` nif. So `~/.love/bin/love` finds `~/.love/lib/love/moon/`, and a distro's
    `/usr/bin/love` finds `/usr/lib/love/moon/`. `mk/install.mk` lays them there.
 
 Without this an installed mooncc outside a source tree cannot compile hello-world at all:

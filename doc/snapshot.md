@@ -1,7 +1,7 @@
 # the heap-image snapshot
 
 love boots from a **serialized heap image** rather than by evaluating the corpus. A plain `love`
-wakes the image baked into its own `.image` section (found via `/proc/self/exe`) and starts a
+wakes the image baked into its own `.image` section (found via `selfpath`) and starts a
 glaze-baked runtime in **~4–12 ms** instead of the ~230 ms an egg eval costs — the native JIT is
 always on, no flags. `LOVE_NO_IMAGE` opts out; the Makefile exports it for all recipes so the
 gate tests the fresh egg and the bench controls the glaze itself. A bad, stale or cross-arch

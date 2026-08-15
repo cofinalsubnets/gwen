@@ -36,7 +36,7 @@
        _ (puts ("up: syncing " + src + " from " + url + "\n"))
        r (sb-sync url)
        _ (? r 0 (oops "up: the sync did not land"))
-       exe (readlink "/proc/self/exe")
+       exe (selfpath 0)
        ; the toolchain is US: unless the environment names a CC, the nest
        ; builds under this very binary's mooncc verb -- love0 compiles there,
        ; and love0 carries the graph on as always (mooncc0.image, the moon
