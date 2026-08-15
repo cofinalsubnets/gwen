@@ -270,7 +270,10 @@
                  + (? (id? dia 'moon) '("__moon__=1") ())   ; the DIALECT's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
                  (? (id? tgt 'x64) ("__SIZEOF_INT128__=16" >< ds) ds))     ; x64 alone carries the wide pair (gen's d128 lane); love.c's limb seam reads it
-       r (uread src)
+       ; ⚠ `-` is READ HERE and nowhere else, so every door onto a TU gets stdin for
+       ; free -- and cdir answers "" for it, which is the cwd, gcc's own rule for a
+       ; source with no directory of its own.
+       r (? (src = "-") [1 (slurp in)] (uread src))
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))
        lx (clexat (deftext ds9 + <>r) (1 - tally ds9))
        _ (? (okv? lx) () (ccdie lx src ("cc: lex error in " + src)))
@@ -624,7 +627,7 @@
        ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set ("love " + <(usplit 43 love-version)) rdme))
        _ (ld-write dst ps)
        (chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-nostdinc] [-t x64|arm64] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a .."
+   usage "usage: mooncc [-c] [-pie] [-nostdinc] [-x c] [-t x64|arm64] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n (tally s)
@@ -711,6 +714,9 @@
                     (go >l d acc))
                  (go >l dia (a >< acc)))))
        (go as 'moon ()))          ; unsaid means moon: our C, extensions and all
+   ; `none` is gcc's word for "read the suffix again", which for us is the default.
+   (xlang? w) (w = "c" || w = "none")
+   (xdie w) ("cc: -x " + w + " -- mooncc reads: c none")
    (tol? a) (a = "-pipe" || a = "-static" ||
              pfx? a "-g" || pfx? a "-O" ||
              pfx? a "-f" || glu? a 108 || glu? a 76 ||
@@ -827,7 +833,20 @@
              (a = "-ffreestanding")
               (flags r (pin (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1))
              (nostd? a) (flags r (pin t 'nostd 1))
+             ; -x names the LANGUAGE of what follows, which is the whole reason an input
+             ; may arrive with no suffix to read. ⚠ LOUD like -std=: `-x c++` and
+             ; `-x assembler` name compilers we are not, and taking either for C would
+             ; read one language as another -- the hazard -std= came off tol? for.
+             (a = "-x") (? (two? r) (? (xlang? <r) (flags >r t) (udie 2 (xdie <r))) (udie 2 usage))
+             (glu? a 120) (: w (snip a 2 (tally a))
+                             (? (xlang? w) (flags r t) (udie 2 (xdie w))))
              (tol? a) (flags r t)
+             ; ⚠ AHEAD OF THE DASH REFUSAL, and the only arg that is: a bare `-` is an
+             ; INPUT, the source on stdin. every configure probe on earth writes
+             ; `cc -x c -c -o /dev/null -` before it trusts a flag, and a cc that cannot
+             ; be asked gets answered by the fallback -- ours is common.mk's, which
+             ; then hands us the one -std= spelling we refuse.
+             (a = "-") (flags r (fpush t 'ins a))
              ((0 < tally a) && (a 0 = 45)) (udie 2 usage)
              (flags r (fpush t 'ins a)))))
    ; EVERY cc SAYS ITS SENTENCE, the internal ones too: gen and holo raise noms
@@ -889,6 +908,9 @@
                 (: _ (? c (cc-obj a b f)
                           (cc-link [a] b f)) 0)
         (? c)   (: (go l) (? !(two? l) 0
+                             ; stdin has no name to derive an .o from -- obase would
+                             ; answer the bare suffix and write a file called `o`.
+                             (<l = "-") (udie 2 "cc: a source on stdin needs -o")
                              !(dotc? <l) (udie 2 ("cc: not a .c input: " + <l))
                              (: _ (cc-obj <l (obase <l) f) (go >l)))
                    (go ins))

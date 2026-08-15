@@ -65,4 +65,16 @@ case $msg in
   *) fail "-nostdlib refused, but said: $msg" ;;
 esac
 
-echo "test_drv: CC=mooncc -- the cc flag soup rides through, the runtime pulls by need, -shared/-nostdlib stay loud"
+# 4: THE CONFIGURE PROBE -- how a build asks a cc anything before trusting it: a source on
+# stdin, its language named by -x because there is no suffix left to read. every
+# autoconf-shaped build writes some version of this line before it believes a flag, so a cc
+# that cannot be ASKED is one that gets answered by the fallback instead.
+printf 'int main(void){return 0;}' | "$ho/mooncc" -std=gnu23 -x c -c -o /dev/null - \
+  || fail "the configure probe (-x c with the source on stdin) did not compile"
+printf 'int main(void){return 0;}' | "$ho/mooncc" -xc -c -o "$d/in.o" - \
+  || fail "glued -xc did not compile"
+[ -s "$d/in.o" ] || fail "a source on stdin wrote no object"
+# ..and -x stays LOUD on a language we are not: taking c++ for C is -std='s own hazard.
+"$ho/mooncc" -x c++ -c "$d/b.c" -o "$d/x.o" 2>/dev/null && fail "-x c++ did not refuse"
+
+echo "test_drv: CC=mooncc -- the cc flag soup rides through, the runtime pulls by need, the configure probe answers, -shared/-nostdlib stay loud"
