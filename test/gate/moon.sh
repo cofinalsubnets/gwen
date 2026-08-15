@@ -93,8 +93,8 @@ struct S { int a; hdr: long b; int c; tail: };
 union  U { top: int x; long y; };
 int main(void) {
   struct S s;
-  if (&s.hdr != (void*)&s.b) return 1;           /* the label IS its member's address */
-  if (offsetof(struct S,tail) != 20) return 2;   /* a trailing one names the end of the data */
+  if ((void*)s.hdr != (void*)&s.b) return 1;     /* the label IS the address -- no & to write */
+  if (offsetof(struct S,tail) != (int)sizeof(struct S)) return 2;  /* trailing: one past the OBJECT */
   printf("%d %d %d %d %d\n", (int)sizeof(struct S), (int)offsetof(struct S,a),
          (int)offsetof(struct S,b), (int)offsetof(struct S,c), (int)sizeof(union U));
   return 0; }

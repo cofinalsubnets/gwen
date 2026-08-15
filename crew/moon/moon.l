@@ -137,7 +137,11 @@
    ; values -- no long double here -- so a consumer takes its double lane, the
    ; one we can compile. a user -D lands after these and wins.
    stdcommon
-    '("__CHAR_BIT__=8" "__SCHAR_MAX__=0x7f" "__SHRT_MAX__=0x7fff"
+    ; ⚠ __mooncc__ says WHICH COMPILER, __moon__ says WHICH DIALECT, and a source wanting an
+    ; extension must ask the second: under -std=c this is still mooncc and the extension is
+    ; still refused. cc-parse adds __moon__ because only it knows the dialect.
+    '("__mooncc__=1"
+      "__CHAR_BIT__=8" "__SCHAR_MAX__=0x7f" "__SHRT_MAX__=0x7fff"
       "__SCHAR_WIDTH__=8" "__SHRT_WIDTH__=16" "__INT_WIDTH__=32"
       "__LONG_LONG_MAX__=0x7fffffffffffffffLL" "__LONG_LONG_WIDTH__=64"
       "__ORDER_LITTLE_ENDIAN__=1234" "__ORDER_BIG_ENDIAN__=4321" "__ORDER_PDP_ENDIAN__=3412"
@@ -262,7 +266,9 @@
    ; stamped line (a gripe, __LINE__) is TRUE with no pay-back pass. an
    ; #include lexes fresh at its own line 1 either way.
    (cc-parse src {'is is 'ds ds 'tgt tgt 'nsi nsi 'dia dia})
-    (: ds9 (archdefs tgt + featdefs tgt + stddefs tgt +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
+    (: ds9 (archdefs tgt + featdefs tgt + stddefs tgt
+                 + (? (id? dia 'moon) '("__moon__=1") ())   ; the DIALECT's own macro: extensions on
+                 +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
                  (? (id? tgt 'x64) ("__SIZEOF_INT128__=16" >< ds) ds))     ; x64 alone carries the wide pair (gen's d128 lane); love.c's limb seam reads it
        r (uread src)
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))

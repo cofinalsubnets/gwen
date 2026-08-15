@@ -696,20 +696,24 @@
            (: a2 (? (mx < 1) 1 mx)
               [(rev acc) (aup (>> (bit + 7) 3) a2) a2])
            (: m <l name <m ty <>m
-              (? (id? ty 'label)                     ; A STRUCT LABEL: the cursor's byte, and the cursor does not move.
-                 ; it takes the TYPE OF THE MEMBER IT PRECEDES, so `&s.lbl` is exactly the
-                 ; `&` of the field it names and reads with the same width. a trailing label
-                 ; (or a run of them) has nothing to stand for, so it falls back to char --
-                 ; a byte at that offset, which is the honest floor for a bare position.
-                 ; ⚠ AND IT ALIGNS AS THAT MEMBER WILL. the cursor is where the last field
-                 ; ended, not where the next one starts, so a label reading the raw cursor
-                 ; names the PADDING before its member rather than the member (`&s.lbl == &s.b`
-                 ; then answers false, which is the whole thing a label is for).
-                 (: (nxt r) (? !(two? r) 'char (: t2 <>(<r) (? (id? t2 'label) (nxt >r) t2)))
+              (? (id? ty 'label)
+                 ; A STRUCT LABEL is a zero-width marker: the ADDRESS of a position and
+                 ; nothing else. It is typed as a ZERO-LENGTH CHAR ARRAY, so `s.hdr` decays
+                 ; to char* exactly as `char hdr[0]` does -- the address, with no `&` to
+                 ; write, which is the whole point of naming a position -- while staying an
+                 ; lvalue, so offsetof(S,hdr) still answers.
+                 ; ⚠ IT ALIGNS AS WHAT FOLLOWS IT. Before a member: that member's own
+                 ; alignment, or the label names the PADDING and &s.hdr != &s.b (the bug the
+                 ; `char x[0]` idiom has -- gcc answers 4 where the member sits at 8).
+                 ; At the END: the STRUCT's alignment, so a trailing label is one past the
+                 ; OBJECT and equals sizeof -- end()'s convention. One past the DATA would
+                 ; sit inside the trailing padding and point at nothing an array would reach.
+                 ; ⚠ mx is final there by construction: nothing follows a trailing label.
+                 (: (nxt r) (? !(two? r) () (: t2 <>(<r) (? (id? t2 'label) (nxt >r) t2)))
                     nt (nxt >l)
-                    la (? pk 1 (talign ps nt))
-                    at (? uni 0 ((aup bit (la * 8)) >> 3))     ; a union flattens every offset
-                    (go >l bit mx ([name at nt] >< acc)))
+                    la (? pk 1 nt (talign ps nt) (? (mx < 1) 1 mx))
+                    at (? uni 0 ((aup bit (la * 8)) >> 3))   ; a union flattens every offset
+                    (go >l bit mx ([name at ['arr 'char 0]] >< acc)))
                  (bfmem? m)                          ; a bitfield member (named or anonymous): (name ty width)
                  (: w <>>m
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)

@@ -119,29 +119,39 @@ it belongs before the line is read at all.
 
 ### struct labels
 
-A label where a member declaration would start names an **offset**: a virtual member that
-holds nothing and takes no space.
+A label where a member declaration would start names an **offset**: a zero-width marker
+that holds nothing and takes no space.
 
 ```c
-struct S { int a; hdr: long b; int c; tail: };
+struct S { char a; hdr: long b; int c; tail: };
 ```
 
-`&s.hdr` is `&s.b` — the label takes the type of the member it precedes, so it reads at the
-same width and `offsetof` answers that member's own offset. ⚠ it also *aligns* as that member
-will: the cursor sits where the previous field ended, so a label reading it raw would name the
-padding rather than the field.
+`s.hdr` **is** the address — no `&` to write, which is the point of naming a position. It
+is typed as a zero-length `char` array, so it decays the way `char hdr[0]` does while
+staying an lvalue, which keeps `offsetof(S, hdr)` answering. It costs nothing: the struct
+above has exactly the size and offsets of `struct { char a; long b; int c; };`.
 
-⚠ this is exactly where it differs from the idiom it replaces. The portable-ish trick is a
-zero-length array marker, `char hdr[0];` — a GCC/Clang extension — and that lands on the
-**unaligned** cursor: for the struct above gcc answers `hdr=4` where `b=8`. A struct label
-answers 8. They are not interchangeable, and the label is the one that means what it says.
+⚠ **the alignment is the whole feature.** The idiom this replaces is a zero-length array
+marker, `char hdr[0];` — a GCC/Clang extension — and it has alignment 1, so it lands where
+the *previous* field ended and names the padding: gcc puts it at **4** where the `long`
+sits at **8**. A label aligns as the member it precedes, so it names the member.
 
-A trailing label (or a run of them) has no member to stand for and falls back to `char`,
-naming the end of the data. In a union every label flattens to 0 like every other member.
+A **trailing** label aligns as the struct, so it is one past the *object* — `offsetof(S,
+tail) == sizeof(struct S)`, `end()`'s convention. One past the *data* would sit inside the
+trailing padding and point at nothing an array of `S` would ever reach. In a union every
+label flattens to 0, like every other member.
 
-`gen.l` never learned about any of this: a label is one more row in the stag table, which is
-the seam holding. The gate's oracle is the same struct with the labels deleted, compiled by
-gcc: identical size, identical offsets.
+`gen.l` never learned about any of this: a label is one more row in the stag table, which
+is the seam holding. `test/cc/141-structlabel.c` is the battery's own check — guarded on
+`__moon__`, so gcc compiles the label-free half and both compilers must still agree — and
+the gate's oracle is the same struct with the labels deleted, compiled by gcc: identical
+size, identical offsets.
+
+### the macros we answer
+
+`__mooncc__` says which **compiler**; `__moon__` says which **dialect**, and only the
+second is a licence to use an extension — under `-std=c` this is still mooncc and the
+extension is still refused.
 
 Anything without `-c` is a **link**, through `crew/holo/link.l`.
 
