@@ -841,9 +841,10 @@
    ; org: () takes the default base (pie 0 / elf-base); a number lays the image
    ; THERE -- the bare-metal lane (qemu -M virt wants its RAM base, 0x80000000),
    ; where `qemu -kernel` loads the segment at p_vaddr and enters at e_entry.
-   ; prod: the producer string for .comment -- what wrote THIS file, the caller
-   ; being the only one that can say (mooncc when its driver linked, holo's ld
-   ; when the applet did).
+   ; prod: the producer string for .comment -- what wrote THIS file. BOTH DOORS SAY THE SAME
+   ; WORD (`love <base>`): it is one linker, and which front end drove it is not a fact the
+   ; file needs. They briefly differed, and the only thing that ever noticed was test_kore,
+   ; which then wanted ten lines of objcopy to look past a distinction carrying nothing.
    ; ⚠ THE BASE HALF OF love-version, never the whole id, and the fixpoint is why:
    ; the VCS suffix names the COMMIT that built the compiler, so love1 (built by
    ; love0's mooncc) and love2 (built by love1's) would carry different producer

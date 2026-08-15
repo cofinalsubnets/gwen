@@ -692,9 +692,7 @@ extern uintptr_t ai_baked_image_len;
 // (after the egg) the self-hosted pass.
 static char const cli[] =
 #include "cli0.h"
- , tests0[] =
-#include "tests0.h"
- , runner[] = "(reads (tap (s2cl tests)))"   // the stream shell (love/bao.l) drinks the baked corpus
+ , runner[] = "(reads (tap (s2cl tests)))"   // the stream shell (love/bao.l) drinks the corpus
  , src0_bao[] =
 #include "bao0.h"
  , src0_rng[] =
@@ -760,9 +758,6 @@ static struct ai *boot(struct ai *g, bool argp) {
     );                                                 //   unspliced below: this lane runs the SAME cli.l
     g = ai_unsplice_(g);
     return ai_evals_(g, cli); }
-  g = ai_strof(g, tests0);                            // the baked corpus, as a string
-  struct ai_def td[] = {{"tests", ai_pop1(g)}};
-  g = ai_defn(g, td, countof(td));
   g = ai_evals_(g,                                    // p1 FIRST: prel's loader reads `sound`, and a
 #include "p10.h"                                      // global folds at its reader's compile, so the
   );                                                  // reader in love has to exist before prel compiles
@@ -787,6 +782,31 @@ static struct ai *boot(struct ai *g, bool argp) {
     "(use 'kanren)"
   );
   g = ai_evals_(g, "(: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0))");   // string -> charlist, for the runner
+  // THE CORPUS IS READ, NOT BAKED. It used to ride as a C string through out/lib/tests0.h, which
+  // put every test file in love0's dependency graph: editing one relinked the bootstrap and
+  // rebuilt every object behind it, ~100 s for a one-line assert. Nothing needed it -- the nifs
+  // are drained in main() before boot() runs, so file io is live here, and out/lib/corpus.list
+  // already holds the ordered set (it exists because make cannot watch a wildcard's MEMBERSHIP).
+  // ⚠ love0 IS NOT A RELEASE ARTIFACT (host/build.mk stamps it "bootstrap" for the same reason),
+  // and the one thing that runs it is test_love0, from the tree that just built it.
+  // ⚠ A MISSING FILE DIES BY NAME. Answering () would run a SHORTER corpus and still print
+  // "tests pass" -- a green gate over tests that never ran, which is the one failure this must
+  // not have. presence is the wrapper, so the read tests the OPEN and never the byte count.
+  g = ai_evals_(g,
+    "(: (c0read p) (: q (open p \"r\")"
+    "               (? q (: s (slurp q) _ (close q) s)"
+    "                  (: _ (say err (\"love0: corpus: cannot open \" + p)) _ (put err 10) (quit 1))))"
+    "   (c0split s) (: n (tally s)"
+    "                  (go i j acc) (? (n <= i) (rev (? (< j i) (link (snip s j i) acc) acc))"
+    "                                 (: c (peep s i 0)"
+    "                                    (? (|| (= c 32) (= c 10))"
+    "                                       (go (+ i 1) (+ i 1) (? (< j i) (link (snip s j i) acc) acc))"
+    "                                       (go (+ i 1) j acc))))"
+    "                  (go 0 0 ()))"
+    "   fs (c0split (c0read \"out/lib/corpus.list\"))"
+    "   _ (? (two? fs) 0 (: _ (say err \"love0: corpus: out/lib/corpus.list names nothing\")"
+    "                       _ (put err 10) (quit 1)))"
+    "   tests (foldl (\\ a f (a + c0read f)) \"\" fs))");
   g = ai_evals_(g, runner);                           // pass 1: corpus via ev = the c0 nif
   g = ai_egg_(g,                                      // bootstrap: install the self-hosted ev
 #include "egg0.h"

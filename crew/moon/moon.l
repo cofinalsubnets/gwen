@@ -498,6 +498,13 @@
        ; the live set is one generation per (worktree, lane, target) -- a tree
        ; carries the shim's love+mooncc.image and the build's love0+mooncc0.image
        ; as two distinct compilers -- so the room here is deliberate, not slack.
+       ; ⚠ AND ANYTHING THAT IS NOT AN ARCHIVE GOES, which is what the paragraph above
+       ; promised and did not do: the cache held one .o PER MEMBER before it held one .a
+       ; per (compiler, target), and nothing has read a .o since. The count kept the
+       ; archives at 32 while 24130 orphans of the old policy sat beside them -- 116 MB in
+       ; someone's HOME, growing, with no reader. A pass that cannot say which generations
+       ; are dead can still say which SHAPES are.
+       _ (foldl (\ a f (? (dota? f) a (: _ (unlink (d + f)) a))) 0 (readdir d))
        fs (foldl (\ a f (: st (stat (d + f))
                           (? (dota? f && two? st) (a + [[(el st 1) f]]) a)))
                  () (readdir d))
@@ -607,7 +614,7 @@
        ; line NAMED is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
        set (lib + rtpull lib tgt nostd)
-       ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set ("mooncc " + <(usplit 43 love-version)) rdme))
+       ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set ("love " + <(usplit 43 love-version)) rdme))
        _ (ld-write dst ps)
        (chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [-nostdinc] [-t x64|arm64] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a .."
@@ -763,7 +770,7 @@
    ; moon-run is the IN-IMAGE door: it ANSWERS the status charm, so a caller holding
    ; this image compiles again after a failed compile instead of dying with it -- the
    ; warm-compiler lane, where the cat is read once and every cc after it is free.
-   ; ⚠ 'leave is the exit door, not a fault (crew/kore/core.l's u-floor, which a udie
+   ; ⚠ 'leave is the exit door, not a fault (crew/kore/u.l's floor, which a udie
    ; anywhere in here rides out on): taking it as an internal raise would print a
    ; nonsense sentence over every usage error and flatten its 2 to a 1.
    (moon-run as)

@@ -11,14 +11,14 @@
 # make READS the rule, so a $(..) still undefined there expands to nothing and the cat
 # comes out short a file -- silently, the members that remain being well-formed.
 lushfiles = crew/lush/job.l crew/lush/lex.l crew/lush/gram.l crew/lush/glob.l crew/lush/word.l crew/lush/eval.l crew/lush/line.l crew/lush/main.l
-korefiles =crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l crew/kore/kore.l
+korefiles =crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l crew/kore/kore.l
 # mooncc is its OWN app, NOT in the kore cat: a cc edit rebuilds only mooncc, so a kore
 # rebuild in another session cannot tear the compiler. ⚠ member order is the scope -- the
 # u-floor, then asbook splices the boot-registered holo and the CROSS BACKENDS join it
 # (defbackend mutates holo's own table, so mooncc cross-compiles every target whichever
 # single backend the host image baked), the writers, the compiler proper, then moon.l
 # whose tail SEAT fires.
-moonfiles = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l
+moonfiles = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l
 # the build-tree kore/mooncc bins are WAKE SHIMS over their sibling images, the exact shape
 # mk/install.mk installs: `#!/bin/sh` resolving its own directory, then exec'ing the
 # SIBLING love on the SIBLING image. ⚠ the interpreter is never PATH's, so a tree-fresh cat
@@ -27,12 +27,26 @@ moonfiles = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/x64.l
 # and shim fresh together, so consistency is structural rather than checked at runtime.
 # (a cold invocation then wakes in ~ms instead of re-evaling the cat, ~1.3s.) kore's shim
 # threads basename($0) through, so the argv[0]-symlink dispatch still lands.
-$(ho)/.kore-cat.l: $(korefiles)
-$(ho)/.mooncc-cat.l: $(moonfiles)
+# ⚠ THE MEMBERSHIP IS AN INPUT AND MAKE CANNOT SEE IT -- the same trap out/dist/.dist.list and
+# out/lib/corpus.list already guard. Moving a file BETWEEN these lists changes what the cat
+# holds while every file make watches keeps its mtime, so the cat is "up to date" and the image
+# is built from the old set: silently, and it reads exactly like the edit not working. Splitting
+# the u-floor out of core.l cost four debug rounds to this, across five different cats.
+# Depend on the LIST: rewritten only when membership moves, so the cat re-lays on add OR drop.
+$(ho)/.kore-cat.list: force_dist_list
+	@mkdir -p $(dir $@)
+	@tf=$@.$$$$.tmp; echo '$(korefiles)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+$(ho)/.mooncc-cat.list: force_dist_list
+	@mkdir -p $(dir $@)
+	@tf=$@.$$$$.tmp; echo '$(moonfiles)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+$(ho)/.kore-cat.l: $(korefiles) $(ho)/.kore-cat.list
+$(ho)/.mooncc-cat.l: $(moonfiles) $(ho)/.mooncc-cat.list
 $(ho)/.kore-cat.l $(ho)/.mooncc-cat.l:
 	@echo CAT	$(abspath $@)
 	@mkdir -p $(dir $@)
-	@cat $^ > $@
+	@cat $(filter %.l,$^) > $@
 $(ho)/kore: $(ho)/kore.image
 	@echo CAT	$(abspath $@)
 	@{ echo '#!/bin/sh'; \
@@ -83,7 +97,7 @@ out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 # (defbackend mutates the spliced holo), every main before kore.l's applet
 # table, up.l LAST so the verbs close over the lot. DIST_ORIGIN pins the
 # default `love up` origin URL ahead of up.l (unset: up asks for a URL).
-distfiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
+distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
             crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
             crew/vi/core.l crew/vi/vi.l \
             crew/kore/diff.l lib/dns.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l \
@@ -156,7 +170,6 @@ out/dist/.dist-cat.l: $(distfiles) out/dist/.dist.list
 # ENCLOSING repo. A second +g on an id that already carried one, and a stage cut from the
 # wrong index: a 158-byte tarball and an artifact with no source in it. mk/lib.mk's
 # love_version has always guarded on exactly this, and the two ids must agree.
-in_git    := $(wildcard $(R)/.git)
 dist_base := $(love_base)
 dist_vcs  := $(if $(in_git),$(shell git -C $(R) describe --always --dirty 2>/dev/null),)
 dist_ver  := $(dist_base)$(if $(dist_vcs),+g$(dist_vcs),)
@@ -232,10 +245,17 @@ out/dist/.staged-$(dist_ver): force_stage $(ho)/love
 # a seed binary rebuilt out there byte-identical rather than merely equivalent, since the
 # blob it embeds is the same archive and not a re-pack that has to coincide.
 ifneq ($(in_git),)
+# KEEP THE LAST N, and nothing fancier: every cut is named for its revision, so they pile up
+# one per commit you happened to build -- 35 of them and 200 MB here before anyone looked. The
+# newest $(dist_keep) survive (by mtime, so the one you are working with is never the casualty)
+# and the stage stamps follow the same rule, being the same generations by another name.
+dist_keep ?= 3
 $(dist_source): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l tools/tgz.l
 	@echo TGZ	$(abspath $@)
 	@rm -f $@
 	@$(ho)/love tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
+	@ls -t out/dist/love-*.tar.gz 2>/dev/null | tail -n +$$(($(dist_keep)+1)) | xargs -r rm -f
+	@ls -t out/dist/.staged-* 2>/dev/null | tail -n +$$(($(dist_keep)+1)) | xargs -r rm -f
 else
 $(dist_source):
 	@echo "dist: no .git here and no $@ --" >&2

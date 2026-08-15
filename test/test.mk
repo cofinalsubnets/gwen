@@ -23,7 +23,12 @@ mw = env -u LOVE_NO_IMAGE $m
 # love0 bakes prel+ev+repl + the whole corpus and self-tests BOTH compilers in one run
 # (-Dai_tco=0, the trampoline lane too), so it must print TWO "tests pass" summaries: a
 # reader stop drops the rest of the stream and exits 0. Status rides `.rc` -- no pipefail.
-test_love0: $(love0)
+# ⚠ corpus.list IS A RUNTIME INPUT NOW, not only a stamp: love0 reads it to find the corpus
+# (host/main.c), so it has to EXIST before love0 runs. It used to be pulled in as tests0.h's
+# prerequisite; with the corpus off the bootstrap's dependency graph, nothing else asks for it,
+# and a fresh tree died with `love0: corpus: cannot open out/lib/corpus.list` -- which the
+# unpacked-release path found and no in-tree run could, out/lib always being warm here.
+test_love0: $(love0) out/lib/corpus.list
 	@echo TEST $(love0)
 	@{ $(love0) </dev/null; echo $$? > out/host/.test_love0.rc; } | tee out/host/.test_love0.out; \
 	  s=$$(cat out/host/.test_love0.rc); \
@@ -356,7 +361,7 @@ test_up: out/dist/love-$a
 # stdin, frames onto a captured stdout, :wq writes), driven through the baked kore.image.
 test_vi: host out/host$(hsuf)/kore.image
 	@echo TEST crew/vi/{hue,core,law}.l
-	@cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l lib/lint.l \
+	@cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/re.l lib/lint.l \
 	    crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l \
 	  | sh test/gate/run.sh vi "$(mw)" "crew/vi/law:"
 	@rm -f $(ho)/.vi1; \

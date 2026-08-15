@@ -82,7 +82,7 @@ done
     echo "(use 'holo)"
     cat "$backend"
   fi
-  cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l \
+  cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
       crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
   echo "($mksys \"$d/sys.o\")"
 } | "$m" || fail "$mksys sys.o"

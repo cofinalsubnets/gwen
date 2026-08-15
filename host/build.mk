@@ -253,16 +253,20 @@ mksys_e = mksys-arm64
 else
 mksys_e = mksys
 endif
-mksys_l = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
-$(ho)/.mksys-cat.l: $(mksys_l)
+mksys_l = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
+$(ho)/.mksys-cat.list: force_dist_list
+	@mkdir -p $(dir $@)
+	@tf=$@.$$$$.tmp; echo '$(mksys_l)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+$(ho)/.mksys-cat.l: $(mksys_l) $(ho)/.mksys-cat.list
 	@echo CAT	$@
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
-# ⚠ THE LAST love0 IN THE DEFAULT LANE. sys.o is LAID by running a love over the mksys
-# cat, and naming love0 here was enough to drag the whole bootstrap back in -- love0 wants
-# $(gl0_h), gl0_h wants tests0.h, and tests0.h is `cat $t | lit`, the corpus through lit's
-# stdin, which is where distboot kept dying at 139. A bundled love lays it just as well:
-# the cat carries holo itself, so the layer needs nothing of the bootstrap.
+# ⚠ THE LAST love0 IN THE DEFAULT LANE. sys.o is LAID by running a love over the mksys cat,
+# and naming love0 here was enough to drag the whole bootstrap back in -- love0 wants $(gl0_h),
+# which used to want tests0.h, `cat $t | lit` through lit's stdin, where distboot kept dying at
+# 139. (The corpus is READ now, not baked, so that particular tail is gone.) A bundled love
+# lays it just as well: the cat carries holo itself, so the layer needs nothing of the bootstrap.
 $(moon_d)/sys.o: $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
 	@echo HOLO	$@
 	@mkdir -p $(dir $@)

@@ -31,7 +31,7 @@ $(lit): tools/lit.c
 	@mkdir -p $(dir $@)
 	@echo CC	$@
 	@LOVE_NO_IMAGE= $(CC) -std=$(ai_std) -O2 -Wall -Wextra -Werror -o $@ $<
-gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/post0.h out/lib/p10.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/pat0.h out/lib/uu0.h out/lib/coin0.h out/lib/rng0.h out/lib/q0.h out/lib/kanren0.h out/lib/overlay0.h out/lib/peg0.h out/lib/verbs0.h out/lib/tests0.h $(asm0_h)
+gl0_h = out/lib/cli0.h out/lib/egg0.h out/lib/post0.h out/lib/p10.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/pat0.h out/lib/uu0.h out/lib/coin0.h out/lib/rng0.h out/lib/q0.h out/lib/kanren0.h out/lib/overlay0.h out/lib/peg0.h out/lib/verbs0.h $(asm0_h)
 .PHONY: lib
 lib: $(lib_h) $(gl0_h)
 # ⚠ lcat a .l into its header ATOMICALLY -- temp, require non-empty, then mv. A bare `> $@`
@@ -73,19 +73,17 @@ out/lib/%0.h: love/%.l $(lit)
 # the glaze is sigil-heavy, so it skips the lcat reader round-trip and bakes verbatim.
 $(glaze_h): out/lib/%.h: love/glaze/%.l $(lit)
 	$(lit_h)
-# ⚠ the corpus SET stamp: tests0.h and ktests.l aggregate $t, a wildcard, so a DELETED test
-# leaves every remaining prereq older than the target and make keeps baking the ghost.
-# Depend on the LIST: rewritten only when membership changes, so they re-lay on add OR delete.
+# ⚠ the corpus SET stamp: ktests.l aggregates $t, a wildcard, so a DELETED test leaves every
+# remaining prereq older than the target and make keeps baking the ghost. Depend on the LIST:
+# rewritten only when membership changes, so it re-lays on add OR delete. love0 READS this file
+# at run time to find the corpus (host/main.c), which is what took the corpus out of its
+# dependency graph -- so the list is a manifest now, not only a stamp.
 .PHONY: force_corpus_list
 force_corpus_list: ;
 out/lib/corpus.list: force_corpus_list
 	@mkdir -p out/lib
 	@tf=$@.$$$$.tmp; echo '$t' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
-out/lib/tests0.h: $t out/lib/corpus.list $(lit)
-	@mkdir -p out/lib
-	@echo CAT	$@
-	@cat $t | $(lit) > $@
 
 # love_version.h: the build's version, surfaced as the `love-version` global.
 #
