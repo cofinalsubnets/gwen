@@ -5,7 +5,7 @@
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \
   test_filemode test_stdinbuf test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
-  test_sb test_kore test_nest test_cookdiff test_dist test_up test_vi test_moon test_clay test_moonfuzz \
+  test_sb test_kore test_refuzz test_nest test_cookdiff test_dist test_up test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_vec test_fixpoint test_raw_bake test_riscv \
   test_raw_riscv test_raw_arm64 test_thumb1 test_thumb2 test_virt test_mps2 test_mps2_t1 \
@@ -339,6 +339,14 @@ test_sb: host out/host$(hsuf)/sb
 korerun = $m wake $(ho)/kore.image kore
 test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/kore.sh $(ho) $m
+# grep + sed against GNU over SEEDED RANDOM patterns (doc: the script's own head).
+# test_kore's battery is a list someone thought of; this one is not, which is why it
+# found the (a*)+ empty-iteration bug and the -w greedy-span bug that the battery,
+# the laws and a green test_slow all sat happily on top of. Skips (exit 0) where GNU
+# grep/sed are absent -- and checks --version, since an interactive `grep` may be a
+# ugrep shim whose BRE differs. Rides test_extra: it costs ~a minute.
+test_refuzz: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image
+	@sh test/gate/refuzz.sh $m out/host$(hsuf)/kore.image
 # cook against GNU MAKE, differentially (doc: the script's own head). The oracle is a
 # SECOND IMPLEMENTATION, and it has to be: a builtin cook never implemented is a VARIABLE
 # reference in make's grammar, so it expands to EMPTY and the build carries on -- invisible

@@ -1,24 +1,32 @@
 ; crew/kore/sed.l -- sed-lite over the re.l engine: the stream editor's useful
 ; core. a toolbox file, no seat -- kore is its door; loads after re.l in the cat.
 ;
-;   sed [-n] SCRIPT [FILE..]
+;   sed [-n] [-E] [-i] [-e SCRIPT].. SCRIPT [FILE..]
 ;
 ; the dialect: commands separated by ; or newlines, each [ADDR[,ADDR]] VERB.
-; addresses: a line number, $ (the last line), /re/ (the BRE dialect of re.l,
-; \/ for a literal /); a range ADDR,ADDR opens at the first, closes at the
+; addresses: a line number, $ (the last line), /re/ (re.l's BRE, or its ERE under
+; -E; \/ for a literal /); a range ADDR,ADDR opens at the first, closes at the
 ; first LATER line matching the second (a numeric end at-or-before the start
 ; keeps just the one line, like GNU). verbs: p (print), d (delete), q (quit
 ; after this line's print; one address only), and s/RE/REPL/[g][p] with any
 ; delimiter after the s. the replacement knows & (the whole match), \1..\9
 ; (group spans off refind, a repeated group reading as its last iteration),
 ; and \x for a literal x. -n holds the auto-print; p and the s p-flag still
-; speak. input is the concatenation of the files (line numbers run through,
-; $ is the last line of the whole stream); - or no files reads in. an
-; unreadable file complains, the rest still flow, and the exit remembers 2.
+; speak. -e stacks scripts in order, joined by newlines, and once any -e is
+; given every positional word is a FILE.
+;
+; ⚠ -i CHANGES THE STREAM MODEL and that is GNU's doing, not a shortcut: without
+; it the files are ONE stream (line numbers run through, $ is the last line of
+; the whole thing); with it each file is its own stream, edited and written back,
+; so numbers restart and $ is per-file. the two walks share `srun`, which takes
+; its output PORT rather than saying into `out` -- that parameter is the whole of
+; how -i captures. no backup suffix: GNU takes one only glued (-i.bak) and
+; nothing in this tree asks for it.
+;
 ; out of dialect (documented, unsmoked): GNU's empty-s-pattern reuse (an empty
 ; pattern here just matches the empty text), \n in replacements, hold space.
 ;
-; the pure floor (lawed in crew/kore/law.l): (sparse sc) -> (1 cmds) | (),
+; the pure floor (lawed in crew/kore/law.l): (sparse sc ere?) -> (1 cmds) | (),
 ; and (usub nodes repl ln g?) -> (changed text), the one substitution walk.
 (:
    ; -- the substitution: replace matches of nodes in ln by repl (g? = all) --
@@ -43,36 +51,36 @@
        ; ate marks "a match ended exactly here": an empty match at that point is
        ; DISCARDED (the POSIX rule -- s/x*/-/g on "xbz" is "-b-z-", one dash)
        (walk i acc ate hit)
-        (: r (refind nodes ln i)
-           (? !(two? r) `(hit (acc + snip ln i n))
-              (: q2 >r ms <q2 me <>q2 sp <>>q2
-                 (? (&& ate (me = ms) (ms = i))
-                    (? (i < n) (walk (i + 1) (acc + snip ln i (i + 1)) () hit)
-                       `(hit acc))
-                    (: acc2 (acc + snip ln i ms + expand ms me sp)
-                       (? !g? `(1 (acc2 + snip ln me n))
-                          ; g at an empty match: keep one charm and step past it
-                          (me = ms) (? (me < n)
-                                       (walk (me + 1) (acc2 + snip ln me (me + 1)) () 1)
-                                       `(1 acc2))
-                          (walk me acc2 1 1)))))))
+        (refind nodes ln i @ [_ ms me sp]
+          (? (&& ate (me = ms) (ms = i))
+             (? (i < n) (walk (i + 1) (acc + snip ln i (i + 1)) () hit)
+                [hit acc])
+             (: acc2 (acc + snip ln i ms + expand ms me sp)
+                (? !g? [1 (acc2 + snip ln me n)]
+                   ; g at an empty match: keep one charm and step past it
+                   (me = ms) (? (me < n)
+                                (walk (me + 1) (acc2 + snip ln me (me + 1)) () 1)
+                                [1 acc2])
+                   (walk me acc2 1 1))))
+          [hit (acc + snip ln i n)])
        (walk 0 "" () ()))
 
    ; -- the script parser: text -> (1 cmds) | (). a command is
    ; (a1 a2 verb payload); an address is () | ('ln N) | ('last) | ('re nodes);
-   ; an s payload is (nodes repl g? p?) --
-   (sparse sc)
+   ; an s payload is (nodes repl g? p?). ere? picks the regex dialect --
+   (sparse sc ere?)
     (: n (tally sc)
+       (rx p) ((? ere? reere rebre) p)
        (sep? c) ((c = 32) || (c = 9) || (c = 10) || (c = 59))
        (skip i) (? ((i < n) && sep? (sc i)) (skip (i + 1)) i)
        (spc i) (? ((i < n) && ((sc i = 32) || (sc i = 9))) (spc (i + 1)) i)
        (dig? c) ((48 <= c) && (c <= 57))
-       (num i v) (? ((i < n) && dig? (sc i)) (num (i + 1) ((* 10 v) + (sc i - 48))) `(v i))
+       (num i v) (? ((i < n) && dig? (sc i)) (num (i + 1) ((* 10 v) + (sc i - 48))) [v i])
        ; to the unescaped delimiter d: \d -> d, all else verbatim -> (text j) | ()
        (until i d acc)
         (? (n <= i) ()
            (: c (sc i)
-              (? (c = d) `(acc (i + 1))
+              (? (c = d) [acc (i + 1)]
                  (&& (c = 92) ((i + 1) < n) (sc (i + 1) = d))
                   (until (i + 2) d (acc + string d))
                  ((c = 92) && ((i + 1) < n))
@@ -80,15 +88,14 @@
                  (until (i + 1) d (acc + string c)))))
        ; one address or none: (addr j) | () malformed
        (raddr i)
-        (? (n <= i) `(() i)
+        (? (n <= i) [() i]
            (: c (sc i)
-              (? (dig? c) (: r (num i 0) `(`('ln <r) <>r))
-                 (c = 36) `('(last) (i + 1))
-                 (c = 47) (: r (until (i + 1) 47 "")
-                             (? !(two? r) ()
-                                (: b (rebre <r)
-                                   (? (two? b) `(`('re <>b) <>r) ()))))
-                 `(() i))))
+              (? (dig? c) (num i 0 @ [v j] [['ln v] j])
+                 (c = 36) ['(last) (i + 1)]
+                 (c = 47) (until (i + 1) 47 "" @ [txt j]
+                            (rx txt @ [_ nds _] [['re nds] j] ())
+                            ())
+                 [() i])))
        (sepend? j) ((n <= j) || sep? (sc j))
        ; the s command's tail past the verb: delimiter, regex, replacement,
        ; flags -> (payload j) | ()
@@ -96,67 +103,47 @@
         (? (n <= (j3 + 1)) ()
            (: dl (sc (j3 + 1))
               (? ((dl = 92) || (dl = 10)) ()
-                 (: rr (until (j3 + 2) dl "")
-                    (? !(two? rr) ()
-                       (: b (rebre <rr)
-                          (? !(two? b) ()
-                             (: rp (until <>rr dl "")
-                                (? !(two? rp) ()
-                                   (: (fgo k g? p?)
-                                       (? (sepend? k) `(k g? p?)
-                                          (sc k = 103) (fgo (k + 1) 1 p?)
-                                          (sc k = 112) (fgo (k + 1) g? 1)
-                                          ())
-                                      fr (fgo <>rp () ())
-                                      (? !(two? fr) ()
-                                         `(`(<>b <rp <>fr <>>fr)
-                                            <fr))))))))))))
+                 (until (j3 + 2) dl "" @ [re j4]
+                   (rx re @ [_ nds _]
+                     (until j4 dl "" @ [rp j5]
+                       (: (fgo k g? p?)
+                           (? (sepend? k) [k g? p?]
+                              (sc k = 103) (fgo (k + 1) 1 p?)
+                              (sc k = 112) (fgo (k + 1) g? 1)
+                              ())
+                          (fgo j5 () () @ [j6 g? p?] [[nds rp g? p?] j6] ()))
+                       ())
+                     ())
+                   ()))))
        (rcmd i acc)
         (: j (skip i)
-           (? (n <= j) `(1 (rev acc))
-              (: r1 (raddr j)
-                 (? !(two? r1) ()
-                    (: a1 <r1 j2 <>r1
-                       comma ((j2 < n) && (sc j2 = 44))
-                       (? (comma && !(two? a1)) ()                  ; a , with no left leg
-                          (: r2 (? comma (raddr (j2 + 1)) `(() j2))
-                             (? (!(two? r2) || (comma && !(two? <r2))) ()
-                                (: a2 <r2 j3 (spc <>r2)
-                                   (? (n <= j3) ()
-                                      (: v (sc j3)
-                                         (? (v = 112) (? (sepend? (j3 + 1)) (rcmd (j3 + 1) (`(a1 a2 'p ()) >< acc)) ())
-                                            (v = 100) (? (sepend? (j3 + 1)) (rcmd (j3 + 1) (`(a1 a2 'd ()) >< acc)) ())
-                                            (v = 113) (? (sepend? (j3 + 1) && !(two? a2))
-                                                         (rcmd (j3 + 1) (`(a1 a2 'q ()) >< acc))
-                                                         ())
-                                            (v = 115) (: sr (rsub j3)
-                                                         (? (two? sr)
-                                                            (rcmd <>sr (`(a1 a2 's <sr) >< acc))
-                                                            ()))
-                                            ()))))))))))))
+           (? (n <= j) [1 (rev acc)]
+              (raddr j @ [a1 j2]
+                (: comma ((j2 < n) && (sc j2 = 44))
+                   (? (comma && !(two? a1)) ()               ; a , with no left leg
+                      (: r2 (? comma (raddr (j2 + 1)) [() j2])
+                         (? (!(two? r2) || (comma && !(two? <r2))) ()
+                            (: a2 <r2 j3 (spc <>r2)
+                               (? (n <= j3) ()
+                                  (: v (sc j3)
+                                     plain (\ verb (? (sepend? (j3 + 1))
+                                                      (rcmd (j3 + 1) ([a1 a2 verb ()] >< acc))
+                                                      ()))
+                                     (? (v = 112) (plain 'p)
+                                        (v = 100) (plain 'd)
+                                        (v = 113) (? (two? a2) () (plain 'q))
+                                        (v = 115) (rsub j3 @ [pay j4]
+                                                    (rcmd j4 ([a1 a2 's pay] >< acc))
+                                                    ())
+                                        ()))))))))
+                ())))
        (rcmd 0 ()))
 
-   ; -- sed: the cycle over the concatenated stream --
-   (sed-main as)
-    (: n? (two? as && (<as = "-n"))
-       rest (? n? >as as)
-       _ (? (two? rest) () (udie 2 "usage: sed [-n] SCRIPT [FILE..]"))
-       pc (sparse <rest)
-       _ (? (two? pc) () (udie 1 ("sed: invalid script: " + <rest)))
-       cmds <>pc
-       fs >rest
-       (rdall a acc bad)
-        (? !(two? a) `((rev acc) bad)
-           (: f <a
-              r (? (f = "-") `(1 (slurp in)) (uread f))
-              (? (two? r) (rdall >a (<>r >< acc) bad)
-                 (: _ (say err ("sed: can't read " + f + ": No such file or directory"))
-                    _ (put err 10)
-                    (rdall >a acc 1)))))
-       rd (? (two? fs) (rdall fs () ()) `(`((slurp in)) ()))
-       all (catmap lines <rd)
-       rc (? <>rd 2 0)
-       nl (tally all)
+   ; -- the cycle. op is the output PORT, which is how -i captures a file's own
+   ; edit instead of saying it into out --
+   ; (srun cmds lines n? op) -> the exit remembered, 0
+   (srun cmds all n? op)
+    (: nl (tally all)
        t (tablet 0)                                  ; the range toggles, keyed by command index
        (amatch a no ln)
         (? !(two? a) 1
@@ -179,26 +166,68 @@
               ()))
        ; one line through the commands -> (kind ps): 0 flows, 1 deleted, 2 quits
        (rline cs idx ps no)
-        (? !(two? cs) `(0 ps)
-           (: c <cs
-              (? !(sel? c idx no ps) (rline >cs (idx + 1) ps no)
-                 (: v <>>c
-                    (? (v = 'd) `(1 ps)
-                       (v = 'q) `(2 ps)
-                       (v = 'p) (: _ (say out ps) _ (put out 10)
-                                   (rline >cs (idx + 1) ps no))
-                       (: pay <>>>c
-                          pr >>pay
-                          r (usub <pay <>pay ps <pr)
-                          ps2 <>r
-                          _ (? (<r && <>pr)
-                               (: _ (say out ps2) (put out 10)) ())
-                          (rline >cs (idx + 1) ps2 no)))))))
+        (cs @ (c >< more)
+           (? !(sel? c idx no ps) (rline more (idx + 1) ps no)
+              (: v <>>c
+                 (? (v = 'd) [1 ps]
+                    (v = 'q) [2 ps]
+                    (v = 'p) (: _ (say op ps) _ (put op 10)
+                                (rline more (idx + 1) ps no))
+                    (: pay <>>>c
+                       pr >>pay
+                       r (usub <pay <>pay ps <pr)
+                       ps2 <>r
+                       _ (? (<r && <>pr) (: _ (say op ps2) (put op 10)) ())
+                       (rline more (idx + 1) ps2 no)))))
+           [0 ps])
        (mline ls no)
-        (? !(two? ls) (: _ (flush out) _ (flush err) rc)
-           (: r (rline cmds 0 <ls no)
-              kind <r ps <>r
-              _ (? (kind = 1) () (? n? () (: _ (say out ps) (put out 10))))
-              (? (kind = 2) (: _ (flush out) _ (flush err) rc)
-                 (mline >ls (no + 1)))))
-       (mline all 1)))
+        (ls @ (x >< more)
+           (rline cmds 0 x no @ [kind ps]
+             (: _ (? (kind = 1) () (? n? () (: _ (say op ps) (put op 10))))
+                (? (kind = 2) 0 (mline more (no + 1))))
+             0)
+           0)
+       (mline all 1))
+
+   ; -- sed: the flags, then one of the two stream models --
+   (sed-main as)
+    (: t (tablet 0)
+       o (uopts as t '(101) ())                      ; -e SCRIPT, stacking
+       _ (? (two? o) () (udie 1 "sed: bad option"))
+       eps <>o rest <>>o
+       _ (? (two? eps || two? rest) ()
+            (udie 1 "usage: sed [-n] [-E] [-i] [-e SCRIPT].. SCRIPT [FILE..]"))
+       n? (peep t 110 0) i? (peep t 105 0)
+       sc (? (two? eps) (ujoinc 10 eps) <rest)
+       fs (? (two? eps) rest >rest)
+       pc (sparse sc (peep t 69 0))
+       _ (? (two? pc) () (udie 1 ("sed: invalid script: " + sc)))
+       cmds <>pc
+       ; -i: each file its own stream, edited and written back. a file that will
+       ; not open complains and the rest still flow, exactly as the joined lane
+       (inplace a bad)
+        (a @ (f >< more)
+           (uread f @ [_ txt]
+             (: j (jug 0)
+                _ (srun cmds (lines txt) n? j)
+                _ (? (uwrite f (slurp j)) ()
+                     (: _ (say err ("sed: couldn't open " + f)) (put err 10)))
+                (inplace more bad))
+             (: _ (say err ("sed: can't read " + f + ": No such file or directory"))
+                _ (put err 10)
+                (inplace more 1)))
+           (: _ (flush err) (? bad 2 0)))
+       ; the joined lane: every file one stream, so the numbers run through
+       (rdall a acc bad)
+        (a @ (f >< more)
+           (: src (? (f = "-") [1 (slurp in)] (uread f))
+              (src @ [_ txt] (rdall more (txt >< acc) bad)
+                (: _ (say err ("sed: can't read " + f + ": No such file or directory"))
+                   _ (put err 10)
+                   (rdall more acc 1))))
+           [(rev acc) bad])
+       (? (i? && two? fs) (inplace fs ())
+          (: rd (? (two? fs) (rdall fs () ()) [[(slurp in)] ()])
+             _ (srun cmds (catmap lines <rd) n? out)
+             _ (flush out) _ (flush err)
+             (? <>rd 2 0)))))
