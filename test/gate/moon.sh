@@ -80,6 +80,48 @@ for f in test/cc/*.c; do
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
 done
 
+# ------------------------------------------- -std=: the dialect rail (struct labels)
+# ⚠ THE ORACLE IS THE LABEL-FREE TWIN. A struct label is not C -- gcc cannot compile the
+# labelled source at all -- so the differential is against the SAME struct with the labels
+# deleted: identical size, identical offsets, and the label answering its member's own
+# address. That is the whole claim (a virtual member, holding nothing, taking no space),
+# and gen.l never learned a thing about it: a label is one more row in the stag table.
+cat > "$ho/.lbl.c" <<'EOF'
+#include <stdio.h>
+#include <stddef.h>
+struct S { int a; hdr: long b; int c; tail: };
+union  U { top: int x; long y; };
+int main(void) {
+  struct S s;
+  if (&s.hdr != (void*)&s.b) return 1;           /* the label IS its member's address */
+  if (offsetof(struct S,tail) != 20) return 2;   /* a trailing one names the end of the data */
+  printf("%d %d %d %d %d\n", (int)sizeof(struct S), (int)offsetof(struct S,a),
+         (int)offsetof(struct S,b), (int)offsetof(struct S,c), (int)sizeof(union U));
+  return 0; }
+EOF
+cat > "$ho/.lblg.c" <<'EOF'
+#include <stdio.h>
+#include <stddef.h>
+struct S { int a; long b; int c; };
+union  U { int x; long y; };
+int main(void) {
+  printf("%d %d %d %d %d\n", (int)sizeof(struct S), (int)offsetof(struct S,a),
+         (int)offsetof(struct S,b), (int)offsetof(struct S,c), (int)sizeof(union U));
+  return 0; }
+EOF
+moonrun -std=holyc -o "$ho/.lbl" "$ho/.lbl.c" > /dev/null 2>&1 || fail "-std=holyc: struct labels did not compile"
+a=$("$ho/.lbl"); ra=$?
+$cc_g -O0 -o "$ho/.lblg" "$ho/.lblg.c" > /dev/null 2>&1 && b=$("$ho/.lblg")
+[ $ra -eq 0 ] || fail "struct labels: the labelled program refused itself (exit $ra)"
+[ "$a" = "$b" ] || fail "struct labels changed the layout (ours [$a] gcc [$b])"
+# ..and the dialect is a FENCE, both ways: C must refuse the label, and an unknown -std=
+# must refuse the whole compile rather than ride through ignored the way it used to.
+moonrun -c -o /dev/null "$ho/.lbl.c" > /dev/null 2>&1 && fail "a struct label was accepted as plain C"
+moonrun -std=c11 -c -o /dev/null "$ho/.lbl.c" > /dev/null 2>&1 && fail "a struct label was accepted under -std=c11"
+moonrun -std=nosuchlang -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "an unknown -std= was tolerated"
+moonrun -std=gnu11 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 || fail "-std=gnu11 refused a plain C file"
+echo "mooncc: -std= is a rail (holyc struct labels lay gcc's own layout; c refuses them; an unknown one refuses)"
+
 # -------------------------------- C11 conditional features (6.10.8.3), per target
 # gcc cannot be the oracle here -- it HAS atomics -- so these are ours alone, and
 # each row must track the parity table: a claimed absence we do not have sends a

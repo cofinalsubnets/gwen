@@ -96,11 +96,49 @@ A `-D` prepends a `#define` line to the source text before the one lex, so a fun
 Targets: `x64`/`amd64`, `arm64`/`aarch64`, `riscv64`, `thumb2`/`cortex-m7`,
 `thumb1`/`cortex-m0`, `thumb2sp`/`playdate`.
 
+**`-std=` is a rail, not an advisory.** It is the one flag that says what *language* the
+input is, so an unknown value refuses the compile rather than riding through ignored —
+reading HolyC as C, or an unrecognised word as either, is worse than saying no. The ISO
+names are all one dialect here (we do not distinguish them from a codegen point of view),
+so they differ only in what we can claim to accept:
+
+| `-std=` | dialect |
+|---|---|
+| `c89 c90 c99 c11 c17 c18 c23`, and each `gnu*` | `c` — the default |
+| `holyc` | `c` plus the HolyC extensions below |
+
+⚠ it is lifted off the command line by a **pre-pass**, never a sixteenth accumulator on
+the flag walk: that walk carries fifteen curried slots across twenty-four call sites, and
+`(f) == f`, so one mistyped site would answer a *closure* instead of a result in silence.
+`-std=` interacts with nothing else on the line, so it comes off it first.
+
+### `-std=holyc` — struct labels
+
+A label where a member declaration would start names an **offset**: a virtual member that
+holds nothing and takes no space.
+
+```c
+struct S { int a; hdr: long b; int c; tail: };
+```
+
+`&s.hdr` is `&s.b` — the label takes the type of the member it precedes, so it reads at the
+same width and `offsetof` answers that member's own offset. ⚠ it also *aligns* as that
+member will: the cursor sits where the previous field ended, so a label reading it raw
+would name the padding rather than the field. A trailing label (or a run of them) has no
+member to stand for and falls back to `char`, naming the end of the data. In a union every
+label flattens to 0 like every other member.
+
+This is not C — gcc answers `expected specifier-qualifier-list` — which is exactly why it
+is safe to add: no valid program can contain one, so the extension cannot change the
+meaning of anything that already compiles. `gen.l` never learned about it: a label is one
+more row in the stag table, which is the seam holding. The gate's oracle is the same struct
+with the labels deleted, compiled by gcc: identical size, identical offsets.
+
 Anything without `-c` is a **link**, through `crew/holo/link.l`.
 
 **The cc conventions** — `CC=mooncc` drives a gcc-shaped recipe unchanged:
 
-- the **advisory** families (`-W..` `-O..` `-g..` `-std=` `-f..` `-pipe` `-static`) ride through
+- the **advisory** families (`-W..` `-O..` `-g..` `-f..` `-pipe` `-static`) ride through
   ignored -- less `-fno-inline`, which is real here (below) -- and so do glued `-l..`/`-L..`: the runtime is pulled by need, so the libc/libm a
   recipe asks for is already in the artifact before it asks, and a name we cannot satisfy still
   lands as a *named* undefined reference at the link rather than going quiet (a real third-party

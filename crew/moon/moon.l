@@ -261,7 +261,7 @@
    ; whole -- clexat stamps them 1-k..0 and the source itself from 1, so every
    ; stamped line (a gripe, __LINE__) is TRUE with no pay-back pass. an
    ; #include lexes fresh at its own line 1 either way.
-   (cc-parse src is ds tgt nsi)
+   (cc-parse src is ds tgt nsi dia)
     (: ds9 (archdefs tgt + featdefs tgt + stddefs tgt +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
                  (? (id? tgt 'x64) ("__SIZEOF_INT128__=16" >< ds) ds))     ; x64 alone carries the wide pair (gen's d128 lane); love.c's limb seam reads it
        r (uread src)
@@ -270,7 +270,7 @@
        _ (? (okv? lx) () (ccdie lx src ("cc: lex error in " + src)))
        pp (cpp <>lx (\ name sys? (incload nsi is (cdir src) name sys?)) src)
        _ (? (okv? pp) () (ccdie pp src ("cc: preprocessor error in " + src)))
-       ps (cparse-t <>pp tgt)                 ; thread the target so parse sizes pointers/longs at the ABI width
+       ps (cparse-d <>pp tgt dia)             ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        _ (? (okv? ps) () (ccdie ps src ("cc: parse error in " + src)))
        ps)
    ; a relocatable object: text/data/.bss/ai_nifs/.image sections + symbols + relocations
@@ -299,8 +299,8 @@
                              || ((48 <= c) && (c <= 57)) || (c = 95))
                         (go (i + 1) (acc + (? ok (snip b i (i + 1)) "_")))))
        (go 0 "ai_ir_"))
-   (cc-objbytes src is ds tgt nsi ni fir)
-    (@ (cc-parse src is ds tgt nsi)
+   (cc-objbytes src is ds tgt nsi ni fir dia)
+    (@ (cc-parse src is ds tgt nsi dia)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs]
        (: ob (cgen-obj ast stag sigs weaks
                        [sfns svars sects alias aligns ainl noinl consts rstrs ni fir (irsym src)] tgt)
@@ -318,7 +318,7 @@
                             fnames gnames weaks lnames)))
              (udie 1 ("cc: the code generator answered an unexpected shape for " + src))))
        (udie 1 ("cc: the parser answered an unexpected shape for " + src)))
-   (cc-obj src dst is ds tgt nsi ni fir) (write-bytes dst (cc-objbytes src is ds tgt nsi ni fir))
+   (cc-obj src dst is ds tgt nsi ni fir dia) (write-bytes dst (cc-objbytes src is ds tgt nsi ni fir dia))
    ; the LINK path (rung 3, crew/holo/link.l): every input lands as object
    ; bytes (a .c compiled here, a .o read off disk), crt0 rides FIRST (its
    ; text is the entry), and ldlink binds the static exe -- no system linker.
@@ -548,9 +548,9 @@
                                         () (sort (filter dotc? (readdir p))))
                             a)))
                () (sort (readdir d)))
-       ((map ((a b) \ [a (string (cc-objbytes b [inc] () tgt () () ()))])
+       ((map ((a b) \ [a (string (cc-objbytes b [inc] () tgt () () () 'c))])
              (nlmems ndir))
-        + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) [mdir inc] () tgt () () ()))])
+        + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) [mdir inc] () tgt () () () 'c))])
               (sort (filter dotc? (readdir (home + "lib/math"))))
         + (member? tgt '(x64 arm64 riscv64) ? [["mksys.o" (string (mksys-bytes tgt))]])))
    (rtpull srcs tgt nostd)
@@ -581,9 +581,9 @@
              ; scares about first.
              _ (? (two? <>pr) (undie <>pr) 0)
              <pr)))
-   (cc-link ins dst is ds tgt pie org dorg nostd nsi ni fir rdme)
+   (cc-link ins dst is ds tgt pie org dorg nostd nsi ni fir rdme dia)
     (: ars (filter dota? ins)
-       srcs (map (\ f (? (dotc? f) [f (string (cc-objbytes f is ds tgt nsi ni fir))]
+       srcs (map (\ f (? (dotc? f) [f (string (cc-objbytes f is ds tgt nsi ni fir dia))]
                          (doto? f) (: r (uread f)
                                       (? (two? r) [f <>r]
                                          (udie 1 ("cc: cannot open " + f))))
@@ -667,8 +667,34 @@
    ; saying so by refusing the whole compile helps nobody. ⚠ GLUED only (glu? wants
    ; a third charm), so a bare `-l` still refuses rather than eating the next word
    ; as a library name and the word after it as an input.
+   ; -- THE DIALECTS ----------------------------------------------------------------
+   ; ⚠ -std= is LOUD, and used to ride the tolerated family. That is the wrong answer for
+   ; the one flag that says what LANGUAGE the input is: reading HolyC as C, or an unknown
+   ; word as either, is worse than refusing. The ISO names are ONE dialect here (doc/moon.md
+   ; -- we do not distinguish them from a codegen point of view), so they differ only in
+   ; what we can say we accept.
+   stds '(("c89" c) ("c90" c) ("c99" c) ("c11" c) ("c17" c) ("c18" c) ("c23" c)
+          ("gnu89" c) ("gnu90" c) ("gnu99" c) ("gnu11" c) ("gnu17" c) ("gnu18" c) ("gnu23" c)
+          ("holyc" holyc))
+   (stdof w) (: (go l) (? !(two? l) () (: r <l (? (<r = w) <>r (go >l)))) (go stds))
+   (stdnames _) (: (go l) (? !(two? l) "" !(two? >l) <(<l) (<(<l) + " " + (go >l))) (go stds))
+   ; ⚠ A PRE-PASS, never a sixteenth accumulator. `flags` carries fifteen curried slots
+   ; across twenty-four call sites, and (f) == f -- so one mistyped site would hand back a
+   ; CLOSURE instead of a result, in silence. -std= interacts with nothing else on the line,
+   ; so it comes OFF the line here and the walk below keeps the arity it has.
+   (std-take as)                                   ; -> (dialect args-without-std)
+    (: (go l dia acc)
+        (? !(two? l) [dia (rev acc)]
+           (: a <l
+              (? (pfx? a "-std=")
+                 (: w (snip a 5 (tally a))
+                    d (stdof w)
+                    _ (? d 0 (udie 2 ("cc: unknown -std=" + w + " -- mooncc reads: " + (stdnames ()))))
+                    (go >l d acc))
+                 (go >l dia (a >< acc)))))
+       (go as 'c ()))
    (tol? a) (a = "-pipe" || a = "-static" ||
-             pfx? a "-g" || pfx? a "-O" || pfx? a "-std=" ||
+             pfx? a "-g" || pfx? a "-O" ||
              pfx? a "-f" || glu? a 108 || glu? a 76 ||
              (pfx? a "-W" &&
               !(pfx? a "-Wl," || pfx? a "-Wa," || pfx? a "-Wp,")))
@@ -787,8 +813,11 @@
     ; the default target is the ground we stand on: love-arch (the C boot's pin)
     ; names the running binary's arch, so a native mooncc emits native code and
     ; -t stays what it always was, the CROSS flag. unknown grounds keep x64.
-    (: ntv (? (love-arch = "arm64") 'arm64 (love-arch = "riscv64") 'riscv64 'x64)
-       f (flags as () () () () () ntv () () () () () () () ())
+    (: sd (std-take as)
+       dia <sd
+       as9 <>sd                                    ; the line with -std= lifted off it
+       ntv (? (love-arch = "arm64") 'arm64 (love-arch = "riscv64") 'riscv64 'x64)
+       f (flags as9 () () () () () ntv () () () () () () () ())
        c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5) pie (el f 6) org (el f 7) nostd (el f 8) nsi (el f 9) dorg (el f 10) ni (el f 11) firp (el f 12) rdme (el f 13)
        ; TWO outcomes now, the cc shape: -c lays objects, anything else LINKS.
        ; one .c used to take a third path (cc-exe: elf64 straight off the IR,
@@ -804,21 +833,21 @@
        (ins @
         []      (udie 2 usage)
         (? o)   (? c (? (two? >ins) (udie 2 "cc: -o takes one input")
-                        (: _ (cc-obj <ins o is ds tgt nsi ni firp) 0))
-                   (: _ (cc-link ins o is ds tgt pie org dorg nostd nsi ni firp rdme) 0))
+                        (: _ (cc-obj <ins o is ds tgt nsi ni firp dia) 0))
+                   (: _ (cc-link ins o is ds tgt pie org dorg nostd nsi ni firp rdme dia) 0))
         ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
         ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT). ⚠ and a
         ; .a is never an OUT: `mooncc a.o libgcc.a` reading as a pair would
         ; write the library it was asked to read FROM.
         (? (!(dotc? b) && !(dota? a) && !(dota? b)
             && (c || (!(doto? a) && !(doto? b)))) [a b])
-                (: _ (? c (cc-obj a b is ds tgt nsi ni firp)
-                          (cc-link [a] b is ds tgt pie org dorg nostd nsi ni firp rdme)) 0)
+                (: _ (? c (cc-obj a b is ds tgt nsi ni firp dia)
+                          (cc-link [a] b is ds tgt pie org dorg nostd nsi ni firp rdme dia)) 0)
         (? c)   (: (go l) (? !(two? l) 0
                              !(dotc? <l) (udie 2 ("cc: not a .c input: " + <l))
-                             (: _ (cc-obj <l (obase <l) is ds tgt nsi ni firp) (go >l)))
+                             (: _ (cc-obj <l (obase <l) is ds tgt nsi ni firp dia) (go >l)))
                    (go ins))
-                (: _ (cc-link ins "a.out" is ds tgt pie org dorg nostd nsi ni firp rdme) 0))))
+                (: _ (cc-link ins "a.out" is ds tgt pie org dorg nostd nsi ni firp rdme dia) 0))))
 
 ; the SEAT: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the

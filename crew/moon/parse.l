@@ -306,7 +306,12 @@
                      (passoc s >tbl))
 
    ; -- the parse state --
-   (psnew tgt) (: t {}
+   (psnew tgt) (psnew-d tgt 'c)                   ; the short spelling: plain C, what every law test wants
+   ; ⚠ a NEW DOOR rather than a wider one. psnew/cparse-t keep the arity every caller
+   ; already spells (law.l alone holds dozens), so nothing shifts by a position -- and
+   ; under (f) == f a shifted call would hand back a closure without a word.
+   (psnew-d tgt dia) (: t {}
+                _ (pin t 'dia dia)                  ; the DIALECT: what grammar the front reads (c | holyc)
                 _ (pin t 'tgt tgt)                  ; the codegen target: 32-bit widths (thumb1/thumb2) vs 64-bit
                 _ (pin t 'types {})         ; typedef name -> ty
                 _ (pin t 'weaks ())                 ; __attribute__((weak)) function names
@@ -618,9 +623,23 @@
                     (: er (pasn ps >ts)
                        (? !(two? er) ()
                           (: cv (cfold <er) (? (charm? cv) [cv <>er] ())))))
+   (holyc? ps) (id? (peep ps 'dia 'c) 'holyc)
+   ; a label is an identifier then `:` -- and NOT `::`, which nothing here spells but a
+   ; reader might, so the test is on the pair rather than the first token alone.
+   (plabel? ts) (: t <ts
+                   (? !(two? ts) 0
+                      !(id? (tkk t) 'id) 0
+                      (peekp >ts ":")))
    (pmembers ps ts acc)                             ; member pairs ((name ty)..); () name = anonymous splice; (name ty width) = a bitfield
     (? !(two? ts) ()
        (peekp ts "}") [(rev acc) >ts]
+       ; A STRUCT LABEL: `name:` where a member declaration would start -- a virtual member
+       ; naming an OFFSET, holding nothing and taking no space (HolyC's, doc/moon-c-gaps.md).
+       ; ⚠ it is read BEFORE the type parse because a label has no type to parse; and only
+       ; where the dialect says so, since in C this is a syntax error and must stay one.
+       (holyc? ps && plabel? ts)
+        (: nm (tkv <ts)
+           (? (two? (want >ts ":")) (pmembers ps >>ts ([nm 'label] >< acc)) ()))
        (: br (pbty ps ts)
           (? !(two? br) ()
              (: bty <br ts2 <>br
@@ -675,7 +694,21 @@
            (: a2 (? (mx < 1) 1 mx)
               [(rev acc) (aup (>> (bit + 7) 3) a2) a2])
            (: m <l name <m ty <>m
-              (? (bfmem? m)                          ; a bitfield member (named or anonymous): (name ty width)
+              (? (id? ty 'label)                     ; A STRUCT LABEL: the cursor's byte, and the cursor does not move.
+                 ; it takes the TYPE OF THE MEMBER IT PRECEDES, so `&s.lbl` is exactly the
+                 ; `&` of the field it names and reads with the same width. a trailing label
+                 ; (or a run of them) has nothing to stand for, so it falls back to char --
+                 ; a byte at that offset, which is the honest floor for a bare position.
+                 ; ⚠ AND IT ALIGNS AS THAT MEMBER WILL. the cursor is where the last field
+                 ; ended, not where the next one starts, so a label reading the raw cursor
+                 ; names the PADDING before its member rather than the member (`&s.lbl == &s.b`
+                 ; then answers false, which is the whole thing a label is for).
+                 (: (nxt r) (? !(two? r) 'char (: t2 <>(<r) (? (id? t2 'label) (nxt >r) t2)))
+                    nt (nxt >l)
+                    la (? pk 1 (talign ps nt))
+                    at (? uni 0 ((aup bit (la * 8)) >> 3))     ; a union flattens every offset
+                    (go >l bit mx ([name at nt] >< acc)))
+                 (bfmem? m)                          ; a bitfield member (named or anonymous): (name ty width)
                  (: w <>>m
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)
                     nmx (? (mx < a) a mx)
@@ -1971,8 +2004,9 @@
           (gripe (? (two? dt) (filof t) (filat spans i0)) <>>t ()
                  ("parse error near " + spell t))))
    (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
-   (cparse-t ts tgt)
-    (: ps (psnew tgt)
+   (cparse-t ts tgt) (cparse-d ts tgt 'c)  ; ..and plain C, which is what every one of them means
+   (cparse-d ts tgt dia)
+    (: ps (psnew-d tgt dia)
        toks (fsbody ts) spans (fspans ts)
        ; note the completed form's staticness/section per declared name, then
        ; clear the stashes for the next form
