@@ -34,7 +34,7 @@ pipe() { n=$1; i=$2; shift 2
 # ------------------------------------------------------------------- the laws
 echo "UTILS crew/kore/{text,core,fs,re,sed,diff,law}.l"
 out=$ho/.test_kore.out
-cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
+cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
     crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l \
     crew/vi/vi.l crew/kore/diff.l \
     crew/kore/law.l | "$m" > "$out" 2>&1
@@ -87,6 +87,11 @@ if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/mooncc" ]; then
   [ -s "$ho/.kore-crt0.o" ] || fail "kore ld: crt0 lay"
   "$ho/mooncc" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-mc.elf" >/dev/null 2>&1 || fail "kore ld: mooncc link"
   korerun ld "$ho/.kore-crt0.o" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-ld.elf" || fail "kore ld"
+  # ⚠ BYTE-IDENTICAL, and it is `.comment` that lets it be: both doors drive the SAME linker,
+  # so the file they write is the same file, producer record included. It briefly was not --
+  # mooncc stamped "mooncc" and kore ld stamped "holo", which shifted every header after it and
+  # cost this check ten lines of objcopy to look past. The distinction carried nothing: one
+  # linker, and the only caller of the holo door was this test.
   cmp -s "$ho/.kore-mc.elf" "$ho/.kore-ld.elf" || fail "kore ld vs mooncc link (bytes)"
   "$ho/.kore-ld.elf"; r=$?
   [ $r -eq 42 ] || fail "kore ld run (exit $r)"

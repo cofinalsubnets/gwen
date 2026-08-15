@@ -61,6 +61,9 @@
    origins (tablet 0)      ; make's variable provenance: name -> "default" | "environment"
                            ; | "file" | "command line" | "override" ($(origin), and the
                            ; rule that a file assignment never beats a command-line one)
+   flavors (tablet 0)      ; name -> "simple" | "recursive", what $(flavor) answers: the one
+                           ; thing a stored value cannot say, since := expands at assign time
+                           ; and = stores the text, leaving both plain text afterwards
    clivars (tablet 0)      ; a 1-cell box: the command line's VAR=VAL words, ((name . val) ..)
 
    ; "a b c" from ("a" "b" "c"); "" from the empty list.
@@ -544,10 +547,34 @@
        0 ""))
    (fn-or args as d)  ((: (g l) (? (two? l) (: v (expand <l as (1 + d)) (? (0 < tally (trim v)) v (g >l))) "")) args)
    (fn-and args as d) ((: (g l last) (? (two? l) (: v (expand <l as (1 + d)) (? (0 < tally (trim v)) (g >l v) "")) last)) args "")
+   ; -- the helpers the added builtins stand on ------------------------------------
+   (findsub s sub)                        ; index of sub in s | -1
+    (: n (tally s) m (tally sub)
+       (at i) (? ((i + m) > n) -1
+                 (: (eq k) (? (k >= m) 1 (((s (i + k)) = (sub k)) ? (eq (1 + k)) 0))
+                    (? (eq 0) i (at (1 + i)))))
+       (? (m = 0) 0 (at 0)))
+   (num1 s) (: r (sound (trim s)) (? (two? r) <r 0))     ; a leading integer | 0
+   (fn-join a b)                          ; $(join): pairwise, the longer list's tail rides alone
+    (: (g x y acc) (? (two? x) (g >x (? (two? y) >y ()) (((<x) + (? (two? y) <y "")) >< acc))
+                      (two? y) (g () >y ((<y) >< acc))
+                      (join " " (rev acc)))
+       (g a b ()))
+   (fn-slice ws n1 n2)                    ; $(wordlist): 1-based, inclusive, clamped both ends
+    (: (g l i acc) (? (!(two? l) || (i > n2)) (rev acc)
+                      (i < n1) (g >l (1 + i) acc)
+                      (g >l (1 + i) (<l >< acc)))
+       (g ws 1 ()))
    funcnames '("shell" "wildcard" "dir" "notdir" "basename" "suffix" "patsubst"
                "subst" "filter" "filter-out" "sort" "strip" "if" "or" "and"
                "addprefix" "addsuffix" "firstword" "lastword" "word" "words"
-               "abspath" "realpath" "call" "origin")
+               "abspath" "realpath" "call" "origin"
+               ; ⚠ A NAME OFF THIS LIST IS A VARIABLE, not a refusal -- `$(foo bar)` reads a
+               ; variable of that name and answers empty, which is make's own rule. so a MISSING
+               ; builtin does not announce itself: it evaluates to nothing and the build carries
+               ; on. that is why the differential gate exists (test/gate/cookdiff.sh).
+               "findstring" "join" "wordlist" "foreach" "value" "flavor"
+               "error" "warning" "info")
    ; $(call fn,a,..): bind $0 (the name) and $1.. to the EXPANDED args, expand
    ; fn's body, put the old bindings back (a shadowed outer $1 survives).
    (fn-call args as d)
@@ -589,7 +616,30 @@
          (nm = "call")      (fn-call (argl 0) as d)
          (nm = "origin")    (peep origins (trim (ex1 at)) "undefined")
          ((nm = "abspath") || (nm = "realpath")) (join " " (map fabs (split-ws (ex1 at))))
-         ""))                                   ; unknown -> empty
+         (nm = "findstring") (: a (argl 0) (? (0 <= (findsub (nth a 1 "") (nth a 0 ""))) (nth a 0 "") ""))
+         (nm = "join")      (: a (argl 0) (fn-join (split-ws (nth a 0 "")) (split-ws (nth a 1 ""))))
+         (nm = "wordlist")  (: a (argl 0)
+                               ws (split-ws (nth a 2 ""))
+                               n1 (num1 (nth a 0 "")) n2 (num1 (nth a 1 ""))
+                               (join " " (fn-slice ws n1 n2)))
+         (nm = "foreach")   (: a (rawl 0)
+                               v (trim (ex1 (nth a 0 "")))
+                               body (nth a 2 "")
+                               old (peep as v "")
+                               r (join " " (map (\ w (: _ (pin as v w) (ex1 body)))
+                                                (split-ws (ex1 (nth a 1 "")))))
+                               _ (pin as v old)              ; ⚠ put the outer binding back
+                               r)
+         ; value/flavor read the variable WITHOUT expanding it -- the one pair that must not ex1
+         (nm = "value")     (peep as (trim (ex1 at)) "")
+         (nm = "flavor")    (: o (peep origins (trim (ex1 at)) "undefined")
+                               (? (o = "undefined") "undefined" (peep flavors (trim (ex1 at)) "recursive")))
+         ; the DIAGNOSTICS. silence here was the costly one: a guard spelled $(error ..) simply
+         ; vanished, so a makefile that meant to refuse built on with an empty variable.
+         (nm = "info")      (: _ (puts (ex1 at)) _ (putc 10) "")
+         (nm = "warning")   (: _ (say err ("cook: " + ex1 at)) _ (put err 10) "")
+         (nm = "error")     (: _ (say err ("cook: *** " + ex1 at + ".  Stop.")) _ (put err 10) (quit 2))
+         ""))                                   ; unknown -> empty (make's own rule; see funcnames)
 
    ; a group body is a function call ($(name args)), a substitution reference
    ; ($(VAR:from=to)), or a plain variable ($(VAR)).
@@ -659,7 +709,12 @@
        ; make reads the @/-/+ modifiers AFTER expansion too (the $(Q)-as-@
        ; verbose-build idiom; mk/lib.mk's lcat_h leads with @ from inside the
        ; variable) -- so re-strip the EXPANDED line and fold its flags in.
-       cmds (map (\ raw (>>(parse-mods (expand >>raw as 0)))) raws)
+       ; ⚠ EXPAND ONCE, and keep the whole parse. Both the oneshell test below and the
+       ; per-line lane want the expanded text, and expanding twice ran every $(shell ..)
+       ; in a recipe TWICE -- the side effects included, and silently, since only the
+       ; second run's value was ever used.
+       exs (map (\ raw (parse-mods (expand >>raw as 0))) raws)
+       cmds (map (\ e >>e) exs)
        ; .ONESHELL: the WHOLE recipe rides ONE shell, so a recipe reads as a script
        ; instead of a run of \-joined lines. make's rule -- the @/- modifiers of the
        ; FIRST line govern the lot. ⚠ with plain -c only the LAST line's status is
@@ -673,13 +728,17 @@
           (: r0 <raws
              (? (peep emitp 0 0) `(((`(sn) + fl) + `((join "\n" cmds))))
                 `((\ _ (sh-line <r0 <>r0 sn fl (join "\n" cmds))))))
-          (map (\ raw (: e (parse-mods (expand >>raw as 0))
-                          sil (<raw || <e) ign (<>raw || <>e) cmd >>e
-                          (? (execp cmd)
-                             (? (peep emitp 0 0) ('exec >< `(sn "-c" cmd))
-                                (\ _ (do-exec `(sn "-c" cmd))))
-                             (peep emitp 0 0) ((`(sn) + fl) + `(cmd))
-                             (\ _ (sh-line sil ign sn fl cmd))))) raws)))
+          (: (g rs es acc)
+              (? !(two? rs) (rev acc)
+                 (: raw <rs e <es
+                    sil (<raw || <e) ign (<>raw || <>e) cmd >>e
+                    st (? (execp cmd)
+                          (? (peep emitp 0 0) ('exec >< `(sn "-c" cmd))
+                             (\ _ (do-exec `(sn "-c" cmd))))
+                          (peep emitp 0 0) ((`(sn) + fl) + `(cmd))
+                          (\ _ (sh-line sil ign sn fl cmd)))
+                    (g >rs >es (st >< acc))))
+             (g raws exs ()))))
 
    ; -- conditionals & assignment ops over the variable table `as` --
    (unquote-str s) (? ((tally s >= 2) && ((s 0 = 34) || (s 0 = 39))) (snip s 1 (tally s - 1)) s)
@@ -700,14 +759,17 @@
    (assign1 as nm op val ov)
    (? (!ov && (peep origins nm "undefined" = "command line")) 0
       (: v (trim val)
-         (org _) (pin origins nm (? ov "override" "file"))
-         (? (op = ":=")  (: _ (pin as nm (expand v as 0)) (org ()))
-            (op = "::=") (: _ (pin as nm (expand v as 0)) (org ()))
+         ; ⚠ the FLAVOR rides beside the origin: an expanded `:=` and a stored `=` are the
+         ; same text afterwards, so nothing in the value itself can answer $(flavor).
+         (org f) (: _ (pin origins nm (? ov "override" "file")) (pin flavors nm f))
+         (? (op = ":=")  (: _ (pin as nm (expand v as 0)) (org "simple"))
+            (op = "::=") (: _ (pin as nm (expand v as 0)) (org "simple"))
             (op = "?=")  (: cur (peep as nm 'cook.undef)
-                            (? (nom? cur) (: _ (pin as nm v) (org ())) 0))
+                            (? (nom? cur) (: _ (pin as nm v) (org "recursive")) 0))
             (op = "+=")  (: o (peep as nm "")
-                            _ (pin as nm (? (0 < tally o) (o + " " + v) v)) (org ()))
-            (: _ (pin as nm v) (org ())))))
+                            _ (pin as nm (? (0 < tally o) (o + " " + v) v))
+                            (org (peep flavors nm "recursive")))
+            (: _ (pin as nm v) (org "recursive")))))
 
    ; -- fold classified lines into a rules list, mutating `as`. The conditional
    ; stack is a list of frames (pon taken active); `on` is the top frame's active
@@ -717,8 +779,12 @@
    (finalize cur) (<cur >< (<>cur >< rev >>cur))
    (flushr cur rules) (? cur (finalize cur >< rules) rules)
    (mkrule c)                  ; -> (TGTS-text PREREQS-text . STEPS-rev); split off an inline ; recipe
+   ; ⚠ THE RECIPE IS EVERYTHING PAST THE FIRST `;`, semicolons included: `a:;x ; y` is one
+   ; recipe line the shell splits, not two fields. taking split-field 2 alone dropped every
+   ; command after the second `;` -- silently, since what remained still ran.
    (: prr (r2 c) sc (splittop prr 59)
-      inl (? (two? >sc && (0 < tally (trim <>sc))) `((parse-mods (trim <>sc))) 0)
+      rec (? (two? >sc) (join ";" >sc) "")
+      inl (? (0 < tally (trim rec)) `((parse-mods (trim rec))) 0)
       (r1 c >< (<sc >< inl)))
    (condon cond) (? (two? cond) <>><cond 1)
    (push-cond cond pon active) (`(pon active active) >< cond)

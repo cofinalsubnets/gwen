@@ -64,7 +64,13 @@ case $arch in
   *) echo "ccarch.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 
+# ⚠ ONE RUN'S WORTH, and no more: each case leaves a .g (a STATIC gcc binary, ~3.2 MB), a
+# .glog, a .gout, a .t and a .tout, and nothing ever read them again -- 1192 files and 420 MB
+# for arm64 alone, 94 MB for riscv, growing with every run. Clearing at the START rather than
+# the end keeps the last run's artifacts for a post-mortem, which is the only time anyone wants
+# them, while bounding the pile to a single run.
 d=$ho/cc-$arch
+rm -rf "$d"
 mkdir -p "$d"
 
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
@@ -147,6 +153,14 @@ for f in test/cc/*.c; do
     fi
   fi
 
+  # ⚠ A PASSED CASE IS DEAD WEIGHT. `fail` exits, so reaching here means this program agreed
+  # on every leg -- and the diffs are printed INLINE at the moment they disagree, so nothing
+  # downstream ever reads these again. The .g is a STATICALLY LINKED cross binary, 3.3 MB, one
+  # per program: 137 of them made cc-arm64 436 MB, 73% of the whole out/ tree, for a gate that
+  # only runs in test_extra. A FAILING case keeps everything, which is the only time anyone
+  # has ever wanted it.
+  rm -f "$d/$b.g" "$d/$b.t" "$d/$b.tout" "$d/$b.gout" "$d/$b.glog" \
+        "$d/$b.x" "$d/$b.xout" "$d/$b.xlog" "$d/$b.tlog"
   n=$((n + 1))
 done
 

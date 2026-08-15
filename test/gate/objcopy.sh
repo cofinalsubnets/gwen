@@ -27,13 +27,13 @@ rm -rf "$d"; mkdir -p "$d"
 echo "OBJCOPY $d"
 
 { echo "(use 'holo)"
-  cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/thumb2.l \
+  cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/thumb2.l \
       crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l
   echo '(objcopy >argv)'; } > "$d/ocopy.l"
 
 # the fixtures, ours end to end: mkfix.l lays one object and links it three ways
 { echo "(use 'holo)"
-  cat crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/thumb2.l \
+  cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/thumb2.l \
       crew/holo/elf.l crew/holo/obj.l crew/holo/link.l test/gate/objcopy.l
   echo "(mkfix \"$d\")"; } | "$ho/love" || { echo "FAIL objcopy fixtures"; exit 1; }
 

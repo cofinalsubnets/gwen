@@ -18,6 +18,13 @@ a ?= $(hosta)
 # is what lets love0's stamp agree with a real one -- see gl0_cc).
 love_base := $(shell cat $R/VERSION 2>/dev/null || echo 0)
 
+# ⚠ IS THIS TREE A CHECKOUT OR AN UNPACKED RELEASE? `git -C DIR` walks UP, so the test is for
+# THIS tree's own .git and never an ancestor's (crew/build.mk learned that the hard way). Two
+# things read it: dist cuts its tarball from the index only where there is one, and the DEFAULT
+# GOAL differs -- a checkout wants the fast gate for its edit loop, an unpacked release wants
+# the product, because whoever unpacked it came for love and not for our test binaries.
+in_git := $(wildcard $R/.git)
+
 # clang is the default host/love0 compiler. ⚠ `CC ?= clang` would be a NO-OP: make ships a
 # built-in default `CC = cc` whose origin is `default`, not `undefined`, so `?=` never
 # fires -- the origin test is what overrides it while still honoring `make CC=gcc`.

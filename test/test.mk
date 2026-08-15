@@ -5,7 +5,7 @@
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \
   test_filemode test_stdinbuf test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
-  test_sb test_kore test_nest test_dist test_up test_vi test_moon test_clay test_moonfuzz \
+  test_sb test_kore test_nest test_cookdiff test_dist test_up test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_vec test_fixpoint test_raw_bake test_riscv \
   test_raw_riscv test_raw_arm64 test_thumb1 test_thumb2 test_virt test_mps2 test_mps2_t1 \
@@ -23,7 +23,12 @@ mw = env -u LOVE_NO_IMAGE $m
 # love0 bakes prel+ev+repl + the whole corpus and self-tests BOTH compilers in one run
 # (-Dai_tco=0, the trampoline lane too), so it must print TWO "tests pass" summaries: a
 # reader stop drops the rest of the stream and exits 0. Status rides `.rc` -- no pipefail.
-test_love0: $(love0)
+# ⚠ corpus.list IS A RUNTIME INPUT NOW, not only a stamp: love0 reads it to find the corpus
+# (host/main.c), so it has to EXIST before love0 runs. It used to be pulled in as tests0.h's
+# prerequisite; with the corpus off the bootstrap's dependency graph, nothing else asks for it,
+# and a fresh tree died with `love0: corpus: cannot open out/lib/corpus.list` -- which the
+# unpacked-release path found and no in-tree run could, out/lib always being warm here.
+test_love0: $(love0) out/lib/corpus.list
 	@echo TEST $(love0)
 	@{ $(love0) </dev/null; echo $$? > out/host/.test_love0.rc; } | tee out/host/.test_love0.out; \
 	  s=$$(cat out/host/.test_love0.rc); \
@@ -334,6 +339,13 @@ test_sb: host out/host$(hsuf)/sb
 korerun = $m wake $(ho)/kore.image kore
 test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/kore.sh $(ho) $m
+# cook against GNU MAKE, differentially (doc: the script's own head). The oracle is a
+# SECOND IMPLEMENTATION, and it has to be: a builtin cook never implemented is a VARIABLE
+# reference in make's grammar, so it expands to EMPTY and the build carries on -- invisible
+# to any test that only asks whether cook agrees with itself. Skips (exit 0) where GNU make
+# is not on the box, since there is no oracle to ask.
+test_cookdiff: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image
+	@sh test/gate/cookdiff.sh $(ho)/kore
 # the install nest, three ways (make / cook / cook+kore PATH lane) -- one shape.
 test_nest: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc.image
 	@sh test/gate/nest.sh $(ho) $m
@@ -349,7 +361,7 @@ test_up: out/dist/love-$a
 # stdin, frames onto a captured stdout, :wq writes), driven through the baked kore.image.
 test_vi: host out/host$(hsuf)/kore.image
 	@echo TEST crew/vi/{hue,core,law}.l
-	@cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l lib/lint.l \
+	@cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/re.l lib/lint.l \
 	    crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l \
 	  | sh test/gate/run.sh vi "$(mw)" "crew/vi/law:"
 	@rm -f $(ho)/.vi1; \

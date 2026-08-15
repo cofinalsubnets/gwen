@@ -4618,7 +4618,8 @@ static lvm_t *const image_extra_aps[] = {
  // instruction fns a compiled thread embeds directly (no def1 cell); odd on
  // thumb, so they would otherwise escape as "fixnums" -- raw baker addresses
  lvm_callk, lvm_kcall, lvm_jump, lvm_scare, lvm_unc,
- lvm_fputbn, lvm_yield_sw, lvm_yield_nif, lvm_task_exit };
+ lvm_fputbn, lvm_yield_sw, lvm_yield_nif, lvm_task_exit,
+ _lvm_yieldk };   // the yield continuation: c0'd, so a task parked mid-yield carries it
 // size (words) of a data object, the same per-kind logic as the GC. d carries the
 // kind, s the raw length words -- two homes only during a fused image load, where
 // the decoded ap lands in the pool while the payload still sits in the source blob.
@@ -4638,17 +4639,34 @@ static uintptr_t image_objsize(struct ai *g, union u *p) {
  if (in_data(p->ap)) return image_datasize(p, p);
  word *term = (word*) ttag(g, p);                                // thread: scan to terminator (production)
  return (uintptr_t)(term - (word*) p) + 1; }
-// bidirectional lvm_* table: index <-> address. supplemental table 0..E-1, then def1 E..
+// the HOST nif slice: [__start_ai_nifs, __stop_ai_nifs) is a link-order table whose length
+// is a RUNTIME quantity, and the token layout wants a compile-time one -- so the index space
+// reserves a fixed slice and only the occupied prefix is ever spelled. A host nif's value is
+// the bare fn (AI_NIF stores it raw), so without this lane every app nif rode as an absolute.
+// ⚠ the slice is INDEXED BY POSITION, so this table's order is part of the image's contract.
+// Nothing checks it by name: the ANCHOR does the whole job, since a binary whose nif set
+// differs is a different binary and its symbol gap says so.
+#define IMAGE_NHOST 256u
+static ai_inline uintptr_t image_nhost(void) {
+ uintptr_t n = (uintptr_t)(__stop_ai_nifs - __start_ai_nifs);
+ return n < IMAGE_NHOST ? n : IMAGE_NHOST; }
+// bidirectional lvm_* table: index <-> address. supplemental table 0..E-1, def1 E.., then
+// the host slice last so existing indices keep their meaning.
 static intptr_t image_ap_index(intptr_t ap) {
  for (uintptr_t i = 0; i < countof(image_extra_aps); i++)
   if ((intptr_t) image_extra_aps[i] == ap) return (intptr_t) i;
  for (uintptr_t j = 0; j < countof(def1); j++)
   if (def1[j].x == ap) return (intptr_t)(countof(image_extra_aps) + j);
+ for (uintptr_t k = 0, n = image_nhost(); k < n; k++)
+  if (__start_ai_nifs[k].x == ap)
+   return (intptr_t)(countof(image_extra_aps) + countof(def1) + k);
  return -1; }
 static ai_inline intptr_t image_ap_resolve(intptr_t idx) {
- return idx < (intptr_t) countof(image_extra_aps)
-   ? (intptr_t) image_extra_aps[idx]
-   : def1[idx - countof(image_extra_aps)].x; }
+ uintptr_t e = countof(image_extra_aps), d = countof(def1);
+ if (idx < (intptr_t) e) return (intptr_t) image_extra_aps[idx];
+ if (idx < (intptr_t)(e + d)) return def1[idx - e].x;
+ { uintptr_t k = (uintptr_t) idx - e - d;                    // the host slice; a short roster reads 0
+   return k < image_nhost() ? __start_ai_nifs[k].x : 0; } }
 // the BARE-FN lane: a compiled thread embeds a nif's fn directly; it is reachable
 // symbolically as the code slot of its def1 cell (cell[0], or cell[2] under lvm_cur)
 static intptr_t image_fn_slot(word const *cell) {
@@ -4657,15 +4675,22 @@ static intptr_t image_fn_index(intptr_t v) {
  for (uintptr_t j = 0; j < countof(def1); j++) {
   word const *c = (word const*) def1[j].x;
   if (image_fn_slot(c) == v) return (intptr_t) j; }
+ for (uintptr_t k = 0, n = image_nhost(); k < n; k++) {
+  word const *c = (word const*) __start_ai_nifs[k].x;
+  if (image_fn_slot(c) == v) return (intptr_t)(countof(def1) + k); }
  return -1; }
 static intptr_t image_fn_resolve(intptr_t j) {
- return image_fn_slot((word const*) def1[j].x); }
+ uintptr_t d = countof(def1);
+ if (j < (intptr_t) d) return image_fn_slot((word const*) def1[j].x);
+ { uintptr_t k = (uintptr_t) j - d;                          // the host slice; a short roster reads 0
+   return k < image_nhost() ? image_fn_slot((word const*) __start_ai_nifs[k].x) : 0; } }
 // the out-of-pool IMMORTALS: (), "", the std ports, NULL (a mid-eval dump meets it
 // in an undressed rbuf/wbuf), map_gap appended LAST so existing indices stay stable
 // ⚠ EVERY PORT VTABLE BELONGS HERE: a port's head carries its vt, so an imaged
 // port holds a binary address that only an index survives the trip.
 static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin, (word) &ai_stdout, (word) &ai_stderr, 0, map_gap,
- (word) &ai_fd_port_vt, (word) &ai_ti_vt, (word) &ai_to_vt, (word) &ai_closed_vt, (word) &ai_ci_vt };
+ (word) &ai_fd_port_vt, (word) &ai_ti_vt, (word) &ai_to_vt, (word) &ai_closed_vt, (word) &ai_ci_vt,
+ (word) yield_c };   // g->ip's parked value: a root holds this binary address, so only an index survives
 static intptr_t image_imm_index(word v) {
  for (uintptr_t i = 0; i < countof(image_immortals); i++) if (image_immortals[i] == v) return (intptr_t) i;
  return -1; }
@@ -4747,13 +4772,16 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 //   binary ptr    -> kept ABSOLUTE (>= TBOUND), base-delta-shifted on load
 // fixnums (odd) pass through; every encoded pointer is EVEN (indices doubled), so
 // parity discriminates. a binary pointer below TBOUND would alias -> dump refuses.
-#define IMAGE_NLVM ((uintptr_t)(countof(image_extra_aps) + countof(def1)))
+#define IMAGE_NLVM ((uintptr_t)(countof(image_extra_aps) + countof(def1) + IMAGE_NHOST))
 #define IMAGE_NIMM ((uintptr_t) countof(image_immortals))
 #define IMAGE_CELLW 16u   /* max nif-cell span (words) an interior link can sit in */
+// the BARE-FN lane's width: one slot per nif CELL whose code slot a thread can embed --
+// def1's, then the host slice's (AI_NIF registers a cell too: host/main.c's nif_exit[]).
+#define IMAGE_NFN ((uintptr_t)(countof(def1) + IMAGE_NHOST))
 // TBOUND: the top of the index region. Every rung above encodes below it, so anything
 // at or over it is a binary pointer -- which is why one spelling, not three.
 #define IMAGE_TBOUND(hb) ((hb) + 2 * (IMAGE_NLVM + IMAGE_NIMM) \
-                               + 2 * IMAGE_NLVM * IMAGE_CELLW + 2 * countof(def1))
+                               + 2 * IMAGE_NLVM * IMAGE_CELLW + 2 * IMAGE_NFN)
 // ⚠ A KEPT ABSOLUTE IS STORED RELATIVE TO THE ANCHOR, and that is what makes a bake
 // REPRODUCIBLE. It used to ride as the raw address and get +delta'd on load: correct
 // either way, but the stored bytes then moved with ASLR, so two bakes of one tree
@@ -4784,6 +4812,14 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
   return v - (intptr_t) x->base; }
  intptr_t ii = image_imm_index((word) v);
  if (ii >= 0) return (intptr_t)(hb + 2 * IMAGE_NLVM + 2 * (uintptr_t) ii);       // out-of-pool immortal
+ // the BARE-FN lane again, for an EVEN-pointer arch. A compiled thread embeds a nif's
+ // code slot directly; on thumb the value is ODD and the parity branch above catches it
+ // (it must -- it would otherwise ride as a fixnum). x64/arm64 pointers are even, so the
+ // same words reached the kept-absolute tail instead and made every image binary-specific.
+ { intptr_t fj = image_fn_index(v);
+   if (fj >= 0) return (intptr_t)(hb + 2 * (IMAGE_NLVM + IMAGE_NIMM)
+                                     + 2 * IMAGE_NLVM * IMAGE_CELLW
+                                     + 2 * (uintptr_t) fj); }
  // an INTERIOR pointer into a def1 nif cell (a baked partial's curry link):
  // encode (cell index, word offset); the owning cell is the GREATEST base <= v
  { intptr_t bj = -1; uintptr_t boff = 0;
@@ -4819,7 +4855,7 @@ static ai_noinline intptr_t img_decode_cold(intptr_t v, uintptr_t hb, intptr_t d
   uintptr_t k = (uv - hb - 2 * (IMAGE_NLVM + IMAGE_NIMM)) / 2;
   return image_ap_resolve((intptr_t)(k / IMAGE_CELLW)) + (k % IMAGE_CELLW) * sizeof(word); }
  if (uv < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM) + 2 * IMAGE_NLVM * IMAGE_CELLW
-         + 2 * countof(def1))                                                    // bare-fn lane: the cell's code slot
+         + 2 * IMAGE_NFN)                                                        // bare-fn lane: the cell's code slot
   return image_fn_resolve((intptr_t)((uv - hb - 2 * (IMAGE_NLVM + IMAGE_NIMM)
                                          - 2 * IMAGE_NLVM * IMAGE_CELLW) / 2));
  // the kept absolute, rebuilt against THIS run's anchor -- so the stored bytes never
@@ -5047,9 +5083,13 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  // without the other. delta is 0 now in every lane: absolutes are stored anchor-relative,
  // so nothing on the decode side wants a shift at all.
  intptr_t delta = 0;
- if (!((H.rsv1 & 1) && !(H.rsv1 >> 1))                                           // zero kept absolutes: fully symbolic, nothing to check
-     && (intptr_t)((word) &ai_image_save - (word) image_immortals) != (intptr_t) H.anchor)
-  return NULL;                                                                   // a DIFFERENT binary (cross-arch/stale) -> normal boot
+ // ⚠ THE ANCHOR IS UNCONDITIONAL, symbolic image or not. It used to be skipped once nothing
+ // was left to relocate -- true of relocation, and the wrong question: an index still MEANS
+ // whatever this binary's tables say, so a foreign build reads the same words as other
+ // functions. The gap between two of our own symbols answers that for free and moves on
+ // ANY layout change, which is more than a roster of the tables could promise.
+ if ((intptr_t)((word) &ai_image_save - (word) image_immortals) != (intptr_t) H.anchor)
+  return NULL;                                                                   // a DIFFERENT binary -> normal boot
  // EXPAND the token stream into the pool, then decode it there IN PLACE. The two passes
  // read and write one word at a time at the same index, so src and base are the same array
  // -- and a payload word arrives already seated, which is why the flat-leaf memcpys are gone.
@@ -5075,7 +5115,7 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
    word term = (word)(off * sizeof(word) + ai_thread_tag); uintptr_t k = 1;
    uintptr_t kmax = nw - off;                                                     // BOUND the walk: a mis-decoded word0 must refuse
    for (;; k++) {                                                                 // ONE pass, decoding to the terminator (rung 2):
-    if (k >= kmax) return NULL;                                                   // the load, never march off the pool (on metal the
+    if (k >= kmax) return NULL;                                                   // the load, never march off the pool (on metal the                                               // the load, never march off the pool (on metal the
     if (s[k] == term) break;                                                      // pool's edge is a dead bus, and a dead bus is MUTE)
     base[off + k] = (word) img_decode((intptr_t) s[k], base, hb, delta); }
    base[off + k] = (word) p + ai_thread_tag;                                      // the terminator, decoded by hand: its head went live
