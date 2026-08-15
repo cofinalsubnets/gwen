@@ -261,8 +261,9 @@
    ; whole -- clexat stamps them 1-k..0 and the source itself from 1, so every
    ; stamped line (a gripe, __LINE__) is TRUE with no pay-back pass. an
    ; #include lexes fresh at its own line 1 either way.
-   (cc-parse src is ds tgt nsi dia)
-    (: ds9 (archdefs tgt + featdefs tgt + stddefs tgt +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
+   (cc-parse src t)
+    (: is (peep t 'is ()) ds (peep t 'ds ()) tgt (peep t 'tgt ()) nsi (peep t 'nsi ()) dia (peep t 'dia ())
+       ds9 (archdefs tgt + featdefs tgt + stddefs tgt +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
                  (? (id? tgt 'x64) ("__SIZEOF_INT128__=16" >< ds) ds))     ; x64 alone carries the wide pair (gen's d128 lane); love.c's limb seam reads it
        r (uread src)
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))
@@ -299,8 +300,9 @@
                              || ((48 <= c) && (c <= 57)) || (c = 95))
                         (go (i + 1) (acc + (? ok (snip b i (i + 1)) "_")))))
        (go 0 "ai_ir_"))
-   (cc-objbytes src is ds tgt nsi ni fir dia)
-    (@ (cc-parse src is ds tgt nsi dia)
+   (cc-objbytes src t)
+    (: ni (peep t 'ni ()) fir (peep t 'fir ()) tgt (peep t 'tgt ())
+     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs]
        (: ob (cgen-obj ast stag sigs weaks
                        [sfns svars sects alias aligns ainl noinl consts rstrs ni fir (irsym src)] tgt)
@@ -317,8 +319,8 @@
                    (objsecs tgt (objsecs4 tforms dforms nforms iforms bforms rforms + xs)
                             fnames gnames weaks lnames)))
              (udie 1 ("cc: the code generator answered an unexpected shape for " + src))))
-       (udie 1 ("cc: the parser answered an unexpected shape for " + src)))
-   (cc-obj src dst is ds tgt nsi ni fir dia) (write-bytes dst (cc-objbytes src is ds tgt nsi ni fir dia))
+       (udie 1 ("cc: the parser answered an unexpected shape for " + src))))
+   (cc-obj src dst t) (write-bytes dst (cc-objbytes src t))
    ; the LINK path (rung 3, crew/holo/link.l): every input lands as object
    ; bytes (a .c compiled here, a .o read off disk), crt0 rides FIRST (its
    ; text is the entry), and ldlink binds the static exe -- no system linker.
@@ -548,9 +550,9 @@
                                         () (sort (filter dotc? (readdir p))))
                             a)))
                () (sort (readdir d)))
-       ((map ((a b) \ [a (string (cc-objbytes b [inc] () tgt () () () 'c))])
+       ((map ((a b) \ [a (string (cc-objbytes b {'tgt tgt 'is [inc] 'dia 'c}))])
              (nlmems ndir))
-        + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) [mdir inc] () tgt () () () 'c))])
+        + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) {'tgt tgt 'is [mdir inc] 'dia 'c}))])
               (sort (filter dotc? (readdir (home + "lib/math"))))
         + (member? tgt '(x64 arm64 riscv64) ? [["mksys.o" (string (mksys-bytes tgt))]])))
    (rtpull srcs tgt nostd)
@@ -581,9 +583,12 @@
              ; scares about first.
              _ (? (two? <>pr) (undie <>pr) 0)
              <pr)))
-   (cc-link ins dst is ds tgt pie org dorg nostd nsi ni fir rdme dia)
-    (: ars (filter dota? ins)
-       srcs (map (\ f (? (dotc? f) [f (string (cc-objbytes f is ds tgt nsi ni fir dia))]
+   (cc-link ins dst t)
+    (: is (peep t 'is ()) ds (peep t 'ds ()) tgt (peep t 'tgt ()) pie (peep t 'pie ())
+       org (peep t 'org ()) dorg (peep t 'dorg ()) nostd (peep t 'nostd ()) nsi (peep t 'nsi ())
+       ni (peep t 'ni ()) fir (peep t 'fir ()) rdme (peep t 'rdme ())
+       ars (filter dota? ins)
+       srcs (map (\ f (? (dotc? f) [f (string (cc-objbytes f t))]
                          (doto? f) (: r (uread f)
                                       (? (two? r) [f <>r]
                                          (udie 1 ("cc: cannot open " + f))))
@@ -718,40 +723,40 @@
    ; belongs before the line is read at all.
    ; the three LISTS (is ds ins) collect reversed and are righted at the end; every other key
    ; is last-one-wins, and `fir` alone accumulates into one comma string.
-   (fnew ntv) (: t {} _ (pin t 'tgt ntv) t)       ; the target defaults to the ground we stand on
-   (fset t k v) (: _ (pin t k v) t)               ; pin, ANSWERING the tablet -- so an arm is one form
-   (fpush t k v) (fset t k (v >< (peep t k ())))
-   (fget t k) (peep t k ())
+   ; the one helper that is not already a primitive: prepend onto a keyed list. `pin`
+   ; ANSWERS its tablet, so every other arm below is a plain pin and the flag set is a
+   ; `{}` literal at its one construction site.
+   (fpush t k v) (pin t k (v >< (peep t k ())))
    (flags as t)
     (? !(two? as)
-       (: _ (pin t 'is (rev (fget t 'is)))
-          _ (pin t 'ds (rev (fget t 'ds)))
-          _ (pin t 'ins (rev (fget t 'ins)))
+       (: _ (pin t 'is (rev (peep t 'is ())))
+          _ (pin t 'ds (rev (peep t 'ds ())))
+          _ (pin t 'ins (rev (peep t 'ins ())))
           t)
        (: a <as r >as
-          (? (a = "-c") (flags r (fset t 'c 1))
+          (? (a = "-c") (flags r (pin t 'c 1))
              ; ⚠ the SAME string love answers, because they are one artifact: mooncc is a
              ; verb on the love binary, not a separate program, and a build that reported
              ; two versions would be reporting a thing that cannot happen. `love-version`
              ; is that one id (mk/lib.mk computes it: ./VERSION plus a VCS suffix).
              ((a = "--version") || (a = "-v"))
               (: _ (puts ("mooncc " + love-version)) _ (putc 10) (quit 0))
-             (a = "-pie") (flags r (fset t 'pie 1))
+             (a = "-pie") (flags r (pin t 'pie 1))
              (a = "-I") (? (two? r) (flags >r (fpush t 'is <r)) (udie 2 usage))
              (a = "-D") (? (two? r) (flags >r (fpush t 'ds <r)) (udie 2 usage))
-             (a = "-o") (? (two? r) (flags >r (fset t 'o <r)) (udie 2 usage))
-             (a = "-t") (? (two? r) (flags >r (fset t 'tgt (totgt <r))) (udie 2 usage))
-             (a = "-Ttext") (? (two? r) (flags >r (fset t 'org (tonum <r))) (udie 2 usage))
+             (a = "-o") (? (two? r) (flags >r (pin t 'o <r)) (udie 2 usage))
+             (a = "-t") (? (two? r) (flags >r (pin t 'tgt (totgt <r))) (udie 2 usage))
+             (a = "-Ttext") (? (two? r) (flags >r (pin t 'org (tonum <r))) (udie 2 usage))
              ; -Tdata is the SPLIT: .data runs there and is stored after the code,
              ; which is what every XIP part needs and what -Ttext alone cannot say.
-             (a = "-Tdata") (? (two? r) (flags >r (fset t 'dorg (tonum <r))) (udie 2 usage))
+             (a = "-Tdata") (? (two? r) (flags >r (pin t 'dorg (tonum <r))) (udie 2 usage))
              ; -fno-inline bars the SPLICE, fn-wide and TU-wide -- the same door
              ; __attribute__((noinline)) opens one name at a time. it is an instrument
              ; before it is an optimization flag: a splice rewrites the code you are
              ; reading into its caller, so comparing one function against another cc's
              ; needs a way to say don't. gcc's -fno-inline-functions is the same word.
              ((a = "-fno-inline") || (a = "-fno-inline-functions"))
-              (flags r (fset t 'ni 1))
+              (flags r (pin t 'ni 1))
              ; -fir=PREFIX[,PREFIX..] -- WRITE DOWN WHAT WE BUILT: the machine-form IR of every
              ; function whose name starts with one of them, laid in .rodata as one readable
              ; datum. -fno-ir=PREFIX[,..] carves back out, gcc's -fno- word and this file's own
@@ -768,10 +773,10 @@
              ; ⚠ a LINK flag: with -c there is no output ELF to carry it and it is ignored.
              (pfx? a "-freadme=")
               (: f (snip a 9 (tally a)) rt (uread f)
-                 (? (two? rt) (flags r (fset t 'rdme <>rt))
+                 (? (two? rt) (flags r (pin t 'rdme <>rt))
                     (udie 1 ("cc: cannot open " + f))))
-             (pfx? a "-fir=") (flags r (fset t 'fir (irjoin (fget t 'fir) (snip a 5 (tally a)))))
-             (pfx? a "-fno-ir=") (flags r (fset t 'fir (irjoin (fget t 'fir) (irneg (snip a 8 (tally a))))))
+             (pfx? a "-fir=") (flags r (pin t 'fir (irjoin (peep t 'fir ()) (snip a 5 (tally a)))))
+             (pfx? a "-fno-ir=") (flags r (pin t 'fir (irjoin (peep t 'fir ()) (irneg (snip a 8 (tally a))))))
              ; ⚠ BARE, and the algebra gives them their meaning rather than a rule doing it:
              ; `-fir` is the EMPTY POSITIVE, which every name has as a prefix, so it opens the
              ; set wherever it sits -- `-fir=` in front. `-fno-ir` is the empty NEGATIVE, and
@@ -780,17 +785,17 @@
              ; without anyone writing down that it wins. ⚠ they must be named HERE: `tol?`
              ; swallows the whole advisory -f family, so before this both were accepted in
              ; silence and answered a binary with no record at all.
-             (a = "-fir") (flags r (fset t 'fir (irjoin (fget t 'fir) "")))
-             (a = "-fno-ir") (flags r (fset t 'fir (irjoin (fget t 'fir) "-")))
+             (a = "-fir") (flags r (pin t 'fir (irjoin (peep t 'fir ()) "")))
+             (a = "-fno-ir") (flags r (pin t 'fir (irjoin (peep t 'fir ()) "-")))
              (glu? a 73) (flags r (fpush t 'is (snip a 2 (tally a))))
              (glu? a 68) (flags r (fpush t 'ds (snip a 2 (tally a))))
-             (glu? a 116) (flags r (fset t 'tgt (totgt (snip a 2 (tally a)))))
+             (glu? a 116) (flags r (pin t 'tgt (totgt (snip a 2 (tally a)))))
              ; -nostdinc is the INCLUDE half of -nostdlib's word, and it is LOUD
              ; rather than advisory: with the /usr/include tail still on, a header
              ; we simply do not carry resolves to GLIBC's instead, and a
              ; freestanding build quietly taking a hosted declaration is the wrong
              ; artifact wearing a green face. (it reaches incload as nsi.)
-             (a = "-nostdinc") (flags r (fset t 'nsi 1))
+             (a = "-nostdinc") (flags r (pin t 'nsi 1))
              ; -ffreestanding is the one member of the -nostd* family that says
              ; something about the LANGUAGE and not just the link: it makes the
              ; implementation freestanding, and __STDC_HOSTED__ is how the
@@ -802,8 +807,8 @@
              ; hosted program that simply supplies its own runtime, and test_raw
              ; is exactly that.
              (a = "-ffreestanding")
-              (flags r (fset (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1))
-             (nostd? a) (flags r (fset t 'nostd 1))
+              (flags r (pin (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1))
+             (nostd? a) (flags r (pin t 'nostd 1))
              (tol? a) (flags r t)
              ((0 < tally a) && (a 0 = 45)) (udie 2 usage)
              (flags r (fpush t 'ins a)))))
@@ -835,10 +840,12 @@
        dia <sd
        as9 <>sd                                    ; the line with -std= lifted off it
        ntv (? (love-arch = "arm64") 'arm64 (love-arch = "riscv64") 'riscv64 'x64)
-       f (flags as9 (fnew ntv))
-       c (fget f 'c) is (map dirn (fget f 'is)) ds (fget f 'ds) o (fget f 'o) ins (fget f 'ins)
-       tgt (fget f 'tgt) pie (fget f 'pie) org (fget f 'org) nostd (fget f 'nostd) nsi (fget f 'nsi)
-       dorg (fget f 'dorg) ni (fget f 'ni) firp (fget f 'fir) rdme (fget f 'rdme)
+       f (flags as9 {'tgt ntv 'dia dia})   ; the flag set, with the dialect already in it
+       ; ⚠ NORMALISE IN THE TABLET, not at a reader. -I dirs want a trailing slash, and the
+       ; consumers now take `f` itself -- so a `dirn` applied on the way out of one reader
+       ; would leave every other consumer holding the raw list. one pin, before anything reads.
+       _ (pin f 'is (map dirn (peep f 'is ())))
+       c (peep f 'c ()) o (peep f 'o ()) ins (peep f 'ins ())
        ; TWO outcomes now, the cc shape: -c lays objects, anything else LINKS.
        ; one .c used to take a third path (cc-exe: elf64 straight off the IR,
        ; no crt0 and no linker) which could not bind a libc -- so `mooncc
@@ -853,21 +860,21 @@
        (ins @
         []      (udie 2 usage)
         (? o)   (? c (? (two? >ins) (udie 2 "cc: -o takes one input")
-                        (: _ (cc-obj <ins o is ds tgt nsi ni firp dia) 0))
-                   (: _ (cc-link ins o is ds tgt pie org dorg nostd nsi ni firp rdme dia) 0))
+                        (: _ (cc-obj <ins o f) 0))
+                   (: _ (cc-link ins o f) 0))
         ; the legacy pair: exactly two bare args, the second no .c -- IN OUT
         ; (a .c/.o mix is a LINK, never a pair; -c keeps its .o OUT). ⚠ and a
         ; .a is never an OUT: `mooncc a.o libgcc.a` reading as a pair would
         ; write the library it was asked to read FROM.
         (? (!(dotc? b) && !(dota? a) && !(dota? b)
             && (c || (!(doto? a) && !(doto? b)))) [a b])
-                (: _ (? c (cc-obj a b is ds tgt nsi ni firp dia)
-                          (cc-link [a] b is ds tgt pie org dorg nostd nsi ni firp rdme dia)) 0)
+                (: _ (? c (cc-obj a b f)
+                          (cc-link [a] b f)) 0)
         (? c)   (: (go l) (? !(two? l) 0
                              !(dotc? <l) (udie 2 ("cc: not a .c input: " + <l))
-                             (: _ (cc-obj <l (obase <l) is ds tgt nsi ni firp dia) (go >l)))
+                             (: _ (cc-obj <l (obase <l) f) (go >l)))
                    (go ins))
-                (: _ (cc-link ins "a.out" is ds tgt pie org dorg nostd nsi ni firp rdme dia) 0))))
+                (: _ (cc-link ins "a.out" f) 0))))
 
 ; the SEAT: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the
