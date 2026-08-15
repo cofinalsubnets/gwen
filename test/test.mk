@@ -5,7 +5,7 @@
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \
   test_filemode test_stdinbuf test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
-  test_sb test_kore test_nest test_dist test_up test_vi test_moon test_clay test_moonfuzz \
+  test_sb test_kore test_nest test_cookdiff test_dist test_up test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_vec test_fixpoint test_raw_bake test_riscv \
   test_raw_riscv test_raw_arm64 test_thumb1 test_thumb2 test_virt test_mps2 test_mps2_t1 \
@@ -334,6 +334,13 @@ test_sb: host out/host$(hsuf)/sb
 korerun = $m wake $(ho)/kore.image kore
 test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 	@sh test/gate/kore.sh $(ho) $m
+# cook against GNU MAKE, differentially (doc: the script's own head). The oracle is a
+# SECOND IMPLEMENTATION, and it has to be: a builtin cook never implemented is a VARIABLE
+# reference in make's grammar, so it expands to EMPTY and the build carries on -- invisible
+# to any test that only asks whether cook agrees with itself. Skips (exit 0) where GNU make
+# is not on the box, since there is no oracle to ask.
+test_cookdiff: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image
+	@sh test/gate/cookdiff.sh $(ho)/kore
 # the install nest, three ways (make / cook / cook+kore PATH lane) -- one shape.
 test_nest: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc.image
 	@sh test/gate/nest.sh $(ho) $m

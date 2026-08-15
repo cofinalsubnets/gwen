@@ -95,7 +95,7 @@ test:
 # ⚠ it BUILDS and smokes the artifact and does not run the seed fixpoint, because the tarball is
 # cut from the git INDEX -- on a dirty tree that would compare the artifact against source you
 # are not looking at, and report the difference as a broken fixpoint.
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_wasm test_kernel test_disk test_virt test_embed test_dist
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_wasm test_kernel test_disk test_virt test_embed test_cookdiff test_dist
 	
 
 # really really really slow gate. test_embed is here too, cheap insurance: the thumb lanes
