@@ -185,7 +185,7 @@
 (hear 0)
 
 ; --- reduction --- `=` stops at alpha (above); `ev` goes further -- it REDUCES. these are the
-; binary twins of proof/rocq/spec.v's reduction layer (step/subst): the proof says "valid by the
+; binary twins of test/proof/rocq/spec.v's reduction layer (step/subst): the proof says "valid by the
 ; calculus", the line here says "the binary computes exactly this". beta on the identity and
 ; const-1, a nested redex reduced all the way, and eta still unbridged (its de Bruijn reduct shifts).
 (assert

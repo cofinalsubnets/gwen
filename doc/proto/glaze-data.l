@@ -91,7 +91,7 @@
   (glaze-now?  e) (&& (! (allocs e)) (! (reads e)))   ; today: no heap touch at all
   (glaze-read? e) (! (allocs e))                      ; stage A/B/C: reads ok, allocators still out
 
-  ; the bench bodies (the lambda bodies, as source data) -- bench/benches/{tree,hash}.l, fib for contrast.
+  ; the bench bodies (the lambda bodies, as source data) -- test/bench/benches/{tree,hash}.l, fib for contrast.
   fib  '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2))))
   prim '(? (< n (* d d)) 1 (? (= 0 (% n d)) 0 (go (+ d 1))))                  ; primes' inner test loop
   mk   '(? (< d 1) 0 (link (mk (- d 1)) (mk (- d 1))))                        ; tree build  -- allocates

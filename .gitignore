@@ -5,28 +5,28 @@ vgcore.*
 # downloaded, never built: limine, OVMF, package sources. outside out/ so `make clean`
 # leaves it -- `make distclean` is what takes it.
 /dl/
-# proof/rocq/coqc build artifacts (proof/rocq/spec.v is checked by `make test_proof`).
-# proof/rocq/gen.v is GENERATED and TEST-ONLY: test_gen lays it from test/spec.l and checks it in
-# the same recipe, so a copy in the tree proves nothing the run does not. proof/rocq/uugen.v and
-# proof/lean/uugen.lean are still checked in -- they regen + re-check in seconds and the diff is
+# test/proof/rocq/coqc build artifacts (test/proof/rocq/spec.v is checked by `make test_proof`).
+# test/proof/rocq/gen.v is GENERATED and TEST-ONLY: test_gen lays it from test/spec.l and checks it in
+# the same recipe, so a copy in the tree proves nothing the run does not. test/proof/rocq/uugen.v and
+# test/proof/lean/uugen.lean are still checked in -- they regen + re-check in seconds and the diff is
 # the drift signal. Only the compiled outputs below are ignored.
-proof/rocq/gen.v
+test/proof/rocq/gen.v
 # (Benches are the exception -- regenerated manually, too slow for per-commit.)
-proof/lean/*.olean
+test/proof/lean/*.olean
 *.vo
 *.vok
 *.vos
 *.glob
-proof/rocq/.*.aux
+test/proof/rocq/.*.aux
 .*.cache
-# proof/rocq/extract.v EXTRACTS this (test_extract); oracle_drive.ml is the source driver
-proof/rocq/normalizer.ml
-proof/rocq/normalizer.mli
-proof/rocq/oracle_drive
+# test/proof/rocq/extract.v EXTRACTS this (test_extract); oracle_drive.ml is the source driver
+test/proof/rocq/normalizer.ml
+test/proof/rocq/normalizer.mli
+test/proof/rocq/oracle_drive
 *.cmi
 *.cmx
 *.cmo
-proof/rocq/*.o
+test/proof/rocq/*.o
 
 
 # python bytecode caches (bench ports) -- build artifacts, never tracked
@@ -47,5 +47,5 @@ doc/archive/
 
 # the two generated proof terms: test_uugen and test_uulean write them from the uu
 # corpus on EVERY run, so a committed copy is 810 KB nothing ever reads
-proof/rocq/uugen.v
-proof/lean/uugen.lean
+test/proof/rocq/uugen.v
+test/proof/lean/uugen.lean

@@ -155,7 +155,7 @@ via `make install`.
 
 [test/spec.l](test/spec.l) is the spec -- the reference and the test in one, each
 section stating its laws in a comment over the asserts that prove them, a real test in
-the corpus, so every claim stays green. [proof/rocq/spec.v](proof/rocq/spec.v) is the
+the corpus, so every claim stays green. [test/proof/rocq/spec.v](test/proof/rocq/spec.v) is the
 machine-checked, axiom-free half. [CLAUDE.md](CLAUDE.md) is the narrative: how to work
 here, the traps, the architecture. [doc/](doc/) goes deep, one file per subsystem.
 

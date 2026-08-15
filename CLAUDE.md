@@ -14,7 +14,7 @@
 ; gcc, no glibc, no ld, kernel included. full C11 is the aim; doc/moon-c-gaps.md is the ledger.
 ;
 ; this file orients -- how to work here, the traps, the vocabulary. the laws live in test/spec.l
-; (the executable spec, green on every target) and proof/rocq/spec.v (machine-checked, axiom-free;
+; (the executable spec, green on every target) and test/proof/rocq/spec.v (machine-checked, axiom-free;
 ; test_proof + test_gen). settle any doubt by probing the binary; demos show theirs (`expr ; value`).
 
 ; --- how to work here (read this first) ---
@@ -257,7 +257,7 @@
 ;
 ; each line is a LAW -- read the free x as forall x, answering the charm 1. test/law.l quantifies
 ; them with lambdas and fuzzes the spread (^n ^^n ^^^n build the nesting), so a law here cannot be
-; wrong in silence; proof/rocq/spec.v is where one goes when it earns more than a fuzz.
+; wrong in silence; test/proof/rocq/spec.v is where one goes when it earns more than a fuzz.
 (ceil x = ceil (re (net x)))         ; 1   ceil retracts onto the integers
 ($x = (? (0 < ceil x) (ceil x) 0))   ; 1   saturate is ceil with the floor raised to 0
 (bit x = (0 < $x))                   ; 1   bit is saturate with the ceiling lowered to 1
@@ -279,7 +279,7 @@
 ;
 ; each law lives in its section comment and the asserts below keep it honest. deep dives:
 ; doc/measures.md, test/operator.l + test/infixop.l, test/help.l, test/missing.l, test/apcap.l,
-; proof/rocq/spec.v.
+; test/proof/rocq/spec.v.
 
 ; --- bootstrapping --- the C core is minimal; the key semantics are love closures installed from
 ; the prel and shared by both compilers:

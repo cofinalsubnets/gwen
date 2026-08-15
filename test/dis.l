@@ -1,5 +1,5 @@
 ; test/dis.l -- `dis` (love/ev.l), the emission interface's DUAL: a compiled thread
-; read back as (op-nom operand..) rows. it is the splice JIT's decoder (bench/vmsplice)
+; read back as (op-nom operand..) rows. it is the splice JIT's decoder (test/bench/vmsplice)
 ; and the reflection door the mop leaves open --
 ; built pre-egg from peek + the book, like `feels`, so the words survive.
 ;
@@ -10,7 +10,7 @@
 ; (never scares), and () for an atom or a native, else a row list whose every head is an
 ; op nom and whose last row is a ret-family terminator. the POSITIVE proof -- dis reads a
 ; real thread and it round-trips through mooncc to the same value -- lives in
-; bench/vmsplice under LOVE_NO_GLAZE, where no closure is glazed.
+; test/bench/vmsplice under LOVE_NO_GLAZE, where no closure is glazed.
 ;
 ; ⚠ dis is a HOST reflection capability (the splice JIT runs on the host, with mooncc).
 ; love0 -- the bootstrap differential binary -- does not surface ev.l's late top-level

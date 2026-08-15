@@ -1,0 +1,13 @@
+;;; Mutable hash-table throughput (see test/bench/benches/hash.l). checksum = N*N.
+(load "lib/bench.lisp")
+(defun hash-run (n)
+  (let ((h (make-hash-table)))
+    (dotimes (i n) (setf (gethash (+ 1 (* 97 i)) h) i))
+    (flet ((scan ()
+             (let ((a 0)) (dotimes (i n) (incf a (gethash (+ 1 (* 97 i)) h 0))) a)))
+      (let ((a (scan)))
+        (dotimes (i n)
+          (let ((k (+ 1 (* 97 i))))
+            (setf (gethash k h) (+ 1 (gethash k h 0)))))
+        (+ a (scan))))))
+(bench "hash" (lambda () (hash-run 10000)))

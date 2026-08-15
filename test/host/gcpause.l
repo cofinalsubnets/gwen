@@ -6,7 +6,7 @@
 ; the live set itself, the honest linear cost. words are the deterministic
 ; measure and carry the asserts; wall ns ride along in the printed table only
 ; (machines flake, words don't). both shapes are THEOREMS in the model first --
-; proof/rocq/gc.v's minor_work_bounded (the minor's work bounded by the nursery
+; test/proof/rocq/gc.v's minor_work_bounded (the minor's work bounded by the nursery
 ; alone, old absent from the statement) and minor_flat (the survivor set
 ; identical under tenure-blind growth) -- so this gate is the instance-check,
 ; not free-standing evidence.

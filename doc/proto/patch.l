@@ -46,13 +46,13 @@
 ; building this in the one language with the Rocq/Lean harness, DON'T clone darcs
 ; 1.x -- clone the idea on the SOUND substrate (the inverse-semigroup formalization,
 ; or pijul's pushout-in-a-category), and let proof/ carry L1..L3. the hand .v
-; (proof/rocq/patch.v) is SCAFFOLDING: a hand proof drifts (the wm2uu lesson).
+; (test/proof/rocq/patch.v) is SCAFFOLDING: a hand proof drifts (the wm2uu lesson).
 ; the destination is GENERATED like the rest of proof/, and the first TWO slices
 ; have ARRIVED: test/uupatch.l encodes the named-slot and positional models'
 ; laws as uu proof TERMS (pointwise, evidence-carrying coprods for every
 ; case-split -- no funext, no classical; the hunk re-aim's index algebra and
 ; splice reassociation sealed lemma by lemma), and tools/uu2coq.l +
-; tools/uu2lean.l emit them into proof/rocq/uugen.v AND proof/lean/uugen.lean,
+; tools/uu2lean.l emit them into test/proof/rocq/uugen.v AND test/proof/lean/uugen.lean,
 ; audited axiom-free in both kernels; those slices' hand copies are deleted
 ; from patch.v. the remaining slices migrate the same way as their models
 ; stabilize. source of truth is the executable ai spec (test/patch.l),

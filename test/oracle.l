@@ -1,5 +1,5 @@
 ; --- differential oracle: ev's reduction vs a reference normalizer ---
-; The companion to proof/rocq/spec.v's reduction layer (shift/subst/step). spec.v proves
+; The companion to test/proof/rocq/spec.v's reduction layer (shift/subst/step). spec.v proves
 ; that calculus consistent; this checks the BINARY against an INDEPENDENT reference
 ; implementation of the same de Bruijn reduction, over thousands of random terms --
 ; the conformance witness the proof alone can't give. ("the math is sound" + "the

@@ -1,12 +1,12 @@
 ; glaze-auto -- the AUTO-HOOK end to end: take the float benchmark's UNCHANGED source (the
-; mand/col/grid mandelbrot nest from bench/benches/float.l), recognize it with `grok`, glaze it
+; mand/col/grid mandelbrot nest from test/bench/benches/float.l), recognize it with `grok`, glaze it
 ; to native, and time it the way the bench does. demonstrates that ordinary interpreted source
 ; gets LuaJIT-territory native code with NO hand-annotation -- the payoff the benches would read
 ; once the recognizer is wired into ev's compile path.
 ;
 ; run:  out/host/love -l love/glaze/emit.l tools/glaze-auto.l   (emit.l leaks grok/jitfgrid as globals)
 
-(: ; --- the EXACT bodies from bench/benches/float.l (verbatim) ---
+(: ; --- the EXACT bodies from test/bench/benches/float.l (verbatim) ---
    mps   '(cx cy zx zy it)
    mbody '(? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))
              (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)

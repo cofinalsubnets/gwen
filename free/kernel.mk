@@ -80,7 +80,7 @@ kcppflags := \
   -I. -Icore -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/free \
   -I$(R)/free/$a \
   -I$(R)/crew/moon/include \
-  -Ilibc \
+  -Ifree/libc \
   $(kcppflags) \
   -DLIMINE_API_REVISION=3
 ifdef K_TEST

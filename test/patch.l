@@ -8,7 +8,7 @@
 ; certifies all eight laws (L1..L3b at both grains, the hunk re-aim included),
 ; tools/uu2coq.l + tools/uu2lean.l emit them into uugen.v/uugen.lean, and Rocq AND
 ; Lean audit them axiom-free (make test_uugen + test_uulean). the HAND leg,
-; proof/rocq/patch.v, scaffolds the slices whose models are still settling, under
+; test/proof/rocq/patch.v, scaffolds the slices whose models are still settling, under
 ; `make test_proof` (the conflictor merge and the frontier
 ; identity in full; the tree lift's commute ALGEBRA -- L1 with the path re-aim --
 ; the content-rewrite lane's L1 at element grain, the clash-segments bubble

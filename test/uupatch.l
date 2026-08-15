@@ -1,6 +1,6 @@
 ; test/uupatch.l -- the PATCH GROUPOID's named-slot AND positional slices as uu
 ; proof TERMS: the generated leg of the patch arc. test/patch.l's first two
-; forms state the laws as executable asserts; proof/rocq/patch.v hand-proved
+; forms state the laws as executable asserts; test/proof/rocq/patch.v hand-proved
 ; them as scaffolding and PROMISED this file (its provenance note): the laws
 ; re-proven inside uu's own kernel, then emitted to Rocq AND Lean by
 ; tools/uu2coq.l + tools/uu2lean.l -- two independent kernels re-certifying the

@@ -234,13 +234,13 @@ test_doc: host
 	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$(mw)" ": ok" \
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
 	done
-# the vmsplice JIT pipeline end to end (bench/vmsplice/auto.sh): dis a live closure,
+# the vmsplice JIT pipeline end to end (test/bench/vmsplice/auto.sh): dis a live closure,
 # compose its ops to C, mooncc it, bind against THIS process, nif, differential vs the
 # interp twin. NOT in test_slow (needs mooncc + a host cc, bench-shaped); run by hand.
 # `dis` itself is gated in the corpus by test/dis.l. x86-64 only (compose emits x86 ABI).
 ifeq ($a,x86_64)
 test_vmsplice: host
-	@sh bench/vmsplice/auto.sh
+	@sh test/bench/vmsplice/auto.sh
 endif
 # Native-codegen self-tests (the love/glaze/ x86-64 jit): test/glaze-x86.l covers emit
 # (the SSE emitter) + auto (ev's source-recognizer), cats the holo backends ahead of
@@ -462,7 +462,7 @@ test_clay: host out/host$(hsuf)/mooncc.image
 test_moonfuzz: host out/host$(hsuf)/mooncc.image
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 888 mutants of test/cc)"
 	@$m wake $(ho)/mooncc.image -l test/gate/moonfuzz.l < /dev/null
-# test_splice -- the splice JIT end to end (lib/splice.l, bench/vmsplice/README.md): a live
+# test_splice -- the splice JIT end to end (lib/splice.l, test/bench/vmsplice/README.md): a live
 # closure's op rows, each op's own IR taken out of THIS BINARY's .rodata (mooncc -fir=lvm_ put
 # it there), spliced into one body, assembled by holo, its one external reference bound to a
 # live address, nif'd -- and required to agree with the closure it came from. ⚠ a PLAIN love:
@@ -781,7 +781,7 @@ test_gcheck: host
 test_gcstress: host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAI_GC_STRESS test_host
 
-# --- the machine-checked half: proof/rocq/ + proof/lean/ ---------------------------------
+# --- the machine-checked half: test/proof/rocq/ + test/proof/lean/ ---------------------------------
 # Each gate below is a no-op that SAYS SO when its checker is missing, so a bare box stays
 # green. The tool guards are grouped by what they need, not by gate.
 COQC     ?= $(shell command -v coqc 2>/dev/null)
@@ -789,8 +789,8 @@ OCAMLOPT ?= $(shell command -v ocamlopt 2>/dev/null)
 LEAN     ?= $(shell command -v lean 2>/dev/null)
 PYTHON3  ?= $(shell command -v python3 2>/dev/null)
 # the scratch coqc strews beside a .v, and what an extracted ocaml ref leaves
-vclean = rm -f $(foreach n,$1,proof/rocq/$n.vo proof/rocq/$n.vok proof/rocq/$n.vos proof/rocq/$n.glob proof/rocq/.$n.aux)
-dclean = rm -f $(foreach n,$1,proof/rocq/$n_ref.ml proof/rocq/$n_ref.mli proof/rocq/$n_drive)
+vclean = rm -f $(foreach n,$1,test/proof/rocq/$n.vo test/proof/rocq/$n.vok test/proof/rocq/$n.vos test/proof/rocq/$n.glob test/proof/rocq/.$n.aux)
+dclean = rm -f $(foreach n,$1,test/proof/rocq/$n_ref.ml test/proof/rocq/$n_ref.mli test/proof/rocq/$n_drive)
 
 ifeq ($(COQC),)
 test_proof test_gc test_gen test_uugen test_mx:
@@ -799,44 +799,44 @@ else
 # spec.v -- love's headline laws (the numeral / function / absence core of test/spec.l) as Rocq
 # theorems, axiom-free and universe-checked: the executable spec upgraded from SHOWN to PROVED.
 # spec.vo is a FILE target, compiled once and KEPT: test_gen and test_extract both `Require
-# Import spec`. /warn one spelling everywhere (`cd proof/rocq && -R . ""`), or spec.vo's logical
+# Import spec`. /warn one spelling everywhere (`cd test/proof/rocq && -R . ""`), or spec.vo's logical
 # name is not the one gen.v asks for. A static pattern: big/mx/enc take their own flags.
-rocq_kept = proof/rocq/spec.vo proof/rocq/patch.vo
-$(rocq_kept): proof/rocq/%.vo: proof/rocq/%.v
-	@echo TEST proof/rocq/$*.v "(coqc)"
-	@cd proof/rocq && $(COQC) -q -R . "" $*.v
+rocq_kept = test/proof/rocq/spec.vo test/proof/rocq/patch.vo
+$(rocq_kept): test/proof/rocq/%.vo: test/proof/rocq/%.v
+	@echo TEST test/proof/rocq/$*.v "(coqc)"
+	@cd test/proof/rocq && $(COQC) -q -R . "" $*.v
 test_proof: $(rocq_kept)
 	@echo "test_proof: spec.v + patch.v check (the .vo IS the evidence, so a re-run is quiet)"
 # gc.v -- the generational MINOR is SOUND (under a complete write barrier no live young is
 # lost), its PAUSE is bounded by the nursery, and the Cheney drain terminates as a true
 # fixpoint. Axiom-free; test_gcheck instance-checks the drain.
 test_gc:
-	@echo TEST proof/rocq/gc.v "(coqc)"
-	@$(COQC) -q proof/rocq/gc.v
+	@echo TEST test/proof/rocq/gc.v "(coqc)"
+	@$(COQC) -q test/proof/rocq/gc.v
 	@$(call vclean,gc)
 # The .l -> .v pipeline: tools/spec2coq.l reads test/spec.l and EMITS gen.v, the spec generating
 # theorems for its own numeral facts. Regenerated every run, so asserts and proofs cannot diverge.
 test_gen: host $(rocq_kept)
-	@echo LOVE	proof/rocq/gen.v "(tools/spec2coq.l on $m)"
-	@$(mw) tools/spec2coq.l > proof/rocq/gen.v
-	@echo TEST proof/rocq/gen.v "(coqc, against spec.v's shared model)"
-	@cd proof/rocq && $(COQC) -R . "" gen.v
+	@echo LOVE	test/proof/rocq/gen.v "(tools/spec2coq.l on $m)"
+	@$(mw) tools/spec2coq.l > test/proof/rocq/gen.v
+	@echo TEST test/proof/rocq/gen.v "(coqc, against spec.v's shared model)"
+	@cd test/proof/rocq && $(COQC) -R . "" gen.v
 	@$(call vclean,gen)
 # The PROOF half of that pipeline (cf. test_gen, which exports concrete ASSERTS): tools/uu2coq.l
 # has uu's kernel TYPE-CHECK a proof term and emits the same term in Gallina for coqc to re-check
 # -- a law proved in love's own kernel and certified by Rocq.
 test_uugen: host
-	@echo LOVE	proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
-	@$(mw) tools/uu2coq.l > proof/rocq/uugen.v
-	@echo TEST proof/rocq/uugen.v "(coqc)"
-	@$(COQC) -q proof/rocq/uugen.v
+	@echo LOVE	test/proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
+	@$(mw) tools/uu2coq.l > test/proof/rocq/uugen.v
+	@echo TEST test/proof/rocq/uugen.v "(coqc)"
+	@$(COQC) -q test/proof/rocq/uugen.v
 	@$(call vclean,uugen)
 # core/mx.l IS the +/* dispatch matrices; core/mx.h is laid from it through clay and tools/mx2coq.l models
 # it in Rocq -- two derivations of ONE datum.
 test_mx: host
-	@echo TEST proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
-	@cat core/mx.l tools/mx2coq.l | $(mw) > proof/rocq/mx.v
-	@cd proof/rocq && $(COQC) -q mx.v >/dev/null
+	@echo TEST test/proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
+	@cat core/mx.l tools/mx2coq.l | $(mw) > test/proof/rocq/mx.v
+	@cd test/proof/rocq && $(COQC) -q mx.v >/dev/null
 	@$(call vclean,mx)
 endif
 
@@ -848,53 +848,53 @@ else
 # ev. /warn RUN THE ORACLE ONCE, into a file (2>&1 too): grep it, then cat it -- a second run
 # to display doubles the work.
 test_extract: host $(rocq_kept)
-	@echo TEST proof/rocq/extract.v "(coqc extraction -> ocaml ref vs ev)"
-	@cd proof/rocq && $(COQC) -R . "" extract.v >/dev/null \
+	@echo TEST test/proof/rocq/extract.v "(coqc extraction -> ocaml ref vs ev)"
+	@cd test/proof/rocq && $(COQC) -R . "" extract.v >/dev/null \
 	  && rm -f normalizer.mli && $(OCAMLOPT) -w -a normalizer.ml oracle_drive.ml -o oracle_drive
-	@proof/rocq/oracle_drive 2000 6 1 > out/.extract_oracle.l
+	@test/proof/rocq/oracle_drive 2000 6 1 > out/.extract_oracle.l
 	@$m out/.extract_oracle.l > out/.extract_oracle.out 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && grep -q "2000 / 2000 PASS" out/.extract_oracle.out; } \
 	    || { echo "FAIL the extract oracle (exit $$r):"; cat out/.extract_oracle.out; exit 1; }
 	@cat out/.extract_oracle.out
 	@$(call vclean,extract)
-	@rm -f proof/rocq/normalizer.ml proof/rocq/normalizer.mli proof/rocq/oracle_drive \
-	  proof/rocq/*.cmi proof/rocq/*.cmx proof/rocq/*.o out/.extract_oracle.l out/.extract_oracle.out
+	@rm -f test/proof/rocq/normalizer.ml test/proof/rocq/normalizer.mli test/proof/rocq/oracle_drive \
+	  test/proof/rocq/*.cmi test/proof/rocq/*.cmx test/proof/rocq/*.o out/.extract_oracle.l out/.extract_oracle.out
 # big.v proves the decimal codec roundtrip and the quot-rem/gcd witnesses, then extracts stdlib's
 # binary Z with the codec; big_drive.ml emits decimal comparisons -- love's READER, limbs and
 # PRINTER against it.
 test_big: host
-	@echo TEST proof/rocq/big.v "(coqc codec proof + extracted Z ref vs the limb lane)"
-	@cd proof/rocq && $(COQC) -q big.v >/dev/null \
+	@echo TEST test/proof/rocq/big.v "(coqc codec proof + extracted Z ref vs the limb lane)"
+	@cd test/proof/rocq && $(COQC) -q big.v >/dev/null \
 	  && rm -f bigref.mli && $(OCAMLOPT) -w -a bigref.ml big_drive.ml -o big_drive
-	@proof/rocq/big_drive 2000 1 > out/.big_oracle.l
+	@test/proof/rocq/big_drive 2000 1 > out/.big_oracle.l
 	@$m out/.big_oracle.l > out/.big_oracle.out 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && grep -q "2000 / 2000 PASS" out/.big_oracle.out; } \
 	    || { echo "FAIL the big oracle (exit $$r):"; cat out/.big_oracle.out; exit 1; }
 	@cat out/.big_oracle.out
 	@$(call vclean,big)
-	@rm -f proof/rocq/bigref.ml proof/rocq/bigref.mli proof/rocq/big_drive \
-	  proof/rocq/*.cmi proof/rocq/*.cmx proof/rocq/*.o out/.big_oracle.l out/.big_oracle.out
+	@rm -f test/proof/rocq/bigref.ml test/proof/rocq/bigref.mli test/proof/rocq/big_drive \
+	  test/proof/rocq/*.cmi test/proof/rocq/*.cmx test/proof/rocq/*.o out/.big_oracle.l out/.big_oracle.out
 # the PROVE rung of the holo encoder ladder: reference x86-64 encoders each proving decode
 # inverts encode, extracted to OCaml and checked BYTE-IDENTICAL against holo -- an oracle, not a
 # disassembler. enc.v is reg-direct, encmem.v ModRM/SIB, encli.v `li`'s form choice.
 encver = enc:1792:reg-direct encmem:6144:memory encli:320:immediate
 test_encver: host
-	@echo TEST proof/rocq/enc.v proof/rocq/encmem.v proof/rocq/encli.v "(coqc round-trip proofs -> ocaml refs vs holo, byte-exact)"
-	@cd proof/rocq && $(COQC) -q enc.v >/dev/null && $(COQC) -q encmem.v >/dev/null && $(COQC) -q encli.v >/dev/null \
+	@echo TEST test/proof/rocq/enc.v test/proof/rocq/encmem.v test/proof/rocq/encli.v "(coqc round-trip proofs -> ocaml refs vs holo, byte-exact)"
+	@cd test/proof/rocq && $(COQC) -q enc.v >/dev/null && $(COQC) -q encmem.v >/dev/null && $(COQC) -q encli.v >/dev/null \
 	  && rm -f enc_ref.mli encmem_ref.mli encli_ref.mli \
 	  && $(OCAMLOPT) -w -a enc_ref.ml enc_drive.ml -o enc_drive >/dev/null \
 	  && $(OCAMLOPT) -w -a encmem_ref.ml encmem_drive.ml -o encmem_drive >/dev/null \
 	  && $(OCAMLOPT) -w -a encli_ref.ml encli_drive.ml -o encli_drive >/dev/null
 	@for s in $(encver); do n=$${s%%:*}; r=$${s#*:}; c=$${r%%:*}; l=$${r#*:}; \
 	   o=out/.$${n}_oracle; \
-	   proof/rocq/$${n}_drive > $$o.l; \
+	   test/proof/rocq/$${n}_drive > $$o.l; \
 	   cat crew/holo/holo.l crew/holo/x64.l $$o.l | $m > $$o.out 2>&1; r=$$?; \
 	   { [ $$r -eq 0 ] && grep -q "$$c / $$c PASS" $$o.out; } \
 	     || { echo "FAIL the $$n oracle, $$l (exit $$r):"; cat $$o.out; exit 1; }; \
 	   cat $$o.out; done
 	@$(call vclean,enc encmem encli)
 	@$(call dclean,enc encmem encli)
-	@rm -f proof/rocq/*.cmi proof/rocq/*.cmx proof/rocq/*.o out/.enc_oracle.* out/.encmem_oracle.* out/.encli_oracle.*
+	@rm -f test/proof/rocq/*.cmi test/proof/rocq/*.cmx test/proof/rocq/*.o out/.enc_oracle.* out/.encmem_oracle.* out/.encli_oracle.*
 endif
 
 # the LEAN leg of the proof bridge (cf. test_uugen, the Rocq leg): tools/uu2lean.l emits the SAME
@@ -906,10 +906,10 @@ test_uulean:
 else
 test_uulean: host
 	@mkdir -p proof/lean
-	@echo LOVE	proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
-	@$(mw) tools/uu2lean.l > proof/lean/uugen.lean
-	@echo TEST proof/lean/uugen.lean "(lean)"
-	@$(LEAN) proof/lean/uugen.lean > out/host/.uulean.out 2>&1; r=$$?; \
+	@echo LOVE	test/proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
+	@$(mw) tools/uu2lean.l > test/proof/lean/uugen.lean
+	@echo TEST test/proof/lean/uugen.lean "(lean)"
+	@$(LEAN) test/proof/lean/uugen.lean > out/host/.uulean.out 2>&1; r=$$?; \
 	  if [ $$r -ne 0 ] || grep -q sorryAx out/host/.uulean.out; then cat out/host/.uulean.out; exit 1; fi
 endif
 

@@ -1,7 +1,7 @@
 # holo encoder fuzz — the fuzz-first rung of the holo verification ladder
 
 > The full ladder (this fuzz rung + the machine-checked prove rung in
-> `proof/rocq/enc*.v`) and the roadmap for further slices live in
+> `test/proof/rocq/enc*.v`) and the roadmap for further slices live in
 > [``](../../../).
 
 The verification frontier stops at holo today: `crew/holo/` (the x86-64 + aarch64 assembler)
@@ -11,7 +11,7 @@ few dozen forms. This harness **automates that exact round-trip and runs it over
 thousands of randomly generated forms**, so the encoder is exercised far past the goldens
 before we invest in a proof.
 
-It is the first rung of a ladder (the shape borrowed from `proof/rocq/extract.v`'s
+It is the first rung of a ladder (the shape borrowed from `test/proof/rocq/extract.v`'s
 differential oracle, which fuzzes a Coq-extracted normalizer against the live `ev`):
 
 1. **fuzz** (this) — random IR form → holo bytes → disassemble → check the decode matches intent.

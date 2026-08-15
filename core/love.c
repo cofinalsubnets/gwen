@@ -898,7 +898,7 @@ static ai_inline void evac_data(struct ai *g, word const *const p0, word const*c
 // ===== generational write barrier =====
 // a minor scavenges only [minor, hp) and finds old->young edges through the REM
 // SET: every edge execution mints (a map pin, a store) goes through gen_wb, so a
-// minor under a complete set is sound (proof/rocq/gc.v barrier_sound).
+// minor under a complete set is sound (test/proof/rocq/gc.v barrier_sound).
 // the one escape is overflow (rem_miss): a dropped entry forces the next collection
 // MAJOR, which traces from roots and needs no rem set.
 // young?: the ADDRESS is the generation (no age bits) -- in [minor, hp).

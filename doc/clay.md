@@ -256,10 +256,10 @@ these were ranked by purity and are transcription targets. §the parse is enough
 
 * **the α-equivalence cluster** -- `salpha`/`shash` and the beta bridge. converted, then
   reverted; the record is in §the criterion. `test/spec.l` §comparing-functions and
-  §reduction pin its laws, `proof/rocq/spec.v` sits under them, and the parse hands
+  §reduction pin its laws, `test/proof/rocq/spec.v` sits under them, and the parse hands
   `clay2coq` the term.
 * **the bignum magnitude helpers** -- the raw limb primitives, operand loading, resumable
-  multiply. `proof/rocq/big.v` already models the lane against stdlib `Z` and `big_drive`
+  multiply. `test/proof/rocq/big.v` already models the lane against stdlib `Z` and `big_drive`
   FUZZES love's limbs against it, and putting the IMPLEMENTATION into Rocq is still the
   largest single verification step this plan offers -- but that step is `clay2coq` over
   the PARSE, not a `.l` transcription. ⚠ and it was never byte-exact anyway:
@@ -345,7 +345,7 @@ why `vbin_fill` earns its place even though it comes later.
   axiom-free, tracked in git, regenerated every run, skips loudly without coqc. it has no
   consumer until rung 5 lands.
 * **regeneration drift** -- the generated file is CHECKED INTO GIT and `cmp`'d by a gate
-  that fails on drift, the discipline `mx.h`, `kinds.h` and `proof/rocq/gen.v` already live
+  that fails on drift, the discipline `mx.h`, `kinds.h` and `test/proof/rocq/gen.v` already live
   under. there is no chicken-and-egg: regeneration is a gate, not a build step.
 * **`test_fixpoint` and `test_raw`** -- they compile `love.c` from scratch and to the byte,
   so generated C must survive both. `make vmret` on every rung touching a `lvm_`, and
@@ -504,7 +504,7 @@ tells about moon. state it this way or not at all.
 * **`clay2coq.l`** -- what turns any of this into a theorem rather than a tidier build, and
   after §the parse is enough it is the piece with the most standing value in the plan: it
   wants `(cparse ..)` in front of it, not a `.l` per region, and it can have the α cluster,
-  the limb helpers and dtoa the day it exists. `proof/rocq/big.v` is the readiest
+  the limb helpers and dtoa the day it exists. `test/proof/rocq/big.v` is the readiest
   customer -- it already models the bignum lane against stdlib `Z` and fuzzes love's limbs
   against the extraction, and `clay2coq` is what upgrades that to a proof about the code
   that ships.

@@ -1696,9 +1696,9 @@
         (natmultcomm n 1)
         (natmultl1 n)))))
 
-; spec.v's NUMERAL LANE, ported to uu (proof/rocq/spec.v: const_one / identity / const_of_const
+; spec.v's NUMERAL LANE, ported to uu (test/proof/rocq/spec.v: const_one / identity / const_of_const
 ; / pow_3_2 / tower). The internal prover now SOURCES these, so the nat model is single
-; across the LAWS (uugen.v), the INSTANCES (proof/rocq/gen.v), and spec.v. `uu-app n x = x^n`
+; across the LAWS (uugen.v), the INSTANCES (test/proof/rocq/gen.v), and spec.v. `uu-app n x = x^n`
 ; (recurse on the exponent), matching spec.v's `app`; the universal laws hold by refl
 ; (const1) or natmultr1 (x^1 = mul x 1 = x), the tower by ground reduction.
 (assert

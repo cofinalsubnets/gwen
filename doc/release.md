@@ -25,7 +25,7 @@ evidence for the slow one.
       (`love up` defaults CC to the artifact's own `mooncc` verb, so it needs no ambient
       toolchain). `make test_dist` and `make test_up` gate it.
 - [ ] **wasm** — rebuild `wasm/love.js` against the release binary.
-- [ ] **the benches** — re-run and refresh the numbers baked into `bench/bench.html`.
+- [ ] **the benches** — re-run and refresh the numbers baked into `test/bench/bench.html`.
       ⚠ Bake first: a bare relink leaves `love` unbaked and its startup is an egg boot, which
       wrecks every timing number.
 

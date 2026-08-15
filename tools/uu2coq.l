@@ -15,7 +15,7 @@
 ; using a constructor we don't map (total2/coprod and friends). What survives is the
 ; predicative core: the path-algebra combinators and the nat/bool arithmetic.
 ;
-; Run: out/host/love tools/uu2coq.l > proof/rocq/uugen.v   then  coqc proof/rocq/uugen.v
+; Run: out/host/love tools/uu2coq.l > test/proof/rocq/uugen.v   then  coqc test/proof/rocq/uugen.v
 
 (: _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uuhom.l" "r"))
@@ -153,7 +153,7 @@
    exports (foldr (\ e a (? (peep keep (e2 e) 0) (link e a) a)) () ents)
 
    _ (. (cat (L
-       "(* proof/rocq/uugen.v -- GENERATED from test/uu.l by tools/uu2coq.l. Do not edit;" (string 10)
+       "(* test/proof/rocq/uugen.v -- GENERATED from test/uu.l by tools/uu2coq.l. Do not edit;" (string 10)
        "   regenerate with `make test_uugen`. uu's kernel type-checked each term below" (string 10)
        "   against its theorem (test/uu.l, green under `make test`); this is the SAME term" (string 10)
        "   translated to Gallina, which coqc re-checks -- the independent second witness," (string 10)

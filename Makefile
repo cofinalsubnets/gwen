@@ -136,7 +136,7 @@ ccdb:
 	@python3 $R/tools/ccdb.py
 
 # ⚠ there is deliberately NO pre-commit hook: the committed artifacts (wasm/love.js,
-# bench/bench.html) are rebuilt by hand (`make wasm`, `make -C bench html`) and staged, so
+# test/bench/bench.html) are rebuilt by hand (`make wasm`, `make -C test/bench html`) and staged, so
 # rebuild before committing anything that affects them. An auto-rebuild hook re-ran the
 # benchmarks on every commit, minutes each.
 #
@@ -161,7 +161,7 @@ wasm:
 # for bytes no edit invalidates, so it survives. distclean is what asks for it again.
 clean:
 	rm -rf out
-	@rm -f proof/rocq/*.vo proof/rocq/*.vok proof/rocq/*.vos proof/rocq/*.glob proof/rocq/.*.aux
+	@rm -f test/proof/rocq/*.vo test/proof/rocq/*.vok test/proof/rocq/*.vos test/proof/rocq/*.glob test/proof/rocq/.*.aux
 	@$(MAKE) -C wasm clean
 distclean: clean
 	rm -rf dl
@@ -234,5 +234,5 @@ waits: host
 endif
 
 bench: host
-	$(MAKE) -C bench bench
+	$(MAKE) -C test/bench bench
 

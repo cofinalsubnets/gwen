@@ -1,5 +1,5 @@
 ; crew/sb/sb.l -- svalbard: the patch-set vcs (doc/sb.md the interface,
-; test/patch.l + proof/rocq/patch.v the laws). this cut
+; test/patch.l + test/proof/rocq/patch.v the laws). this cut
 ; is the MVP's local half: `record` (working changes -> a patch in the store),
 ; `log`, `diff`; `sync` rides the same store next (patches + blobs are immutable
 ; content-addressed files, so union = copy what's missing + re-derive tips).
