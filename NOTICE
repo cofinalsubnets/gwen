@@ -25,7 +25,7 @@ test/uu.l, the ported section only (from "UniMath Foundations PartA")
 
 --- fonts (shipped with the website, not linked into any binary) ---
 
-fonts/Web437_DOS-V_re_PRC16.woff, .woff2
+assets/fonts/Web437_DOS-V_re_PRC16.woff, .woff2
   Copyright VileR. CC BY-SA 4.0.
   https://int10h.org/oldschool-pc-fonts/
   From the Oldschool PC Font collection, redistributed unmodified in the web
@@ -33,7 +33,7 @@ fonts/Web437_DOS-V_re_PRC16.woff, .woff2
   ShareAlike reaches adaptations of the font. Setting a page in a font is not
   an adaptation, so it does not reach this site or love.
 
-fonts/IBMPlexMono-Regular.woff2
+assets/fonts/IBMPlexMono-Regular.woff2
   Copyright (c) 2017 IBM Corp. SIL Open Font License, Version 1.1.
   https://github.com/IBM/plex -- https://openfontlicense.org
   Redistributed unmodified. The OFL asks that this notice travel with the

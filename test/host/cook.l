@@ -44,7 +44,7 @@
    ; ---------------------------------------------------------------- expansion
    ev (run-cook (mk '("R := ."
                       "ho = out/host"
-                      "love_c = $R/love.c $R/data.c"
+                      "love_c = $R/core/love.c $R/data.c"
                       "h_o = $(love_c:$(R)/%.c=$(ho)/%.o)"
                       "suf = $(love_c:.c=.o)"
                       "all:"

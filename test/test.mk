@@ -408,7 +408,7 @@ mx_lay = (: _ (? mx-ok 0 (quit 1)) _ (puts (mx-lds \"$$f\" (slurp in))) (quit 0)
 # dest:source:value:shape-check -- ONE roster, read by `make mx` (which writes) and by
 # test_clay (which regenerates and diffs). Two spellings of this list is how they drift.
 mx_gen = core/mx.h:core/mx.l:mx-h:mx-ok core/kinds.h:core/mx.l:kinds-h:mx-ok core/nifs.h:core/nifs.l:nifs-h:nifs-ok \
-         crew/quay/xterm256.h:quay.l:q-c:q-ok core/love_data.ld:core/mx.l:mx-ld:mx-ok
+         crew/quay/xterm256.h:crew/quay/quay.l:q-c:q-ok core/love_data.ld:core/mx.l:mx-ld:mx-ok
 # /warn the \# escapes are load-bearing: a bare # in a make VARIABLE starts a comment and
 # would eat the rest of the line (a recipe line passes # through, a variable does not).
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`

@@ -63,6 +63,17 @@ love_c = $R/core/love.c $R/crew/moon/lib/math/am.c
 f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/crew/quay/*.c))
 c_c = $(wildcard $R/libc/*.c)
 
+# ⚠ CANCEL MAKE'S LEX RULE. `.l` is Lex's extension to make, so a built-in `%.c: %.l`
+# stands over every source file in this tree -- and where a `<name>.l` sits beside a real
+# `<name>.c`, make runs lex on it, fails, and DELETES THE C. An empty recipe unmakes the
+# rule. (crew/quay/ is the pair that found it; nothing here has ever wanted lex.)
+%.c: %.l
+%.r: %.l
+%.ln: %.l
+.l.c:
+.l.r:
+.l.ln:
+
 # the dialect we target, and mooncc's own aim -- doc/moon-c-gaps.md is the ledger.
 ai_std := c11
 

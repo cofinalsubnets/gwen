@@ -271,7 +271,7 @@ $d/share/man/man1/$(BIN).1: $(ho)/love.1 $(ho)/kore
 # patterns: an implicit rule would make these intermediate.
 $d/share/man/man1/cook.1 $d/share/man/man1/lush.1: $d/share/man/man1/%.1: $(ho)/%.1
 	$(inst644)
-$v/ftdetect/love.vim $v/ftplugin/love.vim: $v/%/love.vim: vim/%.vim
+$v/ftdetect/love.vim $v/ftplugin/love.vim: $v/%/love.vim: assets/vim/%.vim
 	$(inst644)
 # the syntax is GENERATED (crew/build.mk) out of crew/vi/hue.l's class table and the
 # vocabulary this host answers to, so it is installed from out/ like any other artifact.

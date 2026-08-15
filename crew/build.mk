@@ -287,13 +287,13 @@ out/dist/src-$a.o: $(dist_source) tools/mksrc.l $(ho)/love
 # still END the segment for `bake` to grow it at the tail (host/image.c's bake_tail
 # refuses otherwise), which it does, the blob riding .rodata well below it.
 # ⚠ -freadme is the ARTIFACT'S, not the tree's: it rides this link and NOT out/host/love's,
-# so test_fixpoint's relink of $(moon_o) needs no mirror of it. doc/readme.bin is the page a
+# so test_fixpoint's relink of $(moon_o) needs no mirror of it. assets/readme.bin is the page a
 # reader lands on -- `readelf -p .README`, mapped by nothing, and the one annotation worth
 # its bytes now that the source itself is in here.
-$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l doc/readme.bin $(ho)/love
+$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l assets/readme.bin $(ho)/love
 	@echo DIST	$(abspath $@)
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -freadme=doc/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -freadme=assets/readme.bin -o $@
 	@./$@ bake -l out/dist/.dist-cat.l
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
 
@@ -367,7 +367,7 @@ dist_cross: out/dist/love-$(xarch)
 # readers: the painter in vframe and vim) and asks THIS host for its vocabulary -- so the
 # file describes the love you built, which makes it an artifact like any other. It lives
 # under out/ for that reason: a checked-in copy can be stale, a built one cannot.
-# mk/install.mk installs it beside vim/'s two hand-written siblings.
+# mk/install.mk installs it beside assets/vim/'s two hand-written siblings.
 # ⚠ LOVE_NO_IMAGE is CLEARED. Under it the egg's mop never runs and the compiler's own
 # internals (`book` among them) are still on the book; the syntax file describes the
 # SHIPPED language, so the generator gets the shipped boot -- and hue2vim.l refuses
