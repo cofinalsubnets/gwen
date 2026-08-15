@@ -516,12 +516,12 @@ cmt() { "$m" -l lib/irec.l \
           -e "(: r (irec-secof \"$1\" \".comment\") _ (? (two? r) (puts <r) 0) _ (flush out) (quit 0))"; }
 c=$(cmt "$ho/.fgnx" | tr '\0' ' ')
 case "$c" in
-  *GCC*mooncc*) ;;
-  *) fail "mooncc link over a gcc .o must credit both in .comment, got '$c'" ;;
+  *GCC*love*) ;;
+  *) fail "our link over a gcc .o must credit both in .comment, got '$c'" ;;
 esac
 c=$(cmt "$ho/.sibx" | tr '\0' ' ')
-[ "$c" = "mooncc $(cat VERSION) " ] \
-  || fail "an all-ours link says 'mooncc <base>' in .comment (base only -- the fixpoint law), got '$c'"
+[ "$c" = "love $(cat VERSION) " ] \
+  || fail "an all-ours link says 'love <base>' in .comment (base only -- the fixpoint law), got '$c'"
 
 # ..and our own binaries carry a symbol table nm and gdb can read
 nm "$ho/.fgnx" > "$ho/.fgn.nm" 2>&1 || fail "nm on our exe (no symbol table)"

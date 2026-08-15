@@ -196,14 +196,14 @@ the program is the same program and the kernel maps not a byte of it. It answers
 question anyone opening a strange binary asks: **what built this?**
 
 It is a **union**, not a claim. Every input object's own `.comment` rides in ahead of ours,
-first-seen order, deduped, and only then does the linker add its own word (`mooncc` when the
-driver linked, `holo` when kore's `ld` applet did). So a link mixing a foreign object says both
-names and neither claims the other's code:
+first-seen order, deduped, and only then does the linker add its own word — `love`, whichever
+door drove it, because it is one linker and the door carries no information the file needs. So a
+link mixing a foreign object names both TOOLCHAINS and neither claims the other's code:
 
 ```sh
 $ mooncc m.o gcc-built.o -o mix && readelf -p .comment mix
   [     0]  GCC: (GNU) 16.1.1 20260625
-  [    1b]  mooncc 0.1
+  [    1b]  love 0.1
 ```
 
 ⚠ **the version is `love-version`'s BASE half, never the whole id, and that is a law.** The VCS

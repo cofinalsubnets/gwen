@@ -87,19 +87,12 @@ if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/mooncc" ]; then
   [ -s "$ho/.kore-crt0.o" ] || fail "kore ld: crt0 lay"
   "$ho/mooncc" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-mc.elf" >/dev/null 2>&1 || fail "kore ld: mooncc link"
   korerun ld "$ho/.kore-crt0.o" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-ld.elf" || fail "kore ld"
-  # ⚠ THE PROGRAM, NOT THE FILE. Both drive the same linker, so the loaded image must be
-  # identical to the byte -- but `.comment` names WHICH PROGRAM WROTE THE FILE, and those
-  # differ honestly ("mooncc 0.1" against "holo 0.1"), shifting every header after it. So the
-  # comparison is objcopy'd: exactly the bytes that get mapped, and none of the metadata about
-  # who mapped them.
-  korerun objcopy -O binary "$ho/.kore-mc.elf" "$ho/.kore-mc.bin" || fail "kore ld: objcopy mc"
-  korerun objcopy -O binary "$ho/.kore-ld.elf" "$ho/.kore-ld.bin" || fail "kore ld: objcopy ld"
-  cmp -s "$ho/.kore-mc.bin" "$ho/.kore-ld.bin" || fail "kore ld vs mooncc link (program bytes)"
-  for e in "$ho/.kore-mc.elf:mooncc" "$ho/.kore-ld.elf:holo"; do
-    f=${e%%:*}; w=${e##*:}
-    "$m" -l lib/irec.l -e "(: r (irec-secof \"$f\" \".comment\") _ (? (two? r) (puts <r) 0) _ (flush out) (quit 0))" \
-      | grep -q "^$w " || fail "kore ld: .comment does not name $w"
-  done
+  # ⚠ BYTE-IDENTICAL, and it is `.comment` that lets it be: both doors drive the SAME linker,
+  # so the file they write is the same file, producer record included. It briefly was not --
+  # mooncc stamped "mooncc" and kore ld stamped "holo", which shifted every header after it and
+  # cost this check ten lines of objcopy to look past. The distinction carried nothing: one
+  # linker, and the only caller of the holo door was this test.
+  cmp -s "$ho/.kore-mc.elf" "$ho/.kore-ld.elf" || fail "kore ld vs mooncc link (bytes)"
   "$ho/.kore-ld.elf"; r=$?
   [ $r -eq 42 ] || fail "kore ld run (exit $r)"
   # and the archive as a LINK INPUT: `mooncc main.o libf.a` must bind the exe the
