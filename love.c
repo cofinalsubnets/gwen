@@ -6402,7 +6402,7 @@ word ai_big_canon(ai_word **hp, ai_limb const *limb, int n, bool neg) {
    if (u > boxmag) goto big;                                          // < INTPTR_MIN -> bignum
    val = (intptr_t) ((uintptr_t) 0 - u); }                            // incl INTPTR_MIN
   return mk_sun(hp, val); }
-big:
+big: ;                                   // C11 wants a statement before a declaration
  struct ai_big *b = ini_big(big(*hp), neg ? -n : n);
  for (int i = 0; i < n; i++) b->limb[i] = limb[i];
  *hp += b2w(sizeof(struct ai_big) + (size_t) n * sizeof(ai_limb));

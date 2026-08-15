@@ -66,20 +66,24 @@ love_c = $R/love.c $R/crew/moon/lib/math/am.c
 f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/crew/quay/*.c))
 c_c = $(wildcard $R/libc/*.c)
 
-# -std spelling: clang takes `gnu23` only from ~18 (Xcode 16); older Apple clang wants the
-# pre-final `gnu2x`. Probe $(CC) once and fall back, so the host builds on what ships.
-ai_std := $(shell printf 'int main(void){return 0;}' | $(CC) -std=gnu23 -x c -c -o /dev/null - 2>/dev/null && echo gnu23 || echo gnu2x)
+# the dialect we target, and mooncc's own aim -- doc/moon-c-gaps.md is the ledger.
+ai_std := c11
 
 ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
   -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers -Wno-implicit-fallthrough\
   -falign-functions=16 -fomit-frame-pointer -fno-stack-check -fno-stack-protector \
   -fno-exceptions -fno-asynchronous-unwind-tables
+# ⚠ a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- host/main.c
+# owes clock_gettime and kill, so the level is asked for by name.
 # -fcf-protection (Intel CET) is x86-only and Apple/arm clang rejects it outright, so it
 # rides every non-Darwin build and macOS does without -- it has no CET to turn off.
 ifneq ($(shell uname -s),Darwin)
-ai_cflags += -fcf-protection=none
+ai_cflags += -fcf-protection=none -D_POSIX_C_SOURCE=200809L
 # the data-sentinel tiling love.h's ai_typ reads (love.c's DSENT), on every ld/lld link.
 # mach-o goes without: it names sections `segment,section`, so love.h asks them by name.
 data_ld = -Wl,-T,$R/love_data.ld
+else
+# apple's is one word for the whole surface, so it needs no _POSIX_C_SOURCE beside it.
+ai_cflags += -D_DARWIN_C_SOURCE
 endif

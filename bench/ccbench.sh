@@ -65,11 +65,12 @@ export CCACHE_DISABLE=1
 CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*.l 2>/dev/null | grep -vE '/(00-init|spec|glaze-x86|uu)\.l$' | LC_ALL=C sort)"}
 
 # the host's real C flags come from the Makefile ($(ai_cflags)); fall back to a
-# matching set (common.mk) for a standalone run. -std probe = clang/gcc gnu23 else gnu2x.
+# matching set (common.mk) for a standalone run.
 if [ -z "$LOVE_CFLAGS" ]; then
-  std=$(printf 'int main(void){return 0;}' | cc -std=gnu23 -x c -c -o /dev/null - 2>/dev/null && echo gnu23 || echo gnu2x)
-  LOVE_CFLAGS="-std=$std -g -O2 -pipe -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter -Wmissing-field-initializers -Wno-implicit-fallthrough -falign-functions=16 -fomit-frame-pointer -fno-stack-check -fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables"
-  [ "$(uname -s)" = Darwin ] || LOVE_CFLAGS="$LOVE_CFLAGS -fcf-protection=none"
+  LOVE_CFLAGS="-std=c11 -g -O2 -pipe -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter -Wmissing-field-initializers -Wno-implicit-fallthrough -falign-functions=16 -fomit-frame-pointer -fno-stack-check -fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables"
+  if [ "$(uname -s)" = Darwin ]
+  then LOVE_CFLAGS="$LOVE_CFLAGS -D_DARWIN_C_SOURCE"
+  else LOVE_CFLAGS="$LOVE_CFLAGS -fcf-protection=none -D_POSIX_C_SOURCE=200809L"; fi
 fi
 # drop -Werror: this table times compile+link, and -Werror is a lint GATE, not a
 # codegen or speed factor. Keeping it would bench a compiler's warning set, not its
