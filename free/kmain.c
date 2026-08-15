@@ -846,7 +846,7 @@ static lvm(lvm_close) {
       g->io = io;
       Pack(g);
       g = ai_io_wflush(g, io);        // buffered bytes land before the row dies
-      if (!ai_ok(g)) return ghelp(g);
+      if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
       // the device would not take the whole run: PARK and come back. nothing has
       // been mutated yet -- the row is live and Ip unadvanced -- so the re-run is
       // this same close from the top.
@@ -899,7 +899,7 @@ ai_noinline static struct ai *k_stat(struct ai *g) {
   return g->sp[0] = word(c), g; }
 static lvm(lvm_stat) {
   Pack(g); g = k_stat(g);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   ai_musttail return Next(1); }
 
@@ -941,7 +941,7 @@ ai_noinline static struct ai *k_readdir(struct ai *g) {
   return g; }
 static lvm(lvm_readdir) {
   Pack(g); g = k_readdir(g);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   ai_musttail return Next(1); }
 
@@ -1102,7 +1102,7 @@ ai_noinline static struct ai *k_pipe_new(struct ai *g) {
   return g->sp[0] = word(w), g; }
 static lvm(lvm_pipe) {
   Pack(g); g = k_pipe_new(g);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   ai_musttail return Next(1); }
 
@@ -1213,7 +1213,7 @@ ai_noinline static struct ai *k_disk_read(struct ai *g) {
   return g->sp[2] = g->sp[0], g->sp += 2, g; }
 static lvm(lvm_disk_read) {
   Pack(g); g = k_disk_read(g);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   ai_musttail return Next(1); }
 
@@ -1263,7 +1263,7 @@ ai_noinline static struct ai *k_svm_run(struct ai *g) {
   return g->sp[1] = word(c), g->sp += 1, g; }
 static lvm(lvm_svm_run) {
   Pack(g); g = k_svm_run(g);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   ai_musttail return Next(1); }
 
@@ -1298,7 +1298,7 @@ ai_noinline static struct ai *k_vmx_run(struct ai *g) {
   return g->sp[1] = word(c), g->sp += 1, g; }
 static lvm(lvm_vmx_run) {
   Pack(g); g = k_vmx_run(g);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   ai_musttail return Next(1); }
 #endif
@@ -1451,7 +1451,7 @@ ai_noinline static struct ai *k_cwd_read(struct ai *g) {
   return g->sp[1] = g->sp[0], g->sp += 1, g; }  // cwd string over the dummy arg
 static lvm(lvm_cwd) {
   Pack(g); g = k_cwd_read(g);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
   ai_musttail return Next(1); }
 

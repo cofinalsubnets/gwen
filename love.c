@@ -835,7 +835,7 @@ struct ai *gxr(struct ai *g) {
 // ============================================================================
 lvm(lvm_gc, uintptr_t n) {
  Pack(g);
- if (!ai_ok(g = ai_please(g, n))) return ghelp(g);
+ if (!ai_ok(g = ai_please(g, n))) return Ap(_lvm_ghelp, g);
  return Resume(); }
 
 static word gcp(struct ai*, word, word const *, word const *);
@@ -1885,8 +1885,10 @@ lvm(lvm_defglob) {
  Have(3);
  Sp -= 3;
  word k = Ip[1].x, v = Sp[3];
- return Sp[0] = k, Sp[1] = v, Sp[2] = A(g->book), Pack(g),   // a pin lands in the HEAD layer
-  !ai_ok(g = ai_mapput(g)) ? ghelp(g) : (Unpack(g), Sp += 1, Ip += 2, Continue()); }
+ Sp[0] = k, Sp[1] = v, Sp[2] = A(g->book), Pack(g);          // a pin lands in the HEAD layer
+ if (!ai_ok(g = ai_mapput(g))) ai_musttail return Ap(_lvm_ghelp, g);
+ Unpack(g), Sp += 1, Ip += 2;
+ ai_musttail return Continue(); }
 
 // lvm_index (the late-bound global read) is defined below lvm_scare: its
 // miss path is the missing condition and borrows the whole help apparatus.
@@ -1984,7 +1986,6 @@ static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K) {
  return encode(c, ai_status_scare);
 }
 // re-raise a failed op's scare: bare data, observe-then-terminal.
-struct ai *ghelp(struct ai *g) { return ai_raise(ai_core_of(g), zero, zero, help_scare_k); }
 lvm(_lvm_ghelp) { return ai_raise(ai_core_of(g), zero, zero, help_scare_k); }
 // (scare a b): the deliberate raise. the raise point is a clean boundary, so the
 // help's result is delivered back as the value via the more continuation; helpless
@@ -6766,10 +6767,10 @@ lvm(lvm_bdiv_start, int vop) {
  // one-shot the cheap cases: |a|<|b| (q=0), single-limb divisor, or a short quotient.
  if (m < n || n < 2 || m - n < (int) (bdiv_chunk / (uintptr_t) n)) {
   Pack(g); g = ai_big_binop(g, vop);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) return Ap(_lvm_ghelp, g);
   return Resume(); }
  Pack(g); g = ai_bdiv_setup(g, vop == vop_rem);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) return Ap(_lvm_ghelp, g);
  return Resume(); }
 
 lvm(lvm_bdiv) {
@@ -7018,7 +7019,7 @@ static lvm(lvm_aextreme, int kind) {
  if (!packp(x)) return Next(1);
  if (tray(x)->type == ai_O) {
   Pack(g); g = ored(g, kind);
-  if (!ai_ok(g)) return ghelp(g);
+  if (!ai_ok(g)) return Ap(_lvm_ghelp, g);
   return Resume(); }
  if (tray(x)->type == ai_C) return Answer(ZeroPoint);   // complex: unordered
  struct ai_tray *v = tray(x);
@@ -7804,7 +7805,7 @@ static struct ai *obin_run(struct ai *g, int op) {
 lvm(lvm_obin, int op) {
  Pack(g);
  g = obin_run(g, op);
- if (!ai_ok(g)) return ghelp(g);
+ if (!ai_ok(g)) return Ap(_lvm_ghelp, g);
  return Resume(); }
 
 // ai_O reduction body (kind: 0 sum, 1 prod, 2 max, 3 min). g->sp[0] is the array.
