@@ -950,7 +950,7 @@
    ;     matches the shape: a mand recurrence (\ cx cy zx zy it (? (&& (it < LIM) (cmp TEST BOUND))
    ;     (mand ..updates.. (it + 1)) it)) driven by two counted loops col/grid. extracts pxn pyn cxd
    ;     cyd fvars updates testexpr cmpop bound lim, then jitfgrid. exactly 2 invariants (the point)
-   ;     + 2 fvars (the iterate); other shapes return () (stay interpreted). see tools/glaze-auto.l.
+   ;     + 2 fvars (the iterate); other shapes return () (stay interpreted). see mk/tools/glaze-auto.l.
    (opd e i) (nthl >e i)                                       ; i-th operand of a form
    (classify ps args)                                               ; mand params vs recursive args -> (fvars updates invariants)
     (? (two? ps) (: p <ps a <args r (classify >ps >args)

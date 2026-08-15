@@ -675,7 +675,7 @@
    ; buffer and the only reader is the shell, which is busy running the body, so a
    ; body that says more than that would stop forever. a task parks on the read end
    ; and empties it as the body fills it; the two never both stop, because every
-   ; wait in this tree parks its TASK and not the process (tools/waits.l).
+   ; wait in this tree parks its TASK and not the process (mk/tools/waits.l).
    ; ⚠ POSIX runs $( ) in a SUBSHELL, and forkless there is nobody to copy the
    ; state -- sh-subsave/sh-subback do it by hand, and that roster IS the contract:
    ; cwd, variables, functions, positionals, $0, the e/u/x flags, the environment.

@@ -4,7 +4,7 @@
 ; tiled stacks. Pure -- so it rides the corpus on every target (crew/lux/law.l asserts
 ; the invariants), and the driver (crew/lux/lux.l) + the X layers build on it.
 ;
-; ⚠ tools/wm2uu.l reads THIS FILE AS DATA and keys on op SPELLINGS -- cap/caup/cup/cat/
+; ⚠ mk/tools/wm2uu.l reads THIS FILE AS DATA and keys on op SPELLINGS -- cap/caup/cup/cat/
 ; link, and the literal shape (caup (cup z)). A surface rewrite that opfix calls equal
 ; (<>>z, ><, +) is a different tree to it, and test/host/overlay.l's leg 6 stops certifying.
 ;

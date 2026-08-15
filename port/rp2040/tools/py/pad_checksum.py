@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# Frozen golden reference for tools/pad_checksum.g -- DO NOT edit to change
-# behaviour without updating the .g in the same commit (tools/Makefile gates
-# them byte-for-byte). See tools/py/README.md.
+# Frozen golden reference for mk/tools/pad_checksum.g -- DO NOT edit to change
+# behaviour without updating the .g in the same commit (mk/tools/Makefile gates
+# them byte-for-byte). See mk/tools/py/README.md.
 #
 # Stamps the RP2040 second-stage bootloader checksum: read the raw boot2
 # payload (<=252 bytes), zero-pad to 252, append the 4-byte CRC-32/MPEG-2 the

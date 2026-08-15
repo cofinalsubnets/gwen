@@ -48,7 +48,7 @@ and main.c is a 32-check battery over exactly those. The one port with **no
 into a named section. Gate test_rp2040 verifies the boot image (boot2 CRC, SP,
 thumb-bit reset entry); qemu has no RP2040 machine, so test_mps2_t1 is where
 this ISA actually runs. ⚠ arm-none-eabi-ld still binds it (thumb relocations
-are not in crew/holo/link.l), and tools/ (elf2uf2, pad_checksum) is stale
+are not in crew/holo/link.l), and mk/tools/ (elf2uf2, pad_checksum) is stale
 pre-rename code -- pad_checksum's job now belongs to mkboot2.l, so only the
 .uf2 packer is still wanted.
 

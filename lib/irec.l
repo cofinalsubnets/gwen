@@ -8,7 +8,7 @@
 ;
 ; ⚠ THIS IS NOT THE JIT, and the split is deliberate: love/glaze/hook.l lights its lane on
 ; `(from 'splice)`, so a reader that merely wants to LOOK at a binary must not be that module.
-; lib/splice.l is one consumer of this one; `tools/ir.l` is the other, and a third is whoever
+; lib/splice.l is one consumer of this one; `mk/tools/ir.l` is the other, and a third is whoever
 ; opens a binary wondering what the compiler thought it was emitting.
 ;
 ; ⚠ CROSS-EVERYTHING, because a record is text and an ELF is a table: the forms in an aarch64

@@ -39,7 +39,7 @@ notes.
       example against `out/host/love`; never write one from memory, and re-probe on any rename or
       semantic change.
 - [ ] `README.md` — keep its roster in step with `index.html`.
-- [ ] the man pages (`doc/love.md`, `doc/cook.md`, `doc/lush.md`, `doc/kore.md`) — `tools/mkman.l`
+- [ ] the man pages (`doc/love.md`, `doc/cook.md`, `doc/lush.md`, `doc/kore.md`) — `mk/tools/mkman.l`
       renders them; check the `@VERSION@` substitution landed.
 
 ## the cut

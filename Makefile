@@ -133,7 +133,7 @@ lint: $(ho)/love
 # without it the missed core/love.h cascades into a flood of undeclared-name noise. ⚠ the
 # generated headers under out/ must exist, so build first. Machine-specific, gitignored.
 ccdb:
-	@python3 $R/tools/ccdb.py
+	@python3 $R/mk/tools/ccdb.py
 
 # ⚠ there is deliberately NO pre-commit hook: the committed artifacts (wasm/love.js,
 # test/bench/bench.html) are rebuilt by hand (`make wasm`, `make -C test/bench html`) and staged, so
@@ -179,14 +179,14 @@ cacheclean:
 # the asserts should find.
 valg: host
 	@cat $t > $(ho)/.valg-corpus.l
-	valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
+	valgrind --error-exitcode=1 --suppressions=$R/mk/tools/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
 # the math floor's differential: am.c vs the host libm, max-ulp per fn (`ulp reduce` adds
 # the reduction scan). The EYEBALL lane, opt-in like valg since it needs a hosted oracle;
 # test_ulp is the gate, and it builds am.c with mooncc too, which this never did.
 .PHONY: ulp
 ulp:
 	@mkdir -p out/host
-	@$(CC) -O2 -o out/host/ulp $R/tools/ulp.c $R/crew/moon/lib/math/am.c -lm
+	@$(CC) -O2 -o out/host/ulp $R/mk/tools/ulp.c $R/crew/moon/lib/math/am.c -lm
 	@out/host/ulp
 out/host/perf.data: host
 	cat $t | perf record -o $@ $m
@@ -207,7 +207,7 @@ disasm: host
 	exec rizin -A $m
 gdb: host
 	exec gdb $m
-# tools/vmret.l disassembles $m and flags any lvm_* VM ap that emits a `ret` instead of
+# mk/tools/vmret.l disassembles $m and flags any lvm_* VM ap that emits a `ret` instead of
 # tail-jumping. No-op with a message when no disassembler is present, so `test` stays portable.
 OBJDUMP_ANY := $(shell command -v objdump 2>/dev/null || command -v llvm-objdump 2>/dev/null)
 ifeq ($(OBJDUMP_ANY),)
@@ -215,12 +215,12 @@ vmret: host
 	@echo "vmret: skipped (needs objdump or llvm-objdump)"
 else
 vmret: host
-	@$m tools/vmret.l $m
+	@$m mk/tools/vmret.l $m
 endif
 
 # waits rides the fast `test` beside vmret for the same reason: it pins an invariant whose
 # only failure mode is a HANG, which no assert catches after the fact. The device floor's
-# rule is that the only code here that blocks is the scheduler, and tools/waits.l carries
+# rule is that the only code here that blocks is the scheduler, and mk/tools/waits.l carries
 # the roster of every wait plus the sentence earning it -- a new one reddens here instead
 # of arriving as a wedged gate. It reads the C, never the ELF, so it needs no toolchain,
 # but it does need the tracked file list and so no-ops outside a git checkout.
@@ -230,7 +230,7 @@ waits: host
 	@echo "waits: skipped (needs a git checkout to enumerate the .c files)"
 else
 waits: host
-	@$m tools/waits.l $(WAITS_C)
+	@$m mk/tools/waits.l $(WAITS_C)
 endif
 
 bench: host

@@ -11,7 +11,7 @@
 # make READS the rule, so a $(..) still undefined there expands to nothing and the cat
 # comes out short a file -- silently, the members that remain being well-formed.
 lushfiles = crew/lush/job.l crew/lush/lex.l crew/lush/gram.l crew/lush/glob.l crew/lush/word.l crew/lush/eval.l crew/lush/line.l crew/lush/main.l
-korefiles =crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l crew/kore/kore.l
+korefiles =crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l mk/tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l crew/kore/kore.l
 # mooncc is its OWN app, NOT in the kore cat: a cc edit rebuilds only mooncc, so a kore
 # rebuild in another session cannot tear the compiler. ⚠ member order is the scope -- the
 # u-floor, then asbook splices the boot-registered holo and the CROSS BACKENDS join it
@@ -100,7 +100,7 @@ out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
             crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
             crew/vi/core.l crew/vi/vi.l \
-            crew/kore/diff.l lib/dns.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l \
+            crew/kore/diff.l lib/dns.l mk/tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l \
             crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l \
             crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l \
             crew/holo/link.l crew/holo/copy.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
@@ -250,10 +250,10 @@ ifneq ($(in_git),)
 # newest $(dist_keep) survive (by mtime, so the one you are working with is never the casualty)
 # and the stage stamps follow the same rule, being the same generations by another name.
 dist_keep ?= 3
-$(dist_source): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l tools/tgz.l
+$(dist_source): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l mk/tools/tgz.l
 	@echo TGZ	$(abspath $@)
 	@rm -f $@
-	@$(ho)/love tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
+	@$(ho)/love mk/tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
 	@ls -t out/dist/love-*.tar.gz 2>/dev/null | tail -n +$$(($(dist_keep)+1)) | xargs -r rm -f
 	@ls -t out/dist/.staged-* 2>/dev/null | tail -n +$$(($(dist_keep)+1)) | xargs -r rm -f
 else
@@ -264,7 +264,7 @@ $(dist_source):
 	@exit 1
 endif
 
-# THE SOURCE BLOB: the source tarball laid into an object (tools/mksrc.l), so the
+# THE SOURCE BLOB: the source tarball laid into an object (mk/tools/mksrc.l), so the
 # artifact hands out its own source with no second download and no `tar xf` -- love
 # `source` inflates it. host/src.c defines the pair WEAK and empty, so this object's
 # STRONG definitions override them at the link and a plain `make host` needs none of
@@ -279,8 +279,8 @@ src_arch = arm64
 else
 src_arch = x64
 endif
-out/dist/src-$a.o: $(dist_source) tools/mksrc.l $(ho)/love
-	@$(ho)/love tools/mksrc.l $(dist_source) $@ $(src_arch)
+out/dist/src-$a.o: $(dist_source) mk/tools/mksrc.l $(ho)/love
+	@$(ho)/love mk/tools/mksrc.l $(dist_source) $@ $(src_arch)
 # ⚠ THIS LINKS, where it used to `cp` the host binary. A section cannot be injected
 # into a finished ELF, so the artifact is now its own link -- $(moon_o) plus the blob
 # -- and only then baked. The layout stays load-bearing the other way: .image must
@@ -363,7 +363,7 @@ out/dist/love-$(xarch): $(xobjs) out/dist/.dist-cat.l
 dist_cross: out/dist/love-$(xarch)
 
 # ==== the vim syntax for .l -- GENERATED, so there is no copy to keep up to date ====
-# tools/hue2vim.l reads crew/vi/hue.l's class table the other way round (one table, two
+# mk/tools/hue2vim.l reads crew/vi/hue.l's class table the other way round (one table, two
 # readers: the painter in vframe and vim) and asks THIS host for its vocabulary -- so the
 # file describes the love you built, which makes it an artifact like any other. It lives
 # under out/ for that reason: a checked-in copy can be stale, a built one cannot.
@@ -374,7 +374,7 @@ dist_cross: out/dist/love-$(xarch)
 # outright rather than freeze build state and call it the language.
 # ⚠ atomic, for $(lcat_h)'s reason: a bare `> $@` truncates first, so a broken generator
 # would leave a 0-byte syntax file make calls up to date.
-huefiles = crew/vi/config.l crew/vi/hue.l tools/hue2vim.l
+huefiles = crew/vi/config.l crew/vi/hue.l mk/tools/hue2vim.l
 $(ho)/syntax.vim: $(huefiles) $(m)
 	@echo HUE	$@
 	@mkdir -p $(dir $@); t=$@.$$$$.tmp; \

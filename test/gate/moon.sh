@@ -254,7 +254,7 @@ echo "        bare -fir is all and bare -fno-ir is none from either end, and emp
 for t in x64 arm64 riscv64 thumb2 thumb2sp thumb1; do
   moonrun -c -fno-inline -t $t -fir= "$ho/.ir.c" "$ho/.ir-$t.o" >/dev/null 2>&1 \
     || fail "-fir: compile for $t"
-  n=$($m tools/ir.l "$ho/.ir-$t.o" aa_one 2>/dev/null | head -1)
+  n=$($m mk/tools/ir.l "$ho/.ir-$t.o" aa_one 2>/dev/null | head -1)
   case "$n" in aa_one*) ;; *) fail "-fir: $t record does not read back ($n)" ;; esac
 done
 echo "mooncc: the record reads back on all six targets from this one machine (ELF32 and ELF64)"

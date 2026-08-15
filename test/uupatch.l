@@ -3,7 +3,7 @@
 ; forms state the laws as executable asserts; test/proof/rocq/patch.v hand-proved
 ; them as scaffolding and PROMISED this file (its provenance note): the laws
 ; re-proven inside uu's own kernel, then emitted to Rocq AND Lean by
-; tools/uu2coq.l + tools/uu2lean.l -- two independent kernels re-certifying the
+; mk/tools/uu2coq.l + mk/tools/uu2lean.l -- two independent kernels re-certifying the
 ; same terms, the de Bruijn criterion the rest of the proof corpus already
 ; rides. Substrate: test/uu.l + test/uulay.l's list vocabulary (this file
 ; loads after both by sort order).

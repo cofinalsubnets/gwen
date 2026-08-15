@@ -1,5 +1,5 @@
 ; crew/vi/hue.l -- the .l syntax, written down ONCE, for two readers: the
-; painter in crew/vi/core.l's vframe, and the vim syntax file, which tools/hue2vim.l
+; painter in crew/vi/core.l's vframe, and the vim syntax file, which mk/tools/hue2vim.l
 ; GENERATES from the very table below -- built by make into out/host/syntax.vim and
 ; never checked in, so the two readings cannot drift apart. (they had: the syntax
 ; used to carry a hand-curated copy of the vocabulary whose own comment asked a
@@ -87,7 +87,7 @@
    ; pulchritude runs INSIDE love, so the vocabulary is not a list to curate, it
    ; is a question to ask. a bare symbol paints as vocabulary iff the book knows
    ; it -- so the house words colour and your own locals do not, and a rename
-   ; re-curates itself. tools/hue2vim.l asks the same question at generation time
+   ; re-curates itself. mk/tools/hue2vim.l asks the same question at generation time
    ; and bakes the answer into syn keyword lines.
    ;
    ; ⚠ a NAME, not every binding: `+` `$` `<=` `->` are in the book too, and they

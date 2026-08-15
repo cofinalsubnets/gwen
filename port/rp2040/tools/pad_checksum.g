@@ -13,8 +13,8 @@
 ;
 ; Usage: gl pad_checksum.g <boot2.bin>   (writes the .S to stdout)
 ;
-; Port of tools/py/pad_checksum.py -- their output must stay byte-identical
-; (see tools/Makefile test_pad_checksum + tools/py/README.md).
+; Port of mk/tools/py/pad_checksum.py -- their output must stay byte-identical
+; (see mk/tools/Makefile test_pad_checksum + mk/tools/py/README.md).
 
 (: (die m) (: _ (fputs err "pad_checksum: ") _ (fputs err m) _ (fputs err "\n") (exit 1)))
 

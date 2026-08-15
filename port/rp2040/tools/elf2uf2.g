@@ -10,8 +10,8 @@
 ;
 ; Usage: gl elf2uf2.g INPUT.elf OUTPUT.uf2
 ;
-; Port of tools/py/elf2uf2.py -- output must stay byte-identical (see
-; tools/Makefile test_elf2uf2 + tools/py/README.md). ELF32 little-endian
+; Port of mk/tools/py/elf2uf2.py -- output must stay byte-identical (see
+; mk/tools/Makefile test_elf2uf2 + mk/tools/py/README.md). ELF32 little-endian
 ; (the chip is Cortex-M0+); only flash-resident segments are packed.
 
 (: (die m) (: _ (fputs err "elf2uf2: ") _ (fputs err m) _ (fputs err "\n") (exit 1)))

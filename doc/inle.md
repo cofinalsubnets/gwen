@@ -66,7 +66,7 @@ Sizes are one focused person, rough, and they compound: each rung is gated befor
 
 ### rung 0 — the initrd, and a ramfs behind it  ✅ landed
 
-`tools/lcatfs.l` bakes `lib/*.l` per-file into `.rodata` as `{path, bytes, len}` rows
+`mk/tools/lcatfs.l` bakes `lib/*.l` per-file into `.rodata` as `{path, bytes, len}` rows
 (`out/lib/kfs.h`) where `lcatv.l` bakes one file into one literal. Reads come straight off the
 rows; the first write copies the blob into the kernel heap and the entry reads from the copy ever
 after. `open` and `close` land in `defs[]` beside it — the gate needs them, and `open`'s presence

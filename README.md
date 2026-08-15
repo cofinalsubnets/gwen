@@ -118,7 +118,7 @@ via `make install`.
   [doc/lush.md](doc/lush.md)
 - ⚖ **libra** -- the scale: the .l balance scan, formatter and lsp, one scanner under
   all three. [doc/libra.md](doc/libra.md)
-- 🐈 **ain** -- the netcat: an openbsd netcat clone in ~70 lines. [tools/ain.l](tools/ain.l)
+- 🐈 **ain** -- the netcat: an openbsd netcat clone in ~70 lines. [mk/tools/ain.l](mk/tools/ain.l)
 - 🦐 **lux** -- the window manager: an xmonad clone. [crew/lux/](crew/lux/)
 - 🦑 **quay** -- the terminal emulator: a cuttlefish with 256-color skin that likes
   writing screensavers -- and roguelikes: rove plays live on the front page.

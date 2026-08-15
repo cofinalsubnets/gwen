@@ -12,7 +12,7 @@
 // representable rim (~40 ulp at 1e+-300) -- the one documented stance -- with
 // the algebraic exponents (y in {2, 1, -1, 1/2}) EXACT: the spec's power-is-
 // application identities ride am_pow. measured against glibc by the differential
-// ulp harness (2M+ deterministic samples a function, tools/ulp.c), and the
+// ulp harness (2M+ deterministic samples a function, mk/tools/ulp.c), and the
 // mooncc-compiled object is GATED to measure identical to the system cc's --
 // test_ulp, both sweep modes. that second half was a hand check and a header
 // claim until 2026-07-29, when it turned out to be false and two mooncc bugs

@@ -339,5 +339,5 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; mop list. ⚠ a post-egg layer cannot ADD AN OPERATOR: `operators` is mopped and the grammar closes
 ; at the hatch, `grip` being the one door left onto the table (a refused shape rolls back, scaring).
 ;
-; build codegen lives in love under tools/; the C is freestanding, -Wall -Wextra -Werror.
+; build codegen lives in love under mk/tools/; the C is freestanding, -Wall -Wextra -Werror.
 ```

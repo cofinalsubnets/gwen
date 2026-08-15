@@ -88,4 +88,4 @@ attacking one of these next. Remaining verify-first surface + TODOs:
   Teensy pin map (all 55 pads -> bank/bit -> ALT5 mux) is a TODO.
 - **USB CDC console** -- see above.
 
-See `tools/README.md` for the flashing path.
+See `mk/tools/README.md` for the flashing path.

@@ -121,7 +121,7 @@ install-src: $(dist_source)
 	@if [ -d "$d/src/love-$(dist_ver)" ]; then \
 	   echo "  install-src: $d/src/love-$(dist_ver) exists -- left alone (delete it to re-lay)"; \
 	 else \
-	   $(ho)/love tools/tgz.l x $(dist_source) $d/src >/dev/null \
+	   $(ho)/love mk/tools/tgz.l x $(dist_source) $d/src >/dev/null \
 	     && echo "  install-src: source laid at $d/src/love-$(dist_ver)"; fi
 
 install: $(installs)
@@ -188,7 +188,7 @@ $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra $d/bin/moonfmt:
 # ain, the netcat clone: the same shebang mechanism, but installed as a COPY rather than a
 # symlink, so it takes the rewrite unconditionally. At the default BIN the substitution is
 # an identity and the bytes are unchanged.
-$d/bin/ain: tools/ain.l $(ho)/kore
+$d/bin/ain: mk/tools/ain.l $(ho)/kore
 	@echo CP	$(abspath $@)
 	@install -d $(@D)
 	@$(ho)/kore sed '1s|env -S love|env -S $(BIN)|' $< > $@

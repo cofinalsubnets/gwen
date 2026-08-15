@@ -14,7 +14,7 @@ set -u
 
 AI="${1:?usage: loopback.sh <love-binary> [port]}"
 PORT="${2:-7390}"
-AK="tools/ain.l"   # prel is baked into the egg -- no -l love/prel.l preload
+AK="mk/tools/ain.l"   # prel is baked into the egg -- no -l love/prel.l preload
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/ain.XXXXXX")"
 trap 'kill "$srv" 2>/dev/null; rm -rf "$tmp"' EXIT

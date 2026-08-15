@@ -25,7 +25,7 @@
 # fail loudly, and the build has to come out the far side anyway.
 #
 # ⚠ THE SEED CARRIES ITS OWN SOURCE. It holds the source tarball in .rodata
-# (tools/mksrc.l, host/src.c) and `love source` lays it out with bin/love already
+# (mk/tools/mksrc.l, host/src.c) and `love source` lays it out with bin/love already
 # inside, so one downloaded file needs no tar and no second fetch. "It unpacked
 # something" is not the claim -- the tree it lays has to build, compilers poisoned.
 #
@@ -65,7 +65,7 @@ echo "distboot: two bootstraps and a self-rebuild, this takes a few minutes"
 
 # ---- 1. SOURCE, through the machine's own compiler ---------------------------
 mkdir -p "$w/lean"
-"$love" "$R/tools/tgz.l" x "$src" "$w/lean" > /dev/null || fail "cannot unpack $src"
+"$love" "$R/mk/tools/tgz.l" x "$src" "$w/lean" > /dev/null || fail "cannot unpack $src"
 lean=$(echo "$w"/lean/love-*/)
 [ -d "$lean" ] || fail "the source tarball unpacked no love-<ver>/ directory"
 [ -f "$lean/VERSION" ] || fail "the source tarball carries no VERSION (the binary would stamp 'unknown')"

@@ -3,7 +3,7 @@
 ; the oracle is SELF-VALIDATING: for every op the analytic gradient (from `back`)
 ; must match the central finite difference (f(x+eps) - f(x-eps)) / 2eps, cell by
 ; cell. no hand-written expected gradients -- the math checks itself. that IS the
-; gate. wired as `test_tele` (see tools/Makefile).
+; gate. wired as `test_tele` (see mk/tools/Makefile).
 ;
 ; run from the repo root:  out/host/love -l crew/tele/tele.l test/tele/grad.l
 

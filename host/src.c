@@ -3,7 +3,7 @@
 //
 //   (source-gz ()) -> the embedded love-<ver>.tar.gz bytes | () when none is baked in
 //
-// tools/mksrc.l lays the archive into an object as two .rodata symbols and the dist
+// mk/tools/mksrc.l lays the archive into an object as two .rodata symbols and the dist
 // link pulls it in; love/verbs.l's `source` verb inflates what this answers. doc/dist.md.
 //
 // ⚠ PRESENCE RIDES THE KIND, NOT THE NET. an artifact with no source baked in and one

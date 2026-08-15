@@ -1,4 +1,4 @@
-; The ramfs, inle's rung 0 (doc/inle.md). The initrd is .rodata -- tools/lcatfs.l
+; The ramfs, inle's rung 0 (doc/inle.md). The initrd is .rodata -- mk/tools/lcatfs.l
 ; bakes one {path, bytes, len} row per file into out/lib/kfs.h -- and reads come
 ; straight off it; the FIRST write copies the blob into the kernel heap and the file
 ; reads from the copy ever after. So: a baked path opens and reads, an unbaked one

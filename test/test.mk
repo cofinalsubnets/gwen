@@ -698,7 +698,7 @@ define moon_pkg
 moon-$1: host out/host$$(hsuf)/mooncc
 moon-$1-arm64 moon-$1-riscv: $3
 moon-$1 moon-$1-arm64 moon-$1-riscv:
-	@$2="$$($2)" ./tools/moon-$1.sh $$(moon_arch_$$(patsubst moon-$1-%,%,$$@))
+	@$2="$$($2)" ./mk/tools/moon-$1.sh $$(moon_arch_$$(patsubst moon-$1-%,%,$$@))
 endef
 $(eval $(call moon_pkg,tar,TARSRC,host out/host$(hsuf)/mooncc))
 $(eval $(call moon_pkg,m4,M4SRC,host out/host$(hsuf)/mooncc))
@@ -760,13 +760,13 @@ test_objcopy: host
 	@sh test/gate/objcopy.sh $(ho)
 # ain's two-process loopback gate: a server and a client over real TCP on 127.0.0.1,
 # full-duplex, each asserting it got what the other sent. The ONLY net gate driving the real
-# `love tools/ain.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
+# `love mk/tools/ain.l` cli path. In test_slow; override the port with `make nettest PORT=N`.
 PORT ?= 7390
 nettest: host
 	@echo TEST $m "(127.0.0.1:$(PORT))"
 	@sh $R/test/net/loopback.sh $m $(PORT)
-# Validate the l tool rewrites against their frozen Python references in tools/py/
-# (gen_data / vmret). See tools/Makefile + tools/py/README.md. ⚠ lush is a real
+# Validate the l tool rewrites against their frozen Python references in mk/tools/py/
+# (gen_data / vmret). See mk/tools/Makefile + mk/tools/py/README.md. ⚠ lush is a real
 # prerequisite: test/host/cook.l's SHELL pair sets `SHELL := out/host/lush` to prove cook honors it.
 test_tools: host out/host$(hsuf)/lush
 	@$(MAKE) -C tools
@@ -814,28 +814,28 @@ test_gc:
 	@echo TEST test/proof/rocq/gc.v "(coqc)"
 	@$(COQC) -q test/proof/rocq/gc.v
 	@$(call vclean,gc)
-# The .l -> .v pipeline: tools/spec2coq.l reads test/spec.l and EMITS gen.v, the spec generating
+# The .l -> .v pipeline: mk/tools/spec2coq.l reads test/spec.l and EMITS gen.v, the spec generating
 # theorems for its own numeral facts. Regenerated every run, so asserts and proofs cannot diverge.
 test_gen: host $(rocq_kept)
-	@echo LOVE	test/proof/rocq/gen.v "(tools/spec2coq.l on $m)"
-	@$(mw) tools/spec2coq.l > test/proof/rocq/gen.v
+	@echo LOVE	test/proof/rocq/gen.v "(mk/tools/spec2coq.l on $m)"
+	@$(mw) mk/tools/spec2coq.l > test/proof/rocq/gen.v
 	@echo TEST test/proof/rocq/gen.v "(coqc, against spec.v's shared model)"
 	@cd test/proof/rocq && $(COQC) -R . "" gen.v
 	@$(call vclean,gen)
-# The PROOF half of that pipeline (cf. test_gen, which exports concrete ASSERTS): tools/uu2coq.l
+# The PROOF half of that pipeline (cf. test_gen, which exports concrete ASSERTS): mk/tools/uu2coq.l
 # has uu's kernel TYPE-CHECK a proof term and emits the same term in Gallina for coqc to re-check
 # -- a law proved in love's own kernel and certified by Rocq.
 test_uugen: host
-	@echo LOVE	test/proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
-	@$(mw) tools/uu2coq.l > test/proof/rocq/uugen.v
+	@echo LOVE	test/proof/rocq/uugen.v "(mk/tools/uu2coq.l on $m)"
+	@$(mw) mk/tools/uu2coq.l > test/proof/rocq/uugen.v
 	@echo TEST test/proof/rocq/uugen.v "(coqc)"
 	@$(COQC) -q test/proof/rocq/uugen.v
 	@$(call vclean,uugen)
-# core/mx.l IS the +/* dispatch matrices; core/mx.h is laid from it through clay and tools/mx2coq.l models
+# core/mx.l IS the +/* dispatch matrices; core/mx.h is laid from it through clay and mk/tools/mx2coq.l models
 # it in Rocq -- two derivations of ONE datum.
 test_mx: host
 	@echo TEST test/proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
-	@cat core/mx.l tools/mx2coq.l | $(mw) > test/proof/rocq/mx.v
+	@cat core/mx.l mk/tools/mx2coq.l | $(mw) > test/proof/rocq/mx.v
 	@cd test/proof/rocq && $(COQC) -q mx.v >/dev/null
 	@$(call vclean,mx)
 endif
@@ -897,7 +897,7 @@ test_encver: host
 	@rm -f test/proof/rocq/*.cmi test/proof/rocq/*.cmx test/proof/rocq/*.o out/.enc_oracle.* out/.encmem_oracle.* out/.encli_oracle.*
 endif
 
-# the LEAN leg of the proof bridge (cf. test_uugen, the Rocq leg): tools/uu2lean.l emits the SAME
+# the LEAN leg of the proof bridge (cf. test_uugen, the Rocq leg): mk/tools/uu2lean.l emits the SAME
 # uu corpus to Lean 4, which re-checks it -- a SECOND independent kernel, so each law is agreed
 # by two unrelated implementations. Regenerated every run.
 ifeq ($(LEAN),)
@@ -906,8 +906,8 @@ test_uulean:
 else
 test_uulean: host
 	@mkdir -p proof/lean
-	@echo LOVE	test/proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
-	@$(mw) tools/uu2lean.l > test/proof/lean/uugen.lean
+	@echo LOVE	test/proof/lean/uugen.lean "(mk/tools/uu2lean.l on $m)"
+	@$(mw) mk/tools/uu2lean.l > test/proof/lean/uugen.lean
 	@echo TEST test/proof/lean/uugen.lean "(lean)"
 	@$(LEAN) test/proof/lean/uugen.lean > out/host/.uulean.out 2>&1; r=$$?; \
 	  if [ $$r -ne 0 ] || grep -q sorryAx out/host/.uulean.out; then cat out/host/.uulean.out; exit 1; fi
@@ -934,52 +934,52 @@ test_holofuzz: host
 	 else echo "  (sysdiff skipped: no llvm-mc)"; fi
 endif
 # test/uuwm.l is a COMMITTED GENERATED artifact: lux's zipper ops compiled from crew/lux/core.l
-# into uu terms (tools/uuwmgen.l), so test/uuwmlaw.l proves its theorems OF THE IMPLEMENTATION
+# into uu terms (mk/tools/uuwmgen.l), so test/uuwmlaw.l proves its theorems OF THE IMPLEMENTATION
 # at corpus time. `make uuwm` refreshes it; test_uuwm regenerates and diffs.
 uuwm: host
-	@echo LOVE	test/uuwm.l "(tools/uuwmgen.l on $m)"
-	@$(mw) tools/uuwmgen.l > test/uuwm.l
+	@echo LOVE	test/uuwm.l "(mk/tools/uuwmgen.l on $m)"
+	@$(mw) mk/tools/uuwmgen.l > test/uuwm.l
 test_uuwm: host
 	@echo TEST test/uuwm.l "(regenerate + diff)"
-	@$(mw) tools/uuwmgen.l > out/host/.uuwm.l.tmp
+	@$(mw) mk/tools/uuwmgen.l > out/host/.uuwm.l.tmp
 	@cmp -s out/host/.uuwm.l.tmp test/uuwm.l \
 	  || { echo "FAIL: test/uuwm.l is stale (crew/lux/core.l moved?) -- run: make uuwm"; exit 1; }
 	@rm -f out/host/.uuwm.l.tmp
 # test/uukind.l is a COMMITTED GENERATED artifact: doc/proto/kinds.l's abstract kinds-lattice
-# JOIN compiled into uu terms (tools/kinds2uu.l), so test/uukindlaw.l proves the semilattice
+# JOIN compiled into uu terms (mk/tools/kinds2uu.l), so test/uukindlaw.l proves the semilattice
 # laws OF THE ANALYSIS at corpus time. `make uukind` refreshes it; test_uukind diffs it.
 uukind: host
-	@echo LOVE	test/uukind.l "(tools/kinds2uu.l on $m)"
-	@$(mw) tools/kinds2uu.l > test/uukind.l
+	@echo LOVE	test/uukind.l "(mk/tools/kinds2uu.l on $m)"
+	@$(mw) mk/tools/kinds2uu.l > test/uukind.l
 test_uukind: host
 	@echo TEST test/uukind.l "(regenerate + diff)"
-	@$(mw) tools/kinds2uu.l > out/host/.uukind.l.tmp
+	@$(mw) mk/tools/kinds2uu.l > out/host/.uukind.l.tmp
 	@cmp -s out/host/.uukind.l.tmp test/uukind.l \
 	  || { echo "FAIL: test/uukind.l is stale (doc/proto/kinds.l moved?) -- run: make uukind"; exit 1; }
 	@rm -f out/host/.uukind.l.tmp
 # test/uuhomgen.l is a COMMITTED GENERATED artifact: doc/proto/dest.l's two code generators
-# run on its law sites, the emissions lifted to uu terms (tools/dest2uu.l), so test/uuhomlaw.l
+# run on its law sites, the emissions lifted to uu terms (mk/tools/dest2uu.l), so test/uuhomlaw.l
 # proves the destination-die laws OF THE EMISSIONS at corpus time. `make uuhomgen` refreshes it; test_uuhomgen regenerates and diffs.
 uuhomgen: host
-	@echo LOVE	test/uuhomgen.l "(tools/dest2uu.l on $m)"
-	@$(mw) tools/dest2uu.l > test/uuhomgen.l
+	@echo LOVE	test/uuhomgen.l "(mk/tools/dest2uu.l on $m)"
+	@$(mw) mk/tools/dest2uu.l > test/uuhomgen.l
 test_uuhomgen: host
 	@echo TEST test/uuhomgen.l "(regenerate + diff)"
-	@$(mw) tools/dest2uu.l > out/host/.uuhomgen.l.tmp
+	@$(mw) mk/tools/dest2uu.l > out/host/.uuhomgen.l.tmp
 	@cmp -s out/host/.uuhomgen.l.tmp test/uuhomgen.l \
 	  || { echo "FAIL: test/uuhomgen.l is stale (doc/proto/dest.l moved?) -- run: make uuhomgen"; exit 1; }
 	@rm -f out/host/.uuhomgen.l.tmp
 # test/uusplgen.l is a COMMITTED GENERATED artifact: doc/proto/spl.l's three call-site
 # compilers (call, binding splice, substitution splice) run on its samples, the threads
-# lifted to uu terms (tools/spl2uu.l), so test/uuspllaw.l proves the SPLICE LICENSE of
+# lifted to uu terms (mk/tools/spl2uu.l), so test/uuspllaw.l proves the SPLICE LICENSE of
 # the emissions at corpus time.
 # `make uusplgen` refreshes it; test_uusplgen regenerates and diffs.
 uusplgen: host
-	@echo LOVE	test/uusplgen.l "(tools/spl2uu.l on $m)"
-	@$(mw) tools/spl2uu.l > test/uusplgen.l
+	@echo LOVE	test/uusplgen.l "(mk/tools/spl2uu.l on $m)"
+	@$(mw) mk/tools/spl2uu.l > test/uusplgen.l
 test_uusplgen: host
 	@echo TEST test/uusplgen.l "(regenerate + diff)"
-	@$(mw) tools/spl2uu.l > out/host/.uusplgen.l.tmp
+	@$(mw) mk/tools/spl2uu.l > out/host/.uusplgen.l.tmp
 	@cmp -s out/host/.uusplgen.l.tmp test/uusplgen.l \
 	  || { echo "FAIL: test/uusplgen.l is stale (doc/proto/spl.l moved?) -- run: make uusplgen"; exit 1; }
 	@rm -f out/host/.uusplgen.l.tmp

@@ -7,7 +7,7 @@
 ; symlink to it on PATH (the user installs that), running `cook Cookfile [ticket]`
 ; execs `love -l <this-file> Cookfile [ticket]`: the -l loads cook, then Cookfile runs.
 ;
-; (this tool was first written as tools/bake.l; it was renamed to crew/cook/cook.l so
+; (this tool was first written as mk/tools/bake.l; it was renamed to crew/cook/cook.l so
 ; the file name does not collide with the OTHER, unrelated sense of "bake" in this
 ; tree -- baking the heap image / the egg (love/egg.l), the array-perf bake. the
 ; build VERB here is `cook`; "bake" is reserved for the egg. the messages this tool
@@ -1167,7 +1167,7 @@
 
    cook-main _)
 
-; the SEAT (tools/ain.l's shape): fire cook-main iff this very file -- or the
+; the SEAT (mk/tools/ain.l's shape): fire cook-main iff this very file -- or the
 ; installed `cook` symlink -- sits in the program seat of the real command line
 ; (positional program or a -l preload), taking the args AFTER the seat. cmdline
 ; is the full C argv, never rebound, so the read is the same in both load

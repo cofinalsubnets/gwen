@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# Frozen golden reference for tools/elf2uf2.g -- DO NOT edit to change
-# behaviour without updating the .g in the same commit (tools/Makefile gates
-# them byte-for-byte). See tools/py/README.md.
+# Frozen golden reference for mk/tools/elf2uf2.g -- DO NOT edit to change
+# behaviour without updating the .g in the same commit (mk/tools/Makefile gates
+# them byte-for-byte). See mk/tools/py/README.md.
 #
 # Packs a linked RP2040 ELF32 into a flashable UF2 image: walk the PT_LOAD
 # segments by LOAD address (p_paddr), lay them into one contiguous 256-aligned

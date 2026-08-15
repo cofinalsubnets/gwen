@@ -194,7 +194,7 @@ some literal
 
  ; --- real documents through the lens, laws and all ---------------------------
  ; README.md, and the two man pages -- which are WRITTEN in markdown and generated
- ; into roff by this module (tools/mkman.l), so their law 1 is load-bearing: it is
+ ; into roff by this module (mk/tools/mkman.l), so their law 1 is load-bearing: it is
  ; what keeps doc/*.md and the shipped doc/*.1 from being able to disagree.
  _ (: (slurpf f) (: q (open f "r") (slurp q))
       _ (map (\ f (: d (mdread (slurpf f))

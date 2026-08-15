@@ -1,4 +1,4 @@
-; test/uuhomgen.l -- GENERATED from doc/proto/dest.l by tools/dest2uu.l. Do not
+; test/uuhomgen.l -- GENERATED from doc/proto/dest.l by mk/tools/dest2uu.l. Do not
 ; edit; refresh with `make uuhomgen`. The law-site programs, cv (r0 protocol)
 ; and ck (destination die), lifted to uu nlist terms -- 4 nats per instruction
 ; (op d a b), operands parity-tagged (reg r = 2r, imm k = 2k+1), frame offsets

@@ -19,7 +19,7 @@
 ; rebuild -- it would be rebuilding its own running exe. drive.l + patch.l are
 ; optional -- the self-modify loop; the dock serves fine without them.)
 ; Then drive it (another shell):
-;   out/host/love tools/ain.l 127.0.0.1 7620
+;   out/host/love mk/tools/ain.l 127.0.0.1 7620
 ;   > (brief ())            ; the served steering prompt -- read this first
 ;   > (verbs ())            ; the dock's own verbs
 ;   > (probe "(puts (show (+ 1 2)))")   ; run a candidate against the binary

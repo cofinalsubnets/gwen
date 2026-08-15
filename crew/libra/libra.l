@@ -61,7 +61,7 @@
 ;
 ; check is the default because it is the errand that actually recurs: `make lint`
 ; runs it over every tracked .l, fmt is run BY HAND and nothing is gated on
-; layout, and serve waits for an editor that wants it. libra replaced tools/ltidy.l
+; layout, and serve waits for an editor that wants it. libra replaced mk/tools/ltidy.l
 ; outright (deleted 2026-07-28) -- including its janitor `-w`, which is why that
 ; flag strips whitespace without touching indentation.
 (use 'json)

@@ -51,8 +51,8 @@
 ; have ARRIVED: test/uupatch.l encodes the named-slot and positional models'
 ; laws as uu proof TERMS (pointwise, evidence-carrying coprods for every
 ; case-split -- no funext, no classical; the hunk re-aim's index algebra and
-; splice reassociation sealed lemma by lemma), and tools/uu2coq.l +
-; tools/uu2lean.l emit them into test/proof/rocq/uugen.v AND test/proof/lean/uugen.lean,
+; splice reassociation sealed lemma by lemma), and mk/tools/uu2coq.l +
+; mk/tools/uu2lean.l emit them into test/proof/rocq/uugen.v AND test/proof/lean/uugen.lean,
 ; audited axiom-free in both kernels; those slices' hand copies are deleted
 ; from patch.v. the remaining slices migrate the same way as their models
 ; stabilize. source of truth is the executable ai spec (test/patch.l),

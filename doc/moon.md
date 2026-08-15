@@ -214,7 +214,7 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
   reader finding the symbol would conclude the compiler had written down that there was
   nothing, which is a different claim.
 
-  **Reading one back**: `love tools/ir.l FILE [NAME | -l]`, over `lib/irec.l`. ⚠ **any file, any
+  **Reading one back**: `love mk/tools/ir.l FILE [NAME | -l]`, over `lib/irec.l`. ⚠ **any file, any
   target, from any machine** — a record is text and an ELF is a table, so an aarch64 object
   reads on x86-64 with no disassembler, no per-arch mnemonic table and no objdump that has to
   have been built with the right target list. All six targets and both ELF classes are gated
