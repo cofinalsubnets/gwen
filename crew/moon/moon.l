@@ -498,6 +498,13 @@
        ; the live set is one generation per (worktree, lane, target) -- a tree
        ; carries the shim's love+mooncc.image and the build's love0+mooncc0.image
        ; as two distinct compilers -- so the room here is deliberate, not slack.
+       ; ⚠ AND ANYTHING THAT IS NOT AN ARCHIVE GOES, which is what the paragraph above
+       ; promised and did not do: the cache held one .o PER MEMBER before it held one .a
+       ; per (compiler, target), and nothing has read a .o since. The count kept the
+       ; archives at 32 while 24130 orphans of the old policy sat beside them -- 116 MB in
+       ; someone's HOME, growing, with no reader. A pass that cannot say which generations
+       ; are dead can still say which SHAPES are.
+       _ (foldl (\ a f (? (dota? f) a (: _ (unlink (d + f)) a))) 0 (readdir d))
        fs (foldl (\ a f (: st (stat (d + f))
                           (? (dota? f && two? st) (a + [[(el st 1) f]]) a)))
                  () (readdir d))

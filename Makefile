@@ -60,7 +60,7 @@ endif
   test_holo test_as test_elf32 test_objcopy test_holofuzz test_glazefuzz test_encver test_lux \
   test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 \
   test_virt test_wake test_embed embed test_rp2040 valg disasm flame cat cata catav perf repl gdb \
-  vmret waits bench nettest lint ccdb ulp
+  vmret waits bench nettest lint ccdb ulp cacheclean
 
 # ⚠ THE UNPACKED RELEASE BUILDS THE PRODUCT. `tar xzf love-<ver>.tar.gz && make -C love-<ver>`
 # has to end in a seed binary, because that is what whoever ran it came for -- our gates and
@@ -165,6 +165,13 @@ clean:
 	@$(MAKE) -C wasm clean
 distclean: clean
 	rm -rf dl
+# ⚠ THE COMPILER'S CACHE LIVES IN HOME, so `clean` cannot reach it and should not try -- ~/.love
+# also holds the INSTALLED nest that `make install` put there, and a clean that ate someone's
+# installation would be a surprise of the worst kind. It bounds itself (crew/moon/moon.l's
+# mcsweep: the last 32 archives, ~13 MB, swept on every link); this is the door for wanting it
+# gone anyway.
+cacheclean:
+	rm -rf $(HOME)/.love/cache
 
 # the memory lane. ⚠ THE CORPUS IS A FILE ARGUMENT, NEVER STDIN: the corpus TESTS stdin
 # (test/io.l's see/unsee roundtrip), so piping it in has those asserts eating the script

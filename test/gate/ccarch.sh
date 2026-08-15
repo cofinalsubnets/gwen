@@ -64,7 +64,13 @@ case $arch in
   *) echo "ccarch.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 
+# ⚠ ONE RUN'S WORTH, and no more: each case leaves a .g (a STATIC gcc binary, ~3.2 MB), a
+# .glog, a .gout, a .t and a .tout, and nothing ever read them again -- 1192 files and 420 MB
+# for arm64 alone, 94 MB for riscv, growing with every run. Clearing at the START rather than
+# the end keeps the last run's artifacts for a post-mortem, which is the only time anyone wants
+# them, while bounding the pile to a single run.
 d=$ho/cc-$arch
+rm -rf "$d"
 mkdir -p "$d"
 
 fail() { echo "FAIL $name: $*" >&2; exit 1; }

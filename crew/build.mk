@@ -245,10 +245,17 @@ out/dist/.staged-$(dist_ver): force_stage $(ho)/love
 # a seed binary rebuilt out there byte-identical rather than merely equivalent, since the
 # blob it embeds is the same archive and not a re-pack that has to coincide.
 ifneq ($(in_git),)
+# KEEP THE LAST N, and nothing fancier: every cut is named for its revision, so they pile up
+# one per commit you happened to build -- 35 of them and 200 MB here before anyone looked. The
+# newest $(dist_keep) survive (by mtime, so the one you are working with is never the casualty)
+# and the stage stamps follow the same rule, being the same generations by another name.
+dist_keep ?= 3
 $(dist_source): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l tools/tgz.l
 	@echo TGZ	$(abspath $@)
 	@rm -f $@
 	@$(ho)/love tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
+	@ls -t out/dist/love-*.tar.gz 2>/dev/null | tail -n +$$(($(dist_keep)+1)) | xargs -r rm -f
+	@ls -t out/dist/.staged-* 2>/dev/null | tail -n +$$(($(dist_keep)+1)) | xargs -r rm -f
 else
 $(dist_source):
 	@echo "dist: no .git here and no $@ --" >&2
