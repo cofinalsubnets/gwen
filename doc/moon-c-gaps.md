@@ -351,6 +351,57 @@ fails two targets later.
 
 ---
 
+## accepted in SILENCE — the constraints that get no diagnostic
+
+C11 §4 asks for a diagnostic on every syntax-rule or constraint violation, and these get none.
+They are worse than the refusals above and quieter than the wrong answers: the program is
+ill-formed, we say nothing, and the damage lands somewhere else entirely. Both rows below were
+found by a **foreign cc compiling the same file** — which is the only instrument that has ever
+caught one, and the reason a lane that builds love with clang is worth keeping.
+
+### an int where a pointer is owed
+
+```sh
+printf 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint main(void){ return f(0) ? 1 : 0; }\n' > q.c
+out/host/mooncc -std=c11 -c -o /dev/null q.c    # exit 0
+clang -std=c11 -c -o /dev/null q.c              # error: incompatible integer to pointer conversion
+```
+
+§6.8.6.4 hands `return` to the simple-assignment constraints, and §6.5.16.1 permits an integer
+only when it is a **null pointer constant** — `0`, never `1`. gcc and clang both refuse
+(`-Wint-conversion`, an error since clang 16); we take it and hand back a pointer to address 1.
+
+Not hypothetical: `host/main.c`'s four-arg `boot` carried `return 1` on two bake-load error
+paths for as long as mooncc has built this tree, and its caller does `g = boot(..)` then
+`ai_code_of(g)` — a dereference of address 1, where the path existed to reach the scare face.
+Neither lane that compiles it looks: `GL_BOOTSTRAP` selects the two-arg `boot`, so love0's
+clang never sees this one, and we say nothing. `STATIC=1` is what found it.
+
+### a `musttail` into an incompatible prototype
+
+An `__attribute__((musttail))` call must match its **caller's** prototype — same return type,
+same parameter list. Our sibcall pass asks only whether a jump is *emittable*, so a caller
+carrying an extra argument will happily jump into a callee without one:
+
+```c
+// a 5-arg caller into a 4-arg callee: mooncc emits the jump, clang refuses the compile
+static struct ai *f(struct ai *g, union u *Ip, ai_word *Hp, ai_word *Sp, int extra) {
+  ai_musttail return callee(g, Ip, Hp, Sp); }
+```
+
+clang: `cannot perform a tail call to function 'callee' because its signature is incompatible
+with the calling function`. This is the one gap that undermines an invariant rather than a
+value — `ai_musttail` is *owed*, and the whole discipline rests on a shape that cannot jump
+REFUSING at compile (love.h). A check that passes the incompatible case means mooncc alone
+cannot police it. Measured 2026-08-15: 58 converted `ghelp` tails, mooncc took all 58, clang
+named the 5 that were extra-arg lvms.
+
+⚠ **`make vmret` does not cover this.** It reads the shipped binary, which mooncc builds — so
+it sounds mooncc's own output against mooncc's own rule. `test_front` is currently the only
+gate compiling clang at `ai_tco=1`, which is what caught it.
+
+---
+
 ## target asymmetries
 
 Six targets: **x64, arm64, riscv64, thumb2, thumb2sp, thumb1**. The 32-bit ones carry most of
