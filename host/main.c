@@ -1075,10 +1075,10 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
       // ⚠ and it CLOSES q: an open heap port registers a finalizer, so an unclosed one is
       // still reachable at the seal -- and what rides into the image with it is its FD.
       uintptr_t xn = strlen(xtra);
-      if (!ai_ok(g = str0(g, xn))) return 1;
+      if (!ai_ok(g = str0(g, xn))) return g;
       if (xn) memcpy(txt(g->sp[0]), xtra, xn);
       g = ai_defv(g, "bake-load");
-      if (!ai_ok(g)) return 1;
+      if (!ai_ok(g)) return g;
       ai_core_of(g)->sp++;
       g = ai_evals_(g,
         "(: q (open bake-load \"r\")"
