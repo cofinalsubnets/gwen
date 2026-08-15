@@ -4643,8 +4643,9 @@ static uintptr_t image_objsize(struct ai *g, union u *p) {
 // is a RUNTIME quantity, and the token layout wants a compile-time one -- so the index space
 // reserves a fixed slice and only the occupied prefix is ever spelled. A host nif's value is
 // the bare fn (AI_NIF stores it raw), so without this lane every app nif rode as an absolute.
-// ⚠ the slice is INDEXED BY POSITION, so the roster and its order are part of the image's
-// contract -- image_roster() below is what holds a reader to the same one.
+// ⚠ the slice is INDEXED BY POSITION, so this table's order is part of the image's contract.
+// Nothing checks it by name: the ANCHOR does the whole job, since a binary whose nif set
+// differs is a different binary and its symbol gap says so.
 #define IMAGE_NHOST 256u
 static ai_inline uintptr_t image_nhost(void) {
  uintptr_t n = (uintptr_t)(__stop_ai_nifs - __start_ai_nifs);
@@ -4690,22 +4691,6 @@ static intptr_t image_fn_resolve(intptr_t j) {
 static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin, (word) &ai_stdout, (word) &ai_stderr, 0, map_gap,
  (word) &ai_fd_port_vt, (word) &ai_ti_vt, (word) &ai_to_vt, (word) &ai_closed_vt, (word) &ai_ci_vt,
  (word) yield_c };   // g->ip's parked value: a root holds this binary address, so only an index survives
-// THE ROSTER HASH -- what an index MEANS. Every symbolic rung indexes a table
-// (extra aps, def1, the host slice, the immortals), so an image is only readable by a
-// binary whose tables are the same ones in the same order. FNV-1a over the counts and
-// the NAMES -- no addresses -- so it is one number across arches and across builds, and
-// it is what replaces the anchor once there are no absolutes left to anchor.
-static uint64_t image_roster(void) {
- uint64_t h = 1469598103934665603ULL;
- #define IMAGE_RMIX(b) (h = (h ^ (uint64_t)(unsigned char)(b)) * 1099511628211ULL)
- uintptr_t cs[4] = { countof(image_extra_aps), countof(def1), countof(image_immortals), image_nhost() };
- for (uintptr_t i = 0; i < 4; i++) for (uintptr_t k = 0; k < 8; k++) IMAGE_RMIX(cs[i] >> (8 * k));
- for (uintptr_t j = 0; j < countof(def1); j++)
-  for (char const *n = def1[j].n; n && *n; n++) IMAGE_RMIX(*n);
- for (uintptr_t k = 0, n = image_nhost(); k < n; k++)
-  for (char const *q = __start_ai_nifs[k].n; q && *q; q++) IMAGE_RMIX(*q);
- #undef IMAGE_RMIX
- return h; }
 static intptr_t image_imm_index(word v) {
  for (uintptr_t i = 0; i < countof(image_immortals); i++) if (image_immortals[i] == v) return (intptr_t) i;
  return -1; }
@@ -5017,7 +5002,7 @@ void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard cons
  // ⚠ `anchor` is the GAP between the two symbols, not either address. Addresses would
  // write this run's ASLR base into the header, which is the whole of what a
  // reproducible bake must not carry.
- struct image_hdr H = { IMAGE_MAGIC, sizeof(word), nw, IMAGE_ARCH, x->nabs ? (uint64_t)((word) &ai_image_save - (word) image_immortals) : image_roster(), 0, (uint64_t)(x->nabs << 1) | 1u, 0, g->next_serial, {0}, {0} };
+ struct image_hdr H = { IMAGE_MAGIC, sizeof(word), nw, IMAGE_ARCH, (uint64_t)((word) &ai_image_save - (word) image_immortals), 0, (uint64_t)(x->nabs << 1) | 1u, 0, g->next_serial, {0}, {0} };
  // roots = symbols + tasks (live OUTSIDE v0), then the whole GC-traced v0..end block, GENERICALLY: any
  // field added to struct ai's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
  uintptr_t nv = (word*) g->end - (word*) &g->v0, nr = 2 + nv;
@@ -5063,13 +5048,7 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  struct image_hdr H;
  if (len < sizeof H) return NULL;
  memcpy(&H, buf, sizeof H);
- if (H.magic != IMAGE_MAGIC || H.wordsize != sizeof(word)) return NULL;
- // A SYMBOLIC IMAGE IS ARCH-FREE. Every word left in it is an index or an offset, so the
- // only thing a reader must share is what those indices MEAN -- the roster, checked below.
- // A binary-specific one still answers to its own arch: its absolutes are that code's.
- { int sym = (H.rsv1 & 1) && !(H.rsv1 >> 1);
-   if (!sym && H.arch != IMAGE_ARCH) return NULL;
-   if (sym && H.anchor != image_roster()) return NULL; }
+ if (H.magic != IMAGE_MAGIC || H.wordsize != sizeof(word) || H.arch != IMAGE_ARCH) return NULL;
  uintptr_t nw = H.nwords, bytes = nw * sizeof(word), db = IMAGE_NDICT * sizeof(word), ns = H.nstream;
  // ⚠ the stream's length is the HEADER's, never the buffer's: a baked image arrives inside a
  // reserved section and a file may carry a shebang, so "the rest of what you handed me" is
@@ -5104,10 +5083,13 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  // without the other. delta is 0 now in every lane: absolutes are stored anchor-relative,
  // so nothing on the decode side wants a shift at all.
  intptr_t delta = 0;
- if (!((H.rsv1 & 1) && !(H.rsv1 >> 1))                                           // zero kept absolutes: fully symbolic, nothing to check
-     && (intptr_t)((word) &ai_image_save - (word) image_immortals) != (intptr_t) H.anchor)
-  return NULL;                                          // a DIFFERENT binary (stale) -> normal boot; the
-                                                        // symbolic lane answered to the roster instead
+ // ⚠ THE ANCHOR IS UNCONDITIONAL, symbolic image or not. It used to be skipped once nothing
+ // was left to relocate -- true of relocation, and the wrong question: an index still MEANS
+ // whatever this binary's tables say, so a foreign build reads the same words as other
+ // functions. The gap between two of our own symbols answers that for free and moves on
+ // ANY layout change, which is more than a roster of the tables could promise.
+ if ((intptr_t)((word) &ai_image_save - (word) image_immortals) != (intptr_t) H.anchor)
+  return NULL;                                                                   // a DIFFERENT binary -> normal boot
  // EXPAND the token stream into the pool, then decode it there IN PLACE. The two passes
  // read and write one word at a time at the same index, so src and base are the same array
  // -- and a payload word arrives already seated, which is why the flat-leaf memcpys are gone.
