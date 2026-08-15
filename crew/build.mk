@@ -306,7 +306,7 @@ $(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l doc/readme.bin $(
 # a pi with qemu-user bakes the laptop's -- each host can serve both doors.
 # THE TWIN ROSTER, one row per arch a seed can be laid for: the mooncc target, the
 # qemu-user that runs it, and the mksys leaf that lays its machine tail. ⚠ THIS TABLE
-# IS THE AUTHORITY -- `love seed <arch>` keeps a list for its own usage line, and an
+# IS THE AUTHORITY -- `love seed <arch>` keeps its own list of the names, and an
 # arch this roster does not carry is refused HERE, loudly, rather than half-built.
 xtgt_x86_64   = x64
 xtgt_aarch64  = arm64
