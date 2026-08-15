@@ -99,7 +99,7 @@ love layer over a handful of host nifs. the runnable ones land on PATH beside `l
 via `make install`.
 
 - 🌑 **inle** -- the vessel: the freestanding kernel, booting on bare metal with no OS
-  under it. [port/inle/](port/inle/)
+  under it. [free/](free/)
 - 🐇 **bellberry** -- the navigator: the evaluator. [love/ev.l](love/ev.l)
 - 🐐 **mow** -- the grass chewer: the two-gen, two-space copying collector. [love.c](love.c)
 - 🕷️ **holo** -- the assembler: amd64/arm64/riscv64/thumb, and the linker.

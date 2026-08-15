@@ -1,6 +1,6 @@
 // aarch64 architecture-specific C: the PL011 serial console, the GICv2
 // interrupt controller, the ARM generic timer, and CPU-exception
-// reporting. the exception vector table itself is laid by port/inle/mkvec.l;
+// reporting. the exception vector table itself is laid by free/mkvec.l;
 // archinit points VBAR_EL1 at it. this is the aarch64 counterpart of
 // x86_64/arch.c -- same contract (archinit, serial_init, serial_putc,
 // k_reset), different hardware.

@@ -1008,7 +1008,7 @@ cannot explain). The rest stand — they were refused for physics, not for bytes
      so the compiler has no notion of it (only `asm volatile` parses) — every store-touching
      sweep today is safe only because `deadst` is r4-only and `stld`/`stldp` are adjacency-only.
      A pass over a non-frame store without that word is a silent MMIO miscompile in
-     `port/inle/blk.c` and the port mains, which `KCC ?= mooncc` compiles. The answer is twelve
+     `free/blk.c` and the port mains, which `KCC ?= mooncc` compiles. The answer is twelve
      lines and it is TU-WIDE, not per-function: the inliner splices `static inline` device
      accessors into unmarked callers, and with no LTO the TU is the real edge.
   2. **the store-address park past a spliced call** — `callish?` answers on the **pre-splice

@@ -125,7 +125,7 @@ linear trunk.
 
 ## The machinery this shares
 
-The dock cluster ([`port/inle/`](../port/inle/)) does the hard half:
+The dock cluster ([`free/`](../free/)) does the hard half:
 
 - applies a patch — `drive.l` `lay`s a `(path body)` proposal onto the tree,
 - gates it — rebuild + `make test`, red reverts,

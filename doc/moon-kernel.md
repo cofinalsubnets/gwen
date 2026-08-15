@@ -1,7 +1,7 @@
 # the kernel's own toolchain
 
-The inle kernel (`port/inle/`) is compiled, assembled and linked entirely by us, on both arches
-and through all three boot doors. `KCC ?= mooncc` compiles every TU, `port/inle/mkboot.l` and
+The inle kernel (`free/`) is compiled, assembled and linked entirely by us, on both arches
+and through all three boot doors. `KCC ?= mooncc` compiles every TU, `free/mkboot.l` and
 `mkvec.l` lay the assembly as holo IR, and `crew/holo/link.l` does the link. **Nothing foreign
 builds the kernel.**
 
@@ -31,7 +31,7 @@ vacuous before they were dropped, and the probes are the argument:
 
 `crew/holo/link.l` carries the kernel layout — the one real linker feature the `.lds` had that
 we did not: **per-lane (vaddr, LMA) with multiple PT_LOADs**. `ldkern target entry vbase bias
-srcs` is the whole surface; `port/inle/klink.l` is the driver, carrying the four numbers per
+srcs` is the whole surface; `free/klink.l` is the driver, carrying the four numbers per
 arch, which is all `<a>.lds` ever said that we could not. `KLINK=holo` is the default;
 `KLINK=lld` puts ld.lld and the .lds back as the comparison lane. The layout lands on lld's
 addresses exactly: same vaddrs, same paddrs, same entry.
@@ -60,7 +60,7 @@ both halves of the address split through `ld-u64` first.
 
 ## the inline-asm seam: one header, two spellings
 
-`port/inle/<a>/asmops.h`, one per arch, is **the only place in the kernel that spells an
+`free/<a>/asmops.h`, one per arch, is **the only place in the kernel that spells an
 instruction**. Every asm site is a static inline behind a NAME (`k_rd_ttbr1_el1()`, `k_outb()`,
 `k_sp_to_el1h()`, …), and the header says each one twice — holo's neutral template under
 `__mooncc__`, the GNU string otherwise. `grep asm` over the kernel's C finds the header and
@@ -118,8 +118,8 @@ half of the header drifting from the other.
 
 ## the assembly is a lay
 
-There are no `.S` files. `port/inle/mkvec.l` lays the exception/IRQ tail and
-`port/inle/mkboot.l` the bring-up, one file per job rather than one per arch, since the scaffold
+There are no `.S` files. `free/mkvec.l` lays the exception/IRQ tail and
+`free/mkboot.l` the bring-up, one file per job rather than one per arch, since the scaffold
 is shared and only the payload is per-ISA. GAS's `.macro exc_noerr/exc_err` and `.rept` loops are
 love loops — the x86 stubs and the aarch64 vector slots **generate** rather than repeat, which is
 what makes the error-code split and the table shape *stated* instead of transcribed.

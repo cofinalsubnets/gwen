@@ -54,7 +54,7 @@
 ; --- comments -------------------------------------------------------------------
 ; `note` is EMIT-ONLY. cparse cannot capture a comment (lex.l has no comment token
 ; and cpp.l runs first), so notes are AUTHORED in the generator, exactly as
-; port/inle/mkvec.l carries its narrative in the love that lays the assembly.
+; free/mkvec.l carries its narrative in the love that lays the assembly.
 ; doc/clay.md's "comments, in two halves" prices the capture side; it is not built.
 ;
 ; --- the preprocessor -------------------------------------------------------------

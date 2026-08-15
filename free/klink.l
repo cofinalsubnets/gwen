@@ -1,4 +1,4 @@
-; port/inle/klink.l -- the kernel link, ours. holo's ldkern (crew/holo/link.l)
+; free/klink.l -- the kernel link, ours. holo's ldkern (crew/holo/link.l)
 ; under the freestanding image, in place of ld.lld + the per-arch .lds. cat it
 ; after crew/holo/{elf,obj,link}.l and run the result:
 ;

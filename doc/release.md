@@ -57,5 +57,5 @@ files that name a path (`make uuwm` regenerates `test/uuwm.l`, whose drift gate 
 otherwise). ⚠ Python `\b` sweeps treat `-` as a word boundary, so kebab names with capital
 segments mangle — sweep by hand.
 
-C and docs embed love that a `.l` sweep misses: `host/main.c`, `port/inle/kmain.c`,
+C and docs embed love that a `.l` sweep misses: `host/main.c`, `free/kmain.c`,
 `port/rp2040/main.c`, `port/playdate/`, `wasm/`, and `index.html`. Grep them on every rename.

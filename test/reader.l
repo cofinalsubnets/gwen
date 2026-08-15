@@ -121,7 +121,7 @@
 ; back as whatever THAT libc did with an overflow: one source text, three
 ; different numbers (nolibc wrapped to the negative twin, glibc saturated to
 ; LONG_MAX, wasm's 32-bit `long` did neither) -- while decimal, which had its own
-; reader, promoted to a big. port/inle/klink.l spells kernel addresses exactly
+; reader, promoted to a big. free/klink.l spells kernel addresses exactly
 ; this way and rode the wrap. now all three bases share one reader
 ; (is_dec_int/is_hex_int/is_oct_int -> ai_big_read_dec/_hex/_oct), and the
 ; predicates are EXHAUSTIVE over what a base-0 strtol accepted whole, so the

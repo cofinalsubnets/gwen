@@ -5,7 +5,7 @@
 ; hangs off AND the filter a differential fuzzer hangs off -- the same object, read
 ; two ways (the polarities are opposite on purpose).
 ;
-;   out/host/love -l port/inle/judge.l -e "(judge-e \"(puts (show (+ 1 2)))\")"
+;   out/host/love -l free/judge.l -e "(judge-e \"(puts (show (+ 1 2)))\")"
 ;
 ; the ladder, cheapest first:
 ;   parses  -- the reader accepts every form (in-process, via `sound`; no eval)

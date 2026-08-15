@@ -2,7 +2,7 @@
 ; the loop the memory keeps circling -- propose a candidate, JUDGE it, keep the
 ; interesting ones -- with a LOCAL proposer (a random love-program generator).
 ;
-;   out/host/love -l port/inle/judge.l -l port/inle/fuzz.l -e "(fuzz 40 1)"
+;   out/host/love -l free/judge.l -l free/fuzz.l -e "(fuzz 40 1)"
 ;
 ; the generator emits a DETERMINISTIC subset -- arithmetic, application, church
 ; numerals, lists -- NEVER clock/rand/twirl, so a host-vs-love0 disagreement is a REAL

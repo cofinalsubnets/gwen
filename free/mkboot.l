@@ -1,4 +1,4 @@
-; port/inle/mkboot.l -- lay boot.o, the kernel's BRING-UP (doc/moon-kernel.md
+; free/mkboot.l -- lay boot.o, the kernel's BRING-UP (doc/moon-kernel.md
 ; rung 4): the code that runs before there is a C environment to run in. mkvec.l's
 ; sibling and mksys.l's class -- register-exact leaves C cannot say.
 ;
@@ -22,7 +22,7 @@
 ;
 ; runs after crew/holo/{elf,obj}.l in a (use 'holo) cat, with the target's
 ; backend text joined (a frontend bakes holo with the NATIVE backend only);
-; port/inle/kernel.mk drives it. register vocabulary is holo's -- x86: r0=rax
+; free/kernel.mk drives it. register vocabulary is holo's -- x86: r0=rax
 ; r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi; aarch64: rN = xN.
 (:
    (b-rep n x) (? (n < 1) () (x >< (b-rep (n - 1) x)))

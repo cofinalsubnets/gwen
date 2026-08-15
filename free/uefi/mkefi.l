@@ -1,4 +1,4 @@
-; port/inle/uefi/mkefi.l -- lay the ms_abi seam and bind the UEFI loader:
+; free/uefi/mkefi.l -- lay the ms_abi seam and bind the UEFI loader:
 ; port/virt/mkstart.l's sibling, the one piece of the boot that is not C, and
 ; even it is holo IR. runs after crew/holo/{elf,obj,link,pe}.l in a
 ; (use 'holo) cat; (mkboot out objs..) links mooncc's loader objects into the

@@ -596,7 +596,7 @@
        ; runs from SRAM but is STORED after them, and the port's startup copies
        ; it across at boot off __data_load__. a board with a real map (a ROM
        ; header at a fixed offset, a lane order of its own) writes its own link
-       ; driver over ldbare32 instead, the way port/inle/klink.l does over ldkern.
+       ; driver over ldbare32 instead, the way free/klink.l does over ldkern.
        runs (? (charm? dorg) [['at org 'text 'rodata 'nifs]
                               ['copy dorg 'data 'bss]]
               [['at org 'text 'rodata 'data 'nifs 'bss]])

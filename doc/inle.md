@@ -1,6 +1,6 @@
 # inle — the love machine
 
-The plan for turning the bare-metal kernel (`port/inle/`) from a REPL that boots into a machine
+The plan for turning the bare-metal kernel (`free/`) from a REPL that boots into a machine
 that runs the userland we already have: kore, lush, vi, cook, mooncc.
 
 **The decision it rests on: one address space, one `g`, no protection.** Every program here is a
@@ -270,7 +270,7 @@ and `wait` is `catch`.
 
 PCI config-space enumeration (CF8/CFC), then **virtio-blk** — modern virtio-pci on x86_64,
 virtio-mmio on aarch64 (qemu virt's 32 fixed slots), one split virtqueue, polled, synchronous,
-all in `port/inle/blk.c` (~250 lines, the one part that had to be C). Over it three nifs —
+all in `free/blk.c` (~250 lines, the one part that had to be C). Over it three nifs —
 `(disk _)` the sector count, `(disk-read l n)`, `(disk-write l s)` — and over those **FAT32
 r/w written in love**: `lib/fat.l`, which rides the ramfs into every kernel via the module
 walk, zero registration. The fs is device-parameterized (a dev is `(rd wr nsec)`), so the same

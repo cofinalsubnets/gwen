@@ -17,7 +17,7 @@ UTF-8-with-character-indices mooncc's lexer loop goes quadratic.
 ## the count
 
 318 sites touch `txt()` / `len()` / `str()` / `ai_str` / `EmptyString` / `ai_strp`:
-`love.c` 215, `love.h` 11, `host/*.c` 91 over twelve files, `port/inle/kmain.c` 1.
+`love.c` 215, `love.h` 11, `host/*.c` 91 over twelve files, `free/kmain.c` 1.
 
 love.c's 210 attributable sites split three ways:
 

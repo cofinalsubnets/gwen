@@ -1,7 +1,7 @@
-# port/inle/kernel.mk -- the inle kernel, freestanding, into out/free. Included by
+# free/kernel.mk -- the inle kernel, freestanding, into out/free. Included by
 # ./Makefile from the project root, so paths resolve from there; shared vars are common.mk.
 #
-# Arch-independent glue is port/inle/{kmain.c,k.h}, per-arch code port/inle/<a>/. Each
+# Arch-independent glue is free/{kmain.c,k.h}, per-arch code free/<a>/. Each
 # arch brings itself up under `qemu -kernel` with no bootloader or firmware at all (the
 # PVH stub on x86_64, the EL1 MMU stub on aarch64, both laid by mkboot.l); the limine
 # iso/hdd lanes below serve run-*, which want the framebuffer a real bootloader hands over.
@@ -35,19 +35,19 @@ KLD ?= ld.lld
 KCC_IS_MOON := $(if $(findstring mooncc,$(KCC)),1,)
 KCC_IS_CLANG := $(if $(KCC_IS_MOON),,$(shell $(KCC) --version 2>/dev/null | grep -qiw clang && echo 1))
 
-k_arch_c = $(wildcard $(R)/port/inle/$a/*.c)
+k_arch_c = $(wildcard $(R)/free/$a/*.c)
 # aarch64/builtins.c hands a FOREIGN cc the __clear_cache and __udivti3 its codegen
 # emits. ours emits neither (gen.l lowers clear_cache to dc/ic inline and never reaches
 # for a 128-bit divide), and the file is __int128 -- a type we do not carry. clang's alone.
 ifeq ($(KCC_IS_MOON),1)
 k_arch_c := $(filter-out %/builtins.c,$(k_arch_c))
 endif
-k_free_c = $R/port/inle/kmain.c $R/port/inle/blk.c
+k_free_c = $R/free/kmain.c $R/free/blk.c
 # paint.c is named rather than wildcarded (common.mk): the console renders 32bpp,
 # so this seat wants the shared painter. nif.c stays out until the kernel grows
 # defs[] rows for it -- bodies nothing calls are bytes the image cannot spend.
 k_shared_c = $(love_c) $(f_c) $R/crew/quay/paint.c $(c_c)
-k_h = $(love_h) $(wildcard *.h $(R)/port/inle/*.h $(R)/port/inle/$a/*.h)
+k_h = $(love_h) $(wildcard *.h $(R)/free/*.h $(R)/free/$a/*.h)
 
 # ⚠ the object tree and the ELF are per COMPILER as well as per K_TEST: sharing them
 # lets a KCC switch reuse the other compiler's objects, and the differential twin then
@@ -64,8 +64,8 @@ k_arch_o = $(k_arch_c:$(R)/%.c=$(k_odir)/%.o)
 k_free_o = $(k_free_c:$(R)/%.c=$(k_odir)/%.o)
 # the two LAYS: what used to be four .S files (doc/moon-kernel.md rung 4).
 # boot.o is the bring-up, vec.o the interrupt tail; both are holo IR written in
-# love (port/inle/mk{boot,vec}.l), so no assembler runs in this build at all.
-k_lay_o = $(k_odir)/port/inle/$a/boot.o $(k_odir)/port/inle/$a/vec.o
+# love (free/mk{boot,vec}.l), so no assembler runs in this build at all.
+k_lay_o = $(k_odir)/free/$a/boot.o $(k_odir)/free/$a/vec.o
 k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_lay_o)
 
 # The kernel runs the GENERATIONAL collector bounded by g->budget: kmain sums the boot
@@ -74,11 +74,11 @@ k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_lay_o)
 # sizing asks kmallocw for a block bigger than any physical RAM range. gen_please, love.c.
 kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
   -ffunction-sections -fdata-sections
-kldflags := -static -nostdlib --gc-sections -T $(R)/port/inle/$a/$a.lds -z max-page-size=0x1000
+kldflags := -static -nostdlib --gc-sections -T $(R)/free/$a/$a.lds -z max-page-size=0x1000
 kcppflags := \
   -I$(k_odir) \
-  -I. -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/port/inle \
-  -I$(R)/port/inle/$a \
+  -I. -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/free \
+  -I$(R)/free/$a \
   -I$(R)/crew/moon/include \
   -Ilibc \
   $(kcppflags) \
@@ -110,13 +110,13 @@ kcctag = $(if $(KCC_IS_MOON),MOON,CC)
 kernel: $(k_elf)
 
 # The LINK is ours by default: holo's kernel lane (crew/holo/link.l's ldkern, driven by
-# port/inle/klink.l) lays the shape <a>.lds asks for -- the note, five page-aligned
+# free/klink.l) lays the shape <a>.lds asks for -- the note, five page-aligned
 # PT_LOADs, p_paddr = p_vaddr - bias, entry by symbol, kimage_end -- and all three doors
 # boot what it writes. KLINK=lld puts ld.lld and the .lds back, the comparison lane, so
 # the .lds files stay in the tree as its statement of the layout. --gc-sections has no
 # twin here: the image carries some dead code, and it is RAM the kernel has plenty of.
 klink_l = $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/asbook.l \
-  $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/port/inle/klink.l
+  $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/free/klink.l
 $(k_odir)/klink.l: $(klink_l)
 	@echo CAT	$@
 	@mkdir -p "$(dir $@)"
@@ -128,7 +128,7 @@ $(k_elf): $(k_odir)/klink.l $(k_o) $m
 	@mkdir -p "$(dir $@)"
 	@$m $(k_odir)/klink.l $@ $a $(k_o)
 else
-$(k_elf): $(R)/port/inle/$a/$a.lds $(k_o)
+$(k_elf): $(R)/free/$a/$a.lds $(k_o)
 	@echo LD	$@
 	@mkdir -p "$(dir $@)"
 	@$(KLD) $(kldflags) $(k_o) -o $@
@@ -160,7 +160,7 @@ out/lib/korecat.l: $(korefiles)
 	@mkdir -p out/lib
 	@cat $(korefiles) > $@
 
-# Shared C sources (love.c, crew/quay/, libc/) + per-arch port/inle/<a>/.
+# Shared C sources (love.c, crew/quay/, libc/) + per-arch free/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
 $(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h out/lib/kfs.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h,out/lib/korecat.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h)
 	@echo $(kcctag)	$@
@@ -189,14 +189,14 @@ klay_l = $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/asbook.l \
 # klink.l's shape, twice. ⚠ STATIC pattern, never an implicit one: a pattern-MADE
 # prerequisite is an INTERMEDIATE make deletes after the link, and the cat would then run
 # again on every build. naming the targets keeps them ordinary files.
-$(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/port/inle/%.l $(klay_l)
+$(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/free/%.l $(klay_l)
 	@echo CAT	$@
 	@mkdir -p "$(dir $@)"
 	@{ echo "(use 'holo)"; cat $(klay_l) $<; } > $@
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
 # kernel boots into nothing.
-$(k_lay_o): $(k_odir)/port/inle/$a/%.o: $(k_odir)/mk%.l $m
+$(k_lay_o): $(k_odir)/free/$a/%.o: $(k_odir)/mk%.l $m
 	@echo HOLO	$@
 	@mkdir -p "$(dir $@)"
 	@$m -l $< -n -e '(lay-$* "$@" "$a")' && test -s $@
@@ -364,8 +364,8 @@ endif
 # hardware; the ESP is two files.
 uefi_l = $R/crew/kore/text.l $R/crew/kore/core.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/crew/holo/pe.l \
-  $R/port/inle/uefi/mkefi.l
-$(ko)/uefi$(ksuf)/loader.o: $R/port/inle/uefi/loader.c $(ho)/mooncc
+  $R/free/uefi/mkefi.l
+$(ko)/uefi$(ksuf)/loader.o: $R/free/uefi/loader.c $(ho)/mooncc
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
 	@$(ho)/mooncc -c $< $@

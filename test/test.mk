@@ -157,7 +157,14 @@ test_front: $(ho)/front
 # mean nothing. That is also why the link phase skips rather than improvises.
 # ⚠ wasm compiles and does NOT link here -- love.js is a tracked committed artifact and a
 # gate must not rewrite the working tree. test_wasm owns that link, out of tree.
-embed_ports = mps2 teensy41 nucleo446 playdate virt rp2040
+# ⚠ THE TIERS ARE THE POINT. host and free (the kernel) are the TWO PRIMARY TARGETS; everything
+# else under port/ is a real target and a SECONDARY one, and secondary means it cannot hold a
+# commit. This gate used to compile every board, so an mps2 that would not build stopped work on
+# the two targets that matter -- backwards. The boards moved to test_extra, which is where a
+# secondary target belongs. ⚠ port/virt is the exception that proves the rule: it is the
+# FREESTANDING KERNEL on riscv, so it is free's third arch and rides with the primaries.
+embed_ports = virt
+embed_boards = mps2 teensy41 nucleo446 playdate rp2040
 # what each linkable port calls its ELF. ⚠ teensy41 is NOT here: its ELF embeds the baked
 # heap image, whose rule delegates to port/mps2's `img` -- a BAKE UNDER QEMU, on a FORCE rule
 # with no opt-out. Linking it here would cost 80 s and quietly boot a machine, which is the
@@ -181,6 +188,15 @@ test_embed: host $(ho)/mooncc
 	@$(MAKE) -s kernel || { echo "FAIL the $a kernel does not link"; exit 1; }
 	@$(if $(embed_a64),$(MAKE) -s a=aarch64 kernel,echo "  (aarch64 kernel link skipped: $(KCC) cannot cross)")
 	@$(MAKE) -s -C port/virt ../../out/virt/love.elf || { echo "FAIL port/virt does not link"; exit 1; }
+	@echo "test_embed: host, free (x86_64 + aarch64 + riscv) and wasm build against love.h"
+
+# the SECONDARY boards, same checks one tier down -- real targets that cannot hold a commit.
+test_embed_boards: host $(ho)/mooncc
+	@echo TEST the secondary boards compile against love.h "(object only)"
+	@for p in $(embed_boards); do \
+	   $(MAKE) -s -C port/$$p ../../out/$$p/main.o \
+	     || { echo "FAIL port/$$p/main.c does not compile against love.h"; exit 1; }; \
+	 done
 	@if [ -n "$(embed_arm)" ]; then \
 	   for t in $(embed_elfs); do p=$${t%%/*}; f=$${t#*/}; \
 	     $(MAKE) -s -C port/$$p ../../out/$$p/$$f \
@@ -190,7 +206,7 @@ test_embed: host $(ho)/mooncc
 	   $(MAKE) -s -C port/playdate ../../out/playdate/pdex.elf \
 	     || { echo "FAIL port/playdate does not link"; exit 1; }; \
 	 else echo "  (playdate link skipped: needs arm-none-eabi + PLAYDATE_SDK_PATH)"; fi
-	@echo "test_embed: every frontend builds against love.h (any skip is named above)"
+	@echo "test_embed_boards: the secondary boards build (any skip is named above)"
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold.
@@ -367,7 +383,7 @@ test_moon: host $(love0) out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 # whole set lays, so a shape check that quits leaves every committed file untouched.
 # love_data.ld is laid WHOLE; a board's own script is its own memory map, so mx.l takes that
 # text and answers it with the marked block relaid -- the .lds recipe's IO is a pipe.
-mx_lds = port/inle/x86_64/x86_64.lds port/inle/aarch64/aarch64.lds
+mx_lds = free/x86_64/x86_64.lds free/aarch64/aarch64.lds
 mx_lay = (: _ (? mx-ok 0 (quit 1)) _ (puts (mx-lds \"$$f\" (slurp in))) (quit 0))
 # dest:source:value:shape-check -- ONE roster, read by `make mx` (which writes) and by
 # test_clay (which regenerates and diffs). Two spellings of this list is how they drift.
@@ -503,19 +519,19 @@ test_raw: host out/host$(hsuf)/mooncc
 # stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_slow.
 test_drv: host out/host$(hsuf)/mooncc
 	@sh test/gate/drv.sh $(ho) $(ai_cflags)
-# the kernel's inline-asm SEAM (doc/moon-kernel.md): port/inle/<a>/asmops.h says every
+# the kernel's inline-asm SEAM (doc/moon-kernel.md): free/<a>/asmops.h says every
 # privileged instruction twice -- holo's neutral template for mooncc, GNU's for clang -- so
 # the gate compiles one probe with both and compares op by op. Skips without llvm-objdump.
 test_asmops: host out/host$(hsuf)/mooncc
 	@sh test/gate/asmops.sh $(ho)
 # test_vec -- the INTERRUPT gate: raises a real CPU exception with (fault n) and reads the
-# report, the only way to reach port/inle/mkvec.l's 32 stubs and the fault vector, then
+# report, the only way to reach free/mkvec.l's 32 stubs and the fault vector, then
 # checks the stubs no boot can reach against the architecture's own error-code list.
 test_vec: host
 	@$(MAKE) -s a=x86_64 kernel
-	@sh test/gate/vec.sh x86_64 out/free/love-x86_64.elf out/free/x86_64/port/inle/x86_64/vec.o
+	@sh test/gate/vec.sh x86_64 out/free/love-x86_64.elf out/free/x86_64/free/x86_64/vec.o
 	@$(MAKE) -s a=aarch64 kernel
-	@sh test/gate/vec.sh aarch64 out/free/love-aarch64.elf out/free/aarch64/port/inle/aarch64/vec.o
+	@sh test/gate/vec.sh aarch64 out/free/love-aarch64.elf out/free/aarch64/free/aarch64/vec.o
 # THE FIXPOINT: the default love IS mooncc-built, so this gate has it rebuild ITSELF --
 # love1 (love0's lane, relinked) bakes its own compiler image, recompiles every TU, links
 # love2, and the two must be byte-identical. A headline invariant -- but it runs in

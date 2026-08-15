@@ -1,7 +1,7 @@
 #!/bin/sh
 # test/gate/asmops.sh -- the inline-asm SEAM gate (doc/moon-kernel.md rung 3).
 #
-# port/inle/<a>/asmops.h says every privileged instruction the kernel needs
+# free/<a>/asmops.h says every privileged instruction the kernel needs
 # TWICE: holo's neutral template for mooncc, GNU's AT&T/ARM string for clang.
 # two spellings of one operation is exactly the shape that rots quietly -- edit
 # one half, ship, and nothing notices until the other compiler runs. so:
@@ -85,8 +85,8 @@ for a in x86_64 aarch64; do
     x86_64)  t=x64;   ctarget=x86_64-none-elf ;;
     aarch64) t=arm64; ctarget=aarch64-none-elf ;;
   esac
-  h=port/inle/$a/asmops.h
-  inc="-I port/inle/$a -I crew/moon/include"
+  h=free/$a/asmops.h
+  inc="-I free/$a -I crew/moon/include"
 
   # 1. coverage, straight off the header
   for op in $(sed -n 's/^static inline [^(]* \**\(k_[A-Za-z0-9_]*\)(.*/\1/p' "$h"); do

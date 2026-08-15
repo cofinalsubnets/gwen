@@ -5,7 +5,7 @@ a program needs when there is no OS; the other is the OS, wrapped.
 
 **`libc/` — the freestanding floor.** Two `.c` files, ~45 lines: `mem.c` and `str.c`. ⚠ **FOUR
 consumers, and only one goes through `common.mk`.** `c_c = $(wildcard $R/libc/*.c)` serves
-`port/inle/kernel.mk` alone; `port/virt`, `port/mps2` and `port/teensy41` each name the files in
+`free/kernel.mk` alone; `port/virt`, `port/mps2` and `port/teensy41` each name the files in
 their own object lists, two of them through a `%.o: $(R)/libc/%.c` pattern rule that silently
 builds only what is listed. So a grep for `c_c` finds a QUARTER of the truth — grep for `libc/`
 across every Makefile, and for the basenames too. (`limine.h` sits in the same folder but is a
@@ -18,7 +18,7 @@ buffer, K&R malloc over mmap arenas, sockets and a resolver, signals folded onto
 `-pie` self-relocator, and `__ai_start`. It is the userland floor under `CC=mooncc`,
 `make test_raw`, the distro binaries and `love up`.
 
-**The OS-dependent half is already the kernel's own.** `port/inle/kmain.c` defines
+**The OS-dependent half is already the kernel's own.** `free/kmain.c` defines
 `malloc`/`free` over `kmallocw`/`kfree`. The kernel never wanted nolibc's allocator, and `libc/`
 never offered one.
 
@@ -110,7 +110,7 @@ globbing `lib/*.c` the way math is globbed is better still.
 |---|---|
 | `crew/moon/lib/pure.c` | new — the five, moved out of nolibc.c |
 | `crew/moon/moon.l` | glob `lib/*.c` into `mems` instead of naming nolibc |
-| `port/inle/kernel.mk` | name `crew/moon/lib/pure.c` beside `$(c_c)` |
+| `free/kernel.mk` | name `crew/moon/lib/pure.c` beside `$(c_c)` |
 | `port/virt`, `port/mps2`, `port/teensy41` | their own object lists, by hand — see the ⚠ above |
 | `host/build.mk`, `crew/build.mk` | add `pure.o` to the object lists |
 | `mk/install.mk` | `moon_srcs` picks it up (glob, or name it) |
@@ -125,7 +125,7 @@ link and a hosted one. A freestanding link must NOT drag the strong one in.
 ### 2. `libc/` empties
 
 Delete `libc/mem.c` and `libc/str.c`; `libc/` is then `limine.h` alone, which is a vendored
-header and belongs beside the bootloader glue in `port/inle/`. `common.mk`'s `c_c` retires with
+header and belongs beside the bootloader glue in `free/`. `common.mk`'s `c_c` retires with
 it.
 
 ### 3. the errno seam — ONLY if something with an error path joins

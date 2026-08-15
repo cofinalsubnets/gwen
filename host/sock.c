@@ -29,13 +29,13 @@
 #include <netdb.h>
 
 // Every socket fd is CLOSE-ON-EXEC. A run/exec/spawn child must never inherit
-// these -- and the dock (port/inle/serve.l) RE-EXECS itself on adopt: without
+// these -- and the dock (free/serve.l) RE-EXECS itself on adopt: without
 // CLOEXEC the old listener stays bound across the exec and the fresh dock's
 // bind fails (SO_REUSEADDR does not permit two live listeners), so it can't
 // re-moor. CLOEXEC releases the port at exec so the new generation binds clean.
 #define cloexec(fd) do { if ((fd) >= 0) fcntl((fd), F_SETFD, FD_CLOEXEC); } while (0)
 
-// inle's UDP wire (port/inle/x86_64/net.c) caps a datagram at one ethernet MTU.
+// inle's UDP wire (free/x86_64/net.c) caps a datagram at one ethernet MTU.
 #define DG_MAX 1472
 
 // Pull a live OS fd out of a port arg, or -1 if it isn't a port. Same inline

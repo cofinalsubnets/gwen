@@ -51,7 +51,7 @@ unchanged. Drops a dependency, doesn't change the API.
 
 ### L2 — the freestanding kernel grows its own POSIX
 
-When there's no Unix under you (the `inle` bare-metal kernel, `port/inle/`), the kernel must
+When there's no Unix under you (the `inle` bare-metal kernel, `free/`), the kernel must
 *be* the OS. This is the only stratum that's a real OS build: a ramfs VFS, an in-kernel process
 model, signal delivery. The `k_sources[]` table in `kmain.c` is already vfs-shaped, so L2 grows
 from there. **The rung-by-rung plan is `doc/inle.md`** — one address space, tasks as the

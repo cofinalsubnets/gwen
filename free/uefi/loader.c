@@ -1,4 +1,4 @@
-// port/inle/uefi/loader.c -- our own BOOTX64.EFI: the bring-up a bootloader
+// free/uefi/loader.c -- our own BOOTX64.EFI: the bring-up a bootloader
 // used to do, in ~250 lines of mooncc-compiled C. firmware hands us ms_abi
 // UEFI; mkefi.l's thunks carry the seam (efi_main in, efi_call out, efi_go
 // the cr3-and-jump tail). the loader reads love.elf off its own volume,
@@ -40,7 +40,7 @@ static void say(char *s) {
 
 static u64 die(char *s) { say("uefi: "); say(s); say("\r\n"); return 1; }
 
-// the k_boot shape (port/inle/k.h) -- keep the two in step by hand: this file
+// the k_boot shape (free/k.h) -- keep the two in step by hand: this file
 // compiles freestanding, before out/lib exists.
 #define ram_max 64
 struct k_boot {

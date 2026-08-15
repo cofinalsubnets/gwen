@@ -14,7 +14,7 @@
 ; probe ladder to judge, and a closure would fossilize a not-yet-loaded `judge`
 ; to the zero point):
 ;   make host && cp out/host/love out/host/dock
-;   out/host/dock -l port/inle/judge.l -l port/inle/serve.l -l port/inle/drive.l -l port/inle/patch.l -e "(dock 7620)"
+;   out/host/dock -l free/judge.l -l free/serve.l -l free/drive.l -l free/patch.l -e "(dock 7620)"
 ; (a plain `out/host/love ... -e "(dock N)"` works too, but then `adopt` can't
 ; rebuild -- it would be rebuilding its own running exe. drive.l + patch.l are
 ; optional -- the self-modify loop; the dock serves fine without them.)
@@ -102,7 +102,7 @@
    ; --- the served steering prompt: a tree file, so the system can rewrite its
    ; own brief under the same gate. `(brief ())` is the first verb a stranger
    ; calls; edit brief.md and re-serve to retune. --
-   brief-path "port/inle/brief.md"
+   brief-path "free/brief.md"
    (brief _) (look brief-path)
 
    ; --- the dock's own verbs (judge/* come from judge.l; every other global is
@@ -179,8 +179,8 @@
    ; dock), listen, run the accept loop. `port` is a fixnum. (help is installed
    ; by this file's load -- see above.)
    (dock port)
-     (: _ (pin relaunch-slot 0 (L dock-bin "-l" "port/inle/judge.l" "-l" "port/inle/serve.l"
-                                  "-l" "port/inle/drive.l" "-l" "port/inle/patch.l"
+     (: _ (pin relaunch-slot 0 (L dock-bin "-l" "free/judge.l" "-l" "free/serve.l"
+                                  "-l" "free/drive.l" "-l" "free/patch.l"
                                   "-e" (+ "(dock " (+ (show port) ")"))))
         l (listen port)
         (? l (: _ (note (+ "dock: moored on :" (show port)))

@@ -2,7 +2,7 @@
 ; every firmware and every other machine already reads, so this is the door
 ; through which the machine keeps a file across a reset and hands it to the
 ; outside world (the ESP it booted from is a FAT volume). the DRIVER is the
-; kernel's (port/inle/blk.c, the small C part); everything above the sector is
+; kernel's (free/blk.c, the small C part); everything above the sector is
 ; here, where a bug is a scare on the console and not a triple fault.
 ;
 ; a DEVICE is a chain (rd wr nsec): (rd lba n) -> a string of n*512 bytes | (),

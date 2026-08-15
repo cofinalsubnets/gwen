@@ -18,6 +18,12 @@
 ; test_proof + test_gen). settle any doubt by probing the binary; demos show theirs (`expr ; value`).
 
 ; --- how to work here (read this first) ---
+; * ⚠ TWO PRIMARY TARGETS, and the seam is `main ~ kmain` with the love core beneath: host/ is
+;   the hosted frontend, free/ the freestanding one (the inle kernel, x86_64 + aarch64 + riscv),
+;   and they are PEERS over love.c + love.h -- neither is the other's port.
+; * everything under port/ is a real target and a SECONDARY one (mps2, teensy41, nucleo446,
+;   playdate, rp2040): it rides test_extra and cannot hold a commit. a board that cannot follow
+;   the primaries adapts or skips -- it never narrows them.
 ; * THE GATES: `make test` fast, `make test_slow` before committing, `make test_extra` before
 ;   merging to main. between them run the test_* targets covering what you touched (test/test.mk;
 ;   most subsecond off the baked image, the egg gates + test_sat stay cold).
@@ -37,9 +43,9 @@
 ;   announcing itself, never a slow bench to wait out. the classic is a 0-byte lcat header make
 ;   thinks fresh, leaving a native lane unbound -- one bug, two faces (infinite loop or crash).
 ; * the kernel has three boot doors, one ELF per arch: -kernel (x86_64 PVH stub, aarch64 EL1 MMU
-;   stub; test_kernel + test_kernel_arm64, nothing downloaded), UEFI (port/inle/uefi/, our own
+;   stub; test_kernel + test_kernel_arm64, nothing downloaded), UEFI (free/uefi/, our own
 ;   BOOTX64.EFI; doc/uefi.md), limine (iso/hdd + the run-* lanes; dl/ survives `make clean`).
-; * the kernel is OURS end to end: the link (holo's ldkern via port/inle/klink.l, `KLINK=lld` to
+; * the kernel is OURS end to end: the link (holo's ldkern via free/klink.l, `KLINK=lld` to
 ;   compare), the assembly (no .S -- mkboot.l lays bring-up, mkvec.l the interrupt tail), the
 ;   compiler (`KCC ?= mooncc`, doc/moon-kernel.md; `KCC=clang` + test_kdiff the differential).
 ; * ⚠ each KCC variant has its own odir and ELF (kccsuf/klsuf), and mooncc REFUSES a -m flag ;   rather than ignoring it. `make test_vec` faults on purpose -- the one way to reach a stub.
@@ -59,7 +65,7 @@
 ;   non-setting form is skipped in silence and a dropped paren ends the read -- half a config
 ;   beats none.
 ; * C and docs embed love the .l sweeps miss -- grep on every rename: host/main.c,
-;   port/inle/kmain.c, port/rp2040/main.c, port/playdate/ (main.c + cas.l), wasm/, and index.html,
+;   free/kmain.c, port/rp2040/main.c, port/playdate/ (main.c + cas.l), wasm/, and index.html,
 ;   whose examples + "; answers" are probed against out/host/love, never written from memory.
 ; * a bare all-punct symbol mid-list captures its left operand when code compiles (opfix) --
 ;   escape in parens ((+) is + as a value); glued to a datum it is monadic instead (the valence
@@ -136,7 +142,7 @@
 ;   is INSTALLED, not bound: (hear f) writes the hot_help slot, (hear ()) uninstalls, (heard ()) reads.
 ;   ⚠ a help takes (a b) and THE ARITY IS THE PROTOCOL -- a stale 3-arg one under-applies to a closure.
 ; * the crew (crew/, the apps) rides over the core, each owning non-overlapping files so a session
-;   can take one in parallel: lux (X11 wm), inle (the kernel, port/inle/), svalbard (the vcs `sb`,
+;   can take one in parallel: lux (X11 wm), inle (the kernel, free/), svalbard (the vcs `sb`,
 ;   doc/sb.md), moon (the C compiler; test_raw, test_drv), rune (symbolic algebra on the q coin).
 ; * ..lush (the shell 🐚, the distro's console shell and its /bin/sh; test/host/sh.l, doc/lush.md),
 ;   and the document chain lapiz (the markdown/html/roff lens, writes the man pages) -> papel (the
@@ -312,7 +318,7 @@ macros               ; ()      mopped up after birth -- off the book, so the nom
 ; and the lane that skips the rebind hands out the other thing in silence.
 ;
 ; the embed sites, seven: host/main.c (twice -- love0's sed-wrapped <name>0.h twins need a gl0_h
-; entry), wasm/host.c, port/inle/kmain.c, and port/{playdate,mps2,teensy41}/main.c. each wants a
+; entry), wasm/host.c, free/kmain.c, and port/{playdate,mps2,teensy41}/main.c. each wants a
 ; header dep in its build file.
 ;
 ; the egg's door takes three texts -- `ai_egg_(g, egg, p1, corpus)`, ten call sites -- and stitches

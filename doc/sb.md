@@ -159,6 +159,6 @@ bootstrap half; install is the two composed.
 ## where it lives
 
 `crew/sb/` + `lib/sb/` (the holo/kore all-the-way-down precedent). The dock cluster
-([`port/inle/`](../port/inle/)) does the hard half — apply a patch, gate it (rebuild +
+([`free/`](../free/)) does the hard half — apply a patch, gate it (rebuild +
 `make test`, red reverts), adopt it (re-exec onto the new generation); `sync`/`record` are the
 DAG surface over the same store.
