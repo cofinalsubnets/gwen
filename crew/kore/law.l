@@ -175,7 +175,21 @@
       (ok "\\(ab\\)*c" "ababc") (ok "\\(ab\\)*c" "c") (no "x\\(ab\\)c" "xac")
       (ok "\\(a\\(b\\)*\\)*x" "abbax") (ok "\\(\\)*x" "ax")    ; nesting; an empty repeat rests
       (bad "\\(ab") (bad "ab\\)") (bad "[ab") (bad "a\\")      ; malformed answers ()
-      (bad "a\\1") (bad "a\\{2\\}") (bad "a\\|b")              ; out-of-dialect refused
+      (bad "a\\1") (bad "a\\{2") (bad "a\\{3,2\\}")            ; backref, unclosed, inverted
+      ; --- alternation, intervals and the POSIX classes ---
+      (ok "a\\|b" "b") (ok "a\\|b" "a") (no "a\\|b" "c")       ; BRE's GNU \|
+      (ok "ab\\|cd" "zcdz") (no "ab\\|cd" "acbd")              ; the branches are WHOLE
+      (ok "\\(a\\|b\\)c" "bc") (no "\\(a\\|b\\)c" "cc")        ; grouped, and it still groups
+      (ok "a\\|b\\|c" "c") (no "a\\|b\\|c" "d")                ; three-way, kept flat
+      (ok "a\\|" "") (ok "\\|a" "z")                           ; an empty branch fits the empty text
+      (ok "ab\\{2\\}c" "abbc") (no "ab\\{2\\}c" "abc")         ; {n}
+      (ok "ab\\{2,\\}c" "abbbc") (no "ab\\{2,\\}c" "abc")      ; {n,}
+      (ok "ab\\{1,2\\}c" "abc") (no "ab\\{1,2\\}c" "abbbc")    ; {n,m}
+      (ok "\\{2\\}" "x{2}y") (ok "\\+q" "+q")                  ; nothing to repeat: BRE ink
+      (ok "[[:digit:]]" "a1") (no "[[:digit:]]" "ab")
+      (ok "[[:alpha:][:digit:]]" "1") (ok "[^[:digit:]]" "a")  ; two in one bracket, negated
+      (ok "[[:space:]]" "a b") (ok "[[:upper:]]" "aB")
+      (bad "[[:nope:]]")                                       ; an unknown class is malformed
       (= (refind <>(rebre "b*") "abbc" 0) '(1 0 0 ()))         ; leftmost, before longest
       (= (refind <>(rebre "bb") "abbc" 0) '(1 1 3 ()))
       (= (refind <>(rebre "b*") "abbc" 1) '(1 1 3 ()))         ; greedy at its own start
@@ -188,12 +202,32 @@
       (= <>>(rebre "\\(a\\)\\(b\\)") 2)                        ; rebre counts its groups
       (= <>>(rebre "ab") 0)))
 
+; --- the ERE door: THE SAME NODES, the backslashes moved. these laws are the
+; claim that one parser serves two dialects -- each pair here has a BRE twin
+; above wearing different ink, and the two must agree on the tree ---
+(: (eok p s) (: r (reere p) (two? r && rehas <>r s))
+   (eno p s) (: r (reere p) (two? r && !(rehas <>r s)))
+   (ebad p) !(two? (reere p))
+   (assert
+      (eok "a|b" "b") (eno "a|b" "c") (eok "(a|x)b" "xb")
+      (eok "ab?c" "ac") (eok "a+" "aa") (eno "a+" "b")
+      (eok "a{2}" "aa") (eno "a{2}" "ab") (eok "(a|b)+z" "abz")
+      (eok "[[:digit:]]{2}" "a12") (eno "[[:digit:]]{2}" "a1b")
+      (eok "*r" "r") (eok "+q" "q") (eok "{2}" "anything")     ; ERE DROPS a loose repeat
+      (eok "a{" "a{") (eok "a)" "a)")                          ; ..and takes these as ink
+      (ebad "a{3,2}") (ebad "(a") (ebad "a\\1")
+      ; THE TWO DIALECTS AGREE ON THE TREE, which is the whole reason for one parser
+      (= (reere "(a|b)+c") (rebre "\\(a\\|b\\)\\+c"))
+      (= (reere "a{2,3}[[:alpha:]]") (rebre "a\\{2,3\\}[[:alpha:]]"))
+      (= (reere "^(ab|c)*$") (rebre "^\\(ab\\|c\\)*$"))))
+
 ; --- the regex fuzz: an independent Brzozowski-derivative oracle (alternative
 ; SETS of node lists, no backtracking anywhere) against the engine's greedy
 ; backtracker, over seeded random patterns and subjects. anchors sit out (a
 ; derivative has no position); the hand laws above hold them instead ---
 (: (dnul nd) (: t <nd
                 (? (= t 'grp) (dnulq <>>nd)
+                   (= t 'alt) (any dnulq <>nd)      ; nullable if ANY branch is
                    (= t 'rep) ((< <>>nd 1) || dnul <>nd)
                    ()))
    (dnulq ns) (? (two? ns) (dnul <ns && dnulq >ns) 1)
@@ -205,6 +239,10 @@
                    (= t 'any) '(())
                    (= t 'cls) (? (dhit nd c) '(()) ())
                    (= t 'grp) (dl <>>nd c)
+                   ; the derivative of an alternation is the UNION of its branches'
+                   ; -- the one place the set-of-alternatives oracle costs nothing,
+                   ; where the backtracker had to order them
+                   (= t 'alt) (catmap (\ b (dl b c)) <>nd)
                    (: a <>nd lo <>>nd hi <>>>nd
                       (? (hi && (< hi 1)) ()
                          (: lo2 (? (< 0 lo) (- lo 1) 0) hi2 (? hi (- hi 1) ())
@@ -228,8 +266,12 @@
        (from i) (? (walk (L ns) i) 1 (< i n) (from (+ i 1)) ())
        (from 0))
    ; the draws: 1..4 tokens make a pattern, 0..6 charms of abc a subject
-   toks '("a" "b" "c" "." "a*" ".*" "[ab]" "[^a]" "[a-c]" "b\\+" "c\\?" "\\(ab\\)*" "\\(a\\|b\\)")
-   ntok 12                                                     ; \(a\|b\) is bait: parses to () and the draw skips it
+   ; ⚠ EVERY TOKEN HERE MUST PARSE and the oracle must know its node -- an entry
+   ; the draw cannot build is dead weight, and one the oracle cannot take is a
+   ; false alarm. alternation and the intervals joined when the engine grew them
+   toks '("a" "b" "c" "." "a*" ".*" "[ab]" "[^a]" "[a-c]" "b\\+" "c\\?" "\\(ab\\)*"
+          "\\(a\\|b\\)" "a\\|b" "\\(a\\|bc\\)*" "b\\{2\\}" "a\\{1,2\\}" "[[:alpha:]]")
+   ntok 18
    (rpat k st acc) (? (< k 1) (L acc st)
                       (: r (random st ntok) (rpat (- k 1) >r (+ acc ((toks) <r)))))
    (rsub k st acc) (? (< k 1) (L acc st)
@@ -251,6 +293,7 @@
 ; --- the sed floor (crew/kore/sed.l): the substitution walk to its GNU face,
 ; and the script parser's shapes -- what parses, what refuses ---
 (: (sub p r s g?) (: b (rebre p) <>(usub <>b r s g?))
+   (sp s) (sparse s ())                                          ; the BRE door, the default
    (assert
       (= (sub "b" "X" "abc" ()) "aXc") (= (sub "z" "X" "abc" ()) "abc")
       <(usub <>(rebre "b") "X" "abc" ())                         ; the changed bit ...
@@ -265,12 +308,18 @@
       (= (sub "a\\(b\\)\\?c" "<\\1>" "ac" ()) "<>")              ; an unmatched group is ""
       (= (sub "b" "\\&\\\\" "abc" ()) "a&\\c")                   ; \& and \\ stay ink
       (= (sub "^a" "X" "aaa" 1) "Xaa")                           ; the anchor can't re-fire
-      (two? (sparse "p")) (two? (sparse "2,4d")) (two? (sparse "/x/,$d"))
-      (two? (sparse "s/a/b/g; 3p")) (two? (sparse "2 p")) (two? (sparse "s|/|_|"))
-      (= (tally <>(sparse "p;p;p")) 3)
-      !(sparse "s/a") !(sparse ",")                              ; unterminated s; a legless ,
-      !(sparse "2,3q") !(sparse "x") !(sparse "s/a/b/x")            ; q takes one address; unknown verb/flag
-      !(sparse "s/a\\{/b/")))                                    ; the regex dialect refuses through
+      (two? (sp "p")) (two? (sp "2,4d")) (two? (sp "/x/,$d"))
+      (two? (sp "s/a/b/g; 3p")) (two? (sp "2 p")) (two? (sp "s|/|_|"))
+      (= (tally <>(sp "p;p;p")) 3)
+      !(sp "s/a") !(sp ",")                                      ; unterminated s; a legless ,
+      !(sp "2,3q") !(sp "x") !(sp "s/a/b/x")                     ; q takes one address; unknown verb/flag
+      !(sp "s/a\\{/b/")                                          ; the regex dialect refuses through
+      ; ⚠ THE DIALECT REACHES THE SCRIPT, in an address and in an s alike -- the
+      ; -E flag would be a lie if sparse only passed it to one of the two
+      (two? (sp "s/\\(a\\|b\\)/x/")) (two? (sparse "s/(a|b)/x/" 1))
+      (two? (sparse "/a|b/d" 1))
+      (= (sp "s/a\\{2\\}/x/") (sparse "s/a{2}/x/" 1))            ; one tree, two inks
+      (= (sp "/\\(a\\|b\\)c/p") (sparse "/(a|b)c/p" 1))))
 
 ; --- the process floor (crew/kore/proc.l): durations to milliseconds, and
 ; the quote-blind word split under xargs ---

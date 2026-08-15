@@ -233,11 +233,52 @@ pipe "grep -l stdin" 'q
 both "grep empty pattern" grep '' "$ho/.gr1"
 # the BRE battery: star, anchors, classes, +/? , groups, and the two shapes where a
 # leading + or * is a LITERAL because there is nothing to repeat
-for p in 'ab*c' '^x' 'z$' '[abx]b' '[^a]b' 'b\+' 'xb\?z' '\(zz\)*z' '.z' '^\+q' '^*r' 'x[b-z]z'; do
+for p in 'ab*c' '^x' 'z$' '[abx]b' '[^a]b' 'b\+' 'xb\?z' '\(zz\)*z' '.z' '^\+q' '^*r' 'x[b-z]z' \
+         'a\|z' 'abc\|zzz\|nope' '\(a\|x\)b' 'a\|b\|c' 'a\|' '\|a' \
+         'b\{2\}' 'z\{2,\}' 'z\{1,2\}' '\{2\}' '\+q' 'a\{3,2\}' 'a\{2' \
+         '[[:digit:]]' '[[:alpha:]][[:digit:]]' '[^[:alnum:]]' '[[:space:]]' \
+         '[[:upper:]]' '[[:punct:]]' '[[:xdigit:]]' '[]a]' '[a-]' '[[:nope:]]'; do
   grep -c "$p" "$ho/.gr1" > "$g" 2>/dev/null; a=$?
-  korerun grep -c "$p" "$ho/.gr1" > "$o"; b=$?
+  korerun grep -c "$p" "$ho/.gr1" > "$o" 2>/dev/null; b=$?
   cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep BRE '$p' vs GNU"
 done
+# the ERE battery. ⚠ THE RAGGED EDGES ARE THE POINT: a loose repeat is DROPPED in
+# ERE where BRE keeps it as ink, and an unclosed brace / stray ) are literals here
+# and malformed there -- all four read off GNU, none of them guessable
+for p in 'a|z' '(a|x)b' 'a{2}' 'z{2,}' 'z{1,2}' '[[:digit:]]+' 'a+' 'ab?c' '(a|b)+' \
+         '^(a|x)' '(a|b|z)+$' 'a{1,2}b' '[[:digit:]]{2}' '*r' '+q' '?x' '{2}' \
+         'a{' 'a)' 'a||z' 'a{3,2}' '(a'; do
+  grep -Ec "$p" "$ho/.gr1" > "$g" 2>/dev/null; a=$?
+  korerun grep -Ec "$p" "$ho/.gr1" > "$o" 2>/dev/null; b=$?
+  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep ERE '$p' vs GNU"
+done
+# the flag matrix, CLUSTERED as this tree's own scripts write them (-qF, -qiw, -oE):
+# a walk that reads only whole words takes `-qF` for a pattern and passes every
+# single-flag test while doing it
+printf 'abc\nxbz\nzzz\n+q\n*r\nFoo Bar\nab_cd\nx{2}y\na1b2\n' > "$ho/.gr3"
+# ⚠ set -f FIRST: the word split below is deliberate, the PATHNAME EXPANSION that
+# rides along with it is not -- `[a-z]*` and `*r` are globs, and an unguarded split
+# hands grep whatever files happen to sit in the cwd instead of the pattern
+set -f
+for fl in '-c b' '-i FOO' '-i foo' '-w ab' '-w abc' '-x zzz' '-x zz' '-x ' \
+          '-F a\|z' '-F *r' '-F ab' '-o b' '-oE [a-z]+' '-n -i foo' '-h b' '-a b' \
+          '-c -m 2 b' '-m 1 z' '-v b' '-iw foo' '-nv b' '-co b' '-iF foo' \
+          '-ow [a-z]*' '-o ' '-oE [0-9]|[A-Z]'; do
+  # shellcheck disable=SC2086
+  set -- $fl
+  grep "$@" "$ho/.gr3" > "$g" 2>/dev/null; a=$?
+  korerun grep "$@" "$ho/.gr3" > "$o" 2>/dev/null; b=$?
+  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep flags '$fl' vs GNU"
+done
+set +f
+# -e stacks and, once given, every positional word is a FILE
+grep -e abc -e zzz "$ho/.gr3" > "$g"; korerun grep -e abc -e zzz "$ho/.gr3" > "$o"
+same "grep -e stacking"
+# -q is output-free and speaks only in the exit code (61 uses of it in this tree)
+korerun grep -q b "$ho/.gr3" > "$o"; r=$?
+[ $r -eq 0 ] && [ ! -s "$o" ] || fail "kore grep -q hit (exit $r, or it spoke)"
+korerun grep -q qqq "$ho/.gr3" > "$o"; r=$?
+[ $r -eq 1 ] && [ ! -s "$o" ] || fail "kore grep -q miss"
 korerun grep b "$ho/.gr1" > /dev/null; r=$?; [ $r -eq 0 ] || fail "kore grep hit exit"
 korerun grep qqq "$ho/.gr1" > /dev/null; r=$?; [ $r -eq 1 ] || fail "kore grep miss exit"
 grep b "$ho/.gr-nope" 2> "$g"; a=$?
@@ -245,16 +286,43 @@ korerun grep b "$ho/.gr-nope" 2> "$o"; b=$?
 cmp -s "$g" "$o" && [ $a -eq 2 ] && [ $b -eq 2 ] || fail "kore grep missing file vs GNU"
 korerun grep b "$ho/.gr1" "$ho/.gr-nope" > /dev/null 2>&1; r=$?
 [ $r -eq 2 ] || fail "kore grep err beats match exit"
-echo "kore: grep (plain/-n/-c/-v/-l + BRE battery GNU-identical, the exit triple) ok"
+echo "kore: grep (BRE + ERE batteries + the clustered flag matrix GNU-identical, the exit triple) ok"
 
 # --------------------------------------------------------------------- the sed
 printf 'abc\nxbz\nzzz\nq4\nw5\n' > "$ho/.sd1"
 for sc in 's/b/X/' 's/z/Q/g' '2d' '/x/,/q/d' '$d' '2q' 's/x*/-/g' 's/\(b*\)z/[\1]/' \
-          's/b/[&]/' 's|z|_|g' 's/a/1/; s/b/2/' 's/q\(.\)/<\1>/'; do
+          's/b/[&]/' 's|z|_|g' 's/a/1/; s/b/2/' 's/q\(.\)/<\1>/' \
+          's/a\|z/Y/g' 's/[[:digit:]]/#/g' 's/b\{2\}/B/' '/a\|q/d' 's/\(a\|x\)b/@/'; do
   sed "$sc" "$ho/.sd1" > "$g"; a=$?
   korerun sed "$sc" "$ho/.sd1" > "$o"; b=$?
   cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore sed '$sc' vs GNU"
 done
+# -E moves the backslashes; the dialect must reach BOTH an address and an s
+for sc in 's/(a|x)b/@/' 's/a|z/Y/g' 's/[[:digit:]]+/#/' '/a|q/d' 's/b{1,2}/B/'; do
+  sed -E "$sc" "$ho/.sd1" > "$g"; a=$?
+  korerun sed -E "$sc" "$ho/.sd1" > "$o"; b=$?
+  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore sed -E '$sc' vs GNU"
+done
+# -e stacks in order, and clusters (-ne is how this tree writes it)
+sed -n -e 1p -e 3p "$ho/.sd1" > "$g"; korerun sed -n -e 1p -e 3p "$ho/.sd1" > "$o"
+same "sed -e stacking"
+sed -ne 2p "$ho/.sd1" > "$g"; korerun sed -ne 2p "$ho/.sd1" > "$o"; same "sed -ne clustered"
+sed -e 's/a/1/' -e 's/b/2/' "$ho/.sd1" > "$g"
+korerun sed -e 's/a/1/' -e 's/b/2/' "$ho/.sd1" > "$o"; same "sed -e twice"
+# ⚠ -i IS A DIFFERENT STREAM MODEL, not just a different sink: each file is its own
+# stream, so line numbers restart and $ is per-file. TWO files is the only test that
+# can tell that from the joined lane -- with one file the two models agree
+for t in 's/b/X/g' '1d' '$d' 's/[[:digit:]]/#/g'; do
+  cp "$ho/.sd1" "$ho/.sdg"; cp "$ho/.sd1" "$ho/.sdo"
+  sed -i "$t" "$ho/.sdg"; korerun sed -i "$t" "$ho/.sdo"
+  cmp -s "$ho/.sdg" "$ho/.sdo" || fail "kore sed -i '$t' vs GNU"
+done
+cp "$ho/.sd1" "$ho/.sdga"; cp "$ho/.sd1" "$ho/.sdgb"
+cp "$ho/.sd1" "$ho/.sdoa"; cp "$ho/.sd1" "$ho/.sdob"
+sed -i '1d;$d' "$ho/.sdga" "$ho/.sdgb"
+korerun sed -i '1d;$d' "$ho/.sdoa" "$ho/.sdob"
+cmp -s "$ho/.sdga" "$ho/.sdoa" && cmp -s "$ho/.sdgb" "$ho/.sdob" \
+  || fail "kore sed -i over TWO files (the per-file model) vs GNU"
 for sc in '2,4p' '/z/p' 's/b/X/p' '/x/,/q/p'; do
   sed -n "$sc" "$ho/.sd1" > "$g"
   korerun sed -n "$sc" "$ho/.sd1" > "$o"
@@ -268,7 +336,7 @@ printf 'a\n' | korerun sed 's/a' > /dev/null 2>&1; b=$?
 sed p "$ho/.sd-nope" "$ho/.sd1" > "$g" 2>&1; a=$?
 korerun sed p "$ho/.sd-nope" "$ho/.sd1" > "$o" 2>&1; b=$?
 cmp -s "$g" "$o" && [ $a -eq 2 ] && [ $b -eq 2 ] || fail "kore sed missing file vs GNU"
-echo "kore: sed (s///gp + d/p/q + number/\$/regex/range addresses GNU-identical, exits 1/2) ok"
+echo "kore: sed (s///gp + d/p/q + addresses + -E/-e/-i, the per-file model, GNU-identical, exits 1/2) ok"
 
 # --------------------------------------------------------- the process tools
 pipe "xargs"     'a b

@@ -11,8 +11,8 @@
 ;   kore cat|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
 ;   kore cut|tr|nl|rev   the line + field tools + trivia (crew/kore/core.l)
 ;   kore ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (crew/kore/fs.l)
-;   kore grep [-nvcl] PATTERN [F..]   the BRE matcher (crew/kore/re.l)
-;   kore sed [-n] SCRIPT [F..]        the stream editor (crew/kore/sed.l)
+;   kore grep [-nvclqhaixwFEo] [-e P] [-m N] PATTERN [F..]   BRE/ERE (crew/kore/re.l)
+;   kore sed [-nEi] [-e SCRIPT].. SCRIPT [F..]   the stream editor (crew/kore/sed.l)
 ;   kore env|sleep|kill|xargs        the process tools (crew/kore/proc.l)
 ;   kore vi [FILE]                   the editor (crew/vi/)
 ;   kore sh [-c CMD | FILE]          the shell, lush (crew/lush/; also `lush`, and an sh symlink)
@@ -263,8 +263,8 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   nm [-gup] FILE..   an ELF's symbols; -g externals, -u undefined, -p unsorted
   cat head tail wc sort uniq tee          the line tools (crew/kore/core.l)
   cut tr nl rev                           the field tools
-  grep [-nvcl] PAT [F..]                  the BRE matcher (crew/kore/re.l)
-  sed [-n] SCRIPT [F..]                   the stream editor (s///gp, d, p, q, addresses)
+  grep [-nvclqhaixwFEo] [-e P] [-m N] PAT [F..]   BRE, or ERE under -E (crew/kore/re.l)
+  sed [-nEi] [-e SCRIPT].. SCRIPT [F..]   the stream editor (s///gp, d, p, q, addresses)
   env sleep kill xargs                    the process tools (crew/kore/proc.l)
   vi [FILE]                               the editor (crew/vi/)
   sh [-c CMD | FILE]                      the shell, lush (crew/lush/)

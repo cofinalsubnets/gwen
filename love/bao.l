@@ -43,15 +43,15 @@
       ; the corpus answers `;; missing so` off an English sentence (doc/io.md part IV).
       box (tablet 0)
       (drew u) (peep box 0 0)
-      (drop n) (unchug p (n - (inhand p)))     ; the port to n pending; we hold the rest
+      (drop n) (unchug p (n - inhand p))     ; the port to n pending; we hold the rest
       ; flow, plus the count: one chug per gulp, the run laid down as plain conses.
-      (feed u) (: c (see p)
-                  (c = -1 ? ()
-                     (: _ (unsee p c)
-                        t (chug p)
-                        _ (pin box 0 (drew () + tally t))
-                        (go k l) (? (nil? (< 0 k)) l (: j (k - 1) (go j (link (t j) l))))
-                        (go (tally t) (once (\ u (feed ())))))))
+      (feed u)
+       (see p @ -1 () c
+        (: _ (unsee p c)
+           t (chug p)
+           _ (pin box 0 (drew () + tally t))
+           (go k l) (? (0 >= k) l (: j (k - 1) (go j (t j >< l))))
+         (go (tally t) (once (\ u (feed ()))))))
       ; consumed, FORWARDS and by identity: O(consumed), so the sum over the stream is the
       ; stream. ⚠ never (tally >r) -- the residue is lazy, so that would force the whole rest.
       ; ⚠ FORCE AT EVERY STEP: a cons holds its tail as an unforced PROMISE, so a plain `cup`
@@ -137,7 +137,7 @@
    ; lacks the ptys. bind the global when it exists, else a no-op stub; the
    ; mentions below read these locals, so bao compiles quiet everywhere and a
    ; call answers a clean () where the facility is not.
-   (want n) (? (member? n (names ())) (ev n) (\ _ ()))
+   (want n) (member? n (names ()) ? (ev n) (\ _ ()))
    raw (want 'raw) tether (want 'tether) gather (want 'gather) close (want 'close)
 
    (revcat a b) (foldl (flip link) b a)
@@ -228,7 +228,7 @@
 
    ; if cur holds a pristine recall, restore it at its slot in hu;
    ; called before any mutating edit so the original survives.
-   (detach hu cur) (? (two? cur) (cur >< hu) hu)
+   (detach hu cur) (two? cur ? (cur >< hu) hu)
 
    (emptybuf u l r d) (!u && !l && !r && !d)
    (parses u l r d)   (two? (parseall (flatten u l r d)))
@@ -274,37 +274,41 @@
    evk      {-1 -7 4 -7 3 -12 13 10 10 10 8 -3 127 -3 1 -5 5 -6}   ; the raw control bytes
    (edesc1 c) (? (c = 126) -5
                  (c = 59)  (getc 0, peep modarrow (getc 0) 0))
-   (edesc x) (? !(91 = getc 0) 0
+   (edesc x)
+    (? !(91 = getc 0) 0
      (: c (getc 0) e (peep arrow c 0)
-        (? !(id? e 0) e
-           (c = 49) (edesc1 (getc 0))
-           (c = 55) (: _ (getc 0) -5)
-           (c = 52 || c = 56) (: _ (getc 0) -6)
-           (c = 51) (: _ (getc 0) -4) 0)))
-   (edev x) (: c (getc 0) e (peep evk c 0)
+      (? !(id? e 0) e
+       (c @ 49 (edesc1 (getc 0))
+            55 (getc 0, -5)
+            (52 | 56) (getc 0, -6)
+            51 (getc 0, -4)
+            0))))
+
+   (edev x)
+    (: c (getc 0) e (peep evk c 0)
      (? !(id? e 0) e
         (c = 27) (edesc 0)
-        (32 <= c && c < 127 && c)))
+        (32 <= c < 127 ? c)))
 
    ; redraw the buffer in place. pra is rows above the cursor from the PREVIOUS
    ; render -- move up that many first, so we land back on the prompt's row. all
    ; motion is relative, so terminal scrolling never desyncs us. pl is the prompt's
    ; column; the topmost line shares it, later lines start at column 0.
-   (csi n f) (: _ (putc 27) _ (putc 91) _ (putn n) (putc f))   ; ESC [ n f -- the one cursor verb
+   (csi n f) (putc 27, putc 91, putn n, putc f)   ; ESC [ n f -- the one cursor verb
    (edrender pl pra u l r d)
-     (: _ (? (0 < pra) (csi pra 65) ())
-        _ (putc 13)
-        _ (? (0 < pl)  (csi pl 67) ())
-        _ (putc 27) _ (putc 91) _ (putc 74) ; clear to end of screen
-        _ (each (rev u) (\ ln (do (each ln prc) (putc 10))))
-        _ (each (revcat l r) prc)
-        _ (each d (\ ln (do (putc 10) (each ln prc))))
+     (: _ (0 < pra ? (csi pra 65),
+           putc 13,
+           0 < pl ? (csi pl 67),
+           putc 27, putc 91, putc 74, ; clear to end of screen
+           each (rev u) (\ ln (each ln prc, putc 10)),
+           each (revcat l r) prc,
+           each d (\ ln (putc 10, each ln prc)))
         ld (tally d)
-        col ((? (two? u) 0 pl) + tally l)
-        _ (? (0 < ld) (csi ld 65) ())
-        _ (putc 13)
-        _ (? (0 < col) (csi col 67) ())
-        (flush out))
+        col ((two? u ? 0 pl) + tally l)
+        (0 < ld ? (csi ld 65),
+         putc 13,
+         0 < col ? (csi col 67),
+         flush out))
 
    ps1 "> "
    ; the helm glows in the crew's cyan (256-colour 117 ~ #7dcfff), reset after.
@@ -430,12 +434,12 @@
    ; pump bytes from port `src` to port `dst`, one at a time, until src hits EOF
    ; (see -> -1); flush after each byte keeps the far side prompt. (Same shape as
    ; ain's pump -- prel stays socket/pty-free, so each app carries its own.)
-   (pump src dst) (: ch (see src) (? (ch = -1) 0 (put dst ch, flush dst, pump src dst)))
+   (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
 
    ; poll a non-blocking (gather pid) to its exited PAIR. the pair is told from
    ; still-running (0) STRUCTURALLY (two?), never by net: the status pair (0)
    ; nets blue, so ! / nil? can't tell it from 0 -- only two? can.
-   (waitfor pid) (: s (gather pid) (? (two? s) s (0 = s) (rest 2, waitfor pid) s))
+   (waitfor pid) (: s (gather pid) (two? s ? s (0 = s) (rest 2, waitfor pid) s))
 
    ; (wrap argv) -- run argv on a fresh pty and become a TRANSPARENT bidirectional
    ; pump: stdin -> the child, the child's output -> stdout, both live at once
@@ -467,17 +471,17 @@
    ; edev/edesc/edesc1 reading (see ip) instead of the global getc.
    ; ⚠ `@` COSTS mps2 + teensy41 A LIB ROW EACH: bao's `use` lands after the mop, so the
    ; macro has to be live as a MODULE there, not just ridden in on the post text.
-   (besc1 ip c) (c @ 126 -5                     ; a line reader never jumps the buffer:
-                     59  (see ip, peep arrow (see ip) 0))   ;   the PLAIN finals
-   (besc ip) (see ip @ 91
-     (: c (see ip) e (peep arrow c 0)
-        (? !(id? e 0) e
-           (c @ 49        (besc1 ip (see ip))
-                55        (see ip, -5)
-                (52 | 56) (see ip, -6)
-                51        (see ip, -4)
-                0)))
-     0)
+   (besc1 ip c)
+    (c @ 126 -5                               ; a line reader never jumps the buffer:
+         59  (see ip, peep arrow (see ip) 0)) ;   the PLAIN finals
+   (besc ip) (see ip != 91 ? 0
+    (: c (see ip) e (peep arrow c 0)
+     (? !(id? e 0) e
+      (c @ 49        (besc1 ip (see ip))
+           55        (see ip, -5)
+           (52 | 56) (see ip, -6)
+           51        (see ip, -4)
+           0))))
    ; ⚠ THE `see` COMES FIRST and exactly once: evk is indexed BY the byte, so a walk that
    ; peeps before it reads has nothing to peep with.
    (bev ip) (: c (see ip) e (peep evk c 0)
@@ -497,17 +501,17 @@
         (loop l r)
           (: _ (edrender pl 0 () l r ())
              (km uu ll rr dd) (loop ll rr)         ; motion: edleft/.. give (k u l r d), keep l r
-             (bev ip @
-             -7 eofsym
-                10 (putc 10, revcat l r)
-                (c & 0 < c) (loop (c >< l) r)            ; insert a printable
-                -1 (edleft  km () l r ())
-                -2 (edright km () l r ())
-                -3 (edbsp   km () l r ())
-                -4 (eddel   km () l r ())
-                -5 (edhome  km () l r ())
-                -6 (edend   km () l r ())
-                (loop l r)))
+           (bev ip @
+            -7 eofsym
+            10 (putc 10, revcat l r)
+            (c & 0 < c) (loop (c >< l) r)            ; insert a printable
+            -1 (edleft  km () l r ())
+            -2 (edright km () l r ())
+            -3 (edbsp   km () l r ())
+            -4 (eddel   km () l r ())
+            -5 (edhome  km () l r ())
+            -6 (edend   km () l r ())
+            (loop l r)))
         (loop () ()))
 
    ; --- the shell line reader: edraw + command history -------------------------
