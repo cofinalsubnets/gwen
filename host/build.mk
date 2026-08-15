@@ -22,8 +22,8 @@ host_cc = $(CC)
 # ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads, and it is load-bearing whenever CC is the dist
 # artifact's own `love mooncc` verb: the root Makefile exports LOVE_NO_IMAGE=1 for the
 # corpus, an egg-booted love has no verb table, and `mooncc` then reads as a FILENAME
-# ("love: cannot open mooncc"). The love0 lane and the lit rule already lead with it; this
-# puts it on every $(hcc) site at once rather than three times.
+# ("love: cannot open mooncc"). The love0 lane already leads with it; this puts it on
+# every $(hcc) site at once rather than three times.
 hcc = LOVE_NO_IMAGE= $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Iout/lib
 # the whole-archive flag differs by linker, and mach-o takes no love_data.ld either -- it
 # spells sections `segment,section`, so kinds.h's roster asks the sentinels by name.
@@ -112,7 +112,7 @@ $(ho)/liblove.so: $(ho)/liblove.a $(R)/love_data.ld
 # The bootstrap interpreter: -DGL_BOOTSTRAP against the fallback top-level data.h (no
 # -I$(ho)), and -Dai_tco=0, which is also the trampoline-coverage lane. It RUNS the .l
 # tools that generate the lcat headers, so it cannot depend on them -- it #includes the
-# lit-wrapped $(gl0_h) instead, produced without an interpreter. It links the whole
+# sed-wrapped $(gl0_h) instead, produced without an interpreter. It links the whole
 # host/*.c glob: the posix nifs and host/image.c's bake/wake are what let love0 bake and
 # wake mooncc0.image and so drive the mooncc-built default `love`.
 # ⚠ -DAI_VERSION='$(love_base)+bootstrap' on purpose, and BOTH halves earn their place.
@@ -185,7 +185,7 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # mooncc0.image, the image that breaks the self-host circle. With a BUNDLED love beside the
 # tree (the binary a seed laid beside itself -- ./Makefile's bundled_love) there is no circle: that
 # binary already carries mooncc as a verb, so it compiles the tree directly and love0,
-# mooncc0.image and the lit-laid 0.h twins are never made. moon0_dep carries the difference
+# mooncc0.image and the sed-laid 0.h twins are never made. moon0_dep carries the difference
 # into the rules below, so nothing names an image that will not exist.
 # boot_love: whoever runs a build-time .l tool -- love0 normally, the bundled artifact
 # when one is here. Every such site must ask for it by this name, or it resurrects love0.
@@ -250,7 +250,7 @@ $(ho)/.mksys-cat.l: $(mksys_l) $(ho)/.mksys-cat.list
 	@cat $(mksys_l) > $@
 # ⚠ THE LAST love0 IN THE DEFAULT LANE. sys.o is LAID by running a love over the mksys cat,
 # and naming love0 here was enough to drag the whole bootstrap back in -- love0 wants $(gl0_h),
-# which used to want tests0.h, `cat $t | lit` through lit's stdin, where distboot kept dying at
+# which used to want tests0.h, the whole corpus through one stdin, where distboot kept dying at
 # 139. (The corpus is READ now, not baked, so that particular tail is gone.) A bundled love
 # lays it just as well: the cat carries holo itself, so the layer needs nothing of the bootstrap.
 $(moon_d)/sys.o: $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))

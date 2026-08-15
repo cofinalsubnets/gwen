@@ -25,7 +25,7 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 # reason: to be *some* love that can wake mooncc0.image, because the default love is
 # mooncc-built and so cannot drive its own build. A tree the seed laid
 # has no such circle -- that binary IS a love with mooncc baked in as a verb. So it
-# compiles with the binary it shipped with, and love0 / mooncc0.image / the lit-laid 0.h
+# compiles with the binary it shipped with, and love0 / mooncc0.image / the sed-laid 0.h
 # twins are never built at all. Not an optimisation: building them is how a bootstrap that
 # has nothing to bootstrap goes wrong (distboot found the mooncc-built lane segfaulting
 # laying prel0.h), and the lane simply has no reason to exist here.
