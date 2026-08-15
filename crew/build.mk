@@ -183,16 +183,22 @@ dist_drop = wasm/love.js
 # suffix -- because an extracted tarball has no .git to describe. The checked-in VERSION
 # carries only the base; freezing the whole id here is what lets a build from the tarball
 # stamp the same string the tree stamped, and that string compiles into love.o.
-# ⚠ ALWAYS RE-STAGED, never cached on a stamp. The stage's real input is the INDEX, and
-# make cannot depend on that: a `git add` changes what a release contains while every file
-# make watches keeps its mtime, so a stamped stage happily serves a tarball cut before the
-# edit you are trying to test. That is silent, and it looks exactly like the fix not
-# working -- it cost three distboot rounds here before the artifact was opened and found to
-# predate the change. A checkout-index of the tree is a second; correctness is worth it.
+# THE STAGE'S REAL INPUT IS THE INDEX, and the stamp holds the index's own CONTENT HASH --
+# `git write-tree`, 2 ms, the same tree object a commit would name. So this is a content
+# stamp like $(ho)/.hostcc and out/lib/corpus.list, not a date stamp: a `git add` changes the
+# hash and re-stages, and nothing else can make it skip.
+# ⚠ THE OLD RULE RE-STAGED UNCONDITIONALLY and said make could not depend on the index. It
+# can, through the hash; what it cannot depend on is an mtime, which was the true objection --
+# a `git add` moves no file make watches, so a DATE-stamped stage serves a tarball cut before
+# the edit you are testing, silently, looking exactly like the fix not working (three distboot
+# rounds went that way). The hash closes that hole and costs 43 s less on every no-op.
+# ⚠ the dirty WARNING stays outside the skip: `write-tree` hashes the index, so a worktree
+# edit leaves it unchanged -- correctly, the artifact does not carry that edit -- and the one
+# time you need telling is exactly then.
 .PHONY: force_stage
 force_stage: ;
 out/dist/.staged-$(dist_ver): force_stage $(ho)/love
-	@echo STAGE	$(abspath $(dist_stage))/love-$(dist_ver)
+	@mkdir -p out/dist
 	@# ⚠ SAY SO WHEN THE INDEX AND THE WORKING TREE DISAGREE. Cutting from the index is
 	@# right for a release -- it is what makes an artifact reproducible from a revision --
 	@# but it means an uncommitted edit is NOT in what you just built, and a gate run
@@ -208,13 +214,17 @@ out/dist/.staged-$(dist_ver): force_stage $(ho)/love
 	   echo "  /warn this artifact comes from the INDEX and these are NOT in it --"; \
 	   echo "  /warn 'git add' them first:"; \
 	   printf '%s\n' "$$out" | sed 's/^/        /' | head -8; fi
-	@rm -rf $(dist_stage)
-	@mkdir -p $(dist_stage)/love-$(dist_ver)
-	@git -C $(R) checkout-index -a --prefix=$(abspath $(dist_stage))/love-$(dist_ver)/
-	@rm -rf $(dist_stage)/love-$(dist_ver)/dl
-	@rm -f $(dist_stage)/love-$(dist_ver)/$(dist_drop)
-	@printf '%s\n' "$(dist_ver)" > $(dist_stage)/love-$(dist_ver)/VERSION
-	@touch $@
+	@t=$$(git -C $(R) write-tree 2>/dev/null); \
+	 if [ -n "$$t" ] && [ -f $@ ] && [ -d $(dist_stage)/love-$(dist_ver) ] \
+	    && [ "$$t" = "$$(cat $@ 2>/dev/null)" ]; then :; else \
+	   echo "STAGE	$(abspath $(dist_stage))/love-$(dist_ver)"; \
+	   rm -rf $(dist_stage); \
+	   mkdir -p $(dist_stage)/love-$(dist_ver); \
+	   git -C $(R) checkout-index -a --prefix=$(abspath $(dist_stage))/love-$(dist_ver)/; \
+	   rm -rf $(dist_stage)/love-$(dist_ver)/dl; \
+	   rm -f $(dist_stage)/love-$(dist_ver)/$(dist_drop); \
+	   printf '%s\n' "$(dist_ver)" > $(dist_stage)/love-$(dist_ver)/VERSION; \
+	   printf '%s\n' "$$t" > $@; fi
 
 # ⚠ AN EXTRACTED TREE CANNOT CUT ONE. The stage is `git checkout-index`, and a tree laid
 # by `love source` has no .git -- so there the tarball is not built, it is ALREADY THERE:
