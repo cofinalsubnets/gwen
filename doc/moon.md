@@ -41,6 +41,11 @@ The dialect is not "C11-ish" by taste — it is what the target demands:
 `crew/moon/`, the kore discipline: pure engines with law files, a thin driver, one gate per
 piece. ~11k lines of love.
 
+* **floor.l** — the C type floor: the laws that are neither syntax nor codegen (the type shapes,
+  `tysz`/`tyalign`, and the typing door — promotions and the usual arithmetic conversions),
+  spelled once and read from both sides. Pure: the machine word and the struct-tag table arrive
+  as PARAMETERS, so parse threads them off `ps`, gen off `g`, and neither owns the law. This is
+  the file a front that is not `cparse` stands on — it names no token, parse state or register.
 * **lex.l** — text → token list (pure). Tokens carry file/line for diagnostics, and a 4th field
   flagging a `(` GLUED to the preceding identifier — which is what distinguishes a function
   macro from an object macro whose body opens with a paren.

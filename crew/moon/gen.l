@@ -855,12 +855,8 @@
           (cls = 'cmp) (-255 <= n && n <= 255)                ; CMP/CMN imm8
           ())                                                 ; log/mul: materialize into a register
        (fits32? n))
-   ; -- the type floor (struct sizes come off the stag table riding in g) --
-   (ptr? ty) (two? ty && <ty = 'ptr)
-   (arr? ty) (two? ty && <ty = 'arr)
-   (stru? ty) (two? ty && <ty = 'struct)
-   (fn? ty) (two? ty && <ty = 'fn)           ; ('fn ret?) -- a function; decays to its address
-   (bitf? ty) (two? ty && <ty = 'bitfield)    ; a bitfield member: (bitfield uty bitoff width); its lvalue is a UNIT address
+   ; -- the type floor rides crew/moon/floor.l (shapes, sizes, the typing door): g carries only
+   ; the two things the floor takes as parameters -- the machine word and the stag table. --
    (uldop sz) (? (sz = 1) 'ldu1 (sz = 2) 'ldu2 (sz = 4) 'ldu4 'ld)   ; unsigned load of a sz-byte word
    (fnty g nm) (: sig (peep (g 'sigs) nm ())        ; a named function's type, return riding when sig'd
                   (? (two? sig) ['fn <sig] '(fn)))
@@ -926,7 +922,7 @@
    ; the 8-byte REGISTER PAIR, lo in r0, hi in r1 -- the one type wider than the accumulator.
    (llt? ty) ((ty = 'llong) || (ty = 'ullong))
    ; ⚠ THE SIGNEDNESS IS C'S, and C's is not "either operand is unsigned". 6.3.1.8 is a
-   ; RANK rule, and `puac` (parse.l) is the tree's one spelling of it: where the signed
+   ; RANK rule, and `puac` (floor.l) is the tree's one spelling of it: where the signed
    ; type is strictly wider it represents every value of the unsigned one, so the common
    ; type stays SIGNED -- `long long` meets `unsigned int` at long long. Reading that pair
    ; as unsigned made a 64-bit signed divide go logical, and sqlite is where it showed:
@@ -1001,7 +997,7 @@
                    ())))))
    (knum g e) (? (two? e && id? <e 'num) [<>e (numty <>e)] (cnum g e))
    ; a compare or divide takes the COMMON converted type's signedness (C11 6.3.1.8):
-   ; the signedness of the typing door's puac (parse.l) -- ONE spelling of the law,
+   ; the signedness of the typing door's puac (floor.l) -- ONE spelling of the law,
    ; parse and gen both consuming it, width included: on t32 a long cannot hold every
    ; uint, so long-vs-uint compares UNSIGNED there and signed on the 64-bit targets.
    ; a pointer compares as the unsigned word. znrw stays beside it: int meets uint at
@@ -1035,14 +1031,7 @@
    fsetn '((set ne r0) (set p r1) (or r0 r0 r1))
    (negrel op) (? (op = 'eq) 'ne (op = 'ne) 'eq (op = 'lt) 'ge (op = 'ge) 'lt (op = 'le) 'gt 'le)   ; NEGATED: branch-if-false
    (fits32? v) ((-2147483648 <= v) && (v <= 2147483647))    ; holo's ALU/cmp/imul immediates ride le32
-   (tsz g ty) (? (ptr? ty) (wsize g)
-                 (arr? ty) (* <>>ty (tsz g <>ty))
-                 (stru? ty) <>(peep (g 'stag) <>ty 0)
-                 ((ty = 'char) || (ty = 'uchar) || (ty = 'bool)) 1 ((ty = 'short) || (ty = 'ushort)) 2
-                 ((ty = 'int) || (ty = 'uint) || (ty = 'float)) 4
-                 (llt? ty || (ty = 'double)) 8                ; 8-byte on EVERY target (t32's word is 4)
-                 (d128? ty) 16
-                 (wsize g))
+   (tsz g ty) (tysz (wsize g) (g 'stag) ty)
    ; a member's (offset ty) off a struct type, | 'bad
    (fmem g ty name)
     (? !(stru? ty) 'bad

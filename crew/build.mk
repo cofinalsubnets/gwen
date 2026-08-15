@@ -18,7 +18,7 @@ korefiles =crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l crew/
 # (defbackend mutates holo's own table, so mooncc cross-compiles every target whichever
 # single backend the host image baked), the writers, the compiler proper, then moon.l
 # whose tail SEAT fires.
-moonfiles = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l
+moonfiles = crew/kore/text.l crew/kore/core.l crew/kore/asbook.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l
 # the build-tree kore/mooncc bins are WAKE SHIMS over their sibling images, the exact shape
 # mk/install.mk installs: `#!/bin/sh` resolving its own directory, then exec'ing the
 # SIBLING love on the SIBLING image. ⚠ the interpreter is never PATH's, so a tree-fresh cat
@@ -89,7 +89,7 @@ distfiles = crew/kore/text.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
             crew/kore/diff.l lib/dns.l tools/ain.l $(lushfiles) crew/cook/cook.l crew/kore/asbook.l \
             crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l \
             crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l \
-            crew/holo/link.l crew/holo/copy.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
+            crew/holo/link.l crew/holo/copy.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
             crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/sb/merge.l \
             crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l crew/sb/up.l \
             lib/gz.l lib/tar.l lib/tarcmd.l lib/source.l

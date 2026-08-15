@@ -365,68 +365,14 @@
                           (peep (ps 'types) (tkv t) 0) 1 ())
        ())
 
-   ; -- the type floor (parse side; gen re-derives with the same stag) --
-   (ptr? ('ptr)) 1
-   (arr? ('arr)) 1
-   (fn? ('fn)) 1
-   (stru? ('struct)) 1
-   (cplxty? ty) (stru? ty && member? <>ty '("__cplx_double" "__cplx_float"))       ; a seeded complex
-   (bitf? ('bitfield)) 1       ; a bitfield member: (bitfield uty bitoff width)
-   ; the machine WORD (bytes): a pointer and a gp scalar (long) ride it. 4 on the 32-bit thumb ABI,
-   ; 8 otherwise. MUST match gen's (wsize g) (gen.l) -- a divergence mislays every pointer-bearing
-   ; struct SILENTLY, since playout bakes offsets here at parse and gen trusts the stag table.
+   ; -- the type floor rides crew/moon/floor.l (shapes, sizes, the typing door), spelled once
+   ; and read from gen too. ps carries only the two things the floor takes as parameters:
+   ; the machine WORD and the tag table. --
    (pst32? ps) (member? (peep ps 'tgt ()) '(thumb2 thumb2sp thumb1))
    (psword ps) (? (pst32? ps) 4 8)
    (szty ps) (? (pst32? ps) 'uint 'ulong)          ; size_t: sizeof folds wear this coat
-   (tsz ps ty) (? (ptr? ty) (psword ps)
-                  (arr? ty) (* <>>ty (tsz ps <>ty))
-                  (stru? ty) <>(peep (ps 'stag) <>ty 0)
-                  (bitf? ty) (tsz ps <>ty)          ; the unit's size (a bitfield rides its declared type)
-                  ((ty = 'char) || (ty = 'uchar) || (ty = 'bool)) 1 ((ty = 'short) || (ty = 'ushort)) 2
-                  ((ty = 'int) || (ty = 'uint) || (ty = 'float)) 4
-                  ((ty = 'llong) || (ty = 'ullong) || (ty = 'double)) 8     ; 8-byte on EVERY target
-                  ((ty = 'i128) || (ty = 'u128)) 16
-                  (psword ps))
-   (talign ps ty) (? (ptr? ty) (psword ps)
-                     (arr? ty) (talign ps <>ty)
-                     (stru? ty) <>>(peep (ps 'stag) <>ty 0)
-                     (bitf? ty) (talign ps <>ty)
-                     (tsz ps ty))
-   (aup n a) (& (n + (a - 1)) (0 - a))              ; round n up to alignment a
-
-   ; -- the typing door: C's promotion and conversion law spelled ONCE --
-   ; integer promotions (C11 6.3.1.1) and the usual arithmetic conversions
-   ; (6.3.1.8), pure over the shared type vocabulary. ptype's arithmetic lanes
-   ; read it here, and gen's cmpu (compare/divide signedness) CONSUMES it --
-   ; one spelling, both sides, so the parse/gen type twins cannot drift on
-   ; this law. w64 is the one seam: whether long is 8 bytes (!(pst32? ps)
-   ; here, !(t32? g) in gen) -- on ILP32 a long cannot hold every uint, so
-   ; long meets uint at ULONG where LP64 answers long.
-   (parith? ty) (? (bitf? ty) 1
-                   (member? ty '(bool char uchar short ushort int uint long ulong
-                                 llong ullong i128 u128 float double)))
-   (trank ty) (? (member? ty '(i128 u128)) 4
-                 ((ty = 'llong) || (ty = 'ullong)) 3
-                 ((ty = 'long) || (ty = 'ulong)) 2 1)
-   (tusg? ty) (member? ty '(uchar ushort uint ulong ullong u128))
-   (tusg ty) (? (ty = 'int) 'uint (ty = 'long) 'ulong
-                (ty = 'llong) 'ullong (ty = 'i128) 'u128 ty)
-   (tw w64 ty) (: r (trank ty) (? (r = 1) 4 (r = 2) (? w64 8 4) (r = 3) 8 16))
-   (pprom ty) (? (bitf? ty) (pprom <>ty)              ; a bitfield promotes as its unit
-                 (member? ty '(bool char uchar short ushort)) 'int
-                 ty)
-   (puac w64 ta tb)
-    (? ((ta = 'double) || (tb = 'double)) 'double
-       ((ta = 'float) || (tb = 'float)) 'float
-       (: a (pprom ta) b (pprom tb)
-          (? (a = b) a
-             (: ua (tusg? a) ub (tusg? b)
-                (? ((ua && ub) || (!ua && !ub)) (? (trank a < trank b) b a)   ; same signedness: higher rank
-                   (: u (? ua a b) s (? ua b a)     ; one of each: the unsigned one, the signed one
-                      (? (trank s <= trank u) u     ; unsigned rank >= signed: unsigned wins
-                         (tw w64 u < tw w64 s) s    ; signed strictly wider: it represents all of u
-                         (tusg s))))))))            ; same width: the signed one's unsigned twin
-   (tdecay ty) (? (arr? ty) ['ptr <>ty] ty)
+   (tsz ps ty) (tysz (psword ps) (ps 'stag) ty)
+   (talign ps ty) (tyalign (psword ps) (ps 'stag) ty)
 
    ; -- parse-time expr typer (for sizeof folding) -- the UNDECAYED type of an
    ; lvalue/pointer expr, | () when unknown (the caller keeps a deferred 'szof

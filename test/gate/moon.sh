@@ -25,7 +25,7 @@ moon0() { "$love0" wake out/host/mooncc0.image mooncc "$@"; }
 echo "CC crew/moon/{lex,cpp,parse,gen,law}.l"
 out=$ho/.test_moon.out
 { echo "(use 'holo)"
-  cat test/00-init.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
+  cat test/00-init.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
       crew/holo/text.l crew/moon/gen.l crew/moon/law.l
 } | "$m" > "$out" 2>&1
 r=$?
