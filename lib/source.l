@@ -115,11 +115,10 @@
    ; answer. ⚠ crew/build.mk's twin roster is the AUTHORITY -- an arch missing there is
    ; refused by make, loudly and before anything is built; this list is what the usage
    ; line reads and what the cross lane's shape check compares against.
-   seed-arches '(("x86_64" 62) ("aarch64" 183) ("riscv64" 243))
-   (seed-em a) (: (go l) (? !(two? l) ()
-                            (: r <l (? (<r = a) <>r (go >l))))
-                  (go seed-arches))
-   (seed-names _) (ujoin (map (\ r <r) seed-arches))
+   seed-arches {"x86_64" 62 "aarch64" 183 "riscv64" 243}
+   (seed-em a) (peep seed-arches a ())            ; a tablet indexes itself; () is the miss
+   ; ⚠ SORTED: `keys` answers HASH order, so an unsorted usage line reshuffles between builds
+   (seed-names _) (ujoin (sort (keys seed-arches)))
    ; the e_machine off an ELF header (bytes 18-19, little-endian) | ()
    (seed-elfmach p)
     (: b (src-slurp p)

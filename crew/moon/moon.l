@@ -673,11 +673,13 @@
    ; word as either, is worse than refusing. The ISO names are ONE dialect here (doc/moon.md
    ; -- we do not distinguish them from a codegen point of view), so they differ only in
    ; what we can say we accept.
-   stds '(("c89" c) ("c90" c) ("c99" c) ("c11" c) ("c17" c) ("c18" c) ("c23" c)
-          ("gnu89" c) ("gnu90" c) ("gnu99" c) ("gnu11" c) ("gnu17" c) ("gnu18" c) ("gnu23" c)
-          ("holyc" holyc))
-   (stdof w) (: (go l) (? !(two? l) () (: r <l (? (<r = w) <>r (go >l)))) (go stds))
-   (stdnames _) (: (go l) (? !(two? l) "" !(two? >l) <(<l) (<(<l) + " " + (go >l))) (go stds))
+   stds {"c89" 'c "c90" 'c "c99" 'c "c11" 'c "c17" 'c "c18" 'c "c23" 'c
+         "gnu89" 'c "gnu90" 'c "gnu99" 'c "gnu11" 'c "gnu17" 'c "gnu18" 'c "gnu23" 'c
+         "holyc" 'holyc}
+   (stdof w) (peep stds w ())                    ; a tablet indexes itself; () is the miss
+   ; ⚠ SORTED, because `keys` answers HASH order -- a usage line that reshuffles itself
+   ; between builds is a worse sentence than an alphabetical one.
+   (stdnames _) (ujoin (sort (keys stds)))
    ; ⚠ A PRE-PASS, never a sixteenth accumulator. `flags` carries fifteen curried slots
    ; across twenty-four call sites, and (f) == f -- so one mistyped site would hand back a
    ; CLOSURE instead of a result, in silence. -std= interacts with nothing else on the line,
@@ -707,32 +709,49 @@
    (obase p) (: n (tally p)                        ; dir/x.c -> x.o (in the cwd, gcc-shaped)
                 (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r (n - 1)))
                 (go 0 0 + "o"))
-   (flags as c is ds o ins t9 p9 g9 n9 x9 d9 i9 f9 r9)
-    (? !(two? as) [c (rev is) (rev ds) o (rev ins) t9 p9 g9 n9 x9 d9 i9 f9 r9]
+   ; ⚠ ONE TABLET, not fifteen curried slots. The walk used to carry every accumulator BY
+   ; POSITION across twenty-four call sites: adding a flag meant editing all of them, and a
+   ; slip put the right value in the wrong slot -- in silence, since (f) == f makes a short
+   ; call a CLOSURE rather than an error. Now a flag is one `pin` at its own arm and nothing
+   ; anywhere else, and the reader asks for it by name. -std= came off this walk for exactly
+   ; the hazard the tablet retires; it stays a pre-pass because it names the LANGUAGE and
+   ; belongs before the line is read at all.
+   ; the three LISTS (is ds ins) collect reversed and are righted at the end; every other key
+   ; is last-one-wins, and `fir` alone accumulates into one comma string.
+   (fnew ntv) (: t {} _ (pin t 'tgt ntv) t)       ; the target defaults to the ground we stand on
+   (fset t k v) (: _ (pin t k v) t)               ; pin, ANSWERING the tablet -- so an arm is one form
+   (fpush t k v) (fset t k (v >< (peep t k ())))
+   (fget t k) (peep t k ())
+   (flags as t)
+    (? !(two? as)
+       (: _ (pin t 'is (rev (fget t 'is)))
+          _ (pin t 'ds (rev (fget t 'ds)))
+          _ (pin t 'ins (rev (fget t 'ins)))
+          t)
        (: a <as r >as
-          (? (a = "-c") (flags r 1 is ds o ins t9 p9 g9 n9 x9 d9 i9 f9 r9)
+          (? (a = "-c") (flags r (fset t 'c 1))
              ; ⚠ the SAME string love answers, because they are one artifact: mooncc is a
              ; verb on the love binary, not a separate program, and a build that reported
              ; two versions would be reporting a thing that cannot happen. `love-version`
              ; is that one id (mk/lib.mk computes it: ./VERSION plus a VCS suffix).
              ((a = "--version") || (a = "-v"))
               (: _ (puts ("mooncc " + love-version)) _ (putc 10) (quit 0))
-             (a = "-pie") (flags r c is ds o ins t9 1 g9 n9 x9 d9 i9 f9 r9)
-             (a = "-I") (? (two? r) (flags >r c (<r >< is) ds o ins t9 p9 g9 n9 x9 d9 i9 f9 r9) (udie 2 usage))
-             (a = "-D") (? (two? r) (flags >r c is (<r >< ds) o ins t9 p9 g9 n9 x9 d9 i9 f9 r9) (udie 2 usage))
-             (a = "-o") (? (two? r) (flags >r c is ds <r ins t9 p9 g9 n9 x9 d9 i9 f9 r9) (udie 2 usage))
-             (a = "-t") (? (two? r) (flags >r c is ds o ins (totgt <r) p9 g9 n9 x9 d9 i9 f9 r9) (udie 2 usage))
-             (a = "-Ttext") (? (two? r) (flags >r c is ds o ins t9 p9 (tonum <r) n9 x9 d9 i9 f9 r9) (udie 2 usage))
+             (a = "-pie") (flags r (fset t 'pie 1))
+             (a = "-I") (? (two? r) (flags >r (fpush t 'is <r)) (udie 2 usage))
+             (a = "-D") (? (two? r) (flags >r (fpush t 'ds <r)) (udie 2 usage))
+             (a = "-o") (? (two? r) (flags >r (fset t 'o <r)) (udie 2 usage))
+             (a = "-t") (? (two? r) (flags >r (fset t 'tgt (totgt <r))) (udie 2 usage))
+             (a = "-Ttext") (? (two? r) (flags >r (fset t 'org (tonum <r))) (udie 2 usage))
              ; -Tdata is the SPLIT: .data runs there and is stored after the code,
              ; which is what every XIP part needs and what -Ttext alone cannot say.
-             (a = "-Tdata") (? (two? r) (flags >r c is ds o ins t9 p9 g9 n9 x9 (tonum <r) i9 f9 r9) (udie 2 usage))
+             (a = "-Tdata") (? (two? r) (flags >r (fset t 'dorg (tonum <r))) (udie 2 usage))
              ; -fno-inline bars the SPLICE, fn-wide and TU-wide -- the same door
              ; __attribute__((noinline)) opens one name at a time. it is an instrument
              ; before it is an optimization flag: a splice rewrites the code you are
              ; reading into its caller, so comparing one function against another cc's
              ; needs a way to say don't. gcc's -fno-inline-functions is the same word.
              ((a = "-fno-inline") || (a = "-fno-inline-functions"))
-              (flags r c is ds o ins t9 p9 g9 n9 x9 d9 1 f9 r9)
+              (flags r (fset t 'ni 1))
              ; -fir=PREFIX[,PREFIX..] -- WRITE DOWN WHAT WE BUILT: the machine-form IR of every
              ; function whose name starts with one of them, laid in .rodata as one readable
              ; datum. -fno-ir=PREFIX[,..] carves back out, gcc's -fno- word and this file's own
@@ -748,12 +767,11 @@
              ; so what a reader lacks is not more data but a page telling them where to stand.
              ; ⚠ a LINK flag: with -c there is no output ELF to carry it and it is ignored.
              (pfx? a "-freadme=")
-              (: f (snip a 9 (tally a)) t (uread f)
-                 (? (two? t) (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9 f9 <>t)
+              (: f (snip a 9 (tally a)) rt (uread f)
+                 (? (two? rt) (flags r (fset t 'rdme <>rt))
                     (udie 1 ("cc: cannot open " + f))))
-             (pfx? a "-fir=") (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9 (irjoin f9 (snip a 5 (tally a))) r9)
-             (pfx? a "-fno-ir=") (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9
-                                        (irjoin f9 (irneg (snip a 8 (tally a)))) r9)
+             (pfx? a "-fir=") (flags r (fset t 'fir (irjoin (fget t 'fir) (snip a 5 (tally a)))))
+             (pfx? a "-fno-ir=") (flags r (fset t 'fir (irjoin (fget t 'fir) (irneg (snip a 8 (tally a))))))
              ; ⚠ BARE, and the algebra gives them their meaning rather than a rule doing it:
              ; `-fir` is the EMPTY POSITIVE, which every name has as a prefix, so it opens the
              ; set wherever it sits -- `-fir=` in front. `-fno-ir` is the empty NEGATIVE, and
@@ -762,17 +780,17 @@
              ; without anyone writing down that it wins. ⚠ they must be named HERE: `tol?`
              ; swallows the whole advisory -f family, so before this both were accepted in
              ; silence and answered a binary with no record at all.
-             (a = "-fir") (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9 (irjoin f9 "") r9)
-             (a = "-fno-ir") (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9 (irjoin f9 "-") r9)
-             (glu? a 73) (flags r c (snip a 2 (tally a) >< is) ds o ins t9 p9 g9 n9 x9 d9 i9 f9 r9)
-             (glu? a 68) (flags r c is (snip a 2 (tally a) >< ds) o ins t9 p9 g9 n9 x9 d9 i9 f9 r9)
-             (glu? a 116) (flags r c is ds o ins (totgt (snip a 2 (tally a))) p9 g9 n9 x9 d9 i9 f9 r9)
+             (a = "-fir") (flags r (fset t 'fir (irjoin (fget t 'fir) "")))
+             (a = "-fno-ir") (flags r (fset t 'fir (irjoin (fget t 'fir) "-")))
+             (glu? a 73) (flags r (fpush t 'is (snip a 2 (tally a))))
+             (glu? a 68) (flags r (fpush t 'ds (snip a 2 (tally a))))
+             (glu? a 116) (flags r (fset t 'tgt (totgt (snip a 2 (tally a)))))
              ; -nostdinc is the INCLUDE half of -nostdlib's word, and it is LOUD
              ; rather than advisory: with the /usr/include tail still on, a header
              ; we simply do not carry resolves to GLIBC's instead, and a
              ; freestanding build quietly taking a hosted declaration is the wrong
-             ; artifact wearing a green face. (x9 -- it reaches incload as nsi.)
-             (a = "-nostdinc") (flags r c is ds o ins t9 p9 g9 n9 1 d9 i9 f9 r9)
+             ; artifact wearing a green face. (it reaches incload as nsi.)
+             (a = "-nostdinc") (flags r (fset t 'nsi 1))
              ; -ffreestanding is the one member of the -nostd* family that says
              ; something about the LANGUAGE and not just the link: it makes the
              ; implementation freestanding, and __STDC_HOSTED__ is how the
@@ -780,15 +798,15 @@
              ; the W^X mmap arena over the freestanding heap copy -- so without
              ; this a kernel build took the hosted lane and reached for sysconf.
              ; it rides as a DEFINE (cpp applies -D after its predefines, so this
-             ; overrides), which keeps it out of the flag accumulators. ⚠ NOT the
-             ; rest of the family: -nostdlib alone is a hosted program that
-             ; simply supplies its own runtime, and test_raw is exactly that.
+             ; overrides). ⚠ NOT the rest of the family: -nostdlib alone is a
+             ; hosted program that simply supplies its own runtime, and test_raw
+             ; is exactly that.
              (a = "-ffreestanding")
-              (flags r c is ("__STDC_HOSTED__=0" >< ds) o ins t9 p9 g9 1 x9 d9 i9 f9 r9)
-             (nostd? a) (flags r c is ds o ins t9 p9 g9 1 x9 d9 i9 f9 r9)
-             (tol? a) (flags r c is ds o ins t9 p9 g9 n9 x9 d9 i9 f9 r9)
+              (flags r (fset (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1))
+             (nostd? a) (flags r (fset t 'nostd 1))
+             (tol? a) (flags r t)
              ((0 < tally a) && (a 0 = 45)) (udie 2 usage)
-             (flags r c is ds o (a >< ins) t9 p9 g9 n9 x9 d9 i9 f9 r9))))
+             (flags r (fpush t 'ins a)))))
    ; EVERY cc SAYS ITS SENTENCE, the internal ones too: gen and holo raise noms
    ; (musttail-not-a-tail, cs-unsaved, link-undef) that would otherwise reach the reader
    ; as a bare love debug note -- no cc: prefix, nothing naming the input. it goes on
@@ -817,8 +835,10 @@
        dia <sd
        as9 <>sd                                    ; the line with -std= lifted off it
        ntv (? (love-arch = "arm64") 'arm64 (love-arch = "riscv64") 'riscv64 'x64)
-       f (flags as9 () () () () () ntv () () () () () () () ())
-       c (el f 0) is (map dirn (el f 1)) ds (el f 2) o (el f 3) ins (el f 4) tgt (el f 5) pie (el f 6) org (el f 7) nostd (el f 8) nsi (el f 9) dorg (el f 10) ni (el f 11) firp (el f 12) rdme (el f 13)
+       f (flags as9 (fnew ntv))
+       c (fget f 'c) is (map dirn (fget f 'is)) ds (fget f 'ds) o (fget f 'o) ins (fget f 'ins)
+       tgt (fget f 'tgt) pie (fget f 'pie) org (fget f 'org) nostd (fget f 'nostd) nsi (fget f 'nsi)
+       dorg (fget f 'dorg) ni (fget f 'ni) firp (fget f 'fir) rdme (fget f 'rdme)
        ; TWO outcomes now, the cc shape: -c lays objects, anything else LINKS.
        ; one .c used to take a third path (cc-exe: elf64 straight off the IR,
        ; no crt0 and no linker) which could not bind a libc -- so `mooncc

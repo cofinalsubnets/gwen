@@ -610,6 +610,16 @@ echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc bat
 # every check above this line.
 printf 'int wa(int x){return x+1;}\n' > "$ho/.wa.c"
 printf 'int wb(void){ return nope; }\n' > "$ho/.wb.c"
+# ⚠ AND THE FLAGS MUST NOT BLEED. The flag walk accumulates into ONE TABLET now, and a
+# tablet is mutated in place -- so a second compile in the same process would inherit the
+# first's flags if `fnew` ever stopped building a fresh one. The four compiles below all
+# carry the same flags and would not notice; this pair does: a flag-bearing compile, then
+# a bare one, whose object must equal the bare compile run cold.
+moonrun -c "$ho/.wa.c" -o "$ho/.wa-bare.o" > /dev/null 2>&1 || fail "warm: the bare reference compile"
+"$m" wake "$ho/mooncc.image" -e "(: a (moon-run (list \"-c\" \"-fno-inline\" \"-DLEAK=1\" \"-nostdinc\" \"$ho/.wa.c\" \"-o\" \"$ho/.wl1.o\"))
+     b (moon-run (list \"-c\" \"$ho/.wa.c\" \"-o\" \"$ho/.wl2.o\")) (a + b))" </dev/null > /dev/null 2>&1 \
+  || fail "warm: the flag-leak pair did not compile"
+cmp -s "$ho/.wa-bare.o" "$ho/.wl2.o" || fail "warm: FLAGS BLED between compiles in one process"
 moonrun -c "$ho/.wa.c" -o "$ho/.wa-cold.o" > /dev/null 2>&1 || fail "warm: the cold reference compile"
 warm=$(printf '(: a (moon-run (list "-c" "%s" "-o" "%s"))
                   b (moon-run (list "-c" "%s" "-o" "/dev/null"))
