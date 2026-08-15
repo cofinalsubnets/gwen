@@ -261,9 +261,8 @@
    ; whole -- clexat stamps them 1-k..0 and the source itself from 1, so every
    ; stamped line (a gripe, __LINE__) is TRUE with no pay-back pass. an
    ; #include lexes fresh at its own line 1 either way.
-   (cc-parse src t)
-    (: is (peep t 'is ()) ds (peep t 'ds ()) tgt (peep t 'tgt ()) nsi (peep t 'nsi ()) dia (peep t 'dia ())
-       ds9 (archdefs tgt + featdefs tgt + stddefs tgt +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
+   (cc-parse src {'is is 'ds ds 'tgt tgt 'nsi nsi 'dia dia})
+    (: ds9 (archdefs tgt + featdefs tgt + stddefs tgt +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
                  (? (id? tgt 'x64) ("__SIZEOF_INT128__=16" >< ds) ds))     ; x64 alone carries the wide pair (gen's d128 lane); love.c's limb seam reads it
        r (uread src)
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))
@@ -300,9 +299,8 @@
                              || ((48 <= c) && (c <= 57)) || (c = 95))
                         (go (i + 1) (acc + (? ok (snip b i (i + 1)) "_")))))
        (go 0 "ai_ir_"))
-   (cc-objbytes src t)
-    (: ni (peep t 'ni ()) fir (peep t 'fir ()) tgt (peep t 'tgt ())
-     (@ (cc-parse src t)
+   (cc-objbytes src (t @ {'ni ni 'fir fir 'tgt tgt}))
+    (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs]
        (: ob (cgen-obj ast stag sigs weaks
                        [sfns svars sects alias aligns ainl noinl consts rstrs ni fir (irsym src)] tgt)
@@ -319,7 +317,7 @@
                    (objsecs tgt (objsecs4 tforms dforms nforms iforms bforms rforms + xs)
                             fnames gnames weaks lnames)))
              (udie 1 ("cc: the code generator answered an unexpected shape for " + src))))
-       (udie 1 ("cc: the parser answered an unexpected shape for " + src))))
+       (udie 1 ("cc: the parser answered an unexpected shape for " + src)))
    (cc-obj src dst t) (write-bytes dst (cc-objbytes src t))
    ; the LINK path (rung 3, crew/holo/link.l): every input lands as object
    ; bytes (a .c compiled here, a .o read off disk), crt0 rides FIRST (its
@@ -550,9 +548,9 @@
                                         () (sort (filter dotc? (readdir p))))
                             a)))
                () (sort (readdir d)))
-       ((map ((a b) \ [a (string (cc-objbytes b {'tgt tgt 'is [inc] 'dia 'c}))])
+       ((map ((a b) \ [a (string (cc-objbytes b (pin (fseed tgt 'c) 'is [inc])))])
              (nlmems ndir))
-        + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) {'tgt tgt 'is [mdir inc] 'dia 'c}))])
+        + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) (pin (fseed tgt 'c) 'is [mdir inc])))])
               (sort (filter dotc? (readdir (home + "lib/math"))))
         + (member? tgt '(x64 arm64 riscv64) ? [["mksys.o" (string (mksys-bytes tgt))]])))
    (rtpull srcs tgt nostd)
@@ -583,11 +581,9 @@
              ; scares about first.
              _ (? (two? <>pr) (undie <>pr) 0)
              <pr)))
-   (cc-link ins dst t)
-    (: is (peep t 'is ()) ds (peep t 'ds ()) tgt (peep t 'tgt ()) pie (peep t 'pie ())
-       org (peep t 'org ()) dorg (peep t 'dorg ()) nostd (peep t 'nostd ()) nsi (peep t 'nsi ())
-       ni (peep t 'ni ()) fir (peep t 'fir ()) rdme (peep t 'rdme ())
-       ars (filter dota? ins)
+   (cc-link ins dst (t @ {'is is 'ds ds 'tgt tgt 'pie pie 'org org 'dorg dorg
+                          'nostd nostd 'nsi nsi 'ni ni 'fir fir 'rdme rdme}))
+    (: ars (filter dota? ins)
        srcs (map (\ f (? (dotc? f) [f (string (cc-objbytes f t))]
                          (doto? f) (: r (uread f)
                                       (? (two? r) [f <>r]
@@ -724,9 +720,16 @@
    ; the three LISTS (is ds ins) collect reversed and are righted at the end; every other key
    ; is last-one-wins, and `fir` alone accumulates into one comma string.
    ; the one helper that is not already a primitive: prepend onto a keyed list. `pin`
-   ; ANSWERS its tablet, so every other arm below is a plain pin and the flag set is a
-   ; `{}` literal at its one construction site.
+   ; ANSWERS its tablet, so every arm below is a plain pin.
    (fpush t k v) (pin t k (v >< (peep t k ())))
+   ; ⚠ EVERY KEY, SEEDED -- and THIS IS THE MANIFEST. The consumers destructure the set in
+   ; their own parameter, and a map pattern matches on PRESENCE: a key pinned only when its
+   ; flag appears would fail to match exactly when the flag was absent, and the whole call
+   ; would answer the zero point. Seeding also puts the flag set in one readable place, which
+   ; the positional walk had and the bare tablet lost. ⚠ it is NOT a wrapper on `{}`: the
+   ; literal has to be COMPLETE and it is wanted at two sites, so it is spelled once.
+   (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'pie () 'org () 'dorg ()
+                    'nostd () 'nsi () 'ni () 'fir () 'rdme () 'dia dia}
    (flags as t)
     (? !(two? as)
        (: _ (pin t 'is (rev (peep t 'is ())))
@@ -840,7 +843,7 @@
        dia <sd
        as9 <>sd                                    ; the line with -std= lifted off it
        ntv (? (love-arch = "arm64") 'arm64 (love-arch = "riscv64") 'riscv64 'x64)
-       f (flags as9 {'tgt ntv 'dia dia})   ; the flag set, with the dialect already in it
+       f (flags as9 (fseed ntv dia))       ; the flag set, seeded whole
        ; ⚠ NORMALISE IN THE TABLET, not at a reader. -I dirs want a trailing slash, and the
        ; consumers now take `f` itself -- so a `dirn` applied on the way out of one reader
        ; would leave every other consumer holding the raw list. one pin, before anything reads.
