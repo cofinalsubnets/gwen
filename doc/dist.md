@@ -61,15 +61,33 @@ binary out — reusing them is what makes the rebuild byte-identical rather than
 equivalent.
 
 ⚠ **the seed is per-ISA.** "Bootstraps anywhere" means anywhere of that architecture:
-x86_64, aarch64, riscv64 are three seeds. `make dist_cross` bakes the twin, so one x86
-laptop can cut the pi's download.
+x86_64, aarch64, riscv64 are three seeds. `make xa=<arch> dist_cross` bakes any of them,
+so one x86 laptop can cut the pi's download.
+
+**`love seed <arch> [DIR]`** is that door held by the artifact rather than the Makefile —
+we are a cross compiler carrying our own source, so a seed can lay a seed for a machine
+it is not. ⚠ **no fixpoint there, and none is owed.** The check can hold only where the
+output ought to *be* this binary, and a cross lay is the one case the invocation itself
+says it cannot; running it would be a claim nothing could satisfy. What is still checked
+is the artifact's *shape* — its ELF `e_machine` must be the arch asked for, which catches
+a cross build quietly laying the host's. The trust is derived rather than absent: the
+binary doing the cross build is the one plain `love seed` proves natively, and the real
+check for the output is `love seed` on the machine it is for.
+
+⚠ and the OTHER case the fixpoint cannot hold — a **dirty tree** — still FAILS. Nobody
+asked for it, and the megabyte-scale mismatch is the report. The rule is *skip the check
+when the invocation named the reason, never when it was discovered.*
+
+⚠ the cross bake needs **qemu-user** for that arch (the twin's own heap is warmed by
+running it). A missing one is a loud build failure, not a silently unbaked seed.
 
 ## the recipes
 
 ```
-make dist-source   # the tarball
-make dist-seed     # the one-file artifact for this arch
-make dist          # both — a release
+make dist-source        # the tarball
+make dist-seed          # the one-file artifact for this arch
+make dist               # both — a release
+make xa=aarch64 dist_cross   # a seed for another arch (roster: crew/build.mk)
 make test_distboot
 ```
 

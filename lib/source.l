@@ -4,10 +4,14 @@
 ; host/src.c answers it), so there is no second download and no `tar xf`: the binary
 ; you ran IS the source distribution. doc/dist.md.
 ;
-;   love source [DIR]    lay ./love-<ver>/ and build in it
-;   love seed   [DIR]    lay it, BUILD it, and refuse unless the seed it produces is
-;                        this binary byte for byte -- the whole fixpoint, one word.
-;                        prefers an ambient cc (diverse double compiling); -self forbids it
+;   love source [DIR]         lay ./love-<ver>/ and build in it
+;   love seed   [DIR]         lay it, BUILD it, and refuse unless the seed it produces is
+;                             this binary byte for byte -- the whole fixpoint, one word.
+;                             prefers an ambient cc (diverse double compiling); -self forbids it
+;   love seed ARCH [DIR]      lay a seed for ANOTHER machine (x86_64 aarch64 riscv64) --
+;                             we are a cross compiler carrying our own source, so one
+;                             laptop can hand out the pi's download. NO fixpoint there:
+;                             see the ⚠ over the check. `./aarch64` is still a directory.
 ;
 ; ⚠ IT LAYS bin/love TOO, and that is not a convenience -- it is the point. ./Makefile
 ; takes a bin/love beside the tree as the C compiler ($(origin CC), bundled_love), so
@@ -107,6 +111,20 @@
    ; ⚠ and it is a REFUSAL, not a report: a fixpoint that failed and exited 0 would be a
    ; worse artifact than one that never claimed it.
    (seed-arch _) (? (love-arch = "arm64") "aarch64" (love-arch = "x64") "x86_64" love-arch)
+   ; the arches a seed can be laid FOR, each with the ELF e_machine its artifact must
+   ; answer. ⚠ crew/build.mk's twin roster is the AUTHORITY -- an arch missing there is
+   ; refused by make, loudly and before anything is built; this list is what the usage
+   ; line reads and what the cross lane's shape check compares against.
+   seed-arches '(("x86_64" 62) ("aarch64" 183) ("riscv64" 243))
+   (seed-em a) (: (go l) (? !(two? l) ()
+                            (: r <l (? (<r = a) <>r (go >l))))
+                  (go seed-arches))
+   (seed-names _) (ujoin (map (\ r <r) seed-arches))
+   ; the e_machine off an ELF header (bytes 18-19, little-endian) | ()
+   (seed-elfmach p)
+    (: b (src-slurp p)
+       (? !(two? b) ()
+          (: t <>b (? ((tally t) < 20) () ((t 18) + ((t 19) * 256))))))
    ; PATH, split -- "" is the cwd, the way execvp reads an empty field
    (src-dirs _)
     (: p ("" + (getenv "PATH")) n (tally p)
@@ -167,7 +185,14 @@
     (: first? (two? as0 ? (<as0 = "-first") 0)        ; -first: OUR tools win (the gate's own lane)
        as1 (first? ? >as0 as0)
        self? (two? as1 ? (<as1 = "-self") 0)          ; -self: never defer to an ambient cc
-       as (? self? >as1 as1)
+       as2 (? self? >as1 as1)
+       ; THE ARCH WORD, when the first operand names one. ⚠ a path always wins: `./aarch64`
+       ; is the directory, which is the verb rail's own rule (a `/` is always the file) worn
+       ; one level down -- so a dir sharing an arch's name is still reachable, spelled.
+       arch? (two? as2 ? (seed-em <as2) 0)
+       want (? arch? <as2 (seed-arch ()))
+       as (? arch? >as2 as2)
+       cross? !(want = seed-arch ())
        r (src-lay (two? as ? <as "."))
        root <>r
        exe (readlink "/proc/self/exe")
@@ -206,19 +231,40 @@
        ; failure, and an errno is negative -- so it is RED and a truth test reads the
        ; failure as the success. The kind is the only thing that tells them apart.
        _ (? (charm? (chdir root)) (src-die ("cannot enter " + root)) 0)
-       _ (puts ("seed: " + show <>>r + " files in " + root + "\nseed: toolchain -- " + lane + "\n"))
-       s (herald [exe "make" "dist"])
+       _ (puts ("seed: " + show <>>r + " files in " + root
+                + (? cross? ("\nseed: laying for " + want + " (this machine is "
+                             + (seed-arch ()) + ")") "")
+                + "\nseed: toolchain -- " + lane + "\n"))
+       s (herald (? cross? [exe "make" ("xa=" + want) "dist_cross"] [exe "make" "dist"]))
        st (? (two? s) <s s)
        _ (chdir here)
        _ (? (0 = st) 0 (src-die ("the build failed (exit " + show st + ")")))
-       out (root + "/out/dist/love-" + seed-arch ())
-       a (src-slurp exe)
-       _ (atom? a ? (src-die $ "cannot read " + exe))
-       ha (sha256 <>a)
-       b (src-slurp out)
-       _ (? (two? b) 0 (src-die ("cannot read " + out)))
-       hb (sha256 <>b)
-       (? (ha = hb)
+       out (root + "/out/dist/love-" + want)
+       ; ⚠ THE FIXPOINT IS SCOPED, NOT DROPPED. It can hold only where the output OUGHT to be
+       ; this binary, and a cross lay is the one case the INVOCATION itself says it cannot --
+       ; so running it there would be a claim nothing could ever satisfy, which is a bug
+       ; wearing a safeguard's face. (a dirty tree is the other case it cannot hold, and that
+       ; one still FAILS: nobody asked for it, and the megabyte-scale mismatch is the report.)
+       ; what stays checkable is that the artifact is the SHAPE asked for -- the ELF says
+       ; which machine it is for, and a cross build quietly laying the host's is the failure
+       ; this catches. no trust claim is made about it, and none is owed: the binary doing the
+       ; cross build is the one `love seed` proves natively.
+       (? cross?
+        (: m (seed-elfmach out) em (seed-em want)
+           (? (m = em)
+              (: _ (puts ("seed: laid " + out + " for " + want + ", built by " + lane + "\n"
+                          + "seed: no fixpoint -- the output is " + want
+                          + ", this binary is " + (seed-arch ())
+                          + ". run `love seed` on " + want + " to check it there.\n")) 0)
+              (: _ (say err ("seed: WRONG ARCH -- " + out + " answers e_machine " + (show m)
+                             + ", not " + want + "'s " + (show em) + "\n")) 1)))
+        (: a (src-slurp exe)
+           _ (atom? a ? (src-die $ "cannot read " + exe))
+           ha (sha256 <>a)
+           b (src-slurp out)
+           _ (? (two? b) 0 (src-die ("cannot read " + out)))
+           hb (sha256 <>b)
+           (? (ha = hb)
           (: _ (puts ("seed: FIXPOINT -- " + out + "\nseed: is this binary, byte for byte ("
                       + (snip ha 0 16) + "..), built by " + lane + "\n")) 0)
           (: _ (say err ("seed: FIXPOINT FAILED -- what it built is NOT this binary\n"
@@ -228,7 +274,7 @@
              ; status (moon.l:752), and this one is a gate -- so a script wants to read the
              ; verdict, and the in-image lane would have a quit end the shell that asked.
              ; src-die still quits: those are setup failures with nothing to report on.
-             1)))
+             1)))))
 
    ; ⚠ one function, two words: `src` is the short spelling and nothing more, so a
    ; reader meeting either finds the same row rather than a wrapper to chase.

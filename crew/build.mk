@@ -284,18 +284,32 @@ $(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l doc/readme.bin $(
 # the egg, warms, and seals the twin's own heap, glaze emitting the twin's
 # native code the whole way). so one x86 laptop bakes the pi's download, and
 # a pi with qemu-user bakes the laptop's -- each host can serve both doors.
-ifeq ($a,aarch64)
-xarch = x86_64
-xtgt = x64
-xqemu = qemu-x86_64
-xmksys = mksys
-else
-xarch = aarch64
-xtgt = arm64
-xqemu = qemu-aarch64
-xmksys = mksys-arm64
+# THE TWIN ROSTER, one row per arch a seed can be laid for: the mooncc target, the
+# qemu-user that runs it, and the mksys leaf that lays its machine tail. ⚠ THIS TABLE
+# IS THE AUTHORITY -- `love seed <arch>` keeps a list for its own usage line, and an
+# arch this roster does not carry is refused HERE, loudly, rather than half-built.
+xtgt_x86_64   = x64
+xtgt_aarch64  = arm64
+xtgt_riscv64  = riscv64
+xqemu_x86_64  = qemu-x86_64
+xqemu_aarch64 = qemu-aarch64
+xqemu_riscv64 = qemu-riscv64
+xmksys_x86_64  = mksys
+xmksys_aarch64 = mksys-arm64
+xmksys_riscv64 = mksys-riscv
+# which twin: `make xa=riscv64 dist_cross` names one, and the default stays the pair
+# this file always had -- the other member of the two the host is not.
+xa ?= $(if $(filter aarch64,$a),x86_64,aarch64)
+xarch  = $(xa)
+xtgt   = $(xtgt_$(xa))
+xqemu  = $(xqemu_$(xa))
+xmksys = $(xmksys_$(xa))
+ifeq ($(xtgt),)
+$(error dist_cross: no such arch `$(xa)' -- the roster carries x86_64 aarch64 riscv64)
 endif
-xd = out/dist/x
+# ⚠ PER-ARCH, because the objects are: one shared dir let a riscv64 love.o stand as
+# up-to-date for an aarch64 link, and the mismatch shows only at the far end.
+xd = out/dist/x-$(xa)
 moonx = $(moon0) -t $(xtgt)
 xhost_o = $(patsubst host/%.c,$(xd)/host_%.o,$(wildcard host/*.c))
 xmath_o = $(patsubst crew/moon/lib/math/%.c,$(xd)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
