@@ -170,7 +170,6 @@ out/dist/.dist-cat.l: $(distfiles) out/dist/.dist.list
 # ENCLOSING repo. A second +g on an id that already carried one, and a stage cut from the
 # wrong index: a 158-byte tarball and an artifact with no source in it. mk/lib.mk's
 # love_version has always guarded on exactly this, and the two ids must agree.
-in_git    := $(wildcard $(R)/.git)
 dist_base := $(love_base)
 dist_vcs  := $(if $(in_git),$(shell git -C $(R) describe --always --dirty 2>/dev/null),)
 dist_ver  := $(dist_base)$(if $(dist_vcs),+g$(dist_vcs),)

@@ -62,7 +62,15 @@ endif
   test_virt test_wake test_embed embed test_rp2040 valg disasm flame cat cata catav perf repl gdb \
   vmret waits bench nettest lint ccdb ulp
 
+# ⚠ THE UNPACKED RELEASE BUILDS THE PRODUCT. `tar xzf love-<ver>.tar.gz && make -C love-<ver>`
+# has to end in a seed binary, because that is what whoever ran it came for -- our gates and
+# bootstrap rungs are the tree's business, not theirs. A checkout keeps the fast gate: there the
+# edit loop is the thing, and `make dist` is one word away.
+ifeq ($(in_git),)
+.DEFAULT_GOAL := dist
+else
 .DEFAULT_GOAL := test
+endif
 
 # avoid creating empty artifacts with fresh mtime
 .DELETE_ON_ERROR:
