@@ -72,8 +72,7 @@ ai_std := c11
 ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
   -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers -Wno-implicit-fallthrough\
-  -falign-functions=16 -fomit-frame-pointer -fno-stack-check -fno-stack-protector \
-  -fno-exceptions -fno-asynchronous-unwind-tables
+  -falign-functions=16 -fno-stack-protector
 # ⚠ a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- host/main.c
 # owes clock_gettime and kill, so the level is asked for by name.
 # -fcf-protection (Intel CET) is x86-only and Apple/arm clang rejects it outright, so it
