@@ -156,11 +156,12 @@
 ; * an app pins its own name at its own foot, so the image carrying the app carries the word for it
 ;   and `love verbs` prints the table rather than a written-down list. `wake` and `bake` are PRIME
 ;   verbs parsed in C before any love exists, holding rows anyway so a misplaced one is an honest error.
-; * ⚠ fire takes the LINE IT SCANS, and `(cmdline 0)` is how you get one: the pin is `love-cmdline`
-;   and prel's `cmdline` reads it AT THE CALL, because a bare global folds at its reader's compile
-;   and a baked app would scan the BAKE's line forever. ⚠ it needs its operand -- `(cmdline)` is the
-;   closure, unrun and true. gate: test_seat, and a seat that answers () looks exactly like an app
-;   with nothing to say.
+; * ⚠ fire READS THE LINE and a foot hands it nothing: `(fire ws)` scans this invocation's
+;   `cmdline`, `(scan ws a)` a list handed in (kore's in-image door). ⚠ A BAKE PINS NEITHER
+;   `cmdline` NOR `argv` (host/main.c), and that absence is the whole anti-fold law: a bare global
+;   folds at its reader's compile, so a baked app would scan the BAKE's line forever -- unpinned,
+;   the read stays the live lookup. fire's presence guard is what keeps the bake lane quiet rather
+;   than scaring. gate: test_seat, and a seat that answers () looks like an app with nothing to say.
 ; * modules: a baked service keeps its names off the global book, and the layers are the RUNTIME's
 ;   -- no user-facing enter/leave. the chain is the defglob target on top, a use-stack under it,
 ;   orth last and read-only; run_program pushes the session layer, one load = one layer.

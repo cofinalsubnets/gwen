@@ -888,9 +888,8 @@ static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   // returns here. that is kore's convention, and it is why `love kore sed ..` nests.
   g = ai_evals_(g,
     "(: V (from 'verbs)"
-    "   l (cmdline 0)"
-    "   f (? (tablet? V) (V 'seat (cap l)) ())"
-    "   (? f (: r (f (cup l)) (quit (? (charm? r) r 0))) 0))");
+    "   f (? (tablet? V) (V 'seat (cap cmdline)) ())"
+    "   (? f (: r (f (cup cmdline)) (quit (? (charm? r) r 0))) 0))");
   if (argp) return ai_evals_(g, cli);
   if (!replp) return ai_evals_(g, "(reads in)");         // non-tty stdin: the stream shell (love/bao.l) drinks the in port
   return ai_evals_(g, "((from 'bao 'bao) 0)"); }                      // a tty: bao (the baked shell core) is DEFINE-ONLY -- installs
@@ -1176,16 +1175,20 @@ int main(int argc, char const **argv) {
   g = env_budget(g);                               // the LOVE_BUDGET_MB cap, on whichever g won (fresh or woken image)
   bool argp = argc - skip > 1;
   // TWO chains, because there are two honest readings and they differ by the primes:
-  //   love-cmdline  the WHOLE invocation, exactly as typed -- `wake IMAGE` included
-  //   argv          the PROGRAM's view: argv[0], then the words past the prime
+  //   cmdline  the WHOLE invocation, exactly as typed -- `wake IMAGE` included
+  //   argv     the PROGRAM's view: argv[0], then the words past the prime
   // cli.l drops argv's head for its own use and rebinds argv again to the program's
-  // own argv; love-cmdline is never rebound by anyone, which is what makes it the thing
-  // a seat scan can read in any load order (love/verbs.l's `unprime` steps the primes).
-  // ⚠ THE PIN IS `love-cmdline` AND THE WORD IS `cmdline`, prel's door onto it: a bare
-  // global read folds at its reader's compile, so an app baked into an image would carry
-  // THIS line into every future wake. The door reads at the call and cannot fold.
-  g = argv_chain(g, argv, argc, 0);                 // love-cmdline, first: it ends up deeper
-  g = argv_chain(g, argv, argc, skip);              // argv, on top -- sp[0]
+  // own argv; cmdline is never rebound by anyone, which is what makes it the thing a
+  // seat scan can read in any load order (love/verbs.l's `unprime` steps the primes).
+  // ⚠ NEITHER IS PINNED UNDER A BAKE, and that absence is what makes a bare read safe.
+  // A baked consumer folds its bare globals at its own compile, so a nom pinned while
+  // the -l cat compiles would ride THIS line into every future wake. Unpinned it cannot
+  // fold: the read stays the lookup it has to be, and every non-bake invocation pins
+  // both before a line of love runs. The bake lane reads nothing -- love/verbs.l's
+  // `fire` carries the one presence guard, so the app feet go quiet instead of scaring.
+  if (!bake) {
+    g = argv_chain(g, argv, argc, 0);               // cmdline, first: it ends up deeper
+    g = argv_chain(g, argv, argc, skip); }          // argv, on top -- sp[0]
   if (ai_ok(g)) {
     // the static nifs (exit/open/close/run/getenv + any host/*.c app nifs) come
     // from the ai_nifs section -- immortal addresses, so the array door serves.
@@ -1195,10 +1198,11 @@ int main(int argc, char const **argv) {
     // a struct ai_def: C cannot re-root what it holds in an array, and the defn above
     // interns a hundred names -- a hundred chances to move them. ai_defv reads sp[0]
     // and leaves it, so each pop hands the next chain up.
-    g = ai_defv(g, "argv");
-    if (ai_ok(g)) ai_core_of(g)->sp++;              // the book holds argv; the line is sp[0] now
-    g = ai_defv(g, "love-cmdline");
-    if (ai_ok(g)) ai_core_of(g)->sp++;              // the book holds it now
+    if (!bake) {
+      g = ai_defv(g, "argv");
+      if (ai_ok(g)) ai_core_of(g)->sp++;            // the book holds argv; the line is sp[0] now
+      g = ai_defv(g, "cmdline");
+      if (ai_ok(g)) ai_core_of(g)->sp++; }          // the book holds it now
     // `love-image`: WHICH image this session woke, by path -- here because here is
     // the only place it is knowable. The wake strips it from argv, so a consumer
     // keyed on its own compiler's identity (mooncc's runtime cache) can ask no
@@ -1209,8 +1213,8 @@ int main(int argc, char const **argv) {
     // plain global is a pure global, and a baked consumer FOLDS its bare refs at
     // its own compile, so a nom pinned in the egg-booting bake session would ride
     // that session's value into the image forever. Unpinned, it cannot fold, and
-    // the read stays the lookup it has to be. (The line answers the same trap with
-    // a prel door instead -- `cmdline`, over the `love-cmdline` pin.) Ask with
+    // the read stays the lookup it has to be. (`argv` and `cmdline` answer the same
+    // trap the same way -- unpinned under a bake, see below.) Ask with
     // (member? 'love-image (names ())) -- presence out of band, never (lit? ..).
     if (image_load_path && ai_ok(g = ai_strof(g, image_load_path))) {
       g = ai_defv(g, "love-image");

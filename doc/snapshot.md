@@ -100,8 +100,8 @@ with `(member? 'love-image (names ()))`.
 
 ⚠ **Read it as `(ev 'love-image)`, never bare.** A baked consumer folds its bare globals at its
 own compile, and the bakes all egg-boot, so a straight read wires that session's answer — a `0` —
-into the image forever. The nom has to reach the lookup as *data*. The command line answers the
-same law with a door: the pin is `love-cmdline` and `cmdline` is prel's reader over it.
+into the image forever. The nom has to reach the lookup as *data*. `cmdline` and `argv` answer the
+same law from the other side: a bake pins neither, so their bare reads cannot fold either.
 
 The glaze bake is the corpus eval, not a split assert-free lib: `bake` evals the glaze
 (emit.l+auto.l) before dumping, and the asserts' transient natives die in `gen_major`. emit.l's

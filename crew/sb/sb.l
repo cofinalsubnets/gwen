@@ -693,5 +693,5 @@ usage: sb VERB ..
 ; this file's binds (the loader's, or the script's session) is still the head
 ; when this form compiles. body-having: the seat leaks nothing.
 (: _ (pins (from 'verbs 'tab) 'sb sb-main)
-   s ((from 'verbs 'fire) ["sb" "sb.l"] >(cmdline 0))
+   s ((from 'verbs 'fire) ["sb" "sb.l"])
    (? (two? s) (sb-main >s) ()))

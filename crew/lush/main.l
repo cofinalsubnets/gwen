@@ -108,7 +108,7 @@
    (bn p) (: n (tally p)
              (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
-   s ((from 'verbs 'fire) ["lush" "lush.l" "sh"] >(cmdline 0))
+   s ((from 'verbs 'fire) ["lush" "lush.l" "sh"])
    (? (two? s) (: w (bn <s)
                   _ (? (tally w && (w 0 = 45)) (pin sh-login () 1) 0)
                   (sh-main >s))

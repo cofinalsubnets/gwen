@@ -1177,5 +1177,5 @@
 ; cook-main reads BARE: whichever layer holds this file's binds (the loader's, or
 ; a cat's session) is still the head here. cook-main splices its registered self.
 (: _ (pins (from 'verbs 'tab) 'cook cook-main)
-   s ((from 'verbs 'fire) ["cook" "cook.l"] >(cmdline 0))
+   s ((from 'verbs 'fire) ["cook" "cook.l"])
    (? (two? s) (cook-main >s) ()))

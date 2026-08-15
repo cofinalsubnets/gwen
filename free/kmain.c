@@ -1897,10 +1897,10 @@ void kmain(void) {
  "                      _ (pin envt 0 (? (string? v) (link (link n v) c) c)) ())"
  "                   22)"
  "   (environ u) (map (\\ e (+ (cap e) (+ \"=\" (cup e)))) (peep envt 0 ())))"
- // the command line (rung 3), the host's argv shape: `love-cmdline` = ("love" word..)
+ // the command line (rung 3), the host's argv shape: `cmdline` = ("love" word..)
  // off the raw boot line, split quote-aware (-append 'sh -c \"cd lib; pwd\"' must
  // reach the shell as one command); `argv` the same chain, host/main.c's twin names.
- "(: love-cmdline (link \"love\""
+ "(: cmdline (link \"love\""
  "     (: (kw i w s acc) (? (<= (tally bootline) i) (rev (? (tally w) (link w acc) acc))"
  "                          (: c (bootline i)"
  "                             (? s (? (= c s) (kw (+ i 1) w 0 acc) (kw (+ i 1) (+ w c) s acc))"
@@ -1908,7 +1908,7 @@ void kmain(void) {
  "                                (|| (= c 34) (= c 39)) (kw (+ i 1) w c acc)"
  "                                (kw (+ i 1) (+ w c) 0 acc))))"
  "        (kw 0 \"\" 0 ())))"
- "   argv love-cmdline)"
+ "   argv cmdline)"
  // rung 4: spawn/wait as a love-side shim over the core task ops. a process on
  // this machine IS a task: k-prog maps argv onto a love main -- kore-main (or a
  // tool's own <name>-main where the dispatcher is not baked), sh-main, or a .l

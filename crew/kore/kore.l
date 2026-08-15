@@ -305,7 +305,8 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    ; stays quiet; an unknown tool is usage's 2, a status like any other). the baked
    ; kore.image wakes to it with a synthetic "kore" argv0, so a caller holding the
    ; image runs a tool by handing it (link "kore" "ls" "-l") and reading the charm.
-   (\ a (: s ((from 'verbs 'fire) mynames a)
+   ; ⚠ two doors: a list handed in is SCANNED, () means "the line I was started with".
+   (\ a (: s (? (two? a) ((from 'verbs 'scan) mynames a) ((from 'verbs 'fire) mynames))
            (? !(two? s) ()
               (: f0 (applets (intern (bn <s)))
                  (? f0 (urun f0 >s)
@@ -315,4 +316,4 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
 ; the SEAT: file mode (cat | love) dispatches on the real command line and quits with
 ; the status. the -l bake preload seats a flag, not kore, so the scan answers () and
 ; kore-main answers () -- the presence guard, and the one answer that is not a status.
-(: r (kore-main >(cmdline 0)) (? (charm? r) (quit r) ()))
+(: r (kore-main ()) (? (charm? r) (quit r) ()))

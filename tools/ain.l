@@ -84,5 +84,5 @@
 ; taking the args AFTER the seat. `cmdline` is the full C argv, never rebound, so the
 ; test reads the same in both load orders; a multi-call cat (kore) never matches and the
 ; dispatcher there calls ain-main itself. body-having: nothing leaks.
-(: s ((from 'verbs 'fire) ["ain" "ain.l"] >(cmdline 0))
+(: s ((from 'verbs 'fire) ["ain" "ain.l"])
    (? (two? s) (ain-main >s) ()))

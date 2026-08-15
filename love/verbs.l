@@ -54,12 +54,15 @@
    ; doors -- no name was typed, a PATH was -- and it is why six apps each wrote this walk
    ; out for themselves. one walk now; the spellings stay with the app, which is the only
    ; thing that ever knew them.
-   ;   (fire ws a)    -> (SEAT-WORD . args-after) over the word list a, else ()
-   ;   (seatof ws a)  the same without the prime step -- the raw scan.
-   ; ⚠ `a` IS A PARAMETER and reading `cmdline` here instead would be the bug that cost
-   ; an afternoon: this module is COMPILED INTO THE EGG, so a bare global read folds to
-   ; the BAKE session's value and every caller then scans the command line that baked
-   ; the image. the caller reads `>cmdline` in its own file, where its own compile is.
+   ;   (fire ws)      -> (SEAT-WORD . args-after) over THIS invocation's line, else ()
+   ;   (scan ws a)    the same over a list handed in -- kore's in-image door, which runs
+   ;                  an arg list that is not the one this process was started with.
+   ;   (seatof ws a)  the raw scan under both, without the prime step.
+   ; ⚠ THE LINE IS READ HERE, and the guard is the whole licence. This module compiles
+   ; into the egg, where a bare global read once folded to the baking session's value and
+   ; every caller then scanned the line that baked the image -- so a bake pins no `cmdline`
+   ; at all now (host/main.c), which leaves the read a lookup. The absence IS the bake's
+   ; honest answer: nothing was typed, nothing seats, and the feet go quiet without scaring.
    ; the seat WORD rides back because a multi-name app reads it: lush's login dash, an
    ; applet symlink. ⚠ () means "not seated", the presence answer -- ask it with two?.
    (dash w)    (? ((0 < tally w) && (w 0 = 45)) (snip w 1 (tally w)) w)   ; -sh: login(1)'s mark
@@ -77,4 +80,5 @@
                                    ())
                     (mine? ws <a) (<a >< >a)
                     ())                                          ; seats someone else: not me
-   (fire ws a) (seatof ws (unprime a)))
+   (scan ws a) (seatof ws (unprime a))
+   (fire ws)   (scan ws (? (member? 'cmdline (names ())) >cmdline ())))
