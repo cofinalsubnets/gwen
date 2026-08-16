@@ -6,7 +6,8 @@
  * and narrows only at a STORE (fstf), so `(float)d` passed the double straight
  * through -- (float)0.1 == 0.1 read true for a variable too, not just a literal.
  * The cast now round-trips through single precision, which is where the rounding
- * becomes observable.
+ * becomes observable. The integer twin -- an `l` suffix, landed 2026-08-16 -- sits
+ * at the end.
  */
 #include <stdio.h>
 
@@ -36,6 +37,13 @@ int main(void)
 
     /* the classic: 2^24+1 has no float, and rounds down to 2^24 */
     if (16777217.0f != 16777216.0f) return 13;
+
+    /* the INTEGER twin (6.4.4.1): an l/L suffix makes a long, and typing it by
+       magnitude alone computed `i + 2L` in int */
+    if (sizeof(1L) != sizeof(long)) return 14;
+    if (sizeof(1LL) != sizeof(long long)) return 15;
+    if (sizeof(1 + 2L) != sizeof(long)) return 16;
+    if (sizeof(1L + 2) != sizeof(long)) return 17;
 
     return 0;
 }

@@ -116,6 +116,23 @@
           'riscv64                        '("__riscv")
           ('thumb2 | 'thumb2sp | 'thumb1) '("__arm__" "__arm")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
+   ; the OS predefines, the driver's like the arch's: -os picks, default linux
+   ; (the OS under every hosted object today -- raw syscalls, ELF, the host
+   ; seam; without __linux__ host/posix.c's signalfd source silently compiled
+   ; OUT of the selfhost binary). all three spellings gcc gives a linux ELF
+   ; target: st.c asks `#if defined(__linux)` for <pty.h>, and one missing is a
+   ; header silently not included. the unprefixed `linux`/`unix` stay out --
+   ; gcc drops them outside gnu89, and they collide with ordinary identifiers.
+   ; 'none is freestanding's word: a board owes no OS macro.
+   (toos s) (name s @
+    'linux   'linux
+    'none    'none
+    'freebsd 'freebsd
+             (udie 2 ("cc: unknown os " + s)))
+   (osdefs os)
+   (os @ 'none    ()
+         'freebsd '("__FreeBSD__=14" "__unix__" "__unix")   ; stable/14, whose syscall.h the tables speak
+                  '("__linux__" "__linux" "__unix__" "__unix"))
    ; C11's CONDITIONAL FEATURES (6.10.8.3) -- saying an absence out loud is what makes
    ; it conforming rather than a hole, and lets a portable source pick its other lane.
    ; ⚠ every row is TARGET-true: complex and VLAs each ride a subset (the parity table),
@@ -265,8 +282,8 @@
    ; whole -- clexat stamps them 1-k..0 and the source itself from 1, so every
    ; stamped line (a gripe, __LINE__) is TRUE with no pay-back pass. an
    ; #include lexes fresh at its own line 1 either way.
-   (cc-parse src {'is is 'ds ds 'tgt tgt 'nsi nsi 'dia dia})
-    (: ds9 (archdefs tgt + featdefs tgt + stddefs tgt
+   (cc-parse src {'is is 'ds ds 'tgt tgt 'os os 'nsi nsi 'dia dia})
+    (: ds9 (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt
                  + (? (id? dia 'moon) '("__moon__=1") ())   ; the DIALECT's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
                  (? (id? tgt 'x64) ("__SIZEOF_INT128__=16" >< ds) ds))     ; x64 alone carries the wide pair (gen's d128 lane); love.c's limb seam reads it
@@ -347,6 +364,18 @@
            (ld r6 r6 0)
            (call main)
            (mov r6 r0) (li r0 60) (sys))
+   ; the freebsd twin of crt0: the kernel lays the same SysV stack (argc at
+   ; [rsp]; %rdi points there too, unused), so only the exit differs -- exit(1),
+   ; one thread here so one exit is the whole act. ⚠ UNRUN until the vm gates it.
+   crt0-fbsd '((mov r6 sp)
+                (call __ai_start)
+                (mov r6 r0) (li r0 1) (sys)
+                (label __ai_start)
+                (push r6)
+                (lea r5 r6 8)
+                (ld r6 r6 0)
+                (call main)
+                (mov r6 r0) (li r0 1) (sys))
    ; the aarch64 twin: x0 = the OS stack pointer (mov from sp must be lea --
    ; ORR reads XZR at 31), exit_group = 93 in x8; the default __ai_start pushes
    ; lr (its own 16-byte cell, keeping sp 16-aligned for main) and exits
@@ -526,12 +555,14 @@
    ; compiler otherwise -- and the compile is what fills the cache. a cache that
    ; cannot open is invisible, and the link is the one that happens today, at
    ; today's price.
-   (rtarch cd id home tgt)
-    (: k (? (string? cd && string? id) (sha256 $ id + "\n" + show tgt) ())
+   (rtarch cd id home tgt os)
+    ; the key carries the OS beside the target: a freebsd runtime archive and a
+    ; linux one are different bytes wearing one target name.
+    (: k (? (string? cd && string? id) (sha256 $ id + "\n" + show tgt + "\n" + show os) ())
        hit (? (string? k) (mcget cd (k + ".a") "!<arch>\n") ())
        _ (? (two? hit) (utime (cd + k + ".a") (clock ())) 0)   ; the sweep orders by use
        bs (? (two? hit) <>hit
-             (: b (arbytes (rtmems home tgt))
+             (: b (arbytes (rtmems home tgt os))
                 _ (? (string? k) (mcput cd (k + ".a") b) 0)
                 b))
        _ (? (string? cd) (mcsweep cd) 0)
@@ -546,7 +577,7 @@
    ; vocabulary, and a deeper tree would say nothing. ⚠ the member names flatten
    ; that tree with _ and the math ones wear m_: time.c and sys/time.c are two
    ; members of one basename, and an archive resolves by name alone.
-   (rtmems home tgt)
+   (rtmems home tgt os)
     (: ndir (home + "lib/nolibc/") mdir (home + "lib/math/") inc (home + "include/")
        (dotobj n) (? (dotc? n) (snip n 0 (tally n - 2) + ".o") n)
        (nlmems d)
@@ -557,12 +588,16 @@
                                         () (sort (filter dotc? (readdir p))))
                             a)))
                () (sort (readdir d)))
-       ((map ((a b) \ [a (string (cc-objbytes b (pin (fseed tgt 'moon) 'is [inc])))])
+       ; the members compile under the LINK's os (impl.h's table opens on it),
+       ; and the sys leaf is the os's own -- freebsd rides the x64 machine.
+       (f9 is9) (pin (pin (fseed tgt 'moon) 'os os) 'is is9)
+       ((map ((a b) \ [a (string (cc-objbytes b (f9 [inc])))])
              (nlmems ndir))
-        + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) (pin (fseed tgt 'moon) 'is [mdir inc])))])
+        + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) (f9 [mdir inc])))])
               (sort (filter dotc? (readdir (home + "lib/math"))))
-        + (member? tgt '(x64 arm64 riscv64) ? [["mksys.o" (string (mksys-bytes tgt))]])))
-   (rtpull srcs tgt nostd)
+        + (? (id? os 'freebsd) [["mksys.o" (string (mksys-bytes 'freebsd))]]
+             (member? tgt '(x64 arm64 riscv64) ? [["mksys.o" (string (mksys-bytes tgt))]]))))
+   (rtpull srcs tgt os nostd)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
        ; -nostdlib and friends: no runtime BY REQUEST, so there is nothing left to
@@ -583,16 +618,20 @@
             0)
        (? (nostd || !(string? home)) ()
           (: id (mcid home) cd (? (string? id) (mcdir ()) ())   ; no identity, no cache, no directory made
-             pr (arpull "moon-runtime" (rtarch cd id home tgt) dt owed mach)
+             pr (arpull "moon-runtime" (rtarch cd id home tgt os) dt owed mach)
              ; ⚠ the OWE AT TERMINATION IS THE ANSWER: no member defines anything
              ; left in it, so it is exactly the set nothing anywhere defines --
              ; said here, whole, rather than one nom at a time by whichever holo
              ; scares about first.
              _ (? (two? <>pr) (undie <>pr) 0)
              <pr)))
-   (cc-link ins dst (t @ {'is is 'ds ds 'tgt tgt 'pie pie 'org org 'dorg dorg
+   (cc-link ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
                           'nostd nostd 'nsi nsi 'ni ni 'fir fir 'rdme rdme}))
-    (: ars (filter dota? ins)
+    ; -os freebsd links on x64 only (the one lane with a table + mksys twin);
+    ; any other tgt under it is refused rather than half-built.
+    (: _ (? (id? os 'freebsd && ! (id? tgt 'x64))
+            (udie 1 "cc: -os freebsd links x64 only for now") ())
+       ars (filter dota? ins)
        srcs (map (\ f (? (dotc? f) [f (string (cc-objbytes f t))]
                          (doto? f) (: r (uread f)
                                       (? (two? r) [f <>r]
@@ -617,17 +656,25 @@
        runs (? (charm? dorg) [['at org 'text 'rodata 'nifs]
                               ['copy dorg 'data 'bss]]
               [['at org 'text 'rodata 'data 'nifs 'bss]])
-       c9 (tgt @ 'arm64 crt0-a64 'riscv64 crt0-rv crt0)
+       c9 (? (id? os 'freebsd) crt0-fbsd
+             (tgt @ 'arm64 crt0-a64 'riscv64 crt0-rv crt0))
        all (? arm? srcs
               (["crt0" (string (objelf tgt c9 () '("__ai_start") () '("__ai_start") () () () () ()))] >< srcs))
        ; the archives first, then whatever the runtime still owes: a library the
        ; line NAMED is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
-       set (lib + rtpull lib tgt nostd)
+       set (lib + rtpull lib tgt os nostd)
        ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set ("love " + <(usplit 43 love-version)) rdme))
-       _ (ld-write dst ps)
+       ; the freebsd BRAND: EI_OSABI = 9 in e_ident[7] -- the kernel's imgact
+       ; refuses an unbranded static exe, and one byte is the whole claim. ps is
+       ; ld-write's PIECE LIST; the ELF header rides the first piece, text or bytes.
+       (brand9 p)
+        (? (string? p) (snip p 0 7 + string 9 + snip p 8 (tally p))
+           (: (go i l) (? (i = 7) (9 >< >l) (<l >< go (i + 1) >l)) (go 0 p)))
+       ps9 (? (id? os 'freebsd) (brand9 <ps >< >ps) ps)
+       _ (ld-write dst ps9)
        (chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-nostdinc] [-x c] [-t x64|arm64] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-nostdinc] [-x c] [-t x64|arm64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n (tally s)
@@ -749,7 +796,7 @@
    ; would answer the zero point. Seeding also puts the flag set in one readable place, which
    ; the positional walk had and the bare tablet lost. ⚠ it is NOT a wrapper on `{}`: the
    ; literal has to be COMPLETE and it is wanted at two sites, so it is spelled once.
-   (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'pie () 'org () 'dorg ()
+   (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'nsi () 'ni () 'fir () 'rdme () 'dia dia}
    (flags as t)
     (? !(two? as)
@@ -770,6 +817,7 @@
              (a = "-D") (? (two? r) (flags >r (fpush t 'ds <r)) (udie 2 usage))
              (a = "-o") (? (two? r) (flags >r (pin t 'o <r)) (udie 2 usage))
              (a = "-t") (? (two? r) (flags >r (pin t 'tgt (totgt <r))) (udie 2 usage))
+             (a = "-os") (? (two? r) (flags >r (pin t 'os (toos <r))) (udie 2 usage))
              (a = "-Ttext") (? (two? r) (flags >r (pin t 'org (tonum <r))) (udie 2 usage))
              ; -Tdata is the SPLIT: .data runs there and is stored after the code,
              ; which is what every XIP part needs and what -Ttext alone cannot say.
@@ -829,9 +877,12 @@
              ; it rides as a DEFINE (cpp applies -D after its predefines, so this
              ; overrides). ⚠ NOT the rest of the family: -nostdlib alone is a
              ; hosted program that simply supplies its own runtime, and test_raw
-             ; is exactly that.
+             ; is exactly that. freestanding also has NO OS, so it pins -os none
+             ; (a later explicit -os wins, pin over pin -- nothing under free/
+             ; or port/ reads an OS macro, so the kernel and the boards lose a
+             ; __linux__ they never asked for).
              (a = "-ffreestanding")
-              (flags r (pin (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1))
+              (flags r (pin (pin (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1) 'os 'none))
              (nostd? a) (flags r (pin t 'nostd 1))
              ; -x names the LANGUAGE of what follows, which is the whole reason an input
              ; may arrive with no suffix to read. ⚠ LOUD like -std=: `-x c++` and

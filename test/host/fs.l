@@ -97,6 +97,14 @@
           (= 32768 (& 61440 (cauup (stat s))))      ; S_IFREG: a file, not the /proc link
           (< 0 (cap (stat s)))))
 
+   ; the OS roster: the linux lane is COMPILED IN, not its stub. a lost
+   ; __linux__ predefine compiles posix.c's lanes out in SILENCE, so probe one:
+   ; the stub always answers ENOSYS (38), the real mount answers the call's own
+   ; errno (nobody mounts "" on / as no-such-fs). sigfd's twin assert lives in
+   ; test/host/sh.l. forks on the OS when a second one lands.
+   _ (: e (mount "" "/" "no-such-fs")
+        (assert (charm? e) (e != 38)))
+
    _ (unlink l) _ (unlink b)
    _ (test_fin ())
    _ (say out "fs: ok") (put out 10))

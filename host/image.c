@@ -16,6 +16,8 @@
 #include <sys/mman.h>
 #include <link.h>
 
+extern size_t host_selfpath(char*, size_t);       // host/posix.c: the one selfpath door (per-OS ladder)
+
 // the wake-safety guard: a kept-absolute pointer only survives a wake if it aims inside
 // the MAIN PROGRAM's load segments (one ASLR base delta shifts them all). Anything else --
 // a JIT W^X page, an mmap, a shared library -- dies with the bake process, so the dump
@@ -229,9 +231,7 @@ int image_bake(struct ai *g) {
   dl_iterate_phdr(bake_phdr, &bl);
   if (!bl.found) return -5;
   char exe[4096], tmp[4104];
-  ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
-  if (n <= 0) return -6;
-  exe[n] = 0;
+  if (!host_selfpath(exe, sizeof exe)) return -6;
   snprintf(tmp, sizeof tmp, "%s.bake", exe);
   struct stat st;
   int src = open(exe, O_RDONLY);

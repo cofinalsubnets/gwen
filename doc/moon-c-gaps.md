@@ -36,22 +36,37 @@ that says so as conforming without them.
 
 What genuinely stands between here and freestanding C11, each row live above:
 
-- **`_Thread_local`** — the one absent keyword with **no** opt-out macro. `__STDC_NO_THREADS__`
-  excuses `<threads.h>` and not the storage class. A single-threaded freestanding
-  implementation can map it to plain static and be observationally right; that is the cheap
-  road, and it should be taken deliberately rather than by accident.
-- **universal character names in an identifier** — the literal half landed 2026-08-14; an
-  identifier still refuses, which is the remaining half of a C99-mandatory row.
 - **the `#line "file"` half** — the line half landed 2026-08-14, but the file operand is still
   dropped; it wants `__FILE__` to stop being one name per TU first. (The `#if` evaluator landed
   the same day, below.)
-- (the `f`-suffix row **landed 2026-08-14** — and the deeper bug under it, below.)
-- **block-scope `struct` tags**, and the two remaining small syntax rows. Neither is the
-  one-line widening the first two were: `switch (x) case 0: ;` wants the switch parser off its
-  `{`-at-the-root shape, and `int f(int), a;` wants `more`/`one` hoisted out of the top-level
-  dispatch's inner scope. Both are costed in the table.
+- **block-scope `struct` tags** — the last of the syntax rows, and the one that is not a
+  widening: `stag` is one flat table, so scoping it wants a mechanism, not a lane.
 - **the diagnostic obligation**: a non-constant `_Static_assert` is let by today, which is a
-  constraint violation passing in silence — the one class §4 names outright.
+  constraint violation passing in silence — the one class §4 names outright. The *channel* is
+  no longer missing: `blame` (parse.l) files a sentence beside the watermark and `pfail`
+  reports it in place of the generic near-token line, so a refusal can name the program's
+  fault rather than the compiler's position.
+
+**Landed 2026-08-16** (test/cc/142-syntax.c and 138-ucn.c hold them to gcc; the refusals sit in
+test/gate/moon.sh), and the deliberate readings in them:
+
+- **`_Thread_local`** (and gcc's `__thread`) is an ignorable specifier: no TLS, no threads
+  (`__STDC_NO_THREADS__`), so a thread-local *is* the one static object — observationally
+  right, and C11 gives the storage class no opt-out macro to refuse it under. ⚠ it is the row
+  that would read wrong, in silence, the day threads arrive.
+- **universal character names in an identifier**, the remaining half of a C99-mandatory row.
+  A UCN names a code point, so `Å` and a raw utf-8 `Å` intern as one name and export the
+  same symbol bytes gcc does. ⚠ a byte past 127 is now an identifier char everywhere, so a
+  stray one outside a literal interns instead of scaring; Annex D's ranges are not enforced,
+  which accepts more than C11 spells rather than less.
+- **`switch (x) case 0: ;`** — `parm`, the brace-less if/while arms' own door, was already the
+  shape a body of one wants.
+- **`int f(int), a;`** — `one`/`more` hoisted out of the dispatch's inner scope, so the
+  function-first list reaches the object lane mproto cannot take.
+- **bare `typeof`**, and an attribute run **before** a struct/union tag.
+- **an integer where a pointer is owed** — the §4 row that took `host/main.c`'s `return 1` in
+  silence and handed back address 1. `return <non-zero literal>` from a `T *` now refuses and
+  says so; a cast still passes, because a cast says the program means it.
 
 None of these is large on its own. The honest summary is that conformance here is a **ladder of
 small rungs, not a rewrite** — and that the ledger below is the ladder.
@@ -67,16 +82,10 @@ All of C89 passes. What remains is C99/C11/GNU.
 | construct | probe |
 |---|---|
 | `_Atomic` | `_Atomic int a;` — both spellings; `__STDC_NO_ATOMICS__` says so, which is C11's own door for the absence |
-| `_Thread_local` | `_Thread_local int e;` — no TLS anywhere, so the refusal is honest. ⚠ this one has **no** `__STDC_NO_*` macro: `__STDC_NO_THREADS__` excuses `<threads.h>` and nothing else |
-| a universal character name in an IDENTIFIER | `int \u00C5;` — the literal half landed 2026-08-14 (below); an identifier still refuses at lex, as does a raw UTF-8 one |
 | statement expressions | `({ … })` |
 | computed goto | `&&label`, `goto *p` |
-| plain `typeof` | `typeof(x) y;` — ⚠ only `__typeof` / `__typeof__` are recognized |
 | `asm goto` | costed below — the one refusal carrying an estimate |
 | a block-scope `struct` tag | `{ struct T { int z; }; }` inside a function — tags are file-scoped here, so an inner one collides with the outer |
-| a declarator list mixing a function and an object | `int f(int), a;` — two functions in one list is fine, and `int a, f(int);` passes: it is the FUNCTION-FIRST order alone. `mproto` takes the comma continuation and answers `()` on a non-function declarator; the object lane below it already handles a mixed list (`regs` files the sigs, `vps` drops them), but `more`/`one` live in an inner scope the dispatch cannot reach, so the fix is to hoist them, not to widen a test |
-| a `case` label as a switch's whole body | `switch (x) case 0: ;` — a compound body is fine |
-| `__attribute__((packed))` **before** a union tag | `union __attribute__((packed)) U { … }` — after the body it passes |
 | designated RANGE initializers | `[1 ... 5] = 9`, gcc's extension |
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
@@ -84,7 +93,7 @@ All of C89 passes. What remains is C99/C11/GNU.
 | a `##` paste with an empty operand and trailing tokens | `#define P(A,B) A ## B ; bob` |
 | a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
 
-The last ten are what `test_cts` found (doc/moon.md); `test/gate/cts.sh` names the program
+The last seven are what `test_cts` found (doc/moon.md); `test/gate/cts.sh` names the program
 each one came from.
 
 ### what passes, for contrast
@@ -241,8 +250,18 @@ rather than behind a test we thought to write.
 
 ### from an outside corpus
 
-`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). **None
-compile clean and answer wrong.** What remains on its roster is refusals, each loud and named.
+`test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Its roster is
+refusals, each loud and named, and **one** program that compiles clean and answers wrong:
+
+- **00219 — `_Generic` cannot separate two associations that differ only in a QUALIFIER.** cc
+  drops qualifiers, so `const int * const` picks the `int *` row where C matches neither and
+  takes `default`. The ⚠ under `_Generic` above is this, with a program behind it now.
+
+⚠ **A rostered line is a claim that goes stale in silence.** Four of them (`#if ||`'s dead arm,
+`int x[const *]`, a function-typed parameter, `_Generic`) had been fixed by earlier rungs and
+still sat on the roster, and 00219's line said *refuses* where the truth was *answers wrong* —
+which is how a live miscompile hid behind a gate that only runs on an opt-in corpus. Re-read the
+roster when the corpus is in hand, not only when a gate goes red.
 
 ### the residues the fixed rows left behind
 
@@ -300,6 +319,14 @@ wide (doc/moon.md, `calm?`) — and only visible once both builds ran the *same*
 
 Same build, same file family, still open: `strtod("-0.000123e+6")` does not answer -123.0.
 
+### an `l` suffix — landed 2026-08-16, the `f`-suffix row's twin
+
+C11 6.4.4.1 makes an `l`/`L`-suffixed constant a **long**; ours typed it by magnitude alone, so
+on the 64-bit targets `sizeof(1L)` answered 4 and `i + 2L` computed in **int** — a silent
+narrowing of exactly the expression written to avoid one. `ukind` now answers a distinct `'lnum`
+and pprim lowers it to `('cast long ..)`; `1LL` off t32 took the same lane, where it had been
+falling through to a plain int as well. c-testsuite 00219 is what named it, two lines apart.
+
 ### an `f` suffix, and A CAST TO float — both landed 2026-08-14
 
 Two bugs wearing one symptom, and the second was the real one. C11 6.4.4.2 makes an
@@ -355,28 +382,10 @@ fails two targets later.
 
 C11 §4 asks for a diagnostic on every syntax-rule or constraint violation, and these get none.
 They are worse than the refusals above and quieter than the wrong answers: the program is
-ill-formed, we say nothing, and the damage lands somewhere else entirely. Both rows below were
-found by a **foreign cc compiling the same file** — which is the only instrument that has ever
-caught one, and the reason a lane that builds love with clang is worth keeping.
-
-### an int where a pointer is owed
-
-```sh
-printf 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint main(void){ return f(0) ? 1 : 0; }\n' > q.c
-out/host/mooncc -std=c11 -c -o /dev/null q.c    # exit 0
-clang -std=c11 -c -o /dev/null q.c              # error: incompatible integer to pointer conversion
-```
-
-§6.8.6.4 hands `return` to the simple-assignment constraints, and §6.5.16.1 permits an integer
-only when it is a **null pointer constant** — `0`, never `1`. gcc and clang both refuse
-(`-Wint-conversion`, an error since clang 16); we take it and hand back a pointer to address 1.
-
-Not hypothetical: `host/main.c`'s four-arg `boot` carried `return 1` on two bake-load error
-paths for as long as mooncc has built this tree, and its caller does `g = boot(..)` then
-`ai_code_of(g)` — a dereference of address 1, where the path existed to reach the scare face.
-Neither lane that compiles it looks: `GL_BOOTSTRAP` selects the two-arg `boot`, so love0's
-clang never sees this one, and we say nothing. The foreign-cc lane is what found it —
-`make test_hdiff`, which is now the gate for exactly this.
+ill-formed, we say nothing, and the damage lands somewhere else entirely. The row below, and
+the int-for-pointer one that landed 2026-08-16, were both found by a **foreign cc compiling the
+same file** — the only instrument that has ever caught one, and the reason a lane that builds
+love with clang is worth keeping.
 
 ### a `musttail` into an incompatible prototype
 

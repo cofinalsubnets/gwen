@@ -136,8 +136,8 @@
    ; NO such tail: it is the one enum the C SWITCHES over, and a count riding in it
    ; is a case -Wswitch would demand for a value ai_typ can never answer. the table
    ; below wants no bound anyway.
-   kinds-clay `('edef "q" (mx-kinds + '(KN)))
-   reps-clay `('edef "d" mx-reps)
+   kinds-clay ['edef "q" (mx-kinds + '(KN))]
+   reps-clay ['edef "d" mx-reps]
    ; the one bridge between the two rosters: rep -> the kind it dispatches as. it is
    ; LAID, not written, because a hand-written map is exactly the drift the split was
    ; meant to end -- a rep can no more miss its kind than a kind can miss its column.
@@ -147,9 +147,9 @@
    ; -Werror -- the tables are love.c's alone. UNSIZED on purpose: C reads the bound
    ; off the designators, so it cannot disagree with the roster that laid them.
    repq-clay
-    `('gdecl `(`("ai_kind_of_d" '(arr (const (named "enum q")) 0)
-                 `('init (map (\ p `('didx <p `('var (string <>p)))) mx-repq))))
-      '(static))
+    ['gdecl [["ai_kind_of_d" '(arr (const (named "enum q")) 0)
+                 ['init (map (\ p ['didx <p ['var (string <>p)]]) mx-repq)]]]
+      '(static)]
 
    ; --- the same roster, laid for the LINKER ---------------------------------------
    ; enum d is a SLOT INDEX before it is anything else: love.c lays each data sentinel
@@ -195,8 +195,8 @@
    ; KLINK=lld remains the comparison lane and ld.lld still needs telling.
    mx-seats '(("free/x86_64/x86_64.lds"    lean 8)
               ("free/aarch64/aarch64.lds"  lean 8))
-   (mx-stride cls) (: (go l) (? (! (two? l)) (scare 'mx-stride cls)
-                                 (: r <l (? (id? <r cls) <>r (go >l))))
+   (mx-stride cls) (: (go l) (atom? l ? (scare 'mx-stride cls)
+                              (: r <l (id? <r cls ? <>r (go >l))))
                       (go mx-strides))
    ; --- and the same classes laid as C, through clay's rung 2 ---------------------
    ; a knob: `#ifndef NAME` over an `#if defined(..) || .. / #elif / #else` on the
@@ -204,16 +204,15 @@
    ; is how love0 takes ai_data_section=0 -- so the rows here are only the default.
    ; ⚠ this and the linker blocks read ONE roster: a class's stride cannot say two
    ; things any more, which was the last hand-kept crossing in the scheme.
-   (mx-defd n) `('call `('var "defined") `(`('var n)))
-   (mx-ors l) (? (! (two? >l)) (mx-defd <l) `('lor (mx-defd <l) (mx-ors >l)))
+   (mx-defd n) ['call ['var "defined"] [['var n]]]
+   (mx-ors l) (atom? >l ? (mx-defd <l) ['lor (mx-defd <l) (mx-ors >l)])
    (mx-knob nm rows)
-    (: (arms l) (? (! (two? l)) ()
-                   (: r <l (? (two? (el r 2)) (link `((mx-ors (el r 2)) `(`('cpp-def nm <>r)))
-                                                    (arms >l))
-                              (arms >l))))
-       (els l) (? (! (two? l)) (scare 'mx-knob nm)
-                  (: r <l (? (two? (el r 2)) (els >l) `(`('cpp-def nm <>r)))))
-       `('cpp-if `(`(`('un 'not (mx-defd nm)) `(`('cpp-if (arms rows) (els rows)))))))
+    (: (arms l) (two? l ?
+                   (: r <l (two? (el r 2) ? ([(mx-ors (el r 2)) [['cpp-def nm <>r]]] >< arms >l)
+                            (arms >l))))
+       (els l) (atom? l ? (scare 'mx-knob nm)
+                  (: r <l (two? (el r 2) ? (els >l) [['cpp-def nm <>r]])))
+       ['cpp-if [[['un 'not (mx-defd nm)] [['cpp-if (arms rows) (els rows)]]]]])
    ; the two lines a script keeps by hand; everything between them is laid.
    mx-ld-open "/* love_data: the sentinel tiling, laid by mx.l -- edit the table there. */"
    mx-ld-shut "/* end love_data */"
@@ -221,14 +220,14 @@
    mx-nl (string 10)
    (mx-cat l) (foldl (\ a s (a + s + mx-nl)) "" l)
    (mx-tile base stride p)                        ; one KEEP per rep, each slot pinned
-    (: (go i) (? (i = (tally mx-reps)) ""
-                 (p + "KEEP(*(love_data." + (show i) + "))  . = " + base + " + "
-                    + (show (stride * (i + 1))) + ";" + mx-nl + (go (i + 1))))
+    (: (go i) (? (i = tally mx-reps) ""
+                 (p + "KEEP(*(love_data." + show i + "))  . = " + base + " + "
+                    + (show (stride * (i + 1))) + ";" + mx-nl + go (i + 1)))
        (go 0))
    (mx-lds-block stride pad)
     (: p (" " * pad)
-       (p + ". = ALIGN(" + (show stride) + ");" + mx-nl
-          + p + "__love_data = .;" + mx-nl + (mx-tile "__love_data" stride p)))
+       (p + ". = ALIGN(" + show stride + ");" + mx-nl
+          + p + "__love_data = .;" + mx-nl + mx-tile "__love_data" stride p))
 
    ; the host link's -T fragment, laid WHOLE: it exists for this and nothing else.
    mx-ld
@@ -252,28 +251,28 @@
    ; --- and the seats with a full script of their own: splice, don't lay -----------
    ; those scripts are the board's memory map and belong to the board. mx.l takes the
    ; text and answers it with the marked block relaid, so the recipe's IO is a pipe.
-   (mx-seat path) (: (go l) (? (! (two? l)) (scare 'mx-seat path)
-                                (: r <l (? (<r = path) >r (go >l))))
+   (mx-seat path) (: (go l) (? (atom? l) (scare 'mx-seat path)
+                                (: r <l (<r = path ? >r (go >l))))
                      (go mx-seats))
    (mx-lines s) (: n (tally s)
-                   (go i j) (? (j = n) (? (i = j) () `((snip s i j)))
-                               ((peep s j 0) = 10) (link (snip s i j) (go (j + 1) (j + 1)))
+                   (go i j) (? (j = n) (? (i = j) () [(snip s i j)])
+                               (peep s j 0 = 10) (snip s i j >< go (j + 1) (j + 1))
                                (go i (j + 1)))
                    (go 0 0))
    (mx-trim s) (: n (tally s)
-                  (go i) (? (i = n) "" ((peep s i 0) = 32) (go (i + 1)) (snip s i n))
+                  (go i) (? (i = n) "" (peep s i 0 = 32) (go (i + 1)) (snip s i n))
                   (go 0))
    (mx-lds path text)
     (: st  (mx-seat path)
        blk (mx-lds-block (mx-stride <st) <>st)
        ; a seat missing either marker is a mistake, not an empty edit -- scare, so the
        ; recipe leaves the committed file alone rather than writing it back unchanged.
-       (skip l) (? (! (two? l)) (scare 'mx-lds-shut path)
-                   ((mx-trim <l) = mx-ld-shut) (mx-cat l)
+       (skip l) (? (atom? l) (scare 'mx-lds-shut path)
+                   (mx-trim <l = mx-ld-shut) (mx-cat l)
                    (skip >l))
-       (walk l) (? (! (two? l)) (scare 'mx-lds-open path)
-                   ((mx-trim <l) = mx-ld-open) (<l + mx-nl + blk + (skip >l))
-                   (<l + mx-nl + (walk >l)))
+       (walk l) (? (atom? l) (scare 'mx-lds-open path)
+                   (mx-trim <l = mx-ld-open) (<l + mx-nl + blk + skip >l)
+                   (<l + mx-nl + walk >l))
        (walk (mx-lines text)))
 
    ; the whole header. the banner is not decoration: a hand edit here is lost the next
@@ -283,31 +282,31 @@
    mx-h
     (: nl2 (string 10)
        (join (map clay-show
-        `(`('note ("mx.h -- +/* dispatch matrices. generated by mx.l, do not edit"))
-          (mx-clay1 "ai_add_mx" mx-add)
-          '(note "")
-          (mx-clay1 "ai_mul_mx" mx-mul)
-          repq-clay))))
+        [['note "mx.h -- +/* dispatch matrices. generated by mx.l, do not edit"]
+         (mx-clay1 "ai_add_mx" mx-add)
+         '(note "")
+         (mx-clay1 "ai_mul_mx" mx-mul)
+         repq-clay])))
    ; the slot LAYOUT rides kinds.h beside the roster it is a layout of. love.h used
    ; to spell it and asserted its count against enum d; one roster lays both now, so
    ; there is nothing left for that assert to catch.
    slots-clay
     (: nl (string 10)
-       `(`('note ("THE DATA SLOT LAYOUT. the sentinels tile one section at ai_data_stride in" + nl
-                  + "enum d order, so a value's rep is arithmetic on its ap -- love.c's DSENT," + nl
-                  + "love.h's ai_typ, and the six linker scripts laid from this same roster." + nl
-                  + "each #if here is a DEFAULT; the guard over it is the -D door."))
+       [['note ("THE DATA SLOT LAYOUT. the sentinels tile one section at ai_data_stride in" + nl
+                 + "enum d order, so a value's rep is arithmetic on its ap -- love.c's DSENT," + nl
+                 + "love.h's ai_typ, and the six linker scripts laid from this same roster." + nl
+                 + "each #if here is a DEFAULT; the guard over it is the -D door.")]
          (mx-knob "ai_data_section" mx-sections)
          (mx-knob "ai_data_stride" mx-strides)
-         `('cpp-def "ai_data_n" (tally mx-reps))))
+         ['cpp-def "ai_data_n" (tally mx-reps)]])
    kinds-h
     (: nl2 (string 10)
        ((join (map clay-show
-         `(`('note ("kinds.h -- GENERATED by mx.l. do not edit; edit the table there." + nl2))
-           kinds-clay
-           reps-clay
-           '(note ""))))
-        + (join (map clay-show slots-clay))))
+         [['note ("kinds.h -- GENERATED by mx.l. do not edit; edit the table there." + nl2)]
+          kinds-clay
+          reps-clay
+          '(note "")]))
+        + join (map clay-show slots-clay)))
    ; a shape check before anything is written: gen.l and the C compiler both trust
    ; this, and a malformed tree would arrive as a codegen error naming nothing.
    mx-ok
@@ -316,5 +315,5 @@
        c (clay-ok? kinds-clay)
        d (clay-ok? reps-clay)
        e (clay-ok? repq-clay)
-       f (foldl (\ a x (&& a (id? (clay-ok? x) 1))) 1 slots-clay)
-       (&& f (&& (id? a 1) (&& (id? b 1) (&& (id? c 1) (&& (id? d 1) (id? e 1))))))))
+       f (foldl (\ a x (a && id? (clay-ok? x) 1)) 1 slots-clay)
+       (a = b = c = d = e = f = 1)))
