@@ -784,7 +784,7 @@ nettest: host
 # (gen_data / vmret). See mk/tools/Makefile + mk/tools/py/README.md. ⚠ lush is a real
 # prerequisite: test/host/cook.l's SHELL pair sets `SHELL := out/host/lush` to prove cook honors it.
 test_tools: host out/host$(hsuf)/lush
-	@$(MAKE) -C tools
+	@$(MAKE) -C mk/tools
 # test_gcheck: the copy loop's FIXPOINT instance check. AI_GC_CHECK makes gen_minor re-drive
 # its WHOLE scan after the drain and trap if the second pass copies a word, in its own tree.
 # /warn the knob is GCDBG: EXTRA_CFLAGS rides $(ai_cflags), which the mooncc recipes do not use.

@@ -32,8 +32,8 @@ $(m):
 test_vmret: | $(m)
 	@echo TEST vmret.l
 	@for e in $(R)/out/host/love `find $(R)/out/free -name 'love-*.elf' 2>/dev/null`; do \
-	  python3 $(R)/tools/py/vmret.py $$e > $(R)/out/host/.vmret.py 2>&1; \
-	  $(mw) $(R)/tools/vmret.l $$e > $(R)/out/host/.vmret.l 2>&1; \
+	  python3 $(R)/mk/tools/py/vmret.py $$e > $(R)/out/host/.vmret.py 2>&1; \
+	  $(mw) $(R)/mk/tools/vmret.l $$e > $(R)/out/host/.vmret.l 2>&1; \
 	  cmp -s $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l && echo "  ok   $$e" \
 	    || { echo "  FAIL $$e"; diff $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l; rm -f $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l; exit 1; }; \
 	done; rm -f $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l
