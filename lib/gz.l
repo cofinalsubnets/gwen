@@ -165,23 +165,32 @@
              c2 (cask big)
              _ (? len (pour c2 0 (string c) 0 len) 0)
              _ (pin b 0 c2) 0)))
+   ; ⚠ THE ROOM CHECK IS INLINE, and that is not tidiness: `gz-room` reads the cask
+   ; and its length again for a test the pushing path has already made, and this
+   ; runs once per OUTPUT BYTE -- nine and a half million of them for the source
+   ; the artifact carries.
    (gz-push b v)
-    (: _ (gz-room b 1) c (peep b 0 0) len (peep b 1 0)
-       _ (pin c len v) _ (pin b 1 (len + 1)) 0)
+    (: c (peep b 0 0) len (peep b 1 0)
+       (? (len < (tally c)) (: _ (pin c len v) _ (pin b 1 (len + 1)) 0)
+          (: _ (gz-room b 1) c2 (peep b 0 0)
+             _ (pin c2 len v) _ (pin b 1 (len + 1)) 0)))
    (gz-take b)
     (: c (peep b 0 0) len (peep b 1 0)
        (? len (: c2 (cask len) _ (pour c2 0 (string c) 0 len) (string c2)) ""))
    ; a match copies BYTE BY BYTE on purpose: deflate lets a run overlap its own
    ; source (dist 1, len 100 is a hundred of one byte), so a bulk move would be wrong.
    ; ⚠ 1 for the clean end, never 0 -- the caller asks `(! r)`, and 0 is nothing.
+   ; ⚠ the ROOM IS TAKEN ONCE, before the loop, so the cask cannot be replaced
+   ; under it and the walk holds `c` and the write cursor in hand -- two tablet
+   ; reads for the whole match instead of nine per byte. the copy stays byte by
+   ; byte: deflate lets a run overlap its own source and a bulk move would be wrong.
    (gz-copy b dist len)
-    (: (go k) (? (len <= k) 1
-                 (: p (peep b 1 0)
-                    (? (p < dist) ()                       ; a reach before the start
-                       (: v (peep (peep b 0 0) (p - dist) 0)
-                          _ (gz-push b v)
-                          (go (k + 1))))))
-       (go 0))
+    (: _ (gz-room b len)
+       c (peep b 0 0)
+       (go k p) (? (len <= k) (: _ (pin b 1 p) 1)
+                   (p < dist) (: _ (pin b 1 p) ())         ; a reach before the start
+                   (: _ (pin c p (peep c (p - dist) 0)) (go (k + 1) (p + 1))))
+       (go 0 (peep b 1 0)))
 
    ; --- the bit source -------------------------------------------------------
    ; the cursor is a tablet again: 0 the bit position, 1 the torn flag. reading past
@@ -191,8 +200,19 @@
     (: p (peep t 0 0)
        (? (n <= (p >> 3)) (: _ (pin t 1 1) 0)
           (: _ (pin t 0 (p + 1)) (((s (p >> 3)) >> (p & 7)) & 1))))
+   ; ⚠ THE POSITION RIDES A LOCAL, read once and written back once. `gz-bit` pays a
+   ; peep and a pin PER BIT because the cursor is a tablet, and a deflate stream is
+   ; twenty-seven million bits -- so the cursor is taken in hand for the length of a
+   ; run and put back at the end. the semantics are gz-bit's exactly, torn flag and
+   ; all: past the end sets torn, answers a 0 bit, and does NOT advance.
    (gz-bits s n t k)
-    (: (go i a) (? (k <= i) a (go (i + 1) (a | ((gz-bit s n t) << i)))) (go 0 0))
+    (: (go i a p)
+        (? (k <= i) (: _ (pin t 0 p) a)
+           (: over (n <= (p >> 3))
+              _ (? over (pin t 1 1) 0)
+              (go (i + 1) (? over a (a | ((((s (p >> 3)) >> (p & 7)) & 1) << i)))
+                  (? over p (p + 1)))))
+       (go 0 0 (peep t 0 0)))
 
    ; --- canonical Huffman, built from code lengths --------------------------
    ; the shape is puff's: a count of codes per length and the symbols in canonical
@@ -214,15 +234,21 @@
                           (go (i + 1))))
             (go 0))
        `(cnt sym))
+   ; ..and the decode walks up to fifteen bits for ONE symbol, which is where the
+   ; per-bit cursor cost lands hardest -- so it takes the position in hand too, and
+   ; writes it back on every way out, the failing one included.
    (gz-dec s n t h)                          ; -> (1 symbol) | ()
     (: cnt (<h) sym (<(>h))
-       (go l code first index)
-        (? (15 < l) ()
-           (: c (code | (gz-bit s n t))
+       (go l code first index p)
+        (? (15 < l) (: _ (pin t 0 p) ())
+           (: over (n <= (p >> 3))
+              _ (? over (pin t 1 1) 0)
+              c (? over code (code | ((((s (p >> 3)) >> (p & 7)) & 1))))
+              p2 (? over p (p + 1))
               k (peep cnt l 0)
-              (? ((c - k) < first) `(1 (peep sym (index + (c - first)) 0))
-                 (go (l + 1) (c << 1) ((first + k) << 1) (index + k)))))
-       (go 1 0 0 0))
+              (? ((c - k) < first) (: _ (pin t 0 p2) `(1 (peep sym (index + (c - first)) 0)))
+                 (go (l + 1) (c << 1) ((first + k) << 1) (index + k) p2))))
+       (go 1 0 0 0 (peep t 0 0)))
 
    gz-fixlithuff (gz-huff (star-tray '(288) (map (\ i (? (i < 144) 8 (i < 256) 9 (i < 280) 7 8))
                                                  (jot 288))) 288)
