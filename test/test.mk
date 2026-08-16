@@ -13,7 +13,7 @@
   test_rp2040 moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
-  test_holo test_as test_elf32 test_objcopy test_gz test_splice test_distboot test_bakerep
+  test_holo test_as test_elf32 test_objcopy test_gz test_splice test_forge test_distboot test_bakerep
 
 # $(mw) -- the WARM love: the freshly-baked image woken instead of the egg compiled
 # from source (12 ms against 1.05 s). Both lanes carry the same vocabulary, so warm
@@ -477,6 +477,15 @@ test_moonfuzz: host out/host$(hsuf)/mooncc.image
 test_splice: host
 	@echo TEST test/gate/splice.l "(splice JIT: own IR -> holo -> nif -> differential)"
 	@LOVE_NO_GLAZE=1 $m -l test/gate/splice.l < /dev/null
+# test_forge -- nifs WRITTEN IN LOVE (lib/forge.l): a kernel's holo IR assembled for this cpu,
+# installed through the `nif` seam, and required to agree with the twin it deopts into -- on the
+# monomorphic lane it says and on every lane it hands back. The other half of test_splice's
+# coin: that one re-assembles IR the C compiler wrote down, this one assembles IR love wrote.
+# ⚠ the twin here is the C nif itself, so a disagreement is one denotation answering two ways.
+# Zero kernels fitted FAILS: a graceful decline is the design, a silent one reads like a pass.
+test_forge: host
+	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
+	@$m -l test/gate/forge.l < /dev/null
 # test_ccarm64 / test_ccriscv -- the battery on a CROSS TARGET (two targets, one procedure
 # in ccarch.sh): every test/cc/*.c built by `mooncc -t <arch>`, run under qemu-user, required
 # to answer what x64 answers. The three programs no cross lane can build must REFUSE, not skip.
