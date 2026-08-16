@@ -5,8 +5,18 @@ environment.** Per target, one byte string — whatever machine, arch, or OS did
 the building. Every rung below either proves the invariant somewhere new or
 removes a reason it could fail; an environment joins the roster only by
 producing the same bytes. Standing evidence, 2026-08-16: love-aarch64 built on
-bee (x86_64) == built on pi (aarch64), sha bcd371fb, real silicon both ends;
-the x86_64 mirror leg and the OS dimension climb toward the same bar.
+bee (x86_64) == built on pi (aarch64), real silicon both ends; the x86_64
+mirror leg and the OS dimension climb toward the same bar. What the bar has
+extracted so far: the image renames its serials canonical at save (one live
+heap, one byte string — a dead task pid and its +1 nom ripple were the two
+machines' whole difference), and exec-bound forks drop the heap pools from
+the child's inheritance (a swapless box refuses to double-charge a
+budget-sized commitment; the seed's own make died ENOMEM before one recipe
+ran). Open door: the seed PARENT holds its boot-fat heap (inflate scratch +
+budget-grown pools) through the whole build it merely waits on — a small box
+under build pressure oom-kills the waiter and the verdict line dies with it
+(the build and the fixpoint survive, orphaned). The parent should SHED before
+herald: a lean collect + pool release, or the check re-execed thin.
 
 One seed that runs on every platform and answers the same fixpoint everywhere —
 the cosmocc shape. First, what the tree actually holds: no mention of APE,
