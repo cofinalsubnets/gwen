@@ -2,7 +2,33 @@
 #define _AI_SYS_STAT_H
 #include <time.h>       /* struct timespec */
 #include <sys/types.h>  /* mode_t etc -- POSIX says stat.h provides them (busybox leans on it) */
-#if defined(__aarch64__) || defined(__riscv)
+#if defined(__FreeBSD__)
+/* freebsd's ino64 struct stat (stable/14 sys/stat.h): 224 bytes, one layout
+ * every arch, userland == kernel so fstat fills it verbatim. mode is 16-BIT
+ * here, and birthtim rides between ctim and size. */
+struct stat {
+  unsigned long st_dev;
+  unsigned long st_ino;
+  unsigned long st_nlink;
+  unsigned short st_mode;
+  short         st_bsdflags;
+  unsigned int  st_uid;
+  unsigned int  st_gid;
+  int           __pad0;
+  unsigned long st_rdev;
+  struct timespec st_atim;
+  struct timespec st_mtim;
+  struct timespec st_ctim;
+  struct timespec st_birthtim;
+  long          st_size;
+  long          st_blocks;
+  int           st_blksize;
+  unsigned int  st_flags;
+  unsigned long st_gen;
+  unsigned long st_filerev;
+  unsigned long __spare[9];
+};
+#elif defined(__aarch64__) || defined(__riscv)
 /* the asm-generic kernel struct stat (aarch64 + riscv64): 128 bytes, st_mode
  * before st_nlink and both 32-bit -- what newfstatat fills verbatim */
 struct stat {
@@ -58,8 +84,13 @@ struct stat {
 #define S_ISCHR(m)  (((m) & S_IFMT) == S_IFCHR)
 #define S_ISFIFO(m) (((m) & S_IFMT) == S_IFIFO)
 #define S_ISSOCK(m) (((m) & S_IFMT) == S_IFSOCK)
+#if defined(__FreeBSD__)
+#define UTIME_NOW  (-1)
+#define UTIME_OMIT (-2)
+#else
 #define UTIME_NOW  1073741823
 #define UTIME_OMIT 1073741822
+#endif
 /* permission bits (decimal for the octal values, matching this file's style) */
 #define S_ISUID 2048
 #define S_ISGID 1024

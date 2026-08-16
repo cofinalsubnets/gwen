@@ -8,9 +8,15 @@
 #define MAP_SHARED    1
 #define MAP_PRIVATE   2
 #define MAP_FIXED     16
+#if defined(__FreeBSD__)
+#define MAP_ANONYMOUS 4096
+#define MAP_ANON      4096
+#define MAP_POPULATE  0        /* freebsd has no populate; 0 = no-op */
+#else
 #define MAP_ANONYMOUS 32
 #define MAP_ANON      32
 #define MAP_POPULATE  32768
+#endif
 #define MAP_FAILED ((void*)(-1))
 void *mmap(void*, long, int, int, int, long);
 int munmap(void*, long);

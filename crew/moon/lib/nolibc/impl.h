@@ -105,7 +105,7 @@ struct _IO_FILE {
 #define NR_listen         106
 #define NR_getsockopt     118
 #define NR_setsockopt     105
-/*      NR_clone: none -- fork(2) is real here, SYS_fork 2 (fork.c, rung 3) */
+#define NR_fork             2   /* fork(2) is real here; fork.c forks on the OS */
 #define NR_execve          59
 #define NR_wait4            7
 #define NR_kill            37
@@ -125,7 +125,7 @@ struct _IO_FILE {
 #define NR_setsid         147
 #define NR_getpgid        207
 #define NR_mount           21   /* ⚠ another signature -- (type dir flags data) (rung 3) */
-/*      NR_getdents64: none -- getdirentries 554, another record (readdir, rung 3) */
+#define NR_getdirentries  554   /* ino64; the record IS the freebsd dirent (readdir.c) */
 #define NR_clock_gettime  232
 #define NR_exit_group       1   /* exit: one thread here, so one exit is the whole act */
 #define NR_openat         499
