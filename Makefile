@@ -174,10 +174,15 @@ huesrc = $(crewtools) crew/vi/hue.l crew/vi/config.l mk/tools/hue2web.l $(ho)/lo
 site: host out/toolmd.stamp
 	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc out/toolmd
 	@$(MAKE) --no-print-directory out/site/hue.css
+# ⚠ LOVE_NO_IMAGE is CLEARED, for the syntax generator's reason (crew/build.mk): the
+# painter asks THIS host for its vocabulary, and under the egg boot that vocabulary is
+# the compiler's own internals rather than the shipped language. one name differs today
+# (`love-image`), which is one name painted wrong -- and the gap is not fixed at one.
 out/site/hue.css: $(huesrc)
-	@$(ho)/love $R/mk/tools/hue2web.l css > $@
+	@env -u LOVE_NO_IMAGE $(ho)/love $R/mk/tools/hue2web.l css > $@
 	@for f in $(crewtools); do n=$${f##*/}; n=$${n%.l}; \
-	   $(ho)/love $R/mk/tools/hue2web.l src $$f > out/site/$$n.src.html || exit 1; done
+	   env -u LOVE_NO_IMAGE $(ho)/love $R/mk/tools/hue2web.l src $$f > out/site/$$n.src.html \
+	     || exit 1; done
 	@echo "  hue2web: $(words $(crewtools)) sources painted -> out/site/*.src.html"
 SITEPORT ?= 8080
 site-serve: host out/toolmd.stamp
