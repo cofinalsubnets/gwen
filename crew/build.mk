@@ -107,7 +107,7 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/sb/merge.l \
             crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l crew/sb/up.l \
             lib/gz.l lib/tar.l lib/tarcmd.l lib/source.l crew/lapiz/lapiz.l \
-            lib/hueweb.l lib/serve.l
+            lib/salt.l lib/infix.l crew/libra/libra.l lib/hueweb.l lib/serve.l
 DIST_ORIGIN ?=
 # ⚠ THE MEMBERSHIP IS AN INPUT, and make cannot see it. Adding a file to distfiles
 # changes what the artifact CARRIES while every file make watches keeps its mtime, so

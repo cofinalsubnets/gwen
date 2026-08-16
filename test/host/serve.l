@@ -2,11 +2,12 @@
 ; NOT in the test/*.l corpus (it loads crew modules and splices them).
 ;
 ; the SERVER half is kiosko's and gated there (test/host/kiosko.l drives a real
-; socket, the maker hook included). what is gated here is the MAKER: the three
-; things `love serve` answers for and the one thing it refuses, driven directly --
+; socket, the maker hook included). what is gated here is the MAKER: the four
+; things `love serve` answers for and the ones it refuses, driven directly --
 ; no port, no socket, no timing, because none of that is this file's claim.
 ;
 ;   *.l        the painted source
+;   *.l.md     that file's header comment, as a document
 ;   *.md       the rendered document
 ;   /hue.css   the stylesheet that colours both
 ;   anything else -> (), and kiosko does what it always did
@@ -16,6 +17,7 @@
 (use "crew/vi/config.l")                    ; the theme: hue-theme
 (use "crew/vi/hue.l")                       ; the class table, read bare by hueweb
 (use 'lapiz)                                ; the document lens, read bare by serve
+(use 'libra)                                ; ..and the header lifter, likewise
 (use 'hueweb)
 (use 'kiosko)
 (use 'serve)
@@ -56,6 +58,20 @@
            (sub? (<>r) "<h1>a head</h1>")            ; rendered, through lapiz
            (sub? (<>r) "<em>prose</em>"))
         0)
+   ; ⚠ `.l.md` is claimed BEFORE `.md`, and reads the .l with the suffix off. the
+   ; two pages link to each other, which is the whole reason the nav line exists.
+   _ (: r (mk "/x.l.md")
+        _ (assert
+           (two? r)
+           (sub? (<>r) "<h1>/x.l</h1>")              ; the file names the document
+           (sub? (<>r) "a comment")                  ; ..and its header IS the document
+           (sub? (<>r) "href=\"/x.l\""))            ; ..with the way back to the source
+        0)
+   ; a file with no header says so, rather than serving a blank page
+   _ (: _ (spit "/bare.l" "(: x 1)\n")
+        r (mk "/bare.l.md")
+        _ (assert (two? r) (sub? (<>r) "no header comment"))
+        0)
    _ (: r (mk "/hue.css")
         _ (assert
            (two? r)
@@ -82,6 +98,6 @@
    0)
 
 (: _ (test_fin ())
-   _ (puts "lib/serve: ok -- the maker hook (painted .l, rendered .md, the stylesheet, and ())
+   _ (puts "lib/serve: ok -- the maker (painted .l, its header, a rendered .md, the css, and ())
 ")
    0)

@@ -406,10 +406,13 @@
              (libra-check conf (files as) (member? "-w" as)))))
 )
 
-; the SEAT (kiosko's shape): fire libra-main iff this file -- or the installed
-; `libra` script -- sits in the program seat of the real command line. body-having,
-; so nothing leaks.
-(: s ((from 'verbs 'fire) ["libra" "libra.l"])
+; the VERB, and the SEAT (kiosko's shape). the verb table is what makes `love libra
+; ..` a word on the artifact -- crew/build.mk bakes this file in, so a seed can
+; weigh, lay out and document the .l it carries with nothing else on the box. the
+; seat fires libra-main iff this file, or the installed `libra` script, sits in the
+; program seat of the real command line. body-having, so nothing leaks.
+(: _ (pins (from 'verbs 'tab) 'libra libra-main)
+   s ((from 'verbs 'fire) ["libra" "libra.l"])
    ; ⚠ QUIT, never return: the shebang's -l makes this file a PRELOAD, so every
    ; path that merely answers -- a clean check, fmt, infix, doc, -h -- leaves
    ; cli holding the tool's own arguments and it LOADS the first one as a love

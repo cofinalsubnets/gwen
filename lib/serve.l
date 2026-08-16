@@ -7,6 +7,8 @@
 ;
 ;   *.l        the PAINTED source -- syntax coloured, one span per line, every
 ;              line linkable (lib/hueweb.l)
+;   *.l.md     that file's HEADER COMMENT as a document -- libra lifts it, lapiz
+;              shows it, and the two pages link to each other
 ;   *.md       the RENDERED document -- markdown through lapiz's html surface
 ;   /hue.css   the stylesheet that colours both
 ;
@@ -58,39 +60,54 @@
             _ (pin box p `(k h))
             h)))
 
-   ; the page for one source file: a line back to its directory, then the paint.
-   (sv-page path body)
-   (hw-page path '("/hue.css") "/"
-            ("<p class=\"srcnav\"><a href=\"" + sv-up path + "\">"
-             + sv-up path + "</a> &middot; " + path + "</p>\n" + body))
+   ; the nav line every page wears: back to the directory, then across to the
+   ; other reading of the same file. `alt` is `(href text) or ().
+   (sv-nav path alt)
+   ("<p class=\"srcnav\"><a href=\"" + sv-up path + "\">" + sv-up path + "</a> &middot; " + path
+    + (? (two? alt) (" &middot; <a href=\"" + <alt + "\">" + (<>alt) + "</a>") "") + "</p>\n")
+   (sv-page path body alt) (hw-page path '("/hue.css") "/" (sv-nav path alt + body))
 
    ; the page for one markdown file: lapiz reads it and shows it as html, and the
    ; same small template holds it. ⚠ `mdread`/`htshow` BARE, for the reason kiosko
    ; and hueweb are bare -- in the artifact lapiz is catted, not registered.
-   (sv-doc path src)
-   (hw-page path '("/hue.css") "/"
-            ("<p class=\"srcnav\"><a href=\"" + sv-up path + "\">"
-             + sv-up path + "</a> &middot; " + path + "</p>\n" + htshow (mdread src)))
+   (sv-doc path src alt) (sv-page path (htshow (mdread src)) alt)
+
+   ; ..and the header of a .l as a document: libra lifts it (it reads .l, which is
+   ; libra's beat and nobody else's), lapiz shows it. ⚠ `ldoc-md` BARE -- libra is
+   ; catted into the artifact, not registered, the same as kiosko and lapiz.
+   ; an empty answer is a file with no header, and it says so rather than serving a
+   ; blank page.
+   (sv-head path src)
+   (: md (ldoc-md src)
+      (? (0 < tally md) ("# " + path + "\n\n" + md)
+         ("# " + path + "\n\nthis file has no header comment.\n")))
 
    ; THE HOOK. `(ctype body) to serve, () to say "not mine" -- and everything that
    ; is not a .l, a .md or the stylesheet is exactly that.
+   ; ⚠ THE ORDER IS `.l.md` FIRST, and it has to be: that path ends in `.md` as
+   ; much as it ends in `.l.md`, and the file it reads is the .l with the suffix
+   ; taken back off. every other suffix test would claim it first.
    (sv-make root box p)
-   (: md? (sv-ends? p ".md")
+   (: hd? (sv-ends? p ".l.md")
+      md? (sv-ends? p ".md")
+      src (? hd? (snip p 0 (tally p - 3)) p)      ; "/x.l.md" -> "/x.l"
       (? (p = "/hue.css") `("text/css; charset=utf-8" (hw-css 0))
          (! (md? || (sv-ends? p ".l"))) ()
-         (: f (root + p)
+         (: f (root + src)
             r (sv-rdf f)
             (? !(two? r) ()                       ; not there: let kiosko say 404
                `("text/html; charset=utf-8"
-                 (sv-cached box f (\ _ (? md? (sv-doc p (<>r))
-                                           (sv-page p (hw-body p (<>r)))))))))))
+                 (sv-cached box p
+                   (\ _ (? hd? (sv-doc p (sv-head src (<>r)) `(src "the source"))
+                            md? (sv-doc p (<>r) ())
+                            (sv-page p (hw-body p (<>r)) `((p + ".md") "the header, as a document"))))))))))
 
    (sv-usage _)
    (: _ (say err "love serve -- the tree in a browser, painted on the way out
 usage: love serve [-p PORT] [DIR]
   -p, --port PORT   the port to listen on (default 8080)
   DIR               the directory to serve (default .)
-a .l is painted and a .md rendered at request time; /hue.css colours both.
+a .l is painted, a .md rendered, and x.l.md is x.l's header as a document.
 ")
       (quit 0))
 
