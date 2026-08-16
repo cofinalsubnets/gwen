@@ -36,7 +36,21 @@
     (= (L 1 (link 'w (L (link 'sub "echo hi")))) (sh-lex "$(echo hi)"))
     (= (L 1 (link 'w (L (link 'sub "date")))) (sh-lex "`date`"))
     (id? (cap (sh-lex "echo 'x")) 'more)
-    (id? (cap (sh-lex "echo \\")) 'more)))
+    (id? (cap (sh-lex "echo \\")) 'more)
+    ; ⚠ AN EMPTY PAYLOAD IS A PARSE, NOT A FAILURE. A (payload . j) answer nets
+    ; its head alone -- the improper tail is out of the sum -- so "" , `` and a
+    ; heredoc owed no lines all net zero, and a truth test called each of them
+    ; unfinished: `echo ""` asked PS2 for a line nobody owed. The KIND says it.
+    (= (L 1 (lw "echo") (link 'w (L (link 'dq ())))) (sh-lex "echo \"\""))
+    (= (L 1 (lw "echo") (link 'w (L (link 'lit "a") (link 'dq ()) (link 'lit "b"))))
+       (sh-lex "echo a\"\"b"))
+    (= (L 1 (lw "echo") (link 'w (L (link 'sub "")))) (sh-lex "echo ``"))
+    (= (L 1 (lw "cat") (rdt () "<h") (link 'w (L (link 'dq ()))) (opt "nl"))
+       (sh-lex "cat <<E\nE\n"))
+    ; ..and the same law inside a vop word, where the fallback was SILENT: the
+    ; quotes stayed in the text instead of removing
+    (= (L (link 'dq ())) (sh-wordize "\"\""))
+    (= (L (link 'sub "")) (sh-wordize "``"))))
 
 ; the grammar: pipelines under && under ; -- and & backgrounds only its own
 ; and_or; a dangling && is parse-'more (the PS2 lane); compounds refuse politely
@@ -354,6 +368,97 @@
 (: r (hark (L "out/host/love" "out/host/lush" "-c" "f() { pwd; cat core/love.c; cat core/love.c; }; x=$(f); echo ${#x}"))
    t (cup r)
    (assert (< 800000 (sh-int (snip t 0 (- (tally t) 1))))))
+
+; --- the love lane: no syntax yet, just the evaluator and the marshalling -----
+; cli.l's -e law in-process -- every top-level datum off the string, MANY folding
+; to one application (so infix reads) and one staying as it is. an unfinished or
+; raising form is a CONDITION handed back, never a raise the shell has to survive.
+(assert
+ (= 3 (cup (sh-loveval "1 + 2")))
+ (= 262144 (cup (sh-loveval "2 3 4")))
+ (= "hi" (cup (sh-loveval "\"hi\"")))
+ (= (L 1 2 3) (cup (sh-loveval "[1 2 3]")))
+ (id? 'err (cap (sh-loveval "(1 +")))
+ (id? 'unfinished-form (cap (cup (sh-loveval "(1 +"))))
+ (id? 'err (cap (sh-loveval "nosuchname")))
+ ; a string IS its bytes, so a capture is usable; everything else prints sayable
+ (= "hi" (sh-lovetext "hi"))
+ (= "(1 2 3)" (sh-lovetext (L 1 2 3)))
+ (= "3" (sh-lovetext 3)))
+
+; ${(FORM)} -- the interpolation. THE READER IS THE SCANNER, so the extent obeys
+; love's lexical law and not the shell's: a ' is a sigil, a ; runs to the line's
+; end, and a ) or a } inside a "" is text. `${` with a non-POSIX op reached
+; 'unterm before this, so no script that lexed yesterday means anything new.
+(: w1 (\ sg ('w >< [sg]))                        ; a one-segment word token
+   ew ('w >< [('lit >< "echo")])
+   (assert
+    (= [1 ew (w1 ('lov >< "(1 + 2)"))] (sh-lex "echo ${(1 + 2)}"))
+    (= [1 ew ('w >< [('lit >< "x") ('lov >< "(2 3 4)") ('lit >< "y")])]
+       (sh-lex "echo x${(2 3 4)}y"))
+    (= [1 ew (w1 ('lov >< "(\"}\")"))] (sh-lex "echo ${(\"}\")}"))
+    (= [1 ew (w1 ('lov >< "('a)"))] (sh-lex "echo ${('a)}"))
+    ; the reader wants another line, and 'more is how PS2 is asked for one
+    (id? (cap (sh-lex "echo ${(1 +")) 'more)
+    (id? (cap (sh-lex "echo ${(1 + 2)")) 'more)
+    ; the two nesting scanners STEP OVER the body rather than through it
+    (= [1 ew (w1 ('sub >< "echo ${('a)}"))] (sh-lex "echo $(echo ${('a)})"))
+    (= [1 ew (w1 ('vop >< ["U" ":-" "${('a)}"]))] (sh-lex "echo ${U:-${('a)}}"))
+    ; the extent is the reader's, and nothing before it is: the vop lane holds
+    (= [1 ew (w1 ('vop >< ["v" "#" "a"]))] (sh-lex "echo ${v#a}"))))
+
+; the value is a VALUE, not a chomped byte stream: one field, never IFS-split,
+; never globbed -- quiet like "${x}". Splitting can be bought later; unsplitting
+; cannot, so the quiet law is the one that keeps the door open.
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "for w in ${(\"a b c\")}; do echo \"[$w]\"; done"))
+   (assert (= "[a b c]\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "echo ${(\"*\")} ${(1 + 2)}"))
+   (assert (= "* 3\n" (cup r))))
+; all four seg-kind walks: a bare word (wseg), inside ".." (dqat), a ${x:-..}
+; word (sh-textof), and a heredoc body (sh-dollarize's segs through sh-textof)
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+              "echo ${(1 + 2)} \"[${(2 + 2)}]\" ${UNSET_LV:-${(3 + 3)}}; cat <<E\nsum ${(10 + 5)}\nE"))
+   (assert (= "3 [4] 6\nsum 15\n" (cup r))))
+; a love form spanning lines, with a ; comment eating a } and a ) on the way
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "echo ${(1 + 2 ; a } and a )\n)}"))
+   (assert (= "3\n" (cup r))))
+; ERRORS CONTAIN, and at expansion there is no line left to fail: the word is
+; EMPTY and the shell stays sayable
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "echo [${(nosuchname)}] 2>/dev/null; echo alive"))
+   (assert (= "[]\nalive\n" (cup r))))
+
+; `ev`: the answer on out, the TRUTH BIT as the status (positive is true), and
+; -n for the status alone. ⚠ THE WORD `love` IS NOT OURS. A builtin shadows its
+; PATH twin, and the interpreter spells its arguments differently -- `love -e X`
+; would read -e as a datum and fold it in, answering 3.0 for 3. The two want
+; different command lines and isolated processes, so `love` spawns.
+(assert !(sh-bi? "love") (sh-bi? "ev"))
+(: r (hark ["out/host/love" "out/host/lush" "-c" "ev 1 + 2; ev -n 9; echo st=$?"])
+   (assert (= "3\nst=0\n" (cup r))))
+(: r (hark ["out/host/love" "out/host/lush" "-c" "ev 0; echo st=$?; ev 1; echo st=$?"])
+   (assert (= "0\nst=1\n1\nst=0\n" (cup r))))
+; a love form as a shell CONDITION -- the one thing ${( )} cannot do, an
+; expansion being a word and not a command. ⚠ QUOTED, and BOTH directions: the
+; shell lexes first, so bare `ev 3 > 2` is `ev 3` with stdout redirected into a
+; file named 2 -- which answers 0 and passes this assert for the wrong reason,
+; leaving the file behind as the only sign. One arm cannot tell them apart.
+; -n mutes the answer, which is what a condition wants.
+(: r (hark ["out/host/love" "out/host/lush" "-c"
+            "if ev -n '3 > 2'; then echo yes; else echo no; fi
+             if ev -n '2 > 3'; then echo yes; else echo no; fi"])
+   (assert (= "yes\nno\n" (cup r))))
+; ERRORS CONTAIN: a bad form is a status and a line on err, and the shell runs on
+(: r (hark ["out/host/love" "out/host/lush" "-c" "ev '(1 +' 2>/dev/null; echo st=$?; echo alive"])
+   (assert (= "st=1\nalive\n" (cup r))))
+; the form runs in THIS image -- no process is spawned, so a binding it makes is
+; still there on the next line
+(: r (hark ["out/host/love" "out/host/lush" "-c" "ev '(: zz 7)'; ev zz"])
+   (assert (= "7\n7\n" (cup r))))
+(: r (hark ["out/host/love" "out/host/lush" "-c" "x=$(ev '\"a b\"'); echo \"[$x]\"; echo $(ev '[1 2 3]')"])
+   (assert (= "[a b]\n(1 2 3)\n" (cup r))))
+; ..and the binary keeps its own command line, in its own process
+(: r (hark ["out/host/love" "out/host/lush" "-c" "PATH=$PWD/out/host:$PATH love -e '1 + 2'"])
+   (assert (= "3\n" (cup r))))
 
 (test_fin ())
 (puts "sh: ok") (putc 10)

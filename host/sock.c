@@ -1,7 +1,7 @@
 // host/sock.c -- every socket nif, both address families: TCP/UDP (ain's
 // netcat core and inle's oracle wire), unix-domain connect (lux's X display
 // door) and listen (the shore lux moors at). Host-only, auto-globbed +
-// AI_NIF-registered (no
+// AiNif-registered (no
 // love.c/love.h/main.c edit). Every stream nif mirrors main.c's lvm_open:
 // produce an OS fd, hand it to ai_io_alloc (love.c) -> a heap port carrying a
 // close finalizer. Once an fd is a port, READ AND WRITE COME FREE through the
@@ -36,7 +36,7 @@
 #define cloexec(fd) do { if ((fd) >= 0) fcntl((fd), F_SETFD, FD_CLOEXEC); } while (0)
 
 // inle's UDP wire (free/x86_64/net.c) caps a datagram at one ethernet MTU.
-#define DG_MAX 1472
+#define DgMax 1472
 
 // Pull a live OS fd out of a port arg, or -1 if it isn't a port. Same inline
 // "is x a port" as main.c's lvm_close: an even (heap) word whose first slot is
@@ -333,7 +333,7 @@ static lvm(lvm_udprecv) {
  // ⚠ a stack buffer is safe in an lvm_ only while its address never reaches the TAIL:
  // every exit here unwinds the frame before it jumps. ai_musttail is owed rather than
  // opportunistic, so a shape that could not tail-jump refuses at compile.
- char buf[DG_MAX];
+ char buf[DgMax];
  struct dgram d = call_udprecv(fd, buf, sizeof buf);
  // no datagram yet -> PARK on the socket, exactly as accept does. Nothing has been
  // taken off the wire, so the op re-runs whole.
@@ -400,13 +400,13 @@ static union u const
  nif_udpbind[]  = {{lvm_udpbind}, {lvm_ret0}},
  nif_udprecv[]  = {{lvm_udprecv}, {lvm_ret0}},
  nif_udpsend[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_udpsend}, {lvm_ret0}};
-AI_NIF("connect",  nif_connect);
-AI_NIF("listen",   nif_listen);
-AI_NIF("accept",   nif_accept);
-AI_NIF("seal", nif_shutdown);
-AI_NIF("udp-bind", nif_udpbind);
-AI_NIF("udp-recv", nif_udprecv);
-AI_NIF("udp-send", nif_udpsend);
+AiNif("connect",  nif_connect);
+AiNif("listen",   nif_listen);
+AiNif("accept",   nif_accept);
+AiNif("seal", nif_shutdown);
+AiNif("udp-bind", nif_udpbind);
+AiNif("udp-recv", nif_udprecv);
+AiNif("udp-send", nif_udpsend);
 // --- unix-domain connect: lux's X display door ----------------------------------
 // (connectu path) -- connect to a unix-domain stream socket and wrap the fd as a
 // port | (). The load-bearing case is an X display socket (/tmp/.X11-unix/X<n>):
@@ -442,7 +442,7 @@ static lvm(lvm_connectu) {
  ai_musttail return Continue(); }
 
 static union u const nif_connectu[] = {{lvm_connectu}, {lvm_ret0}};
-AI_NIF("connectu", nif_connectu);
+AiNif("connectu", nif_connectu);
 // --- the unix listener ----------------------------------------------------------
 //   (shore path)          -> a listening unix port | () ; unlinks stale first
 //                            (accept/await/close ride the core port nifs)
@@ -475,4 +475,4 @@ static lvm(lvm_shore) {
  Sp += 1; Ip += 1; ai_musttail return Continue(); }
 
 static union u const nif_shore[] = {{lvm_shore}, {lvm_ret0}};
-AI_NIF("shore", nif_shore);
+AiNif("shore", nif_shore);

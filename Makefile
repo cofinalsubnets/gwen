@@ -56,7 +56,7 @@ endif
 # each fragment owns are rostered in that fragment.)
 .PHONY: all install uninstall clean distclean host kernel wasm love0 site site-serve test test_host \
   test_hdiff test_slow test_extra test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm \
-  uuwm test_gc test_gcheck test_gcstress test_hostnif test_doc test_glaze test_hook test_sat \
+  uuwm test_gc test_gcheck test_gcstress test_hostnif test_doc test_glaze test_hook test_sat test_cli \
   test_holo test_as test_elf32 test_objcopy test_holofuzz test_glazefuzz test_encver test_lux \
   test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 \
   test_virt test_wake test_embed embed test_rp2040 valg disasm flame cat cata catav perf repl gdb \
@@ -103,7 +103,7 @@ test:
 # ⚠ it BUILDS and smokes the artifact and does not run the seed fixpoint, because the tarball is
 # cut from the git INDEX -- on a dirty tree that would compare the artifact against source you
 # are not looking at, and report the difference as a broken fixpoint.
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_wasm test_kernel test_disk test_virt test_embed test_cookdiff test_dist
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_wasm test_kernel test_disk test_virt test_embed test_cookdiff test_dist
 	
 
 # really really really slow gate. test_embed is here too, cheap insurance: the thumb lanes
@@ -112,7 +112,7 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 test_extra: test_embed test_embed_boards test_filemode waits test_kernel_arm64 test_mps2 test_mps2_t1 \
 	test_mps2_wake test_teensy41 test_nucleo446 test_nucleo446_smoke test_rp2040 test_playdate test_arm64 \
 	test_vec test_front test_proof test_gen test_uugen test_uulean test_uuwm \
-	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
+	test_uukind test_gc test_gcheck test_gcstress test_imgchain test_extract test_big test_mx \
 	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_elf32 test_objcopy \
 	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_refuzz test_nest test_sb test_vi \
 	test_moon test_clay test_moonfuzz test_splice test_ccarm64 test_ccriscv \
@@ -147,12 +147,46 @@ ccdb:
 # revision behind by construction: the cost of baking the id. test_wasm links out of tree
 # so at least it stops DIRTYING the file on every run.
 
-# this tree's own docs as a browsable site: README.md + doc/*.md through papel.
-site: host
-	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc
+# this tree's own docs as a browsable site: README.md + doc/*.md through papel -- plus
+# one page per CREW TOOL, whose header comment IS its documentation, and the ANNOTATED
+# SOURCE of every crew tool beside it.
+#
+#   libra doc   lifts a .l file's header out as markdown (it is the only thing in the
+#               tree that reads .l for prose), and papel builds the site from markdown
+#               exactly as it always has -- papel never learns what a .l is.
+#   hue2web     paints the source itself, out of crew/vi/hue.l's class table and
+#               crew/vi/config.l's theme -- the same table the editor and the vim
+#               syntax read, so the site wears the editor's colours by construction.
+#
+# a tool with a doc/*.md of its own is skipped for the DOC page (that page is the one
+# someone wrote) but still gets its source page.
+crewtools = $(foreach d,$(wildcard crew/*),$(wildcard $d/$(notdir $d).l))
+sitetools = $(foreach f,$(crewtools),$(if $(wildcard doc/$(notdir $(basename $f)).md),,$f))
+out/toolmd.stamp: $(sitetools) crew/libra/libra.l $(ho)/love
+	@rm -rf out/toolmd && mkdir -p out/toolmd
+	@for f in $(sitetools); do n=$${f##*/}; n=$${n%.l}; \
+	   { $(ho)/love $R/crew/libra/libra.l doc $$f && echo && echo "[the source]($$n.src.html)"; } \
+	     > out/toolmd/$$n.md || exit 1; done
+	@echo "  toolmd: $(words $(sitetools)) crew headers -> out/toolmd/"
+	@touch $@
+# the source pages and their stylesheet, written into the site papel just built
+huesrc = $(crewtools) crew/vi/hue.l crew/vi/config.l mk/tools/hue2web.l $(ho)/love
+site: host out/toolmd.stamp
+	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc out/toolmd
+	@$(MAKE) --no-print-directory out/site/hue.css
+# ⚠ LOVE_NO_IMAGE is CLEARED, for the syntax generator's reason (crew/build.mk): the
+# painter asks THIS host for its vocabulary, and under the egg boot that vocabulary is
+# the compiler's own internals rather than the shipped language. one name differs today
+# (`love-image`), which is one name painted wrong -- and the gap is not fixed at one.
+out/site/hue.css: $(huesrc)
+	@env -u LOVE_NO_IMAGE $(ho)/love $R/mk/tools/hue2web.l css > $@
+	@for f in $(crewtools); do n=$${f##*/}; n=$${n%.l}; \
+	   env -u LOVE_NO_IMAGE $(ho)/love $R/mk/tools/hue2web.l src $$f > out/site/$$n.src.html \
+	     || exit 1; done
+	@echo "  hue2web: $(words $(crewtools)) sources painted -> out/site/*.src.html"
 SITEPORT ?= 8080
-site-serve: host
-	@$(ho)/love -l crew/papel/papel.l -t love -o out/site -s $(SITEPORT) README.md doc
+site-serve: host out/toolmd.stamp
+	@$(ho)/love -l crew/papel/papel.l -t love -o out/site -s $(SITEPORT) README.md doc out/toolmd
 
 wasm:
 	@$(MAKE) -C wasm

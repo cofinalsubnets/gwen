@@ -19,8 +19,8 @@ mw = env -u LOVE_NO_IMAGE $(m)
 # (where $(m)'s ../ prefix would point one level above the root).
 mwr = env -u LOVE_NO_IMAGE out/host$(hsuf)/love
 
-.PHONY: all test_vmret test_cook test_tele test_xor test_hue
-all: test_vmret test_cook test_tele test_xor test_hue
+.PHONY: all test_vmret test_cook test_tele test_xor test_hue test_hueweb
+all: test_vmret test_cook test_tele test_xor test_hue test_hueweb
 
 # Build the host love on demand (it runs the .l tools); only if it's missing.
 $(m):
@@ -62,6 +62,38 @@ test_hue: | $(m)
 	      || { echo "  FAIL $$f: $$g is painted but never linked to a highlight group"; exit 1; }; \
 	  done; \
 	  echo "  ok   $$f"
+
+# hue2web.l -- the THIRD reader of the same class table (the painter, the vim syntax, the
+# site). Two claims, and the second is the one that matters.
+# ⚠ PAINTING CHANGES NO TEXT. strip every tag from the emitted <pre> and decode the three
+# entities and what is left must be the source FILE, byte for byte -- a highlighter that
+# drops a line, eats a backslash or mis-carries a multi-line string is a highlighter that
+# rewrote the program it was showing you, and nothing about the colours would say so.
+# The css half asks the same question hue2vim's gate asks: did it run to the end and mean
+# it (a rule per class, no `;;` scare in the middle of the file).
+test_hueweb: | $(m)
+	@echo TEST hue2web.l
+	@cd $(R) && o=out/host$(hsuf); \
+	  $(mwr) mk/tools/hue2web.l css > $$o/.hue.css \
+	    || { echo "  FAIL: the css generator did not run"; exit 1; }; \
+	  grep -n '^;;' $$o/.hue.css && { echo "  FAIL: a scare printed into the stylesheet"; exit 1; }; \
+	  n=`grep -c '^\.hue \.l-' $$o/.hue.css`; \
+	  [ "$$n" -ge 10 ] || { echo "  FAIL: $$n class rules -- the table answered nothing"; exit 1; }; \
+	  grep -q '^\.hue \.l-comment{color:#' $$o/.hue.css \
+	    || { echo "  FAIL: no comment colour -- the theme join found nothing"; exit 1; }; \
+	  for f in crew/vi/hue.l crew/papel/papel.l crew/libra/libra.l mk/tools/hue2web.l; do \
+	    $(mwr) mk/tools/hue2web.l src $$f > $$o/.hue.html \
+	      || { echo "  FAIL $$f: the painter did not run"; exit 1; }; \
+	    grep -q '</html>' $$o/.hue.html \
+	      || { echo "  FAIL $$f: the page stopped short"; exit 1; }; \
+	    grep -q 'class="l-comment"' $$o/.hue.html \
+	      || { echo "  FAIL $$f: nothing was painted"; exit 1; }; \
+	    sed -n '/<pre class="hue">/,/<\/pre>/p' $$o/.hue.html | head -n -1 \
+	      | sed -e 's/<[^>]*>//g' -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g' > $$o/.hue.txt; \
+	    cmp -s $$f $$o/.hue.txt \
+	      || { echo "  FAIL $$f: the painted text is not the source"; diff $$f $$o/.hue.txt | head -5; exit 1; }; \
+	  done; \
+	  echo "  ok   the stylesheet, and the paint changes no text"
 
 # cook's Makefile-importer suite: test/host/cook.l writes fixture Makefiles to a temp dir and
 # runs cook on them as a subprocess, asserting over the captured output. Paths are relative

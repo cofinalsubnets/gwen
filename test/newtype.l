@@ -175,5 +175,5 @@
     !(lit? a)                ; a mod-n residue too
     !(lit? (sm 5))
     !(lit? (coin #(0 'd) 5)) ; a plain die -> data
-    (lit? (coin #(0 'h 4 1) 5))    ; ... but a die with DIE_HOT (slot 4) strikes lit coins
+    (lit? (coin #(0 'h 4 1) 5))    ; ... but a die with DieHot (slot 4) strikes lit coins
     ))

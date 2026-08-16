@@ -66,7 +66,7 @@ The file discipline, two shapes:
   quits with what it answers (doc/moon.md). ⚠ nothing unwinds through a scare, so a port a tool
   still holds at the leave is lost, exactly as `quit` lost it. The property is gated in
   test/gate/kore.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
-* **the nif lane.** fs effects ride host/posix.c (app-glob AI_NIF, no core edit) and its
+* **the nif lane.** fs effects ride host/posix.c (app-glob AiNif, no core edit) and its
   `posix_` conventions: an effect op answers () ok | a POSITIVE errno | EINVAL misuse; a value
   op answers the value | (). host/posix.c holds rename symlink readlink chmod chown utime
   umask rmdir hardlink (`link` the word belongs to the chain ctor). test/host/fs.l smokes them

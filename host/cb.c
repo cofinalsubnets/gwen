@@ -8,10 +8,10 @@
 #include "../crew/quay/quay.c"
 #include "../crew/quay/nif.c"
 
-AI_NIF("screen", nif_screen);
-AI_NIF("scribe", nif_scribe);
-AI_NIF("glass", nif_glass);
-AI_NIF("gaze", nif_gaze);
-AI_NIF("reply", nif_reply);
-AI_NIF("unfold", nif_unfold);
-AI_NIF("wet", nif_damage);
+AiNif("screen", nif_screen);
+AiNif("scribe", nif_scribe);
+AiNif("glass", nif_glass);
+AiNif("gaze", nif_gaze);
+AiNif("reply", nif_reply);
+AiNif("unfold", nif_unfold);
+AiNif("wet", nif_damage);

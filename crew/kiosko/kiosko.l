@@ -229,7 +229,12 @@
 ; the file, answer. the headers are read and dropped -- we need nothing from any of them,
 ; but consuming them lets the peer finish its write before we close, which is the
 ; difference between a clean close and a reset.
-(: (serve1 root c)
+; ⚠ `make` is a HOOK, not a route table: kiosko still knows nothing about what it
+; serves. it is handed the decoded path and answers `(ctype body) to serve, or ()
+; to say "not mine" -- and it is asked FIRST, so a caller can answer for a path
+; that is also a file on disk (`love serve` paints a .l that is right there).
+; () for the hook is the ordinary static server, unchanged.
+(: (serve1 root make c)
    (: blk (reqblk c)
       line (line1 blk)
       (? (0 = tally blk) 0                                    ; the peer went away
@@ -239,6 +244,9 @@
             (? !((meth = "GET") || head?) (: _ (oops c 405 "Method Not Allowed" 0) `(405 meth raw))
                (: p (pdecode (cutq raw))
                   (? !(safe? p) (: _ (oops c 403 "Forbidden" head?) `(403 meth raw))
+                     (: m (? make (make p) ())
+                        (? (two? m)
+                           (: _ (reply c 200 "OK" <m (<>m) head?) `(200 meth raw))
                      (: full (root + p)
                         (? (dir? full)
                            ; a directory: redirect to the slashed form first, so the
@@ -256,7 +264,7 @@
                            !(fhere? full) (: _ (oops c 404 "Not Found" head?) `(404 meth raw))
                            (: b (gulp full)
                               (? (got? b) (: _ (reply c 200 "OK" (mime full) b head?) `(200 meth raw))
-                                 (: _ (oops c 403 "Forbidden" head?) `(403 meth raw)))))))))))))
+                                 (: _ (oops c 403 "Forbidden" head?) `(403 meth raw)))))))))))))))
 
 ; --- the loop ---------------------------------------------------------------------------
 (: (note quiet l) (? quiet 0
@@ -281,7 +289,7 @@
    ; for none. it is how a generator turns this into a DEV SERVER without kiosko learning
    ; anything: the hook regenerates, kiosko still only knows a directory. it runs in the
    ; accept task, not the session task, so two clients cannot regenerate at once.
-   (accept-loop root l quiet before)
+   (accept-loop root l quiet before make)
    (: _ (await l)
       c (accept l)
       _ (drain ())
@@ -293,22 +301,27 @@
                 ; unwinds, so the cleanup has to be at the landing site), and the client
                 ; gets a 500 instead of a reset. the help rides the task, so five sessions
                 ; hold five of these at once without seeing each other's.
-                (twirl (\ _ (: r (trap (serve1 root) c
+                (twirl (\ _ (: r (trap (serve1 root make) c
                                        (\ a b (: _ (oops c 500 "Internal Server Error" 0)
                                                  `(500 "-" (show a)))))
                                _ (? r (note quiet r) 0) _ (seal c 1) (close c))) ()))
            0)
-      (accept-loop root l quiet before))
+      (accept-loop root l quiet before make))
    ; the entry. `root` is a directory (no trailing slash), `port` a fixnum, `before` a thunk
    ; or (). answers () when the port cannot be taken, so a caller can say something better
    ; than we can. ⚠ all four operands, always -- three would hand back a CLOSURE, which is
    ; truthy, and the caller's "did it listen?" test would read a failure as a success.
-   (serve root port quiet before)
+   ; ⚠ FOUR OPERANDS, ALWAYS -- three hands back a CLOSURE, which is truthy, and the
+   ; caller's "did it listen?" test reads a failure as a success. `serve5` is the same
+   ; entry with the maker hook; `serve` is it with no hook, which is every caller that
+   ; came before.
+   (serve root port quiet before) (serve5 root port quiet before ())
+   (serve5 root port quiet before make)
    (: r (? (ends? root "/") (snip root 0 (tally root - 1)) root)
       l (listen port)
       (? l (: _ (? quiet 0 (: _ (say err ("kiosko: serving " + r + " on http://127.0.0.1:" + show port + "/"))
                               (put err 10)))
-              _ (accept-loop r l quiet before)
+              _ (accept-loop r l quiet before make)
               _ (close l) 1)
          ())))
 

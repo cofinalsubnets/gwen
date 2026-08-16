@@ -20,6 +20,42 @@
         (go (tally t)))
    (sh-runsub x) (sh-chomp ("" + ((sh-subeval ()) x)))
 
+   ; --- the love lane: a form's answer, and that answer as shell text -----------
+   ; lush IS love, so the evaluator is aboard and nothing is spawned.
+   ; (sh-loveval src) -> (1 . value) | ('err . (name . value)), cli.l's -e law:
+   ; every top-level datum off the string, MANY folding to one application (so
+   ; infix reads) and one staying as it is; 'torn is an unfinished shape. the run
+   ; sits under a trap in urun's posture, so a bad form is a condition handed back
+   ; and never a dead shell -- the torn case wears one too, so both render at one
+   ; door. ⚠ a RAISE is what a trap catches: a form calling `quit` still ends the
+   ; process, exactly as `exit` does.
+   (sh-loveval src)
+     (: m (nom 0)                                 ; a fresh nom: 'torn, id?-safe
+        (rdl x acc) (sound x @ 'torn       m
+                               (d >< rest) (rdl rest (d >< acc))
+                               _           (sh-rev acc))
+        ; ⚠ ^m, the PIN: a bare `m` in a pattern would BIND and take every answer.
+        ; the nom is read from outside and the arm asks for that value alone.
+        ; ⚠ [] is the EMPTY CHAIN, exactly; a `()` arm would fit anything (pat.l)
+        (trap (\ _ (rdl src () @ ^m ('err >< ('unfinished-form >< src))
+                                 [] (1 >< ())
+                                 ds (1 >< (ev 'ev (two? >ds ? ds <ds)))))
+              ()
+              (\ a b ('err >< (a >< b)))))
+   (sh-lovesay c)                                 ; a love condition, on err, status 1
+     (: _ (say err "lush: love: ") _ (print err <c) _ (say err " ")
+        _ (print err >c) _ (put err 10) _ (flush err) 1)
+   ; a love value as shell text: a string IS its bytes, anything else prints in
+   ; love notation -- so a string round-trips usable and a list reads back sayable
+   (sh-lovetext v) (? (string? v) v (show v))
+   ; ${(FORM)} at expansion: the text, or "" and a word on err. a bad form is an
+   ; EMPTY expansion, never a torn word -- the seg is already lexed by the time we
+   ; are here, so there is no line to fail and the shell has to stay sayable
+   (sh-lovseg src)
+     (sh-loveval src @ ('err >< c) (: _ (sh-lovesay c) "")
+                      (_ >< v)     (sh-lovetext v)
+                      _            "")
+
    ; --- parameters: shell vars over env; specials; presence OUT OF BAND --------
    ; (sh-vget nm) -> () unset | (1 . value) -- a tablet hit is a STRING (maybe
    ; ""), the miss the (); string? tells them apart where net cannot
@@ -59,6 +95,7 @@
                                (id? k 'var) (sh-vval >sg)
                                (id? k 'vop) (sh-vopseg sg)
                                (id? k 'sub) (sh-runsub >sg)
+                               (id? k 'lov) (sh-lovseg >sg)
                                ""))))
             "" segs)
    (sh-voptext text) (sh-textof (sh-wordize text))
@@ -88,8 +125,9 @@
                             (id? k 'var) (sh-vval >sg)
                             (id? k 'vop) (sh-vopseg sg)
                             (id? k 'sub) (sh-runsub >sg)
+                            (id? k 'lov) (sh-lovseg >sg)
                             "")
-                       live (? (id? k 'sq || id? k 'dq) "0" "1")
+                       live (? (id? k 'sq || id? k 'dq || id? k 'lov) "0" "1")
                        ((<a + t) >< (>a + (sh-mrep (tally t) live)))))
             ("" >< "") segs)
    (sh-vstrip v o text)
@@ -143,6 +181,7 @@
                                       (id? k 'var) (sh-vval >sg)
                                       (id? k 'vop) (sh-vopseg sg)
                                       (id? k 'sub) (sh-runsub >sg)
+                                      (id? k 'lov) (sh-lovseg >sg)
                                       "")
                                  0)
                        1]))))
@@ -151,6 +190,10 @@
         k <sg v >sg
         (? (id? k 'lit) [d (addrun r v 1) 1]
            (id? k 'sq)  [d (addrun r v 0) 1]
+           ; ${(..)} is ONE field, quiet like "${x}": a love answer is a value,
+           ; not a chomped byte stream, so nothing here splits it on IFS or reads
+           ; it for glob chars. splitting can be bought later; unsplitting cannot.
+           (id? k 'lov) [d (addrun r (sh-lovseg v) 0) 1]
            ; "": a real (seen) field even empty -- EXCEPT a lone "$@" over zero
            ; positionals, which contributes nothing (dqat's glue lane sets seen)
            (id? k 'dq)  (dqat v [d r (? (two? v) sn 1)])

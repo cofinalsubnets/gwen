@@ -649,7 +649,7 @@
 ; symbols, one per key position. the emission is folded DYADIC + * ** only --
 ; never (+ a b c), which is application, and never (e x) numeral power, which
 ; COMPOSES a non-numeric operand -- a power rides ('** s e): ** is the bound
-; base-first power, exact through every DIE_STAR operand (integers, bignums,
+; base-first power, exact through every DieStar operand (integers, bignums,
 ; gems, q coins). pfn wraps the emission in \ and hands it to ev: a real
 ; curried closure, glaze-eligible; args arrive in syms order.
 (: (mulfold l) (? (1 = tally l) <l `('* <l (mulfold >l)))

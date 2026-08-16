@@ -28,25 +28,44 @@
 ; the helpers (load1 eval1 bye version usage need vfind pre) are CLOSURE-PRIVATE in the inner
 ; body-having `:`, OFF the global book -- only `parsed` and `argv` (the kept publics; argv is
 ; read by test/run.l + host/main.c) are defglob'd out, the cli sibling of the repl->bao
-; consolidation. The triple holder is bound to `_`, NOT a name: a top-level body-less `:`
-; defglobs every NAMED binding to the book, and this form RE-RUNS at startup (so an egg mop
-; can't catch it), but `_` never leaks -- the intermediate stays off (names ()). The reads
+; consolidation. The triple holder `cli3` is the third and last, and it is a NAME rather
+; than the `_` it used to be -- see the trap note below for what `_` cost. The reads
 ; below pick it up by the sequence law. The inner body returns (parsed program-view-argv run),
 ; where `run` is the dispatch THUNK. Order matters: we defglob `argv` to the program's view
 ; FIRST, THEN call `(run ())` -- the loaded program reads the global `argv`, so it must already
 ; be rebound before the load fires. (-v/-h still exit inside `pre`, before the rebind, as before.)
-(: _
- (: (load1 p) (: q (open p "r")
-       (? q (reads q) (say err ("love: cannot open " + p), quit 1)))
+;
+; THE EXIT DOOR, kore's two faces (crew/kore/u.l's uleave/urun): every leave in the
+; walk -- -v, -h, a bad -m, a missing operand, an unopenable file, a torn -e, and a
+; verb's own status -- SCARES it, and the trap handler below is the only `quit`. So
+; the cli quits EXACTLY ONCE, at its own edge, from a value. Standalone behaviour is
+; unchanged: the same status leaves by the same `quit`. What it buys is a caller in
+; the SAME IMAGE -- a shell, cook, the dock -- which can put its own trap on and get
+; a charm where it used to get a dead process, the reason kore's applets may ride
+; lush's in-image lane and this one may not.
+; ⚠ TWO SPANS, so the handler is written out twice rather than named: `pre` runs
+; -v/-h/-l/-m while the triple is still being built and `run` dispatches after argv
+; is rebound, a leave lands in either, and the defglob has to sit between them. A
+; name for it would be a third global, and this file spends as few as it can.
+; ⚠ nothing unwinds through a scare, so a port held at the leave is lost -- exactly
+; what `quit` lost, no better and no worse.
+; ⚠ the triple is `cli3`, a NAME. It was `_`, to keep it off the book -- but `_` is
+; also what every throwaway lambda parameter is called, so the `\ _` this trap added
+; between the binding and its reads shadowed it, and the reads took the UNIT apart.
+(: cli3
+ (trap (\ x
+ (: (cli-leave c) (scare 'cli-leave c)
+    (load1 p) (: q (open p "r")
+       (? q (reads q) (say err ("love: cannot open " + p), cli-leave 1)))
     (eval1 s) (: m (nom 0)                           ; a fresh nom: unfinished-shape, id?-safe
        (rdl x acc) (sound x @ 'torn      m           ; every top-level datum off the string, in order
                                (a >< b)  (rdl b (a >< acc))
                                (rev acc))            ; 'torn is an unfinished shape
        ds (rdl s ())
-       (? (id? ds m) (say err "love: -e: unfinished form", quit 2)
+       (? (id? ds m) (say err "love: -e: unfinished form", cli-leave 2)
           (two? ds)  (ev 'ev (two? >ds ? ds <ds))    ; MANY datums fold to the ONE application (infix factors,
           ()))                                       ; like a repl line); ONE stays as-is. none: nothing to run
-    (bye s) (puts s, putc 10, flush out, quit 0)     ; print a line to out, flush, exit 0
+    (bye s) (puts s, putc 10, flush out, cli-leave 0) ; print a line to out, flush, leave with 0
     (version _) (bye $ "love " + love-version)       ; _ arg: love has no nullary calls
     ; the verb line comes off the TABLE, never a written-down list -- the registry is the
     ; one manifest, so a binary carries the help its own image earns (a plain love says
@@ -64,7 +83,7 @@
                    + "  --                end of options; the rest are files\n"
                    + (from 'verbs @ {'tab tab} ("verbs: " + vwords (keys tab) + "\n"))
                    )
-    (need h t) (atom? t ? (say err ("love: " + h + " needs an argument"), quit 2))
+    (need h t) (atom? t ? (say err ("love: " + h + " needs an argument"), cli-leave 2))
     ; --- -m, the footprint cap: slot 0 of `tune` over a fresh read, so the other three knobs
     ; ride unchanged and the last -m on the line wins. 0 is the unbounded spelling, which is
     ; why `size` takes a floor of 0 where a count would want 1. ⚠ it lands at the NEXT
@@ -76,7 +95,7 @@
                   u (peep s (n - 1) 0 @ (107 | 75) 1024 (109 | 77) 1048576 (103 | 71) 1073741824 ())
                   d (u ? (snip s 0 (n - 1)) s)                       ; the `:` body slot folds into the
                   v <(sound d)                                       ; binding chain and eats the body
-                  _ ((charm? v && v >= 0) ? 0 (say err ("love: " + h + ": not a size: " + s), quit 2))
+                  _ ((charm? v && v >= 0) ? 0 (say err ("love: " + h + ": not a size: " + s), cli-leave 2))
                   ((v * (u ? u 1048576)) // wordsz ()))
     ; ⚠ tablet?, never a bare truth test: an unregistered module reads () and (() 'word) is the
     ; church const 1, so an unguarded (V 'word h) would answer h -- the string itself, truthy,
@@ -100,10 +119,12 @@
       (k @ 'eval  (print out (eval1 <>p), put out 10)  ; -e ANSWERS OUT LOUD, a repl line printing like
            'evalq (eval1 <>p)         ; one: `print`, the repl's face, not dot's raw one. -n mutes.
            'verb  (: r (<>p >>>p)     ; FN takes the args after the name and ANSWERS a status;
-                     (quit (charm? r ? r 0)))   ;   one that quits internally never returns here
+                     (cli-leave (charm? r ? r 0)))  ; out the one door, which is what quits
            'file  (load1 <>p)
            (reads in)))
-    [p av run])                      ; the body: return (parsed program-argv run)
- parsed <_                           ; DEFGLOB the kept publics out of the triple (the prev `_`)
- argv   <>_                          ; rebind argv to the program's view, BEFORE the run
- _ (<>>_ ()))                        ; (run ()): dispatch now that argv is the program's view (the unit -- run ignores its arg)
+    [p av run]))                     ; the body: return (parsed program-argv run)
+       () (\ a b (id? a 'cli-leave ? (quit (charm? b ? b 0)) (scare a b))))
+ parsed <cli3                        ; DEFGLOB the kept publics out of the triple
+ argv   <>cli3                       ; rebind argv to the program's view, BEFORE the run
+ _ (trap (\ x (<>>cli3 ()))          ; (run ()): dispatch, argv now the program's view
+       () (\ a b (id? a 'cli-leave ? (quit (charm? b ? b 0)) (scare a b)))))

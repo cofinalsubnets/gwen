@@ -10,7 +10,7 @@
 # everywhere" asks for), and mooncc's output does not depend on the arch
 # mooncc runs on.
 #
-# ⚠ the TU flags MIRROR crew/build.mk's x-lane (AI_HAVE_VERSION_H on love.o,
+# ⚠ the TU flags MIRROR crew/build.mk's x-lane (AiHaveVersionH on love.o,
 # no $(moon_fir) -- the cross lane never carried a record), the fixpoint.sh
 # drift trap wearing its cross face. this gate's first run caught the version
 # flag MISSING from the x-lane: the twin named itself "unknown".
@@ -49,7 +49,7 @@ LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\")
 
 # ...and rebuilds every TU with it, natively, in the order make links them
 moon1() { "$qemu" "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
-moon1 -D ai_tco="$tco" -D AI_HAVE_VERSION_H -I"$ho" -I. -Icore -Iout/lib -c core/love.c "$d/love.o" || fail "love1 mooncc -c core/love.c"
+moon1 -D ai_tco="$tco" -D AiHaveVersionH -I"$ho" -I. -Icore -Iout/lib -c core/love.c "$d/love.o" || fail "love1 mooncc -c core/love.c"
 for f in host/*.c; do
   b=$(basename "$f" .c)
   moon1 -D ai_tco="$tco" -I"$ho" -I. -Icore -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"

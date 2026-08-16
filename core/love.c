@@ -1,15 +1,15 @@
 #include "love.h"
 // the build's version string, generated into out/lib/love_version.h and surfaced
-// as `love-version`. -DAI_VERSION wins (love0 pins "bootstrap" so a new commit never
-// relinks the bootstrap); -DAI_HAVE_VERSION_H says the header exists -- mooncc has
+// as `love-version`. -DAiVersion wins (love0 pins "bootstrap" so a new commit never
+// relinks the bootstrap); -DAiHaveVersionH says the header exists -- mooncc has
 // no __has_include, so the probe alone is not enough.
-#ifndef AI_VERSION
-# if defined(AI_HAVE_VERSION_H) || (defined(__has_include) && __has_include("love_version.h"))
+#ifndef AiVersion
+# if defined(AiHaveVersionH) || (defined(__has_include) && __has_include("love_version.h"))
 #  include "love_version.h"
 # endif
 #endif
-#ifndef AI_VERSION
-#define AI_VERSION "unknown"
+#ifndef AiVersion
+#define AiVersion "unknown"
 #endif
 
 // --- kernel-internal declarations ---
@@ -73,7 +73,7 @@ _Static_assert(Bytes == sizeof(uintptr_t), "word size sanity check");
 _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size");
 
 // remembered-set capacity in words; g->alloc'd, so the collector stays freestanding
-#define AI_REM_CAP (1u << 16)
+#define AiRemCap (1u << 16)
 // initial pool sizes, words per half; both grow on demand (a tiny device overrides
 // with -Dai_minor0/-Dai_major0 and accepts more collections)
 #ifndef ai_minor0
@@ -283,12 +283,12 @@ static ai_inline word coin_load(word x) { return ((struct ai_coin*) x)->payload;
 // /show/tally default over the payload in pure C. HOT truthy = the die's coins are
 // lit? (references); absent = fresh data. NET is a MODE fixnum, never a closure --
 // ai_net is pure C under every truth test and must not re-enter the VM.
-enum { DIE_NAME = 0, DIE_ADD = 1, DIE_MUL = 2, DIE_APPLY = 3, DIE_HOT = 4, DIE_SUB = 5,
-       DIE_NET = 6,    // net MODE, a fixnum: absent/0 = net of payload; 1 = net by TALLY (the
+enum { DieName = 0, DieAdd = 1, DieMul = 2, DieApply = 3, DieHot = 4, DieSub = 5,
+       DieNet = 6,    // net MODE, a fixnum: absent/0 = net of payload; 1 = net by TALLY (the
                        // count); 2 = RATIO (an (n d)-of-reals payload nets n/d, sign exact)
-       DIE_STAR = 7,   // truthy = the die's coins are NUMERIC: numeral application powers them
+       DieStar = 7,   // truthy = the die's coins are NUMERIC: numeral application powers them
                        // through their own * (prel num-ap reads this slot; C never does)
-       DIE_DIV = 8 };  // `/` -- like `-` it has no kind matrix, so lvm_quot intercepts coins itself
+       DieDiv = 8 };  // `/` -- like `-` it has no kind matrix, so lvm_quot intercepts coins itself
 // read a die slot, or () if absent / the die is not a map.
 static ai_inline word die_get(struct ai *g, word die, intptr_t slot) {
  return tabp(die) ? ai_mapget(g, zero, putcharm(slot), die) : zero; }
@@ -711,10 +711,10 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  g->minor = g->end;                  // generational watermark: nothing tenured yet (the first collection sets it)
  // the rem set + major pool ride g->alloc: a frontend that cannot supply them cannot run
  g->major_len = ai_major0;
- g->rem = g->alloc(g, NULL, AI_REM_CAP * sizeof(word));
+ g->rem = g->alloc(g, NULL, AiRemCap * sizeof(word));
  g->major_pool = g->rem ? g->alloc(g, NULL, 2 * g->major_len * sizeof(word)) : NULL;
  if (!g->major_pool) { if (g->rem) g->alloc(g, g->rem, 0); return encode(g, ai_status_scare); }
- g->major_base = g->major_hp = g->major_pool, g->rem_cap = AI_REM_CAP, g->budget = ai_budget;
+ g->major_base = g->major_hp = g->major_pool, g->rem_cap = AiRemCap, g->budget = ai_budget;
  g->minor0 = ai_minor0, g->major0 = ai_major0, g->ratio = ai_gc_ratio;   // the live knobs; `tune` moves them
  g->next_wait_events = ai_wait_in;
  // book + macro maps (lookup-lambdas) then the main task thread.
@@ -766,20 +766,20 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    {"love-tco", putcharm(ai_tco)}, };
   g = ai_defn(g, def0, countof(def0));
   g = ai_defn(g, def1, countof(def1));
-  if (ai_ok(g = ai_strof(g, AI_VERSION)))            // a live string: off the STACK, never an ai_def
+  if (ai_ok(g = ai_strof(g, AiVersion)))            // a live string: off the STACK, never an ai_def
    g = ai_pop(ai_defv(g, "love-version"), 1);
   // `love-arch`: the host CPU the glaze emits for. auto-ev interns it as the assembler
   // target ('x64 / 'arm64) and gates the still-x86-only lanes (float / loops).
 #if defined(__x86_64__)
-  #define AI_ARCH "x64"
+  #define AiArch "x64"
 #elif defined(__aarch64__)
-  #define AI_ARCH "arm64"
+  #define AiArch "arm64"
 #elif defined(__riscv)
-  #define AI_ARCH "riscv64"
+  #define AiArch "riscv64"
 #else
-  #define AI_ARCH "other"
+  #define AiArch "other"
 #endif
-  if (ai_ok(g = ai_strof(g, AI_ARCH)))
+  if (ai_ok(g = ai_strof(g, AiArch)))
    g = ai_pop(ai_defv(g, "love-arch"), 1);
   // the 'missing tag needs nothing here (the raise sites mint it); the reader owns
   // no operator tables -- book['operators] is seeded by the prel and factored at compile time
@@ -880,7 +880,14 @@ static ai_inline void evac_nom(struct ai*g, word const*const p0, word const*cons
 
 static ai_inline void evac_thread(struct ai *g, word const *const p0, word const*const t0) {
   // tagl ends the thread regardless of scan space, so a young-pointing terminator is never gcp'd as a field
-  for (g->cp += 1; !tagl(g, g->cp[-1]); g->cp[-1] = gcp(g, g->cp[-1], p0, t0), g->cp++); }
+  for (g->cp += 1; !tagl(g, g->cp[-1]); g->cp[-1] = gcp(g, g->cp[-1], p0, t0), g->cp++);
+  // a pinned thread's terminator names its own head, which moved with the block.
+  // copy_thread re-tags what it copies; a memcpy'd one keeps a from-space self-pointer,
+  // and the loop above ends on it without handing it to gcp.
+  if (g->froze_lo) {
+   word *h = (word*)(g->cp[-1] & ~(word) 3);
+   if (h >= g->froze_lo && h < g->froze_hi)
+    g->cp[-1] = (word)(g->gc_to_lo + (h - g->froze_lo)) | ai_thread_tag; } }
 
 static ai_inline void evac_data(struct ai *g, word const *const p0, word const*const t0) {
   switch (typ(g->cp)) {
@@ -971,8 +978,14 @@ static word major_symbols_rebuild(struct ai *g, word om) {
  for (uintptr_t j = 0; j < cap; j++) {
   word k = os[2 * j];
   if (k == map_gap) continue;
-  word fwd = cell(os[2 * j + 1])->x;            // the atom's first word: its forward, if it survived
-  if (!(lamp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
+  word e = os[2 * j + 1], fwd;
+  // a pinned atom survives without a forward: the prefix is not copied, so word0 is
+  // untouched and the test below would read every frozen symbol as dead.
+  if (g->froze_lo && ptr(e) >= g->froze_lo && ptr(e) < g->froze_hi)
+   fwd = (word)(g->gc_to_lo + (ptr(e) - g->froze_lo));
+  else {
+   fwd = cell(e)->x;                            // the atom's first word: its forward, if it survived
+   if (!(lamp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue; }
   word nk = nom(fwd)->name;
   uintptr_t i = hash(g, nk) & mask;
   while (ns[2 * i] != map_gap) i = (i + 1) & mask;
@@ -983,13 +996,15 @@ static void major_run_finalizers(struct ai *g) {
  struct ai_fz *new_fz = NULL;
  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) {
   word fwd = fz->p->x;
+  if (g->froze_lo && (word*) fz->p >= g->froze_lo && (word*) fz->p < g->froze_hi)
+   fwd = (word)(g->gc_to_lo + ((word*) fz->p - g->froze_lo));   // pinned: alive, and it did not move (symbols_rebuild's rule)
   if (lamp(fwd) && g->gc_to_lo <= ptr(fwd) && ptr(fwd) < g->gc_to_hi) {
    struct ai_fz *nn = bump(g, Width(struct ai_fz));
    nn->p = cell(fwd), nn->fn = fz->fn, nn->next = new_fz, new_fz = nn;
   } else fz->fn(fz->p); }
  g->fz = new_fz; }
 
-// AI_GC_STRESS's two numbers: an EVEN poison, so a stale read faults at an address
+// AiGcStress's two numbers: an EVEN poison, so a stale read faults at an address
 // a backtrace can name; and how often a forced collection is a MAJOR (gen_please).
 #define ai_gc_poison ((word) 0xd0d0d0d0d0d0d0d0ULL)
 #define ai_gc_stress_major 32
@@ -1020,7 +1035,7 @@ static void gen_minor(struct ai *g) {
  for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, g->rem[i], p0, t0);        // major->young edges
  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, word(fz->p), p0, t0));
  while (g->cp < g->major_hp) (datp(g->cp) ? evac_data : evac_thread)(g, p0, t0);
-#ifdef AI_GC_CHECK
+#ifdef AiGcCheck
  // the fixpoint IS a fixpoint (gc.v drain_second_pass_copies_nothing): re-drive the
  // whole scan; every gcp must be an identity. if major_hp moves, the first pass LOST
  // a reachable object -- trap at the collection that lost it. (make test_gcheck)
@@ -1043,7 +1058,7 @@ static void gen_minor(struct ai *g) {
 #endif
  if (g->fz) gen_fz_relocate(g);
  g->hp = g->end;                                              // minor emptied
-#ifdef AI_GC_STRESS
+#ifdef AiGcStress
  // ⚠ poison the vacated nursery, or the stress build is half a detector: a stale
  // local otherwise reads a forwarding pointer that still looks live. last thing
  // here -- gen_fz_relocate is the from-space's last reader.
@@ -1083,8 +1098,22 @@ static struct ai *gen_major(struct ai *g) {
   else return g->gc_gen = 0, encode(g, ai_status_scare);             // true OOM: compacting would overflow the spare -> clean scare, no corruption
  } else to = spare;
  g->gc_gen = 1;
- g->major_hp = to, g->cp = to;
- g->gc_to_lo = to, g->gc_to_hi = to + to_len, g->gc_fwd = to;   // fresh to-space: every copy is a forward
+ // the pinned prefix rides across verbatim at the same offsets. the scan starts below it
+ // so its words are still rewritten in place -- a frozen object may point at something
+ // new -- and gc_fwd starts past it, since nothing in it is copied or forwarded.
+ uintptr_t froze = g->froze;
+ if (froze) {
+  memcpy(to, g->major_base, froze * sizeof(word));
+  g->froze_lo = g->major_base, g->froze_hi = g->major_base + froze;
+  // a live finalizer node is three raw words with no header, so the scan below cannot
+  // stride it. nothing reaches the copies -- run_finalizers bumps a fresh list past the
+  // block -- so forge each into a dead chain of the same width.
+  for (struct ai_fz *z = g->fz; z; z = z->next)
+   if ((word*) z >= g->froze_lo && (word*) z < g->froze_hi) {
+    word *c = to + ((word*) z - g->froze_lo);
+    c[0] = (word) lvm_chain, c[1] = c[2] = ZeroPoint; } }
+ g->major_hp = to + froze, g->cp = to;
+ g->gc_to_lo = to, g->gc_to_hi = to + to_len, g->gc_fwd = to + froze;   // fresh to-space: every copy is a forward
  g->gc_f2lo = (word*) g->end, g->gc_f2hi = g->hp;            // from-range 2: the minor (promote young in the same pass)
  g->ip = cell(gcp(g, word(g->ip), p0, t0));
  g->tasks = cell(gcp(g, word(g->tasks), p0, t0));
@@ -1100,12 +1129,18 @@ static struct ai *gen_major(struct ai *g) {
  if (resized) g->alloc(g, g->major_pool, 0), g->major_pool = resized, g->major_len = to_len;
  g->major_base = to;                                           // flip: active = the to-space
  g->hp = g->end;                                             // the minor's young was promoted: reset it
-#ifdef AI_GC_STRESS
+#ifdef AiGcStress
  // poison the promoted young, like the minor. ⚠ the old major half does NOT -- a
  // measurement (ten minutes on a 24-second lane), and the least needed: a cheney
  // copy left a forwarding pointer in word0 (the ap), which faults on dispatch.
  for (word *p = (word*) g->end; p < (word*) g->end + young; p++) *p = ai_gc_poison;
 #endif
+ g->froze_lo = g->froze_hi = NULL;                              // the window is one major's; a minor must not see it
+ // the rem set dies with the half it named: a major promotes every survivor, so there is
+ // no old->young edge left to remember and every address in it points into a half about
+ // to be reused. cleared here rather than in gen_please alone, because a major can be
+ // called directly -- the image dump compacts before it serializes.
+ g->rem_n = 0, g->rem_miss = 0;
  return g->gc_gen = 0, g; }
 
 // resize the MINOR pool, decoupled from the major. called right after a collection,
@@ -1148,7 +1183,7 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  bool major = g->rem_miss
    || major_free < (uintptr_t) g->len + req0 + 16
    || g->since_major > g->major_live0 + 4 * (uintptr_t) g->len;
-#ifdef AI_GC_STRESS
+#ifdef AiGcStress
  // ⚠ a minor is not enough: stress-collecting tenures everything almost at once,
  // and a minor never moves the tenured -- the detector answered green on its own
  // control. every-collection-major cost a 458 s boot, so a major rides every Nth
@@ -1172,7 +1207,7 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  // the schedule is reproducible): keep the copy overhead inside a band, accumulated
  // over a sliding window; ai_budget caps the footprint by appel's rule.
  uintptr_t const ratio = g->ratio;              // target band: grow above 1/ratio overhead, shrink below 1/(4*ratio)
-#ifdef AI_GC_STRESS
+#ifdef AiGcStress
  // ⚠ the band is meaningless on a forced schedule (`allocated` ~0 -> the nursery
  // doubles every collection, a 256 MB oom); the HARD FLOOR stays -- it guarantees
  // the pending allocation fits, and skipping it reads like a runtime bug.
@@ -1291,6 +1326,10 @@ static ai_noinline intptr_t gcp(struct ai *g, word x, word const *p0, word const
  // a number stays; else find which from-space range holds x (a major traces two),
  // so copy_thread's terminator scan uses x's own home
  if (charmp(x)) return x;
+ // the pinned prefix is not traced: it is memcpy'd to the head of the to-space, so its
+ // answer is arithmetic and leaves no forwarding pointer. froze_lo is 0 otherwise.
+ if (g->froze_lo && ptr(x) >= g->froze_lo && ptr(x) < g->froze_hi)
+  return (word)(g->gc_to_lo + (ptr(x) - g->froze_lo));
  word const *lo = p0, *hi = t0;
  if (!(ptr(x) >= lo && ptr(x) < hi)) {
   if (g->gc_f2lo && ptr(x) >= g->gc_f2lo && ptr(x) < g->gc_f2hi) lo = g->gc_f2lo, hi = g->gc_f2hi;
@@ -2133,20 +2172,20 @@ static lvm(lvm_coin_op, intptr_t slot) {
  word *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = a, dst[1] = f, dst[2] = b, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; return Continue(); }
-lvm(lvm_add_coin) { return Ap(lvm_coin_op, g, DIE_ADD); }
-lvm(lvm_mul_coin) { return Ap(lvm_coin_op, g, DIE_MUL); }
+lvm(lvm_add_coin) { return Ap(lvm_coin_op, g, DieAdd); }
+lvm(lvm_mul_coin) { return Ap(lvm_coin_op, g, DieMul); }
 // `-` and `/` have no kind matrix; lvm_sub/lvm_quot intercept coins themselves and land here.
-lvm(lvm_sub_coin) { return Ap(lvm_coin_op, g, DIE_SUB); }
-lvm(lvm_quot_coin) { return Ap(lvm_coin_op, g, DIE_DIV); }
+lvm(lvm_sub_coin) { return Ap(lvm_coin_op, g, DieSub); }
+lvm(lvm_quot_coin) { return Ap(lvm_coin_op, g, DieDiv); }
 
 // applying a coin: run the die's APPLY closure as `((f self) arg)`; absent, a coin
 // is an opaque handle (const-1), like a cask/port. self is the value at Ip (the apply
 // trampoline sets Ip = the applied object); arg/ret are on the stack.
 lvm(lvm_coin) {
- if (ai_nilp(g, die_get(g, coin_die(word(Ip)), DIE_APPLY))) {   // default opaque-apply: const-1
+ if (ai_nilp(g, die_get(g, coin_die(word(Ip)), DieApply))) {   // default opaque-apply: const-1
   Ip = cell(*++Sp); *Sp = putcharm(1); ai_musttail return Continue(); }
  Have(2);
- word self = word(Ip), f = die_get(g, coin_die(self), DIE_APPLY);
+ word self = word(Ip), f = die_get(g, coin_die(self), DieApply);
  word arg = Sp[0], ret = Sp[1], *dst = Sp - 2;
  dst[0] = self, dst[1] = f, dst[2] = arg, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }
@@ -2861,7 +2900,7 @@ static struct ai_zn ai_net(struct ai *g, word x) {
     return zn(t, 0); }
   if (tabp(x)) return zn((ai_flo_t) map_len(x), 0);              // table: key count
   if (coinp(x)) {                                              // a coin nets its payload (the monoid hom), unless
-    word mode = die_get(g, coin_die(x), DIE_NET);              // its die pins a net MODE.
+    word mode = die_get(g, coin_die(x), DieNet);              // its die pins a net MODE.
     if (mode == putcharm(1))                                   // mode 1: net by TALLY, the COUNT -- never negative,
       return zn((ai_flo_t) ai_count(g, coin_load(x)), 0);      // so truth is "has any"
     if (mode == putcharm(2)) {                                 // mode 2: RATIO -- an (n d)-of-reals payload nets
@@ -2966,7 +3005,7 @@ intptr_t ai_io_fd(struct ai_io const *i) {
 // (heap AND fd-backed), and nothing reads past the head without it. zgetc serves
 // ungetc -> the pending run -> one readn gulp, and THAT ORDER IS THE PARK LAW: a
 // port holding bytes is readable however quiet its fd is; a dry gulp answers
-// IO_WOULDBLOCK and the caller parks. a read drains pending writes first (the
+// IoWouldBlock and the caller parks. a read drains pending writes first (the
 // request/response crossover).
 static ai_inline struct ai_bio *bio_of(struct ai *g, struct ai_io *i) {
  return i->vt == &ai_fd_port_vt && in_live_pool(ai_core_of(g), (word const*) i)
@@ -3017,7 +3056,7 @@ static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
   b->wlen = putcharm(n - (uintptr_t) k); } }
 // io_refill's third answer, beside a byte and EOF: the device has nothing right
 // now. distinct on purpose; never escapes lvm_fgetc.
-#define IO_WOULDBLOCK ((uintptr_t) -2)
+#define IoWouldBlock ((uintptr_t) -2)
 // the three answers for every port. no read method = END; no buffer = ask for one byte.
 // WHICH BIO OWNS THIS PORT'S READ RUN: its own, or -- for the static input port on a seat
 // that lent it one -- the BORROWED one in `inport`. A static cannot own a heap buffer, so a
@@ -3041,7 +3080,7 @@ static struct ai *io_refill(struct ai *g) {
   intptr_t k = vt->readn(g, &c, 1);
   if (k > 0) fc->b = c;
   else if (k < 0) fc->b = EOF;
-  else fc->b = IO_WOULDBLOCK;
+  else fc->b = IoWouldBlock;
   return g; }
  if (bio_wpending(b)) {                          // the crossover: our unsent ask goes first
   if (!ai_ok(g = io_wdrain(g, fc->io))) return g;
@@ -3063,7 +3102,7 @@ static struct ai *io_refill(struct ai *g) {
  // k == 0 is "would block", the ordinary answer. ⚠ NEVER WAIT HERE: this runs
  // under lvm_fgetc, one op -- a blocking poll stops the whole VM, not the reading
  // task. hand it back and let the caller park.
- return fc->b = IO_WOULDBLOCK, g; }
+ return fc->b = IoWouldBlock, g; }
 static ai_inline struct ai *zgetc(struct ai*g) {
  if (!ai_ok(g)) return g;
  struct ai *fc = ai_core_of(g);
@@ -3488,7 +3527,7 @@ lvm(lvm_fgetc) {
   g->io = i;
   if (!ai_ok(g = zgetc(g))) ai_musttail return Ap(_lvm_ghelp, g);
   Unpack(g);
-  if (g->b == IO_WOULDBLOCK) {          // the refill raced and lost -- park, don't spin
+  if (g->b == IoWouldBlock) {          // the refill raced and lost -- park, don't spin
    g->next_wait_fd = ai_io_fd((struct ai_io*) Sp[0]);   // re-read: the gc may have moved it
    ai_musttail return Ap(lvm_yield_sw, g); }
   Sp[0] = putcharm(g->b); }
@@ -4184,10 +4223,10 @@ static lvm(lvm_map_lookup) {
 op11(lvm_tabp, tabp(Sp[0]) ? putcharm(1) : zero)
 // (lit? x): the upper segment of the lattice, ai_kind >= KTablet -- tablets and the
 // tops above (closures, nifs, cask/port), never the fresh value-data below. a
-// COIN's die decides (DIE_HOT truthy = lit): lit? is the lattice cut, not storage.
+// COIN's die decides (DieHot truthy = lit): lit? is the lattice cut, not storage.
 lvm(lvm_litp) {
  word x = Sp[0];
- bool lit = coinp(x) ? !ai_nilp(g, die_get(g, coin_die(x), DIE_HOT))   // a coin: its die decides
+ bool lit = coinp(x) ? !ai_nilp(g, die_get(g, coin_die(x), DieHot))   // a coin: its die decides
                      : ai_kind(x) >= KTablet;                             // else the lattice cut
  Sp[0] = lit ? putcharm(1) : zero;
  ai_musttail return Next(1); }
@@ -4644,14 +4683,14 @@ static uintptr_t image_objsize(struct ai *g, union u *p) {
 // the HOST nif slice: [__start_ai_nifs, __stop_ai_nifs) is a link-order table whose length
 // is a RUNTIME quantity, and the token layout wants a compile-time one -- so the index space
 // reserves a fixed slice and only the occupied prefix is ever spelled. A host nif's value is
-// the bare fn (AI_NIF stores it raw), so without this lane every app nif rode as an absolute.
+// the bare fn (AiNif stores it raw), so without this lane every app nif rode as an absolute.
 // ⚠ the slice is INDEXED BY POSITION, so this table's order is part of the image's contract.
 // Nothing checks it by name: the ANCHOR does the whole job, since a binary whose nif set
 // differs is a different binary and its symbol gap says so.
-#define IMAGE_NHOST 256u
+#define ImageNHost 256u
 static ai_inline uintptr_t image_nhost(void) {
  uintptr_t n = (uintptr_t)(__stop_ai_nifs - __start_ai_nifs);
- return n < IMAGE_NHOST ? n : IMAGE_NHOST; }
+ return n < ImageNHost ? n : ImageNHost; }
 // bidirectional lvm_* table: index <-> address. supplemental table 0..E-1, def1 E.., then
 // the host slice last so existing indices keep their meaning.
 static intptr_t image_ap_index(intptr_t ap) {
@@ -4699,15 +4738,15 @@ static intptr_t image_imm_index(word v) {
 // ai_image_save / ai_image_load, the BUFFER codec: save compacts g and serializes
 // {header, dictionary, token stream}; load validates, expands, decodes in place.
 // a mismatched buffer -> NULL, so the caller boots normally -- never wrong.
-#define IMAGE_MAGIC 0x33304f4e53494119ULL   /* bump if the wire format changes ("..03": the blob rides as a token stream) */
+#define ImageMagic 0x34304f4e53494119ULL   /* bump if the wire format changes ("..04": the header carries its encode base) */
 #if defined(__x86_64__)
-#define IMAGE_ARCH 1
+#define ImageArch 1
 #elif defined(__aarch64__)
-#define IMAGE_ARCH 2
+#define ImageArch 2
 #elif defined(__riscv)
-#define IMAGE_ARCH 3
+#define ImageArch 3
 #else
-#define IMAGE_ARCH 0
+#define ImageArch 0
 #endif
 // the image is binary-SPECIFIC: its indices and kept absolutes mean anything only
 // in the binary that dumped it. two guards reject a mismatch -> NULL -> normal
@@ -4725,7 +4764,7 @@ struct image_hdr {
 // nothing survives it. base/hp are the compacted live half, hb the blob's bytes.
 struct img_ctx {
  word *base, *hp;
- uintptr_t hb, nabs;              // nabs: kept absolutes -- 0 means the image needs no base delta
+ uintptr_t nabs;                  // kept absolutes -- 0 means the image needs no base delta
  uintptr_t cur_off, cur_ap;       // the object being encoded: offset + its hot -- what the guard is told
  int fail, suppress;              // fail is STICKY (any refusal ends the dump); suppress: inside a reverted husk
  struct ai_image_guard const *guard; };
@@ -4768,22 +4807,29 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
  return tag == 1 ? (word)(base + val) : tag == 2 ? (word) image_ap_resolve((intptr_t) val)
       : tag == 3 ? image_immortals[val] : (word) val; }
 // the SELF-DESCRIBING blob (no reloc tables; the load re-derives by re-walking):
-//   heap pointer  -> its BYTE offset       [0, hb)
-//   lvm_* ap      -> hb + 2*index          [hb, hb+2*NLVM)
-//   immortal      -> hb + 2*NLVM + 2*ii    [hb+2*NLVM, TBOUND)
+//   heap pointer  -> its BYTE offset       [0, IdxBase)
+//   lvm_* ap      -> IdxBase + 2*index     [IdxBase, IdxBase+2*NLVM)
+//   immortal      -> IdxBase + 2*NLVM+2*ii [.., TBOUND)
 //   binary ptr    -> kept ABSOLUTE (>= TBOUND), base-delta-shifted on load
+// the lanes start at a constant, not at the blob's own length, so the encoding is a pure
+// function of the heap and one blob can begin with another (doc/plan/image-chain.md).
+// a floor is the only way to get that: a string's payload rides raw and can be any even
+// value, so no rule downstream of the encoder can tell a lane from a byte.
 // fixnums (odd) pass through; every encoded pointer is EVEN (indices doubled), so
 // parity discriminates. a binary pointer below TBOUND would alias -> dump refuses.
-#define IMAGE_NLVM ((uintptr_t)(countof(image_extra_aps) + countof(def1) + IMAGE_NHOST))
-#define IMAGE_NIMM ((uintptr_t) countof(image_immortals))
-#define IMAGE_CELLW 16u   /* max nif-cell span (words) an interior link can sit in */
+#define ImageNLvm ((uintptr_t)(countof(image_extra_aps) + countof(def1) + ImageNHost))
+#define ImageNImm ((uintptr_t) countof(image_immortals))
+#define ImageCellW 16u   /* max nif-cell span (words) an interior link can sit in */
 // the BARE-FN lane's width: one slot per nif CELL whose code slot a thread can embed --
-// def1's, then the host slice's (AI_NIF registers a cell too: host/main.c's nif_exit[]).
-#define IMAGE_NFN ((uintptr_t)(countof(def1) + IMAGE_NHOST))
+// def1's, then the host slice's (AiNif registers a cell too: host/main.c's nif_exit[]).
+#define ImageNFn ((uintptr_t)(countof(def1) + ImageNHost))
+// the lane floor: above any heap this codec encodes (1 TB on 64-bit, 128 MB on 32-bit;
+// a dump past it is refused rather than aliased) and below the absolute lane.
+#define ImageIdxBase ((uintptr_t) 1 << (sizeof(uintptr_t) == 8 ? 40 : 27))
 // TBOUND: the top of the index region. Every rung above encodes below it, so anything
 // at or over it is a binary pointer -- which is why one spelling, not three.
-#define IMAGE_TBOUND(hb) ((hb) + 2 * (IMAGE_NLVM + IMAGE_NIMM) \
-                               + 2 * IMAGE_NLVM * IMAGE_CELLW + 2 * IMAGE_NFN)
+#define ImageTBound (ImageIdxBase + 2 * (ImageNLvm + ImageNImm) \
+                                  + 2 * ImageNLvm * ImageCellW + 2 * ImageNFn)
 // ⚠ A KEPT ABSOLUTE IS STORED RELATIVE TO THE ANCHOR, and that is what makes a bake
 // REPRODUCIBLE. It used to ride as the raw address and get +delta'd on load: correct
 // either way, but the stored bytes then moved with ASLR, so two bakes of one tree
@@ -4794,9 +4840,9 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 // so half a bias of headroom each way, and a pointer farther than that refuses the
 // dump rather than aliasing an index. Parity still discriminates: TBOUND, the bias and
 // the offset are all even, so an encoded absolute is never mistaken for a fixnum.
-#define IMAGE_ABS_BIAS ((uintptr_t) 1 << (sizeof(uintptr_t) == 8 ? 40 : 26))
+#define ImageAbsBias ((uintptr_t) 1 << (sizeof(uintptr_t) == 8 ? 40 : 26))
 static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
- uintptr_t hb = x->hb;
+ uintptr_t const hb = ImageIdxBase;
  // the ap table FIRST, before parity: on thumb every fn address is ODD and would
  // ride raw as a "fixnum", valid only at the baker's base (the qemu-twins trap
  // that walled the teensy wake). a colliding fixnum: ~300 values out of 2^31.
@@ -4804,8 +4850,8 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  if (idx >= 0) return (intptr_t)(hb + 2 * (uintptr_t) idx);                      // lvm_* ap (odd on thumb, even on x64 -- both land here)
  if (oddp(v)) {
   intptr_t fj = image_fn_index(v);                                               // a bare nif fn embedded as an instruction word
-  if (fj >= 0) return (intptr_t)(hb + 2 * (IMAGE_NLVM + IMAGE_NIMM)
-                                    + 2 * IMAGE_NLVM * IMAGE_CELLW
+  if (fj >= 0) return (intptr_t)(hb + 2 * (ImageNLvm + ImageNImm)
+                                    + 2 * ImageNLvm * ImageCellW
                                     + 2 * (uintptr_t) fj);
   return v; }                                                                    // fixnum
  if (v >= (intptr_t) x->base && v < (intptr_t) x->hp) {                          // in-pool heap pointer -> byte offset
@@ -4813,25 +4859,25 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
   if (e) return img_encode(x, (intptr_t) e);                                     //   redirect to its bytecode twin (interp)
   return v - (intptr_t) x->base; }
  intptr_t ii = image_imm_index((word) v);
- if (ii >= 0) return (intptr_t)(hb + 2 * IMAGE_NLVM + 2 * (uintptr_t) ii);       // out-of-pool immortal
+ if (ii >= 0) return (intptr_t)(hb + 2 * ImageNLvm + 2 * (uintptr_t) ii);       // out-of-pool immortal
  // the BARE-FN lane again, for an EVEN-pointer arch. A compiled thread embeds a nif's
  // code slot directly; on thumb the value is ODD and the parity branch above catches it
  // (it must -- it would otherwise ride as a fixnum). x64/arm64 pointers are even, so the
  // same words reached the kept-absolute tail instead and made every image binary-specific.
  { intptr_t fj = image_fn_index(v);
-   if (fj >= 0) return (intptr_t)(hb + 2 * (IMAGE_NLVM + IMAGE_NIMM)
-                                     + 2 * IMAGE_NLVM * IMAGE_CELLW
+   if (fj >= 0) return (intptr_t)(hb + 2 * (ImageNLvm + ImageNImm)
+                                     + 2 * ImageNLvm * ImageCellW
                                      + 2 * (uintptr_t) fj); }
  // an INTERIOR pointer into a def1 nif cell (a baked partial's curry link):
  // encode (cell index, word offset); the owning cell is the GREATEST base <= v
  { intptr_t bj = -1; uintptr_t boff = 0;
    for (uintptr_t j = 0; j < countof(def1); j++) {
     uintptr_t x = (uintptr_t) def1[j].x, d = (uintptr_t) v - x;
-    if ((uintptr_t) v > x && d < IMAGE_CELLW * sizeof(word) && !(d % sizeof(word))
+    if ((uintptr_t) v > x && d < ImageCellW * sizeof(word) && !(d % sizeof(word))
         && (bj < 0 || x > (uintptr_t) def1[bj].x)) bj = (intptr_t) j, boff = d / sizeof(word); }
-   if (bj >= 0) return (intptr_t)(hb + 2 * (IMAGE_NLVM + IMAGE_NIMM)
-                                     + 2 * (((uintptr_t)(countof(image_extra_aps) + (uintptr_t) bj)) * IMAGE_CELLW + boff)); }
- if ((uintptr_t) v < IMAGE_TBOUND(hb))
+   if (bj >= 0) return (intptr_t)(hb + 2 * (ImageNLvm + ImageNImm)
+                                     + 2 * (((uintptr_t)(countof(image_extra_aps) + (uintptr_t) bj)) * ImageCellW + boff)); }
+ if ((uintptr_t) v < ImageTBound)
   x->fail = 1;                                                                   // a binary ptr in the index range: unencodable
  if (img_wxp(x, (word) v)) {
   if (!x->suppress) x->fail = 1;                                                 // un-wakeable absolute (JIT/W^X/mmap)
@@ -4844,34 +4890,36 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
   // address and added the BINARY's delta at wake, which never named the JIT page
   // either. Now it is deterministic garbage instead of random garbage.
   else return 1; }                                                               // tagged 0: decodes as a fixnum, executes never
- { uintptr_t r = (uintptr_t) v - (uintptr_t) image_immortals + IMAGE_ABS_BIAS;   // wraps below the anchor; the bias re-centres
-   if (r >= 2 * IMAGE_ABS_BIAS) { x->fail = 1; return v; }                       // farther from the anchor than the bias carries
+ { uintptr_t r = (uintptr_t) v - (uintptr_t) image_immortals + ImageAbsBias;   // wraps below the anchor; the bias re-centres
+   if (r >= 2 * ImageAbsBias) { x->fail = 1; return v; }                       // farther from the anchor than the bias carries
    x->nabs++;                                                                    // kept absolute: the image is now binary-specific
-   return (intptr_t)(IMAGE_TBOUND(hb) + r); } }                                  // binary (host nif/.rodata), anchor-relative
+   return (intptr_t)(ImageTBound + r); } }                                  // binary (host nif/.rodata), anchor-relative
 // the decode ladder, split hot/cold by the rung-0 census: odd,
 // heap offset, lvm index and immortal are 98.7% of decodes; the cold tail keeps
 // the nif-cell interior, bare-fn and kept-absolute rungs out of the walk's way.
-static ai_noinline intptr_t img_decode_cold(intptr_t v, uintptr_t hb, intptr_t delta) {
+static ai_noinline intptr_t img_decode_cold(intptr_t v, intptr_t delta) {
+ uintptr_t const hb = ImageIdxBase;
  uintptr_t uv = (uintptr_t) v;
- if (uv < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM) + 2 * IMAGE_NLVM * IMAGE_CELLW) {   // nif-cell interior: base + word offset
-  uintptr_t k = (uv - hb - 2 * (IMAGE_NLVM + IMAGE_NIMM)) / 2;
-  return image_ap_resolve((intptr_t)(k / IMAGE_CELLW)) + (k % IMAGE_CELLW) * sizeof(word); }
- if (uv < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM) + 2 * IMAGE_NLVM * IMAGE_CELLW
-         + 2 * IMAGE_NFN)                                                        // bare-fn lane: the cell's code slot
-  return image_fn_resolve((intptr_t)((uv - hb - 2 * (IMAGE_NLVM + IMAGE_NIMM)
-                                         - 2 * IMAGE_NLVM * IMAGE_CELLW) / 2));
+ if (uv < hb + 2 * (ImageNLvm + ImageNImm) + 2 * ImageNLvm * ImageCellW) {   // nif-cell interior: base + word offset
+  uintptr_t k = (uv - hb - 2 * (ImageNLvm + ImageNImm)) / 2;
+  return image_ap_resolve((intptr_t)(k / ImageCellW)) + (k % ImageCellW) * sizeof(word); }
+ if (uv < hb + 2 * (ImageNLvm + ImageNImm) + 2 * ImageNLvm * ImageCellW
+         + 2 * ImageNFn)                                                        // bare-fn lane: the cell's code slot
+  return image_fn_resolve((intptr_t)((uv - hb - 2 * (ImageNLvm + ImageNImm)
+                                         - 2 * ImageNLvm * ImageCellW) / 2));
  // the kept absolute, rebuilt against THIS run's anchor -- so the stored bytes never
  // held an address and `delta` has no part in it (the anchor check upstream is the
  // only thing left that reads one).
  (void) delta;
- return (intptr_t)((uintptr_t) image_immortals + uv - IMAGE_TBOUND(hb) - IMAGE_ABS_BIAS); }
-static ai_inline intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intptr_t delta) {
+ return (intptr_t)((uintptr_t) image_immortals + uv - ImageTBound - ImageAbsBias); }
+static ai_inline intptr_t img_decode(intptr_t v, word *base, intptr_t delta) {
+ uintptr_t const hb = ImageIdxBase;
  if (oddp(v)) return v;
  uintptr_t uv = (uintptr_t) v;
  if (uv < hb) return (intptr_t)((char*) base + uv);                              // byte offset -> live pointer
- if (uv < hb + 2 * IMAGE_NLVM) return image_ap_resolve((intptr_t)((uv - hb) / 2));
- if (uv < hb + 2 * (IMAGE_NLVM + IMAGE_NIMM)) return (intptr_t) image_immortals[(uv - hb - 2 * IMAGE_NLVM) / 2];
- return img_decode_cold(v, hb, delta); }
+ if (uv < hb + 2 * ImageNLvm) return image_ap_resolve((intptr_t)((uv - hb) / 2));
+ if (uv < hb + 2 * (ImageNLvm + ImageNImm)) return (intptr_t) image_immortals[(uv - hb - 2 * ImageNLvm) / 2];
+ return img_decode_cold(v, delta); }
 // ============================================================================
 // the TOKEN STREAM: an encoded word rides as one byte when it is one of the 248
 // commonest words in the image, else as an escape naming its own width. Half an
@@ -4880,14 +4928,14 @@ static ai_inline intptr_t img_decode(intptr_t v, word *base, uintptr_t hb, intpt
 // ⚠ CHOSEN BY COUNT, NOT BY LANE. A fixed token budget per lane is the obvious design, the
 // encoding being a lane ladder already -- it is also 3.63x against this 3.82x, and tuned to
 // whichever image was measured; counts follow a kernel's or an artifact's wherever those go.
-// ⚠ ALWAYS IMAGE_NDICT WORDS -- a short image repeats its commonest into the spare seats. That
+// ⚠ ALWAYS ImageNDict WORDS -- a short image repeats its commonest into the spare seats. That
 // costs nothing, spares the wake a bound test per word, and lets the loader read the dictionary
 // WHERE IT LIES: the header is a whole number of words and a shebang is padded to one.
-#define IMAGE_NDICT 248u   /* tokens 0..247 name a dictionary word, 248..255 a 1..8-byte literal */
-#define IMAGE_DHASH 512u   /* the encoder's value -> token map (open-addressed, 0xff = free) */
+#define ImageNDict 248u   /* tokens 0..247 name a dictionary word, 248..255 a 1..8-byte literal */
+#define ImageDHash 512u   /* the encoder's value -> token map (open-addressed, 0xff = free) */
 // ⚠ the encoder's tables ride the ALLOCATOR, never the frame: together they are kilobytes, and
 // an arm32 load has 12 bits of displacement -- port/mps2 refused to compile them onto the stack.
-struct img_dic { word dict[IMAGE_NDICT], key[IMAGE_DHASH]; unsigned char tk[IMAGE_DHASH]; };
+struct img_dic { word dict[ImageNDict], key[ImageDHash]; unsigned char tk[ImageDHash]; };
 static uintptr_t img_hash(word v) {
  uintptr_t h = (uintptr_t) v; h ^= h >> 17; h *= 0x9e3779b1u; h ^= h >> 13; return h; }
 static void img_sift(word *a, uintptr_t i, uintptr_t n) {
@@ -4900,21 +4948,21 @@ static void img_sift(word *a, uintptr_t i, uintptr_t n) {
 // in every token (test_bakerep). A sorted copy costs a pass and answers exactly; the
 // approximate counters that would save it have a tie order, which is the thing to avoid.
 static uintptr_t img_dict(word *sorted, uintptr_t nw, word *dict) {
- uintptr_t cnt[IMAGE_NDICT], nd = 0;
+ uintptr_t cnt[ImageNDict], nd = 0;
  for (uintptr_t i = nw / 2; i-- > 0; ) img_sift(sorted, i, nw);            // heapsort: no recursion,
  for (uintptr_t n = nw; n > 1; ) {                                         // no scratch, no worst case
   word t = sorted[0]; sorted[0] = sorted[--n]; sorted[n] = t; img_sift(sorted, 0, n); }
  for (uintptr_t i = 0; i < nw; ) {
   uintptr_t j = i; while (j < nw && sorted[j] == sorted[i]) j++;
   uintptr_t n = j - i;
-  if (nd < IMAGE_NDICT || n > cnt[nd - 1]) {                               // beats the weakest seat
-   uintptr_t k = nd < IMAGE_NDICT ? nd++ : IMAGE_NDICT - 1;
+  if (nd < ImageNDict || n > cnt[nd - 1]) {                               // beats the weakest seat
+   uintptr_t k = nd < ImageNDict ? nd++ : ImageNDict - 1;
    for (; k && cnt[k - 1] < n; k--) dict[k] = dict[k - 1], cnt[k] = cnt[k - 1];
    dict[k] = sorted[i], cnt[k] = n; }
   i = j; }
  return nd; }
 static int img_tok(word const *key, unsigned char const *tk, word v) {
- for (uintptr_t h = img_hash(v) & (IMAGE_DHASH - 1); tk[h] != 0xff; h = (h + 1) & (IMAGE_DHASH - 1))
+ for (uintptr_t h = img_hash(v) & (ImageDHash - 1); tk[h] != 0xff; h = (h + 1) & (ImageDHash - 1))
   if (key[h] == v) return tk[h];
  return -1; }
 // one token per blob word. out == NULL sizes the stream instead of writing it, so the
@@ -4927,38 +4975,51 @@ static uintptr_t img_stream(unsigned char *out, word const *blob, uintptr_t nw,
   if (t >= 0) { if (out) out[n] = (unsigned char) t; n++; continue; }
   uintptr_t uv = (uintptr_t) blob[i], q = uv; unsigned wd = 0;
   do wd++, q >>= 8; while (q);                             // ⚠ unsigned: word is signed, and a
-  if (out) { out[n] = (unsigned char)(IMAGE_NDICT + wd - 1);   // negative one would shift forever
+  if (out) { out[n] = (unsigned char)(ImageNDict + wd - 1);   // negative one would shift forever
    for (unsigned k = 0; k < wd; k++) out[n + 1 + k] = (unsigned char)(uv >> (8 * k)); }
   n += 1 + wd; }
  return n; }
-// ..and back, into the pool. 0 = a stream that ran short or ran long -- a foreign
-// buffer either way, so the caller boots normally.
-static int img_expand(word *out, uintptr_t nw, unsigned char const *p, unsigned char const *end,
-                      word const *dict) {
+// ..and back, into the pool. answers where the stream stopped, or NULL if it ran short --
+// a foreign buffer, so the caller boots normally. it does not require the whole stream: a
+// derived image is the first nw words of a longer one, and only the caller knows whether
+// a leftover tail is a prefix or a corruption.
+static unsigned char const *img_expand(word *out, uintptr_t nw, unsigned char const *p,
+                                       unsigned char const *end, word const *dict) {
  for (uintptr_t i = 0; i < nw; i++) {
-  if (p >= end) return 0;
+  if (p >= end) return NULL;
   unsigned t = *p++;
-  if (t < IMAGE_NDICT) { out[i] = dict[t]; continue; }
-  unsigned wd = t - IMAGE_NDICT + 1;
-  if ((uintptr_t)(end - p) < wd) return 0;
+  if (t < ImageNDict) { out[i] = dict[t]; continue; }
+  unsigned wd = t - ImageNDict + 1;
+  if ((uintptr_t)(end - p) < wd) return NULL;
   uintptr_t v = 0;
   if (wd == 3) v = (uintptr_t) p[0] | (uintptr_t) p[1] << 8 | (uintptr_t) p[2] << 16;  // 4 escapes in 5 are a
   else for (unsigned k = 0; k < wd; k++) v |= (uintptr_t) p[k] << (8 * k);             // heap offset, three wide
   p += wd, out[i] = (word) v; }
- return p == end; }
-// serialize g -> a fresh g->alloc'd {header, dictionary, token stream} buffer; NULL on failure. the
-// worker dumps WHEREVER it's called (a mid-eval dump's continuation rides as
-// wake-unreachable ballast); the guarded entry keeps the boot path honest.
-void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
+ return p; }
+// compact g and encode its live half into a fresh g->alloc'd blob, filling *Ho; NULL on
+// failure. the blob is words, not the wire: img_wire tokenizes it for a file and the
+// layered bake diffs two of them. dumps wherever it is called -- a mid-eval dump's
+// continuation rides as wake-unreachable ballast -- and the guarded entry keeps the boot
+// path honest.
+static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard const *guard,
+                       uintptr_t *outnw) {
+ g->image_why = 1;
  if (!g->major_pool) return NULL;                        // needs the major pool (it holds the compacted live half)
  ai_core_of(g)->io = NULL;                               // clear the non-deterministic fd before the bake
+ g->image_why = 2;
  if (!ai_ok(gen_major(g))) return NULL;                  // COMPACT: live half -> [major_base, major_hp) (OOM -> no image)
+ g->image_why = 3;
  word *base = g->major_base, *hp = g->major_hp;
  uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word);
+ // the heap must fit under the lane floor, or a byte offset collides with an index and
+ // decodes as an ap.
+ g->image_why = 8;
+ if (bytes >= ImageIdxBase) return NULL;
+ g->image_why = 3;
  word *blob = g->alloc(g, NULL, bytes);                  // the encoded words: scratch, not the file
  if (!blob) return NULL;
  memcpy(blob, base, bytes);
- // CANONICAL SERIALS (blob-side only): the mint stream's live members rename
+ // canonical serials (blob-side only): the mint stream's live members rename
  // monotone to 1..k below, and the header counter drops to k -- a dead mint (a
  // stray task's pid, a scratch gensym) leaves neither its number nor a +1
  // ripple through every nom minted after it, so one live heap answers one byte
@@ -4971,7 +5032,7 @@ void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard cons
  // boundary a pid was never promised to cross.
  uintptr_t nslot = 0, *slots = g->alloc(g, NULL, (nw / 2 + 1) * sizeof(uintptr_t));
  if (!slots) { g->alloc(g, blob, 0); return NULL; }
- struct img_ctx X = { base, hp, bytes, 0, 0, 0, 0, 0, guard }, *x = &X;
+ struct img_ctx X = { base, hp, 0, 0, 0, 0, 0, guard }, *x = &X;
  for (union u *p = (union u*) base; (word*) p < hp; ) {   // walk the LIVE heap (ttag works on it), encode into blob
   uintptr_t off = (uintptr_t)((word*) p - base);
   // a LIVE finalizer node sits raw in the heap (three words, no header), so no
@@ -5013,6 +5074,7 @@ void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard cons
   else for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(x, ((word*) p)[i]);   // thread interior + terminator
   x->suppress = 0;
   p = (union u*) ((word*) p + sz); }
+ g->image_why = 4;
  if (x->fail) { g->alloc(g, slots, 0); g->alloc(g, blob, 0); return NULL; }   // a binary pointer landed in the index range -> refuse (caller boots normally)
  // the rename: mark live serials (the collected nom/mint slots read RAW off the
  // blob -- scalars rode the memcpy -- plus the pids of both task rings), rank
@@ -5050,59 +5112,142 @@ void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard cons
  // reproducible bake must not carry.
  // the counter drops to the live count: the woken twin's first mint lands
  // above every renamed 1..kser, and the bytes carry no dead mints.
- struct image_hdr H = { IMAGE_MAGIC, sizeof(word), nw, IMAGE_ARCH, (uint64_t)((word) &ai_image_save - (word) image_immortals), 0, (uint64_t)(x->nabs << 1) | 1u, 0, kser, {0}, {0} };
+ struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, (uint64_t)((word) &ai_image_save - (word) image_immortals), 0, (uint64_t)(x->nabs << 1) | 1u, 0, kser, {0}, {0} };
  g->alloc(g, rank, 0);
  // roots = symbols + tasks (live OUTSIDE v0), then the whole GC-traced v0..end block, GENERICALLY: any
  // field added to struct ai's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
  uintptr_t nv = (word*) g->end - (word*) &g->v0, nr = 2 + nv;
+ g->image_why = 5;
  if (nr > countof(H.root_tag)) { g->alloc(g, blob, 0); return NULL; }    // grew past the header table -> bump root_tag[]
  image_root_enc(x, g->symbols,      &H.root_tag[0], &H.root_val[0]);
  image_root_enc(x, (word) g->tasks, &H.root_tag[1], &H.root_val[1]);
  for (uintptr_t i = 0; i < nv; i++) image_root_enc(x, ((word*) &g->v0)[i], &H.root_tag[2 + i], &H.root_val[2 + i]);
+ g->image_why = 6;
  if (x->fail) { g->alloc(g, blob, 0); return NULL; }     // ..a ROOT refused: the walk's own check is behind us
  H.nroot = nr;
+ return g->image_why = 0, *Ho = H, *outnw = nw, blob; }
+// ..and the wire: {header, dictionary, token stream}, g->alloc'd. fills H.nstream.
+static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintptr_t nw, uintptr_t *outlen) {
+ uintptr_t bytes = nw * sizeof(word);
  // the dictionary wants a sorted copy and the copy is the blob's size again -- transient,
  // and bake-time, which is the side of this trade nobody waits on.
  struct img_dic *d = g->alloc(g, NULL, sizeof *d);
- if (!d) { g->alloc(g, blob, 0); return NULL; }
+ if (!d) return NULL;
  word *sorted = g->alloc(g, NULL, bytes);
- if (!sorted) { g->alloc(g, d, 0); g->alloc(g, blob, 0); return NULL; }
+ if (!sorted) { g->alloc(g, d, 0); return NULL; }
  memcpy(sorted, blob, bytes);
  uintptr_t nd = img_dict(sorted, nw, d->dict);
  g->alloc(g, sorted, 0);
  memset(d->tk, 0xff, sizeof d->tk);
  for (uintptr_t i = 0; i < nd; i++) {
-  uintptr_t h = img_hash(d->dict[i]) & (IMAGE_DHASH - 1);
-  while (d->tk[h] != 0xff) h = (h + 1) & (IMAGE_DHASH - 1);
+  uintptr_t h = img_hash(d->dict[i]) & (ImageDHash - 1);
+  while (d->tk[h] != 0xff) h = (h + 1) & (ImageDHash - 1);
   d->key[h] = d->dict[i], d->tk[h] = (unsigned char) i; }
- for (uintptr_t i = nd; i < IMAGE_NDICT; i++) d->dict[i] = nd ? d->dict[0] : 0;   // the spare seats
- uintptr_t ns = img_stream(NULL, blob, nw, d->key, d->tk), db = IMAGE_NDICT * sizeof(word);
- H.nstream = ns;
- uintptr_t total = sizeof H + db + ns;
+ for (uintptr_t i = nd; i < ImageNDict; i++) d->dict[i] = nd ? d->dict[0] : 0;   // the spare seats
+ uintptr_t ns = img_stream(NULL, blob, nw, d->key, d->tk), db = ImageNDict * sizeof(word);
+ H->nstream = ns;
+ uintptr_t total = sizeof *H + db + ns;
  char *buf = g->alloc(g, NULL, total);
- if (!buf) { g->alloc(g, d, 0); g->alloc(g, blob, 0); return NULL; }
- memcpy(buf, &H, sizeof H);
- memcpy(buf + sizeof H, d->dict, db);
- img_stream((unsigned char*)(buf + sizeof H + db), blob, nw, d->key, d->tk);
- g->alloc(g, d, 0), g->alloc(g, blob, 0);
+ if (!buf) { g->alloc(g, d, 0); return NULL; }
+ memcpy(buf, H, sizeof *H);
+ memcpy(buf + sizeof *H, d->dict, db);
+ img_stream((unsigned char*)(buf + sizeof *H + db), blob, nw, d->key, d->tk);
+ g->alloc(g, d, 0);
  return *outlen = total, buf; }
+void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
+ struct image_hdr H;
+ uintptr_t nw = 0;
+ word *blob = img_build(g, &H, guard, &nw);
+ if (!blob) return NULL;
+ void *buf = img_wire(g, &H, blob, nw, outlen);
+ return g->alloc(g, blob, 0), buf; }
 void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
  if ((word*) g->sp != topof(g)) return NULL;             // quiescent: an empty AI stack at the dump point
  return ai_image_save_(g, outlen, guard); }
+// ============================================================================
+// the layered bake (doc/plan/image-chain.md): one process, images in inclusion order.
+// each layer freezes what it dumped, so the next layer's blob begins with this one's and
+// the small image stores its parent's prefix plus the words that changed.
+// ============================================================================
+// the first half: compact, pin, and answer this layer as {header, raw blob}. untokenized,
+// since its only reader is ai_image_save_over below. g->alloc'd; the caller owns it.
+void *ai_image_freeze(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
+ struct image_hdr H;
+ uintptr_t nw = 0;
+ if ((word*) g->sp != topof(g)) return g->image_why = 7, NULL;   // quiescent, like ai_image_save
+ word *blob = img_build(g, &H, guard, &nw);              // ..which compacts under the PREVIOUS pin, if any
+ if (!blob) return NULL;
+ uintptr_t total = sizeof H + nw * sizeof(word);
+ char *rec = g->alloc(g, NULL, total);
+ if (!rec) return g->alloc(g, blob, 0), NULL;
+ memcpy(rec, &H, sizeof H), memcpy(rec + sizeof H, blob, nw * sizeof(word));
+ g->alloc(g, blob, 0);
+ g->froze = nw;                                          // ..and from here nothing in it moves again
+ return *outlen = total, rec; }
+// the derived record for one frozen baseline against the blob just built: the baseline's
+// own header, then every prefix word changed since the freeze. the prefix itself is never
+// stored -- the loader reads it out of the parent's stream.
+static void *img_derive(struct ai *g, void const *base, uintptr_t blen,
+                        struct image_hdr const *H, word const *blob, uintptr_t nw, uintptr_t *outlen) {
+ struct image_hdr B;
+ if (blen < sizeof B) return NULL;
+ memcpy(&B, base, sizeof B);
+ uintptr_t bn = B.nwords;
+ if (B.magic != ImageMagic || bn > nw || blen < sizeof B + bn * sizeof(word)) return NULL;
+ word const *bb = (word const*)((char const*) base + sizeof B);
+ // a plain comparison: the encoding is a pure function of the heap, so a pinned object
+ // keeps its offset and every lane is a constant plus an index. nothing to re-seat.
+ uintptr_t np = 0;
+ for (uintptr_t i = 0; i < bn; i++) if (bb[i] != blob[i]) np++;
+ uintptr_t total = sizeof B + (1 + 2 * np) * sizeof(uint64_t);
+ char *rec = g->alloc(g, NULL, total);
+ if (!rec) return NULL;
+ memcpy(rec, &B, sizeof B);
+ { struct image_hdr *D = (struct image_hdr*)(void*) rec;
+   D->nstream = 0; }                                      // ..and it carries no stream of its own
+ uint64_t *w = (uint64_t*)(void*)(rec + sizeof B);
+ *w++ = (uint64_t) np;
+ for (uintptr_t i = 0; i < bn; i++)
+  if (bb[i] != blob[i]) *w++ = (uint64_t) i, *w++ = (uint64_t) bb[i];
+ return *outlen = total, rec; }
+// the second half: the full image, and beside it the derived record for each frozen
+// baseline -- subout[i] for bases[i], NULL where it did not fit (a foreign record, or a
+// prefix longer than this blob). a NULL is not an error: the caller lays that layer
+// whole, which is only bigger.
+void *ai_image_save_over(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard,
+                         void *const *bases, uintptr_t const *blens, uintptr_t nbase,
+                         void **subout, uintptr_t *sublens) {
+ struct image_hdr H;
+ uintptr_t nw = 0;
+ if ((word*) g->sp != topof(g)) return g->image_why = 7, NULL;   // quiescent, like ai_image_save
+ word *blob = img_build(g, &H, guard, &nw);
+ if (!blob) return NULL;
+ for (uintptr_t i = 0; i < nbase; i++)
+  subout[i] = img_derive(g, bases[i], blens[i], &H, blob, nw, &sublens[i]);
+ void *buf = img_wire(g, &H, blob, nw, outlen);
+ return g->alloc(g, blob, 0), buf; }
 // the image-wake progress hook: weak no-op, overridden by a port bringing the
 // wake up on new metal (a crashed wake with no debugger is otherwise invisible).
 // stages: 1 header, 2 pool, 3 blob, 4 the token stream expanded, 0x100+k walk (per 64K words), 5 walk, 6 roots.
 __attribute__((weak)) void ai_image_note(uintptr_t stage) { (void) stage; }
-struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t)) {
- struct image_hdr H;
- if (len < sizeof H) return NULL;
- memcpy(&H, buf, sizeof H);
- if (H.magic != IMAGE_MAGIC || H.wordsize != sizeof(word) || H.arch != IMAGE_ARCH) return NULL;
- uintptr_t nw = H.nwords, bytes = nw * sizeof(word), db = IMAGE_NDICT * sizeof(word), ns = H.nstream;
+// the wake, over a stream that may carry more than this image: `buf` holds the header,
+// dictionary and token stream to read, and `Hw` is the header to wake with -- the same one
+// for a plain image, the derived record's for a prefix of it. `patch` names the prefix
+// words the deriving session changed.
+static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr const *Hw,
+                           uint64_t const *patch, uintptr_t npatch,
+                           void *(*al)(struct ai*, void*, size_t)) {
+ struct image_hdr S, H = *Hw;                            // S: the STREAM's own header
+ if (len < sizeof S) return NULL;
+ memcpy(&S, buf, sizeof S);
+ if (S.magic != ImageMagic || S.wordsize != sizeof(word) || S.arch != ImageArch) return NULL;
+ if (H.magic != ImageMagic || H.wordsize != sizeof(word) || H.arch != ImageArch) return NULL;
+ if (H.nwords > S.nwords) return NULL;                   // a derived image is a PREFIX, never longer
+ uintptr_t nw = H.nwords, db = ImageNDict * sizeof(word), ns = S.nstream;
  // ⚠ the stream's length is the HEADER's, never the buffer's: a baked image arrives inside a
  // reserved section and a file may carry a shebang, so "the rest of what you handed me" is
  // the one reading that would make a good image look foreign and fall silently back to the egg.
- if (len < sizeof H + db + ns) return NULL;                       // truncated buffer
+ if (len < sizeof S + db + ns) return NULL;                       // truncated buffer
  ai_image_note(1);
  struct ai *g = ai_ini_m(al);
  if (!g) return NULL;
@@ -5122,7 +5267,6 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  ai_image_note(2);
  g->major_hp = base + nw;
  ai_image_note(3);
- uintptr_t hb = bytes;
  // ⚠ THE CHECK IS A DISTANCE, NEVER TWO ADDRESSES, and that is the last thing between a
  // bake and a hash anyone can check: the two symbols shift together under ASLR, so storing
  // where they LANDED wrote this run's mmap base into the header and two bakes of one tree
@@ -5142,22 +5286,31 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  // EXPAND the token stream into the pool, then decode it there IN PLACE. The two passes
  // read and write one word at a time at the same index, so src and base are the same array
  // -- and a payload word arrives already seated, which is why the flat-leaf memcpys are gone.
- { unsigned char const *p0 = (unsigned char const*) buf + sizeof H + db;
-   if (!img_expand(base, nw, p0, p0 + ns, (word const*)((char const*) buf + sizeof H))) return NULL; }
+ { unsigned char const *p0 = (unsigned char const*) buf + sizeof S + db,
+                       *q = img_expand(base, nw, p0, p0 + ns, (word const*)((char const*) buf + sizeof S));
+   // a whole image consumes its stream exactly; a prefix stops where its words end and
+   // the tail is the parent's business.
+   if (!q || (nw == S.nwords && q != p0 + ns)) return NULL; }
+ // ..then the words this layer changed since it was frozen; every other word of the
+ // prefix is the parent's, byte for byte.
+ for (uintptr_t i = 0; i < npatch; i++) {
+  uintptr_t ix = (uintptr_t) patch[2 * i];
+  if (ix >= nw) return NULL;
+  base[ix] = (word) patch[2 * i + 1]; }
  ai_image_note(4);
  word const *src = base;
  for (uintptr_t off = 0; off < nw; ) {
   uintptr_t sz;
   union u *p = (union u*)(base + off);
   word const *s = src + off;
-  base[off] = (word) img_decode((intptr_t) s[0], base, hb, delta);                // word0 first: the ap (kinding needs it real)
+  base[off] = (word) img_decode((intptr_t) s[0], base, delta);                // word0 first: the ap (kinding needs it real)
   if (in_data(p->ap)) { sz = image_datasize(p, s);                                // data kinds: size by ai_typ + the SOURCE's raw length words
    switch (ai_typ(p)) {
-    case DChain: base[off + 1] = (word) img_decode((intptr_t) s[1], base, hb, delta);
-                 base[off + 2] = (word) img_decode((intptr_t) s[2], base, hb, delta); break;
-    case DNom:   base[off + 1] = (word) img_decode((intptr_t) s[1], base, hb, delta); break;   // code + dig ride raw
+    case DChain: base[off + 1] = (word) img_decode((intptr_t) s[1], base, delta);
+                 base[off + 2] = (word) img_decode((intptr_t) s[2], base, delta); break;
+    case DNom:   base[off + 1] = (word) img_decode((intptr_t) s[1], base, delta); break;   // code + dig ride raw
     case DTray:  if (tray(p)->type == ai_O) { word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p));
-                  for (uintptr_t i = 0; i < ne; i++) e[i] = img_decode(e[i], base, hb, delta); }
+                  for (uintptr_t i = 0; i < ne; i++) e[i] = img_decode(e[i], base, delta); }
                  break;
     default:     break; }                                                         // flat leaves: payload is already seated
   } else {                                                                        // thread: the ENCODED terminator is its head's byte offset | tag
@@ -5166,7 +5319,7 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
    for (;; k++) {                                                                 // ONE pass, decoding to the terminator (rung 2):
     if (k >= kmax) return NULL;                                                   // the load, never march off the pool (on metal the                                               // the load, never march off the pool (on metal the
     if (s[k] == term) break;                                                      // pool's edge is a dead bus, and a dead bus is MUTE)
-    base[off + k] = (word) img_decode((intptr_t) s[k], base, hb, delta); }
+    base[off + k] = (word) img_decode((intptr_t) s[k], base, delta); }
    base[off + k] = (word) p + ai_thread_tag;                                      // the terminator, decoded by hand: its head went live
    sz = k + 1; }
   off += sz; }
@@ -5190,7 +5343,24 @@ struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai
  { uintptr_t want = nw >> 1;
    if (want > (uintptr_t) g->len) { struct ai *h = gen_grow(g, want); if (ai_ok(h)) g = h; } }
  return g; }
+struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t)) {
+ struct image_hdr H;
+ if (len < sizeof H) return NULL;
+ memcpy(&H, buf, sizeof H);
+ return img_wake(buf, len, &H, NULL, 0, al); }
 struct ai *ai_image_load(void const *buf, uintptr_t len) { return ai_image_load_m(buf, len, ai_libc_alloc); }
+// ..and a derived image: the first H.nwords words of the parent's stream, patched. `sub`
+// is what ai_image_save_over answered; a torn one answers NULL and the caller boots the
+// egg. the record must be word-aligned -- the container lays entries at 8.
+struct ai *ai_image_load_over(void const *parent, uintptr_t plen, void const *sub, uintptr_t slen) {
+ struct image_hdr D;
+ if (slen < sizeof D + sizeof(uint64_t)) return NULL;
+ memcpy(&D, sub, sizeof D);
+ uint64_t const *w = (uint64_t const*)(void const*)((char const*) sub + sizeof D);
+ uint64_t np = w[0];
+ if (np > (uint64_t) D.nwords
+     || slen < sizeof D + (1 + 2 * (uintptr_t) np) * sizeof(uint64_t)) return NULL;
+ return img_wake(parent, plen, &D, w + 1, (uintptr_t) np, ai_libc_alloc); }
 
 // ============================================================================
 // sym
@@ -6620,8 +6790,8 @@ static struct ai *ai_bmul_setup(struct ai *g) {
 // dispatch. a JOB either SPLITS (push the three half-size children, LIFO) or
 // COMBINES (z1 -= z0; z1 -= z2; r += z1<<m). only na==nb routes here.
 #define kmul_chunk (1 << 14)   // leaf limb-mults folded per dispatch before a yield check
-#define KMUL_HDR 8             // ws header limbs: [0]=n [1]=top (stack ptr) [2]=sign [3]=r_off
-#define KMUL_JW  6             // job record limbs: ar, br, n, rr, sr, state
+#define KmulHdr 8             // ws header limbs: [0]=n [1]=top (stack ptr) [2]=sign [3]=r_off
+#define KmulJw  6             // job record limbs: ar, br, n, rr, sr, state
 static union u const kmul_loop[1] = { { .ap = lvm_kmul } };
 
 static struct ai *ai_kmul_setup(struct ai *g) {
@@ -6631,8 +6801,8 @@ static struct ai *ai_kmul_setup(struct ai *g) {
  for (int t = n; t >= kara_cutoff; t = (t + 1) / 2) d++;   // Karatsuba depth
  uintptr_t njob = (uintptr_t) 8 * d + 32,                 // job-stack capacity (~3d live, generous)
            scrn = (uintptr_t) 6 * n + 16 * (uintptr_t) d + 256,      // O(n) scratch, with margin
-           jobs_off = KMUL_HDR,
-           a_off = jobs_off + njob * KMUL_JW,
+           jobs_off = KmulHdr,
+           a_off = jobs_off + njob * KmulJw,
            b_off = a_off + n,
            r_off = b_off + n,
            scr_off = r_off + 2 * (uintptr_t) n,
@@ -6666,12 +6836,12 @@ static struct ai *ai_kmul_setup(struct ai *g) {
 lvm(lvm_kmul) {
  ai_limb *ws = (ai_limb*) txt(cask(Sp[0])->str);
  int n = (int) ws[0], top = (int) ws[1];
- ai_limb *jobs = ws + KMUL_HDR;
+ ai_limb *jobs = ws + KmulHdr;
  long budget = kmul_chunk;
  while (top > 0 && budget > 0) {
   ws[1] = (ai_limb) top; YieldCheck();             // persist top, then a PER-JOB yield check:
                                                    // a once-per-dispatch check yields too rarely here
-  ai_limb *J = jobs + (uintptr_t) (top - 1) * KMUL_JW;
+  ai_limb *J = jobs + (uintptr_t) (top - 1) * KmulJw;
   uintptr_t ar = J[0], br = J[1];
   int jn = (int) J[2];
   uintptr_t rr = J[3], sr = J[4];
@@ -6689,11 +6859,11 @@ lvm(lvm_kmul) {
    for (int i = nt; i < h + 1; i++) ws[sbO + i] = 0;
    for (int i = 0; i < 2 * (h + 1); i++) ws[z1O + i] = 0;            // clear z1's output slot
    J[5] = 1;                                                          // this job COMBINES when it returns
-   ai_limb *z1J = jobs + (uintptr_t) top       * KMUL_JW;            // push z1 = sa*sb (pops first)
+   ai_limb *z1J = jobs + (uintptr_t) top       * KmulJw;            // push z1 = sa*sb (pops first)
    z1J[0] = saO, z1J[1] = sbO, z1J[2] = (ai_limb) (h + 1), z1J[3] = z1O, z1J[4] = csr, z1J[5] = 0;
-   ai_limb *z2J = jobs + (uintptr_t) (top + 1) * KMUL_JW;            // push z2 = a_hi*b_hi -> r[2m..]
+   ai_limb *z2J = jobs + (uintptr_t) (top + 1) * KmulJw;            // push z2 = a_hi*b_hi -> r[2m..]
    z2J[0] = ar + m, z2J[1] = br + m, z2J[2] = (ai_limb) h, z2J[3] = rr + 2 * (uintptr_t) m, z2J[4] = csr, z2J[5] = 0;
-   ai_limb *z0J = jobs + (uintptr_t) (top + 2) * KMUL_JW;            // push z0 = a_lo*b_lo -> r[0..] (pops last)
+   ai_limb *z0J = jobs + (uintptr_t) (top + 2) * KmulJw;            // push z0 = a_lo*b_lo -> r[0..] (pops last)
    z0J[0] = ar, z0J[1] = br, z0J[2] = (ai_limb) m, z0J[3] = rr, z0J[4] = csr, z0J[5] = 0;
    top += 3; budget -= jn;                                            // pop order z0,z2,z1 then this (combine)
   } else {                                                // COMBINE (st == 1)
@@ -6772,13 +6942,13 @@ lvm(lvm_bmul) {
 // persisting the index j. every entry re-reads the base from Sp[1] (a GC moves
 // it). cheap divides one-shot through ai_big_binop. which: 0 = //, 1 = %.
 #define bdiv_chunk (1 << 14)
-#define BDIV_HDR 6           // ws header limbs: m, n, s(shift), which, nega, negb
+#define BdivHdr 6           // ws header limbs: m, n, s(shift), which, nega, negb
 static union u const bdiv_loop[1] = { { .ap = lvm_bdiv } };
 
 static struct ai *ai_bdiv_setup(struct ai *g, int which) {
  word a = g->sp[0], b = g->sp[1];
  int mub = bigp(a) ? big_nlimbs(a) : wlimbs, nub = bigp(b) ? big_nlimbs(b) : wlimbs;
- uintptr_t wslimbs = BDIV_HDR + (uintptr_t) nub + (mub + 1) + (mub - nub + 1);
+ uintptr_t wslimbs = BdivHdr + (uintptr_t) nub + (mub + 1) + (mub - nub + 1);
  uintptr_t sreq = str_type_width + b2w(wslimbs * sizeof(ai_limb));
  uintptr_t breq = Width(struct ai_cask) + Width(struct ai_tag);
  if (!ai_ok(g = ai_have(g, sreq + breq + 3))) return g;
@@ -6788,7 +6958,7 @@ static struct ai *ai_bdiv_setup(struct ai *g, int which) {
  struct ai_str *ws_s = ini_str(str(g->hp), wslimbs * sizeof(ai_limb));
  g->hp += sreq;
  ai_limb *ws = (ai_limb*) txt(ws_s);
- ai_limb *vn = ws + BDIV_HDR, *un = vn + n, *q = un + (m + 1);
+ ai_limb *vn = ws + BdivHdr, *un = vn + n, *q = un + (m + 1);
  int s = limb_clz(lb[n-1]);                           // normalize so v[n-1]'s top bit is set
  for (int i = n-1; i > 0; i--) vn[i] = (lb[i] << s) | (s ? (ai_dlimb) lb[i-1] >> (limb_bits - s) : 0);
  vn[0] = lb[0] << s;
@@ -6824,7 +6994,7 @@ lvm(lvm_bdiv) {
  ai_limb *ws = (ai_limb*) txt(cask(Sp[1])->str);
  int m = (int) ws[0], n = (int) ws[1], s = (int) ws[2], which = (int) ws[3];
  bool nega = ws[4], negb = ws[5];
- ai_limb *vn = ws + BDIV_HDR, *un = vn + n, *q = un + (m + 1);
+ ai_limb *vn = ws + BdivHdr, *un = vn + n, *q = un + (m + 1);
  int j = (int) getcharm(Sp[0]);
  ai_dlimb const B = limb_base;
  int steps = max(1, (int) (bdiv_chunk / (uintptr_t) n));
@@ -6855,7 +7025,7 @@ lvm(lvm_bdiv) {
  int outn = which ? n : (m - n + 1);
  Have(Width(struct ai_big) + b2w((size_t) (outn + 1) * sizeof(ai_limb)));
  ws = (ai_limb*) txt(cask(Sp[1])->str);                 // re-fetch (Have may have GC'd)
- vn = ws + BDIV_HDR, un = vn + n, q = un + (m + 1);
+ vn = ws + BdivHdr, un = vn + n, q = un + (m + 1);
  bool rneg = which ? nega : (nega != negb);
  word ret = Sp[2], res;
  Pack(g);
@@ -7273,7 +7443,7 @@ static ai_inline int cmp_rank(struct ai *g, word x) {
  if (k == KTrayO) return 3;                         // object tray: above the numbers, BELOW chain
  if (k == KChain) return 4;                        // chain: the grammar substrate -- HIGH, just under book (only book's mutability seats it above)
  if (k == KTablet) return 5;                          // tablet: above chain
- if (coinp(x) && die_get(g, coin_die(x), DIE_NET) == putcharm(2))
+ if (coinp(x) && die_get(g, coin_die(x), DieNet) == putcharm(2))
   return 2;                                        // a RATIO coin seats IN the number band, by its value
  return 6; }                                       // KHot -- thread/function, the ceiling (the only kind left)
 static ai_inline intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb) {

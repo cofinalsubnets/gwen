@@ -42,7 +42,7 @@
    l (listen port)
    srv (twirl (\ _ ((: (g k) (: _ (await l)
                                 c (accept l)
-                                _ (? c (: _ ((from 'kiosko 'serve1) oroot c)
+                                _ (? c (: _ ((from 'kiosko 'serve1) oroot () c)
                                           (close c)) ())
                                 (g k)))
                     0)) 0)

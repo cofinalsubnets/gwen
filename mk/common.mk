@@ -15,7 +15,7 @@ a ?= $(hosta)
 # THE BASE VERSION, the checked-in ./VERSION with no VCS suffix on it -- what a release
 # is called, moving only when a release does. mk/lib.mk's love_version adds the suffix,
 # dist names the tarball for the whole id, and `.comment` carries THIS half alone (which
-# is what lets love0's stamp agree with a real one -- see gl0_cc).
+# is what lets love0's stamp agree with a real one -- see boot_cc).
 love_base := $(shell cat $R/VERSION 2>/dev/null || echo 0)
 
 # ⚠ IS THIS TREE A CHECKOUT OR AN UNPACKED RELEASE? `git -C DIR` walks UP, so the test is for
@@ -92,7 +92,7 @@ ai_cflags += -fcf-protection=none -D_POSIX_C_SOURCE=200809L
 data_ld = -Wl,-T,$R/core/love_data.ld
 # ⚠ AN EMPTY BRACKET IS STILL A BRACKET. core/love.c indexes the host nif slice off
 # [__start_ai_nifs, __stop_ai_nifs), which the toolchain synthesises only where the
-# SECTION exists -- so an embedder registering its defs by hand owns no AI_NIF and the
+# SECTION exists -- so an embedder registering its defs by hand owns no AiNif and the
 # pair goes undefined at the link. weak declarations do not answer it: ld leaves a weak
 # undefined at 0 even where the section IS there, which silently unregisters every host
 # nif. naming the empty pair at the one link that wants it keeps the host lane untouched.

@@ -65,9 +65,9 @@ static struct ai_image_guard image_guard(struct image_segs *segs) {
 // newline cost nothing and keep every later field where the codec expects it.
 // ⚠ and the load side skips it in the HOST, never the core: a shebang is a POSIX exec
 // convention, and love.c stays freestanding-clean. The .image section lane never has one.
-#define IMAGE_SHEBANG "#!/usr/bin/env -S love wake"
+#define ImageShebang "#!/usr/bin/env -S love wake"
 static size_t image_shebang(char *sb, size_t cap) {
-  size_t n = (size_t) snprintf(sb, cap, "%s", IMAGE_SHEBANG);
+  size_t n = (size_t) snprintf(sb, cap, "%s", ImageShebang);
   while ((n + 1) % sizeof(uintptr_t)) sb[n++] = ' ';
   sb[n++] = '\n';
   return n;
@@ -116,9 +116,70 @@ int image_dump(struct ai *g, char const *path) {
 // --section-start), riding the tail of the single segment holo lays -- so the
 // bake GROWS it: nothing is pre-allocated and there is no ceiling; this stub
 // exists only to give the section an address.
-#define RESERVE_WORDS 2u
-__attribute__((section(".love_image"))) uint64_t ai_baked_image[RESERVE_WORDS] = {1};
-uintptr_t ai_baked_image_len = RESERVE_WORDS * 8u;
+#define ReserveWords 2u
+__attribute__((section(".love_image"))) uint64_t ai_baked_image[ReserveWords] = {1};
+uintptr_t ai_baked_image_len = ReserveWords * 8u;
+// --- the image ARRAY ---------------------------------------------------------
+// the section holds EITHER one image -- its first word is the codec's own magic,
+// which is what every binary before this laid -- or a DIRECTORY: magic, count,
+// then one {off, len, kind, base, verbs} record per image, then the blobs. offsets
+// are from the section's first byte.
+//
+// the entries are laid SMALLEST FIRST and `verbs` names what each can serve, so
+// "the first entry that claims this verb" is the walk up the chain, decided
+// before anything is woken -- it has to be, since the verb table lives in the
+// image we have not woken yet.
+//
+// an entry is either whole or derived, and that is the whole of the dedup: kind 0 names a
+// complete image, kind 1 a derived record whose words are the first nwords of entry
+// `base`'s stream plus the few this layer changed (doc/plan/image-chain.md). the codec
+// still never sees a container -- it is handed one buffer or a parent/sub pair -- so no
+// part of the image format lives here.
+#define ImgdirMagic 0x3241594152524119ULL        /* "..ARRAY2", the container's own (derived entries) */
+#define ImgdirVerbs 48u
+struct image_ent { uint64_t off, len, kind, base; char verbs[ImgdirVerbs]; };
+struct image_dir { uint64_t magic, count; struct image_ent ent[]; };
+// is `verb` one of the space- or comma-separated words in `list`? a whole-word
+// match: "lib" must not claim "libra".
+static int imgdir_claims(char const *list, char const *verb) {
+  size_t n = strlen(verb);
+  for (size_t i = 0; i < ImgdirVerbs && list[i]; ) {
+    while (i < ImgdirVerbs && (list[i] == ' ' || list[i] == ',')) i++;
+    size_t j = i;
+    while (j < ImgdirVerbs && list[j] && list[j] != ' ' && list[j] != ',') j++;
+    if (j - i == n && !memcmp(list + i, verb, n)) return 1;
+    i = j; }
+  return 0;
+}
+// what to wake for this command line: 1 and the pair filled, or 0 and the caller boots the
+// egg. a NULL `*sub` means wake *blob whole, non-NULL means wake that derived record over
+// it. a section that is not a directory is one whole image; a torn directory answers 0.
+static int imgdir_at(struct image_dir const *d, unsigned char const *base, uintptr_t n,
+                     uint64_t i, void const **buf, uintptr_t *len) {
+  if (i >= d->count || d->ent[i].off > n || d->ent[i].len > n - d->ent[i].off) return 0;
+  return *buf = (void const *) (base + d->ent[i].off), *len = d->ent[i].len, 1;
+}
+int ai_baked_pick(char const *verb, void const **blob, uintptr_t *blen,
+                  void const **sub, uintptr_t *sublen) {
+  unsigned char const *base = (unsigned char const *) ai_baked_image;
+  uintptr_t n = ai_baked_image_len;
+  struct image_dir const *d = (struct image_dir const *) (void const *) base;
+  uint64_t pick, i;
+  *sub = NULL, *sublen = 0;
+  if (n < sizeof *d || d->magic != ImgdirMagic)
+    return *blob = (void const *) base, *blen = n, n > 0;
+  if (!d->count || n < sizeof *d + d->count * sizeof d->ent[0]) return 0;
+  pick = d->count - 1;                            // the largest is the default
+  if (verb) for (i = 0; i < d->count; i++)
+    if (imgdir_claims(d->ent[i].verbs, verb)) { pick = i; break; }
+  if (!d->ent[pick].kind) return imgdir_at(d, base, n, pick, blob, blen);
+  // derived: its parent carries the stream. one hop only, since nothing lays a derived
+  // parent -- refuse rather than chase.
+  if (!imgdir_at(d, base, n, pick, sub, sublen)) return 0;
+  if (d->ent[pick].base >= d->count || d->ent[d->ent[pick].base].kind) return 0;
+  return imgdir_at(d, base, n, d->ent[pick].base, blob, blen);
+}
+
 struct bake_at { uintptr_t addr, off; int found; };
 static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
   struct bake_at *b = d;
@@ -129,11 +190,11 @@ static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
       b->off = p->p_offset + (b->addr - lo), b->found = 1; }
   return 1;                                       // stop after the first object: the main program
 }
-#define BAKE_SCRATCH (64u << 10)                  // the copy/pad window: a bake runs once, so iterations are free
+#define BakeScratch (64u << 10)                  // the copy/pad window: a bake runs once, so iterations are free
 // move n bytes src@soff -> dst@doff through the caller's window. the two lanes only shuttle bytes.
 static int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n, char *win) {
   for (uint64_t z = 0; z < n; ) {
-    size_t w = n - z < BAKE_SCRATCH ? (size_t)(n - z) : BAKE_SCRATCH;
+    size_t w = n - z < BakeScratch ? (size_t)(n - z) : BakeScratch;
     if (pread(src, win, w, (off_t)(soff + z)) != (ssize_t) w) return -6;
     if (pwrite(dst, win, w, (off_t)(doff + z)) != (ssize_t) w) return -6;
     z += w; }
@@ -155,7 +216,7 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
       || eh.e_shnum < 2 || !eh.e_phnum || eh.e_shstrndx >= eh.e_shnum) return 1;
   nsh = eh.e_shnum, nph = eh.e_phnum;
   sh = g->alloc(g, NULL, nsh * sizeof *sh), ph = g->alloc(g, NULL, nph * sizeof *ph);
-  win = g->alloc(g, NULL, BAKE_SCRATCH);
+  win = g->alloc(g, NULL, BakeScratch);
   if (!sh || !ph || !win) { rc = -6; goto out; }
   if (pread(src, sh, nsh * sizeof *sh, (off_t) eh.e_shoff) != (ssize_t)(nsh * sizeof *sh)
       || pread(src, ph, nph * sizeof *ph, (off_t) eh.e_phoff) != (ssize_t)(nph * sizeof *ph))
@@ -213,6 +274,73 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
     if (close(dst)) rc = -6; }
   g->alloc(g, sh, 0), g->alloc(g, ph, 0), g->alloc(g, str, 0), g->alloc(g, win, 0);
   return rc;
+}
+
+// `love bake -L CAT[:verbs] ..` lands here. main.c has already evaluated each layer's cat
+// in one session, freezing between them, so what arrives is finished bytes: bufs[i] is a
+// derived record for every layer but the last, which is the whole image they derive from.
+// this only lays them.
+// order is the chain, smallest first, since the picker takes the first entry claiming the
+// verb. every derived entry's parent is the last one: each layer froze the one before it,
+// and the last dump is the only blob carrying a stream.
+int image_bake_layers(struct ai *g, void *const *bufs, uintptr_t const *lens,
+                      char *const *verbs, int n) {
+  struct image_dir *d = NULL;
+  unsigned char *buf = NULL;
+  uintptr_t tot = sizeof *d + (uintptr_t) n * sizeof d->ent[0], off = tot;
+  int i, rc = -6, src = -1;
+  char exe[4096], tmp[4104];
+  struct stat st;
+  if (n < 1) return -6;
+  for (i = 0; i < n; i++) tot += (lens[i] + 7u) & ~(uintptr_t) 7;
+  if (!(buf = g->alloc(g, NULL, tot))) return -6;
+  memset(buf, 0, tot);
+  d = (struct image_dir *) (void *) buf;
+  d->magic = ImgdirMagic, d->count = (uint64_t) n;
+  for (i = 0; i < n; i++) {
+    if (verbs[i]) {
+      size_t vl = strlen(verbs[i]);
+      if (vl >= ImgdirVerbs) { fprintf(stderr, "love: bake: verb list too long\n"); goto out; }
+      memcpy(d->ent[i].verbs, verbs[i], vl); }
+    d->ent[i].off = off, d->ent[i].len = (uint64_t) lens[i];
+    d->ent[i].kind = i + 1 < n, d->ent[i].base = (uint64_t)(n - 1);
+    memcpy(buf + off, bufs[i], lens[i]);
+    off += (lens[i] + 7u) & ~(uintptr_t) 7; }
+  { struct bake_at bl = { (uintptr_t) &ai_baked_image_len, 0, 0 };
+    dl_iterate_phdr(bake_phdr, &bl);
+    if (!bl.found) { rc = -5; goto out; }
+    if (!host_selfpath(exe, sizeof exe)) goto out;
+    snprintf(tmp, sizeof tmp, "%s.bake", exe);
+    if ((src = open(exe, O_RDONLY)) < 0 || fstat(src, &st)) goto out;
+    rc = bake_tail(g, src, tmp, buf, tot, bl.off, st.st_mode & 07777);
+    if (rc > 0) { fprintf(stderr, "love: .image is not laid last -- nowhere to grow the image\n"); rc = -3; }
+    if (!rc && rename(tmp, exe)) rc = -6;
+    if (rc) unlink(tmp); }
+ out:
+  if (src >= 0) close(src);
+  g->alloc(g, buf, 0);
+  return rc;
+}
+
+// the layered bake's two codec doors, wrapped so the wake-safety guard -- the host's, and
+// riding the caller's frame -- stays in this file. rec/full are g->alloc'd and the caller
+// frees them; 0 ok, <0 refused.
+int image_freeze(struct ai *g, void **rec, uintptr_t *reclen) {
+  struct image_segs segs;
+  struct ai_image_guard gd = image_guard(&segs);
+  *reclen = 0;
+  if ((*rec = ai_image_freeze(g, reclen, &gd))) return 0;
+  return fprintf(stderr, "love: bake: the layer refused to freeze (why=%lu)\n",
+                 (unsigned long) g->image_why), -2;
+}
+int image_save_over(struct ai *g, void *const *bases, uintptr_t const *blens, uintptr_t nbase,
+                    void **subout, uintptr_t *sublens, void **full, uintptr_t *fulllen) {
+  struct image_segs segs;
+  struct ai_image_guard gd = image_guard(&segs);
+  *fulllen = 0;
+  if ((*full = ai_image_save_over(g, fulllen, &gd, bases, blens, nbase, subout, sublens))) return 0;
+  return fprintf(stderr, "love: bake: the image refused to save (why=%lu)\n",
+                 (unsigned long) g->image_why), -4;
 }
 
 int image_bake(struct ai *g) {
@@ -281,7 +409,7 @@ static lvm(lvm_bake) {
  Sp[0] = r; Ip += 1;
  ai_musttail return Continue(); }
 static union u const nif_bake[] = {{lvm_bake}, {lvm_ret0}};
-AI_NIF("bake", nif_bake);
+AiNif("bake", nif_bake);
 
 struct ai *image_load(char const *path) {
   int fd = open(path, O_RDONLY);

@@ -5,7 +5,7 @@
    theorems test/host/gcpause.l's gauge instance-checks). and the COPY LOOP has
    its shape: the Cheney drain terminates, copies each reachable object exactly
    once, exactly the reachable ones, and is a true fixpoint -- a second pass
-   copies nothing (the drain_* theorems at the bottom; love.c's AI_GC_CHECK
+   copies nothing (the drain_* theorems at the bottom; love.c's AiGcCheck
    build instance-checks the fixpoint on every minor, gate test_gcheck).
 
    This is the Coq counterpart of doc/proto/gengc.l, the runnable ai model of the
@@ -310,7 +310,7 @@ Qed.
                                     nothing live lost.
      drain_second_pass_copies_nothing -- re-running the scan over the result
                                     copies not one word. this is the theorem
-                                    love.c's AI_GC_CHECK build instance-checks:
+                                    love.c's AiGcCheck build instance-checks:
                                     gen_minor re-runs its whole scan after the
                                     drain and traps if major_hp moved. *)
 
@@ -578,7 +578,7 @@ Qed.
 
 (* (v) THE FIXPOINT IS A FIXPOINT: scanning any survivor's edges against the
    final copied set grays nothing -- a second pass over the drained heap
-   copies not one word. love.c's AI_GC_CHECK build runs this very check on
+   copies not one word. love.c's AiGcCheck build runs this very check on
    every minor: re-drive the whole scan, trap if major_hp moved. *)
 Theorem drain_second_pass_copies_nothing : forall r roots res a,
     drain r roots = Some res -> In a res ->

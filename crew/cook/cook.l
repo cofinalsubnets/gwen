@@ -965,9 +965,17 @@
       ; a rule nobody wrote. the narrow %.o: rules above cannot do that: their target
       ; must already end in .o. (test_nest is what caught it.)
       (psrc p item) (: stem <(pmatch <p item) prs <>p (? (two? prs) (stemsub <prs stem) ""))
-      (best-of ms item)        ; prefer a pattern whose stem-source exists, then the shortest stem
-      (: ok (filter (\ p (exists? (psrc p item))) ms) cand (? (two? ok) ok ms)
-         (foldl (\ b p (? !b p (? (tally <(pmatch <p item) < tally <(pmatch <b item)) p b))) 0 cand))
+      ; ⚠ A PATTERN WHOSE SOURCE CANNOT BE HAD DOES NOT APPLY -- make rejects it and
+      ; tries the next, and with none left the target is a source leaf that is
+      ; already on disk. Taking one as a last resort demands a file nobody makes:
+      ; `%.c: %.l` (mk/common.mk cancels make's lex rule, since this tree is full of
+      ; `<name>.l` beside `<name>.c`) had cook asking for core/love.l. "Can be had"
+      ; is exists-or-has-a-card -- no intermediates, per the note above.
+      (phave? p item) (: s (psrc p item) (|| (exists? s) (two? (peep cards s ()))))
+      (best-of ms item)        ; the shortest stem among the patterns that APPLY
+      (: ok (filter (\ p (phave? p item)) ms)
+         (? !(two? ok) 0
+            (foldl (\ b p (? !b p (? (tally <(pmatch <p item) < tally <(pmatch <b item)) p b))) 0 ok)))
       (builtin-of item)        ; the builtin lane: a match whose source is really there
       (: ms (filter (\ p (&& (two? (pmatch <p item)) (exists? (psrc p item)))) builtpats)
          (best-of ms item))

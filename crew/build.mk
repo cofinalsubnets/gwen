@@ -106,7 +106,18 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             crew/holo/link.l crew/holo/copy.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
             crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/sb/merge.l \
             crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l crew/sb/up.l \
-            lib/gz.l lib/tar.l lib/tarcmd.l lib/source.l
+            lib/gz.l lib/tar.l lib/tarcmd.l lib/source.l crew/lapiz/lapiz.l \
+            lib/salt.l lib/infix.l crew/libra/libra.l lib/hueweb.l lib/serve.l
+# THE DOCS LANE -- the small image of the array below. a one-shot `love libra ..`
+# wants the .l reader, the config door, the factor pass and the document lens, and
+# nothing else: it is 1.8 MB against the full image's 7.6, and the wake is linear in
+# that (~17 ms/MB measured), so the command starts in a quarter of the time.
+# ⚠ ITS MEMBERSHIP IS AN INPUT, exactly as distfiles' is -- same list guard below.
+docsfiles = lib/lint.l lib/salt.l lib/infix.l crew/lapiz/lapiz.l crew/libra/libra.l
+# ..and the REST of the dist, which is the second layer of the bake below. filter-out
+# keeps distfiles' order, so the two cats together are the same tree in the same
+# sequence -- only the docs half now goes in FIRST, which is what makes it a prefix.
+restfiles = $(filter-out $(docsfiles),$(distfiles))
 DIST_ORIGIN ?=
 # ⚠ THE MEMBERSHIP IS AN INPUT, and make cannot see it. Adding a file to distfiles
 # changes what the artifact CARRIES while every file make watches keeps its mtime, so
@@ -120,10 +131,24 @@ out/dist/.dist.list: force_dist_list
 	@mkdir -p out/dist
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+out/dist/.docs.list: force_dist_list
+	@mkdir -p out/dist
+	@tf=$@.$$$$.tmp; echo '$(docsfiles)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+out/dist/.docs-cat.l: $(docsfiles) out/dist/.docs.list
+	@echo CAT	$(abspath $@)
+	@mkdir -p out/dist
+	@cat $(docsfiles) > $@
 out/dist/.dist-cat.l: $(distfiles) out/dist/.dist.list
 	@echo CAT	$(abspath $@)
 	@mkdir -p out/dist
 	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(distfiles); } > $@
+# the second layer: everything the docs layer is not. `origin` rides here because it is
+# the artifact's own (love up), and the docs image has no use for it.
+out/dist/.rest-cat.l: $(restfiles) out/dist/.dist.list out/dist/.docs.list
+	@echo CAT	$(abspath $@)
+	@mkdir -p out/dist
+	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(restfiles); } > $@
 # the artifact is named for its arch ($a = uname -m): love-x86_64 here,
 # love-aarch64 on a pi -- the moon lane is native on both (mooncc defaults to
 # the ground it stands on), so `make dist` anywhere bakes that machine's door.
@@ -293,11 +318,19 @@ out/dist/src-$a.o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(love0)
 # so test_fixpoint's relink of $(moon_o) needs no mirror of it. assets/readme.bin is the page a
 # reader lands on -- `readelf -p .README`, mapped by nothing, and the one annotation worth
 # its bytes now that the source itself is in here.
-$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l assets/readme.bin $(ho)/love
+# ⚠ the images are baked by the binary that will carry them. an image keeps its
+# binary's own layout -- the codec's anchor guard is the gap between two of its
+# symbols -- so the array comes out of THIS link and is laid into the section it
+# already has. appending a section moves no symbol, which is why the anchor still
+# holds after: the same reason the single self-bake always worked.
+# ⚠ and smallest first: the picker takes the first entry claiming the verb, and with `-L`
+# that order is load-bearing twice over -- each layer freezes for the next, and only a
+# prefix can be shared (doc/plan/image-chain.md).
+$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.rest-cat.l out/dist/.docs-cat.l assets/readme.bin $(ho)/love
 	@echo DIST	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -freadme=assets/readme.bin -o $@
-	@./$@ bake -l out/dist/.dist-cat.l
+	@./$@ bake -L out/dist/.docs-cat.l:libra,help -L out/dist/.rest-cat.l
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
 
 # ==== dist_cross: the TWIN artifact (the other elf arch) ====
@@ -339,12 +372,12 @@ xmath_o = $(patsubst crew/moon/lib/math/%.c,$(xd)/m_%.o,$(wildcard crew/moon/lib
 # no nolibc.o: the link owes its symbols and the driver pulls the members by need
 # (crew/moon/lib/nolibc/), so a dist takes no calendar and no resolver.
 xobjs = $(xd)/love.o $(xhost_o) $(xmath_o) $(xd)/sys.o
-# -D AI_HAVE_VERSION_H like the host lane (build.mk's love.o): mooncc has no
+# -D AiHaveVersionH like the host lane (build.mk's love.o): mooncc has no
 # __has_include, so the flag is the only door to the version header.
 $(xd)/love.o: core/love.c $(love_h) out/host/mooncc0.image out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moonx) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H -I$(ho) -I. -Icore -Iout/lib -c $< $@
+	@$(moonx) -D ai_tco=$(tco) -D AiHaveVersionH -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(xd)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
 	@echo MOON	$@
 	@mkdir -p $(dir $@)

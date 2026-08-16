@@ -47,6 +47,22 @@ smoke)
   HOME=$dabs.nowhere run "$dist" down 2>&1 | grep -q "no nest" || fail "down without a nest"
   run "$dist" -e '(? (2 = (1 + 1)) (quit 0) (quit 1))' || fail "-e still evals"
 
+  # --- the image chain (doc/plan/image-chain.md) ----------------------------
+  # `libra` claims the small entry, which is stored derived: its words are the first
+  # nwords of the big entry's stream plus the few the second layer changed. a broken
+  # derive does not crash, it wakes a session missing half its book -- so the gate is that
+  # the small entry and the big one lift the same header.
+  run "$dist" libra doc lib/serve.l > "$s/derived.md" 2>&1 \
+    || fail "the derived entry (libra) did not wake"
+  grep -q "love serve" "$s/derived.md" \
+    || fail "the derived entry woke but answered nothing: $(head -3 "$s/derived.md")"
+  run "$dist" -e '(: _ (use (quote libra)) _ (puts (ldoc-md (: q (open "lib/serve.l" "r") s (slurp q) _ (close q) s))) (quit 0))' \
+    > "$s/whole.md" 2>&1 || fail "the whole entry cannot lift a header"
+  # ..the derived page wears its own title line; the body under it must agree exactly
+  tail -n +3 "$s/derived.md" > "$s/derived.body"
+  cmp -s "$s/derived.body" "$s/whole.md" \
+    || fail "derived and whole disagree: $(diff "$s/derived.body" "$s/whole.md" | head -6)"
+
   ln -sf "$dabs" "$s/sb"
   run "$s/sb" 2>&1 | grep -q "usage: sb"       || fail "the argv[0] door"
   echo '(quit 7)' > "$s/up"

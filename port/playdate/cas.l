@@ -26,7 +26,7 @@
    (clamp lo x hi) (? (x < lo) lo (hi < x) hi x)
    ; a term crosses to the canonical ring through the eval bridge: close it
    ; over its variables, apply the closure to the poly coins, and the coin
-   ; arithmetic (die + - * and DIE_STAR power) lands the monomial list.
+   ; arithmetic (die + - * and DieStar power) lands the monomial list.
    (tpoly t vs) (? (1 = tally vs) ((ev `('\ 'x t)) px1)
                    ((ev `('\ 'x 'y t)) px2 py2))
    (fshow p vs) (show (unfix (pemit p vs)))

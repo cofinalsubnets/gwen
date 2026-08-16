@@ -215,7 +215,7 @@ test_embed_boards: host $(ho)/mooncc
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -324,10 +324,15 @@ test_lux: host
 # through the verb rail or a baked image instead. ~2.5s, most of it one bake, and it rides
 # test_slow because the failure it catches is silent by construction (a seat that answers
 # () is indistinguishable from an app with nothing to say).
-.PHONY: test_seat
+.PHONY: test_seat test_cli
 test_seat: host
 	@echo TEST test/gate/seat.sh "(the file-seat lane)"
 	@sh test/gate/seat.sh $m
+# the CLI's exit STATUS -- 0 working, 1 unopenable, 2 malformed, a verb's own charm.
+# seat.sh reads what the binary SAYS; until this, nothing read what it ANSWERS.
+test_cli: host
+	@echo TEST test/gate/cli.sh "(the cli exit-status lane)"
+	@sh test/gate/cli.sh $m
 
 test_sb: host out/host$(hsuf)/sb
 	@echo TEST crew/sb/sb.l + test/host/sb.l
@@ -785,16 +790,23 @@ nettest: host
 # prerequisite: test/host/cook.l's SHELL pair sets `SHELL := out/host/lush` to prove cook honors it.
 test_tools: host out/host$(hsuf)/lush
 	@$(MAKE) -C mk/tools
-# test_gcheck: the copy loop's FIXPOINT instance check. AI_GC_CHECK makes gen_minor re-drive
+# test_gcheck: the copy loop's FIXPOINT instance check. AiGcCheck makes gen_minor re-drive
 # its WHOLE scan after the drain and trap if the second pass copies a word, in its own tree.
 # /warn the knob is GCDBG: EXTRA_CFLAGS rides $(ai_cflags), which the mooncc recipes do not use.
 test_gcheck: host
-	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAI_GC_CHECK test_host
+	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAiGcCheck test_host
 # test_gcstress: the MUTATOR's side -- whether the C around the collector holds a raw pointer
-# across a call that collects. AI_GC_STRESS always collects, poisons the vacated nursery, and
+# across a call that collects. AiGcStress always collects, poisons the vacated nursery, and
 # majors every 32nd. ~4 min, own tree.
 test_gcstress: host
-	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAI_GC_STRESS test_host
+	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAiGcStress test_host
+# test_imgchain: the PINNED PREFIX, which nothing else can reach -- `love bake -L` is the
+# only thing that sets g->froze, so the branch in gcp, the verbatim block in gen_major and
+# the terminator fixup in evac_thread are dead code in every other lane, test_gcstress
+# included. Three layers baked under AiGcStress, then each entry woken. ~40 s, own tree.
+test_imgchain: host
+	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAiGcStress out/host/gcs/love
+	@sh test/gate/imgchain.sh out/host/gcs/love
 
 # --- the machine-checked half: test/proof/rocq/ + test/proof/lean/ ---------------------------------
 # Each gate below is a no-op that SAYS SO when its checker is missing, so a bare box stays

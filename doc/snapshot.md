@@ -55,6 +55,17 @@ preserved, said the long way round and at the price of writing the baker's mmap 
 image. Two bakes of one tree then differed there and nowhere else. The distance discriminates
 exactly as well and is the same number every run; `test_bakerep` is what holds it.
 
+## the section carries an ARRAY
+
+`.image` holds either one image — its first word is the codec's own magic — or a DIRECTORY of
+them, each naming the verbs it can serve, so a one-shot `love libra ..` wakes a small image and
+a full session wakes the big one. Entries are laid smallest first and the picker takes the first
+that claims `argv[1]`, before anything is woken (it has to be: the verb table lives in the image
+being chosen). An entry is either WHOLE or DERIVED — a derived one stores only its header and
+the prefix words a later layer changed, and is baked by `love bake -L CAT:verbs ..`, which
+evaluates the layers in inclusion order and pins each for the next. host/image.c is the
+container, doc/plan/image-chain.md is why. The CODEC never sees the difference.
+
 ## the section is GROWN, not reserved
 
 `.image` is laid LAST — alone in the highest `PT_LOAD`, above `.bss`
@@ -130,7 +141,7 @@ Three seams make mid-eval dumping honest where the boot bake could assume purity
   `v0..end` root window, so the woken session starts with no finalizables. The dump-time fds
   meant nothing in the new process anyway.
 - **The glaze cache is emptied first.** The `bake` global is a glaze wrapper
-  (love/glaze/hook.l) over the host nif (host/image.c, the AI_NIF glob): a native closure cannot
+  (love/glaze/hook.l) over the host nif (host/image.c, the AiNif glob): a native closure cannot
   serialize, and entries re-JIT lazily in the woken session. Any OTHER live native at bake time
   is on the caller — the same contract as the boot bake.
 

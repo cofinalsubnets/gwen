@@ -52,7 +52,7 @@ Three mappings, all of them already half-built:
   already parks a task on an fd and wakes the ready one (``).
 
 ⚠ **The kernel links no `host/*.c`** — `k_shared_c` is love.c + am.c + quay + libc only. The
-`AI_NIF` section glob is the host's trick; a kernel nif is a row in `kmain.c`'s `defs[]` table,
+`AiNif` section glob is the host's trick; a kernel nif is a row in `kmain.c`'s `defs[]` table,
 handed to `ai_defn`. Every nif below is written fresh against the vfs, not `#ifdef`'d out of
 `host/posix.c`.
 
