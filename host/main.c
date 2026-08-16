@@ -666,7 +666,21 @@ AI_NIF("getpid", nif_getpid);
 // to the LIVE g in main, after boot or image wake, so both boot paths honor it.
 static struct ai *env_budget(struct ai *g) {
   char const *b = getenv("LOVE_BUDGET_MB");
-  if (g && b && atol(b) > 0) g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(ai_word));
+  if (g && b && atol(b) > 0) { g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(ai_word)); return g; }
+  // the DEFAULT is half the machine, not infinity: an unbounded resize
+  // controller on a small swapless box asks the kernel past what it will
+  // overcommit, and the refusal wore the bare ;; 0 0 face (the pi, 3.7G no
+  // swap, a 1.8MB objelf input). env wins above; a device pins -Dai_budget;
+  // 0 stays unbounded only where the machine cannot say its size.
+  if (g && !g->budget) {
+#if defined(__linux__)
+    FILE *f = fopen("/proc/meminfo", "r");
+    if (f) { char k[32]; unsigned long kb;
+      if (fscanf(f, "%31s %lu", k, &kb) == 2 && !strcmp(k, "MemTotal:"))
+        g->budget = (uintptr_t) kb * 1024 / 2 / sizeof(ai_word);
+      fclose(f); }
+#endif
+  }
   return g; }
 
 // bake [PATH] / wake PATH: the heap-image snapshot (doc/snapshot.md) -- declared
