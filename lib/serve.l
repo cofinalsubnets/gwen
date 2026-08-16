@@ -3,12 +3,21 @@
 ;   love serve [-p PORT] [DIR]      DIR defaults to the working directory
 ;
 ; kiosko already serves a directory and lists what it holds. what this adds is one
-; HOOK: a request for a `.l` file is answered with the PAINTED source instead of
-; the bytes -- syntax coloured, one span per line, every line linkable -- and a
-; request for /hue.css with the stylesheet that colours it. everything else is
-; kiosko's ordinary static serving, directory listings and all, which is where the
-; tree structure comes from. nothing is written to disk and nothing is generated
-; ahead of time.
+; HOOK, and three answers through it:
+;
+;   *.l        the PAINTED source -- syntax coloured, one span per line, every
+;              line linkable (lib/hueweb.l)
+;   *.md       the RENDERED document -- markdown through lapiz's html surface
+;   /hue.css   the stylesheet that colours both
+;
+; everything else is kiosko's ordinary static serving, directory listings and all,
+; which is where the tree structure comes from. nothing is written to disk and
+; nothing is generated ahead of time.
+;
+; ⚠ NO papel HERE, so a rendered .md is the DOCUMENT and not a site page: no
+; title, no anchors, no contents nav, no cross-link rewriting -- those are papel's
+; site-level readings and papel is not in the artifact. `make site` is still what
+; builds a site. this is what a browser wants of a tree it is reading.
 ;
 ; ⚠ NOTHING IS CHECKED IN AND NOTHING IS CACHED TO DISK. a painted file is built
 ; at request time, ~35 ms for the biggest crew file and under 10 for a typical
@@ -55,23 +64,33 @@
             ("<p class=\"srcnav\"><a href=\"" + sv-up path + "\">"
              + sv-up path + "</a> &middot; " + path + "</p>\n" + body))
 
-   ; THE HOOK. `(1 ctype body)` shape for kiosko is `(ctype body); () means "not
-   ; mine", and everything that is not a .l or the stylesheet is exactly that.
+   ; the page for one markdown file: lapiz reads it and shows it as html, and the
+   ; same small template holds it. ⚠ `mdread`/`htshow` BARE, for the reason kiosko
+   ; and hueweb are bare -- in the artifact lapiz is catted, not registered.
+   (sv-doc path src)
+   (hw-page path '("/hue.css") "/"
+            ("<p class=\"srcnav\"><a href=\"" + sv-up path + "\">"
+             + sv-up path + "</a> &middot; " + path + "</p>\n" + htshow (mdread src)))
+
+   ; THE HOOK. `(ctype body) to serve, () to say "not mine" -- and everything that
+   ; is not a .l, a .md or the stylesheet is exactly that.
    (sv-make root box p)
-   (? (p = "/hue.css") `("text/css; charset=utf-8" (hw-css 0))
-      !(sv-ends? p ".l") ()
-      (: f (root + p)
-         r (sv-rdf f)
-         (? !(two? r) ()                          ; not there: let kiosko say 404
-            `("text/html; charset=utf-8"
-              (sv-cached box f (\ _ (sv-page p (hw-body p (<>r)))))))))
+   (: md? (sv-ends? p ".md")
+      (? (p = "/hue.css") `("text/css; charset=utf-8" (hw-css 0))
+         (! (md? || (sv-ends? p ".l"))) ()
+         (: f (root + p)
+            r (sv-rdf f)
+            (? !(two? r) ()                       ; not there: let kiosko say 404
+               `("text/html; charset=utf-8"
+                 (sv-cached box f (\ _ (? md? (sv-doc p (<>r))
+                                           (sv-page p (hw-body p (<>r)))))))))))
 
    (sv-usage _)
    (: _ (say err "love serve -- the tree in a browser, painted on the way out
 usage: love serve [-p PORT] [DIR]
   -p, --port PORT   the port to listen on (default 8080)
   DIR               the directory to serve (default .)
-a .l is painted at request time; /hue.css is the stylesheet that colours it.
+a .l is painted and a .md rendered at request time; /hue.css colours both.
 ")
       (quit 0))
 

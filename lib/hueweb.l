@@ -5,7 +5,9 @@
 ; -- it asks hue, the way the other two do, so a class added to that table arrives
 ; in all three without anyone being told.
 ;
-;   (hw-css)             the stylesheet: one rule per class, and the frame
+;   (hw-css)             the stylesheet: one rule per class, the frame, and just
+;                        enough prose styling for a rendered document -- `love
+;                        serve` has no papel.css to lean on
 ;   (hw-body path src)   that source as a <pre>, one span per line
 ;   (hw-page ttl hrefs home body)   ..in a page, with its stylesheets and a home link
 ;
@@ -78,6 +80,22 @@
 .hue .ln:target{background:rgba(127,127,127,.16)}
 .srcnav{font-size:.85rem;margin:0 0 1rem;color:var(--dim)}
 .srcnav a{color:var(--link)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 ui-serif,Georgia,serif}
+header{border-bottom:1px solid var(--rule);padding:1rem 1.25rem;font-family:ui-sans-serif,system-ui,sans-serif}
+header a{color:var(--fg);text-decoration:none;font-weight:600}
+main{max-width:64rem;margin:0 auto;padding:2rem 1.25rem}
+a{color:var(--link)}
+h1,h2,h3,h4,h5,h6{font-family:ui-sans-serif,system-ui,sans-serif;line-height:1.25;margin:2rem 0 .6rem}
+h1{margin-top:0;font-size:1.7rem}
+h2{font-size:1.3rem;border-bottom:1px solid var(--rule);padding-bottom:.3rem}
+p,ul,ol,dl,blockquote,pre{margin:0 0 1rem}
+code{background:var(--pre);padding:.1em .35em;border-radius:3px;font:.88em/1.5 ui-monospace,Menlo,monospace}
+pre{background:var(--pre);padding:.9rem 1rem;border-radius:6px;overflow-x:auto}
+pre code,.hue code{background:none;padding:0}
+blockquote{border-left:3px solid var(--rule);margin-left:0;padding-left:1rem;color:var(--dim)}
+dt{font-weight:600;margin-top:.8rem}
+dd{margin:0 0 .2rem 1.2rem;color:var(--dim)}
+hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
 "
    (hw-css _) (hw-frame + hw-cat (map hw-rule hue-classes))
 
