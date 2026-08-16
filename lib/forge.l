@@ -8,6 +8,21 @@
 ;   (forge-why ())                  -> ((reason nom ..) . count) rows -- why a decline declined
 ;   (forge-fitted? ())              -> how many kernels are running native right now
 ;
+; ⚠ WHAT THIS ACTUALLY BUYS, CONTROLLED. `love` is mooncc-built and `love0` is gcc-built, so
+; running a kernel under both separates "faster than C" from "faster than OUR C". ms, same box:
+;
+;                        C (mooncc)   holo    C (gcc)      what it says
+;   aall  n=4096 x2000        14        5         3        gcc wins; the 2.8x is mooncc's gap
+;   outer 200x200 x2000      151       71        79        a real ~10% over gcc, 2.1x over ours
+;   inner 120x120 x40        168       37        28        a tie with gcc, 4.5x over ours
+;   sort  n=4000 x200         34       29        24        a tie with gcc, 1.2x over ours
+;
+; so the kernels are about gcc-quality machine code and NOT better than C. Against the binary
+; the tree actually ships they are 2-4.5x, and that is the number a user feels -- but the honest
+; reading is that most of it is a mooncc loop-codegen gap (it recomputes i*N+j per element where
+; these walk a pointer), and closing THAT would pay in every loop in love.c rather than in three.
+; Say the controlled number or say nothing: "3x the C nif" was true of one compiler and false of C.
+;
 ; ⚠ THE TWIN IS THE DEFINITION and the native is an optimisation, never the other way round.
 ; every guard in a kernel deopts INTO the twin, so a shape the IR does not say is not a bug and
 ; not a raise -- it is the twin's turn. that is what makes a kernel writable at all: it says the
@@ -43,6 +58,7 @@
    ; pushed. every guard jumps to the label `deopt`, which the epilogue below plants.
    ; ⚠ guards come BEFORE any push, so the machine sp is balanced on the deopt path too.
    forge-trayk (apof (iota 0))                      ; a tray's ap word, live in this process
+   forge-chaink (apof '(1 2))                       ; a chain's
    (forge-guard i k)                                ; Sp[i] must be an object of kind k
     [['ld 'r0 'r1 (8 * i)] '(test r0 1) '(br ne deopt)
       '(ld r7 r0 0) ['li 'r8 k] '(cmp r7 r8) '(br ne deopt)]
@@ -73,6 +89,28 @@
    ; instructions, every target, no self-inspection. Take the other lane for a kernel whose
    ; twin is expensive, not for one whose twin is the definition.
    (forge-room b) [['lea 'r7 'r2 b] '(cmp r1 r7) '(br below deopt)]
+   ; the same guard where the size is only known at run time -- `r` holds the BYTE count and
+   ; `slack` rides on top. a shaped result knows its size before it allocates, which is the
+   ; whole reason an allocating kernel is writable: love.c's own lvm_inner computes its `bytes`
+   ; before its `Have` too. ⚠ it jumps to `deoptp`, the UNWINDING deopt: a kernel big enough to
+   ; need a run-time size is big enough to have pushed the callee-saved file first.
+   (forge-roomr r slack) [['leax 'r7 'r2 r 1 slack] '(cmp r1 r7) '(br below deoptp)]
+   ; -- the callee-saved file. five registers, which is what takes a kernel from the five
+   ; caller-saved scratch (r0/r7/r8/r9/r10) to a working set a nested loop fits in.
+   ; ⚠ SAVE ONLY AFTER THE TYPE GUARDS: those deopt to the bare `deopt` with the machine stack
+   ; as the caller left it. everything after a save deopts through `forge-unwind` instead, which
+   ; pops the file back and falls into the same tail -- an unbalanced stack is not a wrong
+   ; answer, it is a return into the middle of somebody else's frame.
+   forge-save '((push r3) (push r11) (push r12) (push r13) (push r14))
+   forge-restore '((pop r14) (pop r13) (pop r12) (pop r11) (pop r3))
+   forge-unwind ('(label deoptp) >< (forge-restore + '((jmp deopt))))
+   ; -- ONE LOVE VALUE handed to a kernel, through `nifx`'s EXTRAS slot: it rides in the cell
+   ; at Ip+32 (love.c lays it at the same offset for arity 1 and arity>=2), is GC-walked, and
+   ; is image-encoded -- so unlike an `li` immediate it is a heap reference the collector knows
+   ; about. that is the door for a constant a kernel cannot spell: the ZERO POINT terminator a
+   ; list-building kernel needs is `&ai_mint_zero`, and no book name hands its address out.
+   ; the glaze uses the same slot for a closure (love/glaze/emit.l).
+   (forge-extras d) [['ld d 'r5 32]]
    ; the deopt tail: Ip <- the interp twin (Ip[1]), then enter it with the args still on Sp.
    ; arity 1 enters at its first word; arity>=2 skips the twin's own curry preamble.
    (forge-deopt ar)
@@ -87,8 +125,12 @@
    (forge-no k nom) (: _ (pin forge-tally [k nom] (1 + peep forge-tally [k nom] 0)) ())
    (forge-why _) (map (\ k (k >< peep forge-tally k 0)) (keys forge-tally))
    (forge-fitted? _) (tally (keys forge-nat))
-   (forge-put nom arity mkir twin)
-    (: _ (pin forge-roll () (peep forge-roll () () + [[nom arity mkir twin]]))
+   ; a row is (nom arity mkir twin extras). `extras` is the value the kernel reads at Ip+32,
+   ; or 'none where it wants none -- the marker is a NOM and never (), which is a legal value
+   ; to hand a kernel and would install through the wrong seam if it read as absence.
+   (forge-put nom arity mkir twin) (forge-putx nom arity mkir twin 'none)
+   (forge-putx nom arity mkir twin extras)
+    (: _ (pin forge-roll () (peep forge-roll () () + [[nom arity mkir twin extras]]))
        _ (pin forge-fits nom twin) nom)
    (forge-of nom) (peep forge-fits nom ())
 
@@ -96,6 +138,7 @@
    ; ⚠ ONE DOOR, bound once: no glaze answers (), and (() 'nif) is 1, which `lit?` declines --
    ; so presence is the guard and a build without the module simply stays interpreted.
    forge-seam (from 'glaze 'nif)
+   forge-seamx (from 'glaze 'nifx)                  ; the same door, one extras slot wider
    forge-arch (intern love-arch)
    forge-asm (from 'holo 'assemble)
    ; assemble one kernel -> its bytes | (). the DEOPT TAIL is the module's, because it is
@@ -119,9 +162,10 @@
        (: rows (peep forge-roll () ())
           laid (map (\ r [r (forge-lay r)]) rows)
           (foldl (\ n lr
-             (: r <lr  bs <>lr  nom <r  ar <>r  twin <>>>r
+             (: r <lr  bs <>lr  nom <r  ar <>r  twin <>>>r  xt <>>>>r
                 (? !(two? bs) n
-                   (: j (forge-seam (cask bs) twin ['\ 'q '(q)] ar)
+                   (: j (? (id? xt 'none) (forge-seam (cask bs) twin ['\ 'q '(q)] ar)
+                           (forge-seamx (cask bs) twin ['\ 'q '(q)] ar xt))
                       (? !(lit? j) (: _ (forge-no 'declined nom) n)
                          (: _ (pin forge-fits nom j) _ (pin forge-nat nom 1) (n + 1)))))))
              0 laid)))
@@ -133,9 +177,9 @@
    ; ai_Z lane and nothing else; a scalar, a float/complex/object tray and a fixnum all deopt.
    ; tray layout: [0] ap, [8] type, [16] rank, [24] shape.., data at 24+rank*8.
    ; ⚠ the C nif re-reads the element type per element (love.c lvm_aall's `fdom ?` sits INSIDE
-   ; the loop); specialised to one lane this is a load and a compare, and measures ~3x on a
-   ; 4096-cell array. that gap is the argument for the whole file: the specialisation is what
-   ; the IR can have and the general C cannot.
+   ; the loop); specialised to one lane this is a load and a compare. 2.8x against the shipping
+   ; compiler -- and SLOWER than gcc's build of the same C, which hoists that ternary out of the
+   ; loop by itself. the header's table is the whole claim; this row is the weakest of the three.
    (forge-aall-ir _)
     (forge-guard 0 forge-trayk
     + '((ld r7 r0 8) (cmp r7 0) (br ne deopt)                ; type must be ai_Z
@@ -150,4 +194,222 @@
         (label yes) (li r0 1)
         (label fin))
     + forge-epi)
-   _ (forge-put 'aall 1 forge-aall-ir aall))
+   _ (forge-put 'aall 1 forge-aall-ir aall)
+
+   ; (outer a b) -- the outer product over two ai_Z trays: rank ra+rb, M*N cells, written
+   ; in one sequential sweep (j fastest) so the destination pointer only ever walks.
+   ; regs: r3=M r11=a-data r12=b-data r13=dest r14=N, r0/r7/r8/r9/r10 scratch.
+   ; ⚠ the size is known before a byte is allocated -- M, N and the rank come off the two
+   ; shapes -- which is the whole reason an allocating kernel is writable: `forge-roomr`
+   ; proves the room and the twin takes the near-full heap. 2.1x the shipping nif at 200x200,
+   ; and ~10% over gcc's build of the same C, which is the only row here that beats a real cc.
+   ; ⚠ love.c's own lvm_outer wrote 4*M of its M*N cells until 2026-08-16 (a mooncc
+   ; declarator-scope bug, doc/moon-c-gaps.md); the differential below is what found it.
+   (forge-outer-ir _)
+    ([ '(ld r0 r1 0) '(test r0 1) '(br ne deopt)
+       ['li 'r8 forge-trayk] '(ld r7 r0 0) '(cmp r7 r8) '(br ne deopt)
+       '(ld r7 r0 8) '(cmp r7 0) '(br ne deopt)                  ; a must be ai_Z
+       '(ld r9 r1 8) '(test r9 1) '(br ne deopt)
+       '(ld r7 r9 0) '(cmp r7 r8) '(br ne deopt)
+       '(ld r7 r9 8) '(cmp r7 0) '(br ne deopt)                  ; b must be ai_Z
+       '(ld r7 r0 16) '(ld r8 r9 16)                             ; ra, rb
+       '(mov r10 r7) '(add r10 r10 r8) '(cmp r10 8) '(br gt deopt)   ; rank <= maxrank
+       '(cmp r7 1) '(br lt deopt) '(cmp r8 1) '(br lt deopt)]
+     + (forge-save
+     + [ '(mov r11 r0) '(mov r12 r9)
+         '(li r3 1) '(li r0 0)                                   ; M = product of a's shape
+         '(label ml) '(cmp r0 r7) '(br ge mle)
+         '(ldx r8 r11 r0 8 24) '(imul r3 r3 r8) '(add r0 r0 1) '(jmp ml)
+         '(label mle)
+         '(ld r8 r12 16) '(li r14 1) '(li r0 0)                  ; N = product of b's shape
+         '(label nl) '(cmp r0 r8) '(br ge nle)
+         '(ldx r9 r12 r0 8 24) '(imul r14 r14 r9) '(add r0 r0 1) '(jmp nl)
+         '(label nle)
+         '(mov r9 r3) '(imul r9 r9 r14)                          ; n = M*N
+         '(mov r0 r10) '(shl r0 3) '(add r0 r0 24)               ; bytes = 24 + rank*8 ..
+         '(mov r7 r9) '(shl r7 3) '(add r0 r0 r7)]               ;       .. + 8*n
+     + (forge-roomr 'r0 96
+     + [ '(mov r13 r2) '(add r2 r2 r0) '(push r13)               ; result = Hp ; Hp += bytes
+         ['li 'r7 forge-trayk] '(st r13 0 r7)
+         '(li r7 0) '(st r13 8 r7) '(st r13 16 r10)              ; ap, type ai_Z, rank
+         '(ld r8 r11 16) '(li r7 0)                              ; the shape: a's words ..
+         '(label sa) '(cmp r7 r8) '(br ge sae)
+         '(ldx r0 r11 r7 8 24) '(stx r13 r7 8 24 r0) '(add r7 r7 1) '(jmp sa)
+         '(label sae)
+         '(ld r9 r12 16) '(mov r10 r8) '(li r7 0)                ;            .. then b's
+         '(label sb) '(cmp r7 r9) '(br ge sbe)
+         '(ldx r0 r12 r7 8 24) '(stx r13 r10 8 24 r0)
+         '(add r7 r7 1) '(add r10 r10 1) '(jmp sb)
+         '(label sbe)
+         '(leax r11 r11 r8 8 24) '(leax r12 r12 r9 8 24)         ; the three data pointers
+         '(ld r7 r13 16) '(leax r13 r13 r7 8 24)
+         '(li r9 0)
+         '(label il) '(cmp r9 r3) '(br ge ile)
+         '(ldx r0 r11 r9 8 0)                                    ; av = a[i]
+         '(li r7 0)
+         '(label jl) '(cmp r7 r14) '(br ge jle)
+         '(ldx r8 r12 r7 8 0) '(imul r8 r8 r0) '(st r13 0 r8) '(add r13 r13 8)
+         '(add r7 r7 1) '(jmp jl)
+         '(label jle)
+         '(add r9 r9 1) '(jmp il)
+         '(label ile) '(pop r0)]
+     + (forge-restore + (forge-epi-ptr + forge-unwind)))))
+   _ (forge-put 'outer 2 forge-outer-ir outer)
+
+   ; (inner a b) -- +.x over two ai_Z trays: contract a's LAST axis with b's FIRST (1D.1D a
+   ; dot, 2D.2D a matmul). ikj order, the accumulator in memory, and the addressing carried
+   ; in WALKING POINTERS -- Arow by K*8, Brow by N*8, Crow by N*8 -- where the C recomputes
+   ; i*N+j and l*N+j per element. that is the whole difference and it is worth 4.5x against
+   ; the shipping compiler (see the header's table).
+   ; regs: r11=Arow r13=Crow r14=N r3=K, r0/r7/r8/r9/r10/r12 scratch;
+   ; [sp+0]=Cend [sp+8]=B data [sp+16]=the result.
+   ; ⚠ the SHAPE guards sit after `forge-save` and deopt through `deoptp`: there are ten
+   ; values to check and five caller-saved registers to check them in. only the type guards,
+   ; which run before any push, can use the bare `deopt`.
+   ; ⚠ n<=1 hands back to the twin: the C answers a BOXED SCALAR there, a different object
+   ; and a different allocation, and a kernel that says one shape says one shape.
+   (forge-inner-ir _)
+    ([ '(ld r0 r1 0) '(test r0 1) '(br ne deopt)
+       ['li 'r8 forge-trayk] '(ld r7 r0 0) '(cmp r7 r8) '(br ne deopt)
+       '(ld r7 r0 8) '(cmp r7 0) '(br ne deopt)
+       '(ld r9 r1 8) '(test r9 1) '(br ne deopt)
+       '(ld r7 r9 0) '(cmp r7 r8) '(br ne deopt)
+       '(ld r7 r9 8) '(cmp r7 0) '(br ne deopt)]
+     + (forge-save
+     + [ '(mov r11 r0) '(mov r12 r9)
+         '(ld r7 r11 16) '(cmp r7 1) '(br lt deoptp)
+         '(ld r8 r12 16) '(cmp r8 1) '(br lt deoptp)
+         '(mov r10 r7) '(sub r10 r10 1) '(ldx r3 r11 r10 8 24)   ; K = a.shape[ra-1]
+         '(ld r9 r12 24) '(cmp r3 r9) '(br ne deoptp)            ; must equal b.shape[0]
+         '(li r13 1) '(li r0 0)                                  ; M = prod a.shape[0..ra-2]
+         '(label ml) '(mov r9 r7) '(sub r9 r9 1) '(cmp r0 r9) '(br ge mle)
+         '(ldx r10 r11 r0 8 24) '(imul r13 r13 r10) '(add r0 r0 1) '(jmp ml)
+         '(label mle)
+         '(li r14 1) '(li r0 1)                                  ; N = prod b.shape[1..rb-1]
+         '(label nl) '(cmp r0 r8) '(br ge nle)
+         '(ldx r10 r12 r0 8 24) '(imul r14 r14 r10) '(add r0 r0 1) '(jmp nl)
+         '(label nle)
+         '(mov r9 r7) '(add r9 r9 r8) '(sub r9 r9 2)             ; rank = (ra-1)+(rb-1)
+         '(cmp r9 8) '(br gt deoptp)
+         '(mov r10 r13) '(imul r10 r10 r14) '(cmp r10 1) '(br le deoptp)   ; n; n<=1 -> the twin
+         '(mov r0 r9) '(shl r0 3) '(add r0 r0 24)
+         '(mov r8 r10) '(shl r8 3) '(add r0 r0 r8)               ; bytes
+         '(leax r7 r2 r0 1 96) '(cmp r1 r7) '(br below deoptp)
+         '(mov r7 r2) '(add r2 r2 r0) '(push r7)
+         ['li 'r0 forge-trayk] '(st r7 0 r0)
+         '(li r0 0) '(st r7 8 r0) '(st r7 16 r9)
+         '(ld r8 r11 16) '(sub r8 r8 1) '(li r0 0)               ; shape: a's first ra-1 ..
+         '(label sa) '(cmp r0 r8) '(br ge sae)
+         '(ldx r10 r11 r0 8 24) '(stx r7 r0 8 24 r10) '(add r0 r0 1) '(jmp sa)
+         '(label sae)
+         '(mov r10 r8) '(ld r8 r12 16) '(li r0 1)                ;      .. then b's last rb-1
+         '(label sb) '(cmp r0 r8) '(br ge sbe)
+         '(ldx r9 r12 r0 8 24) '(stx r7 r10 8 24 r9) '(add r0 r0 1) '(add r10 r10 1) '(jmp sb)
+         '(label sbe)
+         '(ld r0 r11 16) '(leax r11 r11 r0 8 24)
+         '(ld r0 r12 16) '(leax r12 r12 r0 8 24)
+         '(ld r0 r7 16) '(leax r9 r7 r0 8 24)                    ; C data
+         '(mov r0 r13) '(imul r0 r0 r14) '(shl r0 3) '(mov r8 r9) '(add r8 r8 r0)   ; Cend
+         '(mov r10 r9)                                           ; the payload starts as zero
+         '(label zl) '(cmp r10 r8) '(br ge zle)
+         '(li r0 0) '(st r10 0 r0) '(add r10 r10 8) '(jmp zl)
+         '(label zle)
+         '(push r12) '(push r8) '(mov r13 r9)
+         '(label il)
+         '(ld r12 sp 0) '(cmp r13 r12) '(br ge ile)
+         '(ld r9 sp 8) '(li r7 0)
+         '(label ll) '(cmp r7 r3) '(br ge lle)
+         '(ldx r0 r11 r7 8 0) '(li r8 0)
+         '(label jl) '(cmp r8 r14) '(br ge jle)
+         '(ldx r10 r9 r8 8 0) '(imul r10 r10 r0)
+         '(ldx r12 r13 r8 8 0) '(add r12 r12 r10) '(stx r13 r8 8 0 r12)
+         '(add r8 r8 1) '(jmp jl)
+         '(label jle)
+         '(mov r10 r14) '(shl r10 3) '(add r9 r9 r10)
+         '(add r7 r7 1) '(jmp ll)
+         '(label lle)
+         '(mov r10 r3) '(shl r10 3) '(add r11 r11 r10)
+         '(mov r10 r14) '(shl r10 3) '(add r13 r13 r10)
+         '(jmp il)
+         '(label ile) '(pop r0) '(pop r0) '(pop r0)]
+     + (forge-restore + (forge-epi-ptr + forge-unwind))))
+   _ (forge-put 'inner 2 forge-inner-ir inner)
+
+   ; (sort l) over an ALL-FIXNUM chain -- the C's own fast path: a tagged fixnum is (v<<1|1)
+   ; and orders as a signed word, so the compare is one `cmp` and cmp3 never runs. count, copy
+   ; the cars into the UNCOMMITTED gap above Hp (the C's trick: scratch that costs no
+   ; allocation because Hp was only advanced over the spine), bottom-up stable merge, lay the
+   ; spine. an element that is not a fixnum hands the whole list back to the twin.
+   ; regs: r11=a r12=b r13=n r14=spine r3=w, r0/r7/r8/r9/r10 scratch; 32 bytes of machine
+   ; stack hold lo/hi/m, reserved AFTER the last deoptp so the unwinding tail stays a pop of 5.
+   ; ⚠ THE WEAKEST ROW AND IT SAYS SO: 1.2x against the shipping compiler and a dead heat with
+   ; gcc's build of the same C. It is the most IR of the four and buys the least; it is here
+   ; because it pays on the binary the tree ships and regresses nothing, and it is the first
+   ; row to drop if this file ever has to earn its length.
+   ; ⚠ the terminator rides the EXTRAS slot: the last cell's cup is the zero point, whose
+   ; address no book name hands out (`seek`/`peek` are mopped at the hatch).
+   (forge-sort-ir _)
+    ([ '(ld r0 r1 0) '(test r0 1) '(br ne deopt)                  ; a chain of at least two
+       ['li 'r8 forge-chaink] '(ld r7 r0 0) '(cmp r7 r8) '(br ne deopt)
+       '(ld r7 r0 16) '(test r7 1) '(br ne deopt)
+       '(ld r9 r7 0) '(cmp r9 r8) '(br ne deopt)]
+     + (forge-save
+     + [ '(li r13 0) '(mov r9 r0)                                 ; n = 0 ; p = l
+         '(label cl) '(test r9 1) '(br ne cle)
+         '(ld r7 r9 0) '(cmp r7 r8) '(br ne cle)
+         '(add r13 r13 1) '(ld r9 r9 16) '(jmp cl)
+         '(label cle)
+         '(mov r7 r13) '(imul r7 r7 40)                           ; 3n spine + 2n scratch words
+         '(leax r10 r2 r7 1 128) '(cmp r1 r10) '(br below deoptp)
+         '(mov r14 r2)                                            ; spine = Hp
+         '(mov r7 r13) '(imul r7 r7 24) '(add r2 r2 r7)           ; Hp += 3n words: the spine ONLY
+         '(mov r11 r2)                                            ; a = the uncommitted gap
+         '(mov r7 r13) '(shl r7 3) '(mov r12 r11) '(add r12 r12 r7)   ; b = a + n
+         '(li r7 0) '(mov r9 r0)
+         '(label pl) '(cmp r7 r13) '(br ge ple)
+         '(ld r10 r9 8) '(test r10 1) '(br eq deoptp)             ; not a fixnum: the twin's cmp3
+         '(stx r11 r7 8 0 r10) '(ld r9 r9 16) '(add r7 r7 1) '(jmp pl)
+         '(label ple)
+         '(push r0) '(push r0) '(push r0) '(push r0)              ; lo/hi/m live here
+         '(li r3 1)                                               ; w
+         '(label wl) '(cmp r3 r13) '(br ge wle)
+         '(li r0 0)                                               ; lo
+         '(label lol) '(cmp r0 r13) '(br ge lole)
+         '(mov r7 r0) '(add r7 r7 r3) '(cmp r7 r13) '(br le mok) '(mov r7 r13)
+         '(label mok) '(st sp 16 r7)                              ; m  = min(lo+w, n)
+         '(mov r8 r0) '(add r8 r8 r3) '(add r8 r8 r3)
+         '(cmp r8 r13) '(br le hok) '(mov r8 r13)
+         '(label hok) '(st sp 8 r8)                               ; hi = min(lo+2w, n)
+         '(st sp 0 r0) '(mov r8 r0) '(mov r9 r7) '(mov r10 r0)    ; lo ; x=lo y=m o=lo
+         '(label mg) '(ld r7 sp 16) '(cmp r8 r7) '(br ge dx)
+         '(ld r7 sp 8) '(cmp r9 r7) '(br ge dx)
+         '(ldx r0 r11 r9 8 0) '(ldx r7 r11 r8 8 0)
+         '(cmp r0 r7) '(br lt takey)
+         '(stx r12 r10 8 0 r7) '(add r8 r8 1) '(add r10 r10 1) '(jmp mg)
+         '(label takey) '(stx r12 r10 8 0 r0) '(add r9 r9 1) '(add r10 r10 1) '(jmp mg)
+         '(label dx) '(ld r7 sp 16) '(cmp r8 r7) '(br ge dxe)
+         '(ldx r0 r11 r8 8 0) '(stx r12 r10 8 0 r0)
+         '(add r8 r8 1) '(add r10 r10 1) '(jmp dx)
+         '(label dxe)
+         '(label dy) '(ld r7 sp 8) '(cmp r9 r7) '(br ge dye)
+         '(ldx r0 r11 r9 8 0) '(stx r12 r10 8 0 r0)
+         '(add r9 r9 1) '(add r10 r10 1) '(jmp dy)
+         '(label dye)
+         '(ld r0 sp 0) '(add r0 r0 r3) '(add r0 r0 r3) '(jmp lol) ; lo += 2w
+         '(label lole)
+         '(mov r7 r11) '(mov r11 r12) '(mov r12 r7)               ; swap a and b
+         '(add r3 r3 r3) '(jmp wl)
+         '(label wle)
+         '(li r7 0) '(mov r9 r14)                                 ; lay the spine
+         '(label bl) '(cmp r7 r13) '(br ge ble)
+         ['li 'r10 forge-chaink] '(st r9 0 r10)
+         '(ldx r10 r11 r7 8 0) '(st r9 8 r10)
+         '(mov r10 r9) '(add r10 r10 24) '(st r9 16 r10)
+         '(add r9 r9 24) '(add r7 r7 1) '(jmp bl)
+         '(label ble)]
+     + (forge-extras 'r10
+     + [ '(sub r9 r9 24) '(st r9 16 r10)                          ; the last cup: the zero point
+         '(pop r7) '(pop r7) '(pop r7) '(pop r7)
+         '(mov r0 r14)]
+     + (forge-restore + (forge-epi-ptr + forge-unwind)))))
+   _ (forge-putx 'sort 1 forge-sort-ir sort ()))
