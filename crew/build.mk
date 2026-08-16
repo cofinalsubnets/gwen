@@ -357,9 +357,17 @@ $(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
 	@echo HOLO	$@
 	@mkdir -p $(dir $@)
 	@$(love0) -l $(ho)/.mksys-cat.l -n -e '($(xmksys) "$@")' && test -s $@
-out/dist/love-$(xarch): $(xobjs) out/dist/.dist-cat.l
+# the twin's source blob: mksrc lays the same tarball for the twin's machine
+# (xtgt is already holo's arch name). its own basename (src-x-) so an $a==xa
+# run cannot collide with the native rule.
+out/dist/src-x-$(xa).o: $(dist_source) mk/tools/mksrc.l $(ho)/love
+	@$(ho)/love mk/tools/mksrc.l $(dist_source) $@ $(xtgt)
+# ⚠ the twin link MIRRORS the native $(dist_seed) link -- src blob + readme --
+# or the pi's download is not a seed: it answered `;; this love carries no
+# source` on real silicon, which is how this line got its two extra objects.
+out/dist/love-$(xarch): $(xobjs) out/dist/src-x-$(xa).o out/dist/.dist-cat.l assets/readme.bin
 	@echo DIST	$(abspath $@)
-	@$(moonx) -pie $(xobjs) -o $@
+	@$(moonx) -pie $(xobjs) out/dist/src-x-$(xa).o -freadme=assets/readme.bin -o $@
 	@$(xqemu) ./$@ bake -l out/dist/.dist-cat.l
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@ (the $(xarch) twin, baked under $(xqemu))"
 .PHONY: dist_cross

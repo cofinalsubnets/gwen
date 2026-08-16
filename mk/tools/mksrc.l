@@ -26,8 +26,24 @@
    ; a little-endian 8-byte word, the width host/src.c reads it at
    (mksrc-le8 v i acc) (? (i = 8) acc (mksrc-le8 (v >> 8) (i + 1) (acc + `((v & 255)))))
 
+   ; a cross arch's backend JOINS at runtime (obj.l's law: registered, not
+   ; merely named -- the baked holo carries the native one only). the text
+   ; rides the tree beside us; make runs this from the root.
+   (mksrc-be arch)
+    (? (lit? (peep backends arch ())) 0
+       (: f ("crew/holo/" + (arch @ 'arm64 "arm64" 'riscv64 "riscv" "x64") + ".l")
+          q (open f "r")
+          (? q (: _ (mksrc-rdev (flow q)) (close q))
+             (mksrc-die ("no backend aboard and no text at " + f)))))
+   (mksrc-rdev cl)
+    (: r (sound cl)
+       (? (two? r) (: _ (ev 'ev (cap r)) (mksrc-rdev (cup r)))
+          (id? r 'torn) (mksrc-die "torn backend text")
+          0))
+
    (mksrc arch src dst)
-    (: g (mksrc-slurp src)
+    (: _ (mksrc-be arch)
+       g (mksrc-slurp src)
        _ (? (two? g) 0 (mksrc-die ("cannot read " + src)))
        s <>g
        n (tally s)
