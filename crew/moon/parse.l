@@ -78,6 +78,14 @@
        ts)
    (want ts s) (: _ (mark ts) (? (two? ts && tp? <ts s) >ts ()))
    (peekp ts s) (: _ (mark ts) (two? ts && tp? <ts s))
+   ; a refusal that KNOWS its cause files the sentence beside the watermark; pfail
+   ; reports it in place of the generic near-token line when it is still the deepest
+   (blame ts msg)
+    (: _ (mark ts)
+       s (? (two? ts) (seqof <ts) ())
+       _ (? (charm? s && ((peep far 'seq -1) = s))
+            (: _ (pin far 'why msg) (pin far 'wseq s)) ())
+       ())
    asnops [["=" ()] '("+=" +) '("-=" -) '("*=" *) '("/=" /) '("%=" %)
              '("&=" &) '("|=" |) '("^=" ^) '("<<=" shl) '(">>=" shr)]
    scalars '(char short int long void double float)
@@ -111,8 +119,14 @@
    qualkw '(const volatile restrict register auto inline extern static)
    ; ⚠ _Alignof/__alignof__ are NOT here: they are operators (punary), and a skip ate
    ; the parenthesized operand whole.
+   ; ⚠ _Thread_local/__thread SKIP: no TLS, no threads (__STDC_NO_THREADS__), so a
+   ; thread-local IS the one static object -- and would be shared, silently, the day threads land
    qualid '("__attribute__" "__inline" "__inline__" "__restrict" "__restrict__"
-            "__volatile__" "__const" "_Noreturn" "_Alignas" "__extension__")
+            "__volatile__" "__const" "_Noreturn" "_Alignas" "__extension__"
+            "_Thread_local" "__thread")
+   ; typeof's three spellings; the bare one is gnu-mode's and C23's. ⚠ not reserved in
+   ; C11, so an object named `typeof` reads as a declaration (the typedef table wins first)
+   tyofid '("__typeof" "__typeof__" "typeof")
    (pquals ts)
     (? !(two? ts) ts
        (: t <ts
@@ -366,7 +380,7 @@
    (tkbty? ps t)
     (? !(two? t) ()
        (tkk t = 'kw) (member? (tkv t) '(char short int long void double float signed unsigned _Bool _Complex __int128 struct union enum))
-       (tkk t = 'id) (? (member? (tkv t) '("__typeof" "__typeof__")) 1
+       (tkk t = 'id) (? (member? (tkv t) tyofid) 1
                           (peep (ps 'types) (tkv t) 0) 1 ())
        ())
 
@@ -764,7 +778,10 @@
                  [(canon ps <r) <>r])
              (tkw? t 'struct || tkw? t 'union)
               (: uni (tkw? t 'union)
-                 ts2 >ts
+                 ; an attribute run sits before the tag as well as after the body; unread,
+                 ; its own `__attribute__` is taken for the tag name
+                 pb (pattpk >ts)
+                 ts2 <>pb
                  tag (? (two? ts2 && (tkk <ts2 = 'id)) (tkv <ts2) ())
                  ts3 (? tag >ts2 ts2)
                  (? (peekp ts3 "{")
@@ -772,7 +789,7 @@
                        mr (pmembers ps >ts3 ())
                        (? !(two? mr) ()
                           (: pa (pattpk <>mr)          ; a trailing __attribute__((packed)) lays align-1
-                             lay (playout ps <mr uni <pa)
+                             lay (playout ps <mr uni (<pb | <pa))
                              _ (pin (ps 'stag) tag2 lay)
                              _ (? uni (pin (ps 'utag) tag2 1) 0)
                              [['struct tag2] <>pa])))
@@ -812,7 +829,7 @@
              ; __typeof(expr) / __typeof__(type-name) (gcc): the operand's parse-time
              ; type -- a type-name reads pcty, an expression ptype (whose 'sigs lane
              ; carries musl's weak_alias: `extern __typeof(old) new __attribute__(..)`)
-             ((tkk t = 'id) && member? (tkv t) '("__typeof" "__typeof__"))
+             ((tkk t = 'id) && member? (tkv t) tyofid)
               (: r1 (want >ts "(")
                  (? !(two? r1) ()
                     (tkbty? ps <r1)
@@ -892,8 +909,11 @@
                  [['cast uty ['num v]] >ts])
              (tkk t = 'ullnum)                                  ; 1ULL: the suffix FORCES 64 bits on t32
               [['cast (? (pst32? ps) 'ullong 'ulong) ['num (tkv t)]] >ts]
-             (tkk t = 'llnum)                                   ; 1LL: llong on t32, plain elsewhere
-              (? (pst32? ps) [['cast 'llong ['num (tkv t)]] >ts] [['num (tkv t)] >ts])
+             (tkk t = 'llnum)                                   ; 1LL: llong on t32, long elsewhere
+              (? (pst32? ps) [['cast 'llong ['num (tkv t)]] >ts] [['cast 'long ['num (tkv t)]] >ts])
+             ; C11 6.4.4.1: an l/L suffix makes the constant a LONG. untyped, sizeof(1L)
+             ; answered 4 and `i + 2L` computed in int -- the f-suffix row's twin
+             (tkk t = 'lnum) [['cast 'long ['num (tkv t)]] >ts]
              (tkk t = 'flo) [['flo (tkv t)] >ts]
              ; an f suffix makes a FLOAT constant (C11 6.4.4.2) -- the cast is what
              ; narrows it, so `0.1f == 0.1` is false and sizeof(1.5f) is 4
@@ -1501,6 +1521,15 @@
    ; in silence.
    (mustin a b) (? (id? a b) ()                     ; a `musttail` token before the b spine?
                    (((tkk <a = 'id) && (tkv <a = "musttail")) || mustin >a b))
+   ; a bare NON-zero integer constant returned where the enclosing sig says pointer.
+   ; the literal alone: a cast (or any expression) says the program means it
+   (intptr? ps e)
+    (: fn (peep ps 'fnname ())
+       sg (? fn (peep (ps 'sigs) fn ()) ())
+       rt (? (two? sg) <sg ())
+       (? !(ptr? rt) ()
+          (two? e && (<e = 'num) && charm? <>e && !(<>e = 0)) 1
+          ()))
    (pstmt ps ts0)
     (? !(two? ts0) ()
        (: ts (pattr ts0)
@@ -1531,6 +1560,10 @@
               (? (peekp >ts ";") [['ret ()] >>ts]    ; bare `return;` -- a void return
                  (: r (pexpr ps >ts)
                     (? !(two? r) ()
+                       ; C11 6.8.6.4 hands `return` to the assignment constraints, and
+                       ; 6.5.16.1 takes an integer for a pointer only as a NULL POINTER
+                       ; CONSTANT -- so `return 1;` from a T* is ill-formed, not address 1
+                       (intptr? ps <r) (blame <>r "an integer where a pointer is owed")
                        (: rest (want <>r ";")
                           (? (two? rest) [['ret <r] rest] ())))))
              (tkw? t 'if)
@@ -1594,7 +1627,12 @@
                  rc (? (two? r1) (pexpr ps r1) ())
                  r2 (? (two? rc) (want <>rc ")") ())
                  r3 (? (two? r2) (want r2 "{") ())
-                 (? !(two? r3) ()
+                 ; `switch (e) STATEMENT`: a brace-less body is one labeled statement, and
+                 ; parm -- the if/while arms' own door -- takes the label run with it
+                 (? (!(two? r3) && two? r2)
+                    (: rb (parm ps r2)
+                       (? (two? rb) [['switch <rc [<rb]] <>rb] ()))
+                    !(two? r3) ()
                     (: (items ts2 acc)
                         (? !(two? ts2) ()
                            (tp? <ts2 "}") [(rev acc) >ts2]
@@ -1869,6 +1907,95 @@
                             ts2 <>fdr
                             fpty <>>fdr
                             fprm <>>>fdr                              ; the inner params when the declarator IS a function
+                            ; the object lanes sit HERE, not in the third arm: a function-first
+                            ; mixed list (`int f(int), a;`) reaches them from the lane above too
+                            (one ts3 nm t2)                 ; t2 is the element type (stars included)
+                             (? (peekp ts3 "[")
+                                (: dr (adims ps ts3 ())  ; one or more [n]/[] dims (enum consts fold)
+                                   (? !(two? dr) ()
+                                      (: dims <dr rest0 (patt <>dr)   ; an ARRAY declarator carries trailing attributes too
+                                         (? (!(two? >dims) && (<dims = 0))      ; a LONE [] -- size from init, or 0 (extern)
+                                             (? !(peekp rest0 "=") [[nm ['arr t2 0] ()] rest0]      ; no init: incomplete, size 0
+                                                (: ir (pinit ps >rest0)
+                                                   (? !(two? ir) ()
+                                                      (: n (initcount ps t2 <ir)
+                                                         (? (charm? n)
+                                                            [[nm ['arr t2 n] <ir] <>ir]
+                                                            ())))))
+                                            ; multi-dim (or a single sized dim): nested arr, optional init.
+                                            ; an outer [] ([][3]) infers its count from the init's top level.
+                                            (: aty0 (mkarr t2 dims)
+                                               (? (peekp rest0 "=")     ; T a[n].. = init
+                                                   (: ir (pinit ps >rest0)
+                                                      (? !(two? ir) ()
+                                                         (: aty (? (<>>aty0 = 0) ['arr <>aty0 (initcount ps <>aty0 <ir)] aty0)
+                                                            [[nm aty <ir] <>ir])))
+                                                  [[nm aty0 ()] rest0]))))))
+                                (peekp ts3 "=")
+                                 (: r (pinit ps >ts3)
+                                    (? !(two? r) ()
+                                       ; ⚠ a LATER declarator arrives here with its dims ALREADY
+                                       ; parsed (`more` below runs pdtor first, so t2 is the whole
+                                       ; array type and ts3 sits on the `=`), where the FIRST still
+                                       ; has its `[` ahead of it and takes the branch above. so a
+                                       ; lone [] bound has to be filled in HERE as well -- without
+                                       ; it `char a[]={1}, b[]={2,2};` left b INCOMPLETE, and every
+                                       ; later sizeof(b) answered 0 in silence (the bytes were laid
+                                       ; right; only the type was wrong, which is the worse half).
+                                       (: t3 (? (arr? t2 && (<>>t2 = 0) && charm? (initcount ps <>t2 <r))
+                                                ['arr <>t2 (initcount ps <>t2 <r)] t2)
+                                          [[nm t3 <r] <>r])))
+                                [[nm t2 ()] ts3])
+                            (more ts3 acc)
+                                (? (peekp ts3 ",")
+                                   (: dr (pdtor ps >ts3 base)
+                                      (? !(two? dr) ()
+                                         (: r (one (patt <>dr) <<dr <><dr)
+                                            (? (two? r) (more <>r (<r >< acc)) ()))))
+                                   ; a declarator whose type is a FUNCTION type (a function-type
+                                   ; typedef: love.h's `lvm_t lvm_ret0, lvm_cur, ..;`) DECLARES a
+                                   ; function -- register its sig (the typedef carries the return),
+                                   ; lay NO storage (a gdecl here laid duplicate .data symbols)
+                                   ; `;` ends the declaration -- PEEK for it: the remainder may
+                                   ; be EMPTY (a global at EOF), which want's () would conflate
+                                   ; with the missing-semicolon refusal
+                                   (? !(peekp ts3 ";") ()
+                                      (: rest >ts3
+                                         (fnp? pr) (: t <>pr (? (two? t) (<t = 'fn) ()))
+                                         _ (: (regs l) (? !(two? l) ()
+                                                          (: p2 <l
+                                                             ; ⚠ never CLOBBER a filed sig: this door carries no params, and
+                                                             ; over a real prototype it drops the types the call ABI reads
+                                                             _ (? (fnp? p2 && !(peep (ps 'sigs) <p2 ()))
+                                                                  (pin (ps 'sigs) <p2
+                                                                       [(? (two? ><>p2) <><>p2 'long) () ()])
+                                                                  ())
+                                                             ; an ALIAS declared through a function TYPE (musl's
+                                                             ; weak_alias: `extern __typeof(old) new __attribute__
+                                                             ; ((alias("old")))`) answers a nameless 'tdef, so the
+                                                             ; name is recorded HERE, where it is still in hand
+                                                             _ (: al (peep ps 'curalias ())
+                                                                  (? !(two? al) ()
+                                                                     (: _ (pin (ps 'alias) <p2 <al)
+                                                                        (? <>al (pin ps 'weaks (<p2 >< ps 'weaks)) ()))))
+                                                             (regs >l)))
+                                              (regs acc))
+                                         vps (: (go2 l a2) (? !(two? l) a2
+                                                              (go2 >l (? (fnp? <l) a2 (<l >< a2))))
+                                                (go2 acc ()))
+                                         ; a const OBJECT with an initializer is a candidate for .rodata --
+                                         ; per DECLARATOR, since one specifier run serves them all and only
+                                         ; some carry a star. an init-less one is left alone: it rides .bss,
+                                         ; where it costs no file bytes at all.
+                                         _ (? !(leadconst? ts) ()
+                                              (: (goc l) (? !(two? l) 1
+                                                            (: p <l
+                                                               _ (? (cobj? <>p && two? <>>p)
+                                                                    (pin (ps 'consts) <p 1) ())
+                                                               (goc >l)))
+                                                 (goc vps)))
+                                         (? (two? vps) [['gdecl vps] rest]
+                                            ['(tdef) rest]))))
                             (? (!(two? fpty) && peekp ts2 "(")        ; a function (the return type rides the sig table)
                                (: rp (? (krhead? ps >ts2) (pkr ps >ts2) (pparams ps >ts2 ()))
                                   (? !(two? rp) ()
@@ -1878,9 +2005,14 @@
                                            ; more comma-separated declarators SHARING base -- each `* nm (params)`
                                            ; is another prototype (register its sig); ends at `;`. (`void *malloc
                                            ; (size_t), free(void*)` / love.h's `struct ai *ai_ini(void), *ai_ini_m(..)`)
+                                           ; a MIXED list (`int f(int), a;`) is not mproto's shape: the object lane
+                                           ; takes the run, and answers a gdecl -- so a static f, whose linkage rode
+                                           ; the ('proto ..) through note, is filed here while the name is in hand
                                            (peekp aft ",")
                                             (: rest (mproto ps base >aft)
-                                               (? (two? rest) [['proto name] <rest] ()))
+                                               (? (two? rest) [['proto name] <rest]
+                                                  (: _ (? (peep ps 'curstat ()) (pin (ps 'sfns) name 1) ())
+                                                     (more aft ()))))
                                            (: psh (bindlocs ps <rp ())   ; params typed for sizeof folding; restore on fn exit
                                               _ (pin ps 'fnname name)     ; __func__ reads it
                                               b (pblock ps aft)
@@ -1899,94 +2031,8 @@
                                          _ (unshadow ps psh)
                                          (? (two? b) [['fn name <fprm <b] <>b] ()))))
                                ; a global declaration; the first declarator's stars came off `sr`
-                               (: (one ts3 nm t2)                        ; t2 is the element type (stars included)
-                                   (? (peekp ts3 "[")
-                                      (: dr (adims ps ts3 ())  ; one or more [n]/[] dims (enum consts fold)
-                                         (? !(two? dr) ()
-                                            (: dims <dr rest0 (patt <>dr)   ; an ARRAY declarator carries trailing attributes too
-                                               (? (!(two? >dims) && (<dims = 0))      ; a LONE [] -- size from init, or 0 (extern)
-                                                   (? !(peekp rest0 "=") [[nm ['arr t2 0] ()] rest0]      ; no init: incomplete, size 0
-                                                      (: ir (pinit ps >rest0)
-                                                         (? !(two? ir) ()
-                                                            (: n (initcount ps t2 <ir)
-                                                               (? (charm? n)
-                                                                  [[nm ['arr t2 n] <ir] <>ir]
-                                                                  ())))))
-                                                  ; multi-dim (or a single sized dim): nested arr, optional init.
-                                                  ; an outer [] ([][3]) infers its count from the init's top level.
-                                                  (: aty0 (mkarr t2 dims)
-                                                     (? (peekp rest0 "=")     ; T a[n].. = init
-                                                         (: ir (pinit ps >rest0)
-                                                            (? !(two? ir) ()
-                                                               (: aty (? (<>>aty0 = 0) ['arr <>aty0 (initcount ps <>aty0 <ir)] aty0)
-                                                                  [[nm aty <ir] <>ir])))
-                                                        [[nm aty0 ()] rest0]))))))
-                                      (peekp ts3 "=")
-                                       (: r (pinit ps >ts3)
-                                          (? !(two? r) ()
-                                             ; ⚠ a LATER declarator arrives here with its dims ALREADY
-                                             ; parsed (`more` below runs pdtor first, so t2 is the whole
-                                             ; array type and ts3 sits on the `=`), where the FIRST still
-                                             ; has its `[` ahead of it and takes the branch above. so a
-                                             ; lone [] bound has to be filled in HERE as well -- without
-                                             ; it `char a[]={1}, b[]={2,2};` left b INCOMPLETE, and every
-                                             ; later sizeof(b) answered 0 in silence (the bytes were laid
-                                             ; right; only the type was wrong, which is the worse half).
-                                             (: t3 (? (arr? t2 && (<>>t2 = 0) && charm? (initcount ps <>t2 <r))
-                                                      ['arr <>t2 (initcount ps <>t2 <r)] t2)
-                                                [[nm t3 <r] <>r])))
-                                      [[nm t2 ()] ts3])
-                                  first (one (patt ts2) name (? (two? fpty) fpty rty))
-                                  (? !(two? first) ()
-                                     (: (more ts3 acc)
-                                         (? (peekp ts3 ",")
-                                            (: dr (pdtor ps >ts3 base)
-                                               (? !(two? dr) ()
-                                                  (: r (one (patt <>dr) <<dr <><dr)
-                                                     (? (two? r) (more <>r (<r >< acc)) ()))))
-                                            ; a declarator whose type is a FUNCTION type (a function-type
-                                            ; typedef: love.h's `lvm_t lvm_ret0, lvm_cur, ..;`) DECLARES a
-                                            ; function -- register its sig (the typedef carries the return),
-                                            ; lay NO storage (a gdecl here laid duplicate .data symbols)
-                                            ; `;` ends the declaration -- PEEK for it: the remainder may
-                                            ; be EMPTY (a global at EOF), which want's () would conflate
-                                            ; with the missing-semicolon refusal
-                                            (? !(peekp ts3 ";") ()
-                                               (: rest >ts3
-                                                  (fnp? pr) (: t <>pr (? (two? t) (<t = 'fn) ()))
-                                                  _ (: (regs l) (? !(two? l) ()
-                                                                   (: p2 <l
-                                                                      _ (? (fnp? p2)
-                                                                           (pin (ps 'sigs) <p2
-                                                                                [(? (two? ><>p2) <><>p2 'long) () ()])
-                                                                           ())
-                                                                      ; an ALIAS declared through a function TYPE (musl's
-                                                                      ; weak_alias: `extern __typeof(old) new __attribute__
-                                                                      ; ((alias("old")))`) answers a nameless 'tdef, so the
-                                                                      ; name is recorded HERE, where it is still in hand
-                                                                      _ (: al (peep ps 'curalias ())
-                                                                           (? !(two? al) ()
-                                                                              (: _ (pin (ps 'alias) <p2 <al)
-                                                                                 (? <>al (pin ps 'weaks (<p2 >< ps 'weaks)) ()))))
-                                                                      (regs >l)))
-                                                       (regs acc))
-                                                  vps (: (go2 l a2) (? !(two? l) a2
-                                                                       (go2 >l (? (fnp? <l) a2 (<l >< a2))))
-                                                         (go2 acc ()))
-                                                  ; a const OBJECT with an initializer is a candidate for .rodata --
-                                                  ; per DECLARATOR, since one specifier run serves them all and only
-                                                  ; some carry a star. an init-less one is left alone: it rides .bss,
-                                                  ; where it costs no file bytes at all.
-                                                  _ (? !(leadconst? ts) ()
-                                                       (: (goc l) (? !(two? l) 1
-                                                                     (: p <l
-                                                                        _ (? (cobj? <>p && two? <>>p)
-                                                                             (pin (ps 'consts) <p 1) ())
-                                                                        (goc >l)))
-                                                          (goc vps)))
-                                                  (? (two? vps) [['gdecl vps] rest]
-                                                     ['(tdef) rest]))))
-                                        (more <>first [<first])))))))))))))
+                               (: first (one (patt ts2) name (? (two? fpty) fpty rty))
+                                  (? (two? first) (more <>first [<first]) ())))))))))))
    ; a parse refusal names where it stood. the first pass ran unstamped and so
    ; left no trail -- so stamp JUST this form and run it through ptop again,
    ; which is cheap (one form) and now marks as it goes. the FURTHEST token
@@ -2003,12 +2049,17 @@
        ft (? (two? ts2) <ts2 ())
        _ (pin far 'seq -1)
        _ (pin far 'tok ())
+       _ (pin far 'why ())
+       _ (pin far 'wseq ())
        r (ptop ps (stampf ts2 i0 spans))
        dt (? (two? r) () (peep far 'tok ()))
        t (? (two? dt) dt ft)
+       ; a cause filed AT the deepest token names the program's fault; anywhere
+       ; shallower it belongs to a branch that was abandoned, and does not
+       why (? ((peep far 'wseq ()) = (peep far 'seq ())) (peep far 'why ()) ())
        (? !(two? t) (gripe () () () "parse error at end of input")
           (gripe (? (two? dt) (filof t) (filat spans i0)) <>>t ()
-                 ("parse error near " + spell t))))
+                 (? why why ("parse error near " + spell t)))))
    (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
    (cparse-t ts tgt) (cparse-d ts tgt 'moon)  ; ..and the default dialect, which is what a bare caller means
    (cparse-d ts tgt dia)

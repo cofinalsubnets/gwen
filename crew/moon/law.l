@@ -105,7 +105,7 @@
       (= (tn3 <>(clex "08") 0) (L 'num 8 1))                ; 8/9 aren't octal digits -> falls to decimal
       (= (tn3 <>(clex "0x1F") 0) (L 'num 31 1))              ; 7c-ii: hex literals
       (= (tn3 <>(clex "0xFF & 1") 0) (L 'num 255 1))
-      (= (tn3 <>(clex "255L") 0) (L 'num 255 1))             ; an l/L suffix is consumed outright
+      (= (tn3 <>(clex "255L") 0) (L 'lnum 255 1))            ; an l/L suffix makes the constant a LONG
       (= (tn3 <>(clex "100U") 0) (L 'unum 100 1))            ; a u/U marks the token UNSIGNED (neg/div/shift go unsigned):
       (= (tn3 <>(clex "100UL") 0) (L 'ulnum 100 1))          ; bare u an unsigned INT, u+l/L (or a >32-bit value) an unsigned LONG
       (= (tn3 <>(clex "0x8ULL") 0) (L 'ullnum 8 1))          ; the LL pair is its own kind (t32 types it llong)
@@ -198,10 +198,10 @@
       (= (cexp "sizeof(char)+sizeof(short)+sizeof(long)") '(bin + (bin + (cast ulong (num 1)) (cast ulong (num 2))) (cast ulong (num 8))))
       ; the unsuffixed ladder (C11 6.4.4.1): hex/octal/binary climb the unsigned
       ; rungs -- 0xffffffff is a uint, 0xffffffffffffffff a ulong -- decimal stays
-      ; signed until it runs past long; an l suffix skips the uint rung
+      ; signed until it runs past long; an l suffix skips the uint rung and types LONG
       (= (cexp "0x7fffffff") '(num 2147483647))
       (= (cexp "0xffffffff") '(cast uint (num 4294967295)))
-      (= (cexp "0x80000000l") '(num 2147483648))
+      (= (cexp "0x80000000l") '(cast long (num 2147483648)))
       (= (cexp "0xffffffffffffffff") '(cast ulong (num 18446744073709551615)))
       (= (cexp "4294967295") '(num 4294967295))
       (= (cexp "18446744073709551615") '(cast ulong (num 18446744073709551615)))
