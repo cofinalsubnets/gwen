@@ -236,7 +236,8 @@
       ('("the tool -- what it is for" "" "  a display, two spaces in"
          "  and an indented line is still a sentence" "and back")
        = (ldoc-head src))                                ; ..and it keeps its indent
-      ((ldoc-md src) = "the tool -- what it is for\n\n  a display, two spaces in\n  and an indented line is still a sentence\nand back\n")
+      ; ..and an indented run is a DISPLAY, dedented by its own least indent
+      ((ldoc-md src) = "the tool -- what it is for\n\n```\na display, two spaces in\nand an indented line is still a sentence\n```\nand back\n")
       ; ..and the degenerate shapes answer nothing rather than something
       (() = (ldoc-head "(: x 1)\n; a tail comment\n"))  ; code first: no header at all
       (() = (ldoc-head ""))
@@ -244,18 +245,19 @@
       ('("just this") = (ldoc-head "; just this\n")))    ; no newline trouble at the end
    0)
 
-; the SHIELD. `; --- name ---` is how every crew file rules a section off, and
-; markdown claims a `---` line as a rule and then refuses it as anything else --
-; so without the shield mdread stops dead there and everything under it is lost.
-; the assertion is the TAIL: it is still in the document.
+; a BANNER is where the header used to be lost. `starter` claims a `---` line and
+; no markdown block can parse it, so mdread stopped dead there and dropped
+; everything under it in silence. two things fixed that, and neither is a patch:
+; lapiz's reader is total, and a banner is read as the SECTION HEADING it is.
 (: d (mdread (ldoc-md "; --- a banner ---
 ; the body under it
+(: x 1)
 "))
-   (nthl l k) (? (k = 0) <l (nthl >l (k - 1)))
+   (nth l k) (? (k = 0) <l (nth >l (k - 1)))
    _ (assert
-      (2 = tally d)                                      ; the banner is its own block..
-      ('(para ((text "--- a banner ---"))) = <d)         ; ..as the text it is
-      ('(para ((text "the body under it"))) = (nthl d 1)))
+      (2 = tally d)
+      ('(head 2 ((text "a banner"))) = <d)
+      ('(para ((text "the body under it"))) = (nth d 1)))
    0)
 
 ; ⚠ THE LAW, on files nobody wrote for this test: the document keeps every LETTER
@@ -301,6 +303,47 @@
         _ (assert (0 < tally (md->ht md))
                   (0 < tally (md->rf md)))
         0)
+   0)
+
+
+; the STRUCTURE the corpus already carries (rung 1): a banner is a section, a
+; display is a display, and a ⚠ is a hazard. the prose is read, never rewritten.
+(assert
+ ; a `--- name ---` banner is a level-2 heading, and the padding dashes are padding
+ ((ldoc-md "; --- the table ------------------------------------------------\n; a row is a thing.\n(: x 1)\n")
+  = "## the table\na row is a thing.\n")
+ ((ldoc-md "; --- the middle ---\n(: x 1)\n") = "## the middle\n")
+ ; ..but three dashes with nothing in them are not a banner
+ ((ldoc-md "; ---\n(: x 1)\n") = "---\n")
+ ; a `usage:` line and the indented lines under it are ONE display: the alignment
+ ; is the content, and filling it into a paragraph would destroy it
+ ((ldoc-md "; usage:  tool [-x] FILE ..    do the thing\n;     or: love -l tool.l FILE\n; and prose after it.\n(: x 1)\n")
+  = "```\nusage:  tool [-x] FILE ..    do the thing\n    or: love -l tool.l FILE\n```\nand prose after it.\n")
+ ; ⚠ an indent under a LIST ITEM is a wrap, not a display -- it stays a line and
+ ; lapiz joins it to the item above (its lazy continuation)
+ ((ldoc-md "; - a bullet that wraps onto\n;   a second line\n; - and one that does not\n(: x 1)\n")
+  = "- a bullet that wraps onto\n  a second line\n- and one that does not\n")
+ ((mdread (ldoc-md "; - a bullet that wraps onto\n;   a second line\n(: x 1)\n"))
+  = '((bullets (((text "a bullet that wraps onto a second line"))))))
+ ; the hazard marker in bold, and no more than that
+ ((ldoc-md "; ⚠ a hazard, and it is one.\n(: x 1)\n") = "**⚠** a hazard, and it is one.\n")
+ ; ..and a hazard STARTS a block: 22 of the tree's 74 sit jammed against the prose
+ ; above them, and filling them into it is how a page becomes a wall
+ ((ldoc-md "; prose.\n; ⚠ a hazard.\n(: x 1)\n") = "prose.\n\n**⚠** a hazard.\n")
+ ((ldoc-md "; prose.\n;\n; ⚠ a hazard.\n(: x 1)\n") = "prose.\n\n**⚠** a hazard.\n"))
+
+; and the whole of it through the lens: a real header comes out as a document with
+; a heading its sections hang off, which is what papel reads a page's title,
+; anchors and contents nav from.
+(: (rd f) (: q (open f "r") (? q (slurp q) ""))
+   (nth l k) (? (k = 0) <l (nth >l (k - 1)))
+   d (mdread ("# crew/lapiz/lapiz.l\n\n" + ldoc-md (rd "crew/lapiz/lapiz.l")))
+   heads (filter (\ b (id? <b 'head)) d)
+   _ (assert
+      (3 < tally heads)
+      ('(head 1 ((text "crew/lapiz/lapiz.l"))) = <heads)   ; the file names the page
+      (2 = <>(nth heads 1))                               ; ..and its banners are sections
+      (0 < tally (filter (\ b (id? <b 'fence)) d)))       ; the diagrams survived as displays
    0)
 
 (test_fin ())

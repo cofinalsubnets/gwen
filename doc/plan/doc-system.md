@@ -128,10 +128,53 @@ gate: `test/host/libra.l`, with the rest of libra's verbs.
 the LSP server went (2026-08-16) -- `libra serve` and its json-rpc lane, which
 doc/libra.md itself recorded as having no consumer. `lib/json.l` stays.
 
-**rung 1 is now the obvious one, and here is the evidence.** an extracted page has
-no head-1, so its title is its file name and papel gives it no contents at all --
-`hue.html` is a wall of paragraphs. the banners are already isolated as their own
-blocks, which is exactly the seam a heading goes in.
+## ✅ rung 1 landed
+
+the prose's own structure, read as blocks. all of it is in `libra doc`, and the
+mapping is a reading of the corpus as written -- no file was changed to suit it.
+
+`; --- name ---`
+:   a level-2 heading. 41 banners, 40 of them padded out with dashes
+
+`; usage:` and the indented lines under it
+:   a fence. 4 usage blocks
+
+any other indented run
+:   a fence. 532 display lines
+
+an indent under a list item
+:   a WRAP, left to lapiz, which now joins it to the item
+
+a leading `⚠`
+:   the marker in bold, and a block of its own. 74, of which 22 were jammed against the prose above them
+
+and the file's name becomes the level-1 heading -- the one thing on the page not
+taken from the prose, and the one that makes papel work: a page's title, its
+anchors and its whole contents nav are read off the headings. before it, every
+generated page was titled `lapiz.md` and carried no navigation at all.
+
+**the shield is gone.** rung 0 wrapped a banner in a backslash so that mdread
+would not stall on it. that was a defect in the LENS, and it was fixed there
+instead: lapiz's markdown reader is now total (every line lands in some block),
+and its list items take their lazy continuations, so a wrapped bullet is one
+bullet. both are law-gated in `test/host/lapiz.l`.
+
+⚠ THE LETTER LAW STILL HOLDS EXACTLY, all 368 headers -- which is the point of
+having stated it that way. the only thing rung 1 drops is a banner's padding
+dashes, and a dash is not a letter.
+
+### what is left
+
+- **publication.** `out/` is gitignored and GitHub Pages serves the repo root, so
+  `out/site/` reaches nobody. this is the gap, and it is not a doc-system rung:
+  it is a decision about where the built site lives (a tracked `site/`, a first
+  CI workflow, or nothing).
+- **the crew list on `index.html` is hand-maintained** -- the same `<dl>` papel
+  generates for its index. it could stop being written twice.
+- **six tools are dropped from the site** (cook, kore, libra, moon, sb, vi), since
+  a hand-written `doc/*.md` correctly wins the page name. their headers render
+  nowhere.
+- rungs 2 and 3 below, unchanged.
 
 ## difficulty
 

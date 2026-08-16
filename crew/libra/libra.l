@@ -231,37 +231,98 @@
        (g (linesof src) 1 ()))
 
    ; ⚠ AND THE PROSE IS TAKEN AS WRITTEN. the corpus was not composed against a
-   ; convention and is not going to be rewritten into one: where the header is
-   ; markdown already -- and it mostly is, `- ` lists, `code`, indented displays --
-   ; markdown is what it means. where it is not, the mapping bends, never the file.
+   ; convention and is not going to be rewritten into one. but it IS consistent,
+   ; and three of its habits carry structure that markdown would otherwise fill
+   ; flat. each is read as what it plainly is, and nothing else is touched:
    ;
-   ; the bending is one rule today: a line markdown would claim as a block opener
-   ; and then refuse to parse wears one backslash, lapiz's own escape, and stands
-   ; alone. that is the `; --- banner ---` every crew file rules its sections off
-   ; with (and a bare `:   ` body line, markdown's definition marker). WITHOUT IT
-   ; mdread STOPS DEAD at the first banner and the whole rest of the header is
-   ; dropped in silence -- no error, a shorter page, and nothing to notice it by.
-   ; the banner also keeps its own break: it names the section under it, so
-   ; letting markdown fill the two into one paragraph would lose a break the file
-   ; actually made. rung 1 of doc/plan/doc-system.md turns these into headings.
+   ;   `; --- name ---`  a SECTION banner -> a level-2 heading. 41 of them in the
+   ;                     tree's headers, 40 padded out to the right margin with
+   ;                     dashes, which are the padding and not the name.
+   ;   `; usage:` and    a DISPLAY -> a fence, because the ALIGNMENT is the
+   ;   any indented run  content and filling it into a paragraph destroys it.
+   ;                     ⚠ unless the indent is a list item's WRAP, where it is a
+   ;                     margin and lapiz already joins the line to the item.
+   ;   a leading `⚠`     a HAZARD -> the marker in bold, and no more than that: a
+   ;                     real hazard style wants a class, and a new lapiz node is
+   ;                     a three-surface obligation nobody has asked for yet.
    ;
-   ; ⚠ ONE operand for the body: `(: n .. A || B)` pairs A with `||` and answers B
-   ; alone -- the binder takes its names two at a time and reads them BEFORE the
-   ; infix fold ever sees them.
-   (dhazard? s) (: n (tally s)
-                   (((3 <= n) && (snip s 0 3 = "---") && !(dblank? (snip s 3 n)))
-                    || ((4 <= n) && (snip s 0 4 = ":   "))))
-   (dshield s) (? (dhazard? s) ("\n\\" + s + "\n\n") (s + "\n"))
+   ; ⚠ NOTHING IS SHIELDED HERE ANY MORE. a `--- banner ---` used to stop mdread
+   ; dead (`starter` claims the line, no block parses it) and the rest of the
+   ; header went with it, so this pass wrapped such lines in a backslash. lapiz's
+   ; reader is TOTAL as of 2026-08-16 -- the loss was a defect in the lens, and it
+   ; was fixed there rather than papered over here.
+   (dind s) (: n (tally s) (g i) (? ((i < n) && ((s i = 32) || (s i = 9))) (g (i + 1)) i) (g 0))
+   (ddashy? c) ((c = 45) || (c = 32))
+   ; `--- name ------------` -> `(1 "name"), and () for anything else that opens
+   ; with three dashes. the dashes on both sides are the marker and the padding.
+   (dbanner s)
+    (: n (tally s)
+       (? !((3 <= n) && (snip s 0 3 = "---")) ()
+          (: a ((: (f i) (? ((i < n) && (ddashy? (s i))) (f (i + 1)) i)) 0)
+             b ((: (f j) (? ((a < j) && (ddashy? (s (j - 1)))) (f (j - 1)) j)) n)
+             (? (a < b) `(1 (snip s a b)) ()))))
+   (dstarts? s t) (: n (tally s) m (tally t) ((m <= n) && (snip s 0 m = t)))
+   (ditem? s) (: n (tally s)
+                 (((2 <= n) && (snip s 0 2 = "- "))
+                  || ((3 <= n) && ((47 < s 0) && (s 0 < 58) && (snip s 1 3 = ". ")))))
+   ; the ⚠ marker in bold. a hazard is a whole paragraph in this corpus and only
+   ; its first line wears the glyph, so this is the one place it can be said.
+   (dwarn s) (? (dstarts? s "⚠ ") ("**⚠**" + snip s 3 (tally s)) s)
+   ; ..and it STARTS one. 52 of the tree's 74 hazard lines already stand off with a
+   ; blank line above them and 22 are jammed against the prose before them -- the
+   ; author put the glyph at the start of a line either way, which is the whole
+   ; signal there is. without this those 22 fill into the paragraph above and the
+   ; page carries a wall with two ⚠ in the middle of it.
+   (dnl2? s) (: n (tally s) (? (n < 2) (n = 0) ((s (n - 1) = 10) && (s (n - 2) = 10))))
+   (dbreak acc s) (? (&& (dstarts? s "⚠ ") !(dnl2? acc)) (acc + "\n") acc)
+
+   ; a display: the run of indented lines at the head of ls, and what is left.
+   (dtake ls)
+    (: (g l acc) (? (!(two? l) || (dblank? <l) || !(0 < dind <l)) `((rev acc) l)
+                    (g >l (<l >< acc)))
+       (g ls ()))
+   ; ..shown as a fence, dedented by its own LEAST indent: the alignment inside a
+   ; display is the content, the margin in front of it is not. (a `usage:` run
+   ; starts at column 0, so its own least indent is 0 and nothing moves.)
+   (dmin a b) (? (a < b) a b)
+   (dfence ls)
+    (: k (foldl (\ a s (? (dblank? s) a (dmin a (dind s)))) (tally <ls) ls)
+       ("```\n" + foldl (+) "" (map (\ s ((snip s (dmin k (tally s)) (tally s)) + "\n")) ls)
+        + "```\n"))
 
    ; the header as MARKDOWN TEXT, which is the whole of what libra says about a
    ; document: lapiz decides what a document IS, and every surface it has then
    ; arrives free. (a bespoke prose parser here would be a second markdown reader
    ; in the tree, drifting from the first.)
-   (ldoc-md src) (foldl (+) "" (map dshield (ldoc-head src)))
+   ;
+   ; `li` is "the last line was a list item or its wrap" -- the one piece of state
+   ; the walk needs, because an indented line means two different things depending
+   ; on it.
+   (ldoc-md src)
+    (: (go ls li acc)
+        (? !(two? ls) acc
+           (: s <ls
+              b (dbanner s)
+              (? (dblank? s)         (go >ls 0 (acc + "\n"))
+                 (two? b)            (go >ls 0 (acc + "## " + <>b + "\n"))
+                 (dstarts? s "usage:")
+                  (: r (dtake >ls) (go <>r 0 (acc + dfence (s >< <r))))
+                 (&& (0 < dind s) li) (go >ls 1 (acc + s + "\n"))
+                 (0 < dind s)        (: r (dtake ls) (go <>r 0 (acc + dfence <r)))
+                 (ditem? s)          (go >ls 1 (acc + dwarn s + "\n"))
+                 (go >ls 0 (dbreak acc s + dwarn s + "\n")))))
+       (go (ldoc-head src) 0 ""))
 
    ; --- doc ------------------------------------------------------------------
    ; ⚠ THE ONE VERB THAT KEEPS COMMENTS -- infix and unfix print from the datum and
    ; lose every one; this prints the comments and nothing else.
+   ;
+   ; ⚠ THE FILE'S NAME IS THE LEVEL-1 HEADING, and it is the one thing on the page
+   ; that is not in the prose. it belongs here rather than in `ldoc-md`, which is
+   ; text-to-text and never saw a path -- and it is not decoration: papel reads a
+   ; page's title, its anchors and its whole contents nav off the headings, so
+   ; without it a generated page is titled by its file name and carries no
+   ; navigation at all. on the roff surface it is the `.SH` a man page opens with.
    ;
    ; the surfaces are lapiz's three, and lapiz is loaded HERE rather than at the
    ; top: `make lint` runs libra over every tracked .l and pays for whatever the
@@ -271,8 +332,9 @@
        (: r (rdf <fs)
           (? !(two? r) (: _ (say err ("libra: cannot open " + <fs + "\n"))
                            (libra-doc-files >fs surf (bad + 1)))
-             (: md (ldoc-md <>r)
-                (? !(0 < tally md)
+             (: body (ldoc-md <>r)
+                md ("# " + <fs + "\n\n" + body)
+                (? !(0 < tally body)
                     (: _ (say err (<fs + ": no header comment\n"))
                        (libra-doc-files >fs surf (bad + 1)))
                    (: _ (say out (? (id? surf 'md) md

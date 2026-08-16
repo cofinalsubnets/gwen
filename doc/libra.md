@@ -72,6 +72,31 @@ painter in crew/vi/core.l's vframe, and the vim syntax file, which mk/tools/hue2
 GENERATES from the very table below -- built by make into out/host/syntax.vim and
 ```
 
+**the prose's own structure is read, never rewritten.** the corpus was not
+composed against a convention, but it is consistent, and three of its habits
+carry structure that markdown would otherwise fill flat:
+
+`; --- name ---`
+:   a level-2 heading. 41 of them in the tree, 40 padded out with dashes
+
+`; usage:` and the indented lines under it
+:   a fence, because the alignment IS the content
+
+any other indented run
+:   a fence too -- unless the indent is a list item's WRAP, where lapiz joins it
+
+a leading `⚠`
+:   the marker in bold, and a block of its own
+
+and the file's name becomes the level-1 heading. that is the one thing on the
+page not taken from the prose, and it is not decoration: papel reads a page's
+title, its anchors and its whole contents nav off the headings.
+
+nothing is shielded or escaped any more. a `--- banner ---` used to stop mdread
+dead and take the rest of the header with it; lapiz's reader is
+[total](../crew/lapiz/lapiz.l) as of 2026-08-16, so the loss was fixed in the
+lens rather than papered over here.
+
 **`make site` is built on it.** the crew tools that have no page here get one
 anyway: the build runs `libra doc` over each of them into `out/toolmd/*.md` and
 papel makes a site out of markdown exactly as it always has. libra reads `.l`,
