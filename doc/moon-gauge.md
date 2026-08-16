@@ -88,9 +88,44 @@ costs it **+29.2%** — the array leg's keeps ride callee-saved seats, not the o
   under A, 106 under B). A lane change churns them. That is not breakage — `test_cts` and
   the fixpoint are the behavioural instruments, and both held in all four ablations.
 
-## not yet measured
+## where the cycles go — the attribution, run 2026-08-16 (Zen 3, Ryzen 7 5825U)
 
-No top-down cycle attribution has ever been run on mooncc's output. Whether the residual
-1.19× is frontend-bound (I-cache, where code size *is* cycles and the size levers were
-paying invisibly), backend-bound on slot traffic, or bad speculation, is unknown — and it
-decides whether the ablations above are read as savings or as losses.
+Intel's `--topdown` does not apply here; the Zen equivalents are
+`de_dis_uop_queue_empty_di0` (frontend delivered nothing) and the
+`de_dis_dispatch_token_stalls*` family (backend resource stalls). Tight event groups, no
+multiplexing, corpus with boot subtracted, base against D.
+
+| | base | D (no residency) |
+|---|---|---|
+| instructions | 34.54 G | 42.14 G |
+| cycles | 12.59 G | 13.89 G |
+| IPC | 2.74 | 3.03 |
+| **L1-icache misses** | **601,597** | **662,371** |
+| iTLB misses | 422,093 | 400,462 |
+| uop queue empty | 1.762 G (14.0%) | 1.415 G (10.2%) |
+| load-queue token stall | 29.9 M | **156.3 M** |
+| store-queue token stall | 4.1 M | 15.4 M |
+| retire token stall | 395.5 M | 427.8 M |
+| branch misses | 49.9 M (1.04%) | 54.4 M (1.13%) |
+| L1-dcache load misses | 177.2 M | 180.4 M |
+
+⚠ **the frontend hypothesis is dead, twice over.** 600 thousand icache misses against 34
+*billion* instructions is nothing — at 20 cycles apiece it is 0.1% of the run. And frontend
+starvation goes DOWN as the code grows (14.0% → 10.2%), because a backend that is stalling
+gives the fetcher time to fill the queue. **Code size does not buy cycles on this machine.**
+The size levers were not paying invisibly; they were not paying.
+
+Where D's cost actually lands is the load queue — **29.9 M → 156.3 M token stalls, 5.2×** —
+which is the slot traffic, exactly where the arc always said the gap was. But the loads all
+hit: L1-dcache misses move 1.8% and branch misses 9%, neither material.
+
+⚠ **the marginal instructions execute at ~5.85 IPC** (Δ7.60 G instructions over Δ1.30 G
+cycles) against a 2.74 baseline — near Zen 3's dispatch width of 6. That is the whole
+mechanism of "instructions are hidden here": store-forwarded, L1-resident slot traffic is
+absorbed at the fastest rate this core can absorb anything.
+
+⚠ **and that is a fact about THIS core, not about mooncc.** A wide out-of-order machine
+hides instruction count; an in-order one does not. mooncc's thumb1/thumb2 targets are
+Cortex-M0+ and M7 — where instructions *are* cycles, and where the operand pool is already
+empty (`tpool`). The ablations above price residency on x86-64 and say nothing about what it
+is worth on the MCU targets. Do not carry these numbers there.
