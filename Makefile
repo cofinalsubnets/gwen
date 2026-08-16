@@ -148,19 +148,37 @@ ccdb:
 # so at least it stops DIRTYING the file on every run.
 
 # this tree's own docs as a browsable site: README.md + doc/*.md through papel -- plus
-# one page per CREW TOOL, whose header comment IS its documentation. `libra doc` lifts
-# that header out as markdown and papel builds the site from markdown as it always has:
-# libra is the only thing in the tree that reads .l, and papel never learns what a .l is.
-# a tool with a doc/*.md of its own is skipped -- that page is the one someone wrote.
-sitetools = $(foreach d,$(wildcard crew/*),$(if $(wildcard doc/$(notdir $d).md),,$(wildcard $d/$(notdir $d).l)))
+# one page per CREW TOOL, whose header comment IS its documentation, and the ANNOTATED
+# SOURCE of every crew tool beside it.
+#
+#   libra doc   lifts a .l file's header out as markdown (it is the only thing in the
+#               tree that reads .l for prose), and papel builds the site from markdown
+#               exactly as it always has -- papel never learns what a .l is.
+#   hue2web     paints the source itself, out of crew/vi/hue.l's class table and
+#               crew/vi/config.l's theme -- the same table the editor and the vim
+#               syntax read, so the site wears the editor's colours by construction.
+#
+# a tool with a doc/*.md of its own is skipped for the DOC page (that page is the one
+# someone wrote) but still gets its source page.
+crewtools = $(foreach d,$(wildcard crew/*),$(wildcard $d/$(notdir $d).l))
+sitetools = $(foreach f,$(crewtools),$(if $(wildcard doc/$(notdir $(basename $f)).md),,$f))
 out/toolmd.stamp: $(sitetools) crew/libra/libra.l $(ho)/love
 	@rm -rf out/toolmd && mkdir -p out/toolmd
-	@for f in $(sitetools); do n=$${f##*/}; \
-	   $(ho)/love $R/crew/libra/libra.l doc $$f > out/toolmd/$${n%.l}.md || exit 1; done
+	@for f in $(sitetools); do n=$${f##*/}; n=$${n%.l}; \
+	   { $(ho)/love $R/crew/libra/libra.l doc $$f && echo && echo "[the source]($$n.src.html)"; } \
+	     > out/toolmd/$$n.md || exit 1; done
 	@echo "  toolmd: $(words $(sitetools)) crew headers -> out/toolmd/"
 	@touch $@
+# the source pages and their stylesheet, written into the site papel just built
+huesrc = $(crewtools) crew/vi/hue.l crew/vi/config.l mk/tools/hue2web.l $(ho)/love
 site: host out/toolmd.stamp
 	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc out/toolmd
+	@$(MAKE) --no-print-directory out/site/hue.css
+out/site/hue.css: $(huesrc)
+	@$(ho)/love $R/mk/tools/hue2web.l css > $@
+	@for f in $(crewtools); do n=$${f##*/}; n=$${n%.l}; \
+	   $(ho)/love $R/mk/tools/hue2web.l src $$f > out/site/$$n.src.html || exit 1; done
+	@echo "  hue2web: $(words $(crewtools)) sources painted -> out/site/*.src.html"
 SITEPORT ?= 8080
 site-serve: host out/toolmd.stamp
 	@$(ho)/love -l crew/papel/papel.l -t love -o out/site -s $(SITEPORT) README.md doc out/toolmd
