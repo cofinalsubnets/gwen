@@ -82,7 +82,7 @@
    (pad3 v) (: t (show v) (? ((tally t) = 1) ("  " + t) ((tally t) = 2) (" " + t) t))
 
    ; stable insertion by count, descending -- ties keep first-seen order
-   (ins p l) (? !(two? l) [p] ((<><l) < (<>p)) (p >< l) (<l >< (ins p >l)))
+   (ins p l) (? !(two? l) [p] (<><l < <>p) (p >< l) (<l >< (ins p >l)))
 
    _ (? (dir? unimath) 0
         (: _ (puts "uuparity: UniMath not installed, audit skipped\n") (quit 0)))

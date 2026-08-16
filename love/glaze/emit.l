@@ -452,8 +452,8 @@
    ; NIF as a head; show prints it as `link`, invisibly -- the forensic dump showed (atom link
    ; other)). normalize a value head back to its nom -- id?-keyed, and only when the nom is NOT
    ; env-shadowed (a param named link must win, as it does in bytecode).
-   aopv [[(two?) 'two?] [(cap) 'cap] [(cup) 'cup] [(id?) 'id?] [(link) 'link]
-           [(tally) 'tally] [(+) '+] [(-) '-] [(*) '*] [(<) '<] [(<=) '<=]
+   aopv [[two? 'two?] [cap 'cap] [cup 'cup] [id? 'id?] [link 'link]
+           [tally 'tally] [(+) '+] [(-) '-] [(*) '*] [(<) '<] [(<=) '<=]
            [(>) '>] [(>=) '>=] [(=) '=]]
    (aopn x l) (? !(two? l) 0  (id? x <<l) <><l  (aopn x >l))
    ; adesug: rewrite what amble can own by PURE SOURCE IDENTITY, so the twin/deopt story is

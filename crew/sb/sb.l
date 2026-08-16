@@ -85,21 +85,21 @@
    ;     blob writes); a hunk is (path old new), old/new content hashes | () ---
    (h1 p e)                                                   ; one path vs its snap entry|()
     (: t (look p)
-       (? !(two? t) (? (two? e) `(p (<>e) ()) ())                ; unreadable: dead if known
+       (? !(two? t) (? (two? e) `(p <>e ()) ())                ; unreadable: dead if known
           (: h (sha256 <>t)
              (? !(two? e) `(p () h)                              ; born
-                ((<>e) = h) ()                                   ; unchanged
-                `(p (<>e) h)))))                                 ; changed
+                (<>e = h) ()                                   ; unchanged
+                `(p <>e h)))))                                 ; changed
    (scan ps sn acc)                                           ; ps sorted paths, sn the snap
     (? !(two? ps)
        (? !(two? sn) (rev acc)
-          (scan ps >sn (`((<<sn) (<><sn) ()) >< acc)))        ; the tail of snap: dead
+          (scan ps >sn (`(<<sn <><sn ()) >< acc)))        ; the tail of snap: dead
        !(two? sn)
        (: h (h1 <ps ()) (scan >ps sn (? (two? h) (h >< acc) acc)))
        (: p <ps e <sn
           (? (p = <e) (: h (h1 p e) (scan >ps >sn (? (two? h) (h >< acc) acc)))
              (p < <e) (: h (h1 p ()) (scan >ps sn (? (two? h) (h >< acc) acc)))
-             (scan ps >sn (`((<e) (<>e) ()) >< acc)))))       ; snap-only: dead
+             (scan ps >sn (`(<e <>e ()) >< acc)))))       ; snap-only: dead
 
    ; --- record ---
    (sb-record note)
@@ -138,17 +138,17 @@
    (snap+ sn hs pid acc)
     (? !(two? hs) (rev acc + sn)
        !(two? sn) (: h <hs nw <>>h
-                        (snap+ () >hs pid (? !nw acc (`((<h) nw pid) >< acc))))
+                        (snap+ () >hs pid (? !nw acc (`(<h nw pid) >< acc))))
        (: h <hs e <sn
-          (? ((<h) = <e) (: nw <>>h
-                            (snap+ >sn >hs pid (? !nw acc (`((<h) nw pid) >< acc))))
-             ((<h) < <e) (: nw <>>h
-                            (snap+ sn >hs pid (? !nw acc (`((<h) nw pid) >< acc))))
+          (? (<h = <e) (: nw <>>h
+                            (snap+ >sn >hs pid (? !nw acc (`(<h nw pid) >< acc))))
+             (<h < <e) (: nw <>>h
+                            (snap+ sn >hs pid (? !nw acc (`(<h nw pid) >< acc))))
              (snap+ >sn hs pid (<sn >< acc)))))
 
    ; --- log: the patches newest first; * marks a tip ---
    (ins e l) (? !(two? l) `(e)                                ; insert desc by time (seat 0)
-                   ((<<l) <= <e) (e >< l)
+                   (<<l <= <e) (e >< l)
                    (<l >< ins e >l))
    (sb-log _)
     (: tp (tips ())
@@ -172,7 +172,7 @@
               (pr >m)))
        _ (pr es)
        _ (: (pf m) (? (two? m)
-                      (: e <m t (<>e)
+                      (: e <m t <>e
                          ; the psid: the name of this release's head DAG state.
                          ; a banked ref stores its tips sorted, so the sort is a no-op here
                          _ (puts ("  " + <e + "  " + sh (psid t) + "  "
@@ -234,7 +234,7 @@
     (: (go m n) (? !(two? m) n
           (: e <m p <e k <>e
              _ (say (? (0 = k) out err)
-                    ("sb: " + (? (0 = k) "merged " "CONFLICT in ") + p + " -- " + (<>>e) + "\n"))
+                    ("sb: " + (? (0 = k) "merged " "CONFLICT in ") + p + " -- " + <>>e + "\n"))
              (go >m (? (0 = k) n (n + 1)))))
        (go cfs 0))
    (settle ids)
@@ -247,7 +247,7 @@
        ; when it moved the file THIS time. an unresolved conflict always is.
        ix (: (go m t) (? (two? m) (: _ (pin t <<m <><m) (go >m t)) t))
        op (ix oldsnap (tablet 0)) np (ix newsnap (tablet 0))
-       cfs (filter (\ e ((0 < (<>e)) || !(peep op <e () = peep np <e ()))) (<>dr))
+       cfs (filter (\ e ((0 < <>e) || !(peep op <e () = peep np <e ()))) <>dr)
        _ (lay ".sb/snap" (show newsnap))
        nf (mater oldsnap newsnap)
        `((tally ids) nf cfs))
@@ -297,7 +297,7 @@
                 `(curh 1 ("binary, cannot merge -- kept " + sh curh + ", incoming " + sh nw))
                 (: r (diff3 bt ot tt ("recorded (" + sh curpid + ")")
                                       ("incoming (" + sh pid + ")"))
-                   mh (keep <r) n (<>r)
+                   mh (keep <r) n <>r
                    (? (0 = n) `(mh 0 "both sides kept")
                       `(mh n (show n + " region" + (? (1 = n) "" "s") + " left in markers"))))))))
    (derive-snap ids)                                          ; fold the DAG -> (snap conflicts)
@@ -313,7 +313,7 @@
                                      (? !nw (pull snap p 0) (pin snap p (list nw pid))))
                                   (: m (mend old curh nw curpid pid)
                                      _ (pin snap p (list <m pid))
-                                     _ (pin cf p (list (<>m) (<>>m)))
+                                     _ (pin cf p (list <>m <>>m))
                                      ()))
                              (h1 >hs)))
                        (h1 (fld f 'hunks)))
@@ -366,15 +366,15 @@
            (two? (look (".sb/blob/" + h))) 1
            (: b (http-fetch base ("/blob/" + h))
               (? !(two? b) (: _ (say err ("sb: cannot fetch blob " + sh h + "\n")) 0)
-                 (sha256 (<>b) = h) (: _ (lay (".sb/blob/" + h) (<>b)) _ (bump 'b) 1)
+                 (sha256 <>b = h) (: _ (lay (".sb/blob/" + h) <>b) _ (bump 'b) 1)
                  (: _ (say err ("sb: bad address on blob " + sh h + "\n")) 0))))
        (getpatch id)                                   ; ensure a patch is local; answer its form
         (: local (look (".sb/patch/" + id))
-           (? (two? local) (readform (<>local))
+           (? (two? local) (readform <>local)
               (: b (http-fetch base ("/patch/" + id))
                  (? !(two? b) (: _ (say err ("sb: cannot fetch patch " + sh id + "\n")) ())
-                    (sha256 (<>b) = id) (: _ (lay (".sb/patch/" + id) (<>b)) _ (bump 'p)
-                                              (readform (<>b)))
+                    (sha256 <>b = id) (: _ (lay (".sb/patch/" + id) <>b) _ (bump 'p)
+                                              (readform <>b))
                     (: _ (say err ("sb: bad address on patch " + sh id + "\n")) ())))))
        (walk ids ok)                                   ; the transitive closure, by reading as we go
         (? !(two? ids) ok
@@ -389,20 +389,20 @@
                           ; fetching the moment one object failed -- a partial
                           ; pull that then blames every later object for missing.
                           bo (: (hb m a) (? !(two? m) a
-                                   (: h <m x (getblob (<>h)) y (getblob (<>>h))
+                                   (: h <m x (getblob <>h) y (getblob <>>h)
                                       (hb >m (a && x && y))))
                                 (hb hs 1))
                           (walk (fld f 'deps + >ids) (ok && bo))))))))
        tt (http-fetch base "/tips")
        (? !(two? tt) (: _ (say err ("sb: no store at " + base + " (no /tips)\n")) ())
-          (: tips (readform (<>tt))
+          (: tips (readform <>tt)
              (? !(two? tips) (: _ (say err ("sb: " + base + " has no tips\n")) ())
                 (: ok (walk tips 1)
                    rt (http-fetch base "/refs")             ; the refs ride along
-                   theirs (? (two? rt) (readform (<>rt)) ())
+                   theirs (? (two? rt) (readform <>rt) ())
                    ru (refadd (refs ()) theirs 1)
                    _ (? (two? <ru) (lay ".sb/refs" (show <ru)) ())
-                   `(ok (peep n 'p 0) (peep n 'b 0) (<>ru)))))))
+                   `(ok (peep n 'p 0) (peep n 'b 0) <>ru))))))
 
    (sync-url peer)
     (: _ (mk ())
@@ -413,10 +413,10 @@
              r (pull-http base)
              (? !(two? r) 0
                 (: st (settle (readdir ".sb/patch"))
-                   nleft (tell (<>>st))
-                   nref (<>>>r)
-                   _ (puts ("sb: pulled -- " + show <st + " patches (" + show (<>r)
-                            + " in), " + show (<>>r) + " blobs, " + show (<>st) + " files here"
+                   nleft (tell <>>st)
+                   nref <>>>r
+                   _ (puts ("sb: pulled -- " + show <st + " patches (" + show <>r
+                            + " in), " + show <>>r + " blobs, " + show <>st + " files here"
                             + (? (0 = nleft) "" (", " + show nleft + " conflicted"))
                             + (? (0 = nref) "" (", " + show nref + " ref clash")) + "\n"))
                    _ (? <r () (say err "sb: some objects did not arrive -- the pull is INCOMPLETE\n"))
@@ -447,7 +447,7 @@
                    ; the push: only onto a clean peer, and only if every write lands
                    out1 (? (0 = pd) (copy "blob" "." peer) '(0 0))
                    out2 (? (0 = pd) (copy "patch" "." peer) '(0 0))
-                   pushed ((0 = pd) && (0 = (<>out1)) && (0 = (<>out2)))
+                   pushed ((0 = pd) && (0 = <>out1) && (0 = <>out2))
                    ; the refs travel too -- a release is only "the unit you
                    ; propagate" if the NAME reaches the other nest with it
                    theirs (form (peer + "/.sb/refs"))
@@ -457,14 +457,14 @@
                         (: pu (refadd theirs (refs ()) ())
                            (? (two? <pu) (lay (peer + "/.sb/refs") (show <pu)) ())))
                    st (settle (readdir ".sb/patch"))
-                   nleft (tell (<>>st))
-                   nref (<>ru)
+                   nleft (tell <>>st)
+                   nref <>ru
                    pst (? !pushed ()                             ; settle the far end too
                           (: c (chdir peer) r (settle (readdir ".sb/patch")) _ (chdir home) r))
                    _ (puts ("sb: synced -- " + show <st + " patches ("
                             + show <inp + " in, " + show <out2 + " out), "
-                            + show (<inb + <out1) + " blobs, " + show (<>st) + " files here"
-                            + (? (two? pst) (", " + show (<>pst) + " files there") "")
+                            + show (<inb + <out1) + " blobs, " + show <>st + " files here"
+                            + (? (two? pst) (", " + show <>pst + " files there") "")
                             + (? (0 = nleft) "" (", " + show nleft + " conflicted"))
                             + (? (0 = nref) "" (", " + show nref + " ref clash"
                                                 + (? (1 = nref) "" "es"))) + "\n"))
@@ -519,9 +519,9 @@
              (? (two? args && !(two? want)) 0                 ; a prefix failed to resolve; it said so
                 (: ids (? (two? args) (closure want) all)
                    st (settle ids)
-                   nleft (tell (<>>st))
+                   nleft (tell <>>st)
                    _ (puts ("sb: applied " + show <st + " of " + show (tally all)
-                            + " patches, " + show (<>st) + " files updated"
+                            + " patches, " + show <>st + " files updated"
                             + (? (tally ids = tally all) " (the whole store)" "")
                             + (? (0 = nleft) "" (", " + show nleft + " conflicted")) + "\n"))
                    _ (? (0 = nleft) ()
@@ -563,12 +563,12 @@
         (? !(two? m) `((sort acc) n)
            (: e <m mine (refof-in base <e)
               (? !(two? mine) (go >m (e >< acc) n)               ; theirs alone: take it
-                 (show mine = show (<>e)) (go >m acc n)          ; the same head: already ours
+                 (show mine = show <>e) (go >m acc n)          ; the same head: already ours
                  (: _ (? loud (say err ("sb: REF CLASH on " + <e
                                         + " -- banked to different heads\n")) ())
                     (go >m acc (n + 1))))))
        (go extra base 0))
-   (refof-in rs nm) (: (go m) (? !(two? m) () ((<<m) = nm) (<><m) (go >m)) (go rs))
+   (refof-in rs nm) (: (go m) (? !(two? m) () (<<m = nm) <><m (go >m)) (go rs))
 
    (sb-bank args)
     (: _ (mk ())
@@ -635,7 +635,7 @@
                                             (go >m (n + 1)))
                                          (: r (diff3 <>bw <>ow <>tw "here now" ("undone " + sh id))
                                             _ (lay p <r)
-                                            k (<>r)
+                                            k <>r
                                             _ (? (0 = k) (puts ("sb: merged " + p + " -- the later edits kept\n"))
                                                  (say err ("sb: CONFLICT in " + p + " -- " + show k
                                                            + " region" + (? (1 = k) "" "s") + " left in markers\n")))

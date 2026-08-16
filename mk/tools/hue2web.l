@@ -25,12 +25,12 @@
       (? !(two? r) (: _ (say err ("hue2web: cannot open " + path + "\n")) (quit 1))
          (: _ (say out (hw-page path '("papel.css" "hue.css") "index.html"
                                 ("<p class=\"srcnav\">the source of <code>" + path + "</code></p>\n"
-                                 + hw-body path (<>r))))
+                                 + hw-body path <>r)))
             0)))
 
    (h2w-main as)
    (? !(two? as) (h2w-usage 0)
       (<as = "css") (: _ (say out (hw-css 0)) 0)
-      (&& (<as = "src") (two? >as)) (h2w-src (<>as))
+      (&& (<as = "src") (two? >as)) (h2w-src <>as)
       (h2w-usage 0))
    _ (h2w-main >>cmdline))

@@ -14,7 +14,7 @@
    ; HERE, the first moon file in both load orders (crew/build.mk, test/test.mk),
    ; so every later stage can answer one.
    (gripe file line col msg) ['gripe file line col msg]
-   (gripe? ('gripe)) 1
+   (gripe? ('gripe >< _)) 1
    (okv? x) (two? x && !(gripe? x))
    ; clexat: lex with the FIRST line numbered ln0 -- the driver's door. its -D
    ; text prepends to the TU, so those lines get 1-k..0 and the source itself

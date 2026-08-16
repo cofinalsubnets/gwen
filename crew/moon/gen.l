@@ -269,7 +269,7 @@
                (? ((pv = big) && (jv = big) && (sv = big) && (rv = big)) 1
                   ((jv < pv) && (jv < sv) && (jv < rv)) ()
                   ((sv < pv) && (sv < rv)) 1
-                  ((rv < pv)) !(member? nom (lvret g))
+                  (rv < pv) !(member? nom (lvret g))
                   (id? <>p 'd) 1
                   ()))
            (go2 (mup nom)))
@@ -5631,17 +5631,17 @@
                     (: rY <>f o <>>>f
                        b9 (assoc o bs)
                        (? (member? rY stldkeep)
-                          (f >< stldw r (([o rY]) >< bdropo (bdropr bs rY) o))
+                          (f >< stldw r ([o rY] >< bdropo (bdropr bs rY) o))
                           (two? b9 && two? <>b9)     ; an immediate binding: the load remats
-                           (['li rY <><>b9] >< stldw r (([o rY]) >< bdropr bs rY))
+                           (['li rY <><>b9] >< stldw r ([o rY] >< bdropr bs rY))
                           (two? b9 && <>b9 = rY) (stldw r bs)
-                          (two? b9) (['mov rY <>b9] >< stldw r (([o rY]) >< bdropr bs rY))
-                          (f >< stldw r (([o rY]) >< bdropr bs rY))))
+                          (two? b9) (['mov rY <>b9] >< stldw r ([o rY] >< bdropr bs rY))
+                          (f >< stldw r ([o rY] >< bdropr bs rY))))
                    (member? op stops9 && <>f = 'r4)
                     (: o <>>f
                        b2 (bdropo bs o)
                        (? (op = 'st && nom? <>>>f)
-                          (f >< stldw r (([o <>>>f]) >< b2))
+                          (f >< stldw r ([o <>>>f] >< b2))
                           (f >< stldw r b2)))
                    ; a store-immediate binds its constant (full width only; narrow si's
                    ; truncated bytes just invalidate) -- a later ld remats as li
@@ -5649,7 +5649,7 @@
                     (: o <>>f
                        b2 (bdropo bs o)
                        (? (op = 'si)
-                          (f >< stldw r (([o ['k <>>>f]]) >< b2))
+                          (f >< stldw r ([o ['k <>>>f]] >< b2))
                           (f >< stldw r b2)))
                    ; a reg-reg mov CARRIES its src's bindings: the slot now rides both registers,
                    ; and when one dies the other still answers. sp/fp/r4 stay out (sp moves in

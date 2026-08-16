@@ -117,7 +117,7 @@
              _ (tar-txt! b 265 32 (tar-get e 'uname "root"))
              _ (tar-txt! b 297 32 (tar-get e 'gname "root"))
              _ (tar-oct! b 329 8 0) _ (tar-oct! b 337 8 0)    ; devmajor/minor
-             _ (tar-txt! b 345 155 (<sp))                     ; prefix
+             _ (tar-txt! b 345 155 <sp)                     ; prefix
              ; the checksum LAST -- it sums the block it sits in, so every other
              ; field must already be written. six digits, NUL, space.
              _ (tar-oct! b 148 7 (tar-sum b))
@@ -189,7 +189,7 @@
                      (: r (tar-read1 s n o)
                         (? (id? r 'end) `(1 (rev acc))
                            (! r) ()
-                           (go (<>>r) (<(>r) >< acc)))))
+                           (go <>>r (<(>r) >< acc)))))
        (go 0 ()))
 
    ; --- the filesystem, in and out -------------------------------------------
@@ -203,9 +203,9 @@
    ; tar's field is seconds. ⚠ it FOLLOWS a symlink -- there is no lstat here -- so the
    ; link test is readlink, which answers the target for one and nothing for anything
    ; else. Without that test a tree of symlinks archives as copies of its own files.
-   (tar-mode st) (& 4095 (<>>st))
-   (tar-dir? st) ((& 61440 (<>>st)) = 16384)
-   (tar-secs st) (// (<>st) 1000)
+   (tar-mode st) (& 4095 <>>st)
+   (tar-dir? st) ((& 61440 <>>st) = 16384)
+   (tar-secs st) (// <>st 1000)
    (tar-gather root rel)                    ; -> (1 entries) | ()
     (: full (? (tally rel) (root + "/" + rel) root)
        lnk (readlink full)

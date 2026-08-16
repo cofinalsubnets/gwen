@@ -246,7 +246,7 @@
                   (? !(safe? p) (: _ (oops c 403 "Forbidden" head?) `(403 meth raw))
                      (: m (? make (make p) ())
                         (? (two? m)
-                           (: _ (reply c 200 "OK" <m (<>m) head?) `(200 meth raw))
+                           (: _ (reply c 200 "OK" <m <>m head?) `(200 meth raw))
                      (: full (root + p)
                         (? (dir? full)
                            ; a directory: redirect to the slashed form first, so the
@@ -268,7 +268,7 @@
 
 ; --- the loop ---------------------------------------------------------------------------
 (: (note quiet l) (? quiet 0
-                     (: _ (say err ("kiosko: " + show <l + " " + (<>l) + " " + (nth l 2)))
+                     (: _ (say err ("kiosko: " + show <l + " " + <>l + " " + (nth l 2)))
                         (put err 10)))
    ; `await` parks THIS task on the listener until a client is pending; `accept` then
    ; returns at once, the session is spun as its own task, and we re-park.

@@ -34,7 +34,7 @@
    ; closure only through capp (its lam/pi/sig branches all come before the spine case), and
    ; lof prints TERMS, so these two lines plus comp's three ('clo ..) sites are the whole
    ; representation.
-   (capp cl v) ((<>cl) v)
+   (capp cl v) (<>cl v)
 
    (vapp f a) (f @ ('lam cl) (capp cl a) ['na f a])
 
@@ -347,7 +347,9 @@
    (peep CMEM nm 0 @ (_ v) v
       (peep BRIDGE nm 0 @ (_ v) v
          ; ⚠ a SRC row is the ONE-element (t), not a ['hit v] pair: defn pins the term itself.
-         (peep SRC nm 0 @ (src) (: v (ev (u2 src ())) _ (pin CMEM nm ['hit v]) v)
+         ; (src >< _) spells the match: in a PATTERN (x) is a list shape, not x, so the
+         ; cons pattern says the same thing without wearing the singleton the lint flags.
+         (peep SRC nm 0 @ (src >< _) (: v (ev (u2 src ())) _ (pin CMEM nm ['hit v]) v)
                          ['nv nm])))
 
    (u2app t bs)

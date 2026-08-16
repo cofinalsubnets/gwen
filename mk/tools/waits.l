@@ -165,7 +165,7 @@
                 _ (say out "      ") _ (say out (el r 3)) (put out 10))
    (llen l) (foldl (\ n _ (n + 1)) 0 l)
 
-   paths (>argv)
+   paths >argv
    _ (? (two? paths) 0 (die "usage: waits.l FILE .."))
    found (foldl (\ a p (+ a (scan p))) () paths)
    fkeys (map key found)

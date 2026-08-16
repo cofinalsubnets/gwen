@@ -31,7 +31,7 @@
 
 (:
    ; the 'adds sitting at the front of a script (a del's replacement)
-   (m3grab m a) (? (two? m && ((<<m) = 'add)) (m3grab >m (<><m >< a)) `(m (rev a)))
+   (m3grab m a) (? (two? m && (<<m = 'add)) (m3grab >m (<><m >< a)) `(m (rev a)))
 
    ; a myers script -> the 2n+1 slots, gap line gap line .. gap. an 'add after a
    ; KEEP is an insertion and lands in the pending gap; the 'adds after a DEL are
@@ -61,9 +61,9 @@
    ; unstable ones. answers (chunks nconflicts), chunks newest-first.
    (m3go bs os ts ol tl acc nc)
     (? !(two? bs) `(acc nc)
-       (((<os) = <bs) && ((<ts) = <bs)) (m3go >bs >os >ts ol tl (<bs >< acc) nc)
+       ((<os = <bs) && (<ts = <bs)) (m3go >bs >os >ts ol tl (<bs >< acc) nc)
        (: (run b o t bb ob tb)                                        ; extend while either side moved
-           (? (two? b && (!((<o) = <b) || !((<t) = <b)))
+           (? (two? b && (!(<o = <b) || !(<t = <b)))
               (run >b >o >t (<b >< bb) (<o >< ob) (<t >< tb))
               `(b o t (m3cat (rev bb)) (m3cat (rev ob)) (m3cat (rev tb))))
           r (run bs os ts () () ())
@@ -81,4 +81,4 @@
        op (m3parts (myers b (lines ours)))
        tp (m3parts (myers b (lines theirs)))
        r (m3go bp op tp ol tl () 0)
-       `((unlines (m3cat (rev <r))) (<>r))))
+       `((unlines (m3cat (rev <r))) <>r)))

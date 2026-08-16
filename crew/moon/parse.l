@@ -564,7 +564,7 @@
                        (: d <dims
                           (? (two? d && id? <d 'vdim) ['varr (mkarr ety >dims) <>d]
                              ['arr (mkarr ety >dims) d])))
-   (varr? ('varr)) 1
+   (varr? ('varr >< _)) 1
    ; the (params)/[dims] suffix run on a direct declarator. each suffix wraps
    ; INSIDE w (the wrap-so-far: eventual-pointee -> declared type), so the type
    ; grows inside-out; the name's OWN (params) ride out as dat (a fn DEF binds
@@ -868,7 +868,7 @@
    ; else reads a marked type.
    ; ⚠ only the SPECIFIER run's qualifier is seen: a mid-declarator one (`char *
    ; const *p`) reads unqualified, which matches MORE than C does, never less.
-   (cq? ('cq)) 1
+   (cq? ('cq >< _)) 1
    (qmark q ty) (? !q ty
                    (ptr? ty) ['ptr (qmark q <>ty)]
                    (arr? ty) ['arr (qmark q <>ty) <>>ty]

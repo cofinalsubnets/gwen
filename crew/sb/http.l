@@ -78,8 +78,8 @@
    (http-fetch base rel)
     (: u (url-split (base + rel))
        (? !(two? u) ()
-          (: r (http-get <u (<>u) (<>>u))
-             (? (two? r && (200 = <r)) `(1 (<>r)) ()))))
+          (: r (http-get <u <>u <>>u)
+             (? (two? r && (200 = <r)) `(1 <>r) ()))))
 
    ; the first form of a string, if it is a list; () for anything else.
    (readform s)

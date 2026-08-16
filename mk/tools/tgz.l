@@ -24,7 +24,7 @@
    (tgz-c arch dir stamp)
     (: g (tar-gather dir "")
        _ (? (! g) (tgz-die ("cannot read " + dir)) 0)
-       es (? (two? stamp) (tar-level (<(>g)) (<stamp)) (<(>g)))
+       es (? (two? stamp) (tar-level (<(>g)) <stamp) (<(>g)))
        a (tar-pack es)
        _ (? (! a) (tgz-die "cannot pack (a path too long for ustar?)") 0)
        z (gz-zip a "" 0)
@@ -59,7 +59,7 @@
 
    (tgz-main av)
     (: n (tally av)
-       v (? n (<av) "")
+       v (? n <av "")
        (? (! n) (tgz-die "usage: tgz c|x|t ARCHIVE.tar.gz [DIR] | c .. DIR STAMP")
           ; the stamp arrives as text, and `sound` IS the number reader -- it answers
           ; the datum consed onto the rest, so the car is the charm.

@@ -113,7 +113,7 @@
 (assert
  (64 = tally pe)                                          ; the empty file made a real patch
  (two? esnap)                                             ; ...and reached the snap
- ((<>esnap) = sha256 "")                                  ; ...under the honest empty digest
+ (<>esnap = sha256 "")                                  ; ...under the honest empty digest
  (0 = clean)                                              ; ...so the tree came back clean
  !(sb-record "noop")                                    ; ...and stays clean -- no junk tip
  (0 < got2)                                               ; the fresh nest took the whole store
@@ -155,9 +155,9 @@
 (assert
  (mtext = "ONE\ntwo\nthree\nfour\nFIVE\n")               ; BOTH disjoint edits survived
  (0 < gotm)                                              ; ...and it was not a conflict
- (1 = tally cfm) (0 = (<><cfm))                          ; one merge, zero regions unresolved
+ (1 = tally cfm) (0 = <><cfm)                          ; one merge, zero regions unresolved
  (0 = gotc)                                              ; the overlap DID conflict: sync answers 0
- (1 = (<><cfc))                                          ; ...one region
+ (1 = <><cfc)                                          ; ...one region
  (member? "=======" (lines ctext))                       ; ...and the markers are in the file
  (member? "A-TWO" (lines ctext))                         ; ...carrying BOTH sides, neither lost
  (member? "B-TWO" (lines ctext))
@@ -179,7 +179,7 @@
 (assert
  (0 = gotd)                                              ; a delete against an edit is a conflict
  (two? gtext)                                            ; the file is STILL THERE...
- ((<>gtext) = "keep\nme too\n")                          ; ...with the edit intact, not the deletion
+ (<>gtext = "keep\nme too\n")                          ; ...with the edit intact, not the deletion
  (1 = tally (filter (\ e ("g" = <e)) cfd)))              ; ...and g is named in the report
 
 ; --- sync is an EXCHANGE, not a fetch: ONE command settles BOTH nests. the

@@ -172,7 +172,9 @@
 
    (lint-of src conf)
     (: n  (tally src)
-       sg (lint-on? conf 'singleton)
+       ; singleton is ON by default (2026-08-16; three fresh nullary-define bugs in one
+       ; session of new code); (singleton 0) turns it off. the other opinion rules stay opt-in.
+       sg (lint-yes? conf 'singleton)
        sh (lint-on? conf 'shadow)
        dp (peep conf 'deprecated ())
        ; a token just ENDED at index i, having started at ti/tc: the two token rules

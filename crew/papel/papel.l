@@ -152,11 +152,11 @@
                               k (peep seen s0 0)
                               sn (? (0 < k) (s0 + "-" + show k) s0)
                               _ (pin seen s0 (k + 1))
-                              (g >l seen (`((<>b) sn lab) >< acc)))
+                              (g >l seen (`(<>b sn lab) >< acc)))
                            (g >l seen acc)))))
                d (tablet 0) ())
    ; the title: the first head-1, else the meta `title`, else the caller's fallback.
-   (ptitle d dflt) (: h1 (filter (\ b (head? b && ((<>b) = 1))) d)
+   (ptitle d dflt) (: h1 (filter (\ b (head? b && (<>b = 1))) d)
                       mt (mget (pmeta d) 'title)
                       (? (two? h1) (itext (nth <h1 2))
                          (0 < tally mt) mt
@@ -184,7 +184,7 @@
                               x))) l)
    (rlb f b)  (: t <b
                  (? (id? t 'para)    `('para (rli f <>b))
-                    (id? t 'head)    `('head (<>b) (rli f (nth b 2)))
+                    (id? t 'head)    `('head <>b (rli f (nth b 2)))
                     (id? t 'bullets) `('bullets (map (\ i (rli f i)) <>b))
                     (id? t 'numbers) `('numbers (map (\ i (rli f i)) <>b))
                     (id? t 'deflist) `('deflist (map (\ it `((rli f <it) (rli f <>it))) <>b))
@@ -209,7 +209,7 @@
    (ptoc d hs) (: rest (? (two? hs && (1 = <(<hs))) >hs hs)
                   (? !(two? >rest) ""
                      ("<ul>\n" + strcat (map (\ h ("<li class=\"l" + show <h + "\"><a href=\"#"
-                                                   + hq (<>h) + "\">" + hq (nth h 2) + "</a></li>\n")) rest)
+                                                   + hq <>h + "\">" + hq (nth h 2) + "</a></li>\n")) rest)
                       + "</ul>")))
    (pmetah kvs) (? (two? kvs) (htb `('meta kvs)) ""))
 
@@ -315,7 +315,7 @@ table{border-collapse:collapse}
    ; request compares against that same reading and sees it. and `build` itself is
    ; untouched, so the decision that actually matters stays cook's, at cook's resolution.
    ; mtime AND size, because an edit can preserve either one alone.
-   (fprint conf) (foldl (+) 0 (map (\ s (: st (stat s) (? (two? st) ((<>st) + <st) 0)))
+   (fprint conf) (foldl (+) 0 (map (\ s (: st (stat s) (? (two? st) (<>st + <st) 0)))
                                    (sources conf)))
    (refresh conf box) (: f (fprint conf)
                          (? (f = peep box 'f -1) 0 (: _ (pin box 'f f) (build conf))))

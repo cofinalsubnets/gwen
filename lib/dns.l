@@ -104,7 +104,7 @@
     (? (n <= pos) -1
        (: l (r pos)
           (? (l = 0) (pos + 1)
-             (((l & 192) = 192)) (? (n < (pos + 2)) -1 (pos + 2))
+             ((l & 192) = 192) (? (n < (pos + 2)) -1 (pos + 2))
              (dns-skip r (pos + l + 1) n))))
 
    ; a response -> the A addresses in the server's order, () if it says no, or

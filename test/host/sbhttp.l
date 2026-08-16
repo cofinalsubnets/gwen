@@ -63,9 +63,9 @@
  ((show '(1 2)) = (show (readform "(1 2)")))                         ; a form off a string
  (0 < got)                                                           ; the pull went through
  (2 = npat) (4 = nblob)                                              ; every patch, every blob
- ((<>a) = "v2\n")                                                    ; the head content
- ((<>b) = "nested\n")                                                ; ...a NESTED path materialized
- (two? e) (0 = (tally (<>e)))                                        ; ...and the EMPTY file, 0 bytes
+ (<>a = "v2\n")                                                    ; the head content
+ (<>b = "nested\n")                                                ; ...a NESTED path materialized
+ (two? e) (0 = (tally <>e))                                        ; ...and the EMPTY file, 0 bytes
  (two? ref)                                                          ; the ref rode along
  (0 = clean))                                                        ; the tree matches the snap
 

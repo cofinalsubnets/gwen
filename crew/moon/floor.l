@@ -7,11 +7,11 @@
 ; a second front has to drag cparse in to size a struct.
 (:
    ; -- the type shapes --
-   (ptr? ('ptr)) 1
-   (arr? ('arr)) 1
-   (fn? ('fn)) 1                     ; ('fn ret?) -- a function; decays to its address
-   (stru? ('struct)) 1
-   (bitf? ('bitfield)) 1             ; (bitfield uty bitoff width); its lvalue is a UNIT address
+   (ptr? ('ptr >< _)) 1
+   (arr? ('arr >< _)) 1
+   (fn? ('fn >< _)) 1                     ; ('fn ret?) -- a function; decays to its address
+   (stru? ('struct >< _)) 1
+   (bitf? ('bitfield >< _)) 1             ; (bitfield uty bitoff width); its lvalue is a UNIT address
    (cplxty? ty) (stru? ty && member? <>ty '("__cplx_double" "__cplx_float"))   ; a seeded complex
 
    ; -- sizes and alignment. w is the machine word in BYTES (4 on the 32-bit thumb ABI, 8

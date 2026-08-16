@@ -232,9 +232,9 @@
                       ((0 < tally nm) && ((nm 0) = 120)) 'x
                       ((0 < tally nm) && ((nm 0) = 119)) 'w
                       '?))
- rv-abs (('(("a0" r0) ("a1" r1) ("a2" r2) ("a3" r3) ("a4" r4) ("a5" r5) ("a6" r6) ("a7" r7)
-            ("t0" r8) ("t1" r9) ("t2" r10) ("t3" r11) ("t4" r12) ("s2" r13) ("s3" r14) ("s1" r15)
-            ("sp" sp) ("s0" fp) ("ra" lr) ("zero" zero) ("t5" t5) ("t6" t6) ("gp" gp) ("tp" tp)))
+ rv-abs ('(("a0" r0) ("a1" r1) ("a2" r2) ("a3" r3) ("a4" r4) ("a5" r5) ("a6" r6) ("a7" r7)
+           ("t0" r8) ("t1" r9) ("t2" r10) ("t3" r11) ("t4" r12) ("s2" r13) ("s3" r14) ("s1" r15)
+           ("sp" sp) ("s0" fp) ("ra" lr) ("zero" zero) ("t5" t5) ("t6" t6) ("gp" gp) ("tp" tp))
          + (map (\ i [("s" + show i) (intern ("r" + show (15 + i)))]) '(4 5 6 7 8 9 10 11))
          + (map (\ i [("fa" + show i) (intern ("f" + show i))]) ^8)
          + (map (\ i [("ft" + show i) (intern ("f" + show (8 + i)))]) ^12))

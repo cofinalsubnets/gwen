@@ -124,7 +124,7 @@
 ; reads its input as latin-1 unless preconv ran, so a raw UTF-8 character in the source
 ; renders as MOJIBAKE, not as itself.
 (: rglyphs '(("em" "—") ("en" "–") ("bu" "•") ("la" "⟨") ("ra" "⟩") ("mi" "−"))
-   (glyph n)   ((: (g l) (? !(two? l) ("\\(" + n) ((<<l) = n) (<>(<l)) (g >l))) rglyphs)
+   (glyph n)   ((: (g l) (? !(two? l) ("\\(" + n) (<<l = n) (<>(<l)) (g >l))) rglyphs)
    (rqat s i)  ((: (g l) (? !(two? l) ()                       ; does a glyph start at i? -> (name len)
                             (: gl (<>(<l)) n (tally gl)
                                (? (((i + n) <= tally s) && (gl = snip s i (i + n))) `((<(<l)) n) (g >l)))))
@@ -406,7 +406,7 @@
    ; text one char at a time and `mrg` glues it back on -- the same fallback the markdown
    ; surface gives an unclaimed sigil. Without it the reader stops dead at the first one.
    (rchar s y n)   ((tag (\ p `('text (string <p))) (one chr?)) s y n)
-   (rfont o t s y n) ((tag (\ p `(t <p)) (seqs `((skip (lit o)) (pack (rinls)) (skip rclose)))) s y n)
+   (rfont o t s y n) ((tag (\ p `(t <p)) (seqs `((skip (lit o)) (pack rinls) (skip rclose)))) s y n)
    (rstrong s y n) ((rfont "\\fB" 'strong) s y n)
    (rem s y n)     ((rfont "\\fI" 'em) s y n)
    (rcode s y n)   ((tag (\ p `('code (plain <p)))
@@ -428,7 +428,7 @@
              (g j (snip s i j >< acc))))) 0 ())
    fontmacs '((".BR" (strong text) 0) (".RB" (text strong) 0) (".IR" (em text) 0)
               (".RI" (text em) 0) (".SB" (strong) 1) (".SM" (text) 1) (".B" (strong) 1) (".I" (em) 1))
-   (macinfo m) ((: (g l) (? !(two? l) () ((<<l) = m) (>(<l)) (g >l))) fontmacs)
+   (macinfo m) ((: (g l) (? !(two? l) () (<<l = m) (>(<l)) (g >l))) fontmacs)
    (wrapf f l)   (? (id? f 'strong) `(`('strong l)) (id? f 'em) `(`('em l)) l)
    (allplain? l) (? !(two? l) 1 (id? <<l 'text) (allplain? >l) 0)
    (argl a f)    (: l (rfinl a) (? (allplain? l) (wrapf f l) l))     ; an explicit \f inside the arg wins

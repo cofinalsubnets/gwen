@@ -152,7 +152,7 @@
    ;; and free to vectorize -- the same dance as the top of kmain, which stays
    ;; for the limine door where IT is the first code to run), then C.
    x-text
-    ('((label khop)
+    '((label khop)
        (lia sp kstack)
        (add sp sp 0x10000)                            ; + kstack_size
        (ldcr r0 0)
@@ -168,7 +168,7 @@
        (call pvh_to_kboot)
        (call kmain)
        (label x_park)
-       (cli) (hlt) (jmp x_park)))
+       (cli) (hlt) (jmp x_park))
 
    ;; -- aarch64 -----------------------------------------------------------
    ;; the tables mirror x86's shape index for index: hhdm at L0[256], the kernel
@@ -257,7 +257,7 @@
          (jmpr r9)))
 
    a-text
-    ('((label khop)
+    '((label khop)
        (la r9 kstack)                                ; running HIGH now: pc-relative is the linked address
        (li r10 0x10000) (add r9 r9 r10)              ; + kstack_size
        (lea sp r9 0)                                 ; mov sp, x9
@@ -273,7 +273,7 @@
        (call kmain)
        (label a64_park)
        (wfi)
-       (jmp a64_park)))
+       (jmp a64_park))
 
    ;; the boot stack, both arches: kmain never returns and limine's own (64 KiB)
    ;; is the precedent for depth. .bss so it costs the file nothing.

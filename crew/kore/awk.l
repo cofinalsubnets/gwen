@@ -188,8 +188,8 @@
     (: n (tally s) o (jug 0)
        (go k) (? (n <= k) (slurp o)
                  (: c (s k)
-                    _ (put o (? ((up && (97 <= c <= 122))) (c - 32)
-                                ((!up && (65 <= c <= 90))) (c + 32)
+                    _ (put o (? (up && (97 <= c <= 122)) (c - 32)
+                                (!up && (65 <= c <= 90)) (c + 32)
                                 c))
                     (go (k + 1))))
        (go 0))
@@ -352,7 +352,7 @@
               (? ((c = 32) || (c = 9) || (c = 13)) (go (k + 1) prev acc)
                  (c = 35) (go (eol k) prev acc)
                  ; a backslash-newline is a continuation: neither token nor break
-                 (c = 92) (go (? ((((k + 1) < n) && ((src (k + 1)) = 10))) (k + 2) (k + 1))
+                 (c = 92) (go (? (((k + 1) < n) && ((src (k + 1)) = 10)) (k + 2) (k + 1))
                               prev acc)
                  (c = 10) (: t ['nl ""] (go (k + 1) t (t >< acc)))
                  (c = 34) (aw-strlit src n (k + 1) @ [s j]
@@ -360,7 +360,7 @@
                  ((c = 47) && !(aw-div? prev))
                   (aw-erelit src n (k + 1) @ [s j]
                     (: t ['ere s] (go j t (t >< acc))) ())
-                 ((aw-dig? c) || ((c = 46) && (((k + 1) < n)) && (aw-dig? (src (k + 1)))))
+                 ((aw-dig? c) || ((c = 46) && ((k + 1) < n) && (aw-dig? (src (k + 1)))))
                   (: e (aw-nspan src k n)
                      t ['num (aw-parse src k e)]
                      (go e t (t >< acc)))

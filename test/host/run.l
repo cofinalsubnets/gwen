@@ -18,16 +18,16 @@
    ; reach stdout, never what the caller is handed.
    a (hark cmd) b (herald cmd)
    _ (assert (two? a) (two? b))
-   _ (assert ((<a) = (<b)) ((<a) = 0))
-   _ (assert ((>a) = (>b)) ((>a) = "tee-me\n"))
+   _ (assert (<a = <b) (<a = 0))
+   _ (assert (>a = >b) (>a = "tee-me\n"))
 
    ; a nonzero exit still rides back through the tee path
    bad (herald `("sh" "-c" "printf 'nope\n'; exit 3"))
-   _ (assert (two? bad) ((<bad) = 3) ((>bad) = "nope\n"))
+   _ (assert (two? bad) (<bad = 3) (>bad = "nope\n"))
 
    ; no output -> the EmptyString singleton, tee or not
    quiet (herald `("sh" "-c" "exit 0"))
-   _ (assert (two? quiet) ((<quiet) = 0) (! (>quiet)))
+   _ (assert (two? quiet) (<quiet = 0) (! >quiet))
 
    (puts "run: ok\n"))
 

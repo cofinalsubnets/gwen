@@ -58,7 +58,7 @@
    ; ever sees one. 'in carries the header's name, 'out pops back.
    (fmin name) ['fmark 'in name]
    fmout ['fmark 'out ()]
-   (idt? ('id)) 1
+   (idt? ('id >< _)) 1
    ; ⚠ the value is a GUARD, never a second pattern variable: `(pv? ('p v) v)` rebinds
    ; v rather than demanding the two agree, so it answered 1 for every punctuator.
    (idv? ('id v) s) ?(v = s)
@@ -92,8 +92,8 @@
 
    ; -- macro table entries: (obj body) | (fun params body variadic?) --
    (mdef macs name) (peep macs name ())
-   (mobj? ('obj)) 1
-   (mfun? ('fun)) 1
+   (mobj? ('obj >< _)) 1
+   (mfun? ('fun >< _)) 1
 
    ; -- lex a spelling back into one token (## paste result) --
    (relex s line)
@@ -377,7 +377,7 @@
    ; two different wide prefixes keep the first (gcc refuses; nothing here spells it)
    (strk? k) (member? k '(str wstr str16 str32))
    (jork a b) (? (a = b) a (a = 'str) b (b = 'str) a a)
-   (fmark? ('fmark)) 1
+   (fmark? ('fmark >< _)) 1
    (fmpush t files) (? (vof t = 'in) (lof t >< files) >files)
    (fmtop files) (two? files ? <files)
    spanacc {}                               ; the spans, REVERSED, of the strcat-pass now running

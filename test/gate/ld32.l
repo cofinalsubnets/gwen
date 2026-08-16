@@ -42,5 +42,5 @@
       _ (? (0 < nr) 0 (scare 'ld32-no-relocs p))
       _ (puts ("ld32: " + ((show nsym) + (" syms, " + ((show <w)
               + (" thumb funcs, " + ((show <>w) + (" undefs, " + ((show nr)
-              + (" REL relocs -- ok\n"))))))))))
+              + " REL relocs -- ok\n")))))))))
       (flush out)))

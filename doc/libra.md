@@ -127,7 +127,9 @@ it reads `.l` correctly, which is most of the work: `;` and `#!` start comments,
 `"..."` is the only string, and `'` / `` ` `` are READER OPERATORS, never
 delimiters -- so it does not trip where a C lexer would.
 
-**singleton** (off by default) -- a form of ONE element is that element, since
+**singleton** (ON by default; `(singleton 0)` turns it off; this tree makes it STRICT
+in `.libra.l` -- the gate is no gripes, hand-fixed) -- a form of ONE element
+is that element, since
 `(f)` is `f` at zero operands. so the parens do nothing, and a nullary call
 never fires: `(go)` is `go` handed back unrun, silently, with the value you
 wanted one curry away. three things are exempt, and each for a reason:
@@ -190,7 +192,7 @@ person, which is why the project file exists at all.
 
 ```love
 ; ~/.love/etc/libra.l -- or ./.libra.l
-(singleton 1)                                    ; turn the rule on
+(singleton 0)                                    ; turn the rule OFF (on by default)
 (shadow 1)                                       ; ...and the sigil-word rule
 (deprecated old-thing (worse-thing "use better-thing"))
 (strict singleton)                               ; ...and make it fail the gate

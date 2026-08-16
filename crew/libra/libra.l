@@ -18,9 +18,12 @@
 ; in the file, since `sound` does not keep them.
 ;
 ; the SETTINGS come from lib/salt.l -- ~/.love/etc/libra.l for your taste, then
-; ./.libra.l over it for the tree's own. balance is unconditional; the rules that
-; are matters of OPINION (singleton, the deprecated roster) are off until a config
-; asks for them, and even then they only speak. see doc/libra.md.
+; ./.libra.l over it for the tree's own. balance is unconditional. singleton is on
+; by default -- (singleton 0) turns it off -- and this tree's ./.libra.l makes it
+; STRICT: the gate is no gripes, and a gripe is fixed BY HAND, never auto-applied
+; -- (f) == f is false for a macro head and for a match pattern, and no scanner
+; can know which is which. the other OPINION rules (shadow, the deprecated
+; roster) are off until a config asks. see doc/libra.md.
 ;
 ; usage:  libra FILE ..      weigh them: balance is the DEFAULT verb, so a bare
 ;                            file list is the whole command (`-w` also strips
@@ -360,7 +363,7 @@
           + "                              ⚠ both print from the datum: COMMENTS ARE NOT CARRIED\n"
           + "       libra doc FILE ..      the file's HEADER as a document, on stdout\n"
           + "                              markdown by default; -ht for html, -rf for man\n"
-          + "  config: ~/.love/etc/libra.l, then ./.libra.l over it -- (singleton 1),\n"
+          + "  config: ~/.love/etc/libra.l, then ./.libra.l over it -- (singleton 0),\n"
           + "          (deprecated old (worse \"use better\")), (strict singleton),\n"
           + "          (drop-parens 1) for -p by default, (drop-singles 0) / (drop-nullary 1)\n"
           + "          to tune what it drops. doc/libra.md\n")

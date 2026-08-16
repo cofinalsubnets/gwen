@@ -47,36 +47,36 @@
         _ (assert
            (two? r)
            (<r = "text/html; charset=utf-8")
-           (sub? (<>r) "class=\"l-comment\"")        ; painted, by hue's own table
-           (sub? (<>r) "id=\"L1\"")                  ; and every line is linkable
-           (sub? (<>r) "/hue.css"))                  ; ..with the stylesheet that colours it
+           (sub? <>r "class=\"l-comment\"")        ; painted, by hue's own table
+           (sub? <>r "id=\"L1\"")                  ; and every line is linkable
+           (sub? <>r "/hue.css"))                  ; ..with the stylesheet that colours it
         0)
    _ (: r (mk "/d.md")
         _ (assert
            (two? r)
            (<r = "text/html; charset=utf-8")
-           (sub? (<>r) "<h1>a head</h1>")            ; rendered, through lapiz
-           (sub? (<>r) "<em>prose</em>"))
+           (sub? <>r "<h1>a head</h1>")            ; rendered, through lapiz
+           (sub? <>r "<em>prose</em>"))
         0)
    ; ⚠ `.l.md` is claimed BEFORE `.md`, and reads the .l with the suffix off. the
    ; two pages link to each other, which is the whole reason the nav line exists.
    _ (: r (mk "/x.l.md")
         _ (assert
            (two? r)
-           (sub? (<>r) "<h1>/x.l</h1>")              ; the file names the document
-           (sub? (<>r) "a comment")                  ; ..and its header IS the document
-           (sub? (<>r) "href=\"/x.l\""))            ; ..with the way back to the source
+           (sub? <>r "<h1>/x.l</h1>")              ; the file names the document
+           (sub? <>r "a comment")                  ; ..and its header IS the document
+           (sub? <>r "href=\"/x.l\""))            ; ..with the way back to the source
         0)
    ; a file with no header says so, rather than serving a blank page
    _ (: _ (spit "/bare.l" "(: x 1)\n")
         r (mk "/bare.l.md")
-        _ (assert (two? r) (sub? (<>r) "no header comment"))
+        _ (assert (two? r) (sub? <>r "no header comment"))
         0)
    _ (: r (mk "/hue.css")
         _ (assert
            (two? r)
            (<r = "text/css; charset=utf-8")
-           (sub? (<>r) ".hue .l-comment{color:#"))   ; the theme join, not a guess
+           (sub? <>r ".hue .l-comment{color:#"))   ; the theme join, not a guess
         0)
 
    ; --- and the ones it refuses -----------------------------------------------
@@ -93,7 +93,7 @@
    ; is the same value, and REWRITING the file answers the new one.
    _ (: a (mk "/x.l")
         b (mk "/x.l")
-        _ (assert ((<>a) = (<>b)))
+        _ (assert (<>a = <>b))
         0)
    0)
 

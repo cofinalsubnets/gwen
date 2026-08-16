@@ -49,13 +49,13 @@
    ; size is an edit nobody can see anyway (papel's fingerprint takes the same bet,
    ; and for the same reason -- the alternative is re-reading the file to decide
    ; whether to re-read the file).
-   (sv-stamp p) (: st (stat p) (? (two? st) ((<>st) + (<st) * 7) 0))
+   (sv-stamp p) (: st (stat p) (? (two? st) (<>st + <st * 7) 0))
 
    ; ..and the box it lives in: `(stamp html) per path, replaced when the stamp moves.
    (sv-cached box p make)
    (: k (sv-stamp p)
       e (peep box p ())
-      (? (&& (two? e) (<e = k)) (<>e)
+      (? (&& (two? e) (<e = k)) <>e
          (: h (make ())
             _ (pin box p `(k h))
             h)))
@@ -64,7 +64,7 @@
    ; other reading of the same file. `alt` is `(href text) or ().
    (sv-nav path alt)
    ("<p class=\"srcnav\"><a href=\"" + sv-up path + "\">" + sv-up path + "</a> &middot; " + path
-    + (? (two? alt) (" &middot; <a href=\"" + <alt + "\">" + (<>alt) + "</a>") "") + "</p>\n")
+    + (? (two? alt) (" &middot; <a href=\"" + <alt + "\">" + <>alt + "</a>") "") + "</p>\n")
    (sv-page path body alt) (hw-page path '("/hue.css") "/" (sv-nav path alt + body))
 
    ; the page for one markdown file: lapiz reads it and shows it as html, and the
@@ -98,9 +98,9 @@
             (? !(two? r) ()                       ; not there: let kiosko say 404
                `("text/html; charset=utf-8"
                  (sv-cached box p
-                   (\ _ (? hd? (sv-doc p (sv-head src (<>r)) `(src "the source"))
-                            md? (sv-doc p (<>r) ())
-                            (sv-page p (hw-body p (<>r)) `((p + ".md") "the header, as a document"))))))))))
+                   (\ _ (? hd? (sv-doc p (sv-head src <>r) `(src "the source"))
+                            md? (sv-doc p <>r ())
+                            (sv-page p (hw-body p <>r) `((p + ".md") "the header, as a document"))))))))))
 
    (sv-usage _)
    (: _ (say err "love serve -- the tree in a browser, painted on the way out
@@ -125,7 +125,7 @@ a .l is painted, a .md rendered, and x.l.md is x.l's header as a document.
                 (loop r port w))))
       c (loop as 8080 ".")
       port <c
-      dir (<>c)
+      dir <>c
       ; ⚠ BARE, never (from 'kiosko ..). in the artifact kiosko is CATTED, not
       ; registered, so the accessor answers () -- and () applied to five operands is
       ; 1, which is truthy, so the miss would read as a server that started and the

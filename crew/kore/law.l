@@ -280,7 +280,7 @@
           "\\(a\\|b\\)" "a\\|b" "\\(a\\|bc\\)*" "b\\{2\\}" "a\\{1,2\\}" "[[:alpha:]]")
    ntok 18
    (rpat k st acc) (? (< k 1) (L acc st)
-                      (: r (random st ntok) (rpat (- k 1) >r (+ acc ((toks) <r)))))
+                      (: r (random st ntok) (rpat (- k 1) >r (+ acc (toks <r)))))
    (rsub k st acc) (? (< k 1) (L acc st)
                       (: r (random st 3) (rsub (- k 1) >r (+ acc ((L "a" "b" "c") <r)))))
    (fzr i st)

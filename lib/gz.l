@@ -129,7 +129,7 @@
    (gz-emit s n j t head prev i)
     (? (n <= i) (gz-fixlit j t 256)         ; 256 is end-of-block
        (: m (? ((i + gz-minmatch) <= n) (gz-find s n i head prev) '(0 0))
-          l (<m)
+          l <m
           (? (l < gz-minmatch)
              (: _ (gz-fixlit j t (s i))
                 _ (gz-ins s n i head prev)
@@ -238,12 +238,12 @@
    ; per-bit cursor cost lands hardest -- so it takes the position in hand too, and
    ; writes it back on every way out, the failing one included.
    (gz-dec s n t h)                          ; -> (1 symbol) | ()
-    (: cnt (<h) sym (<(>h))
+    (: cnt <h sym (<(>h))
        (go l code first index p)
         (? (15 < l) (: _ (pin t 0 p) ())
            (: over (n <= (p >> 3))
               _ (? over (pin t 1 1) 0)
-              c (? over code (code | ((((s (p >> 3)) >> (p & 7)) & 1))))
+              c (? over code (code | (((s (p >> 3)) >> (p & 7)) & 1)))
               p2 (? over p (p + 1))
               k (peep cnt l 0)
               (? ((c - k) < first) (: _ (pin t 0 p2) `(1 (peep sym (index + (c - first)) 0)))
@@ -298,7 +298,7 @@
        hclen ((gz-bits s n t 4) + 4)
        cl (tablet 0)
        _ (: (go i o) (? (hclen <= i) 0
-                         (: _ (pin cl (<o) (gz-bits s n t 3)) (go (i + 1) (>o))))
+                         (: _ (pin cl <o (gz-bits s n t 3)) (go (i + 1) >o)))
             (go 0 gz-clord))
        ch (gz-huff cl 19)
        tot (hlit + hdist)

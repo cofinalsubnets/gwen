@@ -293,7 +293,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    ; bake loading the cat as `love -l .kore-cat.l -e ..` stays quiet.
    ; the seat word's BASENAME picks the face: a tool name runs that tool on the rest;
    ; anything else (kore itself, a dev path) reads the next word as the tool.
-   mynames (("kore" >< "kore.l" >< map string (keys applets)))
+   mynames ("kore" >< "kore.l" >< map string (keys applets))
    ; the VERBS: kore's applet table IS a verb collection, and the registry is where one
    ; goes. every row lands twice over -- `love ls -l` (the word door) and an `ls` symlink
    ; onto the artifact (the seat door) -- while `love kore ls` still nests through the

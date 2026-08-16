@@ -154,7 +154,7 @@
                             (: sgn (? neg -1 1)
                                (? (&& (fl = 0) (! ee))
                                   `((sgn * iv) d)
-                                  (: mant (((iv * (fl 10)) + fv))
+                                  (: mant ((iv * (fl 10)) + fv)
                                      base (((1.0 * sgn) * mant) / (fl 10))
                                      (? (two? ex) `((base * (jpow10 <ex)) d)
                                         `(base d)))))))))

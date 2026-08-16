@@ -556,8 +556,8 @@
        (? (m = 0) 0 (at 0)))
    (num1 s) (: r (sound (trim s)) (? (two? r) <r 0))     ; a leading integer | 0
    (fn-join a b)                          ; $(join): pairwise, the longer list's tail rides alone
-    (: (g x y acc) (? (two? x) (g >x (? (two? y) >y ()) (((<x) + (? (two? y) <y "")) >< acc))
-                      (two? y) (g () >y ((<y) >< acc))
+    (: (g x y acc) (? (two? x) (g >x (? (two? y) >y ()) ((<x + (? (two? y) <y "")) >< acc))
+                      (two? y) (g () >y (<y >< acc))
                       (join " " (rev acc)))
        (g a b ()))
    (fn-slice ws n1 n2)                    ; $(wordlist): 1-based, inclusive, clamped both ends
