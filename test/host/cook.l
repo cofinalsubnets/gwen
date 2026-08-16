@@ -51,8 +51,8 @@
                       "\techo \"E1[$(h_o)]\""
                       "\techo \"E2[$(suf)]\""
                       "\techo \"E3[$R/$(ho)]\"")) "all")
-   _ (ok "nested-paren + pattern subst-ref" (has ev "E1[out/host/love.o out/host/data.o]"))
-   _ (ok "suffix subst-ref"                 (has ev "E2[./love.o ./data.o]"))
+   _ (ok "nested-paren + pattern subst-ref" (has ev "E1[out/host/core/love.o out/host/data.o]"))
+   _ (ok "suffix subst-ref"                 (has ev "E2[./core/love.o ./data.o]"))
    _ (ok "single-char $R + $(VAR)"          (has ev "E3[./out/host]"))
 
    ; ---------------------------------------------------------------- functions
@@ -108,6 +108,7 @@
    ; -------------------------------------------------------------------- include
    ; (make resolves an include relative to the cwd; the fixture lives elsewhere,
    ; so name it absolutely.)
+   _ (sh (+ "mkdir -p " (+ dir "/mk")))
    _ (write-file (+ dir "/mk/common.mk") "FROM_INC = included-ok\n")
    inc (run-cook (mk `((+ "include " (+ dir "/mk/common.mk")) "all:" "\techo \"I[$(FROM_INC)]\"")) "all")
    _ (ok "include" (has inc "I[included-ok]"))
@@ -246,15 +247,22 @@
    ; --emit transpiles a Makefile to a RESOLVED Cookfile: vars/patterns expanded,
    ; .PHONY targets -> symbols, files -> strings, each recipe line an
    ; ("sh" "-c" cmd) step, the default ticket first, a trailing (cook (ticket 0)).
-   em (run-emit (mk '("CC := cc"  "OBJ := a.o b.o"  ".PHONY: all clean"
+   ; ⚠ THE SOURCES ARE REAL, like every other pattern test here (the head note says
+   ; so). A pattern whose source cannot be had does not apply -- make rejects it
+   ; whether the target exists or not (asked, both ways) -- and emit resolves against
+   ; the disk it is run on. A fixture with no .c proves nothing about resolution; this
+   ; one passed only on the last-resort fallback 4bfac33b removed.
+   _ (sh (+ "mkdir -p " (+ dir "/e; touch " (+ dir "/e/a.c " (+ dir "/e/b.c")))))
+   eo (+ dir "/e/a.o " (+ dir "/e/b.o"))
+   em (run-emit (mk `("CC := cc"  (+ "OBJ := " eo)  ".PHONY: all clean"
                        "all: prog"
                        "prog: $(OBJ)"  "\t$(CC) -o $@ $(OBJ)"
                        "%.o: %.c"      "\t$(CC) -c -o $@ $<"
                        "clean:"        "\t-rm -f prog $(OBJ)")))
    _ (ok "emit: .PHONY target -> symbol"   (has em "(recipe 'all "))
    _ (ok "emit: file target -> string"     (has em "(recipe '\"prog\" "))
-   _ (ok "emit: var-resolved step"         (has em "(\"sh\" \"-c\" \"cc -o prog a.o b.o\")"))
-   _ (ok "emit: pattern-resolved step"     (has em "(\"sh\" \"-c\" \"cc -c -o a.o a.c\")"))
+   _ (ok "emit: var-resolved step"         (has em (+ "(\"sh\" \"-c\" \"cc -o prog " (+ eo "\")"))))
+   _ (ok "emit: pattern-resolved step"     (has em (+ "(\"sh\" \"-c\" \"cc -c -o " (+ dir (+ "/e/a.o " (+ dir "/e/a.c\")"))))))
    _ (ok "emit: default ticket emitted first" (has em "(recipe 'all "))
    _ (ok "emit: trailing cook call"        (has em "(cook-all 0)"))
 

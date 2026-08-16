@@ -932,7 +932,7 @@ test_uulean:
 	@echo "test_uulean: skipped (needs lean)"
 else
 test_uulean: host
-	@mkdir -p proof/lean
+	@mkdir -p test/proof/lean
 	@echo LOVE	test/proof/lean/uugen.lean "(mk/tools/uu2lean.l on $m)"
 	@$(mw) mk/tools/uu2lean.l > test/proof/lean/uugen.lean
 	@echo TEST test/proof/lean/uugen.lean "(lean)"
