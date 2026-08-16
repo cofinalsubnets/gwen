@@ -45,7 +45,7 @@
 #   test subtracts two medians of `samples` runs each (corpus, then empty boot), default 3.
 # resolve the repo root ABSOLUTELY: the build lanes cd into it to reach the source
 # globs (core/love.c, host/*.c, crew/...), so every output/include path below must be absolute.
-R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+R=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 TIMEOUT=${1:-180}
 SAMPLES=${2:-3}
 ho=$R/out/host
@@ -76,7 +76,7 @@ fi
 # codegen or speed factor. Keeping it would bench a compiler's warning set, not its
 # throughput -- gcc's -Wall flags a benign construct in core/love.c (-Wmisleading-indentation)
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
-CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/out/lib"
+CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/core -I$R/out/lib"
 # mk/common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
 # sentinels' tiling IS core/love.h's ai_typ, and ld left to itself keeps each love_data.N an
 # orphan in first-encountered order -- gcc emits love_data.7 first, so lvm_str lands
@@ -110,9 +110,9 @@ MC="$ho/mooncc"
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
-    "$MC" -D ai_tco=1 -Iout/host -I. -Iout/lib -c core/love.c "$od/love.o" || exit 1
+    "$MC" -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c core/love.c "$od/love.o" || exit 1
     for f in host/*.c; do b=$(basename "$f" .c)
-      "$MC" -D ai_tco=1 -Iout/host -I. -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
+      "$MC" -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
     # no nolibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a nolibc.o.

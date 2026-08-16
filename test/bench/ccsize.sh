@@ -22,7 +22,7 @@
 # CALL is the other half, and ccdead.py answers that one.
 #
 # usage: ./ccsize.sh          (after ./ccbench.sh, or `make ccbench`)
-R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+R=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 W=$R/out/test/bench/cc
 [ -d "$W" ] || { echo "ccsize: no $W -- run ./ccbench.sh first" >&2; exit 1; }
 
