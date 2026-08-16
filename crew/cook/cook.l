@@ -913,7 +913,14 @@
                        ; implicit pattern rule, or normal rule
                        (: sb (splitbar (expand-words `(prtext) as)) prs <sb oos >sb
                           (? (any haspct tgts)
-                             (each tgts (\ t (? (haspct t) (pin patbox 0 (`(t prs oos raws) >< peep patbox 0 0)) 0)))
+                             ; ⚠ an EMPTY recipe is make's CANCELLATION idiom ("an empty recipe
+                             ; unmakes the rule" -- mk/common.mk cancels the lex builtin exactly
+                             ; so). registering it made every .c demand a sibling .l, which is
+                             ; how the seed's own make broke against its own tree. we carry no
+                             ; lex builtin, so cancelling is registering nothing. (a cancellation
+                             ; over OUR builtpats has no consumer yet; it would filter there.)
+                             (? !(two? raws) 0
+                                (each tgts (\ t (? (haspct t) (pin patbox 0 (`(t prs oos raws) >< peep patbox 0 0)) 0))))
                              ; ⚠ the automatics read the target's WHOLE prerequisite list,
                              ; which an earlier line may have stated and this one not repeat:
                              ;   a.out: a.c
