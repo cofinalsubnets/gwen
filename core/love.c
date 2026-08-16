@@ -307,7 +307,9 @@ word ai_big_canon(ai_word **hp, ai_limb const *limb, int n, bool neg);
 ai_flo_t ai_big_to_flo(word);                 // bignum -> double (used by toflo)
 intptr_t ai_big_low(word);                   // bignum value mod 2^W (low machine word)
 int ai_big_cmp(word, word);                  // -1/0/1 over two integer operands
+bool ai_ratio_exact(struct ai*, word);  // int/ceil/saturate's exact-ratio domain: a net-mode-2 coin over integer (n d)
 struct ai
+ *ai_ratio_rung(struct ai*, int),     // ..and the lane: long-divide the parts (0 int, 1 ceil, 2 saturate), packed
  *ai_big_binop(struct ai*, int vop),  // vop_add..vop_rem, packed; pops one operand
  *ai_big_quot_true(struct ai*),       // `/` bignum lane: exact quotient when b | a, else a float box
  *ai_big_read_dec(struct ai*),        // sp[0] [+-]?digits token -> canonical value
@@ -2957,7 +2959,11 @@ static intptr_t ai_saturate(struct ai *g, word x) {
   if (re >= (ai_flo_t) maxcharm) return maxcharm;
   intptr_t i = (intptr_t) re;
   return i + (re > (ai_flo_t) i ? 1 : 0); }
-lvm(lvm_saturate) { Sp[0] = putcharm(ai_saturate(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
+lvm(lvm_saturate) {
+ if (ai_ratio_exact(g, Sp[0])) { Pack(g); g = ai_ratio_rung(g, 2);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+  ai_musttail return Resume(); }
+ Sp[0] = putcharm(ai_saturate(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
 // THE TOWER'S THIRD RUNG: ceil(re(net x)) -- the measure retracted onto the integers, where
 // saturate is this one with its floor raised to 0 and bit is it with the ceiling lowered to 1.
 // ⚠ it SATURATES at the charm bounds like every rung below it: a charm is the codomain, so a
@@ -2969,7 +2975,11 @@ static intptr_t ai_ceilnet(struct ai *g, word x) {
   if (re <= (ai_flo_t) mincharm) return mincharm;
   intptr_t i = (intptr_t) re;
   return i + (re > (ai_flo_t) i ? 1 : 0); }
-lvm(lvm_ceil) { Sp[0] = putcharm(ai_ceilnet(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
+lvm(lvm_ceil) {
+ if (ai_ratio_exact(g, Sp[0])) { Pack(g); g = ai_ratio_rung(g, 1);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+  ai_musttail return Resume(); }
+ Sp[0] = putcharm(ai_ceilnet(g, Sp[0])); Ip += 1; ai_musttail return Continue(); }
 
 // ============================================================================
 // io
@@ -5467,7 +5477,18 @@ op11(lvm_sunp, sunp(Sp[0]) ? putcharm(1) : zero)
 op11(lvm_setp, trayp(Sp[0]) ? putcharm(1) : zero)
 // (int x): truncate a float scalar to a fixnum; other numbers pass through. Used by
 // num-ap to get an integer composition count from a non-integer numeral operator.
-op11(lvm_intf, gemp(Sp[0]) ? putcharm((intptr_t) gem_get(Sp[0])) : Sp[0])
+// int: a gem truncates toward zero, SATURATING at the charm bounds like the other
+// rungs (the bare cast wrapped above 2^62 -- UB read as 0); an exact-ratio coin
+// truncates by long division; everything else passes through.
+lvm(lvm_intf) {
+ if (ai_ratio_exact(g, Sp[0])) { Pack(g); g = ai_ratio_rung(g, 0);
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+  ai_musttail return Resume(); }
+ if (gemp(Sp[0])) { ai_flo_t v = gem_get(Sp[0]);
+  Sp[0] = putcharm(v >= (ai_flo_t) maxcharm ? maxcharm
+                 : v <= (ai_flo_t) mincharm ? mincharm
+                 : v != v ? 0 : (intptr_t) v); }
+ Ip += 1; ai_musttail return Continue(); }
 
 // ============================================================================
 // chain
@@ -6713,6 +6734,48 @@ struct ai *ai_big_binop(struct ai *g, int vop) {
      rn = mag_copy(rmag, rem, rr), rneg = nega; } } } }
  g->sp[1] = ai_big_canon(&g->hp, rmag, rn, rneg);
  g->sp++;
+ g->ip = (union u*) g->ip + 1;
+ return g; }
+
+// the integer rungs' EXACT LANE (int / ceil / saturate) for a ratio coin: above
+// 2^53 the float net rounds, so a rung riding it lands on the wrong integer.
+// domain: a net-mode-2 coin over (n d), both exact integers, d nonzero (a zero
+// divisor keeps the float lane's inf/sign story).
+bool ai_ratio_exact(struct ai *g, word x) {
+ if (!coinp(x) || die_get(g, coin_die(x), DieNet) != putcharm(2)) return false;
+ word p = coin_load(x);
+ if (!chainp(p) || !chainp(B(p))) return false;
+ word n = A(p), d = A(B(p));
+ if (!(charmp(n) || sunp(n) || bigp(n)) || !(charmp(d) || sunp(d) || bigp(d))) return false;
+ return charmp(d) ? d != putcharm(0) : sunp(d) ? sun_get(d) != 0 : true; }
+// ..the lane: trunc(n/d) by long division, clamped to the charm bounds like every
+// rung (the codomain law), then the rung's own adjustment -- ceil rounds a dropped
+// remainder up, saturate is ceil with its floor raised to 0. the operand rides
+// g->sp[0] across ai_have's GC edge; scratch sits above hp and is never committed.
+struct ai *ai_ratio_rung(struct ai *g, int rung) {
+ word x = g->sp[0], p = coin_load(x), a = A(p), b = A(B(p));
+ int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
+ if (!ai_ok(g = ai_have(g, b2w((size_t) (4 * (na + nb) + 16) * sizeof(ai_limb))))) return g;
+ x = g->sp[0], p = coin_load(x), a = A(p), b = A(B(p));       // re-fetch (ai_have may have GC'd)
+ ai_limb sa[wlimbs], sb[wlimbs]; ai_limb const *la, *lb; bool nega, negb;
+ int nla = load_int_mag(a, sa, &la, &nega), nlb = load_int_mag(b, sb, &lb, &negb);
+ bool rneg = nega != negb, rnz = false, sat = false;
+ uintptr_t uq = 0;
+ if (nla == 0) ;                                              // 0/d: q 0, r 0
+ else if (mag_cmp(la, nla, lb, nlb) < 0) rnz = true;          // |a| < |b|: q 0, r a
+ else {
+  ai_limb *q = (ai_limb*) g->hp, *rem = q + (nla - nlb + 1), *un = rem + nlb, *vn = un + (nla + 1);
+  mag_divmod(q, rem, la, nla, lb, nlb, un, vn);
+  int qn = nla - nlb + 1; while (qn > 0 && q[qn-1] == 0) qn--;
+  for (int i = 0; i < nlb; i++) if (rem[i]) { rnz = true; break; }
+  if (qn > wlimbs) sat = true;
+  else { for (int i = 0; i < qn; i++) uq |= (uintptr_t) q[i] << (limb_bits * i);
+         if (uq > (uintptr_t) maxcharm + (rneg ? 1 : 0)) sat = true; } }
+ intptr_t t = sat ? (rneg ? mincharm : maxcharm)
+                  : rneg ? -(intptr_t) uq : (intptr_t) uq;
+ if (rung >= 1 && !sat && rnz && !rneg && t < maxcharm) t++;  // ceil: a dropped remainder rounds up
+ if (rung == 2 && t < 0) t = 0;                               // saturate: the floor rises to 0
+ g->sp[0] = putcharm(t);
  g->ip = (union u*) g->ip + 1;
  return g; }
 

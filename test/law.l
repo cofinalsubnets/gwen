@@ -14,7 +14,7 @@
 ; ⚠ each law NAMES ITSELF and the value that broke it before failing -- a law that fails on one
 ; kind out of thirty is a sentence about that kind, and `assert` alone would hide it.
 (: law-flat (list 0 1 2 5 -1 -5 2.5 -2.5 0.0 () "" "a" "ab" 'sym '(1 2) '(-2 1)
-                  (twin 3 4) (twin -1 2) (twin 0 3) @() @(1 2) @(1 2 3) cap 'x)
+                  (twin 3 4) (twin -1 2) (twin 0 3) @() @(1 2) @(1 2 3) (q 7 2) (q -7 2) cap 'x)
    law-jot (list ^0 ^1 ^2 ^4 ^5 ^^0 ^^1 ^^2 ^^4 ^^5 ^^^0 ^^^1 ^^^2 ^^^3 ^^^4 ^^^^3)
    law-corpus (law-flat + law-jot)
    ; a law is (nom . closure); it holds when every value answers the charm 1
@@ -24,7 +24,7 @@
                   (go law-corpus))
    (law-run r) (: nom <r f <>r b (law-bad f)
                   (? (two? b)
-                     (: _ (puts ("law FAILED: " + string nom + "   at " + show <b + "\n")) 0)
+                     (: _ (puts ("law FAILED: " + string nom + "   at " + show <>b + "\n")) 0)
                      1))
    law-rows
     (list
@@ -50,13 +50,27 @@
       ; --- THE MEASURE and the tower it retracts down. every value has a complex measure and
       ; each rung is that measure saturated into a smaller set -- idempotent, identity on its
       ; own image, which is what makes the tower retractions rather than conversions.
+      ; ⚠ a STARRED coin nets ITSELF (the die's star law, q.l) -- net's numeric
+      ; retraction story does not apply to it, so the two laws that route
+      ; through re(net ..) step aside for coins; ratio-rungs polices their
+      ; integer rungs on the exact lane instead.
       ['net-idem  (\ x (: n (net x) (n = net n)))]
-      ['re-idem   (\ x (: r (re (net x)) (r = re (net r))))]
+      ['re-idem   (\ x (? (coin? x) 1 (: r (re (net x)) (r = re (net r)))))]
       ['ceil-idem (\ x (: c (ceil x) (c = ceil c)))]
       ['sat-idem  (\ x (: s $x (s = $s)))]
       ['bit-idem  (\ x (: b ?x (b = ?b)))]
-      ['ceil-net  (\ x (ceil x = ceil (re (net x))))]       ; ceil retracts onto the integers
+      ['ceil-net  (\ x (? (coin? x) 1 (ceil x = ceil (re (net x)))))]   ; ceil retracts onto the integers
       ['sat-ceil  (\ x ($x = (? (0 < ceil x) (ceil x) 0)))] ; saturate is ceil, floor raised to 0
+      ; --- the EXACT LANE: int/ceil/saturate on a ratio coin long-divide the (n d)
+      ; parts, so a part past 2^53 still lands the true integer -- the float net
+      ; rounds there, which is why ceil-net's corpus keeps its ratios small. `//`
+      ; (exact trunc) is the oracle; the last row divides big by big.
+      ['ratio-rungs (\ _ (: b ((60 2) + 1)
+                            (all (\ p (: n <p d <>p c (ceil (q n d))
+                                         ((int (q n d) = n // d)
+                                          && (c = (n // d) + (? (0 < n && 0 != n % d) 1 0))
+                                          && (saturate (q n d) = (? (0 < c) c 0)))))
+                                 [[7 2] [-7 2] [0 5] [b 3] [-b 3] [b 1] [(b * b) b]])))]
       ; ⚠ `bit x`, not `?x`: glued ? is bit EVERYWHERE except opening a parenthesized form, where
       ; `(` + `?` makes the CLAUSE head instead -- (? x) is the one-armed cond, which answers x,
       ; so the law reads x = (0 < $x) and holds only at 0 and 1. this harness caught that.
