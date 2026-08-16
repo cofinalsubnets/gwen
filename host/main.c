@@ -674,11 +674,17 @@ static struct ai *env_budget(struct ai *g) {
   // 0 stays unbounded only where the machine cannot say its size.
   if (g && !g->budget) {
 #if defined(__linux__)
-    FILE *f = fopen("/proc/meminfo", "r");
-    if (f) { char k[32]; unsigned long kb;
-      if (fscanf(f, "%31s %lu", k, &kb) == 2 && !strcmp(k, "MemTotal:"))
-        g->budget = (uintptr_t) kb * 1024 / 2 / sizeof(ai_word);
-      fclose(f); }
+    // raw read + hand parse, no stdio: nolibc's fscanf speaks no width and no
+    // %lu, so a scanf here silently answered 0 in every mooncc-built love --
+    // the default has to fire in the bundled artifact too. MemTotal leads the
+    // file; the first digit run is the kB count.
+    int fd = open("/proc/meminfo", O_RDONLY);
+    if (fd >= 0) { char mb[64]; long n = (long) read(fd, mb, sizeof mb - 1);
+      close(fd);
+      if (n > 8 && !memcmp(mb, "MemTotal", 8)) { mb[n] = 0;
+        char *p = mb; while (*p && (*p < '0' || *p > '9')) p++;
+        uintptr_t kb = 0; while (*p >= '0' && *p <= '9') kb = kb * 10 + (uintptr_t)(*p++ - '0');
+        g->budget = kb * 1024 / 2 / sizeof(ai_word); } }
 #endif
   }
   return g; }
