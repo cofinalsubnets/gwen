@@ -41,7 +41,7 @@ endif
 # the module sources the seat walk serves: (use 'cook) and friends from ANY session of this
 # love resolve here. Installed DEREFERENCED, since install(1) follows the repo lib/
 # symlinks, so the nest stands alone.
-libmods = cook dns json lint salt libra kiosko lapiz papel rune sb sb/text sb/diff sb/merge sb/http sb/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
+libmods = cook dns json lint salt libra kiosko lapiz papel hueweb serve rune sb sb/text sb/diff sb/merge sb/http sb/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
 # ⚠ ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
 binnames = $(BIN) kore sb mooncc moonfmt cook papel kiosko libra ain lux bao lush

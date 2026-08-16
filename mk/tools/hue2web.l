@@ -1,118 +1,36 @@
-; mk/tools/hue2web.l -- the .l syntax as a STYLESHEET and as annotated html, out
-; of crew/vi/hue.l's class table and crew/vi/config.l's theme. the THIRD reader of
-; that one table: the painter in crew/vi/core.l's vframe, the vim syntax
-; (mk/tools/hue2vim.l), and now the site. nothing here knows what a comment or a
-; sigil is -- it asks hue, the way the other two do, and a class added to the
-; table arrives in all three without anyone being told.
+; mk/tools/hue2web.l -- the build-time face of lib/hueweb.l: write the .l syntax
+; stylesheet, and write one source file out as a painted page.
 ;
 ;   love mk/tools/hue2web.l css        the stylesheet, on stdout
 ;   love mk/tools/hue2web.l src FILE   that file as an annotated page, on stdout
 ;
-; the SPLIT the theme already makes is what makes this cheap. hue.l says "a
-; comment is a Comment"; crew/vi/config.l says "in molokayo a Comment is
-; #75715E". the vim generator uses the first half and leaves the colour to the
-; reader's colorscheme; a web page has no colorscheme, so this one joins both and
-; the site wears the editor's theme by construction.
+; the painting itself is lib/hueweb.l, which `love serve` also uses to paint the
+; same file at REQUEST TIME. one painter, two errands -- a build that wrote pages
+; a server would paint differently is two answers to one question.
 ;
-; ⚠ THE RUNS ARE SPARSE. hue-lex answers only the spans it CLAIMS -- a name in no
-; vocabulary is in no run at all -- so the emitter fills the gaps with plain text
-; rather than assuming the runs tile the line. and it carries `in`, the
-; string-open state, from each line to the next, or a multi-line literal (papel's
-; forty-line css) paints as code from its second line on.
-;
-; the page CHROME is papel's own `wrap`, reached through the module accessor. that
-; is papel lending its template, not papel learning what a .l is: this file reads
-; the source, papel says what a page looks like, and neither grows the other's
-; job. ⚠ so a source page sits at the TOP of the site, named `<stem>.src.html` --
-; the template's links to index.html and papel.css are relative, and a page one
-; directory down would break both.
+; ⚠ LOVE_NO_IMAGE must be CLEARED by whoever runs this, and the Makefile does: the
+; word lanes ask the running binary for its vocabulary, and under the egg boot
+; that answer is the compiler's own internals rather than the language we ship.
 (use "crew/vi/config.l")
 (use "crew/vi/hue.l")
-(use 'papel)
+(use 'hueweb)
 
-(: H (from 'hue)
-   classes (H 'hue-classes)  hcls (H 'hue-cls)  hgrp (H 'hue-grp)
-   hbook (H 'hue-book)  hlex (H 'hue-lex)
-   theme (from 'config 'hue-theme)
-   wrap ((from 'papel) 'wrap)
-   hq (from 'lapiz 'hq)
+(: (h2w-rdf p) (: q (open p "r") (? q (: s (slurp q) _ (close q) (? (string? s) `(1 s) ())) ()))
+   (h2w-usage _) (: _ (say err "usage: love mk/tools/hue2web.l css | src FILE\n") (quit 2))
 
-   (nth l k) (? (k = 0) <l (nth >l (k - 1)))
-   (strcat l) (foldl (+) "" l)
-   (base p)  (: n (tally p)
-                (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
-                (go 0 0))
-   (rdf p)   (: q (open p "r") (? q (slurp q) ()))
-   ; ⚠ the final newline ENDS the last line, it does not open another: a file of N
-   ; lines that ends in one would otherwise paint an N+1'th empty row, with a line
-   ; number under the last line of the file.
-   (lines s) ((: (g i st acc) (? !(i < tally s) (? (st < i) (rev (snip s st i >< acc)) (rev acc))
-                                 (s i = 10)     (g (i + 1) (i + 1) (snip s st i >< acc))
-                                 (g (i + 1) st acc)))
-              0 0 ())
-
-   ; --- the stylesheet -------------------------------------------------------
-   ; one rule per CLASS, coloured by the GROUP that class names. a class whose
-   ; group the theme does not carry gets no rule at all rather than a guess.
-   (trow g) ((: (f l) (? !(two? l) () (id? <(<l) g) <l (f >l))) theme)
-   (faces l) (strcat (map (\ f (? (id? f 'bold) ";font-weight:700"
-                                  (id? f 'italic) ";font-style:italic" "")) l))
-   (crule r) (: t (trow (hgrp r))
-                (? !(two? t) ""
-                   (".hue .l-" + (string (hcls r)) + "{color:" + (nth t 2) + (faces (nth t 3)) + "}\n")))
-   ; the frame around the code: the site's own monospace, a soft slab to sit on,
-   ; and LINE NUMBERS out of a css counter -- so the markup carries one span per
-   ; line and no number, and selecting the code copies the code alone.
-   hue-frame
-   ".hue{background:var(--pre);padding:1rem 0;border-radius:6px;overflow-x:auto;counter-reset:ln;
-      font:.82rem/1.55 ui-monospace,Menlo,monospace}
-.hue .ln{display:block;padding:0 1rem 0 0;white-space:pre}
-.hue .ln::before{counter-increment:ln;content:counter(ln);display:inline-block;width:3.2rem;
-      padding-right:1rem;text-align:right;color:var(--dim);opacity:.55;-webkit-user-select:none;user-select:none}
-.hue .ln:target{background:rgba(127,127,127,.16)}
-.srcnav{font-size:.85rem;margin:0 0 1rem}
-"
-   (css-out _) (: _ (say out ("/* the .l syntax, generated by mk/tools/hue2web.l out of\n"
-                              + "   crew/vi/hue.l's class table and crew/vi/config.l's theme. */\n"))
-                    _ (say out hue-frame)
-                    _ (each classes (\ r (say out (crule r))))
-                    0)
-
-   ; --- one file, annotated --------------------------------------------------
-   ; a line becomes its runs, in order, with the UNCLAIMED gaps between them kept
-   ; as plain text. `in` rides from line to line for the string carry.
-   (span-of c a b s) ("<span class=\"l-" + (string c) + "\">" + hq (snip s a b) + "</span>")
-   (paint bk s in)
-   (: r (hlex bk s in 1)
-      (go rs i acc)
-       (? !(two? rs) `((acc + hq (snip s i (tally s))) <>r)
-          (: u <rs c <u a <>u b <>>u
-             (go >rs b (acc + hq (snip s i a) + span-of c a b s))))
-      (go <r 0 ""))
-   (body path src)
-   (: bk (hbook 0)
-      (go ls k in acc)
-       (? !(two? ls) acc
-          (: p (paint bk <ls in)
-             (go >ls (k + 1) <>p
-                 (acc + "<span class=\"ln\" id=\"L" + show k + "\">" + <p + "\n</span>"))))
-      ("<p class=\"srcnav\">the source of <code>" + hq path + "</code></p>\n<pre class=\"hue\">"
-       + (go (lines src) 1 0 "") + "</pre>"))
-
-   (src-out path)
-   (: s (rdf path)
-      (? !(string? s) (: _ (say err ("hue2web: cannot open " + path + "\n")) (quit 1))
-         (: c (: t (tablet 0) _ (pin t 'title "love") t)
-            ; ⚠ the stylesheet rides the template's HEAD slot -- papel passes its
-            ; page metadata through it, and an extra <link> is the same errand.
-            ; that is the whole of what a source page needs papel not to know.
-            _ (say out (wrap c path "<link rel=\"stylesheet\" href=\"hue.css\">" "" (body path s)))
+   ; the site's own chrome: papel.css first, so a painted page and a doc page are
+   ; one design, then hue.css over it for the syntax.
+   (h2w-src path)
+   (: r (h2w-rdf path)
+      (? !(two? r) (: _ (say err ("hue2web: cannot open " + path + "\n")) (quit 1))
+         (: _ (say out (hw-page path '("papel.css" "hue.css") "index.html"
+                                ("<p class=\"srcnav\">the source of <code>" + path + "</code></p>\n"
+                                 + hw-body path (<>r))))
             0)))
 
-   (usage _) (: _ (say err "usage: love mk/tools/hue2web.l css | src FILE\n") (quit 2))
-   (main as)
-   (? !(two? as) (usage 0)
-      (<as = "css") (css-out 0)
-      (&& (<as = "src") (two? >as)) (src-out (<>as))
-      (usage 0))
-   _ (main >>cmdline))
+   (h2w-main as)
+   (? !(two? as) (h2w-usage 0)
+      (<as = "css") (: _ (say out (hw-css 0)) 0)
+      (&& (<as = "src") (two? >as)) (h2w-src (<>as))
+      (h2w-usage 0))
+   _ (h2w-main >>cmdline))
