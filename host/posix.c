@@ -295,12 +295,13 @@ static lvm(lvm_cwd) {
 
 // (selfpath _) -> the path of the RUNNING BINARY, or () where the seat cannot say.
 // The one door for it: the prel's library walk, the seed's bin/love, moon's include
-// root, lux's re-exec and lush's am-I-that-tool test all start here.
+// root, lux's re-exec, lush's am-I-that-tool test and the self-bake's re-open
+// (host/image.c) all start here.
 // ⚠ NO ARGV[0] FALLBACK, and not for want of argv[0] -- the book has it as `cmdline`.
 // It is that a bare `cmdline` read from BAKED code folds to the BAKE's line, and the
 // callers here are baked, so the operand would arrive already wrong. A seat with no
 // door below writes the walk where the line is read live.
-ai_noinline static size_t host_selfpath(char *b, size_t n) {
+ai_noinline size_t host_selfpath(char *b, size_t n) {
 #if defined(__APPLE__)
  char raw[4096], can[PATH_MAX];                        // ⚠ realpath writes PATH_MAX, not n
  uint32_t sz = sizeof raw;
