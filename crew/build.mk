@@ -315,14 +315,14 @@ out/dist/src-$a.o: $(dist_source) mk/tools/mksrc.l $(ho)/love
 # so test_fixpoint's relink of $(moon_o) needs no mirror of it. assets/readme.bin is the page a
 # reader lands on -- `readelf -p .README`, mapped by nothing, and the one annotation worth
 # its bytes now that the source itself is in here.
-# ⚠ THE IMAGES ARE BAKED BY THE BINARY THAT WILL CARRY THEM. an image keeps its
+# ⚠ the images are baked by the binary that will carry them. an image keeps its
 # binary's own layout -- the codec's anchor guard is the gap between two of its
 # symbols -- so the array comes out of THIS link and is laid into the section it
 # already has. appending a section moves no symbol, which is why the anchor still
 # holds after: the same reason the single self-bake always worked.
-# ⚠ AND SMALLEST FIRST: the picker takes the first entry claiming the verb -- and with
-# `-L` that order is load-bearing twice over, because each layer FREEZES for the next
-# and only a prefix can be shared (doc/plan/image-lattice.md).
+# ⚠ and smallest first: the picker takes the first entry claiming the verb, and with `-L`
+# that order is load-bearing twice over -- each layer freezes for the next, and only a
+# prefix can be shared (doc/plan/image-chain.md).
 $(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.rest-cat.l out/dist/.docs-cat.l assets/readme.bin $(ho)/love
 	@echo DIST	$(abspath $@)
 	@mkdir -p $(dir $@)

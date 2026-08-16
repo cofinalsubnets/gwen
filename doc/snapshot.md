@@ -64,7 +64,7 @@ that claims `argv[1]`, before anything is woken (it has to be: the verb table li
 being chosen). An entry is either WHOLE or DERIVED — a derived one stores only its header and
 the prefix words a later layer changed, and is baked by `love bake -L CAT:verbs ..`, which
 evaluates the layers in inclusion order and pins each for the next. host/image.c is the
-container, doc/plan/image-lattice.md is why. The CODEC never sees the difference.
+container, doc/plan/image-chain.md is why. The CODEC never sees the difference.
 
 ## the section is GROWN, not reserved
 
