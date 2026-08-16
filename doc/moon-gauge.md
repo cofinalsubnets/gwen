@@ -25,6 +25,11 @@ that reports only the pair will over-weight it. Both rows, every time.
 | chacha20 | 1,192.7 ms | 241.6 | 223.2 | **5.34×** |
 | poly1305 | 1,754.5 ms | 1,713.4 | 1,053.3 | **1.67×** (1.02× vs gcc) |
 
+⚠ **these are wall-clock and they are not tight.** A second fill 40 minutes later on the same
+box read the corpus at 1.14× (mooncc 4,007.1, clang 3,517.4) and the build rows moved 7-10%.
+Treat ±4% as the floor on a ccbench ratio and reach for `perf` cycles (±0.72% here) for
+anything finer — a 3% ccbench move is not a result.
+
 The corpus row confirms the plateau the regalloc arc last recorded at 1.21× on 2026-08-11.
 chacha reads 5.34× against the ~23× in `ccbench.sh`'s header — the array-slot rung of
 2026-08-10 claimed a 74% wall drop and this is that claim corroborated by a later run of a

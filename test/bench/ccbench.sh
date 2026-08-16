@@ -170,7 +170,7 @@ lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
   lbl=$1; bld=$2; bin=$3
   bt=$(wall "$bld '$bin' '$4'")
   if [ ! -f "$bin" ] || [ ! -x "$bin" ]; then dnf_lane "$lbl"; return; fi
-  echo "build $lbl $bt ok"
+  echo "build $lbl $bt ok"; LIVE=$((LIVE + 1))            # the liveness tally, read at the end
   if passes "$bin"; then echo "test $lbl $(corpus_ms "$bin") ok"
   else echo "test $lbl dnf"; fi
   crow chacha   "$lbl" "$(crypto_ms "$bin" '(cc-run ())' 'ccrypto chacha: ok')"
@@ -178,6 +178,13 @@ lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
 }
 crow() { case $3 in dnf) echo "$1 $2 dnf";; *) echo "$1 $2 $3 ok";; esac; }
 dnf_lane() { for ph in build test chacha poly1305; do echo "$ph $1 dnf"; done; }
+
+# ⚠ A LANE THAT CANNOT BUILD REPORTS dnf, WHICH MEANS A BROKEN HARNESS RENDERS AS A
+# WELL-FORMED TABLE OF NOTHING. that is not hypothetical: the 2026-08-15 reorg broke the
+# root resolution and the -Icore seam, and twelve dnf rows sat in the cached result for a
+# day with the corpus reading simply unavailable. one missing compiler is a legitimate
+# skip; ZERO lanes is the harness, and it exits 1 below.
+LIVE=0
 
 if [ "$(uname -m)" = x86_64 ] && [ -x "$MC" ]; then
   lane mooncc build_mooncc "$WORK/love-mooncc"
@@ -205,3 +212,6 @@ if [ -n "$CCGLIBC" ]; then
     fi
   done
 fi
+
+[ "$LIVE" -gt 0 ] || { echo "ccbench: every lane dnf -- the harness, not the compilers" >&2
+                       exit 1; }
