@@ -116,6 +116,21 @@
           'riscv64                        '("__riscv")
           ('thumb2 | 'thumb2sp | 'thumb1) '("__arm__" "__arm")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
+   ; the OS predefines, the driver's like the arch's: -os picks, default linux
+   ; (the OS under every hosted object today -- raw syscalls, ELF, the host
+   ; seam; without __linux__ host/posix.c's signalfd source silently compiled
+   ; OUT of the selfhost binary). all three spellings gcc gives a linux ELF
+   ; target: st.c asks `#if defined(__linux)` for <pty.h>, and one missing is a
+   ; header silently not included. the unprefixed `linux`/`unix` stay out --
+   ; gcc drops them outside gnu89, and they collide with ordinary identifiers.
+   ; 'none is freestanding's word: a board owes no OS macro.
+   (toos s) (name s @
+    'linux 'linux
+    'none  'none
+           (udie 2 ("cc: unknown os " + s)))
+   (osdefs os)
+   (os @ 'none ()
+               '("__linux__" "__linux" "__unix__" "__unix"))
    ; C11's CONDITIONAL FEATURES (6.10.8.3) -- saying an absence out loud is what makes
    ; it conforming rather than a hole, and lets a portable source pick its other lane.
    ; ⚠ every row is TARGET-true: complex and VLAs each ride a subset (the parity table),
@@ -265,8 +280,8 @@
    ; whole -- clexat stamps them 1-k..0 and the source itself from 1, so every
    ; stamped line (a gripe, __LINE__) is TRUE with no pay-back pass. an
    ; #include lexes fresh at its own line 1 either way.
-   (cc-parse src {'is is 'ds ds 'tgt tgt 'nsi nsi 'dia dia})
-    (: ds9 (archdefs tgt + featdefs tgt + stddefs tgt
+   (cc-parse src {'is is 'ds ds 'tgt tgt 'os os 'nsi nsi 'dia dia})
+    (: ds9 (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt
                  + (? (id? dia 'moon) '("__moon__=1") ())   ; the DIALECT's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
                  (? (id? tgt 'x64) ("__SIZEOF_INT128__=16" >< ds) ds))     ; x64 alone carries the wide pair (gen's d128 lane); love.c's limb seam reads it
@@ -627,7 +642,7 @@
        ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set ("love " + <(usplit 43 love-version)) rdme))
        _ (ld-write dst ps)
        (chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-nostdinc] [-x c] [-t x64|arm64] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-nostdinc] [-x c] [-t x64|arm64] [-os linux|none] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n (tally s)
@@ -749,7 +764,7 @@
    ; would answer the zero point. Seeding also puts the flag set in one readable place, which
    ; the positional walk had and the bare tablet lost. ⚠ it is NOT a wrapper on `{}`: the
    ; literal has to be COMPLETE and it is wanted at two sites, so it is spelled once.
-   (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'pie () 'org () 'dorg ()
+   (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'nsi () 'ni () 'fir () 'rdme () 'dia dia}
    (flags as t)
     (? !(two? as)
@@ -770,6 +785,7 @@
              (a = "-D") (? (two? r) (flags >r (fpush t 'ds <r)) (udie 2 usage))
              (a = "-o") (? (two? r) (flags >r (pin t 'o <r)) (udie 2 usage))
              (a = "-t") (? (two? r) (flags >r (pin t 'tgt (totgt <r))) (udie 2 usage))
+             (a = "-os") (? (two? r) (flags >r (pin t 'os (toos <r))) (udie 2 usage))
              (a = "-Ttext") (? (two? r) (flags >r (pin t 'org (tonum <r))) (udie 2 usage))
              ; -Tdata is the SPLIT: .data runs there and is stored after the code,
              ; which is what every XIP part needs and what -Ttext alone cannot say.
