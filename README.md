@@ -116,8 +116,8 @@ via `make install`.
   filter and bao is the editor, history and fault-face on top. [love/bao.l](love/bao.l)
 - 🐚 **lush** -- the command shell: POSIX, the distro's console and its `/bin/sh`.
   [doc/lush.md](doc/lush.md)
-- ⚖ **libra** -- the scale: the .l balance scan, formatter and lsp, one scanner under
-  all three. [doc/libra.md](doc/libra.md)
+- ⚖ **libra** -- the scale: the .l balance scan, formatter, infix pass and doc lifter,
+  one scanner under all of them. [doc/libra.md](doc/libra.md)
 - 🐈 **ain** -- the netcat: an openbsd netcat clone in ~70 lines. [mk/tools/ain.l](mk/tools/ain.l)
 - 🦐 **lux** -- the window manager: an xmonad clone. [crew/lux/](crew/lux/)
 - 🦑 **quay** -- the terminal emulator: a cuttlefish with 256-color skin that likes

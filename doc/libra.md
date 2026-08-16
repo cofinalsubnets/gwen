@@ -1,11 +1,16 @@
 # libra ⚖ -- the .l balance tool
 
-the scales. libra weighs a `.l` file three ways and they are all the same
-weighing: `libra` says what is wrong with it, `libra fmt` lays it out, and
-`libra serve` says both while you type. one scanner (`lib/lint.l`) under all
-three, so the editor, the formatter and the gate can never disagree about what
-balanced means. the tool is `crew/libra/libra.l`, the gate `make test_hostnif`
+the scales. libra weighs a `.l` file four ways and they are all the same
+weighing: `libra` says what is wrong with it, `libra fmt` lays it out,
+`libra infix`/`unfix` turn it inside out, and `libra doc` lifts its header out as
+a document. one scanner (`lib/lint.l`) under all of them, so the formatter, the
+gate and the doc lifter can never disagree about what a paren or a comment is.
+the tool is `crew/libra/libra.l`, the gate `make test_hostnif`
 (test/host/libra.l), and `make lint` runs it over every tracked `.l`.
+
+an LSP server lived here until 2026-08-16 -- `libra serve`, publishing the same
+scan as diagnostics over json-rpc. it never had a consumer, so it went; `lib/json.l`
+stays, with no consumer of its own outside its gate.
 
 ## the verbs
 
@@ -19,12 +24,14 @@ libra fmt FILE ..       lay it out on stdout; -w rewrites, -n only checks
 libra fmt -p FILE ..    ...and MINIFY THE PARENS while you are there
 libra infix FILE ..     print it MAX-INFIX and MIN-PAREN, on stdout
 libra unfix FILE ..     print it back as PURE PREFIX LISP, on stdout
-libra serve             speak lsp over stdio
+libra doc FILE ..       its HEADER COMMENT as a document, on stdout
+libra doc -ht FILE ..   ...as html; -rf for a man page
 libra -h                the usage
 ```
 
-check is the default because it is the errand that recurs. fmt is run BY HAND
-and nothing is gated on layout; serve waits for an editor that wants it.
+check is the default because it is the errand that recurs: `make lint` runs it
+over every tracked `.l`. every other verb is run by hand and named, and nothing
+is gated on layout.
 
 **infix and unfix are the two directions of one pass.** `unfix` is just `opfix`,
 the factor pass a compile already runs, printed instead of compiled. `infix` is
@@ -44,6 +51,37 @@ proposal is checked against it before being handed out. on this tree all 1571
 top-level forms across 334 files keep the maximal spelling, at 22% fewer parens
 than the prefix spelling. the law is gated in
 [`test/host/infix.l`](../test/host/infix.l).
+
+**doc is the one verb that KEEPS comments**, and it is the mirror of the two
+above it. infix and unfix print from the datum and lose every comment in the
+file; `doc` prints the comments and nothing else -- the leading block, the header
+that twelve of the nineteen crew tools have instead of a `doc/*.md`.
+
+the lifting is a TEXT walk over the same `lib/lint.l` scanner (`lint-cmts`, which
+reports every comment with its text): no reader in the tree keeps comments, so a
+datum walk would answer nothing. it lives in libra because reading `.l` is
+libra's beat and nothing else in the tree should have to learn what a comment is.
+what it hands out is MARKDOWN TEXT, and the showing is
+[lapiz](../crew/lapiz/lapiz.l)'s -- which is why one verb offers three surfaces
+and libra implements none of them.
+
+```
+$ libra doc crew/vi/hue.l | head -3
+crew/vi/hue.l -- the .l syntax, written down ONCE, for two readers: the
+painter in crew/vi/core.l's vframe, and the vim syntax file, which mk/tools/hue2vim.l
+GENERATES from the very table below -- built by make into out/host/syntax.vim and
+```
+
+**`make site` is built on it.** the crew tools that have no page here get one
+anyway: the build runs `libra doc` over each of them into `out/toolmd/*.md` and
+papel makes a site out of markdown exactly as it always has. libra reads `.l`,
+papel reads markdown, and neither learns the other's job.
+
+the gate rides `test/host/libra.l` with the rest of the verbs, and its law is
+that the document keeps every LETTER of the header -- an extraction that stalls
+drops its whole tail in silence, and neither a length nor a block count would
+notice. the plan is [`doc/plan/doc-system.md`](plan/doc-system.md); this is its
+rung 0.
 
 ⚠ **an unknown verb reads as a FILENAME.** `libra serv x.l` says "cannot open
 serv" rather than "no such verb". that is the price of the bare file list being
@@ -193,22 +231,6 @@ the environment rather than by the seat walk. the module walk still reads none.
 `lib/lint.l` takes a plain tablet and reads it with `peep`; it does NOT depend
 on salt, because vi cats that file directly and a module it had to carry along
 would break the cat. salt fills the tablet, lint only reads it.
-
-## the lsp server
-
-`libra serve` speaks LSP over stdin/stdout: a header block (`Content-Length: N`,
-CRLF) framing a json-rpc body, with `lib/json.l` as the translation desk. it
-implements `initialize`, `shutdown`/`exit`, and `textDocument/did{Open,Change,
-Close}` with `publishDiagnostics` -- textDocumentSync 1 (Full), because a scanner
-that reads the whole document wants the whole document.
-
-⚠ the ports are ARGUMENTS: `(libra-serve conf inp outp)` is the whole server, so
-test/host/libra.l drives entire conversations in-process over `(tap ..)` and
-`(jug 0)` -- no subprocess, no pipes, no timing.
-
-there is no consumer. `textDocument/documentSymbol` is the gating rung if one
-appears: an LSP client that exposes only navigation operations and no diagnostics
-operation can connect to a diagnostics-only server and get nothing from it.
 
 ## the formatter
 

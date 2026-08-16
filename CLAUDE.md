@@ -53,8 +53,9 @@
 ; * check a .l edit for balance before trusting it: `out/host/love crew/libra/libra.l <file>`, or
 ;   `make lint` -- libra ⚖ (crew/libra/, doc/libra.md), the .l-aware paren/bracket/brace +
 ;   unclosed-string scan. silent is clean, a warning points at the opener; not in the test gate.
-; * libra's verbs ride one scanner (lib/lint.l): `fmt` reindents (not adopted), `serve` speaks
-;   lsp, `infix`/`unfix` are the two directions of the factor pass (unfix IS opfix printed). the
+; * libra's verbs ride one scanner (lib/lint.l): `fmt` reindents (not adopted), `doc` lifts a
+;   file's header comment out as a document (md/html/man, and `make site`'s crew pages come
+;   from it), `infix`/`unfix` are the two directions of the factor pass (unfix IS opfix printed). the
 ;   singleton/shadow/deprecated rules ride a config, off until it asks, and only `strict` fails.
 ; * ⚠ infix/unfix print from the DATUM: comments are not carried, which is why neither is a mode
 ;   of fmt and neither has `-w`.

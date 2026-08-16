@@ -245,6 +245,41 @@
                     1 (? it ti i) (? it tc col) warns))))
        (w 0 'code () 1 1 1 1 0 0 1 ()))
 
+   ; --- the comments ---------------------------------------------------------
+   ; (lint-cmts src) answers every comment in reading order, `(line col text kind)
+   ; -- line and col 1-BASED at the INTRODUCER, text the bytes after it to the end
+   ; of the line, kind 'semi or 'bang (`;` or `#!`). the fourth walk, and the
+   ; smallest: it wants no stack, only the three states, which is exactly what
+   ; keeps a `;` inside a string from being a comment and a `"` inside a comment
+   ; from opening one.
+   ;
+   ; ⚠ THE TEXT, not just the span, and that is the whole reason this exists: no
+   ; reader in the tree keeps comments (`sound` drops them, `p0` drops them), so
+   ; anything that documents a file FROM the file has to walk the text. lib/ldoc.l
+   ; is the consumer -- one more rider on this scanner rather than a fifth
+   ; independent encoding of what .l lexing means.
+   (lint-cmts src)
+    (: n (tally src)
+       (shut i cl cc ti ck acc) (link `(cl cc (snip src ti i) ck) acc)
+       (w i st line col cl cc ti ck acc)
+        (? (n <= i) (rev (? (id? st 'cmt) (shut i cl cc ti ck acc) acc))
+           (: c (src i)
+              (? (id? st 'str)
+                  (? (c = 92) (w (i + 2) 'str line (col + 2) cl cc ti ck acc)
+                     (c = 34) (w (i + 1) 'code line (col + 1) cl cc ti ck acc)
+                     (c = 10) (w (i + 1) 'str (line + 1) 1 cl cc ti ck acc)
+                     (w (i + 1) 'str line (col + 1) cl cc ti ck acc))
+                 (id? st 'cmt)
+                  (? (c = 10) (w (i + 1) 'code (line + 1) 1 cl cc ti ck (shut i cl cc ti ck acc))
+                     (w (i + 1) 'cmt line (col + 1) cl cc ti ck acc))
+                 (c = 59)  (w (i + 1) 'cmt line (col + 1) line col (i + 1) 'semi acc)
+                 (&& (c = 35) (&& ((i + 1) < n) ((src (i + 1)) = 33)))
+                  (w (i + 2) 'cmt line (col + 2) line col (i + 2) 'bang acc)
+                 (c = 34) (w (i + 1) 'str line (col + 1) cl cc ti ck acc)
+                 (c = 10) (w (i + 1) 'code (line + 1) 1 cl cc ti ck acc)
+                 (w (i + 1) 'code line (col + 1) cl cc ti ck acc))))
+       (w 0 'code 1 1 0 0 0 'semi ()))
+
    ; --- the indent plan ------------------------------------------------------
    ; a frame is `(base openline ntok pair): where this form's continuation lines
    ; align (0-based), the line it opened on, how many of its tokens we have passed

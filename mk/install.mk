@@ -171,8 +171,8 @@ $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 # READ their siblings rather than being -l'd beside them -- two tool files cannot both be
 # -l'd, since each one's seat would fire on the other's command line -- and they find them
 # by READLINK'ing this very symlink back to the source tree, so the link on PATH and the
-# crew directory need not be neighbours. libra's are named ((use 'json), (use 'lint)) and
-# ride libmods above instead.
+# crew directory need not be neighbours. libra's are named ((use 'lint), (use 'salt),
+# (use 'infix), and (use 'lapiz) on the doc verb alone) and ride libmods above instead.
 # ⚠ each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
 $d/bin/cook:    crew/cook/cook.l    $(ho)/kore

@@ -1,9 +1,10 @@
 #!/usr/bin/env -S love -l
-; libra ⚖ -- the scales: the .l balance tool. it weighs a file three ways and they
-; are all the same weighing -- `libra fmt` lays it out, `libra serve` says what is
-; wrong while you type, and `libra check` gates the tree. one scanner
-; (lib/lint.l) under all three, so the editor, the formatter and the gate can
-; never disagree about what balanced means.
+; libra ⚖ -- the scales: the .l balance tool. it weighs a file four ways and they
+; are all the same weighing -- `libra` says what is wrong with it, `libra fmt`
+; lays it out, `libra infix`/`unfix` turn it inside out, and `libra doc` lifts its
+; header out as a document. one scanner (lib/lint.l) under all of them, so the
+; formatter, the gate and the doc lifter can never disagree about what a paren or
+; a comment is.
 ;
 ; the FORMATTER is a REINDENTER: it replaces leading whitespace and leaves every
 ; line break, every alignment inside a line, and every comment exactly where its
@@ -16,33 +17,10 @@
 ; not become one by accident -- printing from the datum would strip every comment
 ; in the file, since `sound` does not keep them.
 ;
-; the SERVER speaks LSP over stdin/stdout, a protocol in two layers and neither
-; of them is lovely: a header block (`Content-Length: N`, CRLF-terminated) framing
-; a json-rpc body. lib/json.l is the translation desk for the second layer; the
-; first is here, and it is about thirty lines -- read a line at a time until one
-; comes back empty, take the length, then read EXACTLY that many bytes. the rest
-; of this file is the conversation.
-;
-; the DIAGNOSTICS are lib/lint.l's, the same scan `libra check` prints and
-; `make lint` gates on. one scanner, three consumers: what the editor underlines
-; is what the gate will refuse, always, with no second implementation to drift.
-;
 ; the SETTINGS come from lib/salt.l -- ~/.love/etc/libra.l for your taste, then
 ; ./.libra.l over it for the tree's own. balance is unconditional; the rules that
 ; are matters of OPINION (singleton, the deprecated roster) are off until a config
 ; asks for them, and even then they only speak. see doc/libra.md.
-;
-; ⚠ THE PORTS ARE ARGUMENTS, never the ambient in/out: (libra-serve conf inp outp)
-; is the whole server, so test/host/libra.l drives entire conversations in-process
-; over (tap ..) and (jug 0) -- no subprocess, no pipes, no timing. the seat hands
-; it the real in/out and nothing else changes. the config rides the same way, so a
-; test states the settings it means instead of inheriting yours.
-;
-; ⚠ AN `id` IS PRESENCE, and it is the one field that must not be read with `!`:
-; json-rpc numbers its requests FROM 0, so a bare truth test would mistake
-; request 0 for a notification and answer nothing, which hangs the editor on its
-; very first message. absence is tested EXACTLY, with (() = id) -- a stored 0 is
-; not (), and `=` knows the difference.
 ;
 ; usage:  libra FILE ..      weigh them: balance is the DEFAULT verb, so a bare
 ;                            file list is the whole command (`-w` also strips
@@ -50,7 +28,7 @@
 ;         libra fmt FILE ..  lay it out (-w rewrites, -n only checks)
 ;         libra infix FILE   print it max-infix and min-paren  (lib/infix.l)
 ;         libra unfix FILE   print it back as pure prefix lisp (the opfix pass)
-;         libra serve        speak lsp over stdio
+;         libra doc FILE     its HEADER as a document -- md, -ht html, -rf man
 ;     or: love -l crew/libra/libra.l ..
 ;
 ; ⚠ infix and unfix PRINT FROM THE DATUM, so they do not carry comments -- `sound`
@@ -58,173 +36,22 @@
 ; of fmt, which is a reindenter and never touches what is on a line. stdout only,
 ; and no -w: a rewrite that silently deleted every comment in a file is not a thing
 ; to offer. they are inverses, and the round trip is gated in test/host/infix.l.
+; `doc` is the other side of that coin: it carries the comments and nothing else.
 ;
 ; check is the default because it is the errand that actually recurs: `make lint`
-; runs it over every tracked .l, fmt is run BY HAND and nothing is gated on
-; layout, and serve waits for an editor that wants it. libra replaced mk/tools/ltidy.l
-; outright (deleted 2026-07-28) -- including its janitor `-w`, which is why that
-; flag strips whitespace without touching indentation.
-(use 'json)
+; runs it over every tracked .l, while fmt and doc are run BY HAND and nothing is
+; gated on layout. libra replaced mk/tools/ltidy.l outright (deleted 2026-07-28) --
+; including its janitor `-w`, which is why that flag strips whitespace without
+; touching indentation.
+;
+; an LSP SERVER lived here until 2026-08-16 -- `libra serve`, a json-rpc lane
+; publishing lint's warnings as diagnostics. nobody ran it, so it went; lib/json.l
+; stays, and the scan it published is the one `libra check` prints.
 (use 'lint)
 (use 'salt)
 (use 'infix)
 
 (:
-   ; --- the frame: a header block, then exactly N bytes -----------------------
-   ; a trailing CR off a header line -- the protocol says CRLF, so the LF is the
-   ; line end and the CR is the last byte before it
-   (chomp s) (: n (tally s) (? ((0 < n) && (s (n - 1) = 13)) (snip s 0 (n - 1)) s))
-
-   ; ⚠ `(1 text) or (), never a bare string: the BLANK line is what ends the
-   ; header block, so "" is a legitimate read and eof must not wear its face.
-   (rdline p)
-    (: (go acc) (: c (see p)
-                   (? (c < 0)  (? (0 < tally acc) `(1 (chomp acc)) ())
-                      (c = 10) `(1 (chomp acc))
-                      (go (acc + c))))
-       (go ""))
-
-   (lc s) (: n (tally s)
-             (go i acc) (? (n <= i) acc
-                           (: c (s i)
-                              (go (i + 1) (acc + (? ((65 <= c) && (c <= 90)) (c + 32) c)))))
-             (go 0 ""))
-
-   ; the digits in a header value; the leading space rides through as a non-digit
-   (atoi s) (: n (tally s)
-               (go i acc) (? (n <= i) acc
-                             (: c (s i)
-                                (? ((48 <= c) && (c <= 57)) (go (i + 1) (acc * 10 + c - 48))
-                                   (go (i + 1) acc))))
-               (go 0 0))
-
-   ; "Content-Length: 42" -> `(1 42). the name is matched case-BLIND: the spec
-   ; fixes its spelling, but a client is not obliged to be careful and one
-   ; mis-cased header would park the reader on a body that never comes.
-   (clen h) (: k "content-length:"
-               n (tally k)
-               (? ((n <= tally h) && (lc (snip h 0 n) = k))
-                   `(1 (atoi (snip h n (tally h))))
-                  ()))
-
-   ; the header block -> `(1 length). every other header is ignored (Content-Type
-   ; is the only other one lsp defines, and it has exactly one legal value).
-   (rdhdrs p)
-    (: (go n) (: r (rdline p)
-                 (? !(two? r) ()                               ; eof mid-block
-                    (: h <>r
-                       (? !(0 < tally h) (? (two? n) n ())       ; the blank line ends it
-                          (: v (clen h) (go (? (two? v) v n)))))))
-       (go ()))
-
-   (rdn p n) (: (go k acc) (? !(k < n) `(1 acc)
-                              (: c (see p) (? (c < 0) () (go (k + 1) (acc + c)))))
-                (go 0 ""))
-
-   ; one whole message off the port: `(1 body-text), or () at eof / broken framing
-   (libra-recv p) (: h (rdhdrs p) (? (two? h) (rdn p <>h) ()))
-
-   ; tally is BYTES and json-show writes utf-8, so the length is right by
-   ; construction -- there is no character count anywhere in this lane
-   (libra-send p v) (: t (json-show v)
-                      _ (say p ("Content-Length: " + show (tally t) + "\r\n\r\n" + t))
-                      _ (flush p)
-                      1)
-
-   ; --- the objects we answer with -------------------------------------------
-   (otab prs) (foldl (\ t p (pin t <p <>p)) (tablet 0) prs)
-   (pos l c)  (otab `(`("line" l) `("character" c)))
-
-   (reply p id res) (libra-send p (otab `('("jsonrpc" "2.0") `("id" id) `("result" res))))
-   (fault p id code m)
-    (libra-send p (otab `('("jsonrpc" "2.0") `("id" id)
-                         `("error" (otab `(`("code" code) `("message" m)))))))
-   (note p mth ps)
-    (libra-send p (otab `('("jsonrpc" "2.0") `("method" mth) `("params" ps))))
-
-   ; textDocumentSync 1 is FULL: every change carries the whole document, which is
-   ; what a scanner that reads the whole document wants anyway.
-   (libra-caps u)
-    (otab `(`("capabilities" (otab '(("textDocumentSync" 1))))
-            `("serverInfo" (otab '(("name" "libra") ("version" "0"))))))
-
-   ; --- the diagnostics ------------------------------------------------------
-   ; ⚠ lint counts lines and columns from ONE and lsp from ZERO, so every position
-   ; drops by one on the way out. the range covers the single character the
-   ; warning points at -- for an unclosed opener that is the opener itself, which
-   ; is where the eye needs to go.
-   ; an imbalance is an ERROR (1) -- the file does not read. every other rule is a
-   ; WARNING (2): the file reads fine and someone has an opinion about it.
-   (sev w) (? (id? <>>>w 'balance) 1 2)
-   (diag w) (: l (<w - 1)
-               c (<>w - 1)
-               (otab `(`("range" (otab `(`("start" (pos l c)) `("end" (pos l (c + 1))))))
-                       `("severity" (sev w))
-                       '("source" "libra")
-                       `("message" <>>w))))
-
-   (libra-diags conf text) (map diag (lint-of text conf))
-
-   ; a clean document publishes an EMPTY array, which is how lsp says "forget what
-   ; i told you" -- and since lint-scan answers () for clean and json writes () as
-   ; [], clearing costs nothing and says itself.
-   (publish conf p uri text)
-    (note p "textDocument/publishDiagnostics"
-            (otab `(`("uri" uri) `("diagnostics" (libra-diags conf text)))))
-
-   ; --- reading a document notification's params -----------------------------
-   ; ⚠ EVERY SLOT IS CHECKED, because a missing one does not error here -- it
-   ; MANUFACTURES a plausible answer. () applied to a string is 1 (const-1) and 1
-   ; applied to a string is the string itself (the identity), so a message with no
-   ; params reads its uri as "uri" and one with no textDocument reads it as 1.
-   ; unguarded, libra publishes diagnostics against a document the client never
-   ; named -- and publishing an empty list at a bogus uri is how you tell an editor
-   ; to CLEAR the warnings it is showing. the laws that make (f)==f lovely make
-   ; this lane a liar, so the shape is confirmed before it is believed.
-   (docuri ps) (? (tablet? ps)
-                   (: d (ps "textDocument")
-                      (? (tablet? d) (: u (d "uri") (? (string? u) `(1 u) ())) ()))
-                  ())
-
-   (stext v) (? (string? v) v "")                  ; absence and a non-string are both empty
-   (dopen ps) (: d (ps "textDocument") (? (tablet? d) (stext (d "text")) ""))
-
-   ; full sync: the LAST change carries the whole document
-   (dchange ps) (: cs (ps "contentChanges")
-                   (? (two? cs) (: c (last cs) (? (tablet? c) (stext (c "text")) "")) ""))
-
-   ; --- the conversation -----------------------------------------------------
-   ; answers 'stop when the client says exit, () otherwise. an unknown REQUEST is
-   ; refused by number (a request must always be answered, or the editor waits
-   ; forever); an unknown notification is simply dropped, which the spec allows.
-   (libra-handle conf p msg)
-    (: mth (msg "method")
-       id  (msg "id")
-       ps  (msg "params")
-       ask !(() = id)                        ; ⚠ EXACT absence -- request 0 is a request
-       (? (mth = "initialize")  (: _ (reply p id (libra-caps ())) ())
-          (mth = "shutdown")    (: _ (reply p id json-null) ())
-          (mth = "exit")        'stop
-          (mth = "textDocument/didOpen")
-           (: r (docuri ps) _ (? (two? r) (publish conf p <>r (dopen ps)) 0) ())
-          (mth = "textDocument/didChange")
-           (: r (docuri ps) _ (? (two? r) (publish conf p <>r (dchange ps)) 0) ())
-          (mth = "textDocument/didClose")
-           (: r (docuri ps) _ (? (two? r) (publish conf p <>r "") 0) ())
-          ask (: _ (fault p id -32601 ("no such method: " + show mth)) ())
-          ()))
-
-   ; the server: read, dispatch, repeat, until the client says exit or the pipe
-   ; ends. a message that is not a json object is DROPPED rather than fatal --
-   ; an editor that garbles one frame should not take the session down with it.
-   (libra-serve conf inp outp)
-    (: (go u) (: m (libra-recv inp)
-                 (? !(two? m) 0
-                    (: r (json-read <>m)
-                       s (? (two? r && tablet? <>r) (libra-handle conf outp <>r) ())
-                       (? (id? s 'stop) 0 (go ())))))
-       (go ()))
-
    ; --- the formatter --------------------------------------------------------
    ; lint-lay says where each line STARTS; laying it out is then just "replace the
    ; leading whitespace, keep the rest". every line break, every alignment inside
@@ -277,9 +104,9 @@
        (g ls pp ()))
 
    ; --- the check ------------------------------------------------------------
-   ; the same warnings the server publishes, laid out for a terminal instead of an
-   ; editor: `path:line:col: text`, the shape a compiler prints and an editor's
-   ; error list already parses. QUIET when clean; a tab warns but never fails.
+   ; lint's warnings laid out for a terminal: `path:line:col: text`, the shape a
+   ; compiler prints and an editor's error list already parses. QUIET when clean;
+   ; a tab warns but never fails.
    (tabcol s) (: n (tally s)
                  (g i) (? (n <= i) () (s i = 9) (i + 1) (g (i + 1)))
                  (g 0))
@@ -361,6 +188,101 @@
                       (libra-fix-files >fs way bad)))))))
    (libra-fix fs way) (: n (libra-fix-files fs way 0) (? (0 < n) (quit 1) 0))
 
+   ; --- the header, as a document --------------------------------------------
+   ; twelve of the nineteen crew tools have no doc/*.md at all: their header
+   ; comment IS their documentation, 30 to 70 lines of it, and nothing could show
+   ; it because nothing could reach it. reading .l is libra's beat, so lifting it
+   ; is libra's errand and lives here -- nothing else in the tree has to learn
+   ; what a comment is to get a page out of a file.
+   ;
+   ; ⚠ IT IS A TEXT WALK, and it has to be. no reader in the tree keeps comments
+   ; -- `sound` drops them, p0 drops them, and infix/unfix above are stdout-only
+   ; for exactly that reason -- so a header lifted from a datum would be empty.
+   ; lint-cmts is the scanner, one more rider on the .l scan all of libra already
+   ; shares, and this is only what to do with what it finds.
+   ;
+   ; THE HEADER is the run of full-line comments at the top of the file, blank
+   ; lines included, ending at the first line that carries CODE. wider than "to
+   ; the first blank line" on purpose: papel's own header ends, blanks, and then
+   ; goes on for two more paragraphs, and both are documentation. what stands to a
+   ; comment's LEFT decides -- blank and the line is a sentence, code and it is a
+   ; remark about that code, which is never the header.
+   (dblank? s) !(0 < tally (ltrim s))
+   ; one leading space off a comment body: `; foo` is "foo" and `;   foo` keeps
+   ; the display's two. a `;` alone is the blank line it looks like.
+   (dbody s) (: n (tally s) (? ((0 < n) && (s 0 = 32)) (snip s 1 n) s))
+   (dcmts src) (: t (tablet 0) _ (each (lint-cmts src) (\ c (pin t <c c))) t)
+   (dalone ln c) (: k (<>c - 1)
+                    (? (dblank? (snip ln 0 k)) `(1 (snip ln 0 k + dbody <>>c)) ()))
+   (drtrim l) (? !(two? l) () (: r (drtrim >l) (? ((two? r) || !(dblank? <l)) (<l >< r) ())))
+
+   ; ⚠ a `#!` line is a SEAT, not a sentence -- `#!/usr/bin/env -S love -l` is the
+   ; first line of six of the crew tools and the first line of no documentation.
+   (ldoc-head src)
+    (: t (dcmts src)
+       (g ls k acc)
+        (? !(two? ls) (drtrim (rev acc))
+           (: c (peep t k ())
+              a (? (two? c) (dalone <ls c) ())      ; the line's own sentence, if it is one
+              (? !(two? a) (? (dblank? <ls) (g >ls (k + 1) ("" >< acc))
+                               (drtrim (rev acc))) ; ..else this line is code: the header ends
+                 (id? <>>>c 'bang) (g >ls (k + 1) acc)             ; the seat line says nothing
+                 (g >ls (k + 1) (<>a >< acc)))))
+       (g (linesof src) 1 ()))
+
+   ; ⚠ AND THE PROSE IS TAKEN AS WRITTEN. the corpus was not composed against a
+   ; convention and is not going to be rewritten into one: where the header is
+   ; markdown already -- and it mostly is, `- ` lists, `code`, indented displays --
+   ; markdown is what it means. where it is not, the mapping bends, never the file.
+   ;
+   ; the bending is one rule today: a line markdown would claim as a block opener
+   ; and then refuse to parse wears one backslash, lapiz's own escape, and stands
+   ; alone. that is the `; --- banner ---` every crew file rules its sections off
+   ; with (and a bare `:   ` body line, markdown's definition marker). WITHOUT IT
+   ; mdread STOPS DEAD at the first banner and the whole rest of the header is
+   ; dropped in silence -- no error, a shorter page, and nothing to notice it by.
+   ; the banner also keeps its own break: it names the section under it, so
+   ; letting markdown fill the two into one paragraph would lose a break the file
+   ; actually made. rung 1 of doc/plan/doc-system.md turns these into headings.
+   ;
+   ; ⚠ ONE operand for the body: `(: n .. A || B)` pairs A with `||` and answers B
+   ; alone -- the binder takes its names two at a time and reads them BEFORE the
+   ; infix fold ever sees them.
+   (dhazard? s) (: n (tally s)
+                   (((3 <= n) && (snip s 0 3 = "---") && !(dblank? (snip s 3 n)))
+                    || ((4 <= n) && (snip s 0 4 = ":   "))))
+   (dshield s) (? (dhazard? s) ("\n\\" + s + "\n\n") (s + "\n"))
+
+   ; the header as MARKDOWN TEXT, which is the whole of what libra says about a
+   ; document: lapiz decides what a document IS, and every surface it has then
+   ; arrives free. (a bespoke prose parser here would be a second markdown reader
+   ; in the tree, drifting from the first.)
+   (ldoc-md src) (foldl (+) "" (map dshield (ldoc-head src)))
+
+   ; --- doc ------------------------------------------------------------------
+   ; ⚠ THE ONE VERB THAT KEEPS COMMENTS -- infix and unfix print from the datum and
+   ; lose every one; this prints the comments and nothing else.
+   ;
+   ; the surfaces are lapiz's three, and lapiz is loaded HERE rather than at the
+   ; top: `make lint` runs libra over every tracked .l and pays for whatever the
+   ; file names, and no other verb wants a document lens.
+   (libra-doc-files fs surf bad)
+    (? !(two? fs) bad
+       (: r (rdf <fs)
+          (? !(two? r) (: _ (say err ("libra: cannot open " + <fs + "\n"))
+                           (libra-doc-files >fs surf (bad + 1)))
+             (: md (ldoc-md <>r)
+                (? !(0 < tally md)
+                    (: _ (say err (<fs + ": no header comment\n"))
+                       (libra-doc-files >fs surf (bad + 1)))
+                   (: _ (say out (? (id? surf 'md) md
+                                     ((from 'lapiz (? (id? surf 'ht) 'md->ht 'md->rf)) md)))
+                      (libra-doc-files >fs surf bad)))))))
+   (libra-doc fs surf)
+    (: _ (? (id? surf 'md) 0 (use 'lapiz))
+       n (libra-doc-files fs surf 0)
+       (? (0 < n) (quit 1) 0))
+
    ; ⚠ ABOVE its reader, and not for tidiness: a lambda that closes over a LATER
    ; binding of the same `:` reads the cell before pin when the value is not
    ; itself a lambda (only lambda-to-lambda recursion resolves lazily), and the
@@ -374,7 +296,8 @@
           + "       libra infix FILE ..    print it MAX-INFIX and MIN-PAREN, on stdout\n"
           + "       libra unfix FILE ..    print it back as PURE PREFIX LISP, on stdout\n"
           + "                              ⚠ both print from the datum: COMMENTS ARE NOT CARRIED\n"
-          + "       libra serve            speak lsp over stdio -- diagnostics as you type\n"
+          + "       libra doc FILE ..      the file's HEADER as a document, on stdout\n"
+          + "                              markdown by default; -ht for html, -rf for man\n"
           + "  config: ~/.love/etc/libra.l, then ./.libra.l over it -- (singleton 1),\n"
           + "          (deprecated old (worse \"use better\")), (strict singleton),\n"
           + "          (drop-parens 1) for -p by default, (drop-singles 0) / (drop-nullary 1)\n"
@@ -408,12 +331,14 @@
                               (? (member? "-n" r && (0 < n)) (quit 1) 0))
              (v = "infix") (libra-fix (files r) 'infix)
              (v = "unfix") (libra-fix (files r) 'lisp)
-             (v = "serve") (libra-serve conf in out)
+             (v = "doc")   (libra-doc (files r) (? (member? "-ht" r) 'ht
+                                                   (member? "-rf" r) 'rf
+                                                   'md))
              (v = "")      (: _ (say err usage) (quit 1))     ; nothing named, nothing to weigh
              ; NO VERB: the whole line is files, and CHECK is what happens to them.
              ; balance is the everyday errand -- `libra *.l` should simply answer
-             ; it -- while fmt is run by hand and serve waits for an editor to
-             ; exist. ⚠ so an unknown verb reads as a FILENAME now, and says
+             ; it -- while every other verb is run by hand and named. ⚠ so an
+             ; unknown verb reads as a FILENAME now, and says
              ; "cannot open" rather than "no such verb". that is the right trade
              ; while the file list is the common case, but it is a trade.
              (libra-check conf (files as) (member? "-w" as)))))
@@ -424,7 +349,7 @@
 ; so nothing leaks.
 (: s ((from 'verbs 'fire) ["libra" "libra.l"])
    ; ⚠ QUIT, never return: the shebang's -l makes this file a PRELOAD, so every
-   ; path that merely answers -- a clean check, fmt, infix, serve, -h -- leaves
+   ; path that merely answers -- a clean check, fmt, infix, doc, -h -- leaves
    ; cli holding the tool's own arguments and it LOADS the first one as a love
    ; program. a clean `libra f.l` ran f.l. the seat miss still returns: that arm
    ; is (use 'libra), where quitting would take the session down with it.

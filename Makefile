@@ -147,12 +147,23 @@ ccdb:
 # revision behind by construction: the cost of baking the id. test_wasm links out of tree
 # so at least it stops DIRTYING the file on every run.
 
-# this tree's own docs as a browsable site: README.md + doc/*.md through papel.
-site: host
-	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc
+# this tree's own docs as a browsable site: README.md + doc/*.md through papel -- plus
+# one page per CREW TOOL, whose header comment IS its documentation. `libra doc` lifts
+# that header out as markdown and papel builds the site from markdown as it always has:
+# libra is the only thing in the tree that reads .l, and papel never learns what a .l is.
+# a tool with a doc/*.md of its own is skipped -- that page is the one someone wrote.
+sitetools = $(foreach d,$(wildcard crew/*),$(if $(wildcard doc/$(notdir $d).md),,$(wildcard $d/$(notdir $d).l)))
+out/toolmd.stamp: $(sitetools) crew/libra/libra.l $(ho)/love
+	@rm -rf out/toolmd && mkdir -p out/toolmd
+	@for f in $(sitetools); do n=$${f##*/}; \
+	   $(ho)/love $R/crew/libra/libra.l doc $$f > out/toolmd/$${n%.l}.md || exit 1; done
+	@echo "  toolmd: $(words $(sitetools)) crew headers -> out/toolmd/"
+	@touch $@
+site: host out/toolmd.stamp
+	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc out/toolmd
 SITEPORT ?= 8080
-site-serve: host
-	@$(ho)/love -l crew/papel/papel.l -t love -o out/site -s $(SITEPORT) README.md doc
+site-serve: host out/toolmd.stamp
+	@$(ho)/love -l crew/papel/papel.l -t love -o out/site -s $(SITEPORT) README.md doc out/toolmd
 
 wasm:
 	@$(MAKE) -C wasm
