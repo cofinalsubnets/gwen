@@ -66,16 +66,16 @@
    _ (chk2 "inner native" (want 'inner) inner ts)
    _ (chk2 "inner deopt " (want 'inner) inner (ds + ts))
 
-   ; sort: pseudo-random runs of every length either side of the merge's power-of-two seams,
-   ; plus the shapes its guards must hand back (short, improper, non-fixnum, not a list at all)
-   (rnd k s) (: (go i q acc) (? (i < 1) acc
-                                (go (i - 1) ((q * 1103515245 + 12345) % 2147483648)
-                                    (((q % 200) - 100) >< acc)))
-                (go k s ()))
-   ls ((map (\ k (rnd k (k * 7 + 3))) (jot 40))
-       + ['(2 1) '(1 2) '(3 1 2) '(1 1 1) '(5 4 3 2 1) '(1 2 3 4 5) '(0 -1 1 -2 2)
-          '(1) () '(1 . 2) '("a" 1) '(1 a 2) '(1.5 2) 5 "text" (rnd 4000 99)])
-   _ (chk1 "sort  both " (want 'sort) sort ls)
+   ; --- the EXTRAS slot, which no kernel in the roster uses right now --------------------------
+   ; ⚠ a kit piece nobody exercises reads exactly like a working one. `nifx` carries one love
+   ; value in the cell at Ip+32 -- the door for a constant a kernel cannot spell, and the only
+   ; way `sort` could reach the zero-point terminator before it was dropped. This kernel is the
+   ; whole mechanism and nothing else: ignore the argument, answer what rode along. The value is
+   ; a HEAP one on purpose, since the point of the slot over an `li` immediate is that the
+   ; collector walks it and the image codec encodes it.
+   (xt-ir _) ((forge-extras 'r0) + forge-epi-ptr)
+   xtval '(the extras slot)
+   _ (forge-putx 'xt 1 xt-ir (\ q xtval) xtval)
 
    ; --- the ARITY>=2 shape, registered here rather than in the roster -------------------------
    ; ⚠ the curried cell is a DIFFERENT cell (love.c lvm_nif lays 8 words behind lvm_cur, not 6)
@@ -90,8 +90,12 @@
    ; ⚠ conditional on the seam, like every other native-only claim here: where nothing can
    ; install, `fitted` stays 0 and the row not growing is the correct answer, not a red. The
    ; one requirement that is NOT conditional is the last line of the file.
-   _ (? (|| (= fitted 0) (= fitted2 (fitted + 1))) 0
+   _ (? (|| (= fitted 0) (= fitted2 (fitted + 2))) 0
         (die ("the roster did not grow: fit " + show fitted + " -> " + show fitted2)))
+   _ (? (= ((want 'xt) 0) xtval) 0
+        (die ("the extras slot answered " + show ((want 'xt) 0) + ", want " + show xtval)))
+   _ (? (= ((want 'xt) '(anything at all)) xtval) 0 (die "the extras kernel read its argument"))
+   _ (say out ("  extras: the Ip+32 slot answers " + show xtval + "\n"))
    nat2 (want 'fx-and)
    pairs [[0 0] [1 1] [6 3] [255 15] [1023 992] [7 0] [65535 4096]
           [12345678 87654321] [1 2.5] ["a" 3] [() 7] [3 ()]]
@@ -145,7 +149,6 @@
         (die ("refit installed " + show again + " but " + show (forge-fitted? 0) + " are native"))))
    _ (chk1 "aall  refit" (want 'aall) aall zs)
    _ (chk2 "outer refit" (want 'outer) outer ts)
-   _ (chk1 "sort  refit" (want 'sort) sort ls)
 
    ; --- a decline is DATA, and one bad kernel does not take the roster with it -----------------
    ; ⚠ a kernel's IR is a program and holo RAISES on an op it cannot lower, so an untrapped

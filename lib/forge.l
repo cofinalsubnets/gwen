@@ -15,13 +15,23 @@
 ;   aall  n=4096 x2000        14        5         3        gcc wins; the 2.8x is mooncc's gap
 ;   outer 200x200 x2000      151       71        79        a real ~10% over gcc, 2.1x over ours
 ;   inner 120x120 x40        168       37        28        a tie with gcc, 4.5x over ours
-;   sort  n=4000 x200         34       29        24        a tie with gcc, 1.2x over ours
+;   (sort  n=4000 x200        34       29        24        DROPPED: a tie with gcc for the most
+;                                                          IR of the four -- 1.2x is not worth
+;                                                          65 lines of hand-written x86-64)
 ;
 ; so the kernels are about gcc-quality machine code and NOT better than C. Against the binary
 ; the tree actually ships they are 2-4.5x, and that is the number a user feels -- but the honest
 ; reading is that most of it is a mooncc loop-codegen gap (it recomputes i*N+j per element where
-; these walk a pointer), and closing THAT would pay in every loop in love.c rather than in three.
+; these walk a pointer, and never gets the induction variables out of their stack slots), and
+; closing THAT pays in every loop in love.c rather than in three.
 ; Say the controlled number or say nothing: "3x the C nif" was true of one compiler and false of C.
+;
+; ⚠ SO THE RULE FOR A NEW KERNEL IS NOT "IS IT HOT". It is: does the kernel hold a constant only
+; known at RUN TIME? crew/sat/flat.l bakes the instance's nvars in as immediates and rebuilds per
+; solver -- C cannot do that at any -O. Every kernel below is a fixed program, which is why each
+; one merely draws with gcc: a fixed program is what a compiler is for. These three stay because
+; they pay on the binary the tree ships, and they are the first thing to delete the day the
+; residency lever lands. They are a hedge, not an asset.
 ;
 ; ⚠ THE TWIN IS THE DEFINITION and the native is an optimisation, never the other way round.
 ; every guard in a kernel deopts INTO the twin, so a shape the IR does not say is not a bug and
@@ -333,83 +343,4 @@
          '(jmp il)
          '(label ile) '(pop r0) '(pop r0) '(pop r0)]
      + (forge-restore + (forge-epi-ptr + forge-unwind))))
-   _ (forge-put 'inner 2 forge-inner-ir inner)
-
-   ; (sort l) over an ALL-FIXNUM chain -- the C's own fast path: a tagged fixnum is (v<<1|1)
-   ; and orders as a signed word, so the compare is one `cmp` and cmp3 never runs. count, copy
-   ; the cars into the UNCOMMITTED gap above Hp (the C's trick: scratch that costs no
-   ; allocation because Hp was only advanced over the spine), bottom-up stable merge, lay the
-   ; spine. an element that is not a fixnum hands the whole list back to the twin.
-   ; regs: r11=a r12=b r13=n r14=spine r3=w, r0/r7/r8/r9/r10 scratch; 32 bytes of machine
-   ; stack hold lo/hi/m, reserved AFTER the last deoptp so the unwinding tail stays a pop of 5.
-   ; ⚠ THE WEAKEST ROW AND IT SAYS SO: 1.2x against the shipping compiler and a dead heat with
-   ; gcc's build of the same C. It is the most IR of the four and buys the least; it is here
-   ; because it pays on the binary the tree ships and regresses nothing, and it is the first
-   ; row to drop if this file ever has to earn its length.
-   ; ⚠ the terminator rides the EXTRAS slot: the last cell's cup is the zero point, whose
-   ; address no book name hands out (`seek`/`peek` are mopped at the hatch).
-   (forge-sort-ir _)
-    ([ '(ld r0 r1 0) '(test r0 1) '(br ne deopt)                  ; a chain of at least two
-       ['li 'r8 forge-chaink] '(ld r7 r0 0) '(cmp r7 r8) '(br ne deopt)
-       '(ld r7 r0 16) '(test r7 1) '(br ne deopt)
-       '(ld r9 r7 0) '(cmp r9 r8) '(br ne deopt)]
-     + (forge-save
-     + [ '(li r13 0) '(mov r9 r0)                                 ; n = 0 ; p = l
-         '(label cl) '(test r9 1) '(br ne cle)
-         '(ld r7 r9 0) '(cmp r7 r8) '(br ne cle)
-         '(add r13 r13 1) '(ld r9 r9 16) '(jmp cl)
-         '(label cle)
-         '(mov r7 r13) '(imul r7 r7 40)                           ; 3n spine + 2n scratch words
-         '(leax r10 r2 r7 1 128) '(cmp r1 r10) '(br below deoptp)
-         '(mov r14 r2)                                            ; spine = Hp
-         '(mov r7 r13) '(imul r7 r7 24) '(add r2 r2 r7)           ; Hp += 3n words: the spine ONLY
-         '(mov r11 r2)                                            ; a = the uncommitted gap
-         '(mov r7 r13) '(shl r7 3) '(mov r12 r11) '(add r12 r12 r7)   ; b = a + n
-         '(li r7 0) '(mov r9 r0)
-         '(label pl) '(cmp r7 r13) '(br ge ple)
-         '(ld r10 r9 8) '(test r10 1) '(br eq deoptp)             ; not a fixnum: the twin's cmp3
-         '(stx r11 r7 8 0 r10) '(ld r9 r9 16) '(add r7 r7 1) '(jmp pl)
-         '(label ple)
-         '(push r0) '(push r0) '(push r0) '(push r0)              ; lo/hi/m live here
-         '(li r3 1)                                               ; w
-         '(label wl) '(cmp r3 r13) '(br ge wle)
-         '(li r0 0)                                               ; lo
-         '(label lol) '(cmp r0 r13) '(br ge lole)
-         '(mov r7 r0) '(add r7 r7 r3) '(cmp r7 r13) '(br le mok) '(mov r7 r13)
-         '(label mok) '(st sp 16 r7)                              ; m  = min(lo+w, n)
-         '(mov r8 r0) '(add r8 r8 r3) '(add r8 r8 r3)
-         '(cmp r8 r13) '(br le hok) '(mov r8 r13)
-         '(label hok) '(st sp 8 r8)                               ; hi = min(lo+2w, n)
-         '(st sp 0 r0) '(mov r8 r0) '(mov r9 r7) '(mov r10 r0)    ; lo ; x=lo y=m o=lo
-         '(label mg) '(ld r7 sp 16) '(cmp r8 r7) '(br ge dx)
-         '(ld r7 sp 8) '(cmp r9 r7) '(br ge dx)
-         '(ldx r0 r11 r9 8 0) '(ldx r7 r11 r8 8 0)
-         '(cmp r0 r7) '(br lt takey)
-         '(stx r12 r10 8 0 r7) '(add r8 r8 1) '(add r10 r10 1) '(jmp mg)
-         '(label takey) '(stx r12 r10 8 0 r0) '(add r9 r9 1) '(add r10 r10 1) '(jmp mg)
-         '(label dx) '(ld r7 sp 16) '(cmp r8 r7) '(br ge dxe)
-         '(ldx r0 r11 r8 8 0) '(stx r12 r10 8 0 r0)
-         '(add r8 r8 1) '(add r10 r10 1) '(jmp dx)
-         '(label dxe)
-         '(label dy) '(ld r7 sp 8) '(cmp r9 r7) '(br ge dye)
-         '(ldx r0 r11 r9 8 0) '(stx r12 r10 8 0 r0)
-         '(add r9 r9 1) '(add r10 r10 1) '(jmp dy)
-         '(label dye)
-         '(ld r0 sp 0) '(add r0 r0 r3) '(add r0 r0 r3) '(jmp lol) ; lo += 2w
-         '(label lole)
-         '(mov r7 r11) '(mov r11 r12) '(mov r12 r7)               ; swap a and b
-         '(add r3 r3 r3) '(jmp wl)
-         '(label wle)
-         '(li r7 0) '(mov r9 r14)                                 ; lay the spine
-         '(label bl) '(cmp r7 r13) '(br ge ble)
-         ['li 'r10 forge-chaink] '(st r9 0 r10)
-         '(ldx r10 r11 r7 8 0) '(st r9 8 r10)
-         '(mov r10 r9) '(add r10 r10 24) '(st r9 16 r10)
-         '(add r9 r9 24) '(add r7 r7 1) '(jmp bl)
-         '(label ble)]
-     + (forge-extras 'r10
-     + [ '(sub r9 r9 24) '(st r9 16 r10)                          ; the last cup: the zero point
-         '(pop r7) '(pop r7) '(pop r7) '(pop r7)
-         '(mov r0 r14)]
-     + (forge-restore + (forge-epi-ptr + forge-unwind)))))
-   _ (forge-putx 'sort 1 forge-sort-ir sort ()))
+   _ (forge-put 'inner 2 forge-inner-ir inner))
