@@ -67,6 +67,8 @@ test/gate/moon.sh), and the deliberate readings in them:
 - **an integer where a pointer is owed** — the §4 row that took `host/main.c`'s `return 1` in
   silence and handed back address 1. `return <non-zero literal>` from a `T *` now refuses and
   says so; a cast still passes, because a cast says the program means it.
+- **`_Generic` over QUALIFIED types** (test/cc/143-genericqual.c) — the row below, and the last
+  program in c-testsuite that compiled clean and answered wrong.
 
 None of these is large on its own. The honest summary is that conformance here is a **ladder of
 small rungs, not a rewrite** — and that the ledger below is the ladder.
@@ -115,9 +117,8 @@ picks on the controlling expression's lvalue-converted type (`pdecay`) and lower
 selected arm alone, so no other arm reaches gen — a call to an undefined function in one links
 clean. `_Alignof` answers `talign`, the door `playout` lays members with, so the operator
 cannot drift from the layout it describes; gcc's `__alignof__` rides the same lane and keeps
-its expression operand. ⚠ association matching is **structural over the resolved type**, so the
-qualifiers cc drops cannot separate two rows — `const int:` and `int:` read as one, where C11
-counts two.
+its expression operand. Association matching is structural over the type, and as of
+2026-08-16 that type carries **qualifiers** — the row below.
 
 Four of them carry an edge worth knowing:
 
@@ -224,6 +225,52 @@ count (nothing compensated). `clexat` now stamps the prepended lines `1-k..0` so
 numbering starts at 1, and moon.l's `deskew` pay-back pass retired with the skew. `#line`
 moves it too now (the directive section above).
 
+### `_Generic` over qualified types — landed 2026-08-16
+
+Two C rules pull opposite ways here, and mooncc had neither: the controlling expression is
+**lvalue-converted** (DR 481), so its *top-level* const or volatile is gone before any row is
+tried, while everything *inside* a pointer survives and compatibility is exact. So `const int x`
+picks `int:`, and `const char *` and `char *` are two different rows. Ours dropped every
+qualifier, matched the first structurally equal row, and answered whichever one was written
+first — c-testsuite 00219 (`const int * const` taking the `int *` row where C takes neither and
+falls to `default`) is off the roster with this.
+
+⚠ **the type language still carries no qualifier**, and that is the point: a node for one would
+reach all 56 of gen's ptr dispatch sites. The one consumer that must tell `const char *` from
+`char *` keeps its **own marked copy** — `('cq mask t)` over the leaf, mask 1=const 2=volatile —
+parked in `ps 'qtys` beside `'locals` and shadowed with it, staged by each declarator parse
+(`ps 'qstage`) and consumed by the bind that follows. Nothing outside `_Generic` reads a marked
+type, and a stage is taken only when it strips back to the type actually bound, so a mark cannot
+outlive the declaration that described it. The sources of a mark are the specifier run
+(`qrun`), a typedef's own (`ps 'qtdef`), a struct member's (`ps 'qmem`, which `playout` has no
+slot for), and — for a cast, whose `('cast ty ..)` node keeps the bare type gen reads — a
+re-read of the type-name off the tokens (`qctl`).
+
+It costs **+0.09% of the instructions** compiling core/love.c (perf, 130.348G vs 130.231G,
+stable to five figures across runs), and the `.o` is byte-identical. Two things buy that back and both are load-bearing: nothing is staged for
+an unqualified declaration (the common path never touches a table), and `qrun` walks the
+specifier run rather than taking a token span — a span by `tally` is O(the rest of the stream),
+which would have been quadratic over a TU.
+
+Held to gcc by test/cc/143-genericqual.c: 31 checks over locals, params, block scope, globals,
+typedefs, members, array decay, `&` and `*`, and const told apart from volatile.
+
+Two deliberate readings:
+
+- a type-name with a **top-level** qualifier (`int * const:`) is parsed, kept, and matched
+  against nothing — no lvalue-converted controlling type can be compatible with it. gcc accepts
+  the row and never selects it; clang warns. We agree on the answer and say nothing.
+- ⚠ only the **specifier run's** qualifier is seen. A mid-declarator one — `char * const *p`,
+  where the const sits on the inner pointer — reads unqualified, so it matches *more* than C
+  does, never less. `typedef char *cp; const cp x;` is read right (a const *pointer*, so the
+  mark does not reach the leaf); `typedef char *cp; const cp *y;` is the shape that would not be.
+
+⚠ one path binds a name without staging for it: a **K&R** parameter list, whose types arrive as
+separate declarations. A prototype's staged mark for the same name would still be sitting there,
+and it is taken if it strips back to the same type — so `int f(const char *buf);` followed by a
+K&R `f(buf) char *buf;` would read `buf` as qualified. The guard makes it need a shape match as
+well as a name match; nothing in the tree or the corpus reaches it.
+
 ### the `_Static_assert` quirks
 
 - ⚠ **A failed static assert reports as `parse error near ;`.** The refusal is correct; the
@@ -251,11 +298,10 @@ rather than behind a test we thought to write.
 ### from an outside corpus
 
 `test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Its roster is
-refusals, each loud and named, and **one** program that compiles clean and answers wrong:
-
-- **00219 — `_Generic` cannot separate two associations that differ only in a QUALIFIER.** cc
-  drops qualifiers, so `const int * const` picks the `int *` row where C matches neither and
-  takes `default`. The ⚠ under `_Generic` above is this, with a program behind it now.
+**refusals only** as of 2026-08-16, each loud and named — no program in the corpus compiles clean
+and answers wrong on any of the three targets. 00219 was the last one (`_Generic` over a
+qualifier, above); its `roster_wrong` list stays in the gate, empty, because the day one comes
+back it belongs there and `wrong` is the kind that must stay loud.
 
 ⚠ **A rostered line is a claim that goes stale in silence.** Four of them (`#if ||`'s dead arm,
 `int x[const *]`, a function-typed parameter, `_Generic`) had been fixed by earlier rungs and
