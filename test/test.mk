@@ -800,6 +800,13 @@ test_gcheck: host
 # majors every 32nd. ~4 min, own tree.
 test_gcstress: host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAiGcStress test_host
+# test_imgchain: the PINNED PREFIX, which nothing else can reach -- `love bake -L` is the
+# only thing that sets g->froze, so the branch in gcp, the verbatim block in gen_major and
+# the terminator fixup in evac_thread are dead code in every other lane, test_gcstress
+# included. Three layers baked under AiGcStress, then each entry woken. ~40 s, own tree.
+test_imgchain: host
+	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAiGcStress out/host/gcs/love
+	@sh test/gate/imgchain.sh out/host/gcs/love
 
 # --- the machine-checked half: test/proof/rocq/ + test/proof/lean/ ---------------------------------
 # Each gate below is a no-op that SAYS SO when its checker is missing, so a bare box stays

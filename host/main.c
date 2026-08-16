@@ -980,19 +980,15 @@ static struct ai_lib const libs[] = {
   {NULL, NULL} };
 struct ai_lib const *ai_libs(void) { return libs; }
 
-// read-eval one .l file into the booting session, LOUDLY: a bake's cat has no shell help,
+// read-eval one .l file into the booting session, loudly: a bake's cat has no shell help,
 // so a raise in it must end the bake rather than seal a half-built artifact.
-// ⚠ THE PATH IS A VALUE, NEVER SPLICED INTO THE SOURCE. Interpolating it built a love
-// program by string concatenation, so a path carrying a quote closed the literal and the
-// rest was CODE: a cat named 'a" (puts "INJECTED") "b' ran, exit 0, and whatever it ran
-// would have been sealed into the artifact. Bound as a name the text is data whatever it
-// holds, and the eval'd form is a constant.
-// ⚠ and it CLOSES q: an open heap port registers a finalizer, so an unclosed one is
-// still reachable at the seal -- and what rides into the image with it is its FD.
-// ⚠ rebound to (), not PULLED: the seal ends with (pull book 'book 0), so the book is
-// already off the book by here and naming it answers `;; missing book`. A body-less
-// top-level `:` pins without it. The name has to stop holding the path either way -- an
-// absolute path would otherwise bake the baker's directory into the image.
+// the path is a value, never spliced into the source: bound as a name the text stays data
+// whatever it holds, and the eval'd form is a constant.
+// it closes q, because an open heap port registers a finalizer and would still be
+// reachable at the seal -- carrying its fd into the image.
+// the name is rebound to (), not pulled: the seal ends with (pull book 'book 0), so the
+// book is already off the book here and naming it answers `;; missing book`. either way
+// the name must stop holding the path, or an absolute one bakes the baker's directory in.
 static struct ai *bake_eval_file(struct ai *g, char const *path) {
   uintptr_t xn = strlen(path);
   if (!ai_ok(g = str0(g, xn))) return g;
@@ -1006,9 +1002,9 @@ static struct ai *bake_eval_file(struct ai *g, char const *path) {
     "      (: _ (say err (\"love: bake: cannot open \" + bake-load)) _ (put err 10) (quit 1))))");
   return ai_ok(g) ? ai_evals_(g, "(: bake-load ())") : g; }
 
-// auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif
-// closures (ap = a W^X mmap addr) that can't be serialized. Empty it: the image boots
-// with a clean cache (natives JIT lazily on the loaded runtime's first ev, as designed).
+// auto.l's self-tests fill the `memo` compile cache with native nif closures whose ap is a
+// W^X mmap address, and those cannot serialize. empty it, so the image boots with a clean
+// cache and natives re-JIT lazily on the woken runtime's first ev.
 static struct ai *bake_empty_glaze(struct ai *g) {
 #ifdef AiGlazed
   return ai_evals_(g, "(: c (from 'glaze 'cache) (map (\\ k (pull c k 0)) (keys c)))");
@@ -1017,14 +1013,12 @@ static struct ai *bake_empty_glaze(struct ai *g) {
 #endif
 }
 
-// THE LAYERED BAKE. Each spec is `CAT` or `CAT:verb,verb`; the cats are evaluated in
-// order into ONE session and every layer but the last is FROZEN after its cat, which
-// pins its words at their offsets so the final blob begins with each of them in turn.
-// The last dump is the only one carrying a token stream: the rest ride as derived
-// records naming the prefix words the later layers changed.
-// ⚠ A DERIVE THAT DOES NOT FIT FAILS THE BAKE, loudly. It means a frozen prefix did not
-// survive as a prefix, which is the one assumption this whole shape rests on -- shipping
-// a quietly-bigger binary would hide exactly the thing worth knowing.
+// the layered bake. each spec is `CAT` or `CAT:verb,verb`; the cats are evaluated in order
+// into one session and every layer but the last is frozen after its cat, pinning its words
+// at their offsets so the final blob begins with each in turn. the last dump is the only
+// one carrying a token stream; the rest ride as derived records.
+// a derive that does not fit fails the bake loudly: it means a frozen prefix did not
+// survive as one, which is the assumption the whole shape rests on.
 static int bake_layers(struct ai *g, char const *const *spec, int n) {
   void *rec[8], *sub[8], *full = NULL;
   uintptr_t reclen[8], sublen[8], fulllen = 0;
@@ -1193,7 +1187,7 @@ int main(int argc, char const **argv) {
   char const *image_load_path = NULL, *bake = NULL;  // see boot(): "" = self-bake, a path = image file
 #ifndef LoveBoot
   char const *bake_load = NULL;                     // bake -l CAT: read-eval it before the seal
-  char const *layer[8];                             // bake -L: the lattice, smallest first
+  char const *layer[8];                             // bake -L: the chain, smallest first
   int nlayer = 0;
 #endif
   int skip = 0;
@@ -1201,17 +1195,15 @@ int main(int argc, char const **argv) {
 #ifndef LoveBoot
   if (argc >= 2 && !strcmp(argv[1], "bake")) {
    int i = 2;                                      // bake [-l CAT | -L CAT:verbs ..] [PATH]
-   // `bake -L CAT[:verbs] ..` is the LAYERED bake (doc/plan/image-lattice.md): one
-   // session, the cats evaluated in inclusion order, frozen between, and the array laid
-   // into our own section. Every -L but the last rides as a derived record.
+   // `bake -L CAT[:verbs] ..` is the layered bake (doc/plan/image-chain.md): one session,
+   // the cats evaluated in inclusion order, frozen between, and the array laid into our
+   // own section. every -L but the last rides as a derived record.
    while (i + 1 < argc && !strcmp(argv[i], "-L") && nlayer < (int) countof(layer))
     layer[nlayer++] = argv[i + 1], i += 2;
    if (!nlayer && i + 1 < argc && !strcmp(argv[i], "-l")) bake_load = argv[i + 1], i += 2;
    bake = i < argc ? argv[i] : "";
-   // ⚠ a LOUD refusal, not a silent one: the layered bake always patches this binary's
-   // own section, so a leftover word is either a 9th layer we cannot hold or a path that
-   // would be quietly ignored -- and a bake nobody reads the output of is the worst
-   // failure this lane has.
+   // a loud refusal: the layered bake always patches this binary's own section, so a
+   // leftover word is either a layer past the cap or a path that would be ignored.
    if (nlayer && *bake)
     return fprintf(stderr, "love: bake -L takes up to %d layers and no output path (got `%s')\n",
                    (int) countof(layer), bake), 2;

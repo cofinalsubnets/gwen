@@ -126,16 +126,15 @@ uintptr_t ai_baked_image_len = ReserveWords * 8u;
 // are from the section's first byte.
 //
 // the entries are laid SMALLEST FIRST and `verbs` names what each can serve, so
-// "the first entry that claims this verb" is the walk up the lattice, decided
+// "the first entry that claims this verb" is the walk up the chain, decided
 // before anything is woken -- it has to be, since the verb table lives in the
 // image we have not woken yet.
 //
-// ⚠ AN ENTRY IS EITHER WHOLE OR DERIVED, and that is the whole of the dedup: kind 0
-// names a complete image, kind 1 names a DERIVED RECORD whose words are the first
-// nwords of entry `base`'s stream plus the handful this layer changed after it was
-// frozen (doc/plan/image-lattice.md). The codec still never sees a container -- it is
-// handed either one buffer or a parent/sub pair -- so nothing about the image FORMAT
-// lives here.
+// an entry is either whole or derived, and that is the whole of the dedup: kind 0 names a
+// complete image, kind 1 a derived record whose words are the first nwords of entry
+// `base`'s stream plus the few this layer changed (doc/plan/image-chain.md). the codec
+// still never sees a container -- it is handed one buffer or a parent/sub pair -- so no
+// part of the image format lives here.
 #define ImgdirMagic 0x3241594152524119ULL        /* "..ARRAY2", the container's own (derived entries) */
 #define ImgdirVerbs 48u
 struct image_ent { uint64_t off, len, kind, base; char verbs[ImgdirVerbs]; };
@@ -152,10 +151,9 @@ static int imgdir_claims(char const *list, char const *verb) {
     i = j; }
   return 0;
 }
-// WHAT TO WAKE for this command line: 1 and the pair filled, or 0 and the caller boots
-// the egg. `*sub` NULL means "wake *blob whole"; non-NULL means "wake that derived
-// record over *blob". A section that is not a directory is one whole image; a directory
-// with a torn record answers 0 -- never wrong.
+// what to wake for this command line: 1 and the pair filled, or 0 and the caller boots the
+// egg. a NULL `*sub` means wake *blob whole, non-NULL means wake that derived record over
+// it. a section that is not a directory is one whole image; a torn directory answers 0.
 static int imgdir_at(struct image_dir const *d, unsigned char const *base, uintptr_t n,
                      uint64_t i, void const **buf, uintptr_t *len) {
   if (i >= d->count || d->ent[i].off > n || d->ent[i].len > n - d->ent[i].off) return 0;
@@ -175,8 +173,8 @@ int ai_baked_pick(char const *verb, void const **blob, uintptr_t *blen,
   if (verb) for (i = 0; i < d->count; i++)
     if (imgdir_claims(d->ent[i].verbs, verb)) { pick = i; break; }
   if (!d->ent[pick].kind) return imgdir_at(d, base, n, pick, blob, blen);
-  // derived: its parent carries the stream. one hop only -- a parent that is itself
-  // derived is a container we do not lay, so refuse rather than chase.
+  // derived: its parent carries the stream. one hop only, since nothing lays a derived
+  // parent -- refuse rather than chase.
   if (!imgdir_at(d, base, n, pick, sub, sublen)) return 0;
   if (d->ent[pick].base >= d->count || d->ent[d->ent[pick].base].kind) return 0;
   return imgdir_at(d, base, n, d->ent[pick].base, blob, blen);
@@ -278,14 +276,13 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
   return rc;
 }
 
-// `love bake -L CAT[:verbs] ..` lands here. main.c has already evaluated each layer's
-// cat in ONE session, freezing between them, so what arrives is the finished bytes:
-// bufs[i] is a DERIVED record for every layer but the last, which is the whole image
-// they all derive from. This only lays them.
-// ⚠ ORDER IS THE LATTICE. smallest first, since the picker takes the first entry that
-// claims the verb -- lay them the other way round and every verb wakes the big one.
-// The parent of every derived entry is the LAST, because the layers are a chain: each
-// one froze the one before it, and the last dump is the only blob with a stream.
+// `love bake -L CAT[:verbs] ..` lands here. main.c has already evaluated each layer's cat
+// in one session, freezing between them, so what arrives is finished bytes: bufs[i] is a
+// derived record for every layer but the last, which is the whole image they derive from.
+// this only lays them.
+// order is the chain, smallest first, since the picker takes the first entry claiming the
+// verb. every derived entry's parent is the last one: each layer froze the one before it,
+// and the last dump is the only blob carrying a stream.
 int image_bake_layers(struct ai *g, void *const *bufs, uintptr_t const *lens,
                       char *const *verbs, int n) {
   struct image_dir *d = NULL;
@@ -325,16 +322,16 @@ int image_bake_layers(struct ai *g, void *const *bufs, uintptr_t const *lens,
   return rc;
 }
 
-// the layered bake's two codec doors, wrapped so the wake-safety guard (which is the
-// host's, and rides the caller's frame) stays in this file. rec/full are g->alloc'd and
-// the caller frees them; 0 ok, <0 refused.
+// the layered bake's two codec doors, wrapped so the wake-safety guard -- the host's, and
+// riding the caller's frame -- stays in this file. rec/full are g->alloc'd and the caller
+// frees them; 0 ok, <0 refused.
 int image_freeze(struct ai *g, void **rec, uintptr_t *reclen) {
   struct image_segs segs;
   struct ai_image_guard gd = image_guard(&segs);
   *reclen = 0;
   if ((*rec = ai_image_freeze(g, reclen, &gd))) return 0;
   return fprintf(stderr, "love: bake: the layer refused to freeze (why=%lu)\n",
-                 (unsigned long) ai_image_why()), -2;
+                 (unsigned long) g->image_why), -2;
 }
 int image_save_over(struct ai *g, void *const *bases, uintptr_t const *blens, uintptr_t nbase,
                     void **subout, uintptr_t *sublens, void **full, uintptr_t *fulllen) {
@@ -343,7 +340,7 @@ int image_save_over(struct ai *g, void *const *bases, uintptr_t const *blens, ui
   *fulllen = 0;
   if ((*full = ai_image_save_over(g, fulllen, &gd, bases, blens, nbase, subout, sublens))) return 0;
   return fprintf(stderr, "love: bake: the image refused to save (why=%lu)\n",
-                 (unsigned long) ai_image_why()), -4;
+                 (unsigned long) g->image_why), -4;
 }
 
 int image_bake(struct ai *g) {

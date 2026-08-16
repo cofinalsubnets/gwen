@@ -203,15 +203,17 @@ struct ai {
  intptr_t lean;                           // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
                                           // (a resize is a full copy + a total refault)
  uintptr_t n_resize;                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
- // THE PINNED PREFIX (ai_image_freeze, the layered bake): the first `froze` words of
- // major_base ride a MAJOR verbatim -- memcpy'd to the same offsets in the to-space and
- // scanned in place, never traced-and-copied. Frozen objects therefore keep their heap
- // OFFSETS for the rest of the process, which is what lets a later image's blob begin
- // with an earlier one's, word for word (doc/plan/image-lattice.md).
- // ⚠ IT MAKES THE FROZEN CLOSURE IMMORTAL. Right for a bake, wrong for a session, so
- // nothing but the freeze door sets it and 0 is the state of every other run.
+ // the pinned prefix: the first `froze` words of major_base ride a major verbatim, so
+ // frozen objects keep their heap offsets and a later image's blob begins with an
+ // earlier one's (doc/plan/image-chain.md). it makes the frozen closure immortal, so
+ // only ai_image_freeze sets it and 0 is every other session.
  uintptr_t froze;
  ai_word *froze_lo, *froze_hi;            // its from-space window; set for the span of one major, else 0
+ uintptr_t image_why;                     // why the codec last refused a dump; 0 = it did not.
+                                          // 1 no major pool, 2 the compaction scared, 3 out of
+                                          // memory, 4 an unencodable heap word, 5 the root table
+                                          // is too small, 6 an unencodable root, 7 the stack was
+                                          // not quiescent, 8 the heap outgrew the lane floor
  uintptr_t budget;                        // total memory CAP in words (2*minor + 2*major); 0 = unbounded.
                                           // appel's rule: the nursery gets the free budget after the major pool.
  uintptr_t minor0, major0, ratio;         // the other three live knobs: nursery floor, the major pool's
@@ -409,16 +411,15 @@ struct ai_image_guard { uintptr_t (*ok)(void *ctx, uintptr_t v, uintptr_t off, u
 void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);
 void *ai_image_save_(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);   // the unguarded worker: a MID-EVAL dump (the bake nif)
 struct ai *ai_image_load(void const *buf, uintptr_t len);
-// THE LAYERED BAKE (doc/plan/image-lattice.md). freeze: dump this layer AND pin it, so
-// the next dump's blob begins with this one's -- answers an opaque {header, blob} record
-// the caller holds and hands back. save_over: the full image, plus that baseline's
-// DERIVED record (its header + the prefix words changed since), which load_over wakes
-// against the parent's stream. Both g->alloc'd; NULL is "no image", never a half one.
+// the layered bake (doc/plan/image-chain.md). freeze dumps this layer and pins it, and
+// answers an opaque {header, blob} record the caller hands back. save_over answers the
+// full image plus each baseline's derived record -- its header and the prefix words that
+// changed -- which load_over wakes against the parent's stream. all g->alloc'd; NULL is
+// no image, never half of one.
 void *ai_image_freeze(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);
 void *ai_image_save_over(struct ai*, uintptr_t *outlen, struct ai_image_guard const*,
                          void *const *bases, uintptr_t const *blens, uintptr_t nbase,
                          void **subout, uintptr_t *sublens);
-uintptr_t ai_image_why(void);   // the codec's last refusal, for a bake's error line
 struct ai *ai_image_load_over(void const *parent, uintptr_t plen, void const *sub, uintptr_t slen);
 struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*, void*, size_t));   // allocator-parameterized (a device heap has no malloc)
 

@@ -1,4 +1,4 @@
-# the image lattice: what a second image costs
+# the image chain: what a second image costs
 
 `.love_image` carries an ARRAY of images (host/image.c, doc/snapshot.md). The array
 worked and it was not free: the sizes ADDED.
@@ -64,10 +64,16 @@ exactly the delta, and a derived image that woke into a session missing half its
 No rule downstream of the encoder can tell a lane from a byte -- which is why the floor
 has to be constant rather than translated.
 
+## the cost it carries
+
+The collector gained two branches on its hot path -- one in `gcp` (every pointer word),
+one in `evac_thread` -- both testing `g->froze_lo`, which is 0 in every session that is
+not a layered bake. Measured, not assumed: 0.53%. See "what is left".
+
 ## what it paid
 
 ```
-                       whole images      lattice
+                       whole images        chain
 docs rung                 1.8 MB         14,800 B     the derived record
 full image                7.2 MB          7.4 MB      (+73 KB: the pin holds some dead objects)
 binary                   13.2 MB         12.0 MB
@@ -77,6 +83,16 @@ love -e 1                 107 ms          107 ms      the same from a long strea
 
 The patch count is the number the design rests on and it came in at ~900 words of a
 880,000-word prefix -- a tenth of a percent. A third and fourth rung are now nearly free.
+
+## what gates it
+
+`test_dist` (in test_slow) proves the derived entry wakes and lifts the same header as the
+whole one. `test_imgchain` (test_extra, ~40 s) is the pin's own gate: nothing but
+`bake -L` sets `g->froze`, so the branch in `gcp`, the verbatim block in `gen_major` and
+the terminator fixup in `evac_thread` are dead code in every other lane -- test_gcstress
+included. It bakes three layers under AiGcStress, where every allocation collects and a
+major rides every 32nd, then wakes each entry. The size cap is what bites: with the pin
+disabled a derived record goes from ~600 bytes to 10 MB.
 
 ## the bug this uncovered
 
@@ -89,9 +105,19 @@ nif -- a mid-eval dump whose session runs on -- always had the same hole.
 
 ## what is left
 
-* a third rung, on demand: the CLI and the container already take up to 8 layers, and the
-  derived record for each is computed against the same final blob.
+* it is a CHAIN, not a general lattice. The pin freezes a contiguous prefix, so layer k
+  must contain layer k-1; two images that do not contain each other cannot both be
+  prefixes of the full one. They still work -- you order them and each carries everything
+  below it -- but the lower one stops being minimal.
+* a third rung, on demand: the CLI and the container take up to 8 layers, and three are
+  gated (test/gate/imgchain.sh). The derived record for each is computed against the same
+  final blob.
 * the cross-arch artifact still bakes a single whole image (`crew/build.mk`'s x-lane); it
   has no second rung to want yet.
-* `ai_image_why()` reports a refusal by number. If a bake ever fails in the field the
+* `g->image_why` reports a refusal by number. If a bake ever fails in the field the
   number is what says which check bit -- give them names if that happens twice.
+* the cost of the pin is 0.53% of instructions on an allocate-and-collect loop, measured
+  against a twin built with the two hot-path branches compiled out (12.672e9 vs 12.606e9,
+  ±8k across runs). Real work pays less, since that load does nothing but churn the heap.
+  If it ever matters, the `gcp` test can be hoisted to once per collection -- at the cost
+  of a second scan loop -- or compiled out outside the bake.
