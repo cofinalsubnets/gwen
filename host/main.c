@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <math.h>
 #include <stddef.h>      // offsetof (the struct ai_wait_fd / struct pollfd assert)
+extern void host_spawn_guard(struct ai*, int);   // host/posix.c (exec-bound forks drop the pools)
 #include <stdnoreturn.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -447,7 +448,9 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
   return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
  fflush(stdout);
+ host_spawn_guard(g, 1);
  pid_t pid = fork();
+ if (pid) host_spawn_guard(g, 0);   // parent (a failed fork included); the child's g is unmapped
  if (pid < 0) { int e = errno;
   close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
   return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(e)); }

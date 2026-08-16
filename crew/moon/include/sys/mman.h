@@ -18,6 +18,12 @@
 #define MAP_POPULATE  32768
 #endif
 #define MAP_FAILED ((void*)(-1))
+#if !defined(__FreeBSD__)
+#define MADV_NORMAL    0
+#define MADV_DONTFORK 10
+#define MADV_DOFORK   11
+#endif
+int madvise(void*, long, int);
 void *mmap(void*, long, int, int, int, long);
 int munmap(void*, long);
 int mprotect(void*, long, int);

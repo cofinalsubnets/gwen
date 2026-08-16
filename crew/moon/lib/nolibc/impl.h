@@ -79,6 +79,7 @@ struct _IO_FILE {
 #define NR_mmap           477
 #define NR_mprotect        74
 #define NR_munmap          73
+#define NR_madvise         75
 #define NR_rt_sigaction   416   /* sigaction; ⚠ no restorer, another ksigaction (rung 3) */
 #define NR_rt_sigprocmask 340   /* sigprocmask; ⚠ 16-byte set, no size arg (rung 3) */
 #define NR_ioctl           54   /* ⚠ the numbers it takes are another encoding (rung 3) */
@@ -223,6 +224,7 @@ struct _IO_FILE {
 #define NR_execve         221
 #define NR_mmap           222
 #define NR_mprotect       226
+#define NR_madvise        233
 #define NR_wait4          260
 #define NR_memfd_create   279
 #else
@@ -235,6 +237,7 @@ struct _IO_FILE {
 #define NR_mmap             9
 #define NR_mprotect        10
 #define NR_munmap          11
+#define NR_madvise         28
 #define NR_rt_sigaction    13
 #define NR_rt_sigprocmask  14
 #define NR_ioctl           16
