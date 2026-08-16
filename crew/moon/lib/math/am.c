@@ -26,8 +26,8 @@ typedef union { double d; uint64_t u; } db;
 static double mkd(uint64_t u) { db b; b.u = u; return b.d; }
 static uint64_t mku(double d) { db b; b.d = d; return b.u; }
 
-#define D_NAN  mkd(0x7ff8000000000000ull)
-#define D_INF  mkd(0x7ff0000000000000ull)
+#define DNan  mkd(0x7ff8000000000000ull)
+#define DInf  mkd(0x7ff0000000000000ull)
 
 // -- Dekker: split a double into 26+27 bit halves so products are exact --
 static void dsplit(double a, double *hi, double *lo) {
@@ -47,9 +47,9 @@ static void dmul(double a, double b, double *hi, double *lo) {
 // exactly via Dekker) sits nearer x. Ties are perfect squares (r == 0).
 double am_sqrt(double x) {
  uint64_t ux = mku(x);
- if (x != x) return D_NAN;
+ if (x != x) return DNan;
  if (ux == 0 || ux == 0x8000000000000000ull) return x;      // +-0
- if (ux >> 63) return D_NAN;                                 // negative
+ if (ux >> 63) return DNan;                                 // negative
  if ((ux >> 52) == 0x7ff) return x;                          // +inf
  int scale = 0;
  // pre-scale ALL tiny x (denormals included): the rounding fixup's Dekker
@@ -89,7 +89,7 @@ static double scale2k(double y, int k) {                     // y * 2^k, k in [-
  return y * mkd((uint64_t)(k + 1023) << 52); }
 double am_exp(double x) {
  if (x != x) return x;
- if (x >  709.782712893383996) return D_INF;                 // overflow
+ if (x >  709.782712893383996) return DInf;                 // overflow
  if (x < -745.133219101941222) return 0.0;                   // underflow to 0
  int k = (int)(x * LOG2E + (x > 0 ? 0.5 : -0.5));
  double r = (x - k * LN2_HI) - k * LN2_LO;
@@ -114,8 +114,8 @@ double am_exp(double x) {
 double am_log(double x) {
  uint64_t ux = mku(x);
  if (x != x) return x;
- if (ux == 0 || ux == 0x8000000000000000ull) return -D_INF;  // +-0 -> -inf
- if (ux >> 63) return D_NAN;                                 // negative
+ if (ux == 0 || ux == 0x8000000000000000ull) return -DInf;  // +-0 -> -inf
+ if (ux >> 63) return DNan;                                 // negative
  if ((ux >> 52) == 0x7ff) return x;                          // +inf
  int k = 0;
  if (ux < (1ull << 52)) { x *= 0x1p54; ux = mku(x); k = -54; }  // denormal
@@ -256,7 +256,7 @@ static double kcos(double r, double rlo) {
 double am_sin(double x) {
  if (x != x) return x;
  uint64_t ax = mku(x) & 0x7fffffffffffffffull;
- if (ax >= 0x7ff0000000000000ull) return D_NAN;              // +-inf
+ if (ax >= 0x7ff0000000000000ull) return DNan;              // +-inf
  double r, rl;
  int j = rpio2(x, &r, &rl);
  switch (j) {
@@ -267,7 +267,7 @@ double am_sin(double x) {
 double am_cos(double x) {
  if (x != x) return x;
  uint64_t ax = mku(x) & 0x7fffffffffffffffull;
- if (ax >= 0x7ff0000000000000ull) return D_NAN;
+ if (ax >= 0x7ff0000000000000ull) return DNan;
  double r, rl;
  int j = rpio2(x, &r, &rl);
  switch (j) {
@@ -311,7 +311,7 @@ static double am_atan(double x) {
  return x < 0 ? -r : r; }
 static const double PI_H = 0x1.921fb54442d18p+1, PI_L = 0x1.1a62633145c07p-53;
 double am_atan2(double y, double x) {
- if (x != x || y != y) return D_NAN;
+ if (x != x || y != y) return DNan;
  uint64_t uy = mku(y), ux2 = mku(x);
  int sy = (int)(uy >> 63), sx = (int)(ux2 >> 63);
  uint64_t ay = uy & 0x7fffffffffffffffull, ax = ux2 & 0x7fffffffffffffffull;
@@ -369,23 +369,23 @@ static void dd_log(double x, double *hi, double *lo) {       // x > 0, finite: l
 double am_pow(double x, double y) {
  if (y == 0.0) return 1.0;
  if (x == 1.0) return 1.0;
- if (x != x || y != y) return D_NAN;
+ if (x != x || y != y) return DNan;
  uint64_t ux = mku(x), uy = mku(y);
  uint64_t axb = ux & 0x7fffffffffffffffull, ayb = uy & 0x7fffffffffffffffull;
  int oi = am_oddint(y);
  if (ayb == 0x7ff0000000000000ull) {                         // y = +-inf
   if (axb == 0x3ff0000000000000ull) return 1.0;              // |x| = 1
   int big = axb > 0x3ff0000000000000ull;
-  return (uy >> 63) ? (big ? 0.0 : D_INF) : (big ? D_INF : 0.0); }
+  return (uy >> 63) ? (big ? 0.0 : DInf) : (big ? DInf : 0.0); }
  if (axb == 0) {                                             // x = +-0
-  double z = (uy >> 63) ? D_INF : 0.0;
+  double z = (uy >> 63) ? DInf : 0.0;
   return ((ux >> 63) && oi == 1) ? -z : z; }
  if (axb == 0x7ff0000000000000ull) {                         // x = +-inf
-  double z = (uy >> 63) ? 0.0 : D_INF;
+  double z = (uy >> 63) ? 0.0 : DInf;
   return ((ux >> 63) && oi == 1) ? -z : z; }
  int neg = 0;
  if (ux >> 63) {                                             // negative base: integer y only
-  if (!oi) return D_NAN;
+  if (!oi) return DNan;
   neg = oi == 1;
   x = -x; }
  // the algebraic exponents answer EXACTLY (power is application: the spec's
@@ -401,7 +401,7 @@ double am_pow(double x, double y) {
  dmul(y, ll, &qh, &ql);                                      // exact: the lo product matters at the rim
  wl += qh + ql;
  double w = wh + wl, we = (wh - w) + wl;                     // renormalize: |we| <= ulp(w)
- if (w >  709.782712893383996) return neg ? -D_INF : D_INF;
+ if (w >  709.782712893383996) return neg ? -DInf : DInf;
  if (w < -745.133219101941222) return neg ? -0.0 : 0.0;
  double e = am_exp(w);
  e = e + e * we;                                             // now the linear step is honest
@@ -496,7 +496,7 @@ double am_strtod(char const *s, char **end) {
  if (!nin) return sign > 0 ? 0.0 : -0.0;         // all zeros
  int kk = e10 - fr + extra;                      // value = din x 10^kk exactly (+ sticky)
  int mag = nin + kk;                             // value in [10^(mag-1), 10^mag)
- if (mag > 310)  return sign * D_INF;
+ if (mag > 310)  return sign * DInf;
  if (mag < -342) return sign > 0 ? 0.0 : -0.0;
  // the seed: v0 holds only the TOP 19 kept digits, so its scale carries the
  // rest of din's length; x 10 in bounded chunks (gradual under/overflow lands close)

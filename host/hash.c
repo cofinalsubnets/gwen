@@ -1,5 +1,5 @@
 // host/hash.c -- content addressing for svalbard (crew/sb/): sha-256 over a
-// string's bytes. Host-only, auto-globbed + AI_NIF-registered (no love.c/love.h/
+// string's bytes. Host-only, auto-globbed + AiNif-registered (no love.c/love.h/
 // main.c edit), the fs.c discipline:
 //
 //   (sha256 str) -> the 64-char lowercase hex digest | () misuse
@@ -84,4 +84,4 @@ static lvm(lvm_sha256) {
  ai_musttail return Next(1); }
 
 static union u const nif_sha256[] = {{lvm_sha256}, {lvm_ret0}};
-AI_NIF("sha256", nif_sha256);
+AiNif("sha256", nif_sha256);

@@ -640,20 +640,20 @@ static union u const
  nif_getenv[] = {{lvm_getenv}, {lvm_ret0}},
  nif_getpid[] = {{lvm_getpid}, {lvm_ret0}};
 // Register in the ai_nifs section (drained in main below). An app thread adds its
-// own nifs the same way in its OWN host/<app>.c -- auto-globbed, AI_NIF-registered,
+// own nifs the same way in its OWN host/<app>.c -- auto-globbed, AiNif-registered,
 // NO edit here or to love.c/love.h:
 //   #include "love.h"                                       // the nif-writing surface
 //   static lvm(lvm_foo) { ... ai_musttail return Answer(<v>); }
 //   static union u const nif_foo[] = {{lvm_foo}, {lvm_ret0}};  // 1-arg; curry for more
-//   AI_NIF("foo", nif_foo);
-AI_NIF("quit", nif_exit);
-AI_NIF("open", nif_open);
-AI_NIF("close", nif_close);
-AI_NIF("hark", nif_hark);
-AI_NIF("herald", nif_herald);
-AI_NIF("exec", nif_exec);
-AI_NIF("getenv", nif_getenv);
-AI_NIF("getpid", nif_getpid);
+//   AiNif("foo", nif_foo);
+AiNif("quit", nif_exit);
+AiNif("open", nif_open);
+AiNif("close", nif_close);
+AiNif("hark", nif_hark);
+AiNif("herald", nif_herald);
+AiNif("exec", nif_exec);
+AiNif("getenv", nif_getenv);
+AiNif("getpid", nif_getpid);
 
 // --- the boot script ---------------------------------------------------
 // Everything the two builds disagree about lives in this ONE conditional
@@ -682,7 +682,7 @@ extern struct ai *image_load(char const*);
 extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
 
-#ifdef GL_BOOTSTRAP
+#ifdef LoveBoot
 // love0: the CLI driver is the sed-wrapped raw text (it can't lcat its own arg
 // ap). Self-test: the whole test corpus, baked in (sed-wrapped), run
 // twice -- once compiled by the C bootstrap compiler (c0), once by the
@@ -830,7 +830,7 @@ static struct ai *boot(struct ai *g, bool argp) {
 // it -- a build tool / self-test is non-interactive); the CLI driver is the
 // canonicalized lcat header.
 #if defined(__x86_64__) || defined(__aarch64__)
-#define AI_GLAZED 1                                      // the native JIT exists on this arch
+#define AiGlazed 1                                      // the native JIT exists on this arch
 #endif
 // the tty is ONE terminal, so its cooked baseline and its atexit live in one
 // place -- posix.c's, which the (raw on) nif already drives. this is the same
@@ -871,7 +871,7 @@ static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   // layer on top; each woken session pushes its own. C-side: enter is a mopped nom
   // now, and a stashless layer is exactly what a session is.
   g = ai_layer_(g);
-#ifdef AI_GLAZED
+#ifdef AiGlazed
   // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the glaze
   // module book) and the natjit creation hook cleared. The forensics twin of LOVE_NO_IMAGE.
   // Checked here, the convergence of the egg-boot and image-wake paths: a body-less
@@ -955,7 +955,7 @@ static char const src_holo[] =
 #include "holo-link.h"
  ;
 
-#ifdef AI_GLAZED
+#ifdef AiGlazed
 // the glaze, ONE module in two files: emit.l (the SSE/native emitter) then auto.l (ev's
 // source recognizer), which reads emit's names bare -- so the order here is the module.
 // hook.l is deliberately not in it; see the (use 'glaze) block in boot().
@@ -971,7 +971,7 @@ static struct ai_lib const libs[] = {
   {"coin", src_coin}, {"rng", src_rng}, {"q", src_q}, {"kanren", src_kanren},
   {"overlay", src_overlay}, {"peg", src_peg}, {"pat", src_pat}, {"uu", src_uu}, {"bao", src_bao},
   {"holo", src_holo}, {"verbs", src_verbs},
-#ifdef AI_GLAZED
+#ifdef AiGlazed
   {"glaze", src_glaze},
 #endif
   {NULL, NULL} };
@@ -1024,7 +1024,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   );                                                     //   tab/word/seat are not names to reach bare, and `get` would shadow half
   g = ai_unsplice_(g);                                   //   the tree. a plain binary carries wake+bake and nothing else; a dist
                                                          //   bake's cat pins the rest into (from 'verbs 'tab)
-#ifdef AI_GLAZED
+#ifdef AiGlazed
   // the glaze, in three moves. (use 'glaze) loads emit.l + auto.l into their own layer and
   // registers it -- ~415 codegen names the book never sees. holo is spliced UNDER that layer
   // so `assemble` folds at the glaze's compile, and both come off after.
@@ -1092,7 +1092,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
       // either way -- an absolute `bake -l` path would otherwise bake the baker's
       // directory into the image, which is the class of bug this arc just finished.
       g = ai_evals_(g, "(: bake-load ())"); }
-#ifdef AI_GLAZED
+#ifdef AiGlazed
     // auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif
     // closures (ap = a W^X mmap addr) that can't be serialized. Empty it: the image boots
     // with a clean cache (natives JIT lazily on the loaded runtime's first ev, as designed).
@@ -1136,12 +1136,12 @@ int main(int argc, char const **argv) {
   // how the line came to be a command line nobody typed. Nothing is written now, so
   // both readings stay available: the whole invocation, and the program's view of it.
   char const *image_load_path = NULL, *bake = NULL;  // see boot(): "" = self-bake, a path = image file
-#ifndef GL_BOOTSTRAP
+#ifndef LoveBoot
   char const *bake_load = NULL;                     // bake -l CAT: read-eval it before the seal
 #endif
   int skip = 0;
 
-#ifndef GL_BOOTSTRAP
+#ifndef LoveBoot
   // `bake -a SPEC ..` lays already-baked image FILES into our own section as an
   // ARRAY, and boots nothing: there is no session to snapshot, only blobs to carry.
   if (argc >= 3 && !strcmp(argv[1], "bake") && !strcmp(argv[2], "-a")) {
@@ -1245,7 +1245,7 @@ int main(int argc, char const **argv) {
     // take what fd 0 can lend -- a read run, or its blocking bit (above). ⚠ NEVER UNDER
     // a bake: the image would carry a heap port, and a run's state belongs to the run, not the egg.
     if (!bake) g = stdin_take(g);
-#ifdef GL_BOOTSTRAP
+#ifdef LoveBoot
     if (!image_load_path) g = boot(g, argp);
     else g = ai_evals_(ai_layer_(g), cli);   // woken: the image carries the warm base; push the session layer, run the CLI
 #else

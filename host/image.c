@@ -65,9 +65,9 @@ static struct ai_image_guard image_guard(struct image_segs *segs) {
 // newline cost nothing and keep every later field where the codec expects it.
 // ⚠ and the load side skips it in the HOST, never the core: a shebang is a POSIX exec
 // convention, and love.c stays freestanding-clean. The .image section lane never has one.
-#define IMAGE_SHEBANG "#!/usr/bin/env -S love wake"
+#define ImageShebang "#!/usr/bin/env -S love wake"
 static size_t image_shebang(char *sb, size_t cap) {
-  size_t n = (size_t) snprintf(sb, cap, "%s", IMAGE_SHEBANG);
+  size_t n = (size_t) snprintf(sb, cap, "%s", ImageShebang);
   while ((n + 1) % sizeof(uintptr_t)) sb[n++] = ' ';
   sb[n++] = '\n';
   return n;
@@ -116,9 +116,9 @@ int image_dump(struct ai *g, char const *path) {
 // --section-start), riding the tail of the single segment holo lays -- so the
 // bake GROWS it: nothing is pre-allocated and there is no ceiling; this stub
 // exists only to give the section an address.
-#define RESERVE_WORDS 2u
-__attribute__((section(".love_image"))) uint64_t ai_baked_image[RESERVE_WORDS] = {1};
-uintptr_t ai_baked_image_len = RESERVE_WORDS * 8u;
+#define ReserveWords 2u
+__attribute__((section(".love_image"))) uint64_t ai_baked_image[ReserveWords] = {1};
+uintptr_t ai_baked_image_len = ReserveWords * 8u;
 // --- the image ARRAY ---------------------------------------------------------
 // the section holds EITHER one image -- its first word is the codec's own magic,
 // which is what every binary before this laid -- or a DIRECTORY: magic, count,
@@ -131,18 +131,18 @@ uintptr_t ai_baked_image_len = RESERVE_WORDS * 8u;
 // "the first entry that claims this verb" is the walk up the lattice, decided
 // before anything is woken -- it has to be, since the verb table lives in the
 // image we have not woken yet.
-#define IMGDIR_MAGIC 0x3141594152524119ULL        /* "..ARRAY1", the container's own */
-#define IMGDIR_VERBS 48u
-struct image_ent { uint64_t off, len; char verbs[IMGDIR_VERBS]; };
+#define ImgdirMagic 0x3141594152524119ULL        /* "..ARRAY1", the container's own */
+#define ImgdirVerbs 48u
+struct image_ent { uint64_t off, len; char verbs[ImgdirVerbs]; };
 struct image_dir { uint64_t magic, count; struct image_ent ent[]; };
 // is `verb` one of the space- or comma-separated words in `list`? a whole-word
 // match: "lib" must not claim "libra".
 static int imgdir_claims(char const *list, char const *verb) {
   size_t n = strlen(verb);
-  for (size_t i = 0; i < IMGDIR_VERBS && list[i]; ) {
-    while (i < IMGDIR_VERBS && (list[i] == ' ' || list[i] == ',')) i++;
+  for (size_t i = 0; i < ImgdirVerbs && list[i]; ) {
+    while (i < ImgdirVerbs && (list[i] == ' ' || list[i] == ',')) i++;
     size_t j = i;
-    while (j < IMGDIR_VERBS && list[j] && list[j] != ' ' && list[j] != ',') j++;
+    while (j < ImgdirVerbs && list[j] && list[j] != ' ' && list[j] != ',') j++;
     if (j - i == n && !memcmp(list + i, verb, n)) return 1;
     i = j; }
   return 0;
@@ -155,7 +155,7 @@ void const *ai_baked_pick(char const *verb, uintptr_t *outlen) {
   uintptr_t n = ai_baked_image_len;
   struct image_dir const *d = (struct image_dir const *) (void const *) base;
   uint64_t pick, i;
-  if (n < sizeof *d || d->magic != IMGDIR_MAGIC) return *outlen = n, (void const *) base;
+  if (n < sizeof *d || d->magic != ImgdirMagic) return *outlen = n, (void const *) base;
   if (!d->count || n < sizeof *d + d->count * sizeof d->ent[0]) return *outlen = 0, NULL;
   pick = d->count - 1;                            // the largest is the default
   if (verb) for (i = 0; i < d->count; i++)
@@ -174,11 +174,11 @@ static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
       b->off = p->p_offset + (b->addr - lo), b->found = 1; }
   return 1;                                       // stop after the first object: the main program
 }
-#define BAKE_SCRATCH (64u << 10)                  // the copy/pad window: a bake runs once, so iterations are free
+#define BakeScratch (64u << 10)                  // the copy/pad window: a bake runs once, so iterations are free
 // move n bytes src@soff -> dst@doff through the caller's window. the two lanes only shuttle bytes.
 static int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n, char *win) {
   for (uint64_t z = 0; z < n; ) {
-    size_t w = n - z < BAKE_SCRATCH ? (size_t)(n - z) : BAKE_SCRATCH;
+    size_t w = n - z < BakeScratch ? (size_t)(n - z) : BakeScratch;
     if (pread(src, win, w, (off_t)(soff + z)) != (ssize_t) w) return -6;
     if (pwrite(dst, win, w, (off_t)(doff + z)) != (ssize_t) w) return -6;
     z += w; }
@@ -200,7 +200,7 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
       || eh.e_shnum < 2 || !eh.e_phnum || eh.e_shstrndx >= eh.e_shnum) return 1;
   nsh = eh.e_shnum, nph = eh.e_phnum;
   sh = g->alloc(g, NULL, nsh * sizeof *sh), ph = g->alloc(g, NULL, nph * sizeof *ph);
-  win = g->alloc(g, NULL, BAKE_SCRATCH);
+  win = g->alloc(g, NULL, BakeScratch);
   if (!sh || !ph || !win) { rc = -6; goto out; }
   if (pread(src, sh, nsh * sizeof *sh, (off_t) eh.e_shoff) != (ssize_t)(nsh * sizeof *sh)
       || pread(src, ph, nph * sizeof *ph, (off_t) eh.e_phoff) != (ssize_t)(nph * sizeof *ph))
@@ -286,7 +286,7 @@ int image_bake_files(struct ai *g, char *const *specs, int n) {
   if (!(buf = g->alloc(g, NULL, tot))) return -6;
   memset(buf, 0, tot);
   d = (struct image_dir *) (void *) buf;
-  d->magic = IMGDIR_MAGIC, d->count = (uint64_t) n;
+  d->magic = ImgdirMagic, d->count = (uint64_t) n;
   for (i = 0; i < n; i++) {
     char const *c = strrchr(specs[i], ':');
     char path[4096];
@@ -295,7 +295,7 @@ int image_bake_files(struct ai *g, char *const *specs, int n) {
     memcpy(path, specs[i], pl), path[pl] = 0;
     if (c && !strchr(c, '/')) {
       size_t vl = strlen(c + 1);
-      if (vl >= IMGDIR_VERBS) { fprintf(stderr, "love: bake: verb list too long\n"); goto out; }
+      if (vl >= ImgdirVerbs) { fprintf(stderr, "love: bake: verb list too long\n"); goto out; }
       memcpy(d->ent[i].verbs, c + 1, vl); }
     if (!(f = fopen(path, "rb"))) goto out;
     if (stat(path, &st)) { fclose(f); goto out; }
@@ -395,7 +395,7 @@ static lvm(lvm_bake) {
  Sp[0] = r; Ip += 1;
  ai_musttail return Continue(); }
 static union u const nif_bake[] = {{lvm_bake}, {lvm_ret0}};
-AI_NIF("bake", nif_bake);
+AiNif("bake", nif_bake);
 
 struct ai *image_load(char const *path) {
   int fd = open(path, O_RDONLY);

@@ -568,8 +568,8 @@
                ; and it's gated off on trampoline builds.
                _ (pin t "__STDC_HOSTED__" ['obj [(tok 'num 1 0)]])
                ; the ARCH predefine (__x86_64__ / __aarch64__) is the DRIVER's:
-               ; cc.l prepends it as a -D-style define by target (love.c's AI_ARCH/
-               ; IMAGE_ARCH read it -- a build without one believed its arch was
+               ; cc.l prepends it as a -D-style define by target (love.c's AiArch/
+               ; ImageArch read it -- a build without one believed its arch was
                ; "other" and the glaze handed holo an unknown target).
                ; __SIZEOF_INT128__ rides the DRIVER's -D channel too, x64 only
                ; (gen's d128 lane): love.c takes 64-bit limbs there, and the

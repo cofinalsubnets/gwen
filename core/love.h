@@ -274,19 +274,19 @@ struct ai_def { char const *n; intptr_t x; };
 struct ai_lib { char const *nom, *src; };
 struct ai_lib const *ai_libs(void);
 
-// host nif auto-registration: AI_NIF("name", fn) lands the entry in the ai_nifs
+// host nif auto-registration: AiNif("name", fn) lands the entry in the ai_nifs
 // section; boot drains [__start_ai_nifs, __stop_ai_nifs) via ai_defn, so an app
 // adds nifs in its own host/<app>.c without touching the core. no linker script:
 // the toolchain defines the bracket symbols.
 #if defined(__APPLE__)
 extern struct ai_def const __start_ai_nifs[] __asm("section$start$__DATA$ai_nifs");
 extern struct ai_def const __stop_ai_nifs[]  __asm("section$end$__DATA$ai_nifs");
-#define AI_NIF(nm, fn) \
+#define AiNif(nm, fn) \
   static struct ai_def const __attribute__((section("__DATA,ai_nifs"), used)) \
     _ainif_##fn = { (nm), (intptr_t) (fn) }
 #else
 extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
-#define AI_NIF(nm, fn) \
+#define AiNif(nm, fn) \
   static struct ai_def const __attribute__((section("ai_nifs"), used)) \
     _ainif_##fn = { (nm), (intptr_t) (fn) }
 #endif
@@ -427,10 +427,10 @@ extern struct ai_fio ai_stdin, ai_stdout, ai_stderr;
 #define evenp(_) !oddp(_)
 #define cell(_) ((union u*)(_))
 // the BLUE FLOOR: extra stack slack on every avail check, a buffer against
-// off-by-one overshoots. 0 under GL_BOOTSTRAP so love0 keeps strict discipline;
+// off-by-one overshoots. 0 under LoveBoot so love0 keeps strict discipline;
 // override with -Dai_avail_floor=N.
 #ifndef ai_avail_floor
-# ifdef GL_BOOTSTRAP
+# ifdef LoveBoot
 #  define ai_avail_floor 0
 # else
 #  define ai_avail_floor 8
@@ -558,12 +558,12 @@ struct ai *grbufg(struct ai *g, uintptr_t len);
 // `return Ap(_lvm_ghelp, g)` -- the call is fine, only the musttail is barred, since
 // the attribute wants the callee's prototype to match the CALLER's.
 lvm_t _lvm_ghelp;
-// ⚠ ai_have IS the phrase "this call may collect"; under AI_GC_STRESS every one
+// ⚠ ai_have IS the phrase "this call may collect"; under AiGcStress every one
 // DOES, so a raw local held across it goes stale on the first run, not years
-// later. AI_GC_CHECK is the other half: it checks the collector where this
+// later. AiGcCheck is the other half: it checks the collector where this
 // checks the mutator.
 static ai_inline struct ai *ai_have(struct ai *g, uintptr_t n) {
-#ifdef AI_GC_STRESS
+#ifdef AiGcStress
  return !ai_ok(g) ? g : ai_please(g, n);
 #else
  return !ai_ok(g) || avail(g) >= n ? g : ai_please(g, n);

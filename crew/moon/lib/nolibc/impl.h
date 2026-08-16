@@ -5,8 +5,8 @@
  * one file it used to be. ⚠ a member reaching another member's file-scope
  * static is what splitting costs: use the public spelling (errno, not
  * __errno_v), or move the state here. */
-#ifndef AI_NOLIBC_IMPL_H
-#define AI_NOLIBC_IMPL_H
+#ifndef AiNolibcImplH
+#define AiNolibcImplH
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -331,17 +331,17 @@ typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;
 struct __sctx { char *p; size_t n, at; };
 struct __ksigaction { void *h; unsigned long flags; void *restorer; unsigned long mask; };
 struct __dirstream { int fd; int pos; int len; char buf[4096]; };
-#define FF_LEFT 1
-#define FF_ZERO 2
-#define FF_ALT  4
-#define FF_PLUS 8
-#define FF_SPC  16
-#define BD_B 1000000000UL
-#define BD_I 36                        /* integer limbs: 324 digits >= 309 */
-#define BD_F 121                       /* fraction limbs: 1089 digits >= 1074 */
-#define BD_N (BD_I + BD_F)
-#define BD_D (BD_N * 9)                /* every digit index the array holds */
-#define BD_U (BD_I * 9 - 1)            /* the index of the units place */
+#define FfLeft 1
+#define FfZero 2
+#define FfAlt  4
+#define FfPlus 8
+#define FfSpc  16
+#define BdB 1000000000UL
+#define BdI 36                        /* integer limbs: 324 digits >= 309 */
+#define BdF 121                       /* fraction limbs: 1089 digits >= 1074 */
+#define BdN (BdI + BdF)
+#define BdD (BdN * 9)                /* every digit index the array holds */
+#define BdU (BdI * 9 - 1)            /* the index of the units place */
 
 extern char **environ;
 extern char const *__ai_progname;

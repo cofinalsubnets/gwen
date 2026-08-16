@@ -1,5 +1,5 @@
 // host/src.c -- the artifact's own source, handed back out. Host-only, auto-globbed
-// + AI_NIF-registered (no love.c/love.h/main.c edit), the fs.c discipline:
+// + AiNif-registered (no love.c/love.h/main.c edit), the fs.c discipline:
 //
 //   (source-gz ()) -> the embedded love-<ver>.tar.gz bytes | () when none is baked in
 //
@@ -43,4 +43,4 @@ static lvm(lvm_srcgz) {
  ai_musttail return Next(1); }
 
 static union u const nif_srcgz[] = {{lvm_srcgz}, {lvm_ret0}};
-AI_NIF("source-gz", nif_srcgz);
+AiNif("source-gz", nif_srcgz);

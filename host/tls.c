@@ -1,4 +1,4 @@
-// host/tls.c -- the C twins of crew/tls's two ciphers, auto-globbed + AI_NIF-
+// host/tls.c -- the C twins of crew/tls's two ciphers, auto-globbed + AiNif-
 // registered (no love.c/love.h/main.c edit), the hash.c discipline:
 //
 //   (chacha20 key nonce ctr txt) -> a string as long as txt   | () misuse
@@ -182,5 +182,5 @@ static lvm(lvm_poly1305) {
 static union u const
   nif_chacha20[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_chacha20}, {lvm_ret0}},
   nif_poly1305[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_poly1305}, {lvm_ret0}};
-AI_NIF("chacha20", nif_chacha20);
-AI_NIF("poly1305", nif_poly1305);
+AiNif("chacha20", nif_chacha20);
+AiNif("poly1305", nif_poly1305);

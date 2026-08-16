@@ -19,7 +19,7 @@
 ; (the file only DEFINES -- a plain load prints nothing; -l preloads it into the shared
 ; global scope so the -e call finds `demos`/`real`.)
 ;
-; what an ACTUAL pid1 still needs is small and core-clean (host/posix.c via the AI_NIF
+; what an ACTUAL pid1 still needs is small and core-clean (host/posix.c via the AiNif
 ; glob, no love.c/love.h edit -- the same discipline as ain/bao). DONE: fork/execve +
 ; the non-blocking waitpid reaper (spawn/glean). REMAINING: signalfd (SIGCHLD/SIGTERM
 ; become perceive events, merged with timers by ai_wait_fds exactly like {nic, clock}),

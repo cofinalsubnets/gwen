@@ -2,7 +2,7 @@
 // signal, the pid-1 supervisor's primitives and the shell's job control), fs
 // effects and values (stat/readdir/rename/chmod/..), the environment, pipes and
 // raw-fd plumbing, and the pty wrapper (bao's rlwrap/debugger muscle). Host-only,
-// auto-globbed + AI_NIF-registered (no love.c/love.h/main.c edit). The
+// auto-globbed + AiNif-registered (no love.c/love.h/main.c edit). The
 // conventions, kept throughout:
 //   effect ops answer () ok | a POSITIVE errno | EINVAL misuse
 //   value ops answer the value | () absence (or a NEGATIVE -errno where a
@@ -715,35 +715,35 @@ static union u const
   nif_posix_ttyfg[]   = {{lvm_posix_ttyfg}, {lvm_ret0}},
   nif_posix_setenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setenv}, {lvm_ret0}},
   nif_posix_environ[] = {{lvm_posix_environ}, {lvm_ret0}};
-AI_NIF("spawn", nif_spawn);
-AI_NIF("glean",  nif_reapany);
-AI_NIF("sigfd", nif_sigfd);
-AI_NIF("sigtake", nif_sigtake);
-AI_NIF("wait",  nif_waitpid);
-AI_NIF("chdir", nif_chdir);
-AI_NIF("cwd",   nif_cwd);
-AI_NIF("selfpath", nif_selfpath);
-AI_NIF("pipe",  nif_pipe);
-AI_NIF("openfd", nif_openfd);
-AI_NIF("spawnio", nif_spawnio);
-AI_NIF("fdclose", nif_shutfd);
-AI_NIF("fdopen", nif_fdopen);
-AI_NIF("spawnmap", nif_spawnmap);
-AI_NIF("getuid", nif_getuid);
-AI_NIF("fork", nif_fork);
-AI_NIF("dup2", nif_dup2);
-AI_NIF("dup", nif_dup);
-AI_NIF("mkdir", nif_mkdir);
-AI_NIF("mount", nif_mount);
-AI_NIF("newns", nif_newns);
-AI_NIF("stat",    nif_posix_stat);
-AI_NIF("readdir", nif_posix_readdir);
-AI_NIF("unlink",  nif_posix_unlink);
-AI_NIF("lseek",   nif_posix_lseek);
-AI_NIF("signal",  nif_posix_signal);
-AI_NIF("ttyfg",   nif_posix_ttyfg);
-AI_NIF("setenv",  nif_posix_setenv);
-AI_NIF("environ", nif_posix_environ);
+AiNif("spawn", nif_spawn);
+AiNif("glean",  nif_reapany);
+AiNif("sigfd", nif_sigfd);
+AiNif("sigtake", nif_sigtake);
+AiNif("wait",  nif_waitpid);
+AiNif("chdir", nif_chdir);
+AiNif("cwd",   nif_cwd);
+AiNif("selfpath", nif_selfpath);
+AiNif("pipe",  nif_pipe);
+AiNif("openfd", nif_openfd);
+AiNif("spawnio", nif_spawnio);
+AiNif("fdclose", nif_shutfd);
+AiNif("fdopen", nif_fdopen);
+AiNif("spawnmap", nif_spawnmap);
+AiNif("getuid", nif_getuid);
+AiNif("fork", nif_fork);
+AiNif("dup2", nif_dup2);
+AiNif("dup", nif_dup);
+AiNif("mkdir", nif_mkdir);
+AiNif("mount", nif_mount);
+AiNif("newns", nif_newns);
+AiNif("stat",    nif_posix_stat);
+AiNif("readdir", nif_posix_readdir);
+AiNif("unlink",  nif_posix_unlink);
+AiNif("lseek",   nif_posix_lseek);
+AiNif("signal",  nif_posix_signal);
+AiNif("ttyfg",   nif_posix_ttyfg);
+AiNif("setenv",  nif_posix_setenv);
+AiNif("environ", nif_posix_environ);
 // --- the rest of the fs surface: the effect ops the fs tools ride ---------------
 // (mv, ln, touch, chmod, chown -- crew/kore/fs.l and friends).
 //   (rename old new)      -> () | errno | EINVAL   (mv's heart; same filesystem)
@@ -888,16 +888,16 @@ static union u const
   nif_posix_rmdir[]    = {{lvm_posix_rmdir}, {lvm_ret0}},
   nif_posix_hardlink[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_hardlink}, {lvm_ret0}},
   nif_posix_copyfile[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_copyfile}, {lvm_ret0}};
-AI_NIF("rename",   nif_posix_rename);
-AI_NIF("symlink",  nif_posix_symlink);
-AI_NIF("readlink", nif_posix_readlink);
-AI_NIF("chmod",    nif_posix_chmod);
-AI_NIF("chown",    nif_posix_chown);
-AI_NIF("utime",    nif_posix_utime);
-AI_NIF("umask",    nif_posix_umask);
-AI_NIF("rmdir",    nif_posix_rmdir);
-AI_NIF("hardlink", nif_posix_hardlink);
-AI_NIF("copyfile", nif_posix_copyfile);
+AiNif("rename",   nif_posix_rename);
+AiNif("symlink",  nif_posix_symlink);
+AiNif("readlink", nif_posix_readlink);
+AiNif("chmod",    nif_posix_chmod);
+AiNif("chown",    nif_posix_chown);
+AiNif("utime",    nif_posix_utime);
+AiNif("umask",    nif_posix_umask);
+AiNif("rmdir",    nif_posix_rmdir);
+AiNif("hardlink", nif_posix_hardlink);
+AiNif("copyfile", nif_posix_copyfile);
 // --- the pty wrapper: bao's rlwrap/debugger muscle ------------------------------
 // spawn a program on a fresh pseudo-terminal, reap it without blocking, signal
 // it, and read/write its window size. The keystone, (tether argv), is hark
@@ -1164,11 +1164,11 @@ static union u const
   nif_winsize[]    = {{lvm_winsize}, {lvm_ret0}},
   nif_setwinsize[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_setwinsize}, {lvm_ret0}},
   nif_ptyecho[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ptyecho}, {lvm_ret0}};
-AI_NIF("tether", nif_tether);
-AI_NIF("gather", nif_reap);
-AI_NIF("still", nif_kill);
-AI_NIF("winsize", nif_winsize);
-AI_NIF("setwinsize", nif_setwinsize);
-AI_NIF("ptyecho", nif_ptyecho);
-AI_NIF("raw", nif_raw);
-AI_NIF("swig", nif_swig);
+AiNif("tether", nif_tether);
+AiNif("gather", nif_reap);
+AiNif("still", nif_kill);
+AiNif("winsize", nif_winsize);
+AiNif("setwinsize", nif_setwinsize);
+AiNif("ptyecho", nif_ptyecho);
+AiNif("raw", nif_raw);
+AiNif("swig", nif_swig);

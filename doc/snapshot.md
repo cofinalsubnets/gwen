@@ -130,7 +130,7 @@ Three seams make mid-eval dumping honest where the boot bake could assume purity
   `v0..end` root window, so the woken session starts with no finalizables. The dump-time fds
   meant nothing in the new process anyway.
 - **The glaze cache is emptied first.** The `bake` global is a glaze wrapper
-  (love/glaze/hook.l) over the host nif (host/image.c, the AI_NIF glob): a native closure cannot
+  (love/glaze/hook.l) over the host nif (host/image.c, the AiNif glob): a native closure cannot
   serialize, and entries re-JIT lazily in the woken session. Any OTHER live native at bake time
   is on the caller — the same contract as the boot bake.
 

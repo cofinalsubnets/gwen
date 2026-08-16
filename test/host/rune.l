@@ -420,7 +420,7 @@
  ((feval (q -1 1) (q 3 2) (q 13 2)) = cimg))
 
 ; --- the eval bridge: polys compile to live closures ------------------------
-; folded dyadic + * ** (the bound base-first power, exact through DIE_STAR),
+; folded dyadic + * ** (the bound base-first power, exact through DieStar),
 ; so one closure computes over integers and q coins alike. the flagship: F1 and F3 of the counterexample,
 ; COMPILED, evaluated at the published collision point -- the same -1/4 and 0
 ; the modular certificate proved, now through ev'd code. a mixed evaluation

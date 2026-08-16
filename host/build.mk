@@ -7,7 +7,7 @@
 # flips. love0 and the generated out/lib/*.h stay pinned to canonical out/host paths.
 ho = out/host$(hsuf)
 h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
-# host/*.c: per-app host-nif files, auto-globbed and auto-registered via AI_NIF. ⚠ linked
+# host/*.c: per-app host-nif files, auto-globbed and auto-registered via AiNif. ⚠ linked
 # DIRECTLY into the binary, never via liblove.a, so the ai_nifs section is not
 # archive-collected. Drop a host/<app>.c in and it builds -- no rule edit.
 host_o = $(patsubst host/%.c,$(ho)/host/%.o,$(wildcard host/*.c))
@@ -109,13 +109,13 @@ $(ho)/liblove.so: $(ho)/liblove.a $(R)/core/love_data.ld
 	@mkdir -p $(dir $@)
 	@$(hcc) -shared -o $@ $(so_archive) $(so_undef) $(data_ld)
 
-# The bootstrap interpreter: -DGL_BOOTSTRAP against the fallback top-level data.h (no
+# The bootstrap interpreter: -DLoveBoot against the fallback top-level data.h (no
 # -I$(ho)), and -Dai_tco=0, which is also the trampoline-coverage lane. It RUNS the .l
 # tools that generate the lcat headers, so it cannot depend on them -- it #includes the
-# sed-wrapped $(gl0_h) instead, produced without an interpreter. It links the whole
+# sed-wrapped $(boot_h) instead, produced without an interpreter. It links the whole
 # host/*.c glob: the posix nifs and host/image.c's bake/wake are what let love0 bake and
 # wake mooncc0.image and so drive the mooncc-built default `love`.
-# ⚠ -DAI_VERSION='$(love_base)+bootstrap' on purpose, and BOTH halves earn their place.
+# ⚠ -DAiVersion='$(love_base)+bootstrap' on purpose, and BOTH halves earn their place.
 # The suffix: love0 bakes the lcat headers every frontend shares, so a love0 that relinks
 # re-lays all of them and rebuilds every object behind them -- a ~25 s cascade fired by
 # nothing but a new commit hash. The bootstrap is not a release artifact; the shipped
@@ -127,10 +127,10 @@ $(ho)/liblove.so: $(ho)/liblove.a $(R)/core/love_data.ld
 # script. Both ai_typ bodies answer the same enum d for the same ap, and the one place a
 # data object crosses between differently-built binaries -- the heap image -- carries an ap
 # as its INDEX, never an address. So the layout never crosses.
-gl0_cc = $(CCACHE) $(CC) $(ai_cflags) -DGL_BOOTSTRAP -Dai_tco=0 -Dai_data_section=0 -DAI_VERSION='"$(love_base)+bootstrap"' -I. -Icore -Iout/lib
+boot_cc = $(CCACHE) $(CC) $(ai_cflags) -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Icore -Iout/lib
 love0_host_o = $(patsubst host/%.c,out/host/0/host/%.o,$(wildcard host/*.c))
 love0_o = $(love0_host_o) $(love_c:$(R)/%.c=out/host/0/%.o)   # PINNED (not $(ho)/0)
-out/host/0/host/main.o: $(gl0_h)
+out/host/0/host/main.o: $(boot_h)
 out/host/0/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # ⚠ the LOVE_NO_IMAGE= prefix (empty = unset) hands the compiler its baked image back from
 # under the blanket corpus export: when CC is the dist artifact's own mooncc verb, the verb
@@ -144,12 +144,12 @@ out/host/0/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 force_love0cc: ;
 out/host/0/.love0cc: force_love0cc
 	@mkdir -p $(dir $@)
-	@tf=$@.$$$$.tmp; printf '%s\n' '$(gl0_cc)' > $$tf; \
+	@tf=$@.$$$$.tmp; printf '%s\n' '$(boot_cc)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
 out/host/0/%.o: $(R)/%.c $(love_h) out/host/0/.love0cc
 	@echo CC	$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(gl0_cc) -c $< -o $@
+	@LOVE_NO_IMAGE= $(boot_cc) -c $< -o $@
 # ⚠ -pie is LOAD-BEARING: love0 bakes mooncc0.image, and the image codec refuses a binary
 # whose text sits in its index range -- a PIE loads high and clears it. gcc/clang default
 # to PIE anyway; mooncc, the download door's CC, does not.
@@ -165,7 +165,7 @@ $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 	@$(hcc) -c $< -o $@
 
 # l.o carries the version string; recompile it when the id changes. love0's twin is
-# deliberately NOT here -- see the -DAI_VERSION note on gl0_cc.
+# deliberately NOT here -- see the -DAiVersion note on boot_cc.
 $(ho)/love.o: out/lib/love_version.h
 # the lcat'd headers host/main.c bakes inline. ONE roster: the mooncc twin and the
 # HCC link below read the same name, and three spellings is how they drift.
@@ -204,7 +204,7 @@ moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/
 # crew/moon/lib/nolibc/ MEMBER BY NEED -- a love asking for no calendar and no
 # resolver links neither. Naming an object would take every member instead.
 moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_math_o) $(moon_d)/sys.o
-# -D AI_HAVE_VERSION_H + the love_version.h dep: this TU carries the version id into the
+# -D AiHaveVersionH + the love_version.h dep: this TU carries the version id into the
 # SHIPPED binary, and mooncc has no __has_include for core/love.c's fallback probe to use.
 # THE RECORD, and it is OFF: `-fir` lays the machine-form IR of every function into
 # .rodata (per-TU `ai_ir_<basename>`), ~1.5 MB, +12.8% on the artifact. It was on for
@@ -218,7 +218,7 @@ moon_fir = -fno-ir
 $(moon_d)/love.o: core/love.c $(love_h) $(moon0_dep) out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H $(moon_fir) -I$(ho) -I. -Icore -Iout/lib -c $< $@
+	@$(moon0) -D ai_tco=$(tco) -D AiHaveVersionH $(moon_fir) -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(moon_d)/host_%.o: host/%.c $(love_h) $(moon0_dep)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
@@ -249,7 +249,7 @@ $(ho)/.mksys-cat.l: $(mksys_l) $(ho)/.mksys-cat.list
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
 # ⚠ THE LAST love0 IN THE DEFAULT LANE. sys.o is LAID by running a love over the mksys cat,
-# and naming love0 here was enough to drag the whole bootstrap back in -- love0 wants $(gl0_h),
+# and naming love0 here was enough to drag the whole bootstrap back in -- love0 wants $(boot_h),
 # which used to want tests0.h, the whole corpus through one stdin, where distboot kept dying at
 # 139. (The corpus is READ now, not baked, so that particular tail is gone.) A bundled love
 # lays it just as well: the cat carries holo itself, so the layer needs nothing of the bootstrap.

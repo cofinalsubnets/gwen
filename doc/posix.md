@@ -27,7 +27,7 @@ love-the-host-process already calls `read`/`write`/`malloc`. L0 widens that to t
 surface as nifs:
 
 > every host nif is `host_X` (an `ai_noinline` syscall worker) + `lvm_X` (the VM
-> tail wrapper) + a `nif_X[]` thread registered via `AI_NIF` in a `host/*.c` file
+> tail wrapper) + a `nif_X[]` thread registered via `AiNif` in a `host/*.c` file
 > (auto-globbed — no love.c/love.h/main.c edit; main.c is core). The fd→port path is
 > free: `ai_io_alloc(g,fd)` wraps any fd as a port with a close finalizer, and
 > read/write then come free via getc/putc. The general-POSIX nifs wear the
