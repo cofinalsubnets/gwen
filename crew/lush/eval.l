@@ -186,7 +186,7 @@
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
    sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false" "command"
                 "read" "set" "shift" "unset" "eval" "." "wait" "local"
-                "break" "continue" "return")
+                "break" "continue" "return" "love")
    (sh-bi? nm) (sh-smem? nm sh-binames)
    (sh-readb args)
      (: args2 (? (two? args && (<args = "-r")) >args args)
@@ -240,6 +240,23 @@
                             (? !j 0 (: _ (each (sh-nth j 0) (\ p (wait p)))
                                        (pull sh-jobs nn 0))))))
            0))
+   ; `love EXPR..` -- the arguments join as ONE love form (the `eval` builtin's
+   ; join), its answer says on out, and its TRUTH BIT is the status: positive is
+   ; true, so `love 1 + 2` is a calculator and `if love ..` is a test. -n says
+   ; nothing and answers the status alone (cli.l's -e/-n pair, same two letters).
+   ; the form runs in THIS image, so a binding it makes is still there next line.
+   ; ⚠ this SHADOWS the love binary for the bare word, the way any builtin shadows
+   ; its PATH twin. A path spelling -- ./love, out/host/love, /usr/bin/love --
+   ; still spawns one, since sh-bi? reads the bare word only.
+   (sh-loveb args)
+     (: q ((two? args) && (<args = "-n"))
+        src (sh-unwords (? q >args args))
+        (? !(tally src) 0
+           (: r (sh-loveval src)
+              (? (id? <r 'err) (sh-lovesay >r)
+                 (: v >r
+                    _ (? q 0 (puts ((sh-lovetext v) + "\n")))
+                    (? v 0 1))))))
    (sh-builtin argv)
      (: cmd <argv
         (? (cmd = "exit")
@@ -286,6 +303,7 @@
                              (? (tally c)
                                 (: r (sh-line c) (? (two? r) (cmderr "eval: unexpected eof") r))
                                 0))
+           (cmd = "love") (sh-loveb >argv)
            (cmd = ".")    (sh-dotb >argv)
            (cmd = "local") (sh-localb >argv)
            (cmd = "wait") (sh-waitb >argv)
