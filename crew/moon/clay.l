@@ -283,62 +283,65 @@
              100)))
    ; ce: render e, parenthesized when it binds looser than the context wants.
    (ce e p) (: q (cprec e) t (craw e) (? (q < p) ("(" + t + ")") t))
+   ; ⚠ the arms ARE the expression grammar: each pattern names its tag and binds its
+   ; operands, so clay-tags' arity column and the code agree by construction rather
+   ; than by two people counting. the tail is lax on purpose -- `vastart 1 2` and the
+   ; rest of the ranged rows are real -- and a node too SHORT to bind falls to /*?*/,
+   ; which is what clay-ok? and clay-unsaid refuse before a show ever runs.
    (craw e)
     (? !(two? e) (? (string? e) e (show e))
-       (: h <e a (el e 1)
-          (? (id? h 'num) (cnum a)
-             (id? h 'flo) (cflo a)
-             (id? h 'str) (cstrlit a)
-             (id? h 'chr) (cchr a)
-             (id? h 'var) a
-             (id? h 'bin) (: p (look binprec a 100)
-                              (ce (el e 2) p + " " + look binop a "?" + " " + ce (el e 3) (p + 1)))
-             (id? h 'land) (ce a 40 + " && " + ce (el e 2) 41)
-             (id? h 'lor) (ce a 35 + " || " + ce (el e 2) 36)
-             ; ?: and = are RIGHT-associative, so the tight side flips
-             (id? h 'cond) (ce a 31 + " ? " + ce (el e 2) 31 + " : " + ce (el e 3) 30)
-             (id? h 'asn) (ce a 90 + " = " + ce (el e 2) 25)
-             (id? h 'rmw) (ce (el e 2) 90 + " " + look binop a "?" + "= " + ce (el e 3) 25)
-             (id? h 'comma) (ce a 21 + ", " + ce (el e 2) 20)
-             ; ⚠ a space between the operator and an operand that starts with the
-             ; SAME character: `- -x`, never `--x`, which the lexer would read as a
-             ; predecrement. (-(-x) is real -- it is how the folder leaves a double
-             ; negation it could not fold.)
-             (id? h 'un) (: o (look unop a "?") r (ce (el e 2) 90)
-                             (o + (? (tally r && (r 0 = o 0)) " " "") + r))
-             ; printing the star back would be faithful but unreadable. the sugar
-             ; re-desugars on the way in, so G1 holds either way; this is the one place
-             ; clay chooses the nicer of two forms that mean the same tree.
-             (id? h 'deref) (: t a
-                               (? (cidx? e) (ce (el t 2) 100 + "[" + ce (el t 3) 0 + "]")
-                                  ("*" + ce t 90)))
-             (id? h 'addr) ("&" + ce a 90)
-             (id? h 'post) (ce a 95 + (? (0 < el e 2) "++" "--"))
-             ; a uint/ulong cast around a bare literal prints as the SUFFIX: spelled as a
-             ; cast, the reparse ladder (C11 6.4.4.1) wraps a big value in its own cast
-             ; and doubles this one. same tree, so G1 holds -- like the deref sugar above.
-             (id? h 'cast)
-              (: t2 (el e 2)
-                 sfx (? !(two? t2 && id? <t2 'num && (0 <= el t2 1)) ()
-                        (id? a 'uint && (el t2 1 <= 4294967295)) "u"
-                        (id? a 'ulong) "ul" ())
-                 (? sfx (cnum (el t2 1) + sfx)
-                    ("(" + cty a "" + ") " + ce t2 90)))
-             (id? h 'szof) ("sizeof(" + (? (ctype? a) (cty a "") (ce a 0)) + ")")
-             ; a call's arguments sit ABOVE the comma operator, hence 21
-             (id? h 'call) (ce a 100 + "(" + sepby ", " (map (\ x (ce x 21)) (el e 2)) + ")")
-             ; (dot (deref x) "f") is what `x->f` parses to, so print the arrow back --
-             ; unless the deref is an INDEX, where `a[i].f` is the arrow already spent
-             (id? h 'dot) (: t a
-                              (? (two? t && id? <t 'deref && !(cidx? t))
-                                 (ce <>t 100 + "->" + el e 2)
-                                 (ce t 100 + "." + el e 2)))
-             (id? h 'init) (cinit e 0)
-             (id? h 'clit) ("(" + cty a "" + ") " + craw (el e 2))
-             (id? h 'vastart) ("__builtin_va_start(" + ce a 21 + ", " + ce (el e 2) 21 + ")")       ; clay's 2-slot form; the 1-slot one never reaches here (clay-unsaid)
-             (id? h 'vaarg) ("__builtin_va_arg(" + ce a 21 + ", " + cty (el e 2) "" + ")")
-             (id? h 'vaend) ("__builtin_va_end(" + ce a 21 + ")")
-             "/*?*/")))
+       (e @
+        ('num v) (cnum v)
+        ('flo v) (cflo v)
+        ('str v) (cstrlit v)
+        ('chr v) (cchr v)
+        ('var v) v
+        ('bin op l r) (: p (look binprec op 100)
+                         (ce l p + " " + look binop op "?" + " " + ce r (p + 1)))
+        ('land l r) (ce l 40 + " && " + ce r 41)
+        ('lor l r) (ce l 35 + " || " + ce r 36)
+        ; ?: and = are RIGHT-associative, so the tight side flips
+        ('cond c t f) (ce c 31 + " ? " + ce t 31 + " : " + ce f 30)
+        ('asn lv r) (ce lv 90 + " = " + ce r 25)
+        ('rmw op lv r) (ce lv 90 + " " + look binop op "?" + "= " + ce r 25)
+        ('comma l r) (ce l 21 + ", " + ce r 20)
+        ; ⚠ a space between the operator and an operand that starts with the
+        ; SAME character: `- -x`, never `--x`, which the lexer would read as a
+        ; predecrement. (-(-x) is real -- it is how the folder leaves a double
+        ; negation it could not fold.)
+        ('un u x) (: o (look unop u "?") r (ce x 90)
+                     (o + (? (tally r && (r 0 = o 0)) " " "") + r))
+        ; printing the star back would be faithful but unreadable. the sugar
+        ; re-desugars on the way in, so G1 holds either way; this is the one place
+        ; clay chooses the nicer of two forms that mean the same tree. the index
+        ; shape IS the pattern -- cparse desugars `a[i]` to (deref (bin + a i)) --
+        ; and cidx? above is the same shape as a bit, for cprec and the arrow below.
+        ('deref ('bin '+ b i)) (ce b 100 + "[" + ce i 0 + "]")
+        ('deref x) ("*" + ce x 90)
+        ('addr x) ("&" + ce x 90)
+        ('post x d) (ce x 95 + (0 < d ? "++" "--"))
+        ; a uint/ulong cast around a bare literal prints as the SUFFIX: spelled as a
+        ; cast, the reparse ladder (C11 6.4.4.1) wraps a big value in its own cast
+        ; and doubles this one. same tree, so G1 holds -- like the deref sugar above.
+        ('cast ty x)
+         (: dflt ("(" + cty ty "" + ") " + ce x 90)
+            (x @ ('num v & 0 <= v)
+                 (: sfx (? (id? ty 'uint && v <= 4294967295) "u" (id? ty 'ulong) "ul" ())
+                    (? sfx (cnum v + sfx) dflt))
+                 dflt))
+        ('szof x) ("sizeof(" + (? (ctype? x) (cty x "") (ce x 0)) + ")")
+        ; a call's arguments sit ABOVE the comma operator, hence 21
+        ('call f as) (ce f 100 + "(" + sepby ", " (map (\ x (ce x 21)) as) + ")")
+        ; (dot (deref x) "f") is what `x->f` parses to, so print the arrow back --
+        ; unless the deref is an INDEX, where `a[i].f` is the arrow already spent
+        ('dot t f) (? (two? t && id? <t 'deref && !(cidx? t)) (ce <>t 100 + "->" + f)
+                      (ce t 100 + "." + f))
+        ('init _) (cinit e 0)
+        ('clit ty x) ("(" + cty ty "" + ") " + craw x)
+        ('vastart ap l) ("__builtin_va_start(" + ce ap 21 + ", " + ce l 21 + ")")
+        ('vaarg ap ty) ("__builtin_va_arg(" + ce ap 21 + ", " + cty ty "" + ")")
+        ('vaend ap) ("__builtin_va_end(" + ce ap 21 + ")")
+        "/*?*/"))
    ; a type shows up in operand position for sizeof; tell the two apart by the head
    (ctype? t) (? (name? t) (member? t '(char short int long uint void double float))
                  (two? t && member? <t '(ptr arr struct named const restrict fn)))
@@ -401,39 +404,39 @@
    ; the list), so it outdents by one against the statements it labels.
    (cstmt s n)
     (? !(two? s) ""
-       (: h <s a (el s 1)
-          (? (id? h 'blk) (line n "{" + join (map (\ x (cstmt x (n + 1))) a) + line n "}")
-             (id? h 'note) (cnote n a)
-             (id? h 'decl) (line n (cdecls a + ";"))
-             (id? h 'sdecl) (line n ("static " + cdecls a + ";"))
-             ; ret's PRE slot is a spelling -- `ai_musttail return ..`, the tail-call
-             ; discipline vmret checks. presence is the ARITY, never the value.
-             (id? h 'ret) (: pre (? (1 < tally >s) (ctag (el s 2) + " ") "")
-                             (line n (pre + (? (two? a) ("return " + ce a 0 + ";") "return;"))))
-             (id? h 'expr) (line n (ce a 0 + ";"))
-             (id? h 'nop) (line n ";")
-             (id? h 'brk) (line n "break;")
-             (id? h 'cont) (line n "continue;")
-             (id? h 'goto) (line n ("goto " + a + ";"))
-             (id? h 'lbl) (line (? (n < 1) 0 (n - 1)) (a + ":"))
-             (id? h 'case) (line (? (n < 1) 0 (n - 1)) ("case " + (? (charm? a) (show a) (ce a 0)) + ":"))
-             (id? h 'dflt) (line (? (n < 1) 0 (n - 1)) "default:")
-             (id? h 'if) (cif s n "")
-             (id? h 'while) (: b (el s 2) (copen n "" ("while (" + ce a 0 + ")") b + cclose n b ""))
-             (id? h 'do) (copen n "" "do" a + cclose n a (" while (" + ce (el s 2) 0 + ");"))
-             ; all three clauses empty is `for (;;)`, C's own spelling of forever --
-             ; the general join would lay `for (; ; )`, which reads as three omissions
-             (id? h 'for) (: b (el s 4)
-                             i (cfor a) c (? (two? (el s 2)) (ce (el s 2) 0) "")
-                             p (? (two? (el s 3)) (ce (el s 3) 0) "")
-                             hdr (? !(tally (i + c + p)) "for (;;)"
-                                    ("for (" + i + "; " + c + "; " + p + ")"))
-                             (copen n "" hdr b + cclose n b ""))
-             (id? h 'switch) (line n ("switch (" + ce a 0 + ") {")
-                              + join (map (\ x (cstmt x (n + 1))) (el s 2)) + line n "}")
-             (id? h 'asm) (line n ("__asm__ (" + cstrlit a + casmop (el s 2) + casmop (el s 3)
-                                   + (? (two? (el s 4)) (" : " + sepby ", " (map cstrlit (el s 4))) "") + ");"))
-             (line n (ce s 0 + ";")))))
+       (s @
+        ('blk items) (line n "{" + join (map (\ x (cstmt x (n + 1))) items) + line n "}")
+        ('note x) (cnote n x)
+        ('decl d) (line n (cdecls d + ";"))
+        ('sdecl d) (line n ("static " + cdecls d + ";"))
+        ; ret's PRE slot is a spelling -- `ai_musttail return ..`, the tail-call
+        ; discipline vmret checks. presence is the ARITY, never the value, so the
+        ; two spellings are two ARMS and the longer one has to lead.
+        ('ret x tag) (line n (ctag tag + " " + (two? x ? ("return " + ce x 0 + ";") "return;")))
+        ('ret x) (line n (two? x ? ("return " + ce x 0 + ";") "return;"))
+        ('expr x) (line n (ce x 0 + ";"))
+        ['nop] (line n ";")
+        ['brk] (line n "break;")
+        ['cont] (line n "continue;")
+        ('goto l) (line n ("goto " + l + ";"))
+        ('lbl l) (line (? (n < 1) 0 (n - 1)) (l + ":"))
+        ('case v) (line (? (n < 1) 0 (n - 1)) ("case " + (charm? v ? (show v) (ce v 0)) + ":"))
+        ['dflt] (line (? (n < 1) 0 (n - 1)) "default:")
+        ('if _ _) (cif s n "")
+        ('while c b) (copen n "" ("while (" + ce c 0 + ")") b + cclose n b "")
+        ('do b c) (copen n "" "do" b + cclose n b (" while (" + ce c 0 + ");"))
+        ; all three clauses empty is `for (;;)`, C's own spelling of forever --
+        ; the general join would lay `for (; ; )`, which reads as three omissions
+        ('for i0 c0 p0 b)
+         (: i (cfor i0) c (two? c0 ? (ce c0 0) "") p (two? p0 ? (ce p0 0) "")
+            hdr (? !(tally (i + c + p)) "for (;;)"
+                   ("for (" + i + "; " + c + "; " + p + ")"))
+            (copen n "" hdr b + cclose n b ""))
+        ('switch c items) (line n ("switch (" + ce c 0 + ") {")
+                           + join (map (\ x (cstmt x (n + 1))) items) + line n "}")
+        ('asm t o1 o2 cl) (line n ("__asm__ (" + cstrlit t + casmop o1 + casmop o2
+                                   + (two? cl ? (" : " + sepby ", " (map cstrlit cl)) "") + ");"))
+        (line n (ce s 0 + ";"))))
    ; if/else, and the else-if CHAIN kept flat: an else whose whole body is another
    ; `if` prints as `} else if (..) {` rather than opening a fresh level, which is
    ; what C source looks like and what the nesting in the tree actually means.
@@ -466,49 +469,54 @@
    ; names its own value -- which is the only way to say the anonymous enum a
    ; compile-time constant lives in (`enum { nf_maxcap = 64 };`).
    (cconst k) (? (two? k) (string <k + " = " + ce (el k 1) 21) (string k))
+   ; a struct or union definition, one member per line. a FIELD is parse's member
+   ; pair, so its type is a clay node and brackets its own name the way every other
+   ; declaration here does -- `lvm_t *m[KN]` as a member is the same cty call it is
+   ; as a global.
+   (csdef nm fs kw)
+    (line 0 (kw + " " + ctag nm + " {")
+     + join (map (\ [fnm ty] (line 1 (cty ty fnm + ";"))) fs)
+     + line 0 "};")
+   ; ⚠ the ranged rows of clay-tags are ARMS here, longest first: `proto 1 4` is four
+   ; real spellings and the trailing slots are what a generator says. reading the
+   ; arity off `tally >t` is what those arms replace.
    (ctop t)
     (? !(two? t) ""
-       (: h <t a (el t 1)
-          (? (id? h 'note) (cnote 0 a)
-             (id? h 'gdecl) (line 0 (cstor (? (1 < tally >t) (el t 2) ()) + cdecls a + ";"))
-             (id? h 'xdecl) (line 0 ("extern " + cdecls a + ";"))
-             ; a forward declaration. cparse keeps the NAME and nothing else, so a bare
-             ; (proto n) is the same reconstruction a return-type-less fn is; the
-             ; appended slots are what a generator says, and what a mutual recursion
-             ; between two generated functions has no other way to spell.
-             (id? h 'proto)
-              (? !(two? >>t) (line 0 ("int " + ctag a + "();"))
-                 (line 0 (csig (ctag a) (? (3 < tally >t) (el t 4) ())
-                               (? (2 < tally >t) (el t 3) 'int) (el t 2) + ";")))
-             (id? h 'tdef) (? (two? >t) (line 0 ("typedef " + cty (el t 2) a + ";"))
-                              (gripe "(tdef) carries nothing -- a typedef cparse could not keep"))
-             ; an enum definition, one line. a constant takes the position C already
-             ; gives it -- a roster that had to say its own indices would not be one --
-             ; and `(nom expr)` is for the enum that is not a lattice at all: an
-             ; ANONYMOUS one, C's spelling for a lone compile-time constant, where a
-             ; position means nothing and the value is the whole point.
-             (id? h 'edef)
-              (line 0 ("enum " + (? (string? a || name? a) (ctag a + " ") "") + "{ "
-                       + sepby ", " (map cconst (el t 2)) + " };"))
-             ; a struct or union definition, one member per line. a FIELD is parse's
-             ; member pair, so its type is a clay node and brackets its own name the
-             ; way every other declaration here does -- `lvm_t *m[KN]` as a member is
-             ; the same cty call it is as a global.
-             (id? h 'sdef)
-              (: kw (? (id? (el t 3) 'union) "union" "struct")
-                 (line 0 (kw + " " + ctag a + " {")
-                  + join (map (\ f (line 1 (cty (el f 1) <f + ";"))) (el t 2))
-                  + line 0 "};"))
-             (id? h 'sassert)
-              (line 0 ("_Static_assert(" + ce a 21 + ", " + cstrlit (ctag (el t 2)) + ");"))
-             ; the preprocessor. a directive owns its line and starts at column 0,
-             ; nested or not -- love.h's own style, and the one cpp reads fastest.
-             (id? h 'cpp-def)
-              (line 0 ("#define " + ctag a
-                       + (? (1 < tally >t) (" " + ce (el t 2) 100) "")))
-             (id? h 'cpp-undef) (line 0 ("#undef " + ctag a))
-             (id? h 'cpp-if) (ccpp a (? (1 < tally >t) (el t 2) ()) (1 < tally >t))
-             (gripe ("cannot show top-level " + string h)))))
+       (t @
+        ('note x) (cnote 0 x)
+        ('gdecl d st) (line 0 (cstor st + cdecls d + ";"))
+        ('gdecl d) (line 0 (cstor () + cdecls d + ";"))
+        ('xdecl d) (line 0 ("extern " + cdecls d + ";"))
+        ; a forward declaration. cparse keeps the NAME and nothing else, so a bare
+        ; (proto n) is the same reconstruction a return-type-less fn is; the
+        ; appended slots are what a generator says, and what a mutual recursion
+        ; between two generated functions has no other way to spell.
+        ('proto nm ps r at) (line 0 (csig (ctag nm) at r ps + ";"))
+        ('proto nm ps r) (line 0 (csig (ctag nm) () r ps + ";"))
+        ('proto nm ps) (line 0 (csig (ctag nm) () 'int ps + ";"))
+        ('proto nm) (line 0 ("int " + ctag nm + "();"))
+        ('tdef nm ty) (line 0 ("typedef " + cty ty nm + ";"))
+        ['tdef] (gripe "(tdef) carries nothing -- a typedef cparse could not keep")
+        ; an enum definition, one line. a constant takes the position C already
+        ; gives it -- a roster that had to say its own indices would not be one --
+        ; and `(nom expr)` is for the enum that is not a lattice at all: an
+        ; ANONYMOUS one, C's spelling for a lone compile-time constant, where a
+        ; position means nothing and the value is the whole point.
+        ('edef nm ks)
+         (line 0 ("enum " + (? (string? nm || name? nm) (ctag nm + " ") "") + "{ "
+                  + sepby ", " (map cconst ks) + " };"))
+        ('sdef nm fs u) (csdef nm fs (id? u 'union ? "union" "struct"))
+        ('sdef nm fs) (csdef nm fs "struct")
+        ('sassert e msg)
+         (line 0 ("_Static_assert(" + ce e 21 + ", " + cstrlit (ctag msg) + ");"))
+        ; the preprocessor. a directive owns its line and starts at column 0,
+        ; nested or not -- love.h's own style, and the one cpp reads fastest.
+        ('cpp-def nm v) (line 0 ("#define " + ctag nm + " " + ce v 100))
+        ('cpp-def nm) (line 0 ("#define " + ctag nm))
+        ('cpp-undef nm) (line 0 ("#undef " + ctag nm))
+        ('cpp-if arms els) (ccpp arms els 1)
+        ('cpp-if arms) (ccpp arms () 0)
+        (gripe ("cannot show top-level " + string <t))))
    ; #if / #elif / #else / #endif over top-level items. the arms carry their own
    ; conditions and the else is a SLOT, so an else out of place has no spelling.
    (ccpp arms els has)
@@ -603,9 +611,11 @@
    ; RETURN TYPE is clay's 4th slot; absent -- which is every fn cparse ever built --
    ; `int` is the best the tree can justify. the 5th is attribute SPELLINGS laid
    ; before it (`ai_noinline ai_noicf struct ai *lvm_add(..)`). see the header.
+   ; (fn name params body [ret [attrs]]) -- the trailing two are clay's, cparse hands
+   ; three, so the three real spellings are three arms over one layout.
+   (cfnl nm ps b r at) (copen 0 "" (csig (ctag nm) at r ps) b + cclose 0 b "")
    (cfn t)
-    (: nm (ctag (el t 1))
-       r (? (3 < tally >t) (el t 4) 'int)
-       at (? (4 < tally >t) (el t 5) ())
-       b (el t 3)
-       (copen 0 "" (csig nm at r (el t 2)) b + cclose 0 b "")))
+    (t @ ('fn nm ps b r at) (cfnl nm ps b r at)
+         ('fn nm ps b r) (cfnl nm ps b r ())
+         ('fn nm ps b) (cfnl nm ps b 'int ())
+         ""))
