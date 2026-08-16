@@ -110,6 +110,28 @@ the [end](e).")
     ; two blank-separated lists of one kind are ONE list (markdown's loose-list rule,
     ; and the only spelling roff has) -- `bmrg`, the block twin of `mrg`
     ((mdread "- a\n\n- b\n") = '((bullets (((text "a")) ((text "b"))))))
+    ; a WRAPPED item is ONE item: a line that is neither blank nor a block opener
+    ; continues the item above it, and the wrap's indentation is not the text's.
+    ((mdread "- a\n  wrapped\n- b\n") = '((bullets (((text "a wrapped")) ((text "b"))))))
+    ((mdread "1. a\n   wrapped\n") = '((numbers (((text "a wrapped"))))))
+    ; ..and what does NOT continue one: a blank line, and every block opener
+    ((mdread "- a\n\nb\n") = '((bullets (((text "a")))) (para ((text "b")))))
+    ((mdread "- a\n- b\n") = '((bullets (((text "a")) ((text "b"))))))
+    ((mdread "- a\n# b\n") = '((bullets (((text "a")))) (head 1 ((text "b")))))
+    ((mdread "- a\n```\nx\n```\n") = '((bullets (((text "a")))) (fence "" "x\n")))
+    ; ⚠ THE READER IS TOTAL: a line `starter` claims but no block can parse -- a
+    ; `---` rule that is not one, a `:   ` body with no term over it -- is taken as
+    ; a paragraph of its own rather than STOPPING the block loop, which used to drop
+    ; the whole rest of the document in silence.
+    ((mdread ":   orphan\n") = '((para ((text ":   orphan")))))
+    ((mdread "--- the table ---\nbody\n")
+     = '((para ((text "--- the table ---"))) (para ((text "body")))))
+    ((mdread "- a\n:   b\n") = '((bullets (((text "a")))) (para ((text ":   b")))))
+    ; ..and it never fires on what a SHOWER writes, which is why law 1 does not feel
+    ; it: a real rule, a real deflist and a shielded paragraph all still read as they
+    ; are shown.
+    ((mdread "---\n") = '((rule)))
+    ((mdread "t\n:   b\n") = '((deflist ((((text "t")) ((text "b")))))))
     ; a paragraph that would re-read as a block wears ONE backslash; the escape leaf takes it off
     ((nrm "- a") = "- a\n")
     ((nrm "\\- a") = "\\- a\n")
@@ -132,6 +154,9 @@ the [end](e).")
     (L "# NAME" "## OPTIONS" "plain paragraph text" "a *b* **c** `d`"
        "- one
 - two"
+       "- an item that wraps onto
+  a second line
+- and one that does not"
        "1. first
 2. second"
        "-l *lib*
