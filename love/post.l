@@ -208,4 +208,5 @@
    (dot x) (: _ (? (string? x || (hot? x && !(port? x))) (say out x) (px out x ())) _ (flush out) x))
 (: putx (print out)
    . dot
+   _ (seal-hook 7 show)                            ; `string` coerces through it from here on
    _ (pin (operators 0) '. '.))

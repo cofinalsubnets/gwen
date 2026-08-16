@@ -704,7 +704,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  memset(g, 0, sizeof(struct ai));      // the core needs no leading ap: () is the const ZeroPoint, never (word)g
  g->len = len0, g->pool = (void*) g, g->alloc = al;
  g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
- g->hot_read = g->hot_numap = g->hot_stack = g->hot_compose = g->hot_opfix = g->hot_help = zero;   // unsealed: hot_hook traps until (seal-hook) fills them; help zero = nobody listening
+ g->hot_read = g->hot_numap = g->hot_stack = g->hot_compose = g->hot_opfix = g->hot_help = g->hot_show = zero;   // unsealed: hot_hook traps until (seal-hook) fills them; help zero = nobody listening
  g->hot_io = zero;                     // the task's stdio: zero is the console, the steady state
  g->mods = zero;                       // the module registry: lazily created by the first (mods _) read
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
@@ -2107,12 +2107,12 @@ static lvm(lvm_numtap) {
 
 // (seal-hook n f): install f as core hook n (0 read, 1 num-ap, 2 stack, 3
 // compose, 4 opfix, 5 the help, 6 the task's stdio -- the two DYNAMIC slots, which
-// alone skip the lambda gate: 5 takes a help or (), 6 a 3-chain or ()). the CALLER
+// alone skip the lambda gate: 5 takes a help or (), 6 a 3-chain or () -- 7 show). the CALLER
 // hands the function over, which makes every ordering
 // contract lexical; a non-lambda or unknown slot traps. a switch, not a table:
 // a slot[] would be an address-taken local (the lvm scratch rule).
 lvm(lvm_seal) {
- if (getcharm(Sp[0]) < 5 && !lamp(Sp[1])) __builtin_trap();
+ if (getcharm(Sp[0]) != 5 && getcharm(Sp[0]) != 6 && !lamp(Sp[1])) __builtin_trap();   // the two DYNAMIC slots alone skip the gate
  switch (getcharm(Sp[0])) {
   case 0: g->hot_read = Sp[1]; break;
   case 1: g->hot_numap = Sp[1]; break;
@@ -2121,6 +2121,7 @@ lvm(lvm_seal) {
   case 4: g->hot_opfix = Sp[1]; break;
   case 5: g->hot_help = Sp[1]; break;
   case 6: g->hot_io = chainp(Sp[1]) ? Sp[1] : zero; break;   // anything but a chain hands the console back
+  case 7: g->hot_show = Sp[1]; break;
   default: __builtin_trap(); }
  Sp += 1, Sp[0] = zero, Ip += 1;
  ai_musttail return Continue(); }
@@ -3675,7 +3676,15 @@ lvm(lvm_string) {
   ini_str(s, n);
   memcpy(txt(s), txt(src), n);
   ai_musttail return Answer(word(s)); }
- ai_musttail return Next(1); }                          // any other type: identity
+ // `string` ANSWERS A STRING: a string is the only identity, every other kind coerces
+ // through hook 7. ⚠ px reaches `string` on chains and noms only, so show cannot recur.
+ if (x == ZeroPoint) { Sp[0] = word(EmptyString); ai_musttail return Next(1); }   // the empty charlist
+ if (strp(x) || !lamp(g->hot_show)) ai_musttail return Next(1);   // ..or the boot window, where identity stands
+ Have(2);                                               // the drive grows Sp by two
+ { word *dst = Sp - 2;                                  // [x show ret] -- callout_drive's 1-arg shape
+   dst[0] = Sp[0], dst[1] = g->hot_show, dst[2] = word(Ip + 1);
+   Sp = dst; Ip = (union u*) callout_drive; }
+ ai_musttail return Continue(); }
 
 ////
 /// " the parser "

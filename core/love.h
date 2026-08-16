@@ -229,7 +229,7 @@ struct ai {
    // THE HOOKS: lisp the C lanes must reach, handed over by (seal-hook n f) and read
    // by SLOT -- no name lookup, no rebind can reach them. numbered in seal = boot
    // order; GC-traced (v0..end) + image-serialized. unsealed = zero -> hot_hook
-   // traps, except slot 5, whose zero is a steady state the raise lanes nil-test.
+   // traps, except 5 (a steady state the raise lanes nil-test) and 7 (identity).
    ai_word hot_read;  // 0: the corpus reader (p1's whole-text door, sealed by p1's own
                   // last act); zero = p1 not up yet, readtext falls back to p0
    ai_word hot_numap; // 1: the church C->lisp num-ap hook (lvm_numap/numtap, data_num_apply)
@@ -252,6 +252,8 @@ struct ai {
                   // dup2 is the process's and cannot serve two tasks at once.
                   // ⚠ OP-LEVEL ONLY: id?, peek and the image still see the static, because
                   // prel's tap/jug poke the port head by index and must keep seeing it.
+   ai_word hot_show;  // 7: `show` -- what `string` coerces the kinds it cannot spell through.
+                  // ⚠ unsealed = identity: show is post.l's, and prel runs before it.
    ai_word mods;  // the MODULE REGISTRY book: name -> module-book, filled by `leave`,
                   // read by use/from. a lazy singleton, so both bootstrap prel runs
                   // capture the SAME tablet. in v0..end: traced + serialized.

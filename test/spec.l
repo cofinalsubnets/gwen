@@ -198,6 +198,24 @@
  (5  = (: let (\ x 5) (let 9)))                  ; likewise for a : binder named like a macro
  !((\ x (cap x)) = cap))                         ; eta_redex_shifts' twin: eta stays unbridged
 
+; --- string ANSWERS A STRING --- the one total coercion. four kinds the nif spells itself:
+; a charm is its BYTE (not its digits -- (string 10) is a newline, which the tree writes
+; everywhere), a nom its spelling, a charlist its bytes, a cask a copy. () is the empty
+; charlist. everything else -- gem, twin, big, tray, tablet, port, lambda -- goes through
+; `show`, seal-hook 7, so a string is the ONLY value that comes back identical.
+; ⚠ unsealed (prel's own run, before post.l) the hook is identity; nothing up there hands
+; `string` a kind the nif cannot spell.
+(: (str? x) (string? (string x))
+   (assert
+    ("A" = string 65) (1 = tally (string 10)) ("hi" = string '(104 105))   ; the four spelled kinds,
+    ("abc" = string 'abc) ("" = string ())                                 ; and the empty charlist
+    ("1.5" = string 1.5) ("-2.5" = string -2.5)                            ; ..the rest coerce
+    (str? 1.5) (str? i) (str? (100 2)) (str? @(1 2 3)) (str? #(1 2)) (str? cap) (str? out)
+    (str? ()) (str? 0) (str? 'x) (str? "s") (str? @(0 0))                  ; incl. every falsy shape
+    (: s "x" (id? s (string s)))                                           ; a string is the only identity
+    (: g 1.5 !(id? g (string g)))
+    ("1.5" = string (string 1.5))))                                        ; ..so it is idempotent
+
 ; --- + and * are generic --- `+` adds numbers, concatenates strings, appends lists; `-` numeric
 ; only. the BYTE LAW: a string + an exact integer 0..255 is one byte. a symbol inherits the string
 ; lane (acts as its spelling, re-interns; demotes on a string operand). `*` is repeated `+`: a sequence
