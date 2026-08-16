@@ -94,17 +94,18 @@ owes a roster gate: on linux, assert the linux features are aboard.
   sigret leaf is surface parity only); the driver takes `-os freebsd`
   (predefine `__FreeBSD__=14`) for compiles and REFUSES the link (no crt0, no
   ELF brand — rung 5's).
-- **rung 3 — the tables fork.** Headers and struct layouts per OS; the
-  signal-number leak into job.l/init.l gets a seam instead of a literal. Six
-  members whose freebsd MECHANISM differs are absent there by `#if` (fork,
-  dup2, readdir, sigaction, signalfd, memfd_create — an empty member defines
-  nothing, so a consumer reads "undefined reference"). ⚠ the rest of the
-  silently-wrong roster still compiles wearing linux semantics and owes the
-  same treatment or a real body here: sigprocmask (how-values 0/1/2 vs 1/2/3),
-  the termios/pty family (linux ioctl numbers inline), the stat family (struct
-  layout), getcwd (__getcwd's 0-return vs linux's length), mount, sendfile,
-  pselect (signature shapes), and every O_*/MAP_*/SO_*/SA_* value in
-  include/. Nothing on the rung-2 exerciser's path touches them.
+- **rung 3 — the tables fork.** Landed and gated 2026-08-16, same box: the
+  value tables open on the OS ahead of the arch (O_*/AT_*/MAP_*/SA_*, the
+  parting signal numbers, the errno tail — the kernels agree through 10 and
+  part at 11 — the ino64 stat/dirent shapes, freebsd's flock), and the
+  mechanism members got bodies: fork(2) real, dup2 via F_DUP2FD, readdir over
+  getdirentries, sigaction translated to the kernel shape (no restorer),
+  sigprocmask's 16-byte set, pselect's bare sigset arg, isatty by TIOCGETA.
+  getcwd needed nothing — its body only reads the sign. Still absent by `#if`
+  (rung 4, gates need a tty and a wire): termios proper, the pty family,
+  mount/sendfile, signalfd (kqueue), the socket constants + `sa_len`. The
+  signal-number leak into job.l/init.l waits for a love runtime on freebsd
+  (rung 5) to mean anything.
 - **rung 4 — the mechanisms.** sigfd over EVFILT_SIGNAL; splice's maps read
   over the sysctl; selfpath's OpenBSD gap if anyone cares.
 - **rung 5 — the artifact whole.** bake/wake on the foreign OS (the phdr walk
@@ -120,8 +121,11 @@ owes a roster gate: on linux, assert the linux features are aboard.
   machine's bytes for the other arch), love1 under qemu-user rebuilds itself
   natively and must answer the same bytes — one cmp proves the twin machine
   reproduces this machine's, and that mooncc's output does not depend on the
-  arch mooncc runs on. Still owed to a second box: the literal two-machine
-  compare, and native aarch64/riscv64 runs of test_fixpoint.
+  arch mooncc runs on. The literal leg rides a real aarch64 box (pi.lan): the
+  shipped twin runs `love seed` there and its own sha256 check is the
+  two-machine compare — which found the twin was NOT a seed (dist_cross
+  linked no source blob; fixed, the twin link now mirrors the native one).
+  Still owed: a native riscv64 ride of test_fixpoint.
 - **rung U1 — the container.** The polyglot prefix over our own linker: sh +
   ELF is the cheap pair; PE re-uses pe.l's reloc machinery; Mach-O is new and
   waits. The prefix must respect bake_tail or the bake learns to re-lay it.
