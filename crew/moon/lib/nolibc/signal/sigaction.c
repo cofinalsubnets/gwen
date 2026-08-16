@@ -1,5 +1,9 @@
 #include "../impl.h"
 
+/* absent on freebsd until rung 3 supplies the body (another ksigaction, no
+   restorer) -- an empty member defines nothing, so a consumer reads
+   "undefined reference", the honest sentence */
+#if !defined(__FreeBSD__)
 int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
   struct __ksigaction ka, ko;
   memset(&ko, 0, sizeof ko);
@@ -21,3 +25,4 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
     old->sa_flags = (int) ko.flags;
     old->sa_mask.__v[0] = (long) ko.mask; }
   return 0; }
+#endif

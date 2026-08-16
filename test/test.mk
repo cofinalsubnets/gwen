@@ -574,6 +574,13 @@ test_fixpoint: host $(love0) out/host/mooncc0.image
 .PHONY: test_xfixpoint
 test_xfixpoint: $(xobjs) $(love0) out/host/mooncc0.image
 	@sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xtgt) $(xmksys) $(tco) $(xd) $(xobjs)
+# rung 2's freebsd gate (doc/plan/seed-universal.md): a mooncc-laid static
+# freebsd binary runs on a real freebsd box. the box arrives by env --
+# FBSD_SSH="ssh -p 2222 -i KEY root@HOST" make test_freebsd -- and without
+# one the gate skips loudly. opt-in by name, like test_distboot.
+.PHONY: test_freebsd
+test_freebsd: host $(love0) out/host/mooncc0.image
+	@sh test/gate/freebsd.sh $(ho) $(love0)
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
 # the WHOLE corpus. Opt-in: needs the -pie toolchain, x86-64 only.

@@ -62,9 +62,92 @@ struct _IO_FILE {
   unsigned char *buf;
 };
 
-/* ---- the syscall numbers, the one arch gate (riscv64 shares aarch64's
- * asm-generic table verbatim -- one flag, two arches) ---- */
-#if defined(__aarch64__) || defined(__riscv)
+/* ---- the syscall numbers. two gates: the OS first, then linux's one arch
+ * gate (riscv64 shares aarch64's asm-generic table verbatim -- one flag, two
+ * arches). freebsd's table is machine-independent: one table, every arch
+ * (stable/14 sys/sys/syscall.h). ⚠ a name ABSENT from the freebsd block is a
+ * MECHANISM that differs, not a number we lack -- the member that wants it
+ * owes a freebsd body (doc/plan/seed-universal.md rungs 3-4), and pulling it
+ * before then fails the compile by name, loudly. ---- */
+#if defined(__FreeBSD__)
+#define NR_read             3
+#define NR_write            4
+#define NR_close            6
+#define NR_fstat          551   /* ino64; ⚠ another struct stat (rung 3) */
+#define NR_lseek          478
+#define NR_nanosleep      240
+#define NR_mmap           477
+#define NR_mprotect        74
+#define NR_munmap          73
+#define NR_rt_sigaction   416   /* sigaction; ⚠ no restorer, another ksigaction (rung 3) */
+#define NR_rt_sigprocmask 340   /* sigprocmask; ⚠ 16-byte set, no size arg (rung 3) */
+#define NR_ioctl           54   /* ⚠ the numbers it takes are another encoding (rung 3) */
+#define NR_pread64        475
+#define NR_pwrite64       476
+#define NR_getpid          20
+#define NR_setuid          23
+#define NR_setgid         181
+#define NR_setgroups       80
+#define NR_geteuid         25
+#define NR_sendfile       393   /* ⚠ another signature (rung 3) */
+#define NR_pselect6       522   /* pselect; ⚠ the 6th arg is a plain sigset* (rung 3) */
+#define NR_socket          97
+#define NR_connect         98
+#define NR_accept          30
+#define NR_sendto         133
+#define NR_getsockname     32
+#define NR_getpeername     31
+#define NR_recvfrom        29
+#define NR_sendmsg         28
+#define NR_recvmsg         27
+#define NR_shutdown       134
+#define NR_bind           104
+#define NR_listen         106
+#define NR_getsockopt     118
+#define NR_setsockopt     105
+/*      NR_clone: none -- fork(2) is real here, SYS_fork 2 (fork.c, rung 3) */
+#define NR_execve          59
+#define NR_wait4            7
+#define NR_kill            37
+#define NR_fcntl           92
+#define NR_fsync           95
+#define NR_fdatasync      550
+#define NR_fchown         123
+#define NR_ftruncate      480
+#define NR_getcwd         326   /* __getcwd */
+#define NR_chdir           12
+#define NR_chroot          61
+#define NR_fchmod         124
+#define NR_umask           60
+#define NR_getuid          24
+#define NR_getgid          47
+#define NR_setpgid         82
+#define NR_setsid         147
+#define NR_getpgid        207
+#define NR_mount           21   /* ⚠ another signature -- (type dir flags data) (rung 3) */
+/*      NR_getdents64: none -- getdirentries 554, another record (readdir, rung 3) */
+#define NR_clock_gettime  232
+#define NR_exit_group       1   /* exit: one thread here, so one exit is the whole act */
+#define NR_openat         499
+#define NR_mkdirat        496
+#define NR_mknodat        559
+#define NR_fchownat       491
+#define NR_faccessat      489
+#define NR_newfstatat     552   /* fstatat; ⚠ another struct stat (rung 3) */
+#define NR_unlinkat       503
+#define NR_renameat       501
+#define NR_linkat         495
+#define NR_symlinkat      502
+#define NR_readlinkat     500
+#define NR_fchmodat       490
+#define NR_ppoll          545   /* 4 args; our trailing sigsetsize rides an ignored register */
+/*      NR_unshare: none -- linux's; the nif above it is already #else'd out */
+#define NR_utimensat      547
+/*      NR_signalfd4: none -- kqueue 362 / kevent 560, EVFILT_SIGNAL (rung 4) */
+/*      NR_dup3: none -- fcntl F_DUP2FD_CLOEXEC (dup2.c, rung 3) */
+#define NR_pipe2          542
+/*      NR_memfd_create: none -- shm_open2 571 + SHM_ANON (rung 3) */
+#elif defined(__aarch64__) || defined(__riscv)
 #define NR_getcwd          17
 #define NR_dup3            24
 #define NR_fcntl           25
