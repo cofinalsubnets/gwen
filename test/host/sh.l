@@ -438,9 +438,15 @@
 (: r (hark ["out/host/love" "out/host/lush" "-c" "ev 0; echo st=$?; ev 1; echo st=$?"])
    (assert (= "0\nst=1\n1\nst=0\n" (cup r))))
 ; a love form as a shell CONDITION -- the one thing ${( )} cannot do, an
-; expansion being a word and not a command
-(: r (hark ["out/host/love" "out/host/lush" "-c" "if ev 3 > 2; then echo yes; else echo no; fi"])
-   (assert (= "yes\n" (cup r))))
+; expansion being a word and not a command. ⚠ QUOTED, and BOTH directions: the
+; shell lexes first, so bare `ev 3 > 2` is `ev 3` with stdout redirected into a
+; file named 2 -- which answers 0 and passes this assert for the wrong reason,
+; leaving the file behind as the only sign. One arm cannot tell them apart.
+; -n mutes the answer, which is what a condition wants.
+(: r (hark ["out/host/love" "out/host/lush" "-c"
+            "if ev -n '3 > 2'; then echo yes; else echo no; fi
+             if ev -n '2 > 3'; then echo yes; else echo no; fi"])
+   (assert (= "yes\nno\n" (cup r))))
 ; ERRORS CONTAIN: a bad form is a status and a line on err, and the shell runs on
 (: r (hark ["out/host/love" "out/host/lush" "-c" "ev '(1 +' 2>/dev/null; echo st=$?; echo alive"])
    (assert (= "st=1\nalive\n" (cup r))))

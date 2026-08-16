@@ -124,6 +124,13 @@
    ; STDIN when handed no file operand (cat head tail wc sort uniq cut tr nl rev grep sed
    ; tee xargs). Those are the next tier and they wait on the stdin story, which is a
    ; question about ^C and a terminal rather than about anything in this file.
+   ; MEASURED 2026-08-16, and the number says WAIT. Over a host build -- 228 simple
+   ; foreground commands, lush as make's SHELL -- the tier was SEVEN (4 cat, 3 sed)
+   ; against the 159 the list below already takes, and every one of the seven named a
+   ; file operand, so asking each tool "are these args safe in here?" would have
+   ; admitted all of them and bought 3%. ⚠ AND ON A HOST THE LANE IS NOT EVEN LIVE:
+   ; cook asks `sh-ours? SHELL` first, /bin/sh is dash, so every recipe line spawns.
+   ; The payoff is the DISTRO's, where /bin/sh IS us. Measure there, not here.
    sh-imgok '("mooncc" "cc"
               "test" "[" "true" "false" "echo" "printf" "uname" "pwd"
               "basename" "dirname" "readlink" "seq" "ls" "cmp" "diff"
@@ -242,7 +249,7 @@
            0))
    ; `ev EXPR..` -- the arguments join as ONE love form (the `eval` builtin's
    ; join), its answer says on out, and its TRUTH BIT is the status: positive is
-   ; true, so `ev 1 + 2` is a calculator and `if ev 3 > 2` is a test -- the one
+   ; true, so `ev 1 + 2` is a calculator and `if ev '3 > 2'` is a test -- the one
    ; thing ${( )} cannot do, since an expansion is a word and not a command. -n
    ; says nothing and answers the status alone (cli.l's -e/-n pair, same letters).
    ; the form runs in THIS image, so a binding it makes is still there next line.
