@@ -26,7 +26,7 @@ The file discipline, two shapes:
   cat member.
 * **a toolbox** (core.l, fs.l): many mains, NO seat — kore is its door.
 
-## the inventory (46 tools, 49 names)
+## the inventory (48 tools, 51 names)
 
 | where | tools |
 | --- | --- |
@@ -39,6 +39,8 @@ The file discipline, two shapes:
 | fs.l, the fs tools | ls cp mv rm mkdir rmdir ln touch pwd chmod install readlink cmp |
 | re.l, the matcher | grep (-n -v -c -l) over the lawed BRE engine |
 | sed.l, the editor | sed (-n; s///gp, d, p, q; number/$/regex/range addresses) |
+| awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
+| find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
 | proc.l, the processes | env sleep kill xargs |
 | crew/vi/ | vi |
 | crew/lush/ | sh / lush |
@@ -123,6 +125,56 @@ s/m/h/d suffixes (udur, lawed); kill sends -N or -NAME (default TERM) per pid, e
 whitespace-splits stdin (quote-blind, deliberately) onto the command's tail (echo by default),
 -n N a batch at a time, exits 0 / 123 (a run failed) / 127 (could not exec), running once even
 on empty input, all like GNU.
+
+## awk (crew/kore/awk.l)
+
+A POSIX awk: BEGIN/END, `pattern { action }` items, `expr, expr` ranges, fields with `$0`
+rebuilding on either side, the special variables (NR NF FS OFS ORS FILENAME FNR SUBSEP RSTART
+RLENGTH CONVFMT OFMT), arrays with `in` and `delete`, user functions whose array parameters
+pass **by reference**, and the builtins length substr index split sub gsub match sprintf sin
+cos atan2 exp log sqrt int rand srand tolower toupper system close. `-F`, `-v var=value`,
+`-f progfile` (repeatable) and command-line `var=value` between file arguments. Regexes are
+re.l's ERE dialect; the whole language is smoked byte-identical against gawk in `make
+test_kore`, the pure floor is lawed.
+
+Three pieces are worth knowing before reading it:
+
+* **the value is four-faced.** `()` uninitialised, a number, a string, and `('sn n s)` — a
+  STRNUM, the thing that came off input looking like a number. It must compare as a number and
+  print as the text it arrived in: `"007"` from a field is 7 to `==` and `007` to `print`. Two
+  numeric-ish values compare numerically, anything else as text, and that one rule is why the
+  field carries both faces rather than one.
+* **the numbers are ours.** `show` prints a double round-trip exact; awk owes `%.6g`. So
+  aw-fixed/aw-expo/aw-gen do the digits by hand off a normalised mantissa, and aw-sprintf is a
+  real printf (flags, width, precision, `d i o u x X c s e E f g G`). They round half away from
+  zero where C rounds half to even — a difference an exact decimal tie can reach and a computed
+  double essentially never does.
+* **`nil?` is a TRUTH test, not a type one.** It answers 1 for `0`, for `-4` and for `""` as
+  readily as for `()`. awk leans on the difference every line, so the empty question is asked by
+  identity (`aw-nil?` is `(id? v ())`) and never by truth. Getting this wrong prints `0` as `""`.
+
+Out of dialect, deliberately — each a rung, not an oversight: **getline** in every spelling
+(it is the one construct that makes the record loop re-entrant, and half a getline is worse
+than none); **output pipes** (`print | "cmd"` — plain `>` and `>>` to a file are here);
+**RS** other than newline; **ARGV/ARGC and ENVIRON** (the arguments are walked, not published);
+printf's `*` width and `#` flag.
+
+## find (crew/kore/find.l)
+
+`find [PATH..] [EXPR]`, PATH defaulting to `.`. Primaries `-name` `-path` (fnmatch, via lush's
+`sh-match`) `-type f|d|l` `-print` `-prune` `-exec CMD.. ;` `-true` `-false`, the global
+`-maxdepth`/`-mindepth`, and the operators `( )` `!`/`-not` `-a`/`-and` (implicit between two
+primaries) `-o`/`-or`, both short-circuiting, `-a` binding tighter. An expression naming no
+action gets `-print`, exactly as GNU does.
+
+* **the walk sorts each directory.** GNU hands out readdir order, which is the file system's
+  business and repeats for nobody — so `find | sort` on both sides is the only honest way to
+  smoke us against it, and that is what the gate does. Sorted is also what a build wants: the
+  same tree cuts the same image twice.
+* **symlinks are not followed** (GNU's `-P`, the default). The `stat` nif follows, so the type
+  read asks `readlink` FIRST — a link answers `l` whatever it points at, and the walk does not
+  descend through it. A dangling link is still visited.
+* it loads late in the cat because it captures `sh-match` at its define; crew/build.mk says so.
 
 ## not built
 

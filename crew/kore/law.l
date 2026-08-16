@@ -340,6 +340,65 @@
       (= (uwords "x") '("x"))
       !(uwords "  \n") !(uwords "")))
 
+; --- the find floor (crew/kore/find.l): the path join, the argument split and
+; the expression grammar. the walk itself is smoked against the system find ---
+(: (assert
+      (= (fi-join "a" "b") "a/b") (= (fi-join "a/" "b") "a/b") (= (fi-join "/" "b") "/b")
+      ; the paths run out at the first flag, bracket or bang
+      (= (fi-paths '("a" "b" "-name" "x") ()) ['("a" "b") '("-name" "x")])
+      (= (fi-paths '("-type" "f") ()) [() '("-type" "f")])
+      (= (fi-paths '("a") ()) ['("a") ()])
+      (= (fi-paths '("a" "!" "-type" "d") ()) ['("a") '("!" "-type" "d")])
+      ; the depths come OUT of the word list wherever they sat
+      (= (fi-depths '("-maxdepth" "2" "-print") 99 0 ()) ['("-print") 2 0])
+      (= (fi-depths '("-print" "-mindepth" "1") 99 0 ()) ['("-print") 99 1])
+      ; -a is implicit, and binds tighter than -o
+      (= (fi-or '("-name" "a" "-o" "-name" "b" "-type" "f"))
+         [['or ['name "a"] ['and ['name "b"] ['type "f"]]] ()])
+      (= (fi-or '("!" "-type" "d")) [['not ['type "d"]] ()])
+      (= (fi-or '("(" "-name" "a" "-o" "-name" "b" ")" "-print"))
+         [['and ['or ['name "a"] ['name "b"]] ['print]] ()])
+      (= (fi-or '("-exec" "echo" "{}" ";")) [['exec '("echo" "{}")] ()])
+      !(fi-or '("-name"))                                ; a primary with no argument
+      !(fi-or '("(" "-print"))                           ; a bracket that never closes
+      !(fi-or '("-exec" "echo"))                         ; an -exec with no ;
+      ; only -print and -exec ACT; anything else earns the added -print
+      (fi-acts? ['print]) (fi-acts? ['and ['name "a"] ['print]])
+      !(fi-acts? ['and ['name "a"] ['type "f"]]) !(fi-acts? ['prune])))
+
+; --- the awk floor (crew/kore/awk.l): the number faces C's printf owes, the
+; strnum question, and the grammar's shapes. the language is smoked against gawk ---
+(: (assert
+      ; %f %e %g by hand -- `show` spells a double round-trip exact, awk owes %.6g
+      (= (aw-fixed 3.14159 2) "3.14") (= (aw-fixed -1.005 2) "-1.00")
+      (= (aw-fixed 2.5 0) "3")                 ; ⚠ half away from zero; C says "2"
+      (= (aw-expo 1234.5 3) "1.235e+03") (= (aw-expo 0.000123 2) "1.23e-04")
+      (= (aw-gen (/ 1 3) 6) "0.333333") (= (aw-gen 100000 6) "100000")
+      (= (aw-gen 1000000 6) "1e+06") (= (aw-gen 0.0001 6) "0.0001")
+      (= (aw-gen 0.00001 6) "1e-05") (= (aw-gen 0 6) "0")
+      (= (aw-numstr 42 "%.6g") "42") (= (aw-numstr 3.5 "%.6g") "3.5")
+      (= (aw-sprintf "%d|%5.2f|%-4s|%x" (list 42 3.14159 "ab" 255) "%.6g") "42| 3.14|ab  |ff")
+      (= (aw-sprintf "%05d|%+d|%c" (list 42 7 65) "%.6g") "00042|+7|A")
+      ; the strnum question is asked of the WHOLE text, blanks aside
+      (aw-looks-num? " 12.5 ") (aw-looks-num? "-3") (aw-looks-num? "1e3")
+      !(aw-looks-num? "12a") !(aw-looks-num? "") !(aw-looks-num? "e3") !(aw-looks-num? "1e")
+      (= (aw-s2n "  12.5xyz") 12.5) (= (aw-s2n "1e3") 1000) (= (aw-s2n "abc") 0)
+      ; substr clamps its start and does NOT dock the length for it -- gnu's reading
+      (= (aw-substr "hello" 2 3 1) "ell") (= (aw-substr "hello" 0 3 1) "hel")
+      (= (aw-substr "hello" 4 0 0) "lo") (= (aw-substr "hello" 2 -1 1) "")
+      (= (aw-index "hello" "ll") 3) (= (aw-index "hello" "z") 0)
+      (= (aw-repl "[&]" "b") "[b]") (= (aw-repl "\\&" "b") "&")
+      (aw-slt "ab" "b") !(aw-slt "b" "ab") !(aw-slt "a" "a") (aw-slt "a" "ab")
+      ; ⚠ the lexer's one context: / after a VALUE divides, / anywhere else opens a regex
+      (= (aw-lex "a/b") '((name "a") (op "/") (name "b") (eof "")))
+      (= (aw-lex "/a/") '((ere "a") (eof "")))
+      (= (aw-lex "f(") '((fname "f") (op "(") (eof "")))       ; a glued ( makes a call
+      ; and the shapes the parser owes the evaluator
+      (= (aw-program (aw-lex "{print}") (tablet 0) ()) '((item () ((print () ())))))
+      (= (aw-program (aw-lex "BEGIN{x=1}") (tablet 0) ())
+         '((begin ((expr (assign "=" (var "x") (num 1)))))))
+      (= (aw-program (aw-lex "/a/,/b/{}") (tablet 0) ()) '((range (ere "a") (ere "b") ())))))
+
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/kore/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
+(say err "crew/kore/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find and awk floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
 ")

@@ -32,11 +32,13 @@ pipe() { n=$1; i=$2; shift 2
          same "$n"; }
 
 # ------------------------------------------------------------------- the laws
-echo "UTILS crew/kore/{text,core,fs,re,sed,diff,law}.l"
+echo "UTILS crew/kore/{text,core,fs,re,sed,awk,find,diff,law}.l"
 out=$ho/.test_kore.out
+# ⚠ lush's job.l + glob.l ride along because find.l captures sh-match at its define
 cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
-    crew/kore/sed.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l \
-    crew/vi/vi.l crew/kore/diff.l \
+    crew/kore/sed.l crew/kore/awk.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
+    crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/lush/job.l crew/lush/glob.l \
+    crew/kore/find.l \
     crew/kore/law.l | "$m" > "$out" 2>&1
 r=$?
 cat "$out"
@@ -397,6 +399,108 @@ ln -sf kore "$ho/sh"
 "$ho/sh" -c 'echo via-symlink' > "$o" 2>&1; r=$?
 [ $r -eq 0 ] && [ "$(cat "$o")" = "via-symlink" ] || fail "kore sh symlink (exit $r)"
 echo "kore: sh (lush aboard -- kore sh + the argv0 symlink) ok"
+
+# ------------------------------------------------------------------ awk
+# gawk is the oracle and every check is byte-identical stdout. the input is a
+# small table so fields, numbers and text all have something to bite on.
+awkin=$ho/.kore-awkin
+printf 'alice 30 engineer\nbob 25 baker\ncarol 41 engineer\n' > "$awkin"
+aw() { n=$1; shift
+       awk "$@" < "$awkin" > "$g" 2>/dev/null
+       korerun awk "$@" < "$awkin" > "$o" 2>/dev/null
+       same "awk $n"; }
+aw fields   '{print $1, $3}'
+aw nr-nf    '{print NR, NF, $NF}'
+aw arith    'BEGIN{print 1+2, 7/2, 7%3, 2^10, -2^2, int(-3.7)}'
+aw concat   'BEGIN{x="a"; y=1; print x y 2}'
+aw numfmt   'BEGIN{print 1/3, 1e20, 0.00001, 100000, 3.0}'
+aw strnum   '{if ($2 > 30) print $1}'
+aw regex    '/engineer/{print $1}'
+aw match    '{if ($0 ~ /^b/) print "b:" NR}'
+aw rebuild  'BEGIN{OFS="-"}{$1=$1; print}'
+aw setfield '{$2="X"; print}'
+aw nf-set   '{NF=2; print; print NF}'
+aw fs       -F' ' '{print NF}'
+aw substr   'BEGIN{print substr("hello",2,3), substr("hello",0,3), substr("hello",4)}'
+aw strfns   'BEGIN{print index("hello","ll"), length("hello"), toupper("aBc"), tolower("aBc")}'
+aw split    'BEGIN{n=split("a:b:c",A,":"); print n, A[1], A[3]}'
+aw gsub     '{n=gsub(/e/,"3"); print n, $0}'
+aw subamp   'BEGIN{s="abc"; sub(/b/,"[&]",s); print s}'
+aw matchfn  'BEGIN{print match("hello","l+"), RSTART, RLENGTH}'
+aw printf   'BEGIN{printf "%s|%d|%5.2f|%-4s|%05d|%+d|%e|%g|%c|%x\n","a",42,3.14159,"b",42,7,1234.5,0.0000123,65,255}'
+aw bignum   'BEGIN{print 1e20, 1e23, 2^60; printf "%d|%.0f\n", 1e20, 1e20}'
+aw math     'BEGIN{printf "%.6f %.6f %.6f %.6f %.6f\n", atan2(1,1), atan2(1,-1), sin(1), cos(1), exp(2)}'
+aw arrays   'BEGIN{a["x"]=1; a["y"]=2; n=0; for(k in a) n++; print n, ("x" in a), ("z" in a)}'
+aw delete   'BEGIN{a[1]=1;a[2]=2; delete a[1]; print (1 in a), (2 in a), length(a)}'
+aw subsep   'BEGIN{a[1,2]=5; print ((1,2) in a), ((1,3) in a)}'
+aw loops    'BEGIN{for(i=0;i<6;i++){if(i==2)continue; if(i==4)break; printf "%d",i}; print ""}'
+aw doloop   'BEGIN{i=0; do{printf "%d",i;i++}while(i<3); print ""}'
+aw func     'function f(a,b){return a+b} BEGIN{print f(2,3)}'
+aw funcarr  'function g(arr){arr["k"]=9} BEGIN{g(A); print A["k"]}'
+aw funcloc  'function h(n,  i,s){for(i=1;i<=n;i++)s=s i; return s} BEGIN{print h(4)}'
+aw recurse  'function fac(n){return n<=1?1:n*fac(n-1)} BEGIN{print fac(6)}'
+aw next     '{if(NR==1) next; print "kept", $1}'
+aw range    '/alice/,/bob/{print "R:" NR}'
+aw uninit   'BEGIN{print x+0, "["x"]", length(x), !x}'
+aw ofmt     'BEGIN{OFMT="%.2f"; print 3.14159, 3}'
+aw convfmt  'BEGIN{CONVFMT="%.2g"; x=3.14159; print (x "")}'
+aw vflag    -v x=7 'BEGIN{print x, x+1}'
+aw dynre    'BEGIN{r="^b"; if("bob" ~ r) print "dyn-ok"}'
+aw endonly  'END{print NR, $0}'
+# the exit code is awk's own, and exit outside END still runs the END rules
+korerun awk '{exit 3} END{print "end ran"}' < "$awkin" > "$o" 2>/dev/null; r=$?
+[ $r -eq 3 ] && [ "$(cat "$o")" = "end ran" ] || fail "kore awk exit (exit $r): $(cat "$o")"
+# a bad program is a diagnosed refusal, not a crash and not silence
+korerun awk 'BEGIN{' < /dev/null > "$o" 2>"$g"; r=$?
+[ $r -eq 2 ] && [ -s "$g" ] || fail "kore awk syntax error (exit $r)"
+# -f takes the program off a file, and several concatenate
+printf 'BEGIN{x=1}\n' > "$ho/.kore-awk1"; printf 'BEGIN{print x+1}\n' > "$ho/.kore-awk2"
+awk -f "$ho/.kore-awk1" -f "$ho/.kore-awk2" < "$awkin" > "$g" 2>/dev/null
+korerun awk -f "$ho/.kore-awk1" -f "$ho/.kore-awk2" < "$awkin" > "$o" 2>/dev/null
+same "awk -f"
+echo "kore: awk (41 checks byte-identical to gawk, the exit code, -f, the refusal) ok"
+
+# ------------------------------------------------------------------ find
+# ⚠ THE ORDER IS SORTED ON BOTH SIDES. find hands out readdir order, which is the
+# file system's business and repeats for nobody; ours sorts each directory on
+# purpose (a build wants the same tree to cut the same image twice), so the only
+# honest comparison is of the SETS. everything else here is byte-identical.
+ft=$ho/.kore-ftree
+rm -rf "$ft"; mkdir -p "$ft/a/b" "$ft/c"
+: > "$ft/f1.txt"; : > "$ft/a/f2.txt"; : > "$ft/a/b/f3.log"; : > "$ft/c/f4.txt"
+ln -sf f1.txt "$ft/link1"
+fd() { n=$1; shift
+       find "$@" 2>/dev/null | LC_ALL=C sort > "$g"
+       korerun find "$@" 2>/dev/null | LC_ALL=C sort > "$o"
+       same "find $n"; }
+fd plain     "$ft"
+fd name      "$ft" -name '*.txt'
+fd nameq     "$ft" -name 'f?.txt'
+fd typef     "$ft" -type f
+fd typed     "$ft" -type d
+fd typel     "$ft" -type l
+fd not       "$ft" '!' -type d
+fd and       "$ft" -type f -name '*.txt'
+fd or        "$ft" -name '*.log' -o -name '*.txt'
+fd parens    "$ft" '(' -name '*.log' -o -name link1 ')'
+fd maxdepth0 "$ft" -maxdepth 0
+fd maxdepth1 "$ft" -maxdepth 1
+fd mindepth2 "$ft" -mindepth 2
+fd path      "$ft" -path '*/a/*'
+fd prune     "$ft" -path '*/a' -prune -o -print
+fd twopaths  "$ft/a" "$ft/c"
+fd explicit  "$ft" -name '*.txt' -print
+fd notname   "$ft" '!' -name '*.txt'
+# -exec runs the command once per name; the output is ours to compare directly
+korerun find "$ft" -name '*.log' -exec echo FOUND '{}' ';' > "$o" 2>/dev/null
+[ "$(cat "$o")" = "FOUND $ft/a/b/f3.log" ] || fail "kore find -exec: $(cat "$o")"
+# a path that is not there complains and the code remembers; the others still walk
+korerun find "$ft/nope" "$ft/c" > "$o" 2>"$g"; r=$?
+[ $r -eq 1 ] && [ -s "$g" ] && grep -q 'f4.txt' "$o" || fail "kore find missing path (exit $r)"
+# a malformed expression is a refusal, not a walk
+korerun find "$ft" -name > /dev/null 2>&1; r=$?
+[ $r -eq 1 ] || fail "kore find bad expression (exit $r)"
+echo "kore: find (18 walks set-identical to the system find, -exec, the two refusals) ok"
 
 # ------------------------------------------------------- the status charm
 # every main ANSWERS its status (crew/kore/core.l's urun) instead of quitting, so

@@ -13,6 +13,8 @@
 ;   kore ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (crew/kore/fs.l)
 ;   kore grep [-nvclqhaixwFEo] [-e P] [-m N] PATTERN [F..]   BRE/ERE (crew/kore/re.l)
 ;   kore sed [-nEi] [-e SCRIPT].. SCRIPT [F..]   the stream editor (crew/kore/sed.l)
+;   kore awk [-F FS] [-v v=x].. 'PROG' [F..]     the language (crew/kore/awk.l)
+;   kore find [PATH..] [EXPR]                    the tree walk (crew/kore/find.l)
 ;   kore env|sleep|kill|xargs        the process tools (crew/kore/proc.l)
 ;   kore vi [FILE]                   the editor (crew/vi/)
 ;   kore sh [-c CMD | FILE]          the shell, lush (crew/lush/; also `lush`, and an sh symlink)
@@ -242,6 +244,7 @@
              'install install-main 'readlink readlink-main
              'cmp cmp-main
              'grep grep-main 'sed sed-main
+             'awk awk-main 'find find-main
              'vi vi-main
              'env env-main 'sleep sleep-main
              'kill kill-main 'xargs xargs-main
@@ -265,6 +268,10 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   cut tr nl rev                           the field tools
   grep [-nvclqhaixwFEo] [-e P] [-m N] PAT [F..]   BRE, or ERE under -E (crew/kore/re.l)
   sed [-nEi] [-e SCRIPT].. SCRIPT [F..]   the stream editor (s///gp, d, p, q, addresses)
+  awk [-F FS] [-v var=val].. 'PROG' [F..]  patterns and actions over records
+  awk [-F FS] -f PROGFILE.. [F..]          ... the program off a file instead
+  find [PATH..] [EXPR]   -name -path -type f|d|l -print -prune -exec CMD.. \\;
+                         ( ) ! -a -o -maxdepth N -mindepth N   (PATH defaults to .)
   env sleep kill xargs                    the process tools (crew/kore/proc.l)
   vi [FILE]                               the editor (crew/vi/)
   sh [-c CMD | FILE]                      the shell, lush (crew/lush/)

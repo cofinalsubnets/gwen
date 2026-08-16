@@ -16,7 +16,7 @@ distro_img   = $(distro_dir)/initramfs.cpio.gz
 # what an initramfs wants carried into RAM. `make test_raw` lays it.
 distro_love    = $(wildcard out/host/love-raw)
 # kore applets to expose as argv[0] symlinks (kore dispatches on the basename).
-distro_applets = ls cat head tail wc sort uniq grep sed cut tr nl rev cp mv rm \
+distro_applets = ls cat head tail wc sort uniq grep sed awk find cut tr nl rev cp mv rm \
                  mkdir rmdir ln touch pwd chmod basename dirname seq yes true \
                  false env sleep kill xargs diff
 
