@@ -70,8 +70,10 @@
        ;   2 ws  4 dig  8 idh  16 idc  32 hexd  64 suf  128 punct1
        (cbit c) ((c = 32 || c = 9 || c = 13 || c = 12 || c = 11 ? 2 0) +
                  (48 <= c <= 57 ? 4 0) +
-                 (97 <= c <= 122 || 65 <= c <= 90 || c = 95 ? 8 0) +
-                 (48 <= c <= 57 || 97 <= c <= 122 || 65 <= c <= 90 || c = 95 ? 16 0) +
+                 ; ⚠ a byte past 127 is an identifier char (a utf-8 `Å` is two of them, C11
+                 ; 6.4.2.1's extended set); a stray one outside a literal now interns, not scares
+                 (97 <= c <= 122 || 65 <= c <= 90 || c = 95 || 128 <= c ? 8 0) +
+                 (48 <= c <= 57 || 97 <= c <= 122 || 65 <= c <= 90 || c = 95 || 128 <= c ? 16 0) +
                  (48 <= c <= 57 || 97 <= c <= 102 || 65 <= c <= 70 ? 32 0) +
                  (c = 117 || c = 85 || c = 108 || c = 76 ? 64 0) +
                  (member? c '(40 41 91 93 123 125 59 44 46 58 63 126 33 43 45 42 47 37 60 62 61 38 124 94 35) ? 128 0))
@@ -111,6 +113,7 @@
             (? (hasll? i j) 'llnum
                (!dec && !(hasl? i j) && (2147483648 <= v) && (v <= 4294967295)) 'unum
                (9223372036854775808 <= v <= 18446744073709551615) 'ulnum
+               (hasl? i j) 'lnum                                 ; 1L is a LONG, not an int that fits
                'num)
            (hasll? i j) 'ullnum
            (hasl? i j || (4294967296 <= v)) 'ulnum
@@ -121,6 +124,7 @@
        ; gcc 13 refuses it where newer ones take C23's relaxation.
        (ucnok? v) ?((v = 36) || (v = 64) || (v = 96) ||
                     (160 <= v <= 1114111 && !(55296 <= v <= 57343)))
+       (ucn? k) ((k < n) && (src k = 92) && ((k + 1) < n) && ((src (k + 1) = 117) || (src (k + 1) = 85)))
        (escv d) (? (d = 110) 10 (d = 116) 9 (d = 114) 13 (d = 97) 7 (d = 98) 8            ; \n \t \r \a \b
                    (d = 102) 12 (d = 118) 11 (d = 48) 0 (d = 92) 92                       ; \f \v \0 backslash
                    (d = 34) 34 (d = 39) 39 (d = 63) 63 (d = 101) 27 ())                   ; \" \' \? \e
@@ -371,11 +375,27 @@
                            cps (? (two? r) (utf8dec <r) ())
                            (lastc l) (? (two? >l) (lastc >l) <l)
                            (? (two? cps) (go <>r line (['num (lastc cps) line () (snip src i <>r)] >< acc)) ()))))
-                 (idh? c) (: (idr j) (? ((j < n) && idc? (src j)) (idr (j + 1)) j)
-                             j (idr i)
-                             t (snip src i j)
-                             s (intern t)
-                             (go j line ((? (peep kwt s ()) ['kw s line] ['id t line]) >< acc)))
+                 ; an identifier may be spelled with UCNs (C99 6.4.2.1). a UCN names a CODE
+                 ; POINT, so `Å` must intern as the utf-8 `Å` does -- one name, built by
+                 ; the escape lane where the plain run is a snip. a malformed one lex-errors.
+                 ((idh? c) || (ucn? i))
+                  (: (idr j) (? ((j < n) && idc? (src j)) (idr (j + 1))
+                                (ucn? j) (: r (escseq (j + 1)) (? (two? r) (idr <>r) j))
+                                j)
+                     j0 (idr i)
+                     (esc? k) (? (j0 <= k) () (src k = 92) 1 (esc? (k + 1)))
+                     (? (j0 <= i) ()
+                        (: t (? (esc? i)
+                                (: sink (jug 0)
+                                   (bld k) (? (j0 <= k) (slurp sink)
+                                              (ucn? k) (: r (escseq (k + 1))
+                                                          _ (utf8put sink <r)
+                                                          (bld <>r))
+                                              (: _ (put sink (src k)) (bld (k + 1))))
+                                   (bld i))
+                                (snip src i j0))
+                           s (intern t)
+                           (go j0 line ((? (peep kwt s ()) ['kw s line] ['id t line]) >< acc)))))
                  (: hit (firstat i (peep pmap c ()))
                     (? hit (go (i + tally hit) line (['p hit line] >< acc))
                        (in1? c)                        ; a '(' GLUED to a preceding id (no space) carries a 4th field: the function-macro paren

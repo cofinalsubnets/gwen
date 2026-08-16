@@ -4,10 +4,14 @@
  * one byte E4. The lexer already re-encoded escapes for the wide faces; the narrow
  * one had to learn it, so escseq reports whether the escape was a UCN.
  *
- * ⚠ a UCN in an IDENTIFIER still refuses -- loudly, and it is the remaining half.
+ * An IDENTIFIER may be spelled with one too (6.4.2.1), and names the same object the
+ * raw utf-8 spelling does -- down to the bytes of the symbol the .o exports.
  */
 char narrow[] = "\u00E4";
 char emoji[]  = "\U0001F600";
+
+int \u00C5 = 3;
+static int f\u00E4(int x) { return x + \u00C5; }   /* the escape and the utf-8 are one name */
 
 int main(void)
 {
@@ -33,6 +37,10 @@ int main(void)
        forbids a UCN naming a basic-set character, and gcc 13 refuses it outright. */
     if (sizeof("\u00E4" "BC") != 5) return 13;
     if ((unsigned char)("\u00E4" "BC")[2] != 'B') return 14;
+
+    /* an identifier spelled with a UCN IS the one spelled in raw utf-8 */
+    if (fä(1) != 4) return 15;
+    if (Å != 3) return 16;
 
     return 0;
 }
