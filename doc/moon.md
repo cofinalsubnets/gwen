@@ -470,9 +470,9 @@ never a bare `mooncc`, until `make install` refreshes the PATH binary.
   220 single-file programs, each held to the stdout it ships. Every `test/cc` file was written
   here to pin a fault we had already met, so the battery says what we already know; these were
   written by people compiling other compilers, and their first run found **nine** programs
-  mooncc built clean and answered wrong. Those nine landed; **one** row is on the wrong-answer
-  roster today (00219, `_Generic` over a qualifier). The rest is refusals, rostered with a
-  cause apiece in `test/gate/cts.sh`, kept apart from wrong answers. ⚠ the roster is double-
+  mooncc built clean and answered wrong. All nine landed, 00219 (`_Generic` over a qualifier)
+  last, so the wrong-answer roster is **empty** on all three targets and the rest is refusals,
+  rostered with a cause apiece in `test/gate/cts.sh` and kept apart. ⚠ the roster is double-
   edged only when it is READ: five of its lines had gone stale by 2026-08-16 — four already
   fixed, and 00219 filed as a refusal when the truth was a live miscompile, which is what
   a gate nobody runs without an opt-in corpus buys you.

@@ -346,6 +346,10 @@
                 _ (pin t 'aligns {})        ; global name -> its __attribute__((aligned(N))) boundary
                 _ (pin t 'locals {})        ; local/param name -> its declared type (for parse-time sizeof folding)
                 _ (pin t 'globals {})       ; file-scope name -> ty, so sizeof over a GLOBAL settles at parse too
+                _ (pin t 'qtys {})          ; the same names -> the QUALIFIER-marked type, _Generic's alone (see qmark)
+                _ (pin t 'qstage {})        ; ..staged by the declarator parse, consumed by the bind that follows
+                _ (pin t 'qtdef {})         ; typedef name -> the const/volatile mask its own leaf wears
+                _ (pin t 'qmem {})          ; "tag.member" -> the same mask, which playout has no slot for
                 ; gcc's builtin va_list, seeded so `typedef __builtin_va_list va_list;`
                 ; (musl's alltypes.h) parses: the SAME per-target tag stdarg.h lays --
                 ; gen bakes the va offsets, so only size/align/decay ride the type here
@@ -666,10 +670,12 @@
                       (? !(two? bw) ()
                          (: rest (want <>bw ";")
                             (? (two? rest) (pmembers ps rest ([() bty <bw] >< acc)) ()))))
-                   (: (dfin mem2 toks acc2)          ; after a declarator (+ optional bitfield): , or ;
-                       (? (peekp toks ",") (dts >toks (mem2 >< acc2))
-                          (: rest (want toks ";")
-                             (? (two? rest) [(mem2 >< acc2) rest] ())))
+                   (: mq (qspec ps ts bty)   ; _Generic's mask for this run; playout has no slot for it
+                      (dfin mem2 toks acc2)          ; after a declarator (+ optional bitfield): , or ;
+                       (: _ (? (<mem2 && mq) (pin ps 'qmemacc ([<mem2 mq] >< peep ps 'qmemacc ())) 0)
+                          (? (peekp toks ",") (dts >toks (mem2 >< acc2))
+                             (: rest (want toks ";")
+                                (? (two? rest) [(mem2 >< acc2) rest] ()))))
                       (dts ts3 acc2)                 ; dtor [: width] (, dtor [: width])* ;
                        (: dr (pdtor ps ts3 bty)
                           (? !(two? dr) ()
@@ -786,12 +792,14 @@
                  ts3 (? tag >ts2 ts2)
                  (? (peekp ts3 "{")
                     (: tag2 (? tag tag (panon ps))
+                       qpre (peep ps 'qmemacc ())    ; _Generic's member marks stack with the bodies
                        mr (pmembers ps >ts3 ())
                        (? !(two? mr) ()
                           (: pa (pattpk <>mr)          ; a trailing __attribute__((packed)) lays align-1
                              lay (playout ps <mr uni (<pb | <pa))
                              _ (pin (ps 'stag) tag2 lay)
                              _ (? uni (pin (ps 'utag) tag2 1) 0)
+                             _ (qmempin ps tag2 qpre)
                              [['struct tag2] <>pa])))
                     (? tag [['struct tag] ts3] ())))
              (tkw? t 'enum)
@@ -851,23 +859,129 @@
              (? (two? dr) [<><dr <>dr] ()))))
 
    (pdecay ty) (? (arr? ty) ['ptr <>ty] (fn? ty) ['ptr ty] ty)   ; _Generic's lvalue conversion
+   ; -- the qualifiers _Generic needs, and why they live off to one side. 6.5.1.1
+   ; matches on COMPATIBLE types, where `const char *` and `char *` are two; a type
+   ; here has never carried const/volatile, because a qualifier node would reach all
+   ; 56 of gen's ptr dispatch sites. So the one consumer that must tell them apart
+   ; keeps its own MARKED copy -- ('cq q t) over the leaf, q a mask of 1=const
+   ; 2=volatile -- parked in ps 'qtys beside 'locals and shadowed with it. Nothing
+   ; else reads a marked type.
+   ; ⚠ only the SPECIFIER run's qualifier is seen: a mid-declarator one (`char *
+   ; const *p`) reads unqualified, which matches MORE than C does, never less.
+   (cq? ('cq)) 1
+   (qmark q ty) (? !q ty
+                   (ptr? ty) ['ptr (qmark q <>ty)]
+                   (arr? ty) ['arr (qmark q <>ty) <>>ty]
+                   ['cq q ty])
+   (qstrip ty) (? (cq? ty) (qstrip <>>ty)
+                  (ptr? ty) ['ptr (qstrip <>ty)]
+                  (arr? ty) ['arr (qstrip <>ty) <>>ty]
+                  ty)
+   (qbare ty) (? (cq? ty) <>>ty ty)         ; lvalue conversion drops the TOP-level qualifier
+   ; one token's const/volatile bit. restrict is not in it -- that qualifies aliasing,
+   ; not the type's identity, and rides (ps 'rstrs) out of band.
+   (cvq t) (? ((tkk t = 'kw) && (tkv t = 'const)) 1
+              ((tkk t = 'id) && (tkv t = "__const")) 1
+              ((tkk t = 'kw) && (tkv t = 'volatile)) 2
+              ((tkk t = 'id) && member? (tkv t) '("__volatile__" "__volatile")) 2
+              0)
+   ; the SPECIFIER run read twice over: its own const/volatile, and what a typedef
+   ; NAME in it brought with it (`typedef const char *ccp`). -> (own typedef's).
+   ; ⚠ walks the run, never a token count -- a span taken by tally is O(the rest of
+   ; the stream) and this runs once per declaration.
+   ; ⚠ sawty ends the walk at the DECLARATOR'S NAME: once a type specifier has gone
+   ; by, the next id is the name, and reading it costs a 12-string scan plus a hash
+   ; lookup on every declaration in the TU for an answer that is always 0.
+   (qrun ps ts)
+    (: (go l sawty)
+        (? !(two? l) [0 0]
+           (: t <l
+              (? ((tkk t = 'kw) && (member? (tkv t) qualkw || member? (tkv t) tyspec))
+                  (: r (go >l (sawty || member? (tkv t) tyspec)) [(<r | cvq t) <>r])
+                 !(tkk t = 'id) [0 0]
+                 sawty [0 0]
+                 (member? (tkv t) qualid)
+                  (: r2 >l (go (? (peekp r2 "(") (skipbal >r2 1) r2) sawty))
+                 (: q (peep (ps 'qtdef) (tkv t) 0)
+                    r (go >l 1)
+                    [<r (<>r | q)]))))
+       (go ts ()))
+   ; a qualifier AFTER the last star qualifies the POINTER -- `int * const`, a type
+   ; no lvalue-converted controlling expression can be compatible with, so the row
+   ; is unreachable. stops at anything that is not a star or a qualifier, so the
+   ; shapes behind a `(` or a `[` are not this rung's.
+   (qtop? ts)
+    (: (go l q) (? !(two? l) q
+                   (tp? <l "*") (go >l ())
+                   (0 < cvq <l) (go >l 1)
+                   ((tkk <l = 'kw) && member? (tkv <l) qualkw) (go >l q)
+                   ((tkk <l = 'id) && member? (tkv <l) qualid) (go >l q)
+                   q)
+       (go ts ()))
+   ; the mask a specifier run lays on the LEAF of the type it names -- its own
+   ; const/volatile plus whatever its typedef already carried. ⚠ over a POINTER
+   ; typedef the run's own does not reach the leaf: `typedef char *cp; const cp x`
+   ; is a const POINTER, where over an array typedef C qualifies the elements.
+   (qspec ps ts base) (: r (qrun ps ts) (? (ptr? base) <>r (<r | <>r)))
+   ; drain the marks pmembers staged for ONE body -- the run since qpre -- onto its
+   ; tag, and restore the stage for whatever body encloses it.
+   (qmempin ps tag qpre)
+    (: now (peep ps 'qmemacc ())
+       (go l k) (? (k < 1) 0
+                   (: _ (pin (ps 'qmem) (tag + "." + <<l) <><l) (go >l (k - 1))))
+       _ (go now (tally now - tally qpre))
+       (pin ps 'qmemacc qpre))
+   ; a type-name for an association: pcty's answer MARKED, plus that top-level bit.
+   ; -> (ty topq rest) | ()
+   (pcqty ps ts)
+    (: br (pbty ps ts)
+       (? !(two? br) ()
+          (: dts <>br
+             bq (qspec ps ts <br)
+             dr (pdtor ps dts <br)
+             (? !(two? dr) ()
+                (: ty <><dr
+                   [(qmark bq ty) (qtop? dts) <>dr])))))
+   ; the controlling expression's marked type. Everything not on file falls back to
+   ; ptype -- an unqualified answer, which is what every arm here said before.
+   (qtype ps e)
+    (: p (ptype ps e)
+       (? !(two? e) p
+          (: k <e
+             (? (k = 'var) (: q (peep (ps 'qtys) <>e 'none) (? (id? q 'none) p q))
+                (k = 'deref) (: it (qtype ps <>e) (? (ptr? it || arr? it) <>it p))
+                (k = 'addr) (: it (qtype ps <>e) (? it ['ptr it] p))
+                (k = 'dot) (: bt (qtype ps <>e)
+                              (? !(stru? (qstrip bt)) p
+                                 (qmark (peep (ps 'qmem) (<>(qstrip bt) + "." + <>>e) 0) p)))
+                p))))
+   ; ..and a CAST is the one shape whose mark is on file nowhere: the ('cast ty ..)
+   ; node keeps the bare type and gen reads that slot, so re-read the type-name off
+   ; the tokens instead, taking the answer only when it strips back to what the node kept.
+   (qctl ps ts e)
+    (: p (qtype ps e)
+       (? !(two? e && (<e = 'cast)) p
+          !(peekp ts "(" && tkbty? ps <(pquals >ts)) p
+          (: cr (pcqty ps >ts)
+             (? (two? cr && (qstrip <cr = p)) <cr p))))
    ; _Generic's associations: `type-name : expr` rows, `default` wearing 'dflt.
-   ; -> (rows rest) | ()
+   ; a row is (ty topq expr). -> (rows rest) | ()
    (pgarms ps ts)
-    (: tr (? (tkw? <ts 'default) ['dflt >ts] (pcty ps ts))
-       rk (? (two? tr) (want <>tr ":") ())
+    (: tr (? (tkw? <ts 'default) ['dflt () >ts] (pcqty ps ts))
+       rk (? (two? tr) (want <>>tr ":") ())
        er (? (two? rk) (pasn ps rk) ())
        (? !(two? er) ()
-          (: r <>er row [<tr <er]
+          (: r <>er row [<tr <>tr <er]
              (? !(peekp r ",") [[row] r]
                 (: more (pgarms ps >r)
                    (? (two? more) [(row >< <more) <>more] ()))))))
-   ; the selected expression, presence-wrapped. ⚠ equality is STRUCTURAL over the
-   ; resolved type, so a `const int:`/`int:` pair reads as one row -- cc drops quals.
+   ; the selected expression, presence-wrapped. equality is STRUCTURAL over the
+   ; marked type, so `const int *` and `int *` are two rows; a top-level-qualified
+   ; row matches nothing.
    (gpick rows ty)
     (: (go l w) (? !(two? l) w                       ; w carries the default: one pass settles it
-                   (: t <<l e <><l
-                      (? (t = ty) [1 e] (go >l (? (t = 'dflt) [1 e] w)))))
+                   (: r <l t <r q <>r e <>>r
+                      (? (!q && (t = ty)) [1 e] (go >l (? (t = 'dflt) [1 e] w)))))
        (go rows ()))
 
    ; complex usual-arithmetic conversion (C99 6.3.1.8): exactly one side
@@ -950,7 +1064,7 @@
                  r2 (? (two? rc) (want <>rc ",") ())
                  ga (? (two? r2) (pgarms ps r2) ())
                  rest (? (two? ga) (want <>ga ")") ())
-                 hit (? (two? rest) (gpick <ga (pdecay (ptype ps <rc))) ())
+                 hit (? (two? rest) (gpick <ga (qbare (pdecay (qctl ps r1 <rc)))) ())
                  (? (two? hit) [<>hit rest] ()))
              ; the varargs builtins (my stdarg.h maps va_* onto these): va_arg's
              ; second operand is a TYPE, so they can't ride the ordinary call path
@@ -1432,6 +1546,7 @@
        stat (leadstatic? ts)                          ; block-scope `static` -> ('sdecl ..), laid in .bss
        (? !(two? br) ()
           (: base <br ts0 <>br
+             bq (qspec ps ts base)   ; the run's const/volatile -- _Generic's, staged below
              (? (peekp ts0 ";") [['decl ()] >ts0]   ; a bare definition (struct S {..};)
                 (: (one ts2)
                     (: dr (pdtor ps ts2 base)
@@ -1445,6 +1560,9 @@
                                       _ (pin ps 'vlan (ix + 1))
                                       (ty0 + [ix])))
                              ts3 <>dr
+                             ; stage the marked type for the bind that follows; bindloc
+                             ; consumes it, so a mark cannot outlive its declaration
+                             _ (? bq (pin (ps 'qstage) name (qmark bq ty)) 0)
                              ; a block-scope function DECLARATION (`int f1(char *);` inside
                              ; a body) declares an EXTERN function -- no storage, no local
                              ; slot. its sig joins the table, which is also what makes the
@@ -1707,25 +1825,36 @@
    ; record a local/param name -> type into ps 'locals, saving the old binding
    ; ('none if fresh) on the block's shadow list so unshadow restores C scope.
    ; ent is (name ty ..) -- a decl entry (name ty ini) or a param (name ty).
+   ; ⚠ 'qtys shadows alongside, and takes the staged mark only when it strips back to
+   ; the type actually bound -- a stage left unconsumed by some other lane cannot then
+   ; qualify a name it never described.
    (bindloc ps ent shadows) (: nm <ent
                                 old (peep (ps 'locals) nm 'none)
+                                oq (peep (ps 'qtys) nm 'none)
+                                nq (peep (ps 'qstage) nm 'none)
+                                st !(id? nq 'none)          ; a stage IS there -- (id? ..) not the datum's own truth
                                 _ (pin (ps 'locals) nm <>ent)
-                                (['locals nm old] >< shadows))
+                                _ (? (st && (qstrip nq = <>ent)) (pin (ps 'qtys) nm nq)
+                                     !(id? oq 'none) (pull (ps 'qtys) nm 0)
+                                     0)
+                                _ (? st (pull (ps 'qstage) nm 0) 0)
+                                (['locals nm old] >< (['qtys nm oq] >< shadows)))
    (bindlocs ps ents shadows) (? !(two? ents) shadows (bindlocs ps >ents (bindloc ps <ents shadows)))
    (loctypes form) (? (two? form && member? <form '(decl sdecl)) <>form ())       ; a block decl's entries, () otherwise
    ; a BLOCK-scope typedef (sqlite's LOGFUNC_t): pin each declarator into ps
    ; 'types like tdeflist, but SAVE the old binding on the block's shadow list
    ; ('none = fresh) so unshadow restores C scope. -> (rest sh2) | (); the
    ; typedef is a pure parse-time binding, no AST form.
-   (btdefs ps base ts sh)
+   (btdefs ps base ts sh bq)
     (: dr (pdtor ps ts base)
        (? !(two? dr) ()
           (: nm <<dr
              old (peep (ps 'types) nm 'none)
              _ (pin (ps 'types) nm <><dr)
+             _ (? bq (pin (ps 'qtdef) nm bq) 0)
              sh2 (['types nm old] >< sh)
              af (patt <>dr)
-             (? (peekp af ",") (btdefs ps base >af sh2)
+             (? (peekp af ",") (btdefs ps base >af sh2 bq)
                 (peekp af ";") [>af sh2]
                 ()))))
    (pblock ps ts)
@@ -1737,7 +1866,7 @@
                  ((tkk <ts2 = 'id) && (tkv <ts2 = "__extension__")) (items >ts2 acc sh)
                  (tkw? <ts2 'typedef)
                   (: br (pbty ps >ts2)
-                     r (? (two? br) (btdefs ps <br <>br sh) ())
+                     r (? (two? br) (btdefs ps <br <>br sh (qspec ps >ts2 <br)) ())
                      (? !(two? r) (: _ (unshadow ps sh) ())
                         (items <r acc <>r)))
                  (: r (? (tkbty? ps <(pquals ts2)) (pdecl ps ts2) (pstmt ps ts2))
@@ -1761,6 +1890,9 @@
                       entry (? (arr? ty0) [<e0 ['ptr <>ty0]] e0)
                       _ (? (peep ps 'sawrstr () && <e0)   ; a NAMED restrict param: file it for note
                            (pin ps 'currstr (<e0 >< peep ps 'currstr ())) 0)
+                      _ (? !<e0 0                         ; a NAMED param stages its mark like a local's
+                           (: bq (qspec ps ts <br)
+                              (? bq (pin (ps 'qstage) <e0 (qmark bq <>entry)) 0)))
                       ts3 <>dr
                       (? (peekp ts3 ",")
                           (? (peekp >ts3 "...")              ; ... after this param -> variadic
@@ -1831,12 +1963,13 @@
 
    ; a comma-list of typedef declarators sharing one base type (`typedef T a, b;`);
    ; pins each name -> its declared type. answers ('tdef) rest | ().
-   (tdeflist ps base ts)
+   (tdeflist ps base ts bq)             ; bq = the specifier run's mask, _Generic's (qspec)
     (: dr (pdtor ps ts base)
        (? !(two? dr) ()
           (: _ (pin (ps 'types) <<dr <><dr)
+             _ (? bq (pin (ps 'qtdef) <<dr bq) 0)
              af (patt <>dr)                ; glibc trails __attribute__ on a typedef's declarator
-             (? (peekp af ",") (tdeflist ps base >af)
+             (? (peekp af ",") (tdeflist ps base >af bq)
                 ; peek for the `;`: the remainder may be EMPTY (a typedef at EOF)
                 (peekp af ";") ['(tdef) >af]
                 ()))))
@@ -1882,10 +2015,11 @@
                  (? (initless? <><r) [['xdecl <><r] <>r] r))))
        (tkw? <ts 'typedef)
         (: br (pbty ps >ts)
-           (? !(two? br) () (tdeflist ps <br <>br)))
+           (? !(two? br) () (tdeflist ps <br <>br (qspec ps >ts <br))))
        (: br (pbty ps ts)
           (? !(two? br) ()
              (: base <br ts0 <>br
+                gbq (qspec ps ts base)  ; the run's mask, _Generic's; one stages it
                 (? (peekp ts0 ";") ['(tdef) >ts0]     ; a bare struct/enum definition
                    (: (stars ts2 ty) (: s (pquals ts2) (? (peekp s "*") (stars >s ['ptr ty]) [ty s]))
                       sr (stars ts0 base)
@@ -1909,7 +2043,12 @@
                             fprm <>>>fdr                              ; the inner params when the declarator IS a function
                             ; the object lanes sit HERE, not in the third arm: a function-first
                             ; mixed list (`int f(int), a;`) reaches them from the lane above too
-                            (one ts3 nm t2)                 ; t2 is the element type (stars included)
+                            ; the marked type stages here, where the entry is final; note's
+                            ; gogl consumes it, the way bindloc does for a local
+                            (one ts3 nm t2) (: r (one0 ts3 nm t2)
+                                               _ (? (gbq && two? r) (pin (ps 'qstage) <<r (qmark gbq <><r)) 0)
+                                               r)
+                            (one0 ts3 nm t2)                ; t2 is the element type (stars included)
                              (? (peekp ts3 "[")
                                 (: dr (adims ps ts3 ())  ; one or more [n]/[] dims (enum consts fold)
                                    (? !(two? dr) ()
@@ -2069,8 +2208,18 @@
        ; clear the stashes for the next form
        (note f)
         (: _ (? (member? <f '(gdecl xdecl))         ; register file-scope names -> types (ptype's global fallback)
+                ; ..and consume the mark ptop staged for each, on bindloc's terms:
+                ; only when it strips back to the type actually filed
                 (: (gogl prs) (? !(two? prs) 1
-                                 (: _ (pin (ps 'globals) <<prs <><prs) (gogl >prs)))
+                                 (: nm <<prs ty <><prs
+                                    nq (peep (ps 'qstage) nm 'none) st !(id? nq 'none)
+                                    oq (peep (ps 'qtys) nm 'none)
+                                    _ (pin (ps 'globals) nm ty)
+                                    _ (? (st && (qstrip nq = ty)) (pin (ps 'qtys) nm nq)
+                                         !(id? oq 'none) (pull (ps 'qtys) nm 0)
+                                         0)
+                                    _ (? st (pull (ps 'qstage) nm 0) 0)
+                                    (gogl >prs)))
                    (gogl <>f))
                 ())
            st (peep ps 'curstat ()) sc (peep ps 'cursect ()) an (peep ps 'curalign ())

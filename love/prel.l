@@ -19,8 +19,8 @@
    star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray (twin 0 0)) top-tray (tray ())  ; the four typed-tray ctors (witness baked in)
    (tier v) (? (tray? v) (: c (atype v) (? (= c 0) star-tray (= c 1) gem-tray (= c 2) twin-tray top-tray)) ())  ; a tray's tier IS its ctor; nil off a tray
    zero? nil?
-   (one? x) (= x (cap x))
    (atom? x) (nil? (two? x))
+   one? atom?
    ; a fresh layer: its own macro table at key 0, the pre-enter chain and name at charm key 31337.
    ; a charm key cannot collide with a name. (enter ()) is anonymous.
    (enter nm) (: F (tablet 0) _ (pin F 0 (tablet 0)) _ (pin F 31337 (link (books ()) nm))
@@ -302,6 +302,15 @@
 (:: 'pins (\ l (: (go t r) (? (two? (cup r)) (go (list pin t (cap r) (caup r)) (cuup r)) t)
                   (go (cap l) (cup l)))))
 
+(: (** a b) (b a) $ 1 ! nil?  (!= a b) (nil? (= a b)))   ; prefix: infix is not live until seal-hook 4
+
+; lisp compatibility synonyms
+(: seqx (\ l (>< ': (foldr (\ l r (>< '_ (>< l r))) (list (last l)) (init l))))
+   ifx (>< '?) letx (>< ':) lamx (>< '\ )
+   _ (:: ', seqx) _ (:: 'do seqx) _ (:: 'begin seqx) _ (:: 'progn seqx)
+   _ (:: 'let letx)
+   _ (:: 'cond ifx) _ (:: 'if ifx)
+   _ (:: 'quote lamx) _ (:: 'lambda lamx))
 
 ; --- the loader: use-on-miss ------------------------------------------------
 ; the `use` up top splices a registered module; here it also loads one it lacks, from the baked
@@ -359,26 +368,8 @@
                     (slashy? (string m)) (: _ (rdev q) ())
                     (: _ (enter m) _ (rdev q) _ (leave ()) (prior m))))))))
 
+
 ; --- reader operators: the operators tablet + the opfix factor pass ---------
-; ONE tablet, keyed by ARITY -- the operands a sigil takes FROM THE FORM AROUND IT -- and the
-; valence law is that lookup: 0 is the glued lane, which takes none (it wraps the datum it is
-; already stuck to); 2 is spaced, a left operand and a right; -1 is spaced with NO BOUND, a left
-; and then all of them. so a nom lives in as many lanes as it has faces -- `?` is `bit` glued and
-; cond spaced -- and the two faces of the law are two keys of one table rather than two tables.
-; ⚠ arity 1, a right operand and no left, has a key and no walk yet: a row there is inert and its
-; sigil reads undeclared. the reader leaves a sigil a plain symbol; opfix factors it here.
-; a SPACED row is the whole fold: a band (higher binds tighter) and a hand (0 right, 1 left -- how
-; a same-band run folds); op-ent normalizes every written shape to (name band hand . arity), and a
-; shape short of one takes the zero. undeclared is infix at band 95 -- above every row here, so the
-; table holds only exceptions. infix is live from this table on. a GLUED row maps a run-piece to
-; its monadic word, and a run factors greedily, so <>x is (cap (cup x)).
-; AN N-ARY OPERATOR collects its operands FLAT where a dyadic spans them into one, so (c ? a b)
-; is (? c a b) and not (? c (a b)). that is what lets a CLAUSE FORM wear its scrutinee on the
-; left: the arms stay operands, exactly as the prefix spelling already has them, so (x @ p b) and
-; (@ x p b) are the SAME form and only one of them was typed. neither `?` nor `@` learns anything
-; -- the special form and the macro are handed the shape they always took.
-; ⚠ the arity is the KEY, so the door takes it -- (grip ar nm v) -- and pinning a row straight
-; back restores the operator EXACTLY. a lane named anywhere else would leak through that door.
 (: operators (pins (tablet 0)
  0 (pins (tablet 0)                                 ; --- ARITY 0: glued. takes nothing from the form
  '< 'cap '> 'cup '+ 'net '* 'prod '| 'abs '- 'negate '/ 'reciprocal
@@ -389,14 +380,9 @@
  1 (tablet 0)                                       ; --- ARITY 1: a right operand and no left. no walk yet
  2 (pins (tablet 0)                                 ; --- ARITY 2: spaced. a left operand and a right
  '** 70
- '* -60 '/ -60 '% -60 '// -60                       ; multiplicative, LEFT -- the MINUS is the hand, and
-                                                    ; // is floor divide, sitting with its siblings:
-                                                    ; undeclared it took the 95 default, ABOVE *, so
-                                                    ; (s * n // g) read as (* s (// n g)) -- right only
-                                                    ; where g divides n
- '+ -50 '- -50                                      ; additive, LEFT -- arithmetic is the whole exception,
-                                                    ; and the sign is where it shows
- '| 30 '& 30 '&& 30 '|| 30      ; logical (&& || also macros; the row pins the band below comparison)
+ '* -60 '/ -60 '% -60 '// -60                       ; multiplicative, LEFT -- the MINUS is the hand
+ '+ -50 '- -50                                      ; additive, LEFT
+ '| 30 '& 30 '&& 30 '|| 30                          ; logical (&& || also macros; the row pins the band below comparison)
  '>< 25                                             ; cons -- the loosest builder
  '$ 5 '\ 6)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate), and the
                                                     ; lambda a hair ABOVE it, so ([a b] \ a * b $ [2 3]) closes the body at
@@ -408,12 +394,11 @@
  -2 (pins (tablet 0)                                ; --- ARITY -2: spaced, and it CHAINS. a left and a right, but
  '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40)))          ; a same-band neighbour JOINS the run instead of nesting
  ; ⚠ the rows are NOMS, not values: a value would be unwritable, and an unwritable head is a
- ; form no text can spell -- which is what keeps opfix invertible (lib/infix.l). a row resolves
- ; at the use site like any name, so libra's `shadow` rule speaks where one is rebound.
-; factorization is the GLUED lane's alone: a run splits greedily, longest-prefix, no backtracking,
-; against arity 0. a SPACED sigil is one whole name -- it either carries a row in a spaced lane or
-; takes the fresh-punct default -- so != && >>= :- ?- each stay one operator.
-; everything to (seal-hook 4 opfix) stays prefix -- the first pass compiles prel with no opfix.
+ ; form no text can spell -- which is what keeps opfix invertible (lib/infix.l).
+
+;;; FIXME the code below is rather old and hoary and can probably be freshened up.
+;;; remember we can't use operators or pattern matching yet here though.
+;;; catalog all the op-* functions,
 (: ; the lanes, by their arity key. LOCAL: the tablets are the ones in `operators`, not copies,
    ; so a `grip` write through the door is seen here at once and there is nothing beside it.
    monadics (operators 0) dyadics (operators 2) naries (operators -1) chains (operators -2)
@@ -427,13 +412,14 @@
    (op-puncp x)
     (? (nom? x)
        (: s (string x)
-          (? (string? s)
+          (? (string? s) ;;; FIXME string should *always* return a string, if !(string? (string x)) that's a bug
              (: n (tally s)
                 (? (< 0 n)
                    ((: (go i) (? (< i n) (? (op-punc-byte (s i)) (go (+ 1 i)) 0) 1)) 0)
                    0))
-             0))
-       0)
+             0)) ;;; FIXME dangling 0 clauses like these are bad end-weight coding and
+       0) ;;; they may not even be semantically needed since ? fall-through returns ()
+
    ; a BAND is a SIGNED charm: the magnitude is the level (higher binds tighter) and the sign is
    ; the hand -- positive right, negative LEFT. arithmetic is the only left-handed band there is,
    ; so the minus marks the exception and the hand stops being a slot anyone has to count to.
@@ -757,28 +743,9 @@
    (pin book 'opfix opfix))
 ; the LAST seal: opfix joins the other four in the g->hot_* fields, so no later rebind can reach it.
 (seal-hook 4 opfix)
-; the two self-named apply operators: ** flips (a ** b = (b a), tightest band), $ is the identity
-; so a $ b = (a b), weak-binding application at the loosest band. glued $x is saturate.
-(: (** a b) (b a))
-(: $ 1)
-; ! . != are ordinary functions under their punct names. ! and . are monadic and nothing else, so
-; the walk has no row to fold and hands the plain symbol through. != carries the comparison row,
-; the one thing a binding cannot say. escape mid-list as (!) (.), like any bare operator.
-(: ! nil?)
-(: (!= a b) !(a = b))
-; lisp-compat aliases by head-symbol substitution
-(: seqx (\ l (>< ': (foldr (\ l r (>< '_ (>< l r))) (list (last l)) (init l)))))
-(:: (intern ",") seqx) (:: 'do seqx) (:: 'begin seqx) (:: 'progn seqx)
-(:: 'let (\ a (>< ': a)))
-(:: 'if (\ a (>< '? a)))
-(:: 'cond (\ a (>< '? a)))
-(:: 'quote (\ a (>< '\ a)))
 
 ; --- assert / suite: the strict checkers, baked so they work with no harness ---
-; each form must net true or assert scares with the source form, terminal without a help -- no
-; `quit`, which is host-only, so a false claim stops the kernel run too. `suite` adds a
-; "<name>: ok" sentinel, so a file gates itself. not `test`: that is a common local, and a macro
-; ignores lexical scope.
+;;; FIXME how are these used at the moment?
 (:: 'assert (\ l (>< 'do (map (\ e (list '? e 0 (list 'scare (list '\ 'assert) (list '\ e)))) l))))
 (:: 'suite (\ l (>< 'do (>< (>< 'assert (cup l)) (list (list 'puts (cap l)) (list 'puts ": ok\n"))))))
 
@@ -793,6 +760,7 @@
    (a-dim d) (? (two? d) (tally d) (saturate d))
    (a-shape s) (? (two? s) (map a-dim s) (list (a-dim s))))
 
+;;; FIXME we new names for these. tuple isn't too bad but "hash" for the tablet constructor is wrong
 ; tuple/hash value constructors -- also the read-back targets of the printed @(…) / #(…)
 (: (spread l) (tray (a-type l) (list (foldl (\ n _ (1 + n)) 0 l)) l))
 (:: 'tuple (\ a (list 'spread ('list >< a))))
@@ -883,13 +851,11 @@
                           (? !(id? v sent) v
                              !(heard ()) ()
                              (scare 'missing nm))))))
-; the help door: (hear f) installs f as the help every raise reaches -- seal-hook's one dynamic
-; slot, the same hot_help the C raise lanes read -- and (heard ()) answers the installed one.
-; (hear ()) uninstalls: a raise then takes the default escape.
+
+;;; FIXME help/io setters below here. redesign the API with more structure
 ; binary?: does f take exactly two operands? read two ways -- the arity off the n-ary closure
 ; marker, else the param count off the source a compiled lambda stashes. ⚠ ONE-SIDED on purpose:
-; a shape neither reads (a nif, a partial) PASSES. a false refusal walls off a legitimate handler
-; at the one door a session cannot route around; a missed one is only today's silence.
+; a shape neither reads (a nif, a partial) PASSES.
 ; ⚠ the marker is read off a known binary rather than named: `peek`'s nom dies at the hatch but
 ; the folded reference lives. ⚠ and it must be lvm_cur -- the ap TABLE has it. binding lvm_ret0
 ; the same way (to catch a one-armed nif) segfaults the image bake, so the nif case stays open.
@@ -901,31 +867,15 @@
                (binary? f) (seal-hook 5 f)
                (scare 'help-arity f)))
 ; the stdio door, the help's twin: (wear (i o e)) re-seats in/out/err FOR THIS TASK,
-; (wear ()) hands the console back, (worn ()) answers what is worn. an element that is
-; not a port keeps the console, so (wear (L () o ())) re-seats stdout alone. ⚠ what a
-; task wears is read by the port OPS -- `id?` and `peek` still answer the static.
 (: (wear l) (seal-hook 6 l))
 ; trap -- (f x) under a help that ESCAPES: the value on a clean run, (n a b) when a
-; scare landed here. peg's (\ s y n) aimed at conditions, less the y a caller already
-; has -- a clean run just answers, and n's own answer is the form's, so which one you
-; got is a thing the caller wrote both halves of. currying supplies the operand ((trap
-; (serve1 root) c ..)), and the unit is the x when there is genuinely nothing to hand.
-; n wears the help's own arity, so `welp` is one.
-; ⚠ ALL THREE OPERANDS, always: two hand back a closure, which is truthy, and f never
-; runs at all. n's own arity is checked (binary?) BEFORE f runs -- so the refusal lands
-; under the AMBIENT help, not inside the raise this form exists to catch.
-; ⚠ n fires only once the displaced help is BACK, which is what the thunks are for --
-; the presence a caller no longer carries is carried HERE, since a clean v may be a
-; closure like the escape's. run n inside and its own raise would land in this trap.
-; ⚠ nothing unwinds: the escape jumps past every pending restore between the raise and
-; here, so a cleanup belongs in n, never inside f -- or in `mind`'s c, which is the same
-; cleanup owned by the resource instead of by the catcher. to catch selectively, let n
-; re-raise what is not yours -- by then the outer help is the one listening.
-; ⚠ the escape is THIS TASK'S: a help is inherited at spawn, so a child raising under
-; one it never installed would land in the parent's stack and tear both. `home` is the
-; installing task, and a raise from anywhere else re-seats prev and re-raises there
-; instead -- an outer trap's help meets the same test, so the chain walks down to an
-; answering help or to none, which is what a child that installed nothing deserves.
+; scare landed here.
+; ⚠ ALL THREE OPERANDS, always: two hand back a closure, which is truthy, and f never runs at
+; all. n's own arity is checked (binary?) BEFORE f runs -- so the refusal lands under the
+; AMBIENT help, not inside the raise this form exists to catch.
+; ⚠ nothing unwinds: the escape jumps past every pending restore between the raise and here, so
+; a cleanup belongs in n, never inside f -- or in `mind`'s c, which is the same cleanup owned by
+; the resource instead of by the catcher.
 (: (trap f x n)
      (: _ (? (binary? n) 0 (scare 'help-arity n))   ; refuse BEFORE f runs, under the ambient help
         prev (heard ())

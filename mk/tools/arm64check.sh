@@ -14,7 +14,7 @@
 # Args: $1.. = the .l files to run (default: the corpus). The gate is the
 # "tests pass" sentinel AND a clean exit (a reader-stop exits 0 without it).
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."          # mk/tools -> the tree root
 
 QEMU=$(command -v qemu-aarch64 2>/dev/null || true)
 GCC="$AARCH64_CC"
@@ -34,7 +34,7 @@ O=out/arm64; mkdir -p $O; rm -f $O/*.o
 # its own Continue (advance Ip, br [Ip]). Under tco=0 the native is entered as
 # ap(g) with x1/x2/x3 garbage, so the codegen ONLY runs under tco=1. -O2 gives
 # the sibling-call optimization the threaded loop relies on.
-CF="-std=gnu2x -O2 -Dai_tco=1 -I. -Iout/lib -fomit-frame-pointer -fno-stack-protector -fno-exceptions -w"
+CF="-std=gnu2x -O2 -Dai_tco=1 -I. -Icore -Iout/lib -fomit-frame-pointer -fno-stack-protector -fno-exceptions -w"
 echo "AARCH64 cross-build ($GCC)"
 # crew/moon/lib/math/am.c is the math floor (fdlibm/-lm retired) -- link it like the host does.
 for f in core/love.c host/*.c crew/moon/lib/math/am.c; do

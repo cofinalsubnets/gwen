@@ -62,9 +62,9 @@ roster_refuses='
 00214 a statement expression under __builtin_expect
 00216 designated RANGE initializers -- [1 ... 5] = v
 '
-roster_wrong='
-00219 _Generic cannot separate two associations that differ only in a QUALIFIER -- cc drops them, so `const int * const` picks the `int *` row where C takes neither and falls to default (doc/moon-c-gaps)
-'
+# EMPTY, and worth keeping as a list rather than a comment: the day one of these
+# comes back it belongs here, and `wrong` is the kind that must stay loud.
+roster_wrong=''
 # the two per-target lines, both of them lanes x64 has and the others do not
 # (doc/moon-c-gaps, "target asymmetries"): a by-value composite in a variadic
 # function, and the variable-length array.

@@ -59,11 +59,11 @@ rm -f "$d"/*.o
 # shellcheck disable=SC2086  # $tflag is a word pair or empty, deliberately unquoted
 moonc() { "$ho/mooncc" $tflag "$@"; }
 
-moonc -D ai_tco=1 -I"$ho" -I. -Iout/lib -c core/love.c "$d/love.o" || fail "mooncc $tflag -c core/love.c"
+moonc -D ai_tco=1 -I"$ho" -I. -Icore -Iout/lib -c core/love.c "$d/love.o" || fail "mooncc $tflag -c core/love.c"
 
 for f in host/*.c; do
   b=$(basename "$f" .c)
-  moonc -D ai_tco=1 -I"$ho" -I. -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
+  moonc -D ai_tco=1 -I"$ho" -I. -Icore -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
 done
 
 # nolibc is NOT compiled here: the link below owes its symbols and the driver's
