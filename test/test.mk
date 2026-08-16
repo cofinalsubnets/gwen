@@ -566,6 +566,14 @@ test_vec: host
 # $(moon_o) is the link list: the gate is handed make's objects, it never globs the odir.
 test_fixpoint: host $(love0) out/host/mooncc0.image
 	@sh test/gate/fixpoint.sh $(ho) $(love0) $(moon_fir) $(moon_o)
+# THE CROSS-MACHINE FIXPOINT, in effigy (doc/plan/seed-universal.md U0): dist_cross's
+# twin objects link love1, then love1 under qemu-user rebuilds itself natively and must
+# answer the same bytes -- the twin machine reproducing this machine's, on one box.
+# opt-in BY NAME (a full rebuild under emulation is minutes): `make test_xfixpoint`,
+# or `make xa=riscv64 test_xfixpoint` for the other twin. skips loudly without qemu.
+.PHONY: test_xfixpoint
+test_xfixpoint: $(xobjs) $(love0) out/host/mooncc0.image
+	@sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xtgt) $(xmksys) $(tco) $(xd) $(xobjs)
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
 # the WHOLE corpus. Opt-in: needs the -pie toolchain, x86-64 only.
