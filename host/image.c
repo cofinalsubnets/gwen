@@ -119,6 +119,51 @@ int image_dump(struct ai *g, char const *path) {
 #define RESERVE_WORDS 2u
 __attribute__((section(".love_image"))) uint64_t ai_baked_image[RESERVE_WORDS] = {1};
 uintptr_t ai_baked_image_len = RESERVE_WORDS * 8u;
+// --- the image ARRAY ---------------------------------------------------------
+// the section holds EITHER one image -- its first word is the codec's own magic,
+// which is what every binary before this laid -- or a DIRECTORY: magic, count,
+// then one {off, len, verbs} record per image, then the blobs. offsets are from
+// the section's first byte. ⚠ the CODEC NEVER SEES THE DIFFERENCE: ai_image_load
+// takes a pointer and a length either way, so this is a container around it and
+// not a change to the image format. nothing in core/love.c moves.
+//
+// the entries are laid SMALLEST FIRST and `verbs` names what each can serve, so
+// "the first entry that claims this verb" is the walk up the lattice, decided
+// before anything is woken -- it has to be, since the verb table lives in the
+// image we have not woken yet.
+#define IMGDIR_MAGIC 0x3141594152524119ULL        /* "..ARRAY1", the container's own */
+#define IMGDIR_VERBS 48u
+struct image_ent { uint64_t off, len; char verbs[IMGDIR_VERBS]; };
+struct image_dir { uint64_t magic, count; struct image_ent ent[]; };
+// is `verb` one of the space- or comma-separated words in `list`? a whole-word
+// match: "lib" must not claim "libra".
+static int imgdir_claims(char const *list, char const *verb) {
+  size_t n = strlen(verb);
+  for (size_t i = 0; i < IMGDIR_VERBS && list[i]; ) {
+    while (i < IMGDIR_VERBS && (list[i] == ' ' || list[i] == ',')) i++;
+    size_t j = i;
+    while (j < IMGDIR_VERBS && list[j] && list[j] != ' ' && list[j] != ',') j++;
+    if (j - i == n && !memcmp(list + i, verb, n)) return 1;
+    i = j; }
+  return 0;
+}
+// the blob to wake, and how long it is. a section that is not a directory is one
+// image; a directory with a torn record answers nothing, and the caller boots the
+// egg -- never wrong.
+void const *ai_baked_pick(char const *verb, uintptr_t *outlen) {
+  unsigned char const *base = (unsigned char const *) ai_baked_image;
+  uintptr_t n = ai_baked_image_len;
+  struct image_dir const *d = (struct image_dir const *) (void const *) base;
+  uint64_t pick, i;
+  if (n < sizeof *d || d->magic != IMGDIR_MAGIC) return *outlen = n, (void const *) base;
+  if (!d->count || n < sizeof *d + d->count * sizeof d->ent[0]) return *outlen = 0, NULL;
+  pick = d->count - 1;                            // the largest is the default
+  if (verb) for (i = 0; i < d->count; i++)
+    if (imgdir_claims(d->ent[i].verbs, verb)) { pick = i; break; }
+  if (d->ent[pick].off > n || d->ent[pick].len > n - d->ent[pick].off) return *outlen = 0, NULL;
+  return *outlen = d->ent[pick].len, (void const *) (base + d->ent[pick].off);
+}
+
 struct bake_at { uintptr_t addr, off; int found; };
 static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
   struct bake_at *b = d;
@@ -212,6 +257,75 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
     if (!rc && (fchmod(dst, mode) || fsync(dst))) rc = -6;
     if (close(dst)) rc = -6; }
   g->alloc(g, sh, 0), g->alloc(g, ph, 0), g->alloc(g, str, 0), g->alloc(g, win, 0);
+  return rc;
+}
+
+// `love bake -a SPEC ..` -- lay the named image FILES into this binary's own
+// section as an array. a SPEC is `path` or `path:verb,verb` naming what that
+// image can serve; the LAST spec is the default and needs no verbs. no session is
+// booted for this: the images were baked already, and this only carries them.
+// ⚠ ORDER IS THE LATTICE. smallest first, since the picker takes the first entry
+// that claims the verb -- lay them the other way round and every verb wakes the
+// big one.
+int image_bake_files(struct ai *g, char *const *specs, int n) {
+  struct image_dir *d = NULL;
+  unsigned char *buf = NULL;
+  uintptr_t tot = sizeof *d + (uintptr_t) n * sizeof d->ent[0], off = tot;
+  int i, rc = -6, src = -1;
+  char exe[4096], tmp[4104];
+  struct stat st;
+  if (n < 1) return -6;
+  for (i = 0; i < n; i++) {                       // size them first: one buffer, one pass
+    char const *c = strrchr(specs[i], ':');
+    char path[4096];
+    size_t pl = c && !strchr(c, '/') ? (size_t)(c - specs[i]) : strlen(specs[i]);
+    if (pl >= sizeof path) return -6;
+    memcpy(path, specs[i], pl), path[pl] = 0;
+    if (stat(path, &st)) return fprintf(stderr, "love: bake: cannot read %s\n", path), -6;
+    tot += (uintptr_t) st.st_size + 7u & ~(uintptr_t) 7; }
+  if (!(buf = g->alloc(g, NULL, tot))) return -6;
+  memset(buf, 0, tot);
+  d = (struct image_dir *) (void *) buf;
+  d->magic = IMGDIR_MAGIC, d->count = (uint64_t) n;
+  for (i = 0; i < n; i++) {
+    char const *c = strrchr(specs[i], ':');
+    char path[4096];
+    size_t pl = c && !strchr(c, '/') ? (size_t)(c - specs[i]) : strlen(specs[i]);
+    FILE *f;
+    memcpy(path, specs[i], pl), path[pl] = 0;
+    if (c && !strchr(c, '/')) {
+      size_t vl = strlen(c + 1);
+      if (vl >= IMGDIR_VERBS) { fprintf(stderr, "love: bake: verb list too long\n"); goto out; }
+      memcpy(d->ent[i].verbs, c + 1, vl); }
+    if (!(f = fopen(path, "rb"))) goto out;
+    if (stat(path, &st)) { fclose(f); goto out; }
+    d->ent[i].off = off, d->ent[i].len = (uint64_t) st.st_size;
+    if (fread(buf + off, 1, (size_t) st.st_size, f) != (size_t) st.st_size) { fclose(f); goto out; }
+    fclose(f);
+    // ⚠ AN IMAGE FILE MAY WEAR A SHEBANG -- `bake -x` writes one so the image can be
+    // run, and image_load steps over it. carrying it into the array would hand the
+    // codec a buffer whose first word is `#!/usr/b` instead of the magic, and the
+    // whole artifact would fall back to the egg in silence. image_dump PADS the line
+    // so what follows stays word-aligned, which is what lets this move it down.
+    if (d->ent[i].len > 2 && buf[off] == '#' && buf[off + 1] == '!') {
+      unsigned char *nl = memchr(buf + off, '\n', (size_t) d->ent[i].len);
+      if (nl) { size_t sk = (size_t)(nl - (buf + off)) + 1;
+                memmove(buf + off, buf + off + sk, (size_t)(d->ent[i].len - sk));
+                d->ent[i].len -= sk; } }
+    off += (uintptr_t) d->ent[i].len + 7u & ~(uintptr_t) 7; }
+  { struct bake_at bl = { (uintptr_t) &ai_baked_image_len, 0, 0 };
+    dl_iterate_phdr(bake_phdr, &bl);
+    if (!bl.found) { rc = -5; goto out; }
+    if (!host_selfpath(exe, sizeof exe)) goto out;
+    snprintf(tmp, sizeof tmp, "%s.bake", exe);
+    if ((src = open(exe, O_RDONLY)) < 0 || fstat(src, &st)) goto out;
+    rc = bake_tail(g, src, tmp, buf, tot, bl.off, st.st_mode & 07777);
+    if (rc > 0) { fprintf(stderr, "love: .image is not laid last -- nowhere to grow the image\n"); rc = -3; }
+    if (!rc && rename(tmp, exe)) rc = -6;
+    if (rc) unlink(tmp); }
+ out:
+  if (src >= 0) close(src);
+  g->alloc(g, buf, 0);
   return rc;
 }
 

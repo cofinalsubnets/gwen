@@ -676,6 +676,8 @@ static struct ai *env_budget(struct ai *g) {
 // full binary's lane.
 extern int image_dump(struct ai*, char const*);          // host/image.c (file I/O around love.c's codec)
 extern int image_bake(struct ai*);                       // host/image.c (the self-bake)
+extern int image_bake_files(struct ai*, char *const *, int);   // ..and the array of already-baked ones
+extern void const *ai_baked_pick(char const*, uintptr_t*);     // which entry this command line wants
 extern struct ai *image_load(char const*);
 extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
@@ -1140,6 +1142,13 @@ int main(int argc, char const **argv) {
   int skip = 0;
 
 #ifndef GL_BOOTSTRAP
+  // `bake -a SPEC ..` lays already-baked image FILES into our own section as an
+  // ARRAY, and boots nothing: there is no session to snapshot, only blobs to carry.
+  if (argc >= 3 && !strcmp(argv[1], "bake") && !strcmp(argv[2], "-a")) {
+   struct ai *b = ai_ini();
+   int rc = b ? image_bake_files(b, (char *const *) (argv + 3), argc - 3) : -6;
+   if (rc) fprintf(stderr, "love: bake -a failed (%d)\n", rc);
+   return rc ? 1 : 0; }
   if (argc >= 2 && !strcmp(argv[1], "bake")) {
    int i = 2;                                      // bake [-l CAT] [PATH]
    if (i + 1 < argc && !strcmp(argv[i], "-l")) bake_load = argv[i + 1], i += 2;
@@ -1168,7 +1177,13 @@ int main(int argc, char const **argv) {
   uintptr_t woke_ms = 0;                       // what the wake cost, for `born` below
   if (!g && !bake && !(noimg && *noimg)) {
    uintptr_t t0 = ai_clock();
-   if (ai_baked_image_len && (g = ai_image_load(ai_baked_image, ai_baked_image_len)))
+   // ..and WHICH image: the section may carry an array, in which case the first
+   // entry claiming this command's verb wins and the largest is the fallback. one
+   // pass over a directory, before anything is woken -- it has to be, since the
+   // verb table lives in the image we are choosing.
+   uintptr_t blen = 0;
+   void const *bimg = ai_baked_pick(argc > 1 ? argv[1] : NULL, &blen);
+   if (blen && bimg && (g = ai_image_load(bimg, blen)))
     woke_ms = ai_clock() - t0,
     image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
   if (!g) g = ai_ini();

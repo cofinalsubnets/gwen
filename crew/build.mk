@@ -108,6 +108,12 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l crew/sb/up.l \
             lib/gz.l lib/tar.l lib/tarcmd.l lib/source.l crew/lapiz/lapiz.l \
             lib/salt.l lib/infix.l crew/libra/libra.l lib/hueweb.l lib/serve.l
+# THE DOCS LANE -- the small image of the array below. a one-shot `love libra ..`
+# wants the .l reader, the config door, the factor pass and the document lens, and
+# nothing else: it is 1.8 MB against the full image's 7.6, and the wake is linear in
+# that (~17 ms/MB measured), so the command starts in a quarter of the time.
+# ⚠ ITS MEMBERSHIP IS AN INPUT, exactly as distfiles' is -- same list guard below.
+docsfiles = lib/lint.l lib/salt.l lib/infix.l crew/lapiz/lapiz.l crew/libra/libra.l
 DIST_ORIGIN ?=
 # ⚠ THE MEMBERSHIP IS AN INPUT, and make cannot see it. Adding a file to distfiles
 # changes what the artifact CARRIES while every file make watches keeps its mtime, so
@@ -121,6 +127,14 @@ out/dist/.dist.list: force_dist_list
 	@mkdir -p out/dist
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+out/dist/.docs.list: force_dist_list
+	@mkdir -p out/dist
+	@tf=$@.$$$$.tmp; echo '$(docsfiles)' > $$tf; \
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+out/dist/.docs-cat.l: $(docsfiles) out/dist/.docs.list
+	@echo CAT	$(abspath $@)
+	@mkdir -p out/dist
+	@cat $(docsfiles) > $@
 out/dist/.dist-cat.l: $(distfiles) out/dist/.dist.list
 	@echo CAT	$(abspath $@)
 	@mkdir -p out/dist
@@ -291,12 +305,20 @@ out/dist/src-$a.o: $(dist_source) mk/tools/mksrc.l $(ho)/love
 # so test_fixpoint's relink of $(moon_o) needs no mirror of it. assets/readme.bin is the page a
 # reader lands on -- `readelf -p .README`, mapped by nothing, and the one annotation worth
 # its bytes now that the source itself is in here.
-$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l assets/readme.bin $(ho)/love
+# ⚠ THE IMAGES ARE BAKED BY THE BINARY THAT WILL CARRY THEM. an image keeps its
+# binary's own layout -- the codec's anchor guard is the gap between two of its
+# symbols -- so both files come out of THIS link, and `bake -a` then lays them into
+# the section it already has. appending a section moves no symbol, which is why the
+# anchor still holds after: the same reason the single self-bake always worked.
+# ⚠ AND SMALLEST FIRST: the picker takes the first entry claiming the verb.
+$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l out/dist/.docs-cat.l assets/readme.bin $(ho)/love
 	@echo DIST	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -freadme=assets/readme.bin -o $@
-	@./$@ bake -l out/dist/.dist-cat.l
-	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
+	@./$@ bake -l out/dist/.docs-cat.l out/dist/docs.image
+	@./$@ bake -l out/dist/.dist-cat.l out/dist/full.image
+	@./$@ bake -a out/dist/docs.image:libra,help out/dist/full.image
+	@echo "  dist: $$(du -h $@ | cut -f1) -> $@ (images: $$(du -h out/dist/docs.image | cut -f1) docs, $$(du -h out/dist/full.image | cut -f1) full)"
 
 # ==== dist_cross: the TWIN artifact (the other elf arch) ====
 # the same door for the machine you are not on: every TU through `mooncc -t`,
