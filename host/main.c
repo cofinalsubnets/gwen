@@ -669,15 +669,14 @@ static struct ai *env_budget(struct ai *g) {
   if (g && b && atol(b) > 0) { g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(ai_word)); return g; }
   // the DEFAULT is half the machine, not infinity: an unbounded resize
   // controller on a small swapless box asks the kernel past what it will
-  // overcommit, and the refusal wore the bare ;; 0 0 face (the pi, 3.7G no
-  // swap, a 1.8MB objelf input). env wins above; a device pins -Dai_budget;
-  // 0 stays unbounded only where the machine cannot say its size.
+  // overcommit, and the refusal is a bare failed op. env wins above; a device
+  // pins -Dai_budget; 0 stays unbounded only where the machine cannot say its
+  // size.
   if (g && !g->budget) {
 #if defined(__linux__)
     // raw read + hand parse, no stdio: nolibc's fscanf speaks no width and no
-    // %lu, so a scanf here silently answered 0 in every mooncc-built love --
-    // the default has to fire in the bundled artifact too. MemTotal leads the
-    // file; the first digit run is the kB count.
+    // %lu, and the default must fire in both libcs. MemTotal leads the file;
+    // the first digit run is the kB count.
     int fd = open("/proc/meminfo", O_RDONLY);
     if (fd >= 0) { char mb[64]; long n = (long) read(fd, mb, sizeof mb - 1);
       close(fd);

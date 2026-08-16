@@ -280,8 +280,8 @@ else
 src_arch = x64
 endif
 # ⚠ mksrc rides the mksys cat (kore + holo elf/obj), NOT (use 'holo): the
-# module walk resolves off a NEST, and a fresh seed tree has none -- the pi's
-# first ride died there. same lane as sys.o, proven in both worlds.
+# module walk resolves off a NEST, and a fresh seed tree has none. same lane
+# as sys.o, live in both worlds.
 out/dist/src-$a.o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(love0)
 	@$(love0) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(src_arch)
 # ⚠ THIS LINKS, where it used to `cp` the host binary. A section cannot be injected
@@ -340,8 +340,7 @@ xmath_o = $(patsubst crew/moon/lib/math/%.c,$(xd)/m_%.o,$(wildcard crew/moon/lib
 # (crew/moon/lib/nolibc/), so a dist takes no calendar and no resolver.
 xobjs = $(xd)/love.o $(xhost_o) $(xmath_o) $(xd)/sys.o
 # -D AI_HAVE_VERSION_H like the host lane (build.mk's love.o): mooncc has no
-# __has_include, so without it the twin NAMED ITSELF "unknown" -- test_xfixpoint
-# caught it as machine B refusing to reproduce machine A's bytes.
+# __has_include, so the flag is the only door to the version header.
 $(xd)/love.o: core/love.c $(love_h) out/host/mooncc0.image out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
@@ -366,8 +365,7 @@ $(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
 out/dist/src-x-$(xa).o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(love0)
 	@$(love0) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(xtgt)
 # ⚠ the twin link MIRRORS the native $(dist_seed) link -- src blob + readme --
-# or the pi's download is not a seed: it answered `;; this love carries no
-# source` on real silicon, which is how this line got its two extra objects.
+# a twin without them is not a seed.
 out/dist/love-$(xarch): $(xobjs) out/dist/src-x-$(xa).o out/dist/.dist-cat.l assets/readme.bin
 	@echo DIST	$(abspath $@)
 	@$(moonx) -pie $(xobjs) out/dist/src-x-$(xa).o -freadme=assets/readme.bin -o $@

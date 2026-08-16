@@ -133,8 +133,7 @@
 
    ; the CANCELLATION idiom: an EMPTY recipe unmakes a pattern rule ("an empty
    ; recipe unmakes the rule" -- mk/common.mk cancels make's lex builtin exactly
-   ; so). registered live, `%.c: %.l` made every .c demand a sibling .l, which
-   ; is how the seed's own make broke against its own tree on the pi.
+   ; so). a live `%.c: %.l` would make every .c demand a sibling .l.
    _ (sh (+ "echo C > " (+ dir "/p/n.c")))
    ca (run-cook (mk `("%.c: %.l"
                       (+ "all: " (+ dir "/p/n.c")) "\t@echo \"CA[ok]\"")) "all")

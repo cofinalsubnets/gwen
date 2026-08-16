@@ -32,8 +32,8 @@
          ; the freebsd x64 lane. same machine, another kernel: the syscall insn
          ; answers errors as CF + positive errno, so the trampoline normalizes to
          ; linux's -errno ('below IS jc in holo's cc table) and er() upstairs
-         ; never learns which kernel answered. ⚠ UNRUN until a freebsd box gates
-         ; it (rung 5); the numbers are stable/14's syscall.h.
+         ; never learns which kernel answered. the numbers are stable/14's
+         ; syscall.h.
          '(
          ; -- __ai_sys: the same SysV -> kernel chain as the x64 lane below.
          (label __ai_sys)
@@ -76,9 +76,8 @@
          ; -- siglongjmp(buf, val): the mask first, then the file, then the jump.
          ;    ⚠ val and buf ride rbx/rbp, NOT r8/r9: freebsd's syscall exit
          ;    ZEROES the scratch registers (a leak mitigation linux does not
-         ;    have -- the vm's core showed r8 = r9 = 0 at syscall+1), so only
-         ;    the callee-saved file survives the kernel. rbx then restores
-         ;    LAST, off itself.
+         ;    have), so only the callee-saved file survives the kernel. rbx
+         ;    then restores LAST, off itself.
          (label siglongjmp)
          (mov r4 r5)                 ; rbp <- val (callee-saved survives the kernel)
          (mov r3 r6)                 ; rbx <- buf

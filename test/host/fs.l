@@ -101,7 +101,7 @@
    ; __linux__ predefine compiles posix.c's lanes out in SILENCE, so probe one:
    ; the stub always answers ENOSYS (38), the real mount answers the call's own
    ; errno (nobody mounts "" on / as no-such-fs). sigfd's twin assert lives in
-   ; test/host/sh.l. forks on the OS when a second one lands.
+   ; test/host/sh.l. forks on the OS when a second one joins.
    _ (: e (mount "" "/" "no-such-fs")
         (assert (charm? e) (e != 38)))
 

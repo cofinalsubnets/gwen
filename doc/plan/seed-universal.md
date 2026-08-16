@@ -1,5 +1,13 @@
 # plan: a universal seed binary
 
+**THE INVARIANT: the same byte-identical fixpoint binary, built in every
+environment.** Per target, one byte string — whatever machine, arch, or OS did
+the building. Every rung below either proves the invariant somewhere new or
+removes a reason it could fail; an environment joins the roster only by
+producing the same bytes. Standing evidence, 2026-08-16: love-aarch64 built on
+bee (x86_64) == built on pi (aarch64), sha bcd371fb, real silicon both ends;
+the x86_64 mirror leg and the OS dimension climb toward the same bar.
+
 One seed that runs on every platform and answers the same fixpoint everywhere —
 the cosmocc shape. First, what the tree actually holds: no mention of APE,
 cosmopolitan, polyglot or fat binaries anywhere in 4,124 commits; the seed is
@@ -129,14 +137,25 @@ owes a roster gate: on linux, assert the linux features are aboard.
 - **rung U1 — the container.** The polyglot prefix over our own linker: sh +
   ELF is the cheap pair; PE re-uses pe.l's reloc machinery; Mach-O is new and
   waits. The prefix must respect bake_tail or the bake learns to re-lay it.
-- **rung U2 — one file, many ISAs.** Three doors, undecided on purpose: a fat
-  binary (N .text + N images — the per-arch object separation in crew/build.mk
-  exists precisely because objects must not mix); a carried interpreter (the
-  seed's real product is the *tree* — a tiny portable interpreter that can run
-  `love seed` is a much smaller universality claim than a universal vm binary);
-  or the wasm backend ([moon-wasm](moon-wasm.md)) as the one ISA that runs
-  everywhere. Decide after U0–U1 and decoupling rung 2 have taught what the
-  fixpoint can even mean across ISAs.
+- **rung U2 — the targets DISSOLVE.** Decided 2026-08-16 (chosen, revisable):
+  once the invariant holds per target, love-x86_64 and love-aarch64 stop being
+  products — ONE `love`, one byte string, every machine. The invariant is what
+  makes this well-defined: each lane's bytes are already machine-independent
+  (proven both directions on real silicon), so the union artifact is too — any
+  box assembles the same fat file, because every part it packs is the part
+  every other box would pack. `mooncc -t` keeps its targets; it is the
+  ARTIFACT names that go. Two tensions the design must answer:
+  (1) **the self-bake mutates the file** — a universal artifact's distributed
+  bytes must stay immutable, so the per-arch images either all ride the file
+  (N bakes, qemu for the foreign ones at build time — the current dist_cross
+  law generalized), or the bake moves out-of-file (a sidecar under ~/.love,
+  first-boot warm) for the universal lane;
+  (2) **a builder today needs qemu-user for foreign bakes** — either that
+  stays a build-time-only tool (the precedent dist_cross set), or the bake
+  becomes an emulation-free function of the tree. The fallback doors if fat
+  disappoints: the carried interpreter, or the wasm backend
+  ([moon-wasm](moon-wasm.md)) as the one ISA. U1's polyglot container is the
+  EXECUTES-everywhere half; this rung is the RUNS-NATIVE-everywhere half.
 
 ## choices (revisable)
 

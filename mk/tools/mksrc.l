@@ -16,9 +16,9 @@
 ; blob is ONE object of known size, so ordinary globals land in the symbol book like
 ; any other and nothing in the linker has to learn a new name.
 ; ⚠ NO (use 'holo) here: that resolves off a NEST (~/.love), which a fresh
-; seed tree does not have -- the pi's first ride died there as a bare ;; note.
-; make hands us holo the way it hands mksys its own: -l $(ho)/.mksys-cat.l
-; (kore text/core/asbook + holo elf/obj), the lane sys.o already rides.
+; seed tree does not have. make hands us holo the way it hands mksys its own:
+; -l $(ho)/.mksys-cat.l (kore text/core/asbook + holo elf/obj), the lane
+; sys.o already rides.
 
 (: (mksrc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
    (mksrc-die m) (: _ (say err ("mksrc: " + m + "\n")) (quit 1))
