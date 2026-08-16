@@ -49,7 +49,7 @@
  (hexd? c) ((digit? c) || ((97 <= c) && (c <= 102)))
  (hexdv c) (? (digit? c) (c - 48) (c - 87))
  (all-hex? s) (: n (tally s) (go i) (? (n <= i) 1 (hexd? (s i)) (go (i + 1)) 0) (go 0))
- (s2i s) (: s (trim s) n (tally s)                      ; int(s, 0): decimal or 0x hex, sign
+ (s2i s0) (: s (trim s0) n (tally s)                    ; int(s, 0): decimal or 0x hex, sign
             (? (n = 0) ()
                (: neg ((s 0) = 45)
                   b (? neg (snip s 1 n) s)
@@ -62,11 +62,14 @@
                                        (digit? (b i)) (d (i + 1) (10 * acc + ((b i) - 48)))
                                        ())
                           (d 0 0)))
-                  (? (charm? v) (? neg (0 - v) v) ()))))
- (show0x n) (: (h v acc) (? (v = 0) acc (h (/ v 16) ((nthl '(48 49 50 51 52 53 54 55 56 57 97 98 99 100 101 102) (% v 16)) >< acc)))
+                  (? (id? v ()) () (? neg (0 - v) v)))))
+ ; ⚠ exact big division: int on an inexact big ratio rides a gem and drops digits
+ (divp v d) (int ((v - (% v d)) / d))
+ (show0x n) (: (h v acc) (? (v = 0) acc (h (divp v 16) ((nthl '(48 49 50 51 52 53 54 55 56 57 97 98 99 100 101 102) (% v 16)) >< acc)))
                (? (n = 0) "0x0" ("0x" + string (h n ()))))
  M64 18446744073709551616
  (mask64 x) (% ((% x M64) + M64) M64)
+ (pow2 k) (: (go i a) (? (i = k) a (go (i + 1) (2 * a))) (go 0 1))
 
  ; ---- the boxed RNG (a tablet slot; every draw is one line at the use site) ----
  RS (tablet 0)
@@ -74,7 +77,7 @@
  (rnd n) (: r (random (peep RS 0 0) n) _ (pin RS 0 >r) <r)   ; [0, n)
  (rint a b) (a + rnd (b - a + 1))                            ; [a, b] inclusive
  (pick l) (nthl l (rnd (tally l)))
- (coin) (rnd 2)
+ (coin _) (rnd 2)
  (pick-n l k) (? (k = 0) ()                                  ; k DISTINCT draws
                  (: x (pick l) (x >< pick-n (filter (\ y !(y = x)) l) (k - 1))))
 
@@ -83,16 +86,16 @@
  (sh c) (: pid (spawn ["sh" "-c" c]) (? (pid < 0) 1 (wait pid)))
  (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) t) ""))
  (wrf p t) (: q (open p "w") _ (say q t) (close q))
- (oct3 c) (string [(48 + (/ c 64)) (48 + (% (/ c 8) 8)) (48 + (% c 8))])
+ (oct3 c) (string [(48 + (int (c / 64))) (48 + (% (int (c / 8)) 8)) (48 + (% c 8))])
  (hex-bytes hx) (: n (tally hx)                              ; hex string -> charm list
                    (go i acc) (? (n <= i) (rev acc)
                                  (go (i + 2) ((16 * hexdv (hx i) + hexdv (hx (i + 1))) >< acc)))
                    (go 0 ()))
  (lay-bin hx p) (sh ("printf '" + foldl (\ a c (a + "\\" + oct3 c)) "" (hex-bytes hx) + "' > " + p))
  (spaced-hex hx) (: n (tally hx)
+                    (a2 a b) (? (a = "") b (a + " " + b))
                     (go i acc) (? (n <= i) acc
                                   (go (i + 2) (a2 acc ("0x" + snip hx i (i + 2)))))
-                    (a2 a b) (? (a = "") b (a + " " + b))
                     (go 0 ""))
 
  ; ---- decoded instruction records: [mnem ops nbytes bad] ----
@@ -128,16 +131,16 @@
  (disasm-mc hx triple mattr cmark)
   (: _ (wrf (tmpd + "/.fuzz.in") (spaced-hex hx))
      _ (sh ("llvm-mc --disassemble --triple=" + triple + mattr + " < " + tmpd + "/.fuzz.in > " + tmpd + "/.fuzz.out 2>/dev/null"))
-     (one ln acc)
-      (: c (idx-of ln cmark)
-         ln (trim (? (charm? c) (snip ln 0 c) ln))
+     (one l0 acc)
+      (: c (idx-of l0 cmark)
+         ln (trim (? (charm? c) (snip l0 0 c) l0))
          (? ((tally ln) = 0) acc
             (pfx? ln ".text") acc
             (pfx? ln ".byte") ([".byte" "" 4 1] >< acc)
             (: ts (toks ln)
                ([(cap ts) (trim (snip ln (tally <ts) (tally ln))) 4 0] >< acc))))
      got (rev (foldl (\ a ln (one ln a)) () (lines (rdf (tmpd + "/.fuzz.out")))))
-     want (/ (tally hx) 8)
+     want (int ((tally hx) / 8))
      (? ((tally got) = want) got
         (got + [["<count>" "" 4 1]])))
 
@@ -194,17 +197,17 @@
             (? !(two? m) [base ix sc dsp]
                (pfx? <m "#") (go >m ix sc (s2i (snip <m 1 (tally <m))))
                (pfx? <m "lsl") (: hi (idx-of <m "#")
-                                  (go >m ix (? (charm? hi) (1 (s2i (snip <m (hi + 1) (tally <m))) 2) sc) dsp))
+                                  (go >m ix (? (charm? hi) (pow2 (s2i (snip <m (hi + 1) (tally <m)))) sc) dsp))
                (go >m <m sc dsp))
            (go >ps () 1 0))))
 
  ; riscv memory: '8(a1)' / '-300(t6)'
- (mem-rv op)
-  (: op (trim op) a (idx-of op "(") b (idx-of op ")")
+ (mem-rv o0)
+  (: op (trim o0) a (idx-of op "(") b (idx-of op ")")
      (? (!(charm? a) || !(charm? b)) ()
         [(snip op (a + 1) b) () 1 (? (a = 0) 0 (s2i (snip op 0 a)))]))
 
- (imm-x64 op) (: v (s2i op) (? (charm? v) (mask64 v) ()))
+ (imm-x64 op) (: v (s2i op) (? (id? v ()) () (mask64 v)))   ; a decoded imm may be a big
  (imm-arm op) (s2i (? (pfx? (trim op) "#") (snip (trim op) 1 (tally (trim op))) op))
  (imm-rv op) (s2i op)
 
@@ -214,19 +217,17 @@
            (r5 "rsi" "esi" "si" "sil") (r6 "rdi" "edi" "di" "dil"))
  x64-abs ((foldl (\ a f (a + map (\ nm [nm <f]) >f)) () x64-fam)
           + (foldl (\ a n (: b ("r" + show n) s (intern ("r" + show (n - 1)))
-                            (a + [[b s] [(b + "d") s] [(b + "w") s] [(b + "b") s])))
+                            (a + [[b s] [(b + "d") s] [(b + "w") s] [(b + "b") s]])))
                    () '(8 9 10 11 12 13 14 15)))
  (abs-x64 nm) (: p (assoc (trim nm) x64-abs) (? (two? p) <>p ()))
- (abs-arm nm) (: nm (trim nm)
+ (abs-arm n0) (: nm (trim n0)
                  (? ((nm = "sp") || (nm = "wsp")) 'sp
                     ((nm = "xzr") || (nm = "wzr")) 'zr
                     (: n (tally nm)
-                       (? ((1 < n) && (((nm 0) = 120) || ((nm 0) = 119)) && (all-hex? "") )
-                          0 0)
-                       (? ((1 < n) && (((nm 0) = 120) || ((nm 0) = 119))
-                           && (: (dg i) (? (n <= i) 1 (digit? (nm i)) (dg (i + 1)) 0) (dg 1)))
+                       digits (: (dg i) (? (n <= i) 1 (digit? (nm i)) (dg (i + 1)) 0) (dg 1))
+                       (? ((1 < n) && (((nm 0) = 120) || ((nm 0) = 119)) && digits)
                           (intern ("r" + snip nm 1 n)) ()))))
- (arm-width nm) (: nm (trim nm)
+ (arm-width n0) (: nm (trim n0)
                    (? ((nm = "sp") || (nm = "wsp")) 'sp
                       ((0 < tally nm) && ((nm 0) = 120)) 'x
                       ((0 < tally nm) && ((nm 0) = 119)) 'w
@@ -257,8 +258,7 @@
                        !(id? (arm-width got) (nthl w 2)) ("width " + got + " != " + string (nthl w 2))
                        ())
         (id? k 'i) (: v (a-imm got)
-                      (? (? (charm? v) (v = (nthl w 1)) (v = (nthl w 1))) ()
-                         ("imm " + got + " != " + show0x (nthl w 1))))
+                      (? (v = (nthl w 1)) () ("imm " + got + " != " + show0x (mask64 (nthl w 1)))))
         (id? k 'x) (: t (trim got)
                       (? ((pfx? t "xmm") && ((snip t 3 (tally t)) = show (nthl w 1))) ()
                          ("xmm " + got + " != xmm" + show (nthl w 1))))
@@ -269,10 +269,9 @@
               !((nthl m 3) = (nthl w 2)) ("mem disp " + show0x (mask64 (nthl m 3)) + " != " + show0x (mask64 (nthl w 2)))
               (id? k 'm) ()
               (: ix (nthl m 1)
-                 (? !(two? '(1)) 0
-                    (? (!(string? ix) || !(id? (a-abs ix) (nthl w 3))) ("mem index != " + string (nthl w 3))
-                       !((nthl m 2) = (nthl w 4)) ("mem scale " + show (nthl m 2) + " != " + show (nthl w 4))
-                       ())))))))
+                 (? (!(string? ix) || !(id? (a-abs ix) (nthl w 3))) ("mem index != " + string (nthl w 3))
+                    !((nthl m 2) = (nthl w 4)) ("mem scale " + show (nthl m 2) + " != " + show (nthl w 4))
+                    ()))))))
  (run-spec ins spec strict)
   (? (any i-bad ins) "undecodable/bad byte"
      ((tally ins) != (tally spec)) ((show (tally ins)) + " insns, expected " + show (tally spec) + ":" + dump-ins ins)
@@ -292,17 +291,18 @@
 
  ; ---- shared draw pools ----
  gpregs '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 sp)
- (rrand) (pick gpregs)
- (nrand) (pick (filter (\ r !(id? r 'sp)) gpregs))          ; no sp in a value seat
+ (rrand _) (pick gpregs)
+ (nrand _) (pick (filter (\ r !(id? r 'sp)) gpregs))          ; no sp in a value seat
  fregs (map (\ i (intern ("f" + show i))) ^16)
- (frand) (pick fregs)
- (imm-small) (rnd 128)
- (imm-s32) (rint (0 - 2147483648) 2147483647)
- (imm-u32) (rint 0 4294967295)
- (imm-big) (rint 4294967296 9223372036854775807)
- (disp-any) (: k (rnd 3) (? (k = 0) 0 (k = 1) (rint -128 127) (rint (0 - 2147483648) 2147483647)))
+ (frand _) (pick fregs)
+ (imm-small _) (rnd 128)
+ (imm-s32 _) (rint (0 - 2147483648) 2147483647)
+ (imm-u32 _) (rint 0 4294967295)
+ (imm-big _) (rint 4294967296 9223372036854775807)
+ (disp-any _) (: k (rnd 3) (? (k = 0) 0 (k = 1) (rint -128 127) (rint (0 - 2147483648) 2147483647)))
 
  ; ================================================================ x64 lane
+ (fno f) (s2i (snip (string f) 1 (tally (string f))))       ; 'f7 -> 7
  x64-alu '("add" "sub" "and" "or" "xor" "imul")
  x64-sized-ld '(("ld1" ("movsx")) ("ld2" ("movsx")) ("ld4" ("movsxd"))
                 ("ldu1" ("movzx")) ("ldu2" ("movzx")) ("ldu4" ("mov")))
@@ -310,50 +310,50 @@
              (below "setb") (above "seta") (ae "setae") (be "setbe") (s "sets") (ns "setns")
              (vs "seto") (vc "setno"))
  gens-x64
-  [["mov_rr" (\ _ (: d (rrand) s (rrand)
+  [["mov_rr" (\ _ (: d (rrand 0) s (rrand 0)
                      [[['mov d s]] (spec1 '("mov") [['r d] ['r s]])]))]
-   ["li" (\ _ (: d (rrand) k (rnd 4)
-                 imm (? (k = 0) (imm-small) (k = 1) (imm-s32) (k = 2) (imm-u32) (imm-big))
+   ["li" (\ _ (: d (rrand 0) k (rnd 4)
+                 imm (? (k = 0) (imm-small 0) (k = 1) (imm-s32 0) (k = 2) (imm-u32 0) (imm-big 0))
                  [[['li d imm]] (spec1 '("mov" "movabs") [['r d] ['i (mask64 imm)]])]))]
-   ["alu_rr" (\ _ (: op (pick x64-alu) d (rrand) b (rrand)
+   ["alu_rr" (\ _ (: op (pick x64-alu) d (rrand 0) b (rrand 0)
                      [[[(intern op) d d b]] (spec1 [op] [['r d] ['r b]])]))]
-   ["alu_imm" (\ _ (: op (pick '("add" "sub" "and" "or" "xor")) d (rrand) imm (imm-s32)
+   ["alu_imm" (\ _ (: op (pick '("add" "sub" "and" "or" "xor")) d (rrand 0) imm (imm-s32 0)
                       [[[(intern op) d d imm]] (spec1 [op] [['r d] ['i (mask64 imm)]])]))]
-   ["cmp" (\ _ (: a (rrand)
-                  (? (coin)
-                     (: b (rrand) [[['cmp a b]] (spec1 '("cmp") [['r a] ['r b]])])
-                     (: imm (imm-s32) [[['cmp a imm]] (spec1 '("cmp") [['r a] ['i (mask64 imm)]])]))))]
-   ["ld" (\ _ (: d (rrand) b (rrand) o (disp-any)
+   ["cmp" (\ _ (: a (rrand 0)
+                  (? (coin 0)
+                     (: b (rrand 0) [[['cmp a b]] (spec1 '("cmp") [['r a] ['r b]])])
+                     (: imm (imm-s32 0) [[['cmp a imm]] (spec1 '("cmp") [['r a] ['i (mask64 imm)]])]))))]
+   ["ld" (\ _ (: d (rrand 0) b (rrand 0) o (disp-any 0)
                  [[['ld d b o]] (spec1 '("mov") [['r d] ['m b o]])]))]
-   ["st" (\ _ (: b (rrand) o (disp-any) s (rrand)
+   ["st" (\ _ (: b (rrand 0) o (disp-any 0) s (rrand 0)
                  [[['st b o s]] (spec1 '("mov") [['m b o] ['r s]])]))]
-   ["ld_sized" (\ _ (: row (pick x64-sized-ld) d (rrand) b (rrand) o (disp-any)
+   ["ld_sized" (\ _ (: row (pick x64-sized-ld) d (rrand 0) b (rrand 0) o (disp-any 0)
                        [[[(intern <row) d b o]] (spec1 (nthl row 1) [['r d] ['m b o]])]))]
-   ["st_sized" (\ _ (: op (pick '("st1" "st2" "st4")) b (rrand) o (disp-any) s (rrand)
+   ["st_sized" (\ _ (: op (pick '("st1" "st2" "st4")) b (rrand 0) o (disp-any 0) s (rrand 0)
                        [[[(intern op) b o s]] (spec1 '("mov") [['m b o] ['r s]])]))]
-   ["pushpop" (\ _ (? (coin)
-                      (: s (rrand) [[['push s]] (spec1 '("push") [['r s]])])
-                      (: d (nrand) [[['pop d]] (spec1 '("pop") [['r d]])])))]
-   ["lea" (\ _ (: d (rrand) b (rrand) o (disp-any)
+   ["pushpop" (\ _ (? (coin 0)
+                      (: s (rrand 0) [[['push s]] (spec1 '("push") [['r s]])])
+                      (: d (nrand 0) [[['pop d]] (spec1 '("pop") [['r d]])])))]
+   ["lea" (\ _ (: d (rrand 0) b (rrand 0) o (disp-any 0)
                   [[['lea d b o]] (spec1 '("lea") [['r d] ['m b o]])]))]
-   ["shift" (\ _ (: op (pick '("shl" "shr" "sar" "rol" "ror")) d (rrand) c (rnd 64)
+   ["shift" (\ _ (: op (pick '("shl" "shr" "sar" "rol" "ror")) d (rrand 0) c (rnd 64)
                     [[[(intern op) d c]] (spec1 [op] [['r d] ['i c]])]))]
-   ["unary" (\ _ (: op (pick '("neg" "not" "inc" "dec")) d (rrand)
+   ["unary" (\ _ (: op (pick '("neg" "not" "inc" "dec")) d (rrand 0)
                     [[[(intern op) d]] (spec1 [op] [['r d]])]))]
-   ["ldx" (\ _ (: d (rrand) b (rrand) ix (pick (filter (\ r !(id? r 'sp)) gpregs))
-                  sc (pick '(1 2 4 8)) dp (disp-any)
+   ["ldx" (\ _ (: d (rrand 0) b (rrand 0) ix (pick (filter (\ r !(id? r 'sp)) gpregs))
+                  sc (pick '(1 2 4 8)) dp (disp-any 0)
                   [[['ldx d b ix sc dp]] (spec1 '("mov") [['r d] ['mx b dp ix sc]])]))]
-   ["leax" (\ _ (: d (rrand) b (rrand) ix (pick (filter (\ r !(id? r 'sp)) gpregs))
-                   sc (pick '(1 2 4 8)) dp (disp-any)
+   ["leax" (\ _ (: d (rrand 0) b (rrand 0) ix (pick (filter (\ r !(id? r 'sp)) gpregs))
+                   sc (pick '(1 2 4 8)) dp (disp-any 0)
                    [[['leax d b ix sc dp]] (spec1 '("lea") [['r d] ['mx b dp ix sc]])]))]
    ["shiftv" (\ _ (: row (pick '(("shlv" "shl") ("shrv" "shr") ("sarv" "sar")))
                      d (pick (filter (\ r !(id? r 'r1)) gpregs))
                      [[[(intern <row) d 'r1]] (spec1 [(nthl row 1)] [['r d] ['lit "cl"]])]))]
-   ["flagalu" (\ _ (: row (pick '(("adds" "add") ("subs" "sub"))) d (rrand)
-                      (? (coin)
-                         (: b (rrand) [[[(intern <row) d d b]] (spec1 [(nthl row 1)] [['r d] ['r b]])])
-                         (: imm (imm-s32) [[[(intern <row) d d imm]] (spec1 [(nthl row 1)] [['r d] ['i (mask64 imm)]])]))))]
-   ["setcc" (\ _ (: row (pick x64-setcc) d (rrand)
+   ["flagalu" (\ _ (: row (pick '(("adds" "add") ("subs" "sub"))) d (rrand 0)
+                      (? (coin 0)
+                         (: b (rrand 0) [[[(intern <row) d d b]] (spec1 [(nthl row 1)] [['r d] ['r b]])])
+                         (: imm (imm-s32 0) [[[(intern <row) d d imm]] (spec1 [(nthl row 1)] [['r d] ['i (mask64 imm)]])]))))]
+   ["setcc" (\ _ (: row (pick x64-setcc) d (rrand 0)
                     [[['set <row d]]
                      (\ ins (? (any i-bad ins) "undecodable/bad byte"
                                ((tally ins) != 2) ((show (tally ins)) + " insns, want setcc+movzx:" + dump-ins ins)
@@ -361,19 +361,18 @@
                                   r1 (run-spec [a] [[[(nthl row 1)] [['r d]]]] 0)
                                   (? (string? r1) r1
                                      (run-spec [b] [['("movzx") [['r d]]]] 0)))))]))]
-   ["jmpr" (\ _ (: d (rrand) [[['jmpr d]] (spec1 '("jmp") [['r d]])]))]
-   ["callr" (\ _ (: d (rrand) [[['callr d]] (spec1 '("call") [['r d]])]))]
-   ["ssealu" (\ _ (: op (pick '("addsd" "subsd" "mulsd" "divsd")) d (frand) s (frand)
+   ["jmpr" (\ _ (: d (rrand 0) [[['jmpr d]] (spec1 '("jmp") [['r d]])]))]
+   ["callr" (\ _ (: d (rrand 0) [[['callr d]] (spec1 '("call") [['r d]])]))]
+   ["ssealu" (\ _ (: op (pick '("addsd" "subsd" "mulsd" "divsd")) d (frand 0) s (frand 0)
                      [[[(intern op) d s]] (spec1 [op] [['x (fno d)] ['x (fno s)]])]))]
-   ["cvt" (\ _ (: d (frand) g (rrand)
+   ["cvt" (\ _ (: d (frand 0) g (rrand 0)
                   [[['cvtsi2sd d g]] (spec1 '("cvtsi2sd") [['x (fno d)] ['r g]])]))]
-   ["movqxr" (\ _ (: d (frand) g (rrand)
+   ["movqxr" (\ _ (: d (frand 0) g (rrand 0)
                      [[['movqxr d g]] (spec1 '("movq") [['x (fno d)] ['r g]])]))]
-   ["ldsd" (\ _ (: d (frand) b (rrand) o (disp-any)
+   ["ldsd" (\ _ (: d (frand 0) b (rrand 0) o (disp-any 0)
                    [[['ldsd d b o]] (spec1 '("movsd") [['x (fno d)] ['m b o]])]))]
-   ["stsd" (\ _ (: b (rrand) o (disp-any) s (frand)
+   ["stsd" (\ _ (: b (rrand 0) o (disp-any 0) s (frand 0)
                    [[['stsd b o s]] (spec1 '("movsd") [['m b o] ['x (fno s)]])]))]]
- (fno f) (s2i (snip (string f) 1 (tally (string f))))
 
  ; ================================================================ arm64 lane
  arm-alu '(("add" "add") ("sub" "sub") ("and" "and") ("or" "orr") ("xor" "eor") ("imul" "mul"))
@@ -382,26 +381,8 @@
                 ("ldu2" ("ldrh" "ldurh") w) ("ldu4" ("ldr" "ldur") w))
  arm-cc '((eq "eq") (ne "ne") (lt "lt") (le "le") (gt "gt") (ge "ge") (below "lo")
           (above "hi") (ae "hs") (be "ls") (s "mi") (ns "pl") (vs "vs") (vc "vc"))
- (arm-disp) (: k (rnd 3) (? (k = 0) 0 (k = 1) (rint -256 255) (8 * rnd 512)))
- ; the movz/movk(/movn/orr) chain reassembled into its 64-bit value
- (recon-li ins d)
-  (: (go m val)
-      (? !(two? m) (mask64 val)
-         (: i <m
-            (? (i-bad i) "undecodable in li chain"
-               (: o (ops-arm (i-ops i))
-                  (? !(id? (abs-arm <o) d) ("li dest " + <o + " != " + string d)
-                     (: sh (: hi (idx-of (i-ops i) "lsl #")
-                              (? (charm? hi) (s2i (snip (i-ops i) (hi + 5) (tally (i-ops i)))) 0))
-                        imm (? (1 < tally o) (imm-arm (nthl o 1)) 0)
-                        mn (i-mnem i)
-                        v2 (? ((mn = "mov") || (mn = "movz")) (mask64 (* imm (2 ^' sh)))
-                              (mn = "movk") (: keep (mask64 (0 - (* 65536 (2 ^' sh)) - 1))
-                                               0)
-                              ())
-                        0))))))
-     0)
- (2^ k) (: (go i a) (? (i = k) a (go (i + 1) (2 * a))) (go 0 1))
+ (arm-disp _) (: k (rnd 3) (? (k = 0) 0 (k = 1) (rint -256 255) (8 * rnd 512)))
+ ; the movz/movk(/movn/orr) chain reassembled into its 64-bit value; () = unreadable
  (recon-li2 ins d)
   (: (go m val)
       (? !(two? m) (mask64 val)
@@ -411,72 +392,73 @@
                   (? !(id? (abs-arm <o) d) ()
                      (: hi (idx-of (i-ops i) "lsl #")
                         sh (? (charm? hi) (s2i (snip (i-ops i) (hi + 5) (tally (i-ops i)))) 0)
-                        imm (? (1 < tally o) (: v (imm-arm (nthl o 1)) (? (charm? v) v 0)) 0)
+                        imm (? (1 < tally o) (: v (imm-arm (nthl o 1)) (? (nil? v) 0 v)) 0)
                         mn (i-mnem i)
-                        (? ((mn = "mov") || (mn = "movz")) (go >m (mask64 (imm * 2^ sh)))
-                           (mn = "movk") (go >m (mask64 ((mask64 (val - (% (/ val (2^ sh)) 65536) * 2^ sh)) + (% imm 65536) * 2^ sh)))
-                           (mn = "movn") (go >m (mask64 (M64 - 1 - (% imm 65536) * 2^ sh)))
+                        (? ((mn = "mov") || (mn = "movz")) (go >m (mask64 (imm * pow2 sh)))
+                           (mn = "movk") (go >m (mask64 ((mask64 (val - (% (divp val (pow2 sh)) 65536) * pow2 sh)) + (% imm 65536) * pow2 sh)))
+                           (mn = "movn") (go >m (mask64 (M64 - 1 - (% imm 65536) * pow2 sh)))
                            (mn = "orr") (go >m (mask64 imm))
                            ())))))))
      (go ins 0))
  gens-arm
-  [["mov_rr" (\ _ (: d (nrand) s (nrand)
+  [["mov_rr" (\ _ (: d (nrand 0) s (nrand 0)
                      [[['mov d s]] (spec1 '("mov") [['r d] ['r s]])]))]
-   ["li" (\ _ (: d (nrand) k (rnd 6)
-                 imm (? (k = 0) (imm-small) (k = 1) (rnd 65536) (k = 2) (imm-s32)
-                        (k = 3) (imm-u32) (k = 4) (imm-big) (0 - rint 1 65535))
+   ["li" (\ _ (: d (nrand 0) k (rnd 6)
+                 imm (? (k = 0) (imm-small 0) (k = 1) (rnd 65536) (k = 2) (imm-s32 0)
+                        (k = 3) (imm-u32 0) (k = 4) (imm-big 0) (0 - rint 1 65535))
                  [[['li d imm]]
                   (\ ins (? !(two? ins) "no insns"
                             (: got (recon-li2 ins d)
                                (? !(charm? got) "li chain unreadable"
                                   (got != mask64 imm) ("li value " + show0x got + " != " + show0x (mask64 imm))
                                   ()))))]))]
-   ["alu_rr" (\ _ (: row (pick arm-alu) d (nrand) a (nrand) b (nrand)
+   ["alu_rr" (\ _ (: row (pick arm-alu) d (nrand 0) a (nrand 0) b (nrand 0)
                      [[[(intern <row) d a b]] (spec1 [(nthl row 1)] [['r d] ['r a] ['r b]])]))]
-   ["alu_imm" (\ _ (: op (pick '("add" "sub")) d (rrand) a (rrand) imm (rnd 4096)
+   ["alu_imm" (\ _ (: op (pick '("add" "sub")) d (rrand 0) a (rrand 0) imm (rnd 4096)
                       [[[(intern op) d a imm]] (spec1 [op] [['r d] ['r a] ['i imm]])]))]
-   ["cmp" (\ _ (: a (nrand)
-                  (? (coin)
-                     (: b (nrand) [[['cmp a b]] (spec1 '("cmp") [['r a] ['r b]])])
+   ["cmp" (\ _ (: a (nrand 0)
+                  (? (coin 0)
+                     (: b (nrand 0) [[['cmp a b]] (spec1 '("cmp") [['r a] ['r b]])])
                      (: imm (rnd 4096) [[['cmp a imm]] (spec1 '("cmp") [['r a] ['i imm]])]))))]
-   ["ld" (\ _ (: d (nrand) b (rrand) o (arm-disp)
+   ["ld" (\ _ (: d (nrand 0) b (rrand 0) o (arm-disp 0)
                  [[['ld d b o]] (spec1 '("ldr" "ldur") [['rw d 'x] ['m b o]])]))]
-   ["st" (\ _ (: b (rrand) o (arm-disp) s (nrand)
+   ["st" (\ _ (: b (rrand 0) o (arm-disp 0) s (nrand 0)
                  [[['st b o s]] (spec1 '("str" "stur") [['rw s 'x] ['m b o]])]))]
-   ["ld_sized" (\ _ (: row (pick arm-sized-ld) d (nrand) b (rrand) o (arm-disp)
+   ["ld_sized" (\ _ (: row (pick arm-sized-ld) d (nrand 0) b (rrand 0) o (arm-disp 0)
                        [[[(intern <row) d b o]] (spec1 (nthl row 1) [['rw d (nthl row 2)] ['m b o]])]))]
    ["st_sized" (\ _ (: row (pick '(("st1" ("strb" "sturb")) ("st2" ("strh" "sturh")) ("st4" ("str" "stur"))))
-                       b (rrand) o (arm-disp) s (nrand)
+                       b (rrand 0) o (arm-disp 0) s (nrand 0)
                        [[[(intern <row) b o s]] (spec1 (nthl row 1) [['rw s 'w] ['m b o]])]))]
-   ["pushpop" (\ _ (? (coin)
-                      (: s (nrand)
-                         [[['push s]]
-                          (spec1 '("str") [['r s] ['m 'sp -16]])])
-                      (: d (nrand)
-                         [[['pop d]]
-                          (\ ins (: r (run-spec ins [['("ldr") [['r d]]]] 0)
-                                    (? (string? r) r
-                                       (: m (mem-arm (nthl (ops-arm (i-ops <ins)) 1))
-                                          (? (!(two? m) || !(id? (abs-arm <m) 'sp)) "pop base != sp" ())))))]))))]
-   ["shift" (\ _ (: row (pick '(("shl" "lsl") ("shr" "lsr") ("sar" "asr"))) d (nrand) c (rnd 64)
+   ["pushpop" (\ _ (: base-sp? (\ ins (: m (mem-arm (nthl (ops-arm (i-ops <ins)) 1))
+                                          (? (!(two? m) || !(id? (abs-arm <m) 'sp)) "base != sp" ())))
+                      (? (coin 0)
+                         (: s (nrand 0)
+                            [[['push s]]
+                             (\ ins (: r (run-spec ins [['("str") [['r s]]]] 0)
+                                       (? (string? r) r (base-sp? ins))))])
+                         (: d (nrand 0)
+                            [[['pop d]]
+                             (\ ins (: r (run-spec ins [['("ldr") [['r d]]]] 0)
+                                       (? (string? r) r (base-sp? ins))))]))))]
+   ["shift" (\ _ (: row (pick '(("shl" "lsl") ("shr" "lsr") ("sar" "asr"))) d (nrand 0) c (rnd 64)
                     allowed (? (c = 0) '("lsl" "lsr" "asr") [(nthl row 1)])
                     [[[(intern <row) d c]] (spec1 allowed [['r d] ['r d] ['i c]])]))]
-   ["unary" (\ _ (: op (pick '("neg" "not" "inc" "dec")) d (nrand)
+   ["unary" (\ _ (: op (pick '("neg" "not" "inc" "dec")) d (nrand 0)
                     (? ((op = "neg") || (op = "not"))
                        [[[(intern op) d]] (spec1 [(? (op = "neg") "neg" "mvn")] [['r d] ['r d]])]
                        [[[(intern op) d]] (spec1 [(? (op = "inc") "add" "sub")] [['r d] ['r d] ['i 1]])])))]
-   ["jmpr" (\ _ (: d (nrand) [[['jmpr d]] (spec1 '("br") [['r d]])]))]
-   ["callr" (\ _ (: d (nrand) [[['callr d]] (spec1 '("blr") [['r d]])]))]
-   ["setcc" (\ _ (: row (pick arm-cc) d (nrand)
+   ["jmpr" (\ _ (: d (nrand 0) [[['jmpr d]] (spec1 '("br") [['r d]])]))]
+   ["callr" (\ _ (: d (nrand 0) [[['callr d]] (spec1 '("blr") [['r d]])]))]
+   ["setcc" (\ _ (: row (pick arm-cc) d (nrand 0)
                     [[['set <row d]] (spec1 '("cset") [['r d] ['lit (nthl row 1)]])]))]
-   ["sx" (\ _ (: row (pick '(("sx1" "sxtb") ("sx2" "sxth") ("sx4" "sxtw"))) d (nrand)
+   ["sx" (\ _ (: row (pick '(("sx1" "sxtb") ("sx2" "sxth") ("sx4" "sxtw"))) d (nrand 0)
                  [[[(intern <row) d]] (spec1 [(nthl row 1)] [['rw d 'x] ['rw d 'w]])]))]]
 
  ; ================================================================ riscv lane
  rv-gpregs '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 sp fp lr)
- (rv-rand) (pick rv-gpregs)
- (rv-frand) (pick fregs)
- (rv-imm12) (rint -2048 2047)
+ (rv-rand _) (pick rv-gpregs)
+ (rv-frand _) (pick fregs)
+ (rv-imm12 _) (rint -2048 2047)
  rv-alu '(("add" "add") ("sub" "sub") ("and" "and") ("or" "or") ("xor" "xor") ("imul" "mul"))
  rv-hop '((eq "bne" 0) (ne "beq" 0) (lt "bge" 0) (ge "blt" 0)
           (gt "bge" 1) (le "blt" 1) (below "bgeu" 0) (ae "bltu" 0)
@@ -490,10 +472,10 @@
            (eq "feq.d" 0 "beqz") (ne "feq.d" 0 "bnez"))
  (rv-spec spec) (\ ins (run-spec ins spec 1))
  gens-rv
-  [["mov_rr" (\ _ (: d (rv-rand) s (rv-rand)
+  [["mov_rr" (\ _ (: d (rv-rand 0) s (rv-rand 0)
                      [[['mov d s]] (rv-spec [['("mv") [['r d] ['r s]]]])]))]
-   ["li" (\ _ (: d (rv-rand) k (rnd 5)
-                 imm (? (k = 0) (rv-imm12) (k = 1) (imm-s32) (k = 2) (imm-u32) (k = 3) (imm-big)
+   ["li" (\ _ (: d (rv-rand 0) k (rnd 5)
+                 imm (? (k = 0) (rv-imm12 0) (k = 1) (imm-s32 0) (k = 2) (imm-u32 0) (k = 3) (imm-big 0)
                         (0 - rint 4294967296 4611686018427387904))
                  [[['li d imm]]
                   (\ ins
@@ -509,31 +491,31 @@
                                               (mn = "addiw") (: s (% (mask64 (val + imm-rv (nthl o 2))) 4294967296)
                                                                 (? (2147483648 <= s) (s - 4294967296) s))
                                               (mn = "addi") (val + imm-rv (nthl o 2))
-                                              (mn = "slli") (val * 2^ (imm-rv (nthl o 2)))
-                                              ())
-                                        (? !(charm? (? (v2 < 0) (0 - v2) v2)) ("li unexpected mnem " + mn)
-                                           (go >m v2)))))))
+                                              (mn = "slli") (val * pow2 (imm-rv (nthl o 2)))
+                                              'bad)
+                                        (? (id? v2 'bad) ("li unexpected mnem " + mn)
+                                           (go >m v2))))))
                            (go ins 0))))]))]
-   ["alu_rr" (\ _ (: row (pick rv-alu) d (rv-rand) a (rv-rand) b (rv-rand)
+   ["alu_rr" (\ _ (: row (pick rv-alu) d (rv-rand 0) a (rv-rand 0) b (rv-rand 0)
                      [[[(intern <row) d a b]] (rv-spec [[[(nthl row 1)] [['r d] ['r a] ['r b]]]])]))]
-   ["alu_imm" (\ _ (: op (pick '("add" "sub" "and" "or" "xor")) d (rv-rand) a (rv-rand)
+   ["alu_imm" (\ _ (: op (pick '("add" "sub" "and" "or" "xor")) d (rv-rand 0) a (rv-rand 0)
                       i0 (rint 1 2046)
                       imm (? ((op = "and") && (i0 = 255)) 254 i0)
                       mn (? (op = "add") "addi" (op = "sub") "addi" (op = "and") "andi" (op = "or") "ori" "xori")
                       want (? (op = "sub") (0 - imm) imm)
                       [[[(intern op) d a imm]] (rv-spec [[[mn] [['r d] ['r a] ['i want]]]])]))]
-   ["cmpbr" (\ _ (: row (pick rv-hop) a (rv-rand) b (rv-rand)
+   ["cmpbr" (\ _ (: row (pick rv-hop) a (rv-rand 0) b (rv-rand 0)
                     x (? (nthl row 2) b a) y (? (nthl row 2) a b)
                     [[['cmp a b] ['br <row 'l] ['label 'l]]
                      (rv-spec [[[(nthl row 1)] [['r x] ['r y] ['i 8]]] ['("j") [['i 4]]]])]))]
-   ["cmpbr_imm" (\ _ (: row (pick rv-hop) a (rv-rand) imm (rint 1 2047)
+   ["cmpbr_imm" (\ _ (: row (pick rv-hop) a (rv-rand 0) imm (rint 1 2047)
                         x (? (nthl row 2) 't5 a) y (? (nthl row 2) a 't5)
                         [[['cmp a imm] ['br <row 'l] ['label 'l]]
                          (rv-spec [['("li") [['r 't5] ['i imm]]]
                                    [[(nthl row 1)] [['r x] ['r y] ['i 8]]]
                                    ['("j") [['i 4]]]])]))]
    ["setcc" (\ _ (: cond (pick '(eq ne lt ge gt le below above ae be s ns))
-                    a (rv-rand) b (rv-rand) d (rv-rand)
+                    a (rv-rand 0) b (rv-rand 0) d (rv-rand 0)
                     x1 [['("xori") [['r d] ['r d] ['i 1]]]]
                     spec (? (id? cond 'eq) [['("xor") [['r 't6] ['r a] ['r b]]] ['("seqz") [['r d] ['r 't6]]]]
                             (id? cond 'ne) [['("xor") [['r 't6] ['r a] ['r b]]] ['("snez") [['r d] ['r 't6]]]]
@@ -548,34 +530,34 @@
                             (id? cond 's) [['("sub") [['r 't6] ['r a] ['r b]]] ['("sltz") [['r d] ['r 't6]]]]
                             ([['("sub") [['r 't6] ['r a] ['r b]]] ['("sltz") [['r d] ['r 't6]]]] + x1))
                     [[['cmp a b] ['set cond d]] (rv-spec spec)]))]
-   ["ld" (\ _ (: row (pick rv-ld) d (rv-rand) b (rv-rand) o (rv-imm12)
+   ["ld" (\ _ (: row (pick rv-ld) d (rv-rand 0) b (rv-rand 0) o (rv-imm12 0)
                  [[[(intern <row) d b o]] (rv-spec [[[(nthl row 1)] [['r d] ['m b o]]]])]))]
-   ["st" (\ _ (: row (pick rv-st) b (rv-rand) o (rv-imm12) s (rv-rand)
+   ["st" (\ _ (: row (pick rv-st) b (rv-rand 0) o (rv-imm12 0) s (rv-rand 0)
                  [[[(intern <row) b o s]] (rv-spec [[[(nthl row 1)] [['r s] ['m b o]]]])]))]
-   ["ld_far" (\ _ (: d (rv-rand) b (rv-rand)
-                     off ((? (coin) 1 -1) * rint 2048 2147479552)
+   ["ld_far" (\ _ (: d (rv-rand 0) b (rv-rand 0)
+                     off ((? (coin 0) 1 -1) * rint 2048 2147479552)
                      l0 (% (mask64 off) 4096)
                      lo (? (2047 < l0) (l0 - 4096) l0)
-                     hi (% (/ (mask64 (off - lo)) 4096) 1048576)
+                     hi (% (int ((mask64 (off - lo)) / 4096)) 1048576)
                      [[['ld d b off]]
                       (rv-spec [['("lui") [['r 't6] ['i hi]]]
                                 ['("add") [['r 't6] ['r 't6] ['r b]]]
                                 ['("ld") [['r d] ['m 't6 lo]]]])]))]
-   ["ldx" (\ _ (: d (rv-rand) b (rv-rand) ix (rv-rand) sc (pick '(2 4 8)) dp (rv-imm12)
+   ["ldx" (\ _ (: d (rv-rand 0) b (rv-rand 0) ix (rv-rand 0) sc (pick '(2 4 8)) dp (rv-imm12 0)
                   amt (? (sc = 2) 1 (sc = 4) 2 3)
                   [[['ldx d b ix sc dp]]
                    (rv-spec [['("slli") [['r 't6] ['r ix] ['i amt]]]
                              ['("add") [['r 't6] ['r 't6] ['r b]]]
                              ['("ld") [['r d] ['m 't6 dp]]]])]))]
-   ["stx" (\ _ (: b (rv-rand) ix (rv-rand) s (rv-rand) sc (pick '(2 4 8)) dp (rv-imm12)
+   ["stx" (\ _ (: b (rv-rand 0) ix (rv-rand 0) s (rv-rand 0) sc (pick '(2 4 8)) dp (rv-imm12 0)
                   amt (? (sc = 2) 1 (sc = 4) 2 3)
                   [[['stx b ix sc dp s]]
                    (rv-spec [['("slli") [['r 't6] ['r ix] ['i amt]]]
                              ['("add") [['r 't6] ['r 't6] ['r b]]]
                              ['("sd") [['r s] ['m 't6 dp]]]])]))]
-   ["shift" (\ _ (: row (pick '(("shl" "slli") ("shr" "srli") ("sar" "srai"))) d (rv-rand) c (rint 1 63)
+   ["shift" (\ _ (: row (pick '(("shl" "slli") ("shr" "srli") ("sar" "srai"))) d (rv-rand 0) c (rint 1 63)
                     [[[(intern <row) d c]] (rv-spec [[[(nthl row 1)] [['r d] ['r d] ['i c]]]])]))]
-   ["rot" (\ _ (: op (pick '("rol" "ror")) d (rv-rand) c (rint 1 63)
+   ["rot" (\ _ (: op (pick '("rol" "ror")) d (rv-rand 0) c (rint 1 63)
                   k (? (op = "ror") c (% (64 - c) 64))
                   [[[(intern op) d c]]
                    (rv-spec [['("srli") [['r 't6] ['r d] ['i k]]]
@@ -584,41 +566,41 @@
    ["shiftv" (\ _ (: row (pick '(("shlv" "sll") ("shrv" "srl") ("sarv" "sra")))
                      d (pick (filter (\ r !(id? r 'r1)) rv-gpregs))
                      [[[(intern <row) d 'r1]] (rv-spec [[[(nthl row 1)] [['r d] ['r d] ['r 'r1]]]])]))]
-   ["unary" (\ _ (: op (pick '("neg" "not" "inc" "dec")) d (rv-rand)
+   ["unary" (\ _ (: op (pick '("neg" "not" "inc" "dec")) d (rv-rand 0)
                     spec (? (op = "neg") [['("neg") [['r d] ['r d]]]]
                             (op = "not") [['("not") [['r d] ['r d]]]]
                             (op = "inc") [['("addi") [['r d] ['r d] ['i 1]]]]
                             [['("addi") [['r d] ['r d] ['i -1]]]])
                     [[[(intern op) d]] (rv-spec spec)]))]
    ["sxzx" (\ _ (: row (pick '(("sx1" 56 "srai") ("sx2" 48 "srai") ("zx2" 48 "srli") ("zx4" 32 "srli")))
-                   d (rv-rand) c (nthl row 1)
+                   d (rv-rand 0) c (nthl row 1)
                    [[[(intern <row) d]]
                     (rv-spec [['("slli") [['r d] ['r d] ['i c]]]
                               [[(nthl row 2)] [['r d] ['r d] ['i c]]]])]))]
    ["divrem" (\ _ (: row (pick '(("div" "div") ("udiv" "divu") ("rem" "rem") ("urem" "remu")))
-                     d (rv-rand) a (rv-rand) b (rv-rand) t (rv-rand)
+                     d (rv-rand 0) a (rv-rand 0) b (rv-rand 0) t (rv-rand 0)
                      ir (? ((<row = "div") || (<row = "udiv")) [[(intern <row) d a b]]
                            [[(intern <row) d a b t]])
                      [ir (rv-spec [[[(nthl row 1)] [['r d] ['r a] ['r b]]]])]))]
-   ["jmpr" (\ _ (: d (rv-rand)
+   ["jmpr" (\ _ (: d (rv-rand 0)
                    [[['jmpr d]]
-                    (? (id? d 'lr) (\ ins (run-spec ins [['("ret") []]] 0))
+                    (? (id? d 'lr) (\ ins (run-spec ins [['("ret") ()]] 0))
                        (rv-spec [['("jr") [['r d]]]]))]))]
-   ["callr" (\ _ (: d (rv-rand) [[['callr d]] (rv-spec [['("jalr") [['r d]]]])]))]
-   ["pushpop" (\ _ (? (coin)
-                      (: s (rv-rand)
+   ["callr" (\ _ (: d (rv-rand 0) [[['callr d]] (rv-spec [['("jalr") [['r d]]]])]))]
+   ["pushpop" (\ _ (? (coin 0)
+                      (: s (rv-rand 0)
                          [[['push s]] (rv-spec [['("addi") [['r 'sp] ['r 'sp] ['i -16]]]
                                                 ['("sd") [['r s] ['m 'sp 0]]]])])
-                      (: d (rv-rand)
+                      (: d (rv-rand 0)
                          [[['pop d]] (rv-spec [['("ld") [['r d] ['m 'sp 0]]]
                                                ['("addi") [['r 'sp] ['r 'sp] ['i 16]]]])])))]
    ["fp3" (\ _ (: row (pick '(("addsd" "fadd.d") ("subsd" "fsub.d") ("mulsd" "fmul.d") ("divsd" "fdiv.d")))
-                  d (rv-frand) s (rv-frand)
+                  d (rv-frand 0) s (rv-frand 0)
                   [[[(intern <row) d s]] (rv-spec [[[(nthl row 1)] [['r d] ['r d] ['r s]]]])]))]
-   ["fmov" (\ _ (: d (rv-frand) s (rv-frand)
+   ["fmov" (\ _ (: d (rv-frand 0) s (rv-frand 0)
                    [[['movsd d s]] (rv-spec [['("fmv.d") [['r d] ['r s]]]])]))]
    ["fcvt" (\ _ (: which (pick '("cvtsi2sd" "cvttsd2si" "movqxr" "movqrx"))
-                   f (rv-frand) g (rv-rand)
+                   f (rv-frand 0) g (rv-rand 0)
                    (? (which = "cvtsi2sd")
                       [[['cvtsi2sd f g]] (rv-spec [['("fcvt.d.l") [['r f] ['r g]]]])]
                       (which = "movqxr")
@@ -632,12 +614,12 @@
                                        (? (((tally o) = 3) && ((nthl o 2) = "rtz")) ()
                                           "fcvt.l.d rm != rtz")))))])))]
    ["fldst" (\ _ (: which (pick '("ldsd" "stsd" "ldss" "stss"))
-                    f (rv-frand) b (rv-rand) o (rv-imm12)
+                    f (rv-frand 0) b (rv-rand 0) o (rv-imm12 0)
                     (? (which = "ldsd") [[['ldsd f b o]] (rv-spec [['("fld") [['r f] ['m b o]]]])]
                        (which = "stsd") [[['stsd b o f]] (rv-spec [['("fsd") [['r f] ['m b o]]]])]
                        (which = "ldss") [[['ldss f b o]] (rv-spec [['("flw") [['r f] ['m b o]]]])]
                        [[['stss b o f]] (rv-spec [['("fsw") [['r f] ['m b o]]]])])))]
-   ["fcmpbr" (\ _ (: row (pick rv-fhop) a (rv-frand) b (rv-frand)
+   ["fcmpbr" (\ _ (: row (pick rv-fhop) a (rv-frand 0) b (rv-frand 0)
                      x (? (nthl row 2) b a) y (? (nthl row 2) a b)
                      [[['ucomisd a b] ['br <row 'l] ['label 'l]]
                       (rv-spec [[[(nthl row 1)] [['r 't6] ['r x] ['r y]]]
@@ -651,11 +633,12 @@
                               ['("beq") [['r t] ['r 't6] ['i 8]]]
                               ['("j") [['i 4]]]])]))]]
 
- ; ---- the lanes ----
+ ; ---- the lanes; the 10th column names the disassembler a lane needs ----
  arches
-  [["x64" 'x64 gens-x64 (\ hx (disasm-x64 hx)) ops-comma mem-x64 (\ s (abs-x64 s)) imm-x64 1]
-   ["arm64" 'arm64 gens-arm (\ hx (disasm-mc hx "aarch64" "" "//")) ops-arm mem-arm (\ s (abs-arm s)) imm-arm 0]
-   ["riscv" 'riscv64 gens-rv (\ hx (disasm-mc hx "riscv64" " --mattr=+m,+f,+d" "#")) ops-comma mem-rv (\ s (abs-rv s)) imm-rv 0]]
+  [["x64" 'x64 gens-x64 (\ hx (disasm-x64 hx)) ops-comma mem-x64 (\ s (abs-x64 s)) imm-x64 1 "objdump"]
+   ["arm64" 'arm64 gens-arm (\ hx (disasm-mc hx "aarch64" "" "//")) ops-arm mem-arm (\ s (abs-arm s)) imm-arm 0 "llvm-mc"]
+   ["riscv" 'riscv64 gens-rv (\ hx (disasm-mc hx "riscv64" " --mattr=+m,+f,+d" "#")) ops-comma mem-rv (\ s (abs-rv s)) imm-rv 0 "llvm-mc"]]
+ (tool? t) ((sh ("command -v " + t + " >/dev/null 2>&1")) = 0)
 
  fz-n (: v ("" + getenv "FUZZ_N") (? (0 < tally v) (s2i v) 8))
  fz-seed (: v ("" + getenv "FUZZ_SEED") (? (0 < tally v) (s2i v) 20250717))
@@ -665,7 +648,7 @@
   (: nm <row tgt (nthl row 1) gens (nthl row 2)
      _ (pin AR 'ops (nthl row 4)) _ (pin AR 'mem (nthl row 5))
      _ (pin AR 'abs (nthl row 6)) _ (pin AR 'imm (nthl row 7))
-     llvm2 (nthl row 8)
+     llvm2 ((nthl row 8) && (tool? "llvm-mc"))
      _ (rseed fz-seed)
      _ (puts ("\n=== holo " + nm + " encoder fuzz: seed " + show fz-seed + ", " + show fz-n + "/class ===\n"))
      (class cl) (: cn <cl gen (nthl cl 1)
@@ -691,6 +674,8 @@
      (foldl (\ a cl (a + class cl)) 0 gens))
 
  lanes (? (0 < tally fz-arch) (filter (\ r (<r = fz-arch)) arches) arches)
- bad (foldl (\ a r (a + run-lane r)) 0 lanes)
+ bad (foldl (\ a r (? (tool? (nthl r 9)) (a + run-lane r)
+                      (: _ (puts ("  (" + <r + " skipped: no " + nthl r 9 + ")\n")) a)))
+            0 lanes)
  _ (puts ("\nholo fuzz: " + (? (0 < bad) ((show bad) + " FAILURES\n") "all classes green\n")))
  (? (0 < bad) (quit 1) (quit 0)))

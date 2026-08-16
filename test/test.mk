@@ -785,8 +785,8 @@ PORT ?= 7390
 nettest: host
 	@echo TEST $m "(127.0.0.1:$(PORT))"
 	@sh $R/test/net/loopback.sh $m $(PORT)
-# Validate the l tool rewrites against their frozen Python references in mk/tools/py/
-# (gen_data / vmret). See mk/tools/Makefile + mk/tools/py/README.md. ⚠ lush is a real
+# The tool gates beside the build: vmret over every built ELF, the hue generators, cook,
+# tele. See mk/tools/Makefile. ⚠ lush is a real
 # prerequisite: test/host/cook.l's SHELL pair sets `SHELL := out/host/lush` to prove cook honors it.
 test_tools: host out/host$(hsuf)/lush
 	@$(MAKE) -C mk/tools
@@ -940,26 +940,19 @@ test_uulean: host
 	  if [ $$r -ne 0 ] || grep -q sorryAx out/host/.uulean.out; then cat out/host/.uulean.out; exit 1; fi
 endif
 
-# the fuzz-first rung of the holo encoder ladder (test/holo/fuzz/): random IR forms encoded via
-# holo, disassembled (objdump for x64, llvm-mc elsewhere), decode checked against intent.
-# sysdiff.py rides the same lane for the SYSTEM ops, off holo's own arm64.l tables.
-holofuzz = x64:objdump:--no-llvm arm64:llvm-mc: riscv:llvm-mc:
-ifeq ($(PYTHON3),)
-test_holofuzz:
-	@echo "test_holofuzz: skipped (needs python3)"
-else
+# the fuzz-first rung of the holo encoder ladder (test/holo/fuzz/): random IR forms encoded
+# via holo (in-process), disassembled (objdump for x64, cross-read by llvm-mc; llvm-mc
+# elsewhere), decode checked against intent. fuzz.l skips a lane whose disassembler is
+# absent and exits 1 on any decode disagreement. sysdiff.l rides the same lane for the
+# SYSTEM ops, byte-exact off holo's own arm64.l tables.
 test_holofuzz: host
-	@echo TEST test/holo/fuzz/fuzz.py "(holo x64+arm64+riscv encoder differential fuzz)"
-	@for s in $(holofuzz); do a=$${s%%:*}; r=$${s#*:}; t=$${r%%:*}; x=$${r#*:}; \
-	   if command -v $$t >/dev/null 2>&1; then \
-	     $(PYTHON3) test/holo/fuzz/fuzz.py --arch $$a -n 8 --seed 20250717 $$x \
-	       || { echo "FAIL holofuzz $$a -- a holo encoding disagrees with $$t"; exit 1; }; \
-	   else echo "  ($$a skipped: no $$t)"; fi; done
+	@echo TEST test/holo/fuzz/fuzz.l "(holo x64+arm64+riscv encoder differential fuzz)"
+	@FUZZ_N=8 FUZZ_SEED=20250717 $(mw) test/holo/fuzz/fuzz.l \
+	  || { echo "FAIL holofuzz -- a holo encoding disagrees with its disassembler"; exit 1; }
 	@if command -v llvm-mc >/dev/null 2>&1; then \
-	   $(PYTHON3) test/holo/fuzz/sysdiff.py \
+	   $(mw) test/holo/fuzz/sysdiff.l \
 	     || { echo "FAIL sysdiff -- a holo SYSTEM encoding disagrees with llvm-mc"; exit 1; }; \
 	 else echo "  (sysdiff skipped: no llvm-mc)"; fi
-endif
 # test/uuwm.l is a COMMITTED GENERATED artifact: lux's zipper ops compiled from crew/lux/core.l
 # into uu terms (mk/tools/uuwmgen.l), so test/uuwmlaw.l proves its theorems OF THE IMPLEMENTATION
 # at corpus time. `make uuwm` refreshes it; test_uuwm regenerates and diffs.

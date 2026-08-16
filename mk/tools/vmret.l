@@ -1,7 +1,7 @@
 #!/usr/bin/env l
 ; vmret.l -- flag lvm_* VM-instruction aps that contain a `ret`.
 ;
-; Port of mk/tools/vmret.py (see it for the full rationale). The l VM is
+; The l VM is
 ; threaded: every lvm_* opcode ap should tail-jump to the next, never
 ; emit an ordinary `ret`. This tool disassembles an ELF (shelling out to
 ; objdump / llvm-objdump via the `hark` nif) and reports every lvm_* function
@@ -31,7 +31,7 @@
    (prefix? p s) (= p (snip s 0 (tally p)))
    (dash? a) (&& (< 0 (tally a)) (= 45 (peep a 0 0))))
 
-; --- line classifiers (the three vmret.py regexes, by hand) -----------
+; --- line classifiers ---------------------------------------------
 ; HEADER_RE  ^\s*[0-9a-fA-F]+\s+<(.+)>:\s*$  -> the captured name, else 0.
 (: (parse-header line)
    (: i (skip-ws line 0)
@@ -128,7 +128,7 @@
      (: st (find-symtab d (u64 d 40) (u16 d 58) (u16 d 60) 0)  ; e_shoff / e_shentsize / e_shnum
         (? st (collect-syms d (cap st) (// (cup st) 24) 0 (tablet 0)) (tablet 0))))
 
-; --- the scan (vmret.py scan(), grouping by function header) ----------
+; --- the scan, grouping by function header ----------------------------
 ; close the current watched function: flag it iff it collected any rets.
 (: (close name watching rets flagged)
    (? (&& watching (two? rets)) (link (link name (rev rets)) flagged) flagged))
@@ -242,7 +242,7 @@
    scanned  (scan-all (lines output) prefix ret? sizes)
    flagged  (cap scanned)
    total    (cup scanned)
-   ; --- the report (byte-for-byte the same shape as vmret.py) ---
+   ; --- the report ---
    (? (= 0 total)
       (: _ (say err "vmret: no ") _ (say err prefix) _ (say err "* functions found in ")
          _ (say err base) _ (say err " (stripped binary?)\n") (quit 2))

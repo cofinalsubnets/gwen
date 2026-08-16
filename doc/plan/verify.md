@@ -22,28 +22,30 @@ half of the same ladder, not separate programs.
 | verified lux (uuwm) | wm2uu.l, test/uuwm*.l | keep; FRESHENED 2026-08-16 |
 | CLAUDE.md laws fuzz | test/law.l | keep; grows a uu leg (below) |
 | property fuzz | test/fuzz.l | keep |
-| holo encoder fuzz | test/holo/fuzz/*.py | PORT TO LOVE, then rm the py |
-| vmret.l vs vmret.py differential | mk/tools/py/ | RETIRE the py side |
-| uu-vs-UniMath parity audit | mk/tools/py/uu_parity.py | PORT TO LOVE |
+| holo encoder fuzz | test/holo/fuzz/{fuzz,sysdiff}.l | PORTED 2026-08-16; py gone |
+| vmret.l vs vmret.py differential | mk/tools/py/ | RETIRED 2026-08-16 |
+| uu-vs-UniMath parity audit | mk/tools/uuparity.l | PORTED 2026-08-16 |
 
 ## no python in tree except benchmarks
 
-the standing rule (gwen, 2026-08-16). the inventory outside test/bench/:
+the standing rule (gwen, 2026-08-16). done 2026-08-16:
 
-- **test/holo/fuzz/{fuzz,sysdiff,regmap}.py** -- the encoder differential
-  fuzz (test_holofuzz). the oracle is objdump/llvm-mc, which stay; only the
-  HARNESS is python. port shape: holo loads in-process (the py shells out to
-  love per form; the love harness just calls the encoder), bytes to a temp
-  file, spawn the disassembler, parse text, compare by abstract register
-  identity and immediate value -- the same tolerance rules. gate the port on
-  a planted fault: flip one encoder byte, the gate must go red.
-- **mk/tools/py/vmret.py** -- was the golden reference for vmret.l. the
-  differential paid while vmret.l was young; vmret.l has been the only tool
-  the build runs for months. retired with the directory.
-- **mk/tools/py/uu_parity.py** -- ported to mk/tools/uuparity.l (same audit:
-  every unprefixed test/uu.l name must be published UniMath).
-- **mk/tools/ccdb.py** -- compile_commands generator for clangd. dev-only,
-  not verification; ports to love when touched next.
+- **test/holo/fuzz/fuzz.l** -- the encoder differential fuzz, holo in-process
+  (the py shelled out to love per batch), 68 generator classes across the
+  three arches, the same tolerance rules (abstract register identity,
+  immediates mod 2^64). gated on a planted fault: a flipped nibble goes red
+  on every lane (49/32/54 of ~50 samples caught). the x64 lane now ALSO runs
+  the llvm-mc second opinion the old gate skipped (--no-llvm).
+- **test/holo/fuzz/sysdiff.l** -- the system-lane byte-exact differential;
+  output count-identical to the python (x64 743/0/0, arm64 167/0/19).
+  regmap.py (a one-time register-map probe) deleted with them.
+- **mk/tools/py/** -- gone. vmret.l stands alone (its gate reads the tool's
+  own ret-free verdict); uu_parity.py ported to mk/tools/uuparity.l.
+
+still standing, not verification:
+
+- **mk/tools/ccdb.py** -- compile_commands generator for clangd. dev-only;
+  ports to love when touched next.
 - **port/rp2040/tools/py/{elf2uf2,pad_checksum}.py** -- flasher utilities on
   a port lane. port to love with the next rp2040 ride.
 
