@@ -79,6 +79,7 @@ struct _IO_FILE {
 #define NR_mmap           477
 #define NR_mprotect        74
 #define NR_munmap          73
+#define NR_madvise         75
 #define NR_rt_sigaction   416   /* sigaction; ⚠ no restorer, another ksigaction (rung 3) */
 #define NR_rt_sigprocmask 340   /* sigprocmask; ⚠ 16-byte set, no size arg (rung 3) */
 #define NR_ioctl           54   /* ⚠ the numbers it takes are another encoding (rung 3) */
@@ -105,7 +106,7 @@ struct _IO_FILE {
 #define NR_listen         106
 #define NR_getsockopt     118
 #define NR_setsockopt     105
-/*      NR_clone: none -- fork(2) is real here, SYS_fork 2 (fork.c, rung 3) */
+#define NR_fork             2   /* fork(2) is real here; fork.c forks on the OS */
 #define NR_execve          59
 #define NR_wait4            7
 #define NR_kill            37
@@ -125,7 +126,7 @@ struct _IO_FILE {
 #define NR_setsid         147
 #define NR_getpgid        207
 #define NR_mount           21   /* ⚠ another signature -- (type dir flags data) (rung 3) */
-/*      NR_getdents64: none -- getdirentries 554, another record (readdir, rung 3) */
+#define NR_getdirentries  554   /* ino64; the record IS the freebsd dirent (readdir.c) */
 #define NR_clock_gettime  232
 #define NR_exit_group       1   /* exit: one thread here, so one exit is the whole act */
 #define NR_openat         499
@@ -223,6 +224,7 @@ struct _IO_FILE {
 #define NR_execve         221
 #define NR_mmap           222
 #define NR_mprotect       226
+#define NR_madvise        233
 #define NR_wait4          260
 #define NR_memfd_create   279
 #else
@@ -235,6 +237,7 @@ struct _IO_FILE {
 #define NR_mmap             9
 #define NR_mprotect        10
 #define NR_munmap          11
+#define NR_madvise         28
 #define NR_rt_sigaction    13
 #define NR_rt_sigprocmask  14
 #define NR_ioctl           16

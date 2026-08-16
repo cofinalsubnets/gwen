@@ -5019,6 +5019,19 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard
  word *blob = g->alloc(g, NULL, bytes);                  // the encoded words: scratch, not the file
  if (!blob) return NULL;
  memcpy(blob, base, bytes);
+ // canonical serials (blob-side only): the mint stream's live members rename
+ // monotone to 1..k below, and the header counter drops to k -- a dead mint (a
+ // stray task's pid, a scratch gensym) leaves neither its number nor a +1
+ // ripple through every nom minted after it, so one live heap answers one byte
+ // string whatever the session's history. `code` is an ORDER key (a name tie
+ // compares noms by it), so rank-order assignment preserves every comparison;
+ // serial 0 stays the immortal ()'s. the SESSION keeps its own serials -- the
+ // rename touches the blob alone, so a mid-eval bake's continuation is
+ // unharmed and the woken twin starts canonical. ⚠ a pid charm COPIED into
+ // user data is unfindable and keeps its old number across a bake -- a session
+ // boundary a pid was never promised to cross.
+ uintptr_t nslot = 0, *slots = g->alloc(g, NULL, (nw / 2 + 1) * sizeof(uintptr_t));
+ if (!slots) { g->alloc(g, blob, 0); return NULL; }
  struct img_ctx X = { base, hp, 0, 0, 0, 0, 0, guard }, *x = &X;
  for (union u *p = (union u*) base; (word*) p < hp; ) {   // walk the LIVE heap (ttag works on it), encode into blob
   uintptr_t off = (uintptr_t)((word*) p - base);
@@ -5045,7 +5058,9 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard
   if (in_data(p->ap)) switch (ai_typ(p)) {
    case DChain: blob[off + 1] = img_encode(x, ((struct ai_chain*) p)->a);
                 blob[off + 2] = img_encode(x, ((struct ai_chain*) p)->b); break;
-   case DNom:   blob[off + 1] = img_encode(x, (intptr_t) nom(p)->name); break;
+   case DNom:   blob[off + 1] = img_encode(x, (intptr_t) nom(p)->name);
+                slots[nslot++] = off + 2; break;         // the serial word, canonicalized below
+   case DMint:  slots[nslot++] = off + 1; break;         // mints AND missings (one shape, one ap)
    case DTray:   if (tray(p)->type == ai_O) {
                  word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p)), eo = (uintptr_t)(e - (word*) p);
                  for (uintptr_t i = 0; i < ne; i++) blob[off + eo + i] = img_encode(x, e[i]); }
@@ -5060,13 +5075,45 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard
   x->suppress = 0;
   p = (union u*) ((word*) p + sz); }
  g->image_why = 4;
- if (x->fail) { g->alloc(g, blob, 0); return NULL; }     // a binary pointer landed in the index range -> refuse (caller boots normally)
+ if (x->fail) { g->alloc(g, slots, 0); g->alloc(g, blob, 0); return NULL; }   // a binary pointer landed in the index range -> refuse (caller boots normally)
+ // the rename: mark live serials (the collected nom/mint slots read RAW off the
+ // blob -- scalars rode the memcpy -- plus the pids of both task rings), rank
+ // them 1..k in old order, rewrite in place. rings walk the LIVE post-compaction
+ // nodes; their pid word sits at [2] as a charm.
+ uintptr_t nser = g->next_serial + 1, kser = 0;
+ word *rank = g->alloc(g, NULL, nser * sizeof(word));
+ if (!rank) { g->alloc(g, slots, 0); g->alloc(g, blob, 0); return NULL; }
+ memset(rank, 0, nser * sizeof(word));
+ for (uintptr_t i = 0; i < nslot; i++)
+  if ((uintptr_t) blob[slots[i]] < nser) rank[blob[slots[i]]] = 1;
+ for (union u *n = g->tasks, *st = n; n; n = n->m == st ? NULL : n->m) {
+  uintptr_t pid = getcharm(n[2].x);
+  if (pid < nser) rank[pid] = 1; }
+ if (g->parked)
+  for (union u *n = g->parked, *st = n; n; n = n->m == st ? NULL : n->m) {
+   uintptr_t pid = getcharm(n[2].x);
+   if (pid < nser) rank[pid] = 1; }
+ rank[0] = 0;                                            // the immortal ()'s, never drawn, never moved
+ for (uintptr_t i = 1; i < nser; i++) if (rank[i]) rank[i] = ++kser;
+ for (uintptr_t i = 0; i < nslot; i++)
+  if ((uintptr_t) blob[slots[i]] < nser) blob[slots[i]] = rank[blob[slots[i]]];
+ for (union u *n = g->tasks, *st = n; n; n = n->m == st ? NULL : n->m) {
+  uintptr_t off = (uintptr_t)((word*) n - base), pid = getcharm(n[2].x);
+  if ((word*) n >= base && (word*) n < hp && pid < nser) blob[off + 2] = putcharm(rank[pid]); }
+ if (g->parked)
+  for (union u *n = g->parked, *st = n; n; n = n->m == st ? NULL : n->m) {
+   uintptr_t off = (uintptr_t)((word*) n - base), pid = getcharm(n[2].x);
+   if ((word*) n >= base && (word*) n < hp && pid < nser) blob[off + 2] = putcharm(rank[pid]); }
+ g->alloc(g, slots, 0);
  // rsv1 carries the kept-absolute count, ODD-tagged ((n<<1)|1) so a pre-field image
  // (rsv1 == 0) never reads as "zero absolutes" -- those keep the strict anchor check.
  // ⚠ `anchor` is the GAP between the two symbols, not either address. Addresses would
  // write this run's ASLR base into the header, which is the whole of what a
  // reproducible bake must not carry.
- struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, (uint64_t)((word) &ai_image_save - (word) image_immortals), 0, (uint64_t)(x->nabs << 1) | 1u, 0, g->next_serial, {0}, {0} };
+ // the counter drops to the live count: the woken twin's first mint lands
+ // above every renamed 1..kser, and the bytes carry no dead mints.
+ struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, (uint64_t)((word) &ai_image_save - (word) image_immortals), 0, (uint64_t)(x->nabs << 1) | 1u, 0, kser, {0}, {0} };
+ g->alloc(g, rank, 0);
  // roots = symbols + tasks (live OUTSIDE v0), then the whole GC-traced v0..end block, GENERICALLY: any
  // field added to struct ai's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
  uintptr_t nv = (word*) g->end - (word*) &g->v0, nr = 2 + nv;

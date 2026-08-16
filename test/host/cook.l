@@ -131,6 +131,14 @@
                       (+ "$(outs): " (+ dir (+ "/p/%.out: " (+ dir "/p/%.in")))) "\tcp $< $@")) "all")
    _ (ok "static pattern rule builds target" (= 0 <(sh (+ "test -f " (+ dir "/p/y.out")))))
 
+   ; the CANCELLATION idiom: an EMPTY recipe unmakes a pattern rule ("an empty
+   ; recipe unmakes the rule" -- mk/common.mk cancels make's lex builtin exactly
+   ; so). a live `%.c: %.l` would make every .c demand a sibling .l.
+   _ (sh (+ "echo C > " (+ dir "/p/n.c")))
+   ca (run-cook (mk `("%.c: %.l"
+                      (+ "all: " (+ dir "/p/n.c")) "\t@echo \"CA[ok]\"")) "all")
+   _ (ok "an empty pattern recipe cancels, not registers" (has ca "CA[ok]"))
+
    ; ---------------------------------------------- the BUILTIN implicit rules
    ; make's own database, which a Makefile never states: lua 5.4 writes recipes for
    ; three of its 34 objects and leaves the rest to it. ⚠ CC is overridden per-run so

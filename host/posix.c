@@ -31,6 +31,7 @@
 #include <sys/signalfd.h>   // signalfd, struct signalfd_siginfo (Linux only)
 #include <sys/mount.h>      // mount(2)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
+#include <sys/mman.h>       // madvise (the spawn guard)
 #endif
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>    // _NSGetExecutablePath (selfpath)
@@ -122,12 +123,39 @@ static void sig_dfl_job(void) {
 // execvp; the parent returns immediately -- NON-BLOCKING, unlike run (waits +
 // captures) and exec (replaces in place). The child inherits init's stdio (a real
 // pid1 redirects to the journal); a failed exec _exit(127)s, seen by the next glean.
+// spawn guard: the heap pools leave an exec-bound fork's inheritance, so a
+// swapless box is not asked to double-charge a budget-sized commitment the
+// child never touches (it execs at once). scoped by the caller: the (fork)
+// nif and any child that walks the heap inherit whole, as fork means.
+// best-effort -- an unaligned edge or a kernel without the advice keeps
+// plain fork.
+static void guard1(void *lo, void *hi, int adv) {
+ uintptr_t a = ((uintptr_t) lo + 4095) & ~(uintptr_t) 4095,
+           b = (uintptr_t) hi & ~(uintptr_t) 4095;
+ if (b > a) (void) madvise((void*) a, (long) (b - a), adv); }
+void host_spawn_guard(struct ai *g, int on) {
+#if defined(__linux__)
+ int adv = on ? MADV_DONTFORK : MADV_DOFORK;
+ // the ceiling is the FRONTIER, not the block top: a marshal (argv_marshal,
+ // main.c's own) lays the child's argv at g->hp, so the window above hp
+ // stays mapped; the live bulk below it is what a swapless box cannot
+ // double-charge. nothing allocates between the two calls, so the ranges
+ // agree.
+ guard1(g, g->hp, adv);
+ if (g->major_pool) guard1(g->major_pool, g->major_pool + 2 * g->major_len, adv);
+#else
+ (void) g; (void) on;
+#endif
+}
+
 ai_noinline static struct ai *host_spawn(struct ai *g) {
  char **cav;
  g = argv_marshal(g, &cav);
  if (!cav) return g;                                         // misuse pushed -1, or OOM
  fflush(NULL);                                               // flush now, not twice in the child
+ host_spawn_guard(g, 1);
  pid_t pid = fork();
+ if (pid) host_spawn_guard(g, 0);   // parent (a failed fork included); the child's g is unmapped
  if (pid < 0) return ai_push(g, 1, putcharm(-errno));
  if (!pid) { sig_dfl_job(); execvp(cav[0], cav); _exit(127); }   // child: default signals, exec or die 127
  return ai_push(g, 1, putcharm(pid)); }                      // parent: the live pid
@@ -945,7 +973,9 @@ ai_noinline static struct ai *host_tether(struct ai *g) {
  if (pipe(ep)) { int e = errno; close(mfd); return ai_push(g, 1, putcharm(e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
 
+ host_spawn_guard(g, 1);
  pid_t pid = fork();
+ if (pid) host_spawn_guard(g, 0);   // parent (a failed fork included); the child's g is unmapped
  if (pid < 0) { int e = errno; close(mfd); close(ep[0]); close(ep[1]); return ai_push(g, 1, putcharm(e)); }
  if (!pid) {                                       // child
   close(mfd); close(ep[0]);

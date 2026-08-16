@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <math.h>
 #include <stddef.h>      // offsetof (the struct ai_wait_fd / struct pollfd assert)
+extern void host_spawn_guard(struct ai*, int);   // host/posix.c (exec-bound forks drop the pools)
 #include <stdnoreturn.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -447,7 +448,9 @@ ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
   return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(e)); }
  fcntl(ep[1], F_SETFD, FD_CLOEXEC);
  fflush(stdout);
+ host_spawn_guard(g, 1);
  pid_t pid = fork();
+ if (pid) host_spawn_guard(g, 0);   // parent (a failed fork included); the child's g is unmapped
  if (pid < 0) { int e = errno;
   close(op[0]); close(op[1]); close(ep[0]); close(ep[1]);
   return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(e)); }
@@ -666,7 +669,26 @@ AiNif("getpid", nif_getpid);
 // to the LIVE g in main, after boot or image wake, so both boot paths honor it.
 static struct ai *env_budget(struct ai *g) {
   char const *b = getenv("LOVE_BUDGET_MB");
-  if (g && b && atol(b) > 0) g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(ai_word));
+  if (g && b && atol(b) > 0) { g->budget = (uintptr_t) atol(b) * (1024 * 1024 / sizeof(ai_word)); return g; }
+  // the DEFAULT is half the machine, not infinity: an unbounded resize
+  // controller on a small swapless box asks the kernel past what it will
+  // overcommit, and the refusal is a bare failed op. env wins above; a device
+  // pins -Dai_budget; 0 stays unbounded only where the machine cannot say its
+  // size.
+  if (g && !g->budget) {
+#if defined(__linux__)
+    // raw read + hand parse, no stdio: nolibc's fscanf speaks no width and no
+    // %lu, and the default must fire in both libcs. MemTotal leads the file;
+    // the first digit run is the kB count.
+    int fd = open("/proc/meminfo", O_RDONLY);
+    if (fd >= 0) { char mb[64]; long n = (long) read(fd, mb, sizeof mb - 1);
+      close(fd);
+      if (n > 8 && !memcmp(mb, "MemTotal", 8)) { mb[n] = 0;
+        char *p = mb; while (*p && (*p < '0' || *p > '9')) p++;
+        uintptr_t kb = 0; while (*p >= '0' && *p <= '9') kb = kb * 10 + (uintptr_t)(*p++ - '0');
+        g->budget = kb * 1024 / 2 / sizeof(ai_word); } }
+#endif
+  }
   return g; }
 
 // bake [PATH] / wake PATH: the heap-image snapshot (doc/snapshot.md) -- declared
