@@ -336,10 +336,13 @@ xmath_o = $(patsubst crew/moon/lib/math/%.c,$(xd)/m_%.o,$(wildcard crew/moon/lib
 # no nolibc.o: the link owes its symbols and the driver pulls the members by need
 # (crew/moon/lib/nolibc/), so a dist takes no calendar and no resolver.
 xobjs = $(xd)/love.o $(xhost_o) $(xmath_o) $(xd)/sys.o
-$(xd)/love.o: core/love.c $(love_h) out/host/mooncc0.image
+# -D AI_HAVE_VERSION_H like the host lane (build.mk's love.o): mooncc has no
+# __has_include, so without it the twin NAMED ITSELF "unknown" -- test_xfixpoint
+# caught it as machine B refusing to reproduce machine A's bytes.
+$(xd)/love.o: core/love.c $(love_h) out/host/mooncc0.image out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c $< $@
+	@$(moonx) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(xd)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
