@@ -332,6 +332,7 @@
                 _ (pin t 'ainl ())                  ; always_inline function names (love.h's ai_inline)
                 _ (pin t 'noinl ())                 ; noinline function names (love.h's ai_noinline)
                 _ (pin t 'enums {})         ; enum constant -> value
+                _ (pin t 'declaring {})     ; the names of the declaration being parsed RIGHT NOW (C11 6.2.1p7)
                 _ (pin t 'etag {})          ; enum tag -> 1 when no enumerator is negative (an unsigned underlying type)
                 _ (pin t 'stag {})          ; tag -> (fields size align)
                 _ (pin t 'utag {})          ; the tags of that table that are UNIONS (the layout flattens them alike)
@@ -1100,10 +1101,17 @@
              ; to give, so it stays an undeclared identifier.
              ((tkk t = 'id) && (tkv t = "__func__") && string? (peep ps 'fnname ()))
               [['str (peep ps 'fnname ())] >ts]
+             ; ⚠ A NAME BEING DECLARED RIGHT NOW IS NOT AN ENUM CONSTANT. C11 6.2.1p7: a
+             ; declarator's scope begins at the END OF ITS DECLARATOR, so the initializers
+             ; that follow in the same declaration already see it -- `uintptr_t M = f(),
+             ; N = g(), n = M * N;` reads the local N. Fold it and the local is never read:
+             ; love.c has `enum { N = 4 }` in one function and that N as a local in another,
+             ; and lvm_outer's `n = M * N` compiled to `M * 4` in silence.
              (tkk t = 'id)
-              (: ev (peep (ps 'enums) (tkv t) ())
+              (: nm (tkv t)
+                 ev (? (peep (ps 'declaring) nm ()) () (peep (ps 'enums) nm ()))
                  (? (charm? ev) [['num ev] >ts]
-                    [['var (tkv t)] >ts]))
+                    [['var nm] >ts]))
              (tp? t "(") (: r (pexpr ps >ts)
                             (? !(two? r) ()
                                (: rest (want <>r ")")
@@ -1570,6 +1578,11 @@
                              ; said more, so it wins. the entry drops out below.
                              _ (? (!(fn? ty) || peep (ps 'sigs) name ()) 0
                                   (pin (ps 'sigs) name [<>ty () ()]))
+                             ; the declarator is finished, so the name is in scope for every
+                             ; initializer after it -- marked BEFORE pinit runs (see the primary
+                             ; rule's note). the block's own shadowdecl still does the durable
+                             ; hiding and the restore; this only covers the declaration itself.
+                             _ (pin (ps 'declaring) name 1)
                              (? (varr? ty && (stat || peekp ts3 "=")) ()
                                 (peekp ts3 "=")
                                 (: r (pinit ps >ts3)
@@ -1586,7 +1599,13 @@
                           (: rest (want <>r ";")
                              es (filter (\ e !(fn? <>e)) (rev (<r >< acc)))
                              (? (two? rest) [[(? stat 'sdecl 'decl) es] rest] ()))))
-                   (more ts0 ()))))))
+                   ; the marks live for THIS declaration only -- saved and put back, because a
+                   ; declaration nests (a `for` init, an initializer carrying a compound literal)
+                   olddecl (ps 'declaring)
+                   _ (pin ps 'declaring {})
+                   res (more ts0 ())
+                   _ (pin ps 'declaring olddecl)
+                   res)))))
 
    ; asm [volatile] ( "template" [: outputs [: inputs [: clobbers]]] ) ; -- the
    ; GNU STATEMENT form (basic and extended), the template in holo's neutral
