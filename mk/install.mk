@@ -131,7 +131,7 @@ uninstall:
 
 # the embedding surface is TWO files: core/love.h includes core/kinds.h (the kind lattice,
 # laid by core/mx.l), so an installed core/love.h without it does not compile.
-$d/include/%.h: %.h
+$d/include/%.h: core/%.h
 	$(inst644)
 
 $d/lib/love/%.l: love/%.l
