@@ -35,6 +35,12 @@
 ; lens, not an isomorphism, and the laws say which half is which. a new surface owes law 1 and
 ; nothing more; that is what keeps its arrival from touching any other.
 ;
+; and the markdown reader is TOTAL: every line of input lands in some block. `starter`
+; claims more lines than the blocks it names can parse (a `---` that is not a rule, a
+; `:   ` with no term over it), and a block loop that stopped at one of those dropped the
+; whole rest of the document in silence -- so the last alternative takes one line as a
+; paragraph. it cannot fire on what a shower writes, so law 1 does not feel it.
+;
 ; --- the middle ---
 ; a doc is a list of BLOCKS:
 ;   ('meta ((key value) ..))  ('head N inl)  ('para inl)  ('fence lang text)  ('quote doc)
@@ -180,8 +186,19 @@
                                  (skip (lit "```")) (skip (span nonl?)) eol))) s y n)
    (q-line s y n)  ((seqs `((skip (lit ">")) (skip (opt (lit " "))) (span nonl?) (lit "\n"))) s y n)
    (b-quote s y n) ((tag (\ p `('quote (mdread (strcat <p)))) (pack (many1 q-line))) s y n)   ; the doc reads ITSELF
-   (u-item s y n)  ((seqs `((skip (lit "- ")) (span nonl?) eol)) s y n)
-   (o-item s y n)  ((seqs `((skip (one dig?)) (skip (span dig?)) (skip (lit ". ")) (span nonl?) eol)) s y n)
+   ; a list item and its LAZY CONTINUATION: a wrapped item is ONE item. a line
+   ; that is neither blank nor a block opener belongs to the item above it --
+   ; markdown's own rule, and `p-line` is already the exact test, so the two
+   ; readings of "what continues a block" cannot drift. the leading whitespace is
+   ; the WRAP's and not the text's, so it goes; the lines join with one space, the
+   ; way a paragraph's do. ⚠ law 1 is untouched by this: mdshow writes an item on
+   ; ONE line and a blank line between blocks, so nothing a shower emits is ever
+   ; read as a continuation, and the fixed point holds for both spellings.
+   (litrim s) ((: (g i) (? ((i < tally s) && (sp? (s i))) (g (i + 1)) (snip s i (tally s)))) 0)
+   (lazyj p)  (joins (map litrim p) " ")
+   (u-item s y n)  ((tag lazyj (seqs `((skip (lit "- ")) (span nonl?) eol (many p-line)))) s y n)
+   (o-item s y n)  ((tag lazyj (seqs `((skip (one dig?)) (skip (span dig?)) (skip (lit ". "))
+                                       (span nonl?) eol (many p-line)))) s y n)
    (b-bullets s y n) ((tag (\ p `('bullets (map mdinl p))) (many1 u-item)) s y n)
    (b-numbers s y n) ((tag (\ p `('numbers (map mdinl p))) (many1 o-item)) s y n)
    ; a definition-list item: a TERM line (itself no block opener), then its `:   ` body line.
@@ -197,8 +214,21 @@
    (p-line s y n)  ((tag (\ p (strcat p))                      ; ..`tag` does the wrapping; f yields the ELEMENT
                          (seqs `((notp blankline) (notp starter) (one nonl?) (span nonl?) eol))) s y n)
    (b-para s y n)  ((tag (\ p `('para (mdinl (joins p " ")))) (many1 p-line)) s y n)
+   ; ⚠ THE LAST RESORT, and it is what makes mdread TOTAL: a line every block above
+   ; refused. `starter` claims more lines than the blocks it names can parse -- a
+   ; `--- text ---` rule that is not a rule, a `:   ` body with no term over it --
+   ; and `p-line` then refuses them too, so the block loop used to STOP there and
+   ; drop the whole rest of the document in silence. no error, a shorter page, and
+   ; nothing to notice it by. this takes exactly ONE line as a paragraph and lets
+   ; the loop go on, so no input can vanish.
+   ; ⚠ it cannot fire on anything a SHOWER writes -- mdshow shields a paragraph
+   ; whose text would re-read as a block opener, closes every fence, and puts a
+   ; blank line between blocks -- so law 1 does not feel it. it fires on HAND
+   ; WRITTEN markdown alone, which is exactly where the loss was.
+   (b-line s y n)  ((tag (\ p `('para (mdinl (strcat p)))) (seqs `((one nonl?) (span nonl?) eol))) s y n)
    (mdblock s y n) ((seqs `((skip (many blankline))
-                            (alts `(b-rule b-head b-fence b-quote b-bullets b-numbers b-deflist b-para)))) s y n)
+                            (alts `(b-rule b-head b-fence b-quote b-bullets b-numbers b-deflist
+                                    b-para b-line)))) s y n)
    ; YAML-ish FRONT MATTER, the markdown face of the meta block: head-only (a `---` fence
    ; anywhere else is a rule), so it is read before the block loop and shown before it.
    (kvline s y n)  ((tag (\ p `((intern <p) (nthl p 1)))

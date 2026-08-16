@@ -575,18 +575,10 @@
                ; (gen's d128 lane): love.c takes 64-bit limbs there, and the
                ; `divq` __asm__ lane with them; every other target keeps the
                ; portable 32-bit branch.
-               ; and Linux is the OS under every cc-built object (raw syscalls,
-               ; ELF, the host seam) -- without it host/posix.c's signalfd source
-               ; silently compiled OUT of the selfhost binary (a rung-2 wart)
-               ; all three spellings gcc gives a linux ELF target: st.c asks
-               ; `#if defined(__linux)` for <pty.h>, and one spelling missing is
-               ; a header silently not included. the unprefixed `linux`/`unix`
-               ; stay out -- gcc drops them outside gnu89, and they collide with
-               ; ordinary identifiers.
-               _ (pin t "__linux__" ['obj [(tok 'num 1 0)]])
-               _ (pin t "__linux" ['obj [(tok 'num 1 0)]])
-               _ (pin t "__unix__" ['obj [(tok 'num 1 0)]])
-               _ (pin t "__unix" ['obj [(tok 'num 1 0)]])
+               ; the OS predefines (__linux__ and kin) are the DRIVER's too,
+               ; like the arch's: moon.l's osdefs rides them down the -D
+               ; channel, picked by -os. cpp says the language and the
+               ; compiler; the machine AND the OS are the driver's to name.
                ; gcc's limit predefines, the ones the host seam reads. only the
                ; target-blind ones live here -- __LONG_MAX__ and the whole
                ; <stdint>-shaped family fork on the word width, so they ride the

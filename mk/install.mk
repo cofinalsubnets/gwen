@@ -41,7 +41,7 @@ endif
 # the module sources the seat walk serves: (use 'cook) and friends from ANY session of this
 # love resolve here. Installed DEREFERENCED, since install(1) follows the repo lib/
 # symlinks, so the nest stands alone.
-libmods = cook dns json lint salt libra kiosko lapiz papel rune sb sb/text sb/diff sb/merge sb/http sb/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
+libmods = cook dns json lint salt libra kiosko lapiz papel hueweb serve rune sb sb/text sb/diff sb/merge sb/http sb/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
 # ⚠ ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
 binnames = $(BIN) kore sb mooncc moonfmt cook papel kiosko libra ain lux bao lush
@@ -171,8 +171,8 @@ $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 # READ their siblings rather than being -l'd beside them -- two tool files cannot both be
 # -l'd, since each one's seat would fire on the other's command line -- and they find them
 # by READLINK'ing this very symlink back to the source tree, so the link on PATH and the
-# crew directory need not be neighbours. libra's are named ((use 'json), (use 'lint)) and
-# ride libmods above instead.
+# crew directory need not be neighbours. libra's are named ((use 'lint), (use 'salt),
+# (use 'infix), and (use 'lapiz) on the doc verb alone) and ride libmods above instead.
 # ⚠ each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
 $d/bin/cook:    crew/cook/cook.l    $(ho)/kore

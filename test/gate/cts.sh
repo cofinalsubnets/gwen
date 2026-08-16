@@ -51,25 +51,19 @@ esac
 roster_refuses='
 00044 a struct tag redefined in an inner block escapes to file scope
 00050 a brace-elided initializer that continues PAST an anonymous union member
-00051 a case label as a switch, whose body is not a compound statement
 00053 a block-scope struct tag collides with the outer one of the same name
-00121 a declarator list mixing a function and an object -- int f(int), g(int), a;
-00145 #if folds the right arm of || even when the left one settles it, so a dead 0/0 refuses
 00149 the address of a compound literal in a static initializer
 00150 the same, with designated initializers nested inside it
 00152 #line is ignored (doc/moon-c-gaps: the directives ignored on purpose)
-00162 a * bound in an array parameter -- int x[const *] (the qualifiers alone are fine)
 00201 a ## paste that MAKES a macro name, which is then invoked with arguments
 00202 a ## paste with an empty operand, followed by more tokens
 00204 a register-exhausted SSE-class by-value argument -- five float HFAs (the gp twin landed, this one did not)
-00209 a function-typed parameter whose own parameter list is not empty -- int f(int (int), int)
-00210 __attribute__((packed)) BEFORE a union tag (after the body it is fine)
 00213 a statement expression, ({ ... })
 00214 a statement expression under __builtin_expect
 00216 designated RANGE initializers -- [1 ... 5] = v
-00219 _Generic
 '
 roster_wrong='
+00219 _Generic cannot separate two associations that differ only in a QUALIFIER -- cc drops them, so `const int * const` picks the `int *` row where C takes neither and falls to default (doc/moon-c-gaps)
 '
 # the two per-target lines, both of them lanes x64 has and the others do not
 # (doc/moon-c-gaps, "target asymmetries"): a by-value composite in a variadic

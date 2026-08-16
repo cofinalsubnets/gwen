@@ -215,7 +215,7 @@ test_embed_boards: host $(ho)/mooncc
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -571,6 +571,21 @@ test_vec: host
 # $(moon_o) is the link list: the gate is handed make's objects, it never globs the odir.
 test_fixpoint: host $(love0) out/host/mooncc0.image
 	@sh test/gate/fixpoint.sh $(ho) $(love0) $(moon_fir) $(moon_o)
+# THE CROSS-MACHINE FIXPOINT, in effigy (doc/plan/seed-universal.md U0): dist_cross's
+# twin objects link love1, then love1 under qemu-user rebuilds itself natively and must
+# answer the same bytes -- the twin machine reproducing this machine's, on one box.
+# opt-in BY NAME (a full rebuild under emulation is minutes): `make test_xfixpoint`,
+# or `make xa=riscv64 test_xfixpoint` for the other twin. skips loudly without qemu.
+.PHONY: test_xfixpoint
+test_xfixpoint: $(xobjs) $(love0) out/host/mooncc0.image
+	@sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xtgt) $(xmksys) $(tco) $(xd) $(xobjs)
+# rung 2's freebsd gate (doc/plan/seed-universal.md): a mooncc-laid static
+# freebsd binary runs on a real freebsd box. the box arrives by env --
+# FBSD_SSH="ssh -p 2222 -i KEY root@HOST" make test_freebsd -- and without
+# one the gate skips loudly. opt-in by name, like test_distboot.
+.PHONY: test_freebsd
+test_freebsd: host $(love0) out/host/mooncc0.image
+	@sh test/gate/freebsd.sh $(ho) $(love0)
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
 # the WHOLE corpus. Opt-in: needs the -pie toolchain, x86-64 only.
@@ -774,7 +789,7 @@ nettest: host
 # (gen_data / vmret). See mk/tools/Makefile + mk/tools/py/README.md. ⚠ lush is a real
 # prerequisite: test/host/cook.l's SHELL pair sets `SHELL := out/host/lush` to prove cook honors it.
 test_tools: host out/host$(hsuf)/lush
-	@$(MAKE) -C tools
+	@$(MAKE) -C mk/tools
 # test_gcheck: the copy loop's FIXPOINT instance check. AI_GC_CHECK makes gen_minor re-drive
 # its WHOLE scan after the drain and trap if the second pass copies a word, in its own tree.
 # /warn the knob is GCDBG: EXTRA_CFLAGS rides $(ai_cflags), which the mooncc recipes do not use.

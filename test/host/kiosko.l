@@ -61,9 +61,14 @@
    ; never get to run), then serve1 answers one request. it stops on a flag rather than a
    ; count, so adding an assert below does not silently hang the run.
    stop (tablet 0)
+   (mk p) (? (p = "/made") '("text/plain" "made on the way out")
+             (p = "/a.txt") '("text/plain" "the hook wins over the file")
+             ())
    srv (twirl (\ _ ((: (g k) (: _ (await l)
                                 c (accept l)
-                                _ (? c (: _ (serve1 dir c) _ (seal c 1) (close c)) 0)
+                                ; the MAKER hook: it claims /made and says "not mine" for
+                                ; everything else, including a path that IS a file on disk
+                                _ (? c (: _ (serve1 dir mk c) _ (seal c 1) (close c)) 0)
                                 (? (peep stop 0 0) 1 (g (k + 1))))) 0)) 0)
    (ask req) (: c (connect "127.0.0.1" port)
                 _ (say c req)
@@ -75,6 +80,16 @@
    (code r)  (: n (tally r) ((: (g i) (? (&& (i < n) (! ((r i) = 32))) (g (i + 1)) (snip r (i + 1) (i + 4)))) 0))
    (sub? s t) (: n (tally s) m (tally t)
                  ((: (g i) (? ((i + m) <= n) (? ((snip s i (i + m)) = t) 1 (g (i + 1))) 0)) 0))
+
+   ; --- the MAKER hook -------------------------------------------------------------------
+   ; ⚠ it is asked FIRST, before the file on disk, which is the whole point: `love serve`
+   ; paints a .l that is sitting right there. a hook that answers () is the ordinary
+   ; static server, and every case below proves that half.
+   _ (assert
+      ("200" = (code (get "/made")))
+      (sub? (get "/made") "made on the way out")
+      (sub? (get "/a.txt") "the hook wins over the file")     ; ..even when the file exists
+      ("404" = (code (get "/nope"))))                         ; ..and () is still a 404
 
    ; --- THE GUARD, first ------------------------------------------------------------------
    _ (assert

@@ -86,13 +86,12 @@
     (: t (peep jit-memo 'irtab ())
        (? (two? t) t
           (: exe (bind-rd (bind-seat 0))
-             rows (filter (\ w (tally >w <= jit-cap)) (irec-bytes exe))
-             (? (nil? rows) (jit-no ['no-irtab] "this love carries no IR record (built without -fir)")
-                (:
-                   v (: tb (tablet 0)
-                        _ (map (\ w (pin tb <w >w)) rows)
-                        [1 tb (tally rows)])
-                   _ (pin jit-memo 'irtab v) v)))))
+             rows (filter (w \ tally >w <= jit-cap) (irec-bytes exe))
+           (? !rows (jit-no ['no-irtab] "this love carries no IR record (built without -fir)")
+            (: tb {}
+               _ (each rows (a >< u \ pin tb a u))
+               v [1 tb (tally rows)]
+             (pin jit-memo 'irtab v, v))))))
    ; one handler's forms | (). ⚠ WHAT THE SPLICER OWES, and the trap is worth the sentence:
    ; a handler's tail is the fixed dispatch triple (ld r0 r5 8)(add r5 r5 8)(jmpr r0) and comes
    ; off every copy but the last, whose bump becomes the whole segment's. Internal labels are
@@ -104,7 +103,8 @@
    ; be summed and hoisted to one guard at the top, ahead of any Sp motion, deopting to the
    ; twin exactly as the C route's guard does. A per-op guard left in place is a silent
    ; double-apply, not a crash.
-   (jit-ir nm) (: t (jit-irtab ()) (? (two? t) (peep <>t nm ()) ()))
+   (jit-ir nm)
+    (jit-irtab () @ (_ t) (peep t nm ()))
 
    ; --- the BRIDGE: a book name to the lvm_ that runs it ------------------------------
    ; `dis` can only name the book key (`cup`) -- every lvm_ nom died at the hatch -- and the
@@ -112,28 +112,26 @@
    ; the IR, in this binary, as `ai_nif_lvm`. Same door, same reason: derived from the registry,
    ; so a nif cannot enter one table and miss the other.
    (jit-lvmtab _)
-    (: t (peep jit-memo 'lvmtab ())
-       (? (two? t) t
-          (: exe (bind-rd (bind-seat 0))
-             rows (irec-at exe "ai_nif_lvm")
-             (? (nil? rows) (jit-no ['no-lvmtab] "this love carries no ai_nif_lvm (nifs.h is older than lib/splice.l)")
-                (: v [1 rows]
-                   _ (pin jit-memo 'lvmtab v) v)))))
+    (peep jit-memo 'lvmtab () @ (t & two? t) t
+     (: exe (bind-rd (bind-seat 0))
+        rows (irec-at exe "ai_nif_lvm")
+      (? !rows (jit-no ['no-lvmtab] "this love carries no ai_nif_lvm (nifs.h is older than lib/splice.l)")
+         (: v [1 rows] (pin jit-memo 'lvmtab v, v)))))
    (jit-lvmof nm)                                    ; a dis row's nom -> its handler nom | ()
     (? ("lvm_" = snip (string nm) 0 4) nm
        (: t (jit-lvmtab ())
           s (string nm)
-          (go l) (@ l ([n h] >< more) (? (s = n) h (go more)) ())
-          (? (two? t) (go <>t) ())))
+          (go l) (l @ ([n h] >< more) (s = n ? h (go more)))
+          (two? t ? (go <>t))))
 
    ; --- THE SPLICER: op rows -> one function's worth of IR ------------------------------
    ; the VM's own convention, and the reason a handler's body needs no rewriting to be
    ; spliced: g=r6, Ip=r5, Hp=r2, Sp=r1, and every op takes its argument from Sp[0] and
    ; leaves its answer there. Two bodies laid end to end already agree about everything.
    jit-tail '((ld r0 r5 8) (add r5 r5 8) (jmpr r0))   ; the dispatch triple every handler ends in
-   (dropn l n) (? (n < 1) l (dropn >l (n - 1)))
-   (taken l n) (? ((n < 1) || atom? l) () (<l >< taken >l (n - 1)))
-   (endswith? l t) (: n (tally l) k (tally t) ((k <= n) && (dropn l (n - k) = t)))
+   (dropn l n) (n < 1 ? l (dropn >l (n - 1)))
+   (taken l n) (n < 1 || atom? l ? () (<l >< taken >l (n - 1)))
+   (endswith? l t) (: n (tally l) k (tally t) (k <= n && dropn l (n - k) = t))
    ; ⚠ THE SPLICE CONDITION, structural and checked rather than assumed. A handler qualifies
    ; only if, tail off, it: touches no frame (the fld family runs `sub sp`), never reads Ip
    ; (an operand-taking op reads its operand FROM the thread, which a splice does not advance),
@@ -144,8 +142,7 @@
    ; spec.l sweeps every `?`-named global in (names ()) and these three leak onto the book.
    (jit-frame? f) ?(member? <f '(sub add lea) && member? 'sp >f)     ; anything that moves the stack
    (jit-ipread? f) ?(member? 'r5 >f)                                ; ..or reads the thread
-   (jit-leaves? f) (? (id? <f 'call) 1 (id? <f 'jmpr) 1             ; ..or leaves for good: an
-                      (id? <f 'jmp) !(jit-lbl? <>f) 0)              ; internal jmp is the body's own
+   (jit-leaves? f) (<f @ ('call | 'jmpr) 1 'jmp !(jit-lbl? <>f) 0)
    ; ⚠ it answers WHICH law broke, not a bit: the tally of those noms is the coverage census,
    ; and each one names a different rung (a frame wants a spill, a gc jump wants the hoisted
    ; guard to own its Have, an Ip read wants the operand said).
@@ -167,32 +164,31 @@
    (jit-push-a i) [['ld 'r0 'r1 (8 * i)] '(st r1 -8 r0) '(sub r1 r1 8)]
    (jit-push-q w) [['li 'r0 w] '(st r1 -8 r0) '(sub r1 r1 8)]
    (cwd v) ((2 * v) + 1)                             ; a charm operand as its tagged word
-   (jit-fld nm) (? (id? nm 'lvm_argcup) 'cup  (id? nm 'lvm_argcap) 'cap
-                   (id? nm 'lvm_argtwo) 'two?  ())
+   (jit-fld nm) (nm @ 'lvm_argcup 'cup 'lvm_argcap 'cap 'lvm_argtwo 'two?)
    ; a handler's clean body, tail off -- MEMOIZED, because the checking is per handler and the
    ; splicing is per copy. `[1 body]` or `[0]`; the reason is tallied on the first ask only.
    (jit-body h)
-    (: m (peep jit-bodies h ())
-       (? (two? m) m
-          (: fs (jit-ir h)
-             v (? !(two? fs) (: _ (jit-no ['no-ir h] ("no IR for " + string h + " in this binary")) [0])
-                  !(endswith? fs jit-tail)
-                   (: _ (jit-no ['no-tail h] (string h + " does not end in the dispatch tail")) [0])
-                  (: b (taken fs (tally fs - tally jit-tail))
-                     d (jit-dirt b)
-                     (? (nil? d) [1 b]
-                        (: _ (jit-no ['unclean h d] (string h + " is not splice-clean: " + string d)) [0]))))
-             _ (pin jit-bodies h v) v)))
+    (peep jit-bodies h () @ (m & two? m) m
+     (: fs (jit-ir h)
+        v (? !(two? fs) (jit-no ['no-ir h] ("no IR for " + string h + " in this binary"), [0])
+             !(endswith? fs jit-tail)
+              (jit-no ['no-tail h] (string h + " does not end in the dispatch tail"), [0])
+             (: b (taken fs (tally fs - tally jit-tail))
+                d (jit-dirt b)
+              (? !d [1 b]
+               (jit-no ['unclean h d] (string h + " is not splice-clean: " + string d), [0]))))
+      (pin jit-bodies h v,
+       v)))
    (jit-splice h k)                                  ; ..made this copy's own | ()
-    (: v (jit-body h) (? <v (jit-rn <>v k) ()))
+    (: v (jit-body h) (<v ? (jit-rn <>v k)))
    ; one row -> (forms >< words-pushed) | ()
    (jit-row r k)
     (: nm <r os >r
        ; ⚠ presence rides the wrapper, and it has to: operand 0 is the commonest one there is
        ; (arg 0, the first slot), and a bare `(nil? i)` reads that legitimate zero as absence --
        ; the row then declines in silence, which is exactly how it read the first time.
-       i9 (? (two? os && charm? <os) [1 <os] ())
-       j9 (? (two? os && two? >os && charm? <>os) [1 <>os] ())
+       i9 (two? os && charm? <os ? [1 <os])
+       j9 (two? os && two? >os && charm? <>os ? [1 <>os])
        ; ⚠ THE PUSH-PAIR FAMILY, and the operands ride in SOURCE order off a MOVING Sp -- an
        ; index is relative to the Sp of its own load, so two pushes laid in order come out
        ; right with no arithmetic (love.c says this over PushA/PushQ, and jit-push-a inherits
@@ -202,23 +198,27 @@
        ; EAGERLY as an argument, so a shared (pp p q) would index the empty wrapper first.
        two9 ?(two? i9 && two? j9)
        (via h) (: b (jit-splice h k) (? (nil? b) () (b >< 0)))
-       (? (id? nm 'lvm_aa) (? two9 ((jit-push-a <>i9 + jit-push-a <>j9) >< 2) ())
-          (id? nm 'lvm_aq) (? two9 ((jit-push-a <>i9 + jit-push-q (cwd <>j9)) >< 2) ())
-          (id? nm 'lvm_qa) (? two9 ((jit-push-q (cwd <>i9) + jit-push-a <>j9) >< 2) ())
-          (id? nm 'lvm_qq) (? two9 ((jit-push-q (cwd <>i9) + jit-push-q (cwd <>j9)) >< 2) ())
-          (id? nm 'lvm_arg)  (? (two? i9) (jit-push-a <>i9 >< 1) ())
-          (id? nm 'lvm_arg0) (jit-push-a 0 >< 1)   (id? nm 'lvm_arg1) (jit-push-a 1 >< 1)
-          (id? nm 'lvm_arg2) (jit-push-a 2 >< 1)   (id? nm 'lvm_arg3) (jit-push-a 3 >< 1)
-          (id? nm 'lvm_quote) (? (two? i9) (jit-push-q (cwd <>i9) >< 1) ())
-          (id? nm 'lvm_quo0) (jit-push-q 1 >< 1)   (id? nm 'lvm_quo1) (jit-push-q 3 >< 1)
-          (id? nm 'lvm_quo2) (jit-push-q 5 >< 1)   (id? nm 'lvm_quo3) (jit-push-q 7 >< 1)
-          (id? nm 'lvm_quom1) (jit-push-q -1 >< 1) (id? nm 'lvm_quom2) (jit-push-q -3 >< 1)
+       (nm @ 'lvm_aa (two9 ? (jit-push-a <>i9 + jit-push-a <>j9) >< 2)
+             'lvm_aq (two9 ? (jit-push-a <>i9 + jit-push-q (cwd <>j9)) >< 2)
+             'lvm_qa (two9 ? (jit-push-q (cwd <>i9) + jit-push-a <>j9) >< 2)
+             'lvm_qq (two9 ? (jit-push-q (cwd <>i9) + jit-push-q (cwd <>j9)) >< 2)
+             'lvm_arg  (two? i9 ? (jit-push-a <>i9) >< 1)
+             'lvm_arg0 (jit-push-a 0 >< 1)
+             'lvm_arg1 (jit-push-a 1 >< 1)
+             'lvm_arg2 (jit-push-a 2 >< 1)
+             'lvm_arg3 (jit-push-a 3 >< 1)
+             'lvm_quote (two? i9 ? (jit-push-q (cwd <>i9)) >< 1)
+             'lvm_quo0 (jit-push-q 1 >< 1)
+             'lvm_quo1 (jit-push-q 3 >< 1)
+             'lvm_quo2 (jit-push-q 5 >< 1)
+             'lvm_quo3 (jit-push-q 7 >< 1)
+             'lvm_quom1 (jit-push-q -1 >< 1)
+             'lvm_quom2 (jit-push-q -3 >< 1)
+
           (: fl (jit-fld nm)                        ; a fused push-and-op: unfuse it
              h (jit-lvmof (? (nom? fl) fl nm))
              (? (nil? h) (jit-no ['no-bridge nm] ("no handler nom for " + string nm))
-                (nom? fl) (? (two? i9)
-                             (: b (jit-splice h k) (? (nil? b) () ((jit-push-a <>i9 + b) >< 1)))
-                             ())
+                (nom? fl) (two? i9 ? (: b (jit-splice h k) (b ? (jit-push-a <>i9 + b) >< 1)))
                 (two? os) (jit-no ['operand nm] ("operand-taking " + string nm + " is not composed yet"))
                 (via h)))))
    ; ⚠ THE REFLOW, and it is the whole seam: a handler DELIVERS with (st r1 0 rX) and the next
@@ -228,10 +228,9 @@
    ; differ (they never do today, both being r0). This is the op-boundary reload the whole arc
    ; is about, removed at the level where it is a pattern instead of an allocator.
    (jit-seam fs)
-    (@ fs (['st 'r1 0 rX] >< ['ld rY 'r1 0] >< rest)
+    (fs @ (['st 'r1 0 rX] >< ['ld rY 'r1 0] >< rest)
            (['st 'r1 0 rX] >< (? (id? rX rY) () [['mov rY rX]]) + jit-seam rest)
-          (f >< rest) (f >< jit-seam rest)
-          ())
+          (f >< rest) (f >< jit-seam rest))
    ; the whole body: ONE room guard ahead of any Sp motion, deopting to the twin and never to
    ; gc, then the spliced ops, then the dispatch tail advanced past the nif's own two-word cell.
    ; ⚠ the guard is the C route's, read back off its own emission: r7 = Hp + 8*peak + the avail
@@ -240,48 +239,43 @@
    ai-avail-floor 64
    (jit-forms rows)
     (: (go rs k pk net acc)
-        (@ rs (r >< more)
-              (? (id? <r 'lvm_ret) [acc pk net]
-                 (: p (jit-row r k)
-                    (? (nil? p) ()
-                       (: n2 (net + >p)
-                          (go more (k + 1) (? (pk < n2) n2 pk) n2 (acc + <p))))))
-              ())
-       b (go rows 0 0 0 ())
-       (@ b [body0 pk net]
-            ('((label jitbody))
-             + (? (0 < pk)
-                  [['add 'r7 'r2 (8 * pk)] ['add 'r7 'r7 ai-avail-floor] '(cmp r1 r7)
-                   '(br ae jitgo) '(ld r5 r5 8) '(ld r0 r5 0) '(jmpr r0) '(label jitgo)]
-                  ())
-             + jit-seam body0
-             ; ⚠ THE COLLAPSE, and without it the answer is a stack deeper than it started:
-             ; an arity-1 nif is handed its argument in Sp[0] and owes its answer in that SAME
-             ; slot. Every push the body made rides below it, so the result moves back up and Sp
-             ; comes home -- Sp[net] = Sp[0]; Sp += net, the C route's own last line.
-             + (? (0 < net) [['ld 'r0 'r1 0] ['st 'r1 (8 * net) 'r0] ['add 'r1 'r1 (8 * net)]] ())
-             + '((ld r0 r5 16) (add r5 r5 16) (jmpr r0)))
-            ()))
+        (rs @ (r >< more)
+         (<r @ 'lvm_ret [acc pk net]
+          (jit-row r k @ (a >< u)
+           (: n2 (net + u)
+            (go more (k + 1) (pk < n2 ? n2 pk) n2 (acc + a))))))
+       (go rows 0 0 0 () @ [body0 pk net]
+        ('((label jitbody))
+         + (0 < pk ?
+            [['add 'r7 'r2 (8 * pk)] ['add 'r7 'r7 ai-avail-floor] '(cmp r1 r7)
+             '(br ae jitgo) '(ld r5 r5 8) '(ld r0 r5 0) '(jmpr r0) '(label jitgo)])
+         + jit-seam body0
+         ; ⚠ THE COLLAPSE, and without it the answer is a stack deeper than it started:
+         ; an arity-1 nif is handed its argument in Sp[0] and owes its answer in that SAME
+         ; slot. Every push the body made rides below it, so the result moves back up and Sp
+         ; comes home -- Sp[net] = Sp[0]; Sp += net, the C route's own last line.
+         + (0 < net ? [['ld 'r0 'r1 0] ['st 'r1 (8 * net) 'r0] ['add 'r1 'r1 (8 * net)]])
+         + '((ld r0 r5 16) (add r5 r5 16) (jmpr r0)))))
 
    ; --- the live symbol table: this process's own symtab plus its own load bias -----------
    ; we own both sides, so a JIT here resolves a symbol the way a debugger would and never the
    ; way a loader does: our own binary carries the table holo wrote, and the maps line whose
    ; path is ours and whose file offset is zero carries the bias. ⚠ never the FIRST maps line
    ; -- that is often an unrelated anonymous r-xp region.
-   (bind-die m) (: _ (jit-say m) (welp '(bind)))
-   (bind-seat _) (? (member? 'selfpath (names ())) (selfpath 0) (bind-die "no selfpath nif"))
+   (bind-die m) (jit-say m, welp '(bind))
+   (bind-seat _) (member? 'selfpath (names ()) ? (selfpath 0) (bind-die "no selfpath nif"))
    (bind-rd p) (: s (jit-slurp p) (? (string? s) s (bind-die ("cannot open " + p))))
    (bind-le s i n) (: (go k a m) (? (k = n) a (go (k + 1) (a + peep s (i + k) 0 * m) (m * 256))) (go 0 0 1))
    (bind-live-tab _) (: exe (bind-rd (bind-seat 0))
-      symemo (tablet 0)
+      symemo {}
       exepath (bind-seat 0)
       base (: mp (bind-rd "/proc/self/maps") n (tally mp)
               (sp? j) (peep mp j 0 = 32)
-              (eol? j) ((j = n) || (peep mp j 0 = 10))
-              (nlend j) (: (go e) (? (eol? e) e (go (e + 1))) (go j))
-              (skipsp j) (: (go e) (? ((e < n) && sp? e) (go (e + 1)) e) (go j))
-              (tokend j) (: (go e) (? (eol? e || sp? e) e (go (e + 1))) (go j))
-              (fld i f) (: (go j k) (: t (tokend j) (? (k = f) (j >< t) (go (skipsp t) (k + 1)))) (go i 0))
+              (eol? j) (j = n || peep mp j 0 = 10)
+              (nlend j) (: (go e) (eol? e ? e (go (e + 1))) (go j))
+              (skipsp j) (: (go e) (e < n && sp? e ? (go (e + 1)) e) (go j))
+              (tokend j) (: (go e) (eol? e || sp? e ? e (go (e + 1))) (go j))
+              (fld i f) (: (go j k) (: t (tokend j) (k = f ? (j >< t) (go (skipsp t) (k + 1)))) (go i 0))
               (hex i e) (: (go j a) (: c (peep mp j 0)
                            (? (e <= j) a
                               (47 < c < 58) (go (j + 1) (a * 16 + c - 48))
@@ -291,7 +285,7 @@
               (loff i) (: se (fld i 2) (hex <se >se))
               (lpath i) (: se (fld i 5) (snip mp <se (nlend <se)))
               (go i) (? (n <= i) (bind-die "exe not found in maps")
-                        ((loff i = 0) && (exepath = lpath i)) (lstart i)
+                        (loff i = 0 && exepath = lpath i) (lstart i)
                         (go (nlend i + 1)))
               (go 0))
       ; ⚠ the symtab walk is linear and string-compares every entry, so a bare lookup is
@@ -310,7 +304,7 @@
    ; handler carries is (la rX sym), and at runtime that symbol's live address is a NUMBER --
    ; so it becomes (li rX addr), a movabs, and the whole body is position-independent.
    (jit-abs fs lv)
-    (@ fs (['la r s] >< rest) (['li r (lv (string s))] >< jit-abs rest lv)
+    (fs @ (['la r s] >< rest) (['li r (lv (string s))] >< jit-abs rest lv)
           (f >< rest) (f >< jit-abs rest lv)
           ())
    ; ⚠ THE BLOB CACHE, and the op rows ARE the key -- the same rows denote the same bytes, so a
@@ -325,7 +319,7 @@
        (? (two? m) m
           (: fs (jit-forms rows)
              v (? (nil? fs) [0]
-                  (: bs (peep ((from 'holo 'assemble) 'x64 (jit-abs fs (jit-live 0))) 'bytes 0)
+                  (: bs (peep (from 'holo 'assemble 'x64 (jit-abs fs (jit-live 0))) 'bytes 0)
                      (? (two? bs) [1 bs] (jit-no ['holo] "holo assembled nothing") [0])))
              _ (pin jit-blobs rows v) v)))
    ; --- the census's second question ------------------------------------------------------
@@ -348,18 +342,18 @@
                   lvm_aap lvm_aqp lvm_qap lvm_qqp)
    (jit-class bs)                                     ; a blocker SET -> what would unblock it
     (? (atom? bs) 'none
-       (any (\ b (member? b jit-call-ops)) bs) 'call
-       (all (\ b (member? b jit-branch-ops)) bs) 'branch-only
-       (any (\ b (member? b jit-branch-ops)) bs) 'branch-plus
+       (any (b \ member? b jit-call-ops) bs) 'call
+       (all (b \ member? b jit-branch-ops) bs) 'branch-only
+       (any (b \ member? b jit-branch-ops) bs) 'branch-plus
        'other)
    (jit-census f)                                     ; census only, behind its own env gate
     (: bs (jit-blockers f)
        k (jit-class bs)
        _ (pin jit-tally ['class k] (1 + peep jit-tally ['class k] 0))
-       _ (map (\ b (pin jit-tally ['blocks b] (1 + peep jit-tally ['blocks b] 0))) bs) ())
+       _ (map (b \ pin jit-tally ['blocks b] (1 + peep jit-tally ['blocks b] 0)) bs) ())
    (jit-blockers f)                                   ; the distinct ops a closure is blocked by
     (: rows (? (member? 'disg (names ())) (disg f) ())
-       (go l acc) (@ l (r >< more)
+       (go l acc) (l @ (r >< more)
                        (: nm <>r os >>r
                           (go more (? (jit-sayable? nm os) acc
                                       (member? nm acc) acc  (nm >< acc))))

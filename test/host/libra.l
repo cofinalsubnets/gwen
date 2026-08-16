@@ -1,17 +1,13 @@
-; --- test/host/libra.l: libra ⚖, the .l language server (crew/libra/libra.l) ---
-; the ports are ARGUMENTS, so a whole lsp conversation runs in-process here: the
-; client's messages go in on a (tap ..) and the server's come back out of a
-; (jug 0). no subprocess, no pipes, no timing, and a failure points at a line
-; rather than at a hung editor. run standalone from the repo root:
+; --- test/host/libra.l: libra ⚖, the .l balance tool (crew/libra/libra.l) ---
+; four verbs over one scanner, and this gate is that claim: the formatter, the
+; check and the doc lifter all read lib/lint.l, so no two of them can disagree
+; about what a paren or a comment is. run standalone from the repo root:
 ;   cat test/00-init.l test/host/libra.l | out/host/love
 
-(use 'json)
 (use 'lint)          ; libra splices this BELOW itself, so the session must ask for it too
 (use 'salt)
 (use 'libra)
-
-; a string as an input PORT (prel's own trick: index it over its jot)
-(: (lt-port s) (tap (map s (jot (tally s)))))
+(use 'lapiz)         ; ..and the doc verb's surfaces, which libra loads on that verb alone
 
 ; the settings a test means, stated rather than inherited: an empty tablet is
 ; "no config anywhere", which is what every balance test wants. ⚠ never (salt
@@ -20,159 +16,7 @@
 (: lt-none (tablet 0)
    (lt-conf prs) (foldl (\ t p (: _ (pin t <p >p) t)) (tablet 0) prs))
 
-; one client message, framed the way an editor frames it
-(: (lt-wire v) (: t (json-show v) ("Content-Length: " + show (tally t) + "\r\n\r\n" + t)))
-
-; every frame the server wrote, parsed back into values
-(: (lt-said j)
-   (: p (lt-port (slurp j))
-      (go acc) (: m (libra-recv p)
-                  (? (! (two? m)) (rev acc)
-                     (: r (json-read <>m)
-                        (go (? (two? r) (link <>r acc) acc)))))
-      (go ())))
-
-; run a conversation: a list of message values in, the server's replies out
-(: (lt-talkc conf vs)
-   (: j (jug 0)
-      txt (foldl (\ a v (a + (lt-wire v))) "" vs)
-      _ (libra-serve conf (lt-port txt) j)
-      (lt-said j)))
-(: (lt-talk vs) (lt-talkc lt-none vs))
-
-; is ndl anywhere in hay? (for reading the raw wire, where key order is the
-; tablet's business and only the spelling of a value is ours)
-(: (lt-has? hay ndl)
-   (: n (tally hay)
-      m (tally ndl)
-      (go i) (? ((n - m) < i) ()
-                ((snip hay i (i + m)) = ndl) 1
-                (go (i + 1)))
-      (go 0)))
-
-(: (lt-obj prs) (foldl (\ t p (pin t <p <>p)) (tablet 0) prs))
-(: (lt-req id mth ps) (lt-obj `(`("jsonrpc" "2.0") `("id" id) `("method" mth) `("params" ps))))
-(: (lt-not mth ps)    (lt-obj `(`("jsonrpc" "2.0") `("method" mth) `("params" ps))))
-(: (lt-doc uri txt)   (lt-obj `(`("textDocument" (lt-obj `(`("uri" uri) `("text" txt)))))))
-
-(: lt-bad "(: a 1\n   (b 2)\n")     ; one dropped paren -- the classic .l slip
-(: lt-ok  "(: a 1 (a + 1))")
-
-; --- the frame ------------------------------------------------------------
-; a header block then exactly N bytes; the length is in BYTES, so utf-8 rides
-; through without a character count anywhere
-(assert
- (: p (lt-port (lt-wire "hi")) r (libra-recv p) (&& (two? r) ("\"hi\"" = <>r)))
- (: p (lt-port (lt-wire "é")) r (libra-recv p) ("\"é\"" = <>r))
- !(libra-recv (lt-port ""))                                  ; eof: nothing, out of band
- !(libra-recv (lt-port "Content-Length: 5\r\n\r\nab"))        ; a short body is not a message
- ; the header name is matched case-blind, and a stray header rides through ignored
- (: p (lt-port "content-length: 2\r\nX-Junk: 1\r\n\r\n42") r (libra-recv p) ("42" = <>r)))
-
-; --- initialize -----------------------------------------------------------
-; ⚠ id 0 is a REQUEST, not a notification: json-rpc numbers from 0, and a bare
-; truth test on the id would answer nothing and hang the editor on message one
-(assert
- (: rs (lt-talk `((lt-req 0 "initialize" (tablet 0))))
-    r  <rs
-    (&& (1 = (tally rs)) (0 = (r "id")) ("2.0" = (r "jsonrpc"))
-        (1 = (((r "result") "capabilities") "textDocumentSync"))
-        ("libra" = (((r "result") "serverInfo") "name")))))
-
-; --- diagnostics ----------------------------------------------------------
-; the positions are lint's, dropped by one: lint counts from 1, lsp from 0. an
-; unclosed opener points at the OPENER (line 1 col 1 -> line 0 character 0).
-(assert
- (: ds (libra-diags lt-none lt-bad)
-    d  <ds
-    (&& (1 = (tally ds))
-        (0 = (((d "range") "start") "line")) (0 = (((d "range") "start") "character"))
-        (0 = (((d "range") "end") "line"))   (1 = (((d "range") "end") "character"))
-        (1 = (d "severity")) ("libra" = (d "source")) ("unclosed (" = (d "message"))))
- !(libra-diags lt-none lt-ok)                                        ; a clean document: no diagnostics
- !(libra-diags lt-none ""))                                          ; ...and an empty one likewise
-
-; didOpen publishes them; didChange with a repaired document publishes the EMPTY
-; array, which is how lsp says "forget what i told you". `[]` and not `null` --
-; the whole reason json names null instead of the empty array.
-(assert
- (: rs (lt-talk `((lt-not "textDocument/didOpen" (lt-doc "file:///x.l" lt-bad))))
-    r  <rs
-    (&& (1 = (tally rs))
-        ("textDocument/publishDiagnostics" = (r "method"))
-        ("file:///x.l" = ((r "params") "uri"))
-        (1 = (tally ((r "params") "diagnostics")))))
- (: rs (lt-talk `((lt-not "textDocument/didOpen" (lt-doc "file:///x.l" lt-bad))
-                  (lt-not "textDocument/didChange"
-                          (lt-obj `(`("textDocument" (lt-obj `(`("uri" "file:///x.l"))))
-                                    `("contentChanges" `((lt-obj `(`("text" lt-ok)))))))) ))
-    (&& (2 = (tally rs))
-        (1 = (tally ((<rs "params") "diagnostics")))         ; broken: one
-        (() = ((<>rs "params") "diagnostics"))))             ; repaired: cleared, exactly ()
- ; and it goes out ON THE WIRE as [] -- never null, which an editor would ignore
- ; instead of clearing (the whole reason json names null and not the empty array)
- (: j (jug 0)
-    _ (libra-serve lt-none (lt-port (lt-wire (lt-not "textDocument/didOpen" (lt-doc "file:///x.l" lt-ok)))) j)
-    t (slurp j)
-    (&& (lt-has? t "\"diagnostics\":[]") (! (lt-has? t "\"diagnostics\":null")))))
-
-; didClose clears them too
-(assert
- (: rs (lt-talk `((lt-not "textDocument/didClose" (lt-doc "file:///x.l" lt-bad))))
-    (() = ((<rs "params") "diagnostics"))))
-
-; --- the edges ------------------------------------------------------------
-; an unknown REQUEST is refused by number (a request must always be answered, or
-; the editor waits forever); an unknown NOTIFICATION is dropped in silence
-(assert
- (: rs (lt-talk `((lt-req 7 "textDocument/hover" (tablet 0))))
-    r  <rs
-    (&& (1 = (tally rs)) (7 = (r "id")) (-32601 = ((r "error") "code"))))
- !(lt-talk `((lt-not "$/setTrace" (tablet 0))))
- ; shutdown answers null, then exit ends the session -- what follows is never read
- (: rs (lt-talk `((lt-req 1 "shutdown" (tablet 0))
-                  (lt-not "exit" (tablet 0))
-                  (lt-req 2 "initialize" (tablet 0))))
-    (&& (1 = (tally rs)) (json-null? (<rs "result")))))
-
-; ⚠ a MALFORMED document notification is dropped, never answered with an invented
-; uri. unguarded this is not an error but a plausible lie: () applied to a string
-; is 1 (const-1) and 1 applied to it is the string back (the identity), so no
-; params at all reads its uri as "uri" and no textDocument reads it as 1 -- and
-; publishing an empty list at a bogus uri tells an editor to CLEAR warnings it is
-; rightly showing. nothing goes out, and the session stays up.
-(assert
- !(lt-talk `((lt-not "textDocument/didOpen" (tablet 0))))                  ; no textDocument
- !(lt-talk `((lt-not "textDocument/didOpen" (lt-obj `(`("textDocument" (tablet 0)))))))  ; no uri
- !(lt-talk `((lt-not "textDocument/didChange" (tablet 0))))
- !(lt-talk `((lt-not "textDocument/didClose" (tablet 0))))
- ; a uri that is not a string is not a uri
- !(lt-talk `((lt-not "textDocument/didOpen" (lt-obj `(`("textDocument" (lt-obj `(`("uri" 7)))))))))
- ; ...and a malformed one does not stop the next message being served
- (: rs (lt-talk `((lt-not "textDocument/didOpen" (tablet 0))
-                  (lt-req 5 "initialize" (tablet 0))))
-    (&& (1 = (tally rs)) (5 = (<rs "id"))))
- ; a document with no text, but a real uri, is an EMPTY document -- clean, not junk
- (: rs (lt-talk `((lt-not "textDocument/didOpen"
-                          (lt-obj `(`("textDocument" (lt-obj `(`("uri" "file:///e.l")))))))))
-    (&& (1 = (tally rs)) ("file:///e.l" = ((<rs "params") "uri"))
-        (() = ((<rs "params") "diagnostics"))))
- ; an empty contentChanges list leaves the document empty rather than inventing text
- (: rs (lt-talk `((lt-not "textDocument/didChange"
-                          (lt-obj `(`("textDocument" (lt-obj `(`("uri" "file:///x.l"))))
-                                    `("contentChanges" ()))))))
-    (() = ((<rs "params") "diagnostics"))))
-
-; a garbled frame does not take the session down: the body is dropped and the
-; next message is served as if nothing happened
-(assert
- (: j (jug 0)
-    txt ("Content-Length: 7\r\n\r\n{nope!!" + (lt-wire (lt-req 3 "initialize" (tablet 0))))
-    _ (libra-serve lt-none (lt-port txt) j)
-    rs (lt-said j)
-    (&& (1 = (tally rs)) (3 = (<rs "id")))))
-
-; --- the other two verbs --------------------------------------------------
+; --- the formatter and the check ------------------------------------------
 ; the FORMATTER is a reindenter: it replaces leading whitespace and touches
 ; nothing else, so a line break, an inside-the-line alignment and a comment all
 ; survive it. laying out an already-laid-out file is the identity, which is what
@@ -187,12 +31,12 @@
  ("(: a 1)\n" = (libra-fmt "(: a 1)   \n"))
  ("\n(: a 1)\n" = (libra-fmt "   \n(: a 1)\n")))
 
-; the CHECK is the same scan the server publishes, so the two can never
-; disagree about a file: one warning here is one diagnostic there
+; the CHECK is the scan itself, laid out for a terminal: one warning here is one
+; line there, and the config rides in as an argument rather than being read
 (assert
  (1 = (tally (lint-scan "(: a 1\n")))
- (1 = (tally (libra-diags lt-none "(: a 1\n")))
- !(lint-scan "(: a 1)\n") !(libra-diags lt-none "(: a 1)\n"))
+ (1 = (tally (lint-of "(: a 1\n" lt-none)))
+ !(lint-scan "(: a 1)\n") !(lint-of "(: a 1)\n" lt-none))
 
 ; --- the config rules -----------------------------------------------------
 ; ⚠ THE DEFAULT IS BALANCE ALONE. (lint-scan src) is (lint-of src ()), so a tool
@@ -281,11 +125,14 @@
  ; the far commoner body call (: a 1 (bit x)) is. flagging one would flag both.
  !(lint-of "(: (bit x) x)" lt-shad))
 
-; the SEVERITY splits with the rule: an imbalance is an error (1) because the
-; file does not read; an opinion is a warning (2) because it does.
+; WHICH WARNINGS FAIL splits with the rule: an imbalance always does, because the
+; file does not read and that is not a matter of opinion; an opinion never does,
+; so turning a rule on cannot redden a tree that was green. `(strict R)` promotes
+; one, for a project that has actually finished with it.
 (assert
- (1 = ((<(libra-diags lt-none "(: a 1\n")) "severity"))
- (2 = ((<(libra-diags lt-sing "(go)")) "severity")))
+ (fatal? lt-none <(lint-scan "(: a 1\n"))
+ !(fatal? lt-sing <(lint-of "(go)" lt-sing))
+ (fatal? (lt-conf `(`('strict 'singleton))) <(lint-of "(go)" lt-sing)))
 
 ; --- the paren minifier (fmt -p) ------------------------------------------
 ; ⚠ THE SPAN HALF IS OPFIX'S OWN JUDGEMENT, not a copy of it: splice the child's
@@ -344,6 +191,160 @@
   = (libra-fmt (libra-drop "(: a ((f x) + 1)\n b 2)\n" (tablet 0))))
  ; and with no drops in it, -p is the reindenter exactly
  (: s "(: a 1\n   b 2)\n" (s = (libra-fmt (libra-drop s (tablet 0))))))
+
+; --- doc: the header out of the file ---------------------------------------
+; the fourth verb, and the only one that keeps comments. three layers of claim:
+; the SCANNER (lint-cmts reports every comment with its TEXT, and nothing that is
+; not one -- a `;` inside a string is not a comment), the HEADER (which lines it
+; is, on a source written to have every edge in it at once), and THE LAW, which
+; is the one that matters.
+
+; ⚠ the string is the whole point of asking lint rather than grepping for `;`.
+(: src "#!/usr/bin/env -S love -l
+; two
+;  three
+
+; five
+(: x \"a ; not a comment\"  ; six, to the right
+   y 2)
+; eight
+"
+   cs (lint-cmts src)
+   (nthl l k) (? (k = 0) <l (nthl >l (k - 1)))
+   _ (assert
+      (6 = tally cs)                                    ; six, and the string holds none
+      ('(1 1 "/usr/bin/env -S love -l" bang) = <cs)     ; the introducer's own spot
+      ('(2 1 " two" semi) = (nthl cs 1))                ; the text is what follows `;`
+      ('(5 1 " five" semi) = (nthl cs 3))               ; the blank line is counted
+      ('(6 27 " six, to the right" semi) = (nthl cs 4)) ; past the string, at its own column
+      ('(8 1 " eight" semi) = (nthl cs 5)))
+   0)
+
+; the HEADER: a seat line, an indented display, a blank inside, an indented
+; sentence, a comment to the RIGHT of code (never the header), one under it.
+(: src "#!/usr/bin/env -S love -l
+; the tool -- what it is for
+;
+;   a display, two spaces in
+  ; and an indented line is still a sentence
+; and back
+;
+(: run 1)   ; not the header
+; nor this
+"
+   _ (assert
+      ('("the tool -- what it is for" "" "  a display, two spaces in"
+         "  and an indented line is still a sentence" "and back")
+       = (ldoc-head src))                                ; ..and it keeps its indent
+      ; ..and an indented run is a DISPLAY, dedented by its own least indent
+      ((ldoc-md src) = "the tool -- what it is for\n\n```\na display, two spaces in\nand an indented line is still a sentence\n```\nand back\n")
+      ; ..and the degenerate shapes answer nothing rather than something
+      (() = (ldoc-head "(: x 1)\n; a tail comment\n"))  ; code first: no header at all
+      (() = (ldoc-head ""))
+      ("" = (ldoc-md "(: x 1)\n"))
+      ('("just this") = (ldoc-head "; just this\n")))    ; no newline trouble at the end
+   0)
+
+; a BANNER is where the header used to be lost. `starter` claims a `---` line and
+; no markdown block can parse it, so mdread stopped dead there and dropped
+; everything under it in silence. two things fixed that, and neither is a patch:
+; lapiz's reader is total, and a banner is read as the SECTION HEADING it is.
+(: d (mdread (ldoc-md "; --- a banner ---
+; the body under it
+(: x 1)
+"))
+   (nth l k) (? (k = 0) <l (nth >l (k - 1)))
+   _ (assert
+      (2 = tally d)
+      ('(head 2 ((text "a banner"))) = <d)
+      ('(para ((text "the body under it"))) = (nth d 1)))
+   0)
+
+; ⚠ THE LAW, on files nobody wrote for this test: the document keeps every LETTER
+; of the header. alphanumerics on both sides, so markdown's own normalizations --
+; a paragraph filled onto one line, `code` losing its ticks, an escape losing its
+; backslash -- are not mistaken for loss. what is left is the claim worth making:
+; nothing was DROPPED. an extraction that stalls drops its whole tail in silence,
+; and neither a length nor a block count would notice; letters do. it holds on 368
+; of the tree's 378 tracked .l files (the other ten have no header) and the three
+; named here are the hardest: all begin with a banner. (hue.l and eval.l have no
+; doc/*.md at all, which is the gap the doc verb exists to close.)
+(: (nthl l k) (? (k = 0) <l (nthl >l (k - 1)))
+   (alnum? c) (((48 <= c) && (c <= 57)) || ((65 <= c) && (c <= 90)) || ((97 <= c) && (c <= 122)))
+   (bare s) ((: (g i acc) (? (i < tally s) (g (i + 1) (? (alnum? (s i)) (acc + string (s i)) acc)) acc))
+             0 "")
+   (itext l) (foldl (+) "" (map (\ x (: t <x
+                                        (? (id? t 'text) <>x
+                                           (id? t 'code) <>x
+                                           (id? t 'link) (itext <>x + nthl x 2)
+                                           ((id? t 'strong) || (id? t 'em)) (itext <>x)
+                                           ""))) l))
+   (btext b) (: t <b
+                (? (id? t 'head)  (itext (nthl b 2))
+                   (id? t 'para)  (itext <>b)
+                   (id? t 'fence) (nthl b 2)
+                   (id? t 'quote) (dtext <>b)
+                   ((id? t 'bullets) || (id? t 'numbers)) (foldl (+) "" (map itext <>b))
+                   (id? t 'deflist) (foldl (+) "" (map (\ it (itext <it + itext <>it)) <>b))
+                   ""))
+   (dtext d) (foldl (+) "" (map btext d))
+   (slurpf f) (: q (open f "r") (? q (slurp q) ""))
+   _ (map (\ f (: src (slurpf f)
+                  head (foldl (+) "" (ldoc-head src))
+                  d (mdread (ldoc-md src))
+                  (assert
+                   (1 < tally d)                         ; a document, not a line
+                   (0 < tally (bare head))
+                   ((bare head) = (bare (dtext d))))))   ; ..and it kept every letter
+          (L "crew/vi/hue.l" "crew/lush/eval.l" "crew/libra/libra.l"))
+   ; the surfaces come free, and that is the seam's whole promise: libra says
+   ; markdown, lapiz says the rest.
+   _ (: md (ldoc-md (slurpf "crew/vi/hue.l"))
+        _ (assert (0 < tally (md->ht md))
+                  (0 < tally (md->rf md)))
+        0)
+   0)
+
+
+; the STRUCTURE the corpus already carries (rung 1): a banner is a section, a
+; display is a display, and a ⚠ is a hazard. the prose is read, never rewritten.
+(assert
+ ; a `--- name ---` banner is a level-2 heading, and the padding dashes are padding
+ ((ldoc-md "; --- the table ------------------------------------------------\n; a row is a thing.\n(: x 1)\n")
+  = "## the table\na row is a thing.\n")
+ ((ldoc-md "; --- the middle ---\n(: x 1)\n") = "## the middle\n")
+ ; ..but three dashes with nothing in them are not a banner
+ ((ldoc-md "; ---\n(: x 1)\n") = "---\n")
+ ; a `usage:` line and the indented lines under it are ONE display: the alignment
+ ; is the content, and filling it into a paragraph would destroy it
+ ((ldoc-md "; usage:  tool [-x] FILE ..    do the thing\n;     or: love -l tool.l FILE\n; and prose after it.\n(: x 1)\n")
+  = "```\nusage:  tool [-x] FILE ..    do the thing\n    or: love -l tool.l FILE\n```\nand prose after it.\n")
+ ; ⚠ an indent under a LIST ITEM is a wrap, not a display -- it stays a line and
+ ; lapiz joins it to the item above (its lazy continuation)
+ ((ldoc-md "; - a bullet that wraps onto\n;   a second line\n; - and one that does not\n(: x 1)\n")
+  = "- a bullet that wraps onto\n  a second line\n- and one that does not\n")
+ ((mdread (ldoc-md "; - a bullet that wraps onto\n;   a second line\n(: x 1)\n"))
+  = '((bullets (((text "a bullet that wraps onto a second line"))))))
+ ; the hazard marker in bold, and no more than that
+ ((ldoc-md "; ⚠ a hazard, and it is one.\n(: x 1)\n") = "**⚠** a hazard, and it is one.\n")
+ ; ..and a hazard STARTS a block: 22 of the tree's 74 sit jammed against the prose
+ ; above them, and filling them into it is how a page becomes a wall
+ ((ldoc-md "; prose.\n; ⚠ a hazard.\n(: x 1)\n") = "prose.\n\n**⚠** a hazard.\n")
+ ((ldoc-md "; prose.\n;\n; ⚠ a hazard.\n(: x 1)\n") = "prose.\n\n**⚠** a hazard.\n"))
+
+; and the whole of it through the lens: a real header comes out as a document with
+; a heading its sections hang off, which is what papel reads a page's title,
+; anchors and contents nav from.
+(: (rd f) (: q (open f "r") (? q (slurp q) ""))
+   (nth l k) (? (k = 0) <l (nth >l (k - 1)))
+   d (mdread ("# crew/lapiz/lapiz.l\n\n" + ldoc-md (rd "crew/lapiz/lapiz.l")))
+   heads (filter (\ b (id? <b 'head)) d)
+   _ (assert
+      (3 < tally heads)
+      ('(head 1 ((text "crew/lapiz/lapiz.l"))) = <heads)   ; the file names the page
+      (2 = <>(nth heads 1))                               ; ..and its banners are sections
+      (0 < tally (filter (\ b (id? <b 'fence)) d)))       ; the diagrams survived as displays
+   0)
 
 (test_fin ())
 (puts "libra: ok")

@@ -150,6 +150,16 @@ moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 || fail "a TU of o
 printf '_Static_assert(0, "boom");' > "$ho/.feat.c"
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 && fail "a FAILING lone _Static_assert passed"
 
+# C11 6.5.16.1: an integer reaches a pointer only as a NULL POINTER CONSTANT, so
+# `return 1` from a T* is a constraint violation -- host/main.c carried one for years,
+# clang named it, and we took it in silence and handed back address 1
+printf 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return 0;}\n' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+  && fail "an int returned where a pointer is owed was accepted"
+printf 'struct s;\nstatic struct s *f(int x){ if (x) return (struct s*)1; return 0; }\nint m(void){return 0;}\n' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+  || fail "a CAST to the pointer type must still pass"
+
 # a UCN takes EXACTLY 4 (or 8) hex digits -- a short run must REFUSE, not take what
 # it found. test/cc/138 holds the well-formed side; only the refusals live here.
 # \134 is the backslash, written in octal so the sequence survives this file.
@@ -162,6 +172,12 @@ for bad in '\134u00E' '\134U0001F60' '\134u' '\134uZZZZ' \
   printf "char *s = \"$bad\";\nint m(void){return 0;}\n" > "$ho/.feat.c"
   moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
     && fail "a malformed universal character name was accepted: $bad"
+done
+# ..and in an IDENTIFIER, the other position a UCN takes (test/cc/138 holds the well-formed side)
+for bad in '\134u0041' '\134u00E' '\134uD800'; do
+  printf "int $bad;\nint m(void){return 0;}\n" > "$ho/.feat.c"
+  moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+    && fail "a malformed universal character name was accepted in an identifier: $bad"
 done
 for ok in '\134u0024' '\134u0040' '\134u0060' '\134u00A0' '\134U0010FFFF'; do
   printf "char *s = \"$ok\";\nint m(void){return 0;}\n" > "$ho/.feat.c"

@@ -10,7 +10,10 @@
 ; (sqrt stays in C -- crew/moon/lib/math/am.c's am_sqrt, OURS and IEEE-exact; a thing
 ; C CAN say has no place here.) three targets, one layer: (mksys dst) lays x64,
 ; (mksys-arm64 dst) aarch64, (mksys-riscv dst) riscv64 -- all seed mksys-as, which
-; picks the arch's IR table
+; picks the arch's IR table. (mksys-freebsd dst) is the OS twin of the x64 lane
+; (doc/plan/seed-universal.md rung 2): same machine, freebsd's kernel ABI --
+; the carry-flag error normalized to -errno so nolibc's er() keeps one law,
+; sigprocmask 340 (3 args, a 16-byte set, SIG_* = 1/2/3).
 ; (the scaffold is shared; the payloads are irreducibly per-ISA). runs after
 ; crew/holo/{elf,obj}.l in a cat (the mooncc prefix layers; the assembler itself
 ; rides the baked holo book):
@@ -21,10 +24,92 @@
 (: (mksys dst) (mksys-as 'x64 dst)
    (mksys-arm64 dst) (mksys-as 'arm64 dst)
    (mksys-riscv dst) (mksys-as 'riscv64 dst)
+   (mksys-freebsd dst) (mksys-as 'freebsd dst)
    (mksys-as arch dst) (write-bytes dst (mksys-bytes arch))
    ; the bytes alone -- moon.l's runtime pull lays sys in-memory through this
    (mksys-bytes arch)
-    (: ir (? (id? arch 'x64)
+    (: ir (? (id? arch 'freebsd)
+         ; the freebsd x64 lane. same machine, another kernel: the syscall insn
+         ; answers errors as CF + positive errno, so the trampoline normalizes to
+         ; linux's -errno ('below IS jc in holo's cc table) and er() upstairs
+         ; never learns which kernel answered. ⚠ UNRUN until a freebsd box gates
+         ; it (rung 5); the numbers are stable/14's syscall.h.
+         '(
+         ; -- __ai_sys: the same SysV -> kernel chain as the x64 lane below.
+         (label __ai_sys)
+         (mov r0 r6)                 ; rax <- n
+         (mov r6 r5)                 ; rdi <- a
+         (mov r5 r2)                 ; rsi <- b
+         (mov r2 r1)                 ; rdx <- c
+         (mov r9 r7)                 ; r10 <- d
+         (mov r7 r8)                 ; r8  <- e
+         (ld r8 sp 8)                ; r9  <- f (the one stack arg)
+         (sys)
+         (br below sys-err)          ; CF set: rax is +errno
+         (ret)
+         (label sys-err)
+         (neg r0)                    ; -errno out, the one law er() reads
+         (ret)
+
+         ; -- __sigsetjmp(buf, save): the register file as the x64 lane, then the
+         ;    mask by sigprocmask(1=SIG_BLOCK, NULL, &buf[8]) -- freebsd's set is
+         ;    16 bytes, so it takes buf[8..9] (the glibc-sized buffer has room).
+         (label __sigsetjmp)
+         (st r6 0  r3)               ; rbx
+         (st r6 8  r4)               ; rbp
+         (st r6 16 r11)              ; r12
+         (st r6 24 r12)              ; r13
+         (st r6 32 r13)              ; r14
+         (st r6 40 r14)              ; r15
+         (ld r0 sp 0)                ; the return rip sits at [rsp]
+         (st r6 56 r0)
+         (lea r0 sp 8)               ; the caller's rsp once we return
+         (st r6 48 r0)
+         (lea r2 r6 64)              ; rdx = &buf[8] (oset)
+         (li r5 0)                   ; rsi = NULL (read only)
+         (li r6 1)                   ; rdi = SIG_BLOCK (freebsd: 1)
+         (li r0 340)                 ; sigprocmask
+         (sys)
+         (li r0 0)                   ; the first arrival answers 0
+         (ret)
+
+         ; -- siglongjmp(buf, val): the mask first, then the file, then the jump.
+         ;    ⚠ val and buf ride rbx/rbp, NOT r8/r9: freebsd's syscall exit
+         ;    ZEROES the scratch registers (a leak mitigation linux does not
+         ;    have -- the vm's core showed r8 = r9 = 0 at syscall+1), so only
+         ;    the callee-saved file survives the kernel. rbx then restores
+         ;    LAST, off itself.
+         (label siglongjmp)
+         (mov r4 r5)                 ; rbp <- val (callee-saved survives the kernel)
+         (mov r3 r6)                 ; rbx <- buf
+         (lea r5 r6 64)              ; rsi = &buf[8] (the saved 16-byte set)
+         (li r6 3)                   ; rdi = SIG_SETMASK (freebsd: 3)
+         (li r2 0)                   ; rdx = NULL
+         (li r0 340)                 ; sigprocmask
+         (sys)
+         (mov r0 r4)                 ; rax <- val, before rbp is restored
+         (ld r4  r3 8)               ; rbp
+         (ld r11 r3 16)              ; r12
+         (ld r12 r3 24)              ; r13
+         (ld r13 r3 32)              ; r14
+         (ld r14 r3 40)              ; r15
+         (ld sp r3 48)               ; the saved rsp
+         (ld r1 r3 56)               ; the saved rip
+         (ld r3 r3 0)                ; rbx, last, off itself
+         (cmp r0 0)                  ; 0 lifted to 1 (the setjmp law)
+         (br ne lj-live)
+         (li r0 1)
+         (label lj-live)
+         (jmpr r1)
+
+         ; -- __ai_sigret: laid for surface parity only. freebsd has no
+         ;    SA_RESTORER -- a handler returns on the kernel's own trampoline,
+         ;    and the freebsd sigaction body never installs this (rung 3).
+         (label __ai_sigret)
+         (li r0 417)                 ; sigreturn
+         (sys))
+
+         (id? arch 'x64)
          '(
          ; -- __ai_sys: SysV args (rdi rsi rdx rcx r8 r9 [rsp+8]) -> the kernel's
          ;    (rax rdi rsi rdx r10 r8 r9). each mov reads a slot the previous one
@@ -285,4 +370,5 @@
          (label __ai_sigret)
          (li r7 139)                 ; rt_sigreturn
          (sys)))
-       (objelf arch ir () '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret") () () () () () () ())))
+       ; the freebsd lane is the x64 machine wearing another kernel -- objelf takes the machine
+       (objelf (? (id? arch 'freebsd) 'x64 arch) ir () '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret") () () () () () () ())))

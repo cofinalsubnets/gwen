@@ -106,7 +106,8 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             crew/holo/link.l crew/holo/copy.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
             crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/sb/merge.l \
             crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l crew/sb/up.l \
-            lib/gz.l lib/tar.l lib/tarcmd.l lib/source.l
+            lib/gz.l lib/tar.l lib/tarcmd.l lib/source.l crew/lapiz/lapiz.l \
+            lib/salt.l lib/infix.l crew/libra/libra.l lib/hueweb.l lib/serve.l
 DIST_ORIGIN ?=
 # ⚠ THE MEMBERSHIP IS AN INPUT, and make cannot see it. Adding a file to distfiles
 # changes what the artifact CARRIES while every file make watches keeps its mtime, so
@@ -336,10 +337,13 @@ xmath_o = $(patsubst crew/moon/lib/math/%.c,$(xd)/m_%.o,$(wildcard crew/moon/lib
 # no nolibc.o: the link owes its symbols and the driver pulls the members by need
 # (crew/moon/lib/nolibc/), so a dist takes no calendar and no resolver.
 xobjs = $(xd)/love.o $(xhost_o) $(xmath_o) $(xd)/sys.o
-$(xd)/love.o: core/love.c $(love_h) out/host/mooncc0.image
+# -D AI_HAVE_VERSION_H like the host lane (build.mk's love.o): mooncc has no
+# __has_include, so without it the twin NAMED ITSELF "unknown" -- test_xfixpoint
+# caught it as machine B refusing to reproduce machine A's bytes.
+$(xd)/love.o: core/love.c $(love_h) out/host/mooncc0.image out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c $< $@
+	@$(moonx) -D ai_tco=$(tco) -D AI_HAVE_VERSION_H -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(xd)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
