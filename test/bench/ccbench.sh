@@ -45,7 +45,7 @@
 #   test subtracts two medians of `samples` runs each (corpus, then empty boot), default 3.
 # resolve the repo root ABSOLUTELY: the build lanes cd into it to reach the source
 # globs (core/love.c, host/*.c, crew/...), so every output/include path below must be absolute.
-R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+R=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 TIMEOUT=${1:-180}
 SAMPLES=${2:-3}
 ho=$R/out/host
@@ -76,7 +76,7 @@ fi
 # codegen or speed factor. Keeping it would bench a compiler's warning set, not its
 # throughput -- gcc's -Wall flags a benign construct in core/love.c (-Wmisleading-indentation)
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
-CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/out/lib"
+CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/core -I$R/out/lib"
 # mk/common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
 # sentinels' tiling IS core/love.h's ai_typ, and ld left to itself keeps each love_data.N an
 # orphan in first-encountered order -- gcc emits love_data.7 first, so lvm_str lands
@@ -110,9 +110,9 @@ MC="$ho/mooncc"
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
-    "$MC" -D ai_tco=1 -Iout/host -I. -Iout/lib -c core/love.c "$od/love.o" || exit 1
+    "$MC" -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c core/love.c "$od/love.o" || exit 1
     for f in host/*.c; do b=$(basename "$f" .c)
-      "$MC" -D ai_tco=1 -Iout/host -I. -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
+      "$MC" -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
     # no nolibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a nolibc.o.
@@ -170,7 +170,7 @@ lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
   lbl=$1; bld=$2; bin=$3
   bt=$(wall "$bld '$bin' '$4'")
   if [ ! -f "$bin" ] || [ ! -x "$bin" ]; then dnf_lane "$lbl"; return; fi
-  echo "build $lbl $bt ok"
+  echo "build $lbl $bt ok"; LIVE=$((LIVE + 1))            # the liveness tally, read at the end
   if passes "$bin"; then echo "test $lbl $(corpus_ms "$bin") ok"
   else echo "test $lbl dnf"; fi
   crow chacha   "$lbl" "$(crypto_ms "$bin" '(cc-run ())' 'ccrypto chacha: ok')"
@@ -178,6 +178,13 @@ lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
 }
 crow() { case $3 in dnf) echo "$1 $2 dnf";; *) echo "$1 $2 $3 ok";; esac; }
 dnf_lane() { for ph in build test chacha poly1305; do echo "$ph $1 dnf"; done; }
+
+# ⚠ A LANE THAT CANNOT BUILD REPORTS dnf, WHICH MEANS A BROKEN HARNESS RENDERS AS A
+# WELL-FORMED TABLE OF NOTHING. that is not hypothetical: the 2026-08-15 reorg broke the
+# root resolution and the -Icore seam, and twelve dnf rows sat in the cached result for a
+# day with the corpus reading simply unavailable. one missing compiler is a legitimate
+# skip; ZERO lanes is the harness, and it exits 1 below.
+LIVE=0
 
 if [ "$(uname -m)" = x86_64 ] && [ -x "$MC" ]; then
   lane mooncc build_mooncc "$WORK/love-mooncc"
@@ -205,3 +212,6 @@ if [ -n "$CCGLIBC" ]; then
     fi
   done
 fi
+
+[ "$LIVE" -gt 0 ] || { echo "ccbench: every lane dnf -- the harness, not the compilers" >&2
+                       exit 1; }

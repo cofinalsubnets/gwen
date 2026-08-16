@@ -56,7 +56,7 @@ endif
 # each fragment owns are rostered in that fragment.)
 .PHONY: all install uninstall clean distclean host kernel wasm love0 site site-serve test test_host \
   test_hdiff test_slow test_extra test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm \
-  uuwm test_gc test_gcheck test_gcstress test_hostnif test_doc test_glaze test_hook test_sat \
+  uuwm test_gc test_gcheck test_gcstress test_hostnif test_doc test_glaze test_hook test_sat test_cli \
   test_holo test_as test_elf32 test_objcopy test_holofuzz test_glazefuzz test_encver test_lux \
   test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 \
   test_virt test_wake test_embed embed test_rp2040 valg disasm flame cat cata catav perf repl gdb \
@@ -103,7 +103,7 @@ test:
 # ⚠ it BUILDS and smokes the artifact and does not run the seed fixpoint, because the tarball is
 # cut from the git INDEX -- on a dirty tree that would compare the artifact against source you
 # are not looking at, and report the difference as a broken fixpoint.
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_wasm test_kernel test_disk test_virt test_embed test_cookdiff test_dist
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_wasm test_kernel test_disk test_virt test_embed test_cookdiff test_dist
 	
 
 # really really really slow gate. test_embed is here too, cheap insurance: the thumb lanes

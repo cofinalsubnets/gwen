@@ -124,6 +124,13 @@
    ; STDIN when handed no file operand (cat head tail wc sort uniq cut tr nl rev grep sed
    ; tee xargs). Those are the next tier and they wait on the stdin story, which is a
    ; question about ^C and a terminal rather than about anything in this file.
+   ; MEASURED 2026-08-16, and the number says WAIT. Over a host build -- 228 simple
+   ; foreground commands, lush as make's SHELL -- the tier was SEVEN (4 cat, 3 sed)
+   ; against the 159 the list below already takes, and every one of the seven named a
+   ; file operand, so asking each tool "are these args safe in here?" would have
+   ; admitted all of them and bought 3%. ⚠ AND ON A HOST THE LANE IS NOT EVEN LIVE:
+   ; cook asks `sh-ours? SHELL` first, /bin/sh is dash, so every recipe line spawns.
+   ; The payoff is the DISTRO's, where /bin/sh IS us. Measure there, not here.
    sh-imgok '("mooncc" "cc"
               "test" "[" "true" "false" "echo" "printf" "uname" "pwd"
               "basename" "dirname" "readlink" "seq" "ls" "cmp" "diff"
@@ -186,7 +193,7 @@
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
    sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false" "command"
                 "read" "set" "shift" "unset" "eval" "." "wait" "local"
-                "break" "continue" "return")
+                "break" "continue" "return" "ev")
    (sh-bi? nm) (sh-smem? nm sh-binames)
    (sh-readb args)
      (: args2 (? (two? args && (<args = "-r")) >args args)
@@ -240,6 +247,26 @@
                             (? !j 0 (: _ (each (sh-nth j 0) (\ p (wait p)))
                                        (pull sh-jobs nn 0))))))
            0))
+   ; `ev EXPR..` -- the arguments join as ONE love form (the `eval` builtin's
+   ; join), its answer says on out, and its TRUTH BIT is the status: positive is
+   ; true, so `ev 1 + 2` is a calculator and `if ev '3 > 2'` is a test -- the one
+   ; thing ${( )} cannot do, since an expansion is a word and not a command. -n
+   ; says nothing and answers the status alone (cli.l's -e/-n pair, same letters).
+   ; the form runs in THIS image, so a binding it makes is still there next line.
+   ; ⚠ NOT SPELLED `love`. A builtin shadows its PATH twin, and the interpreter
+   ; and this lane spell their arguments differently -- `love -e "1 + 2"` would
+   ; read `-e` as a DATUM and fold it into the form, answering 3.0 for 3. The two
+   ; want different command lines and isolated processes, so the word `love` stays
+   ; the binary's and spawns. `ev` is love's own name for the evaluator (love/ev.l).
+   (sh-loveb args)
+     (: q ((two? args) && (<args = "-n"))
+        src (sh-unwords (? q >args args))
+        (? !(tally src) 0
+           (: r (sh-loveval src)
+              (? (id? <r 'err) (sh-lovesay >r)
+                 (: v >r
+                    _ (? q 0 (puts ((sh-lovetext v) + "\n")))
+                    (? v 0 1))))))
    (sh-builtin argv)
      (: cmd <argv
         (? (cmd = "exit")
@@ -286,6 +313,7 @@
                              (? (tally c)
                                 (: r (sh-line c) (? (two? r) (cmderr "eval: unexpected eof") r))
                                 0))
+           (cmd = "ev")   (sh-loveb >argv)
            (cmd = ".")    (sh-dotb >argv)
            (cmd = "local") (sh-localb >argv)
            (cmd = "wait") (sh-waitb >argv)

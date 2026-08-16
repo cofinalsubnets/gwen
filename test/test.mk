@@ -324,10 +324,15 @@ test_lux: host
 # through the verb rail or a baked image instead. ~2.5s, most of it one bake, and it rides
 # test_slow because the failure it catches is silent by construction (a seat that answers
 # () is indistinguishable from an app with nothing to say).
-.PHONY: test_seat
+.PHONY: test_seat test_cli
 test_seat: host
 	@echo TEST test/gate/seat.sh "(the file-seat lane)"
 	@sh test/gate/seat.sh $m
+# the CLI's exit STATUS -- 0 working, 1 unopenable, 2 malformed, a verb's own charm.
+# seat.sh reads what the binary SAYS; until this, nothing read what it ANSWERS.
+test_cli: host
+	@echo TEST test/gate/cli.sh "(the cli exit-status lane)"
+	@sh test/gate/cli.sh $m
 
 test_sb: host out/host$(hsuf)/sb
 	@echo TEST crew/sb/sb.l + test/host/sb.l
