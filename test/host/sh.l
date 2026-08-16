@@ -427,21 +427,32 @@
 (: r (hark (L "out/host/love" "out/host/lush" "-c" "echo [${(nosuchname)}] 2>/dev/null; echo alive"))
    (assert (= "[]\nalive\n" (cup r))))
 
-; the builtin: the answer on out, the TRUTH BIT as the status (positive is true),
-; and -n for the status alone
-(: r (hark (L "out/host/love" "out/host/lush" "-c" "love 1 + 2; love -n 9; echo st=$?"))
+; `ev`: the answer on out, the TRUTH BIT as the status (positive is true), and
+; -n for the status alone. ⚠ THE WORD `love` IS NOT OURS. A builtin shadows its
+; PATH twin, and the interpreter spells its arguments differently -- `love -e X`
+; would read -e as a datum and fold it in, answering 3.0 for 3. The two want
+; different command lines and isolated processes, so `love` spawns.
+(assert !(sh-bi? "love") (sh-bi? "ev"))
+(: r (hark ["out/host/love" "out/host/lush" "-c" "ev 1 + 2; ev -n 9; echo st=$?"])
    (assert (= "3\nst=0\n" (cup r))))
-(: r (hark (L "out/host/love" "out/host/lush" "-c" "love 0; echo st=$?; love 1; echo st=$?"))
+(: r (hark ["out/host/love" "out/host/lush" "-c" "ev 0; echo st=$?; ev 1; echo st=$?"])
    (assert (= "0\nst=1\n1\nst=0\n" (cup r))))
+; a love form as a shell CONDITION -- the one thing ${( )} cannot do, an
+; expansion being a word and not a command
+(: r (hark ["out/host/love" "out/host/lush" "-c" "if ev 3 > 2; then echo yes; else echo no; fi"])
+   (assert (= "yes\n" (cup r))))
 ; ERRORS CONTAIN: a bad form is a status and a line on err, and the shell runs on
-(: r (hark (L "out/host/love" "out/host/lush" "-c" "love '(1 +' 2>/dev/null; echo st=$?; echo alive"))
+(: r (hark ["out/host/love" "out/host/lush" "-c" "ev '(1 +' 2>/dev/null; echo st=$?; echo alive"])
    (assert (= "st=1\nalive\n" (cup r))))
 ; the form runs in THIS image -- no process is spawned, so a binding it makes is
 ; still there on the next line
-(: r (hark (L "out/host/love" "out/host/lush" "-c" "love '(: zz 7)'; love zz"))
+(: r (hark ["out/host/love" "out/host/lush" "-c" "ev '(: zz 7)'; ev zz"])
    (assert (= "7\n7\n" (cup r))))
-(: r (hark (L "out/host/love" "out/host/lush" "-c" "x=$(love '\"a b\"'); echo \"[$x]\"; echo $(love '[1 2 3]')"))
+(: r (hark ["out/host/love" "out/host/lush" "-c" "x=$(ev '\"a b\"'); echo \"[$x]\"; echo $(ev '[1 2 3]')"])
    (assert (= "[a b]\n(1 2 3)\n" (cup r))))
+; ..and the binary keeps its own command line, in its own process
+(: r (hark ["out/host/love" "out/host/lush" "-c" "PATH=$PWD/out/host:$PATH love -e '1 + 2'"])
+   (assert (= "3\n" (cup r))))
 
 (test_fin ())
 (puts "sh: ok") (putc 10)
