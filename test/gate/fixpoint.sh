@@ -25,10 +25,15 @@ shift 3
 d=$ho/fix
 cat=$ho/.mooncc-cat.l
 
-if [ "$(uname -m)" != x86_64 ]; then
-  echo "test_fixpoint: x86-64 only, skipped on $(uname -m)"
-  exit 0
-fi
+# any arch a seed can be laid for owes this invariant (doc/plan/seed-universal.md
+# U0); an arch off the roster skips, it does not fail. the mksys leaf is the
+# host's own (the twin roster, crew/build.mk).
+case "$(uname -m)" in
+  x86_64)  mks=mksys ;;
+  aarch64) mks=mksys-arm64 ;;
+  riscv64) mks=mksys-riscv ;;
+  *) echo "test_fixpoint: no seed for $(uname -m), skipped"; exit 0
+esac
 
 fail() { echo "FAIL test_fixpoint: $*" >&2; exit 1; }
 
@@ -56,17 +61,17 @@ moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
 # string, naming a broken fixpoint where the only difference is a build flag. $fir is the
 # same trap wearing its second face -- it decides whether ~1.5 MB of IR record rides -- and
 # it arrives from make for exactly that reason.
-moon1 -D ai_tco=1 -D AI_HAVE_VERSION_H $fir -I"$ho" -I. -Iout/lib -c core/love.c "$d/love.o" || fail "love1 mooncc -c core/love.c"
+moon1 -D ai_tco=1 -D AI_HAVE_VERSION_H $fir -I"$ho" -I. -Icore -Iout/lib -c core/love.c "$d/love.o" || fail "love1 mooncc -c core/love.c"
 for f in host/*.c; do
   b=$(basename "$f" .c)
-  moon1 -D ai_tco=1 $fir -I"$ho" -I. -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
+  moon1 -D ai_tco=1 $fir -I"$ho" -I. -Icore -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
 done
 # nolibc rides the implicit runtime, as in raw.sh -- pulled member by need.
 for f in crew/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
   moon1 $fir -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
 done
-LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "(mksys \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
+LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "($mks \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 
 # love2 takes the SAME list in the SAME order, one directory over -- link order is layout,
