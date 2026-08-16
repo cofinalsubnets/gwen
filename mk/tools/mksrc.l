@@ -15,7 +15,10 @@
 ; across MANY objects (the nif lane), and link.l's ldsynth is a fixed list of them; a
 ; blob is ONE object of known size, so ordinary globals land in the symbol book like
 ; any other and nothing in the linker has to learn a new name.
-(use 'holo)
+; ⚠ NO (use 'holo) here: that resolves off a NEST (~/.love), which a fresh
+; seed tree does not have -- the pi's first ride died there as a bare ;; note.
+; make hands us holo the way it hands mksys its own: -l $(ho)/.mksys-cat.l
+; (kore text/core/asbook + holo elf/obj), the lane sys.o already rides.
 
 (: (mksrc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
    (mksrc-die m) (: _ (say err ("mksrc: " + m + "\n")) (quit 1))
@@ -28,8 +31,12 @@
 
    ; a cross arch's backend JOINS at runtime (obj.l's law: registered, not
    ; merely named -- the baked holo carries the native one only). the text
-   ; rides the tree beside us; make runs this from the root.
+   ; rides the tree beside us; make runs this from the root. and an UNBAKED
+   ; love has no holo at all -- say so, instead of a bare ;; note.
    (mksrc-be arch)
+    (? (member? 'objelf (names ())) (mksrc-be2 arch)
+       (mksrc-die "no holo aboard -- this love is unbaked (make host bakes it)"))
+   (mksrc-be2 arch)
     (? (lit? (peep backends arch ())) 0
        (: f ("crew/holo/" + (arch @ 'arm64 "arm64" 'riscv64 "riscv" "x64") + ".l")
           q (open f "r")

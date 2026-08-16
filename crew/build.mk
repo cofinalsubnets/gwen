@@ -279,8 +279,11 @@ src_arch = arm64
 else
 src_arch = x64
 endif
-out/dist/src-$a.o: $(dist_source) mk/tools/mksrc.l $(ho)/love
-	@$(ho)/love mk/tools/mksrc.l $(dist_source) $@ $(src_arch)
+# ⚠ mksrc rides the mksys cat (kore + holo elf/obj), NOT (use 'holo): the
+# module walk resolves off a NEST, and a fresh seed tree has none -- the pi's
+# first ride died there. same lane as sys.o, proven in both worlds.
+out/dist/src-$a.o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(love0)
+	@$(love0) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(src_arch)
 # ⚠ THIS LINKS, where it used to `cp` the host binary. A section cannot be injected
 # into a finished ELF, so the artifact is now its own link -- $(moon_o) plus the blob
 # -- and only then baked. The layout stays load-bearing the other way: .image must
@@ -360,8 +363,8 @@ $(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
 # the twin's source blob: mksrc lays the same tarball for the twin's machine
 # (xtgt is already holo's arch name). its own basename (src-x-) so an $a==xa
 # run cannot collide with the native rule.
-out/dist/src-x-$(xa).o: $(dist_source) mk/tools/mksrc.l $(ho)/love
-	@$(ho)/love mk/tools/mksrc.l $(dist_source) $@ $(xtgt)
+out/dist/src-x-$(xa).o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(love0)
+	@$(love0) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(xtgt)
 # ⚠ the twin link MIRRORS the native $(dist_seed) link -- src blob + readme --
 # or the pi's download is not a seed: it answered `;; this love carries no
 # source` on real silicon, which is how this line got its two extra objects.
