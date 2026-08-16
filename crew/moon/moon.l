@@ -845,9 +845,12 @@
              ; it rides as a DEFINE (cpp applies -D after its predefines, so this
              ; overrides). ⚠ NOT the rest of the family: -nostdlib alone is a
              ; hosted program that simply supplies its own runtime, and test_raw
-             ; is exactly that.
+             ; is exactly that. freestanding also has NO OS, so it pins -os none
+             ; (a later explicit -os wins, pin over pin -- nothing under free/
+             ; or port/ reads an OS macro, so the kernel and the boards lose a
+             ; __linux__ they never asked for).
              (a = "-ffreestanding")
-              (flags r (pin (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1))
+              (flags r (pin (pin (fpush t 'ds "__STDC_HOSTED__=0") 'nostd 1) 'os 'none))
              (nostd? a) (flags r (pin t 'nostd 1))
              ; -x names the LANGUAGE of what follows, which is the whole reason an input
              ; may arrive with no suffix to read. ⚠ LOUD like -std=: `-x c++` and
