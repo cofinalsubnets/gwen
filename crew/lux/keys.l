@@ -26,7 +26,7 @@
    xk-ret 65293  xk-tab 65289  xk-left 65361  xk-up 65362  xk-right 65363  xk-down 65364
 
    ; --- a binding row ---
-   (kb mods sym act) `(mods sym act)
+   (kb mods sym act) [mods sym act]
    (kb-mods r) <r  (kb-sym r) <>r  (kb-act r) (nthl r 2)
    (keys-has t mods sym) (any (\ r ((kb-mods r = mods) && (kb-sym r = sym))) t)
    (keys-find t mods sym) (: hit (afind (\ r ((kb-mods r = mods) && (kb-sym r = sym))) t)
@@ -43,10 +43,10 @@
    ;       "," / "1"     a one-char STRING is that character, punctuation and digits included
    ;       65027         a bare charm IS the keysym, so the table is a convenience,
    ;                     never a ceiling (⚠ 32 and up: a digit key is "1" or 49, not 1) ---
-   xk-fkeys (map (\ i `(("F" + show (i + 1)) (65470 + i))) (jot 12))             ; F1..F12
-   xk-names (xk-fkeys + `(
-     `("Return" xk-ret)   `("Tab" xk-tab)     '("space" 32)       '("Escape" 65307)
-     `("Left" xk-left)    `("Up" xk-up)       `("Right" xk-right) `("Down" xk-down)
+   xk-fkeys (map (\ i [("F" + show (i + 1)) (65470 + i)]) (jot 12))             ; F1..F12
+   xk-names (xk-fkeys + [
+     ["Return" xk-ret]   ["Tab" xk-tab]     '("space" 32)       '("Escape" 65307)
+     ["Left" xk-left]    ["Up" xk-up]       ["Right" xk-right] ["Down" xk-down]
      '("BackSpace" 65288) '("Delete" 65535)   '("Insert" 65379)   '("Menu" 65383)
      '("Home" 65360)      '("End" 65367)      '("Page_Up" 65365)  '("Page_Down" 65366)
      '("Print" 65377)     '("Pause" 65299)
@@ -57,7 +57,7 @@
      '("XF86AudioRaiseVolume" 269025043) '("XF86AudioPlay" 269025044)
      '("XF86AudioStop" 269025045)        '("XF86AudioPrev" 269025046)
      '("XF86AudioNext" 269025047)
-     '("XF86MonBrightnessUp" 269025026)  '("XF86MonBrightnessDown" 269025027)))
+     '("XF86MonBrightnessUp" 269025026)  '("XF86MonBrightnessDown" 269025027)])
    (xk-of k) (? (charm? k) (? (31 < k) k ())                                     ; a keysym, verbatim -- the escape hatch past the table
                 (: nm (? (name? k) (string k) k)
                    (? !(string? nm) ()
@@ -77,15 +77,15 @@
     (? !(two? spec) ()
        (: n (tally spec)
           ks (xk-of (nthl spec (n - 1)))
-          ms (foldl (\ a m (: b (kmod-of m modm) (? (two? a && b) `((<a | b)) ())))
+          ms (foldl (\ a m (: b (kmod-of m modm) (? (two? a && b) [(<a | b)] ())))
                     '(0) (take (n - 1) spec))
-          (? (ks && two? ms) `(<ms ks) ())))
+          (? (ks && two? ms) [<ms ks] ())))
 
    ; --- a config's own rows. `spawn`/`exec` carry their argv FLAT in a config
    ;     ((spawn "rofi" "-show" "drun")) and nested in a binding row, so they are
    ;     the two the reader re-wraps; every other action is already its own shape. ---
    (kb-act-of a) (? !(two? a) a
-                    (id? <a 'spawn || id? <a 'exec) `(<a >a)
+                    (id? <a 'spawn || id? <a 'exec) [<a >a]
                     a)
    (keys-rows modm rows)                                                         ; ((spec action) ..) -> binding rows; an unreadable spec is dropped
     (foldr (\ r acc (: k (? (two? r) (kspec modm <r) ())
@@ -98,19 +98,19 @@
 
    ; --- the directional block: the .hs list comprehension as a map --
    ;     (dir keysyms delta) x {hjkl, arrows} x {mod, mod+shift, mod+ctrl} ---
-   (kdirs-for nud) `(`('left  `(104 xk-left)  `((0 - nud) 0))
-                     `('down  `(106 xk-down)  `(0 nud))
-                     `('up    `(107 xk-up)    `(0 (0 - nud)))
-                     `('right `(108 xk-right) `(nud 0)))
+   (kdirs-for nud) [['left  [104 xk-left]  [(0 - nud) 0]]
+                     ['down  [106 xk-down]  [0 nud]]
+                     ['up    [107 xk-up]    [0 (0 - nud)]]
+                     ['right [108 xk-right] [nud 0]]]
    (kdir-rows modm d) (: dir <d delta (nthl d 2)
-                         (foldl cat () (map (\ sym `((kb modm sym `('go dir delta))
-                                                     (kb (modm | shiftm) sym `('swapd dir delta))
-                                                     (kb (modm | ctrlm) sym `('resize dir delta))))
+                         (foldl cat () (map (\ sym [(kb modm sym ['go dir delta])
+                                                     (kb (modm | shiftm) sym ['swapd dir delta])
+                                                     (kb (modm | ctrlm) sym ['resize dir delta])])
                                             <>d)))
    (keys-dir-for modm nud) (foldl cat () (map (\ d (kdir-rows modm d)) (kdirs-for nud)))
 
    ; --- the custom command block, exactly the config's table ---
-   (keys-cmd-for modm) `(
+   (keys-cmd-for modm) [
      (kb modm 120 '(kill))                                                       ; mod+x
      (kb (modm | shiftm) 113 '(quit))                                            ; mod+shift+q
      (kb modm xk-ret '(spawn ("xfce4-terminal")))                                ; mod+return  term
@@ -131,14 +131,14 @@
      (kb modm 44 '(msg inc-master))                                              ; mod+,       IncMasterN 1
      (kb modm 46 '(msg dec-master))                                              ; mod+.       IncMasterN -1
      (kb (modm | shiftm) 44 '(msg shrink))                                       ; mod+shift+,
-     (kb (modm | shiftm) 46 '(msg expand)))                                      ; mod+shift+.
+     (kb (modm | shiftm) 46 '(msg expand))]                                      ; mod+shift+.
 
    ; --- xmonad's `keys def`, single-monitor subset (mod+{w,e,r} screens and
    ;     mod+shift+/ help are not ported; some rows are overridden by custom).
    ;     the digit rows follow the TAG COUNT, and stop at 9 -- there is no tenth
    ;     digit key to hang a tenth workspace on. ---
    (keys-def-for modm ntags) (: ds (map (+ 1) (jot (? (9 < ntags) 9 ntags)))
-    (cat `(
+    (cat [
      (kb (modm | shiftm) xk-ret '(spawn ("xterm")))                              ; mod+shift+return  terminal
      (kb modm 112 '(spawn ("dmenu_run")))                                        ; mod+p             (custom overrides)
      (kb (modm | shiftm) 99 '(kill))                                             ; mod+shift+c
@@ -159,9 +159,9 @@
      (kb modm 44 '(msg inc-master))
      (kb modm 46 '(msg dec-master))
      (kb (modm | shiftm) 113 '(quit))                                            ; mod+shift+q
-     (kb modm 113 '(restart)))                                                   ; mod+q
-     (cat (map (\ d (kb modm (48 + d) `('view d))) ds)                           ; mod+1..9
-          (map (\ d (kb (modm | shiftm) (48 + d) `('shift d))) ds))))            ; mod+shift+1..9
+     (kb modm 113 '(restart))]                                                   ; mod+q
+     (cat (map (\ d (kb modm (48 + d) ['view d])) ds)                           ; mod+1..9
+          (map (\ d (kb (modm | shiftm) (48 + d) ['shift d])) ds))))            ; mod+shift+1..9
 
    ; --- the STOCK table: what lux drives with no config file anywhere ---
    keys-dir (keys-dir-for supm 20)

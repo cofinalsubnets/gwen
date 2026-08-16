@@ -33,7 +33,7 @@
    _ (pin evq 0 ())
    (x-reply s) (: pkt (x-rbytes s 32)                                            ; the next 32-byte REPLY header, events stashed; an ERROR
                   (? ((<pkt = 1) || ((127 & <pkt) = 0)) pkt                      ; packet ALSO answers the wait (the window died mid-query --
-                     (: _ (pin evq 0 ((peep evq 0 ()) + `(pkt))) (x-reply s))))      ; blocking forever on it would hang the whole WM)
+                     (: _ (pin evq 0 ((peep evq 0 ()) + [pkt])) (x-reply s))))      ; blocking forever on it would hang the whole WM)
 
    ; --- connect + the setup handshake -> the screen record | (). auth is ()
    ;     (an -ac server) or (name data) -- the MIT-MAGIC-COOKIE-1 pair a real
@@ -65,7 +65,7 @@
              vis (x-r32 s) _ (x-r8 s) _ (x-r8 s)                                 ; root visual; backing-stores, save-unders
              depth (x-r8 s) _ (x-r8 s)                                           ; root depth (a drawing client's PutImage needs it)
              _ (x-skip s ((4 * alen) - (32 + ((vlen + x-pad4 vlen) + ((8 * nfmt) + 40)))))
-             `(root wpx hpx minkc maxkc idbase cmap vis depth))))
+             [root wpx hpx minkc maxkc idbase cmap vis depth])))
    (scr-root sc) <sc  (scr-w sc) <>sc  (scr-h sc) <>>sc
    (scr-mink sc) (nthl sc 3)  (scr-maxk sc) (nthl sc 4)  (scr-idbase sc) (nthl sc 5)
    (scr-cmap sc) (nthl sc 6)  (scr-visual sc) (nthl sc 7)  (scr-depth sc) (nthl sc 8)
@@ -95,10 +95,10 @@
     (: _ (x-w8 s 20) _ (x-w8 s 0) _ (x-w16 s 6) _ (x-w32 s win) _ (x-w32 s prop)
        _ (x-w32 s 0) _ (x-w32 s 0) _ (x-w32 s 1024) _ (x-flush s)
        hdr (x-reply s)
-       (? !(<hdr = 1) `(0 0 ())                                                 ; the window died: no property
+       (? !(<hdr = 1) [0 0 ()]                                                 ; the window died: no property
           (: rlen (u32 hdr 4)
              bytes (x-rbytes s (rlen * 4))
-             `((nthl hdr 1) (u32 hdr 12) bytes))))
+             [(nthl hdr 1) (u32 hdr 12) bytes])))
    (x-atoms-of bytes) (? (tally bytes < 4) ()                                    ; group 4 LE bytes -> a 32-bit atom/window list
                          (u32 bytes 0 >< x-atoms-of (drop 4 bytes)))
    (x-getprop-atoms s win prop) (x-atoms-of (nthl (x-getprop s win prop) 2))
@@ -117,7 +117,7 @@
     (: _ (x-w8 s 14) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w32 s win) _ (x-flush s)
        hdr (x-reply s)
        (? !(<hdr = 1) '(0 0 1 1)                                                ; the window died: a harmless placeholder rect
-          `((u16 hdr 12) (u16 hdr 14) (u16 hdr 16) (u16 hdr 18))))
+          [(u16 hdr 12) (u16 hdr 14) (u16 hdr 16) (u16 hdr 18)]))
    (x-raise s win) (: _ (x-w8 s 12) _ (x-w8 s 0) _ (x-w16 s 4) _ (x-w32 s win)   ; ConfigureWindow CWStackMode=Above
                       _ (x-w16 s 64) _ (x-w16 s 0) (x-w32 s 0))
    (x-lower s win) (: _ (x-w8 s 12) _ (x-w8 s 0) _ (x-w16 s 4) _ (x-w32 s win)   ; ConfigureWindow CWStackMode=Below (a desktop stays under)
@@ -169,13 +169,13 @@
        ; is precisely a garble detector, and it used to throw the detection away.
        (? !(<hdr = 1) ()
           (: n (u16 hdr 16) bytes (x-rbytes s (u32 hdr 4 * 4))
-             `(1 (take n (x-atoms-of bytes))))))
+             [1 (take n (x-atoms-of bytes))])))
    (x-attrs s win)                                                               ; -> (map-state override-redirect); map-state 2 = IsViewable
     (: _ (x-w8 s 3) _ (x-w8 s 0) _ (x-w16 s 2) _ (x-w32 s win) _ (x-flush s)
        hdr (x-reply s)
        (? !(<hdr = 1) '(0 1)                                                    ; the window died: reads as unmanageable
           (: _ (x-rbytes s (u32 hdr 4 * 4))                                     ; drain the trailing reply data
-             `((nthl hdr 26) (nthl hdr 27)))))
+             [(nthl hdr 26) (nthl hdr 27)])))
    (x-manageable? s win) (: a (x-attrs s win) ((<a = 2) && (<>a = 0)))           ; viewable and not override-redirect
 
    ; --- become the WM: SubstructureRedirect|Notify on the root, synced by an
@@ -244,10 +244,10 @@
    ;     a string); xauth-cookie is the host loader over open/slurp. ---
    (xauth-parse b disp)
     (: n (tally b)
-       (fld i) (: ln ((<< (b i) 8) | b (i + 1)) e ((i + 2) + ln) `((snip b (i + 2) e) e))
+       (fld i) (: ln ((<< (b i) 8) | b (i + 1)) e ((i + 2) + ln) [(snip b (i + 2) e) e])
        (go i) (? ((n - i) < 10) ()                                               ; too short for another record
                  (: ad (fld (i + 2)) nu (fld <>ad) nm (fld <>nu) da (fld <>nm)
-                    (? ((<nu = disp) && (<nm = "MIT-MAGIC-COOKIE-1")) `(<nm <da)
+                    (? ((<nu = disp) && (<nm = "MIT-MAGIC-COOKIE-1")) [<nm <da]
                        (go <>da))))
        (go 0))
    (xauth-cookie path disp)
@@ -257,7 +257,7 @@
    ; --- the event decoder: one 32-byte event -> (code detail window state) | ()
    ;     code 0 = X error (window is garbage). window at byte 8, state at byte 28,
    ;     detail (keycode) at byte 1 -- enough for every event the WM handles. ---
-   (x-decode pkt) `((127 & <pkt) (nthl pkt 1) (u32 pkt 8) (u16 pkt 28) pkt)         ; code, detail(keycode), window@8, state@28, + the raw bytes
+   (x-decode pkt) [(127 & <pkt) (nthl pkt 1) (u32 pkt 8) (u16 pkt 28) pkt]         ; code, detail(keycode), window@8, state@28, + the raw bytes
    (x-next s)                                                                    ; a stashed event first, else the socket
     (: q (peep evq 0 ())
        (? (two? q) (: _ (pin evq 0 >q) (x-decode <q))

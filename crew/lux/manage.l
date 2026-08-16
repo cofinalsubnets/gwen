@@ -21,7 +21,7 @@
 (grip 2 '<||> 30)
 (grip 2 '-?> 25)
 (:
-   (mg-ctx s win screen geom) `(s win screen geom)
+   (mg-ctx s win screen geom) [s win screen geom]
    (mg-sock c) (nthl c 0)  (mg-win c) (nthl c 1)  (mg-screen c) (nthl c 2)  (mg-geom c) (nthl c 3)
 
    ; --- actions: (ctx sh) -> sh. The float trio move the (already-tiled) window
@@ -43,7 +43,7 @@
    ; --- combinators. A Maybe-hook (from -?>) is (ctx sh) -> (sh') | () : matched
    ;     yields a 1-list, else nothing. compose-one takes the FIRST match;
    ;     compose-all threads a list of plain hooks. ---
-   (-?> pred act) (\ c sh (? (pred c) `((act c sh)) ()))
+   (-?> pred act) (\ c sh (? (pred c) [(act c sh)] ()))
    (compose-one mhs) (\ c sh (: (go l) (? !(two? l) sh
                                           (: r (<l c sh) (? (two? r) <r (go >l)))) (go mhs)))
    (compose-all hs) (\ c sh (foldl (\ s h (h c s)) sh hs))
@@ -71,11 +71,11 @@
    ;     manageDocks, composeOne [ notification/dock, fullscreen, dialog, modal ] ].
    ;     centers float centered, floats float in place, ignores are never managed. ---
    (manage-for centers floats ignores)
-    (compose-all `(
+    (compose-all [
        (\ c sh sh)                                                              ; manageHook def: tile (identity -- the driver already admitted it)
        transience
        manage-docks
-       (compose-one `(
+       (compose-one [
           (class-of? (mg-classes ignores) -?> (\ c sh (do-ignore c (do-raise c sh))))
           ((prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_NOTIFICATION"
             <||> prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DOCK")
@@ -91,5 +91,5 @@
            -?> do-float)
           ((prop? "_NET_WM_STATE" "_NET_WM_STATE_MODAL"
             <||> class-of? (mg-classes floats))
-           -?> do-float)))))
+           -?> do-float)])])
    manage-default (manage-for mg-center-def mg-float-def ()))

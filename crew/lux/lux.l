@@ -41,12 +41,12 @@
    (lux! f) (: _ (pin lux-cell 'q (f >< peep lux-cell 'q ()))                 ; (a peep+pin pair -- a concurrent drain in the gap can lose
                 'queued)                                                         ;  a change; prompt-scale odds, and wssane? guards either way)
    ; the command sugar -- each a (lux! ..) over the snapshot shape (sh lay hist ffoc)
-   (lay! l)  (lux! (\ st `(<st l (nthl st 2) (nthl st 3))))
+   (lay! l)  (lux! (\ st [<st l (nthl st 2) (nthl st 3)]))
    (msg! m)  (lux! (\ st (: lay2 (lay-msg <>st m (wsget <st (wscur <st)))
-                             `(<st (? lay2 lay2 <>st) (nthl st 2) (nthl st 3)))))
-   (sink! w) (lux! (\ st `((wssink <st w) <>st (nthl st 2)
-                             (: f (nthl st 3) (? (f = w) () f)))))
-   (float! w r) (lux! (\ st `((wsdofloat <st w r) <>st (nthl st 2) w)))
+                             [<st (? lay2 lay2 <>st) (nthl st 2) (nthl st 3)])))
+   (sink! w) (lux! (\ st [(wssink <st w) <>st (nthl st 2)
+                             (: f (nthl st 3) (? (f = w) () f))]))
+   (float! w r) (lux! (\ st [(wsdofloat <st w r) <>st (nthl st 2) w]))
    (row u) (wsrow <(lux-st ()))
 
    ; the moor: shore the socket, twirl a session per client -- read every form
@@ -84,8 +84,8 @@
    ; -l modules re-runs whole); the script and the seat itself as fallbacks.
    (lux-restart u) (: _ (say out "lux: restart over the moor -- exec\n") _ (flush out)
                       _ (exec argv)
-                      _ (exec `((lux-self ())))
-                      _ (exec `((selfpath 0) (lux-self ())))
+                      _ (exec [(lux-self ())])
+                      _ (exec [(selfpath 0) (lux-self ())])
                       'restart-failed)
    ; the session reads LINES (see parks the TASK -- the reader's park law) and
    ; sounds the TEXT: `sound` walks a charlist, so a socket running dry mid-skip
@@ -127,7 +127,7 @@
 ; a welp-face help so a scare returns a visible value (to the repl client, or
 ; at a driver raise site) instead of dropping the wm -- the dock's shape:
 ; answer ('scare a b), the only bit a help sees.
-(hear (\ a b `('scare a b)))
+(hear (\ a b ['scare a b]))
 
 (: s (x-connect lux-display)
    _ (? s 0 (: _ (say err "lux: no display -- Xephyr up?\n") (quit 1)))
@@ -154,7 +154,7 @@
    ;     table lives in a cell so MappingNotify can re-resolve and regrab. ---
    (keys-resolve u) (: km (x-keymap s (scr-mink sc) (scr-maxk sc) (keys-syms lux-keymap))
                        (filter (\ r (<>r > 0))                                   ; rows (mods keycode action); keysym absent -> dropped
-                               (map (\ r `((kb-mods r) (peep km (kb-sym r) 0) (kb-act r))) lux-keymap)))
+                               (map (\ r [(kb-mods r) (peep km (kb-sym r) 0) (kb-act r)]) lux-keymap)))
    (keys-grab tab) (: _ (map (\ r (map (\ lm (x-grab s root (lm | <r) <>r)) '(0 2 16 18))) tab)
                       (x-flush s))
    ktabc #()
@@ -165,7 +165,7 @@
 
    ; --- rendering (the layout engine answers, X obeys) ---
    (nth l i) (? (i < 1) <l (nth >l (i - 1)))
-   scrn `(0 0 wpx hpx)
+   scrn [0 0 wpx hpx]
    (trect u) (ewmh-rect scrn wpx hpx)                                            ; the tiling rect: screen minus dock struts (sup+b flips)
 
    ; --- the unmap ledger (xmonad's mapped + waitingUnmap): map!/hide! track our
@@ -249,8 +249,8 @@
           (k = 'restart)                                                         ; restart-in-place: exec the original argv (execvp, so love
           (: _ (line ("lux: restart -- exec, pid " + show (getpid 0)))            ; re-resolves off PATH -- an upgraded binary lands first try,
              _ (exec argv)                                                        ; and a dev pile of -l modules re-runs whole; exec'ing
-             _ (exec `((lux-self ())))                                            ; the seat path would pin a deleted build forever). the
-             _ (exec `((selfpath 0) (lux-self ())))                               ; CLOEXEC'd socket drops, the redirect releases, the new
+             _ (exec [(lux-self ())])                                            ; the seat path would pin a deleted build forever). the
+             _ (exec [(selfpath 0) (lux-self ())])                               ; CLOEXEC'd socket drops, the redirect releases, the new
              _ (line "lux: restart failed") (loop sh lay hist ffoc))              ; generation ADOPTS the survivors
           (k = 'refresh) (relay sh lay ffoc)
           (k = 'reset-layout) (relay sh lux-layout ffoc)
@@ -268,8 +268,8 @@
           ; --- the directional trio: the f_t hinge ---
           (wsfloating? sh fw)                                                    ; float focused: move (go) or resize (swapd/resize)
           (: r (wsrect sh fw) d (nthl a 2) dx <d dy <>d
-             r2 (? (k = 'go) `((nth r 0 + dx) (nth r 1 + dy) (nth r 2) (nth r 3))
-                   `((nth r 0) (nth r 1) (mx2 20 (nth r 2 + dx)) (mx2 20 (nth r 3 + dy))))
+             r2 (? (k = 'go) [(nth r 0 + dx) (nth r 1 + dy) (nth r 2) (nth r 3)]
+                   [(nth r 0) (nth r 1) (mx2 20 (nth r 2 + dx)) (mx2 20 (nth r 3 + dy))])
              (relay (wsdofloat sh fw r2) lay ffoc))
           (: dir <>a pls <(lay-tile lay (trect ()) z) tgt (nav-target pls (wsfoc sh) dir)
              (? (k = 'go) (? tgt (relay (wsmap sh (zfocto tgt)) lay ()) (loop sh lay hist ffoc))
@@ -284,8 +284,8 @@
    ;     drag's duration -- the pointer is grabbed, the user is not spawning. ---
    (drag-rect mode g0 rx0 ry0 rx ry)
     (: dx (rx - rx0) dy (ry - ry0)
-       (? (mode = 'move) `((nth g0 0 + dx) (nth g0 1 + dy) (nth g0 2) (nth g0 3))
-          `((nth g0 0) (nth g0 1) (mx2 40 (nth g0 2 + dx)) (mx2 40 (nth g0 3 + dy)))))
+       (? (mode = 'move) [(nth g0 0 + dx) (nth g0 1 + dy) (nth g0 2) (nth g0 3)]
+          [(nth g0 0) (nth g0 1) (mx2 40 (nth g0 2 + dx)) (mx2 40 (nth g0 3 + dy))]))
    (drag mode w g0 rx0 ry0)
     (: e (x-next s)
        (? !e g0                                                                 ; display gone: keep the start rect
@@ -303,12 +303,12 @@
    ;     through the help above -- not a 4-list, so it refuses the same way. ---
    (loop sh lay hist ffoc)
     (: q (pull lux-cell 'q ())
-       (? !(two? q) (: _ (pin lux-cell 'st `(sh lay hist ffoc))
+       (? !(two? q) (: _ (pin lux-cell 'st [sh lay hist ffoc])
                           (loop2 sh lay hist ffoc))
           (: st (foldl (\ acc f (: r (f acc)
                                    (? (two? r && ((4 = tally r) && wssane? <r)) r
                                       (: _ (line "lux: change refused") acc))))
-                       `(sh lay hist ffoc) (rev q))
+                       [sh lay hist ffoc] (rev q))
              _ (pin lux-cell 'st st)                                            ; the snapshot rides POST-drain, so a moor read sees the change
              sh2 <st lay2 <>st f2 (nthl st 3)
              flf (? (f2 && wsfloating? sh2 f2) f2 ())
@@ -428,7 +428,7 @@
                       gw (? (mask & 4) (u16 pkt 20) (nth g 2))                   ; keep their current geometry
                       gh (? (mask & 8) (u16 pkt 22) (nth g 3))
                       _ (x-configure s win gx gy gw gh) _ (x-flush s)
-                      sh2 (? (wsfloating? sh win) (wsdofloat sh win `(gx gy gw gh)) sh)    ; a FLOAT's request is granted too, and the
+                      sh2 (? (wsfloating? sh win) (wsdofloat sh win [gx gy gw gh]) sh)    ; a FLOAT's request is granted too, and the
                       (loop sh2 lay hist ffoc)))                                 ; sheaf's rect follows it (xmonad: grant + re-float)
                 (code = 33)                                                      ; ClientMessage: EWMH requests ride SendEvent to the root
                 (: pkt (ev-raw e) cw (ewmh-cm-win pkt) ty (ewmh-cm-type pkt)
@@ -448,12 +448,12 @@
                               _ (render sh2 lay ()) _ (line ("lux: un" + (word + (" " + show cw)))) (loop sh2 lay hist ()))))
                    (? ((ty = ewmh-atom "_NET_WM_STATE") &&                       ; _NET_WM_STATE add/remove/toggle FULLSCREEN (ewmhFullscreen)
                           (wsknownw? sh cw && (fs? (ewmh-cm-d1 pkt) || fs? (ewmh-cm-d2 pkt))))
-                      (state-toggle scrn `((ewmh-atom "_NET_WM_STATE_FULLSCREEN")) "fullscreen")    ; over the whole screen, struts and all
+                      (state-toggle scrn [(ewmh-atom "_NET_WM_STATE_FULLSCREEN")] "fullscreen")    ; over the whole screen, struts and all
                       ((ty = ewmh-atom "_NET_WM_STATE") &&                       ; MAXIMIZED_VERT/HORZ -> float over the tiling rect (panel kept)
                           (wsknownw? sh cw && (mx? (ewmh-cm-d1 pkt) || mx? (ewmh-cm-d2 pkt))))
-                      (state-toggle (trect ()) `((ewmh-atom "_NET_WM_STATE_MAXIMIZED_VERT") (ewmh-atom "_NET_WM_STATE_MAXIMIZED_HORZ")) "maximize")
+                      (state-toggle (trect ()) [(ewmh-atom "_NET_WM_STATE_MAXIMIZED_VERT") (ewmh-atom "_NET_WM_STATE_MAXIMIZED_HORZ")] "maximize")
                       ((ty = ewmh-atom "WM_CHANGE_STATE") && (ewmh-cm-d0 pkt = 3))       ; ICCCM iconify -> minimize (minimizeEventHook)
-                      (: lay2 (msg-or lay (lay-msg lay `('minimize-window cw) (wsget sh (wscur sh))))
+                      (: lay2 (msg-or lay (lay-msg lay ['minimize-window cw] (wsget sh (wscur sh))))
                          _ (render sh lay2 ffoc) _ (line ("lux: minimize " + show cw)) (loop sh lay2 hist ffoc))
                       ((ty = ewmh-atom "_NET_CLOSE_WINDOW") && wsknownw? sh cw)       ; a panel/pager closes a window -- gracefully if it can
                       (: _ (? (x-has-atom s cw "WM_PROTOCOLS" "WM_DELETE_WINDOW") (x-wmdel s cw) (x-kill s cw))
@@ -470,7 +470,7 @@
                                (loop sh2 lay hist ff2))))
                       (ty = ewmh-atom "_NET_ACTIVE_WINDOW")                      ; a pager activates: restore if minimized, view its tag, focus
                       (: z (wsget sh (wscur sh))
-                         lay2 (msg-or lay (lay-msg lay `('restore-window cw) z))
+                         lay2 (msg-or lay (lay-msg lay ['restore-window cw] z))
                          t (wstagof sh cw)
                          (? !t (: _ (render sh lay2 ffoc) (loop sh lay2 hist ffoc))
                             (: sh2 (wsmap (switch sh lay2 t) (zfocto cw))

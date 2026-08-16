@@ -83,7 +83,7 @@
     (? (i < 1) s
        (: r1 (random st 10) r2 (random >r1 40)
           s2 (fzop <r1 (1 + <r2) s)
-          (? (wssane? s2) (fz (i - 1) >r2 s2) `('broke <r1 (1 + <r2)))))
+          (? (wssane? s2) (fz (i - 1) >r2 s2) ['broke <r1 (1 + <r2)])))
    sF (fz 200 (wheel 7) (sheaf '(1 2 3)))
    (assert (wssane? sF) (all (\ w (wsfloating? sF w || wsknown? sF (wstagof sF w))) (wswins sF))))
 
@@ -116,12 +116,12 @@
       (: zs (zfocdn z3) M (lay-msg L1 'mirror-shrink zs) h20 (nthl <><(lay-tile M r zs) 4)
          ((h20 < 300) && h20 > 250))
       ; ||| holds the layouts; NextLayout cycles the index (tall -> full -> tall)
-      (: C (choice `(L1 full))
+      (: C (choice [L1 full])
          ((tally <(ch-tile C r z3) = 3)                                         ; index 0 = ResizableTall
           && (tally <(ch-tile (lay-msg C 'next-layout z3) r z3) = 1)            ; index 1 = Full
           && (nthl (lay-msg (lay-msg C 'next-layout z3) 'next-layout z3) 1 = 0)))     ; wraps back to 0
       ; a message ||| doesn't know (shrink) delegates to the active sublayout
-      (nthl (ch-cur (lay-msg (choice `(L1 full)) 'shrink z3)) 2 = 0.48)))
+      (nthl (ch-cur (lay-msg (choice [L1 full]) 'shrink z3)) 2 = 0.48)))
 
 ; --- the tiling LEDGER (rtwinsrow, test/uulay.l: proved of the model in uu,
 ; --- certified by Rocq + Lean; here the same law watched on the metal):
@@ -140,13 +140,13 @@
    (sumarea ps) (foldl (\ a p (a + area p)) 0 ps)
    r (rct 0 0 800 600) z3 (zfrom '(10 20 30)) z1 (zfrom '(10))
    L1 (resizable-tall 1 0.02 0.5)
-   base (choice `(L1 (dwindle 1.618)))
+   base (choice [L1 (dwindle 1.618)])
    stk (minimize (smart-borders (toggle-full (mirror base))))                    ; the config's t (l1 ||| l2) shape
    (assert
       ; MIRROR transposes: master moves to the TOP, the partition is preserved
       (: m (lay-msg (mirror L1) 'mirror z3) p <(lay-tile m r z3)                 ; toggle MIRROR on
          ((<p = '(10 0 0 800 300)) && (sumarea p = 480000)))                      ; master owns the top strip
-      (lay-tile (mirror L1) r z3 = `(<(lay-tile L1 r z3) (mirror L1)))            ; MIRROR off is a pass-through
+      (lay-tile (mirror L1) r z3 = [<(lay-tile L1 r z3) (mirror L1)])            ; MIRROR off is a pass-through
       ; Dwindle is a golden spiral: the focus takes phi/(1+phi) of the width, still a partition
       (: p <(lay-tile (dwindle 1.618) r z3)
          ((nthl <p 3 = int ((1.618 / 2.618) * 800)) && (sumarea p = 480000) && (tally p = 3)))
@@ -175,10 +175,10 @@
 ; --- edit (the lux repl's live-layout hook), and modifiers wrap them like
 ; --- any builtin ---
 (: (q op lay a b) (? (op = 'tile) (: f (zfoc b)                                  ; focus in a fixed corner box; state = (nthl lay 1)
-                                     `((? f `((f >< rct 0 0 100 (nthl lay 1))) ()) lay))
-                     (op = 'msg) (? (a = 'grow) `(<lay (nthl lay 1 + 10)) ())
+                                     [(? f [(f >< rct 0 0 100 (nthl lay 1))] ()) lay])
+                     (op = 'msg) (? (a = 'grow) [<lay (nthl lay 1 + 10)] ())
                      ())
-   Q `(q 50) r (rct 0 0 800 600) z3 (zfrom '(10 20 30))
+   Q [q 50] r (rct 0 0 800 600) z3 (zfrom '(10 20 30))
    (assert
       (<(lay-tile Q r z3) = '((10 0 0 100 50)))                                  ; the closure places
       (<>(lay-tile Q r z3) = Q)                                                  ; ... and hands its record back
@@ -203,15 +203,15 @@
       ((yes <||> no) c) !((no <||> no) c) ((no <||> yes) c)
       ((no <||> no <||> yes) c)                                                  ; and chains right, so a run of alternatives is one rule
       ; -?> fires the action iff the predicate matches (a 1-list = matched, () = not)
-      (((yes -?> tag 'a) c s0) = `(('a >< s0)))
+      (((yes -?> tag 'a) c s0) = [('a >< s0)])
       !((no -?> tag 'a) c s0)
       ; the two bind so a rule needs no inner parens: `p <||> q -?> act`
-      (((no <||> yes -?> (tag 'a)) c s0) = `(('a >< s0)))
+      (((no <||> yes -?> (tag 'a)) c s0) = [('a >< s0)])
       ; compose-one takes the FIRST matching rule; none -> the sheaf unchanged
-      (((compose-one `((no -?> tag 'a) (yes -?> tag 'b) (yes -?> tag 'c))) c s0) = ('b >< s0))
-      (((compose-one `((no -?> tag 'a) (no -?> tag 'b))) c s0) = s0)
+      (((compose-one [(no -?> tag 'a) (yes -?> tag 'b) (yes -?> tag 'c)]) c s0) = ('b >< s0))
+      (((compose-one [(no -?> tag 'a) (no -?> tag 'b)]) c s0) = s0)
       ; compose-all threads every hook (a plain hook, so wrap or use identity)
-      (((compose-all `((\ c sh ('x >< sh)) (\ c sh ('y >< sh)))) c s0) = ('y >< ('x >< s0)))
+      (((compose-all [(\ c sh ('x >< sh)) (\ c sh ('y >< sh))]) c s0) = ('y >< ('x >< s0)))
       ; manage-for is the assembled config hook -- a runnable closure (X-driven; not called here)
       (lit? manage-default) (lit? (manage-for '("a") '("b") '("c")))))
 

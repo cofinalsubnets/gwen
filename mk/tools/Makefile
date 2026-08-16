@@ -1,11 +1,10 @@
 # The gates for the tools that ride beside the build rather than in it. Three shapes: a
-# GENERATED file diffed against a fresh regeneration (vmret against its frozen python
-# reference under py/), a generator's output weighed for shape rather than byte-compared
-# (hue, whose file the build owns), and a library's own law file (cook, tele). Each checks
-# only what is already built.
+# tool run over every build artifact present (vmret), a generator's output weighed for
+# shape rather than byte-compared (hue, whose file the build owns), and a library's own
+# law file (cook, tele). Each checks only what is already built.
 #
-# `make test_tools` from the repo root, or `make -C tools` here. Needs python3 for the
-# vmret reference, and objdump/llvm-objdump for vmret itself.
+# `make test_tools` from the repo root, or `make -C tools` here. Needs objdump or
+# llvm-objdump for vmret.
 
 R := ../..
 include $(R)/mk/common.mk
@@ -26,17 +25,18 @@ all: test_vmret test_cook test_tele test_xor test_hue test_hueweb
 $(m):
 	@$(MAKE) -C $(R)/host
 
-# vmret.l vs py/vmret.py over the host binary plus any kernel ELFs present (each arch
-# exercises a different ret matcher). ⚠ love0 is skipped: it builds -Dai_tco=0, the
-# trampoline, where handler rets are expected and the vmret signal is noise.
+# vmret.l over the host binary plus any kernel ELFs present (each arch exercises a
+# different ret matcher). exit 0 AND the ret-free summary line -- vmret exits 1 on
+# suspects and 2 on a stripped binary, and the line proves it scanned to the end.
+# ⚠ love0 is skipped: it builds -Dai_tco=0, the trampoline, where handler rets are
+# expected and the vmret signal is noise.
 test_vmret: | $(m)
 	@echo TEST vmret.l
 	@for e in $(R)/out/host/love `find $(R)/out/free -name 'love-*.elf' 2>/dev/null`; do \
-	  python3 $(R)/mk/tools/py/vmret.py $$e > $(R)/out/host/.vmret.py 2>&1; \
-	  $(mw) $(R)/mk/tools/vmret.l $$e > $(R)/out/host/.vmret.l 2>&1; \
-	  cmp -s $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l && echo "  ok   $$e" \
-	    || { echo "  FAIL $$e"; diff $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l; rm -f $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l; exit 1; }; \
-	done; rm -f $(R)/out/host/.vmret.py $(R)/out/host/.vmret.l
+	  $(mw) $(R)/mk/tools/vmret.l $$e > $(R)/out/host/.vmret.l 2>&1 \
+	    && grep -q 'ret-free' $(R)/out/host/.vmret.l && echo "  ok   $$e" \
+	    || { echo "  FAIL $$e"; cat $(R)/out/host/.vmret.l; rm -f $(R)/out/host/.vmret.l; exit 1; }; \
+	done; rm -f $(R)/out/host/.vmret.l
 
 
 # the syntax file is BUILT (crew/build.mk) out of crew/vi/hue.l's class table and the

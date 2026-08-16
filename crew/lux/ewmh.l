@@ -32,7 +32,7 @@
     (: vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT_PARTIAL"))
        vals (? (two? vals) vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT")))
        st (strut-parse vals)
-       (? st (: _ (pin ewst 'struts (`(win st) >< filter (\ p !(<p = win)) (peep ewst 'struts ()))) st) ()))
+       (? st (: _ (pin ewst 'struts ([win st] >< filter (\ p !(<p = win)) (peep ewst 'struts ()))) st) ()))
    (ewmh-untrack win) (pin ewst 'struts (filter (\ p !(<p = win)) (peep ewst 'struts ())))
 
    ; --- CreateWindow (opcode 1): the 1x1 InputOnly support window at (-1,-1) ---
@@ -71,26 +71,26 @@
        _ (x-mkwin s idbase root)
        _ (x-chprop32 s root (a "_NET_SUPPORTED") 4                                           ; type ATOM(4); only the _NET_ vocabulary
                      (map (\ nm (peep at nm 0)) (filter (\ nm (snip nm 0 5 = "_NET_")) ewmh-atoms)))
-       _ (x-chprop32 s root (a "_NET_SUPPORTING_WM_CHECK") 33 `(idbase))                     ; type WINDOW(33)
-       _ (x-chprop32 s idbase (a "_NET_SUPPORTING_WM_CHECK") 33 `(idbase))
+       _ (x-chprop32 s root (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase])                     ; type WINDOW(33)
+       _ (x-chprop32 s idbase (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase])
        _ (x-chprop8 s idbase (a "_NET_WM_NAME") utf8 "LG3D (XMonad)")                        ; setWMName: the Java hack
-       _ (x-chprop32 s root (a "_NET_NUMBER_OF_DESKTOPS") 6 `(ndesk))                        ; type CARDINAL(6)
+       _ (x-chprop32 s root (a "_NET_NUMBER_OF_DESKTOPS") 6 [ndesk])                        ; type CARDINAL(6)
        (x-flush s))
 
    ; --- sync: publish the sheaf whenever it changed (pagers track us) ---
    (ewmh-sync s sh)
     (: wins (wswins sh) cur (wscur sh - 1) foc (? (wsfoc sh) (wsfoc sh) 0)
-       key `(cur foc wins)
+       key [cur foc wins]
        (? (key = peep ewst 'last ()) 0
           (: _ (pin ewst 'last key) root (peep ewst 'root 0)
              _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST") 33 wins)
              _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST_STACKING") 33 wins)   ; libwnck CREATES its windows off THIS list (no stacking =
                                                                                      ; an empty taskbar); wswins is tiles-then-floats = bottom to top
-             _ (x-chprop32 s root (ewmh-atom "_NET_CURRENT_DESKTOP") 6 `(cur))
-             _ (x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 `(foc))
+             _ (x-chprop32 s root (ewmh-atom "_NET_CURRENT_DESKTOP") 6 [cur])
+             _ (x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 [foc])
              _ (map (\ p (: t (<p - 1)                                           ; tiled windows wear their workspace...
-                            (map (\ w (x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 `(t))) (zrow <>p)))) (wsboard sh))
-             _ (map (\ p (x-chprop32 s <p (ewmh-atom "_NET_WM_DESKTOP") 6 `((nthl p 2 - 1)))) (wsfloat sh))           ; ...floats wear their HOME tag (per-workspace now)
+                            (map (\ w (x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 [t])) (zrow <>p)))) (wsboard sh))
+             _ (map (\ p (x-chprop32 s <p (ewmh-atom "_NET_WM_DESKTOP") 6 [(nthl p 2 - 1)])) (wsfloat sh))           ; ...floats wear their HOME tag (per-workspace now)
              (x-flush s))))
 
    ; --- ClientMessage (event 33) field reads, off the raw bytes ---
