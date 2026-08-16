@@ -121,7 +121,19 @@
     (? (! (two? stk)) stk
        (: f <stk
           ne (<>>>f + 1)
-          (link `(<f <>f <>>f ne (? (1 = ne) i <>>>>f) <>>>>>f <>>>>>>f) >stk)))
+          (link `(<f <>f <>>f ne (? (1 = ne) i <>>>>f) <>>>>>f <>>>>>>f <>>>>>>>f <>>>>>>>>f) >stk)))
+
+   ; a bare `@` element marks its frame a MATCH: everything after it is arms, and in
+   ; a PATTERN (x) is a list shape, not x -- so the singleton rule stands down there.
+   ; fires only where a token ends FREE (space, newline, comment); a glued @( is the
+   ; tray ctor and never reaches this. the bit rides slot 8 and lpush inherits it, so
+   ; nested pattern forms are covered; an arm BODY inherits too, the price of not
+   ; pairing arms, and it costs missed gripes only, never noise.
+   (lat src stk it ti i)
+    (? (! (&& it (two? stk))) stk
+       (! ((snip src ti i) = "@")) stk
+       (: f <stk
+          (link `(<f <>f <>>f <>>>f <>>>>f <>>>>>f <>>>>>>f 1 <>>>>>>>>f) >stk)))
 
    ; a new opener. `pre` is what it is GLUED to (empty when it stands free), and
    ; that text decides everything:
@@ -140,11 +152,12 @@
    (lpush stk c i line col src it ti)
     (: pre (? it (snip src ti i) "")
        pq  (? (two? stk) (: pf <stk <>>>>>>pf) 0)
+       am  (? (two? stk) (: pf <stk <>>>>>>>pf) 0)
        ct  (lall? lctc? pre)
        op  (lall? lopc? pre)
        qd  (? (|| pq (&& ct (lin? pre 39))) 1 0)
        pl  (? (|| pq (|| ct op)) 0 (? (c = 40) 1 0))
-       (link `((lclose c) line col 0 0 pl qd) stk))
+       (link `((lclose c) line col 0 0 pl qd am ()) stk))
 
    ; the SINGLETON warning for a form about to close, or (). a form of one element
    ; is that element -- (f) == f at zero operands -- so the parens do nothing and
@@ -153,6 +166,14 @@
    ; own zero point. ⚠ that exemption is narrower than "starts with punctuation"
    ; on purpose -- (<>b) IS droppable (probed: (<>l) and <>l are one value), and
    ; flagging it is the point. only the GLUED case above is load-bearing.
+   ; a singleton in PATTERN position is a list shape, not x, so the rule stands down
+   ; there -- but which positions are patterns is only known when the BINDER closes
+   ; (the last element is the body). so: under a match's @ the whole subtree is arms
+   ; and stays silent; a singleton that is an element of a `\`, an even element of a
+   ; `:`, or one level inside such an element DEFERS its verdict to that binder's
+   ; close, where an entry at the FINAL index was the body (warn) and any other was
+   ; a pattern (silent). odd `:` elements are values and warn at once. patterns
+   ; nested deeper than one level are rare and respell (x >< _).
    (lsing src n f)
     (? (&& <>>>>>f (1 = <>>>f))
         (: t (ltok-at src n <>>>>f)
@@ -160,6 +181,23 @@
               `(<>f <>>f ("singleton " + (? (0 < (tally t)) ("(" + t + ") ") "")
                           + "-- (x) == x") 'singleton)))
        ())
+   ; the deferral home: () to warn NOW, else `(depth idx) naming the binder frame
+   ; (1 parent, 2 grandparent) and the element index the verdict keys on.
+   (ldefer src n rest)
+    (? (! (two? rest)) ()
+       (: pf <rest ph (ltok-at src n <>>>>pf) pne <>>>pf
+          (? (&& (ph = "\\") (2 <= pne)) `(1 pne)
+             (&& (ph = ":") (&& (2 <= pne) (0 = (pne % 2)))) `(1 pne)
+             (? (! (two? >rest)) ()
+                (: gf <>rest gh (ltok-at src n <>>>>gf) gne <>>>gf
+                   (? (&& (gh = "\\") (2 <= gne)) `(2 gne)
+                      (&& (gh = ":") (&& (2 <= gne) (0 = (gne % 2)))) `(2 gne)
+                      ()))))))
+   ; hang (idx . warn) on the binder's pend slot, rebuilding the stack in place
+   (lpend1 f idx wr) `(<f <>f <>>f <>>>f <>>>>f <>>>>>f <>>>>>>f <>>>>>>>f ((idx >< wr) >< <>>>>>>>>f))
+   (lpend rest d idx wr)
+    (? (1 = d) (link (lpend1 <rest idx wr) >rest)
+       (link <rest (link (lpend1 <>rest idx wr) >>rest)))
 
    ; --- the scan -------------------------------------------------------------
    ; (lint-of src conf) is the whole weighing; (lint-scan src) is it with no
@@ -173,8 +211,9 @@
    (lint-of src conf)
     (: n  (tally src)
        ; singleton is ON by default (2026-08-16; three fresh nullary-define bugs in one
-       ; session of new code); (singleton 0) turns it off. the other opinion rules stay opt-in.
-       sg (lint-yes? conf 'singleton)
+       ; session of new code); (singleton 0) turns it off. NO config at all -- lint-scan's
+       ; () -- stays balance alone, the contract vi's cat and the fixtures ride.
+       sg (? (id? conf ()) 0 (lint-yes? conf 'singleton))
        sh (lint-on? conf 'shadow)
        dp (peep conf 'deprecated ())
        ; a token just ENDED at index i, having started at ti/tc: the two token rules
@@ -211,7 +250,7 @@
                   (? (c = 10) (w (i + 1) 'code stk (line + 1) 1 sl sc 0 ti tc warns)
                      (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc warns))
                  (c = 59)                                                      ; ; -- start comment
-                  (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc
+                  (w (i + 1) 'cmt (lat src stk it ti i) line (col + 1) sl sc 0 ti tc
                      (? it (lend line tc ti i stk warns) warns))
                  (&& (c = 35) (&& ((i + 1) < n) ((src (i + 1)) = 33)))          ; #! shebang, to EOL
                   (w (i + 2) 'cmt stk line (col + 2) sl sc 0 ti tc
@@ -220,7 +259,7 @@
                   (w (i + 1) 'str (? it stk (lelem stk i)) line (col + 1) line col 0 ti tc
                      (? it (lend line tc ti i stk warns) warns))
                  (c = 10)
-                  (w (i + 1) 'code stk (line + 1) 1 sl sc 0 ti tc
+                  (w (i + 1) 'code (lat src stk it ti i) (line + 1) 1 sl sc 0 ti tc
                      (? it (lend line tc ti i stk warns) warns))
                  (|| (c = 40) (|| (c = 91) (c = 123)))                          ; ( [ {  -- push
                   ; an opener is an element of its PARENT -- unless it is GLUED to
@@ -236,11 +275,19 @@
                         (! (<<stk = c))
                          (w (i + 1) 'code >stk line (col + 1) sl sc 0 ti tc
                             (link `(line col ("mismatched " + string c) 'balance) w0))
-                        (: sw (? sg (lsing src n <stk) ())
-                           (w (i + 1) 'code >stk line (col + 1) sl sc 0 ti tc
-                              (? (two? sw) (link sw w0) w0)))))
+                        (: f <stk rest >stk
+                           ; the verdicts this binder owed its deferred children:
+                           ; an entry at the FINAL index was the body, so it warns
+                           w1 (foldl (\ a p (? (<p = <>>>f) (link >p a) a)) w0 <>>>>>>>>f)
+                           sw (? sg (lsing src n f) ())
+                           (? (id? sw ()) (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)
+                              <>>>>>>>f (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)   ; match arms: silent
+                              (: dh (ldefer src n rest)
+                                 (? (id? dh ())
+                                     (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc (link sw w1))
+                                    (w (i + 1) 'code (lpend rest <dh <>dh sw) line (col + 1) sl sc 0 ti tc w1)))))))
                  (c < 33)                                                      ; space, tab, the rest
-                  (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc
+                  (w (i + 1) 'code (lat src stk it ti i) line (col + 1) sl sc 0 ti tc
                      (? it (lend line tc ti i stk warns) warns))
                  ; an ordinary character: a token START only if we were not in one
                  (w (i + 1) 'code (? it stk (lelem stk i)) line (col + 1) sl sc

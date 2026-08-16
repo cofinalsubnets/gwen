@@ -128,7 +128,7 @@ all: host kernel wasm dist
 # semantic check. The roster below is the files whose singletons ARE the subject --
 # reader/pattern/operator specimens and the executable spec's zero-operand laws --
 # plus doc/proto, which is sketches. Everything else answers for every gripe.
-lint_exempt = test/host/p0fix.l test/spec.l test/law.l test/operator.l test/pat.l
+lint_exempt = test/host/p0fix.l test/spec.l test/law.l test/operator.l
 lint: $(ho)/love
 	@$(ho)/love $R/crew/libra/libra.l $$(git ls-files '*.l' | grep -v '^doc/proto/' \
 	  $(foreach f,$(lint_exempt),| grep -v '^$(f)$$')) && echo "lint: clean -- no gripes"
