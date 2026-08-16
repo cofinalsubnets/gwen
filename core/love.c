@@ -657,7 +657,12 @@ enum ai_status ai_fin(struct ai *g) {
  enum ai_status s = ai_code_of(g);
  if ((g = ai_core_of(g))) {
    for (struct ai_fz *fz = g->fz; fz; fz->fn(fz->p), fz = fz->next); // run finalizers
-   g->alloc(g, g->pool, 0); }
+   // ⚠ the rem set and the major pool are ai_ini_0's OWN g->alloc calls, not room inside
+   // the nursery -- a frontend that exits never misses them, one that fins to make room
+   // for the next runtime gets nothing back without this.
+   if (g->rem) g->alloc(g, g->rem, 0);
+   if (g->major_pool) g->alloc(g, g->major_pool, 0);
+   g->alloc(g, g->pool, 0); }                 // ..the pool IS g, so it goes last
  return s; }
 
 // ⚠ every .x here must be IMMORTAL -- a nif address, a fixnum, an out-of-pool
