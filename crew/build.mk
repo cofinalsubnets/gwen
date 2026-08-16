@@ -114,6 +114,10 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
 # that (~17 ms/MB measured), so the command starts in a quarter of the time.
 # ⚠ ITS MEMBERSHIP IS AN INPUT, exactly as distfiles' is -- same list guard below.
 docsfiles = lib/lint.l lib/salt.l lib/infix.l crew/lapiz/lapiz.l crew/libra/libra.l
+# ..and the REST of the dist, which is the second layer of the bake below. filter-out
+# keeps distfiles' order, so the two cats together are the same tree in the same
+# sequence -- only the docs half now goes in FIRST, which is what makes it a prefix.
+restfiles = $(filter-out $(docsfiles),$(distfiles))
 DIST_ORIGIN ?=
 # ⚠ THE MEMBERSHIP IS AN INPUT, and make cannot see it. Adding a file to distfiles
 # changes what the artifact CARRIES while every file make watches keeps its mtime, so
@@ -139,6 +143,12 @@ out/dist/.dist-cat.l: $(distfiles) out/dist/.dist.list
 	@echo CAT	$(abspath $@)
 	@mkdir -p out/dist
 	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(distfiles); } > $@
+# the second layer: everything the docs layer is not. `origin` rides here because it is
+# the artifact's own (love up), and the docs image has no use for it.
+out/dist/.rest-cat.l: $(restfiles) out/dist/.dist.list out/dist/.docs.list
+	@echo CAT	$(abspath $@)
+	@mkdir -p out/dist
+	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(restfiles); } > $@
 # the artifact is named for its arch ($a = uname -m): love-x86_64 here,
 # love-aarch64 on a pi -- the moon lane is native on both (mooncc defaults to
 # the ground it stands on), so `make dist` anywhere bakes that machine's door.
@@ -307,18 +317,18 @@ out/dist/src-$a.o: $(dist_source) mk/tools/mksrc.l $(ho)/love
 # its bytes now that the source itself is in here.
 # ⚠ THE IMAGES ARE BAKED BY THE BINARY THAT WILL CARRY THEM. an image keeps its
 # binary's own layout -- the codec's anchor guard is the gap between two of its
-# symbols -- so both files come out of THIS link, and `bake -a` then lays them into
-# the section it already has. appending a section moves no symbol, which is why the
-# anchor still holds after: the same reason the single self-bake always worked.
-# ⚠ AND SMALLEST FIRST: the picker takes the first entry claiming the verb.
-$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.dist-cat.l out/dist/.docs-cat.l assets/readme.bin $(ho)/love
+# symbols -- so the array comes out of THIS link and is laid into the section it
+# already has. appending a section moves no symbol, which is why the anchor still
+# holds after: the same reason the single self-bake always worked.
+# ⚠ AND SMALLEST FIRST: the picker takes the first entry claiming the verb -- and with
+# `-L` that order is load-bearing twice over, because each layer FREEZES for the next
+# and only a prefix can be shared (doc/plan/image-lattice.md).
+$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.rest-cat.l out/dist/.docs-cat.l assets/readme.bin $(ho)/love
 	@echo DIST	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -freadme=assets/readme.bin -o $@
-	@./$@ bake -l out/dist/.docs-cat.l out/dist/docs.image
-	@./$@ bake -l out/dist/.dist-cat.l out/dist/full.image
-	@./$@ bake -a out/dist/docs.image:libra,help out/dist/full.image
-	@echo "  dist: $$(du -h $@ | cut -f1) -> $@ (images: $$(du -h out/dist/docs.image | cut -f1) docs, $$(du -h out/dist/full.image | cut -f1) full)"
+	@./$@ bake -L out/dist/.docs-cat.l:libra,help -L out/dist/.rest-cat.l
+	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
 
 # ==== dist_cross: the TWIN artifact (the other elf arch) ====
 # the same door for the machine you are not on: every TU through `mooncc -t`,

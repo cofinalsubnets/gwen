@@ -676,8 +676,11 @@ static struct ai *env_budget(struct ai *g) {
 // full binary's lane.
 extern int image_dump(struct ai*, char const*);          // host/image.c (file I/O around love.c's codec)
 extern int image_bake(struct ai*);                       // host/image.c (the self-bake)
-extern int image_bake_files(struct ai*, char *const *, int);   // ..and the array of already-baked ones
-extern void const *ai_baked_pick(char const*, uintptr_t*);     // which entry this command line wants
+extern int image_bake_layers(struct ai*, void *const *, uintptr_t const *, char *const *, int);  // ..and the layered array
+extern int image_freeze(struct ai*, void**, uintptr_t*);                                         // ..whose two codec doors
+extern int image_save_over(struct ai*, void *const *, uintptr_t const *, uintptr_t,
+                           void**, uintptr_t*, void**, uintptr_t*);                              // ..wear the wake guard there
+extern int ai_baked_pick(char const*, void const**, uintptr_t*, void const**, uintptr_t*);       // which entry this command line wants
 extern struct ai *image_load(char const*);
 extern uint64_t ai_baked_image[];
 extern uintptr_t ai_baked_image_len;
@@ -977,8 +980,86 @@ static struct ai_lib const libs[] = {
   {NULL, NULL} };
 struct ai_lib const *ai_libs(void) { return libs; }
 
+// read-eval one .l file into the booting session, LOUDLY: a bake's cat has no shell help,
+// so a raise in it must end the bake rather than seal a half-built artifact.
+// ⚠ THE PATH IS A VALUE, NEVER SPLICED INTO THE SOURCE. Interpolating it built a love
+// program by string concatenation, so a path carrying a quote closed the literal and the
+// rest was CODE: a cat named 'a" (puts "INJECTED") "b' ran, exit 0, and whatever it ran
+// would have been sealed into the artifact. Bound as a name the text is data whatever it
+// holds, and the eval'd form is a constant.
+// ⚠ and it CLOSES q: an open heap port registers a finalizer, so an unclosed one is
+// still reachable at the seal -- and what rides into the image with it is its FD.
+// ⚠ rebound to (), not PULLED: the seal ends with (pull book 'book 0), so the book is
+// already off the book by here and naming it answers `;; missing book`. A body-less
+// top-level `:` pins without it. The name has to stop holding the path either way -- an
+// absolute path would otherwise bake the baker's directory into the image.
+static struct ai *bake_eval_file(struct ai *g, char const *path) {
+  uintptr_t xn = strlen(path);
+  if (!ai_ok(g = str0(g, xn))) return g;
+  if (xn) memcpy(txt(g->sp[0]), path, xn);
+  g = ai_defv(g, "bake-load");
+  if (!ai_ok(g)) return g;
+  ai_core_of(g)->sp++;
+  g = ai_evals_(g,
+    "(: q (open bake-load \"r\")"
+    " (? q (: _ (reads q) (close q))"
+    "      (: _ (say err (\"love: bake: cannot open \" + bake-load)) _ (put err 10) (quit 1))))");
+  return ai_ok(g) ? ai_evals_(g, "(: bake-load ())") : g; }
+
+// auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif
+// closures (ap = a W^X mmap addr) that can't be serialized. Empty it: the image boots
+// with a clean cache (natives JIT lazily on the loaded runtime's first ev, as designed).
+static struct ai *bake_empty_glaze(struct ai *g) {
+#ifdef AiGlazed
+  return ai_evals_(g, "(: c (from 'glaze 'cache) (map (\\ k (pull c k 0)) (keys c)))");
+#else
+  return g;
+#endif
+}
+
+// THE LAYERED BAKE. Each spec is `CAT` or `CAT:verb,verb`; the cats are evaluated in
+// order into ONE session and every layer but the last is FROZEN after its cat, which
+// pins its words at their offsets so the final blob begins with each of them in turn.
+// The last dump is the only one carrying a token stream: the rest ride as derived
+// records naming the prefix words the later layers changed.
+// ⚠ A DERIVE THAT DOES NOT FIT FAILS THE BAKE, loudly. It means a frozen prefix did not
+// survive as a prefix, which is the one assumption this whole shape rests on -- shipping
+// a quietly-bigger binary would hide exactly the thing worth knowing.
+static int bake_layers(struct ai *g, char const *const *spec, int n) {
+  void *rec[8], *sub[8], *full = NULL;
+  uintptr_t reclen[8], sublen[8], fulllen = 0;
+  char *verbs[8];
+  char path[8][4096];
+  int i, rc = -6;
+  for (i = 0; i < n; i++) {                              // split each spec, then eval its cat
+    char const *c = strrchr(spec[i], ':');
+    size_t pl = c && !strchr(c, '/') ? (size_t)(c - spec[i]) : strlen(spec[i]);
+    if (pl >= sizeof path[0]) return -6;
+    memcpy(path[i], spec[i], pl), path[i][pl] = 0;
+    verbs[i] = c && !strchr(c, '/') ? (char*) c + 1 : NULL;
+    if (!ai_ok(g = bake_eval_file(g, path[i]))) return -2;
+    g = bake_empty_glaze(g);                             // ..before every dump, not just the last
+    if (i + 1 < n && (rc = image_freeze(g, &rec[i], &reclen[i]))) return rc; }
+  if ((rc = image_save_over(g, rec, reclen, (uintptr_t)(n - 1), sub, sublen, &full, &fulllen)))
+    return rc;
+  for (i = 0; i + 1 < n; i++) if (!sub[i]) {
+    fprintf(stderr, "love: bake -L: layer %d (%s) did not survive as a prefix\n", i, path[i]);
+    return -3; }
+  sub[n - 1] = full, sublen[n - 1] = fulllen;
+  for (i = 0; i + 1 < n; i++)                            // what each derived layer costs against its own words
+    fprintf(stderr, "  bake -L: layer %d %s: %lu KB of prefix -> %lu B derived\n",
+            i, path[i], (unsigned long)(reclen[i] >> 10), (unsigned long) sublen[i]);
+  fprintf(stderr, "  bake -L: layer %d %s: %lu KB whole\n",
+          n - 1, path[n - 1], (unsigned long)(fulllen >> 10));
+  rc = image_bake_layers(g, sub, sublen, verbs, n);
+  for (i = 0; i + 1 < n; i++) g->alloc(g, rec[i], 0), g->alloc(g, sub[i], 0);
+  g->alloc(g, full, 0);
+  return rc;
+}
+
 // bake: NULL = no snapshot; "" = `love bake` (patch the binary's own .image); else `bake PATH` (an image file).
-static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load) {
+static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *bake_load,
+                       char const *const *layer, int nlayer) {
   bool replp = !argp && isatty(STDIN_FILENO);
   if (replp) raw_mode();
   // THE DEBUG DOOR: LOVE_NO_MOP keeps the compiler's internals on the book (peek/poke/
@@ -1066,38 +1147,12 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     // ⚠ it was an ENVIRONMENT VARIABLE, and this tree spends exactly one of those
     // (HOME). An argument is visible in the command that ran, survives being read
     // back out of a log, and cannot be inherited by something that never asked.
-    char const *xtra = bake_load;
-    if (xtra) {
-      // ⚠ THE PATH IS A VALUE, NEVER SPLICED INTO THE SOURCE. Interpolating it built a love
-      // program by string concatenation, so a path carrying a quote closed the literal and
-      // the rest was CODE: a cat named 'a" (puts "INJECTED") "b' ran, exit 0, and
-      // whatever it ran would have been sealed into the artifact. Bound as a name the text
-      // is data whatever it holds, the eval'd form is a constant, and the buffer that had
-      // to be big enough for two copies of a path simply goes.
-      // ⚠ and it CLOSES q: an open heap port registers a finalizer, so an unclosed one is
-      // still reachable at the seal -- and what rides into the image with it is its FD.
-      uintptr_t xn = strlen(xtra);
-      if (!ai_ok(g = str0(g, xn))) return g;
-      if (xn) memcpy(txt(g->sp[0]), xtra, xn);
-      g = ai_defv(g, "bake-load");
-      if (!ai_ok(g)) return g;
-      ai_core_of(g)->sp++;
-      g = ai_evals_(g,
-        "(: q (open bake-load \"r\")"
-        " (? q (: _ (reads q) (close q))"
-        "      (: _ (say err (\"love: bake: cannot open \" + bake-load)) _ (put err 10) (quit 1))))");
-      // ⚠ rebound to (), not PULLED: the seal above ends with (pull book 'book 0), so the
-      // book is already off the book by here and naming it answers `;; missing book`. A
-      // body-less top-level `:` pins without it. The name has to stop holding the path
-      // either way -- an absolute `bake -l` path would otherwise bake the baker's
-      // directory into the image, which is the class of bug this arc just finished.
-      g = ai_evals_(g, "(: bake-load ())"); }
-#ifdef AiGlazed
-    // auto.l's self-tests ran auto-ev, filling the `memo` compile cache with native nif
-    // closures (ap = a W^X mmap addr) that can't be serialized. Empty it: the image boots
-    // with a clean cache (natives JIT lazily on the loaded runtime's first ev, as designed).
-    g = ai_evals_(g, "(: c (from 'glaze 'cache) (map (\\ k (pull c k 0)) (keys c)))");
-#endif
+    if (bake_load && !ai_ok(g = bake_eval_file(g, bake_load))) return g;
+    if (nlayer) {                                        // THE LAYERED BAKE: see image_bake_layers
+      int rc = bake_layers(g, layer, nlayer);
+      if (rc) fprintf(stderr, "love: bake -L failed (rc=%d)\n", rc);
+      exit(rc ? 1 : 0); }
+    g = bake_empty_glaze(g);
     int rc = *bake ? image_dump(g, bake) : image_bake(g);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
@@ -1138,21 +1193,28 @@ int main(int argc, char const **argv) {
   char const *image_load_path = NULL, *bake = NULL;  // see boot(): "" = self-bake, a path = image file
 #ifndef LoveBoot
   char const *bake_load = NULL;                     // bake -l CAT: read-eval it before the seal
+  char const *layer[8];                             // bake -L: the lattice, smallest first
+  int nlayer = 0;
 #endif
   int skip = 0;
 
 #ifndef LoveBoot
-  // `bake -a SPEC ..` lays already-baked image FILES into our own section as an
-  // ARRAY, and boots nothing: there is no session to snapshot, only blobs to carry.
-  if (argc >= 3 && !strcmp(argv[1], "bake") && !strcmp(argv[2], "-a")) {
-   struct ai *b = ai_ini();
-   int rc = b ? image_bake_files(b, (char *const *) (argv + 3), argc - 3) : -6;
-   if (rc) fprintf(stderr, "love: bake -a failed (%d)\n", rc);
-   return rc ? 1 : 0; }
   if (argc >= 2 && !strcmp(argv[1], "bake")) {
-   int i = 2;                                      // bake [-l CAT] [PATH]
-   if (i + 1 < argc && !strcmp(argv[i], "-l")) bake_load = argv[i + 1], i += 2;
+   int i = 2;                                      // bake [-l CAT | -L CAT:verbs ..] [PATH]
+   // `bake -L CAT[:verbs] ..` is the LAYERED bake (doc/plan/image-lattice.md): one
+   // session, the cats evaluated in inclusion order, frozen between, and the array laid
+   // into our own section. Every -L but the last rides as a derived record.
+   while (i + 1 < argc && !strcmp(argv[i], "-L") && nlayer < (int) countof(layer))
+    layer[nlayer++] = argv[i + 1], i += 2;
+   if (!nlayer && i + 1 < argc && !strcmp(argv[i], "-l")) bake_load = argv[i + 1], i += 2;
    bake = i < argc ? argv[i] : "";
+   // ⚠ a LOUD refusal, not a silent one: the layered bake always patches this binary's
+   // own section, so a leftover word is either a 9th layer we cannot hold or a path that
+   // would be quietly ignored -- and a bake nobody reads the output of is the worst
+   // failure this lane has.
+   if (nlayer && *bake)
+    return fprintf(stderr, "love: bake -L takes up to %d layers and no output path (got `%s')\n",
+                   (int) countof(layer), bake), 2;
    skip = (i < argc ? i + 1 : i) - 1; }
   else
 #endif
@@ -1181,9 +1243,10 @@ int main(int argc, char const **argv) {
    // entry claiming this command's verb wins and the largest is the fallback. one
    // pass over a directory, before anything is woken -- it has to be, since the
    // verb table lives in the image we are choosing.
-   uintptr_t blen = 0;
-   void const *bimg = ai_baked_pick(argc > 1 ? argv[1] : NULL, &blen);
-   if (blen && bimg && (g = ai_image_load(bimg, blen)))
+   uintptr_t blen = 0, slen = 0;
+   void const *bimg = NULL, *bsub = NULL;
+   if (ai_baked_pick(argc > 1 ? argv[1] : NULL, &bimg, &blen, &bsub, &slen)
+       && (g = bsub ? ai_image_load_over(bimg, blen, bsub, slen) : ai_image_load(bimg, blen)))
     woke_ms = ai_clock() - t0,
     image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
   if (!g) g = ai_ini();
@@ -1249,7 +1312,7 @@ int main(int argc, char const **argv) {
     if (!image_load_path) g = boot(g, argp);
     else g = ai_evals_(ai_layer_(g), cli);   // woken: the image carries the warm base; push the session layer, run the CLI
 #else
-    if (!image_load_path) g = boot(g, argp, bake, bake_load);
+    if (!image_load_path) g = boot(g, argp, bake, bake_load, layer, nlayer);
     else {              // wake: skip the egg warm, dispatch straight to the program
       bool replp = !argp && isatty(STDIN_FILENO);
       if (replp) raw_mode();

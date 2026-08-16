@@ -203,6 +203,15 @@ struct ai {
  intptr_t lean;                           // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
                                           // (a resize is a full copy + a total refault)
  uintptr_t n_resize;                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
+ // THE PINNED PREFIX (ai_image_freeze, the layered bake): the first `froze` words of
+ // major_base ride a MAJOR verbatim -- memcpy'd to the same offsets in the to-space and
+ // scanned in place, never traced-and-copied. Frozen objects therefore keep their heap
+ // OFFSETS for the rest of the process, which is what lets a later image's blob begin
+ // with an earlier one's, word for word (doc/plan/image-lattice.md).
+ // ⚠ IT MAKES THE FROZEN CLOSURE IMMORTAL. Right for a bake, wrong for a session, so
+ // nothing but the freeze door sets it and 0 is the state of every other run.
+ uintptr_t froze;
+ ai_word *froze_lo, *froze_hi;            // its from-space window; set for the span of one major, else 0
  uintptr_t budget;                        // total memory CAP in words (2*minor + 2*major); 0 = unbounded.
                                           // appel's rule: the nursery gets the free budget after the major pool.
  uintptr_t minor0, major0, ratio;         // the other three live knobs: nursery floor, the major pool's
@@ -400,6 +409,17 @@ struct ai_image_guard { uintptr_t (*ok)(void *ctx, uintptr_t v, uintptr_t off, u
 void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);
 void *ai_image_save_(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);   // the unguarded worker: a MID-EVAL dump (the bake nif)
 struct ai *ai_image_load(void const *buf, uintptr_t len);
+// THE LAYERED BAKE (doc/plan/image-lattice.md). freeze: dump this layer AND pin it, so
+// the next dump's blob begins with this one's -- answers an opaque {header, blob} record
+// the caller holds and hands back. save_over: the full image, plus that baseline's
+// DERIVED record (its header + the prefix words changed since), which load_over wakes
+// against the parent's stream. Both g->alloc'd; NULL is "no image", never a half one.
+void *ai_image_freeze(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);
+void *ai_image_save_over(struct ai*, uintptr_t *outlen, struct ai_image_guard const*,
+                         void *const *bases, uintptr_t const *blens, uintptr_t nbase,
+                         void **subout, uintptr_t *sublens);
+uintptr_t ai_image_why(void);   // the codec's last refusal, for a bake's error line
+struct ai *ai_image_load_over(void const *parent, uintptr_t plen, void const *sub, uintptr_t slen);
 struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*, void*, size_t));   // allocator-parameterized (a device heap has no malloc)
 
 // the terminal scare face: prints ";; a b\n" (show forms) to the err port from
