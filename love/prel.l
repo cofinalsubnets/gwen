@@ -904,29 +904,39 @@
                  _ (c ())
                  (? (&& (two? r) (id? <r mark)) (scare <>r <>>r) r)))))
 ; boxfix-core: same prep, rewriting refs via sub/subl since c0 has no analysis-time redirect.
+; the law: EAGER reads see let*, closures see letrec*. a bare read BEFORE its name's pin
+; keeps the plain nom -- a boxed name's own binding is renamed _, so the nom resolves
+; OUTWARD, and (: s (trim s)) under a param s reads the param. a read under a \ takes the
+; cell, filled by the time the closure runs (or the cell-miss door when it runs early).
+; pn is the pinned-so-far set; u is 1 under a \.
 (: (boxfix-core prs body) (:
    (rmc cs ns) (filter (\ p !(member? <p ns)) cs)
    ; bnd: the lexical binder set, seeded with the scope's own names, so a locally-bound name is
    ; an ordinary variable and never a macro head.
-   (sub cs x bnd) (?
-    (nom? x) (: p (assoc x cs) (? (two? p) (list cellread <>p (list '\ >>p)) x))
+   (sub cs x bnd pn u) (?
+    (nom? x) (: p (assoc x cs)
+                (? !(two? p) x
+                   (|| u (member? x pn)) (list cellread <>p (list '\ >>p))
+                   x))
     (atom? x) x
     (: h (cap x) (?
-      (id? h '\) (? (atom? >>x) x (: r (lp x) (link '\ (cat <r (list (sub (rmc cs <r) >r (cat <r bnd)))))))
-      (id? h ':) (: ns (ln >x) (': >< subl (rmc cs ns) >x (cat ns bnd)))
-      (: m (macros h) (? (&& m !(member? h bnd)) (sub cs (m >x) bnd) (map (\ e (sub cs e bnd)) x))))))
-   (subl cs bs bnd) (?
+      (id? h '\) (? (atom? >>x) x (: r (lp x) (link '\ (cat <r (list (sub (rmc cs <r) >r (cat <r bnd) pn 1))))))
+      (id? h ':) (: ns (ln >x) (': >< subl (rmc cs ns) >x (cat ns bnd) pn u))
+      (: m (macros h) (? (&& m !(member? h bnd)) (sub cs (m >x) bnd pn u) (map (\ e (sub cs e bnd pn u)) x))))))
+   (subl cs bs bnd pn u) (?
     (atom? bs) bs
-    (atom? >bs) (list (sub cs <bs bnd))
-    (: nd (dsug <bs <>bs) (<nd >< sub cs >nd bnd >< subl cs >>bs bnd)))
+    (atom? >bs) (list (sub cs <bs bnd pn u))
+    (: nd (dsug <bs <>bs) (<nd >< sub cs >nd bnd pn u >< subl cs >>bs bnd pn u)))
    (: bx (boxset prs)
       (? (id? () bx) ()
        (: cs (mkcs bx) ns0 (map cap prs)
-          (one p) (: d (sub cs >p ns0)
-                     (? (member? <p bx)
-                        (: c (assoc <p cs) (link '_ (list pin <>c (list '\ >>c) d)))
-                        (link (cap p) d)))
-          (cellbinds cs + map one prs >< sub cs body ns0))))))
+          (one p pn) (: d (sub cs >p ns0 pn 0)
+                        (? (member? <p bx)
+                           (: c (assoc <p cs) (link '_ (list pin <>c (list '\ >>c) d)))
+                           (link (cap p) d)))
+          (ones ps pn) (? (atom? ps) ()
+                          ((one <ps pn) >< ones >ps (<<ps >< pn)))
+          (cellbinds cs + ones prs () >< sub cs body ns0 ns0 0))))))
 ; the flat-list adapter: a `:` binding list -> the rewritten list, or the input unchanged.
 ; love.c interns "boxfix" and calls it off the book, so c0 compiles prel through this. it must
 ; exist before ev.l does, and both compilers share the one pass.

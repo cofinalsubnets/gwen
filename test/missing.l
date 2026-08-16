@@ -40,36 +40,38 @@
 (assert (42 = (an-g 0)))
 (hear 0)
 
-; ONE SCOPE -- a `:` binds every name over the whole form. reading a binding
-; before its value is pinned is the SAME condition, with the binding site's
-; nom (a named point) as payload: a call for help, the zero point helpless. the two old silent
-; lanes -- a direct forward read escaping to the book, a boxed pre-fill read
-; of 0 -- are gone: one law at every depth, local or book.
+; ONE FORM, TWO SCOPES -- the split law: EAGER reads see let*, closures see
+; letrec*. a bare read BEFORE its name's pin is the OUTER binding (the book, a
+; param, an enclosing let) -- so a binding may rebuild on what it shadows:
+; (: s (trim s)) under a param s reads the param. a read UNDER A \ is the letrec
+; cell, filled by the binder's pin; run early it is the missing condition with
+; the binding-site nom as payload: a call for help, the zero point helpless.
+(hear welp)               ; the bare lane is now a BOOK read when nothing binds it -- welp keeps the corpus quiet
 (: an-outer 99)
 (assert
- (id? (:) (: a an-outer an-outer 2 a))            ; no silent capture of the book's an-outer
- (id? (:) (: a an-local an-local 2 a))            ; ... nor of nothing: the point helpless
+ (99 = (: a an-outer an-outer 2 a))              ; the bare pre-pin read IS the book's an-outer
+ (id? (:) (: a an-local an-local 2 a))            ; ... and of nothing, the zero point
  (2 = (: a an-local an-local 2 an-local))        ; the body reads the local, post-pin
- (id? (:) (: f (\ _ an-cell) v (f 0) an-cell 5 v))  ; the boxed lane reads the same point
- (5 = (: f (\ _ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the cell, once pinned
-; AT EVERY DEPTH means NESTED too, and a SHADOWED name is the sharp case: an outer binding of
-; the same nom must not answer for the inner one's pre-fill read. ⚠ cprop is the lane that used
-; to: it killed a shadowed name let*-wise (after the RHS) on a form that is letrec*, so an outer
-; CONSTANT propagated into the RHS where the name is the unpinned inner one. only a constant did,
-; which is why it read one way here and another under a lambda param -- and c0, which has no
-; cprop, disagreed with ev. the assert pins the two shapes that told them apart.
+ (id? (:) (: f (\ _ an-cell) v (f 0) an-cell 5 v))  ; the closure's read is the CELL: the point pre-pin
+ (5 = (: f (\ _ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the value, once pinned
+(hear 0)
+; AT EVERY DEPTH means NESTED too, and a SHADOWED name is the sharp case: the
+; outer binding answers exactly the EAGER pre-pin reads -- bare in a def -- and
+; never a closure's, which belong to the inner cell. ⚠ cprop's splice lanes
+; (beta/bspl) bsub-rename a :'s binders whole-form, letrec-wise, so an entangled
+; : -- a bare pre-pin sibling read -- DECLINES the splice (entg?) and the call
+; runs un-inlined; the two shapes below are the ones that told the lanes apart.
 (: an-outer2 42)
 (assert
- ; 1 is (() + 1): the RHS read the point, NOT the outer 42 -- 43 is what a leak answers
- (1 = (: q 1 (: an-outer2 (an-outer2 + 1) an-outer2)))       ; shadowed CONSTANT, nested
- (1 = ((\ p (: p (p + 1) p)) 42))                            ; ..and a shadowed lambda PARAM, alike
- (id? (:) (: an-o3 99 (: f (\ _ an-o3) r (f 0) an-o3 42 r))) ; ..the boxed lane, outer in scope
+ (43 = (: q 1 (: an-outer2 (an-outer2 + 1) an-outer2)))      ; shadowed CONSTANT, nested: the outer 42 + 1
+ (43 = ((\ p (: p (p + 1) p)) 42))                           ; ..and a shadowed lambda PARAM, alike
+ (id? (:) (: an-o3 99 (: f (\ _ an-o3) r (f 0) an-o3 42 r))) ; ..the closure's read is the CELL, outer in scope
  (2 = (: b 1 b (b + 1) b))                                   ; ⚠ a rebind WITHIN one chain still
  (43 = (: c 42 d (c + 1) d)))                                ;   reads the previous value, and folds
 
 ; the help hears the cell miss too; the payload is the binding-site nom
 (hear (\ a b (? (&& (id? a 'missing) (nom? b) ("an-fwd" = (string b))) 'cell-nom 0)))
-(assert (id? 'cell-nom (: q an-fwd an-fwd 2 q)))
+(assert (id? 'cell-nom (: g (\ _ an-fwd) q (g 0) an-fwd 2 q)))
 (hear 0)
 
 (hear (\ a b (? (id? a 'missing) 'fired 0)))
