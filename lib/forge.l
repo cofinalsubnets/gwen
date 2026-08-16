@@ -44,12 +44,35 @@
    ; ⚠ guards come BEFORE any push, so the machine sp is balanced on the deopt path too.
    forge-trayk (apof (iota 0))                      ; a tray's ap word, live in this process
    (forge-guard i k)                                ; Sp[i] must be an object of kind k
-    `(`('ld 'r0 'r1 (8 * i)) '(test r0 1) '(br ne deopt)
-       '(ld r7 r0 0) `('li 'r8 k) '(cmp r7 r8) '(br ne deopt))
+    [['ld 'r0 'r1 (8 * i)] '(test r0 1) '(br ne deopt)
+      '(ld r7 r0 0) ['li 'r8 k] '(cmp r7 r8) '(br ne deopt)]
    (forge-fixg i)                                   ; Sp[i] must be a fixnum
-    `(`('ld 'r0 'r1 (8 * i)) '(test r0 1) '(br eq deopt))
-   ; tag r0 as a fixnum, answer it in Sp[0], step Ip past the interp slot to lvm_ret
+    [['ld 'r0 'r1 (8 * i)] '(test r0 1) '(br eq deopt)]
+   ; the two epilogues, both answering in Sp[0] and stepping Ip past the interp slot to lvm_ret
+   ; (which pops the extra arguments). the kernel picks: `forge-epi` where r0 holds an UNTAGGED
+   ; number, `forge-epi-ptr` where it holds a heap pointer -- an even pointer IS the value, and
+   ; tagging one answers a fixnum somewhere in the middle of the heap.
    forge-epi '((shl r0 1) (or r0 r0 1) (st r1 0 r0) (add r5 r5 16) (ld r7 r5 0) (jmpr r7))
+   forge-epi-ptr '((st r1 0 r0) (add r5 r5 16) (ld r7 r5 0) (jmpr r7))
+   ; -- THE ROOM GUARD, and it is how a kernel allocates. a native body's registers are NOT GC
+   ; roots (the collector walks g, Sp and Ip), so a collection fired mid-kernel leaves every
+   ; pointer it is holding pointing into the old semispace. so a kernel never calls the
+   ; collector: it proves the room FIRST -- Sp - Hp >= b bytes -- and DEOPTS to the twin when
+   ; the room is not there, and the twin allocates the ordinary way with an ordinary `Have`.
+   ; the output size has to be known before any Hp motion, which for a shaped result it is.
+   ; ⚠ FIRST, with the type guards, ahead of any store: the deopt path must have touched
+   ; nothing. ⚠ and `b` is the reservation PLUS slack, never the exact need -- love/glaze/emit.l
+   ; spends 88 bytes on a 3-word cons for the same reason.
+   ; ⚠ THE OTHER LANE IS REAL AND NOT TAKEN. `Have` does not return, it TAIL-CALLS lvm_gc, which
+   ; packs, collects and Resumes at g->ip -- and in a nif cell Ip IS the cell, so a collection
+   ; re-enters the kernel from the top and the second go finds room. A kernel whose guard comes
+   ; first holds nothing across it, so that lane is as open to it as it is to the C nifs. It is
+   ; not taken because reaching lvm_gc needs its LIVE ADDRESS -- this binary's own symtab and
+   ; load bias, lib/splice.l's bind-live-tab, host-only machinery -- for a path that fires at
+   ; most once a collection and lands in a twin that was going to be right anyway. Three
+   ; instructions, every target, no self-inspection. Take the other lane for a kernel whose
+   ; twin is expensive, not for one whose twin is the definition.
+   (forge-room b) [['lea 'r7 'r2 b] '(cmp r1 r7) '(br below deopt)]
    ; the deopt tail: Ip <- the interp twin (Ip[1]), then enter it with the args still on Sp.
    ; arity 1 enters at its first word; arity>=2 skips the twin's own curry preamble.
    (forge-deopt ar)
@@ -61,11 +84,11 @@
    forge-fits (tablet 0)                            ; nom -> the value in force
    forge-nat (tablet 0)                             ; nom -> 1 where that value is native
    forge-tally (tablet 0)                           ; decline reason -> count
-   (forge-no k nom) (: _ (pin forge-tally `(k nom) (1 + peep forge-tally `(k nom) 0)) ())
+   (forge-no k nom) (: _ (pin forge-tally [k nom] (1 + peep forge-tally [k nom] 0)) ())
    (forge-why _) (map (\ k (k >< peep forge-tally k 0)) (keys forge-tally))
    (forge-fitted? _) (tally (keys forge-nat))
    (forge-put nom arity mkir twin)
-    (: _ (pin forge-roll () (peep forge-roll () () + `(`(nom arity mkir twin))))
+    (: _ (pin forge-roll () (peep forge-roll () () + [[nom arity mkir twin]]))
        _ (pin forge-fits nom twin) nom)
    (forge-of nom) (peep forge-fits nom ())
 
@@ -75,16 +98,16 @@
    forge-seam (from 'glaze 'nif)
    forge-arch (intern love-arch)
    forge-asm (from 'holo 'assemble)
-   ; assemble one kernel -> its bytes | (). the arity's epilogue and deopt tail are the
-   ; module's, so a kernel body says only its own work and can never spell the ABI wrong.
+   ; assemble one kernel -> its bytes | (). the DEOPT TAIL is the module's, because it is
+   ; arity-determined and mechanical; the EPILOGUE is the kernel's, because only the kernel
+   ; knows whether r0 ends up holding a number or a pointer.
    ; ⚠ TRAPPED, and it has to be: a kernel's IR is a PROGRAM, holo raises on an op it cannot
    ; lower ('bad-op) or a target with no backend ('no-backend), and an unguarded assemble takes
    ; the whole fit down -- every other kernel in the roster with it. the raise's own tag is
    ; what the census records, so a mis-said kernel names itself and its neighbours still fit.
    (forge-lay row)
     (: nom <row  ar <>row  mkir <>>row
-       bs (trap (\ _ (peep (forge-asm forge-arch
-                             ((mkir 0) + (forge-epi + forge-deopt ar))) 'bytes 0))
+       bs (trap (\ _ (peep (forge-asm forge-arch ((mkir 0) + forge-deopt ar)) 'bytes 0))
                 () (\ a b (: _ (forge-no a nom) 'raised)))
        ; ⚠ the raise arm answers a NOM, not (): a decline must be counted ONCE, and a bare ()
        ; here reads as "assembled to nothing" and tallies the miss a second time under its name.
@@ -94,11 +117,11 @@
    (forge-fit _)
     (? !(lit? forge-seam) (: _ (forge-no 'no-seam forge-arch) 0)
        (: rows (peep forge-roll () ())
-          laid (map (\ r `(r (forge-lay r))) rows)
+          laid (map (\ r [r (forge-lay r)]) rows)
           (foldl (\ n lr
              (: r <lr  bs <>lr  nom <r  ar <>r  twin <>>>r
                 (? !(two? bs) n
-                   (: j (forge-seam (cask bs) twin `('\ 'q '(q)) ar)
+                   (: j (forge-seam (cask bs) twin ['\ 'q '(q)] ar)
                       (? !(lit? j) (: _ (forge-no 'declined nom) n)
                          (: _ (pin forge-fits nom j) _ (pin forge-nat nom 1) (n + 1)))))))
              0 laid)))
@@ -125,5 +148,6 @@
         (add r10 r10 1) (jmp el)
         (label no) (li r0 0) (jmp fin)
         (label yes) (li r0 1)
-        (label fin)))
+        (label fin))
+    + forge-epi)
    _ (forge-put 'aall 1 forge-aall-ir aall))

@@ -26,15 +26,15 @@
    ; ⚠ the empty and the all-nonzero cases are the two the loop bounds can get wrong in
    ; opposite directions -- an off-by-one at the top answers 0 for a full array, and one at
    ; the bottom answers 1 for an array whose only zero is last.
-   zs (L (iota 0) (iota 1) (iota 2) (iota 9) (iota 64)
-        (+ 1 (iota 1)) (+ 1 (iota 2)) (+ 1 (iota 9)) (+ 1 (iota 64)) (+ 1 (iota 4096))
-        (array '(3) -1 2 3) (array '(3) -1 0 3) (array '(3) 1 2 0) (array '(3) 0 2 3)
-        (array '(2 2) 1 2 3 4) (array '(2 2) 1 2 3 0) (array '(2 3) 1 1 1 1 1 1)
-        (array '(2 2 2) 1 1 1 1 1 1 1 0) (array '(4 0) ))
+   zs [(iota 0) (iota 1) (iota 2) (iota 9) (iota 64)
+       (+ 1 (iota 1)) (+ 1 (iota 2)) (+ 1 (iota 9)) (+ 1 (iota 64)) (+ 1 (iota 4096))
+       (array '(3) -1 2 3) (array '(3) -1 0 3) (array '(3) 1 2 0) (array '(3) 0 2 3)
+       (array '(2 2) 1 2 3 4) (array '(2 2) 1 2 3 0) (array '(2 3) 1 1 1 1 1 1)
+       (array '(2 2 2) 1 1 1 1 1 1 1 0) (array '(4 0) )]
    ; the deopt battery: a float tray, an object tray, plain scalars, the zero point, text
-   others (L (array '(2 2) 1.0 2.0 3.0 4.0) (array '(3) 1.0 0.0 2.0)
-             (array '(2) 'a 'b) (array '(2) () ())
-             5 0 -3 2.5 () "text" '(1 2 3))
+   others [(array '(2 2) 1.0 2.0 3.0 4.0) (array '(3) 1.0 0.0 2.0)
+           (array '(2) 'a 'b) (array '(2) () ())
+           5 0 -3 2.5 () "text" '(1 2 3)]
 
    nat (forge-of 'aall)
    _ (? (lit? nat) 0 (die "forge-of 'aall answered nothing -- the roster did not register"))
@@ -54,24 +54,61 @@
    ; as the ABI's own law.
    (fx-and-ir _)
     (forge-fixg 0 + (forge-fixg 1
-    + '((ld r0 r1 0) (sar r0 1) (ld r7 r1 8) (sar r7 1) (and r0 r0 r7))))
+    + ('((ld r0 r1 0) (sar r0 1) (ld r7 r1 8) (sar r7 1) (and r0 r0 r7)) + forge-epi)))
    _ (forge-put 'fx-and 2 fx-and-ir (&))
    fitted2 (forge-fit 0)
    _ (? (= fitted2 (fitted + 1)) 0
         (die ("the roster did not grow: fit " + show fitted + " -> " + show fitted2)))
    nat2 (forge-of 'fx-and)
-   pairs (L (L 0 0) (L 1 1) (L 6 3) (L 255 15) (L 1023 992) (L 7 0) (L 65535 4096)
-            (L 12345678 87654321) (L 1 2.5) (L "a" 3) (L () 7) (L 3 ()))
+   pairs [[0 0] [1 1] [6 3] [255 15] [1023 992] [7 0] [65535 4096]
+          [12345678 87654321] [1 2.5] ["a" 3] [() 7] [3 ()]]
    bad2 (filter (\ p !(= (nat2 <p <>p) (& <p <>p))) pairs)
    _ (? (nil? bad2) (say out ("  arity 2: agrees with its twin on " + show (tally pairs) + " pairs\n"))
         (die ("arity-2 kernel DISAGREES with its twin on " + show bad2)))
+
+   ; --- ALLOCATION: the room guard, and the law that no collection runs mid-body --------------
+   ; a native body's registers are not GC roots, so a kernel proves the room BEFORE any Hp or Sp
+   ; motion and deopts to the twin when it is not there -- the twin then allocates with an
+   ; ordinary `Have`. `link`, the 3-word cons, is the smallest thing that can hold the law.
+   ; ⚠ GATE-ONLY, and the measurement is the reason: 300k conses run 7 ms through the C nif and
+   ; 18 ms through this, because the body is smaller than the curried cell's own indirection.
+   ; The lane pays where there is a LOOP in it (`aall` above wins 3.2x on 4096 cells) and loses
+   ; where there is not, so this one holds the ABI and stays out of the roster.
+   ; ⚠ the churn is the real assertion: 2M conses through the native builder, which forces the
+   ; guard to fire repeatedly. A kernel that let a collection run mid-body would answer a cell
+   ; in the old semispace -- not a crash, a wrong list, which is why the deep build is compared
+   ; against the C one rather than merely counted.
+   chaink (apof '(1 2))
+   (link-ir _)
+    (forge-room 96
+    + ([['li 'r8 chaink] '(st r2 0 r8)                   ; [Hp] = lvm_chain
+         '(ld r0 r1 0) '(st r2 8 r0)                     ; [Hp+8]  = a
+         '(ld r0 r1 8) '(st r2 16 r0)                    ; [Hp+16] = b
+         '(mov r0 r2) '(add r2 r2 24)]                   ; answer = Hp ; Hp += 3w
+       + forge-epi-ptr))
+   _ (forge-put 'cons2 2 link-ir link)
+   fitted3 (forge-fit 0)
+   _ (? (= fitted3 (fitted2 + 1)) 0
+        (die ("the allocating kernel did not fit: " + show fitted2 + " -> " + show fitted3)))
+   natc (forge-of 'cons2)
+   cx [1 0 -3 2.5 () "s" 'nom '(1 2) (iota 3)]
+   badc (filter (\ a (any (\ b !(= (natc a b) (link a b))) cx)) cx)
+   _ (? (nil? badc) 0 (die ("the cons kernel DISAGREES with `link` on " + show badc)))
+   deep (: (go i a) (? (i < 1) a (go (i - 1) (natc i a))) (go 5000 ()))
+   deepc (: (go i a) (? (i < 1) a (go (i - 1) (link i a))) (go 5000 ()))
+   _ (? (= deep deepc) 0 (die "a 5000-deep native build differs from the C one"))
+   _ (: (go i) (? (i < 1) 0 (: _ (go2 500) (go (i - 1))))
+        (go2 k) (: (g3 j a) (? (j < 1) (tally a) (g3 (j - 1) (natc j a))) (g3 k ()))
+        (go 4000))
+   _ (? (= (natc 1 '(2 3)) '(1 2 3)) 0 (die "the cons kernel is wrong after the churn"))
+   _ (say out ("  allocation: " + show (tally cx * tally cx) + " pairs, a 5000-deep build and 2M conses of churn\n"))
 
    ; --- the wake rung: a fit is idempotent, because a woken image must be able to re-run it --
    ; ⚠ a native cell does not survive a bake (the image codec reverts it to the twin), so
    ; `forge-fit` is what a wake calls to get native back. Called twice it must install twice
    ; and answer the same, never accumulate a second roster or hand back a stale cell.
    again (forge-fit 0)
-   _ (? (= again fitted2) 0 (die ("refit fitted " + show again + ", first fit " + show fitted2)))
+   _ (? (= again fitted3) 0 (die ("refit fitted " + show again + ", first fit " + show fitted3)))
    _ (chk "after refit" zs)
    _ (chk "after refit (deopt)" others)
 
@@ -82,9 +119,9 @@
    ; leave its neighbours native.
    (bogus-ir _) '((no-such-op r0 r1))
    _ (forge-put 'bogus 1 bogus-ir aall)
-   fitted3 (forge-fit 0)
-   _ (? (= fitted3 fitted2) 0
-        (die ("a bogus kernel changed the fitted count: " + show fitted2 + " -> " + show fitted3)))
+   fitted4 (forge-fit 0)
+   _ (? (= fitted4 fitted3) 0
+        (die ("a bogus kernel changed the fitted count: " + show fitted3 + " -> " + show fitted4)))
    _ (? (forge-why 0) 0 (die "the bogus kernel declined without naming a reason"))
    _ (? (= ((forge-of 'bogus) (+ 1 (iota 4))) 1) 0 (die "the bogus kernel did not fall back to its twin"))
    _ (chk "after a decline" zs)
