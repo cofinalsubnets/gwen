@@ -119,6 +119,13 @@ int image_dump(struct ai *g, char const *path) {
 #define ReserveWords 2u
 __attribute__((section(".love_image"))) uint64_t ai_baked_image[ReserveWords] = {1};
 uintptr_t ai_baked_image_len = ReserveWords * 8u;
+// ⚠ AND THE STUB'S SIZE IS A LIE gcc believes: ReserveWords is 2 because the bake grows
+// the object, so every read past the second word is out of bounds of the DECLARATION and
+// in bounds of the section. main.c says `extern uint64_t ai_baked_image[]` and never
+// hears about it; this file holds the sized definition, so it does.
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__mooncc__)
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
 // --- the image ARRAY ---------------------------------------------------------
 // the section holds EITHER one image -- its first word is the codec's own magic,
 // which is what every binary before this laid -- or a DIRECTORY: magic, count,

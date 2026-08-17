@@ -65,12 +65,20 @@
       ; parts, so a part past 2^53 still lands the true integer -- the float net
       ; rounds there, which is why ceil-net's corpus keeps its ratios small. `//`
       ; (exact trunc) is the oracle; the last row divides big by big.
+      ; ⚠ THE RUNGS ANSWER A CHARM, and a charm is 2^62 wide on a 64-bit word and 2^30
+      ; on a 32-bit one -- so on the narrow word the oracle names a bignum the codomain
+      ; cannot hold and every rung saturates instead, correctly. the DIVISOR carries the
+      ; word's scale: the numerator stays past 2^53 either way, which is the whole point,
+      ; and the quotient lands inside the charm on both. (2^30 is a charm only where a
+      ; fixnum is 62-bit -- love/cli.l's wordsz asks the same question.)
       ['ratio-rungs (\ _ (: b ((60 2) + 1)
+                            s (charm? 1073741824 ? 1 (32 2))
                             (all (\ p (: n <p d <>p c (ceil (q n d))
                                          ((int (q n d) = n // d)
                                           && (c = (n // d) + (? (0 < n && 0 != n % d) 1 0))
                                           && (saturate (q n d) = (? (0 < c) c 0)))))
-                                 [[7 2] [-7 2] [0 5] [b 3] [-b 3] [b 1] [(b * b) b]])))]
+                                 [[7 2] [-7 2] [0 5] [b (3 * s)] [-b (3 * s)]
+                                  [b s] [(b * b) (b * s)]])))]
       ; --- + ASSOCIATES, mixed bands included (the degenerate law): a number against
       ; text or a chain arrives as that band's UNIT, which is exactly what lets
       ; (x+y)+z = x+(y+z) close over the bands. three seams are carved out BY NAME,
