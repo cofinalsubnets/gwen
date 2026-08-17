@@ -53,12 +53,12 @@ module 'mem -- off the bare book everywhere -- and flat.l's presence probe
 collapsed from the out-of-band (names ()) dance to an ordinary `(from 'mem)`
 read. test/host/modnif.l holds the laws, including the C+.l one-module story:
 (module 'mem ..) text reopens the drain-made tablet and its .l member reaches
-the C nif. What the climb found, both in the mooncc lane: (1) the writer keeps
-only EXPORTED globals in a named section that is not ai_nifs (gen.l's loc?),
-so the AiModNifs row is not static; (2) holo's linker resolved only its two
+the C nif. What the climb found: holo's linker resolved only its two
 hand-laid brackets -- it now grants GNU ld's own generic rule, __start_X/
 __stop_X over any named lane's laid extent (link.l's ld-extents, threaded
-through cx), which the gcc lane always granted for free.
+through cx), which the gcc lane always granted for free. (A suspected
+mooncc gap -- statics dropped from named sections -- was differentialed
+and CLEARED: file-scope statics lay their bytes, symbol local, as C asks.)
 
 **Rung 2 -- the crew modularizes.** One app at a time, moon first (the
 collision hotspot AND the love0 lane -- mooncc0.image bakes moon's cat under

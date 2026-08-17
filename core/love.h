@@ -294,8 +294,6 @@ struct ai_lib const *ai_libs(void);
 // AiModNifs("mod", table) is the MODULE twin: one row = one (module, def table),
 // drained as one ai_defn call per row, so an app's nifs register under its
 // module instead of the book -- (module 'mod ..) text reopens the same one.
-// ⚠ the row is EXPORTED, not static: mooncc's writer keeps only exported
-// globals in a named section that is not ai_nifs (crew/moon/gen.l's loc?).
 struct ai_mod { char const *mod; struct ai_def const *defs; uintptr_t n; };
 #if defined(__APPLE__)
 extern struct ai_def const __start_ai_nifs[] __asm("section$start$__DATA$ai_nifs");
@@ -306,7 +304,7 @@ extern struct ai_mod const __stop_ai_mods[]  __asm("section$end$__DATA$ai_mods")
   static struct ai_def const __attribute__((section("__DATA,ai_nifs"), used)) \
     _ainif_##fn = { (nm), (intptr_t) (fn) }
 #define AiModNifs(m, tab) \
-  struct ai_mod const __attribute__((section("__DATA,ai_mods"), used)) \
+  static struct ai_mod const __attribute__((section("__DATA,ai_mods"), used)) \
     _aimod_##tab = { (m), (tab), sizeof(tab)/sizeof*(tab) }
 #else
 extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
@@ -315,7 +313,7 @@ extern struct ai_mod const __start_ai_mods[], __stop_ai_mods[];
   static struct ai_def const __attribute__((section("ai_nifs"), used)) \
     _ainif_##fn = { (nm), (intptr_t) (fn) }
 #define AiModNifs(m, tab) \
-  struct ai_mod const __attribute__((section("ai_mods"), used)) \
+  static struct ai_mod const __attribute__((section("ai_mods"), used)) \
     _aimod_##tab = { (m), (tab), sizeof(tab)/sizeof*(tab) }
 #endif
 
