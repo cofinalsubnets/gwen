@@ -34,6 +34,14 @@ smoke)
   rm -rf "$s"; mkdir -p "$s"
 
   run "$dist" kore true                            || fail "kore true (the nested dispatch)"
+  # the source door, cheaply: the seed lays its tree with a runnable bin/love and
+  # the very archive it carried. the fixpoint stays test_distboot's; THIS is the
+  # leg that keeps the verb from going dark between releases.
+  ( cd "$s" && run "$dabs" source ) > "$s/src.log" 2>&1 \
+                                                   || { tail -3 "$s/src.log"; fail "love source did not lay"; }
+  srcd=$(echo "$s"/love-*/)
+  [ -x "$srcd/bin/love" ]                          || fail "love source laid no runnable bin/love"
+  ls "$srcd"/out/dist/love-*.tar.gz >/dev/null 2>&1 || fail "love source laid no archive"
   run "$dist" sb 2>&1 | grep -q "patch-set vcs"  || fail "sb usage"
   run "$dist" mooncc 2>&1 | grep -q "usage: mooncc" || fail "mooncc verb usage"
   # the CC-under-make lane: the Makefile blanket-exports LOVE_NO_IMAGE=1, and

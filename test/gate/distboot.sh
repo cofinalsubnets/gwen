@@ -40,13 +40,19 @@
 # nothing needed to unpack it -- so its leg here was a third bootstrap proving what
 # the seed's already proves.
 #
+# ⚠ THE SEED IS THE TREE'S OWN out/host/love (seed-universal U2: the host build
+# subsumed, the love-<arch> names dissolved). Two consequences ride here: the
+# lean tree's binary embeds an archive it must RE-CUT from itself (selfpack --
+# leg 4's compare is what holds that re-cut to the byte), and the claim compare
+# runs BEFORE the circle leg, whose `make dist` bakes the compared binary in
+# place.
+#
 # Two complete bootstraps and a self-rebuild -- minutes, not seconds. Opt-in, by name.
-# usage: distboot.sh SOURCE_TGZ SEED_EXE [REFERENCE_LOVE]
+# usage: distboot.sh SOURCE_TGZ SEED_EXE
 set -u
 
 src=$1
 seed=$2
-ref=${3:-}
 
 [ -f "$src" ] || { echo "distboot: no $src -- run 'make dist'"; exit 1; }
 [ -x "$seed" ] || { echo "distboot: no $seed -- run 'make dist'"; exit 1; }
@@ -103,11 +109,24 @@ selfd=$(echo "$w"/self/love-*/)
 grep -q "was called" "$w/selfb.log" && { grep "was called" "$w/selfb.log" | head -3; fail "the seed-laid build reached for an ambient compiler"; }
 echo "  OK seed: one binary lays its own source and builds it, no tar and no ambient cc"
 
-# ---- 3. THE CIRCLE CLOSES: the artifact rebuilds ITSELF, to the byte ---------
+# ---- 3. THE CLAIM ------------------------------------------------------------
+# Both binaries here are the bare LINKS (the explicit out/host/love target, no
+# .baked asked) -- and each embeds its archive, so this one cmp also proves the
+# lean tree's selfpack re-cut the very bytes the seed carried.
+if cmp -s "$lean/out/host/love" "$selfd/out/host/love"; then
+  echo "  OK both artifacts answer the SAME binary ($(wc -c < "$lean/out/host/love") bytes)"
+else
+  ls -l "$lean/out/host/love" "$selfd/out/host/love"
+  fail "source and seed built DIFFERENT binaries -- the release claim is false"
+fi
+
+# ---- 4. THE CIRCLE CLOSES: the artifact rebuilds ITSELF, to the byte ---------
 # The chain whole: cut a tarball, bootstrap it, build the artifact, extract the source
 # back OUT of the artifact, and rebuild -- and the second artifact is the first one's
 # bytes. That is a stronger claim than "it builds": it says the artifact carries
 # everything it was made from and nothing about the machine it was made on leaked in.
+# ⚠ this leg comes AFTER the claim compare on purpose: `make dist` bakes the
+# tree's out/host/love in place, and leg 3 wants the bare links.
 #
 # ⚠ IT NEEDS A REPRODUCIBLE BAKE, and that is the only reason this leg can exist. An
 # image used to carry the baker's ASLR base (raw kept absolutes, the header's address
@@ -119,42 +138,13 @@ echo "  OK seed: one binary lays its own source and builds it, no tar and no amb
   > "$w/selfd.log" 2>&1 \
   || { tail -20 "$w/selfd.log"; fail "the seed-laid tree cannot rebuild the artifact"; }
 grep -q "was called" "$w/selfd.log" && { grep "was called" "$w/selfd.log" | head -3; fail "the artifact rebuild reached for an ambient compiler"; }
-again=$selfd/out/dist/love-$(uname -m)
+again=$selfd/out/host/love
 [ -f "$again" ] || fail "the artifact rebuild produced no $again"
 if cmp -s "$seed" "$again"; then
   echo "  OK circle: the artifact rebuilds ITSELF byte-for-byte ($(sha256sum < "$again" | cut -c1-16)..)"
 else
   ls -l "$seed" "$again"
   fail "the rebuilt artifact differs from the one that laid its source ($(cmp -l "$seed" "$again" 2>/dev/null | wc -l) bytes)"
-fi
-
-# ---- 4. THE CLAIM ------------------------------------------------------------
-if cmp -s "$lean/out/host/love" "$selfd/out/host/love"; then
-  echo "  OK both artifacts answer the SAME binary ($(wc -c < "$lean/out/host/love") bytes)"
-else
-  ls -l "$lean/out/host/love" "$selfd/out/host/love"
-  fail "source and seed built DIFFERENT binaries -- the release claim is false"
-fi
-
-# ..and against the tree they were cut from, when the tree is one thing (see the
-# header: a dirty tree legitimately differs, because a release comes from the index).
-# ⚠ AND ONLY WHILE THE TREE'S BINARY IS UNBAKED. `make host` bakes $(ho)/love IN PLACE
-# (host/build.mk's .baked stamp), and an artifact lane builds out/host/love alone, so
-# the two are a 2.4M baked binary against a 935K linked one. Baking both would not
-# rescue it either: a bake carries the binary's OWN PATH, which is why test_bakerep
-# insists its two bakes run at one path. So this leg is opportunistic by nature -- it
-# rides after a relink and stands aside after a `make`, and it SAYS WHICH, because a
-# comparison that quietly passed only when nobody had run `make` is worth nothing.
-if [ -n "$ref" ] && [ -f "$ref" ]; then
-  if [ -f "$ref.baked" ] && [ ! "$ref" -nt "$ref.baked" ]; then
-    echo "  (the in-tree binary is BAKED -- skipping the comparison, see the header)"
-  elif [ -n "$(git -C "$R" status --porcelain 2>/dev/null)" ]; then
-    echo "  (tree is dirty -- skipping the in-tree comparison, see the header)"
-  else
-    cmp -s "$ref" "$lean/out/host/love" \
-      && echo "  OK and identical to the in-tree binary" \
-      || fail "the artifacts differ from the in-tree binary on a CLEAN tree"
-  fi
 fi
 
 echo "distboot: two artifacts, one love -- and the seed rebuilds itself to the byte -- ok"

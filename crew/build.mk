@@ -60,15 +60,16 @@ out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 	@echo LOVE	$(abspath $@)
 	@$(love0) -l out/host/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
-# ==== dist: the ONE artifact (self-host rung 3) ====
-# out/dist/love-<arch> is the download door whole: the default love (mooncc-built,
-# static PIE, nolibc) re-baked with the crew warm -- cook + kore + lush (vi and ain ride
-# its cat) + mooncc (all five backends) + sb + kiosko -- and crew/sb/up.l's
-# verb table, which love/cli.l's verb rail reads: `love up URL` syncs ~/.love/src
-# and cook-installs the nest; `love sb|cook|kore|kiosko|mooncc ..` are the same
-# binary being multi-call. the bake rides `love bake`'s own lane (main.c's
-# `bake -l CAT` evals it ahead of the cache-empty + seal), so the artifact
-# is the default binary with a bigger image -- no session layer, same sealing.
+# ==== dist: the ONE artifact (self-host rung 3; seed-universal U2) ====
+# the seed IS the default binary: out/host/love links the moon objects plus its
+# own source blob and readme (host/build.mk carries the link), and the layered
+# bake lays the crew warm -- cook + kore + lush (vi and ain ride its cat) +
+# mooncc (all five backends) + sb + kiosko -- and crew/sb/up.l's verb table,
+# which love/cli.l's verb rail reads: `love sb|cook|kore|kiosko|mooncc ..` are
+# the same binary being multi-call. there is no leaner host build beside it and
+# no love-<arch> twin: one tree, one binary, and `make dist` is that binary
+# plus the source tarball. the per-ISA bytes remain (a binary is for one
+# machine until U1's container); it is the artifact NAMES that dissolved.
 # member order is the scope: kore's floor first, asbook before the backends
 # (defbackend mutates the spliced holo), every main before kore.l's applet
 # table, up.l LAST so the verbs close over the lot. DIST_ORIGIN pins the
@@ -129,9 +130,6 @@ $(ho)/.rest-cat.l: $(restfiles) $(ho)/.dist.list $(ho)/.docs.list
 	@echo CAT	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(restfiles); } > $@
-# the artifact is named for its arch ($a = uname -m): love-x86_64 here,
-# love-aarch64 on a pi -- the moon lane is native on both (mooncc defaults to
-# the ground it stands on), so `make dist` anywhere bakes that machine's door.
 .PHONY: dist dist-source dist-seed
 
 # ==== THE RELEASE ARTIFACTS (doc/dist.md) ====
@@ -140,10 +138,11 @@ $(ho)/.rest-cat.l: $(restfiles) $(ho)/.dist.list $(ho)/.docs.list
 #
 #   SOURCE   love-<ver>.tar.gz   sources only. `make` bootstraps through the local
 #                                cc, which builds love0 and NOTHING else.
-#   SEED     love-<arch>         one executable that CARRIES its own source and IS
-#                                its own toolchain. `love source` lays the tree with
-#                                bin/love already in it; `make` there calls no
-#                                ambient compiler at all.
+#   SEED     love                one executable that CARRIES its own source and IS
+#                                its own toolchain -- the tree's own out/host/love,
+#                                baked. `love source` lays the tree with bin/love
+#                                already in it; `make` there calls no ambient
+#                                compiler at all.
 #
 # ⚠ AND THEY ANSWER THE SAME BINARY, which is the whole claim and is not a thing we
 # had to engineer: the local cc only ever builds `love0` (host/build.mk), and every
@@ -181,10 +180,16 @@ dist_ver  := $(dist_base)$(if $(dist_vcs),+g$(dist_vcs),)
 dist_stamp ?= 0
 dist_stage = out/dist/stage
 dist_source = out/dist/love-$(dist_ver).tar.gz
-dist_seed   = out/dist/love-$a
 dist-source: $(dist_source)
-dist-seed:   $(dist_seed)
-dist:        dist-source dist-seed   # a release is both
+# the seed is the tree's own binary, baked -- one file, no second name. the HCC
+# flavor is a foreign-cc differential, not the artifact, so dist refuses it.
+ifneq ($(HCC),)
+dist-seed:
+	$(error dist: the HCC flavor is a differential, not the artifact -- drop HCC=)
+else
+dist-seed: $(ho)/love.baked
+endif
+dist: dist-source dist-seed   # a release is both
 
 # ⚠ wasm/love.js is EMSCRIPTEN'S OUTPUT, committed so github pages can serve a repl
 # (wasm/Makefile calls it "the COMMITTED artifact"). It stays in the repo for exactly
@@ -215,7 +220,7 @@ dist_drop = wasm/love.js
 # time you need telling is exactly then.
 .PHONY: force_stage
 force_stage: ;
-out/dist/.staged-$(dist_ver): force_stage $(ho)/love
+out/dist/.staged-$(dist_ver): force_stage
 	@mkdir -p out/dist
 	@# ⚠ SAY SO WHEN THE INDEX AND THE WORKING TREE DISAGREE. Cutting from the index is
 	@# right for a release -- it is what makes an artifact reproducible from a revision --
@@ -255,18 +260,25 @@ ifneq ($(in_git),)
 # newest $(dist_keep) survive (by mtime, so the one you are working with is never the casualty)
 # and the stage stamps follow the same rule, being the same generations by another name.
 dist_keep ?= 3
-$(dist_source): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l mk/tools/tgz.l
+# ⚠ the runner is $(boot_love), never the seed itself: the seed EMBEDS this
+# archive, so the archive must exist before the binary can link.
+$(dist_source): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l mk/tools/tgz.l $(if $(bundled_love),,$(love0))
 	@echo TGZ	$(abspath $@)
 	@rm -f $@
-	@$(ho)/love mk/tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
+	@$(boot_love) mk/tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
 	@ls -t out/dist/love-*.tar.gz 2>/dev/null | tail -n +$$(($(dist_keep)+1)) | xargs -r rm -f
 	@ls -t out/dist/.staged-* 2>/dev/null | tail -n +$$(($(dist_keep)+1)) | xargs -r rm -f
 else
-$(dist_source):
-	@echo "dist: no .git here and no $@ --" >&2
-	@echo "dist: an extracted tree rebuilds from the archive 'love source' laid;" >&2
-	@echo "dist: re-extract if it went missing." >&2
-	@exit 1
+# an extracted tree has no index to cut from -- but it needs the archive, since
+# the seed it builds embeds one. a seed-laid tree already holds the very bytes
+# it carried (reusing them is what makes its rebuild byte-identical); a bare
+# source tree re-cuts them from itself -- mk/tools/selfpack.l mirrors the stage
+# cut (same walk, same sort, same stamp), and test_distboot's binary compare is
+# what holds the re-cut to the byte.
+$(dist_source): $(if $(bundled_love),,$(love0))
+	@if [ -f $@ ]; then :; else \
+	   echo "TGZ	$(abspath $@)"; mkdir -p $(dir $@); \
+	   $(boot_love) mk/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp); fi
 endif
 
 # THE SOURCE BLOB: the source tarball laid into an object (mk/tools/mksrc.l), so the
@@ -281,49 +293,25 @@ endif
 # which reads as the tarball rule being broken rather than this line being early.
 ifeq ($a,aarch64)
 src_arch = arm64
+else ifeq ($a,riscv64)
+src_arch = riscv64
 else
 src_arch = x64
 endif
 # ⚠ mksrc rides the mksys cat (kore + holo elf/obj), NOT (use 'holo): the
 # module walk resolves off a NEST, and a fresh seed tree has none. same lane
-# as sys.o, live in both worlds.
-out/dist/src-$a.o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(love0)
-	@$(love0) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(src_arch)
-# ⚠ THIS LINKS, where it used to `cp` the host binary. A section cannot be injected
-# into a finished ELF, so the artifact is now its own link -- $(moon_o) plus the blob
-# -- and only then baked. The layout stays load-bearing the other way: .image must
-# still END the segment for `bake` to grow it at the tail (host/image.c's bake_tail
-# refuses otherwise), which it does, the blob riding .rodata well below it.
-# ⚠ -freadme is the ARTIFACT'S, not the tree's: it rides this link and NOT out/host/love's,
-# so test_fixpoint's relink of $(moon_o) needs no mirror of it. assets/readme.bin is the page a
-# reader lands on -- `readelf -p .README`, mapped by nothing, and the one annotation worth
-# its bytes now that the source itself is in here.
-# ⚠ the images are baked by the binary that will carry them. an image keeps its
-# binary's own layout -- the codec's anchor guard is the gap between two of its
-# symbols -- so the array comes out of THIS link and is laid into the section it
-# already has. appending a section moves no symbol, which is why the anchor still
-# holds after: the same reason the single self-bake always worked.
-# ⚠ and smallest first: the picker takes the first entry claiming the verb, and with `-L`
-# that order is load-bearing twice over -- each layer freezes for the next, and only a
-# prefix can be shared (doc/plan/image-chain.md).
-$(dist_seed): $(moon_o) out/dist/src-$a.o $(ho)/.rest-cat.l $(ho)/.docs-cat.l assets/readme.bin $(ho)/love
-	@echo DIST	$(abspath $@)
-	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -freadme=assets/readme.bin -o $@
-	@./$@ bake -L $(ho)/.docs-cat.l:libra,help -L $(ho)/.rest-cat.l
-	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
+# as sys.o, live in both worlds. PINNED to out/host: the blob is the tree's,
+# not a compiler flavor's, and only the moon link takes it.
+out/host/src.o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
+	@$(boot_love) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(src_arch)
 
-# ==== dist_cross: the TWIN artifact (the other elf arch) ====
-# the same door for the machine you are not on: every TU through `mooncc -t`,
-# the twin's mksys leaf, our -pie link -- and the bake RUNS the twin under
-# qemu-user (the one foreign tool here, and only at build time: `bake` boots
-# the egg, warms, and seals the twin's own heap, glaze emitting the twin's
-# native code the whole way). so one x86 laptop bakes the pi's download, and
-# a pi with qemu-user bakes the laptop's -- each host can serve both doors.
-# THE TWIN ROSTER, one row per arch a seed can be laid for: the mooncc target, the
-# qemu-user that runs it, and the mksys leaf that lays its machine tail. ⚠ THIS TABLE
-# IS THE AUTHORITY -- `love seed <arch>` keeps its own list of the names, and an
-# arch this roster does not carry is refused HERE, loudly, rather than half-built.
+# ==== the x-lane: test_xfixpoint's objects (seed-universal U0) ====
+# there is ONE artifact; this lane builds no second one. it compiles the tree's
+# TUs through `mooncc -t` for another arch so the cross-machine fixpoint gate
+# can link them and prove, under qemu-user, that mooncc's output does not
+# depend on the arch mooncc runs on. gate machinery, never a product.
+# THE ROSTER, one row per arch the gate can effigy: the mooncc target, the
+# qemu-user that runs it, and the mksys leaf that lays its machine tail.
 xtgt_x86_64   = x64
 xtgt_aarch64  = arm64
 xtgt_riscv64  = riscv64
@@ -333,19 +321,18 @@ xqemu_riscv64 = qemu-riscv64
 xmksys_x86_64  = mksys
 xmksys_aarch64 = mksys-arm64
 xmksys_riscv64 = mksys-riscv
-# which twin: `make xa=riscv64 dist_cross` names one, and the default stays the pair
-# this file always had -- the other member of the two the host is not.
+# which arch: `make xa=riscv64 test_xfixpoint` names one, and the default is
+# the other member of the two the host is not.
 xa ?= $(if $(filter aarch64,$a),x86_64,aarch64)
-xarch  = $(xa)
 xtgt   = $(xtgt_$(xa))
 xqemu  = $(xqemu_$(xa))
 xmksys = $(xmksys_$(xa))
 ifeq ($(xtgt),)
-$(error dist_cross: no such arch `$(xa)' -- the roster carries x86_64 aarch64 riscv64)
+$(error x-lane: no such arch `$(xa)' -- the roster carries x86_64 aarch64 riscv64)
 endif
 # ⚠ PER-ARCH, because the objects are: one shared dir let a riscv64 love.o stand as
 # up-to-date for an aarch64 link, and the mismatch shows only at the far end.
-xd = out/dist/x-$(xa)
+xd = out/x-$(xa)
 moonx = $(moon0) -t $(xtgt)
 xhost_o = $(patsubst host/%.c,$(xd)/host_%.o,$(wildcard host/*.c))
 xmath_o = $(patsubst crew/moon/lib/math/%.c,$(xd)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
@@ -372,20 +359,6 @@ $(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
 	@echo HOLO	$@
 	@mkdir -p $(dir $@)
 	@$(love0) -l $(ho)/.mksys-cat.l -n -e '($(xmksys) "$@")' && test -s $@
-# the twin's source blob: mksrc lays the same tarball for the twin's machine
-# (xtgt is already holo's arch name). its own basename (src-x-) so an $a==xa
-# run cannot collide with the native rule.
-out/dist/src-x-$(xa).o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(love0)
-	@$(love0) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(xtgt)
-# ⚠ the twin link MIRRORS the native $(dist_seed) link -- src blob + readme --
-# a twin without them is not a seed.
-out/dist/love-$(xarch): $(xobjs) out/dist/src-x-$(xa).o $(ho)/.dist-cat.l assets/readme.bin
-	@echo DIST	$(abspath $@)
-	@$(moonx) -pie $(xobjs) out/dist/src-x-$(xa).o -freadme=assets/readme.bin -o $@
-	@$(xqemu) ./$@ bake -l $(ho)/.dist-cat.l
-	@echo "  dist: $$(du -h $@ | cut -f1) -> $@ (the $(xarch) twin, baked under $(xqemu))"
-.PHONY: dist_cross
-dist_cross: out/dist/love-$(xarch)
 
 # ==== the vim syntax for .l -- GENERATED, so there is no copy to keep up to date ====
 # mk/tools/hue2vim.l reads crew/vi/hue.l's class table the other way round (one table, two

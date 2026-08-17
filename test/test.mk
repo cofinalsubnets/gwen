@@ -362,13 +362,13 @@ test_cookdiff: host
 # the install nest, three ways (make / cook / cook+kore PATH lane) -- one shape.
 test_nest: host
 	@sh test/gate/nest.sh $(ho) $m
-# the dist artifact: test_dist smokes the verb rail on the baked one-file binary (seconds,
+# the dist artifact -- the tree's own baked binary: test_dist smokes its verb rail (seconds,
 # test_slow); test_up runs the WHOLE download door -- origin recorded, kiosko serving it,
 # `love up` cooking a scratch nest from source -- and is OPT-IN (minutes).
-test_dist: out/dist/love-$a
-	@sh test/gate/dist.sh smoke out/dist/love-$a
-test_up: out/dist/love-$a
-	@sh test/gate/dist.sh up out/dist/love-$a
+test_dist: $(ho)/love.baked
+	@sh test/gate/dist.sh smoke $(ho)/love
+test_up: $(ho)/love.baked
+	@sh test/gate/dist.sh up $(ho)/love
 # The editor (crew/vi/): the pure modal engine's laws (no tty -- vstep driven byte by
 # byte), then scripted end-to-end passes through the `kore vi` face over a pipe (keys off
 # stdin, frames onto a captured stdout, :wq writes), driven through the crew layer.
@@ -583,7 +583,7 @@ test_vec: host
 # $(moon_o) is the link list: the gate is handed make's objects, it never globs the odir.
 test_fixpoint: host $(love0) out/host/mooncc0.image
 	@sh test/gate/fixpoint.sh $(ho) $(love0) $(moon_fir) $(moon_o)
-# THE CROSS-MACHINE FIXPOINT, in effigy (doc/plan/seed-universal.md U0): dist_cross's
+# THE CROSS-MACHINE FIXPOINT, in effigy (doc/plan/seed-universal.md U0): the x-lane's
 # twin objects link love1, then love1 under qemu-user rebuilds itself natively and must
 # answer the same bytes -- the twin machine reproducing this machine's, on one box.
 # opt-in BY NAME (a full rebuild under emulation is minutes): `make test_xfixpoint`,
@@ -753,7 +753,7 @@ test_bakerep: host
 	@sh test/gate/bakerep.sh $(ho)
 test_distboot: dist
 	@echo TEST test/gate/distboot.sh
-	@sh test/gate/distboot.sh $(dist_source) $(dist_seed) $(ho)/love
+	@sh test/gate/distboot.sh $(dist_source) $(ho)/love
 # test_gz -- lib/tar.l + lib/gz.l against the two programs they replace. The LAWS are
 # test/host/gz.l (in test_hostnif, needing nothing outside the tree); this is the half
 # only the outside world can say, and it is a separate gate because a coder and a

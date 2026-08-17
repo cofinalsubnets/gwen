@@ -47,9 +47,9 @@
 # net their sum (source to a tested and measured binary). A missing/failed lane
 # shows dnf.
 #
-# Requires `make host` first: the generated out/lib/*.h headers and out/host/love (it lays
-# the inflate row's stream, which needs lib/gz.l); and the ARTIFACT, out/dist/love-<arch>,
-# because the mooncc lane runs that and not an intermediate -- see the note on SEED.
+# Requires `make host` first: the generated out/lib/*.h headers and out/host/love, which
+# is also the ARTIFACT (the seed) -- the mooncc lane runs it and not an intermediate;
+# see the note on SEED.
 # x86-64 only (mooncc's native lane); off x86-64, or with no artifact built, the mooncc
 # cells read dnf and gcc/clang are still raced.
 #
@@ -137,7 +137,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 # archive in its place: a program that needs no member pulls none.
 # ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads: the root Makefile exports it as 1 for the
 # corpus, and an egg-booted love has no verb table, so `mooncc` reads as a FILENAME.
-SEED=$R/out/dist/love-$(uname -m)
+SEED=$R/out/host/love
 mc() { env LOVE_NO_IMAGE= "$SEED" mooncc "$@"; }
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"

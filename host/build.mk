@@ -262,6 +262,8 @@ $(moon_d)/sys.o: $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_love) -l $(ho)/.mksys-cat.l -n -e "((from 'moon '$(mksys_e)) \"$@\")" && test -s $@
 ifneq ($(HCC),)
+# ⚠ the HCC flavor is a foreign-cc DIFFERENTIAL, not the artifact: it links no
+# source blob and no readme ($(hcc) knows neither), and dist refuses it.
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/core/love_data.ld $(baked_h)
 	@echo LD	$@
 	@mkdir -p $(dir $@)
@@ -276,10 +278,19 @@ else
 # is the same glob for the same reason -- keep the two in step.)
 nolibc_src = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
                         crew/moon/lib/nolibc/*/*.c crew/moon/lib/nolibc/*/*.h)
-$(ho)/love $(ho)/love.cand: $(moon_o) $(nolibc_src)
+# THIS LINK IS THE SEED (doc/dist.md, seed-universal U2): the default binary
+# carries its own source blob and readme, and once baked it IS the artifact --
+# there is no leaner host build for it to subsume anymore.
+# ⚠ the layout stays load-bearing: .image must END the segment for `bake` to
+# grow it at the tail (host/image.c's bake_tail refuses otherwise), which it
+# does, the blob riding .rodata well below it.
+# ⚠ -freadme rides only THIS link, so test_fixpoint's relink of $(moon_o) needs
+# no mirror of it. assets/readme.bin is the page a reader lands on --
+# `readelf -p .README`, mapped by nothing.
+$(ho)/love $(ho)/love.cand: $(moon_o) out/host/src.o assets/readme.bin $(nolibc_src)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) -o $@
+	@$(moon0) -pie $(moon_o) out/host/src.o -freadme=assets/readme.bin -o $@
 endif
 
 # the man pages are WRITTEN in doc/*.md and generated here through the lapiz lens: one

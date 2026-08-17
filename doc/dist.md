@@ -6,7 +6,11 @@ somebody who just downloaded one: *do you have a C toolchain?*
 | | | |
 |---|---|---|
 | **source** | `love-<ver>.tar.gz` | sources only. `make` bootstraps through the machine's own cc. |
-| **seed** | `love-<arch>` | one executable that carries its own source and **is** its own toolchain. |
+| **seed** | `love` | one executable that carries its own source and **is** its own toolchain. |
+
+The seed is not a separate build: it **is** the tree's own `out/host/love`, baked —
+the default binary links its source blob and readme, so `make` produces `love0`
+(the bootstrap scaffold) and the seed, and nothing else.
 
 With the source tarball: unpack, `make`, `make install` — the social contract every C
 project has used since the 1980s, and the reason to prefer it is not nostalgia, it is
@@ -15,7 +19,7 @@ that nobody has to learn anything.
 With the seed: download one file, and
 
 ```sh
-./love-x86_64 source     # lays love-<ver>/ with bin/love already inside
+./love source            # lays love-<ver>/ with bin/love already inside
 cd love-<ver> && make    # calls no ambient compiler at all
 ```
 
@@ -60,34 +64,28 @@ because an extracted tree has no `.git` and cannot re-cut one. Same blob in, sam
 binary out — reusing them is what makes the rebuild byte-identical rather than merely
 equivalent.
 
-⚠ **the seed is per-ISA.** "Bootstraps anywhere" means anywhere of that architecture:
-x86_64, aarch64, riscv64 are three seeds. `make xa=<arch> dist_cross` bakes any of them,
-so one x86 laptop can cut the pi's download.
+⚠ **the seed's bytes are the tree's, not the builder's.** Whatever machine runs
+the build, the same tree answers the same bytes (the seed-universal invariant,
+proven both directions on real silicon) — so platform-specific builds are
+meaningless and the `love-<arch>` names dissolved with rung U2: there is one
+binary, `love`. (`mooncc -t` keeps its cross targets — `make test_xfixpoint`
+proves the bytes do not depend on the arch mooncc runs on — but no second
+artifact is built from them.)
 
-**`love seed <arch> [DIR]`** is that door held by the artifact rather than the Makefile —
-we are a cross compiler carrying our own source, so a seed can lay a seed for a machine
-it is not. ⚠ **no fixpoint there, and none is owed.** The check can hold only where the
-output ought to *be* this binary, and a cross lay is the one case the invocation itself
-says it cannot; running it would be a claim nothing could satisfy. What is still checked
-is the artifact's *shape* — its ELF `e_machine` must be the arch asked for, which catches
-a cross build quietly laying the host's. The trust is derived rather than absent: the
-binary doing the cross build is the one plain `love seed` proves natively, and the real
-check for the output is `love seed` on the machine it is for.
+**`love seed [DIR]`** is the circle held by the artifact rather than the
+Makefile: lay the source, rebuild, and check the rebuilt seed IS this binary,
+byte for byte.
 
-⚠ and the OTHER case the fixpoint cannot hold — a **dirty tree** — still FAILS. Nobody
+⚠ the one case the fixpoint cannot hold — a **dirty tree** — still FAILS. Nobody
 asked for it, and the megabyte-scale mismatch is the report. The rule is *skip the check
 when the invocation named the reason, never when it was discovered.*
-
-⚠ the cross bake needs **qemu-user** for that arch (the twin's own heap is warmed by
-running it). A missing one is a loud build failure, not a silently unbaked seed.
 
 ## the recipes
 
 ```
 make dist-source        # the tarball
-make dist-seed          # the one-file artifact for this arch
+make dist-seed          # the seed: out/host/love, baked
 make dist               # both — a release
-make xa=aarch64 dist_cross   # a seed for another arch (roster: crew/build.mk)
 make test_distboot
 ```
 

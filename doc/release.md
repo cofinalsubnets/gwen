@@ -21,7 +21,7 @@ evidence for the slow one.
 - [ ] **version stamp** — `out/lib/love_version.h` carries the build's vc id (surfaced as
       `love-version`); `make force_version` refreshes it. A `-dirty` suffix means the tree was not
       committed first.
-- [ ] **the dist artifact** — `make dist` bakes `out/dist/love-<arch>`, the one-file download door
+- [ ] **the dist artifact** — `make dist` bakes the seed, `out/host/love` itself: the one-file download door
       (`love up` defaults CC to the artifact's own `mooncc` verb, so it needs no ambient
       toolchain). `make test_dist` and `make test_up` gate it.
 - [ ] **wasm** — rebuild `wasm/love.js` against the release binary.

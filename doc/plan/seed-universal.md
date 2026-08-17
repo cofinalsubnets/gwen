@@ -147,7 +147,16 @@ owes a roster gate: on linux, assert the linux features are aboard.
 - **rung U1 — the container.** The polyglot prefix over our own linker: sh +
   ELF is the cheap pair; PE re-uses pe.l's reloc machinery; Mach-O is new and
   waits. The prefix must respect bake_tail or the bake learns to re-lay it.
-- **rung U2 — the targets DISSOLVE.** Decided 2026-08-16 (chosen, revisable):
+- **rung U2 — the targets DISSOLVE.** Decided 2026-08-16 (chosen, revisable);
+  Landed 2026-08-17: ONE binary. The host build is subsumed — out/host/love
+  links the source blob + readme and, baked, IS the artifact (`make` in a clean
+  tree produces love0 and the seed, nothing else); love-x86_64/love-aarch64
+  and the dist_cross twin are gone as products (`dist-seed` is the tree's
+  binary; the x-lane objects remain only for test_xfixpoint); `love seed`
+  takes no arch; and a git-less tree re-cuts its archive from itself
+  (mk/tools/selfpack.l, gated by distboot's binary compare). The seed's bytes
+  are the tree's, never the builder's — that is the standing invariant. The
+  full statement:
   once the invariant holds per target, love-x86_64 and love-aarch64 stop being
   products — ONE `love`, one byte string, every machine. The invariant is what
   makes this well-defined: each lane's bytes are already machine-independent

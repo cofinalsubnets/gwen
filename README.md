@@ -10,8 +10,7 @@ love folds these components along with its own source code into a single-binary
 interpreter, toolchain, and userland.
 
 - <code>love source</code> extract the bundled source
-- <code>love seed</code> bootstrap a verified identical binary through the ambient C toolchain
-- <code>love seed &lt;arch&gt;</code> cross-compile for another arch
+- <code>love seed</code> bootstrap a verified identical binary
 
 ## language
 

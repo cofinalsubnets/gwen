@@ -1,6 +1,6 @@
 #!/bin/sh
 # test/gate/xfixpoint.sh -- the CROSS-MACHINE fixpoint, in effigy (doc/plan/
-# seed-universal.md U0). dist_cross's twin objects -- this machine's mooncc,
+# seed-universal.md U0). the x-lane's twin objects -- this machine's mooncc,
 # -t the other arch -- link love1: machine A's bytes for machine B. Then love1
 # itself, under qemu-user standing in for machine B, bakes its own mooncc
 # image, rebuilds every TU natively (mooncc's default target is the ground it

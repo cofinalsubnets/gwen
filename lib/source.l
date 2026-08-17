@@ -51,9 +51,6 @@
     (: r (src-lay (? (two? as) <as "."))
      (puts (";; wrote " + <>r + "\n"), 0))
 
-   (seed-arch _) (love-arch @ "arm64" "aarch64" "x64" "x86_64" x x)
-   seed-arches '("x86_64" "aarch64" "riscv64")
-   (seed-known? a) (member? a seed-arches)
    (src-dirs _)
     (: p ("" + getenv "PATH") n (tally p)
        (go k st acc) (? (n <= k) (rev (snip p st k >< acc))
@@ -98,11 +95,7 @@
     (: first? (two? as0 ? (<as0 = "-first") 0)
        as1 (first? ? >as0 as0)
        self? (two? as1 ? (<as1 = "-self") 0)
-       as2 (? self? >as1 as1)
-       arch? (two? as2 ? (seed-known? <as2) 0)
-       want (? arch? <as2 (seed-arch ()))
-       as (? arch? >as2 as2)
-       cross? !(want = seed-arch ())
+       as (? self? >as1 as1)
        r (src-lay (two? as ? <as "."))
        root <>r
        exe (selfpath 0)
@@ -119,15 +112,15 @@
        here (cwd 0)
        _ (? (charm? (chdir root)) (src-die ("can't enter " + root)) 0)
        cc (? (string? env) env (two? amb) <>amb "this binary")
-       _ (puts (";; seeding " + want + " with " + cc + "\n"))
-       s (herald (? cross? [exe "make" ("xa=" + want) "dist_cross"] [exe "make" "dist"]))
+       _ (puts (";; seeding with " + cc + "\n"))
+       s (herald [exe "make" "dist"])
        st (two? s ? <s s)
        _ (chdir here)
        _ (0 != st ? (src-die ("the build failed (exit " + show st + ")")))
-       out (root + "/out/dist/love-" + want)
-       (? cross?
-         (puts (";; wrote " + out + " (no fixpoint)\n"), 0)
-        (sha256 (dslurp exe) = sha256 (dslurp out))
+       ; the ONE artifact (seed-universal U2): the seed is the laid tree's own
+       ; binary, and the rebuild must BE this binary, byte for byte.
+       out (root + "/out/host/love")
+       (? (sha256 (dslurp exe) = sha256 (dslurp out))
          (puts ";; fixpoint ok\n", 0)
         (say err ";; FIXPOINT NOT OK\n", 1)))
 
