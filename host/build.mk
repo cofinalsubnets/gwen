@@ -20,10 +20,9 @@ host_cc = $(CC)
 # in it; and love0 is shared and unsuffixed, so a flag reaching it leaks out of the debug
 # lane -- a stress-built love0 segfaults baking mooncc0.image and takes the tree with it.
 # ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads, and it is load-bearing whenever CC is the dist
-# artifact's own `love mooncc` verb: the root Makefile exports LOVE_NO_IMAGE=1 for the
-# corpus, an egg-booted love has no verb table, and `mooncc` then reads as a FILENAME
-# ("love: cannot open mooncc"). The love0 lane already leads with it; this puts it on
-# every $(hcc) site at once rather than three times.
+# artifact's own `love mooncc` verb: under a caller's exported egg a love has no verb
+# table, and `mooncc` then reads as a FILENAME ("love: cannot open mooncc"). The love0
+# lane already leads with it; this puts it on every $(hcc) site at once.
 hcc = LOVE_NO_IMAGE= $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Icore -Iout/lib
 # the whole-archive flag differs by linker, and mach-o takes no core/love_data.ld either -- it
 # spells sections `segment,section`, so core/kinds.h's roster asks the sentinels by name.

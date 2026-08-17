@@ -41,16 +41,9 @@ endif
 # bootstrap interpreter
 love0 = out/host/love0
 
-# the corpus egg-boots on purpose: a gate wants a fresh egg, not whatever image the
-# binary happens to carry.
-# ⚠ BUT NEVER WHERE A BUNDLED LOVE IS THE TOOLCHAIN. An egg-booted love has no verb
-# table at all, and in a seed-laid tree the verbs ARE the toolchain -- sh, make, cc,
-# test, uname. Exported there, every recipe line cook spawns lands on the file lane
-# and answers `love: cannot open -c`, 196 times in one build, which reads as a broken
-# shell rather than a blinded one.
-ifeq ($(bundled_love),)
-export LOVE_NO_IMAGE := 1
-endif
+# the gates run the image by default: warm is what ships. a gate whose subject is the
+# fresh egg says so itself with LOVE_NO_IMAGE=1; love0 is always the egg. the build
+# recipes keep their LOVE_NO_IMAGE= clears as the guard against a user's exported egg.
 
 # every verb here is phony: one roster, so adding one is one line and not two. (the gates
 # each fragment owns are rostered in that fragment.)
@@ -91,39 +84,31 @@ test_phases = test_host test_love0
 test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
-# slow gate. test_embed rides here rather than in `test`: ~7 s on a tree nothing touched,
-# and it earns them only when core/love.h or a frontend moved (a core/love.h edit puts it at ~2.5 min,
-# because linking every frontend means compiling core/love.c once per target). What it adds HERE
-# is the frontends the booting lanes below never reach -- mps2, teensy41, nucleo446,
-# playdate, and kmain.c at aarch64 -- which otherwise wait for test_extra.
-# the SEED is the product (doc/dist.md), so the tier that gates a commit is the tier that
-# builds one -- test_dist links the artifact and smokes it. It stays OUT of the default goal on
-# the clock: dist is ~2 min after a crew edit and 43 s even as a no-op, where the fast gate is
-# ~15 s, and the edit loop is what makes this tree workable.
-# ⚠ it BUILDS and smokes the artifact and does not run the seed fixpoint, because the tarball is
-# cut from the git INDEX -- on a dirty tree that would compare the artifact against source you
-# are not looking at, and report the difference as a broken fixpoint.
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_wasm test_kernel test_disk test_virt test_embed test_cookdiff test_dist
-	
+# slow gate -- the MERGE gate. test_seed is the headline: the artifact lays its own
+# source and rebuilds itself byte-identically (`love seed`), which is the product's
+# whole claim. the embedded lanes (kernel, boards, wasm, cross arches) are off the
+# rosters: out of scope for now, each still runs by name when its surface moves.
+test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_dist test_seed
 
-# really really really slow gate. test_embed is here too, cheap insurance: the thumb lanes
-# below SKIP without arm-none-eabi, so on a bare box this tier would otherwise compile none
-# of them either.
+
+# really really really slow gate: the depth behind the seed -- the proofs, the gc lanes,
+# the moon and holo batteries, the crew apps. the embedded and cross-arch gates left this
+# roster with the slow gate's (test_embed*, test_kernel*, test_disk, test_uefi, test_virt,
+# test_vec, test_asmops, the boards, the thumb lanes, test_elf32, test_objcopy, test_wasm,
+# test_arm64, test_cc/cts arm64+riscv); test_fixpoint and test_distboot retired to
+# by-name as well -- test_seed proves the circle in the slow gate.
 # ⚠ test_nest is NOT here, and it is not passing: its A/B contents check covers artifacts
 # built from `(names ())`, which carries SESSION facts -- `love-image` is in the book only
 # where that session woke from an image, so syntax.vim (and the heaps baked beside it)
 # differ by whether the love that made them was baked. real, and not worth chasing on a
 # path being retired. `make test_nest` still runs it.
-test_extra: test_embed test_embed_boards test_filemode waits test_kernel_arm64 test_mps2 test_mps2_t1 \
-	test_mps2_wake test_teensy41 test_nucleo446 test_nucleo446_smoke test_rp2040 test_playdate test_arm64 \
-	test_vec test_front test_proof test_gen test_uugen test_uulean test_uuwm \
+test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
 	test_uukind test_gc test_gcheck test_gcstress test_imgchain test_extract test_big test_mx \
-	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as test_elf32 test_objcopy \
+	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as \
 	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_refuzz test_sb test_vi \
-	test_moon test_clay test_moonfuzz test_splice test_forge test_ccarm64 test_ccriscv \
-	test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp test_raw \
-	test_drv test_hdiff test_asmops test_fixpoint test_dist nettest test_thumb1 test_thumb2 test_thumb2sp \
-	test_virt test_kernel test_uefi test_wasm test_wake test_gz
+	test_moon test_clay test_moonfuzz test_splice test_forge \
+	test_cts test_libc test_ulp test_raw \
+	test_drv test_hdiff nettest test_wake test_gz
 
 all: host kernel wasm dist
 
@@ -183,10 +168,9 @@ huesrc = $(crewtools) crew/vi/hue.l crew/vi/config.l mk/tools/hue2web.l $(ho)/lo
 site: host out/toolmd.stamp
 	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc out/toolmd
 	@$(MAKE) --no-print-directory out/site/hue.css
-# ⚠ LOVE_NO_IMAGE is CLEARED, for the syntax generator's reason (crew/build.mk): the
-# painter asks THIS host for its vocabulary, and under the egg boot that vocabulary is
-# the compiler's own internals rather than the shipped language. one name differs today
-# (`love-image`), which is one name painted wrong -- and the gap is not fixed at one.
+# ⚠ LOVE_NO_IMAGE is CLEARED (the guard against an exported egg): the painter asks THIS
+# host for its vocabulary, and under the egg boot that vocabulary is the compiler's own
+# internals rather than the shipped language.
 out/site/hue.css: $(huesrc)
 	@env -u LOVE_NO_IMAGE $(ho)/love $R/mk/tools/hue2web.l css > $@
 	@for f in $(crewtools); do n=$${f##*/}; n=$${n%.l}; \
@@ -251,7 +235,9 @@ disasm: host
 gdb: host
 	exec gdb $m
 # mk/tools/vmret.l disassembles $m and flags any lvm_* VM ap that emits a `ret` instead of
-# tail-jumping. No-op with a message when no disassembler is present, so `test` stays portable.
+# tail-jumping. the sibcall pass only gripes over a call that is MARKED ai_musttail, so a
+# forgotten mark rets silently -- this is the check that the discipline is COMPLETE, ~2 s.
+# No-op with a message when no disassembler is present, so the gate stays portable.
 OBJDUMP_ANY := $(shell command -v objdump 2>/dev/null || command -v llvm-objdump 2>/dev/null)
 ifeq ($(OBJDUMP_ANY),)
 vmret: host
@@ -261,7 +247,7 @@ vmret: host
 	@$m mk/tools/vmret.l $m
 endif
 
-# waits rides the fast `test` beside vmret for the same reason: it pins an invariant whose
+# waits pins an invariant whose
 # only failure mode is a HANG, which no assert catches after the fact. The device floor's
 # rule is that the only code here that blocks is the scheduler, and mk/tools/waits.l carries
 # the roster of every wait plus the sentence earning it -- a new one reddens here instead

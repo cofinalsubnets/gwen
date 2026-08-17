@@ -10,10 +10,12 @@ evidence for the slow one.
 
 - [ ] `make test` — ⚠ read the summary, not the exit code: host and love0 must **each** print the
       zz-fin "tests pass" line (love0 twice). A silent reader stop exits 0.
-- [ ] `make test_slow` — the proofs, gc/glaze/sat/holo, the crew apps, tool diffs, arm64, the qemu
-      kernels, wasm, the UEFI door.
-- [ ] `make test_extra` — the really slow tier; this is the merge-to-main gate.
-- [ ] `make valg` clean, `make vmret` green, `make waits` for the blocking roster.
+- [ ] `make test_slow` — the merge gate; `test_seed` inside it is the headline: the artifact
+      rebuilds itself byte-identically.
+- [ ] `make test_extra` — the depth behind the seed: proofs, gc lanes, the moon and holo
+      batteries, the crew apps. The embedded and cross-arch gates left the rosters and run
+      by name when their surface moves.
+- [ ] `make valg` clean, `make waits` for the blocking roster.
 - [ ] `make lint` — libra over every tracked `.l`.
 
 ## the artifacts

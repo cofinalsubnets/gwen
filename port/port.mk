@@ -14,7 +14,7 @@ p_dir = $(notdir $(CURDIR))
 o = out/$(p_dir)
 # mooncc is love's own verb (the layered bake, doc/plan/one-binary.md). MOONCC is the
 # command as run FROM $(R); mc is the file the verb needs, the baked-stamp's sibling.
-# ⚠ LOVE_NO_IMAGE= leads: an egg-booted love has no verbs, and the root exports it=1.
+# ⚠ LOVE_NO_IMAGE= leads (the guard against an exported egg): an egg-booted love has no verbs.
 MOONCC = LOVE_NO_IMAGE= out/host/love mooncc
 mc = $(R)/out/host/love.baked
 lv = $(R)/out/host/love

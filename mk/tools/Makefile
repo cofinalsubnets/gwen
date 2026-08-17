@@ -9,14 +9,9 @@
 R := ../..
 include $(R)/mk/common.mk
 
-# the WARM love (test/test.mk's $(mw), same bargain): the baked image woken rather than the
-# egg compiled from source. The root exports LOVE_NO_IMAGE so the EGG gates boot cold;
-# these tools are not the egg, and test/host/cook.l spawns a subprocess per fixture that would
-# inherit it.
-mw = env -u LOVE_NO_IMAGE $(m)
-# the same warm love spelled from the REPO ROOT, for the recipes that `cd $(R)` first
+# the love spelled from the REPO ROOT, for the recipes that `cd $(R)` first
 # (where $(m)'s ../ prefix would point one level above the root).
-mwr = env -u LOVE_NO_IMAGE out/host$(hsuf)/love
+mr = out/host$(hsuf)/love
 
 .PHONY: all test_vmret test_cook test_tele test_xor test_hue test_hueweb
 all: test_vmret test_cook test_tele test_xor test_hue test_hueweb
@@ -33,7 +28,7 @@ $(m):
 test_vmret: | $(m)
 	@echo TEST vmret.l
 	@for e in $(R)/out/host/love `find $(R)/out/free -name 'love-*.elf' 2>/dev/null`; do \
-	  $(mw) $(R)/mk/tools/vmret.l $$e > $(R)/out/host/.vmret.l 2>&1 \
+	  $(m) $(R)/mk/tools/vmret.l $$e > $(R)/out/host/.vmret.l 2>&1 \
 	    && grep -q 'ret-free' $(R)/out/host/.vmret.l && echo "  ok   $$e" \
 	    || { echo "  FAIL $$e"; cat $(R)/out/host/.vmret.l; rm -f $(R)/out/host/.vmret.l; exit 1; }; \
 	done; rm -f $(R)/out/host/.vmret.l
@@ -74,7 +69,7 @@ test_hue: | $(m)
 test_hueweb: | $(m)
 	@echo TEST hue2web.l
 	@cd $(R) && o=out/host$(hsuf); \
-	  $(mwr) mk/tools/hue2web.l css > $$o/.hue.css \
+	  $(mr) mk/tools/hue2web.l css > $$o/.hue.css \
 	    || { echo "  FAIL: the css generator did not run"; exit 1; }; \
 	  grep -n '^;;' $$o/.hue.css && { echo "  FAIL: a scare printed into the stylesheet"; exit 1; }; \
 	  n=`grep -c '^\.hue \.l-' $$o/.hue.css`; \
@@ -82,7 +77,7 @@ test_hueweb: | $(m)
 	  grep -q '^\.hue \.l-comment{color:#' $$o/.hue.css \
 	    || { echo "  FAIL: no comment colour -- the theme join found nothing"; exit 1; }; \
 	  for f in crew/vi/hue.l crew/papel/papel.l crew/libra/libra.l mk/tools/hue2web.l; do \
-	    $(mwr) mk/tools/hue2web.l src $$f > $$o/.hue.html \
+	    $(mr) mk/tools/hue2web.l src $$f > $$o/.hue.html \
 	      || { echo "  FAIL $$f: the painter did not run"; exit 1; }; \
 	    grep -q '</html>' $$o/.hue.html \
 	      || { echo "  FAIL $$f: the page stopped short"; exit 1; }; \
@@ -109,7 +104,7 @@ test_cook: | $(m)
 	@echo TEST test/host/cook.l
 	@mkdir -p $(R)/out/host$(hsuf)/.bin && ln -sf ../love $(R)/out/host$(hsuf)/.bin/love
 	@cd $(R) && PATH="$(abspath $(R)/out/host$(hsuf)/.bin):$$PATH" \
-	  sh test/gate/run.sh -a cook "$(mwr)" "cook tests pass" test/host/cook.l
+	  sh test/gate/run.sh -a cook "$(mr)" "cook tests pass" test/host/cook.l
 
 # tele, the autograd library (pure love over the constellation algebra): test/tele/grad.l
 # grad-checks every op, analytic gradient vs central finite difference, so the oracle is
@@ -117,7 +112,7 @@ test_cook: | $(m)
 # Through run.sh for the summary line: the exit code alone passes a reader that stopped early.
 test_tele: | $(m)
 	@echo TEST test/tele/grad.l
-	@cd $(R) && sh test/gate/run.sh -a tele "$(mwr) -l crew/tele/tele.l" "tele tests pass" test/tele/grad.l
+	@cd $(R) && sh test/gate/run.sh -a tele "$(mr) -l crew/tele/tele.l" "tele tests pass" test/tele/grad.l
 
 # the integration gate over that same library: a 2-8-1 MLP learns XOR, seeded so it converges
 # identically every run -- autograd + nn + optim composed into a real net. test/tele/grad.l
@@ -129,7 +124,7 @@ test_tele: | $(m)
 test_xor: | $(m)
 	@echo TEST test/tele/xor.l
 	@cd $(R) && cat test/00-init.l test/tele/xor.l test/zz-fin.l > out/host/.test_xor.l; \
-	  $(mwr) -l crew/tele/tele.l out/host/.test_xor.l </dev/null > out/host/.test_xor.out 2>&1; \
+	  $(mr) -l crew/tele/tele.l out/host/.test_xor.l </dev/null > out/host/.test_xor.out 2>&1; \
 	  r=$$?; cat out/host/.test_xor.out; \
 	  [ $$r -eq 0 ] || { echo "FAIL test_xor (exit $$r)"; exit 1; }; \
 	  grep -q "tests pass" out/host/.test_xor.out || { echo "FAIL test_xor (exit 0, no summary)"; exit 1; }

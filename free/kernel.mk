@@ -28,8 +28,8 @@ endif
 #   make kernel a=aarch64 KCC=aarch64-linux-gnu-gcc KLINK=lld KLD=aarch64-linux-gnu-ld
 # KLD serves the KLINK=lld lane only -- the default link is ours.
 # ⚠ mooncc is love's own verb now (the layered bake, doc/plan/one-binary.md), and the
-# LOVE_NO_IMAGE= clear is load-bearing: the root Makefile exports it=1 for the corpus,
-# and an egg-booted love has no verb table -- `mooncc` would read as a filename.
+# LOVE_NO_IMAGE= clear is load-bearing (the guard against an exported egg): an
+# egg-booted love has no verb table -- `mooncc` would read as a filename.
 KCC ?= LOVE_NO_IMAGE= $(ho)/love mooncc
 KLD ?= ld.lld
 # ours by NAME: booting the image just to answer a makefile question at parse time is

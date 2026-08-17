@@ -11,8 +11,8 @@
 # stdin closed instead -- for a gate whose subject must not be cat'd in, and for the lanes
 # that test stdin itself.
 #
-# /warn LOVE is a word LIST, not a path: `$(mw)` is `env -u LOVE_NO_IMAGE out/host/love`, so
-# it must go unquoted here. The caller quotes it as one argument; this splits it back.
+# /warn LOVE is a word LIST, not a path: an egg lane is `env LOVE_NO_IMAGE=1 out/host/love`,
+# so it must go unquoted here. The caller quotes it as one argument; this splits it back.
 set -u
 
 a=

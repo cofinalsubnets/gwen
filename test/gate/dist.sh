@@ -22,8 +22,8 @@ name=test_dist
 
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
 
-# the artifact NEEDS its baked image (the verbs live there); the make environment
-# exports LOVE_NO_IMAGE=1 for the corpus, so every artifact run here unsets it.
+# the artifact NEEDS its baked image (the verbs live there), so every artifact run
+# clears LOVE_NO_IMAGE -- the guard against a caller's exported egg.
 run() { env -u LOVE_NO_IMAGE "$@"; }
 
 dabs=$(CDPATH= cd -- "$(dirname -- "$dist")" && pwd)/$(basename -- "$dist")
@@ -44,10 +44,9 @@ smoke)
   ls "$srcd"/out/dist/love-*.tar.gz >/dev/null 2>&1 || fail "love source laid no archive"
   run "$dist" sb 2>&1 | grep -q "patch-set vcs"  || fail "sb usage"
   run "$dist" mooncc 2>&1 | grep -q "usage: mooncc" || fail "mooncc verb usage"
-  # the CC-under-make lane: the Makefile blanket-exports LOVE_NO_IMAGE=1, and
-  # the love0 recipes hand THIS command its image back with `LOVE_NO_IMAGE=`
-  # (empty = unset, main.c) -- pin that an empty value does not egg-boot the
-  # artifact (which would read "mooncc" as a filename).
+  # the CC-under-make lane: the build recipes hand this command its image back
+  # with `LOVE_NO_IMAGE=` (empty = unset, main.c) -- pin that an empty value
+  # does not egg-boot the artifact (which would read "mooncc" as a filename).
   LOVE_NO_IMAGE= "$dist" mooncc 2>&1 | grep -q "usage: mooncc" \
                                                    || fail "empty LOVE_NO_IMAGE suppressed the image"
   run "$dist" up >/dev/null 2>&1

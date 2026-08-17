@@ -291,12 +291,14 @@ endif
 # make never builds the tarball, and only the recipe -- expanded later, when the
 # variable is set -- names a file that was never cut. It fails as a missing archive,
 # which reads as the tarball rule being broken rather than this line being early.
+# ⚠ flat ifeqs, no else-chain: cook reads `else ifeq` as a bare else and drops the
+# condition, so a chain picks the wrong arch under the seed's own make.
+src_arch = x64
 ifeq ($a,aarch64)
 src_arch = arm64
-else ifeq ($a,riscv64)
+endif
+ifeq ($a,riscv64)
 src_arch = riscv64
-else
-src_arch = x64
 endif
 # ⚠ mksrc rides the mksys cat (kore + holo elf/obj), NOT (use 'holo): the
 # module walk resolves off a NEST, and a fresh seed tree has none. same lane

@@ -1243,7 +1243,7 @@ int main(int argc, char const **argv) {
   // AUTO-LOAD: with no image flag, wake the image baked into the binary's own .image section, so a
   // plain `love` is glazed-by-default at ~4 ms cold start instead of the ~230 ms egg eval. Opt out with
   // LOVE_NO_IMAGE (the bench does, to control glazed-vs-interp itself). An EMPTY value is nothing
-  // (unset) -- so a recipe under the Makefile's blanket `export LOVE_NO_IMAGE := 1` can hand ONE
+  // (unset) -- so a recipe under a caller's exported LOVE_NO_IMAGE can hand ONE
   // command its image back with the sh idiom `LOVE_NO_IMAGE= cmd` (the dist artifact running as
   // $(CC): its mooncc verb lives in the baked image, and an egg boot would read "mooncc" as a
   // filename). Any problem -- unbaked, stale, truncated -- makes the load return NULL, so we fall

@@ -135,8 +135,8 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 # file, which closes the same hole from the other side -- but the artifact is still what
 # this should race, because it is what a user runs. ⚠ a one-line C file does NOT warm the
 # archive in its place: a program that needs no member pulls none.
-# ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads: the root Makefile exports it as 1 for the
-# corpus, and an egg-booted love has no verb table, so `mooncc` reads as a FILENAME.
+# ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads, the guard against an exported egg: an
+# egg-booted love has no verb table, so `mooncc` reads as a FILENAME.
 SEED=$R/out/host/love
 mc() { env LOVE_NO_IMAGE= "$SEED" mooncc "$@"; }
 build_mooncc() { # $1=binpath

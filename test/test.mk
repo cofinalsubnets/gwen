@@ -5,7 +5,7 @@
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \
   test_filemode test_stdinbuf test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
-  test_sb test_kore test_refuzz test_nest test_cookdiff test_dist test_up test_vi test_moon test_clay test_moonfuzz \
+  test_sb test_kore test_refuzz test_nest test_cookdiff test_dist test_up test_seed test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_vec test_fixpoint test_raw_bake test_riscv \
   test_raw_riscv test_raw_arm64 test_thumb1 test_thumb2 test_virt test_mps2 test_mps2_t1 \
@@ -15,10 +15,8 @@
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
   test_holo test_as test_elf32 test_objcopy test_gz test_splice test_forge test_distboot test_bakerep
 
-# $(mw) -- the WARM love: the freshly-baked image woken instead of the egg compiled
-# from source (12 ms against 1.05 s). Both lanes carry the same vocabulary, so warm
-# is a speed choice; the EGG gates take $m, whose LOVE_NO_IMAGE this Makefile exports.
-mw = env -u LOVE_NO_IMAGE $m
+# $m is the WARM love -- the baked image woken, what ships. a gate whose subject is
+# the egg boot spells LOVE_NO_IMAGE=1 itself; love0 is always the egg.
 
 # love0 bakes prel+ev+repl + the whole corpus and self-tests BOTH compilers in one run
 # (-Dai_tco=0, the trampoline lane too), so it must print TWO "tests pass" summaries: a
@@ -36,7 +34,7 @@ test_love0: $(love0) out/lib/corpus.list
 # test_filemode -- FILE MODE IS TERMINAL, and nothing inside the corpus can gate that:
 # a test that proves the run dies cannot also report. so a shell runs one two-line file
 # and asks both halves of the law -- the face on err AND exit 1 -- for a missing name.
-test_filemode: $m
+test_filemode: $(ho)/love.baked
 	@echo TEST file mode is terminal
 	@printf '(: _ (puts "reached\\n") _ (an-name-the-book-lacks 1) (puts "past\\n"))\n' > out/host/.test_filemode.l
 	@$m out/host/.test_filemode.l > out/host/.test_filemode.out 2>&1; r=$$?; \
@@ -53,7 +51,7 @@ test_filemode: $m
 # pipe also lends its O_NONBLOCK bit (`inflag`), and the law for that one is read straight off
 # /proc: a child must inherit fd 0 BLOCKING, or it takes an empty pipe for an ended one.
 # The corpus cannot gate any of this; it exists only BETWEEN two ways of being fed.
-test_stdinbuf: $m
+test_stdinbuf: $(ho)/love.baked
 	@echo TEST stdin borrows a run
 	@printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "tail form")\n' > out/host/.test_stdinbuf1.l
 	@printf '(exec (L "cat"))\nHANDOFF-TAIL\n' > out/host/.test_stdinbuf2.l
@@ -97,7 +95,7 @@ test_stdinbuf: $m
 # the file does (core/love.c's rbio_of), but `reads` trickles `in` a byte at a time to keep
 # its position exact, which costs ~1.45x here. This is the gate that runs constantly.
 # cat'ing also keeps the corpus's one-global-scope property.
-test_host: $m
+test_host: $(ho)/love.baked
 	@echo TEST $m
 	@cat $t > out/host/.test_host.l
 	@{ $m out/host/.test_host.l </dev/null; echo $$? > out/host/.test_host.rc; } | tee out/host/.test_host.out; \
@@ -112,14 +110,14 @@ test_host: $m
 # borrowed run (core/love.c's rbio_of), a pipe has none and drips.
 # ⚠ the summary line carries a DURATION, so that is normalised away and everything else must
 # match byte for byte -- the dots included, since a dropped assert is exactly what this catches.
-# ⚠ AND BOTH LOVES. $m is the EGG lane (LOVE_NO_IMAGE); $(mw) is the BAKED image, which is
-# what `love` is on a user's PATH. They are not interchangeable here: a reader bug that lost two
-# bytes of the corpus showed on the baked lane and NOT on the egg one, so a gate that ran only
-# $m reported ok while the shipped binary read 2286 of 3959 asserts and quit 1.
-test_stdincorpus: $m
+# ⚠ AND BOTH LOVES. The egg lane and the baked image are not interchangeable here: a
+# reader bug that lost two bytes of the corpus showed on the baked lane and NOT on the
+# egg one, so a gate that ran only the egg reported ok while the shipped binary read
+# 2286 of 3959 asserts and quit 1.
+test_stdincorpus: $(ho)/love.baked
 	@echo TEST the corpus down file, redirect and pipe -- egg and baked
 	@cat $t > out/host/.test_sc.l
-	@for L in "$m" "$(mw)"; do \
+	@for L in "env LOVE_NO_IMAGE=1 $m" "$m"; do \
 	 for d in file seek pipe; do \
 	   case $$d in \
 	     file) $$L out/host/.test_sc.l < /dev/null > out/host/.test_sc.$$d 2>&1;; \
@@ -214,14 +212,14 @@ test_embed_boards: host
 	@echo "test_embed_boards: the secondary boards build (any skip is named above)"
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
-# AND a "<name>: ok"; WARM but for hostnif_cold.
+# AND a "<name>: ok"; a cold lane opts in via hostnif_cold.
 hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/modnif.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
 test_hostnif: host out/host$(hsuf)/lush
 	@for s in $(hostnif_tests); do echo "TEST $$s"; \
-	  case " $(hostnif_cold) " in *" $$s "*) L="$m";; *) L="$(mw)";; esac; \
+	  case " $(hostnif_cold) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 $m";; *) L="$m";; esac; \
 	  cat test/00-init.l $$s | sh test/gate/run.sh hostnif "$$L" ": ok" \
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
 	done
@@ -231,7 +229,7 @@ test_hostnif: host out/host$(hsuf)/lush
 doc_tests = doc/stream.l doc/proto/dest.l doc/proto/spl.l
 test_doc: host
 	@for s in $(doc_tests); do echo "TEST $$s"; \
-	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$(mw)" ": ok" \
+	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$m" ": ok" \
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
 	done
 # the vmsplice JIT pipeline end to end (test/bench/vmsplice/auto.sh): dis a live closure,
@@ -249,20 +247,20 @@ ifeq ($a,x86_64)
 test_glaze: host
 	@echo TEST test/glaze-x86.l "(emit + auto)"
 	@{ echo "(use 'holo)"; cat crew/holo/x64.l crew/holo/arm64.l test/glaze-x86.l; } \
-	  | sh test/gate/run.sh glaze "$m" "test/glaze-x86:"
+	  | sh test/gate/run.sh glaze "env LOVE_NO_IMAGE=1 $m" "test/glaze-x86:"
 else
 test_glaze:
 	@echo "test_glaze: skipped (host arch $a is not x86_64)"
 endif
 # test_hook -- the natjit CREATION-HOOK laws: every law claims BOTH the answer and that the hook
-# owned it (`fired?`), twice over the hook's two lives -- the IMAGE's ($(mw), what ships) and the
+# owned it (`fired?`), twice over the hook's two lives -- the IMAGE's ($m, what ships) and the
 # EGG BOOT's ($m). ⚠ never by cat'ing hook.l in: a woken image has `nif` off the book.
 ifneq ($(filter $a,x86_64 aarch64),)
 test_hook: host
 	@echo TEST test/glaze-hook.l "(the baked image)"
-	@sh test/gate/run.sh -a hook "$(mw)" "glaze-hook: ok" test/glaze-hook.l
-	@echo TEST test/glaze-hook.l "(egg boot, hook.l out of the tree)"
 	@sh test/gate/run.sh -a hook "$m" "glaze-hook: ok" test/glaze-hook.l
+	@echo TEST test/glaze-hook.l "(egg boot, hook.l out of the tree)"
+	@sh test/gate/run.sh -a hook "env LOVE_NO_IMAGE=1 $m" "glaze-hook: ok" test/glaze-hook.l
 else
 test_hook:
 	@echo "test_hook: skipped (the hook emits for x86_64 / aarch64; host arch is $a)"
@@ -274,9 +272,9 @@ ifneq ($(filter $a,x86_64 aarch64),)
 test_glazefuzz: host
 	@echo TEST love/glaze/fuzz.l "(glaze differential fuzz: glazed vs interpreted)"
 	@on=out/host/.gfuzz_on.out; off=out/host/.gfuzz_off.out; \
-	  $m love/glaze/fuzz.l > $$on 2>/dev/null \
+	  LOVE_NO_IMAGE=1 $m love/glaze/fuzz.l > $$on 2>/dev/null \
 	    || { echo "FAIL glazefuzz: the GLAZED run died"; exit 1; }; \
-	  LOVE_NO_GLAZE=1 $m love/glaze/fuzz.l > $$off 2>/dev/null \
+	  LOVE_NO_IMAGE=1 LOVE_NO_GLAZE=1 $m love/glaze/fuzz.l > $$off 2>/dev/null \
 	    || { echo "FAIL glazefuzz: the INTERPRETED run died"; exit 1; }; \
 	  fon=`sed -n 's/^fires=//p' $$on`; foff=`sed -n 's/^fires=//p' $$off`; \
 	  [ -n "$$fon" ] && [ -n "$$foff" ] \
@@ -300,12 +298,12 @@ test_glazefuzz:
 	@echo "test_glazefuzz: skipped (the glaze emits for x86_64 / aarch64; host arch is $a)"
 endif
 # crew/sat/ -- the CDCL SAT solver app. Portable love (no glaze), so it runs on every arch.
-# Gate = exit 0 AND the sentinels. COLD ($m, not $(mw)) -- the one app gate that is: the
+# Gate = exit 0 AND the sentinels. COLD on purpose -- the one app gate that is: the
 # solver answers in 3.6 s over the fresh egg and 14.4 s over the woken image.
 test_sat: host
 	@echo TEST crew/sat/sat.l + crew/sat/dimacs.l + crew/sat/flat.l
 	@cat crew/sat/sat.l crew/sat/dimacs.l crew/sat/flat.l \
-	  | sh test/gate/run.sh sat "$m" "sat: Stages 1-3 ok|crew/sat/dimacs: ok|crew/sat/flat: ok"
+	  | sh test/gate/run.sh sat "env LOVE_NO_IMAGE=1 $m" "sat: Stages 1-3 ok|crew/sat/dimacs: ok|crew/sat/flat: ok"
 # The DRAT lane's EXTERNAL check: flat.l's refutations verified by drat-trim, the SAT
 # competition's own checker (fetched + built into out/drat on first use; skips offline).
 # The in-gate twin (fd-check) runs inside test_sat. Not in test_slow (network).
@@ -318,7 +316,7 @@ test_lux: host
 	@echo TEST crew/lux/core.l ... crew/lux/config.l + crew/lux/law.l "(the whole app, host)"
 	@cat test/00-init.l crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l \
 	    crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/law.l \
-	  | sh test/gate/run.sh lux "$(mw)" "crew/lux/law: StackSet"
+	  | sh test/gate/run.sh lux "$m" "crew/lux/law: StackSet"
 # the SEAT lane -- an app fired by its own FILE NAME (positional, or a -l preload), which
 # is the one dispatch door no other gate reaches: every app gate below drives its subject
 # through the verb rail or a baked image instead. ~2.5s, most of it one bake, and it rides
@@ -337,11 +335,11 @@ test_cli: host
 test_sb: host out/host$(hsuf)/sb
 	@echo TEST crew/sb/sb.l + test/host/sb.l
 	@rm -rf out/host/.sbtest
-	@cat test/00-init.l test/host/sb.l | sh test/gate/run.sh sb "$(mw)" "sb: ok"
+	@cat test/00-init.l test/host/sb.l | sh test/gate/run.sh sb "$m" "sb: ok"
 # the kore smokes drive love's own crew layer (`love kore ..` -- the layered bake,
 # doc/plan/one-binary.md), warm per spawn; the argv0 smoke lays its own two-line shim,
 # the distro's shape, since the tree carries no kore binary anymore.
-korerun = $(mw) kore
+korerun = $m kore
 test_kore: host
 	@sh test/gate/kore.sh $(ho) $m
 # grep + sed against GNU over SEEDED RANDOM patterns (doc: the script's own head).
@@ -369,6 +367,17 @@ test_dist: $(ho)/love.baked
 	@sh test/gate/dist.sh smoke $(ho)/love
 test_up: $(ho)/love.baked
 	@sh test/gate/dist.sh up $(ho)/love
+# test_seed -- THE MERGE GATE: the artifact lays its own source into a scratch dir and
+# rebuilds itself through the machine's toolchain; the rebuilt binary must answer the
+# running one's bytes (`love seed`). Minutes -- a whole bootstrap -- and the claim the
+# product makes, so it rides the slow gate. The scratch stays on a red for the autopsy.
+test_seed: $(ho)/love.baked
+	@echo TEST love seed "(the fixpoint)"
+	@rm -rf $(ho)/.seedtest && mkdir -p $(ho)/.seedtest
+	@$(ho)/love seed $(ho)/.seedtest > $(ho)/.test_seed.out 2>&1 \
+	  || { tail -20 $(ho)/.test_seed.out; echo "FAIL love seed"; exit 1; }
+	@tail -1 $(ho)/.test_seed.out
+	@rm -rf $(ho)/.seedtest
 # The editor (crew/vi/): the pure modal engine's laws (no tty -- vstep driven byte by
 # byte), then scripted end-to-end passes through the `kore vi` face over a pipe (keys off
 # stdin, frames onto a captured stdout, :wq writes), driven through the crew layer.
@@ -376,7 +385,7 @@ test_vi: host
 	@echo TEST crew/vi/{hue,core,law}.l
 	@cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/re.l lib/lint.l \
 	    crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l \
-	  | sh test/gate/run.sh vi "$(mw)" "crew/vi/law:"
+	  | sh test/gate/run.sh vi "$m" "crew/vi/law:"
 	@rm -f $(ho)/.vi1; \
 	  printf 'ihello world\033:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "hello world" ]; } \
@@ -394,7 +403,7 @@ test_vi: host
 # The C compiler (crew/moon/, doc/moon.md): the pure pipeline's goldens, then stage-0 end
 # to end through the real `mooncc` -- compile, run, exit 42, against a gcc -O0 differential
 # on the same source. Drives the crew layer warm (~0.68s -> ~0.1s per compile, 88 of them).
-moonrun = $(mw) mooncc
+moonrun = $m mooncc
 # love0 rides along for the inline-asm checks: templates parse through holo/text.l, whose
 # combinators come off the bare `post` each frontend's boot binds ITSELF, so the bootstrap
 # lane can lose the feature while this one keeps it.
@@ -426,7 +435,7 @@ mx: host
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
 	@t=out/.lds.$$$$; for f in $(mx_lds); do \
-	   $(mw) -l core/mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
+	   $m -l core/mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
 	   cmp -s $$t $$f || { mv $$t $$f; echo "LOVE	$$f"; }; \
 	 done; rm -f $$t
 # ...and the DEPENDENCY, off the same roster: a committed generated file is stale the moment
@@ -441,7 +450,7 @@ mx: host
 define mx_dep
 $(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
 	@if test -x $$(m); then \
-	   $$(mw) -l $$< -e "(: _ (? $(word 4,$(subst :, ,$(1))) 0 (quit 1)) _ (puts $(word 3,$(subst :, ,$(1)))) (quit 0))" > out/.$$(@F) || exit 1; \
+	   $$(m) -l $$< -e "(: _ (? $(word 4,$(subst :, ,$(1))) 0 (quit 1)) _ (puts $(word 3,$(subst :, ,$(1)))) (quit 0))" > out/.$$(@F) || exit 1; \
 	   cmp -s out/.$$(@F) $$@ || echo "LOVE	$$@ (relaid -- $$< moved)"; \
 	   mv out/.$$(@F) $$@; \
 	 else touch $$@; fi
@@ -452,14 +461,14 @@ $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
 test_clay: host
 	@echo TEST test/gate/clay.l "(clay G1: (cparse (clay-show c)) == c over test/cc)"
-	@$(mw) -l test/gate/clay.l < /dev/null
+	@$m -l test/gate/clay.l < /dev/null
 # ...and the CONSUMERS: the generated headers regenerate and DIFF here -- a hand edit to any,
 # or a table edit with no regen, is a red. The roster is mx_gen above; `cmp`, not rtk diff.
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
 	@t=out/.lds.$$$$; for f in $(mx_lds); do \
-	   $(mw) -l core/mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
+	   $m -l core/mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
 	   cmp -s $$t $$f || { echo "FAIL $$f is not what core/mx.l lays -- run: make mx"; diff -u $$f $$t | head -20; rm -f $$t; exit 1; }; \
 	 done; rm -f $$t
 	@echo "clay-mx: core/mx.h, core/kinds.h, core/nifs.h, xterm256.h and the 6 love_data scripts regenerate identically"
@@ -469,7 +478,7 @@ test_clay: host
 # still parses, and a printed CENSUS of named-vs-bare refusals. stderr is KEPT: cpp speaks there.
 test_moonfuzz: host
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 888 mutants of test/cc)"
-	@$(mw) -l test/gate/moonfuzz.l < /dev/null
+	@$m -l test/gate/moonfuzz.l < /dev/null
 # test_splice -- the splice JIT end to end (lib/splice.l, test/bench/vmsplice/README.md): a live
 # closure's op rows, each op's own IR taken out of THIS BINARY's .rodata (mooncc -fir=lvm_ put
 # it there), spliced into one body, assembled by holo, its one external reference bound to a
@@ -479,7 +488,7 @@ test_moonfuzz: host
 # declined sample is a named coverage gap, not a red; a DISAGREEMENT is, and so is zero spliced.
 test_splice: host
 	@echo TEST test/gate/splice.l "(splice JIT: own IR -> holo -> nif -> differential)"
-	@LOVE_NO_GLAZE=1 $m -l test/gate/splice.l < /dev/null
+	@LOVE_NO_IMAGE=1 LOVE_NO_GLAZE=1 $m -l test/gate/splice.l < /dev/null
 # test_forge -- nifs WRITTEN IN LOVE (lib/forge.l): a kernel's holo IR assembled for this cpu,
 # installed through the `nif` seam, and required to agree with the twin it deopts into -- on the
 # monomorphic lane it says and on every lane it hands back. The other half of test_splice's
@@ -488,7 +497,7 @@ test_splice: host
 # Zero kernels fitted FAILS: a graceful decline is the design, a silent one reads like a pass.
 test_forge: host
 	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
-	@$m -l test/gate/forge.l < /dev/null
+	@LOVE_NO_IMAGE=1 $m -l test/gate/forge.l < /dev/null
 # test_ccarm64 / test_ccriscv -- the battery on a CROSS TARGET (two targets, one procedure
 # in ccarch.sh): every test/cc/*.c built by `mooncc -t <arch>`, run under qemu-user, required
 # to answer what x64 answers. The three programs no cross lane can build must REFUSE, not skip.
@@ -763,7 +772,7 @@ test_distboot: dist
 # that says the same thing to a cpu, over corpora chosen for the chain the kernel walks.
 test_gz: host
 	@echo TEST test/gate/gzfind.l
-	@$(mw) $R/test/gate/gzfind.l
+	@$m $R/test/gate/gzfind.l
 	@echo TEST test/gate/targz.sh
 	@sh test/gate/targz.sh $(ho)/love
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
@@ -775,13 +784,13 @@ test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l \
 	    crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l \
-	    test/holo/golden.l | sh test/gate/run.sh holo "$(mw)" ", 0 failed"
+	    test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
 # as.l -- the real AT&T x86-64 front over holo. test/holo/as.l's goldens are byte-identical
 # to /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
 test_as: host
 	@echo TEST test/holo/as.l
 	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/as.l test/holo/as.l \
-	  | sh test/gate/run.sh as "$(mw)" ", 0 failed"
+	  | sh test/gate/run.sh as "$m" ", 0 failed"
 # test_elf32 -- holo's ELF32 executable writer, judged by a real loader: both thumb backends
 # lay write+exit, Linux maps the segment and enters in Thumb state, and 42 must come back.
 # test/holo/golden.l pins the header fields; this pins the only opinion that counts. Needs qemu-arm
@@ -861,7 +870,7 @@ test_gc:
 # theorems for its own numeral facts. Regenerated every run, so asserts and proofs cannot diverge.
 test_gen: host $(rocq_kept)
 	@echo LOVE	test/proof/rocq/gen.v "(mk/tools/spec2coq.l on $m)"
-	@$(mw) mk/tools/spec2coq.l > test/proof/rocq/gen.v
+	@$m mk/tools/spec2coq.l > test/proof/rocq/gen.v
 	@echo TEST test/proof/rocq/gen.v "(coqc, against spec.v's shared model)"
 	@cd test/proof/rocq && $(COQC) -R . "" gen.v
 	@$(call vclean,gen)
@@ -870,7 +879,7 @@ test_gen: host $(rocq_kept)
 # -- a law proved in love's own kernel and certified by Rocq.
 test_uugen: host
 	@echo LOVE	test/proof/rocq/uugen.v "(mk/tools/uu2coq.l on $m)"
-	@$(mw) mk/tools/uu2coq.l > test/proof/rocq/uugen.v
+	@$m mk/tools/uu2coq.l > test/proof/rocq/uugen.v
 	@echo TEST test/proof/rocq/uugen.v "(coqc)"
 	@$(COQC) -q test/proof/rocq/uugen.v
 	@$(call vclean,uugen)
@@ -878,7 +887,7 @@ test_uugen: host
 # it in Rocq -- two derivations of ONE datum.
 test_mx: host
 	@echo TEST test/proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
-	@cat core/mx.l mk/tools/mx2coq.l | $(mw) > test/proof/rocq/mx.v
+	@cat core/mx.l mk/tools/mx2coq.l | $m > test/proof/rocq/mx.v
 	@cd test/proof/rocq && $(COQC) -q mx.v >/dev/null
 	@$(call vclean,mx)
 endif
@@ -950,7 +959,7 @@ else
 test_uulean: host
 	@mkdir -p test/proof/lean
 	@echo LOVE	test/proof/lean/uugen.lean "(mk/tools/uu2lean.l on $m)"
-	@$(mw) mk/tools/uu2lean.l > test/proof/lean/uugen.lean
+	@$m mk/tools/uu2lean.l > test/proof/lean/uugen.lean
 	@echo TEST test/proof/lean/uugen.lean "(lean)"
 	@$(LEAN) test/proof/lean/uugen.lean > out/host/.uulean.out 2>&1; r=$$?; \
 	  if [ $$r -ne 0 ] || grep -q sorryAx out/host/.uulean.out; then cat out/host/.uulean.out; exit 1; fi
@@ -963,10 +972,10 @@ endif
 # SYSTEM ops, byte-exact off holo's own arm64.l tables.
 test_holofuzz: host
 	@echo TEST test/holo/fuzz/fuzz.l "(holo x64+arm64+riscv encoder differential fuzz)"
-	@FUZZ_N=8 FUZZ_SEED=20250717 $(mw) test/holo/fuzz/fuzz.l \
+	@FUZZ_N=8 FUZZ_SEED=20250717 $m test/holo/fuzz/fuzz.l \
 	  || { echo "FAIL holofuzz -- a holo encoding disagrees with its disassembler"; exit 1; }
 	@if command -v llvm-mc >/dev/null 2>&1; then \
-	   $(mw) test/holo/fuzz/sysdiff.l \
+	   $m test/holo/fuzz/sysdiff.l \
 	     || { echo "FAIL sysdiff -- a holo SYSTEM encoding disagrees with llvm-mc"; exit 1; }; \
 	 else echo "  (sysdiff skipped: no llvm-mc)"; fi
 # test/uuwm.l is a COMMITTED GENERATED artifact: lux's zipper ops compiled from crew/lux/core.l
@@ -974,10 +983,10 @@ test_holofuzz: host
 # at corpus time. `make uuwm` refreshes it; test_uuwm regenerates and diffs.
 uuwm: host
 	@echo LOVE	test/uuwm.l "(mk/tools/uuwmgen.l on $m)"
-	@$(mw) mk/tools/uuwmgen.l > test/uuwm.l
+	@$m mk/tools/uuwmgen.l > test/uuwm.l
 test_uuwm: host
 	@echo TEST test/uuwm.l "(regenerate + diff)"
-	@$(mw) mk/tools/uuwmgen.l > out/host/.uuwm.l.tmp
+	@$m mk/tools/uuwmgen.l > out/host/.uuwm.l.tmp
 	@cmp -s out/host/.uuwm.l.tmp test/uuwm.l \
 	  || { echo "FAIL: test/uuwm.l is stale (crew/lux/core.l moved?) -- run: make uuwm"; exit 1; }
 	@rm -f out/host/.uuwm.l.tmp
@@ -986,10 +995,10 @@ test_uuwm: host
 # laws OF THE ANALYSIS at corpus time. `make uukind` refreshes it; test_uukind diffs it.
 uukind: host
 	@echo LOVE	test/uukind.l "(mk/tools/kinds2uu.l on $m)"
-	@$(mw) mk/tools/kinds2uu.l > test/uukind.l
+	@$m mk/tools/kinds2uu.l > test/uukind.l
 test_uukind: host
 	@echo TEST test/uukind.l "(regenerate + diff)"
-	@$(mw) mk/tools/kinds2uu.l > out/host/.uukind.l.tmp
+	@$m mk/tools/kinds2uu.l > out/host/.uukind.l.tmp
 	@cmp -s out/host/.uukind.l.tmp test/uukind.l \
 	  || { echo "FAIL: test/uukind.l is stale (doc/proto/kinds.l moved?) -- run: make uukind"; exit 1; }
 	@rm -f out/host/.uukind.l.tmp
@@ -998,10 +1007,10 @@ test_uukind: host
 # proves the destination-die laws OF THE EMISSIONS at corpus time. `make uuhomgen` refreshes it; test_uuhomgen regenerates and diffs.
 uuhomgen: host
 	@echo LOVE	test/uuhomgen.l "(mk/tools/dest2uu.l on $m)"
-	@$(mw) mk/tools/dest2uu.l > test/uuhomgen.l
+	@$m mk/tools/dest2uu.l > test/uuhomgen.l
 test_uuhomgen: host
 	@echo TEST test/uuhomgen.l "(regenerate + diff)"
-	@$(mw) mk/tools/dest2uu.l > out/host/.uuhomgen.l.tmp
+	@$m mk/tools/dest2uu.l > out/host/.uuhomgen.l.tmp
 	@cmp -s out/host/.uuhomgen.l.tmp test/uuhomgen.l \
 	  || { echo "FAIL: test/uuhomgen.l is stale (doc/proto/dest.l moved?) -- run: make uuhomgen"; exit 1; }
 	@rm -f out/host/.uuhomgen.l.tmp
@@ -1012,10 +1021,10 @@ test_uuhomgen: host
 # `make uusplgen` refreshes it; test_uusplgen regenerates and diffs.
 uusplgen: host
 	@echo LOVE	test/uusplgen.l "(mk/tools/spl2uu.l on $m)"
-	@$(mw) mk/tools/spl2uu.l > test/uusplgen.l
+	@$m mk/tools/spl2uu.l > test/uusplgen.l
 test_uusplgen: host
 	@echo TEST test/uusplgen.l "(regenerate + diff)"
-	@$(mw) mk/tools/spl2uu.l > out/host/.uusplgen.l.tmp
+	@$m mk/tools/spl2uu.l > out/host/.uusplgen.l.tmp
 	@cmp -s out/host/.uusplgen.l.tmp test/uusplgen.l \
 	  || { echo "FAIL: test/uusplgen.l is stale (doc/proto/spl.l moved?) -- run: make uusplgen"; exit 1; }
 	@rm -f out/host/.uusplgen.l.tmp
@@ -1026,6 +1035,6 @@ test_wake: $(ho)/love
 	@echo TEST wake "(the woken-image lane, doc/wake-storm.md)"
 	@cp $(ho)/love $(ho)/love.wake && $(ho)/love.wake bake
 	@cat test/00-init.l test/uu.l > $(ho)/wake-corpus.l
-	@if env -u LOVE_NO_IMAGE timeout 60 $(ho)/love.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
+	@if timeout 60 $(ho)/love.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
 	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; \
 	  else echo "test_wake: FAILED -- the wake storm (doc/wake-storm.md)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; exit 1; fi
