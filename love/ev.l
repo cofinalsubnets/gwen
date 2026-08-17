@@ -617,7 +617,7 @@
                 (two? as && propk? <as && <hk && pure-ap? >hk (kval <as))             ; a PURE-APPLYING head with a KNOWN operand: fold the whole
                   (cpap >hk as)                                                       ;   known prefix, an unknown tail keeps the value as its head
                 (keep2 x h2 as)))))))                                                 ; nothing rewrote -> the ORIGINAL call
-   (wx (cprop x () 64 0 0) 0))
+   (wx (cprop x () 64 0 ()) ()))   ; bnd seeds (): a 0 seed rode `list + 0` into every binder set
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a nom? literal.
   ; ⚠ routing it to ava captures it as a SPURIOUS import: it inflates a closure's arity by one with
   ; no matching value applied at the ref site -> an under-saturated partial (silently wrong). the

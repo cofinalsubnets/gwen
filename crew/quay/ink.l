@@ -11,7 +11,7 @@
 ; ties raw / winsize / cue?, which ride host/posix.c, so ink never joins the test
 ; corpus (love0 links no host nifs) -- probe it live under a pty instead.
 
-(: esc ("" + 27)
+(: esc (string 27)
 
    ; the ocean ramp: 24 chromatophores, deep blue out to pale pink and back,
    ; each pre-rendered as one SGR background cell so a frame is pure lookup
