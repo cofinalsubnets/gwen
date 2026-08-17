@@ -209,10 +209,18 @@ leaned on the ambience, which is the coda's whole point.
 there (the whole form compiles before the use runs) -- love0-lane probes spell
 (from 'mod 'name), never one-use. moon.sh's asm-text probe is the law.
 
-**Rung 3 -- the search collapses.** libsrc drops the seat rungs; cwd `lib/`
-stays with a retirement note; mk/install.mk's lib tree and the nest resolution
-contract retire in coordination with the self-host arc's `love up` story, not
-as a side effect here.
+**Rung 3 -- the search collapses. CLIMBED.** libsrc walks the baked table and
+cwd `lib/` -- the dev tree's lane, kept with its retirement note until the
+tree stops being special. The seat rungs (`<seat>/../lib/`, its `love/`
+subfolder) are gone, and `selfpath` leaves the loader with them: an artifact's
+modules are baked or image-carried, never found beside the binary. The
+installed lanes prove it whole: test_nest (make == cook, the installed mooncc
+from any cwd) and test_up (the download door, a full from-source nest) run on
+binaries that never touch the walk they used to need. loader.l's seat laws
+flipped to retirement laws -- fixture where the rungs looked, the use scares
+no-module under trap, nothing registers. mk/install.mk still lays the nest's
+lib tree (source on disk); it retires with the self-host arc's `love up`
+story, as planned, not as a side effect here.
 
 ## ⚠ traps this plan already knows
 

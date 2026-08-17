@@ -51,10 +51,11 @@
    _ (unlink "lib/zz-selfprobe.l") _ (unlink "lib/zz-pathprobe.l")
    _ (rmdir "lib/zz-loadprobe") 0)
 
-; the SEAT rungs: the loader also walks <seat>/../lib/ and its love/ subfolder,
-; the seat being the running binary's own home. this binary is out/host/love,
-; so its rungs are out/lib/ and out/lib/love/ -- fixture there, cwd-lib absent,
-; and the walk must still find both.
+; the SEAT rungs are RETIRED (the modules arc, rung 3): the loader no longer
+; walks <seat>/../lib/ or its love/ subfolder -- an artifact's modules are baked
+; or image-carried. this binary is out/host/love, so its old rungs were out/lib/
+; and out/lib/love/ -- fixture there, cwd-lib absent, and the walk must MISS:
+; the use scares no-module and nothing registers.
 (: _ (mkdir "out/lib/love" 493)
    _ (: p (open "out/lib/zz-seatprobe.l" "w")
         _ (say p "(: zz-seat-pin 51)")
@@ -62,10 +63,10 @@
    _ (: p (open "out/lib/love/zz-fhsprobe.l" "w")
         _ (say p "(: zz-fhs-pin 52)")
         (close p)))
-(use 'zz-seatprobe)
-(use 'zz-fhsprobe)
-(assert (51 = (from 'zz-seatprobe 'zz-seat-pin))
-        (52 = (from 'zz-fhsprobe 'zz-fhs-pin)))
+(: a (trap (\ _ (use 'zz-seatprobe)) () (\ a b 'caught))
+   b (trap (\ _ (use 'zz-fhsprobe)) () (\ a b 'caught))
+ (assert (id? a 'caught) (id? b 'caught)
+         (nil? (from 'zz-seatprobe)) (nil? (from 'zz-fhsprobe))))
 (: _ (unlink "out/lib/zz-seatprobe.l") _ (unlink "out/lib/love/zz-fhsprobe.l")
    _ (rmdir "out/lib/love") 0)
 (test_fin ())

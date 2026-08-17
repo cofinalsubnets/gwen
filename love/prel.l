@@ -333,28 +333,15 @@
                    e (? (? (< 2 (- n b)) (= ".l" (snip s (- n 2) n)) 0) (- n 2) n)
                    (intern (snip s b e)))
       fsopen (peep book 'open ())      ; the host's open nif, by peep -- see above
-      ; the seat root: where the running binary lives. <seat>/../lib/ is the nest shape, its
-      ; love/ subfolder the FHS one. no selfpath nif gives (), and the rungs miss.
-      ; read at each miss, never captured -- a binding folds the build tree's seat into the image.
-      spath (peep book 'selfpath ())
-      (seatlib _) (: x (? (nil? spath) () (spath 0))
-                     (? (string? x)
-                        (: n (tally x)
-                           b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep x k 0)) (+ k 1) r)) r)) 0 0)
-                           (+ (snip x 0 b) "../lib/"))
-                        ()))
-      ; the walk: the baked table, then lib/ off the cwd (the dev tree), then the seat root's lib/,
-      ; then its love/ subfolder
+      ; the walk: the baked table, then lib/ off the cwd -- the dev tree's lane, kept
+      ; for a tree and its tools (papel's want, the gates); it too retires when the
+      ; tree stops being special. the SEAT rungs (<seat>/../lib/, its love/ subfolder
+      ; -- the nest and FHS shapes) retired with the modules arc: an artifact's
+      ; modules are baked or image-carried, never found beside the binary.
       (libsrc nm) (: s (lib nm)                                ; the baked table: a read port over the C text
                      (? (port? s) s
                         (nil? fsopen) ()
-                        (: f (+ (string nm) ".l")
-                           q (fsopen (+ "lib/" f) "r")
-                           (? q q
-                              (: sl (seatlib 0)
-                                 (? (nil? sl) ()
-                                    (: q2 (fsopen (+ sl f) "r")
-                                       (? q2 q2 (fsopen (+ (+ sl "love/") f) "r")))))))))
+                        (fsopen (+ "lib/" (+ (string nm) ".l")) "r")))
       (\ m (? (tablet? m) (prior m)
               (string? m)
               (: nm (mname m)

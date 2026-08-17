@@ -1,13 +1,12 @@
 # mk/install.mk -- install / uninstall. Included by ./Makefile from the project root;
 # shared vars are mk/common.mk.
 #
-# THE NEST: the default install is ~/.love, a self-implying home -- the loader's seat walk
-# derives <seat>/../lib and its love/ subfolder from the running binary's own path, so
-# ~/.love/bin/love finds ~/.love/lib/love/<x>.l with no configuration and no env vars.
-# ~/.local/bin gets a compat SYMLINK per bin, since PATH already knows it. A distro
-# overrides PREFIX/DESTDIR and the same lib/love/ layout is the walk's FHS rung
-# (/usr/bin/love finds /usr/lib/love/<x>.l) -- one layout, both worlds, and the compat
-# links are nest-only.
+# THE NEST: the default install is ~/.love, a self-implying home. ⚠ the loader's SEAT
+# WALK IS RETIRED (the modules arc, rung 3): the binary's modules are baked or
+# image-carried, and nothing resolves ~/.love/lib/love/<x>.l at runtime anymore. the
+# lib tree below still installs -- source on disk for reading and for tools that open
+# it by PATH -- and retires with the self-host arc's `love up` story, not before.
+# ~/.local/bin gets a compat SYMLINK per bin, since PATH already knows it.
 
 # --- install / uninstall --------------------------------------------
 PREFIX ?= .love/
