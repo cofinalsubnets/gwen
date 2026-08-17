@@ -160,15 +160,20 @@ owes a roster gate: on linux, assert the linux features are aboard.
     module 'moon by the modules arc — fixed, the recipe takes the module
     door); and the halves must share the source blob or the fat pays it
     twice.
-  - **U1.1 — the format.** The container is ours: an sh prefix that picks by
-    `uname -m` and a directory of members at page-aligned offsets. Decisions
-    (chosen, revisable): a `#!/bin/sh` first line (the kernel execs it from
-    ANY caller; a hosted Linux without /bin/sh is not hosted — the APE-style
-    bare-word prefix only survives shell/execvp fallback); exec by
-    extract-and-cache (the adopt pattern, content-named under ~/.love, then
-    `exec` with the fat path held in env so selfpath answers the container);
-    the source blob rides ONCE, a member beside the ELFs, not once per half —
-    the halves' src lookup walks the container directory.
+  - **U1.1 — the format.** Landed 2026-08-17: mk/tools/fatpack.l lays the
+    container (page-aligned members behind a one-block `#!/bin/sh` prefix; the
+    kernel execs that from ANY caller, where the APE-style bare-word prefix
+    only survives shell/execvp fallback), the cache is content-named under
+    ~/.love/fat (the members' sha rides the prefix, so a new fat lands a new
+    cache and the adopt holds), the x-lane grew the twin SEED (its own src.o
+    + readme — both halves answer the same 3.2 MB blob), and `make dist-fat`
+    + `make test_fat` (opt-in: prefix + cache + byte-determinism + the
+    foreign member under qemu) hold it. Deferred: the blob rides once per
+    half today — the shared-member dedup (~3 MB) waits on a directory walk in
+    the src lookup (U1.1b); no env hand-back of the fat path yet (nothing
+    reads it until U1.3's re-cut). And the pi named U1.2's price exactly: an
+    egg twin serves NO VERBS (`love source` on the pi read a file named
+    "source") — verb dispatch is the baked binary's behavior.
   - **U1.2 — the bake leaves the distributed bytes.** The fat artifact ships
     link-pure: no heap image aboard. First boot on a box bakes the native
     EXTRACTION in place under ~/.love — the existing in-place bake, unchanged,

@@ -600,6 +600,12 @@ test_fixpoint: host $(love0) out/host/mooncc0.image
 .PHONY: test_xfixpoint
 test_xfixpoint: $(xobjs) $(love0) out/host/mooncc0.image
 	@sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xtgt) $(xmksys) $(tco) $(xd) $(xobjs)
+# test_fat -- the fat container (seed-universal U1): the one file answers through
+# its prefix + cache on the native machine, the pack is byte-deterministic, and
+# the foreign member answers under qemu-user. opt-in by name, like the x-lane.
+.PHONY: test_fat
+test_fat: dist-fat
+	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(boot_love)" $(ho) $(xd)
 # rung 2's freebsd gate (doc/plan/seed-universal.md): a mooncc-laid static
 # freebsd binary runs on a real freebsd box. the box arrives by env --
 # FBSD_SSH="ssh -p 2222 -i KEY root@HOST" make test_freebsd -- and without

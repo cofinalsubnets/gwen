@@ -290,6 +290,24 @@ $(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
 	@mkdir -p $(dir $@)
 	@$(love0) -l $(ho)/.mksys-cat.l -n -e "((from 'moon '$(xmksys)) \"$@\")" && test -s $@
 
+# ==== the fat container (seed-universal U1) ====
+# the twin SEED: the x-lane link wearing the artifact's clothes -- its own src
+# blob and readme, so the member answers `love source` like the native one.
+$(xd)/src.o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
+	@$(boot_love) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(xtgt)
+$(xd)/love: $(xobjs) $(xd)/src.o assets/readme.bin
+	@echo MOON	$@
+	@$(moonx) -pie $(xobjs) $(xd)/src.o -freadme=assets/readme.bin -o $@
+# dist-fat -- OPT-IN: ONE file, both texts, behind fatpack's sh prefix and its
+# content-named cache under ~/.love/fat. the native member rides baked; the
+# twin is an egg until U1.2 moves the bake to the extraction.
+fat = out/dist/love-fat
+.PHONY: dist-fat
+dist-fat: $(ho)/love.baked $(xd)/love mk/tools/fatpack.l
+	@mkdir -p out/dist
+	@$(boot_love) mk/tools/fatpack.l $(fat) $a $(ho)/love $(xa) $(xd)/love
+	@chmod +x $(fat)
+
 # ==== the vim syntax for .l -- GENERATED, so there is no copy to keep up to date ====
 # mk/tools/hue2vim.l reads crew/vi/hue.l's class table the other way round (one table, two
 # readers: the painter in vframe and vim) and asks THIS host for its vocabulary -- so the
