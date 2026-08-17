@@ -233,10 +233,10 @@
  (('ef + '(1 2)) = '(ef 1 2)) ('ef = 'ef + 5)  ; a NAMED symbol still ADJOINS to a list (foo stays foo); a number degenerates against it
  ((\ x x) = () + (\ x x)) (2 = (((\ x x) + (\ x x)) (\ n (+ n 1)) 0))   ; the TOP lane too: () + hot = hot, and
  ("ababab" = "ab" * 3) ('xyxy = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")   ; sym * count re-interns; + on two hots IS church add (id+id acts as 2)
- !("ab" * -3) ("ababab" = "ab" * 2.5) !('(1 2) * 0)         ; the count saturates; the NUMBER 0 empties
- (5 = () * 5) (5 = 5 * ()) ("ab" = "ab" * ()) ("ab" = () * "ab")   ; () is *'s IDENTITY too -- the multiplicative-
- ('(1 2) = '(1 2) * (mint 0)) (() = () * ()) ("@(1 2 3)" = show (() * @(1 2 3)))   ; identity FACE (1) of the unit,
- ("" = "ab" * 0) ((\ x x) = () * (\ x x)))                  ; mirroring its + face (0); 0 stays the number; () * hot = hot too
+ ("ababab" = "ab" * -3) !("ab" * 2.5) !('(1 2) * 0)         ; a count acts by |magnitude| when EXACT (the one hom
+ (() = () * 5) (() = 5 * ()) (() = "ab" * ()) (() = () * "ab")   ; over the sign crossing); an inexact count is no count.
+ (() = '(1 2) * (mint 0)) (() = () * ()) (() = () * @(1 2 3))    ; () is the ZERO and the zero ANNIHILATES * (the
+ ("" = "ab" * 0) (() = () * (\ x x)))                       ; semiring law; 1 is the identity); the NUMBER 0 still counts: 0 copies = the kind's empty
 
 ; --- the unit rides through EVERY dyadic arithmetic lane --- () is the DO-NOTHING operand,
 ; either side, for - / // % & | ^ << >> just as for + and *: the op never happens. NOT the
@@ -259,8 +259,8 @@
 ; way), so this is the one law the hand is visible in. RIGHT-distributivity ((a+b)*c=a*c+b*c) holds on
 ; the nose (the outer loop ranges the LEFT operand); LEFT-distributivity holds only up to a
 ; permutation (intrinsic to ordered pairs -- same multiset, different order). `net` is NOT the
-; `*` measure (it's not multiplicative); `tally` is. () stays the * UNIT (identity), not the
-; cartesian annihilator -- the unit law preempts the empty-operand lane.
+; `*` measure (it's not multiplicative); `tally` is. () is the ZERO and annihilates *, so the
+; empty-operand lane and the zero law say the same thing.
 (assert
  (('(1 2) * '(3 4)) = '((1 3) (1 4) (2 3) (2 4)))                ; the product: every ordered pairing
  (('(1 2) * '(3 4) * '(5 6)) = '(((1 3) 5) ((1 3) 6) ((1 4) 5) ((1 4) 6) ((2 3) 5) ((2 3) 6) ((2 4) 5) ((2 4) 6)))  ; the left hand nests left
@@ -270,7 +270,7 @@
  (!(('(1 2) * ('(3 4) + '(5 6))) = (('(1 2) * '(3 4)) + ('(1 2) * '(5 6)))))  ; left-distrib FAILS as ordered lists ...
  ((sort ('(1 2) * ('(3 4) + '(5 6)))) = (sort (('(1 2) * '(3 4)) + ('(1 2) * '(5 6)))))  ; ... but holds up to permutation
  ('(1 3) = cap ('(1 2) * '(3 4)))                               ; pairs are real 2-lists -- reversible via cap/cup
- (('(1 2) * ()) = '(1 2)) (() * '(3 4) = '(3 4))                ; () is the * UNIT (identity), not the annihilator
+ (() = '(1 2) * ()) (() = () * '(3 4))                          ; () is the ZERO: it annihilates the cartesian too
  !("ab" * '(1 2)) !('(1 2) * "ab"))                            ; only chain*chain -- string*chain stays nil
 
 ; --- numeric functions --- abs int (type-aware); constants e pi i; gcd modpow; the irreducible

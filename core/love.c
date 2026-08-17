@@ -5767,15 +5767,20 @@ static lvm(lvm_bin_b) { word b = Sp[1]; ai_musttail return Push(b); }
 // ============================================================================
 
 // `*` REPEAT lane: a sequence times a scalar count n is n copies joined ("repeated
-// +"). the count is SATURATED to a green charm (($ c), the count law); an array or
-// any non-number is not a count -> zero.
+// +"). THE COUNT LAW (the associativity arc): a count acts by |count| when it is an
+// EXACT integer -- magnitude is the one multiplicative hom that survives the sign
+// crossing ((-1)*(-2) re-enters the positives) -- and any INEXACT count (gem, twin,
+// tray) answers the absorbing () (those classes are closed under *, so the refusal
+// composes: (x * 2.5) * 2 and x * (2.5 * 2 = 5.0) both land ()).
 static lvm(lvm_mul_rep) {
  word a = Sp[0], b = Sp[1];
  bool aseq = strp(a) || chainp(a) || namep(a);       // a string / list / NAMED symbol repeats
  word seq = aseq ? a : b, cnt = aseq ? b : a;
- if ((!strp(seq) && !chainp(seq) && !namep(seq)) || (!isnum(cnt) && !twinp(cnt)))
-  ai_musttail return Push(ZeroPoint);             // seq not a sequence/symbol, or count not a number
- uintptr_t n = (uintptr_t) ai_saturate(g, cnt);
+ if ((!strp(seq) && !chainp(seq) && !namep(seq)) || (!charmp(cnt) && !bigp(cnt)))
+  ai_musttail return Push(ZeroPoint);             // seq not a sequence/symbol, or count not exact
+ uintptr_t n;
+ if (charmp(cnt)) { intptr_t v = getcharm(cnt); n = (uintptr_t) (v < 0 ? -v : v); }
+ else n = (uintptr_t) maxcharm;                      // |big|: past addressable, dies in Have()
  if (chainp(seq)) {                                   // list -> n copies of the spine
   if (!n) ai_musttail return Push(ZeroPoint);   // 0 copies -> the empty list () (zero-ontology)
   uintptr_t m = llen(seq), total = m * n;
@@ -5924,10 +5929,10 @@ lvm(lvm_mul) {
   if (!__builtin_mul_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
       && t >= mincharm && t <= maxcharm)
    ai_musttail return Push(putcharm(t)); }
- // a bare mint is *'s identity -- the UNIT, not the annihilating 0 -- so it
- // overrides the count lane: "ab" * () is "ab", distinct from "ab" * 0 = ""
- if (mintp(a)) ai_musttail return Push(b);
- if (mintp(b)) ai_musttail return Push(a);
+ // a bare mint is the ZERO, and the zero ANNIHILATES under * (the semiring law:
+ // 0*x = 0; the identity is 1, which is already the identity function). the
+ // matrix says the same thing (lvm_0), so this stays a fast path.
+ if (mintp(a) || mintp(b)) ai_musttail return Push(ZeroPoint);
  ai_musttail return Ap(ai_mul_mx[ai_kind(a)][ai_kind(b)], g); }
 
 avm_div(fquot, /)                               // `//` fixnum fast path: truncating quotient

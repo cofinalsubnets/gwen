@@ -93,6 +93,40 @@
                   (mix? a b c) ((txt? a || txt? b || txt? c) && (two? a || two? b || two? c))
                   (ok? y z) (? (mix? x y z) 1 (((x + y) + z) = (x + (y + z))))
                   (all (\ y (all (ok? y) ws)) ws))))]
+      ; --- * ASSOCIATES too (the zero law): () annihilates, an exact count acts by
+      ; |magnitude| (the one hom over the sign crossing), an inexact count answers
+      ; the absorbing () -- so every mixed shape closes, trays and text included.
+      ; two seams carved out BY NAME: the CARTESIAN (chain*chain pairs nest, so
+      ; repeat and pairing commute only up to ORDER -- tally is the hom that
+      ; survives, spec.l holds it), and coins (a coin READS a chain as (n d) --
+      ; the same seam add-assoc names).
+      ['mul-assoc
+       (\ x (? (lit? x || coin? x) 1
+               (: ws (list 0 2 -5 2.5 (twin 3 4) () "" "ab" 'sym '(1 2) @(1 2))
+                  (ch v) (? (two? v) 1 0)
+                  (ok? y z) (? (coin? y || coin? z) 1
+                               (1 < (ch x + ch y + ch z)) 1
+                               (((x * y) * z) = (x * (y * z))))
+                  (all (\ y (all (ok? y) ws)) ws))))]
+      ; --- DISTRIBUTION, each clause on its honest domain: the numeric bands are a
+      ; true semiring (full dist, signs included); repeat distributes over exact
+      ; NONNEG counts (|.| is additive without a sign crossing -- |m+n| != |m|+|n|
+      ; across one, carved BY NAME, and the old saturating count never had it
+      ; either); the cartesian is RIGHT-distributive on the nose (left only up to
+      ; order -- spec.l holds both); and m*(x+y) = m*x + m*y over the SEQUENCE side
+      ; is impossible outright: a free monoid admits no bilinear product.
+      ['mul-dist
+       (\ x (? (lit? x || coin? x) 1
+               (: ms (list 0 1 2 5)
+                  nums (list 0 2 -5 2.5 (twin 3 4))
+                  act (all (\ m (all (\ n ((x * (m + n)) = ((x * m) + (x * n)))) ms)) ms)
+                  num (? (two? x || tray? x || string? x || (? (id? x ()) 0 (nom? x))) 1
+                         (all (\ y (all (\ z ((x * (y + z)) = ((x * y) + (x * z)))) nums)) nums))
+                  cart (? (two? x)
+                          (: bs (list '(3) '(-2 1))
+                             (all (\ a (all (\ b (((a + b) * x) = ((a * x) + (b * x)))) bs)) bs))
+                          1)
+                  (act && num && cart))))]
       ; ⚠ `bit x`, not `?x`: glued ? is bit EVERYWHERE except opening a parenthesized form, where
       ; `(` + `?` makes the CLAUSE head instead -- (? x) is the one-armed cond, which answers x,
       ; so the law reads x = (0 < $x) and holds only at 0 and 1. this harness caught that.

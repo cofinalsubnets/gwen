@@ -13,8 +13,9 @@
 ;     function arguments -- sections, escaped operators, one-param integer
 ;     lambdas -- as Coq funs (direct beta and n-fold compose ride the same lane);
 ;     predicates as integers (love's =/</! answer 1|0 charms; Z.b2z bridges).
-;   * the UNIT lane: () (and a fresh mint) rides through every dyadic -- modeled
-;     over option Z / option (list Z), None the unit, uop/ulop the lifted ops.
+;   * the UNIT lane: () (and a fresh mint) rides through every dyadic EXCEPT *,
+;     where it ANNIHILATES (the zero; the associativity law) -- modeled over
+;     option Z / option (list Z), None the unit, uop/ulop lifted, umul/ulmul absorbing.
 ;   * TEXT as spelling (the symbol-as-spelling lane): symbols and strings are
 ;     their byte lists under + (concat) and * (repeat), equality band-guarded
 ;     (symbol never = string).
@@ -115,12 +116,15 @@
                                             (&& (uz? (e2 x)) (unit? (e3 x))))
                     0)))
    (tuz x) (? (unit? x) "None"  (intv? x) ("(Some " + (tv x) + ")")
+              (id? (cap x) '*) ("(umul " + (tuz (e2 x)) + " " + (tuz (e3 x)) + ")")   ; * : the unit ANNIHILATES
               ("(uop " + (uzf (cap x)) + " " + (tuz (e2 x)) + " " + (tuz (e3 x)) + ")"))
-   ; list u-tree: a unit on either side of + or * answers the list side
+   ; list u-tree: a unit on either side of + answers the list side; under * it
+   ; ANNIHILATES (() is the zero -- the associativity law)
    (ul? x) (? (lst? x) 1
               (! (&& (two? x) (len3? x) (| (id? (cap x) '+) (id? (cap x) '*)))) 0
               (| (&& (unit? (e2 x)) (ul? (e3 x))) (&& (ul? (e2 x)) (unit? (e3 x)))))
    (tul x) (? (unit? x) "None"  (lst? x) ("(Some " + (tl x) + ")")
+              (id? (cap x) '*) ("(ulmul " + (tul (e2 x)) + " " + (tul (e3 x)) + ")")
               ("(ulop " + (tul (e2 x)) + " " + (tul (e3 x)) + ")"))
 
    ; -- text as SPELLING: symbols and strings are byte lists under + (concat) and * (repeat);
@@ -143,11 +147,12 @@
               (qnom? x)   ("[" + (joinb (string (e2 x)) 0) + "]")
               (: h (cap x)
                  (? (id? h '+) ("(" + (ttl (e2 x)) + " ++ " + (ttl (e3 x)) + ")")
-                    (id? h '*) ("(srep (Z.to_nat " + (tv (e3 x)) + ") " + (ttl (e2 x)) + ")")
+                    (id? h '*) ("(srep (Z.abs_nat " + (tv (e3 x)) + ") " + (ttl (e2 x)) + ")")
                     (ttl (e2 x)))))                     ; intern / string: the spelling itself
 
    ; -- gaussian twins: exact complex over Z as (re im) pairs -- conj negates im, the
-   ;    unit rides every dyadic, and the SIGN (so the order too) is LEX on (re, im);
+   ;    unit rides + and - (under * it annihilates, out of this band's reach), and
+   ;    the SIGN (so the order too) is LEX on (re, im);
    ;    $ of a lex-positive twin is its magnitude (the corpus instances are pythagorean)
    (twinv? x) (&& (two? x) (id? (cap x) 'twin) (len3? x) (charm? (e2 x)) (charm? (e3 x)))
    ; a twin/conj/i anywhere in the term: the GATE into the gaussian lane (a bare charm
@@ -160,7 +165,11 @@
               (gneg? x) (gz? (e2 x))
               (: h (cap x)
                  (? (&& (id? h 'conj) (un2? x)) (gz? (e2 x))
-                    (&& (member? h '(+ - *)) (len3? x)) (&& (gz? (e2 x)) (gz? (e3 x)))
+                    ; ⚠ a unit under * leaves the band (() annihilates now), so only
+                    ; + and - let the unit ride here; * demands both sides gaussian-proper
+                    (&& (id? h '*) (len3? x)) (&& (gz? (e2 x)) (gz? (e3 x))
+                                                  (! (hasu? (e2 x))) (! (hasu? (e3 x))))
+                    (&& (member? h '(+ -)) (len3? x)) (&& (gz? (e2 x)) (gz? (e3 x)))
                     0)))
    (tg x) (? (twinv? x) ("(" + (tv (e2 x)) + ", " + (tv (e3 x)) + ")")
              (id? x 'i) "(0, 1)"
@@ -250,9 +259,9 @@
    (lst? x) (? (qlist? x) 1  (string? x) 1
                (! (two? x)) 0
                (: h (cap x)
-                  (? (&& (id? h '+) (len3? x)) (| (&& (intv? (e2 x)) (lst? (e3 x)))       ; scalar prepend
+                  (? (&& (id? h '+) (len3? x)) (| (&& (intv? (e2 x)) (lst? (e3 x)))       ; number + list: DEGENERATES to the list
                                                   (&& (lst? (e2 x)) (| (lst? (e3 x))       ; append
-                                                                       (byte? (e3 x)))))   ; byte-append (the byte LAW: out of 0..255 answers ())
+                                                                       (intv? (e3 x)))))   ; list + number: degenerates too (the associativity law)
                      (&& (id? h '*) (len3? x)) (&& (lst? (e2 x)) (intv? (e3 x)))           ; repeat
                      (&& (id? h 'map) (len3? x)) (&& (tfn (e2 x)) (lst? (e3 x)))
                      (&& (id? h 'filter) (len3? x)) (&& (tfb (e2 x)) (lst? (e3 x)))
@@ -288,11 +297,11 @@
              (string? x)    ("[" + (joinb x 0) + "]")
              (: h (cap x)                                     ; the broadcast / append / repeat ops
                 (? (id? h '+)  (? (arr? x)        ("(vaddt " + (tl (e2 x)) + " " + (tl (e3 x)) + ")")
-                                  (intv? (e2 x))  ("(" + (tv (e2 x)) + " :: " + (tl (e3 x)) + ")")  ; scalar prepend
-                                  (intv? (e3 x))  ("(" + (tl (e2 x)) + " ++ [" + (tv (e3 x)) + "])") ; byte-append
+                                  (intv? (e2 x))  (tl (e3 x))   ; DEGENERATE: a number against a list arrives as the unit
+                                  (intv? (e3 x))  (tl (e2 x))   ; ... either side (the associativity law)
                                   ("(" + (tl (e2 x)) + " ++ " + (tl (e3 x)) + ")"))                ; list append
                    (id? h '*)  (? (arr? x) ("(vscale " + (tv (e3 x)) + " " + (tl (e2 x)) + ")")     ; array scale
-                                  ("(srep (Z.to_nat " + (tv (e3 x)) + ") " + (tl (e2 x)) + ")"))    ; list repeat
+                                  ("(srep (Z.abs_nat " + (tv (e3 x)) + ") " + (tl (e2 x)) + ")"))    ; list repeat
                    (id? h '//) ("(vquot " + (tv (e3 x)) + " " + (tl (e2 x)) + ")")
                    (id? h 'map)    ("(map " + (tfn (e2 x)) + " " + (tl (e3 x)) + ")")
                    (id? h 'filter) ("(filter " + (tfb (e2 x)) + " " + (tl (e3 x)) + ")")
@@ -539,8 +548,11 @@
      "Fixpoint hget (m:list (Z*Z)) (k d:Z):Z := match m with nil=>d | p::m' => if Z.eqb k (fst p) then snd p else hget m' k d end." (string 10)
      ; the word shifts: the count rides mod 64, >> is arithmetic (Z.shiftr on negatives)
      "Definition shlz (a b:Z):Z := Z.shiftl a (Z.modulo b 64).  Definition shrz (a b:Z):Z := Z.shiftr a (Z.modulo b 64)." (string 10)
-     ; the UNIT lane: None is () and rides through every lifted dyadic untouched
+     ; the UNIT lane: None is (). it rides through every lifted dyadic untouched --
+     ; EXCEPT *, where () is the ZERO and the zero annihilates (the associativity law)
      "Definition uop (f:Z->Z->Z) (a b:option Z) : option Z := match a,b with None,x=>x | x,None=>x | Some x, Some y => Some (f x y) end." (string 10)
+     "Definition umul (a b:option Z) : option Z := match a,b with Some x, Some y => Some (x*y) | _,_ => None end." (string 10)
+     "Definition ulmul (a b:option (list Z)) : option (list Z) := None." (string 10)
      "Definition ueq (a b:option Z) : bool := match a,b with None,None=>true | Some x, Some y => Z.eqb x y | _,_=>false end." (string 10)
      "Definition unet (a:option Z) : Z := match a with None => 0 | Some z => z end." (string 10)
      "Definition ulop (a b:option (list Z)) : option (list Z) := match a,b with None,x=>x | x,None=>x | Some x, Some y => Some (x++y) end." (string 10)
