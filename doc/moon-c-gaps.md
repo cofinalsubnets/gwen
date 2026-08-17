@@ -89,10 +89,9 @@ All of C89 passes. What remains is C99/C11/GNU.
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
-| a `##` paste with an empty operand and trailing tokens | `#define P(A,B) A ## B ; bob` |
 | a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
 
-The last six are what `test_cts` found (doc/moon.md); `test/gate/cts.sh` names the program
+The last five are what `test_cts` found (doc/moon.md); `test/gate/cts.sh` names the program
 each one came from.
 
 ### what passes, for contrast
@@ -173,7 +172,10 @@ report the mapped line, matching gcc (test/cc/137-line.c). The delta rides `macs
 state already threaded through every arm of `cppgo`, so no signature moved; it is applied
 where active tokens accumulate, and again on a directive's own body, which is what makes
 `#if __LINE__` right. `doinc` saves and restores it, so a header's `#line` does not follow the
-return. ⚠ the **file operand is parsed and dropped**: `#line 700 "generated.y"` reports line
+return. The operand is **macro-expanded** when it is not already a digit sequence (C11
+6.10.4p3, landed 2026-08-17), so `#line line` takes the 1000 that `line` expands to and a
+second round works too; one that still is not a number leaves the directive doing nothing.
+⚠ the **file operand is parsed and dropped**: `#line 700 "generated.y"` reports line
 700 of the *real* path, where gcc says `generated.y`. `__FILE__` is the TU's name throughout
 (cpp shares one macro table across includes), so the file half wants that lifted first.
 
@@ -312,6 +314,26 @@ Held by test/cc/147-enumscope.c, 11 checks against gcc: the escape itself, nesti
 constant over a file-scope one, a local over a block constant, the typedef arm, a tagged enum
 with a declarator, and two sequential blocks.
 
+### `##` with an empty operand ATE the token after it — FIXED 2026-08-17
+
+C11 6.10.3.3p2 replaces an argument with no preprocessing tokens by a **placemarker**: it
+pastes to whatever it meets, two of them paste to another, and the leftovers are deleted before
+the rescan. There was no such token here, so `paste` (cpp.l) only folded a `##` that had a
+following token, and an empty operand fell through two ways:
+
+- `A ## B` with `B` empty emitted a **literal `##`** into the C stream — `parse error near ##`,
+  loud and harmless.
+- `A ## B ; bob` pasted `A` with the **`;`**, and since `jim;` does not relex to one token the
+  fold kept `A` and **dropped the semicolon**. ⚠ that is a preprocessor silently deleting a
+  token, and it reads as a refusal only because a missing `;` usually breaks the parse next.
+  Nothing guarantees it does.
+
+`subst` mints a `'pmark` token where a `##`-adjacent parameter has an empty argument (the
+variadic tail included), `paste` folds it — `pm ## x` → `x`, `x ## pm` → `x`, `pm ## pm` → `pm`
+— and a sweep drops any that met no `##`, so one can never escape into the C stream. Held to
+gcc by test/cc/149-paste.c, 10 checks over an empty right operand, an empty left, both empty, a
+three-way paste with an empty middle, the variadic tail, and tokens on either side of the paste.
+
 ### a block-scope struct tag collided with the file-scope one — FIXED 2026-08-17
 
 C11 6.7.2.3 gives a tag defined inside a block that block's scope. `stag` was keyed by the
@@ -365,7 +387,7 @@ differed. That instrument costs nothing and nobody had pointed it at the tray op
 
 `test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Its roster is
 **refusals only**, each loud and named — no program in the corpus compiles clean and answers
-wrong on any of the three targets. 210 answer on x64 and 10 refuse (11 on arm64, 12 on riscv64,
+wrong on any of the three targets. 212 answer on x64 and 8 refuse (9 on arm64, 10 on riscv64,
 the target rows below). `roster_wrong` stays in the gate, empty, because the day one comes back
 it belongs there and `wrong` is the kind that must stay loud.
 
