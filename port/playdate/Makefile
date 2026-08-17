@@ -19,7 +19,7 @@ o = $(R)/out/playdate
 n = love
 pd_sdk = $(PLAYDATE_SDK_PATH)
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
-MOONCC = $(R)/out/host/mooncc
+MOONCC = $(R)/out/host/love.baked
 pd_cc = $(CCACHE) arm-none-eabi-gcc -g3
 pd_opt = -Os -falign-functions=16 -fomit-frame-pointer
 # the device M7's FPU is single-precision; gcc-side doubles ride the libgcc
@@ -88,7 +88,7 @@ $(lib_hs): FORCE
 $(m): FORCE
 	@$(MAKE) -C $(R) out/host/love
 $(MOONCC): FORCE
-	@$(MAKE) -C $(R) out/host/mooncc
+	@$(MAKE) -C $(R) out/host/love.baked
 
 # cas.l -> C string literal, atomically (a 0-byte header would silently drop
 # the whole demo -- same discipline as the root's lcat_h)
@@ -124,11 +124,11 @@ $(o)/Source/pdex.%: $(o)/pdex.%
 $(o)/main.o: main.c pdglue.h $(pd_h) | $(MOONCC)
 	@echo MOON	$@
 	@mkdir -p $(o)
-	@cd $(R) && out/host/mooncc $(mc_flags) -c port/playdate/main.c out/playdate/main.o
+	@cd $(R) && LOVE_NO_IMAGE= out/host/love mooncc $(mc_flags) -c port/playdate/main.c out/playdate/main.o
 $(o)/%.o: $(R)/%.c $(pd_h) | $(MOONCC)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@cd $(R) && out/host/mooncc $(mc_flags) -c $*.c out/playdate/$*.o
+	@cd $(R) && LOVE_NO_IMAGE= out/host/love mooncc $(mc_flags) -c $*.c out/playdate/$*.o
 # the gcc half: the SDK boundary
 $(o)/pdglue.o: pdglue.c pdglue.h
 	@echo CC	$@

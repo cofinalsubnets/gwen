@@ -26,11 +26,11 @@
 # reproduces exactly and a green one means the same thing tomorrow. raise
 # REFUZZ_ROUNDS by hand when hunting; never make either time-dependent.
 #
-# usage: refuzz.sh LOVE KOREIMAGE
+# usage: refuzz.sh LOVE
 set -u
 
 m=$1
-img=$2
+
 seed=${REFUZZ_SEED:-20260815}
 rounds=${REFUZZ_ROUNDS:-150}
 
@@ -49,7 +49,7 @@ case $("$SED" --version 2>&1 | head -1) in *GNU*) ;;
 w=${TMPDIR:-/tmp}/refuzz.$$
 mkdir -p "$w" || exit 1
 trap 'rm -rf "$w"' EXIT INT TERM
-korerun() { "$m" wake "$img" kore "$@"; }
+korerun() { LOVE_NO_IMAGE= "$m" kore "$@"; }
 
 # ⚠ THE DRAW IS MADE IN awk, ONCE, not in the shell: `$(rnd)` runs in a SUBSHELL,
 # so an LCG kept in a shell variable never advances in the parent and every round

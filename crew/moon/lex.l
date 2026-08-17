@@ -5,6 +5,7 @@
 ; \n \t \r \0 \\ \') read as ('num code); string literals (same escapes,
 ; plus \") as ('str text). not yet (staged): hex/octal/float literals,
 ; adjacent-string pasting, the preprocessor's # lines.
+(module 'moon
 (:
    ; a diagnostic carrier: a stage may answer this instead of
    ; a bare bad, naming its own cause -- file/line/col (any () when unknown) and a
@@ -403,3 +404,4 @@
                            (go (i + 1) line ((? gl ['p (string c) line 1] ['p (string c) line]) >< acc)))
                        ())))))
        (go 0 ln0 ())))
+) ; module 'moon

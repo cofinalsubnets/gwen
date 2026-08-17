@@ -153,7 +153,7 @@
 
 ; --- the frame: escapes exact on a tiny screen ---
    (mini ls ks) (: st (vgo ls ks) _ (pin st 'w 8) _ (pin st 'h 4) (vframe st))
-   E$ (+ "" 27)
+   E$ (string 27)
    _ (assert
       (= (mini '("ab") "")
          (+ E$ (+ "[H" (+ "ab" (+ E$ (+ "[K\r\n" (+ "~" (+ E$ (+ "[K\r\n" (+ "~" (+ E$ (+ "[K\r\n"
@@ -276,7 +276,7 @@
       (= (klass ",") '(comma))
       (= (runs "," 0) '((comma 0 1)))
       (= (runs "map,map" 0) '((book 0 3) (comma 3 4) (book 4 7)))
-      (= (runs ("map" + (+ "" 1) + "map") 0) '((book 0 3) (book 4 7))))   ; unclaimed: no run of its own
+      (= (runs ("map" + (string 1) + "map") 0) '((book 0 3) (book 4 7))))   ; unclaimed: no run of its own
 
 ; --- the carry: a string spans lines (papel.l's css is forty of them), so a
 ;     line's class depends on where the line BEFORE it ended -----------------

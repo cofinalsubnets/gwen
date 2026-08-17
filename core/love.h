@@ -291,17 +291,30 @@ struct ai_lib const *ai_libs(void);
 // section; boot drains [__start_ai_nifs, __stop_ai_nifs) via ai_defn, so an app
 // adds nifs in its own host/<app>.c without touching the core. no linker script:
 // the toolchain defines the bracket symbols.
+// AiModNifs("mod", table) is the MODULE twin: one row = one (module, def table),
+// drained as one ai_defn call per row, so an app's nifs register under its
+// module instead of the book -- (module 'mod ..) text reopens the same one.
+struct ai_mod { char const *mod; struct ai_def const *defs; uintptr_t n; };
 #if defined(__APPLE__)
 extern struct ai_def const __start_ai_nifs[] __asm("section$start$__DATA$ai_nifs");
 extern struct ai_def const __stop_ai_nifs[]  __asm("section$end$__DATA$ai_nifs");
+extern struct ai_mod const __start_ai_mods[] __asm("section$start$__DATA$ai_mods");
+extern struct ai_mod const __stop_ai_mods[]  __asm("section$end$__DATA$ai_mods");
 #define AiNif(nm, fn) \
   static struct ai_def const __attribute__((section("__DATA,ai_nifs"), used)) \
     _ainif_##fn = { (nm), (intptr_t) (fn) }
+#define AiModNifs(m, tab) \
+  static struct ai_mod const __attribute__((section("__DATA,ai_mods"), used)) \
+    _aimod_##tab = { (m), (tab), sizeof(tab)/sizeof*(tab) }
 #else
 extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
+extern struct ai_mod const __start_ai_mods[], __stop_ai_mods[];
 #define AiNif(nm, fn) \
   static struct ai_def const __attribute__((section("ai_nifs"), used)) \
     _ainif_##fn = { (nm), (intptr_t) (fn) }
+#define AiModNifs(m, tab) \
+  static struct ai_mod const __attribute__((section("ai_mods"), used)) \
+    _aimod_##tab = { (m), (tab), sizeof(tab)/sizeof*(tab) }
 #endif
 
 // port vtable -- what a device owes, and nothing else. a NULL slot means no
@@ -392,7 +405,7 @@ struct ai
  *ai_ini_m(void*(*)(struct ai*, void*, size_t)),
  *ai_evals_(struct ai*, const char*),
  *ai_egg_(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, corpus, post)
- *ai_defn(struct ai*, struct ai_def const*, uintptr_t),   // ⚠ IMMORTAL values only
+ *ai_defn(struct ai*, struct ai_def const*, uintptr_t, char const*),   // ⚠ IMMORTAL values only; mod (or NULL = the book)
  *ai_defv(struct ai*, char const*),                // its twin for a LIVE heap value (rides sp[0], stays there)
  *ai_layer_(struct ai*),      // push a fresh writable layer (the runtime's enter); every frontend opens its session with it
  *ai_unsplice_(struct ai*);   // drop the link below the head (the runtime's bare leave)

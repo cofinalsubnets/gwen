@@ -4,8 +4,8 @@
 ; the spelling IS a monoid hom, so this crossing is lawful). a NUMBER against a symbol
 ; arrives as the unit (the degenerate law: no hom from a group into the free monoid),
 ; so the symbol answers whole. it still ADJOINS to a list (foo stays foo -- the list
-; law), applying it is const-1, and the EMPTY symbol (intern "") is the zero point (),
-; the +/* UNIT. coins are the per-kind override.
+; law), applying it is const-1, and the EMPTY symbol (intern "") is the zero point ():
+; +'s unit and *'s annihilating zero. coins are the per-kind override.
 
 (: sa-z (intern "")
  (assert
@@ -16,8 +16,8 @@
   ('ef = (@(1 2) + 'ef)) ('ef = ('ef + @(1 2))) ; sym <-> array: the tray is number-band, same law
   ; the EMPTY symbol (intern "") is () -- the UNIT, so it's +'s identity --
   ('ef = sa-z + 'ef) ('ef = 'ef + sa-z) (id? () (sa-z + sa-z))   ; () + x = x, either side; () + () = ()
-  ; --- * repeats the spelling and re-interns; sym*sym stays nil (str*str); () is *'s unit ---
-  ('xyxy = ('xy * 2)) ('xyxy = (2 * 'xy)) !('a * 'b) (2 = sa-z * 2)
+  ; --- * repeats the spelling and re-interns; sym*sym stays nil (str*str); () is *'s ZERO ---
+  ('xyxy = ('xy * 2)) ('xyxy = (2 * 'xy)) !('a * 'b) (() = sa-z * 2)
   ; --- apply: const-1, uniformly (the unit action; no more name indexing) ---
   (1 = ('xyz 1)) (1 = ('xyz 0)) (1 = (sa-z 5)) (1 = ((mint 0) 'x))
   ; --- lists still take any element, symbols included (the list law, not string algebra)

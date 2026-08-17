@@ -80,15 +80,21 @@
       (ADD_H     lvm_addh       lvm_bin_unit lvm_addh       lvm_addh       lvm_addh     lvm_addh     lvm_addh)
       ; `*`: the semiring product whose `+` is the lane above. numbers multiply,
       ;      sequence * count repeats, lambdas and maps compose (Church mul).
-      (MUL_MINT  lvm_bin_unit   lvm_bin_unit lvm_bin_unit   lvm_bin_unit   lvm_bin_unit lvm_bin_unit lvm_bin_unit)
-      (MUL_NUM   lvm_muln       lvm_bin_unit lvm_mul_rep    lvm_mul_rep    lvm_mul_rep  lvm_mulh     lvm_mulh)
-      ; string*string and sym*sym stay nil (lvm_0, the undefined lane -> the unit that
-      ; vanishes); a NUMBER against either repeats it.
-      (MUL_REP   lvm_mul_rep    lvm_bin_unit lvm_0          lvm_0          lvm_0        lvm_mulh     lvm_mulh)
+      ; THE ZERO ANNIHILATES (2026-08-16, the associativity law's * half): () is the
+      ; ZERO, and a semiring's zero kills under * -- () * x = (). the identity is 1,
+      ; which already IS the identity (numeral = function), so the repeat lane and the
+      ; Church lane agree without a special cell. undefined-answers-() is LAWFUL here
+      ; where it poisoned +: () absorbs under *, so a collapse propagates instead of
+      ; vanishing -- str*str staying lvm_0 is the same statement as the mint row.
+      (MUL_MINT  lvm_0          lvm_0        lvm_0          lvm_0          lvm_0        lvm_0        lvm_0)
+      (MUL_NUM   lvm_muln       lvm_0        lvm_mul_rep    lvm_mul_rep    lvm_mul_rep  lvm_mulh     lvm_mulh)
+      ; string*string and sym*sym stay nil (lvm_0 -- the ABSORBING zero now, so the
+      ; collapse is lawful); a NUMBER against either repeats it.
+      (MUL_REP   lvm_mul_rep    lvm_0        lvm_0          lvm_0          lvm_0        lvm_mulh     lvm_mulh)
       ; the chain row is MUL_REP with one cell changed: chain*chain is the CARTESIAN
       ; product, which is what makes the list lane a semiring rather than a monoid.
-      (MUL_CHAIN lvm_mul_rep    lvm_bin_unit lvm_0          lvm_0          lvm_mul_cart lvm_mulh     lvm_mulh)
-      (MUL_H     lvm_mulh       lvm_bin_unit lvm_mulh       lvm_mulh       lvm_mulh     lvm_mulh     lvm_mulh))
+      (MUL_CHAIN lvm_mul_rep    lvm_0        lvm_0          lvm_0          lvm_mul_cart lvm_mulh     lvm_mulh)
+      (MUL_H     lvm_mulh       lvm_0        lvm_mulh       lvm_mulh       lvm_mulh     lvm_mulh     lvm_mulh))
 
    ; --- which row each kind takes. a KTablet or KHot operand wins over everything,
    ; which is why their rows AND columns are the Church lanes: a tablet IS a lookup

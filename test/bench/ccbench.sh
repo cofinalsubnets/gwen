@@ -122,19 +122,23 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 
 # -- mooncc: the WHOLE toolchain in love, verbatim from `make test_raw`. mooncc -c each
 #    unit, mksys the syscall leaf, our linker binds. -I$ho picks up the lcat'd headers. --
-# ⚠ THE COMPILER IS THE ARTIFACT, NOT out/host/mooncc, and this is not a preference --
-# it is the only spelling of the lane that measures the same thing twice. mooncc's link
-# pulls crew/moon/lib/nolibc/ MEMBER BY NEED and caches the archive under
-# ~/.love/cache/moon, keyed on the compiler, its stat, AND ITS IMAGE. For an image FILE
-# the key carries that file's stat (moon.l's mcrtkey), and this file's make target used to
-# rebuild out/host/mooncc.image as a prerequisite -- so every run missed and paid a
-# one-time libc BUILD inside the build row: 43.8 s against 20.1 s warm, 54% of the number.
-# A baked image keys as the word "<baked>" instead, so the artifact's entry survives every
-# rebuild of the intermediates (measured: `touch out/host/mooncc.image out/host/love`
-# leaves it at 18.9 s). It is also simply what a user runs. A one-line C file does NOT warm
-# the archive in its place -- a program that needs no member pulls none.
+# ⚠ THE COMPILER IS THE SHIPPED ARTIFACT, and it is not a preference -- it is the only
+# spelling of this lane that measures the same thing twice. mooncc's link pulls
+# crew/moon/lib/nolibc/ MEMBER BY NEED and caches the archive under ~/.love/cache/moon,
+# keyed on the compiler, its stat, AND ITS IMAGE (moon.l's mcrtkey). An image FILE puts
+# that file's stat in the key, so while the lane ran out of out/host/mooncc -- whose
+# .image this file's own make target rebuilt as a prerequisite -- every run missed and
+# paid a one-time libc BUILD inside a per-build row: 43.8 s against 20.1 s warm, 54% of
+# the number. A BAKED image keys as the word "<baked>" instead, so the entry survives
+# every rebuild of the intermediates (measured then: `touch out/host/mooncc.image
+# out/host/love` left it at 18.9 s). The one-binary change has since retired that image
+# file, which closes the same hole from the other side -- but the artifact is still what
+# this should race, because it is what a user runs. ⚠ a one-line C file does NOT warm the
+# archive in its place: a program that needs no member pulls none.
+# ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads: the root Makefile exports it as 1 for the
+# corpus, and an egg-booted love has no verb table, so `mooncc` reads as a FILENAME.
 SEED=$R/out/dist/love-$(uname -m)
-mc() { "$SEED" mooncc "$@"; }
+mc() { env LOVE_NO_IMAGE= "$SEED" mooncc "$@"; }
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
@@ -148,7 +152,7 @@ build_mooncc() { # $1=binpath
       mc -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
     { cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
           crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
-      echo "(mksys \"$od/sys.o\")"; } | "$SEED" || exit 1
+      echo "((from 'moon 'mksys) \"$od/sys.o\")"; } | env LOVE_NO_IMAGE= "$SEED" || exit 1
     mc "$od"/*.o -o "$bin" ) || return 1
 }
 

@@ -5,6 +5,7 @@
 ; parse threads them off ps, gen off g, and a front that is NEITHER stands on this file alone.
 ; ⚠ nothing here may name a token, a parse state, a register or a target: the moment it does,
 ; a second front has to drag cparse in to size a struct.
+(module 'moon
 (:
    ; -- the type shapes --
    (ptr? ('ptr >< _)) 1
@@ -70,3 +71,4 @@
                          (tw w64 u < tw w64 s) s    ; signed strictly wider: it represents all of u
                          (tusg s))))))))            ; same width: the signed one's unsigned twin
    (tdecay ty) (? (arr? ty) ['ptr <>ty] ty))
+) ; module 'moon

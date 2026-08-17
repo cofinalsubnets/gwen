@@ -12,8 +12,11 @@
 R := ../..
 p_dir = $(notdir $(CURDIR))
 o = out/$(p_dir)
-MOONCC = out/host/mooncc
-mc = $(R)/out/host/mooncc
+# mooncc is love's own verb (the layered bake, doc/plan/one-binary.md). MOONCC is the
+# command as run FROM $(R); mc is the file the verb needs, the baked-stamp's sibling.
+# ⚠ LOVE_NO_IMAGE= leads: an egg-booted love has no verbs, and the root exports it=1.
+MOONCC = LOVE_NO_IMAGE= out/host/love mooncc
+mc = $(R)/out/host/love.baked
 lv = $(R)/out/host/love
 
 # a failed recipe takes its half-written target with it -- else a 0-byte artifact carries a
@@ -44,7 +47,7 @@ endif
 $(lv): FORCE
 	@$(MAKE) -C $(R) out/host/love
 $(mc): FORCE
-	@$(MAKE) -C $(R) out/host/mooncc
+	@$(MAKE) -C $(R) out/host/love.baked
 
 # the holo cats. ⚠ the backend text is named explicitly: a frontend bakes holo with the
 # NATIVE backend only, and a port must not care which machine it is building on.

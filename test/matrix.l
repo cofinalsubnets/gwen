@@ -169,7 +169,7 @@
 
  ; --- mul_rep: a sequence times a scalar count (int(abs c)) -> n copies joined ---
  (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))   ; str (commutes)
- (= "" (* "ab" -2))    (= "ababab" (* "ab" 2.9))   ; ($ count): saturates, ceils
+ (= "abab" (* "ab" -2))    (nil? (* "ab" 2.9))   ; (|count|): exact magnitude; an inexact count is no count
  ('xyxy = (* 'xy 2))                          ; sym * count repeats the spelling and RE-INTERNS -> a symbol
  (= '(1 2 1 2) (* '(1 2) 2))                  ; list
  (= "" (* "ab" 0))   (nil? (* '(1 2) 0))      ; 0 copies: empty str / empty list

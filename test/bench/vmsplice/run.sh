@@ -14,11 +14,11 @@ R=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$R"
 o=out/test/bench/vmsplice
 m=out/host/love
-mc=out/host/mooncc
+mc="env LOVE_NO_IMAGE= out/host/love mooncc"
 CC=${CC:-cc}
 mkdir -p $o
 [ -x $m ] || { echo "vmsplice: no $m -- run make host first" >&2; exit 1; }
-[ -x $mc ] || { echo "vmsplice: no $mc -- run make host first" >&2; exit 1; }
+[ -x out/host/love ] || { echo "vmsplice: no $mc -- run make host first" >&2; exit 1; }
 
 echo "== splice.c: composed vs dispatched =="
 # core/love.c per compiler: the probe links against the real VM, so each column is

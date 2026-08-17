@@ -14,13 +14,15 @@
 ; (word-sized components compare by exact cross-multiply, so near-equal rationals
 ; never tie by double rounding; wider fall to the sign-exact quotients). a method
 ; gets RAW operands, so it OWNS its domain: ok? admits a star or an (n d) of stars
-; (an integer rides cap/mint: (cap 7) is 7, (caup 7) the unit), and anything else
+; (an integer spells (n 1) through `parts` -- it used to ride the ()-*-unit as its
+; denominator, which the zero law retired), and anything else
 ; answers () -- the undefined-op law, and the fence that keeps a foreign operand (a
-; chain of coins, say) from dragging gcd into a loop. `reduce`/`ok?` are local
+; chain of coins, say) from dragging gcd into a loop. `reduce`/`ok?`/`parts` are local
 ; plumbing; q is the only name this leaks.
 (: q (: (reduce n d) (? (0 = n) [0 1]                           ; gcd out, sign on num, den > 0
                         (: g (gcd (abs n) (abs d)) s (? (d < 0) -1 1)
                            [(s * n // g) (s * d // g)]))
+        (parts v) (? (two? v) v [v 1])                          ; a bare star is n/1
         ; the domain test is the CLOSED star (the fixpoint minus coins): star?
         ; is open now, and an open star as an (n d) component would drag gcd
         ; off the tower it terminates on -- a coin is never a coefficient.
@@ -37,19 +39,23 @@
         _ (pins st
              1 (\ a b (: x (load a) y (load b)                  ; (n1 d1) + (n2 d2)
                   (? (ok? x && ok? y)
-                     (coin st (reduce (<x * <>y + <y * <>x) (<>x * <>y)))
+                     (: p (parts x) r (parts y)
+                        (coin st (reduce (<p * <>r + <r * <>p) (<>p * <>r))))
                      ())))
              2 (\ a b (: x (load a) y (load b)                  ; (n1 d1) * (n2 d2)
                   (? (ok? x && ok? y)
-                     (coin st (reduce (<x * <y) (<>x * <>y)))
+                     (: p (parts x) r (parts y)
+                        (coin st (reduce (<p * <r) (<>p * <>r))))
                      ())))
              5 (\ a b (: x (load a) y (load b)                  ; (n1 d1) - (n2 d2)
                   (? (ok? x && ok? y)
-                     (coin st (reduce (<x * <>y - <y * <>x) (<>x * <>y)))
+                     (: p (parts x) r (parts y)
+                        (coin st (reduce (<p * <>r - <r * <>p) (<>p * <>r))))
                      ())))
              8 (\ a b (: x (load a) y (load b)                  ; (n1 d1) / (n2 d2): invert and
-                  (? (ok? x && ok? y && <y != 0)                ; multiply; by zero -> () (no inf in Q)
-                     (coin st (reduce (<x * <>y) (<>x * <y)))
+                  (? (ok? x && ok? y && <y != 0)                ; multiply; by zero -> () (no inf in Q; cap of a bare star is itself)
+                     (: p (parts x) r (parts y)
+                        (coin st (reduce (<p * <>r) (<>p * <r))))
                      ()))))
         (\ n (? (two? n) (coin st (reduce <n <>n))              ; (q (n d)) -- the show form
                 (\ d (coin st (reduce n d)))))))               ; (q n d) -- the ergonomic curried form

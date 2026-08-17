@@ -18,7 +18,7 @@ ho=$1
 m=$2
 
 fail() { echo "FAIL $*" >&2; exit 1; }
-korerun() { "$m" wake "$ho/kore.image" kore "$@"; }
+korerun() { LOVE_NO_IMAGE= "$m" kore "$@"; }
 
 g=$ho/.kore-g
 o=$ho/.kore-o
@@ -54,8 +54,12 @@ korerun diff "$ho/.au1" "$ho/.au2" > "$ho/.kore-diff.out" 2>&1; r=$?
 diff -u "$ho/.au1" "$ho/.au2" | tail -n +3 > "$g"
 tail -n +3 "$ho/.kore-diff.out" > "$o"
 same "diff"
-# kore dispatches on argv[0], so a symlink named `diff` IS diff
-ln -sf kore "$ho/diff"
+# kore dispatches on argv[0], so a link named `diff` IS diff. the shim is the distro's
+# own shape (a script reading basename $0, tool names symlinked onto it) -- the build
+# tree carries no kore binary anymore, the crew riding love's own image.
+printf '#!/bin/sh\nn=$(basename -- "$0")\nLOVE_NO_IMAGE= exec "%s" kore "$n" "$@"\n' "$PWD/$m" > "$ho/.koreshim"
+chmod 755 "$ho/.koreshim"
+ln -sf .koreshim "$ho/diff"
 "$ho/diff" "$ho/.au1" "$ho/.au2" > "$ho/.kore-sym.out" 2>&1; r=$?
 [ $r -eq 1 ] && cmp -s "$ho/.kore-diff.out" "$ho/.kore-sym.out" \
   || fail "kore argv0 symlink (exit $r)"
@@ -378,7 +382,9 @@ printf 'x\n' | korerun xargs /no/such/cmd 2>/dev/null; r=$?
 env AUP=44 sh -c 'printf %s "$AUP"' > "$g"
 korerun env AUP=44 sh -c 'printf %s "$AUP"' > "$o"; same "env assign"
 # _= is the shell's own last-argument variable and differs by who was exec'd
-env | grep -v '^_=' | LC_ALL=C sort > "$g"
+# the oracle wears korerun's own LOVE_NO_IMAGE= prefix, so the two children
+# compare the same environment
+LOVE_NO_IMAGE= env | grep -v '^_=' | LC_ALL=C sort > "$g"
 korerun env | grep -v '^_=' | LC_ALL=C sort > "$o"; same "env print"
 korerun env sh -c 'exit 3'; r=$?; [ $r -eq 3 ] || fail "kore env child exit (rc $r)"
 korerun sleep 0.1 || fail "kore sleep"
@@ -395,7 +401,7 @@ echo "kore: process tools (env/sleep/kill/xargs -- GNU-identical output, the exi
 # dispatch, compounds, cmdsub.
 korerun sh -c 'if true; then echo "kore-sh $(echo ok)"; fi' > "$o" 2>&1; r=$?
 [ $r -eq 0 ] && [ "$(cat "$o")" = "kore-sh ok" ] || fail "kore sh (exit $r)"
-ln -sf kore "$ho/sh"
+ln -sf .koreshim "$ho/sh"
 "$ho/sh" -c 'echo via-symlink' > "$o" 2>&1; r=$?
 [ $r -eq 0 ] && [ "$(cat "$o")" = "via-symlink" ] || fail "kore sh symlink (exit $r)"
 echo "kore: sh (lush aboard -- kore sh + the argv0 symlink) ok"
@@ -509,7 +515,7 @@ echo "kore: find (18 walks set-identical to the system find, -exec, the two refu
 # statuses are 1, 2 (a udie from deep inside), 0 and 0: the run must reach the last
 # say, and the charms must be exactly those. ⚠ nothing else here can catch this: a
 # regression to `quit` still passes every check above.
-"$m" wake "$ho/kore.image" -e '(: a (kore-main (list "kore" "false"))
+LOVE_NO_IMAGE= "$m" -e '(: a (kore-main (list "kore" "false"))
                                     b (kore-main (list "kore" "basename"))
                                     c (kore-main (list "kore" "true"))
                                     d (kore-main (list "kore" "echo" "alive"))
@@ -519,7 +525,7 @@ r=$?
 [ $r -eq 0 ] || fail "kore in-image: the process did not survive four tools (exit $r)"
 [ "$(tail -1 "$o")" = "1 2 0 0" ] || fail "kore in-image statuses: $(tail -1 "$o")"
 # ..and the unknown tool answers usage's 2 rather than ending anything
-"$m" wake "$ho/kore.image" -e '(: r (kore-main (list "kore" "nosuchtool"))
+LOVE_NO_IMAGE= "$m" -e '(: r (kore-main (list "kore" "nosuchtool"))
                                     _ (say out ("after " + show r + "\n")) (quit 0))' > "$o" 2>/dev/null
 [ "$(tail -1 "$o")" = "after 2" ] || fail "kore in-image unknown tool: $(tail -1 "$o")"
 echo "kore: the status charm (mains answer, the image survives, the seat quits) ok"

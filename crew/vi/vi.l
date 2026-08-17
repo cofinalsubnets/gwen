@@ -21,7 +21,7 @@
        _ (pin st 'pens (hue-wake ()))
        ws (winsize 0)
        _ (? (two? ws) (: _ (pin st 'h <ws) (pin st 'w >ws)) ())
-       e (+ "" 27)
+       e (string 27)
        _ (raw 1)
        _ (puts (+ e "[?1049h"))
        ; the ex write requests: (name) means write, "" means the buffer's file

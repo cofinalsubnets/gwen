@@ -509,22 +509,18 @@ Proof. exact (st_eta (Var 6)). Qed.
 (* `+` on sequences (strings, lists) is concatenation -- a MONOID: associative,
    with the empty sequence as identity ("" and () are the units, cat_nil_l/r).
    The runtime LIFTS that unit out of the sequence lane: a bare mint -- the zero
-   point () too -- is the UNIT, the do-nothing element, the IDENTITY of BOTH + and
-   * in EVERY lane (() + x = () * x = x for a number, string, complex, array,
-   anything), not just on sequences. 0 and 1 are its two FACES: the unit shows 0
-   (the additive identity) in + and 1 (the multiplicative identity) in *, one
-   nothing reading as each operation's identity -- yet it stays the unit, NOT the
-   number 0 (which annihilates *: smul 0 = []). The model is typed-by-sequences,
-   so cat_nil_l/r (the + unit) and smul_one (the * unit) are the witnessed
-   fragments; the scalar lanes are that same unit extended by dispatch. `*` is
-   REPEATED `+`: a sequence times a count is that many copies concatenated, and
-   the count SATURATES (max 0, ceil) -- a non-positive count gives the empty
-   sequence. `+` is also the MEASURE HOMOMORPHISM: the net of a concatenation
-   is the sum of the nets. The BYTE LAW (a string + an exact integer 0..255 is
-   one byte; rep-blind, so 66 and 66.0 alike) is the one PARTIAL case, modeled
-   as an option -- None is nil. The other failures are the same None lane:
-   NAMED-symbol-`+` (named symbols left the string algebra) and string-`-`
-   (numeric only) are nil, not modeled separately. *)
+   point () too -- is +'s IDENTITY in EVERY lane (() + x = x for a number,
+   string, complex, array, anything). Under * that same token is the ZERO, and
+   the zero ANNIHILATES (() * x = (), gunit_times_l/r below); *'s identity is 1,
+   the numeral that is already the identity function. `*` is REPEATED `+`: a
+   sequence times an EXACT count is |count| copies concatenated (smul_hom, the
+   action law), and an inexact count is no count -- it answers the absorbing ().
+   `+` is also the MEASURE HOMOMORPHISM: the net of a concatenation is the sum
+   of the nets. Mixed-band + DEGENERATES (the associativity law): a number
+   against a sequence arrives as that band's unit, so the sequence answers whole
+   -- the byte law and the element-adjoin law are RETIRED, which is what lets
+   gplus_assoc below quantify with no side conditions. NAMED-symbol-`+` (named
+   symbols took the string algebra) and string-`-` (numeric only) stay nil. *)
 
 Open Scope Z_scope.
 
@@ -535,10 +531,10 @@ Theorem cat_nil_l : forall (A:Type) (x : list A), [] ++ x = x.  Proof. reflexivi
 Theorem cat_nil_r : forall (A:Type) (x : list A), x ++ [] = x.
 Proof. intros A x. induction x as [|a x IH]; simpl; [reflexivity | rewrite IH; reflexivity]. Qed.
 
-(* concrete: "ab"+"cd"="abcd"; '(1 2)+'(3 4)='(1 2 3 4); 5+'(1 2)='(5 1 2) (adjoin) *)
+(* concrete: "ab"+"cd"="abcd"; '(1 2)+'(3 4)='(1 2 3 4); 5+'(1 2)='(1 2) (degenerate,
+   in gplus below -- at the bare list level there is nothing left to state) *)
 Theorem cat_strings : [97;98] ++ [99;100] = [97;98;99;100].    Proof. reflexivity. Qed.
 Theorem cat_lists   : [1;2] ++ [3;4] = ([1;2;3;4] : list Z).    Proof. reflexivity. Qed.
-Theorem adjoin      : 5 :: [1;2] = ([5;1;2] : list Z).          Proof. reflexivity. Qed.
 
 (* * as repeated +: n copies concatenated *)
 Definition srep {A} (n : nat) (s : list A) : list A := concat (repeat s n).
@@ -547,37 +543,42 @@ Definition srep {A} (n : nat) (s : list A) : list A := concat (repeat s n).
 Theorem star_is_repeated_plus : forall (A:Type) (n:nat) (s:list A), srep (S n) s = s ++ srep n s.
 Proof. intros. unfold srep. reflexivity. Qed.
 
-(* the count SATURATES: max(0, ceil); integer count => ceil id, non-positive => empty *)
-Definition scount (c : Z) : nat := Z.to_nat (Z.max 0 c).
-Definition smul {A} (c : Z) (s : list A) : list A := srep (scount c) s.
+(* THE * COUNT LAW (the associativity arc): an exact count acts by |count| --
+   magnitude is the one multiplicative hom over the sign crossing, since
+   (-1)*(-2) re-enters the positives -- so smul is a MONOID ACTION of multiplicative Z.
+   ($'s saturating count stays with numeral-apply below: application is not *.) *)
+Definition mcount (c : Z) : nat := Z.abs_nat c.
+Definition smul {A} (c : Z) (s : list A) : list A := srep (mcount c) s.
 
 Theorem star_ab_3   : smul 3 [97;98] = [97;98;97;98;97;98].     Proof. reflexivity. Qed. (* "ab"*3 *)
 Theorem star_list_2 : smul 2 [1;2] = ([1;2;1;2] : list Z).      Proof. reflexivity. Qed. (* '(1 2)*2 *)
-Theorem star_neg    : forall (A:Type) (s:list A), smul (-3) s = [].  Proof. reflexivity. Qed. (* "ab"*-3 = "" *)
+Theorem star_neg    : smul (-3) [97;98] = [97;98;97;98;97;98].  Proof. reflexivity. Qed. (* "ab"*-3: |−3| copies *)
 Theorem star_zero   : forall (A:Type) (s:list A), smul 0 s = [].     Proof. reflexivity. Qed. (* '(1 2)*0 = () *)
-(* the * UNIT: 1 is *'s identity (smul 1 = id) -- the face () shows in *, as
-   the empty sequence is the face it shows in + (cat_nil_r). Contrast star_zero:
-   the number 0 ANNIHILATES *, but the unit () does not (() * x = x). *)
+(* the * IDENTITY is 1 (smul 1 = id) -- the numeral that is already the identity
+   function. Contrast star_zero: the number 0 empties the kind, and () (below)
+   ANNIHILATES; nothing but 1 passes through. *)
 Theorem smul_one    : forall (A:Type) (s:list A), smul 1 s = s.
-Proof. intros A s. unfold smul, srep, scount. simpl. apply app_nil_r. Qed.
+Proof. intros A s. unfold smul, srep, mcount. simpl. apply app_nil_r. Qed.
 
-Theorem count_saturates : forall c, c <= 0 -> scount c = 0%nat.
-Proof. intros c H. unfold scount. rewrite Z.max_l by lia. reflexivity. Qed.
-Theorem count_keeps : forall c, 0 <= c -> Z.of_nat (scount c) = c.
-Proof. intros c H. unfold scount. rewrite Z.max_r by lia. apply Z2Nat.id. lia. Qed.
+(* the action law: smul is a hom from multiplicative Z -- THE fact that makes mixed
+   * associate ((x * a) * b = x * (a * b) with the sequence in any seat) *)
+Lemma srep_mult : forall (A:Type) (a b:nat) (s:list A), srep (a * b) s = srep a (srep b s).
+Proof. intros A a b s. unfold srep. induction a as [|a IH]; simpl.
+  reflexivity. rewrite repeat_app, concat_app, IH. reflexivity. Qed.
+Theorem smul_hom : forall (A:Type) (a b:Z) (s:list A), smul (a * b) s = smul a (smul b s).
+Proof. intros A a b s. unfold smul, mcount. rewrite Zabs2Nat.inj_mul. apply srep_mult. Qed.
 
-(* ---- () is the IDENTITY OF BOTH MONOIDS, over ONE unit token -----------------
-   cat_nil_l/r and smul_one above witness the two FACES of () separately: it shows
-   as the empty sequence [] in + and as the count 1 in *. The prose claim is
-   stronger -- a SINGLE () that is the do-nothing element of + AND * across every
-   lane: () + x = () * x = x for a number, a sequence, anything. Model a value as
-   the unit (), a number, or a (nestable) sequence, with + and * the GENERIC ops
-   that send () to the OTHER operand and otherwise act per lane: numbers add /
-   multiply, sequences concatenate, a number-by-sequence * is the saturating repeat
-   -- * is iterated + -- and sequence-by-sequence * is the cartesian product, each
-   pair a 2-list, which is why the carrier must NEST (GSeq holds gval). Then () is a
-   two-sided identity of BOTH, over the SAME () token -- and is provably NOT the
-   number 0, which ANNIHILATES * (0 * x = []) while () never does. *)
+(* ---- () is +'s IDENTITY and *'s ZERO (the associativity law, 2026-08-16) -----
+   One () token, one law per face: () + x = x (nothing adjoins nothing), and
+   () * x = () (a semiring's zero ANNIHILATES its product; the * identity is 1,
+   the numeral that is already the identity function). Mixed bands DEGENERATE
+   under +: a number against a sequence arrives as that band's unit, so the
+   sequence answers whole -- the only hom from a group into a free monoid is
+   trivial, which is what buys associativity OVER THE WHOLE CARRIER (gplus_assoc
+   below, no side conditions). Under *, numbers act on sequences by |count|
+   (smul_hom's action law), sequence-by-sequence * is the cartesian product
+   (each pair a 2-list, why the carrier NESTS), and undefined mixes answer () --
+   lawful here, where () absorbs, in a way it never was for +. *)
 Inductive gval := GUnit | GNum (z : Z) | GSeq (xs : list gval).
 
 Definition gplus (a b : gval) : gval :=
@@ -586,33 +587,62 @@ Definition gplus (a b : gval) : gval :=
   | _,       GUnit   => a
   | GNum m,  GNum n  => GNum (m + n)
   | GSeq xs, GSeq ys => GSeq (xs ++ ys)
-  | GNum n,  GSeq ys => GSeq (GNum n :: ys)        (* adjoin: 5 + '(1 2) = '(5 1 2) *)
-  | GSeq xs, GNum n  => GSeq (xs ++ [GNum n])
+  | GNum _,  GSeq ys => GSeq ys                    (* DEGENERATE: 5 + '(1 2) = '(1 2) *)
+  | GSeq xs, GNum _  => GSeq xs
   end.
 
 Definition gtimes (a b : gval) : gval :=
   match a, b with
-  | GUnit,   _       => b
-  | _,       GUnit   => a
+  | GUnit,   _       => GUnit                      (* the zero annihilates *)
+  | _,       GUnit   => GUnit
   | GNum m,  GNum n  => GNum (m * n)
-  | GNum n,  GSeq ys => GSeq (concat (repeat ys (Z.to_nat (Z.max 0 n))))  (* repeat: iterated + *)
-  | GSeq xs, GNum n  => GSeq (concat (repeat xs (Z.to_nat (Z.max 0 n))))
+  | GNum n,  GSeq ys => GSeq (srep (Z.abs_nat n) ys)             (* repeat: |count| copies *)
+  | GSeq xs, GNum n  => GSeq (srep (Z.abs_nat n) xs)
   | GSeq xs, GSeq ys => GSeq (flat_map (fun x => map (fun y => GSeq [x; y]) ys) xs)  (* cartesian *)
   end.
 
 (* the + monoid's identity, the SAME () token on either side: () + x = x = x + () *)
 Theorem gunit_plus_l  : forall x, gplus GUnit x = x.   Proof. reflexivity. Qed.
 Theorem gunit_plus_r  : forall x, gplus x GUnit = x.   Proof. intro x; destruct x; reflexivity. Qed.
-(* the * monoid's identity, over that same () token: () * x = x = x * () *)
-Theorem gunit_times_l : forall x, gtimes GUnit x = x.  Proof. reflexivity. Qed.
-Theorem gunit_times_r : forall x, gtimes x GUnit = x.  Proof. intro x; destruct x; reflexivity. Qed.
+(* *'s zero, that same token: () * x = () = x * () *)
+Theorem gunit_times_l : forall x, gtimes GUnit x = GUnit.  Proof. reflexivity. Qed.
+Theorem gunit_times_r : forall x, gtimes x GUnit = GUnit.  Proof. intro x; destruct x; reflexivity. Qed.
 
-(* () is NOT the number 0: the number 0 ANNIHILATES * (0 * x = []), the unit does
-   not (() * x = x) -- so they differ on the * lane (cf. unit_neq_zero). *)
+(* () is still NOT the number 0: on a string, 0 counts (0 copies = "", the kind's
+   own empty) where () annihilates to () -- the model keeps GSeq [] and GUnit
+   apart just as love keeps "" and () apart (cf. unit_neq_zero). *)
 Theorem gzero_annihilates : forall ys, gtimes (GNum 0) (GSeq ys) = GSeq [].
-Proof. reflexivity. Qed.
+Proof. intros ys. cbn. reflexivity. Qed.
 Theorem gunit_ne_zero : gtimes GUnit (GSeq [GNum 1]) <> gtimes (GNum 0) (GSeq [GNum 1]).
 Proof. cbn. congruence. Qed.
+
+(* THE LAW ITSELF: + associates over the WHOLE carrier, no side conditions --
+   this is what retiring the adjoin bought (5 + '(1 2) = '(5 1 2) broke it). *)
+Theorem gplus_assoc : forall x y z, gplus (gplus x y) z = gplus x (gplus y z).
+Proof. intros x y z. destruct x, y, z; cbn; try reflexivity.
+  f_equal; lia. f_equal; apply cat_assoc. Qed.
+
+(* ... and * associates wherever the cartesian is not engaged: the annihilating
+   () and the |count| action law close every mixed shape. (chain*chain, the
+   nesting cartesian, is the carve-out -- ordered pairs nest differently and
+   the law holds only through tally, cart_length below.) *)
+Theorem gtimes_assoc_num : forall a b c,
+  gtimes (gtimes (GNum a) (GNum b)) (GNum c) = gtimes (GNum a) (gtimes (GNum b) (GNum c)).
+Proof. intros. cbn. f_equal. lia. Qed.
+Theorem gtimes_assoc_seq3 : forall a b s,
+  gtimes (gtimes (GSeq s) (GNum a)) (GNum b) = gtimes (GSeq s) (gtimes (GNum a) (GNum b)).
+Proof. intros. cbn. f_equal.
+  change (smul b (smul a s) = smul (a * b) s).
+  rewrite Z.mul_comm. symmetry. apply smul_hom. Qed.
+Theorem gtimes_assoc_seq2 : forall a b s,
+  gtimes (gtimes (GNum a) (GSeq s)) (GNum b) = gtimes (GNum a) (gtimes (GSeq s) (GNum b)).
+Proof. intros. cbn. f_equal.
+  change (smul b (smul a s) = smul a (smul b s)).
+  rewrite <- smul_hom, <- smul_hom, Z.mul_comm. reflexivity. Qed.
+Theorem gtimes_assoc_seq1 : forall a b s,
+  gtimes (gtimes (GNum a) (GNum b)) (GSeq s) = gtimes (GNum a) (gtimes (GNum b) (GSeq s)).
+Proof. intros. cbn. f_equal.
+  change (smul (a * b) s = smul a (smul b s)). apply smul_hom. Qed.
 
 (* LIST * LIST is the CARTESIAN PRODUCT (the chain lane, lvm_mul_cart): every ordered
    pairing, each pair a 2-list. This is the semiring product whose + is ++ -- but only
@@ -648,14 +678,20 @@ Proof. intros A B a b c. unfold cart. induction a as [|x a IH]; simpl.
     + rewrite <- !app_assoc. apply Permutation_app_head.
       rewrite !app_assoc. apply Permutation_app_tail. apply Permutation_app_comm. Qed.
 
-(* THE COUNT LAW IS SHARED: numeral-apply (n f) composes f the SAME scount times.
-   `*` repeats (smul) and a numeral composes (numap) through ONE saturated count,
-   the same Z.max 0 that defines `sat` -- so count_saturates is BOTH the *-floor
-   and the compose-floor. This is the count side of the one saturation bit; its
-   value-side twin is sat_clamps (net <= 0 => sat = 0), and its third face is the
-   n-ary closure's fire-vs-hold (test/oracle.l, test/proof/rocq/extract.v). (Only the
-   COMPOSITION count saturates; the numeral-on-numeral exponent climbs to
-   reciprocals -- (-1 x) = 1/x -- so this is appf-iteration, not `app`.) *)
+(* THE TWO COUNT LAWS SPLIT (the associativity arc): `*` repeats by |count|
+   (mcount -- smul must be a hom from multiplicative Z, see smul_hom), while numeral-apply
+   composes f a SATURATED count of times (scount, the same Z.max 0 that defines
+   `sat`) -- application is not *, and it owes no product law. count_saturates
+   is the compose-floor; its value-side twin is sat_clamps (net <= 0 => sat = 0),
+   and its third face is the n-ary closure's fire-vs-hold (test/oracle.l,
+   test/proof/rocq/extract.v). (Only the COMPOSITION count saturates; the
+   numeral-on-numeral exponent climbs to reciprocals -- (-1 x) = 1/x -- so this
+   is appf-iteration, not `app`.) *)
+Definition scount (c : Z) : nat := Z.to_nat (Z.max 0 c).
+Theorem count_saturates : forall c, c <= 0 -> scount c = 0%nat.
+Proof. intros c H. unfold scount. rewrite Z.max_l by lia. reflexivity. Qed.
+Theorem count_keeps : forall c, 0 <= c -> Z.of_nat (scount c) = c.
+Proof. intros c H. unfold scount. rewrite Z.max_r by lia. apply Z2Nat.id. lia. Qed.
 Definition numap {A} (c : Z) (f : A -> A) (x : A) : A := Nat.iter (scount c) f x.
 
 (* a non-positive count composes 0 times: the identity -- the compose-FLOOR,
@@ -684,25 +720,13 @@ Proof.
     replace (Z.of_nat (S n)) with (Z.of_nat n + 1) by lia. ring.
 Qed.
 
-(* the byte law: string + exact 0..255 is one byte (rep-blind); else nil (None) *)
-Definition byte_add (s : list Z) (n : Z) : option (list Z) :=
-  if andb (0 <=? n) (n <=? 255) then Some (s ++ [n]) else None.
-
-Theorem byte_in_range : byte_add [120] 66 = Some [120; 66].   Proof. reflexivity. Qed. (* "x"+66="xB" *)
-Theorem byte_neg_nil  : byte_add [120] (-66) = None.          Proof. reflexivity. Qed. (* "x"+-66=nil *)
-Theorem byte_over_nil : byte_add [120] 256 = None.            Proof. reflexivity. Qed. (* "x"+256=nil *)
-
-Theorem byte_iff : forall s n, byte_add s n <> None <-> 0 <= n <= 255.
-Proof.
-  intros s n. unfold byte_add. split.
-  - destruct (0 <=? n) eqn:E1; destruct (n <=? 255) eqn:E2; cbn; intro H.
-    + apply Z.leb_le in E1. apply Z.leb_le in E2. lia.
-    + congruence.
-    + congruence.
-    + congruence.
-  - intros [H1 H2]. apply Z.leb_le in H1. apply Z.leb_le in H2.
-    rewrite H1, H2. cbn. discriminate.
-Qed.
+(* the byte law is RETIRED (the associativity law): a number against a string
+   arrives as that band's unit, so the string answers whole -- (string c) is
+   the one spelling of a byte now. gplus says it; the concrete witnesses: *)
+Theorem degen_str_num : gplus (GSeq [GNum 120]) (GNum 66) = GSeq [GNum 120].
+Proof. reflexivity. Qed.                                      (* "x"+66="x" *)
+Theorem degen_num_str : gplus (GNum 66) (GSeq [GNum 120]) = GSeq [GNum 120].
+Proof. reflexivity. Qed.                                      (* 66+"x"="x" *)
 
 (* ============================================================ *)
 (* arrays: shaped, broadcasting, reductions, contraction        *)
@@ -1092,7 +1116,8 @@ End Faces.
 Print Assumptions sat_clamps.        (* the net/saturation law (value side) *)
 Print Assumptions app_appZ.          (* the Z lane IS the nat lane: gen.v shares this model *)
 Print Assumptions numap_floor.       (* the count-law floor (count side, same $) *)
-Print Assumptions gunit_times_l.     (* () is the identity of BOTH monoids, + and * *)
+Print Assumptions gplus_assoc.       (* + associates over the whole carrier (the degenerate law) *)
+Print Assumptions gunit_times_l.     (* () is +'s identity and *'s annihilating zero *)
 Print Assumptions unit_lt_zero.      (* () < 0: the floor below value-false (order side) *)
 Print Assumptions le_total.          (* the total order *)
 Print Assumptions eta_not_bridged.   (* = is alpha+structural on source, no further *)

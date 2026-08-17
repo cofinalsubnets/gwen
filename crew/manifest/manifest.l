@@ -138,7 +138,7 @@
 
  ; --- the tui ---
  (upto n f) ((: (go i) (? (< i n) (: _ (f i) (go (+ i 1))) ())) 0)
- (cnom cx cy) (intern (+ (string (+ 97 )) (show (+ cy 1))))
+ (cnom cx cy) (intern (+ (string (+ 97 cx)) (show (+ cy 1))))
  (min2 a b) (? (< a b) a b)
  (max2 a b) (? (< a b) b a)
 
@@ -173,7 +173,7 @@
     _ (say j "\e[K\r\n")
     ; the header row: column letters, the cursor's lit
     _ (say j "    ")
-    _ (upto nc (\ i (: t (padl (+ (string (+ 97 )) "    ") 7)
+    _ (upto nc (\ i (: t (padl (+ (string (+ 97 i)) "    ") 7)
                        _ (? (= i cx) (say j "\e[7m") 0)
                        _ (say j (padr t 9))
                        _ (? (= i cx) (say j "\e[0m") 0)

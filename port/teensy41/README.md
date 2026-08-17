@@ -15,7 +15,7 @@ cd port/teensy41 && make            # -> $R/out/teensy41/love.hex
 make flash                           # teensy_loader_cli --mcu=TEENSY41 -w -v ...
 ```
 
-Compiled END TO END by **mooncc** (`out/host/mooncc -t thumb2`, built by the
+Compiled END TO END by **mooncc** (`love mooncc -t thumb2`, built by the
 root Makefile): love.c, the am math floor, libc, and the port's own C all go
 through the repo's compiler, and `mkboot.l` lays the ROM-facing FlexSPI/IVT/
 vector blocks + crt0 + the barrier helpers from holo IR -- there is no `.S`

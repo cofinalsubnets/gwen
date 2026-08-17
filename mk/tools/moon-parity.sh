@@ -41,16 +41,16 @@
 #   why    every refusal with the cause the compiler gave, and every borrow with its symbol
 set -e
 
-mc=${MOONCC:-out/host/mooncc}
-kore=${KORE:-out/host/kore}
+# mooncc and kore are love's own verbs (the layered bake); MOONCC/KORE still override.
+# ⚠ `env`, not a bare assignment prefix: $mc expands AFTER assignment-recognition, so a
+# literal `LOVE_NO_IMAGE=` in the expansion would run as a command name.
+love=${LOVE:-out/host/love}
+mc=${MOONCC:-env LOVE_NO_IMAGE= $love mooncc}
+kore=${KORE:-env LOVE_NO_IMAGE= $love kore}
 doc=${DOC:-doc/moon-c-gaps.md}
 mode=${1:-table}
 d=${TMPDIR:-/tmp}/moon-parity.$$
-[ -x "$mc" ] || { echo "moon-parity: no $mc -- run make out/host/mooncc"; exit 0; }
-# ⚠ refuse rather than degrade: with no way to read an object's symbols every
-# BORROWED lane reads as ours, and the table would say `ok` where it means `libgcc`
-# -- silently, which is worse than not running at all.
-[ -x "$kore" ] || { echo "moon-parity: no $kore -- kore nm is what tells a borrowed lane from ours; run make out/host/kore"; exit 1; }
+[ -x "$love" ] || { echo "moon-parity: no $love -- run make host"; exit 0; }
 mkdir -p "$d"
 trap 'rm -rf "$d"' EXIT
 
@@ -70,7 +70,7 @@ p() {
   : > "$d/p$n.allow"
   for s in "$@"; do printf '%s\n' "$s" >> "$d/p$n.allow"; done
   for t in $targets; do
-    if "$mc" -t "$t" -c "$d/p$n.c" -o "$d/p$n.$t.o" 2>"$d/p$n.$t.log"; then
+    if $mc -t "$t" -c "$d/p$n.c" -o "$d/p$n.$t.o" 2>"$d/p$n.$t.log"; then
       printf 'ok' > "$d/p$n.$t.v"
       printf '%s\n' "$d/p$n.$t.o" >> "$d/objs"
     else printf '%s' '—' > "$d/p$n.$t.v"; fi
@@ -114,7 +114,7 @@ p '`double`/`float` arithmetic' \
 # its header and no rows, which is the answer, not a silence.
 if [ -s "$d/objs" ]; then
   # shellcheck disable=SC2046
-  "$kore" nm -u $(cat "$d/objs") 2>/dev/null > "$d/undef.txt" || true
+  $kore nm -u $(cat "$d/objs") 2>/dev/null > "$d/undef.txt" || true
   one=$(head -1 "$d/objs")
   awk -v one="$one" '
     /^\/.*:$/ { f=substr($0,1,length($0)-1); next }

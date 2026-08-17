@@ -33,8 +33,8 @@ d=$ho/libc
 mkdir -p "$d"
 
 fail() { echo "FAIL test_libc: $*" >&2; exit 1; }
-# the compiler under test: the baked mooncc image, woken per invocation
-moonrun() { "$m" wake "$ho/mooncc.image" mooncc "$@"; }
+# the compiler under test: love's own mooncc verb (the crew layer, woken per invocation)
+moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 
 arch=$(uname -m)
 if [ "$arch" != x86_64 ]; then

@@ -13,9 +13,9 @@
 ; yields, the scheduler poll()s the parked fd and wakes the ready task. The
 ; two-process integration gate is `make nettest` (test/net/loopback.sh).
 
-; read a \n-terminated line off port p; the byte law ("" + byte appends one char)
-; rebuilds the text. EOF (get -> -1) also ends the line.
-(: (rdline p) (: (go acc) (: ch (see p) (? (= ch 10) acc (= ch -1) acc (go (acc + ch))))
+; read a \n-terminated line off port p; (string ch) spells the byte, + concats.
+; EOF (get -> -1) also ends the line.
+(: (rdline p) (: (go acc) (: ch (see p) (? (= ch 10) acc (= ch -1) acc (go (acc + string ch))))
                  (go "")))
 
 ; --- listen / accept / connect / get / say / seal over 127.0.0.1 ---

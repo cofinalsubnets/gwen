@@ -75,16 +75,20 @@ DOCK_PORT ?= 7620
 dock: host
 	@cp $(ho)/love $(ho)/dock
 	exec $(ho)/dock -l free/judge.l -l free/serve.l -l free/drive.l -l free/patch.l -e "(dock $(DOCK_PORT))"
-# the default BOOT IMAGE: `$< bake` boots the fresh binary, snapshots the post-warm heap
-# and lays it back into that binary's OWN .image section -- host/image.c copies the exe,
-# pwrites the blob at the section's file offset and renames over the original, so a new
-# inode leaves anyone still executing on the old one. A plain `love` then wakes in ~4 ms
-# instead of eval'ing the egg (~230 ms). The load is an OPTIMIZATION: main.c falls back to
-# an egg boot on any mismatch, so a stale bake is slower, never fatal. The .baked STAMP
-# carries the dependency, since the bake mutates the binary itself.
-$(ho)/love.baked $(ho)/love.cand.baked: %.baked: %
-	@echo LOVE	$< "(bake)"
-	@$< bake
+# the BOOT IMAGE -- the LAYERED CREW BAKE (doc/plan/one-binary.md): `$< bake -L ..` boots
+# the fresh binary, evals the docs layer, FREEZES, evals the rest of the crew, and lays
+# the chain into that binary's OWN .image section -- host/image.c copies the exe, pwrites
+# the blob and renames over the original, so a new inode leaves anyone still executing on
+# the old one. The tree's love then IS the artifact's shape: `love kore|mooncc|sh|libra ..`
+# with no shim and no sibling image, a verb waking only its layer (libra ~22 ms, the full
+# crew ~104 ms -- and no verb picks the LARGEST entry, so a bare `love` pays the full
+# wake; the corpus never does, riding LOVE_NO_IMAGE). The load is an OPTIMIZATION: main.c
+# falls back to an egg boot on any mismatch, so a stale bake is slower, never fatal. The
+# .baked STAMP carries the dependency, since the bake mutates the binary itself -- and it
+# now watches the cats too, so a crew edit rebakes (~12 s) without relinking.
+$(ho)/love.baked $(ho)/love.cand.baked: %.baked: % $(ho)/.docs-cat.l $(ho)/.rest-cat.l
+	@echo LOVE	$< "(bake -L)"
+	@$< bake -L $(ho)/.docs-cat.l:libra,help -L $(ho)/.rest-cat.l
 	@touch $@
 
 
@@ -256,7 +260,7 @@ $(ho)/.mksys-cat.l: $(mksys_l) $(ho)/.mksys-cat.list
 $(moon_d)/sys.o: $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
 	@echo HOLO	$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(boot_love) -l $(ho)/.mksys-cat.l -n -e '($(mksys_e) "$@")' && test -s $@
+	@LOVE_NO_IMAGE= $(boot_love) -l $(ho)/.mksys-cat.l -n -e "((from 'moon '$(mksys_e)) \"$@\")" && test -s $@
 ifneq ($(HCC),)
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/core/love_data.ld $(baked_h)
 	@echo LD	$@

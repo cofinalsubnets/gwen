@@ -190,9 +190,10 @@ costs it **+29.2%** — the array leg's keeps ride callee-saved seats, not the o
 
 ## how to measure
 
-- Both cipher rows, never one, and the corpus beside them. `make -C test/bench ccbench` (it refreshes `host`,
-  `mooncc` and `mooncc.image` first — a `wake` on an image its binary did not bake fails as
-  `love: cannot open mooncc`, not as a version error).
+- Both cipher rows, never one, and the corpus beside them. `make -C test/bench ccbench`
+  refreshes `host` and `dist-seed` first: the crew rides love's own layered image now, so
+  there is no sibling image to skew, and the mooncc lane races the ARTIFACT — a stale bake
+  reads as a slow egg boot, never a wrong compiler.
 - ⚠ `net` is a sum over every phase, so it moved when the three nif rows landed and results
   either side of that do not compare on it. Per-row ratios do.
 - Cycles, not instructions, for anything claiming a speed effect. Instructions are near

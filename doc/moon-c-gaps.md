@@ -4,14 +4,14 @@ A **living ledger** of mooncc's conformance gaps: what C it refuses, what it mis
 where the root cause sits. Rows get deleted as they land — this is a status surface, not a
 history.
 
-Everything below was probed against `out/host/mooncc`. The recipes are included — reproduce
+Everything below was probed against `love mooncc` (the crew layer). The recipes are included — reproduce
 rather than trust, and re-verify any `parse.l`/`gen.l` anchor before editing.
 
 Probe recipe:
 
 ```sh
 printf 'int m(void){ return 0; }\n' >> q.c
-out/host/love wake out/host/mooncc.image mooncc \
+out/host/love mooncc \
   -c -t x64 -o /dev/null q.c
 ```
 

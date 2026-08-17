@@ -263,7 +263,7 @@ int main(void) {
   { char const *s = woke ? "; image awake\r\n" : "; no image -- baking the egg\r\n";
     for (; *s; s++) serial_putc(*s); }
   if (!woke) g = ai_ini();
-  g = ai_defn(g, defs, countof(defs));
+  g = ai_defn(g, defs, countof(defs), 0);
   // BOUND the collector to the arena (the Appel knob -- gen_please, love.c):
   // 2*minor + 2*major carve out of the free list, and a major resize holds old
   // and new at once, so an unbounded budget OOMs inside the collector. A

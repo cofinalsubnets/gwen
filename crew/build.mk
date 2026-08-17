@@ -1,6 +1,10 @@
-# crew/build.mk -- the crew app builds: the kore/mooncc/sb/lush scripts, their baked
-# images, and the dist artifact. Included by ./Makefile after host/build.mk, so $(ho) is
-# already spelled; shared vars are mk/common.mk.
+# crew/build.mk -- the crew rides IN the default binary (doc/plan/one-binary.md): the
+# layered bake host/build.mk runs lays the whole crew into out/host/love's own image, so
+# `love kore|mooncc|sh|..` is the build tree's spelling exactly as it is the artifact's.
+# What remains here: the cat rosters, mooncc0.image (love0's own -- an image keeps its
+# binary's layout), the lush/sb PATH scripts, and the dist artifact. Included by
+# ./Makefile after host/build.mk, so $(ho) is already spelled; shared vars are
+# mk/common.mk.
 
 # kore: the diff engines, the text/tool surface, the line tools, and `kore` itself -- the
 # multi-call toolbox picking its util off the command line or an argv[0] symlink. lush
@@ -22,47 +26,20 @@ korefiles =crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/k
 # single backend the host image baked), the writers, the compiler proper, then moon.l
 # whose tail SEAT fires.
 moonfiles = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l
-# the build-tree kore/mooncc bins are WAKE SHIMS over their sibling images, the exact shape
-# mk/install.mk installs: `#!/bin/sh` resolving its own directory, then exec'ing the
-# SIBLING love on the SIBLING image. ⚠ the interpreter is never PATH's, so a tree-fresh cat
-# can never run under a foreign older-baked binary -- the skew that once laid EMPTY .text
-# when obj.l read a `holo` book key an installed love's bake lacked. make keeps cat, image
-# and shim fresh together, so consistency is structural rather than checked at runtime.
-# (a cold invocation then wakes in ~ms instead of re-evaling the cat, ~1.3s.) kore's shim
-# threads basename($0) through, so the argv[0]-symlink dispatch still lands.
-# ⚠ THE MEMBERSHIP IS AN INPUT AND MAKE CANNOT SEE IT -- the same trap out/dist/.dist.list and
+# ⚠ THE MEMBERSHIP IS AN INPUT AND MAKE CANNOT SEE IT -- the same trap $(ho)/.dist.list and
 # out/lib/corpus.list already guard. Moving a file BETWEEN these lists changes what the cat
 # holds while every file make watches keeps its mtime, so the cat is "up to date" and the image
 # is built from the old set: silently, and it reads exactly like the edit not working. Splitting
 # the u-floor out of core.l cost four debug rounds to this, across five different cats.
 # Depend on the LIST: rewritten only when membership moves, so the cat re-lays on add OR drop.
-$(ho)/.kore-cat.list: force_dist_list
-	@mkdir -p $(dir $@)
-	@tf=$@.$$$$.tmp; echo '$(korefiles)' > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
 $(ho)/.mooncc-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(moonfiles)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
-$(ho)/.kore-cat.l: $(korefiles) $(ho)/.kore-cat.list
 $(ho)/.mooncc-cat.l: $(moonfiles) $(ho)/.mooncc-cat.list
-$(ho)/.kore-cat.l $(ho)/.mooncc-cat.l:
 	@echo CAT	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@cat $(filter %.l,$^) > $@
-$(ho)/kore: $(ho)/kore.image
-	@echo CAT	$(abspath $@)
-	@{ echo '#!/bin/sh'; \
-	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
-	   echo 'n=$$(basename -- "$$0")'; \
-	   echo 'exec "$$h/love" wake "$$h/kore.image" "$$n" "$$@"'; } > $@
-	@chmod 755 $@
-$(ho)/mooncc: $(ho)/mooncc.image
-	@echo CAT	$(abspath $@)
-	@{ echo '#!/bin/sh'; \
-	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$0")" && pwd)'; \
-	   echo 'exec "$$h/love" wake "$$h/mooncc.image" mooncc "$$@"'; } > $@
-	@chmod 755 $@
 # sb 🌱 the patch-set vcs (svalbard), and lush 🐚 the love shell -- also the distro's console shell,
 # whose SEAT in main.l fires on its own basename. Both are catted shebang scripts, PATH
 # picking the love that runs them.
@@ -74,15 +51,11 @@ $(ho)/sb $(ho)/lush:
 	@mkdir -p $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $^; } > $@
 	@chmod 755 $@
-# the two WARM images (the live bake, doc/snapshot.md): each cat loads under a NEUTRAL name
-# so its tail SEAT stays quiet, then the bake nif snapshots the session. LOVE_NO_IMAGE
-# rides the recipe, so the bake session itself egg-boots -- same warm state every time.
-$(ho)/mooncc.image $(ho)/kore.image: $(ho)/%.image: $(ho)/.%-cat.l $m
-	@echo LOVE	$(abspath $@)
-	@$m -l $< -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
-# mooncc0.image: the SAME cat baked by LOVE0, the build-time compiler that breaks the
+# mooncc0.image: the mooncc cat baked by LOVE0, the build-time compiler that breaks the
 # self-host circle -- the default love is mooncc-built, so its own image cannot drive its
-# build, and love0 waking this one can. PINNED to out/host like love0 itself.
+# build, and love0 waking this one can. PINNED to out/host like love0 itself. The ONLY
+# standalone image left: the default love's crew rides its own .image (the layered bake,
+# host/build.mk), and an image cannot cross binaries anyway.
 out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 	@echo LOVE	$(abspath $@)
 	@$(love0) -l out/host/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
@@ -129,29 +102,32 @@ DIST_ORIGIN ?=
 # silently, and it looks exactly like the feature not working. (mk/lib.mk's
 # corpus.list is the same guard for $t, and for the same reason.) Depend on the LIST:
 # rewritten only when membership moves, so the cat re-lays on an add OR a delete.
+# ⚠ the cats live in $(ho): they are the DEFAULT binary's own bake layers now
+# (host/build.mk's love.baked), and the dist lanes read the same files -- one roster,
+# one set of bytes, so the tree binary and the artifact cannot drift.
 .PHONY: force_dist_list
 force_dist_list: ;
-out/dist/.dist.list: force_dist_list
-	@mkdir -p out/dist
+$(ho)/.dist.list: force_dist_list
+	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
-out/dist/.docs.list: force_dist_list
-	@mkdir -p out/dist
+$(ho)/.docs.list: force_dist_list
+	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(docsfiles)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
-out/dist/.docs-cat.l: $(docsfiles) out/dist/.docs.list
+$(ho)/.docs-cat.l: $(docsfiles) $(ho)/.docs.list
 	@echo CAT	$(abspath $@)
-	@mkdir -p out/dist
+	@mkdir -p $(dir $@)
 	@cat $(docsfiles) > $@
-out/dist/.dist-cat.l: $(distfiles) out/dist/.dist.list
+$(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list
 	@echo CAT	$(abspath $@)
-	@mkdir -p out/dist
+	@mkdir -p $(dir $@)
 	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(distfiles); } > $@
 # the second layer: everything the docs layer is not. `origin` rides here because it is
 # the artifact's own (love up), and the docs image has no use for it.
-out/dist/.rest-cat.l: $(restfiles) out/dist/.dist.list out/dist/.docs.list
+$(ho)/.rest-cat.l: $(restfiles) $(ho)/.dist.list $(ho)/.docs.list
 	@echo CAT	$(abspath $@)
-	@mkdir -p out/dist
+	@mkdir -p $(dir $@)
 	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(restfiles); } > $@
 # the artifact is named for its arch ($a = uname -m): love-x86_64 here,
 # love-aarch64 on a pi -- the moon lane is native on both (mooncc defaults to
@@ -330,11 +306,11 @@ out/dist/src-$a.o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(love0)
 # ⚠ and smallest first: the picker takes the first entry claiming the verb, and with `-L`
 # that order is load-bearing twice over -- each layer freezes for the next, and only a
 # prefix can be shared (doc/plan/image-chain.md).
-$(dist_seed): $(moon_o) out/dist/src-$a.o out/dist/.rest-cat.l out/dist/.docs-cat.l assets/readme.bin $(ho)/love
+$(dist_seed): $(moon_o) out/dist/src-$a.o $(ho)/.rest-cat.l $(ho)/.docs-cat.l assets/readme.bin $(ho)/love
 	@echo DIST	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) out/dist/src-$a.o -freadme=assets/readme.bin -o $@
-	@./$@ bake -L out/dist/.docs-cat.l:libra,help -L out/dist/.rest-cat.l
+	@./$@ bake -L $(ho)/.docs-cat.l:libra,help -L $(ho)/.rest-cat.l
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@"
 
 # ==== dist_cross: the TWIN artifact (the other elf arch) ====
@@ -403,10 +379,10 @@ out/dist/src-x-$(xa).o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(lov
 	@$(love0) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(xtgt)
 # ⚠ the twin link MIRRORS the native $(dist_seed) link -- src blob + readme --
 # a twin without them is not a seed.
-out/dist/love-$(xarch): $(xobjs) out/dist/src-x-$(xa).o out/dist/.dist-cat.l assets/readme.bin
+out/dist/love-$(xarch): $(xobjs) out/dist/src-x-$(xa).o $(ho)/.dist-cat.l assets/readme.bin
 	@echo DIST	$(abspath $@)
 	@$(moonx) -pie $(xobjs) out/dist/src-x-$(xa).o -freadme=assets/readme.bin -o $@
-	@$(xqemu) ./$@ bake -l out/dist/.dist-cat.l
+	@$(xqemu) ./$@ bake -l $(ho)/.dist-cat.l
 	@echo "  dist: $$(du -h $@ | cut -f1) -> $@ (the $(xarch) twin, baked under $(xqemu))"
 .PHONY: dist_cross
 dist_cross: out/dist/love-$(xarch)

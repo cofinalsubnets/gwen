@@ -324,7 +324,7 @@ int main(int argc, char const **argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: %s <file.l>...\n", argv[0]);
     return 2; }
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
+  struct ai *g = ai_defn(ai_ini(), defs, countof(defs), 0);
   g = ai_egg_(g,
 #include "egg.h"
     ,

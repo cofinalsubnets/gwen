@@ -13,7 +13,7 @@
 (: (mkscr r c) (screen (cask (screen () r c)) r c)
    (chat s i) (& 255 (glass s i))
    (rowtx s r) (: c (gaze s 2)
-                (foldl (\ a i (+ a (: ch (chat s (+ (* r c) i)) (? (= 0 ch) 32 ch))))
+                (foldl (\ a i (+ a (string (: ch (chat s (+ (* r c) i)) (? (= 0 ch) 32 ch)))))
                        "" (jot c))))
 
 ; --- a child's plain output lands on the grid, colours and all ---

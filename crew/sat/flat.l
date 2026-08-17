@@ -38,16 +38,13 @@
 ; the conf caller pre-ensures arena room (aru+nv+3 words) and node room (wnu+4): the
 ; kernels never grow a cask.
 (:
-   ; ⚠ PRESENCE OUT OF BAND: `(lit? peepw)` READS peepw, and reading a name the book lacks
-   ; IS the missing condition -- so every "have I got one?" here asks (names ()), never the
-   ; name. the answer is the same on a host; off one it is an answer instead of a raise.
-   (there? n) (member? n (names ()))
-   ; --- 8-byte word slots, low 4 bytes live: the host's word nifs (host/mem.c) when
-   ; they are in the book, the byte path as the portable twin (freestanding targets
-   ; have no host glob) -- picked once at bind time ---------------------------------
-   getw (? (there? 'peepw) peepw
+   ; --- 8-byte word slots, low 4 bytes live: the host's word nifs (host/mem.c,
+   ; module 'mem -- (from 'mem) answers () off a host, so presence is an ordinary
+   ; read), the byte path as the portable twin -- picked once at bind time --------
+   memw (from 'mem)
+   getw (? (lit? memw) (memw 'peepw)
            (\ c i (: b (8 * i) (peep c b 0 | ((peep c (b + 1) 0 << 8) | ((peep c (b + 2) 0 << 16) | (peep c (b + 3) 0 << 24)))))))
-   putw (? (there? 'pinw) pinw
+   putw (? (lit? memw) (memw 'pinw)
            (\ c i v (: b (8 * i)
                        _ (pin c b (v & 255)) _ (pin c (b + 1) ((v >> 8) & 255))
                        _ (pin c (b + 2) ((v >> 16) & 255)) (pin c (b + 3) ((v >> 24) & 255)))))

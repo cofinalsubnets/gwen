@@ -28,6 +28,7 @@
 ; from a parenthesized type followed by a brace initializer, (type){ init }.
 ; ⚠ a NEW NODE HERE IS ALSO CLAY'S: clay.l validates and re-says what this file
 ; produces, so it wants an arity row, a precedence and a rendering (doc/clay.md).
+(module 'moon
 (:
    ; token readers: t = (kind val line)
    (tkk t) <t (tkv t) <>t
@@ -2301,3 +2302,4 @@
            (: r (ptop ps ts2)
               (? (two? r) (: _ (note <r) (tops <>r (<r >< acc))) (pfail ps ts2 spans toks))))
        (tops toks ())))
+) ; module 'moon

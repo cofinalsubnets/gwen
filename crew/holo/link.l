@@ -380,6 +380,7 @@
    ; -- ARCHIVES. the noms no object defines but the LINKER lays: a driver over any
    ; door here answers for these, so a ledger must not go looking for them in a .a.
    ldsynth '("__start_ai_nifs" "__stop_ai_nifs" "__start_ai_rela" "__stop_ai_rela"
+             "__start_ai_mods" "__stop_ai_mods"
              "__data_start__" "__data_end__" "__data_load__"
              "__bss_start__" "__bss_end__" "__load_size__")
    (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs), global noms
@@ -583,18 +584,40 @@
             (each objs))
        glo)
 
+   ; the extents of every NAMED lane, once laid: lane -> (start end). ldres's
+   ; generic bracket reads it -- an empty lane never enters, so a miss stays a miss.
+   (ld-extents objs)
+    (: xt (tablet 0)
+       _ (map (\ ob (map (\ l (map (\ i (: a (peep (peep ob 'base 0) i 0)
+                                           e (a + at (peep (peep ob 'secs 0) i ()) 2)
+                                           r (peep xt l ())
+                                           (pin xt l (? !(two? r) `(a e)
+                                                        `((? (a < <r) a <r) (? (<>r < e) e <>r))))))
+                                   (peep (peep ob 'lanes 0) l ())))
+                         (peep ob 'named ())))
+              objs)
+       xt)
+
    ; resolve a name: the symbol book, or a synthesized bracket -- the nif region
-   ; (n0..n1) or, under -pie, the RELATIVE-reloc offset table (r0..r1) that
-   ; nolibc's startup walks to slide every abs64 data pointer by the load base.
-   ; non-pie leaves r0 == r1 (an empty table), so the startup loop is a no-op.
-   (ldres glo n0 n1 r0 r1 nm)
+   ; (n0..n1), under -pie the RELATIVE-reloc offset table (r0..r1) that
+   ; nolibc's startup walks to slide every abs64 data pointer by the load base
+   ; (non-pie leaves r0 == r1, an empty table, so the startup loop is a no-op) --
+   ; or GNU ld's own generic rule, which the gcc lane already grants: a section
+   ; named X brackets as __start_X/__stop_X, read off the laid lane's extent (xt).
+   (ldres glo n0 n1 r0 r1 xt nm)
     (: r (peep glo nm ())
        (? (two? r) <r
           (nm = "__start_ai_nifs") n0
           (nm = "__stop_ai_nifs") n1
           (nm = "__start_ai_rela") r0
           (nm = "__stop_ai_rela") r1
-          (scare 'link-undef nm)))
+          (: z (tally nm)
+             x (? ((8 < z) && (snip nm 0 8 = "__start_"))
+                  (: v (peep xt (intern (snip nm 8 z)) ()) (? (two? v) `(<v) ()))
+                  ((7 < z) && (snip nm 0 7 = "__stop_"))
+                  (: v (peep xt (intern (snip nm 7 z)) ()) (? (two? v) `(<>v) ()))
+                  ())
+             (? (two? x) <x (scare 'link-undef nm)))))
 
    ; patch one object's one section: stream its bytes, splicing each
    ; relocation's field. a section-symbol reloc lands on the object's own
@@ -605,12 +628,13 @@
    ; and R_RISCV_64 is 2 -- the same number as R_X86_64_PC32 -- so the kind
    ; dispatch below switches on the machine, never on the number alone.
    ; cx is the resolution context every lane shares -- (glo n0 n1 r0 r1 relbox rv
-   ; arm? be), the symbol book, the two synthesized brackets, the -pie site box, the
-   ; riscv flag, the EM_ARM flag and the backend the ARM lane re-encodes through --
-   ; bundled so ldemit can thread it without a nine-argument tail.
+   ; arm? be xt), the symbol book, the two synthesized brackets, the -pie site box,
+   ; the riscv flag, the EM_ARM flag, the backend the ARM lane re-encodes through,
+   ; and the named-lane extents -- bundled so ldemit can thread it without a
+   ; ten-argument tail.
    (ldpatch ob ix base cx)
     (: glo <cx n0 (at cx 1) n1 (at cx 2) r0 (at cx 3) r1 (at cx 4)
-       relbox (at cx 5) rv (at cx 6) arm? (at cx 7) be (at cx 8)
+       relbox (at cx 5) rv (at cx 6) arm? (at cx 7) be (at cx 8) xt (at cx 9)
        s (peep ob 'src 0) se (peep (peep ob 'secs 0) ix ())
        off0 (at se 1) sz (at se 2)
        (ent es) (? !(two? es) ()
@@ -643,7 +667,7 @@
                     ; STRONG reference is an error.
                     ((at sy 1 = 2) && (at sy 3 = 0) &&
                      !(two? (peep glo <sy ()))) 0
-                    (ldres glo n0 n1 r0 r1 <sy))
+                    (ldres glo n0 n1 r0 r1 xt <sy))
               ; the two classes part HERE and nowhere else. an ARM field is 4 bytes
               ; wide whatever the kind, its addend is already in it, and `ad` arrives
               ; () -- so every line below would fold the unit into an address.
@@ -909,7 +933,7 @@
               o1 <objs
               (? (two? e) <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
-       cx `(glo n0 end r0 r1 relbox rv () ())
+       cx `(glo n0 end r0 r1 relbox rv () () (ld-extents objs))
        et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata <et objs >et))
        ed (ldemitn cx 'data objs (ldemit cx 'data <eo objs >eo))
@@ -1045,7 +1069,7 @@
        _ (pin glo "kimage_end" `(kend 0))
        e (peep glo ent ())
        _ (? (two? e) 0 (scare 'link-entry ent))
-       cx `(glo n0 n1 n1 n1 () () () ())            ; no -pie table here, and no riscv or arm kernel yet
+       cx `(glo n0 n1 n1 n1 () () () () (ld-extents objs))   ; no -pie table here, and no riscv or arm kernel yet
        en (ldemit cx 'note vbase objs ())
        eb (ldemit cx 'boot b0 objs (gap vbase b0))  ; the file resumes at vbase (offset 4096)
        eq (ldemit cx 'limreq q0 objs (>eb + gap <eb q0))
@@ -1269,7 +1293,7 @@
        ; runs first. the core never consults e_entry; it takes the vector table.
        ent (: e (peep glo "_start" ()) (? (two? e) <e org))
        nif (: r (peep lpos 'nifs ()) (? (two? r) r `(org org 0)))
-       cx `(glo <nif (<nif + at nif 2) org org () () 1 be)
+       cx `(glo <nif (<nif + at nif 2) org org () () 1 be (ld-extents objs))
        ; -- the bytes, run by run, lane by lane, in that same order --
        body (: (go rs fp acc)
                 (? !(two? rs) `(fp acc)

@@ -123,7 +123,7 @@
                               (c = 92) (: e (jesc s (k + 1) n)
                                           (? (two? e) (go <>e (acc + <e)) ()))
                               (c < 32) ()            ; a raw control byte is not json
-                              (go (k + 1) (acc + c))))))
+                              (go (k + 1) (acc + string c))))))
                  (i + 1) "")
 
    ; an exponent: optional sign, then at least one digit.
@@ -207,26 +207,26 @@
                     (? (two? r) (: e (jws s <>r n) (? (e < n) () [1 <r]))))
 
    ; --- writing --------------------------------------------------------------------
-   (jhexd v) ("" + (? (v < 10) (48 + v) (87 + v)))
+   (jhexd v) (string (? (v < 10) (48 + v) (87 + v)))
 
    ; bytes >= 128 ride out untouched: love strings are byte strings and json is utf-8, so
    ; already-utf-8 text is already right. only the seven named escapes and the control
    ; bytes need saying.
-   ; ⚠ the escape is SPELLED, never built: `+` appends a charm as a byte, so the old
-   ; ("" + 92 + 34) leaned on the band's left hand to mean \" -- one re-association and
-   ; it is the byte 126. only the two computed nibbles ride the byte law now.
+   ; ⚠ every byte is SPELLED (a literal or `string`), never built by +: mixed + is the
+   ; degenerate law now, so ("" + 34) answers "" -- the old byte-append spellings
+   ; silently erased the very quotes and brackets they meant to write.
    (jqc c) (c @ 34 "\\\""  92 "\\\\"
                 10 "\\n"   13 "\\r"   9 "\\t"
                 8  "\\b"   12 "\\f"
                 (c < 32 ? ("\\u00" + (jhexd (c // 16)) + (jhexd (c % 16)))
-                          ("" + c)))
+                          (string c)))
 
    (jqt s) (: n (tally s)
-              ((: (go k acc) (? (k < n) (go (k + 1) (acc + (jqc (s k)))) (acc + 34)))
-               0 ("" + 34)))
+              ((: (go k acc) (? (k < n) (go (k + 1) (acc + (jqc (s k)))) (acc + "\"")))
+               0 "\""))
 
    (jjoin xs) (? (atom? xs) ""
-                 ((: (go l acc) (? (two? l) (go >l ((acc + 44) + <l)) acc)) >xs <xs))
+                 ((: (go l acc) (? (two? l) (go >l ((acc + ",") + <l)) acc)) >xs <xs))
 
    ; show is the whole number lane -- it already lays a charm, a sun, a big and a gem down
    ; the way json spells them. the GUARD is for what json has no word for: ieee-inf and
@@ -244,11 +244,11 @@
       (? (string? v)    (jqt v)
          (json-bool? v) (? v "true" "false")
          (json-null? v) "null"
-         (() = v)       ("" + 91 + 93)
-         (tablet? v)    ((("" + 123)
-                          + (jjoin (map (\ k ((jqt k) + 58 + (json-show (v k)))) (keys v))))
-                         + ("" + 125))
+         (() = v)       "[]"
+         (tablet? v)    (("{"
+                          + (jjoin (map (\ k ((jqt k) + ":" + (json-show (v k)))) (keys v))))
+                         + "}")
          (tray? v)      (scare 'json "arrays are lists" v)
-         (two? v)       ((("" + 91) + (jjoin (map json-show v))) + ("" + 93))
+         (two? v)       (("[" + (jjoin (map json-show v))) + "]")
          (constellation? v) (jnumshow v)
          (scare 'json "no json spelling for this" v)))

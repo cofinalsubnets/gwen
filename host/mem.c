@@ -1,14 +1,14 @@
 // host/mem.c -- 8-byte word slots on a cask, low 4 bytes live: the flat solver's
 // state (crew/sat/flat.l), where the byte-at-a-time accessors cost 4 dispatches
-// per read. Host-only, auto-globbed + AiNif-registered (no love.c/love.h/main.c
-// edit).
+// per read. Host-only, auto-globbed + AiModNifs-registered under MODULE 'mem
+// (no love.c/love.h/main.c edit; nothing on the bare book).
 //
-//   (peepw c i)         -> the word at slot i, low 4 bytes | () misuse
-//   (pinw c i v)        -> lay v zero-extended into slot i -> c | () misuse
+//   ((from 'mem 'peepw) c i)   -> the word at slot i, low 4 bytes | () misuse
+//   ((from 'mem 'pinw) c i v)  -> lay v zero-extended into slot i -> c | () misuse
 //
 // value ops, so absence/misuse answers (); flat.l binds getw/putw to them when
-// they are in the book, the byte path staying the portable twin (freestanding
-// targets have no host glob).
+// the module is registered, the byte path staying the portable twin
+// (freestanding targets have no host glob).
 #include "love.h"
 #include <string.h>
 #include <stdint.h>
@@ -40,5 +40,7 @@ static lvm(lvm_pinw) {
 static union u const
   nif_peepw[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_peepw}, {lvm_ret0}},
   nif_pinw[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_pinw},  {lvm_ret0}};
-AiNif("peepw", nif_peepw);
-AiNif("pinw",  nif_pinw);
+static struct ai_def const memdefs[] = {
+  {"peepw", (intptr_t) nif_peepw},
+  {"pinw",  (intptr_t) nif_pinw}, };
+AiModNifs("mem", memdefs);

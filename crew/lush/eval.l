@@ -137,12 +137,13 @@
               "mkdir" "rmdir" "rm" "ln" "touch" "chmod" "mv" "cp" "install"
               "objcopy")
    ; ⚠ nm/ar/ld/as are NOT here and could not be: the lane resolves a word to a GLOBAL by
-   ; name, and those four reach kore's applet table as folded values from a `:` scope that
-   ; never pins them. The guard already refuses them, so this is a note, not a bug -- but
-   ; an allow-list naming words the lane cannot reach would read as a wider claim.
+   ; name (or a MODULE member, the row's third slot), and those four reach kore's applet
+   ; table as folded values from a `:` scope that never pins them. The guard already
+   ; refuses them, so this is a note, not a bug -- but an allow-list naming words the
+   ; lane cannot reach would read as a wider claim.
    ; the words whose main is not spelled <word>-main. kore-main wants the WHOLE argv
    ; (it reads its own program seat); the rest take the args after the name.
-   sh-imgalias '(("mooncc" "moon-run") ("cc" "moon-run") ("kore" "kore-main")
+   sh-imgalias '(("mooncc" "moon-run" "moon") ("cc" "moon-run" "moon") ("kore" "kore-main")
                  ("[" "bracket-main") ("objcopy" "objcopy"))
    (sh-pathdirs _)
      (: p ("" + (getenv "PATH")) n (tally p)
@@ -174,9 +175,11 @@
    (sh-imgask w)
      (: al (sh-assoc w sh-imgalias)
         mn (? (two? al) <>al (w + "-main"))
+        md (? ((two? al) && (two? >>al)) (from (intern <>>al)) ())   ; the row's module, or ()
         nm (intern mn)
-        (? (&& (sh-smem? w sh-imgok) !(sh-slashed? w) (member? nm (names ())) (sh-ours? w))
-           [1 (sh-imgwrap (ev nm) mn) (mn = "kore-main")]
+        ok (? (tablet? md) (member? nm (keys md)) (member? nm (names ())))
+        (? (&& (sh-smem? w sh-imgok) !(sh-slashed? w) ok (sh-ours? w))
+           [1 (sh-imgwrap (? (tablet? md) (md nm) (ev nm)) mn) (mn = "kore-main")]
            0))
    ; ⚠ THE APPLET IS WRAPPED, because udie RAISES rather than exiting: `(scare 'leave c)`
    ; is what the verb table's own `urun` catches, and the in-image lane reaches the applet

@@ -1,10 +1,10 @@
 ; `*` extended as the multiplicative analog of `+` (l.c g_mul_mx), dispatched
 ; through the same kind matrix. `*` is "repeated `+`": a sequence (string/symbol/
-; list) times a scalar count n is n copies joined, just as (* 2 3) = 2+2+2. The
-; count SATURATES (($ c) -- the count law, shared with numeral-apply and array
-; shapes: non-positive -> 0 -> empty, a float ceils, a complex by total-order-
-; guarded modulus); an array/non-number count is undefined
-; (nil). chain x chain is the CARTESIAN PRODUCT (the semiring product whose `+` is cat --
+; list) times a scalar count n is n copies joined, just as (* 2 3) = 2+2+2. THE
+; COUNT LAW (the associativity arc): an EXACT integer acts by |count| -- magnitude
+; is the one multiplicative hom over the sign crossing -- and an INEXACT count
+; (float/complex/array) is no count: it answers (), the absorbing zero.
+; chain x chain is the CARTESIAN PRODUCT (the semiring product whose `+` is cat --
 ; see test/spec.l); string x string / sym x sym stay nil; a thread anywhere -> composition.
 (: sm-i (\ x (? (nom? x) (= x (intern (string x))) 0)))      ; interned symbol?
 (assert
@@ -16,9 +16,9 @@
  ; --- string repetition (commutative), empty, count coercion ---
  ("ababab" = "ab" * 3)   ("ababab" = 3 * "ab")
  ("" = "ab" * 0)   (string? ("ab" * 0))          ; 0 -> the empty string
- ("" = "ab" * -2) (string? ("ab" * -2))          ; non-positive count saturates to 0 -> empty
- ("ababab" = "ab" * 2.9)                      ; float count ceils: ($ 2.9) = 3
- ("ababab" = "ab" * ~(3 4))                  ; complex count: ($ ~(3 4)) = 3, the real part
+ ("abab" = "ab" * -2) ("abab" = -2 * "ab")       ; a negative count acts by its magnitude
+ !("ab" * 2.9)                                ; a float is no count -> ()
+ !("ab" * ~(3 4))                            ; a complex neither
  ("xxx" = "x" * 3)
 
  ; --- a symbol inherits the string lane: * repeats the spelling and RE-INTERNS -> a symbol ---

@@ -204,7 +204,7 @@ int main(void) {
   sh_call(SH_CLOSE, (uintptr_t) cl);
   struct ai *g = ai_image_load(buf, len);
   if (!g) { sh_puts("; wake REFUSED\n"); m7_exit(5); }
-  g = ai_defn(g, defs, countof(defs));
+  g = ai_defn(g, defs, countof(defs), 0);
   if (ai_ok(g)) ai_core_of(g)->budget = freelist->len / 4;
   struct ai *r = ai_evals_(g,
     "(: ok (&& ((3 2) = 8)"
@@ -363,7 +363,7 @@ int main(void) {
   freelist = (struct mem*) POOL;
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
+  struct ai *g = ai_defn(ai_ini(), defs, countof(defs), 0);
   if (ai_ok(g)) ai_core_of(g)->budget = POOL_BYTES / sizeof(ai_word) / 4;
   struct ai *r = ai_egg_(g,
 #include "egg.h"

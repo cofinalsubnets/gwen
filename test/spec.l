@@ -104,11 +104,16 @@
  (5.0 = (abs ~(3 4))) (~(2.0 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
 
 (hear welp)                                      ; the misses answer quietly; the sweep asks about names, not values
+; ⚠ the census is the CORE book's contract, so it runs on the EGG lane only: a woken
+; image (love-image on the book is the marker) carries whatever apps rode the bake --
+; the crew layer among them -- and their predicates follow the local ()-false idiom,
+; which is not this law. the egg lane still sweeps every core name on every run.
 (: (q-nom? n) (: s (string n) t (tally s) (? (0 < t) (= 63 (peep s (t - 1) 0)) 0))
    (q-bit? n) (: f (ev n)
                  (ok v) (nil? (id? () (f v)))
                  (&& (ok 'zz) (&& (ok 0) (&& (ok "") (ok ())))))
-   bad (filter (\ n (nil? (q-bit? n))) (filter q-nom? (names ())))
+   bad (? (member? 'love-image (names ())) ()
+          (filter (\ n (nil? (q-bit? n))) (filter q-nom? (names ()))))
    _ (? (two? bad) (: _ (puts ("bit-law offenders: " + (show bad) + "\n")) 0) 0)   ; NAME them: the
    (assert (nil? (two? bad))))                                     ; seat that fails is not always this one
 (hear 0)
@@ -233,10 +238,10 @@
  (('ef + '(1 2)) = '(ef 1 2)) ('ef = 'ef + 5)  ; a NAMED symbol still ADJOINS to a list (foo stays foo); a number degenerates against it
  ((\ x x) = () + (\ x x)) (2 = (((\ x x) + (\ x x)) (\ n (+ n 1)) 0))   ; the TOP lane too: () + hot = hot, and
  ("ababab" = "ab" * 3) ('xyxy = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")   ; sym * count re-interns; + on two hots IS church add (id+id acts as 2)
- !("ab" * -3) ("ababab" = "ab" * 2.5) !('(1 2) * 0)         ; the count saturates; the NUMBER 0 empties
- (5 = () * 5) (5 = 5 * ()) ("ab" = "ab" * ()) ("ab" = () * "ab")   ; () is *'s IDENTITY too -- the multiplicative-
- ('(1 2) = '(1 2) * (mint 0)) (() = () * ()) ("@(1 2 3)" = show (() * @(1 2 3)))   ; identity FACE (1) of the unit,
- ("" = "ab" * 0) ((\ x x) = () * (\ x x)))                  ; mirroring its + face (0); 0 stays the number; () * hot = hot too
+ ("ababab" = "ab" * -3) !("ab" * 2.5) !('(1 2) * 0)         ; a count acts by |magnitude| when EXACT (the one hom
+ (() = () * 5) (() = 5 * ()) (() = "ab" * ()) (() = () * "ab")   ; over the sign crossing); an inexact count is no count.
+ (() = '(1 2) * (mint 0)) (() = () * ()) (() = () * @(1 2 3))    ; () is the ZERO and the zero ANNIHILATES * (the
+ ("" = "ab" * 0) (() = () * (\ x x)))                       ; semiring law; 1 is the identity); the NUMBER 0 still counts: 0 copies = the kind's empty
 
 ; --- the unit rides through EVERY dyadic arithmetic lane --- () is the DO-NOTHING operand,
 ; either side, for - / // % & | ^ << >> just as for + and *: the op never happens. NOT the
@@ -259,8 +264,8 @@
 ; way), so this is the one law the hand is visible in. RIGHT-distributivity ((a+b)*c=a*c+b*c) holds on
 ; the nose (the outer loop ranges the LEFT operand); LEFT-distributivity holds only up to a
 ; permutation (intrinsic to ordered pairs -- same multiset, different order). `net` is NOT the
-; `*` measure (it's not multiplicative); `tally` is. () stays the * UNIT (identity), not the
-; cartesian annihilator -- the unit law preempts the empty-operand lane.
+; `*` measure (it's not multiplicative); `tally` is. () is the ZERO and annihilates *, so the
+; empty-operand lane and the zero law say the same thing.
 (assert
  (('(1 2) * '(3 4)) = '((1 3) (1 4) (2 3) (2 4)))                ; the product: every ordered pairing
  (('(1 2) * '(3 4) * '(5 6)) = '(((1 3) 5) ((1 3) 6) ((1 4) 5) ((1 4) 6) ((2 3) 5) ((2 3) 6) ((2 4) 5) ((2 4) 6)))  ; the left hand nests left
@@ -270,7 +275,7 @@
  (!(('(1 2) * ('(3 4) + '(5 6))) = (('(1 2) * '(3 4)) + ('(1 2) * '(5 6)))))  ; left-distrib FAILS as ordered lists ...
  ((sort ('(1 2) * ('(3 4) + '(5 6)))) = (sort (('(1 2) * '(3 4)) + ('(1 2) * '(5 6)))))  ; ... but holds up to permutation
  ('(1 3) = cap ('(1 2) * '(3 4)))                               ; pairs are real 2-lists -- reversible via cap/cup
- (('(1 2) * ()) = '(1 2)) (() * '(3 4) = '(3 4))                ; () is the * UNIT (identity), not the annihilator
+ (() = '(1 2) * ()) (() = () * '(3 4))                          ; () is the ZERO: it annihilates the cartesian too
  !("ab" * '(1 2)) !('(1 2) * "ab"))                            ; only chain*chain -- string*chain stays nil
 
 ; --- numeric functions --- abs int (type-aware); constants e pi i; gcd modpow; the irreducible
@@ -780,6 +785,26 @@
   (8 = ((from 'kanren 'subst) '(()) 8))                         ; curried member reach
   (nil? (from 'kanren 'spec-missing))                           ; a member miss reads the zero point
   (lit? unify) (lit? rand) (lit? reads))                        ; the boot splices serve the bare names
+
+; (module 'nm form ..) is the filesystem-free definition: open nm's layer -- the REGISTERED
+; tablet on a reopen, a fresh one otherwise -- eval each form there as the loader would, leave
+; registers; answers the tablet. text anywhere defines or reopens any module; (module () ..) is
+; a scratch layer, registered nowhere. each form compiles at ITS eval, so bindings defglob into
+; the module layer and a member folds into a consumer at the consumer's compile, as ever.
+(: smv-out (member? 'smv (names ()))                     ; captured BEFORE: love0 reruns the
+                                                         ; corpus in-process, and run 1's use
+                                                         ; below splices smv onto the walk
+   m1 (module 'spec-mod (: smv 41 (smf x) (x + smv)))
+   m2 (module 'spec-mod (: smv (smv + 1) smw 100))       ; reopen: the old member is in scope
+   ma (module () (: sma 9))
+ (assert
+  (tablet? m1) (m1 = m2) (m1 = from 'spec-mod)           ; one tablet, registered, answered
+  (42 = from 'spec-mod 'smv) (100 = from 'spec-mod 'smw) ; the reopen read 41 and extended
+  (42 = ((from 'spec-mod 'smf) 1))                       ; smf folded smv at ITS compile: 41
+  (smv-out = member? 'smv (names ()))                    ; no leak: the walk is as it was
+  (! (member? 'sma (names ())))                          ; the anonymous layer leaks nothing
+  (tablet? ma)))                                         ; the scratch layer answers its tablet
+(: _ (use 'spec-mod) (assert (42 = smv)))                ; use splices a module `module` made
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since
 ; t and (gauge 0) reports a VM stat; an opaque handle acts as a constant function.

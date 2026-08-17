@@ -22,21 +22,23 @@
 ; (⚠ through STDIN, as the gate does -- `love test/host/papel.l` would seat a file
 ;  whose basename is papel.l, and papel's own seat would fire on it.)
 
-(use 'papel)                                ; the loader: lib/papel.l -- papel wants lapiz + cook itself
-
 ; --- the module seam: three modules, and papel adds nothing to the book ----------
-(assert
- (member? 'papel (from ()))
- (member? 'lapiz (from ()))
- (member? 'cook (from ()))
- (member? 'build (keys (from 'papel)))
- (lit? (from 'papel 'papel-main))
- (! (from 'papyrus))                          ; a missing module answers ()
- ; the combinators are a MODULE nobody splices at boot: lapiz and cook each said (use 'peg),
- ; so peg is loaded and reachable BY KEY -- and `parse` is not a name in the book at all.
- (member? 'peg (from ()))
- (lit? (from 'peg 'seq))
- (! (member? 'parse (names ()))))
+(: parse-before (member? 'parse (names ()))  ; the book BEFORE the load, for the leak delta
+ _ (use 'papel)                              ; the loader: lib/papel.l -- papel wants lapiz + cook itself
+ (assert
+  (member? 'papel (from ()))
+  (member? 'lapiz (from ()))
+  (member? 'cook (from ()))
+  (member? 'build (keys (from 'papel)))
+  (lit? (from 'papel 'papel-main))
+  (! (from 'papyrus))                          ; a missing module answers ()
+  ; the combinators are a MODULE nobody splices at boot: lapiz and cook each said (use 'peg),
+  ; so peg is loaded and reachable BY KEY. ⚠ `parse` itself CAN sit on the book -- the
+  ; crew layer (moon's front end) puts it there in the warm lane -- so the leak check is
+  ; a DELTA: loading papel must not have ADDED it.
+  (member? 'peg (from ()))
+  (lit? (from 'peg 'seq))
+  (= parse-before (member? 'parse (names ())))))
 
 (: dir "/tmp/papeltest"
    (put-file f s) (: q (open (dir + "/" + f) "w") _ (say q s) (close q))

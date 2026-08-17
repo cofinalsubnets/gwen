@@ -36,7 +36,7 @@
    ; lowercase hex, and back. the tests speak hex because the RFCs do.
    (hex s)
     (: d "0123456789abcdef" n (tally s)
-       (go i a) (? (n <= i) a (go (i + 1) (a + (d (>> (s i) 4)) + (d (& (s i) 15)))))
+       (go i a) (? (n <= i) a (go (i + 1) (a + (string (d (>> (s i) 4))) + (string (d (& (s i) 15))))))
        (go 0 ""))
    (unhex h)
     (: (nib c) (? (c < 58) (c - 48) (c - 87))

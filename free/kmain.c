@@ -1839,7 +1839,7 @@ void kmain(void) {
   // the disk (rung 5): probe the bus, and hand the driver its one DMA block --
   // kmallocw memory, so pa = va - khhdm holds for everything the device reads.
   k_blk_init(kmallocw(b2w(352)));
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
+  struct ai *g = ai_defn(ai_ini(), defs, countof(defs), 0);
   // BOUND the generational collector to the device's RAM (the Appel knob): without it the nursery's
   // copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive) sizing then asks
   // kmallocw for a contiguous block bigger than physical RAM -> OOM. An eighth of free RAM leaves ample
@@ -1851,17 +1851,17 @@ void kmain(void) {
   // and run through ev at boot (no console), then qemu is quit.
   g = ai_strof(g, ktests);
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
-  g = ai_defn(g, td, countof(td));
+  g = ai_defn(g, td, countof(td), 0);
 #else
   // the kore cat, bound whole (rung 3); the session below drinks it through a tap.
   g = ai_strof(g, src_kore);
   struct ai_def kd[] = {{"korecat", ai_pop1(g)}};
-  g = ai_defn(g, kd, countof(kd));
+  g = ai_defn(g, kd, countof(kd), 0);
 #endif
   // the boot cmdline, raw; the boot text below splits it into the argv shape.
   g = ai_strof(g, kboot.cmdline);
   struct ai_def bd[] = {{"bootline", ai_pop1(g)}};
-  g = ai_defn(g, bd, countof(bd));
+  g = ai_defn(g, bd, countof(bd), 0);
   // load the prel, then run the l read-eval-print loop. its line
   // editor (in love/bao.l, the baked shell core) drives the console; PS/2 keyboard
   // and serial input both arrive as ANSI escape sequences the l edev decodes.

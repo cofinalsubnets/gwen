@@ -38,11 +38,11 @@
     (z5 2 = a * b)             ; (3*4) mod 5 = 2
     (z5 0 = z5 2 + z5 3)   ; wraps to 0
 
-    ; --- the ()-identity, inherited FREE (both faces) ---
+    ; --- the () laws, inherited FREE (one per face) ---
     (a = () + a)                 ; () is +'s identity
     (a = a + ())                 ; ... either side
-    (a = () * a)                 ; () is *'s identity too
-    (a = a * ())
+    (() = () * a)                ; ... and *'s ZERO: it annihilates
+    (() = a * ())
 
     ; --- a monoid has a +, but no * ---
     (sm 5 = smp + smq)         ; 2 + 3 = 5

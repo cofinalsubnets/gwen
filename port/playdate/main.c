@@ -174,7 +174,7 @@ void love_init(void) {
                             : "; love/playdate -- baking the egg"; *s; s++)
     cb_putc(kcb, *s);
   blit();
-  struct ai *g = ai_defn(woke ? g0 : ai_ini_m(pd_alloc), defs, countof(defs));
+  struct ai *g = ai_defn(woke ? g0 : ai_ini_m(pd_alloc), defs, countof(defs), 0);
   pdg_log(ai_ok(g) ? "love: core up" : "love: core FAILED");
   // bound the collector to a QUARTER of the device's 16 MB (the Appel knob,
   // teensy's law): a major resize holds old and new pools at once, so the

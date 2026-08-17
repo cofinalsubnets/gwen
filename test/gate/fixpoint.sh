@@ -71,7 +71,7 @@ for f in crew/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
   moon1 $fir -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
 done
-LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "($mks \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
+LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "((from 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 
 # love2 takes the SAME list in the SAME order, one directory over -- link order is layout,

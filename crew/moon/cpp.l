@@ -17,6 +17,7 @@
 ; definition). predefined __LINE__ __FILE__ __STDC__.
 ; adjacent string literals concatenate (phase 6). fenced: _Pragma, __COUNTER__,
 ; the GNU ,##__VA_ARGS__ comma elision, #if with character constants.
+(module 'moon
 (:
    ; ⚠ AT THE HEAD, and they have to be: love0's compiler is single-pass and folds a
    ; pure global at each definition's own compile, so one of these bound mid-list reads
@@ -410,14 +411,14 @@
    (condactive cond) (? !(two? cond) 1 <<cond)
    (parentactive cond) (? !(two? cond) 1 <<cond)
    ; buf accumulates REVERSED (a cat per line re-copies the whole run -- love.c's
-   ; longest directive-free run is ~50k tokens); flush restores source order.
-   (flush buf macs out) (revcat (expand (rev buf) macs) out)
+   ; longest directive-free run is ~50k tokens); tokflush restores source order (its name must not shadow the core port flush -- the crew shares the default book now).
+   (tokflush buf macs out) (revcat (expand (rev buf) macs) out)
    (cppgo toks macs cond buf out incf)
     (? !(two? toks) (? (two? cond) (gripe () <>><cond () "unterminated #if -- no #endif")
-                          (rev (flush buf macs out)))
+                          (rev (tokflush buf macs out)))
        (: ls (linesplit toks) line <ls rest <>ls
           (? (pv? <line "#")
-              (: out1 (flush buf macs out)
+              (: out1 (tokflush buf macs out)
                  dir (? (two? >line) (dirname <>line) ())   ; if/else are keywords; the rest ids
                  dirk (? (two? >line) (kof <>line) ())      ; ..and its kind, which is how a line marker is known
                  body >>line
@@ -608,3 +609,4 @@
           (: _ (pin spanacc 'l ())
              out (strcat-pass r 0 ())
              [1 (tok 'fspans (rev (peep spanacc 'l ())) 0 >< out)]))))       ; an EMPTY token list is a valid empty TU, not a failure -- only a gripe fails
+) ; module 'moon

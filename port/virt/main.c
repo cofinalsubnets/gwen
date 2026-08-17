@@ -172,7 +172,7 @@ int main(void) {
   freelist = (struct mem*) POOL;
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
+  struct ai *g = ai_defn(ai_ini(), defs, countof(defs), 0);
   if (ai_ok(g)) ai_core_of(g)->budget = POOL_BYTES / sizeof(ai_word) / 4;
   struct ai *r = ai_egg_(g,
 #include "egg.h"

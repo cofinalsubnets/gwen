@@ -19,7 +19,7 @@
    (cur s) (gaze s 0)
    (rowtx s r)                                       ; row r's chars, blanks as spaces
     (: c (gaze s 2)
-       (foldl (\ a i (+ a (: ch (chat s (+ (* r c) i)) (? (= 0 ch) 32 ch)))) "" (jot c))))
+       (foldl (\ a i (+ a (string (: ch (chat s (+ (* r c) i)) (? (= 0 ch) 32 ch))))) "" (jot c))))
 
 ; --- 1. the ctor and the size protocol ---
 (: n (screen () 4 10)

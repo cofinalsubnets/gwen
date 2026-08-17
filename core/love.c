@@ -665,11 +665,34 @@ enum ai_status ai_fin(struct ai *g) {
    g->alloc(g, g->pool, 0); }                 // ..the pool IS g, so it goes last
  return s; }
 
+// the module lane's target: find-or-make mod's tablet on the registry (g->mods,
+// the same lazy singleton lvm_mods answers -- the drain runs at boot, before
+// prel, so both are creatable here, and again over a woken image, where the
+// found tablet takes the re-pin) and push it where the book map would sit.
+static struct ai *ai_modtab(struct ai *g, char const *mod) {
+ if (!ai_ok(g)) return g;
+ struct ai *c = ai_core_of(g);
+ if (c->mods == zero) {
+  if (!ai_ok(g = map_new(g))) return g;
+  c = ai_core_of(g), c->mods = c->sp[0], c->sp++; }
+ if (!ai_ok(g = intern(ai_strof(g, mod)))) return g;   // [modnom ..]
+ c = ai_core_of(g);
+ word m = ai_mapget(c, zero, c->sp[0], c->mods);
+ if (m != zero) { c->sp[0] = m; return g; }             // [tablet ..]
+ if (!ai_ok(g = map_new(g))) return g;                  // a fresh module: [tablet modnom ..]
+ c = ai_core_of(g);
+ g = ai_push(g, 3, c->sp[1], c->sp[0], c->mods);        // (key val coll) for mapput
+ if (!ai_ok(g = ai_mapput(g))) return g;                // [mods tablet modnom ..]
+ c = ai_core_of(g);
+ c->sp[2] = c->sp[1], c->sp += 2;                       // [tablet ..]
+ return g; }
+
 // ⚠ every .x here must be IMMORTAL -- a nif address, a fixnum, an out-of-pool
 // constant. C cannot re-root what it holds in an array, and no ordering fixes it;
 // a value that MOVES arrives on the stack instead (ai_defv).
-struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
- for (g = ai_push(g, 1, A(ai_core_of(g)->book)); n--;
+// mod non-NULL binds the whole table under that module instead of the book.
+struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n, char const *mod) {
+ for (g = mod ? ai_modtab(g, mod) : ai_push(g, 1, A(ai_core_of(g)->book)); n--;
   g = ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].x), defs[n].n))));
  ai_core_of(g)->sp++;
  return g; }
@@ -771,8 +794,8 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
    // love-tco: glazed code continues by tail-jump, which only the threaded build
    // honors -- auto.l reads this and keeps the interpreter on a trampoline build
    {"love-tco", putcharm(ai_tco)}, };
-  g = ai_defn(g, def0, countof(def0));
-  g = ai_defn(g, def1, countof(def1));
+  g = ai_defn(g, def0, countof(def0), 0);
+  g = ai_defn(g, def1, countof(def1), 0);
   if (ai_ok(g = ai_strof(g, AiVersion)))            // a live string: off the STACK, never an ai_def
    g = ai_pop(ai_defv(g, "love-version"), 1);
   // `love-arch`: the host CPU the glaze emits for. auto-ev interns it as the assembler
@@ -5767,15 +5790,20 @@ static lvm(lvm_bin_b) { word b = Sp[1]; ai_musttail return Push(b); }
 // ============================================================================
 
 // `*` REPEAT lane: a sequence times a scalar count n is n copies joined ("repeated
-// +"). the count is SATURATED to a green charm (($ c), the count law); an array or
-// any non-number is not a count -> zero.
+// +"). THE COUNT LAW (the associativity arc): a count acts by |count| when it is an
+// EXACT integer -- magnitude is the one multiplicative hom that survives the sign
+// crossing ((-1)*(-2) re-enters the positives) -- and any INEXACT count (gem, twin,
+// tray) answers the absorbing () (those classes are closed under *, so the refusal
+// composes: (x * 2.5) * 2 and x * (2.5 * 2 = 5.0) both land ()).
 static lvm(lvm_mul_rep) {
  word a = Sp[0], b = Sp[1];
  bool aseq = strp(a) || chainp(a) || namep(a);       // a string / list / NAMED symbol repeats
  word seq = aseq ? a : b, cnt = aseq ? b : a;
- if ((!strp(seq) && !chainp(seq) && !namep(seq)) || (!isnum(cnt) && !twinp(cnt)))
-  ai_musttail return Push(ZeroPoint);             // seq not a sequence/symbol, or count not a number
- uintptr_t n = (uintptr_t) ai_saturate(g, cnt);
+ if ((!strp(seq) && !chainp(seq) && !namep(seq)) || (!charmp(cnt) && !bigp(cnt)))
+  ai_musttail return Push(ZeroPoint);             // seq not a sequence/symbol, or count not exact
+ uintptr_t n;
+ if (charmp(cnt)) { intptr_t v = getcharm(cnt); n = (uintptr_t) (v < 0 ? -v : v); }
+ else n = (uintptr_t) maxcharm;                      // |big|: past addressable, dies in Have()
  if (chainp(seq)) {                                   // list -> n copies of the spine
   if (!n) ai_musttail return Push(ZeroPoint);   // 0 copies -> the empty list () (zero-ontology)
   uintptr_t m = llen(seq), total = m * n;
@@ -5924,10 +5952,10 @@ lvm(lvm_mul) {
   if (!__builtin_mul_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
       && t >= mincharm && t <= maxcharm)
    ai_musttail return Push(putcharm(t)); }
- // a bare mint is *'s identity -- the UNIT, not the annihilating 0 -- so it
- // overrides the count lane: "ab" * () is "ab", distinct from "ab" * 0 = ""
- if (mintp(a)) ai_musttail return Push(b);
- if (mintp(b)) ai_musttail return Push(a);
+ // a bare mint is the ZERO, and the zero ANNIHILATES under * (the semiring law:
+ // 0*x = 0; the identity is 1, which is already the identity function). the
+ // matrix says the same thing (lvm_0), so this stays a fast path.
+ if (mintp(a) || mintp(b)) ai_musttail return Push(ZeroPoint);
  ai_musttail return Ap(ai_mul_mx[ai_kind(a)][ai_kind(b)], g); }
 
 avm_div(fquot, /)                               // `//` fixnum fast path: truncating quotient
