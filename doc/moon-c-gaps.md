@@ -295,6 +295,34 @@ value, so nothing announces them but a differential — which is why they arrive
 each batch behind an outside package or an outside corpus
 rather than behind a test we thought to write.
 
+### an enum constant declared in a BLOCK escapes it
+
+`enum { N = 4 };` inside a function body pins into the one flat `'enums` table and is never
+taken back off at block exit, so every later function in the TU can read `N`. C11 6.2.1p7 gives
+it the enclosing block's scope. Filed, not fixed: the tree has lived on the flat table since the
+beginning and `shadow1` already hides a leaked constant behind any local of the same spelling, so
+what is left is a name that resolves where it should not — visible, not yet a wrong answer.
+
+⚠ it stopped being harmless once. `lvm_outer`'s `uintptr_t M = .., N = .., n = M * N, ..` read the
+leaked `N` from a *different function's* `enum { N = 4 }` and compiled `n = M * 4`, so the outer
+product wrote 4·M of its M·N cells and handed back a tray whose tail was uninitialized heap —
+correct on the first read and garbage after the next allocation. **That was the declarator-scope
+bug below, and fixing it took the wrong answer away; this row is the other half still standing.**
+The two together are the lesson: a leak and a scope-point bug are each survivable, and their
+product is a silent miscompile. `test/cc/146-declscope.c` holds both halves.
+
+### a declarator was not in scope for the initializers after it — FIXED 2026-08-16
+
+C11 6.2.1p7: a declarator's scope begins at the **end of its declarator**, so
+`unsigned long M = f(), N = g(), n = M * N;` must read the local `N`. mooncc bound the
+declaration's names only after the whole declaration was parsed (the block loop's `shadowdecl`),
+so an earlier declarator was invisible to a later initializer and any file-scope enum constant or
+typedef of the same spelling won. Now `'declaring` marks each name as its declarator finishes and
+the primary rule declines to fold it; the block's `shadowdecl` still owns the durable hiding and
+the restore. ⚠ found by a DIFFERENTIAL BETWEEN OUR OWN TWO BINARIES — `love` is mooncc-built and
+`love0` is gcc-built, and running the same array battery under both named the one function that
+differed. That instrument costs nothing and nobody had pointed it at the tray ops.
+
 ### from an outside corpus
 
 `test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Its roster is

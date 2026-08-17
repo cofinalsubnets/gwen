@@ -1,11 +1,19 @@
-// host/hash.c -- content addressing for svalbard (crew/sb/): sha-256 over a
-// string's bytes. Host-only, auto-globbed + AiNif-registered (no love.c/love.h/
-// main.c edit), the fs.c discipline:
+// host/hash.c -- a digest over a string's bytes. Host-only, auto-globbed + AiNif-
+// registered (no love.c/love.h/main.c edit), the fs.c discipline:
 //
 //   (sha256 str) -> the 64-char lowercase hex digest | () misuse
+//   (crc32 str)  -> the IEEE crc32, a charm         | () misuse
 //
-// FIPS 180-4, the compact single-pass shape; a value op, so absence/misuse
-// answers ().
+// FIPS 180-4 and IEEE 802.3, both the compact single-pass shape; value ops, so
+// absence/misuse answers ().
+//
+// ⚠ THE TWO ARE NOT IN THE SAME POSITION and it is worth knowing which is which.
+// crc32 SHADOWS lib/gz.l's gz-crcwalk, which stays the statement of it and the
+// ORACLE: test/host/gzc.l holds this to that, so a disagreement has a right answer.
+// sha256 shadows NOTHING -- there is no love sha-256 in the tree -- so crew/sb's blob
+// and patch ids and crew/moon's cache key rest on this file, and the only thing holding
+// it honest is the published vectors in test/host/. That is a thinner rope than the
+// rest of host/ hangs from, and the fix is a love sha-256, not another vector.
 #include "love.h"
 #include <stdint.h>
 #include <string.h>
@@ -83,5 +91,54 @@ static lvm(lvm_sha256) {
  Unpack(g);
  ai_musttail return Next(1); }
 
-static union u const nif_sha256[] = {{lvm_sha256}, {lvm_ret0}};
+// --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -------------------------
+// EIGHT BYTES AT A TIME, and that is the whole difference: the byte-at-a-time walk
+// lib/gz.l spells is a dependency chain one link per byte, where slicing spends eight
+// INDEPENDENT lookups and lets the machine overlap them. gz.l cannot do this -- eight
+// tray reads per byte would cost eight times what one does.
+// ⚠ the tables are built on the first call rather than laid in .rodata: 2048 entries
+// off a one-line recurrence, and nothing for a reader to check against the polynomial.
+static uint32_t crc_t[8][256];
+static int crc_ready;
+
+static void crc_init(void) {
+ unsigned i, k;
+ for (i = 0; i < 256; i++) {
+  uint32_t c = i;
+  for (k = 0; k < 8; k++) c = (c & 1) ? (c >> 1) ^ 0xedb88320 : c >> 1;
+  crc_t[0][i] = c; }
+ for (i = 0; i < 256; i++) {                    // table k is table 0 shifted k bytes on
+  uint32_t c = crc_t[0][i];
+  for (k = 1; k < 8; k++) { c = crc_t[0][c & 0xff] ^ (c >> 8); crc_t[k][i] = c; } }
+ crc_ready = 1; }
+
+#define LD32(p) ((uint32_t) (p)[0] | (uint32_t) (p)[1] << 8 \
+               | (uint32_t) (p)[2] << 16 | (uint32_t) (p)[3] << 24)
+
+static uint32_t crc32_of(const uint8_t *p, uintptr_t n) {
+ uint32_t c = 0xffffffff;
+ if (!crc_ready) crc_init();
+ for (; n >= 8; p += 8, n -= 8) {
+  uint32_t a = c ^ LD32(p), b = LD32(p + 4);
+  c = crc_t[7][a & 0xff] ^ crc_t[6][(a >> 8) & 0xff]
+    ^ crc_t[5][(a >> 16) & 0xff] ^ crc_t[4][a >> 24]
+    ^ crc_t[3][b & 0xff] ^ crc_t[2][(b >> 8) & 0xff]
+    ^ crc_t[1][(b >> 16) & 0xff] ^ crc_t[0][b >> 24]; }
+ for (; n; p++, n--) c = crc_t[0][(c ^ *p) & 0xff] ^ (c >> 8);
+ return c ^ 0xffffffff; }
+
+ai_noinline static struct ai *host_crc32(struct ai *g) {
+ if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+ { struct ai_str *s = (struct ai_str*) g->sp[0];
+   g->sp[0] = putcharm(crc32_of((const uint8_t*) s->bytes, (uintptr_t) s->len)); }
+ return g; }
+static lvm(lvm_crc32) {
+ Pack(g); g = host_crc32(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ Unpack(g);
+ ai_musttail return Next(1); }
+
+static union u const nif_sha256[] = {{lvm_sha256}, {lvm_ret0}},
+                    nif_crc32[]  = {{lvm_crc32},  {lvm_ret0}};
 AiNif("sha256", nif_sha256);
+AiNif("crc32", nif_crc32);

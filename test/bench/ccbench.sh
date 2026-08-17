@@ -2,7 +2,9 @@
 # ccbench.sh -- the COMPILER shootout (the page's FOURTH table). Builds the love host
 # binary with three C compilers and, for each, reports four wall-clock costs:
 #   build : compile every C translation unit (core/love.c + host/*.c + the am math floor)
-#           and link a working `love` -- source to runnable binary.
+#           and link a working `love` -- source to runnable binary. ⚠ the mooncc lane
+#           builds ONCE UNTIMED first; the note above that call says why, and the row read
+#           2.2x too high until it did.
 #   test  : run the full arch-neutral corpus ($t, the same files test_host/test_raw
 #           feed) through the binary that build produced, with egg-boot EXCLUDED
 #           (subtracted) so it times the suite executing, not the compiler self-install.
@@ -14,10 +16,19 @@
 #           residency for the second shape only -- so the PAIR is the reading. Wide
 #           chacha beside narrow poly says the gap is array slots; the day they close
 #           together is the day that reading was wrong.
+#   inflate / crc32 / sha256 : the HEAVY NIFS (test/bench/cnifs.l), and a different
+#           question from the pair above. The ciphers are a lever chosen to name a
+#           defect; these three are work the tree waits on -- `love source` unpacks its
+#           own tarball through inflate and checks it with crc32, and every svalbard
+#           blob id is a sha256. They are also three shapes: inflate is BRANCHY (a bit
+#           reader and a table per symbol), crc32 has no branch in its loop at all, and
+#           sha256 carries a 64-word array beside eight scalars -- the ciphers' two
+#           shapes in one function. A lane behind on inflate and level on crc32 is
+#           losing to branches, not to loads.
 # The three compilers, ALL THREE STATIC -- that is the whole point of the pairing:
-#   mooncc : love's OWN C compiler (crew/moon/), the exact `make test_raw` sequence --
-#            no gcc/glibc/ld anywhere: mooncc lays every .o, mksys emits the syscall
-#            leaf, our linker (crew/holo/) binds. It egg-boots (no baked image).
+#   mooncc : love's OWN C compiler (crew/moon/), run out of THE SHIPPED ARTIFACT's own
+#            `mooncc` verb -- no gcc/glibc/ld anywhere: mooncc lays every .o, mksys emits
+#            the syscall leaf, our linker (crew/holo/) binds.
 #   gcc-musl / clang-musl : the same translation units at the host's real -O2 cflags,
 #            through the musl-gcc/musl-clang wrappers and linked -static. Also
 #            egg-boot -- no `bake`, so all three lanes run the identical corpus off
@@ -36,9 +47,14 @@
 # net their sum (source to a tested and measured binary). A missing/failed lane
 # shows dnf.
 #
-# Requires `make host` first: the generated out/lib/*.h headers and, for the mooncc
-# lane, out/host/mooncc(+.image). x86-64 only (mooncc's native lane); off x86-64 it
-# prints every row with the mooncc cells dnf and gcc/clang still raced.
+# Requires `make host` first: the generated out/lib/*.h headers and out/host/love (it lays
+# the inflate row's stream, which needs lib/gz.l); and the ARTIFACT, out/dist/love-<arch>,
+# because the mooncc lane runs that and not an intermediate -- see the note on SEED.
+# x86-64 only (mooncc's native lane); off x86-64, or with no artifact built, the mooncc
+# cells read dnf and gcc/clang are still raced.
+#
+# ⚠ THE net ROW IS A SUM OVER EVERY PHASE, so adding rows moves it and results either
+# side of a row change do not compare. The per-row ratios do.
 #
 # usage: ./ccbench.sh [timeout-seconds] [samples]
 #   build is timed once (a stable multi-second cost, and the artifact is reused);
@@ -106,22 +122,38 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 
 # -- mooncc: the WHOLE toolchain in love, verbatim from `make test_raw`. mooncc -c each
 #    unit, mksys the syscall leaf, our linker binds. -I$ho picks up the lcat'd headers. --
-MC="env LOVE_NO_IMAGE= $ho/love mooncc"
+# ⚠ THE COMPILER IS THE SHIPPED ARTIFACT, and it is not a preference -- it is the only
+# spelling of this lane that measures the same thing twice. mooncc's link pulls
+# crew/moon/lib/nolibc/ MEMBER BY NEED and caches the archive under ~/.love/cache/moon,
+# keyed on the compiler, its stat, AND ITS IMAGE (moon.l's mcrtkey). An image FILE puts
+# that file's stat in the key, so while the lane ran out of out/host/mooncc -- whose
+# .image this file's own make target rebuilt as a prerequisite -- every run missed and
+# paid a one-time libc BUILD inside a per-build row: 43.8 s against 20.1 s warm, 54% of
+# the number. A BAKED image keys as the word "<baked>" instead, so the entry survives
+# every rebuild of the intermediates (measured then: `touch out/host/mooncc.image
+# out/host/love` left it at 18.9 s). The one-binary change has since retired that image
+# file, which closes the same hole from the other side -- but the artifact is still what
+# this should race, because it is what a user runs. ⚠ a one-line C file does NOT warm the
+# archive in its place: a program that needs no member pulls none.
+# ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads: the root Makefile exports it as 1 for the
+# corpus, and an egg-booted love has no verb table, so `mooncc` reads as a FILENAME.
+SEED=$R/out/dist/love-$(uname -m)
+mc() { env LOVE_NO_IMAGE= "$SEED" mooncc "$@"; }
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
-    $MC -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c core/love.c "$od/love.o" || exit 1
+    mc -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c core/love.c "$od/love.o" || exit 1
     for f in host/*.c; do b=$(basename "$f" .c)
-      $MC -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
+      mc -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
     # no nolibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a nolibc.o.
     for f in crew/moon/lib/math/*.c; do b=$(basename "$f" .c)
-      $MC -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
+      mc -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
     { cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
           crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
-      echo "((from 'moon 'mksys) \"$od/sys.o\")"; } | out/host/love || exit 1
-    $MC "$od"/*.o -o "$bin" ) || return 1
+      echo "((from 'moon 'mksys) \"$od/sys.o\")"; } | env LOVE_NO_IMAGE= "$SEED" || exit 1
+    mc "$od"/*.o -o "$bin" ) || return 1
 }
 
 # the corpus as ONE file, fed by REDIRECT. It arrives on stdin either way (which keeps
@@ -150,19 +182,29 @@ corpus_ms() { # $1=binpath ; median full, median boot, report max(0, full-boot)
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
-# a ccrypto.l driver's own run time, boot excluded the same way. The reps are fixed
+# a workload driver's own run time, boot excluded the same way. The reps are fixed
 # in the .l, so every compiler does identical work. dnf if the sentinel never printed
 # -- a lane that answered nothing must not be timed as if it were fast.
 CRYPTO=$R/test/bench/ccrypto.l
-crypto_ms() { # $1=binpath $2=driver-call $3=sentinel
-  bin=$1; drv=$2
-  { cat "$CRYPTO"; echo "$drv"; } > "$WORK/ccrypto.run.l"
-  out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$bin" < "$WORK/ccrypto.run.l" 2>&1) || { echo dnf; return; }
-  printf '%s' "$out" | grep -q "$3" || { echo dnf; return; }
-  full=$(med "LOVE_NO_IMAGE=1 $bin < $WORK/ccrypto.run.l")
+NIFS=$R/test/bench/cnifs.l
+drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
+  bin=$1; df=$2; drv=$3
+  { cat "$df"; echo "$drv"; } > "$WORK/drv.run.l"
+  out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$bin" < "$WORK/drv.run.l" 2>&1) || { echo dnf; return; }
+  printf '%s' "$out" | grep -q "$4" || { echo dnf; return; }
+  full=$(med "LOVE_NO_IMAGE=1 $bin < $WORK/drv.run.l")
   boot=$(med "LOVE_NO_IMAGE=1 $bin </dev/null")
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
+
+# the inflate row's input, laid ONCE by the already-built host love -- lib/gz.l is a
+# module and the lane binaries have no module path, so the stream cannot be made where
+# it is used. INFN is the inflated size, handed to the nif so it allocates once.
+# ⚠ if this fails the inflate row is dnf and the other two are unaffected: a missing
+# stream must not read as a compiler that could not build.
+INF=$WORK/bench.deflate
+INFN=$(cd "$R" && out/host/love test/bench/ccgen.l core/love.c "$INF" 2>/dev/null)
+case $INFN in ''|*[!0-9]*) INFN=0;; esac
 
 # one compiler lane: build (timed once), verify, then time the corpus and the two
 # cipher rows (boot excluded from each).
@@ -173,11 +215,16 @@ lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
   echo "build $lbl $bt ok"; LIVE=$((LIVE + 1))            # the liveness tally, read at the end
   if passes "$bin"; then echo "test $lbl $(corpus_ms "$bin") ok"
   else echo "test $lbl dnf"; fi
-  crow chacha   "$lbl" "$(crypto_ms "$bin" '(cc-run ())' 'ccrypto chacha: ok')"
-  crow poly1305 "$lbl" "$(crypto_ms "$bin" '(po-run ())' 'ccrypto poly1305: ok')"
+  crow chacha   "$lbl" "$(drv_ms "$bin" "$CRYPTO" '(cc-run ())' 'ccrypto chacha: ok')"
+  crow poly1305 "$lbl" "$(drv_ms "$bin" "$CRYPTO" '(po-run ())' 'ccrypto poly1305: ok')"
+  if [ "$INFN" -gt 0 ]; then
+    crow inflate "$lbl" "$(drv_ms "$bin" "$NIFS" "(inf-run \"$INF\" $INFN 300)" 'cnifs inflate: ok')"
+  else echo "inflate $lbl dnf"; fi
+  crow crc32    "$lbl" "$(drv_ms "$bin" "$NIFS" '(crc-run ())' 'cnifs crc32: ok')"
+  crow sha256   "$lbl" "$(drv_ms "$bin" "$NIFS" '(sha-run ())' 'cnifs sha256: ok')"
 }
 crow() { case $3 in dnf) echo "$1 $2 dnf";; *) echo "$1 $2 $3 ok";; esac; }
-dnf_lane() { for ph in build test chacha poly1305; do echo "$ph $1 dnf"; done; }
+dnf_lane() { for ph in build test chacha poly1305 inflate crc32 sha256; do echo "$ph $1 dnf"; done; }
 
 # ⚠ A LANE THAT CANNOT BUILD REPORTS dnf, WHICH MEANS A BROKEN HARNESS RENDERS AS A
 # WELL-FORMED TABLE OF NOTHING. that is not hypothetical: the 2026-08-15 reorg broke the
@@ -186,10 +233,16 @@ dnf_lane() { for ph in build test chacha poly1305; do echo "$ph $1 dnf"; done; }
 # skip; ZERO lanes is the harness, and it exits 1 below.
 LIVE=0
 
-if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/love" ]; then
+if [ "$(uname -m)" = x86_64 ] && [ -x "$SEED" ]; then
+  # ⚠ AND ONE UNTIMED BUILD BEFORE THE TIMED ONE, which the note on SEED explains: the
+  # artifact's cache entry survives everything but a NEW ARTIFACT, and after `make dist`
+  # the first link builds the runtime. gcc and clang link a musl somebody else compiled,
+  # so holding mooncc to the same shape means its libc is built too, not built inside the
+  # row. Costs one build on a ten-minute table and makes the row mean one thing.
+  build_mooncc "$WORK/love-warm" >/dev/null 2>&1
   lane mooncc build_mooncc "$WORK/love-mooncc"
 else
-  dnf_lane mooncc                                   # mooncc's native lane is x86-64 only
+  dnf_lane mooncc                        # x86-64 only, and it needs the artifact built
 fi
 # the native lanes: static musl. The wrappers hand the compiler musl's headers and crt,
 # so the translation units are the identical job -- only the libc differs, and -static

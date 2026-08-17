@@ -13,7 +13,7 @@
   test_rp2040 moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
-  test_holo test_as test_elf32 test_objcopy test_gz test_splice test_distboot test_bakerep
+  test_holo test_as test_elf32 test_objcopy test_gz test_splice test_forge test_distboot test_bakerep
 
 # $(mw) -- the WARM love: the freshly-baked image woken instead of the egg compiled
 # from source (12 ms against 1.05 s). Both lanes carry the same vocabulary, so warm
@@ -215,7 +215,7 @@ test_embed_boards: host
 # Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; WARM but for hostnif_cold.
-hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/modnif.l
+hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/infix.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/modnif.l
 # out/host/lush: test/host/sh.l drives the BUILT shell end to end, via out/host/love and
 # never env's PATH love -- the tree's nifs, not the nest's.
 hostnif_cold =                                   # empty: no gate needs the cold lane
@@ -480,6 +480,15 @@ test_moonfuzz: host
 test_splice: host
 	@echo TEST test/gate/splice.l "(splice JIT: own IR -> holo -> nif -> differential)"
 	@LOVE_NO_GLAZE=1 $m -l test/gate/splice.l < /dev/null
+# test_forge -- nifs WRITTEN IN LOVE (lib/forge.l): a kernel's holo IR assembled for this cpu,
+# installed through the `nif` seam, and required to agree with the twin it deopts into -- on the
+# monomorphic lane it says and on every lane it hands back. The other half of test_splice's
+# coin: that one re-assembles IR the C compiler wrote down, this one assembles IR love wrote.
+# ⚠ the twin here is the C nif itself, so a disagreement is one denotation answering two ways.
+# Zero kernels fitted FAILS: a graceful decline is the design, a silent one reads like a pass.
+test_forge: host
+	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
+	@$m -l test/gate/forge.l < /dev/null
 # test_ccarm64 / test_ccriscv -- the battery on a CROSS TARGET (two targets, one procedure
 # in ccarch.sh): every test/cc/*.c built by `mooncc -t <arch>`, run under qemu-user, required
 # to answer what x64 answers. The three programs no cross lane can build must REFUSE, not skip.
@@ -749,8 +758,12 @@ test_distboot: dist
 # test/host/gz.l (in test_hostnif, needing nothing outside the tree); this is the half
 # only the outside world can say, and it is a separate gate because a coder and a
 # decoder written by one hand round-trip cleanly through a format nobody else speaks.
-# Skips where either system tool is missing.
+# Skips where either system tool is missing. gzfind.l rides along and needs NOTHING
+# outside: it is the differential between gz.l's match finder and the holo IR beside it
+# that says the same thing to a cpu, over corpora chosen for the chain the kernel walks.
 test_gz: host
+	@echo TEST test/gate/gzfind.l
+	@$(mw) $R/test/gate/gzfind.l
 	@echo TEST test/gate/targz.sh
 	@sh test/gate/targz.sh $(ho)/love
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
