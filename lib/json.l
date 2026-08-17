@@ -123,7 +123,7 @@
                               (c = 92) (: e (jesc s (k + 1) n)
                                           (? (two? e) (go <>e (acc + <e)) ()))
                               (c < 32) ()            ; a raw control byte is not json
-                              (go (k + 1) (acc + c))))))
+                              (go (k + 1) (acc + string c))))))
                  (i + 1) "")
 
    ; an exponent: optional sign, then at least one digit.

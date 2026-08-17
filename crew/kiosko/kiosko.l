@@ -129,7 +129,7 @@
                       (reqcap < tally acc) acc
                       (: k (swig c buf)
                          (? (0 < k) (go (acc + snip (string buf) 0 k))
-                            (: ch (see c) (? (ch = -1) acc (go (acc + ch)))))))
+                            (: ch (see c) (? (ch = -1) acc (go (acc + string ch)))))))
                    (go ""))
    ; the request line: up to the first newline, without its carriage return.
    (line1 s)    (: n (tally s)
@@ -162,9 +162,9 @@
                          (: c (s i)
                             (? ((c = 37) && ((i + 2) < n))
                                (: h (hexv (s (i + 1))) l (hexv (s (i + 2)))
-                                  (? ((-1 < h) && (-1 < l)) (g (i + 3) (acc + (16 * h + l)))
-                                     (g (i + 1) (acc + c))))
-                               (g (i + 1) (acc + c)))))) 0 ""))
+                                  (? ((-1 < h) && (-1 < l)) (g (i + 3) (acc + string (16 * h + l)))
+                                     (g (i + 1) (acc + string c))))
+                               (g (i + 1) (acc + string c)))))) 0 ""))
    (cutq s)    (: n (tally s)
                   ((: (g i) (? !(i < n) s
                                ((s i = 63) || (s i = 35)) (snip s 0 i)
