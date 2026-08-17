@@ -61,6 +61,19 @@ lanes tightest first, so that is the one place that reads the table shape and th
 sees a uniform tuple. A spaced sigil is one whole name and never splits into factors; factoring
 is the glued lane's alone — arity 0.
 
+**The glued lane keys on a WORD, not a char**, so a row may be spelled with as many chars as it
+likes — `0? 1? 2?` (nil?/one?/two?) are stock. `monofactor` splits a run **right to left**, longest
+first: the sigil the reader glued to the datum matches before the ones reaching over it, so on a
+run `abc` the rows `a` `bc` beat `ab` `c`. Single-char rows agree either way, which is why the stock
+table alone cannot tell the two directions apart.
+
+That order is a **preference, not a commitment** — the walk backtracks, so a run factors iff some
+split exists at all. The completeness is what keeps `grip 0` composable: an unfactorable run has to
+fall through to the plain application `(run d)`, since that fallback is what carries data and coined
+heads past opfix, so a dead end can never be *reported*. Without the fallback, coining `?<` would
+silently unfactor `2?<x` — a run with nothing to do with it. With it, `?<` is tried first, fails to
+complete, and yields to `<`.
+
 ⚠ **A band must be positive.** A tablet miss answers `0`, so a zero band would read that miss as
 a live row at the loosest band there is.
 
