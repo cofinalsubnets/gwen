@@ -13,8 +13,10 @@
 ; would park the task forever. kiosko closes after one request for the same
 ; reason from the other side.
 ;
-; loads inside the `sb` layer (merge.l opened it), so these names never reach
-; the book.
+; rides module 'sb, so these names never reach the book; `dial` (resolve +
+; connect) comes off module 'dns, scoped here to the wrap's own compile.
+(module 'sb
+(use 'dns)
 (:
    ; "80" -> 80. `int` is a truncation, not a parser, so digits are ours.
    (digits s)
@@ -86,3 +88,5 @@
     (: r (sound s)
        d (? (two? r) <r ())
        (? (two? d) d ())))
+
+) ; module 'sb

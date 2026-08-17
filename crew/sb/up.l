@@ -1,7 +1,7 @@
 ; crew/sb/up.l -- the up/down verbs + the verb table: the dist artifact's rail
 ; (doc/sb.md, the install answer: install = sync + cook build). this file rides
-; the dist cat LAST (crew/build.mk distfiles), so it reads the crew bare -- svalbard.s
-; sb-sync/dirty, kore's dir?, cook/kiosko/moon mains -- and its tail pins
+; the dist cat LAST (crew/build.mk distfiles) and module 'sb -- sb-sync/dirty
+; are the module's own, herald the host nif -- and its tail pins into
 ; `verbs`, the table love/cli.l's verb rail walks. `verbs` is unbound everywhere
 ; else, so the rail is a property of what is BAKED, not of the language: only an
 ; artifact whose bake evaluated this file answers `love up`.
@@ -18,6 +18,7 @@
 ; links that resolve into it. unrecorded work in src REFUSES without -f (down
 ; eats the tree; svalbard knows whether it holds anything unsaved). ~/.vim is the
 ; user's; down leaves it alone.
+(module 'sb
 (: (oops m) (: _ (say err m) _ (put err 10) (quit 1))
 
    ; the nest paths, off HOME -- the seat walk's own convention, no env knobs
@@ -111,3 +112,5 @@
    _ (pins T
       'up up-main
       'down down-main))
+
+) ; module 'sb

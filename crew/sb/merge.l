@@ -19,17 +19,18 @@
 ; adjacent edits with no stable line between them share a run and conflict --
 ; textbook diff3, the same call git makes.
 ;
-; NO BRACKETS HERE: the runtime supplies the layer. a module consumer says
-; (use 'sb) -- lib/sb.l assembles the whole stack (kore text + diff, then
-; merge/http/core) into one loader-wrapped layer; the standalone script is the
-; same files catted into the session layer, nothing sealed, the seat reading
-; bare. loads after crew/kore/{text,diff}.l either way. it captures
+; every lane rides module 'sb (the wrap below): a consumer says (use 'sb) --
+; lib/sb.l assembles the whole stack (kore text + diff, then merge/http/core),
+; each part registering itself; the standalone script is the same files catted,
+; the wrap registering the same module. loads after crew/kore/{text,diff}.l
+; either way. it captures
 ; lines/unlines and myers at its define -- the capture law. the round trip
 ; through lines is exact on newline-terminated text; a final unterminated line
 ; gains its newline, text.l's one normalization, and it only ever touches a
 ; path already diverged.
 
-(use 'kore) ; the text/u floors ride module 'kore now; ambient here until this app wraps
+(module 'sb
+(use 'kore) ; the text/diff floors (myers, lines) ride module 'kore
 (:
    ; the 'adds sitting at the front of a script (a del's replacement)
    (m3grab m a) (? (two? m && (<<m = 'add)) (m3grab >m (<><m >< a)) `(m (rev a)))
@@ -83,3 +84,5 @@
        tp (m3parts (myers b (lines theirs)))
        r (m3go bp op tp ol tl () 0)
        `((unlines (m3cat (rev <r))) <>r)))
+
+) ; module 'sb

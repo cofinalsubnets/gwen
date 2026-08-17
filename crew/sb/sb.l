@@ -23,8 +23,11 @@
 ; too); the store format doesn't care what a hunk's old/new mean.
 ;
 ; loads after crew/kore/text.l (lines) + crew/kore/diff.l (udiff) in the svalbard
-; cat. body-less top-level `:` (the tool shape): the engine leaks into the cat's
-; scope; the SEAT form at the tail is the only thing that fires as a program.
+; cat -- the floors ride module 'kore, read here through the scoped use. every
+; lane rides module 'sb: the engine binds in the module, never the cat's scope;
+; the SEAT form at the tail is the only thing that fires as a program.
+(module 'sb
+(use 'kore)
 (:
    ; --- files ---
    ; presence is the (1 _) wrapper, content is always a string: an EMPTY file
@@ -689,9 +692,11 @@ usage: sb VERB ..
 ; positional program or a -l preload), taking the args AFTER the seat. cmdline
 ; is the full C argv, never rebound, so the read is the same in both load orders
 ; and the cat stays quiet under any other name -- which is why the gate can cat
-; this file and have nothing fire. sb-main reads BARE: whichever layer holds
-; this file's binds (the loader's, or the script's session) is still the head
-; when this form compiles. body-having: the seat leaks nothing.
+; this file and have nothing fire. sb-main reads BARE: the module's layer holds
+; this file's binds and is still the head when this form compiles. body-having:
+; the seat leaks nothing.
 (: _ (pins (from 'verbs 'tab) 'sb sb-main)
    s ((from 'verbs 'fire) ["sb" "sb.l"])
    (? (two? s) (sb-main >s) ()))
+
+) ; module 'sb

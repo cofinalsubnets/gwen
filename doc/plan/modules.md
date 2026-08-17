@@ -136,6 +136,29 @@ wrapper's registration -- a file's own registration wins; the loader's is the
 fallback for bare files. The law lives in test/host/loader.l (both lanes,
 a (module ..)-wrapped fixture).
 
+*Sb CLIMBED.* The four files wear `(module 'sb`: merge.l's ambient
+(use 'kore) head became the scoped use (two of the three middle-state heads
+remain: vi/config.l, holo/copy.l), sb.l took one too (lines/udiff), http.l
+scopes (use 'dns) for its compile-time `dial` read, and the `walk` shadow
+dissolved. lib/sb.l's assembly needed only its comment updated -- the parts
+self-register and the loader's re-pin keeps the file-made module; the
+standalone script cat registers the same modules in the session. TWO false
+alarms the climb paid for, both worth their notes. (1) The consumer sweep
+flagged up.l's and source.l's bare `herald` as cook globals gone module-side
+-- but herald is a HOST NIF (main.c), visible everywhere; grepping the
+CALLERS found cook among them and read as the definer. The "fix"
+((from 'cook 'herald), a missing member) was the real break: the absorbed
+(() argv) call answers 1, and test_up printed "cook install failed (exit 1)"
+with no child at all. Verify a name's HOME before respelling -- grep for the
+definer (AiNif, the defglob), never conclude from call sites. (2) One red
+test_up at the pre-sb HEAD would not reproduce: three subsequent virgin runs
+(two by hand, one under make) built the door whole. The durable rule stands
+regardless: wrap work runs the opt-in gates that exercise the app's runtime
+lanes BY NAME -- test_up here -- since nothing on the default rosters covers
+them. One environmental scare worth naming: the sb script's shebang takes
+`love` off PATH, and an installed pre-module love answers
+`;; missing module` -- that is the nest re-seat's business, not the wrap's.
+
 **Rung 3 -- the search collapses.** libsrc drops the seat rungs; cwd `lib/`
 stays with a retirement note; mk/install.mk's lib tree and the nest resolution
 contract retire in coordination with the self-host arc's `love up` story, not
