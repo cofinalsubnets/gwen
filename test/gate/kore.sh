@@ -46,11 +46,12 @@ pipe() { n=$1; i=$2; shift 2
 echo "UTILS crew/kore/{text,core,fs,re,sed,awk,expr,find,diff,patch,law}.l"
 out=$ho/.test_kore.out
 # ⚠ lush's job.l + glob.l ride along because find.l captures sh-match at its define
-cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
-    crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
-    crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/kore/patch.l crew/lush/job.l crew/lush/glob.l \
-    crew/kore/find.l \
-    crew/kore/law.l | "$m" > "$out" 2>&1
+{ cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
+      crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
+      crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/kore/patch.l crew/lush/job.l crew/lush/glob.l \
+      crew/kore/find.l; \
+  echo "(use 'kore)"; \
+  cat crew/kore/law.l; } | "$m" > "$out" 2>&1
 r=$?
 cat "$out"
 [ $r -eq 0 ] && grep -q "crew/kore/law: myers" "$out" || fail "utils (exit $r)"

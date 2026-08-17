@@ -7,6 +7,8 @@
 ;
 ; (vgo lines keys) births a buffer, feeds the TEXT's bytes (27 spelled \e via
 ; the 27-element list shape), and answers the state; the helpers read it back.
+(use 'vi) ; the editor's engine just registered module 'vi in this cat
+
 (: (bytes s) (: n (tally s) (go i acc) (? (< i 0) acc (go (- i 1) (s i >< acc))) (go (- n 1) ()))
    (vgo ls ks) (vfeed (vnew ls "t") (bytes ks))
    (vgob ls bs) (vfeed (vnew ls "t") bs)

@@ -28,6 +28,7 @@
 ; macro-names, the twin of names), `values` the names bound to a value rather
 ; than a nif. only the three special forms are written out, and they are the
 ; grammar, not the book. a list would rot; a question cannot.
+(module 'vi
 (:
    hue-classes
     '((comment    Comment    (eol (";" "#!")))
@@ -286,3 +287,4 @@
    (hue-deep x) (: ct (getenv "COLORTERM")
                    (? (string? ct) ((ct = "truecolor") || (ct = "24bit")) ()))
    (hue-wake x) (hue-pens (hue-rows ()) (hue-deep ())))
+) ; module 'vi

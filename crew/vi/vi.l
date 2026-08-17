@@ -10,6 +10,8 @@
 ; ends with :wq and never dangles. the tty raws via the `raw` nif (cooked
 ; restores at exit, bao's atexit); the frame lives on the alternate screen,
 ; so the session's scrollback survives the visit.
+(module 'vi
+(use 'kore) ; the text/u floors
 (:
    (vi-main as)
     (: f (? (two? as) <as "")
@@ -75,3 +77,4 @@
                  (? (st 'quit) (fin ())
                     (go <>kr)))))
        (go -1)))
+) ; module 'vi

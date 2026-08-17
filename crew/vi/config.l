@@ -16,7 +16,7 @@
 ; a terminal that cannot do 24-bit still shows the author's fallback.
 ;
 ; a row is `(group cterm256 "#rrggbb" faces)`, faces drawn from (bold italic).
-(use 'kore) ; the text/u floors ride module 'kore now; ambient here until this app wraps
+(module 'vi
 (:
    hue-theme
     '((Comment    59  "#75715E" ())
@@ -35,3 +35,4 @@
    ; knob anyone downstream has. same row shape; a file with no rows in it means
    ; no overrides, which is a perfectly good thing for a theme file to mean.
    hue-theme-file "/.love/hue.l")
+) ; module 'vi

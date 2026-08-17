@@ -33,11 +33,11 @@
 ; `values` of the running binary, so under LOVE_NO_IMAGE (the egg boot) the answer
 ; is the compiler's own internals rather than the language that shipped. a
 ; generator writing files must clear it, the way the syntax rule does.
-; ⚠ IT READS hue BARE, and its consumer owes it that. crew/vi/hue.l and
-; crew/vi/config.l are not lib modules -- they are CATTED, into kore's image and
-; into the artifact's -- so this file names `hue-lex` and `hue-theme` the way
-; vi's own painter does. a tool outside those images says (use "crew/vi/config.l")
-; and (use "crew/vi/hue.l") first, which splices them the same way.
+; ⚠ hue rides MODULE 'vi. the images that cat crew/vi/{config,hue}.l registered
+; it (the files' own wraps); a tool outside those images says
+; (use "crew/vi/config.l") and (use "crew/vi/hue.l") first -- the wraps register
+; the same module -- and the use below splices it for this file's own compile.
+(use 'vi)
 (:
    (hw-nth l k) (? (k = 0) <l (hw-nth >l (k - 1)))
    (hw-cat l)   (foldl (+) "" l)

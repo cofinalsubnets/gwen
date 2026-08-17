@@ -32,6 +32,8 @@
 ; out of scope, documented: visual mode, named registers, ., macros, :s
 ; (sed exists), tabs render raw (the terminal's stops, not ours), no
 ; horizontal scroll (long lines clip at the view's edge).
+(module 'vi
+(use 'kore) ; the text/u floors
 (:
    ; -- the small floor --
    ; lists do NOT index by application (a number list would church-tower), so
@@ -622,3 +624,4 @@
        cr (? said? h ((st 'row - top) + 1))
        cc (: k (? said? (tally status + 1) (st 'col + 1)) (? (w < k) w k))
        (e + "[H" + rows top "" + clipl status + e + "[K" + e + "[" + show cr + ";" + show cc + "H")))
+) ; module 'vi

@@ -159,6 +159,31 @@ them. One environmental scare worth naming: the sb script's shebang takes
 `love` off PATH, and an installed pre-module love answers
 `;; missing module` -- that is the nest re-seat's business, not the wrap's.
 
+*Lush CLIMBED.* The eight parts wear `(module 'lush`; lib/lush.l's assembly
+and the catted bin register the same module, and the distro's /lib/sh.l lane
+reads it through boot.l's one-use -e. The consumers, sorted by DEFINER this
+time: kore.l's sh/lush rows read (from 'lush 'sh-main); find.l's fnmatch
+capture rides a scoped (use 'lush); cook's two runtime doors -- cook-glob and
+the in-image verdict -- became from-reads (a miss answers (), keeping the
+spawn lane), the standalone -l splice registering the module off
+lib/lush/glob.l; the host and kernel sh gates splice what their cats just
+registered. The climb caught what the QUIET class predicts, twice over:
+test_dist's own engagement probes read sh-oneline/sh-imgc/sh-imgfn bare in
+their -e forms -- the gate that exists to catch the silent spawn-fallback was
+itself the bare reader -- and running test_hostnif by name surfaced the glued
+reader's stale downstream law (baotest's dotted-nom check; "1.2.3" is a RUN
+now), which had sailed past the default rosters at the merge.
+
+*Vi CLIMBED -- rung 2 closes.* The four files wear `(module 'vi`; core.l and
+vi.l lead with the scoped (use 'kore); config.l's ambient head DROPPED
+outright -- config reads no kore; the head had been serving the cat's
+downstream, and the one lane still leaning on it (test_kore's law cat)
+now echoes its own (use 'kore) before law.l, the moon.sh pattern. law.l and
+hue2vim.l lead with (use 'vi); lib/hueweb.l splices it for its own compile
+(outside-image tools' two path-uses register the same module -- the loader
+re-pin); kore.l's vi row reads (from 'vi 'vi-main). Only the still-bare
+holo/asbook ambience remains -- holo's own wrap, rung 2's coda, dissolves it.
+
 **Rung 3 -- the search collapses.** libsrc drops the seat rungs; cwd `lib/`
 stays with a retirement note; mk/install.mk's lib tree and the nest resolution
 contract retire in coordination with the self-host arc's `love up` story, not

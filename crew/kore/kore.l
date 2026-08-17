@@ -255,7 +255,7 @@
              'patch patch-main
              'grep grep-main 'sed sed-main
              'awk awk-main 'find find-main
-             'vi vi-main
+             'vi (from 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
              'env env-main 'sleep sleep-main
              'kill kill-main 'xargs xargs-main
              ; the shell: lush's wrap registered ahead of this file in the cat, so sh-main
