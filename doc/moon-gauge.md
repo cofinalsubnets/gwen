@@ -33,31 +33,85 @@ so a lane behind on inflate and level on crc32 is losing to branches, not to loa
 | chacha20 | 1,192.7 ms | 241.6 | 223.2 | **5.34×** |
 | poly1305 | 1,754.5 ms | 1,713.4 | 1,053.3 | **1.67×** (1.02× vs gcc) |
 
+⚠ **THAT BUILD ROW IS NOT COMPARABLE TO THE ONE BELOW** and never measured what it said:
+51,766.8 ms carries the one-time nolibc build the next section takes apart. Its mooncc/clang
+figure is fiction; the corpus and cipher rows are unaffected.
+
 ⚠ **these are wall-clock and they are not tight.** A second fill 40 minutes later on the same
 box read the corpus at 1.14× (mooncc 4,007.1, clang 3,517.4) and the build rows moved 7-10%.
 Treat ±4% as the floor on a ccbench ratio and reach for `perf` cycles (±0.72% here) for
 anything finer — a 3% ccbench move is not a result.
 
-## the heavy-nif rows (2026-08-17, same box, the run that added them)
+## the heavy-nif rows (2026-08-17, same box, and a corrected build row)
 
 | | mooncc | gcc-musl | clang-musl | mooncc/clang |
 |---|---|---|---|---|
-| build | 41,794.1 ms | 10,167.4 | 6,124.2 | **6.82×** |
-| corpus | 3,423.2 ms | 2,752.4 | 2,721.6 | **1.26×** |
-| chacha20 | 1,059.0 ms | 307.5 | 185.6 | **5.71×** |
-| poly1305 | 1,286.4 ms | 1,397.2 | 864.4 | **1.49×** (0.92× vs gcc) |
-| inflate | 594.5 ms | 386.4 | 347.7 | **1.71×** |
-| crc32 | 639.6 ms | 418.0 | 466.4 | **1.37×** (1.53× vs gcc) |
-| sha256 | 1,485.5 ms | 326.7 | 367.8 | **4.04×** |
+| build | 19,202.8 ms | 9,542.0 | 5,729.1 | **3.35×** |
+| corpus | 3,249.2 ms | 2,593.0 | 2,506.0 | **1.30×** |
+| chacha20 | 926.5 ms | 281.4 | 159.6 | **5.80×** |
+| poly1305 | 1,231.1 ms | 1,321.0 | 795.2 | **1.55×** (0.93× vs gcc) |
+| inflate | 576.3 ms | 362.5 | 316.2 | **1.82×** |
+| crc32 | 649.1 ms | 410.7 | 452.6 | **1.43×** (1.58× vs gcc) |
+| sha256 | 1,484.0 ms | 392.9 | 350.8 | **4.23×** |
+
+⚠ **THE BUILD ROW WAS 2.2× TOO HIGH AND THE BENCHMARK CAUSED IT.** It read 41,794 ms twice
+running, reproducibly, and it was still wrong: mooncc's link pulls `crew/moon/lib/nolibc/`
+member by need and caches the archive under `~/.love/cache/moon` keyed on the compiler,
+its stat and its image — and for an image FILE the key carries that file's stat, while
+`test/bench/Makefile` rebuilt `out/host/mooncc.image` as a prerequisite of the very
+target. So every run missed and paid a one-time **libc build** inside a per-build row,
+against gcc and clang linking a musl somebody else compiled. Measured directly: 43,754 ms
+after `touch out/host/mooncc.image`, 20,139 ms without. The lane now runs **the artifact**,
+whose baked image keys as the word `"<baked>"` and therefore survives every rebuild of the
+intermediates (`touch out/host/mooncc.image out/host/love` leaves it at 18,905 ms), plus
+one untimed build so the row means one thing. ⚠ a one-line C file does not warm the
+archive in its place — a program that needs no member pulls none, and it links in 94 ms.
 
 ⚠ **sha256 is the row worth reading, and it was not chosen to prove anything.** It sits at
-4.04×, next door to chacha's 5.71×, while crc32 — the same kind of table work with no array
-carried across the loop — sits at 1.37×. sha256's inner loop keeps a 64-word message
+4.23×, next door to chacha's 5.80×, while crc32 — the same kind of table work with no array
+carried across the loop — sits at 1.43×. sha256's inner loop keeps a 64-word message
 schedule; that is the array-slot shape appearing in a function picked for being *used*, not
 for being diagnostic, which is the strongest corroboration the diagnosis has. inflate at
-1.71× is the branchy end and says the branch path is not where mooncc is losing.
+1.82× is the branchy end and says the branch path is not where mooncc is losing.
 
-⚠ clang is SLOWER than gcc on crc32 (466.4 against 418.0) and much faster on poly1305. Two
+## where the build time goes (2026-08-17, the same box)
+
+Once the row is honest, the 19.2 s has an address. Every number below is a direct
+measurement, not a subtraction:
+
+| step | ms | of the build |
+|---|---:|---:|
+| `core/love.c` | 12,587 | 68% |
+| `host/*.c` (11 units) | 4,934 | 27% |
+| `crew/moon/lib/math/am.c` | 642 | 3% |
+| `mksys` (the syscall leaf) | 173 | 1% |
+| **link** | **194** | **1%** |
+
+and the one file that is two thirds of it splits again:
+
+| phase of the `love.c` compile | ms | share |
+|---|---:|---:|
+| lex + cpp + parse | 1,306 | 10% |
+| **codegen (`cgen-obj`, `crew/moon/gen.l`)** | **11,509** | **88%** |
+| object write (`objsecs`) | 277 | 2% |
+
+**So the gap is `gen.l`, and it is not a hot spot.** `perf` on one `love.c` compile is flat
+VM dispatch — `lvm_argtwocond` 13.0%, `lvm_eq` 11.6%, `lvm_tapn` 8.5%, `lvm_cur` 7.1%,
+then the `arg*` family — with `gcp` at 2.2% and `map_probe` (tablet hashing) at 1.3%.
+There is no data structure to fix and no collector to tune; it is gen.l's own love running
+on the interpreter, and per-unit against gcc that is 1.6× on `love.c` and about 2× on the
+small ones.
+
+⚠ **the linker is not the problem and it was worth checking**: ours binds the whole set in
+194 ms where `ld` does it in 38. 5×, on 1% of the build.
+
+⚠ **the splice JIT is not the lever either, and it is already built.** With love rebuilt
+`make moon_fir=-fir` so the binary carries its IR record, `(use 'splice)` ahead of the
+mooncc cat, and codegen re-run: **one closure** native-backed over the whole compile, and
+11,708 → 11,248 ms, which is noise. Whatever gen.l's hot closures are, the splicer declines
+them — that is the thing to look at before anything else in this file gets optimized.
+
+⚠ clang is SLOWER than gcc on crc32 (452.6 against 410.7) and much faster on poly1305. Two
 optimizing compilers disagreeing by 11% in opposite directions on adjacent rows is the scale
 of noise-plus-real-difference to keep in mind before reading a mooncc move of that size.
 

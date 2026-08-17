@@ -2,7 +2,9 @@
 # ccbench.sh -- the COMPILER shootout (the page's FOURTH table). Builds the love host
 # binary with three C compilers and, for each, reports four wall-clock costs:
 #   build : compile every C translation unit (core/love.c + host/*.c + the am math floor)
-#           and link a working `love` -- source to runnable binary.
+#           and link a working `love` -- source to runnable binary. ⚠ the mooncc lane
+#           builds ONCE UNTIMED first; the note above that call says why, and the row read
+#           2.2x too high until it did.
 #   test  : run the full arch-neutral corpus ($t, the same files test_host/test_raw
 #           feed) through the binary that build produced, with egg-boot EXCLUDED
 #           (subtracted) so it times the suite executing, not the compiler self-install.
@@ -24,9 +26,9 @@
 #           shapes in one function. A lane behind on inflate and level on crc32 is
 #           losing to branches, not to loads.
 # The three compilers, ALL THREE STATIC -- that is the whole point of the pairing:
-#   mooncc : love's OWN C compiler (crew/moon/), the exact `make test_raw` sequence --
-#            no gcc/glibc/ld anywhere: mooncc lays every .o, mksys emits the syscall
-#            leaf, our linker (crew/holo/) binds. It egg-boots (no baked image).
+#   mooncc : love's OWN C compiler (crew/moon/), run out of THE SHIPPED ARTIFACT's own
+#            `mooncc` verb -- no gcc/glibc/ld anywhere: mooncc lays every .o, mksys emits
+#            the syscall leaf, our linker (crew/holo/) binds.
 #   gcc-musl / clang-musl : the same translation units at the host's real -O2 cflags,
 #            through the musl-gcc/musl-clang wrappers and linked -static. Also
 #            egg-boot -- no `bake`, so all three lanes run the identical corpus off
@@ -45,10 +47,11 @@
 # net their sum (source to a tested and measured binary). A missing/failed lane
 # shows dnf.
 #
-# Requires `make host` first: the generated out/lib/*.h headers, out/host/love (it lays
-# the inflate row's stream, which needs lib/gz.l) and, for the mooncc lane,
-# out/host/mooncc(+.image). x86-64 only (mooncc's native lane); off x86-64 it
-# prints every row with the mooncc cells dnf and gcc/clang still raced.
+# Requires `make host` first: the generated out/lib/*.h headers and out/host/love (it lays
+# the inflate row's stream, which needs lib/gz.l); and the ARTIFACT, out/dist/love-<arch>,
+# because the mooncc lane runs that and not an intermediate -- see the note on SEED.
+# x86-64 only (mooncc's native lane); off x86-64, or with no artifact built, the mooncc
+# cells read dnf and gcc/clang are still raced.
 #
 # ⚠ THE net ROW IS A SUM OVER EVERY PHASE, so adding rows moves it and results either
 # side of a row change do not compare. The per-row ratios do.
@@ -119,22 +122,34 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 
 # -- mooncc: the WHOLE toolchain in love, verbatim from `make test_raw`. mooncc -c each
 #    unit, mksys the syscall leaf, our linker binds. -I$ho picks up the lcat'd headers. --
-MC="$ho/mooncc"
+# ⚠ THE COMPILER IS THE ARTIFACT, NOT out/host/mooncc, and this is not a preference --
+# it is the only spelling of the lane that measures the same thing twice. mooncc's link
+# pulls crew/moon/lib/nolibc/ MEMBER BY NEED and caches the archive under
+# ~/.love/cache/moon, keyed on the compiler, its stat, AND ITS IMAGE. For an image FILE
+# the key carries that file's stat (moon.l's mcrtkey), and this file's make target used to
+# rebuild out/host/mooncc.image as a prerequisite -- so every run missed and paid a
+# one-time libc BUILD inside the build row: 43.8 s against 20.1 s warm, 54% of the number.
+# A baked image keys as the word "<baked>" instead, so the artifact's entry survives every
+# rebuild of the intermediates (measured: `touch out/host/mooncc.image out/host/love`
+# leaves it at 18.9 s). It is also simply what a user runs. A one-line C file does NOT warm
+# the archive in its place -- a program that needs no member pulls none.
+SEED=$R/out/dist/love-$(uname -m)
+mc() { "$SEED" mooncc "$@"; }
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
-    "$MC" -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c core/love.c "$od/love.o" || exit 1
+    mc -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c core/love.c "$od/love.o" || exit 1
     for f in host/*.c; do b=$(basename "$f" .c)
-      "$MC" -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
+      mc -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
     # no nolibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a nolibc.o.
     for f in crew/moon/lib/math/*.c; do b=$(basename "$f" .c)
-      "$MC" -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
+      mc -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
     { cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
           crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
-      echo "(mksys \"$od/sys.o\")"; } | out/host/love || exit 1
-    "$MC" "$od"/*.o -o "$bin" ) || return 1
+      echo "(mksys \"$od/sys.o\")"; } | "$SEED" || exit 1
+    mc "$od"/*.o -o "$bin" ) || return 1
 }
 
 # the corpus as ONE file, fed by REDIRECT. It arrives on stdin either way (which keeps
@@ -214,10 +229,16 @@ dnf_lane() { for ph in build test chacha poly1305 inflate crc32 sha256; do echo 
 # skip; ZERO lanes is the harness, and it exits 1 below.
 LIVE=0
 
-if [ "$(uname -m)" = x86_64 ] && [ -x "$MC" ]; then
+if [ "$(uname -m)" = x86_64 ] && [ -x "$SEED" ]; then
+  # ⚠ AND ONE UNTIMED BUILD BEFORE THE TIMED ONE, which the note on SEED explains: the
+  # artifact's cache entry survives everything but a NEW ARTIFACT, and after `make dist`
+  # the first link builds the runtime. gcc and clang link a musl somebody else compiled,
+  # so holding mooncc to the same shape means its libc is built too, not built inside the
+  # row. Costs one build on a ten-minute table and makes the row mean one thing.
+  build_mooncc "$WORK/love-warm" >/dev/null 2>&1
   lane mooncc build_mooncc "$WORK/love-mooncc"
 else
-  dnf_lane mooncc                                   # mooncc's native lane is x86-64 only
+  dnf_lane mooncc                        # x86-64 only, and it needs the artifact built
 fi
 # the native lanes: static musl. The wrappers hand the compiler musl's headers and crt,
 # so the translation units are the identical job -- only the libc differs, and -static
