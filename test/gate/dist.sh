@@ -122,6 +122,19 @@ MK
     && run "$dabs" -e '(: _ (use (name "lush")) _ (sh-oneline (list "-c") "mooncc -zzz") (quit (? (two? (peep sh-imgc "mooncc" 0)) 0 1)))' ) \
      >/dev/null 2>&1 \
     || fail "lush ran a command without taking its own in-image decision"
+  # the checksums ride the same lane, and the same two things are asked of them: that the
+  # decision was taken and kept, and that the answer it produced -- through a redirect,
+  # which a tool running in here takes the way a builtin does -- is the one GNU gives.
+  ln -sf "$dabs" "$sabs/bin/sha256sum"
+  printf 'love\n' > "$sabs/w/sum.in"
+  ( cd "$sabs/w" && PATH=$sabs/bin:/usr/bin:/bin && export PATH \
+    && run "$dabs" -e '(: _ (use (name "lush")) _ (sh-oneline (list "-c") "sha256sum sum.in > sum.out") (quit (? (two? (peep sh-imgc "sha256sum" 0)) 0 1)))' ) \
+     >/dev/null 2>&1 \
+    || fail "lush spawned sha256sum where its own main rides this image"
+  if command -v sha256sum > /dev/null 2>&1; then
+    ( cd "$sabs/w" && sha256sum sum.in ) > "$sabs/w/sum.ref"
+    cmp -s "$sabs/w/sum.out" "$sabs/w/sum.ref" || fail "in-image sha256sum disagreed with GNU"
+  fi
   # ..and cook's own: two recipe lines are ONE process in-image, one process EACH spawned
   mkdir -p "$sabs/pw"
   printf 'all:\n\t@echo $$$$\n\t@echo $$$$\n' > "$sabs/pw/Makefile"

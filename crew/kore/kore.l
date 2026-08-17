@@ -11,6 +11,7 @@
 ;   kore cat|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
 ;   kore cut|tr|nl|rev|paste|comm|join|split|od   the line, field and record tools
 ;                                                 (crew/kore/core.l)
+;   kore cksum|md5sum|sha256sum [-c] [F..]   the checksums (crew/kore/sum.l)
 ;   kore ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (crew/kore/fs.l)
 ;   kore stat|du|chown|mktemp                        ... and what they report
 ;   kore expr EXPRESSION             the little language (crew/kore/expr.l)
@@ -245,6 +246,7 @@
              'nl nl-main 'rev rev-main
              'paste paste-main 'comm comm-main 'split split-main
              'join join-main 'od od-main
+             'cksum cksum-main 'md5sum md5sum-main 'sha256sum sha256sum-main
              'ls ls-main 'cp cp-main 'mv mv-main
              'rm rm-main 'mkdir mkdir-main 'rmdir rmdir-main
              'ln ln-main 'touch touch-main
@@ -278,6 +280,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   cat head tail wc sort uniq tee          the line tools (crew/kore/core.l)
   cut tr nl rev                           the field tools
   paste comm join split od                the record tools
+  cksum | md5sum [-c] | sha256sum [-c]    the checksums (crew/kore/sum.l)
   expr EXPRESSION                         arithmetic, comparison and BRE matching
   patch [-pN] [-R] [-i F] [--dry-run]     lay a unified diff on a tree
   grep [-nvclqhaixwFEo] [-e P] [-m N] PAT [F..]   BRE, or ERE under -E (crew/kore/re.l)
