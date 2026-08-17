@@ -12,6 +12,11 @@ five scalar limbs, so the pair reads whether a gap is array slots or general res
 win there is worth having and is not the objective. ⚠ but do not read them to zero either —
 `core/love.c:6138`'s z-tray comparison is the same array-indexed shape.
 
+⚠ **AND THE PAIR IS CONFOUNDED** — chacha rotates 320 times a block and poly1305 not once,
+so the pair separates rotate-heavy from rotate-free just as cleanly as it separates array
+from scalar, and mooncc emits no rotate instruction at all. See *the reason is the ROTATE*
+below before spending anything on the strength of these two rows.
+
 ⚠ **the corpus average is flattering and the pair exists because of it** (`ccbench.sh`'s own
 header says so). An arc that reports only the corpus row will under-weight array work; an arc
 that reports only the pair will over-weight it. Both rows, every time.
@@ -69,10 +74,57 @@ archive in its place — a program that needs no member pulls none, and it links
 
 ⚠ **sha256 is the row worth reading, and it was not chosen to prove anything.** It sits at
 4.23×, next door to chacha's 5.80×, while crc32 — the same kind of table work with no array
-carried across the loop — sits at 1.43×. sha256's inner loop keeps a 64-word message
-schedule; that is the array-slot shape appearing in a function picked for being *used*, not
-for being diagnostic, which is the strongest corroboration the diagnosis has. inflate at
-1.82× is the branchy end and says the branch path is not where mooncc is losing.
+carried across the loop — sits at 1.43×. inflate at 1.82× is the branchy end and says the
+branch path is not where mooncc is losing.
+
+### ⚠ and the reason is the ROTATE, not the array — read this before the section above
+
+This file said sha256 corroborated the array-slot diagnosis, on the strength of its 64-word
+message schedule. **That was wrong, or at best half true**, and taking the row apart says so:
+
+| | insns/iter | memory ops/iter | |
+|---|---:|---:|---|
+| schedule loop, mooncc | 144 | 55 | 48 iterations |
+| schedule loop, gcc | 36 | 4 | |
+| compression loop, mooncc | 209 | 69 | 64 iterations |
+| compression loop, gcc | 48 | 3 | |
+
+Dynamically that is **5.06× the instructions** (34.4 G against 6.80 G for the row) at a
+*higher* IPC — 5.89 against 5.32 — so nothing is stalling. mooncc simply executes five times
+the work, all of it hitting L1.
+
+And here is where it goes. For `rr(e, 6)` gcc emits **one instruction**, `ror $0xb,%r14d`.
+mooncc emits sixteen:
+
+    mov  %r10,0x40(%rsp)        ; e, to a frame slot
+    movq $0x6,0x48(%rsp)        ; ..and the CONSTANT 6, to another
+    mov  0x40(%rsp),%r8d        ; reload e
+    movslq 0x48(%rsp),%rcx      ; reload 6
+    shr  %cl,%rax               ; a VARIABLE shift by it
+    rex mov 0x40(%rsp),%esi     ; reload e again
+    mov  $0x20,%r9d
+    movslq 0x48(%rsp),%rax      ; reload 6 again
+    sub  %rax,%r9               ; 32 - 6
+    shl  %cl,%rax  ...  or
+
+Two separable defects, and neither is register pressure: **the rotate idiom
+`(x >> n) | (x << (32 - n))` is never recognized**, and **an inlined body does not
+constant-propagate** — the literal 6 is materialized to the frame and read back twice, which
+is also why the shifts are `%cl` variable forms instead of immediates. Counted over the whole
+translation unit, **mooncc emits 0 rotate instructions where gcc emits 6 in `host/hash.c` and
+32 in `host/tls.c`.**
+
+sha_block does 4 rotates per schedule iteration and 6 per compression iteration — 576 a
+block. At ~15 excess instructions each that is ~8,600 of the ~16,000 excess, so the rotate is
+about **half** the gap on its own.
+
+⚠ **THIS CONFOUNDS THE CIPHER PAIR.** chacha does 320 rotates a block; poly1305 does **none**,
+and neither does crc32, and neither does inflate. The rows split exactly on rotates —
+5.80× and 4.23× with them, 1.55×/1.43×/1.82× without — which the array-slot reading also
+fits, because the two rotate-heavy functions happen to be the two carrying arrays. The two
+hypotheses are not separated by anything measured so far. The experiment that separates them
+is cheap and has not been run: **teach `gen.l` the rotate, re-fill the table.** If chacha and
+sha256 fall toward 2× the pair was reading rotates all along.
 
 ## where the build time goes (2026-08-17, the same box)
 
