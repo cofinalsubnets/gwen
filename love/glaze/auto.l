@@ -574,10 +574,14 @@
           hm (ho-fix info (map (\ f (<f >< (0 >< ()))) info))                            ; the higher-order fixpoint
           ho? (\ nm (: e (ho-assq nm hm) (two? e && (<>e || two? >>e))))             ; returns-fn OR takes-fn -> inline it
           lamc? (\ pr (: nd (dehead pr) (ho-lamb? >nd && !(dcount <nd >nd) && ho? <nd)))   ; a NON-RECURSIVE higher-order const
-          lamcs (map dehead (filter lamc? pairs))
+          lamcs0 (map dehead (filter lamc? pairs))
+          ; a lamc NAMED in another lamc's body stays bound: the fold substitutes each value as
+          ; written, so a name already spent is never rewritten inside the text replacing a later
+          ; one -- inlining both would leave the dropped binding dangling in that text.
+          lamcs (filter (\ q !(ho-any (\ r (!(id? <r <q) && occurs? <q >r)) lamcs0)) lamcs0)
           (? (atom? lamcs) form                                                                  ; no HOF const -> leave the form for the other lanes (dsimp mangles string/cask/loop forms)
              (: sub (\ e (dsimp (foldl (\ b pr (subst-sym <pr >pr b)) e lamcs)))         ; inline each HOF lamc, then beta-collapse
-                keep (filter (\ pr !(lamc? pr)) pairs)                                         ; non-HOF bindings keep their RAW form (grpfix recognizes define-sugar function heads)
+                keep (filter (\ pr !(ho-any (\ q (id? <q <(dehead pr))) lamcs)) pairs)         ; non-inlined bindings keep their RAW form (grpfix recognizes define-sugar function heads)
                 (': >< unpair (map (\ pr (<pr >< sub >pr)) keep) (sub body))))))
    ; --- CHURCH LOWERING (dechurch): a literal church application (N f x) -- N a small whole numeral,
    ;     f a FUNCTION (a lambda literal or a partial of a dyadic op, e.g. (+ i)) -- is f applied to x
