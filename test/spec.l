@@ -104,11 +104,16 @@
  (5.0 = (abs ~(3 4))) (~(2.0 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
 
 (hear welp)                                      ; the misses answer quietly; the sweep asks about names, not values
+; ⚠ the census is the CORE book's contract, so it runs on the EGG lane only: a woken
+; image (love-image on the book is the marker) carries whatever apps rode the bake --
+; the crew layer among them -- and their predicates follow the local ()-false idiom,
+; which is not this law. the egg lane still sweeps every core name on every run.
 (: (q-nom? n) (: s (string n) t (tally s) (? (0 < t) (= 63 (peep s (t - 1) 0)) 0))
    (q-bit? n) (: f (ev n)
                  (ok v) (nil? (id? () (f v)))
                  (&& (ok 'zz) (&& (ok 0) (&& (ok "") (ok ())))))
-   bad (filter (\ n (nil? (q-bit? n))) (filter q-nom? (names ())))
+   bad (? (member? 'love-image (names ())) ()
+          (filter (\ n (nil? (q-bit? n))) (filter q-nom? (names ()))))
    _ (? (two? bad) (: _ (puts ("bit-law offenders: " + (show bad) + "\n")) 0) 0)   ; NAME them: the
    (assert (nil? (two? bad))))                                     ; seat that fails is not always this one
 (hear 0)

@@ -179,7 +179,7 @@ embed_elfs = mps2/love.elf nucleo446/firm.elf rp2040/love.elf
 embed_a64 = $(or $(KCC_IS_MOON),$(filter 1,$(KCC_IS_CLANG)))
 embed_arm := $(and $(shell command -v arm-none-eabi-gcc 2>/dev/null),\
                    $(shell command -v arm-none-eabi-ld 2>/dev/null))
-test_embed: host $(ho)/mooncc
+test_embed: host
 	@echo TEST the frontends compile against core/love.h "(object only)"
 	@$(MAKE) -s kmain_o
 	@$(if $(embed_a64),$(MAKE) -s a=aarch64 kmain_o,echo "  (aarch64 kmain.c skipped: $(KCC) cannot cross)")
@@ -196,7 +196,7 @@ test_embed: host $(ho)/mooncc
 	@echo "test_embed: host, free (x86_64 + aarch64 + riscv) and wasm build against core/love.h"
 
 # the SECONDARY boards, same checks one tier down -- real targets that cannot hold a commit.
-test_embed_boards: host $(ho)/mooncc
+test_embed_boards: host
 	@echo TEST the secondary boards compile against core/love.h "(object only)"
 	@for p in $(embed_boards); do \
 	   $(MAKE) -s -C port/$$p ../../out/$$p/main.o \
@@ -338,11 +338,11 @@ test_sb: host out/host$(hsuf)/sb
 	@echo TEST crew/sb/sb.l + test/host/sb.l
 	@rm -rf out/host/.sbtest
 	@cat test/00-init.l test/host/sb.l | sh test/gate/run.sh sb "$(mw)" "sb: ok"
-# the kore smokes drive the BAKED image (`wake kore.image`), ~0.02s vs ~0.75s per spawn
-# over the ~68 tool runs; the argv0-symlink smoke execs the real shim, whose basename-$0
-# dispatch the wake bypasses. the synthetic "kore" argv0 keeps the exit faces unchanged.
-korerun = $m wake $(ho)/kore.image kore
-test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+# the kore smokes drive love's own crew layer (`love kore ..` -- the layered bake,
+# doc/plan/one-binary.md), warm per spawn; the argv0 smoke lays its own two-line shim,
+# the distro's shape, since the tree carries no kore binary anymore.
+korerun = $(mw) kore
+test_kore: host
 	@sh test/gate/kore.sh $(ho) $m
 # grep + sed against GNU over SEEDED RANDOM patterns (doc: the script's own head).
 # test_kore's battery is a list someone thought of; this one is not, which is why it
@@ -350,17 +350,17 @@ test_kore: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/
 # the laws and a green test_slow all sat happily on top of. Skips (exit 0) where GNU
 # grep/sed are absent -- and checks --version, since an interactive `grep` may be a
 # ugrep shim whose BRE differs. Rides test_extra: it costs ~a minute.
-test_refuzz: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image
-	@sh test/gate/refuzz.sh $m out/host$(hsuf)/kore.image
+test_refuzz: host
+	@sh test/gate/refuzz.sh $m
 # cook against GNU MAKE, differentially (doc: the script's own head). The oracle is a
 # SECOND IMPLEMENTATION, and it has to be: a builtin cook never implemented is a VARIABLE
 # reference in make's grammar, so it expands to EMPTY and the build carries on -- invisible
 # to any test that only asks whether cook agrees with itself. Skips (exit 0) where GNU make
 # is not on the box, since there is no oracle to ask.
-test_cookdiff: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image
-	@sh test/gate/cookdiff.sh $(ho)/kore
+test_cookdiff: host
+	@sh test/gate/cookdiff.sh $m
 # the install nest, three ways (make / cook / cook+kore PATH lane) -- one shape.
-test_nest: host out/host$(hsuf)/kore out/host$(hsuf)/kore.image out/host$(hsuf)/mooncc.image
+test_nest: host
 	@sh test/gate/nest.sh $(ho) $m
 # the dist artifact: test_dist smokes the verb rail on the baked one-file binary (seconds,
 # test_slow); test_up runs the WHOLE download door -- origin recorded, kiosko serving it,
@@ -371,8 +371,8 @@ test_up: out/dist/love-$a
 	@sh test/gate/dist.sh up out/dist/love-$a
 # The editor (crew/vi/): the pure modal engine's laws (no tty -- vstep driven byte by
 # byte), then scripted end-to-end passes through the `kore vi` face over a pipe (keys off
-# stdin, frames onto a captured stdout, :wq writes), driven through the baked kore.image.
-test_vi: host out/host$(hsuf)/kore.image
+# stdin, frames onto a captured stdout, :wq writes), driven through the crew layer.
+test_vi: host
 	@echo TEST crew/vi/{hue,core,law}.l
 	@cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/re.l lib/lint.l \
 	    crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/law.l \
@@ -393,12 +393,12 @@ test_vi: host out/host$(hsuf)/kore.image
 	  echo "kore: vi (laws + piped create/dd/q!/undo end-to-end) ok"
 # The C compiler (crew/moon/, doc/moon.md): the pure pipeline's goldens, then stage-0 end
 # to end through the real `mooncc` -- compile, run, exit 42, against a gcc -O0 differential
-# on the same source. Drives the WARM image (~0.68s -> ~0.02s per compile, 88 of them).
-moonrun = $m wake $(ho)/mooncc.image mooncc
+# on the same source. Drives the crew layer warm (~0.68s -> ~0.1s per compile, 88 of them).
+moonrun = $(mw) mooncc
 # love0 rides along for the inline-asm checks: templates parse through holo/text.l, whose
 # combinators come off the bare `post` each frontend's boot binds ITSELF, so the bootstrap
 # lane can lose the feature while this one keeps it.
-test_moon: host $(love0) out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+test_moon: host $(love0)
 	@sh test/gate/moon.sh $(ho) $m $(love0)
 # the COMMITTED GENERATED artifacts, laid from the tables that define them (core/mx.l the +/*
 # dispatch matrices and the kind lattice they index, core/nifs.l the nif + instruction registry,
@@ -417,7 +417,10 @@ mx_gen = core/mx.h:core/mx.l:mx-h:mx-ok core/kinds.h:core/mx.l:kinds-h:mx-ok cor
 # /warn the \# escapes are load-bearing: a bare # in a make VARIABLE starts a comment and
 # would eat the rest of the line (a recipe line passes # through, a variable does not).
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
-mxlay   = $(mw) -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
+# ⚠ the EGG lane, deliberately: these generators read CORE tables with the boot
+# vocabulary, and the warm book now carries the crew (the layered bake) -- kore's
+# two-arg `join` shadowed clay's one-arg at mx-h's define and the .h came out empty.
+mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
 	@echo LOVE	core/mx.h core/kinds.h core/nifs.h xterm256.h core/love_data.ld "+5 .lds (core/mx.l + core/nifs.l + quay.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
@@ -447,9 +450,9 @@ $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 # test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/clay.md): for every file
 # in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. ⚠ the run PARTITIONS and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
-test_clay: host out/host$(hsuf)/mooncc.image
+test_clay: host
 	@echo TEST test/gate/clay.l "(clay G1: (cparse (clay-show c)) == c over test/cc)"
-	@$m wake $(ho)/mooncc.image -l test/gate/clay.l < /dev/null
+	@$(mw) -l test/gate/clay.l < /dev/null
 # ...and the CONSUMERS: the generated headers regenerate and DIFF here -- a hand edit to any,
 # or a table edit with no regen, is a red. The roster is mx_gen above; `cmp`, not rtk diff.
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
@@ -464,9 +467,9 @@ test_clay: host out/host$(hsuf)/mooncc.image
 # test_moonfuzz -- moon's REFUSAL surface: each test/cc file broken
 # eight ways from a fixed seed. Two reds -- no SCARE, no hang -- plus G1 on every mutant that
 # still parses, and a printed CENSUS of named-vs-bare refusals. stderr is KEPT: cpp speaks there.
-test_moonfuzz: host out/host$(hsuf)/mooncc.image
+test_moonfuzz: host
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 888 mutants of test/cc)"
-	@$m wake $(ho)/mooncc.image -l test/gate/moonfuzz.l < /dev/null
+	@$(mw) -l test/gate/moonfuzz.l < /dev/null
 # test_splice -- the splice JIT end to end (lib/splice.l, test/bench/vmsplice/README.md): a live
 # closure's op rows, each op's own IR taken out of THIS BINARY's .rodata (mooncc -fir=lvm_ put
 # it there), spliced into one body, assembled by holo, its one external reference bound to a
@@ -480,9 +483,9 @@ test_splice: host
 # test_ccarm64 / test_ccriscv -- the battery on a CROSS TARGET (two targets, one procedure
 # in ccarch.sh): every test/cc/*.c built by `mooncc -t <arch>`, run under qemu-user, required
 # to answer what x64 answers. The three programs no cross lane can build must REFUSE, not skip.
-test_ccarm64: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+test_ccarm64: host
 	@sh test/gate/ccarch.sh arm64 $(ho) $m
-test_ccriscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+test_ccriscv: host
 	@sh test/gate/ccarch.sh riscv64 $(ho) $m
 # test_cts -- an OUTSIDE corpus: c-testsuite's 220 single-file programs, each held to the
 # stdout the corpus itself ships, on all three targets. Every file in test/cc/ was written
@@ -490,11 +493,11 @@ test_ccriscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
 # programs mooncc compiles clean and answers wrong. The failures are ROSTERED with a cause
 # apiece in cts.sh, refusals and wrong answers kept apart. Opt-in on an imported tree
 # (`make dl/c-testsuite`), skips whole without it.
-test_cts: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+test_cts: host
 	@sh test/gate/cts.sh x64 $(ho) $m
-test_cts_arm64: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+test_cts_arm64: host
 	@sh test/gate/cts.sh arm64 $(ho) $m
-test_cts_riscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+test_cts_riscv: host
 	@sh test/gate/cts.sh riscv64 $(ho) $m
 # the corpus itself -- 220 files, cloned once and kept in dl/ like limine, so `make clean`
 # leaves it and only `make distclean` asks the network again. NOTHING depends on this rule:
@@ -505,26 +508,26 @@ $(dl)/c-testsuite:
 # test_libc -- OUR C LIBRARY against the system's, function by function:
 # test/libc/*.c built by mooncc (pulling crew/moon/lib/nolibc.c by need) and by gcc, run,
 # and the two OUTPUTS compared, so a drift names the function and the case.
-test_libc: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+test_libc: host
 	@sh test/gate/libc.sh $(ho) $m
 # test_ulp -- THE MATH FLOOR, built by both compilers and required to agree. `make ulp`
 # measures am.c's accuracy for the $(CC) build alone, which asks whether the algorithm is
 # right, never whether OUR compiler builds it -- and float BITS are where codegen hides.
-test_ulp: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+test_ulp: host
 	@sh test/gate/ulp.sh $(ho) $m
 # The rung-2 self-host gate: compile core/love.c AND every host/*.c with mooncc (gcc/clang only
 # LINKS), then run the whole corpus through the all-mooncc binary -- the compiler compiles
 # the runtime it runs on. OPT-IN; x86-64 only; the binary carries no image, so a fresh egg.
-test_selfhost: host out/host$(hsuf)/mooncc
+test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
-	  $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c core/love.c $$d/love.o \
+	  $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c core/love.c $$d/love.o \
 	    || { echo "FAIL mooncc -c core/love.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
-	    $(ho)/mooncc -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c $$f $$d/$$b.o \
+	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
-	  $(ho)/mooncc -Icrew/moon/include -c crew/moon/lib/math/am.c $$d/am.o \
+	  $(moonrun) -Icrew/moon/include -c crew/moon/lib/math/am.c $$d/am.o \
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
 	  $(host_cc) -static -o $(ho)/love-selfhost $$d/*.o $(host_ldflags) \
 	    || { echo "FAIL link all-mooncc binary"; exit 1; }; \
@@ -537,7 +540,7 @@ test_selfhost: host out/host$(hsuf)/mooncc
 # The rung-4 gate: the GCC-FREE fixpoint. Everything test_selfhost builds PLUS our own raw
 # libc (nolibc.c), math floor (am.c) and sys.o, bound by OUR OWN static linker -- no gcc,
 # no glibc, no ld anywhere. In test_slow, x86-64 only; supersedes test_selfhost.
-test_raw: host out/host$(hsuf)/mooncc
+test_raw: host
 	@sh test/gate/raw.sh x64 $(ho) $m $t
 # test_hdiff -- the FOREIGN-CC differential at the host (KCC's twin one level up). gcc and
 # clang each link the whole vm at ai_tco=1, which the default mooncc lane never does, and
@@ -549,12 +552,12 @@ test_hdiff: host
 # the cc-DRIVER conventions (the `CC=mooncc` door's floor): the REAL $(ai_cflags) soup
 # rides through -c, a link owing libc symbols pulls the runtime by need, and the loud edges
 # stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_slow.
-test_drv: host out/host$(hsuf)/mooncc
+test_drv: host
 	@sh test/gate/drv.sh $(ho) $(ai_cflags)
 # the kernel's inline-asm SEAM: free/<a>/asmops.h says every
 # privileged instruction twice -- holo's neutral template for mooncc, GNU's for clang -- so
 # the gate compiles one probe with both and compares op by op. Skips without llvm-objdump.
-test_asmops: host out/host$(hsuf)/mooncc
+test_asmops: host
 	@sh test/gate/asmops.sh $(ho)
 # test_vec -- the INTERRUPT gate: raises a real CPU exception with (fault n) and reads the
 # report, the only way to reach free/mkvec.l's 32 stubs and the fault vector, then
@@ -594,17 +597,17 @@ test_raw_bake: test_raw
 # test_riscv -- the test/cc battery `mooncc -t riscv64` under qemu-riscv64, exit code
 # against the native x64 build. OUT of test_slow: test_ccriscv runs the same battery and
 # compares STDOUT, so this is its strict subset -- the lighter opt-in lane.
-test_riscv: host out/host$(hsuf)/mooncc out/host$(hsuf)/mooncc.image
+test_riscv: host
 	@sh test/gate/riscv.sh $(ho) $m
 # test_raw's riscv64 twin: mooncc -t riscv64 lays every object, mksys-riscv the syscall
 # leaf, OUR linker binds, qemu-riscv64 runs the whole corpus over the fresh egg. The riscv
 # backend loads into the sealed holo module at runtime for mksys. Opt-in; skips w/o qemu.
-test_raw_riscv: host out/host$(hsuf)/mooncc out/lib/riscv.h
+test_raw_riscv: host out/lib/riscv.h
 	@sh test/gate/raw.sh riscv64 $(ho) $m $t
 # test_raw's aarch64 twin: mooncc -t arm64 lays every object, mksys-arm64 the syscall leaf,
 # OUR linker binds, qemu-user runs the WHOLE C-sorted $t over the fresh egg. ⚠ $t must stay
 # in C/byte order: test/uu.l defines the kernel test/uukindlaw.l calls. Opt-in; needs qemu.
-test_raw_arm64: host out/host$(hsuf)/mooncc
+test_raw_arm64: host
 	@sh test/gate/raw.sh arm64 $(ho) $m $t
 # test_thumb1 -- the ELF32/EM_ARM object writer (crew/holo/obj.l objsecs32) end to end and the
 # 32-bit data model: a cross-object BL, the inline v6-M soft divide/rem, a global via the
@@ -612,45 +615,45 @@ test_raw_arm64: host out/host$(hsuf)/mooncc
 # NAMED SECTION holding a function-pointer table -- the vector-table shape, thumb bit and all.
 # Then the other direction: test/gate/ld32.l reads an object back through link.l's ld-read,
 # the only exercise the 32-bit rows of its field table get.
-test_thumb1: host out/host$(hsuf)/mooncc
+test_thumb1: host
 	@sh test/gate/thumb.sh thumb1 $(ho)
 # test_thumb2 -- the thumb1 gate's ARMv7E-M twin, ON THE DEVICE CPU (qemu mps2-an500 is a
 # Cortex-M7, the Teensy 4.1 / Playdate silicon). the featured lane is `la`, thumb2's
 # MOVW/MOVT pair: every binding shape rides once -- global fn, static fn, literal, var.
-test_thumb2: host out/host$(hsuf)/mooncc
+test_thumb2: host
 	@sh test/gate/thumb.sh thumb2 $(ho)
 # test_virt -- LOVE ITSELF on the bare riscv64 hart: the whole runtime compiled end to end
 # by mooncc -t riscv64 (port/virt/), start.o laid from holo IR, OUR linker binds -- no
 # foreign toolchain ANYWHERE. Bakes the egg, asserts, exits 42; 98 = a machine trap.
-test_virt: host out/host$(hsuf)/mooncc
+test_virt: host
 	@sh test/gate/boot.sh virt "$(MAKE)"
 # test_mps2 -- LOVE ITSELF on the M7: the whole runtime by mooncc -t thumb2 (port/mps2/),
 # start.o laid from holo IR, ldbare32 binding one RWX segment at 0 -- no foreign toolchain
 # ANYWHERE, the second port after virt to reach that. On qemu's Cortex-M7 it bakes the egg
 # FROM SOURCE and asserts spec laws over the hatched image; exits 42, and 98 = fault.
-test_mps2: host out/host$(hsuf)/mooncc
+test_mps2: host
 	@sh test/gate/boot.sh mps2 "$(MAKE)"
 # test_mps2_t1 -- LOVE ON THE RP2040'S ISA: the same port by mooncc -t thumb1 (ARMv6-M,
 # ai_tco=0's trampoline, soft floats through libgcc's v6-m __aeabi set). v6-M is a strict
 # subset of ARMv7E-M, so qemu's M7 runs it natively; exit 42 = hatched + laws held. Our linker
 # binds this one too -- libgcc.a is named on the line and its members pulled by need through
 # the ranlib index, so the .a is a LIBRARY the link READS, not a tool it runs.
-test_mps2_t1: host out/host$(hsuf)/mooncc
+test_mps2_t1: host
 	@sh test/gate/boot.sh mps2_t1 "$(MAKE)"
 # test_mps2_wake -- the IMAGE lane: the baker bakes the corpus on qemu's M7 and dumps a
 # fully-symbolic heap image; the WAKER -- a different binary, arena deliberately offset --
 # wakes it and re-runs the driver laws. The teensy's build rides the same love.img.
-test_mps2_wake: host out/host$(hsuf)/mooncc
+test_mps2_wake: host
 	@sh test/gate/boot.sh mps2_wake "$(MAKE)"
 # test_thumb2sp -- the SP-only-FPU face (the playdate's STM32F746): f64 arithmetic SOFTENS
 # to __aeabi_* libgcc calls while the 64-bit transfers keep the d-reg value model. Gated on
 # qemu's mps2-an386, whose FPv4-SP FPU FAULTS on any f64 arithmetic that slipped through.
-test_thumb2sp: host out/host$(hsuf)/mooncc
+test_thumb2sp: host
 	@sh test/gate/thumb.sh thumb2sp $(ho)
 # test_playdate -- the playdate build gate: the device half compiled by mooncc -t thumb2sp
 # behind pdglue's word-only SDK seam, the pdx built by pdc. Verifies the DEVICE elf: no UND,
 # eventHandler exported, ZERO movw/movt relocs -- the loader relocates ABS32 words only.
-test_playdate: host out/host$(hsuf)/mooncc
+test_playdate: host
 	@echo TEST out/playdate/love.pdx
 	@if [ -z "$$PLAYDATE_SDK_PATH" ] || ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_playdate: no PLAYDATE_SDK_PATH / arm-none-eabi toolchain, skipped"; exit 0; fi; \
@@ -666,7 +669,7 @@ test_playdate: host out/host$(hsuf)/mooncc
 # is the map in that file), mkimg.l wraps the baked heap image, ocopy.l writes the .hex/.bin,
 # and the ROM-facing boot image is VERIFIED out of that .bin (FCFB tag at flash 0, IVT at
 # 0x1000, thumb-bit entry). So this one never skips; test_mps2 is the runtime (no RT1062 qemu).
-test_teensy41: host out/host$(hsuf)/mooncc
+test_teensy41: host
 	@echo TEST out/teensy41/love.hex
 	@$(MAKE) -C port/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_teensy41: love (all-mooncc thumb2), OUR linker, flatten and boot image -- nothing foreign"
@@ -677,7 +680,7 @@ test_teensy41: host out/host$(hsuf)/mooncc
 # libgcc.a lives, but the .a is READ as an archive, by need, not run. The 128 KB SRAM never
 # held love: this port is the TOOLCHAIN on silicon, its arithmetic gated by test_thumb2sp
 # and its boot by test_nucleo446_smoke below.
-test_nucleo446: host out/host$(hsuf)/mooncc
+test_nucleo446: host
 	@echo TEST out/nucleo446/firm.hex
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
@@ -687,7 +690,7 @@ test_nucleo446: host out/host$(hsuf)/mooncc
 # its exit code the self-check tally carried out through mkboot.l's sh_exit. The only lane that
 # executes crt0, the semihosting block and the fault vectors. ~0.7s.
 # ⚠ qemu only -- on silicon a bkpt with no debugger escalates to lockup.
-test_nucleo446_smoke: host out/host$(hsuf)/mooncc
+test_nucleo446_smoke: host
 	@sh test/gate/boot.sh nucleo446_smoke "$(MAKE)"
 # test_rp2040 -- the Pico firmware BUILD gate, nucleo446-shaped, and the one port with NO .S:
 # vector table and crt0 are C, and boot2 -- the 256-byte stage the mask ROM checksums before
@@ -696,7 +699,7 @@ test_nucleo446_smoke: host out/host$(hsuf)/mooncc
 # 264 KB SRAM, the reset entry thumb-bit and inside flash. rlink.l binds, ocopy.l flattens; the
 # skip asks after the last foreign thing here, gcc's cortex-m0 libgcc, READ as an archive.
 # qemu has no RP2040 machine, so this builds and never boots -- test_thumb1 gates the ISA.
-test_rp2040: host out/host$(hsuf)/mooncc
+test_rp2040: host
 	@echo TEST out/rp2040/love.bin
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   echo "test_rp2040: no arm-none-eabi toolchain, skipped"; exit 0; fi; \
@@ -715,17 +718,17 @@ moon_arch_arm64 = arm64
 moon_arch_riscv = riscv64
 # $1 package, $2 its source-tree var, $3 what the two CROSS lanes wait on
 define moon_pkg
-moon-$1: host out/host$$(hsuf)/mooncc
+moon-$1: host
 moon-$1-arm64 moon-$1-riscv: $3
 moon-$1 moon-$1-arm64 moon-$1-riscv:
 	@$2="$$($2)" ./mk/tools/moon-$1.sh $$(moon_arch_$$(patsubst moon-$1-%,%,$$@))
 endef
-$(eval $(call moon_pkg,tar,TARSRC,host out/host$(hsuf)/mooncc))
-$(eval $(call moon_pkg,m4,M4SRC,host out/host$(hsuf)/mooncc))
-$(eval $(call moon_pkg,lua,LUASRC,host out/host$(hsuf)/mooncc))
+$(eval $(call moon_pkg,tar,TARSRC,host))
+$(eval $(call moon_pkg,m4,M4SRC,host))
+$(eval $(call moon_pkg,lua,LUASRC,host))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
-$(eval $(call moon_pkg,gzip,GZIPSRC,host out/host$(hsuf)/mooncc))
-$(eval $(call moon_pkg,bzip2,BZIP2SRC,host out/host$(hsuf)/mooncc))
+$(eval $(call moon_pkg,gzip,GZIPSRC,host))
+$(eval $(call moon_pkg,bzip2,BZIP2SRC,host))
 # test_distboot -- THE RELEASE CLAIM: take either artifact, type make, get the same
 # binary. SOURCE bootstraps through the machine's own cc; SEED carries its source in
 # .rodata, lays it with `love source`, and builds with cc/gcc/clang shadowed by scripts

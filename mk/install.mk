@@ -28,13 +28,18 @@ v = $(DESTDIR)/$(VIMPREFIX)
 # `#!/usr/bin/env -S love -l` would re-exec the wrong interpreter, so it installs as a COPY
 # with line 1 rewritten -- which is what a package wants anyway. The pattern matches both
 # shebang forms, leaving a trailing ` -l` alone.
+# the sed these recipes spawn is OURS: kore is the installed binary's own verb now
+# (the layered bake, doc/plan/one-binary.md). ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads,
+# for $(hcc)'s reason: the root exports it=1 for the corpus, and an egg-booted love has
+# no verbs -- `kore` would read as a filename.
+korecmd = LOVE_NO_IMAGE= $(ho)/love kore
 ifeq ($(BIN),love)
 # ⚠ the chmod repairs the target when the source came through svalbard, which does not carry
 # the executable bit -- without it the link resolves to a 644 file and every exec EACCESes.
 instool = ln -sf $(abspath $1) $2 && chmod 755 $(abspath $1)
 instag = LN
 else
-instool = $(ho)/kore sed '1s|env -S love|env -S $(BIN)|' $1 > $2 && chmod 755 $2
+instool = $(korecmd) sed '1s|env -S love|env -S $(BIN)|' $1 > $2 && chmod 755 $2
 instag = CP
 endif
 
@@ -49,7 +54,6 @@ mannames = $(BIN) cook lush
 installs = $(patsubst %,$d/bin/%,$(binnames)) \
   $(patsubst %,$d/share/man/man1/%.1,$(mannames)) \
   $d/lib/love/prel.l $d/lib/love/ev.l $d/lib/love/bao.l \
-  $d/lib/love/mooncc.image $d/lib/love/kore.image \
   $(patsubst %,$d/lib/love/%.l,$(libmods)) \
   $v/ftdetect/love.vim $v/syntax/love.vim $v/ftplugin/love.vim
 
@@ -163,8 +167,8 @@ $d/lib/liblove.so: $(glibc_ho)/liblove.so
 $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 	@echo CP	$(abspath $@)
 	@install -D -m 755 $< $@
-# the boot image travels INSIDE the binary (.image is an allocated PROGBITS section), so
-# the plain-copy install keeps the ~4ms wake.
+# the boot image travels INSIDE the binary (.image is an allocated PROGBITS section, the
+# layered crew chain riding it), so the plain-copy install keeps the warm wake and every verb.
 
 # the single-file shebang tools, one shape: the `#!/usr/bin/env -S love -l` line re-execs
 # the installed interpreter, and each file's own SEAT fires on its name. papel and libra
@@ -175,11 +179,11 @@ $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 # (use 'infix), and (use 'lapiz) on the doc verb alone) and ride libmods above instead.
 # ⚠ each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
-$d/bin/cook:    crew/cook/cook.l    $(ho)/kore
-$d/bin/papel:   crew/papel/papel.l  $(ho)/kore
-$d/bin/kiosko:  crew/kiosko/kiosko.l $(ho)/kore
-$d/bin/libra:   crew/libra/libra.l  $(ho)/kore
-$d/bin/moonfmt: crew/moon/fmt.l     $(ho)/kore
+$d/bin/cook:    crew/cook/cook.l    $(ho)/love.baked
+$d/bin/papel:   crew/papel/papel.l  $(ho)/love.baked
+$d/bin/kiosko:  crew/kiosko/kiosko.l $(ho)/love.baked
+$d/bin/libra:   crew/libra/libra.l  $(ho)/love.baked
+$d/bin/moonfmt: crew/moon/fmt.l     $(ho)/love.baked
 $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra $d/bin/moonfmt:
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
@@ -188,30 +192,28 @@ $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra $d/bin/moonfmt:
 # ain, the netcat clone: the same shebang mechanism, but installed as a COPY rather than a
 # symlink, so it takes the rewrite unconditionally. At the default BIN the substitution is
 # an identity and the bytes are unchanged.
-$d/bin/ain: mk/tools/ain.l $(ho)/kore
+$d/bin/ain: mk/tools/ain.l $(ho)/love.baked
 	@echo CP	$(abspath $@)
 	@install -d $(@D)
-	@$(ho)/kore sed '1s|env -S love|env -S $(BIN)|' $< > $@
+	@$(korecmd) sed '1s|env -S love|env -S $(BIN)|' $< > $@
 	@chmod 755 $@
 
 # kore, the multi-call toolbox: the util picked off the command line or off argv[0] through
 # a tool-named symlink. It shadows nothing here -- only `kore` lands on PATH, and the distro
 # symlinks the tool names where shadowing is the point.
-# A WAKE SHIM on the baked image, mooncc's lane below: the cat this used to inline re-evals
-# on EVERY spawn, which is 0.5-1.4s before a tool says anything (crew/build.mk's ~1.3s, paid
-# by the install lane alone -- out/host/kore has woken an image all along).
+# A VERB SHIM: the installed binary carries the crew in its own layered image
+# (doc/plan/one-binary.md), so there is no sibling image and no wake spelling -- the
+# picker wakes the crew layer off the `kore` verb, same warm start as ever.
 # ⚠ `n` comes off $0 UNCHASED where `h` is the chased path: a tool symlink must arrive as its
-# own name for the argv[0] door, and only the real file's dir has the lib/ sibling.
+# own name for the argv[0] door, and only the real file's dir has the $(BIN) sibling.
 $d/bin/kore: $(MAKEFILE_LIST)
 	@echo CAT	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
 	   echo 'n=$$(basename -- "$$0")'; \
-	   echo 'exec "$$h/$(BIN)" wake "$$h/../lib/love/kore.image" "$$n" "$$@"'; } > $@
+	   echo 'case "$$n" in kore) LOVE_NO_IMAGE= exec "$$h/$(BIN)" kore "$$@";; *) LOVE_NO_IMAGE= exec "$$h/$(BIN)" kore "$$n" "$$@";; esac'; } > $@
 	@chmod 755 $@
-$d/lib/love/kore.image: $(ho)/kore.image
-	$(inst644)
 
 # sb 🌱 and lush 🐚, each its own catted script: their sources carry no shebangs, so the
 # interpreter line then a plain cat. Each SEAT fires on the installed name -- lush's on its
@@ -224,20 +226,17 @@ $d/bin/sb $d/bin/lush:
 	@{ echo '#!/usr/bin/env -S $(BIN)'; cat $^; } > $@
 	@chmod 755 $@
 
-# mooncc, its own app: the installed bin is a WAKE SHIM booting the baked image next door,
-# so the whole-cat re-eval (~1.3s per compile) is paid ONCE at bake. ⚠ the image is
-# anchor-checked to its binary, so the two always install from the same build. ⚠ and the
-# home comes off the CHASED path (readlink -f): invoked through a ~/.local compat symlink,
-# $0's own dir has no lib/ sibling -- the nest does.
+# mooncc: the same verb-shim shape -- the compiler is the installed binary's own verb,
+# its layer woken by the picker (~ms, the whole-cat re-eval long gone). ⚠ the home comes
+# off the CHASED path (readlink -f): invoked through a ~/.local compat symlink, $0's own
+# dir has no $(BIN) sibling -- the nest does.
 $d/bin/mooncc: $(MAKEFILE_LIST)
 	@echo CAT	$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
-	   echo 'exec "$$h/$(BIN)" wake "$$h/../lib/love/mooncc.image" mooncc "$$@"'; } > $@
+	   echo 'LOVE_NO_IMAGE= exec "$$h/$(BIN)" mooncc "$$@"'; } > $@
 	@chmod 755 $@
-$d/lib/love/mooncc.image: $(ho)/mooncc.image
-	$(inst644)
 
 # lux, the window manager: its modules catted into one shebang script. Settings ride salt
 # (~/.love/etc/lux.l then ./.lux.l), which also names the display and the cookie when
@@ -261,10 +260,10 @@ $d/bin/bao: $(MAKEFILE_LIST)
 
 # the .TH command name follows BIN too (`man lovelang` should not head LOVE(1));
 # the other `love`s on that line are the PROJECT and the version string, so they stay.
-$d/share/man/man1/$(BIN).1: $(ho)/love.1 $(ho)/kore
+$d/share/man/man1/$(BIN).1: $(ho)/love.1 $(ho)/love.baked
 	@echo CP	$(abspath $@)
 	@install -d $(@D)
-	@$(ho)/kore sed '1s|"LOVE"|"$(BINUP)"|' $< > $@
+	@$(korecmd) sed '1s|"LOVE"|"$(BINUP)"|' $< > $@
 	@chmod 644 $@
 
 # the man pages BIN does not rename, and the two hand-written vim files. ⚠ static

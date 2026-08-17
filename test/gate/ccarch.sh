@@ -74,7 +74,7 @@ rm -rf "$d"
 mkdir -p "$d"
 
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
-moonrun() { "$m" wake "$ho/mooncc.image" mooncc "$@"; }
+moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 
 # $unsupported comes from the case above: the features THIS target has no lane
 # for yet -- refusal is the asserted behaviour, per target, not per gate.

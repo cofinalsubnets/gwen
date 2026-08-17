@@ -10,9 +10,9 @@
 # asks whether cook agrees with itself. Six functions and two real bugs came out of
 # the first sweep of this file.
 #
-# usage: cookdiff.sh KORE     (KORE = a binary answering `kore make`)
+# usage: cookdiff.sh LOVE     (LOVE = a binary whose `kore make` verb is cook)
 set -u
-K=${1:?usage: cookdiff.sh KORE}
+K=${1:?usage: cookdiff.sh LOVE}
 K=$(cd "$(dirname "$K")" && pwd)/$(basename "$K")
 
 command -v make >/dev/null 2>&1 || { echo "cookdiff: no ambient make -- skipped"; exit 0; }
@@ -33,7 +33,7 @@ case_() {
   nm=$1; kind=$2
   d=$work/$nm; mkdir -p "$d"; cat > "$d/Makefile"
   g=$(cd "$d" && make -s 2>&1)
-  c=$(cd "$d" && "$K" make 2>&1 | grep -v 'is already up to date')
+  c=$(cd "$d" && LOVE_NO_IMAGE= "$K" kore make 2>&1 | grep -v 'is already up to date')
   ran=$((ran + 1))
   [ "$g" = "$c" ] && return 0
   if [ "$kind" = known ]; then

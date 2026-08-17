@@ -27,11 +27,14 @@ endif
 # exactly like CC on the host side; a GCC cross toolchain also works:
 #   make kernel a=aarch64 KCC=aarch64-linux-gnu-gcc KLINK=lld KLD=aarch64-linux-gnu-ld
 # KLD serves the KLINK=lld lane only -- the default link is ours.
-KCC ?= $(ho)/mooncc
+# ⚠ mooncc is love's own verb now (the layered bake, doc/plan/one-binary.md), and the
+# LOVE_NO_IMAGE= clear is load-bearing: the root Makefile exports it=1 for the corpus,
+# and an egg-booted love has no verb table -- `mooncc` would read as a filename.
+KCC ?= LOVE_NO_IMAGE= $(ho)/love mooncc
 KLD ?= ld.lld
-# ours by NAME: mooncc is a wake shim over an image, so `--version` would have to
-# boot it just to answer a makefile question at parse time -- and parse time is BEFORE
-# any recipe, so the probe would read whatever image a half-done build left behind.
+# ours by NAME: booting the image just to answer a makefile question at parse time is
+# wrong anyway -- parse time is BEFORE any recipe, so a --version probe would read
+# whatever image a half-done build left behind.
 KCC_IS_MOON := $(if $(findstring mooncc,$(KCC)),1,)
 KCC_IS_CLANG := $(if $(KCC_IS_MOON),,$(shell $(KCC) --version 2>/dev/null | grep -qiw clang && echo 1))
 
@@ -103,7 +106,7 @@ kcc_tgt = $(if $(KCC_IS_MOON),-t $(k_be_$a),$(kcc_if_clang))
 
 kcc = $(KCC) $(kcflags) $(kcflags_mach) $(kcppflags) $(kcc_tgt)
 # ours has to exist before it can compile anything.
-kcc_dep = $(if $(KCC_IS_MOON),$(ho)/mooncc,)
+kcc_dep = $(if $(KCC_IS_MOON),$(ho)/love.baked,)
 # the tag names the compiler that actually runs, so the clang lane reads as clang's.
 kcctag = $(if $(KCC_IS_MOON),MOON,CC)
 
@@ -373,10 +376,10 @@ endif
 uefi_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/crew/holo/pe.l \
   $R/free/uefi/mkefi.l
-$(ko)/uefi$(ksuf)/loader.o: $R/free/uefi/loader.c $(ho)/mooncc
+$(ko)/uefi$(ksuf)/loader.o: $R/free/uefi/loader.c $(ho)/love.baked
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(ho)/mooncc -c $< $@
+	@LOVE_NO_IMAGE= $(ho)/love mooncc -c $< $@
 $(ko)/uefi$(ksuf)/BOOTX64.EFI: $(ko)/uefi$(ksuf)/loader.o $(uefi_l) $m
 	@echo HOLO	$@
 	@mkdir -p $(dir $@)

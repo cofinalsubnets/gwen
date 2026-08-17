@@ -16,8 +16,8 @@ m=$2
 love0=$3
 
 fail() { echo "FAIL $*" >&2; exit 1; }
-# the compiler under test: the baked mooncc image, woken per invocation
-moonrun() { "$m" wake "$ho/mooncc.image" mooncc "$@"; }
+# the compiler under test: love's own mooncc verb (the crew layer, woken per invocation)
+moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 # ..and the BOOTSTRAP one, the lane that compiles core/love.c: love0 waking mooncc0.image
 moon0() { "$love0" wake out/host/mooncc0.image mooncc "$@"; }
 
@@ -369,8 +369,7 @@ EOF
 printf 'int f() { return 40; }\n' > "$ho/.mi2.c"
 # -c with several inputs writes each .o beside its source, so it runs IN $ho
 mabs="$PWD/$ho"
-( cd "$ho" && "$mabs/love" wake "$mabs/mooncc.image" \
-    mooncc -c .mi1.c .mi2.c ) > /dev/null 2>&1 \
+( cd "$ho" && LOVE_NO_IMAGE= "$mabs/love" mooncc -c .mi1.c .mi2.c ) > /dev/null 2>&1 \
   || fail "mooncc multi-input -c"
 $cc_g -no-pie -o "$ho/.mi" "$ho/.mi1.o" "$ho/.mi2.o" > /dev/null 2>&1 \
   || fail "ld multi-input objects"
@@ -636,7 +635,7 @@ printf 'int wb(void){ return nope; }\n' > "$ho/.wb.c"
 # carry the same flags and would not notice; this pair does: a flag-bearing compile, then
 # a bare one, whose object must equal the bare compile run cold.
 moonrun -c "$ho/.wa.c" -o "$ho/.wa-bare.o" > /dev/null 2>&1 || fail "warm: the bare reference compile"
-"$m" wake "$ho/mooncc.image" -e "(: a (moon-run (list \"-c\" \"-fno-inline\" \"-DLEAK=1\" \"-nostdinc\" \"$ho/.wa.c\" \"-o\" \"$ho/.wl1.o\"))
+LOVE_NO_IMAGE= "$m" -e "(: a (moon-run (list \"-c\" \"-fno-inline\" \"-DLEAK=1\" \"-nostdinc\" \"$ho/.wa.c\" \"-o\" \"$ho/.wl1.o\"))
      b (moon-run (list \"-c\" \"$ho/.wa.c\" \"-o\" \"$ho/.wl2.o\")) (a + b))" </dev/null > /dev/null 2>&1 \
   || fail "warm: the flag-leak pair did not compile"
 cmp -s "$ho/.wa-bare.o" "$ho/.wl2.o" || fail "warm: FLAGS BLED between compiles in one process"
@@ -648,7 +647,7 @@ warm=$(printf '(: a (moon-run (list "-c" "%s" "-o" "%s"))
                   _ (say out (show a + " " + show b + " " + show c + " " + show d + "\n"))
                   (quit 0))' \
              "$ho/.wa.c" "$ho/.wa-warm.o" "$ho/.wb.c" "$ho/.wa.c" "$ho/.wa-warm.o")
-"$m" wake "$ho/mooncc.image" -e "$warm" > "$ho/.warm.out" 2>/dev/null
+LOVE_NO_IMAGE= "$m" -e "$warm" > "$ho/.warm.out" 2>/dev/null
 r=$?
 [ $r -eq 0 ] || fail "warm mooncc: the image did not survive a failed compile (exit $r)"
 [ "$(tail -1 "$ho/.warm.out")" = "0 1 2 0" ] || fail "warm mooncc statuses: $(tail -1 "$ho/.warm.out")"

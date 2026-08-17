@@ -170,7 +170,7 @@ setup: $(SETUP)
 # `make ccbench` to refresh it on its own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt
 $(CCBENCH): ccbench.sh ccrypto.l $(GL) $(R)/core/love.c $(wildcard $(R)/host/*.c) | $(BDIR)
-	@$(MAKE) -s -C $(R) host out/host/mooncc out/host/mooncc.image
+	@$(MAKE) -s -C $(R) host
 	@LOVE_CFLAGS='$(ai_cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
 ccbench: $(CCBENCH)
 	@cat $(CCBENCH)

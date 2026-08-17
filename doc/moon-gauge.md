@@ -77,9 +77,9 @@ costs it **+29.2%** — the array leg's keeps ride callee-saved seats, not the o
 
 ## how to measure
 
-- Both `ccbench` rows, never one. `make -C test/bench ccbench` (it refreshes `host`,
-  `mooncc` and `mooncc.image` first — a `wake` on an image its binary did not bake fails as
-  `love: cannot open mooncc`, not as a version error).
+- Both `ccbench` rows, never one. `make -C test/bench ccbench` (it refreshes `host` --
+  the crew rides love's own layered image now, so there is no sibling image to skew; a stale
+  bake reads as a slow egg boot, never a wrong compiler).
 - Cycles, not instructions, for anything claiming a speed effect. Instructions are near
   deterministic here (±0.01%) and make a tempting proxy; §above is why they mislead.
 - An ablation is priced through `test_fixpoint`, so a configuration that cannot rebuild

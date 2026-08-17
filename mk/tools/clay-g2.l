@@ -12,8 +12,8 @@
 ; original is deleted afterwards and there is nothing left to compare to. what stands
 ; afterwards is the regeneration-drift cmp in test_clay, and the corpus.
 ;
-; run inside a woken mooncc image, which is where the front end lives:
-;   love wake mooncc.image -l mk/tools/clay-g2.l \
+; run on the baked love, whose crew layer carries the front end:
+;   love -l mk/tools/clay-g2.l \
 ;     -e '(clay-g2 ".love-orig.c" "love.c" (\ ("salpha" "shash")))'
 ; answers 1 and prints a report; quits 1 on any difference.
 (:

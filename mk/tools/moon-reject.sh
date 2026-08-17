@@ -21,11 +21,15 @@
 # a gcc the script skips, like moon-sweep.sh without a package tree.
 set -e
 
-mc=${MOONCC:-out/host/mooncc}
-kore=${KORE:-out/host/kore}
+# mooncc and kore are love's own verbs (the layered bake); MOONCC/KORE still override.
+# ⚠ `env`, not a bare assignment prefix: $mc expands AFTER assignment-recognition, so a
+# literal `LOVE_NO_IMAGE=` in the expansion would run as a command name.
+love=${LOVE:-out/host/love}
+mc=${MOONCC:-env LOVE_NO_IMAGE= $love mooncc}
+kore=${KORE:-env LOVE_NO_IMAGE= $love kore}
 gcc=${GCC:-gcc}
 d=${TMPDIR:-/tmp}/moon-reject.$$
-[ -x "$mc" ] || { echo "moon-reject: no $mc -- run make out/host/mooncc"; exit 0; }
+[ -x "$love" ] || { echo "moon-reject: no $love -- run make host"; exit 0; }
 command -v "$gcc" >/dev/null 2>&1 || { echo "moon-reject: no $gcc (the oracle) -- skipping"; exit 0; }
 mkdir -p "$d"
 trap 'rm -rf "$d"' EXIT
@@ -38,7 +42,7 @@ p() {
   f=$d/$1.c
   printf '%s\n' "$2" > "$f"
   if "$gcc" -c -std=c99 -o "$d/$1.gcc.o" "$f" >"$d/$1.gcc.log" 2>&1; then g=ok; else g=no; fi
-  if "$mc" -c -o "$d/$1.moon.o" "$f" >"$d/$1.moon.log" 2>&1; then m=ok; else m=no; fi
+  if $mc -c -o "$d/$1.moon.o" "$f" >"$d/$1.moon.log" 2>&1; then m=ok; else m=no; fi
   msg=$(head -1 "$d/$1.moon.log" 2>/dev/null)
   if [ "$g" = no ] && [ "$m" = no ]; then
     nboth=$((nboth+1)); printf '  both      %-14s %s\n' "$1" "$msg"
@@ -121,13 +125,12 @@ p s_goto    'int main(void){ goto nowhere; return 0; }'
 p s_dupcase 'int main(void){ int x=1; switch(x){ case 1: return 1; case 1: return 2; } return 0; }'
 for t in s_goto s_dupcase; do
   [ -f "$d/$t.moon.o" ] || continue
-  [ -x "$kore" ] || { echo "    (no $kore -- run make out/host/kore to read the symbol tables)"; break; }
-  u=$("$kore" nm -gu "$d/$t.moon.o" 2>/dev/null | awk '{print $2}' | tr '\n' ' ')
+  u=$($kore nm -gu "$d/$t.moon.o" 2>/dev/null | awk '{print $2}' | tr '\n' ' ')
   [ -n "$u" ] && printf '    %-12s undefined in the object: %s\n' "$t" "$u"
 done
 echo "--- and what the LINK says about them ---"
 for t in s_goto s_dupcase; do
-  printf '    %-12s %s\n' "$t" "$("$mc" -o "$d/$t.exe" "$d/$t.c" 2>&1 | head -1)"
+  printf '    %-12s %s\n' "$t" "$($mc -o "$d/$t.exe" "$d/$t.c" 2>&1 | head -1)"
 done
 
 echo

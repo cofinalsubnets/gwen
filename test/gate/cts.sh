@@ -78,7 +78,7 @@ fi
 "
 
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
-moonrun() { "$m" wake "$ho/mooncc.image" mooncc "$@"; }
+moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 # the roster read two ways: which kind a number is on, and what its cause says
 kindof() {
   case "$roster_refuses" in *"

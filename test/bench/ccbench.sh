@@ -106,22 +106,22 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 
 # -- mooncc: the WHOLE toolchain in love, verbatim from `make test_raw`. mooncc -c each
 #    unit, mksys the syscall leaf, our linker binds. -I$ho picks up the lcat'd headers. --
-MC="$ho/mooncc"
+MC="env LOVE_NO_IMAGE= $ho/love mooncc"
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
-    "$MC" -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c core/love.c "$od/love.o" || exit 1
+    $MC -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c core/love.c "$od/love.o" || exit 1
     for f in host/*.c; do b=$(basename "$f" .c)
-      "$MC" -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
+      $MC -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
     # no nolibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a nolibc.o.
     for f in crew/moon/lib/math/*.c; do b=$(basename "$f" .c)
-      "$MC" -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
+      $MC -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
     { cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
           crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
       echo "(mksys \"$od/sys.o\")"; } | out/host/love || exit 1
-    "$MC" "$od"/*.o -o "$bin" ) || return 1
+    $MC "$od"/*.o -o "$bin" ) || return 1
 }
 
 # the corpus as ONE file, fed by REDIRECT. It arrives on stdin either way (which keeps
@@ -186,7 +186,7 @@ dnf_lane() { for ph in build test chacha poly1305; do echo "$ph $1 dnf"; done; }
 # skip; ZERO lanes is the harness, and it exits 1 below.
 LIVE=0
 
-if [ "$(uname -m)" = x86_64 ] && [ -x "$MC" ]; then
+if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/love" ]; then
   lane mooncc build_mooncc "$WORK/love-mooncc"
 else
   dnf_lane mooncc                                   # mooncc's native lane is x86-64 only

@@ -61,7 +61,9 @@ diff -r "$T/A" "$T/B" > /dev/null                 || fail "A vs B: contents diff
 # lane C: every applet name a symlink onto the kore shim, PATH fronted. tr rides
 # too ($(BINUP)'s $(shell ... tr [:lower:] [:upper:]) runs under this PATH).
 K=$T/korebin; mkdir -p "$K"
-for t in install sed ln cat chmod mkdir tr; do ln -sf "$(pwd)/$ho/kore" "$K/$t"; done
+printf '#!/bin/sh\nn=$(basename -- "$0")\nLOVE_NO_IMAGE= exec "%s" kore "$n" "$@"\n' "$(pwd)/$love" > "$K/.koreshim"
+chmod 755 "$K/.koreshim"
+for t in install sed ln cat chmod mkdir tr; do ln -sf .koreshim "$K/$t"; done
 PATH="$(pwd)/$K:$PATH" "$love" -l crew/cook/cook.l -f Makefile install DESTDIR="$T/C/" \
   > /dev/null 2> "$T/cerr"                        || { cat "$T/cerr"; fail "cook install (kore lane)"; }
 
