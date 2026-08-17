@@ -68,11 +68,11 @@
       ; ⚠ THE RUNGS ANSWER A CHARM, and a charm is 2^62 wide on a 64-bit word and 2^30
       ; on a 32-bit one -- so on the narrow word the oracle names a bignum the codomain
       ; cannot hold and every rung saturates instead, correctly. the DIVISOR carries the
-      ; word's scale: the numerator stays past 2^53 either way, which is the whole point,
-      ; and the quotient lands inside the charm on both. (2^30 is a charm only where a
-      ; fixnum is 62-bit -- love/cli.l's wordsz asks the same question.)
+      ; word's scale (`word` is 00-init's own flag, false on the 32-bit wasm shim): the
+      ; numerator stays past 2^53 either way, which is the whole point, and the quotient
+      ; lands inside the charm on both.
       ['ratio-rungs (\ _ (: b ((60 2) + 1)
-                            s (charm? 1073741824 ? 1 (32 2))
+                            s (word ? 1 (32 2))
                             (all (\ p (: n <p d <>p c (ceil (q n d))
                                          ((int (q n d) = n // d)
                                           && (c = (n // d) + (? (0 < n && 0 != n % d) 1 0))
