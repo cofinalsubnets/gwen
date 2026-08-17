@@ -574,10 +574,14 @@
           hm (ho-fix info (map (\ f (<f >< (0 >< ()))) info))                            ; the higher-order fixpoint
           ho? (\ nm (: e (ho-assq nm hm) (two? e && (<>e || two? >>e))))             ; returns-fn OR takes-fn -> inline it
           lamc? (\ pr (: nd (dehead pr) (ho-lamb? >nd && !(dcount <nd >nd) && ho? <nd)))   ; a NON-RECURSIVE higher-order const
-          lamcs (map dehead (filter lamc? pairs))
+          lamcs0 (map dehead (filter lamc? pairs))
+          ; a lamc NAMED in another lamc's body stays bound: the fold substitutes each value as
+          ; written, so a name already spent is never rewritten inside the text replacing a later
+          ; one -- inlining both would leave the dropped binding dangling in that text.
+          lamcs (filter (\ q !(ho-any (\ r (!(id? <r <q) && occurs? <q >r)) lamcs0)) lamcs0)
           (? (atom? lamcs) form                                                                  ; no HOF const -> leave the form for the other lanes (dsimp mangles string/cask/loop forms)
              (: sub (\ e (dsimp (foldl (\ b pr (subst-sym <pr >pr b)) e lamcs)))         ; inline each HOF lamc, then beta-collapse
-                keep (filter (\ pr !(lamc? pr)) pairs)                                         ; non-HOF bindings keep their RAW form (grpfix recognizes define-sugar function heads)
+                keep (filter (\ pr !(ho-any (\ q (id? <q <(dehead pr))) lamcs)) pairs)         ; non-inlined bindings keep their RAW form (grpfix recognizes define-sugar function heads)
                 (': >< unpair (map (\ pr (<pr >< sub >pr)) keep) (sub body))))))
    ; --- CHURCH LOWERING (dechurch): a literal church application (N f x) -- N a small whole numeral,
    ;     f a FUNCTION (a lambda literal or a partial of a dyadic op, e.g. (+ i)) -- is f applied to x
@@ -1096,10 +1100,17 @@
       (: low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts form0))))))))))   ; autogroup's FULL lowering: church/HOF/&& + structural (lift/loops/value-lets)
          (foldl (\ _ pr (? (swfnpair? pr) (pin srcreg <<pr (><pr >< >pr)) ())) () <(anat-defs >low))) ())
    (swuniq l) (? (atom? l) () (member? <l >l) (swuniq >l) (<l >< swuniq >l))
-   (swheads e acc) (? (atom? e) acc  (two? e && id? <e '\) acc                   ; collect call heads (symbols); skip quoted/lambda subforms
-      (: h <e acc2 (? (name? h) (h >< acc) acc) (foldl (\ a x (swheads x a)) acc2 >e)))
+   (swbnds e) (map (\ p (? (two? <p) <<p <p)) <(anat-defs >e))                       ; a `:`'s binding names
+   ; collect call heads (symbols); skip quoted/lambda subforms. bnd is the binder set: this walk
+   ; reads SOURCE, where an infix (a op b) wears its left operand as a head, so a locally bound
+   ; name reaches here as often as a called one -- and swallowing a global of that spelling puts
+   ; a stranger in the group. a `\` subform is skipped whole, so bnd carries `:` names + params.
+   (swheads e bnd acc) (? (atom? e) acc  (two? e && id? <e '\) acc
+      (two? e && id? <e ':) (foldl (\ a x (swheads x (swbnds e + bnd) a)) acc >e)
+      (: h <e acc2 (? (name? h && !(member? h bnd)) (h >< acc) acc)
+         (foldl (\ a x (swheads x bnd a)) acc2 >e)))
    (swgather fns) (: names (map caap fns)                                                 ; enlarge fns with recorded globals reachable from the bodies (to fixpoint)
-      heads (foldl (\ a p (swheads >p a)) () fns)
+      heads (foldl (\ a p (swheads >p ><p a)) () fns)                                ; the fn's own params bind too
       new (swuniq (filter (\ h (!(member? h names) && !(id? (peep srcreg h 0) 0))) heads))
       (? (atom? new) fns
          (swgather (foldr (\ h a (: d (peep srcreg h 0) (((h >< <d) >< >d) >< a))) fns new))))
@@ -1125,6 +1136,9 @@
              (: armap (map (\ p `(<<p ((tally <p) - 1))) fns)                 ; (name arity) candidates
                 grp (grpfix fns armap)                                                        ; the closed glazeable subset
                 (? (atom? grp) form0                                                          ; nothing survives the fixpoint -> original (un-lifted)
+                   ; a group of SWALLOWED members only rewrites nothing here, so committing the
+                   ; lowered form buys nothing and stakes the whole file on it.
+                   !(ho-any (\ p (member? (? (two? <p) <<p <p) (map cap grp))) pairs) form0
                    (: gnames (map cap grp)
                       gdefs (map mapfix-def (filter (\ p (member? <<p gnames)) fns))   ; the group's (nameform . body) defs, with map-valued peeps rewritten to mpeep
                       (': >< rewrite-bindings >form gnames gdefs))))))))             ; each binding of the LIFTED form -> its native  (last ) closes the srcrec `:` wrapper)
