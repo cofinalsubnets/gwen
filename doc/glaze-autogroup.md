@@ -64,14 +64,17 @@ And because removing one stranger does not remove the shape that made a stranger
 `autogroup` declines when nothing in the surviving group is a binding of this form.
 `rewrite-bindings` would have rewritten nothing in that case anyway.
 
-## still open: swheads reads pre-opfix source
+## closed: swheads reads opfixed source
 
-`autogroup` hooks the ev-rebind, so it walks the form before infix is factored — and
-there every `(a op b)` wears its left operand as a head. `(want = seed-arch ())` is how
-`want` reached the walk at all; `(x + 1)` and `(n <= i)` arrive the same way. The binder
-set catches a bound operand. A **free** one is still a fake head, filtered today only by
-having to carry a `srcreg` entry. Walking opfixed source is the real cure, and it is not
-a small change: the pipeline and `rewrite-bindings` are written against the raw form.
+`autogroup` hooks the ev-rebind, so the pipeline walks the form before infix is
+factored — and there every `(a op b)` wears its left operand as a head. `(want =
+seed-arch ())` is how `want` reached the walk at all; `(x + 1)` and `(n <= i)` arrive
+the same way. The cure looked large because the pipeline and `rewrite-bindings` are
+written against the raw form — but head collection is a read-only analysis, so only it
+had to move: `swheads` now opfixes its input (`opfix` is deep, idempotent, and keeps
+binders verbatim) and walks factored source, where an operand can never masquerade as
+a head. The binder set stays — a real call head can still be a local fn. The law rides
+test/glaze-x86.l.
 
 ## the method
 

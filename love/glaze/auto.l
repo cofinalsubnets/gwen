@@ -1101,14 +1101,15 @@
          (foldl (\ _ pr (? (swfnpair? pr) (pin srcreg <<pr (><pr >< >pr)) ())) () <(anat-defs >low))) ())
    (swuniq l) (? (atom? l) () (member? <l >l) (swuniq >l) (<l >< swuniq >l))
    (swbnds e) (map (\ p (? (two? <p) <<p <p)) <(anat-defs >e))                       ; a `:`'s binding names
-   ; collect call heads (symbols); skip quoted/lambda subforms. bnd is the binder set: this walk
-   ; reads SOURCE, where an infix (a op b) wears its left operand as a head, so a locally bound
-   ; name reaches here as often as a called one -- and swallowing a global of that spelling puts
-   ; a stranger in the group. a `\` subform is skipped whole, so bnd carries `:` names + params.
-   (swheads e bnd acc) (? (atom? e) acc  (two? e && id? <e '\) acc
-      (two? e && id? <e ':) (foldl (\ a x (swheads x (swbnds e + bnd) a)) acc >e)
+   ; collect call heads (symbols); skip lambda subforms. the walk reads OPFIXED source, so an
+   ; infix (a op b) arrives factored and an operand never masquerades as a head. bnd is the
+   ; binder set that filters real-but-local heads: `:` names + params (a `\` subform is
+   ; skipped whole, so its params never leak).
+   (swwalk e bnd acc) (? (atom? e) acc  (two? e && id? <e '\) acc
+      (two? e && id? <e ':) (foldl (\ a x (swwalk x (swbnds e + bnd) a)) acc >e)
       (: h <e acc2 (? (name? h && !(member? h bnd)) (h >< acc) acc)
-         (foldl (\ a x (swheads x bnd a)) acc2 >e)))
+         (foldl (\ a x (swwalk x bnd a)) acc2 >e)))
+   (swheads e bnd acc) (swwalk (opfix e) bnd acc)
    (swgather fns) (: names (map caap fns)                                                 ; enlarge fns with recorded globals reachable from the bodies (to fixpoint)
       heads (foldl (\ a p (swheads >p ><p a)) () fns)                                ; the fn's own params bind too
       new (swuniq (filter (\ h (!(member? h names) && !(id? (peep srcreg h 0) 0))) heads))

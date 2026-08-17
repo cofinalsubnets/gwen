@@ -843,6 +843,19 @@
       (67305985 = v))                                                                              ; 0x04030201: the two dsr2 calls read in source order
    (say err "love/glaze/auto: delet keeps _-bound effects + call-binding order ok\n"))
 
+; --- swheads reads opfixed source (auto.l): in RAW source an infix (a op b) wears its left
+;     operand as a head, so a free name in operand position -- spelled like a recorded global --
+;     joined the group as a stranger. the walk opfixes first: only real call heads arrive, and
+;     the binder set still filters local ones.
+(: swh (G 'swheads)
+   h1 (swh '(? (two? l) (pm9 x (want9 = 3 ? (cup l) l)) 0) '(x l) ())
+   h2 (swh '(: a (want9 1 2) (+ a x)) '(x) ())
+   _ (assert
+      (! (member? 'want9 h1)) (1 = (member? 'pm9 h1))                             ; a free operand is no head; the real call is
+      (1 = (member? 'want9 h2))                                                   ; a called global still arrives
+      (! (member? 'x h2)))                                                        ; ... and the binder set still filters
+   (say err "love/glaze/auto: swheads reads opfixed source -- no operand fake heads\n"))
+
 ; --- the POINT-= grammar + the re-declared member?: the recognizer admits a point-guarded
 ;     key compared to a raw chain car ((= P (cap ..))), so the auto.l tail's member? is a
 ;     GROUP NATIVE -- the baked global rides it. Lanes: word-compare hits over any car kind
