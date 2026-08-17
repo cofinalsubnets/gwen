@@ -144,9 +144,46 @@ owes a roster gate: on linux, assert the linux features are aboard.
   two-machine compare — which found the twin was NOT a seed (dist_cross
   linked no source blob; fixed, the twin link now mirrors the native one).
   Still owed: a native riscv64 ride of test_fixpoint.
-- **rung U1 — the container.** The polyglot prefix over our own linker: sh +
-  ELF is the cheap pair; PE re-uses pe.l's reloc machinery; Mach-O is new and
-  waits. The prefix must respect bake_tail or the bake learns to re-lay it.
+- **rung U1 — the container.** THE RULING (gwen, 2026-08-17): the strong
+  reading is chosen. There are not multiple builds of love — no x86_64 binary
+  and aarch64 binary. THE artifact carries the text for every platform and the
+  OS compatibility layer, and one byte string answers the fixpoint on every
+  arch. That was the initial bar for `love seed`; U1 is the container that
+  makes the one file execute everywhere. Its own ladder:
+  - **U1.0 — evidence before architecture.** Landed 2026-08-17: a one-block
+    sh prefix (picks by `uname -m`, dd's the page-aligned member out once,
+    execs the cache) + the baked native seed + the x-lane twin = 14.0 MB, and
+    the ONE file answered `(quit 7)` and the tower on bee and on pi, scp'd
+    as-is. What it taught: the pi pays a 7.6 s egg boot EVERY run (the twin
+    ships no image), so U1.2's first-boot bake is load-bearing, not polish;
+    the x-lane's sys.o recipe had rotted dark (ambient mksys names, moved to
+    module 'moon by the modules arc — fixed, the recipe takes the module
+    door); and the halves must share the source blob or the fat pays it
+    twice.
+  - **U1.1 — the format.** The container is ours: an sh prefix that picks by
+    `uname -m` and a directory of members at page-aligned offsets. Decisions
+    (chosen, revisable): a `#!/bin/sh` first line (the kernel execs it from
+    ANY caller; a hosted Linux without /bin/sh is not hosted — the APE-style
+    bare-word prefix only survives shell/execvp fallback); exec by
+    extract-and-cache (the adopt pattern, content-named under ~/.love, then
+    `exec` with the fat path held in env so selfpath answers the container);
+    the source blob rides ONCE, a member beside the ELFs, not once per half —
+    the halves' src lookup walks the container directory.
+  - **U1.2 — the bake leaves the distributed bytes.** The fat artifact ships
+    link-pure: no heap image aboard. First boot on a box bakes the native
+    EXTRACTION in place under ~/.love — the existing in-place bake, unchanged,
+    aimed at the cached copy. This answers both of U2's tensions at once: the
+    distributed bytes stay immutable (bake_tail never touches them, so the
+    prefix cannot perturb it), and the build needs no emulation — both halves
+    are link outputs, f(tree) on any host by U0's cross determinism. qemu
+    stays what dist_cross made it: a gate's tool, never the artifact's.
+  - **U1.3 — the bar itself.** `love seed` from the fat artifact, on bee and
+    on pi, answers the same fat bytes — two boxes, one sha256. The gate rides
+    by name (a wire and a second box), the way test_freebsd does.
+  - **U1.4 — the artifact swap.** out/host/love becomes the container (U2's
+    "one binary" absorbs U1's "one file"); the dev loop pays one extraction
+    per relink, the bake moves to the extraction, and dist-seed is the fat
+    file. PE via pe.l and Mach-O stay parked until someone names the box.
 - **rung U2 — the targets DISSOLVE.** Decided 2026-08-16 (chosen, revisable);
   Landed 2026-08-17: ONE binary. The host build is subsumed — out/host/love
   links the source blob + readme and, baked, IS the artifact (`make` in a clean
@@ -181,9 +218,9 @@ owes a roster gate: on linux, assert the linux features are aboard.
 - read "every platform" as *every hosted Linux ISA, then one BSD* until someone
   names a platform they actually need; Windows and macOS are out of scope words
   until then.
-- read "identical fixpoint" as *any machine reproduces the per-target bytes*
-  (rung 0), not *one canonical byte string for all targets* — the strong reading
-  waits on the rung-3 decision, and may be declined.
+- read "identical fixpoint" as *one canonical byte string for all targets* —
+  the strong reading, RULED 2026-08-17 (rung U1's header); the weaker
+  per-target reading was the scaffold and U0 retired it.
 - the per-ISA claim in doc/dist.md stays true until the rung that falsifies it
   lands; this plan does not pre-rewrite the docs.
 
