@@ -1,7 +1,7 @@
 ; lush 🐚, assembled: the shell state + job control, the lexer, the grammar,
 ; the glob, the word expander, the engine, the repl loops, then the entry +
-; seat -- all INCLUDED into this one layer (a slashed use evals into the
-; current head), so (use 'lush) loads the lot and leave registers it whole.
+; seat -- each part a (module 'lush form, so the parts register the one module
+; and the loader keeps the file-made registration: (use 'lush) loads the lot.
 (use 'lush/job)
 (use 'lush/lex)
 (use 'lush/gram)

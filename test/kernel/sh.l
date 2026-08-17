@@ -2,6 +2,9 @@
 ; the engine parts (job..eval, in cat order) load just before this file, so
 ; sh-line is the shell -- the same door test/host/sh.l reads on the host. the
 ; tail redirects onto the rung-2 tree and is read back; the tree is restored.
+
+(use 'lush) ; the engine parts above just registered module 'lush
+
 (: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
    ; wc pads its counts to the byte total's width, so read the NUMBER, not the face
    (numof s) ((: (go i acc) (? (<= (tally s) i) acc

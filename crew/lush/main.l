@@ -20,6 +20,7 @@
 ; the gate: test/host/sh.l reads the parts bare (cat order) and asserts on the
 ; sh-* names; the interactive loop is probed live under script(1).
 
+(module 'lush
 (: ; source a file through the line machinery, quietly absent (the rc/profile floor)
    (sh-src path)
      (? (two? (stat path))
@@ -113,3 +114,4 @@
                   _ (? (tally w && (w 0 = 45)) (pin sh-login () 1) 0)
                   (sh-main >s))
       ()))
+) ; module 'lush

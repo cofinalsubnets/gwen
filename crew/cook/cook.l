@@ -204,16 +204,15 @@
    ; are already running, the recipe line can run HERE -- one image wake for a whole
    ; make instead of one per line, and every other tool in this image (mooncc above
    ; all) is then in-image too, so a CC=mooncc build stops paying a wake per TU.
-   ; ⚠ asked by NAME, never by a bare reference: cook runs standalone as well
-   ; (`love -l crew/cook/cook.l`), where lush is not aboard at all, and a bare
-   ; sh-oneline would raise 'missing at the define rather than at the call.
-   ; the policy -- "would spawning this land on us?" -- is lush's, not ours.
+   ; ⚠ asked through the MODULE, never by a bare reference: cook runs standalone
+   ; as well (`love -l crew/cook/cook.l`), where lush's engine is not aboard and
+   ; the from-reads answer () -- the spawn lane, unchanged. the policy --
+   ; "would spawning this land on us?" -- is lush's, not ours.
    (inimg sh)
    (: v (peep cookbox 'inimg 'no)
        (? !(id? v 'no) v
-          (: f (? (&& (member? 'sh-oneline (names ())) (member? 'sh-ours? (names ()))
-                      ((ev 'sh-ours?) sh))
-                 (ev 'sh-oneline) 0)
+          (: ours (from 'lush 'sh-ours?) one (from 'lush 'sh-oneline)
+             f (? ((lit? ours) && (lit? one) && (ours sh)) one 0)
              _ (pin cookbox 'inimg f)
              f)))
 
@@ -286,25 +285,19 @@
 ;
 ; $(wildcard) prefers PURE LOVE: lush's glob (crew/lush/glob.l, the mask law)
 ; over readdir/stat -- no /bin/sh underneath, so `kore make` globs before a
-; shell exists. riding a cat that carries the lush parts (kore's), the name is
-; already aboard; a standalone -l load splices lib/lush/glob.l off the cwd --
-; BEFORE the importer below compiles, so its bare sh-glob read folds (the
-; capture law). both probes ride the book: a bare read of an unbound nom
-; scares, and a use miss is fatal in file mode. where neither lands (a dev
-; binary on a foreign cwd -- no lib/ to walk), globw below keeps the POSIX
-; shell-out lane. the verdict pins HERE, before the importer compiles: once a
-; form reading sh-glob bare has compiled, the nom shows on the book (its
-; missing cell) and a late (names ()) probe would lie.
-(? (member? 'sh-glob (names ())) 0
-   (two? (stat "lib/lush/glob.l")) (use 'lush/glob)
+; shell exists. the glob rides module 'lush: a cat carrying the lush parts
+; (kore's) registered it already, and a standalone -l load registers it off
+; lib/lush/glob.l on the cwd, HERE, before cook-glob folds its from-read.
+; where neither lands (a dev binary on a foreign cwd -- no lib/ to walk),
+; globw below keeps the POSIX shell-out lane.
+(? (tablet? (from 'lush)) 0
+   (two? (stat "lib/lush/glob.l")) (use 'lush/glob)   ; the wrapped file registers module 'lush
    0)
 ; cook-glob: the pathname glob, a CLOSURE when lush's glob is aboard, () when
-; not (the importer then keeps its POSIX shell-out lane). built through ev so
-; sh-glob is never read bare in a session without it -- even a dead branch's
-; compile would scare on the unbound nom.
-(: cook-glob (? (member? 'sh-glob (names ()))
-                (ev '(\ pat (sh-glob pat (sh-ones (tally pat)))))
-                ()))
+; not (the importer then keeps its POSIX shell-out lane). the glob rides
+; module 'lush now, so the door is a from-read -- a miss answers ().
+(: cook-glob (: g (from 'lush 'sh-glob) o (from 'lush 'sh-ones)
+                (? ((lit? g) && (lit? o)) (\ pat (g pat (o (tally pat)))) ())))
 
 ; The whole importer lives in ONE body-having `:`, so none of its many helper
 ; names leak to the global scope. The form reads outer globals (the peg

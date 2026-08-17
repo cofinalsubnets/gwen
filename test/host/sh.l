@@ -14,6 +14,7 @@
 (reads (open "crew/lush/eval.l" "r"))
 (reads (open "crew/lush/line.l" "r"))
 (reads (open "crew/lush/main.l" "r"))
+(use 'lush) ; the parts just registered module 'lush -- the laws below read it spliced
 
 ; the lexer: glued operators, io-numbers out of band ((), or (n) attached),
 ; quotes as segments, # comments, the 'more protocol on an unfinished shape.

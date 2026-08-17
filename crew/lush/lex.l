@@ -31,6 +31,7 @@
 ; a # at a word START kills the rest of the line; \X is X literal;
 ; \<newline> vanishes (the join law); "" keeps \ escapes for $ ` " \ only.
 
+(module 'lush
 (: (lx-ws? b) (b = 32 || b = 9)
    (sh-digit? b) (48 <= b < 58)
    (sh-digits? s)
@@ -358,3 +359,4 @@
                  (b = 41) (op2 i cur started segs toks hq bods k ")" 1)
                  (lx (i + 1) (cur + string b) 1 segs toks hq bods k))))
       (lx 0 "" 0 () () () () 0)))
+) ; module 'lush

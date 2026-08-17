@@ -1,8 +1,8 @@
 ; --- lush 🐚 job control -- the shell state + the v3 job machinery ---
-; NO BRACKETS HERE: the runtime supplies the layer. (use 'lush) assembles the
-; parts via lib/lush.l; the catted bin and the distro's /lib/sh.l read them
-; bare, in cat order (job eval line main) -- each part a body-less `:` leaking
-; its binds, so later parts read earlier ones. the shell story lives in main.l.
+; every part rides module 'lush (the wrap): (use 'lush) assembles them via
+; lib/lush.l, and the catted bin and the distro's /lib/sh.l register the same
+; module in cat order (job eval line main) -- each part a body-less `:` binding
+; into the module, so later parts read earlier ones. the shell story is main.l's.
 ;
 ; v3 (doc/posix.md step 4): JOB CONTROL. the shell IGNORES the tty's job
 ; signals (installed in (sh _), main.l; spawn's child side resets them to
@@ -14,6 +14,7 @@
 ; Linux-only already). also here: the shared floor (sh-rev sh-nth sh-int
 ; sh-unwords) and the shell state (sh-jobs sh-status sh-tty).
 
+(module 'lush
 (: (sh-rev l) (foldl (\ a x (x >< a)) () l)
    (sh-nth l i) (? (i = 0) <l (sh-nth >l (i - 1)))
 
@@ -128,3 +129,4 @@
               _ (pin sh-jobs n [(sh-nth j 0) 'running (sh-nth j 2)])
               _ (puts (sh-jobline n (sh-jobs n)))
               0))))
+) ; module 'lush

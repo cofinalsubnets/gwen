@@ -15,6 +15,7 @@
 ; brk/cnt, a function call catches ret, everything else passes them up.
 ; set -e rides sh-eflag with sh-noe guarding conditions and && || arms.
 
+(module 'lush
 (: ; export NAME=VAL -> setenv; export NAME promotes the shell var
    (sh-eqpos s i) (? (i = (tally s)) () (? ((s i) = 61) i (sh-eqpos s (i + 1))))
    (sh-export w)
@@ -903,3 +904,4 @@
            (id? <pr 'err)
              (: _ (say err ("lush: " + (>pr + "\n"))) _ (pin sh-status () 2) 2)
            (sh-eval-top src >pr))))
+) ; module 'lush

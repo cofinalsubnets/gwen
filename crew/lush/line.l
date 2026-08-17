@@ -14,6 +14,7 @@
 ; drops to cooked, prints ;; a b, welps to the zero point, and the loop
 ; re-prompts: a crash never eats the terminal (installed in (sh _), main.l).
 
+(module 'lush
 (: ; --- the floor: bao's shell-help shape, cooked first so the print lands clean
    (lush-help a b)
      (: _ (raw 0) _ (puts ";; ") _ (putx a) _ (puts " ") _ (putx b) _ (putc 10)
@@ -161,3 +162,4 @@
                  (: _ (raw 0)                                     ; cooked for the command
                     _ (sh-eval-top full >pr)
                     _ (raw 1) (sh-loop "" nhist)))))))              ; re-raw for the next prompt
+) ; module 'lush

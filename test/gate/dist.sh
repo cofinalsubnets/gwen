@@ -112,7 +112,7 @@ MK
   # process and ask whether the decision was taken and kept: an unconsulted lane
   # leaves the cache untouched, whatever the predicate on its own would answer.
   ( PATH=$sabs/bin:/usr/bin:/bin && export PATH \
-    && run "$dabs" -e '(: _ (sh-oneline (list "-c") "mooncc -zzz") (quit (? (two? (peep sh-imgc "mooncc" 0)) 0 1)))' ) \
+    && run "$dabs" -e '(: _ (use (name "lush")) _ (sh-oneline (list "-c") "mooncc -zzz") (quit (? (two? (peep sh-imgc "mooncc" 0)) 0 1)))' ) \
      >/dev/null 2>&1 \
     || fail "lush ran a command without taking its own in-image decision"
   # ..and cook's own: two recipe lines are ONE process in-image, one process EACH spawned
@@ -126,7 +126,7 @@ MK
     && fail "cook ran its lines in-image while SHELL was a foreign /bin/sh"
   # the skew guard, stated directly: same bytes, different file -> the shortcut is refused
   ( PATH=$sabs/cbin:/usr/bin:/bin && export PATH \
-    && run "$dabs" -e '(quit (? (two? (sh-imgfn "mooncc")) 1 0))' ) \
+    && run "$dabs" -e '(: _ (use (name "lush")) (quit (? (two? (sh-imgfn "mooncc")) 1 0)))' ) \
     || fail "the in-image lane engaged for a mooncc that is a DIFFERENT file"
 
   # a bare name we do NOT own must never go in-image, whatever rides this image

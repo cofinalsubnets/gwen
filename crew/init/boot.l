@@ -22,7 +22,9 @@
                  (? r (+ " -> errno " (show r)) " -> ok")))))))
 
    ; the console job: a fresh `love` running the shell over the inherited console fds.
-   (console _) (L "/bin/love" "-l" "/lib/sh.l" "-e" "(sh 0)")
+   ; the -l registers module 'lush (the parts' own wraps); the -e reads it through
+   ; one use -- compile is per-binding, so (sh 0) compiles after the splice.
+   (console _) (L "/bin/love" "-l" "/lib/sh.l" "-e" "(: _ (use 'lush) (sh 0))")
 
    ; a boot self-check: run a real userland command (kore, forked + captured) so the
    ; console SHOWS the base system works end to end before we hand off the tty. `hark`

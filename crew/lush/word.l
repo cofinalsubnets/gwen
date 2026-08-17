@@ -13,6 +13,7 @@
 ; sh-wordize (quote-aware) at use. ('sub . text) runs through the box sh-subeval -- eval.l
 ; pins the evaluator there at load (word compiles before eval exists).
 
+(module 'lush
 (: sh-subeval #0
    (sh-ifs? b) (|| (b = 32) (b = 9) (b = 10))
    (sh-chomp t)
@@ -230,3 +231,4 @@
      (: st (wsegs (sh-tilde segs) [() () 0])
         fs (sh-rev (closef (sh-nth st 0) (sh-nth st 1) (sh-nth st 2)))
         (catmap sh-field1 fs)))
+) ; module 'lush

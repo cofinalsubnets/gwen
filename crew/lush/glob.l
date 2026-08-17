@@ -14,6 +14,7 @@
 ; the dotfile law lives at the directory scan: a leading . matches only a
 ; pattern that spells the . itself.
 
+(module 'lush
 (: (sh-anyglob t)
      (: n (tally t)
         (go i) (? (i = n) 0
@@ -91,3 +92,4 @@
         (map (\ nm (d + nm))
              (filter (\ nm ((dot || !((nm 0) = 46)) && sh-fmatch ct cm nm))
                      names))))
+) ; module 'lush

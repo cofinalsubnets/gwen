@@ -258,12 +258,12 @@
              'vi vi-main
              'env env-main 'sleep sleep-main
              'kill kill-main 'xargs xargs-main
-             ; the shell: lush's parts precede this file in the cat, so sh-main
+             ; the shell: lush's wrap registered ahead of this file in the cat, so sh-main
              ; folds here. `kore sh ..` and a /bin/sh symlink both land it (the
              ; symlink usually through lush's OWN seat, which fires first at
              ; cat load on an sh/lush basename -- this row serves the image
              ; wake, where only kore-main dispatches)
-             'sh sh-main 'lush sh-main)
+             'sh (from 'lush 'sh-main) 'lush (from 'lush 'sh-main))
    (usage _) (: _ (say err "kore -- the love multi-call toolbox
 usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)

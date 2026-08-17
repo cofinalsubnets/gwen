@@ -17,6 +17,7 @@
 ; into "the list so far ends here" -- the compound parsers then expect their
 ; own closer by name. an empty rest where a compound needs more is 'more.
 
+(module 'lush
 (: (tk-op? t o) (id? <t 'op && (>t = o))
    (tk-w? t) (id? <t 'w)
    (tk-rd? t) (id? <t 'rd)
@@ -259,3 +260,4 @@
    (pcfin ts ws rs)
      (? (!ws && !rs) ('err >< "expected a command")
         ['cmd (sh-rev ws) (sh-rev rs) >< ts]))
+) ; module 'lush
