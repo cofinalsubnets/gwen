@@ -1285,7 +1285,12 @@ int main(int argc, char const **argv) {
     // the static nifs (exit/open/close/run/getenv + any host/*.c app nifs) come
     // from the ai_nifs section -- immortal addresses, so the array door serves.
     // (This also re-pins them into a loaded image's book.)
-    g = ai_defn(g, __start_ai_nifs, __stop_ai_nifs - __start_ai_nifs);
+    g = ai_defn(g, __start_ai_nifs, __stop_ai_nifs - __start_ai_nifs, 0);
+    // ..and the MODULE tables (ai_mods, one ai_defn call per row): an app's nifs
+    // land under its module, off the bare book. Same re-pin over a woken image --
+    // the registry rides the image, so the drain finds the tablet and refreshes it.
+    for (struct ai_mod const *mt = __start_ai_mods; mt < __stop_ai_mods; mt++)
+      g = ai_defn(g, mt->defs, mt->n, mt->mod);
     // ⚠ NEITHER CHAIN LEAVES THE STACK. They are live heap values, so they cannot ride
     // a struct ai_def: C cannot re-root what it holds in an array, and the defn above
     // interns a hundred names -- a hundred chances to move them. ai_defv reads sp[0]

@@ -146,8 +146,8 @@ int ai_init(void) {
   // a quarter of the ceiling, like every other bounded seat: the transient peak while a
   // resize holds both halves is double the budget.
   if (ai_ok(F)) ai_core_of(F)->budget = (2048u << 20) / sizeof(ai_word) / 4;
-  struct ai_def d[] = {{"exit", (ai_word) nif_exit, 0}};
-  F = ai_defn(F, d, countof(d));
+  struct ai_def d[] = {{"exit", (ai_word) nif_exit}};
+  F = ai_defn(F, d, countof(d), 0);
   if (!ai_ok(F)) return ai_code_of(F);
   F = ai_egg_(F, src_egg, src_p1, src_corpus, src_post);
   F = ai_evals_(F, boot_ai);

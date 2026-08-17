@@ -212,9 +212,8 @@
    ; run's address, an instruction carries itself, and ai_defn reads the pair. UNSIZED
    ; on purpose -- C counts the rows, so countof cannot disagree with the roster.
    ; ⚠ `init`, not `irow`: a def1 row is a struct and owns its braces. it is already
-   ; one line, because its cells are scalars and the flat rule keeps them whole.
-   ; the trailing 0 is .mod (the book lane) spelled out: love.o meets -Werror.
-   (def-row nm v) `('init `(`('str nm) `('cast '(named "intptr_t") v) '(num 0)))
+   ; one line, because its two cells are scalars and the flat rule keeps them whole.
+   (def-row nm v) `('init `(`('str nm) `('cast '(named "intptr_t") v)))
    (nif-at n) (? (n < 1) (vr "nifs") `('bin '+ (vr "nifs") `('num n)))
    (zip a b) (? (! (two? a)) () (link `(<a <b) (zip >a >b)))
    nif-def1

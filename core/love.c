@@ -665,37 +665,35 @@ enum ai_status ai_fin(struct ai *g) {
    g->alloc(g, g->pool, 0); }                 // ..the pool IS g, so it goes last
  return s; }
 
-// ai_defn's module lane: bind d->n -> d->x on module d->mod's tablet, found or
-// made on the registry (g->mods, the same lazy singleton lvm_mods answers --
-// the drain runs at boot, before prel, so both must be creatable here, and
-// again over a woken image, where the found tablet takes the re-pin).
-static struct ai *ai_moddef(struct ai *g, struct ai_def const *d) {
+// the module lane's target: find-or-make mod's tablet on the registry (g->mods,
+// the same lazy singleton lvm_mods answers -- the drain runs at boot, before
+// prel, so both are creatable here, and again over a woken image, where the
+// found tablet takes the re-pin) and push it where the book map would sit.
+static struct ai *ai_modtab(struct ai *g, char const *mod) {
  if (!ai_ok(g)) return g;
  struct ai *c = ai_core_of(g);
  if (c->mods == zero) {
   if (!ai_ok(g = map_new(g))) return g;
   c = ai_core_of(g), c->mods = c->sp[0], c->sp++; }
- if (!ai_ok(g = intern(ai_strof(g, d->mod)))) return g;      // [modnom ..]
+ if (!ai_ok(g = intern(ai_strof(g, mod)))) return g;   // [modnom ..]
  c = ai_core_of(g);
  word m = ai_mapget(c, zero, c->sp[0], c->mods);
- if (m != zero) c->sp[0] = m;                                 // [tablet ..]
- else {                                                       // a fresh module: make + register
-  if (!ai_ok(g = map_new(g))) return g;                       // [tablet modnom ..]
-  c = ai_core_of(g);
-  g = ai_push(g, 3, c->sp[1], c->sp[0], c->mods);             // (key val coll) for mapput
-  if (!ai_ok(g = ai_mapput(g))) return g;                     // [mods tablet modnom ..]
-  c = ai_core_of(g);
-  c->sp[2] = c->sp[1], c->sp += 2; }                          // [tablet ..]
- g = ai_mapput(intern(ai_strof(ai_push(g, 1, d->x), d->n)));  // [tablet ..]
- return ai_pop(g, 1); }
+ if (m != zero) { c->sp[0] = m; return g; }             // [tablet ..]
+ if (!ai_ok(g = map_new(g))) return g;                  // a fresh module: [tablet modnom ..]
+ c = ai_core_of(g);
+ g = ai_push(g, 3, c->sp[1], c->sp[0], c->mods);        // (key val coll) for mapput
+ if (!ai_ok(g = ai_mapput(g))) return g;                // [mods tablet modnom ..]
+ c = ai_core_of(g);
+ c->sp[2] = c->sp[1], c->sp += 2;                       // [tablet ..]
+ return g; }
 
 // ⚠ every .x here must be IMMORTAL -- a nif address, a fixnum, an out-of-pool
 // constant. C cannot re-root what it holds in an array, and no ordering fixes it;
 // a value that MOVES arrives on the stack instead (ai_defv).
-struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n) {
- for (g = ai_push(g, 1, A(ai_core_of(g)->book)); n--;)
-  g = defs[n].mod ? ai_moddef(g, defs + n)
-    : ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].x), defs[n].n)));
+// mod non-NULL binds the whole table under that module instead of the book.
+struct ai *ai_defn(struct ai*g, struct ai_def const*defs, uintptr_t n, char const *mod) {
+ for (g = mod ? ai_modtab(g, mod) : ai_push(g, 1, A(ai_core_of(g)->book)); n--;
+  g = ai_mapput(intern(ai_strof(ai_push(g, 1, defs[n].x), defs[n].n))));
  ai_core_of(g)->sp++;
  return g; }
 
@@ -781,23 +779,23 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   g = map_new(g);
   if (ai_ok(g)) g->symbols = ai_pop1(g);
   struct ai_def def0[] = {
-   {"book", A(g->book), 0},   // the l-level book = the orth MAP (the chain stays C-side; `books` reads it)
-   {"in", (word) &ai_stdin, 0},
-   {"out", (word) &ai_stdout, 0},
-   {"err", (word) &ai_stderr, 0},
+   {"book", A(g->book)},   // the l-level book = the orth MAP (the chain stays C-side; `books` reads it)
+   {"in", (word) &ai_stdin},
+   {"out", (word) &ai_stdout},
+   {"err", (word) &ai_stderr},
    // the two doors prel BUILDS (tap and jug), so it can stamp the kind it means;
    // mopped at birth like every other raw pointer the compiler folds (love/egg.l)
-   {"ci-vt", (word) &ai_ci_vt, 0},
-   {"to-vt", (word) &ai_to_vt, 0},
+   {"ci-vt", (word) &ai_ci_vt},
+   {"to-vt", (word) &ai_to_vt},
    // max-charm/min-charm: this build's fixnum bounds, exposed so width-specific
    // tests gate on the real boundary (it differs on 32- vs 64-bit ports).
-   {"max-charm", putcharm((ai_word)((uintptr_t)-1 >> 2)), 0},
-   {"min-charm", putcharm(-(ai_word)((uintptr_t)-1 >> 2) - 1), 0},
+   {"max-charm", putcharm((ai_word)((uintptr_t)-1 >> 2))},
+   {"min-charm", putcharm(-(ai_word)((uintptr_t)-1 >> 2) - 1)},
    // love-tco: glazed code continues by tail-jump, which only the threaded build
    // honors -- auto.l reads this and keeps the interpreter on a trampoline build
-   {"love-tco", putcharm(ai_tco), 0}, };
-  g = ai_defn(g, def0, countof(def0));
-  g = ai_defn(g, def1, countof(def1));
+   {"love-tco", putcharm(ai_tco)}, };
+  g = ai_defn(g, def0, countof(def0), 0);
+  g = ai_defn(g, def1, countof(def1), 0);
   if (ai_ok(g = ai_strof(g, AiVersion)))            // a live string: off the STACK, never an ai_def
    g = ai_pop(ai_defv(g, "love-version"), 1);
   // `love-arch`: the host CPU the glaze emits for. auto-ev interns it as the assembler

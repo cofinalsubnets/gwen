@@ -88,9 +88,9 @@ static union u const
   nif_pushed[]  = {{ai_pushed}, {lvm_ret0}},
   nif_cur_set[] = {{lvm_cur}, {.x = putcharm(2)}, {ai_cur_set}, {lvm_ret0}};
 static struct ai_def defs[] = {
-  {"crank",   (intptr_t) nif_crank, 0},
-  {"pushed",  (intptr_t) nif_pushed, 0},
-  {"cur_set", (intptr_t) nif_cur_set, 0} };
+  {"crank",   (intptr_t) nif_crank},
+  {"pushed",  (intptr_t) nif_pushed},
+  {"cur_set", (intptr_t) nif_cur_set} };
 
 // --- the frame --------------------------------------------------------------
 static void blit(void) {
@@ -174,7 +174,7 @@ void love_init(void) {
                             : "; love/playdate -- baking the egg"; *s; s++)
     cb_putc(kcb, *s);
   blit();
-  struct ai *g = ai_defn(woke ? g0 : ai_ini_m(pd_alloc), defs, countof(defs));
+  struct ai *g = ai_defn(woke ? g0 : ai_ini_m(pd_alloc), defs, countof(defs), 0);
   pdg_log(ai_ok(g) ? "love: core up" : "love: core FAILED");
   // bound the collector to a QUARTER of the device's 16 MB (the Appel knob,
   // teensy's law): a major resize holds old and new pools at once, so the

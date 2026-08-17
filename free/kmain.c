@@ -1679,65 +1679,65 @@ static bool cbinit(void) {
   return true; }
 
 static struct ai_def defs[] = {
-  {"reset", (intptr_t) nif_reset, 0},
-  {"draw", (intptr_t) nif_draw, 0},
-  {"key", (intptr_t) nif_key, 0},
-  {"fault", (intptr_t) nif_fault, 0},
+  {"reset", (intptr_t) nif_reset},
+  {"draw", (intptr_t) nif_draw},
+  {"key", (intptr_t) nif_key},
+  {"fault", (intptr_t) nif_fault},
   // the ramfs door. ⚠ `open`'s PRESENCE is what lights up prel's module walk
   // (love/prel.l's fsopen, by peep) and salt's config read -- both are gated on
   // the name being in the book, so this row is the whole wiring.
-  {"open", (intptr_t) nif_open, 0},
-  {"close", (intptr_t) nif_close, 0},
+  {"open", (intptr_t) nif_open},
+  {"close", (intptr_t) nif_close},
   // the rest of the read surface (rung 1). ⚠ these wear the HOST'S names and the
   // host's shapes on purpose: kore reads (size mtime mode ns) and a list of entry
   // strings, and a divergence here would be silent where an absence is loud.
-  {"stat", (intptr_t) nif_stat, 0},
-  {"readdir", (intptr_t) nif_readdir, 0},
-  {"lseek", (intptr_t) nif_lseek, 0},
-  {"openfd", (intptr_t) nif_openfd, 0},
-  {"fdclose", (intptr_t) nif_fdclose, 0},
+  {"stat", (intptr_t) nif_stat},
+  {"readdir", (intptr_t) nif_readdir},
+  {"lseek", (intptr_t) nif_lseek},
+  {"openfd", (intptr_t) nif_openfd},
+  {"fdclose", (intptr_t) nif_fdclose},
   // the writable tree (rung 2), the host's names and shapes again
-  {"mkdir", (intptr_t) nif_mkdir, 0},
-  {"rmdir", (intptr_t) nif_rmdir, 0},
-  {"unlink", (intptr_t) nif_unlink, 0},
-  {"rename", (intptr_t) nif_rename, 0},
-  {"chdir", (intptr_t) nif_chdir, 0},
-  {"cwd", (intptr_t) nif_cwd, 0},
-  {"chmod", (intptr_t) nif_chmod, 0},
-  {"utime", (intptr_t) nif_utime, 0},
+  {"mkdir", (intptr_t) nif_mkdir},
+  {"rmdir", (intptr_t) nif_rmdir},
+  {"unlink", (intptr_t) nif_unlink},
+  {"rename", (intptr_t) nif_rename},
+  {"chdir", (intptr_t) nif_chdir},
+  {"cwd", (intptr_t) nif_cwd},
+  {"chmod", (intptr_t) nif_chmod},
+  {"utime", (intptr_t) nif_utime},
   // rung 4: the pipe pair, the fd plumbing, and the process seat under the
   // spawn shim (the boot text below). host names, host shapes, as ever.
-  {"pipe", (intptr_t) nif_pipe, 0},
-  {"fdopen", (intptr_t) nif_fdopen, 0},
-  {"dup", (intptr_t) nif_dup, 0},
-  {"dup2", (intptr_t) nif_dup2, 0},
-  {"getpid", (intptr_t) nif_getpid, 0},
-  {"procseat", (intptr_t) nif_procseat, 0},
+  {"pipe", (intptr_t) nif_pipe},
+  {"fdopen", (intptr_t) nif_fdopen},
+  {"dup", (intptr_t) nif_dup},
+  {"dup2", (intptr_t) nif_dup2},
+  {"getpid", (intptr_t) nif_getpid},
+  {"procseat", (intptr_t) nif_procseat},
   // rung 5: the disk -- the raw block door lib/fat.l's filesystem rides. these
   // three are OURS (no host twin: the host has no raw disk), so the shapes are
   // love's -- absence and refusal answer (), presence is the green sector count.
-  {"disk", (intptr_t) nif_disk, 0},
-  {"disk-read", (intptr_t) nif_disk_read, 0},
-  {"disk-write", (intptr_t) nif_disk_write, 0},
+  {"disk", (intptr_t) nif_disk},
+  {"disk-read", (intptr_t) nif_disk_read},
+  {"disk-write", (intptr_t) nif_disk_write},
   // ⚠ x86_64 only, so a love-side reader must ask (member? 'svm (names ()))
   // before it asks (svm ()) -- on the aarch64 seat the nom is not in the book
   // at all, and reading it is a missing condition rather than an absence.
 #if defined(__x86_64__)
-  {"svm", (intptr_t) nif_svm, 0},
-  {"svm-run", (intptr_t) nif_svm_run, 0},
-  {"vmx", (intptr_t) nif_vmx, 0},
-  {"vmx-run", (intptr_t) nif_vmx_run, 0},
+  {"svm", (intptr_t) nif_svm},
+  {"svm-run", (intptr_t) nif_svm_run},
+  {"vmx", (intptr_t) nif_vmx},
+  {"vmx-run", (intptr_t) nif_vmx_run},
 #endif
   // quit is seat-aware now (rung 4): a spawned task's exit is the TASK's, so
   // the row is owed on BOTH kernels. unseated it resets the shipped machine;
   // the TEST kernel's unseated arm answers the code instead (kore0.l's identity
   // pin, one door deeper), so a failing assert still cannot eat the summary,
   // and `exit` stays qemu's one door out.
-  {"quit", (intptr_t) nif_quit, 0},
+  {"quit", (intptr_t) nif_quit},
 #ifdef K_TEST
-  {"exit", (intptr_t) nif_exit, 0},
+  {"exit", (intptr_t) nif_exit},
 #endif
-  {"color", (intptr_t) nif_color, 0} };
+  {"color", (intptr_t) nif_color} };
 
 #ifdef K_TEST
 // The whole test corpus, baked VERBATIM to a C string literal by mk/tools/lcatv.l
@@ -1839,7 +1839,7 @@ void kmain(void) {
   // the disk (rung 5): probe the bus, and hand the driver its one DMA block --
   // kmallocw memory, so pa = va - khhdm holds for everything the device reads.
   k_blk_init(kmallocw(b2w(352)));
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
+  struct ai *g = ai_defn(ai_ini(), defs, countof(defs), 0);
   // BOUND the generational collector to the device's RAM (the Appel knob): without it the nursery's
   // copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive) sizing then asks
   // kmallocw for a contiguous block bigger than physical RAM -> OOM. An eighth of free RAM leaves ample
@@ -1850,18 +1850,18 @@ void kmain(void) {
   // bind the baked corpus to the global `tests`; below it is read form-by-form
   // and run through ev at boot (no console), then qemu is quit.
   g = ai_strof(g, ktests);
-  struct ai_def td[] = {{"tests", ai_pop1(g), 0}};
-  g = ai_defn(g, td, countof(td));
+  struct ai_def td[] = {{"tests", ai_pop1(g)}};
+  g = ai_defn(g, td, countof(td), 0);
 #else
   // the kore cat, bound whole (rung 3); the session below drinks it through a tap.
   g = ai_strof(g, src_kore);
-  struct ai_def kd[] = {{"korecat", ai_pop1(g), 0}};
-  g = ai_defn(g, kd, countof(kd));
+  struct ai_def kd[] = {{"korecat", ai_pop1(g)}};
+  g = ai_defn(g, kd, countof(kd), 0);
 #endif
   // the boot cmdline, raw; the boot text below splits it into the argv shape.
   g = ai_strof(g, kboot.cmdline);
-  struct ai_def bd[] = {{"bootline", ai_pop1(g), 0}};
-  g = ai_defn(g, bd, countof(bd));
+  struct ai_def bd[] = {{"bootline", ai_pop1(g)}};
+  g = ai_defn(g, bd, countof(bd), 0);
   // load the prel, then run the l read-eval-print loop. its line
   // editor (in love/bao.l, the baked shell core) drives the console; PS/2 keyboard
   // and serial input both arrive as ANSI escape sequences the l edev decodes.

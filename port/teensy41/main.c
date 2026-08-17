@@ -129,10 +129,10 @@ static union u const
 extern const char _binary_love_img_start[], _binary_love_img_end[];
 
 static struct ai_def defs[] = {
-  {"gpio_init", (intptr_t) nif_gpio_init, 0},
-  {"gpio_dir",  (intptr_t) nif_gpio_dir, 0},
-  {"gpio_put",  (intptr_t) nif_gpio_put, 0},
-  {"gpio_get",  (intptr_t) nif_gpio_get, 0}, };
+  {"gpio_init", (intptr_t) nif_gpio_init},
+  {"gpio_dir",  (intptr_t) nif_gpio_dir},
+  {"gpio_put",  (intptr_t) nif_gpio_put},
+  {"gpio_get",  (intptr_t) nif_gpio_get}, };
 
 // --- the arena ------------------------------------------------------------
 // The generational collector is the ONLY collector, and it draws its pools
@@ -263,7 +263,7 @@ int main(void) {
   { char const *s = woke ? "; image awake\r\n" : "; no image -- baking the egg\r\n";
     for (; *s; s++) serial_putc(*s); }
   if (!woke) g = ai_ini();
-  g = ai_defn(g, defs, countof(defs));
+  g = ai_defn(g, defs, countof(defs), 0);
   // BOUND the collector to the arena (the Appel knob -- gen_please, love.c):
   // 2*minor + 2*major carve out of the free list, and a major resize holds old
   // and new at once, so an unbounded budget OOMs inside the collector. A

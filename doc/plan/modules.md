@@ -40,20 +40,25 @@ reach, no leak to the global book, reopen sees the old members and extends the
 same tablet, `use` splices it, anonymous `(module () ..)` is a scratch layer
 that registers nothing. Nothing else moves. Gate: `make test`.
 
-**Rung 1 -- ai_defn's module target. CLIMBED.** struct ai_def grew `.mod`
-(NULL = the book); ai_moddef (core/love.c) find-or-makes the module tablet on
-g->mods -- ai_defn runs at boot BEFORE prel, so the registry is made C-side
-there, and AGAIN over a woken image, where the found tablet takes the re-pin
-(the same freshness the book lane always had). AiModNif("mod", nm, fn) is the
-section variant; AiNif delegates to it. The proof: host/mem.c's peepw/pinw
-moved into module 'mem -- off the bare book everywhere -- and flat.l's
-presence probe collapsed from the out-of-band (names ()) dance to an ordinary
-`(from 'mem)` read. test/host/modnif.l holds the laws, including the C+.l
-one-module story: (module 'mem ..) text reopens the drain-made tablet and its
-.l member reaches the C nif. What the climb found: `.mod` made EVERY
-positional {n, x} initializer a -Werror missing-field warning -- nifs.l's
-def-row now lays the trailing 0 (nifs.h regenerated, test_clay identical) and
-the eight frontends' hand rows spell it too.
+**Rung 1 -- ai_defn's module target. CLIMBED.** The module is the CALL's, not
+the row's: ai_defn grew a fourth parameter (NULL = the book, so struct ai_def
+stays two words), and ai_modtab (core/love.c) pushes the found-or-made module
+tablet where the book map would sit -- the binding loop is one loop either
+way. The registry is made C-side at boot (the drain runs BEFORE prel) and
+FOUND over a woken image, where the drain re-pins the current addresses (the
+same freshness the book lane always had). AiModNifs("mod", table) is the
+section spelling: one exported struct ai_mod row = one (module, def table) =
+one ai_defn call at the drain. The proof: host/mem.c's peepw/pinw moved into
+module 'mem -- off the bare book everywhere -- and flat.l's presence probe
+collapsed from the out-of-band (names ()) dance to an ordinary `(from 'mem)`
+read. test/host/modnif.l holds the laws, including the C+.l one-module story:
+(module 'mem ..) text reopens the drain-made tablet and its .l member reaches
+the C nif. What the climb found, both in the mooncc lane: (1) the writer keeps
+only EXPORTED globals in a named section that is not ai_nifs (gen.l's loc?),
+so the AiModNifs row is not static; (2) holo's linker resolved only its two
+hand-laid brackets -- it now grants GNU ld's own generic rule, __start_X/
+__stop_X over any named lane's laid extent (link.l's ld-extents, threaded
+through cx), which the gcc lane always granted for free.
 
 **Rung 2 -- the crew modularizes.** One app at a time, moon first (the
 collision hotspot AND the love0 lane -- mooncc0.image bakes moon's cat under

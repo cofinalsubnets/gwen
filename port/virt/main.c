@@ -102,7 +102,7 @@ static lvm(ai_vexit) {
   return Continue(); }                       // unreached
 
 static union u const nif_vexit[] = {{ai_vexit}, {lvm_ret0}};
-static struct ai_def defs[] = { {"vexit", (intptr_t) nif_vexit, 0} };
+static struct ai_def defs[] = { {"vexit", (intptr_t) nif_vexit} };
 
 // --- the arena ------------------------------------------------------------
 // The teensy first-fit free list, fed 64 MB of virt's DRAM by address -- the
@@ -172,7 +172,7 @@ int main(void) {
   freelist = (struct mem*) POOL;
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
+  struct ai *g = ai_defn(ai_ini(), defs, countof(defs), 0);
   if (ai_ok(g)) ai_core_of(g)->budget = POOL_BYTES / sizeof(ai_word) / 4;
   struct ai *r = ai_egg_(g,
 #include "egg.h"

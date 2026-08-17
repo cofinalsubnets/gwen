@@ -284,16 +284,16 @@ static union u const
   nif_wcap[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_wcap},   {lvm_ret0}};
 
 static struct ai_def const defs[] = {
-  {"quit",   (intptr_t) nif_quit, 0},
-  {"dev",    (intptr_t) nif_dev, 0},
-  {"feed",   (intptr_t) nif_feed, 0},
-  {"shut",   (intptr_t) nif_shut, 0},
-  {"stall",  (intptr_t) nif_stall, 0},
-  {"wstall", (intptr_t) nif_wstall, 0},
-  {"wcap",   (intptr_t) nif_wcap, 0},
-  {"sent",   (intptr_t) nif_sent, 0},
-  {"wpending", (intptr_t) nif_wpend, 0},
-  {"naps",   (intptr_t) nif_naps, 0} };
+  {"quit",   (intptr_t) nif_quit},
+  {"dev",    (intptr_t) nif_dev},
+  {"feed",   (intptr_t) nif_feed},
+  {"shut",   (intptr_t) nif_shut},
+  {"stall",  (intptr_t) nif_stall},
+  {"wstall", (intptr_t) nif_wstall},
+  {"wcap",   (intptr_t) nif_wcap},
+  {"sent",   (intptr_t) nif_sent},
+  {"wpending", (intptr_t) nif_wpend},
+  {"naps",   (intptr_t) nif_naps} };
 
 // --- the boot --------------------------------------------------------------
 // The corpus texts are the ones every frontend shares (out/lib, laid by lcat off
@@ -324,7 +324,7 @@ int main(int argc, char const **argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: %s <file.l>...\n", argv[0]);
     return 2; }
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs));
+  struct ai *g = ai_defn(ai_ini(), defs, countof(defs), 0);
   g = ai_egg_(g,
 #include "egg.h"
     ,
