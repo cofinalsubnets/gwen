@@ -40,12 +40,20 @@ reach, no leak to the global book, reopen sees the old members and extends the
 same tablet, `use` splices it, anonymous `(module () ..)` is a scratch layer
 that registers nothing. Nothing else moves. Gate: `make test`.
 
-**Rung 1 -- ai_defn's module target.** struct ai_def gets `.mod` (a string,
-NULL = book); ai_defn find-or-makes the module tablet in g->mods (sharing
-lvm_mods' lazy-create -- ai_defn runs at boot BEFORE prel, so the registry
-must be creatable C-side) and mapputs there; an AiModNif(mod, nm, fn) variant
-so the section drain needs no grouping. Proof: one host app's nifs move into
-its own module. Gate: `make test` + that app's gate.
+**Rung 1 -- ai_defn's module target. CLIMBED.** struct ai_def grew `.mod`
+(NULL = the book); ai_moddef (core/love.c) find-or-makes the module tablet on
+g->mods -- ai_defn runs at boot BEFORE prel, so the registry is made C-side
+there, and AGAIN over a woken image, where the found tablet takes the re-pin
+(the same freshness the book lane always had). AiModNif("mod", nm, fn) is the
+section variant; AiNif delegates to it. The proof: host/mem.c's peepw/pinw
+moved into module 'mem -- off the bare book everywhere -- and flat.l's
+presence probe collapsed from the out-of-band (names ()) dance to an ordinary
+`(from 'mem)` read. test/host/modnif.l holds the laws, including the C+.l
+one-module story: (module 'mem ..) text reopens the drain-made tablet and its
+.l member reaches the C nif. What the climb found: `.mod` made EVERY
+positional {n, x} initializer a -Werror missing-field warning -- nifs.l's
+def-row now lays the trailing 0 (nifs.h regenerated, test_clay identical) and
+the eight frontends' hand rows spell it too.
 
 **Rung 2 -- the crew modularizes.** One app at a time, moon first (the
 collision hotspot AND the love0 lane -- mooncc0.image bakes moon's cat under

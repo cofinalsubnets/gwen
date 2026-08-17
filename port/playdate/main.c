@@ -88,9 +88,9 @@ static union u const
   nif_pushed[]  = {{ai_pushed}, {lvm_ret0}},
   nif_cur_set[] = {{lvm_cur}, {.x = putcharm(2)}, {ai_cur_set}, {lvm_ret0}};
 static struct ai_def defs[] = {
-  {"crank",   (intptr_t) nif_crank},
-  {"pushed",  (intptr_t) nif_pushed},
-  {"cur_set", (intptr_t) nif_cur_set} };
+  {"crank",   (intptr_t) nif_crank, 0},
+  {"pushed",  (intptr_t) nif_pushed, 0},
+  {"cur_set", (intptr_t) nif_cur_set, 0} };
 
 // --- the frame --------------------------------------------------------------
 static void blit(void) {

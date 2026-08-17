@@ -129,10 +129,10 @@ static union u const
 extern const char _binary_love_img_start[], _binary_love_img_end[];
 
 static struct ai_def defs[] = {
-  {"gpio_init", (intptr_t) nif_gpio_init},
-  {"gpio_dir",  (intptr_t) nif_gpio_dir},
-  {"gpio_put",  (intptr_t) nif_gpio_put},
-  {"gpio_get",  (intptr_t) nif_gpio_get}, };
+  {"gpio_init", (intptr_t) nif_gpio_init, 0},
+  {"gpio_dir",  (intptr_t) nif_gpio_dir, 0},
+  {"gpio_put",  (intptr_t) nif_gpio_put, 0},
+  {"gpio_get",  (intptr_t) nif_gpio_get, 0}, };
 
 // --- the arena ------------------------------------------------------------
 // The generational collector is the ONLY collector, and it draws its pools

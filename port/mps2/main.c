@@ -109,7 +109,7 @@ static lvm(ai_m7exit) {
   return Continue(); }                       // unreached
 
 static union u const nif_m7exit[] = {{ai_m7exit}, {lvm_ret0}};
-static struct ai_def defs[] = { {"m7exit", (intptr_t) nif_m7exit} };
+static struct ai_def defs[] = { {"m7exit", (intptr_t) nif_m7exit, 0} };
 
 // --- the arena ------------------------------------------------------------
 // The teensy first-fit free list, fed the AN500's 16 MB PSRAM (mps.ram at

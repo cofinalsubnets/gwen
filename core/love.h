@@ -276,7 +276,7 @@ struct ai {
     } *io; }; }; };
  intptr_t end[]; };
 
-struct ai_def { char const *n; intptr_t x; };
+struct ai_def { char const *n; intptr_t x; char const *mod; };   // mod: bind under this module, not the book; NULL = the book
 
 // THE SOURCE LIBRARY: the .l texts lcat'd into this binary, name -> source, the rung
 // `use` tries before the filesystem walk. A frontend defines ai_libs over its own
@@ -290,19 +290,22 @@ struct ai_lib const *ai_libs(void);
 // host nif auto-registration: AiNif("name", fn) lands the entry in the ai_nifs
 // section; boot drains [__start_ai_nifs, __stop_ai_nifs) via ai_defn, so an app
 // adds nifs in its own host/<app>.c without touching the core. no linker script:
-// the toolchain defines the bracket symbols.
+// the toolchain defines the bracket symbols. AiModNif("mod", "name", fn) binds
+// under module `mod` instead of the book -- the registry tablet is found or
+// made at the drain, so (module 'mod ..) text reopens the same module.
 #if defined(__APPLE__)
 extern struct ai_def const __start_ai_nifs[] __asm("section$start$__DATA$ai_nifs");
 extern struct ai_def const __stop_ai_nifs[]  __asm("section$end$__DATA$ai_nifs");
-#define AiNif(nm, fn) \
+#define AiModNif(mod, nm, fn) \
   static struct ai_def const __attribute__((section("__DATA,ai_nifs"), used)) \
-    _ainif_##fn = { (nm), (intptr_t) (fn) }
+    _ainif_##fn = { (nm), (intptr_t) (fn), (mod) }
 #else
 extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
-#define AiNif(nm, fn) \
+#define AiModNif(mod, nm, fn) \
   static struct ai_def const __attribute__((section("ai_nifs"), used)) \
-    _ainif_##fn = { (nm), (intptr_t) (fn) }
+    _ainif_##fn = { (nm), (intptr_t) (fn), (mod) }
 #endif
+#define AiNif(nm, fn) AiModNif(0, nm, fn)
 
 // port vtable -- what a device owes, and nothing else. a NULL slot means no
 // method (no readn reads END, no writen discards). neither blocks the scheduler;

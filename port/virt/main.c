@@ -102,7 +102,7 @@ static lvm(ai_vexit) {
   return Continue(); }                       // unreached
 
 static union u const nif_vexit[] = {{ai_vexit}, {lvm_ret0}};
-static struct ai_def defs[] = { {"vexit", (intptr_t) nif_vexit} };
+static struct ai_def defs[] = { {"vexit", (intptr_t) nif_vexit, 0} };
 
 // --- the arena ------------------------------------------------------------
 // The teensy first-fit free list, fed 64 MB of virt's DRAM by address -- the
