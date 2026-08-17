@@ -107,9 +107,9 @@
        nl (tally ks)
        w (cask (nl * 8))   sy (cask (nl * 8))   pa (cask (nl * 8))
        _ (: (go i l) (? (nl <= i) 0
-                        (: v (<l)
+                        (: v <l
                            _ (gz-c32! w i (v >> 9))   _ (gz-c32! sy i (v & 511))
-                           (go (i + 1) (>l))))
+                           (go (i + 1) >l)))
             (go 0 ks))
        (pick li ii top) (? (nl <= li) 0     ; 1 takes the leaf queue, 0 the internal one
                            (top <= ii) 1
