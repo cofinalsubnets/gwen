@@ -132,11 +132,14 @@
    ; admitted all of them and bought 3%. ⚠ AND ON A HOST THE LANE IS NOT EVEN LIVE:
    ; cook asks `sh-ours? SHELL` first, /bin/sh is dash, so every recipe line spawns.
    ; The payoff is the DISTRO's, where /bin/sh IS us. Measure there, not here.
+   ; ⚠ the checksums are the one row here that reads STDIN when handed no file operand,
+   ; and they are in anyway: named a file they are bounded like the rest, and the words
+   ; a build spells (`sha256sum dist.tgz`, a -c over a list) always name one.
    sh-imgok '("mooncc" "cc"
               "test" "[" "true" "false" "echo" "printf" "uname" "pwd"
               "basename" "dirname" "readlink" "seq" "ls" "cmp" "diff"
               "mkdir" "rmdir" "rm" "ln" "touch" "chmod" "mv" "cp" "install"
-              "objcopy")
+              "objcopy" "cksum" "md5sum" "sha256sum")
    ; ⚠ nm/ar/ld/as are NOT here and could not be: the lane resolves a word to a GLOBAL by
    ; name (or a MODULE member, the row's third slot), and those four reach kore's applet
    ; table as folded values from a `:` scope that never pins them. The guard already

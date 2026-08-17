@@ -27,7 +27,7 @@ The file discipline, two shapes:
   cat member.
 * **a toolbox** (core.l, fs.l): many mains, NO seat — kore is its door.
 
-## the inventory (66 tools, 69 names)
+## the inventory (69 tools, 72 names)
 
 | where | tools |
 | --- | --- |
@@ -37,6 +37,7 @@ The file discipline, two shapes:
 | core.l, the line tools | cat echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
 | core.l, the record tools | paste comm join split od |
+| sum.l, the checksums | cksum md5sum sha256sum (`-c` reads a list back) |
 | core.l, the trivia | seq yes true false basename dirname test [ uname printf |
 | fs.l, the fs tools | ls cp mv rm mkdir rmdir ln touch pwd chmod install readlink cmp |
 | fs.l, what they report | stat du chown mktemp |
@@ -206,6 +207,21 @@ walks several at once. Three things are worth knowing:
 * **od takes ONE -t per run**, the last given winning. GNU's several-at-once lane re-widens every
   column to the widest type in the set, which is a whole layout of its own and not another row.
 
+## the checksums (crew/kore/sum.l)
+
+`cksum`, `md5sum`, `sha256sum` — the file whole, its bytes digested, one line said. The two
+faces are GNU's: cksum's `CRC BYTES NAME` (and no name at all reading stdin), the digest pair's
+`DIGEST  NAME` with the two spaces that mean text mode. `-c` reads such a list back and says
+`NAME: OK` / `NAME: FAILED` per line, leaving with 1 if any did not match; the gate holds both
+directions, GNU reading ours and ours reading GNU's.
+
+The digests themselves are **host/hash.c** (`sha256`, `md5`, `cksum` — the last being POSIX's
+own crc, a different polynomial from `crc32`'s and with the byte count folded in, which is why
+an empty file is `4294967295 0`). There is no love statement of any of the three, so an image
+that carries no host nif — the kernel's, which compiles no `host/*.c` — answers 2 and names the
+digest it is missing rather than saying a wrong number. The probe is asked at first call and
+kept, never at load: this file is baked by a love that HAS the nifs.
+
 ## what the fs tools report (crew/kore/fs.l)
 
 `stat -c FORMAT` (or `--printf=`, which reads the escapes and adds no newline where `-c` does
@@ -263,6 +279,8 @@ parsers for a shape nothing in this decade emits.
 
 Polish, as need arises: ls -l (stat already carries size/mtime/mode), cp -r, multi-source cp/mv
 into a directory, sort -n/-k, uniq -d/-u, cut -b, tr [:class:] and -ds, echo -e, seq over gems,
-grep -i/-o/-E, sed -i/y/N, join -o, od with several -t at once, date's spellings past `@SECONDS`.
+grep -i/-o/-E, sed -i/y/N, join -o, od with several -t at once, date's spellings past `@SECONDS`,
+the checksums' `-b`/`--tag` output modes and `-c`'s `--quiet`/`--status` (a `-c` list written either
+way still READS here).
 `df` is the one that wants a NIF and not an afternoon: nothing here answers `statvfs`.
 None block the distro; add them when a real script wants them.

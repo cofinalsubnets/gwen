@@ -2,18 +2,22 @@
 // registered (no love.c/love.h/main.c edit), the fs.c discipline:
 //
 //   (sha256 str) -> the 64-char lowercase hex digest | () misuse
-//   (crc32 str)  -> the IEEE crc32, a charm         | () misuse
+//   (md5 str)    -> the 32-char lowercase hex digest | () misuse
+//   (crc32 str)  -> the IEEE crc32, a charm          | () misuse
+//   (cksum str)  -> POSIX cksum's crc, length folded in, a charm | () misuse
 //
-// FIPS 180-4 and IEEE 802.3, both the compact single-pass shape; value ops, so
-// absence/misuse answers ().
+// FIPS 180-4, RFC 1321, IEEE 802.3 and POSIX cksum, all the compact single-pass
+// shape; value ops, so absence/misuse answers (). crew/kore's cksum, md5sum and
+// sha256sum applets are these four plus a line of output.
 //
-// ⚠ THE TWO ARE NOT IN THE SAME POSITION and it is worth knowing which is which.
-// crc32 SHADOWS lib/gz.l's gz-crcwalk, which stays the statement of it and the
-// ORACLE: test/host/gzc.l holds this to that, so a disagreement has a right answer.
-// sha256 shadows NOTHING -- there is no love sha-256 in the tree -- so crew/sb's blob
-// and patch ids and crew/moon's cache key rest on this file, and the only thing holding
-// it honest is the published vectors in test/host/. That is a thinner rope than the
-// rest of host/ hangs from, and the fix is a love sha-256, not another vector.
+// ⚠ THEY ARE NOT ALL IN THE SAME POSITION and it is worth knowing which is which.
+// crc32 shadows lib/gz.l's gz-crcwalk and cksum test/host/hash.l's hash-ckwalk: both
+// polynomials are STATED in love, and test/host/{gzc,hash}.l hold the C to the walk at
+// every length, so a disagreement there has a right answer. sha256 and md5 shadow
+// NOTHING -- so crew/sb's blob and patch ids and crew/moon's cache key rest on this
+// file, and what holds those two honest is the published vectors in test/host/hash.l
+// and GNU coreutils in test/gate/kore.sh. That is a thinner rope than the rest of
+// host/ hangs from, and the fix is a love sha-256, not another vector.
 #include "love.h"
 #include <stdint.h>
 #include <string.h>
@@ -91,6 +95,78 @@ static lvm(lvm_sha256) {
  Unpack(g);
  ai_musttail return Next(1); }
 
+// --- md5 (RFC 1321) ---------------------------------------------------------------
+// the same shape as sha256 above with the endianness turned around: md5 loads its
+// words and lays its length LITTLE-endian, where sha-256 does both big.
+static const uint32_t MK[64] = {
+ 0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
+ 0x698098d8,0x8b44f7af,0xffff5bb1,0x895cd7be,0x6b901122,0xfd987193,0xa679438e,0x49b40821,
+ 0xf61e2562,0xc040b340,0x265e5a51,0xe9b6c7aa,0xd62f105d,0x02441453,0xd8a1e681,0xe7d3fbc8,
+ 0x21e1cde6,0xc33707d6,0xf4d50d87,0x455a14ed,0xa9e3e905,0xfcefa3f8,0x676f02d9,0x8d2a4c8a,
+ 0xfffa3942,0x8771f681,0x6d9d6122,0xfde5380c,0xa4beea44,0x4bdecfa9,0xf6bb4b60,0xbebfbc70,
+ 0x289b7ec6,0xeaa127fa,0xd4ef3085,0x04881d05,0xd9d4d039,0xe6db99e5,0x1fa27cf8,0xc4ac5665,
+ 0xf4292244,0x432aff97,0xab9423a7,0xfc93a039,0x655b59c3,0x8f0ccc92,0xffeff47d,0x85845dd1,
+ 0x6fa87e4f,0xfe2ce6e0,0xa3014314,0x4e0811a1,0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391};
+static const uint8_t MS[64] = {
+ 7,12,17,22, 7,12,17,22, 7,12,17,22, 7,12,17,22,
+ 5, 9,14,20, 5, 9,14,20, 5, 9,14,20, 5, 9,14,20,
+ 4,11,16,23, 4,11,16,23, 4,11,16,23, 4,11,16,23,
+ 6,10,15,21, 6,10,15,21, 6,10,15,21, 6,10,15,21};
+
+static uint32_t rl(uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
+
+static void md5_block(uint32_t h[4], const uint8_t *p) {
+ uint32_t m[16], a = h[0], b = h[1], c = h[2], d = h[3];
+ for (int i = 0; i < 16; i++)
+  m[i] = (uint32_t) p[4*i] | (uint32_t) p[4*i+1] << 8
+       | (uint32_t) p[4*i+2] << 16 | (uint32_t) p[4*i+3] << 24;
+ for (int i = 0; i < 64; i++) {
+  uint32_t f; int g;
+  if (i < 16)      { f = (b & c) | (~b & d); g = i; }
+  else if (i < 32) { f = (d & b) | (~d & c); g = (5*i + 1) & 15; }
+  else if (i < 48) { f = b ^ c ^ d;          g = (3*i + 5) & 15; }
+  else             { f = c ^ (b | ~d);       g = (7*i) & 15; }
+  f += a + MK[i] + m[g];
+  a = d; d = c; c = b; b += rl(f, MS[i]); }
+ h[0] += a; h[1] += b; h[2] += c; h[3] += d; }
+
+static void md5_hex(const uint8_t *msg, size_t len, char out[33]) {
+ uint32_t h[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
+ size_t i = 0;
+ for (; i + 64 <= len; i += 64) md5_block(h, msg + i);
+ uint8_t tail[128];
+ size_t r = len - i;
+ memcpy(tail, msg + i, r);
+ tail[r++] = 0x80;
+ size_t pad = (r <= 56) ? 64 : 128;
+ memset(tail + r, 0, pad - 8 - r);
+ uint64_t bits = (uint64_t) len << 3;
+ for (int k = 0; k < 8; k++) tail[pad - 8 + k] = (uint8_t) (bits >> (8 * k));
+ md5_block(h, tail);
+ if (pad == 128) md5_block(h, tail + 64);
+ static const char hx[] = "0123456789abcdef";
+ for (int k = 0; k < 4; k++)
+  for (int j = 0; j < 4; j++) {
+  uint8_t b = (uint8_t) (h[k] >> (8 * j));
+  out[8 * k + 2 * j] = hx[b >> 4];
+  out[8 * k + 2 * j + 1] = hx[b & 15]; }
+ out[32] = 0; }
+
+ai_noinline static struct ai *host_md5(struct ai *g) {
+ if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+ struct ai_str *s = (struct ai_str*) g->sp[0];
+ char hex[33];
+ md5_hex((const uint8_t*) s->bytes, (size_t) s->len, hex);
+ if (!ai_ok(g = ai_strof(g, hex))) return g;                  // pushes: digest over arg
+ g->sp[1] = g->sp[0];
+ g->sp += 1;
+ return g; }
+static lvm(lvm_md5) {
+ Pack(g); g = host_md5(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ Unpack(g);
+ ai_musttail return Next(1); }
+
 // --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -------------------------
 // EIGHT BYTES AT A TIME, and that is the whole difference: the byte-at-a-time walk
 // lib/gz.l spells is a dependency chain one link per byte, where slicing spends eight
@@ -138,7 +214,40 @@ static lvm(lvm_crc32) {
  Unpack(g);
  ai_musttail return Next(1); }
 
+// --- cksum (POSIX: NOT reflected, polynomial 0x04c11db7, the LENGTH folded in) -----
+// ⚠ a different crc from the one above in every part: the register runs the other way,
+// the seed is 0, and the message does not end at the last byte -- the byte count goes
+// through the same walk, low byte first, which is what makes cksum answer 4294967295
+// for the empty file rather than 0. one bit at a time, since the table it would want
+// is not the one crc32 built.
+static uint32_t ck_byte(uint32_t c, uint8_t b) {
+ c ^= (uint32_t) b << 24;
+ for (int k = 0; k < 8; k++) c = (c & 0x80000000u) ? (c << 1) ^ 0x04c11db7u : c << 1;
+ return c; }
+
+static uint32_t cksum_of(const uint8_t *p, uintptr_t n) {
+ uint32_t c = 0;
+ uintptr_t len = n;
+ for (uintptr_t i = 0; i < n; i++) c = ck_byte(c, p[i]);
+ for (; len; len >>= 8) c = ck_byte(c, (uint8_t) (len & 0xff));
+ return ~c; }
+
+ai_noinline static struct ai *host_cksum(struct ai *g) {
+ if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
+ { struct ai_str *s = (struct ai_str*) g->sp[0];
+   g->sp[0] = putcharm(cksum_of((const uint8_t*) s->bytes, (uintptr_t) s->len)); }
+ return g; }
+static lvm(lvm_cksum) {
+ Pack(g); g = host_cksum(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ Unpack(g);
+ ai_musttail return Next(1); }
+
 static union u const nif_sha256[] = {{lvm_sha256}, {lvm_ret0}},
-                    nif_crc32[]  = {{lvm_crc32},  {lvm_ret0}};
+                    nif_md5[]    = {{lvm_md5},    {lvm_ret0}},
+                    nif_crc32[]  = {{lvm_crc32},  {lvm_ret0}},
+                    nif_cksum[]  = {{lvm_cksum},  {lvm_ret0}};
 AiNif("sha256", nif_sha256);
+AiNif("md5", nif_md5);
 AiNif("crc32", nif_crc32);
+AiNif("cksum", nif_cksum);
