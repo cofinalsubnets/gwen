@@ -54,7 +54,7 @@
                         rep (reply (peep bx () 0))
                         ; ⚠ a reply is a byte STREAM and its order is the whole content
                         ; of it -- and one say beats six puts.
-                        _ (? rep (: _ (say m (foldl (\ a b (+ a ("" + b))) "" rep))
+                        _ (? rep (: _ (say m (foldl (\ a b (+ a (string b))) "" rep))
                                     (flush m))
                              0)
                         _ (? dirty (pin dirty () 1) 0)

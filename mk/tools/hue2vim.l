@@ -145,7 +145,7 @@
    ; regions a level, and buys only the mis-colouring of `(a]`, which is libra's
    ; to say and not a highlighter's. ⚠ `[` is the one byte vim's regex would read
    ; as a collection; `(`, `{` and `}` are literal under default magic.
-   (vim-brk c) (? (c = 91) "\\[" ("" + c))
+   (vim-brk c) (? (c = 91) "\\[" (string c))
    brkpairs
     (: (go j k a) (? (tally hue-brk <= j) a
                      (go (j + 2) k (a + ((" " + k) + ("=\"" + (vim-brk (hue-brk j)) + "\"")))))

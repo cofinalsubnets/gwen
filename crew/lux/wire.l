@@ -18,7 +18,7 @@
    (x-r16 s) (: a (see s) b (see s) (a | (<< b 8)))
    (x-r32 s) (: a (x-r16 s) b (x-r16 s) (a | (<< b 16)))
    (x-skip s n) (: (go i) (? (i < n) (: _ (see s) (go (i + 1))) 0) (go 0))
-   (x-rstr s n) (: (go i acc) (? (i < n) (go (i + 1) (acc + see s)) acc) (go 0 ""))
+   (x-rstr s n) (: (go i acc) (? (i < n) (go (i + 1) (acc + string (see s))) acc) (go 0 ""))
    (x-pad4 n) ((4 - (n % 4)) % 4)
    (x-wname s t) (: (go i) (? (i < tally t) (: _ (put s (t i)) (go (i + 1))) 0) (go 0))
    (x-rbytes s n) (: (go i acc) (? (i < n) (go (i + 1) (see s >< acc)) (rev acc)) (go 0 ()))       ; n raw bytes -> a list
@@ -108,7 +108,7 @@
     (: bytes (nthl (x-getprop s win 67) 2)
        (: (go l seen acc) (? !(two? l) acc                                       ; walk past the first NUL, then collect to the next
                              (<l = 0) (? seen acc (go >l 1 acc))
-                             (go >l seen (? seen (acc + <l) acc)))
+                             (go >l seen (? seen (acc + string <l) acc)))
           (go bytes 0 "")))
    (x-transient s win) (: a (x-getprop-atoms s win 68) (? (two? a) <a ()))       ; WM_TRANSIENT_FOR (atom 68) -> the parent window | ()
 
