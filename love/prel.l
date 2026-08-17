@@ -399,7 +399,9 @@
 (: operators (pins (tablet 0)
  0 (pins (tablet 0)                                 ; --- ARITY 0: glued. takes nothing from the form
  '< 'cap '> 'cup '+ 'net '* 'prod '| 'abs '- 'negate '/ 'reciprocal
- '% 'fraction '? 'bit '$ 'saturate '! 'nil? '^ 'jot)   ; `.` is pinned here by post.l, whose dot it is
+ '% 'fraction '? 'bit '$ 'saturate '! 'nil? '^ 'jot   ; `.` is pinned here by post.l, whose dot it is
+ '0? 'nil? '1? 'one? '2? 'two?)                ; the arity predicates: a row is a WORD, so it may
+                                               ; spell digits -- 2?<>x is (two? (cap (cup x)))
                                                ; ⚠ ^ ALSO rides arity 2 as xor: the lane is the
                                                ; key, so glued ^x counts up and spaced a ^ b does
                                                ; not -- $ is the same two-lane sigil (saturate/apply)
@@ -472,24 +474,26 @@
    (op-ent k) (: d (op-lane k dyadics 2)
                  (? (two? d) d (: c (op-lane k chains -2) (? (two? c) c (op-lane k naries -1)))))
    (op-chain? k) (two? (op-lane k chains -2))
-   ; longest prefix of nm[i..n) with a monadic meaning -> (len . word), or 0. the table holds word
-   ; values, so a hit is asked out of band against the miss answer -- a truth test would drop any
-   ; word that nets nothing.
-   (mono-long nm i n)
-    ((: (go k) (? (< k 1) 0
-                  (: e (monadics (intern (snip nm i (+ i k))))
-                     (? (id? () e) (go (- k 1)) (>< k e)))))
-     (- n i))
-   ; factor a glued run against the monadic table -> the word list (outermost first), or 0
-   (monofactor s)
-    (: nm (string s) n (tally nm)
-       ((: (go i)
-           (? (< i n)
-              (: m (mono-long nm i n)
-                 (? (two? m)
-                    (? (= (+ i (cap m)) n) (>< (caup m) ())
-                       (: r (go (+ i (cap m))) (? (two? r) (>< (caup m) r))))))))
-        0))
+   ; factor nm[0..j) against the monadic table onto acc -> the word list (outermost first), or 0.
+   ; ⚠ RIGHT TO LEFT: the sigil the reader glued to the datum matches first, longest first, so on
+   ; "abc" rows `a` `bc` beat `ab` `c`. single-char rows agree either way, which is why the stock
+   ; table cannot tell the directions apart. ⚠ AND IT BACKTRACKS: a split whose leftover
+   ; dead-ends falls back to the next-shorter sigil, so a run factors iff SOME split exists.
+   ; that completeness is what a dead end cannot buy -- an unfactorable run must fall through
+   ; to the plain application (data and coined heads ride that), so there is no room to report
+   ; one, and a fresh `grip 0` row would silently unfactor runs that used to work.
+   ; the table holds word values, so a hit is asked out of band against the miss answer --
+   ; a truth test would drop any word that nets nothing.
+   (mono-go nm j acc)
+    (? (< 0 j)
+       ((: (try k)
+           (? (< k 1) ()
+              (: e (monadics (intern (snip nm (- j k) j)))
+                 (? (id? () e) (try (- k 1))
+                    (: r (mono-go nm (- j k) (>< e acc)) (? (two? r) r (try (- k 1))))))))
+        j)
+       acc)
+   (monofactor s) (: nm (string s) (mono-go nm (tally nm) ()))
 ; the walk. a pending-operator frame is (orig name need band . got): the source symbol, the
 ; resolved name, the operands still wanted, the captured band, and the operands so far, reversed.
 ; need 0 means filled with the fold deferred, so a later operator can steal the last operand --

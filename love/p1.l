@@ -106,6 +106,12 @@
         (p1-tend? (cap cl)) (link (p1-rev acc ()) cl)
         (p1-tok (p1-cup cl) (link (cap cl) acc)))
    (p1-rev l acc) (? (link? l) (p1-rev (cup l) (link (cap l) acc)) acc)
+   (p1-drop cl k) (? (< 0 k) (p1-drop (p1-cup cl) (- k 1)) cl)
+   (p1-take l k acc) (? (< 0 k) (p1-take (cup l) (- k 1) (link (cap l) acc)) (p1-rev acc ()))
+   ; one past a token's last operator char, or 0 -- where its run ends.
+   (p1-runend l i best)
+     (? (nil? (link? l)) best
+        (p1-runend (cup l) (+ i 1) (? (p1-opc? (cap l)) (+ i 1) best)))
    ; an OPERATOR RUN: a maximal run of operator chars, read as one plain symbol
    ; and factored later by opfix. ⚠ a trailing '-' right before a digit is the
    ; next number's sign, not part of the run -- the run sheds it and the '-' is
@@ -196,6 +202,7 @@
                  (= c 126) (p1-lift (? (? (link? r) (& (p1-cls (cap r)) 16) ()) 'twin 'conj) r head)
                  (= c 44) (link (name ",") r)
                  (? (p1-opc? c) (nil? numlead) ()) (p1-op cl head)
+                 (p1-dig? c) (p1-nop cl)
                  (: tr (p1-tok cl ())
                     (link (p1-atom (cap tr)) (cup tr)))))))
 
@@ -233,6 +240,26 @@
            (? head (? (= run ":") 1 (= run "?")) ()) (link sym rest)
            (nil? (? shed 1 (p1-glued? rest))) (link sym rest)
            (: d (p1-read1 rest ())
+              (? (nil? (link? d)) 'torn
+                 (link (link 'mono (link (link sym (link (cap d) ())) ())) (cup d))))))
+   ; a digit-led token carrying a sigil is a RUN, not a name: 2?<>x is 2?<>
+   ; around x. a digit breaks p1-run, so the run is cut from the whole token,
+   ; one past its last sigil. the numeral lane wins first.
+   (p1-nop cl)
+     (: tr (p1-tok cl ())
+        tok (cap tr) rest (cup tr) a (p1-atom tok)
+        k0 (p1-runend tok 0 0)
+        lastc (cap (p1-drop cl (? (< 0 k0) (- k0 1) 0)))
+        shed (? (nil? (< 1 k0)) ()
+                (nil? (= lastc 45)) ()
+                (: r0 (p1-drop cl k0) (? (link? r0) (p1-dig? (cap r0)) ())))
+        k (? shed (- k0 1) k0)
+        r (p1-drop cl k)
+        (? (nil? (nom? a)) (link a rest)                  ; a numeral: untouched
+           (nil? (< 0 k)) (link a rest)                   ; no sigil: a plain name-led token
+           (nil? (p1-glued? r)) (link a rest)             ; run ends the form: the plain symbol
+           (: sym (name (string (p1-take tok k ())))
+              d (p1-read1 r ())
               (? (nil? (link? d)) 'torn
                  (link (link 'mono (link (link sym (link (cap d) ())) ())) (cup d))))))
    ; glued = the next char starts a datum rather than ending the form.

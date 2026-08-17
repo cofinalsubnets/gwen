@@ -89,6 +89,12 @@ Two laws worth carrying:
   `-(-5)` and `-x` is negate x, symmetric with `!!5` and `!x`. ⚠ The kebab law is not the reason
   `-x` could have been a name — it governs the INSIDE of a name-led token (`old-thing`,
   `nl->sp`), on tokens whose LEADING char is alnum/`_`.
+* **A digit-led token carrying a sigil is a RUN, not a name.** `2?<>x` is the run `2?<>` glued to
+  `x`, which opfix factors to `(two? (cap (cup x)))`. A digit breaks `p1-run`, so this run is cut
+  out of the whole token instead — one past its LAST sigil, digits and all — and the numeral lane
+  is asked first, so `1.5` and `0.5` are never runs. ⚠ **p0 does not implement this**, so nothing
+  the bootstrap reads (`love/*.l`, `core/*.l`) may spell one; `rdiff.l` cannot catch it, being
+  scoped to the pure lisp subset.
 * **An integer literal reads the same in every build.** All three bases go through the reader's
   own `ai_big_read_dec`/`_hex`/`_oct`, so a literal is a fixnum, a box or a bignum **by its
   VALUE** and never by what a libc did with an overflow. ⚠ Before that, `0xffffffff80200000`
