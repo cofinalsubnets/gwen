@@ -288,7 +288,7 @@ $(xd)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
 $(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
 	@echo HOLO	$@
 	@mkdir -p $(dir $@)
-	@$(love0) -l $(ho)/.mksys-cat.l -n -e '($(xmksys) "$@")' && test -s $@
+	@$(love0) -l $(ho)/.mksys-cat.l -n -e "((from 'moon '$(xmksys)) \"$@\")" && test -s $@
 
 # ==== the vim syntax for .l -- GENERATED, so there is no copy to keep up to date ====
 # mk/tools/hue2vim.l reads crew/vi/hue.l's class table the other way round (one table, two
