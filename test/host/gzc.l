@@ -1,6 +1,6 @@
-; --- test/host/gzc.l: the C twin of inflate, held to gz-puff ---
-; NOT in the test/*.l corpus: `inflate` is a host nif (host/inflate.c) and lib/gz.l is a
-; lib module, so neither is visible to the love0 bake.
+; --- test/host/gzc.l: the C twins of gz.l, held to the love they shadow ---
+; NOT in the test/*.l corpus: `inflate` (host/inflate.c) and `crc32` (host/hash.c) are
+; host nifs and lib/gz.l is a lib module, so neither is visible to the love0 bake.
 ;
 ; test/host/gz.l is where lib/gz.l's own laws live; this file asks the other question --
 ; does the C answer what love answers, on the same stream? gz-puff is the oracle
@@ -18,6 +18,7 @@
 ;             decodes to NONSENSE in love rather than failing, and the C has to produce
 ;             the SAME nonsense. It is why inf_build fills first-writer-wins and zeroes
 ;             its symbol array -- drop either and the fuzz reddens within a few bits.
+;   CRC       every length 0..129, which is the eight-at-a-time tail at every offset.
 ;   MISUSE    a wrong shape answers (), it does not decode.
 ;
 ; ⚠ `string?`, NEVER `?` OR `!`, to ask whether an answer is there: a decoded run of NULs
@@ -27,10 +28,12 @@
 ; run:  cat test/00-init.l test/host/gzc.l | out/host/love
 (use 'gz)
 
-(assert (lit? inflate))
+(assert
+ (lit? inflate)
+ (lit? crc32))
 
 (: (gzc-mk n f) (: b (cask n) (go i) (? (n <= i) (string b) (: _ (pin b i (f i)) (go (i + 1)))) (go 0))
-   (gzc-l d h) (: r (gz-puff d h) (? (two? r) (<(>r)) 'nil))      ; the oracle
+   (gzc-l d h) (: r (gz-puff d h) (? (two? r) <>r 'nil))          ; the oracle
    (gzc-c d h) (: r (inflate d h) (? (string? r) r 'nil))         ; the C twin
    (gzc-same d h) (? (= (gzc-l d h) (gzc-c d h)) 1 0)
    (gzc-all f xs) (? (! (two? xs)) 1 (? (f <xs) (gzc-all f >xs) 0))
@@ -70,7 +73,7 @@
    ; the door itself: `gz-inflate` reaches for the nif and must answer what puff answers
    (gzc-door s) (: d (gz-deflate s)   n (tally s)
                    r (gz-inflate d n)
-                   (? (! (two? r)) 0 (= (<(>r)) s) 1 0)))
+                   (? (! (two? r)) 0 (= <>r s) 1 0)))
 
 ; --- the shapes ---
 (assert
@@ -103,8 +106,32 @@
  (gzc-all (\ s (gzc-fuzz s 1)) gzc-fz)
  (gzc-fuzz gzc-noise 29))
 
+; --- crc32, the other twin in host/hash.c, against gz-crcwalk ---
+; ⚠ EVERY LENGTH 0 THROUGH 129, because the C reads EIGHT BYTES AT A TIME where the walk
+; reads one: the tail is the only place the two can part and it is a different tail at
+; every length mod eight. The published check value is asserted off the C side, so a twin
+; that agrees with a walk which has drifted still fails.
+(: (gzc-crc s) (? (= (crc32 s) (gz-crcwalk s)) 1 0)
+   (gzc-crclen k)
+    (: (go i) (? (k < i) 1
+                 (! (gzc-crc (gzc-mk i (\ j (((j * 2654435761) >> 11) & 255))))) 0
+                 (go (i + 1)))
+       (go 0)))
+(assert
+ (3421780262 = (crc32 "123456789"))              ; 0xcbf43926, what every crc32 publishes
+ (gzc-crclen 129)
+ (gzc-all gzc-crc gzc-shapes)
+ ; ⚠ all-NUL and empty are the two answers a truth test would throw away: the crc of ""
+ ; IS 0, and the crc of 300 NULs is not, and both have to come back as charms.
+ (gzc-crc (gzc-mk 300 (\ i 0)))
+ (0 = (crc32 ""))
+ (charm? (crc32 (gzc-mk 300 (\ i 0)))))
+
 ; --- MISUSE: a value op, so a wrong shape answers () and decodes nothing ---
 (assert
+ (! (charm? (crc32 7)))
+ (! (charm? (crc32 ())))
+ (! (charm? (crc32 (cask 8))))
  (! (string? (inflate 7 10)))
  (! (string? (inflate () 10)))
  (! (string? (inflate (cask 8) 10)))
@@ -115,6 +142,6 @@
  (gzc-same "" 0))
 
 (: _ (test_fin ())
-   _ (puts "gzc: ok -- the C twin agrees with gz-puff (shapes, hints, torn, fuzz, misuse)
+   _ (puts "gzc: ok -- the C twins agree with love (shapes, hints, torn, fuzz, crc, misuse)
 ")
    0)

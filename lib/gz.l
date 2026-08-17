@@ -53,11 +53,18 @@
     (: (go k c) (? (8 <= k) c (go (k + 1) (? (c & 1) ((c >> 1) ^ 3988292384) (c >> 1))))
        (go 0 n))
    gz-crctab (star-tray '(256) (map gz-crcrow (jot 256)))
-   (gz-crc32 s)
+   (gz-crcwalk s)
     (: n (tally s)
        (go i c) (? (n <= i) (c ^ 4294967295)
                    (go (i + 1) ((peep gz-crctab ((c ^ (s i)) & 255) 0) ^ (c >> 8))))
        (go 0 4294967295))
+   ; the door, gz-inflate's exactly: host/hash.c where the artifact carries it, the walk
+   ; above where it does not -- love0, today. ⚠ THE FALLBACK IS NOT WHY THE WALK IS HERE:
+   ; it is the statement of the polynomial and the oracle test/host/gzc.l holds the C to,
+   ; and it would earn its place in a tree where every build carried every nif.
+   ; ⚠ `charm?`, not `?`: the crc of "" is 0, a true answer a truth test calls absent.
+   (gz-crc32 s)
+    (? (lit? crc32) (: r (crc32 s) (? (charm? r) r (gz-crcwalk s))) (gz-crcwalk s))
 
    ; --- the bit sink ---------------------------------------------------------
    ; DEFLATE packs bits into bytes LSB-first, but a Huffman CODE is stored

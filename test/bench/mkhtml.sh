@@ -176,7 +176,8 @@ leaving glibc off the ledger. Which libc does not move the timings (under 0.1%):
 allocates, formats and copies through its own floor, so libc barely runs.
 mooncc trades some compile and run throughput for that self-sufficiency; the gap to the
 optimizing compilers is modest, and the binary it emits passes the identical corpus.</p>
-<p class="note">The last two rows are single C functions rather than the whole corpus
+<p class="note">The <b>chacha</b> and <b>poly1305</b> rows are single C functions rather
+than the whole corpus
 (<code>test/bench/ccrypto.l</code> drives the <code>chacha20</code> and <code>poly1305</code>
 nifs in <code>host/tls.c</code>), and they are here because an average can hide a
 lopsided one. <b>chacha</b> indexes a sixteen-word state <i>array</i> in its inner loop;
@@ -184,6 +185,16 @@ lopsided one. <b>chacha</b> indexes a sixteen-word state <i>array</i> in its inn
 home to the second shape and not the first, so the two rows are a gauge: wide chacha
 beside narrow poly says the remaining gap is array slots, and the day they close
 together is the day that reading was wrong.</p>
+<p class="note">The last three rows (<code>test/bench/cnifs.l</code>) are the other kind
+of row: not a gauge chosen to name a defect, but work the tree waits on.
+<code>love source</code> unpacks its own tarball through <code>inflate</code> and checks
+it with <code>crc32</code>; every svalbard blob and patch id is a <code>sha256</code>.
+They are three shapes as well &mdash; <b>inflate</b> is branchy (a bit reader and a table
+lookup per symbol), <b>crc32</b> has no branch in its loop at all, and <b>sha256</b>
+carries a sixty-four word array beside eight scalar working variables, which is the
+cipher pair&rsquo;s two shapes inside one function. A lane behind on inflate and level on
+crc32 is losing to branches rather than to loads. <b>net</b> sums every row, so it moves
+whenever a row is added &mdash; the per-row ratios are what compare across time.</p>
 <div class="wrap">
 CC
 awk '

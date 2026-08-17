@@ -14,6 +14,15 @@
 #           residency for the second shape only -- so the PAIR is the reading. Wide
 #           chacha beside narrow poly says the gap is array slots; the day they close
 #           together is the day that reading was wrong.
+#   inflate / crc32 / sha256 : the HEAVY NIFS (test/bench/cnifs.l), and a different
+#           question from the pair above. The ciphers are a lever chosen to name a
+#           defect; these three are work the tree waits on -- `love source` unpacks its
+#           own tarball through inflate and checks it with crc32, and every svalbard
+#           blob id is a sha256. They are also three shapes: inflate is BRANCHY (a bit
+#           reader and a table per symbol), crc32 has no branch in its loop at all, and
+#           sha256 carries a 64-word array beside eight scalars -- the ciphers' two
+#           shapes in one function. A lane behind on inflate and level on crc32 is
+#           losing to branches, not to loads.
 # The three compilers, ALL THREE STATIC -- that is the whole point of the pairing:
 #   mooncc : love's OWN C compiler (crew/moon/), the exact `make test_raw` sequence --
 #            no gcc/glibc/ld anywhere: mooncc lays every .o, mksys emits the syscall
@@ -36,9 +45,13 @@
 # net their sum (source to a tested and measured binary). A missing/failed lane
 # shows dnf.
 #
-# Requires `make host` first: the generated out/lib/*.h headers and, for the mooncc
-# lane, out/host/mooncc(+.image). x86-64 only (mooncc's native lane); off x86-64 it
+# Requires `make host` first: the generated out/lib/*.h headers, out/host/love (it lays
+# the inflate row's stream, which needs lib/gz.l) and, for the mooncc lane,
+# out/host/mooncc(+.image). x86-64 only (mooncc's native lane); off x86-64 it
 # prints every row with the mooncc cells dnf and gcc/clang still raced.
+#
+# ⚠ THE net ROW IS A SUM OVER EVERY PHASE, so adding rows moves it and results either
+# side of a row change do not compare. The per-row ratios do.
 #
 # usage: ./ccbench.sh [timeout-seconds] [samples]
 #   build is timed once (a stable multi-second cost, and the artifact is reused);
@@ -150,19 +163,29 @@ corpus_ms() { # $1=binpath ; median full, median boot, report max(0, full-boot)
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
-# a ccrypto.l driver's own run time, boot excluded the same way. The reps are fixed
+# a workload driver's own run time, boot excluded the same way. The reps are fixed
 # in the .l, so every compiler does identical work. dnf if the sentinel never printed
 # -- a lane that answered nothing must not be timed as if it were fast.
 CRYPTO=$R/test/bench/ccrypto.l
-crypto_ms() { # $1=binpath $2=driver-call $3=sentinel
-  bin=$1; drv=$2
-  { cat "$CRYPTO"; echo "$drv"; } > "$WORK/ccrypto.run.l"
-  out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$bin" < "$WORK/ccrypto.run.l" 2>&1) || { echo dnf; return; }
-  printf '%s' "$out" | grep -q "$3" || { echo dnf; return; }
-  full=$(med "LOVE_NO_IMAGE=1 $bin < $WORK/ccrypto.run.l")
+NIFS=$R/test/bench/cnifs.l
+drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
+  bin=$1; df=$2; drv=$3
+  { cat "$df"; echo "$drv"; } > "$WORK/drv.run.l"
+  out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$bin" < "$WORK/drv.run.l" 2>&1) || { echo dnf; return; }
+  printf '%s' "$out" | grep -q "$4" || { echo dnf; return; }
+  full=$(med "LOVE_NO_IMAGE=1 $bin < $WORK/drv.run.l")
   boot=$(med "LOVE_NO_IMAGE=1 $bin </dev/null")
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
+
+# the inflate row's input, laid ONCE by the already-built host love -- lib/gz.l is a
+# module and the lane binaries have no module path, so the stream cannot be made where
+# it is used. INFN is the inflated size, handed to the nif so it allocates once.
+# ⚠ if this fails the inflate row is dnf and the other two are unaffected: a missing
+# stream must not read as a compiler that could not build.
+INF=$WORK/bench.deflate
+INFN=$(cd "$R" && out/host/love test/bench/ccgen.l core/love.c "$INF" 2>/dev/null)
+case $INFN in ''|*[!0-9]*) INFN=0;; esac
 
 # one compiler lane: build (timed once), verify, then time the corpus and the two
 # cipher rows (boot excluded from each).
@@ -173,11 +196,16 @@ lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
   echo "build $lbl $bt ok"; LIVE=$((LIVE + 1))            # the liveness tally, read at the end
   if passes "$bin"; then echo "test $lbl $(corpus_ms "$bin") ok"
   else echo "test $lbl dnf"; fi
-  crow chacha   "$lbl" "$(crypto_ms "$bin" '(cc-run ())' 'ccrypto chacha: ok')"
-  crow poly1305 "$lbl" "$(crypto_ms "$bin" '(po-run ())' 'ccrypto poly1305: ok')"
+  crow chacha   "$lbl" "$(drv_ms "$bin" "$CRYPTO" '(cc-run ())' 'ccrypto chacha: ok')"
+  crow poly1305 "$lbl" "$(drv_ms "$bin" "$CRYPTO" '(po-run ())' 'ccrypto poly1305: ok')"
+  if [ "$INFN" -gt 0 ]; then
+    crow inflate "$lbl" "$(drv_ms "$bin" "$NIFS" "(inf-run \"$INF\" $INFN 300)" 'cnifs inflate: ok')"
+  else echo "inflate $lbl dnf"; fi
+  crow crc32    "$lbl" "$(drv_ms "$bin" "$NIFS" '(crc-run ())' 'cnifs crc32: ok')"
+  crow sha256   "$lbl" "$(drv_ms "$bin" "$NIFS" '(sha-run ())' 'cnifs sha256: ok')"
 }
 crow() { case $3 in dnf) echo "$1 $2 dnf";; *) echo "$1 $2 $3 ok";; esac; }
-dnf_lane() { for ph in build test chacha poly1305; do echo "$ph $1 dnf"; done; }
+dnf_lane() { for ph in build test chacha poly1305 inflate crc32 sha256; do echo "$ph $1 dnf"; done; }
 
 # ⚠ A LANE THAT CANNOT BUILD REPORTS dnf, WHICH MEANS A BROKEN HARNESS RENDERS AS A
 # WELL-FORMED TABLE OF NOTHING. that is not hypothetical: the 2026-08-15 reorg broke the
