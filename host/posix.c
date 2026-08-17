@@ -369,7 +369,9 @@ static lvm(lvm_selfpath) {
 // --- pipes + redirects (the fd plumbing a shell pipeline needs) ------------------
 // (pipe _)       -> (readfd . writefd) of a fresh pipe (raw fds), or -errno.
 // (openfd path m) -> a raw fd opening `path`: m 0 = read, 1 = write/create/trunc,
-//                   2 = write/create/append. -errno on failure, -1 on a bad path.
+//                   2 = write/create/append, 3 = write/create/EXCL at mode 0600 --
+//                   the one that FAILS on an existing name, which is what makes a
+//                   mktemp a claim and not a guess. -errno on failure, -1 on a bad path.
 // (spawnio argv in out err closes pg fg) -> pid. fork; in the child: the JOB-CONTROL
 //                   dance first -- pg < 0 stays in the parent's pgrp (the legacy /
 //                   non-tty lane), pg = 0 LEADS a fresh process group, pg > 0 JOINS
@@ -407,8 +409,9 @@ static lvm(lvm_openfd) {
  intptr_t m = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
  int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
            : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
+           : m == 3 ? (O_WRONLY | O_CREAT | O_EXCL)
            : O_RDONLY;
- int fd = open(buf, flags, 0644);
+ int fd = open(buf, flags, m == 3 ? 0600 : 0644);
  Sp[1] = (fd < 0) ? putcharm(-errno) : putcharm(fd);
  Sp += 1; ai_musttail return Next(1); }
 
@@ -527,7 +530,10 @@ static lvm(lvm_spawnmap) {
  ai_musttail return Continue(); }
 
 // (getuid _) -> the real uid, a charm. the shell's # vs $ prompt; always succeeds.
+// (getgid _) -> the real gid, its pair -- `id` owes the primary group as a FACT, and
+//               the /etc/passwd row is only where the group usually is, not where it is.
 static lvm(lvm_getuid) { Sp[0] = putcharm((intptr_t) getuid()); ai_musttail return Next(1); }
+static lvm(lvm_getgid) { Sp[0] = putcharm((intptr_t) getgid()); ai_musttail return Next(1); }
 
 // (fork _) -> child pid | 0 in the child | -errno. fork WITHOUT exec -- the
 // shell's subshell: the child EVALS a subtree and quits, and must NEVER return
@@ -600,13 +606,22 @@ static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 // --- the general POSIX fs surface (the posix_ symbol namespace; doc/posix.md L0,
 // staging step 1) -- these serve any program, not just the supervisor, so their C
 // symbols wear the posix_ prefix; the love names stay the plain POSIX words.
-// (stat path)    -> (size mtime mode ns) | () -- absence (or unreadability) is nothing.
+// (stat path)    -> (size mtime mode ns uid gid nlink blocks ino) | () -- absence (or
+//                   unreadability) is nothing.
 //                   size in bytes, mtime in MILLISECONDS (the (clock t) scale), mode
 //                   the raw st_mode charm: kind reads off the S_IFMT bits in love
 //                   ((& mode 61440): 32768 file, 16384 dir, 40960 link) and the
 //                   permission bits ride along; ns the same mtime whole in NANOSECONDS,
 //                   one charm (fits a fixnum to year 2262) -- the resolution a builder
 //                   wants, where two writes in one millisecond still order (cook).
+//                   blocks is st_blocks, 512-byte units, which is DISK USAGE and not
+//                   the size (du's whole subject; a sparse file says less than it is).
+//                   ⚠ THE TAIL IS APPEND-ONLY and a reader asks `tally` before it
+//                   reads past ns: the kernel's own stat (free/kmain.c) answers the
+//                   first four alone, having no ownership to tell about.
+// (lstat path)   -> the same tuple, of the LINK ITSELF where the path names one. du and
+//                   `stat` owe the link's own blocks and mode, not its target's, and a
+//                   dangling link still has a truth to tell about itself.
 // (readdir path) -> the entry names, a list of strings ("." and ".." dropped), or ()
 //                   on failure. NO order promised (readdir order, prepended) -- sort in love.
 // (unlink path)  -> () ok | a POSITIVE errno | EINVAL misuse (the mkdir convention:
@@ -615,10 +630,10 @@ static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 //                   convention: negative = failure, like spawn/wait). RAW fds, the
 //                   openfd lane -- NOT ports (a port's read buffer would desync
 //                   under a seek). whence: 0 SET, 1 CUR, 2 END.
-ai_noinline static struct ai *host_posix_stat(struct ai *g) {
+ai_noinline static struct ai *host_stat_tuple(struct ai *g, int follow) {
  char p[4096];
  struct stat st;
- if (!str_cbuf(g->sp[0], p, sizeof p) || stat(p, &st))
+ if (!str_cbuf(g->sp[0], p, sizeof p) || (follow ? stat(p, &st) : lstat(p, &st)))
   return g->sp[0] = ZeroPoint, g;                             // absent -> the real ()
 #if defined(__APPLE__)
  intptr_t ms = (intptr_t) st.st_mtimespec.tv_sec * 1000 + st.st_mtimespec.tv_nsec / 1000000;
@@ -627,9 +642,18 @@ ai_noinline static struct ai *host_posix_stat(struct ai *g) {
  intptr_t ms = (intptr_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000;
  intptr_t ns = (intptr_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec;
 #endif
- if (!ai_ok(g = ai_have(g, 4 * Width(struct ai_chain)))) return g;
+ if (!ai_ok(g = ai_have(g, 9 * Width(struct ai_chain)))) return g;
  struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                putcharm(ns), ZeroPoint);
+                                putcharm((intptr_t) st.st_ino), ZeroPoint);
+ c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+               putcharm((intptr_t) st.st_blocks), word(c));
+ c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+               putcharm((intptr_t) st.st_nlink), word(c));
+ c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+               putcharm((intptr_t) st.st_gid), word(c));
+ c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
+               putcharm((intptr_t) st.st_uid), word(c));
+ c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)), putcharm(ns), word(c));
  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                putcharm((intptr_t) st.st_mode), word(c));
  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)), putcharm(ms), word(c));
@@ -637,6 +661,13 @@ ai_noinline static struct ai *host_posix_stat(struct ai *g) {
                putcharm((intptr_t) st.st_size), word(c));
  g->sp[0] = word(c);
  return g; }
+ai_noinline static struct ai *host_posix_stat(struct ai *g) { return host_stat_tuple(g, 1); }
+ai_noinline static struct ai *host_posix_lstat(struct ai *g) { return host_stat_tuple(g, 0); }
+static lvm(lvm_posix_lstat) {
+ Pack(g); g = host_posix_lstat(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ Unpack(g);
+ ai_musttail return Next(1); }
 static lvm(lvm_posix_stat) {
  Pack(g); g = host_posix_stat(g);
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
@@ -729,6 +760,7 @@ static union u const
   nif_fdopen[]  = {{lvm_fdopen}, {lvm_ret0}},
   nif_spawnmap[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_spawnmap}, {lvm_ret0}},
   nif_getuid[]  = {{lvm_getuid}, {lvm_ret0}},
+  nif_getgid[]  = {{lvm_getgid}, {lvm_ret0}},
   nif_fork[]    = {{lvm_fork}, {lvm_ret0}},
   nif_dup2[]    = {{lvm_cur}, {.x = putcharm(2)}, {lvm_dup2}, {lvm_ret0}},
   nif_dup[]     = {{lvm_dup}, {lvm_ret0}},
@@ -736,6 +768,7 @@ static union u const
   nif_mount[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_mount}, {lvm_ret0}},
   nif_newns[]   = {{lvm_newns}, {lvm_ret0}},
   nif_posix_stat[]    = {{lvm_posix_stat}, {lvm_ret0}},
+  nif_posix_lstat[]   = {{lvm_posix_lstat}, {lvm_ret0}},
   nif_posix_readdir[] = {{lvm_posix_readdir}, {lvm_ret0}},
   nif_posix_unlink[]  = {{lvm_posix_unlink}, {lvm_ret0}},
   nif_posix_lseek[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_lseek}, {lvm_ret0}},
@@ -758,6 +791,7 @@ AiNif("fdclose", nif_shutfd);
 AiNif("fdopen", nif_fdopen);
 AiNif("spawnmap", nif_spawnmap);
 AiNif("getuid", nif_getuid);
+AiNif("getgid", nif_getgid);
 AiNif("fork", nif_fork);
 AiNif("dup2", nif_dup2);
 AiNif("dup", nif_dup);
@@ -765,6 +799,7 @@ AiNif("mkdir", nif_mkdir);
 AiNif("mount", nif_mount);
 AiNif("newns", nif_newns);
 AiNif("stat",    nif_posix_stat);
+AiNif("lstat",   nif_posix_lstat);
 AiNif("readdir", nif_posix_readdir);
 AiNif("unlink",  nif_posix_unlink);
 AiNif("lseek",   nif_posix_lseek);

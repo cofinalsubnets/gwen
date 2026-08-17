@@ -246,6 +246,281 @@
             (: t (readlink q) (? (string? t) t ())))
        (? (string? r) (: _ (say out r) _ (put out 10) _ (flush out) 0) 1))
 
+   ; ---- the reporting tools: stat, du -- and chown, mktemp ---------------------
+   ; ⚠ THESE READ THE STAT TAIL. host/posix.c's stat answers
+   ; (size mtime mode ns uid gid nlink blocks ino), append-only, and the KERNEL's own
+   ; stat (free/kmain.c) answers the first four alone -- an image tree has no ownership
+   ; to tell about. so the tail is asked by TALLY and a world that does not carry it
+   ; says so rather than reading a 0 someone might believe.
+   (ust-at st k) (? (tally st <= k) () (at st k))
+   ; /etc/passwd and /etc/group, read as the files they are (no NSS, no getpwnam)
+   (uidname path id)                   ; a numeric id -> its name, or the number back
+    (: r (uread path)
+       (? !(two? r) (show id)
+          (: (go ls) (? !(two? ls) (show id)
+                        (: f (usplit 58 <ls)
+                           (? ((3 <= tally f) && (uatoi (at f 2) = id)) (at f 0) (go >ls))))
+             (go (lines <>r)))))
+   (uidof path nm)                     ; a name -> (1 id), or () when the file has none
+    (: r (uread path)
+       (? !(two? r) ()
+          (: (go ls) (? !(two? ls) ()
+                        (: f (usplit 58 <ls)
+                           (? ((3 <= tally f) && (at f 0 = nm)) `(1 (uatoi (at f 2)))
+                              (go >ls))))
+             (go (lines <>r)))))
+   ; every group a user belongs to: the primary first, then the /etc/group rows naming
+   ; them, ASCENDING -- which is the order the kernel keeps its credential list in, and
+   ; so the order `id` prints
+   (ugroups nm gid)
+    (: r (uread "/etc/group")
+       (go ls acc)
+        (? !(two? ls) acc
+           (: f (usplit 58 <ls)
+              g (? (4 <= tally f) (uatoi (at f 2)) -1)
+              ms (? (4 <= tally f) (usplit 44 (at f 3)) ())
+              (go >ls (? ((member? nm ms) && !(g = gid)) (g >< acc) acc))))
+       rest (? (two? r) (sort (go (lines <>r) ())) ())
+       (gid >< rest))
+
+   ; -- stat: the file's own facts, by -c FORMAT. %n %N %s %b %B %f %a %A %F %u %U %g %G
+   ; %h %i %Y %y, the \n \t \\ escapes, and %% . -L follows a symbolic link; the bare
+   ; face does not. ⚠ THERE IS NO DEFAULT BLOCK. GNU's is four lines of access, change
+   ; and birth times and a device number, and this stat carries none of them -- printing
+   ; a block with the modify time standing in three times over would be a fabrication,
+   ; so the tool asks for -c instead of inventing one.
+   (ust-kindc m) (: k (& m 61440)
+                    (? (k = 32768) "-" (k = 16384) "d" (k = 40960) "l" (k = 8192) "c"
+                       (k = 24576) "b" (k = 4096) "p" (k = 49152) "s" "?"))
+   (ust-kind m sz) (: k (& m 61440)
+                      (? (k = 32768) (? sz "regular file" "regular empty file")
+                         (k = 16384) "directory" (k = 40960) "symbolic link"
+                         (k = 8192) "character special file"
+                         (k = 24576) "block special file"
+                         (k = 4096) "fifo" (k = 49152) "socket" "weird file"))
+   (ust-perm m)                        ; the ls face: drwxr-sr-t, the three set bits told
+    (: (tri sh sb ch)
+        (: b (% (// m (sh 2)) 8)
+           x (0 < (& b 1))
+           s (0 < (& m sb))
+           (((? (0 < (& b 4)) "r" "-") + (? (0 < (& b 2)) "w" "-"))
+            + (? s (? x ch (string ((ch 0) - 32))) (? x "x" "-"))))
+       ((ust-kindc m) + ((tri 6 2048 "s") + ((tri 3 1024 "s") + (tri 0 512 "t")))))
+   (ustamp ns)                         ; %y: 2026-08-17 13:32:41.073610912 +0000
+    (: s (// ns 1000000000) frac (% ns 1000000000)
+       ymd (ucivil (// s 86400)) secs (% s 86400)
+       (p2 v) (uzpad 2 (show v))
+       ((((show <ymd) + "-" + (p2 <>ymd) + "-" + (p2 <>>ymd)) + " ")
+        + (((p2 (// secs 3600)) + ":" + (p2 (// (% secs 3600) 60)) + ":" + (p2 (% secs 60)))
+           + ("." + (uzpad 9 (show frac)) + " +0000"))))
+   ; ⚠ -c DOES NOT READ ESCAPES -- `stat -c 'a\tb'` prints the backslash and the t, and
+   ; adds a newline of its own; --printf reads them and adds none. GNU's split, and the
+   ; only way a format can carry a literal backslash at all.
+   (ust-expand fmt p st esc?)
+    (: n (tally fmt) o (jug 0)
+       sz <st md <>>st ns (at st 3)
+       uid (ust-at st 4) gid (ust-at st 5) nlk (ust-at st 6)
+       blk (ust-at st 7) ino (ust-at st 8)
+       (num v) (? (charm? v) (show v) "?")
+       (go k)
+        (? (n <= k) (slurp o)
+           (: c (fmt k)
+              (? ((esc? && (c = 92)) && ((k + 1) < n))
+                 (: d (fmt (k + 1))
+                    _ (? (d = 110) (put o 10) (d = 116) (put o 9) (d = 92) (put o 92)
+                         (: _ (put o 92) (put o d)))
+                    (go (k + 2)))
+                 !((c = 37) && ((k + 1) < n)) (: _ (put o c) (go (k + 1)))
+                 (: d (fmt (k + 1))
+                    _ (? (d = 37) (put o 37)
+                         (d = 110) (say o p)
+                         (d = 78) (say o ("'" + p + "'"))
+                         (d = 115) (say o (show sz))
+                         (d = 98) (say o (num blk))
+                         (d = 66) (say o "512")
+                         (d = 102) (say o (uradix md 16))
+                         (d = 97) (say o (uradix (& md 4095) 8))
+                         (d = 65) (say o (ust-perm md))
+                         (d = 70) (say o (ust-kind md sz))
+                         (d = 117) (say o (num uid))
+                         (d = 85) (say o (? (charm? uid) (uidname "/etc/passwd" uid) "?"))
+                         (d = 103) (say o (num gid))
+                         (d = 71) (say o (? (charm? gid) (uidname "/etc/group" gid) "?"))
+                         (d = 104) (say o (num nlk))
+                         (d = 105) (say o (num ino))
+                         (d = 89) (say o (show (// ns 1000000000)))
+                         (d = 121) (say o (ustamp ns))
+                         (: _ (put o 37) (put o d)))
+                    (go (k + 2))))))
+       (go 0))
+   (stat-main as)
+    (: (long? w n s) ((n < tally w) && (snip w 0 n = s))
+       (fl a fmt L pf fs)
+        (? !(two? a) `(fmt L pf (rev fs))
+           (<a = "-L") (fl >a fmt 1 pf fs)
+           (<a = "-c") (? (two? >a) (fl >>a <>a L 0 fs) (udie 2 "stat: -c wants a format"))
+           ((2 < tally <a) && (snip <a 0 2 = "-c")) (fl >a (snip <a 2 (tally <a)) L 0 fs)
+           (long? <a 9 "--format=") (fl >a (snip <a 9 (tally <a)) L 0 fs)
+           (long? <a 9 "--printf=") (fl >a (snip <a 9 (tally <a)) L 1 fs)
+           (fl >a fmt L pf (<a >< fs)))
+       p (fl as () 0 0 ())
+       fmt <p L? <>p pf? <>>p fs (at p 3)
+       _ (? ((string? fmt) && two? fs) ()
+            (udie 2 "usage: stat [-L] -c FORMAT | --printf=FORMAT   FILE.."))
+       (one q ok)
+        (: st (? L? (stat q) (lstat q))
+           (? !(two? st)
+              (: _ (say err ("stat: cannot stat '" + q + "': No such file or directory"))
+                 _ (put err 10) 0)
+              (: _ (say out (ust-expand fmt q st pf?)) _ (? pf? 0 (put out 10)) ok)))
+       (go a ok) (? (two? a) (go >a (one <a ok)) (: _ (flush out) (? ok 0 1)))
+       (go fs 1))
+
+   ; -- du: what a tree costs on the disk. the count is st_blocks (512 each), which is
+   ; ALLOCATION and not size -- a sparse file costs less than it measures and a tiny one
+   ; costs a whole block -- and the report is in 1K units, rounded up, unless -b asks for
+   ; apparent bytes or -h for the three-figure human face. -a counts files too, -s only
+   ; the totals, -c a grand total, -d N stops descending. ⚠ a hard link is counted ONCE
+   ; per run, keyed by inode alone: this stat carries no device, so a walk crossing two
+   ; filesystems could collide two inodes -- rare, and named here rather than hidden.
+   ; ⚠ THE WALK SORTS EACH DIRECTORY, like find's, so the same tree reports twice alike.
+   (uhuman n)                          ; GNU's -h: three significant figures, rounded UP
+    (: units '("K" "M" "G" "T" "P")
+       (pick k) (? ((4 < k) || (n < ((* 10 (k + 1)) 2))) k (pick (k + 1)))
+       k (? (n < 1024) 0 (pick 1))
+       d ((* 10 k) 2)
+       (? (k = 0) (show n)
+          (: tenths (// ((* n 10) + (d - 1)) d)
+             whole (// (n + (d - 1)) d)
+             u (at units (k - 1))
+             (? (tenths < 100) ((show (// tenths 10)) + "." + (show (% tenths 10)) + u)
+                ((show whole) + u)))))
+   (du-main as)
+    (: (fl a t fs) (? !(two? a) `(t (rev fs))
+                      (<a = "-d") (? (two? >a) (: _ (pin t 'd (uatoi <>a)) (fl >>a t fs))
+                                     (udie 2 "du: -d wants a depth"))
+                      ((tally <a < 2) || !(<a 0 = 45)) (fl >a t (<a >< fs))
+                      (: w <a
+                         (cl k) (? (tally w <= k) (fl >a t fs)
+                                   (: c (w k)
+                                      (? (c = 97) (: _ (pin t 'a 1) (cl (k + 1)))
+                                         (c = 115) (: _ (pin t 's 1) (cl (k + 1)))
+                                         (c = 99) (: _ (pin t 'c 1) (cl (k + 1)))
+                                         (c = 98) (: _ (pin t 'b 1) (cl (k + 1)))
+                                         (c = 104) (: _ (pin t 'h 1) (cl (k + 1)))
+                                         (c = 107) (cl (k + 1))       ; -k IS the default
+                                         (c = 100) (: _ (pin t 'd (uatoi (snip w (k + 1) (tally w))))
+                                                      (fl >a t fs))
+                                         (udie 2 ("du: unknown option -" + string c)))))
+                         (cl 1)))
+       t (tablet 0)
+       p (fl as t ())
+       fs (? (two? <>p) <>p '("."))
+       a? (peep t 'a 0) s? (peep t 's 0) c? (peep t 'c 0)
+       b? (peep t 'b 0) h? (peep t 'h 0) maxd (peep t 'd ())
+       seen (tablet 0)
+       (fmt n) (? h? (uhuman n) (? b? (show n) (show (// (n + 1023) 1024))))
+       (emit n q) (: _ (say out (fmt n)) _ (put out 9) _ (say out q) (put out 10))
+       ; ⚠ -b's apparent size counts a FILE's st_size and a directory's not at all --
+       ; GNU's rule, and not a guess: an empty directory whose st_size is 40 reports 0.
+       (own st dir?)
+        (: nlk (ust-at st 6) ino (ust-at st 8)
+           ct (? b? (? dir? 0 <st) (* 512 (? (charm? (ust-at st 7)) (ust-at st 7) 0)))
+           (? ((charm? nlk) && (1 < nlk))
+              (? (peep seen ino 0) 0 (: _ (pin seen ino 1) ct))
+              ct))
+       (walk q depth top?)
+        (: st (lstat q)
+           (? !(two? st)
+              (: _ (say err ("du: cannot access '" + q + "'")) _ (put err 10)
+                 _ (pin t 'bad 1) 0)
+              (: dir? (16384 = (& 61440 <>>st))
+                 kids (? dir?
+                         (foldl (\ acc c (acc + walk ((q + "/") + c) (depth + 1) 0))
+                                0 (sort (readdir q)))
+                         0)
+                 tot ((own st dir?) + kids)
+                 deep? (? (charm? maxd) (maxd < depth) 0)
+                 _ (? (((dir? || a?) || top?) && (!s? && !deep?)) (emit tot q) ())
+                 tot)))
+       (go a acc) (? !(two? a) acc
+                     (: n (walk <a 0 1)
+                        _ (? s? (emit n <a) ())
+                        (go >a (acc + n))))
+       total (go fs 0)
+       _ (? c? (emit total "total") ())
+       _ (flush out)
+       (? (peep t 'bad 0) 1 0))
+
+   ; -- chown: OWNER[:GROUP] onto every named path, -R down the tree. a name is looked
+   ; up in /etc/passwd / /etc/group, a numeral is taken as itself, and an empty side is
+   ; -1, which the kernel reads as "leave this one alone" --
+   (uowner spec)                       ; "u:g" / "u" / ":g" -> (uid gid), -1 for absent
+    (: ps (usplit 58 spec)
+       (side w path) (? !(0 < tally w) -1
+                        (: r (uidof path w)
+                           (? (two? r) <>r
+                              (: c (w 0) (? ((48 <= c) && (c <= 57)) (uatoi w)
+                                             (udie 1 ("chown: invalid user: '" + spec + "'")))))))
+       `((side <ps "/etc/passwd") (? (two? >ps) (side <>ps "/etc/group") -1)))
+   (chown-main as)
+    (: r? (two? as && (<as = "-R"))
+       rest (? r? >as as)
+       _ (? (two? >rest) () (udie 2 "usage: chown [-R] OWNER[:GROUP] FILE.."))
+       ug (uowner <rest)
+       uid <ug gid <>ug
+       (one q ok)
+        (: e (chown q uid gid)
+           ok2 (? !e ok
+                  (: _ (say err ("chown: cannot chown '" + q + "'")) _ (put err 10) 0))
+           (? (r? && (udirp q))
+              (foldl (\ acc c (one ((q + "/") + c) acc)) ok2 (readdir q))
+              ok2))
+       (go a ok) (? (two? a) (go >a (one <a ok)) (? ok 0 1))
+       (go >rest 1))
+
+   ; -- mktemp: a name nobody else has, MADE and not merely proposed. the trailing run
+   ; of X's in the template becomes random alphanumerics and the name is claimed with an
+   ; exclusive create (openfd's mode 3) or an exclusive mkdir under -d, so the answer is
+   ; a fact by the time it is printed. -u drops the file again (the unsafe face, and
+   ; GNU calls it that too), -p DIR / -t put the name under a directory --
+   umtchars "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+   (umtname tmpl)                      ; the X run filled with fresh charms
+    (: n (tally tmpl)
+       (e k) (? ((0 < k) && (tmpl (k - 1) = 88)) (e (k - 1)) k)
+       en (e n)
+       o (jug 0)
+       _ (say o (snip tmpl 0 en))
+       (go k) (? (n <= k) () (: _ (put o (umtchars (rand 62))) (go (k + 1))))
+       _ (go en)
+       (slurp o))
+   (mktemp-main as)
+    (: (fl a d u q dir fs)
+        (? !(two? a) `(d u q dir (rev fs))
+           (<a = "-d") (fl >a 1 u q dir fs)
+           (<a = "-u") (fl >a d 1 q dir fs)
+           (<a = "-q") (fl >a d u 1 dir fs)
+           (<a = "-t") (fl >a d u q (? dir dir (getenv "TMPDIR")) fs)
+           (<a = "-p") (? (two? >a) (fl >>a d u q <>a fs) (udie 1 "mktemp: -p wants a directory"))
+           ((2 < tally <a) && (snip <a 0 2 = "-p")) (fl >a d u q (snip <a 2 (tally <a)) fs)
+           (fl >a d u q dir (<a >< fs)))
+       p (fl as 0 0 0 () ())
+       d? <p u? <>p q? <>>p pdir (at p 3) fs (at p 4)
+       tm (? (string? pdir) pdir (: e (getenv "TMPDIR") (? (string? e) e "/tmp")))
+       named (two? fs)
+       tmpl (? named <fs "tmp.XXXXXXXXXX")
+       base (? (named && !(string? pdir)) tmpl ((? (0 < tally tm) tm ".") + "/" + tmpl))
+       (try n)
+        (? (n < 1) (? q? 1 (udie 1 "mktemp: could not make a name nobody had"))
+           (: nm (umtname base)
+              fd (? d? -1 (openfd nm 3))
+              got (? d? !(mkdir nm 448) (0 <= fd))
+              _ (? (0 <= fd) (fdclose fd) ())
+              (? !got (try (n - 1))
+                 (: _ (? u? (? d? (rmdir nm) (unlink nm)) ())
+                    _ (say out nm) _ (put out 10) _ (flush out) 0))))
+       (try 100))
+
    ; -- cmp: are two files the same bytes (-s says nothing, the exit code answers) --
    (cmp-main as)
     (: s? (two? as && (<as = "-s"))

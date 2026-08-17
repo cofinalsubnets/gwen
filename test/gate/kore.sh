@@ -1,9 +1,13 @@
 #!/bin/sh
 # test/gate/kore.sh -- kore, the multi-call toolbox (crew/kore/), against GNU coreutils
-# as the oracle. The laws first, then ~90 checks whose shape is almost always the same
+# as the oracle. The laws first, then ~350 checks whose shape is almost always the same
 # one: run the system tool, run OUR applet the same way, and require byte-identical
 # stdout -- and, where the exit code carries meaning (grep's 0/1/2, sed's 1/2, xargs'
-# 123/127), that too. GNU is not assumed correct, only independent.
+# 123/127, expr's 0/1/2, patch's 0/1), that too. GNU is not assumed correct, only
+# independent. Three checks cannot take that shape and say so where they sit: the
+# walks whose order is the file system's business (find, du) compare SETS, split and
+# patch compare the TREE they leave, and mktemp's answer is random, so its shape and
+# its effect are what is asked.
 #
 # That one shape is `both`/`pipe` below; it is why 161 lines of recipe fit here without
 # repeating `cmp -s` ninety times. Where a check is genuinely its own thing -- the fs
@@ -19,6 +23,13 @@ m=$2
 
 fail() { echo "FAIL $*" >&2; exit 1; }
 korerun() { LOVE_NO_IMAGE= "$m" kore "$@"; }
+# the love and the out dir, spelled ABSOLUTELY: $m and $ho are relative (the root
+# Makefile sets R := .), and the checks that cd somewhere -- split's output directory,
+# patch's tree -- cannot use either. ⚠ a `< $ho/p.diff` INSIDE a cd'd subshell opens
+# after the cd, so a relative one silently hands patch an empty stdin -- and both sides
+# then do nothing and match, which reads exactly like a pass.
+case $ho in /*) HO=$ho;; *) HO=$PWD/$ho;; esac
+K=$PWD/$m
 
 g=$ho/.kore-g
 o=$ho/.kore-o
@@ -32,12 +43,12 @@ pipe() { n=$1; i=$2; shift 2
          same "$n"; }
 
 # ------------------------------------------------------------------- the laws
-echo "UTILS crew/kore/{text,core,fs,re,sed,awk,find,diff,law}.l"
+echo "UTILS crew/kore/{text,core,fs,re,sed,awk,expr,find,diff,patch,law}.l"
 out=$ho/.test_kore.out
 # ⚠ lush's job.l + glob.l ride along because find.l captures sh-match at its define
 cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
-    crew/kore/sed.l crew/kore/awk.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
-    crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/lush/job.l crew/lush/glob.l \
+    crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
+    crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/kore/patch.l crew/lush/job.l crew/lush/glob.l \
     crew/kore/find.l \
     crew/kore/law.l | "$m" > "$out" 2>&1
 r=$?
@@ -507,6 +518,265 @@ korerun find "$ft/nope" "$ft/c" > "$o" 2>"$g"; r=$?
 korerun find "$ft" -name > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "kore find bad expression (exit $r)"
 echo "kore: find (18 walks set-identical to the system find, -exec, the two refusals) ok"
+
+# --------------------------------------------------------- the record tools
+# paste / comm / join / split / od, against the GNU tools. `both` carries most of
+# it; split is checked by its EFFECT (the pieces it writes), which is the only
+# thing it produces at all.
+rt=$ho/.kore-rec
+rm -rf "$rt"; mkdir -p "$rt"
+printf 'a\nb\nc\n' > "$rt/p1"; printf '1\n2\n' > "$rt/p2"; printf 'X\nY\nZ\nW\n' > "$rt/p3"
+both "paste"       paste "$rt/p1" "$rt/p2"
+both "paste 3"     paste "$rt/p1" "$rt/p2" "$rt/p3"
+both "paste -d"    paste -d: "$rt/p1" "$rt/p3"
+# ⚠ the delimiter LIST cycles per gap and starts over each row -- a two-delimiter
+# list over three columns is the only shape that can tell that from "the first one"
+both "paste -d2"   paste -d':|' "$rt/p1" "$rt/p2" "$rt/p3"
+both "paste -s"    paste -s "$rt/p1" "$rt/p2"
+both "paste -s -d" paste -s -d, "$rt/p1" "$rt/p3"
+printf 'apple\nbanana\ncherry\n' > "$rt/c1"; printf 'banana\ndate\n' > "$rt/c2"
+for fl in '' -1 -2 -3 -12 -13 -23 -123; do
+  # shellcheck disable=SC2086
+  both "comm $fl" comm $fl "$rt/c1" "$rt/c2"
+done
+printf 'a 1 x\nb 2 y\nc 3 z\nc 4 w\n' > "$rt/j1"; printf 'a A\nc C\nc D\nd E\n' > "$rt/j2"
+printf 'a:1:x\nb:2:y\nc:3:z\n' > "$rt/j3"; printf 'a:A\nc:C\n' > "$rt/j4"
+printf '  a   1  \nb 2\n' > "$rt/j5"; printf 'a A\nb B\n' > "$rt/j6"
+both "join"         join "$rt/j1" "$rt/j2"
+both "join -a1"     join -a 1 "$rt/j1" "$rt/j2"
+both "join -a1 -a2" join -a 1 -a 2 "$rt/j1" "$rt/j2"
+both "join -v1"     join -v 1 "$rt/j1" "$rt/j2"
+both "join -v2"     join -v 2 "$rt/j1" "$rt/j2"
+both "join -t:"     join -t: "$rt/j3" "$rt/j4"
+both "join -t: -a1" join -t: -a 1 "$rt/j3" "$rt/j4"
+both "join -1 -2"   join -1 2 -2 1 "$rt/j1" "$rt/j2"
+both "join blanks"  join "$rt/j5" "$rt/j6"
+# ⚠ a key repeated on BOTH sides is the whole cross product, in file-1-outer order
+both "join cross"   join "$rt/j1" "$rt/j1"
+# split writes files and says nothing: the pieces are the comparison
+seq 1 25 > "$rt/sq"; printf 'a\nb' > "$rt/nonl"; : > "$rt/none"
+sp() { n=$1; shift
+       rm -rf "$rt/sg" "$rt/so"; mkdir -p "$rt/sg" "$rt/so"
+       ( cd "$rt/sg" && split "$@" ) 2>/dev/null
+       ( cd "$rt/so" && LOVE_NO_IMAGE= "$K" kore split "$@" ) 2>/dev/null
+       diff -r "$rt/sg" "$rt/so" > /dev/null 2>&1 || fail "kore split $n vs GNU"; }
+sp "-l 10"   -l 10 ../sq
+sp "-l 7 pre" -l 7 ../sq pre
+sp "-b 13"   -b 13 ../sq
+sp "-a 3"    -l 5 -a 3 ../sq
+sp "-d"      -l 9 -d ../sq
+sp "no final newline" -l 1 ../nonl
+sp "empty writes nothing" -l 5 ../none
+# od: the address radices, the readings, the limits, and the `*` a repeat collapses to
+printf 'hello\nworld\n\001\002\377' > "$rt/o1"
+printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB' > "$rt/odup"
+printf '\0\1\7\10\11\12\13\14\15\134\177\377abc' > "$rt/oesc"
+: > "$rt/oempty"
+for f in o1 odup oesc oempty; do
+  for fl in '' -c -b -x -a -d -s -i -tx1 -tx4 -to1 -to4 -tu1 -tu4 -td1 -td4 -tc -ta \
+            -Ad -Ax -An '-v -c' '-N 5 -c' '-j 3 -c' '-j 3 -N 4 -c'; do
+    # shellcheck disable=SC2086
+    both "od $fl $f" od $fl "$rt/$f"
+  done
+done
+both "od -An -tx1"  od -An -tx1 "$rt/o1"
+both "od two files" od -c "$rt/o1" "$rt/oesc"
+both "od -Ax -to2"  od -Ax -to2 "$rt/o1"
+echo "kore: record tools (paste/comm/join/split/od GNU-identical -- od over 4 files x 24 readings) ok"
+
+# ------------------------------------------------------------------- expr
+# ⚠ EXPR SPEAKS IN THE EXIT CODE as much as on stdout (0 the answer is neither ""
+# nor "0", 1 it is, 2 the expression will not do), so `both` comparing both is the
+# whole check. the arithmetic ones are here because C's TRUNCATING division and
+# love's FLOORING // disagree on every negative pair.
+for e in '1 + 2' '10 / 3' '10 % 3' '3 * 4' '1 + 2 * 3' '( 1 + 2 ) * 3' '5 - 8' \
+         '-7 / 2' '-7 % 2' '7 / -2' 'abc = abc' 'abc = abd' '2 < 10' '2 < 10a' \
+         'abc < abd' '3 >= 3' '3 != 4' '1 | 2' '0 | 3' '0 & 2' '1 & 2' \
+         'abc : a.c' 'abcd : a.c' 'abc : x' 'length abcde' 'substr abcdef 2 3' \
+         'substr abcdef 0 3' 'substr abcdef 5 99' 'index abcdef cd' 'index abcdef z' \
+         '+ length' '0' 'foo' '1 / 0' 'a + 1' '1 +'; do
+  # shellcheck disable=SC2086
+  set -- $e
+  expr "$@" > "$g" 2>/dev/null; a=$?
+  korerun expr "$@" > "$o" 2>/dev/null; b=$?
+  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore expr '$e' vs GNU (gnu $a ours $b)"
+done
+# the two the loop cannot carry: a group in the pattern, and the empty operand
+expr abc : 'a\(.\)c' > "$g"; korerun expr abc : 'a\(.\)c' > "$o"; same "expr group"
+expr abc : 'a\(x\)c' > "$g" 2>/dev/null; a=$?
+korerun expr abc : 'a\(x\)c' > "$o" 2>/dev/null; b=$?
+cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore expr empty group vs GNU"
+expr '' '|' foo > "$g"; korerun expr '' '|' foo > "$o"; same "expr empty | foo"
+echo "kore: expr (36 expressions + the groups, stdout AND the 0/1/2 exit, GNU-identical) ok"
+
+# ------------------------------------------------- stat, du, date, id, mktemp, chown
+# ⚠ TZ=UTC: this love has no tz database (localtime IS gmtime), so `date` and stat's
+# %y are UTC and only UTC. GNU reads TZ, so the oracle has to be told.
+export TZ=UTC
+dt=$ho/.kore-dt
+rm -rf "$dt"; mkdir -p "$dt/a/b" "$dt/c"
+printf '0123456789' > "$dt/f1"
+head -c 9000 /dev/urandom > "$dt/a/f2"
+: > "$dt/a/b/f3"
+ln -sf f1 "$dt/lk"
+for f in '%n' '%s' '%a' '%A' '%F' '%u' '%U' '%g' '%G' '%h' '%i' '%Y' '%b' '%B' '%f' \
+         '%N' '%y' '%n|%s|%a' 'x%%y' 'a\tb\n'; do
+  both "stat -c $f" stat -c "$f" "$dt/f1"
+done
+both "stat dir"      stat -c '%n %F %A %a' "$dt/a"
+# ⚠ the bare face does NOT follow a link and -L does -- one stat call apart, and the
+# only check that can tell lstat from stat at all
+both "stat link"     stat -c '%n %F %A' "$dt/lk"
+both "stat -L link"  stat -L -c '%n %F %A' "$dt/lk"
+both "stat many"     stat -c '%s %n' "$dt/f1" "$dt/a/f2"
+both "stat empty"    stat -c '%F' "$dt/a/b/f3"
+# -c adds a newline and reads no escapes; --printf reads them and adds none
+both "stat --printf" stat --printf='a\t%s\n' "$dt/f1"
+korerun stat -c %s "$dt/nope" > /dev/null 2>&1; r=$?
+[ $r -eq 1 ] || fail "kore stat missing file (exit $r)"
+# du: the walk hands out readdir order, so the tree comparisons are of the SETS
+# (find's honesty, and for the same reason); the single-path ones are byte-identical
+dusort() { n=$1; shift
+           "$@" 2>/dev/null | LC_ALL=C sort > "$g"
+           korerun "$@" 2>/dev/null | LC_ALL=C sort > "$o"
+           same "du $n"; }
+dusort "plain" du "$dt"
+dusort "-a"    du -a "$dt"
+dusort "-d 1"  du -d 1 "$dt"
+dusort "-ab"   du -ab "$dt"
+both "du -s"   du -s "$dt"
+both "du file" du "$dt/f1"
+both "du -c"   du -c "$dt/f1" "$dt/a/f2"
+both "du -sb"  du -sb "$dt"
+both "du -sh"  du -sh "$dt"
+both "du -sk"  du -sk "$dt"
+both "du -h"   du -h "$dt/a/f2"
+# a hard link is counted ONCE per run, which is the whole reason du reads inodes
+rm -rf "$dt/hl"; mkdir "$dt/hl"; head -c 9000 /dev/urandom > "$dt/hl/one"
+ln "$dt/hl/one" "$dt/hl/two"
+both "du hard link" du -s "$dt/hl"
+# ..and -h's three significant figures, rounded UP, over a scale that reaches G
+rm -rf "$dt/hs"; mkdir "$dt/hs"
+for sz in 1 5000 11000 100000 1500000 20000000; do head -c $sz /dev/zero > "$dt/hs/f$sz"; done
+dusort "-ah over a scale" du -ah "$dt/hs"
+# date: -d @SECONDS is what makes this gateable at all -- `now` differs by the second
+for s in 0 1 1000000000 1700000000 1234567890 951782400 2147483647 4102444800; do
+  for f in '' '+%Y-%m-%d %H:%M:%S' \
+           '+%a %A %b %B %j %y %C %e %F %T %D %s %H %I %p %u %w %Z %z' '+%%|%n|%t|'; do
+    if [ -n "$f" ]; then
+      LC_ALL=C date -u -d @$s "$f" > "$g"; korerun date -u -d @$s "$f" > "$o"
+    else
+      LC_ALL=C date -u -d @$s > "$g"; korerun date -u -d @$s > "$o"
+    fi
+    same "date -d @$s '$f'"
+  done
+done
+LC_ALL=C date -u -r "$dt/f1" '+%Y-%m-%d %H:%M:%S' > "$g"
+korerun date -u -r "$dt/f1" '+%Y-%m-%d %H:%M:%S' > "$o"; same "date -r FILE"
+[ "$(korerun date '+%Y')" = "$(date -u '+%Y')" ] || fail "kore date (now)"
+# id: the numeric and named faces byte-identical, groups included -- the supplementary
+# list is read out of /etc/group here (no getgroups, no NSS), so it is a real check
+for fl in -u -g -un -gn -G ''; do
+  # shellcheck disable=SC2086
+  both "id $fl" id $fl
+done
+# mktemp answers a name nobody had, so the SHAPE and the effect are the check
+t=$(korerun mktemp) || fail "kore mktemp"
+case $t in /tmp/tmp.??????????) [ -f "$t" ] || fail "kore mktemp made no file";;
+           *) fail "kore mktemp name: $t";; esac
+[ "$(stat -c %a "$t")" = 600 ] || fail "kore mktemp mode: $(stat -c %a "$t")"
+rm -f "$t"
+t=$(korerun mktemp -d); [ -d "$t" ] || fail "kore mktemp -d"; rmdir "$t"
+t=$(korerun mktemp -p "$dt" wooXXXXXX)
+case $t in "$dt"/woo??????) [ -f "$t" ] || fail "kore mktemp -p made no file";;
+           *) fail "kore mktemp -p name: $t";; esac
+rm -f "$t"
+t=$(korerun mktemp -u); [ -e "$t" ] && fail "kore mktemp -u left the file behind"
+# chown: unprivileged, so the honest checks are the no-op and the refusal
+korerun chown "$(id -un):$(id -gn)" "$dt/f1" || fail "kore chown to our own ids"
+korerun chown nosuchuser000 "$dt/f1" 2>/dev/null; r=$?
+[ $r -eq 1 ] || fail "kore chown unknown user (exit $r)"
+echo "kore: stat/du/date/id/mktemp/chown (GNU-identical, the tree sums, the UTC clock) ok"
+
+# ------------------------------------------------------------------ patch
+# ⚠ THE ORACLE IS THE TREE, not the message. GNU patch's chatter has moved between
+# releases; what has not is what it leaves on disk, so every check here runs GNU
+# and ours over two identical copies and requires the copies to still match.
+pw=$HO/.kore-pw
+pset() { rm -rf "$pw"; mkdir -p "$pw/g/sub" "$pw/o/sub"
+         printf 'one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n' > "$pw/base"
+         cp "$pw/base" "$pw/g/sub/f.txt"; cp "$pw/base" "$pw/o/sub/f.txt"; }
+pmk() { cp "$pw/base" "$pw/new"; sed -i "$1" "$pw/new"
+        ( cd "$pw" && diff -u base new \
+            | sed -e '1s|^--- base.*|--- a/sub/f.txt|' -e '2s|^+++ new.*|+++ b/sub/f.txt|' ) > "$pw/p.diff"; }
+prun() { n=$1; shift
+         ( cd "$pw/g" && patch "$@" < "$pw/p.diff" ) >/dev/null 2>&1; a=$?
+         ( cd "$pw/o" && LOVE_NO_IMAGE= "$K" kore patch "$@" < "$pw/p.diff" ) >/dev/null 2>&1; b=$?
+         diff -r "$pw/g" "$pw/o" > /dev/null 2>&1 && [ $a -eq $b ] \
+           || { diff -r "$pw/g" "$pw/o" | head -5; fail "kore patch $n (gnu $a ours $b)"; }; }
+pset; pmk 's/three/THREE/; s/seven/SEVEN/'; prun "two hunks" -p1
+pset; pmk 's/three/THREE/; s/seven/SEVEN/'
+( cd "$pw/g" && patch -p1 < "$pw/p.diff" ) >/dev/null 2>&1
+( cd "$pw/o" && LOVE_NO_IMAGE= "$K" kore patch -p1 < "$pw/p.diff" ) >/dev/null 2>&1
+prun "-R puts it back" -p1 -R
+# an offset: a line inserted ahead of the hunk moves it, and both must find it there
+pset; pmk 's/three/THREE/; s/seven/SEVEN/'
+for s in g o; do ( cd "$pw/$s/sub" && printf 'zero\n' > t && cat f.txt >> t && mv t f.txt ); done
+prun "offset (and the .orig a mismatch leaves)" -p1
+pset; pmk 's/three/THREE/'; prun "--dry-run touches nothing" -p1 --dry-run
+# no -p at all: the basename, which is why `patch < p` works from inside the directory
+pset; pmk 's/four/FOUR/'
+( cd "$pw/g/sub" && patch < "$pw/p.diff" ) >/dev/null 2>&1; a=$?
+( cd "$pw/o/sub" && LOVE_NO_IMAGE= "$K" kore patch < "$pw/p.diff" ) >/dev/null 2>&1; b=$?
+diff -r "$pw/g" "$pw/o" > /dev/null 2>&1 && [ $a -eq $b ] || fail "kore patch (no -p)"
+# a create (--- /dev/null), whose -0,0 seat is the one the search has to reach
+pset; printf 'x\ny\nz\n' > "$pw/new"
+( cd "$pw" && diff -u /dev/null new | sed -e '2s|^+++ new.*|+++ b/sub/new.txt|' ) > "$pw/p.diff"
+prun "creates a file" -p1
+# ⚠ the missing final newline, BOTH directions -- the `\ No newline` line carries no
+# count of its own, so the one closing a hunk arrives after the counts are spent
+pset; printf 'a\nb\nc' > "$pw/base"
+cp "$pw/base" "$pw/g/sub/f.txt"; cp "$pw/base" "$pw/o/sub/f.txt"
+pmk 's/c/C/'; prun "a source with no final newline" -p1
+pset; printf 'a\nb\nc\n' > "$pw/base"
+cp "$pw/base" "$pw/g/sub/f.txt"; cp "$pw/base" "$pw/o/sub/f.txt"
+printf 'a\nb\nC' > "$pw/new"
+( cd "$pw" && diff -u base new \
+    | sed -e '1s|^--- base.*|--- a/sub/f.txt|' -e '2s|^+++ new.*|+++ b/sub/f.txt|' ) > "$pw/p.diff"
+prun "the patch takes the newline away" -p1
+# many hunks over a longer file, so the running delta gets exercised
+pset; seq 1 200 > "$pw/base"
+cp "$pw/base" "$pw/g/sub/f.txt"; cp "$pw/base" "$pw/o/sub/f.txt"
+pmk 's/^7$/SEVEN/; s/^70$/SEVENTY/; s/^133$/ONETHIRTYTHREE/; 40d; 100i\INSERTED'
+prun "many hunks" -p1
+# -i names the patch, -p2 strips deeper, and two files ride one patch
+pset; pmk 's/two/TWO/'
+sed -i -e '1s|.*|--- x/y/sub/f.txt|' -e '2s|.*|+++ x/y/sub/f.txt|' "$pw/p.diff"
+( cd "$pw/g" && patch -p2 -i "$pw/p.diff" ) >/dev/null 2>&1; a=$?
+( cd "$pw/o" && LOVE_NO_IMAGE= "$K" kore patch -p2 -i "$pw/p.diff" ) >/dev/null 2>&1; b=$?
+diff -r "$pw/g" "$pw/o" > /dev/null 2>&1 && [ $a -eq $b ] || fail "kore patch -p2 -i"
+pset
+printf 'aa\nbb\n' > "$pw/g/sub/g.txt"; cp "$pw/g/sub/g.txt" "$pw/o/sub/g.txt"
+{ printf -- '--- a/sub/f.txt\n+++ b/sub/f.txt\n@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n three\n'
+  printf -- '--- a/sub/g.txt\n+++ b/sub/g.txt\n@@ -1,2 +1,2 @@\n aa\n-bb\n+BB\n'; } > "$pw/p.diff"
+prun "two files in one patch" -p1
+# a hunk with nowhere to go: exit 1, the file half-applied the same way, and a .rej
+pset; pmk 's/three/THREE/; s/seven/SEVEN/'
+for s in g o; do printf 'nope\nnope\nnope\nnope\nnope\nnope\nnope\nnope\n' > "$pw/$s/sub/f.txt"; done
+( cd "$pw/g" && patch -p1 < "$pw/p.diff" ) >/dev/null 2>&1; a=$?
+( cd "$pw/o" && LOVE_NO_IMAGE= "$K" kore patch -p1 < "$pw/p.diff" ) >/dev/null 2>&1; b=$?
+[ $a -eq 1 ] && [ $b -eq 1 ] && cmp -s "$pw/g/sub/f.txt" "$pw/o/sub/f.txt" \
+  && [ -f "$pw/o/sub/f.txt.rej" ] && [ -f "$pw/o/sub/f.txt.orig" ] \
+  || fail "kore patch reject (gnu $a ours $b)"
+cmp -s "$pw/g/sub/f.txt.rej" "$pw/o/sub/f.txt.rej" || fail "kore patch .rej vs GNU"
+# ⚠ the .orig is the file AS IT WAS, which here is the unrelated one -- so the reject
+# is re-applied to the tree the patch was cut against, and that is the real claim: a
+# .rej we wrote is a patch our own reader takes back.
+cp "$pw/base" "$pw/o/sub/f.txt"
+( cd "$pw/o/sub" && LOVE_NO_IMAGE= "$K" kore patch f.txt < f.txt.rej ) >/dev/null 2>&1 \
+  || fail "kore patch: the .rej does not re-apply"
+cmp -s "$pw/o/sub/f.txt" "$pw/new" || fail "kore patch: the re-applied .rej lands elsewhere"
+echo "kore: patch (13 applications leaving the same tree GNU patch does -- offsets, creates, rejects, the newline) ok"
 
 # ------------------------------------------------------- the status charm
 # every main ANSWERS its status (crew/kore/core.l's urun) instead of quitting, so

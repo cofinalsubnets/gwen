@@ -9,13 +9,17 @@
 ;   kore objcopy -O binary|ihex IN OUT   a linked ELF flattened (crew/holo/copy.l)
 ;   kore nm [-gup] FILE..   an ELF's symbols, nm's three columns (crew/holo/link.l)
 ;   kore cat|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
-;   kore cut|tr|nl|rev   the line + field tools + trivia (crew/kore/core.l)
+;   kore cut|tr|nl|rev|paste|comm|join|split|od   the line, field and record tools
+;                                                 (crew/kore/core.l)
 ;   kore ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (crew/kore/fs.l)
+;   kore stat|du|chown|mktemp                        ... and what they report
+;   kore expr EXPRESSION             the little language (crew/kore/expr.l)
+;   kore patch [-pN] [-R] [-i F]     unified diffs laid on a tree (crew/kore/patch.l)
 ;   kore grep [-nvclqhaixwFEo] [-e P] [-m N] PATTERN [F..]   BRE/ERE (crew/kore/re.l)
 ;   kore sed [-nEi] [-e SCRIPT].. SCRIPT [F..]   the stream editor (crew/kore/sed.l)
 ;   kore awk [-F FS] [-v v=x].. 'PROG' [F..]     the language (crew/kore/awk.l)
 ;   kore find [PATH..] [EXPR]                    the tree walk (crew/kore/find.l)
-;   kore env|sleep|kill|xargs        the process tools (crew/kore/proc.l)
+;   kore env|sleep|kill|xargs|date|id   the process and world tools (crew/kore/proc.l)
 ;   kore vi [FILE]                   the editor (crew/vi/)
 ;   kore sh [-c CMD | FILE]          the shell, lush (crew/lush/; also `lush`, and an sh symlink)
 ; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/moon.md.)
@@ -238,12 +242,17 @@
              'basename basename-main 'dirname dirname-main
              'cut cut-main 'tr tr-main
              'nl nl-main 'rev rev-main
+             'paste paste-main 'comm comm-main 'split split-main
+             'join join-main 'od od-main
              'ls ls-main 'cp cp-main 'mv mv-main
              'rm rm-main 'mkdir mkdir-main 'rmdir rmdir-main
              'ln ln-main 'touch touch-main
              'pwd pwd-main 'chmod chmod-main
              'install install-main 'readlink readlink-main
              'cmp cmp-main
+             'stat stat-main 'du du-main 'chown chown-main 'mktemp mktemp-main
+             'expr expr-main 'date date-main 'id id-main
+             'patch patch-main
              'grep grep-main 'sed sed-main
              'awk awk-main 'find find-main
              'vi vi-main
@@ -267,6 +276,9 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   nm [-gup] FILE..   an ELF's symbols; -g externals, -u undefined, -p unsorted
   cat head tail wc sort uniq tee          the line tools (crew/kore/core.l)
   cut tr nl rev                           the field tools
+  paste comm join split od                the record tools
+  expr EXPRESSION                         arithmetic, comparison and BRE matching
+  patch [-pN] [-R] [-i F] [--dry-run]     lay a unified diff on a tree
   grep [-nvclqhaixwFEo] [-e P] [-m N] PAT [F..]   BRE, or ERE under -E (crew/kore/re.l)
   sed [-nEi] [-e SCRIPT].. SCRIPT [F..]   the stream editor (s///gp, d, p, q, addresses)
   awk [-F FS] [-v var=val].. 'PROG' [F..]  patterns and actions over records
@@ -274,10 +286,13 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   find [PATH..] [EXPR]   -name -path -type f|d|l -print -prune -exec CMD.. \\;
                          ( ) ! -a -o -maxdepth N -mindepth N   (PATH defaults to .)
   env sleep kill xargs                    the process tools (crew/kore/proc.l)
+  date [-u] [-d @SEC] [-r F] [+FMT]       the clock, UTC (no tz database here)
+  id [-u|-g|-G] [-n]                      who this process is
   vi [FILE]                               the editor (crew/vi/)
   sh [-c CMD | FILE]                      the shell, lush (crew/lush/)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (crew/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs
+  stat -c FMT | du [-sabhc] | chown | mktemp   ... and what they report
   echo seq yes true false basename dirname     ... and the trivia
 ")
                 2)

@@ -66,10 +66,11 @@ processes, this surface answered against a ramfs.
 | file descriptor                | **port** via `ai_io_alloc` + the `k_sources[]` vtable  |
 | `open`/`read`/`write`/`close`  | `open`/`close` + getc/putc; `lseek` over the raw-fd `openfd` lane |
 | `dup2`/`pipe`                  | `dup` `dup2` `pipe` (a pair of fds)                    |
-| `stat`/`mkdir`/`unlink`/readdir| `stat` `mkdir` `rmdir` `unlink` `readdir` `rename` `symlink` `readlink` `hardlink` `chmod` `chown` `utime` `umask` |
+| `stat`/`mkdir`/`unlink`/readdir| `stat` `lstat` `mkdir` `rmdir` `unlink` `readdir` `rename` `symlink` `readlink` `hardlink` `chmod` `chown` `utime` `umask` |
 | `cwd` — `chdir`/`getcwd`       | `chdir` `cwd`                                           |
 | signals — `sigaction`/`kill`   | **the condition system**: `signal`, `sigfd`/`sigtake`, `still` |
 | environment                    | `getenv` `setenv` `environ`; cli.l parses argv          |
+| ids — `getuid`/`getgid`        | `getuid` `getgid` (the REAL pair; no effective ids here) |
 | exit codes / std streams       | `in`/`out`/`err` ports; `quit`                          |
 | sockets (BSD)                  | **ain** — `connect`/`listen`/`accept`/`shutdown`/DNS (host/sock.c) |
 | time — `clock_gettime`         | `ai_clock` / `(clock t)`                                |
@@ -89,8 +90,14 @@ Two mappings are the elegant ones:
 ## Conventions
 
 An effect op answers `()` on success | a POSITIVE errno | EINVAL on misuse; a value op answers
-the value | `()`. `stat` answers `(size mtime-ms mode ns)` — ns the whole mtime in nanoseconds,
-one charm, cook's build-grade resolution — or `()` for absence. `spawn` answers a pid or a
+the value | `()`. `stat` answers `(size mtime-ms mode ns uid gid nlink blocks ino)` — ns the
+whole mtime in nanoseconds, one charm, cook's build-grade resolution; blocks is `st_blocks`,
+512-byte units, which is DISK USAGE and not the size — or `()` for absence. `lstat` answers the
+same of the LINK itself. ⚠ **the tail is append-only and a reader asks `tally` before reading past
+`ns`**: the kernel's own stat (free/kmain.c) answers the first four alone, an image tree having no
+ownership to tell about, and kore's `stat`/`du` say so rather than reading a 0 someone might
+believe. `openfd`'s mode 3 is O_CREAT|O_EXCL at 0600 — the one that FAILS on an existing name,
+which is what makes a `mktemp` a claim and not a guess. `spawn` answers a pid or a
 negative errno, and a child that cannot exec `_exit(127)`s. `setenv` with a non-string value
 unsets (the absence lane). Wrap at the call boundary — readdir/stat struct layouts and errno
 values differ across Linux/*BSD/mac, so the `call_X` worker normalizes and love sees a stable

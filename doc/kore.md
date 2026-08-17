@@ -27,7 +27,7 @@ The file discipline, two shapes:
   cat member.
 * **a toolbox** (core.l, fs.l): many mains, NO seat — kore is its door.
 
-## the inventory (48 tools, 51 names)
+## the inventory (66 tools, 69 names)
 
 | where | tools |
 | --- | --- |
@@ -36,13 +36,17 @@ The file discipline, two shapes:
 | crew/cook/cook.l | make / cook |
 | core.l, the line tools | cat echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
-| core.l, the trivia | seq yes true false basename dirname |
+| core.l, the record tools | paste comm join split od |
+| core.l, the trivia | seq yes true false basename dirname test [ uname printf |
 | fs.l, the fs tools | ls cp mv rm mkdir rmdir ln touch pwd chmod install readlink cmp |
+| fs.l, what they report | stat du chown mktemp |
+| expr.l, the little language | expr (arithmetic, the six comparisons, \| and &, and `:` over the BRE engine) |
+| patch.l, the diff read back | patch (unified only; -pN -R -i -o --dry-run, offsets, rejects) |
 | re.l, the matcher | grep (-n -v -c -l) over the lawed BRE engine |
 | sed.l, the editor | sed (-n; s///gp, d, p, q; number/$/regex/range addresses) |
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
 | find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
-| proc.l, the processes | env sleep kill xargs |
+| proc.l, the processes and the world | env sleep kill xargs date id |
 | crew/vi/ | vi |
 | crew/lush/ | sh / lush |
 
@@ -177,8 +181,88 @@ action gets `-print`, exactly as GNU does.
   descend through it. A dangling link is still visited.
 * it loads late in the cat because it captures `sh-match` at its define; crew/build.mk says so.
 
+## expr, and the record tools (crew/kore/expr.l, crew/kore/core.l)
+
+`expr` is the one applet with a grammar: `|`, `&`, the six comparisons, `+ -`, `* / %`, `:`,
+then the primaries (`( )`, `length`, `substr`, `index`, `match`, `+ TOKEN`, a bare word). Its
+own file because `:` rides re.l's BRE engine, and a body captures its free names at its define.
+
+* **every value is a TEXT**, and a text that reads as a whole number is a number wherever one
+  is wanted. That one rule is the whole type system: `2 < 10` is 1 and `2 < 10a` is 0, because
+  the second pair has no number in it.
+* the **exit code is a third channel** — 0 the answer is neither `""` nor `"0"`, 1 it is, 2 the
+  expression will not do — so the gate compares stdout *and* `$?` on every check.
+* ⚠ **the division truncates toward zero and the remainder wears the dividend's sign**, which is
+  C's rule and expr's. love's `//` FLOORS, so the sign is taken out and put back rather than
+  divided with; `-7 / 2` is -3 and `-7 % 2` is -1.
+
+`paste`/`comm`/`join`/`split`/`od` read whole files rather than riding `ueach`, because each
+walks several at once. Three things are worth knowing:
+
+* **paste's delimiter list cycles per GAP and starts over each row**, and the list advances with
+  the separator it spends — never with the cell, since the first cell spends none.
+* **join is a relational join**: a key repeated on either side makes the whole cross product,
+  file-1-outer. `-o`, `-e` and `-i` are out of dialect (an output template is its own language).
+* **od takes ONE -t per run**, the last given winning. GNU's several-at-once lane re-widens every
+  column to the widest type in the set, which is a whole layout of its own and not another row.
+
+## what the fs tools report (crew/kore/fs.l)
+
+`stat -c FORMAT` (or `--printf=`, which reads the escapes and adds no newline where `-c` does
+neither), `du`, `chown`, `mktemp`. They read the **stat tail**: host/posix.c's `stat` answers
+`(size mtime mode ns uid gid nlink blocks ino)` and `lstat` the same of the link itself. The tail
+is append-only and the KERNEL's own stat (free/kmain.c) answers the first four alone — an image
+tree has no ownership to tell about — so it is asked by `tally` and a world without it says so.
+
+* ⚠ **there is no default `stat` face.** GNU's is four lines of access, change and birth times
+  and a device number, none of which this stat carries. Printing the modify time three times over
+  would be a fabrication, so the tool asks for `-c`.
+* **du counts `st_blocks`, which is allocation and not size** — a sparse file costs less than it
+  measures, a tiny one costs a whole block — and reports 1K units rounded up. `-b`'s apparent
+  size counts a FILE's `st_size` and a directory's **not at all**, which is GNU's rule and not a
+  guess: an empty directory whose st_size is 40 reports 0. A hard link is counted once per run,
+  keyed by inode alone (this stat carries no device). Like find's, the walk sorts each directory.
+* **`mktemp` MAKES the name** — `openfd` mode 3 is O_EXCL at 0600, and `-d` an exclusive mkdir —
+  so the answer is a fact by the time it is printed, not a proposal.
+* **`id`'s supplementary groups are read out of `/etc/group`**: there is no `getgroups` here and
+  no NSS anywhere. The primary comes first, then the rest ascending, which is the order the
+  kernel keeps its credential list in and so the order GNU prints.
+
+## the clock (crew/kore/proc.l)
+
+⚠ **UTC and only UTC.** There is no tz database in this tree, so localtime IS gmtime — the same
+call nolibc made, for the same reason. `date -u` is taken and changes nothing. `-d @SECONDS` and
+`-r FILE` name a moment other than now, which is also the only thing that makes the tool gateable
+against GNU at all; the gate runs the oracle under `TZ=UTC`. The calendar itself is Hinnant's
+exact integer civil-from-days in core.l (`ucivil`/`udays`, lawed by the round trip), which stat's
+`%y` reads too.
+
+## patch (crew/kore/patch.l)
+
+The other half of diff.l: that file WRITES unified hunks, this reads them back and lays them on
+a tree. `-pN` (unsaid drops every leading directory, patch's own default), `-R`, `-i`, `-o`,
+`--dry-run`, `-s`. **Unified diffs only, deliberately** — context and normal format are two more
+parsers for a shape nothing in this decade emits.
+
+* a FILE is a list of `(text nl)` pairs. **A missing final newline is data** here as everywhere in
+  kore, and a patch can both carry one in and take one away, so the flag rides per line.
+* ⚠ **the `\ No newline at end of file` line is tested before the counts run out.** It carries no
+  count of its own, so the one closing a hunk arrives after both counters have hit zero — a body
+  that stopped on the counts alone leaves every "the patch takes the newline away" case unmarked.
+* applying carries a **delta**: the running difference between a seat in the original and the same
+  content's seat now. A hunk that does not sit where it says searches outward from there, which is
+  what `offset` in patch's report means — and the reach is `n + 1 + |want|`, not `n`, because a
+  create hunk's `-0,0` wants seat -1 in a file of no lines.
+* a rejected hunk lands in `NAME.rej` **byte-identical to GNU's**, the original in `NAME.orig`,
+  and the exit is 1. The `.orig` lands on a MISMATCH and not only on a failure — GNU's
+  `--backup-if-mismatch`, since a hunk that moved applied to a file the patch did not describe.
+* the gate's oracle is **the tree, not the message**: GNU patch's chatter has moved between
+  releases; what it leaves on disk has not.
+
 ## not built
 
 Polish, as need arises: ls -l (stat already carries size/mtime/mode), cp -r, multi-source cp/mv
 into a directory, sort -n/-k, uniq -d/-u, cut -b, tr [:class:] and -ds, echo -e, seq over gems,
-grep -i/-o/-E, sed -i/y/N. None block the distro; add them when a real script wants them.
+grep -i/-o/-E, sed -i/y/N, join -o, od with several -t at once, date's spellings past `@SECONDS`.
+`df` is the one that wants a NIF and not an afternoon: nothing here answers `statvfs`.
+None block the distro; add them when a real script wants them.
