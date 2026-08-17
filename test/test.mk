@@ -755,8 +755,12 @@ test_distboot: dist
 # test/host/gz.l (in test_hostnif, needing nothing outside the tree); this is the half
 # only the outside world can say, and it is a separate gate because a coder and a
 # decoder written by one hand round-trip cleanly through a format nobody else speaks.
-# Skips where either system tool is missing.
+# Skips where either system tool is missing. gzfind.l rides along and needs NOTHING
+# outside: it is the differential between gz.l's match finder and the holo IR beside it
+# that says the same thing to a cpu, over corpora chosen for the chain the kernel walks.
 test_gz: host
+	@echo TEST test/gate/gzfind.l
+	@$(mw) $R/test/gate/gzfind.l
 	@echo TEST test/gate/targz.sh
 	@sh test/gate/targz.sh $(ho)/love
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is

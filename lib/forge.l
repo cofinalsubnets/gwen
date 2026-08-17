@@ -26,12 +26,18 @@
 ; closing THAT pays in every loop in love.c rather than in three.
 ; Say the controlled number or say nothing: "3x the C nif" was true of one compiler and false of C.
 ;
-; ⚠ SO THE RULE FOR A NEW KERNEL IS NOT "IS IT HOT". It is: does the kernel hold a constant only
-; known at RUN TIME? crew/sat/flat.l bakes the instance's nvars in as immediates and rebuilds per
-; solver -- C cannot do that at any -O. Every kernel below is a fixed program, which is why each
-; one merely draws with gcc: a fixed program is what a compiler is for. These three stay because
-; they pay on the binary the tree ships, and they are the first thing to delete the day the
-; residency lever lands. They are a hedge, not an asset.
+; ⚠ SO THE RULE FOR A NEW KERNEL IS NOT "IS IT HOT". There are two reasons that hold up, and the
+; three kernels below have NEITHER. One: does it hold a constant only known at RUN TIME?
+; crew/sat/flat.l bakes the instance's nvars in as immediates and rebuilds per solver -- C cannot
+; do that at any -O. Two: is the TWIN INTERPRETED LOVE rather than C? Then the kernel is not
+; racing a compiler at all, and what it buys is VOCABULARY -- lib/gz.l's match finder compares
+; bytes where `(s i)` is a VM apply, and no improvement to `mooncc` hands love code an instruction
+; the VM has no name for. That one is 2.7x on the whole of `gz-deflate` and is the shape to copy.
+; Every kernel below is a fixed program with a C twin, which is why each merely draws with gcc: a
+; fixed program is what a compiler is for. These three stay because they pay on the binary the
+; tree ships, and they are the first thing to delete the day the residency lever lands. They are
+; a hedge, not an asset. ⚠ AND FORGE IS A LIBRARY, not this roster: lib/gz.l registers its kernel
+; from its own module through `forge-putx`, which is the arrangement to reach for.
 ;
 ; ⚠ THE TWIN IS THE DEFINITION and the native is an optimisation, never the other way round.
 ; every guard in a kernel deopts INTO the twin, so a shape the IR does not say is not a bug and
