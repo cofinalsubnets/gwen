@@ -84,7 +84,7 @@ done
   fi
   cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
       crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
-  echo "($mksys \"$d/sys.o\")"
+  echo "((from 'moon '$mksys) \"$d/sys.o\")"
 } | "$m" || fail "$mksys sys.o"
 
 moonc "$d"/*.o -o "$ho/$bin" || fail "our-linker bind $bin"

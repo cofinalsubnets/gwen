@@ -260,7 +260,7 @@ $(ho)/.mksys-cat.l: $(mksys_l) $(ho)/.mksys-cat.list
 $(moon_d)/sys.o: $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
 	@echo HOLO	$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(boot_love) -l $(ho)/.mksys-cat.l -n -e '($(mksys_e) "$@")' && test -s $@
+	@LOVE_NO_IMAGE= $(boot_love) -l $(ho)/.mksys-cat.l -n -e "((from 'moon '$(mksys_e)) \"$@\")" && test -s $@
 ifneq ($(HCC),)
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/core/love_data.ld $(baked_h)
 	@echo LD	$@

@@ -17,6 +17,7 @@
 ; definition). predefined __LINE__ __FILE__ __STDC__.
 ; adjacent string literals concatenate (phase 6). fenced: _Pragma, __COUNTER__,
 ; the GNU ,##__VA_ARGS__ comma elision, #if with character constants.
+(module 'moon
 (:
    ; ⚠ AT THE HEAD, and they have to be: love0's compiler is single-pass and folds a
    ; pure global at each definition's own compile, so one of these bound mid-list reads
@@ -608,3 +609,4 @@
           (: _ (pin spanacc 'l ())
              out (strcat-pass r 0 ())
              [1 (tok 'fspans (rev (peep spanacc 'l ())) 0 >< out)]))))       ; an EMPTY token list is a valid empty TU, not a failure -- only a gripe fails
+) ; module 'moon

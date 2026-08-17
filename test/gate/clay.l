@@ -21,6 +21,7 @@
 ; in test/cc/ are there to BE refused).
 (:
    _ (use 'clay)
+   _ (use 'moon)                       ; the front end (clex/cpp/cparse-t) is module 'moon
    cshow (from 'clay 'clay-show)
    cok? (from 'clay 'clay-ok?)
    nl (string 10)

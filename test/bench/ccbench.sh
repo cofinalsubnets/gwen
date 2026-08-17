@@ -120,7 +120,7 @@ build_mooncc() { # $1=binpath
       $MC -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$od/m_$b.o" || exit 1; done
     { cat crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
           crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
-      echo "(mksys \"$od/sys.o\")"; } | out/host/love || exit 1
+      echo "((from 'moon 'mksys) \"$od/sys.o\")"; } | out/host/love || exit 1
     $MC "$od"/*.o -o "$bin" ) || return 1
 }
 

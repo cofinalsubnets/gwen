@@ -28,6 +28,7 @@
 ; splices it for neither, so `@` is simply an unbound name there: without this line moon.l
 ; reads fine under `love` and answers `;; missing @` under love0 -- at BAKE time, in the
 ; one lane the compiler cannot be built without. asbook.l's (use 'holo) is the same shape.
+(module 'moon
 (use 'pat)
 
 (:
@@ -983,3 +984,4 @@
 (: _ (pins (from 'verbs 'tab) 'mooncc moon-main 'cc moon-main)
    s ((from 'verbs 'fire) ["mooncc" "mooncc.l" "moon.l"])
    (? (two? s) (moon-main >s) ()))
+) ; module 'moon

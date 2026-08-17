@@ -17,6 +17,7 @@
 ;     -e '(clay-g2 ".love-orig.c" "love.c" (\ ("salpha" "shash")))'
 ; answers 1 and prints a report; quits 1 on any difference.
 (:
+   _ (use 'moon)                       ; the front end is module 'moon now
    nl (string 10)
    (g2-el l i) (? (i < 1) <l (g2-el >l (i - 1)))
    (g2-say s) (puts (s + nl))

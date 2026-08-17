@@ -26,7 +26,9 @@ echo "CC crew/moon/{lex,cpp,parse,gen,law}.l"
 out=$ho/.test_moon.out
 { echo "(use 'holo)"
   cat test/00-init.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
-      crew/holo/text.l crew/moon/gen.l crew/moon/law.l
+      crew/holo/text.l crew/moon/gen.l
+  echo "(use 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
+  cat crew/moon/law.l
 } | "$m" > "$out" 2>&1
 r=$?
 cat "$out"
@@ -635,15 +637,17 @@ printf 'int wb(void){ return nope; }\n' > "$ho/.wb.c"
 # carry the same flags and would not notice; this pair does: a flag-bearing compile, then
 # a bare one, whose object must equal the bare compile run cold.
 moonrun -c "$ho/.wa.c" -o "$ho/.wa-bare.o" > /dev/null 2>&1 || fail "warm: the bare reference compile"
-LOVE_NO_IMAGE= "$m" -e "(: a (moon-run (list \"-c\" \"-fno-inline\" \"-DLEAK=1\" \"-nostdinc\" \"$ho/.wa.c\" \"-o\" \"$ho/.wl1.o\"))
-     b (moon-run (list \"-c\" \"$ho/.wa.c\" \"-o\" \"$ho/.wl2.o\")) (a + b))" </dev/null > /dev/null 2>&1 \
+LOVE_NO_IMAGE= "$m" -e "(: mr (from 'moon 'moon-run)
+     a (mr (list \"-c\" \"-fno-inline\" \"-DLEAK=1\" \"-nostdinc\" \"$ho/.wa.c\" \"-o\" \"$ho/.wl1.o\"))
+     b (mr (list \"-c\" \"$ho/.wa.c\" \"-o\" \"$ho/.wl2.o\")) (a + b))" </dev/null > /dev/null 2>&1 \
   || fail "warm: the flag-leak pair did not compile"
 cmp -s "$ho/.wa-bare.o" "$ho/.wl2.o" || fail "warm: FLAGS BLED between compiles in one process"
 moonrun -c "$ho/.wa.c" -o "$ho/.wa-cold.o" > /dev/null 2>&1 || fail "warm: the cold reference compile"
-warm=$(printf '(: a (moon-run (list "-c" "%s" "-o" "%s"))
-                  b (moon-run (list "-c" "%s" "-o" "/dev/null"))
-                  c (moon-run (list "-zzz"))
-                  d (moon-run (list "-c" "%s" "-o" "%s"))
+warm=$(printf '(: mr (from (name "moon") (name "moon-run"))
+                  a (mr (list "-c" "%s" "-o" "%s"))
+                  b (mr (list "-c" "%s" "-o" "/dev/null"))
+                  c (mr (list "-zzz"))
+                  d (mr (list "-c" "%s" "-o" "%s"))
                   _ (say out (show a + " " + show b + " " + show c + " " + show d + "\n"))
                   (quit 0))' \
              "$ho/.wa.c" "$ho/.wa-warm.o" "$ho/.wb.c" "$ho/.wa.c" "$ho/.wa-warm.o")

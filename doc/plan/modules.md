@@ -68,6 +68,30 @@ untouched: a module form rides a cat like any form. The book fence gate lands
 with the first wrap: the shipped bare book stops carrying crew names, and the
 measured shadows dissolve. Gate: per-app gates + test_slow.
 
+*Moon CLIMBED.* The seven cat members (floor lex cpp parse gen mksys moon)
+each wear a two-line wrap -- `(module 'moon` before the first form, `)` after
+the last -- and nothing else in the files moved: gen.l's `(use 'pat)` rides
+INSIDE the wrap now, scoped to the module's own compile, and moon.l's tail
+still pins mooncc/cc into (from 'verbs 'tab), so the verb rail needed nothing.
+lof/vof/subst answer uu's and kanren's own on the warm walk now (the id?
+probe), cparse and mksys are off the bare book, and the rest layer shed ~1 MB.
+What the climb taught: (1) `(: _ (use 'x) ..)` serves LATER BINDINGS in the
+same form -- compile is per-binding -- so a one-form -e reads a module through
+one use; the macro-needs-the-next-FORM rule is macros only. (2) The consumers
+were exactly the -e/-l lanes: the sys.o recipes and package harnesses spell
+`((from 'moon '<mksys>) ..)` (ten sh sites + host/build.mk), moon.sh's warm
+lane binds moon-run by `from`, and the three in-process gates (gate/clay.l,
+moonfuzz.l, clay-g2.l) lead with (use 'moon) -- moon.sh's law cat echoes the
+same line between gen.l and law.l. (3) The one QUIET regression was lush's
+in-image lane: sh-imgask resolved a word's main as a bare global, so with
+moon-run in a module the lane silently fell back to spawning -- and the
+byte-compare stayed green, because both sides were the spawn. test_dist's
+engagement probe (peep sh-imgc after a real line) is what caught it; the
+alias row grew a module slot, ("mooncc" "moon-run" "moon"). A wrap's blast
+radius is exactly the (ev 'name)-style RUNTIME readers -- grep for those
+before wrapping the next app. Remaining shadows ride the still-bare apps:
+`shell` (cook), `walk` (sb).
+
 **Rung 3 -- the search collapses.** libsrc drops the seat rungs; cwd `lib/`
 stays with a retirement note; mk/install.mk's lib tree and the nest resolution
 contract retire in coordination with the self-host arc's `love up` story, not
