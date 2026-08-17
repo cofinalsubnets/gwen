@@ -16,6 +16,7 @@
 ; reading of the result.
 ;
 ; loads after crew/holo/link.l, whose field table, ld-write and ld-zeros it reads.
+(use 'kore) ; the text/u floors ride module 'kore now; ambient here until this app wraps
 (:
    ;; the PT_LOADs as (fileoff filesz paddr) -- all a flat image needs of them.
    (oc-segs fs s)

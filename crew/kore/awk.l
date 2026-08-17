@@ -29,6 +29,7 @@
 ; from zero on the scaled value where C rounds half to even on the exact binary
 ; one -- the two differ only on an exact tie, which a decimal literal can reach
 ; and a computed double essentially never does.
+(module 'kore
 (:
    ; -- values --------------------------------------------------------------
    ; a value is () uninitialised, a number, a string, or ('sn n s) -- a STRNUM,
@@ -1271,3 +1272,4 @@
         _ (flush out)
         code)
      2))
+) ; module 'kore

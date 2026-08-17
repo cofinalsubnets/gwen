@@ -6,6 +6,7 @@
 ; plus \") as ('str text). not yet (staged): hex/octal/float literals,
 ; adjacent-string pasting, the preprocessor's # lines.
 (module 'moon
+(use 'kore)
 (:
    ; a diagnostic carrier: a stage may answer this instead of
    ; a bare bad, naming its own cause -- file/line/col (any () when unknown) and a

@@ -9,6 +9,7 @@
 ; third). a body-less top-level `:` (the wm's app shape): `myers` the entry,
 ; dold/dnew/dcost the script readers, d* the machinery. indexes and rounds ride TABLETS
 ; (charm keys, negatives fine) for O(1) reads; every loop is a tail call.
+(module 'kore
 (:
    ; a list -> a tablet keyed 0..n-1: O(1) element reads for the snake loop
    (dindex l) (: t (tablet 0)
@@ -202,3 +203,4 @@
              _ (say o "+++ ") _ (say o bn) _ (put o 10)
              _ (say o h)
              (slurp o)))))
+) ; module 'kore

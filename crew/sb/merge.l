@@ -29,6 +29,7 @@
 ; gains its newline, text.l's one normalization, and it only ever touches a
 ; path already diverged.
 
+(use 'kore) ; the text/u floors ride module 'kore now; ambient here until this app wraps
 (:
    ; the 'adds sitting at the front of a script (a del's replacement)
    (m3grab m a) (? (two? m && (<<m = 'add)) (m3grab >m (<><m >< a)) `(m (rev a)))

@@ -13,6 +13,7 @@
 ; (the smokes in `make test_kore` hold them to the byte): wc pads every field to the
 ; digit width of the byte TOTAL, uniq -c wears width 7, head/tail banner many files
 ; with ==> name <== and a blank line between.
+(module 'kore
 (:
    ; -- cat: files (or -) onto out, verbatim --
    (cat-main as) (ueach "cat" puts as)
@@ -402,3 +403,4 @@
                                  (go >m)))
                     (go (lines txt)))
        (ueach "rev" dot as)))
+) ; module 'kore

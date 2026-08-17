@@ -382,7 +382,11 @@
                   _ (pin F 31337 (link (books ()) nm))
                   (setbooks (link F (books ()))))
     (mrun nm fs) (: _ (mopen nm) _ (each fs (\ f (ev 'ev f))) (leave ()))
-    (:: 'module (\ l (list mrun (cap l) (list '\ (link (cup l) ())))))))
+    ; ⚠ the quote takes the forms LIST whole -- (\ (f ..)), one element PER FORM.
+    ; an extra (link .. ()) here once made the body ONE application chain: every
+    ; form's effects still ran (the gates stayed green), but each answer was
+    ; APPLIED to the next -- caught only when a bodyless (: answered a function.
+    (:: 'module (\ l (list mrun (cap l) (list '\ (cup l)))))))
 
 
 ; --- reader operators: the operators tablet + the opfix factor pass ---------

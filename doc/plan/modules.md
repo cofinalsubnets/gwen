@@ -92,6 +92,32 @@ radius is exactly the (ev 'name)-style RUNTIME readers -- grep for those
 before wrapping the next app. Remaining shadows ride the still-bare apps:
 `shell` (cook), `walk` (sb).
 
+*Kore CLIMBED -- and it flushed out the macro's one real bug.* The eleven
+kore files (the text/u floors + the applets + kore.l) wear the wrap; the
+wrapped moon files lead with a scoped (use 'kore); the three still-bare REAL
+consumers (vi/config.l sb/merge.l holo/copy.l) carry an ambient (use 'kore)
+head until their own wraps convert it -- cook and lush looked like consumers
+and are not (cook defines its own lines/chomp; lush's reads are runtime
+doors), and a head there BROKE the egg lane's file loads (papel loads cook;
+'kore has no lib entry off the image), which test_seat caught. lush's resolver
+grew the applets' home-module fallback (sh-imgask tries the book, then
+(from 'kore nm)) and the urun wrap door reads the module -- a miss absorbs
+to (), keeping the no-wrap lane. asbook.l stays bare on purpose: its ambient
+(use 'holo) is load-bearing for the cats' holo copies (host/main.c:966's
+double-carry note) -- that ambience is holo's own wrap to dissolve.
+THE FIND: since rung 0 the module macro emitted `(\ ((f ..)))` -- ONE extra
+list level -- so a body's forms evaluated as ONE APPLICATION CHAIN: every
+form's effects ran and every gate stayed green, but each form's ANSWER was
+applied to the next. It surfaced only when kore's use shifted moon.l's chain
+so the big form's answer (moon-cc, a bodyless (:'s last value) met () --
+udie 2 usage at the mooncc0.image bake, three files from the cause. The fix
+is one level ((cup l) whole); the law is spec.l's smt probe: a
+function-answering form followed by another form, and the side effect only a
+spurious application could leave must not appear. Diagnosis notes that paid:
+flush the markers (buffered puts lie about the death point), and make the
+suspect call print its ARGUMENT -- ZF-ARG named the next form's answer and
+with it the whole mechanism.
+
 **Rung 3 -- the search collapses.** libsrc drops the seat rungs; cwd `lib/`
 stays with a retirement note; mk/install.mk's lib tree and the nest resolution
 contract retire in coordination with the self-host arc's `love up` story, not

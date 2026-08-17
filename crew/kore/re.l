@@ -33,6 +33,7 @@
 ; group first -- (..)*'s \1 is the LAST iteration, like GNU; read it with assoc.
 ; matching is greedy backtracking in continuation style, so alternation is just
 ; one more node that tries its branches in order on the winning path.
+(module 'kore
 (:
    ; -- the twelve POSIX [:name:] classes, each written once as its ranges --
    cnames '(("alnum" (48 57) (65 90) (97 122))  ("alpha" (65 90) (97 122))
@@ -365,3 +366,4 @@
           (: hit (dof "(standard input)" (slurp in) 0)
              _ (flush out)
              (? hit 0 1)))))
+) ; module 'kore

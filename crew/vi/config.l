@@ -16,6 +16,7 @@
 ; a terminal that cannot do 24-bit still shows the author's fallback.
 ;
 ; a row is `(group cterm256 "#rrggbb" faces)`, faces drawn from (bold italic).
+(use 'kore) ; the text/u floors ride module 'kore now; ambient here until this app wraps
 (:
    hue-theme
     '((Comment    59  "#75715E" ())

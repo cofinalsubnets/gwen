@@ -6,6 +6,7 @@
 ; chmod utime cwd), whose convention shapes every loop here: an effect op nets
 ; truthy exactly when something went wrong. a body-less top-level `:` leaking
 ; uoct (lawed in law.l) and the mains.
+(module 'kore
 (:
    ; octal text -> a charm ("755" is 493), chmod's one argument shape
    (uoct s)
@@ -258,3 +259,4 @@
           (: _ (? s? () (: _ (say out ((<fs + " ") + (<>fs + " differ")))
                            _ (put out 10) (flush out)))
              1))))
+) ; module 'kore

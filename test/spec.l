@@ -805,6 +805,13 @@
   (! (member? 'sma (names ())))                          ; the anonymous layer leaks nothing
   (tablet? ma)))                                         ; the scratch layer answers its tablet
 (: _ (use 'spec-mod) (assert (42 = smv)))                ; use splices a module `module` made
+; a module's forms eval ONE BY ONE, never as one application chain: a form whose
+; answer is a function must not be APPLIED to the next form's answer. the probe is
+; a side effect only a spurious call could leave -- smt stays empty.
+(: smt (tablet 0)
+   mq (module () (: (smf2 x) (pin smt 'called 1)) (: smq2 2))
+ (assert (nil? (peep smt 'called ()))                    ; nothing applied smf2
+         (member? 'smq2 (keys mq))))                     ; ..and both forms landed
 
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since
 ; t and (gauge 0) reports a VM stat; an opaque handle acts as a constant function.

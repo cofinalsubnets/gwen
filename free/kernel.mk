@@ -127,7 +127,8 @@ $(k_odir)/klink.list: force_dist_list
 $(k_odir)/klink.l: $(klink_l) $(k_odir)/klink.list
 	@echo CAT	$@
 	@mkdir -p "$(dir $@)"
-	@{ echo "(use 'holo)"; cat $(klink_l); } > $@
+	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
+	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(klink_l)); } > $@
 
 ifeq ($(KLINK),holo)
 $(k_elf): $(k_odir)/klink.l $(k_o) $m
@@ -199,7 +200,8 @@ klay_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
 $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/free/%.l $(klay_l)
 	@echo CAT	$@
 	@mkdir -p "$(dir $@)"
-	@{ echo "(use 'holo)"; cat $(klay_l) $<; } > $@
+	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
+	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(klay_l)) $<; } > $@
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
 # kernel boots into nothing.

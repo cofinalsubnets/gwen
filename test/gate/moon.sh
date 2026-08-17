@@ -25,7 +25,9 @@ moon0() { "$love0" wake out/host/mooncc0.image mooncc "$@"; }
 echo "CC crew/moon/{lex,cpp,parse,gen,law}.l"
 out=$ho/.test_moon.out
 { echo "(use 'holo)"
-  cat test/00-init.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
+  cat test/00-init.l crew/kore/text.l crew/kore/u.l   # the kore floors register module 'kore
+  echo "(use 'kore)"                    # ..ambient: holo/text.l and law.l read `lines` bare
+  cat crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
       crew/holo/text.l crew/moon/gen.l
   echo "(use 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
   cat crew/moon/law.l

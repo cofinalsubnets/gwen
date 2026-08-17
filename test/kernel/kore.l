@@ -5,6 +5,8 @@
 ; is then proved on the tree itself, and unmade at the foot. (The tools print
 ; their usual output to the console mid-corpus; that is the smoke, not a mess.)
 
+(use 'kore) ; the applets ride module 'kore -- the cat's kore files above just registered it
+
 (: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
    (wr p s) (: q (open p "w") (? (port? q) (: _ (say q s) _ (close q) 1) 0))
    d "/tmp/l-kore"

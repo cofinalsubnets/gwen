@@ -27,6 +27,7 @@
 ; dispatch as the body; nothing leaks, and every path ANSWERS a charm through core.l's
 ; urun, so an in-image caller lives through a tool that would have quit (the SEAT below
 ; is the one site that quits). ⚠ a main here leaves deep through `die`, never `quit`.
+(module 'kore
 (: kore-main (: (read-text p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))   ; (1 text) | ()
    (die m) (: _ (say err m) _ (put err 10) (uleave 2))
 
@@ -324,3 +325,4 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
 ; the status. the -l bake preload seats a flag, not kore, so the scan answers () and
 ; kore-main answers () -- the presence guard, and the one answer that is not a status.
 (: r (kore-main ()) (? (charm? r) (quit r) ()))
+) ; module 'kore

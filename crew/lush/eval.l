@@ -177,17 +177,20 @@
         mn (? (two? al) <>al (w + "-main"))
         md (? ((two? al) && (two? >>al)) (from (intern <>>al)) ())   ; the row's module, or ()
         nm (intern mn)
-        ok (? (tablet? md) (member? nm (keys md)) (member? nm (names ())))
-        (? (&& (sh-smem? w sh-imgok) !(sh-slashed? w) ok (sh-ours? w))
-           [1 (sh-imgwrap (? (tablet? md) (md nm) (ev nm)) mn) (mn = "kore-main")]
+        f0 (? (tablet? md) (md nm)                    ; the alias row named the module
+              (member? nm (names ())) (ev nm)         ; a bare global (objcopy's lane)
+              (from 'kore nm))                        ; else the applets' home module
+        (? (&& (sh-smem? w sh-imgok) !(sh-slashed? w) !(nil? f0) (sh-ours? w))
+           [1 (sh-imgwrap f0 mn) (mn = "kore-main")]
            0))
    ; ⚠ THE APPLET IS WRAPPED, because udie RAISES rather than exiting: `(scare 'leave c)`
    ; is what the verb table's own `urun` catches, and the in-image lane reaches the applet
    ; BARE. Unwrapped, one `test` on a bad expression escapes as an unhandled raise and
    ; takes the whole shell down instead of failing one command. moon-run wants no wrap --
    ; it answers its status by construction, which is why it was the safe single entry.
-   (sh-imgwrap f mn) (? ((mn = "moon-run") || !(member? 'urun (names ()))) f
-                        (\ as ((ev 'urun) f as)))
+   ; urun lives in module 'kore now; a miss absorbs to (), which keeps the no-wrap lane.
+   (sh-imgwrap f mn) (: ur (from 'kore 'urun)
+                        (? ((mn = "moon-run") || !ur) f (\ as (ur f as))))
    (sh-assoc w l) (? !(two? l) 0 (w = <<l) <l (sh-assoc w >l))
    (sh-imgfn w) (: v (peep sh-imgc w 'no)
                    (? !(id? v 'no) v

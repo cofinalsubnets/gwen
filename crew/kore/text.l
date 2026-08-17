@@ -5,6 +5,7 @@
 ; tool preserves it, so a tool whose output can carry the source's LAST line asks
 ; `nl-end?` of its input and `chomp`s when the answer is no. a body-less top-level `:` (the wm's app shape); loads
 ; BEFORE diff.l in the gate (udiff captures `lines` at its define -- the capture law).
+(module 'kore
 (:
    ; text -> the list of its lines, split at charm 10
    (lines s)
@@ -24,3 +25,4 @@
    ; chomps to itself -- neither is a special case anywhere above.
    (nl-end? s) (: n (tally s) ((0 < n) && (s (n - 1) = 10)))
    (chomp t) (: n (tally t) (? (nl-end? t) (snip t 0 (n - 1)) t)))
+) ; module 'kore

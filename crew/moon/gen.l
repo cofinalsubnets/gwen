@@ -19,6 +19,7 @@
 ; ⚠ ahead of the form: a \ param that is not a nom lowers through pat's `@`, and a macro is
 ; in the chain only once its layer is spliced -- the cat's other preamble (asbook.l's holo).
 (module 'moon
+(use 'kore)
 (use 'pat)
 (:
    ; ⚠ FIRST binding on purpose: a plain VALUE folds EAGERLY when the baking compiler reaches

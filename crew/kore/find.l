@@ -21,6 +21,7 @@
 ; ⚠ SYMLINKS ARE NOT FOLLOWED (GNU's -P, the default). the `stat` nif follows, so
 ; the type read asks `readlink` FIRST -- a link answers l, whatever it points at,
 ; and the walk does not descend through it. a dangling link is still visited.
+(module 'kore
 (:
    ; a path and one entry -> the child's path (a trailing / on the parent stays one /)
    (fi-join p b)
@@ -156,3 +157,4 @@
                             _ (put err 10) (pin st 101 1)))
                     (go >m)))
        (go (? (two? <sp) <sp '(".")))))
+) ; module 'kore

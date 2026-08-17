@@ -5,6 +5,7 @@
 ; a child that cannot exec _exit(127)s), still (pty.c's kill), rest (the core
 ; sleep, milliseconds). a body-less top-level `:` leaking the two pure helpers
 ; (udur, uwords -- lawed in law.l) and the mains.
+(module 'kore
 (:
    ; a duration text -> milliseconds | (): N or N.N, an optional s/m/h/d suffix
    ; (seconds the default). 0 is a real duration -- callers test charm?, not truth
@@ -127,3 +128,4 @@
                               (w && !(bad = 127)) 123
                               bad))))
        (go runs 0)))
+) ; module 'kore

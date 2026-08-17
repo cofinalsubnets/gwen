@@ -10,6 +10,7 @@
 ; the applets are no longer the compiler's business.
 ;
 ; a body-less top-level `:` -- these names LEAK on purpose, which is what makes them a floor.
+(module 'kore
 (:
    ; -- the u-floor --
    ; decimal text -> a charm (a leading - reads negative)
@@ -172,3 +173,4 @@
                            (: _ (say err (who + ": cannot open " + f)) _ (put err 10) 0))))
        (go a ok) (? (two? a) (go >a (one <a ok)) (: _ (flush out) (? ok 0 1)))
        (? (two? as) (go as 1) (: _ (dot (slurp in)) _ (flush out) 0))))
+) ; module 'kore

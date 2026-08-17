@@ -28,6 +28,7 @@
 ;
 ; the pure floor (lawed in crew/kore/law.l): (sparse sc ere?) -> (1 cmds) | (),
 ; and (usub nodes repl ln g?) -> (changed text), the one substitution walk.
+(module 'kore
 (:
    ; -- the substitution: replace matches of nodes in ln by repl (g? = all) --
    (usub nodes repl ln g?)
@@ -239,3 +240,4 @@
                      (? (two? <rd) (nl-end? (last <rd)) 1))
              _ (flush out) _ (flush err)
              (? <>rd 2 0)))))
+) ; module 'kore
