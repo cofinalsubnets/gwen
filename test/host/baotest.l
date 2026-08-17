@@ -107,7 +107,7 @@
    !(two? (parseall '(40 49)))
    (1.5 = <(parseall '(49 46 53)))
    (1000.0 = <(parseall '(49 101 51)))
-   (nom? <(parseall '(49 46 50 46 51)))
+   (two? <(parseall '(49 46 50 46 51)))     ; "1.2.3": a digit-led RUN factors now (test/glued.l), no longer a nom
    ; the more-sentinel: an unclosed shape is m (not two?); a complete datum is
    !(two? (parseall '(40 43 32 49)))                  ; "(+ 1" unclosed
    (two? (parseall '(49 32 43)))                      ; "1 +" complete (the curry partial)
