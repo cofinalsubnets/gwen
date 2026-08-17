@@ -20,8 +20,9 @@
   (= "ab" (+ "ab" ""))   (= "ab" (+ "" "ab"))
   (= "" (+ "" ""))                        ; empty join -> the empty string
   (string? (+ "" ""))                        ; ... still a string, not 0
-  ; scat is gone; + takes the byte law instead: 0 is byte 0, not an empty operand
-  (= 3 (tally (+ "ab" 0)))  (= 0 ((+ "ab" 0) 2))
+  ; a NUMBER against a string arrives as "" (the degenerate law): 0 is no byte,
+  ; and the string answers whole -- (string 0) is the one spelling of byte 0
+  (= "ab" (+ "ab" 0))  (= 2 (tally (+ "ab" 0)))
   (= 0 (+ 0 0))
 
   ; snip: an empty string snip returns "" -- a string snip yields a STRING, the

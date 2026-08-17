@@ -49,11 +49,11 @@
    ; the cursor is a tablet: 0 the accumulator, 1 how many bits it holds.
    (gz-put j t v k)
     (: (go a n) (? (n < 8) (: _ (pin t 0 a) _ (pin t 1 n) 0)
-                    (: _ (say j ("" + (a & 255))) (go (a >> 8) (n - 8))))
+                    (: _ (say j (string (a & 255))) (go (a >> 8) (n - 8))))
        (go ((peep t 0 0) | ((v & ((1 << k) - 1)) << (peep t 1 0))) ((peep t 1 0) + k)))
    (gz-align j t)                          ; flush the tail byte, zero-padded
     (? (peep t 1 0)
-       (: _ (say j ("" + ((peep t 0 0) & 255))) _ (pin t 0 0) _ (pin t 1 0) 0)
+       (: _ (say j (string ((peep t 0 0) & 255))) _ (pin t 0 0) _ (pin t 1 0) 0)
        0)
    (gz-rev v k) (: (go i a w) (? (k <= i) a (go (i + 1) ((a << 1) | (w & 1)) (w >> 1))) (go 0 0 v))
 
@@ -360,7 +360,7 @@
        _ (pin h 4 (stamp & 255))        _ (pin h 5 ((stamp >> 8) & 255))
        _ (pin h 6 ((stamp >> 16) & 255)) _ (pin h 7 ((stamp >> 24) & 255))
        _ (pin h 8 0) _ (pin h 9 3)               ; XFL none, OS 3 = unix
-       ((string h) + (? named (nom + ("" + 0)) "") + (gz-deflate txt)
+       ((string h) + (? named (nom + (string 0)) "") + (gz-deflate txt)
         + (gz-le32s (gz-crc32 txt)) + (gz-le32s ((tally txt) & 4294967295))))
 
    ; the header's optional fields are four flags, and every one of them must be

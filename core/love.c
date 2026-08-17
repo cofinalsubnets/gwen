@@ -5722,7 +5722,8 @@ static ai_inline char *add_emit(struct ai *g, char *w, word x) {  // append x's 
  if (strp(x)) return (void) memcpy(w, txt(x), len(x)), w + len(x);
  if (nomp(x)) { struct ai_str *n = nom_str(g, x);
   return n ? ((void) memcpy(w, txt(n), n->len), w + n->len) : w; }
- return *w = (char) seq_byte(x), w + 1; }               // number -> one byte (gated >= 0 by the byte law)
+ return *w = (char) seq_byte(x), w + 1; }               // number -> one byte (unreachable from + since the
+                                                        // degenerate lane; symbol paths never land here)
 static lvm(lvm_add_string) {
  word a = Sp[0], b = Sp[1];
  if (trayp(a) || trayp(b)) ai_musttail return Push(ZeroPoint); // array <-> string: undefined
@@ -5749,6 +5750,12 @@ static lvm(lvm_0) {                             // unsupported mix (array <-> st
 static lvm(lvm_bin_unit) {
  word a = Sp[0], b = Sp[1];
  ai_musttail return Push(mintp(a) ? b : a); }
+// the DEGENERATE lane: a mixed pair with no lawful crossing answers the higher
+// band's operand whole -- the foreigner arrives as that band's unit, since the
+// only hom a group has into a free monoid is trivial. this is what restores +
+// associativity (the byte law and the element-adjoin law could not associate).
+static lvm(lvm_bin_a) { word a = Sp[0]; ai_musttail return Push(a); }
+static lvm(lvm_bin_b) { word b = Sp[1]; ai_musttail return Push(b); }
 
 // ============================================================================
 // generic-op lane aps, the dispatch matrices, then the `+`/`*` dispatchers

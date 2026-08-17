@@ -160,9 +160,9 @@
    ; is the same on every machine.
    (nm-sp w) (? (w < 1) "" (nm-sp (w - 1) + " "))
    (nm-hex v w) (: dg "0123456789abcdef"
-                   (go k a) (? (k < 0) a (go (k - 1) (a + dg ((v // (k 16)) % 16))))
+                   (go k a) (? (k < 0) a (go (k - 1) (a + string (dg ((v // (k 16)) % 16)))))
                    (go (w - 1) ""))
-   (nm-low t) (: c (t 0) (? ((65 <= c) && (c <= 90)) ("" + (c + 32)) t))
+   (nm-low t) (: c (t 0) (? ((65 <= c) && (c <= 90)) (string (c + 32)) t))
    (nm-let sy)
     (: x (at sy 3) sec (at sy 6)
        u (? (x = 0) "U" (x = 65521) "A" (x = 65522) "C"
@@ -199,7 +199,7 @@
               (? (c = 103) (nm-flags t (k + 1) 1 u srt)
                  (c = 117) (nm-flags t (k + 1) g 1 srt)
                  (c = 112) (nm-flags t (k + 1) g u 1)
-                 (die ("nm: unknown flag -" + ("" + c))))))
+                 (die ("nm: unknown flag -" + (string c))))))
        (go a g u srt fs)
         (? !(two? a) `(g u srt (rev fs))
            ((1 < tally <a) && (<a 0 = 45))

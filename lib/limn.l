@@ -27,10 +27,10 @@
    ; glyph bytes go OUT as utf-8: the grid holds cp437 (the fold), the outer terminal
    ; speaks unicode (the unfold), each face rendered once and cached
    limn-glyphs #()
-   (limn-utf8 cp) (? (< cp 128) ("" + cp)
-                     (< cp 2048) (+ ("" + (| 192 (>> cp 6))) ("" + (| 128 (& 63 cp))))
-                     (+ ("" + (| 224 (>> cp 12)))
-                        (+ ("" + (| 128 (& 63 (>> cp 6)))) ("" + (| 128 (& 63 cp))))))
+   (limn-utf8 cp) (? (< cp 128) (string cp)
+                     (< cp 2048) (+ (string (| 192 (>> cp 6))) (string (| 128 (& 63 cp))))
+                     (+ (string (| 224 (>> cp 12)))
+                        (+ (string (| 128 (& 63 (>> cp 6)))) (string (| 128 (& 63 cp))))))
    (limn-glyph b) (: g (peep limn-glyphs b ())
                      (? (string? g) g
                       (: cp (? ((<= 32 b) && (< b 127)) b (unfold b))

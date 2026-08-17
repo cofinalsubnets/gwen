@@ -352,7 +352,7 @@
    ((: (g i acc)
        (? (i >= tally s) acc
           (? ((s i = 92) && ((1 + i) < tally s) && (s (1 + i) = 10))
-             (g (2 + i) (acc + 32)) (g (1 + i) (acc + s i)))))
+             (g (2 + i) (acc + " ")) (g (1 + i) (acc + string (s i))))))
     0 "")
    (lines s)
    ((: (g i st acc)
@@ -377,9 +377,9 @@
           (: c (l i)
              (? (c = 35) acc                                  ; 35 = #
                 (c = 92) (? ((1 + i) < tally l)               ; 92 = backslash
-                            (: d (l (1 + i)) (? (d = 35) (g (2 + i) (acc + 35)) (g (2 + i) (acc + 92 + d))))
-                            (acc + 92))
-                (g (1 + i) (acc + c))))))
+                            (: d (l (1 + i)) (? (d = 35) (g (2 + i) (acc + "#")) (g (2 + i) (acc + "\\" + string d))))
+                            (acc + "\\"))
+                (g (1 + i) (acc + string c))))))
     0 "")
    ; split a string on a top-level char `ch` -- parens/braces are balanced, so a
    ; delimiter inside $(..) / ${..} does not split (used for function args and the
@@ -487,7 +487,7 @@
 
    ; -- function helpers --
    (chomp s) ((: (g i) (? ((0 < i) && (s (i - 1) = 10)) (g (i - 1)) (snip s 0 i))) (tally s))
-   (nl->sp s) ((: (g i acc) (? (i >= tally s) acc (g (1 + i) (acc + (? (s i = 10) 32 (s i)))))) 0 "")
+   (nl->sp s) ((: (g i acc) (? (i >= tally s) acc (g (1 + i) (acc + string (? (s i = 10) 32 (s i)))))) 0 "")
    (fn-shell sh cmd) (: r (hark `(sh "-c" cmd)) (? (two? r) (nl->sp (chomp >r)) ""))
    ; $(wildcard), native both ways: lush's glob (cook-glob -- classes, multi-
    ; segment patterns, the mask law) when it is aboard; else glob1 below -- a
@@ -543,7 +543,7 @@
       ((: (g i acc)
           (? ((i + tally frm) > tally s) (acc + sub s i (tally s))
              (? (frm = sub s i (i + tally frm)) (g (i + tally frm) (acc + to))
-                (g (1 + i) (acc + s i)))))
+                (g (1 + i) (acc + string (s i))))))
        0 ""))
    (fn-or args as d)  ((: (g l) (? (two? l) (: v (expand <l as (1 + d)) (? (0 < tally (trim v)) v (g >l))) "")) args)
    (fn-and args as d) ((: (g l last) (? (two? l) (: v (expand <l as (1 + d)) (? (0 < tally (trim v)) (g >l v) "")) last)) args "")
@@ -662,11 +662,11 @@
                    (? ((nx = 40) || (nx = 123))
                       (: close (? (nx = 40) 41 125) j (findclose s (2 + i) nx close)
                          (g (1 + j) (acc + eval-group (snip s (2 + i) j) as d)))
-                      (nx = 36) (g (2 + i) (acc + 36))
+                      (nx = 36) (g (2 + i) (acc + "$"))
                       (namech nx || (nx = 64) || (nx = 60) || (nx = 94) || (nx = 42))
                       (g (2 + i) (acc + expand (peep as (snip s (1 + i) (2 + i)) "") as (1 + d)))
-                      (g (1 + i) (acc + s i))))
-                (g (1 + i) (acc + s i)))))
+                      (g (1 + i) (acc + string (s i)))))
+                (g (1 + i) (acc + string (s i))))))
        0 ""))
    (expand-words ws as) (catmap (\ w (split-ws (expand w as 0))) ws)
    ; a recipe LINE that begins with the shell `exec` builtin is an INTERACTIVE

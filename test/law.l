@@ -71,6 +71,20 @@
                                           && (c = (n // d) + (? (0 < n && 0 != n % d) 1 0))
                                           && (saturate (q n d) = (? (0 < c) c 0)))))
                                  [[7 2] [-7 2] [0 5] [b 3] [-b 3] [b 1] [(b * b) b]])))]
+      ; --- + ASSOCIATES, mixed bands included (the degenerate law): a number against
+      ; text or a chain arrives as that band's UNIT, which is exactly what lets
+      ; (x+y)+z = x+(y+z) close over the bands. three seams are carved out BY NAME,
+      ; each its own arc rather than a hedge: text<->chain still ADJOINS (the charlist
+      ; hom is the deferred rung), a coin READS a chain as (n d) and mixes garbage
+      ; with a twin, and mismatched trays answer () -- undefined-answers-() breaks
+      ; any law it touches.
+      ['add-assoc
+       (\ x (? (lit? x || coin? x || tray? x) 1
+               (: ws (list 0 2 -5 2.5 (twin 3 4) () "" "ab" 'sym '(1 2) '(-2 1))
+                  (txt? v) (string? v || (? (id? v ()) 0 (nom? v)))
+                  (mix? a b c) ((txt? a || txt? b || txt? c) && (two? a || two? b || two? c))
+                  (ok? y z) (? (mix? x y z) 1 (((x + y) + z) = (x + (y + z))))
+                  (all (\ y (all (ok? y) ws)) ws))))]
       ; ⚠ `bit x`, not `?x`: glued ? is bit EVERYWHERE except opening a parenthesized form, where
       ; `(` + `?` makes the CLAUSE head instead -- (? x) is the one-armed cond, which answers x,
       ; so the law reads x = (0 < $x) and holds only at 0 and 1. this harness caught that.

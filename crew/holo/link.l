@@ -400,7 +400,7 @@
    ; unreachable through the index, which is the reader's only door. kore's `ar`
    ; and moon's runtime archive are both this.
    (ld-arp w s) (? (tally s < w) (ld-arp w (s + " ")) s)      ; ar fields are LEFT-justified
-   (ld-arb4 v) (((("" + ((v >> 24) & 255)) + ((v >> 16) & 255)) + ((v >> 8) & 255)) + (v & 255))
+   (ld-arb4 v) ((string ((v >> 24) & 255)) + (string ((v >> 16) & 255)) + (string ((v >> 8) & 255)) + (string (v & 255)))
    (ld-arhdr nm date uid gid mode sz)
     ((((((ld-arp 16 nm + ld-arp 12 date) + ld-arp 6 uid) + ld-arp 6 gid) + ld-arp 8 mode)
       + ld-arp 10 (show sz)) + "`\n")

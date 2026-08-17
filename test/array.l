@@ -160,7 +160,7 @@
 
  ; --- non-conforming / non-numeric -> nil ---
  (nil? (+ (star-tray '(3) 0) (star-tray '(4) 0)))   ; shapes [3] and [4] don't conform
- (nil? (+ (star-tray '(3) 0) "x"))              ; non-numeric operand
+ (= "x" (+ (star-tray '(3) 0) "x"))             ; a tray is number-band: against a string it degenerates
  (nil? (star-tray '(3) 0)))                     ; (sanity) zero array is falsy
 
 ; --- empty arrays: the first stone of the APL buildout. a shape-(0) array

@@ -360,7 +360,7 @@
       (tally km = 71)))                                                          ; 70 stock, +3 new rows, -2 unbound (1 bind + 1 unbind unreadable)
 
 ; --- ~/.Xauthority parsing (crew/lux/wire.l rung 8), on mock bytes ---
-(: (be16 n) (("" + (>> n 8)) + (255 & n))                                        ; big-endian u16 as two appended bytes
+(: (be16 n) ((string (>> n 8)) + string (255 & n))                                        ; big-endian u16 as two appended bytes
    (fld t) (be16 (tally t) + t)
    (entry num data) ((((be16 256 + fld "bee") + fld num) + fld "MIT-MAGIC-COOKIE-1") + fld data)
    b (entry "0" "aaaabbbbccccdddd" + entry "7" "0123456789abcdef")
