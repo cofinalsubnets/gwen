@@ -69,17 +69,21 @@
  (gem? (% 7.0 0.0))
 
  ; --- + is generic: string/list concat, order-preserving; - stays numeric (nil) ---
- (= "xB" (+ "x" 66))                ; str + num -> one byte at back (the byte law)
- (= "Bx" (+ 66 "x"))                ; num + str -> byte at front
- (= "xB" (+ "x" 66.0))              ; rep-blind: 66.0 IS 66
- (nil? (+ "x" 66.9))                ; ... but a non-integer is NOT a byte -> nil
- (nil? (+ "x" -66)) (nil? (+ "x" 256))   ; out of 0..255 -> nil
+ ; MIXED BANDS DEGENERATE (the associativity law, 2026-08-16): a number against a
+ ; string or a chain arrives as that band's UNIT, so the other operand answers
+ ; whole -- the byte law and the element-adjoin law could never associate and are
+ ; gone. (string c) and (l + [x]) are their lawful spellings.
+ (= "x" (+ "x" 66))                 ; str + num -> the string (the number arrives as "")
+ (= "x" (+ 66 "x"))                 ; num + str -> the same
+ (= "x" (+ "x" 66.0))               ; ... a gem no differently
+ (= "x" (+ "x" 66.9))
+ (= "x" (+ "x" -66)) (= "x" (+ "x" 256))   ; no byte range: there is no byte
  (= "abcd" (+ "ab" "cd"))           ; str + str -> concat
  (= '(1 2 3 4) (+ '(1 2) '(3 4)))   ; list + list -> append
- (= '("x" 1 2) (+ "x" '(1 2)))      ; str + list -> (X str list)
+ (= '("x" 1 2) (+ "x" '(1 2)))      ; str + list -> (X str list)  [the charlist hom is the deferred rung]
  (= '(1 2 "x") (+ '(1 2) "x"))      ; list + str -> (append list (list str))
- (= '(5 1 2) (+ 5 '(1 2)))          ; num + list -> X at front
- (= '(1 2 5) (+ '(1 2) 5))          ; list + num -> append at back
+ (= '(1 2) (+ 5 '(1 2)))            ; num + list -> the list
+ (= '(1 2) (+ '(1 2) 5))            ; list + num -> the list
  (nil? (- "a" "b"))
 
  ; --- equality with promotion across charm?/gem? ---

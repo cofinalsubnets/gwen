@@ -72,8 +72,8 @@
 
    ; --- read one line (cooked): bytes until \n; 'eof at immediate EOF. here on
    ; the shared floor: eval's `.`/read builtins and the loops all drink from it
-   (sh-getline port) (: c (see port) (? (c < 0) 'eof (c = 10) "" (("" + c) + (sh-rest port))))
-   (sh-rest port)    (: c (see port) (? (c < 0) ""   (c = 10) "" (("" + c) + (sh-rest port))))
+   (sh-getline port) (: c (see port) (? (c < 0) 'eof (c = 10) "" ((string c) + (sh-rest port))))
+   (sh-rest port)    (: c (see port) (? (c < 0) ""   (c = 10) "" ((string c) + (sh-rest port))))
 
    (sh-unwords ws) (foldl (\ a w (? (tally a) ((a + " ") + w) w)) "" ws)
    (sh-addjob pids state cmd)

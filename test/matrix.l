@@ -124,24 +124,22 @@
  (= ~(11 2) (peep (+ @(10 20) mx-ac) 0 0))    ; R/Z array + C array (real promotes)
  (nil? (+ @(1 2) @(1 2 3)))                   ; non-conforming shapes -> nil
 
- ; --- add_string lane: text x text, and a number as one byte ---
+ ; --- add_string lane: text x text; a NUMBER (tray included) arrives as the unit
+ ;     and the text answers whole (the degenerate law: no hom from a group into
+ ;     the free monoid, so the byte law is gone) ---
  (= "abcd" (+ "ab" "cd"))                     ; str + str
- (= "abC" (+ "ab" 67))   (= "Cab" (+ 67 "ab")) ; str + num (byte at the written end)
+ (= "ab" (+ "ab" 67))   (= "ab" (+ 67 "ab"))  ; str + num -> the string
  ("abef" = (+ "ab" 'ef))                      ; a symbol inherits the string lane under +; a string operand DEMOTES
  ('efef = (+ 'ef 'ef))                         ; sym + sym cats spellings and RE-INTERNS -> a symbol
  ("efab" = (+ 'ef "ab"))                       ; ... demote again (the rank min pulls to string)
+ (= "ab" (+ @(1 2) "ab"))   (= "ab" (+ "ab" @(1 2)))   ('ef = (+ @(1 2) 'ef))
+ (= "ab" (+ mx-big "ab"))                     ; a bignum is a number like any other
 
- ; --- the arith<->seq SEAM (KTrayO|KString) is ARRAY x text only -> nil. A SCALAR
- ;     number joins text as one byte ONLY under the byte law (exact 0..255), so a
- ;     bignum -- never in range -- is nil too. ---
- (nil? (+ @(1 2) "ab"))   (nil? (+ "ab" @(1 2)))   (nil? (+ @(1 2) 'ef))
- (nil? (+ mx-big "ab"))                       ; bignum: out of byte range -> nil
-
- ; --- add_seq lane: a list anywhere (chain wins over text & number) ---
+ ; --- add_seq lane: a list against text (chain wins); a NUMBER degenerates ---
  (= '(1 2 3 4) (+ '(1 2) '(3 4)))             ; list + list
- (= '(5 1 2) (+ 5 '(1 2)))   (= '(1 2 5) (+ '(1 2) 5))   ; num <-> list
+ (= '(1 2) (+ 5 '(1 2)))   (= '(1 2) (+ '(1 2) 5))   ; num <-> list -> the list
  (= '("ab" 1 2) (+ "ab" '(1 2)))              ; str <-> list (str is one element)
- (= "(@(1 2) 7 8)" (show (+ @(1 2) '(7 8))))  ; array <-> list (array is one element)
+ (= "(7 8)" (show (+ @(1 2) '(7 8))))         ; array <-> list: the tray is number-band, it degenerates
 
  ; --- addl lane: a lambda operand anywhere -> CHURCH-NUMERAL add (not pointwise):
  ;     (m + n) a x == m a (n a x), so the result is a function awaiting (f x).

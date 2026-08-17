@@ -330,7 +330,8 @@
                 (wxl1 c x (lp x) bnd))                 ; opfix (op-flat-ol) already flattened nested lambdas at the source, shared with c0
      (h = ':) (? (atom? >x) ':                      ; (:) = the head read -- (f)==f at zero operands, a missing name (c0 agrees)
                  (atom? >>x) (keep x (keep1 >x (wx <>x bnd)) ':)
-                 (keep x (wxl (boxfix >x) bnd) ':))   ; boxfix = letrec* capture-by-location source rewrite, post-macroexpand
+                 (keep x (wxl (boxfix >x) bnd) ':))   ; boxfix = the capture-by-location source rewrite, post-macroexpand
+                                                       ;   (eager reads see let*, closures see letrec* -- prel's law)
                                                        ;   (it passes an unboxed let VERBATIM, so identity rides through)
      (h = '?) (? (atom? >x) '?                      ; (?) likewise: the empty form is the head's value
                  (keep x (wxc >x bnd) '?))
@@ -503,7 +504,8 @@
     (id? <x '\) (? (atom? >>x) x
        (: r (lp x) ps <r ren (map (\ p (p >< (nom 0))) ps)                      ; rename binders to fresh -> no capture
           ('\ >< (map cup ren + [(bsub (ren + rmkeys ps env) (last x))]))))
-    (id? <x ':) (: nms (colnms >x) ren (map (\ p (p >< (nom 0))) nms)       ; a : is a letrec scope too -- rename its binders fresh so a subst can't be captured
+    (id? <x ':) (: nms (colnms >x) ren (map (\ p (p >< (nom 0))) nms)       ; rename the :'s binders fresh so a subst can't be captured -- whole-form, which is
+                                                                             ;   why an ENTANGLED : (a bare pre-pin sibling read) never reaches bsub (entg?)
        (map (\ e (bsub (ren + rmkeys nms env) e)) x))
     (map (\ e (bsub env e)) x))
    (beta lam as) (: r (lp lam) ps <r np (tally ps)                               ; apply a lambda to args (curried)
@@ -555,6 +557,25 @@
          (keep2 x h2 as)))))                                                     ; a lambda body escaping at a value position -> decline (the escape law)
    (cplam x se fl op bnd) (? (atom? >>x) x                                       ; (\ v) quote -> leave
     (: r (lp x) (relam x r (cprop >r (rmkeys <r se) fl 0 (<r + bnd)))))          ; the body is a value -> op 0
+   ; the new-law guard (eager reads see let*, closures see letrec*): bsub renames a :'s
+   ; binders over the WHOLE form -- letrec-wise -- but a bare read BEFORE its name's pin
+   ; reads the OUTER binding, and that rename would capture it (the fresh nom then reads
+   ; as a wild cell miss). a body carrying such an ENTANGLED : declines beta and the
+   ; splice, and the call runs un-inlined. over-approximate on purpose: any occurrence of
+   ; a not-yet-pinned sibling name in a def flags, even under a \ or a quote.
+   (occn v e) (? (id? e v) 1 (atom? e) 0 (|| (occn v <e) (occn v >e)))
+   (entg? x) (?
+    (atom? x) 0
+    (id? <x '\) (? (atom? >>x) 0 (entg? (last x)))
+    (id? <x ':) (: nms (colnms >x)
+       (walk bs pn) (?
+        (atom? bs) 0
+        (atom? >bs) (entg? <bs)
+        (? (any (\ v (nil? (member? v pn) && occn v <>bs)) nms) 1
+           (entg? <>bs) 1
+           (walk >>bs (<bs >< pn))))
+       (walk >x ()))
+    (any entg? x))
    (cpbinds bs se fl op bnd) (?
     (atom? bs) bs
     (atom? >bs) (keep1 bs (cprop <bs se fl op bnd))                              ; the let's BODY inherits the let's op
@@ -568,12 +589,12 @@
    (cprop x se fl op bnd) (: h <x (?
     (h = x) (? (nom? x) (: e (assq x se) (? (atom? e) x <>e)) x)               ; const/known-lambda var -> value
     (h = '\) (cplam x se fl op bnd)
-    ; a let's names all shadow throughout (one scope) -- so they leave `se` too, exactly as
-    ; cplam drops its params. ⚠ bnd alone is not enough: without the rmkeys an OUTER constant
-    ; of the same name propagates into a binding's own RHS, where letrec* says the name is the
-    ; unpinned INNER one. that is a let* kill on a letrec* form, and it read (: x 42 (: x (x + 1) x))
-    ; as 43 where c0 said the pre-fill read. a rebind WITHIN one chain still folds: the name is
-    ; stripped once at entry and re-enters se as each binding pins, so (: x 1 x (x + 1) x) is 2.
+    ; a let's names leave `se` at entry, exactly as cplam drops its params. under the split
+    ; law a bare PRE-PIN read does see the outer binding, so the entry-kill is CONSERVATIVE
+    ; there -- it misses a fold, and the runtime read still answers the outer value -- but it
+    ; cannot be lifted wholesale: an under-\ read inside a pre-pin def is the letrec cell,
+    ; and a propagated outer constant would answer for it. a rebind WITHIN one chain still
+    ; folds: the name re-enters se as each binding pins, so (: x 1 x (x + 1) x) is 2.
     (h = ':) (: ns (ln >x) (keep x (cpbinds >x (rmkeys ns se) fl op (cat ns bnd)) ':))
     (h = '?) (keep x (mapi (\ e (cprop e se fl op bnd)) >x) '?)              ; no prune here -- wxc does it
     (: m (? (nom? h) (macros h) 0)                                          ; macro head, not shadowed? expand on RAW args -- a
@@ -584,7 +605,9 @@
                                                                                   ; a COMPOUND head goes out WALKED, which is what keeps
                                                                                   ; cprop's output macro-free and wx's macro lane gone
              hk (kconst hr)                                                       ; the head's own value, when it has one
-             (? ((0 < fl) && (lambp hr) && (two? as) && (allp as se))                        ; two? as: (f) is f -- nothing to substitute
+             (? ((0 < fl) && (lambp hr) && (two? as) && (entg? (last hr)))                   ; an entangled : in the body -> no bsub lane is sound;
+                  (keep2 x h2 as)                                                     ;   keep the call (boxfix's runtime law answers it)
+                ((0 < fl) && (lambp hr) && (two? as) && (allp as se))                        ; two? as: (f) is f -- nothing to substitute
                   (: red (cprop (beta hr as) se (fl - 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
                      (? (op || !(lambp red)) red (keep2 x h2 as)))                    ; escaping lambda result -> REVERT (keep the closure)
                 ((0 < fl) && (lambp hr) && (two? as))                                     ; ... with an IMPURE arg -> the BINDING SPLICE (bspl;
@@ -594,7 +617,7 @@
                 (two? as && propk? <as && <hk && pure-ap? >hk (kval <as))             ; a PURE-APPLYING head with a KNOWN operand: fold the whole
                   (cpap >hk as)                                                       ;   known prefix, an unknown tail keeps the value as its head
                 (keep2 x h2 as)))))))                                                 ; nothing rewrote -> the ORIGINAL call
-   (wx (cprop x () 64 0 0) 0))
+   (wx (cprop x () 64 0 ()) ()))   ; bnd seeds (): a 0 seed rode `list + 0` into every binder set
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a nom? literal.
   ; ⚠ routing it to ava captures it as a SPURIOUS import: it inflates a closure's arity by one with
   ; no matching value applied at the ref site -> an under-saturated partial (silently wrong). the

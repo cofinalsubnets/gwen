@@ -1,17 +1,19 @@
 ; A NAMED symbol INHERITS the string lane under +/* (the totality philosophy: make use of
 ; constructions others reject). a symbol acts as its SPELLING and RE-INTERNS the result,
-; but DEMOTES to a string when a string operand is present (the rank min pulls to 0). it
-; still ADJOINS to a list (foo stays foo -- the list law), applying it is const-1, and the
-; EMPTY symbol (intern "") is the zero point (), the +/* UNIT. coins are the per-kind
-; override. strings keep the whole algebra (concat, byte law, repetition) unchanged.
+; but DEMOTES to a string when a string operand is present (the rank min pulls to 0 --
+; the spelling IS a monoid hom, so this crossing is lawful). a NUMBER against a symbol
+; arrives as the unit (the degenerate law: no hom from a group into the free monoid),
+; so the symbol answers whole. it still ADJOINS to a list (foo stays foo -- the list
+; law), applying it is const-1, and the EMPTY symbol (intern "") is the zero point (),
+; the +/* UNIT. coins are the per-kind override.
 
 (: sa-z (intern "")
  (assert
   ; --- + inherits the string lane: sym+sym cats spellings and RE-INTERNS ---
   ('efef = ('ef + 'ef)) ('ab = ('a + 'b))       ; sym + sym -> an interned symbol
   ("abef" = ("ab" + 'ef)) ("efab" = ('ef + "ab"))   ; sym <-> string -> DEMOTE to a string
-  ('Aef = (65 + 'ef)) ('efA = ('ef + 65))       ; sym <-> number -> the byte law, re-interned
-  !(@(1 2) + 'ef) !('ef + @(1 2))               ; sym <-> array stays nil (no string algebra for arrays)
+  ('ef = (65 + 'ef)) ('ef = ('ef + 65))         ; sym <-> number -> the number degenerates
+  ('ef = (@(1 2) + 'ef)) ('ef = ('ef + @(1 2))) ; sym <-> array: the tray is number-band, same law
   ; the EMPTY symbol (intern "") is () -- the UNIT, so it's +'s identity --
   ('ef = sa-z + 'ef) ('ef = 'ef + sa-z) (id? () (sa-z + sa-z))   ; () + x = x, either side; () + () = ()
   ; --- * repeats the spelling and re-interns; sym*sym stays nil (str*str); () is *'s unit ---
@@ -26,8 +28,8 @@
   (id? sa-z (intern ""))
   ; --- noms carry their name as data: read it with `string` ---
   ("cd" = (string (nom "cd"))) ("cd" = (string (nom 'cd)))
-  ; --- strings keep everything ---
-  ("abcd" = ("ab" + "cd")) ("Aab" = (65 + "ab")) ("abA" = ("ab" + 65))
+  ; --- strings: concat stands; a number degenerates to "" against one ---
+  ("abcd" = ("ab" + "cd")) ("ab" = (65 + "ab")) ("ab" = ("ab" + 65))
   ("ababab" = ("ab" * 3)) ("" = ("" + ""))))
 
 ; --- mint serials: the total order is TOTAL over symbols -------------------

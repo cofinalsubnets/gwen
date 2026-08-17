@@ -314,7 +314,7 @@
    ; the helm glows in the crew's cyan (256-colour 117 ~ #7dcfff), reset after.
    ; SGR is zero-width to both the host terminal and the inle console (crew/quay/quay.c),
    ; so `pl` below stays (tally ps1) and the cursor math is undisturbed.
-   ps1c ("" + 27 + "[38;5;117m" + ps1 + "" + 27 + "[39m")
+   ps1c (string 27 + "[38;5;117m" + ps1 + string 27 + "[39m")
 
    ; print the prompt, then dispatch events until ^D or a submitted buffer.
    ; returns eofsym on ^D, else (vs . nhu) so the repl can thread history.

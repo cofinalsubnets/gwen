@@ -7,7 +7,8 @@
    states as prose: every kind collapses to a BAND (the partition is derived
    from the table by row+column equality, both ops at once), the 225-
    cell tables factor through the band quotient with nothing left over, the
-   dispatch COMMUTES (orientation lives in the lane fn, never the table), and
+   dispatch COMMUTES up to mirror (a symmetric lane orients itself; the
+   positional bin_a/bin_b pair carries orientation in the name), and
    the diagonal reads the lattice: one lane per band, the algebra ladder.
    KMint is its own band, the unit lane whole: the dispatchers early-out a
    bare mint as the UNIT before indexing (the fast path), and the matrix says
@@ -17,24 +18,25 @@ From Stdlib Require Import List Arith.
 Import ListNotations.
 
 Inductive kind := KMint | KNom | KCharm | KSun | KGem | KTwin | KBig | KTrayZ | KTrayR | KTrayC | KTrayO | KString | KChain | KTablet | KHot.
-Inductive lane := Lbin_unit | Ladd_string | Ladd_seq | Laddh | Laddn | L0 | Lmul_rep | Lmulh | Lmuln | Lmul_cart.
-Definition lane_eqb (x y : lane) : bool := match x, y with Lbin_unit, Lbin_unit => true | Ladd_string, Ladd_string => true | Ladd_seq, Ladd_seq => true | Laddh, Laddh => true | Laddn, Laddn => true | L0, L0 => true | Lmul_rep, Lmul_rep => true | Lmulh, Lmulh => true | Lmuln, Lmuln => true | Lmul_cart, Lmul_cart => true | _, _ => false end.
+Inductive lane := Lbin_unit | Ladd_string | Lbin_a | Ladd_seq | Laddh | Lbin_b | Laddn | L0 | Lmul_rep | Lmulh | Lmuln | Lmul_cart.
+Definition lane_eqb (x y : lane) : bool := match x, y with Lbin_unit, Lbin_unit => true | Ladd_string, Ladd_string => true | Lbin_a, Lbin_a => true | Ladd_seq, Ladd_seq => true | Laddh, Laddh => true | Lbin_b, Lbin_b => true | Laddn, Laddn => true | L0, L0 => true | Lmul_rep, Lmul_rep => true | Lmulh, Lmulh => true | Lmuln, Lmuln => true | Lmul_cart, Lmul_cart => true | _, _ => false end.
+Definition mirror (l : lane) : lane := match l with Lbin_unit => Lbin_unit | Ladd_string => Ladd_string | Lbin_a => Lbin_b | Ladd_seq => Ladd_seq | Laddh => Laddh | Lbin_b => Lbin_a | Laddn => Laddn | L0 => L0 | Lmul_rep => Lmul_rep | Lmulh => Lmulh | Lmuln => Lmuln | Lmul_cart => Lmul_cart end.
 
 Definition addmx (a b : kind) : lane :=
  match a with
  | KMint => match b with KMint => Lbin_unit | KNom => Lbin_unit | KCharm => Lbin_unit | KSun => Lbin_unit | KGem => Lbin_unit | KTwin => Lbin_unit | KBig => Lbin_unit | KTrayZ => Lbin_unit | KTrayR => Lbin_unit | KTrayC => Lbin_unit | KTrayO => Lbin_unit | KString => Lbin_unit | KChain => Lbin_unit | KTablet => Lbin_unit | KHot => Lbin_unit end
- | KNom => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Ladd_string | KSun => Ladd_string | KGem => Ladd_string | KTwin => Ladd_string | KBig => Ladd_string | KTrayZ => Ladd_string | KTrayR => Ladd_string | KTrayC => Ladd_string | KTrayO => Ladd_string | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
- | KCharm => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
- | KSun => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
- | KGem => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
- | KTwin => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
- | KBig => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
- | KTrayZ => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
- | KTrayR => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
- | KTrayC => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
- | KTrayO => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
- | KString => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Ladd_string | KSun => Ladd_string | KGem => Ladd_string | KTwin => Ladd_string | KBig => Ladd_string | KTrayZ => Ladd_string | KTrayR => Ladd_string | KTrayC => Ladd_string | KTrayO => Ladd_string | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
- | KChain => match b with KMint => Lbin_unit | KNom => Ladd_seq | KCharm => Ladd_seq | KSun => Ladd_seq | KGem => Ladd_seq | KTwin => Ladd_seq | KBig => Ladd_seq | KTrayZ => Ladd_seq | KTrayR => Ladd_seq | KTrayC => Ladd_seq | KTrayO => Ladd_seq | KString => Ladd_seq | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
+ | KNom => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Lbin_a | KSun => Lbin_a | KGem => Lbin_a | KTwin => Lbin_a | KBig => Lbin_a | KTrayZ => Lbin_a | KTrayR => Lbin_a | KTrayC => Lbin_a | KTrayO => Lbin_a | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
+ | KCharm => match b with KMint => Lbin_unit | KNom => Lbin_b | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Lbin_b | KChain => Lbin_b | KTablet => Laddh | KHot => Laddh end
+ | KSun => match b with KMint => Lbin_unit | KNom => Lbin_b | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Lbin_b | KChain => Lbin_b | KTablet => Laddh | KHot => Laddh end
+ | KGem => match b with KMint => Lbin_unit | KNom => Lbin_b | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Lbin_b | KChain => Lbin_b | KTablet => Laddh | KHot => Laddh end
+ | KTwin => match b with KMint => Lbin_unit | KNom => Lbin_b | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Lbin_b | KChain => Lbin_b | KTablet => Laddh | KHot => Laddh end
+ | KBig => match b with KMint => Lbin_unit | KNom => Lbin_b | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Lbin_b | KChain => Lbin_b | KTablet => Laddh | KHot => Laddh end
+ | KTrayZ => match b with KMint => Lbin_unit | KNom => Lbin_b | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Lbin_b | KChain => Lbin_b | KTablet => Laddh | KHot => Laddh end
+ | KTrayR => match b with KMint => Lbin_unit | KNom => Lbin_b | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Lbin_b | KChain => Lbin_b | KTablet => Laddh | KHot => Laddh end
+ | KTrayC => match b with KMint => Lbin_unit | KNom => Lbin_b | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Lbin_b | KChain => Lbin_b | KTablet => Laddh | KHot => Laddh end
+ | KTrayO => match b with KMint => Lbin_unit | KNom => Lbin_b | KCharm => Laddn | KSun => Laddn | KGem => Laddn | KTwin => Laddn | KBig => Laddn | KTrayZ => Laddn | KTrayR => Laddn | KTrayC => Laddn | KTrayO => Laddn | KString => Lbin_b | KChain => Lbin_b | KTablet => Laddh | KHot => Laddh end
+ | KString => match b with KMint => Lbin_unit | KNom => Ladd_string | KCharm => Lbin_a | KSun => Lbin_a | KGem => Lbin_a | KTwin => Lbin_a | KBig => Lbin_a | KTrayZ => Lbin_a | KTrayR => Lbin_a | KTrayC => Lbin_a | KTrayO => Lbin_a | KString => Ladd_string | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
+ | KChain => match b with KMint => Lbin_unit | KNom => Ladd_seq | KCharm => Lbin_a | KSun => Lbin_a | KGem => Lbin_a | KTwin => Lbin_a | KBig => Lbin_a | KTrayZ => Lbin_a | KTrayR => Lbin_a | KTrayC => Lbin_a | KTrayO => Lbin_a | KString => Ladd_seq | KChain => Ladd_seq | KTablet => Laddh | KHot => Laddh end
  | KTablet => match b with KMint => Lbin_unit | KNom => Laddh | KCharm => Laddh | KSun => Laddh | KGem => Laddh | KTwin => Laddh | KBig => Laddh | KTrayZ => Laddh | KTrayR => Laddh | KTrayC => Laddh | KTrayO => Laddh | KString => Laddh | KChain => Laddh | KTablet => Laddh | KHot => Laddh end
  | KHot => match b with KMint => Lbin_unit | KNom => Laddh | KCharm => Laddh | KSun => Laddh | KGem => Laddh | KTwin => Laddh | KBig => Laddh | KTrayZ => Laddh | KTrayR => Laddh | KTrayC => Laddh | KTrayO => Laddh | KString => Laddh | KChain => Laddh | KTablet => Laddh | KHot => Laddh end
  end.
@@ -61,9 +63,9 @@ Definition rk : list kind := [KMint; KNom; KCharm; KSun; KGem; KTwin; KBig; KTra
 
 Definition addb : list (list lane) := [
   [Lbin_unit; Lbin_unit; Lbin_unit; Lbin_unit; Lbin_unit];
-  [Lbin_unit; Ladd_string; Ladd_string; Ladd_seq; Laddh];
-  [Lbin_unit; Ladd_string; Laddn; Ladd_seq; Laddh];
-  [Lbin_unit; Ladd_seq; Ladd_seq; Ladd_seq; Laddh];
+  [Lbin_unit; Ladd_string; Lbin_a; Ladd_seq; Laddh];
+  [Lbin_unit; Lbin_b; Laddn; Lbin_b; Laddh];
+  [Lbin_unit; Ladd_seq; Lbin_a; Ladd_seq; Laddh];
   [Lbin_unit; Laddh; Laddh; Laddh; Laddh]
  ].
 Definition mulb : list (list lane) := [
@@ -80,9 +82,9 @@ Theorem add_factors_through_bands : forallb (fun a => forallb (fun b => lane_eqb
 Proof. vm_compute. reflexivity. Qed.
 Theorem mul_factors_through_bands : forallb (fun a => forallb (fun b => lane_eqb (mulmx a b) (mulband (band a) (band b))) rk) rk = true.
 Proof. vm_compute. reflexivity. Qed.
-Theorem add_dispatch_commutes : forallb (fun a => forallb (fun b => lane_eqb (addmx a b) (addmx b a)) rk) rk = true.
+Theorem add_dispatch_commutes : forallb (fun a => forallb (fun b => lane_eqb (addmx a b) (mirror (addmx b a))) rk) rk = true.
 Proof. vm_compute. reflexivity. Qed.
-Theorem mul_dispatch_commutes : forallb (fun a => forallb (fun b => lane_eqb (mulmx a b) (mulmx b a)) rk) rk = true.
+Theorem mul_dispatch_commutes : forallb (fun a => forallb (fun b => lane_eqb (mulmx a b) (mirror (mulmx b a))) rk) rk = true.
 Proof. vm_compute. reflexivity. Qed.
 
 (* the lattice, read off the diagonal: one add/mul lane pair per band *)

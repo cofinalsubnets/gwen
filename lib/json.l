@@ -79,13 +79,13 @@
                              (v >= 0 ? (go (k + 1) (acc * 16 + v) (d - 1))))))
                     i 0 4)
 
-   ; a code point out as utf-8 bytes, laid down by the byte law (string + charm appends).
-   (jutf8 u) (? (u < 128)   ("" + u)
-                (u < 2048)  ("" + (192 + (u // 64)) + (128 + (u % 64)))
-                (u < 65536) ("" + (224 + (u // 4096)) + (128 + ((u // 64) % 64))
-                                + (128 + (u % 64)))
-                ("" + (240 + (u // 262144)) + (128 + ((u // 4096) % 64))
-                    + (128 + ((u // 64) % 64)) + (128 + (u % 64))))
+   ; a code point out as utf-8 bytes, one (string byte) per byte.
+   (jutf8 u) (? (u < 128)   (string u)
+                (u < 2048)  (string (192 + (u // 64)) + string (128 + (u % 64)))
+                (u < 65536) (string (224 + (u // 4096)) + string (128 + ((u // 64) % 64))
+                                + string (128 + (u % 64)))
+                (string (240 + (u // 262144)) + string (128 + ((u // 4096) % 64))
+                    + string (128 + ((u // 64) % 64)) + string (128 + (u % 64))))
 
    ; \uXXXX, with the surrogate pair rejoined. a lone or unpaired surrogate is passed
    ; through as itself rather than refused -- the text is still json, and refusing a whole
@@ -114,7 +114,7 @@
                                  (c = 98)  8    (c = 102) 12   (c = 110) 10
                                  (c = 114) 13   (c = 116) 9
                                  -1)
-                            (? (b < 0) () [("" + b) (i + 1)])))))
+                            (? (b < 0) () [(string b) (i + 1)])))))
 
    (jstr s i n) ((: (go k acc)
                      (? (! (k < n)) ()

@@ -7,7 +7,7 @@
 ; into). it is a BALANCE scan, not a parse: it knows delimiters and strings and
 ; nothing else about the language.
 ;
-; (lint-scan src) answers a list of warnings, each `(line col text) with line
+; (lint-scan src) answers a list of warnings, each [line col text] with line
 ; and col 1-BASED -- a position, so a consumer can point AT the character rather
 ; than re-derive one from a sentence. no warnings is (), which here means what
 ; it says: nothing to report.
@@ -16,7 +16,7 @@
 ; carries each opener's position for exactly that -- and an unclosed string the
 ; same way. (a dropped paren is the classic .l slip; pointing at the far end of
 ; the file is the least useful place to point.)
-; (lint-lay src) answers the INDENT PLAN: one entry per line, `(1 n) for "this
+; (lint-lay src) answers the INDENT PLAN: one entry per line, [1 n] for "this
 ; line's first character belongs at 0-based column n", or () for "leave this
 ; line exactly as it is" (a line inside a string, where the leading spaces ARE
 ; the string). ⚠ the wrapper is not decoration -- column 0 is the commonest
@@ -36,7 +36,7 @@
    ; is the charm c anywhere in s? the three sets below are spelled as STRINGS
    ; rather than as || chains, because a reader can check them against love.c at
    ; a glance and a || chain of seventeen cannot be read at all.
-   (lin? s c) (: n (tally s) (go k) (? (n <= k) () ((s k) = c) 1 (go (k + 1))) (go 0))
+   (lin? s c) (: n (tally s) (go k) (? (n <= k) () (s k = c) 1 (go (k + 1))) (go 0))
 
    ; the OPERATOR run characters (love.c's op_break, complemented) -- the chars
    ; that fuse into one sigil when they touch.
@@ -47,21 +47,21 @@
    (lctc? c) (lin? "'`#@~" c)
    ; a token character: anything that is not whitespace, a delimiter, a quote
    ; mark or a comment start.
-   (ltkc? c) (! (|| (c < 33) (|| (c = 34) (|| (c = 59) (|| (c = 40) (|| (c = 41)
-                   (|| (c = 91) (|| (c = 93) (|| (c = 123) (c = 125))))))))))
+   (ltkc? c) !(c < 33 || c = 34 || c = 59 || c = 40 || c = 41
+               || c = 91 || c = 93 || c = 123 || c = 125)
 
    (lall? p s) (: n (tally s)
                   (go k) (? (n <= k) (0 < n) (p (s k)) (go (k + 1)) ())
                   (go 0))
    ; the token starting at index i (empty if a delimiter sits there)
-   (ltok-at src n i) (: (go k) (? (&& (k < n) (ltkc? (src k))) (go (k + 1)) k)
+   (ltok-at src n i) (: (go k) (? (k < n && ltkc? (src k)) (go (k + 1)) k)
                         (snip src i (go i)))
 
    ; --- the config the rules read --------------------------------------------
    ; ⚠ lint.l takes a PLAIN TABLET and reads it with peep -- it does NOT depend on
    ; lib/salt.l. vi cats this file directly (test/test.mk), and a module it had to
    ; carry along would break that. salt fills the tablet; lint only reads it.
-   (lint-on? conf k) (: v (peep conf k ()) (&& (two? v) <v))
+   (lint-on? conf k) (: v (peep conf k ()) (two? v && <v))
    ; ...and a switch whose default is YES: absent means on, and only an explicit 0
    ; turns it off. the opinion rules are off until asked; the halves of a rule that
    ; has BEEN asked for are on until refused.
@@ -69,17 +69,17 @@
    ; the name a token MENTIONS: a leading ' is quote, and 'foo names foo just as
    ; much as bare foo does -- a rename wants both. (a TRAILING ' is the prime
    ; idiom, part of the name, and stays.)
-   (lname t) (: n (tally t) (go k) (? (&& (k < n) ((t k) = 39)) (go (k + 1)) (snip t k n)) (go 0))
-   ; the roster entry for the token text t: a bare name, or `(name "hint").
+   (lname t) (: n (tally t) (go k) (? (k < n && t k = 39) (go (k + 1)) (snip t k n)) (go 0))
+   ; the roster entry for the token text t: a bare name, or (name "hint").
    (lint-dep roster t)
-    (? (! (two? roster)) ()
+    (? !(two? roster) ()
        (: e <roster
           nm (? (two? e) <e e)
-          (? ((string nm) = t) `(1 e) (lint-dep >roster t))))
+          (? (string nm = t) [1 e] (lint-dep >roster t))))
    (lint-depmsg e)
     (: nm (? (two? e) <e e)
-       h  (? (&& (two? e) (two? >e)) <>e ())
-       ("deprecated " + (string nm) + (? (string? h) (" -- " + h) "")))
+       h  (? (two? e && two? >e) <>e ())
+       ("deprecated " + string nm + (? (string? h) (" -- " + h) "")))
 
    ; --- the shadow rule ------------------------------------------------------
    ; the words a glued row names (`operators` at arity 0). a glued sigil factors to ONE of these
@@ -89,39 +89,56 @@
    ; ⚠ this does NOT reserve the names: the rule speaks, the binding stands.
    lshadow-words '("cap" "cup" "net" "prod" "abs" "negate" "reciprocal" "fraction"
                    "bit" "saturate" "nil?" "dot")
-   (lsmem? l t) (? (! (two? l)) 0 (t = <l) 1 (lsmem? >l t))
-   ; is the token that just ended a BINDING NAME? two shapes, both read off the frame in
-   ; hand: (: nm ..) an even element of a `:`, and (\ nm .. b) any element past a `\`'s
-   ; head. both over-fire on a BARE-NAME BODY ((: a 1 cap), (\ x cap)) -- the last operand
-   ; is the body, and which element is last is not known until the closer. that shape is
-   ; rare enough to cost one line of noise.
+   (lsmem? l t) (? !(two? l) 0 (t = <l) 1 (lsmem? >l t))
+   ; is frame f a BINDER slot -- a `\` past its head, or a `:` at an even (value)
+   ; element? shared by the shadow rule (is the token that just ended a binding
+   ; name?) and the singleton deferral (does this child sit in pattern position?).
+   (lbind? src n f)
+    (f @ {'e1 e1 'ne ne}
+     (: h (ltok-at src n e1)
+        (? (h = ":")  (2 <= ne && 0 = ne % 2)
+           (h = "\\") (2 <= ne)
+           0)))
+   ; is the token that just ended a BINDING NAME? both shapes over-fire on a
+   ; BARE-NAME BODY ((: a 1 cap), (\ x cap)) -- the last operand is the body, and
+   ; which element is last is not known until the closer. that shape is rare
+   ; enough to cost one line of noise.
    ;
    ; ⚠ the SUGAR HEADER (: (bit x) ..) is NOT caught, and cannot be here: at token time it
    ; is element 1 of a form at an even `:` position, which is exactly what a body call
    ; (: a 1 (cap x)) also is -- and THAT is common, so guessing would fire on half the
    ; tree. deciding it needs the `:` closer plus a per-element index the frame does not
    ; keep. a real gap, named rather than papered over.
-   (lbind-pos? src n stk)
-    (? (! (two? stk)) 0
-       (: f <stk h (ltok-at src n <>>>>f) ne <>>>f
-          (? (h = ":")  (&& (2 <= ne) (0 = (ne % 2)))
-             (h = "\\") (2 <= ne)
-             0)))
+   (lbind-pos? src n stk) (? (two? stk) (lbind? src n <stk) 0)
 
    ; --- the frame ------------------------------------------------------------
-   ; `(closer line col nelem e1i plain quoted): the expected closer and where the
-   ; opener SAT (so an unclosed one reports its own position), how many elements
-   ; this form has taken, the index the FIRST one started at, and the two bits the
-   ; singleton rule turns on.
+   ; a TABLET: {'cl closer 'ln line 'co col 'ne nelem 'e1 e1i 'pl plain 'qd quoted
+   ; 'am arm 'pd pend} -- the expected closer and where the opener SAT (so an
+   ; unclosed one reports its own position), how many elements this form has
+   ; taken, the index the FIRST one started at, the two bits the singleton rule
+   ; turns on, the match bit, and the deferred verdicts. a tablet PINS IN PLACE,
+   ; so nothing rebuilds the stack, and a pattern {'ne ne 'e1 e1} reads slots by
+   ; name. the walkers keep plain args: a frame moves once per token, the char
+   ; loop every byte.
    ;
-   ; ⚠ e1i is an INDEX, read back out of src on demand rather than accumulated as
+   ; ⚠ e1 is an INDEX, read back out of src on demand rather than accumulated as
    ; text -- there is then no token-end bookkeeping to get wrong, and the scan
    ; stays one pass with no per-character allocation.
    (lelem stk i)
-    (? (! (two? stk)) stk
-       (: f <stk
-          ne (<>>>f + 1)
-          (link `(<f <>f <>>f ne (? (1 = ne) i <>>>>f) <>>>>>f <>>>>>>f) >stk)))
+    (? !(two? stk) stk
+       (: f <stk ne (f 'ne + 1)
+          (pin f 'ne ne, (? (1 = ne) (pin f 'e1 i) 0), stk)))
+
+   ; a bare `@` element marks its frame a MATCH: everything after it is arms, and in
+   ; a PATTERN (x) is a list shape, not x -- so the singleton rule stands down there.
+   ; fires only where a token ends FREE (space, newline, comment); a glued @( is the
+   ; tray ctor and never reaches this. lpush inherits the bit, so nested pattern
+   ; forms are covered; an arm BODY inherits too, the price of not pairing arms,
+   ; and it costs missed gripes only, never noise.
+   (lat src stk it ti i)
+    (? !(it && two? stk) stk
+       !(snip src ti i = "@") stk
+       (pin <stk 'am 1, stk))
 
    ; a new opener. `pre` is what it is GLUED to (empty when it stands free), and
    ; that text decides everything:
@@ -139,12 +156,14 @@
    ;                             plain form after all
    (lpush stk c i line col src it ti)
     (: pre (? it (snip src ti i) "")
-       pq  (? (two? stk) (: pf <stk <>>>>>>pf) 0)
+       pq  (? (two? stk) (<stk 'qd) 0)
+       am  (? (two? stk) (<stk 'am) 0)
        ct  (lall? lctc? pre)
        op  (lall? lopc? pre)
-       qd  (? (|| pq (&& ct (lin? pre 39))) 1 0)
-       pl  (? (|| pq (|| ct op)) 0 (? (c = 40) 1 0))
-       (link `((lclose c) line col 0 0 pl qd) stk))
+       qd  (? (pq || ct && lin? pre 39) 1 0)
+       pl  (? (pq || ct || op) 0 (? (c = 40) 1 0))
+       (link {'cl (lclose c) 'ln line 'co col 'ne 0 'e1 0 'pl pl 'qd qd 'am am 'pd ()}
+             stk))
 
    ; the SINGLETON warning for a form about to close, or (). a form of one element
    ; is that element -- (f) == f at zero operands -- so the parens do nothing and
@@ -153,13 +172,33 @@
    ; own zero point. ⚠ that exemption is narrower than "starts with punctuation"
    ; on purpose -- (<>b) IS droppable (probed: (<>l) and <>l are one value), and
    ; flagging it is the point. only the GLUED case above is load-bearing.
+   ; a singleton in PATTERN position is a list shape, not x, so the rule stands down
+   ; there -- but which positions are patterns is only known when the BINDER closes
+   ; (the last element is the body). so: under a match's @ the whole subtree is arms
+   ; and stays silent; a singleton that is an element of a `\`, an even element of a
+   ; `:`, or one level inside such an element DEFERS its verdict to that binder's
+   ; close, where an entry at the FINAL index was the body (warn) and any other was
+   ; a pattern (silent). odd `:` elements are values and warn at once. patterns
+   ; nested deeper than one level are rare and respell (x >< _).
    (lsing src n f)
-    (? (&& <>>>>>f (1 = <>>>f))
-        (: t (ltok-at src n <>>>>f)
-           (? (lall? lopc? t) ()
-              `(<>f <>>f ("singleton " + (? (0 < (tally t)) ("(" + t + ") ") "")
-                          + "-- (x) == x") 'singleton)))
+    (f @ {'pl 1 'ne 1 'e1 e1 'ln ln 'co co}
+     (: t (ltok-at src n e1)
+        (? (lall? lopc? t) ()
+           [ln co ("singleton " + (? (0 < tally t) ("(" + t + ") ") "") + "-- (x) == x")
+            'singleton]))
+     ())
+   ; the deferral home: () to warn NOW, else [depth idx] naming the binder frame
+   ; (1 parent, 2 grandparent) and the element index the verdict keys on.
+   (ldefer src n rest)
+    (? !(two? rest) ()
+       (lbind? src n <rest) [1 (<rest 'ne)]
+       !(two? >rest) ()
+       (lbind? src n <>rest) [2 (<>rest 'ne)]
        ())
+   ; hang (idx . warn) on the binder's pend slot
+   (lpend rest d idx wr)
+    (: f (? (1 = d) <rest <>rest)
+       (pin f 'pd ((idx >< wr) >< f 'pd), rest))
 
    ; --- the scan -------------------------------------------------------------
    ; (lint-of src conf) is the whole weighing; (lint-scan src) is it with no
@@ -173,8 +212,9 @@
    (lint-of src conf)
     (: n  (tally src)
        ; singleton is ON by default (2026-08-16; three fresh nullary-define bugs in one
-       ; session of new code); (singleton 0) turns it off. the other opinion rules stay opt-in.
-       sg (lint-yes? conf 'singleton)
+       ; session of new code); (singleton 0) turns it off. NO config at all -- lint-scan's
+       ; () -- stays balance alone, the contract vi's cat and the fixtures ride.
+       sg (? (id? conf ()) 0 (lint-yes? conf 'singleton))
        sh (lint-on? conf 'shadow)
        dp (peep conf 'deprecated ())
        ; a token just ENDED at index i, having started at ti/tc: the two token rules
@@ -182,12 +222,12 @@
        ; `deprecated`, an unset switch for `shadow`.
        (lend line tc ti i stk warns)
         (: t  (snip src ti i)
-           w0 (? (! (two? dp)) warns
+           w0 (? !(two? dp) warns
                  (: r (lint-dep dp (lname t))
-                    (? (two? r) (link `(line tc (lint-depmsg <>r) 'deprecated) warns) warns)))
-           (? (&& sh (&& (lsmem? lshadow-words t) (lbind-pos? src n stk)))
-              (link `(line tc ("shadow " + t + " -- a glued sigil factors to this name")
-                      'shadow) w0)
+                    (? (two? r) (link [line tc (lint-depmsg <>r) 'deprecated] warns) warns)))
+           (? (sh && lsmem? lshadow-words t && lbind-pos? src n stk)
+              (link [line tc ("shadow " + t + " -- a glued sigil factors to this name")
+                     'shadow] w0)
               w0))
 
        ; stk: the frames above, a matched-pair stack, so ([)] is caught and not
@@ -199,8 +239,10 @@
        (w i st stk line col sl sc it ti tc warns)
         (? (n <= i)
             (: w0 (? it (lend line tc ti i stk warns) warns)
-               w1 (? (id? st 'str) (link `(sl sc "unclosed string" 'balance) w0) w0)
-               (rev (foldl (\ a o (link `(<>o <>>o ("unclosed " + string (lopen <o)) 'balance) a)) w1 stk)))
+               w1 (? (id? st 'str) (link [sl sc "unclosed string" 'balance] w0) w0)
+               (rev (foldl (\ a o (o @ {'cl cl 'ln ln 'co co}
+                            (link [ln co ("unclosed " + string (lopen cl)) 'balance] a)))
+                     w1 stk)))
            (: c (src i)
               (? (id? st 'str)                                    ; inside "..."
                   (? (c = 92) (w (i + 2) 'str stk line (col + 2) sl sc 0 ti tc warns)   ; \ escape: skip next
@@ -211,36 +253,44 @@
                   (? (c = 10) (w (i + 1) 'code stk (line + 1) 1 sl sc 0 ti tc warns)
                      (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc warns))
                  (c = 59)                                                      ; ; -- start comment
-                  (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc
+                  (w (i + 1) 'cmt (lat src stk it ti i) line (col + 1) sl sc 0 ti tc
                      (? it (lend line tc ti i stk warns) warns))
-                 (&& (c = 35) (&& ((i + 1) < n) ((src (i + 1)) = 33)))          ; #! shebang, to EOL
+                 (c = 35 && i + 1 < n && src (i + 1) = 33)                     ; #! shebang, to EOL
                   (w (i + 2) 'cmt stk line (col + 2) sl sc 0 ti tc
                      (? it (lend line tc ti i stk warns) warns))
                  (c = 34)                                                      ; " -- start string
                   (w (i + 1) 'str (? it stk (lelem stk i)) line (col + 1) line col 0 ti tc
                      (? it (lend line tc ti i stk warns) warns))
                  (c = 10)
-                  (w (i + 1) 'code stk (line + 1) 1 sl sc 0 ti tc
+                  (w (i + 1) 'code (lat src stk it ti i) (line + 1) 1 sl sc 0 ti tc
                      (? it (lend line tc ti i stk warns) warns))
-                 (|| (c = 40) (|| (c = 91) (c = 123)))                          ; ( [ {  -- push
+                 (c = 40 || c = 91 || c = 123)                                 ; ( [ {  -- push
                   ; an opener is an element of its PARENT -- unless it is GLUED to
                   ; the token before it, in which case the two are one datum.
                   (w (i + 1) 'code (lpush (? it stk (lelem stk i)) c i line col src it ti)
                      line (col + 1) sl sc 0 ti tc
                      (? it (lend line tc ti i stk warns) warns))
-                 (|| (c = 41) (|| (c = 93) (c = 125)))                          ; ) ] }  -- match
+                 (c = 41 || c = 93 || c = 125)                                 ; ) ] }  -- match
                   (: w0 (? it (lend line tc ti i stk warns) warns)
-                     (? (! (two? stk))
+                     (? !(two? stk)
                          (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc
-                            (link `(line col ("stray " + string c) 'balance) w0))
-                        (! (<<stk = c))
+                            (link [line col ("stray " + string c) 'balance] w0))
+                        !(<stk 'cl = c)
                          (w (i + 1) 'code >stk line (col + 1) sl sc 0 ti tc
-                            (link `(line col ("mismatched " + string c) 'balance) w0))
-                        (: sw (? sg (lsing src n <stk) ())
-                           (w (i + 1) 'code >stk line (col + 1) sl sc 0 ti tc
-                              (? (two? sw) (link sw w0) w0)))))
+                            (link [line col ("mismatched " + string c) 'balance] w0))
+                        (: f <stk rest >stk
+                           ; the verdicts this binder owed its deferred children:
+                           ; an entry at the FINAL index was the body, so it warns
+                           w1 (foldl (\ a p (? (<p = f 'ne) (link >p a) a)) w0 (f 'pd))
+                           sw (? sg (lsing src n f) ())
+                           (? (id? sw ()) (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)
+                              (f 'am)     (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)   ; match arms: silent
+                              (: dh (ldefer src n rest)
+                                 (? (id? dh ())
+                                     (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc (link sw w1))
+                                    (w (i + 1) 'code (lpend rest <dh <>dh sw) line (col + 1) sl sc 0 ti tc w1)))))))
                  (c < 33)                                                      ; space, tab, the rest
-                  (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc
+                  (w (i + 1) 'code (lat src stk it ti i) line (col + 1) sl sc 0 ti tc
                      (? it (lend line tc ti i stk warns) warns))
                  ; an ordinary character: a token START only if we were not in one
                  (w (i + 1) 'code (? it stk (lelem stk i)) line (col + 1) sl sc
@@ -248,7 +298,7 @@
        (w 0 'code () 1 1 1 1 0 0 1 ()))
 
    ; --- the comments ---------------------------------------------------------
-   ; (lint-cmts src) answers every comment in reading order, `(line col text kind)
+   ; (lint-cmts src) answers every comment in reading order, [line col text kind]
    ; -- line and col 1-BASED at the INTRODUCER, text the bytes after it to the end
    ; of the line, kind 'semi or 'bang (`;` or `#!`). the fourth walk, and the
    ; smallest: it wants no stack, only the three states, which is exactly what
@@ -262,7 +312,7 @@
    ; independent encoding of what .l lexing means.
    (lint-cmts src)
     (: n (tally src)
-       (shut i cl cc ti ck acc) (link `(cl cc (snip src ti i) ck) acc)
+       (shut i cl cc ti ck acc) (link [cl cc (snip src ti i) ck] acc)
        (w i st line col cl cc ti ck acc)
         (? (n <= i) (rev (? (id? st 'cmt) (shut i cl cc ti ck acc) acc))
            (: c (src i)
@@ -275,7 +325,7 @@
                   (? (c = 10) (w (i + 1) 'code (line + 1) 1 cl cc ti ck (shut i cl cc ti ck acc))
                      (w (i + 1) 'cmt line (col + 1) cl cc ti ck acc))
                  (c = 59)  (w (i + 1) 'cmt line (col + 1) line col (i + 1) 'semi acc)
-                 (&& (c = 35) (&& ((i + 1) < n) ((src (i + 1)) = 33)))
+                 (c = 35 && i + 1 < n && src (i + 1) = 33)
                   (w (i + 2) 'cmt line (col + 2) line col (i + 2) 'bang acc)
                  (c = 34) (w (i + 1) 'str line (col + 1) cl cc ti ck acc)
                  (c = 10) (w (i + 1) 'code (line + 1) 1 cl cc ti ck acc)
@@ -283,9 +333,9 @@
        (w 0 'code 1 1 0 0 0 'semi ()))
 
    ; --- the indent plan ------------------------------------------------------
-   ; a frame is `(base openline ntok pair): where this form's continuation lines
-   ; align (0-based), the line it opened on, how many of its tokens we have passed
-   ; (the HEAD is token 1), and whether it is a PAIRING form.
+   ; a frame is {'base b 'ol openline 'nt ntok 'pr pair}: where this form's
+   ; continuation lines align (0-based), the line it opened on, how many of its
+   ; tokens we have passed (the HEAD is token 1), and whether it is a PAIRING form.
    ;
    ; ⚠ THE PAIRING RULE is the whole difference between a formatter that is close
    ; and one that is right. `:` and `?` take their operands TWO AT A TIME -- : is
@@ -303,18 +353,15 @@
    ; column LEFT of the enclosing paren -- which no cap-and-fallback reproduces --
    ; while every well-laid file gets worse (crew/libra/libra.l 7 -> 22, this file
    ; 1 -> 4) and tree-wide churn RISES from 12591 to 16448. alignment it is.
-   (ldelim? c) (|| (c < 33) (|| (c = 40) (|| (c = 41) (|| (c = 91)
-                                (|| (c = 93) (|| (c = 123) (c = 125)))))))
-   (lpair? c nx) (&& (|| (c = 58) (c = 63)) (ldelim? nx))     ; a LONE : or ? , not a name starting with one
+   (ldelim? c) (c < 33 || c = 40 || c = 41 || c = 91 || c = 93 || c = 123 || c = 125)
+   (lpair? c nx) ((c = 58 || c = 63) && ldelim? nx)     ; a LONE : or ? , not a name starting with one
 
    ; the next line's indent: the frame's base, plus one when the token that will
    ; start it is the second of a pair
-   (lcont stk) (? (! (two? stk)) 0
-                  (: f <stk
-                     base <f
-                     nt <>>f
-                     pr <>>>f
-                     (? (&& pr (0 = (nt % 2))) (base + 1) base)))
+   (lcont stk)
+    (? !(two? stk) 0
+       (<stk @ {'base base 'nt nt 'pr pr}
+        (? (pr && 0 = nt % 2) (base + 1) base)))
 
    ; the HEAD token just ENDED at 1-based column x (the delimiter after it). a form
    ; whose head stands ALONE on its line -- `(:` opening a module, `(assert` opening
@@ -322,33 +369,26 @@
    ; written there: one space past the head. so a `(:` body lands at 3 and an
    ; `(assert` body at 8, which is what the house does and what "open paren + 1"
    ; never gets right.
+   ;
+   ; ⚠ ONLY the pairing forms. `(assert` alone on its line indents its body
+   ; ONE past the open paren, while `(:` alone indents THREE -- the house
+   ; style is per-head, the way every lisp's indent spec is, and one rule
+   ; forced over both moves whichever file it was not written for.
    (lhend stk line x)
-    (? (! (two? stk)) stk
-       (: f <stk
-          ol <>f
-          nt <>>f
-          pr <>>>f
-          ; ⚠ ONLY the pairing forms. `(assert` alone on its line indents its body
-          ; ONE past the open paren, while `(:` alone indents THREE -- the house
-          ; style is per-head, the way every lisp's indent spec is, and one rule
-          ; forced over both moves whichever file it was not written for.
-          (? (&& pr (&& (nt = 1) (ol = line)))
-              (link `(x ol 1 pr) >stk)
-             stk)))
+    (? !(two? stk) stk
+       (<stk @ ({'nt 1 'pr 1 'ol ol} & ol = line)
+        (pin <stk 'base x, stk)
+        stk))
 
    ; a token (or a nested opener -- it is a token to its parent) begins at 1-based
    ; column tc; c is its first character and nx the one after
    (ltok stk line tc c nx)
-    (? (! (two? stk)) stk
+    (? !(two? stk) stk
        (: f <stk
-          base <f
-          ol <>f
-          nt <>>f
-          pr <>>>f
-          (? (nt = 0)                (link `(base ol 1 (? (lpair? c nx) 1 0)) >stk)
+          (f @ {'nt 0} (pin f 'nt 1, pin f 'pr (? (lpair? c nx) 1 0), stk)
              ; operand one: this is where the form aligns
-             (&& (nt = 1) (ol = line)) (link `((tc - 1) ol 2 pr) >stk)
-             (link `(base ol (nt + 1) pr) >stk))))
+             ({'nt 1 'ol ol} & ol = line) (pin f 'base (tc - 1), pin f 'nt 2, stk)
+             (pin f 'nt (f 'nt + 1), stk))))
 
    ; ⚠ `it` is 1 while we are INSIDE a token: ltok must fire once per token, at
    ; its first character, never once per character -- a three-letter name would
@@ -366,17 +406,17 @@
                      (c = 10) (w (i + 1) 'str stk (line + 1) 1 1 (link () plan))
                      (w (i + 1) 'str stk line (col + 1) 1 plan))
                  (id? st 'cmt)
-                  (? (c = 10) (w (i + 1) 'code stk (line + 1) 1 0 (link `(1 (lcont stk)) plan))
+                  (? (c = 10) (w (i + 1) 'code stk (line + 1) 1 0 (link [1 (lcont stk)] plan))
                      (w (i + 1) 'cmt stk line (col + 1) 0 plan))
                  (c = 59) (w (i + 1) 'cmt stk line (col + 1) 0 plan)
-                 (&& (c = 35) (&& ((i + 1) < n) ((src (i + 1)) = 33)))
+                 (c = 35 && i + 1 < n && src (i + 1) = 33)
                   (w (i + 2) 'cmt stk line (col + 2) 0 plan)
                  (c = 34) (w (i + 1) 'str (ltok stk line col c 32) line (col + 1) 1 plan)
                  ; ⚠ the head's end must land BEFORE the plan is read, or the very
                  ; line the body starts on still carries the old fallback
                  (c = 10) (: s2 (? it (lhend stk line col) stk)
-                             (w (i + 1) 'code s2 (line + 1) 1 0 (link `(1 (lcont s2)) plan)))
-                 (|| (c = 40) (|| (c = 91) (c = 123)))
+                             (w (i + 1) 'code s2 (line + 1) 1 0 (link [1 (lcont s2)] plan)))
+                 (c = 40 || c = 91 || c = 123)
                   ; an opener is a token to its PARENT -- UNLESS it is GLUED to the
                   ; token before it. ⚠ `~(0 1)`, `'(a b)`, `#(k v)`, `@(1 2)` are ONE
                   ; operand wearing a reader sigil, not two, and counting them as two
@@ -384,17 +424,17 @@
                   ; the one miscount that CASCADES, so it is the one worth naming:
                   ; `it` is already "the previous character was part of a token".
                   (w (i + 1) 'code
-                     (link `(col line 0 0) (? it stk (ltok stk line col c 32)))
+                     (link {'base col 'ol line 'nt 0 'pr 0} (? it stk (ltok stk line col c 32)))
                      line (col + 1) 0 plan)
-                 (|| (c = 41) (|| (c = 93) (c = 125)))
+                 (c = 41 || c = 93 || c = 125)
                   (w (i + 1) 'code (? (two? stk) >stk stk) line (col + 1) 0 plan)
-                 (|| (c = 32) (c = 9))
+                 (c = 32 || c = 9)
                   (w (i + 1) 'code (? it (lhend stk line col) stk) line (col + 1) 0 plan)
                  ; an ordinary character: a token START only if we were not in one
                  (w (i + 1) 'code
-                    (? it stk (ltok stk line col c (? ((i + 1) < n) (src (i + 1)) 10)))
+                    (? it stk (ltok stk line col c (? (i + 1 < n) (src (i + 1)) 10)))
                     line (col + 1) 1 plan))))
-       (w 0 'code () 1 1 0 (link `(1 0) ())))
+       (w 0 'code () 1 1 0 [[1 0]]))
 
    ; --- the drop plan --------------------------------------------------------
    ; (lint-drops src conf) answers the byte indexes to DELETE, ascending -- two per
@@ -421,54 +461,38 @@
    ; one rule also disposes of foo(x), '(x), `(a b) and every sigil-glued run, and
    ; it is nearly free: 17 of the tree's 193389 code parens are right-glued.
 
-   ; the frame: `(closer oi ne e1 pl qd kx ks) -- the expected closer, the opener's
-   ; BYTE INDEX, how many elements this form has taken, where the first one started,
-   ; whether the parens are plain (not sigil- or operator-glued), whether we sit
-   ; inside a quote (data: hands off), this form's own index among its PARENT's
-   ; elements, and the kids that closed inside it (`(ki kj kx) each, newest first).
-   ; named accessors, because eight fields of <>>>>>> cannot be read.
-   (ldf-cl f) <f
-   (ldf-oi f) <>f
-   (ldf-ne f) <>>f
-   (ldf-e1 f) <>>>f
-   (ldf-pl f) <>>>>f
-   (ldf-qd f) <>>>>>f
-   (ldf-kx f) <>>>>>>f
-   (ldf-ks f) <>>>>>>>f
-   (ldf-mk cl oi ne e1 pl qd kx ks) `(cl oi ne e1 pl qd kx ks)
+   ; the frame: {'cl closer 'oi opener-index 'ne nelem 'e1 e1 'pl plain 'qd quoted
+   ; 'kx kidx 'ks kids} -- the expected closer, the opener's BYTE INDEX, the
+   ; element count and first-element index (`lelem` bumps those two here too --
+   ; the slots are named, so the two scans share the counter), whether the parens
+   ; are plain (not sigil- or operator-glued), whether we sit inside a quote
+   ; (data: hands off), this form's own index among its PARENT's elements, and
+   ; the kids that closed inside it ([ki kj kx] each, newest first).
 
-   (ldelem stk i)
-    (? (! (two? stk)) stk
-       (: f <stk ne ((ldf-ne f) + 1)
-          (link (ldf-mk (ldf-cl f) (ldf-oi f) ne (? (1 = ne) i (ldf-e1 f))
-                        (ldf-pl f) (ldf-qd f) (ldf-kx f) (ldf-ks f)) >stk)))
-
-   ; a new opener, classified exactly as lpush classifies it. ⚠ ldelem must run
+   ; a new opener, classified exactly as lpush classifies it. ⚠ lelem must run
    ; BEFORE this, so `kx` reads the parent's own count for the slot this form fills.
    (ldpush stk c i src it ti)
     (: pre (? it (snip src ti i) "")
-       pq  (? (two? stk) (ldf-qd <stk) 0)
+       pq  (? (two? stk) (<stk 'qd) 0)
        ct  (lall? lctc? pre)
        op  (lall? lopc? pre)
-       qd  (? (|| pq (&& ct (lin? pre 39))) 1 0)
-       pl  (? (|| pq (|| ct op)) 0 (? (c = 40) 1 0))
-       kx  (? (two? stk) ((ldf-ne <stk) - 1) 0)
-       (link (ldf-mk (lclose c) i 0 0 pl qd kx ()) stk))
+       qd  (? (pq || ct && lin? pre 39) 1 0)
+       pl  (? (pq || ct || op) 0 (? (c = 40) 1 0))
+       kx  (? (two? stk) (<stk 'ne - 1) 0)
+       (link {'cl (lclose c) 'oi i 'ne 0 'e1 0 'pl pl 'qd qd 'kx kx 'ks ()} stk))
 
    ; register a closed form with its parent, iff it is ELIGIBLE for a span drop.
    (ldkid stk ki kj kx ok)
-    (? (! (two? stk)) stk
-       (! ok) stk
-       (: f <stk
-          (link (ldf-mk (ldf-cl f) (ldf-oi f) (ldf-ne f) (ldf-e1 f) (ldf-pl f)
-                        (ldf-qd f) (ldf-kx f) (link `(ki kj kx) (ldf-ks f))) >stk)))
+    (? !(two? stk) stk
+       !ok stk
+       (pin <stk 'ks ([ki kj kx] >< <stk 'ks), stk))
 
    ; a byte that cannot FUSE with an adjacent token: a delimiter, a comment start,
    ; or a string quote.
-   (ldsep? c) (|| (ldelim? c) (|| (c = 59) (c = 34)))
+   (ldsep? c) (ldelim? c || c = 59 || c = 34)
    (ldfree? src n i j)
     (&& (? (i < 1) 1 (ldsep? (src (i - 1))))
-        (? ((j + 1) < n) (ldsep? (src (j + 1))) 1))
+        (? (j + 1 < n) (ldsep? (src (j + 1))) 1))
 
    ; ⚠ ELIGIBILITY, and it is a matter of TASTE rather than of law. a child whose
    ; HEAD is punctuation folds the same either way -- (? (! (two? l)) ..) and
@@ -477,9 +501,9 @@
    ; APPLICATION and INFIX children only, and leaves ! ? : \ + alone. sigil-glued
    ; parens are already out (pl), and so is a form with nothing in it.
    (ldeligible? src n f)
-    (&& (ldf-pl f)
-        (&& (0 < (ldf-ne f))
-            (! (lall? lopc? (ltok-at src n (ldf-e1 f))))))
+    (f @ ({'pl 1 'e1 e1 'ne ne} & 0 < ne)
+     !(lall? lopc? (ltok-at src n e1))
+     0)
 
    (lany? p s) (: n (tally s)
                   (go k) (? (n <= k) () (p (s k)) 1 (go (k + 1)))
@@ -498,38 +522,37 @@
    ; MACRO, which reads its operand's SHAPE rather than its value. libra cannot know
    ; which heads are macros. it is on by default and (drop-singles 0) turns it off.
    (ldsing? src n f sg nu)
-    (&& sg
-     (&& (ldf-pl f)
-        (&& (1 = (ldf-ne f))
-            (: t (ltok-at src n (ldf-e1 f))
-               (? (lall? lopc? t) ()              ; (+) (:) (?) -- the escape idiom
-                  ; ⚠ a sole element that is ITSELF A FORM stays wrapped, and this
-                  ; is opfix's call, not ours: has-top-op? keeps ((mov r3 r12))
-                  ; whole because a list of one may be DATA -- a program, a type
-                  ; signature. overriding it rewrote ((mat m n)) to (mat m n) in
-                  ; doc/proto/overlay-tele.l, which is a different value.
-                  (0 = (tally t)) ()
-                  (|| nu (lany? lopc? t)))))))    ; (<>b) yes; (go) only if asked
+    (? !sg ()
+       (f @ {'pl 1 'ne 1 'e1 e1}
+        (: t (ltok-at src n e1)
+           (? (lall? lopc? t) ()              ; (+) (:) (?) -- the escape idiom
+              ; ⚠ a sole element that is ITSELF A FORM stays wrapped, and this
+              ; is opfix's call, not ours: has-top-op? keeps ((mov r3 r12))
+              ; whole because a list of one may be DATA -- a program, a type
+              ; signature. overriding it rewrote ((mat m n)) to (mat m n) in
+              ; doc/proto/overlay-tele.l, which is a different value.
+              (0 = tally t) ()
+              (nu || lany? lopc? t)))         ; (<>b) yes; (go) only if asked
+        ()))
 
    ; the i'th element of l replaced by its OWN elements
-   (ldsplice l i) (? (! (two? l)) l
+   (ldsplice l i) (? !(two? l) l
                      (0 < i) (link <l (ldsplice >l (i - 1)))
                      (cat <l >l))
    ; f closed at j: weigh every kid that closed inside it against f's own text,
    ; which only exists now that its closer is known. one read and one base fold per
    ; FORM, then one fold per kid.
    (ldspans src n f j ks acc)
-    (: r (sound (snip src (ldf-oi f) (j + 1)))
-       (? (! (two? r)) acc
-          (! (two? <r)) acc
+    (: r (sound (snip src (f 'oi) (j + 1)))
+       (? !(two? r) acc
+          !(two? <r) acc
           (: x <r
              base (opfix x)
              (go l a)
-              (? (! (two? l)) a
-                 (: k <l ki <k kj <>k kx <>>k
-                    (go >l (? (&& (ldfree? src n ki kj)
-                                  (base = (opfix (ldsplice x kx))))
-                              (link kj (link ki a)) a))))
+              (? !(two? l) a
+                 (<l @ [ki kj kx]
+                  (go >l (? (ldfree? src n ki kj && base = opfix (ldsplice x kx))
+                            (link kj (link ki a)) a))))
              (go ks acc))))
 
    ; the walk. states and glue are lint-of's exactly -- ⚠ `it` fires ONCE PER TOKEN,
@@ -550,28 +573,26 @@
                   (? (c = 10) (w (i + 1) 'code stk 0 ti acc)
                      (w (i + 1) 'cmt stk 0 ti acc))
                  (c = 59) (w (i + 1) 'cmt stk 0 ti acc)
-                 (&& (c = 35) (&& ((i + 1) < n) ((src (i + 1)) = 33)))
+                 (c = 35 && i + 1 < n && src (i + 1) = 33)
                   (w (i + 2) 'cmt stk 0 ti acc)
-                 (c = 34) (w (i + 1) 'str (? it stk (ldelem stk i)) 0 ti acc)
+                 (c = 34) (w (i + 1) 'str (? it stk (lelem stk i)) 0 ti acc)
                  (c = 10) (w (i + 1) 'code stk 0 ti acc)
-                 (|| (c = 40) (|| (c = 91) (c = 123)))
-                  (w (i + 1) 'code (ldpush (? it stk (ldelem stk i)) c i src it ti) 0 ti acc)
-                 (|| (c = 41) (|| (c = 93) (c = 125)))
+                 (c = 40 || c = 91 || c = 123)
+                  (w (i + 1) 'code (ldpush (? it stk (lelem stk i)) c i src it ti) 0 ti acc)
+                 (c = 41 || c = 93 || c = 125)
                   ; ⚠ an imbalanced file drops NOTHING: a mismatched closer pops and
                   ; says nothing rather than guessing. balance is `check`'s errand.
-                  (? (! (two? stk)) (w (i + 1) 'code stk 0 ti acc)
-                     (! ((ldf-cl <stk) = c)) (w (i + 1) 'code >stk 0 ti acc)
+                  (? !(two? stk) (w (i + 1) 'code stk 0 ti acc)
+                     !(<stk 'cl = c) (w (i + 1) 'code >stk 0 ti acc)
                      (: f <stk
-                        a1 (? (&& (c = 41) (two? (ldf-ks f)))
-                              (ldspans src n f i (rev (ldf-ks f)) acc) acc)
-                        sd (&& (ldsing? src n f sg nu) (ldfree? src n (ldf-oi f) i))
-                        a2 (? sd (link i (link (ldf-oi f) a1)) a1)
+                        a1 (? (c = 41 && two? (f 'ks)) (ldspans src n f i (rev (f 'ks)) acc) acc)
+                        sd (ldsing? src n f sg nu && ldfree? src n (f 'oi) i)
+                        a2 (? sd (link i (link (f 'oi) a1)) a1)
                         (w (i + 1) 'code
-                           (? sd >stk (ldkid >stk (ldf-oi f) i (ldf-kx f)
-                                              (ldeligible? src n f)))
+                           (? sd >stk (ldkid >stk (f 'oi) i (f 'kx) (ldeligible? src n f)))
                            0 ti a2)))
                  (c < 33) (w (i + 1) 'code stk 0 ti acc)
-                 (w (i + 1) 'code (? it stk (ldelem stk i)) 1 (? it ti i) acc))))
+                 (w (i + 1) 'code (? it stk (lelem stk i)) 1 (? it ti i) acc))))
        (w 0 'code () 0 0 ()))
 
    ; the indexes ASCENDING. they arrive in close order -- innermost first, a form's
@@ -579,9 +600,9 @@
    ; no sort is needed.
    (lint-drops src conf)
     (: ds (ldscan src conf)
-       (? (! (two? ds)) ()
+       (? !(two? ds) ()
           (: n (tally src)
-             (fill m l) (? (! (two? l)) m (: _ (pin m <l 1) (fill m >l)))
+             (fill m l) (? !(two? l) m (pin m <l 1, fill m >l))
              t (fill (tablet 0) ds)
              (go k acc) (? (k < 0) acc (go (k - 1) (? (peep t k ()) (link k acc) acc)))
              (go (n - 1) ()))))

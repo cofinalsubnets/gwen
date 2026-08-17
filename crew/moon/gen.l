@@ -6317,10 +6317,10 @@
        (go i acc)
         (? (n <= i) acc
            (: c (tm i)
-              (? !(c = 37) (go (i + 1) (acc + c))
+              (? !(c = 37) (go (i + 1) (acc + string c))
                  (i + 1 < n)
                   (: d (tm (i + 1))
-                     (? (d = 37) (go (i + 2) (acc + 37))
+                     (? (d = 37) (go (i + 2) (acc + "%"))
                         (48 <= d && d <= 57)
                          (: ix (d - 48)
                             (? (ix < tally al) (go (i + 2) (acc + nthr al ix)) 'bad))

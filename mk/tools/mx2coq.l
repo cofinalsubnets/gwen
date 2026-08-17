@@ -14,8 +14,11 @@
 ;     gem/array kind routes identically"). KMint is its own band, the unit
 ;     lane whole (the dispatchers early-out a mint first -- the fast path;
 ;     the matrix says the same thing, so nothing rests on the early-out).
-;   * dispatch COMMUTES: mx[a][b] = mx[b][a] over the WHOLE square -- the
-;     lane fn handles orientation, the matrix never does.
+;   * dispatch COMMUTES: mx[a][b] = mirror mx[b][a] over the WHOLE square,
+;     where mirror swaps the positional pair (bin_a/bin_b, "answer the a/b
+;     operand") and fixes every other lane -- a symmetric lane handles
+;     orientation itself, the positional pair carries it in the name, and
+;     either way the table adds none of its own.
 ;   * the diagonal reads the lattice: one lane per band, the algebra ladder.
 ; what the dump-shaped predecessor needed and this does not: mk/tools/mxdump.c, the
 ; 47-line TU that #include'd love.c whole to read its own statics back out, the
@@ -96,7 +99,8 @@
 ("   from the table by row+column equality, both ops at once), the "
  + (show ((tally kinds) * (tally kinds))) + "-") nl
 "   cell tables factor through the band quotient with nothing left over, the" nl
-"   dispatch COMMUTES (orientation lives in the lane fn, never the table), and" nl
+"   dispatch COMMUTES up to mirror (a symmetric lane orients itself; the" nl
+"   positional bin_a/bin_b pair carries orientation in the name), and" nl
 "   the diagonal reads the lattice: one lane per band, the algebra ladder." nl
 "   KMint is its own band, the unit lane whole: the dispatchers early-out a" nl
 "   bare mint as the UNIT before indexing (the fast path), and the matrix says" nl
@@ -109,7 +113,13 @@
    _ (. ("Inductive lane := " + (bars ln lanes) + "." + nl))
    _ (. ("Definition lane_eqb (x y : lane) : bool := match x, y with "
          + (join (map (\ x ((? (id? x (cap lanes)) "" " | ") + (ln x) + ", " + (ln x) + " => true")) lanes))
-         + " | _, _ => false end." + nl + nl))
+         + " | _, _ => false end." + nl))
+   ; mirror: the argument swap's action on lanes. the positional degenerate pair
+   ; trades places (bin_a answers Sp[0], bin_b Sp[1]); every symmetric lane is fixed.
+   (mir x) (: t (show x) (? (= t "lvm_bin_a") "Lbin_b" (= t "lvm_bin_b") "Lbin_a" (ln x)))
+   _ (. ("Definition mirror (l : lane) : lane := match l with "
+         + (join (map (\ x ((? (id? x (cap lanes)) "" " | ") + (ln x) + " => " + (mir x))) lanes))
+         + " end." + nl + nl))
    _ (. (mxdef "addmx" addm))
    _ (. (mxdef "mulmx" mulm))
    _ (. ("Definition band (k : kind) : nat := match k with "
@@ -125,8 +135,8 @@
    (allsq f) ("forallb (fun a => forallb (fun b => " + f + ") rk) rk")
    _ (. ((thm "add_factors_through_bands" (allsq "lane_eqb (addmx a b) (addband (band a) (band b))"))
        + (thm "mul_factors_through_bands" (allsq "lane_eqb (mulmx a b) (mulband (band a) (band b))"))
-       + (thm "add_dispatch_commutes"     (allsq "lane_eqb (addmx a b) (addmx b a)"))
-       + (thm "mul_dispatch_commutes"     (allsq "lane_eqb (mulmx a b) (mulmx b a)")) + nl))
+       + (thm "add_dispatch_commutes"     (allsq "lane_eqb (addmx a b) (mirror (addmx b a))"))
+       + (thm "mul_dispatch_commutes"     (allsq "lane_eqb (mulmx a b) (mirror (mulmx b a))")) + nl))
    _ (. ("(* the lattice, read off the diagonal: one add/mul lane pair per band *)" + nl
        + "Theorem the_diagonal_reads_the_lattice :" + nl
        + "  map (fun k => (addmx k k, mulmx k k)) [" + (commas (\ c (kn (at reps c))) (jot nb)) + "]" + nl

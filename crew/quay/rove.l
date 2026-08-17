@@ -144,7 +144,7 @@
                   (: gh (cell i (peep vis i 0))
                      p2 <>gh
                      _ (? (p = p2) () (say j (pen p2)))
-                     _ (say j ("" + <gh))
+                     _ (say j (string <gh))
                      (row y (x + 1) (i + 1) p2))
                   p)
    (rows y p) (? (y < h) (rows (y + 1) (: p2 (row y 0 (w * y) p) _ (say j "\r\n") p2)) p)

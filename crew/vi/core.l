@@ -577,7 +577,7 @@
 
    ; -- the frame: one full redraw as a single text --
    (vframe st)
-    (: e ("" + 27)
+    (: e (string 27)
        w (st 'w) h (st 'h) body (h - 1)
        _ (? (st 'row < st 'top) (pin st 'top (st 'row)) ())
        _ (? ((st 'top + (body - 1)) < st 'row) (pin st 'top (st 'row - (body - 1))) ())

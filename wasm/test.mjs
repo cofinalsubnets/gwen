@@ -46,7 +46,6 @@ try {
   code = m.ccall('ai_eval', 'number', ['number'], [ptr]);
 } catch (e) {
   // a failing assert calls (exit 1); under emscripten that throws to unwind.
-  // Fall through to the output check, which won't find the pass summary.
   code = (e && typeof e.status === 'number') ? e.status : 1;
 }
 m._free(ptr);
@@ -57,7 +56,16 @@ process.stdout.write(out.endsWith('\n') ? out : out + '\n');
 
 // "tests pass" appears once, in the final zz-fin summary -- so a truncated or
 // aborted run fails here loudly rather than passing by accident.
+//
+// ⚠ AND THE EXIT CODE IS NOT THE VERDICT. zz-fin calls (quit 1) when anything
+// failed and test_host gates on exactly that, but nothing carries it out of
+// ai_eval here -- no throw, no nonzero return. a red law rode a whole gate run
+// out through this line, because the summary it printed still said "tests
+// pass". so the OUTPUT decides: the summary must be there and zz-fin's failure
+// block must not.
 const clean = out.replace(/\x1b\[[0-9;]*m/g, '');
-if (code === 0 && /tests pass/.test(clean) && !/assert failed/.test(clean)) process.exit(0);
-console.error(`WASM TEST FAILED (eval code ${code})`);
+const failed = /^\s*\d+ failed:/m.test(clean) || /assert failed/.test(clean);
+if (code === 0 && /tests pass/.test(clean) && !failed) process.exit(0);
+console.error(`WASM TEST FAILED (eval code ${code}`
+              + (failed ? ', the corpus reported failures)' : ')'));
 process.exit(1);

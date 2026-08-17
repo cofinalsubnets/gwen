@@ -138,7 +138,7 @@
 
  ; --- the tui ---
  (upto n f) ((: (go i) (? (< i n) (: _ (f i) (go (+ i 1))) ())) 0)
- (cnom cx cy) (intern (+ ("" + (+ 97 cx)) (show (+ cy 1))))
+ (cnom cx cy) (intern (+ (string (+ 97 )) (show (+ cy 1))))
  (min2 a b) (? (< a b) a b)
  (max2 a b) (? (< a b) b a)
 
@@ -173,7 +173,7 @@
     _ (say j "\e[K\r\n")
     ; the header row: column letters, the cursor's lit
     _ (say j "    ")
-    _ (upto nc (\ i (: t (padl (+ ("" + (+ 97 i)) "    ") 7)
+    _ (upto nc (\ i (: t (padl (+ (string (+ 97 )) "    ") 7)
                        _ (? (= i cx) (say j "\e[7m") 0)
                        _ (say j (padr t 9))
                        _ (? (= i cx) (say j "\e[0m") 0)
@@ -211,7 +211,7 @@
           (= k 27) (go sh path r c cx cy top2 ())
           (? (= k 127) 1 (= k 8)) (go sh path r c cx cy top2
                                       (? (tally edit) (snip edit 0 (- (tally edit) 1)) edit))
-          ((<= 32 k) && (< k 127)) (go sh path r c cx cy top2 (+ edit ("" + k)))
+          ((<= 32 k) && (< k 127)) (go sh path r c cx cy top2 (+ edit (string k)))
           (go sh path r c cx cy top2 edit))
        (? (? (= k 1065) 1 (= k 107)) (go sh path r c cx (max2 0 (- cy 1)) top2 ())       ; up
           (? (= k 1066) 1 (= k 106)) (go sh path r c cx (min2 98 (+ cy 1)) top2 ())      ; down

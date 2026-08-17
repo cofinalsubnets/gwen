@@ -2,7 +2,7 @@
 ; stream inside it, and the crc32 underneath. `(use 'gz)`, then:
 ;
 ;   (gz-crc32 s)           -> the IEEE crc32 of a string, a charm
-;   (gz-deflate s)         -> raw DEFLATE bytes, one fixed-Huffman block
+;   (gz-deflate s)         -> raw DEFLATE bytes
 ;   (gz-inflate s n)       -> (1 bytes) | ()    n a size hint, 0 when unknown
 ;   (gz-zip s nom stamp)   -> a .gz member; nom "" for no name, stamp 0 for no time
 ;   (gz-unzip s)           -> (1 bytes) | ()
@@ -11,14 +11,14 @@
 ; is a legitimate member and a torn one answers nothing too, so a bare value could
 ; never say which happened. test with two?, take with <(>r).
 ;
-; the CODER is greedy LZ77 into the fixed Huffman code -- one block, no dynamic code
-; of our own. it costs no tree to build and no table in the stream, and it PAYS for
-; that: on this tree's own sources it lands a shade behind `gzip -1` and about 24%
-; behind `gzip -9` (137965 -> 49241, where -9 gets 39713 and -1 gets 47876). the gap is
-; almost entirely the code the block declares, so a dynamic coder is where the next
-; real win is, not a longer match chain.
-; the DECODER is complete -- stored, fixed AND dynamic -- because the far side is not
-; ours to choose: we must read whatever `gzip -9` wrote, and it writes dynamic.
+; the CODER is greedy LZ77 in blocks of sixteen thousand symbols, and each block is
+; costed three ways and written the cheapest: stored, the fixed Huffman code, or a
+; code built from the block's own frequencies. on the source tarball the artifact
+; carries that is 9735680 -> 2960320, against `gzip -9`'s 2849795 and `gzip -1`'s
+; 3361368. what it does NOT do is look ahead: the parse is greedy, one match taken
+; where it is found, and that 3.9% is nearly all of what the lookahead would buy.
+; the DECODER is complete for the same three, because the far side is not ours to
+; choose: we must read whatever `gzip -9` wrote.
 ;
 ; ⚠ THE THREE CONTAINERS ARE NOT INTERCHANGEABLE, and each is here for a reason a
 ; substitute could not serve: a `cask` is the mutable byte array (pin writes through),
@@ -49,21 +49,13 @@
    ; the cursor is a tablet: 0 the accumulator, 1 how many bits it holds.
    (gz-put j t v k)
     (: (go a n) (? (n < 8) (: _ (pin t 0 a) _ (pin t 1 n) 0)
-                    (: _ (say j ("" + (a & 255))) (go (a >> 8) (n - 8))))
+                    (: _ (say j (string (a & 255))) (go (a >> 8) (n - 8))))
        (go ((peep t 0 0) | ((v & ((1 << k) - 1)) << (peep t 1 0))) ((peep t 1 0) + k)))
    (gz-align j t)                          ; flush the tail byte, zero-padded
     (? (peep t 1 0)
-       (: _ (say j ("" + ((peep t 0 0) & 255))) _ (pin t 0 0) _ (pin t 1 0) 0)
+       (: _ (say j (string ((peep t 0 0) & 255))) _ (pin t 0 0) _ (pin t 1 0) 0)
        0)
    (gz-rev v k) (: (go i a w) (? (k <= i) a (go (i + 1) ((a << 1) | (w & 1)) (w >> 1))) (go 0 0 v))
-
-   ; the fixed literal/length code (RFC 1951 3.2.6) is four runs, so it is a
-   ; function rather than a table -- there is nothing to look up.
-   (gz-fixlit j t s)
-    (? (s < 144) (gz-put j t (gz-rev (48 + s) 8) 8)
-       (s < 256) (gz-put j t (gz-rev (400 + (s - 144)) 9) 9)
-       (s < 280) (gz-put j t (gz-rev (s - 256) 7) 7)
-                 (gz-put j t (gz-rev (192 + (s - 280)) 8) 8))
 
    ; --- the length and distance ladders (RFC 1951 3.2.5) ---------------------
    gz-lbase (star-tray '(29) '(3 4 5 6 7 8 9 10 11 13 15 17 19 23 27 31 35 43 51 59
@@ -87,6 +79,103 @@
    (gz-c32! c i v) (: o (i * 4)
                       _ (pin c o (v & 255))          _ (pin c (o + 1) ((v >> 8) & 255))
                       _ (pin c (o + 2) ((v >> 16) & 255)) _ (pin c (o + 3) ((v >> 24) & 255)) 0)
+
+   ; --- a Huffman code, built from frequencies -------------------------------
+   ; sort the used symbols by count, then merge the two lightest live nodes until one
+   ; is left; a leaf's DEPTH is its code length. the two candidates come off two
+   ; queues -- the sorted leaves, and the internal nodes the merge itself makes, which
+   ; come out ascending for free -- so nothing is searched and nothing is re-sorted.
+   ; a symbol rides its own count as one number, count:sym, so `sort` needs no
+   ; comparator and the tie goes to the lower symbol.
+   (gz-hkeys f i a) (? (i < 0) a
+                       (: c (gz-c32 f i) (gz-hkeys f (i - 1) (? c (((c << 9) + i) >< a) a))))
+   (gz-hcopy f nsym) (: c (cask (nsym * 4))
+                        _ (: (go i) (? (nsym <= i) 0
+                                       (: _ (gz-c32! c i (gz-c32 f i)) (go (i + 1))))
+                             (go 0))
+                        c)
+   (gz-hdep pa i d) (: p (gz-c32 pa i) (? p (gz-hdep pa (p - 1) (d + 1)) d))
+   ; ⚠ halving the counts and rebuilding is how a code is walked back under the depth
+   ; the format allows -- crude, and it always terminates: all-ones is a balanced tree,
+   ; nine deep over the literal alphabet and five over the code-length one.
+   (gz-hhalve f nsym i) (? (nsym <= i) 0
+                           (: c (gz-c32 f i)
+                              _ (? c (gz-c32! f i (: h (c >> 1) (? h h 1))) 0)
+                              (gz-hhalve f nsym (i + 1))))
+   (gz-hpass f nsym lim pass)               ; -> (lengths deepest)
+    (: ks (sort (gz-hkeys f (nsym - 1) ()))
+       nl (tally ks)
+       w (cask (nl * 8))   sy (cask (nl * 8))   pa (cask (nl * 8))
+       _ (: (go i l) (? (nl <= i) 0
+                        (: v <l
+                           _ (gz-c32! w i (v >> 9))   _ (gz-c32! sy i (v & 511))
+                           (go (i + 1) >l)))
+            (go 0 ks))
+       (pick li ii top) (? (nl <= li) 0     ; 1 takes the leaf queue, 0 the internal one
+                           (top <= ii) 1
+                           ((gz-c32 w li) <= (gz-c32 w ii)) 1
+                           0)
+       _ (: (go top li ii)
+             (? ((nl + nl - 1) <= top) 0
+                (: p (pick li ii top)
+                   a (? p li ii)    li1 (? p (li + 1) li)    ii1 (? p ii (ii + 1))
+                   q (pick li1 ii1 top)
+                   b (? q li1 ii1)  li2 (? q (li1 + 1) li1)  ii2 (? q ii1 (ii1 + 1))
+                   _ (gz-c32! w top ((gz-c32 w a) + (gz-c32 w b)))
+                   _ (gz-c32! pa a (top + 1))   _ (gz-c32! pa b (top + 1))
+                   (go (top + 1) li2 ii2)))
+            (go nl 0 nl))
+       lens (tablet 0)
+       mx (: (go i m) (? (nl <= i) m
+                         (: d (gz-hdep pa i 0)
+                            _ (pin lens (gz-c32 sy i) d)
+                            (go (i + 1) (? (m < d) d m))))
+             (go 0 0))
+       (? ((lim < mx) & (pass < 32)) (: _ (gz-hhalve f nsym 0) (gz-hpass f nsym lim (pass + 1)))
+          `(lens mx)))
+   ; ⚠ A CODE NEEDS TWO SYMBOLS even where the block used one or none: a lone symbol
+   ; would want a zero-bit code, and the format cannot spell one. the two cheapest are
+   ; conjured at count one, which is the shape zlib writes too.
+   (gz-hlens f nsym lim)
+    (: c (gz-hcopy f nsym)                  ; halving is destructive; the caller's
+       u (: (go i k) (? (nsym <= i) k       ; counts are still owed to the cost sums
+                        (go (i + 1) (? (gz-c32 c i) (k + 1) k)))
+            (go 0 0))
+       _ (? (2 <= u) 0
+            (: _ (? (gz-c32 c 0) 0 (gz-c32! c 0 1))
+               _ (? (gz-c32 c 1) 0 (gz-c32! c 1 1)) 0))
+       (gz-hpass c nsym lim 0))
+   ; canonical: shortest codes first, ties by symbol. the code goes in REVERSED, since
+   ; a Huffman code is stored MSB-first and gz-put spends bits the other way.
+   (gz-hcodes lens nsym mx)
+    (: cnt (tablet 0)
+       _ (: (go i) (? (nsym <= i) 0
+                      (: l (peep lens i 0)
+                         _ (? l (pin cnt l ((peep cnt l 0) + 1)) 0)
+                         (go (i + 1))))
+            (go 0))
+       nxt (tablet 0)
+       _ (: (go l c) (? (mx < l) 0
+                        (: _ (pin nxt l c) (go (l + 1) ((c + (peep cnt l 0)) << 1))))
+            (go 1 0))
+       code (tablet 0)
+       _ (: (go i) (? (nsym <= i) 0
+                      (: l (peep lens i 0)
+                         _ (? l (: c (peep nxt l 0)
+                                   _ (pin code i (gz-rev c l))   _ (pin nxt l (c + 1)) 0)
+                              0)
+                         (go (i + 1))))
+            (go 0))
+       code)
+
+   ; the fixed code (RFC 1951 3.2.6) is canonical over four runs of length, so it is
+   ; those lengths handed to the same builder -- and the DECODER reads its tables off
+   ; the same two rows.
+   gz-fixlenl (star-tray '(288) (map (\ i (? (i < 144) 8 (i < 256) 9 (i < 280) 7 8))
+                                     (jot 288)))
+   gz-fixlend (star-tray '(30) (map (\ i 5) (jot 30)))
+   gz-fixcodl (gz-hcodes gz-fixlenl 288 9)
+   gz-fixcodd (gz-hcodes gz-fixlend 30 5)
 
    ; --- the match finder -----------------------------------------------------
    ; deflate's window is 32k and its match 258 bytes, both the format's numbers.
@@ -125,31 +214,163 @@
    (gz-fill s n head prev i l)              ; index every position a match covered
     (: (go k) (? (l <= k) 0 (: _ (gz-ins s n (i + k) head prev) (go (k + 1)))) (go 0))
 
-   ; the coder proper: greedy, one symbol at a time, tail-recursive over i.
-   (gz-emit s n j t head prev i)
-    (? (n <= i) (gz-fixlit j t 256)         ; 256 is end-of-block
+   ; --- the token buffer -----------------------------------------------------
+   ; a block is TOKENIZED first and coded second, because a code of the block's own
+   ; cannot be built until the block's frequencies are known. a literal is its own
+   ; byte; a match packs the two codes and the two extra values that spell it, so the
+   ; ladders are walked here and not again at write time.
+   gz-tokmax 16384                          ; zlib's block, measured in symbols
+   ; a three-byte match spends a length code and a distance code -- thirteen bits and
+   ; up, against the fifteen or so three literals cost -- so past some reach it is a
+   ; LOSS, and a greedy parse takes it anyway and blocks the longer match one byte on.
+   ; refusing them past 4096 pays everywhere measured: the source tarball 2984599 ->
+   ; 2960320, this tree's .l files 32094 -> 31862, out/host/love 1225045 -> 1216277.
+   ; ⚠ AND REFUSING THEM OUTRIGHT DOES NOT. text likes it (the tarball goes on to
+   ; 2949504) and binaries do not -- out/host/love swells to 1275300, 4.6% worse.
+   gz-toofar 4096
+   (gz-tok s n head prev tok fl fd i k xb)  ; -> (i tokens extra-bits)
+    (? (n <= i) `(i k xb)
+       (gz-tokmax <= k) `(i k xb)
        (: m (? ((i + gz-minmatch) <= n) (gz-find s n i head prev) '(0 0))
-          l <m
+          l (? (<m = 3) (? (gz-toofar < <>m) 0 <m) <m)
           (? (l < gz-minmatch)
-             (: _ (gz-fixlit j t (s i))
+             (: c (s i)
+                _ (gz-c32! tok k c)
+                _ (gz-c32! fl c ((gz-c32 fl c) + 1))
                 _ (gz-ins s n i head prev)
-                (gz-emit s n j t head prev (i + 1)))
+                (gz-tok s n head prev tok fl fd (i + 1) (k + 1) xb))
              (: d (<(>m))
                 lc (gz-lcode l)   dc (gz-dcode d)
-                _ (gz-fixlit j t (257 + lc))
-                _ (: e (peep gz-lext lc 0) (? e (gz-put j t (l - (peep gz-lbase lc 0)) e) 0))
-                _ (gz-put j t (gz-rev dc 5) 5)
-                _ (: e (peep gz-dext dc 0) (? e (gz-put j t (d - (peep gz-dbase dc 0)) e) 0))
+                le (peep gz-lext lc 0)   de (peep gz-dext dc 0)
+                _ (gz-c32! tok k (256 + (lc << 23) + (dc << 18)
+                                  + ((l - (peep gz-lbase lc 0)) << 13)
+                                  + (d - (peep gz-dbase dc 0))))
+                _ (gz-c32! fl (257 + lc) ((gz-c32 fl (257 + lc)) + 1))
+                _ (gz-c32! fd dc ((gz-c32 fd dc) + 1))
                 _ (gz-fill s n head prev i l)
-                (gz-emit s n j t head prev (i + l))))))
+                (gz-tok s n head prev tok fl fd (i + l) (k + 1) (xb + le + de))))))
+
+   ; --- the block's own code, written out as code LENGTHS ---------------------
+   ; the lengths go through a THIRD Huffman code, run-length coded first: 16 repeats
+   ; the previous length three to six times, 17 and 18 are runs of zero, three to ten
+   ; and eleven to a hundred and thirty-eight. a value is always spelled once before
+   ; 16 may repeat it.
+   ; ⚠ THE ORDER IS THE FORMAT'S, not ours: the code-length code declares its own
+   ; lengths in this permutation so the rarely-used ones sit at the tail and can be
+   ; trimmed off. both sides read the same row.
+   gz-clord (star-tray '(19) '(16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15))
+   (gz-clx sy) (? (sy = 16) 2 (sy = 17) 3 (sy = 18) 7 0)
+   (gz-trim lens k lo) (? (k <= lo) lo (peep lens (k - 1) 0) k (gz-trim lens (k - 1) lo))
+   (gz-run cl tot rl)                       ; -> how many entries rl holds
+    (: (span v k) (? (tot <= k) k ((peep cl k 0) = v) (span v (k + 1)) k)
+       (put j sy ex) (: _ (gz-c32! rl j ((sy << 7) + ex)) (j + 1))
+       (zeros i r j) (? (r < 3) (? r (zeros (i + 1) (r - 1) (put j 0 0)) `(i j))
+                          (r < 11) (zeros (i + r) 0 (put j 17 (r - 3)))
+                          (: t (? (138 < r) 138 r) (zeros (i + t) (r - t) (put j 18 (t - 11)))))
+       (reps i r v j) (? (r < 3) (? r (reps (i + 1) (r - 1) v (put j v 0)) `(i j))
+                          (: t (? (6 < r) 6 r) (reps (i + t) (r - t) v (put j 16 (t - 3)))))
+       (go i j) (? (tot <= i) j
+                   (: v (peep cl i 0)
+                      r ((span v i) - i)
+                      p (? v (reps (i + 1) (r - 1) v (put j v 0)) (zeros i r j))
+                      (go <p <>p)))
+       (go 0 0))
+
+   ; --- what a block would cost, in BITS -------------------------------------
+   (gz-cost f lens nsym i a)
+    (? (nsym <= i) a
+       (gz-cost f lens nsym (i + 1) (a + ((gz-c32 f i) * (peep lens i 0)))))
+   (gz-ccost rl lenc nr i a)
+    (? (nr <= i) a
+       (: sy ((gz-c32 rl i) >> 7)
+          (gz-ccost rl lenc nr (i + 1) (a + (peep lenc sy 0) + (gz-clx sy)))))
+
+   (gz-wtoks j t tok k codl lenl codd lend i)
+    (? (k <= i) (gz-put j t (peep codl 256 0) (peep lenl 256 0))   ; 256 ends the block
+       (: v (gz-c32 tok i)
+          (? (v < 256)
+             (: _ (gz-put j t (peep codl v 0) (peep lenl v 0))
+                (gz-wtoks j t tok k codl lenl codd lend (i + 1)))
+             (: u (v - 256)   lc (u >> 23)   dc ((u >> 18) & 31)
+                _ (gz-put j t (peep codl (257 + lc) 0) (peep lenl (257 + lc) 0))
+                _ (: e (peep gz-lext lc 0) (? e (gz-put j t ((u >> 13) & 31) e) 0))
+                _ (gz-put j t (peep codd dc 0) (peep lend dc 0))
+                _ (: e (peep gz-dext dc 0) (? e (gz-put j t (u & 8191) e) 0))
+                (gz-wtoks j t tok k codl lenl codd lend (i + 1))))))
+   (gz-wstored j t s i0 i1 last)
+    (: len (i1 - i0)
+       _ (gz-put j t (? last 1 0) 1)   _ (gz-put j t 0 2)
+       _ (gz-align j t)                     ; a stored block starts at a byte
+       _ (gz-put j t (len & 255) 8)          _ (gz-put j t ((len >> 8) & 255) 8)
+       _ (gz-put j t ((len ^ 65535) & 255) 8)
+       _ (gz-put j t (((len ^ 65535) >> 8) & 255) 8)
+       (: (go k) (? (len <= k) 0 (: _ (gz-put j t (s (i0 + k)) 8) (go (k + 1)))) (go 0)))
+
+   ; three ways to spell one block, and the cheapest in bits wins. the tree the third
+   ; must declare ahead of itself is the only reason the other two still win anything:
+   ; a block of noise pays it for nothing, and a short one cannot amortize it.
+   (gz-flush s j t tok k fl fd i0 i1 last xb)
+    (: _ (gz-c32! fl 256 ((gz-c32 fl 256) + 1))          ; end-of-block, always sent
+       rl (gz-hlens fl 286 15)   lenl <rl   mxl <>rl
+       rd (gz-hlens fd 30 15)    lend <rd   mxd <>rd
+       hlit (gz-trim lenl 286 257)   hdist (gz-trim lend 30 1)
+       cl (tablet 0)                        ; the two length runs, laid end to end
+       _ (: (go i) (? (hlit <= i) 0 (: _ (pin cl i (peep lenl i 0)) (go (i + 1)))) (go 0))
+       _ (: (go i) (? (hdist <= i) 0
+                      (: _ (pin cl (hlit + i) (peep lend i 0)) (go (i + 1))))
+            (go 0))
+       rlb (cask (320 * 4))
+       nr (gz-run cl (hlit + hdist) rlb)
+       fc (cask (19 * 4))
+       _ (: (go i) (? (nr <= i) 0
+                      (: sy ((gz-c32 rlb i) >> 7)
+                         _ (gz-c32! fc sy ((gz-c32 fc sy) + 1))
+                         (go (i + 1))))
+            (go 0))
+       rc (gz-hlens fc 19 7)   lenc <rc   mxc <>rc
+       hclen (: (go i) (? (i <= 4) 4 (peep lenc (peep gz-clord (i - 1) 0) 0) i (go (i - 1)))
+                (go 19))
+       dyn (17 + (hclen * 3) + (gz-ccost rlb lenc nr 0 0)
+            + (gz-cost fl lenl 286 0 0) + (gz-cost fd lend 30 0 0) + xb)
+       fix (3 + (gz-cost fl gz-fixlenl 286 0 0) + (gz-cost fd gz-fixlend 30 0 0) + xb)
+       ; LEN is sixteen bits, so a span past 65535 has no stored spelling at all.
+       raw (? ((i1 - i0) < 65536) (42 + ((i1 - i0) * 8)) (dyn + fix))
+       (? (raw < (? (dyn <= fix) dyn fix)) (gz-wstored j t s i0 i1 last)
+          (fix < dyn)
+           (: _ (gz-put j t (? last 1 0) 1)   _ (gz-put j t 1 2)
+              (gz-wtoks j t tok k gz-fixcodl gz-fixlenl gz-fixcodd gz-fixlend 0))
+          (: codl (gz-hcodes lenl 286 mxl)   codd (gz-hcodes lend 30 mxd)
+             codc (gz-hcodes lenc 19 mxc)
+             _ (gz-put j t (? last 1 0) 1)   _ (gz-put j t 2 2)
+             _ (gz-put j t (hlit - 257) 5)   _ (gz-put j t (hdist - 1) 5)
+             _ (gz-put j t (hclen - 4) 4)
+             _ (: (go i) (? (hclen <= i) 0
+                            (: _ (gz-put j t (peep lenc (peep gz-clord i 0) 0) 3)
+                               (go (i + 1))))
+                  (go 0))
+             _ (: (go i) (? (nr <= i) 0
+                            (: v (gz-c32 rlb i)   sy (v >> 7)
+                               _ (gz-put j t (peep codc sy 0) (peep lenc sy 0))
+                               _ (: b (gz-clx sy) (? b (gz-put j t (v & 127) b) 0))
+                               (go (i + 1))))
+                  (go 0))
+             (gz-wtoks j t tok k codl lenl codd lend 0))))
+
+   ; the window and the chains outlive the block: a match may reach back into any
+   ; block already written, which is what makes many blocks cost only their trees.
+   (gz-blocks s n j t head prev i)
+    (: tok (cask (gz-tokmax * 4))
+       fl (cask (286 * 4))   fd (cask (30 * 4))
+       r (gz-tok s n head prev tok fl fd i 0 0)
+       i2 <r   k <>r   xb <>>r
+       _ (gz-flush s j t tok k fl fd i i2 (? (n <= i2) 1 0) xb)
+       (? (n <= i2) 0 (gz-blocks s n j t head prev i2)))
 
    (gz-deflate s)
     (: n (tally s)
        j (jug 0)   t (tablet 0)
        head (cask (32768 * 4))   prev (cask (32768 * 4))
-       _ (gz-put j t 1 1)                   ; BFINAL -- one block for the whole input
-       _ (gz-put j t 1 2)                   ; BTYPE 01, the fixed code
-       _ (gz-emit s n j t head prev 0)
+       _ (gz-blocks s n j t head prev 0)
        _ (gz-align j t)
        ((slurp j) + ""))
 
@@ -250,9 +471,8 @@
                  (go (l + 1) (c << 1) ((first + k) << 1) (index + k) p2))))
        (go 1 0 0 0 (peep t 0 0)))
 
-   gz-fixlithuff (gz-huff (star-tray '(288) (map (\ i (? (i < 144) 8 (i < 256) 9 (i < 280) 7 8))
-                                                 (jot 288))) 288)
-   gz-fixdisthuff (gz-huff (star-tray '(30) (map (\ i 5) (jot 30))) 30)
+   gz-fixlithuff (gz-huff gz-fixlenl 288)
+   gz-fixdisthuff (gz-huff gz-fixlend 30)
 
    ; --- the three block kinds ------------------------------------------------
    (gz-stored s n t b)
@@ -291,15 +511,14 @@
    ; the dynamic block's own code, read as code LENGTHS through a third Huffman code
    ; -- the one place the format describes itself. 16/17/18 are runs, and 16 repeats
    ; the previous length, so the walk carries it.
-   gz-clord '(16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15)
    (gz-dynamic s n t b)
     (: hlit ((gz-bits s n t 5) + 257)
        hdist ((gz-bits s n t 5) + 1)
        hclen ((gz-bits s n t 4) + 4)
        cl (tablet 0)
-       _ (: (go i o) (? (hclen <= i) 0
-                         (: _ (pin cl <o (gz-bits s n t 3)) (go (i + 1) >o)))
-            (go 0 gz-clord))
+       _ (: (go i) (? (hclen <= i) 0
+                      (: _ (pin cl (peep gz-clord i 0) (gz-bits s n t 3)) (go (i + 1))))
+            (go 0))
        ch (gz-huff cl 19)
        tot (hlit + hdist)
        lens (tablet 0)
@@ -360,7 +579,7 @@
        _ (pin h 4 (stamp & 255))        _ (pin h 5 ((stamp >> 8) & 255))
        _ (pin h 6 ((stamp >> 16) & 255)) _ (pin h 7 ((stamp >> 24) & 255))
        _ (pin h 8 0) _ (pin h 9 3)               ; XFL none, OS 3 = unix
-       ((string h) + (? named (nom + ("" + 0)) "") + (gz-deflate txt)
+       ((string h) + (? named (nom + (string 0)) "") + (gz-deflate txt)
         + (gz-le32s (gz-crc32 txt)) + (gz-le32s ((tally txt) & 4294967295))))
 
    ; the header's optional fields are four flags, and every one of them must be
@@ -384,7 +603,11 @@
                           + ((s (n - 2)) << 16) + ((s (n - 1)) << 24))
                    crc ((s (n - 8)) + ((s (n - 7)) << 8)
                         + ((s (n - 6)) << 16) + ((s (n - 5)) << 24))
-                   body (: c (cask (n - i4 - 8)) _ (pour c 0 s i4 (n - 8)) (string c))
+                   ; ⚠ `pour`'s last argument is a COUNT, not an end offset, and the nif
+                   ; clamps it to the shorter of the two arrays -- so an end offset can
+                   ; answer right off the destination's size alone, silently, and move
+                   ; the whole tail to do it. spell the count.
+                   body (: c (cask (n - i4 - 8)) _ (pour c 0 s i4 (n - i4 - 8)) (string c))
                    r (gz-inflate body isize)
                    (? (! r) ()
                       (: out (<(>r))

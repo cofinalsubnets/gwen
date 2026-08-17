@@ -63,14 +63,20 @@
       ;      nothing adjoins nothing, so () + x = x + () = x. the dispatchers early-out
       ;      on a mint before reaching the table; the table says the same thing, so
       ;      the fast path is a fast path and never load-bearing.
+      ; MIXED BANDS DEGENERATE (2026-08-16, the associativity law): a number against a
+      ; symbol, a string, or a chain arrives as that band's UNIT and the other operand
+      ; answers whole -- the only hom a group has into a free monoid is trivial, so the
+      ; byte law and the element-adjoin law could never associate and are gone. the
+      ; band order is NUM < NOM < STR < CHAIN; nom+str keeps the SPELLING hom (lawful),
+      ; str/nom+chain keeps adjoin FOR NOW (the charlist hom is the deferred rung).
       (ADD_MINT  lvm_bin_unit   lvm_bin_unit lvm_bin_unit   lvm_bin_unit   lvm_bin_unit lvm_bin_unit lvm_bin_unit)
-      (ADD_NUM   lvm_addn       lvm_bin_unit lvm_add_string lvm_add_string lvm_add_seq  lvm_addh     lvm_addh)
+      (ADD_NUM   lvm_addn       lvm_bin_unit lvm_bin_b      lvm_bin_b      lvm_bin_b    lvm_addh     lvm_addh)
       ; a NAMED symbol inherits the STRING algebra under +: nom+nom cats spellings and
-      ; re-interns, nom+str demotes to a string, nom+num rides the byte law. but
+      ; re-interns, nom+str demotes to a string (the spelling IS a monoid hom). but
       ; nom+chain stays add_seq -- a symbol ADJOINS to a list, foo stays foo.
-      (ADD_STR   lvm_add_string lvm_bin_unit lvm_add_string lvm_add_string lvm_add_seq  lvm_addh     lvm_addh)
-      (ADD_NOM   lvm_add_string lvm_bin_unit lvm_add_string lvm_add_string lvm_add_seq  lvm_addh     lvm_addh)
-      (ADD_TWO   lvm_add_seq    lvm_bin_unit lvm_add_seq    lvm_add_seq    lvm_add_seq  lvm_addh     lvm_addh)
+      (ADD_STR   lvm_bin_a      lvm_bin_unit lvm_add_string lvm_add_string lvm_add_seq  lvm_addh     lvm_addh)
+      (ADD_NOM   lvm_bin_a      lvm_bin_unit lvm_add_string lvm_add_string lvm_add_seq  lvm_addh     lvm_addh)
+      (ADD_TWO   lvm_bin_a      lvm_bin_unit lvm_add_seq    lvm_add_seq    lvm_add_seq  lvm_addh     lvm_addh)
       (ADD_H     lvm_addh       lvm_bin_unit lvm_addh       lvm_addh       lvm_addh     lvm_addh     lvm_addh)
       ; `*`: the semiring product whose `+` is the lane above. numbers multiply,
       ;      sequence * count repeats, lambdas and maps compose (Church mul).

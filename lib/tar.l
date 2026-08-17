@@ -61,7 +61,10 @@
    (tar-txt s o n)                          ; a NUL-ended text field
     (: (go i) (? (n <= i) i ((s (o + i)) = 0) i (go (i + 1)))
        k (go 0)
-       (? k (: c (cask k) _ (pour c 0 s o (o + k)) (string c)) ""))
+       ; ⚠ `pour`'s last argument is a COUNT, not an end offset, and the nif clamps it to
+       ; the shorter of the two arrays -- so an end offset can answer right off the
+       ; destination's size alone, silently, and move the whole tail to do it.
+       (? k (: c (cask k) _ (pour c 0 s o k) (string c)) ""))
 
    ; --- entries --------------------------------------------------------------
    (tar-entry nom kind body)
@@ -91,7 +94,7 @@
              k (go 0 -1)
              (? (k < 0) ()
                 (: p (cask k) _ (pour p 0 nom 0 k)
-                   q (cask (n - k - 1)) _ (pour q 0 nom (k + 1) n)
+                   q (cask (n - k - 1)) _ (pour q 0 nom (k + 1) (n - k - 1))
                    `((string p) (string q)))))))
 
    ; --- writing --------------------------------------------------------------
@@ -150,7 +153,7 @@
     (: (go i) (? (tar-blk <= i) 1 ((s (o + i)) = 0) (go (i + 1)) 0) (go 0))
    (tar-read1 s n o)                        ; -> (1 entry next) | () | 'end
     (? (tar-zero? s o) 'end
-       (: b (cask tar-blk) _ (pour b 0 s o (o + tar-blk))
+       (: b (cask tar-blk) _ (pour b 0 s o tar-blk)
           got (tar-sum b)
           want (tar-oct s (o + 148) 8)
           (? (! (got = want)) ()
@@ -173,7 +176,7 @@
                       _ (pin e 'uname (tar-txt s (o + 265) 32))
                       _ (pin e 'gname (tar-txt s (o + 297) 32))
                       _ (pin e 'body (? sz (: c (cask sz)
-                                              _ (pour c 0 s (o + tar-blk) (o + tar-blk + sz))
+                                              _ (pour c 0 s (o + tar-blk) sz)
                                               (string c))
                                           ""))
                       blocks (? sz (* tar-blk (// (sz + tar-blk - 1) tar-blk)) 0)

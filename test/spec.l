@@ -217,17 +217,20 @@
     ("1.5" = string (string 1.5))))                                        ; ..so it is idempotent
 
 ; --- + and * are generic --- `+` adds numbers, concatenates strings, appends lists; `-` numeric
-; only. the BYTE LAW: a string + an exact integer 0..255 is one byte. a symbol inherits the string
-; lane (acts as its spelling, re-interns; demotes on a string operand). `*` is repeated `+`: a sequence
-; times a count repeats it, and the count SATURATES.
+; only. MIXED BANDS DEGENERATE (the associativity law): a number against a symbol, a string,
+; or a chain arrives as that band's UNIT and the other operand answers whole -- the byte law
+; and the element-adjoin law could never associate and are gone; (string c) and (l + [x])
+; spell them. a symbol inherits the string lane (acts as its spelling, re-interns; demotes on
+; a string operand -- the spelling IS a monoid hom, so that crossing is lawful). `*` is
+; repeated `+`: a sequence times a count repeats it, and the count SATURATES.
 (assert
- ("abcd" = "ab" + "cd") ("xB" = "x" + 66) ('efef = 'ef + 'ef) ("abef" = "ab" + 'ef)
- ("xB" = "x" + 66.0) !("x" + 1.5) !("x" + -66) !("x" + 256)   ; the byte law: exact 0..255 or nil
- ('(1 2 3 4) = '(1 2) + '(3 4)) ('(5 1 2) = 5 + '(1 2)) !("a" - "b")
+ ("abcd" = "ab" + "cd") ("x" = "x" + 66) ('efef = 'ef + 'ef) ("abef" = "ab" + 'ef)
+ ("x" = "x" + 66.0) ("x" = "x" + 1.5) ("x" = "x" + -66) ("x" = "x" + 256)   ; a number degenerates against text
+ ('(1 2 3 4) = '(1 2) + '(3 4)) ('(1 2) = 5 + '(1 2)) !("a" - "b")
  ('(3) = '(3) + ()) ('(3) = () + '(3)) ('(1 2) = '(1 2) + (mint 0))   ; a bare mint -- the zero point () too -- is +'s
  ("ab" = "ab" + ()) ("ab" = () + "ab") (5 = 5 + ()) (5 = () + 5)      ; IDENTITY in every lane, not just on lists:
  (~(1 2) = () + ~(1 2)) ("@(1 2 3)" = show (() + @(1 2 3))) (() = () + ())  ; string/number/complex/array pass through
- (('ef + '(1 2)) = '(ef 1 2)) ((intern (+ "ef" 5)) = 'ef + 5)  ; a NAMED symbol still ADJOINS to a list (foo stays foo); + a number rides the byte law, re-interned
+ (('ef + '(1 2)) = '(ef 1 2)) ('ef = 'ef + 5)  ; a NAMED symbol still ADJOINS to a list (foo stays foo); a number degenerates against it
  ((\ x x) = () + (\ x x)) (2 = (((\ x x) + (\ x x)) (\ n (+ n 1)) 0))   ; the TOP lane too: () + hot = hot, and
  ("ababab" = "ab" * 3) ('xyxy = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")   ; sym * count re-interns; + on two hots IS church add (id+id acts as 2)
  !("ab" * -3) ("ababab" = "ab" * 2.5) !('(1 2) * 0)         ; the count saturates; the NUMBER 0 empties
