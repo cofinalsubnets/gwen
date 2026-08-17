@@ -43,7 +43,7 @@ cat "$out"
 # just every template failing to parse. love0's build-tool lane is the one that
 # compiles core/love.c, and it is the only lane the laws above never walk.
 echo "CC crew/holo/text.l (love0 lane)"
-"$love0" -l crew/holo/text.l -e '(? (two? (asm-text "li r0, 60")) (quit 0) (quit 1))' </dev/null \
+"$love0" -l crew/holo/text.l -e '(? (two? ((from (name "holo") (name "asm-text")) "li r0, 60")) (quit 0) (quit 1))' </dev/null \
   || fail "asm-text under love0 -- is bare \`post\` the module accessor there?"
 
 # ---------------------------------------------- the pipeline's stage types

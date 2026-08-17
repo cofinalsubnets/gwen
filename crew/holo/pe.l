@@ -14,6 +14,7 @@
 ; pelink asks for a reserve of ZERO and the first text byte lands exactly at
 ; base = ImageBase + 0x1000.
 
+(module 'holo
 (: pe-ibase 65536                        ; the preferred base; .reloc frees the loader from it
    pe-hraw 512                           ; file bytes reserved for every header
    pe-falign 512
@@ -96,3 +97,4 @@
        (ld-write out
           (`(hdr (ld-zeros (- pe-hraw (tally hdr)))) + (>en
            + `((ld-zeros (- craw fsz)) reloc (ld-zeros (- rraw rsz))))))))
+) ; module 'holo

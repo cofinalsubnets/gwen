@@ -50,6 +50,7 @@
 ; probes one member through (from 'holo 'assemble). a backend outside the entry joins at runtime
 ; the same way every cat does: (use 'holo), then the backend text.
 
+(module 'holo
 (: ;; -- a 0-based list accessor (prel has none; `nth` is not bound -- it absorbs as the zero
    ;; point). instruction forms read their operands through this. --
    (at l k) (? (k = 0) <l (at >l (k - 1)))
@@ -323,3 +324,4 @@
    (hex2 b)  (hex1 (b >> 4) + hex1 (b & 15))
    (hexs bs) (foldl (\ a b (a + hex2 b)) "" bs)
    (holo-hex target prog) (hexs (holo-bytes target prog)))
+) ; module 'holo

@@ -8,6 +8,8 @@
 ; run: cat crew/holo/{holo,x64,arm64,thumb2,riscv,thumb1,text,elf}.l test/holo/golden.l
 ;      | out/host/love   (nonzero exit on any miss)
 
+(use 'holo) ; the cat's wrapped sources just registered the module
+
 (: pass #(0 0) fail #(0 0)
    (bump t)  (pin t 0 $ 1 + peep t 0 0)
    (sayln s) (puts s, flush out)

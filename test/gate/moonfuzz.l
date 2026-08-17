@@ -28,6 +28,7 @@
 (:
    _ (use 'clay)
    _ (use 'moon)                       ; the front end (clex/cpp/cparse-t) is module 'moon
+   _ (use 'kore)                       ; uread below is the u-floor's
    cshow (from 'clay 'clay-show)
    cok? (from 'clay 'clay-ok?)
    nl (string 10)

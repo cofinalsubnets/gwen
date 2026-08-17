@@ -18,6 +18,7 @@
 ; the data tables (registers, the ALU group, the condition codes) come FIRST: the emit functions
 ; read them by mutation-visible reference, the way tele's tape is defined before its users.
 
+(module 'holo
 (: ;; -- the register file: abstract name -> x86 encoding number (rsp kept aside as sp). --
    x64-regs (tabof
         `(('sp >< 4)
@@ -584,3 +585,4 @@
    _ (pin x64 'short 1)                        ; opt into branch relaxation (jmp8/br8 exist here)
    _ (defbackend 'x64 x64)
    _ (defbackend 'amd64 x64))
+) ; module 'holo

@@ -931,7 +931,7 @@ test_encver: host
 	@for s in $(encver); do n=$${s%%:*}; r=$${s#*:}; c=$${r%%:*}; l=$${r#*:}; \
 	   o=out/.$${n}_oracle; \
 	   test/proof/rocq/$${n}_drive > $$o.l; \
-	   cat crew/holo/holo.l crew/holo/x64.l $$o.l | $m > $$o.out 2>&1; r=$$?; \
+	   { cat crew/holo/holo.l crew/holo/x64.l; echo "(use 'holo)"; cat $$o.l; } | $m > $$o.out 2>&1; r=$$?; \
 	   { [ $$r -eq 0 ] && grep -q "$$c / $$c PASS" $$o.out; } \
 	     || { echo "FAIL the $$n oracle, $$l (exit $$r):"; cat $$o.out; exit 1; }; \
 	   cat $$o.out; done

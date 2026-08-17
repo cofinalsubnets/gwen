@@ -27,6 +27,7 @@
 ; the one riscv-specific caveat: a far-displacement stx/stxb between a cmp and its br borrows x30
 ; and breaks the fusion (real codegen keeps cmp and br adjacent; nothing emits that shape).
 
+(module 'holo
 (: ;; -- registers: r0..r7 -> a0..a7 (x10..x17, the LP64D argument file), r8..r12 -> t0..t4
    ;;    (x5,x6,x7,x28,x29 caller-saved), r13/r14/r15 -> s2/s3/s1 (x18,x19,x9 callee-saved, the
    ;;    homes), sp -> x2, fp -> s0 (x8), lr -> ra (x1). r19..r26 -> s4..s11 (x20..x27) is the
@@ -451,3 +452,4 @@
    _ (pin rv 'nop '(19 0 0 0))                 ; the ('align n) filler unit: NOP 00000013 LE
    _ (defbackend 'riscv64 rv)
    _ (defbackend 'rv64 rv))
+) ; module 'holo

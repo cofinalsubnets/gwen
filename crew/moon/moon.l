@@ -30,6 +30,7 @@
 ; one lane the compiler cannot be built without. asbook.l's (use 'holo) is the same shape.
 (module 'moon
 (use 'kore)
+(use 'holo) ; the assembler module: asm-text, arbytes, the linker
 (use 'pat)
 
 (:

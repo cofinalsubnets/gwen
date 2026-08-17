@@ -22,6 +22,7 @@
 ; the byte plumbing: every v6-M instruction is ONE 16-bit halfword EXCEPT BL (two halfwords, hi first,
 ; each le16 -- same trap thumb2.l documents). `t16` emits one narrow halfword; `t32` the BL pair.
 
+(module 'holo
 (: ;; -- registers: abstract number = hardware number for r0..r12; sp/lr/pc/fp named. (shared shape
    ;;    with thumb2.l -- could be factored to an arm32-common, but it's ~15 lines, little leverage.) --
    t1-regs (tabof
@@ -387,3 +388,4 @@
    _ (pin t1 'nop '(0 191))                    ; the ('align n) filler unit: NOP (16-bit) bf00 LE
    _ (defbackend 'thumb1 t1)
    _ (defbackend 'cortex-m0 t1))
+) ; module 'holo

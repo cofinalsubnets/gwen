@@ -17,6 +17,7 @@
 
 ; the combinators (love/peg.l). the use is its OWN top-level form -- a `:` body compiles
 ; as one unit, so a use inside the form below would run too late to serve it.
+(module 'holo
 (use 'peg)
 
 (: ;; -- byte-class predicates (the combinator leaves feed a parser one byte at a time). --
@@ -65,3 +66,4 @@
                       (: form (parse txline clean)
                          (? (two? form) (form >< acc) (scare 'asm-text clean))))))
              () (txsplit src)))
+) ; module 'holo

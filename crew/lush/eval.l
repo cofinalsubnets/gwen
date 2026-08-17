@@ -145,7 +145,7 @@
    ; the words whose main is not spelled <word>-main. kore-main wants the WHOLE argv
    ; (it reads its own program seat); the rest take the args after the name.
    sh-imgalias '(("mooncc" "moon-run" "moon") ("cc" "moon-run" "moon") ("kore" "kore-main")
-                 ("[" "bracket-main") ("objcopy" "objcopy"))
+                 ("[" "bracket-main") ("objcopy" "objcopy" "holo"))
    (sh-pathdirs _)
      (: p ("" + (getenv "PATH")) n (tally p)
         (go from k acc) (? (n <= k) (sh-rev (snip p from k >< acc))
@@ -179,7 +179,7 @@
         md (? ((two? al) && (two? >>al)) (from (intern <>>al)) ())   ; the row's module, or ()
         nm (intern mn)
         f0 (? (tablet? md) (md nm)                    ; the alias row named the module
-              (member? nm (names ())) (ev nm)         ; a bare global (objcopy's lane)
+              (member? nm (names ())) (ev nm)         ; a bare global
               (from 'kore nm))                        ; else the applets' home module
         (? (&& (sh-smem? w sh-imgok) !(sh-slashed? w) !(nil? f0) (sh-ours? w))
            [1 (sh-imgwrap f0 mn) (mn = "kore-main")]

@@ -11,6 +11,7 @@
 ;
 ; run: out/host/love -l crew/holo/holo.l -l crew/holo/x64.l -l crew/holo/arm64.l -l crew/holo/elf.l crew/holo/demo.l
 
+(module 'holo
 (: say (\ s (: _ (puts s) (flush out)))
 
    ;; -- the x86-64 userland program: write the message via the Linux syscall ABI, then exit(7).
@@ -34,3 +35,4 @@
    _ (say "wrote /tmp/love-x64.elf and /tmp/love-arm64.elf\n")
    _ (say "  x64:   chmod +x /tmp/love-x64.elf && /tmp/love-x64.elf ; echo $?\n")
    _ (say "  arm64: qemu-system-aarch64 -M virt -cpu cortex-a57 -nographic -kernel /tmp/love-arm64.elf\n"))
+) ; module 'holo

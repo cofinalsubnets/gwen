@@ -32,6 +32,7 @@
 ; urun, so an in-image caller lives through a tool that would have quit (the SEAT below
 ; is the one site that quits). ⚠ a main here leaves deep through `die`, never `quit`.
 (module 'kore
+(use 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
 (: kore-main (: (read-text p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))   ; (1 text) | ()
    (die m) (: _ (say err m) _ (put err 10) (uleave 2))
 
@@ -225,7 +226,7 @@
              'make (from 'cook 'cook-main) 'cook (from 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
              'as as-main
              'ar ar-main 'ld ld-main
-             'objcopy objcopy         ; the applet IS the function: crew/holo/copy.l
+             'objcopy (from 'holo 'objcopy)   ; the applet IS the function: crew/holo/copy.l, module-side
              'cat cat-main 'echo echo-main
              'head head-main 'tail tail-main
              'wc wc-main 'sort sort-main
@@ -319,7 +320,11 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    ; ⚠ each row closes over ITS OWN f -- the inner `:` is a fresh scope per step, so the
    ; closures do not all end up holding the last applet.
    _ (: T (from 'verbs 'tab)
-        _ (pin T 'kore (\ as (kore-main ("kore" >< as))))
+        ; ⚠ kore-main is UNBOUND here -- the outer form binds it only after this
+        ; whole form answers -- so the closure reads it through the registry at
+        ; the call, when module 'kore holds it. a bare read compiled here would
+        ; ride a missing cell against the CALLER's walk, where kore never walks.
+        _ (pin T 'kore (\ as ((from 'kore 'kore-main) ("kore" >< as))))
         (go ks) (? (two? ks) (: f (applets <ks) _ (pin T <ks (\ as (urun f as))) (go >ks)) 0)
         (go (keys applets)))
    ; kore-main is the ONE leaked global, and the in-image door too: it dispatches a

@@ -11,6 +11,7 @@
 ; are still on the global book; the eventual host path reaches them through the `holo` book):
 ;   out/host/love -l crew/holo/holo.l -l crew/holo/x64.l -l crew/holo/as.l ...
 
+(module 'holo
 (: ;; --- the physical register file: name -> (enc width-in-bytes). the low 8 have irregular
    ;; byte/word names, so spell the rows; r8..r15 are uniform (rN / rNd / rNw / rNb). ---
    as-regs (tablet 0)
@@ -194,3 +195,4 @@
    (as-text src) (: st (as-lay src)
                     (resolve (peep st 'items ()) (peep st 'labels 0) (peep backends 'x64 ()) 0))
    (as-hex src)  (hexs (as-text src)))
+) ; module 'holo

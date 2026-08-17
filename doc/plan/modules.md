@@ -184,6 +184,31 @@ hue2vim.l lead with (use 'vi); lib/hueweb.l splices it for its own compile
 re-pin); kore.l's vi row reads (from 'vi 'vi-main). Only the still-bare
 holo/asbook ambience remains -- holo's own wrap, rung 2's coda, dissolves it.
 
+*Holo CLIMBED -- the coda, and the last ambience dies.* The fourteen crew/holo
+files wear `(module 'holo`, so the baked lib entry (holo + native backend +
+elf/obj/link as one source) and every cat REOPEN one tablet -- the double-carry
+is now a double-write into the same module, and defbackend's join is unchanged.
+asbook.l became an ensure-load: `(? (tablet? (from 'holo)) 0 (: _ (enter ())
+_ (use 'holo) (leave ())))` -- registered through an anonymous layer, spliced
+nowhere. Readers by definer: gen.l (asm-text), moon.l + mksys.l (arbytes,
+objelf, the linker) and kore.l (elf64, arbytes, ld-syms, at) lead with scoped
+(use 'holo); kore.l's objcopy row and lush's alias row read the module; the
+golden/as gates and hueweb-style outside tools splice what their cats
+register; mksrc.l's unbaked-love guard asks (from 'holo 'objelf).
+THREE FINDS the climb surfaced, each its own law now:
+(1) kore.l's verb closure read its own module's kore-main through a
+compile-time missing cell -- it only ever worked by bake-environment luck (the
+minimal repro fails even on a pre-coda dist whose `kore true` passes). Pin
+closures that outlive their module's load read through the registry:
+(\ as ((from 'kore 'kore-main) ..)).
+(2) copy.l's scoped head killed the LAST ambient splice -- and with it the
+warm image's bare uread that gate scripts (clay.l, moonfuzz.l) had been
+leaning on without saying so. The readers say (use 'kore) now; nothing else
+leaned on the ambience, which is the coda's whole point.
+(3) love0's c0 is single-pass: `(: _ (use 'x) body)` does NOT serve the body
+there (the whole form compiles before the use runs) -- love0-lane probes spell
+(from 'mod 'name), never one-use. moon.sh's asm-text probe is the law.
+
 **Rung 3 -- the search collapses.** libsrc drops the seat rungs; cwd `lib/`
 stays with a retirement note; mk/install.mk's lib tree and the nest resolution
 contract retire in coordination with the self-host arc's `love up` story, not

@@ -11,6 +11,7 @@
 ; the immediate-load is the stable short form and the length doesn't move), place the data just past
 ; it, then assemble for real. load after holo.l + the backend(s).
 
+(module 'holo
 (: elf-base 4194304                                            ; 0x400000, the classic ET_EXEC base
    elf-hdr  120                                                ; 64-byte ELF header + 56-byte phdr (catall is in holo.l)
    elf-machines (tabof
@@ -123,3 +124,4 @@
    ;; byte array and says raw, where a string is text that merely happens to be bytes
    ;; today.
    (write-bytes path bs) (: q (open path "w") _ (say q (cask bs)) (close q)))
+) ; module 'holo

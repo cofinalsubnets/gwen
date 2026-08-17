@@ -20,6 +20,8 @@
 ; -l $(ho)/.mksys-cat.l (kore text/core/asbook + holo elf/obj), the lane
 ; sys.o already rides.
 
+(? (lit? (from 'holo 'objelf)) (use 'holo) 0) ; splice the assembler when this love is baked; the guard below says so when not
+
 (: (mksrc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
    (mksrc-die m) (: _ (say err ("mksrc: " + m + "\n")) (quit 1))
 
@@ -34,7 +36,7 @@
    ; rides the tree beside us; make runs this from the root. and an UNBAKED
    ; love has no holo at all -- say so, instead of a bare ;; note.
    (mksrc-be arch)
-    (? (member? 'objelf (names ())) (mksrc-be2 arch)
+    (? (lit? (from 'holo 'objelf)) (mksrc-be2 arch)
        (mksrc-die "no holo aboard -- this love is unbaked (make host bakes it)"))
    (mksrc-be2 arch)
     (? (lit? (peep backends arch ())) 0

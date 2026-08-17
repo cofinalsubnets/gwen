@@ -22,6 +22,7 @@
 ; register vocabulary is holo's: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi
 ; r7=r8 r8=r9 r9=r10 r10=r11 r11=r12 r12=r13 r13=r14 r14=r15.
 (module 'moon
+(use 'holo) ; objelf, the relocatable writer
 (: (mksys dst) (mksys-as 'x64 dst)
    (mksys-arm64 dst) (mksys-as 'arm64 dst)
    (mksys-riscv dst) (mksys-as 'riscv64 dst)

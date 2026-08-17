@@ -23,6 +23,7 @@
 ; loads after crew/holo/obj.l in the mooncc cat -- reads elf-base / elf-machines /
 ; elf64-hdr / le32 / le64 bare (asbook.l + elf.l re-leak them). moon.l drives it:
 ; `mooncc a.o b.c -o prog`.
+(module 'holo
 (:
    ; little-endian reads off a byte-indexable text; a u64 field can carry a
    ; signed value (a RELA addend), so sg64 folds the high half back down
@@ -1342,3 +1343,4 @@
                  (: _ (say q (: p <l (? (string? p) p (cask p))))
                     (go >l)))
        (go ps)))
+) ; module 'holo

@@ -1,8 +1,10 @@
-; crew/kore/asbook.l -- splice the assembler module for the rest of the cat. elf.l /
-; obj.l / link.l / gen.l read holo names BARE (catall, le*, lay, laylax, patch-with,
-; holo-bytes ..); this one form resolves them: the registered `holo` module splices
-; just below the cat's top layer, so those reads fold at each file's own compile while
-; the cat's own defglobs stay on top, shadow-proof. kore's cat order: .. asbook.l,
-; crew/holo/elf.l, crew/kore/kore.l; mooncc's: this, then the cross backends join
-; the spliced module (defbackend mutates its table), then elf/obj/link/moon.
-(use 'holo)
+; crew/kore/asbook.l -- make sure the assembler module is REGISTERED for the cat:
+; the wrapped crew/holo files (backends, elf/obj/link, copy) REOPEN module 'holo,
+; and holo's readers say (use 'holo) scoped or probe (from 'holo ..) -- nothing
+; reads it off an ambient splice anymore. the load rides an anonymous layer, so
+; use's splice is popped and nothing lands in the cat's own walk. kore's cat
+; order: .. asbook.l, crew/holo/elf.l, ..; mooncc's: this, then the cross
+; backends join the module (defbackend mutates its table), then elf/obj/link.
+(: _ (? (tablet? (from 'holo)) 0
+        (: _ (enter ()) _ (use 'holo) (leave ())))
+   0)

@@ -101,7 +101,7 @@ if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/mooncc" ]; then
     cmp -s "$ho/.kore-gnu.a" "$ho/.kore-our.a" || fail "kore ar vs GNU (archive bytes)"
     ar t "$ho/.kore-gnu.a" > "$g"; korerun ar t "$ho/.kore-our.a" > "$o"; same "ar t"
   fi
-  "$m" -l "$ho/.mooncc-cat.l" -e '(write-bytes "'"$ho"'/.kore-crt0.o" (objelf (intern "x64") crt0 () (link "__ai_start" ()) () (link "__ai_start" ()) () () () () ()))' >/dev/null 2>&1
+  "$m" -l "$ho/.mooncc-cat.l" -e '(: _ (use (name "holo")) _ (use (name "moon")) (write-bytes "'"$ho"'/.kore-crt0.o" (objelf (intern "x64") crt0 () (link "__ai_start" ()) () (link "__ai_start" ()) () () () () ())))' >/dev/null 2>&1
   [ -s "$ho/.kore-crt0.o" ] || fail "kore ld: crt0 lay"
   "$ho/mooncc" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-mc.elf" >/dev/null 2>&1 || fail "kore ld: mooncc link"
   korerun ld "$ho/.kore-crt0.o" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-ld.elf" || fail "kore ld"
@@ -786,7 +786,7 @@ echo "kore: patch (13 applications leaving the same tree GNU patch does -- offse
 # statuses are 1, 2 (a udie from deep inside), 0 and 0: the run must reach the last
 # say, and the charms must be exactly those. ⚠ nothing else here can catch this: a
 # regression to `quit` still passes every check above.
-LOVE_NO_IMAGE= "$m" -e '(: a (kore-main (list "kore" "false"))
+LOVE_NO_IMAGE= "$m" -e '(: _ (use (name "kore")) a (kore-main (list "kore" "false"))
                                     b (kore-main (list "kore" "basename"))
                                     c (kore-main (list "kore" "true"))
                                     d (kore-main (list "kore" "echo" "alive"))
@@ -796,7 +796,7 @@ r=$?
 [ $r -eq 0 ] || fail "kore in-image: the process did not survive four tools (exit $r)"
 [ "$(tail -1 "$o")" = "1 2 0 0" ] || fail "kore in-image statuses: $(tail -1 "$o")"
 # ..and the unknown tool answers usage's 2 rather than ending anything
-LOVE_NO_IMAGE= "$m" -e '(: r (kore-main (list "kore" "nosuchtool"))
+LOVE_NO_IMAGE= "$m" -e '(: _ (use (name "kore")) r (kore-main (list "kore" "nosuchtool"))
                                     _ (say out ("after " + show r + "\n")) (quit 0))' > "$o" 2>/dev/null
 [ "$(tail -1 "$o")" = "after 2" ] || fail "kore in-image unknown tool: $(tail -1 "$o")"
 echo "kore: the status charm (mains answer, the image survives, the seat quits) ok"

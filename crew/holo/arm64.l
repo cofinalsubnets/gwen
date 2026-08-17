@@ -14,6 +14,7 @@
 ; encoding / a scratch register), so an immediate there RAISES rather than emit wrong bytes -- put
 ; the value in a register. load after holo.l.
 
+(module 'holo
 (: ;; -- registers: r0..r14 -> x0..x14, sp -> 31 (the SP/XZR slot; we only use 31 as SP). x16 (IP0) is
    ;;    an UNNAMED scratch the indexed stores borrow. `lr` (x30) and `fp` (x29) are exposed by name so
    ;;    a callee that makes nested calls can spill its return address (BL clobbers x30) -- aarch64-only,
@@ -473,3 +474,4 @@
    _ (pin arm64 'nop '(31 32 3 213))           ; the ('align n) filler unit: NOP d503201f LE
    _ (defbackend 'arm64 arm64)
    _ (defbackend 'aarch64 arm64))
+) ; module 'holo

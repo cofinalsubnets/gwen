@@ -14,6 +14,7 @@
 ; bare, and the assembler internals bare too: the cat leads with (use 'holo)
 ; (crew/kore/asbook.l), so lay/laylax/patch-with/le*/catall resolve through the
 ; spliced module. moon.l drives it: `mooncc -c foo.c foo.o`.
+(module 'holo
 (:
    ; the ELF relocation TYPES we emit (x86-64)
    r-64    1                                        ; R_X86_64_64     S + A   (an abs64 data pointer)
@@ -664,3 +665,4 @@
                 + `(symbytes strblob)
                 + relas
                 + `(shstrblob sht)))))
+) ; module 'holo

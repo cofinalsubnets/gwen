@@ -21,6 +21,7 @@
 ; Thumb modified-immediate form, so an immediate there RAISES -- moon's `immok` seam blocks it upstream
 ; and materializes the value into a register instead (mirrors arm64.l's bitmask stance).
 
+(module 'holo
 (: ;; -- registers. abstract number = hardware number for r0..r12; sp/lr/pc/fp are named. r12 (IP) is
    ;;    the AAPCS intra-call scratch; the indexed stores borrow it as an unnamed address temp. --
    thumb-regs (tabof
@@ -418,3 +419,4 @@
    _ (defbackend 'thumb2 thumb2)
    _ (defbackend 'cortex-m7 thumb2)
    _ (defbackend 'thumb2sp thumb2))   ; the SP-only-FPU face (playdate): same encoder, gen softens f64
+) ; module 'holo
