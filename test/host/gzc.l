@@ -30,7 +30,14 @@
 
 (assert
  (lit? inflate)
- (lit? crc32))
+ (lit? crc32)
+ ; ⚠ THE PRESENCE PROBE ITSELF, on a name no build carries. This is the line that would
+ ; have caught the first spelling of the doors: an unbound global SCARES when referenced,
+ ; so `(lit? crc32)` is not a test for a missing nif -- it is the crash. A binary with the
+ ; nifs cannot exercise the fallback, but it can prove the probe tells the two apart.
+ (0 = (gz-nif 9 (\ _ gz-no-such-nif)))
+ (0 = (gz-nif 9 (\ _ gz-no-such-nif)))          ; ..and the answer is kept, asked twice
+ (1 = (gz-nif 10 gz-crcprobe)))
 
 (: (gzc-mk n f) (: b (cask n) (go i) (? (n <= i) (string b) (: _ (pin b i (f i)) (go (i + 1)))) (go 0))
    (gzc-l d h) (: r (gz-puff d h) (? (two? r) <>r 'nil))          ; the oracle

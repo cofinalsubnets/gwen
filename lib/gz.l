@@ -58,13 +58,31 @@
        (go i c) (? (n <= i) (c ^ 4294967295)
                    (go (i + 1) ((peep gz-crctab ((c ^ (s i)) & 255) 0) ^ (c >> 8))))
        (go 0 4294967295))
-   ; the door, gz-inflate's exactly: host/hash.c where the artifact carries it, the walk
-   ; above where it does not -- love0, today. ⚠ THE FALLBACK IS NOT WHY THE WALK IS HERE:
-   ; it is the statement of the polynomial and the oracle test/host/gzc.l holds the C to,
-   ; and it would earn its place in a tree where every build carried every nif.
+   ; --- the two doors ---------------------------------------------------------
+   ; ⚠ `lit?` IS NOT A PRESENCE TEST, and these are the first things in the tree that
+   ; needed one. An UNBOUND global scares when it is REFERENCED -- not when the function
+   ; around it is compiled -- so `(lit? crc32)` asks a question only a binary that already
+   ; carries the nif can answer, and on one that does not it is the scare it was written to
+   ; avoid. Every other lit? in the tree is on a value already in hand.
+   ; ⚠ AND THE PROBE IS ASKED AT FIRST CALL, NEVER AT LOAD: lib/gz.l is baked into the
+   ; artifact by a love that has the nifs, so a load-time answer would be the BAKING love's
+   ; and not the running one's. Trapped once, kept in a tablet for the process.
+   gz-door (tablet 0)
+   gz-crcprobe (\ _ (crc32 ""))              ; making the lambda references nothing
+   gz-infprobe (\ _ (inflate "" 0))
+   (gz-nif k f)
+    (: v (peep gz-door k ())
+       (? (charm? v) v
+          (: w (trap (\ _ (: _ (f 0) 1)) () (\ a b 0)) _ (pin gz-door k w) w)))
+
+   ; host/hash.c where the artifact carries it, the walk above where it does not.
+   ; ⚠ THE FALLBACK IS NOT WHY THE WALK IS HERE: it is the statement of the polynomial and
+   ; the oracle test/host/gzc.l holds the C to, and it would earn its place in a tree where
+   ; every build carried every nif.
    ; ⚠ `charm?`, not `?`: the crc of "" is 0, a true answer a truth test calls absent.
    (gz-crc32 s)
-    (? (lit? crc32) (: r (crc32 s) (? (charm? r) r (gz-crcwalk s))) (gz-crcwalk s))
+    (? (gz-nif 0 gz-crcprobe) (: r (crc32 s) (? (charm? r) r (gz-crcwalk s)))
+       (gz-crcwalk s))
 
    ; --- the bit sink ---------------------------------------------------------
    ; DEFLATE packs bits into bytes LSB-first, but a Huffman CODE is stored
@@ -720,9 +738,10 @@
    ; the door. host/inflate.c where the artifact carries it, gz-puff where it does not
    ; and wherever it declines -- and a TORN STREAM DECLINES, so a torn one is read twice
    ; and answers () both times. ⚠ `string?`, never `?`: a string of NULs sums to zero and
-   ; would read as absent.
+   ; would read as absent. The presence probe is gz-nif's, and why is written there.
    (gz-inflate s hint)
-    (? (lit? inflate) (: r (inflate s hint) (? (string? r) `(1 r) (gz-puff s hint)))
+    (? (gz-nif 1 gz-infprobe)
+       (: r (inflate s hint) (? (string? r) `(1 r) (gz-puff s hint)))
        (gz-puff s hint))
 
    ; --- the container (RFC 1952) --------------------------------------------
