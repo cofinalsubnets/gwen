@@ -12,17 +12,17 @@ hosta := $(shell uname -m)
 # to the simply-expanded $(hosta) keeps the override and spends one fork for the tree.
 a ?= $(hosta)
 
-# THE BASE VERSION, the checked-in ./VERSION with no VCS suffix on it -- what a release
-# is called, moving only when a release does. mk/lib.mk's love_version adds the suffix,
-# dist names the tarball for the whole id, and `.comment` carries THIS half alone (which
+# THE VERSION, the checked-in ./VERSION and the whole of it -- what a build is called,
+# moving only when a release does. No VCS suffix anywhere: dist names the tarball for it,
+# love_version.h compiles it into love.o, and `.comment` carries the same string (which
 # is what lets love0's stamp agree with a real one -- see boot_cc).
 love_base := $(shell cat $R/VERSION 2>/dev/null || echo 0)
 
 # ⚠ IS THIS TREE A CHECKOUT OR AN UNPACKED RELEASE? `git -C DIR` walks UP, so the test is for
-# THIS tree's own .git and never an ancestor's (crew/build.mk learned that the hard way). Two
-# things read it: dist cuts its tarball from the index only where there is one, and the DEFAULT
-# GOAL differs -- a checkout wants the fast gate for its edit loop, an unpacked release wants
-# the product, because whoever unpacked it came for love and not for our test binaries.
+# THIS tree's own .git and never an ancestor's (crew/build.mk learned that the hard way). One
+# thing reads it: the DEFAULT GOAL -- a checkout wants the fast gate for its edit loop, an
+# unpacked release wants the product, because whoever unpacked it came for love and not for
+# our test binaries.
 in_git := $(wildcard $R/.git)
 
 # clang is the default host/love0 compiler. ⚠ `CC ?= clang` would be a NO-OP: make ships a

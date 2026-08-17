@@ -90,39 +90,14 @@ out/lib/corpus.list: force_corpus_list
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
 
 # love_version.h: the build's version, surfaced as the `love-version` global.
-#
-# TWO PARTS, and the split is the point: the checked-in ./VERSION is the BASE -- an
-# arbitrary string, ours to bump deliberately -- and the VCS only ever adds a SUFFIX.
-# A version-control id alone cannot say whether one build is newer than another, or
-# what it is; a base alone cannot say which revision you have. So `0.1` in a release
-# tarball, `0.1+g701f864d-dirty` in a working checkout.
-#
-# ⚠ AND A TARBALL IS VCS-INDEPENDENT BY CONSTRUCTION, which is the whole reason the base
-# is a FILE rather than a tag: an unpacked release has no .git to describe, and this id
-# compiles into love.o, so a tarball that could not name itself would differ from the
-# tree it was cut from by exactly one string -- and the release claim rests on those two
-# being the same bytes (doc/dist.md). The dist stage freezes the FULL computed id into
-# the staged VERSION, so an extracted build reproduces it exactly with no VCS present.
-#
-# VCS-agnostic: darcs stamps its patch hash, git describes, neither leaves the base bare.
-# ⚠ rewritten only when the id CHANGES, so l.o relinks on a new revision and not on every
-# build. A frontend without it on the include path falls back to "unknown".
-.PHONY: force_version
-force_version: ;
-out/lib/love_version.h: force_version
+# ./VERSION is the WHOLE id -- an arbitrary string, ours to bump deliberately, and no
+# version control is consulted: the artifact's bytes are the tree's, so the tree's own
+# file is the only honest name for a build. It compiles into love.o, so it rewrites
+# only when VERSION moves and a frontend without it falls back to "unknown".
+out/lib/love_version.h: $(R)/VERSION
 	@mkdir -p out/lib
-	@b="$$(cat $(R)/VERSION 2>/dev/null || echo 0)"; \
-	if [ -d $(R)/_darcs ]; then \
-	  s="+darcs.$$(darcs log --repodir $(R) --last 1 2>/dev/null | awk '/^patch/{print substr($$2,1,12)}')"; \
-	  darcs whatsnew --repodir $(R) >/dev/null 2>&1 && s="$$s.dirty"; \
-	  v="$$b$$s"; \
-	elif [ -e $(R)/.git ]; then \
-	  s="$$(git -C $(R) describe --always --dirty 2>/dev/null)"; \
-	  v="$$b$${s:++g$$s}"; \
-	else \
-	  v="$$b"; \
-	fi; tf=$@.$$$$.tmp; printf '#define AiVersion "%s"\n' "$$v" > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+	@printf '#define AiVersion "%s"\n' "$$(cat $(R)/VERSION)" > $@
+	@echo SH	$@
 
 # the lcat'd headers are PRODUCED BY running the lcat love, so re-lay them whenever it
 # moves. ⚠ EMPTY when a seed bundled one: love0 is never built there, and naming

@@ -60,9 +60,9 @@ exactly this; `test_bakerep` guards the reproducible bake underneath it cheaply 
 to ride the slow gate.
 
 ⚠ **the archive rides along.** `love source` lays the very bytes the seed carried,
-because an extracted tree has no `.git` and cannot re-cut one. Same blob in, same
-binary out — reusing them is what makes the rebuild byte-identical rather than merely
-equivalent.
+and a re-cut answers the same bytes: `mk/tools/selfpack.l` is the one cutter in every
+world — the tree on disk, sorted, mtimes pinned — so same tree in, same blob out,
+same binary out.
 
 ⚠ **the seed's bytes are the tree's, not the builder's.** Whatever machine runs
 the build, the same tree answers the same bytes (the seed-universal invariant,
@@ -75,10 +75,6 @@ artifact is built from them.)
 **`love seed [DIR]`** is the circle held by the artifact rather than the
 Makefile: lay the source, rebuild, and check the rebuilt seed IS this binary,
 byte for byte.
-
-⚠ the one case the fixpoint cannot hold — a **dirty tree** — still FAILS. Nobody
-asked for it, and the megabyte-scale mismatch is the report. The rule is *skip the check
-when the invocation named the reason, never when it was discovered.*
 
 ## the recipes
 
@@ -112,12 +108,11 @@ already says, and a third bootstrap to keep honest in every release gate. Retire
 
 ## the traps this design walks into
 
-⚠ **VERSION.** `love_version.h` is generated from `git describe`, and an extracted
-tarball has no `.git` — so it fell back to `"unknown"`, and that string is compiled
-into `love.o`. The artifacts would have differed by exactly one word, which is the
-sort of thing that makes a headline claim quietly false. The stage writes a `VERSION`
-file and `mk/lib.mk` reads it **when there is no VCS directory**, so a development
-checkout is unaffected and a stray VERSION can never shadow a real revision.
+⚠ **VERSION.** The checked-in `./VERSION` is the **whole** id: `love_version.h` is
+generated from it and nothing else, the tarball is named for it, and no version
+control is consulted anywhere — an id with a VCS suffix would make the artifact's
+bytes depend on something outside the tree, which is exactly what the seed invariant
+forbids. It moves when a release does, by hand.
 
 ⚠ **`CC ?=` cannot express "unless the user chose one".** make defines `CC=cc`
 itself, so `?=` never fires and the ambient compiler wins silently. `$(origin CC)`
@@ -125,11 +120,12 @@ is the only way to ask whether a *human* set it. The Makefile uses that to let a
 bundled `bin/love` be the compiler, and an explicit `CC=` still outranks it — which
 is exactly what the source artifact is for, and what the DDC leg needs.
 
-⚠ **a release is cut from the INDEX.** `git checkout-index` is the stage, which is
-what makes an artifact reproducible from a revision — and it means an uncommitted edit
-is *not* in what you just built. The stage says so when the worktree and index
-disagree, because a gate run against a stale artifact is silent and looks exactly like
-the fix not working.
+⚠ **a release is cut from the TREE.** `selfpack` walks the root and skips only what
+is not source (`out bin dl`, everything hidden at the root, and `wasm/love.js`), so
+every file on disk — tracked or not — is in the artifact, and the edit you just made
+is in what you just built. The cut runs every make and settles on its own stamp (the
+sha of the leveled tar, kept beside the archive), so a deleted or renamed file —
+which leaves no mtime for make to watch — still re-cuts, and a touch does not.
 
 And the gate earns its keep by **poisoning the compiler**: the seed lane builds with
 `cc`/`gcc`/`clang` shadowed by scripts that fail loudly. Without that, a passing build

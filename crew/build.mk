@@ -164,21 +164,13 @@ $(ho)/.rest-cat.l: $(restfiles) $(ho)/.dist.list $(ho)/.docs.list
 # download, and the reason a dynamic coder is the next rung.
 #
 # ⚠ REPRODUCIBLE BY CONSTRUCTION: the pack pins every mtime/uid/gid to $(dist_stamp)
-# and the gzip header's own MTIME is 0, so two cuts of one revision are the same
-# bytes and "this is that release" is something anyone can check with sha256sum.
-# the SAME two-part id mk/lib.mk computes -- base from ./VERSION, VCS only a suffix --
-# because the tarball is named for it AND ships it, and a release whose filename and
-# `love --version` disagreed would be its own kind of lie.
-# ⚠ AND THE .git MUST BE THIS TREE'S: `git -C DIR` walks UP, so an extracted tree sitting
-# inside a checkout -- which is where `love seed` puts one, the cwd -- described the
-# ENCLOSING repo. A second +g on an id that already carried one, and a stage cut from the
-# wrong index: a 158-byte tarball and an artifact with no source in it. mk/lib.mk's
-# love_version has always guarded on exactly this, and the two ids must agree.
-dist_base := $(love_base)
-dist_vcs  := $(if $(in_git),$(shell git -C $(R) describe --always --dirty 2>/dev/null),)
-dist_ver  := $(dist_base)$(if $(dist_vcs),+g$(dist_vcs),)
+# and the gzip header's own MTIME is 0, so two cuts of one tree are the same bytes
+# and "this is that release" is something anyone can check with sha256sum.
+# the id is ./VERSION, the whole of it -- the tarball is named for it AND ships it,
+# and no version control is consulted anywhere in the cut: the tree on disk is the
+# source, and the archive's bytes are a function of it and nothing else.
+dist_ver  := $(love_base)
 dist_stamp ?= 0
-dist_stage = out/dist/stage
 dist_source = out/dist/love-$(dist_ver).tar.gz
 dist-source: $(dist_source)
 # the seed is the tree's own binary, baked -- one file, no second name. the HCC
@@ -198,88 +190,24 @@ dist: dist-source dist-seed   # a release is both
 # without installing a foreign toolchain, inside an artifact whose whole claim is that
 # it needs none. Dropping it from the TARBALL costs the repl nothing.
 dist_drop = wasm/love.js
-# the stage: every TRACKED file, minus dl/ (third-party downloads that `make
-# distclean` fetches again -- shipping them would triple the tarball and stale them).
-# ⚠ checkout-index reads the INDEX, so a release is cut from what is tracked, not
-# from whatever is lying in the working tree.
-# ⚠ and the staged VERSION is OVERWRITTEN with the fully computed id -- base AND vcs
-# suffix -- because an extracted tarball has no .git to describe. The checked-in VERSION
-# carries only the base; freezing the whole id here is what lets a build from the tarball
-# stamp the same string the tree stamped, and that string compiles into love.o.
-# THE STAGE'S REAL INPUT IS THE INDEX, and the stamp holds the index's own CONTENT HASH --
-# `git write-tree`, 2 ms, the same tree object a commit would name. So this is a content
-# stamp like $(ho)/.hostcc and out/lib/corpus.list, not a date stamp: a `git add` changes the
-# hash and re-stages, and nothing else can make it skip.
-# ⚠ THE OLD RULE RE-STAGED UNCONDITIONALLY and said make could not depend on the index. It
-# can, through the hash; what it cannot depend on is an mtime, which was the true objection --
-# a `git add` moves no file make watches, so a DATE-stamped stage serves a tarball cut before
-# the edit you are testing, silently, looking exactly like the fix not working (three distboot
-# rounds went that way). The hash closes that hole and costs 43 s less on every no-op.
-# ⚠ the dirty WARNING stays outside the skip: `write-tree` hashes the index, so a worktree
-# edit leaves it unchanged -- correctly, the artifact does not carry that edit -- and the one
-# time you need telling is exactly then.
-.PHONY: force_stage
-force_stage: ;
-out/dist/.staged-$(dist_ver): force_stage
-	@mkdir -p out/dist
-	@# ⚠ SAY SO WHEN THE INDEX AND THE WORKING TREE DISAGREE. Cutting from the index is
-	@# right for a release -- it is what makes an artifact reproducible from a revision --
-	@# but it means an uncommitted edit is NOT in what you just built, and a gate run
-	@# against it is testing the old code while you read the new. That failure is silent
-	@# and looks exactly like the fix not working; it cost two full distboot rounds here.
-	@# ⚠ THE WORKTREE COLUMN IS THE ONE THAT MATTERS. `status --porcelain` reports a
-	@# STAGED edit as dirty too, and those are exactly the ones that DO ride -- warning
-	@# on them cries wolf on every correct release and teaches you to read past it. The
-	@# second column is the worktree against the index: ` M` and `??` are absent from
-	@# the artifact, `M ` is in it.
-	@out=$$(git -C $(R) status --porcelain 2>/dev/null | awk 'substr($$0,2,1) != " "'); \
-	 if [ -n "$$out" ]; then \
-	   echo "  /warn this artifact comes from the INDEX and these are NOT in it --"; \
-	   echo "  /warn 'git add' them first:"; \
-	   printf '%s\n' "$$out" | sed 's/^/        /' | head -8; fi
-	@t=$$(git -C $(R) write-tree 2>/dev/null); \
-	 if [ -n "$$t" ] && [ -f $@ ] && [ -d $(dist_stage)/love-$(dist_ver) ] \
-	    && [ "$$t" = "$$(cat $@ 2>/dev/null)" ]; then :; else \
-	   echo "STAGE	$(abspath $(dist_stage))/love-$(dist_ver)"; \
-	   rm -rf $(dist_stage); \
-	   mkdir -p $(dist_stage)/love-$(dist_ver); \
-	   git -C $(R) checkout-index -a --prefix=$(abspath $(dist_stage))/love-$(dist_ver)/; \
-	   rm -rf $(dist_stage)/love-$(dist_ver)/dl; \
-	   rm -f $(dist_stage)/love-$(dist_ver)/$(dist_drop); \
-	   printf '%s\n' "$(dist_ver)" > $(dist_stage)/love-$(dist_ver)/VERSION; \
-	   printf '%s\n' "$$t" > $@; fi
-
-# ⚠ AN EXTRACTED TREE CANNOT CUT ONE. The stage is `git checkout-index`, and a tree laid
-# by `love source` has no .git -- so there the tarball is not built, it is ALREADY THERE:
-# the artifact wrote the bytes it carried to exactly this path. Reusing them is what makes
-# a seed binary rebuilt out there byte-identical rather than merely equivalent, since the
-# blob it embeds is the same archive and not a re-pack that has to coincide.
-ifneq ($(in_git),)
-# KEEP THE LAST N, and nothing fancier: every cut is named for its revision, so they pile up
-# one per commit you happened to build -- 35 of them and 200 MB here before anyone looked. The
-# newest $(dist_keep) survive (by mtime, so the one you are working with is never the casualty)
-# and the stage stamps follow the same rule, being the same generations by another name.
-dist_keep ?= 3
+# THE ARCHIVE IS THE TREE: selfpack walks the root and skips only what is not
+# source -- out bin dl, everything HIDDEN at the root (.git .sb .claude .cache
+# .gitignore .., the machine's and the checkout's), and $(dist_drop) -- pins every
+# mtime to $(dist_stamp) and sorts, so the bytes are a function of the tree's
+# CONTENT and of nothing else. No index, no stage, no version control: the files
+# you are looking at are the files the artifact carries, checkout and seed-laid
+# tree alike -- which is what lets the rebuild answer the same bytes anywhere.
+# ⚠ a FORCE rule, the corpus.list pattern: selfpack runs every make, walks and
+# hashes (cheap, and the hash sees a delete or rename that leaves no mtime), and
+# writes the archive ONLY when the tree's content moved -- so its mtime holds and
+# nothing downstream re-links on a touch or a no-op.
 # ⚠ the runner is $(boot_love), never the seed itself: the seed EMBEDS this
 # archive, so the archive must exist before the binary can link.
-$(dist_source): out/dist/.staged-$(dist_ver) lib/tar.l lib/gz.l mk/tools/tgz.l $(if $(bundled_love),,$(love0))
-	@echo TGZ	$(abspath $@)
-	@rm -f $@
-	@$(boot_love) mk/tools/tgz.l c $@ $(dist_stage) $(dist_stamp)
-	@ls -t out/dist/love-*.tar.gz 2>/dev/null | tail -n +$$(($(dist_keep)+1)) | xargs -r rm -f
-	@ls -t out/dist/.staged-* 2>/dev/null | tail -n +$$(($(dist_keep)+1)) | xargs -r rm -f
-else
-# an extracted tree has no index to cut from -- but it needs the archive, since
-# the seed it builds embeds one. a seed-laid tree already holds the very bytes
-# it carried (reusing them is what makes its rebuild byte-identical); a bare
-# source tree re-cuts them from itself -- mk/tools/selfpack.l mirrors the stage
-# cut (same walk, same sort, same stamp), and test_distboot's binary compare is
-# what holds the re-cut to the byte.
-$(dist_source): $(if $(bundled_love),,$(love0))
-	@if [ -f $@ ]; then :; else \
-	   echo "TGZ	$(abspath $@)"; mkdir -p $(dir $@); \
-	   $(boot_love) mk/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp); fi
-endif
+.PHONY: force_src
+force_src: ;
+$(dist_source): force_src $(if $(bundled_love),,$(love0))
+	@mkdir -p $(dir $@)
+	@$(boot_love) mk/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
 # THE SOURCE BLOB: the source tarball laid into an object (mk/tools/mksrc.l), so the
 # artifact hands out its own source with no second download and no `tar xf` -- love

@@ -20,9 +20,8 @@ evidence for the slow one.
 
 ## the artifacts
 
-- [ ] **version stamp** — `out/lib/love_version.h` carries the build's vc id (surfaced as
-      `love-version`); `make force_version` refreshes it. A `-dirty` suffix means the tree was not
-      committed first.
+- [ ] **version stamp** — `./VERSION` is the whole id (surfaced as `love-version`); bump it
+      by hand for the cut. No VCS suffix exists anymore: the artifact's bytes are the tree's.
 - [ ] **the dist artifact** — `make dist` bakes the seed, `out/host/love` itself: the one-file download door
       (`love up` defaults CC to the artifact's own `mooncc` verb, so it needs no ambient
       toolchain). `make test_dist` and `make test_up` gate it.

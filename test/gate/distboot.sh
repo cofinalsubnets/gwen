@@ -14,10 +14,8 @@
 # form a person downloading them can care about.
 #
 # ⚠ THE ARTIFACTS ARE COMPARED TO EACH OTHER, not to the in-tree binary. That is the
-# claim as stated, and it is also the only form that survives a dirty tree: a release
-# is cut from the INDEX and the in-tree binary is built from the WORKING TREE, so on
-# an uncommitted change those two legitimately differ. The in-tree comparison is made
-# too, but only when git says the tree is clean.
+# claim as stated: the archive is cut from the tree itself (selfpack, no index and no
+# stage), so what you are looking at is what both artifacts carry.
 #
 # ⚠ AND THE SEED LANE POISONS THE COMPILER. A gate that merely observes the build
 # succeed cannot tell whether the bundled love did the work or the ambient gcc quietly
@@ -132,8 +130,9 @@ fi
 # image used to carry the baker's ASLR base (raw kept absolutes, the header's address
 # pair, a dead JIT husk's W^X pointer) and `born`, the hatch duration -- so two bakes of
 # one tree differed by 180012 bytes and no artifact could ever equal another.
-# ⚠ and the archive rides ALONG: `love source` lays the very bytes it carried, because
-# an extracted tree has no .git and cannot re-cut one. Same blob in, same binary out.
+# ⚠ and the archive rides ALONG: `love source` lays the very bytes it carried, and a
+# re-cut (selfpack, the one cutter) answers the same bytes -- the cmp below is what
+# holds that to the byte. Same blob in, same binary out.
 ( cd "$selfd" && PATH="$w/nocc:$PATH" make -j"$(nproc 2>/dev/null || echo 4)" dist ) \
   > "$w/selfd.log" 2>&1 \
   || { tail -20 "$w/selfd.log"; fail "the seed-laid tree cannot rebuild the artifact"; }
