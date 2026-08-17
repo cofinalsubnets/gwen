@@ -118,6 +118,24 @@ flush the markers (buffered puts lie about the death point), and make the
 suspect call print its ARGUMENT -- ZF-ARG named the next form's answer and
 with it the whole mechanism.
 
+*Cook CLIMBED -- the smallest climb, because cook was already module-shaped.*
+lib/cook.l symlinks the source, so `(use 'cook)` and papel's want lane
+registered it long ago, and cook-main already opens by splicing its registered
+self (the guard kiosko copied). The wrap closes the last bare lane, the kore
+cat: `(module 'cook` with `(use 'peg)` as its first, now scoped, form -- the
+~30 globals (`join` `date` `check` among them) leave the cat's session layer,
+and the `shell` shadow dissolves (bare `shell` is bao's repl entry again). One
+consumer respell: kore.l's applet rows read `(from 'cook 'cook-main)`. lush
+needed nothing -- make/cook are deliberately off sh-imgok (a main that quits
+and keeps state). THE SEAM the wrap exposed is the loader's: a path or lib use
+enters a wrapper layer, the file's own module form registers its tablet, and
+the loader's leave then pinned its EMPTY wrapper over it -- papel's
+`(from 'cook 'recipe)` read () off the clobber. The fix is in prel's two load
+lanes: capture what the file registered after rdev, and re-pin it over the
+wrapper's registration -- a file's own registration wins; the loader's is the
+fallback for bare files. The law lives in test/host/loader.l (both lanes,
+a (module ..)-wrapped fixture).
+
 **Rung 3 -- the search collapses.** libsrc drops the seat rungs; cwd `lib/`
 stays with a retirement note; mk/install.mk's lib tree and the nest resolution
 contract retire in coordination with the self-host arc's `love up` story, not

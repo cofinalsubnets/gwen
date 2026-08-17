@@ -42,14 +42,15 @@
 ; Cookfile, or a -f FILE) is love source. See "importing a Makefile" at the foot of
 ; this file. The first rule is the default ticket either way.
 
-; NO BRACKETS HERE: the runtime supplies the layer. a module consumer says
-; (use 'cook) (lib/cook.l) or probes (from 'cook 'recipe); riding a cat (kore's),
-; everything binds in the cat's session layer instead -- never orth. before cook
-; was a module it leaked 32 globals into the base, `join` `date` `check` `one`
-; `span` `pick` among them.
+; the wrap: every lane rides module 'cook. a consumer says (use 'cook)
+; (lib/cook.l) or probes (from 'cook 'recipe); riding a cat (kore's), the wrap
+; registers the same module, so the ~30 globals (`join` `date` `check` `shell`
+; among them) stay off the cat's session layer too. a path load composes: the
+; loader keeps a file's own registration over its wrapper layer (prel's t re-pin).
+(module 'cook
 
-; the combinators (love/peg.l) -- its own top-level form, so the names are spliced
-; before anything below compiles against them.
+; the combinators (love/peg.l) -- the wrap's first form, so the names walk
+; before anything below compiles against them, scoped to this module's compile.
 (use 'peg)
 
 (: cards (tablet 0)          ; the recipe cards: item -> (ingredients orderonly . steps)
@@ -1187,8 +1188,10 @@
 ; orders; inside the multi-call `kore` nothing matches and kore's dispatcher calls
 ; cook-main itself. body-having: the seat machinery leaks nothing.
 ;
-; cook-main reads BARE: whichever layer holds this file's binds (the loader's, or
-; a cat's session) is still the head here. cook-main splices its registered self.
+; cook-main reads BARE: the module's layer holds this file's binds and is still
+; the head here. cook-main splices its registered self when called from outside.
 (: _ (pins (from 'verbs 'tab) 'cook cook-main)
    s ((from 'verbs 'fire) ["cook" "cook.l"])
    (? (two? s) (cook-main >s) ()))
+
+) ; module 'cook

@@ -35,7 +35,20 @@
 (use 'zz-loadprobe)
 (assert (41 = (from 'zz-loadprobe 'zz-probe-pin)))
 
+; a SELF-REGISTERING file -- its text is a (module 'nm ..) wrap (cook.l's shape) --
+; keeps ITS registration on both lanes: the loader's empty wrapper layer must not
+; pin over the module the file made. symbol lane, then the explicit-path lane.
+(: p (open "lib/zz-selfprobe.l" "w")
+   _ (say p "(module 'zz-selfprobe (: zz-self-pin 77))") (close p))
+(use 'zz-selfprobe)
+(assert (77 = (from 'zz-selfprobe 'zz-self-pin)))
+(: p (open "lib/zz-pathprobe.l" "w")
+   _ (say p "(module 'zz-pathprobe (: zz-path-pin 78))") (close p))
+(use "lib/zz-pathprobe.l")
+(assert (78 = (from 'zz-pathprobe 'zz-path-pin)))
+
 (: _ (unlink "lib/zz-loadprobe.l") _ (unlink "lib/zz-loadprobe/sub.l")
+   _ (unlink "lib/zz-selfprobe.l") _ (unlink "lib/zz-pathprobe.l")
    _ (rmdir "lib/zz-loadprobe") 0)
 
 ; the SEAT rungs: the loader also walks <seat>/../lib/ and its love/ subfolder,

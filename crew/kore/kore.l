@@ -218,7 +218,7 @@
    applets #('diff diff-main
              'nm nm-main
              'nc ain-main 'ain ain-main
-             'make cook-main 'cook cook-main   ; bare: cook.l precedes this file in the cat, bracket-free, so it folds here
+             'make (from 'cook 'cook-main) 'cook (from 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
              'as as-main
              'ar ar-main 'ld ld-main
              'objcopy objcopy         ; the applet IS the function: crew/holo/copy.l

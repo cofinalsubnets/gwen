@@ -361,12 +361,18 @@
                  (? (tablet? (peep (mods ()) nm ())) (prior nm)
                     (: q (? (nil? fsopen) () (fsopen m "r"))
                        (? (nil? q) (prior m)
-                          (: _ (enter nm) _ (rdev q) _ (leave ()) (prior nm))))))
+                          ; a file whose own (module nm ..) registered wins: keep ITS tablet
+                          ; over the loader's wrapper layer, which leave would pin over it.
+                          (: _ (enter nm) _ (rdev q) t (peep (mods ()) nm ()) _ (leave ())
+                             _ (? (nil? t) 0 (pin (mods ()) nm t))
+                             (prior nm))))))
               (tablet? (peep (mods ()) m ())) (prior m)
               (: q (libsrc m)
                  (? (nil? (port? q)) (prior m)                ; every source is a port now, baked or on disk
                     (slashy? (string m)) (: _ (rdev q) ())
-                    (: _ (enter m) _ (rdev q) _ (leave ()) (prior m))))))))
+                    (: _ (enter m) _ (rdev q) t (peep (mods ()) m ()) _ (leave ())
+                       _ (? (nil? t) 0 (pin (mods ()) m t))
+                       (prior m))))))))
 
 ; --- module: filesystem-free definition --------------------------------------
 ; (module 'nm form ..): open nm's layer -- the REGISTERED tablet on a reopen, a
