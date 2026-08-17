@@ -40,7 +40,9 @@ What genuinely stands between here and freestanding C11, each row live above:
   dropped; it wants `__FILE__` to stop being one name per TU first. (The `#if` evaluator landed
   the same day, below.)
 - **block-scope `struct` tags** — the last of the syntax rows, and the one that is not a
-  widening: `stag` is one flat table, so scoping it wants a mechanism, not a lane.
+  widening: `stag` is one flat table, so scoping it wants a mechanism, not a lane. ⚠ and not
+  the enum constant's mechanism — a tag key rides out to gen, so it wants RENAMING (`panon`
+  already mints synthetic keys gen takes) rather than the restore-at-brace below.
 - **the diagnostic obligation**: a non-constant `_Static_assert` is let by today, which is a
   constraint violation passing in silence — the one class §4 names outright. The *channel* is
   no longer missing: `blame` (parse.l) files a sentence beside the watermark and `pfail`
@@ -295,21 +297,25 @@ value, so nothing announces them but a differential — which is why they arrive
 each batch behind an outside package or an outside corpus
 rather than behind a test we thought to write.
 
-### an enum constant declared in a BLOCK escapes it
+### an enum constant declared in a BLOCK escaped it — FIXED 2026-08-17
 
-`enum { N = 4 };` inside a function body pins into the one flat `'enums` table and is never
-taken back off at block exit, so every later function in the TU can read `N`. C11 6.2.1p7 gives
-it the enclosing block's scope. Filed, not fixed: the tree has lived on the flat table since the
-beginning and `shadow1` already hides a leaked constant behind any local of the same spelling, so
-what is left is a name that resolves where it should not — visible, not yet a wrong answer.
+C11 6.2.1p7 gives a block-scope enum constant the block's scope. `'enums` is one flat table and
+nothing took a constant back off at the closing brace, so `enum { N = 4 };` inside one function
+answered in every later one. Each constant now rides `ps 'enumacc` as a shadow entry from the
+moment `pbty` pins it, and `edrain` moves the run onto the block's own shadow list — where
+`unshadow` already knew how to put a name back, and where a local of the same spelling stacks
+on top of it. ⚠ **file scope drains nowhere**: `note` clears the run per top-level form instead,
+which is also what keeps the delta short enough for `edrain` to count by `tally`.
 
-⚠ it stopped being harmless once. `lvm_outer`'s `uintptr_t M = .., N = .., n = M * N, ..` read the
-leaked `N` from a *different function's* `enum { N = 4 }` and compiled `n = M * 4`, so the outer
-product wrote 4·M of its M·N cells and handed back a tray whose tail was uninitialized heap —
-correct on the first read and garbage after the next allocation. **That was the declarator-scope
-bug below, and fixing it took the wrong answer away; this row is the other half still standing.**
-The two together are the lesson: a leak and a scope-point bug are each survivable, and their
-product is a silent miscompile. `test/cc/146-declscope.c` holds both halves.
+⚠ the constant is folded AT PARSE, and that is the whole reason a restore is sound here — no
+`'enums` name reaches gen, so nothing outlives the table. A block-scope struct TAG is the same
+C rule and **cannot** be done this way: the tag table rides out to gen and the type node carries
+only the name, so pulling an inner tag would leave gen sizing `('struct T)` off the outer one.
+That row wants renaming, not restoring.
+
+Held by test/cc/147-enumscope.c, 11 checks against gcc: the escape itself, nesting, a block
+constant over a file-scope one, a local over a block constant, the typedef arm, a tagged enum
+with a declarator, and two sequential blocks.
 
 ### a declarator was not in scope for the initializers after it — FIXED 2026-08-16
 

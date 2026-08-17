@@ -827,7 +827,11 @@
                                              (? (charm? cv) [cv <>er] ()))))
                                     [v ts5])
                               (? !(two? vr) ()
-                                 (: _ (pin (ps 'enums) name <vr)
+                                 ; the constant, and a shadow entry for it on ps 'enumacc --
+                                 ; whoever owns the scope drains that run (edrain / note)
+                                 (: old (peep (ps 'enums) name 'none)
+                                    _ (pin (ps 'enums) name <vr)
+                                    _ (pin ps 'enumacc (['enums name old] >< peep ps 'enumacc ()))
                                     ts6 <>vr
                                     pos2 (pos && !(<vr < 0))
                                     (? (peekp ts6 ",") (consts >ts6 (<vr + 1) pos2)
@@ -1839,6 +1843,17 @@
           (: _ (pull (ps 'enums) nm 0) (['enums nm olde] >< s1))))
    (shadowdecl ps names shadows) (? !(two? names) shadows
                                      (shadowdecl ps >names (shadow1 ps <names shadows)))
+   ; an enum body DEFINES constants wherever it is written, and at block scope C11
+   ; 6.2.1p7 gives them the block -- so move the run pbty pinned since epre onto the
+   ; block's shadow list and hand the stage back to whatever encloses it. the entries
+   ; are already shadow entries, newest first, which is the order unshadow wants.
+   ; ⚠ file scope drains NOWHERE: `note` clears the run per top-level form instead,
+   ; which is also what keeps this delta short enough to count by tally.
+   (edrain ps epre shadows)
+    (: now (peep ps 'enumacc ())
+       (go l k) (? (k < 1) shadows (<l >< go >l (k - 1)))
+       _ (pin ps 'enumacc epre)
+       (go now (tally now - tally epre)))
    (unshadow ps shadows) (? !(two? shadows) ()
                             (: e <shadows
                                _ (? (<>>e = 'none) (pull (ps <e) <>e 0) (pin (ps <e) <>e <>>e))   ; 'none = the name was ABSENT (a fresh local): remove it, don't pin the sentinel
@@ -1880,6 +1895,7 @@
                 ()))))
    (pblock ps ts)
     (: ts0 (want ts "{")
+       epre (peep ps 'enumacc ())
        (? !(two? ts0) ()
           (: (items ts2 acc sh)
               (? !(two? ts2) (: _ (unshadow ps sh) ())
@@ -1887,12 +1903,14 @@
                  ((tkk <ts2 = 'id) && (tkv <ts2 = "__extension__")) (items >ts2 acc sh)
                  (tkw? <ts2 'typedef)
                   (: br (pbty ps >ts2)
-                     r (? (two? br) (btdefs ps <br <>br sh (qspec ps >ts2 <br)) ())
+                     r (? (two? br) (btdefs ps <br <>br (edrain ps epre sh) (qspec ps >ts2 <br)) ())
                      (? !(two? r) (: _ (unshadow ps sh) ())
                         (items <r acc <>r)))
                  (: r (? (tkbty? ps <(pquals ts2)) (pdecl ps ts2) (pstmt ps ts2))
                     (? !(two? r) (: _ (unshadow ps sh) ())
-                       (items <>r (<r >< acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) sh))))))
+                       ; the enum body parses BEFORE the declarators bind, so its entries
+                       ; go under theirs -- unshadow walks newest first and the oldest wins
+                       (items <>r (<r >< acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) (edrain ps epre sh)))))))
              (items ts0 () ()))))
 
    ; params := void | TYPE '*'* id (, ..)* [, ...]   -> (entries rest variadic?)
@@ -2295,6 +2313,7 @@
            _ (pin ps 'curinl ())
            _ (pin ps 'curnoinl ())
            _ (pin ps 'curalign ())
+           _ (pin ps 'enumacc ())        ; a file-scope enum constant is nobody's to take back
            (pin ps 'cursect ()))
        (tops ts2 acc)
         (? !(two? ts2) [1 ['prog (rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)      ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure
