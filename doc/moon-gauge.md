@@ -105,11 +105,39 @@ small ones.
 ⚠ **the linker is not the problem and it was worth checking**: ours binds the whole set in
 194 ms where `ld` does it in 38. 5×, on 1% of the build.
 
-⚠ **the splice JIT is not the lever either, and it is already built.** With love rebuilt
-`make moon_fir=-fir` so the binary carries its IR record, `(use 'splice)` ahead of the
-mooncc cat, and codegen re-run: **one closure** native-backed over the whole compile, and
-11,708 → 11,248 ms, which is noise. Whatever gen.l's hot closures are, the splicer declines
-them — that is the thing to look at before anything else in this file gets optimized.
+### ⚠ the splice JIT is not the lever, and the census says why
+
+With love rebuilt `make moon_fir=-fir` so the binary carries its IR record, `(use 'splice)`
+ahead of the mooncc cat, and codegen re-run: **one closure** native-backed over the whole
+compile, 11,708 → 11,248 ms, which is noise. `LOVE_SPLICE_CENSUS=1` says what happened —
+12,427 closures reached the door during one `cgen-obj` of `core/love.c`:
+
+| class | closures | | what would unblock it |
+|---|---:|---|---|
+| **call** | **11,821** | **95.1%** | nothing — see below |
+| branch-plus | 298 | 2.4% | the Ip fold, and then something else |
+| other | 214 | 1.7% | — |
+| none | 62 | 0.5% | nothing blocks it |
+| branch-only | 32 | **0.26%** | the Ip fold, on its own |
+
+and the ranked blockers are the apply family, in order: `lvm_qap` 6,699, `lvm_tap` 6,356,
+`lvm_argap` 5,993, `lvm_tapn` 5,426, `lvm_ap` 5,238, `lvm_apn` 4,029, `lvm_quoteap` 3,246 —
+interleaved with the *names* being applied (`+` 2,813, `=` 1,932, `><` 1,548, `peep` 1,224,
+`pin` 905).
+
+**This is by construction, not by omission.** The splicer deletes the dispatch *between* the
+ops of one bytecode thread, pasting each op's machine form out of `.rodata`. An apply leaves
+the thread, and there is no machine form for "enter an arbitrary closure", so `lib/splice.l`
+says it plainly: *a closure containing a CALL is one no amount of branch or operand work
+reaches.* gen.l is a code generator — it is calls almost all the way down.
+
+So the arc's next rung, the Ip fold that dissolves the branch family, converts **32 of 12,427
+closures here**. Whatever gen.l's 11.5 s is going to be paid down by, it is not this lane, and
+the census is the argument — not a guess about what gen.l looks like.
+
+⚠ **62 closures were blocked by nothing and 1 was installed.** Worth a look before anyone
+reads the `none` row as headroom: the blocker walk (`jit-blockers`, over `disg`) and the door
+(`jit-1`, over `dis`) are not the same pass, and the other 61 died somewhere after.
 
 ⚠ clang is SLOWER than gcc on crc32 (452.6 against 410.7) and much faster on poly1305. Two
 optimizing compilers disagreeing by 11% in opposite directions on adjacent rows is the scale
