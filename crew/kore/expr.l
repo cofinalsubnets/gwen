@@ -65,7 +65,7 @@
        _ (? (two? r) () (ex-die ("invalid regular expression: " + b)))
        nds <>r ng <>>r
        m (refindp nds a 0 (\ st en (st = 0)))
-       (? ng (? (two? m) (: e (assoc 1 (at m 3))
+       (? ng (? (two? m) (: e (assoc 1 (m 3))
                             (? (two? e) (snip a <>e <>>e) ""))
                 "")
           (? (two? m) (show (<>>m - <>m)) "0")))
@@ -116,7 +116,7 @@
                                    (ex-die "syntax error: missing argument after 'substr'"))
                  [w >m])))
        (? (5 < lv) (prim ts)
-          (: ops (at ex-ops lv)
+          (: ops (ex-ops lv)
              r (ex-parse (lv + 1) ts)
              (go v m) (? ((two? m) && (member? <m ops))
                          (: r2 (ex-parse (lv + 1) >m)

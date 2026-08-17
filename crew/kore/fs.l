@@ -252,21 +252,21 @@
    ; stat (free/kmain.c) answers the first four alone -- an image tree has no ownership
    ; to tell about. so the tail is asked by TALLY and a world that does not carry it
    ; says so rather than reading a 0 someone might believe.
-   (ust-at st k) (? (tally st <= k) () (at st k))
+   (ust-at st k) (? (tally st <= k) () (st k))
    ; /etc/passwd and /etc/group, read as the files they are (no NSS, no getpwnam)
    (uidname path id)                   ; a numeric id -> its name, or the number back
     (: r (uread path)
        (? !(two? r) (show id)
           (: (go ls) (? !(two? ls) (show id)
                         (: f (usplit 58 <ls)
-                           (? ((3 <= tally f) && (uatoi (at f 2) = id)) (at f 0) (go >ls))))
+                           (? ((3 <= tally f) && (uatoi (f 2) = id)) (f 0) (go >ls))))
              (go (lines <>r)))))
    (uidof path nm)                     ; a name -> (1 id), or () when the file has none
     (: r (uread path)
        (? !(two? r) ()
           (: (go ls) (? !(two? ls) ()
                         (: f (usplit 58 <ls)
-                           (? ((3 <= tally f) && (at f 0 = nm)) `(1 (uatoi (at f 2)))
+                           (? ((3 <= tally f) && (f 0 = nm)) `(1 (uatoi (f 2)))
                               (go >ls))))
              (go (lines <>r)))))
    ; every group a user belongs to: the primary first, then the /etc/group rows naming
@@ -277,8 +277,8 @@
        (go ls acc)
         (? !(two? ls) acc
            (: f (usplit 58 <ls)
-              g (? (4 <= tally f) (uatoi (at f 2)) -1)
-              ms (? (4 <= tally f) (usplit 44 (at f 3)) ())
+              g (? (4 <= tally f) (uatoi (f 2)) -1)
+              ms (? (4 <= tally f) (usplit 44 (f 3)) ())
               (go >ls (? ((member? nm ms) && !(g = gid)) (g >< acc) acc))))
        rest (? (two? r) (sort (go (lines <>r) ())) ())
        (gid >< rest))
@@ -318,7 +318,7 @@
    ; only way a format can carry a literal backslash at all.
    (ust-expand fmt p st esc?)
     (: n (tally fmt) o (jug 0)
-       sz <st md <>>st ns (at st 3)
+       sz <st md <>>st ns (st 3)
        uid (ust-at st 4) gid (ust-at st 5) nlk (ust-at st 6)
        blk (ust-at st 7) ino (ust-at st 8)
        (num v) (? (charm? v) (show v) "?")
@@ -364,7 +364,7 @@
            (long? <a 9 "--printf=") (fl >a (snip <a 9 (tally <a)) L 1 fs)
            (fl >a fmt L pf (<a >< fs)))
        p (fl as () 0 0 ())
-       fmt <p L? <>p pf? <>>p fs (at p 3)
+       fmt <p L? <>p pf? <>>p fs (p 3)
        _ (? ((string? fmt) && two? fs) ()
             (udie 2 "usage: stat [-L] -c FORMAT | --printf=FORMAT   FILE.."))
        (one q ok)
@@ -392,7 +392,7 @@
        (? (k = 0) (show n)
           (: tenths (// ((* n 10) + (d - 1)) d)
              whole (// (n + (d - 1)) d)
-             u (at units (k - 1))
+             u (units (k - 1))
              (? (tenths < 100) ((show (// tenths 10)) + "." + (show (% tenths 10)) + u)
                 ((show whole) + u)))))
    (du-main as)
@@ -505,7 +505,7 @@
            ((2 < tally <a) && (snip <a 0 2 = "-p")) (fl >a d u q (snip <a 2 (tally <a)) fs)
            (fl >a d u q dir (<a >< fs)))
        p (fl as 0 0 0 () ())
-       d? <p u? <>p q? <>>p pdir (at p 3) fs (at p 4)
+       d? <p u? <>p q? <>>p pdir (p 3) fs (p 4)
        tm (? (string? pdir) pdir (: e (getenv "TMPDIR") (? (string? e) e "/tmp")))
        named (two? fs)
        tmpl (? named <fs "tmp.XXXXXXXXXX")

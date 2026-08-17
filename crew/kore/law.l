@@ -234,7 +234,7 @@
 (: p1 "--- a/x\n+++ b/x\n@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n three\n"
    secs (pt-parse (lines p1))
    sec <secs
-   h (<(at sec 2))
+   h (<(sec 2))
    (assert
       (= (pt-hdr "@@ -1,8 +1,8 @@") '(1 8 1 8))
       (= (pt-hdr "@@ -3 +4,2 @@ fn()") '(3 1 4 2))                        ; a bare seat is one line

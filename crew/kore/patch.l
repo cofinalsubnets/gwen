@@ -85,7 +85,7 @@
     (? (!(two? m) || !(pt-pfx <m "@@")) `((rev acc) m)
        (: hd (pt-hdr <m)
           (? !(two? hd) `((rev acc) m)
-             (: b (pt-body >m <>hd (at hd 3) ())
+             (: b (pt-body >m <>hd (hd 3) ())
                 (pt-hunks <>b (`(<hd <>>hd <b) >< acc))))))
    (pt-parse ls)
     (: (go m acc)
@@ -108,8 +108,8 @@
                  (: _ (say o <<m) _ (? <><m (put o 10) 0) (go >m)))
        (go ps))
    ; the two sides of a hunk: the old TEXTS to look for, the new PAIRS to lay down
-   (pt-old h) (map (\ l <>l) (filter (\ l !(<l = 43)) (at h 2)))
-   (pt-new h) (map (\ l `(<>l (at l 2))) (filter (\ l !(<l = 45)) (at h 2)))
+   (pt-old h) (map (\ l <>l) (filter (\ l !(<l = 43)) (h 2)))
+   (pt-new h) (map (\ l `(<>l (l 2))) (filter (\ l !(<l = 45)) (h 2)))
 
    ; --- the search: where does this hunk's old side actually sit ------------------
    (pt-match ps k old)
@@ -130,12 +130,12 @@
    (pt-rej nm hs)
     (: o (jug 0)
        (rng l c) (? (c = 1) (show l) ((show l) + "," + (show c)))
-       (one h) (: ls (at h 2)
+       (one h) (: ls (h 2)
                   no (tally (filter (\ l !(<l = 43)) ls))
                   nn (tally (filter (\ l !(<l = 45)) ls))
                   _ (say o ((("@@ -" + (rng <h no)) + (" +" + (rng <>h nn))) + " @@\n"))
                   (foldl (\ _ l (: _ (put o <l) _ (say o <>l)
-                                   (? (at l 2) (put o 10) (say o "\n\\ No newline at end of file\n"))))
+                                   (? (l 2) (put o 10) (say o "\n\\ No newline at end of file\n"))))
                          0 ls))
        _ (say o (("--- " + nm + "\n") + ("+++ " + nm + "\n")))
        _ (foldl (\ _ h (one h)) 0 hs)
@@ -146,7 +146,7 @@
    ; the two starts turns the patch around, and everything downstream then reads one
    ; shape. a -R that reversed at apply time would owe every later step a second lane.
    (pt-flip h)
-    `(<>h <h (map (\ l `((? (<l = 45) 43 (<l = 43) 45 32) <>l (at l 2))) (at h 2)))
+    `(<>h <h (map (\ l `((? (<l = 45) 43 (<l = 43) 45 32) <>l (l 2))) (h 2)))
    (pt-file nm hs dry? silent?)
     (: r (uread nm)
        fresh !(two? r)
@@ -173,7 +173,7 @@
                     (go >m ps2 ((delta + off) + ((tally new) - tally old)) (i + 1) bad
                         (? off 1 off?) rej)))))
        res (go hs ps0 0 1 0 0 ())
-       ps' <res bad <>res rej <>>res off? (at res 3)
+       ps' <res bad <>res rej <>>res off? (res 3)
        nh (tally hs)
        _ (? bad
             (pt-cry ((((show bad) + " out of " + (show nh)) + (? (nh = 1) " hunk" " hunks"))
@@ -208,7 +208,7 @@
             (fl >a p R (snip <a 8 (tally <a)) dry silent outp rest)
            (fl >a p R inp dry silent outp (<a >< rest)))
        q (fl as () 0 () 0 0 () ())
-       p <q R? <>q inp <>>q dry? (at q 3) silent? (at q 4) outp (at q 5) rest (at q 6)
+       p <q R? <>q inp <>>q dry? (q 3) silent? (q 4) outp (q 5) rest (q 6)
        txt (? (string? inp)
               (: r (uread inp) (? (two? r) <>r (udie 2 ("patch: cannot open " + inp))))
               (slurp in))

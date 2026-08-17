@@ -501,7 +501,7 @@
                         (udie 2 ("comm: unknown option -" + string c)))))
               (cl 1 s1 s2 s3)))
        p (fl as 0 0 0)
-       s1 <p s2 <>p s3 <>>p fs (at p 3)
+       s1 <p s2 <>p s3 <>>p fs (p 3)
        _ (? (two? >fs) () (udie 2 "usage: comm [-123] FILE1 FILE2"))
        (pre k) ((? (!s1 && (1 < k)) "\t" "") + (? (!s2 && (2 < k)) "\t" ""))
        (emit k ln) (? (? (k = 1) s1 (k = 2) s2 s3) ()
@@ -546,7 +546,7 @@
               ((2 < tally <a) && (snip <a 0 2 = "-a")) (fl >a ln by (uatoi (val <a)) d? fs)
               (fl >a ln by sw d? (<a >< fs))))
        p (fl as () () 2 0 ())
-       ln <p by <>p sw <>>p d? (at p 3) fs (at p 4)
+       ln <p by <>p sw <>>p d? (p 3) fs (p 4)
        nl (? (charm? ln) ln 1000)
        src (? (two? fs) <fs "-")
        pre (? ((two? fs) && two? >fs) <>fs "x")
@@ -666,7 +666,7 @@
               "ff" "cr" "so" "si" "dle" "dc1" "dc2" "dc3" "dc4" "nak" "syn" "etb"
               "can" "em" "sub" "esc" "fs" "gs" "rs" "us" "sp")
    (uodname c)                         ; -ta's name, the high bit masked off like GNU's
-    (: b (& c 127) (? (b < 33) (at uodnames b) (b = 127) "del" (string b)))
+    (: b (& c 127) (? (b < 33) (uodnames b) (b = 127) "del" (string b)))
    (uodesc c)                          ; -tc's escape; anything else is three octal
     (? (c = 0) "\\0" (c = 7) "\\a" (c = 8) "\\b" (c = 9) "\\t" (c = 10) "\\n"
        (c = 11) "\\v" (c = 12) "\\f" (c = 13) "\\r"
