@@ -34,13 +34,15 @@ naming it is most of what this section is for.
 
 Present natively — roughly **17 of ~85 chapter-8 packages**, several partial:
 
-coreutils (`kore`, 46 tools / 49 names, GNU-byte-identical smokes, `make test_kore`) ·
+coreutils (`kore`, 66 tools / 69 names, GNU-byte-identical smokes, `make test_kore`) ·
 bash (`lush`) · sed · grep · diffutils (diff, cmp) · make (`cook`) · tar (`lib/tar.l`,
 ustar both ways) · gzip (`lib/gz.l`) · zlib · vim (`crew/vi`) · sysvinit
-(`crew/init/boot.l` as `/init`) · openssl-ish (`crew/tls`) · nc (`mk/tools/ain.l`).
+(`crew/init/boot.l` as `/init`) · openssl-ish (`crew/tls`) · nc (`mk/tools/ain.l`) ·
+**patch** (`crew/kore/patch.l`, unified diffs).
 
-The partials, stated: kore has no `du df stat chown id date od expr split paste comm
-join mktemp`; sed is a deliberate subset (no hold space, no `\n` in replacements); our
+The partials, stated: kore has no `df` (nothing here answers `statvfs`, so it wants a
+nif and not an afternoon); sed is a deliberate subset (no hold space, no `\n` in
+replacements); `expr` has no `-o` output template and `od` takes one `-t` per run; our
 DEFLATE is fixed-Huffman only, about 24% behind `gzip -9`.
 
 ### what is absent, in the order it hurts
@@ -48,8 +50,7 @@ DEFLATE is fixed-Huffman only, about 24% behind `gzip -9`.
 - **the ./configure tax** — perl, python, m4, autoconf, automake, libtool, bison, flex,
   gettext, pkg-config. Every real LFS package demands these *before* it compiles a line.
   This, not the compiler, is what axis B actually runs into.
-- **the small four** — awk, find, patch, bc. Individually cheap, and `find`/`awk` are
-  what a configure script actually executes.
+- **bc** — the last of what was "the small four"; awk, find and patch are in.
 - **the rest of the shell floor** — less, xz, bzip2, file.
 - **the admin layer** — util-linux, shadow, procps, psmisc, e2fsprogs, kmod, iproute2, kbd.
 - **docs** — groff, man-db, texinfo, ncurses, readline.
@@ -85,9 +86,30 @@ The gap between those two numbers is entirely *other people's build systems*.
   prints awk's `0` as empty), and **an integral double past a charm still owes its
   digits** — `int` overflows to 0 at 1e20, so the exact integer comes back through
   love's bigints, glibc-identical even at 1e23.
-- **rung 1 — `patch`, and the coreutils stragglers.** `patch` has a reader already in the
-  tree to learn from (`crew/sb/`); `stat du date od expr mktemp` are each an afternoon
-  and each unblock a shell script somebody has already written.
+- **rung 1 — `patch`, and the coreutils stragglers — BUILT.** Thirteen applets: `patch`
+  (`crew/kore/patch.l`, unified diffs, `-pN -R -i -o --dry-run -s`, offsets and rejects),
+  `expr` (`crew/kore/expr.l`, its own file because `:` rides the BRE engine), `od paste
+  comm join split` in core.l, `stat du chown mktemp` in fs.l, `date id` in proc.l. All in
+  `make test_kore`, all GNU-byte-identical where GNU has an opinion, plus laws over the
+  pure floors — the calendar, the record floor, the report floor, expr's, patch's.
+  Three nifs grew with them (host/posix.c): **`stat`'s tuple gained
+  `uid gid nlink blocks ino`** (append-only; the kernel's own stat still answers the
+  first four, and the tail is asked by `tally`), a **`lstat`** beside it (du and stat owe
+  the link's own blocks, not its target's), **`getgid`**, and `openfd` gained mode 3,
+  O_EXCL at 0600, which is what makes `mktemp` a claim rather than a guess.
+  Four things the work taught, all now comments in the tree:
+  * **`two?` is false for a TEXT**, and the u-floor's option walk asked it of a glued
+    value — so `grep -m2` read as a bare `-m` with nothing behind it and took the next
+    word, the FILE, for the count. Silently, since the miss had somewhere to go. Fixed in
+    `uopts` (ask `tally`), and every option walk written since asks the same way.
+  * **the oracle for `patch` is the TREE, not the message.** GNU patch's chatter has moved
+    between releases; what it leaves on disk has not.
+  * ⚠ **a `< $ho/p.diff` inside a cd'd subshell opens AFTER the cd**, so a relative path
+    hands the tool an empty stdin — and both sides then do nothing and match, which reads
+    exactly like a pass. The gate spells `$ho` and `$m` absolutely now.
+  * **GNU's `--apparent-size` counts a file's `st_size` and a directory's not at all** —
+    an empty directory whose st_size is 40 reports 0. Read off the tool, not from the man
+    page, and not from one filesystem: btrfs and tmpfs disagree about everything else here.
 - **rung 2 — cpio, and the distro cuts itself.** With `find` landed, replacing the
   host `find | cpio | gzip -9` pipeline closes the wart above. `lib/gz.l` already
   writes the gzip container; cpio's newc format is smaller than ustar.

@@ -39,10 +39,14 @@
                  (? (tally a <= k) (uopts rest t vals es)
                     (: c (a k)
                        (? !(member? c vals) (: _ (pin t c 1) (cl (k + 1) rest es))
+                          ; ⚠ a GLUED value is asked by TALLY and never by `two?`: a text
+                          ; is no link, so `two? "2"` is 0 and a -m2 read as a bare -m
+                          ; with nothing behind it -- silently, since the miss then took
+                          ; the next word (the FILE) for the count
                           (: glued (snip a (k + 1) (tally a))
-                             got (? (two? glued) 1 (two? rest))
-                             v (? (two? glued) glued (? (two? rest) <rest ()))
-                             rest2 (? (two? glued) rest (? (two? rest) >rest rest))
+                             got (? (0 < tally glued) 1 (two? rest))
+                             v (? (0 < tally glued) glued (? (two? rest) <rest ()))
+                             rest2 (? (0 < tally glued) rest (? (two? rest) >rest rest))
                              (? !got ()
                                 (: _ (? (c = 101) () (pin t c [1 v]))
                                    (cl (tally a) rest2 (? (c = 101) (v >< es) es))))))))

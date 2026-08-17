@@ -158,6 +158,106 @@
 (: (assert
       (= (uoct "755") 493) (= (uoct "644") 420) (= (uoct "0") 0) (= (uoct "7") 7)))
 
+; --- the calendar floor (crew/kore/core.l): civil-from-days and its inverse. exact by
+; construction (no month table, no float), and the ROUND TRIP is what holds it: stat's
+; %y and date both read them, and a leap-year slip would only show on one day a year ---
+(: (rt z) (: c (ucivil z) (= (udays <c <>c <>>c) z))
+   (assert
+      (= (ucivil 0) '(1970 1 1)) (= (ucivil 1) '(1970 1 2)) (= (ucivil -1) '(1969 12 31))
+      (= (ucivil 19675) '(2023 11 14)) (= (ucivil 20682) '(2026 8 17))
+      (= (ucivil 11016) '(2000 2 29))                   ; a century divisible by 400 IS leap
+      (= (ucivil 11017) '(2000 3 1))
+      (= (ucivil -25508) '(1900 3 1))                   ; ..and 1900 is not
+      (= (udays 1970 1 1) 0) (= (udays 2000 2 29) 11016) (= (udays 1900 3 1) -25508)
+      (rt 0) (rt 1) (rt -1) (rt 19675) (rt 11016) (rt 20682) (rt 40000) (rt -25508)))
+
+; --- the record floor (crew/kore/core.l): paste's delimiter list, split's suffix and
+; size words, join's field split, and od's three readings ---
+(: (assert
+      (= (udels ":|") '(":" "|"))
+      (= (udels "\\t") '("\t")) (= (udels "\\0") '(""))   ; POSIX's \0 IS the empty one
+      (= (udels "") '(""))
+      (= (usfx 0 2 0) "aa") (= (usfx 1 2 0) "ab") (= (usfx 26 2 0) "ba")
+      (= (usfx 675 2 0) "zz") (= (usfx 0 3 0) "aaa")
+      (= (usfx 0 2 1) "00") (= (usfx 9 2 1) "09") (= (usfx 10 2 1) "10")
+      (= (usize "1000") 1000) (= (usize "2K") 2048) (= (usize "1M") 1048576)
+      (= (ujfs () "  a   1  ") '("a" "1"))                ; blank runs, the edges dropped
+      (= (ujfs () "") ()) (= (ujfs 58 "a:b:") '("a" "b" ""))
+      (= (unth '("a" "b") 2) "b") !(unth '("a" "b") 3) !(unth '("a") 0)
+      (= (uzpad 3 "7") "007") (= (uzpad 1 "77") "77")
+      (= (uradix 255 16) "ff") (= (uradix 255 8) "377")
+      (= (uodesc 10) "\\n") (= (uodesc 0) "\\0") (= (uodesc 92) "\\") (= (uodesc 65) "A")
+      (= (uodesc 1) "001") (= (uodesc 255) "377") (= (uodesc 127) "177")
+      (= (uodname 10) "nl") (= (uodname 32) "sp") (= (uodname 127) "del")
+      (= (uodname 255) "del") (= (uodname 65) "A")        ; -ta masks the high bit
+      (= (uodtype "x1") '(x 1 2)) (= (uodtype "o2") '(o 2 6)) (= (uodtype "d4") '(d 4 11))
+      (= (uodtype "u1") '(u 1 3)) (= (uodtype "c") '(c 1 3)) !(uodtype "q")))
+
+; --- the report floor (crew/kore/fs.l): stat's permission face and timestamp, du's
+; three-figure human face (rounded UP, which is GNU's rule and not a rounding) ---
+(: (assert
+      (= (ust-perm 33188) "-rw-r--r--") (= (ust-perm 16877) "drwxr-xr-x")
+      (= (ust-perm 41471) "lrwxrwxrwx") (= (ust-perm 36333) "-rwsr-sr-x")
+      (= (ust-perm 33261) "-rwxr-xr-x") (= (ust-perm 17407) "drwxrwxrwt")
+      (= (ust-kind 33188 10) "regular file") (= (ust-kind 33188 0) "regular empty file")
+      (= (ust-kind 16877 4) "directory") (= (ust-kind 41471 2) "symbolic link")
+      (= (ustamp 0) "1970-01-01 00:00:00.000000000 +0000")
+      (= (ustamp 1700000000073610912) "2023-11-14 22:13:20.073610912 +0000")
+      (= (uhuman 0) "0") (= (uhuman 1023) "1023")
+      (= (uhuman 1024) "1.0K") (= (uhuman 4096) "4.0K") (= (uhuman 12288) "12K")
+      (= (uhuman 102400) "100K") (= (uhuman 1500160) "1.5M") (= (uhuman 3000000000) "2.8G")))
+
+; --- the expr floor (crew/kore/expr.l): every value is a TEXT, a text that reads as a
+; whole number is a number where one is wanted, and the division TRUNCATES ---
+(: (e as) (<(ex-parse 0 as))
+   (assert
+      (= (ex-num "42") '(1 42)) (= (ex-num "-7") '(1 -7)) !(ex-num "12a") !(ex-num "")
+      !(ex-num "-") (= (ex-num "0") '(1 0))
+      (ex-true? "1") (ex-true? "a") !(ex-true? "0") !(ex-true? "")
+      (= (ex-arith "/" "-7" "2") "-3") (= (ex-arith "%" "-7" "2") "-1")   ; C's truncation
+      (= (ex-arith "/" "7" "-2") "-3") (= (ex-arith "%" "7" "-2") "1")
+      (= (ex-cmp "<" "2" "10") "1") (= (ex-cmp "<" "2" "10a") "0")        ; text, not number
+      (= (ex-cmp "=" "abc" "abc") "1") (= (ex-cmp ">=" "3" "3") "1")
+      (= (ex-substr "abcdef" "2" "3") "bcd") (= (ex-substr "abcdef" "0" "3") "")
+      (= (ex-substr "abcdef" "5" "99") "ef")
+      (= (ex-index "abcdef" "cd") "3") (= (ex-index "abcdef" "z") "0")
+      (= (ex-match "abc" "a.c") "3") (= (ex-match "abc" "a\\(.\\)c") "b")
+      (= (ex-match "abcd" "a.c") "3")                                     ; anchored at the head
+      (= (ex-match "abc" "x") "0") (= (ex-match "abc" "a\\(x\\)c") "")
+      (= (e '("1" "+" "2")) "3") (= (e '("1" "+" "2" "*" "3")) "7")
+      (= (e '("(" "1" "+" "2" ")" "*" "3")) "9")
+      (= (e '("0" "|" "3")) "3") (= (e '("0" "&" "2")) "0") (= (e '("1" "&" "2")) "1")
+      (= (e '("length" "abcde")) "5") (= (e '("+" "length")) "length")))
+
+; --- the patch floor (crew/kore/patch.l): the hunk header, the body's counts and its
+; `\ No newline` mark, the -p walk, and the file<->pairs bridge ---
+(: p1 "--- a/x\n+++ b/x\n@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n three\n"
+   secs (pt-parse (lines p1))
+   sec <secs
+   h (<(at sec 2))
+   (assert
+      (= (pt-hdr "@@ -1,8 +1,8 @@") '(1 8 1 8))
+      (= (pt-hdr "@@ -3 +4,2 @@ fn()") '(3 1 4 2))                        ; a bare seat is one line
+      (= (pt-hdr "@@ -0,0 +1,2 @@") '(0 0 1 2))
+      !(pt-hdr "@@ nope")
+      (= (pt-hname "--- a/sub/f.txt\t2026-08-17 09:46:51") "a/sub/f.txt")
+      (= (pt-hname "+++ b/x") "b/x")
+      (= (pt-strip "a/b/c.txt" 1) "b/c.txt") (= (pt-strip "a/b/c.txt" 2) "c.txt")
+      (= (pt-strip "a/b/c.txt" ()) "c.txt")                               ; unsaid drops them all
+      (= (pt-strip "c.txt" 3) "c.txt")
+      (= (tally secs) 1) (= <sec "a/x") (= <>sec "b/x")
+      (= h '(1 1 ((32 "one" 1) (45 "two" 1) (43 "TWO" 1) (32 "three" 1))))
+      (= (pt-old h) '("one" "two" "three")) (= (pt-new h) '(("one" 1) ("TWO" 1) ("three" 1)))
+      ; the `\` line marks the entry BEFORE it, and it arrives after the counts are spent
+      (= (<(pt-body (lines "-c\n\\ No newline at end of file\n+C\n\\ No newline at end of file\n")
+                    1 1 ()))
+         '((45 "c" 0) (43 "C" 0)))
+      (= (pt-render (pt-pairs "a\nb\n")) "a\nb\n")
+      (= (pt-render (pt-pairs "a\nb")) "a\nb")                            ; the end is data
+      (= (pt-seek (pt-pairs "x\na\nb\n") '("a" "b") 0) '(1 1))            ; found one line down
+      (= (pt-seek (pt-pairs "") () -1) '(1 0))                            ; a create's -0,0
+      !(pt-seek (pt-pairs "q\n") '("a") 0)))
+
 ; --- the regex floor (crew/kore/re.l): the BRE faces, held by hand ---
 (: (ok p s) (: r (rebre p) (two? r && rehas <>r s))
    (no p s) (: r (rebre p) (two? r && !(rehas <>r s)))
