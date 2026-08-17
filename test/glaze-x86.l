@@ -839,7 +839,7 @@
    v (dsr4 ())
    _ (assert
       (0 = (dsleaf 20))
-      (= (slurp j) (+ (+ "" 1) 2))                                                                 ; both bytes, in order: the _-bound put kept
+      (= (slurp j) (+ (string 1) (string 2)))                                                      ; both bytes, in order: the _-bound put kept
       (67305985 = v))                                                                              ; 0x04030201: the two dsr2 calls read in source order
    (say err "love/glaze/auto: delet keeps _-bound effects + call-binding order ok\n"))
 
