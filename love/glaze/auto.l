@@ -1100,10 +1100,17 @@
       (: low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts form0))))))))))   ; autogroup's FULL lowering: church/HOF/&& + structural (lift/loops/value-lets)
          (foldl (\ _ pr (? (swfnpair? pr) (pin srcreg <<pr (><pr >< >pr)) ())) () <(anat-defs >low))) ())
    (swuniq l) (? (atom? l) () (member? <l >l) (swuniq >l) (<l >< swuniq >l))
-   (swheads e acc) (? (atom? e) acc  (two? e && id? <e '\) acc                   ; collect call heads (symbols); skip quoted/lambda subforms
-      (: h <e acc2 (? (name? h) (h >< acc) acc) (foldl (\ a x (swheads x a)) acc2 >e)))
+   (swbnds e) (map (\ p (? (two? <p) <<p <p)) <(anat-defs >e))                       ; a `:`'s binding names
+   ; collect call heads (symbols); skip quoted/lambda subforms. bnd is the binder set: this walk
+   ; reads SOURCE, where an infix (a op b) wears its left operand as a head, so a locally bound
+   ; name reaches here as often as a called one -- and swallowing a global of that spelling puts
+   ; a stranger in the group. a `\` subform is skipped whole, so bnd carries `:` names + params.
+   (swheads e bnd acc) (? (atom? e) acc  (two? e && id? <e '\) acc
+      (two? e && id? <e ':) (foldl (\ a x (swheads x (swbnds e + bnd) a)) acc >e)
+      (: h <e acc2 (? (name? h && !(member? h bnd)) (h >< acc) acc)
+         (foldl (\ a x (swheads x bnd a)) acc2 >e)))
    (swgather fns) (: names (map caap fns)                                                 ; enlarge fns with recorded globals reachable from the bodies (to fixpoint)
-      heads (foldl (\ a p (swheads >p a)) () fns)
+      heads (foldl (\ a p (swheads >p ><p a)) () fns)                                ; the fn's own params bind too
       new (swuniq (filter (\ h (!(member? h names) && !(id? (peep srcreg h 0) 0))) heads))
       (? (atom? new) fns
          (swgather (foldr (\ h a (: d (peep srcreg h 0) (((h >< <d) >< >d) >< a))) fns new))))
@@ -1129,6 +1136,9 @@
              (: armap (map (\ p `(<<p ((tally <p) - 1))) fns)                 ; (name arity) candidates
                 grp (grpfix fns armap)                                                        ; the closed glazeable subset
                 (? (atom? grp) form0                                                          ; nothing survives the fixpoint -> original (un-lifted)
+                   ; a group of SWALLOWED members only rewrites nothing here, so committing the
+                   ; lowered form buys nothing and stakes the whole file on it.
+                   !(ho-any (\ p (member? (? (two? <p) <<p <p) (map cap grp))) pairs) form0
                    (: gnames (map cap grp)
                       gdefs (map mapfix-def (filter (\ p (member? <<p gnames)) fns))   ; the group's (nameform . body) defs, with map-valued peeps rewritten to mpeep
                       (': >< rewrite-bindings >form gnames gdefs))))))))             ; each binding of the LIFTED form -> its native  (last ) closes the srcrec `:` wrapper)
