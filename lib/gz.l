@@ -4,6 +4,7 @@
 ;   (gz-crc32 s)           -> the IEEE crc32 of a string, a charm
 ;   (gz-deflate s)         -> raw DEFLATE bytes
 ;   (gz-inflate s n)       -> (1 bytes) | ()    n a size hint, 0 when unknown
+;   (gz-puff s n)          -> the same, in love, and the oracle the C twin answers to
 ;   (gz-zip s nom stamp)   -> a .gz member; nom "" for no name, stamp 0 for no time
 ;   (gz-unzip s)           -> (1 bytes) | ()
 ;
@@ -25,6 +26,15 @@
 ; what the twin answers or handing the call back. It is 2.7x on the whole coder, and it
 ; is here rather than in C for the reason the comment above it gives: `(s i)` is a VM
 ; apply and the compare wants an instruction. test/gate/gzfind.l is the differential.
+;
+; ⚠ AND SO DOES INFLATE, IN C. `gz-puff` below is the whole of RFC 1951 and the oracle;
+; `gz-inflate` is a door that reaches for host/inflate.c's nif and falls back to it. That
+; one is 205x, not 2.7x, and the difference is the ALGORITHM: the C indexes a table where
+; puff walks a canonical code one bit at a time, which is the right trade at C's per-op
+; cost and the wrong one at love's -- building the same table in love costs 44 ms on this
+; tarball, more than the whole C decode. Which is also why it is not a holo kernel: the
+; small kernel is the bit walk, and the bit walk is not what wins. test/host/gzc.l is the
+; differential, and it fuzzes, because a corrupt block is where two decoders part.
 ;
 ; ⚠ THE THREE CONTAINERS ARE NOT INTERCHANGEABLE, and each is here for a reason a
 ; substitute could not serve: a `cask` is the mutable byte array (pin writes through),
@@ -691,7 +701,7 @@
             ())
        (? r `(1 fin) ()))
 
-   (gz-inflate s hint)
+   (gz-puff s hint)
     (: n (tally s)
        t (tablet 0)   b (gz-buf hint)
        (go u) (: r (gz-block s n t b)
@@ -700,6 +710,13 @@
                     (<(>r)) `(1 (gz-take b))
                     (go ())))
        (? n (go ()) ()))
+   ; the door. host/inflate.c where the artifact carries it, gz-puff where it does not
+   ; and wherever it declines -- and a TORN STREAM DECLINES, so a torn one is read twice
+   ; and answers () both times. ⚠ `string?`, never `?`: a string of NULs sums to zero and
+   ; would read as absent.
+   (gz-inflate s hint)
+    (? (lit? inflate) (: r (inflate s hint) (? (string? r) `(1 r) (gz-puff s hint)))
+       (gz-puff s hint))
 
    ; --- the container (RFC 1952) --------------------------------------------
    (gz-le32s v)

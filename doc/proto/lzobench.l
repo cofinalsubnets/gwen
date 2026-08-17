@@ -16,7 +16,7 @@
 ;
 ;                       bytes     of in     compress    decompress
 ;   love lzo1x-1      4264331    43.80%      1980 ms       1618 ms
-;   love deflate      2960320    30.41%     23547 ms*      7339 ms
+;   love deflate      2960320    30.41%     23547 ms*      7339 ms**
 ;   love zstd         4368080    44.87%      6080 ms       7327 ms
 ;   love zstd, on a frame `zstd -19` wrote:
 ;                     2283124    23.45%          --       4679 ms
@@ -42,6 +42,15 @@
 ; both lanes on that same input, twin 23221 and native 8619). So the pack is 13x off
 ; `gzip -9` where it was 35x, and LZO's lead on the pack is 4.4x where it was 11.9x --
 ; which narrows what this file concluded without changing it.
+;
+; ⚠ ** AND THE UNPACK MOVED FURTHER, AND OFF THIS FILE'S TERMS. host/inflate.c is a C
+; twin of gz-puff, so the `gzd` lane no longer times love at all where the artifact
+; carries the nif -- it times C, 20 ms under gcc and 37 under mooncc against gz-puff's
+; 6294 and 7377 on the later tarball. That is FASTER THAN `gzip -d`, which is the first
+; row in this table where love's stack beats the C program it is measured against, and
+; it is why the deflate row is now the only interesting one: the pack is 13x off and the
+; unpack is ahead. ⚠ every other DECOMPRESS number here is still love, so the column no
+; longer compares like with like -- read the row, not the column.
 ;
 ; LZO still buys 4.4x on the pack and 4.5x on the unpack, and now costs 1304011 bytes
 ; -- the blob is 44.0% bigger with it. the LZO coder here lands 3.8% UNDER liblzo2's
