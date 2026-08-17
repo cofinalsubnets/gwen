@@ -97,7 +97,8 @@ dist lanes shared every seam -- and the re-aimed gates are the discovery story:
   token accessors over uu's), `shell` `subst` (cook's over the spawn + kanren's),
   `walk` (kore's fs walk over kanren's). All pre-date this arc ON THE SHIPPED
   ARTIFACT -- the seed's bare book always carried them -- the tree just never
-  tested that book. Renaming them is the BOOK-HYGIENE rung, open.
+  tested that book. They dissolve by MODULARIZING, not renaming: the crew stops
+  defglobbing when it wraps in modules -- doc/plan/modules.md is that arc.
 - **test_hostnif had not run since the + flip, and it was a nest of byte-law
   riders**: test/host/net.l's rdline (its comment still CITED the retired law),
   manifest/cb/berth's rowtx folds, luxui-probe's `("" + ch)`, crew/lux/wire.l's
@@ -115,7 +116,7 @@ dist lanes shared every seam -- and the re-aimed gates are the discovery story:
 - **kore.sh's `env print vs GNU`** wanted the oracle under korerun's own prefix,
   or the two children compare different environments.
 
-Still open here: the book-hygiene renames above; option (c), a default-claiming
+Still open here: option (c), a default-claiming
 entry so a bare `love` wakes a thin prefix (today it pays the ~104 ms full
 wake); test_wake/test_imgchain re-aim (both still green as-is); distro.mk's
 argv0 farm could point at the one binary once cli.l learns argv[0] dispatch.

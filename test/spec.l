@@ -786,6 +786,26 @@
   (nil? (from 'kanren 'spec-missing))                           ; a member miss reads the zero point
   (lit? unify) (lit? rand) (lit? reads))                        ; the boot splices serve the bare names
 
+; (module 'nm form ..) is the filesystem-free definition: open nm's layer -- the REGISTERED
+; tablet on a reopen, a fresh one otherwise -- eval each form there as the loader would, leave
+; registers; answers the tablet. text anywhere defines or reopens any module; (module () ..) is
+; a scratch layer, registered nowhere. each form compiles at ITS eval, so bindings defglob into
+; the module layer and a member folds into a consumer at the consumer's compile, as ever.
+(: smv-out (member? 'smv (names ()))                     ; captured BEFORE: love0 reruns the
+                                                         ; corpus in-process, and run 1's use
+                                                         ; below splices smv onto the walk
+   m1 (module 'spec-mod (: smv 41 (smf x) (x + smv)))
+   m2 (module 'spec-mod (: smv (smv + 1) smw 100))       ; reopen: the old member is in scope
+   ma (module () (: sma 9))
+ (assert
+  (tablet? m1) (m1 = m2) (m1 = from 'spec-mod)           ; one tablet, registered, answered
+  (42 = from 'spec-mod 'smv) (100 = from 'spec-mod 'smw) ; the reopen read 41 and extended
+  (42 = ((from 'spec-mod 'smf) 1))                       ; smf folded smv at ITS compile: 41
+  (smv-out = member? 'smv (names ()))                    ; no leak: the walk is as it was
+  (! (member? 'sma (names ())))                          ; the anonymous layer leaks nothing
+  (tablet? ma)))                                         ; the scratch layer answers its tablet
+(: _ (use 'spec-mod) (assert (42 = smv)))                ; use splices a module `module` made
+
 ; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since
 ; t and (gauge 0) reports a VM stat; an opaque handle acts as a constant function.
 ; (nclock t) is clock's fine INTERVAL twin: monotonic ns minus t (ms-degraded where a frontend

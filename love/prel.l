@@ -368,6 +368,22 @@
                     (slashy? (string m)) (: _ (rdev q) ())
                     (: _ (enter m) _ (rdev q) _ (leave ()) (prior m))))))))
 
+; --- module: filesystem-free definition --------------------------------------
+; (module 'nm form ..): open nm's layer -- the REGISTERED tablet on a reopen, a
+; fresh one otherwise -- eval each form there as the loader would, leave
+; registers; answers the tablet. text anywhere defines or reopens any module;
+; (module () ..) is a scratch layer, registered nowhere. each form compiles at
+; ITS eval, after the open, so bindings defglob into the module layer (a form
+; compiled early would defglob past it) and a macro form serves the NEXT form,
+; not its own. the run rides the expansion as a VALUE: enter/leave are mopped.
+(: _
+ (: (mopen nm) (: r (? (nil? nm) () (peep (mods ()) nm ()))
+                  F (? (tablet? r) r (: t (tablet 0) _ (pin t 0 (tablet 0)) t))
+                  _ (pin F 31337 (link (books ()) nm))
+                  (setbooks (link F (books ()))))
+    (mrun nm fs) (: _ (mopen nm) _ (each fs (\ f (ev 'ev f))) (leave ()))
+    (:: 'module (\ l (list mrun (cap l) (list '\ (link (cup l) ())))))))
+
 
 ; --- reader operators: the operators tablet + the opfix factor pass ---------
 (: operators (pins (tablet 0)
