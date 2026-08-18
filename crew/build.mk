@@ -84,7 +84,7 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             crew/holo/link.l crew/holo/copy.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
             crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/sb/merge.l \
             crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l crew/sb/up.l \
-            lib/gz.l lib/tar.l lib/tarcmd.l lib/source.l crew/lapiz/lapiz.l \
+            lib/gz.l lib/tar.l lib/tarcmd.l lib/gzcmd.l lib/source.l crew/lapiz/lapiz.l \
             lib/salt.l lib/infix.l crew/libra/libra.l lib/hueweb.l lib/serve.l
 # THE DOCS LANE -- the small image of the array below. a one-shot `love libra ..`
 # wants the .l reader, the config door, the factor pass and the document lens, and
@@ -159,9 +159,9 @@ $(ho)/.rest-cat.l: $(restfiles) $(ho)/.dist.list $(ho)/.docs.list
 # a third leg of every release gate to keep honest.
 #
 # The archive is OURS end to end -- lib/tar.l and lib/gz.l -- so cutting a release
-# needs neither `tar` nor `gzip` on the box. ⚠ our coder writes the FIXED Huffman
-# code, ~24% above `gzip -9` (lib/gz.l carries the numbers): a real cost on a
-# download, and the reason a dynamic coder is the next rung.
+# needs neither `tar` nor `gzip` on the box, and lib/gzcmd.l wears their flags for a
+# hand. Our coder costs every block three ways and writes the cheapest; it lands a
+# few percent above `gzip -9` (lib/gz.l carries the numbers).
 #
 # ⚠ REPRODUCIBLE BY CONSTRUCTION: the pack pins every mtime/uid/gid to $(dist_stamp)
 # and the gzip header's own MTIME is 0, so two cuts of one tree are the same bytes

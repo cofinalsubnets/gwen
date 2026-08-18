@@ -9,8 +9,9 @@
 ; thing it exists to make, but a `tar cf` that quietly gzipped would be an archive
 ; whose name lies about its bytes. Without z the ustar rides plain.
 ;
-; ⚠ our DEFLATE is the FIXED Huffman code (lib/gz.l) -- every gunzip reads it, and it
-; is about 24% above `gzip -9` on source. The honest number lives in lib/gz.l.
+; ⚠ our DEFLATE costs every block three ways -- stored, fixed, and a code built from
+; the block's own frequencies -- and lands a few percent above `gzip -9`. The honest
+; numbers live in lib/gz.l.
 (: (tarc-die m) (: _ (say err ("tar: " + m + "\n")) (quit 1))
    (tarc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
    (tarc-blurt p s) (: q (open p "w") (? q (: _ (say q s) _ (close q) 1) ()))

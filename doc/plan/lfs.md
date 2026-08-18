@@ -36,14 +36,17 @@ Present natively — roughly **17 of ~85 chapter-8 packages**, several partial:
 
 coreutils (`kore`, 85 tools / 88 names, GNU-byte-identical smokes, `make test_kore`) ·
 bash (`lush`) · sed · grep · diffutils (diff, cmp) · make (`cook`) · tar (`lib/tar.l`,
-ustar both ways) · gzip (`lib/gz.l`) · zlib · vim (`crew/vi`) · sysvinit
+ustar both ways, `love tar`) · gzip (`lib/gz.l`, and `lib/gzcmd.l` wears GNU's flags
+as `love gzip` / `gunzip` / `zcat`) · zlib · vim (`crew/vi`) · sysvinit
 (`crew/init/boot.l` as `/init`) · openssl-ish (`crew/tls`) · nc (`mk/tools/ain.l`) ·
 **patch** (`crew/kore/patch.l`, unified diffs).
 
 The partials, stated: kore has no `df` (nothing here answers `statvfs`, so it wants a
 nif and not an afternoon); sed is a deliberate subset (no hold space, no `\n` in
 replacements); `expr` has no `-o` output template and `od` takes one `-t` per run; our
-DEFLATE is fixed-Huffman only, about 24% behind `gzip -9`.
+DEFLATE lands a few percent above `gzip -9` (it costs every block three ways and writes
+the cheapest -- lib/gz.l carries the numbers), and `gzip -d` reads one member per file
+where GNU reads a concatenation.
 
 ### what is absent, in the order it hurts
 
@@ -62,7 +65,9 @@ still the one imported artifact — `mk/distro.mk` says `BZIMAGE ?= /boot/vmlinu
 No GRUB.
 
 ⚠ and the wart worth naming: `distro-initramfs` cuts its image with the **host's** `find`,
-`cpio` and `gzip -9`. The distro that exists to prove we need no host is built by one.
+`cpio` and `gzip -9`. The distro that exists to prove we need no host is built by one --
+two thirds of that pipeline are ours now (kore's `find`, `love gzip`) and unadopted; the
+recipe still spells the host's.
 
 ## the number
 
@@ -127,9 +132,24 @@ The gap between those two numbers is entirely *other people's build systems*.
   Left deliberately: fmt, pr, csplit, ptx and numfmt (each its own layout language),
   dir/vdir (they are `ls -C`/`ls -l`), shuf (a seed decision first), the sha1/sha512
   family (host/hash.c carries three digests), and who/users/logname (no utmp).
-- **rung 2 — cpio, and the distro cuts itself.** With `find` landed, replacing the
-  host `find | cpio | gzip -9` pipeline closes the wart above. `lib/gz.l` already
-  writes the gzip container; cpio's newc format is smaller than ustar.
+- **rung 1c — gzip's face — BUILT.** `lib/gzcmd.l`: `love gzip`, `love gunzip` and
+  `love zcat`, GNU's flag spelling (`-cdfklnNqrtv`, `-1..-9`, `-S SUF`, the long forms)
+  over lib/gz.l's two doors, registered as verbs the way `love tar` is. The in-place
+  replace carries the mode and the mtime; `-l`'s listing is byte-identical to GNU's,
+  ratio and all. Gated in `make test_gz` (test/gate/targz.sh section 4). Three things
+  worth knowing:
+  * **`-l`'s ratio is the DEFLATE PAYLOAD's**, not the file's — GNU takes the header
+    and the trailer out before dividing, and the tenth is ROUNDED where an older gzip
+    truncated. A hundred random files were asked which.
+  * **the suffix is asked before the bytes are**: a name with nothing to strip is a
+    warning (exit 2), so `gunzip *` over a mixed directory walks on. Reading first
+    calls every plain file "not in gzip format" instead, which is exit 1 and a stop.
+  * **one member per file** — gz-unzip reads the trailer off the tail, so a legal
+    `cat a.gz b.gz` is refused whole rather than half-read. That belongs in gz.l when
+    something here needs it.
+- **rung 2 — cpio, and the distro cuts itself.** With `find` and now `gzip` landed,
+  only `cpio` is still the host's in the `find | cpio | gzip -9` pipeline. cpio's newc
+  format is smaller than ustar.
 - **rung 3 — decide about the configure tax.** The genuine fork, and it is a decision,
   not a rung: grow perl/python/autotools, or keep declining them and only ever build
   packages that do not ask. Six packages so far have not asked. That is not an accident

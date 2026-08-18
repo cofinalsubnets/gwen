@@ -107,8 +107,9 @@ for f in tree/text.l tree/sub/deep/blob.bin tree/empty; do
 EOF
   "$love" "$w/one.l" || fail "love could not gzip $f"
   gzip -dc "$w/one.gz" | cmp - "$src" || fail "system gunzip disagrees on $f"
-  # ..and the reverse, at -9, which is where gzip writes a DYNAMIC code -- the
-  # branch our own coder never emits and so never exercises from this side.
+  # ..and the reverse, at -9: two coders that both build a code from a block's own
+  # frequencies still choose different codes, so this is the branch where a decoder
+  # reading only its own writer's output has never been asked anything.
   gzip -9 -c "$src" > "$w/theirs.gz"
   cat > "$w/one2.l" <<EOF
 (use 'gz)
@@ -122,5 +123,77 @@ EOF
   cmp "$w/back" "$src" || fail "we disagree with gzip -9 on $f"
 done
 echo "  OK gzip container both ways (text, incompressible, empty; -9 dynamic codes read)"
+
+# ---- 4. the COMMAND faces: gzip, gunzip, zcat (lib/gzcmd.l) -----------------
+# the engine is section 3's; what is asked here is the FACE -- the suffix rules, the
+# in-place replace, the mode and the mtime carried across, the flags and the statuses.
+c="$w/cmd"; mkdir -p "$c"
+head -c 20000 /etc/services > "$c/f.txt" 2>/dev/null || cat lib/gz.l > "$c/f.txt"
+cp "$c/f.txt" "$c/g.txt"
+chmod 0640 "$c/f.txt"
+touch -d '2021-02-03 04:05:06' "$c/f.txt"
+
+# ours out, GNU in -- and the input is GONE, the mode and the mtime carried over
+( cd "$c" && "$r/$love" gzip f.txt ) || fail "gzip exit"
+[ ! -e "$c/f.txt" ] || fail "gzip left the input behind"
+gzip -t "$c/f.txt.gz" || fail "system gzip rejects ours"
+gunzip -c "$c/f.txt.gz" | cmp - "$c/g.txt" || fail "system gunzip disagrees with our gzip"
+[ "$(stat -c %a "$c/f.txt.gz")" = 640 ] || fail "gzip did not carry the mode over"
+[ "$(stat -c %Y "$c/f.txt.gz")" = "$(date -d '2021-02-03 04:05:06' +%s)" ] \
+  || fail "gzip did not carry the mtime over"
+
+# GNU out, ours in -- -k so the .gz stays for the checks below, and the bytes are
+# compared against a copy taken before GNU ate the original
+cp "$c/g.txt" "$c/gsave.txt"
+gzip -9 "$c/g.txt"
+( cd "$c" && "$r/$love" gunzip -k g.txt.gz ) || fail "gunzip exit"
+cmp "$c/g.txt" "$c/gsave.txt" || fail "gunzip differs from the original"
+[ -e "$c/g.txt.gz" ] || fail "gunzip -k removed the input"
+
+# the filter, both directions, and zcat
+cat "$c/g.txt" | "$love" gzip | gunzip -c | cmp - "$c/g.txt" || fail "gzip filter"
+gzip -c "$c/g.txt" | "$love" zcat | cmp - "$c/g.txt" || fail "zcat"
+"$love" gzip -c "$c/g.txt" | "$love" gunzip -c | cmp - "$c/g.txt" || fail "our own round trip"
+
+# -l, byte-identical to GNU's over a file GNU wrote (the ratio is the PAYLOAD's, and
+# its tenth is rounded -- two chances to differ in one line)
+gzip -l "$c/g.txt.gz" > "$w/l.want" 2>/dev/null
+"$love" gzip -l "$c/g.txt.gz" > "$w/l.got" 2>/dev/null
+cmp -s "$w/l.want" "$w/l.got" || { diff "$w/l.want" "$w/l.got"; fail "gzip -l vs GNU"; }
+
+# -t says nothing about a good member and 1 about a torn one.
+# ⚠ set -e is ON in this gate, so a status is caught with `|| e=$?` and never with a
+# bare run followed by $? -- a failing command on its own line ends the script silently
+run() { e=0; "$@" > /dev/null 2>&1 || e=$?; }
+"$love" gzip -t "$c/g.txt.gz" || fail "gzip -t on a good member"
+head -c 200 "$c/g.txt.gz" > "$c/torn.gz"
+run "$love" gzip -t "$c/torn.gz";     [ $e -eq 1 ] || fail "gzip -t on a torn member ($e)"
+
+# the statuses: a miss is 1, a name that is not a member is 1, a suffix that says
+# nothing is 2, and an output already there is 2 until -f says otherwise
+run "$love" gzip "$c/nosuch";         [ $e -eq 1 ] || fail "gzip miss exit ($e)"
+run "$love" gunzip -c "$c/g.txt";     [ $e -eq 1 ] || fail "gunzip not-gzip exit ($e)"
+run "$love" gunzip "$c/g.txt";        [ $e -eq 2 ] || fail "gunzip unknown suffix exit ($e)"
+cp "$c/g.txt" "$c/h.txt"; : > "$c/h.txt.gz"
+run "$love" gzip "$c/h.txt";          [ $e -eq 2 ] || fail "gzip existing output exit ($e)"
+[ -e "$c/h.txt" ] || fail "gzip removed the input it refused to replace"
+"$love" gzip -f "$c/h.txt" || fail "gzip -f exit"
+gunzip -c "$c/h.txt.gz" | cmp - "$c/g.txt" || fail "gzip -f wrote the wrong bytes"
+
+# -S, -N, -r, and the levels a script spends
+cp "$c/g.txt" "$c/s.txt"
+"$love" gzip -S .zz "$c/s.txt" && [ -e "$c/s.txt.zz" ] || fail "gzip -S"
+"$love" gunzip -S .zz "$c/s.txt.zz" && cmp "$c/s.txt" "$c/g.txt" || fail "gunzip -S"
+cp "$c/g.txt" "$c/named.txt"
+"$love" gzip -9 "$c/named.txt" || fail "gzip -9 (a level is taken, not refused)"
+mv "$c/named.txt.gz" "$c/other.gz"
+( cd "$c" && "$r/$love" gunzip -N other.gz ) || fail "gunzip -N"
+[ -e "$c/named.txt" ] || fail "gunzip -N did not take the stored name back"
+mkdir -p "$c/tree/in"; cp "$c/g.txt" "$c/tree/in/r1.txt"; cp "$c/g.txt" "$c/tree/r2.txt"
+"$love" gzip -r "$c/tree" || fail "gzip -r"
+[ -e "$c/tree/in/r1.txt.gz" ] && [ -e "$c/tree/r2.txt.gz" ] || fail "gzip -r missed a file"
+"$love" gunzip -r "$c/tree" || fail "gunzip -r"
+cmp "$c/tree/in/r1.txt" "$c/g.txt" || fail "gunzip -r differs"
+echo "  OK the command faces -- gzip/gunzip/zcat, the suffixes, the statuses, -l vs GNU"
 
 echo "targz: lib/tar.l + lib/gz.l agree with GNU tar and GNU gzip both ways -- ok"
