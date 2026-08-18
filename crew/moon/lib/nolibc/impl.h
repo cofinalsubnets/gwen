@@ -345,6 +345,13 @@ extern long __ai_ocan(long fl);
 extern long __ai_mapfb(long fl);
 extern long __ai_safb(long fl);
 extern long __ai_sacan(long fl);
+extern long __ai_affb(long af);          /* socket family: inet6 moves, the rest agree */
+extern long __ai_afcan(long af);
+extern long __ai_sotype(long t);         /* SOCK_* flag bits move high */
+extern long __ai_msgfb(long fl);         /* send/recv flags */
+extern int __ai_sofb(long *lv, long *op);        /* sockopt level+name; -1 unmapped */
+extern unsigned int __ai_sain(void const *a, unsigned int n, void *out);   /* sockaddr head, in; answers the namelen */
+extern void __ai_saout(void *a, unsigned int n);                   /* ..and back out */
 static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
   long v = __ai_osv;
   if (!v) v = __ai_osv = __ai_osdetect();

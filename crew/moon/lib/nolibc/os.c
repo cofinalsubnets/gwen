@@ -32,6 +32,13 @@ long __ai_safb(long f) { return f; }
 long __ai_sacan(long f) { return f; }
 void __ai_tiofb(struct termios const *t, struct __fb_termios *f) { (void) t; (void) f; }
 void __ai_tiocan(struct __fb_termios const *f, struct termios *t) { (void) f; (void) t; }
+long __ai_affb(long a) { return a; }
+long __ai_afcan(long a) { return a; }
+long __ai_sotype(long t) { return t; }
+long __ai_msgfb(long f) { return f; }
+int __ai_sofb(long *lv, long *op) { (void) lv; (void) op; return 0; }
+unsigned int __ai_sain(void const *a, unsigned int n, void *out) { memcpy(out, a, n); return n; }
+void __ai_saout(void *a, unsigned int n) { (void) a; (void) n; }
 #else
 /* canonical (linux x86_64) -> freebsd, sorted by canonical. a pair rides
  * here only when the members speak the call correctly on both kernels --
@@ -286,4 +293,60 @@ void __ai_tiocan(struct __fb_termios const *f, struct termios *t) {
   for (int i = 0; i < 17; i++)
     if (os_tio_cc[i] >= 0) t->c_cc[i] = f->c_cc[(int) os_tio_cc[i]];
   t->c_ispeed = f->c_ispeed; t->c_ospeed = f->c_ospeed; }
+
+/* the socket family: unix and inet agree, inet6 moves (10 -> 28). the BSD
+ * sockaddr fronts a length byte where linux's 16-bit family sits: __ai_sain
+ * rebuilds the head into the caller's scratch, __ai_saout folds a kernel-
+ * filled head back in place. freebsd's copyin rewrites sa_len from the
+ * syscall's namelen, so the length byte is set only for form. */
+long __ai_affb(long a) { return a == 10 ? 28 : a; }
+long __ai_afcan(long a) { return a == 28 ? 10 : a; }
+unsigned int __ai_sain(void const *a, unsigned int n, void *out) {
+  unsigned char const *s = a;
+  unsigned char *b = out;
+  memcpy(out, a, n);
+  if (n >= 2) {
+    long fam = s[0] | s[1] << 8;
+    /* a unix name is as long as its path: linux's 110-byte struct rides whole,
+     * freebsd refuses anything past its own 106 -- so the length follows the
+     * string, the portable spelling both kernels take. */
+    if (fam == 1 && n > 2) {
+      unsigned int k = 2;
+      while (k < n && b[k]) k++;
+      n = k + (k < n); }
+    b[0] = (unsigned char) n;
+    b[1] = (unsigned char) __ai_affb(fam); }
+  return n; }
+void __ai_saout(void *a, unsigned int n) {
+  unsigned char *b = a;
+  if (n >= 2) {
+    unsigned int fam = (unsigned int) __ai_afcan(b[1]);
+    b[0] = (unsigned char) (fam & 255);
+    b[1] = (unsigned char) (fam >> 8); } }
+/* socket type: STREAM/DGRAM agree; the two flag bits move high
+ * (stable/14: SOCK_CLOEXEC 0x10000000, SOCK_NONBLOCK 0x20000000) */
+long __ai_sotype(long t) {
+  long o = t & 0xff;
+  if (t & 0x800)   o |= 0x20000000;
+  if (t & 0x80000) o |= 0x10000000;
+  return o; }
+/* send/recv flags: the named bits translate, the rest drop */
+long __ai_msgfb(long f) {
+  long o = f & 3;                       /* OOB 1, PEEK 2 agree */
+  if (f & 0x40)   o |= 0x80;            /* MSG_DONTWAIT */
+  if (f & 0x100)  o |= 0x40;            /* MSG_WAITALL */
+  if (f & 0x4000) o |= 0x20000;         /* MSG_NOSIGNAL */
+  return o; }
+/* sockopt: SOL_SOCKET moves whole (1 -> 0xffff) and its names permute; the
+ * IPPROTO_* levels ride (TCP_NODELAY 1 = 1). only what sys/socket.h spells
+ * has a row; an unmapped name refuses loudly upstream, never a silently
+ * different option. 0 ok, -1 unknown. */
+int __ai_sofb(long *lv, long *op) {
+  if (*lv != 1) return 0;
+  *lv = 0xffff;
+  switch (*op) {
+    case 2: *op = 4; return 0;          /* SO_REUSEADDR */
+    case 4: *op = 0x1007; return 0;     /* SO_ERROR */
+    case 9: *op = 8; return 0; }        /* SO_KEEPALIVE */
+  return -1; }
 #endif

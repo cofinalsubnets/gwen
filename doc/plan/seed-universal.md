@@ -263,10 +263,18 @@ owes a roster gate: on linux, assert the linux features are aboard.
     text and status on both kernels. Standing evidence past the gate: the
     tree's own out/host/love, branded by one dd byte, ran the repl and
     `love source` ON THE BOX — the tree laid whole, bin/love copied in by
-    the runtime selfpath, and the laid love answered. ⚠ still linux-only:
-    the socket FAMILY (sa_len, sockaddr shapes — numbers are mapped, the
-    structs are not; the net lanes are UNTESTED on freebsd) and sigfd →
-    kqueue. ⚠ a 2 GB box OOM-kills mooncc's love.o compile at the default
+    the runtime selfpath, and the laid love answered. The socket FAMILY
+    LANDED 2026-08-18: sockaddr heads rebuilt through __ai_sain/__ai_saout
+    (the BSD length byte where linux's 16-bit family sits; a unix name's
+    length follows its path — freebsd refuses linux's whole 110), inet6
+    moves 10→28, SOCK_* flag bits move high, SOL_SOCKET moves whole with
+    its names permuted (only what sys/socket.h spells has a row), msg
+    flags map, sendmsg/recvmsg refuse loudly on fb (msghdr/cmsg layouts
+    differ; nothing in the tree speaks them). Gate: the UV-net leg —
+    loopback TCP, UDP with the peer's translated head, a unix pair, one
+    binary, byte-identical text both kernels. ⚠ still linux-only: sigfd →
+    kqueue (signalfd answers ENOSYS on fb; lush's job control leans on
+    it). ⚠ a 2 GB box OOM-kills mooncc's love.o compile at the default
     budget (half box RAM in WORDS ≈ 4x RSS): seed runs there want
     LOVE_BUDGET_MB set small.
   - **UV3 — one binary, both boxes.** BEGUN 2026-08-17: every x64 static
@@ -274,11 +282,15 @@ owes a roster gate: on linux, assert the linux features are aboard.
     byte, freebsd's imgact refuses without it) — the on-box seed run forced
     the ruling: the whole build succeeded on freebsd and then its own
     freshly-linked love failed exec, unbranded. out/host/love needs no dd
-    anywhere now. STILL OWED: the gate's `-os freebsd` build leg deletes
-    once the fixpoint answers on the box (the same-sha256 trophy); `-os`
-    then retires for love itself (it stays a mooncc cross dimension for
-    foreign C), and the OS leaves the artifact space: per-ISA bytes, every
-    kernel. ⚠ small-box seed economics: a 2 GB box swap-kills the parent
+    anywhere now. LANDED 2026-08-18: the gate's `-os freebsd` build legs
+    are DELETED (`-os` stays a mooncc cross dimension for foreign C, and
+    the OS left love's artifact space: per-ISA bytes, every kernel); the
+    born brand is asserted, not dd'd; and the TROPHY IS GATED — the
+    FBSD_SEED=1 leg runs `love seed` on the box and greps its own
+    fixpoint-ok (the seed compares the rebuild against the running exe's
+    bytes, so the box answering ok IS the tree's bytes; budget-invariance
+    makes the box's LOVE_BUDGET_MB=512 economics immaterial). ⚠ small-box
+    seed economics: a 2 GB box swap-kills the parent
     waiter + the interpreted holo step even at LOVE_BUDGET_MB=128 — the
     waiter-sheds-its-heap door (top of this doc) is now load-bearing.
     **THE CROSS-KERNEL TROPHY, 2026-08-17**: the seed built the seed ON

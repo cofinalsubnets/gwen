@@ -1,13 +1,12 @@
 #!/bin/sh
-# test/gate/freebsd.sh -- rungs 2+3's gate (doc/plan/seed-universal.md): mooncc
-# -os freebsd lays a static freebsd/amd64 binary -- the impl.h table, the
-# OS-blind mksys tail, the dual crt0, the EI_OSABI brand, and rung 3's forked
-# tables (O_*/MAP_*/SA_*/signal numbers/errno tail, the stat and dirent
-# structs, the sigaction/sigprocmask/fork/dup2/readdir bodies) -- and a REAL
-# freebsd runs it. rung UV1's leg then asks the stronger question: ONE
-# default-lane binary, no -os at all, answering both kernels the same.
-# ⚠ NOT here on purpose: termios proper and the socket family (sa_len,
-# another constant set) -- rung 4's, with gates that need a tty and a wire.
+# test/gate/freebsd.sh -- the multi-OS gate (doc/plan/seed-universal.md, rung
+# UV): ONE default-lane x64 binary -- no -os, born branded EI_OSABI=9 --
+# answers BOTH kernels with the same text and status. the legs: UV1 (entry,
+# carry, sigsetjmp), UV2 (the whole compat battery: open flags, stat, dirent,
+# signals, fork), UV-net (the socket family: sockaddr heads, sockopt names,
+# msg flags, over loopback TCP + UDP + unix), and -- FBSD_SEED=1, minutes --
+# the trophy: `love seed` ON THE BOX answers the tree's own bytes.
+# ⚠ NOT here on purpose: termios proper (a gate that needs a tty).
 #
 # the box arrives by env: FBSD_SSH is a command prefix ("ssh -p 2222 -i key
 # root@host"); without one the gate skips loudly, the house rule for a gate
@@ -117,59 +116,17 @@ int main(void) {
 EOF
 
 moon0() { "$love0" wake "$ho/mooncc0.image" mooncc "$@"; }
-moon0 -os freebsd -t x64 "$d/rung2.c" -o "$d/rung2" || fail "mooncc -os freebsd link"
-
-# one byte says freebsd: e_ident[7] = 9
-[ "$(dd if="$d/rung2" bs=1 skip=7 count=1 2>/dev/null | od -An -tu1 | tr -d ' ')" = 9 ] \
-  || fail "EI_OSABI is not 9 -- the brand did not land"
-
-out=$($FBSD_SSH 'cat > /tmp/rung2 && chmod +x /tmp/rung2 && /tmp/rung2; echo "rc=$?"' < "$d/rung2") \
-  || fail "the box could not take or run the binary"
-echo "$out" | grep -q "hello, freebsd" || fail "no greeting -- got: $out"
-echo "$out" | grep -q "printf rides: 42" || fail "stdio did not ride -- got: $out"
-echo "$out" | grep -q "rc=42" || fail "wrong exit -- got: $out"
-
-echo "test_freebsd: a mooncc-laid static freebsd/amd64 binary ran on the box -- rungs 2+3 hold"
-
-# ---- rung 4/5: the WHOLE love, -os freebsd, runs on the box ----
-# every TU through mooncc (the host lane's flags wearing -os freebsd), mksys-freebsd
-# the machine tail, our link -- then the -e lane, say, and the stdin repl answer there.
-mkdir -p "$d/love"
-moon0 -os freebsd -t x64 -D ai_tco=1 -D AiHaveVersionH -fno-ir -I"$ho" -I. -Icore -Iout/lib -c core/love.c "$d/love/love.o" || fail "-os freebsd core/love.c"
-for f in host/*.c; do
-  b=$(basename "$f" .c)
-  moon0 -os freebsd -t x64 -D ai_tco=1 -I"$ho" -I. -Icore -Iout/lib -c "$f" "$d/love/host_$b.o" || fail "-os freebsd $f"
-done
-for f in crew/moon/lib/math/*.c; do
-  b=$(basename "$f" .c)
-  moon0 -os freebsd -t x64 -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/love/m_$b.o" || fail "-os freebsd $f"
-done
-"$love0" -l "$ho/.mksys-cat.l" -n -e "((from 'moon 'mksys-freebsd) \"$d/love/sys.o\")" || fail "mksys-freebsd"
-moon0 -os freebsd -t x64 "$d/love"/*.o -o "$d/love/love-fbsd" || fail "the love link came up short"
-
-# ⚠ -e RUNS MANY TIMES ON PURPOSE: argv must arrive whole on every exec. the
-# freebsd kernel hands the vector base in %rdi and [rsp] may hold a pad word
-# below argc, so a crt0 reading the wrong door flips by stack address, not by
-# input -- one green run proves nothing.
-$FBSD_SSH 'cat > /tmp/love-fbsd && chmod +x /tmp/love-fbsd' < "$d/love/love-fbsd" \
-  || fail "the box could not take love"
-out=$($FBSD_SSH 'for i in 1 2 3 4 5 6 7 8; do /tmp/love-fbsd -e "(quit 7)" < /dev/null; printf "%s" "$?"; done; echo
-echo "(say out (show 42))" | /tmp/love-fbsd
-echo
-echo "(say out (show (sort (L 3 1 2))))" | /tmp/love-fbsd') \
-  || fail "the box could not run love"
-echo "$out" | grep -q "77777777" || fail "-e quit did not carry on every exec -- got: $out"
-echo "$out" | grep -q "42" || fail "the say lane -- got: $out"
-echo "$out" | grep -q "(1 2 3)" || fail "the stdin repl -- got: $out"
-
-echo "test_freebsd: the WHOLE love (egg) answers on the box -- -e, say, and the repl"
 
 # ---- rung UV1: ONE binary, both kernels ----
 # the DEFAULT lane, no -os: canonical numbers dispatched at runtime (os.c's
-# probe + map), the dual crt0, the dual sigprocmask leaves, the errno row.
-# branded 9 by dd here -- freebsd's loader requires the byte and linux's
-# never reads it (UV3 decides the default brand) -- and then the SAME file
-# must answer the SAME text and status on both kernels.
+# probe + map), the dual crt0, the dual sigprocmask leaves, the errno row,
+# and the brand BORN in (every x64 static exe leaves the linker EI_OSABI=9;
+# freebsd's loader requires the byte and linux's never reads it). the SAME
+# file must answer the SAME text and status on both kernels.
+# ⚠ -e/argv LANES RUN MANY TIMES ON PURPOSE: the freebsd kernel hands the
+# vector base in %rdi and [rsp] may hold a pad word below argc, so a crt0
+# reading the wrong door flips by stack address, not by input -- one green
+# run proves nothing.
 cat > "$d/uv1.c" <<'EOF'
 #include <unistd.h>
 #include <errno.h>
@@ -192,9 +149,10 @@ int main(int argc, char **argv) {
   return 42; }
 EOF
 moon0 -t x64 "$d/uv1.c" -o "$d/uv1" || fail "uv1: the default-lane compile"
-printf '\011' | dd of="$d/uv1" bs=1 seek=7 count=1 conv=notrunc 2>/dev/null
-lout=$("$d/uv1" one two; echo "rc=$?")
-fout=$($FBSD_SSH 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && /tmp/uv1 one two; echo "rc=$?"' < "$d/uv1") \
+[ "$(dd if="$d/uv1" bs=1 skip=7 count=1 2>/dev/null | od -An -tu1 | tr -d ' ')" = 9 ] \
+  || fail "uv1: not born branded EI_OSABI=9"
+lout=$(for i in 1 2 3 4; do "$d/uv1" one two; echo "rc=$?"; done)
+fout=$($FBSD_SSH 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && for i in 1 2 3 4; do /tmp/uv1 one two; echo "rc=$?"; done' < "$d/uv1") \
   || fail "uv1: the box could not take or run it"
 [ "$lout" = "$fout" ] || fail "uv1: the kernels disagree -- linux[$lout] freebsd[$fout]"
 echo "$lout" | grep -q "uv1: argc=3 jmp=7 ebadf=ok kill=ok" || fail "uv1 body -- got: $lout"
@@ -209,7 +167,6 @@ echo "test_freebsd: UV1 -- ONE default-lane binary answered both kernels the sam
 # translated at runtime, and the SAME file answers the SAME text on both
 # kernels. (the linux run answers here; the box answers over ssh.)
 moon0 -t x64 "$d/rung2.c" -o "$d/uv2" || fail "uv2: the default-lane compile"
-printf '\011' | dd of="$d/uv2" bs=1 seek=7 count=1 conv=notrunc 2>/dev/null
 l2=$("$d/uv2" < /dev/null; echo "rc=$?")   # stdin pinned: the battery asserts isatty(0)==0
 f2=$($FBSD_SSH 'cat > /tmp/uv2 && chmod +x /tmp/uv2 && /tmp/uv2; echo "rc=$?"' < "$d/uv2") \
   || fail "uv2: the box could not take or run it"
@@ -218,3 +175,108 @@ echo "$l2" | grep -q "rc=42" || fail "uv2 exit -- got: $l2"
 echo "$l2" | grep -q "all" || fail "uv2 battery -- got: $l2"
 
 echo "test_freebsd: UV2 -- the whole rung2 battery, one binary, both kernels"
+
+# ---- rung UV-net: the socket family, one binary ----
+# sockaddr heads rebuilt (the BSD length byte where linux's 16-bit family
+# sits), sockopt names permuted under SOL_SOCKET's move, msg flags mapped --
+# proven over loopback TCP (bind/listen/getsockname/connect/accept), UDP
+# (sendto/recvfrom + the peer's translated head), and a unix-path pair.
+cat > "$d/uvnet.c" <<'EOF'
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <stdio.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/un.h>
+
+static int step = 0;
+static void ok(int cond) {
+  step++;
+  if (!cond) { char b[3] = {'F', (char)('A' + step - 1), '\n'}; write(2, b, 3); _exit(step); } }
+
+int main(void) {
+  /* TCP over loopback: the whole shape */
+  int ls = socket(AF_INET, SOCK_STREAM, 0);
+  ok(ls >= 0);
+  int one = 1;
+  ok(setsockopt(ls, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one) == 0);
+  struct sockaddr_in a; memset(&a, 0, sizeof a);
+  a.sin_family = AF_INET; a.sin_port = 0; a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ok(bind(ls, (struct sockaddr*) &a, sizeof a) == 0 && listen(ls, 4) == 0);
+  struct sockaddr_in got; socklen_t gn = sizeof got; memset(&got, 0, sizeof got);
+  ok(getsockname(ls, (struct sockaddr*) &got, &gn) == 0 && got.sin_family == AF_INET && got.sin_port != 0);
+  int pid = fork();
+  if (pid == 0) {
+    int c = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in t; memset(&t, 0, sizeof t);
+    t.sin_family = AF_INET; t.sin_port = got.sin_port; t.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (c < 0 || connect(c, (struct sockaddr*) &t, sizeof t)) _exit(99);
+    char m[8];
+    if (write(c, "ping", 4) != 4 || read(c, m, 8) != 4 || memcmp(m, "pong", 4)) _exit(98);
+    _exit(5); }
+  struct sockaddr_in peer; socklen_t pn = sizeof peer; memset(&peer, 0, sizeof peer);
+  int cf = accept(ls, (struct sockaddr*) &peer, &pn);
+  ok(cf >= 0 && peer.sin_family == AF_INET);
+  char m[8];
+  ok(read(cf, m, 8) == 4 && memcmp(m, "ping", 4) == 0 && write(cf, "pong", 4) == 4);
+  int err = -1; socklen_t el = sizeof err;
+  ok(getsockopt(cf, SOL_SOCKET, SO_ERROR, &err, &el) == 0 && err == 0);
+  int stx = 0;
+  ok(waitpid(pid, &stx, 0) == pid && WIFEXITED(stx) && WEXITSTATUS(stx) == 5);
+  ok(close(cf) == 0 && close(ls) == 0);
+
+  /* UDP: sendto/recvfrom, the peer head translated on the way out */
+  int u = socket(AF_INET, SOCK_DGRAM, 0);
+  memset(&a, 0, sizeof a);
+  a.sin_family = AF_INET; a.sin_port = 0; a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ok(u >= 0 && bind(u, (struct sockaddr*) &a, sizeof a) == 0);
+  gn = sizeof got; memset(&got, 0, sizeof got);
+  ok(getsockname(u, (struct sockaddr*) &got, &gn) == 0 && got.sin_port != 0);
+  ok(sendto(u, "dgram", 5, 0, (struct sockaddr*) &got, sizeof got) == 5);
+  pn = sizeof peer; memset(&peer, 0, sizeof peer);
+  char db[8];
+  ok(recvfrom(u, db, 8, 0, (struct sockaddr*) &peer, &pn) == 5
+     && memcmp(db, "dgram", 5) == 0 && peer.sin_family == AF_INET && peer.sin_port == got.sin_port);
+  ok(recvfrom(u, db, 8, MSG_DONTWAIT, 0, 0) == -1 && errno == EAGAIN);   /* the flag moved, the errno came back canonical */
+  ok(close(u) == 0);
+
+  /* a unix-path pair */
+  unlink("/tmp/uvnet.sock");
+  int us = socket(AF_UNIX, SOCK_STREAM, 0);
+  struct sockaddr_un ua; memset(&ua, 0, sizeof ua);
+  ua.sun_family = AF_UNIX; strcpy(ua.sun_path, "/tmp/uvnet.sock");
+  ok(us >= 0 && bind(us, (struct sockaddr*) &ua, sizeof ua) == 0 && listen(us, 2) == 0);
+  int uc = socket(AF_UNIX, SOCK_STREAM, 0);
+  ok(uc >= 0 && connect(uc, (struct sockaddr*) &ua, sizeof ua) == 0);
+  int ua2 = accept(us, 0, 0);
+  ok(ua2 >= 0 && write(uc, "x", 1) == 1 && read(ua2, m, 1) == 1 && m[0] == 'x');
+  ok(close(uc) == 0 && close(ua2) == 0 && close(us) == 0 && unlink("/tmp/uvnet.sock") == 0);
+
+  write(1, "net all\n", 8);
+  return 42;
+}
+EOF
+moon0 -t x64 "$d/uvnet.c" -o "$d/uvnet" || fail "uvnet: the default-lane compile"
+ln=$("$d/uvnet" < /dev/null; echo "rc=$?")
+fn=$($FBSD_SSH 'cat > /tmp/uvnet && chmod +x /tmp/uvnet && /tmp/uvnet; echo "rc=$?"' < "$d/uvnet") \
+  || fail "uvnet: the box could not take or run it"
+[ "$ln" = "$fn" ] || fail "uvnet: the kernels disagree -- linux[$ln] freebsd[$fn]"
+echo "$ln" | grep -q "net all" || fail "uvnet battery -- got: $ln"
+echo "$ln" | grep -q "rc=42" || fail "uvnet exit -- got: $ln"
+
+echo "test_freebsd: UV-net -- the socket family, one binary, both kernels"
+
+# ---- the trophy, opt-in by name (FBSD_SEED=1, minutes): the seed builds the
+# seed ON THE BOX, and the bytes are the tree's own. the bake is budget-
+# invariant now, so the box's budget (RAM economics) does not move the answer.
+if [ -n "${FBSD_SEED:-}" ]; then
+  out=$($FBSD_SSH 'rm -rf /tmp/seedrun && mkdir /tmp/seedrun && cd /tmp/seedrun \
+    && cat > love && chmod +x love \
+    && env LOVE_BUDGET_MB=512 ./love seed > seed.log 2>&1; tail -3 seed.log' < "$ho/love") \
+    || fail "trophy: the box could not run the seed"
+  echo "$out" | grep -q "fixpoint ok" || fail "trophy: the on-box seed missed the fixpoint -- got: $out"
+  echo "test_freebsd: THE TROPHY -- the seed built the seed on freebsd, to the byte"
+fi
