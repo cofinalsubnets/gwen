@@ -211,6 +211,50 @@ owes a roster gate: on linux, assert the linux features are aboard.
     stay in the tree as the working evidence (opt-in, no default path).
   - **NEXT, ruled: the OS dimension** — claim (b), the decoupling ladder's
     rungs 4-5, toward one text that runs on every kernel of its arch.
+- **rung UV — MULTI-OS PER ISA** (ruled on the table, 2026-08-17): one binary
+  per arch that runs on linux AND freebsd, then netbsd. The wall that parked
+  U1 has no OS twin — proven the day it was ruled: the tree's own love with
+  e_ident[EI_OSABI]=9 runs UNCHANGED on linux (the linux loader never reads
+  the byte) and the freebsd box EXECS the same bytes (it dies at the first
+  linux-numbered syscall — the loader said yes). One byte string satisfies
+  both kernels; only the syscall layer is owed. The ladder:
+  - **UV1 — one syscall door.** LANDED 2026-08-17. The x64 mksys tail is
+    OS-BLIND: CF cleared going in (linux hands it back untouched through
+    r11), a carry answer — freebsd's +errno — parked below linux's band as
+    -(errno+4096); impl.h's __ai_call unparks, so the tail never learns
+    which kernel answered. os.c probes once (syscall 20: getpid on freebsd
+    answers a pid, writev(-1,NULL,0) on linux answers -EBADF) and the
+    canonical lane translates numbers (NR_fb_* now unconditional in impl.h,
+    the -os freebsd lane aliases it, os.c's map pairs it) and errnos (the
+    0..97 row). The sigprocmask leaves branch on __ai_osv between 14 and
+    340; crt0 serves both kernels (zero rdi says linux); crt0-fbsd and the
+    separate freebsd mksys lane RETIRED (mksys-freebsd survives as an
+    alias). ⚠ the map's POLICY: a pair rides only when the call's shape
+    agrees on both kernels — fstat/sigaction/sigprocmask/ioctl/getdents/
+    getcwd/mount/sendfile/pselect6 are OMITTED (ENOSYS, loud) until UV2
+    lands each body; mapped-but-untranslated VALUES (open/mmap/fcntl flags,
+    clockids, diverging signal numbers, sa_len) are UV2's rows. Gate:
+    test_freebsd's UV1 leg — one default-lane binary, branded 9 by dd,
+    answers identical text and status on both kernels (argc, sigsetjmp
+    round trip, EBADF, kill, exit).
+  - **UV2 — the compat members.** every `#if __FreeBSD__` fork in nolibc
+    becomes a runtime branch: stat/dirent/sigaction/sigprocmask, termios and
+    the ioctl encodings, open/mmap/fcntl flag translation, wait-status
+    decode, clockids, the signal-number map. canonical shapes and values
+    are OURS (today's linux-valued ones); each OS translates at the
+    boundary; each landed body flips its number into os.c's map. ⚠ signal
+    numbers overlap in the worst way — freebsd SIGSTOP=17 IS linux SIGCHLD
+    — the map must be total and gated.
+  - **UV3 — one binary, both boxes.** out/host/love itself, branded 9,
+    passes test_freebsd with the gate's whole `-os freebsd` build leg
+    deleted; the trophy is the SAME sha256 answering on linux and the box.
+    `-os` retires for love itself (it stays a mooncc cross dimension for
+    foreign C), and the OS leaves the artifact space: per-ISA bytes, every
+    kernel.
+  - **UV4 — netbsd.** the .note.netbsd.ident PT_NOTE (holo's linker learns
+    note segments; foreign kernels ignore notes), a third syscall column,
+    the userland sigtramp (__sigaction_sigtramp — netbsd's kernel provides
+    none), a netbsd box and gate.
 - **rung U2 — the targets DISSOLVE.** Decided 2026-08-16 (chosen, revisable);
   Landed 2026-08-17: ONE binary. The host build is subsumed — out/host/love
   links the source blob + readme and, baked, IS the artifact (`make` in a clean

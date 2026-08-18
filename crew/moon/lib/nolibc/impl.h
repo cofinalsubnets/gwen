@@ -62,94 +62,173 @@ struct _IO_FILE {
   unsigned char *buf;
 };
 
-/* ---- the syscall numbers. two gates: the OS first, then linux's one arch
- * gate (riscv64 shares aarch64's asm-generic table verbatim -- one flag, two
- * arches). freebsd's table is machine-independent: one table, every arch
- * (stable/14 sys/sys/syscall.h). ⚠ a name ABSENT from the freebsd block is a
- * MECHANISM that differs, not a number we lack -- the member that wants it
- * owes a freebsd body (doc/plan/seed-universal.md rungs 3-4), and pulling it
- * before then fails the compile by name, loudly. ---- */
+/* ---- the syscall numbers. freebsd's table first, UNCONDITIONAL and named
+ * NR_fb_*: it is machine-independent (stable/14 sys/sys/syscall.h) and feeds
+ * two lanes -- the -os freebsd compile aliases NR_* to it below, and os.c's
+ * runtime map pairs it with the canonical numbers so ONE binary answers both
+ * kernels. ⚠ a canonical name ABSENT here is a MECHANISM that differs, not a
+ * number we lack -- the member that wants it owes a freebsd body
+ * (doc/plan/seed-universal.md rungs 4 / UV2). ---- */
+#define NR_fb_read            3
+#define NR_fb_write           4
+#define NR_fb_close           6
+#define NR_fb_fstat         551   /* ino64; ⚠ another struct stat (rung 3) */
+#define NR_fb_lseek         478
+#define NR_fb_nanosleep     240
+#define NR_fb_mmap          477
+#define NR_fb_mprotect       74
+#define NR_fb_munmap         73
+#define NR_fb_madvise        75
+#define NR_fb_rt_sigaction  416   /* sigaction; ⚠ no restorer, another ksigaction (rung 3) */
+#define NR_fb_rt_sigprocmask 340  /* sigprocmask; ⚠ 16-byte set, no size arg (rung 3) */
+#define NR_fb_ioctl          54   /* ⚠ the numbers it takes are another encoding (rung 3) */
+#define NR_fb_pread64       475
+#define NR_fb_pwrite64      476
+#define NR_fb_getpid         20
+#define NR_fb_setuid         23
+#define NR_fb_setgid        181
+#define NR_fb_setgroups      80
+#define NR_fb_geteuid        25
+#define NR_fb_sendfile      393   /* ⚠ another signature (rung 3) */
+#define NR_fb_pselect6      522   /* pselect; ⚠ the 6th arg is a plain sigset* (rung 3) */
+#define NR_fb_socket         97
+#define NR_fb_connect        98
+#define NR_fb_accept         30
+#define NR_fb_sendto        133
+#define NR_fb_getsockname    32
+#define NR_fb_getpeername    31
+#define NR_fb_recvfrom       29
+#define NR_fb_sendmsg        28
+#define NR_fb_recvmsg        27
+#define NR_fb_shutdown      134
+#define NR_fb_bind          104
+#define NR_fb_listen        106
+#define NR_fb_getsockopt    118
+#define NR_fb_setsockopt    105
+#define NR_fb_fork            2   /* fork(2) is real here; fork.c forks on the OS */
+#define NR_fb_execve         59
+#define NR_fb_wait4           7
+#define NR_fb_kill           37
+#define NR_fb_fcntl          92
+#define NR_fb_fsync          95
+#define NR_fb_fdatasync     550
+#define NR_fb_fchown        123
+#define NR_fb_ftruncate     480
+#define NR_fb_getcwd        326   /* __getcwd */
+#define NR_fb_chdir          12
+#define NR_fb_chroot         61
+#define NR_fb_fchmod        124
+#define NR_fb_umask          60
+#define NR_fb_getuid         24
+#define NR_fb_getgid         47
+#define NR_fb_setpgid        82
+#define NR_fb_setsid        147
+#define NR_fb_getpgid       207
+#define NR_fb_mount          21   /* ⚠ another signature -- (type dir flags data) (rung 3) */
+#define NR_fb_getdirentries 554   /* ino64; the record IS the freebsd dirent (readdir.c) */
+#define NR_fb___sysctl      202   /* sysctl(3)'s door (selfpath's KERN_PROC_PATHNAME) */
+#define NR_fb_posix_openpt  504   /* a real syscall here; linux opens /dev/ptmx */
+#define NR_fb_clock_gettime 232
+#define NR_fb_exit            1   /* exit: one thread here, so one exit is the whole act */
+#define NR_fb_openat        499
+#define NR_fb_mkdirat       496
+#define NR_fb_mknodat       559
+#define NR_fb_fchownat      491
+#define NR_fb_faccessat     489
+#define NR_fb_newfstatat    552   /* fstatat; ⚠ another struct stat (rung 3) */
+#define NR_fb_unlinkat      503
+#define NR_fb_renameat      501
+#define NR_fb_linkat        495
+#define NR_fb_symlinkat     502
+#define NR_fb_readlinkat    500
+#define NR_fb_fchmodat      490
+#define NR_fb_ppoll         545   /* 4 args; our trailing sigsetsize rides an ignored register */
+/*      unshare: none -- linux's; the nif above it is already #else'd out */
+#define NR_fb_utimensat     547
+/*      signalfd4: none -- kqueue 362 / kevent 560, EVFILT_SIGNAL (rung 4) */
+/*      dup3: none -- fcntl F_DUP2FD_CLOEXEC (dup2.c, rung 3) */
+#define NR_fb_pipe2         542
+/*      memfd_create: none -- shm_open2 571 + SHM_ANON (rung 3) */
+
+/* ---- the NR_* the members say: freebsd's aliases, or linux behind its one
+ * arch gate (riscv64 shares aarch64's asm-generic table verbatim). ---- */
 #if defined(__FreeBSD__)
-#define NR_read             3
-#define NR_write            4
-#define NR_close            6
-#define NR_fstat          551   /* ino64; ⚠ another struct stat (rung 3) */
-#define NR_lseek          478
-#define NR_nanosleep      240
-#define NR_mmap           477
-#define NR_mprotect        74
-#define NR_munmap          73
-#define NR_madvise         75
-#define NR_rt_sigaction   416   /* sigaction; ⚠ no restorer, another ksigaction (rung 3) */
-#define NR_rt_sigprocmask 340   /* sigprocmask; ⚠ 16-byte set, no size arg (rung 3) */
-#define NR_ioctl           54   /* ⚠ the numbers it takes are another encoding (rung 3) */
-#define NR_pread64        475
-#define NR_pwrite64       476
-#define NR_getpid          20
-#define NR_setuid          23
-#define NR_setgid         181
-#define NR_setgroups       80
-#define NR_geteuid         25
-#define NR_sendfile       393   /* ⚠ another signature (rung 3) */
-#define NR_pselect6       522   /* pselect; ⚠ the 6th arg is a plain sigset* (rung 3) */
-#define NR_socket          97
-#define NR_connect         98
-#define NR_accept          30
-#define NR_sendto         133
-#define NR_getsockname     32
-#define NR_getpeername     31
-#define NR_recvfrom        29
-#define NR_sendmsg         28
-#define NR_recvmsg         27
-#define NR_shutdown       134
-#define NR_bind           104
-#define NR_listen         106
-#define NR_getsockopt     118
-#define NR_setsockopt     105
-#define NR_fork             2   /* fork(2) is real here; fork.c forks on the OS */
-#define NR_execve          59
-#define NR_wait4            7
-#define NR_kill            37
-#define NR_fcntl           92
-#define NR_fsync           95
-#define NR_fdatasync      550
-#define NR_fchown         123
-#define NR_ftruncate      480
-#define NR_getcwd         326   /* __getcwd */
-#define NR_chdir           12
-#define NR_chroot          61
-#define NR_fchmod         124
-#define NR_umask           60
-#define NR_getuid          24
-#define NR_getgid          47
-#define NR_setpgid         82
-#define NR_setsid         147
-#define NR_getpgid        207
-#define NR_mount           21   /* ⚠ another signature -- (type dir flags data) (rung 3) */
-#define NR_getdirentries  554   /* ino64; the record IS the freebsd dirent (readdir.c) */
-#define NR___sysctl       202   /* sysctl(3)'s door (selfpath's KERN_PROC_PATHNAME) */
-#define NR_posix_openpt   504   /* a real syscall here; linux opens /dev/ptmx */
-#define NR_clock_gettime  232
-#define NR_exit_group       1   /* exit: one thread here, so one exit is the whole act */
-#define NR_openat         499
-#define NR_mkdirat        496
-#define NR_mknodat        559
-#define NR_fchownat       491
-#define NR_faccessat      489
-#define NR_newfstatat     552   /* fstatat; ⚠ another struct stat (rung 3) */
-#define NR_unlinkat       503
-#define NR_renameat       501
-#define NR_linkat         495
-#define NR_symlinkat      502
-#define NR_readlinkat     500
-#define NR_fchmodat       490
-#define NR_ppoll          545   /* 4 args; our trailing sigsetsize rides an ignored register */
-/*      NR_unshare: none -- linux's; the nif above it is already #else'd out */
-#define NR_utimensat      547
-/*      NR_signalfd4: none -- kqueue 362 / kevent 560, EVFILT_SIGNAL (rung 4) */
-/*      NR_dup3: none -- fcntl F_DUP2FD_CLOEXEC (dup2.c, rung 3) */
-#define NR_pipe2          542
-/*      NR_memfd_create: none -- shm_open2 571 + SHM_ANON (rung 3) */
+#define NR_read           NR_fb_read
+#define NR_write          NR_fb_write
+#define NR_close          NR_fb_close
+#define NR_fstat          NR_fb_fstat
+#define NR_lseek          NR_fb_lseek
+#define NR_nanosleep      NR_fb_nanosleep
+#define NR_mmap           NR_fb_mmap
+#define NR_mprotect       NR_fb_mprotect
+#define NR_munmap         NR_fb_munmap
+#define NR_madvise        NR_fb_madvise
+#define NR_rt_sigaction   NR_fb_rt_sigaction
+#define NR_rt_sigprocmask NR_fb_rt_sigprocmask
+#define NR_ioctl          NR_fb_ioctl
+#define NR_pread64        NR_fb_pread64
+#define NR_pwrite64       NR_fb_pwrite64
+#define NR_getpid         NR_fb_getpid
+#define NR_setuid         NR_fb_setuid
+#define NR_setgid         NR_fb_setgid
+#define NR_setgroups      NR_fb_setgroups
+#define NR_geteuid        NR_fb_geteuid
+#define NR_sendfile       NR_fb_sendfile
+#define NR_pselect6       NR_fb_pselect6
+#define NR_socket         NR_fb_socket
+#define NR_connect        NR_fb_connect
+#define NR_accept         NR_fb_accept
+#define NR_sendto         NR_fb_sendto
+#define NR_getsockname    NR_fb_getsockname
+#define NR_getpeername    NR_fb_getpeername
+#define NR_recvfrom       NR_fb_recvfrom
+#define NR_sendmsg        NR_fb_sendmsg
+#define NR_recvmsg        NR_fb_recvmsg
+#define NR_shutdown       NR_fb_shutdown
+#define NR_bind           NR_fb_bind
+#define NR_listen         NR_fb_listen
+#define NR_getsockopt     NR_fb_getsockopt
+#define NR_setsockopt     NR_fb_setsockopt
+#define NR_fork           NR_fb_fork
+#define NR_execve         NR_fb_execve
+#define NR_wait4          NR_fb_wait4
+#define NR_kill           NR_fb_kill
+#define NR_fcntl          NR_fb_fcntl
+#define NR_fsync          NR_fb_fsync
+#define NR_fdatasync      NR_fb_fdatasync
+#define NR_fchown         NR_fb_fchown
+#define NR_ftruncate      NR_fb_ftruncate
+#define NR_getcwd         NR_fb_getcwd
+#define NR_chdir          NR_fb_chdir
+#define NR_chroot         NR_fb_chroot
+#define NR_fchmod         NR_fb_fchmod
+#define NR_umask          NR_fb_umask
+#define NR_getuid         NR_fb_getuid
+#define NR_getgid         NR_fb_getgid
+#define NR_setpgid        NR_fb_setpgid
+#define NR_setsid         NR_fb_setsid
+#define NR_getpgid        NR_fb_getpgid
+#define NR_mount          NR_fb_mount
+#define NR_getdirentries  NR_fb_getdirentries
+#define NR___sysctl       NR_fb___sysctl
+#define NR_posix_openpt   NR_fb_posix_openpt
+#define NR_clock_gettime  NR_fb_clock_gettime
+#define NR_exit_group     NR_fb_exit
+#define NR_openat         NR_fb_openat
+#define NR_mkdirat        NR_fb_mkdirat
+#define NR_mknodat        NR_fb_mknodat
+#define NR_fchownat       NR_fb_fchownat
+#define NR_faccessat      NR_fb_faccessat
+#define NR_newfstatat     NR_fb_newfstatat
+#define NR_unlinkat       NR_fb_unlinkat
+#define NR_renameat       NR_fb_renameat
+#define NR_linkat         NR_fb_linkat
+#define NR_symlinkat      NR_fb_symlinkat
+#define NR_readlinkat     NR_fb_readlinkat
+#define NR_fchmodat       NR_fb_fchmodat
+#define NR_ppoll          NR_fb_ppoll
+#define NR_utimensat      NR_fb_utimensat
+#define NR_pipe2          NR_fb_pipe2
 #elif defined(__aarch64__) || defined(__riscv)
 #define NR_getcwd          17
 #define NR_dup3            24
@@ -318,13 +397,39 @@ static long er(long r) {
   if ((unsigned long) r > (unsigned long) -4096L) { __errno_v = (int) -r; return -1; }
   return r; }
 
-static long sc0(long n) { return __ai_sys(n, 0, 0, 0, 0, 0, 0); }
-static long sc1(long n, long a) { return __ai_sys(n, a, 0, 0, 0, 0, 0); }
-static long sc2(long n, long a, long b) { return __ai_sys(n, a, b, 0, 0, 0, 0); }
-static long sc3(long n, long a, long b, long c) { return __ai_sys(n, a, b, c, 0, 0, 0); }
-static long sc4(long n, long a, long b, long c, long d) { return __ai_sys(n, a, b, c, d, 0, 0); }
-static long sc5(long n, long a, long b, long c, long d, long e) { return __ai_sys(n, a, b, c, d, e, 0); }
-static long sc6(long n, long a, long b, long c, long d, long e, long f) { return __ai_sys(n, a, b, c, d, e, f); }
+/* ---- one syscall door under one binary (seed-universal rung UV1). __ai_sys
+ * is the raw OS-blind tail (sys.o): CF cleared going in, and a carry answer
+ * -- freebsd's error convention -- comes back parked BELOW linux's band as
+ * -(errno+4096), so the kernels' answers cannot collide. __ai_osv is the
+ * kernel under us (os.c probes it once: 1 linux, 2 freebsd) and __ai_call
+ * translates for the canonical lane -- numbers by os.c's map, errnos by its
+ * row. the -os freebsd lane runs native numbers and errnos: it only unparks. */
+extern long __ai_osv;
+extern long __ai_osdetect(void);
+#if defined(__FreeBSD__)
+static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
+  long r = __ai_sys(n, a, b, c, d, e, f);
+  return r < -4096L ? -(-r - 4096) : r; }
+#else
+extern long __ai_nrfb(long n);
+extern long __ai_errfb(long e);
+static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
+  long v = __ai_osv;
+  if (!v) v = __ai_osv = __ai_osdetect();
+  if (v == 2) {
+    n = __ai_nrfb(n);
+    if (n < 0) return -38; }                          /* ENOSYS, canonically */
+  long r = __ai_sys(n, a, b, c, d, e, f);
+  return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
+#endif
+
+static long sc0(long n) { return __ai_call(n, 0, 0, 0, 0, 0, 0); }
+static long sc1(long n, long a) { return __ai_call(n, a, 0, 0, 0, 0, 0); }
+static long sc2(long n, long a, long b) { return __ai_call(n, a, b, 0, 0, 0, 0); }
+static long sc3(long n, long a, long b, long c) { return __ai_call(n, a, b, c, 0, 0, 0); }
+static long sc4(long n, long a, long b, long c, long d) { return __ai_call(n, a, b, c, d, 0, 0); }
+static long sc5(long n, long a, long b, long c, long d, long e) { return __ai_call(n, a, b, c, d, e, 0); }
+static long sc6(long n, long a, long b, long c, long d, long e, long f) { return __ai_call(n, a, b, c, d, e, f); }
 /* ⚠ er and sc0..sc6 are static IN A HEADER on purpose: a member inlines the ones it
  * uses and the dead-static sweep drops the bodies it did not need, so the rest cost
  * nothing. Before that sweep this shape would have been duplication in every TU. */

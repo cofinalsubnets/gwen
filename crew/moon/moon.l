@@ -358,29 +358,29 @@
    ; sp) -- so a libc object (crew/moon/lib/nolibc.c, rung 4) can override it
    ; strong and unpack envp/auxv too. no conditional anywhere: the weak
    ; machinery is the whole switch.
-   crt0 '((mov r6 sp)
+   ; ..and the x64 entry serves BOTH kernels (seed-universal rung UV1): linux
+   ; zeroes every register and lays argc at [rsp]; freebsd hands the vector
+   ; base IN %rdi (its own crt1 reads argc at (%rdi)) with rsp only aligned
+   ; NEAR it, sometimes a pad word below argc -- so a zero rdi says linux,
+   ; and the freebsd side pushes once to restore linux's entry parity
+   ; (rsp ≡ 8 mod 16 there, ≡ 0 here). each side exits by its own number;
+   ; the weak tail exits linux's way -- a link that rides freebsd carries
+   ; nolibc's strong __ai_start, whose exit() goes through the one door.
+   crt0 '((cmp r6 0)
+           (br ne c0-fb)
+           (mov r6 sp)
            (call __ai_start)
            (mov r6 r0) (li r0 60) (sys)
+           (label c0-fb)
+           (push r6)
+           (call __ai_start)
+           (mov r6 r0) (li r0 1) (sys)
            (label __ai_start)
            (push r6)
            (lea r5 r6 8)
            (ld r6 r6 0)
            (call main)
            (mov r6 r0) (li r0 60) (sys))
-   ; the freebsd twin of crt0: the VECTOR BASE ARRIVES IN %rdi (freebsd's own
-   ; crt1 reads argc at (%rdi)); the kernel's rsp is only aligned NEAR it and
-   ; sometimes holds a pad word below argc, so sp is never consulted. the push
-   ; restores linux's entry parity (rsp ≡ 8 mod 16 here, ≡ 0 there), and the
-   ; exit is exit(1) -- one thread here so one exit is the whole act.
-   crt0-fbsd '((push r6)
-                (call __ai_start)
-                (mov r6 r0) (li r0 1) (sys)
-                (label __ai_start)
-                (push r6)
-                (lea r5 r6 8)
-                (ld r6 r6 0)
-                (call main)
-                (mov r6 r0) (li r0 1) (sys))
    ; the aarch64 twin: x0 = the OS stack pointer (mov from sp must be lea --
    ; ORR reads XZR at 31), exit_group = 93 in x8; the default __ai_start pushes
    ; lr (its own 16-byte cell, keeping sp 16-aligned for main) and exits
@@ -600,8 +600,7 @@
              (nlmems ndir))
         + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) (f9 [mdir inc])))])
               (sort (filter dotc? (readdir (home + "lib/math"))))
-        + (? (id? os 'freebsd) [["mksys.o" (string (mksys-bytes 'freebsd))]]
-             (member? tgt '(x64 arm64 riscv64) ? [["mksys.o" (string (mksys-bytes tgt))]]))))
+        + (? (member? tgt '(x64 arm64 riscv64)) [["mksys.o" (string (mksys-bytes tgt))]] ())))
    (rtpull srcs tgt os nostd)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
@@ -661,8 +660,7 @@
        runs (? (charm? dorg) [['at org 'text 'rodata 'nifs]
                               ['copy dorg 'data 'bss]]
               [['at org 'text 'rodata 'data 'nifs 'bss]])
-       c9 (? (id? os 'freebsd) crt0-fbsd
-             (tgt @ 'arm64 crt0-a64 'riscv64 crt0-rv crt0))
+       c9 (tgt @ 'arm64 crt0-a64 'riscv64 crt0-rv crt0)   ; x64's serves both kernels
        all (? arm? srcs
               (["crt0" (string (objelf tgt c9 () '("__ai_start") () '("__ai_start") () () () () ()))] >< srcs))
        ; the archives first, then whatever the runtime still owes: a library the
