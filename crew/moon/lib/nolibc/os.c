@@ -8,7 +8,7 @@
 long __ai_osv;                    /* 0 unprobed; 1 linux; 2 freebsd; 3 netbsd */
 
 long __ai_osdetect(void) {
-#if defined(__aarch64__) || defined(__riscv)
+#ifndef AiTwoKernels
   return 1;                       /* one kernel per arch today */
 #else
   /* 20 is getpid on both BSDs and writev on linux: writev(-1, NULL, 0) is
@@ -25,7 +25,7 @@ long __ai_osdetect(void) {
 #endif
 }
 
-#if defined(__aarch64__) || defined(__riscv)
+#ifndef AiTwoKernels
 long __ai_nrfb(long n) { return n; }      /* no second kernel on this arch */
 long __ai_errfb(long e) { return e; }
 long __ai_sigfb(long s) { return s; }

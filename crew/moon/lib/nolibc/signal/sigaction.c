@@ -36,6 +36,7 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
       old->sa_mask.__v[0] = (long) __ai_maskcan((unsigned long) ko.mask[0]
                                                 | ((unsigned long) ko.mask[1] << 32)); }
     return 0; }
+#ifdef AiTwoKernels
   if (__ai_osv == 3) {
     /* the same permutation and shim; netbsd's shape puts the mask before the
      * flags, and the kernel provides no return path -- the registered tramp
@@ -65,6 +66,7 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
       old->sa_mask.__v[0] = (long) __ai_maskcan((unsigned long) ko.mask[0]
                                                 | ((unsigned long) ko.mask[1] << 32)); }
     return 0; }
+#endif
   struct __ksigaction ka, ko;
   memset(&ko, 0, sizeof ko);
   if (a) {

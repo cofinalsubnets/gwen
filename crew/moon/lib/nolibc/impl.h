@@ -44,7 +44,16 @@
 #include <netinet/in.h>
 
 extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
+/* ⚠ ONE KERNEL PER ARCH but x86_64: os.c's __ai_osdetect answers 1 flat on the
+ * others and every translation there is an identity stub. The BSD branches
+ * compile only where a second kernel can answer -- so a link for a one-kernel
+ * arch owes no machine tail mksys did not lay for it. */
+#if !defined(__aarch64__) && !defined(__riscv)
+# define AiTwoKernels 1
+#endif
+#ifdef AiTwoKernels
 extern long __ai_sys7(long n, long a, long b, long c, long d, long e, long f, long g);   /* the 7th arg rides the stack (netbsd mmap) */
+#endif
 extern void __ai_sigret(void);
 extern int main(int, char**);
 
@@ -367,9 +376,11 @@ static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
 static long __ai_fb(long n, long a, long b, long c, long d, long e, long f) {
   long r = __ai_sys(n, a, b, c, d, e, f);
   return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
+#ifdef AiTwoKernels
 static long __ai_fb7(long n, long a, long b, long c, long d, long e, long f, long g) {
   long r = __ai_sys7(n, a, b, c, d, e, f, g);
   return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
+#endif
 
 static long sc0(long n) { return __ai_call(n, 0, 0, 0, 0, 0, 0); }
 static long sc1(long n, long a) { return __ai_call(n, a, 0, 0, 0, 0, 0); }
@@ -484,7 +495,9 @@ struct __nb_kevent {                  /* __kevent50's record: 40 bytes, no ext,
   void *udata;
 };
 extern void __ai_nbstat(struct __nb_stat const *f, struct stat *st);
+#ifdef AiTwoKernels
 extern void __ai_nb_sigtramp(void);   /* mksys: mov r15->rdi; setcontext; exit */
+#endif
 #define FfLeft 1
 #define FfZero 2
 #define FfAlt  4
