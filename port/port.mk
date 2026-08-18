@@ -54,14 +54,20 @@ $(mc): FORCE
 p_link_be ?= $(p_be)
 p_be_l    = $(addprefix $(R)/crew/holo/,$(addsuffix .l,$(p_be)))
 p_lnbe_l  = $(addprefix $(R)/crew/holo/,$(addsuffix .l,$(p_link_be)))
-lay_l  = $(R)/crew/kore/text.l $(R)/crew/kore/u.l $(R)/crew/kore/asbook.l \
+# ⚠ THE FLOOR IS CATTED, THEN SPLICED. text.l and u.l reopen module 'kore, so their
+# names (uread, udie ..) do not walk for whoever comes after -- and every driver below
+# reads them bare. So the cats emit (use 'kore) once the two files have registered it,
+# free/kernel.mk's klink recipe exactly.
+kore_l = $(R)/crew/kore/text.l $(R)/crew/kore/u.l
+lay_l  = $(kore_l) $(R)/crew/kore/asbook.l \
   $(R)/crew/holo/elf.l $(R)/crew/holo/obj.l
-link_l = $(R)/crew/kore/text.l $(R)/crew/kore/u.l $(R)/crew/kore/asbook.l \
+link_l = $(kore_l) $(R)/crew/kore/asbook.l \
   $(p_lnbe_l) $(R)/crew/holo/elf.l $(R)/crew/holo/obj.l $(R)/crew/holo/link.l
 copy_l = $(link_l) $(R)/crew/holo/copy.l
-# the same two lists spelled from $(R), which is where the cats run
-lay_lc = $(subst $(R)/,,$(lay_l))
-be_lc  = $(subst $(R)/,,$(p_be_l))
+# the same lists spelled from $(R), which is where the cats run
+lay_lc  = $(subst $(R)/,,$(lay_l))
+kore_lc = $(subst $(R)/,,$(kore_l))
+be_lc   = $(subst $(R)/,,$(p_be_l))
 
 # the am math floor: the one object every port compiles exactly alike.
 $(R)/$(o)/am.o: $(R)/crew/moon/lib/math/am.c $(mc)
@@ -77,7 +83,8 @@ define p_ocopy
 $$(R)/$$(o)/ocopy.l: $$(copy_l)
 	@echo CAT	$$@
 	@mkdir -p $$(R)/$$(o)
-	@{ echo "(use 'holo)"; cat $$(copy_l); echo '(objcopy >argv)'; } > $$@
+	@{ echo "(use 'holo)"; cat $$(kore_l); echo "(use 'kore)"; \
+	   cat $$(filter-out $$(kore_l),$$(copy_l)); echo '(objcopy >argv)'; } > $$@
 endef
 
 # p_obj -- one compiled object. $1 stem, $2 the source from $(R), $3 the prerequisites,
@@ -95,7 +102,8 @@ define p_lay
 $$(R)/$$(o)/$1.o: $2.l $$(p_be_l) $$(lay_l) $$(lv)
 	@echo HOLO	$$@
 	@mkdir -p $$(R)/$$(o)
-	@cd $$(R) && { echo "(use 'holo)"; cat $$(be_lc) $$(lay_lc) port/$$(p_dir)/$2.l; \
+	@cd $$(R) && { echo "(use 'holo)"; cat $$(be_lc) $$(kore_lc); echo "(use 'kore)"; \
+	  cat $$(filter-out $$(kore_lc),$$(lay_lc)) port/$$(p_dir)/$2.l; \
 	  echo '($2 $3)'; } | out/host/love
 endef
 
@@ -106,5 +114,6 @@ define p_link
 $$(R)/$$(o)/$1.l: $1.l $$(link_l)
 	@echo CAT	$$@
 	@mkdir -p $$(R)/$$(o)
-	@{ echo "(use 'holo)"; cat $$(link_l) $$<; } > $$@
+	@{ echo "(use 'holo)"; cat $$(kore_l); echo "(use 'kore)"; \
+	   cat $$(filter-out $$(kore_l),$$(link_l)) $$<; } > $$@
 endef

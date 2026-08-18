@@ -12,6 +12,7 @@
 ;   efi_call -- every UEFI service goes back out through this: sysv
 ;     (fn a b c d e) -> ms (rcx rdx r8 r9 [rsp+32]) with the 32-byte shadow.
 ;     register names are holo's file: r1=rcx r2=rdx r5=rsi r6=rdi r7=r8 r8=r9.
+(use 'kore)   ; the u-floor (uread), off the module the cat's own u.l registered
 (: efi-ir `(`('label 'efiboot)
             `('push 'r5)                ; rsi
             `('push 'r6)                ; rdi
