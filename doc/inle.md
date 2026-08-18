@@ -25,9 +25,10 @@ it, and since rung 2 a **writable tree**: create, `mkdir` `rmdir` `unlink` `rena
 milliseconds, off the machine's RTC.
 
 Since rung 3 it has its userland: the whole kore cat (the fs and line tools, grep/sed, vi,
-lush, cook, the holo toolchain) bakes into the shipped kernel and the boot command line's
-program seat dispatches it — `-append "kore ls lib"` runs the tool and resets, `-append "sh"`
-boots lush, an empty cmdline falls to the console shell with the toolbox warm.
+lush, cook, the holo toolchain) bakes into the shipped kernel and the boot command line
+dispatches it off the verb registry — `-append "kore ls lib"` runs the tool and resets,
+`-append "sh"` boots lush, an empty cmdline falls to the console shell with the toolbox
+warm. `make run` boots to a lush prompt; the iso's second entry is the console shell.
 
 Since rung 4 it has processes — pipes over kernel-heap queues, `spawn`/`wait` as a love shim
 over `twirl`/`catch` (a process IS a task), per-pid stdio seats under the folded ports, and a
@@ -179,14 +180,18 @@ pairs on slot 0 behind the host's three doors.
 The whole `$(korefiles)` cat bakes verbatim (`lcatv`, the ktests precedent) into the SHIPPED
 kernel and evals at boot through the stream shell — the corpus's own reads-over-a-tap lane,
 since that is the one door proven on full-surface text. `holo` and `peg` join the kernel's
-`ai_libs` beside uu and bao, because asbook.l opens with `(use 'holo)` and cook.l with
-`(use 'peg)`. The cmdline rides `kboot` from every door — limine's request, PVH's
-`start_info`, the DTB's `/chosen` `bootargs` — and the boot text splits it quote-aware into
-the host's argv shape (`cmdline` = `("love" word..)`, `argv` the twin). Nothing more is
-needed: the members' own seats and kore.l's tail dispatch read `cmdline` exactly as on the
-host, so `-append "kore ls lib"` runs the tool, `-append "sh"` boots lush, `-append "vi
-lib/json.l"` boots the editor, and an empty cmdline loads it all quietly and falls to the
-console shell, the toolbox warm in its session.
+`ai_libs` beside uu and bao, because asbook.l wants `holo` and cook.l `peg`. The cmdline
+rides `kboot` from every door — limine's request, PVH's `start_info`, the DTB's `/chosen`
+`bootargs` — and the boot text splits it quote-aware into `bootargv`.
+
+⚠ **The cat loads SEATLESS, and the boot dispatches after it.** A member's own seat fires
+as its file is read, and the cat is in dependency order — lush sits mid-cat, so a seat
+firing there takes the machine with kore's applets still unread (no `ls`, no pipeline).
+So `cmdline` is `("love")` while the cat loads, every seat sits out, and the foot of the
+boot pins the real line and hands the program word to `k-prog` — the same registry door
+rung 4's `spawn` uses. One dispatch on this machine, and an interactive lush gets the
+whole toolbox: `-append "kore ls lib"` runs the tool, `-append "sh"` boots lush,
+`-append "vi lib/json.l"` boots the editor, an empty line falls to the console shell.
 
 * ⚠ **There is no shebang lane on inle.** `kore TOOL ARGS` is a love call into the registry
   tablet, not an exec — the multi-call trick is doing all the work, and it is why kore was the
@@ -204,12 +209,12 @@ console shell, the toolbox warm in its session.
   the cat loads. The roster is self-retiring — a rung that lands the real nif takes its name
   off the list by existing. `raw` answers `()` (the console is always a raw tty) and `signal`
   accepts and ignores, which is what lush's interactive entry wants.
-* **lush boots.** `sh` in the program seat fires main.l's own seat mid-cat, exactly as an sh
-  symlink does on the host; builtins (cd, pwd, export, read ..) ride the rung-2 tree, external
-  commands wait for rung 4's spawn.
-* *gate:* `make test_kboot` — three boots of the shipped x86_64 kernel through the PVH door,
+* **lush boots**, interactively and with the whole cat behind it: the prompt carries the cwd,
+  builtins (cd, pwd, export, read ..) ride the rung-2 tree, and a bare `ls lib | wc -l` is
+  rung 4's spawn over the registry — no `/bin`, no PATH, the verb table IS the path.
+* *gate:* `make test_kboot` — four boots of the shipped x86_64 kernel through the PVH door,
   each `-append` a real command line: `kore ls lib`, `kore wc lib/json.l` byte-exact against
-  the host `wc`, and `sh -c "cd lib; pwd"`. Opt-in like test_kdiff (a cold cat eval per boot);
+  the host `wc`, `sh -c "cd lib; pwd"`, and a pipeline. Opt-in like test_kdiff (a cold cat eval per boot);
   run it when the kernel or the cat moves. vi is the interactive smoke under `run-*`, and its
   boot is proven headless — `-append "vi lib/json.l"` draws the hued file over serial. The
   aarch64 twin dispatches the same way through its DTB door (spot-proven; the gate lane is
@@ -361,4 +366,8 @@ Worth stating, because it is the reason this ladder is weeks and not years:
   take memory the collector was counting on. Rung 4 added the pipe queues, which grow the same
   way (and for a reason — the growth is what keeps the unbuffered write lane from dropping
   bytes).
-* **whether lush wants a `/bin` at all** on a machine where every program is a registry entry.
+* ~~**whether lush wants a `/bin` at all**~~ Answered: no. The verb registry is the path —
+  `k-prog` resolves a spawned word through `(from 'verbs 'word)`, so every applet the cat
+  pinned is a program by name. lush's own in-image lane stays refused here (it asks whether
+  PATH's winner is this binary, and there is no PATH), which is what leaves every stage a
+  real task.

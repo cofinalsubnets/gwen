@@ -1897,21 +1897,27 @@ void kmain(void) {
  "                      _ (pin envt 0 (? (string? v) (link (link n v) c) c)) ())"
  "                   22)"
  "   (environ u) (map (\\ e (+ (cap e) (+ \"=\" (cup e)))) (peep envt 0 ())))"
- // the command line (rung 3), the host's argv shape: `cmdline` = ("love" word..)
- // off the raw boot line, split quote-aware (-append 'sh -c \"cd lib; pwd\"' must
- // reach the shell as one command); `argv` the same chain, host/main.c's twin names.
- "(: cmdline (link \"love\""
+ // the command line (rung 3): `bootargv` = (word..) off the raw boot line, split
+ // quote-aware (-append 'sh -c \"cd lib; pwd\"' must reach the shell as one command).
+ // ⚠ `cmdline` stays SEATLESS until the cat is in: a member's seat fires as its own
+ // file is read, and lush sits mid-cat -- it would take the machine with kore's
+ // applets still unread. the boot dispatch at the foot wears the real line.
+ "(: bootargv"
  "     (: (kw i w s acc) (? (<= (tally bootline) i) (rev (? (tally w) (link w acc) acc))"
  "                          (: c (bootline i)"
- "                             (? s (? (= c s) (kw (+ i 1) w 0 acc) (kw (+ i 1) (+ w c) s acc))"
+ // ⚠ a char joins a string as a STRING OF ONE: (+ w c) on mixed bands
+ // degenerates to w alone, so a bare charm would drop every word's letters.
+ "                             (? s (? (= c s) (kw (+ i 1) w 0 acc) (kw (+ i 1) (+ w (string c)) s acc))"
  "                                (= c 32) (kw (+ i 1) \"\" 0 (? (tally w) (link w acc) acc))"
  "                                (|| (= c 34) (= c 39)) (kw (+ i 1) w c acc)"
- "                                (kw (+ i 1) (+ w c) 0 acc))))"
- "        (kw 0 \"\" 0 ())))"
+ "                                (kw (+ i 1) (+ w (string c)) 0 acc))))"
+ "        (kw 0 \"\" 0 ()))"
+ "   cmdline (link \"love\" ())"
  "   argv cmdline)"
  // rung 4: spawn/wait as a love-side shim over the core task ops. a process on
- // this machine IS a task: k-prog maps argv onto a love main -- kore-main (or a
- // tool's own <name>-main where the dispatcher is not baked), sh-main, or a .l
+ // this machine IS a task: k-prog maps argv onto a love main -- a VERB off the
+ // registry (kore, sh, every applet the cat pinned), a tool's own <name>-main
+ // where nothing registered one, or a .l
  // path off the ramfs, evaled form by form (⚠ no fresh layer from here: its
  // defglobs land in the session, the shim's honest divergence) -- and k-spawn1
  // twirls it under a help that quits any scare (the wait-side face of a died
@@ -1930,17 +1936,20 @@ void kmain(void) {
  "           (go t))"
  "        127)))"
  "   (k-tool nm as) (? (member? nm (names ())) (link (ev nm) as) ())"
- "   (k-prog argv) (: a0 (cap argv) b (k-bn a0)"
- "     (? (|| (= b \"sh\") (= b \"lush\")) (k-tool 'sh-main (cup argv))"
- "        (= b \"kore\")"
- "          (: k (k-tool 'kore-main argv)"
- "             (? (two? k) k"
- "                (two? (cup argv))"
- "                  (k-tool (intern (+ (cap (cup argv)) \"-main\")) (cup (cup argv)))"
- "                ()))"
- "        (: k (k-tool (intern (+ b \"-main\")) (cup argv))"
+ // the registry is the PATH on this machine: every app pins its own names into
+ // (from 'verbs 'tab), and `word` applies the shadow rules -- a slashed word or
+ // a .l name is a file and never a verb, which is what leaves the two lanes
+ // below reachable. a verb takes the args AFTER its name, kore's convention.
+ "   (k-prog argv) (: a0 (cap argv) b (k-bn a0) as (cup argv)"
+ "     v ((from 'verbs 'word) a0)"
+ "     (? !(nil? v) (link v as)"
+ "        (: k (k-tool (intern (+ b \"-main\")) as)"
  "           (? (two? k) k"
- "              (two? (stat a0)) (link (k-run-file a0) (cup argv))"
+ // `kore TOOL ..` where no dispatcher registered one -- the test kernel's seat,
+ // which bakes the applet files and not kore.l
+ "              (&& (= b \"kore\") (two? as))"
+ "                (k-tool (intern (+ (cap as) \"-main\")) (cup as))"
+ "              (two? (stat a0)) (link (k-run-file a0) as)"
  "              ()))))"
  "   (k-spawn1 argv f0 f1 f2) (: pr (k-prog argv)"
  // ⚠ the help is the seat's exit door too: a kore main leaves deep by scaring 'leave
@@ -2007,11 +2016,23 @@ void kmain(void) {
    "     '(symlink hardlink readlink spawn spawnmap fork exec herald wait still"
    "       getpid getuid seal ttyfg glean pipe fdopen dup dup2 connect listen"
    "       accept udp-bind udp-send udp-recv hark winsize))");
-  // then the kore cat through the stream shell: its members' own seats and
-  // kore.l's tail dispatch read `cmdline` -- a seated tool runs and quits (the
-  // reset door above), a plain boot loads it all quietly -- and the console
-  // shell takes whatever is left, the toolbox warm in its session.
+  // then the kore cat through the stream shell, quietly: the line is seatless
+  // here, so every member's own seat sits out and the whole userland lands.
   r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally korecat)) (link (peep korecat i 0) (g (+ 1 i))))) 0)))");
+  // now the line wears its real shape and the program word dispatches off the
+  // registry -- spawn's own door. a seated program quits with its status (the
+  // reset door); an empty line falls to the console shell, the toolbox warm.
+  r = ai_evals_(r, "(: cmdline (link \"love\" bootargv) argv cmdline)");
+  r = ai_evals_(r,
+   "(? (two? bootargv)"
+   "   (: _ (hear (\\ a b (? (id? a 'leave) (quit b)"
+   "                        (: _ (say err \";; \") _ (print err a) _ (say err \" \") _ (print err b)"
+   "                           _ (put err 10) (quit 1)))))"
+   "      pr (k-prog bootargv)"
+   "      r (? (two? pr) ((cap pr) (cup pr))"
+   "           (: _ (say err (+ (cap bootargv) \": not found\")) _ (put err 10) 127))"
+   "      (quit (? (charm? r) r 0)))"
+   "   0)");
   r = ai_evals_(r, "((from 'bao 'shell) 0)");
 #endif
   // a terminal scare gets the honest face on the serial console before reset

@@ -223,10 +223,13 @@ k_xorriso = xorriso -as mkisofs -quiet -R -r -J \
   $(k_xorriso_$a)
 
 # The Limine bootloader config is generated here rather than kept as a
-# standalone source file (it is four static lines).
+# standalone source file (it is a handful of static lines). Two entries, and the
+# first is what the timeout picks: `sh` seats lush with the whole cat behind it
+# (`make run` is a shell prompt), the second leaves the line empty for the love
+# console shell -- the same two doors -append opens on the -kernel lanes.
 $(ko)/limine.conf:
 	@mkdir -p $(dir $@)
-	@printf 'timeout: 1\n/gk\n    protocol: limine\n    path: boot():/boot/kernel\n' > $@
+	@printf 'timeout: 1\n/lush\n    protocol: limine\n    path: boot():/boot/kernel\n    cmdline: sh\n/love\n    protocol: limine\n    path: boot():/boot/kernel\n' > $@
 
 $(ko)/love-$a$(ksuf)$(kvsuf).iso: $(k_elf) $(dl)/limine/limine $(ko)/limine.conf
 	@echo MK	$@
