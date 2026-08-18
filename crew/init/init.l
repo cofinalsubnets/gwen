@@ -183,7 +183,7 @@
 
    (perceive _)
      (: sig (sigfd 0)
-        (? !sig (note "  perceive: Linux signalfd only")
+        (? !sig (note "  perceive: no signal source here")
            (: pids (tablet 0) tries (tablet 0)
               units (L (unit 'slow 'service (L "sh" "-c" "sleep 0.15; exit 0") 'on-fail ())
                        (unit 'flap 'service (L "sh" "-c" "exit 1")             'on-fail ()))

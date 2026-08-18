@@ -38,6 +38,7 @@
 #include <limits.h>         // PATH_MAX -- realpath's buffer is not ours to size
 #elif !defined(__GLIBC__)
 #include <sys/sysctl.h>     // the freebsd selfpath door (nolibc's; glibc dropped the symbol)
+#include <sys/event.h>      // kqueue/kevent, sigfd's BSD lane (nolibc's; glibc has no such door)
 #endif
 
 // A wait(2) status word -> the value a reaper hands back: the exit code, or
@@ -194,7 +195,7 @@ static lvm(lvm_reapany) {
  Unpack(g);
  Ip += 1; ai_musttail return Continue(); }
 
-// --- the signal perceive source (Linux signalfd) --------------------------------
+// --- the signal perceive source (signalfd; kqueue on the BSDs) ------------------
 // (sigfd sigs)  -> a PORT over a signalfd watching `sigs` (a list of signal numbers;
 //                  a non-list keeps the supervisor default SIGCHLD + SIGTERM), those signals
 //                  first BLOCKED (sigprocmask) so they QUEUE to the fd instead of
@@ -207,6 +208,29 @@ static lvm(lvm_reapany) {
 // story for {signals, clock}), then sigtake reads the record. SIGCHLD coalesces, so a
 // 'chld wake still loops `glean` to harvest every zombie.
 #if defined(__linux__)
+#if !defined(__GLIBC__)
+// the BSD lane: the port holds a kqueue fd instead. EVFILT_SIGNAL fires on
+// SEND -- before delivery processing -- so the same blocked mask queues here
+// too (probed on both boxes). one kernel per process, so one flavor: a flag.
+static int host_sigkq;
+ai_noinline static int host_sigfd_kq(ai_word a) {
+ int kq = kqueue();
+ if (kq < 0) return -1;
+ struct kevent ch;
+ if (chainp(a))
+  for (ai_word p = a; chainp(p); p = B(p)) {
+   if (!(A(p) & 1)) continue;
+   EV_SET(&ch, getcharm(A(p)), EVFILT_SIGNAL, EV_ADD, 0, 0, 0);
+   if (kevent(kq, &ch, 1, 0, 0, 0) < 0) return close(kq), -1; }
+ else {
+  EV_SET(&ch, SIGCHLD, EVFILT_SIGNAL, EV_ADD, 0, 0, 0);
+  if (kevent(kq, &ch, 1, 0, 0, 0) < 0) return close(kq), -1;
+  EV_SET(&ch, SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, 0);
+  if (kevent(kq, &ch, 1, 0, 0, 0) < 0) return close(kq), -1; }
+ fcntl(kq, F_SETFD, FD_CLOEXEC);
+ host_sigkq = 1;
+ return kq; }
+#endif
 // the arg may be a LIST of signal numbers to watch; anything else (the dummy-0
 // convention) keeps the supervisor's classic pair, SIGCHLD + SIGTERM.
 ai_noinline static struct ai *host_sigfd(struct ai *g) {
@@ -219,6 +243,9 @@ ai_noinline static struct ai *host_sigfd(struct ai *g) {
  else { sigaddset(&m, SIGCHLD); sigaddset(&m, SIGTERM); }
  if (sigprocmask(SIG_BLOCK, &m, NULL)) return g->sp[0] = ZeroPoint, g;
  int fd = signalfd(-1, &m, SFD_NONBLOCK | SFD_CLOEXEC);
+#if !defined(__GLIBC__)
+ if (fd < 0) fd = host_sigfd_kq(a);          // ENOSYS: a BSD kernel; kqueue is the body
+#endif
  if (fd < 0) return g->sp[0] = ZeroPoint, g;
  struct ai *r = ai_io_alloc(g, fd);
  if (!ai_ok(r)) return close(fd), g->sp[0] = ZeroPoint, g;    // OOM -> zero (cf. net.c lvm_listen)
@@ -228,16 +255,28 @@ static lvm(lvm_sigfd) {
  Pack(g); g = host_sigfd(g); Unpack(g);     // host_sigfd folds every failure to (), so no ghelp
  ai_musttail return Next(1); }
 
-// read one signalfd_siginfo (non-blocking) into (signo . pid). signo is the raw
-// number (Linux: SIGCHLD 17, SIGTERM 15); pid is ssi_pid (the dead child on SIGCHLD).
+// read one pending signal (non-blocking) into (signo . pid). signo is the raw
+// canonical number (SIGCHLD 17, SIGTERM 15); pid is ssi_pid (the dead child on
+// SIGCHLD) -- except the kqueue lane, which names no sender: pid 0 there, and a
+// 'chld consumer loops glean for the pids anyway.
 ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
- struct signalfd_siginfo si;
- ssize_t n = (fd >= 0) ? read(fd, &si, sizeof si) : -1;
- if (n != (ssize_t) sizeof si) { g->sp[0] = ZeroPoint; return g; }   // none ready -> the real () (not charm 0)
+ intptr_t signo, pid;
+#if !defined(__GLIBC__)
+ if (host_sigkq) {
+  struct kevent ev;
+  struct timespec z = {0, 0};
+  if (kevent(fd, 0, 0, &ev, 1, &z) != 1) { g->sp[0] = ZeroPoint; return g; }
+  signo = (intptr_t) ev.ident; pid = 0; }
+ else
+#endif
+ {
+  struct signalfd_siginfo si;
+  ssize_t n = (fd >= 0) ? read(fd, &si, sizeof si) : -1;
+  if (n != (ssize_t) sizeof si) { g->sp[0] = ZeroPoint; return g; }  // none ready -> the real () (not charm 0)
+  signo = (intptr_t) si.ssi_signo; pid = (intptr_t) si.ssi_pid; }
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                putcharm((intptr_t) si.ssi_signo),
-                                putcharm((intptr_t) si.ssi_pid));
+                                putcharm(signo), putcharm(pid));
  g->sp[0] = word(w);
  return g; }
 

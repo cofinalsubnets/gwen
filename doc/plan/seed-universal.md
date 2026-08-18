@@ -351,6 +351,24 @@ owes a roster gate: on linux, assert the linux features are aboard.
     linux/ext4, freebsd/ufs and netbsd/ffs answer ONE byte string from one
     tree. still open on netbsd: the pty quartet (TIOCPTSNAME is another
     shape) and sendmsg/recvmsg (refused loudly, both BSDs).
+  - **UV-sig — sigfd rides kqueue. LANDED 2026-08-18.** The last inert
+    stub with a live consumer (init's perceive parks on sigfd; lush's job
+    control never called it — wait/signal/still, already translated).
+    nolibc grows the pair: sys/event.h speaks freebsd's record and
+    negative filters as the canon; netbsd repacks to __kevent50's 40
+    bytes, filter = -canon - 1 (an involution). EVFILT_SIGNAL is the one
+    filter whose ident is a signal number, so it alone rides the
+    permutation — canonical numbers both directions; a no-twin signal
+    (STKFLT, PWR) refuses EINVAL. posix.c's sigfd falls to a kqueue on
+    signalfd's ENOSYS behind the same port; sigtake there names no sender
+    (pid 0 — a 'chld consumer loops glean anyway). The load-bearing fact,
+    probed on both boxes before a line was written: a BLOCKED signal
+    still fires EVFILT_SIGNAL (it hooks the send, before the mask), so
+    the sigfd contract — block, queue, take — holds verbatim; and poll
+    sees a pending kqueue fd, so the scheduler's await merge just works.
+    Gate: osbox.sh's UV-sig leg (signalfd, or its ENOSYS falling to
+    kqueue — same text both kernels) and the trophy leg's love-level
+    sigkq.l (the pending take AND the parked take, on the box).
 - **rung U2 — the targets DISSOLVE.** Decided 2026-08-16 (chosen, revisable);
   Landed 2026-08-17: ONE binary. The host build is subsumed — out/host/love
   links the source blob + readme and, baked, IS the artifact (`make` in a clean

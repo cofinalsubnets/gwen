@@ -10,9 +10,9 @@
 ; from `wait` as 256+sig (above every exit status) and the job parks in
 ; `sh-jobs`: n -> (pids state cmd), state 'stopped | 'running. builtins:
 ; jobs / fg / bg; a trailing & runs the pipeline unwaited as a 'running job.
-; signal numbers are the Linux/x86 charms (the repo's home ABI; signalfd is
-; Linux-only already). also here: the shared floor (sh-rev sh-nth sh-int
-; sh-unwords) and the shell state (sh-jobs sh-status sh-tty).
+; signal numbers are the Linux/x86 charms (the repo's home ABI; the BSDs
+; take them through nolibc's permutation). also here: the shared floor
+; (sh-rev sh-nth sh-int sh-unwords) and the shell state (sh-jobs sh-status sh-tty).
 
 (module 'lush
 (: (sh-rev l) (foldl (\ a x (x >< a)) () l)

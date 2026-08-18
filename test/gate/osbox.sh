@@ -6,8 +6,10 @@
 # freebsd|netbsd`. the legs: UV1 (entry, carry, sigsetjmp), UV2 (the whole
 # compat battery: open flags, stat, dirent, signals, fork), UV-net (the
 # socket family: sockaddr heads, sockopt names, msg flags, over loopback
-# TCP + UDP + unix), and -- FBSD_SEED=1 / NBSD_SEED=1, minutes -- the
-# trophy: `love seed` ON THE BOX answers the tree's own bytes.
+# TCP + UDP + unix), UV-sig (the signal perceive source: signalfd, or its
+# ENOSYS falling to kqueue's EVFILT_SIGNAL), and -- FBSD_SEED=1 /
+# NBSD_SEED=1, minutes -- the trophy: `love seed` ON THE BOX answers the
+# tree's own bytes.
 # ⚠ NOT here on purpose: termios proper (a gate that needs a tty), and
 # netbsd's pty quartet (TIOCPTSNAME is another shape -- open).
 #
@@ -280,13 +282,105 @@ echo "$ln" | grep -q "rc=42" || fail "uvnet exit -- got: $ln"
 
 echo "$t: UV-net -- the socket family, one binary, both kernels"
 
+# ---- rung UV-sig: the signal perceive source, one binary ----
+# posix.c's sigfd lane, spelled out: signalfd where the kernel has it, and on
+# its ENOSYS the kqueue door -- EVFILT_SIGNAL idents in CANONICAL numbers both
+# ways, fired by a BLOCKED signal (the signalfd contract), the child still
+# waitable after the event. the SAME text on both kernels.
+cat > "$d/uvsig.c" <<'EOF'
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <stdio.h>
+#include <time.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <sys/signalfd.h>
+#include <sys/event.h>
+
+static int step = 0;
+static void ok(int cond) {
+  step++;
+  if (!cond) { char b[3] = {'F', (char)('A' + step - 1), '\n'}; write(2, b, 3); _exit(step); } }
+
+static int take(int sfd, int kq) {
+  if (kq >= 0) {
+    struct kevent ev; struct timespec z = {0, 0};
+    return kevent(kq, 0, 0, &ev, 1, &z) == 1 ? (int) ev.ident : 0; }
+  struct signalfd_siginfo si;
+  return read(sfd, &si, sizeof si) == (int) sizeof si ? (int) si.ssi_signo : 0; }
+
+int main(void) {
+  sigset_t m; sigemptyset(&m);
+  sigaddset(&m, SIGUSR1); sigaddset(&m, SIGCHLD);
+  ok(sigprocmask(SIG_BLOCK, &m, 0) == 0);
+  int sfd = signalfd(-1, &m, SFD_NONBLOCK | SFD_CLOEXEC), kq = -1;
+  if (sfd < 0) {                       /* a BSD kernel: the kqueue door */
+    ok(errno == ENOSYS);
+    kq = kqueue();
+    ok(kq >= 0);
+    struct kevent ch;
+    EV_SET(&ch, SIGUSR1, EVFILT_SIGNAL, EV_ADD, 0, 0, 0);
+    ok(kevent(kq, &ch, 1, 0, 0, 0) == 0);
+    EV_SET(&ch, SIGCHLD, EVFILT_SIGNAL, EV_ADD, 0, 0, 0);
+    ok(kevent(kq, &ch, 1, 0, 0, 0) == 0);
+  } else {                             /* linux: the kqueue door refuses */
+    ok(kqueue() == -1 && errno == ENOSYS);
+    ok(sfd >= 0); ok(1); ok(1); }
+  ok(kill(getpid(), SIGUSR1) == 0);    /* BLOCKED, and it still fires the source */
+  ok(take(sfd, kq) == SIGUSR1);
+  int pid = fork();
+  if (pid == 0) _exit(3);
+  int signo = 0;
+  for (int i = 0; i < 200 && !(signo = take(sfd, kq)); i++) {
+    struct timespec t = {0, 10000000}; nanosleep(&t, 0); }
+  ok(signo == SIGCHLD);
+  int st = 0;
+  ok(waitpid(pid, &st, 0) == pid && WIFEXITED(st) && WEXITSTATUS(st) == 3);
+  printf("uvsig: usr1=%d chld=%d canonical\n", SIGUSR1, SIGCHLD);
+  fflush(stdout);
+  write(1, "sig all\n", 8);
+  return 42;
+}
+EOF
+moon0 -t x64 "$d/uvsig.c" -o "$d/uvsig" || fail "uvsig: the default-lane compile"
+ls2=$("$d/uvsig" < /dev/null; echo "rc=$?")
+fs2=$($box 'cat > /tmp/uvsig && chmod +x /tmp/uvsig && /tmp/uvsig; echo "rc=$?"' < "$d/uvsig") \
+  || fail "uvsig: the box could not take or run it"
+[ "$ls2" = "$fs2" ] || fail "uvsig: the kernels disagree -- linux[$ls2] $os[$fs2]"
+echo "$ls2" | grep -q "uvsig: usr1=10 chld=17 canonical" || fail "uvsig body -- got: $ls2"
+echo "$ls2" | grep -q "rc=42" || fail "uvsig exit -- got: $ls2"
+
+echo "$t: UV-sig -- the signal source, signalfd or kqueue, both kernels"
+
 # ---- the trophy, opt-in by name (FBSD_SEED=1, minutes): the seed builds the
 # seed ON THE BOX, and the bytes are the tree's own. the bake is budget-
 # invariant now, so the box's budget (RAM economics) does not move the answer.
 if [ -n "$sd" ]; then
-  out=$($box 'rm -rf /tmp/seedrun && mkdir /tmp/seedrun && cd /tmp/seedrun \
-    && cat > love && chmod +x love \
-    && env LOVE_BUDGET_MB=512 ./love seed > seed.log 2>&1; tail -3 seed.log' < "$ho/love") \
+  $box 'rm -rf /tmp/seedrun && mkdir /tmp/seedrun && cd /tmp/seedrun \
+    && cat > love && chmod +x love' < "$ho/love" \
+    || fail "trophy: the box could not take the seed"
+  # the love-level sigfd round rides the shipped binary: the port IS a kqueue
+  # here -- the pending take, then the PARKED take (await merges the kq fd).
+  cat > "$d/sigkq.l" <<'EOF'
+(: sp (sigfd (L 10 17))
+   me (getpid 0)
+   _  (still me 10)
+   ev (sigtake sp)
+   _  (assert (hot? sp) (two? ev) (= 10 (cap ev)))
+   p  (spawn (L "sh" "-c" "sleep 0.3; exit 0"))
+   _  (await sp)
+   e2 (sigtake sp)
+   _  (assert (two? e2) (= 17 (cap e2)))
+   (puts "sigkq ok\n"))
+EOF
+  sout=$($box 'cd /tmp/seedrun && cat > sigkq.l && ./love sigkq.l; echo "rc=$?"' < "$d/sigkq.l") \
+    || fail "trophy: the box could not run sigkq.l"
+  { echo "$sout" | grep -q "sigkq ok" && echo "$sout" | grep -q "rc=0"; } \
+    || fail "trophy: love's sigfd missed on the box -- got: $sout"
+  echo "$t: sigfd rode kqueue -- the pending and the parked take, on the box"
+  out=$($box 'cd /tmp/seedrun \
+    && env LOVE_BUDGET_MB=512 ./love seed > seed.log 2>&1; tail -3 seed.log') \
     || fail "trophy: the box could not run the seed"
   echo "$out" | grep -q "fixpoint ok" || fail "trophy: the on-box seed missed the fixpoint -- got: $out"
   echo "$t: THE TROPHY -- the seed built the seed on $os, to the byte"

@@ -129,6 +129,8 @@ struct _IO_FILE {
 #define NR_fb_getdirentries 554   /* ino64; the record IS the freebsd dirent (readdir.c) */
 #define NR_fb___sysctl      202   /* sysctl(3)'s door (selfpath's KERN_PROC_PATHNAME) */
 #define NR_fb_posix_openpt  504   /* a real syscall here; linux opens /dev/ptmx */
+#define NR_fb_kqueue        362   /* the BSD door signalfd awaits (netbsd: 344) */
+#define NR_fb_kevent        560   /* post-12 record, ext[4] (netbsd: __kevent50 435) */
 #define NR_fb_clock_gettime 232
 #define NR_fb_exit            1   /* exit: one thread here, so one exit is the whole act */
 #define NR_fb_openat        499
@@ -464,6 +466,13 @@ struct __nb_dirent {                  /* __getdents30's record: name at byte 13 
   char name[512];
 };
 struct __nb_sigact { void *h; unsigned int mask[4]; int flags; };   /* mask BEFORE flags */
+struct __nb_kevent {                  /* __kevent50's record: 40 bytes, no ext,
+                                       * filter WIDE and positive (= -canon - 1) */
+  unsigned long ident;
+  unsigned int filter, flags, fflags, _p0;
+  long data;
+  void *udata;
+};
 extern void __ai_nbstat(struct __nb_stat const *f, struct stat *st);
 extern void __ai_nb_sigtramp(void);   /* mksys: mov r15->rdi; setcontext; exit */
 #define FfLeft 1
