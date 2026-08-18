@@ -73,6 +73,13 @@
                (src-foreign? p && src-ccworks? p dir ? [1 p] (go >ds))))
       (go (src-dirs ())))
      (try '("cc" "gcc" "clang")))
+   ; is there an executable by this name on PATH -- no foreign test, unlike
+   ; src-cc: the question is only whether the emulator is installed.
+   (src-onpath? w)
+    (: (go ds) (? (!(two? ds)) ()
+                  (: d (tally <ds ? <ds ".") p (d + "/" + w)
+                     (two? (stat p) ? [1 p] (go >ds))))
+       (go (src-dirs ())))
    (src-farm root exe)
     (d : (root + "/out/.seedbin")
        (mkdir d 493,
@@ -119,6 +126,36 @@
              _ (close q2)
              v)))
 
+   ; ⚠ THE FIXPOINT IS SCOPED, NOT DROPPED. It can hold only where the output
+   ; ought to BE this binary, and a cross lay is the one case the invocation
+   ; itself says it cannot -- so it is skipped for a reason the caller NAMED,
+   ; never for one that was discovered. A dirty tree still fails.
+   ; ⚠ AND THE LAY IS PRE-CREW: the link answers three verbs (bake wake verbs),
+   ; because the crew arrives at BAKE and a bake means RUNNING the artifact --
+   ; which this machine cannot do for another ISA. qemu-user can where it is
+   ; installed; where it is not, the target machine runs the line we print.
+   (seed-cross root xa dst)
+    (: made (root + "/out/x-" + xa + "/love")
+       e (copyfile made dst)
+       _ (e < 0 ? (src-die ("can't write " + dst)))
+       _ (chmod dst 493)
+       d0 (root + "/out/host/.docs-cat.l:libra,help")
+       d1 (root + "/out/host/.rest-cat.l")
+       q (src-onpath? ("qemu-" + xa))
+       _ (two? q ? (puts (";; baking through qemu-" + xa + " -- minutes, and the crew\n"
+                          + ";; is what makes it a seed and not a three-verb egg\n")))
+       s (two? q ? (herald [<>q dst "bake" "-L" d0 "-L" d1]))
+       st (two? s ? <s s)                       ; herald answers a pair or a status
+       ok (two? q ? (0 = st) 0)
+       _ (puts (";; laid " + dst + (ok ? " -- baked\n" " -- an EGG\n")))
+       _ (? ok (puts (";; no fixpoint: a cross lay cannot BE this binary, so the claim\n"
+                      + ";; is not made. `love seed` on the " + xa + " machine proves it.\n"))
+              (puts (";; three verbs (bake wake verbs), and no qemu-" + xa + " here to\n"
+                     + ";; grow them. On the " + xa + " machine, or with the emulator:\n"
+                     + ";;   " + dst + " bake -L " + d0 + " -L " + d1 + "\n")))
+       ; a bake we ASKED FOR and did not get is a failure; no emulator is not.
+       (ok ? 0 (two? q ? 1 0)))
+
    ; ⚠ THE WAIT RUNS IN A FRESH PROCESS. src-lay's inflate leaves ~200 MB of
    ; heap that the parent would otherwise hold through the whole build, for
    ; nothing -- and no collection gives it back, because free coalesces into a
@@ -126,28 +163,48 @@
    ; is the one thing that returns the pages; the waiter boots at ~57 MB, which
    ; is what a small box under build pressure has to spare. PATH, CC and the cwd
    ; all ride the environment across it, so only the root has to be said.
-   (seed-wait root)
+   (seed-wait root xa dst)
     (: exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't find seed path"))
        here (cwd 0)
        _ (? (charm? (chdir root)) (src-die ("can't enter " + root)) 0)
-       s (herald [exe "make" "dist"])
+       ; the cats ride along: they are the crew a bake needs, and arch-blind
+       s (herald (string? xa ? [exe "make" ("xa=" + xa) ("out/x-" + xa + "/love")
+                                "out/host/.docs-cat.l" "out/host/.rest-cat.l"]
+                              [exe "make" "dist"]))
        st (two? s ? <s s)
        _ (chdir here)
        _ (0 != st ? (src-die ("the build failed (exit " + show st + ")")))
-       ; the ONE artifact (seed-universal U2): the seed is the laid tree's own
-       ; binary, and the rebuild must BE this binary, byte for byte.
-       out (root + "/out/host/love")
-       (? (src-same? exe out)
-         (puts ";; fixpoint ok\n", 0)
-        (say err ";; FIXPOINT NOT OK\n", 1)))
+       (? (string? xa) (seed-cross root xa dst)
+          ; the ONE artifact (seed-universal U2): the seed is the laid tree's own
+          ; binary, and the rebuild must BE this binary, byte for byte.
+          (: out (root + "/out/host/love")
+             (? (src-same? exe out)
+               (puts ";; fixpoint ok\n", 0)
+              (say err ";; FIXPOINT NOT OK\n", 1)))))
+
+   ; the cross door: we are a cross compiler carrying our own source, so a seed
+   ; lays a seed for a machine it is not -- which is the portability story now
+   ; that one binary per ISA is the shape. Every love carries every ISA's
+   ; runtime (mkrt joins all three), so any version builds any other.
+   seed-arches '("x86_64" "aarch64" "riscv64")
+   ; the arch word is positional and A PATH STILL WINS: `./aarch64` is the
+   ; directory, the verb rail's own rule worn one level down.
+   (seed-arch? w) (: n (tally w)
+                     (go i) (? (n <= i) (member? w seed-arches)
+                               (w i = 47) 0
+                               (go (i + 1)))
+                     (go 0))
 
    (seed-lay as0)
     (: first? (two? as0 ? (<as0 = "-first") 0)
        as1 (first? ? >as0 as0)
        self? (two? as1 ? (<as1 = "-self") 0)
-       as (? self? >as1 as1)
-       r (src-lay (two? as ? <as "."))
+       as2 (? self? >as1 as1)
+       xa (? ((two? as2) && (seed-arch? <as2)) <as2 ())
+       as (string? xa ? >as2 as2)
+       dir (two? as ? <as ".")
+       r (src-lay dir)
        root <>r
        exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't find seed path"))
@@ -161,13 +218,21 @@
        _ (? (two? ours)
           (puts $ ";; using own tools: " + (src-words ours) + "\n"))
        cc (? (string? env) env (two? amb) <>amb "this binary")
-       _ (puts (";; seeding with " + cc + "\n"))
-       e (exec [exe "seed" "-wait" root])
+       _ (puts (";; seeding " + (string? xa ? (xa + " ") "") + "with " + cc + "\n"))
+       dst (string? xa ? (dir + "/love-" + xa) ())
+       e (string? xa ? (exec [exe "seed" "-wait" root xa dst])
+                       (exec [exe "seed" "-wait" root]))
        (src-die ("can't wait for the build (exec: " + show e + ")")))
 
    (seed-main as0)
-    (? ((two? as0) && (<as0 = "-wait")) (seed-wait (two? >as0 ? <>as0 "."))
-       (seed-lay as0))
+    (? (!((two? as0) && (<as0 = "-wait"))) (seed-lay as0)
+       (: a1 >as0
+          root (two? a1 ? <a1 ".")
+          a2 (two? a1 ? >a1 ())
+          xa (two? a2 ? <a2 ())
+          a3 (two? a2 ? >a2 ())
+          dst (two? a3 ? <a3 ())
+          (seed-wait root xa dst)))
 
    (pins (from 'verbs 'tab)
     'source source-main

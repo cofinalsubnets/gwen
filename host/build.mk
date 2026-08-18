@@ -242,7 +242,13 @@ mksys_e = mksys-arm64
 else
 mksys_e = mksys
 endif
-mksys_l = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
+# ⚠ THE BACKENDS RIDE THE CAT, all three: sys.o is laid for an arch the cat is
+# asked for, and only the baked book's own backend is aboard otherwise -- so a
+# cross lay for the third ISA answered `obj-no-backend`. asbook.l first, then
+# the backends join the module, then elf/obj: asbook.l's own stated order.
+mksys_l = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
+          crew/holo/x64.l crew/holo/arm64.l crew/holo/riscv.l \
+          crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
 $(ho)/.mksys-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(mksys_l)' > $$tf; \
