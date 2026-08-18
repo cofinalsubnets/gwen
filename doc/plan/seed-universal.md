@@ -346,9 +346,11 @@ owes a roster gate: on linux, assert the linux features are aboard.
     test/gate/osbox.sh is ONE script for both boxes (test_freebsd /
     test_netbsd; FBSD_SSH / NBSD_SSH; *_SEED=1 for the trophy leg); the
     conjuring recipe for the netbsd box (the -live.img.gz, QMP send-key
-    through the VGA console) rides its header. still open on netbsd: the
-    pty quartet (TIOCPTSNAME is another shape) and sendmsg/recvmsg (refused
-    loudly, both BSDs).
+    through the VGA console) rides its header. **THE TROPHY, THIRD KERNEL,
+    2026-08-18 (NBSD_SEED=1, gated)**: the seed built the seed ON NETBSD —
+    linux/ext4, freebsd/ufs and netbsd/ffs answer ONE byte string from one
+    tree. still open on netbsd: the pty quartet (TIOCPTSNAME is another
+    shape) and sendmsg/recvmsg (refused loudly, both BSDs).
 - **rung U2 — the targets DISSOLVE.** Decided 2026-08-16 (chosen, revisable);
   Landed 2026-08-17: ONE binary. The host build is subsumed — out/host/love
   links the source blob + readme and, baked, IS the artifact (`make` in a clean
