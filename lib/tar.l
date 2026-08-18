@@ -97,6 +97,10 @@
                    q (cask (n - k - 1)) _ (pour q 0 nom (k + 1) (n - k - 1))
                    `((string p) (string q)))))))
 
+   ; host/hash.c's streaming state: 105 bytes, opaque, allocated here because the
+   ; nifs do not allocate -- they fold into a cask the caller owns.
+   tar-shast 105
+
    ; --- writing --------------------------------------------------------------
    (tar-kindc k) (? (id? k 'dir) 53 (id? k 'link) 50 48)   ; '5' '2' '0'
    (tar-head e)                             ; -> the 512-byte header | ()
@@ -111,7 +115,10 @@
              _ (tar-oct! b 100 8 (tar-get e 'mode 420))
              _ (tar-oct! b 108 8 (tar-get e 'uid 0))
              _ (tar-oct! b 116 8 (tar-get e 'gid 0))
-             _ (tar-oct! b 124 12 (? (id? kind 'file) (tally body) 0))
+             ; the size comes off 'size when the entry carries one -- a THIN entry
+             ; (tar-thin?) knows its length without holding its bytes. no 'size and
+             ; it is the body's tally, which is every fat entry, unchanged.
+             _ (tar-oct! b 124 12 (? (id? kind 'file) (tar-get e 'size (tally body)) 0))
              _ (tar-oct! b 136 12 (tar-get e 'mtime 0))
              _ (pin b 156 (tar-kindc kind))
              _ (tar-txt! b 157 100 (tar-get e 'to ""))
@@ -126,6 +133,50 @@
              _ (tar-oct! b 148 7 (tar-sum b))
              _ (pin b 154 32)
              (string b))))
+   ; --- the archive as a STREAM ----------------------------------------------
+   ; tar-pack's answer exists to be looked at once and dropped, and for a source tree
+   ; that is megabytes held to be hashed. tar-hash is the same archive fed through a
+   ; resumable sha-256 (host/hash.c) a bufferful at a time: the header, then the file's
+   ; bytes read straight off 'path, then the pad -- so the peak is one cask and not one
+   ; archive. It answers what (sha256 (tar-pack es)) answers, and test/gate/targz.sh
+   ; holds the two together over a tree with the awkward shapes in it.
+   ; ⚠ IT READS WHAT THE HEADER SAYS. a file that moved between the walk's stat and
+   ; this read would put a body of one length under a header of another, so a short
+   ; read is a TORN archive and answers () -- the caller cuts the fat way, which reads
+   ; each file once and cannot disagree with itself.
+   (tar-feed h buf e)                       ; feed one file's body + pad; 1 | ()
+    (: n (tar-get e 'size 0)
+       q (? (0 < n) (open (tar-get e 'path "") "r") 0)
+       (? (0 = n) 1
+          (! q) ()
+          (: (go left) (? (0 = left) 1
+                          (: k (swig q buf)
+                             (? (0 >= k) ()
+                                (: k2 (? (left < k) left k)
+                                   _ (sha256-feed h (snip (string buf) 0 k2))
+                                   (go (left - k2))))))
+             ok (go n)
+             _ (close q)
+             (? (! ok) ()
+                (: r (% n tar-blk)
+                   _ (? r (sha256-feed h (string (cask (tar-blk - r)))) 0)
+                   1)))))
+   (tar-hash es)                            ; -> the 64-char digest | ()
+    (: h (cask tar-shast)
+       _ (sha256-init h)
+       buf (cask 65536)
+       (go xs) (? (! (two? xs)) 1
+                  (: e <xs
+                     hd (tar-head e)
+                     (? (! hd) ()
+                        (: _ (sha256-feed h hd)
+                           ok (? (id? (tar-get e 'kind 'file) 'file) (tar-feed h buf e) 1)
+                           (? (! ok) () (go >xs))))))
+       done (go es)
+       (? (! done) ()
+          (: _ (sha256-feed h (string (cask (tar-blk * 2))))
+             (sha256-done h))))
+
    (tar-pad s)                              ; up to the next 512
     (: n (tally s) r (% n tar-blk)
        (? r (: c (cask (tar-blk - r)) (s + (string c))) s))
@@ -212,7 +263,15 @@
    ; the pruned walk: `keep` is asked with each child's rel nom BEFORE the walk
    ; descends or slurps, so what the caller will not carry is never read -- a
    ; build tree's out/ is gigabytes the archive was never going to hold.
-   (tar-gather? keep root rel)              ; -> (1 entries) | ()
+   (tar-gather? keep root rel) (tar-walk? keep root rel 1)
+   ; THE THIN WALK: the same walk that reads no file. each file entry carries its
+   ; 'size (off stat) and its 'path (where the bytes are) instead of its body, which
+   ; is what lets a caller hash or write the archive as a STREAM -- the fat walk holds
+   ; every byte of the tree at once, and a tree is megabytes that exist to be read
+   ; through once. ⚠ 'path is this machine's and rides no header; tar-head reads
+   ; neither key but 'size, so a thin entry heads exactly as its fat twin does.
+   (tar-thin? keep root rel) (tar-walk? keep root rel 0)
+   (tar-walk? keep root rel fat)            ; -> (1 entries) | ()
     (: full (? (tally rel) (root + "/" + rel) root)
        lnk (readlink full)
        st (stat full)
@@ -233,11 +292,16 @@
              (go ks acc) (? (! (two? ks)) `(1 (rev acc))
                             (: k2 (tar-join rel <ks)
                                (? (! (keep k2)) (go >ks acc)
-                                  (: r (tar-gather? keep root k2)
+                                  (: r (tar-walk? keep root k2 fat)
                                      (? (! r) ()
                                         (go >ks (foldl (\ a x (x >< a)) acc (<(>r)))))))))
              r (go kids ())
              (? (! r) () `(1 (e >< (<(>r))))))
+          (! fat)
+          (: e (tar-entry rel 'file "")
+             _ (pin e 'mode (tar-mode st)) _ (pin e 'mtime (tar-secs st))
+             _ (pin e 'size <st) _ (pin e 'path full)
+             `(1 `(e)))
           (: b (tar-slurp full)
              (? (! b) ()
                 (: e (tar-entry rel 'file (<(>b)))

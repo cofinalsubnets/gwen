@@ -36,6 +36,10 @@ printf 'alpha\n'                        > "$w/tree/a.txt"
 printf 'beta beta beta beta beta beta\n' > "$w/tree/sub/b.txt"
 head -c 512  /dev/urandom               > "$w/tree/sub/exact512.bin"
 head -c 4096 /dev/urandom               > "$w/tree/sub/deep/blob.bin"
+# bigger than tar-hash's 64 KB read buffer, so its chunk loop takes more than one
+# turn on a single body -- the only shape here that is about the STREAM and not
+# about the header.
+head -c 200000 /dev/urandom             > "$w/tree/sub/deep/big.bin"
 cat lib/gz.l lib/tar.l                  > "$w/tree/text.l"
 ln -s a.txt "$w/tree/link"
 chmod 0600 "$w/tree/sub/b.txt"
@@ -122,5 +126,27 @@ EOF
   cmp "$w/back" "$src" || fail "we disagree with gzip -9 on $f"
 done
 echo "  OK gzip container both ways (text, incompressible, empty; -9 dynamic codes read)"
+
+# --- the archive as a STREAM must equal the archive as a THING ---------------------
+# tar-hash walks thin entries and feeds a resumable sha-256 the header, the body off
+# disk, and the pad -- so it names an archive that was never built. The claim is that
+# it answers exactly what hashing the packed bytes answers, over this same tree: the
+# symlink (no body), the empty file (no pad), the exact-512 body (a zero-length pad,
+# where an off-by-one lives), and a body that outruns the read buffer.
+cat > "$w/hash.l" <<EOF
+(use 'tar)
+(: g (tar-gather? (\ _ 1) "$w/tree" "")
+   t (tar-thin? (\ _ 1) "$w/tree" "")
+   _ (? (g && t) 0 (: _ (say err "walk failed\n") (quit 1)))
+   a (tar-pack (tar-level (<(>g)) 0))
+   _ (? a 0 (: _ (say err "pack failed\n") (quit 1)))
+   h1 (sha256 a)
+   h2 (tar-hash (tar-level (<(>t)) 0))
+   _ (? (string? h2) 0 (: _ (say err "tar-hash answered ()\n") (quit 1)))
+   _ (? (= h1 h2) 0 (: _ (say err ("packed " + h1 + " streamed " + h2 + "\n")) (quit 1)))
+   0)
+EOF
+"$love" "$w/hash.l" || fail "tar-hash disagrees with sha256 of tar-pack"
+echo "  OK the streamed archive digest equals the packed one"
 
 echo "targz: lib/tar.l + lib/gz.l agree with GNU tar and GNU gzip both ways -- ok"

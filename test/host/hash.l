@@ -15,6 +15,11 @@
 ;   LENGTHS   the block is 64 bytes and the length rides the last 8 of it, so 55/56 and
 ;             119/120 are where a padding off by one shows, at both digests.
 ;   MISUSE    value ops: a wrong shape answers (), it does not digest.
+;   STREAM    sha256-init/feed/done is the SAME digest resumable, and its oracle is the
+;             one-shot beside it: fed in chunks of every awkward size, at every length
+;             where the padding could slip, it must answer what (sha256 s) answers. a
+;             second spelling of the compression function is exactly what this must not
+;             be, so the test is agreement and not another vector.
 ;
 ; run:  cat test/00-init.l test/host/hash.l | out/host/love
 (assert
@@ -99,7 +104,53 @@
  !(charm? (cksum ()))
  !(charm? (cksum (cask 8))))
 
+; --- sha-256 resumable: the stream against the one-shot -----------------------------
+; the state is a 105-byte cask the caller owns; a cask of any other size, or a feed of
+; anything that is not a string, is a misuse and answers ().
+(: sha-st 105
+   (sha-stream s k)                       ; s fed k bytes at a time -> the digest
+    (: b (cask sha-st)
+       _ (sha256-init b)
+       n (tally s)
+       (go i) (? (n <= i) (sha256-done b)
+                 (: j (? (n < (i + k)) n (i + k))
+                    _ (sha256-feed b (snip s i j))
+                    (go j)))
+       (go 0))
+   ; every length across both padding boundaries (55/56 and 119/120), each fed whole
+   ; and in chunks that divide the block, straddle it, and outrun it
+   (sha-agree? n)
+    (: s (hash-bytes n)
+       h (sha256 s)
+       (go ks) (? (! (two? ks)) 1
+                  (? (= h (sha-stream s <ks)) (go >ks) 0)))
+   (sha-sweep lo hi)
+    (: (go n) (? (hi < n) 1
+                 (? (sha-agree? n '(1 3 7 63 64 65 127 128)) (go (n + 1)) 0))
+       (go lo)))
+
+(assert
+ (lit? sha256-init) (lit? sha256-feed) (lit? sha256-done)
+ ; the published vectors, arrived at a byte at a time
+ ((sha-stream "" 1) = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+ ((sha-stream "abc" 1) = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+ ((sha-stream hash-56 1) = (sha256 hash-56))
+ ((sha-stream hash-112 7) = (sha256 hash-112))
+ ; 0..130 by every chunking: the block, the two pad boundaries, and past them
+ (sha-sweep 0 130)
+ ; a body that outruns any one feed, at a chunk size that is not a block multiple
+ ((sha-stream (hash-bytes 100000) 65536) = (sha256 (hash-bytes 100000)))
+ ((sha-stream (hash-bytes 100000) 1000) = (sha256 (hash-bytes 100000)))
+ ; misuse: the state is a 105-byte cask or it is nothing
+ (nil? (sha256-init (cask 8)))
+ (nil? (sha256-init "not a cask"))
+ (nil? (sha256-feed (cask 8) "x"))
+ (nil? (sha256-feed (cask sha-st) 7))
+ (nil? (sha256-done (cask 8)))
+ (nil? (sha256-done "not a cask")))
+
 (: _ (test_fin ())
-   _ (puts "hash: ok -- md5 and sha-256 on their published vectors, cksum against a love walk
+   _ (puts "hash: ok -- md5 and sha-256 on their published vectors, the resumable sha-256
+      against the one-shot, cksum against a love walk
 ")
    0)

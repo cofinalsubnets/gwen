@@ -212,7 +212,7 @@ force_src: ;
 $(dist_source): force_src $(if $(bundled_love),,$(love0))
 	@mkdir -p $(dir $@)
 	@r="$(ho)/love"; [ -x "$$r" ] || r="$(boot_love)"; \
-	 LOVE_NO_IMAGE= LOVE_BUDGET_MB=1024 $$r mk/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
+	 LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $$r mk/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
 # THE SOURCE BLOB: the source tarball laid into an object (mk/tools/mksrc.l), so the
 # artifact hands out its own source with no second download and no `tar xf` -- love
