@@ -126,13 +126,22 @@
                              (go params 0))
 
    ; -- ## paste: fold a token list, pasting across every (p "##") by joining
-   ; the previous result token's spelling with the next token's. --
+   ; the previous result token's spelling with the next token's.
+   ; an EMPTY ## operand is a placemarker (C11 6.10.3.3p2): it pastes to whatever it
+   ; meets and then vanishes, and two of them paste to another. subst mints them, this
+   ; folds them, and the sweep at the end drops any that met no ##. ⚠ without one, an
+   ; empty operand left the ## unfolded -- `A ## B` with B empty emitted a literal ##,
+   ; and `A ## B ; bob` pasted A with the `;` and ATE it when the join failed to relex. --
+   (pmk? ('pmark >< _)) 1
    (paste toks line)
-    (: (go l acc) (? !(two? l) (rev acc)
+    (: (nopm l) (? !(two? l) () (pmk? <l) (nopm >l) (<l >< nopm >l))
+       (go l acc) (? !(two? l) (nopm (rev acc))
                      (pv? <l "##" && two? acc && two? >l)
                       (: a <acc b <>l
-                         r (relex (spell a + spell b) line)
-                         (go >>l ((? r r a) >< >acc)))
+                         (? (pmk? a) (go >>l (b >< >acc))     ; placemarker ## x -> x
+                            (pmk? b) (go >>l acc)             ; x ## placemarker -> x
+                            (: r (relex (spell a + spell b) line)
+                               (go >>l ((? r r a) >< >acc)))))
                      (go >l (<l >< acc)))
        (go toks ()))
 
@@ -158,7 +167,10 @@
                  (idt? t && -1 < paramidx params (vof t))       ; a named parameter
                   (: pi (paramidx params (vof t))
                      raw (argn args pi)
-                     sub (? (adjh i) raw (expand raw macs))
+                     ; an EMPTY argument beside a ## is a placemarker, not nothing
+                     sub (? !(adjh i) (expand raw macs)
+                            (two? raw) raw
+                            [(tok 'pmark "" line)])
                      (go (i + 1) (revcat sub acc)))
                  (var? && idv? t "__VA_ARGS__")                 ; the variadic tail
                   (: va (vaargs args params)
@@ -168,7 +180,9 @@
                          (: acc2 >acc                       ; drop the ## already emitted (no join)
                             (? (two? va) (go (i + 1) (revcat (expand va macs) acc2))         ; args present: keep the comma
                                (go (i + 1) (? (two? acc2 && pv? <acc2 ",") >acc2 acc2))))      ; empty: drop the comma too
-                        prevhh (go (i + 1) (revcat va acc))     ; a real `## __VA_ARGS__` paste: unexpanded, paste folds it
+                        ; a real `## __VA_ARGS__` paste: unexpanded, paste folds it -- and
+                        ; an empty tail is the placemarker, same as a named parameter's
+                        prevhh (go (i + 1) (revcat (? (two? va) va [(tok 'pmark "" line)]) acc))
                         (go (i + 1) (revcat (expand va macs) acc))))
                  (go (i + 1) (t >< acc)))))
        (paste (go 0 ()) line))
@@ -205,6 +219,11 @@
    (mapadd toks hs line)                            ; give body tokens the hideset + the invocation line
     (? !(two? toks) ()
        (: t <toks ([(kof t) (vof t) line (dedup (hof t + hs)) (sof t)] >< mapadd >toks hs line)))
+   ; -- #line's operand: a digit sequence, or what one macro-expands to (C11 6.10.4p3).
+   ; () when it is neither, which is the directive doing nothing. --
+   (lnum body macs)
+    (: b (? (two? body && kof <body = 'num) body (expand body macs))
+       (? (two? b && kof <b = 'num) (vof <b) ()))
 
    ; -- #if / #elif integer constant-expression evaluation (undefined ids -> 0,
    ; defined X / defined(X) resolved first, then macro-expanded). --
@@ -453,14 +472,17 @@
                     ; #line N ["file"]: the NEXT line becomes N, so a token at
                     ; physical P reports P + (N - L - 1). ⚠ the file operand is
                     ; parsed and DROPPED -- __FILE__ is the TU's name throughout.
-                    ; a non-literal operand falls to the ignore below, as before.
-                    (dir = "line" && two? body && kof <body = 'num)
-                     (pin macs 'lndelta (vof <body - lof <line - 1),
-                      cppgo rest macs cond () out1 incf)
+                    ; ⚠ an operand that is not already a digit sequence is MACRO-EXPANDED
+                    ; and then has to be one (C11 6.10.4p3) -- `#line line`. one that
+                    ; still is not falls to the ignore below, as before.
+                    (dir = "line")
+                     (: n (lnum body macs)
+                        _ (? n (pin macs 'lndelta (n - lof <line - 1)) 0)
+                        (cppgo rest macs cond () out1 incf))
                     ; ignored on purpose, and each is one gcc also accepts: a bare
                     ; `#` is the null directive (C11 6.10.7), and a numeric one is
                     ; gcc -E's line marker.
-                    (member? dir '("pragma" "line" "ident" "sccs" "assert" "unassert") ||
+                    (member? dir '("pragma" "ident" "sccs" "assert" "unassert") ||
                         !(two? >line) || id? dirk 'num)
                      (cppgo rest macs cond () out1 incf)
                     ; ..and anything else is a directive we do not implement, where

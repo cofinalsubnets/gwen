@@ -9,6 +9,12 @@
  * nothing here may test it.
  */
 
+/* the operands for the two macro-expanded `#line`s below: a plain object macro, and
+   one that only becomes a digit sequence after a second round of expansion */
+#define five_hundred 500
+#define SIX 600
+#define PLUS SIX
+
 /* C11 6.7.6.2p4: a parameter declared [*] decays to a pointer like [] does */
 static int sum_star(int n, int v[*]);
 static int sum_star(int n, int v[])
@@ -46,6 +52,14 @@ int main(void)
 #if __LINE__ != 400
 #error the directive lane must see the mapped line too
 #endif
+
+    /* C11 6.10.4p3: an operand that is not already a digit sequence is macro-expanded
+       and then has to be one. ⚠ keep each `#line` ADJACENT to its check. */
+#line five_hundred
+    if (__LINE__ != 500) return 7;
+
+#line PLUS
+    if (__LINE__ != 600) return 8;
 
     return 0;
 }

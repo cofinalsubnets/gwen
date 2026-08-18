@@ -49,14 +49,10 @@ esac
 # faults, not backend ones, and no target routes around any of them. The two that ARE
 # per-target follow the lists.
 roster_refuses='
-00044 a struct tag redefined in an inner block escapes to file scope
 00050 a brace-elided initializer that continues PAST an anonymous union member
-00053 a block-scope struct tag collides with the outer one of the same name
 00149 the address of a compound literal in a static initializer
 00150 the same, with designated initializers nested inside it
-00152 #line is ignored (doc/moon-c-gaps: the directives ignored on purpose)
 00201 a ## paste that MAKES a macro name, which is then invoked with arguments
-00202 a ## paste with an empty operand, followed by more tokens
 00204 a register-exhausted SSE-class by-value argument -- five float HFAs (the gp twin landed, this one did not)
 00213 a statement expression, ({ ... })
 00214 a statement expression under __builtin_expect
