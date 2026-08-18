@@ -203,7 +203,12 @@
          ; SA_RESTORER off); the symbol keeps the two sys.o surfaces identical.
          '(
          ; -- __ai_sys: args x0..x6 (n,a..f) -> the kernel's x8=nr, x0..x5.
-         ;    x8 drains first, then each mov reads the slot ahead of it.
+         ;    x8 drains first, then each mov reads the slot ahead of it. the tail
+         ;    is OS-BLIND, as x64's is: the BSDs answer an error by SETTING THE
+         ;    CARRY with a positive errno in x0, and linux preserves NZCV across
+         ;    svc (it rides SPSR through the eret), so a carry going in clear can
+         ;    only have been raised by a BSD. ⚠ clearing it takes a BORROW --
+         ;    aarch64's cmp is subs, and subtracting 0 leaves C SET.
          (label __ai_sys)
          (mov r8 r0)                 ; x8 <- n
          (mov r0 r1)                 ; x0 <- a
@@ -212,8 +217,37 @@
          (mov r3 r4)                 ; x3 <- d
          (mov r4 r5)                 ; x4 <- e
          (mov r5 r6)                 ; x5 <- f
+         (li r9 0)                   ; 0 - 1 borrows, so C goes CLEAR
+         (cmp r9 1)
          (sys)
+         (br ae sys-err)             ; `ae' IS carry-set on this file: a BSD error
          (ret)                       ; x0 rides out (-errno included; C wraps it)
+         (label sys-err)
+         (neg r0)
+         (lea r0 r0 -4096)           ; -(errno+4096): parked for __ai_call
+         (ret)
+
+         ; -- __ai_sys7(n,a..g): the wide door netbsd's classic pads want. On
+         ;    aarch64 the seventh argument is just another register -- the kernel
+         ;    reads x0..x7 -- so unlike x64 nothing rides the stack.
+         (label __ai_sys7)
+         (mov r8 r0)                 ; x8 <- n
+         (mov r0 r1)
+         (mov r1 r2)
+         (mov r2 r3)
+         (mov r3 r4)
+         (mov r4 r5)
+         (mov r5 r6)
+         (mov r6 r7)                 ; x6 <- g, the seventh
+         (li r9 0)
+         (cmp r9 1)
+         (sys)
+         (br ae sys7-err)
+         (ret)
+         (label sys7-err)
+         (neg r0)
+         (lea r0 r0 -4096)
+         (ret)
 
          ; -- __sigsetjmp(buf, save): the callee-saved file, the return seam,
          ;    then the current mask into buf[21] (rt_sigprocmask how=0 set=NULL).
@@ -242,51 +276,91 @@
          (stsd r0 160 f15)
          (lea r2 r0 168)             ; x2 = &buf[21] (oldset)
          (li r1 0)                   ; x1 = NULL (read only)
-         (li r0 0)                   ; x0 = SIG_BLOCK
-         (li r3 8)                   ; x3 = sigsetsize
+         (li r3 8)                   ; x3 = sigsetsize (linux's fourth)
+         (la r9 __ai_osv)
+         (ld r9 r9 0)
+         (cmp r9 2)
+         (br eq sj-fb)
+         (cmp r9 3)
+         (br eq sj-nb)
+         (li r0 0)                   ; x0 = SIG_BLOCK (linux 0)
          (li r8 135)                 ; rt_sigprocmask
          (sys)
          (li r0 0)                   ; the first arrival answers 0
          (ret)
+         (label sj-fb)
+         (li r0 1)                   ; SIG_BLOCK (both BSDs: 1), 16-byte set
+         (li r8 340)                 ; sigprocmask
+         (sys)
+         (li r0 0)
+         (ret)
+         (label sj-nb)
+         (li r0 1)
+         (li r8 293)                 ; __sigprocmask14
+         (sys)
+         (li r0 0)
+         (ret)
 
          ; -- siglongjmp(buf, val): the mask FIRST (the fault barrier jumps out
          ;    of a signal handler), then the file, then ret through the saved lr.
+         ; ⚠ buf and val ride x19/x20, NOT the scratch file: freebsd's syscall exit
+         ;    ZEROES the caller-saved registers (a leak mitigation linux has not),
+         ;    so only the callee-saved half survives the kernel -- and that half is
+         ;    about to be overwritten from the buffer anyway. x19 restores LAST,
+         ;    off itself, x20 the line before it.
          (label siglongjmp)
-         (mov r9 r0)                 ; x9  <- buf
-         (mov r10 r1)                ; x10 <- val
-         (lea r1 r9 168)             ; x1 = &buf[21] (the saved mask)
-         (li r0 2)                   ; x0 = SIG_SETMASK
-         (li r2 0)                   ; x2 = NULL
-         (li r3 8)                   ; x3 = sigsetsize
+         (mov r19 r0)                ; x19 <- buf
+         (mov r20 r1)                ; x20 <- val
+         (lea r1 r19 168)            ; x1 = &buf[21] (the saved mask)
+         (li r2 0)                   ; x2 = NULL (oset)
+         (li r3 8)                   ; x3 = sigsetsize (linux's fourth)
+         (la r9 __ai_osv)
+         (ld r9 r9 0)
+         (cmp r9 2)
+         (br eq lj-fb)
+         (cmp r9 3)
+         (br eq lj-nb)
+         (li r0 2)                   ; x0 = SIG_SETMASK (linux 2)
          (li r8 135)                 ; rt_sigprocmask
          (sys)
-         (ld r19 r9 0)
-         (ld r20 r9 8)
-         (ld r21 r9 16)
-         (ld r22 r9 24)
-         (ld r23 r9 32)
-         (ld r24 r9 40)
-         (ld r25 r9 48)
-         (ld r26 r9 56)
-         (ld r27 r9 64)
-         (ld r28 r9 72)
-         (ld fp  r9 80)
-         (ldsd f8  r9 104)
-         (ldsd f9  r9 112)
-         (ldsd f10 r9 120)
-         (ldsd f11 r9 128)
-         (ldsd f12 r9 136)
-         (ldsd f13 r9 144)
-         (ldsd f14 r9 152)
-         (ldsd f15 r9 160)
-         (mov r0 r10)                ; x0 <- val, 0 lifted to 1 (the setjmp law)
+         (jmp lj-file)
+         (label lj-fb)
+         (li r0 3)                   ; SIG_SETMASK (both BSDs: 3)
+         (li r8 340)                 ; sigprocmask
+         (sys)
+         (jmp lj-file)
+         (label lj-nb)
+         (li r0 3)
+         (li r8 293)                 ; __sigprocmask14
+         (sys)
+         (label lj-file)
+         (ld r21 r19 16)
+         (ld r22 r19 24)
+         (ld r23 r19 32)
+         (ld r24 r19 40)
+         (ld r25 r19 48)
+         (ld r26 r19 56)
+         (ld r27 r19 64)
+         (ld r28 r19 72)
+         (ld fp  r19 80)
+         (ldsd f8  r19 104)
+         (ldsd f9  r19 112)
+         (ldsd f10 r19 120)
+         (ldsd f11 r19 128)
+         (ldsd f12 r19 136)
+         (ldsd f13 r19 144)
+         (ldsd f14 r19 152)
+         (ldsd f15 r19 160)
+         (mov r0 r20)                ; x0 <- val, 0 lifted to 1 (the setjmp law)
          (cmp r0 0)
          (br ne lj-live)
          (li r0 1)
          (label lj-live)
-         (ld r11 r9 88)
+         (ld r11 r19 88)
          (lea sp r11 0)              ; sp <- the saved sp
-         (ld lr r9 96)
+         (ld lr r19 96)
+         (ld r20 r19 8)              ; x20 back, then x19 off itself
+         (ld r19 r19 0)
          (ret)                       ; ret x30 = the saved return pc
 
          ; -- __ai_sigret: rt_sigreturn, laid for surface parity (see above).
@@ -380,9 +454,15 @@
          (label __ai_sigret)
          (li r7 139)                 ; rt_sigreturn
          (sys)))
+       ; what each lane EXPORTS, and the three differ: the wide door rides wherever
+       ; a BSD does (x64 through the stack, arm64 through x6 -- riscv has no second
+       ; kernel yet), and the netbsd trampoline is x64's alone until an arm64
+       ; netbsd box proves one (impl.h's AiNbTramp says the same to the C).
        (objelf arch ir ()
-               (? (id? arch 'x64)   ; the wide door and the netbsd tramp are x64's alone
+               (? (id? arch 'x64)
                   '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret" "__ai_nb_sigtramp")
+                  (id? arch 'arm64)
+                  '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret")
                   '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret"))
                () () () () () () ())))
 ) ; module 'moon

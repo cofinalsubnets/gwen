@@ -485,13 +485,23 @@
            (ld r6 r6 0)
            (call main)
            (mov r6 r0) (li r0 60) (sys))
-   ; the aarch64 twin: x0 = the OS stack pointer (mov from sp must be lea --
-   ; ORR reads XZR at 31), exit_group = 93 in x8; the default __ai_start pushes
-   ; lr (its own 16-byte cell, keeping sp 16-aligned for main) and exits
-   ; straight off main's answer, already in x0.
-   crt0-a64 '((lea r0 sp 0)
+   ; the aarch64 twin, and it serves BOTH kernels the way x64's does (rung UV1):
+   ; linux zeroes every register and lays argc at [sp], freebsd hands the vector
+   ; BASE IN X0 with sp only near it -- a pad word below argc as often as not,
+   ; which is why a linux-shaped entry there is a COIN FLIP: half the runs read
+   ; argc off the pad, find no program, and fall to stdin. So a zero x0 says
+   ; linux and sp is the vector; a non-zero x0 IS the vector. Each side exits by
+   ; its own number (exit_group 93 / exit 1); a link riding freebsd carries
+   ; nolibc's strong __ai_start, whose exit() goes through the one door.
+   ; ⚠ mov from sp must be lea -- ORR reads XZR at 31.
+   crt0-a64 '((cmp r0 0)
+               (br ne c0a-fb)
+               (lea r0 sp 0)
                (call __ai_start)
                (li r8 93) (sys)
+               (label c0a-fb)
+               (call __ai_start)
+               (li r8 1) (sys)
                (label __ai_start)
                (push lr)
                (lea r1 r0 8)
@@ -825,14 +835,15 @@
        lib (all + arload all ars tgt)
        set (lib + rtpull lib tgt os nostd vb)
        ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set ("love " + <(usplit 43 love-version)) rdme))
-       ; the BRAND: EI_OSABI = 9 in e_ident[7], on EVERY x64 static exe -- the
+       ; the BRAND: EI_OSABI = 9 in e_ident[7], on EVERY hosted static exe -- the
        ; linux loader never reads the byte, freebsd's imgact refuses without
-       ; it, so the one binary is born acceptable to both kernels (rung UV3).
+       ; it (Exec format error), so the one binary is born acceptable to both
+       ; kernels (rung UV3). arm64 wears it for the same reason x64 does.
        ; ps is ld-write's PIECE LIST; the ELF header rides the first piece.
        (brand9 p)
         (? (string? p) (snip p 0 7 + string 9 + snip p 8 (tally p))
            (: (go i l) (? (i = 7) (9 >< >l) (<l >< go (i + 1) >l)) (go 0 p)))
-       ps9 (? (id? tgt 'x64) (brand9 <ps >< >ps) ps)
+       ps9 (? (member? tgt '(x64 arm64)) (brand9 <ps >< >ps) ps)
        _ (ld-write dst ps9)
        (chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [-x c] [-t x64|arm64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."

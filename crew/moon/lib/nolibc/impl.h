@@ -44,12 +44,19 @@
 #include <netinet/in.h>
 
 extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
-/* ⚠ ONE KERNEL PER ARCH but x86_64: os.c's __ai_osdetect answers 1 flat on the
- * others and every translation there is an identity stub. The BSD branches
- * compile only where a second kernel can answer -- so a link for a one-kernel
- * arch owes no machine tail mksys did not lay for it. */
-#if !defined(__aarch64__) && !defined(__riscv)
+/* ⚠ WHICH ARCHES CARRY A SECOND KERNEL. The BSD branches compile only where one
+ * can answer, so a link for a one-kernel arch owes no machine tail mksys did not
+ * lay for it. x86_64 and aarch64 carry them; riscv keeps os.c's identity stubs
+ * until a BSD riscv box exists to contradict a table.
+ * ⚠ AND THE NETBSD RETURN PATH IS NARROWER STILL: __ai_nb_sigtramp is x64 asm,
+ * laid by that mksys alone. Where it is absent the netbsd sigaction refuses BY
+ * NAME rather than registering a trampoline that is not there -- freebsd on the
+ * same arch is unaffected, and an arm64 netbsd box is what would lift it. */
+#if !defined(__riscv)
 # define AiTwoKernels 1
+#endif
+#if !defined(__aarch64__) && !defined(__riscv)
+# define AiNbTramp 1
 #endif
 #ifdef AiTwoKernels
 extern long __ai_sys7(long n, long a, long b, long c, long d, long e, long f, long g);   /* the 7th arg rides the stack (netbsd mmap) */
@@ -495,7 +502,7 @@ struct __nb_kevent {                  /* __kevent50's record: 40 bytes, no ext,
   void *udata;
 };
 extern void __ai_nbstat(struct __nb_stat const *f, struct stat *st);
-#ifdef AiTwoKernels
+#ifdef AiNbTramp
 extern void __ai_nb_sigtramp(void);   /* mksys: mov r15->rdi; setcontext; exit */
 #endif
 #define FfLeft 1

@@ -38,6 +38,11 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
     return 0; }
 #ifdef AiTwoKernels
   if (__ai_osv == 3) {
+#ifndef AiNbTramp
+    /* no proven return path on this ISA: refuse rather than register a tramp
+     * that was never laid. freebsd on this arch does not come through here. */
+    (void) a; (void) old; __errno_v = ENOSYS; return -1;
+#else
     /* the same permutation and shim; netbsd's shape puts the mask before the
      * flags, and the kernel provides no return path -- the registered tramp
      * (mksys's __ai_nb_sigtramp, version 2) is the way back. */
@@ -65,7 +70,9 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
       old->sa_flags = (int) __ai_sacan(ko.flags);
       old->sa_mask.__v[0] = (long) __ai_maskcan((unsigned long) ko.mask[0]
                                                 | ((unsigned long) ko.mask[1] << 32)); }
-    return 0; }
+    return 0;
+#endif
+  }
 #endif
   struct __ksigaction ka, ko;
   memset(&ko, 0, sizeof ko);
