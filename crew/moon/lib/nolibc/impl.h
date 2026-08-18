@@ -127,6 +127,8 @@ struct _IO_FILE {
 #define NR_getpgid        207
 #define NR_mount           21   /* ⚠ another signature -- (type dir flags data) (rung 3) */
 #define NR_getdirentries  554   /* ino64; the record IS the freebsd dirent (readdir.c) */
+#define NR___sysctl       202   /* sysctl(3)'s door (selfpath's KERN_PROC_PATHNAME) */
+#define NR_posix_openpt   504   /* a real syscall here; linux opens /dev/ptmx */
 #define NR_clock_gettime  232
 #define NR_exit_group       1   /* exit: one thread here, so one exit is the whole act */
 #define NR_openat         499

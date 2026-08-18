@@ -129,3 +129,36 @@ echo "$out" | grep -q "printf rides: 42" || fail "stdio did not ride -- got: $ou
 echo "$out" | grep -q "rc=42" || fail "wrong exit -- got: $out"
 
 echo "test_freebsd: a mooncc-laid static freebsd/amd64 binary ran on the box -- rungs 2+3 hold"
+
+# ---- rung 4/5: the WHOLE love, -os freebsd, runs on the box ----
+# every TU through mooncc (the host lane's flags wearing -os freebsd), mksys-freebsd
+# the machine tail, our link -- then the -e lane, say, and the stdin repl answer there.
+mkdir -p "$d/love"
+moon0 -os freebsd -t x64 -D ai_tco=1 -D AiHaveVersionH -fno-ir -I"$ho" -I. -Icore -Iout/lib -c core/love.c "$d/love/love.o" || fail "-os freebsd core/love.c"
+for f in host/*.c; do
+  b=$(basename "$f" .c)
+  moon0 -os freebsd -t x64 -D ai_tco=1 -I"$ho" -I. -Icore -Iout/lib -c "$f" "$d/love/host_$b.o" || fail "-os freebsd $f"
+done
+for f in crew/moon/lib/math/*.c; do
+  b=$(basename "$f" .c)
+  moon0 -os freebsd -t x64 -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/love/m_$b.o" || fail "-os freebsd $f"
+done
+"$love0" -l "$ho/.mksys-cat.l" -n -e "((from 'moon 'mksys-freebsd) \"$d/love/sys.o\")" || fail "mksys-freebsd"
+moon0 -os freebsd -t x64 "$d/love"/*.o -o "$d/love/love-fbsd" || fail "the love link came up short"
+
+# ⚠ every run rides the PIPED REPL (data, then EOF) -- the one lane that is
+# deterministic on freebsd today. The -e lane races the stdin-owner's EOF exit
+# there (the plan's rung-4 note: `-e "(quit 7)"` with an EOF'd stdin answers 0
+# or 7 by coin-flip); restore -e legs when that race is fixed.
+$FBSD_SSH 'cat > /tmp/love-fbsd && chmod +x /tmp/love-fbsd' < "$d/love/love-fbsd" \
+  || fail "the box could not take love"
+out=$($FBSD_SSH 'echo "(quit 7)" | /tmp/love-fbsd; echo "rc=$?"
+echo "(say out (show 42))" | /tmp/love-fbsd
+echo
+echo "(say out (show (sort (L 3 1 2))))" | /tmp/love-fbsd') \
+  || fail "the box could not run love"
+echo "$out" | grep -q "rc=7" || fail "quit did not carry -- got: $out"
+echo "$out" | grep -q "42" || fail "the say lane -- got: $out"
+echo "$out" | grep -q "(1 2 3)" || fail "the stdin repl -- got: $out"
+
+echo "test_freebsd: the WHOLE love (egg) answers on the box -- quit, say, and the repl"
