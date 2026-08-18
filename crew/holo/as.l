@@ -4,8 +4,11 @@
 ; with link.l's `ld`. where crew/holo/text.l parses holo's OWN mnemonics over abstract registers,
 ; THIS parses real x86-64: physical registers (%rax/%eax/..), the AT&T operand grammar, the directive
 ; set. the encoders mirror x64.l form-for-form but read the register number off the name and carry the
-; operand WIDTH (x64.l is 64-bit-mode only). M1 scope: 64/32-bit GPR core -- reg/imm ALU, mov, unary,
-; push/pop, lea rip, call/jmp/jcc (NEAR; branch relaxation is M2), ret/nop/syscall/leave/cq[dt]o.
+; operand WIDTH (x64.l is 64-bit-mode only). scope: the GPR core at all four widths -- ALU, mov,
+; unary, push/pop, lea, test over register, immediate AND memory operands; call/jmp/jcc (NEAR;
+; branch relaxation is M2), ret/nop/syscall/leave/cq[dt]o. a memory operand is AT&T's full
+; disp(base,index,scale), rip-relative and indirect `*` included; the size suffix (movb/addl/..)
+; gives the width wherever no register operand carries one.
 ;
 ; load AFTER holo.l + x64.l (bare, dev/test context -- the encoder primitives le32/byte/fix/modrm..
 ; are still on the global book; the eventual host path reaches them through the `holo` book):
@@ -57,11 +60,20 @@
       ((: (g i st acc) (? (i >= n) (rev (snip s st n >< acc))
                           (s i = 10) (g (i + 1) (i + 1) (snip s st i >< acc))
                           (g (i + 1) st acc))) 0 0 ()))
-   ;; split a string on a byte, trimming each field (used for the operand list on ',').
+   ;; split a string on a byte, trimming each field (the (base,index,scale) fields inside a paren).
    (as-split s c) (: n (tally s)
       ((: (g i st acc) (? (i >= n) (rev (as-trim (snip s st n) >< acc))
                           (s i = c) (g (i + 1) (i + 1) (as-trim (snip s st i) >< acc))
                           (g (i + 1) st acc))) 0 0 ()))
+   ;; the operand list splits on TOP-LEVEL commas only -- a memory operand carries its own inside
+   ;; the parens, and cutting there would tear it in three.
+   (as-oplist s) (: n (tally s)
+      ((: (g i st d acc)
+          (? (i >= n) (rev (as-trim (snip s st n) >< acc))
+             (s i = 40) (g (i + 1) st (d + 1) acc)
+             (s i = 41) (g (i + 1) st (d - 1) acc)
+             ((s i = 44) && (d = 0)) (g (i + 1) (i + 1) 0 (as-trim (snip s st i) >< acc))
+             (g (i + 1) st d acc))) 0 0 0 ()))
    ;; the head mnemonic and the operand-string of an instruction line.
    (as-mnem s)  (: i (as-idx s 32) j (as-idx s 9)
                    k (? (i < 0) j (j < 0) i (? (i < j) i j))
@@ -70,30 +82,92 @@
                    k (? (i < 0) j (j < 0) i (? (i < j) i j))
                    (? (k < 0) "" (as-trim (snip s k (tally s)))))
 
-   ;; --- operand parsing: -> a tagged form. (rg enc w) | (im n) | (lbl sym) | (rip sym) | (mem base disp) ---
+   ;; --- operand parsing: -> a tagged form.
+   ;;   (rg enc w) | (im n) | (lbl sym) | (rip sym) | (ind o) | (mem base index scale disp)
+   ;; a memory operand is AT&T's disp(base,index,scale) with either register absent (-1 then); a
+   ;; leading `*` marks the indirect branch target it wraps. ---
    (as-reglook nm) (: r (peep as-regs (intern nm) ()) (? (two? r) r (scare 'as-badreg nm)))
+   (as-mreg f) (? (0 = tally f) -1 <(as-reglook (snip f 1 (tally f))))   ; a %reg field, or absent
    (as-operand t)
-      (? (as-has? t 40)                                       ; contains '(' -> a memory operand
+      (? (t 0 = 42) `('ind (as-operand (snip t 1 (tally t))))    ; *%reg / *mem
+         (as-has? t 40)                                       ; contains '(' -> a memory operand
          (: op (as-idx t 40) inner (snip t (op + 1) (tally t - 1))     ; strip the ')'
             disp (snip t 0 op)
+            d (? (0 = tally disp) 0 (as-num disp))
             (? (inner = "%rip") `('rip (intern disp))        ; sym(%rip)
-               (: r (as-reglook (snip inner 1 (tally inner)))  ; disp(%reg) / (%reg)
-                  `('mem <r (? (0 = tally disp) 0 (as-num disp))))))
+               (: fs (as-split inner 44) k (tally fs)
+                  (? (k > 3) (scare 'as-memform t)
+                     `('mem (as-mreg <fs) (? (k < 2) -1 (as-mreg (at fs 1)))
+                            (? (k < 3) 1 (as-num (at fs 2))) d)))))
          (t 0 = 37) ('rg >< as-reglook (snip t 1 (tally t)))        ; %reg
          (t 0 = 36) `('im (as-num (snip t 1 (tally t))))             ; $imm
          (as-numish? t) `('im (as-num t))                           ; a bare number
          `('lbl (intern t)))                                        ; a symbol (branch/call target)
-   (as-ops rest) (? (0 = tally rest) () (map as-operand (as-split rest 44)))
+   (as-ops rest) (? (0 = tally rest) () (map as-operand (as-oplist rest)))
 
    ;; --- encoder primitives (physical, width-aware; x64.l is the form reference). ---
    (as-hi n) (n >> 3)  (as-lo n) (n & 7)
-   (as-rex w r x b) (? (w > 0 || r > 0 || x > 0 || b > 0)               ; emit REX only when a bit is set
-                       `((64 | ((w << 3) | ((r << 2) | ((x << 1) | b))))) ())
-   (as-mrm m r rm) ((m << 6) | (((r & 7) << 3) | (rm & 7)))
-   (as-w8? o) (at o 2 = 8)                                    ; a register operand is 64-bit?
-   (as-regn o) (at o 1)                                       ; its encoding number
+   (as-rex f w r x b) (? (f > 0 || w > 0 || r > 0 || x > 0 || b > 0)   ; only when a bit is set,
+                         `((64 | ((w << 3) | ((r << 2) | ((x << 1) | b))))) ())   ; or f forces one
+   (as-mrm m r rm)  ((m << 6) | (((r & 7) << 3) | (rm & 7)))
+   (as-sib sc ix b) ((sc << 6) | (((ix & 7) << 3) | (b & 7)))
+   (as-scb s) (? (s = 1) 0 (s = 2) 1 (s = 4) 2 (s = 8) 3 (scare 'as-badscale s))
+   (as-regn o) (at o 1)                                       ; a register operand's encoding number
+   (as-regw o) (? (<o = 'rg) (at o 2) 0)                      ; ... and its width, 0 if it isn't one
+   ;; spl/bpl/sil/dil name the low four's bytes only UNDER a REX -- bare, those slots spell
+   ;; ah/ch/dh/bh -- so a byte operand in 4..7 forces an otherwise-empty one.
+   (as-frc o) (? !(as-regw o = 1) 0 ((as-regn o >= 4) && (as-regn o <= 7)))
+   (as-frcs ops) (foldl (\ a o (? (a > 0) a (as-frc o))) 0 ops)
 
-   ;; the ALU group: mnemonic -> (rr-opcode  imm-ext). reg field carries the source (AT&T src,dst).
+   ;; --- the r/m half: a register (mod 3) or a memory operand, which lays a ModRM (+ SIB)
+   ;; (+ displacement) and hands up the REX X and B bits. an rbp/r13 base has no disp-less slot
+   ;; (mod 0 there means disp32) so force a disp byte; an rsp/r12 base needs a SIB to say so; a
+   ;; base-less form is mod 0 + SIB base 5 + a full disp32; rip-relative is mod 0, rm 5, and the
+   ;; four bytes are a rel32 fixup. ---
+   (as-mem-rm rf o)
+      (: b (at o 1) ix (at o 2) sc (at o 3) d (at o 4)
+         (? (b < 0) (`((as-mrm 0 rf 4) (as-sib (as-scb sc) (? (ix < 0) 4 ix) 5)) + le32 d)
+            (: md (? ((d = 0) && !(as-lo b = 5)) 0 (fits8 d) 1 2)
+               dsp (? (md = 0) () (md = 1) `((byte d)) (le32 d))
+               hd (? (ix >= 0)      `((as-mrm md rf 4) (as-sib (as-scb sc) ix b))
+                     (as-lo b = 4)  `((as-mrm md rf 4) (as-sib 0 4 b))
+                     `((as-mrm md rf (as-lo b))))
+               (hd + dsp))))
+   (as-rm rf o) (? (<o = 'mem) (as-mem-rm rf o)
+                   (<o = 'rip) `((as-mrm 0 rf 5) (fix 4 'rel32 (at o 1) 0))
+                   (<o = 'rg)  `((as-mrm 3 rf (as-regn o)))
+                   (scare 'as-notrm o))
+   (as-rm-x o)  (? !(<o = 'mem) 0 (: i (at o 2) (? (i < 0) 0 (as-hi i))))
+   (as-rm-b o)  (? (<o = 'mem) (: b (at o 1) (? (b < 0) 0 (as-hi b)))
+                   (<o = 'rip) 0 (as-hi (as-regn o)))
+   (as-mem? o)  ((<o = 'mem) || (<o = 'rip))
+
+   ;; --- operand size. the AT&T suffix sets it; absent one it is read off a register operand, and
+   ;; 0 means neither said -- fine for the 64-bit-default forms (push/pop/call/jmp), a raise for
+   ;; anything else. width 2 takes a 66 prefix, width 1 the opcode one BELOW the wide one (89/88,
+   ;; 01/00, c7/c6, f7/f6, ff/fe all sit in that relation). ---
+   (as-sfxw c) (? (c = 98) 1 (c = 119) 2 (c = 108) 4 (c = 113) 8 0)
+   as-sfxable '(mov add or and sub xor cmp test neg not inc dec push pop lea)
+   (as-mnw s) (: n (tally s) w (? (n < 2) 0 (as-sfxw (s (n - 1))))    ; -> (stem width)
+                 st (? (w = 0) 'x (intern (snip s 0 (n - 1))))
+                 (? ((w > 0) && (member? st as-sfxable)) `(st w) `((intern s) 0)))
+   (as-p16 w)  (? (w = 2) '(102) ())
+   (as-rexw w) (? (w = 8) 1 0)
+   (as-opw opc w) (? (w = 1) (opc - 1) opc)
+   (as-imw w n)   (? (w = 1) `((byte n)) (w = 2) (le16 n) (le32 n))
+   (as-width sw ops)
+      (: rw (foldl (\ a o (? (a > 0) a (as-regw o))) 0 ops)
+         (? (sw = 0) rw
+            ((rw > 0) && !(rw = sw)) (scare 'as-widthclash `(sw rw))
+            sw))
+   ;; the whole reg-with-r/m family in one spelling: size prefix, REX, opcode, ModRM tail. `rn` is
+   ;; the reg field -- a register encoding, or an opcode extension digit.
+   (as-emit w frc opc rn rm)
+      (catall `((as-p16 w) (as-rex frc (as-rexw w) (as-hi rn) (as-rm-x rm) (as-rm-b rm))
+                 opc (as-rm rn rm)))
+
+   ;; the ALU group: mnemonic -> (rr-opcode  imm-ext). reg field carries the source (AT&T src,dst);
+   ;; the reg->r/m direction is the table's opcode and r/m->reg is +2 (mov's 89/8b sit the same way).
    as-alu (tabof
         `(('add >< '(1 0)) ('or >< '(9 1)) ('and >< '(33 4)) ('sub >< '(41 5))
            ('xor >< '(49 6)) ('cmp >< '(57 7))))
@@ -104,54 +178,67 @@
            ('jbe >< 134) ('ja >< 135) ('js >< 136) ('jns >< 137) ('jo >< 128) ('jno >< 129)
            ('jp >< 138) ('jnp >< 139)))
 
-   ;; alu $imm,%d and alu %s,%d.  d is the r/m, s the reg field.
-   (as-alu-ri ext d w imm)
-      (? (fits8 imm) (as-rex (? (w = 8) 1 0) 0 0 (as-hi d) + `(131 (as-mrm 3 ext d) (byte imm)))
-         (catall `((as-rex (? (w = 8) 1 0) 0 0 (as-hi d)) `(129 (as-mrm 3 ext d)) (le32 imm))))
-   (as-alu-rr rr d w s)
-      (as-rex (? (w = 8) 1 0) (as-hi s) 0 (as-hi d) + `(rr (as-mrm 3 s d)))
+   ;; alu $imm,r/m: 80 /ext ib for a byte, else the 83 /ext ib short form where the immediate fits,
+   ;; else 81 /ext iz.
+   (as-alu-i ext w frc rm imm)
+      (? (w = 1)     (as-emit 1 frc '(128) ext rm + `((byte imm)))
+         (fits8 imm) (as-emit w frc '(131) ext rm + `((byte imm)))
+         (as-emit w frc '(129) ext rm + as-imw w imm))
 
-   ;; mov: reg<-reg (89), reg<-imm (b8+rd / c7 /0 / movabs by width and range).
-   (as-mov-rr d w s) (as-rex (? (w = 8) 1 0) (as-hi s) 0 (as-hi d) + `(137 (as-mrm 3 s d)))
-   (as-mov-ri d w imm)
-      (? (w = 8)
-         (? (fits32 imm) (catall `((as-rex 1 0 0 (as-hi d)) `(199 (as-mrm 3 0 d)) (le32 imm)))    ; c7 /0 id
-            (catall `((as-rex 1 0 0 (as-hi d)) `((184 | as-lo d)) (le64 imm))))                  ; movabs
-         (catall `((as-rex 0 0 0 (as-hi d)) `((184 | as-lo d)) (le32 imm))))                     ; b8+rd id (32-bit)
+   ;; mov $imm,%reg: the b0/b8+r short forms by width, movabs where a 64-bit immediate needs it,
+   ;; c7 /0 id where it fits signed-32.
+   (as-mov-ri d w frc imm)
+      (: rx (as-rex frc (as-rexw w) 0 0 (as-hi d))
+         (? (w = 1) (catall `(rx `((176 | as-lo d) (byte imm))))
+            (w = 2) (catall `('(102) rx `((184 | as-lo d)) (le16 imm)))
+            (w = 4) (catall `(rx `((184 | as-lo d)) (le32 imm)))
+            (fits32 imm) (catall `(rx `(199 (as-mrm 3 0 d)) (le32 imm)))
+            (catall `(rx `((184 | as-lo d)) (le64 imm)))))
 
    ;; --- the per-instruction encoders (each -> a byte/fix item list). ---
-   (as-2 mn a b)                                             ; two-operand
-      (: ka <a kb <b
-         (? (mn = 'mov)
-            (? ((ka = 'rg) && (kb = 'rg)) (as-mov-rr (as-regn b) (at >b 1) (as-regn a))
-               ((ka = 'im) && (kb = 'rg)) (as-mov-ri (as-regn b) (at >b 1) (at a 1))
-               ((ka = 'rip) && (kb = 'rg)) (as-lea (at a 1) (as-regn b))                     ; lea alias? no -- mov from rip is a load, M2
-               (scare 'as-mov-form `(a b)))
-            (mn = 'lea)
-            (? ((ka = 'rip) && (kb = 'rg)) (as-lea (at a 1) (as-regn b))
+   ;; ⚠ a rip-relative operand with an immediate TAIL is refused, not encoded: x64-patch measures
+   ;; rel32 from the end of its own field, and holo's fixup carries no addend to walk past the tail.
+   (as-2 mn w a b)                                           ; two-operand: AT&T src,dst
+      (: ka <a kb <b frc (as-frcs `(a b))
+         alu (peep as-alu mn ())
+         rr  (? (mn = 'mov) 137 (mn = 'test) 133 (two? alu) (at alu 0) 0)
+         opi (? (mn = 'mov) 199 (mn = 'test) 247 0)          ; the imm-to-r/m opcode, 0 = the ALU's
+         (? (mn = 'lea)
+            (? ((kb = 'rg) && as-mem? a) (as-emit w frc '(141) (as-regn b) a)
                (scare 'as-lea-form `(a b)))
-            (mn = 'test)
-            (? ((ka = 'rg) && (kb = 'rg))
-               (as-rex (? (as-w8? a) 1 0) (as-hi (as-regn a)) 0 (as-hi (as-regn b)) + `(133 (as-mrm 3 (as-regn a) (as-regn b))))
-               (scare 'as-test-form `(a b)))
-            (: alu (peep as-alu mn ())                       ; the ALU group
-               (? !(two? alu) (scare 'as-op2 mn)
-                  (kb = 'rg)
-                  (: d (as-regn b) w (at >b 1)
-                     (? (ka = 'rg) (as-alu-rr (at alu 0) d w (as-regn a))
-                        (ka = 'im) (as-alu-ri (at alu 1) d w (at a 1))
-                        (scare 'as-alu-src `(a b))))
-                  (scare 'as-alu-dst `(a b))))))
-   (as-lea sym d) (catall `((as-rex 1 (as-hi d) 0 0) `(141 (as-mrm 0 (as-lo d) 5)) `((fix 4 'rel32 sym 0))))
-   (as-1 mn a)                                               ; one-operand
-      (: k <a
-         (? (mn = 'push) (: n (as-regn a) (? (n >= 8) `(65 (80 | as-lo n)) `((80 | n))))
-            (mn = 'pop)  (: n (as-regn a) (? (n >= 8) `(65 (88 | as-lo n)) `((88 | n))))
+            (rr = 0) (scare 'as-op2 mn)
+            (w = 0)  (scare 'as-nowidth `(mn a b))
+            ((as-mem? a) && (as-mem? b)) (scare 'as-twomem `(a b))
+            (ka = 'rg) (as-emit w frc `((as-opw rr w)) (as-regn a) b)               ; reg -> r/m
+            ((kb = 'rg) && as-mem? a)                                              ; r/m -> reg
+            (as-emit w frc `((as-opw (? (mn = 'test) rr (rr + 2)) w)) (as-regn b) a)
+            (ka = 'im)                                                             ; $imm -> r/m
+            (: _ (? (<b = 'rip) (scare 'as-ripimm `(a b)) 0)
+               im (at a 1)
+               (? ((mn = 'mov) && (kb = 'rg)) (as-mov-ri (as-regn b) w frc im)
+                  (opi > 0) (as-emit w frc `((as-opw opi w)) 0 b + as-imw w im)
+                  (as-alu-i (at alu 1) w frc b im)))
+            (scare 'as-op2-form `(a b))))
+   (as-1 mn w a)                                             ; one-operand
+      (: k <a  frc (as-frc a)
+         pw (? (w = 2) 2 0)                                  ; push/pop take 66 but never REX.W
+         (? (mn = 'push)                                     ; ff /6
+            (? (k = 'rg) (: n (as-regn a)
+                            ((as-p16 pw) + (? (n >= 8) `(65 (80 | as-lo n)) `((80 | n)))))
+               (as-emit pw 0 '(255) 6 a))
+            (mn = 'pop)                                      ; 8f /0
+            (? (k = 'rg) (: n (as-regn a)
+                            ((as-p16 pw) + (? (n >= 8) `(65 (88 | as-lo n)) `((88 | n)))))
+               (as-emit pw 0 '(143) 0 a))
             (member? mn '(neg not inc dec))
-            (: n (as-regn a) w (at a 2)
-               opc (? (member? mn '(inc dec)) 255 247)
+            (: opc (? (member? mn '(inc dec)) 255 247)
                ext (? (mn = 'neg) 3 (mn = 'not) 2 (mn = 'inc) 0 1)
-               (as-rex (? (w = 8) 1 0) 0 0 (as-hi n) + `(opc (as-mrm 3 ext n))))
+               (? (w = 0) (scare 'as-nowidth `(mn a)) (as-emit w frc `((as-opw opc w)) ext a)))
+            (k = 'ind)                                       ; call/jmp through a register or memory
+            (: o (at a 1)
+               (? (mn = 'call) (as-emit 0 0 '(255) 2 o)
+                  (mn = 'jmp)  (as-emit 0 0 '(255) 4 o)
+                  (scare 'as-op1 mn)))
             (member? mn '(call jmp))
             (: sym (at a 1) (? (mn = 'call) `(232 (fix 4 'rel32 sym 0)) `(233 (fix 4 'rel32 sym 0))))
             (peep as-cc mn ()) (: sym (at a 1) `(15 (peep as-cc mn 0) (fix 4 'rel32 sym 0)))
@@ -162,11 +249,11 @@
          (mn = 'cdq) '(153) (mn = 'cdqe) '(72 152)             ; cdq is 99, cdqe is REX.W+98 (eax->rax) -- NOT the same byte
          (mn = 'hlt) '(244) (scare 'as-op0 mn))
 
-   (as-instr mn ops)
-      (: n (tally ops)
+   (as-instr mn sw ops)
+      (: n (tally ops) w (as-width sw ops)
          (? (n = 0) (as-0 mn)
-            (n = 1) (as-1 mn <ops)
-            (n = 2) (as-2 mn <ops <>ops)
+            (n = 1) (as-1 mn w <ops)
+            (n = 2) (as-2 mn w <ops <>ops)
             (scare 'as-arity `(mn n))))
 
    ;; --- pass one: walk the lines, encode each, assign addresses, record labels + .globl. returns
@@ -186,8 +273,8 @@
                            (member? mn '(".text" ".data" ".section" ".p2align" ".align" ".type" ".size" ".file" ".ident"))
                            (go >lines addr items)                ; M1: single .text section, ignore layout dirs
                            (scare 'as-directive mn)))
-                     (: mn (intern (as-mnem raw))
-                        r (revonto (as-instr mn (as-ops (as-rest raw))) items 0)
+                     (: mw (as-mnw (as-mnem raw))
+                        r (revonto (as-instr <mw (at mw 1) (as-ops (as-rest raw))) items 0)
                         (go >lines (addr + <r) >r)))))
          (go (as-lines src) 0 ()))
 
