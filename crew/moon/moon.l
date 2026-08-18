@@ -668,13 +668,14 @@
        lib (all + arload all ars tgt)
        set (lib + rtpull lib tgt os nostd)
        ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set ("love " + <(usplit 43 love-version)) rdme))
-       ; the freebsd BRAND: EI_OSABI = 9 in e_ident[7] -- the kernel's imgact
-       ; refuses an unbranded static exe, and one byte is the whole claim. ps is
-       ; ld-write's PIECE LIST; the ELF header rides the first piece, text or bytes.
+       ; the BRAND: EI_OSABI = 9 in e_ident[7], on EVERY x64 static exe -- the
+       ; linux loader never reads the byte, freebsd's imgact refuses without
+       ; it, so the one binary is born acceptable to both kernels (rung UV3).
+       ; ps is ld-write's PIECE LIST; the ELF header rides the first piece.
        (brand9 p)
         (? (string? p) (snip p 0 7 + string 9 + snip p 8 (tally p))
            (: (go i l) (? (i = 7) (9 >< >l) (<l >< go (i + 1) >l)) (go 0 p)))
-       ps9 (? (id? os 'freebsd) (brand9 <ps >< >ps) ps)
+       ps9 (? (id? tgt 'x64) (brand9 <ps >< >ps) ps)
        _ (ld-write dst ps9)
        (chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [-nostdinc] [-x c] [-t x64|arm64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."

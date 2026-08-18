@@ -269,12 +269,18 @@ owes a roster gate: on linux, assert the linux features are aboard.
     kqueue. ⚠ a 2 GB box OOM-kills mooncc's love.o compile at the default
     budget (half box RAM in WORDS ≈ 4x RSS): seed runs there want
     LOVE_BUDGET_MB set small.
-  - **UV3 — one binary, both boxes.** out/host/love itself, branded 9,
-    passes test_freebsd with the gate's whole `-os freebsd` build leg
-    deleted; the trophy is the SAME sha256 answering on linux and the box.
-    `-os` retires for love itself (it stays a mooncc cross dimension for
+  - **UV3 — one binary, both boxes.** BEGUN 2026-08-17: every x64 static
+    exe is now BORN branded EI_OSABI=9 (the linux loader never reads the
+    byte, freebsd's imgact refuses without it) — the on-box seed run forced
+    the ruling: the whole build succeeded on freebsd and then its own
+    freshly-linked love failed exec, unbranded. out/host/love needs no dd
+    anywhere now. STILL OWED: the gate's `-os freebsd` build leg deletes
+    once the fixpoint answers on the box (the same-sha256 trophy); `-os`
+    then retires for love itself (it stays a mooncc cross dimension for
     foreign C), and the OS leaves the artifact space: per-ISA bytes, every
-    kernel.
+    kernel. ⚠ small-box seed economics: a 2 GB box swap-kills the parent
+    waiter + the interpreted holo step even at LOVE_BUDGET_MB=128 — the
+    waiter-sheds-its-heap door (top of this doc) is now load-bearing.
   - **UV4 — netbsd.** the .note.netbsd.ident PT_NOTE (holo's linker learns
     note segments; foreign kernels ignore notes), a third syscall column,
     the userland sigtramp (__sigaction_sigtramp — netbsd's kernel provides
