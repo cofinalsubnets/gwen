@@ -287,15 +287,24 @@ owes a roster gate: on linux, assert the linux features are aboard.
     answered are IDENTICAL to the linux build's at matched budget: linux/
     ext4 and freebsd/ufs produce ONE byte string from one tree. Two finds
     on the way: lush's glob answered raw readdir order (now sorted — the
-    posix law, and readdir's order is the FILESYSTEM'S), and ⚠ the OPEN
-    BUG this hunt isolated — **LOVE_BUDGET_MB leaks into the bake**: a
-    different budget moves GC timing during the warm and ~3 heap words
-    land in a different copy order, a 26-byte value-preserving
-    permutation in .love_image. Nothing OS about it (reproduced pure-linux
-    with env -i); each budget regime is its own stable fixpoint. The bake
-    owes budget-invariance (a canonical order at save, or a normalizing
-    collect); until then the fixpoint gate and any cross-machine compare
-    must run under ONE budget regime.
+    posix law, and readdir's order is the FILESYSTEM'S), and the bug this
+    hunt isolated — **LOVE_BUDGET_MB leaked into the bake** — is FIXED
+    2026-08-17. Three leaks, all of them the collector's TIMING written
+    into bytes: the intern map's slot order was its insertion history
+    (probing settles collisions by arrival, majors re-arrive in old slot
+    order); a layered bake's FROZEN intern backing was abandoned by the
+    first post-freeze major mid-mutation, pinning both the moment's slots
+    and every since-freeze atom as ballast; and a weak drop + re-intern
+    handed a name a fresh serial at a GC-chosen moment. The cures, in the
+    codec and the collector: the dump re-inserts the live intern pairs in
+    SPELLING order (img_canon_symbols); gen_major scrubs the pinned copy
+    of an about-to-be-abandoned intern map to a canonical empty husk
+    before the scan can trace it; and the serial rename ranks mints in
+    session order then named noms by spelling (img_rank_assign) — one
+    shared heapsort (img_sort) serves all three orders plus the
+    dictionary. Gated: test_bakerep grew the layered egg-bake budget lane
+    (default vs LOVE_BUDGET_MB=128, byte-compare); a 64..2048 sweep
+    answered identical.
   - **UV4 — netbsd.** the .note.netbsd.ident PT_NOTE (holo's linker learns
     note segments; foreign kernels ignore notes), a third syscall column,
     the userland sigtramp (__sigaction_sigtramp — netbsd's kernel provides
