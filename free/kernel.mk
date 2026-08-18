@@ -13,7 +13,7 @@ dl = dl
 # every gate and verb below is phony: one roster, so adding one is one line and not two.
 .PHONY: force_kfs_list kmain_o run run-hdd run-$a run-hdd-$a run-headless init-container \
   uefi test_arm64 test_kernel test_disk test_uefi test_kboot test_kdiff test_kernel_arm64 \
-  test_wasm
+  test_inle test_wasm
 
 # K_TEST=1 builds a headless serial test kernel (batch read-eval over COM1, with an
 # `exit` nif that quits qemu) into its own odir / elf / iso, so it never clobbers the
@@ -436,6 +436,21 @@ else
 test_kdiff:
 	@echo "test_kdiff: skipped (no clang)"
 endif
+
+# test_inle -- the kernel's whole roster, in one word. Every lane below prints its own
+# skip where the seat cannot run it (not x86_64, no qemu, no clang), so this is safe to
+# type anywhere; cheapest first, so a break says so early. SEQUENTIAL sub-makes, test_kdiff's
+# own shape: as plain prerequisites a -j would land two of them in one object tree at once.
+# ⚠ NOT on test_slow -- it is minutes of qemu, and the merge gate's subject is the seed.
+# This is the gate to type when free/ or the kore cat moves.
+test_inle:
+	@$(MAKE) -s test_kernel
+	@$(MAKE) -s test_disk
+	@$(MAKE) -s test_uefi
+	@$(MAKE) -s test_kboot
+	@$(MAKE) -s test_kernel_arm64
+	@$(MAKE) -s test_kdiff
+	@echo "test_inle: boot, disk, command line -- both arches, both compilers"
 
 # The aarch64 twin of test_kernel, same corpus under full-TCG (~45s). In test_slow
 # because the lane needs a gate that RUNS it: the aarch64 kernel is otherwise reached

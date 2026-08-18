@@ -88,6 +88,8 @@ test:
 # source and rebuilds itself byte-identically (`love seed`), which is the product's
 # whole claim. the embedded lanes (kernel, boards, wasm, cross arches) are off the
 # rosters: out of scope for now, each still runs by name when its surface moves.
+# the kernel's set has one name -- `make test_inle` (free/kernel.mk) -- since it is
+# six lanes and typing five of them is how the sixth goes unrun.
 test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_dist test_seed
 
 

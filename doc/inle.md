@@ -64,6 +64,9 @@ Divergence here is worse than absence — kore reads these shapes and a wrong on
 ## the ladder
 
 Sizes are one focused person, rough, and they compound: each rung is gated before the next.
+Each rung names its own gate at the foot; **`make test_inle` runs all of them** — the corpus,
+the disk, the UEFI door, the command line, the aarch64 twin, the clang twin. None of it is on
+`test_slow`, so this is the one to type when free/ or the kore cat moves.
 
 ### rung 0 — the initrd, and a ramfs behind it  ✅ landed
 
