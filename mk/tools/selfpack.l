@@ -13,10 +13,19 @@
 ; AND THE ONE STAMP: the sha of the leveled tar is the tree's content id, kept
 ; in ARCHIVE.sha. run every make (a force rule); the gzip is paid only when the
 ; tree's content actually moved -- a touch settles, a delete or rename is seen.
-; the walk PRUNES before it reads (tar-gather? + sp-keep?), and the coder is
-; host/deflate.c through gz.l's door, so a full cut is seconds -- on a runner
-; that carries the nifs; love0 carries none, which is why the recipe prefers
-; the tree's own love.
+; the walk PRUNES before it reads (sp-keep?), and the coder is host/deflate.c
+; through gz.l's door, so a full cut is seconds -- on a runner that carries the
+; nifs; love0 carries none, which is why the recipe prefers the tree's own love.
+;
+; ⚠ AND THE QUIET RUN NEVER BUILDS THE ARCHIVE. Every make asks the same question
+; -- has the tree moved? -- and the answer used to cost a full cut: read every
+; file, pack ten megabytes, hash them, drop them. The thin pass (tar-thin? +
+; tar-hash) answers it as a STREAM instead: stat the tree, then hash the archive
+; those entries DESCRIBE, a bufferful at a time, holding neither the bodies nor
+; the tar. Same id, same rule -- content, never an mtime -- for 175 MB against
+; 293 MB and about half the time. The cut below still reads each file once, and
+; it is the cut that writes the sidecar, so what .sha names is always the archive
+; that was written and never the pass that only looked.
 (use 'tar)
 (use 'gz)
 
@@ -45,25 +54,23 @@
           _ (pin e 'nom (top + "/" + (tar-get e 'nom "")))
           (sp-take >es top (e >< acc))))
 
-   (sp-main av)
-    (: n (tally av)
-       _ (? (2 <= n) 0 (sp-die "usage: selfpack ARCHIVE.tar.gz TOP [STAMP [DROP..]]"))
-       arch <av
-       top (<(>av))
-       stamp (? (3 <= n) (<(sound (<(>(>av))))) 0)
-       drops (? (3 <= n) (>(>(>av))) ())
-       g (tar-gather? (sp-keep? drops) "." "")
-       _ (? g 0 (sp-die "cannot read the tree"))
-       es <>g
-       root <es                             ; the "." entry leads the walk
-       te (tar-entry top 'dir "")           ; TOP itself, wearing the tree root's mode
+   ; the tree root leads the walk; TOP goes in behind it wearing the root's mode,
+   ; and the rest is re-homed under TOP. shared, so the thin pass and the cut level
+   ; the same entries the same way and their digests are comparable.
+   (sp-lev es top stamp)
+    (: root <es
+       te (tar-entry top 'dir "")
        _ (pin te 'mode (tar-get root 'mode 493))
-       body (sp-take >es top ())
-       lev (tar-level (root >< (te >< body)) stamp)
+       (tar-level (root >< (te >< (sp-take >es top ()))) stamp))
+
+   ; the cut that reads: pack, hash, and write when the content actually moved.
+   (sp-cut arch side top stamp drops)
+    (: g (tar-gather? (sp-keep? drops) "." "")
+       _ (? g 0 (sp-die "cannot read the tree"))
+       lev (sp-lev <>g top stamp)
        a (tar-pack lev)
        _ (? a 0 (sp-die "cannot pack (a path too long for ustar?)"))
        h (sha256 a)
-       side (arch + ".sha")
        old (sp-read side)
        have (sp-read arch)
        fresh (two? old && two? have && (= (<(>old)) h))
@@ -79,5 +86,27 @@
              _ (sp-write side h)
              _ (say out ("selfpack: " + show (tally lev) + " entries -> " + arch + "\n"))
              0)))
+
+   (sp-main av)
+    (: n (tally av)
+       _ (? (2 <= n) 0 (sp-die "usage: selfpack ARCHIVE.tar.gz TOP [STAMP [DROP..]]"))
+       arch <av
+       top (<(>av))
+       stamp (? (3 <= n) (<(sound (<(>(>av))))) 0)
+       drops (? (3 <= n) (>(>(>av))) ())
+       side (arch + ".sha")
+       ; THE THIN PASS: stat the tree, hash the archive it describes, and settle the
+       ; run when that id is the one the sidecar already names and the archive is
+       ; still there. `stat` and not a read -- the question is whether the file
+       ; EXISTS, and its three megabytes have nothing to say about that.
+       ; ⚠ a () is not an answer. a torn read (a file that moved under the walk) or
+       ; a nom too long for ustar answers one, and both fall through to the cut,
+       ; which reads each file once and so cannot disagree with itself.
+       t (tar-thin? (sp-keep? drops) "." "")
+       _ (? t 0 (sp-die "cannot read the tree"))
+       hq (tar-hash (sp-lev <>t top stamp))
+       old (sp-read side)
+       quiet ((string? hq) && (two? old) && (= (<(>old)) hq) && (two? (stat arch)))
+       (? quiet 0 (sp-cut arch side top stamp drops)))
 
    (sp-main >argv))

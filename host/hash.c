@@ -2,6 +2,8 @@
 // registered (no love.c/love.h/main.c edit), the fs.c discipline:
 //
 //   (sha256 str) -> the 64-char lowercase hex digest | () misuse
+//   (sha256-init b) / (sha256-feed b str) / (sha256-done b)  -- the same digest over a
+//                   STREAM, the state carried in a 105-byte cask; see below
 //   (md5 str)    -> the 32-char lowercase hex digest | () misuse
 //   (crc32 str)  -> the IEEE crc32, a charm          | () misuse
 //   (cksum str)  -> POSIX cksum's crc, length folded in, a charm | () misuse
@@ -91,6 +93,126 @@ ai_noinline static struct ai *host_sha256(struct ai *g) {
  return g; }
 static lvm(lvm_sha256) {
  Pack(g); g = host_sha256(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ Unpack(g);
+ ai_musttail return Next(1); }
+
+// --- the same digest, resumable ----------------------------------------------------
+// the one-shot above wants its whole message contiguous, and for an archive that is
+// megabytes existing only to be hashed once. these three carry the state in a CASK
+// instead, so a caller feeds it a bufferful at a time and holds nothing: the state is
+// h[8], the running byte count, and the sub-block remainder a feed could not consume.
+// the block loop is sha_block above, untouched -- one spelling of the compression
+// function, two ways in, so the streamed digest cannot drift from the one-shot.
+//
+// THE CASK IS 105 BYTES and its layout is this file's; love allocates it and carries
+// it, never reads it. big-endian throughout, like the digest, so the state is bytes
+// and not this machine's words -- it can be written down, and an image that carries
+// one wakes on any box.
+//
+//   0..31   h[8], big-endian
+//   32..39  the byte count so far, big-endian
+//   40      the remainder length, 0..63
+//   41..104 the remainder itself
+#define ShaSt 105
+#define ShaRem 40
+#define ShaBuf 41
+
+static struct ai_str *sha_cask(ai_word x) {                   // the cask's bytes, or NULL
+ if ((x & 1) || ((union u*) x)->ap != lvm_cask) return NULL;
+ struct ai_str *s = ((struct ai_cask*) x)->str;
+ return s && s->len == ShaSt ? s : NULL; }
+
+static void sha_ld(const uint8_t *st, uint32_t h[8], uint64_t *len) {
+ for (int k = 0; k < 8; k++)
+  h[k] = (uint32_t) st[4*k] << 24 | (uint32_t) st[4*k+1] << 16
+       | (uint32_t) st[4*k+2] << 8 | (uint32_t) st[4*k+3];
+ uint64_t n = 0;
+ for (int k = 0; k < 8; k++) n = n << 8 | st[32 + k];
+ *len = n; }
+
+static void sha_st(uint8_t *st, const uint32_t h[8], uint64_t len) {
+ for (int k = 0; k < 8; k++) {
+  st[4*k]   = (uint8_t) (h[k] >> 24); st[4*k+1] = (uint8_t) (h[k] >> 16);
+  st[4*k+2] = (uint8_t) (h[k] >> 8);  st[4*k+3] = (uint8_t)  h[k]; }
+ for (int k = 0; k < 8; k++) st[32 + k] = (uint8_t) (len >> (56 - 8*k)); }
+
+// (sha256-init b) -> b, a 105-byte cask carrying FIPS 180-4's initial state and
+// nothing fed | () on anything that is not such a cask.
+ai_noinline static ai_word host_sha_init(ai_word x) {
+ struct ai_str *s = sha_cask(x);
+ if (!s) return ZeroPoint;
+ static const uint32_t h0[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                                0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
+ uint8_t *st = (uint8_t*) s->bytes;
+ memset(st, 0, ShaSt);
+ sha_st(st, h0, 0);
+ return x; }
+static lvm(lvm_sha_init) { Sp[0] = host_sha_init(Sp[0]); ai_musttail return Next(1); }
+
+// (sha256-feed b str) -> b, str's bytes folded in | (). any chunk size: what does not
+// fill a block stays in the remainder and rides to the next feed, which is the whole
+// point -- a caller reads by the bufferful and never has to think in 64s.
+ai_noinline static ai_word host_sha_feed(ai_word x, ai_word a) {
+ struct ai_str *cs = sha_cask(x);
+ if (!cs || !ai_strp(a)) return ZeroPoint;
+ struct ai_str *in = (struct ai_str*) a;
+ uint8_t *st = (uint8_t*) cs->bytes;
+ uint32_t h[8];
+ uint64_t len;
+ sha_ld(st, h, &len);
+ unsigned rem = st[ShaRem];
+ const uint8_t *p = (const uint8_t*) in->bytes;
+ uintptr_t n = in->len;
+ len += n;
+ if (rem) {                                                  // top the remainder up first
+  unsigned want = 64 - rem;
+  if (n < want) { memcpy(st + ShaBuf + rem, p, n); st[ShaRem] = (uint8_t) (rem + n);
+                  sha_st(st, h, len); return x; }
+  memcpy(st + ShaBuf + rem, p, want);
+  sha_block(h, st + ShaBuf);
+  p += want; n -= want; rem = 0; }
+ for (; n >= 64; p += 64, n -= 64) sha_block(h, p);
+ if (n) memcpy(st + ShaBuf, p, n);
+ st[ShaRem] = (uint8_t) n;
+ sha_st(st, h, len);
+ return x; }
+static lvm(lvm_sha_feed) {
+ Sp[1] = host_sha_feed(Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
+
+// (sha256-done b) -> the 64-char lowercase hex digest | (). the pad is the one-shot's,
+// over the remainder rather than the message tail; b is left spent, not reusable.
+ai_noinline static struct ai *host_sha_done(struct ai *g) {
+ struct ai_str *cs = sha_cask(g->sp[0]);
+ if (!cs) return g->sp[0] = ZeroPoint, g;
+ uint8_t *st = (uint8_t*) cs->bytes;
+ uint32_t h[8];
+ uint64_t len;
+ sha_ld(st, h, &len);
+ unsigned r = st[ShaRem];
+ uint8_t tail[128];
+ memcpy(tail, st + ShaBuf, r);
+ tail[r++] = 0x80;
+ size_t pad = (r <= 56) ? 64 : 128;
+ memset(tail + r, 0, pad - 8 - r);
+ uint64_t bits = len << 3;
+ for (int k = 0; k < 8; k++) tail[pad - 1 - k] = (uint8_t) (bits >> (8 * k));
+ sha_block(h, tail);
+ if (pad == 128) sha_block(h, tail + 64);
+ char hex[65];
+ static const char hx[] = "0123456789abcdef";
+ for (int k = 0; k < 8; k++)
+  for (int j = 0; j < 4; j++) {
+   uint8_t b = (uint8_t) (h[k] >> (24 - 8 * j));
+   hex[8*k + 2*j] = hx[b >> 4];
+   hex[8*k + 2*j + 1] = hx[b & 15]; }
+ hex[64] = 0;
+ if (!ai_ok(g = ai_strof(g, hex))) return g;                  // pushes: digest over arg
+ g->sp[1] = g->sp[0];
+ g->sp += 1;
+ return g; }
+static lvm(lvm_sha_done) {
+ Pack(g); g = host_sha_done(g);
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
@@ -244,10 +366,16 @@ static lvm(lvm_cksum) {
  ai_musttail return Next(1); }
 
 static union u const nif_sha256[] = {{lvm_sha256}, {lvm_ret0}},
+                    nif_sha_init[] = {{lvm_sha_init}, {lvm_ret0}},
+                    nif_sha_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_sha_feed}, {lvm_ret0}},
+                    nif_sha_done[] = {{lvm_sha_done}, {lvm_ret0}},
                     nif_md5[]    = {{lvm_md5},    {lvm_ret0}},
                     nif_crc32[]  = {{lvm_crc32},  {lvm_ret0}},
                     nif_cksum[]  = {{lvm_cksum},  {lvm_ret0}};
 AiNif("sha256", nif_sha256);
+AiNif("sha256-init", nif_sha_init);
+AiNif("sha256-feed", nif_sha_feed);
+AiNif("sha256-done", nif_sha_done);
 AiNif("md5", nif_md5);
 AiNif("crc32", nif_crc32);
 AiNif("cksum", nif_cksum);

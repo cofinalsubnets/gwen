@@ -208,12 +208,18 @@ dist_drop = wasm/love.js
 # budget-bounded gigabytes). No binary yet -- the first make, a laid seed --
 # falls back to $(boot_love). Never a dependency edge: the seed EMBEDS this
 # archive, so the archive must exist before the binary can link.
+# ⚠ stale is fine only while it can still RUN the packer. A love older than a
+# nif the packer reaches for answers `missing', and the tree cannot relink its
+# way out -- src.o carries this archive, so the binary that would fix the
+# runner needs the runner first. The probe hands that case to $(boot_love),
+# which is built from these very sources.
 .PHONY: force_src
 force_src: ;
 $(dist_source): force_src $(if $(bundled_love),,$(love0))
 	@mkdir -p $(dir $@)
 	@r="$(ho)/love"; [ -x "$$r" ] || r="$(boot_love)"; \
-	 LOVE_NO_IMAGE= LOVE_BUDGET_MB=1024 $$r mk/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
+	 $$r -e '(lit? sha256-init)' > /dev/null 2>&1 || r="$(boot_love)"; \
+	 LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $$r mk/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
 # THE SOURCE BLOB: the source tarball laid into an object (mk/tools/mksrc.l), so the
 # artifact hands out its own source with no second download and no `tar xf` -- love
