@@ -213,7 +213,11 @@ $(dist_source): force_src $(if $(bundled_love),,$(love0))
 # artifact hands out its own source with no second download and no `tar xf` -- love
 # `source` inflates it. host/src.c defines the pair WEAK and empty, so this object's
 # STRONG definitions override them at the link and a plain `make host` needs none of
-# it. ⚠ holo names its arches ($a is uname's, and they disagree on x86_64).
+# it. ⚠ holo names its arches (uname's and holo's disagree on x86_64).
+# ⚠ THE BLOB FOLLOWS $(hosta), NOT $a. Only the host link takes this object, and the
+# path is arch-neutral -- so reading $a lets `make kernel a=aarch64` lay an arm64 blob
+# at out/host/src.o and every later host link dies on link-machine. The x-lane cuts
+# its own $(xd)/src.o for the cross road.
 # ⚠ AND THESE TWO RULES MUST SIT BELOW $(dist_source)'s DEFINITION. A prerequisite
 # list is expanded where it is WRITTEN: above the definition it expands to nothing,
 # make never builds the tarball, and only the recipe -- expanded later, when the
@@ -222,10 +226,10 @@ $(dist_source): force_src $(if $(bundled_love),,$(love0))
 # ⚠ flat ifeqs, no else-chain: cook reads `else ifeq` as a bare else and drops the
 # condition, so a chain picks the wrong arch under the seed's own make.
 src_arch = x64
-ifeq ($a,aarch64)
+ifeq ($(hosta),aarch64)
 src_arch = arm64
 endif
-ifeq ($a,riscv64)
+ifeq ($(hosta),riscv64)
 src_arch = riscv64
 endif
 # ⚠ mksrc rides the mksys cat (kore + holo elf/obj), NOT (use 'holo): the
