@@ -41,6 +41,10 @@
 # which the edk2 firmware does not enumerate, and UEFI walks the whole PXE list
 # instead. edk2 is not packaged for arch-arm; the .fd is GUEST code, so a copy
 # from any host serves, and an empty 64M file is a fine varstore.
+# an arm64 netbsd box (2026-08-18, NBSD_ARM64_SSH): the evbarm-aarch64
+# arm64.img.gz from the same cdn tree, on the same edk2 shape as its freebsd
+# neighbour -- and it boots to a serial login, so the one-time setup types in
+# over -serial stdio rather than QMP.
 # usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|arm64]
 set -u
 
@@ -52,6 +56,7 @@ case "$os-$arch" in
   netbsd-x64)    box=${NBSD_SSH:-};       sd=${NBSD_SEED:-} ;;
   freebsd-x64)   box=${FBSD_SSH:-};       sd=${FBSD_SEED:-} ;;
   freebsd-arm64) box=${FBSD_ARM64_SSH:-}; sd=${FBSD_ARM64_SEED:-} ;;
+  netbsd-arm64)  box=${NBSD_ARM64_SSH:-}; sd=${NBSD_ARM64_SEED:-} ;;
   *) echo "osbox: no box is defined for $os on $arch" >&2; exit 1 ;;
 esac
 t=test_$os; [ "$arch" = x64 ] || t=test_${os}_${arch}
