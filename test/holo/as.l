@@ -64,6 +64,18 @@
       ("cdq"         "99"                    "cdq")
       ("cdqe"        "4898"                  "cdqe")
       ("hlt"         "f4"                    "hlt")
+      ;; the sign-extend family in both spellings -- cltq/cltd and cwtl/cwtd are the pairs a
+      ;; letter apart that mean different halves of it
+      ("cbw"         "6698"                  "cbw")
+      ("cbtw"        "6698"                  "cbtw")
+      ("cwde"        "98"                    "cwde")
+      ("cwtl"        "98"                    "cwtl")
+      ("cltq"        "4898"                  "cltq")
+      ("cwd"         "6699"                  "cwd")
+      ("cwtd"        "6699"                  "cwtd")
+      ("cltd"        "99"                    "cltd")
+      ("retq"        "c3"                    "retq")
+      ("leaveq"      "c9"                    "leaveq")
       ;; memory, base+displacement -- and the two encodings the base register forces: an rsp/r12
       ;; base needs a SIB to say so, an rbp/r13 base has no disp-less slot and takes a 0 byte
       ("mem.st"       "488903"                "mov %rax, (%rbx)")

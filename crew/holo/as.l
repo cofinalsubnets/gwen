@@ -6,7 +6,8 @@
 ; set. the encoders mirror x64.l form-for-form but read the register number off the name and carry the
 ; operand WIDTH (x64.l is 64-bit-mode only). scope: the GPR core at all four widths -- ALU, mov,
 ; unary, push/pop, lea, test over register, immediate AND memory operands; call/jmp/jcc (NEAR;
-; branch relaxation is M2), ret/nop/syscall/leave/cq[dt]o. a memory operand is AT&T's full
+; branch relaxation is M2), and the nullaries in both spellings (cltq as well as cdqe, and the
+; other five of the sign-extend family). a memory operand is AT&T's full
 ; disp(base,index,scale), rip-relative and indirect `*` included; the size suffix (movb/addl/..)
 ; gives the width wherever no register operand carries one.
 ;
@@ -243,11 +244,20 @@
             (: sym (at a 1) (? (mn = 'call) `(232 (fix 4 'rel32 sym 0)) `(233 (fix 4 'rel32 sym 0))))
             (peep as-cc mn ()) (: sym (at a 1) `(15 (peep as-cc mn 0) (fix 4 'rel32 sym 0)))
             (scare 'as-op1 mn)))
-   (as-0 mn)                                                 ; nullary
-      (? (mn = 'ret) '(195) (mn = 'nop) '(144) (mn = 'syscall) '(15 5)
-         (mn = 'leave) '(201) (member? mn '(cqo cqto)) '(72 153)
-         (mn = 'cdq) '(153) (mn = 'cdqe) '(72 152)             ; cdq is 99, cdqe is REX.W+98 (eax->rax) -- NOT the same byte
-         (mn = 'hlt) '(244) (scare 'as-op0 mn))
+   ;; --- the nullaries, in both spellings. AT&T names the sign-extend family c<from>t<to> and
+   ;; Intel names it c<from><to>, which puts the two halves of it ONE LETTER APART under names
+   ;; that pair up wrong: cltq widens the accumulator (eax -> rax) and cltd splits it across
+   ;; edx:eax, and likewise cwtl against cwtd. gcc emits the AT&T spelling of all six. ---
+   as-nils (tabof
+        `(('ret >< '(195)) ('retq >< '(195)) ('nop >< '(144)) ('hlt >< '(244))
+           ('syscall >< '(15 5)) ('leave >< '(201)) ('leaveq >< '(201))
+           ('cbw >< '(102 152))  ('cbtw >< '(102 152))       ; al -> ax
+           ('cwde >< '(152))     ('cwtl >< '(152))           ; ax -> eax
+           ('cdqe >< '(72 152))  ('cltq >< '(72 152))        ; eax -> rax
+           ('cwd >< '(102 153))  ('cwtd >< '(102 153))       ; ax -> dx:ax
+           ('cdq >< '(153))      ('cltd >< '(153))           ; eax -> edx:eax
+           ('cqo >< '(72 153))   ('cqto >< '(72 153))))      ; rax -> rdx:rax
+   (as-0 mn) (: b (peep as-nils mn ()) (? (two? b) b (scare 'as-op0 mn)))
 
    (as-instr mn sw ops)
       (: n (tally ops) w (as-width sw ops)
