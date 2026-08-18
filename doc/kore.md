@@ -27,19 +27,23 @@ The file discipline, two shapes:
   cat member.
 * **a toolbox** (core.l, fs.l): many mains, NO seat — kore is its door.
 
-## the inventory (69 tools, 72 names)
+## the inventory (85 tools, 88 names)
 
 | where | tools |
 | --- | --- |
 | kore.l (thin mains) | diff (the patience/myers engines), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link), objcopy (a linked ELF flattened to `-O binary` or `-O ihex`, byte-identical to llvm/gnu objcopy on both) |
 | mk/tools/ain.l | nc / ain |
 | crew/cook/cook.l | make / cook |
-| core.l, the line tools | cat echo head tail wc sort uniq tee |
+| core.l, the line tools | cat tac echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |
+| core.l, the column tools | fold expand unexpand (all three count COLUMNS, so a tab steps to the next stop) |
+| core.l, the encodings | base64 base32 (RFC 4648; `-d` reads it back, `-w` says the wrap) |
+| core.l, the two little computations | tsort factor |
 | core.l, the record tools | paste comm join split od |
 | sum.l, the checksums | cksum md5sum sha256sum (`-c` reads a list back) |
-| core.l, the trivia | seq yes true false basename dirname test [ uname printf |
+| core.l, the trivia | seq yes true false basename dirname test [ uname arch nproc printf |
 | fs.l, the fs tools | ls cp mv rm mkdir rmdir ln touch pwd chmod install readlink cmp |
+| fs.l, the paths and the two bare calls | realpath link unlink |
 | fs.l, what they report | stat du chown mktemp |
 | expr.l, the little language | expr (arithmetic, the six comparisons, \| and &, and `:` over the BRE engine) |
 | patch.l, the diff read back | patch (unified only; -pN -R -i -o --dry-run, offsets, rejects) |
@@ -47,7 +51,7 @@ The file discipline, two shapes:
 | sed.l, the editor | sed (-n; s///gp, d, p, q; number/$/regex/range addresses) |
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
 | find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
-| proc.l, the processes and the world | env sleep kill xargs date id |
+| proc.l, the processes and the world | env printenv sleep kill xargs date id whoami groups |
 | crew/vi/ | vi |
 | crew/lush/ | sh / lush |
 
@@ -57,13 +61,15 @@ The file discipline, two shapes:
   real GNU tool in `make test_kore` (LC_ALL=C for sort/ls). The fussy faces are pinned
   deliberately: wc pads every field to the digit width of the byte TOTAL; uniq -c wears width
   7; nl is pad-6 + tab and a blank line is seven bare spaces; head/tail banner many files with
-  `==> name <==`; ls -a is GNU -A. Effects (cp/mv/rm/..) are smoked by acting and then
-  verifying with the shell.
+  `==> name <==`; ls -a is GNU -A; `base64 -w 0` ends with no newline at all. Effects
+  (cp/mv/rm/..) are smoked by acting and then verifying with the shell, and the encodings are
+  smoked over a BINARY file, which is the only input that says anything.
 * **the u-floor.** The shared helpers leak u-prefixed from core.l and are lawed pure in law.l:
   uatoi uread udie upad ujoin uhdr uhead/utail ucount ubase/udir usplit ujoinc uspec/upick
-  uset urev ueach, fs.l's uoct/udirp/udest/ucopy, and proc.l's udur/uwords. `ueach` is the cat
-  walk every whole-input tool rides (files or stdin, `-` reads stdin, a miss complains on err
-  and the exit code remembers).
+  uset urev uwords ueach, core.l's ucol/utac/ufold/uexpand/uunexpand and the coder trio
+  ubenc/ubdec/ubwrap, fs.l's uoct/udirp/udest/ucopy/rp-parts, and proc.l's udur. `ueach` is
+  the cat walk every whole-input tool rides (files or stdin, `-` reads stdin, a miss
+  complains on err and the exit code remembers).
 * **the exit door.** A main ANSWERS its status as a charm; it does not quit. A leave from deep
   inside a walk rides `udie`, which says its sentence and then `uleave` — a scare carrying the
   status — and `urun` is the driver both faces come back through, flushing the ports and
@@ -94,6 +100,33 @@ The file discipline, two shapes:
 * a value that can legitimately net 0 — an end index, a (0 0) span — reads BLUE (falsy): give
   it uread's (1 ..) success shape. And never name a local `err` or `out`; they are the PORTS,
   and the shadow says into a charm.
+
+## the column tools, the encodings, tsort and factor (crew/kore/core.l)
+
+`fold`, `expand` and `unexpand` are one section because they share `ucol`: all three count
+COLUMNS, so a tab steps to the next stop, `\b` steps back one and `\r` starts the line over.
+`fold -b` asks for bytes instead, `-s` backs the break up to the last blank, `-w N` and the
+obsolescent `-N` both say the width; `expand -t N -i`; `unexpand -a`, and `-t N` means `-a`
+too, as GNU's does.
+
+* ⚠ **a tab lands only where it saves at least two columns**, which is why a lone space
+  sitting on a tab stop stays a space. It is the one rule the obvious unexpand gets wrong.
+* fold breaks BEFORE the charm that would overflow, so a charm wider than the whole width
+  still gets a line of its own.
+
+`base64` and `base32` are one coder over two alphabets (RFC 4648): 3 bytes to 4 charms at 6
+bits, 5 to 8 at 5, the short tail padded with `=` either way. `-d` reads it back — a newline
+is ignored, anything else outside the alphabet is refused with exit 1 — and `-w` says the
+wrap, 76 unsaid.
+
+* ⚠ **`-w 0` closes nothing.** GNU ends a wrapped last line with a newline but leaves one
+  long line without one, so the obvious implementation is a byte too long.
+
+`tsort` answers **a** topological order and not GNU's: where the input pins one they agree,
+and where it does not both are right, so the gate only asks about inputs that pin one. A loop
+is named on err, broken at the first node still standing, and leaves 1. `factor` is trial
+division by 2 and the odd numbers — exact for anything this tree spends, and a twenty-digit
+semiprime will simply sit there, which is what GNU keeps a Pollard rho for.
 
 ## the regex engine (crew/kore/re.l)
 
@@ -130,7 +163,12 @@ assigns K=V.. and runs the command with the child's exit; sleep sums decimal dur
 s/m/h/d suffixes (udur, lawed); kill sends -N or -NAME (default TERM) per pid, exit 0/1; xargs
 whitespace-splits stdin (quote-blind, deliberately) onto the command's tail (echo by default),
 -n N a batch at a time, exits 0 / 123 (a run failed) / 127 (could not exec), running once even
-on empty input, all like GNU.
+on empty input, all like GNU. `printenv` prints the world or just the names asked for (a name
+with nothing in it says nothing and the exit remembers); `whoami` and `groups` are id's two
+thin faces, so they read /etc/passwd and /etc/group exactly as id does. `arch` and `nproc`
+live in core.l beside uname, which is the other tool that reads the machine: arch IS uname -m
+and ⚠ nproc counts what /proc/cpuinfo names, which is GNU's `--all` — nothing here reads an
+affinity mask.
 
 ## awk (crew/kore/awk.l)
 
@@ -224,6 +262,13 @@ kept, never at load: this file is baked by a love that HAS the nifs.
 
 ## what the fs tools report (crew/kore/fs.l)
 
+`realpath` walks a path COMPONENT BY COMPONENT — resolving each symlink as it arrives — so a
+last name that does not exist yet still answers, which is GNU's default face and the case a
+resolver written around one `stat` gets wrong. `-e` wants the whole path to be there, `-m`
+allows any of it to be missing, `-s` takes the links as they lie. ⚠ `readlink -f` beside it is
+STRICTER than GNU's (it wants the path to exist), which is GNU's `readlink -e`; realpath is
+the GNU-shaped door. `link` and `unlink` are the two syscalls said plainly, no face on them.
+
 `stat -c FORMAT` (or `--printf=`, which reads the escapes and adds no newline where `-c` does
 neither), `du`, `chown`, `mktemp`. They read the **stat tail**: host/posix.c's `stat` answers
 `(size mtime mode ns uid gid nlink blocks ino)` and `lstat` the same of the link itself. The tail
@@ -283,4 +328,9 @@ grep -i/-o/-E, sed -i/y/N, join -o, od with several -t at once, date's spellings
 the checksums' `-b`/`--tag` output modes and `-c`'s `--quiet`/`--status` (a `-c` list written either
 way still READS here).
 `df` is the one that wants a NIF and not an afternoon: nothing here answers `statvfs`.
+Left out of the coreutils batch deliberately: `fmt` `pr` `csplit` `ptx` `numfmt` (each its own
+layout language, not another row), `dir`/`vdir` (they are `ls -C` and `ls -l`, neither of which
+ls wears yet), `shuf` (it wants a decision about the seed before it wants code), `sha1sum` and
+the sha512 family (host/hash.c carries sha256, md5 and cksum alone), and `who`/`users`/`logname`
+(no utmp here, and there will not be one).
 None block the distro; add them when a real script wants them.

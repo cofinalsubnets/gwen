@@ -34,7 +34,7 @@ naming it is most of what this section is for.
 
 Present natively — roughly **17 of ~85 chapter-8 packages**, several partial:
 
-coreutils (`kore`, 66 tools / 69 names, GNU-byte-identical smokes, `make test_kore`) ·
+coreutils (`kore`, 85 tools / 88 names, GNU-byte-identical smokes, `make test_kore`) ·
 bash (`lush`) · sed · grep · diffutils (diff, cmp) · make (`cook`) · tar (`lib/tar.l`,
 ustar both ways) · gzip (`lib/gz.l`) · zlib · vim (`crew/vi`) · sysvinit
 (`crew/init/boot.l` as `/init`) · openssl-ish (`crew/tls`) · nc (`mk/tools/ain.l`) ·
@@ -110,6 +110,23 @@ The gap between those two numbers is entirely *other people's build systems*.
   * **GNU's `--apparent-size` counts a file's `st_size` and a directory's not at all** —
     an empty directory whose st_size is 40 reports 0. Read off the tool, not from the man
     page, and not from one filesystem: btrfs and tmpfs disagree about everything else here.
+- **rung 1b — the second coreutils batch — BUILT.** Sixteen applets, every one pure over
+  the u-floor and none of them wanting a nif: `tac` (core.l), the column tools `fold`
+  `expand` `unexpand` over the shared `ucol`, the encodings `base64` `base32` (one coder,
+  two alphabets), `tsort` and `factor`, `realpath` `link` `unlink` (fs.l), `printenv`
+  `whoami` `groups` (proc.l) and `arch` `nproc` beside uname. All in `make test_kore`,
+  GNU-byte-identical, laws over the new pure floors. `uwords` moved core-ward to u.l,
+  where tsort and factor read it too. Three things the work taught, all comments in the
+  tree now:
+  * **`base64 -w 0` closes nothing** — GNU ends a WRAPPED last line with a newline and
+    leaves one long line without one. The obvious coder is a byte too long.
+  * **a tab lands only where it saves at least two columns**, so a lone space sitting on
+    a tab stop stays a space. The rule unexpand is easiest to get wrong.
+  * **the encodings are only smoked by a BINARY file** — text agrees under any bug that
+    only mangles the high bit.
+  Left deliberately: fmt, pr, csplit, ptx and numfmt (each its own layout language),
+  dir/vdir (they are `ls -C`/`ls -l`), shuf (a seed decision first), the sha1/sha512
+  family (host/hash.c carries three digests), and who/users/logname (no utmp).
 - **rung 2 — cpio, and the distro cuts itself.** With `find` landed, replacing the
   host `find | cpio | gzip -9` pipeline closes the wart above. `lib/gz.l` already
   writes the gzip container; cpio's newc format is smaller than ustar.

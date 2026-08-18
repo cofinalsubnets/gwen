@@ -1,10 +1,11 @@
-; crew/kore/proc.l -- the process tools of kore: env, sleep, kill, xargs.
+; crew/kore/proc.l -- the process and world tools of kore: env, printenv, sleep,
+; kill, xargs, date, id, whoami, groups.
 ; a toolbox file, no seat -- kore is its door; loads after core.l and rides the
 ; u-floor. no nifs of its own: environ/getenv/setenv (host/main.c + init.c),
 ; spawn/wait (init.c's posix lane -- spawn answers the pid or a NEGATIVE errno,
 ; a child that cannot exec _exit(127)s), still (pty.c's kill), rest (the core
-; sleep, milliseconds). a body-less top-level `:` leaking the two pure helpers
-; (udur, uwords -- lawed in law.l) and the mains.
+; sleep, milliseconds). a body-less top-level `:` leaking one pure helper
+; (udur -- lawed in law.l) and the mains.
 (module 'kore
 (:
    ; a duration text -> milliseconds | (): N or N.N, an optional s/m/h/d suffix
@@ -30,16 +31,6 @@
                  ((* whole mul) + (// (* <fr mul) <>fr))
                  ()))
           ()))
-   ; whitespace-split a text into words (the xargs face, quote-blind)
-   (uwords t)
-    (: n (tally t)
-       (go i st acc)
-        (? (n <= i) (rev (? (st < 0) acc (snip t st i >< acc)))
-           (: c (t i)
-              w ((c = 32) || (c = 9) || (c = 10) || (c = 13))
-              (? w (go (i + 1) -1 (? (st < 0) acc (snip t st i >< acc)))
-                 (go (i + 1) (? (st < 0) i st) acc))))
-       (go 0 -1 ()))
 
    ; -- env: assignments, then print the world or run a command inside it --
    (env-main as)
@@ -207,6 +198,28 @@
             (peep t 71 0) (say out (ujoin (map (\ g (? n? (uidname "/etc/group" g) (show g))) gs)))
             (say out ((("uid=" + (show uid) + "(" + nm + ")") + (" gid=" + (one gid)))
                       + (" groups=" + (ujoinc 44 (map one gs))))))
+       _ (put out 10) _ (flush out) 0)
+
+
+   ; -- printenv: the world, or just the names asked for (a name with no value in it
+   ; says nothing and the exit remembers, like GNU's) --
+   (printenv-main as)
+    (? !(two? as)
+       (: (pr e) (? !(two? e) (: _ (flush out) 0)
+                    (: _ (say out <e) _ (put out 10) (pr >e)))
+          (pr (environ 0)))
+       (: (one w ok) (: v (getenv w)
+                        (? (string? v) (: _ (say out v) _ (put out 10) ok) 0))
+          (go a ok) (? (two? a) (go >a (one <a ok)) (: _ (flush out) (? ok 0 1)))
+          (go as 1)))
+
+   ; -- whoami and groups: id's two thin faces (id -un and id -Gn) --
+   (whoami-main _)
+    (: _ (say out (uidname "/etc/passwd" (getuid 0))) _ (put out 10) _ (flush out) 0)
+   (groups-main _)
+    (: nm (uidname "/etc/passwd" (getuid 0))
+       gs (ugroups nm (getgid 0))
+       _ (say out (ujoin (map (\ g (uidname "/etc/group" g)) gs)))
        _ (put out 10) _ (flush out) 0)
 
    ; -- xargs: stdin's words onto the command's tail (echo when none), -n N a

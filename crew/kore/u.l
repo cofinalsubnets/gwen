@@ -168,6 +168,16 @@
     (: o (jug 0)
        (go k) (? (k < 0) (slurp o) (: _ (put o (s k)) (go (k - 1))))
        (go (tally s - 1)))
+   ; whitespace-split a text into words (the xargs face, quote-blind)
+   (uwords t)
+    (: n (tally t)
+       (go i st acc)
+        (? (n <= i) (rev (? (st < 0) acc (snip t st i >< acc)))
+           (: c (t i)
+              w ((c = 32) || (c = 9) || (c = 10) || (c = 13))
+              (? w (go (i + 1) -1 (? (st < 0) acc (snip t st i >< acc)))
+                 (go (i + 1) (? (st < 0) i st) acc))))
+       (go 0 -1 ()))
    ; the cat walk every whole-input tool rides: dot over each input text (args or
    ; stdin, - reads stdin), a miss complains and the exit code remembers
    (ueach who dot as)
