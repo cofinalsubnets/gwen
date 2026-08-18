@@ -825,15 +825,10 @@
        lib (all + arload all ars tgt)
        set (lib + rtpull lib tgt os nostd vb)
        ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set ("love " + <(usplit 43 love-version)) rdme))
-       ; the BRAND: EI_OSABI = 9 in e_ident[7], on EVERY x64 static exe -- the
-       ; linux loader never reads the byte, freebsd's imgact refuses without
-       ; it, so the one binary is born acceptable to both kernels (rung UV3).
-       ; ps is ld-write's PIECE LIST; the ELF header rides the first piece.
-       (brand9 p)
-        (? (string? p) (snip p 0 7 + string 9 + snip p 8 (tally p))
-           (: (go i l) (? (i = 7) (9 >< >l) (<l >< go (i + 1) >l)) (go 0 p)))
-       ps9 (? (id? tgt 'x64) (brand9 <ps >< >ps) ps)
-       _ (ld-write dst ps9)
+       ; the EI_OSABI = 9 brand (rung UV3) is ldlink's now, laid where the header is
+       ; made -- this driver used to lay it and kore's `ld` did not, which made two
+       ; doors over one linker write two different files.
+       _ (ld-write dst ps)
        (chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [-x c] [-t x64|arm64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)

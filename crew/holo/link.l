@@ -1024,9 +1024,15 @@
             + (? img? `((elf64-phdr 1 6 ioff iaddr iaddr isz isz 4096)) ())
             + (? nb? `((elf64-phdr 4 4 nbo (base + nbo) (base + nbo) 24 24 4)) ()))
        hdr (elf64-hdrn (? pie 3 2) ent mach `(shto nsh 10) phs)
-       (hdr >< ((? nb? `(nbnote) ()) + >en + tail + (? pie `(rtab) ()) + ipad + >ei
-                + `((ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
-                    (ld-zeros (shto - (rdmo + rdmz))) sht))))
+       ; ⚠ THE BRAND: EI_OSABI = 9 in e_ident[7] on every x64 exe this lane writes.
+       ; The linux loader never reads the byte and freebsd's imgact refuses without
+       ; it, so one binary is born acceptable to both kernels. It lives HERE, where
+       ; the header is made, and not at a caller: mooncc branded its own output and
+       ; kore's `ld` did not, so the two doors over ONE linker wrote different files.
+       hdr9 (? (mach = 62) (ld-brand hdr 7 9) hdr)
+       (hdr9 >< ((? nb? `(nbnote) ()) + >en + tail + (? pie `(rtab) ()) + ipad + >ei
+                 + `((ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
+                     (ld-zeros (shto - (rdmo + rdmz))) sht))))
 
    ; --- the KERNEL lane: one ELF, three doors ---------------------------------
    ; a freestanding image is laid where it RUNS and loaded where it LANDS: every
@@ -1344,6 +1350,12 @@
        (hdr >< (`((ld-zeros (foff - hdrsz))) + pieces
                 + `((ld-zeros (symo - fend)) <st <>st <shstr
                     (ld-zeros (shto - (ssto + sstz))) sht))))
+
+   ; one byte of a piece, whichever shape the piece arrived in (the header comes back
+   ; as a text from one hdr builder and as a byte list from another)
+   (ld-brand p i v)
+    (? (string? p) (((snip p 0 i) + (string v)) + (snip p (i + 1) (tally p)))
+       (: (go k l) (? (k = i) (v >< >l) (<l >< (go (k + 1) >l))) (go 0 p)))
 
    ; write a piece list to a file, raw: texts pass through, byte lists pack into a
    ; CASK. an explicit left walk -- map runs its effects right-to-left.

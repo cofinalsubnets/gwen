@@ -476,6 +476,29 @@
       (= (sp "s/a\\{2\\}/x/") (sparse "s/a{2}/x/" 1))            ; one tree, two inks
       (= (sp "/\\(a\\|b\\)c/p") (sparse "/(a|b)c/p" 1))))
 
+; --- the /proc floor (crew/kore/proc.l): the stat-line split, the two clocks, the
+; terminal name and the uptime phrase. the FACES over them cannot be lawed and are not
+; smoked byte-for-byte either -- every number they read is a clock and the process
+; table moves between two runs -- so this is where the family is actually held ---
+(: (assert
+      ; ⚠ THE COMM IS TAKEN BETWEEN THE FIRST ( AND THE LAST ), because a program may
+      ; be named with either in it -- split on spaces and every field after it shifts
+      (= (ustatf "42 (bash) S 7 42 42 1024 99") '(42 "bash" "S" "7" "42" "42" "1024" "99"))
+      (= (ustatf "9 ((sd-pam)) S 1") '(9 "(sd-pam)" "S" "1"))
+      (= (ustatf "9 (a b) c) S 1") '(9 "a b) c" "S" "1"))
+      !(ustatf "9 no parens here")
+      (= (uclk 0) "00:00:00") (= (uclk 3661) "01:01:01") (= (uclk 359999) "99:59:59")
+      (= (uclk 360000) "100:00:00")                     ; the hours are never clipped
+      (= (uhms 100) "00:00:01") (= (uhms 131) "00:00:01")   ; USER_HZ is 100, and it truncates
+      ; the terminal number is Linux's own dev_t: major in bits 8..19, minor split
+      (= (utty 0) "?") (= (utty 34816) "pts/0") (= (utty 34819) "pts/3")
+      (= (utty 1025) "tty1") (= (utty 1088) "ttyS0") (= (utty 2304) "?")
+      (= (uupsay 60) "1 min") (= (uupsay 1980) "33 min")
+      (= (uupsay 9180) " 2:33") (= (uupsay 86400) "1 day,  0:00")
+      (= (uupsay 2275261) "26 days,  8:01")
+      (= (usignum "-9") 9) (= (usignum "-TERM") 15) (= (usignum "-KILL") 9)
+      !(usignum "-nope") !(usignum "x") !(usignum "-")))
+
 ; --- the process floor (crew/kore/proc.l): durations to milliseconds ---
 (: (assert
       (= (udur "2") 2000) (= (udur "0") 0) (= (udur "1s") 1000)

@@ -367,15 +367,25 @@ printf 'abc\nxbz\nzzz\n+q\n*r\nFoo Bar\nab_cd\nx{2}y\na1b2\n' > "$ho/.gr3"
 # rides along with it is not -- `[a-z]*` and `*r` are globs, and an unguarded split
 # hands grep whatever files happen to sit in the cwd instead of the pattern
 set -f
-for fl in '-c b' '-i FOO' '-i foo' '-w ab' '-w abc' '-x zzz' '-x zz' '-x ' \
+for fl in '-c b' '-i FOO' '-i foo' '-w ab' '-w abc' '-x zzz' '-x zz' \
           '-F a\|z' '-F *r' '-F ab' '-o b' '-oE [a-z]+' '-n -i foo' '-h b' '-a b' \
           '-c -m 2 b' '-m 1 z' '-v b' '-iw foo' '-nv b' '-co b' '-iF foo' \
-          '-ow [a-z]*' '-o ' '-oE [0-9]|[A-Z]'; do
+          '-ow [a-z]*' '-oE [0-9]|[A-Z]'; do
   # shellcheck disable=SC2086
   set -- $fl
   grep "$@" "$ho/.gr3" > "$g" 2>/dev/null; a=$?
   korerun grep "$@" "$ho/.gr3" > "$o" 2>/dev/null; b=$?
   cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep flags '$fl' vs GNU"
+done
+# ⚠ THE EMPTY PATTERN IS ITS OWN ROW. `set -- $fl` word-splits, so an empty word cannot
+# ride that list at all: the `-x ` and `-o ` rows above were really `grep -x FILE`, a
+# pattern and NO file -- which reads STDIN, and hangs any run whose stdin is a pipe
+# instead of a terminal. Both sides hung or both saw EOF, so it passed while proving
+# nothing about the empty pattern it was written for.
+for fl in -x -o -c -v; do
+  grep $fl '' "$ho/.gr3" > "$g" 2>/dev/null; a=$?
+  korerun grep $fl '' "$ho/.gr3" > "$o" 2>/dev/null; b=$?
+  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep $fl '' (the empty pattern) vs GNU"
 done
 set +f
 # -e stacks and, once given, every positional word is a FILE
@@ -507,6 +517,51 @@ korerun printenv | grep -v '^_=' | LC_ALL=C sort > "$o"; same "printenv print"
 [ "$(korerun arch)" = "$(uname -m)" ] || fail "kore arch"
 [ "$(korerun nproc)" = "$(nproc --all)" ] || fail "kore nproc"
 echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc) ok"
+
+# --------------------------------------------------------- the /proc family
+# ⚠ NOT byte-for-byte, and it cannot be: the process table moves between two runs and
+# every number these read is a clock. The PARSERS are lawed above (ustatf, uclk, utty,
+# uupsay); what is asked here is that the FACES agree with procps about the machine
+# they are both looking at -- the header they print, a process we made ourselves, and
+# a number that has to come out of /proc/meminfo.
+# ⚠ the victim is a COPY of sleep under our own name: `killall sleep` on a shared box
+# would reach into somebody else's build, and this gate has no business doing that.
+nap=$ho/.kore-nap
+cp "$(command -v sleep)" "$nap" 2>/dev/null && chmod 755 "$nap"
+ps    | head -1 > "$g"; korerun ps -e | head -1 > "$o"; same "ps header"
+free  | head -1 > "$g"; korerun free  | head -1 > "$o"; same "free header"
+if [ -x "$nap" ]; then
+  "$nap" 30 & n1=$!
+  "$nap" 30 & n2=$!
+  sleep 1
+  korerun ps -e | awk '{print $1}' | grep -qx "$n1" || fail "kore ps -e missed our own child"
+  korerun pidof .kore-nap | tr ' ' '\n' | grep -qx "$n1" || fail "kore pidof missed one"
+  korerun pidof .kore-nap | tr ' ' '\n' | grep -qx "$n2" || fail "kore pidof missed one"
+  # every pid we name is one procps names too -- the other way round is a race, since
+  # a process can arrive between the two readings and neither tool is wrong about it
+  korerun pgrep -x .kore-nap | LC_ALL=C sort > "$o"
+  pgrep -x .kore-nap | LC_ALL=C sort > "$g"
+  comm -23 "$o" "$g" > "$ho/.kore-px"
+  [ ! -s "$ho/.kore-px" ] || fail "kore pgrep named a pid procps does not"
+  korerun pkill -x .kore-nap || fail "kore pkill"
+  wait $n1; r=$?; [ $r -eq 143 ] || fail "kore pkill did not TERM (rc $r)"
+  wait $n2; r=$?; [ $r -eq 143 ] || fail "kore pkill left one alive (rc $r)"
+  "$nap" 30 & n3=$!
+  sleep 1
+  [ "$(korerun pwdx $n3)" = "$(pwdx $n3)" ] || fail "kore pwdx vs procps"
+  korerun killall .kore-nap || fail "kore killall"
+  wait $n3; r=$?; [ $r -eq 143 ] || fail "kore killall did not TERM (rc $r)"
+fi
+korerun killall nosuchprocess 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore killall miss exit (rc $r)"
+korerun pidof nosuchprocess > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore pidof miss exit (rc $r)"
+mt=$(awk '/^MemTotal:/{print $2}' /proc/meminfo)
+[ "$(korerun free | awk 'NR==2{print $2}')" = "$mt" ] || fail "kore free total vs /proc/meminfo"
+[ "$(korerun free -m | awk 'NR==2{print $2}')" = "$((mt / 1024))" ] || fail "kore free -m"
+# ⚠ no `N users` clause: it comes out of utmp, which this tree does not keep
+korerun uptime | grep -qE '^ [0-9][0-9]:[0-9][0-9]:[0-9][0-9] up .*load average: [0-9]' \
+  || fail "kore uptime shape"
+korerun uptime | grep -q users && fail "kore uptime invented a user count"
+echo "kore: the /proc family (ps/free/uptime/pidof/pgrep/pkill/killall/pwdx vs procps) ok"
 
 # ------------------------------------------------------------------ the shell
 # lush rides the kore cat: `kore sh` (and an sh symlink) IS the shell -- the

@@ -32,7 +32,7 @@ naming it is most of what this section is for.
 
 ## chapters 7–8, the final system
 
-Present natively — roughly **18 of ~85 chapter-8 packages**, several partial:
+Present natively — roughly **19 of ~85 chapter-8 packages**, several partial:
 
 coreutils (`kore`, 85 tools / 88 names, GNU-byte-identical smokes, `make test_kore`) ·
 bash (`lush`) · sed · grep · diffutils (diff, cmp) · make (`cook`) · tar (`lib/tar.l`,
@@ -40,7 +40,8 @@ ustar both ways, `love tar`) · gzip (`lib/gz.l`, and `lib/gzcmd.l` wears GNU's 
 as `love gzip` / `gunzip` / `zcat`) · cpio (`lib/cpio.l` newc, `love cpio`) · zlib ·
 vim (`crew/vi`) · sysvinit
 (`crew/init/boot.l` as `/init`) · openssl-ish (`crew/tls`) · nc (`mk/tools/ain.l`) ·
-**patch** (`crew/kore/patch.l`, unified diffs).
+**patch** (`crew/kore/patch.l`, unified diffs) · **procps-ng** (kore's ps, free, uptime,
+pidof, pgrep, pkill, pwdx) and psmisc's killall.
 
 The partials, stated: kore has no `df` (nothing here answers `statvfs`, so it wants a
 nif and not an afternoon); sed is a deliberate subset (no hold space, no `\n` in
@@ -56,7 +57,8 @@ where GNU reads a concatenation.
   This, not the compiler, is what axis B actually runs into.
 - **bc** — the last of what was "the small four"; awk, find and patch are in.
 - **the rest of the shell floor** — less, xz, bzip2, file.
-- **the admin layer** — util-linux, shadow, procps, psmisc, e2fsprogs, kmod, iproute2, kbd.
+- **the admin layer** — util-linux, shadow, e2fsprogs, kmod, iproute2, kbd. (procps and
+  psmisc are half here: the /proc readers landed, `top`/`vmstat`/`pmap` did not.)
 - **docs** — groff, man-db, texinfo, ncurses, readline.
 
 ## chapters 9–10 — config partial, kernel imported
@@ -147,6 +149,30 @@ The gap between those two numbers is entirely *other people's build systems*.
   * **one member per file** — gz-unzip reads the trailer off the tail, so a legal
     `cat a.gz b.gz` is refused whole rather than half-read. That belongs in gz.l when
     something here needs it.
+- **rung 1d — the /proc family — BUILT.** Eight applets in `crew/kore/proc.l`, and **no
+  nif grew for any of them**: /proc is a filesystem, so the whole family is `uread` and a
+  parser. `ps` (procps' rule — ours, same terminal — with `-e`/`-A`/`a`/`x` for all),
+  `free` (used is total minus AVAILABLE, which is what procps prints), `uptime`, `pidof`,
+  `pgrep`, `pkill`, `killall`, `pwdx`. The parsers are lawed and the faces are smoked
+  against procps in `make test_kore`. Three things:
+  * ⚠ **the comm is taken between the FIRST `(` and the LAST `)`** of a stat line, never
+    by splitting on spaces — a program may be named `(sd-pam)` or `a b)c`, and every
+    field after it then shifts.
+  * ⚠ **`uptime` has no `N users`**: that count is utmp's, this tree keeps none, and a
+    fabricated 0 is worse than an absent field.
+  * the faces cannot be smoked byte-for-byte (the table moves between two runs), so the
+    gate asks about a process it made ITSELF — and kills a copy of `sleep` under its own
+    name, because `killall sleep` on a shared box reaches into other people's work.
+  Two older things fell out of the work, neither of them the family's:
+  * **the EI_OSABI=9 brand was mooncc's, not the linker's** — so `kore ld` and `mooncc`
+    wrote different bytes from ONE linker (`e113ebba` put the brand at the caller). It
+    lives in `ldlink` now, where the header is made. The check that catches it is gated
+    on `[ -x $ho/mooncc ]` and had been skipping.
+  * **a `'-x '` row in the gate's grep matrix was `grep -x FILE`** — a pattern and no
+    file, which reads stdin and hangs any run whose stdin is a pipe. `set -- $fl`
+    word-splits, so the empty pattern it meant to test could never ride that list; both
+    sides saw EOF and it passed while proving nothing. The empty pattern is its own row
+    now.
 - **rung 2 — cpio, and the distro cuts itself — BUILT.** `lib/cpio.l` is the SVR4 newc
   wire (pack, unpack, scatter) over lib/tar.l's own entries — the walk that fills them
   is about a file and not about a format, which is why the second wire is short — and

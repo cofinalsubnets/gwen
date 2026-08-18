@@ -65,23 +65,24 @@
           _ (rest t)
           0))
 
+   ; -TERM / -15 / -9 -> the number, or () for anything else. shared with kill, which
+   ; is the tool that taught the table; pkill and killall wear the same spelling.
+   usignames '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("KILL" 9) ("USR1" 10)
+               ("USR2" 12) ("TERM" 15) ("CONT" 18) ("STOP" 19))
+   (usigdig? b k) (? ((tally b) <= k) (0 < (tally b))
+                     ((48 <= (b k)) && ((b k) <= 57)) (usigdig? b (k + 1))
+                     0)
+   (usignum w)
+    (: n (tally w)
+       (snl l b) (? !(two? l) () (<<l = b) <><l (snl >l b))
+       (? ((n < 2) || !((w 0) = 45)) ()
+          (: b (snip w 1 n)
+             (? (usigdig? b 0) (uatoi b) (snl usignames b)))))
+
    ; -- kill: a signal (default TERM) onto every named pid --
    (kill-main as)
-    (: signames '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("KILL" 9) ("USR1" 10)
-                   ("USR2" 12) ("TERM" 15) ("CONT" 18) ("STOP" 19))
-       (snl l b) (? !(two? l) ()
-                    (<<l = b) <><l
-                    (snl >l b))
-       (alldig? s) (: n (tally s)
-                      (go k) (? (n <= k) (0 < n)
-                                ((48 <= s k) && (s k <= 57)) (go (k + 1))
-                                ())
-                      (go 0))
-       (signum s) (: n (tally s)
-                     (? ((n < 2) || !(s 0 = 45)) ()
-                        (: b (snip s 1 n)
-                           (? (alldig? b) (uatoi b) (snl signames b)))))
-       sig (? (two? as) (signum <as) ())
+    (: (alldig? s) (usigdig? s 0)
+       sig (? (two? as) (usignum <as) ())
        pids (? (charm? sig) >as as)
        sg (? (charm? sig) sig 15)
        _ (? (two? pids) () (udie 1 "usage: kill [-SIG] PID.."))
@@ -221,6 +222,226 @@
        gs (ugroups nm (getgid 0))
        _ (say out (ujoin (map (\ g (uidname "/etc/group" g)) gs)))
        _ (put out 10) _ (flush out) 0)
+
+
+   ; ---- the /proc family: ps, free, uptime, pidof, pgrep, pkill, killall, pwdx ----
+   ; ⚠ NO NIF GREW FOR ANY OF THESE. /proc is a filesystem, so the whole family is
+   ; `uread` and a parser -- which is also why a world without one (the kernel's own
+   ; image, free/kmain.c, mounts no procfs) reads as NO PROCESSES rather than as an
+   ; error. The tools say what they found; they do not invent a reason.
+   ; ⚠ AND NONE OF THEM CAN BE SMOKED BYTE-FOR-BYTE against procps: the process table
+   ; moves between two runs, and every number here is a clock. So the PARSERS are lawed
+   ; (law.l) and the FACES are smoked as sets -- a pid we made ourselves is in the
+   ; listing, a pid we killed is gone -- which is test/gate/kore.sh's own note.
+
+   (uprocs _)                          ; every numeric name under /proc, ascending
+    (: r (readdir "/proc")
+       (dig? s) (: n (tally s)
+                   (go k) (? (n <= k) (0 < n)
+                             ((48 <= (s k)) && ((s k) <= 57)) (go (k + 1))
+                             0)
+                   (go 0))
+       (? (two? r) (sort (map uatoi (filter dig? r))) ()))
+   ; a stat line -> (pid comm state ppid pgrp session tty_nr ..). ⚠ THE COMM IS TAKEN
+   ; BETWEEN THE FIRST "(" AND THE LAST ")" and never by splitting on spaces: a program
+   ; may be named `(sd-pam)` or `a b)c`, and a naive split reads its parentheses as
+   ; fields -- silently, since every field after it is then off by the same amount.
+   (ustatf ln)
+    (: n (tally ln)
+       (lp k) (? (k < 0) -1 ((ln k) = 41) k (lp (k - 1)))
+       (fp k) (? (n <= k) -1 ((ln k) = 40) k (fp (k + 1)))
+       a (fp 0) b (lp (n - 1))
+       ; ⚠ the pid is taken through uwords and not off the raw slice: `uatoi` reads
+       ; every charm it is handed, so the SPACE before the "(" would go in as -16
+       (? ((a < 0) || ((b < 0) || (b < a))) ()
+          (: h (uwords (snip ln 0 a))
+             (? !(two? h) ()
+                ((uatoi <h) >< ((snip ln (a + 1) b) >< (uwords (snip ln (b + 1) n))))))))
+   (upstat pid)                        ; a pid -> its stat fields | ()
+    (: r (uread (("/proc/" + (show pid)) + "/stat"))
+       (? (two? r) (ustatf <>r) ()))
+   (upself _)                          ; the same for this very process
+    (: r (uread "/proc/self/stat") (? (two? r) (ustatf <>r) ()))
+   (upcmd pid)                         ; the cmdline, NULs to spaces, or () when empty
+    (: r (uread (("/proc/" + (show pid)) + "/cmdline"))
+       (? !(two? r) ()
+          (: s <>r n (tally s)
+             (go k acc) (? (n <= k) acc
+                           (go (k + 1) (acc + (? ((s k) = 0) " " (string (s k))))))
+             o (go 0 "")
+             z (tally o)
+             (? (0 = z) () ((o (z - 1)) = 32) (snip o 0 (z - 1)) o))))
+   (ubase0 p) (: n (tally p)                       ; argv[0]'s basename, for pidof
+                 (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
+                 (go 0 0))
+
+   ; the two clocks. USER_HZ is 100 everywhere Linux runs a userland we could be in.
+   (uclk s)                            ; a second count -> HH:MM:SS
+    (: (p2 v) (uzpad 2 (show v))
+       ((((p2 (// s 3600)) + ":") + ((p2 (// (% s 3600) 60)) + ":")) + (p2 (% s 60))))
+   (uhms tk) (uclk (// tk 100))
+   ; tty_nr -> the name ps prints. the encoding is Linux's own: major in bits 8..19,
+   ; minor split across 0..7 and 20..31, and 0 means no controlling terminal.
+   (utty n)
+    (? (n = 0) "?"
+       (: maj (& (n >> 8) 4095)
+          mn ((& n 255) | (& (n >> 12) 1048320))
+          (? (maj = 136) ("pts/" + (show mn))
+             (maj = 4) (? (mn < 64) ("tty" + (show mn)) ("ttyS" + (show (mn - 64))))
+             "?")))
+   ; /proc/uptime's seconds -> procps' phrase. under an hour it counts minutes, and a
+   ; day arrives with a comma: "up 26 days,  8:01", "up  2:33", "up 33 min"
+   (uupsay secs)
+    (: d (// secs 86400)
+       hh (// (% secs 86400) 3600)
+       mm (// (% secs 3600) 60)
+       ds (? (0 < d) ((show d) + (? (d = 1) " day, " " days, ")) "")
+       (? (0 < (d + hh)) ((ds + (upad 2 (show hh))) + (":" + (uzpad 2 (show mm))))
+          ((show mm) + " min")))
+   (umeminfo _)                        ; /proc/meminfo -> a tablet, the kB counts by name
+    (: r (uread "/proc/meminfo")
+       t (tablet 0)
+       (one ln) (: n (tally ln)
+                   (go k) (? (n <= k) -1 ((ln k) = 58) k (go (k + 1)))
+                   i (go 0)
+                   (? (i < 0) 0
+                      (: ws (uwords (snip ln (i + 1) n))
+                         (? (two? ws) (pin t (intern (snip ln 0 i)) (uatoi <ws)) 0))))
+       _ (? (two? r) (foldl (\ _ ln (one ln)) 0 (lines <>r)) 0)
+       t)
+
+   ; -- ps: the pid, its terminal, its cpu time and its name. -e/-A/a/x take every
+   ; process; bare ps takes the ones that are OURS and share this terminal, which is
+   ; procps' rule (same euid, same tty) and not a simplification of it -- a bare ps
+   ; listing root's daemons would be a different tool.
+   ; ⚠ the owner comes off /proc/PID ITSELF, whose directory is owned by the process:
+   ; one stat where /proc/PID/status would be a second read and a second parser.
+   (upuid p) (: st (stat ("/proc/" + (show p))) (? (5 < (tally st)) (st 4) -1))
+   (ps-main as)
+    (: all (: (go l) (? !(two? l) 0
+                        (: w <l
+                           (? (member? w '("-e" "-A" "-ax" "ax" "a" "x" "-a")) 1 (go >l))))
+              (go as))
+       self (upself 0)
+       mine (? self (uatoi (self 6)) 0)
+       myuid (getuid 0)
+       _ (say out "    PID TTY          TIME CMD") _ (put out 10)
+       (one p) (: f (upstat p)
+                  (? !f 0
+                     (: tty (uatoi (f 6))
+                        (? (! (all || ((tty = mine) && ((upuid p) = myuid)))) 0
+                           (: _ (say out (upad 7 (show p)))
+                              _ (say out (" " + (urpad 8 (utty tty))))
+                              _ (say out (" " + (uhms ((uatoi (f 13)) + (uatoi (f 14))))))
+                              _ (say out (" " + (f 1)))
+                              (put out 10))))))
+       _ (foldl (\ _ p (one p)) 0 (uprocs 0))
+       _ (flush out) 0)
+
+   ; -- free: /proc/meminfo, procps' six columns. ⚠ USED IS TOTAL MINUS AVAILABLE and
+   ; not total minus free: the kernel's own estimate of what a new program could have
+   ; is the only honest reading of "used", and it is what procps prints --
+   (free-main as)
+    (: m (umeminfo 0)
+       (g k) (peep m k 0)
+       div (? (member? "-g" as) 1048576 (? (member? "-m" as) 1024 1))
+       (cell x) (upad 12 (show (// x div)))
+       tot (g 'MemTotal) fre (g 'MemFree) av (g 'MemAvailable)
+       bc (((g 'Buffers) + (g 'Cached)) + (g 'SReclaimable))
+       st (g 'SwapTotal) sf (g 'SwapFree)
+       _ (say out "               total        used        free      shared  buff/cache   available")
+       _ (put out 10)
+       _ (say out ((urpad 8 "Mem:") + (cell tot) + (cell (tot - av)) + (cell fre)
+                   + (cell (g 'Shmem)) + (cell bc) + (cell av)))
+       _ (put out 10)
+       _ (say out ((urpad 8 "Swap:") + (cell st) + (cell (st - sf)) + (cell sf)))
+       _ (put out 10)
+       _ (flush out) 0)
+
+   ; -- uptime: the clock, how long since boot, and the three load averages. ⚠ THERE
+   ; IS NO `N users` FIELD and there will not be one: it comes out of utmp, which this
+   ; tree does not keep, and a fabricated 0 is worse than an absent field. ⚠ the time
+   ; of day is UTC, for the reason `date` gives --
+   (uptime-main as)
+    (: r (uread "/proc/uptime")
+       secs (? (two? r) (: w (uwords <>r)
+                           (? (two? w) (uatoi <(usplit 46 <w)) 0))
+              0)
+       l (uread "/proc/loadavg")
+       ws (? (two? l) (uwords <>l) ())
+       ld (? (2 < (tally ws)) ((((ws 0) + ", ") + ((ws 1) + ", ")) + (ws 2))
+              "0.00, 0.00, 0.00")
+       tod (uclk (% (// (clock 0) 1000) 86400))
+       _ (say out (((" " + tod) + (" up " + (uupsay secs))) + (",  load average: " + ld)))
+       _ (put out 10) _ (flush out) 0)
+
+   ; -- the four by-name tools. a name is matched against the COMM, which is what the
+   ; kernel keeps and is capped at fifteen charms -- `pgrep -f` asks the cmdline
+   ; instead, where the whole of a long program name lives --
+   (upmatch f? x? pat pid)             ; does this process answer to pat
+    (: c (? f? (upcmd pid) (: s (upstat pid) (? s (s 1) ())))
+       (? !(string? c) 0
+          x? (c = pat)
+          (: r (reere pat) (? (two? r) (rehas <>r c) (udie 2 ("bad pattern: " + pat))))))
+   (upfind f? x? pat)                  ; the pids answering, ours never among them
+    (: me (: s (upself 0) (? s <s -1))
+       (filter (\ p (? (p = me) 0 (upmatch f? x? pat p))) (uprocs 0)))
+   (pidof-main as)
+    (: fs (filter (\ w !((0 < tally w) && ((w 0) = 45))) as)
+       _ (? (two? fs) () (udie 1 "usage: pidof NAME.."))
+       me (: s (upself 0) (? s <s -1))
+       (hit p) (: s (upstat p)
+                  c (? s (s 1) ())
+                  a (: x (upcmd p) (? (string? x) (ubase0 <(usplit 32 x)) ()))
+                  (? (p = me) 0
+                     (foldl (\ acc w (? acc 1 (? ((c = w) || (a = w)) 1 0))) 0 fs)))
+       ps (filter hit (rev (uprocs 0)))
+       _ (? (two? ps) (: _ (say out (ujoin (map show ps))) (put out 10)) 0)
+       _ (flush out)
+       (? (two? ps) 0 1))
+   (pgrep-main as)
+    (: t (tablet 0)
+       o (uopts as t () ())
+       _ (? (two? o) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
+       rest <>>o
+       _ (? (two? rest) () (udie 2 "usage: pgrep [-f] [-x] PATTERN"))
+       ps (upfind (peep t 102 0) (peep t 120 0) <rest)
+       _ (foldl (\ _ p (: _ (say out (show p)) (put out 10))) 0 ps)
+       _ (flush out)
+       (? (two? ps) 0 1))
+   (pkill-main as)
+    (: sig (? (two? as) (usignum <as) ())
+       rest (? (charm? sig) >as as)
+       t (tablet 0)
+       o (uopts rest t () ())
+       _ (? (two? o) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
+       ws <>>o
+       _ (? (two? ws) () (udie 2 "usage: pkill [-SIG] [-f] [-x] PATTERN"))
+       ps (upfind (peep t 102 0) (peep t 120 0) <ws)
+       _ (foldl (\ _ p (still p (? (charm? sig) sig 15))) 0 ps)
+       (? (two? ps) 0 1))
+   (killall-main as)
+    (: sig (? (two? as) (usignum <as) ())
+       ns (? (charm? sig) >as as)
+       _ (? (two? ns) () (udie 1 "usage: killall [-SIG] NAME.."))
+       me (: s (upself 0) (? s <s -1))
+       (one nm ok)
+        (: ps (filter (\ p (? (p = me) 0 (: s (upstat p) (? s ((s 1) = nm) 0)))) (uprocs 0))
+           (? (two? ps)
+              (: _ (foldl (\ _ p (still p (? (charm? sig) sig 15))) 0 ps) ok)
+              (: _ (say err (nm + ": no process found")) _ (put err 10) 0)))
+       ok (foldl (\ a nm (one nm a)) 1 ns)
+       _ (flush err)
+       (? ok 0 1))
+   ; -- pwdx: where a process is standing, out of /proc/PID/cwd --
+   (pwdx-main as)
+    (: _ (? (two? as) () (udie 1 "usage: pwdx PID.."))
+       (one w ok)
+        (: d (readlink (("/proc/" + w) + "/cwd"))
+           (? (string? d) (: _ (say out ((w + ": ") + d)) _ (put out 10) ok)
+              (: _ (say err (w + ": No such process")) _ (put err 10) 0)))
+       ok (foldl (\ a w (one w a)) 1 as)
+       _ (flush out) (? ok 0 1))
 
    ; -- xargs: stdin's words onto the command's tail (echo when none), -n N a
    ; batch at a time. exits 0 clean, 123 when a run failed, 127 when one

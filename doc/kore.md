@@ -27,7 +27,7 @@ The file discipline, two shapes:
   cat member.
 * **a toolbox** (core.l, fs.l): many mains, NO seat — kore is its door.
 
-## the inventory (85 tools, 88 names)
+## the inventory (93 tools, 96 names)
 
 | where | tools |
 | --- | --- |
@@ -52,6 +52,7 @@ The file discipline, two shapes:
 | awk.l, the language | awk (patterns and actions, BEGIN/END, arrays, user functions) |
 | find.l, the walk | find (-name -path -type -print -prune -exec; ( ) ! -a -o; the depths) |
 | proc.l, the processes and the world | env printenv sleep kill xargs date id whoami groups |
+| proc.l, the /proc family | ps free uptime pidof pgrep pkill killall pwdx |
 | crew/vi/ | vi |
 | crew/lush/ | sh / lush |
 
@@ -66,10 +67,11 @@ The file discipline, two shapes:
   smoked over a BINARY file, which is the only input that says anything.
 * **the u-floor.** The shared helpers leak u-prefixed from core.l and are lawed pure in law.l:
   uatoi uread udie upad ujoin uhdr uhead/utail ucount ubase/udir usplit ujoinc uspec/upick
-  uset urev uwords ueach, core.l's ucol/utac/ufold/uexpand/uunexpand and the coder trio
-  ubenc/ubdec/ubwrap, fs.l's uoct/udirp/udest/ucopy/rp-parts, and proc.l's udur. `ueach` is
-  the cat walk every whole-input tool rides (files or stdin, `-` reads stdin, a miss
-  complains on err and the exit code remembers).
+  uset urev uwords upad/urpad ueach, core.l's ucol/utac/ufold/uexpand/uunexpand and the
+  coder trio ubenc/ubdec/ubwrap, fs.l's uoct/udirp/udest/ucopy/rp-parts, and proc.l's
+  udur plus the /proc floor (uprocs ustatf upstat upcmd uclk uhms utty uupsay umeminfo
+  usignum). `ueach` is the cat walk every whole-input tool rides (files or stdin, `-`
+  reads stdin, a miss complains on err and the exit code remembers).
 * **the exit door.** A main ANSWERS its status as a charm; it does not quit. A leave from deep
   inside a walk rides `udie`, which says its sentence and then `uleave` — a scare carrying the
   status — and `urun` is the driver both faces come back through, flushing the ports and
@@ -289,6 +291,37 @@ tree has no ownership to tell about — so it is asked by `tally` and a world wi
   no NSS anywhere. The primary comes first, then the rest ascending, which is the order the
   kernel keeps its credential list in and so the order GNU prints.
 
+## the /proc family (crew/kore/proc.l)
+
+`ps`, `free`, `uptime`, `pidof`, `pgrep`, `pkill`, `killall` and `pwdx`. **No nif grew for
+any of them** — /proc is a filesystem, so the whole family is `uread` and a parser, and a
+world without one (the kernel's own image, which mounts no procfs) reads as *no processes*
+rather than as an error.
+
+* ⚠ **the comm is taken between the FIRST `(` and the LAST `)`** of a stat line, never by
+  splitting on spaces: a program may be named `(sd-pam)` or `a b)c`, and a naive split
+  reads its parentheses as fields — silently, since every field after it then shifts.
+* **`ps` bare is procps' rule**: the processes that are ours *and* share this terminal.
+  The owner comes off `/proc/PID` itself, whose directory the process owns — one stat
+  where `/proc/PID/status` would be a second read and a second parser. `-e`/`-A`/`a`/`x`
+  take every process. The columns are procps' to the space; TIME is USER_HZ 100 and
+  truncates, and the hours are never clipped (`100:00:00` is a real answer).
+* **`free`'s used is total minus AVAILABLE**, not total minus free — the kernel's own
+  estimate of what a new program could have is the only honest reading, and it is what
+  procps prints. `-m` and `-g` divide; `-h` is not here (its rounding is a layout).
+* ⚠ **`uptime` has no `N users` field** and will not get one: that count comes out of
+  utmp, which this tree does not keep, and a fabricated 0 is worse than an absent field.
+  The time of day is UTC, for the reason the clock section gives.
+* **the by-name four** match the COMM, which the kernel caps at fifteen charms; `pgrep -f`
+  asks the cmdline instead, where a long name survives, and `-x` wants the whole of it.
+  `pgrep`/`pkill` never match themselves. The signal spelling (`-9`, `-TERM`) is `kill`'s
+  own table, shared.
+* the faces are **not smoked byte-for-byte** — the process table moves between two runs —
+  so the parsers are lawed and the faces are asked about a process the gate made itself:
+  in `ps -e`, found by `pidof`, gone after `pkill`. ⚠ and the gate kills a COPY of sleep
+  under its own name, because `killall sleep` on a shared box reaches into other people's
+  work.
+
 ## the clock (crew/kore/proc.l)
 
 ⚠ **UTC and only UTC.** There is no tz database in this tree, so localtime IS gmtime — the same
@@ -333,4 +366,7 @@ layout language, not another row), `dir`/`vdir` (they are `ls -C` and `ls -l`, n
 ls wears yet), `shuf` (it wants a decision about the seed before it wants code), `sha1sum` and
 the sha512 family (host/hash.c carries sha256, md5 and cksum alone), and `who`/`users`/`logname`
 (no utmp here, and there will not be one).
+Out of the /proc family, deliberately: `top` (a full-screen loop, and its data is `ps`'s),
+`pmap` and `vmstat` (each its own layout), `dmesg` (the ring buffer wants a syscall, not a
+file).
 None block the distro; add them when a real script wants them.

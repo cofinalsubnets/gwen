@@ -69,8 +69,10 @@
                              _ (print err b) _ (put err 10) _ (flush err) 1))))))
    ; complain on err and leave through the exit door with code c
    (udie c m) (: _ (say err m) _ (put err 10) (uleave c))
-   ; left-pad with spaces to width w (a wider count never shrinks)
+   ; left-pad with spaces to width w (a wider count never shrinks), and its mirror --
+   ; the columns that count from the left (ps's TTY, free's label) want the other one
    (upad w s) (? (tally s < w) (upad w (" " + s)) s)
+   (urpad w s) (? (tally s < w) (urpad w (s + " ")) s)
    ; join texts with single spaces
    (ujoin a) (? !(two? a) ""
                 !(two? >a) <a

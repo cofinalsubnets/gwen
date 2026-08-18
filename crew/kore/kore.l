@@ -26,6 +26,7 @@
 ;   kore find [PATH..] [EXPR]                    the tree walk (crew/kore/find.l)
 ;   kore env|printenv|sleep|kill|xargs|date|id   the process and world tools
 ;                                                 (crew/kore/proc.l)
+;   kore ps|free|uptime|pidof|pgrep|pkill|killall|pwdx   the /proc family
 ;   kore whoami|groups|arch|nproc    the four one-line answers
 ;   kore vi [FILE]                   the editor (crew/vi/)
 ;   kore sh [-c CMD | FILE]          the shell, lush (crew/lush/; also `lush`, and an sh symlink)
@@ -271,6 +272,10 @@
              'vi (from 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
              'env env-main 'printenv printenv-main 'sleep sleep-main
              'whoami whoami-main 'groups groups-main
+             ; the /proc family -- no nif of their own, /proc is a filesystem
+             'ps ps-main 'free free-main 'uptime uptime-main
+             'pidof pidof-main 'pgrep pgrep-main 'pkill pkill-main
+             'killall killall-main 'pwdx pwdx-main
              'kill kill-main 'xargs xargs-main
              ; the shell: lush's wrap registered ahead of this file in the cat, so sh-main
              ; folds here. `kore sh ..` and a /bin/sh symlink both land it (the
@@ -305,6 +310,9 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
                          ( ) ! -a -o -maxdepth N -mindepth N   (PATH defaults to .)
   env printenv sleep kill xargs           the process tools (crew/kore/proc.l)
   whoami | groups | arch | nproc          the four one-line answers
+  ps [-e] | free [-m|-g] | uptime         what /proc says about the machine
+  pidof NAME.. | pgrep [-fx] PAT          .. and about who is running
+  pkill [-SIG] [-fx] PAT | killall [-SIG] NAME.. | pwdx PID..
   date [-u] [-d @SEC] [-r F] [+FMT]       the clock, UTC (no tz database here)
   id [-u|-g|-G] [-n]                      who this process is
   vi [FILE]                               the editor (crew/vi/)
