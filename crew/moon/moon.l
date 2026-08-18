@@ -685,7 +685,15 @@
              (: z (runtime-gz nm)
                 (? (! (string? z)) ()
                    (: ok (? (string? home) ((rtcid home) = (runtime-gz "id")) 1)
-                      (? (! ok) () z)))))))
+                      ; the carried bytes are a DEFLATE stream -- no size hint,
+                      ; so inflate counts it first (~4ms on half a megabyte,
+                      ; against the compile it stands in for). ⚠ inflate does
+                      ; not validate, so the MAGIC is the check: bytes that are
+                      ; not a stream decode to nonsense, not to (), and mcget
+                      ; asks the same question of a cache file.
+                      a (? ok (inflate z 0) ())
+                      (? ((string? a) && (8 <= (tally a))
+                          && ((snip a 0 8) = "!<arch>\n")) a ())))))))
    (rtarch cd id home tgt os vb)
     ; the key carries the OS beside the target: a freebsd runtime archive and a
     ; linux one are different bytes wearing one target name.

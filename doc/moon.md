@@ -301,7 +301,8 @@ the runtime sources the implicit link pulls — are found through three rungs, t
    is the binary's own.
 
 The runtime itself rides COMPILED as well as in source: mk/tools/mkrt.l lays each hosted
-ISA's nolibc archive (x64/arm64/riscv64, ~1.5 MB raw) beside the source blob, stamped with
+ISA's nolibc archive (x64/arm64/riscv64, ~1.5 MB of archive under DEFLATE, ~210 kB carried,
+one inflate on the ISA a link asks for) beside the source blob, stamped with
 `rtcid` — a pure hash of the include/ + lib/ slice. A link consults the cache, then the
 carried archive (the blob lane by construction; a disk home only when its slice hashes to
 the stamp, so a laid seed tree serves and an edited dev tree falls through to the compile),

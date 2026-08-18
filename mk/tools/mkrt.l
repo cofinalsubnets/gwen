@@ -1,5 +1,5 @@
 ; mk/tools/mkrt.l -- lay the compiled nolibc runtime into an ELF object, one
-; raw archive per hosted ISA, so a bare `love cc` links without compiling
+; deflated archive per hosted ISA, so a bare `love cc` links without compiling
 ; 197 members first (moon.l's rtcarried; host/src.c answers runtime-gz).
 ;
 ;   love wake out/host/mooncc0.image mk/tools/mkrt.l OUT.o [ARCH]
@@ -8,8 +8,8 @@
 ; shape 8-aligned:
 ;
 ;   ai_rtgz_<nm>_len   an 8-byte little-endian length
-;   ai_rtgz_<nm>       the bytes, right behind it (a raw .a; `id` is
-;                      moon.l's rtcid of the tree slice, plain text)
+;   ai_rtgz_<nm>       the bytes, right behind it (a .a under DEFLATE; `id`
+;                      is moon.l's rtcid of the tree slice, plain text)
 ;
 ; host/src.c declares every symbol WEAK, so a love carrying no runtime (love0)
 ; answers nothing and the compile-from-source lane stands. ⚠ determinism is
@@ -60,12 +60,15 @@
        mcid (from 'moon 'mcid)
        id (mcid "crew/moon/")
        cd (? (string? id) ((from 'moon 'mcdir) ()) ())
-       ; RAW, not deflated: ~1.5 MB across the three ISAs, and rtcarried reads
-       ; the bytes straight -- nothing to inflate on the bare `love cc` path.
+       ; DEFLATED: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
+       ; and rtcarried pays one inflate for the ISA it wants.
        (one tgt) (: a (rtarch cd id "crew/moon/" tgt 'linux ())
                     _ (? (string? a) 0 (rt-die (show tgt + ": no archive (a member refused?)")))
-                    _ (say out ("MKRT\t" + show tgt + " " + show (tally a) + "\n"))
-                    a)
+                    z (deflate a)
+                    _ (? (string? z) 0 (rt-die (show tgt + ": deflate refused the archive")))
+                    _ (say out ("MKRT\t" + show tgt + " " + show (tally a)
+                                + " -> " + show (tally z) + "\n"))
+                    z)
        forms ((rt-forms "id" cid)
               + (rt-forms "x64" (one 'x64))
               + (rt-forms "arm64" (one 'arm64))

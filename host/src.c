@@ -45,7 +45,7 @@ static lvm(lvm_srcgz) {
 static union u const nif_srcgz[] = {{lvm_srcgz}, {lvm_ret0}};
 AiNif("source-gz", nif_srcgz);
 
-// (runtime-gz "x64"|"arm64"|"riscv64") -> that ISA's raw nolibc archive;
+// (runtime-gz "x64"|"arm64"|"riscv64") -> that ISA's nolibc archive, deflated;
 // (runtime-gz "id") -> the pure tree-slice hash the archives were cut from
 // (moon.l's rtcid). () when none is carried. mk/tools/mkrt.l lays them, the
 // same weak/strong law as the source blob above; moon.l's rtcarried consumes.
