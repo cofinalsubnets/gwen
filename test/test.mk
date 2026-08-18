@@ -13,7 +13,7 @@
   test_rp2040 moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
-  test_holo test_as test_elf32 test_objcopy test_gz test_splice test_forge test_distboot test_bakerep
+  test_holo test_as test_elf32 test_objcopy test_gz test_cpio test_splice test_forge test_distboot test_bakerep
 
 # $m is the WARM love -- the baked image woken, what ships. a gate whose subject is
 # the egg boot spells LOVE_NO_IMAGE=1 itself; love0 is always the egg.
@@ -784,6 +784,13 @@ test_gz: host
 	@$m $R/test/gate/gzfind.l
 	@echo TEST test/gate/targz.sh
 	@sh test/gate/targz.sh $(ho)/love
+# test_cpio -- lib/cpio.l + its face against GNU cpio, both ways over newc. Separate
+# from test_gz for the same reason test_gz is separate from the laws: the system tool
+# is the only oracle that can catch a format two of our own functions agree on. This
+# is the wire `make distro-initramfs` cuts its image with.
+test_cpio: host
+	@echo TEST test/gate/cpio.sh
+	@sh test/gate/cpio.sh $(ho)/love
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (test/holo/golden.l). A host-only app -- it adds no nif and is NOT
 # baked into love0. The sources are cat'd in because the host bakes its NATIVE backend

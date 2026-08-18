@@ -32,12 +32,13 @@ naming it is most of what this section is for.
 
 ## chapters 7–8, the final system
 
-Present natively — roughly **17 of ~85 chapter-8 packages**, several partial:
+Present natively — roughly **18 of ~85 chapter-8 packages**, several partial:
 
 coreutils (`kore`, 85 tools / 88 names, GNU-byte-identical smokes, `make test_kore`) ·
 bash (`lush`) · sed · grep · diffutils (diff, cmp) · make (`cook`) · tar (`lib/tar.l`,
 ustar both ways, `love tar`) · gzip (`lib/gz.l`, and `lib/gzcmd.l` wears GNU's flags
-as `love gzip` / `gunzip` / `zcat`) · zlib · vim (`crew/vi`) · sysvinit
+as `love gzip` / `gunzip` / `zcat`) · cpio (`lib/cpio.l` newc, `love cpio`) · zlib ·
+vim (`crew/vi`) · sysvinit
 (`crew/init/boot.l` as `/init`) · openssl-ish (`crew/tls`) · nc (`mk/tools/ain.l`) ·
 **patch** (`crew/kore/patch.l`, unified diffs).
 
@@ -64,10 +65,9 @@ lush reads `/etc/profile` and `~/.profile`; libra owns `~/.love/etc`. The kernel
 still the one imported artifact — `mk/distro.mk` says `BZIMAGE ?= /boot/vmlinuz-linux`.
 No GRUB.
 
-⚠ and the wart worth naming: `distro-initramfs` cuts its image with the **host's** `find`,
-`cpio` and `gzip -9`. The distro that exists to prove we need no host is built by one --
-two thirds of that pipeline are ours now (kore's `find`, `love gzip`) and unadopted; the
-recipe still spells the host's.
+The image is cut by **kore's `find`, `love cpio` and `love gzip`** — no host tool in the
+pipeline — and `make distro-smoke` boots it. The wart this section carried for months
+(a distro that exists to prove we need no host, built by one) is gone.
 
 ## the number
 
@@ -147,9 +147,29 @@ The gap between those two numbers is entirely *other people's build systems*.
   * **one member per file** — gz-unzip reads the trailer off the tail, so a legal
     `cat a.gz b.gz` is refused whole rather than half-read. That belongs in gz.l when
     something here needs it.
-- **rung 2 — cpio, and the distro cuts itself.** With `find` and now `gzip` landed,
-  only `cpio` is still the host's in the `find | cpio | gzip -9` pipeline. cpio's newc
-  format is smaller than ustar.
+- **rung 2 — cpio, and the distro cuts itself — BUILT.** `lib/cpio.l` is the SVR4 newc
+  wire (pack, unpack, scatter) over lib/tar.l's own entries — the walk that fills them
+  is about a file and not about a format, which is why the second wire is short — and
+  `lib/cpiocmd.l` is `love cpio` (`-o -i -t`, `-H newc`, `-d -u -v`, `-F/-I/-O`,
+  `--quiet`, the block count). `mk/distro.mk` now cuts the initramfs with
+  **kore's find, our cpio and our gzip**, and `make distro-smoke` boots that image
+  under qemu: love is pid 1, /proc is mounted, the kore userland answers. The wart at
+  the top of this page is closed. Gated by name in `make test_cpio` (GNU cpio both
+  ways, the listings byte-identical, the flags, the image shape). Three things:
+  * ⚠ **the stored name loses a leading `./`** — GNU cpio drops it where GNU tar keeps
+    it, so two listings of the same tree disagree by two charms until you match it.
+  * ⚠ **the mode field is the whole `st_mode`**, type bits and all, where tar keeps the
+    kind in a typeflag byte. A newc header carrying permission bits alone extracts as a
+    file of mode 0 and no kind, and the kernel's own reader takes it silently.
+  * **hard links are not encoded** (newc says them with a shared ino and nlink > 1, the
+    body on the last member); we write nlink 1 and a fresh ino, so a tree of hard links
+    comes back as copies. Half of that job would be worse than none — a reader that
+    believes nlink waits for a body that never comes.
+  * ⚠ and the bug the boot found, which the packer had nothing to do with:
+    **`lib/dns.l` has to ride into the initramfs**. mk/tools/ain.l is a korefiles member
+    and probes for the `dial` nif at load, saying `(use 'dns)` when it is absent — which
+    it is in love-raw. With no `/lib/dns.l` that scare takes the whole cat down, and the
+    symptom is every applet gone rather than a quiet `nc`.
 - **rung 3 — decide about the configure tax.** The genuine fork, and it is a decision,
   not a rung: grow perl/python/autotools, or keep declining them and only ever build
   packages that do not ask. Six packages so far have not asked. That is not an accident

@@ -84,7 +84,8 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             crew/holo/link.l crew/holo/copy.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
             crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/sb/merge.l \
             crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l crew/sb/up.l \
-            lib/gz.l lib/tar.l lib/tarcmd.l lib/gzcmd.l lib/source.l crew/lapiz/lapiz.l \
+            lib/gz.l lib/tar.l lib/tarcmd.l lib/gzcmd.l lib/cpio.l lib/cpiocmd.l \
+            lib/source.l crew/lapiz/lapiz.l \
             lib/salt.l lib/infix.l crew/libra/libra.l lib/hueweb.l lib/serve.l
 # THE DOCS LANE -- the small image of the array below. a one-shot `love libra ..`
 # wants the .l reader, the config door, the factor pass and the document lens, and
