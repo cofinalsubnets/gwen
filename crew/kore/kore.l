@@ -8,11 +8,15 @@
 ;   kore as TGT IN OUT   assemble IR forms from IN (x64|arm64) into an ELF at OUT
 ;   kore objcopy -O binary|ihex IN OUT   a linked ELF flattened (crew/holo/copy.l)
 ;   kore nm [-gup] FILE..   an ELF's symbols, nm's three columns (crew/holo/link.l)
-;   kore cat|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
+;   kore cat|tac|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
 ;   kore cut|tr|nl|rev|paste|comm|join|split|od   the line, field and record tools
 ;                                                 (crew/kore/core.l)
+;   kore fold|expand|unexpand        the column tools (a tab steps to the next stop)
+;   kore base64|base32 [-d] [-w N]   the RFC 4648 encodings
+;   kore tsort|factor                a partial order made total, and a number's primes
 ;   kore cksum|md5sum|sha256sum [-c] [F..]   the checksums (crew/kore/sum.l)
 ;   kore ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (crew/kore/fs.l)
+;   kore realpath|link|unlink        a path made canonical, and the two bare calls
 ;   kore stat|du|chown|mktemp                        ... and what they report
 ;   kore expr EXPRESSION             the little language (crew/kore/expr.l)
 ;   kore patch [-pN] [-R] [-i F]     unified diffs laid on a tree (crew/kore/patch.l)
@@ -20,7 +24,10 @@
 ;   kore sed [-nEi] [-e SCRIPT].. SCRIPT [F..]   the stream editor (crew/kore/sed.l)
 ;   kore awk [-F FS] [-v v=x].. 'PROG' [F..]     the language (crew/kore/awk.l)
 ;   kore find [PATH..] [EXPR]                    the tree walk (crew/kore/find.l)
-;   kore env|sleep|kill|xargs|date|id   the process and world tools (crew/kore/proc.l)
+;   kore env|printenv|sleep|kill|xargs|date|id   the process and world tools
+;                                                 (crew/kore/proc.l)
+;   kore ps|free|uptime|pidof|pgrep|pkill|killall|pwdx   the /proc family
+;   kore whoami|groups|arch|nproc    the four one-line answers
 ;   kore vi [FILE]                   the editor (crew/vi/)
 ;   kore sh [-c CMD | FILE]          the shell, lush (crew/lush/; also `lush`, and an sh symlink)
 ; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/moon.md.)
@@ -228,7 +235,7 @@
              'as as-main
              'ar ar-main 'ld ld-main
              'objcopy (from 'holo 'objcopy)   ; the applet IS the function: crew/holo/copy.l, module-side
-             'cat cat-main 'echo echo-main
+             'cat cat-main 'tac tac-main 'echo echo-main
              'head head-main 'tail tail-main
              'wc wc-main 'sort sort-main
              'uniq uniq-main 'tee tee-main
@@ -240,10 +247,13 @@
              ; ⚠ `[` cannot be QUOTED -- it opens a bracket in the reader -- so the nom
              ; is interned by name; the map ctor evaluates its keys, which is the door.
              'test test-main (name "[") bracket-main
-             'uname uname-main 'printf printf-main
+             'uname uname-main 'arch arch-main 'nproc nproc-main 'printf printf-main
              'basename basename-main 'dirname dirname-main
              'cut cut-main 'tr tr-main
              'nl nl-main 'rev rev-main
+             'fold fold-main 'expand expand-main 'unexpand unexpand-main
+             'base64 base64-main 'base32 base32-main
+             'tsort tsort-main 'factor factor-main
              'paste paste-main 'comm comm-main 'split split-main
              'join join-main 'od od-main
              'cksum cksum-main 'md5sum md5sum-main 'sha256sum sha256sum-main
@@ -252,6 +262,7 @@
              'ln ln-main 'touch touch-main
              'pwd pwd-main 'chmod chmod-main
              'install install-main 'readlink readlink-main
+             'realpath realpath-main 'link link-main 'unlink unlink-main
              'cmp cmp-main
              'stat stat-main 'du du-main 'chown chown-main 'mktemp mktemp-main
              'expr expr-main 'date date-main 'id id-main
@@ -259,7 +270,12 @@
              'grep grep-main 'sed sed-main
              'awk awk-main 'find find-main
              'vi (from 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
-             'env env-main 'sleep sleep-main
+             'env env-main 'printenv printenv-main 'sleep sleep-main
+             'whoami whoami-main 'groups groups-main
+             ; the /proc family -- no nif of their own, /proc is a filesystem
+             'ps ps-main 'free free-main 'uptime uptime-main
+             'pidof pidof-main 'pgrep pgrep-main 'pkill pkill-main
+             'killall killall-main 'pwdx pwdx-main
              'kill kill-main 'xargs xargs-main
              ; the shell: lush's wrap registered ahead of this file in the cat, so sh-main
              ; folds here. `kore sh ..` and a /bin/sh symlink both land it (the
@@ -277,8 +293,11 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   ld A.o.. -o OUT    holo's static linker (-pie, -t x64|arm64|riscv64, -Ttext)
   objcopy -O F IN OUT   flatten a linked ELF: F is binary or ihex (Intel HEX)
   nm [-gup] FILE..   an ELF's symbols; -g externals, -u undefined, -p unsorted
-  cat head tail wc sort uniq tee          the line tools (crew/kore/core.l)
+  cat tac head tail wc sort uniq tee      the line tools (crew/kore/core.l)
   cut tr nl rev                           the field tools
+  fold [-w N] [-s] [-b] | expand [-t N] [-i] | unexpand [-a] [-t N]   the columns
+  base64 | base32 [-d] [-w N] [F]         the encodings (RFC 4648)
+  tsort [F] | factor [N..]                the two little computations
   paste comm join split od                the record tools
   cksum | md5sum [-c] | sha256sum [-c]    the checksums (crew/kore/sum.l)
   expr EXPRESSION                         arithmetic, comparison and BRE matching
@@ -289,13 +308,18 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   awk [-F FS] -f PROGFILE.. [F..]          ... the program off a file instead
   find [PATH..] [EXPR]   -name -path -type f|d|l -print -prune -exec CMD.. \\;
                          ( ) ! -a -o -maxdepth N -mindepth N   (PATH defaults to .)
-  env sleep kill xargs                    the process tools (crew/kore/proc.l)
+  env printenv sleep kill xargs           the process tools (crew/kore/proc.l)
+  whoami | groups | arch | nproc          the four one-line answers
+  ps [-e] | free [-m|-g] | uptime         what /proc says about the machine
+  pidof NAME.. | pgrep [-fx] PAT          .. and about who is running
+  pkill [-SIG] [-fx] PAT | killall [-SIG] NAME.. | pwdx PID..
   date [-u] [-d @SEC] [-r F] [+FMT]       the clock, UTC (no tz database here)
   id [-u|-g|-G] [-n]                      who this process is
   vi [FILE]                               the editor (crew/vi/)
   sh [-c CMD | FILE]                      the shell, lush (crew/lush/)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (crew/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs
+  realpath [-e|-m|-s] P.. | link F NEW | unlink F   ... the paths and the two calls
   stat -c FMT | du [-sabhc] | chown | mktemp   ... and what they report
   echo seq yes true false basename dirname     ... and the trivia
 ")

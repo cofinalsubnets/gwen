@@ -171,11 +171,16 @@ both "cat"      cat "$ho/.cu1" "$ho/.cu2"
 both "seq"      seq 5
 both "echo"     echo hi there
 both "basename" basename /a/b.txt .txt
+both "tac"      tac "$ho/.cu1" "$ho/.cu2"
+# ⚠ the newline rides the line it FOLLOWED: a last line arriving without one comes
+# back FIRST without one, which is the whole of tac's shape and easy to get wrong
+printf 'x\ny' > "$ho/.cu3"
+both "tac no-nl" tac "$ho/.cu3"
 # tee writes twice: the file half is checked as well as the stream half
 printf 'q\nq\nr\n' | tee "$ho/.cu-g2" > "$g"
 printf 'q\nq\nr\n' | korerun tee "$ho/.cu-o2" > "$o"
 cmp -s "$g" "$o" && cmp -s "$ho/.cu-g2" "$ho/.cu-o2" || fail "kore tee vs GNU"
-echo "kore: line tools (sort/uniq/head/tail/wc/cat/seq/echo/basename/tee GNU-identical) ok"
+echo "kore: line tools (sort/uniq/head/tail/wc/cat/tac/seq/echo/basename/tee GNU-identical) ok"
 
 # ------------------------------------------------------------ the field tools
 printf 'a:b:c\nnodelim\nx:y\n' > "$ho/.fu1"
@@ -203,6 +208,76 @@ pipe "rev"       'abc
 de
 '                rev
 echo "kore: field tools (cut/tr/nl/rev GNU-identical) ok"
+
+# ---------------------------------------------------------- the column tools
+# all three count COLUMNS: the tab cases are the point, since a byte count answers
+# differently for every one of them
+pipe "fold"        'abcdefghij
+kl
+'                  fold -w 4
+pipe "fold -s"     'aaa bbb ccc ddd
+'                  fold -s -w 6
+pipe "fold tab"    'a	bcdefgh
+'                  fold -w 8
+pipe "fold -b"     'ab	cd
+'                  fold -b -w 4
+pipe "fold -N"     'abcdefghij
+'                  fold -4
+pipe "fold 80"     'the eighty-column default, unspoken
+'                  fold
+pipe "expand"      'a	b
+	x
+ab	c
+'                  expand
+pipe "expand -t 4" 'a	b
+'                  expand -t 4
+pipe "expand -i"   '	a	b
+'                  expand -i
+# ⚠ a tab lands only where it saves at least TWO columns, so a lone space sitting on
+# a stop stays a space -- the one rule the obvious implementation gets wrong
+pipe "unexpand"    '   	ab   cd
+'                  unexpand
+pipe "unexpand -a" '        a       b
+'                  unexpand -a
+pipe "unexpand 1sp" 'abcdefg x
+'                   unexpand -a
+pipe "unexpand 2sp" 'abcdef  x
+'                   unexpand -a
+pipe "unexpand tail" 'a        
+'                    unexpand -a
+pipe "unexpand -t 4" '    a   b
+'                    unexpand -t 4
+echo "kore: column tools (fold/expand/unexpand GNU-identical, the tab stops) ok"
+
+# ------------------------------------------- the encodings, tsort and factor
+# the encodings ride a BINARY file, which is the only input that says anything:
+# text agrees under any bug that only mangles the high bit
+head -c 5000 /dev/urandom > "$ho/.b64src" 2>/dev/null || dd if=/dev/random of="$ho/.b64src" bs=1 count=5000 2>/dev/null
+both "base64"      base64 "$ho/.b64src"
+both "base64 -w 0" base64 -w 0 "$ho/.b64src"
+both "base64 -w 20" base64 -w 20 "$ho/.b64src"
+both "base32"      base32 "$ho/.b64src"
+base64 "$ho/.b64src" > "$ho/.b64txt"
+korerun base64 -d "$ho/.b64txt" > "$o"; cmp -s "$ho/.b64src" "$o" || fail "kore base64 -d"
+base32 "$ho/.b64src" > "$ho/.b32txt"
+korerun base32 -d "$ho/.b32txt" > "$o"; cmp -s "$ho/.b64src" "$o" || fail "kore base32 -d"
+printf 'aG!s\n' | korerun base64 -d > /dev/null 2>&1; r=$?
+[ $r -eq 1 ] || fail "kore base64 bad input (rc $r)"
+# tsort: OUR order is a topological one and not GNU's, so the input pins one -- a
+# chain has exactly one answer, and then both tools owe the same lines
+pipe "tsort chain" 'a b
+b c
+c d
+'                  tsort
+printf 'a b\nb a\n' | korerun tsort > "$o" 2>/dev/null; r=$?
+[ $r -eq 1 ] && [ "$(LC_ALL=C sort "$o" | tr -d '\n')" = ab ] || fail "kore tsort loop (rc $r)"
+printf 'a b c\n' | korerun tsort > /dev/null 2>&1; r=$?
+[ $r -eq 1 ] || fail "kore tsort odd words (rc $r)"
+both "factor"      factor 97 100 1234567 65537 2 1 0
+pipe "factor stdin" '12 13
+17
+'                   factor
+echo "kore: encodings + tsort + factor (base64/base32 over a binary file, GNU-identical) ok"
 
 # --------------------------------------------------------------- the fs tools
 P=$ho/.fsplay
@@ -237,7 +312,21 @@ korerun cmp -s "$P/f1" "$P/i/nope" 2> /dev/null; [ $? -eq 2 ] || fail "kore cmp 
 [ "$(korerun readlink "$P/l1")" = "$(readlink "$P/l1")" ] || fail "kore readlink"
 ln -sf l1 "$P/l2"
 [ "$(korerun readlink -f "$P/l2")" = "$(readlink -f "$P/l2")" ] || fail "kore readlink -f"
-echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink) ok"
+# realpath: the message on a miss is GNU's to the byte as well as the answer, and a
+# LAST component that is not there yet still answers -- GNU's default, and the case
+# a resolver written around stat gets wrong
+for q in "$P/l2" "$P/../$(basename "$P")/f1" "$P/i/../i/n" "$P/nosuch"; do
+  [ "$(korerun realpath "$q")" = "$(realpath "$q")" ] || fail "kore realpath $q"
+done
+korerun realpath "$P/nope/x" > "$o" 2> "$ho/.rp-e"; r=$?
+realpath "$P/nope/x" > "$g" 2> "$ho/.rp-g"; rg=$?
+[ $r -eq $rg ] && cmp -s "$ho/.rp-e" "$ho/.rp-g" || fail "kore realpath miss (rc $r vs $rg)"
+[ "$(korerun realpath -m "$P/nope/x")" = "$(realpath -m "$P/nope/x")" ] || fail "kore realpath -m"
+korerun realpath -e "$P/nosuch" > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore realpath -e"
+korerun link "$P/f1" "$P/hard1" && [ "$(stat -c %h "$P/hard1")" -ge 2 ] || fail "kore link"
+korerun unlink "$P/hard1" && [ ! -e "$P/hard1" ] || fail "kore unlink"
+korerun unlink "$P/hard1" 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore unlink miss (rc $r)"
+echo "kore: fs tools (mkdir/cp/mv/ln/touch/chmod/ls/pwd/rm/rmdir/install/cmp/readlink/realpath/link) ok"
 
 # ------------------------------------------------------------------- the greps
 printf 'abc\nxbz\nzzz\n+q\n*r\n' > "$ho/.gr1"; printf 'nope\nbc here\n' > "$ho/.gr2"
@@ -278,15 +367,25 @@ printf 'abc\nxbz\nzzz\n+q\n*r\nFoo Bar\nab_cd\nx{2}y\na1b2\n' > "$ho/.gr3"
 # rides along with it is not -- `[a-z]*` and `*r` are globs, and an unguarded split
 # hands grep whatever files happen to sit in the cwd instead of the pattern
 set -f
-for fl in '-c b' '-i FOO' '-i foo' '-w ab' '-w abc' '-x zzz' '-x zz' '-x ' \
+for fl in '-c b' '-i FOO' '-i foo' '-w ab' '-w abc' '-x zzz' '-x zz' \
           '-F a\|z' '-F *r' '-F ab' '-o b' '-oE [a-z]+' '-n -i foo' '-h b' '-a b' \
           '-c -m 2 b' '-m 1 z' '-v b' '-iw foo' '-nv b' '-co b' '-iF foo' \
-          '-ow [a-z]*' '-o ' '-oE [0-9]|[A-Z]'; do
+          '-ow [a-z]*' '-oE [0-9]|[A-Z]'; do
   # shellcheck disable=SC2086
   set -- $fl
   grep "$@" "$ho/.gr3" > "$g" 2>/dev/null; a=$?
   korerun grep "$@" "$ho/.gr3" > "$o" 2>/dev/null; b=$?
   cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep flags '$fl' vs GNU"
+done
+# ⚠ THE EMPTY PATTERN IS ITS OWN ROW. `set -- $fl` word-splits, so an empty word cannot
+# ride that list at all: the `-x ` and `-o ` rows above were really `grep -x FILE`, a
+# pattern and NO file -- which reads STDIN, and hangs any run whose stdin is a pipe
+# instead of a terminal. Both sides hung or both saw EOF, so it passed while proving
+# nothing about the empty pattern it was written for.
+for fl in -x -o -c -v; do
+  grep $fl '' "$ho/.gr3" > "$g" 2>/dev/null; a=$?
+  korerun grep $fl '' "$ho/.gr3" > "$o" 2>/dev/null; b=$?
+  cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore grep $fl '' (the empty pattern) vs GNU"
 done
 set +f
 # -e stacks and, once given, every positional word is a FILE
@@ -405,7 +504,64 @@ sleep 3 & sp=$!
 korerun kill -9 $sp || fail "kore kill send"
 wait $sp; r=$?; [ $r -eq 137 ] || fail "kore kill effect (rc $r)"
 korerun kill -0 999999 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore kill dead pid (rc $r)"
-echo "kore: process tools (env/sleep/kill/xargs -- GNU-identical output, the exit faces) ok"
+# printenv and the three one-line answers. ⚠ `arch` is not a program on every distro
+# (Arch ships none), so uname -m is its oracle -- and nproc's is --all: nothing here
+# reads an affinity mask, so the count is the machine's and not this process's
+[ "$(KAUP=7 korerun printenv KAUP)" = 7 ] || fail "kore printenv"
+korerun printenv NO_SUCH_VAR_HERE > /dev/null 2>&1; r=$?
+[ $r -eq 1 ] || fail "kore printenv miss (rc $r)"
+LOVE_NO_IMAGE= printenv | grep -v '^_=' | LC_ALL=C sort > "$g"
+korerun printenv | grep -v '^_=' | LC_ALL=C sort > "$o"; same "printenv print"
+[ "$(korerun whoami)" = "$(whoami)" ] || fail "kore whoami"
+[ "$(korerun groups)" = "$(groups)" ] || fail "kore groups"
+[ "$(korerun arch)" = "$(uname -m)" ] || fail "kore arch"
+[ "$(korerun nproc)" = "$(nproc --all)" ] || fail "kore nproc"
+echo "kore: process tools (env/printenv/sleep/kill/xargs/whoami/groups/arch/nproc) ok"
+
+# --------------------------------------------------------- the /proc family
+# ⚠ NOT byte-for-byte, and it cannot be: the process table moves between two runs and
+# every number these read is a clock. The PARSERS are lawed above (ustatf, uclk, utty,
+# uupsay); what is asked here is that the FACES agree with procps about the machine
+# they are both looking at -- the header they print, a process we made ourselves, and
+# a number that has to come out of /proc/meminfo.
+# ⚠ the victim is a COPY of sleep under our own name: `killall sleep` on a shared box
+# would reach into somebody else's build, and this gate has no business doing that.
+nap=$ho/.kore-nap
+cp "$(command -v sleep)" "$nap" 2>/dev/null && chmod 755 "$nap"
+ps    | head -1 > "$g"; korerun ps -e | head -1 > "$o"; same "ps header"
+free  | head -1 > "$g"; korerun free  | head -1 > "$o"; same "free header"
+if [ -x "$nap" ]; then
+  "$nap" 30 & n1=$!
+  "$nap" 30 & n2=$!
+  sleep 1
+  korerun ps -e | awk '{print $1}' | grep -qx "$n1" || fail "kore ps -e missed our own child"
+  korerun pidof .kore-nap | tr ' ' '\n' | grep -qx "$n1" || fail "kore pidof missed one"
+  korerun pidof .kore-nap | tr ' ' '\n' | grep -qx "$n2" || fail "kore pidof missed one"
+  # every pid we name is one procps names too -- the other way round is a race, since
+  # a process can arrive between the two readings and neither tool is wrong about it
+  korerun pgrep -x .kore-nap | LC_ALL=C sort > "$o"
+  pgrep -x .kore-nap | LC_ALL=C sort > "$g"
+  comm -23 "$o" "$g" > "$ho/.kore-px"
+  [ ! -s "$ho/.kore-px" ] || fail "kore pgrep named a pid procps does not"
+  korerun pkill -x .kore-nap || fail "kore pkill"
+  wait $n1; r=$?; [ $r -eq 143 ] || fail "kore pkill did not TERM (rc $r)"
+  wait $n2; r=$?; [ $r -eq 143 ] || fail "kore pkill left one alive (rc $r)"
+  "$nap" 30 & n3=$!
+  sleep 1
+  [ "$(korerun pwdx $n3)" = "$(pwdx $n3)" ] || fail "kore pwdx vs procps"
+  korerun killall .kore-nap || fail "kore killall"
+  wait $n3; r=$?; [ $r -eq 143 ] || fail "kore killall did not TERM (rc $r)"
+fi
+korerun killall nosuchprocess 2>/dev/null; r=$?; [ $r -eq 1 ] || fail "kore killall miss exit (rc $r)"
+korerun pidof nosuchprocess > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore pidof miss exit (rc $r)"
+mt=$(awk '/^MemTotal:/{print $2}' /proc/meminfo)
+[ "$(korerun free | awk 'NR==2{print $2}')" = "$mt" ] || fail "kore free total vs /proc/meminfo"
+[ "$(korerun free -m | awk 'NR==2{print $2}')" = "$((mt / 1024))" ] || fail "kore free -m"
+# ⚠ no `N users` clause: it comes out of utmp, which this tree does not keep
+korerun uptime | grep -qE '^ [0-9][0-9]:[0-9][0-9]:[0-9][0-9] up .*load average: [0-9]' \
+  || fail "kore uptime shape"
+korerun uptime | grep -q users && fail "kore uptime invented a user count"
+echo "kore: the /proc family (ps/free/uptime/pidof/pgrep/pkill/killall/pwdx vs procps) ok"
 
 # ------------------------------------------------------------------ the shell
 # lush rides the kore cat: `kore sh` (and an sh symlink) IS the shell -- the

@@ -8,6 +8,10 @@
 #
 # The kernel stays the one imported artifact (BZIMAGE, default the host's).
 
+# ⚠ THE CUT IS OURS END TO END NOW -- kore's find, lib/cpio.l and lib/gz.l where the
+# host's find | cpio | gzip -9 stood. $(mabs) because the pack runs INSIDE a `cd`, and
+# $m is spelled relative to the tree root.
+mabs         = $(abspath $m)
 distro_dir   = out/distro
 distro_root  = $(distro_dir)/root
 distro_img   = $(distro_dir)/initramfs.cpio.gz
@@ -33,12 +37,17 @@ $(distro_img): crew/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 	@cp crew/init/boot.l $(distro_root)/init && chmod 755 $(distro_root)/init
 	@cp $(distro_love) $(distro_root)/bin/love && chmod 755 $(distro_root)/bin/love
 	@cat $(lushfiles) > $(distro_root)/lib/sh.l
+# ⚠ lib/dns.l RIDES ALONG OR THE WHOLE TOOLBOX DIES: mk/tools/ain.l, a korefiles member,
+# probes for the `dial` nif at load and says (use 'dns) when it is absent -- which it is
+# in love-raw -- and an initramfs with no /lib/dns.l answers that with a scare that takes
+# the whole cat down. The symptom is every applet gone, not a quiet nc.
+	@cp lib/dns.l $(distro_root)/lib/dns.l
 	@{ echo '#!/bin/love'; cat $(korefiles); } > $(distro_root)/bin/kore && chmod 755 $(distro_root)/bin/kore
 	@for a in $(distro_applets); do ln -sf kore $(distro_root)/bin/$$a; done
 	@ln -sf kore $(distro_root)/bin/sh
 	@ln -sf kore $(distro_root)/bin/lush
-	@( cd $(distro_root) && find . | cpio --quiet -o -H newc ) | gzip -9 > $@
-	@echo "  packed $$(gzip -l $@ | awk 'NR==2{print $$2}') bytes -> $@"
+	@( cd $(distro_root) && $(mabs) kore find . | $(mabs) cpio -o --quiet ) | $(mabs) gzip > $@
+	@echo "  packed $$($(mabs) gzip -l $@ | $(mabs) kore awk 'NR==2{print $$2}') bytes -> $@"
 
 # Direct kernel boot, no bootloader: rdinit=/init makes love pid 1. KVM when the host
 # offers it -- TCG is too slow to reach the console inside a smoke window.
