@@ -452,6 +452,21 @@ EOF
   { echo "$sout" | grep -q "sigkq ok" && echo "$sout" | grep -q "rc=0"; } \
     || fail "trophy: love's sigfd missed on the box -- got: $sout"
   echo "$t: sigfd rode kqueue -- the pending and the parked take, on the box"
+  # the bare-binary door: the shipped love compiles hello world from a bare
+  # cwd, resolving its headers and runtime from the CARRIED source in memory
+  # (HOME pinned to an empty scratch, and it must STAY empty -- nothing is
+  # written anywhere), and the exe answers.
+  cat > "$d/hicc.c" <<'EOF'
+#include <stdio.h>
+int main(void) { printf("hi from the bare door\n"); return 0; }
+EOF
+  bout=$($box 'rm -rf /tmp/ccbare && mkdir -p /tmp/ccbare/home && cd /tmp/ccbare && cat > hi.c \
+    && env HOME=/tmp/ccbare/home /tmp/seedrun/love cc hi.c && ./a.out; echo "rc=$?"; ls -A /tmp/ccbare/home' < "$d/hicc.c") \
+    || fail "trophy: the bare cc door did not answer"
+  { echo "$bout" | grep -q "hi from the bare door" && echo "$bout" | grep -q "rc=0"; } \
+    || fail "trophy: bare cc -- got: $bout"
+  echo "$bout" | grep -q "\.love" && fail "trophy: bare cc wrote into HOME -- got: $bout"
+  echo "$t: love cc -- the bare binary compiled from its carried source, on the box"
   out=$($box 'cd /tmp/seedrun \
     && env LOVE_BUDGET_MB=512 ./love seed > seed.log 2>&1; tail -3 seed.log') \
     || fail "trophy: the box could not run the seed"

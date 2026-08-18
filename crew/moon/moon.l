@@ -8,8 +8,9 @@
 ; (crew/holo/link.l, rung 3), which binds them with crt0 and the implicit
 ; runtime into -o's exe, `a.out` bare. the old positional
 ; pair `mooncc [-c] IN OUT` still reads (two bare args, no .c and -- linking --
-; no .o). -I dirs search before the system pair on both include forms
-; (-nostdinc drops /usr/include off the tail, so only our own headers answer); a -D
+; no .o). -I dirs search before our own headers on both include forms -- and
+; OURS ARE THE ONLY STANDARD SET: there is no /usr/include tail (a header we
+; do not carry is refused, never resolved to whatever libc the box has); a -D
 ; rides in as a synthesized #define line, so token bodies and function-like
 ; -DF(x)=.. take the one macro path. the driver wears the cc conventions: the
 ; advisory flag families (-W.. -O.. -g.. -std= -f.. -pipe -static) ride through
@@ -64,6 +65,89 @@
                            (two? (uread (<rs + "lib/nolibc/core.c"))) <rs
                            (go >rs))
                 (go (mroots ())))
+   (pfx? s p) (: n (tally p) (n <= tally s && (snip s 0 n = p)))
+   ; a path with its . and .. components folded away, for the table lookups
+   ; below -- "lib/nolibc/sys/../impl.h" and "lib/nolibc/impl.h" are ONE key.
+   (pnorm p)
+    (: n (tally p)
+       (go i st ps) (? (n < i) ps
+                       ((i = n) || (p i = 47))
+                        (: c (snip p st i)
+                           (go (i + 1) (i + 1)
+                               (? ((c = "") || (c = ".")) ps
+                                  (c = "..") (? (two? ps) >ps ())
+                                  (c >< ps))))
+                       (go (i + 1) st ps))
+       (jn l a) (? !(two? l) a (jn >l (<l + (? (tally a) ("/" + a) a))))
+       (jn (go 0 0 ()) ""))
+   ; the carried archive is a .gz: the 10-byte header, the flagged optional
+   ; fields stepped over, the DEFLATE stream to the C nif, the isize from the
+   ; trailer as its hint. lib/gz.l's walk, carried here READ-ONLY because moon
+   ; owes no module (a bake-order `use` was exactly the fragility this had).
+   (gzskip s n i) (? (n <= i) () ((s i) = 0) (i + 1) (gzskip s n (i + 1)))
+   (gzbody s)
+    (: n (tally s)
+       (? ((n < 18) || (! (((s 0) = 31) & ((s 1) = 139) & ((s 2) = 8)))) ()
+          (: flg (s 3)
+             i1 (? (flg & 4) (: x ((s 10) + ((s 11) << 8)) (12 + x)) 10)
+             i2 (? (flg & 8) (gzskip s n i1) i1)
+             i3 (? (! i2) () (flg & 16) (gzskip s n i2) i2)
+             i4 (? (! i3) () (flg & 2) (i3 + 2) i3)
+             (? ((! i4) || (n < (i4 + 8))) ()
+                (: c (cask (n - i4 - 8))
+                   _ (pour c 0 s i4 (n - i4 - 8))
+                   (inflate (string c)
+                            ((s (n - 4)) + ((s (n - 3)) << 8)
+                             + ((s (n - 2)) << 16) + ((s (n - 1)) << 24))))))))
+   ; ..and a read-only ustar walk: nom (prefix + name), size, body -- all this
+   ; needs. lib/tar.l stays the whole law; this reads the slice and nothing else.
+   (toct s o k) (: (go i a) (? (k <= i) a
+                               (: c (s (o + i))
+                                  (? ((48 <= c) && (c < 56))
+                                     (go (i + 1) ((a * 8) + (c - 48))) a)))
+                   (go 0 0))
+   (ttxt s o k) (: (go i) (? ((k <= i) || ((s (o + i)) = 0)) i (go (i + 1)))
+                   m (go 0)
+                   (? m (: c (cask m) _ (pour c 0 s o m) (string c)) ""))
+   ; noms are "[./]<top>/crew/moon/.."; the top strips per-entry (the archive
+   ; leads with "./")
+   (strip1 nom) (: s (? (pfx? nom "./") (snip nom 2 (tally nom)) nom)
+                   m (tally s)
+                   (go i) (? (m <= i) ""
+                             (s i = 47) (snip s (i + 1) m)
+                             (go (i + 1)))
+                   (go 0))
+   (tarfiles s)                             ; -> [[nom body] ..], files only
+    (: n (tally s)
+       (go o acc) (? ((n < (o + 512)) || ((s o) = 0)) acc
+                     (: nm (ttxt s o 100)
+                        pf (ttxt s (o + 345) 155)
+                        nom (? (tally pf) (pf + "/" + nm) nm)
+                        sz (toct s (o + 124) 12)
+                        k (s (o + 156))
+                        acc2 (? ((k = 48) || (k = 0))
+                                (: c (cask sz) _ (pour c 0 s (o + 512) sz)
+                                   ([nom (string c)] >< acc))
+                                acc)
+                        (go (o + 512 + (* 512 (// (sz + 511) 512))) acc2)))
+       (go 0 ()))
+   ; no nest on disk, but a love carries its whole tree (source-gz): the
+   ; toolchain slice -- include/ and lib/, what install.mk ships -- as an
+   ; IN-MEMORY table, key the nest-relative path, value the bytes. nothing is
+   ; written anywhere: the resolver and the runtime walk read the table where
+   ; they would have read the nest. () when there is nothing to carry (love0),
+   ; and the owed-nest diagnostic stands.
+   (mblob _)
+    (: gz (source-gz "x")
+       u (? (string? gz) (gzbody gz) ())
+       (? (! (string? u)) ()
+          (foldl (\ a e
+                   (: rel (strip1 <e)
+                      (? (!(pfx? rel "crew/moon/")) a
+                         (: sub (snip rel 10 (tally rel))
+                            (? (!(pfx? sub "include/") && !(pfx? sub "lib/")) a
+                               (: _ (pin a sub <>e) a))))))
+                 (tablet 0) (tarfiles u))))
    ; the first three of a name list, comma-joined, with a count of the rest --
    ; a diagnostic wants a taste, not the whole bag
    (mfew ns)
@@ -74,21 +158,35 @@
        (? (3 < n) (s + " (+" + show (n - 3) + " more)") s))
    ; #include resolver bound to a source dir + the -I list: "" searches relative
    ; first (the src dir, then cwd) then the -I dirs; <> the -I dirs straight off;
-   ; both fall to the system pair, our own headers before /usr. answers
+   ; both end at OUR headers -- the only standard set, no /usr tail: a name we
+   ; do not carry refuses here, never resolves to the box's own libc (whose
+   ; headers speak another compiler and, off linux, another kernel). `vb` is the
+   ; carried source's table (moon-cc pins it when no nest stands on disk): the
+   ; same order, in memory, and nothing written anywhere. answers
    ; (1 text child) -- the child hook resolves the hit file's OWN quote
    ; includes beside it (gcc's rule; cpp.l threads it). -> that | ().
-   (incload nsi is srcdir name sys?)
-    (: ours (map (\ r (r + "include/")) (mroots ())                          ; our headers (stdarg.h ..) win for <>
-             + (? nsi () '("/usr/include/")))                                ; -nostdinc: no glibc tail at all
+   (incload vb is srcdir name sys?)
+    (: ours (map (\ r (r + "include/")) (mroots ()))
        dirs (? sys? (is + ours)
                 ([srcdir ""] + is + ours))
        (go ds) (? !(two? ds) ()
                   (: r (uread (<ds + name))
                      (? (two? r)
                         (: hd (cdir (<ds + name))
-                           [1 <>r (\ n2 s2 (incload nsi is hd n2 s2))])
+                           [1 <>r (\ n2 s2 (incload vb is hd n2 s2))])
                         (go >ds))))
-       (go dirs))
+       r (go dirs)
+       (? (two? r) r
+          (id? vb ()) ()
+          ; the carried source: the quote form beside its includer, then our
+          ; headers -- the disk walk's own order
+          (: k1 (pnorm (srcdir + name))
+             h1 (? sys? () (peep vb k1 ()))
+             (? (string? h1) [1 h1 (\ n2 s2 (incload vb is (cdir k1) n2 s2))]
+                (: k2 ("include/" + name)
+                   h2 (peep vb k2 ())
+                   (? (string? h2) [1 h2 (\ n2 s2 (incload vb is (cdir k2) n2 s2))]
+                      ()))))))
    (el l i) (? (i < 1) <l (el >l (i - 1)))
    ; a -D definition as #define text: the first = becomes the space, so
    ; -DX -> "X" (defined 1 below), -DX=v -> "X v", -DF(x)=x -> "F(x) x"
@@ -285,7 +383,7 @@
    ; whole -- clexat stamps them 1-k..0 and the source itself from 1, so every
    ; stamped line (a gripe, __LINE__) is TRUE with no pay-back pass. an
    ; #include lexes fresh at its own line 1 either way.
-   (cc-parse src {'is is 'ds ds 'tgt tgt 'os os 'nsi nsi 'dia dia})
+   (cc-parse src {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia})
     (: ds9 (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt
                  + (? (id? dia 'moon) '("__moon__=1") ())   ; the DIALECT's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
@@ -293,11 +391,17 @@
        ; ⚠ `-` is READ HERE and nowhere else, so every door onto a TU gets stdin for
        ; free -- and cdir answers "" for it, which is the cwd, gcc's own rule for a
        ; source with no directory of its own.
-       r (? (src = "-") [1 (slurp in)] (uread src))
+       ; the source itself may live in the carried table (a runtime member on
+       ; the blob lane): disk first, then vb by key
+       r (? (src = "-") [1 (slurp in)]
+            (: q (uread src)
+               (? (two? q) q
+                  (id? vb ()) ()
+                  (: h (peep vb src ()) (? (string? h) [1 h] ())))))
        _ (? (two? r) () (udie 1 ("cc: cannot open " + src)))
        lx (clexat (deftext ds9 + <>r) (1 - tally ds9))
        _ (? (okv? lx) () (ccdie lx src ("cc: lex error in " + src)))
-       pp (cpp <>lx (\ name sys? (incload nsi is (cdir src) name sys?)) src)
+       pp (cpp <>lx (\ name sys? (incload vb is (cdir src) name sys?)) src)
        _ (? (okv? pp) () (ccdie pp src ("cc: preprocessor error in " + src)))
        ps (cparse-d <>pp tgt dia)             ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        _ (? (okv? ps) () (ccdie ps src ("cc: parse error in " + src)))
@@ -560,48 +664,90 @@
    ; compiler otherwise -- and the compile is what fills the cache. a cache that
    ; cannot open is invisible, and the link is the one that happens today, at
    ; today's price.
-   (rtarch cd id home tgt os)
+   ; the PURE runtime identity: names and bytes of the headers + lib sources,
+   ; nothing of the machine -- what mk/tools/mkrt.l stamps beside the carried
+   ; archives, and what a disk home must hash to for them to serve it. (mcid
+   ; below is a CACHE key and mixes in the binary's own path and stats; this
+   ; one must travel.)
+   (rtcid home)
+    (sha256 ("moon-rtc 1\n" + ((mctree (home + "include/")) + (mctree (home + "lib/")))))
+   ; the carried runtime: the build lays each ISA's compiled archive beside the
+   ; source blob (mk/tools/mkrt.l; host/src.c answers runtime-gz), so a link
+   ; owes no member compiles -- the bare door's ~28 s becomes a read. it
+   ; serves the DEFAULT lane only, and only when the identity matches: the blob
+   ; lane's identity IS the carried source, a disk home serves iff its slice
+   ; hashes to the stamped id (a laid seed tree does; an edited dev tree does
+   ; not, and falls through to the compile).
+   (rtcarried home tgt os)
+    (? (member? os '(freebsd none)) ()       ; the default lane only ((), or -os linux said)
+       (: nm (tgt @ 'x64 "x64" 'arm64 "arm64" 'riscv64 "riscv64" ())
+          (? (! (string? nm)) ()
+             (: z (runtime-gz nm)
+                (? (! (string? z)) ()
+                   (: ok (? (string? home) ((rtcid home) = (runtime-gz "id")) 1)
+                      (? (! ok) () z)))))))
+   (rtarch cd id home tgt os vb)
     ; the key carries the OS beside the target: a freebsd runtime archive and a
     ; linux one are different bytes wearing one target name.
     (: k (? (string? cd && string? id) (sha256 $ id + "\n" + show tgt + "\n" + show os) ())
        hit (? (string? k) (mcget cd (k + ".a") "!<arch>\n") ())
        _ (? (two? hit) (utime (cd + k + ".a") (clock ())) 0)   ; the sweep orders by use
+       cr (? (two? hit) () (rtcarried home tgt os))
        bs (? (two? hit) <>hit
-             (: b (arbytes (rtmems home tgt os))
+             (string? cr) cr
+             (: b (arbytes (rtmems home tgt os vb))
                 _ (? (string? k) (mcput cd (k + ".a") b) 0)
                 b))
        _ (? (string? cd) (mcsweep cd) 0)
        bs)
-   ; every member compiled, ready to index. the IMPLICIT runtime compiles with the
-   ; system tail LEFT ON (the () below): these are our own sources reaching only
-   ; our own headers, and the user's -nostdinc is about the user's translation
-   ; units, not this one. nolibc is a TREE: every .c directly under lib/nolibc/ and
+   ; every member compiled, ready to index. the IMPLICIT runtime compiles like
+   ; everything else: our own sources reaching only our own headers.
+   ; nolibc is a TREE: every .c directly under lib/nolibc/ and
    ; every .c one level down (string/, ..), one function to a file where the
    ; file-scope state allows. A link owing no calendar takes no calendar
    ;. ⚠ one level, not a walk -- the depth is the
    ; vocabulary, and a deeper tree would say nothing. ⚠ the member names flatten
    ; that tree with _ and the math ones wear m_: time.c and sys/time.c are two
    ; members of one basename, and an archive resolves by name alone.
-   (rtmems home tgt os)
-    (: ndir (home + "lib/nolibc/") mdir (home + "lib/math/") inc (home + "include/")
+   (rtmems home tgt os vb)
+    (: disk (string? home)                ; () home = the blob lane: paths are vb keys
+       ndir (? disk (home + "lib/nolibc/") "lib/nolibc/")
+       mdir (? disk (home + "lib/math/") "lib/math/")
+       inc  (? disk (home + "include/") "include/")
        (dotobj n) (? (dotc? n) (snip n 0 (tally n - 2) + ".o") n)
+       (swap47 s) (: n (tally s) c (cask n)
+                     _ (pour c 0 s 0 n)
+                     (go i) (? (n <= i) (string c)
+                               (: _ (? (peep c i 0 = 47) (pin c i 95) 0)
+                                  (go (i + 1))))
+                     (go 0))
        (nlmems d)
-        (foldl (\ a e (: p (d + e)
-                         (? (dotc? e) (a + [[(dotobj e) p]])
-                            (sdir? (stat p))
-                             (a + foldl (\ a2 f (a2 + [[(dotobj $ e + "_" + f) (p + "/" + f)]]))
-                                        () (sort (filter dotc? (readdir p))))
-                            a)))
-               () (sort (readdir d)))
+        (? disk
+           (foldl (\ a e (: p (d + e)
+                            (? (dotc? e) (a + [[(dotobj e) p]])
+                               (sdir? (stat p))
+                                (a + foldl (\ a2 f (a2 + [[(dotobj $ e + "_" + f) (p + "/" + f)]]))
+                                           () (sort (filter dotc? (readdir p))))
+                               a)))
+                  () (sort (readdir d)))
+           ; the carried source: the same pairs off the table's keys (the
+           ; member's "path" IS its key; cc-parse reads it back from vb)
+           (foldl (\ a k (: sub (snip k (tally d) (tally k))
+                            (? (dotc? sub) (a + [[(dotobj (swap47 sub)) k]]) a)))
+                  () (sort (filter (\ k (pfx? k d)) (keys vb)))))
+       mfs (? disk (sort (filter dotc? (readdir (home + "lib/math"))))
+              (foldl (\ a k (: sub (snip k (tally mdir) (tally k))
+                               (? (dotc? sub) (a + [sub]) a)))
+                     () (sort (filter (\ k (pfx? k mdir)) (keys vb)))))
        ; the members compile under the LINK's os (impl.h's table opens on it),
        ; and the sys leaf is the os's own -- freebsd rides the x64 machine.
-       (f9 is9) (pin (pin (fseed tgt 'moon) 'os os) 'is is9)
+       (f9 is9) (pin (pin (pin (fseed tgt 'moon) 'os os) 'is is9) 'vb vb)
        ((map ((a b) \ [a (string (cc-objbytes b (f9 [inc])))])
              (nlmems ndir))
         + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) (f9 [mdir inc])))])
-              (sort (filter dotc? (readdir (home + "lib/math"))))
+              mfs
         + (? (member? tgt '(x64 arm64 riscv64)) [["mksys.o" (string (mksys-bytes tgt))]] ())))
-   (rtpull srcs tgt os nostd)
+   (rtpull srcs tgt os nostd vb)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
        ; -nostdlib and friends: no runtime BY REQUEST, so there is nothing left to
@@ -615,14 +761,17 @@
        ; the old message led with the absent toolchain and prescribed "install the
        ; nest", which is the wrong repair for a program whose label is misspelled,
        ; and the two conditions read identically from here.
-       _ (? (two? owed && !(string? home))
+       _ (? (two? owed && (!(string? home) && (id? vb ())))
             (udie 1 ("cc: undefined reference to " + qfew owed
                      + "; no runtime in reach to supply it either (looked in "
                      + mfew (mroots ()) + ") -- check the spelling, then the nest"))
             0)
-       (? (nostd || !(string? home)) ()
-          (: id (mcid home) cd (? (string? id) (mcdir ()) ())   ; no identity, no cache, no directory made
-             pr (arpull "moon-runtime" (rtarch cd id home tgt os) dt owed mach)
+       (? (nostd || ((!(string? home)) && (id? vb ()))) ()
+          ; the blob lane has no disk identity, so no cache: id () -> cd () --
+          ; a bare compile pays the runtime build each link, honestly
+          (: id (? (string? home) (mcid home) ())
+             cd (? (string? id) (mcdir ()) ())   ; no identity, no cache, no directory made
+             pr (arpull "moon-runtime" (rtarch cd id home tgt os vb) dt owed mach)
              ; ⚠ the OWE AT TERMINATION IS THE ANSWER: no member defines anything
              ; left in it, so it is exactly the set nothing anywhere defines --
              ; said here, whole, rather than one nom at a time by whichever holo
@@ -630,7 +779,7 @@
              _ (? (two? <>pr) (undie <>pr) 0)
              <pr)))
    (cc-link ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
-                          'nostd nostd 'nsi nsi 'ni ni 'fir fir 'rdme rdme}))
+                          'nostd nostd 'vb vb 'ni ni 'fir fir 'rdme rdme}))
     ; -os freebsd links on x64 only (the one lane with a table + mksys twin);
     ; any other tgt under it is refused rather than half-built.
     (: _ (? (id? os 'freebsd && ! (id? tgt 'x64))
@@ -666,7 +815,7 @@
        ; the archives first, then whatever the runtime still owes: a library the
        ; line NAMED is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
-       set (lib + rtpull lib tgt os nostd)
+       set (lib + rtpull lib tgt os nostd vb)
        ps (? arm? (ldbare32 tgt runs set ()) (ldlink tgt pie org set ("love " + <(usplit 43 love-version)) rdme))
        ; the BRAND: EI_OSABI = 9 in e_ident[7], on EVERY x64 static exe -- the
        ; linux loader never reads the byte, freebsd's imgact refuses without
@@ -678,7 +827,7 @@
        ps9 (? (id? tgt 'x64) (brand9 <ps >< >ps) ps)
        _ (ld-write dst ps9)
        (chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-nostdinc] [-x c] [-t x64|arm64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-x c] [-t x64|arm64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n (tally s)
@@ -801,7 +950,7 @@
    ; the positional walk had and the bare tablet lost. ⚠ it is NOT a wrapper on `{}`: the
    ; literal has to be COMPLETE and it is wanted at two sites, so it is spelled once.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'nsi () 'ni () 'fir () 'rdme () 'dia dia}
+                    'nostd () 'vb () 'ni () 'fir () 'rdme () 'dia dia}
    (flags as t)
     (? !(two? as)
        (: _ (pin t 'is (rev (peep t 'is ())))
@@ -866,12 +1015,10 @@
              (glu? a 73) (flags r (fpush t 'is (snip a 2 (tally a))))
              (glu? a 68) (flags r (fpush t 'ds (snip a 2 (tally a))))
              (glu? a 116) (flags r (pin t 'tgt (totgt (snip a 2 (tally a)))))
-             ; -nostdinc is the INCLUDE half of -nostdlib's word, and it is LOUD
-             ; rather than advisory: with the /usr/include tail still on, a header
-             ; we simply do not carry resolves to GLIBC's instead, and a
-             ; freestanding build quietly taking a hosted declaration is the wrong
-             ; artifact wearing a green face. (it reaches incload as nsi.)
-             (a = "-nostdinc") (flags r (pin t 'nsi 1))
+             ; -nostdinc's whole job is DONE BY DESIGN now: the /usr/include
+             ; tail is gone, our headers are the only standard set, so a header
+             ; we do not carry refuses either way. accepted for CC= recipes.
+             (a = "-nostdinc") (flags r t)
              ; -ffreestanding is the one member of the -nostd* family that says
              ; something about the LANGUAGE and not just the link: it makes the
              ; implementation freestanding, and __STDC_HOSTED__ is how the
@@ -937,6 +1084,9 @@
        ; consumers now take `f` itself -- so a `dirn` applied on the way out of one reader
        ; would leave every other consumer holding the raw list. one pin, before anything reads.
        _ (pin f 'is (map dirn (peep f 'is ())))
+       ; no nest on disk anywhere: the carried source answers, in memory --
+       ; pinned ONCE here so every TU and the runtime share the one inflate.
+       _ (? (string? (mhome ())) 0 (pin f 'vb (mblob ())))
        c (peep f 'c ()) o (peep f 'o ()) ins (peep f 'ins ())
        ; TWO outcomes now, the cc shape: -c lays objects, anything else LINKS.
        ; one .c used to take a third path (cc-exe: elf64 straight off the IR,

@@ -44,3 +44,42 @@ static lvm(lvm_srcgz) {
 
 static union u const nif_srcgz[] = {{lvm_srcgz}, {lvm_ret0}};
 AiNif("source-gz", nif_srcgz);
+
+// (runtime-gz "x64"|"arm64"|"riscv64") -> that ISA's deflated nolibc archive;
+// (runtime-gz "id") -> the pure tree-slice hash the archives were cut from
+// (moon.l's rtcid). () when none is carried. mk/tools/mkrt.l lays them, the
+// same weak/strong law as the source blob above; moon.l's rtcarried consumes.
+__attribute__((weak)) const unsigned char ai_rtgz_x64[1] = {0};
+__attribute__((weak)) const uintptr_t ai_rtgz_x64_len = 0;
+__attribute__((weak)) const unsigned char ai_rtgz_arm64[1] = {0};
+__attribute__((weak)) const uintptr_t ai_rtgz_arm64_len = 0;
+__attribute__((weak)) const unsigned char ai_rtgz_riscv64[1] = {0};
+__attribute__((weak)) const uintptr_t ai_rtgz_riscv64_len = 0;
+__attribute__((weak)) const unsigned char ai_rtgz_id[1] = {0};
+__attribute__((weak)) const uintptr_t ai_rtgz_id_len = 0;
+
+ai_noinline static struct ai *host_rtgz(struct ai *g) {
+ const unsigned char *p = 0;
+ uintptr_t n = 0;
+ ai_word a = g->sp[0];
+ if (ai_strp(a)) {
+  const char *s = (const char*) txt(a);
+  uintptr_t sl = len(a);
+  if (sl == 3 && !memcmp(s, "x64", 3))          p = ai_rtgz_x64,     n = ai_rtgz_x64_len;
+  else if (sl == 5 && !memcmp(s, "arm64", 5))   p = ai_rtgz_arm64,   n = ai_rtgz_arm64_len;
+  else if (sl == 7 && !memcmp(s, "riscv64", 7)) p = ai_rtgz_riscv64, n = ai_rtgz_riscv64_len;
+  else if (sl == 2 && !memcmp(s, "id", 2))      p = ai_rtgz_id,      n = ai_rtgz_id_len; }
+ if (!n) return g->sp[0] = ZeroPoint, g;
+ if (!ai_ok(g = str0(g, n))) return g;
+ memcpy(txt(g->sp[0]), p, (size_t) n);          // .rodata: no re-read after the collect
+ g->sp[1] = g->sp[0];
+ g->sp += 1;
+ return g; }
+static lvm(lvm_rtgz) {
+ Pack(g); g = host_rtgz(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ Unpack(g);
+ ai_musttail return Next(1); }
+
+static union u const nif_rtgz[] = {{lvm_rtgz}, {lvm_ret0}};
+AiNif("runtime-gz", nif_rtgz);

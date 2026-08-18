@@ -244,6 +244,28 @@ endif
 out/host/src.o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
 	@$(boot_love) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(src_arch)
 
+# THE CARRIED RUNTIME: each hosted ISA's compiled nolibc archive, raw and
+# laid beside the source blob (mk/tools/mkrt.l lays, moon.l's rtcarried
+# consumes), so a bare `love cc` links without compiling 197 members first.
+# RIDES THE MOONCC IMAGE by wake -- the archives ARE mooncc compiles, so the
+# whole compiler must be aboard -- and the image dep also re-cuts them when
+# the COMPILER moves, keeping a binary and its carried archives cut together.
+# deterministic all the way down, so the fixpoint carries the object unchanged.
+rt_slice = $(wildcard crew/moon/include/*.h crew/moon/include/*/*.h \
+                      crew/moon/lib/*.l \
+                      crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
+                      crew/moon/lib/nolibc/*/*.c crew/moon/lib/nolibc/*/*.h \
+                      crew/moon/lib/math/*.c)
+# ⚠ TWO LANES, like moon0's: the bundled seed rides its own baked moon (and
+# its rtarch consult finds the binary's own carried archives -- the laid tree
+# hashes to their stamp, so a fresh-box seed COPIES them instead of compiling
+# 3 x 197 members); only the git-clone lane wakes mooncc0.image, which is the
+# one lane love0 was ever owed. dragging that dep into the bundled lane cost
+# both box trophies once: love0's C compile met netbsd's gcc and its own
+# linux-isms.
+out/host/rt.o: $(rt_slice) mk/tools/mkrt.l $(if $(bundled_love),,out/host/mooncc0.image $(love0))
+	@$(if $(bundled_love),LOVE_NO_IMAGE= $(bundled_love) mk/tools/mkrt.l $@ $(src_arch),$(love0) wake out/host/mooncc0.image mk/tools/mkrt.l $@ $(src_arch))
+
 # ==== the x-lane: test_xfixpoint's objects (seed-universal U0) ====
 # there is ONE artifact; this lane builds no second one. it compiles the tree's
 # TUs through `mooncc -t` for another arch so the cross-machine fixpoint gate
@@ -304,9 +326,11 @@ $(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
 # blob and readme, so the member answers `love source` like the native one.
 $(xd)/src.o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
 	@$(boot_love) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(xtgt)
-$(xd)/love: $(xobjs) $(xd)/src.o assets/readme.bin
+$(xd)/rt.o: $(rt_slice) mk/tools/mkrt.l $(if $(bundled_love),,out/host/mooncc0.image $(love0))
+	@$(if $(bundled_love),LOVE_NO_IMAGE= $(bundled_love) mk/tools/mkrt.l $@ $(xtgt),$(love0) wake out/host/mooncc0.image mk/tools/mkrt.l $@ $(xtgt))
+$(xd)/love: $(xobjs) $(xd)/src.o $(xd)/rt.o assets/readme.bin
 	@echo MOON	$@
-	@$(moonx) -pie $(xobjs) $(xd)/src.o -freadme=assets/readme.bin -o $@
+	@$(moonx) -pie $(xobjs) $(xd)/src.o $(xd)/rt.o -freadme=assets/readme.bin -o $@
 # dist-fat -- OPT-IN: ONE file, both texts, behind fatpack's sh prefix and its
 # content-named cache under ~/.love/fat. the native member rides baked; the
 # twin is an egg until U1.2 moves the bake to the extraction.

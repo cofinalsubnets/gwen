@@ -286,10 +286,10 @@ nolibc_src = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
 # ⚠ -freadme rides only THIS link, so test_fixpoint's relink of $(moon_o) needs
 # no mirror of it. assets/readme.bin is the page a reader lands on --
 # `readelf -p .README`, mapped by nothing.
-$(ho)/love $(ho)/love.cand: $(moon_o) out/host/src.o assets/readme.bin $(nolibc_src)
+$(ho)/love $(ho)/love.cand: $(moon_o) out/host/src.o out/host/rt.o assets/readme.bin $(nolibc_src)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) out/host/src.o -freadme=assets/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) out/host/src.o out/host/rt.o -freadme=assets/readme.bin -o $@
 endif
 
 # the man pages are WRITTEN in doc/*.md and generated here through the lapiz lens: one

@@ -49,6 +49,17 @@ smoke)
   # does not egg-boot the artifact (which would read "mooncc" as a filename).
   LOVE_NO_IMAGE= "$dist" mooncc 2>&1 | grep -q "usage: mooncc" \
                                                    || fail "empty LOVE_NO_IMAGE suppressed the image"
+  # the bare cc door: from an empty cwd with an empty HOME, the artifact
+  # compiles hello world from its CARRIED source, entirely in memory -- `love
+  # cc` anywhere, no tree, no install, and NOTHING written outside the cwd.
+  mkdir -p "$s/bare/home"
+  printf '#include <stdio.h>\nint main(void) { printf("bare door\\n"); return 0; }\n' > "$s/bare/hi.c"
+  # timeout 15: the carried runtime makes this ~0.2 s; a fall back to
+  # compiling 197 members (~28 s) is a regression this leg must SEE
+  ( cd "$s/bare" && HOME=$PWD/home timeout 15 env -u LOVE_NO_IMAGE "$dabs" cc hi.c && ./a.out ) > "$s/bare.log" 2>&1 \
+                                                   || { tail -3 "$s/bare.log"; fail "the bare cc door (or it took the 28 s compile lane)"; }
+  grep -q "bare door" "$s/bare.log"                || fail "bare cc: the exe did not answer"
+  [ -z "$(ls -A "$s/bare/home")" ]                 || fail "bare cc: wrote into HOME ($(ls -A "$s/bare/home"))"
   run "$dist" up >/dev/null 2>&1
   [ $? -eq 2 ]                                     || fail "up without an origin should refuse (exit 2)"
   HOME=$dabs.nowhere run "$dist" down 2>&1 | grep -q "no nest" || fail "down without a nest"

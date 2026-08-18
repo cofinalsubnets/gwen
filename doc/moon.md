@@ -84,11 +84,14 @@ piece. ~11k lines of love.
 ## the driver
 
 ```
-mooncc [-c] [-pie] [-nostdinc] [-fno-inline] [-fir=PFX[,PFX..]] [-fno-ir=PFX[,PFX..]] [-t TARGET] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
+mooncc [-c] [-pie] [-fno-inline] [-fir=PFX[,PFX..]] [-fno-ir=PFX[,PFX..]] [-t TARGET] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
 ```
 
 Several inputs need `-c` and land each in the cwd as `x.o` (gcc-shaped); the old positional pair
-`mooncc [-c] IN OUT` still reads. `-I` dirs search before the system pair on both include forms.
+`mooncc [-c] IN OUT` still reads. `-I` dirs search before our own headers on both include forms,
+and ours are the ONLY standard set — there is no `/usr/include` tail. A header we do not carry
+is refused by name, never resolved to whatever libc the box has (whose headers speak another
+compiler and, off linux, another kernel).
 A `-D` prepends a `#define` line to the source text before the one lex, so a function-like
 `-DF(x)=..` rides the normal macro path (and diagnostics under `-D` skew by the define count).
 
@@ -171,10 +174,9 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
   a source asks (love.c asks it to choose the W^X mmap arena over the freestanding heap copy).
   ⚠ **Only that flag** — the rest of the family is a hosted program supplying its own runtime,
   which is exactly what `test_raw` is;
-- `-nostdinc` is the INCLUDE half of that word and drops `/usr/include` off the search tail, so
-  only our own headers answer. It is **loud, not advisory**: with the tail on, a header we do
-  not carry resolves to glibc's, and a freestanding build taking a hosted declaration is the
-  wrong artifact wearing a green face;
+- `-nostdinc`'s whole job is done by design now: the `/usr/include` tail is gone, so a header
+  we do not carry refuses either way. The flag rides through accepted-and-ignored for
+  `CC=mooncc` recipes;
 - `-fno-inline` (and gcc's `-fno-inline-functions`) is the one member of the `-f` family that is
   **real** here: it bars every splice for the whole TU, the same door
   `__attribute__((noinline))` opens one name at a time, and it **outranks `always_inline`** —
@@ -285,18 +287,31 @@ union over a foreign `.o`, and the exact string on an all-ours link.
 ## the toolchain root
 
 mooncc's own files — our headers (`crew/moon/include/`, glibc-ABI-faithful but NOT glibc's) and
-the runtime sources the implicit link pulls — are found through a two-rung walk, tried in order:
+the runtime sources the implicit link pulls — are found through three rungs, tried in order:
 
 1. **the dev tree**, `crew/moon/` off the cwd;
 2. **the installed nest**, `<seat>/../lib/love/moon/` — the loader's own seat walk, the
    `selfpath` nif. So `~/.love/bin/love` finds `~/.love/lib/love/moon/`, and a distro's
    `/usr/bin/love` finds `/usr/lib/love/moon/`. `mk/install.mk` lays them there.
+3. **the carried source, in memory** — a bare binary with no nest anywhere inflates its own
+   embedded archive (`source-gz`) and reads the toolchain slice out of a table: the resolver
+   and the runtime walk take the table where they would have read the nest. Nothing is written
+   to the filesystem, so `love cc hi.c` answers from any cwd on any kernel with no tree and no
+   install — and a version's compiles can never ride a stale copy, because the source it reads
+   is the binary's own.
 
-Without this an installed mooncc outside a source tree cannot compile hello-world at all:
-`<stdio.h>` falls through to `/usr/include` — *glibc's*, whose stdio.h wants the compiler's own
-stddef.h — and the link finds no libc. Gate: `test/gate/nest.sh` compiles and links from a
-scratch cwd against the installed nest (`cd` matters: from the repo root rung 1 serves and rung
-2 is never exercised).
+The runtime itself rides COMPILED as well as in source: mk/tools/mkrt.l lays each hosted
+ISA's nolibc archive (x64/arm64/riscv64, ~1.5 MB raw) beside the source blob, stamped with
+`rtcid` — a pure hash of the include/ + lib/ slice. A link consults the cache, then the
+carried archive (the blob lane by construction; a disk home only when its slice hashes to
+the stamp, so a laid seed tree serves and an edited dev tree falls through to the compile),
+then compiles. That is what makes the bare door ~0.2 s instead of the ~28 s member build,
+still writing nothing.
+
+Gates: `test/gate/nest.sh` compiles and links from a scratch cwd against the installed nest
+(`cd` matters: from the repo root rung 1 serves and rung 2 is never exercised);
+`test/gate/dist.sh`'s bare leg compiles from an empty cwd with an empty HOME and holds that
+HOME stays empty.
 
 ⚠ **The root is READ AT EACH CALL, never bound.** mooncc rides a baked image, and a captured
 seat would fold the build tree's path into that image and ride it forever.
