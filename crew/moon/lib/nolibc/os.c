@@ -135,11 +135,15 @@ static short const os_nr[][3] = {
   {NR_pipe2,         NR_fb_pipe2,       453},
 };
 
+/* ⚠ A PLAIN SCAN, and it must be: the rows are keyed by OUR NR_*, which impl.h
+ * defines per arch, so the written order is ascending on x86_64 (read 0, write
+ * 1, close 3 ..) and is NOT on the asm-generic arches (read 63, write 64, close
+ * 57 ..). An early exit on a passed key would answer ENOSYS to almost every
+ * call the moment this lane opens on arm64. 71 rows, and only on a BSD. */
 long __ai_nrfb(long n) {
   int col = __ai_osv == 3 ? 2 : 1;
-  for (unsigned i = 0; i < sizeof os_nr / sizeof *os_nr; i++) {
+  for (unsigned i = 0; i < sizeof os_nr / sizeof *os_nr; i++)
     if (os_nr[i][0] == n) return os_nr[i][col];
-    if (os_nr[i][0] > n) break; }
   return -1; }
 
 /* freebsd errno -> canonical, indexed by freebsd's value (ELAST 97). rows
