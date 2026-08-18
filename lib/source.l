@@ -81,6 +81,9 @@
         d))
    src-needs '("cc" "make" "sh" "sed" "grep" "tr" "cat" "mkdir" "mv" "rm" "ln"
                "test" "uname" "printf" "install" "cmp" "chmod" "touch" "echo")
+   ; kore's ujoin is not in this layer -- src-dirs rolls its own split for the
+   ; same reason, so the join is local too.
+   (src-words l) (? (!(two? l)) "" (!(two? >l)) <l (<l + " " + (src-words >l)))
    (src-ours ns)
     (: (go l acc) (? !(two? l) (rev acc)
                      (: w <l
@@ -156,7 +159,7 @@
        _ (two? amb ? (setenv "CC" <>amb) 0)
        ours (src-ours src-needs)
        _ (? (two? ours)
-          (puts $ ";; using own tools: " + ujoin ours + "\n"))
+          (puts $ ";; using own tools: " + (src-words ours) + "\n"))
        cc (? (string? env) env (two? amb) <>amb "this binary")
        _ (puts (";; seeding with " + cc + "\n"))
        e (exec [exe "seed" "-wait" root])
