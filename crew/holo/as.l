@@ -6,8 +6,8 @@
 ; set. the encoders mirror x64.l form-for-form but read the register number off the name and carry the
 ; operand WIDTH (x64.l is 64-bit-mode only). scope: the GPR core at all four widths -- ALU, mov,
 ; unary, push/pop, lea, test over register, immediate AND memory operands; call/jmp/jcc (NEAR;
-; branch relaxation is M2), and the nullaries in both spellings (cltq as well as cdqe, and the
-; other five of the sign-extend family). a memory operand is AT&T's full
+; branch relaxation is M2), and the nullaries -- the sign-extend family in both spellings (cltq
+; as well as cdqe), the flag ops, and the trap/system handful. a memory operand is AT&T's full
 ; disp(base,index,scale), rip-relative and indirect `*` included; the size suffix (movb/addl/..)
 ; gives the width wherever no register operand carries one.
 ;
@@ -256,7 +256,16 @@
            ('cdqe >< '(72 152))  ('cltq >< '(72 152))        ; eax -> rax
            ('cwd >< '(102 153))  ('cwtd >< '(102 153))       ; ax -> dx:ax
            ('cdq >< '(153))      ('cltd >< '(153))           ; eax -> edx:eax
-           ('cqo >< '(72 153))   ('cqto >< '(72 153))))      ; rax -> rdx:rax
+           ('cqo >< '(72 153))   ('cqto >< '(72 153))        ; rax -> rdx:rax
+           ;; the flag, trap and system nullaries. `int3' is what holo's own text calls trap.
+           ('int3 >< '(204)) ('ud2 >< '(15 11)) ('pause >< '(243 144))
+           ('cpuid >< '(15 162)) ('rdtsc >< '(15 49))
+           ('cli >< '(250)) ('sti >< '(251))                 ; the interrupt flag
+           ('clc >< '(248)) ('stc >< '(249)) ('cmc >< '(245))  ; ... the carry flag
+           ('cld >< '(252)) ('std >< '(253))                 ; ... and the direction flag
+           ('lahf >< '(159)) ('sahf >< '(158))
+           ('xlat >< '(215)) ('xlatb >< '(215))
+           ('sysret >< '(15 7)) ('sysretl >< '(15 7)) ('sysretq >< '(72 15 7))))
    (as-0 mn) (: b (peep as-nils mn ()) (? (two? b) b (scare 'as-op0 mn)))
 
    (as-instr mn sw ops)
