@@ -129,6 +129,25 @@
    ; typeof's three spellings; the bare one is gnu-mode's and C23's. ⚠ not reserved in
    ; C11, so an object named `typeof` reads as a declaration (the typedef table wins first)
    tyofid '("__typeof" "__typeof__" "typeof")
+   ; gcc's LIBRARY builtins: the prefix names the plain function and is nothing else.
+   ; libsig is the signature to DECLARE on the way past, because a program that spells
+   ; the prefix is exactly the one that never included the header. ⚠ the roster is a
+   ; constant -- built per identifier token, the table alone would cost more than the
+   ; whole feature saves. ⚠ it sits up here with the other rosters and not beside the
+   ; type floor it reads: further down the block, love0's lane answers `;; missing
+   ; libbin` at bake time.
+   libbin '("__builtin_memcpy" "__builtin_memmove" "__builtin_memset"
+            "__builtin_memcmp" "__builtin_strlen" "__builtin_strcpy")
+   ; ..and the shape test the builtin arms hide their string compares behind: pprim sees
+   ; EVERY identifier in the TU, and the shortest name any of them answers to is 16 long
+   (bib? s) (: n (tally s) (? (n < 16) () ((s 2) = 98)))     ; `__b..`, 16+
+   (libsig ps nm)
+    (: vp '(ptr void) cp '(ptr char) sz (szty ps)
+       (? (nm = "memset") [vp [vp 'int sz] ()]
+          (nm = "memcmp") ['int [vp vp sz] ()]
+          (nm = "strlen") [sz [cp] ()]
+          (nm = "strcpy") [cp [cp cp] ()]
+          [vp [vp vp sz] ()]))                     ; memcpy and memmove
    (pquals ts)
     (? !(two? ts) ts
        (: t <ts
@@ -156,6 +175,13 @@
        (((tkk <ts = 'id) && (tkv <ts = "__attribute__")) && peekp >ts "(")
         (pattr (skipbal >>ts 1))
        ts)
+   ; gcc's `__label__ a, b;` at a block head declares LOCAL labels. skipped: a label
+   ; already mangles to fn.NAME, so the declaration changes nothing -- until two blocks
+   ; of one function spell the same name, and that lands as a duplicate label, loudly.
+   (plabs ts)
+    (? !(two? ts) ts
+       (peekp ts ";") >ts
+       (plabs >ts))
    ; does the leading declaration-specifier run carry keyword k? scans the front
    ; run of qualifier + type-specifier keywords (and balance-skips attribute ids),
    ; the same tokens pquals drops. the run is order-free, so `static char const`
@@ -335,6 +361,7 @@
                 _ (pin t 'noinl ())                 ; noinline function names (love.h's ai_noinline)
                 _ (pin t 'enums {})         ; enum constant -> value
                 _ (pin t 'declaring {})     ; the names of the declaration being parsed RIGHT NOW (C11 6.2.1p7)
+                _ (pin t 'labs {})          ; the labels DEFINED in the function being parsed (C11 6.8.1p3)
                 _ (pin t 'etag {})          ; enum tag -> 1 when no enumerator is negative (an unsigned underlying type)
                 _ (pin t 'stag {})          ; tag -> (fields size align)
                 _ (pin t 'tags {})          ; a BLOCK tag's spelling -> the key it took in stag (C11 6.7.2.3)
@@ -685,8 +712,10 @@
                           (? !(two? dr) ()
                              (peekp <>dr ":")        ; a bitfield: append the width to (name ty)
                               (: bw (pbits ps <>dr)
-                                 (? !(two? bw) () (dfin (<dr + [<bw]) <>bw acc2)))
-                             (dfin <dr <>dr acc2)))
+                                 (? !(two? bw) () (dfin (<dr + [<bw]) (pattr <>bw) acc2)))
+                             ; a trailing __attribute__((..)) on a member declarator. ⚠ an
+                             ; `aligned` ask drops here as it does on the leading spelling
+                             (dfin <dr (pattr <>dr) acc2)))
                       r (dts ts2 ())
                       ; <r is REVERSED (dts links) -- and acc accumulates reversed
                       ; too (pmembers revs at "}"), so prepend it AS IS: a second rev
@@ -1133,6 +1162,49 @@
                  rb (? (two? r2) (pasn ps r2) ())
                  rest (? (two? rb) (want <>rb ")") ())
                  (? (two? rest) [['asn ['deref <ra] ['deref <rb]] rest] ()))
+             ; a library builtin IS its plain name: rewrite it, and declare the name if
+             ; nothing else has, so the call binds and the link pulls the member by need
+             ((tkk t = 'id) && bib? (tkv t) && member? (tkv t) libbin)
+              (: nm (snip (tkv t) 10 (tally (tkv t)))
+                 _ (? (peep (ps 'sigs) nm ()) 0 (pin (ps 'sigs) nm (libsig ps nm)))
+                 [['var nm] >ts])
+             ; the type-level builtins: each answers a CONSTANT at parse, because its
+             ; operands are TYPES (or an expression that is never evaluated), so none
+             ; of the three can ride the ordinary call path.
+             ; __builtin_offsetof: seed &((T*)0)->NAME and let the postfix ladder take
+             ; the `.b` / `[i]` tail, then fold the whole address the way the hand-written
+             ; idiom already folds -- one door, so the two spellings cannot disagree.
+             ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_offsetof"))
+              (: r1 (want >ts "(")
+                 tr (? (two? r1) (pcty ps r1) ())
+                 r2 (? (two? tr) (want <>tr ",") ())
+                 nm (? (two? r2 && (tkk <r2 = 'id)) (tkv <r2) ())
+                 dr (? nm (ppostfrom ps ['dot ['deref ['cast ['ptr <tr] '(num 0)]] nm] >r2) ())
+                 rest (? (two? dr) (want <>dr ")") ())
+                 off (? (two? rest) (nulloff ps <dr) ())
+                 (? (charm? off) [['cast (szty ps) ['num off]] rest] ()))
+             ; __builtin_types_compatible_p: structural equality over the two bare types,
+             ; and NO decay -- an array is not its element pointer, which is the whole
+             ; question the linux kernel's __must_be_array asks it
+             ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_types_compatible_p"))
+              (: r1 (want >ts "(")
+                 ta (? (two? r1) (pcqty ps r1) ())
+                 r2 (? (two? ta) (want <>>ta ",") ())
+                 tb (? (two? r2) (pcqty ps r2) ())
+                 rest (? (two? tb) (want <>>tb ")") ())
+                 ; _Generic's marked types, so an INNER const tells `const char *` from
+                 ; `char *`; the TOP-level one is dropped, which is C11's own reading and
+                 ; gcc's for this builtin
+                 (? (two? rest) [['num (? ((qbare <ta) = (qbare <tb)) 1 0)] rest] ()))
+             ; __builtin_constant_p: 1 when the parse-time fold settles the operand, 0
+             ; whenever it does not. CONSERVATIVE by construction -- a miss sends the
+             ; consumer down its runtime lane, where a false 1 would hand it a wrong
+             ; constant one. the operand is not evaluated, so its side effects are gone.
+             ((tkk t = 'id) && bib? (tkv t) && (tkv t = "__builtin_constant_p"))
+              (: r1 (want >ts "(")
+                 ra (? (two? r1) (pasn ps r1) ())
+                 rest (? (two? ra) (want <>ra ")") ())
+                 (? (two? rest) [['num (? (charm? (cfold <ra)) 1 0)] rest] ()))
              ; __func__ (C99 6.4.2.2): the enclosing function's name as a string.
              ; pinned by the two body-parsing sites; outside a body there is no name
              ; to give, so it stays an undeclared identifier.
@@ -1604,7 +1676,7 @@
                                    (: ix (peep ps 'vlan 0)
                                       _ (pin ps 'vlan (ix + 1))
                                       (ty0 + [ix])))
-                             ts3 <>dr
+                             ts3 (pattr <>dr)                  ; a trailing __attribute__((..)) on a local declarator
                              ; stage the marked type for the bind that follows; bindloc
                              ; consumes it, so a mark cannot outlive its declaration
                              _ (? bq (pin (ps 'qstage) name (qmark bq ty)) 0)
@@ -1852,7 +1924,12 @@
              (tp? t ";") ['(nop) >ts]
              ; a label: id ':' (a ternary's id is followed by '?', never ':')
              ((tkk t = 'id) && tp? (? (two? >ts) <>ts ()) ":")
-              [['lbl (tkv t)] >>ts]
+              ; C11 6.8.1p3: a label's scope is its whole FUNCTION, so two of a name are
+              ; one label emitted twice and every goto to it takes the first -- silently.
+              ; gcc's `__label__` is the spelling that makes it easy to write by accident.
+              (: nm (tkv t)
+                 (? (peep (ps 'labs) nm ()) (blame ts ("duplicate label '" + nm + "'"))
+                    (: _ (pin (ps 'labs) nm 1) [['lbl nm] >>ts])))
              (: r (pexpr ps ts)
                 (? !(two? r) ()
                    (: rest (want <>r ";")
@@ -1938,6 +2015,7 @@
               (? !(two? ts2) (: _ (bend sh) ())
                  (tp? <ts2 "}") (: _ (bend sh) [['blk (rev acc)] >ts2])
                  ((tkk <ts2 = 'id) && (tkv <ts2 = "__extension__")) (items >ts2 acc sh)
+                 ((tkk <ts2 = 'id) && (tkv <ts2 = "__label__")) (items (plabs >ts2) acc sh)
                  (tkw? <ts2 'typedef)
                   (: br (pbty ps >ts2)
                      r (? (two? br) (btdefs ps <br <>br (sdrain ps epre sh) (qspec ps >ts2 <br)) ())
@@ -1969,7 +2047,7 @@
                       _ (? !<e0 0                         ; a NAMED param stages its mark like a local's
                            (: bq (qspec ps ts <br)
                               (? bq (pin (ps 'qstage) <e0 (qmark bq <>entry)) 0)))
-                      ts3 <>dr
+                      ts3 (pattr <>dr)                     ; ..and on a parameter
                       (? (peekp ts3 ",")
                           (? (peekp >ts3 "...")              ; ... after this param -> variadic
                               (: rest (want >>ts3 ")")
@@ -2230,6 +2308,7 @@
                                                      (more aft ()))))
                                            (: psh (bindlocs ps <rp ())   ; params typed for sizeof folding; restore on fn exit
                                               _ (pin ps 'fnname name)     ; __func__ reads it
+                                              _ (pin ps 'labs {})         ; labels are per function
                                               b (pblock ps aft)
                                               _ (pin ps 'fnname ())
                                               _ (unshadow ps psh)
@@ -2241,6 +2320,7 @@
                                    (? (peekp aft ";") [['proto name] >aft]
                                       (: psh (bindlocs ps <fprm ())
                                          _ (pin ps 'fnname name)
+                                         _ (pin ps 'labs {})
                                          b (pblock ps aft)
                                          _ (pin ps 'fnname ())
                                          _ (unshadow ps psh)

@@ -29,7 +29,12 @@ The dialect is not "C11-ish" by taste — it is what the target demands:
   `#if`/`#ifdef` trees, `#include`.
 * `double` and `float`; NO long double.
 * `_Static_assert` (both the two-argument and the C23 one-argument form); `__attribute__`
-  parsed and, where it matters, honored (`section(..)`, `always_inline`, `noinline`).
+  parsed and, where it matters, honored (`section(..)`, `always_inline`, `noinline`) — leading
+  or trailing, on a declaration, a local, a parameter or a struct member.
+* the gcc builtins a freestanding source reaches for: `offsetof`, `types_compatible_p` and
+  `constant_p` (each a constant at parse), `trap`/`unreachable`, `expect`, the `clz`/`ctz`/
+  `popcount`/`bswap` families, the `__sync` spin pair, and `memcpy`/`memmove`/`memset`/
+  `memcmp`/`strlen`/`strcpy`, which ARE the plain functions and are declared on the way past.
 * setjmp/sigsetjmp + signal handlers — the library's problem, not the compiler's; mooncc only
   needs the calls and the volatile discipline around them.
 * the tail-threaded VM: `return Continue()` everywhere, with **guaranteed sibcalls** so the

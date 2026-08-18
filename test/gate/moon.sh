@@ -164,6 +164,22 @@ printf 'struct s;\nstatic struct s *f(int x){ if (x) return (struct s*)1; return
 moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
   || fail "a CAST to the pointer type must still pass"
 
+# the attribute skip on a local/parameter/member takes __attribute__ ALONE: an asm NAME
+# would rename the object, and dropping it renames it in silence. test/cc/145 holds the
+# well-formed side; only the refusals live here.
+printf 'int m(void){ int x __asm__("y"); return x; }\n' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+  && fail "an asm NAME on a local was skipped as decoration"
+printf 'int m(void){ register long sp asm("rsp"); return (int)sp; }\n' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+  && fail "a register variable pinned by asm() was accepted"
+# C11 6.8.1p3: a label is unique to its FUNCTION. two of a name laid one mangled label
+# twice and every goto took the first. ⚠ gcc COMPILES this one, __label__ making the two
+# distinct -- a refusal, so it costs no right answer.
+printf 'int m(void){ { __label__ L; L: ; } { __label__ L; L: ; } return 0; }\n' > "$ho/.feat.c"
+moonrun -c -t x64 -o /dev/null "$ho/.feat.c" > /dev/null 2>&1 \
+  && fail "a duplicate label was accepted"
+
 # a UCN takes EXACTLY 4 (or 8) hex digits -- a short run must REFUSE, not take what
 # it found. test/cc/138 holds the well-formed side; only the refusals live here.
 # \134 is the backslash, written in octal so the sequence survives this file.
