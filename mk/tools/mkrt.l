@@ -60,10 +60,8 @@
        mcid (from 'moon 'mcid)
        id (mcid "crew/moon/")
        cd (? (string? id) ((from 'moon 'mcdir) ()) ())
-       ; RAW, not deflated: ~1.5 MB across the three ISAs, the price gwen
-       ; accepted -- and love0's C deflate refuses the third large input (a
-       ; standing nif bug beside its over-apply segfault), so raw is also the
-       ; lane that works everywhere. rtcarried reads the bytes straight.
+       ; RAW, not deflated: ~1.5 MB across the three ISAs, and rtcarried reads
+       ; the bytes straight -- nothing to inflate on the bare `love cc` path.
        (one tgt) (: a (rtarch cd id "crew/moon/" tgt 'linux ())
                     _ (? (string? a) 0 (rt-die (show tgt + ": no archive (a member refused?)")))
                     _ (say out ("MKRT\t" + show tgt + " " + show (tally a) + "\n"))
