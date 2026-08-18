@@ -328,5 +328,7 @@ static lvm(lvm_deflate) {
  Unpack(g);
  ai_musttail return Next(1); }
 
-static union u const nif_deflate[] = {{lvm_cur}, {.x = putcharm(1)}, {lvm_deflate}, {lvm_ret0}};
+// one operand, so the run is {impl, ret0} -- core/nifs.l states the law and lvm_cur
+// curries once unconditionally, which at arity one hands the body an operand too many.
+static union u const nif_deflate[] = {{lvm_deflate}, {lvm_ret0}};
 AiNif("deflate", nif_deflate);

@@ -161,7 +161,12 @@
    _ (assert
       (lit? deflate)
       (gzc-all gzd-same gzd-corp)                       ; the bytes, corpus-wide
-      (gzc-all gzd-trip gzd-corp))                      ; ..and both inflates read them
+      (gzc-all gzd-trip gzd-corp)                       ; ..and both inflates read them
+      ; ⚠ ONE OPERAND, so a second applies to the ANSWER: a string of an index is that
+      ; byte, and the two spellings are the same value. A nif run carrying a curry
+      ; prologue it has no operands for reads the spare operand as its return address.
+      (= (deflate gzc-text 3) ((deflate gzc-text) 3))
+      (= (deflate gzc-one 0) ((deflate gzc-one) 0)))
    (puts "gzc: deflate twin ok -- the C coder answers love's bytes, both inflates read it
 "))
 
