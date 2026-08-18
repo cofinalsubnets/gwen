@@ -13,16 +13,11 @@ int *__errno_location(void);
 #define ENOEXEC          8
 #define EBADF            9
 #define ECHILD          10
-/* 1..10 are V7's, one table; from 11 the kernels part ways (freebsd:
- * stable/14 sys/errno.h) */
-#if defined(__FreeBSD__)
-#define EDEADLK         11
-#define EAGAIN          35
-#define EWOULDBLOCK     35
-#else
+/* 1..10 are V7's, one table; from 11 the kernels part ways. these are the
+ * CANONICAL (linux) values on every lane -- a freebsd kernel's answers
+ * translate through nolibc's row (os.c) before anything reads errno. */
 #define EAGAIN          11
 #define EWOULDBLOCK     11
-#endif
 #define ENOMEM          12
 #define EACCES          13
 #define EFAULT          14
@@ -46,18 +41,6 @@ int *__errno_location(void);
 #define EDOM            33
 #define ERANGE          34
 #define ETXTBSY         26
-#if defined(__FreeBSD__)
-#define ENAMETOOLONG    63
-#define ENOLCK          77
-#define ENOSYS          78
-#define ENOTEMPTY       66
-#define ELOOP           62
-#define ECONNRESET      54
-#define ENOTCONN        57
-#define ETIMEDOUT       60
-#define ECONNREFUSED    61
-#define EINPROGRESS     36
-#else
 #define EDEADLK         35
 #define ENAMETOOLONG    36
 #define ENOLCK          37
@@ -69,5 +52,4 @@ int *__errno_location(void);
 #define ETIMEDOUT      110
 #define ECONNREFUSED   111
 #define EINPROGRESS    115
-#endif
 #endif

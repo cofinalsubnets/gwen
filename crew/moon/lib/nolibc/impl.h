@@ -150,86 +150,12 @@ struct _IO_FILE {
 #define NR_fb_pipe2         542
 /*      memfd_create: none -- shm_open2 571 + SHM_ANON (rung 3) */
 
-/* ---- the NR_* the members say: freebsd's aliases, or linux behind its one
- * arch gate (riscv64 shares aarch64's asm-generic table verbatim). ---- */
-#if defined(__FreeBSD__)
-#define NR_read           NR_fb_read
-#define NR_write          NR_fb_write
-#define NR_close          NR_fb_close
-#define NR_fstat          NR_fb_fstat
-#define NR_lseek          NR_fb_lseek
-#define NR_nanosleep      NR_fb_nanosleep
-#define NR_mmap           NR_fb_mmap
-#define NR_mprotect       NR_fb_mprotect
-#define NR_munmap         NR_fb_munmap
-#define NR_madvise        NR_fb_madvise
-#define NR_rt_sigaction   NR_fb_rt_sigaction
-#define NR_rt_sigprocmask NR_fb_rt_sigprocmask
-#define NR_ioctl          NR_fb_ioctl
-#define NR_pread64        NR_fb_pread64
-#define NR_pwrite64       NR_fb_pwrite64
-#define NR_getpid         NR_fb_getpid
-#define NR_setuid         NR_fb_setuid
-#define NR_setgid         NR_fb_setgid
-#define NR_setgroups      NR_fb_setgroups
-#define NR_geteuid        NR_fb_geteuid
-#define NR_sendfile       NR_fb_sendfile
-#define NR_pselect6       NR_fb_pselect6
-#define NR_socket         NR_fb_socket
-#define NR_connect        NR_fb_connect
-#define NR_accept         NR_fb_accept
-#define NR_sendto         NR_fb_sendto
-#define NR_getsockname    NR_fb_getsockname
-#define NR_getpeername    NR_fb_getpeername
-#define NR_recvfrom       NR_fb_recvfrom
-#define NR_sendmsg        NR_fb_sendmsg
-#define NR_recvmsg        NR_fb_recvmsg
-#define NR_shutdown       NR_fb_shutdown
-#define NR_bind           NR_fb_bind
-#define NR_listen         NR_fb_listen
-#define NR_getsockopt     NR_fb_getsockopt
-#define NR_setsockopt     NR_fb_setsockopt
-#define NR_fork           NR_fb_fork
-#define NR_execve         NR_fb_execve
-#define NR_wait4          NR_fb_wait4
-#define NR_kill           NR_fb_kill
-#define NR_fcntl          NR_fb_fcntl
-#define NR_fsync          NR_fb_fsync
-#define NR_fdatasync      NR_fb_fdatasync
-#define NR_fchown         NR_fb_fchown
-#define NR_ftruncate      NR_fb_ftruncate
-#define NR_getcwd         NR_fb_getcwd
-#define NR_chdir          NR_fb_chdir
-#define NR_chroot         NR_fb_chroot
-#define NR_fchmod         NR_fb_fchmod
-#define NR_umask          NR_fb_umask
-#define NR_getuid         NR_fb_getuid
-#define NR_getgid         NR_fb_getgid
-#define NR_setpgid        NR_fb_setpgid
-#define NR_setsid         NR_fb_setsid
-#define NR_getpgid        NR_fb_getpgid
-#define NR_mount          NR_fb_mount
-#define NR_getdirentries  NR_fb_getdirentries
-#define NR___sysctl       NR_fb___sysctl
-#define NR_posix_openpt   NR_fb_posix_openpt
-#define NR_clock_gettime  NR_fb_clock_gettime
-#define NR_exit_group     NR_fb_exit
-#define NR_openat         NR_fb_openat
-#define NR_mkdirat        NR_fb_mkdirat
-#define NR_mknodat        NR_fb_mknodat
-#define NR_fchownat       NR_fb_fchownat
-#define NR_faccessat      NR_fb_faccessat
-#define NR_newfstatat     NR_fb_newfstatat
-#define NR_unlinkat       NR_fb_unlinkat
-#define NR_renameat       NR_fb_renameat
-#define NR_linkat         NR_fb_linkat
-#define NR_symlinkat      NR_fb_symlinkat
-#define NR_readlinkat     NR_fb_readlinkat
-#define NR_fchmodat       NR_fb_fchmodat
-#define NR_ppoll          NR_fb_ppoll
-#define NR_utimensat      NR_fb_utimensat
-#define NR_pipe2          NR_fb_pipe2
-#elif defined(__aarch64__) || defined(__riscv)
+/* ---- the NR_* the members say: linux's, the CANONICAL numbers -- one body
+ * per member, and a freebsd runtime translates through os.c's map (a member's
+ * freebsd branch reaches an unmappable call by NR_fb_* through fb0..fb6
+ * below). linux's one arch gate: riscv64 shares aarch64's asm-generic table
+ * verbatim. ---- */
+#if defined(__aarch64__) || defined(__riscv)
 #define NR_getcwd          17
 #define NR_dup3            24
 #define NR_fcntl           25
@@ -397,22 +323,28 @@ static long er(long r) {
   if ((unsigned long) r > (unsigned long) -4096L) { __errno_v = (int) -r; return -1; }
   return r; }
 
-/* ---- one syscall door under one binary (seed-universal rung UV1). __ai_sys
- * is the raw OS-blind tail (sys.o): CF cleared going in, and a carry answer
- * -- freebsd's error convention -- comes back parked BELOW linux's band as
- * -(errno+4096), so the kernels' answers cannot collide. __ai_osv is the
- * kernel under us (os.c probes it once: 1 linux, 2 freebsd) and __ai_call
- * translates for the canonical lane -- numbers by os.c's map, errnos by its
- * row. the -os freebsd lane runs native numbers and errnos: it only unparks. */
+/* ---- one syscall door under one binary (seed-universal rungs UV1-UV2).
+ * __ai_sys is the raw OS-blind tail (sys.o): CF cleared going in, and a carry
+ * answer -- freebsd's error convention -- comes back parked BELOW linux's
+ * band as -(errno+4096), so the kernels' answers cannot collide. __ai_osv is
+ * the kernel under us (os.c probes it once: 1 linux, 2 freebsd); __ai_call
+ * translates numbers by os.c's map and errnos by its row. every member wears
+ * ONE body: the canonical (linux-valued) face, with a freebsd branch on
+ * __ai_osv where the shapes part -- fb0..fb6 reach the calls the map cannot
+ * carry, by their NR_fb_* number, errno translated the same. */
 extern long __ai_osv;
 extern long __ai_osdetect(void);
-#if defined(__FreeBSD__)
-static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
-  long r = __ai_sys(n, a, b, c, d, e, f);
-  return r < -4096L ? -(-r - 4096) : r; }
-#else
 extern long __ai_nrfb(long n);
 extern long __ai_errfb(long e);
+extern long __ai_sigfb(long sig);
+extern long __ai_sigcan(long sig);
+extern unsigned long __ai_maskfb(unsigned long m);
+extern unsigned long __ai_maskcan(unsigned long m);
+extern long __ai_ofb(long fl);
+extern long __ai_ocan(long fl);
+extern long __ai_mapfb(long fl);
+extern long __ai_safb(long fl);
+extern long __ai_sacan(long fl);
 static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
   long v = __ai_osv;
   if (!v) v = __ai_osv = __ai_osdetect();
@@ -421,7 +353,9 @@ static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
     if (n < 0) return -38; }                          /* ENOSYS, canonically */
   long r = __ai_sys(n, a, b, c, d, e, f);
   return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
-#endif
+static long __ai_fb(long n, long a, long b, long c, long d, long e, long f) {
+  long r = __ai_sys(n, a, b, c, d, e, f);
+  return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
 
 static long sc0(long n) { return __ai_call(n, 0, 0, 0, 0, 0, 0); }
 static long sc1(long n, long a) { return __ai_call(n, a, 0, 0, 0, 0, 0); }
@@ -430,9 +364,14 @@ static long sc3(long n, long a, long b, long c) { return __ai_call(n, a, b, c, 0
 static long sc4(long n, long a, long b, long c, long d) { return __ai_call(n, a, b, c, d, 0, 0); }
 static long sc5(long n, long a, long b, long c, long d, long e) { return __ai_call(n, a, b, c, d, e, 0); }
 static long sc6(long n, long a, long b, long c, long d, long e, long f) { return __ai_call(n, a, b, c, d, e, f); }
-/* ⚠ er and sc0..sc6 are static IN A HEADER on purpose: a member inlines the ones it
- * uses and the dead-static sweep drops the bodies it did not need, so the rest cost
- * nothing. Before that sweep this shape would have been duplication in every TU. */
+static long fb1(long n, long a) { return __ai_fb(n, a, 0, 0, 0, 0, 0); }
+static long fb2(long n, long a, long b) { return __ai_fb(n, a, b, 0, 0, 0, 0); }
+static long fb3(long n, long a, long b, long c) { return __ai_fb(n, a, b, c, 0, 0, 0); }
+static long fb6(long n, long a, long b, long c, long d, long e, long f) { return __ai_fb(n, a, b, c, d, e, f); }
+/* ⚠ er, sc0..sc6 and fb1..fb6 are static IN A HEADER on purpose: a member inlines
+ * the ones it uses and the dead-static sweep drops the bodies it did not need, so
+ * the rest cost nothing. Before that sweep this shape would have been duplication
+ * in every TU. */
 
 /* the shapes the public headers keep opaque, and the fmt members' limb geometry. */
 typedef void (*__exitfn)(void);
@@ -440,7 +379,53 @@ typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in
 typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;
 struct __sctx { char *p; size_t n, at; };
 struct __ksigaction { void *h; unsigned long flags; void *restorer; unsigned long mask; };
-struct __dirstream { int fd; int pos; int len; char buf[4096]; };
+/* `ent` is the freebsd repack slot: getdirentries' record is another shape,
+ * so readdir translates the current one here and hands this out instead. */
+struct __dirstream { int fd; int pos; int len; struct dirent ent; char buf[4096]; };
+
+/* ---- freebsd's kernel shapes, the twins a member's freebsd branch fills and
+ * translates (stable/14; the canonical faces live in the public headers). ---- */
+struct __fb_stat {                    /* ino64, 224 bytes; mode is 16-BIT */
+  unsigned long st_dev;
+  unsigned long st_ino;
+  unsigned long st_nlink;
+  unsigned short st_mode;
+  short         st_bsdflags;
+  unsigned int  st_uid;
+  unsigned int  st_gid;
+  int           __pad0;
+  unsigned long st_rdev;
+  struct timespec st_atim;
+  struct timespec st_mtim;
+  struct timespec st_ctim;
+  struct timespec st_birthtim;
+  long          st_size;
+  long          st_blocks;
+  int           st_blksize;
+  unsigned int  st_flags;
+  unsigned long st_gen;
+  unsigned long st_filerev;
+  unsigned long __spare[9];
+};
+struct __fb_dirent {                  /* the ino64 record getdirentries fills */
+  unsigned long  d_ino;
+  long           d_off;
+  unsigned short d_reclen;
+  unsigned char  d_type;
+  unsigned char  __pad0;
+  unsigned short d_namlen;
+  unsigned short __pad1;
+  char           d_name[256];
+};
+struct __fb_sigact { void *h; int flags; unsigned int mask[4]; };   /* sigaction(416): no restorer */
+struct __fb_termios {                 /* 44 bytes: 4 flag words, 20 chars, 2 speeds, no c_line */
+  unsigned int c_iflag, c_oflag, c_cflag, c_lflag;
+  unsigned char c_cc[20];
+  unsigned int c_ispeed, c_ospeed;
+};
+extern void __ai_fbstat(struct __fb_stat const *f, struct stat *st);   /* fstat.c's, shared by the stat trio */
+extern void __ai_tiofb(struct termios const *t, struct __fb_termios *f);   /* os.c's termios rows */
+extern void __ai_tiocan(struct __fb_termios const *f, struct termios *t);
 #define FfLeft 1
 #define FfZero 2
 #define FfAlt  4

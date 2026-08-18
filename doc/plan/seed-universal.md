@@ -237,14 +237,38 @@ owes a roster gate: on linux, assert the linux features are aboard.
     test_freebsd's UV1 leg — one default-lane binary, branded 9 by dd,
     answers identical text and status on both kernels (argc, sigsetjmp
     round trip, EBADF, kill, exit).
-  - **UV2 — the compat members.** every `#if __FreeBSD__` fork in nolibc
-    becomes a runtime branch: stat/dirent/sigaction/sigprocmask, termios and
-    the ioctl encodings, open/mmap/fcntl flag translation, wait-status
-    decode, clockids, the signal-number map. canonical shapes and values
-    are OURS (today's linux-valued ones); each OS translates at the
-    boundary; each landed body flips its number into os.c's map. ⚠ signal
-    numbers overlap in the worst way — freebsd SIGSTOP=17 IS linux SIGCHLD
-    — the map must be total and gated.
+  - **UV2 — the compat members.** LANDED 2026-08-17, and it went FURTHER
+    than planned: the freebsd-valued HEADER forks retired entirely (fcntl/
+    signal/mman/stat/dirent/termios/errno are canonical, linux-valued, on
+    every lane), so each member wears ONE body with a runtime branch on
+    __ai_osv — the `-os freebsd` lane collapsed into "canonical + brand".
+    What translates: the stat trio and readdir (the __fb_stat/__fb_dirent
+    twins; readdir repacks into the DIR's own slot), sigaction (freebsd's
+    ksigaction, SA rows, and __ai_sigshim so a handler sees the CANONICAL
+    signal number), sigprocmask (how+1, the 16-byte set, bit-by-bit mask
+    translation), kill (⚠ freebsd 17 IS canonical SIGCHLD and means
+    SIGSTOP there — os.c's permutation, STKFLT/PWR refuse), waitpid (the
+    signal inside the status), open/mmap/fcntl (flag rows, record locks
+    reordered), clock_gettime (MONOTONIC is 4 there), select's 6th arg,
+    termios WHOLE (four flag-word tables + the cc index permutation;
+    exotic locals do not round-trip, the named surface does), ioctl (known
+    requests translate, unknown refuse loudly), the pty quartet, rmdir/
+    utimensat (AT bits, UTIME specials -1/-2), madvise (DONTFORK no-ops
+    rather than firing freebsd's PROTECT), sysctl (runtime-guarded, always
+    linked — host_selfpath's ladder tries /proc then the sysctl door, so
+    the try IS the OS probe; ⚠ the glibc bootstrap lane guards it out,
+    glibc dropped the symbol). mount/sendfile and linux's own mechanisms
+    stay off the map: ENOSYS, loudly. Gate: test_freebsd's UV2 leg runs
+    the ENTIRE rung2 battery from one default-lane binary, byte-identical
+    text and status on both kernels. Standing evidence past the gate: the
+    tree's own out/host/love, branded by one dd byte, ran the repl and
+    `love source` ON THE BOX — the tree laid whole, bin/love copied in by
+    the runtime selfpath, and the laid love answered. ⚠ still linux-only:
+    the socket FAMILY (sa_len, sockaddr shapes — numbers are mapped, the
+    structs are not; the net lanes are UNTESTED on freebsd) and sigfd →
+    kqueue. ⚠ a 2 GB box OOM-kills mooncc's love.o compile at the default
+    budget (half box RAM in WORDS ≈ 4x RSS): seed runs there want
+    LOVE_BUDGET_MB set small.
   - **UV3 — one binary, both boxes.** out/host/love itself, branded 9,
     passes test_freebsd with the gate's whole `-os freebsd` build leg
     deleted; the trophy is the SAME sha256 answering on linux and the box.

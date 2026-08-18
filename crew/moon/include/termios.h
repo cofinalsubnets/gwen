@@ -4,14 +4,6 @@
 typedef unsigned int  tcflag_t;
 typedef unsigned char cc_t;
 typedef unsigned int  speed_t;
-#if defined(__FreeBSD__)
-/* freebsd layout: 4 flag words, 20 control chars, 2 speeds = 44 bytes (no c_line) */
-struct termios {
-  tcflag_t c_iflag, c_oflag, c_cflag, c_lflag;
-  cc_t c_cc[20];
-  speed_t c_ispeed, c_ospeed;
-};
-#else
 /* glibc x86-64 layout: 4 flag words, a line byte, 32 control chars, 2 speeds = 60 bytes */
 struct termios {
   tcflag_t c_iflag, c_oflag, c_cflag, c_lflag;
@@ -19,7 +11,6 @@ struct termios {
   cc_t c_cc[32];
   speed_t c_ispeed, c_ospeed;
 };
-#endif
 /* the flags the kernels agree on */
 #define BRKINT  2
 #define ISTRIP 32
@@ -30,22 +21,6 @@ struct termios {
 #define TCSANOW   0
 #define TCSADRAIN 1
 #define TCSAFLUSH 2
-#if defined(__FreeBSD__)
-/* ...and where they part (stable/14 sys/termios.h) */
-#define IXON  0x200
-#define ISIG  0x80
-#define ICANON 0x100
-#define IEXTEN 0x400
-#define VMIN  16
-#define VTIME 17
-#define TCIFLUSH  1
-#define TCOFLUSH  2
-#define TCIOFLUSH 3
-#define TCOOFF 1
-#define TCOON  2
-#define TCIOFF 3
-#define TCION  4
-#else
 #define IXON 1024
 #define ISIG    1
 #define ICANON  2
@@ -59,7 +34,6 @@ struct termios {
 #define TCOON  1
 #define TCIOFF 2
 #define TCION  3
-#endif
 int tcgetattr(int, struct termios*);
 int tcsetattr(int, int, struct termios const*);
 int tcsendbreak(int, int);

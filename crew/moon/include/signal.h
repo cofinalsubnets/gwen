@@ -17,17 +17,6 @@ struct sigaction {
 #define SIGABRT  6
 #define SIGFPE   8
 #define SIGSEGV 11
-#if defined(__FreeBSD__)
-#define SIGBUS  10
-/* sa_flags, freebsd's values (stable/14 sys/signal.h) */
-#define SA_ONSTACK   1
-#define SA_RESTART   2
-#define SA_RESETHAND 4
-#define SA_NOCLDSTOP 8
-#define SA_NODEFER  16
-#define SA_NOCLDWAIT 32
-#define SA_SIGINFO  64
-#else
 #define SIGBUS   7
 /* sa_flags, Linux's values (the same on every arch we speak) */
 #define SA_NOCLDSTOP 1
@@ -37,7 +26,6 @@ struct sigaction {
 #define SA_RESTART   0x10000000
 #define SA_NODEFER 1073741824
 #define SA_RESETHAND 0x80000000
-#endif
 void *signal(int, void*);        /* returns the old handler; love.c ignores it */
 int raise(int);
 int sigaction(int, struct sigaction const*, struct sigaction*);
@@ -52,17 +40,6 @@ int sigemptyset(sigset_t*);
 #define SIGTTIN 21
 #define SIGTTOU 22
 #define SIGWINCH 28
-#if defined(__FreeBSD__)
-#define SIGUSR1 30
-#define SIGUSR2 31
-#define SIGCHLD 20
-#define SIGCONT 19
-#define SIGSTOP 17
-#define SIGTSTP 18
-#define SIG_BLOCK   1
-#define SIG_UNBLOCK 2
-#define SIG_SETMASK 3
-#else
 #define SIGUSR1 10
 #define SIGUSR2 12
 #define SIGCHLD 17
@@ -72,7 +49,6 @@ int sigemptyset(sigset_t*);
 #define SIG_BLOCK   0
 #define SIG_UNBLOCK 1
 #define SIG_SETMASK 2
-#endif
 int kill(pid_t, int);
 int sigaddset(sigset_t*, int);
 int sigismember(sigset_t const*, int);

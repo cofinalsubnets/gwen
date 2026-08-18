@@ -1,29 +1,41 @@
 #include "../impl.h"
 
-#if defined(__FreeBSD__)
-/* freebsd sigaction(416): userland == kernel there -- {handler(8), flags(4),
- * a 16-byte set at offset 12, no restorer (the kernel lays its own return
- * trampoline)}. our glibc-shaped struct sigaction translates at the seam;
- * the mask bytes copy verbatim (one bit law both sides, bit sig-1). */
-struct __fbsd_sigaction { void *h; int flags; unsigned int mask[4]; };
+/* one body, both kernels. on freebsd the numbers, the sa_flags and the
+ * ksigaction shape translate -- and the HANDLER would land on the freebsd
+ * number, so __ai_sigshim rides in front and hands the user's handler the
+ * canonical one. SIG_DFL/SIG_IGN pass bare; the user handlers park in
+ * __sighand by FREEBSD number, so the shim's lookup is one index. */
+static void (*__sighand[64])(int);
+static void __ai_sigshim(int s) {
+  void (*h)(int) = (s > 0 && s < 64) ? __sighand[s] : 0;
+  if (h) h((int) __ai_sigcan(s)); }
+
 int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
-  struct __fbsd_sigaction ka, ko;
-  memset(&ko, 0, sizeof ko);
-  if (a) {
-    memset(&ka, 0, sizeof ka);
-    ka.h = (void *) a->sa_handler;
-    ka.flags = a->sa_flags;
-    memcpy(ka.mask, a->sa_mask.__v, 16); }
-  long r = sc3(NR_rt_sigaction, sig, a ? (long) &ka : 0, old ? (long) &ko : 0);
-  if (r < 0) { __errno_v = (int) -r; return -1; }
-  if (old) {
-    memset(old, 0, sizeof *old);
-    old->sa_handler = (void (*)(int)) ko.h;
-    old->sa_flags = ko.flags;
-    memcpy(old->sa_mask.__v, ko.mask, 16); }
-  return 0; }
-#else
-int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
+  if (__ai_osv == 2) {
+    long fs = __ai_sigfb(sig);
+    if (fs <= 0) { __errno_v = EINVAL; return -1; }
+    struct __fb_sigact ka, ko;
+    memset(&ko, 0, sizeof ko);
+    void (*prev)(int) = __sighand[fs];
+    if (a) {
+      memset(&ka, 0, sizeof ka);
+      void (*h)(int) = a->sa_handler;
+      if (h == (void (*)(int)) 0 || h == (void (*)(int)) 1) {
+        ka.h = (void *) h; __sighand[fs] = 0; }
+      else {
+        ka.h = (void *) __ai_sigshim; __sighand[fs] = h; }
+      ka.flags = (int) __ai_safb(a->sa_flags);
+      ka.mask[0] = (unsigned int) __ai_maskfb((unsigned long) a->sa_mask.__v[0]);
+      ka.mask[1] = (unsigned int) (__ai_maskfb((unsigned long) a->sa_mask.__v[0]) >> 32); }
+    long r = sc3(NR_rt_sigaction, fs, a ? (long) &ka : 0, old ? (long) &ko : 0);
+    if (r < 0) { if (a) __sighand[fs] = prev; __errno_v = (int) -r; return -1; }
+    if (old) {
+      memset(old, 0, sizeof *old);
+      old->sa_handler = (ko.h == (void *) __ai_sigshim) ? prev : (void (*)(int)) ko.h;
+      old->sa_flags = (int) __ai_sacan(ko.flags);
+      old->sa_mask.__v[0] = (long) __ai_maskcan((unsigned long) ko.mask[0]
+                                                | ((unsigned long) ko.mask[1] << 32)); }
+    return 0; }
   struct __ksigaction ka, ko;
   memset(&ko, 0, sizeof ko);
   if (a) {
@@ -44,4 +56,3 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
     old->sa_flags = (int) ko.flags;
     old->sa_mask.__v[0] = (long) ko.mask; }
   return 0; }
-#endif

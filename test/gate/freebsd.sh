@@ -201,3 +201,20 @@ echo "$lout" | grep -q "uv1: argc=3 jmp=7 ebadf=ok kill=ok" || fail "uv1 body --
 echo "$lout" | grep -q "rc=42" || fail "uv1 exit -- got: $lout"
 
 echo "test_freebsd: UV1 -- ONE default-lane binary answered both kernels the same"
+
+# ---- rung UV2: the compat members -- the WHOLE rung2 battery, one binary ----
+# the same source the -os leg runs, compiled in the DEFAULT lane: open flags,
+# stat, dirent, dup2, mkdir/rmdir, mmap, getcwd, readdir, sigaction + the
+# handler's number, sigprocmask's bits, fork + the wait status -- every one
+# translated at runtime, and the SAME file answers the SAME text on both
+# kernels. (the linux run answers here; the box answers over ssh.)
+moon0 -t x64 "$d/rung2.c" -o "$d/uv2" || fail "uv2: the default-lane compile"
+printf '\011' | dd of="$d/uv2" bs=1 seek=7 count=1 conv=notrunc 2>/dev/null
+l2=$("$d/uv2" < /dev/null; echo "rc=$?")   # stdin pinned: the battery asserts isatty(0)==0
+f2=$($FBSD_SSH 'cat > /tmp/uv2 && chmod +x /tmp/uv2 && /tmp/uv2; echo "rc=$?"' < "$d/uv2") \
+  || fail "uv2: the box could not take or run it"
+[ "$l2" = "$f2" ] || fail "uv2: the kernels disagree -- linux[$l2] freebsd[$f2]"
+echo "$l2" | grep -q "rc=42" || fail "uv2 exit -- got: $l2"
+echo "$l2" | grep -q "all" || fail "uv2 battery -- got: $l2"
+
+echo "test_freebsd: UV2 -- the whole rung2 battery, one binary, both kernels"

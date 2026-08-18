@@ -36,8 +36,8 @@
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>    // _NSGetExecutablePath (selfpath)
 #include <limits.h>         // PATH_MAX -- realpath's buffer is not ours to size
-#elif defined(__FreeBSD__) || defined(__DragonFly__)
-#include <sys/sysctl.h>     // KERN_PROC_PATHNAME (selfpath)
+#elif !defined(__GLIBC__)
+#include <sys/sysctl.h>     // the freebsd selfpath door (nolibc's; glibc dropped the symbol)
 #endif
 
 // A wait(2) status word -> the value a reaper hands back: the exit code, or
@@ -340,21 +340,21 @@ ai_noinline size_t host_selfpath(char *b, size_t n) {
  size_t l = strlen(p);
  if (l >= n) return 0;
  return memcpy(b, p, l + 1), l;
-#elif defined(__FreeBSD__) || defined(__DragonFly__)
- int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+#else
+ // a RUNTIME ladder, because one binary meets more than one kernel: linux's
+ // link, then netbsd's spelling of it, then freebsd's sysctl door -- each try
+ // answers only on its kernel, so the tries ARE the OS probe.
+ ssize_t r = readlink("/proc/self/exe", b, n - 1);
+ if (r <= 0) r = readlink("/proc/curproc/exe", b, n - 1);
+ if (r > 0) return b[r] = 0, (size_t) r;
+#if !defined(__GLIBC__)
+ // nolibc always links sysctl (ENOSYS off freebsd); glibc dropped the symbol,
+ // and the glibc build is the linux bootstrap scaffold -- /proc answered above.
+ int mib[4] = { 1, 14, 12, -1 };                       // CTL_KERN KERN_PROC KERN_PROC_PATHNAME(-1)
  size_t sz = n;
- if (sysctl(mib, 4, b, &sz, NULL, 0) || !sz) return 0;
- return strlen(b);
-#else
- char const *link =
-#if defined(__NetBSD__)
-  "/proc/curproc/exe";
-#else
-  "/proc/self/exe";                                    // linux, and every /proc that copies it
+ if (!sysctl(mib, 4, b, &sz, NULL, 0) && sz) return strlen(b);
 #endif
- ssize_t r = readlink(link, b, n - 1);
- if (r <= 0) return 0;
- return b[r] = 0, (size_t) r;
+ return 0;
 #endif
 }
 ai_noinline static struct ai *host_selfpath_ap(struct ai *g) {
