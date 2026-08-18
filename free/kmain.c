@@ -402,7 +402,7 @@ static const uint8_t
    'B', 'N', 'M',  '<', '>', '?',   0, '*',
      0, ' ' };
 
-_Static_assert(countof(kb2ascii) == countof(shift_kb2ascii));
+_Static_assert(countof(kb2ascii) == countof(shift_kb2ascii), "one scancode table, two faces");
 
 #define kb_code_left 75
 #define kb_code_right 77

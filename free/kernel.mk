@@ -91,7 +91,10 @@ ifdef K_TEST
 kcppflags += -DK_TEST -Dai_tco=1
 endif
 ifeq ($(KCC_IS_CLANG),1)
-kcc_if_clang = -target $a-unknown-none-elf
+# ⚠ -Dasm: the tree's C is c11 plus the GNU asm keyword, which mooncc's parser takes
+# under all three spellings and strict clang under none. one define beats -std=gnu11,
+# which would let the twin accept extensions the primary compiler never sees.
+kcc_if_clang = -target $a-unknown-none-elf -Dasm=__asm__
 endif
 
 # the machine flags a FOREIGN cc needs told. mooncc is told none: `-t` names the backend
