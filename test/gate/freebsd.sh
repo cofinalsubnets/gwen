@@ -1,12 +1,13 @@
 #!/bin/sh
 # test/gate/freebsd.sh -- rungs 2+3's gate (doc/plan/seed-universal.md): mooncc
 # -os freebsd lays a static freebsd/amd64 binary -- the impl.h table, the
-# mksys-freebsd twin (CF -> -errno), crt0-fbsd, the EI_OSABI brand, and rung
-# 3's forked tables (O_*/MAP_*/SA_*/signal numbers/errno tail, the stat and
-# dirent structs, the sigaction/sigprocmask/fork/dup2/readdir bodies) -- and a
-# REAL freebsd runs it. ⚠ NOT here on purpose: termios proper and the socket
-# family (sa_len, another constant set) -- rung 4's, with gates that need a
-# tty and a wire.
+# OS-blind mksys tail, the dual crt0, the EI_OSABI brand, and rung 3's forked
+# tables (O_*/MAP_*/SA_*/signal numbers/errno tail, the stat and dirent
+# structs, the sigaction/sigprocmask/fork/dup2/readdir bodies) -- and a REAL
+# freebsd runs it. rung UV1's leg then asks the stronger question: ONE
+# default-lane binary, no -os at all, answering both kernels the same.
+# ⚠ NOT here on purpose: termios proper and the socket family (sa_len,
+# another constant set) -- rung 4's, with gates that need a tty and a wire.
 #
 # the box arrives by env: FBSD_SSH is a command prefix ("ssh -p 2222 -i key
 # root@host"); without one the gate skips loudly, the house rule for a gate
@@ -162,3 +163,41 @@ echo "$out" | grep -q "42" || fail "the say lane -- got: $out"
 echo "$out" | grep -q "(1 2 3)" || fail "the stdin repl -- got: $out"
 
 echo "test_freebsd: the WHOLE love (egg) answers on the box -- -e, say, and the repl"
+
+# ---- rung UV1: ONE binary, both kernels ----
+# the DEFAULT lane, no -os: canonical numbers dispatched at runtime (os.c's
+# probe + map), the dual crt0, the dual sigprocmask leaves, the errno row.
+# branded 9 by dd here -- freebsd's loader requires the byte and linux's
+# never reads it (UV3 decides the default brand) -- and then the SAME file
+# must answer the SAME text and status on both kernels.
+cat > "$d/uv1.c" <<'EOF'
+#include <unistd.h>
+#include <errno.h>
+#include <signal.h>
+#include <setjmp.h>
+#include <string.h>
+#include <stdio.h>
+
+int main(int argc, char **argv) {
+  (void) argv;
+  sigjmp_buf b;
+  int j = sigsetjmp(b, 1);
+  if (!j) siglongjmp(b, 7);
+  int bad = write(-1, "x", 1) == -1 && errno == EBADF;
+  int k = kill(getpid(), 0) == 0;
+  char m[96];
+  sprintf(m, "uv1: argc=%d jmp=%d ebadf=%s kill=%s\n",
+          argc, j, bad ? "ok" : "NO", k ? "ok" : "NO");
+  write(1, m, strlen(m));
+  return 42; }
+EOF
+moon0 -t x64 "$d/uv1.c" -o "$d/uv1" || fail "uv1: the default-lane compile"
+printf '\011' | dd of="$d/uv1" bs=1 seek=7 count=1 conv=notrunc 2>/dev/null
+lout=$("$d/uv1" one two; echo "rc=$?")
+fout=$($FBSD_SSH 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && /tmp/uv1 one two; echo "rc=$?"' < "$d/uv1") \
+  || fail "uv1: the box could not take or run it"
+[ "$lout" = "$fout" ] || fail "uv1: the kernels disagree -- linux[$lout] freebsd[$fout]"
+echo "$lout" | grep -q "uv1: argc=3 jmp=7 ebadf=ok kill=ok" || fail "uv1 body -- got: $lout"
+echo "$lout" | grep -q "rc=42" || fail "uv1 exit -- got: $lout"
+
+echo "test_freebsd: UV1 -- ONE default-lane binary answered both kernels the same"

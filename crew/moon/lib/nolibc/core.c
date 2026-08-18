@@ -133,6 +133,7 @@ int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), voi
  * definition overrides crt0's weak call-main tail (the linker's weak machinery
  * is the whole switch -- no flags anywhere). ---- */
 void __ai_start(long *sp) {
+  __ai_osv = __ai_osdetect();   /* which kernel: settled before any other syscall */
   long argc = sp[0];
   char **argv = (char **) (sp + 1);
   char **e = argv + argc + 1;
