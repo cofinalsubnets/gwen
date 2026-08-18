@@ -1,5 +1,4 @@
 (: (src-die m) (say err (";; " + m + "\n"), quit 1)
-   (src-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")])))
 
    (src-head nom) (: n (tally nom)
                      (go i) (? (n <= i) nom (nom i = 47) (snip nom 0 i) (go (i + 1)))
@@ -18,7 +17,6 @@
        _ (close q)
        p)
 
-   (dslurp p) (src-slurp p @ [1 r] r (src-die $ "can't read " p))
    (src-lay-love root)
     (: exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't read seed path"))
@@ -91,7 +89,57 @@
                                        (src-foreign? p ? 1 (any >ds))))
                         (go >l (any (src-dirs ()) ? acc (w >< acc)))))
        (go ns ()))
-   (seed-main as0)
+   ; ⚠ NOT (sha256 (slurp a) = sha256 (slurp b)): slurp draws a byte at a time
+   ; and the answer is copied, so two 13 MB binaries cost the waiter ~140 MB it
+   ; never gets back. The question is only whether the bytes agree, and a walk
+   ; answers it in two buffers. A short read rides as a LEFTOVER, so the streams
+   ; line up however the reads happen to fall.
+   (src-chunk q b) (: k (swig q b) (? (0 < k) (snip (string b) 0 k) ""))
+   (src-same? p1 p2)
+    (: q1 (open p1 "r")
+       q2 (open p2 "r")
+       (? (!(q1 && q2)) (: _ (q1 ? (close q1) 0) _ (q2 ? (close q2) 0) 0)
+          (: b1 (cask 65536)
+             b2 (cask 65536)
+             (go r1 r2)
+              (: r1 (tally r1 ? r1 (src-chunk q1 b1))
+                 r2 (tally r2 ? r2 (src-chunk q2 b2))
+                 n1 (tally r1)
+                 n2 (tally r2)
+                 m (? (n1 < n2) n1 n2)
+                 (? (0 = m) (? (0 = (n1 + n2)) 1 0)      ; both ended, same place
+                    (n1 = n2) (r1 = r2 ? (go "" "") 0)   ; the even case: no snip at all
+                    (!((snip r1 0 m) = (snip r2 0 m))) 0
+                    (go (snip r1 m n1) (snip r2 m n2))))
+             v (go "" "")
+             _ (close q1)
+             _ (close q2)
+             v)))
+
+   ; ⚠ THE WAIT RUNS IN A FRESH PROCESS. src-lay's inflate leaves ~200 MB of
+   ; heap that the parent would otherwise hold through the whole build, for
+   ; nothing -- and no collection gives it back, because free coalesces into a
+   ; list and never unmaps, so tightening the budget only ever RAISES rss. exec
+   ; is the one thing that returns the pages; the waiter boots at ~57 MB, which
+   ; is what a small box under build pressure has to spare. PATH, CC and the cwd
+   ; all ride the environment across it, so only the root has to be said.
+   (seed-wait root)
+    (: exe (selfpath 0)
+       _ (string? exe ? 0 (src-die "can't find seed path"))
+       here (cwd 0)
+       _ (? (charm? (chdir root)) (src-die ("can't enter " + root)) 0)
+       s (herald [exe "make" "dist"])
+       st (two? s ? <s s)
+       _ (chdir here)
+       _ (0 != st ? (src-die ("the build failed (exit " + show st + ")")))
+       ; the ONE artifact (seed-universal U2): the seed is the laid tree's own
+       ; binary, and the rebuild must BE this binary, byte for byte.
+       out (root + "/out/host/love")
+       (? (src-same? exe out)
+         (puts ";; fixpoint ok\n", 0)
+        (say err ";; FIXPOINT NOT OK\n", 1)))
+
+   (seed-lay as0)
     (: first? (two? as0 ? (<as0 = "-first") 0)
        as1 (first? ? >as0 as0)
        self? (two? as1 ? (<as1 = "-self") 0)
@@ -109,20 +157,14 @@
        ours (src-ours src-needs)
        _ (? (two? ours)
           (puts $ ";; using own tools: " + ujoin ours + "\n"))
-       here (cwd 0)
-       _ (? (charm? (chdir root)) (src-die ("can't enter " + root)) 0)
        cc (? (string? env) env (two? amb) <>amb "this binary")
        _ (puts (";; seeding with " + cc + "\n"))
-       s (herald [exe "make" "dist"])
-       st (two? s ? <s s)
-       _ (chdir here)
-       _ (0 != st ? (src-die ("the build failed (exit " + show st + ")")))
-       ; the ONE artifact (seed-universal U2): the seed is the laid tree's own
-       ; binary, and the rebuild must BE this binary, byte for byte.
-       out (root + "/out/host/love")
-       (? (sha256 (dslurp exe) = sha256 (dslurp out))
-         (puts ";; fixpoint ok\n", 0)
-        (say err ";; FIXPOINT NOT OK\n", 1)))
+       e (exec [exe "seed" "-wait" root])
+       (src-die ("can't wait for the build (exec: " + show e + ")")))
+
+   (seed-main as0)
+    (? ((two? as0) && (<as0 = "-wait")) (seed-wait (two? >as0 ? <>as0 "."))
+       (seed-lay as0))
 
    (pins (from 'verbs 'tab)
     'source source-main
