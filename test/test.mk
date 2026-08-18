@@ -606,13 +606,16 @@ test_xfixpoint: $(xobjs) $(love0) out/host/mooncc0.image
 .PHONY: test_fat
 test_fat: dist-fat
 	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(boot_love)" $(ho) $(xd)
-# rung 2's freebsd gate (doc/plan/seed-universal.md): a mooncc-laid static
-# freebsd binary runs on a real freebsd box. the box arrives by env --
-# FBSD_SSH="ssh -p 2222 -i KEY root@HOST" make test_freebsd -- and without
-# one the gate skips loudly. opt-in by name, like test_distboot.
-.PHONY: test_freebsd
+# the multi-OS gate (doc/plan/seed-universal.md, rung UV): ONE default-lane
+# binary answers every kernel with the same text. the box arrives by env --
+# FBSD_SSH / NBSD_SSH = "ssh -p 2222 -i KEY root@HOST" -- and without one the
+# gate skips loudly. opt-in by name, like test_distboot; FBSD_SEED=1 /
+# NBSD_SEED=1 adds the on-box `love seed` trophy leg (minutes).
+.PHONY: test_freebsd test_netbsd
 test_freebsd: host $(love0) out/host/mooncc0.image
-	@sh test/gate/freebsd.sh $(ho) $(love0)
+	@sh test/gate/osbox.sh $(ho) $(love0) freebsd
+test_netbsd: host $(love0) out/host/mooncc0.image
+	@sh test/gate/osbox.sh $(ho) $(love0) netbsd
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
 # the WHOLE corpus. Opt-in: needs the -pie toolchain, x86-64 only.

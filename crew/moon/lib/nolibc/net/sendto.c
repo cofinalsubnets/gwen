@@ -1,7 +1,7 @@
 #include "../impl.h"
 
 long sendto(int fd, void const *b, unsigned long n, int fl, struct sockaddr const *a, socklen_t an) {
-  if (__ai_osv == 2) {
+  if (__ai_osv >= 2) {
     struct sockaddr_storage s;
     long sa = 0;
     if (a) {

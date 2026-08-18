@@ -4936,8 +4936,12 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
         && (bj < 0 || x > (uintptr_t) def1[bj].x)) bj = (intptr_t) j, boff = d / sizeof(word); }
    if (bj >= 0) return (intptr_t)(hb + 2 * (ImageNLvm + ImageNImm)
                                      + 2 * (((uintptr_t)(countof(image_extra_aps) + (uintptr_t) bj)) * ImageCellW + boff)); }
- if ((uintptr_t) v < ImageTBound)
-  x->fail = 1;                                                                   // a binary ptr in the index range: unencodable
+ // a LOW absolute is not evidence of garbage: netbsd loads a PIE near zero, so
+ // every binary pointer there sits under the lane floor. the encoding is anchor-
+ // RELATIVE either way; what vouches for a low value is the wake-safety guard
+ // (in-segment = a real binary pointer). only an unaudited dump keeps the floor.
+ if ((uintptr_t) v < ImageTBound && !x->guard)
+  x->fail = 1;                                                                   // low absolute, no auditor to vouch for it
  if (img_wxp(x, (word) v)) {
   if (!x->suppress) x->fail = 1;                                                 // un-wakeable absolute (JIT/W^X/mmap)
   // ⚠ A REVERTED HUSK'S DEAD JIT ADDRESS BAKES AS A CONSTANT. The husk is ballast --

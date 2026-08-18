@@ -81,6 +81,8 @@
          (ld r1 r1 0)
          (cmp r1 2)
          (br eq sj-fb)
+         (cmp r1 3)
+         (br eq sj-nb)
          (li r6 0)                   ; rdi = SIG_BLOCK
          (li r9 8)                   ; r10 = sigsetsize
          (li r0 14)                  ; rt_sigprocmask
@@ -88,8 +90,14 @@
          (li r0 0)                   ; the first arrival answers 0
          (ret)
          (label sj-fb)
-         (li r6 1)                   ; rdi = SIG_BLOCK (freebsd: 1)
+         (li r6 1)                   ; rdi = SIG_BLOCK (both BSDs: 1)
          (li r0 340)                 ; sigprocmask
+         (sys)
+         (li r0 0)
+         (ret)
+         (label sj-nb)
+         (li r6 1)
+         (li r0 293)                 ; __sigprocmask14: the same 16-byte shape
          (sys)
          (li r0 0)
          (ret)
@@ -109,14 +117,21 @@
          (ld r1 r1 0)
          (cmp r1 2)
          (br eq lj-fb)
+         (cmp r1 3)
+         (br eq lj-nb)
          (li r6 2)                   ; rdi = SIG_SETMASK
          (li r9 8)                   ; r10 = sigsetsize
          (li r0 14)                  ; rt_sigprocmask
          (sys)
          (jmp lj-file)
          (label lj-fb)
-         (li r6 3)                   ; rdi = SIG_SETMASK (freebsd: 3)
+         (li r6 3)                   ; rdi = SIG_SETMASK (both BSDs: 3)
          (li r0 340)                 ; sigprocmask
+         (sys)
+         (jmp lj-file)
+         (label lj-nb)
+         (li r6 3)
+         (li r0 293)                 ; __sigprocmask14
          (sys)
          (label lj-file)
          (mov r0 r4)                 ; rax <- val, before rbp is restored
@@ -139,6 +154,40 @@
          ;    SA_RESTORER, a handler there returns on the kernel's own trampoline.
          (label __ai_sigret)
          (li r0 15)                  ; rt_sigreturn
+         (sys)
+
+         ; -- __ai_sys7(n,a..g): the wide door for netbsd's classic pads -- the
+         ;    kernel reads a seventh argument at [rsp+8], so g overwrites the
+         ;    incoming f slot (drained into r9 first; a callee owns its stack args).
+         (label __ai_sys7)
+         (mov r0 r6)                 ; rax <- n
+         (mov r6 r5)                 ; rdi <- a
+         (mov r5 r2)                 ; rsi <- b
+         (mov r2 r1)                 ; rdx <- c
+         (mov r9 r7)                 ; r10 <- d
+         (mov r7 r8)                 ; r8  <- e
+         (ld r8 sp 8)                ; r9  <- f
+         (ld r1 sp 16)               ; rcx <- g (scratch; the kernel clobbers rcx anyway)
+         (st sp 8 r1)                ; [rsp+8] <- g, where the kernel reads arg 7
+         (cmp r0 0)
+         (sys)
+         (br below sys7-err)
+         (ret)
+         (label sys7-err)
+         (neg r0)
+         (lea r0 r0 -4096)
+         (ret)
+
+         ; -- __ai_nb_sigtramp: netbsd's return path -- the kernel calls the
+         ;    handler directly and leaves the ucontext in r15; the registered
+         ;    tramp (version 2) returns through setcontext, and a fall-through
+         ;    exits loudly rather than wandering.
+         (label __ai_nb_sigtramp)
+         (mov r6 r14)                ; rdi <- r15 (the ucontext)
+         (li r0 308)                 ; setcontext
+         (sys)
+         (li r6 -1)
+         (li r0 1)                   ; exit
          (sys))
 
          (id? arch 'arm64)
@@ -331,5 +380,9 @@
          (label __ai_sigret)
          (li r7 139)                 ; rt_sigreturn
          (sys)))
-       (objelf arch ir () '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret") () () () () () () ())))
+       (objelf arch ir ()
+               (? (id? arch 'x64)   ; the wide door and the netbsd tramp are x64's alone
+                  '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret" "__ai_nb_sigtramp")
+                  '("__ai_sys" "__sigsetjmp" "siglongjmp" "__ai_sigret"))
+               () () () () () () ())))
 ) ; module 'moon

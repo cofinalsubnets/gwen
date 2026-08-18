@@ -7,4 +7,9 @@ int clock_gettime(int ck, struct timespec *ts) {
     if (ck == 1) ck = 4;
     else if (ck == 2) ck = 15;
     else if (ck == 3) ck = 14; }
+  else if (__ai_osv == 3) {
+    /* netbsd: MONOTONIC 3; the cputime ids are flag words */
+    if (ck == 1) ck = 3;
+    else if (ck == 2) ck = 0x40000000;
+    else if (ck == 3) ck = 0x20000000; }
   return (int) er(sc2(NR_clock_gettime, ck, (long) ts)); }

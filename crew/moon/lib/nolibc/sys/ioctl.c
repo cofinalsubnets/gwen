@@ -4,7 +4,7 @@ int ioctl(int fd, unsigned long req, ...) {
   va_list ap; va_start(ap, req);
   long arg = va_arg(ap, long);
   va_end(ap);
-  if (__ai_osv == 2) {
+  if (__ai_osv >= 2) {
     /* the encodings part wholesale; the requests whose PAYLOAD agrees
      * translate here, and an unknown one refuses loudly rather than firing
      * a foreign encoding at the kernel. termios rides its own members

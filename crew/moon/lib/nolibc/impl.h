@@ -44,6 +44,7 @@
 #include <netinet/in.h>
 
 extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
+extern long __ai_sys7(long n, long a, long b, long c, long d, long e, long f, long g);   /* the 7th arg rides the stack (netbsd mmap) */
 extern void __ai_sigret(void);
 extern int main(int, char**);
 
@@ -355,13 +356,16 @@ extern void __ai_saout(void *a, unsigned int n);                   /* ..and back
 static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
   long v = __ai_osv;
   if (!v) v = __ai_osv = __ai_osdetect();
-  if (v == 2) {
+  if (v >= 2) {
     n = __ai_nrfb(n);
     if (n < 0) return -38; }                          /* ENOSYS, canonically */
   long r = __ai_sys(n, a, b, c, d, e, f);
   return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
 static long __ai_fb(long n, long a, long b, long c, long d, long e, long f) {
   long r = __ai_sys(n, a, b, c, d, e, f);
+  return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
+static long __ai_fb7(long n, long a, long b, long c, long d, long e, long f, long g) {
+  long r = __ai_sys7(n, a, b, c, d, e, f, g);
   return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
 
 static long sc0(long n) { return __ai_call(n, 0, 0, 0, 0, 0, 0); }
@@ -433,6 +437,35 @@ struct __fb_termios {                 /* 44 bytes: 4 flag words, 20 chars, 2 spe
 extern void __ai_fbstat(struct __fb_stat const *f, struct stat *st);   /* fstat.c's, shared by the stat trio */
 extern void __ai_tiofb(struct termios const *t, struct __fb_termios *f);   /* os.c's termios rows */
 extern void __ai_tiocan(struct __fb_termios const *f, struct termios *t);
+
+/* ---- the third kernel: netbsd (rung UV4). the classic BSD band matches
+ * freebsd number for number, and signals, SA flags, masks, wait status, the
+ * tty ioctls and termios (one CRTSCTS bit) reuse the freebsd tables verbatim.
+ * netbsd's own: the versioned numbers (the os_nr third column), the PAD the
+ * classic calls carry (lseek/pread/pwrite/ftruncate/truncate slide their
+ * args; mmap's 7th rides the stack through __ai_sys7), these shapes, the
+ * errno tail past 84, and the userland sigtramp the kernel does not provide. */
+#define NR_nb_sigaction_sigtramp 340   /* (sig, nsa, osa, tramp, 2) */
+struct __nb_stat {                    /* 152 bytes; the timespec quartet mid-struct */
+  unsigned long dev;
+  unsigned int mode, _p0;
+  unsigned long ino;
+  unsigned int nlink, uid, gid, _p1;
+  unsigned long rdev;
+  long atime, atimensec, mtime, mtimensec, ctime, ctimensec, btime, btimensec;
+  long size, blocks;
+  int blksize;
+  unsigned int flags, gen, spare0, spare1;
+};
+struct __nb_dirent {                  /* __getdents30's record: name at byte 13 */
+  unsigned long fileno;
+  unsigned short reclen, namlen;
+  unsigned char type;
+  char name[512];
+};
+struct __nb_sigact { void *h; unsigned int mask[4]; int flags; };   /* mask BEFORE flags */
+extern void __ai_nbstat(struct __nb_stat const *f, struct stat *st);
+extern void __ai_nb_sigtramp(void);   /* mksys: mov r15->rdi; setcontext; exit */
 #define FfLeft 1
 #define FfZero 2
 #define FfAlt  4

@@ -317,10 +317,38 @@ owes a roster gate: on linux, assert the linux features are aboard.
     dictionary. Gated: test_bakerep grew the layered egg-bake budget lane
     (default vs LOVE_BUDGET_MB=128, byte-compare); a 64..2048 sweep
     answered identical.
-  - **UV4 — netbsd.** the .note.netbsd.ident PT_NOTE (holo's linker learns
-    note segments; foreign kernels ignore notes), a third syscall column,
-    the userland sigtramp (__sigaction_sigtramp — netbsd's kernel provides
-    none), a netbsd box and gate.
+  - **UV4 — netbsd.** LANDED 2026-08-18 — the one x64 binary answers a THIRD
+    kernel. What it took, smaller than feared because the BSDs agree so much:
+    ldlink lays the .note.netbsd.ident PT_NOTE + alloc section in every
+    hosted x64 link (netbsd's exec REFUSES noteless binaries; foreign
+    kernels ignore notes; strip keeps an alloc section); the probe grew a
+    second question (sys 20 says BSD, kern.ostype's first byte parts the
+    two); os_nr grew a third column (the classic band matches freebsd
+    NUMBER FOR NUMBER — only the versioned calls differ: __fstat50 440,
+    __getdents30 390, __wait450 449, __sigprocmask14 293 ..); signals, SA
+    flags, masks, wait status, tty ioctls and termios (one CRTSCTS bit)
+    reuse the freebsd tables VERBATIM; errno parts company only past 84.
+    netbsd's own: the classic PAD (lseek/pread/pwrite/ftruncate slide an
+    arg; mmap's 7th rides the stack through mksys's __ai_sys7 wide door),
+    the stat/dirent/sigaction shapes, O_DIRECTORY/O_CLOEXEC/AF_INET6/
+    MSG_NOSIGNAL values, and the userland sigtramp — the kernel calls the
+    handler directly and provides NO return path, so sigaction registers
+    mksys's __ai_nb_sigtramp (mov r15->rdi; setcontext) via
+    __sigaction_sigtramp version 2. the ENTRY needed nothing: rdi arrives 0
+    and [rsp] is a long argc, so the dual crt0's linux door already fit.
+    Two ambushes: netbsd's AuxInfo is {u32 type, PAD, u64 value} with the
+    pad UNZEROED, so auxv a_type reads through its low word everywhere
+    (dl_iterate_phdr found no phdrs and the dump's guard refused
+    everything); and netbsd loads a PIE near ZERO, so every binary pointer
+    sat under the codec's lane floor — a low absolute now passes when the
+    wake-safety guard vouches for it (the encoding was anchor-relative all
+    along), and only an unaudited dump keeps the floor. Gate:
+    test/gate/osbox.sh is ONE script for both boxes (test_freebsd /
+    test_netbsd; FBSD_SSH / NBSD_SSH; *_SEED=1 for the trophy leg); the
+    conjuring recipe for the netbsd box (the -live.img.gz, QMP send-key
+    through the VGA console) rides its header. still open on netbsd: the
+    pty quartet (TIOCPTSNAME is another shape) and sendmsg/recvmsg (refused
+    loudly, both BSDs).
 - **rung U2 — the targets DISSOLVE.** Decided 2026-08-16 (chosen, revisable);
   Landed 2026-08-17: ONE binary. The host build is subsumed — out/host/love
   links the source blob + readme and, baked, IS the artifact (`make` in a clean

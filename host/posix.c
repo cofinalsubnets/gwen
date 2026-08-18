@@ -348,11 +348,14 @@ ai_noinline size_t host_selfpath(char *b, size_t n) {
  if (r <= 0) r = readlink("/proc/curproc/exe", b, n - 1);
  if (r > 0) return b[r] = 0, (size_t) r;
 #if !defined(__GLIBC__)
- // nolibc always links sysctl (ENOSYS off freebsd); glibc dropped the symbol,
+ // nolibc always links sysctl (ENOSYS off the BSDs); glibc dropped the symbol,
  // and the glibc build is the linux bootstrap scaffold -- /proc answered above.
- int mib[4] = { 1, 14, 12, -1 };                       // CTL_KERN KERN_PROC KERN_PROC_PATHNAME(-1)
+ int mib[4] = { 1, 14, 12, -1 };                       // freebsd: CTL_KERN KERN_PROC KERN_PROC_PATHNAME(-1)
  size_t sz = n;
  if (!sysctl(mib, 4, b, &sz, NULL, 0) && sz) return strlen(b);
+ int nmib[4] = { 1, 48, -1, 5 };                       // netbsd: KERN_PROC_ARGS(pid=-1) KERN_PROC_PATHNAME
+ sz = n;
+ if (!sysctl(nmib, 4, b, &sz, NULL, 0) && sz) return strlen(b);
 #endif
  return 0;
 #endif

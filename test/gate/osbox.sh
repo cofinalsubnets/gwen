@@ -1,34 +1,45 @@
 #!/bin/sh
-# test/gate/freebsd.sh -- the multi-OS gate (doc/plan/seed-universal.md, rung
-# UV): ONE default-lane x64 binary -- no -os, born branded EI_OSABI=9 --
-# answers BOTH kernels with the same text and status. the legs: UV1 (entry,
-# carry, sigsetjmp), UV2 (the whole compat battery: open flags, stat, dirent,
-# signals, fork), UV-net (the socket family: sockaddr heads, sockopt names,
-# msg flags, over loopback TCP + UDP + unix), and -- FBSD_SEED=1, minutes --
-# the trophy: `love seed` ON THE BOX answers the tree's own bytes.
-# ⚠ NOT here on purpose: termios proper (a gate that needs a tty).
+# test/gate/osbox.sh -- the multi-OS gate (doc/plan/seed-universal.md, rung
+# UV): ONE default-lane x64 binary -- no -os, born branded EI_OSABI=9 and
+# carrying the netbsd ident note -- answers EVERY kernel with the same text
+# and status. one script, one battery, a box per OS: `osbox.sh OUT LOVE0
+# freebsd|netbsd`. the legs: UV1 (entry, carry, sigsetjmp), UV2 (the whole
+# compat battery: open flags, stat, dirent, signals, fork), UV-net (the
+# socket family: sockaddr heads, sockopt names, msg flags, over loopback
+# TCP + UDP + unix), and -- FBSD_SEED=1 / NBSD_SEED=1, minutes -- the
+# trophy: `love seed` ON THE BOX answers the tree's own bytes.
+# ⚠ NOT here on purpose: termios proper (a gate that needs a tty), and
+# netbsd's pty quartet (TIOCPTSNAME is another shape -- open).
 #
-# the box arrives by env: FBSD_SSH is a command prefix ("ssh -p 2222 -i key
-# root@host"); without one the gate skips loudly, the house rule for a gate
-# whose instrument is not on this machine.
+# the box arrives by env: FBSD_SSH / NBSD_SSH is a command prefix ("ssh -p
+# 2222 -i key root@host"); without one the gate skips loudly, the house rule
+# for a gate whose instrument is not on this machine.
 #
-# conjuring a box (what gated this 2026-08-16): the BASIC-CLOUDINIT qcow2 from
-# download.freebsd.org/releases/VM-IMAGES/<rel>/amd64/Latest/, a NoCloud seed
-# iso (mkisofs -V cidata user-data meta-data: disable_root false + an
-# authorized key + PermitRootLogin prohibit-password), then
+# conjuring a freebsd box (what gated this 2026-08-16): the BASIC-CLOUDINIT
+# qcow2 from download.freebsd.org/releases/VM-IMAGES/<rel>/amd64/Latest/, a
+# NoCloud seed iso (mkisofs -V cidata user-data meta-data: disable_root
+# false + an authorized key + PermitRootLogin prohibit-password), then
 #   qemu-system-x86_64 -enable-kvm -m 2048 -drive file=img.qcow2,if=virtio \
 #     -cdrom seed.iso -nic user,hostfwd=tcp:127.0.0.1:2222-:22 -display none
 # first boot runs freebsd-update; sshd answers a few minutes in.
-# usage: freebsd.sh OUTDIR LOVE0
+# a netbsd box (2026-08-18): the -live.img.gz from
+# cdn.netbsd.org/pub/NetBSD/NetBSD-<rel>/images/, gunzip + qemu-img resize,
+# boot the same qemu shape with -qmp; its console is VGA, so the one-time
+# setup (rc.conf sshd=YES dhcpcd=YES, the key, consdev=com0) types in by QMP
+# send-key, root with no password. sshd's default already takes keyed root.
+# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd
 set -u
 
 ho=$1
 love0=$2
-d=$ho/fbsd
+os=${3:-freebsd}
+t=test_$os
+d=$ho/$os
+if [ "$os" = netbsd ]; then box=${NBSD_SSH:-}; sd=${NBSD_SEED:-}; else box=${FBSD_SSH:-}; sd=${FBSD_SEED:-}; fi
 
-[ -n "${FBSD_SSH:-}" ] || { echo "test_freebsd: skipped (no FBSD_SSH box)"; exit 0; }
+[ -n "$box" ] || { echo "$t: skipped (no box in the env)"; exit 0; }
 
-fail() { echo "FAIL test_freebsd: $*" >&2; exit 1; }
+fail() { echo "FAIL $t: $*" >&2; exit 1; }
 
 mkdir -p "$d"
 cat > "$d/rung2.c" <<'EOF'
@@ -152,13 +163,13 @@ moon0 -t x64 "$d/uv1.c" -o "$d/uv1" || fail "uv1: the default-lane compile"
 [ "$(dd if="$d/uv1" bs=1 skip=7 count=1 2>/dev/null | od -An -tu1 | tr -d ' ')" = 9 ] \
   || fail "uv1: not born branded EI_OSABI=9"
 lout=$(for i in 1 2 3 4; do "$d/uv1" one two; echo "rc=$?"; done)
-fout=$($FBSD_SSH 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && for i in 1 2 3 4; do /tmp/uv1 one two; echo "rc=$?"; done' < "$d/uv1") \
+fout=$($box 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && for i in 1 2 3 4; do /tmp/uv1 one two; echo "rc=$?"; done' < "$d/uv1") \
   || fail "uv1: the box could not take or run it"
-[ "$lout" = "$fout" ] || fail "uv1: the kernels disagree -- linux[$lout] freebsd[$fout]"
+[ "$lout" = "$fout" ] || fail "uv1: the kernels disagree -- linux[$lout] $os[$fout]"
 echo "$lout" | grep -q "uv1: argc=3 jmp=7 ebadf=ok kill=ok" || fail "uv1 body -- got: $lout"
 echo "$lout" | grep -q "rc=42" || fail "uv1 exit -- got: $lout"
 
-echo "test_freebsd: UV1 -- ONE default-lane binary answered both kernels the same"
+echo "$t: UV1 -- ONE default-lane binary answered both kernels the same"
 
 # ---- rung UV2: the compat members -- the WHOLE rung2 battery, one binary ----
 # the same source the -os leg runs, compiled in the DEFAULT lane: open flags,
@@ -168,13 +179,13 @@ echo "test_freebsd: UV1 -- ONE default-lane binary answered both kernels the sam
 # kernels. (the linux run answers here; the box answers over ssh.)
 moon0 -t x64 "$d/rung2.c" -o "$d/uv2" || fail "uv2: the default-lane compile"
 l2=$("$d/uv2" < /dev/null; echo "rc=$?")   # stdin pinned: the battery asserts isatty(0)==0
-f2=$($FBSD_SSH 'cat > /tmp/uv2 && chmod +x /tmp/uv2 && /tmp/uv2; echo "rc=$?"' < "$d/uv2") \
+f2=$($box 'cat > /tmp/uv2 && chmod +x /tmp/uv2 && /tmp/uv2; echo "rc=$?"' < "$d/uv2") \
   || fail "uv2: the box could not take or run it"
-[ "$l2" = "$f2" ] || fail "uv2: the kernels disagree -- linux[$l2] freebsd[$f2]"
+[ "$l2" = "$f2" ] || fail "uv2: the kernels disagree -- linux[$l2] $os[$f2]"
 echo "$l2" | grep -q "rc=42" || fail "uv2 exit -- got: $l2"
 echo "$l2" | grep -q "all" || fail "uv2 battery -- got: $l2"
 
-echo "test_freebsd: UV2 -- the whole rung2 battery, one binary, both kernels"
+echo "$t: UV2 -- the whole rung2 battery, one binary, both kernels"
 
 # ---- rung UV-net: the socket family, one binary ----
 # sockaddr heads rebuilt (the BSD length byte where linux's 16-bit family
@@ -261,22 +272,22 @@ int main(void) {
 EOF
 moon0 -t x64 "$d/uvnet.c" -o "$d/uvnet" || fail "uvnet: the default-lane compile"
 ln=$("$d/uvnet" < /dev/null; echo "rc=$?")
-fn=$($FBSD_SSH 'cat > /tmp/uvnet && chmod +x /tmp/uvnet && /tmp/uvnet; echo "rc=$?"' < "$d/uvnet") \
+fn=$($box 'cat > /tmp/uvnet && chmod +x /tmp/uvnet && /tmp/uvnet; echo "rc=$?"' < "$d/uvnet") \
   || fail "uvnet: the box could not take or run it"
-[ "$ln" = "$fn" ] || fail "uvnet: the kernels disagree -- linux[$ln] freebsd[$fn]"
+[ "$ln" = "$fn" ] || fail "uvnet: the kernels disagree -- linux[$ln] $os[$fn]"
 echo "$ln" | grep -q "net all" || fail "uvnet battery -- got: $ln"
 echo "$ln" | grep -q "rc=42" || fail "uvnet exit -- got: $ln"
 
-echo "test_freebsd: UV-net -- the socket family, one binary, both kernels"
+echo "$t: UV-net -- the socket family, one binary, both kernels"
 
 # ---- the trophy, opt-in by name (FBSD_SEED=1, minutes): the seed builds the
 # seed ON THE BOX, and the bytes are the tree's own. the bake is budget-
 # invariant now, so the box's budget (RAM economics) does not move the answer.
-if [ -n "${FBSD_SEED:-}" ]; then
-  out=$($FBSD_SSH 'rm -rf /tmp/seedrun && mkdir /tmp/seedrun && cd /tmp/seedrun \
+if [ -n "$sd" ]; then
+  out=$($box 'rm -rf /tmp/seedrun && mkdir /tmp/seedrun && cd /tmp/seedrun \
     && cat > love && chmod +x love \
     && env LOVE_BUDGET_MB=512 ./love seed > seed.log 2>&1; tail -3 seed.log' < "$ho/love") \
     || fail "trophy: the box could not run the seed"
   echo "$out" | grep -q "fixpoint ok" || fail "trophy: the on-box seed missed the fixpoint -- got: $out"
-  echo "test_freebsd: THE TROPHY -- the seed built the seed on freebsd, to the byte"
+  echo "$t: THE TROPHY -- the seed built the seed on $os, to the byte"
 fi

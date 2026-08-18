@@ -15,4 +15,6 @@ int utimensat(int dfd, char const *p, struct timespec const *ts, int fl) {
       a = (long) t2; }
     long f2 = (fl & AT_SYMLINK_NOFOLLOW) ? 0x200 : 0;
     return (int) er(sc4(NR_utimensat, dfd, (long) p, a, f2)); }
+  if (__ai_osv == 3 && (fl & AT_SYMLINK_NOFOLLOW))
+    fl = (fl & ~AT_SYMLINK_NOFOLLOW) | 0x200;   /* netbsd's bit; its specials are linux's */
   return (int) er(sc4(NR_utimensat, dfd, (long) p, (long) ts, fl)); }

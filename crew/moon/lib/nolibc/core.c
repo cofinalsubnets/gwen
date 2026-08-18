@@ -87,11 +87,15 @@ FILE *stdin = &__stdf[0], *stdout = &__stdf[1], *stderr = &__stdf[2];
  * ET_DYN. AT_PHDR is the runtime address of the program headers, which sit at
  * file offset 64 inside the p_offset==0 PT_LOAD, so bias = AT_PHDR - 64 - that
  * segment's link-time p_vaddr (0x400000 for EXEC -> 0; 0 for PIE -> the slide). ---- */
+/* ⚠ a_type reads through its LOW WORD everywhere: netbsd's AuxInfo is
+ * {u32 type, pad, u64 value} and the kernel leaves the pad unzeroed, so a
+ * long-wide read sees garbage -- and linux's u64 types all fit 32 bits, so
+ * one narrow read serves every kernel (the AT_NULL stop included). */
 static unsigned long __ai_bias(void) {
   unsigned long phdr = 0; Elf64_Half phnum = 0;
-  for (long *a = __auxv; a && a[0]; a += 2) {
-    if (a[0] == 3) phdr = (unsigned long) a[1];        /* AT_PHDR */
-    if (a[0] == 5) phnum = (Elf64_Half) a[1]; }        /* AT_PHNUM */
+  for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {
+    if ((unsigned int) a[0] == 3) phdr = (unsigned long) a[1];   /* AT_PHDR */
+    if ((unsigned int) a[0] == 5) phnum = (Elf64_Half) a[1]; }   /* AT_PHNUM */
   if (!phdr) return 0;
   Elf64_Phdr const *ph = (Elf64_Phdr const *) phdr;
   for (Elf64_Half i = 0; i < phnum; i++)
@@ -116,9 +120,9 @@ static void __ai_reloc(void) {
  * in-binary pointers correctly under -pie (0 for a fixed-base ET_EXEC). ---- */
 int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), void *data) {
   unsigned long phdr = 0, phnum = 0;
-  for (long *a = __auxv; a && a[0]; a += 2) {
-    if (a[0] == 3) phdr = (unsigned long) a[1];        /* AT_PHDR */
-    if (a[0] == 5) phnum = (unsigned long) a[1]; }     /* AT_PHNUM */
+  for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {   /* low word: __ai_bias's rule */
+    if ((unsigned int) a[0] == 3) phdr = (unsigned long) a[1];   /* AT_PHDR */
+    if ((unsigned int) a[0] == 5) phnum = (unsigned long) a[1]; }   /* AT_PHNUM */
   if (!phdr) return 0;
   struct dl_phdr_info in;
   memset(&in, 0, sizeof in);

@@ -899,7 +899,15 @@
        ; off the count.
        img? (0 < foldl (\ a ob (a + ld-lanesz ob 'image)) 0 objs)
        wx? !(charm? org)
-       hdrsz (64 + (56 * ((? wx? 3 1) + (? img? 1 0))))
+       ; the one x64 binary may land on netbsd, whose exec REQUIRES the ident
+       ; note (no note -> ENOEXEC; foreign kernels ignore notes). 24 bytes riding
+       ; the header reserve, with a PT_NOTE and an alloc section so strip keeps it.
+       nb? (wx? && mach = 62)
+       hdrsz (64 + (56 * ((? wx? 3 1) + (? img? 1 0) + (? nb? 1 0))) + (? nb? 24 0))
+       nbo (hdrsz - 24)
+       nbnote (? nb? (catall `((le32 7) (le32 4) (le32 1)                ; namesz descsz NETBSD_TAG
+                               '(78 101 116 66 83 68 0 0) (le32 1000000000)))   ; "NetBSD\0\0", 10.0
+                  ())
        lay (ldlay objs base hdrsz (? wx? 4096 1))
        end <lay n0 <>lay o0 <>>lay d0 <>>>lay
        nrel (? pie (ld-nabs objs rv) 0)
@@ -967,7 +975,7 @@
        ; declares it: our linker INVENTS that section, and ldsynth defines its bracket by
        ; hand, so the section name and the symbol name are free of each other there.
        shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" ".love_rela" ".bss" ".love_image"
-                         ".symtab" ".strtab" ".shstrtab" ".comment" ".README"))
+                         ".symtab" ".strtab" ".shstrtab" ".comment" ".README" ".note.netbsd.ident"))
        (snm k) (at <>shstr k)
        symo (ld-align 8 endf) symz (tally <st)
        stro (symo + symz) strz (tally <>st)
@@ -975,7 +983,7 @@
        cmt (ld-comment objs prod) cmto (ssto + sstz) cmtz (tally cmt)
        rdm (? (string? readme) (o-strbytes readme) ())
        rdmo (cmto + cmtz) rdmz (tally rdm)
-       nsh (? (0 < rdmz) 13 12)
+       nsh ((? (0 < rdmz) 13 12) + (? nb? 1 0))
        shto (ld-align 8 (rdmo + rdmz))
        sht (catall `((ld-shdr 0 0 0 0 0 0 0 0 0 0)                                   ; the reserved null header
                      ; each lane runs to the page the next one starts on, so a split's pad
@@ -991,7 +999,8 @@
                      (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
                      (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)
                      (ld-shdr (snm 10) 1 48 0 cmto cmtz 0 0 1 1)                    ; .comment: MERGE|STRINGS, no alloc
-                     (? (0 < rdmz) (ld-shdr (snm 11) 1 32 0 rdmo rdmz 0 0 1 0) ())))  ; .README: STRINGS, no alloc
+                     (? (0 < rdmz) (ld-shdr (snm 11) 1 32 0 rdmo rdmz 0 0 1 0) ())   ; .README: STRINGS, no alloc
+                     (? nb? (ld-shdr (snm 12) 7 2 (base + nbo) nbo 24 0 0 4 0) ())))  ; SHT_NOTE, alloc: strip keeps it
        ; W^X: segment one is the header and the code, READ+EXECUTE; segment two the
        ; literals, READ; segment three .data through ai_rela, running out to bss in memsz
        ; alone, READ+WRITE; a fourth carries the image when there is one, RW (a heap
@@ -1012,9 +1021,10 @@
                      (elf64-phdr 1 4 (o0 - base) o0 o0 (d0 - o0) (d0 - o0) 4096)
                      (elf64-phdr 1 6 (d0 - base) d0 d0 (r1 - d0) (bend - d0) 4096))
                  `((elf64-phdr 1 7 0 base base (r1 - base) (bend - base) 4096)))
-            + (? img? `((elf64-phdr 1 6 ioff iaddr iaddr isz isz 4096)) ()))
+            + (? img? `((elf64-phdr 1 6 ioff iaddr iaddr isz isz 4096)) ())
+            + (? nb? `((elf64-phdr 4 4 nbo (base + nbo) (base + nbo) 24 24 4)) ()))
        hdr (elf64-hdrn (? pie 3 2) ent mach `(shto nsh 10) phs)
-       (hdr >< (>en + tail + (? pie `(rtab) ()) + ipad + >ei
+       (hdr >< ((? nb? `(nbnote) ()) + >en + tail + (? pie `(rtab) ()) + ipad + >ei
                 + `((ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
                     (ld-zeros (shto - (rdmo + rdmz))) sht))))
 

@@ -1,7 +1,7 @@
 #include "../impl.h"
 
 int sigprocmask(int how, sigset_t const *s, sigset_t *o) {
-  if (__ai_osv == 2) {
+  if (__ai_osv >= 2) {
     /* freebsd sigprocmask(340): 3 args, a 16-byte set, how 1/2/3 (ours + 1);
      * the mask bits carry signal numbers, so they translate bit by bit. */
     unsigned long ks[2] = {0, 0}, ko[2] = {0, 0};
