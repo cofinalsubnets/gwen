@@ -611,11 +611,16 @@ test_fat: dist-fat
 # FBSD_SSH / NBSD_SSH = "ssh -p 2222 -i KEY root@HOST" -- and without one the
 # gate skips loudly. opt-in by name, like test_distboot; FBSD_SEED=1 /
 # NBSD_SEED=1 adds the on-box `love seed` trophy leg (minutes).
-.PHONY: test_freebsd test_netbsd
+.PHONY: test_freebsd test_netbsd test_freebsd_arm64
 test_freebsd: host $(love0) out/host/mooncc0.image
 	@sh test/gate/osbox.sh $(ho) $(love0) freebsd
 test_netbsd: host $(love0) out/host/mooncc0.image
 	@sh test/gate/osbox.sh $(ho) $(love0) netbsd
+# the SECOND ISA: FBSD_ARM64_SSH names an aarch64 freebsd box and the local half
+# of each comparison rides qemu-aarch64, so the leg is one binary under two
+# kernels on an ISA this machine is not. Skips loudly without either.
+test_freebsd_arm64: host $(love0) out/host/mooncc0.image
+	@sh test/gate/osbox.sh $(ho) $(love0) freebsd arm64
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
 # the WHOLE corpus. Opt-in: needs the -pie toolchain, x86-64 only.

@@ -29,17 +29,46 @@
 # boot the same qemu shape with -qmp; its console is VGA, so the one-time
 # setup (rc.conf sshd=YES dhcpcd=YES, the key, consdev=com0) types in by QMP
 # send-key, root with no password. sshd's default already takes keyed root.
-# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd
+# ⚠ TWO DIMENSIONS NOW: the OS and the ISA. `osbox.sh OUT LOVE0 freebsd arm64`
+# runs the same battery against a freebsd/arm64 box (FBSD_ARM64_SSH), and the
+# LOCAL half of every comparison rides qemu-aarch64 -- same binary, same ISA,
+# two kernels, which is the claim. Without that emulator the arm64 lane skips
+# loudly, exactly as a missing box does.
+# an arm64 freebsd box (2026-08-18): the aarch64 BASIC-CLOUDINIT qcow2 from the
+# same VM-IMAGES tree, booted by qemu-system-aarch64 -M virt -accel kvm on an
+# aarch64 host (a pi is native; TCG elsewhere is ~2x slower again). ⚠ the disk
+# must be virtio-blk-PCI said explicitly -- `if=virtio' lands it on the MMIO bus,
+# which the edk2 firmware does not enumerate, and UEFI walks the whole PXE list
+# instead. edk2 is not packaged for arch-arm; the .fd is GUEST code, so a copy
+# from any host serves, and an empty 64M file is a fine varstore.
+# usage: osbox.sh OUTDIR LOVE0 freebsd|netbsd [x64|arm64]
 set -u
 
 ho=$1
 love0=$2
 os=${3:-freebsd}
-t=test_$os
-d=$ho/$os
-if [ "$os" = netbsd ]; then box=${NBSD_SSH:-}; sd=${NBSD_SEED:-}; else box=${FBSD_SSH:-}; sd=${FBSD_SEED:-}; fi
+arch=${4:-x64}
+case "$os-$arch" in
+  netbsd-x64)    box=${NBSD_SSH:-};       sd=${NBSD_SEED:-} ;;
+  freebsd-x64)   box=${FBSD_SSH:-};       sd=${FBSD_SEED:-} ;;
+  freebsd-arm64) box=${FBSD_ARM64_SSH:-}; sd=${FBSD_ARM64_SEED:-} ;;
+  *) echo "osbox: no box is defined for $os on $arch" >&2; exit 1 ;;
+esac
+t=test_$os; [ "$arch" = x64 ] || t=test_${os}_${arch}
+d=$ho/$os-$arch
 
 [ -n "$box" ] || { echo "$t: skipped (no box in the env)"; exit 0; }
+
+# the LOCAL half of each comparison: native where the arch is this machine's,
+# qemu-user where it is not. The point of the leg is ONE binary under TWO
+# kernels, so the emulator stands in for linux/arm64 hardware and nothing else.
+if [ "$arch" = arm64 ]; then
+  qemu=$(command -v qemu-aarch64 2>/dev/null || true)
+  [ -n "$qemu" ] || { echo "$t: skipped (no qemu-aarch64 for the local half)"; exit 0; }
+  run() { "$qemu" "$@"; }
+else
+  run() { "$@"; }
+fi
 
 fail() { echo "FAIL $t: $*" >&2; exit 1; }
 
@@ -133,7 +162,7 @@ moon0() { "$love0" wake "$ho/mooncc0.image" mooncc "$@"; }
 # ---- rung UV1: ONE binary, both kernels ----
 # the DEFAULT lane, no -os: canonical numbers dispatched at runtime (os.c's
 # probe + map), the dual crt0, the dual sigprocmask leaves, the errno row,
-# and the brand BORN in (every x64 static exe leaves the linker EI_OSABI=9;
+# and the brand BORN in (every hosted static exe leaves the linker EI_OSABI=9;
 # freebsd's loader requires the byte and linux's never reads it). the SAME
 # file must answer the SAME text and status on both kernels.
 # ⚠ -e/argv LANES RUN MANY TIMES ON PURPOSE: the freebsd kernel hands the
@@ -161,10 +190,10 @@ int main(int argc, char **argv) {
   write(1, m, strlen(m));
   return 42; }
 EOF
-moon0 -t x64 "$d/uv1.c" -o "$d/uv1" || fail "uv1: the default-lane compile"
+moon0 -t "$arch" "$d/uv1.c" -o "$d/uv1" || fail "uv1: the default-lane compile"
 [ "$(dd if="$d/uv1" bs=1 skip=7 count=1 2>/dev/null | od -An -tu1 | tr -d ' ')" = 9 ] \
   || fail "uv1: not born branded EI_OSABI=9"
-lout=$(for i in 1 2 3 4; do "$d/uv1" one two; echo "rc=$?"; done)
+lout=$(for i in 1 2 3 4; do run "$d/uv1" one two; echo "rc=$?"; done)
 fout=$($box 'cat > /tmp/uv1 && chmod +x /tmp/uv1 && for i in 1 2 3 4; do /tmp/uv1 one two; echo "rc=$?"; done' < "$d/uv1") \
   || fail "uv1: the box could not take or run it"
 [ "$lout" = "$fout" ] || fail "uv1: the kernels disagree -- linux[$lout] $os[$fout]"
@@ -179,8 +208,8 @@ echo "$t: UV1 -- ONE default-lane binary answered both kernels the same"
 # handler's number, sigprocmask's bits, fork + the wait status -- every one
 # translated at runtime, and the SAME file answers the SAME text on both
 # kernels. (the linux run answers here; the box answers over ssh.)
-moon0 -t x64 "$d/rung2.c" -o "$d/uv2" || fail "uv2: the default-lane compile"
-l2=$("$d/uv2" < /dev/null; echo "rc=$?")   # stdin pinned: the battery asserts isatty(0)==0
+moon0 -t "$arch" "$d/rung2.c" -o "$d/uv2" || fail "uv2: the default-lane compile"
+l2=$(run "$d/uv2" < /dev/null; echo "rc=$?")   # stdin pinned: the battery asserts isatty(0)==0
 f2=$($box 'cat > /tmp/uv2 && chmod +x /tmp/uv2 && /tmp/uv2; echo "rc=$?"' < "$d/uv2") \
   || fail "uv2: the box could not take or run it"
 [ "$l2" = "$f2" ] || fail "uv2: the kernels disagree -- linux[$l2] $os[$f2]"
@@ -298,8 +327,8 @@ int main(void) {
   return 42;
 }
 EOF
-moon0 -t x64 "$d/uvnet.c" -o "$d/uvnet" || fail "uvnet: the default-lane compile"
-ln=$("$d/uvnet" < /dev/null; echo "rc=$?")
+moon0 -t "$arch" "$d/uvnet.c" -o "$d/uvnet" || fail "uvnet: the default-lane compile"
+ln=$(run "$d/uvnet" < /dev/null; echo "rc=$?")
 fn=$($box 'cat > /tmp/uvnet && chmod +x /tmp/uvnet && /tmp/uvnet; echo "rc=$?"' < "$d/uvnet") \
   || fail "uvnet: the box could not take or run it"
 [ "$ln" = "$fn" ] || fail "uvnet: the kernels disagree -- linux[$ln] $os[$fn]"
@@ -369,8 +398,8 @@ int main(void) {
   return 42;
 }
 EOF
-moon0 -t x64 "$d/uvsig.c" -o "$d/uvsig" || fail "uvsig: the default-lane compile"
-ls2=$("$d/uvsig" < /dev/null; echo "rc=$?")
+moon0 -t "$arch" "$d/uvsig.c" -o "$d/uvsig" || fail "uvsig: the default-lane compile"
+ls2=$(run "$d/uvsig" < /dev/null; echo "rc=$?")
 fs2=$($box 'cat > /tmp/uvsig && chmod +x /tmp/uvsig && /tmp/uvsig; echo "rc=$?"' < "$d/uvsig") \
   || fail "uvsig: the box could not take or run it"
 [ "$ls2" = "$fs2" ] || fail "uvsig: the kernels disagree -- linux[$ls2] $os[$fs2]"
@@ -416,8 +445,8 @@ int main(void) {
   return 42;
 }
 EOF
-moon0 -t x64 "$d/uvpty.c" -o "$d/uvpty" || fail "uvpty: the default-lane compile"
-lp=$("$d/uvpty" < /dev/null; echo "rc=$?")
+moon0 -t "$arch" "$d/uvpty.c" -o "$d/uvpty" || fail "uvpty: the default-lane compile"
+lp=$(run "$d/uvpty" < /dev/null; echo "rc=$?")
 fp=$($box 'cat > /tmp/uvpty && chmod +x /tmp/uvpty && /tmp/uvpty; echo "rc=$?"' < "$d/uvpty") \
   || fail "uvpty: the box could not take or run it"
 [ "$lp" = "$fp" ] || fail "uvpty: the kernels disagree -- linux[$lp] $os[$fp]"
