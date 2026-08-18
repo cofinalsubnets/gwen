@@ -352,6 +352,7 @@ extern long __ai_affb(long af);          /* socket family: inet6 moves, the rest
 extern long __ai_afcan(long af);
 extern long __ai_sotype(long t);         /* SOCK_* flag bits move high */
 extern long __ai_msgfb(long fl);         /* send/recv flags */
+extern long __ai_msgcan(long fl);        /* ..and recvmsg's msg_flags back */
 extern int __ai_sofb(long *lv, long *op);        /* sockopt level+name; -1 unmapped */
 extern unsigned int __ai_sain(void const *a, unsigned int n, void *out);   /* sockaddr head, in; answers the namelen */
 extern void __ai_saout(void *a, unsigned int n);                   /* ..and back out */
@@ -431,6 +432,15 @@ struct __fb_dirent {                  /* the ino64 record getdirentries fills */
   char           d_name[256];
 };
 struct __fb_sigact { void *h; int flags; unsigned int mask[4]; };   /* sigaction(416): no restorer */
+struct __fb_msghdr {                  /* BOTH BSDs: 48 bytes, int-wide lengths */
+  void *name;
+  unsigned int namelen, _p0;
+  void *iov;
+  int iovlen, _p1;
+  void *control;
+  unsigned int controllen;
+  int flags;
+};
 struct __fb_termios {                 /* 44 bytes: 4 flag words, 20 chars, 2 speeds, no c_line */
   unsigned int c_iflag, c_oflag, c_cflag, c_lflag;
   unsigned char c_cc[20];

@@ -6,12 +6,12 @@
 # freebsd|netbsd`. the legs: UV1 (entry, carry, sigsetjmp), UV2 (the whole
 # compat battery: open flags, stat, dirent, signals, fork), UV-net (the
 # socket family: sockaddr heads, sockopt names, msg flags, over loopback
-# TCP + UDP + unix), UV-sig (the signal perceive source: signalfd, or its
-# ENOSYS falling to kqueue's EVFILT_SIGNAL), and -- FBSD_SEED=1 /
-# NBSD_SEED=1, minutes -- the trophy: `love seed` ON THE BOX answers the
-# tree's own bytes.
-# ⚠ NOT here on purpose: termios proper (a gate that needs a tty), and
-# netbsd's pty quartet (TIOCPTSNAME is another shape -- open).
+# TCP + UDP + unix, and SCM_RIGHTS fd-passing through sendmsg/recvmsg),
+# UV-sig (the signal perceive source: signalfd, or its ENOSYS falling to
+# kqueue's EVFILT_SIGNAL), UV-pty (the quartet through three per-kernel
+# shapes), and -- FBSD_SEED=1 / NBSD_SEED=1, minutes -- the trophy:
+# `love seed` ON THE BOX answers the tree's own bytes.
+# ⚠ NOT here on purpose: termios proper (a gate that needs a real tty).
 #
 # the box arrives by env: FBSD_SSH / NBSD_SSH is a command prefix ("ssh -p
 # 2222 -i key root@host"); without one the gate skips loudly, the house rule
@@ -266,6 +266,32 @@ int main(void) {
   ok(uc >= 0 && connect(uc, (struct sockaddr*) &ua, sizeof ua) == 0);
   int ua2 = accept(us, 0, 0);
   ok(ua2 >= 0 && write(uc, "x", 1) == 1 && read(ua2, m, 1) == 1 && m[0] == 'x');
+
+  /* SCM_RIGHTS through the pair: a pipe's write end crosses the socket and
+     still writes -- sendmsg/recvmsg's translated msghdr + cmsg heads */
+  int pp[2];
+  ok(pipe(pp) == 0);
+  { union { struct cmsghdr c; unsigned char b[64]; } cu; memset(&cu, 0, sizeof cu);
+    struct iovec io = { (void*) "f", 1 };
+    struct msghdr mh; memset(&mh, 0, sizeof mh);
+    mh.msg_iov = &io; mh.msg_iovlen = 1;
+    mh.msg_control = cu.b; mh.msg_controllen = CMSG_SPACE(sizeof (int));
+    struct cmsghdr *c = CMSG_FIRSTHDR(&mh);
+    c->cmsg_level = SOL_SOCKET; c->cmsg_type = SCM_RIGHTS; c->cmsg_len = CMSG_LEN(sizeof (int));
+    memcpy(CMSG_DATA(c), &pp[1], sizeof (int));
+    ok(sendmsg(uc, &mh, 0) == 1);
+    char fb2[4]; struct iovec io2 = { fb2, 1 };
+    struct msghdr m2; memset(&m2, 0, sizeof m2); memset(&cu, 0, sizeof cu);
+    m2.msg_iov = &io2; m2.msg_iovlen = 1;
+    m2.msg_control = cu.b; m2.msg_controllen = sizeof cu.b;
+    ok(recvmsg(ua2, &m2, 0) == 1 && fb2[0] == 'f' && !(m2.msg_flags & MSG_CTRUNC));
+    c = CMSG_FIRSTHDR(&m2);
+    ok(c && c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_RIGHTS
+       && c->cmsg_len == CMSG_LEN(sizeof (int)));
+    int xfd; memcpy(&xfd, CMSG_DATA(c), sizeof xfd);
+    char rb[8];
+    ok(write(xfd, "far", 3) == 3 && read(pp[0], rb, 8) == 3 && memcmp(rb, "far", 3) == 0);
+    ok(close(xfd) == 0 && close(pp[0]) == 0 && close(pp[1]) == 0); }
   ok(close(uc) == 0 && close(ua2) == 0 && close(us) == 0 && unlink("/tmp/uvnet.sock") == 0);
 
   write(1, "net all\n", 8);
@@ -352,6 +378,53 @@ echo "$ls2" | grep -q "uvsig: usr1=10 chld=17 canonical" || fail "uvsig body -- 
 echo "$ls2" | grep -q "rc=42" || fail "uvsig exit -- got: $ls2"
 
 echo "$t: UV-sig -- the signal source, signalfd or kqueue, both kernels"
+
+# ---- rung UV-pty: the pty quartet, one binary ----
+# posix_openpt (freebsd's real syscall; /dev/ptmx elsewhere), grantpt
+# (netbsd's TIOCGRANTPT; a no-op where open grants), unlockpt, ptsname
+# (FIODGNAME / TIOCPTSNAME / TIOCGPTN -- three kernels, three shapes), then
+# the slave opens, tells tty, and carries a line. names differ per kernel
+# (/dev/pts/N vs /dev/ttypN) so the text prints none of them.
+cat > "$d/uvpty.c" <<'EOF'
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <termios.h>
+
+static int step = 0;
+static void ok(int cond) {
+  step++;
+  if (!cond) { char b[3] = {'F', (char)('A' + step - 1), '\n'}; write(2, b, 3); _exit(step); } }
+
+int main(void) {
+  int m = posix_openpt(O_RDWR | O_NOCTTY);
+  ok(m >= 0);
+  ok(grantpt(m) == 0 && unlockpt(m) == 0);
+  char *sn = ptsname(m);
+  ok(sn != 0 && sn[0] == '/');
+  int s = open(sn, O_RDWR | O_NOCTTY);
+  ok(s >= 0);
+  ok(isatty(s) == 1);
+  struct termios t;
+  ok(tcgetattr(s, &t) == 0);
+  char b[4] = {0};
+  ok(write(m, "h\n", 2) == 2 && read(s, b, 4) == 2 && memcmp(b, "h\n", 2) == 0);
+  ok(close(s) == 0 && close(m) == 0);
+  write(1, "pty all\n", 8);
+  return 42;
+}
+EOF
+moon0 -t x64 "$d/uvpty.c" -o "$d/uvpty" || fail "uvpty: the default-lane compile"
+lp=$("$d/uvpty" < /dev/null; echo "rc=$?")
+fp=$($box 'cat > /tmp/uvpty && chmod +x /tmp/uvpty && /tmp/uvpty; echo "rc=$?"' < "$d/uvpty") \
+  || fail "uvpty: the box could not take or run it"
+[ "$lp" = "$fp" ] || fail "uvpty: the kernels disagree -- linux[$lp] $os[$fp]"
+echo "$lp" | grep -q "pty all" || fail "uvpty battery -- got: $lp"
+echo "$lp" | grep -q "rc=42" || fail "uvpty exit -- got: $lp"
+
+echo "$t: UV-pty -- the quartet, one binary, both kernels"
 
 # ---- the trophy, opt-in by name (FBSD_SEED=1, minutes): the seed builds the
 # seed ON THE BOX, and the bytes are the tree's own. the bake is budget-

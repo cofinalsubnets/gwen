@@ -43,6 +43,7 @@ long __ai_affb(long a) { return a; }
 long __ai_afcan(long a) { return a; }
 long __ai_sotype(long t) { return t; }
 long __ai_msgfb(long f) { return f; }
+long __ai_msgcan(long f) { return f; }
 int __ai_sofb(long *lv, long *op) { (void) lv; (void) op; return 0; }
 unsigned int __ai_sain(void const *a, unsigned int n, void *out) { memcpy(out, a, n); return n; }
 void __ai_saout(void *a, unsigned int n) { (void) a; (void) n; }
@@ -357,6 +358,13 @@ long __ai_msgfb(long f) {
   if (f & 0x40)   o |= 0x80;            /* MSG_DONTWAIT */
   if (f & 0x100)  o |= 0x40;            /* MSG_WAITALL */
   if (f & 0x4000) o |= __ai_osv == 3 ? 0x400 : 0x20000;   /* MSG_NOSIGNAL */
+  return o; }
+/* recvmsg's msg_flags come back the other way */
+long __ai_msgcan(long f) {
+  long o = f & 1;                       /* MSG_OOB agrees */
+  if (f & 0x8)  o |= 0x80;              /* MSG_EOR */
+  if (f & 0x10) o |= 0x20;              /* MSG_TRUNC */
+  if (f & 0x20) o |= 0x8;               /* MSG_CTRUNC */
   return o; }
 /* sockopt: SOL_SOCKET moves whole (1 -> 0xffff) and its names permute; the
  * IPPROTO_* levels ride (TCP_NODELAY 1 = 1). only what sys/socket.h spells

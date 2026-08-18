@@ -369,6 +369,22 @@ owes a roster gate: on linux, assert the linux features are aboard.
     Gate: osbox.sh's UV-sig leg (signalfd, or its ENOSYS falling to
     kqueue — same text both kernels) and the trophy leg's love-level
     sigkq.l (the pending take AND the parked take, on the box).
+  - **UV-far — the last two doors, full parity. LANDED 2026-08-18.**
+    sendmsg/recvmsg stop refusing: both BSDs share one msghdr/cmsghdr
+    shape, and the probe showed the cmsg DATA offset (16) and CMSG_LEN
+    values AGREE with the canon — so the translation rewrites only the
+    heads (int-wide lengths, level moved with SOL_SOCKET; under it only
+    SCM_RIGHTS is spelled, an unmapped type refuses). control rides a
+    256-byte scratch, a bigger one refuses loudly; recvmsg folds the
+    name through saout, the flags back through msgcan. And the pty
+    quartet answers netbsd: grantpt = TIOCGRANTPT, unlockpt a no-op
+    like the other kernels, ptsname = TIOCPTSNAME filling a ptmget
+    (2056 bytes, the slave name at 1032) — three kernels, three
+    ptsname shapes, one member. Gate: uvnet grew the SCM_RIGHTS round
+    (a pipe end crosses the unix pair and still writes) and a UV-pty
+    leg (quartet, isatty, tcgetattr, a line through the pair). With
+    this every refusal left in the BSD lanes is inherent (STKFLT/PWR
+    have no twin; memfd/unshare/mount are linux's own words).
 - **rung U2 — the targets DISSOLVE.** Decided 2026-08-16 (chosen, revisable);
   Landed 2026-08-17: ONE binary. The host build is subsumed — out/host/love
   links the source blob + readme and, baked, IS the artifact (`make` in a clean

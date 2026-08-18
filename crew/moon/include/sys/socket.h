@@ -29,6 +29,12 @@ struct sockaddr_storage { sa_family_t ss_family; char __pad[126]; };
 #define SHUT_RDWR 2
 #define MSG_NOSIGNAL 16384
 #define MSG_DONTWAIT 64
+#define MSG_OOB 1
+#define MSG_PEEK 2
+#define MSG_TRUNC 32
+#define MSG_CTRUNC 8
+#define MSG_EOR 128
+#define MSG_WAITALL 256
 #define MSG_CMSG_CLOEXEC 1073741824
 int socket(int, int, int);
 int bind(int, struct sockaddr const*, socklen_t);
