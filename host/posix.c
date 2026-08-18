@@ -27,11 +27,11 @@
 #include <sys/ioctl.h>  // ioctl TIOCSCTTY TIOC[GS]WINSZ struct winsize
 #include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
 #include <dirent.h>     // opendir/readdir/closedir
+#include <sys/mman.h>       // madvise (the spawn guard)
 #if defined(__linux__)
 #include <sys/signalfd.h>   // signalfd, struct signalfd_siginfo (Linux only)
 #include <sys/mount.h>      // mount(2)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
-#include <sys/mman.h>       // madvise (the spawn guard)
 #endif
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>    // _NSGetExecutablePath (selfpath)
@@ -129,10 +129,12 @@ static void sig_dfl_job(void) {
 // nif and any child that walks the heap inherit whole, as fork means.
 // best-effort -- an unaligned edge or a kernel without the advice keeps
 // plain fork.
+#if defined(__linux__)
 static void guard1(void *lo, void *hi, int adv) {
  uintptr_t a = ((uintptr_t) lo + 4095) & ~(uintptr_t) 4095,
            b = (uintptr_t) hi & ~(uintptr_t) 4095;
  if (b > a) (void) madvise((void*) a, (long) (b - a), adv); }
+#endif
 void host_spawn_guard(struct ai *g, int on) {
 #if defined(__linux__)
  int adv = on ? MADV_DONTFORK : MADV_DOFORK;

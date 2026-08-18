@@ -183,8 +183,10 @@
               (bool "_Bool"))
    (cptr? t) (two? t && id? <t 'ptr)
    ; a tag spells as itself, string or symbol. cident? is a FIRST-character check and
-   ; wants to be no more: a tag reaches here from a C lexer or from a generator, and
-   ; the one non-identifier in that set is parse's anonymous `.anon0` (parse.l:614).
+   ; wants to be no more: a tag reaches here from a C lexer or from a generator, and the
+   ; non-identifiers in that set are parse's synthetic keys, which all lead with a dot --
+   ; the anonymous `.anon0` and a block-scope tag's `.T.0`. Neither is sayable at top
+   ; level without the block it belongs to, so griping is the honest answer.
    (ctag a) (? (string? a) a (string a))
    (cident? a) (: s (ctag a) c (? (tally s) (s 0) 0)
                   (((96 < c) && (c < 123)) || ((64 < c) && (c < 91)) || (c = 95)))

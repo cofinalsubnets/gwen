@@ -124,8 +124,26 @@ owes a roster gate: on linux, assert the linux features are aboard.
   mount/sendfile, signalfd (kqueue), the socket constants + `sa_len`. The
   signal-number leak into job.l/init.l waits for a love runtime on freebsd
   (rung 5) to mean anything.
-- **rung 4 — the mechanisms.** sigfd over EVFILT_SIGNAL; splice's maps read
-  over the sysctl; selfpath's OpenBSD gap if anyone cares.
+- **rung 4 — the mechanisms.** BEGUN 2026-08-17, by need — the whole love was
+  compiled -os freebsd and the link named its debts: sysctl (nolibc grew the
+  member + header; selfpath's KERN_PROC_PATHNAME reads it), the termios fork
+  (freebsd's 44-byte struct, no c_line; ISIG/ICANON/IEXTEN/IXON/VMIN/VTIME
+  and the flush/flow selectors part company — termios.h forks on the OS), and
+  the tty family's freebsd bodies (TIOCGETA/SETA+act, TIOCSPGRP, posix_openpt
+  the real syscall 504, unlockpt a no-op by pts(4), ptsname over FIODGNAME).
+  With those, THE WHOLE LOVE LINKS AND RUNS on the 14.4 box — the -e lane,
+  say, and the stdin repl answer (test_freebsd's new leg holds it). Still
+  owed: sigfd over EVFILT_SIGNAL; splice's maps read over the sysctl; the
+  socket constants + sa_len (compiled with linux values today — the net lanes
+  are UNTESTED on freebsd); memfd/unshare/mount stay linux behind stubs.
+  The "-e race" RESOLVED 2026-08-17 — never a race: freebsd's kernel hands
+  the arg vector base in %rdi (its own crt1 reads argc at `(%rdi)`) and rsp
+  is only aligned NEAR it, sometimes with a pad word below argc, so a crt0
+  reading argc off [rsp] saw argc=0 by stack address — love then ran the
+  stdin lane and exited 0 at EOF (the piped-repl legs were only accidentally
+  deterministic: the stdin lane read the same piped program). crt0-fbsd
+  reads %rdi now, and the gate runs -e eight times to hold argv whole on
+  every exec.
 - **rung 5 — the artifact whole.** bake/wake on the foreign OS (the phdr walk
   off auxv, EI_OSABI/.note.ABI-tag), then the fixpoint gate runs there.
 
@@ -174,21 +192,25 @@ owes a roster gate: on linux, assert the linux features are aboard.
     reads it until U1.3's re-cut). And the pi named U1.2's price exactly: an
     egg twin serves NO VERBS (`love source` on the pi read a file named
     "source") — verb dispatch is the baked binary's behavior.
-  - **U1.2 — the bake leaves the distributed bytes.** The fat artifact ships
-    link-pure: no heap image aboard. First boot on a box bakes the native
-    EXTRACTION in place under ~/.love — the existing in-place bake, unchanged,
-    aimed at the cached copy. This answers both of U2's tensions at once: the
-    distributed bytes stay immutable (bake_tail never touches them, so the
-    prefix cannot perturb it), and the build needs no emulation — both halves
-    are link outputs, f(tree) on any host by U0's cross determinism. qemu
-    stays what dist_cross made it: a gate's tool, never the artifact's.
-  - **U1.3 — the bar itself.** `love seed` from the fat artifact, on bee and
-    on pi, answers the same fat bytes — two boxes, one sha256. The gate rides
-    by name (a wire and a second box), the way test_freebsd does.
-  - **U1.4 — the artifact swap.** out/host/love becomes the container (U2's
-    "one binary" absorbs U1's "one file"); the dev loop pays one extraction
-    per relink, the bake moves to the extraction, and dist-seed is the fat
-    file. PE via pe.l and Mach-O stay parked until someone names the box.
+  - **U1 PARKED (gwen, 2026-08-17), and why.** The exec question has exactly
+    three doors on every ELF OS (Linux and all four BSDs check one e_machine
+    before any byte of ours runs; FatELF proposed kernel-side fat in 2009 and
+    upstream refused; only Mach-O kernels pick an arch): a #! coat, per-box
+    binfmt registration, or explicit lay. The coat's run shapes were explored
+    to the end — cache (rejected: nothing touches ~/.love), self-assimilation
+    (rejected: a file that overwrites itself is anti-user), and the ephemeral
+    hatch (an anonymous inode, execve via /proc/self/fd, no residue) which is
+    SOUND but needs the members baked — and duplicating two ~8 MB images
+    whose heap is one arch-free program is not acceptable: it makes the
+    global fixpoint ugly, and the point of the fixpoint is that it is
+    beautiful. So the container waits on either the ARCH-NEUTRAL IMAGE
+    (symbolic refsyms over a name-sorted lvm table, per-arch glaze annexes;
+    the fat then costs ~1 MB of text per platform over ONE image) — or on
+    inle: OUR kernel's exec loader accepts the fat format we actually want
+    to write, the door the free kernels refused. fatpack/dist-fat/test_fat
+    stay in the tree as the working evidence (opt-in, no default path).
+  - **NEXT, ruled: the OS dimension** — claim (b), the decoupling ladder's
+    rungs 4-5, toward one text that runs on every kernel of its arch.
 - **rung U2 — the targets DISSOLVE.** Decided 2026-08-16 (chosen, revisable);
   Landed 2026-08-17: ONE binary. The host build is subsumed — out/host/love
   links the source blob + readme and, baked, IS the artifact (`make` in a clean

@@ -1,8 +1,12 @@
 #include "../impl.h"
-/* absent on freebsd until rung 4 supplies the body (another ioctl encoding /
-   another signature) -- an empty member reads "undefined reference" */
-#if !defined(__FreeBSD__)
 
+#if defined(__FreeBSD__)
+char *ptsname(int fd) {
+  static char nb[32];
+  struct { int len; void *buf; } a = { sizeof nb - 5, nb + 5 };
+  if (ioctl(fd, 0x80106678UL, &a) < 0) return 0;                /* FIODGNAME: IOC_IN | 16<<16 | 'f'<<8 | 120 */
+  return memcpy(nb, "/dev/", 5), nb; }                          /* the kernel answers "pts/N", sans /dev/ */
+#else
 char *ptsname(int fd) {
   static char nb[32];
   int n = 0;

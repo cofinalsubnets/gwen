@@ -337,6 +337,7 @@
                 _ (pin t 'declaring {})     ; the names of the declaration being parsed RIGHT NOW (C11 6.2.1p7)
                 _ (pin t 'etag {})          ; enum tag -> 1 when no enumerator is negative (an unsigned underlying type)
                 _ (pin t 'stag {})          ; tag -> (fields size align)
+                _ (pin t 'tags {})          ; a BLOCK tag's spelling -> the key it took in stag (C11 6.7.2.3)
                 _ (pin t 'utag {})          ; the tags of that table that are UNIONS (the layout flattens them alike)
                 _ (pin t 'sigs {})          ; fn/proto name -> (rettype (paramty..)) for the call ABI
                 _ (pin t 'anon 0)                   ; the anonymous-tag counter
@@ -770,6 +771,28 @@
                     (go >l nbit nmx ([name at ty] >< acc))))))
        (go ms 0 0 ()))
    (panon ps) (: k (peep ps 'anon 0) _ (pin ps 'anon (k + 1)) (".anon" + show k))
+   ; a tag DEFINED inside a block is that block's (C11 6.7.2.3), and it cannot be scoped
+   ; the way an enum constant is: the key is what the type node carries and what gen sizes
+   ; and lays members by, long after the brace closed. So mint a key of its own and bind
+   ; the SPELLING to it for the rest of the block -- the table only ever grows, and the
+   ; binding is what retires. ⚠ the key leads with `.` like an anonymous tag's, so it is
+   ; not a C identifier and clay says the block is inexpressible rather than laying a name
+   ; no C compiler could read back. file scope keeps the bare spelling.
+   (ptagkey ps nm)
+    (? (peep ps 'blkd 0 < 1) nm
+       (: k (peep ps 'anon 0)
+          _ (pin ps 'anon (k + 1))
+          key ("." + nm + "." + show k)
+          old (peep (ps 'tags) nm 'none)
+          _ (pin (ps 'tags) nm key)
+          _ (pin ps 'scopacc (['tags nm old] >< peep ps 'scopacc ()))
+          key))
+   ; ..and a bare `struct T` reads the innermost block tag of that spelling. ⚠ with none in
+   ; scope it answers the bare name rather than declaring a fresh incomplete tag as C says,
+   ; so `struct Node *p;` in a body still means the file-scope Node it was written to mean.
+   ; That accepts more than C spells, never less, and it is what keeps the forward reference
+   ; working without a lookahead to tell a declaration from a reference.
+   (tagref ps nm) (peep (ps 'tags) nm nm)
    (pbty ps ts0)
     (: ts (pquals ts0)
      (? !(two? ts) ()
@@ -794,7 +817,9 @@
                  tag (? (two? ts2 && (tkk <ts2 = 'id)) (tkv <ts2) ())
                  ts3 (? tag >ts2 ts2)
                  (? (peekp ts3 "{")
-                    (: tag2 (? tag tag (panon ps))
+                    ; ⚠ the key is bound BEFORE the body parses, so `struct T { struct T *n; }`
+                    ; resolves its own name to the tag being defined and not to an outer one
+                    (: tag2 (? tag (ptagkey ps tag) (panon ps))
                        qpre (peep ps 'qmemacc ())    ; _Generic's member marks stack with the bodies
                        mr (pmembers ps >ts3 ())
                        (? !(two? mr) ()
@@ -804,7 +829,7 @@
                              _ (? uni (pin (ps 'utag) tag2 1) 0)
                              _ (qmempin ps tag2 qpre)
                              [['struct tag2] <>pa])))
-                    (? tag [['struct tag] ts3] ())))
+                    (? tag [['struct (tagref ps tag)] ts3] ())))
              (tkw? t 'enum)
               ; the underlying type is UNSIGNED when no enumerator is negative (gcc's
               ; choice), and an enum BIT-FIELD is where that shows: `enum c code : 8`
@@ -813,7 +838,13 @@
               (: ts2 >ts
                  tag (? (two? ts2 && (tkk <ts2 = 'id)) (tkv <ts2) ())
                  ts3 (? tag >ts2 ts2)
-                 (ety pos) (: _ (? tag (pin (ps 'etag) tag pos) 0) (? pos 'uint 'int))
+                 ; an enum TAG scopes by restoring, not by renaming: the type is 'int/'uint
+                 ; from here on, so no tag key ever reaches gen to be resolved late
+                 (ety pos) (: _ (? tag (: old (peep (ps 'etag) tag 'none)
+                                          _ (pin ps 'scopacc (['etag tag old] >< peep ps 'scopacc ()))
+                                          (pin (ps 'etag) tag pos))
+                                      0)
+                              (? pos 'uint 'int))
                  (? (peekp ts3 "{")
                     (: (consts ts4 v pos)
                         (? (peekp ts4 "}") [(ety pos) >ts4]    ; a trailing comma (or empty body): the enum ends
@@ -827,7 +858,11 @@
                                              (? (charm? cv) [cv <>er] ()))))
                                     [v ts5])
                               (? !(two? vr) ()
-                                 (: _ (pin (ps 'enums) name <vr)
+                                 ; the constant, and a shadow entry for it on ps 'scopacc --
+                                 ; whoever owns the scope drains that run (sdrain / note)
+                                 (: old (peep (ps 'enums) name 'none)
+                                    _ (pin (ps 'enums) name <vr)
+                                    _ (pin ps 'scopacc (['enums name old] >< peep ps 'scopacc ()))
                                     ts6 <>vr
                                     pos2 (pos && !(<vr < 0))
                                     (? (peekp ts6 ",") (consts >ts6 (<vr + 1) pos2)
@@ -1839,6 +1874,18 @@
           (: _ (pull (ps 'enums) nm 0) (['enums nm olde] >< s1))))
    (shadowdecl ps names shadows) (? !(two? names) shadows
                                      (shadowdecl ps >names (shadow1 ps <names shadows)))
+   ; a type specifier BINDS names wherever it is written -- an enum body's constants and
+   ; its tag's signedness, a block tag's spelling -- and at block scope C11 gives every one
+   ; of them that block. So move the run pbty staged since epre onto the block's shadow list
+   ; and hand the stage back to whatever encloses it. the entries are already shadow entries,
+   ; newest first, which is the order unshadow wants.
+   ; ⚠ file scope drains NOWHERE: `note` clears the run per top-level form instead,
+   ; which is also what keeps this delta short enough to count by tally.
+   (sdrain ps epre shadows)
+    (: now (peep ps 'scopacc ())
+       (go l k) (? (k < 1) shadows (<l >< go >l (k - 1)))
+       _ (pin ps 'scopacc epre)
+       (go now (tally now - tally epre)))
    (unshadow ps shadows) (? !(two? shadows) ()
                             (: e <shadows
                                _ (? (<>>e = 'none) (pull (ps <e) <>e 0) (pin (ps <e) <>e <>>e))   ; 'none = the name was ABSENT (a fresh local): remove it, don't pin the sentinel
@@ -1880,19 +1927,27 @@
                 ()))))
    (pblock ps ts)
     (: ts0 (want ts "{")
-       (? !(two? ts0) ()
+       epre (peep ps 'scopacc ())
+       ; the depth a tag definition reads to know it is not at file scope; bend restores it
+       ; alongside the shadow list, on every way out of the block
+       d0 (peep ps 'blkd 0)
+       _ (pin ps 'blkd (d0 + 1))
+       (bend sh) (: _ (pin ps 'blkd d0) (unshadow ps sh))
+       (? !(two? ts0) (: _ (pin ps 'blkd d0) ())
           (: (items ts2 acc sh)
-              (? !(two? ts2) (: _ (unshadow ps sh) ())
-                 (tp? <ts2 "}") (: _ (unshadow ps sh) [['blk (rev acc)] >ts2])
+              (? !(two? ts2) (: _ (bend sh) ())
+                 (tp? <ts2 "}") (: _ (bend sh) [['blk (rev acc)] >ts2])
                  ((tkk <ts2 = 'id) && (tkv <ts2 = "__extension__")) (items >ts2 acc sh)
                  (tkw? <ts2 'typedef)
                   (: br (pbty ps >ts2)
-                     r (? (two? br) (btdefs ps <br <>br sh (qspec ps >ts2 <br)) ())
-                     (? !(two? r) (: _ (unshadow ps sh) ())
+                     r (? (two? br) (btdefs ps <br <>br (sdrain ps epre sh) (qspec ps >ts2 <br)) ())
+                     (? !(two? r) (: _ (bend sh) ())
                         (items <r acc <>r)))
                  (: r (? (tkbty? ps <(pquals ts2)) (pdecl ps ts2) (pstmt ps ts2))
-                    (? !(two? r) (: _ (unshadow ps sh) ())
-                       (items <>r (<r >< acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) sh))))))
+                    (? !(two? r) (: _ (bend sh) ())
+                       ; the enum body parses BEFORE the declarators bind, so its entries
+                       ; go under theirs -- unshadow walks newest first and the oldest wins
+                       (items <>r (<r >< acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) (sdrain ps epre sh)))))))
              (items ts0 () ()))))
 
    ; params := void | TYPE '*'* id (, ..)* [, ...]   -> (entries rest variadic?)
@@ -2295,6 +2350,7 @@
            _ (pin ps 'curinl ())
            _ (pin ps 'curnoinl ())
            _ (pin ps 'curalign ())
+           _ (pin ps 'scopacc ())        ; what a file-scope specifier bound is nobody's to take back
            (pin ps 'cursect ()))
        (tops ts2 acc)
         (? !(two? ts2) [1 ['prog (rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)      ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure

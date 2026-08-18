@@ -39,8 +39,6 @@ What genuinely stands between here and freestanding C11, each row live above:
 - **the `#line "file"` half** — the line half landed 2026-08-14, but the file operand is still
   dropped; it wants `__FILE__` to stop being one name per TU first. (The `#if` evaluator landed
   the same day, below.)
-- **block-scope `struct` tags** — the last of the syntax rows, and the one that is not a
-  widening: `stag` is one flat table, so scoping it wants a mechanism, not a lane.
 - **the diagnostic obligation**: a non-constant `_Static_assert` is let by today, which is a
   constraint violation passing in silence — the one class §4 names outright. The *channel* is
   no longer missing: `blame` (parse.l) files a sentence beside the watermark and `pfail`
@@ -87,15 +85,13 @@ All of C89 passes. What remains is C99/C11/GNU.
 | statement expressions | `({ … })` |
 | computed goto | `&&label`, `goto *p` |
 | `asm goto` | costed below — the one refusal carrying an estimate |
-| a block-scope `struct` tag | `{ struct T { int z; }; }` inside a function — tags are file-scoped here, so an inner one collides with the outer |
 | designated RANGE initializers | `[1 ... 5] = 9`, gcc's extension |
 | the address of a compound literal in a **static** initializer | `struct S *p = &(struct S){1,2};` — inside a function it passes |
 | brace elision continuing **past** an anonymous union member | `{1,2,3,{4,5}}` over `struct { int a,b; union { int c,d; }; struct S1 s; }` — elision *into* the union is fine |
 | a `##` paste that makes a macro NAME | `CAT(A,B)(x)` where `AB` is itself a macro — the pasted name is not rescanned as an invocation |
-| a `##` paste with an empty operand and trailing tokens | `#define P(A,B) A ## B ; bob` |
 | a register-exhausted **SSE**-class by-value argument | five float HFAs — the gp twin landed 2026-08-08 (below), this one did not |
 
-The last seven are what `test_cts` found (doc/moon.md); `test/gate/cts.sh` names the program
+The last five are what `test_cts` found (doc/moon.md); `test/gate/cts.sh` names the program
 each one came from.
 
 ### what passes, for contrast
@@ -176,7 +172,10 @@ report the mapped line, matching gcc (test/cc/137-line.c). The delta rides `macs
 state already threaded through every arm of `cppgo`, so no signature moved; it is applied
 where active tokens accumulate, and again on a directive's own body, which is what makes
 `#if __LINE__` right. `doinc` saves and restores it, so a header's `#line` does not follow the
-return. ⚠ the **file operand is parsed and dropped**: `#line 700 "generated.y"` reports line
+return. The operand is **macro-expanded** when it is not already a digit sequence (C11
+6.10.4p3, landed 2026-08-17), so `#line line` takes the 1000 that `line` expands to and a
+second round works too; one that still is not a number leaves the directive doing nothing.
+⚠ the **file operand is parsed and dropped**: `#line 700 "generated.y"` reports line
 700 of the *real* path, where gcc says `generated.y`. `__FILE__` is the TU's name throughout
 (cpp shares one macro table across includes), so the file half wants that lifted first.
 
@@ -295,21 +294,82 @@ value, so nothing announces them but a differential — which is why they arrive
 each batch behind an outside package or an outside corpus
 rather than behind a test we thought to write.
 
-### an enum constant declared in a BLOCK escapes it
+### an enum constant declared in a BLOCK escaped it — FIXED 2026-08-17
 
-`enum { N = 4 };` inside a function body pins into the one flat `'enums` table and is never
-taken back off at block exit, so every later function in the TU can read `N`. C11 6.2.1p7 gives
-it the enclosing block's scope. Filed, not fixed: the tree has lived on the flat table since the
-beginning and `shadow1` already hides a leaked constant behind any local of the same spelling, so
-what is left is a name that resolves where it should not — visible, not yet a wrong answer.
+C11 6.2.1p7 gives a block-scope enum constant the block's scope. `'enums` is one flat table and
+nothing took a constant back off at the closing brace, so `enum { N = 4 };` inside one function
+answered in every later one. Each constant now rides `ps 'enumacc` as a shadow entry from the
+moment `pbty` pins it, and `edrain` moves the run onto the block's own shadow list — where
+`unshadow` already knew how to put a name back, and where a local of the same spelling stacks
+on top of it. ⚠ **file scope drains nowhere**: `note` clears the run per top-level form instead,
+which is also what keeps the delta short enough for `edrain` to count by `tally`.
 
-⚠ it stopped being harmless once. `lvm_outer`'s `uintptr_t M = .., N = .., n = M * N, ..` read the
-leaked `N` from a *different function's* `enum { N = 4 }` and compiled `n = M * 4`, so the outer
-product wrote 4·M of its M·N cells and handed back a tray whose tail was uninitialized heap —
-correct on the first read and garbage after the next allocation. **That was the declarator-scope
-bug below, and fixing it took the wrong answer away; this row is the other half still standing.**
-The two together are the lesson: a leak and a scope-point bug are each survivable, and their
-product is a silent miscompile. `test/cc/146-declscope.c` holds both halves.
+⚠ the constant is folded AT PARSE, and that is the whole reason a restore is sound here — no
+`'enums` name reaches gen, so nothing outlives the table. A block-scope struct TAG is the same
+C rule and **cannot** be done this way: the tag table rides out to gen and the type node carries
+only the name, so pulling an inner tag would leave gen sizing `('struct T)` off the outer one.
+That row renames instead — the section below.
+
+Held by test/cc/147-enumscope.c, 11 checks against gcc: the escape itself, nesting, a block
+constant over a file-scope one, a local over a block constant, the typedef arm, a tagged enum
+with a declarator, and two sequential blocks.
+
+### `##` with an empty operand ATE the token after it — FIXED 2026-08-17
+
+C11 6.10.3.3p2 replaces an argument with no preprocessing tokens by a **placemarker**: it
+pastes to whatever it meets, two of them paste to another, and the leftovers are deleted before
+the rescan. There was no such token here, so `paste` (cpp.l) only folded a `##` that had a
+following token, and an empty operand fell through two ways:
+
+- `A ## B` with `B` empty emitted a **literal `##`** into the C stream — `parse error near ##`,
+  loud and harmless.
+- `A ## B ; bob` pasted `A` with the **`;`**, and since `jim;` does not relex to one token the
+  fold kept `A` and **dropped the semicolon**. ⚠ that is a preprocessor silently deleting a
+  token, and it reads as a refusal only because a missing `;` usually breaks the parse next.
+  Nothing guarantees it does.
+
+`subst` mints a `'pmark` token where a `##`-adjacent parameter has an empty argument (the
+variadic tail included), `paste` folds it — `pm ## x` → `x`, `x ## pm` → `x`, `pm ## pm` → `pm`
+— and a sweep drops any that met no `##`, so one can never escape into the C stream. Held to
+gcc by test/cc/149-paste.c, 10 checks over an empty right operand, an empty left, both empty, a
+three-way paste with an empty middle, the variadic tail, and tokens on either side of the paste.
+
+### a block-scope struct tag collided with the file-scope one — FIXED 2026-08-17
+
+C11 6.7.2.3 gives a tag defined inside a block that block's scope. `stag` was keyed by the
+spelling alone, so the LAST `struct T` in a TU laid out every earlier one's members, and both
+halves of that cost a right answer: an inner tag escaped (`sizeof(struct T)` in a later function
+read the inner layout — c-testsuite 00044), and a collision refused as `cannot compile 'f'
+(cause unnamed)` once gen went looking for a member the winning layout did not have (00053).
+⚠ the ledger had this filed as a refusal row; the escape half was a **wrong answer** and nothing
+said so. Both are off the corpus roster now, on all three targets.
+
+A block tag takes a **key of its own** (`ptagkey`) and `ps 'tags` binds the spelling to it for
+the rest of the block, riding the same shadow list the enum constants do. Renaming, not
+retiring: the key is what the type node carries and what gen sizes and lays members by, long
+after the brace closed, so the table only ever grows and it is the binding that retires. The
+key is bound *before* the body parses, so `struct T { struct T *n; }` resolves to itself.
+`'utag` and `'qmem` follow the key for free — they are pinned with it.
+
+Three deliberate readings:
+
+- ⚠ the key leads with `.` (`.T.3`), like `panon`'s `.anon0`, so it is **not a C identifier**
+  and clay gripes rather than laying a name no C compiler could read back. A block containing a
+  tag definition is *inexpressible* in clay's partition, which is the honest answer and not a
+  red — a block tag cannot be said at top level without its block.
+- ⚠ **a bare `struct T` with no tag in scope answers the bare spelling**, where C11 6.7.2.3p8
+  declares a fresh incomplete tag in the current scope. So `struct Node *p;` in a body still
+  means the file-scope `Node` it was written to mean. That accepts more than C spells, never
+  less, and it is what lets the reference site stay a lookup instead of a lookahead to tell a
+  declaration from a reference.
+- an **enum** tag scopes by restoring, not renaming: `enum` lowers to `'int`/`'uint` at parse,
+  so no enum tag key ever reaches gen. Only its signedness is scoped, and `'etag` rides the
+  shadow list beside the constants.
+
+Held to gcc by test/cc/148-tagscope.c, 14 checks: the escape, two colliding blocks with a member
+access in each (the part gen resolves late), the file-scope tag still itself, a self-referential
+inner tag, nesting, a union tag, a block typedef over a block tag, a forward reference, and two
+sequential blocks.
 
 ### a declarator was not in scope for the initializers after it — FIXED 2026-08-16
 
@@ -326,16 +386,18 @@ differed. That instrument costs nothing and nobody had pointed it at the tray op
 ### from an outside corpus
 
 `test_cts` holds c-testsuite's 220 programs to the output they ship (doc/moon.md). Its roster is
-**refusals only** as of 2026-08-16, each loud and named — no program in the corpus compiles clean
-and answers wrong on any of the three targets. 00219 was the last one (`_Generic` over a
-qualifier, above); its `roster_wrong` list stays in the gate, empty, because the day one comes
-back it belongs there and `wrong` is the kind that must stay loud.
+**refusals only**, each loud and named — no program in the corpus compiles clean and answers
+wrong on any of the three targets. 212 answer on x64 and 8 refuse (9 on arm64, 10 on riscv64,
+the target rows below). `roster_wrong` stays in the gate, empty, because the day one comes back
+it belongs there and `wrong` is the kind that must stay loud.
 
 ⚠ **A rostered line is a claim that goes stale in silence.** Four of them (`#if ||`'s dead arm,
 `int x[const *]`, a function-typed parameter, `_Generic`) had been fixed by earlier rungs and
-still sat on the roster, and 00219's line said *refuses* where the truth was *answers wrong* —
-which is how a live miscompile hid behind a gate that only runs on an opt-in corpus. Re-read the
-roster when the corpus is in hand, not only when a gate goes red.
+still sat on the roster; 00219's line said *refuses* where the truth was *answers wrong*; and
+00044's said the tag *escapes to file scope* as if that were the refusal it sat under, where the
+escape compiled clean and answered wrong. Every one of those is a gate that only runs on an
+opt-in corpus describing a compiler that had moved. Re-read the roster when the corpus is in
+hand, not only when a gate goes red.
 
 ### the residues the fixed rows left behind
 

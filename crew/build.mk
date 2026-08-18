@@ -201,13 +201,18 @@ dist_drop = wasm/love.js
 # hashes (cheap, and the hash sees a delete or rename that leaves no mtime), and
 # writes the archive ONLY when the tree's content moved -- so its mtime holds and
 # nothing downstream re-links on a touch or a no-op.
-# ⚠ the runner is $(boot_love), never the seed itself: the seed EMBEDS this
+# ⚠ the runner PREFERS the tree's own love -- stale is fine, the archive is
+# f(tree) and never f(runner), and only that binary carries host/deflate.c's
+# coder (love0 links no host nifs, so its lane pays the love-side coder in
+# budget-bounded gigabytes). No binary yet -- the first make, a laid seed --
+# falls back to $(boot_love). Never a dependency edge: the seed EMBEDS this
 # archive, so the archive must exist before the binary can link.
 .PHONY: force_src
 force_src: ;
 $(dist_source): force_src $(if $(bundled_love),,$(love0))
 	@mkdir -p $(dir $@)
-	@$(boot_love) mk/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
+	@r="$(ho)/love"; [ -x "$$r" ] || r="$(boot_love)"; \
+	 LOVE_NO_IMAGE= LOVE_BUDGET_MB=1024 $$r mk/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
 # THE SOURCE BLOB: the source tarball laid into an object (mk/tools/mksrc.l), so the
 # artifact hands out its own source with no second download and no `tar xf` -- love

@@ -87,9 +87,9 @@ make test_distboot
 
 The archive is **ours end to end** — `lib/tar.l` writes the ustar, `lib/gz.l` the
 DEFLATE — so cutting a release needs neither `tar` nor `gzip` on the box.
-⚠ our coder writes the fixed Huffman code only, ~24% above `gzip -9`
-(lib/gz.l carries the measured numbers). That is a real cost on a download and the
-reason a dynamic coder is the next rung.
+The coder blocks and costs three spellings (stored, fixed, its own code) and lands
+~4% above `gzip -9` (lib/gz.l carries the measured numbers); host/deflate.c is its
+C twin, held to the same bytes, so cutting is cheap wherever the nifs are aboard.
 
 **Reproducible by construction.** The pack pins every mtime/uid/gid to `dist_stamp`
 (0 by default) and the gzip header's own MTIME is 0, so two cuts of one revision are

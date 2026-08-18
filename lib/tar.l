@@ -209,7 +209,10 @@
    (tar-mode st) (& 4095 <>>st)
    (tar-dir? st) ((& 61440 <>>st) = 16384)
    (tar-secs st) (// <>st 1000)
-   (tar-gather root rel)                    ; -> (1 entries) | ()
+   ; the pruned walk: `keep` is asked with each child's rel nom BEFORE the walk
+   ; descends or slurps, so what the caller will not carry is never read -- a
+   ; build tree's out/ is gigabytes the archive was never going to hold.
+   (tar-gather? keep root rel)              ; -> (1 entries) | ()
     (: full (? (tally rel) (root + "/" + rel) root)
        lnk (readlink full)
        st (stat full)
@@ -228,9 +231,11 @@
              ; order is the filesystem's and varies between two boxes holding one tree.
              kids (sort (readdir full))
              (go ks acc) (? (! (two? ks)) `(1 (rev acc))
-                            (: r (tar-gather root (tar-join rel <ks))
-                               (? (! r) ()
-                                  (go >ks (foldl (\ a x (x >< a)) acc (<(>r)))))))
+                            (: k2 (tar-join rel <ks)
+                               (? (! (keep k2)) (go >ks acc)
+                                  (: r (tar-gather? keep root k2)
+                                     (? (! r) ()
+                                        (go >ks (foldl (\ a x (x >< a)) acc (<(>r)))))))))
              r (go kids ())
              (? (! r) () `(1 (e >< (<(>r))))))
           (: b (tar-slurp full)
@@ -240,6 +245,7 @@
                    ; ⚠ the inner ` is load-bearing: `(1 (e)) would APPLY e to nothing, and
              ; (f) == f, so the caller would take a bare entry for a list of them.
              `(1 `(e)))))))
+   (tar-gather root rel) (tar-gather? (\ _ 1) root rel)
    ; ⚠ `mkdir` IS DYADIC (path, mode). At one operand it hands back a CLOSURE and makes
    ; no directory -- (f x) curries, it does not default -- and the closure is truthy, so
    ; the miss is silent at every call site that tests it.
