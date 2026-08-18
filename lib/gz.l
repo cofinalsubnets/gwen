@@ -70,6 +70,7 @@
    gz-door (tablet 0)
    gz-crcprobe (\ _ (crc32 ""))              ; making the lambda references nothing
    gz-infprobe (\ _ (inflate "" 0))
+   gz-defprobe (\ _ (deflate ""))
    (gz-nif k f)
     (: v (peep gz-door k ())
        (? (charm? v) v
@@ -537,13 +538,20 @@
        _ (gz-flush s j t tok k fl fd i i2 (? (n <= i2) 1 0) xb)
        (? (n <= i2) 0 (gz-blocks fn s n j t head prev i2)))
 
-   (gz-deflate s)
+   (gz-deflatel s)
     (: n (tally s)
        j (jug 0)   t (tablet 0)
        head (cask (32768 * 4))   prev (cask (32768 * 4))
        _ (gz-blocks (gz-finder n) s n j t head prev 0)
        _ (gz-align j t)
        ((slurp j) + ""))
+   ; host/deflate.c where the artifact carries it, the coder above where it does not --
+   ; and the C is a twin held to the BYTES, so the door changes cost and never content.
+   ; the love lane is the oracle test/host/gzc.l holds it to.
+   (gz-deflate s)
+    (? (gz-nif 2 gz-defprobe)
+       (: r (deflate s) (? (string? r) r (gz-deflatel s)))
+       (gz-deflatel s))
 
    ; --- the growing byte buffer ---------------------------------------------
    ; inflate writes bytes AND reads them back (a match copies out of what it has

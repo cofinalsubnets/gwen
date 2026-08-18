@@ -11,9 +11,12 @@
 ; holds a re-cut to the byte.
 ;
 ; AND THE ONE STAMP: the sha of the leveled tar is the tree's content id, kept
-; in ARCHIVE.sha. run every make (a force rule); the walk and the sha are the
-; cheap half, and the gzip (the expensive half, ~45 s) is paid only when the
+; in ARCHIVE.sha. run every make (a force rule); the gzip is paid only when the
 ; tree's content actually moved -- a touch settles, a delete or rename is seen.
+; the walk PRUNES before it reads (tar-gather? + sp-keep?), and the coder is
+; host/deflate.c through gz.l's door, so a full cut is seconds -- on a runner
+; that carries the nifs; love0 carries none, which is why the recipe prefers
+; the tree's own love.
 (use 'tar)
 (use 'gz)
 
@@ -29,17 +32,18 @@
                    (go 0))
    ; hidden at the root = the machine's, not the source's
    (sp-hid? nom) (: seg (sp-top nom) (tally seg && (peep seg 0 0 = 46)))
-   ; keep an entry unless its top segment is a build product or hidden, or its
-   ; whole nom is a DROP; re-home the kept ones under TOP -- the walk is already
-   ; sorted, so order is preserved.
-   (sp-take es top drops acc)
+   ; keep a nom unless its top segment is a build product or hidden, or the
+   ; whole nom is a DROP. handed to the WALK, not run after it: what the archive
+   ; will not carry is never read (out/ and dl/ are gigabytes on a build box).
+   (sp-keep? drops nom)
+    (! (member? (sp-top nom) sp-skip || sp-hid? nom || member? nom drops))
+   ; re-home the kept entries under TOP -- the walk is already sorted, so order
+   ; is preserved.
+   (sp-take es top acc)
     (? !(two? es) (rev acc)
        (: e <es
-          nom (tar-get e 'nom "")
-          (? (member? (sp-top nom) sp-skip || sp-hid? nom || member? nom drops)
-             (sp-take >es top drops acc)
-             (: _ (pin e 'nom (top + "/" + nom))
-                (sp-take >es top drops (e >< acc))))))
+          _ (pin e 'nom (top + "/" + (tar-get e 'nom "")))
+          (sp-take >es top (e >< acc))))
 
    (sp-main av)
     (: n (tally av)
@@ -48,13 +52,13 @@
        top (<(>av))
        stamp (? (3 <= n) (<(sound (<(>(>av))))) 0)
        drops (? (3 <= n) (>(>(>av))) ())
-       g (tar-gather "." "")
+       g (tar-gather? (sp-keep? drops) "." "")
        _ (? g 0 (sp-die "cannot read the tree"))
        es <>g
        root <es                             ; the "." entry leads the walk
        te (tar-entry top 'dir "")           ; TOP itself, wearing the tree root's mode
        _ (pin te 'mode (tar-get root 'mode 493))
-       body (sp-take >es top drops ())
+       body (sp-take >es top ())
        lev (tar-level (root >< (te >< body)) stamp)
        a (tar-pack lev)
        _ (? a 0 (sp-die "cannot pack (a path too long for ustar?)"))

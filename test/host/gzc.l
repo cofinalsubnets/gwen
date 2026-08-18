@@ -148,6 +148,23 @@
  ; ..and the empty stream is not a stream at all, at either lane
  (gzc-same "" 0))
 
+; --- DEFLATE, the coder twin (host/deflate.c): held to the BYTES, not just the round
+;     trip -- same parse, same block costing, same Huffman tie-breaks, so `=` over the
+;     streams is the law. the love lane is the oracle; a divergence is the C being
+;     wrong until proven otherwise.
+(: (gzd-same s) (? (= (deflate s) (gz-deflatel s)) 1 0)
+   (gzd-trip s) (: c (deflate s)
+                   l (gz-puff c (tally s))
+                   i (inflate c (tally s))
+                   (? ((two? l) & (string? i) & (= (<(>l)) s) & (= i s)) 1 0))
+   gzd-corp (L gzc-empty gzc-one gzc-run gzc-long gzc-per gzc-near gzc-text)
+   _ (assert
+      (lit? deflate)
+      (gzc-all gzd-same gzd-corp)                       ; the bytes, corpus-wide
+      (gzc-all gzd-trip gzd-corp))                      ; ..and both inflates read them
+   (puts "gzc: deflate twin ok -- the C coder answers love's bytes, both inflates read it
+"))
+
 (: _ (test_fin ())
    _ (puts "gzc: ok -- the C twins agree with love (shapes, hints, torn, fuzz, crc, misuse)
 ")
