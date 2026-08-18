@@ -367,10 +367,12 @@
            (ld r6 r6 0)
            (call main)
            (mov r6 r0) (li r0 60) (sys))
-   ; the freebsd twin of crt0: the kernel lays the same SysV stack (argc at
-   ; [rsp]; %rdi points there too, unused), so only the exit differs -- exit(1),
-   ; one thread here so one exit is the whole act. ⚠ UNRUN until the vm gates it.
-   crt0-fbsd '((mov r6 sp)
+   ; the freebsd twin of crt0: the VECTOR BASE ARRIVES IN %rdi (freebsd's own
+   ; crt1 reads argc at (%rdi)); the kernel's rsp is only aligned NEAR it and
+   ; sometimes holds a pad word below argc, so sp is never consulted. the push
+   ; restores linux's entry parity (rsp ≡ 8 mod 16 here, ≡ 0 there), and the
+   ; exit is exit(1) -- one thread here so one exit is the whole act.
+   crt0-fbsd '((push r6)
                 (call __ai_start)
                 (mov r6 r0) (li r0 1) (sys)
                 (label __ai_start)

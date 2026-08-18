@@ -128,7 +128,7 @@ int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), voi
   in.dlpi_phnum = (Elf64_Half) phnum;
   return cb(&in, sizeof in, data); }
 
-/* ---- the entry: crt0 hands us the OS stack pointer (argc at [sp]); unpack
+/* ---- the entry: crt0 hands us the arg vector base (argc at [sp]); unpack
  * argv/envp/auxv, arm stdio, run main, exit with its answer. this STRONG
  * definition overrides crt0's weak call-main tail (the linker's weak machinery
  * is the whole switch -- no flags anywhere). ---- */

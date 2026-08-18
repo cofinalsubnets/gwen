@@ -136,11 +136,14 @@ owes a roster gate: on linux, assert the linux features are aboard.
   owed: sigfd over EVFILT_SIGNAL; splice's maps read over the sysctl; the
   socket constants + sa_len (compiled with linux values today — the net lanes
   are UNTESTED on freebsd); memfd/unshare/mount stay linux behind stubs.
-  ⚠ OPEN RACE, isolated: `love -e "(quit 7)"` with stdin an EOF'd PIPE
-  answers 0 or 7 by coin-flip on freebsd (deterministically 7 on linux) —
-  the stdin-owner's EOF exit races the -e task; doc/io.md's ownership
-  machinery is the ground, and the gate's runs avoid the shape until it is
-  fixed.
+  The "-e race" RESOLVED 2026-08-17 — never a race: freebsd's kernel hands
+  the arg vector base in %rdi (its own crt1 reads argc at `(%rdi)`) and rsp
+  is only aligned NEAR it, sometimes with a pad word below argc, so a crt0
+  reading argc off [rsp] saw argc=0 by stack address — love then ran the
+  stdin lane and exited 0 at EOF (the piped-repl legs were only accidentally
+  deterministic: the stdin lane read the same piped program). crt0-fbsd
+  reads %rdi now, and the gate runs -e eight times to hold argv whole on
+  every exec.
 - **rung 5 — the artifact whole.** bake/wake on the foreign OS (the phdr walk
   off auxv, EI_OSABI/.note.ABI-tag), then the fixpoint gate runs there.
 

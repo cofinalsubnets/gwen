@@ -146,19 +146,19 @@ done
 "$love0" -l "$ho/.mksys-cat.l" -n -e "((from 'moon 'mksys-freebsd) \"$d/love/sys.o\")" || fail "mksys-freebsd"
 moon0 -os freebsd -t x64 "$d/love"/*.o -o "$d/love/love-fbsd" || fail "the love link came up short"
 
-# ⚠ every run rides the PIPED REPL (data, then EOF) -- the one lane that is
-# deterministic on freebsd today. The -e lane races the stdin-owner's EOF exit
-# there (the plan's rung-4 note: `-e "(quit 7)"` with an EOF'd stdin answers 0
-# or 7 by coin-flip); restore -e legs when that race is fixed.
+# ⚠ -e RUNS MANY TIMES ON PURPOSE: argv must arrive whole on every exec. the
+# freebsd kernel hands the vector base in %rdi and [rsp] may hold a pad word
+# below argc, so a crt0 reading the wrong door flips by stack address, not by
+# input -- one green run proves nothing.
 $FBSD_SSH 'cat > /tmp/love-fbsd && chmod +x /tmp/love-fbsd' < "$d/love/love-fbsd" \
   || fail "the box could not take love"
-out=$($FBSD_SSH 'echo "(quit 7)" | /tmp/love-fbsd; echo "rc=$?"
+out=$($FBSD_SSH 'for i in 1 2 3 4 5 6 7 8; do /tmp/love-fbsd -e "(quit 7)" < /dev/null; printf "%s" "$?"; done; echo
 echo "(say out (show 42))" | /tmp/love-fbsd
 echo
 echo "(say out (show (sort (L 3 1 2))))" | /tmp/love-fbsd') \
   || fail "the box could not run love"
-echo "$out" | grep -q "rc=7" || fail "quit did not carry -- got: $out"
+echo "$out" | grep -q "77777777" || fail "-e quit did not carry on every exec -- got: $out"
 echo "$out" | grep -q "42" || fail "the say lane -- got: $out"
 echo "$out" | grep -q "(1 2 3)" || fail "the stdin repl -- got: $out"
 
-echo "test_freebsd: the WHOLE love (egg) answers on the box -- quit, say, and the repl"
+echo "test_freebsd: the WHOLE love (egg) answers on the box -- -e, say, and the repl"
