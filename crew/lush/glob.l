@@ -86,10 +86,13 @@
                   (catmap (\ d (gmatches d ct cm)) pfxs)
                   (catmap (\ d (: p (d + ct) (? (two? (stat p)) [p] ()))) pfxs))
            (? !(two? rest) nxt (gwalk (map (\ p (p + "/")) nxt) rest))))
+   ; ⚠ SORTED, the posix law for expansion -- and readdir's raw order is the
+   ; FILESYSTEM'S (ext4 hashes, ufs appends), so an unsorted glob leaks the
+   ; disk into anything built over it.
    (gmatches d ct cm)
      (: names (readdir (? (tally d) d "."))
         dot (tally ct && ((ct 0) = 46))
         (map (\ nm (d + nm))
-             (filter (\ nm ((dot || !((nm 0) = 46)) && sh-fmatch ct cm nm))
-                     names))))
+             (sort (filter (\ nm ((dot || !((nm 0) = 46)) && sh-fmatch ct cm nm))
+                           names)))))
 ) ; module 'lush

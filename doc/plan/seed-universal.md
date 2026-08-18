@@ -281,6 +281,21 @@ owes a roster gate: on linux, assert the linux features are aboard.
     kernel. ⚠ small-box seed economics: a 2 GB box swap-kills the parent
     waiter + the interpreted holo step even at LOVE_BUDGET_MB=128 — the
     waiter-sheds-its-heap door (top of this doc) is now load-bearing.
+    **THE CROSS-KERNEL TROPHY, 2026-08-17**: the seed built the seed ON
+    FREEBSD — the whole ladder (ambient cc → love0 → mooncc → every object
+    → link → bake) ran on the box from the one binary, and the bytes it
+    answered are IDENTICAL to the linux build's at matched budget: linux/
+    ext4 and freebsd/ufs produce ONE byte string from one tree. Two finds
+    on the way: lush's glob answered raw readdir order (now sorted — the
+    posix law, and readdir's order is the FILESYSTEM'S), and ⚠ the OPEN
+    BUG this hunt isolated — **LOVE_BUDGET_MB leaks into the bake**: a
+    different budget moves GC timing during the warm and ~3 heap words
+    land in a different copy order, a 26-byte value-preserving
+    permutation in .love_image. Nothing OS about it (reproduced pure-linux
+    with env -i); each budget regime is its own stable fixpoint. The bake
+    owes budget-invariance (a canonical order at save, or a normalizing
+    collect); until then the fixpoint gate and any cross-machine compare
+    must run under ONE budget regime.
   - **UV4 — netbsd.** the .note.netbsd.ident PT_NOTE (holo's linker learns
     note segments; foreign kernels ignore notes), a third syscall column,
     the userland sigtramp (__sigaction_sigtramp — netbsd's kernel provides
