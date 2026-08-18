@@ -58,6 +58,9 @@
    tickets (tablet 0)      ; a 1-cell box: the recipe words named on the command line (the non-flag args), () until the dispatch parses them
    pgen (tablet 0)         ; a 1-cell box: a pattern-rule resolver (item -> a card | 0), installed by the Makefile importer (() until then)
    cookbox (tablet 0)      ; a 1-cell box: the in-image shell verdict (sh-line's `inimg`), decided once a run
+   jobs (tablet 0)         ; a 1-cell box: the -j width (1 = serial, and nothing forks)
+   running (tablet 0)      ; pid -> the item whose recipe that job is running
+   verdicts (tablet 0)     ; pid -> the status a reaped job answered, until its land takes it
 
    origins (tablet 0)      ; make's variable provenance: name -> "default" | "environment"
                            ; | "file" | "command line" | "override" ($(origin), and the
@@ -120,9 +123,10 @@
 ; that re-runs without touching its output (the love_version.h cmp idiom) does NOT
 ; cascade, matching make's mtime-only decision.
 
-(: (prep item done shipped)
+(: (prep item done shipped pending)
    (? (peep done item ())                                   ; settled already
       (peep done item ())
+      (two? (peep pending item 0)) ()                       ; a job is up for it; landing it settles it
       ; the card: an explicit recipe wins outright; otherwise a pattern rule may
       ; synthesize one (merging any explicit "prereqs only" card), else the explicit
       ; prereq-only card, else nothing (a source leaf).
@@ -136,24 +140,27 @@
               (: g (? f (f item) 0) (? (two? g) g ex)))
          (? (two? r)
             ; item has a card: prep every prerequisite up to date, then decide.
+            ; ⚠ PREPPING AND LANDING ARE TWO PASSES, and that is the whole of -j:
+            ; prep leaves a stale prerequisite's recipe RUNNING, so the next one's
+            ; subtree starts beside it; only then does the second pass wait, because
+            ; an age cannot be read off a file still being written. at -j1 nothing is
+            ; ever left running and the two passes read as the one walk they were.
             (: ingredients <r orderonly <>r steps >>r
-               _ (each ingredients (\ d (prep d done shipped)))
-               _ (each orderonly (\ d (prep d done shipped)))  ; order-only: built if missing, never makes us stale
+               _ (each ingredients (\ d (prep d done shipped pending)))
+               _ (each orderonly (\ d (prep d done shipped pending)))  ; order-only: built if missing, never makes us stale
+               _ (each ingredients (\ d (jobland d done shipped pending)))
+               _ (each orderonly (\ d (jobland d done shipped pending)))
                ta0 (date item)
                fresh (any (\ d (peep shipped d 0)) ingredients)   ; a prerequisite's file changed
                older (any (\ d (: da (peep done d ())     ; a prerequisite is newer
                                   (? !da 1 (? !ta0 1 (da > ta0))))) ingredients)
                stale (!ta0 || fresh || older)
-               ; run the recipe when stale; mark shipped only if the recipe actually
-               ; advanced the file's mtime (created it, or rewrote it newer) -- a
-               ; no-op rebuild must not force dependents.
-               _ (? stale (: _ (recur item steps)
-                             nw (date item)
-                             (? (two? steps && (? !ta0 (? nw 1 0) (? nw (nw > ta0) 0)))
-                                (pin shipped item 1) 0)) 0)
-               age (date item)
-               _ (pin done item age)
-               age)
+               ; run the recipe when stale -- as a job where there is room to fork one,
+               ; else right here. a job's item settles when it lands; everything else
+               ; settles now.
+               j (? stale (jobstart item steps) 0)
+               (? j (: _ (pin pending item (link j (link ta0 steps))) ta0)
+                    (settle item ta0 (? stale steps ()) done shipped)))
             ; no card: a source leaf. it must already exist on disk.
             (: ta (date item)
                _ (? ta 0 (: _ (say err ("cook: no recipe to make " + show item))
@@ -161,8 +168,93 @@
                _ (pin done item ta)
                ta))))
 
+   ; settle an item: read its age and pin it. mark shipped only if the recipe actually
+   ; advanced the file's mtime (created it, or rewrote it newer) -- a no-op rebuild
+   ; must not force dependents. `steps` is () for an item that ran no recipe.
+   (settle item ta0 steps done shipped)
+   (: nw (date item)
+      _ (? (two? steps && (? !ta0 (? nw 1 0) (? nw (nw > ta0) 0)))
+           (pin shipped item 1) 0)
+      _ (pin done item nw)
+      nw)
+
+   ; a prerequisite's job must LAND before its age can be read. () for an item that
+   ; never took one, which is every item at -j1.
+   (jobland item done shipped pending)
+   (: v (peep pending item 0)
+      (? !(two? v) ()
+         (: st (jobwait <v)
+            _ (pull pending item 0)
+            _ (? (0 = st) 0 (jobdie item st))
+            (settle item <>v >>v done shipped))))
+
    ; run a recipe: each step in order.
    (recur item steps) (each steps (\ step (step1 step)))
+
+   ; --- the job pool (-j N) --------------------------------------------------
+   ; a stale recipe runs in a FORKED CHILD -- the fork nif, no exec: the child owns a
+   ; copy of this heap and runs the recipe exactly as a serial cook would, thunk steps
+   ; and the in-image shell door included, then quits with its verdict. So a job's only
+   ; outputs are the files it wrote and the status it answered, which is already make's
+   ; whole contract for a recipe. ⚠ AND THAT IS WHY A THUNK STEP'S HEAP EFFECT DOES NOT
+   ; SURVIVE -j: it lands in the child. A Cookfile that builds by mutating cook's own
+   ; tables wants -j1, and gets it by default.
+   ; ⚠ green threads (twirl) would not do here. They are cooperative, so where the
+   ; in-image door is live -- lush as /bin/sh, the distro -- the compile runs IN this
+   ; process and N tasks would take turns on one core. A fork is parallel in both worlds.
+   ; ⚠ and every name here is job-prefixed on purpose: this scope leaks into the same
+   ; layer the expander walks, where `join` and `start` already mean other things.
+   (jobw _) (: n (peep jobs 0 1) (? (0 < n) n 1))
+
+   ; an (exec ..) step REPLACES the process, so a recipe carrying one can never be a
+   ; job: the child would be replaced and cook would carry on as if it had run.
+   (jobforkable? steps) (!(any (\ s (two? s && (<s = 'exec))) steps))
+
+   ; start item's recipe. answers the job's pid when one took it -- the caller must
+   ; land it before reading the item's age -- or 0 when it ran here and is done.
+   ; ⚠ the serial lane DRAINS FIRST: a recipe run here calls herald, which waits on
+   ; its own child, and `glean` reaps ANY child -- so the two must never be in the air
+   ; at once. a fork we asked for and did not get runs the recipe here, one job narrower.
+   (jobstart item steps)
+   (? (!(two? steps)) 0                                     ; a pure aggregate runs nothing: no job, and no drain either
+      (!((1 < jobw ()) && (jobforkable? steps))) (: _ (jobdrain 0) _ (recur item steps) 0)
+      (: _ (? (jobw () <= $running) (jobreap 0) 0)          ; wait for a slot
+         _ (flush out) _ (flush err)
+         p (fork 0)
+         (? (0 = p) (: _ (recur item steps) (quit 0))       ; the child: run it and go
+            (0 < p) (: _ (pin running p item) p)
+            (: _ (recur item steps) 0))))
+
+   ; reap one job home and file its verdict under its pid, so whichever land wants it
+   ; finds it however the reaps fall. `glean` is waitpid(-1, WNOHANG), so the wait is
+   ; a poll -- `rest` parks it, which costs a millisecond and not a core.
+   (jobreap _)
+   (: r (glean 0)
+      (? (two? r) (: _ (pin verdicts <r >r) _ (pull running <r 0) <r)
+         (charm? r) ()                                      ; -errno: no children left
+         (: _ (rest 1) (jobreap 0))))
+
+   ; this pid's status, reaping as needed. a pid that is neither filed nor running was
+   ; reaped by something that is not this pool, and its verdict is GONE -- which is not
+   ; a green one, so it is said rather than assumed.
+   (jobwait p)
+   (: v (peep verdicts p 'no)
+      (? !(id? v 'no) (: _ (pull verdicts p 0) v)
+         (0 = $running) (: _ (say err ("cook: lost the job for pid " + show p))
+                            _ (put err 10) (quit 1))
+         (: _ (jobreap 0) (jobwait p))))
+
+   (jobdrain _) (? (0 < $running) (: _ (jobreap 0) (jobdrain 0)) 0)
+
+   ; a job came home red. the child already printed which command failed and with what
+   ; status; this adds the ITEM, which is the half that goes missing when jobs
+   ; interleave, and says nothing about a number -- the child's exit is not the
+   ; command's. outstanding jobs are let finish first, as make does: a half-written
+   ; file left behind by a kill would read as up to date on the next run.
+   (jobdie item ec)
+   (: _ (jobdrain 0)
+      _ (say err ("cook: the recipe for " + show item + " failed"))
+      _ (put err 10) (quit ec))
 
    ; one step. a list HEADED BY THE SYMBOL `exec` -- (exec PROG ARGS..) -- is an
    ; INTERACTIVE step: it runs via the `exec` nif, which REPLACES cook and inherits
@@ -241,7 +333,10 @@
 ; advanced their file. `cook` prints a verdict off it; a caller that wants the number
 ; takes `$` of it (papel's build does).
 (: (prepped item)
-   (: shipped (tablet 0) _ (prep item (tablet 0) shipped) shipped)
+   (: done (tablet 0) shipped (tablet 0) pending (tablet 0)
+      _ (prep item done shipped pending)
+      _ (jobland item done shipped pending)       ; the top item's own job, if it took one
+      shipped)
 
    (cook item)                                ; prep item up to date and report
    (? !item (: _ (say err "cook: nothing to cook") _ (put err 10) (quit 1))
@@ -1084,6 +1179,11 @@
    ; non-flag; cook reads the rest via mk-args). Like make, it takes flags in any
    ; order and treats every non-flag word as a recipe to build:
    ;   -f, --file FILE   the build file (a Makefile or a Cookfile); else discovered
+   ;   -j, --jobs N      run up to N recipes at once (default 1). N is REQUIRED -- a
+   ;                     bare -j is make's "unlimited", and one translation unit here
+   ;                     peaks at 2.3 GB, so the number is the caller's to say.
+   ;                     ⚠ the width does not travel: there is no jobserver, so a
+   ;                     recursive $(MAKE) runs at -j1 unless its own line says otherwise.
    ;   --emit            transpile a Makefile to a resolved Cookfile on stdout, then exit
    ;   -h, --help, help  print usage and exit
    ;   -v, --version, version   print the version and exit
@@ -1093,8 +1193,9 @@
    ; rest are recipes; with -f, every positional word is a recipe.
    (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (quit 0))
    (version _) (bye ("cook (love " + love-version + ")"))
-   (usage _) (bye ("usage: cook [-f FILE] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]\n"
+   (usage _) (bye ("usage: cook [-f FILE] [-j N] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]\n"
                    + "  -f, --file FILE   the build file (Makefile or Cookfile); else discovered\n"
+                   + "  -j, --jobs N      run up to N recipes at once (default 1)\n"
                    + "      --emit        transpile a Makefile to a resolved Cookfile, then exit\n"
                    + "  -v, --version     print the version and exit\n"
                    + "  -h, --help        print this help and exit\n"
@@ -1102,6 +1203,16 @@
                    + "  RECIPE ...        the items to build (default: the first recipe declared)\n"
                    + "a Makefile (Makefile/makefile/GNUmakefile/*.mk) is imported and cooked; any other build file is a Cookfile of ordinary love source."))
    (need-arg h r) (? (two? r) 0 (: _ (say err ("cook: " + h + " needs an argument")) _ (put err 10) (quit 2)))
+   ; a job count: all digits and above zero, or the run ends here. `-j0` and `-j x`
+   ; are the same mistake and get the same word.
+   (jobn w)
+   (: n (tally w)
+      (go k a) (? (n <= k) a
+                  (!(digitp (w k))) 0
+                  (go (k + 1) (a * 10 + (w k) - 48)))
+      v (? (0 < n) (go 0 0) 0)
+      (? (0 < v) v (: _ (say err ("cook: -j wants a job count, not " + show w))
+                      _ (put err 10) (quit 2))))
    ; a NAME=VAL word (make's command-line variable; NAME:=VAL folds to the same,
    ; the split point's leading : stripped) -> (name . val), or () for a plain word.
    (varw w)
@@ -1113,6 +1224,9 @@
    ((: (loop ws opt) (? !(two? ws) opt
        (: w <ws r >ws
           (? ((w = "-f") || (w = "--file")) (: _ (need-arg w r) _ (pin opt 'file <r) (loop >r opt))
+             ((w = "-j") || (w = "--jobs"))  (: _ (need-arg w r) _ (pin opt 'jobs (jobn <r)) (loop >r opt))
+             ((2 < tally w) && ("-j" = snip w 0 2))          ; glued: -j8
+                                             (: _ (pin opt 'jobs (jobn (snip w 2 (tally w)))) (loop r opt))
              (w = "--emit")                                       (: _ (pin opt 'emit 1) (loop r opt))
              ((w = "-h") || (w = "--help") || (w = "help"))      (: _ (pin opt 'help 1) (loop r opt))
              ((w = "-v") || (w = "--version") || (w = "version")) (: _ (pin opt 'ver 1) (loop r opt))
@@ -1140,6 +1254,7 @@
       _ (? (peep opt 'help 0) (usage 0) 0)
       _ (? (peep opt 'ver 0) (version 0) 0)
       _ (pin clivars 0 (peep opt 'var ()))                   ; the VAR=VAL words, for seed-defaults
+      _ (pin jobs 0 (peep opt 'jobs 1))                      ; the -j width; 1 is the serial cook
       emit? (peep opt 'emit 0)
       pos (peep opt 'pos ())
       xf (peep opt 'file 0)                                       ; an explicit -f file (0 if none)

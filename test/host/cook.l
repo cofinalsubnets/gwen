@@ -389,6 +389,63 @@
                  "all")
    _ (ok "wildcard: pure-love glob, nullglob" (has wld "WC[crew/lush/job.l]"))
 
+   ; ------------------------------------------------------------------ -j jobs
+   ; the job pool: under -j N a stale recipe runs in a forked child. THE CLAIM IS
+   ; THAT WIDTH CHANGES NOTHING BUT THE WALL CLOCK, so every case here asks the same
+   ; fixture at -j4 and answers it against the serial law -- not against a timing,
+   ; which is the one thing a gate cannot hold still.
+   (run-cookj src tgt j)
+   (: _ (write-file (+ dir "/Makefile") src)
+       r (hark `(love "-l" "crew/cook/cook.l" "-j" j (+ dir "/Makefile") tgt))
+       (? (two? r) >r ""))
+   _ (sh (+ "mkdir -p " (D "/j")))
+   jsrc (mk `(".PHONY: all"
+              (+ "all: " (+ (D "/j/a ") (+ (D "/j/b ") (+ (D "/j/c ") (D "/j/d")))))
+              "\t@echo J[all]"
+              (D "/j/a:") (+ "\t@echo A > " (D "/j/a"))
+              (D "/j/b:") (+ "\t@echo B > " (D "/j/b"))
+              (D "/j/c:") (+ "\t@echo C > " (D "/j/c"))
+              (D "/j/d:") (+ "\t@echo D > " (D "/j/d"))))
+   _ (sh (+ "rm -f " (D "/j/[abcd]")))
+   j1 (run-cookj jsrc "all" "1")
+   _ (sh (+ "rm -f " (D "/j/[abcd]")))
+   j4 (run-cookj jsrc "all" "4")
+   _ (ok "-j4 answers what -j1 answered" (= j1 j4))
+   _ (ok "-j4 ran every independent recipe"
+         (= 0 <(sh (+ "test -f " (+ (D "/j/a") (+ " && test -f " (+ (D "/j/b")
+                      (+ " && test -f " (+ (D "/j/c") (+ " && test -f " (D "/j/d")))))))))))
+   ; a glued -jN is the same flag
+   _ (sh (+ "rm -f " (D "/j/[abcd]")))
+   jg (: r (hark `(love "-l" "crew/cook/cook.l" "-j4" (+ dir "/Makefile") "all")) (? (two? r) >r ""))
+   _ (ok "-j4 glued reads as -j 4" (= j1 jg))
+
+   ; an EDGE still orders: one must finish before two starts, however wide the pool.
+   _ (sh (+ "rm -f " (+ (D "/j/log") (+ " " (+ (D "/j/one ") (D "/j/two"))))))
+   jchain (mk `(".PHONY: all"
+                (+ "all: " (D "/j/two"))
+                (D "/j/one:") (+ "\t@sleep 1; echo one >> " (+ (D "/j/log") (+ "; touch " (D "/j/one"))))
+                (+ (D "/j/two: ") (D "/j/one")) (+ "\t@echo two >> " (+ (D "/j/log") (+ "; touch " (D "/j/two"))))))
+   _ (run-cookj jchain "all" "4")
+   jlog (: r (sh (+ "cat " (D "/j/log"))) (? (two? r) >r ""))
+   _ (ok "-j4 keeps an edge in order" (has jlog "one\ntwo"))
+
+   ; a red recipe under -j is still red, and its siblings are let finish rather than
+   ; killed -- a half-written file left behind would read as up to date next run.
+   _ (sh (+ "rm -f " (+ (D "/j/ok ") (D "/j/red"))))
+   jred (mk `(".PHONY: all"
+              (+ "all: " (+ (D "/j/ok ") (D "/j/red")))
+              (D "/j/ok:") (+ "\t@sleep 1; echo OK > " (D "/j/ok"))
+              (D "/j/red:") "\t@exit 3"))
+   _ (write-file (+ dir "/Makefile") jred)
+   jrst (: r (hark `(love "-l" "crew/cook/cook.l" "-j" "4" (+ dir "/Makefile") "all")) (? (two? r) <r 0))
+   _ (ok "-j4: a failed recipe fails the run" (!(= 0 jrst)))
+   _ (ok "-j4: outstanding jobs finish first" (= 0 <(sh (+ "test -f " (D "/j/ok")))))
+
+   ; the width is the caller's to say: a bare -j is make's "unlimited", and one
+   ; translation unit here peaks at 2.3 GB, so cook asks for the number instead.
+   jbad (: r (hark `(love "-l" "crew/cook/cook.l" "-j" "x" (+ dir "/Makefile") "all")) (? (two? r) <r 0))
+   _ (ok "-j wants a count" (!(= 0 jbad)))
+
    ; ---------------------------------------------------------------- summary
    np (peep pass 0 0) nf (peep fail 0 0)
    _ (puts (+ (show np) (+ " cook tests pass" (? (< 0 nf) (+ ", " (+ (show nf) " FAIL")) ""))))
