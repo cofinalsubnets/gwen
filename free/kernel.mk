@@ -83,7 +83,6 @@ kcppflags := \
   -I. -Icore -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/free \
   -I$(R)/free/$a \
   -I$(R)/crew/moon/include \
-  -Ifree/libc \
   $(kcppflags) \
   -DLIMINE_API_REVISION=3
 ifdef K_TEST
@@ -171,7 +170,7 @@ out/lib/korecat.l: $(korefiles)
 	@mkdir -p out/lib
 	@cat $(korefiles) > $@
 
-# Shared C sources (core/love.c, crew/quay/, libc/) + per-arch free/<a>/.
+# Shared C sources (core/love.c, crew/quay/, nolibc's six) + per-arch free/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
 $(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h out/lib/kfs.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h,out/lib/korecat.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h)
 	@echo $(kcctag)	$@
