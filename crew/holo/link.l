@@ -899,10 +899,11 @@
        ; off the count.
        img? (0 < foldl (\ a ob (a + ld-lanesz ob 'image)) 0 objs)
        wx? !(charm? org)
-       ; the one x64 binary may land on netbsd, whose exec REQUIRES the ident
-       ; note (no note -> ENOEXEC; foreign kernels ignore notes). 24 bytes riding
-       ; the header reserve, with a PT_NOTE and an alloc section so strip keeps it.
-       nb? (wx? && mach = 62)
+       ; the binary may land on netbsd, whose exec REQUIRES the ident note
+       ; (no note -> ENOEXEC; foreign kernels ignore notes). 24 bytes riding the
+       ; header reserve, with a PT_NOTE and an alloc section so strip keeps it.
+       ; on the ISAs that can meet that kernel: riscv has one today.
+       nb? (wx? && (member? mach '(62 183)))
        hdrsz (64 + (56 * ((? wx? 3 1) + (? img? 1 0) + (? nb? 1 0))) + (? nb? 24 0))
        nbo (hdrsz - 24)
        nbnote (? nb? (catall `((le32 7) (le32 4) (le32 1)                ; namesz descsz NETBSD_TAG

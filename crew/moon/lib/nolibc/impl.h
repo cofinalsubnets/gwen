@@ -55,7 +55,7 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
 #if !defined(__riscv)
 # define AiTwoKernels 1
 #endif
-#if !defined(__aarch64__) && !defined(__riscv)
+#if !defined(__riscv)
 # define AiNbTramp 1
 #endif
 #ifdef AiTwoKernels
@@ -503,7 +503,19 @@ struct __nb_kevent {                  /* __kevent50's record: 40 bytes, no ext,
 };
 extern void __ai_nbstat(struct __nb_stat const *f, struct stat *st);
 #ifdef AiNbTramp
-extern void __ai_nb_sigtramp(void);   /* mksys: mov r15->rdi; setcontext; exit */
+extern void __ai_nb_sigtramp(void);   /* mksys: the ucontext register; setcontext */
+#endif
+#if defined(__aarch64__)
+/* ⚠ THE PROBE CANNOT USE __ai_sys HERE. netbsd/aarch64 takes the number from
+ * the SVC IMMEDIATE and SIGSYSes the register form, so asking which kernel we
+ * are on with the register form would die on the very kernel it is asking
+ * about. These two leaves set x8 AND the immediate to the same number: linux
+ * ignores the immediate and runs x8, netbsd reads it. 20 = getpid on netbsd,
+ * epoll_create1 on linux/arm64. ⚠ freebsd hears NEITHER -- it signals SIGILL
+ * for any immediate but zero -- and is already out when these run: crt0 knows
+ * it by the entry protocol and hands __ai_start the answer. */
+extern long __ai_nbp20(long);
+extern long __ai_nbp202(long, long, long, long, long, long);
 #endif
 #define FfLeft 1
 #define FfZero 2

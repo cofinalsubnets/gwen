@@ -469,14 +469,17 @@
    ; and the freebsd side pushes once to restore linux's entry parity
    ; (rsp ≡ 8 mod 16 there, ≡ 0 here). each side exits by its own number;
    ; the weak tail exits linux's way -- a link that rides freebsd carries
-   ; nolibc's strong __ai_start, whose exit() goes through the one door.
+   ; nolibc's strong __ai_start, whose exit() goes through the one door. both
+   ; sides hand it a second word of 0: every kernel here answers the probe.
    crt0 '((cmp r6 0)
            (br ne c0-fb)
            (mov r6 sp)
+           (li r5 0)
            (call __ai_start)
            (mov r6 r0) (li r0 60) (sys)
            (label c0-fb)
            (push r6)
+           (li r5 0)
            (call __ai_start)
            (mov r6 r0) (li r0 1) (sys)
            (label __ai_start)
@@ -493,13 +496,19 @@
    ; linux and sp is the vector; a non-zero x0 IS the vector. Each side exits by
    ; its own number (exit_group 93 / exit 1); a link riding freebsd carries
    ; nolibc's strong __ai_start, whose exit() goes through the one door.
+   ; the branch taken is also HANDED DOWN in the second word: this arch's kernel
+   ; probe cannot run blind the way x64's can -- netbsd carries the number in the
+   ; svc immediate and freebsd SIGILLs any immediate but zero -- so the freebsd
+   ; side answers 2 here and leaves only linux and netbsd to be asked.
    ; ⚠ mov from sp must be lea -- ORR reads XZR at 31.
    crt0-a64 '((cmp r0 0)
                (br ne c0a-fb)
                (lea r0 sp 0)
+               (li r1 0)
                (call __ai_start)
                (li r8 93) (sys)
                (label c0a-fb)
+               (li r1 2)
                (call __ai_start)
                (li r8 1) (sys)
                (label __ai_start)
@@ -511,6 +520,7 @@
    ; the riscv twin: a0 = the OS stack pointer, exit_group = 94 in a7 (the
    ; answer already rides a0); the default __ai_start mirrors arm64's.
    crt0-rv '((lea r0 sp 0)
+              (li r1 0)
               (call __ai_start)
               (li r7 94) (sys)
               (label __ai_start)

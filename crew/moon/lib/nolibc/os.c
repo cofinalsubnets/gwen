@@ -14,7 +14,25 @@ long __ai_osdetect(void) {
   /* 20 is getpid on both BSDs and writev on linux: writev(-1, NULL, 0) is
    * -EBADF, a pid is positive, and no kernel is disturbed by asking. a
    * positive answer says BSD; kern.ostype's first byte parts the two
-   * (__sysctl is 202 and {CTL_KERN, KERN_OSTYPE} is {1, 1} on both). */
+   * (__sysctl is 202 and {CTL_KERN, KERN_OSTYPE} is {1, 1} on both).
+   * ⚠ on aarch64 the two doors are mksys leaves, not __ai_sys: netbsd there
+   * SIGSYSes the register form, so the question has to be asked in the svc
+   * IMMEDIATE the kernel being asked about reads. 20 is epoll_create1 on
+   * linux/arm64, which refuses -EINVAL -- the same negative the writev door
+   * gives. ⚠ and that immediate is ILLEGAL on freebsd/arm64, whose svc handler
+   * signals SIGILL/ILL_ILLOPN for any but zero -- asking blind kills the
+   * process before it can hear an answer. So freebsd is already OUT by the
+   * time this runs: crt0 parts it from the rest by the entry protocol alone
+   * and hands 2 down, and this branch only ever asks linux from netbsd. */
+# if defined(__aarch64__)
+  long r = __ai_nbp20(-1);
+  if (r <= 0) return 1;
+  { int mib[2] = {1, 1};
+    char b[16] = {0};
+    unsigned long len = sizeof b;
+    __ai_nbp202((long) mib, 2, (long) b, (long) &len, 0, 0);
+    return b[0] == 'N' ? 3 : 2; }
+# else
   long r = __ai_sys(20, -1, 0, 0, 0, 0, 0);
   if (r <= 0) return 1;
   { int mib[2] = {1, 1};
@@ -22,6 +40,7 @@ long __ai_osdetect(void) {
     unsigned long len = sizeof b;
     __ai_sys(202, (long) mib, 2, (long) b, (long) &len, 0, 0);
     return b[0] == 'N' ? 3 : 2; }
+# endif
 #endif
 }
 
