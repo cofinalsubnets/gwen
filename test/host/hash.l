@@ -15,11 +15,13 @@
 ;   LENGTHS   the block is 64 bytes and the length rides the last 8 of it, so 55/56 and
 ;             119/120 are where a padding off by one shows, at both digests.
 ;   MISUSE    value ops: a wrong shape answers (), it does not digest.
-;   STREAM    sha256-init/feed/done is the SAME digest resumable, and its oracle is the
-;             one-shot beside it: fed in chunks of every awkward size, at every length
-;             where the padding could slip, it must answer what (sha256 s) answers. a
-;             second spelling of the compression function is exactly what this must not
-;             be, so the test is agreement and not another vector.
+;   STREAM    <X>-init/feed/done is the SAME digest resumable -- all three of them --
+;             and its oracle is the one-shot beside it: fed in chunks of every awkward
+;             size, at every length where the padding could slip, it must answer what
+;             the one-shot answers. a second spelling of the compression function is
+;             exactly what this must not be, so the test is agreement and not another
+;             vector. ⚠ the state's WIDTH is the only thing telling the three apart,
+;             so the misuse cases feed each nif the other two's cask.
 ;
 ; run:  cat test/00-init.l test/host/hash.l | out/host/love
 (assert
@@ -104,29 +106,42 @@
  !(charm? (cksum ()))
  !(charm? (cksum (cask 8))))
 
-; --- sha-256 resumable: the stream against the one-shot -----------------------------
-; the state is a 105-byte cask the caller owns; a cask of any other size, or a feed of
-; anything that is not a string, is a misuse and answers ().
+; --- the three resumable digests: each stream against its own one-shot ---------------
+; the state is a cask the caller owns, and ⚠ THE WIDTH IS THE TYPE -- 105 for sha-256,
+; 89 for md5, 12 for cksum. A cask of any other size, or a feed of anything that is not
+; a string, is a misuse and answers (); which is what stops one digest's state being
+; fed to another's nif and answering a number that looks like an answer.
 (: sha-st 105
-   (sha-stream s k)                       ; s fed k bytes at a time -> the digest
-    (: b (cask sha-st)
-       _ (sha256-init b)
+   md5-st  89
+   ck-st   12
+   ; a text fed k bytes at a time through (width init feed done) -> the digest
+   (dig-stream d s k)
+    (: b (cask <d)
+       _ (<>d b)
        n (tally s)
-       (go i) (? (n <= i) (sha256-done b)
+       (go i) (? (n <= i) (<>>>d b)
                  (: j (? (n < (i + k)) n (i + k))
-                    _ (sha256-feed b (snip s i j))
+                    _ (<>>d b (snip s i j))
                     (go j)))
        (go 0))
+   dig-sha (\ _ [sha-st sha256-init sha256-feed sha256-done])
+   dig-md5 (\ _ [md5-st  md5-init    md5-feed    md5-done])
+   dig-ck  (\ _ [ck-st   cksum-init  cksum-feed  cksum-done])
+   (sha-stream s k) (dig-stream (dig-sha 0) s k)
+   (md5-stream s k) (dig-stream (dig-md5 0) s k)
+   (ck-stream s k)  (dig-stream (dig-ck 0) s k)
    ; every length across both padding boundaries (55/56 and 119/120), each fed whole
    ; and in chunks that divide the block, straddle it, and outrun it
-   (sha-agree? n)
+   (dig-agree? n)
     (: s (hash-bytes n)
-       h (sha256 s)
        (go ks) (? (! (two? ks)) 1
-                  (? (= h (sha-stream s <ks)) (go >ks) 0)))
+                  (? (&& (= (sha256 s) (sha-stream s <ks))
+                         (= (md5 s) (md5-stream s <ks))
+                         (= (cksum s) (ck-stream s <ks)))
+                     (go >ks) 0)))
    (sha-sweep lo hi)
     (: (go n) (? (hi < n) 1
-                 (? (sha-agree? n '(1 3 7 63 64 65 127 128)) (go (n + 1)) 0))
+                 (? (dig-agree? n '(1 3 7 63 64 65 127 128)) (go (n + 1)) 0))
        (go lo)))
 
 (assert
@@ -147,10 +162,27 @@
  (nil? (sha256-feed (cask 8) "x"))
  (nil? (sha256-feed (cask sha-st) 7))
  (nil? (sha256-done (cask 8)))
- (nil? (sha256-done "not a cask")))
+ (nil? (sha256-done "not a cask"))
+ ; --- md5 and cksum stream the same way ---
+ (lit? md5-init) (lit? md5-feed) (lit? md5-done)
+ (lit? cksum-init) (lit? cksum-feed) (lit? cksum-done)
+ ((md5-stream "" 1) = "d41d8cd98f00b204e9800998ecf8427e")
+ ((md5-stream "abc" 1) = "900150983cd24fb0d6963f7d28e17f72")
+ ((md5-stream hash-112 7) = (md5 hash-112))
+ ((md5-stream (hash-bytes 100000) 1000) = (md5 (hash-bytes 100000)))
+ ; ⚠ cksum folds the LENGTH in at the end, so the empty file is 4294967295 and not 0 --
+ ; the one place a streamed digest could plausibly answer "nothing fed" and be wrong
+ ((ck-stream "" 4) = 4294967295) ((ck-stream "" 4) = (cksum ""))
+ ((ck-stream (hash-bytes 100000) 1000) = (cksum (hash-bytes 100000)))
+ ; misuse, and ⚠ CROSSWISE: a state of the wrong width is refused, which is the only
+ ; thing between three digests that all take a cask and a string
+ (nil? (md5-init (cask sha-st))) (nil? (sha256-init (cask md5-st)))
+ (nil? (cksum-init (cask sha-st))) (nil? (md5-init (cask ck-st)))
+ (nil? (md5-feed (cask md5-st) 7)) (nil? (cksum-feed (cask ck-st) 7))
+ (nil? (md5-done (cask 8))) (nil? (cksum-done (cask 8))))
 
 (: _ (test_fin ())
    _ (puts "hash: ok -- md5 and sha-256 on their published vectors, the resumable sha-256
-      against the one-shot, cksum against a love walk
+      against the one-shot, cksum against a love walk, and md5/cksum streamed too
 ")
    0)
