@@ -47,7 +47,7 @@
                         b (cask 8192)
                         _ (: (drain x) (: n (swig m b)
                                           (? (< 0 n)
-                                             (: _ (scribe (peep bx () 0) (snip (string b) 0 n))
+                                             (: _ (scribe (peep bx () 0) (snip b 0 n))
                                                 (drain ()))
                                              0))
                            (drain ()))

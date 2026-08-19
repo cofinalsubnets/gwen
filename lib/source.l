@@ -111,7 +111,9 @@
    ; never gets back. The question is only whether the bytes agree, and a walk
    ; answers it in two buffers. A short read rides as a LEFTOVER, so the streams
    ; line up however the reads happen to fall.
-   (src-chunk q b) (: k (swig q b) (? (0 < k) (snip (string b) 0 k) ""))
+   ; ⚠ `snip` reads the CASK: (snip (string b) 0 k) would copy all 64K to take the k
+   ; bytes the read filled, and a short read at the tail of every file pays it twice.
+   (src-chunk q b) (: k (swig q b) (? (0 < k) (snip b 0 k) ""))
    (src-same? p1 p2)
     (: q1 (open p1 "r")
        q2 (open p2 "r")

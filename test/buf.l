@@ -1,6 +1,7 @@
 ; cask (Phase 3): a mutable flat byte string. One constructor (cask); pin /
 ; get / put fold into the generic ops (get/put dispatch on the value's kind);
-; pour blits a byte range from a string or cask into a cask. Bytes are data, so
+; pour blits a byte range from a string or cask into a cask, and snip reads one
+; back out as a string -- both take a cask where they take a string. Bytes are data, so
 ; a stored byte reads back as its unsigned value 0..255. Equality is by
 ; identity -- a cask is mutable, so two distinct bufs never compare =.
 
@@ -43,6 +44,14 @@
 
  ; --- pour clamps an oversized count rather than trampling the heap ---
  (: b (cask 2) _ (pour b 0 "ABCD" 0 100) (= 2 (tally b)))
+
+ ; --- snip reads a cask, the way pour does: the prefix a read filled, copied out ---
+ (: b (cask 4) _ (pour b 0 "ABCD" 0 4) (= "AB" (snip b 0 2)))
+ (: b (cask 4) _ (pour b 0 "ABCD" 0 4) (string? (snip b 0 2)))   ; a STRING, not a cask
+ (: b (cask 4) _ (pour b 0 "ABCD" 0 4) (= "ABCD" (snip b -9 99)))  ; clamps like a string
+ (: b (cask 4) (id? "" (snip b 2 2)))         ; an empty range is THE empty string
+ ; the snapshot is taken, not aliased: a later pin does not reach it
+ (: b (cask 2) _ (pour b 0 "AB" 0 2) s (snip b 0 2) _ (pin b 0 90) (= "AB" s))
 
  ; --- equality is by identity (a cask is mutable) ---
  (: b (cask 2) (= b b))                       ; a cask equals itself

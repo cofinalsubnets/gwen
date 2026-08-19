@@ -4486,10 +4486,13 @@ struct ai *ai_strof(struct ai *g, char const *cs) {
  return g; }
 
 op11(lvm_strp, strp(Sp[0]) ? putcharm(1) : zero)
+// a CASK snips as the string of its bytes, the way `pour` already READS one: swig
+// fills a buffer and the caller wants the prefix it filled, and (string b) first
+// copies the whole buffer to take a corner of it -- 64K a read for a 12-byte file.
 lvm(lvm_snip) {
- if (!strp(Sp[0])) Sp[2] = zero;
+ if (!strp(Sp[0]) && !caskp(Sp[0])) Sp[2] = zero;
  else {
-  struct ai_str *s = str(Sp[0]), *t;
+  struct ai_str *s = bytes_of(Sp[0]), *t;
   intptr_t i = oddp(Sp[1]) ? getcharm(Sp[1]) : 0,
            j = oddp(Sp[2]) ? getcharm(Sp[2]) : 0;
   i = max(i, 0), i = min(i, (word) len(s));
@@ -4502,7 +4505,7 @@ lvm(lvm_snip) {
   else {
    size_t req = str_type_width + b2w(j - i);
    Have(req);
-   s = str(Sp[0]);                               // re-read post-Have (GC may have moved it)
+   s = bytes_of(Sp[0]);                          // re-read post-Have (GC may have moved it)
    t = str(Hp);
    Hp += req;
    ini_str(t, j - i);

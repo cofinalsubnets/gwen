@@ -58,10 +58,15 @@
    ; `see` returns is a real byte and has to be kept.
    swigp        (member? 'swig (names ()))       ; ⚠ pinned BEFORE the lanes read it
    ; the CHUNK floor: at or above it, handing back the cask beats copying out of it. the
-   ; two lanes below cost two copies of the body against two syscalls, and 8K is where
-   ; those cross on this machine -- measured, 2000 reads: at 4K copying wins 23ms to 26ms,
-   ; at 8K the cask wins 29ms to 32ms, and it only widens (128K: 114ms to 51ms).
-   caskfloor    8192
+   ; lane below costs ONE copy of the body against two syscalls, and 128K is where those
+   ; cross on this machine -- measured, 40000 reads a point, best of five whole processes
+   ; (user+sys, a boot subtracted): 64K copy 0.96s cask 1.21s, 96K copy 1.32s cask 1.44s,
+   ; 128K copy 1.85s cask 1.60s.
+   ; ⚠ IT MOVED, from 8192, when `snip` learned to read a cask: the lane used to copy the
+   ; body TWICE -- (string buf) for the whole buffer, then the snip -- and one copy buys
+   ; it sixteen times the range. A floor is a measurement, so it re-measures when the
+   ; thing it measures changes.
+   caskfloor    131072
    ; --- lane 3, the general one: chunk into a jug until the reads stop. for anything
    ; `stat` cannot size -- a procfs file, a fifo -- and the fallback whenever a promise
    ; below turns out to be false. it reopens, because the lanes above have consumed theirs.
@@ -69,7 +74,7 @@
                     (? !q ()
                        (: j (jug 0) buf (cask 65536)
                           (go _) (: k (swig q buf)
-                                    (? (0 < k) (: _ (say j (snip (string buf) 0 k)) (go ()))
+                                    (? (0 < k) (: _ (say j (snip buf 0 k)) (go ()))
                                        (: c (see q) (? (c = -1) 0 (: _ (put j c) (go ()))))))
                           _ (go ()) _ (close q) (slurp j))))
    (gulp f)
@@ -96,15 +101,15 @@
                   (? ((k = n) && (0 = swig q probe) && (-1 = see q))
                      (: _ (close q) buf)
                      (: _ (close q) (gulp-loop f))))    ; it grew, or it shrank
-               ; --- lane 2, TWO copies: ask for ONE BYTE MORE than stat said. on a regular
+               ; --- lane 2, ONE copy: ask for ONE BYTE MORE than stat said. on a regular
                ; file `read` comes up short only at the end, so a read short of the buffer
-               ; proves we have all of it in one syscall, with no probe and no jug. for a
-               ; small body that beats lane 1, because two copies of it are cheaper than
+               ; proves we have all of it in one syscall, with no probe and no jug. below
+               ; the floor that beats lane 1, because one copy of the body is cheaper than
                ; the two syscalls a proof costs.
                (: buf (cask (n + 1))
                   k (swig q buf)
                   (? ((0 < k) && (k < tally buf))
-                     (: s (snip (string buf) 0 k) _ (close q) s)
+                     (: s (snip buf 0 k) _ (close q) s)
                      (: _ (close q) (gulp-loop f))))))))    ; it grew past its own size
    ; ⚠ `got?`, not `lit?`: lit? asks "is this a FUNCTION", and a string is not one, so
    ; (lit? line) reads every request as a dead peer. and it cannot be a net test either --
@@ -128,7 +133,7 @@
                    (? (sub? acc "\r\n\r\n" || sub? acc "\n\n") acc
                       (reqcap < tally acc) acc
                       (: k (swig c buf)
-                         (? (0 < k) (go (acc + snip (string buf) 0 k))
+                         (? (0 < k) (go (acc + snip buf 0 k))
                             (: ch (see c) (? (ch = -1) acc (go (acc + string ch)))))))
                    (go ""))
    ; the request line: up to the first newline, without its carriage return.
