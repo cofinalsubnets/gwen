@@ -2,11 +2,15 @@
 // registered (no love.c/love.h/main.c edit), the fs.c discipline:
 //
 //   (sha256 str) -> the 64-char lowercase hex digest | () misuse
-//   (sha256-init b) / (sha256-feed b str) / (sha256-done b)  -- the same digest over a
-//                   STREAM, the state carried in a 105-byte cask; see below
 //   (md5 str)    -> the 32-char lowercase hex digest | () misuse
 //   (crc32 str)  -> the IEEE crc32, a charm          | () misuse
 //   (cksum str)  -> POSIX cksum's crc, length folded in, a charm | () misuse
+//
+// and three of them stream, the state in a cask the CALLER allocates (the nifs do not
+// allocate) -- see the layouts below:
+//   (sha256-init b) / (sha256-feed b str) / (sha256-done b)   b a 105-byte cask
+//   (md5-init b)    / (md5-feed b str)    / (md5-done b)      b an 89-byte cask
+//   (cksum-init b)  / (cksum-feed b str)  / (cksum-done b)    b a 12-byte cask
 //
 // FIPS 180-4, RFC 1321, IEEE 802.3 and POSIX cksum, all the compact single-pass
 // shape; value ops, so absence/misuse answers (). crew/kore's cksum, md5sum and
@@ -59,28 +63,58 @@ static void sha_block(uint32_t h[8], const uint8_t *p) {
  h[0] += a; h[1] += b; h[2] += c; h[3] += d;
  h[4] += e; h[5] += f; h[6] += gg; h[7] += hh; }
 
-static void sha256_hex(const uint8_t *msg, size_t len, char out[65]) {
- uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                  0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19};
- size_t i = 0;
- for (; i + 64 <= len; i += 64) sha_block(h, msg + i);
+// --- the buffering md5 and sha-256 share -------------------------------------------
+// ⚠ THE ONLY DIFFERENCE between them here is which compression function runs and which
+// way the length is laid; the block arithmetic is the same, so it is written once and
+// both the one-shots and the streams below go through it.
+typedef void (*blkfn)(uint32_t *h, const uint8_t *p);
+
+// top the remainder up, run whole blocks straight off the input, keep the tail ->
+// the new remainder length
+static unsigned blk_feed(uint32_t *h, uint8_t *buf, unsigned rem, blkfn f,
+                         const uint8_t *p, uintptr_t n) {
+ if (rem) {
+  unsigned want = 64 - rem;
+  if (n < want) { memcpy(buf + rem, p, n); return (unsigned) (rem + n); }
+  memcpy(buf + rem, p, want);
+  f(h, buf);
+  p += want; n -= want; }
+ for (; n >= 64; p += 64, n -= 64) f(h, p);
+ if (n) memcpy(buf, p, n);
+ return (unsigned) n; }
+
+// the pad: 0x80, zeros, then the BIT count -- big-endian for sha-256, little for md5
+static void blk_done(uint32_t *h, const uint8_t *buf, unsigned r, uint64_t len,
+                     blkfn f, int be) {
  uint8_t tail[128];
- size_t r = len - i;
- memcpy(tail, msg + i, r);
+ memcpy(tail, buf, r);
  tail[r++] = 0x80;
  size_t pad = (r <= 56) ? 64 : 128;
  memset(tail + r, 0, pad - 8 - r);
- uint64_t bits = (uint64_t) len << 3;
- for (int k = 0; k < 8; k++) tail[pad - 1 - k] = (uint8_t) (bits >> (8 * k));
- sha_block(h, tail);
- if (pad == 128) sha_block(h, tail + 64);
- static const char hx[] = "0123456789abcdef";
+ uint64_t bits = len << 3;
  for (int k = 0; k < 8; k++)
+  if (be) tail[pad - 1 - k] = (uint8_t) (bits >> (8 * k));
+  else    tail[pad - 8 + k] = (uint8_t) (bits >> (8 * k));
+ f(h, tail);
+ if (pad == 128) f(h, tail + 64); }
+
+// the hex face both digests wear, low nibble last, n words wide
+static void blk_hex(const uint32_t *h, int words, int be, char *out) {
+ static const char hx[] = "0123456789abcdef";
+ for (int k = 0; k < words; k++)
   for (int j = 0; j < 4; j++) {
-  uint8_t b = (uint8_t) (h[k] >> (24 - 8 * j));
-  out[8 * k + 2 * j] = hx[b >> 4];
-  out[8 * k + 2 * j + 1] = hx[b & 15]; }
- out[64] = 0; }
+   uint8_t b = (uint8_t) (h[k] >> (be ? 24 - 8 * j : 8 * j));
+   out[8 * k + 2 * j] = hx[b >> 4];
+   out[8 * k + 2 * j + 1] = hx[b & 15]; }
+ out[8 * words] = 0; }
+
+static void sha256_hex(const uint8_t *msg, size_t len, char out[65]) {
+ uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                  0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19};
+ uint8_t buf[64];
+ unsigned r = blk_feed(h, buf, 0, sha_block, msg, (uintptr_t) len);
+ blk_done(h, buf, r, (uint64_t) len, sha_block, 1);
+ blk_hex(h, 8, 1, out); }
 
 ai_noinline static struct ai *host_sha256(struct ai *g) {
  if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
@@ -93,126 +127,6 @@ ai_noinline static struct ai *host_sha256(struct ai *g) {
  return g; }
 static lvm(lvm_sha256) {
  Pack(g); g = host_sha256(g);
- if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
- Unpack(g);
- ai_musttail return Next(1); }
-
-// --- the same digest, resumable ----------------------------------------------------
-// the one-shot above wants its whole message contiguous, and for an archive that is
-// megabytes existing only to be hashed once. these three carry the state in a CASK
-// instead, so a caller feeds it a bufferful at a time and holds nothing: the state is
-// h[8], the running byte count, and the sub-block remainder a feed could not consume.
-// the block loop is sha_block above, untouched -- one spelling of the compression
-// function, two ways in, so the streamed digest cannot drift from the one-shot.
-//
-// THE CASK IS 105 BYTES and its layout is this file's; love allocates it and carries
-// it, never reads it. big-endian throughout, like the digest, so the state is bytes
-// and not this machine's words -- it can be written down, and an image that carries
-// one wakes on any box.
-//
-//   0..31   h[8], big-endian
-//   32..39  the byte count so far, big-endian
-//   40      the remainder length, 0..63
-//   41..104 the remainder itself
-#define ShaSt 105
-#define ShaRem 40
-#define ShaBuf 41
-
-static struct ai_str *sha_cask(ai_word x) {                   // the cask's bytes, or NULL
- if ((x & 1) || ((union u*) x)->ap != lvm_cask) return NULL;
- struct ai_str *s = ((struct ai_cask*) x)->str;
- return s && s->len == ShaSt ? s : NULL; }
-
-static void sha_ld(const uint8_t *st, uint32_t h[8], uint64_t *len) {
- for (int k = 0; k < 8; k++)
-  h[k] = (uint32_t) st[4*k] << 24 | (uint32_t) st[4*k+1] << 16
-       | (uint32_t) st[4*k+2] << 8 | (uint32_t) st[4*k+3];
- uint64_t n = 0;
- for (int k = 0; k < 8; k++) n = n << 8 | st[32 + k];
- *len = n; }
-
-static void sha_st(uint8_t *st, const uint32_t h[8], uint64_t len) {
- for (int k = 0; k < 8; k++) {
-  st[4*k]   = (uint8_t) (h[k] >> 24); st[4*k+1] = (uint8_t) (h[k] >> 16);
-  st[4*k+2] = (uint8_t) (h[k] >> 8);  st[4*k+3] = (uint8_t)  h[k]; }
- for (int k = 0; k < 8; k++) st[32 + k] = (uint8_t) (len >> (56 - 8*k)); }
-
-// (sha256-init b) -> b, a 105-byte cask carrying FIPS 180-4's initial state and
-// nothing fed | () on anything that is not such a cask.
-ai_noinline static ai_word host_sha_init(ai_word x) {
- struct ai_str *s = sha_cask(x);
- if (!s) return ZeroPoint;
- static const uint32_t h0[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                                0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
- uint8_t *st = (uint8_t*) s->bytes;
- memset(st, 0, ShaSt);
- sha_st(st, h0, 0);
- return x; }
-static lvm(lvm_sha_init) { Sp[0] = host_sha_init(Sp[0]); ai_musttail return Next(1); }
-
-// (sha256-feed b str) -> b, str's bytes folded in | (). any chunk size: what does not
-// fill a block stays in the remainder and rides to the next feed, which is the whole
-// point -- a caller reads by the bufferful and never has to think in 64s.
-ai_noinline static ai_word host_sha_feed(ai_word x, ai_word a) {
- struct ai_str *cs = sha_cask(x);
- if (!cs || !ai_strp(a)) return ZeroPoint;
- struct ai_str *in = (struct ai_str*) a;
- uint8_t *st = (uint8_t*) cs->bytes;
- uint32_t h[8];
- uint64_t len;
- sha_ld(st, h, &len);
- unsigned rem = st[ShaRem];
- const uint8_t *p = (const uint8_t*) in->bytes;
- uintptr_t n = in->len;
- len += n;
- if (rem) {                                                  // top the remainder up first
-  unsigned want = 64 - rem;
-  if (n < want) { memcpy(st + ShaBuf + rem, p, n); st[ShaRem] = (uint8_t) (rem + n);
-                  sha_st(st, h, len); return x; }
-  memcpy(st + ShaBuf + rem, p, want);
-  sha_block(h, st + ShaBuf);
-  p += want; n -= want; rem = 0; }
- for (; n >= 64; p += 64, n -= 64) sha_block(h, p);
- if (n) memcpy(st + ShaBuf, p, n);
- st[ShaRem] = (uint8_t) n;
- sha_st(st, h, len);
- return x; }
-static lvm(lvm_sha_feed) {
- Sp[1] = host_sha_feed(Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
-
-// (sha256-done b) -> the 64-char lowercase hex digest | (). the pad is the one-shot's,
-// over the remainder rather than the message tail; b is left spent, not reusable.
-ai_noinline static struct ai *host_sha_done(struct ai *g) {
- struct ai_str *cs = sha_cask(g->sp[0]);
- if (!cs) return g->sp[0] = ZeroPoint, g;
- uint8_t *st = (uint8_t*) cs->bytes;
- uint32_t h[8];
- uint64_t len;
- sha_ld(st, h, &len);
- unsigned r = st[ShaRem];
- uint8_t tail[128];
- memcpy(tail, st + ShaBuf, r);
- tail[r++] = 0x80;
- size_t pad = (r <= 56) ? 64 : 128;
- memset(tail + r, 0, pad - 8 - r);
- uint64_t bits = len << 3;
- for (int k = 0; k < 8; k++) tail[pad - 1 - k] = (uint8_t) (bits >> (8 * k));
- sha_block(h, tail);
- if (pad == 128) sha_block(h, tail + 64);
- char hex[65];
- static const char hx[] = "0123456789abcdef";
- for (int k = 0; k < 8; k++)
-  for (int j = 0; j < 4; j++) {
-   uint8_t b = (uint8_t) (h[k] >> (24 - 8 * j));
-   hex[8*k + 2*j] = hx[b >> 4];
-   hex[8*k + 2*j + 1] = hx[b & 15]; }
- hex[64] = 0;
- if (!ai_ok(g = ai_strof(g, hex))) return g;                  // pushes: digest over arg
- g->sp[1] = g->sp[0];
- g->sp += 1;
- return g; }
-static lvm(lvm_sha_done) {
- Pack(g); g = host_sha_done(g);
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  ai_musttail return Next(1); }
@@ -254,25 +168,10 @@ static void md5_block(uint32_t h[4], const uint8_t *p) {
 
 static void md5_hex(const uint8_t *msg, size_t len, char out[33]) {
  uint32_t h[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
- size_t i = 0;
- for (; i + 64 <= len; i += 64) md5_block(h, msg + i);
- uint8_t tail[128];
- size_t r = len - i;
- memcpy(tail, msg + i, r);
- tail[r++] = 0x80;
- size_t pad = (r <= 56) ? 64 : 128;
- memset(tail + r, 0, pad - 8 - r);
- uint64_t bits = (uint64_t) len << 3;
- for (int k = 0; k < 8; k++) tail[pad - 8 + k] = (uint8_t) (bits >> (8 * k));
- md5_block(h, tail);
- if (pad == 128) md5_block(h, tail + 64);
- static const char hx[] = "0123456789abcdef";
- for (int k = 0; k < 4; k++)
-  for (int j = 0; j < 4; j++) {
-  uint8_t b = (uint8_t) (h[k] >> (8 * j));
-  out[8 * k + 2 * j] = hx[b >> 4];
-  out[8 * k + 2 * j + 1] = hx[b & 15]; }
- out[32] = 0; }
+ uint8_t buf[64];
+ unsigned r = blk_feed(h, buf, 0, md5_block, msg, (uintptr_t) len);
+ blk_done(h, buf, r, (uint64_t) len, md5_block, 0);
+ blk_hex(h, 4, 0, out); }
 
 ai_noinline static struct ai *host_md5(struct ai *g) {
  if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
@@ -340,19 +239,57 @@ static lvm(lvm_crc32) {
 // ⚠ a different crc from the one above in every part: the register runs the other way,
 // the seed is 0, and the message does not end at the last byte -- the byte count goes
 // through the same walk, low byte first, which is what makes cksum answer 4294967295
-// for the empty file rather than 0. one bit at a time, since the table it would want
-// is not the one crc32 built.
-static uint32_t ck_byte(uint32_t c, uint8_t b) {
+// for the empty file rather than 0. Its tables are its own for that reason: crc32's
+// are the reflected polynomial's and answer a different number.
+// ⚠ ck_bit IS THE STATEMENT of the polynomial, and it is the table's only source --
+// the walk below is derived from it, not a second spelling of it. (It was the walk
+// itself until the tables landed, at 8 shifts and a branch a byte: 90% of a `cksum`
+// run, and 3.5 s of the 3.9 s over 100 MB.)
+static uint32_t ck_bit(uint32_t c, uint8_t b) {
  c ^= (uint32_t) b << 24;
  for (int k = 0; k < 8; k++) c = (c & 0x80000000u) ? (c << 1) ^ 0x04c11db7u : c << 1;
  return c; }
 
+static uint32_t ck_t[8][256];
+static int ck_ready;
+
+static void ck_init(void) {
+ unsigned i, k;
+ for (i = 0; i < 256; i++) ck_t[0][i] = ck_bit(0, (uint8_t) i);
+ for (i = 0; i < 256; i++) {                    // table k is table 0 shifted k bytes on
+  uint32_t c = ck_t[0][i];
+  for (k = 1; k < 8; k++) {
+   c = (c << 8) ^ ck_t[0][(c >> 24) & 0xff];
+   ck_t[k][i] = c; } }
+ ck_ready = 1; }
+
+#define LD32BE(p) ((uint32_t) (p)[0] << 24 | (uint32_t) (p)[1] << 16 \
+                 | (uint32_t) (p)[2] << 8  | (uint32_t) (p)[3])
+
+// EIGHT BYTES AT A TIME, the same trade crc32 takes above: eight INDEPENDENT lookups
+// the machine can overlap, against a dependency chain one link per byte.
+static uint32_t ck_run(uint32_t c, const uint8_t *p, uintptr_t n) {
+ if (!ck_ready) ck_init();
+ for (; n >= 8; p += 8, n -= 8) {
+  uint32_t a = c ^ LD32BE(p), b = LD32BE(p + 4);
+  c = ck_t[7][(a >> 24) & 0xff] ^ ck_t[6][(a >> 16) & 0xff]
+    ^ ck_t[5][(a >> 8) & 0xff]  ^ ck_t[4][a & 0xff]
+    ^ ck_t[3][(b >> 24) & 0xff] ^ ck_t[2][(b >> 16) & 0xff]
+    ^ ck_t[1][(b >> 8) & 0xff]  ^ ck_t[0][b & 0xff]; }
+ for (; n; p++, n--) c = (c << 8) ^ ck_t[0][((c >> 24) ^ *p) & 0xff];
+ return c; }
+
+// the length, low byte first, through the same walk -- eight bytes at the most, so it
+// stays a byte at a time
+static uint32_t ck_len(uint32_t c, uint64_t len) {
+ if (!ck_ready) ck_init();
+ for (; len; len >>= 8) {
+  uint8_t b = (uint8_t) (len & 0xff);
+  c = (c << 8) ^ ck_t[0][((c >> 24) ^ b) & 0xff]; }
+ return c; }
+
 static uint32_t cksum_of(const uint8_t *p, uintptr_t n) {
- uint32_t c = 0;
- uintptr_t len = n;
- for (uintptr_t i = 0; i < n; i++) c = ck_byte(c, p[i]);
- for (; len; len >>= 8) c = ck_byte(c, (uint8_t) (len & 0xff));
- return ~c; }
+ return ~ck_len(ck_run(0, p, n), (uint64_t) n); }
 
 ai_noinline static struct ai *host_cksum(struct ai *g) {
  if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
@@ -365,17 +302,190 @@ static lvm(lvm_cksum) {
  Unpack(g);
  ai_musttail return Next(1); }
 
+// --- the same digests, resumable ---------------------------------------------------
+// the one-shots want their whole message contiguous, and for a file that is the file.
+// each triple below carries the state in a CASK instead, so a caller feeds it a gulp
+// at a time and holds nothing. the block loops above are untouched -- one spelling of
+// each compression function, two ways in, so a streamed digest cannot drift from its
+// one-shot, and test/host/hash.l holds the two together at every chunking.
+//
+// THE LAYOUT IS THIS FILE'S; love allocates the cask, carries it, and never reads it.
+// big-endian throughout, whatever the algorithm's own order, so the state is bytes and
+// not this machine's words -- it can be written down, and an image carrying one wakes
+// on any box.
+//
+//   sha-256, 105:  0..31 h[8] BE | 32..39 count BE | 40 remainder len | 41.. remainder
+//   md5,      89:  0..15 h[4] BE | 16..23 count BE | 24 remainder len | 25.. remainder
+//   cksum,    12:  0..3 crc BE   | 4..11 count BE                    (no block, no rem)
+//
+// ⚠ THE SIZE IS THE TYPE. Three states of three widths, and every entry point checks
+// the one it wants -- which is what stops an md5 state being fed to sha256-feed and
+// answering a number that looks like a digest.
+#define ShaSt 105
+#define ShaRem 40
+#define ShaBuf 41
+#define Md5St 89
+#define Md5Rem 24
+#define Md5Buf 25
+#define CkSt 12
+
+static struct ai_str *dig_cask(ai_word x, uintptr_t want) {   // the cask's bytes, or NULL
+ if ((x & 1) || ((union u*) x)->ap != lvm_cask) return NULL;
+ struct ai_str *s = ((struct ai_cask*) x)->str;
+ return s && s->len == want ? s : NULL; }
+
+// h[words] then the 8-byte count, both big-endian, at the front of the state
+static void dig_ld(const uint8_t *st, uint32_t *h, int words, uint64_t *len) {
+ for (int k = 0; k < words; k++)
+  h[k] = (uint32_t) st[4*k] << 24 | (uint32_t) st[4*k+1] << 16
+       | (uint32_t) st[4*k+2] << 8 | (uint32_t) st[4*k+3];
+ uint64_t n = 0;
+ for (int k = 0; k < 8; k++) n = n << 8 | st[4*words + k];
+ *len = n; }
+
+static void dig_st(uint8_t *st, const uint32_t *h, int words, uint64_t len) {
+ for (int k = 0; k < words; k++) {
+  st[4*k]   = (uint8_t) (h[k] >> 24); st[4*k+1] = (uint8_t) (h[k] >> 16);
+  st[4*k+2] = (uint8_t) (h[k] >> 8);  st[4*k+3] = (uint8_t)  h[k]; }
+ for (int k = 0; k < 8; k++) st[4*words + k] = (uint8_t) (len >> (56 - 8*k)); }
+
+// the three entry points a block digest wears, told apart by its state's width
+struct digspec { uintptr_t st; int words; unsigned remoff, bufoff; blkfn f; int be;
+                 const uint32_t *h0; };
+static const uint32_t sha_h0[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                                   0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
+static const uint32_t md5_h0[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
+static const struct digspec dig_sha = {ShaSt, 8, ShaRem, ShaBuf, sha_block, 1, sha_h0},
+                            dig_md5 = {Md5St, 4, Md5Rem, Md5Buf, md5_block, 0, md5_h0};
+
+// (X-init b) -> b, carrying the standard's initial state and nothing fed | () on
+// anything that is not a cask of X's width
+static ai_word dig_init(ai_word x, const struct digspec *d) {
+ struct ai_str *s = dig_cask(x, d->st);
+ if (!s) return ZeroPoint;
+ uint8_t *st = (uint8_t*) s->bytes;
+ memset(st, 0, d->st);
+ dig_st(st, d->h0, d->words, 0);
+ return x; }
+
+// (X-feed b str) -> b, str's bytes folded in | (). any chunk size: what does not fill
+// a block stays in the remainder and rides to the next feed, which is the whole point
+// -- a caller reads by the gulp and never has to think in 64s.
+static ai_word dig_feed(ai_word x, ai_word a, const struct digspec *d) {
+ struct ai_str *cs = dig_cask(x, d->st);
+ if (!cs || !ai_strp(a)) return ZeroPoint;
+ struct ai_str *in = (struct ai_str*) a;
+ uint8_t *st = (uint8_t*) cs->bytes;
+ uint32_t h[8];
+ uint64_t len;
+ dig_ld(st, h, d->words, &len);
+ len += (uint64_t) in->len;
+ st[d->remoff] = (uint8_t) blk_feed(h, st + d->bufoff, st[d->remoff], d->f,
+                                    (const uint8_t*) in->bytes, (uintptr_t) in->len);
+ dig_st(st, h, d->words, len);
+ return x; }
+
+// (X-done b) -> the hex digest | (). the pad is the one-shot's, over the remainder
+// rather than the message tail; b is left spent, not reusable.
+static struct ai *dig_done(struct ai *g, const struct digspec *d) {
+ struct ai_str *cs = dig_cask(g->sp[0], d->st);
+ if (!cs) return g->sp[0] = ZeroPoint, g;
+ uint8_t *st = (uint8_t*) cs->bytes;
+ uint32_t h[8];
+ uint64_t len;
+ dig_ld(st, h, d->words, &len);
+ blk_done(h, st + d->bufoff, st[d->remoff], len, d->f, d->be);
+ char hex[65];
+ blk_hex(h, d->words, d->be, hex);
+ if (!ai_ok(g = ai_strof(g, hex))) return g;                  // pushes: digest over arg
+ g->sp[1] = g->sp[0];
+ g->sp += 1;
+ return g; }
+
+ai_noinline static ai_word host_sha_init(ai_word x) { return dig_init(x, &dig_sha); }
+ai_noinline static ai_word host_md5_init(ai_word x) { return dig_init(x, &dig_md5); }
+ai_noinline static ai_word host_sha_feed(ai_word x, ai_word a) {
+ return dig_feed(x, a, &dig_sha); }
+ai_noinline static ai_word host_md5_feed(ai_word x, ai_word a) {
+ return dig_feed(x, a, &dig_md5); }
+ai_noinline static struct ai *host_sha_done(struct ai *g) { return dig_done(g, &dig_sha); }
+ai_noinline static struct ai *host_md5_done(struct ai *g) { return dig_done(g, &dig_md5); }
+
+static lvm(lvm_sha_init) { Sp[0] = host_sha_init(Sp[0]); ai_musttail return Next(1); }
+static lvm(lvm_md5_init) { Sp[0] = host_md5_init(Sp[0]); ai_musttail return Next(1); }
+static lvm(lvm_sha_feed) {
+ Sp[1] = host_sha_feed(Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
+static lvm(lvm_md5_feed) {
+ Sp[1] = host_md5_feed(Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
+static lvm(lvm_sha_done) {
+ Pack(g); g = host_sha_done(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ Unpack(g);
+ ai_musttail return Next(1); }
+static lvm(lvm_md5_done) {
+ Pack(g); g = host_md5_done(g);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ Unpack(g);
+ ai_musttail return Next(1); }
+
+// cksum streams with NO block and NO remainder: its walk is a byte at a time, so the
+// whole state is the register and the count. ⚠ and the count is not bookkeeping here
+// -- cksum folds it into the message at the end, which is why an empty file answers
+// 4294967295 and not 0, and why `done` is where the length finally speaks.
+ai_noinline static ai_word host_ck_init(ai_word x) {
+ struct ai_str *s = dig_cask(x, CkSt);
+ if (!s) return ZeroPoint;
+ memset((uint8_t*) s->bytes, 0, CkSt);
+ return x; }
+ai_noinline static ai_word host_ck_feed(ai_word x, ai_word a) {
+ struct ai_str *cs = dig_cask(x, CkSt);
+ if (!cs || !ai_strp(a)) return ZeroPoint;
+ struct ai_str *in = (struct ai_str*) a;
+ uint8_t *st = (uint8_t*) cs->bytes;
+ uint32_t c;
+ uint64_t len;
+ dig_ld(st, &c, 1, &len);
+ uintptr_t n = in->len;
+ len += (uint64_t) n;
+ c = ck_run(c, (const uint8_t*) in->bytes, n);
+ dig_st(st, &c, 1, len);
+ return x; }
+ai_noinline static ai_word host_ck_done(ai_word x) {
+ struct ai_str *cs = dig_cask(x, CkSt);
+ if (!cs) return ZeroPoint;
+ uint8_t *st = (uint8_t*) cs->bytes;
+ uint32_t c;
+ uint64_t len;
+ dig_ld(st, &c, 1, &len);
+ return putcharm(~ck_len(c, len)); }
+static lvm(lvm_ck_init) { Sp[0] = host_ck_init(Sp[0]); ai_musttail return Next(1); }
+static lvm(lvm_ck_feed) {
+ Sp[1] = host_ck_feed(Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
+static lvm(lvm_ck_done) { Sp[0] = host_ck_done(Sp[0]); ai_musttail return Next(1); }
+
 static union u const nif_sha256[] = {{lvm_sha256}, {lvm_ret0}},
                     nif_sha_init[] = {{lvm_sha_init}, {lvm_ret0}},
                     nif_sha_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_sha_feed}, {lvm_ret0}},
                     nif_sha_done[] = {{lvm_sha_done}, {lvm_ret0}},
                     nif_md5[]    = {{lvm_md5},    {lvm_ret0}},
+                    nif_md5_init[] = {{lvm_md5_init}, {lvm_ret0}},
+                    nif_md5_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_md5_feed}, {lvm_ret0}},
+                    nif_md5_done[] = {{lvm_md5_done}, {lvm_ret0}},
                     nif_crc32[]  = {{lvm_crc32},  {lvm_ret0}},
-                    nif_cksum[]  = {{lvm_cksum},  {lvm_ret0}};
+                    nif_cksum[]  = {{lvm_cksum},  {lvm_ret0}},
+                    nif_ck_init[] = {{lvm_ck_init}, {lvm_ret0}},
+                    nif_ck_feed[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_ck_feed}, {lvm_ret0}},
+                    nif_ck_done[] = {{lvm_ck_done}, {lvm_ret0}};
 AiNif("sha256", nif_sha256);
 AiNif("sha256-init", nif_sha_init);
 AiNif("sha256-feed", nif_sha_feed);
 AiNif("sha256-done", nif_sha_done);
 AiNif("md5", nif_md5);
+AiNif("md5-init", nif_md5_init);
+AiNif("md5-feed", nif_md5_feed);
+AiNif("md5-done", nif_md5_done);
 AiNif("crc32", nif_crc32);
 AiNif("cksum", nif_cksum);
+AiNif("cksum-init", nif_ck_init);
+AiNif("cksum-feed", nif_ck_feed);
+AiNif("cksum-done", nif_ck_done);

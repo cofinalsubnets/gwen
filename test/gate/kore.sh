@@ -180,7 +180,52 @@ both "tac no-nl" tac "$ho/.cu3"
 printf 'q\nq\nr\n' | tee "$ho/.cu-g2" > "$g"
 printf 'q\nq\nr\n' | korerun tee "$ho/.cu-o2" > "$o"
 cmp -s "$g" "$o" && cmp -s "$ho/.cu-g2" "$ho/.cu-o2" || fail "kore tee vs GNU"
+# THE GULP SEAMS. cat/head/tail/nl/rev read by 4096-byte chugs now, so a line that
+# spans a gulp, an input with no newline in it at all, and a file that ends exactly
+# on the boundary are each a place the reader can lose or double a byte -- and none
+# of them shows in the small fixtures above.
+awk 'BEGIN{for(i=0;i<300;i++)printf "%09d-", i; print ""}' > "$ho/.gs1"   # one 3000-char line
+awk 'BEGIN{for(i=0;i<40;i++){for(j=0;j<300;j++)printf "%09d-",j; print ""}}' > "$ho/.gs2"
+dd if=/dev/zero bs=4096 count=1 2>/dev/null | tr '\0' 'x' > "$ho/.gs3"    # 4096, no newline
+printf 'abc' > "$ho/.gs4"                                                 # no newline at all
+: > "$ho/.gs5"                                                            # empty
+# ⚠ wc counts a WORD as a maximal ink run, so one straddling a gulp is the seam that
+# double-counts; and uniq's runs straddle too. Neither shows on the fixtures above,
+# which hold no spaces and no repeats.
+awk 'BEGIN{for(i=0;i<2000;i++)printf "word%d ", i%7; print ""}' > "$ho/.gs6"
+awk 'BEGIN{for(i=0;i<9000;i++)print "dup" i%3}' > "$ho/.gs7"
+for f in .gs1 .gs2 .gs3 .gs4 .gs5 .gs6 .gs7; do
+  for t in "cat" "rev" "nl" "head -n 3" "tail -n 3" "head -n 1" \
+           "grep 000000001" "grep -c 0" "grep -n 000000002" "sed s/00/QQ/" "sed -n 2p" \
+           'sed $d' "sed 2q" "wc" "wc -c" "wc -l" "wc -w" "uniq" "uniq -c" \
+           "tac" "fold -w 33" "fold -s -w 33" "expand -t 5" "unexpand -a -t 5" \
+           "cksum" "md5sum" "sha256sum"; do
+    # shellcheck disable=SC2086
+    $t "$ho/$f" > "$g" 2>/dev/null; korerun $t "$ho/$f" > "$o" 2>/dev/null
+    cmp -s "$g" "$o" || fail "kore $t over $f (a gulp seam)"
+  done
+done
+korerun cat "$ho/.gs1" "$ho/.gs4" "$ho/.gs2" > "$o"; cat "$ho/.gs1" "$ho/.gs4" "$ho/.gs2" > "$g"
+cmp -s "$g" "$o" || fail "kore cat: operands joined across the seams"
+# ⚠ sed JOINS its operands, so $ is the last line of the LAST file and an unterminated
+# file in the MIDDLE keeps its newline -- both are lookahead, and both are invisible
+# on one operand. grep does not join: its numbers restart per file.
+for t in 'sed $d' 'sed $s/^/L/' "sed -n 2p" "sed 3q" "grep -n 000000002" "grep -c 0"; do
+  # shellcheck disable=SC2086
+  $t "$ho/.gs2" "$ho/.gs4" "$ho/.gs2" > "$g" 2>/dev/null
+  korerun $t "$ho/.gs2" "$ho/.gs4" "$ho/.gs2" > "$o" 2>/dev/null
+  cmp -s "$g" "$o" || fail "kore $t over three operands (the join, and its lookahead)"
+done
+# tee holds every destination open while it reads, so its seam is the fan-out
+tee "$ho/.te1" "$ho/.te2" < "$ho/.gs6" > "$g"
+korerun tee "$ho/.to1" "$ho/.to2" < "$ho/.gs6" > "$o"
+cmp -s "$g" "$o" && cmp -s "$ho/.te1" "$ho/.to1" && cmp -s "$ho/.te2" "$ho/.to2" \
+  || fail "kore tee: two destinations across the gulps"
+wc "$ho/.gs6" "$ho/.gs7" | sed "s|$ho/||g" > "$g"
+korerun wc "$ho/.gs6" "$ho/.gs7" | sed "s|$ho/||g" > "$o"
+cmp -s "$g" "$o" || fail "kore wc: the total row over two operands"
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/tac/seq/echo/basename/tee GNU-identical) ok"
+echo "kore: the gulp seams (a line past 4096, no final newline, empty, boundary-exact) ok"
 
 # ------------------------------------------------------------ the field tools
 printf 'a:b:c\nnodelim\nx:y\n' > "$ho/.fu1"
@@ -739,7 +784,24 @@ done
 both "od -An -tx1"  od -An -tx1 "$rt/o1"
 both "od two files" od -c "$rt/o1" "$rt/oesc"
 both "od -Ax -to2"  od -Ax -to2 "$rt/o1"
+# ⚠ od READS its operands now, a row at a time off a joined stream, so a row that
+# spans a 4096-byte gulp, a -j that skips past one, and a `*` run that crosses one
+# are all new seams -- and every fixture above is under fifty bytes.
+awk 'BEGIN{for(i=0;i<1300;i++)printf "0123456789abcdef"}' > "$rt/obig"   # 20800, all dup
+head -c 9000 /dev/urandom > "$rt/orand"
+for fl in -c -tx1 '-j 4090 -c' '-j 4096 -tx1' '-N 4100 -c' '-j 4000 -N 200 -tx1' -v; do
+  # shellcheck disable=SC2086
+  both "od $fl obig"  od $fl "$rt/obig"
+  both "od $fl orand" od $fl "$rt/orand"
+done
+both "od join skip"  od -j 5000 -tx1 "$rt/orand" "$rt/obig"
+both "od join lim"   od -N 9100 -c   "$rt/orand" "$rt/obig"
+both "od join three" od -tx1 "$rt/o1" "$rt/orand" "$rt/oesc"
+# -j past the end of the COMBINED input is a diagnostic, and -j exactly at it is not
+korerun od -j 999999 -c "$rt/o1" >/dev/null 2>&1 && fail "kore od: -j past the end must fail"
+both "od -j at end" od -j 14 -c "$rt/o1"
 echo "kore: record tools (paste/comm/join/split/od GNU-identical -- od over 4 files x 24 readings) ok"
+echo "kore: od across the gulps (rows, -j, -N and the * run over 4096) ok"
 
 # -------------------------------------------------------------- the checksums
 # cksum, md5sum and sha256sum against GNU. these three are the tools whose entire

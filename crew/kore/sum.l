@@ -24,11 +24,36 @@
           (: w (trap (\ _ (: _ (f 0) 1)) () (\ a b 0)) _ (pin sum-door k w) w)))
    (sum-have who nm k probe) (? (sum-nif k probe) 0 (udie 2 (who + ": this image carries no " + nm)))
 
-   ; an operand's bytes as a string: "-" is stdin, as it is everywhere in kore.
-   ; ⚠ 'dir is its own answer because a directory OPENS and slurps EMPTY -- digested,
-   ; it would be the digest of nothing, which is a plausible wrong number rather than
-   ; a miss, and the only reading here worth a guard of its own.
-   (sum-text f)
+   ; ⚠ THE TRIPLES LIVE INSIDE LAMBDAS for the reason the probes do: an unbound global
+   ; scares when it is REFERENCED, and this file is baked by a love that HAS the nifs
+   ; into an image that may not. [state-width init feed done].
+   (sum-shad _) [105 sha256-init sha256-feed sha256-done]
+   (sum-md5d _) [89  md5-init    md5-feed    md5-done]
+   (sum-ckd _)  [12  cksum-init  cksum-feed  cksum-done]
+
+   ; one operand digested as a STREAM -> [digest bytes] | 'dir | (). "-" is stdin, as
+   ; it is everywhere in kore. ⚠ sha256sum of a 100 MB file used to hold all 100 MB to
+   ; digest it; the state is a cask of tens of bytes and the file goes past a gulp at
+   ; a time. The byte count rides out because cksum's line says it.
+   ; ⚠ 'dir is its own answer because a directory OPENS and reads EMPTY -- digested, it
+   ; would be the digest of nothing, a plausible wrong number rather than a miss.
+   (sum-run mk f)
+    (? (udirp f) 'dir
+       (: p (uin (\ _ 0) f)
+          (? (! p) ()
+             (: d (mk 0)
+                b (cask <d)
+                _ (<>d b)
+                rd (urd <p)
+                (go n) (: h (urd-gulp rd) k (tally h)
+                          (? k (: _ (<>>d b h) (go (n + k))) n))
+                n (go 0)
+                _ (? <>p (close <p) 0)
+                v (<>>>d b)
+                (? (v = ()) () [v n])))))
+   ; the -c list is read WHOLE, and should be: it is a list of digests, never the thing
+   ; digested. one line a file, and nobody writes a gigabyte of them.
+   (sum-list f)
     (? (f = "-") [1 ((slurp in) + "")]
        (udirp f) 'dir
        (: r (uread f) (? (two? r) [1 (<>r + "")] ())))
@@ -38,20 +63,20 @@
 
    ; --- the two output faces -------------------------------------------------
    ; cksum says the byte count too, and says NO name for stdin (GNU's face exactly)
-   (sum-ckline t f) ((show (cksum t)) + " " + (show (tally t)) + (? (tally f) (" " + f) "") + "\n")
-   (sum-hexline dgst t f) ((dgst t) + "  " + f + "\n")
+   (sum-ckline v n f) ((show v) + " " + (show n) + (? (tally f) (" " + f) "") + "\n")
+   (sum-hexline v n f) (v + "  " + f + "\n")
 
    ; --- the digest lane ------------------------------------------------------
    ; every operand onto out; sn names stdin in the no-operand lane. one unreadable
    ; file complains and costs the status, the rest still run.
-   (sum-say who line sn as)
-    (: (row f ok)
-        (: r (sum-text f)
-           (? (two? r) (: _ (say out (line <>r f)) ok)
+   (sum-say who line mk sn as)
+    (: (row f nm ok)
+        (: r (sum-run mk f)
+           (? (two? r) (: _ (say out (line <r <>r nm)) ok)
               (: _ (sum-nope who f r) 0)))
-       (go a ok) (? (two? a) (go >a (row <a ok)) (: _ (flush out) (? ok 0 1)))
+       (go a ok) (? (two? a) (go >a (row <a <a ok)) (: _ (flush out) (? ok 0 1)))
        (? (two? as) (go as 1)
-          (: _ (say out (line ((slurp in) + "") sn)) _ (flush out) 0)))
+          (: _ (row "-" sn 1) _ (flush out) 0)))
 
    ; --- the -c lane ----------------------------------------------------------
    ; a line is n hex digits, two characters (two spaces, or " *" where the writer
@@ -82,15 +107,15 @@
    ; all, and LISTS that were no good. ⚠ sour is its own count because it costs the
    ; status and says nothing: the two warnings below are each a claim about lines, and
    ; a list nobody could read has none to make a claim about.
-   (sum-check who dgst n as)
+   (sum-check who mk n as)
     (: (row l st)
         (: p (sum-split l n)
            bad <st unread <>st seen <>>st sour <>>>st
            (? !(two? p) st
-              (: said <p f <>p r (sum-text f)
+              (: said <p f <>p r (sum-run mk f)
                  (? !(two? r) (: _ (sum-nope who f r) _ (say out (f + ": FAILED open or read\n"))
                                  [bad (unread + 1) (seen + 1) sour])
-                    ((dgst <>r) = said) (: _ (say out (f + ": OK\n")) [bad unread (seen + 1) sour])
+                    (<r = said) (: _ (say out (f + ": OK\n")) [bad unread (seen + 1) sour])
                     (: _ (say out (f + ": FAILED\n")) [(bad + 1) unread (seen + 1) sour])))))
        (over ls st) (? (two? ls) (over >ls (row <ls st)) st)
        ; one list, and GNU's complaint where nothing in it was a checksum line
@@ -103,7 +128,7 @@
                  [<s2 <>s2 <>>s2 (<>>>s2 + 1)])))
        (walk a st)
         (? !(two? a) st
-           (: r (sum-text <a)
+           (: r (sum-list <a)
               (? (two? r) (walk >a (list1 <a <>r st))
                  (: _ (sum-nope who <a r) (walk >a [<st <>st <>>st (<>>>st + 1)])))))
        st (? (two? as) (walk as [0 0 0 0]) (list1 "standard input" ((slurp in) + "") [0 0 0 0]))
@@ -121,11 +146,12 @@
 
    ; --- the three mains ------------------------------------------------------
    ; the digest pair share a front: -c reads a list back, anything else digests operands
-   (sum-front who nm k probe dgst n as)
+   (sum-front who nm k probe mk n as)
     (: _ (sum-have who nm k probe)
-       (? ((two? as) && ((<as = "-c") || (<as = "--check"))) (sum-check who dgst n >as)
-          (sum-say who (sum-hexline dgst) "-" as)))
-   (cksum-main as) (: _ (sum-have "cksum" "cksum" 0 sum-ckp) (sum-say "cksum" sum-ckline "" as))
-   (md5sum-main as) (sum-front "md5sum" "md5" 1 sum-md5p (\ t (md5 t)) 32 as)
-   (sha256sum-main as) (sum-front "sha256sum" "sha256" 2 sum-shap (\ t (sha256 t)) 64 as))
+       (? ((two? as) && ((<as = "-c") || (<as = "--check"))) (sum-check who mk n >as)
+          (sum-say who sum-hexline mk "-" as)))
+   (cksum-main as) (: _ (sum-have "cksum" "cksum" 0 sum-ckp)
+                       (sum-say "cksum" sum-ckline sum-ckd "" as))
+   (md5sum-main as) (sum-front "md5sum" "md5" 1 sum-md5p sum-md5d 32 as)
+   (sha256sum-main as) (sum-front "sha256sum" "sha256" 2 sum-shap sum-shad 64 as))
 ) ; module 'kore

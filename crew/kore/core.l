@@ -17,7 +17,7 @@
 (module 'kore
 (:
    ; -- cat: files (or -) onto out, verbatim --
-   (cat-main as) (ueach "cat" puts as)
+   (cat-main as) (uchunks "cat" puts as)
 
    ; -- tac: the lines back to front, a file at a time. the newline rides the line it
    ; FOLLOWED, so a last line arriving without one comes back first without one --
@@ -27,7 +27,18 @@
                         (t k = 10) (go (k + 1) (k + 1) (snip t st (k + 1) >< acc))
                         (go (k + 1) st acc))
        (go 0 0 ()))
-   (tac-main as) (ueach "tac" (\ t (foldl (\ _ r (say out r)) 0 (utac t))) as)
+   ; ⚠ tac is the one line tool that MUST hold its input -- nothing can be said until
+   ; the end is known. Reading it a line at a time still drops the whole-text copy and
+   ; the `lines` list over it, and PREPENDING IS THE REVERSAL, so there is no rev.
+   ; utac stays as the pure face law.l holds.
+   (tac-main as)
+    (ureach "tac"
+            (\ f first rd
+               (: (go acc) (: l (urd-line rd)
+                              (? !(two? l) acc (go ((<l + (? <>l "\n" "")) >< acc))))
+                  (out1 m) (? (two? m) (: _ (say out <m) (out1 >m)) 1)
+                  (out1 (go ()))))
+            as)
 
    ; -- echo: the args back; -n holds the newline --
    (echo-main as)
@@ -44,7 +55,7 @@
                             (47 < (w k) < 58) (go (k + 1))
                             0)
                   (go 1))
-   (uclip who clip as)
+   (uclip-args who as)                      ; -> (n files many?)
     (: nr (? (two? as && (<as = "-n"))
              (? (two? >as) `((uatoi <>as) >>as)
                 (udie 2 (who + ": -n wants a count")))
@@ -52,20 +63,35 @@
              `((uatoi (snip <as 1 (tally <as))) >as)
              `(10 as))
        n <nr fs <>nr
-       many (two? fs && two? >fs)
-       (one f first ok)
-        (: r (? (f = "-") `(1 (slurp in)) (uread f))
-           (? (two? r)
-              (: _ (? many (say out (uhdr first (? (f = "-") "standard input" f))) ())
-                 _ (say out (clip n <>r))
-                 ok)
-              (: _ (say err (who + ": cannot open " + f)) _ (put err 10) 0)))
-       (go a first ok) (? (two? a) (go >a 0 (one <a first ok))
-                          (: _ (flush out) (? ok 0 1)))
-       (? (two? fs) (go fs 1 1)
-          (: _ (say out (clip n (slurp in))) _ (flush out) 0)))
-   (head-main as) (uclip "head" uhead as)
-   (tail-main as) (uclip "tail" utail as)
+       `(n fs (? (two? fs && two? >fs) 1 0)))
+   (uclip-hdr many first f)
+    (? many (say out (uhdr first (? (f = "-") "standard input" f))) 0)
+   ; ⚠ HEAD STOPS -- it used to `lines` the whole input and take n off the front, so
+   ; one line of a 100 MB file cost 7.2 GB. uhead is still the spec for where the
+   ; last newline goes (law.l holds it); this answers the same text, a line at a time.
+   (head-main as)
+    (: p (uclip-args "head" as) n <p fs <>p many <>>p
+       (body f first rd)
+        (: _ (uclip-hdr many first f)
+           (go k) (? (n <= k) 1
+                     (: l (urd-line rd)
+                        (? (! (two? l)) 1
+                           (: _ (say out <l) _ (? <>l (put out 10) 0) (go (k + 1))))))
+           (go 0))
+       (ureach "head" body fs))
+   ; tail cannot stop reading but need not HOLD: a ring of the last n lines is the
+   ; whole answer. ⚠ trimmed at 2n, so the trim costs n every n lines, not n a line.
+   (tail-main as)
+    (: p (uclip-args "tail" as) n <p fs <>p many <>>p
+       (body f first rd)
+        (: _ (uclip-hdr many first f)
+           (go acc k) (: l (urd-line rd)
+                         (? (! (two? l)) acc
+                            (: a2 (l >< acc)
+                               (? ((* 2 n) <= (k + 1)) (go (take n a2) n) (go a2 (k + 1))))))
+           (out1 m) (? (two? m) (: _ (say out (<(<m))) _ (? (<>(<m)) (put out 10) 0) (out1 >m)) 1)
+           (out1 (rev (take n (go () 0)))))
+       (ureach "tail" body fs))
 
    ; -- wc: lines, words, bytes (flags pick; bare wc reads all three) --
    (wc-main as)
@@ -79,19 +105,26 @@
        l? (? none 1 <p) w? (? none 1 <>p) c? (? none 1 <>>p)
        fs <>>>p
        (c3 x) <>>x
-       ; read every input up front: a row is (name (l w b)), name () for stdin
-       (rd a acc ok)
-        (? !(two? a) `((rev acc) ok)
-           (: f <a
-              r (? (f = "-") `(1 (slurp in)) (uread f))
-              (? (two? r) (rd >a (`(f (ucount <>r)) >< acc) ok)
-                 (: _ (say err ("wc: cannot open " + f)) _ (put err 10)
-                    (rd >a acc 0)))))
-       ro (? (two? fs) (rd fs () 1) `(`(`(() (ucount (slurp in)))) 1))
-       rows <ro ok <>ro
+       ; a row is (name (l w b)), name () for stdin. ⚠ counted a gulp at a time --
+       ; nothing here needs the text, only the three numbers off it
+       st (tablet 0) _ (pin st 'rows ()) _ (pin st 'ok 1)
+       _ (ureachm (\ f (: _ (say err ("wc: cannot open " + f)) _ (put err 10)
+                          _ (pin st 'ok 0) 0))
+                  (\ f first rd
+                     (: (go acc) (: h (urd-gulp rd) (? (tally h) (go (ucount-go acc h)) acc))
+                        c (ucount-say (go ucount0))
+                        _ (pin st 'rows (`((? (two? fs) f ()) c) >< (peep st 'rows ())))
+                        1))
+                  fs)
+       rows (rev (peep st 'rows ())) ok (peep st 'ok 0)
        (sum sel a acc) (? (two? a) (sum sel >a (acc + sel <><a)) acc)
        tl (sum cap rows 0) tw (sum caup rows 0) tb (sum c3 rows 0)
-       wdt (tally (show tb))                        ; the GNU face: pad to the byte total
+       ; the GNU face: pad every column to the BYTE TOTAL's width, even where the
+       ; bytes are not printed (`wc -lw` of a 3001-byte file wears width 4).
+       ; ⚠ ONE COUNT OVER ONE INPUT WEARS NONE -- `wc -l f` is "1 f", never "   1 f".
+       ; A one-digit byte count hides this, which is every fixture until .gs1.
+       wdt (? (((? l? 1 0) + (? w? 1 0) + (? c? 1 0) = 1) && !(two? >rows))
+              1 (tally (show tb)))
        (fmt cnt) (: a (? c? `((upad wdt (show (c3 cnt)))) ())
                     a (? w? (upad wdt (show <>cnt) >< a) a)
                     a (? l? (upad wdt (show <cnt) >< a) a)
@@ -134,31 +167,42 @@
    (uniq-main as)
     (: c? (two? as && (<as = "-c"))
        fs (? c? >as as)
-       t (? (two? fs)
-            (: x (uread <fs) (? (two? x) <>x
-                                     (udie 2 ("uniq: cannot open " + <fs))))
-            (slurp in))
        (emit line cnt) (: _ (? c? (say out (upad 7 (show cnt) + " ")) ())
                           _ (say out line) (put out 10))
-       (go a prev cnt)
-        (? !(two? a) (? (0 < cnt) (emit prev cnt) ())
-           (cnt = 0) (go >a <a 1)
-           (<a = prev) (go >a prev (cnt + 1))
-           (: _ (emit prev cnt) (go >a <a 1)))
-       _ (go (lines t) () 0)
+       ; adjacent runs, so ONE line of memory is the whole state -- the run's first
+       ; and how many have matched it
+       _ (ureachm (\ f (udie 2 ("uniq: cannot open " + f)))
+                  (\ f first rd
+                     (: (go prev cnt)
+                         (: l (urd-line rd)
+                            (? !(two? l) (: _ (? (0 < cnt) (emit prev cnt) ()) 1)
+                               (: x <l
+                                  (? (cnt = 0) (go x 1)
+                                     (x = prev) (go prev (cnt + 1))
+                                     (: _ (emit prev cnt) (go x 1))))))
+                        (go () 0)))
+                  (? (two? fs) [<fs] ()))
        _ (flush out) 0)
 
    ; -- tee: stdin onto out AND every file (-a appends) --
    (tee-main as)
     (: a? (two? as && (<as = "-a"))
        fs (? a? >as as)
-       t (slurp in)
-       (one f ok) (: q (open f (? a? "a" "w"))
-                     (? q (: _ (say q t) _ (close q) ok)
-                        (: _ (say err ("tee: cannot open " + f)) _ (put err 10) 0)))
-       (go a ok) (? (two? a) (go >a (one <a ok)) ok)
-       ok (go fs 1)
-       _ (puts t) _ (flush out) (? ok 0 1))
+       ; ⚠ every destination opens UP FRONT. tee is a pipe, and a pipe cannot wait
+       ; for the end of its input to start writing -- it used to slurp stdin whole.
+       (opn l acc ok)
+        (? !(two? l) [(rev acc) ok]
+           (: q (open <l (? a? "a" "w"))
+              (? q (opn >l (q >< acc) ok)
+                 (: _ (say err ("tee: cannot open " + <l)) _ (put err 10)
+                    (opn >l acc 0)))))
+       r (opn fs () 1)
+       qs <r ok <>r
+       (each1 l h) (? (two? l) (: _ (say <l h) (each1 >l h)) 0)
+       _ (uchunks "tee" (\ h (: _ (each1 qs h) _ (puts h) 1)) ())
+       (clo l) (? (two? l) (: _ (close <l) (clo >l)) 0)
+       _ (clo qs)
+       _ (flush out) (? ok 0 1))
 
    ; -- seq: FIRST INCR LAST, one a line (one and two args fill in the 1s) --
    (seq-main as)
@@ -362,9 +406,9 @@
            (go k) (? (n < k) () (: _ (? (upick spec k) (put o (ln (k - 1))) ()) (go (k + 1))))
            _ (go 1)
            _ (say out (slurp o)) (put out 10))
-       (dot t) (: (go m) (? (two? m) (: _ ((? fspec fieldline charline) <m) (go >m)) ())
-                  (go (lines t)))
-       (ueach "cut" dot fs))
+       ; cut terminates every line it writes, so the source's own end says nothing
+       (dot ln term?) (: _ ((? fspec fieldline charline) ln) 1)
+       (ulines "cut" dot fs))
 
    ; -- tr: SET1 SET2 translates (SET2 pads with its last charm), -d deletes, -s
    ; squeezes same-charm runs; stdin only, like the real one --
@@ -407,27 +451,21 @@
    ; seven spaces and no number, and the count carries across inputs --
    (nl-main as)
     (: t #('i 1)
-       (dot txt)
-        (: (go m) (? !(two? m) ()
-                     (: ln <m
-                        _ (? !ln (: _ (say out "       ") (put out 10))
-                             (: i (peep t 'i 1)
-                                _ (say out (upad 6 (show i))) _ (put out 9)
-                                _ (say out ln) _ (put out 10)
-                                (pin t 'i (i + 1))))
-                        (go >m)))
-           (go (lines txt)))
-       (ueach "nl" dot as))
+       ; nl terminates every line it writes, so term? says nothing here either
+       (dot ln term?)
+        (: _ (? !ln (: _ (say out "       ") (put out 10))
+                (: i (peep t 'i 1)
+                   _ (say out (upad 6 (show i))) _ (put out 9)
+                   _ (say out ln) _ (put out 10)
+                   (pin t 'i (i + 1))))
+           1)
+       (ulines "nl" dot as))
 
    ; -- rev: every line back to front --
    (rev-main as)
-    (: (dot txt) (: e (nl-end? txt)                     ; the last line keeps the source's end
-                    (go m) (? !(two? m) ()
-                              (: _ (say out (urev <m))
-                                 _ (? (e || two? >m) (put out 10) 0)
-                                 (go >m)))
-                    (go (lines txt)))
-       (ueach "rev" dot as))
+    ; the last line keeps the source's end, which is exactly what term? carries
+    (: (dot ln term?) (: _ (say out (urev ln)) _ (? term? (put out 10) 0) 1)
+       (ulines "rev" dot as))
 
    ; ---- the column tools: fold, expand, unexpand --------------------------------
    ; all three count COLUMNS and not bytes -- a tab steps to the next stop, \b steps
@@ -470,13 +508,15 @@
        w (? (string? v) (uatoi v) (? (charm? <p) <p 80))
        _ (? (0 < w) () (udie 2 "fold: width must be positive"))
        s? (peep t 115 0) b? (peep t 98 0)
-       (dot txt) (: e (nl-end? txt)
-                    (go m) (? !(two? m) ()
-                              (: _ (say out <m)
-                                 _ (? (e || two? >m) (put out 10) 0)
-                                 (go >m)))
-                    (go (foldl (\ a l (a + (ufold w s? b? l))) () (lines txt))))
-       (ueach "fold" dot <>>o))
+       ; ⚠ the pieces are said as they are cut. The flatten this replaced was
+       ; `(foldl (\ a l (a + ..)) () ..)`, which copies the whole answer per line.
+       (dot ln term?)
+        (: (go m) (? !(two? m) 1
+                     (: _ (say out <m)
+                        _ (? ((two? >m) || term?) (put out 10) 0)
+                        (go >m)))
+           (go (ufold w s? b? ln)))
+       (ulines "fold" dot <>>o))
 
    ; -- expand: tabs to spaces, a stop every n (8 unsaid); -i converts only the
    ; blanks a line opens with --
@@ -498,13 +538,8 @@
        n (? (string? v) (uatoi v) 8)
        _ (? (0 < n) () (udie 2 "expand: tab size must be positive"))
        i? (peep t 105 0)
-       (dot txt) (: e (nl-end? txt)
-                    (go m) (? !(two? m) ()
-                              (: _ (say out (uexpand n i? <m))
-                                 _ (? (e || two? >m) (put out 10) 0)
-                                 (go >m)))
-                    (go (lines txt)))
-       (ueach "expand" dot <>>o))
+       (dot ln term?) (: _ (say out (uexpand n i? ln)) _ (? term? (put out 10) 0) 1)
+       (ulines "expand" dot <>>o))
 
    ; -- unexpand: blanks back to tabs -- only the ones a line OPENS with unless -a
    ; takes every run (-t says a size and means -a too). ⚠ a tab lands only where it
@@ -534,13 +569,8 @@
        n (? (string? v) (uatoi v) 8)
        _ (? (0 < n) () (udie 2 "unexpand: tab size must be positive"))
        a? (? (string? v) 1 (peep t 97 0))
-       (dot txt) (: e (nl-end? txt)
-                    (go m) (? !(two? m) ()
-                              (: _ (say out (uunexpand n a? <m))
-                                 _ (? (e || two? >m) (put out 10) 0)
-                                 (go >m)))
-                    (go (lines txt)))
-       (ueach "unexpand" dot <>>o))
+       (dot ln term?) (: _ (say out (uunexpand n a? ln)) _ (? term? (put out 10) 0) 1)
+       (ulines "unexpand" dot <>>o))
 
    ; ---- the calendar floor (stat's %y and date both read it) --------------------
    ; Howard Hinnant's exact integer civil-from-days and its inverse, shifted to a March
@@ -725,7 +755,7 @@
        r (go 0 ())
        (? (two? r) r '("")))
    ; an input's lines, or a leave naming the file (the record tools read whole files:
-   ; they walk several at once, so ueach's one-at-a-time cat walk is not their shape)
+   ; they walk several at once, so ureach's one-at-a-time walk is not their shape)
    (urows who f)
     (: r (? (f = "-") `(1 (slurp in)) (uread f))
        (? (two? r) (lines <>r) (udie 1 (who + ": cannot open " + f))))
@@ -997,47 +1027,55 @@
        kd <ty sz <>ty wd <>>ty
        byte? ((id? kd 'c) || (id? kd 'a))
        step (? byte? 1 sz)
-       (rd f) (? (f = "-") (slurp in)
-                 (: r (uread f) (? (two? r) <>r (udie 1 ("od: cannot open " + f)))))
-       ; the named files are ONE stream, which is what makes the offsets run through
-       whole (foldl (\ acc f (acc + rd f)) "" (? (two? fs) fs '("-")))
-       _ (? (tally whole < skip) (udie 1 "od: cannot skip past end of combined input") ())
-       hi (: e (? (charm? lim) (skip + lim) (tally whole))
-             (? (e < tally whole) e (tally whole)))
-       src (? (skip < hi) (snip whole skip hi) "")
-       nb (tally src)
+       ; the named operands are ONE stream, which is what makes the offsets run
+       ; through -- and a ROW at a time off it, never the stream itself. ⚠ every
+       ; reading below indexes THE ROW now, not a whole-file `src`: od held every
+       ; operand at once to dump 16 bytes of them.
+       rd (urdb (\ f (udie 1 ("od: cannot open " + f))) fs)
+       ; ⚠ the skip is READ PAST, not indexed: a joined stream has no length to take
+       ; it off, and running out mid-skip IS the diagnostic GNU gives.
+       (drop k) (? (k <= 0) 1
+                   (: g (urdj-take rd (? (65536 < k) 65536 k))
+                      n (tally g)
+                      (? n (drop (k - n)) 0)))
+       _ (? (drop skip) 0 (udie 1 "od: cannot skip past end of combined input"))
        (adr k) (? (ad = 110) ""
                   (ad = 100) (uzpad 7 (show k))
                   (ad = 120) (uzpad 6 (uradix k 16))
                   (uzpad 7 (uradix k 8)))
-       (val k)                          ; the little-endian item at k, short reads zeroed
-        (: (go i acc) (? (sz <= i) acc
-                         (go (i + 1) (acc + (* (? ((k + i) < nb) (src (k + i)) 0)
+       (val blk k)                      ; the little-endian item at k, short reads zeroed
+        (: n (tally blk)
+           (go i acc) (? (sz <= i) acc
+                         (go (i + 1) (acc + (* (? ((k + i) < n) (blk (k + i)) 0)
                                                ((* 8 i) 2)))))
            (go 0 0))
-       (cell k)
-        (? (id? kd 'c) (upad 3 (uodesc (src k)))
-           (id? kd 'a) (upad 3 (uodname (src k)))
-           (: raw (val k)
+       (cell blk k)
+        (? (id? kd 'c) (upad 3 (uodesc (blk k)))
+           (id? kd 'a) (upad 3 (uodname (blk k)))
+           (: raw (val blk k)
               v (? ((id? kd 'd) && !(raw < (((* 8 sz) - 1) 2))) (raw - ((* 8 sz) 2)) raw)
               (? (id? kd 'x) (uzpad wd (uradix v 16))
                  (id? kd 'o) (uzpad wd (uradix v 8))
                  (upad wd (show v)))))
-       (rowof k cnt)
+       (rowof blk cnt)
         (: items (? byte? cnt (// ((cnt + sz) - 1) sz))
            o (jug 0)
            (go i) (? (items <= i) (slurp o)
-                     (: _ (put o 32) _ (say o (cell (k + (* i step)))) (go (i + 1))))
+                     (: _ (put o 32) _ (say o (cell blk (* i step))) (go (i + 1))))
            (go 0))
-       (walk k prev star)
-        (? (nb <= k) ()
-           (: cnt (? ((k + 16) < nb) 16 (nb - k))
-              blk (snip src k (k + cnt))
-              (? ((!v? && (cnt = 16)) && (blk = prev))
-                 (: _ (? star () (: _ (say out "*") (put out 10))) (walk (k + 16) blk 1))
-                 (: _ (say out (adr (skip + k))) _ (say out (rowof k cnt)) _ (put out 10)
-                    (walk (k + 16) blk 0)))))
-       _ (walk 0 () 0)
+       ; left is -1 for no -N; the walk answers the byte count, for the closing offset
+       (walk k left prev star)
+        (? (left = 0) k
+           (: blk (urdj-take rd (? (left < 0) 16 (? (16 < left) 16 left)))
+              cnt (tally blk)
+              left2 (? (left < 0) -1 (left - cnt))
+              (? (0 = cnt) k
+                 ((!v? && (cnt = 16)) && (blk = prev))
+                  (: _ (? star () (: _ (say out "*") (put out 10)))
+                     (walk (k + cnt) left2 blk 1))
+                 (: _ (say out (adr (skip + k))) _ (say out (rowof blk cnt)) _ (put out 10)
+                    (walk (k + cnt) left2 blk 0)))))
+       nb (walk 0 (? (charm? lim) lim -1) () 0)
        _ (? (ad = 110) () (: _ (say out (adr (skip + nb))) (put out 10)))
        _ (flush out) 0))
 ) ; module 'kore
