@@ -6,7 +6,7 @@
 ; whole entry in one layer and registers it: namespacing, not hiding).
 ; NOT in the kernel/wasm frontends (a host-only bake, like the parser combinators), so
 ; guard on its presence: (from 'holo) answers () where it was never baked -- no
-; helpless-read warning. and the HOST bakes its NATIVE backend only (mooncc.image carries
+; missing-read warning. and the HOST bakes its NATIVE backend only (mooncc.image carries
 ; all), so each backend's goldens gate on its presence in (A 'backends) -- under love0
 ; (every backend baked) both blocks run, on the host the native one does. The full
 ; encoder gate (every backend golden, objdump-checked, + the text/elf frontends) stays in

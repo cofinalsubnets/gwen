@@ -45,6 +45,11 @@ What genuinely stands between here and freestanding C11, each row live above:
   reports it in place of the generic near-token line, so a refusal can name the program's
   fault rather than the compiler's position.
 
+**A duplicate label now refuses and names itself** (2026-08-18). C11 6.8.1p3 scopes a label to
+its whole function; two of a name emitted one mangled label twice and every `goto` to it took
+the first, in silence. ⚠ the deviation it buys: gcc's `__label__` makes two blocks' `L` two
+labels, and that program refuses here.
+
 **Landed 2026-08-16** (test/cc/142-syntax.c and 138-ucn.c hold them to gcc; the refusals sit in
 test/gate/moon.sh), and the deliberate readings in them:
 
@@ -107,6 +112,42 @@ arrays, brace elision in nested initialisers, pointer-to-array declarators, func
 function pointers, multi-character constants (`'ab'` is 0x6162, gcc's packing, signed at four
 chars), binary literals (`0b1010`, gcc's extension and C23's spelling), `__func__`, and
 `__typeof__` over locals, globals, struct members, dereferences and function names.
+
+**The GNU builtins and the attribute positions landed 2026-08-18** (test/cc/144-gnubuiltins.c
+and 145-attrpos.c hold both to gcc):
+
+- `__builtin_offsetof` rides `nulloff`, the fold the hand-written `&((T*)0)->m` idiom already
+  took, so the two spellings cannot disagree; the designator's `.b` and `[i]` tail is the
+  postfix ladder's own, seeded with the null deref.
+- `__builtin_types_compatible_p` compares the MARKED types `_Generic` keeps (`pcqty`), so an
+  inner `const` tells `const char *` from `char *` while a top-level one drops — and NOTHING
+  decays, which is the question linux's `__must_be_array` asks it (`T[]` is not `T*`).
+- `__builtin_constant_p` is 1 exactly where `cfold` settles the operand. ⚠ CONSERVATIVE by
+  construction, and it must stay that way: a miss answers 0 and sends the consumer down its
+  runtime lane, where a false 1 would hand it a constant that is not one. The operand is not
+  evaluated, so its side effects are gone — gcc's rule.
+- `__builtin_unreachable` rides the trap (`ud2`/`brk`). gcc emits nothing and lets the
+  fall-through run into whatever follows, which is the one lowering that cannot be debugged.
+- `__builtin_memcpy`/`memmove`/`memset`/`memcmp`/`strlen`/`strcpy` ARE the plain functions:
+  parse rewrites the name and DECLARES it if nothing else has, since a program that spells the
+  prefix is the one that never included the header. The link pulls the nolibc member by need.
+- the `l`/`ll` counting spellings (`clzl`, `ctzl`, `ctzll`). x64's `bsf` and rv's ladder walk up
+  from the low bit and were already 64-bit-shaped; only a64 owed a second encoding. On t32 the
+  `l` spellings are the 32-bit lane (long is 4 there) and `ll` refuses with the other pair rows.
+- an `__attribute__((..))` run TRAILING a local declarator, a parameter, or a struct member —
+  the leading position was always skipped, and the kernel writes `__maybe_unused`/`__packed` in
+  all four. The skip takes `__attribute__` alone: `int x __asm__("y")` still refuses, because
+  dropping an asm name renames an object in silence. ⚠ what is skipped is DROPPED, so an
+  `aligned` or `packed` ask on one MEMBER lays the member where its type says — the same
+  silence the leading spelling has always kept (the alignment row below), and an ABI question
+  rather than a missed optimization. A `packed` on the struct BODY is read, and stays read.
+- `__label__ a, b;` at a block head parses and drops — a label already mangles to `fn.NAME`.
+  ⚠ so a name DECLARED in two blocks of one function refuses (above) where gcc compiles it.
+
+The whole set costs **+0.081% of the instructions** compiling core/love.c (perf, 136.115G vs
+136.005G, the same tree built twice and stable to eight figures). `pprim` sees every identifier
+in the TU, so the four arms' string compares hide behind `bib?` — a length test and one
+character. Without it the same features cost +0.128%, which is what the shape test is for.
 
 **`_Generic` and `_Alignof` landed 2026-08-14** (test/cc/136-c11.c, held to gcc). `_Generic`
 picks on the controlling expression's lvalue-converted type (`pdecay`) and lowers to the
@@ -433,9 +474,11 @@ of cost `asm goto`'s surface row carries. Past 16 the frame must be realigned at
 that should refuse rather than land wrong.
 
 ⚠ Until it lands the tree cannot use either spelling on a local, and neither can a header it
-compiles. A struct **member** is a second rung: `playout` computes a member's alignment from
-its type alone, and an over-aligned member also moves the tag's own alignment (`asalign`'s
-16+-guard, gen.l, is written for exactly that day).
+compiles — and since 2026-08-18 that covers the TRAILING spellings on a local, a parameter and a
+member too, which skip alongside the leading one rather than refusing. A struct **member** is a
+second rung: `playout` computes a member's alignment from its type alone, and an over-aligned
+member also moves the tag's own alignment (`asalign`'s 16+-guard, gen.l, is written for exactly
+that day).
 
 ### what the %f hunt actually found — and the trap in it
 

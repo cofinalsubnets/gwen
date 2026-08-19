@@ -6,6 +6,10 @@
 ; e_entry's bit 0 is what enters Thumb state. write(1,msg,n) then exit(42), EABI: the call
 ; number rides r7, the arguments r0..r2, and `svc #0` is holo's `sys`.
 ; run: cat holo.l <backend>.l elf.l elf32.l, then (elf32-write '<tgt> "<path>").
+; ⚠ holo rides module 'holo, so the cat's own names are not ambient here: this file has
+; to ASK for them. Without the (use), the writer answers `;; missing elf32` -- which is
+; what a gate cat catting a module's files looks like from the outside.
+(use 'holo)
 (: (elf32-write tgt path)
    (: msg "love-asm speaks arm32 linux\n"
       (prog a) `(`('li 'r0 1) `('li 'r1 a) `('li 'r2 (tally msg)) `('li 'r7 4) `('sys)

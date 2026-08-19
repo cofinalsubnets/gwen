@@ -238,7 +238,7 @@ struct ai {
    ai_word hot_opfix; // 4: the operator factor pass, sealed last; pre-seal the pass
                   // simply skips (everything up to the seal is written prefix)
    ai_word hot_help;  // 5: the INSTALLED HELP, the one DYNAMIC slot: (hear f) installs,
-                  // (hear ()) uninstalls, (heard ()) answers; zero = helpless, raises
+                  // (hear ()) uninstalls, (heard ()) answers; zero = nothing heard, raises
                   // take the default escape. read by ai_raise/lvm_index, never the book.
                   // ⚠ PER TASK: this is the running task's live copy, saved into its node
                   // and restored on the switch (like Ip/Sp), inherited at spawn. one shared

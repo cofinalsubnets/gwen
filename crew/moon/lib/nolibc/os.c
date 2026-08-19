@@ -1,20 +1,50 @@
 /* crew/moon/lib/nolibc/os.c -- the kernel under one binary (seed-universal
- * rungs UV1-UV2). one x86_64 build runs linux and freebsd: __ai_osdetect asks
+ * rungs UV1-UV2). one build runs linux, freebsd and netbsd: __ai_osdetect asks
  * the kernel which it is (once, at entry or lazily under __ai_call), and
- * numbers, errnos, signals, masks and flag words translate through the
- * tables here. the arm lanes have one kernel today: identity stubs. */
+ * numbers, errnos, signals, masks and flag words translate through the tables
+ * here. x64 and arm64 carry them; riscv takes the identity stubs below and
+ * answers whichever kernel -os named. */
 #include "impl.h"
 
 long __ai_osv;                    /* 0 unprobed; 1 linux; 2 freebsd; 3 netbsd */
 
 long __ai_osdetect(void) {
-#ifndef AiTwoKernels
-  return 1;                       /* one kernel per arch today */
+#ifndef AiOsTranslate
+  /* no tables on this arch: the kernel is whichever one the build was compiled
+   * for, and nothing at runtime can contradict it. ⚠ READ OFF -os, never
+   * assumed -- linux is where we started, not a default, and a build naming a
+   * kernel this arch has no tail for owes a diagnostic and not another
+   * kernel's numbers. */
+# if defined(__linux__)
+  return 1;
+# elif defined(__FreeBSD__)
+#  error "nolibc: -os freebsd wants the translation tables, and this arch has no machine tail for them"
+# else
+#  error "nolibc: no OS predefine -- -os named a kernel os.c cannot speak for"
+# endif
 #else
   /* 20 is getpid on both BSDs and writev on linux: writev(-1, NULL, 0) is
    * -EBADF, a pid is positive, and no kernel is disturbed by asking. a
    * positive answer says BSD; kern.ostype's first byte parts the two
-   * (__sysctl is 202 and {CTL_KERN, KERN_OSTYPE} is {1, 1} on both). */
+   * (__sysctl is 202 and {CTL_KERN, KERN_OSTYPE} is {1, 1} on both).
+   * ⚠ on aarch64 the two doors are mksys leaves, not __ai_sys: netbsd there
+   * SIGSYSes the register form, so the question has to be asked in the svc
+   * IMMEDIATE the kernel being asked about reads. 20 is epoll_create1 on
+   * linux/arm64, which refuses -EINVAL -- the same negative the writev door
+   * gives. ⚠ and that immediate is ILLEGAL on freebsd/arm64, whose svc handler
+   * signals SIGILL/ILL_ILLOPN for any but zero -- asking blind kills the
+   * process before it can hear an answer. So freebsd is already OUT by the
+   * time this runs: crt0 parts it from the rest by the entry protocol alone
+   * and hands 2 down, and this branch only ever asks linux from netbsd. */
+# if defined(__aarch64__)
+  long r = __ai_nbp20(-1);
+  if (r <= 0) return 1;
+  { int mib[2] = {1, 1};
+    char b[16] = {0};
+    unsigned long len = sizeof b;
+    __ai_nbp202((long) mib, 2, (long) b, (long) &len, 0, 0);
+    return b[0] == 'N' ? 3 : 2; }
+# else
   long r = __ai_sys(20, -1, 0, 0, 0, 0, 0);
   if (r <= 0) return 1;
   { int mib[2] = {1, 1};
@@ -22,10 +52,11 @@ long __ai_osdetect(void) {
     unsigned long len = sizeof b;
     __ai_sys(202, (long) mib, 2, (long) b, (long) &len, 0, 0);
     return b[0] == 'N' ? 3 : 2; }
+# endif
 #endif
 }
 
-#ifndef AiTwoKernels
+#ifndef AiOsTranslate
 long __ai_nrfb(long n) { return n; }      /* no second kernel on this arch */
 long __ai_errfb(long e) { return e; }
 long __ai_sigfb(long s) { return s; }

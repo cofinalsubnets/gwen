@@ -69,8 +69,10 @@
                              _ (print err b) _ (put err 10) _ (flush err) 1))))))
    ; complain on err and leave through the exit door with code c
    (udie c m) (: _ (say err m) _ (put err 10) (uleave c))
-   ; left-pad with spaces to width w (a wider count never shrinks)
+   ; left-pad with spaces to width w (a wider count never shrinks), and its mirror --
+   ; the columns that count from the left (ps's TTY, free's label) want the other one
    (upad w s) (? (tally s < w) (upad w (" " + s)) s)
+   (urpad w s) (? (tally s < w) (urpad w (s + " ")) s)
    ; join texts with single spaces
    (ujoin a) (? !(two? a) ""
                 !(two? >a) <a
@@ -283,6 +285,16 @@
                            (go 0)))
             as)
 
+   ; whitespace-split a text into words (the xargs face, quote-blind)
+   (uwords t)
+    (: n (tally t)
+       (go i st acc)
+        (? (n <= i) (rev (? (st < 0) acc (snip t st i >< acc)))
+           (: c (t i)
+              w ((c = 32) || (c = 9) || (c = 10) || (c = 13))
+              (? w (go (i + 1) -1 (? (st < 0) acc (snip t st i >< acc)))
+                 (go (i + 1) (? (st < 0) i st) acc))))
+       (go 0 -1 ()))
    ; the cat walk every whole-input tool rides: dot over each input text (args or
    ; stdin, - reads stdin), a miss complains and the exit code remembers
    (ueach who dot as)

@@ -449,6 +449,11 @@
            ('eret >< le32 0xD69F03E0)
            ('ret >< le32 0xD65F03C0)                         ; ret x30
            ('sys >< le32 0xD4000001)                         ; svc #0
+           ; ⚠ svc WITH AN IMMEDIATE, which netbsd/aarch64 requires: it takes the
+           ; syscall number from the INSTRUCTION, not a register, and offers no
+           ; indirect door (SYS_syscall and SYS___syscall both SIGSYS there). So
+           ; a runtime number is only reachable through a table of these.
+           ('svcn >< arm64-exc 0xD4000001)                   ; svc #imm
            ('nop >< le32 0xD503201F)
            ('trap >< le32 0xD4200000)))                      ; brk #0
    _ (foldl (\ _ p (emrow arm64-emitters <p (arm64-aluop <p))) 0 arm64-alu-rows)

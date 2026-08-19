@@ -1,14 +1,14 @@
 ; missing -- a nom not in the book (the global table). reading one is a
 ; CALL FOR HELP: with a global help installed the read raises
 ; (help 'missing nom) and the help's result becomes the value at the site;
-; helpless it reads the ZERO POINT -- the mint at serial 0: nameless, false,
+; with nothing heard it reads the ZERO POINT -- the mint at serial 0: nameless, false,
 ; and a unit (absence absorbs application). the read happens where the code says it does: a closure
 ; captures its free globals at creation, so a missing read in a lambda body fires
 ; the condition at the define, not the call.
 
 ; welp is the FLOOR HANDLER: install it and a missing read answers the zero point with
-; no warning. (Truly helpless -- no help at all -- it still answers the zero point, but
-; SURFACES ";; missing nom" on err to catch the silent const-1 trap; we don't trigger that.)
+; no warning -- which is why every read below sits in a welp window. Outside one the
+; corpus hears test-strict (00-init.l) and a missing read ENDS THE RUN, as in file mode.
 (hear welp)
 (assert
  (id? (:) an-never-defined)                      ; the floor handler: the zero point
@@ -45,7 +45,7 @@
 ; param, an enclosing let) -- so a binding may rebuild on what it shadows:
 ; (: s (trim s)) under a param s reads the param. a read UNDER A \ is the letrec
 ; cell, filled by the binder's pin; run early it is the missing condition with
-; the binding-site nom as payload: a call for help, the zero point helpless.
+; the binding-site nom as payload: a call for help, the zero point where nothing hears.
 (hear welp)               ; the bare lane is now a BOOK read when nothing binds it -- welp keeps the corpus quiet
 (: an-outer 99)
 (assert
@@ -86,3 +86,5 @@
            (&& !(id? s (peep t 1 s))               ; a pinned 0 is PRESENT, not absent
                (id? s (peep t 9 s))                ; an absent key is absent
                (id? (:) (peep t 9 ())))))          ; ... and the caller may still name absence ()
+
+(hear test-strict)   ; the empty slot is this file's subject; the corpus resumes strict

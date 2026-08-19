@@ -69,6 +69,16 @@ lay_lc  = $(subst $(R)/,,$(lay_l))
 kore_lc = $(subst $(R)/,,$(kore_l))
 be_lc   = $(subst $(R)/,,$(p_be_l))
 
+# nolibc's pure members: the libc a bare-metal seat gets, the same six the kernel takes
+# (mk/common.mk) out of the same source -- there is no second libc in this tree. A port
+# lays them with a foreach over libc_m under its own <x>_cc. ⚠ -Icrew/moon/include is
+# owed: the members open with impl.h, whose hosted declarations cost compile time and
+# nothing else -- the six owe ONE symbol between them (memmove's memcpy), and it is one
+# of the six.
+libc_m    = memchr memcmp memcpy memmove memset strlen
+libc_dep  = $(R)/crew/moon/lib/nolibc/impl.h $(mc)
+libc_o    = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(libc_m)))
+
 # the am math floor: the one object every port compiles exactly alike.
 $(R)/$(o)/am.o: $(R)/crew/moon/lib/math/am.c $(mc)
 	@echo MOON	$@

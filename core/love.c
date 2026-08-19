@@ -756,7 +756,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   M[3].x = zero;   // wake_at: zero means "always runnable"
   M[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O (slot value -1, non-zero)
   M[5].x = putcharm(ai_wait_in);   // wait_events: the read direction, the default
-  M[6].x = zero;   // help: helpless until the first (hear f)
+  M[6].x = zero;   // help: nothing heard until the first (hear f)
   M[7].x = zero;   // stdio: the console until the first (wear l)
   g->tasks = tagthread(M, 8);
   g->parked = NULL;   // nothing is fd-parked before the first task ever parks
@@ -2039,7 +2039,7 @@ static union u const help_scare_k[] = { {help_ret_scare} };
 static union u const help_drive[] =
  { {lvm_ap}, {.ap = ap_next}, {.ap = lvm_ret0} };
 
-// raise a scare with data a/b at the heard help as (help a b); helpless (or
+// raise a scare with data a/b at the heard help as (help a b); with nothing heard (or
 // still too tight after a collect) hand the scare-encoded core back to C.
 // callers Pack first (ip stays at the raise site); a/b survive the collect in
 // the scare_a/b stash, so the raise buys its own frame and never allocates.
@@ -2069,7 +2069,7 @@ static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K) {
 // re-raise a failed op's scare: bare data, observe-then-terminal.
 lvm(_lvm_ghelp) { return ai_raise(ai_core_of(g), zero, zero, help_scare_k); }
 // (scare a b): the deliberate raise. the raise point is a clean boundary, so the
-// help's result is delivered back as the value via the more continuation; helpless
+// help's result is delivered back as the value via the more continuation; with nothing heard
 // it is terminal.
 lvm(lvm_scare) {
  Have1();                          // the resume push only: ai_raise buys its own frame
@@ -2079,11 +2079,11 @@ lvm(lvm_scare) {
 // the missing miss sentinel: a private static address no book value can equal,
 // so a name bound to zero stays distinct from no entry at all.
 static union u const no_entry[1];
-// the GC-free C-data emitters (defined below), forward-declared for lvm_index's helpless-miss face.
+// the GC-free C-data emitters (defined below), forward-declared for lvm_index's unheard-miss face.
 static struct ai *ioputs(struct ai*, char const*),
                  *ioputc(struct ai*, int);
 static ai_inline struct ai *zflush(struct ai*);
-// a helpless missing read answers ZeroPoint: absence is a POINT, not a quantity --
+// a missing read with nothing heard answers ZeroPoint: absence is a POINT, not a quantity --
 // a number would exponentiate under a numeral, a unit absorbs (what keeps
 // (i love you) = 1). distinct from 0 and "".
 // the 'missing tag, minted WHERE IT IS USED: both callers are cold, so a
@@ -2095,7 +2095,7 @@ static ai_noinline word missing_tag(struct ai *g) {
  return ai_ok(h) ? ai_pop1(h) : 0; }
 
 // a read of the LIVE book by name -- the global twin of boxfix's (missing cell
-// 'nom). a miss raises (help 'missing nom); helpless it reads the zero point.
+// 'nom). a miss raises (help 'missing nom); with nothing heard it reads the zero point.
 // the site never self-patches: a later define is seen, a rebind honoured.
 lvm(lvm_index) {
  Have1();                          // room for the push first (may GC; no live local held yet)
@@ -2107,7 +2107,7 @@ lvm(lvm_index) {
  word h = g->hot_help;
  if (ai_nilp(g, h)) {
 #if __STDC_HOSTED__
-  // helpless (file mode): the zero point is silent, so surface ";; missing <nom>"
+  // nothing heard (file mode): the zero point is silent, so surface ";; missing <nom>"
   // on err and still answer it. missing-specific -- a deliberate scare stays
   // terminal. nom_str + ioput* hold no heap operand -> no GC, so Sp/Ip survive.
   struct ai_str *nm = nom_str(g, Ip[1].x);
@@ -2641,7 +2641,7 @@ lvm(lvm_spawn) {
  N[3].x = zero;         // wake_at: sentinel for "always runnable"
  N[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O
  N[5].x = putcharm(ai_wait_in);   // wait_events: the read direction, the default
- N[6].x = g->hot_help;   // INHERITED: a child starts under its parent's help, never helpless
+ N[6].x = g->hot_help;   // INHERITED: a child starts under its parent's help, never without one
  N[7].x = g->hot_io;     // ...and under its parent's stdio, the console until it wears its own
  N[8].x = x;
  N[9].x = fn;

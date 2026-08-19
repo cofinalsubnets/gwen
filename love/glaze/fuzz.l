@@ -54,7 +54,7 @@
    (uptogo i acc) (? (i < 0) acc (uptogo (i - 1) (i >< acc)))
    (upto n) (uptogo (n - 1) ())
    ; the leaf pools. `bleaf` is the hostile one: k/acc are frame params where they are
-   ; bound and FREE elsewhere (a free read is a helpless scare, which rides to stderr and
+   ; bound and FREE elsewhere (a free read scares with nothing heard, which rides to stderr and
    ; answers the zero point -- stdout stays comparable), and the rest are the values the
    ; integer lanes have no register shape for.
    ileaf (\ _ (pick '(x y 0 1 2 3 -1 7)))

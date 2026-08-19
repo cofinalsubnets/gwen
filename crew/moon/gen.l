@@ -1985,8 +1985,11 @@
    ; the overflow trio = the op + the overflow flag (seto / set vs, mul via mulo's smulh check),
    ; result stored through arg3, the flag the value.
    (cgbuiltin g env bi args)                       ; a builtin call -> its value | 'bad; not one -> 'no
-    (? (bi = "__builtin_trap") (? (arm? g) (mkv 'long 'r0 '((trap)))
-                                  (mkv 'long 'r0 '((ud2))))     ; the named op, not raw bytes: a raw bars unframe in every splice site
+    (? (member? bi '("__builtin_trap" "__builtin_unreachable"))
+        ; unreachable rides the trap: gcc emits nothing and lets the fall-through run
+        ; into whatever follows, which is the one lowering that cannot be debugged
+        (? (arm? g) (mkv 'long 'r0 '((trap)))
+           (mkv 'long 'r0 '((ud2))))     ; the named op, not raw bytes: a raw bars unframe in every splice site
        (bi = "__builtin_inf")
         (? (t32? g) (mkv 'double 'r0 '((li r0 0) (li r1 2146435072) (movqxr f0 r0)))
            (mkv 'double 'r0 '((li r0 9218868437227405312) (movqxr f0 r0))))
@@ -2041,9 +2044,10 @@
                        ['label di]
                        '(raw (159 59 3 213))          ; dsb ish
                        '(raw (223 63 3 213))]))))     ; isb
-       (member? bi '("__builtin_clzll" "__builtin_clz"))
+       (member? bi '("__builtin_clzll" "__builtin_clzl" "__builtin_clz"))
         (: e1 (cgexpr g env <args ())
-           ll (bi = "__builtin_clzll")
+           ; the `l` spelling is as wide as the target's own long: 8 bytes everywhere but t32
+           ll (? (bi = "__builtin_clz") () (bi = "__builtin_clzll") 1 !(t32? g))
            pre (? ll () '((shl r0 32)))    ; clz32(x) = clz64(x << 32) -- the shift also clears upper garbage
            (? (bad? e1) 'bad
               (t32? g && !ll)              ; clz32 is one word: CLZ / libgcc's __clzsi2
@@ -2071,12 +2075,15 @@
               (mkv 'long 'r0 (asint g e1 + pre +
                               (? (a64? g) '((raw (0 16 192 218)))                    ; clz x0, x0
                                  '((raw (72 15 189 192 72 131 240 63))))))))   ; bsr rax,rax; xor rax,63
-       ; count trailing zeros, 32-bit (dlmalloc's compute_bit2idx; ctz(0) stays UB;
-       ; upper garbage is harmless -- the defined case has a set bit in the low 32):
-       ; x64 bsf, a64 rbit+clz, rv a mask-narrowing search, t32 isolate-and-clz
-       (bi = "__builtin_ctz")
+       ; count trailing zeros (dlmalloc's compute_bit2idx; ctz(0) stays UB; for the 32-bit
+       ; spelling upper garbage is harmless -- the defined case has a set bit in the low 32):
+       ; x64 bsf, a64 rbit+clz, rv a mask-narrowing search, t32 isolate-and-clz. x64's bsf and
+       ; rv's ladder both walk UP from the low bit, so the l/ll widths cost them nothing
+       (member? bi '("__builtin_ctzll" "__builtin_ctzl" "__builtin_ctz"))
         (: e1 (cgexpr g env <args ())
+           ll (? (bi = "__builtin_ctz") () (bi = "__builtin_ctzll") 1 !(t32? g))
            (? (bad? e1) 'bad
+              (ll && t32? g) (nolane g ("no lane for " + bi + (ontgt g)))   ; the pair lane, again
               (t32? g)
                (mkv 'long 'r0 (asint g e1 +
                   (? (v6m? g) '((call __ctzsi2))
@@ -2094,8 +2101,9 @@
                      + step 2 3 (nthr ls 4) + step 1 1 (nthr ls 5)
                      + '((mov r0 r1))))))
               (mkv 'long 'r0 (asint g e1 +
-                              (? (a64? g) '((raw (0 0 192 90 0 16 192 90)))   ; rbit w0,w0; clz w0,w0
-                                 '((raw (72 15 188 192))))))))                ; bsf rax,rax
+                              (? (a64? g && ll) '((raw (0 0 192 218 0 16 192 218)))   ; rbit x0,x0; clz x0,x0
+                                 (a64? g) '((raw (0 0 192 90 0 16 192 90)))   ; rbit w0,w0; clz w0,w0
+                                 '((raw (72 15 188 192))))))))                ; bsf rax,rax -- REX.W, so it serves both widths
        ; the bswap trio (glibc's <byteswap.h> inlines): fully-masked neutral shift/or
        ; expansions -- no raw (unframe stays alive), no new ops. 16/32 are width-blind
        ; and ride every target; 64 is the three-stage swap (bytes, halves, words) and

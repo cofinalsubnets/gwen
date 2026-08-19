@@ -246,6 +246,54 @@
             (: t (readlink q) (? (string? t) t ())))
        (? (string? r) (: _ (say out r) _ (put out 10) _ (flush out) 0) 1))
 
+   ; -- realpath: a path with every symlink, every . and every .. taken out of it.
+   ; the walk resolves COMPONENT BY COMPONENT, so a last name that does not exist yet
+   ; still answers -- GNU's default face. -e wants the whole path to be there, -m
+   ; allows any of it to be missing, -s takes the links as they lie --
+   (rp-parts p) (filter (\ w (0 < tally w)) (usplit 47 p))
+   (rp-canon q n)                      ; the resolved path, or () past n links
+    (: (walk acc parts d)
+        (? !(two? parts) `(1 acc)
+           (0 = d) ()
+           (: p <parts
+              (? (p = ".") (walk acc >parts d)
+                 (p = "..") (walk (rl-clean (acc + "/..")) >parts d)
+                 (: cand (? (acc = "/") ("/" + p) (acc + "/" + p))
+                    t (readlink cand)
+                    (? !(string? t) (walk cand >parts d)
+                       (walk (? (t 0 = 47) "/" acc) (rp-parts t + >parts) (d - 1)))))))
+       (walk "/" (rp-parts (rl-abs q)) n))
+   (realpath-main as)
+    (: t (tablet 0)
+       o (uopts as t () ())
+       fs <>>o
+       _ (? (two? fs) () (udie 1 "usage: realpath [-e|-m|-s] PATH.."))
+       e? (peep t 101 0) m? (peep t 109 0) s? (peep t 115 0)
+       (one q ok)
+        (: r (? s? `(1 (rl-clean (rl-abs q))) (rp-canon q 40))
+           (? !(two? r)
+              (: _ (say err ("realpath: " + q + ": too many levels of symbolic links"))
+                 _ (put err 10) 0)
+              (: p <>r
+                 want (? m? () (? e? p (udir p)))    ; what has to be there to answer
+                 (? ((id? want ()) || (two? (stat want)))
+                    (: _ (say out p) _ (put out 10) ok)
+                    (: _ (say err ("realpath: " + q + ": No such file or directory"))
+                       _ (put err 10) 0)))))
+       (go a ok) (? (two? a) (go >a (one <a ok)) (: _ (flush out) (? ok 0 1)))
+       (go fs 1))
+
+   ; -- link and unlink: the two syscalls said plainly, no face on them (ln and rm
+   ; are where the faces live) --
+   (link-main as)
+    (? !(two? >as) (udie 1 "usage: link FILE NEW")
+       (: e (hardlink <as <>as)
+          (? !e 0 (udie 1 ("link: cannot link " + <>as + " to " + <as)))))
+   (unlink-main as)
+    (? !(two? as) (udie 1 "usage: unlink FILE")
+       (: e (unlink <as)
+          (? !e 0 (udie 1 ("unlink: cannot unlink " + <as)))))
+
    ; ---- the reporting tools: stat, du -- and chown, mktemp ---------------------
    ; ⚠ THESE READ THE STAT TAIL. host/posix.c's stat answers
    ; (size mtime mode ns uid gid nlink blocks ino), append-only, and the KERNEL's own

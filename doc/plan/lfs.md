@@ -32,18 +32,23 @@ naming it is most of what this section is for.
 
 ## chapters 7–8, the final system
 
-Present natively — roughly **17 of ~85 chapter-8 packages**, several partial:
+Present natively — roughly **19 of ~85 chapter-8 packages**, several partial:
 
-coreutils (`kore`, 66 tools / 69 names, GNU-byte-identical smokes, `make test_kore`) ·
+coreutils (`kore`, 85 tools / 88 names, GNU-byte-identical smokes, `make test_kore`) ·
 bash (`lush`) · sed · grep · diffutils (diff, cmp) · make (`cook`) · tar (`lib/tar.l`,
-ustar both ways) · gzip (`lib/gz.l`) · zlib · vim (`crew/vi`) · sysvinit
+ustar both ways, `love tar`) · gzip (`lib/gz.l`, and `lib/gzcmd.l` wears GNU's flags
+as `love gzip` / `gunzip` / `zcat`) · cpio (`lib/cpio.l` newc, `love cpio`) · zlib ·
+vim (`crew/vi`) · sysvinit
 (`crew/init/boot.l` as `/init`) · openssl-ish (`crew/tls`) · nc (`mk/tools/ain.l`) ·
-**patch** (`crew/kore/patch.l`, unified diffs).
+**patch** (`crew/kore/patch.l`, unified diffs) · **procps-ng** (kore's ps, free, uptime,
+pidof, pgrep, pkill, pwdx) and psmisc's killall.
 
 The partials, stated: kore has no `df` (nothing here answers `statvfs`, so it wants a
 nif and not an afternoon); sed is a deliberate subset (no hold space, no `\n` in
 replacements); `expr` has no `-o` output template and `od` takes one `-t` per run; our
-DEFLATE is fixed-Huffman only, about 24% behind `gzip -9`.
+DEFLATE lands a few percent above `gzip -9` (it costs every block three ways and writes
+the cheapest -- lib/gz.l carries the numbers), and `gzip -d` reads one member per file
+where GNU reads a concatenation.
 
 ### what is absent, in the order it hurts
 
@@ -52,7 +57,8 @@ DEFLATE is fixed-Huffman only, about 24% behind `gzip -9`.
   This, not the compiler, is what axis B actually runs into.
 - **bc** — the last of what was "the small four"; awk, find and patch are in.
 - **the rest of the shell floor** — less, xz, bzip2, file.
-- **the admin layer** — util-linux, shadow, procps, psmisc, e2fsprogs, kmod, iproute2, kbd.
+- **the admin layer** — util-linux, shadow, e2fsprogs, kmod, iproute2, kbd. (procps and
+  psmisc are half here: the /proc readers landed, `top`/`vmstat`/`pmap` did not.)
 - **docs** — groff, man-db, texinfo, ncurses, readline.
 
 ## chapters 9–10 — config partial, kernel imported
@@ -61,8 +67,9 @@ lush reads `/etc/profile` and `~/.profile`; libra owns `~/.love/etc`. The kernel
 still the one imported artifact — `mk/distro.mk` says `BZIMAGE ?= /boot/vmlinuz-linux`.
 No GRUB.
 
-⚠ and the wart worth naming: `distro-initramfs` cuts its image with the **host's** `find`,
-`cpio` and `gzip -9`. The distro that exists to prove we need no host is built by one.
+The image is cut by **kore's `find`, `love cpio` and `love gzip`** — no host tool in the
+pipeline — and `make distro-smoke` boots it. The wart this section carried for months
+(a distro that exists to prove we need no host, built by one) is gone.
 
 ## the number
 
@@ -110,9 +117,85 @@ The gap between those two numbers is entirely *other people's build systems*.
   * **GNU's `--apparent-size` counts a file's `st_size` and a directory's not at all** —
     an empty directory whose st_size is 40 reports 0. Read off the tool, not from the man
     page, and not from one filesystem: btrfs and tmpfs disagree about everything else here.
-- **rung 2 — cpio, and the distro cuts itself.** With `find` landed, replacing the
-  host `find | cpio | gzip -9` pipeline closes the wart above. `lib/gz.l` already
-  writes the gzip container; cpio's newc format is smaller than ustar.
+- **rung 1b — the second coreutils batch — BUILT.** Sixteen applets, every one pure over
+  the u-floor and none of them wanting a nif: `tac` (core.l), the column tools `fold`
+  `expand` `unexpand` over the shared `ucol`, the encodings `base64` `base32` (one coder,
+  two alphabets), `tsort` and `factor`, `realpath` `link` `unlink` (fs.l), `printenv`
+  `whoami` `groups` (proc.l) and `arch` `nproc` beside uname. All in `make test_kore`,
+  GNU-byte-identical, laws over the new pure floors. `uwords` moved core-ward to u.l,
+  where tsort and factor read it too. Three things the work taught, all comments in the
+  tree now:
+  * **`base64 -w 0` closes nothing** — GNU ends a WRAPPED last line with a newline and
+    leaves one long line without one. The obvious coder is a byte too long.
+  * **a tab lands only where it saves at least two columns**, so a lone space sitting on
+    a tab stop stays a space. The rule unexpand is easiest to get wrong.
+  * **the encodings are only smoked by a BINARY file** — text agrees under any bug that
+    only mangles the high bit.
+  Left deliberately: fmt, pr, csplit, ptx and numfmt (each its own layout language),
+  dir/vdir (they are `ls -C`/`ls -l`), shuf (a seed decision first), the sha1/sha512
+  family (host/hash.c carries three digests), and who/users/logname (no utmp).
+- **rung 1c — gzip's face — BUILT.** `lib/gzcmd.l`: `love gzip`, `love gunzip` and
+  `love zcat`, GNU's flag spelling (`-cdfklnNqrtv`, `-1..-9`, `-S SUF`, the long forms)
+  over lib/gz.l's two doors, registered as verbs the way `love tar` is. The in-place
+  replace carries the mode and the mtime; `-l`'s listing is byte-identical to GNU's,
+  ratio and all. Gated in `make test_gz` (test/gate/targz.sh section 4). Three things
+  worth knowing:
+  * **`-l`'s ratio is the DEFLATE PAYLOAD's**, not the file's — GNU takes the header
+    and the trailer out before dividing, and the tenth is ROUNDED where an older gzip
+    truncated. A hundred random files were asked which.
+  * **the suffix is asked before the bytes are**: a name with nothing to strip is a
+    warning (exit 2), so `gunzip *` over a mixed directory walks on. Reading first
+    calls every plain file "not in gzip format" instead, which is exit 1 and a stop.
+  * **one member per file** — gz-unzip reads the trailer off the tail, so a legal
+    `cat a.gz b.gz` is refused whole rather than half-read. That belongs in gz.l when
+    something here needs it.
+- **rung 1d — the /proc family — BUILT.** Eight applets in `crew/kore/proc.l`, and **no
+  nif grew for any of them**: /proc is a filesystem, so the whole family is `uread` and a
+  parser. `ps` (procps' rule — ours, same terminal — with `-e`/`-A`/`a`/`x` for all),
+  `free` (used is total minus AVAILABLE, which is what procps prints), `uptime`, `pidof`,
+  `pgrep`, `pkill`, `killall`, `pwdx`. The parsers are lawed and the faces are smoked
+  against procps in `make test_kore`. Three things:
+  * ⚠ **the comm is taken between the FIRST `(` and the LAST `)`** of a stat line, never
+    by splitting on spaces — a program may be named `(sd-pam)` or `a b)c`, and every
+    field after it then shifts.
+  * ⚠ **`uptime` has no `N users`**: that count is utmp's, this tree keeps none, and a
+    fabricated 0 is worse than an absent field.
+  * the faces cannot be smoked byte-for-byte (the table moves between two runs), so the
+    gate asks about a process it made ITSELF — and kills a copy of `sleep` under its own
+    name, because `killall sleep` on a shared box reaches into other people's work.
+  Two older things fell out of the work, neither of them the family's:
+  * **the EI_OSABI=9 brand was mooncc's, not the linker's** — so `kore ld` and `mooncc`
+    wrote different bytes from ONE linker (`e113ebba` put the brand at the caller). It
+    lives in `ldlink` now, where the header is made. The check that catches it is gated
+    on `[ -x $ho/mooncc ]` and had been skipping.
+  * **a `'-x '` row in the gate's grep matrix was `grep -x FILE`** — a pattern and no
+    file, which reads stdin and hangs any run whose stdin is a pipe. `set -- $fl`
+    word-splits, so the empty pattern it meant to test could never ride that list; both
+    sides saw EOF and it passed while proving nothing. The empty pattern is its own row
+    now.
+- **rung 2 — cpio, and the distro cuts itself — BUILT.** `lib/cpio.l` is the SVR4 newc
+  wire (pack, unpack, scatter) over lib/tar.l's own entries — the walk that fills them
+  is about a file and not about a format, which is why the second wire is short — and
+  `lib/cpiocmd.l` is `love cpio` (`-o -i -t`, `-H newc`, `-d -u -v`, `-F/-I/-O`,
+  `--quiet`, the block count). `mk/distro.mk` now cuts the initramfs with
+  **kore's find, our cpio and our gzip**, and `make distro-smoke` boots that image
+  under qemu: love is pid 1, /proc is mounted, the kore userland answers. The wart at
+  the top of this page is closed. Gated by name in `make test_cpio` (GNU cpio both
+  ways, the listings byte-identical, the flags, the image shape). Three things:
+  * ⚠ **the stored name loses a leading `./`** — GNU cpio drops it where GNU tar keeps
+    it, so two listings of the same tree disagree by two charms until you match it.
+  * ⚠ **the mode field is the whole `st_mode`**, type bits and all, where tar keeps the
+    kind in a typeflag byte. A newc header carrying permission bits alone extracts as a
+    file of mode 0 and no kind, and the kernel's own reader takes it silently.
+  * **hard links are not encoded** (newc says them with a shared ino and nlink > 1, the
+    body on the last member); we write nlink 1 and a fresh ino, so a tree of hard links
+    comes back as copies. Half of that job would be worse than none — a reader that
+    believes nlink waits for a body that never comes.
+  * ⚠ and the bug the boot found, which the packer had nothing to do with:
+    **`lib/dns.l` has to ride into the initramfs**. mk/tools/ain.l is a korefiles member
+    and probes for the `dial` nif at load, saying `(use 'dns)` when it is absent — which
+    it is in love-raw. With no `/lib/dns.l` that scare takes the whole cat down, and the
+    symptom is every applet gone rather than a quiet `nc`.
 - **rung 3 — decide about the configure tax.** The genuine fork, and it is a decision,
   not a rung: grow perl/python/autotools, or keep declining them and only ever build
   packages that do not ask. Six packages so far have not asked. That is not an accident

@@ -194,7 +194,7 @@
        ((nm = ".data") || ld-pre nm ".data.") 'data
        (nm = "ai_nifs") 'nifs
        (nm = ".love_image") 'image
-       ; the KERNEL lanes (ldkern's, free/<a>/<a>.lds's names): the boot
+       ; the KERNEL lanes (ldkern's names): the boot
        ; stub's page tables and bring-up ladder, the limine request block --
        ; its three sections bracket a scan, so they lay in header order, which
        ; is the order kmain.c writes them -- and the PVH note qemu reads to
@@ -899,10 +899,11 @@
        ; off the count.
        img? (0 < foldl (\ a ob (a + ld-lanesz ob 'image)) 0 objs)
        wx? !(charm? org)
-       ; the one x64 binary may land on netbsd, whose exec REQUIRES the ident
-       ; note (no note -> ENOEXEC; foreign kernels ignore notes). 24 bytes riding
-       ; the header reserve, with a PT_NOTE and an alloc section so strip keeps it.
-       nb? (wx? && mach = 62)
+       ; the binary may land on netbsd, whose exec REQUIRES the ident note
+       ; (no note -> ENOEXEC; foreign kernels ignore notes). 24 bytes riding the
+       ; header reserve, with a PT_NOTE and an alloc section so strip keeps it.
+       ; on the ISAs that can meet that kernel: riscv has one today.
+       nb? (wx? && (member? mach '(62 183)))
        hdrsz (64 + (56 * ((? wx? 3 1) + (? img? 1 0) + (? nb? 1 0))) + (? nb? 24 0))
        nbo (hdrsz - 24)
        nbnote (? nb? (catall `((le32 7) (le32 4) (le32 1)                ; namesz descsz NETBSD_TAG
@@ -1024,17 +1025,24 @@
             + (? img? `((elf64-phdr 1 6 ioff iaddr iaddr isz isz 4096)) ())
             + (? nb? `((elf64-phdr 4 4 nbo (base + nbo) (base + nbo) 24 24 4)) ()))
        hdr (elf64-hdrn (? pie 3 2) ent mach `(shto nsh 10) phs)
-       (hdr >< ((? nb? `(nbnote) ()) + >en + tail + (? pie `(rtab) ()) + ipad + >ei
-                + `((ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
-                    (ld-zeros (shto - (rdmo + rdmz))) sht))))
+       ; ⚠ THE BRAND: EI_OSABI = 9 in e_ident[7] on every exe this lane writes for
+       ; an ISA that can meet freebsd. The linux loader never reads the byte and
+       ; freebsd's imgact refuses without it, so one binary is born acceptable to
+       ; every kernel. It lives HERE, where the header is made, and not at a caller:
+       ; mooncc branded its own output and kore's `ld` did not, so the two doors
+       ; over ONE linker wrote different files. Same ISAs the note rides.
+       hdr9 (? (member? mach '(62 183)) (ld-brand hdr 7 9) hdr)
+       (hdr9 >< ((? nb? `(nbnote) ()) + >en + tail + (? pie `(rtab) ()) + ipad + >ei
+                 + `((ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
+                     (ld-zeros (shto - (rdmo + rdmz))) sht))))
 
    ; --- the KERNEL lane: one ELF, three doors ---------------------------------
    ; a freestanding image is laid where it RUNS and loaded where it LANDS: every
    ; PT_LOAD carries p_paddr = p_vaddr - bias, which is what lets `qemu -kernel`
    ; copy by p_paddr with the MMU off while limine (and our own BOOTX64.EFI) maps
    ; by p_vaddr with it on -- one file, and mkboot.l bridges the two. that split,
-   ; and the several segments it needs, is the whole of what free/<a>/<a>.lds
-   ; says that ldlink's one-segment shape cannot.
+   ; and the several segments it needs, is the whole of what a kernel asks for
+   ; that ldlink's one-segment shape cannot say.
    ;
    ; the lanes, each page-aligned and each its own segment: `boot` (the stub's
    ; page tables and bring-up ladder), `limreq` (the limine request block, which
@@ -1344,6 +1352,12 @@
        (hdr >< (`((ld-zeros (foff - hdrsz))) + pieces
                 + `((ld-zeros (symo - fend)) <st <>st <shstr
                     (ld-zeros (shto - (ssto + sstz))) sht))))
+
+   ; one byte of a piece, whichever shape the piece arrived in (the header comes back
+   ; as a text from one hdr builder and as a byte list from another)
+   (ld-brand p i v)
+    (? (string? p) (((snip p 0 i) + (string v)) + (snip p (i + 1) (tally p)))
+       (: (go k l) (? (k = i) (v >< >l) (<l >< (go (k + 1) >l))) (go 0 p)))
 
    ; write a piece list to a file, raw: texts pass through, byte lists pack into a
    ; CASK. an explicit left walk -- map runs its effects right-to-left.

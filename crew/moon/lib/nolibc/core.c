@@ -135,9 +135,12 @@ int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), voi
 /* ---- the entry: crt0 hands us the arg vector base (argc at [sp]); unpack
  * argv/envp/auxv, arm stdio, run main, exit with its answer. this STRONG
  * definition overrides crt0's weak call-main tail (the linker's weak machinery
- * is the whole switch -- no flags anywhere). ---- */
-void __ai_start(long *sp) {
-  __ai_osv = __ai_osdetect();   /* which kernel: settled before any other syscall */
+ * is the whole switch -- no flags anywhere). crt0's second word is what its
+ * own entry test learned about the kernel, 0 where it learned nothing: the
+ * aarch64 probe may not run blind (see __ai_osdetect), so there the freebsd
+ * side answers 2 and only linux and netbsd are left to ask. ---- */
+void __ai_start(long *sp, long osv) {
+  __ai_osv = osv ? osv : __ai_osdetect();   /* which kernel: crt0's answer where it has one, else ask */
   long argc = sp[0];
   char **argv = (char **) (sp + 1);
   char **e = argv + argc + 1;

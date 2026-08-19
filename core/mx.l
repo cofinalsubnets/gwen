@@ -167,8 +167,10 @@
    ; enum d is a SLOT INDEX before it is anything else: love.c lays each data sentinel
    ; in its own love_data.N and love.h reads a value's rep as arithmetic on the ap. ld
    ; has to be TOLD that tiling -- it cannot read ai_data_stride -- so six linker
-   ; scripts carried nine hand-copied lines apiece. they are laid from the roster now,
-   ; and a rep entering it enters every script.
+   ; scripts carried nine hand-copied lines apiece. holo needs none of it (it lays each
+   ; section on the grain the object declares, which IS this tiling), so as each seat's
+   ; link became ours its script left. the host's -T fragment is the last one, and it
+   ; is laid from the roster.
    ; ⚠ the stride is the SEAT's, not the tree's: love.h's #if picks it off the arch and
    ; the row below says the same number. a script tiling TIGHTER than its seat believes
    ; answers slot 0 for every value, in silence -- the one drift in this scheme that
@@ -199,14 +201,6 @@
    ; INDEX in image_extra_aps, so a layout never crosses between two binaries.
    mx-sections '((byname 0 ("__wasm__" "__APPLE__"))
                  (tiled  1 ()))
-   ; the scripts, keyed to a class. the third column is the script's indent, so the
-   ; block keeps its neighbours' shape. a seat leaves this roster when its LINK
-   ; becomes ours: holo lays each love_data.N whole and in order, on the grain the
-   ; object declares, which IS this tiling -- so a holo-linked board owes no script
-   ; at all. the three thumb seats left that way; the two kernel ones stay while
-   ; KLINK=lld remains the comparison lane and ld.lld still needs telling.
-   mx-seats '(("free/x86_64/x86_64.lds"    lean 8)
-              ("free/aarch64/aarch64.lds"  lean 8))
    (mx-stride cls) (: (go l) (atom? l ? (scare 'mx-stride cls)
                               (: r <l (id? <r cls ? <>r (go >l))))
                       (go mx-strides))
@@ -225,22 +219,12 @@
        (els l) (atom? l ? (scare 'mx-knob nm)
                   (: r <l (two? (el r 2) ? (els >l) [['cpp-def nm <>r]])))
        ['cpp-if [[['un 'not (mx-defd nm)] [['cpp-if (arms rows) (els rows)]]]]])
-   ; the two lines a script keeps by hand; everything between them is laid.
-   mx-ld-open "/* love_data: the sentinel tiling, laid by mx.l -- edit the table there. */"
-   mx-ld-shut "/* end love_data */"
-
    mx-nl (string 10)
-   (mx-cat l) (foldl (\ a s (a + s + mx-nl)) "" l)
    (mx-tile base stride p)                        ; one KEEP per rep, each slot pinned
     (: (go i) (? (i = tally mx-reps) ""
                  (p + "KEEP(*(love_data." + show i + "))  . = " + base + " + "
                     + (show (stride * (i + 1))) + ";" + mx-nl + go (i + 1)))
        (go 0))
-   (mx-lds-block stride pad)
-    (: p (" " * pad)
-       (p + ". = ALIGN(" + show stride + ");" + mx-nl
-          + p + "__love_data = .;" + mx-nl + mx-tile "__love_data" stride p))
-
    ; the host link's -T fragment, laid WHOLE: it exists for this and nothing else.
    mx-ld
     (: s (mx-stride 'lean)
@@ -259,33 +243,6 @@
         + "ASSERT(__stop_love_data - __start_love_data == "
         + (show (tally mx-reps)) + " * " + (show s) + "," + mx-nl
         + "       \"love_data: slot count moved -- sync love.h's ai_data_n and mx.l\")" + mx-nl))
-
-   ; --- and the seats with a full script of their own: splice, don't lay -----------
-   ; those scripts are the board's memory map and belong to the board. mx.l takes the
-   ; text and answers it with the marked block relaid, so the recipe's IO is a pipe.
-   (mx-seat path) (: (go l) (? (atom? l) (scare 'mx-seat path)
-                                (: r <l (<r = path ? >r (go >l))))
-                     (go mx-seats))
-   (mx-lines s) (: n (tally s)
-                   (go i j) (? (j = n) (? (i = j) () [(snip s i j)])
-                               (peep s j 0 = 10) (snip s i j >< go (j + 1) (j + 1))
-                               (go i (j + 1)))
-                   (go 0 0))
-   (mx-trim s) (: n (tally s)
-                  (go i) (? (i = n) "" (peep s i 0 = 32) (go (i + 1)) (snip s i n))
-                  (go 0))
-   (mx-lds path text)
-    (: st  (mx-seat path)
-       blk (mx-lds-block (mx-stride <st) <>st)
-       ; a seat missing either marker is a mistake, not an empty edit -- scare, so the
-       ; recipe leaves the committed file alone rather than writing it back unchanged.
-       (skip l) (? (atom? l) (scare 'mx-lds-shut path)
-                   (mx-trim <l = mx-ld-shut) (mx-cat l)
-                   (skip >l))
-       (walk l) (? (atom? l) (scare 'mx-lds-open path)
-                   (mx-trim <l = mx-ld-open) (<l + mx-nl + blk + skip >l)
-                   (<l + mx-nl + walk >l))
-       (walk (mx-lines text)))
 
    ; the whole header. the banner is not decoration: a hand edit here is lost the next
    ; time the gate runs, so the file has to say where its source is.
@@ -306,7 +263,7 @@
     (: nl (string 10)
        [['note ("THE DATA SLOT LAYOUT. the sentinels tile one section at ai_data_stride in" + nl
                  + "enum d order, so a value's rep is arithmetic on its ap -- love.c's DSENT," + nl
-                 + "love.h's ai_typ, and the six linker scripts laid from this same roster." + nl
+                 + "love.h's ai_typ, and core/love_data.ld laid from this same roster." + nl
                  + "each #if here is a DEFAULT; the guard over it is the -D door.")]
          (mx-knob "ai_data_section" mx-sections)
          (mx-knob "ai_data_stride" mx-strides)

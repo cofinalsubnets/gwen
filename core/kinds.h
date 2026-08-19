@@ -5,7 +5,7 @@ enum d { DMint, DNom, DSun, DGem, DTwin, DBig, DTray, DString, DChain };
 //
 // THE DATA SLOT LAYOUT. the sentinels tile one section at ai_data_stride in
 // enum d order, so a value's rep is arithmetic on its ap -- love.c's DSENT,
-// love.h's ai_typ, and the six linker scripts laid from this same roster.
+// love.h's ai_typ, and core/love_data.ld laid from this same roster.
 // each #if here is a DEFAULT; the guard over it is the -D door.
 #if !defined(ai_data_section)
 #if defined(__wasm__) || defined(__APPLE__)

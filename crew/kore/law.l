@@ -134,7 +134,10 @@
       (= (ubase "/a/b/" "") "b") (= (ubase "///" "") "/")
       (= (ubase "b" "b") "b")                                      ; the suffix never eats the whole name
       (= (udir "/a/b") "/a") (= (udir "a") ".") (= (udir "/") "/")
-      (= (udir "a/") ".") (= (udir "/a/b/") "/a")))
+      (= (udir "a/") ".") (= (udir "/a/b/") "/a")
+      (= (uwords " a  bb\tc\n") '("a" "bb" "c"))                   ; the quote-blind split
+      (= (uwords "x") '("x"))
+      !(uwords "  \n") !(uwords "")))
 
 ; --- the field-tool floor: usplit keeps every piece (cut's face, where lines drops
 ; the empty tail), uspec/upick read cut's LIST, uset expands tr's ranges + escapes,
@@ -154,9 +157,54 @@
       (= (uset "\\n\\t") '(10 9))                                  ; the escapes
       (= (urev "abc") "cba") !(urev "")))
 
-; --- the fs-tool floor (crew/kore/fs.l): uoct reads chmod's octal ---
+; --- the column floor (crew/kore/core.l): fold, expand and unexpand all count
+; COLUMNS, which is the one thing they share and the one thing a byte count
+; disagrees with -- so ucol is lawed first and the three faces over it after ---
 (: (assert
-      (= (uoct "755") 493) (= (uoct "644") 420) (= (uoct "0") 0) (= (uoct "7") 7)))
+      (= (ucol 0 9 8) 8) (= (ucol 1 9 8) 8) (= (ucol 8 9 8) 16)     ; a tab lands on the stop
+      (= (ucol 3 9 4) 4) (= (ucol 4 9 4) 8)
+      (= (ucol 5 8 8) 4) (= (ucol 0 8 8) 0)                         ; \b never walks past 0
+      (= (ucol 7 13 8) 0) (= (ucol 2 97 8) 3)
+      (= (ufold 4 0 0 "abcdefghij") '("abcd" "efgh" "ij"))
+      (= (ufold 4 0 0 "abcd") '("abcd")) (= (ufold 4 0 0 "") '(""))
+      (= (ufold 6 1 0 "aaa bbb ccc") '("aaa " "bbb " "ccc"))         ; -s backs up to the blank
+      (= (ufold 8 0 0 "a\tbcdefgh") '("a\t" "bcdefgh"))              ; the tab fills to the stop
+      (= (ufold 4 0 1 "ab\tcd") '("ab\tc" "d"))                      ; -b counts the bytes instead
+      (= (uexpand 8 0 "a\tb") "a       b") (= (uexpand 4 0 "a\tb") "a   b")
+      (= (uexpand 8 0 "\tx") "        x")
+      (= (uexpand 8 1 "\ta\tb") "        a\tb")                      ; -i stops at the first ink
+      (= (uunexpand 8 1 "        a       b") "\ta\tb")
+      (= (uunexpand 8 1 "abcdefg x") "abcdefg x")                    ; one space saves nothing
+      (= (uunexpand 8 1 "abcdef  x") "abcdef\tx")                    ; two of them reach the stop
+      (= (uunexpand 8 0 "   \tab   cd") "\tab   cd")                 ; no -a: the lead alone
+      (= (uunexpand 8 1 "a        ") "a\t ")))                       ; a trailing run is a run
+
+; --- tac, the encodings and factor (crew/kore/core.l) ---
+(: (assert
+      ; ⚠ the newline rides the line it FOLLOWED, so a last line arriving without one
+      ; comes back first without one -- which is the whole of tac's shape
+      (= (utac "a\nb\nc\n") '("c\n" "b\n" "a\n"))
+      (= (utac "x\ny") '("y" "x\n"))
+      !(utac "")
+      (= (ubenc ub64set 6 "hello world") "aGVsbG8gd29ybGQ=")
+      (= (ubenc ub64set 6 "a") "YQ==") (= (ubenc ub64set 6 "ab") "YWI=")
+      (= (ubenc ub64set 6 "abc") "YWJj") !(ubenc ub64set 6 "")
+      (= (ubenc ub32set 5 "hello") "NBSWY3DP") (= (ubenc ub32set 5 "a") "ME======")
+      (= (ubdec ub64set 6 "aGVsbG8gd29ybGQ=") '(1 "hello world"))
+      (= (ubdec ub64set 6 "YQ==") '(1 "a")) (= (ubdec ub32set 5 "NBSWY3DP") '(1 "hello"))
+      (= (ubdec ub64set 6 "aGVs\nbG8=") '(1 "hello"))               ; a newline is ignored
+      !(ubdec ub64set 6 "aG!s")                                      ; anything else is not
+      (= (ubwrap 4 "abcdefg") "abcd\nefg\n") (= (ubwrap 0 "ab") "ab")   ; ⚠ -w 0 closes nothing
+      !(ubwrap 4 "") !(ubwrap 0 "")
+      (= (ufactor 97) '(97)) (= (ufactor 100) '(2 2 5 5))
+      (= (ufactor 1234567) '(127 9721)) (= (ufactor 2) '(2))
+      !(ufactor 1) !(ufactor 0)))
+
+; --- the fs-tool floor (crew/kore/fs.l): uoct reads chmod's octal, rp-parts cuts a
+; path into the components realpath walks ---
+(: (assert
+      (= (uoct "755") 493) (= (uoct "644") 420) (= (uoct "0") 0) (= (uoct "7") 7)
+      (= (rp-parts "/a//b/") '("a" "b")) (= (rp-parts "a") '("a")) !(rp-parts "///")))
 
 ; --- the calendar floor (crew/kore/core.l): civil-from-days and its inverse. exact by
 ; construction (no month table, no float), and the ROUND TRIP is what holds it: stat's
@@ -428,17 +476,36 @@
       (= (sp "s/a\\{2\\}/x/") (sparse "s/a{2}/x/" 1))            ; one tree, two inks
       (= (sp "/\\(a\\|b\\)c/p") (sparse "/(a|b)c/p" 1))))
 
-; --- the process floor (crew/kore/proc.l): durations to milliseconds, and
-; the quote-blind word split under xargs ---
+; --- the /proc floor (crew/kore/proc.l): the stat-line split, the two clocks, the
+; terminal name and the uptime phrase. the FACES over them cannot be lawed and are not
+; smoked byte-for-byte either -- every number they read is a clock and the process
+; table moves between two runs -- so this is where the family is actually held ---
+(: (assert
+      ; ⚠ THE COMM IS TAKEN BETWEEN THE FIRST ( AND THE LAST ), because a program may
+      ; be named with either in it -- split on spaces and every field after it shifts
+      (= (ustatf "42 (bash) S 7 42 42 1024 99") '(42 "bash" "S" "7" "42" "42" "1024" "99"))
+      (= (ustatf "9 ((sd-pam)) S 1") '(9 "(sd-pam)" "S" "1"))
+      (= (ustatf "9 (a b) c) S 1") '(9 "a b) c" "S" "1"))
+      !(ustatf "9 no parens here")
+      (= (uclk 0) "00:00:00") (= (uclk 3661) "01:01:01") (= (uclk 359999) "99:59:59")
+      (= (uclk 360000) "100:00:00")                     ; the hours are never clipped
+      (= (uhms 100) "00:00:01") (= (uhms 131) "00:00:01")   ; USER_HZ is 100, and it truncates
+      ; the terminal number is Linux's own dev_t: major in bits 8..19, minor split
+      (= (utty 0) "?") (= (utty 34816) "pts/0") (= (utty 34819) "pts/3")
+      (= (utty 1025) "tty1") (= (utty 1088) "ttyS0") (= (utty 2304) "?")
+      (= (uupsay 60) "1 min") (= (uupsay 1980) "33 min")
+      (= (uupsay 9180) " 2:33") (= (uupsay 86400) "1 day,  0:00")
+      (= (uupsay 2275261) "26 days,  8:01")
+      (= (usignum "-9") 9) (= (usignum "-TERM") 15) (= (usignum "-KILL") 9)
+      !(usignum "-nope") !(usignum "x") !(usignum "-")))
+
+; --- the process floor (crew/kore/proc.l): durations to milliseconds ---
 (: (assert
       (= (udur "2") 2000) (= (udur "0") 0) (= (udur "1s") 1000)
       (= (udur "1.5") 1500) (= (udur ".5") 500) (= (udur "1.") 1000)
       (= (udur "2m") 120000) (= (udur "1h") 3600000) (= (udur "1d") 86400000)
       (= (udur "1.5m") 90000)
-      !(udur "") !(udur "x") !(udur "5x") !(udur "1.2.3") !(udur ".")
-      (= (uwords " a  bb\tc\n") '("a" "bb" "c"))
-      (= (uwords "x") '("x"))
-      !(uwords "  \n") !(uwords "")))
+      !(udur "") !(udur "x") !(udur "5x") !(udur "1.2.3") !(udur ".")))
 
 ; --- the find floor (crew/kore/find.l): the path join, the argument split and
 ; the expression grammar. the walk itself is smoked against the system find ---

@@ -1,6 +1,7 @@
-; crew/kore/core.l -- the line tools, the coreutils batch of kore: cat, echo, head,
-; tail, wc, sort, uniq, tee, seq, yes, true, false, basename, dirname -- and the field
-; tools: cut, tr, nl, rev. every tool is a
+; crew/kore/core.l -- the line tools, the coreutils batch of kore: cat, tac, echo,
+; head, tail, wc, sort, uniq, tee, seq, yes, true, false, basename, dirname -- the
+; field tools cut, tr, nl, rev -- the column tools fold, expand, unexpand -- and the
+; encodings base64 and base32 beside tsort and factor. every tool is a
 ; <name>-main (the args after its name -> conversation on the ports -> the exit status,
 ; ANSWERED as a charm; a leave from deep inside rides udie, and urun is the door both
 ; come back through), dispatched by the multi-call `kore` (kore.l holds the registry). this
@@ -17,6 +18,16 @@
 (:
    ; -- cat: files (or -) onto out, verbatim --
    (cat-main as) (uchunks "cat" puts as)
+
+   ; -- tac: the lines back to front, a file at a time. the newline rides the line it
+   ; FOLLOWED, so a last line arriving without one comes back first without one --
+   (utac t)                            ; text -> its records, last first
+    (: n (tally t)
+       (go k st acc) (? (n <= k) (? (st < k) (snip t st k >< acc) acc)
+                        (t k = 10) (go (k + 1) (k + 1) (snip t st (k + 1) >< acc))
+                        (go (k + 1) st acc))
+       (go 0 0 ()))
+   (tac-main as) (ueach "tac" (\ t (foldl (\ _ r (say out r)) 0 (utac t))) as)
 
    ; -- echo: the args back; -n holds the newline --
    (echo-main as)
@@ -287,6 +298,20 @@
        (? !(two? ws) (udie 2 "usage: uname [-snrma]")
           (: _ (say out (u-join ws)) _ (put out 10) _ (flush out) 0)))
 
+   ; -- arch: uname -m, and nothing else --
+   (arch-main _) (: _ (say out (u-mach ())) _ (put out 10) _ (flush out) 0)
+
+   ; -- nproc: the processors /proc/cpuinfo names. ⚠ GNU counts the ones this process
+   ; may RUN on; nothing here reads an affinity mask, so this is GNU's --all --
+   (nproc-main _)
+    (: r (uread "/proc/cpuinfo")
+       w "processor"
+       (go ls n) (? !(two? ls) n
+                    (go >ls (? ((tally w <= tally <ls) && (snip <ls 0 (tally w) = w))
+                               (n + 1) n)))
+       n (? (two? r) (go (lines <>r) 0) 0)
+       _ (say out (show (? (0 < n) n 1))) _ (put out 10) _ (flush out) 0)
+
    ; -- printf: the escapes, then %s %d %c %%. The format is REUSED while args remain
    ; (POSIX), and an exhausted %s is "" / %d is 0 rather than a stop. No field widths:
    ; nothing in this tree spends one, and a half-implemented %-5.2f would be a lie.
@@ -431,6 +456,119 @@
     (: (dot ln term?) (: _ (say out (urev ln)) _ (? term? (put out 10) 0) 1)
        (ulines "rev" dot as))
 
+   ; ---- the column tools: fold, expand, unexpand --------------------------------
+   ; all three count COLUMNS and not bytes -- a tab steps to the next stop, \b steps
+   ; back one, \r starts the line over -- which is the whole reason they are one
+   ; section: `ucol` is the only thing they share and the only thing they disagree
+   ; with a byte count about. fold -b asks for the bytes instead.
+   (ucol col c stop)                   ; the column charm c leaves the cursor on
+    (? (c = 9) (* stop ((// col stop) + 1))
+       (c = 8) (? (0 < col) (col - 1) 0)
+       (c = 13) 0
+       (col + 1))
+   (ublank? c) ((c = 32) || (c = 9))
+   (uspaces o k) (? (0 < k) (: _ (put o 32) (uspaces o (k - 1))) 0)
+
+   ; -- fold: one line -> the pieces it breaks into at width w. the break lands
+   ; BEFORE the charm that would overflow, so a charm wider than the whole width
+   ; still gets a line of its own; -s backs the break up to the last blank --
+   (ufold w s? b? s)
+    (: n (tally s)
+       (go k st col lb acc)            ; lb: seat after the last blank, -1 for none
+        (? (n <= k) (rev (snip s st n >< acc))
+           (: c (s k)
+              nc (? b? (col + 1) (ucol col c 8))
+              (? ((w < nc) && (st < k))
+                 (: cut (? ((s? && (st < lb)) && (lb <= k)) lb k)
+                    (go cut cut 0 -1 (snip s st cut >< acc)))
+                 (go (k + 1) st nc (? (ublank? c) (k + 1) lb) acc))))
+       (go 0 0 0 -1 ()))
+   (fold-main as)
+    (: t (tablet 0)
+       (pre a wid acc)                 ; the obsolescent -N width, as head takes its own
+        (? !(two? a) `(wid (rev acc))
+           ((1 < tally <a) && (<a 0 = 45) && (digits? <a))
+            (pre >a (uatoi (snip <a 1 (tally <a))) acc)
+           (pre >a wid (<a >< acc)))
+       p (pre as () ())
+       o (uopts <>p t '(119) ())
+       _ (? (two? o) () (udie 2 "fold: -w wants a width"))
+       v (uoptv t 119)
+       w (? (string? v) (uatoi v) (? (charm? <p) <p 80))
+       _ (? (0 < w) () (udie 2 "fold: width must be positive"))
+       s? (peep t 115 0) b? (peep t 98 0)
+       (dot txt) (: e (nl-end? txt)
+                    (go m) (? !(two? m) ()
+                              (: _ (say out <m)
+                                 _ (? (e || two? >m) (put out 10) 0)
+                                 (go >m)))
+                    (go (foldl (\ a l (a + (ufold w s? b? l))) () (lines txt))))
+       (ueach "fold" dot <>>o))
+
+   ; -- expand: tabs to spaces, a stop every n (8 unsaid); -i converts only the
+   ; blanks a line opens with --
+   (uexpand n i? s)
+    (: m (tally s) o (jug 0)
+       (go k col lead)
+        (? (m <= k) (slurp o)
+           (: c (s k)
+              (? ((c = 9) && (lead || !i?))
+                 (: to (* n ((// col n) + 1)) _ (uspaces o (to - col)) (go (k + 1) to lead))
+                 (: _ (put o c)
+                    (go (k + 1) (ucol col c n) (? (ublank? c) lead 0))))))
+       (go 0 0 1))
+   (expand-main as)
+    (: t (tablet 0)
+       o (uopts as t '(116) ())
+       _ (? (two? o) () (udie 2 "expand: -t wants a tab size"))
+       v (uoptv t 116)
+       n (? (string? v) (uatoi v) 8)
+       _ (? (0 < n) () (udie 2 "expand: tab size must be positive"))
+       i? (peep t 105 0)
+       (dot txt) (: e (nl-end? txt)
+                    (go m) (? !(two? m) ()
+                              (: _ (say out (uexpand n i? <m))
+                                 _ (? (e || two? >m) (put out 10) 0)
+                                 (go >m)))
+                    (go (lines txt)))
+       (ueach "expand" dot <>>o))
+
+   ; -- unexpand: blanks back to tabs -- only the ones a line OPENS with unless -a
+   ; takes every run (-t says a size and means -a too). ⚠ a tab lands only where it
+   ; saves at least two columns, which is why a lone space on a stop stays a space --
+   (uunexpand n a? s)
+    (: m (tally s) o (jug 0)
+       (spill st end)                  ; a blank run from column st to column end
+        (: (go cur) (: to (* n ((// cur n) + 1))
+                      (? ((to <= end) && ((cur + 2) <= to)) (: _ (put o 9) (go to))
+                         (uspaces o (end - cur))))
+           (go st))
+       (go k col rst lead)             ; rst: the run's first column, -1 for none
+        (? (m <= k) (: _ (? (rst < 0) 0 (spill rst col)) (slurp o))
+           (: c (s k)
+              cv (ucol col c n)
+              (? ((ublank? c) && (lead || a?))
+                 (go (k + 1) cv (? (rst < 0) col rst) lead)
+                 (: _ (? (rst < 0) 0 (spill rst col))
+                    _ (put o c)
+                    (go (k + 1) cv -1 (? (ublank? c) lead 0))))))
+       (go 0 0 -1 1))
+   (unexpand-main as)
+    (: t (tablet 0)
+       o (uopts as t '(116) ())
+       _ (? (two? o) () (udie 2 "unexpand: -t wants a tab size"))
+       v (uoptv t 116)
+       n (? (string? v) (uatoi v) 8)
+       _ (? (0 < n) () (udie 2 "unexpand: tab size must be positive"))
+       a? (? (string? v) 1 (peep t 97 0))
+       (dot txt) (: e (nl-end? txt)
+                    (go m) (? !(two? m) ()
+                              (: _ (say out (uunexpand n a? <m))
+                                 _ (? (e || two? >m) (put out 10) 0)
+                                 (go >m)))
+                    (go (lines txt)))
+       (ueach "unexpand" dot <>>o))
+
    ; ---- the calendar floor (stat's %y and date both read it) --------------------
    ; Howard Hinnant's exact integer civil-from-days and its inverse, shifted to a March
    ; year so the leap day lands at the END and no month table is needed. ⚠ love's // is
@@ -456,6 +594,149 @@
        doy ((// ((* 153 (m + (? (2 < m) -3 9))) + 2) 5) + (d - 1))
        doe ((((* yoe 365) + (// yoe 4)) - (// yoe 100)) + doy)
        (((* era 146097) + doe) - 719468))
+
+
+   ; ---- the encodings: base64 and base32 (RFC 4648, GNU's two faces) ------------
+   ; ONE coder, two alphabets: the group is 3 bytes -> 4 charms at 6 bits and 5 -> 8
+   ; at 5, the short tail padded with = to a whole group either way. -d reads it back
+   ; (a newline is ignored, anything else outside the alphabet is refused), -w wraps
+   ; the output at 76 unless told another width, 0 for one long line.
+   ub64set "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+   ub32set "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+   (ubenc set bits s)
+    (: n (tally s) o (jug 0)
+       gb (? (bits = 6) 3 5)                    ; bytes in a whole group
+       gc (// (* gb 8) bits)                    ; charms in a whole group
+       msk ((bits 2) - 1)
+       (grp k)
+        (? (n <= k) (slurp o)
+           (: have (? ((k + gb) <= n) gb (n - k))
+              (val i acc) (? (gb <= i) acc
+                             (val (i + 1) ((* acc 256) + (? (i < have) (s (k + i)) 0))))
+              v (val 0 0)
+              full (// (((* have 8) + bits) - 1) bits)   ; the charms carrying data
+              (go j) (? (gc <= j) (grp (k + gb))
+                        (: _ (? (j < full)
+                                (put o (set (& (// v ((* bits ((gc - 1) - j)) 2)) msk)))
+                                (put o 61))
+                           (go (j + 1))))
+              (go 0)))
+       (grp 0))
+   ; ⚠ -w 0 closes NOTHING: GNU wraps at a width and ends the last line, but one long
+   ; line arrives with no newline at all -- so a `base64 -w 0` piped into a compare is
+   ; a byte shorter than the obvious implementation makes it
+   (ubwrap w s)                                 ; the coded text, wrapped and closed
+    (: n (tally s) o (jug 0)
+       (go k) (? (n <= k) (slurp o)
+                 (: e (? ((k + w) < n) (k + w) n)
+                    _ (say o (snip s k e)) _ (put o 10) (go e)))
+       (? (0 < w) (go 0) s))
+   (ubdec set bits s)                           ; (1 text), or () when it will not read
+    (: ns (tally set) n (tally s) o (jug 0)
+       (ix c) (: (go k) (? (ns <= k) () (set k = c) `(1 k) (go (k + 1))) (go 0))
+       (go k acc nb)
+        (? (n <= k) `(1 (slurp o))
+           (: c (s k)
+              (? ((c = 10) || (c = 13)) (go (k + 1) acc nb)
+                 (c = 61) (: (tail j)               ; past the pad, only pad and newline
+                              (? (n <= j) `(1 (slurp o))
+                                 (: d (s j)
+                                    (? (((d = 61) || (d = 10)) || (d = 13)) (tail (j + 1))
+                                       ())))
+                            (tail (k + 1)))
+                 (: r (ix c)
+                    (? !(two? r) ()
+                       (: a2 ((* acc (bits 2)) + <>r)
+                          n2 (nb + bits)
+                          (? (8 <= n2)
+                             (: _ (put o (& (// a2 ((n2 - 8) 2)) 255))
+                                (go (k + 1) (& a2 (((n2 - 8) 2) - 1)) (n2 - 8)))
+                             (go (k + 1) a2 n2))))))))
+       (go 0 0 0))
+   (ubmain who set bits as)
+    (: t (tablet 0)
+       o (uopts as t '(119) ())
+       _ (? (two? o) () (udie 1 (who + ": -w wants a width")))
+       v (uoptv t 119)
+       w (? (string? v) (uatoi v) 76)
+       d? (peep t 100 0)
+       fs <>>o
+       _ (? (two? >fs) (udie 1 (who + ": extra operand")) ())
+       txt (? (two? fs) (: r (? (<fs = "-") `(1 (slurp in)) (uread <fs))
+                           (? (two? r) <>r (udie 1 (who + ": cannot open " + <fs))))
+              (slurp in))
+       _ (? d? (: r (ubdec set bits txt)
+                  (? (two? r) (say out <>r) (udie 1 (who + ": invalid input"))))
+            (say out (ubwrap w (ubenc set bits txt))))
+       _ (flush out) 0)
+   (base64-main as) (ubmain "base64" ub64set 6 as)
+   (base32-main as) (ubmain "base32" ub32set 5 as)
+
+   ; ---- the two little computations: tsort and factor ---------------------------
+
+   ; -- tsort: the pairs' partial order made total. ⚠ the answer is A topological
+   ; order, not GNU's: where the input pins one they agree, and where it does not both
+   ; are right -- so the gate asks only about inputs that pin one. a loop is named on
+   ; err, broken at the first node still standing, and leaves 1, as GNU's does --
+   (tsort-main as)
+    (: _ (? (two? >as) (udie 1 "usage: tsort [FILE]") ())
+       t (? (two? as) (: r (? (<as = "-") `(1 (slurp in)) (uread <as))
+                         (? (two? r) <>r (udie 1 ("tsort: cannot open " + <as))))
+              (slurp in))
+       ws (uwords t)
+       _ (? (% (tally ws) 2) (udie 1 "tsort: odd number of input words") ())
+       deg (tablet 0) succ (tablet 0)       ; the graph, keyed by the interned words
+       (rd l order)
+        (? !(two? l) (rev order)
+           (: a (name <l) b (name <>l)
+              o1 (? (id? (peep deg a ()) ()) (: _ (pin deg a 0) (a >< order)) order)
+              o2 (? (id? (peep deg b ()) ()) (: _ (pin deg b 0) (b >< o1)) o1)
+              _ (? (id? a b) 0                       ; a pair of one is a node, not an edge
+                   (: _ (pin succ a (b >< (peep succ a ())))
+                      (pin deg b ((peep deg b 0) + 1))))
+              (rd >>l o2)))
+       order (rd ws ())
+       (loose l) (? !(two? l) () ((peep deg <l 0) = 0) `(1 <l) (loose >l))
+       (ts-drop x l) (? !(two? l) () (id? <l x) >l (<l >< ts-drop x >l))
+       (emit k) (: _ (say out (string k)) _ (put out 10)
+                   (foldl (\ _ b (pin deg b ((peep deg b 0) - 1))) 0 (peep succ k ())))
+       (go l bad)
+        (? !(two? l) (: _ (flush out) bad)
+           (: r (loose l)
+              (? (two? r) (: _ (emit <>r) (go (ts-drop <>r l) bad))
+                 (: _ (say err "tsort: input contains a loop:") _ (put err 10)
+                    _ (foldl (\ _ k (: _ (say err ("tsort: " + (string k))) (put err 10)))
+                             0 l)
+                    _ (emit <l)
+                    (go >l 1)))))
+       (go order 0))
+
+   ; -- factor: every number's primes, GNU's `N: p q r`. trial division by 2 and the
+   ; odd numbers -- exact for anything this tree spends, and a twenty-digit semiprime
+   ; will simply sit here (that is what GNU keeps a Pollard rho for) --
+   (ufactor n0)
+    (: (go n d acc)
+        (? (n < 2) (rev acc)
+           (0 = (% n d)) (go (// n d) d (d >< acc))
+           (n < (* d d)) (rev (n >< acc))
+           (go n (? (d = 2) 3 (d + 2)) acc))
+       (? (n0 < 2) () (go n0 2 ())))
+   (factor-main as)
+    (: (dig? s) (: n (tally s)
+                   (go k) (? (n <= k) (0 < n)
+                             ((48 <= (s k)) && ((s k) <= 57)) (go (k + 1))
+                             0)
+                   (go 0))
+       (one w ok)
+        (? !(dig? w)
+           (: _ (say err ("factor: '" + w + "' is not a valid positive integer"))
+              _ (put err 10) 0)
+           (: _ (say out (w + ":"))
+              _ (foldl (\ _ p (: _ (put out 32) (say out (show p)))) 0 (ufactor (uatoi w)))
+              _ (put out 10) ok))
+       (go a ok) (? (two? a) (go >a (one <a ok)) ok)
+       ok (go (? (two? as) as (uwords (slurp in))) 1)
+       _ (flush out) (? ok 0 1))
 
    ; ---- the record tools: paste, comm, join, split, od -------------------------
 

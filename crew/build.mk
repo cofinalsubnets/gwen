@@ -84,7 +84,8 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             crew/holo/link.l crew/holo/copy.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
             crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/sb/merge.l \
             crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l crew/sb/up.l \
-            lib/gz.l lib/tar.l lib/tarcmd.l lib/source.l crew/lapiz/lapiz.l \
+            lib/gz.l lib/tar.l lib/tarcmd.l lib/gzcmd.l lib/cpio.l lib/cpiocmd.l \
+            lib/source.l crew/lapiz/lapiz.l \
             lib/salt.l lib/infix.l crew/libra/libra.l lib/hueweb.l lib/serve.l
 # THE DOCS LANE -- the small image of the array below. a one-shot `love libra ..`
 # wants the .l reader, the config door, the factor pass and the document lens, and
@@ -159,9 +160,9 @@ $(ho)/.rest-cat.l: $(restfiles) $(ho)/.dist.list $(ho)/.docs.list
 # a third leg of every release gate to keep honest.
 #
 # The archive is OURS end to end -- lib/tar.l and lib/gz.l -- so cutting a release
-# needs neither `tar` nor `gzip` on the box. ⚠ our coder writes the FIXED Huffman
-# code, ~24% above `gzip -9` (lib/gz.l carries the numbers): a real cost on a
-# download, and the reason a dynamic coder is the next rung.
+# needs neither `tar` nor `gzip` on the box, and lib/gzcmd.l wears their flags for a
+# hand. Our coder costs every block three ways and writes the cheapest; it lands a
+# few percent above `gzip -9` (lib/gz.l carries the numbers).
 #
 # ⚠ REPRODUCIBLE BY CONSTRUCTION: the pack pins every mtime/uid/gid to $(dist_stamp)
 # and the gzip header's own MTIME is 0, so two cuts of one tree are the same bytes
@@ -201,18 +202,23 @@ dist_drop = wasm/love.js
 # hashes (cheap, and the hash sees a delete or rename that leaves no mtime), and
 # writes the archive ONLY when the tree's content moved -- so its mtime holds and
 # nothing downstream re-links on a touch or a no-op.
-# ⚠ the runner PREFERS the tree's own love -- stale is fine, the archive is
-# f(tree) and never f(runner), and only that binary carries host/deflate.c's
-# coder (love0 links no host nifs, so its lane pays the love-side coder in
-# budget-bounded gigabytes). No binary yet -- the first make, a laid seed --
-# falls back to $(boot_love). Never a dependency edge: the seed EMBEDS this
-# archive, so the archive must exist before the binary can link.
+# the runner is $(boot_love) -- the bundled love, or the egg this make built.
+# The archive is f(tree) and never f(runner), so the only question is which
+# binary runs it, and the egg wins twice over: gcc's codegen through deflate's
+# and sha's array loops takes a THIRD of the instructions mooncc's does, and
+# glibc hands back the pages that nolibc's free never munmaps -- 1.2 s / 148 MB
+# against the tree's own love at 2.2 s / 627 MB, same bytes out.
+# ⚠ and it is always CURRENT, which the tree's own love need not be: a love
+# older than a nif the packer reaches for answers `missing', and the tree cannot
+# relink its way out, since src.o carries this archive -- the binary that would
+# fix the runner would need the runner first.
+# Never a dependency edge: the seed EMBEDS this archive, so the archive must
+# exist before the binary can link.
 .PHONY: force_src
 force_src: ;
 $(dist_source): force_src $(if $(bundled_love),,$(love0))
 	@mkdir -p $(dir $@)
-	@r="$(ho)/love"; [ -x "$$r" ] || r="$(boot_love)"; \
-	 LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $$r mk/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(boot_love) mk/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
 # THE SOURCE BLOB: the source tarball laid into an object (mk/tools/mksrc.l), so the
 # artifact hands out its own source with no second download and no `tar xf` -- love

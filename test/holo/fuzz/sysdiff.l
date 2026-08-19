@@ -15,6 +15,9 @@
 (reads (open "crew/holo/x64.l" "r"))
 (reads (open "crew/holo/arm64.l" "r"))
 (reads (open "crew/holo/riscv.l" "r"))
+; holo rides module 'holo: reading the source REGISTERS it, and the names come
+; through the door rather than off this file's layer.
+(use 'holo)
 
 (:
  (nthl l i) (? (i = 0) <l (nthl >l (i - 1)))

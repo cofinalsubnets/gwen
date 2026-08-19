@@ -20,7 +20,7 @@
 (: hatched (member? 'born (names ())))
 (hear welp)                                    ; welp answers the misses quietly
 (assert (? hatched !operators 1) (? hatched !pureset 1))
-(hear 0)
+(hear test-strict)
 
 ; reading is structural: a sigil from a port is just the symbol, no table consulted
 (assert ('^ = (cap (sound '(94)))) ('+ = (cap (sound '(43)))))

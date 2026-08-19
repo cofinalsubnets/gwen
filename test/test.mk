@@ -13,7 +13,7 @@
   test_rp2040 moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
-  test_holo test_as test_elf32 test_objcopy test_gz test_splice test_forge test_distboot test_bakerep
+  test_holo test_as test_elf32 test_objcopy test_gz test_cpio test_splice test_forge test_distboot test_bakerep
 
 # $m is the WARM love -- the baked image woken, what ships. a gate whose subject is
 # the egg boot spells LOVE_NO_IMAGE=1 itself; love0 is always the egg.
@@ -173,14 +173,12 @@ embed_boards = mps2 teensy41 nucleo446 playdate rp2040
 # with no opt-out. Linking it here would cost 80 s and quietly boot a machine, which is the
 # one thing this gate promises not to do. test_teensy41 (test_extra) owns that link.
 embed_elfs = mps2/love.elf nucleo446/firm.elf rp2040/love.elf
-# the aarch64 kernel face needs a CROSS-CAPABLE KCC -- ours or clang, never a native gcc
-embed_a64 = $(or $(KCC_IS_MOON),$(filter 1,$(KCC_IS_CLANG)))
 embed_arm := $(and $(shell command -v arm-none-eabi-gcc 2>/dev/null),\
                    $(shell command -v arm-none-eabi-ld 2>/dev/null))
 test_embed: host
 	@echo TEST the frontends compile against core/love.h "(object only)"
 	@$(MAKE) -s kmain_o
-	@$(if $(embed_a64),$(MAKE) -s a=aarch64 kmain_o,echo "  (aarch64 kmain.c skipped: $(KCC) cannot cross)")
+	@$(MAKE) -s a=aarch64 kmain_o
 	@$(MAKE) -s K_TEST=1 kmain_o
 	@for p in $(embed_ports); do \
 	   $(MAKE) -s -C port/$$p ../../out/$$p/main.o \
@@ -189,7 +187,7 @@ test_embed: host
 	@$(if $(wildcard $(EMCC)),$(MAKE) -s -C wasm ../out/wasm/host.o,echo "  (wasm/host.c skipped: no emcc)")
 	@echo TEST the frontends link "(no boot, no qemu)"
 	@$(MAKE) -s kernel || { echo "FAIL the $a kernel does not link"; exit 1; }
-	@$(if $(embed_a64),$(MAKE) -s a=aarch64 kernel,echo "  (aarch64 kernel link skipped: $(KCC) cannot cross)")
+	@$(MAKE) -s a=aarch64 kernel
 	@$(MAKE) -s -C port/virt ../../out/virt/love.elf || { echo "FAIL port/virt does not link"; exit 1; }
 	@echo "test_embed: host, free (x86_64 + aarch64 + riscv) and wasm build against core/love.h"
 
@@ -415,10 +413,8 @@ test_moon: host $(love0)
 # ⚠ core/mx.h/kinds.h/nifs.h are CORE headers -- a refresh rebuilds the tree, so the gate to run
 # after is `make test`, not test_clay alone. Each is written aside and moved only once the
 # whole set lays, so a shape check that quits leaves every committed file untouched.
-# core/love_data.ld is laid WHOLE; a board's own script is its own memory map, so core/mx.l takes that
-# text and answers it with the marked block relaid -- the .lds recipe's IO is a pipe.
-mx_lds = free/x86_64/x86_64.lds free/aarch64/aarch64.lds
-mx_lay = (: _ (? mx-ok 0 (quit 1)) _ (puts (mx-lds \"$$f\" (slurp in))) (quit 0))
+# core/love_data.ld is the last linker script in the tree and is laid WHOLE: every other
+# seat's link became ours, and holo needs no script at all.
 # dest:source:value:shape-check -- ONE roster, read by `make mx` (which writes) and by
 # test_clay (which regenerates and diffs). Two spellings of this list is how they drift.
 mx_gen = core/mx.h:core/mx.l:mx-h:mx-ok core/kinds.h:core/mx.l:kinds-h:mx-ok core/nifs.h:core/nifs.l:nifs-h:nifs-ok \
@@ -431,13 +427,9 @@ mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${
 # two-arg `join` shadowed clay's one-arg at mx-h's define and the .h came out empty.
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo LOVE	core/mx.h core/kinds.h core/nifs.h xterm256.h core/love_data.ld "+5 .lds (core/mx.l + core/nifs.l + quay.l on $m)"
+	@echo LOVE	core/mx.h core/kinds.h core/nifs.h xterm256.h core/love_data.ld "(core/mx.l + core/nifs.l + quay.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
-	@t=out/.lds.$$$$; for f in $(mx_lds); do \
-	   $m -l core/mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
-	   cmp -s $$t $$f || { mv $$t $$f; echo "LOVE	$$f"; }; \
-	 done; rm -f $$t
 # ...and the DEPENDENCY, off the same roster: a committed generated file is stale the moment
 # its table moves, and the objects that include it then rebuild from the fresh one. Without
 # this a new core/nifs.l row builds clean and gates GREEN with its nom still off the book -- the
@@ -467,11 +459,7 @@ test_clay: host
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
-	@t=out/.lds.$$$$; for f in $(mx_lds); do \
-	   $m -l core/mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
-	   cmp -s $$t $$f || { echo "FAIL $$f is not what core/mx.l lays -- run: make mx"; diff -u $$f $$t | head -20; rm -f $$t; exit 1; }; \
-	 done; rm -f $$t
-	@echo "clay-mx: core/mx.h, core/kinds.h, core/nifs.h, xterm256.h and the 6 love_data scripts regenerate identically"
+	@echo "clay-mx: core/mx.h, core/kinds.h, core/nifs.h, xterm256.h and core/love_data.ld regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
 # test_moonfuzz -- moon's REFUSAL surface: each test/cc file broken
 # eight ways from a fixed seed. Two reds -- no SCARE, no hang -- plus G1 on every mutant that
@@ -611,7 +599,7 @@ test_fat: dist-fat
 # FBSD_SSH / NBSD_SSH = "ssh -p 2222 -i KEY root@HOST" -- and without one the
 # gate skips loudly. opt-in by name, like test_distboot; FBSD_SEED=1 /
 # NBSD_SEED=1 adds the on-box `love seed` trophy leg (minutes).
-.PHONY: test_freebsd test_netbsd test_freebsd_arm64
+.PHONY: test_freebsd test_netbsd test_freebsd_arm64 test_netbsd_arm64
 test_freebsd: host $(love0) out/host/mooncc0.image
 	@sh test/gate/osbox.sh $(ho) $(love0) freebsd
 test_netbsd: host $(love0) out/host/mooncc0.image
@@ -621,6 +609,10 @@ test_netbsd: host $(love0) out/host/mooncc0.image
 # kernels on an ISA this machine is not. Skips loudly without either.
 test_freebsd_arm64: host $(love0) out/host/mooncc0.image
 	@sh test/gate/osbox.sh $(ho) $(love0) freebsd arm64
+# and its netbsd sibling: NBSD_ARM64_SSH, the same shape. one aarch64 binary
+# answers all three kernels -- the door netbsd needs there is the svc IMMEDIATE.
+test_netbsd_arm64: host $(love0) out/host/mooncc0.image
+	@sh test/gate/osbox.sh $(ho) $(love0) netbsd arm64
 # test_raw_bake -- the mooncc-PIE binary bakes its own image and wakes it. The procedure
 # (and the why) lives in test/gate/raw-bake.sh; make keeps the dependency and the file list,
 # the WHOLE corpus. Opt-in: needs the -pie toolchain, x86-64 only.
@@ -789,6 +781,13 @@ test_gz: host
 	@$m $R/test/gate/gzfind.l
 	@echo TEST test/gate/targz.sh
 	@sh test/gate/targz.sh $(ho)/love
+# test_cpio -- lib/cpio.l + its face against GNU cpio, both ways over newc. Separate
+# from test_gz for the same reason test_gz is separate from the laws: the system tool
+# is the only oracle that can catch a format two of our own functions agree on. This
+# is the wire `make distro-initramfs` cuts its image with.
+test_cpio: host
+	@echo TEST test/gate/cpio.sh
+	@sh test/gate/cpio.sh $(ho)/love
 # The neutral assembler (crew/holo/) + its x86-64 backend: every encoder golden is
 # objdump-checked (test/holo/golden.l). A host-only app -- it adds no nif and is NOT
 # baked into love0. The sources are cat'd in because the host bakes its NATIVE backend
@@ -801,10 +800,12 @@ test_holo: host
 	    test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
 # as.l -- the real AT&T x86-64 front over holo. test/holo/as.l's goldens are byte-identical
 # to /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
+# asrefuse.sh is the other half: what must RAISE, one love per case.
 test_as: host
 	@echo TEST test/holo/as.l
 	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/as.l test/holo/as.l \
 	  | sh test/gate/run.sh as "$m" ", 0 failed"
+	@sh test/gate/asrefuse.sh "$m"
 # test_elf32 -- holo's ELF32 executable writer, judged by a real loader: both thumb backends
 # lay write+exit, Linux maps the segment and enters in Thumb state, and 42 must come back.
 # test/holo/golden.l pins the header fields; this pins the only opinion that counts. Needs qemu-arm

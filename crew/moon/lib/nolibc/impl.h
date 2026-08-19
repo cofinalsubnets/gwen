@@ -44,21 +44,22 @@
 #include <netinet/in.h>
 
 extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
-/* ⚠ WHICH ARCHES CARRY A SECOND KERNEL. The BSD branches compile only where one
- * can answer, so a link for a one-kernel arch owes no machine tail mksys did not
- * lay for it. x86_64 and aarch64 carry them; riscv keeps os.c's identity stubs
- * until a BSD riscv box exists to contradict a table.
- * ⚠ AND THE NETBSD RETURN PATH IS NARROWER STILL: __ai_nb_sigtramp is x64 asm,
- * laid by that mksys alone. Where it is absent the netbsd sigaction refuses BY
- * NAME rather than registering a trampoline that is not there -- freebsd on the
- * same arch is unaffected, and an arm64 netbsd box is what would lift it. */
+/* ⚠ WHERE THE TRANSLATION LAYER COMPILES. nolibc's C is written in one kernel's
+ * spelling -- linux's, because that is where we started and NOT because it is a
+ * default -- and os.c translates the others into it. The tables compile where
+ * the machine tail they call has been laid: x86_64 and aarch64 have it, riscv
+ * takes os.c's identity stubs and speaks whichever kernel -os named. This is a
+ * claim about mksys leaves, never a roster of kernels we are willing to run on.
+ * ⚠ AND THE NETBSD RETURN PATH IS ITS OWN CLAIM -- narrower in principle, though
+ * the same arches carry both today: __ai_nb_sigtramp is per-arch asm (mksys.l
+ * lays x64 and arm64). Where it is absent netbsd's sigaction refuses BY NAME
+ * rather than register a trampoline that is not there; freebsd on the same arch
+ * is unaffected. */
 #if !defined(__riscv)
-# define AiTwoKernels 1
+# define AiOsTranslate 1        /* os.c's tables, and the leaves they call */
+# define AiNbTramp 1            /* netbsd's signal return path */
 #endif
-#if !defined(__aarch64__) && !defined(__riscv)
-# define AiNbTramp 1
-#endif
-#ifdef AiTwoKernels
+#ifdef AiOsTranslate
 extern long __ai_sys7(long n, long a, long b, long c, long d, long e, long f, long g);   /* the 7th arg rides the stack (netbsd mmap) */
 #endif
 extern void __ai_sigret(void);
@@ -383,7 +384,7 @@ static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
 static long __ai_fb(long n, long a, long b, long c, long d, long e, long f) {
   long r = __ai_sys(n, a, b, c, d, e, f);
   return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
-#ifdef AiTwoKernels
+#ifdef AiOsTranslate
 static long __ai_fb7(long n, long a, long b, long c, long d, long e, long f, long g) {
   long r = __ai_sys7(n, a, b, c, d, e, f, g);
   return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
@@ -408,6 +409,7 @@ static long fb6(long n, long a, long b, long c, long d, long e, long f) { return
 /* the shapes the public headers keep opaque, and the fmt members' limb geometry. */
 typedef void (*__exitfn)(void);
 typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in units */
+#define __MDirect ((__mhdr *) 1)   /* in an allocated block's `next': a mapping of its own, pages fresh from the kernel */
 typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;
 struct __sctx { char *p; size_t n, at; };
 struct __ksigaction { void *h; unsigned long flags; void *restorer; unsigned long mask; };
@@ -503,7 +505,19 @@ struct __nb_kevent {                  /* __kevent50's record: 40 bytes, no ext,
 };
 extern void __ai_nbstat(struct __nb_stat const *f, struct stat *st);
 #ifdef AiNbTramp
-extern void __ai_nb_sigtramp(void);   /* mksys: mov r15->rdi; setcontext; exit */
+extern void __ai_nb_sigtramp(void);   /* mksys: the ucontext register; setcontext */
+#endif
+#if defined(__aarch64__)
+/* ⚠ THE PROBE CANNOT USE __ai_sys HERE. netbsd/aarch64 takes the number from
+ * the SVC IMMEDIATE and SIGSYSes the register form, so asking which kernel we
+ * are on with the register form would die on the very kernel it is asking
+ * about. These two leaves set x8 AND the immediate to the same number: linux
+ * ignores the immediate and runs x8, netbsd reads it. 20 = getpid on netbsd,
+ * epoll_create1 on linux/arm64. ⚠ freebsd hears NEITHER -- it signals SIGILL
+ * for any immediate but zero -- and is already out when these run: crt0 knows
+ * it by the entry protocol and hands __ai_start the answer. */
+extern long __ai_nbp20(long);
+extern long __ai_nbp202(long, long, long, long, long, long);
 #endif
 #define FfLeft 1
 #define FfZero 2
