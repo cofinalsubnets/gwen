@@ -197,7 +197,8 @@ awk 'BEGIN{for(i=0;i<9000;i++)print "dup" i%3}' > "$ho/.gs7"
 for f in .gs1 .gs2 .gs3 .gs4 .gs5 .gs6 .gs7; do
   for t in "cat" "rev" "nl" "head -n 3" "tail -n 3" "head -n 1" \
            "grep 000000001" "grep -c 0" "grep -n 000000002" "sed s/00/QQ/" "sed -n 2p" \
-           'sed $d' "sed 2q" "wc" "wc -c" "wc -l" "wc -w" "uniq" "uniq -c"; do
+           'sed $d' "sed 2q" "wc" "wc -c" "wc -l" "wc -w" "uniq" "uniq -c" \
+           "tac" "fold -w 33" "fold -s -w 33" "expand -t 5" "unexpand -a -t 5"; do
     # shellcheck disable=SC2086
     $t "$ho/$f" > "$g" 2>/dev/null; korerun $t "$ho/$f" > "$o" 2>/dev/null
     cmp -s "$g" "$o" || fail "kore $t over $f (a gulp seam)"

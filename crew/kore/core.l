@@ -27,7 +27,18 @@
                         (t k = 10) (go (k + 1) (k + 1) (snip t st (k + 1) >< acc))
                         (go (k + 1) st acc))
        (go 0 0 ()))
-   (tac-main as) (ueach "tac" (\ t (foldl (\ _ r (say out r)) 0 (utac t))) as)
+   ; ⚠ tac is the one line tool that MUST hold its input -- nothing can be said until
+   ; the end is known. Reading it a line at a time still drops the whole-text copy and
+   ; the `lines` list over it, and PREPENDING IS THE REVERSAL, so there is no rev.
+   ; utac stays as the pure face law.l holds.
+   (tac-main as)
+    (ureach "tac"
+            (\ f first rd
+               (: (go acc) (: l (urd-line rd)
+                              (? !(two? l) acc (go ((<l + (? <>l "\n" "")) >< acc))))
+                  (out1 m) (? (two? m) (: _ (say out <m) (out1 >m)) 1)
+                  (out1 (go ()))))
+            as)
 
    ; -- echo: the args back; -n holds the newline --
    (echo-main as)
@@ -497,13 +508,15 @@
        w (? (string? v) (uatoi v) (? (charm? <p) <p 80))
        _ (? (0 < w) () (udie 2 "fold: width must be positive"))
        s? (peep t 115 0) b? (peep t 98 0)
-       (dot txt) (: e (nl-end? txt)
-                    (go m) (? !(two? m) ()
-                              (: _ (say out <m)
-                                 _ (? (e || two? >m) (put out 10) 0)
-                                 (go >m)))
-                    (go (foldl (\ a l (a + (ufold w s? b? l))) () (lines txt))))
-       (ueach "fold" dot <>>o))
+       ; ⚠ the pieces are said as they are cut. The flatten this replaced was
+       ; `(foldl (\ a l (a + ..)) () ..)`, which copies the whole answer per line.
+       (dot ln term?)
+        (: (go m) (? !(two? m) 1
+                     (: _ (say out <m)
+                        _ (? ((two? >m) || term?) (put out 10) 0)
+                        (go >m)))
+           (go (ufold w s? b? ln)))
+       (ulines "fold" dot <>>o))
 
    ; -- expand: tabs to spaces, a stop every n (8 unsaid); -i converts only the
    ; blanks a line opens with --
@@ -525,13 +538,8 @@
        n (? (string? v) (uatoi v) 8)
        _ (? (0 < n) () (udie 2 "expand: tab size must be positive"))
        i? (peep t 105 0)
-       (dot txt) (: e (nl-end? txt)
-                    (go m) (? !(two? m) ()
-                              (: _ (say out (uexpand n i? <m))
-                                 _ (? (e || two? >m) (put out 10) 0)
-                                 (go >m)))
-                    (go (lines txt)))
-       (ueach "expand" dot <>>o))
+       (dot ln term?) (: _ (say out (uexpand n i? ln)) _ (? term? (put out 10) 0) 1)
+       (ulines "expand" dot <>>o))
 
    ; -- unexpand: blanks back to tabs -- only the ones a line OPENS with unless -a
    ; takes every run (-t says a size and means -a too). ⚠ a tab lands only where it
@@ -561,13 +569,8 @@
        n (? (string? v) (uatoi v) 8)
        _ (? (0 < n) () (udie 2 "unexpand: tab size must be positive"))
        a? (? (string? v) 1 (peep t 97 0))
-       (dot txt) (: e (nl-end? txt)
-                    (go m) (? !(two? m) ()
-                              (: _ (say out (uunexpand n a? <m))
-                                 _ (? (e || two? >m) (put out 10) 0)
-                                 (go >m)))
-                    (go (lines txt)))
-       (ueach "unexpand" dot <>>o))
+       (dot ln term?) (: _ (say out (uunexpand n a? ln)) _ (? term? (put out 10) 0) 1)
+       (ulines "unexpand" dot <>>o))
 
    ; ---- the calendar floor (stat's %y and date both read it) --------------------
    ; Howard Hinnant's exact integer civil-from-days and its inverse, shifted to a March
@@ -752,7 +755,7 @@
        r (go 0 ())
        (? (two? r) r '("")))
    ; an input's lines, or a leave naming the file (the record tools read whole files:
-   ; they walk several at once, so ueach's one-at-a-time cat walk is not their shape)
+   ; they walk several at once, so ureach's one-at-a-time walk is not their shape)
    (urows who f)
     (: r (? (f = "-") `(1 (slurp in)) (uread f))
        (? (two? r) (lines <>r) (udie 1 (who + ": cannot open " + f))))

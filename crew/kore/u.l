@@ -294,14 +294,5 @@
               w ((c = 32) || (c = 9) || (c = 10) || (c = 13))
               (? w (go (i + 1) -1 (? (st < 0) acc (snip t st i >< acc)))
                  (go (i + 1) (? (st < 0) i st) acc))))
-       (go 0 -1 ()))
-   ; the cat walk every whole-input tool rides: dot over each input text (args or
-   ; stdin, - reads stdin), a miss complains and the exit code remembers
-   (ueach who dot as)
-    (: (one f ok) (? (f = "-") (: _ (dot (slurp in)) ok)
-                     (: r (uread f)
-                        (? (two? r) (: _ (dot <>r) ok)
-                           (: _ (say err (who + ": cannot open " + f)) _ (put err 10) 0))))
-       (go a ok) (? (two? a) (go >a (one <a ok)) (: _ (flush out) (? ok 0 1)))
-       (? (two? as) (go as 1) (: _ (dot (slurp in)) _ (flush out) 0))))
+       (go 0 -1 ())))
 ) ; module 'kore
