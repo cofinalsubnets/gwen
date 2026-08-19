@@ -1,3 +1,10 @@
+; the wrap: see lib/tarcmd.l -- `use` splices into the current layer, so the two asks
+; need a layer of this file's own rather than the dist cat's. the seed's lay reads the
+; carried archive through both, and rode that cat's leak to reach them before.
+(module 'source
+(use 'gz)
+(use 'tar)
+
 (: (src-die m) (say err (";; " + m + "\n"), quit 1)
 
    (src-head nom) (: n (tally nom)
@@ -238,3 +245,5 @@
     'source source-main
     'src    source-main
     'seed   seed-main))
+
+) ; module 'source

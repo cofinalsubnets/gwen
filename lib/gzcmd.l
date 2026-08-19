@@ -20,6 +20,13 @@
 ; the trailer out before it divides, which is why a small file lists a ratio its bytes
 ; on disk do not show. The (totals) row is OURS: GNU's own adds the first file's whole
 ; size to the others' payloads, and reproducing that arithmetic is not worth a line.
+; the wrap and the ask: gz rides module 'gz, so the codec's names have to be asked for,
+; and the ask has to land in a layer of our own -- unwrapped, riding the dist cat, `use`
+; would put gz's names straight back on the cat's shared layer. this file read them off
+; that layer before, which worked only while nobody moved a file.
+(module 'gzcmd
+(use 'gz)
+
 (: gzc-usage "usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]   (gunzip = -d, zcat = -dc)"
    gzc-help "gzip -- the RFC 1952 container in love (lib/gz.l is the codec)
 usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]
@@ -277,3 +284,5 @@ no file, or a bare -, is the filter: stdin -> stdout"
     'gzip   gzip-main
     'gunzip gunzip-main
     'zcat   zcat-main))
+
+) ; module 'gzcmd

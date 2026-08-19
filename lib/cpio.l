@@ -27,6 +27,12 @@
 ; tree of hard links comes back as copies. Nothing in this tree has one to carry, and
 ; a half-done job here would be worse than none: a reader that believes nlink waits for
 ; a body that never comes.
+; the wrap: cpio rides module 'cpio, and it READS tar's names -- the entry shape is
+; tar's, deliberately, so one walk feeds both wires. Both halves are explicit now: the
+; ask lands in this file's own layer, and a consumer says (use 'cpio).
+(module 'cpio
+(use 'tar)
+
 (:
    cpio-mag "070701"
    cpio-trail "TRAILER!!!"
@@ -166,3 +172,5 @@
                        (cpio-there? p)))
               (? !ok () (go >xs (? skip k (k + 1))))))
        (go es 0)))
+
+) ; module 'cpio

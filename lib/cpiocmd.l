@@ -23,6 +23,14 @@
 ; member on err as it passes, which is the half a script reads.
 ; ⚠ -p (pass-through) is not here. It is a third mode with its own semantics, and
 ; `find | cpio -o | (cd dst && cpio -i)` says the same thing with the two we have.
+; the wrap and the ask: tar rides module 'tar, and this file reads its entry shapes --
+; the ask has to land in a layer of our own, since unwrapped and riding the dist cat
+; `use` would put those names straight back on the cat's shared layer, which is where
+; this file used to read them without asking at all.
+(module 'cpiocmd
+(use 'tar)
+(use 'cpio)
+
 (: cpioc-usage "usage: cpio {-o|-i|-t} [-H newc] [-dutv] [-F|-I|-O FILE] [--quiet]"
    (cpioc-moan m) (: _ (say err ("cpio: " + m)) _ (put err 10) (flush err))
    (cpioc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
@@ -183,3 +191,5 @@
                 (: _ (cpioc-moan cpioc-usage) 2)))))
 
    (pins (from 'verbs 'tab) 'cpio cpio-main))
+
+) ; module 'cpiocmd
