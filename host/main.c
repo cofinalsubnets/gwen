@@ -1158,7 +1158,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     // `bake -l FILE`: read-eval one more .l file before the snapshot -- the dist
     // artifact's door (crew/build.mk): the crew cats + the verb table go in WARM,
     // ahead of the same cache-empty + seal every bake gets, and the image still
-    // carries no session layer. a raise in the cat is helpless here (no shell
+    // carries no session layer. a raise in the cat finds nothing heard here (no shell
     // help), so a broken cat is a LOUD failed bake, never a quiet artifact.
     // ⚠ it was an ENVIRONMENT VARIABLE, and this tree spends exactly one of those
     // (HOME). An argument is visible in the command that ran, survives being read
