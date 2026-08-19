@@ -45,7 +45,17 @@
    (as-num s)  (? (as-neg? s) (0 - as-num (snip s 1 (tally s)))
                   (as-hex? s) (as-hexv (snip s 2 (tally s)))
                   (as-decv s))
-   (as-numish? s) ((tally s > 0) && ((s 0 = 45) || ((s 0 >= 48) && (s 0 <= 57))))
+   ;; ⚠ EVERY BYTE, or it is not a numeral. as-num reads digits off the FRONT and stops, so an
+   ;; unchecked `$N' comes back 30 -- the character's own value -- and encodes as a number nobody
+   ;; wrote. a symbolic immediate is a thing this front cannot do; it must SAY so.
+   (as-dig? c)  ((c >= 48) && (c <= 57))
+   (as-hexc? c) (as-dig? c || ((c >= 97) && (c <= 102)) || ((c >= 65) && (c <= 70)))
+   (as-allof? s p k) (: n (tally s)
+      ((: (g i) (? (i >= n) (n > k) (p (s i)) (g (i + 1)) 0)) k))
+   (as-num? s) (? (as-neg? s) (as-num? (snip s 1 (tally s)))
+                  (as-hex? s) (as-allof? s as-hexc? 2)
+                  (as-allof? s as-dig? 0))
+   (as-imm s) (? (as-num? s) (as-num s) (scare 'as-badnum s))   ; a number where one is required
 
    ;; --- little string helpers over the byte string (love has no split/find). ---
    (as-has? s c) ((: (g i) (? (i >= tally s) 0 (s i = c) 1 (g (i + 1)))) 0)
@@ -94,15 +104,15 @@
          (as-has? t 40)                                       ; contains '(' -> a memory operand
          (: op (as-idx t 40) inner (snip t (op + 1) (tally t - 1))     ; strip the ')'
             disp (snip t 0 op)
-            d (? (0 = tally disp) 0 (as-num disp))
-            (? (inner = "%rip") `('rip (intern disp))        ; sym(%rip)
-               (: fs (as-split inner 44) k (tally fs)
+            (? (inner = "%rip") `('rip (intern disp))        ; sym(%rip) -- a SYMBOL displacement
+               (: fs (as-split inner 44) k (tally fs)        ; ... everywhere else, a number
+                  d (? (0 = tally disp) 0 (as-imm disp))
                   (? (k > 3) (scare 'as-memform t)
                      `('mem (as-mreg <fs) (? (k < 2) -1 (as-mreg (at fs 1)))
-                            (? (k < 3) 1 (as-num (at fs 2))) d)))))
+                            (? (k < 3) 1 (as-imm (at fs 2))) d)))))
          (t 0 = 37) ('rg >< as-reglook (snip t 1 (tally t)))        ; %reg
-         (t 0 = 36) `('im (as-num (snip t 1 (tally t))))             ; $imm
-         (as-numish? t) `('im (as-num t))                           ; a bare number
+         (t 0 = 36) `('im (as-imm (snip t 1 (tally t))))             ; $imm
+         (as-num? t) `('im (as-num t))                              ; a bare number
          `('lbl (intern t)))                                        ; a symbol (branch/call target)
    (as-ops rest) (? (0 = tally rest) () (map as-operand (as-oplist rest)))
 

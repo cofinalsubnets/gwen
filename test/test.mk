@@ -812,10 +812,12 @@ test_holo: host
 	    test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
 # as.l -- the real AT&T x86-64 front over holo. test/holo/as.l's goldens are byte-identical
 # to /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
+# asrefuse.sh is the other half: what must RAISE, one love per case.
 test_as: host
 	@echo TEST test/holo/as.l
 	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/as.l test/holo/as.l \
 	  | sh test/gate/run.sh as "$m" ", 0 failed"
+	@sh test/gate/asrefuse.sh "$m"
 # test_elf32 -- holo's ELF32 executable writer, judged by a real loader: both thumb backends
 # lay write+exit, Linux maps the segment and enters in Thumb state, and 42 must come back.
 # test/holo/golden.l pins the header fields; this pins the only opinion that counts. Needs qemu-arm
