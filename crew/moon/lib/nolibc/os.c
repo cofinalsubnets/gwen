@@ -19,6 +19,8 @@ long __ai_osdetect(void) {
   return 1;
 # elif defined(__FreeBSD__)
 #  error "nolibc: -os freebsd wants the translation tables, and this arch has no machine tail for them"
+# elif defined(__NetBSD__)
+#  error "nolibc: -os netbsd wants the translation tables, and this arch has no machine tail for them"
 # else
 #  error "nolibc: no OS predefine -- -os named a kernel os.c cannot speak for"
 # endif

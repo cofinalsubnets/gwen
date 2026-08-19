@@ -10,6 +10,9 @@
 #include <errno.h>
 #include <math.h>
 #include <stddef.h>      // offsetof (the struct ai_wait_fd / struct pollfd assert)
+#if defined(AiNolibc)
+extern long __ai_osv;    // which kernel this run met: 1 linux, 2 freebsd, 3 netbsd (love-os)
+#endif
 extern void host_spawn_guard(struct ai*, int);   // host/posix.c (exec-bound forks drop the pools)
 #include <stdnoreturn.h>
 #include <signal.h>
@@ -1316,6 +1319,31 @@ int main(int argc, char const **argv) {
     if (image_load_path && ai_ok(g = ai_strof(g, image_load_path))) {
       g = ai_defv(g, "love-image");
       if (ai_ok(g)) ai_core_of(g)->sp++; }
+    // `love-os`: WHICH KERNEL this invocation stands on -- "linux", "freebsd" or
+    // "netbsd". A per-run fact like argv and NOT a build one: one binary answers
+    // all three, so the compile that made it cannot say and only the run can. Our
+    // libc probed it at entry (__ai_osv); a foreign one is built for one kernel
+    // and its predefine is the whole answer.
+    // ⚠ UNPINNED WHERE NOTHING CAN TELL, absence being the honest answer -- a
+    // consumer that must know owes a diagnostic, never a guess at linux.
+    // ⚠ AND UNPINNED UNDER A BAKE, for argv's reason above: a baked consumer would
+    // fold the baking machine's kernel in and carry it onto every other.
+    if (!bake) {
+      char const *osn =
+#if defined(AiNolibc)
+        __ai_osv == 1 ? "linux" : __ai_osv == 2 ? "freebsd" : __ai_osv == 3 ? "netbsd" : 0;
+#elif defined(__linux__)
+        "linux";
+#elif defined(__FreeBSD__)
+        "freebsd";
+#elif defined(__NetBSD__)
+        "netbsd";
+#else
+        0;
+#endif
+      if (osn && ai_ok(g = ai_strof(g, osn))) {
+        g = ai_defv(g, "love-os");
+        if (ai_ok(g)) ai_core_of(g)->sp++; } }
     // `born` -- WHAT THIS INVOCATION COST TO START, in ms, and it belongs to the run and
     // not to the heap. The egg pins the HATCH duration (egg.l) and the bake pulls it back
     // off (the seal), so a woken love arrives without one and re-pins the WAKE duration

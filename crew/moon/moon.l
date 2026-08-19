@@ -217,23 +217,34 @@
           'riscv64                        '("__riscv")
           ('thumb2 | 'thumb2sp | 'thumb1) '("__arm__" "__arm")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
-   ; the OS predefines, the driver's like the arch's: -os picks, default linux
-   ; (the OS under every hosted object today -- raw syscalls, ELF, the host
-   ; seam; without __linux__ host/posix.c's signalfd source silently compiled
-   ; OUT of the selfhost binary). all three spellings gcc gives a linux ELF
-   ; target: st.c asks `#if defined(__linux)` for <pty.h>, and one missing is a
-   ; header silently not included. the unprefixed `linux`/`unix` stay out --
-   ; gcc drops them outside gnu89, and they collide with ordinary identifiers.
-   ; 'none is freestanding's word: a board owes no OS macro.
+   ; the OS predefines, the driver's like the arch's: -os picks, and UNNAMED is
+   ; the ground we stand on -- never a fixed kernel. all three spellings gcc
+   ; gives a linux ELF target: st.c asks `#if defined(__linux)` for <pty.h>, and
+   ; one missing is a header silently not included. the unprefixed `linux`/`unix`
+   ; stay out -- gcc drops them outside gnu89, and they collide with ordinary
+   ; identifiers. 'none is freestanding's word: a board owes no OS macro.
    (toos s) (name s @
     'linux   'linux
     'none    'none
     'freebsd 'freebsd
+    'netbsd  'netbsd
              (udie 2 ("cc: unknown os " + s)))
-   (osdefs os)
-   (os @ 'none    ()
-         'freebsd '("__FreeBSD__=14" "__unix__" "__unix")   ; stable/14, whose syscall.h the tables speak
-                  '("__linux__" "__linux" "__unix__" "__unix"))
+   ; the ground: main.c pins `love-os` per RUN, because one binary meets three
+   ; kernels and the compile that made it cannot say which. ⚠ THE NOM IS DATA,
+   ; for mcid's reason -- a bare ref folds the bake session's absence in forever.
+   ; nothing pinned means nothing could tell, and a compile owes a diagnostic
+   ; there rather than a guess at whichever kernel we happen to have started on.
+   (host-os _)
+    (: n (? (member? 'love-os (names ())) (ev 'love-os) ())
+       (? (string? n) (toos n)
+          (udie 2 "cc: cannot tell which kernel this is -- name one with -os")))
+   (osdefs os0)
+    (: os (id? os0 () ? (host-os 0) os0)
+       (os @ 'none    ()
+             'freebsd '("__FreeBSD__=14" "__unix__" "__unix")   ; stable/14, whose syscall.h the tables speak
+             'netbsd  '("__NetBSD__" "__unix__" "__unix")
+             'linux   '("__linux__" "__linux" "__unix__" "__unix")
+                      (udie 2 ("cc: no predefines for os " + string os))))
    ; C11's CONDITIONAL FEATURES (6.10.8.3) -- saying an absence out loud is what makes
    ; it conforming rather than a hole, and lets a portable source pick its other lane.
    ; ⚠ every row is TARGET-true: complex and VLAs each ride a subset (the parity table),
