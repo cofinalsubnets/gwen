@@ -44,21 +44,22 @@
 #include <netinet/in.h>
 
 extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
-/* ⚠ WHICH ARCHES CARRY A SECOND KERNEL. The BSD branches compile only where one
- * can answer, so a link for a one-kernel arch owes no machine tail mksys did not
- * lay for it. x86_64 and aarch64 carry them; riscv keeps os.c's identity stubs
- * until a BSD riscv box exists to contradict a table.
- * ⚠ AND THE NETBSD RETURN PATH IS NARROWER STILL: __ai_nb_sigtramp is x64 asm,
- * laid by that mksys alone. Where it is absent the netbsd sigaction refuses BY
- * NAME rather than registering a trampoline that is not there -- freebsd on the
- * same arch is unaffected, and an arm64 netbsd box is what would lift it. */
+/* ⚠ WHERE THE TRANSLATION LAYER COMPILES. nolibc's C is written in one kernel's
+ * spelling -- linux's, because that is where we started and NOT because it is a
+ * default -- and os.c translates the others into it. The tables compile where
+ * the machine tail they call has been laid: x86_64 and aarch64 have it, riscv
+ * takes os.c's identity stubs and speaks whichever kernel -os named. This is a
+ * claim about mksys leaves, never a roster of kernels we are willing to run on.
+ * ⚠ AND THE NETBSD RETURN PATH IS ITS OWN CLAIM -- narrower in principle, though
+ * the same arches carry both today: __ai_nb_sigtramp is per-arch asm (mksys.l
+ * lays x64 and arm64). Where it is absent netbsd's sigaction refuses BY NAME
+ * rather than register a trampoline that is not there; freebsd on the same arch
+ * is unaffected. */
 #if !defined(__riscv)
-# define AiTwoKernels 1
+# define AiOsTranslate 1        /* os.c's tables, and the leaves they call */
+# define AiNbTramp 1            /* netbsd's signal return path */
 #endif
-#if !defined(__riscv)
-# define AiNbTramp 1
-#endif
-#ifdef AiTwoKernels
+#ifdef AiOsTranslate
 extern long __ai_sys7(long n, long a, long b, long c, long d, long e, long f, long g);   /* the 7th arg rides the stack (netbsd mmap) */
 #endif
 extern void __ai_sigret(void);
@@ -383,7 +384,7 @@ static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
 static long __ai_fb(long n, long a, long b, long c, long d, long e, long f) {
   long r = __ai_sys(n, a, b, c, d, e, f);
   return r < -4096L ? -__ai_errfb(-r - 4096) : r; }
-#ifdef AiTwoKernels
+#ifdef AiOsTranslate
 static long __ai_fb7(long n, long a, long b, long c, long d, long e, long f, long g) {
   long r = __ai_sys7(n, a, b, c, d, e, f, g);
   return r < -4096L ? -__ai_errfb(-r - 4096) : r; }

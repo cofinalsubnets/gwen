@@ -9,7 +9,7 @@
 long __ai_osv;                    /* 0 unprobed; 1 linux; 2 freebsd; 3 netbsd */
 
 long __ai_osdetect(void) {
-#ifndef AiTwoKernels
+#ifndef AiOsTranslate
   /* no tables on this arch: the kernel is whichever one the build was compiled
    * for, and nothing at runtime can contradict it. ⚠ READ OFF -os, never
    * assumed -- linux is where we started, not a default, and a build naming a
@@ -56,7 +56,7 @@ long __ai_osdetect(void) {
 #endif
 }
 
-#ifndef AiTwoKernels
+#ifndef AiOsTranslate
 long __ai_nrfb(long n) { return n; }      /* no second kernel on this arch */
 long __ai_errfb(long e) { return e; }
 long __ai_sigfb(long s) { return s; }
