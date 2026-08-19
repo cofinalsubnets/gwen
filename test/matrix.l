@@ -5,16 +5,17 @@
 ; tier) | KString KMint | KChain(chain) | KTablet KHot.
 ; A monadic op is that matrix's diagonal. Three matrices are explicit tables in
 ; l.c -- g_add_mx (+), g_mul_mx (*), g_apply_mx (apply); the rest (- / %
-; < <= = >= >) are lane aps that refine the same lattice internally. This
-; file pins EVERY cell with an assertion, so the coverage is auditable in one
-; place -- and so a dispatch regression (e.g. a data-sentinel stride desync that
-; mis-routes whole apply rows) fails loudly here. The coarse {NUM ARR LIST STR
-; USYM ISYM} category laws are spec.l's `+ and * are generic` section; this
-; file adds the FINE within-category cells (fix vs box/float/complex vs bignum;
-; the four array tiers) and the apply matrix, which had no systematic test.
+; < <= = >= >) are lane aps that refine the same lattice internally.
+; This file holds the FINE within-category cells: fix vs box/float/complex vs
+; bignum, the four array tiers, the rep pairings a coarse law folds together. The
+; COARSE cell of each row -- what the band law already says -- is spec.l's, and
+; the church-numeral rows are functions.l's; a row that is wholly theirs is a
+; pointer here, not a copy. So a dispatch regression (e.g. a data-sentinel stride
+; desync that mis-routes whole apply rows) still fails loudly, without the corpus
+; asserting one cell twice.
 
-; one representative value per kind. The three scalar-star boxes are now distinct
-; kinds (KGem/KTwin/KSun) but still share one apply matrix cell (data_num_apply).
+; one representative value per kind -- the legend a row is read against. The three
+; scalar-star boxes are distinct kinds (KGem/KTwin/KSun) but share one apply cell.
 (: mx-fix 5                              ; KCharm
    mx-real 2.5                            ; KGem, the gem (float box)
    mx-cpx ~(2 3)                        ; KTwin, complex scalar (Cp)
@@ -34,59 +35,38 @@
 ; APPLY matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]
 ; ============================================================================
 ; Each data kind's sentinel tail-jumps through this. The arg-kind dimension is
-; uniform today (a link for later), so we vary it to pin that. Non-data applies
-; (fixnum numeral, lambda/nif, map, opaque handle) take their own paths.
+; uniform today (a link for later), so we vary it to pin that. The index/append
+; laws themselves are spec.l's (chains, strings, points); the church rows are
+; functions.l's whole numeric tower. What is left here is the cells no band law
+; reaches.
 (assert
- ; --- row KChain: a chain is a SEQUENCE, the text law one lattice rung up -- a charm
- ;     INDEXES an element, a chain JUXTAPOSES (the append), everything else takes the
- ;     default action. it was the Church eliminator ((p f) == (f (A p) (B p))) until the
- ;     tree was checked and nothing at all applied a chain to a function. ---
- (= 7 ('(7 8 9) 0))  (= 9 ('(7 8 9) 2))       ; arg = charm: the kth element
- (= 9 ('(7 8 9) -1)) (= 7 ('(7 8 9) -3))      ; negative counts from the end
- (= 1 ('(7 8 9) 3))  (= 1 ('(7 8 9) -4))      ; out of range either way -> the unit
+ ; --- row KChain: a chain is a SEQUENCE, the text law one lattice rung up. it was the
+ ;     Church eliminator ((p f) == (f (A p) (B p))) until the tree was checked and nothing
+ ;     at all applied a chain to a function -- so a lambda takes the DEFAULT action, and
+ ;     that is the cell worth pinning. the index/append rows are spec.l's chains section. ---
  (= 1 ((link 1 2) 1))                            ; improper chain: the spine is one cell, so 1 is oob
- (= '(1 2 3 4) ('(1 2) '(3 4)))                  ; arg = chain: the append
- (= (+ '(1 2) '(3 4)) ('(1 2) '(3 4)))           ; ... which agrees with + on the nose
- (= '(1 2 3 4 5) ('(1 2) '(3 4) '(5)))           ; ... and curries, like text juxtaposition
  (= 1 ('(1 2) (\ a b `(a b))))                   ; arg = a lambda: the DEFAULT action, not an eliminator
- (= 1 ('(1 2) 'x)) (= 1 ('(1 2) "ab"))           ; ... as for every other kind
- (= 1 ('(1 2) ()))                               ; ⚠ () is the ZERO POINT, not a chain: default, not identity
+ (= 1 ('(1 2) "ab"))                             ; ... as for every other kind
 
- ; --- row KString: applying a string indexes a byte (1 if oob/non-numeric) ---
- (= 97 ("ab" 0))   (= 98 ("ab" 1))            ; arg = fixnum
- (= 98 ("ab" -1))  (= 97 ("ab" -2))           ; negative counts from the end, as a chain does
- (= 1 ("ab" 9))    (= 1 ("ab" -3))            ; oob -> 1 (matches "" == k**0)
- (= 1 ("ab" 'x))                              ; arg = symbol (non-number) -> 1
+ ; --- row KString: the byte index is spec.l's; the width and the empty row are here ---
  (= 255 ((string 255) 0))                     ; byte is unsigned 0..255
  (= 1 ("" 5)) (= 1 ("" -1))                   ; the empty string indexes to 1
 
- ; --- row KMint: the name index left with the string algebra (the mint round);
- ;     a symbol is a point with a spelling attribute and applies as every unit
- ;     does -- const-1, like 0, (), and the hots ---
- (= 1 ('abc 0))   (= 1 ('abc 2))
- (= 1 ('abc 9))   (= 1 ('abc 'x))
- (= 1 ((mint 0) 5))
+ ; --- row KMint: a point applies as every unit does, const-1 -- spec.l's mints section
+ ;     says it for both the bare mint and the named symbol, so the row is a pointer.
 
  ; --- the scalar-star + array rows (KGem/KTwin/KSun/KTray*, all -> data_num_apply):
- ;     a star or tray is a Church numeral (operand ** operator, or operator-fold
- ;     over a function). Full tower coverage in functions.l. ---
- (= 9 (2.0 3))                                ; float operator: 3 ** 2.0 = 9
- (= 8 (3 2.0))                                ; float operand: 2.0 ** 3 = 8
- (= 13 ((2.5 (+ 1)) 10))                      ; float operator on a fn: ($ 2.5)=3 comps
- (= 13 ((~(3 4) (+ 1)) 10))                  ; complex operator on a fn: ($ ~(3 4))=3 comps, the real part
- (aall (= @(4 9 16) (2 @(2 3 4))))            ; array operand: elementwise ** broadcast
+ ;     a star or tray is a Church numeral (operand ** operator, or operator-fold over a
+ ;     function). The whole tower, saturation included, is functions.l's. ---
 
  ; --- row KBig: a bignum is also a Church numeral, but its magnitude is always
  ;     astronomical (>= 2^62), so (bignum x) cannot terminate in a finite test.
  ;     The row exists (-> data_num_apply, same as the tray tiers) but is not exercised. ---
 
- ; --- non-matrix apply paths --------------------------------------------------
- (= 8 (3 2))   (= 5 (1 5))   (= 1 (0 'anything))   ; KCharm numeral (odd-tag path)
- (= 36 ((\ x (* x x)) 6))                     ; KHot: a lambda applies directly
- (= 7 (((+) 3) 4))                            ; KHot: a nif / partial application
- (= 10 (mx-map 1))   (= 20 (mx-map 2))        ; KTablet: a tablet looks its key up
- (nil? (mx-map 9))                            ; ...missing key -> nil
- (= 1 ((cask 4) 'x)))                       ; opaque handle (cask) behaves as 0
+ ; --- non-matrix apply paths: the charm numeral, the lambda and the cask take their own
+ ;     routes and are said elsewhere; the nif partial and the tablet miss are here ---
+ (= 7 (((+) 3) 4))                            ; KHot: a nif fired through the unit call
+ (nil? (mx-map 9)))                           ; KTablet: a missing key -> nil, the zero point
 
 ; ============================================================================
 ; `+` matrix (g_add_mx): the FINE within-category cells the spec's band laws fold together
@@ -112,7 +92,6 @@
  (twin? (+ (100 2) ~(0 1)))                  ; big + complex -> complex (widens)
 
  ; --- array tower: each tier with a matching array and with a scalar broadcast ---
- (aall (= @(11 22) (+ @(10 20) @(1 2))))      ; Z + Z
  (= gem-tray (tier (+ @(10 20) @(1.5 2.5))))      ; Z + R -> widens to R
  (aall (= @(11.5 22.5) (+ @(10 20) @(1.5 2.5))))
  (aall (= @(3.0 5.0) (+ @(1.5 2.5) @(1.5 2.5)))) ; R + R
@@ -122,22 +101,17 @@
  (aall (= @(12 22) (+ @(10 20) 2)))           ; Z + scalar (broadcast, no widen)
  (= ~(11 2) (peep (+ ~(10 0) mx-ac) 0 0))    ; C array + complex scalar
  (= ~(11 2) (peep (+ @(10 20) mx-ac) 0 0))    ; R/Z array + C array (real promotes)
- (nil? (+ @(1 2) @(1 2 3)))                   ; non-conforming shapes -> nil
 
  ; --- add_string lane: text x text; a NUMBER (tray included) arrives as the unit
- ;     and the text answers whole (the degenerate law: no hom from a group into
- ;     the free monoid, so the byte law is gone) ---
- (= "abcd" (+ "ab" "cd"))                     ; str + str
- (= "ab" (+ "ab" 67))   (= "ab" (+ 67 "ab"))  ; str + num -> the string
- ("abef" = (+ "ab" 'ef))                      ; a symbol inherits the string lane under +; a string operand DEMOTES
- ('efef = (+ 'ef 'ef))                         ; sym + sym cats spellings and RE-INTERNS -> a symbol
- ("efab" = (+ 'ef "ab"))                       ; ... demote again (the rank min pulls to string)
- (= "ab" (+ @(1 2) "ab"))   (= "ab" (+ "ab" @(1 2)))   ('ef = (+ @(1 2) 'ef))
+ ;     and the text answers whole. the crossings the spec states once, the orders
+ ;     it does not, and the reps it has no room for: ---
+ ("efab" = (+ 'ef "ab"))                       ; sym + str DEMOTES (the rank min pulls to string)
+ (= "ab" (+ @(1 2) "ab"))   (= "ab" (+ "ab" @(1 2)))   ; a tray is number-band against text, either side
+ ('ef = (+ @(1 2) 'ef))
  (= "ab" (+ mx-big "ab"))                     ; a bignum is a number like any other
 
  ; --- add_seq lane: a list against text (chain wins); a NUMBER degenerates ---
- (= '(1 2 3 4) (+ '(1 2) '(3 4)))             ; list + list
- (= '(1 2) (+ 5 '(1 2)))   (= '(1 2) (+ '(1 2) 5))   ; num <-> list -> the list
+ (= '(1 2) (+ '(1 2) 5))                      ; list <-> num, the order the spec leaves open
  (= '("ab" 1 2) (+ "ab" '(1 2)))              ; str <-> list (str is one element)
  (= "(7 8)" (show (+ @(1 2) '(7 8))))         ; array <-> list: the tray is number-band, it degenerates
 
@@ -167,18 +141,14 @@
  (= (80 2)                                 ; 2^40 * 2^40, exact (an z array would wrap)
     (peep (* (top-tray '(2) `((40 2) (40 2))) (top-tray '(2) `((40 2) (40 2)))) 0 0))
 
- ; --- mul_rep: a sequence times a scalar count (int(abs c)) -> n copies joined ---
- (= "ababab" (* "ab" 3))   (= "ababab" (* 3 "ab"))   ; str (commutes)
- (= "abab" (* "ab" -2))    (nil? (* "ab" 2.9))   ; (|count|): exact magnitude; an inexact count is no count
- ('xyxy = (* 'xy 2))                          ; sym * count repeats the spelling and RE-INTERNS -> a symbol
- (= '(1 2 1 2) (* '(1 2) 2))                  ; list
- (= "" (* "ab" 0))   (nil? (* '(1 2) 0))      ; 0 copies: empty str / empty list
+ ; --- mul_rep: the repeat law and its |count| are the spec's; the cells here are the
+ ;     ones no band law reaches -- the reversed order, and a non-number count ---
+ (= "ababab" (* 3 "ab"))                      ; str * count commutes
+ (nil? (* "ab" @(1 2)))   (nil? (* @(1 2) "ab"))   ; an array is no count -> nil
 
- ; --- count must be a number: an array / non-number count -> nil ---
- (nil? (* "ab" @(1 2)))   (nil? (* @(1 2) "ab"))
-
- ; --- seq * seq: chain x chain is the cartesian product; string/sym stay nil (lvm_0) ---
- (nil? (* "ab" "cd"))   (nil? (* 'a 'b))   (= '((1 2)) (* '(1) '(2)))
+ ; --- seq * seq: chain x chain is the cartesian product (spec.l); string stays nil,
+ ;     and so does SYMBOL, which the string lane might have been read to cover ---
+ (nil? (* 'a 'b))
 
  ; --- mull: a lambda operand anywhere -> composition (Church mul) ---
  (= 36 ((* (\ x (* x x)) (\ x (+ x 1))) 5))   ; sq(inc 5) = sq 6 = 36
@@ -195,7 +165,7 @@
  (= (100 2) (- (+ (100 2) 5) 5))        ; bignum
  (= ~(-2 -2) (- ~(1 2) ~(3 4)))            ; complex
  (aall (= @(9 18) (- @(10 20) @(1 2))))       ; array elementwise
- (nil? (- "a" "b"))   (nil? (- '(1) '(2)))    ; non-numeric -> nil
+ (nil? (- '(1) '(2)))                         ; non-numeric -> nil
 
  ; --- division: `/` true (float on inexact), `//` truncating; array broadcast; complex defined ---
  (= 2.5 (/ 5 2))   (= 2 (// 5 2))   (= 2.5 (/ 5 2.0))   ; / promotes, // truncates
@@ -210,30 +180,22 @@
  (nil? (% ~(1 2) 2))                       ; complex -> nil
  (nil? (% "a" 2))                           ; non-numeric -> nil
 
- ; === ordered comparison (< <= > >=): a TOTAL ORDER over all values. Cross-kind =
- ; the enum q type lattice (the order the matrix DIAGONAL encodes), fixnum/number
- ; low -> lambda high: number < string < symbol < chain < lambda. Within a kind:
- ; numbers by value, text/sym lexicographic, chains recursive, lambdas by repr hash.
- ; An array operand is the exception -> elementwise mask (never the scalar order).
+ ; === ordered comparison (< <= > >=): a TOTAL ORDER over all values. The BANDS -- points at
+ ; the floor, then string, then the numbers, then tray < chain < map < top -- are spec.l's
+ ; order section. Here: the reps that interleave WITHIN the number band, the complex rule,
+ ; the lambda class, and the array operand, which BROADCASTS to a mask rather than ordering.
  ; `> >=` are `< <=` with operands reversed (a > b == b < a).
  ; --- within NUMBER: the whole tower orders by value (reps interleave) ---
- (< 1 2)   (< 1 1.5)   (< 1.5 2)                       ; fix / float
+ (< 1 2)   (< 1.5 2)                                    ; fix / float
  (? word (< (<< 1 62) (* 3 (<< 1 62))) 1)               ; box < box (64-bit word only)
  (< 5 (100 2))   (? word (< (<< 1 62) (100 2)) 1)  ; fix/box < bignum (magnitude-exact)
  (< (100 2) (101 2))                             ; bignum < bignum
  ; --- complex: lexicographic (re, im); a real r is (r, 0) ---
  (< i 1)   (< ~(1 9) ~(2 0))   (< ~(2 1) ~(2 2))   ; re decides, then im
  !(< ~(2 2) ~(2 2))   (<= ~(2 2) ~(2 2))        ; equal complexes
- ; --- within STRING / SYMBOL: lexicographic, a prefix sorts first ---
- (< "abc" "abd")   (< "ab" "abc")   !(< "abc" "abc")
- (< 'aa 'ab)   (< 'ab 'abc)
- ; --- within PAIR: recursive lexicographic; a shorter prefix sorts first ---
- (< '(1 2) '(1 3))   (< '(1) '(1 2))   (< '(1 2) '(2))
- !(< '(1 2) '(1 2))   (<= '(1 2) '(1 2))
- ; --- CROSS-kind = the true-blue lattice (symbol < string < number < chain < lambda) ---
- (< 'a "a")   (< "a" 1)   (< 1 '(0))   (< '(0) (+ 1))
+ ; --- the band crossings the spec's line does not carry a rep for ---
  (< "" 1.5)   (< 'z (100 2))   (< "x" ~(1 1))      ; ANY string < ANY number
- !(< 1 "a")   !(< '(0) 'z)                        ; ...and the reverses are false (chain > sym)
+ !(< '(0) 'z)                                     ; ...and a chain is above a point
  ; --- LAMBDA is the top class; within it, ordered by representation hash ---
  (< 5 (+ 1))   (> (+ 1) '(0))   (< "z" (+ 1))         ; everything sorts below a lambda
  !(< (+ 1) (+ 1))   (<= (+ 1) (+ 1))   (>= (+ 1) (+ 1))   ; reflexive: a lambda equals itself
@@ -251,17 +213,12 @@
  ; --- 0/0 collapses to 0, so it is ORDERED like any zero (no NaN to be unordered) ---
  (nil? (< (/ 0 0) (/ 0 0)))   (<= (/ 0 0) (/ 0 0))   (nil? (> (/ 0 0) 1))
 
- ; --- equality `=`: bridges the numeric tower, elementwise over arrays, else eql ---
- (= 3 3.0)                                    ; fix = float (promotion)
+ ; --- equality `=`: bridges the numeric tower, else eql. the array rows are spec.l's ---
  (? word (= (<< 1 62) (<< 1 62)) 1)            ; box = box (64-bit word only)
  (? word !(= (<< 1 62) 0) 1)                ; ...never = a fixnum
  (= (100 2) (100 2))                    ; bignum = bignum
  (= ~(2 0) 2)                                ; complex bridges a real (im 0)
  !(= ~(2 1) 2)                            ; ...but not when im != 0
- (= @(1 2) @(1 2))                            ; array = array -> a BOOLEAN, like every kind
- !(= @(1 9) @(1 8))                           ; ...one cell differs -> false, never a mask
- !(= @(1 2) @(1 2 3))                         ; ...a shape mismatch is false too
- (= @(1 2) (gem-tray '(2) '(1.0 2.0)))        ; ...cells compare across tiers, like (= 5 5.0)
  (= 'ef 'ef)   !(= 'ef 'gh)                ; symbol identity
  (= "ab" "ab")                                ; string structural eq
  (= '(1 2) '(1 2))                            ; list structural eq
@@ -269,15 +226,13 @@
 
 ; --- inner (+.x contraction) & outer (o.x) products ---------------------------
 (assert
- (32 = (inner @(1 2 3) @(4 5 6)))                  ; 1D.1D dot -> scalar number
  (11.0 = (inner @(1.0 2.0) @(3.0 4.0)))            ; float dot
  (11.0 = (inner @(1 2) @(3.0 4.0))) (gem? (inner @(1 2) @(3.0 4.0)))  ; mixed z.r widens to r
  (: A (star-tray '(2 3) '(1 2 3 4 5 6)) B (star-tray '(3 2) '(7 8 9 10 11 12)) C (inner A B)
     (&& ('(2 2) = (shape C)) (58 = (peep C '(0 0) 0)) (64 = (peep C '(0 1) 0))
-        (139 = (peep C '(1 0) 0)) (154 = (peep C '(1 1) 0))))   ; 2x2 matmul
+        (139 = (peep C '(1 0) 0)) (154 = (peep C '(1 1) 0))))   ; 2x2 matmul, every cell
  (aall (@(6 15) = (inner (star-tray '(2 3) '(1 2 3 4 5 6)) @(1 1 1))))   ; matrix . vector
  (: O (outer @(1 2 3) @(10 20))
     (&& ('(3 2) = (shape O)) (10 = (peep O '(0 0) 0)) (60 = (peep O '(2 1) 0))))  ; outer
- (star-tray = (tier (outer @(1 2) @(3 4)))) (gem-tray = (tier (outer @(1 2) @(3.0 4.0))))       ; outer domain
- !(inner @(1 2 3) @(1 2))                          ; contracted-axis mismatch -> nil
+ (gem-tray = (tier (outer @(1 2) @(3.0 4.0))))     ; outer widens on an inexact operand
  !(inner @(1 2) 5) !(outer @(1 2) 5))              ; non-array operand -> nil
