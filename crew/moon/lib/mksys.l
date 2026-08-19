@@ -563,9 +563,9 @@
          (li r7 139)                 ; rt_sigreturn
          (sys)))
        ; what each lane EXPORTS, and the three differ: the wide door rides wherever
-       ; a BSD does (x64 through the stack, arm64 through x6 -- riscv has no second
-       ; kernel yet), and the netbsd trampoline is x64's alone until an arm64
-       ; netbsd box proves one (impl.h's AiNbTramp says the same to the C).
+       ; a BSD does (x64 through the stack, arm64 through x6), and riscv exports
+       ; neither it nor the netbsd pair -- nothing has laid that tail, which is
+       ; the whole of what impl.h's AiOsTranslate says to the C.
        (objelf arch ir ()
                (? (id? arch 'x64)
                   '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret" "__ai_nb_sigtramp")

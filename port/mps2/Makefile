@@ -21,7 +21,7 @@ mps2_ld = $(MOONCC) -t thumb2 -Ttext 0 -Tdata 0x20000000 -nostdlib
 # the five faces share a skeleton and differ in main.o alone: the plain kernel, the BAKER
 # that dumps a heap image through semihosting, the WAKER that boots one back, and the two
 # -pd twins carrying the rune+cas corpus.
-skel = $(R)/$(o)/start.o $(R)/$(o)/love.o $(R)/$(o)/am.o $(R)/$(o)/mem.o $(R)/$(o)/str.o
+skel = $(R)/$(o)/start.o $(R)/$(o)/love.o $(R)/$(o)/am.o $(libc_o)
 objs        = $(skel) $(R)/$(o)/main.o
 baker_objs  = $(skel) $(R)/$(o)/main-baker.o
 waker_objs  = $(skel) $(R)/$(o)/main-waker.o
@@ -33,8 +33,8 @@ mps2: $(R)/$(o)/love.elf
 mps2t1: $(R)/$(o)/love-t1.elf
 
 $(eval $(call p_obj,love,core/love.c,$(R)/core/love.c $(R)/core/love.h $(lib_hR) $(mc),$(mps2_cc)))
-$(eval $(call p_obj,mem,free/libc/mem.c,$(R)/free/libc/mem.c $(R)/core/love.h $(mc),$(mps2_cc)))
-$(eval $(call p_obj,str,free/libc/str.c,$(R)/free/libc/str.c $(R)/core/love.h $(mc),$(mps2_cc)))
+$(foreach m,$(libc_m),$(eval $(call p_obj,$m,crew/moon/lib/nolibc/string/$m.c,\
+  $(R)/crew/moon/lib/nolibc/string/$m.c $(libc_dep),$(mps2_cc) -Icrew/moon/include)))
 
 # main.c, once per face -- the -D is the whole difference.
 mainc = main.c $(R)/core/love.h $(lib_hR) $(mc)
@@ -104,12 +104,13 @@ $(R)/$(o)/love-pd.img: $(R)/$(o)/baker-pd.elf $(R)/$(o)/waker-pd.elf
 # __aeabi soft-float/64-bit helpers come from gcc's v6-m multilib.
 mps2t1_cc = $(MOONCC) -t thumb1 -D ai_tco=0 -D __STDC_HOSTED__=0 -I. -Icore -Iout/lib
 t1_lg = `arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -print-libgcc-file-name`
-t1_objs = $(R)/$(o)/start.o $(R)/$(o)/love-t1.o $(R)/$(o)/am-t1.o $(R)/$(o)/mem-t1.o \
-  $(R)/$(o)/str-t1.o $(R)/$(o)/main-t1.o
+t1_libc_o = $(addprefix $(R)/$(o)/,$(addsuffix -t1.o,$(libc_m)))
+t1_objs = $(R)/$(o)/start.o $(R)/$(o)/love-t1.o $(R)/$(o)/am-t1.o $(t1_libc_o) \
+  $(R)/$(o)/main-t1.o
 
 $(eval $(call p_obj,love-t1,core/love.c,$(R)/core/love.c $(R)/core/love.h $(lib_hR) $(mc),$(mps2t1_cc)))
-$(eval $(call p_obj,mem-t1,free/libc/mem.c,$(R)/free/libc/mem.c $(R)/core/love.h $(mc),$(mps2t1_cc)))
-$(eval $(call p_obj,str-t1,free/libc/str.c,$(R)/free/libc/str.c $(R)/core/love.h $(mc),$(mps2t1_cc)))
+$(foreach m,$(libc_m),$(eval $(call p_obj,$m-t1,crew/moon/lib/nolibc/string/$m.c,\
+  $(R)/crew/moon/lib/nolibc/string/$m.c $(libc_dep),$(mps2t1_cc) -Icrew/moon/include)))
 $(eval $(call p_obj,main-t1,port/mps2/main.c,$(mainc),$(mps2t1_cc)))
 $(eval $(call p_obj,am-t1,crew/moon/lib/math/am.c,$(R)/crew/moon/lib/math/am.c $(mc),\
   $(MOONCC) -t thumb1 -Icrew/moon/lib/math -Icrew/moon/include))

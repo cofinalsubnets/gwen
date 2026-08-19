@@ -1,8 +1,9 @@
 /* the mem* five. nolibc copies WORD-WIDE where the pointers agree and falls to
  * bytes where they do not, so every case here is run at several alignments and
  * across the word boundary -- an off-by-one in the wide lane hides completely at
- * offset 0. free/libc/mem.c (the freestanding twin) is plain byte loops, and these
- * are the five that must stay in it: a compiler synthesizes calls to them. */
+ * offset 0. ⚠ this battery is 64-bit only, and the wide lane is written against
+ * sizeof(long): what proves the 32-bit stride is the thumb boards booting
+ * (test_mps2, test_mps2_t1), since nolibc is their libc too. */
 #include <string.h>
 #include "say.h"
 

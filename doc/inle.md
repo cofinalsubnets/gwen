@@ -217,7 +217,7 @@ whole toolbox: `-append "kore ls lib"` runs the tool, `-append "sh"` boots lush,
   rung 4's spawn over the registry — no `/bin`, no PATH, the verb table IS the path.
 * *gate:* `make test_kboot` — four boots of the shipped x86_64 kernel through the PVH door,
   each `-append` a real command line: `kore ls lib`, `kore wc lib/json.l` byte-exact against
-  the host `wc`, `sh -c "cd lib; pwd"`, and a pipeline. Opt-in like test_kdiff (a cold cat eval per boot);
+  the host `wc`, `sh -c "cd lib; pwd"`, and a pipeline. Opt-in (a cold cat eval per boot);
   run it when the kernel or the cat moves. vi is the interactive smoke under `run-*`, and its
   boot is proven headless — `-append "vi lib/json.l"` draws the hued file over serial. The
   aarch64 twin dispatches the same way through its DTB door (spot-proven; the gate lane is

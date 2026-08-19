@@ -12,7 +12,7 @@ dl = dl
 
 # every gate and verb below is phony: one roster, so adding one is one line and not two.
 .PHONY: force_kfs_list kmain_o run run-hdd run-$a run-hdd-$a run-headless init-container \
-  uefi test_arm64 test_kernel test_disk test_uefi test_kboot test_kdiff test_kernel_arm64 \
+  uefi test_arm64 test_kernel test_disk test_uefi test_kboot test_kernel_arm64 \
   test_inle test_wasm
 
 # K_TEST=1 builds a headless serial test kernel (batch read-eval over COM1, with an
@@ -22,29 +22,16 @@ ifdef K_TEST
 ksuf := -test
 endif
 
-# The COMPILER is ours: mooncc compiles every TU, holo lays
-# the assembly and links, so nothing foreign is left. KCC=clang is the comparison lane,
-# exactly like CC on the host side; a GCC cross toolchain also works:
-#   make kernel a=aarch64 KCC=aarch64-linux-gnu-gcc KLINK=lld KLD=aarch64-linux-gnu-ld
-# KLD serves the KLINK=lld lane only -- the default link is ours.
+# The COMPILER is ours, and only ours: mooncc compiles every TU, holo lays the assembly
+# and links. KCC names WHICH love drives it, not which compiler -- a foreign cc has no
+# lane here (dropped 2026-08-19: HCC covers foreign-cc on the host and ccbench races them
+# over the same TUs, so a second kernel compiler earned nothing it did not already cost).
 # ⚠ mooncc is love's own verb now (the layered bake, doc/plan/one-binary.md), and the
 # LOVE_NO_IMAGE= clear is load-bearing (the guard against an exported egg): an
 # egg-booted love has no verb table -- `mooncc` would read as a filename.
 KCC ?= LOVE_NO_IMAGE= $(ho)/love mooncc
-KLD ?= ld.lld
-# ours by NAME: booting the image just to answer a makefile question at parse time is
-# wrong anyway -- parse time is BEFORE any recipe, so a --version probe would read
-# whatever image a half-done build left behind.
-KCC_IS_MOON := $(if $(findstring mooncc,$(KCC)),1,)
-KCC_IS_CLANG := $(if $(KCC_IS_MOON),,$(shell $(KCC) --version 2>/dev/null | grep -qiw clang && echo 1))
 
 k_arch_c = $(wildcard $(R)/free/$a/*.c)
-# aarch64/builtins.c hands a FOREIGN cc the __clear_cache and __udivti3 its codegen
-# emits. ours emits neither (gen.l lowers clear_cache to dc/ic inline and never reaches
-# for a 128-bit divide), and the file is __int128 -- a type we do not carry. clang's alone.
-ifeq ($(KCC_IS_MOON),1)
-k_arch_c := $(filter-out %/builtins.c,$(k_arch_c))
-endif
 k_free_c = $R/free/kmain.c $R/free/blk.c
 # paint.c is named rather than wildcarded (mk/common.mk): the console renders 32bpp,
 # so this seat wants the shared painter. nif.c stays out until the kernel grows
@@ -52,15 +39,8 @@ k_free_c = $R/free/kmain.c $R/free/blk.c
 k_shared_c = $(love_c) $(f_c) $R/crew/quay/paint.c $(c_c)
 k_h = $(love_h) $(wildcard *.h $(R)/free/*.h $(R)/free/$a/*.h)
 
-# ⚠ the object tree and the ELF are per COMPILER as well as per K_TEST: sharing them
-# lets a KCC switch reuse the other compiler's objects, and the differential twin then
-# re-runs the mooncc artifact and reports it green. ours keeps the bare name (it ships).
-KLINK ?= holo
-kccsuf = $(if $(KCC_IS_MOON),,-$(notdir $(KCC)))
-klsuf = $(if $(filter holo,$(KLINK)),,-$(KLINK))
-kvsuf = $(kccsuf)$(klsuf)
-k_odir = $(ko)/$a$(ksuf)$(kccsuf)
-k_elf = $(ko)/love-$a$(ksuf)$(kvsuf).elf
+k_odir = $(ko)/$a$(ksuf)
+k_elf = $(ko)/love-$a$(ksuf).elf
 
 k_shared_o = $(k_shared_c:$(R)/%.c=$(k_odir)/%.o)
 k_arch_o = $(k_arch_c:$(R)/%.c=$(k_odir)/%.o)
@@ -77,50 +57,35 @@ k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_lay_o)
 # sizing asks kmallocw for a block bigger than any physical RAM range. gen_please, core/love.c.
 kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
   -ffunction-sections -fdata-sections
-kldflags := -static -nostdlib --gc-sections -T $(R)/free/$a/$a.lds -z max-page-size=0x1000
 kcppflags := \
   -I$(k_odir) \
   -I. -Icore -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/free \
   -I$(R)/free/$a \
   -I$(R)/crew/moon/include \
-  -Ifree/libc \
   $(kcppflags) \
   -DLIMINE_API_REVISION=3
 ifdef K_TEST
 # tail-threaded, matching the real kernel and the host; love0 stays the trampoline lane.
 kcppflags += -DK_TEST -Dai_tco=1
 endif
-ifeq ($(KCC_IS_CLANG),1)
-# ⚠ -Dasm: the tree's C is c11 plus the GNU asm keyword, which mooncc's parser takes
-# under all three spellings and strict clang under none. one define beats -std=gnu11,
-# which would let the twin accept extensions the primary compiler never sees.
-kcc_if_clang = -target $a-unknown-none-elf -Dasm=__asm__
-endif
-
-# the machine flags a FOREIGN cc needs told. mooncc is told none: `-t` names the backend
-# and the -m* soup is vacuous for our codegen -- nothing of ours ever lives below sp (no
-# red zone to disable), and we emit abs64 and pc-relative relocations and nothing else, so
-# the top 2 GiB needs no code model. ⚠ mooncc REFUSES a -m flag rather than ignoring it
-# (dropping one silently would be the no-op wearing a cc face), so these must not reach it.
-kcflags_x86_64 = -m64 -march=x86-64 -mabi=sysv -mno-red-zone -mcmodel=kernel
-kcflags_aarch64 = -mcpu=generic -march=armv8-a
-kcflags_mach = $(if $(KCC_IS_MOON),,$(kcflags_$a))
-kcc_tgt = $(if $(KCC_IS_MOON),-t $(k_be_$a),$(kcc_if_clang))
-
-kcc = $(KCC) $(kcflags) $(kcflags_mach) $(kcppflags) $(kcc_tgt)
+# no machine flags: `-t` names the backend and the -m* soup is vacuous for our codegen --
+# nothing of ours ever lives below sp (no red zone to disable), and we emit abs64 and
+# pc-relative relocations and nothing else, so the top 2 GiB needs no code model.
+# ⚠ mooncc REFUSES a -m flag rather than ignoring it (dropping one silently would be the
+# no-op wearing a cc face), which is the other reason there are none to pass.
+kcc = $(KCC) $(kcflags) $(kcppflags) -t $(k_be_$a)
 # ours has to exist before it can compile anything.
-kcc_dep = $(if $(KCC_IS_MOON),$(ho)/love.baked,)
-# the tag names the compiler that actually runs, so the clang lane reads as clang's.
-kcctag = $(if $(KCC_IS_MOON),MOON,CC)
+kcc_dep = $(ho)/love.baked
 
 kernel: $(k_elf)
 
-# The LINK is ours by default: holo's kernel lane (crew/holo/link.l's ldkern, driven by
-# free/klink.l) lays the shape <a>.lds asks for -- the note, five page-aligned
-# PT_LOADs, p_paddr = p_vaddr - bias, entry by symbol, kimage_end -- and all three doors
-# boot what it writes. KLINK=lld puts ld.lld and the .lds back, the comparison lane, so
-# the .lds files stay in the tree as its statement of the layout. --gc-sections has no
-# twin here: the image carries some dead code, and it is RAM the kernel has plenty of.
+# The LINK is ours, and only ours: holo's kernel lane (crew/holo/link.l's ldkern, driven
+# by free/klink.l) lays the shape -- the note, five page-aligned PT_LOADs,
+# p_paddr = p_vaddr - bias, entry by symbol, kimage_end -- and all three doors boot what
+# it writes. The <a>.lds files and the KLINK=lld lane that read them went 2026-08-19: a
+# linker twin nothing ran, and it was the one thing keeping the two kernel seats on
+# core/mx.l's hand-spliced roster. No --gc-sections either -- the image carries some dead
+# code, and it is RAM the kernel has plenty of.
 klink_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/free/klink.l
 $(k_odir)/klink.list: force_dist_list
@@ -133,17 +98,10 @@ $(k_odir)/klink.l: $(klink_l) $(k_odir)/klink.list
 	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
 	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(klink_l)); } > $@
 
-ifeq ($(KLINK),holo)
 $(k_elf): $(k_odir)/klink.l $(k_o) $m
 	@echo HOLO	$@
 	@mkdir -p "$(dir $@)"
 	@$m $(k_odir)/klink.l $@ $a $(k_o)
-else
-$(k_elf): $(R)/free/$a/$a.lds $(k_o)
-	@echo LD	$@
-	@mkdir -p "$(dir $@)"
-	@$(KLD) $(kldflags) $(k_o) -o $@
-endif
 
 # --- the initrd ------------------------------------------------------
 # lib/*.l baked per-file into .rodata as {path, bytes, len} rows (mk/tools/lcatfs.l), which
@@ -171,10 +129,10 @@ out/lib/korecat.l: $(korefiles)
 	@mkdir -p out/lib
 	@cat $(korefiles) > $@
 
-# Shared C sources (core/love.c, crew/quay/, libc/) + per-arch free/<a>/.
+# Shared C sources (core/love.c, crew/quay/, nolibc's six) + per-arch free/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
 $(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h out/lib/kfs.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h,out/lib/korecat.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h)
-	@echo $(kcctag)	$@
+	@echo MOON	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
@@ -234,7 +192,7 @@ $(ko)/limine.conf:
 	@mkdir -p $(dir $@)
 	@printf 'timeout: 1\n/lush\n    protocol: limine\n    path: boot():/boot/kernel\n    cmdline: sh\n/love\n    protocol: limine\n    path: boot():/boot/kernel\n' > $@
 
-$(ko)/love-$a$(ksuf)$(kvsuf).iso: $(k_elf) $(dl)/limine/limine $(ko)/limine.conf
+$(ko)/love-$a$(ksuf).iso: $(k_elf) $(dl)/limine/limine $(ko)/limine.conf
 	@echo MK	$@
 	@rm -rf $(ko)/iso_root
 	@mkdir -p $(ko)/iso_root/boot
@@ -342,26 +300,26 @@ test_arm64: host
 # own bring-up -- page tables, GDT, long mode, kboot -- with NOTHING in dl/ involved.
 ifeq ($a,x86_64)
 test_kernel: host $(R)/mk/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test$(kvsuf).elf
-	@echo TEST $(ko)/love-$a-test$(kvsuf).elf "(serial, headless, -kernel; ~60s, ceiling 420s)"
-	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test$(kvsuf).elf - $a
+	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test.elf
+	@echo TEST $(ko)/love-$a-test.elf "(serial, headless, -kernel; ~60s, ceiling 420s)"
+	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test.elf - $a
 
 # test_disk -- the rung-5 gate: write a file, RESET the machine, read it back. Two boots
 # of the K_TEST kernel over one FRESH scratch image -- the first finds no filesystem and
 # formats, the second must mount what the first wrote; ktest.l's 4th arg demands the kept
 # line on top of the green summary.
 test_disk: host $(R)/mk/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test$(kvsuf).elf
-	@rm -f $(ko)/love-$a-test$(kvsuf).elf.disk
-	@echo TEST $(ko)/love-$a-test$(kvsuf).elf "(two boots, one disk: the reset-persistence gate)"
-	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test$(kvsuf).elf - $a
-	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test$(kvsuf).elf - $a "disk: fat kept across the reset"
+	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test.elf
+	@rm -f $(ko)/love-$a-test.elf.disk
+	@echo TEST $(ko)/love-$a-test.elf "(two boots, one disk: the reset-persistence gate)"
+	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test.elf - $a
+	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test.elf - $a "disk: fat kept across the reset"
 	@echo "test_disk: the machine remembered"
 
 # test_kboot -- inle rung 3's gate: the SHIPPED kernel (no K_TEST) booted direct with a
 # boot command line, the baked kore cat dispatching off the program seat, running the tool
 # and quitting through the reset door. Four boots at a cold cat eval each (~minutes under
-# TCG), so OPT-IN like test_kdiff -- run it when the kernel or the kore cat moves. vi
+# TCG), so OPT-IN -- run it when the kernel or the kore cat moves. vi
 # stays the interactive smoke, under run-* -- `-append "vi lib/json.l"`.
 test_kboot: host $(R)/mk/tools/kboot.l
 	@$(MAKE) -s $(k_elf)
@@ -395,7 +353,7 @@ $(ko)/uefi$(ksuf)/BOOTX64.EFI: $(ko)/uefi$(ksuf)/loader.o $(uefi_l) $m
 # the ESP: BOOTX64.EFI at the removable-media path the firmware looks for, and the kernel
 # beside it (the loader opens "love.elf" on its own volume).
 $(ko)/esp$(ksuf)/EFI/BOOT/BOOTX64.EFI: $(ko)/uefi$(ksuf)/BOOTX64.EFI
-$(ko)/esp$(ksuf)/love.elf: $(ko)/love-x86_64$(ksuf)$(kvsuf).elf
+$(ko)/esp$(ksuf)/love.elf: $(ko)/love-x86_64$(ksuf).elf
 $(ko)/esp$(ksuf)/EFI/BOOT/BOOTX64.EFI $(ko)/esp$(ksuf)/love.elf:
 	@echo CP	$@
 	@mkdir -p $(dir $@)
@@ -422,25 +380,10 @@ test_uefi: host $(R)/mk/tools/ktest.l
 	@$m $(R)/mk/tools/ktest.l $(ko)/esp-test $(OVMF_X64) x86_64
 endif
 
-# test_kdiff -- the clang-vs-mooncc K_TEST DIFFERENTIAL. clang's only remaining job in
-# this tree is to be the twin: a second compiler over the same sources, so when the kernel
-# breaks you can ask whether it broke in the code or in our codegen. A twin nothing runs
-# is a twin that rots, so this boots it, out of its own object tree (kccsuf). ~45s per
-# arch on top of test_kernel, so OPT-IN -- run it when the kernel moves.
-ifneq ($(shell command -v clang 2>/dev/null),)
-test_kdiff:
-	@$(MAKE) -s KCC=clang test_kernel
-	@$(MAKE) -s KCC=clang test_kernel_arm64
-	@echo "test_kdiff: the same corpus, both compilers, both arches"
-else
-test_kdiff:
-	@echo "test_kdiff: skipped (no clang)"
-endif
-
 # test_inle -- the kernel's whole roster, in one word. Every lane below prints its own
-# skip where the seat cannot run it (not x86_64, no qemu, no clang), so this is safe to
-# type anywhere; cheapest first, so a break says so early. SEQUENTIAL sub-makes, test_kdiff's
-# own shape: as plain prerequisites a -j would land two of them in one object tree at once.
+# skip where the seat cannot run it (not x86_64, no qemu), so this is safe to type
+# anywhere; cheapest first, so a break says so early. SEQUENTIAL sub-makes: as plain
+# prerequisites a -j would land two of them in one object tree at once.
 # ⚠ NOT on test_slow -- it is minutes of qemu, and the merge gate's subject is the seed.
 # This is the gate to type when free/ or the kore cat moves.
 test_inle:
@@ -449,23 +392,21 @@ test_inle:
 	@$(MAKE) -s test_uefi
 	@$(MAKE) -s test_kboot
 	@$(MAKE) -s test_kernel_arm64
-	@$(MAKE) -s test_kdiff
-	@echo "test_inle: boot, disk, command line -- both arches, both compilers"
+	@echo "test_inle: boot, disk, command line -- both arches"
 
 # The aarch64 twin of test_kernel, same corpus under full-TCG (~45s). In test_slow
 # because the lane needs a gate that RUNS it: the aarch64 kernel is otherwise reached
-# only by lanes test_kernel's x86_64 gate skips. Needs qemu-system-aarch64 and a
-# CROSS-CAPABLE $(KCC) -- ours (-t names the backend) or clang (-target); a native gcc
-# cannot, so that lane skips.
+# only by lanes test_kernel's x86_64 gate skips. Our own cc crosses by name (-t), so the
+# only thing that can be missing is the emulator.
 QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
-ifeq ($(and $(QEMU_A64),$(or $(KCC_IS_MOON),$(filter 1,$(KCC_IS_CLANG)))),)
+ifeq ($(QEMU_A64),)
 test_kernel_arm64:
-	@echo "test_kernel_arm64: skipped (need qemu-system-aarch64 + a cross-capable KCC)"
+	@echo "test_kernel_arm64: skipped (need qemu-system-aarch64)"
 else
 test_kernel_arm64: host $(R)/mk/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test$(kvsuf).elf
-	@echo TEST $(ko)/love-aarch64-test$(kvsuf).elf "(serial, headless, TCG, -kernel; ~90s, ceiling 420s)"
-	@$m $(R)/mk/tools/ktest.l $(ko)/love-aarch64-test$(kvsuf).elf - aarch64
+	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test.elf
+	@echo TEST $(ko)/love-aarch64-test.elf "(serial, headless, TCG, -kernel; ~90s, ceiling 420s)"
+	@$m $(R)/mk/tools/ktest.l $(ko)/love-aarch64-test.elf - aarch64
 endif
 
 # --- wasm headless test (wired into test_slow; emcc + node) -----------------
