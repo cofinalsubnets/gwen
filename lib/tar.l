@@ -31,6 +31,12 @@
 ; that is NOT stored. A path that fits neither -- no "/" leaving a <=100 tail -- is
 ; refused rather than truncated: a silently shortened path is a wrong archive that
 ; looks right until something extracts it.
+; the wrap: tar rides module 'tar. a consumer says (use 'tar); riding a cat -- the
+; dist artifact's, where this file is EVALUATED INTO THE IMAGE -- the wrap registers
+; the same module, so the compile is paid once at bake time and (use 'tar) is a splice
+; afterwards rather than a reload. unwrapped it leaked its names into the cat's layer
+; and `use` found no module, so every caller recompiled this file from lib/.
+(module 'tar
 (:
    tar-blk 512
 
@@ -351,3 +357,5 @@
                                 (tar-there? p)))
                        (? (! ok) () (go >xs (k + 1)))))
        (go es 0)))
+
+) ; module 'tar

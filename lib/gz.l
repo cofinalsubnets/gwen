@@ -45,6 +45,12 @@
 ; ⚠ `+` IS DYADIC: every sum here is infix. A prefix (+ a b c) is APPLICATION, which
 ; church-exponentiates and answers a bignum the size of the sky (crew/tls/bytes.l pays
 ; the same warning).
+; the wrap: gz rides module 'gz. a consumer says (use 'gz); riding a cat -- the dist
+; artifact's, where this file is EVALUATED INTO THE IMAGE -- the wrap registers the
+; same module, so the compile is paid once at bake time and (use 'gz) is a splice
+; afterwards rather than a reload. unwrapped it leaked its names into the cat's layer
+; and `use` found no module, so every caller recompiled this file from lib/.
+(module 'gz
 (:
    ; --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -----------------
    ; built once at load into a tray, read with peep. the final xor is the same
@@ -804,3 +810,5 @@
                          (? (! ((gz-crc32 out) = crc)) ()
                             (! ((tally out) = (isize & 4294967295))) ()
                             `(1 out))))))))))
+
+) ; module 'gz

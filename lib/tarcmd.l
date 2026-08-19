@@ -11,6 +11,15 @@
 ;
 ; ⚠ our DEFLATE is the FIXED Huffman code (lib/gz.l) -- every gunzip reads it, and it
 ; is about 24% above `gzip -9` on source. The honest number lives in lib/gz.l.
+; the wrap: `use` SPLICES a module's names into the current layer, so these two asks
+; have to land in a layer of our own -- unwrapped, riding the dist cat, they would put
+; tar's and gz's names straight back on the cat's shared layer, which is the leak the
+; module wraps over there just took out. the ask is explicit either way: this file rode
+; that leak before and reads their names by the door now.
+(module 'tarcmd
+(use 'gz)
+(use 'tar)
+
 (: (tarc-die m) (: _ (say err ("tar: " + m + "\n")) (quit 1))
    (tarc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
    (tarc-blurt p s) (: q (open p "w") (? q (: _ (say q s) _ (close q) 1) ()))
@@ -64,3 +73,5 @@
 
    T (from 'verbs 'tab)
    _ (pins T 'tar tar-main))
+
+) ; module 'tarcmd
