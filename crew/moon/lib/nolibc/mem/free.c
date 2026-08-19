@@ -4,8 +4,8 @@
    arena list below never returns a page, so a heap that peaks through a few
    large blocks would keep every one of them resident for the run. ⚠ the tag
    rides `next', which an allocated block does not otherwise use -- so malloc
-   writes it on EVERY block, or free reads whatever the old payload left there. */
-#define MDirect ((__mhdr *) 1)
+   writes it on EVERY block, or free reads whatever the old payload left there.
+   __MDirect names it in impl.h, where calloc reads it too. */
 #define MBig ((size_t) 128 * 1024)
 
 static __mhdr __mbase;
@@ -13,7 +13,7 @@ static __mhdr *__mfree;
 void free(void *p) {
   if (!p) return;
   __mhdr *b = (__mhdr *) p - 1, *q = __mfree;
-  if (b->next == MDirect) { munmap(b, (long) (b->size * sizeof(__mhdr))); return; }
+  if (b->next == __MDirect) { munmap(b, (long) (b->size * sizeof(__mhdr))); return; }
   for (; !(b > q && b < q->next); q = q->next)
     if (q >= q->next && (b > q || b < q->next)) break;   /* at the arena's wrap point */
   if (b + b->size == q->next) { b->size += q->next->size; b->next = q->next->next; }
@@ -37,7 +37,7 @@ static void *__mbig(size_t nu) {                        /* its own mapping, give
   if (m == (void *) -1) { __errno_v = ENOMEM; return 0; }
   __mhdr *u = m;
   u->size = len / sizeof(__mhdr);
-  u->next = MDirect;
+  u->next = __MDirect;
   return (void *) (u + 1); }
 void *malloc(size_t n) {
   size_t nu = (n + sizeof(__mhdr) - 1) / sizeof(__mhdr) + 1;

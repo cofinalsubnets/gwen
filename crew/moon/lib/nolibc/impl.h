@@ -408,6 +408,7 @@ static long fb6(long n, long a, long b, long c, long d, long e, long f) { return
 /* the shapes the public headers keep opaque, and the fmt members' limb geometry. */
 typedef void (*__exitfn)(void);
 typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in units */
+#define __MDirect ((__mhdr *) 1)   /* in an allocated block's `next': a mapping of its own, pages fresh from the kernel */
 typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;
 struct __sctx { char *p; size_t n, at; };
 struct __ksigaction { void *h; unsigned long flags; void *restorer; unsigned long mask; };
