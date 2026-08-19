@@ -175,7 +175,26 @@ both "basename" basename /a/b.txt .txt
 printf 'q\nq\nr\n' | tee "$ho/.cu-g2" > "$g"
 printf 'q\nq\nr\n' | korerun tee "$ho/.cu-o2" > "$o"
 cmp -s "$g" "$o" && cmp -s "$ho/.cu-g2" "$ho/.cu-o2" || fail "kore tee vs GNU"
+# THE GULP SEAMS. cat/head/tail/nl/rev read by 4096-byte chugs now, so a line that
+# spans a gulp, an input with no newline in it at all, and a file that ends exactly
+# on the boundary are each a place the reader can lose or double a byte -- and none
+# of them shows in the small fixtures above.
+awk 'BEGIN{for(i=0;i<300;i++)printf "%09d-", i; print ""}' > "$ho/.gs1"   # one 3000-char line
+awk 'BEGIN{for(i=0;i<40;i++){for(j=0;j<300;j++)printf "%09d-",j; print ""}}' > "$ho/.gs2"
+dd if=/dev/zero bs=4096 count=1 2>/dev/null | tr '\0' 'x' > "$ho/.gs3"    # 4096, no newline
+printf 'abc' > "$ho/.gs4"                                                 # no newline at all
+: > "$ho/.gs5"                                                            # empty
+for f in .gs1 .gs2 .gs3 .gs4 .gs5; do
+  for t in "cat" "rev" "nl" "head -n 3" "tail -n 3" "head -n 1"; do
+    # shellcheck disable=SC2086
+    $t "$ho/$f" > "$g" 2>/dev/null; korerun $t "$ho/$f" > "$o" 2>/dev/null
+    cmp -s "$g" "$o" || fail "kore $t over $f (a gulp seam)"
+  done
+done
+korerun cat "$ho/.gs1" "$ho/.gs4" "$ho/.gs2" > "$o"; cat "$ho/.gs1" "$ho/.gs4" "$ho/.gs2" > "$g"
+cmp -s "$g" "$o" || fail "kore cat: operands joined across the seams"
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/seq/echo/basename/tee GNU-identical) ok"
+echo "kore: the gulp seams (a line past 4096, no final newline, empty, boundary-exact) ok"
 
 # ------------------------------------------------------------ the field tools
 printf 'a:b:c\nnodelim\nx:y\n' > "$ho/.fu1"

@@ -168,6 +168,79 @@
     (: o (jug 0)
        (go k) (? (k < 0) (slurp o) (: _ (put o (s k)) (go (k - 1))))
        (go (tally s - 1)))
+   ; --- reading an input WITHOUT holding it ----------------------------------
+   ; uread + `lines` keeps four whole copies of the input alive at once -- `rev` of
+   ; 50 MB wanted 1.09 GB of live set. These hand it over a gulp or a line at a time.
+   ; ⚠ see/unsee/chug AND NOT `swig`: kore runs in two worlds (see ucopy-bytes) and
+   ; the kernel image compiles no host/*.c. The gulp door is core's, so no probe.
+   (urd q) (: t (tablet 0)
+              _ (pin t 'q q) _ (pin t 'h "") _ (pin t 'p 0) _ (pin t 'e 0)
+              t)
+   ; one gulp onto the held bytes; 1 when something arrived, 0 at the end. ⚠ the
+   ; see/unsee pair is what terminates it -- `see` touches the device (chug never
+   ; does) and the byte it answers is one chug must count, so a gulp is never empty.
+   (urd-fill t)
+    (: q (peep t 'q ())
+       c (see q)
+       (? (c = -1) (: _ (pin t 'e 1) 0)
+          (: _ (unsee q c) _ (pin t 'h ((peep t 'h "") + (chug q))) 1)))
+   ; the next line -> [line term?], () when spent. term? is whether the SOURCE ended
+   ; it with a newline -- what `nl-end?` answers on the whole-text road.
+   ; ⚠ the scan mark is not an optimisation: without it the held bytes are rescanned
+   ; from the front every gulp, so an input with no newline costs its length squared.
+   (urd-line t)
+    (: h (peep t 'h "") n (tally h)
+       (idx k) (? (n <= k) -1 ((h k) = 10) k (idx (k + 1)))
+       i (idx (peep t 'p 0))
+       (? (0 <= i) (: _ (pin t 'h (snip h (i + 1) n)) _ (pin t 'p 0) [(snip h 0 i) 1])
+          (peep t 'e 0) (? n (: _ (pin t 'h "") _ (pin t 'p 0) [h 0]) ())
+          (: _ (pin t 'p n) _ (urd-fill t) (urd-line t))))
+   ; the gulp just read, handed over and let go; "" when the input is spent
+   (urd-gulp t)
+    (? (urd-fill t) (: h (peep t 'h "") _ (pin t 'h "") _ (pin t 'p 0) h) "")
+
+   ; --- the operand walk -----------------------------------------------------
+   ; each name in turn, a miss complains and costs the status without stopping the
+   ; run. ⚠ no operands at all IS one operand, and it is stdin.
+   (uwalk one as)
+    (: (go a ok) (? (two? a) (go >a (one <a ok)) (: _ (flush out) (? ok 0 1)))
+       (? (two? as) (go as 1) (: _ (one "-" 1) _ (flush out) 0)))
+   ; an operand open for reading -> [port close?] | (). ⚠ "-" is stdin and is NOT
+   ; closed after: a later operand may be it again.
+   (uin who f)
+    (? (f = "-") [in 0]
+       (: q (open f "r")
+          (? q [q 1] (: _ (say err (who + ": cannot open " + f)) _ (put err 10) ()))))
+   ; THE DRIVER the rest ride: body gets (name first? reader) per operand and answers
+   ; truth to keep the status. first? is 1 on the leading one, all `uhdr` needs.
+   (ureach who body as)
+    (: t (tablet 0) _ (pin t 'f 1)
+       (uwalk (\ f ok
+                (: p (uin who f)
+                   (? (! p) 0
+                      (: fst (peep t 'f 1)
+                         _ (pin t 'f 0)
+                         v (body f fst (urd <p))
+                         _ (? <>p (close <p) 0)
+                         (? v ok 0)))))
+              as))
+   ; dot gets the bytes a bufferful at a time -- for tools that do not care where
+   ; the lines fall (cat)
+   (uchunks who dot as)
+    (ureach who
+            (\ f fst rd (: (go _) (: h (urd-gulp rd) (? (tally h) (: _ (dot h) (go 0)) 1))
+                           (go 0)))
+            as)
+   ; dot gets (line term?), one line at a time -- every tool whose whole-text body was
+   ; `(go (lines t))`. ⚠ dot answering 0 STOPS this operand, so a tool can read no
+   ; further than it has to.
+   (ulines who dot as)
+    (ureach who
+            (\ f fst rd (: (go _) (: l (urd-line rd)
+                                     (? (! (two? l)) 1 (? (dot <l <>l) (go 0) 1)))
+                           (go 0)))
+            as)
+
    ; the cat walk every whole-input tool rides: dot over each input text (args or
    ; stdin, - reads stdin), a miss complains and the exit code remembers
    (ueach who dot as)

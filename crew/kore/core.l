@@ -16,7 +16,7 @@
 (module 'kore
 (:
    ; -- cat: files (or -) onto out, verbatim --
-   (cat-main as) (ueach "cat" puts as)
+   (cat-main as) (uchunks "cat" puts as)
 
    ; -- echo: the args back; -n holds the newline --
    (echo-main as)
@@ -33,7 +33,7 @@
                             (47 < (w k) < 58) (go (k + 1))
                             0)
                   (go 1))
-   (uclip who clip as)
+   (uclip-args who as)                      ; -> (n files many?)
     (: nr (? (two? as && (<as = "-n"))
              (? (two? >as) `((uatoi <>as) >>as)
                 (udie 2 (who + ": -n wants a count")))
@@ -41,20 +41,35 @@
              `((uatoi (snip <as 1 (tally <as))) >as)
              `(10 as))
        n <nr fs <>nr
-       many (two? fs && two? >fs)
-       (one f first ok)
-        (: r (? (f = "-") `(1 (slurp in)) (uread f))
-           (? (two? r)
-              (: _ (? many (say out (uhdr first (? (f = "-") "standard input" f))) ())
-                 _ (say out (clip n <>r))
-                 ok)
-              (: _ (say err (who + ": cannot open " + f)) _ (put err 10) 0)))
-       (go a first ok) (? (two? a) (go >a 0 (one <a first ok))
-                          (: _ (flush out) (? ok 0 1)))
-       (? (two? fs) (go fs 1 1)
-          (: _ (say out (clip n (slurp in))) _ (flush out) 0)))
-   (head-main as) (uclip "head" uhead as)
-   (tail-main as) (uclip "tail" utail as)
+       `(n fs (? (two? fs && two? >fs) 1 0)))
+   (uclip-hdr many first f)
+    (? many (say out (uhdr first (? (f = "-") "standard input" f))) 0)
+   ; ⚠ HEAD STOPS -- it used to `lines` the whole input and take n off the front, so
+   ; one line of a 100 MB file cost 7.2 GB. uhead is still the spec for where the
+   ; last newline goes (law.l holds it); this answers the same text, a line at a time.
+   (head-main as)
+    (: p (uclip-args "head" as) n <p fs <>p many <>>p
+       (body f first rd)
+        (: _ (uclip-hdr many first f)
+           (go k) (? (n <= k) 1
+                     (: l (urd-line rd)
+                        (? (! (two? l)) 1
+                           (: _ (say out <l) _ (? <>l (put out 10) 0) (go (k + 1))))))
+           (go 0))
+       (ureach "head" body fs))
+   ; tail cannot stop reading but need not HOLD: a ring of the last n lines is the
+   ; whole answer. ⚠ trimmed at 2n, so the trim costs n every n lines, not n a line.
+   (tail-main as)
+    (: p (uclip-args "tail" as) n <p fs <>p many <>>p
+       (body f first rd)
+        (: _ (uclip-hdr many first f)
+           (go acc k) (: l (urd-line rd)
+                         (? (! (two? l)) acc
+                            (: a2 (l >< acc)
+                               (? ((* 2 n) <= (k + 1)) (go (take n a2) n) (go a2 (k + 1))))))
+           (out1 m) (? (two? m) (: _ (say out (<(<m))) _ (? (<>(<m)) (put out 10) 0) (out1 >m)) 1)
+           (out1 (rev (take n (go () 0)))))
+       (ureach "tail" body fs))
 
    ; -- wc: lines, words, bytes (flags pick; bare wc reads all three) --
    (wc-main as)
@@ -337,9 +352,9 @@
            (go k) (? (n < k) () (: _ (? (upick spec k) (put o (ln (k - 1))) ()) (go (k + 1))))
            _ (go 1)
            _ (say out (slurp o)) (put out 10))
-       (dot t) (: (go m) (? (two? m) (: _ ((? fspec fieldline charline) <m) (go >m)) ())
-                  (go (lines t)))
-       (ueach "cut" dot fs))
+       ; cut terminates every line it writes, so the source's own end says nothing
+       (dot ln term?) (: _ ((? fspec fieldline charline) ln) 1)
+       (ulines "cut" dot fs))
 
    ; -- tr: SET1 SET2 translates (SET2 pads with its last charm), -d deletes, -s
    ; squeezes same-charm runs; stdin only, like the real one --
@@ -382,27 +397,21 @@
    ; seven spaces and no number, and the count carries across inputs --
    (nl-main as)
     (: t #('i 1)
-       (dot txt)
-        (: (go m) (? !(two? m) ()
-                     (: ln <m
-                        _ (? !ln (: _ (say out "       ") (put out 10))
-                             (: i (peep t 'i 1)
-                                _ (say out (upad 6 (show i))) _ (put out 9)
-                                _ (say out ln) _ (put out 10)
-                                (pin t 'i (i + 1))))
-                        (go >m)))
-           (go (lines txt)))
-       (ueach "nl" dot as))
+       ; nl terminates every line it writes, so term? says nothing here either
+       (dot ln term?)
+        (: _ (? !ln (: _ (say out "       ") (put out 10))
+                (: i (peep t 'i 1)
+                   _ (say out (upad 6 (show i))) _ (put out 9)
+                   _ (say out ln) _ (put out 10)
+                   (pin t 'i (i + 1))))
+           1)
+       (ulines "nl" dot as))
 
    ; -- rev: every line back to front --
    (rev-main as)
-    (: (dot txt) (: e (nl-end? txt)                     ; the last line keeps the source's end
-                    (go m) (? !(two? m) ()
-                              (: _ (say out (urev <m))
-                                 _ (? (e || two? >m) (put out 10) 0)
-                                 (go >m)))
-                    (go (lines txt)))
-       (ueach "rev" dot as))
+    ; the last line keeps the source's end, which is exactly what term? carries
+    (: (dot ln term?) (: _ (say out (urev ln)) _ (? term? (put out 10) 0) 1)
+       (ulines "rev" dot as))
 
    ; ---- the calendar floor (stat's %y and date both read it) --------------------
    ; Howard Hinnant's exact integer civil-from-days and its inverse, shifted to a March
