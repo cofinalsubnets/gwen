@@ -26,12 +26,10 @@ endif
 # and links. KCC names WHICH love drives it, not which compiler -- a foreign cc has no
 # lane here (dropped 2026-08-19: HCC covers foreign-cc on the host and ccbench races them
 # over the same TUs, so a second kernel compiler earned nothing it did not already cost).
-# KLD serves the KLINK=lld lane only -- the default link is ours.
 # ⚠ mooncc is love's own verb now (the layered bake, doc/plan/one-binary.md), and the
 # LOVE_NO_IMAGE= clear is load-bearing (the guard against an exported egg): an
 # egg-booted love has no verb table -- `mooncc` would read as a filename.
 KCC ?= LOVE_NO_IMAGE= $(ho)/love mooncc
-KLD ?= ld.lld
 
 k_arch_c = $(wildcard $(R)/free/$a/*.c)
 k_free_c = $R/free/kmain.c $R/free/blk.c
@@ -41,13 +39,8 @@ k_free_c = $R/free/kmain.c $R/free/blk.c
 k_shared_c = $(love_c) $(f_c) $R/crew/quay/paint.c $(c_c)
 k_h = $(love_h) $(wildcard *.h $(R)/free/*.h $(R)/free/$a/*.h)
 
-# ⚠ the ELF is per LINKER as well as per K_TEST: sharing it would let a KLINK switch
-# report the other linker's artifact green. ours keeps the bare name (it ships). the
-# objects are the same either way, so the object tree carries no suffix.
-KLINK ?= holo
-klsuf = $(if $(filter holo,$(KLINK)),,-$(KLINK))
 k_odir = $(ko)/$a$(ksuf)
-k_elf = $(ko)/love-$a$(ksuf)$(klsuf).elf
+k_elf = $(ko)/love-$a$(ksuf).elf
 
 k_shared_o = $(k_shared_c:$(R)/%.c=$(k_odir)/%.o)
 k_arch_o = $(k_arch_c:$(R)/%.c=$(k_odir)/%.o)
@@ -64,7 +57,6 @@ k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_lay_o)
 # sizing asks kmallocw for a block bigger than any physical RAM range. gen_please, core/love.c.
 kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
   -ffunction-sections -fdata-sections
-kldflags := -static -nostdlib --gc-sections -T $(R)/free/$a/$a.lds -z max-page-size=0x1000
 kcppflags := \
   -I$(k_odir) \
   -I. -Icore -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/free \
@@ -87,12 +79,13 @@ kcc_dep = $(ho)/love.baked
 
 kernel: $(k_elf)
 
-# The LINK is ours by default: holo's kernel lane (crew/holo/link.l's ldkern, driven by
-# free/klink.l) lays the shape <a>.lds asks for -- the note, five page-aligned
-# PT_LOADs, p_paddr = p_vaddr - bias, entry by symbol, kimage_end -- and all three doors
-# boot what it writes. KLINK=lld puts ld.lld and the .lds back, the comparison lane, so
-# the .lds files stay in the tree as its statement of the layout. --gc-sections has no
-# twin here: the image carries some dead code, and it is RAM the kernel has plenty of.
+# The LINK is ours, and only ours: holo's kernel lane (crew/holo/link.l's ldkern, driven
+# by free/klink.l) lays the shape -- the note, five page-aligned PT_LOADs,
+# p_paddr = p_vaddr - bias, entry by symbol, kimage_end -- and all three doors boot what
+# it writes. The <a>.lds files and the KLINK=lld lane that read them went 2026-08-19: a
+# linker twin nothing ran, and it was the one thing keeping the two kernel seats on
+# core/mx.l's hand-spliced roster. No --gc-sections either -- the image carries some dead
+# code, and it is RAM the kernel has plenty of.
 klink_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/free/klink.l
 $(k_odir)/klink.list: force_dist_list
@@ -105,17 +98,10 @@ $(k_odir)/klink.l: $(klink_l) $(k_odir)/klink.list
 	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
 	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(klink_l)); } > $@
 
-ifeq ($(KLINK),holo)
 $(k_elf): $(k_odir)/klink.l $(k_o) $m
 	@echo HOLO	$@
 	@mkdir -p "$(dir $@)"
 	@$m $(k_odir)/klink.l $@ $a $(k_o)
-else
-$(k_elf): $(R)/free/$a/$a.lds $(k_o)
-	@echo LD	$@
-	@mkdir -p "$(dir $@)"
-	@$(KLD) $(kldflags) $(k_o) -o $@
-endif
 
 # --- the initrd ------------------------------------------------------
 # lib/*.l baked per-file into .rodata as {path, bytes, len} rows (mk/tools/lcatfs.l), which
@@ -206,7 +192,7 @@ $(ko)/limine.conf:
 	@mkdir -p $(dir $@)
 	@printf 'timeout: 1\n/lush\n    protocol: limine\n    path: boot():/boot/kernel\n    cmdline: sh\n/love\n    protocol: limine\n    path: boot():/boot/kernel\n' > $@
 
-$(ko)/love-$a$(ksuf)$(klsuf).iso: $(k_elf) $(dl)/limine/limine $(ko)/limine.conf
+$(ko)/love-$a$(ksuf).iso: $(k_elf) $(dl)/limine/limine $(ko)/limine.conf
 	@echo MK	$@
 	@rm -rf $(ko)/iso_root
 	@mkdir -p $(ko)/iso_root/boot
@@ -314,20 +300,20 @@ test_arm64: host
 # own bring-up -- page tables, GDT, long mode, kboot -- with NOTHING in dl/ involved.
 ifeq ($a,x86_64)
 test_kernel: host $(R)/mk/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test$(klsuf).elf
-	@echo TEST $(ko)/love-$a-test$(klsuf).elf "(serial, headless, -kernel; ~60s, ceiling 420s)"
-	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test$(klsuf).elf - $a
+	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test.elf
+	@echo TEST $(ko)/love-$a-test.elf "(serial, headless, -kernel; ~60s, ceiling 420s)"
+	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test.elf - $a
 
 # test_disk -- the rung-5 gate: write a file, RESET the machine, read it back. Two boots
 # of the K_TEST kernel over one FRESH scratch image -- the first finds no filesystem and
 # formats, the second must mount what the first wrote; ktest.l's 4th arg demands the kept
 # line on top of the green summary.
 test_disk: host $(R)/mk/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test$(klsuf).elf
-	@rm -f $(ko)/love-$a-test$(klsuf).elf.disk
-	@echo TEST $(ko)/love-$a-test$(klsuf).elf "(two boots, one disk: the reset-persistence gate)"
-	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test$(klsuf).elf - $a
-	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test$(klsuf).elf - $a "disk: fat kept across the reset"
+	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test.elf
+	@rm -f $(ko)/love-$a-test.elf.disk
+	@echo TEST $(ko)/love-$a-test.elf "(two boots, one disk: the reset-persistence gate)"
+	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test.elf - $a
+	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test.elf - $a "disk: fat kept across the reset"
 	@echo "test_disk: the machine remembered"
 
 # test_kboot -- inle rung 3's gate: the SHIPPED kernel (no K_TEST) booted direct with a
@@ -367,7 +353,7 @@ $(ko)/uefi$(ksuf)/BOOTX64.EFI: $(ko)/uefi$(ksuf)/loader.o $(uefi_l) $m
 # the ESP: BOOTX64.EFI at the removable-media path the firmware looks for, and the kernel
 # beside it (the loader opens "love.elf" on its own volume).
 $(ko)/esp$(ksuf)/EFI/BOOT/BOOTX64.EFI: $(ko)/uefi$(ksuf)/BOOTX64.EFI
-$(ko)/esp$(ksuf)/love.elf: $(ko)/love-x86_64$(ksuf)$(klsuf).elf
+$(ko)/esp$(ksuf)/love.elf: $(ko)/love-x86_64$(ksuf).elf
 $(ko)/esp$(ksuf)/EFI/BOOT/BOOTX64.EFI $(ko)/esp$(ksuf)/love.elf:
 	@echo CP	$@
 	@mkdir -p $(dir $@)
@@ -418,9 +404,9 @@ test_kernel_arm64:
 	@echo "test_kernel_arm64: skipped (need qemu-system-aarch64)"
 else
 test_kernel_arm64: host $(R)/mk/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test$(klsuf).elf
-	@echo TEST $(ko)/love-aarch64-test$(klsuf).elf "(serial, headless, TCG, -kernel; ~90s, ceiling 420s)"
-	@$m $(R)/mk/tools/ktest.l $(ko)/love-aarch64-test$(klsuf).elf - aarch64
+	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test.elf
+	@echo TEST $(ko)/love-aarch64-test.elf "(serial, headless, TCG, -kernel; ~90s, ceiling 420s)"
+	@$m $(R)/mk/tools/ktest.l $(ko)/love-aarch64-test.elf - aarch64
 endif
 
 # --- wasm headless test (wired into test_slow; emcc + node) -----------------

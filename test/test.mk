@@ -413,10 +413,8 @@ test_moon: host $(love0)
 # ⚠ core/mx.h/kinds.h/nifs.h are CORE headers -- a refresh rebuilds the tree, so the gate to run
 # after is `make test`, not test_clay alone. Each is written aside and moved only once the
 # whole set lays, so a shape check that quits leaves every committed file untouched.
-# core/love_data.ld is laid WHOLE; a board's own script is its own memory map, so core/mx.l takes that
-# text and answers it with the marked block relaid -- the .lds recipe's IO is a pipe.
-mx_lds = free/x86_64/x86_64.lds free/aarch64/aarch64.lds
-mx_lay = (: _ (? mx-ok 0 (quit 1)) _ (puts (mx-lds \"$$f\" (slurp in))) (quit 0))
+# core/love_data.ld is the last linker script in the tree and is laid WHOLE: every other
+# seat's link became ours, and holo needs no script at all.
 # dest:source:value:shape-check -- ONE roster, read by `make mx` (which writes) and by
 # test_clay (which regenerates and diffs). Two spellings of this list is how they drift.
 mx_gen = core/mx.h:core/mx.l:mx-h:mx-ok core/kinds.h:core/mx.l:kinds-h:mx-ok core/nifs.h:core/nifs.l:nifs-h:nifs-ok \
@@ -429,13 +427,9 @@ mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${
 # two-arg `join` shadowed clay's one-arg at mx-h's define and the .h came out empty.
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo LOVE	core/mx.h core/kinds.h core/nifs.h xterm256.h core/love_data.ld "+5 .lds (core/mx.l + core/nifs.l + quay.l on $m)"
+	@echo LOVE	core/mx.h core/kinds.h core/nifs.h xterm256.h core/love_data.ld "(core/mx.l + core/nifs.l + quay.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
-	@t=out/.lds.$$$$; for f in $(mx_lds); do \
-	   $m -l core/mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
-	   cmp -s $$t $$f || { mv $$t $$f; echo "LOVE	$$f"; }; \
-	 done; rm -f $$t
 # ...and the DEPENDENCY, off the same roster: a committed generated file is stale the moment
 # its table moves, and the objects that include it then rebuild from the fresh one. Without
 # this a new core/nifs.l row builds clean and gates GREEN with its nom still off the book -- the
@@ -465,11 +459,7 @@ test_clay: host
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
-	@t=out/.lds.$$$$; for f in $(mx_lds); do \
-	   $m -l core/mx.l -e "$(mx_lay)" < $$f > $$t || { rm -f $$t; exit 1; }; \
-	   cmp -s $$t $$f || { echo "FAIL $$f is not what core/mx.l lays -- run: make mx"; diff -u $$f $$t | head -20; rm -f $$t; exit 1; }; \
-	 done; rm -f $$t
-	@echo "clay-mx: core/mx.h, core/kinds.h, core/nifs.h, xterm256.h and the 6 love_data scripts regenerate identically"
+	@echo "clay-mx: core/mx.h, core/kinds.h, core/nifs.h, xterm256.h and core/love_data.ld regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
 # test_moonfuzz -- moon's REFUSAL surface: each test/cc file broken
 # eight ways from a fixed seed. Two reds -- no SCARE, no hang -- plus G1 on every mutant that

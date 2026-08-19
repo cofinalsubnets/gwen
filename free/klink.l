@@ -1,14 +1,16 @@
 ; free/klink.l -- the kernel link, ours. holo's ldkern (crew/holo/link.l)
-; under the freestanding image, in place of ld.lld + the per-arch .lds. cat it
+; under the freestanding image. cat it
 ; after crew/holo/{elf,obj,link}.l and run the result:
 ;
 ;   love <cat> OUT ARCH OBJ.o..
 ;
-; what the linker script used to carry is exactly the four numbers below: the
-; ELF target, the entry SYMBOL, the virtual base the image is laid at, and the
-; bias between where it runs and where it loads (p_vaddr - p_paddr). every
-; other line of <a>.lds -- the five PT_LOADs, the page alignments, kimage_end,
-; the .note/.eh_frame discards -- is ldkern's own shape, one lane per arch.
+; there used to be an ld.lld lane reading a per-arch <a>.lds; both went
+; 2026-08-19. What those scripts carried that this file still needs is exactly
+; the four numbers below: the ELF target, the entry SYMBOL, the virtual base the
+; image is laid at, and the bias between where it runs and where it loads
+; (p_vaddr - p_paddr). Every other line of them -- the five PT_LOADs, the page
+; alignments, kimage_end, the .note/.eh_frame discards -- is ldkern's own shape,
+; one lane per arch, and was hand-copied prose here.
 ;
 ; the bias is the whole trick: x86_64 lays the image in the top 2 GiB and loads
 ; it at the same offset into low RAM (bias = KVMA), while aarch64's virt board

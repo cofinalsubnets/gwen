@@ -194,7 +194,7 @@
        ((nm = ".data") || ld-pre nm ".data.") 'data
        (nm = "ai_nifs") 'nifs
        (nm = ".love_image") 'image
-       ; the KERNEL lanes (ldkern's, free/<a>/<a>.lds's names): the boot
+       ; the KERNEL lanes (ldkern's names): the boot
        ; stub's page tables and bring-up ladder, the limine request block --
        ; its three sections bracket a scan, so they lay in header order, which
        ; is the order kmain.c writes them -- and the PVH note qemu reads to
@@ -1041,8 +1041,8 @@
    ; PT_LOAD carries p_paddr = p_vaddr - bias, which is what lets `qemu -kernel`
    ; copy by p_paddr with the MMU off while limine (and our own BOOTX64.EFI) maps
    ; by p_vaddr with it on -- one file, and mkboot.l bridges the two. that split,
-   ; and the several segments it needs, is the whole of what free/<a>/<a>.lds
-   ; says that ldlink's one-segment shape cannot.
+   ; and the several segments it needs, is the whole of what a kernel asks for
+   ; that ldlink's one-segment shape cannot say.
    ;
    ; the lanes, each page-aligned and each its own segment: `boot` (the stub's
    ; page tables and bring-up ladder), `limreq` (the limine request block, which
