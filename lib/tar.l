@@ -150,6 +150,9 @@
    ; this read would put a body of one length under a header of another, so a short
    ; read is a TORN archive and answers () -- the caller cuts the fat way, which reads
    ; each file once and cannot disagree with itself.
+   ; ⚠ `snip` READS THE CASK, and it must: (snip (string buf) 0 k) copies the whole
+   ; buffer to take the corner a read filled -- 64K for a 12-byte file, and over a
+   ; source tree more copying than the archive it is hashing.
    (tar-feed h buf e)                       ; feed one file's body + pad; 1 | ()
     (: n (tar-get e 'size 0)
        q (? (0 < n) (open (tar-get e 'path "") "r") 0)
@@ -159,7 +162,7 @@
                           (: k (swig q buf)
                              (? (0 >= k) ()
                                 (: k2 (? (left < k) left k)
-                                   _ (sha256-feed h (snip (string buf) 0 k2))
+                                   _ (sha256-feed h (snip buf 0 k2))
                                    (go (left - k2))))))
              ok (go n)
              _ (close q)
