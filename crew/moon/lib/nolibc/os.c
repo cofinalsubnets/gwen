@@ -1,15 +1,27 @@
 /* crew/moon/lib/nolibc/os.c -- the kernel under one binary (seed-universal
- * rungs UV1-UV2). one x86_64 build runs linux and freebsd: __ai_osdetect asks
+ * rungs UV1-UV2). one build runs linux, freebsd and netbsd: __ai_osdetect asks
  * the kernel which it is (once, at entry or lazily under __ai_call), and
- * numbers, errnos, signals, masks and flag words translate through the
- * tables here. the arm lanes have one kernel today: identity stubs. */
+ * numbers, errnos, signals, masks and flag words translate through the tables
+ * here. x64 and arm64 carry them; riscv takes the identity stubs below and
+ * answers whichever kernel -os named. */
 #include "impl.h"
 
 long __ai_osv;                    /* 0 unprobed; 1 linux; 2 freebsd; 3 netbsd */
 
 long __ai_osdetect(void) {
 #ifndef AiTwoKernels
-  return 1;                       /* one kernel per arch today */
+  /* no tables on this arch: the kernel is whichever one the build was compiled
+   * for, and nothing at runtime can contradict it. ⚠ READ OFF -os, never
+   * assumed -- linux is where we started, not a default, and a build naming a
+   * kernel this arch has no tail for owes a diagnostic and not another
+   * kernel's numbers. */
+# if defined(__linux__)
+  return 1;
+# elif defined(__FreeBSD__)
+#  error "nolibc: -os freebsd wants the translation tables, and this arch has no machine tail for them"
+# else
+#  error "nolibc: no OS predefine -- -os named a kernel os.c cannot speak for"
+# endif
 #else
   /* 20 is getpid on both BSDs and writev on linux: writev(-1, NULL, 0) is
    * -EBADF, a pid is positive, and no kernel is disturbed by asking. a
