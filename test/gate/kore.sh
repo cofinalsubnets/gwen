@@ -184,10 +184,15 @@ awk 'BEGIN{for(i=0;i<40;i++){for(j=0;j<300;j++)printf "%09d-",j; print ""}}' > "
 dd if=/dev/zero bs=4096 count=1 2>/dev/null | tr '\0' 'x' > "$ho/.gs3"    # 4096, no newline
 printf 'abc' > "$ho/.gs4"                                                 # no newline at all
 : > "$ho/.gs5"                                                            # empty
-for f in .gs1 .gs2 .gs3 .gs4 .gs5; do
+# ⚠ wc counts a WORD as a maximal ink run, so one straddling a gulp is the seam that
+# double-counts; and uniq's runs straddle too. Neither shows on the fixtures above,
+# which hold no spaces and no repeats.
+awk 'BEGIN{for(i=0;i<2000;i++)printf "word%d ", i%7; print ""}' > "$ho/.gs6"
+awk 'BEGIN{for(i=0;i<9000;i++)print "dup" i%3}' > "$ho/.gs7"
+for f in .gs1 .gs2 .gs3 .gs4 .gs5 .gs6 .gs7; do
   for t in "cat" "rev" "nl" "head -n 3" "tail -n 3" "head -n 1" \
            "grep 000000001" "grep -c 0" "grep -n 000000002" "sed s/00/QQ/" "sed -n 2p" \
-           'sed $d' "sed 2q"; do
+           'sed $d' "sed 2q" "wc" "wc -c" "wc -l" "wc -w" "uniq" "uniq -c"; do
     # shellcheck disable=SC2086
     $t "$ho/$f" > "$g" 2>/dev/null; korerun $t "$ho/$f" > "$o" 2>/dev/null
     cmp -s "$g" "$o" || fail "kore $t over $f (a gulp seam)"
@@ -204,6 +209,14 @@ for t in 'sed $d' 'sed $s/^/L/' "sed -n 2p" "sed 3q" "grep -n 000000002" "grep -
   korerun $t "$ho/.gs2" "$ho/.gs4" "$ho/.gs2" > "$o" 2>/dev/null
   cmp -s "$g" "$o" || fail "kore $t over three operands (the join, and its lookahead)"
 done
+# tee holds every destination open while it reads, so its seam is the fan-out
+tee "$ho/.te1" "$ho/.te2" < "$ho/.gs6" > "$g"
+korerun tee "$ho/.to1" "$ho/.to2" < "$ho/.gs6" > "$o"
+cmp -s "$g" "$o" && cmp -s "$ho/.te1" "$ho/.to1" && cmp -s "$ho/.te2" "$ho/.to2" \
+  || fail "kore tee: two destinations across the gulps"
+wc "$ho/.gs6" "$ho/.gs7" | sed "s|$ho/||g" > "$g"
+korerun wc "$ho/.gs6" "$ho/.gs7" | sed "s|$ho/||g" > "$o"
+cmp -s "$g" "$o" || fail "kore wc: the total row over two operands"
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/seq/echo/basename/tee GNU-identical) ok"
 echo "kore: the gulp seams (a line past 4096, no final newline, empty, boundary-exact) ok"
 

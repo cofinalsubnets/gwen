@@ -83,19 +83,26 @@
        l? (? none 1 <p) w? (? none 1 <>p) c? (? none 1 <>>p)
        fs <>>>p
        (c3 x) <>>x
-       ; read every input up front: a row is (name (l w b)), name () for stdin
-       (rd a acc ok)
-        (? !(two? a) `((rev acc) ok)
-           (: f <a
-              r (? (f = "-") `(1 (slurp in)) (uread f))
-              (? (two? r) (rd >a (`(f (ucount <>r)) >< acc) ok)
-                 (: _ (say err ("wc: cannot open " + f)) _ (put err 10)
-                    (rd >a acc 0)))))
-       ro (? (two? fs) (rd fs () 1) `(`(`(() (ucount (slurp in)))) 1))
-       rows <ro ok <>ro
+       ; a row is (name (l w b)), name () for stdin. ⚠ counted a gulp at a time --
+       ; nothing here needs the text, only the three numbers off it
+       st (tablet 0) _ (pin st 'rows ()) _ (pin st 'ok 1)
+       _ (ureachm (\ f (: _ (say err ("wc: cannot open " + f)) _ (put err 10)
+                          _ (pin st 'ok 0) 0))
+                  (\ f first rd
+                     (: (go acc) (: h (urd-gulp rd) (? (tally h) (go (ucount-go acc h)) acc))
+                        c (ucount-say (go ucount0))
+                        _ (pin st 'rows (`((? (two? fs) f ()) c) >< (peep st 'rows ())))
+                        1))
+                  fs)
+       rows (rev (peep st 'rows ())) ok (peep st 'ok 0)
        (sum sel a acc) (? (two? a) (sum sel >a (acc + sel <><a)) acc)
        tl (sum cap rows 0) tw (sum caup rows 0) tb (sum c3 rows 0)
-       wdt (tally (show tb))                        ; the GNU face: pad to the byte total
+       ; the GNU face: pad every column to the BYTE TOTAL's width, even where the
+       ; bytes are not printed (`wc -lw` of a 3001-byte file wears width 4).
+       ; ⚠ ONE COUNT OVER ONE INPUT WEARS NONE -- `wc -l f` is "1 f", never "   1 f".
+       ; A one-digit byte count hides this, which is every fixture until .gs1.
+       wdt (? (((? l? 1 0) + (? w? 1 0) + (? c? 1 0) = 1) && !(two? >rows))
+              1 (tally (show tb)))
        (fmt cnt) (: a (? c? `((upad wdt (show (c3 cnt)))) ())
                     a (? w? (upad wdt (show <>cnt) >< a) a)
                     a (? l? (upad wdt (show <cnt) >< a) a)
@@ -138,31 +145,42 @@
    (uniq-main as)
     (: c? (two? as && (<as = "-c"))
        fs (? c? >as as)
-       t (? (two? fs)
-            (: x (uread <fs) (? (two? x) <>x
-                                     (udie 2 ("uniq: cannot open " + <fs))))
-            (slurp in))
        (emit line cnt) (: _ (? c? (say out (upad 7 (show cnt) + " ")) ())
                           _ (say out line) (put out 10))
-       (go a prev cnt)
-        (? !(two? a) (? (0 < cnt) (emit prev cnt) ())
-           (cnt = 0) (go >a <a 1)
-           (<a = prev) (go >a prev (cnt + 1))
-           (: _ (emit prev cnt) (go >a <a 1)))
-       _ (go (lines t) () 0)
+       ; adjacent runs, so ONE line of memory is the whole state -- the run's first
+       ; and how many have matched it
+       _ (ureachm (\ f (udie 2 ("uniq: cannot open " + f)))
+                  (\ f first rd
+                     (: (go prev cnt)
+                         (: l (urd-line rd)
+                            (? !(two? l) (: _ (? (0 < cnt) (emit prev cnt) ()) 1)
+                               (: x <l
+                                  (? (cnt = 0) (go x 1)
+                                     (x = prev) (go prev (cnt + 1))
+                                     (: _ (emit prev cnt) (go x 1))))))
+                        (go () 0)))
+                  (? (two? fs) [<fs] ()))
        _ (flush out) 0)
 
    ; -- tee: stdin onto out AND every file (-a appends) --
    (tee-main as)
     (: a? (two? as && (<as = "-a"))
        fs (? a? >as as)
-       t (slurp in)
-       (one f ok) (: q (open f (? a? "a" "w"))
-                     (? q (: _ (say q t) _ (close q) ok)
-                        (: _ (say err ("tee: cannot open " + f)) _ (put err 10) 0)))
-       (go a ok) (? (two? a) (go >a (one <a ok)) ok)
-       ok (go fs 1)
-       _ (puts t) _ (flush out) (? ok 0 1))
+       ; ⚠ every destination opens UP FRONT. tee is a pipe, and a pipe cannot wait
+       ; for the end of its input to start writing -- it used to slurp stdin whole.
+       (opn l acc ok)
+        (? !(two? l) [(rev acc) ok]
+           (: q (open <l (? a? "a" "w"))
+              (? q (opn >l (q >< acc) ok)
+                 (: _ (say err ("tee: cannot open " + <l)) _ (put err 10)
+                    (opn >l acc 0)))))
+       r (opn fs () 1)
+       qs <r ok <>r
+       (each1 l h) (? (two? l) (: _ (say <l h) (each1 >l h)) 0)
+       _ (uchunks "tee" (\ h (: _ (each1 qs h) _ (puts h) 1)) ())
+       (clo l) (? (two? l) (: _ (close <l) (clo >l)) 0)
+       _ (clo qs)
+       _ (flush out) (? ok 0 1))
 
    ; -- seq: FIRST INCR LAST, one a line (one and two args fill in the 1s) --
    (seq-main as)

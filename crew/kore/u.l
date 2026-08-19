@@ -86,15 +86,22 @@
    (utail n t) (: ls (lines t) k (tally ls)
                   o (unlines (? (n < k) (drop (k - n) ls) ls))
                   (? (nl-end? t) o (chomp o)))
-   ; the wc counter: text -> (lines words bytes), a word a maximal ink run
-   (ucount t)
-    (: n (tally t)
+   ; the wc counter as a FOLD, so a gulp can be counted and dropped: st is
+   ; [inw lines words bytes]. ⚠ `inw` HAS TO RIDE BETWEEN GULPS -- a word is a
+   ; maximal ink run and one straddling the boundary counts twice without it.
+   (ucount-go st s)
+    (: n (tally s)
        (ws? c) ((c = 32) || ((8 < c) && (c < 14)))
-       (go k inw l w) (? (n <= k) `(l w n)
-                         (: c (t k)
+       (go k inw l w) (? (n <= k) [inw l w]
+                         (: c (s k)
                             (? (ws? c) (go (k + 1) 0 (? (c = 10) (l + 1) l) w)
                                (go (k + 1) 1 l (? inw w (w + 1))))))
-       (go 0 0 0 0))
+       r (go 0 <st <>st <>>st)
+       [<r <>r <>>r (<>>>st + n)])
+   ucount0 [0 0 0 0]
+   (ucount-say st) `(<>st <>>st <>>>st)     ; the state's (lines words bytes) face
+   ; text -> (lines words bytes), a word a maximal ink run (lawed in law.l)
+   (ucount t) (ucount-say (ucount-go ucount0 t))
    ; the two pure path clips (basename NAME [SUFFIX] / dirname NAME; lawed in law.l)
    (ubase p sfx)
     (: (e k) (? ((0 < k) && (p (k - 1) = 47)) (e (k - 1)) k)
