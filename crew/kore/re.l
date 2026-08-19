@@ -326,44 +326,43 @@
                  (? (en < tally ln) (go (? (en = st) (en + 1) en)) ()))
               ())
            (go 0))
-       ; one text through the chosen face; answers the hit flag onward
-       (dof label t2 hit)
-        (: ls (lines t2)
-           (? q? (: (anyl xs) (xs @ (x >< more) (? (sel x) 1 (anyl more)) ())
-                    (? (anyl ls) 1 hit))
-              l? (: (anyl xs) (xs @ (x >< more) (? (sel x) 1 (anyl more)) ())
-                    (? (anyl ls) (: _ (say out label) _ (put out 10) 1) hit))
-              c? (: (cnt xs k) (? (mx && (mx <= k)) k
-                                  (xs @ (x >< more) (cnt more (? (sel x) (k + 1) k)) k))
-                    k (cnt ls 0)
+       ; one input through the chosen face; answers the hit flag onward. ⚠ it READS a
+       ; line at a time -- grep of 50 MB used to hold 8.2 GB, because `lines` made a
+       ; string and a cell for every line before the first one was matched. -q and -l
+       ; stop at the first hit, which is now a stop and not just a shortcut.
+       (dof label rd hit)
+        (: (anym _) (: l (urd-line rd) (? !(two? l) 0 (? (sel <l) 1 (anym 0))))
+           (? q? (? (anym 0) 1 hit)
+              l? (? (anym 0) (: _ (say out label) _ (put out 10) 1) hit)
+              c? (: (cnt k) (? (mx && (mx <= k)) k
+                               (: l (urd-line rd)
+                                  (? !(two? l) k (cnt (? (sel <l) (k + 1) k)))))
+                    k (cnt 0)
                     _ (pfx label)
                     _ (say out (show k)) _ (put out 10)
                     (? (0 < k) 1 hit))
-              (: (lp xs no h seen)
+              (: (lp no h seen)
                   (? (mx && (mx <= seen)) h
-                     (xs @ (x >< more)
-                       (: m (sel x)
-                          _ (? (m && o? && !v?) (emit1 label no x)
-                               m (: _ (pfx label)
-                                     _ (? n? (: _ (say out (show no)) (put out 58)) ())
-                                     _ (say out x) (put out 10))
-                               ())
-                          (lp more (no + 1) (? m 1 h) (? m (seen + 1) seen)))
-                       h))
-                 (lp ls 1 hit 0))))
+                     (: l (urd-line rd)
+                        (? !(two? l) h
+                           (: x <l
+                              m (sel x)
+                              _ (? (m && o? && !v?) (emit1 label no x)
+                                   m (: _ (pfx label)
+                                         _ (? n? (: _ (say out (show no)) (put out 58)) ())
+                                         _ (say out x) (put out 10))
+                                   ())
+                              (lp (no + 1) (? m 1 h) (? m (seen + 1) seen))))))
+                 (lp 1 hit 0))))
        ; `bad`, not `err`: err is the PORT, and a shadow here would say into a charm
-       (gow a hit bad)
-        (a @ (f >< more)
-           (: lab (? (f = "-") "(standard input)" f)
-              src (? (f = "-") [1 (slurp in)] (uread f))
-              (src @ [_ txt]
-                (gow more (dof lab txt hit) bad)
-                (: _ (say err ("grep: " + f + ": No such file or directory"))
-                   _ (put err 10)
-                   (gow more hit 1))))
-           (: _ (flush out) _ (flush err) (? bad 2 hit 0 1)))
-       (? (two? fs) (gow fs 0 0)
-          (: hit (dof "(standard input)" (slurp in) 0)
-             _ (flush out)
-             (? hit 0 1)))))
+       st (tablet 0) _ (pin st 'hit 0) _ (pin st 'bad 0)
+       _ (ureachm (\ f (: _ (say err ("grep: " + f + ": No such file or directory"))
+                          _ (put err 10) _ (pin st 'bad 1) 0))
+                  (\ f first rd
+                     (: _ (pin st 'hit (dof (? (f = "-") "(standard input)" f) rd
+                                            (peep st 'hit 0)))
+                        1))
+                  fs)
+       _ (flush out) _ (flush err)
+       (? (peep st 'bad 0) 2 (peep st 'hit 0) 0 1)))
 ) ; module 'kore

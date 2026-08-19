@@ -142,60 +142,63 @@
 
    ; -- the cycle. op is the output PORT, which is how -i captures a file's own
    ; edit instead of saying it into out --
-   ; (srun cmds lines n? op end?) -> the exit remembered, 0. end? is whether the SOURCE
-   ; ended in a newline; a 0 there is data, and the last line must go out without one.
-   (srun cmds all n? op end?)
-    (: nl (tally all)
-       t (tablet 0)                                  ; the range toggles, keyed by command index
-       (amatch a no ln)
+   ; (srun cmds rd n? op) -> the exit remembered, 0. rd is a `urdj`, and its
+   ; [line term? last?] is all the cycle ever needed of the whole text: `$` is last?,
+   ; and the missing final newline is term?. ⚠ THE READ IS A LINE AT A TIME now -- sed
+   ; of 50 MB held 8.1 GB when the cycle was handed `(lines txt)`.
+   (srun cmds rd n? op)
+    (: t (tablet 0)                                  ; the range toggles, keyed by command index
+       (amatch a no ln last?)
         (? !(two? a) 1
            (<a = 'ln) (no = <>a)
-           (<a = 'last) (no = nl)
+           (<a = 'last) last?
            (rehas <>a ln))
        ; is command c (at index idx) selected on line no with pattern space ln?
        ; a range opens on its first address and closes on a LATER line's second
-       (sel? c idx no ln)
+       (sel? c idx no ln last?)
         (: a1 <c a2 <>c
-           (? !(two? a2) (amatch a1 no ln)
+           (? !(two? a2) (amatch a1 no ln last?)
               (peep t idx 0)
-               (: fin (? (<a2 = 'ln) (<>a2 <= no) (amatch a2 no ln))
+               (: fin (? (<a2 = 'ln) (<>a2 <= no) (amatch a2 no ln last?))
                   _ (? fin (pin t idx 0) ())
                   1)
-              (amatch a1 no ln)
+              (amatch a1 no ln last?)
                (: one (? (<a2 = 'ln) (<>a2 <= no) ())
                   _ (? one () (pin t idx 1))
                   1)
               ()))
        ; one line through the commands -> (kind ps): 0 flows, 1 deleted, 2 quits
-       (rline cs idx ps no q)
+       (rline cs idx ps no q last?)
         (cs @ (c >< more)
-           (? !(sel? c idx no ps) (rline more (idx + 1) ps no q)
+           (? !(sel? c idx no ps last?) (rline more (idx + 1) ps no q last?)
               (: v <>>c
                  (? (v = 'd) [1 ps]
                     (v = 'q) [2 ps]
                     (v = 'p) (: _ (say q ps) _ (put q 10)
-                                (rline more (idx + 1) ps no q))
+                                (rline more (idx + 1) ps no q last?))
                     (: pay <>>>c
                        pr >>pay
                        r (usub <pay <>pay ps <pr)
                        ps2 <>r
                        _ (? (<r && <>pr) (: _ (say q ps2) (put q 10)) ())
-                       (rline more (idx + 1) ps2 no q)))))
+                       (rline more (idx + 1) ps2 no q last?)))))
            [0 ps])
        ; ⚠ THE LAST LINE OF AN UNTERMINATED SOURCE RIDES A JUG. the newline goes missing
        ; after the LAST WRITE and not after every one -- `sed -n 'p;p'` keeps the inner
        ; one -- so the line is rendered whole and chomped once, whatever the commands did.
-       (mline ls no)
-        (ls @ (x >< more)
-           (: hold (? ((two? more) || end?) () (jug 0))
+       ; ⚠ and only the LAST line of the whole stream can lose it: an unterminated file
+       ; in the middle of the join is followed by more output, so it keeps its newline.
+       (mline no)
+        (urdj-line rd @ [x term? last?]
+           (: hold (? (? last? term? 1) () (jug 0))
               q (? hold hold op)
-              (rline cmds 0 x no q @ [kind ps]
+              (rline cmds 0 x no q last? @ [kind ps]
                 (: _ (? (kind = 1) () (? n? () (: _ (say q ps) (put q 10))))
                    _ (? hold (say op (chomp (slurp hold))) 0)
-                   (? (kind = 2) 0 (mline more (no + 1))))
+                   (? (kind = 2) 0 (mline (no + 1))))
                 0))
            0)
-       (mline all 1))
+       (mline 1))
 
    ; -- sed: the flags, then one of the two stream models --
    (sed-main as)
@@ -211,33 +214,26 @@
        pc (sparse sc (peep t 69 0))
        _ (? (two? pc) () (udie 1 ("sed: invalid script: " + sc)))
        cmds <>pc
+       ; GNU's own sentence for an unreadable operand, and the one the gate pins
+       (sed-miss f) (: _ (say err ("sed: can't read " + f + ": No such file or directory"))
+                       _ (put err 10) 0)
        ; -i: each file its own stream, edited and written back. a file that will
-       ; not open complains and the rest still flow, exactly as the joined lane
+       ; not open complains and the rest still flow, exactly as the joined lane.
+       ; ⚠ the ANSWER is still held whole, and must be: it overwrites its own input.
        (inplace a bad)
         (a @ (f >< more)
-           (uread f @ [_ txt]
-             (: j (jug 0)
-                _ (srun cmds (lines txt) n? j (nl-end? txt))
-                _ (? (uwrite f (slurp j)) ()
-                     (: _ (say err ("sed: couldn't open " + f)) (put err 10)))
-                (inplace more bad))
-             (: _ (say err ("sed: can't read " + f + ": No such file or directory"))
-                _ (put err 10)
-                (inplace more 1)))
+           (: rd (urdj sed-miss [f])
+              j (jug 0)
+              _ (srun cmds rd n? j)
+              b (peep rd 'bad 0)
+              _ (? b () (? (uwrite f (slurp j)) ()
+                           (: _ (say err ("sed: couldn't open " + f)) (put err 10))))
+              (inplace more (? b 1 bad)))
            (: _ (flush err) (? bad 2 0)))
-       ; the joined lane: every file one stream, so the numbers run through
-       (rdall a acc bad)
-        (a @ (f >< more)
-           (: src (? (f = "-") [1 (slurp in)] (uread f))
-              (src @ [_ txt] (rdall more (txt >< acc) bad)
-                (: _ (say err ("sed: can't read " + f + ": No such file or directory"))
-                   _ (put err 10)
-                   (rdall more acc 1))))
-           [(rev acc) bad])
        (? (i? && two? fs) (inplace fs ())
-          (: rd (? (two? fs) (rdall fs () ()) [[(slurp in)] ()])
-             _ (srun cmds (catmap lines <rd) n? out
-                     (? (two? <rd) (nl-end? (last <rd)) 1))
+          ; the joined lane: every file one stream, so the numbers and $ run through
+          (: rd (urdj sed-miss fs)
+             _ (srun cmds rd n? out)
              _ (flush out) _ (flush err)
-             (? <>rd 2 0)))))
+             (? (peep rd 'bad 0) 2 0)))))
 ) ; module 'kore

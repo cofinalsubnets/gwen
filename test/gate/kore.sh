@@ -185,7 +185,9 @@ dd if=/dev/zero bs=4096 count=1 2>/dev/null | tr '\0' 'x' > "$ho/.gs3"    # 4096
 printf 'abc' > "$ho/.gs4"                                                 # no newline at all
 : > "$ho/.gs5"                                                            # empty
 for f in .gs1 .gs2 .gs3 .gs4 .gs5; do
-  for t in "cat" "rev" "nl" "head -n 3" "tail -n 3" "head -n 1"; do
+  for t in "cat" "rev" "nl" "head -n 3" "tail -n 3" "head -n 1" \
+           "grep 000000001" "grep -c 0" "grep -n 000000002" "sed s/00/QQ/" "sed -n 2p" \
+           'sed $d' "sed 2q"; do
     # shellcheck disable=SC2086
     $t "$ho/$f" > "$g" 2>/dev/null; korerun $t "$ho/$f" > "$o" 2>/dev/null
     cmp -s "$g" "$o" || fail "kore $t over $f (a gulp seam)"
@@ -193,6 +195,15 @@ for f in .gs1 .gs2 .gs3 .gs4 .gs5; do
 done
 korerun cat "$ho/.gs1" "$ho/.gs4" "$ho/.gs2" > "$o"; cat "$ho/.gs1" "$ho/.gs4" "$ho/.gs2" > "$g"
 cmp -s "$g" "$o" || fail "kore cat: operands joined across the seams"
+# ⚠ sed JOINS its operands, so $ is the last line of the LAST file and an unterminated
+# file in the MIDDLE keeps its newline -- both are lookahead, and both are invisible
+# on one operand. grep does not join: its numbers restart per file.
+for t in 'sed $d' 'sed $s/^/L/' "sed -n 2p" "sed 3q" "grep -n 000000002" "grep -c 0"; do
+  # shellcheck disable=SC2086
+  $t "$ho/.gs2" "$ho/.gs4" "$ho/.gs2" > "$g" 2>/dev/null
+  korerun $t "$ho/.gs2" "$ho/.gs4" "$ho/.gs2" > "$o" 2>/dev/null
+  cmp -s "$g" "$o" || fail "kore $t over three operands (the join, and its lookahead)"
+done
 echo "kore: line tools (sort/uniq/head/tail/wc/cat/seq/echo/basename/tee GNU-identical) ok"
 echo "kore: the gulp seams (a line past 4096, no final newline, empty, boundary-exact) ok"
 

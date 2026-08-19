@@ -206,17 +206,18 @@
     (: (go a ok) (? (two? a) (go >a (one <a ok)) (: _ (flush out) (? ok 0 1)))
        (? (two? as) (go as 1) (: _ (one "-" 1) _ (flush out) 0)))
    ; an operand open for reading -> [port close?] | (). ⚠ "-" is stdin and is NOT
-   ; closed after: a later operand may be it again.
-   (uin who f)
+   ; closed after: a later operand may be it again. `miss` says the complaint, because
+   ; grep and sed each owe GNU a different sentence for the same failure.
+   (uin miss f)
     (? (f = "-") [in 0]
-       (: q (open f "r")
-          (? q [q 1] (: _ (say err (who + ": cannot open " + f)) _ (put err 10) ()))))
+       (: q (open f "r") (? q [q 1] (: _ (miss f) ()))))
+   (umiss who) (\ f (: _ (say err (who + ": cannot open " + f)) _ (put err 10) 0))
    ; THE DRIVER the rest ride: body gets (name first? reader) per operand and answers
    ; truth to keep the status. first? is 1 on the leading one, all `uhdr` needs.
-   (ureach who body as)
+   (ureachm miss body as)
     (: t (tablet 0) _ (pin t 'f 1)
        (uwalk (\ f ok
-                (: p (uin who f)
+                (: p (uin miss f)
                    (? (! p) 0
                       (: fst (peep t 'f 1)
                          _ (pin t 'f 0)
@@ -224,6 +225,7 @@
                          _ (? <>p (close <p) 0)
                          (? v ok 0)))))
               as))
+   (ureach who body as) (ureachm (umiss who) body as)
    ; dot gets the bytes a bufferful at a time -- for tools that do not care where
    ; the lines fall (cat)
    (uchunks who dot as)
@@ -231,6 +233,39 @@
             (\ f fst rd (: (go _) (: h (urd-gulp rd) (? (tally h) (: _ (dot h) (go 0)) 1))
                            (go 0)))
             as)
+   ; --- the operands AS ONE STREAM -------------------------------------------
+   ; sed's joined lane: the line numbers and `$` run through the files, so the read
+   ; has to cross them. ⚠ ONE LINE OF LOOKAHEAD, which is the whole reason this is
+   ; not `ureach` -- `$` is "no further line anywhere", and nothing shorter answers it.
+   ; the next line ignoring the lookahead, opening operands as it runs out of them
+   (urdj-raw t)
+    (: rd (peep t 'rd ())
+       l (? rd (urd-line rd) ())
+       (? (two? l) l
+          (: _ (? (peep t 'cl ()) (: _ (close (peep t 'cl ())) (pin t 'cl ())) 0)
+             fs (peep t 'fs ())
+             (? (! (two? fs)) ()
+                (: _ (pin t 'fs >fs)
+                   p (uin (peep t 'm ()) <fs)
+                   (? (! p) (: _ (pin t 'bad 1) (urdj-raw t))
+                      (: _ (pin t 'rd (urd <p))
+                         _ (? <>p (pin t 'cl <p) 0)
+                         (urdj-raw t))))))))
+   (urdj-line t)                            ; -> [line term? last?] | ()
+    (: pk (peep t 'pk ())
+       (? (! (two? pk)) ()
+          (: nx (urdj-raw t)
+             _ (pin t 'pk nx)
+             [<pk <>pk (? (two? nx) 0 1)])))
+   ; ⚠ 'bad is read off the box AFTER the walk: a miss cannot stop a joined stream,
+   ; it only costs the status, and by then the reader has passed it.
+   (urdj miss fs)
+    (: t (tablet 0)
+       _ (pin t 'm miss) _ (pin t 'fs (? (two? fs) fs '("-")))
+       _ (pin t 'rd ()) _ (pin t 'cl ()) _ (pin t 'bad 0)
+       _ (pin t 'pk (urdj-raw t))
+       t)
+
    ; dot gets (line term?), one line at a time -- every tool whose whole-text body was
    ; `(go (lines t))`. ⚠ dot answering 0 STOPS this operand, so a tool can read no
    ; further than it has to.
