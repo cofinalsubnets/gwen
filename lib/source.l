@@ -143,25 +143,39 @@
    ; because the crew arrives at BAKE and a bake means RUNNING the artifact --
    ; which this machine cannot do for another ISA. qemu-user can where it is
    ; installed; where it is not, the target machine runs the line we print.
+   ; ⚠ THE BAKE RUNS IN THE LAID TREE. `use` reaches a module through the baked
+   ; table or lib/ off the CWD and nowhere else, so a bake standing anywhere but
+   ; the root scares no-module on the first `use` the cats reach. The binary is
+   ; named absolutely across the chdir, since dst is the caller's cwd's.
    (seed-cross root xa dst)
     (: made (root + "/out/x-" + xa + "/love")
        e (copyfile made dst)
        _ (e < 0 ? (src-die ("can't write " + dst)))
        _ (chmod dst 493)
-       d0 (root + "/out/host/.docs-cat.l:libra,help")
-       d1 (root + "/out/host/.rest-cat.l")
+       here (cwd 0)
+       abs (? (dst 0 = 47) dst (here + "/" + dst))
+       d0 "out/host/.docs-cat.l:libra,help"
+       d1 "out/host/.rest-cat.l"
        q (src-onpath? ("qemu-" + xa))
        _ (two? q ? (puts (";; baking through qemu-" + xa + " -- minutes, and the crew\n"
                           + ";; is what makes it a seed and not a three-verb egg\n")))
-       s (two? q ? (herald [<>q dst "bake" "-L" d0 "-L" d1]))
+       _ (two? q ? (? (charm? (chdir root)) (src-die ("can't enter " + root)) 0))
+       s (two? q ? (herald [<>q abs "bake" "-L" d0 "-L" d1]))
+       _ (two? q ? (chdir here))
        st (two? s ? <s s)                       ; herald answers a pair or a status
        ok (two? q ? (0 = st) 0)
        _ (puts (";; laid " + dst + (ok ? " -- baked\n" " -- an EGG\n")))
+       ; three ends, three stories: baked, no emulator to bake with, and a bake
+       ; that ran and failed -- which is never the emulator's absence.
        _ (? ok (puts (";; no fixpoint: a cross lay cannot BE this binary, so the claim\n"
                       + ";; is not made. `love seed` on the " + xa + " machine proves it.\n"))
+              (two? q)
+              (puts (";; the bake FAILED under qemu-" + xa + " (exit " + show st + ") and the\n"
+                     + ";; lay is three verbs (bake wake verbs). To see it again:\n"
+                     + ";;   cd " + root + " && " + abs + " bake -L " + d0 + " -L " + d1 + "\n"))
               (puts (";; three verbs (bake wake verbs), and no qemu-" + xa + " here to\n"
                      + ";; grow them. On the " + xa + " machine, or with the emulator:\n"
-                     + ";;   " + dst + " bake -L " + d0 + " -L " + d1 + "\n")))
+                     + ";;   cd " + root + " && " + abs + " bake -L " + d0 + " -L " + d1 + "\n")))
        ; a bake we ASKED FOR and did not get is a failure; no emulator is not.
        (ok ? 0 (two? q ? 1 0)))
 
@@ -204,14 +218,23 @@
                                (w i = 47) 0
                                (go (i + 1)))
                      (go 0))
+   ; this machine's arch in seed-arches' spelling -- holo names its arches and
+   ; uname names them differently, and love-arch speaks holo's.
+   (seed-native _) (? (love-arch = "x64") "x86_64" (love-arch = "arm64") "aarch64" love-arch)
 
    (seed-lay as0)
     (: first? (two? as0 ? (<as0 = "-first") 0)
        as1 (first? ? >as0 as0)
        self? (two? as1 ? (<as1 = "-self") 0)
        as2 (? self? >as1 as1)
-       xa (? ((two? as2) && (seed-arch? <as2)) <as2 ())
-       as (string? xa ? >as2 as2)
+       ; naming THIS machine is a NATIVE seed, fixpoint and all: the cross lane
+       ; exists for a machine we are not, and the fixpoint is scoped to where the
+       ; output ought to BE this binary -- which `love seed x86_64` on an x86_64
+       ; box asks for exactly as much as a bare `love seed`. ⚠ the WORD is eaten
+       ; either way, or the arch would go on to be read as the directory.
+       xa0 (? ((two? as2) && (seed-arch? <as2)) <as2 ())
+       xa (? ((string? xa0) && (xa0 = (seed-native 0))) () xa0)
+       as (string? xa0 ? >as2 as2)
        dir (two? as ? <as ".")
        r (src-lay dir)
        root <>r
