@@ -173,14 +173,12 @@ embed_boards = mps2 teensy41 nucleo446 playdate rp2040
 # with no opt-out. Linking it here would cost 80 s and quietly boot a machine, which is the
 # one thing this gate promises not to do. test_teensy41 (test_extra) owns that link.
 embed_elfs = mps2/love.elf nucleo446/firm.elf rp2040/love.elf
-# the aarch64 kernel face needs a CROSS-CAPABLE KCC -- ours or clang, never a native gcc
-embed_a64 = $(or $(KCC_IS_MOON),$(filter 1,$(KCC_IS_CLANG)))
 embed_arm := $(and $(shell command -v arm-none-eabi-gcc 2>/dev/null),\
                    $(shell command -v arm-none-eabi-ld 2>/dev/null))
 test_embed: host
 	@echo TEST the frontends compile against core/love.h "(object only)"
 	@$(MAKE) -s kmain_o
-	@$(if $(embed_a64),$(MAKE) -s a=aarch64 kmain_o,echo "  (aarch64 kmain.c skipped: $(KCC) cannot cross)")
+	@$(MAKE) -s a=aarch64 kmain_o
 	@$(MAKE) -s K_TEST=1 kmain_o
 	@for p in $(embed_ports); do \
 	   $(MAKE) -s -C port/$$p ../../out/$$p/main.o \
@@ -189,7 +187,7 @@ test_embed: host
 	@$(if $(wildcard $(EMCC)),$(MAKE) -s -C wasm ../out/wasm/host.o,echo "  (wasm/host.c skipped: no emcc)")
 	@echo TEST the frontends link "(no boot, no qemu)"
 	@$(MAKE) -s kernel || { echo "FAIL the $a kernel does not link"; exit 1; }
-	@$(if $(embed_a64),$(MAKE) -s a=aarch64 kernel,echo "  (aarch64 kernel link skipped: $(KCC) cannot cross)")
+	@$(MAKE) -s a=aarch64 kernel
 	@$(MAKE) -s -C port/virt ../../out/virt/love.elf || { echo "FAIL port/virt does not link"; exit 1; }
 	@echo "test_embed: host, free (x86_64 + aarch64 + riscv) and wasm build against core/love.h"
 
