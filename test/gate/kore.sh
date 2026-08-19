@@ -784,7 +784,24 @@ done
 both "od -An -tx1"  od -An -tx1 "$rt/o1"
 both "od two files" od -c "$rt/o1" "$rt/oesc"
 both "od -Ax -to2"  od -Ax -to2 "$rt/o1"
+# ⚠ od READS its operands now, a row at a time off a joined stream, so a row that
+# spans a 4096-byte gulp, a -j that skips past one, and a `*` run that crosses one
+# are all new seams -- and every fixture above is under fifty bytes.
+awk 'BEGIN{for(i=0;i<1300;i++)printf "0123456789abcdef"}' > "$rt/obig"   # 20800, all dup
+head -c 9000 /dev/urandom > "$rt/orand"
+for fl in -c -tx1 '-j 4090 -c' '-j 4096 -tx1' '-N 4100 -c' '-j 4000 -N 200 -tx1' -v; do
+  # shellcheck disable=SC2086
+  both "od $fl obig"  od $fl "$rt/obig"
+  both "od $fl orand" od $fl "$rt/orand"
+done
+both "od join skip"  od -j 5000 -tx1 "$rt/orand" "$rt/obig"
+both "od join lim"   od -N 9100 -c   "$rt/orand" "$rt/obig"
+both "od join three" od -tx1 "$rt/o1" "$rt/orand" "$rt/oesc"
+# -j past the end of the COMBINED input is a diagnostic, and -j exactly at it is not
+korerun od -j 999999 -c "$rt/o1" >/dev/null 2>&1 && fail "kore od: -j past the end must fail"
+both "od -j at end" od -j 14 -c "$rt/o1"
 echo "kore: record tools (paste/comm/join/split/od GNU-identical -- od over 4 files x 24 readings) ok"
+echo "kore: od across the gulps (rows, -j, -N and the * run over 4096) ok"
 
 # -------------------------------------------------------------- the checksums
 # cksum, md5sum and sha256sum against GNU. these three are the tools whose entire

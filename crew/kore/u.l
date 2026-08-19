@@ -246,34 +246,53 @@
    ; sed's joined lane: the line numbers and `$` run through the files, so the read
    ; has to cross them. ⚠ ONE LINE OF LOOKAHEAD, which is the whole reason this is
    ; not `ureach` -- `$` is "no further line anywhere", and nothing shorter answers it.
-   ; the next line ignoring the lookahead, opening operands as it runs out of them
+   ; ⚠ 'bad is read off the box AFTER the walk: a miss cannot stop a joined stream,
+   ; it only costs the status, and by then the reader has passed it.
+   (urdj-box miss fs)
+    (: t (tablet 0)
+       _ (pin t 'm miss) _ (pin t 'fs (? (two? fs) fs '("-")))
+       _ (pin t 'rd ()) _ (pin t 'cl ()) _ (pin t 'bad 0) _ (pin t 'h "")
+       t)
+   ; open the next operand; 1 when one did, 0 when the list is spent
+   (urdj-step t)
+    (: _ (? (peep t 'cl ()) (: _ (close (peep t 'cl ())) (pin t 'cl ())) 0)
+       fs (peep t 'fs ())
+       (? (! (two? fs)) 0
+          (: _ (pin t 'fs >fs)
+             p (uin (peep t 'm ()) <fs)
+             (? (! p) (: _ (pin t 'bad 1) (urdj-step t))
+                (: _ (pin t 'rd (urd <p))
+                   _ (? <>p (pin t 'cl <p) 0)
+                   1)))))
+   ; the next line ignoring the lookahead, crossing operands as it runs out of them
    (urdj-raw t)
     (: rd (peep t 'rd ())
        l (? rd (urd-line rd) ())
-       (? (two? l) l
-          (: _ (? (peep t 'cl ()) (: _ (close (peep t 'cl ())) (pin t 'cl ())) 0)
-             fs (peep t 'fs ())
-             (? (! (two? fs)) ()
-                (: _ (pin t 'fs >fs)
-                   p (uin (peep t 'm ()) <fs)
-                   (? (! p) (: _ (pin t 'bad 1) (urdj-raw t))
-                      (: _ (pin t 'rd (urd <p))
-                         _ (? <>p (pin t 'cl <p) 0)
-                         (urdj-raw t))))))))
+       (? (two? l) l (? (urdj-step t) (urdj-raw t) ())))
    (urdj-line t)                            ; -> [line term? last?] | ()
     (: pk (peep t 'pk ())
        (? (! (two? pk)) ()
           (: nx (urdj-raw t)
              _ (pin t 'pk nx)
              [<pk <>pk (? (two? nx) 0 1)])))
-   ; ⚠ 'bad is read off the box AFTER the walk: a miss cannot stop a joined stream,
-   ; it only costs the status, and by then the reader has passed it.
-   (urdj miss fs)
-    (: t (tablet 0)
-       _ (pin t 'm miss) _ (pin t 'fs (? (two? fs) fs '("-")))
-       _ (pin t 'rd ()) _ (pin t 'cl ()) _ (pin t 'bad 0)
-       _ (pin t 'pk (urdj-raw t))
-       t)
+   ; the LINE face: primed, so `last?` is answerable from the first line on
+   (urdj miss fs) (: t (urdj-box miss fs) _ (pin t 'pk (urdj-raw t)) t)
+   ; the BYTE face: unprimed, because priming would eat a line. od dumps ROWS and its
+   ; offsets run through the operands, which is the same join and not the same unit.
+   (urdb miss fs) (urdj-box miss fs)
+   ; up to k bytes off the joined stream, "" when it is spent
+   (urdj-take t k)
+    (: (fill _) (? (k <= (tally (peep t 'h "")))  1
+                   (: rd (peep t 'rd ())
+                      g (? rd (urd-gulp rd) "")
+                      (? (tally g) (: _ (pin t 'h ((peep t 'h "") + g)) (fill 0))
+                         (? (urdj-step t) (fill 0) 0))))
+       _ (fill 0)
+       h (peep t 'h "")
+       n (tally h)
+       m (? (n < k) n k)
+       _ (pin t 'h (snip h m n))
+       (snip h 0 m))
 
    ; dot gets (line term?), one line at a time -- every tool whose whole-text body was
    ; `(go (lines t))`. ⚠ dot answering 0 STOPS this operand, so a tool can read no

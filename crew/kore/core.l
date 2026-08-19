@@ -1027,47 +1027,55 @@
        kd <ty sz <>ty wd <>>ty
        byte? ((id? kd 'c) || (id? kd 'a))
        step (? byte? 1 sz)
-       (rd f) (? (f = "-") (slurp in)
-                 (: r (uread f) (? (two? r) <>r (udie 1 ("od: cannot open " + f)))))
-       ; the named files are ONE stream, which is what makes the offsets run through
-       whole (foldl (\ acc f (acc + rd f)) "" (? (two? fs) fs '("-")))
-       _ (? (tally whole < skip) (udie 1 "od: cannot skip past end of combined input") ())
-       hi (: e (? (charm? lim) (skip + lim) (tally whole))
-             (? (e < tally whole) e (tally whole)))
-       src (? (skip < hi) (snip whole skip hi) "")
-       nb (tally src)
+       ; the named operands are ONE stream, which is what makes the offsets run
+       ; through -- and a ROW at a time off it, never the stream itself. ⚠ every
+       ; reading below indexes THE ROW now, not a whole-file `src`: od held every
+       ; operand at once to dump 16 bytes of them.
+       rd (urdb (\ f (udie 1 ("od: cannot open " + f))) fs)
+       ; ⚠ the skip is READ PAST, not indexed: a joined stream has no length to take
+       ; it off, and running out mid-skip IS the diagnostic GNU gives.
+       (drop k) (? (k <= 0) 1
+                   (: g (urdj-take rd (? (65536 < k) 65536 k))
+                      n (tally g)
+                      (? n (drop (k - n)) 0)))
+       _ (? (drop skip) 0 (udie 1 "od: cannot skip past end of combined input"))
        (adr k) (? (ad = 110) ""
                   (ad = 100) (uzpad 7 (show k))
                   (ad = 120) (uzpad 6 (uradix k 16))
                   (uzpad 7 (uradix k 8)))
-       (val k)                          ; the little-endian item at k, short reads zeroed
-        (: (go i acc) (? (sz <= i) acc
-                         (go (i + 1) (acc + (* (? ((k + i) < nb) (src (k + i)) 0)
+       (val blk k)                      ; the little-endian item at k, short reads zeroed
+        (: n (tally blk)
+           (go i acc) (? (sz <= i) acc
+                         (go (i + 1) (acc + (* (? ((k + i) < n) (blk (k + i)) 0)
                                                ((* 8 i) 2)))))
            (go 0 0))
-       (cell k)
-        (? (id? kd 'c) (upad 3 (uodesc (src k)))
-           (id? kd 'a) (upad 3 (uodname (src k)))
-           (: raw (val k)
+       (cell blk k)
+        (? (id? kd 'c) (upad 3 (uodesc (blk k)))
+           (id? kd 'a) (upad 3 (uodname (blk k)))
+           (: raw (val blk k)
               v (? ((id? kd 'd) && !(raw < (((* 8 sz) - 1) 2))) (raw - ((* 8 sz) 2)) raw)
               (? (id? kd 'x) (uzpad wd (uradix v 16))
                  (id? kd 'o) (uzpad wd (uradix v 8))
                  (upad wd (show v)))))
-       (rowof k cnt)
+       (rowof blk cnt)
         (: items (? byte? cnt (// ((cnt + sz) - 1) sz))
            o (jug 0)
            (go i) (? (items <= i) (slurp o)
-                     (: _ (put o 32) _ (say o (cell (k + (* i step)))) (go (i + 1))))
+                     (: _ (put o 32) _ (say o (cell blk (* i step))) (go (i + 1))))
            (go 0))
-       (walk k prev star)
-        (? (nb <= k) ()
-           (: cnt (? ((k + 16) < nb) 16 (nb - k))
-              blk (snip src k (k + cnt))
-              (? ((!v? && (cnt = 16)) && (blk = prev))
-                 (: _ (? star () (: _ (say out "*") (put out 10))) (walk (k + 16) blk 1))
-                 (: _ (say out (adr (skip + k))) _ (say out (rowof k cnt)) _ (put out 10)
-                    (walk (k + 16) blk 0)))))
-       _ (walk 0 () 0)
+       ; left is -1 for no -N; the walk answers the byte count, for the closing offset
+       (walk k left prev star)
+        (? (left = 0) k
+           (: blk (urdj-take rd (? (left < 0) 16 (? (16 < left) 16 left)))
+              cnt (tally blk)
+              left2 (? (left < 0) -1 (left - cnt))
+              (? (0 = cnt) k
+                 ((!v? && (cnt = 16)) && (blk = prev))
+                  (: _ (? star () (: _ (say out "*") (put out 10)))
+                     (walk (k + cnt) left2 blk 1))
+                 (: _ (say out (adr (skip + k))) _ (say out (rowof blk cnt)) _ (put out 10)
+                    (walk (k + cnt) left2 blk 0)))))
+       nb (walk 0 (? (charm? lim) lim -1) () 0)
        _ (? (ad = 110) () (: _ (say out (adr (skip + nb))) (put out 10)))
        _ (flush out) 0))
 ) ; module 'kore
