@@ -239,19 +239,57 @@ static lvm(lvm_crc32) {
 // ⚠ a different crc from the one above in every part: the register runs the other way,
 // the seed is 0, and the message does not end at the last byte -- the byte count goes
 // through the same walk, low byte first, which is what makes cksum answer 4294967295
-// for the empty file rather than 0. one bit at a time, since the table it would want
-// is not the one crc32 built.
-static uint32_t ck_byte(uint32_t c, uint8_t b) {
+// for the empty file rather than 0. Its tables are its own for that reason: crc32's
+// are the reflected polynomial's and answer a different number.
+// ⚠ ck_bit IS THE STATEMENT of the polynomial, and it is the table's only source --
+// the walk below is derived from it, not a second spelling of it. (It was the walk
+// itself until the tables landed, at 8 shifts and a branch a byte: 90% of a `cksum`
+// run, and 3.5 s of the 3.9 s over 100 MB.)
+static uint32_t ck_bit(uint32_t c, uint8_t b) {
  c ^= (uint32_t) b << 24;
  for (int k = 0; k < 8; k++) c = (c & 0x80000000u) ? (c << 1) ^ 0x04c11db7u : c << 1;
  return c; }
 
+static uint32_t ck_t[8][256];
+static int ck_ready;
+
+static void ck_init(void) {
+ unsigned i, k;
+ for (i = 0; i < 256; i++) ck_t[0][i] = ck_bit(0, (uint8_t) i);
+ for (i = 0; i < 256; i++) {                    // table k is table 0 shifted k bytes on
+  uint32_t c = ck_t[0][i];
+  for (k = 1; k < 8; k++) {
+   c = (c << 8) ^ ck_t[0][(c >> 24) & 0xff];
+   ck_t[k][i] = c; } }
+ ck_ready = 1; }
+
+#define LD32BE(p) ((uint32_t) (p)[0] << 24 | (uint32_t) (p)[1] << 16 \
+                 | (uint32_t) (p)[2] << 8  | (uint32_t) (p)[3])
+
+// EIGHT BYTES AT A TIME, the same trade crc32 takes above: eight INDEPENDENT lookups
+// the machine can overlap, against a dependency chain one link per byte.
+static uint32_t ck_run(uint32_t c, const uint8_t *p, uintptr_t n) {
+ if (!ck_ready) ck_init();
+ for (; n >= 8; p += 8, n -= 8) {
+  uint32_t a = c ^ LD32BE(p), b = LD32BE(p + 4);
+  c = ck_t[7][(a >> 24) & 0xff] ^ ck_t[6][(a >> 16) & 0xff]
+    ^ ck_t[5][(a >> 8) & 0xff]  ^ ck_t[4][a & 0xff]
+    ^ ck_t[3][(b >> 24) & 0xff] ^ ck_t[2][(b >> 16) & 0xff]
+    ^ ck_t[1][(b >> 8) & 0xff]  ^ ck_t[0][b & 0xff]; }
+ for (; n; p++, n--) c = (c << 8) ^ ck_t[0][((c >> 24) ^ *p) & 0xff];
+ return c; }
+
+// the length, low byte first, through the same walk -- eight bytes at the most, so it
+// stays a byte at a time
+static uint32_t ck_len(uint32_t c, uint64_t len) {
+ if (!ck_ready) ck_init();
+ for (; len; len >>= 8) {
+  uint8_t b = (uint8_t) (len & 0xff);
+  c = (c << 8) ^ ck_t[0][((c >> 24) ^ b) & 0xff]; }
+ return c; }
+
 static uint32_t cksum_of(const uint8_t *p, uintptr_t n) {
- uint32_t c = 0;
- uintptr_t len = n;
- for (uintptr_t i = 0; i < n; i++) c = ck_byte(c, p[i]);
- for (; len; len >>= 8) c = ck_byte(c, (uint8_t) (len & 0xff));
- return ~c; }
+ return ~ck_len(ck_run(0, p, n), (uint64_t) n); }
 
 ai_noinline static struct ai *host_cksum(struct ai *g) {
  if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
@@ -407,10 +445,9 @@ ai_noinline static ai_word host_ck_feed(ai_word x, ai_word a) {
  uint32_t c;
  uint64_t len;
  dig_ld(st, &c, 1, &len);
- const uint8_t *p = (const uint8_t*) in->bytes;
  uintptr_t n = in->len;
  len += (uint64_t) n;
- for (uintptr_t i = 0; i < n; i++) c = ck_byte(c, p[i]);
+ c = ck_run(c, (const uint8_t*) in->bytes, n);
  dig_st(st, &c, 1, len);
  return x; }
 ai_noinline static ai_word host_ck_done(ai_word x) {
@@ -420,8 +457,7 @@ ai_noinline static ai_word host_ck_done(ai_word x) {
  uint32_t c;
  uint64_t len;
  dig_ld(st, &c, 1, &len);
- for (; len; len >>= 8) c = ck_byte(c, (uint8_t) (len & 0xff));
- return putcharm(~c); }
+ return putcharm(~ck_len(c, len)); }
 static lvm(lvm_ck_init) { Sp[0] = host_ck_init(Sp[0]); ai_musttail return Next(1); }
 static lvm(lvm_ck_feed) {
  Sp[1] = host_ck_feed(Sp[0], Sp[1]); Sp += 1; ai_musttail return Next(1); }
