@@ -29,10 +29,11 @@
  (id? (:) (? 0 'a)) (id? (:) (map (+ 1) ()))     ; a no-match `?` (and `map` of nothing) falls to the zero point () (= the empty form (:)), NOT charm 0
  (2 = (: x 1 x (x + 1) x)))                      ; the sequence law: a rebind reads the previous value
 ; one scope: a forward read raises missing, and welp answers it with the zero point -- the same
-; law the asserts above show, under a help that keeps it quiet (file mode's default quits on it)
+; law the asserts above show, under a help that keeps it quiet (file mode quits on it, and
+; so does this corpus outside a window like this one -- 00-init.l's test-strict)
 (hear welp)
 (assert (id? (:) (: a b b 2 a)) (2 = (: a b b 2 b)))
-(hear 0)
+(hear test-strict)
 
 ; --- true and false --- false is *nothing*: whatever NETS <= 0 (a complex-valued measure --
 ; numbers their value, text its charm sum, lists the sum of element nets, SPINE only). `!` (nil?) reads
@@ -116,7 +117,7 @@
           (filter (\ n (nil? (q-bit? n))) (filter q-nom? (names ()))))
    _ (? (two? bad) (: _ (puts ("bit-law offenders: " + (show bad) + "\n")) 0) 0)   ; NAME them: the
    (assert (nil? (two? bad))))                                     ; seat that fails is not always this one
-(hear 0)
+(hear test-strict)
 
 ; --- arithmetic --- + - * / // % infix; charm fast path, overflow grows charm->sun->big;
 ; `/` is true division (inexact int quotient -> float); 0/0 = 0; bitwise << >> & | ^ ride the
@@ -187,7 +188,7 @@
  !(1 = (\ x x)) !((\ y y) = 1) !(id? 1 (\ x x))                    ; NO numeral bridge: a number never equals a closure
  !(0 = (\ _ 1)) !((\ q 1) = 0) (42 = ((\ x x) 42)) (1 = ((\ _ 1) 9)) ; ... they ACT alike under apply; = stays representation-strict
  !!(\ _ 1) (1 = $(\ _ 1)))     ; a top is present and nets 1
-(hear 0)
+(hear test-strict)
 
 ; --- reduction --- `=` stops at alpha (above); `ev` goes further -- it REDUCES. these are the
 ; binary twins of test/proof/rocq/spec.v's reduction layer (step/subst): the proof says "valid by the
@@ -448,7 +449,7 @@
 ; a missing read answers the zero point under the floor handler welp (no warning surfaced)
 (hear welp)
 (assert (: z zz-never-pinned (&& !(nom? z) !z (id? z (:)) ("()" = (show z)))))   ; absence: the zero point, wearing ()
-(hear 0)
+(hear test-strict)
 (assert
  (() = (:)) !(nom? ()) !(name? ()) !(mint? ()) !(0 = ()) !(id? 0 '()) (() = (intern "")) (0 = $()) !() !!$'x
  ("()" = (show ()))
@@ -689,7 +690,7 @@
 ; a missing name reads the zero point under the floor handler welp (no warning surfaced)
 (hear welp)
 (assert (id? (:) not-in-the-book) !not-in-the-book)   ; a nom not in the book
-(hear 0)
+(hear test-strict)
 
 ; --- i/o & ports --- in/out/err are the default ports; getc + putc/puts/putn/putx, per-port
 ; see/put/... , open/close/pad. the vessels: (tap cl) an input SOURCE over a colist, (jug 0) an
@@ -755,7 +756,7 @@
         (? hatched !spin 1)                        ;  hence the born guards)
         (? hatched !operators 1) (? hatched !pureset 1)   ; the compile tables too (2026-07-07)
         (? hatched !enter 1) (? hatched !leave 1) (? hatched !lib 1))  ; the layer door + the source library: the runtime's, off the surface
-(hear 0)
+(hear test-strict)
 
 ; --- modules --- one layer per load, the registry, and `use` the loader -- all the runtime's.
 ; there is NO enter/leave on the surface: the runtime opens a fresh layer around every module
@@ -804,12 +805,18 @@
   (smv-out = member? 'smv (names ()))                    ; no leak: the walk is as it was
   (! (member? 'sma (names ())))                          ; the anonymous layer leaks nothing
   (tablet? ma)))                                         ; the scratch layer answers its tablet
-(: _ (use 'spec-mod) (assert (42 = smv)))                ; use splices a module `module` made
+; use splices a module `module` made. ⚠ TWO FORMS, and they have to be: a group is
+; compiled whole, so a read of smv sitting beside the use that splices it is addressed
+; before the splice has run, and answers `;; missing smv' on the way to being right.
+(: _ (use 'spec-mod))
+(assert (42 = smv))
 ; a module's forms eval ONE BY ONE, never as one application chain: a form whose
 ; answer is a function must not be APPLIED to the next form's answer. the probe is
 ; a side effect only a spurious call could leave -- smt stays empty.
-(: smt (tablet 0)
-   mq (module () (: (smf2 x) (pin smt 'called 1)) (: smq2 2))
+; ⚠ the probe is a form of its own for the same reason: smf2's body is compiled in the
+; MODULE's layer, where a smt bound beside it in one group is not addressable.
+(: smt (tablet 0))
+(: mq (module () (: (smf2 x) (pin smt 'called 1)) (: smq2 2))
  (assert (nil? (peep smt 'called ()))                    ; nothing applied smf2
          (member? 'smq2 (keys mq))))                     ; ..and both forms landed
 

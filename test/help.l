@@ -26,14 +26,14 @@
 (assert !(heard ()) !(lit? (heard ())))
 
 ; help is present by its net, like everything: "" is a value netting nothing,
-; so it is no help -- a bare missing read would go helpless (and surface ";; missing",
+; so it is no help -- a bare missing read would find nothing heard (and surface ";; missing",
 ; which we don't trigger here). the koan's help
 ; (\ a b 1) is =-equal to 0 yet a top netting 1: installed, every scare answers 1,
-; and a missing read fires the help instead of going helpless.
+; and a missing read fires the help instead of finding nothing heard.
 (hear "")
 (assert !(heard ()) !(lit? (heard ())))
 (hear (\ a b 1))
-(assert (1 = (scare 'k 'v)) (1 = one-nothing-unpinned-2))   ; net-1 help: the miss fires it -> 1, no helpless read
+(assert (1 = (scare 'k 'v)) (1 = one-nothing-unpinned-2))   ; net-1 help: the miss fires it -> 1, nothing goes unheard
 (hear 0)
 
 ; the help is PER TASK: a raise finds the one its OWN task installed. one shared
@@ -172,3 +172,5 @@
  ; ... and every nothing still uninstalls
  (: _ (hear ()) r (nil? (heard ())) _ (hear welp) r))
 (hear 0)
+
+(hear test-strict)   ; the empty slot is this file's subject; the corpus resumes strict

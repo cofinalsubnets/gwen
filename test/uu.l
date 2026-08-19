@@ -2514,4 +2514,4 @@
                     '(the (total2 x nat (paths nat x x)) (tpair 0 (idpath 0)))))))
  ; a constant codomain still has to be compared
  (id? 'rejected (rejects (\ z (defn 'uu-cv7 '(pi x nat bool) '(the (pi x nat nat) (lam x x)))))))
-(hear 0)
+(hear test-strict)
