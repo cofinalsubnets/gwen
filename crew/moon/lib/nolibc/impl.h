@@ -163,7 +163,7 @@ struct _IO_FILE {
 #define NR_fb_readlinkat    500
 #define NR_fb_fchmodat      490
 #define NR_fb_ppoll         545   /* 4 args; our trailing sigsetsize rides an ignored register */
-/*      unshare: none -- linux's; the nif above it is already #else'd out */
+/*      unshare: none -- linux's; the nif calls it and hears this refusal */
 #define NR_fb_utimensat     547
 /*      signalfd4: none -- kqueue 362 / kevent 560, EVFILT_SIGNAL (rung 4) */
 /*      dup3: none -- fcntl F_DUP2FD_CLOEXEC (dup2.c, rung 3) */

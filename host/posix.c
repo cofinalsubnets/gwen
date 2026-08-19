@@ -34,12 +34,12 @@
 // standing on: ours carries every door on all three (crew/moon/include/sys), and
 // a foreign libc carries what its own box does. So these are build facts under
 // AiNolibc and box facts under anything else.
-// ⚠ TWO ROWS BELOW NAME THE KERNEL, and they do it for DIFFERENT reasons.
-// unshare/CLONE_NEW* and the /proc/self/*_map writes are a linux MECHANISM --
-// nothing elsewhere has them to reach. mount(2) every kernel has; ours speaks
-// LINUX'S ARGUMENT SHAPE and os.c leaves the row unmapped, so it reaches one
-// kernel today. Mapping the BSD shapes is what widens that one, and it is the
-// libc that widens -- never this file.
+// ⚠ mount(2) and unshare are LINUX-REACHING, and still not this file's question:
+// ours carries both symbols and os.c leaves their rows unmapped, so the call
+// refuses with ENOSYS off linux at RUN time -- which is the only place that can
+// know, since one binary meets three kernels. Compiling them out by the kernel
+// we were BUILT on would refuse them on a linux box too. Widening them is the
+// libc's job (mount wants the BSD argument shapes; unshare is linux's own).
 #if defined(AiNolibc)
 # define AiHaveSignalfd 1
 # define AiHaveKqueue   1
@@ -52,7 +52,7 @@
 # define AiHaveKqueue 1
 # define AiHaveSysctl 1
 #endif
-#if defined(__linux__)
+#if defined(AiNolibc) || defined(__linux__)
 # define AiHaveMount      1
 # define AiHaveNamespaces 1
 #endif
