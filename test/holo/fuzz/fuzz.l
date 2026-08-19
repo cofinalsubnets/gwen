@@ -18,6 +18,9 @@
 (reads (open "crew/holo/x64.l" "r"))
 (reads (open "crew/holo/arm64.l" "r"))
 (reads (open "crew/holo/riscv.l" "r"))
+; holo rides module 'holo: reading the source REGISTERS it, and the names come
+; through the door rather than off this file's layer.
+(use 'holo)
 
 (:
  ; ---- the small string kit (this file loads only holo, so it carries its own) ----
