@@ -613,7 +613,7 @@
  (6 = +'(1 2 3)) (-1 = +'(-2 1)) (24 = *'(1 2 3 4))     ; +/ and */ -- the net, unclamped
  (5 = |-5) (-3 = -(1 + 2)) (0.25 = /4) (1 = ?7) (0 = ?"")
  (3 = (+ 1 2)) (1 = ((< 5) 9))                   ; spaced head = prefix call; the section
- (0 = (: mr '(to 0) (<mr = 'lin))) (3 = (:(+ 1 2)))   ; head fuses ((<mr = 'lin)=(= (cap mr) 'lin)); : still whole-list
+ (0 = (: mr '(to 0) (<mr = 'lin))) (3 = (:(+ 1 2)))   ; head fuses ((<mr = 'lin)=(= (cap mr) 'lin)); : cannot factor, so it falls back
  ('(mono (< x)) = (caup (cap (sound '(40 102 32 60 120 41)))))  ; the emission, data-lane
  (7 = (+ 1 2, + 3 4)) (3 = (1 ,, 3, )) (7 = (, 6 7))   ; the comma layer: clauses in sequence, the last answers; empties drop
  (12 = (foldl (+) 0 '(3 4 5))))

@@ -201,7 +201,7 @@
                  (= c 64) (? (p1-glued? r) (p1-lift 'tuple r head) (link (name "@") r))
                  (= c 126) (p1-lift (? (? (link? r) (& (p1-cls (cap r)) 16) ()) 'twin 'conj) r head)
                  (= c 44) (link (name ",") r)
-                 (? (p1-opc? c) (nil? numlead) ()) (p1-op cl head)
+                 (? (p1-opc? c) (nil? numlead) ()) (p1-op cl)
                  (p1-dig? c) (p1-nop cl)
                  (: tr (p1-tok cl ())
                     (link (p1-atom (cap tr)) (cup tr)))))))
@@ -226,18 +226,16 @@
    ; THE VALENCE LAW, reader half: a run GLUED to the datum after it is MONADIC
    ; -- the run becomes a wrap UNDER a mono wrap, so the emission is the nested
    ; (mono (run d)), which opfix factors against book['operators] arity 0 -- a spaced
-   ; run is the plain symbol, dyadic by opfix's default. head
-   ; fuses too, so (<x = y) is (= (cap x) y); the exceptions are \ (which never
-   ; fuses, form space) and : / ? at head (they consume the whole list, where
-   ; fusion would swallow only the next datum).
-   (p1-op cl head)
+   ; run is the plain symbol, dyadic by opfix's default. head fuses too, so
+   ; (<x = y) is (= (cap x) y) and (?x ..) is bit x applied -- no head is exempt.
+   ; \ is the one run that never fuses anywhere: it is form space.
+   (p1-op cl)
      (: rr (p1-run cl ())
         run (string (cap rr))
         rest (cup rr)
         sym (name run)
         shed (? (link? rest) (= (cap rest) 45) ())    ; p1-run put a sign back: glued
         (? (= run "\\") (link sym rest)
-           (? head (? (= run ":") 1 (= run "?")) ()) (link sym rest)
            (nil? (? shed 1 (p1-glued? rest))) (link sym rest)
            (: d (p1-read1 rest ())
               (? (nil? (link? d)) 'torn
