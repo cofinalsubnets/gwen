@@ -385,6 +385,10 @@
    ; #include lexes fresh at its own line 1 either way.
    (cc-parse src {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia})
     (: ds9 (archdefs tgt + osdefs os + featdefs tgt + stddefs tgt
+                 ; OUR libc is the one in this link, and it carries its whole
+                 ; surface on every kernel it serves -- so a source asking what it
+                 ; may call asks THIS, never which kernel it is standing on.
+                 + '("AiNolibc=1")
                  + (? (id? dia 'moon) '("__moon__=1") ())   ; the DIALECT's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
                  (? (id? tgt 'x64) ("__SIZEOF_INT128__=16" >< ds) ds))     ; x64 alone carries the wide pair (gen's d128 lane); love.c's limb seam reads it

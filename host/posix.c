@@ -28,17 +28,53 @@
 #include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
 #include <dirent.h>     // opendir/readdir/closedir
 #include <sys/mman.h>       // madvise (the spawn guard)
+
+// --- WHAT THIS LIBC CARRIES, asked once -------------------------------------
+// the question a lane owes is which doors it may call, never which kernel it is
+// standing on: ours carries every door on all three (crew/moon/include/sys), and
+// a foreign libc carries what its own box does. So these are build facts under
+// AiNolibc and box facts under anything else.
+// ⚠ TWO ROWS BELOW NAME THE KERNEL, and they do it for DIFFERENT reasons.
+// unshare/CLONE_NEW* and the /proc/self/*_map writes are a linux MECHANISM --
+// nothing elsewhere has them to reach. mount(2) every kernel has; ours speaks
+// LINUX'S ARGUMENT SHAPE and os.c leaves the row unmapped, so it reaches one
+// kernel today. Mapping the BSD shapes is what widens that one, and it is the
+// libc that widens -- never this file.
+#if defined(AiNolibc)
+# define AiHaveSignalfd 1
+# define AiHaveKqueue   1
+# define AiHaveSysctl   1
+# define AiHaveDontfork 1
+#elif defined(__linux__)
+# define AiHaveSignalfd 1
+# define AiHaveDontfork 1
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__)
+# define AiHaveKqueue 1
+# define AiHaveSysctl 1
+#endif
 #if defined(__linux__)
-#include <sys/signalfd.h>   // signalfd, struct signalfd_siginfo (Linux only)
-#include <sys/mount.h>      // mount(2)
+# define AiHaveMount      1
+# define AiHaveNamespaces 1
+#endif
+
+#if defined(AiHaveSignalfd)
+#include <sys/signalfd.h>   // signalfd, struct signalfd_siginfo
+#endif
+#if defined(AiHaveKqueue)
+#include <sys/event.h>      // kqueue/kevent, the signal port's BSD door
+#endif
+#if defined(AiHaveSysctl)
+#include <sys/sysctl.h>     // the BSD selfpath doors (glibc dropped the symbol)
+#endif
+#if defined(AiHaveMount)
+#include <sys/mount.h>      // mount(2), in linux's argument shape
+#endif
+#if defined(AiHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
 #endif
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>    // _NSGetExecutablePath (selfpath)
 #include <limits.h>         // PATH_MAX -- realpath's buffer is not ours to size
-#elif !defined(__GLIBC__)
-#include <sys/sysctl.h>     // the freebsd selfpath door (nolibc's; glibc dropped the symbol)
-#include <sys/event.h>      // kqueue/kevent, sigfd's BSD lane (nolibc's; glibc has no such door)
 #endif
 
 // A wait(2) status word -> the value a reaper hands back: the exit code, or
@@ -130,14 +166,14 @@ static void sig_dfl_job(void) {
 // nif and any child that walks the heap inherit whole, as fork means.
 // best-effort -- an unaligned edge or a kernel without the advice keeps
 // plain fork.
-#if defined(__linux__)
+#if defined(AiHaveDontfork)
 static void guard1(void *lo, void *hi, int adv) {
  uintptr_t a = ((uintptr_t) lo + 4095) & ~(uintptr_t) 4095,
            b = (uintptr_t) hi & ~(uintptr_t) 4095;
  if (b > a) (void) madvise((void*) a, (long) (b - a), adv); }
 #endif
 void host_spawn_guard(struct ai *g, int on) {
-#if defined(__linux__)
+#if defined(AiHaveDontfork)
  int adv = on ? MADV_DONTFORK : MADV_DOFORK;
  // the ceiling is the FRONTIER, not the block top: a marshal (argv_marshal,
  // main.c's own) lays the child's argv at g->hp, so the window above hp
@@ -207,9 +243,9 @@ static lvm(lvm_reapany) {
 // merges the sigfd with a heartbeat task's timer in one wait, the {nic, clock}
 // story for {signals, clock}), then sigtake reads the record. SIGCHLD coalesces, so a
 // 'chld wake still loops `glean` to harvest every zombie.
-#if defined(__linux__)
-#if !defined(__GLIBC__)
-// the BSD lane: the port holds a kqueue fd instead. EVFILT_SIGNAL fires on
+#if defined(AiHaveSignalfd) || defined(AiHaveKqueue)
+#if defined(AiHaveKqueue)
+// the BSD door: the port holds a kqueue fd instead. EVFILT_SIGNAL fires on
 // SEND -- before delivery processing -- so the same blocked mask queues here
 // too (probed on both boxes). one kernel per process, so one flavor: a flag.
 static int host_sigkq;
@@ -242,8 +278,13 @@ ai_noinline static struct ai *host_sigfd(struct ai *g) {
   if (A(p) & 1) sigaddset(&m, (int) getcharm(A(p))); }
  else { sigaddset(&m, SIGCHLD); sigaddset(&m, SIGTERM); }
  if (sigprocmask(SIG_BLOCK, &m, NULL)) return g->sp[0] = ZeroPoint, g;
- int fd = signalfd(-1, &m, SFD_NONBLOCK | SFD_CLOEXEC);
-#if !defined(__GLIBC__)
+ // every door this libc carries, in order: the canonical one, then the BSD one
+ // where it answers -- the try IS the probe, as selfpath's ladder below.
+ int fd = -1;
+#if defined(AiHaveSignalfd)
+ fd = signalfd(-1, &m, SFD_NONBLOCK | SFD_CLOEXEC);
+#endif
+#if defined(AiHaveKqueue)
  if (fd < 0) fd = host_sigfd_kq(a);          // ENOSYS: a BSD kernel; kqueue is the body
 #endif
  if (fd < 0) return g->sp[0] = ZeroPoint, g;
@@ -261,7 +302,7 @@ static lvm(lvm_sigfd) {
 // 'chld consumer loops glean for the pids anyway.
 ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
  intptr_t signo, pid;
-#if !defined(__GLIBC__)
+#if defined(AiHaveKqueue)
  if (host_sigkq) {
   struct kevent ev;
   struct timespec z = {0, 0};
@@ -270,10 +311,15 @@ ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
  else
 #endif
  {
+#if defined(AiHaveSignalfd)
   struct signalfd_siginfo si;
   ssize_t n = (fd >= 0) ? read(fd, &si, sizeof si) : -1;
   if (n != (ssize_t) sizeof si) { g->sp[0] = ZeroPoint; return g; }  // none ready -> the real () (not charm 0)
-  signo = (intptr_t) si.ssi_signo; pid = (intptr_t) si.ssi_pid; }
+  signo = (intptr_t) si.ssi_signo; pid = (intptr_t) si.ssi_pid;
+#else
+  (void) fd; g->sp[0] = ZeroPoint; return g;   // no canonical door: the kq lane above is the only one
+#endif
+ }
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                 putcharm(signo), putcharm(pid));
@@ -289,7 +335,7 @@ static lvm(lvm_sigtake) {
  Unpack(g);
  Ip += 1; ai_musttail return Continue(); }
 #else
-// signalfd is Linux-only; keep the names present (so init.l loads) but inert.
+// a libc with neither door; keep the names present (so init.l loads) but inert.
 static lvm(lvm_sigfd)   { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
 static lvm(lvm_sigtake) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
 #endif
@@ -386,9 +432,9 @@ ai_noinline size_t host_selfpath(char *b, size_t n) {
  ssize_t r = readlink("/proc/self/exe", b, n - 1);
  if (r <= 0) r = readlink("/proc/curproc/exe", b, n - 1);
  if (r > 0) return b[r] = 0, (size_t) r;
-#if !defined(__GLIBC__)
- // nolibc always links sysctl (ENOSYS off the BSDs); glibc dropped the symbol,
- // and the glibc build is the linux bootstrap scaffold -- /proc answered above.
+#if defined(AiHaveSysctl)
+ // ours always links sysctl (ENOSYS off the BSDs); glibc dropped the symbol,
+ // and that build is the linux bootstrap scaffold -- /proc answered above.
  int mib[4] = { 1, 14, 12, -1 };                       // freebsd: CTL_KERN KERN_PROC KERN_PROC_PATHNAME(-1)
  size_t sz = n;
  if (!sysctl(mib, 4, b, &sz, NULL, 0) && sz) return strlen(b);
@@ -621,14 +667,19 @@ static lvm(lvm_mkdir) {
  Sp[1] = mkdir(p, (mode_t) mode) ? putcharm(errno) : ZeroPoint;
  Sp += 1; ai_musttail return Next(1); }
 
-#if defined(__linux__)
+#if defined(AiHaveMount)
 ai_noinline static ai_word host_mount(ai_word a, ai_word b, ai_word c) {
  char src[1024], tgt[1024], typ[64];
  if (!str_cbuf(a, src, sizeof src) || !str_cbuf(b, tgt, sizeof tgt) || !str_cbuf(c, typ, sizeof typ))
   return putcharm(EINVAL);
  return mount(src, tgt, typ, 0, NULL) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_mount) { Sp[2] = host_mount(Sp[0], Sp[1], Sp[2]); Sp += 2; ai_musttail return Next(1); }
+#else
+// the call is there; our mount speaks a shape this kernel does not answer.
+static lvm(lvm_mount) { Sp[2] = putcharm(ENOSYS); Sp += 2; ai_musttail return Next(1); }
+#endif
 
+#if defined(AiHaveNamespaces)
 static int ns_write(char const *path, char const *s) {
  int fd = open(path, O_WRONLY);
  if (fd < 0) return -1;
@@ -643,7 +694,7 @@ static lvm(lvm_newns) {
  snprintf(b, sizeof b, "0 %ld 1\n", gid); ns_write("/proc/self/gid_map", b);
  Sp[0] = ZeroPoint; ai_musttail return Next(1); }
 #else
-static lvm(lvm_mount) { Sp[2] = putcharm(ENOSYS); Sp += 2; ai_musttail return Next(1); }   // Linux-only
+// a linux mechanism; elsewhere the name stands and refuses.
 static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 #endif
 

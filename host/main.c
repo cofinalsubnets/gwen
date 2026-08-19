@@ -676,10 +676,11 @@ static struct ai *env_budget(struct ai *g) {
   // pins -Dai_budget; 0 stays unbounded only where the machine cannot say its
   // size.
   if (g && !g->budget) {
-#if defined(__linux__)
     // raw read + hand parse, no stdio: nolibc's fscanf speaks no width and no
     // %lu, and the default must fire in both libcs. MemTotal leads the file;
-    // the first digit run is the kB count.
+    // the first digit run is the kB count. ⚠ NOT gated on a kernel: the open
+    // fails where there is no procfs, which leaves the budget unbounded --
+    // exactly what naming the kernel bought, and it asks the box instead.
     int fd = open("/proc/meminfo", O_RDONLY);
     if (fd >= 0) { char mb[64]; long n = (long) read(fd, mb, sizeof mb - 1);
       close(fd);
@@ -687,7 +688,6 @@ static struct ai *env_budget(struct ai *g) {
         char *p = mb; while (*p && (*p < '0' || *p > '9')) p++;
         uintptr_t kb = 0; while (*p >= '0' && *p <= '9') kb = kb * 10 + (uintptr_t)(*p++ - '0');
         g->budget = kb * 1024 / 2 / sizeof(ai_word); } }
-#endif
   }
   return g; }
 
