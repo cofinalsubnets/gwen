@@ -84,6 +84,8 @@
                   (act && num && cart))))]
       ['bit-sat   (x \ ?x = (0 < $x))]                      ; bit is saturate, ceiling lowered to 1
       ['nil?-bit  (\ x (!x = (0 = $x)))]                    ; nil? is bit's complement
+      ['sat-net   (x \ $x = $(net x))]                      ; ..so $ factors through the net: one clamp, at the end
+      ['bit-nil   (x \ ?x = !!x)]                           ; ..and the bit is nil?'s own double negation
       ['sat-green (\ x (: s $x ((0 <= s) && (charm? s))))]  ; ..and the codomain each names
       ['bit-bool  (\ x (: b ?x ((b = 0) || (b = 1))))]
       ['apply-is-id (x \ atom? x ? 1 (<x = (cap $ x)))]

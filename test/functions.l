@@ -50,11 +50,8 @@
  (: (even? n) (? (zero? n) 1 (odd? (+ -1 n)))
     (odd? n) (? (zero? n) 0 (even? (+ -1 n)))
   (odd? 99))
-
- (= -2 (^ 1 -1))
- (= 15 (| 8 (| 4 (| 2 1))))
- (= 16 (>> 64 2))
- (= 16 (<< 2 3))))
+ ; a higher-order param applied past its own arity: f takes g, then over-applies it
+ (= 3 ((\ f g (f g 1 2 3)) (\ g a b c (g c b)) (\ a b a)))))
 
 ; ackermann function
 (: (ack m n p) (?

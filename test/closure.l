@@ -56,6 +56,11 @@
   ; --- a value defined BEFORE the function using it needs no box, stays correct ---
   (= 6   (: x 5 f (\ n (+ x n)) (f 1)))
 
+  ; --- `_` is a binder like any other, and repeats: each pin is its own slot, nothing
+  ; reads them, and a bare literal body still answers ---
+  (= 0 (: _ 1 _ 2 0))
+  (= 7 (: _ 1 _ 2 _ 3 7))
+
   ; --- box cells must not shift an EARLIER ref: `a` reads an outer binding
   ; before a later init's forward capture forces `self` to be boxed; the cell
   ; sits below `a` at runtime, so `a`'s captured slot must already count it ---

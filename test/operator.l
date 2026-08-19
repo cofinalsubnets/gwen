@@ -15,12 +15,6 @@
 ; factorization (the GLUED lane, arity 0) in the valence laws, and a FRESH
 ; punct operator needs no entry at all (default dyadic; test/infixop.l's DEFAULT
 ; INFIX section).
-; ⚠ presence, not born's net -- born is a DURATION now and a fast wake answers 0, which
-; would read as pre-egg and pass these vacuously. spec.l's bootstrapping section says more.
-(: hatched (member? 'born (names ())))
-(hear welp)                                    ; welp answers the misses quietly
-(assert (? hatched !operators 1) (? hatched !pureset 1))
-(hear test-strict)
 
 ; reading is structural: a sigil from a port is just the symbol, no table consulted
 (assert ('^ = (cap (sound '(94)))) ('+ = (cap (sound '(43)))))

@@ -9,7 +9,7 @@
 ; file pins EVERY cell with an assertion, so the coverage is auditable in one
 ; place -- and so a dispatch regression (e.g. a data-sentinel stride desync that
 ; mis-routes whole apply rows) fails loudly here. The coarse {NUM ARR LIST STR
-; USYM ISYM} category grids live in test/symadd.l (+) and test/seqmul.l (*); this
+; USYM ISYM} category laws are spec.l's `+ and * are generic` section; this
 ; file adds the FINE within-category cells (fix vs box/float/complex vs bignum;
 ; the four array tiers) and the apply matrix, which had no systematic test.
 
@@ -89,7 +89,7 @@
  (= 1 ((cask 4) 'x)))                       ; opaque handle (cask) behaves as 0
 
 ; ============================================================================
-; `+` matrix (g_add_mx): the FINE within-category cells symadd.l folds together
+; `+` matrix (g_add_mx): the FINE within-category cells the spec's band laws fold together
 ; ============================================================================
 ; addn lane (numeric tower & arrays): the matrix routes here for any arith x
 ; arith chain; the lane then refines by representation. Each rep pairing:

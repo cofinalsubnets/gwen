@@ -133,10 +133,10 @@
  (= top-tray (tier @((100 2) 1)))                    ; bignum element -> object array
  (aall (= @(1 2 3) (array 3 1 2 3))))
 
-; --- pin / truthiness: (nil? x) == (= 0 (pin x)) holds across tuple types, via
-; g_len recursing into each element's own magnitude (so an all-zero array is pin 0,
-; not the garbage that a raw word-bits L2 norm would give). A bignum element forces
-; an o array; a complex element packs into a c array (both keep the invariant).
+; --- the measure across tuple types: g_len recurses into each element's own magnitude,
+; so an all-zero array nets 0 and not the garbage a raw word-bits L2 norm would give.
+; a bignum element forces an o array; a complex element packs into a c array. (the
+; invariant !x == (0 = $x) itself is law.l's, quantified over its whole corpus.)
 (: oa-z2 (array 2 ~(0 0) ~(0 0))               ; two zero complexes -> packed c array
    oa-c2 (array 2 ~(0 0) ~(3 4))               ; nets sum: ~(0 0)+~(3 4) -> re 3 -> ceil 3
    oa-b2 (array 2 (100 2) 0))                 ; bignum element saturates pin, forces o
@@ -146,8 +146,4 @@
  (= 3 (sat oa-c2)) !!oa-c2                         ; one nonzero element -> truthy, ceil(3)
  !!oa-b2                                          ; a bignum element is truthy
  (= 0 (sat (top-tray '(2 2) 0)))                       ; all-nil object array -> pin 0
- !!(array 2 'a 'b)                                ; symbol elements -> truthy
- ; the defining invariant (nil? x) == (= 0 (pin x)) on each:
- (= (? (nil? oa-z2) 1 0) (? (= 0 (sat oa-z2)) 1 0))
- (= (? (nil? oa-c2) 1 0) (? (= 0 (sat oa-c2)) 1 0))
- (= (? (nil? oa-b2) 1 0) (? (= 0 (sat oa-b2)) 1 0)))
+ !!(array 2 'a 'b))                               ; symbol elements -> truthy

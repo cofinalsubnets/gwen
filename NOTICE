@@ -1,11 +1,8 @@
-NOTICE -- the parts of this tree that are not ours
+NOTICE
 
-love is 0BSD (see LICENSE). A license covers the work of its author, so the
-files below, which came from elsewhere, keep the terms they came under. Each
-already carries its notice in place; this file is the roster, so a packager
-does not have to go looking.
+--- love ---
 
-Nothing here is copyleft. Nothing here constrains what you do with love.
+love is released under 0BSD (see LICENSE).
 
 
 --- code ---
@@ -19,11 +16,10 @@ test/uu.l, the ported section only (from "UniMath Foundations PartA")
   Copyright (c) 2015 the UniMath Development Team.
   MIT License. https://github.com/UniMath/UniMath
   Definitions and theorem statements from Foundations/PartA.v et al, ported to
-  uu's surface with the original names. The type checker above that section --
-  and everything baked into the binary -- is ours.
+  uu's surface with the original names.
 
 
---- fonts (shipped with the website, not linked into any binary) ---
+--- fonts ---
 
 assets/fonts/Web437_DOS-V_re_PRC16.woff, .woff2
   Copyright VileR. CC BY-SA 4.0.
@@ -38,29 +34,3 @@ assets/fonts/IBMPlexMono-Regular.woff2
   https://github.com/IBM/plex -- https://openfontlicense.org
   Redistributed unmodified. The OFL asks that this notice travel with the
   font; that is what this entry is for.
-
-
---- downloaded at build time, never redistributed by us ---
-
-dl/ is gitignored and holds what `make` fetches: the limine bootloader
-binaries, edk2 OVMF firmware, and the userland package sources the LFS ladder
-compiles (lua, sqlite, m4, tar, ...). Each keeps its own upstream license.
-`make distclean` removes them. No love artifact contains them.
-
-
---- history ---
-
-crew/cc/lib/math/*.c held musl 1.1.21's src/math (MIT), itself derived from
-fdlibm (Copyright (C) 2004 Sun Microsystems, Inc.; "permission to use, copy,
-modify, and distribute this software is freely granted, provided that this
-notice is preserved" -- it was, at the head of every file). Retired in commit
-3b6e845b when crew/moon/lib/math/am.c replaced it. No release since carries
-that code, but git history does, and those blobs keep their notices.
-
-
---- acknowledgement, owed to no license ---
-
-crew/moon/lib/nolibc.c's malloc/free follow the first-fit free list from
-Kernighan & Ritchie, The C Programming Language, 2nd ed., section 8.7. The
-algorithm, not the text: the arenas, the identifiers and the rest of the file
-are ours. Noted here because it is true, not because anything requires it.

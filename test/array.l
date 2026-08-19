@@ -119,24 +119,9 @@
  !(aall (< 2 1))
  (aall (< (star-tray '(2) '(1 2)) (star-tray '(2) '(3 4))))  ; array: same expression
 
- ; --- truthiness is the NET: a value is false iff its element sum nets <= 0 ---
- (nil? (star-tray '(3) 0))                  ; zero array -> false
- (nil? (gem-tray '(2 2) 0))                ; zero float array -> false
- (nil? (star-tray '(0) 0))                  ; empty array -> vacuously false
- (nil? 0.0)                             ; boxed 0.0 -> false (was a truthy wart)
- !(nil? 2.5)                         ; positive float -> true
- (nil? -5)                           ; a negative real is FALSE (<= 0)
- !(nil? (+ (star-tray '(2) 0) 1))        ; positive array -> true
- (nil? @(-3 -4))                     ; a NEGATIVE array is false too -- the sign law at rank 1
- (nil? @(-2 1)) !(nil? @(-2 3))      ; the elements SUM: -2+1 <= 0 < -2+3
- (= 1 (? (star-tray '(3) 0) 0 1))         ; zero array takes the false arm
- (= 0 (? (+ (star-tray '(3) 0) 1) 0 1))    ; positive array takes the true arm
- ; a positive net makes the array truthy, per the tower:
- !(nil? @(0 0 5))                    ; one positive element -> true
- (nil? @(0.0 0.0))                      ; all-zero float tuple -> false
- (nil? ~(0 0))                         ; complex 0+0i -> false
- (nil? ~(0 1))                      ; a PURE PHASE is blue: gated by the real part, not the order
- (nil? i)                            ; ...so the imaginary unit is nothing, though it still SORTS above 0
+ ; --- truthiness is the NET (spec.l); here only the shapes an array adds to it ---
+ (nil? (gem-tray '(2 2) 0))                ; a zero float array, at rank 2
+ (nil? @(-2 1)) !(nil? @(-2 3))      ; the cells SUM before the gate: -2+1 <= 0 < -2+3
 
  ; --- elementwise transcendentals over an array ---
  (aall (= (gem-tray '(2) '(2.0 3.0)) ((/ 1 2) (gem-tray '(2) '(4.0 9.0)))))

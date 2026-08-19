@@ -30,9 +30,7 @@
  (6 = (net '(1 2 3))) (24 = (prod '(2 3 4))))
 
 (assert
- (0 = $(net '(-2 1))) (-1 = (net '(-2 1)))      ; the net unclamped, $ its one clamp
- (all (\ v ($v = $(net v))) `(7 -5 '(1 -5) @(2 3) "ab" ~(0 2) #(1 10)))
- (all (\ v ((bit v) = !!v)) `(7 0 -3 "" "a" '(0) ~(0 2)))
+ (-1 = (net '(-2 1)))                           ; the net unclamped ($ is law.l's sat-net)
  (negate = (- 0)) (reciprocal = (/ 1))               ; the words ARE the sections
  ((net @(1 2 3)) = (net @(1 2 3))) ((net @(1 2 3)) = (net '(1 2 3)))
  ((net '(1 2 3)) = (foldl (+) 0 '(1 2 3)))

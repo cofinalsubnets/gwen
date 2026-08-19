@@ -17,7 +17,10 @@
 ; that allow many parentheses to be omitted.
 
 ; guidelines for working in this repo:
-; - keep comments tight. inline when possible. no paragraphs or ⚠ YELLING
+; - comments are short, calm lowercase, inline when possible, no paragraphs
+; - comments do not log history, cite past bugs, or refer beyond the present code
+; - this matters because the seed carries the source so the source needs to be nice
+; - C code may not use mutable globals/statics or directly call malloc/free
 ; - `make test` is the fast gate to check if it works (<1m)
 ; - `make test_slow` is the slow gate, before committing (<10m)
 ; - `make test_extra` is the really slow gate, before merging (<25m)
@@ -52,21 +55,25 @@ i = 0.5 -1                   ; complex numbers
  (11 13 17) "this matches lax about the tail"
  (11 >< 13 >< 17 >< _) 'this-is-fine-too)
 
-; language traps based on assumptions from other languages
+; language traps
 ; - (x) = x: singleton lists are no-ops
 ; - $ x != $x: spaced and glued are different operators
 ; - (+ 2 3 4) = ((+ 2 3) 4) = (5 4) = 1024: no varargs
 ; - (1 +) = (+ 1): no sections
+; - gem? (3 / 2) = 1: / gives a float; // for int
 
-; booleans: in a conditional what values are true and false?
-; love's rule is simple: positive is true, zero or negative
-; is false.
-(? 1 2 3)  ; 2
-(? 0 2 3)  ; 3
-(? -1 2 3) ; 3
+; booleans
+; love's exact booleans are {0,1}. however any value can be
+; considered boolean if it occurs as a ? predicate. the truth
+; value chosen in this situation is described for all x by the
+; lambda equations
+(x \ ?x = (bit x) = ($x > 0))
+(x \ $x = (ceil (re (net x))))
+; where the basic operation net is a complex-valued structure
+; respecting sum defined explicitly for all basic love data types. 
+(? 1 2 3)  ; 2 ; this predicate succeeds
+(? 0 2 3)  ; 3 ; this predicate fails
+(-1 ? 2 3) ; 3 ; infix ? is idiomatic ternary syntax
 ; compound data are summed over their parts and the truth value is the sign.
 (? '(1 -0.5) 'yea 'nae) ; yea
 (? '(1 -1.5) 'yea 'nae) ; nae
-; this equation shows different spellings of the truth bit of x
-(x \ ?x = !!x = ($x != 0) = (re +x > 0))
-

@@ -66,7 +66,11 @@
  !i !~(0 -1) !~(0 8) (0 = $i)                    ; ...and a PURE PHASE is BLUE. `i` and `-i` are swapped by a
  (i < 5) (~(0 -1) < i)                           ; field automorphism, so truth cannot tell them apart -- but the
                                                  ; ORDER still must (sorting needs totality). the one place they part.
+ (3 = $~(3 4)) (3 = $~(3 -4))                    ; ...so the AMOUNT is the real part, conjugate-blind
+ (1 = $@(0.3 0.4)) (1 = $~(0.001 0))             ; the clamp CEILS, so any positive net reaches 1 at every tier
  (1 = $#0) !!#0                                  ; ... but a box stays truthy: maps count keys
+ (120 = $(nom 'x)) (2 = (int (abs #(1 10 2 20))))  ; a nom nets its spelling's charms; a map counts keys either way
+ ($(100 2) = $(200 2)) (0 = $(0 - (100 2))) (0 = $(0 - (62 2)))  ; every positive big saturates to the charm ceiling; red is red at every width
  (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
  (0 = !5) (1 = !0) (id? zero? nil?) (1 = (nil? 0))  ; ! negates it; non is nil?
@@ -128,6 +132,9 @@
 ; ride the valence law (-(f x) negate, /4 reciprocal, ...) while sections ((- 0), (/ 1)) stay words.
 (assert
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
+ (1.0 = 7.0 % 2.0) (0.0 = 7.5 % 2.5) (-1.0 = -7.0 % 2.0)   ; % rides fmod, so it holds on the
+ (gem? (% 7 0)) (gem? (% 7.0 0.0))                         ; float lane too, sign following the
+                                                           ; dividend; and by zero it is a gem, not a scare
  (2 = 4 / 2) (charm? (4 / 2)) (-2 = (// -5 2))
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) (~(-1 -2) = ((- 0) ~(1 2)))   ; the sections are the monadics
  !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (? word (1e308 < 1 / 0) 1) (0 = (/ 0 0))
@@ -237,12 +244,16 @@
  ("ab" = "ab" + ()) ("ab" = () + "ab") (5 = 5 + ()) (5 = () + 5)      ; IDENTITY in every lane, not just on lists:
  (~(1 2) = () + ~(1 2)) ("@(1 2 3)" = show (() + @(1 2 3))) (() = () + ())  ; string/number/complex/array pass through
  (('ef + '(1 2)) = '(ef 1 2)) ('ef = 'ef + 5)  ; a NAMED symbol still ADJOINS to a list (foo stays foo); a number degenerates against it
+ ('ef = 65 + 'ef) ('ef = 'ef + @(1 2)) ('ef = @(1 2) + 'ef)  ; ..either side, and a tray is number-band the same way
  ((\ x x) = () + (\ x x)) (2 = (((\ x x) + (\ x x)) (\ n (+ n 1)) 0))   ; the TOP lane too: () + hot = hot, and
  ("ababab" = "ab" * 3) ('xyxy = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")   ; sym * count re-interns; + on two hots IS church add (id+id acts as 2)
  ("ababab" = "ab" * -3) !("ab" * 2.5) !('(1 2) * 0)         ; a count acts by |magnitude| when EXACT (the one hom
  (() = () * 5) (() = 5 * ()) (() = "ab" * ()) (() = () * "ab")   ; over the sign crossing); an inexact count is no count.
  (() = '(1 2) * (mint 0)) (() = () * ()) (() = () * @(1 2 3))    ; () is the ZERO and the zero ANNIHILATES * (the
- ("" = "ab" * 0) (() = () * (\ x x)))                       ; semiring law; 1 is the identity); the NUMBER 0 still counts: 0 copies = the kind's empty
+ ("" = "ab" * 0) (() = () * (\ x x))                        ; semiring law; 1 is the identity); the NUMBER 0 still counts: 0 copies = the kind's empty
+ !("ab" * ~(3 4))                                           ; ..and a complex is no count either, like the gem
+ ("ab" * 3 = "ab" + "ab" + "ab")                            ; THE TIE, the whole reason * is `repeated +`:
+ ('(1) * 3 = '(1) + '(1) + '(1)))                           ;   s*n IS s+s+..+s, in each lane that repeats
 
 ; --- the unit rides through EVERY dyadic arithmetic lane --- () is the DO-NOTHING operand,
 ; either side, for - / // % & | ^ << >> just as for + and *: the op never happens. NOT the
@@ -472,13 +483,22 @@
  !(string 0) !!(string 1) (1 = (tally (string 0)))   ; a NUL nets nothing: the chain of nothings reaches the BYTES, and (string 0) is one of them
  !(snip (+ "a" 0) 1 2) (97 = $(+ "a" 0))        ; ... an all-NUL text IS nothing, and the NUL byte appends for free
  ("bidden" = (snip "forbidden planet" 3 9)) ("abcd" = (+ "ab" "cd")) (1 = ("hi" 9))
+ ; there is ONE empty string: no 0-length text is ever allocated, so however a caller
+ ; arrives at one -- snipped, joined, repeated zero times, coerced, drained -- it is the
+ ; same object, and `id?` holds where only `=` was promised. a snip of text answers TEXT
+ ; (the kind's own nothing); only a non-text input, having no witness to keep, answers 0.
+ (id? "" (snip "abc" 1 1)) (id? "" (snip "" 0 5)) (0 = (snip 0 0 5))
+ (id? "" (+ "" "")) (id? "" ("ab" * 0)) (id? "" (string ())) (id? "" (string ""))
+ (id? "" (slurp (jug 0))) (id? "" (slurp (tap ()))) (id? "" (slurp 42))
+ ("" = (puts "")) (0 = (puts 0))                 ; ..and an empty operand writes nothing, answering itself
  ("abcd" = ("ab" "cd")) ("abcdef" = ("ab" "cd" "ef")) (: a "ab" b "cd" ((a b) = (+ a b)))   ; juxtaposition joins text, curried, no literal needed
  (99 = ("abc" -1)) (97 = ("abc" -3)) (1 = ("abc" -4))   ; a negative index counts from the END; past the front is out of range
  ("aXcd" = (pin "abcd" 1 88)) (: s "abcd" _ (pin s 1 88) ("abcd" = s))   ; pin answers a FRESH text; the original is untouched
  ("abcd" = (pin "abcd" 9 88)) ("abcd" = (pin "abcd" -1 88)) ("abcd" = (pin "abcd" 1 'x))  ; out of range / a non-byte is the no-op (from-the-end is APPLY's alone)
  ("ab" = ("ab" "")) ("ab" = ("" "ab")) ("" = ("" "")) (1 = ("ab" 'cd)) (1 = ("ab" '(1 2)))   ; "" is the unit; a non-text operand stays const-1
  ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
- ("\"a\\nb\"" = (show "a\nb")) ("(mint " = (snip (show (mint 0)) 0 6)))   ; a mint prints (mint <serial>) (diagnostic, not an exact reparse)
+ ('xy = (intern (string 'xy)))                   ; ..so intern . string is the identity on an interned symbol
+ ("\"a\\nb\"" = (show "a\nb")))
 
 ; --- hashes --- #(k v ..)/(hash ..) build, (tablet 0) the empty hash; #() = the EMPTY
 ; MAP (the reader emits (tablet 0); () is the zero-point, distinct from 0); #x boxes a datum;
@@ -635,6 +655,7 @@
  ; nothing, not a number
  (id? (&& () 5) ()) (id? (&& 1 0 3) ()) (id? (|| () ()) ()) (id? (|| () 0) ())
  (2 = (|| 0 2 3)) ('(1 2 3) = `(1 2 3)) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
+ (1 = (quote 1)) ('a = (quote a))                                  ; quote, the macro spelling of '
  (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big)) (9 = ((<=< (+ 1) (\ x (x * 2))) 4))
  (id? () (list)) (tray? (tuple)) (tablet? (hash)) (id? () (unless))   ; ⚠ the zero-operand macro
  (id? () (:)) (id? () (?)) (id? () (\)))                           ;   ..and the empty forms, still their head's value
@@ -667,7 +688,7 @@
 ; counts are CAPPED by the `apcap` box; the numeric power lane caps the RESULT instead
 ; (~ exponent * log2|base| bits against the box as a word budget), so a size-fixed or
 ; growthless base runs free ((pin apcap 0 n) retunes both). in anger: test/help.l,
-; test/missing.l, test/apcap.l.
+; test/missing.l, test/apcap.l, test/task.l (the scoop ring), test/random.l.
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
  ('(boom 7) = (trap (\ _ (scare 'boom 7)) () (\ a b `(a b)))) (3 = (trap (+ 1) 2 welp))
@@ -678,15 +699,11 @@
     r (trap (\ _ (mind (\ _ (scare 'boom 7)) () (\ _ (pin t 0 'freed)))) () (\ a b a))
     (&& (id? r 'boom) (id? (t 0) 'freed)))                    ; ..the condition riding on outward
  (42 = (: p (twirl (\ x (do (rest 0) (x + 1))) 41) (catch p))) (0 = (catch 99999)) (landed? 99999)
- (: (drain _) (? (two? (scoop 0)) (drain ()) 0)                  ; the ring is shared: drain first
-    _ (drain ()) p (twirl (\ _ ()) ()) _ (rest 0) s (scoop 0)
-    (&& (two? s) (&& (p = (cap s)) (nil? (cup s)))))             ; a () retval is STILL a pair
  (nil? (myself ()))                                           ; nobody twirled the root task
  (: p (twirl (\ _ (myself ())) ()) (p = (catch p)))           ; ..a child knows the id twirl gave it
- !(rest 0) (4 = (tally (wheel 1))) ((rand 10) < 10) (gem? (randf 0))
+ !(rest 0) ((rand 10) < 10) (gem? (randf 0))
  (lit? scare)
- (tablet? apcap) (1048576 = (apcap 0))              ; the apcap ceiling, a tunable box
- (: st (wheel 7) ((cap (random st 0)) = (cap (random st 0)))))
+ (: st (wheel 7) ((cap (random st 0)) = (cap (random st 0)))))   ; the functional layer is reproducible
 ; a missing name reads the zero point under the floor handler welp (no warning surfaced)
 (hear welp)
 (assert (id? (:) not-in-the-book) !not-in-the-book)   ; a nom not in the book
@@ -744,18 +761,14 @@
 ; `born` is WHAT THIS INVOCATION COST TO START in ms -- the hatch on an egg boot, the wake
 ; on a woken one -- and it is unbound pre-egg; just before birth the egg mops up runtime names.
 ; the mopped names are GONE post-birth; the floor handler welp answers the miss with the zero point (no warning)
-; ⚠ `hatched` ASKS PRESENCE, never born's net. The guards below mean "is born BOUND", and
+; ⚠ `hatched` ASKS PRESENCE, never born's net. The guard below means "is born BOUND", and
 ; born is a DURATION: a wake fast enough to answer 0 is blue, so a net test would read the
 ; post-egg runtime as pre-egg and pass every law under it vacuously. It measured 6 ms here
-; and 0 is one quiet machine away.
+; and 0 is one quiet machine away. WHICH names the mop takes is love/egg.l's list and
+; internal -- nothing on the surface names them, so nothing here asserts them.
 (: hatched (member? 'born (names ())))
 (hear welp)
-(assert (lit? ev) (? hatched (charm? born) 1)
-        (? hatched !macros 1) (? hatched !poke 1)     ; post-birth the names are gone
-        (? hatched !boxfix 1) (? hatched !lvm_ret 1) ; (pre-egg they still exist,
-        (? hatched !spin 1)                        ;  hence the born guards)
-        (? hatched !operators 1) (? hatched !pureset 1)   ; the compile tables too (2026-07-07)
-        (? hatched !enter 1) (? hatched !leave 1) (? hatched !lib 1))  ; the layer door + the source library: the runtime's, off the surface
+(assert (lit? ev) (? hatched (charm? born) 1))
 (hear test-strict)
 
 ; --- modules --- one layer per load, the registry, and `use` the loader -- all the runtime's.
@@ -820,31 +833,7 @@
  (assert (nil? (peep smt 'called ()))                    ; nothing applied smf2
          (member? 'smq2 (keys mq))))                     ; ..and both forms landed
 
-; --- odds & ends --- show renders a value as its reparsable printed form; (clock t) is ms since
-; t and (gauge 0) reports a VM stat; an opaque handle acts as a constant function.
-; (nclock t) is clock's fine INTERVAL twin: monotonic ns minus t (ms-degraded where a frontend
-; has no ns source, so monotone everywhere). (please x) is a collection on demand -- () asks for
-; a minor, a positive charm for a major -- answering the collection count, so two asks order
-; strictly; the worst pause of each kind rides gauge[14]/[15] in words (test/host/gcpause.l
-; proves the minor's flat in the live set).
-(assert (string? (show @(1 2 3))) (charm? (clock 0)) (1 = ((cask 4) 'x))
-        (16 = tally (gauge 0)) (0 <= nclock (nclock 0)))
-(: c1 (please ()) c2 (please 1)                  ; the sequence law orders the two asks
- (assert (c1 < c2)))
-; (tune v) is gauge's WRITE twin -- the four live GC knobs as a rank-1 Z array, in words:
-; [0] budget (total footprint cap, 2*minor + 2*major; 0 = unbounded -- appel's rule gives the
-; nursery what is left after the major pool) [1] minor0 (the nursery floor) [2] major0 (the
-; major pool's grow/shrink step) [3] ratio (the copy-overhead setpoint). (tune ()) reads; a
-; 4-array WRITES and answers what it REPLACED, so a probe restores with one call. a knob lands
-; at the next collection. a wrong shape is a silent no-op answering the current knobs (pin's
-; misuse convention), so a refused write is readable as "nothing moved".
-(: k0 (tune ())                                  ; whatever this seat booted with
-   old (tune @(2097152 32768 131072 16))
-   now (tune ())
-   bad (tune 'nonsense)                          ; refused: not an array
-   back (tune k0)                                ; ..and put the seat back for the rest of the corpus
- (assert (4 = tally k0) (tray? k0)
-         (k0 = old)                              ; a write answers what it replaced
-         (2097152 = peep now 0 0) (16 = peep now 3 0)
-         (now = bad)                             ; a refused shape wrote nothing
-         (now = back) (k0 = (tune ()))))         ; the restore lands: the seat is as it booted
+; --- odds & ends --- show renders a value as its reparsable printed form; an opaque handle
+; acts as a constant function. the VM's own instruments -- clock/nclock/gauge/please and
+; gauge's write twin `tune` -- are not the language: test/gauge.l.
+(assert (string? (show @(1 2 3))) (1 = ((cask 4) 'x)))

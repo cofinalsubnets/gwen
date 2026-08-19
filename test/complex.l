@@ -84,20 +84,7 @@
  (near -1 (re (2 i)))   (? word (near 0 (im (2 i))) 1)   ; im residue exceeds near's tol under f32 powf
  (near 0.20787957635076193 (re (i i)))   (near 0 (im (i i)))
 
- ; --- truthiness: a complex is FALSE iff it sorts <= 0+0i by the total order (re, then
- ;     im) -- 0, a negative real part, or re=0 with im<=0. re>0, or re=0 with im>0, is true.
- ;     (Lockstep with #: #z = 0 iff z <= 0, so -i and ~(-3 4) are now falsy.) ---
- (nil? ~(0 0))   (nil? ~(0 0.0))           ; 0+0i is false
- (nil? ~(-3 4))  (nil? ~(0 -1))            ; re<0, and -i, are false
- ; THE TRUTH GATE IS THE REAL PART, not the total order -- the one place the two
- ; part. `i` and `-i` are swapped by a field automorphism (and C admits no order
- ; compatible with its arithmetic), so truth cannot tell them apart: both are
- ; BLUE, the zero floor. they have magnitude, but no positive amount. the ORDER
- ; still separates them, because sorting needs totality.
- (nil? i)  (nil? ~(0 1))  (nil? ~(0 8))    ; every pure phase is nothing...
- (i < 5)   (~(0 -1) < i)                   ; ...but the order still ranks them
- (? ~(3 4) 1 0)   (? ~(3 -4) 1 0)          ; re>0 -> true, whatever the phase
- (3 = $~(3 4))  (3 = $~(3 -4))              ; ...and the AMOUNT is the real part, conjugate-blind (the magnitude is abs's)
+ ; --- the truth gate is the REAL part, not the total order (the pure-phase law): spec.l ---
 
  ; --- complex meets bignum: the bignum narrows to double (floating domain) ---
  (twin? (+ i B100))
