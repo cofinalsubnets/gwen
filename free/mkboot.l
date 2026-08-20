@@ -4,20 +4,16 @@
 ;   (lay-boot dst "x86_64")   the PVH note qemu reads to find the 32-bit entry,
 ;                             the page tables + GDT, the long-mode ladder, khop
 ;   (lay-boot dst "aarch64")  the translation tables, MAIR/TCR/TTBR, the MMU
-;                             switch, the hop into the high mapping, khop
+;                             switch, the hop into the mapped world, khop
 ;
-; LINKED HIGH, RUNS LOW is the whole difficulty on both arches. every PT_LOAD
-; vaddr sits in the top 2 GiB and loads at a low physical
-; address, so until the MMU/paging comes on the code EXECUTES low while every
-; symbol it names is linked high. the two worlds are two different questions and
-; the answer is a different instruction for each:
-;   `la`  (x86 rip-relative lea; aarch64 adrp+add) -- where the label IS RUNNING,
-;         the low physical address. this is what writes page tables.
-;   `lia` (x86 movabs; aarch64 an inline literal) -- where the LINKER put it, the
-;         high address. this is what the hop jumps to.
-; the third case is a field that must hold the physical address of a symbol at
-; LINK time, with no instruction involved at all: the PVH note's entry word, the
-; GDT register's base, the ljmp's target. those carry the FOLD addend below.
+; the link is FLAT on both arches (klink.l: vaddr = paddr, bias 0), so a label's
+; running address, its linked address, and the address a page table wants to hold
+; are ONE number. `la` (x86 rip-relative lea; aarch64 adrp+add) answers it, and a
+; field can name it whole -- the PVH note's entry word, the GDT register's base,
+; the ljmp's target. `lia` (x86 movabs; aarch64 an inline literal) stays only
+; where an absolute is wanted for its own sake: the hop that takes the first
+; fetch after the MMU comes on, where a pc-relative branch would ride a broken
+; map instead of failing on it, and the stack it lands on.
 ;
 ; runs after crew/holo/{elf,obj}.l in a (use 'holo) cat, with the target's
 ; backend text joined (a frontend bakes holo with the NATIVE backend only);
@@ -27,13 +23,8 @@
    (b-rep n x) (? (n < 1) () (x >< (b-rep (n - 1) x)))
    (b-zeros n) (b-rep n 0)
 
-   ;; the FOLD: an addend that turns a high-half link address into its low
-   ;; physical twin. KVMA is 0xffffffff80000000 and relocation arithmetic is
-   ;; 64-bit modular, so `S - KVMA` is `S + (2^64 - KVMA)` and 2^64 - KVMA is
-   ;; exactly 2^31. every `sym - KVMA` in the old .S files is this constant.
-   kvma-fold 2147483648
-   (b-abs32 lbl ad) `(`('fix 4 'abs32 lbl (kvma-fold + ad)))   ; a 4-byte physical address
-   (b-abs64 lbl ad) `(`('fix 8 'abs64 lbl (kvma-fold + ad)))   ; ..and its 8-byte twin
+   (b-abs32 lbl ad) `(`('fix 4 'abs32 lbl ad))   ; a 4-byte physical address
+   (b-abs64 lbl ad) `(`('fix 8 'abs64 lbl ad))   ; ..and its 8-byte twin
    (b-quad v) `('raw (le64 v))
 
    ;; -- the x86-32 helper table -------------------------------------------
@@ -84,14 +75,13 @@
      + `(`('raw (b-abs32 'pvh32 0))))                ; the PHYSICAL address of the 32-bit entry
 
    ;; the page tables, zero-filled and part of the file (they are .boot's bytes,
-   ;; not .bss -- the loader hands them over whole). one PML4, two PDPTs (the
-   ;; identity and hhdm windows share one, the kernel-high map gets the other),
-   ;; four PDs of 2 MiB entries covering physical 0..4 GiB. RAM above 4 GiB
-   ;; stays unmapped -- pvh.c drops those e820 entries.
+   ;; not .bss -- the loader hands them over whole). one PML4, one PDPT the
+   ;; identity and hhdm windows share, four PDs of 2 MiB entries covering
+   ;; physical 0..4 GiB. RAM above 4 GiB stays unmapped -- pvh.c drops those
+   ;; e820 entries.
    x-boot
     ('((label pml4)) + `(`('raw (b-zeros 4096)))
      + '((label pdpt_id)) + `(`('raw (b-zeros 4096)))
-     + '((label pdpt_hi)) + `(`('raw (b-zeros 4096)))
      + '((label pd0)) + `(`('raw (b-zeros 16384)))
      ;; the GDT: a null, a 64-bit code segment at 0x08, a data segment at 0x10.
      + `(`('align 8) `('label 'gdt))
@@ -116,18 +106,15 @@
          (i32 (i-add-eax 0x1000)) (i32 (i-st-edi 8))
          (i32 (i-add-eax 0x1000)) (i32 (i-st-edi 16))
          (i32 (i-add-eax 0x1000)) (i32 (i-st-edi 24)))
-     ;; kernel-high PDPT: entry 510 -> PD0, so KVMA maps phys 0..1 GiB
-     + `((i32 (i-edi-sym 'pdpt_hi 0)) (i32 (i-sti-edi (510 * 8) 'pd0 3)))
-     ;; PML4: [0] identity, [256] the hhdm at 0xffff8000_00000000, [511] kernel-high.
-     ;; NX rides the hhdm entry alone -- one bit at the top of the walk covers every
-     ;; page under it, and the hhdm is how the kernel reaches ALL of ram (kboot.hhdm),
-     ;; so heap, framebuffer and every mapped physical page stop being executable
-     ;; without a second table. ⚠ the identity window keeps X: pvh64 runs there, at a
-     ;; low physical address, until `jmpr` hops it high three instructions later.
+     ;; PML4: [0] identity, [256] the hhdm at 0xffff8000_00000000 -- one PDPT
+     ;; described twice, and NX on the second description is the whole reason the
+     ;; hhdm exists. one bit at the top of the walk covers every page under it, and
+     ;; the hhdm is how the kernel reaches ram (kboot.hhdm), so heap and every page
+     ;; it hands out stop being executable without a second table. ⚠ the identity
+     ;; window keeps X: the kernel image and the framebuffer are read through it.
      + `((i32 (i-edi-sym 'pml4 0)) (i32 (i-eax-sym 'pdpt_id 3))
          (i32 i-st-edi0) (i32 (i-st-edi (256 * 8)))
-         (i32 (i-stimm-edi ((256 * 8) + 4) 0x80000000))
-         (i32 (i-sti-edi (511 * 8) 'pdpt_hi 3)))
+         (i32 (i-stimm-edi ((256 * 8) + 4) 0x80000000)))
      ;; the long-mode ladder: GDT, CR4.PAE, CR3, EFER.LME, CR0.PG|PE, far jump
      + `((i32 (i-lgdt 'gdtreg 0))
          (i32 (i-ldcr 4)) (i32 (i-or-eax8 0x20)) (i32 (i-stcr 4))     ; CR4.PAE
@@ -138,9 +125,9 @@
          ; the first walk after paging comes on faults instead of honouring the NX.
          (i32 (i-ldcr 0)) (i32 (i-or-eax 0x80000001)) (i32 (i-stcr 0)))   ; PG | PE
      + `((i32 (i-ljmp 'pvh64 0)))
-     ;; ..and we are 64-bit. the data selectors, then the hop to the high
-     ;; mapping -- an ABSOLUTE address, since every branch so far was relative
-     ;; and relative branches stay low.
+     ;; ..and we are 64-bit. the data selectors, then the hop into the mapped
+     ;; world -- absolute on purpose: it is the first fetch after paging, and a
+     ;; relative branch would ride a broken map instead of failing on it.
      + `(`('label 'pvh64))
      + `(`('raw '(102 184 16 0))                     ; 66 b8 10 00  mov $0x10, %ax
          `('raw '(142 216))                          ; 8e d8        mov %ax, %ds
@@ -148,7 +135,7 @@
          `('raw '(142 208)))                         ; 8e d0        mov %ax, %ss
      + '((lia r0 khop) (jmpr r0)))
 
-   ;; the high half: a stack, SSE on before ANY C runs (pvh_to_kboot is compiled
+   ;; past the hop: a stack, SSE on before ANY C runs (pvh_to_kboot is compiled
    ;; and free to vectorize -- the same dance as the top of kmain, which stays
    ;; for a door that hands over with C already reachable), then C.
    x-text
@@ -171,17 +158,17 @@
        (cli) (hlt) (jmp x_park))
 
    ;; -- aarch64 -----------------------------------------------------------
-   ;; the tables mirror x86's shape index for index: hhdm at L0[256], the kernel
-   ;; gig at L1[510]. TTBR0 gets the identity map (the switch itself), TTBR1 the
-   ;; hhdm + KVMA. the first gig is virt's MMIO ground and is laid as a real L2
-   ;; of 2 MiB Device blocks -- arch.c's mmio_map walks TTBR1 expecting a TABLE
-   ;; there (a 1 GiB block would read as a bogus L2 pointer) and re-lays the two
-   ;; slots it cares about, same shape. RAM (1..4 GiB) rides 1 GiB Normal blocks.
+   ;; the tables mirror x86's shape index for index: one L1 named twice, as the
+   ;; identity map under TTBR0 (where the kernel runs) and as the hhdm at
+   ;; L0[256] under TTBR1. the first gig is virt's MMIO ground and is laid as a
+   ;; real L2 of 2 MiB Device blocks -- arch.c's mmio_map walks TTBR1 expecting
+   ;; a TABLE there (a 1 GiB block would read as a bogus L2 pointer) and re-lays
+   ;; the two slots it cares about, same shape. RAM (1..4 GiB) rides 1 GiB
+   ;; Normal blocks, and the kernel's own gig is one of them.
    a-boot
     ('((label l0_lo)) + `(`('raw (b-zeros 4096)))    ; TTBR0: [0] -> l1_id
-     + '((label l0_hi)) + `(`('raw (b-zeros 4096)))  ; TTBR1: [256] hhdm -> l1_id, [511] -> l1_hi
+     + '((label l0_hi)) + `(`('raw (b-zeros 4096)))  ; TTBR1: [256] hhdm -> l1_id
      + '((label l1_id)) + `(`('raw (b-zeros 4096)))  ; [0] -> l2_dev, [1..3] 1G Normal blocks
-     + '((label l1_hi)) + `(`('raw (b-zeros 4096)))  ; [510] the kernel gig: KVMA -> RAMB
      + '((label l2_dev)) + `(`('raw (b-zeros 4096))))   ; 512 x 2M Device blocks over phys 0..1G
 
    a-gig 0x40000705                                 ; 0x40000000 | 0x705  valid | AttrIndx 1 | SH inner | AF
@@ -218,13 +205,11 @@
      + `(`('li 'r2 a-gig) `('st 'r1 8 'r2)
          `('li 'r2 (a-gig + 0x40000000)) `('st 'r1 16 'r2)
          `('li 'r2 (a-gig + 0x80000000)) `('st 'r1 24 'r2))
-     ;; l1_hi: [510] = the kernel gig, KVMA + V -> RAMB + V
-     + `('(la r5 l1_hi) `('li 'r2 a-gig) `('st 'r5 (510 * 8) 'r2))
-     ;; the L0s: identity for the switch, hhdm + kernel-high for the life after
+     ;; the L0s: the same L1 under both, identity for the kernel and the hhdm
+     ;; for reaching ram by physical address
      + '((or r3 r1 r6)
          (la r0 l0_lo) (st r0 0 r3)
          (la r2 l0_hi) (st r2 2048 r3)               ; [256]
-         (or r5 r5 r6) (st r2 4088 r5)               ; [511]
          ;; MAIR: attr0 Device-nGnRnE (what mmio_attr_index prefers), attr1 Normal WB
          (li r3 0xff00)
          (msr mair_el1 r3)
@@ -248,18 +233,19 @@
          (li r4 0x1005) (or r3 r3 r4)          ; M | C | I = 1<<0 | 1<<2 | 1<<12
          (msr sctlr_el1 r3)
          (isb)
-         ;; the hop. every branch so far was pc-relative and stayed low; this
-         ;; one must be the LINKED address, so it rides an inline literal --
-         ;; and the align is lia's, not decoration: the literal sits at the
-         ;; instruction's own address + 8, so the site has to be even-worded
-         ;; for the 8-byte load to be aligned.
+         ;; into the mapped world. the link is flat, so this lands where the
+         ;; pc already is -- but it rides the literal anyway, because it is the
+         ;; first fetch after the MMU came on and a pc-relative branch would
+         ;; hide a broken identity map instead of failing on it. the align is
+         ;; lia's, not decoration: the literal sits at the instruction's own
+         ;; address + 8, so the site has to be even-worded for the load.
          (align 8)
          (lia r9 khop)
          (jmpr r9)))
 
    a-text
     '((label khop)
-       (la r9 kstack)                                ; running HIGH now: pc-relative is the linked address
+       (la r9 kstack)                                ; flat: pc-relative IS the linked address
        (li r10 0x10000) (add r9 r9 r10)              ; + kstack_size
        (lea sp r9 0)                                 ; mov sp, x9
        ;; qemu lays the dtb at the RAM base; a loader that passed one in x0 wins.

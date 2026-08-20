@@ -21,10 +21,9 @@
    r-pc32  2                                        ; R_X86_64_PC32   S + A - P (an la into .data)
    r-plt32 4                                        ; R_X86_64_PLT32  L + A - P (a call to an external fn)
    r-32    10                                       ; R_X86_64_32     S + A, TRUNCATED to 4 bytes -- the
-                                                    ; kernel's PVH note says `.long pvh32 - KVMA`, a
-                                                    ; 64-bit address minus the high-half base, and the
-                                                    ; wrapped-down sum is the physical entry qemu jumps
-                                                    ; to. the linker checks the fit; nothing hosted emits it.
+                                                    ; kernel's PVH note names its 32-bit entry, and the
+                                                    ; kernel links flat under 4 GiB so the address fits.
+                                                    ; the linker checks it; nothing hosted emits it.
    ; ... and aarch64. field relocs here patch BITS of an instruction word, not a
    ; whole field -- the placeholder bytes carry the base opcode (the fixup's aux).
    ra-abs64  257                                    ; R_AARCH64_ABS64           S + A
@@ -570,7 +569,7 @@
               (? ; an ABSOLUTE pointer at the label -- aux is the constant byte
                  ; offset a &arr[i] / &s.field baked into the field.
                  (id? k 'abs64) (o-rela off si rabs (sa + aux))
-                 ; ..and its 4-byte twin, the PVH note's `.long pvh32 - KVMA`
+                 ; ..and its 4-byte twin, the PVH note's 32-bit entry
                  (id? k 'abs32) (o-rela off si r-32 (sa + aux))
                  ; x64: the field is measured from its own END, so every addend
                  ; carries the -4. a weak-defined fn binds its own symbol through

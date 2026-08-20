@@ -7,8 +7,8 @@
 ; kernel lane.
 
 (: (kparams arch)         ; ldkern's target, entry, vaddr, bias; vaddr - bias = where it loads
-    (? (arch = "x86_64")  ['x64   "kmain"   0xffffffff80200000 0xffffffff80000000]  ; -> 0x200000
-       (arch = "aarch64") ['arm64 "a64boot" 0xffffffff80200000 0xffffffff40000000]  ; -> 0x40200000, qemu -M virt's RAM base + 2M
+    (? (arch = "x86_64")  ['x64   "kmain"   0x200000   0]     ; flat: vaddr IS the physical address
+       (arch = "aarch64") ['arm64 "a64boot" 0x40200000 0]     ; qemu -M virt's RAM base + 2M
        (scare 'klink-arch arch))
    ; presence out of band: an unreadable object and an EMPTY one are the same
    ; value, and an empty .o here would link a kernel with a silent hole in it.

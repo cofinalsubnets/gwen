@@ -137,7 +137,7 @@
  ; ..and the same value in the other two bases, in every build
  (18446744073709551615 = (rdr "0xffffffffffffffff"))
  (18446744073709551615 = (rdr "01777777777777777777777"))
- (18446744071564165120 = (rdr "0xffffffff80200000"))            ; klink.l's kernel vbase
+ (18446744071564165120 = (rdr "0xffffffff80200000"))            ; a high-half address
  (9223372036854775807 = (rdr "0x7fffffffffffffff"))             ; the old strtol ceiling
  (340282366920938463463374607431768211455 = (rdr "0xffffffffffffffffffffffffffffffff"))
  (73786976294838206463 = (rdr "007777777777777777777777"))      ; 2^66-1, octal

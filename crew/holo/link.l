@@ -78,11 +78,10 @@
    (ld-zeros n) (? (n < 1) () (0 >< ld-zeros (n - 1)))
    (ld-align a v) (? (a < 2) v (: r (v % a) (? (r = 0) v (v + (a - r)))))
    (ld-fits32 v) ((-2147483648 <= v) && (v <= 2147483647))
-   ; every relocation's field arithmetic is a linker's: 64-bit MODULAR. hosted
-   ; addresses never reach the wrap, but the kernel LEANS on it -- mkboot.l's
-   ; 32-bit stub says `.boot + 0x80003000`, and that sum wraps the high-half
-   ; base off to the physical address the pre-paging code has to jump to.
-   ; % is truncated here, so a negative sum comes back negative: fold it up.
+   ; every relocation's field arithmetic is a linker's: 64-bit MODULAR. nothing
+   ; laid here reaches the wrap today, but an image linked above the signed half
+   ; would, and % is truncated in this dialect -- a negative sum comes back
+   ; negative, so fold it up.
    (ld-u64 v) (: r (v % 18446744073709551616)
                  (? (r < 0) (r + 18446744073709551616) r))
    (ld-u32 v) (: r (v % 4294967296) (? (r < 0) (r + 4294967296) r))
@@ -701,9 +700,6 @@
                            ; _32 is UNSIGNED and _32S signed, so each reads the wrapped
                            ; sum its own way -- and a truncated address would point
                            ; somewhere real and wrong, so each checks its own range.
-                           ; the kernel exercises both: its high-half addresses are
-                           ; 32S's negative half, and mkboot.l's wrapped `.boot + bias`
-                           ; is a plain unsigned physical address.
                            (: v (? (kind = 10) sa (sg64 sa))
                               _ (? (? (kind = 10) (v <= 4294967295) (ld-fits32 v))
                                    0 (scare 'link-range <sy))
@@ -1034,11 +1030,11 @@
                      (ld-zeros (shto - (rdmo + rdmz))) sht))))
 
    ; --- the KERNEL lane: one ELF, three doors ---------------------------------
-   ; a freestanding image is laid where it RUNS and loaded where it LANDS: every
-   ; PT_LOAD carries p_paddr = p_vaddr - bias, which is what lets `qemu -kernel`
-   ; copy by p_paddr with the MMU off while our own BOOTX64.EFI maps
-   ; by p_vaddr with it on -- one file, and mkboot.l bridges the two. that split,
-   ; and the several segments it needs, is the whole of what a kernel asks for
+   ; every PT_LOAD carries p_paddr = p_vaddr - bias, so an image can be laid
+   ; where it RUNS and loaded where it LANDS. inle passes bias 0 and takes the
+   ; two as one number (free/klink.l), which is what lets `qemu -kernel` copy by
+   ; p_paddr with the MMU off and our own BOOTX64.EFI take those same pages with
+   ; it on. the several segments it needs are the rest of what a kernel asks for
    ; that ldlink's one-segment shape cannot say.
    ;
    ; the lanes, each page-aligned and each its own segment: `boot` (the stub's

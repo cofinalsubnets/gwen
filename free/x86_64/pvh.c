@@ -15,9 +15,10 @@ struct hvm_start_info {
 };
 struct hvm_memmap_entry { uint64_t addr, size; uint32_t type, reserved; };
 
-// the linker lays this at the end of .bss; image - KVMA is the physical
-// footprint qemu loaded us into, which e820 still calls usable RAM (the PVH
-// loader reserves nothing) -- hand it to the heap and the kernel eats itself.
+// the linker lays this at the end of .bss, and the link is flat, so the symbol
+// IS the physical footprint qemu loaded us into -- which e820 still calls usable
+// RAM (the PVH loader reserves nothing). hand it to the heap and the kernel eats
+// itself.
 extern char kimage_end[];
 
 static void give(uint64_t base, uint64_t len) {
@@ -31,7 +32,7 @@ void pvh_to_kboot(uint32_t si_paddr) {
   if (si->magic != 0x336ec578 || si->version < 1 || !si->memmap_paddr) return;
   struct hvm_memmap_entry *mm = (void *) (pvh_hhdm + si->memmap_paddr);
   uint64_t k0 = 0x200000,             // k1 page-rounded: meminit lays a struct
-           k1 = (((uintptr_t) kimage_end - 0xffffffff80000000ull) + 0xfff) & ~0xfffull;
+           k1 = ((uintptr_t) kimage_end + 0xfff) & ~0xfffull;
   kboot.hhdm = pvh_hhdm;
   if (si->cmdline_paddr) k_cmdline((char const *) (pvh_hhdm + si->cmdline_paddr), (uintptr_t) ~0);
   for (uint32_t i = 0; i < si->memmap_entries; i++) {

@@ -2,12 +2,12 @@
 // used to do, in ~250 lines of mooncc-compiled C. firmware hands us ms_abi
 // UEFI; mkefi.l's thunks carry the seam (efi_main in, efi_call out, efi_go
 // the cr3-and-jump tail). the loader reads love.elf off its own volume,
-// copies the PT_LOADs anywhere 2M-aligned, finds `kboot` in the kernel's
-// symtab (our binaries carry one on purpose) and fills it: the UEFI memmap's
-// conventional ranges, the GOP framebuffer, the hhdm. then ExitBootServices,
-// our page tables (identity + hhdm + KVMA over wherever the kernel landed),
-// and kmain. the kernel notices nothing: kboot is kboot, and the request
-// section answers NULL, the same ELF boots all three doors.
+// takes the pages AT the link address, copies the PT_LOADs there, finds
+// `kboot` in the kernel's symtab (our binaries carry one on purpose) and
+// fills it: the UEFI memmap's conventional ranges, the GOP framebuffer, the
+// hhdm. then ExitBootServices, our page tables (identity + the hhdm's NX
+// twin), and kmain. the kernel notices nothing: kboot is kboot, and the same
+// ELF boots all three doors.
 //
 // INTEGER-ONLY on purpose: the entry thunk saves rsi/rdi around the sysv
 // call and nothing else -- the ms_abi xmm6..15 stay untouched only as long
@@ -21,7 +21,6 @@ typedef unsigned char u8;
 extern u64 efi_call(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e);
 extern void efi_go(u64 pml4, u64 entry);
 
-#define KVMA 0xffffffff80000000ull
 #define HHDM 0xffff800000000000ull
 
 static u8 lip_guid[16] = {0xa1,0x31,0x1b,0x5b,0x62,0x95,0xd2,0x11,0x8e,0x3f,0x00,0xa0,0xc9,0x69,0x72,0x3b};
@@ -51,9 +50,9 @@ struct k_boot {
  u8 has_fb; };
 
 static u8 mmap[32768];                 // the UEFI memory map, GetMemoryMap-filled
-// the page tables: pml4 + 2 pdpt + 4 pd + the kernel pd. a page table's low 12
-// bits are its flags, so the aligned(4096) IS the contract -- mooncc honors it.
-static u64 pt[8 * 512] __attribute__((aligned(4096)));
+// the page tables: pml4 + one pdpt + four pds. a page table's low 12 bits are
+// its flags, so the aligned(4096) IS the contract -- mooncc honors it.
+static u64 pt[6 * 512] __attribute__((aligned(4096)));
 
 u64 efi_main(void *handle, void *st) {
  sys = (void **) st;
@@ -83,8 +82,8 @@ u64 efi_main(void *handle, void *st) {
  if (efi_call(((void **) f)[4], (u64) f, (u64) &rsz, buf, 0, 0) || rsz != fsz)
   return die("short read on love.elf");
 
- // the ELF: copy every PT_LOAD into one fresh 2M-aligned span; our tables
- // will lay KVMA over it, so the link-time paddrs only fix RELATIVE places.
+ // the ELF: the link is FLAT, so a PT_LOAD's vaddr is the physical address it
+ // wants. take exactly those pages and copy each segment home.
  u8 *e = (u8 *) buf;
  if (*(u32 *) e != 0x464c457f) return die("love.elf is not an ELF");
  u64 phoff = *(u64 *) (e + 32), entry = *(u64 *) (e + 24);
@@ -97,23 +96,23 @@ u64 efi_main(void *handle, void *st) {
   if (pa < lo) lo = pa;
   if (pa + msz > hi) hi = pa + msz; }
  if (hi <= lo) return die("love.elf carries no load segments");
- // floor lo to 2M: the kernel high map is laid in 2M pages, and a PDE's
- // physical address has to be 2M-aligned (the bits below are RESERVED, and a
- // reserved bit set is a #PF at the first instruction fetch -- how this bug
- // announced itself). the lowest load address is only PAGE-aligned (0x201000
- // after the ELF headers), so the 2M floor below it becomes the anchor: every
- // segment copies at its offset from THERE, and the map lines up exactly.
+ // floor lo to 2M: the window is laid in 2M pages. the lowest load address is
+ // only PAGE-aligned (0x201000, after the ELF headers), so the 2M floor below
+ // it is the page the kernel's first block lives in.
  lo &= ~0x1fffffull;
- u64 span = 0, npg = (hi - lo + 4095) / 4096 + 512;    // + 2M of alignment slack
- if (efi_call(bs[5], 0, 2, npg, (u64) &span, 0))
-  return die("no pages for the kernel");
- u64 kbase = (span + 0x1fffff) & ~0x1fffffull;         // 2M-align inside the span
+ u64 span = lo;
+ // AT the link address, not anywhere: a flat kernel names its own physical
+ // home, and taking it means the identity window IS the kernel's map -- no
+ // second table, no relocation. ⚠ a REFUSAL is fatal on purpose: relocating
+ // would shadow this range, and our own code, stack and tables are in it.
+ if (efi_call(bs[5], 2, 2, (hi - lo + 4095) / 4096, (u64) &span, 0))
+  return die("firmware would not give the kernel its load address");
  for (u16 i = 0; i < phn; i++) {
   u8 *p = e + phoff + (u64) i * phsz;
   if (*(u32 *) p != 1) continue;
   u64 off = *(u64 *) (p + 8), pa = *(u64 *) (p + 24);
   u64 flz = *(u64 *) (p + 32), msz = *(u64 *) (p + 40);
-  u8 *d = (u8 *) (kbase + (pa - lo));
+  u8 *d = (u8 *) pa;
   for (u64 j = 0; j < flz; j++) d[j] = e[off + j];
   for (u64 j = flz; j < msz; j++) d[j] = 0; }
 
@@ -132,7 +131,7 @@ u64 efi_main(void *handle, void *st) {
    char *nm = (char *) (str + *(u32 *) sy);
    if (nm[0] == 'k' && nm[1] == 'b' && nm[2] == 'o' && nm[3] == 'o'
        && nm[4] == 't' && !nm[5]) {
-    kb = (struct k_boot *) (kbase + (*(u64 *) (sy + 8) - KVMA - lo));
+    kb = (struct k_boot *) *(u64 *) (sy + 8);          // flat: st_value IS the address
     break; } } }
  if (!kb) return die("no kboot symbol in love.elf");
  kb->hhdm = HHDM;
@@ -148,24 +147,18 @@ u64 efi_main(void *handle, void *st) {
   kb->fb.pitch_px = *(u32 *) (info + 32);
   kb->has_fb = 1; }
 
- // page tables BEFORE ExitBootServices (say still works): identity + hhdm
- // over the low 4G in 2M pages, and KVMA -> the span the kernel landed in.
- for (u64 i = 0; i < 8 * 512; i++) pt[i] = 0;
- for (u64 i = 0; i < 2048; i++) pt[3 * 512 + i] = (i << 21) | 0x83;
- for (u64 i = 0; i < 4; i++) pt[512 + i] = (u64) &pt[(3 + i) * 512] | 3;
- // KVMA + V maps to kbase + (V - lo): the segments were copied at their
- // offsets FROM lo, and lo (the lowest link paddr, 2M-aligned by the script)
- // is where the kernel believes KVMA's image begins. slots below lo stay
- // unmapped -- nothing of ours lives there.
- u64 *kpd = pt + 7 * 512;              // the slack page after the seven above
- for (u64 i = lo >> 21; i < 512; i++) kpd[i] = (kbase + (i << 21) - lo) | 0x83;
- pt[2 * 512 + 510] = (u64) kpd | 3;
+ // page tables BEFORE ExitBootServices (say still works): one PDPT of 2M
+ // identity blocks over the low 4G, named twice. the kernel sits at its link
+ // address, so identity is already its map -- mkboot.l's PVH stub lays the
+ // same two windows for the same reasons.
+ for (u64 i = 0; i < 6 * 512; i++) pt[i] = 0;
+ for (u64 i = 0; i < 2048; i++) pt[2 * 512 + i] = (i << 21) | 0x83;
+ for (u64 i = 0; i < 4; i++) pt[512 + i] = (u64) &pt[(2 + i) * 512] | 3;
  pt[0] = (u64) &pt[512] | 3;
  // NX on the hhdm entry alone: one bit at the top of the walk covers every page
  // under it, and the hhdm is how the kernel reaches all of ram. the identity
  // window keeps X -- efi_go's own next instruction fetch is there.
  pt[256] = (u64) &pt[512] | 3 | (1ull << 63);
- pt[511] = (u64) &pt[2 * 512] | 3;
 
  // the memmap -> kboot.ram: CONVENTIONAL (7) only. loader/firmware-typed
  // memory stays out, so the kernel heap never eats this stack, the tables,

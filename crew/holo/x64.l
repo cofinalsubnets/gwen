@@ -570,9 +570,9 @@
          (kind = 'abs64) (le64 (target + aux))     ; aux = a byte ADDEND (&arr[i]/&s.field: label + constant offset)
          ;; abs32: the same absolute address TRUNCATED to four bytes. only ever
          ;; correct where the sum provably fits, and the kernel's boot stub is
-         ;; where it does -- `pvh32 - KVMA` is a high-half address minus the
-         ;; high-half base, which is the low physical address qemu's PVH loader
-         ;; jumps to. the linker range-checks its own half (link.l, kind 10).
+         ;; where it does -- it links flat under 4 GiB, and the PVH note must
+         ;; name that entry in 32 bits. the linker range-checks its own half
+         ;; (link.l, kind 10).
          (kind = 'abs32) (: v ((target + aux) % 4294967296)
                             (le32 (? (v < 0) (v + 4294967296) v)))
          (scare 'badfix kind))
