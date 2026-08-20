@@ -261,19 +261,35 @@ static int k_fd_eff(struct ai *g, int fd) {
 // the fd first read through the running task's seat (rung 4). The NULL-guards
 // keep misuse from crashing (read-from-output-fd reads the end;
 // write-to-input-fd discards).
-static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  int fd = k_fd_eff(g, (int) ai_io_fd(g->io));
+// the row-level motions, on an ALREADY-RESOLVED fd. The port dispatchers below
+// resolve through the running task's seat first; free/sys.c's syscall door does
+// not, which is the one difference between the two callers.
+static intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) {
   struct k_source *s = k_source(fd);
   if (!s || !s->readn) return -1;
   return s->readn(fd, dst, n); }
-static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
-  int fd = k_fd_eff(*fp, (int) ai_io_fd((*fp)->io));
+static intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
   struct k_source *s = k_source(fd);
   if (!s) return (intptr_t) n;
   if (s->writen) return s->writen(fd, src, n);
   if (!s->putc) return (intptr_t) n;
   for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
   return (intptr_t) n; }
+static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+  return k_row_read(k_fd_eff(g, (int) ai_io_fd(g->io)), dst, n); }
+static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
+  return k_row_write(k_fd_eff(*fp, (int) ai_io_fd((*fp)->io)), src, n); }
+
+// free/sys.c's door: the POSIX shapes over the same rows. ⚠ the port layer says
+// END with -1 and read(2) says it with 0, so the ends are translated here rather
+// than in the syscall table, where every future row would have to remember.
+long k_fd_write(int fd, void const *b, long n) {
+  if (n < 0) return -22;                                 // EINVAL
+  return (long) k_row_write(fd, (unsigned char const *) b, (uintptr_t) n); }
+long k_fd_read(int fd, void *b, long n) {
+  if (n < 0) return -22;
+  intptr_t r = k_row_read(fd, (unsigned char *) b, (uintptr_t) n);
+  return r < 0 ? 0 : (long) r; }
 static struct ai *fd_flush(struct ai *g) {
   int fd = k_fd_eff(g, (int) ai_io_fd(g->io));
   struct k_source *s = k_source(fd);
@@ -1523,6 +1539,20 @@ static lvm(lvm_fault) {
 #ifdef K_TEST
 // (exit code) -- quit qemu; the test corpus calls it on completion / failure.
 static lvm(lvm_kexit) { k_qemu_exit(getcharm(Sp[0])); Ip += 1; ai_musttail return Continue(); }
+
+// (syswrite fd str) -> the count landed, or -1 on a non-string. THE SYSCALL
+// SEAM'S ONE GATE: it calls nolibc's write(), which is sc3(NR_write, ..) into
+// free/sys.c, which is the row -- so a green test/kernel/sys.l says that whole
+// path is live and no other test in the tree can say it. K_TEST only: the
+// shipped kernel has no reason to spell a syscall in love.
+extern long write(int, void const *, long);
+ai_noinline static ai_word k_syswrite(ai_word fw, ai_word sw) {
+  if (!ai_strp(sw)) return putcharm(-1);
+  struct ai_str *pv = (struct ai_str*) sw;
+  return putcharm(write((int) getcharm(fw), pv->bytes, (long) pv->len)); }
+static lvm(lvm_syswrite) {
+  Sp[1] = k_syswrite(Sp[0], Sp[1]);
+  Sp += 1; ai_musttail return Next(1); }
 #endif
 
 // (quit code) -- the exit door, and since rung 4 the door with two rooms behind
@@ -1606,6 +1636,7 @@ static union u
   nif_quit[] = {{lvm_quit}, {lvm_ret0}},
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
+  nif_syswrite[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_syswrite}, {lvm_ret0}},
 #endif
   nif_fault[] = {{lvm_fault}, {lvm_ret0}};
 
@@ -1711,6 +1742,7 @@ static struct ai_def const __attribute__((section("ai_nifs"), used)) defs[] = {
   {"quit", (intptr_t) nif_quit},
 #ifdef K_TEST
   {"exit", (intptr_t) nif_exit},
+  {"syswrite", (intptr_t) nif_syswrite},
 #endif
   {"color", (intptr_t) nif_color} };
 

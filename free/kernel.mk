@@ -32,7 +32,7 @@ endif
 KCC ?= LOVE_NO_IMAGE= $(ho)/love mooncc
 
 k_arch_c = $(wildcard $(R)/free/$a/*.c)
-k_free_c = $R/free/kmain.c $R/free/blk.c
+k_free_c = $R/free/kmain.c $R/free/blk.c $R/free/sys.c
 # paint.c is named rather than wildcarded (mk/common.mk): the console renders 32bpp,
 # so this seat wants the shared painter. nif.c stays out until the kernel grows
 # defs[] rows for it -- bodies nothing calls are bytes the image cannot spend.
@@ -62,6 +62,7 @@ kcppflags := \
   -I. -Icore -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/free \
   -I$(R)/free/$a \
   -I$(R)/crew/moon/include \
+  -D__inle__ \
   $(kcppflags)
 ifdef K_TEST
 # tail-threaded, matching the real kernel and the host; love0 stays the trampoline lane.
@@ -226,7 +227,8 @@ init-container: host
 # heavy for an emulated kernel. Added, in order: ramfs.l (the baked initrd, which on the
 # host would just be `open` on the real tree), fs.l and wfs.l (the writable tree), kore0.l
 # then the kore cat then kore.l (the fs tools over the cat's own prefix), pipe.l (rung 4:
-# pipes, the spawn/wait shim, the stdio seat), lush's engine parts in cat order as
+# pipes, the spawn/wait shim, the stdio seat), sys.l (the syscall seam -- nolibc's write
+# through free/sys.c to a row, which only this seat can ask), lush's engine parts in cat order as
 # test/host/sh.l reads them (sh0.l pins what they mention and the seat lacks) and sh.l,
 # rung 4's gate -- a real pipeline through sh-line -- then disk.l (rung 5: the virtio raw
 # door + lib/fat.l on the real device, guarded on (disk ()) so a seat without one stays
@@ -235,7 +237,7 @@ init-container: host
 kt = $(filter-out %/run.l %/bell.l %/zz-fin.l,$t) \
   $R/test/kernel/ramfs.l $R/test/kernel/fs.l $R/test/kernel/wfs.l \
   $R/test/kernel/kore0.l $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/core.l $R/crew/kore/fs.l \
-  $R/test/kernel/kore.l $R/test/kernel/pipe.l \
+  $R/test/kernel/kore.l $R/test/kernel/pipe.l $R/test/kernel/sys.l \
   $R/test/kernel/sh0.l $R/crew/lush/job.l $R/crew/lush/lex.l $R/crew/lush/gram.l \
   $R/crew/lush/glob.l $R/crew/lush/word.l $R/crew/lush/eval.l $R/test/kernel/sh.l \
   $R/test/kernel/disk.l $R/test/kernel/svm.l $R/test/kernel/vmx.l \

@@ -15,7 +15,12 @@ long __ai_osdetect(void) {
    * assumed -- linux is where we started, not a default, and a build naming a
    * kernel this arch has no tail for owes a diagnostic and not another
    * kernel's numbers. */
-# if defined(__linux__)
+  /* ⚠ inle is not linux, and 1 does not say it is: the value names the NUMBERING
+   * __ai_call is to speak, and inle's door (free/sys.c) answers the canonical
+   * one. Nothing translates because there is nothing to translate to. */
+# if defined(__inle__)
+  return 1;
+# elif defined(__linux__)
   return 1;
 # elif defined(__FreeBSD__)
 #  error "nolibc: -os freebsd wants the translation tables, and this arch has no machine tail for them"
