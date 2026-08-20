@@ -143,8 +143,8 @@ kmain_o: $(k_free_o)
 # l.o carries the version string; recompile it when the id changes. ⚠ the -D is what MAKES
 # it carry one -- mooncc has no __has_include for core/love.c's fallback probe, so without it
 # the dep tracks a header the object cannot read and the kernel answers "unknown".
-$(k_odir)/love.o: out/lib/love_version.h
-$(k_odir)/love.o: kcppflags += -DAiHaveVersionH
+$(k_odir)/core/love.o: out/lib/love_version.h
+$(k_odir)/core/love.o: kcppflags += -DAiHaveVersionH
 
 # The two LAYS. holo's object writer (obj.l's objsecs) takes a list of NAMED sections --
 # .boot, .note.pvh, the 2 KiB-aligned vector table, .bss -- which is what the kernel needs
