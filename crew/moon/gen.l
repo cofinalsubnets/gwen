@@ -838,6 +838,7 @@
    ; LAST pin wins: the deepest site reached before the unwind is the one that knows. --
    (nolane g txt) (: _ (pin g 'nolane txt) 'bad)
    (ontgt g) (" on " + show (peep g 'tgt 'x64))      ; " on arm64" -- for a phrase whose answer turns on the target
+   (no128 g) (nolane g ("no lane for 128-bit integer arithmetic" + ontgt g))   ; every d128 site, one phrase
    ; the immediate gate: x64 ALU/cmp immediates ride le32; arm64 add/sub/cmp
    ; take imm12 (a negative flips, a 24-bit value splits in the backend), the
    ; logicals only a bottom-aligned bitmask (2^n - 1), multiply none at all.
@@ -1477,7 +1478,7 @@
                      (pair? g (vty a))
                       (vfs a + pnum <kr + pbrf g op (usg? (vty a)) 'r0 'r1 'r2 'r3 cc lbl)
                      (d128? (vty a))
-                      (? !(x64t? g) 'bad
+                      (? !(x64t? g) (no128 g)
                          (wbr op (as128 g a + (wpush + wnum <kr)) (id? (vty a) 'u128)))
                      (: n <kr
                         cc9 (bcc op (cmpu g (vty a) <>kr))
@@ -1496,7 +1497,7 @@
                      (pair? g (vty b))
                       (vfs b + pnum <kl + pbrf g (rflip op) (usg? (vty b)) 'r0 'r1 'r2 'r3 cc lbl)
                      (d128? (vty b))
-                      (? !(x64t? g) 'bad
+                      (? !(x64t? g) (no128 g)
                          (wbr (rflip op) (as128 g b + (wpush + wnum <kl)) (id? (vty b) 'u128)))
                      (: n <kl
                         cc9 (bcc (rflip op) (cmpu g <>kl (vty b)))
@@ -1527,7 +1528,7 @@
                               (? (bad? b) 'bad
                                  (flo? (vty b)) (? wA 'bad (: _ (rfree g (vreg b)) (fcb ())))
                                  (wA || d128? (vty b))                 ; a wide side: c128 over the cell
-                                  (? !(x64t? g) 'bad
+                                  (? !(x64t? g) (no128 g)
                                      (: u2 (id? (? (wA && d128? (vty b)) (wbin (vty a) (vty b))
                                                    wA (vty a) (vty b)) 'u128)
                                         ; a WORD left widens its cell hi by its own signedness
@@ -1557,7 +1558,7 @@
                              (? (bad? b) 'bad
                                 (flo? (vty b)) (: _ (rfree g (vreg ah)) _ (rfree g (vreg b)) (fcb ()))
                                 (d128? (vty b))                       ; a word park against a wide right: build its cell
-                                 (? !(x64t? g) 'bad
+                                 (? !(x64t? g) (no128 g)
                                     (: fs (vfs ah + vfs b
                                            + ['(sub sp sp 16) ['st 'sp 0 (vreg ah)]]
                                            + (? (usg? (vty ah) || ptr? (vty ah)) '((si sp 8 0))
@@ -2330,7 +2331,7 @@
                            (mkv ty 'r0 (pld 'r4 <>en))
                            (mkv ty 'r0 ([['la 'r2 <>en]] + pld 'r2 0)))
                        (d128? ty)                      ; a wide local/global reads both words (r1 the
-                        (? !(x64t? g) 'bad             ;  address temp -- clear of the pair's own halves)
+                        (? !(x64t? g) (no128 g)        ;  address temp -- clear of the pair's own halves)
                            (<en = 'loc)
                             (mkv ty 'r0 [['ld 'r0 'r4 <>en] ['ld 'r2 'r4 (<>en + 8)]])
                            (mkv ty 'r0 [['la 'r1 <>en] '(ld r0 r1 0) '(ld r2 r1 8)]))
@@ -2428,7 +2429,7 @@
                                + (? (<rv = 'loc) (pst 'r4 <>rv)
                                     ([['la 'r2 <>rv]] + pst 'r2 0))))
                         (d128? ty)                       ; a wide target stores both words (r1 the address temp)
-                         (? !(x64t? g) 'bad
+                         (? !(x64t? g) (no128 g)
                             (mkv ty 'r0
                                  (as128 g r
                                   + (? (<rv = 'loc) [['st 'r4 <>rv 'r0] ['st 'r4 (<>rv + 8) 'r2]]
@@ -2569,7 +2570,7 @@
                         (mkv (vty lv) 'r0
                          (vfs lv + spush 'r0 + asll g r + spop 'r2 + pst 'r2 0))))
                  (d128? (vty lv0))                   ; a wide store through a computed address (r1)
-                  (? !(x64t? g) 'bad
+                  (? !(x64t? g) (no128 g)
                      (: lv (matv g lv0)
                         r (cgexpr g env <>>e ())
                         (? (bad? r) 'bad
@@ -2689,7 +2690,7 @@
                      (? (pair? g ty)
                         (mkv ty 'r0 (pld 'r4 off + ppost 'r4 off (* stp <>>e)))
                         (d128? ty)                   ; wide ++/--: step in place, store, step BACK (the
-                         (? !(x64t? g) 'bad          ;  answer is the OLD pair, and the carry ops are in-place)
+                         (? !(x64t? g) (no128 g)     ;  answer is the OLD pair, and the carry ops are in-place)
                             (mkv ty 'r0 [['ld 'r0 'r4 off] ['ld 'r2 'r4 (off + 8)]
                                           [(? (<>>e < 0) 'dec128 'inc128)]
                                           ['st 'r4 off 'r0] ['st 'r4 (off + 8) 'r2]
@@ -2794,7 +2795,7 @@
                  (pair? g tgt && !(llt? (vty r)))                           ; widen to the pair (source signedness)
                   (mkv tgt 'r0 (asll g r))
                  (d128? tgt && !(d128? (vty r)))                            ; widen to the wide pair (source signedness)
-                  (? (x64t? g) (mkv tgt 'r0 (as128 g r)) 'bad)
+                  (? (x64t? g) (mkv tgt 'r0 (as128 g r)) (no128 g))
                  (two? (cvt tgt 'r0)) (mkv tgt 'r0 (tor0 g r + cvt tgt 'r0))   ; int -> narrower int
                  (mkv tgt (vreg r) (vfs r))))                                    ; a full-word int cast KEEPS the register (a wide one narrows to its lo)
           (k = 'un)
@@ -2833,7 +2834,7 @@
                       (mkv (vty r) 'r0 (tor0 g r + '((not r0) (not r1))))
                      (mkv 'long 'r0 (tor0 g r + [['ors (? (v6m? g) 'r0 'r12) 'r0 'r1] '(set eq r0)])))
                  (d128? (vty r))                       ; unary on the wide pair
-                  (? !(x64t? g) 'bad
+                  (? !(x64t? g) (no128 g)
                      (<>e = 'neg) (mkv (vty r) 'r0 (tor0 g r + '((n128))))
                      (<>e = 'bnot) (mkv (vty r) 'r0 (tor0 g r + '((not r0) (not r2))))
                      (mkv 'long 'r0 (tor0 g r + '((or r0 r0 r2) (cmp r0 0)) + '((set eq r0)))))
@@ -2955,7 +2956,8 @@
                             ['label ld]]))
               _ (vmflush g)                           ; the walk's labels join
               (? (bad? lv) 'bad
-                 (t32? g && (flo? ty || llt? ty || stru? ty)) 'bad   ; t32 va_arg reads WORDS only (love.c's shape) -- refuse LOUD
+                 (t32? g && (flo? ty || llt? ty || stru? ty))        ; t32 va_arg reads WORDS only (love.c's shape)
+                  (nolane g ("no lane for a double/pair/struct va_arg" + ontgt g))
                  (d128? ty) 'bad                     ; a wide va_arg: not carried
                  (flo? ty) (mkv 'double 'r0 (tor0 g lv + walk + fldf ty 'f0 'r2 0))
                  (mkv ty 'r0 (tor0 g lv + walk + [[(ldop ty) 'r0 'r2 0]]))))
@@ -3132,7 +3134,8 @@
                     ; t32 composites: an HFA rides the d-regs (the sse2 pair lane below = AAPCS32-VFP
                     ; d-pairs; an 8B one-sse blob = the packed S-pair, bit-identical); a <=4B int one
                     ; rides r0's word. mixed/int-pair 8..16B stays deferred -- refuse LOUD.
-                    (? (t32? g && va? && stru? aty) 'bad   ; a t32 VARIADIC call rides the base PCS: no d-reg composites -- refuse LOUD
+                    (? (t32? g && va? && stru? aty)        ; a t32 VARIADIC call rides the base PCS: no d-reg composites
+                        (nolane g ("no lane for a by-value struct in a variadic call" + ontgt g))
                        (v6m? g && sse2? g aty)       ; v6-M: a POSITION-0 16B composite rides r0-r3 whole (the
                         (? (gpc = 0)                     ;  base-ABI words); any later start would SPLIT -- deferred
                            (kls >as (i + 1) 4 xmmc ovc
@@ -3198,8 +3201,9 @@
                                              (mv (j - 1) (acc9 + [['ld 'r1 'r0 (* 8 j)] '(push r1)])))
                               (kls >as (i + 1) gpc xmmc (ovc + n)
                                    ([['ov ovc n] (tor0 g a + mv (n - 1) ())] >< acc))))
-                       (stru? aty && !(aone g aty)) 'bad        ; a MIXED 16B by-value struct stays ahead
-                       (d128? aty) 'bad                          ; a wide arg: not carried (love.c passes limbs, never dlimbs)
+                       (stru? aty && !(aone g aty))             ; a MIXED 16B by-value struct stays ahead
+                        (nolane g ("no lane for passing this " + show (tsz g aty) + "-byte struct by value" + ontgt g))
+                       (d128? aty) (no128 g)                     ; a wide arg: not carried (love.c passes limbs, never dlimbs)
                        (pair? g aty)                             ; a pair arg: an even-odd register pair (AAPCS32
                         (: gpe (& (gpc + 1) -2)                  ;  rounds up), else the stack 8-aligned -- and gp
                            (? ((gpe + 2) <= ngp g)               ;  assignment closes behind a stack arg (C.13)
@@ -3532,7 +3536,7 @@
                                          tor0 g b + '((mov r2 r0)) + spop2 'r0 'r1 +
                                          pshiftv g kind))))))
           (member? op '(shl shr) && d128? (vty a))          ; a wide shift keeps the left type
-           (? !(x64t? g) 'bad
+           (? !(x64t? g) (no128 g)
               (: kind (? (op = 'shl) 'shl128 (usg? (vty a)) 'shr128 'sar128)
                  vknd (? (op = 'shl) 'shl128v (usg? (vty a)) 'shr128v 'sar128v)
                  kc (knum g rhs)
@@ -3624,7 +3628,7 @@
                                  ; relations settle 0/1 via c128. a widening product (both hi
                                  ; halves provably zero) is ONE mulq; / and % stay refused
                                  ; (love.c divides through the divq asm).
-                                 (? !(x64t? g) 'bad
+                                 (? !(x64t? g) (no128 g)
                                     (pa || pb) 'bad
                                     (: rt (wbin ta tb)
                                        w? (two? wpk)
@@ -6254,7 +6258,7 @@
                        (flo? ty) (one >ps env3 (acc + asflo g r + fstf g ty 'r4 off 'f0))
                        (pair? g ty) (one >ps env3 (acc + asll g r + pst 'r4 off))
                        (d128? ty)
-                        (? !(x64t? g) 'bad
+                        (? !(x64t? g) (no128 g)
                            (two? hreg)              ; a pair home's init is two register moves
                             (one >ps env3 (acc + as128 g r + [['mov <hreg 'r0] ['mov <>hreg 'r2]]))
                            (one >ps env3 (acc + as128 g r + [['st 'r4 off 'r0] ['st 'r4 (off + 8) 'r2]])))
@@ -6878,7 +6882,7 @@
                       (flo? (vty r)) (asintt g r rt + (? (id? rt 'bool) (cvt rt 'r0) ()) + (? il [['jmp il]] epj))     ; a double value, an int return -> truncate to r0
                       (pair? g rt) (asll g r + (? il [['jmp il]] epj))        ; a pair return: r0:r1 (widen a word value)
                       (d128? rt)                                                ; a wide return rides rdx:rax (the SysV i128 pair)
-                       (? (x64t? g) (as128 g r + (? il [['jmp il]] epj)) 'bad)
+                       (? (x64t? g) (as128 g r + (? il [['jmp il]] epj)) (no128 g))
                       (id? rt 'bool)                             ; a bool return CONVERTS (callers read r0 whole -- cc calls untyped)
                        (tor0 g r + cvt rt 'r0 + (? il [['jmp il]] epj))
                       (tor0 g r + (? il [['jmp il]] epj)))      ; int -> int, as before (a pair value narrows to its lo)
@@ -7521,7 +7525,8 @@
         (: (cls qs gpi ov env)
             (? !(two? qs) (: _ (pin g 'vagp gpi) _ (pin g 'vaov ov) [() env])
                (: p <qs pty <>p
-                  (? (flo? pty || llt? pty || stru? pty) 'bad
+                  (? (flo? pty || llt? pty || stru? pty)
+                      (nolane g ("no lane for a double/pair/struct param in a variadic function" + ontgt g))
                      (3 < gpi) (cls >qs gpi (ov + 4) ([<p (ovb g + 16 + ov) pty] >< env))
                      (cls >qs (gpi + 1) ov ([<p (ovb g + 4 * gpi) pty] >< env)))))
            (cls ps 0 0 ()))
@@ -7536,7 +7541,7 @@
         (: (cls qs gpi ov env)
             (? !(two? qs) (: _ (pins g 'vagp gpi 'vaov ov) [() env])
                (: p <qs pty <>p
-                  (? (stru? pty) 'bad
+                  (? (stru? pty) (nolane g ("no lane for a by-value struct param in a variadic function" + ontgt g))
                      (7 < gpi) (cls >qs gpi (ov + 1) ([<p ((ovb g + 64) + 8 * ov) pty] >< env))
                      (cls >qs (gpi + 1) ov ([<p (ovb g + 8 * gpi) pty] >< env)))))
            (cls ps 0 0 ()))
