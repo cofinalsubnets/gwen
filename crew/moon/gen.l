@@ -2719,7 +2719,7 @@
                     _ (adrop9 g env <>e)           ; an element RMW retires its pin(s)
                     (? (arr? ty) 'bad
                        (bitf? ty) 'bad             ; bitfield ++/-- -- refuse (rare; use `f = f + 1`)
-                       (d128? ty) 'bad             ; wide ++/-- -- refuse (use `x = x + 1`)
+                       (d128? ty) (nolane g "++/-- is not carried on a wide value (use `x = x + 1`)")
                        (pair? g ty)
                         (: lv (matv g lv0)
                            (mkv ty 'r0 (vfs lv +
@@ -2772,7 +2772,8 @@
                   (: v (cfold <>>e)
                      (? (cint? v) (mkv 'double 'r0 [['li 'r0 (fbits (0.0 + v))] '(movqxr f0 r0)])
                         'bad))
-                 (d128? tgt && flo? (vty r)) 'bad                            ; double -> wide: not carried
+                 (d128? tgt && flo? (vty r))                                 ; double -> wide: not carried
+                  (nolane g "a double is not converted to a wide integer")
                  (flo? tgt && !(flo? (vty r))) (mkv 'double 'r0 (asflo g r))  ; int -> double
                  ((tgt = 'bool) && flo? (vty r))       ; (bool)d is d != 0.0, never a truncation
                   ; ((bool)0.5 is 1) -- the un-'not lane's shape with the NaN-honest !=
@@ -2958,7 +2959,7 @@
               (? (bad? lv) 'bad
                  (t32? g && (flo? ty || llt? ty || stru? ty))        ; t32 va_arg reads WORDS only (love.c's shape)
                   (nolane g ("no lane for a double/pair/struct va_arg" + ontgt g))
-                 (d128? ty) 'bad                     ; a wide va_arg: not carried
+                 (d128? ty) (nolane g "a wide va_arg is not carried")
                  (flo? ty) (mkv 'double 'r0 (tor0 g lv + walk + fldf ty 'f0 'r2 0))
                  (mkv ty 'r0 (tor0 g lv + walk + [[(ldop ty) 'r0 'r2 0]]))))
           (k = 'vaend) (mkv 'long 'r0 ())
@@ -3195,7 +3196,8 @@
                        ; slots. ⚠ x64 pushes DEEPEST first, so the struct's HIGHEST eightbyte
                        ; goes first -- offset 0 lands at the block's low address.
                        (amem? g aty)
-                        (? (< 8 (asalign g aty)) 'bad         ; over-aligned MEMORY arg: deferred, refuse LOUD
+                        (? (< 8 (asalign g aty))              ; over-aligned MEMORY arg: deferred
+                            (nolane g "a by-value struct aligned past 8 is not carried as an argument")
                            (: n (aslots g aty)
                               (mv j acc9) (? (j < 0) acc9
                                              (mv (j - 1) (acc9 + [['ld 'r1 'r0 (* 8 j)] '(push r1)])))
@@ -3203,7 +3205,8 @@
                                    ([['ov ovc n] (tor0 g a + mv (n - 1) ())] >< acc))))
                        (stru? aty && !(aone g aty))             ; a MIXED 16B by-value struct stays ahead
                         (nolane g ("no lane for passing this " + show (tsz g aty) + "-byte struct by value" + ontgt g))
-                       (d128? aty) (no128 g)                     ; a wide arg: not carried (love.c passes limbs, never dlimbs)
+                       (d128? aty)                               ; a wide arg: not carried (love.c passes limbs, never dlimbs)
+                        (nolane g "a wide value is not carried as an argument")
                        (pair? g aty)                             ; a pair arg: an even-odd register pair (AAPCS32
                         (: gpe (& (gpc + 1) -2)                  ;  rounds up), else the stack 8-aligned -- and gp
                            (? ((gpe + 2) <= ngp g)               ;  assignment closes behind a stack arg (C.13)
@@ -3240,7 +3243,8 @@
                           opush (? (a8? g) (aval + [['st 'sp (* 8 ovc) 'r0]])
                                    (t32? g) (aval + [['st 'sp ovc 'r0]])
                                    (aval + '((push r0))))
-                          (? (t32? g && va? && wd2) 'bad   ; a t32 VARIADIC call rides the base PCS: no d-reg doubles -- refuse LOUD
+                          (? (t32? g && va? && wd2)        ; a t32 VARIADIC call rides the base PCS: no d-reg doubles
+                              (nolane g ("no lane for a double in a variadic call" + ontgt g))
                              (v6m? g && id? aty 'float)    ; v6-M base ABI: a bare float arg is ONE WORD (binary32,
                               (: av1 (asflo g a              ;  the gcc shape -- ai_flo_t IS float on a 32-bit love)
                                       + '((cvtsd2ss f0 f0) (movqrx r0 f0)))
@@ -3267,7 +3271,8 @@
                              (rv? g && va? && wd2)
                               (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] opush] >< acc))
                              (wd2 && xmmc < 8) (kls >as (i + 1) gpc (xmmc + 1) ovc ([['x xmmc] rpush] >< acc))
-                             (t32? g && wd2) 'bad         ; a t32 fp/blob OVERFLOW arg (9+ doubles): the 4-byte slot can't carry it -- refuse LOUD
+                             (t32? g && wd2)              ; a t32 fp/blob OVERFLOW arg (9+ doubles): the 4-byte slot can't carry it
+                              (nolane g ("no lane for a double argument past the register file" + ontgt g))
                              (!wd2 && gpc < ngp g) (kls >as (i + 1) (gpc + 1) xmmc ovc ([['g gpc] rpush] >< acc))
                              (t32? g) (kls >as (i + 1) gpc xmmc (ovc + 4) ([['ov ovc 4] opush] >< acc))
                              (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] opush] >< acc)))))))))))
@@ -3410,7 +3415,8 @@
                            '((movqxr f0 r0)))
                    (? (bad? hr) 'bad
                       (v6m? g && stru? (fnret (vty hr)) &&   ; a MEMORY-returning callee behind a POINTER: the
-                          4 < tsz g (fnret (vty hr))) 'bad   ; implicit-arg shift wasn't staged -- refuse LOUD
+                          4 < tsz g (fnret (vty hr)))        ; implicit-arg shift wasn't staged
+                       (nolane g ("no lane for an indirect call to a MEMORY-returning function" + ontgt g))
                       ; ⚠ t32: r12 is ALSO the far-mem/pair scratch, so a register park dies to
                       ; any far frame offset in the ez emissions -- park in a frame slot and
                       ; reload r12 as the LAST thing before the call (the sib rewrite keeps the
@@ -3767,7 +3773,8 @@
                                       'bad))))
                          iml (? (iml? && !(flo? tb)) (immop g (rflip op) b tb <kl <>kl wnt) 'no)
                          (? !(id? iml 'no) iml
-                            ((flo? ta || flo? tb) && (d128? ta || d128? tb)) 'bad           ; wide meets double: refuse
+                            ((flo? ta || flo? tb) && (d128? ta || d128? tb))                ; wide meets double
+                             (nolane g "a wide integer is not mixed with a double")
                             (flo? ta || flo? tb)
                              ; the double lane: either operand double -> both to double (f1=left,
                              ; f0=right through the gp stack), then the scalar-double op or ucomisd.
@@ -7374,7 +7381,8 @@
                         xmn (+ (? (id? f0 'x) 1 0) (? (id? f1 'x) 1 0))
                         (? ((ngp g < (gpi + gpn)) || (8 < (xmmi + xmn)))     ; not enough regs -> the WHOLE aggregate goes to memory (2 stack eightbytes)
                             (? (pol? hp) 'bad           ; under a policy: deopt, not a fresh memory lane
-                               (t32? g) 'bad            ; t32 stack HFA params (9+ doubles): deferred, refuse LOUD
+                               (t32? g)                 ; t32 stack HFA params (9+ doubles): deferred
+                                (nolane g ("no lane for an HFA param past the register file" + ontgt g))
                                (spill hp >ps gpi xmmi (ovi + 2) ([<p (ovb g + (* 8 ovi)) pty] >< env) acc))
                             (: off (nslot g 16)
                                st0 (? (id? f0 'g) [['st 'r4 off (nthr (argr g) gpi)]] (fstf g 'double 'r4 off (xmmreg xmmi)))
@@ -7389,7 +7397,8 @@
                      (: off (nslot g 8)
                         (spill hp >ps gpi (xmmi + 1) ovi ([<p off pty] >< env)
                                (acc + fstf g 'double 'r4 off (xmmreg xmmi))))
-                     (? (t32? g) 'bad                   ; t32 stack blob params: deferred, refuse LOUD
+                     (? (t32? g)                        ; t32 stack blob params: deferred
+                         (nolane g ("no lane for a stack-passed by-value struct param" + ontgt g))
                         (spill hp >ps gpi xmmi (ovi + 1) ([<p (ovb g + (* 8 ovi)) pty] >< env) acc)))
                  ; a MEMORY-class param: the caller laid the whole aggregate in the overflow
                  ; block, and by SysV that memory IS the callee's copy -- so the param binds
@@ -7429,8 +7438,10 @@
                                             ['st 'r4 (off + 4) (nthr (argr g) (gpe + 1))]])))
                         (: ov8 (ovi + 7 & -8)
                            (spill hp >ps 4 xmmi (ov8 + 8) ([<p (ovb g + ov8) pty] >< env) acc))))
-                 (t32? g && flo? pty) 'bad              ; a t32 double param past d7: the 4-byte slot can't carry it -- refuse LOUD
-                 (d128? pty) 'bad                       ; a wide param: not carried (mirror of the arg refusal)
+                 (t32? g && flo? pty)                   ; a t32 double param past d7: the 4-byte slot can't carry it
+                  (nolane g ("no lane for a double param past the register file" + ontgt g))
+                 (d128? pty)                            ; a wide param: not carried (mirror of the arg refusal)
+                  (nolane g "a wide value is not carried as a parameter")
                  (!(flo? pty) && gpi < ngp g)
                   (? (pol? hp && gpi < nhome g &&
                       (homable? pty ||
