@@ -57,7 +57,7 @@ mkdir -p "$d"
 rm -f "$d"/*.o
 
 # shellcheck disable=SC2086  # $tflag is a word pair or empty, deliberately unquoted
-moonc() { "$ho/mooncc" $tflag "$@"; }
+moonc() { LOVE_NO_IMAGE= "$m" mooncc $tflag "$@"; }
 
 moonc -D ai_tco=1 -I"$ho" -I. -Icore -Iout/lib -c core/love.c "$d/love.o" || fail "mooncc $tflag -c core/love.c"
 

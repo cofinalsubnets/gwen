@@ -23,6 +23,7 @@ m=$2
 
 fail() { echo "FAIL $*" >&2; exit 1; }
 korerun() { LOVE_NO_IMAGE= "$m" kore "$@"; }
+moonc() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 # the love and the out dir, spelled ABSOLUTELY: $m and $ho are relative (the root
 # Makefile sets R := .), and the checks that cd somewhere -- split's output directory,
 # patch's tree -- cannot use either. ⚠ a `< $ho/p.diff` INSIDE a cd'd subshell opens
@@ -83,17 +84,17 @@ if [ "$(uname -m)" = x86_64 ]; then
   chmod +x "$ho/.kore-as.elf"; "$ho/.kore-as.elf"; r=$?
   [ $r -eq 7 ] || fail "kore as run (exit $r)"
 fi
-# ar + ld, over mooncc objects (x86_64; both need the mooncc shim beside us).
+# ar + ld, over mooncc objects (x86_64; both ride the mooncc verb of $m).
 # ar: GNU-shape TO THE BYTE -- same members through binutils ar (D = deterministic,
 # our only mode) and ours, whole archives cmp'd; `ar t` lists alike. ld: lay the
 # same crt0 object mooncc's own link lane synthesizes (crt0/objelf leak from the
 # mooncc cat), then our applet must bind crt0+main+f BYTE-IDENTICAL to mooncc's
 # whole-program link, and the exe must run: 35 + 7 = exit 42.
-if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/mooncc" ]; then
+if [ "$(uname -m)" = x86_64 ]; then
   printf 'int f(void){return 35;}\n' > "$ho/.kore-arf.c"
   printf 'int f(void);\nint main(void){return f()+7;}\n' > "$ho/.kore-arm.c"
-  "$ho/mooncc" -c "$ho/.kore-arf.c" "$ho/.kore-arf.o" >/dev/null 2>&1 || fail "kore ar: mooncc -c f.c"
-  "$ho/mooncc" -c "$ho/.kore-arm.c" "$ho/.kore-arm.o" >/dev/null 2>&1 || fail "kore ar: mooncc -c main.c"
+  moonc -c "$ho/.kore-arf.c" "$ho/.kore-arf.o" >/dev/null 2>&1 || fail "kore ar: mooncc -c f.c"
+  moonc -c "$ho/.kore-arm.c" "$ho/.kore-arm.o" >/dev/null 2>&1 || fail "kore ar: mooncc -c main.c"
   if command -v ar >/dev/null 2>&1; then
     rm -f "$ho/.kore-gnu.a" "$ho/.kore-our.a"
     ar rcsD "$ho/.kore-gnu.a" "$ho/.kore-arf.o" "$ho/.kore-arm.o"
@@ -103,7 +104,7 @@ if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/mooncc" ]; then
   fi
   "$m" -l "$ho/.mooncc-cat.l" -e '(: _ (use (name "holo")) _ (use (name "moon")) (write-bytes "'"$ho"'/.kore-crt0.o" (objelf (intern "x64") crt0 () (link "__ai_start" ()) () (link "__ai_start" ()) () () () () ())))' >/dev/null 2>&1
   [ -s "$ho/.kore-crt0.o" ] || fail "kore ld: crt0 lay"
-  "$ho/mooncc" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-mc.elf" >/dev/null 2>&1 || fail "kore ld: mooncc link"
+  moonc "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-mc.elf" >/dev/null 2>&1 || fail "kore ld: mooncc link"
   korerun ld "$ho/.kore-crt0.o" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-ld.elf" || fail "kore ld"
   # ⚠ BYTE-IDENTICAL, and it is `.comment` that lets it be: both doors drive the SAME linker,
   # so the file they write is the same file, producer record included. It briefly was not --
@@ -118,10 +119,10 @@ if [ "$(uname -m)" = x86_64 ] && [ -x "$ho/mooncc" ]; then
   # through the ranlib index, since the library also carries one nothing calls. our
   # ar writes it, our linker reads it (crew/holo/link.l's ld-arsyms).
   printf 'int unused(void){return 99;}\n' > "$ho/.kore-arz.c"
-  "$ho/mooncc" -c "$ho/.kore-arz.c" "$ho/.kore-arz.o" >/dev/null 2>&1 || fail "kore ar: mooncc -c unused.c"
+  moonc -c "$ho/.kore-arz.c" "$ho/.kore-arz.o" >/dev/null 2>&1 || fail "kore ar: mooncc -c unused.c"
   rm -f "$ho/.kore-arl.a"
   korerun ar rcs "$ho/.kore-arl.a" "$ho/.kore-arf.o" "$ho/.kore-arz.o" || fail "kore ar rcs (library)"
-  "$ho/mooncc" "$ho/.kore-arm.o" "$ho/.kore-arl.a" -o "$ho/.kore-ara.elf" >/dev/null 2>&1 || fail "kore ld: archive input"
+  moonc "$ho/.kore-arm.o" "$ho/.kore-arl.a" -o "$ho/.kore-ara.elf" >/dev/null 2>&1 || fail "kore ld: archive input"
   cmp -s "$ho/.kore-mc.elf" "$ho/.kore-ara.elf" || fail "kore ld archive vs .o link (bytes -- an unneeded member rode in?)"
   "$ho/.kore-ara.elf"; r=$?
   [ $r -eq 42 ] || fail "kore ld archive run (exit $r)"
