@@ -23,12 +23,14 @@
    (dot-c? nom) (: n (tally nom) (2 < n && (snip nom (n - 2) n) = ".c"))
 
    ; the host lane: love.c, host/, and the crew's C.
+   ; ⚠ /core carries love.h and every lane names it bare, so a group that drops it
+   ; parses nothing: the miss is fatal and the flood after it says nothing.
    host ["-std=gnu23" "-Dai_tco=1"
-         (inc "") (inc "/out/lib") (inc "/out/host") (inc "/crew/quay")]
+         (inc "") (inc "/core") (inc "/out/lib") (inc "/out/host") (inc "/crew/quay")]
    ; the freestanding kernel: its own libc, its own headers, nothing hosted.
    inle (["-std=gnu23" "-Dai_tco=1" "-ffreestanding" "-nostdinc"
           "-DLIMINE_API_REVISION=3" "-DK_TEST"
-          (inc "") (inc "/out/lib") (inc "/out/host") (inc "/crew/quay")]
+          (inc "") (inc "/core") (inc "/out/lib") (inc "/out/host") (inc "/crew/quay")]
          + [(inc "/free") (inc "/crew/moon/include")])
    ; moon's replacement libc -- compiled against its OWN headers, so glibc's
    ; declarations would conflict with the real ones.
@@ -45,8 +47,13 @@
 
    (flags-for rel)
     (? (pre? rel "crew/moon/lib/") moonlibc
-       (pre? rel "free/aarch64/") (inle + ["--target=aarch64-unknown-none-elf"])
-       (pre? rel "free/") inle
+       ; asmops.h lives once per arch under the same name, so the arch dir is named
+       ; here and never both at once.
+       (pre? rel "free/aarch64/") (inle + [(inc "/free/aarch64") "--target=aarch64-unknown-none-elf"])
+       (pre? rel "free/") (inle + [(inc "/free/x86_64")])
+       ; the asm seam probe reads free/<a>/asmops.h from OUTSIDE free/, deliberately:
+       ; kernel.mk globs that directory and a file there would join the kernel build.
+       (rel = "test/gate/asmops.c") (host + [(inc "/free/x86_64")])
        (pre? rel "port/playdate/") (? (tally pd-sdk) (playdate + [("-I" + pd-sdk + "/C_API")]) playdate)
        (pre? rel "wasm/") (host + [("-I" + emsdk + "/upstream/emscripten/system/include")])
        host)
