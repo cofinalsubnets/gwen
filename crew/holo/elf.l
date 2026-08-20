@@ -32,11 +32,12 @@
    ;; table -- the symbol table rides there, past p_filesz, mapped by nothing and read by nm/gdb.
    (elf64-hdrn etype entry machine sh phs)
     (: shoff (? (two? sh) <sh 0) shnum (? (two? sh) <>sh 0) shstrx (? (two? sh) <>>sh 0)
+       rv? (machine = 243)
       (catall `(
          '(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)              ; e_ident: \x7fELF, 64-bit LSB SysV
          (le16 etype) (le16 machine) (le32 1)                  ; e_type (2 EXEC / 3 DYN), e_machine, version 1
          (le64 entry) (le64 64) (le64 shoff)                   ; e_entry, e_phoff=64, e_shoff
-         (le32 0) (le16 64) (le16 56)                          ; e_flags, e_ehsize=64, e_phentsize=56
+         (le32 (? rv? 4 0)) (le16 64) (le16 56)                ; e_flags (riscv: FLOAT_ABI_DOUBLE), e_ehsize=64, e_phentsize=56
          (le16 (tally phs)) (le16 (? (two? sh) 64 0)) (le16 shnum) (le16 shstrx)
          (catall phs))))
 

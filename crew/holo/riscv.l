@@ -1,9 +1,11 @@
 ; riscv -- the RV64 BACKEND for the neutral assembler (crew/holo/holo.l), the fifth target (the
 ; pine64 ox64's T-Head C906 and qemu -M virt). like the others it pins a {lower,patch} pair -- here
 ; under 'riscv64 and 'rv64 -- and the driver, IR forms and byte plumbing stay untouched. fixed 32-bit
-; little-endian instructions (no compressed forms emitted), native three-address ALU, RV64IMFD only
-; (no Zbb/Zba: what qemu-virt, the C906 and every rv64gc core share). every word here was checked
-; against `llvm-mc --triple=riscv64` (--show-encoding / --disassemble). load after holo.l.
+; little-endian instructions (no compressed forms emitted), native three-address ALU. these tables are
+; RV64IMFD: no Zbb/Zba, and no A -- moon's __sync seam hands its two atomic words (amoswap.aq, the
+; release fence) in raw, so a linked image asks for RV64IMAFD, which is rv64gc less the compressed
+; forms and so runs on every rv64gc core. every word here was checked against `llvm-mc
+; --triple=riscv64` (--show-encoding / --disassemble). load after holo.l.
 ;
 ; the novel bit: RISC-V HAS NO FLAGS REGISTER, and the IR is flag-shaped (cmp .. br cond). so the
 ; assembler itself is the flags register: cmp/test/ucomisd emit nothing (or only an immediate

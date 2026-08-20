@@ -656,7 +656,7 @@
               '(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)                     ; e_ident: \x7fELF 64-bit LSB
               (le16 1) (le16 machine) (le32 1)                            ; ET_REL, e_machine, version
               (le64 0) (le64 0) (le64 sht-off)                            ; e_entry=0, e_phoff=0, e_shoff
-              (le32 0) (le16 64) (le16 0)                                 ; e_flags, e_ehsize, e_phentsize=0
+              (le32 (? (machine = 243) 4 0)) (le16 64) (le16 0)           ; e_flags (riscv: FLOAT_ABI_DOUBLE), e_ehsize, e_phentsize=0
               (le16 0) (le16 64) (le16 nsh)                               ; e_phnum=0, e_shentsize=64, e_shnum
               (le16 i-shs)))                                              ; e_shstrndx
        (catall (`(hdr)
