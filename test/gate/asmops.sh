@@ -38,6 +38,7 @@ mkdir -p "$work"
 trap 'rm -rf "$work"' EXIT
 rc=0
 fail() { echo "FAIL test_asmops: $*" >&2; rc=1; }
+moonc() { LOVE_NO_IMAGE= "$ho/love" mooncc "$@"; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -94,7 +95,7 @@ for a in x86_64 aarch64; do
   done
 
   # 2. mooncc takes it
-  if ! "$ho/mooncc" -t $t -nostdinc -c $inc "$probe" -o "$work/$a-moon.o" 2>"$work/$a.err"; then
+  if ! moonc -t $t -nostdinc -c $inc "$probe" -o "$work/$a-moon.o" 2>"$work/$a.err"; then
     fail "$a: mooncc could not compile the probe"; sed 's/^/    /' "$work/$a.err" >&2; continue
   fi
 

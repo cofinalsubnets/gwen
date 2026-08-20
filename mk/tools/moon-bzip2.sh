@@ -45,7 +45,7 @@ pkgfind() {                        # pkgfind <dir-glob> <witness-file>
 }
 
 ho=out/host
-mc=$ho/mooncc
+mc="$ho/love mooncc"
 love=$ho/love
 BZIP2SRC=${BZIP2SRC:-$(pkgfind 'bzip2-1.0.8*' bzlib.c)}
 
@@ -58,9 +58,7 @@ if [ ! -f "$BZIP2SRC/bzlib.c" ]; then
   echo "            set BZIP2SRC=<an extracted bzip2-1.0.8 tree> to run (see mk/tools/moon-bzip2.sh)."
   exit 0
 fi
-for bin in "$mc" "$love"; do
-  [ -x "$bin" ] || { echo "$name: missing $bin -- run 'make $ho/mooncc host'"; exit 1; }
-done
+[ -x "$love" ] || { echo "$name: missing $love -- run 'make host'"; exit 1; }
 
 d=$ho/$sub
 rm -rf "$d"; mkdir -p "$d"

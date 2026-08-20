@@ -38,6 +38,7 @@ esac
 
 name=test_$tgt
 fail() { echo "FAIL $*" >&2; exit 1; }
+moonc() { LOVE_NO_IMAGE= "$ho/love" mooncc "$@"; }
 
 for tool in arm-none-eabi-gcc arm-none-eabi-ld qemu-system-arm; do
   command -v $tool > /dev/null 2>&1 || {
@@ -84,7 +85,7 @@ lg=$(arm-none-eabi-gcc $cpu -print-libgcc-file-name)
 lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
   tag=$1; libsrc=$2; harsrc=$3; mflags=$4; want=$5; tmo=$6; msg=$7; tail=$8
   lb=$(basename "$libsrc" .c); hb=$(basename "$harsrc" .c)
-  "$ho/mooncc" -t "$tgt" $mflags -c "$libsrc" "$d/$tag.lib.o" \
+  moonc -t "$tgt" $mflags -c "$libsrc" "$d/$tag.lib.o" \
     || fail "mooncc -t $tgt -c $lb"
   arm-none-eabi-gcc $cpu -ffreestanding -O2 -c "$harsrc" -o "$d/$tag.har.o" \
     || fail "gcc $hb"

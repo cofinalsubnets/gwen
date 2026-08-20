@@ -61,7 +61,7 @@ pkgfind() {                        # pkgfind <dir-glob> <witness-file>
 }
 
 ho=out/host
-mc=$ho/mooncc
+mc="$ho/love mooncc"
 love=$ho/love
 
 if [ -n "$need" ] && ! command -v "$need" > /dev/null 2>&1; then
@@ -74,7 +74,7 @@ if [ -z "$SQLSRC" ] || [ ! -f "$SQLSRC/sqlite3.c" ]; then
   echo "             set SQLSRC=<an extracted sqlite-amalgamation dir> to run (see mk/tools/moon-sqlite.sh)."
   exit 0
 fi
-[ -x "$mc" ] || { echo "$name: missing $mc -- run 'make $ho/mooncc'"; exit 1; }
+[ -x "$love" ] || { echo "$name: missing $love -- run 'make host'"; exit 1; }
 
 d=$ho/$sub
 rm -rf "$d"; mkdir -p "$d"

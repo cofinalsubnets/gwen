@@ -21,7 +21,7 @@
 set -e
 
 ho=out/host
-mc=$ho/mooncc
+mc="$ho/love mooncc"
 inc=crew/moon/include
 PKGSRC=${PKGSRC:-dl/gzip-1.13}
 [ $# -gt 0 ] && for a in "$@"; do case $a in PKGSRC=*) PKGSRC=${a#PKGSRC=} ;; esac; done
@@ -31,7 +31,7 @@ if [ ! -f "$PKGSRC/lib/Makefile" ]; then
   echo "            set PKGSRC=<a ./configure'd tree with lib/> to run (see mk/tools/moon-sweep.sh)."
   exit 0
 fi
-[ -x "$mc" ] || { echo "moon-sweep: missing $mc -- run 'make $ho/mooncc'"; exit 1; }
+[ -x "$love" ] || { echo "moon-sweep: missing $love -- run 'make host'"; exit 1; }
 
 # absolute: the compile runs from inside lib/, and a relative -I silently
 # mis-resolves the moment we cd (the bisection trap in)

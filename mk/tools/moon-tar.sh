@@ -60,7 +60,7 @@ pkgfind() {                        # pkgfind <dir-glob> <witness-file>
 }
 
 ho=out/host
-mc=$ho/mooncc
+mc="$ho/love mooncc"
 love=$ho/love
 TARSRC=${TARSRC:-$(pkgfind 'tar-1.13*' config.h)}
 
@@ -73,9 +73,7 @@ if [ ! -f "$TARSRC/config.h" ]; then
   echo "          set TARSRC=<a ./configure'd tar-1.13 tree> to run (see mk/tools/moon-tar.sh)."
   exit 0
 fi
-for bin in "$mc" "$love"; do
-  [ -x "$bin" ] || { echo "$name: missing $bin -- run 'make $ho/mooncc host'"; exit 1; }
-done
+[ -x "$love" ] || { echo "$name: missing $love -- run 'make host'"; exit 1; }
 command -v tar  >/dev/null 2>&1 || { echo "$name: no system tar to verify against -- skipped"; exit 0; }
 
 d=$ho/$sub

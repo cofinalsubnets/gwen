@@ -56,7 +56,7 @@ pkgfind() {                        # pkgfind <dir-glob> <witness-file>
 }
 
 ho=out/host
-mc=$ho/mooncc
+mc="$ho/love mooncc"
 love=$ho/love
 GZIPSRC=${GZIPSRC:-$(pkgfind 'gzip-1.2.4*' gzip.c)}
 
@@ -69,9 +69,7 @@ if [ ! -f "$GZIPSRC/gzip.c" ]; then
   echo "           set GZIPSRC=<a gzip-1.2.4 tree> to run (see mk/tools/moon-gzip.sh)."
   exit 0
 fi
-for bin in "$mc" "$love"; do
-  [ -x "$bin" ] || { echo "$name: missing $bin -- run 'make $ho/mooncc host'"; exit 1; }
-done
+[ -x "$love" ] || { echo "$name: missing $love -- run 'make host'"; exit 1; }
 
 d=$ho/$sub
 rm -rf "$d"; mkdir -p "$d/src"

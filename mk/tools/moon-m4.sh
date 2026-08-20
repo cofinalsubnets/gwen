@@ -66,7 +66,7 @@ pkgfind() {                        # pkgfind <dir-glob> <witness-file>
 }
 
 ho=out/host
-mc=$ho/mooncc
+mc="$ho/love mooncc"
 love=$ho/love
 M4SRC=${M4SRC:-$(pkgfind 'm4-1.4*' config.h)}
 
@@ -79,9 +79,7 @@ if [ ! -f "$M4SRC/config.h" ]; then
   echo "         set M4SRC=<a ./configure'd m4-1.4 tree> to run (see mk/tools/moon-m4.sh)."
   exit 0
 fi
-for bin in "$mc" "$love"; do
-  [ -x "$bin" ] || { echo "$name: missing $bin -- run 'make $ho/mooncc host'"; exit 1; }
-done
+[ -x "$love" ] || { echo "$name: missing $love -- run 'make host'"; exit 1; }
 
 # the target-libc corrections (idempotent; see the header comment)
 sed -i 's|^#define HAVE_EFGCVT 2$|/* #undef HAVE_EFGCVT */|;s|^#define USE_STACKOVF 1$|/* #undef USE_STACKOVF */|' "$M4SRC/config.h"

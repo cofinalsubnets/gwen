@@ -28,12 +28,13 @@ if [ "$arch" != x86_64 ]; then
 fi
 
 fail() { echo "FAIL test_raw_bake: $*" >&2; exit 1; }
+moonc() { LOVE_NO_IMAGE= "$ho/love" mooncc "$@"; }
 
 d=$ho/raw
 ls "$d"/*.o >/dev/null 2>&1 || fail "no objects in $d -- run test_raw first"
 
 echo "BAKE-WAKE $ho/love-raw-pie"
-$ho/mooncc -pie "$d"/*.o -o "$ho/love-raw-pie" || fail "-pie link love-raw-pie"
+moonc -pie "$d"/*.o -o "$ho/love-raw-pie" || fail "-pie link love-raw-pie"
 
 # bake a COPY, so the un-baked pie binary stays around
 cp "$ho/love-raw-pie" "$ho/love-raw-baked"

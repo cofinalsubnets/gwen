@@ -63,7 +63,7 @@ pkgfind() {                        # pkgfind <dir-glob> <witness-file>
 }
 
 ho=out/host
-mc=$ho/mooncc
+mc="$ho/love mooncc"
 love=$ho/love
 
 if [ -n "$need" ] && ! command -v "$need" > /dev/null 2>&1; then
@@ -76,7 +76,7 @@ if [ -z "$LUASRC" ] || [ ! -f "$LUASRC/src/lua.c" ]; then
   echo "          set LUASRC=<an extracted lua-5.4.x tree> to run (see mk/tools/moon-lua.sh)."
   exit 0
 fi
-[ -x "$mc" ] || { echo "$name: missing $mc -- run 'make $ho/mooncc'"; exit 1; }
+[ -x "$love" ] || { echo "$name: missing $love -- run 'make host'"; exit 1; }
 
 G=$(pwd); MC=$G/$mc
 d=$ho/$sub
