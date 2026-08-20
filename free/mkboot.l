@@ -172,6 +172,9 @@
      + '((label l2_dev)) + `(`('raw (b-zeros 4096))))   ; 512 x 2M Device blocks over phys 0..1G
 
    a-gig 0x40000705                                 ; 0x40000000 | 0x705  valid | AttrIndx 1 | SH inner | AF
+   ;; PXNTable | UXNTable, bits 59 and 60 of a TABLE descriptor: nothing under
+   ;; this entry may be fetched from, at either EL. x86's NX bit, one level up.
+   a-xntab 0x1800000000000000
    a-boot-text
     ('((label a64boot)
        ;; the DOOR, one bit, read off the MACHINE and not off who booted us: a
@@ -205,12 +208,18 @@
      + `(`('li 'r2 a-gig) `('st 'r1 8 'r2)
          `('li 'r2 (a-gig + 0x40000000)) `('st 'r1 16 'r2)
          `('li 'r2 (a-gig + 0x80000000)) `('st 'r1 24 'r2))
-     ;; the L0s: the same L1 under both, identity for the kernel and the hhdm
-     ;; for reaching ram by physical address
-     + '((or r3 r1 r6)
-         (la r0 l0_lo) (st r0 0 r3)
-         (la r2 l0_hi) (st r2 2048 r3)               ; [256]
-         ;; MAIR: attr0 Device-nGnRnE (what mmio_attr_index prefers), attr1 Normal WB
+     ;; the L0s: the same L1 under both -- identity for the kernel to run in,
+     ;; the hhdm for reaching ram by physical address. ⚠ the XN pair rides the
+     ;; hhdm descriptor ALONE, which is the whole reason the second window is
+     ;; worth its entry: one bit at the top of the walk covers every page under
+     ;; it, so the heap and every page it hands out stop being executable
+     ;; through the map the kernel reads them by, while the identity walk keeps
+     ;; X for the image it runs from. the x86 stub says this at PML4[256].
+     + `('(or r3 r1 r6)
+         '(la r0 l0_lo) '(st r0 0 r3)
+         '(la r2 l0_hi)
+         `('li 'r5 a-xntab) '(or r5 r5 r3) '(st r2 2048 r5))   ; [256], and nothing under it runs
+     + '(;; MAIR: attr0 Device-nGnRnE (what mmio_attr_index prefers), attr1 Normal WB
          (li r3 0xff00)
          (msr mair_el1 r3)
          ;; TCR: 48-bit VA both halves, 4K granules, WB WA inner-shareable walks,
