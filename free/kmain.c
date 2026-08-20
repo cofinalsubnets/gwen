@@ -215,6 +215,10 @@ struct k_source *k_source_open(struct ai *g, int fd) {
 // door. a seat maps the running task's fds 0/1/2 to real rows; every dispatcher
 // below reads it through k_fd_eff. slot -1 is pass-through, -2 is seated CLOSED
 // (an fdmap's () entry: reads answer the end, writes fall away).
+// ⚠ THE SEAT IS THE PORT LAYER'S, AND ONLY ITS: k_fd_eff is reached from
+// fd_readn, fd_writen, ai_fd_close and k_procseat -- never from a nif, which is
+// why k_fdopen takes the fd it was handed. So an fd spelled in love is an
+// absolute row, and free/sys.c's syscall door is seat-blind by the same law.
 struct k_seat { intptr_t pid; int fd[3]; };
 static struct k_seat *k_seats;
 static int k_seats_n;

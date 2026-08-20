@@ -66,6 +66,10 @@ f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/crew/quay/*.c))
 # the map they reach it through -- which under -D__inle__ is the identity, free/sys.c
 # answering the canonical numbers itself. mooncc builds the kernel, so it builds the
 # kernel's libc too -- there is no second copy to drift.
+# ⚠ NAMING A MEMBER HERE IS A DECISION, and stdio is the one to weigh: printf and
+# friends write fd 1 themselves, and free/sys.c is seat-blind, so a seated task's
+# printf would reach the console where its port reaches the pipe. Member-by-member
+# is what keeps that from arriving by accident.
 c_c = $(addprefix $R/crew/moon/lib/nolibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) \
   $(addprefix $R/crew/moon/lib/nolibc/sys/,read.c write.c) \
   $R/crew/moon/lib/nolibc/os.c

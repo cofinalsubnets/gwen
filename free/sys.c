@@ -23,11 +23,19 @@ int __errno_v;
 int *__errno_location(void) { return &__errno_v; }
 
 // the kernel side (kmain.c): a raw fd through the k_sources row, no port above
-// it. ⚠ SEAT-BLIND, and knowingly: k_fd_eff maps a task's 0/1/2 through its
-// seat and needs the running task, which it reads off `g` -- and a syscall
-// arrives from inside nolibc with no g threaded to it. Nothing seated calls
-// this yet; when host/posix.c's nifs do, they hold a g at the nif and the seat
-// has to reach __ai_sys from there or not at all.
+// it -- and SEAT-BLIND, which is the law and not a gap. The seat is a property
+// of the PORT layer: k_fd_eff is called from fd_readn, fd_writen, ai_fd_close
+// and k_procseat, and from nowhere else, so an fd spelled in love is already an
+// absolute row and only a port's own fd is ever remapped. A syscall sits under
+// the port by construction, exactly as on a real kernel, where the number the
+// trap carries is already the calling process's own.
+// ⚠ THE DIVERGENCE THIS BUYS, named so it is not rediscovered as a bug: a
+// SEATED task spelling `write(1, ..)` reaches row 1, where POSIX would reach
+// whatever its parent seated. Nothing does -- love's stdio goes through the
+// folded ports, and host/posix.c touches an implicit fd at three terminal-
+// control calls and no data I/O at all. Closing it means per-task row tables
+// (a real fd table), not an ambient g: `g` MOVES under collection, so the
+// running task cannot be cached, only threaded.
 extern long k_fd_write(int fd, void const *b, long n);
 extern long k_fd_read(int fd, void *b, long n);
 
