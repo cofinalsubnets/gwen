@@ -6,8 +6,17 @@
 ; loader grants past SizeOfRawData), plus .reloc: the abs64 sites ldpatch
 ; collects for the -pie lane, re-encoded as base relocations -- firmware slides
 ; the image wherever it likes and fixes every pointer itself, no self-reloc.
-; entry is the FIRST object's text (the mkefi.l thunk -- ms_abi in, sysv out),
-; x64 only: UEFI on this machine speaks ms_abi x86-64.
+; entry is the FIRST object's text (the mkefi.l thunk). `target` is ldkern's
+; word, and the COFF machine below is the only arch-bound thing here: the DIR64
+; base relocations included, everything else reads the same on both.
+;
+; TWO load sections, page-aligned apart, and the split is not decoration:
+; firmware protects a loaded image by section, and every section it finds
+; EXECUTABLE it also makes READ-ONLY. one RWX section therefore comes back as
+; RO+X, and the first write to a static takes a permission fault -- which is
+; what aarch64 firmware does and x86 firmware happens not to. so .text carries
+; text + rodata and no write bit, .data carries data + nifs + bss and no
+; execute bit, and the protection lands where it was aimed.
 ;
 ; the one address subtlety: ldlay reserves a header inside the load image (an
 ; ELF's own header rides there); PE headers live BELOW the first section, so
@@ -45,33 +54,47 @@
                  (blocks <g (catall `((le32 pg) (le32 (+ 8 (* 2 (tally es)))) (catall (map le16 es))) >< acc))))
           (catall (blocks sites ()))))
 
+   ;; the COFF machine, elf.l's elf-machines in the other clothing
+   pe-machines (tabof `(('x64 >< 34404) ('amd64 >< 34404)          ; 0x8664
+                        ('arm64 >< 43620) ('aarch64 >< 43620)))    ; 0xAA64
+
    ;; link a set -- ((id bytes)..), the mkefi thunk FIRST -- into a PE32+ at out.
-   (pelink srcs out)
-    (: objs (map (\ p (ld-read <p <>p 62)) srcs)
+   (pelink target srcs out)
+    (: mach (peep pe-machines target 0)
+       emach (peep elf-machines target 0)
+       _ (? (0 < mach) 0 (scare 'pe-target target))
+       objs (map (\ p (ld-read <p <>p emach)) srcs)
        base (+ pe-ibase 4096)
-       lay (ldlay objs base 0 1)          ; one RWX .text: nothing to split, so .data packs tight
-       end <lay n0 <>lay
+       lay (ldlay objs base 0 4096)       ; the lanes land page-apart: rodata at o0, data at d0
+       end (lay 0) n0 (lay 1) o0 (lay 2) d0 (lay 3)
        bend (ldlay1 'bss end objs)
        relbox (: t (tablet 0) _ (pin t 0 ()) t)
        glo (ldsyms objs)
        o1 <objs
        ent (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)
        cx `(glo n0 end end end relbox ())
+       ;; the read-only half. each lane is emitted AT the address ldlay gave it,
+       ;; so the gap the alignment opened is written out as zeros.
        et (ldemit cx 'text base objs ())
-       eo (ldemit cx 'rodata <et objs >et)
-       ed (ldemit cx 'data <eo objs >eo)
-       en (ldemit cx 'nifs <ed objs >ed)
-       fsz (- end base)
-       craw (pe-al pe-falign fsz)
-       text-vsz (- bend base)
-       reloc-rva (pe-al 4096 (+ 4096 text-vsz))
+       eo (ldemit cx 'rodata o0 objs (>et + `((ld-zeros (- o0 <et)))))
+       ;; ..and the writable half, its own run of bytes from d0.
+       ed (ldemit cx 'data d0 objs ())
+       en (ldemit cx 'nifs n0 objs (>ed + `((ld-zeros (- n0 <ed)))))
+       tfsz (- <eo base)                  ; .text: text + rodata
+       traw (pe-al pe-falign tfsz)
+       dfsz (- <en d0)                    ; .data: data + nifs, and bss past it
+       draw (pe-al pe-falign dfsz)
+       text-vsz (- d0 base)
+       data-rva (- d0 pe-ibase)
+       data-vsz (- bend d0)
+       reloc-rva (pe-al 4096 (+ data-rva data-vsz))
        reloc (pe-relocs (rev (peep relbox 0 ())))
        rsz (tally reloc)
        rraw (pe-al pe-falign rsz)
        img-sz (+ reloc-rva (pe-al 4096 rsz))
        opt (catall `(
           (le16 523) '(0 0)                              ; PE32+ magic, linker 0.0
-          (le32 craw) (le32 0) (le32 0)
+          (le32 traw) (le32 draw) (le32 0)
           (le32 (- ent pe-ibase)) (le32 4096)            ; entry RVA, base of code
           (le64 pe-ibase)
           (le32 4096) (le32 pe-falign)                   ; section / file alignment
@@ -87,14 +110,19 @@
        hdr (catall `(
           '(77 90) (map (\ _ 0) (jot 58)) (le32 64)      ; MZ, e_lfanew = 64
           '(80 69 0 0)
-          (le16 34404) (le16 2)                          ; 0x8664, two sections
+          (le16 mach) (le16 3)                           ; the COFF machine, three sections
           (le32 0) (le32 0) (le32 0)
           (le16 (tally opt)) (le16 34)                   ; EXE | LARGE_ADDRESS_AWARE
           opt
-          (pe-sect ".text" text-vsz 4096 craw pe-hraw 3758096416)      ; 0xE0000020 code|rwx
-          (pe-sect ".reloc" rsz reloc-rva rraw (+ pe-hraw craw) 1107296320)))  ; 0x42000040
+          (pe-sect ".text" tfsz 4096 traw pe-hraw 1610612768)          ; 0x60000020 code|r-x
+          (pe-sect ".data" data-vsz data-rva draw (+ pe-hraw traw) 3221225536)   ; 0xC0000040 data|rw-
+          (pe-sect ".reloc" rsz reloc-rva rraw (pe-hraw + traw + draw) 1107296320)))  ; 0x42000040
        _ (? (< pe-hraw (tally hdr)) (scare 'pe-headers-overflow (tally hdr)) 0)
+       ;; headers, the read-only half padded to its file size, then the writable
+       ;; half padded to its own, then .reloc. `+` folds right, so the chunks
+       ;; concatenate in the order written.
        (ld-write out
-          (`(hdr (ld-zeros (- pe-hraw (tally hdr)))) + (>en
-           + `((ld-zeros (- craw fsz)) reloc (ld-zeros (- rraw rsz))))))))
+          (`(hdr (ld-zeros (- pe-hraw (tally hdr))))
+           + >eo + `((ld-zeros (- traw tfsz)))
+           + >en + `((ld-zeros (- draw dfsz)) reloc (ld-zeros (- rraw rsz)))))))
 ) ; module 'holo

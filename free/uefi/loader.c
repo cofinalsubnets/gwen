@@ -1,16 +1,15 @@
-// free/uefi/loader.c -- our own BOOTX64.EFI: the bring-up a bootloader
-// used to do, in ~250 lines of mooncc-compiled C. firmware hands us ms_abi
-// UEFI; mkefi.l's thunks carry the seam (efi_main in, efi_call out, efi_go
-// the cr3-and-jump tail). the loader reads love.elf off its own volume,
+// free/uefi/loader.c -- our own BOOTX64.EFI / BOOTAA64.EFI: the bring-up a bootloader
+// used to do, in ~250 lines of mooncc-compiled C. mkefi.l's thunks carry the
+// calling-convention seam (efi_main in, efi_call out) and efi_go, the tail
+// that swaps the tables and jumps. the loader reads love.elf off its own volume,
 // takes the pages at the link address (or anywhere, and maps them there),
-// copies the PT_LOADs home, finds
-// `kboot` in the kernel's symtab (our binaries carry one on purpose) and
-// fills it: the UEFI memmap's conventional ranges, the GOP framebuffer, the
-// hhdm. then ExitBootServices, our page tables (identity + the hhdm's NX
-// twin), and kmain. the kernel notices nothing: kboot is kboot, and the same
-// ELF boots all three doors.
+// copies the PT_LOADs home, finds `kboot` in the kernel's symtab (our binaries
+// carry one on purpose) and fills it: the UEFI memmap's conventional ranges,
+// the GOP framebuffer, the hhdm. then ExitBootServices, our page tables
+// (identity + the hhdm's no-execute twin), and the kernel's entry. the kernel
+// notices nothing: kboot is kboot, and the same ELF boots every door.
 //
-// INTEGER-ONLY on purpose: the entry thunk saves rsi/rdi around the sysv
+// INTEGER-ONLY on purpose: the x86 entry thunk saves rsi/rdi around the sysv
 // call and nothing else -- the ms_abi xmm6..15 stay untouched only as long
 // as no float sneaks in here.
 
@@ -116,8 +115,15 @@ u64 efi_main(void *handle, void *st) {
   // rides along. both are firmware's placement, so ask rather than assume.
   // (pt and mmap are statics -- the image range covers them.)
   u64 imb = ((u64 *) lip)[8], ims = ((u64 *) lip)[9], sp = (u64) &span;
+#if defined(__aarch64__)
+  // the low window's RAM gig is one 1 GiB block, and the override splits that
+  // one; a kernel outside it would want a second table this does not lay.
+  if (lo < 0x40000000ull || hi > 0x80000000ull)
+   return die("the kernel wants to live outside the first RAM gig");
+#else
   if (hi > 0x40000000ull)
    return die("the kernel wants more than the first GiB");
+#endif
   if ((imb < hi && lo < imb + ims) || (sp >= lo && sp < hi))
    return die("firmware placed us inside the kernel's own window"); }
  for (u16 i = 0; i < phn; i++) {
@@ -160,28 +166,49 @@ u64 efi_main(void *handle, void *st) {
   kb->fb.pitch_px = *(u32 *) (info + 32);
   kb->has_fb = 1; }
 
- // page tables BEFORE ExitBootServices (say still works): 2M identity blocks
- // over the low 4G, and a PDPT per window onto them -- mkboot.l's PVH stub
- // lays the same two windows for the same reasons, sharing one PDPT because
- // nothing there ever relocates.
+ // page tables BEFORE ExitBootServices (say still works): two windows onto one
+ // set of blocks, identity for the image to run in and the hhdm to reach ram
+ // by physical address, the second carrying the no-execute bit -- mkboot.l's
+ // stubs lay the same shape for the same reasons, and share a level where
+ // nothing relocates. the LOW window is the one that bends when it must, so
+ // the hhdm stays a true direct map: k.h promises physical P at khhdm + P and
+ // blk.c's vtop is that promise inverted.
  for (u64 i = 0; i < 8 * 512; i++) pt[i] = 0;
+#if defined(__aarch64__)
+ // l0_lo, l0_hi, the two L1s, l2_dev, l2_ram. a table descriptor is 3, a block
+ // 1: 0x705 is a Normal block (AttrIndx 1, SH inner, AF), 0x401 a Device one.
+ for (u64 i = 0; i < 512; i++) pt[4 * 512 + i] = (i << 21) | 0x401;   // MMIO, phys 0..1G
+ for (u64 i = 1; i < 4; i++) {                                        // RAM, 1G blocks
+  pt[2 * 512 + i] = (i << 30) | 0x705;
+  pt[3 * 512 + i] = (i << 30) | 0x705; }
+ pt[2 * 512] = (u64) &pt[4 * 512] | 3;
+ pt[3 * 512] = (u64) &pt[4 * 512] | 3;
+ if (kbase != lo) {
+  u64 *l2 = pt + 5 * 512;                        // the low window's RAM gig, in 2M blocks
+  for (u64 i = 0; i < 512; i++) l2[i] = (0x40000000ull + (i << 21)) | 0x705;
+  for (u64 v = lo; v < hi; v += 0x200000)
+   l2[(v - 0x40000000ull) >> 21] = (kbase + (v - lo)) | 0x705;
+  pt[2 * 512 + 1] = (u64) l2 | 3; }
+ pt[0] = (u64) &pt[2 * 512] | 3;                                  // TTBR0[0]
+ // PXNTable | UXNTable, bits 59 and 60: nothing under the hhdm may be fetched
+ // from, at either EL. efi_go reads TTBR1's root at pt + 4096, so l0_hi is the
+ // page right after l0_lo and that adjacency is the contract.
+ pt[512 + 256] = (u64) &pt[3 * 512] | 3 | (3ull << 59);            // TTBR1[256]
+#else
  for (u64 i = 0; i < 2048; i++) pt[3 * 512 + i] = (i << 21) | 0x83;
  for (u64 i = 0; i < 4; i++) pt[2 * 512 + i] = (u64) &pt[(3 + i) * 512] | 3;
  for (u64 i = 0; i < 4; i++) pt[1 * 512 + i] = (u64) &pt[(3 + i) * 512] | 3;
  if (kbase != lo) {
-  // relocated: the LOW window's first GiB takes its own PD, identity but for
-  // the kernel's own blocks. the hhdm keeps the pure one -- k.h promises
-  // physical P at khhdm + P, and blk.c's vtop is that promise inverted, so
-  // the direct map is the one view that must not lie.
-  u64 *kpd = pt + 7 * 512;
+  u64 *kpd = pt + 7 * 512;                       // the low window's first GiB, in 2M pages
   for (u64 i = 0; i < 512; i++) kpd[i] = (i << 21) | 0x83;
   for (u64 v = lo; v < hi; v += 0x200000) kpd[v >> 21] = (kbase + (v - lo)) | 0x83;
   pt[512] = (u64) kpd | 3; }
  pt[0] = (u64) &pt[512] | 3;
  // NX on the hhdm entry alone: one bit at the top of the walk covers every page
- // under it, and the hhdm is how the kernel reaches all of ram. the identity
- // window keeps X -- efi_go's own next instruction fetch is there.
+ // under it. the identity window keeps X -- efi_go's own next instruction fetch
+ // is there.
  pt[256] = (u64) &pt[2 * 512] | 3 | (1ull << 63);
+#endif
 
  // the memmap -> kboot.ram: CONVENTIONAL (7) only. loader/firmware-typed
  // memory stays out, so the kernel heap never eats this stack, the tables,

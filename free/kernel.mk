@@ -12,7 +12,7 @@ dl = dl
 
 # every gate and verb below is phony: one roster, so adding one is one line and not two.
 .PHONY: force_kfs_list kmain_o run run-$a run-sh run-headless init-container \
-  uefi test_arm64 test_kernel test_disk test_uefi test_kboot test_kernel_arm64 \
+  uefi test_arm64 test_kernel test_disk test_uefi test_uefi_arm64 test_kboot test_kernel_arm64 \
   test_inle test_wasm
 
 # K_TEST=1 builds a headless serial test kernel (batch read-eval over COM1, with an
@@ -193,8 +193,8 @@ k_fw = -drive if=pflash,unit=0,format=raw,file=$(dl)/edk2-ovmf/ovmf-code-$a.fd,r
 # not ours to lay yet, so aarch64 takes the -kernel door for both.
 ifeq ($a,x86_64)
 run: run-$a
-run-$a: $(ko)/esp/EFI/BOOT/BOOTX64.EFI $(ko)/esp/love.elf $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	exec $(k_qemu) $(k_fw) -drive format=raw,file=fat:rw:$(ko)/esp
+run-$a: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf $(dl)/edk2-ovmf/ovmf-code-$a.fd
+	exec $(k_qemu) $(k_fw) -drive format=raw,file=fat:rw:$(ko)/esp-$a
 else
 run: run-$a
 run-$a: $(k_elf)
@@ -309,25 +309,32 @@ endif
 uefi_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/crew/holo/pe.l \
   $R/free/uefi/mkefi.l
-$(ko)/uefi$(ksuf)/loader.o: $R/free/uefi/loader.c $(ho)/love.baked
+# the removable-media path firmware looks for, per arch -- it is the FILENAME that
+# picks the loader, so the two ESPs differ in nothing else.
+k_efiname_x86_64 = BOOTX64.EFI
+k_efiname_aarch64 = BOOTAA64.EFI
+k_efiname = $(k_efiname_$a)
+k_uefid = $(ko)/uefi-$a$(ksuf)
+k_espd = $(ko)/esp-$a$(ksuf)
+$(k_uefid)/loader.o: $R/free/uefi/loader.c $(ho)/love.baked
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(ho)/love mooncc -c $< $@
-$(ko)/uefi$(ksuf)/BOOTX64.EFI: $(ko)/uefi$(ksuf)/loader.o $(uefi_l) $m
+	@LOVE_NO_IMAGE= $(ho)/love mooncc -t $(k_be_$a) -c $< $@
+$(k_uefid)/$(k_efiname): $(k_uefid)/loader.o $(uefi_l) $m
 	@echo HOLO	$@
 	@mkdir -p $(dir $@)
-	@{ echo "(use 'holo)"; cat $(uefi_l); echo '(mkboot "$@" (list "$<"))'; } | $m
-# the ESP: BOOTX64.EFI at the removable-media path the firmware looks for, and the kernel
-# beside it (the loader opens "love.elf" on its own volume).
-$(ko)/esp$(ksuf)/EFI/BOOT/BOOTX64.EFI: $(ko)/uefi$(ksuf)/BOOTX64.EFI
-$(ko)/esp$(ksuf)/love.elf: $(ko)/love-x86_64$(ksuf).elf
-$(ko)/esp$(ksuf)/EFI/BOOT/BOOTX64.EFI $(ko)/esp$(ksuf)/love.elf:
+	@{ echo "(use 'holo)"; cat $(uefi_l); echo '(mkboot "$@" "$a" (list "$<"))'; } | $m
+# the ESP: the loader at that path, and the kernel beside it (the loader opens
+# "love.elf" on its own volume).
+$(k_espd)/EFI/BOOT/$(k_efiname): $(k_uefid)/$(k_efiname)
+$(k_espd)/love.elf: $(ko)/love-$a$(ksuf).elf
+$(k_espd)/EFI/BOOT/$(k_efiname) $(k_espd)/love.elf:
 	@echo CP	$@
 	@mkdir -p $(dir $@)
 	@cp $< $@
-uefi: $(ko)/esp/EFI/BOOT/BOOTX64.EFI $(ko)/esp/love.elf
-	@echo "uefi: out/free/esp is an ESP -- copy it to a FAT32 partition, or"
-	@echo "      qemu-system-x86_64 -drive format=raw,file=fat:rw:$(ko)/esp ..."
+uefi: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf
+	@echo "uefi: $(ko)/esp-$a is an ESP -- copy it to a FAT32 partition, or"
+	@echo "      qemu-system-$a -drive format=raw,file=fat:rw:$(ko)/esp-$a ..."
 
 # test_uefi -- the whole laptop door under qemu, and the only gate that exercises the
 # HAND-OVER (the loader off the ESP, kboot from the memmap, ExitBootServices, the jump);
@@ -342,9 +349,24 @@ test_uefi:
 	@echo "test_uefi: skipped (x86_64 + $(dl)/edk2-ovmf/ovmf-code-x86_64.fd needed)"
 else
 test_uefi: host $(R)/mk/tools/ktest.l
-	@$(MAKE) -s K_TEST=1 $(ko)/esp-test/EFI/BOOT/BOOTX64.EFI $(ko)/esp-test/love.elf
-	@echo TEST $(ko)/esp-test "(serial, headless, our own BOOTX64.EFI; ~64s, ceiling 420s)"
-	@$m $(R)/mk/tools/ktest.l $(ko)/esp-test $(OVMF_X64) x86_64
+	@$(MAKE) -s K_TEST=1 $(ko)/esp-x86_64-test/EFI/BOOT/BOOTX64.EFI $(ko)/esp-x86_64-test/love.elf
+	@echo TEST $(ko)/esp-x86_64-test "(serial, headless, our own BOOTX64.EFI; ~64s, ceiling 420s)"
+	@$m $(R)/mk/tools/ktest.l $(ko)/esp-x86_64-test $(OVMF_X64) x86_64
+endif
+
+# test_uefi_arm64 -- the same door on the other arch, and the ONLY one that gives
+# aarch64 a loader of ours: `qemu -kernel` is a hypervisor protocol, so until this
+# lane runs, arm64 has never met firmware.
+OVMF_A64 := $(wildcard $(dl)/edk2-ovmf/ovmf-code-aarch64.fd)
+QEMU_A64U ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
+ifeq ($(and $(OVMF_A64),$(QEMU_A64U)),)
+test_uefi_arm64:
+	@echo "test_uefi_arm64: skipped (qemu-system-aarch64 + $(dl)/edk2-ovmf/ovmf-code-aarch64.fd needed)"
+else
+test_uefi_arm64: host $(R)/mk/tools/ktest.l
+	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/esp-aarch64-test/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-aarch64-test/love.elf
+	@echo TEST $(ko)/esp-aarch64-test "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 420s)"
+	@$m $(R)/mk/tools/ktest.l $(ko)/esp-aarch64-test $(OVMF_A64) aarch64
 endif
 
 # test_inle -- the kernel's whole roster, in one word. Every lane below prints its own
@@ -359,7 +381,8 @@ test_inle:
 	@$(MAKE) -s test_uefi
 	@$(MAKE) -s test_kboot
 	@$(MAKE) -s test_kernel_arm64
-	@echo "test_inle: boot, disk, command line -- both arches"
+	@$(MAKE) -s test_uefi_arm64
+	@echo "test_inle: boot, disk, command line, firmware -- both arches"
 
 # The aarch64 twin of test_kernel, same corpus under full-TCG (~45s). In test_slow
 # because the lane needs a gate that RUNS it: the aarch64 kernel is otherwise reached
