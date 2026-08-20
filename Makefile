@@ -127,9 +127,10 @@ lint: $(ho)/love
 
 # ccdb: emit compile_commands.json so clangd reads the flags the build actually uses --
 # without it the missed core/love.h cascades into a flood of undeclared-name noise. ⚠ the
-# generated headers under out/ must exist, so build first. Machine-specific, gitignored.
-ccdb:
-	@python3 $R/mk/tools/ccdb.py
+# generated headers under out/ must exist, so build first. Machine-specific: it carries
+# absolute paths, so it is this box's and rides in no archive.
+ccdb: $(ho)/love
+	@$(ho)/love $R/mk/tools/ccdb.l
 
 # ⚠ there is deliberately NO pre-commit hook: the committed artifacts (wasm/love.js,
 # test/bench/bench.html) are rebuilt by hand (`make wasm`, `make -C test/bench html`) and staged, so

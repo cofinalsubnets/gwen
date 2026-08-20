@@ -249,7 +249,7 @@ Four words, each naming exactly one thing, and none of them borrowed:
 
 ⚠ A band being signed makes it **red** under the net, so every test on one must be by kind or by
 identity — `(nil? -60)` is true, and a truth test would read every left-handed row as absent. The
-door and `lib/infix.l` both spell this out at the site.
+door spells this out at the site.
 
 `band` and `lane` are internal: absent from `(names ())`, and mechanically swappable. `grip` is
 the one that reaches the surface, because it is the door.

@@ -7,8 +7,7 @@
 # named section), rlink.l binds it over holo's ldbare32, and ocopy.l flattens it. gcc's
 # cortex-m0 libgcc is the one foreign FILE, read as an archive by need and never run.
 #
-# ⚠ the .uf2 packer (mk/tools/elf2uf2.g) still speaks the pre-rename .g dialect, so `make bin`
-# writes the raw flash image and a UF2 wants that port first.
+# ⚠ there is no .uf2 packer, so `make bin` writes the raw flash image and a UF2 wants one.
 #
 # Faces: `make` builds love.elf + love.bin and verifies the segment permissions and the
 # boot surface (the boot2 CRC, the vector table's SP and reset entry) -- the three words a

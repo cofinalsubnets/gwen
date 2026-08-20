@@ -186,12 +186,6 @@ this file". `lex.l` has no comment token and `cpp.l` runs first, so a note is AU
 the generator -- exactly as `free/mkvec.l` carries its narrative in the love that lays
 the assembly.
 
-one thing worth still watching, for its own sake rather than clay's: `crew/moon/fmt.l:2`
-says moonfmt "shares NOTHING with the parser/codegen: it reads text and writes text". the
-day it wants to respace across line breaks or rewrap a table it needs the structure, and a
-formatter on the AST needs comments IN the AST. at that point capture has a customer of its
-own. don't build it for clay, and don't write it off.
-
 ## the order of work
 
 incremental, each rung shippable, `love.c` staying hand-written until its region converts

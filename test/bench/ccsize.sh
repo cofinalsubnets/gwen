@@ -19,7 +19,7 @@
 #     in the wrong column without it.
 #
 # ⚠ this counts what a lane SHIPS, which for a libc is half the question: what it can
-# CALL is the other half, and ccdead.py answers that one.
+# CALL is the other half, and ccdead.l answers that one.
 #
 # usage: ./ccsize.sh          (after ./ccbench.sh, or `make ccbench`)
 R=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)

@@ -86,13 +86,13 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l crew/sb/up.l \
             lib/gz.l lib/tar.l lib/tarcmd.l lib/gzcmd.l lib/cpio.l lib/cpiocmd.l \
             lib/source.l crew/lapiz/lapiz.l \
-            lib/salt.l lib/infix.l crew/libra/libra.l lib/hueweb.l lib/serve.l
+            lib/salt.l crew/libra/libra.l lib/hueweb.l lib/serve.l
 # THE DOCS LANE -- the small image of the array below. a one-shot `love libra ..`
 # wants the .l reader, the config door, the factor pass and the document lens, and
 # nothing else: it is 1.8 MB against the full image's 7.6, and the wake is linear in
 # that (~17 ms/MB measured), so the command starts in a quarter of the time.
 # ⚠ ITS MEMBERSHIP IS AN INPUT, exactly as distfiles' is -- same list guard below.
-docsfiles = lib/lint.l lib/salt.l lib/infix.l crew/lapiz/lapiz.l crew/libra/libra.l
+docsfiles = lib/lint.l lib/salt.l crew/lapiz/lapiz.l crew/libra/libra.l
 # ..and the REST of the dist, which is the second layer of the bake below. filter-out
 # keeps distfiles' order, so the two cats together are the same tree in the same
 # sequence -- only the docs half now goes in FIRST, which is what makes it a prefix.

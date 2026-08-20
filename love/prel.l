@@ -409,7 +409,7 @@
  -2 (pins (tablet 0)                                ; --- ARITY -2: spaced, and it CHAINS. a left and a right, but
  '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40)))          ; a same-band neighbour JOINS the run instead of nesting
  ; ⚠ the rows are NOMS, not values: a value would be unwritable, and an unwritable head is a
- ; form no text can spell -- which is what keeps opfix invertible (lib/infix.l).
+ ; form no text can spell -- which is what keeps opfix invertible.
 
 ;;; FIXME the code below is rather old and hoary and can probably be freshened up.
 ;;; remember we can't use operators or pattern matching yet here though.
@@ -519,7 +519,7 @@
    ; ⚠ ONLY A COMPOUND OPERAND IS BOUND. an atom -- a nom, a numeral, a string -- has no effect
    ; and no cost to read twice, so binding it would buy nothing and spend an UNWRITABLE nom: a
    ; fresh nom has no spelling, and a factored form carrying one is a form no text can say
-   ; (lib/infix.l, and the same reason the table's rows are noms). so (a < b < c) stays plain.
+   ; (the same reason the table's rows are noms). so (a < b < c) stays plain.
    (op-chn-rest pv r)                                        ; r = (op z op z ..), or a dangling op
     (? (atom? r) 0
        (: op (cap r)

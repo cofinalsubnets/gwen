@@ -1,6 +1,6 @@
 ; lib/lint.l -- the .l balance scan, structured so its consumers can share one
-; scanner: `libra check` prints what it finds and gates `make lint`,
-; `libra` (crew/libra/libra.l) turns the same warnings into lsp diagnostics. it
+; scanner: `libra check` prints what it finds and gates `make lint`, `libra doc`
+; rides lint-cmts to lift a header, and vi's own reindent rides lint-lay. it
 ; reads .l correctly -- `;` and `#!` start comments to end of line, `"..."` is
 ; the only string, and `'` / backtick are READER OPERATORS (quote, list-ctor),
 ; never delimiters, so they scan as ordinary code (the trap a C lexer falls
@@ -28,7 +28,8 @@
 ; by construction, since it only ever says where a line STARTS. it never moves a
 ; break, never re-flows, never touches what is on the line. everything the house
 ; style does that this cannot predict (aligned comment columns, hand-laid
-; tables) survives untouched for exactly that reason.
+; tables) survives untouched for exactly that reason. it is a plan; vi's `=`
+; applies it to one buffer, and nothing else applies it at all.
 (: (lclose c) (? (c = 40) 41 (c = 91) 93 125)          ; ( -> )   [ -> ]   { -> }
    (lopen c)  (? (c = 41) 40 (c = 93) 91 123)          ; ...and back, for the report
 
@@ -99,17 +100,21 @@
         (? (h = ":")  (2 <= ne && 0 = ne % 2)
            (h = "\\") (2 <= ne)
            0)))
-   ; is the token that just ended a BINDING NAME? both shapes over-fire on a
+   ; is the token that just ended a BINDING NAME? this shape over-fires on a
    ; BARE-NAME BODY ((: a 1 cap), (\ x cap)) -- the last operand is the body, and
    ; which element is last is not known until the closer. that shape is rare
    ; enough to cost one line of noise.
-   ;
-   ; ⚠ the SUGAR HEADER (: (bit x) ..) is NOT caught, and cannot be here: at token time it
-   ; is element 1 of a form at an even `:` position, which is exactly what a body call
-   ; (: a 1 (cap x)) also is -- and THAT is common, so guessing would fire on half the
-   ; tree. deciding it needs the `:` closer plus a per-element index the frame does not
-   ; keep. a real gap, named rather than papered over.
    (lbind-pos? src n stk) (? (two? stk) (lbind? src n <stk) 0)
+   ; the SUGAR HEADER (: (bit x) ..): at token time element 1 of a form at an ODD `:`
+   ; index, which a body call (: a 1 (cap x)) also is. the two part at the `:` CLOSER,
+   ; where the final count is known -- the body is the LAST element and a name slot is
+   ; not -- so the verdict defers on the binder's pend slot, the singleton rule's own
+   ; machinery run at the opposite polarity.
+   (lsugar-pos? src n stk)
+    (? (! (two? stk && two? >stk)) 0
+       (: f <stk p <>stk
+          (? (! (1 = f 'ne)) 0                         ; not this form's FIRST element
+             (lbind? src n p))))                       ; ..sitting in the parent's binder slot
 
    ; --- the frame ------------------------------------------------------------
    ; a TABLET: {'cl closer 'ln line 'co col 'ne nelem 'e1 e1i 'pl plain 'qd quoted
@@ -225,9 +230,10 @@
            w0 (? !(two? dp) warns
                  (: r (lint-dep dp (lname t))
                     (? (two? r) (link [line tc (lint-depmsg <>r) 'deprecated] warns) warns)))
-           (? (sh && lsmem? lshadow-words t && lbind-pos? src n stk)
-              (link [line tc ("shadow " + t + " -- a glued sigil factors to this name")
-                     'shadow] w0)
+           shw [line tc ("shadow " + t + " -- a glued sigil factors to this name") 'shadow]
+           (? (! (sh && lsmem? lshadow-words t)) w0
+              (lbind-pos? src n stk) (link shw w0)
+              (lsugar-pos? src n stk) (: _ (lpend stk 2 (<>stk 'ne) shw) w0)
               w0))
 
        ; stk: the frames above, a matched-pair stack, so ([)] is caught and not
@@ -279,9 +285,15 @@
                          (w (i + 1) 'code >stk line (col + 1) sl sc 0 ti tc
                             (link [line col ("mismatched " + string c) 'balance] w0))
                         (: f <stk rest >stk
-                           ; the verdicts this binder owed its deferred children:
-                           ; an entry at the FINAL index was the body, so it warns
-                           w1 (foldl (\ a p (? (<p = f 'ne) (link >p a) a)) w0 (f 'pd))
+                           ; the verdicts this binder owed its deferred children. an entry
+                           ; at the FINAL index was the BODY: a singleton there warns, and
+                           ; a shadow there does not -- the two rules read the same fact
+                           ; from opposite sides.
+                           w1 (foldl (\ a p (: wr >p last? (<p = f 'ne)
+                                              (? (id? (wr 3) 'shadow) (? last? a (link wr a))
+                                                 last? (link wr a)
+                                                 a)))
+                                     w0 (f 'pd))
                            sw (? sg (lsing src n f) ())
                            (? (id? sw ()) (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)
                               (f 'am)     (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)   ; match arms: silent
@@ -435,175 +447,4 @@
                     (? it stk (ltok stk line col c (? (i + 1 < n) (src (i + 1)) 10)))
                     line (col + 1) 1 plan))))
        (w 0 'code () 1 1 0 [[1 0]]))
-
-   ; --- the drop plan --------------------------------------------------------
-   ; (lint-drops src conf) answers the byte indexes to DELETE, ascending -- two per
-   ; dropped pair, the `(` and its mate -- so `libra fmt -p` can minify parens the
-   ; way libra-lay applies lint-lay's plan: lint says WHERE, the tool rewrites. a
-   ; THIRD walk rather than a rider on the balance scan, because that scan is the
-   ; gate and nothing that is not balance belongs in its frame.
-   ;
-   ; TWO predicates ride here, and they rest on DIFFERENT laws:
-   ;   a SPAN paren -- ("exit " + (show ec) + ")") -- is decided by OPFIX. splice
-   ;     the child's elements into its parent's operand run, fold both, compare:
-   ;     equal cores mean the parens did nothing. op-core recurses structurally, so
-   ;     a form's fold reads only its OWN operand list -- the test is LOCAL, the
-   ;     file is never read twice, and the precedence law is BORROWED rather than
-   ;     copied. libra cannot drift from the compiler because it asks the compiler.
-   ;   a SINGLETON -- (<>b) -- is decided by (f) == f, which opfix DECLINES to
-   ;     apply: it keeps ((mov r3 r12)) wrapped on purpose, since a list of one may
-   ;     be a program (has-top-op?, love/prel.l). so that half stays `lsing`'s law.
-   ;
-   ; ⚠ AND BOTH ARE GATED LEXICALLY, because the datum cannot see what a DELETION
-   ; does to the text. ((show x)+"\n") reads fine and folds equal, but dropping the
-   ; bytes leaves `x+` as ONE token, a different program. so a pair drops only when
-   ; it stands FREE -- a delimiter, a comment or a quote on both outer sides. that
-   ; one rule also disposes of foo(x), '(x), `(a b) and every sigil-glued run, and
-   ; it is nearly free: 17 of the tree's 193389 code parens are right-glued.
-
-   ; the frame: {'cl closer 'oi opener-index 'ne nelem 'e1 e1 'pl plain 'qd quoted
-   ; 'kx kidx 'ks kids} -- the expected closer, the opener's BYTE INDEX, the
-   ; element count and first-element index (`lelem` bumps those two here too --
-   ; the slots are named, so the two scans share the counter), whether the parens
-   ; are plain (not sigil- or operator-glued), whether we sit inside a quote
-   ; (data: hands off), this form's own index among its PARENT's elements, and
-   ; the kids that closed inside it ([ki kj kx] each, newest first).
-
-   ; a new opener, classified exactly as lpush classifies it. ⚠ lelem must run
-   ; BEFORE this, so `kx` reads the parent's own count for the slot this form fills.
-   (ldpush stk c i src it ti)
-    (: pre (? it (snip src ti i) "")
-       pq  (? (two? stk) (<stk 'qd) 0)
-       ct  (lall? lctc? pre)
-       op  (lall? lopc? pre)
-       qd  (? (pq || ct && lin? pre 39) 1 0)
-       pl  (? (pq || ct || op) 0 (? (c = 40) 1 0))
-       kx  (? (two? stk) (<stk 'ne - 1) 0)
-       (link {'cl (lclose c) 'oi i 'ne 0 'e1 0 'pl pl 'qd qd 'kx kx 'ks ()} stk))
-
-   ; register a closed form with its parent, iff it is ELIGIBLE for a span drop.
-   (ldkid stk ki kj kx ok)
-    (? !(two? stk) stk
-       !ok stk
-       (pin <stk 'ks ([ki kj kx] >< <stk 'ks), stk))
-
-   ; a byte that cannot FUSE with an adjacent token: a delimiter, a comment start,
-   ; or a string quote.
-   (ldsep? c) (ldelim? c || c = 59 || c = 34)
-   (ldfree? src n i j)
-    (&& (? (i < 1) 1 (ldsep? (src (i - 1))))
-        (? (j + 1 < n) (ldsep? (src (j + 1))) 1))
-
-   ; ⚠ ELIGIBILITY, and it is a matter of TASTE rather than of law. a child whose
-   ; HEAD is punctuation folds the same either way -- (? (! (two? l)) ..) and
-   ; (? ! (two? l) ..) are one program -- and nobody would write the second. the
-   ; formatter must emit what you would have written, so the span half takes
-   ; APPLICATION and INFIX children only, and leaves ! ? : \ + alone. sigil-glued
-   ; parens are already out (pl), and so is a form with nothing in it.
-   (ldeligible? src n f)
-    (f @ ({'pl 1 'e1 e1 'ne ne} & 0 < ne)
-     !(lall? lopc? (ltok-at src n e1))
-     0)
-
-   (lany? p s) (: n (tally s)
-                  (go k) (? (n <= k) () (p (s k)) 1 (go (k + 1)))
-                  (go 0))
-   ; the singleton half: `lsing`'s law, plus ONE exemption the formatter needs. a
-   ; sole element carrying no operator character is a BARE NAME -- (go), (loop),
-   ; (step) -- the nullary trap, the closure handed back unrun. dropping those
-   ; parens is semantics-preserving (it was already a no-op) and it DELETES THE
-   ; EVIDENCE, so fmt leaves them for `check`'s singleton rule to speak about.
-   ; (drop-nullary 1) takes them anyway.
-   ;
-   ; ⚠ AND THIS HALF CANNOT BE VERIFIED, which is why it has its own key. the span
-   ; half is checkable against opfix -- fold both ways, compare -- and the tree
-   ; answers 303 files clean. this half rests on (f) == f, a law opfix DECLINES to
-   ; apply, so there is no oracle to check it with; and that law is false for a
-   ; MACRO, which reads its operand's SHAPE rather than its value. libra cannot know
-   ; which heads are macros. it is on by default and (drop-singles 0) turns it off.
-   (ldsing? src n f sg nu)
-    (? !sg ()
-       (f @ {'pl 1 'ne 1 'e1 e1}
-        (: t (ltok-at src n e1)
-           (? (lall? lopc? t) ()              ; (+) (:) (?) -- the escape idiom
-              ; ⚠ a sole element that is ITSELF A FORM stays wrapped, and this
-              ; is opfix's call, not ours: has-top-op? keeps ((mov r3 r12))
-              ; whole because a list of one may be DATA -- a program, a type
-              ; signature. overriding it rewrote ((mat m n)) to (mat m n) in
-              ; doc/proto/overlay-tele.l, which is a different value.
-              (0 = tally t) ()
-              (nu || lany? lopc? t)))         ; (<>b) yes; (go) only if asked
-        ()))
-
-   ; the i'th element of l replaced by its OWN elements
-   (ldsplice l i) (? !(two? l) l
-                     (0 < i) (link <l (ldsplice >l (i - 1)))
-                     (cat <l >l))
-   ; f closed at j: weigh every kid that closed inside it against f's own text,
-   ; which only exists now that its closer is known. one read and one base fold per
-   ; FORM, then one fold per kid.
-   (ldspans src n f j ks acc)
-    (: r (sound (snip src (f 'oi) (j + 1)))
-       (? !(two? r) acc
-          !(two? <r) acc
-          (: x <r
-             base (opfix x)
-             (go l a)
-              (? !(two? l) a
-                 (<l @ [ki kj kx]
-                  (go >l (? (ldfree? src n ki kj && base = opfix (ldsplice x kx))
-                            (link kj (link ki a)) a))))
-             (go ks acc))))
-
-   ; the walk. states and glue are lint-of's exactly -- ⚠ `it` fires ONCE PER TOKEN,
-   ; at its first character, or a three-letter name counts as three elements and
-   ; every kid index below it is wrong.
-   (ldscan src conf)
-    (: n  (tally src)
-       sg (lint-yes? conf 'drop-singles)
-       nu (lint-on? conf 'drop-nullary)
-       (w i st stk it ti acc)
-        (? (n <= i) acc
-           (: c (src i)
-              (? (id? st 'str)
-                  (? (c = 92) (w (i + 2) 'str stk 0 ti acc)
-                     (c = 34) (w (i + 1) 'code stk 0 ti acc)
-                     (w (i + 1) 'str stk 0 ti acc))
-                 (id? st 'cmt)
-                  (? (c = 10) (w (i + 1) 'code stk 0 ti acc)
-                     (w (i + 1) 'cmt stk 0 ti acc))
-                 (c = 59) (w (i + 1) 'cmt stk 0 ti acc)
-                 (c = 35 && i + 1 < n && src (i + 1) = 33)
-                  (w (i + 2) 'cmt stk 0 ti acc)
-                 (c = 34) (w (i + 1) 'str (? it stk (lelem stk i)) 0 ti acc)
-                 (c = 10) (w (i + 1) 'code stk 0 ti acc)
-                 (c = 40 || c = 91 || c = 123)
-                  (w (i + 1) 'code (ldpush (? it stk (lelem stk i)) c i src it ti) 0 ti acc)
-                 (c = 41 || c = 93 || c = 125)
-                  ; ⚠ an imbalanced file drops NOTHING: a mismatched closer pops and
-                  ; says nothing rather than guessing. balance is `check`'s errand.
-                  (? !(two? stk) (w (i + 1) 'code stk 0 ti acc)
-                     !(<stk 'cl = c) (w (i + 1) 'code >stk 0 ti acc)
-                     (: f <stk
-                        a1 (? (c = 41 && two? (f 'ks)) (ldspans src n f i (rev (f 'ks)) acc) acc)
-                        sd (ldsing? src n f sg nu && ldfree? src n (f 'oi) i)
-                        a2 (? sd (link i (link (f 'oi) a1)) a1)
-                        (w (i + 1) 'code
-                           (? sd >stk (ldkid >stk (f 'oi) i (f 'kx) (ldeligible? src n f)))
-                           0 ti a2)))
-                 (c < 33) (w (i + 1) 'code stk 0 ti acc)
-                 (w (i + 1) 'code (? it stk (lelem stk i)) 1 (? it ti i) acc))))
-       (w 0 'code () 0 0 ()))
-
-   ; the indexes ASCENDING. they arrive in close order -- innermost first, a form's
-   ; kids after the form itself -- so a tablet turns the pile into a sorted walk and
-   ; no sort is needed.
-   (lint-drops src conf)
-    (: ds (ldscan src conf)
-       (? !(two? ds) ()
-          (: n (tally src)
-             (fill m l) (? !(two? l) m (pin m <l 1, fill m >l))
-             t (fill (tablet 0) ds)
-             (go k acc) (? (k < 0) acc (go (k - 1) (? (peep t k ()) (link k acc) acc)))
-             (go (n - 1) ()))))
 )

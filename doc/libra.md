@@ -1,12 +1,11 @@
 # libra ⚖ -- the .l balance tool
 
-the scales. libra weighs a `.l` file four ways and they are all the same
-weighing: `libra` says what is wrong with it, `libra fmt` lays it out,
-`libra infix`/`unfix` turn it inside out, and `libra doc` lifts its header out as
-a document. one scanner (`lib/lint.l`) under all of them, so the formatter, the
-gate and the doc lifter can never disagree about what a paren or a comment is.
-the tool is `crew/libra/libra.l`, the gate `make test_hostnif`
-(test/host/libra.l), and `make lint` runs it over every tracked `.l`.
+the scales. libra weighs a `.l` file two ways and they are the same weighing:
+`libra` says what is wrong with it, and `libra doc` lifts its header out as a
+document. one scanner (`lib/lint.l`) under both, so the gate and the doc lifter
+can never disagree about what a paren or a comment is. the tool is
+`crew/libra/libra.l`, the gate `make test_hostnif` (test/host/libra.l), and
+`make lint` runs it over every tracked `.l`.
 
 an LSP server lived here until 2026-08-16 -- `libra serve`, publishing the same
 scan as diagnostics over json-rpc. it never had a consumer, so it went; `lib/json.l`
@@ -18,44 +17,18 @@ stays, with no consumer of its own outside its gate.
 libra FILE ..           weigh them -- balance is the DEFAULT verb, so a bare
                         file list is the whole command
 libra check FILE ..     the same thing, spelled out
-libra -w FILE ..        ...and strip trailing whitespace while you are there
-                        (WITHOUT reindenting)
-libra fmt FILE ..       lay it out on stdout; -w rewrites, -n only checks
-libra fmt -p FILE ..    ...and MINIFY THE PARENS while you are there
-libra infix FILE ..     print it MAX-INFIX and MIN-PAREN, on stdout
-libra unfix FILE ..     print it back as PURE PREFIX LISP, on stdout
 libra doc FILE ..       its HEADER COMMENT as a document, on stdout
 libra doc -ht FILE ..   ...as html; -rf for a man page
 libra -h                the usage
 ```
 
 check is the default because it is the errand that recurs: `make lint` runs it
-over every tracked `.l`. every other verb is run by hand and named, and nothing
-is gated on layout.
+over every tracked `.l`. `doc` is run by hand and named, and nothing is gated on
+layout.
 
-**infix and unfix are the two directions of one pass.** `unfix` is just `opfix`,
-the factor pass a compile already runs, printed instead of compiled. `infix` is
-its RIGHT INVERSE ([`lib/infix.l`](../lib/infix.l)): for any form it answers a
-surface that factors back to exactly that form, choosing the fewest parens it can
-prove correct. round-tripping a file through both reproduces it.
-
-⚠ **they print from the DATUM, so comments are not carried** -- `sound` does not
-keep them. that is why they are verbs of their own rather than modes of fmt,
-which is a reindenter and never touches what is on a line, and why there is no
-`-w`: a rewrite that silently deleted every comment in a file is not a thing to
-offer. redirect if you mean it.
-
-`infix` always terminates with something correct, because prefix is a fixed point
-of opfix -- so the fully-parenthesized spelling is always a valid answer and every
-proposal is checked against it before being handed out. on this tree all 1571
-top-level forms across 334 files keep the maximal spelling, at 22% fewer parens
-than the prefix spelling. the law is gated in
-[`test/host/infix.l`](../test/host/infix.l).
-
-**doc is the one verb that KEEPS comments**, and it is the mirror of the two
-above it. infix and unfix print from the datum and lose every comment in the
-file; `doc` prints the comments and nothing else -- the leading block, the header
-that twelve of the nineteen crew tools have instead of a `doc/*.md`.
+**doc is the verb that KEEPS comments.** the check reads them only to know where
+code is not; `doc` prints the comments and nothing else -- the leading block, the
+header that twelve of the nineteen crew tools have instead of a `doc/*.md`.
 
 the lifting is a TEXT walk over the same `lib/lint.l` scanner (`lint-cmts`, which
 reports every comment with its text): no reader in the tree keeps comments, so a
@@ -168,10 +141,11 @@ it catches a plain `:` binder name and a `\` param. two things it does not:
   binding and once for the body, because which element is last is not known
   until the closer. a body that is a bare monadic name is rare enough to pay
   one line for.
-- the **sugar header** `(: (bit x) ..)` is missed, and cannot be caught here.
-  at token time it is element 1 of a form at an even `:` position -- which is
-  exactly what the far commoner body call `(: a 1 (bit x))` is. flagging one
-  would flag both, and the second is half the tree.
+- the **sugar header** `(: (bit x) ..)` warns and the far commoner body call
+  `(: a 1 (bit x))` does not, though at token time they are the same shape.
+  the verdict defers to the binder's closer, where the final count is known and
+  the body is the last element -- the singleton rule's machinery run the other
+  way round.
 
 on this tree the rule finds 20 bindings across 332 files, and they are real
 ones (`abs` in `lush/glob.l`, `dot` in `cook.l`, `net` in `moon/gen.l`).
@@ -196,14 +170,11 @@ person, which is why the project file exists at all.
 (shadow 1)                                       ; ...and the sigil-word rule
 (deprecated old-thing (worse-thing "use better-thing"))
 (strict singleton)                               ; ...and make it fail the gate
-(drop-parens 1)                                  ; fmt minifies parens without -p
-(drop-singles 0)                                 ; ...but leave (x) alone
-(drop-nullary 1)                                 ; ...and take (go) too
 ```
 
-⚠ `drop-parens` and `drop-singles` are read with `salt-one`, never by PRESENCE:
-the tail of `(drop-parens 0)` is `two?` just as much as `(drop-parens 1)`'s is, so
-asking whether the key is there would read an explicit OFF as an on.
+⚠ `singleton` and `shadow` are read with `salt-one`, never by PRESENCE: the tail
+of `(singleton 0)` is `two?` just as much as `(singleton 1)`'s is, so asking
+whether the key is there would read an explicit OFF as an on.
 
 a setting is one form: the head names it, the tail is its value. an entry in the
 roster is a bare name or a `(name "hint")` pair, and the hint is printed after
@@ -258,77 +229,3 @@ the environment rather than by the seat walk. the module walk still reads none.
 `lib/lint.l` takes a plain tablet and reads it with `peep`; it does NOT depend
 on salt, because vi cats that file directly and a module it had to carry along
 would break the cat. salt fills the tablet, lint only reads it.
-
-## the formatter
-
-`libra fmt` is a REINDENTER and nothing more: it replaces leading whitespace and
-leaves every line break, every alignment inside a line, and every comment
-exactly where its author put them. it cannot re-flow and will not try. the rule
-is one sentence -- a continuation line aligns under its form's FIRST OPERAND, or
-one past the open delimiter when the head stands alone on its line -- plus the
-pairing rule, since `:` and `?` take their operands two at a time and the house
-sets the second of each pair one past the first.
-
-## the paren minifier
-
-`libra fmt -p` also drops the parens that do nothing. it is a format option rather
-than a verb of its own, because minifying and reindenting are one errand — make
-the file read the way the house writes it — and they compose in a single pass.
-
-the everyday case is the one that abounds: **application binds tighter than every
-infix operator**, so a call alone in an operand span never needed its parens.
-
-```love
-("cook: command failed (exit " + (show ec) + ")")   ; before
-("cook: command failed (exit " + show ec + ")")     ; after
-```
-
-⚠ **the decision is opfix's, not libra's.** splice the child's elements into its
-parent's operand run, fold both ways, and drop only when the cores come out
-IDENTICAL. `op-core` recurses structurally, so a form's fold reads only its own
-operand list — the test is local, the file is never read twice, and the precedence
-law is *borrowed* rather than copied, so libra cannot drift from the compiler. what
-it refuses matters as much as what it takes:
-
-```love
-(f (show x))        an application OPERAND -- (f show x) is ((f show) x)
-("a" + f (show x))  the group shares its span with f
-(x * (a + b))       band
-(x + (a + b))       arithmetic is LEFT-handed, so + cannot yield to +
-(f + `(a b))        reader sugar owns those parens
-(? (! (two? l)) ..) a PUNCT HEAD folds the same and reads far worse
-```
-
-⚠ **and the answer is gated LEXICALLY**, because the datum cannot see what a
-deletion does to the text. `((show x)+"a")` reads fine and folds equal, but dropping
-the bytes leaves `x+` as one token — a different program. so a pair drops only when
-it stands FREE: a delimiter, a comment or a quote on both outer sides. that one rule
-also disposes of `foo(x)`, `'(x)` and every sigil-glued run, and it costs almost
-nothing: right-glued parens are a bare handful of the tree's ~190k code parens.
-
-**singletons ride the same flag** but rest on a different law: `(x)` is `x` by
-`(f) == f`, which opfix *declines* to apply — it keeps `((mov r3 r12))` whole,
-because a list of one may be data. so that half stays lexical, and it carries the
-risk the span half does not: `(f) == f` is false for a MACRO, which reads its
-operand's shape rather than its value, and libra cannot know which heads are macros.
-`(drop-singles 0)` turns it off. a list of one FORM is left alone either way.
-
-⚠ **the nullary trap stays visible.** `(go)` is `go` handed back unrun, and dropping
-those parens is semantics-preserving *and* deletes the only evidence of a bug this
-tree keeps hitting. fmt leaves them for `check`'s singleton rule to speak about;
-`(drop-nullary 1)` takes them anyway.
-
-**how it is checked.** apply every drop to every tracked `.l` file, re-read, and
-compare the compiled cores — they must come out identical — then rebuild the
-self-hosting tree from the minified source and run the gate, with the test counts
-unmoved.
-
-## the reindenter
-
-**it is BUILT BUT NOT ADOPTED.** nothing is gated on layout and nothing has been
-reformatted. tree-wide it would move about a fifth of all lines, because the
-tree carries two live conventions (align-to-first-operand, and a hanging indent
-that no positional rule reproduces). the open decision is whether to adopt
-alignment and reflow the minority, or adopt file by file with a shrinking ignore
-list. a width guard as a bridge between the two pays nowhere -- the numbers are
-in `lib/lint.l`, do not re-derive them.

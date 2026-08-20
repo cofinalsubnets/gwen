@@ -187,7 +187,7 @@ ccsize: $(CCBENCH)
 # how much of that libc the binary can ever REACH -- the reachability half, which is
 # what tells a fat libc from an indivisible one. CCDEAD_V=1 lists the biggest dead.
 ccdead: $(CCBENCH)
-	@./ccdead.py
+	@$(GL) ccdead.l
 
 # Self-contained results page: test/bench/bench.html, the full roster as columns
 # (a present-but-empty language shows a dotted column), with a transpose button

@@ -48,7 +48,7 @@ endif
 libmods = cook dns json lint salt libra kiosko lapiz papel hueweb serve rune sb sb/text sb/diff sb/merge sb/http sb/core lush lush/job lush/lex lush/gram lush/glob lush/word lush/eval lush/line lush/main
 # ⚠ ONE roster each: the compat-symlink block below reads the same two names, and two
 # spellings of a list is how they drift.
-binnames = $(BIN) kore sb mooncc moonfmt cook papel kiosko libra ain lux bao lush
+binnames = $(BIN) kore sb mooncc cook papel kiosko libra ain lux bao lush
 mannames = $(BIN) cook lush
 installs = $(patsubst %,$d/bin/%,$(binnames)) \
   $(patsubst %,$d/share/man/man1/%.1,$(mannames)) \
@@ -174,16 +174,15 @@ $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
 # READ their siblings rather than being -l'd beside them -- two tool files cannot both be
 # -l'd, since each one's seat would fire on the other's command line -- and they find them
 # by READLINK'ing this very symlink back to the source tree, so the link on PATH and the
-# crew directory need not be neighbours. libra's are named ((use 'lint), (use 'salt),
-# (use 'infix), and (use 'lapiz) on the doc verb alone) and ride libmods above instead.
+# crew directory need not be neighbours. libra's are named ((use 'lint), (use 'salt), and
+# (use 'lapiz) on the doc verb alone) and ride libmods above instead.
 # ⚠ each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
 $d/bin/cook:    crew/cook/cook.l    $(ho)/love.baked
 $d/bin/papel:   crew/papel/papel.l  $(ho)/love.baked
 $d/bin/kiosko:  crew/kiosko/kiosko.l $(ho)/love.baked
 $d/bin/libra:   crew/libra/libra.l  $(ho)/love.baked
-$d/bin/moonfmt: crew/moon/fmt.l     $(ho)/love.baked
-$d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra $d/bin/moonfmt:
+$d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra:
 	@echo $(instag)	$(abspath $@)
 	@mkdir -p $(@D)
 	@$(call instool,$<,$@)

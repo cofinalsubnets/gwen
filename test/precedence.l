@@ -132,8 +132,7 @@
  (!(catch (\ _ (grip 7 '^^ 60))))                   ; ..and a lane with no key is refused, never minted
 
  ; --- the GLUED lane through the same door: arity 0, where a row is the WORD the sigil names.
- ; this lane had no door at all before the tablets joined, which is why lib/infix.l had to keep
- ; a copy of the sigil map. one nom lives in as many lanes as it has faces, and `?` is the pair:
+ ; one nom lives in as many lanes as it has faces, and `?` is the pair:
  ; `bit` glued, cond spaced -- the valence law as two keys of one table. ---
  (: r (grip 0 '? ()) _ (grip 0 '? r) (r = 'bit))  ; a clear-and-restore is the non-destructive READ
  ; ⚠ the fixture needs a sigil whose GLUED row is empty -- `was = ()` is half the law. it was

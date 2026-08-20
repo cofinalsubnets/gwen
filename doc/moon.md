@@ -78,7 +78,6 @@ piece. ~11k lines of love.
   stays 64-bit —
   sound because signed overflow is UB — and widths bite only at memory and casts. This is also
   where the register story lives.
-* **fmt.l** — diagnostics.
 * **clay.l** — C as love data (doc/clay.md).
 * **stage.l** — the pipeline's stages, typed: each pass's signature (input stage → output
   stage). The moon gate checks gen.l *as data* against it, so a new pass declares its sig there
