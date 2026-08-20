@@ -341,7 +341,7 @@
    ;; to the full register, zero-extended, so no separate movzx. the twin of
    ;; ldcr below; the kernel reads CS to learn which selector the bootloader left
    ;; it running under, since the IDT entries must name a segment that is valid
-   ;; in the CURRENT GDT (limine leaves 0x28, OVMF 0x38).
+   ;; in the CURRENT GDT (OVMF leaves 0x38; a stub that lays its own names it).
    (emit-ldseg d n)
       (: dn (rn d)
          _ (? ((n >= 0) && (n <= 5)) 0 (scare 'x64-segnum n))

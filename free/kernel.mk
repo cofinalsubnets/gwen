@@ -3,20 +3,20 @@
 #
 # Arch-independent glue is free/{kmain.c,k.h}, per-arch code free/<a>/. Each
 # arch brings itself up under `qemu -kernel` with no bootloader or firmware at all (the
-# PVH stub on x86_64, the EL1 MMU stub on aarch64, both laid by mkboot.l); the limine
-# iso/hdd lanes below serve run-*, which want the framebuffer a real bootloader hands over.
+# PVH stub on x86_64, the EL1 MMU stub on aarch64, both laid by mkboot.l); free/uefi/'s
+# own BOOTX64.EFI is the second door, and the one that hands over a framebuffer.
 ko = out/free
 # downloaded, not built -- so it lives OUTSIDE out/ and `make clean` leaves it standing.
 # `make distclean` is the one that asks for the network again.
 dl = dl
 
 # every gate and verb below is phony: one roster, so adding one is one line and not two.
-.PHONY: force_kfs_list kmain_o run run-hdd run-$a run-hdd-$a run-headless init-container \
+.PHONY: force_kfs_list kmain_o run run-$a run-sh run-headless init-container \
   uefi test_arm64 test_kernel test_disk test_uefi test_kboot test_kernel_arm64 \
   test_inle test_wasm
 
 # K_TEST=1 builds a headless serial test kernel (batch read-eval over COM1, with an
-# `exit` nif that quits qemu) into its own odir / elf / iso, so it never clobbers the
+# `exit` nif that quits qemu) into its own odir and elf, so it never clobbers the
 # normal interactive one.
 ifdef K_TEST
 ksuf := -test
@@ -62,8 +62,7 @@ kcppflags := \
   -I. -Icore -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/free \
   -I$(R)/free/$a \
   -I$(R)/crew/moon/include \
-  $(kcppflags) \
-  -DLIMINE_API_REVISION=3
+  $(kcppflags)
 ifdef K_TEST
 # tail-threaded, matching the real kernel and the host; love0 stays the trampoline lane.
 kcppflags += -DK_TEST -Dai_tco=1
@@ -171,54 +170,6 @@ $(k_lay_o): $(k_odir)/free/$a/%.o: $(k_odir)/mk%.l $m
 	@mkdir -p "$(dir $@)"
 	@$m -l $< -n -e '(lay-$* "$@" "$a")' && test -s $@
 
-# --- ISO / HDD image rules -------------------------------------------
-# limine ships one loader per firmware face; the ESP wants all three, both doors.
-k_efi = BOOTX64.EFI BOOTIA32.EFI BOOTAA64.EFI
-k_xorriso_x86_64 = \
-  -b boot/limine/limine-bios-cd.bin \
-  -no-emul-boot -boot-load-size 4 -boot-info-table
-k_xorriso = xorriso -as mkisofs -quiet -R -r -J \
-  -hfsplus -apm-block-size 2048 \
-  --efi-boot boot/limine/limine-uefi-cd.bin \
-  -efi-boot-part --efi-boot-image --protective-msdos-label \
-  $(k_xorriso_$a)
-
-# The Limine bootloader config is generated here rather than kept as a
-# standalone source file (it is a handful of static lines). Two entries, and the
-# first is what the timeout picks: `sh` seats lush with the whole cat behind it
-# (`make run` is a shell prompt), the second leaves the line empty for the love
-# console shell -- the same two doors -append opens on the -kernel lanes.
-$(ko)/limine.conf:
-	@mkdir -p $(dir $@)
-	@printf 'timeout: 1\n/lush\n    protocol: limine\n    path: boot():/boot/kernel\n    cmdline: sh\n/love\n    protocol: limine\n    path: boot():/boot/kernel\n' > $@
-
-$(ko)/love-$a$(ksuf).iso: $(k_elf) $(dl)/limine/limine $(ko)/limine.conf
-	@echo MK	$@
-	@rm -rf $(ko)/iso_root
-	@mkdir -p $(ko)/iso_root/boot
-	@cp $< $(ko)/iso_root/boot/kernel
-	@mkdir -p $(ko)/iso_root/boot/limine
-	@cp $(ko)/limine.conf $(ko)/iso_root/boot/limine/
-	@mkdir -p $(ko)/iso_root/EFI/BOOT
-	@cp $(dl)/limine/limine-uefi-cd.bin $(ko)/iso_root/boot/limine/
-	@cp $(dl)/limine/limine-bios.sys $(dl)/limine/limine-bios-cd.bin $(ko)/iso_root/boot/limine/
-	@cp $(addprefix $(dl)/limine/,$(k_efi)) $(ko)/iso_root/EFI/BOOT/
-	@$(k_xorriso) $(ko)/iso_root -o $@
-	@$(dl)/limine/limine bios-install $@
-	@rm -rf $(ko)/iso_root
-
-$(ko)/love-$a.hdd: $(ko)/love-$a.elf $(dl)/limine/limine $(ko)/limine.conf
-	@echo MK	$@
-	@rm -f $@
-	@dd if=/dev/zero bs=1M count=0 seek=64 of=$@
-	@PATH=$$PATH:/usr/sbin:/sbin sgdisk $@ -n 1:2048 -t 1:ef00
-	@mformat -i $@@@1M
-	@mmd -i $@@@1M ::/EFI ::/EFI/BOOT ::/boot ::/boot/limine
-	@mcopy -i $@@@1M $< ::/boot/kernel
-	@mcopy -i $@@@1M $(ko)/limine.conf ::/boot/limine
-	@mcopy -i $@@@1M $(dl)/limine/limine-bios.sys ::/boot/limine
-	@for f in $(k_efi); do mcopy -i $@@@1M $(dl)/limine/$$f ::/EFI/BOOT; done
-
 # --- qemu run targets ------------------------------------------------
 # KVM where the host offers it: TCG costs 6x on the boot (22s to the prompt against
 # 5s) and 7x on the corpus. A box without /dev/kvm falls to TCG and answers the same,
@@ -229,17 +180,31 @@ k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x86_64,$a),$(filter x86_64,$(sh
 k_qemu_x86_64 = -M q35 -serial stdio
 k_qemu_risc = -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
 k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio -semihosting $(k_qemu_risc)
-k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) $(k_kvm) \
-  -drive if=pflash,unit=0,format=raw,file=$(dl)/edk2-ovmf/ovmf-code-$a.fd,readonly=on
+k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) $(k_kvm)
+# ⚠ the FIRMWARE rides the ESP door ALONE. `qemu -kernel` enters our PVH stub with the
+# machine bare; hand it OVMF as well and the firmware boots first and takes the door.
+# mk/tools/ktest.l draws the same line, which is why its -kernel lane names no pflash.
+k_fw = -drive if=pflash,unit=0,format=raw,file=$(dl)/edk2-ovmf/ovmf-code-$a.fd,readonly=on
 
+# THE TWO DOORS, and they trade: our own BOOTX64.EFI hands over a framebuffer and
+# carries no command line, `qemu -kernel` carries one (-append) and hands over no
+# framebuffer -- PVH has nothing to hand. so `run` is the graphical one and
+# `run-sh` the one that seats lush. ⚠ x86_64 only for the ESP: BOOTAA64.EFI is
+# not ours to lay yet, so aarch64 takes the -kernel door for both.
+ifeq ($a,x86_64)
 run: run-$a
-run-hdd: run-hdd-$a
-run-$a: $(ko)/love-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	exec $(k_qemu) -cdrom $<
-run-hdd-$a: $(ko)/love-$a.hdd $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	exec $(k_qemu) -hda $<
-run-headless: $(ko)/love-$a.iso $(dl)/edk2-ovmf/ovmf-code-$a.fd
-	exec $(k_qemu) -cdrom $< -display none -no-reboot
+run-$a: $(ko)/esp/EFI/BOOT/BOOTX64.EFI $(ko)/esp/love.elf $(dl)/edk2-ovmf/ovmf-code-$a.fd
+	exec $(k_qemu) $(k_fw) -drive format=raw,file=fat:rw:$(ko)/esp
+else
+run: run-$a
+run-$a: $(k_elf)
+	exec $(k_qemu) -kernel $<
+endif
+# the serial doors: no firmware, nothing downloaded, and a command line.
+run-sh: $(k_elf)
+	exec $(k_qemu) -kernel $< -append "sh"
+run-headless: $(k_elf)
+	exec $(k_qemu) -kernel $< -display none -no-reboot
 
 # Boot init AS PID 1 in a container -- love at the Linux altitude of "the system". An
 # unprivileged pid+user+mount namespace: --pid --fork makes the entrypoint pid 1, --user
@@ -334,11 +299,13 @@ test_kernel test_disk test_kboot:
 endif
 
 # --- the UEFI door: our own BOOTX64.EFI ------------------------------------
-# No limine, no gnu-efi, no foreign toolchain: mooncc compiles the loader (loader.c reads
-# love.elf off the ESP, fills kboot from the UEFI memmap + GOP, ExitBootServices, page
-# tables, jumps kmain), mkefi.l lays the ms_abi<->SysV seam in holo IR, and holo's PE lane
-# links the PE32+ the firmware runs. This is the LAPTOP door, what replaces limine on real
-# hardware; the ESP is two files.
+# No gnu-efi, no foreign toolchain, no bootloader we did not write: mooncc compiles the
+# loader (loader.c reads love.elf off the ESP, fills kboot from the UEFI memmap + GOP,
+# ExitBootServices, page tables, jumps kmain), mkefi.l lays the ms_abi<->SysV seam in holo
+# IR, and holo's PE lane links the PE32+ the firmware runs. This is the LAPTOP door and the
+# only one that hands over a framebuffer; the ESP is two files.
+# ⚠ it carries NO command line -- `run-sh` is the -append door. adding one means a second
+# file on the ESP for the loader to read, and nothing here reads one yet.
 uefi_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/crew/holo/pe.l \
   $R/free/uefi/mkefi.l
@@ -436,10 +403,4 @@ $(dl)/edk2-ovmf/ovmf-code-%.fd:
 	@case "$a" in \
 		aarch64) dd if=/dev/zero of=$@ bs=1 count=0 seek=67108864 2>/dev/null;; \
 	esac
-
-$(dl)/limine/limine:
-	@echo MK	limine
-	@rm -rf $(dl)/limine
-	@git clone https://codeberg.org/Limine/Limine.git $(dl)/limine --branch=v10.x-binary --depth=1 > /dev/null 2>&1
-	@$(MAKE) -sC $(dl)/limine
 

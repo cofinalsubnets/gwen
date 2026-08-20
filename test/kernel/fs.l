@@ -66,8 +66,8 @@
    (= 3 <now)
    (<= <>was <>now)
    (= (tally orig) <back)
-   ; THE WALL CLOCK, which every line above leans on: limine's date if it answered,
-   ; else the machine's own RTC (mc146818 on x86_64, PL031 on aarch64). It reads as
+   ; THE WALL CLOCK, which every line above leans on: the door's date if it left
+   ; one, else the machine's own RTC (mc146818 on x86_64, PL031 on aarch64). It reads as
    ; milliseconds since the epoch here exactly as it does on the host -- an uptime
    ; in ticks is what it used to be, and would fail this by a factor of a thousand.
    (< 1600000000000 (clock 0))))

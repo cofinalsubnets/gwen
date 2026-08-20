@@ -425,10 +425,10 @@
    ; -- the bytes (`-c` writes them; the link path feeds them to ldlink).
    ; both targets: obj.l picks the reloc vocabulary by tgt.
    ; ..plus one section per OTHER __attribute__((section(NAME))) name the TU
-   ; used, appended in declaration order (cgen-obj's tail). the kernel's
-   ; .limine_requests is why: a bootloader SCANS for that section by name, and
-   ; three of them bracket the scan, so both their EXISTENCE and their order are
-   ; the protocol's. objsecs is the door that takes them.
+   ; used, appended in declaration order (cgen-obj's tail). a section named at all
+   ; is a section whose ADDRESS is the point -- port/rp2040's .vectors is read by
+   ; the core before an instruction runs -- so both its existence and its order are
+   ; the program's to fix, never ours. objsecs is the door that takes them.
    ; ⚠ THE TWO WIDE TUPLES ARE NAMED ONCE, HERE -- parse.l's `tops` answers fourteen fields
    ; and gen.l's cgen-obj twelve. `[]` is the strict arity, so a shape that gains a member is
    ; a refusal naming the file rather than every site quietly reading its NEIGHBOUR.

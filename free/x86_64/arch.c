@@ -98,9 +98,9 @@ void k_qemu_exit(int code) { k_outl(0xf4, (uint32_t) code); }
 #endif
 
 // --- the wall clock: the mc146818 CMOS RTC ---------------------------
-// Limine answers a boot date; the other two doors (-kernel, UEFI) answer none, so
-// this is what makes (clock 0) and every mtime a DATE rather than an uptime on the
-// door the gate itself rides. -> UNIX SECONDS, or 0 when the chip says nothing.
+// No door answers a boot date, so this is what makes (clock 0) and every mtime a
+// DATE rather than an uptime -- on every door, the gate's included.
+// -> UNIX SECONDS, or 0 when the chip says nothing.
 static uint8_t cmos(uint8_t r) { return k_outb(0x70, r), k_inb(0x71); }
 static uint32_t unbcd(uint32_t v) { return (v >> 4) * 10u + (v & 15); }
 

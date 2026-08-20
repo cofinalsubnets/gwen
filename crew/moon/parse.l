@@ -2382,7 +2382,7 @@
            _ (? (st && member? <f '(fn proto)) (pin (ps 'sfns) <>f 1) ())
            ; a FUNCTION may name its section and its alignment too (love.c's data
            ; sentinels): where the code lands is the point there exactly as it is
-           ; for .limine_requests, and the align is what pins the SPACING.
+           ; for a part's .vectors, and the align is what pins the SPACING.
            _ (? (sc && member? <f '(fn proto)) (pin (ps 'sects) <>f sc) ())
            _ (? (an && member? <f '(fn proto)) (pin (ps 'aligns) <>f an) ())
            _ (? ((<f = 'gdecl) && (st || sc || an))

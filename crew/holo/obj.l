@@ -393,8 +393,8 @@
    ; emits (.boot, .note.pvh, the 2 KiB-aligned vector table).
    ; the five DESCRIPTORS are their own binding because a compiler has a sixth
    ; kind of stream to add to them: a global wearing __attribute__((section(..)))
-   ; with a name that is neither ai_nifs nor .image (the kernel's
-   ; .limine_requests, which a bootloader SCANS for). moon.l appends those and
+   ; with a name that is neither ai_nifs nor .image (a part's .vectors, which the
+   ; core reads before an instruction runs). moon.l appends those and
    ; calls objsecs itself; everything else takes the five and nothing more.
    ; ⚠ .bss is NOBITS (8): its size rides the header and its zeros ride NOTHING, so
    ; whoever loads the image owes them -- linux over p_memsz, the .lds ports over

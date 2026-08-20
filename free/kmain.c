@@ -1,4 +1,3 @@
-#include "limine.h"
 #include "k.h"
 #include "love.h"
 #include "quay.h"
@@ -15,7 +14,7 @@ uint64_t kticks;
 #define k_tick_ms 10
 static uintptr_t k_ticks_for(uintptr_t ms) { return (ms + k_tick_ms - 1) / k_tick_ms; }
 // Higher-half direct map offset: physical address P is reachable at
-// khhdm + P, copied out of Limine's HHDM response. Set before archinit,
+// khhdm + P, taken from kboot's hhdm. Set before archinit,
 // so arch code can use it for MMIO.
 uintptr_t khhdm;
 
@@ -71,43 +70,11 @@ void k_qemu_exit(int);
 
 #include "quay.h"
 #include <stdarg.h>
-__attribute__((used, section(".limine_requests_start")))
-static volatile LIMINE_REQUESTS_START_MARKER;
-#define _L __attribute__((used, section(".limine_requests"))) static volatile
-_L LIMINE_BASE_REVISION(3);
-_L struct limine_memmap_request memmap_req = { .id = LIMINE_MEMMAP_REQUEST, .revision = 0 };
-_L struct limine_hhdm_request hhdm_req = { .id = LIMINE_HHDM_REQUEST, .revision = 0 };
-_L struct limine_framebuffer_request fb_req = { .id = LIMINE_FRAMEBUFFER_REQUEST, .revision = 0 };
-_L struct limine_date_at_boot_request date_req = { .id = LIMINE_DATE_AT_BOOT_REQUEST, .revision = 0 };
-_L struct limine_executable_address_request addr_req = { .id = LIMINE_EXECUTABLE_ADDRESS_REQUEST, .revision = 0 };
-_L struct limine_efi_system_table_request systbl_req = { .id = LIMINE_EFI_SYSTEM_TABLE_REQUEST, .revision = 0 };
-_L struct limine_executable_cmdline_request cmdline_req = { .id = LIMINE_EXECUTABLE_CMDLINE_REQUEST, .revision = 0 };
-__attribute__((used, section(".limine_requests_end")))
-static volatile LIMINE_REQUESTS_END_MARKER;
-
-// kboot -- populated by limine_to_kboot() at the top of kmain.
+// kboot -- the machine as the door found it, filled BEFORE kmain reads it:
+// pvh_to_kboot off qemu's hvm_start_info, the UEFI loader off the firmware
+// memmap and GOP, the aarch64 stub off the DTB. nothing below asks which door
+// answered, which is the whole point of the struct.
 struct k_boot kboot;
-static void limine_to_kboot(void) {
-  if (hhdm_req.response) kboot.hhdm = hhdm_req.response->offset;
-  if (memmap_req.response) {
-    struct limine_memmap_entry **rr = memmap_req.response->entries;
-    uintptr_t n = memmap_req.response->entry_count;
-    for (uintptr_t i = 0; i < n && kboot.ram_n < k_boot_ram_max; i++)
-      if (rr[i]->type == 0)
-        kboot.ram[kboot.ram_n].base = rr[i]->base,
-        kboot.ram[kboot.ram_n].len  = rr[i]->length,
-        kboot.ram_n++; }
-  if (date_req.response && date_req.response->timestamp > 0)
-    kboot.date = (uint64_t) date_req.response->timestamp;
-  if (cmdline_req.response && cmdline_req.response->cmdline)
-    k_cmdline(cmdline_req.response->cmdline, (uintptr_t) ~0);
-  if (fb_req.response && fb_req.response->framebuffer_count) {
-    struct limine_framebuffer *g = fb_req.response->framebuffers[0];
-    kboot.fb.base     = g->address;
-    kboot.fb.w        = g->width;
-    kboot.fb.h        = g->height;
-    kboot.fb.pitch_px = g->pitch >> 2;
-    kboot.has_fb      = true; } }
 
 #define kb_code_lshift 0x2a
 #define kb_code_rshift 0x36
@@ -369,7 +336,7 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
 // CLOCK_REALTIME in ms) -- one scale for the scheduler's deadlines, for (clock t),
 // and for every mtime. This used to answer kticks: an uptime in TENTHS OF A SECOND
 // wearing the millisecond name, which made (rest 30) a third of a second and every
-// date a fiction. The date rides kboot (limine's, or the machine's RTC); when
+// date a fiction. The date rides kboot (the door's, or the machine's RTC); when
 // nobody knew it, this degrades to milliseconds since boot and says so by reading
 // as 1970.
 uintptr_t ai_clock(void) { return (uintptr_t) (kboot.date * 1000 + kticks * k_tick_ms); }
@@ -1642,9 +1609,9 @@ static union u
 #endif
   nif_fault[] = {{lvm_fault}, {lvm_ret0}};
 
-// Reads the bootloader-populated kboot struct (Limine or UEFI) and
+// Reads the door-populated kboot struct and
 // links every reported free range into the kernel free list. The
-// chained-into-kmem order matches the previous Limine-walk order:
+// chained-into-kmem order matches the memmap walk order:
 // entries are pushed in array order, so kmem ends up pointing at the
 // last entry, with earlier entries linked through ->next.
 static bool meminit(void) {
@@ -1815,23 +1782,20 @@ struct ai_lib const *ai_libs(void) { return libs; }
 void kmain(void) {
 #if defined(__x86_64__)
  // Enable x87/SSE before ANY other C runs -- a compiler vectorizes freely on
- // x86_64 (even the struct copies in limine_to_kboot below compile to movups),
- // and that #UDs into a triple fault with no output while SSE is masked. This
- // is the single SSE-enable point; archinit no longer repeats it.
+ // x86_64 (even a struct copy compiles to movups), and that #UDs into a triple
+ // fault with no output while SSE is masked. This is the single SSE-enable
+ // point; archinit no longer repeats it.
  k_sse_enable();
 #endif
- // Copy the requested Limine responses into kboot before anything else
- // reads it.
- limine_to_kboot();
  khhdm = kboot.hhdm;
  archinit();
- // the wall date, in the one order that can answer on every door: limine's if it
- // was asked and answered, else the machine's RTC -- which archinit has just made
- // reachable (the aarch64 read is device memory, and mmio_map lays it).
+ // the wall date, in the one order that can answer on every door: whatever the
+ // door left in kboot if it had one, else the machine's RTC -- which archinit has
+ // just made reachable (the aarch64 read is device memory, and mmio_map lays it).
  if (!kboot.date) kboot.date = k_rtc();
  serial_init();
  // the heap (meminit) is the only hard requirement. the framebuffer
- // console is optional: when fbinit/cbinit fail -- no Limine
+ // console is optional: when fbinit/cbinit fail -- the door handed over no
  // framebuffer, or the console buffer won't allocate -- kcb stays null
  // and the kernel runs headless on the serial console alone.
  if (meminit()) {

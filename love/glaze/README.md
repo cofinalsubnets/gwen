@@ -40,7 +40,7 @@ C3               ret
 ```
 
 — copied them to the heap and jumped in. Run on the **kernel** target under qemu it
-returned the immediate exactly (verified at 42 and at 12345). So Limine maps the HHDM —
+returned the immediate exactly (verified at 42 and at 12345). So the HHDM —
 which backs the kernel heap — **without the NX bit**: kernel data memory is already
 executable. No page-table work, no `mprotect`; a love glaze on the kernel is just love
 emitting bytes and calling them where they land.

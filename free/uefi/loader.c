@@ -6,7 +6,7 @@
 // symtab (our binaries carry one on purpose) and fills it: the UEFI memmap's
 // conventional ranges, the GOP framebuffer, the hhdm. then ExitBootServices,
 // our page tables (identity + hhdm + KVMA over wherever the kernel landed),
-// and kmain. the kernel notices nothing: kboot is kboot, the limine request
+// and kmain. the kernel notices nothing: kboot is kboot, and the request
 // section answers NULL, the same ELF boots all three doors.
 //
 // INTEGER-ONLY on purpose: the entry thunk saves rsi/rdi around the sysv

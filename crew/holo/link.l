@@ -171,7 +171,7 @@
    (ld-unwind? nm)
     ?(ld-pre nm ".eh_frame" || ld-pre nm ".ARM.exidx" || ld-pre nm ".ARM.extab")
    ; the lanes the linker knows by name; anything else allocated is a named lane
-   ld-lanes '(text rodata data nifs bss image note boot limreq)
+   ld-lanes '(text rodata data nifs bss image note boot)
    ; a COMPILER-NAMED section -- one the list below has no word for -- becomes its
    ; OWN lane, keyed by the name. keeping a section apart from .text and .data is
    ; the only reason to name one, so the linker keeps it apart and keeps it whole:
@@ -194,13 +194,10 @@
        ((nm = ".data") || ld-pre nm ".data.") 'data
        (nm = "ai_nifs") 'nifs
        (nm = ".love_image") 'image
-       ; the KERNEL lanes (ldkern's names): the boot
-       ; stub's page tables and bring-up ladder, the limine request block --
-       ; its three sections bracket a scan, so they lay in header order, which
-       ; is the order kmain.c writes them -- and the PVH note qemu reads to
-       ; find the 32-bit entry. a hosted object carries none of them.
+       ; the KERNEL lanes (ldkern's names): the boot stub's page tables and
+       ; bring-up ladder, and the PVH note qemu reads to find the 32-bit entry.
+       ; a hosted object carries neither.
        ((nm = ".boot") || (nm = ".boot.text")) 'boot
-       (ld-pre nm ".limine_requests") 'limreq
        (nm = ".note.pvh") 'note
        (ld-any nm ty fl))
 
@@ -1039,15 +1036,14 @@
    ; --- the KERNEL lane: one ELF, three doors ---------------------------------
    ; a freestanding image is laid where it RUNS and loaded where it LANDS: every
    ; PT_LOAD carries p_paddr = p_vaddr - bias, which is what lets `qemu -kernel`
-   ; copy by p_paddr with the MMU off while limine (and our own BOOTX64.EFI) maps
+   ; copy by p_paddr with the MMU off while our own BOOTX64.EFI maps
    ; by p_vaddr with it on -- one file, and mkboot.l bridges the two. that split,
    ; and the several segments it needs, is the whole of what a kernel asks for
    ; that ldlink's one-segment shape cannot say.
    ;
    ; the lanes, each page-aligned and each its own segment: `boot` (the stub's
-   ; page tables and bring-up ladder), `limreq` (the limine request block, which
-   ; a bootloader scans), text, rodata, then data -- nifs and image ride the data
-   ; run, and .bss follows it past p_filesz. .note.pvh is laid at vbase and rides
+   ; page tables and bring-up ladder), text, rodata, then data -- nifs and image
+   ; ride the data run, and .bss follows it past p_filesz. .note.pvh is laid at vbase and rides
    ; NO PT_LOAD: nothing maps it, qemu reads it out of the file through PT_NOTE
    ; to find XEN_ELFNOTE_PHYS32_ENTRY, so it lives in the header page where ld
    ; puts it too. `ent` names the entry SYMBOL (kmain on x86_64, a64boot on
@@ -1061,8 +1057,7 @@
        (lsz lane) (foldl (\ a ob (a + ld-lanesz ob lane)) 0 objs)
        ne (ldlay1 'note vbase objs)                 ; the note first, at vbase
        b0 (ld-align 4096 ne)  b1 (ldlay1 'boot b0 objs)
-       q0 (ld-align 4096 b1)  q1 (ldlay1 'limreq q0 objs)
-       t0 (ld-align 4096 q1)  t1 (ldlayn 'text (ldlay1 'text t0 objs) objs)
+       t0 (ld-align 4096 b1)  t1 (ldlayn 'text (ldlay1 'text t0 objs) objs)
        o0 (ld-align 4096 t1)  o1 (ldlayn 'rodata (ldlay1 'rodata o0 objs) objs)
        d0 (ld-align 4096 o1)  d1 (ldlayn 'data (ldlay1 'data d0 objs) objs)
        n0 (ld-align 16 d1)    n1 (ldlay1 'nifs n0 objs)
@@ -1077,7 +1072,6 @@
        nsz (lsz 'note)
        segs (filter (\ g (0 < at g 6))
               `(`(1 7 (fo b0) b0 (b0 - bias) (b1 - b0) (b1 - b0) 4096)
-                `(1 6 (fo q0) q0 (q0 - bias) (q1 - q0) (q1 - q0) 4096)
                 `(1 5 (fo t0) t0 (t0 - bias) (t1 - t0) (t1 - t0) 4096)
                 `(1 4 (fo o0) o0 (o0 - bias) (o1 - o0) (o1 - o0) 4096)
                 `(1 6 (fo d0) d0 (d0 - bias) (i1 - d0) (kend - d0) 4096)))
@@ -1091,8 +1085,7 @@
        cx `(glo n0 n1 n1 n1 () () () () (ld-extents objs))   ; no -pie table here, and no riscv or arm kernel yet
        en (ldemit cx 'note vbase objs ())
        eb (ldemit cx 'boot b0 objs (gap vbase b0))  ; the file resumes at vbase (offset 4096)
-       eq (ldemit cx 'limreq q0 objs (>eb + gap <eb q0))
-       et (ldemitn cx 'text objs (ldemit cx 'text t0 objs (>eq + gap <eq t0)))
+       et (ldemitn cx 'text objs (ldemit cx 'text t0 objs (>eb + gap <eb t0)))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs (>et + gap <et o0)))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs (>eo + gap <eo d0)))
        ef (ldemit cx 'nifs n0 objs (>ed + gap <ed n0))
@@ -1100,10 +1093,10 @@
        fsz (fo i1)                                  ; the loaded bytes end here
        ; the section headers and symbol table ride past p_filesz, mapped by
        ; nothing -- what `nm`, a labeled objdump and a gdb `break kmain` read.
-       lanesx (tabof `(('note >< 1) ('boot >< 2) ('limreq >< 3) ('text >< 4)
-                       ('rodata >< 5) ('data >< 6) ('nifs >< 6) ('image >< 6) ('bss >< 7)))
+       lanesx (tabof `(('note >< 1) ('boot >< 2) ('text >< 3)
+                       ('rodata >< 4) ('data >< 5) ('nifs >< 5) ('image >< 5) ('bss >< 6)))
        st (ldstab objs glo lanesx ld-sym 24)
-       shstr (o-strtab '(".note.pvh" ".boot" ".limine_requests" ".text" ".rodata"
+       shstr (o-strtab '(".note.pvh" ".boot" ".text" ".rodata"
                          ".data" ".bss" ".symtab" ".strtab" ".shstrtab"))
        (snm k) (at <>shstr k)
        symo (ld-align 8 fsz) symz (tally <st)
@@ -1113,15 +1106,14 @@
        sht (catall `((ld-shdr 0 0 0 0 0 0 0 0 0 0)                                ; the reserved null header
                      (ld-shdr (snm 0) 7 2 vbase hdrsz nsz 0 0 4 0)                ; .note.pvh, in the header page
                      (ld-shdr (snm 1) 1 7 b0 (fo b0) (b1 - b0) 0 0 4096 0)
-                     (ld-shdr (snm 2) 1 3 q0 (fo q0) (q1 - q0) 0 0 4096 0)
-                     (ld-shdr (snm 3) 1 6 t0 (fo t0) (t1 - t0) 0 0 4096 0)
-                     (ld-shdr (snm 4) 1 2 o0 (fo o0) (o1 - o0) 0 0 4096 0)
-                     (ld-shdr (snm 5) 1 3 d0 (fo d0) (i1 - d0) 0 0 4096 0)        ; .data, the nifs and image runs with it
-                     (ld-shdr (snm 6) 8 3 i1 (fo i1) (kend - i1) 0 0 16 0)        ; NOBITS: an offset, no bytes
-                     (ld-shdr (snm 7) 2 0 0 symo symz 9 (at st 2) 8 24)           ; link=.strtab info=first global
-                     (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
-                     (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)))
-       hdr (elf64-hdrn 2 <e mach `(shto 11 10)
+                     (ld-shdr (snm 2) 1 6 t0 (fo t0) (t1 - t0) 0 0 4096 0)
+                     (ld-shdr (snm 3) 1 2 o0 (fo o0) (o1 - o0) 0 0 4096 0)
+                     (ld-shdr (snm 4) 1 3 d0 (fo d0) (i1 - d0) 0 0 4096 0)        ; .data, the nifs and image runs with it
+                     (ld-shdr (snm 5) 8 3 i1 (fo i1) (kend - i1) 0 0 16 0)        ; NOBITS: an offset, no bytes
+                     (ld-shdr (snm 6) 2 0 0 symo symz 8 (at st 2) 8 24)           ; link=.strtab info=first global
+                     (ld-shdr (snm 7) 3 0 0 stro strz 0 0 1 0)
+                     (ld-shdr (snm 8) 3 0 0 ssto sstz 0 0 1 0)))
+       hdr (elf64-hdrn 2 <e mach `(shto 10 9)
                        (map (\ g (elf64-phdr <g (at g 1) (at g 2) (at g 3)
                                              (at g 4) (at g 5) (at g 6) (at g 7)))
                             phs))

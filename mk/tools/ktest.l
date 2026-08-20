@@ -5,8 +5,8 @@
 ; argv = (this file firmware arch), and the FILE picks the door: a .elf boots
 ; DIRECT (`qemu -kernel`, the PVH door -- no bootloader, no firmware image at
 ; all, so pass "-" for the firmware); a DIRECTORY is an ESP served as a FAT
-; volume (the uefi door -- our own BOOTX64.EFI + love.elf); anything else is
-; the iso lane (limine cdrom). the last two take the firmware as pflash.
+; volume (the uefi door -- our own BOOTX64.EFI + love.elf), and takes the
+; firmware as pflash. there is no third door, so anything else is a refusal.
 
 (: (sub-at s i t j) (? (>= j (tally t)) 1                    ; does t occur in s at index i?
        (? (= (peep s (+ i j) 0) (peep t j 0)) (sub-at s i t (+ 1 j)) 0))
@@ -52,7 +52,7 @@
    below4g `("-fw_cfg" "opt/ovmf/X-PciMmio64Mb,string=0")
    media (? elf? `("-kernel" iso)
             dir? (fw + (below4g + `("-drive" (+ "format=raw,file=fat:rw:" iso))))
-            (fw + `("-cdrom" iso)))
+            (scare 'ktest-media iso))
    ; KVM where the host can back it: 7x on this corpus (50s of TCG against 7s).
    ; ⚠ x86_64-on-x86_64 only -- `virt` is asked for gic-version=2 above, and an
    ; arm host whose GIC cannot back v2 REFUSES the pairing rather than degrading.

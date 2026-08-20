@@ -694,25 +694,25 @@
 ; three names have a meaning the object writer knows -- ai_nifs (bracketed by
 ; the linker for main()'s boot drain), .love_image (laid last, for the bake) and
 ; .data (where an unattributed global goes). every OTHER name rides out as its
-; own section, because WHERE those bytes land is the point: the kernel's
-; .limine_requests is SCANNED for by a bootloader, and a request block quietly
-; sitting in .data is a kernel that boots with an empty memmap. cob passes no
+; own section, because WHERE those bytes land is the point: port/rp2040's
+; .vectors is read by the core before an instruction runs, and a vector table
+; quietly sitting in .data is a part that never boots. cob passes no
 ; xtra, so this needs the variant that carries the parser's section table. ---
 (: (cobx src)
     (: r (cparse <>(clex src))
        (? (okv? r) (cgen-obj (el r 1) (el r 2) (el r 3) (el r 4)
                              [(el r 5) (el r 6) (el r 7) (el r 8) (el r 9)] 'x64) ()))
    (el l i) (? (< i 1) <l (el >l (- i 1)))
-   ob (cobx "__attribute__((used, section(\".limine_requests\"))) static volatile long m = 7;
-             __attribute__((section(\".limine_requests_end\"))) static volatile long e = 1;
+   ob (cobx "__attribute__((used, section(\".vectors\"))) static volatile long m = 7;
+             __attribute__((section(\".vectors_tail\"))) static volatile long e = 1;
              long plain = 3; int main() { return (int) (m + e + plain); }")
    xs (el ob 8)
    (assert
       (= (tally xs) 2)                                   ; two extra sections, one per NAME
-      ; ..in DECLARATION order: the three limine sections bracket a scan, so the
-      ; order is the protocol's and not the compiler's to choose
-      (= <<xs ".limine_requests")
-      (= <<>xs ".limine_requests_end")
+      ; ..in DECLARATION order: a program that brackets a run reads the two in the
+      ; order it wrote them, which is its to choose and not the compiler's
+      (= <<xs ".vectors")
+      (= <<>xs ".vectors_tail")
       (member? '(label m) <><xs)                          ; the global's bytes land THERE
       (member? '(label e) <><>xs)
       !(member? '(label m) (el ob 2))                     ; ..and NOT in .data

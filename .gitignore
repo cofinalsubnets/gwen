@@ -2,7 +2,7 @@ vgcore.*
 .gdb_history
 .claude/
 /out/
-# downloaded, never built: limine, OVMF, package sources. outside out/ so `make clean`
+# downloaded, never built: OVMF, package sources. outside out/ so `make clean`
 # leaves it -- `make distclean` is what takes it.
 /dl/
 # test/proof/rocq/coqc build artifacts (test/proof/rocq/spec.v is checked by `make test_proof`).

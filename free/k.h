@@ -11,9 +11,9 @@ void
  k_log_char(char);
 
 // k_boot -- the small struct the bootloader hand-off populates before
-// kmain() runs. kmain.c reads this in meminit/fbinit; the Limine path
-// fills it in limine_to_kboot(). Adding a new backend is just "write
-// something that fills kboot, then jump to kmain."
+// kmain() runs. kmain.c reads this in meminit/fbinit; each door fills it
+// its own way (pvh_to_kboot, the UEFI loader, dtb.c). Adding a new backend
+// is just "write something that fills kboot, then jump to kmain."
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -34,12 +34,13 @@ struct k_boot {
   } fb;
   bool has_fb;
   // the wall date at boot, UNIX SECONDS -- what makes ai_clock a clock and not an
-  // uptime. Limine answers it; the doors that do not (-kernel, UEFI) fall back to
-  // the machine's RTC in kmain. ⚠ 0 is "nobody knew", not midnight 1970: a stat
+  // uptime. NO door answers it now, so every one falls back to the machine's RTC
+  // in kmain -- a door that learns a date may still fill this. ⚠ 0 is "nobody
+  // knew", not midnight 1970: a stat
   // then reads as its own uptime, which is wrong but at least visibly so.
   uint64_t date;
-  // the boot command line, copied whole at hand-off (limine's request, PVH's
-  // start_info, the DTB's /chosen bootargs). "" is a plain boot: the love-side
+  // the boot command line, copied whole at hand-off (PVH's start_info, the DTB's
+  // /chosen bootargs; the UEFI loader passes none). "" is a plain boot: the love-side
   // split leaves cmdline seatless and the console shell takes over.
   char cmdline[256];
 };

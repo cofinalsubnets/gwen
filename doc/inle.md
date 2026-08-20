@@ -13,7 +13,7 @@ Where it stops being enough is named at the foot, with what it would cost.
 
 ## where inle is today
 
-`kmain.c` boots (three doors: `-kernel`, UEFI, limine), lays a heap over the memory map, draws a
+`kmain.c` boots (two doors: `-kernel`, UEFI), lays a heap over the memory map, draws a
 framebuffer console through quay, decodes PS/2 scancodes, and runs `((from 'bao 'shell) 0)`.
 Interrupts, the timer, cooperative tasks (`twirl`/`catch`), and fd-parking all work.
 
@@ -115,8 +115,8 @@ absence is loud.
   every date was a fiction. It is milliseconds since the epoch now, the host's scale exactly: the
   100 Hz tick over a boot date, and `ai_sleep`/`ai_wait_fds` convert at their door — so the
   corpus's `(rest 30)` sleeps 30 ms, as it always claimed to.
-* ⚠ **The date has to come from the machine, not the bootloader.** `date_at_boot` is wired, but
-  limine answers on one door of three and the gate rides another — so the RTC is read directly:
+* ⚠ **The date has to come from the machine, not the door.** No door answers a boot date, so
+  the RTC is read directly:
   the mc146818 CMOS walk on x86_64 (BCD, 12-hour and update-in-progress all handled, bounded so
   an absent chip cannot hang the boot), one register of the PL031 on aarch64, which already sits
   inside the 2MiB block `mmio_map` lays for the UART. Both doors prove it in the gate.
@@ -184,8 +184,8 @@ The whole `$(korefiles)` cat bakes verbatim (`lcatv`, the ktests precedent) into
 kernel and evals at boot through the stream shell — the corpus's own reads-over-a-tap lane,
 since that is the one door proven on full-surface text. `holo` and `peg` join the kernel's
 `ai_libs` beside uu and bao, because asbook.l wants `holo` and cook.l `peg`. The cmdline
-rides `kboot` from every door — limine's request, PVH's `start_info`, the DTB's `/chosen`
-`bootargs` — and the boot text splits it quote-aware into `bootargv`.
+rides `kboot` from the doors that carry one — PVH's `start_info`, the DTB's `/chosen`
+`bootargs`; the UEFI loader passes none — and the boot text splits it quote-aware into `bootargv`.
 
 ⚠ **The cat loads SEATLESS, and the boot dispatches after it.** A member's own seat fires
 as its file is read, and the cat is in dependency order — lush sits mid-cat, so a seat

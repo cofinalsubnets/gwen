@@ -1,7 +1,7 @@
 // PVH -> kboot: the C half of mkboot.l's hand-off. Runs high, paging on, with
 // the stub's hhdm window (0xffff8000_00000000 over physical 0..4G) already
-// mapped; reads qemu's hvm_start_info (the e820 map) and fills kboot the way
-// limine_to_kboot fills it on the iso door. Headless by construction -- PVH
+// mapped; reads qemu's hvm_start_info (the e820 map) and fills kboot, the way
+// every door fills it before kmain reads it. Headless by construction -- PVH
 // hands over no framebuffer, so has_fb stays false and kmain runs on serial.
 #include "k.h"
 

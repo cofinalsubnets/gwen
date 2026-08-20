@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include "asmops.h"                    // the privileged instructions, both spellings
 
-// khhdm is the Limine higher-half direct map offset; kmain sets it
+// khhdm is the higher-half direct map offset the door left; kmain sets it
 // before archinit runs, so physical address P is reachable at khhdm+P.
 // all device MMIO below goes through it.
 extern uintptr_t khhdm;
@@ -27,7 +27,7 @@ extern uint8_t vectors[];
 
 // --- QEMU 'virt' machine fixed MMIO layout ---------------------------
 // the virt machine's device addresses are stable across QEMU versions;
-// a port to other boards would read these from the device tree Limine
+// a port to other boards would read these from the device tree the door
 // hands us instead of hardcoding them.
 #define UART_PHYS   0x09000000         // PL011 UART
 #define RTC_PHYS    0x09010000         // PL031 RTC -- inside the UART's 2MiB block
@@ -45,15 +45,16 @@ static inline void mmio_wr8(uintptr_t phys, uintptr_t off, uint8_t v) {
   *(volatile uint8_t*) (khhdm + phys + off) = v; }
 
 // --- device MMIO mapping ---------------------------------------------
-// Limine's HHDM covers RAM but not device MMIO, so the GIC and UART
+// the HHDM covers RAM but not device MMIO, so the GIC and UART
 // pages are unmapped at boot. mmio_map adds them: it walks the live
 // TTBR1_EL1 tables (reachable through the HHDM, since page tables live
 // in RAM) and installs 2MiB block descriptors at the HHDM image of
 // each device. both devices sit in the first 1GiB of physical space,
-// so they share one L2 table; when Limine left that slot empty we
+// so they share one L2 table; when the door left that slot empty we
 // supply our own static l2_table. the attribute index is whatever
 // Device (or, failing that, Normal) slot MAIR_EL1 already holds --
-// MAIR is global, shared with Limine's mappings, so we must not edit it.
+// MAIR is global, shared with the mappings already standing, so we must
+// not edit it.
 #define PA_MASK  0x0000fffffffff000ULL  // descriptor output addr, bits 47:12
 #define BLK_MASK 0x0000ffffffe00000ULL  // 2MiB block output addr, bits 47:21
 
@@ -66,7 +67,7 @@ static uintptr_t va2pa(void *va) {
 
 // the MAIR_EL1 slot to use for device memory: prefer a Device
 // attribute, then Normal non-cacheable, then Normal write-back (still
-// correct under QEMU). MAIR is configured by Limine and left as-is.
+// correct under QEMU). MAIR is the door's, and left as-is.
 static uint32_t mmio_attr_index(void) {
   uint64_t mair = k_rd_mair_el1();
   static uint8_t const prefer[] = { 0x00, 0x04, 0x08, 0x0c, 0x44, 0xff };
@@ -238,9 +239,10 @@ void k_fault(uint64_t esr, uint64_t elr, uint64_t far) {
   for (;;) k_wait(); }
 
 // --- bring-up and reset ----------------------------------------------
-// Limine hands us a civilised environment -- EL1, MMU on, a stack and
-// the HHDM in place -- so archinit only has to install our own vector
-// table, interrupt controller and timer, then unmask IRQs.
+// archinit runs into a civilised environment -- EL1, MMU on, a stack and
+// the HHDM in place, laid by a64boot's cold path or by the firmware on an
+// MMU-on door -- so it only has to install our own vector table, interrupt
+// controller and timer, then unmask IRQs.
 void archinit(void) {
   // a bootloader may enter at EL1t (SP_EL0 selected, SP_EL1 unset) with
   // FP/SIMD trapping -- both must be settled before anything can fault or

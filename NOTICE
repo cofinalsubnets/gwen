@@ -7,11 +7,6 @@ love is released under 0BSD (see LICENSE).
 
 --- code ---
 
-free/limine.h
-  Copyright (C) 2022-2025 Mintsuki and contributors.
-  BSD Zero Clause License (0BSD) -- the same terms as love itself.
-  The limine boot protocol header. Notice preserved at the head of the file.
-
 test/uu.l, the ported section only (from "UniMath Foundations PartA")
   Copyright (c) 2015 the UniMath Development Team.
   MIT License. https://github.com/UniMath/UniMath

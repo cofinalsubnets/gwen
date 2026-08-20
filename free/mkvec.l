@@ -130,9 +130,9 @@
          (la r2 isr_types)       ; rdx = the type cursor
          (mov r0 r2)             ; rax = the sentinel: rcx reaches isr_types when done
          ;; the bootloader's code selector. IDT entries must name a segment
-         ;; valid in the CURRENT GDT, and the doors disagree -- limine leaves
-         ;; cs = 0x28, OVMF 0x38, our own PVH stub 0x08. reading it is the
-         ;; only way that is true of all three.
+         ;; valid in the CURRENT GDT, and the doors disagree -- OVMF leaves
+         ;; cs = 0x38, our own PVH stub 0x08. reading it is the only way that
+         ;; is true of both.
          (ldseg r8 1)            ; r9 = cs
          (label idt_entry)
          (ld r3 r1 0)            ; rbx = the handler address

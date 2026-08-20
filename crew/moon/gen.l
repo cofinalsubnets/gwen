@@ -8101,8 +8101,8 @@
    ; meaning the writer knows: `ai_nifs` needs the linker's __start_/__stop_ bracket around a
    ; packed run for main()'s boot drain, `.image` must be LAST so `love bake` can grow it at the
    ; tail, and `.data` takes an unattributed global. every OTHER name carries through to the .o as
-   ; a real section -- a bootloader SCANS for .limine_requests, and ⚠ DECLARATION ORDER is the
-   ; protocol's order, not ours, which is what xnames keeps.
+   ; a real section -- a part reads its .vectors at a fixed address, and ⚠ DECLARATION ORDER is
+   ; the program's order, not ours, which is what xnames keeps.
    (cgdata g)
     (: sects (peep g 'sects {})
        consts (peep g 'consts {})
@@ -8173,8 +8173,8 @@
                                      ['raw (bts t (tally t - 1) () + '(0))]]))))
        ; ..and whether one of them may ride a lane nothing writes: the .rodata rule
        ; (ro?) asked of EVERY global in it, since flags belong to the section and one
-       ; writable member decides for all. .limine_requests is the live example -- a
-       ; bootloader writes its responses into those blocks, and nothing there is const.
+       ; writable member decides for all -- a section anything outside the program
+       ; writes into is not const, however const its other members read.
        ; the const gate comes first so a plain writable section never images anything.
        (xro? nm)
         (: (go gs) (? !(two? gs) 1

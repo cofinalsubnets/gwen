@@ -7,7 +7,7 @@
 ;                             switch, the hop into the high mapping, khop
 ;
 ; LINKED HIGH, RUNS LOW is the whole difficulty on both arches. every PT_LOAD
-; vaddr sits in the top 2 GiB (limine requires it) and loads at a low physical
+; vaddr sits in the top 2 GiB and loads at a low physical
 ; address, so until the MMU/paging comes on the code EXECUTES low while every
 ; symbol it names is linked high. the two worlds are two different questions and
 ; the answer is a different instruction for each:
@@ -150,7 +150,7 @@
 
    ;; the high half: a stack, SSE on before ANY C runs (pvh_to_kboot is compiled
    ;; and free to vectorize -- the same dance as the top of kmain, which stays
-   ;; for the limine door where IT is the first code to run), then C.
+   ;; for a door that hands over with C already reachable), then C.
    x-text
     '((label khop)
        (lia sp kstack)
@@ -187,8 +187,9 @@
    a-gig 0x40000705                                 ; 0x40000000 | 0x705  valid | AttrIndx 1 | SH inner | AF
    a-boot-text
     ('((label a64boot)
-       ;; the DOOR, one bit: limine enters with the MMU ON, `qemu -kernel` with
-       ;; it off. GAS said this with `tbz x9, #0, 1f`; the neutral surface has
+       ;; the DOOR, one bit, read off the MACHINE and not off who booted us: a
+       ;; firmware hand-off enters with the MMU ON, `qemu -kernel` with it off.
+       ;; GAS said this with `tbz x9, #0, 1f`; the neutral surface has
        ;; no test-bit-and-branch and no immediate AND, so the bit is masked
        ;; through a register. x9/x10 are dead at the entry.
        (mrs r9 sctlr_el1)
@@ -235,7 +236,7 @@
          (msr ttbr0_el1 r0)
          (msr ttbr1_el1 r2)
          ;; FP/SIMD on before ANY C runs (dtb.c is compiled and free to
-         ;; vectorize) -- archinit's own set stays for the limine door.
+         ;; vectorize) -- archinit's own set stays for the MMU-on door.
          (mrs r3 cpacr_el1)
          (li r4 0x300000) (or r3 r3 r4)        ; 3 << 20
          (msr cpacr_el1 r3)
@@ -275,8 +276,8 @@
        (wfi)
        (jmp a64_park))
 
-   ;; the boot stack, both arches: kmain never returns and limine's own (64 KiB)
-   ;; is the precedent for depth. .bss so it costs the file nothing.
+   ;; the boot stack, both arches: kmain never returns, and 64 KiB is what a
+   ;; firmware hand-off hands over. .bss so it costs the file nothing.
    b-stack `(`('label 'kstack) `('raw (b-zeros 65536)))
 
    ;; -- the two objects ---------------------------------------------------

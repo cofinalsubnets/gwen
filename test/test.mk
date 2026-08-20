@@ -486,7 +486,7 @@ test_cts_arm64: host
 	@sh test/gate/cts.sh arm64 $(ho) $m
 test_cts_riscv: host
 	@sh test/gate/cts.sh riscv64 $(ho) $m
-# the corpus itself -- 220 files, cloned once and kept in dl/ like limine, so `make clean`
+# the corpus itself -- 220 files, cloned once and kept in dl/ like OVMF, so `make clean`
 # leaves it and only `make distclean` asks the network again. NOTHING depends on this rule:
 # a gate that downloads is a gate that fails on a train.
 $(dl)/c-testsuite:
