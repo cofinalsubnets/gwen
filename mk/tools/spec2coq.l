@@ -344,11 +344,14 @@
                                (: p (tp x) (? p 1 0))))                      ; a predicate, as its 1|0 charm
                 0)
    (allv? l) (? (two? l) (&& (intv? (cap l)) (allv? (cup l))) (! (two? l)))
-   ; a CLOSED +/-/* tree of numeric literals: evaluable with no free vars, so we can
-   ; check its actual value. the Coq model has only Vz (fixnum) for integers -- no big
-   ; kind -- so an expr that OVERFLOWS a charm (e.g. (* 2 2^61) = 2^62) is unmodellable
-   ; for a charm? test and must skip, not masquerade as Vz. (used by tk below.)
-   (concrete-int? x) (? (two? x) (&& (len3? x) (member? (cap x) '(+ - *))
+   ; a CLOSED tree of numeric literals under any modelled binary op: evaluable with no free
+   ; vars, so we can check its actual value. the Coq model has only Vz (fixnum) for integers
+   ; -- no big kind -- so an expr that OVERFLOWS a charm (e.g. (* 2 2^61) = 2^62) is
+   ; unmodellable for a charm? test and must skip, not masquerade as Vz. ⚠ THE WHOLE binop
+   ; ROW, not just +/-/*: a narrow op WIDENS on a zero divisor -- (% 7 0) is 0.0 and
+   ; (// 7 0) is ieee-inf -- and the kind lattice here is syntactic, so it cannot see that.
+   ; the value can, which is what this asks. (used by tk below.)
+   (concrete-int? x) (? (two? x) (&& (len3? x) (binop (cap x))
                                      (concrete-int? (e2 x)) (concrete-int? (e3 x)))
                           (&& (! (nom? x)) (! (two? x))))
 
@@ -361,8 +364,8 @@
                    (id? h 'saturate) (? (lamform? (e2 x)) "1"                        ; a closure nets 1
                                         (&& (hasg? (e2 x)) (glist? (e2 x))) ("(gsat " + (tgsum (gels (e2 x))) + ")")
                                         (hashv? (e2 x)) ("(Z.of_nat (length " + (th (e2 x)) + "))")  ; $hash = key count
-                                        (| (listv? (e2 x)) (qnlist? (e2 x))) ("(Z.max 0 (asum " + (tl (e2 x)) + "))")
-                                        ("(Z.max 0 " + (tv (e2 x)) + ")"))  ; $list / $int
+                                        (| (listv? (e2 x)) (qnlist? (e2 x))) ("(satZ (asum " + (tl (e2 x)) + "))")
+                                        ("(satZ " + (tv (e2 x)) + ")"))  ; $list / $int -- spec.v's clamp, floor AND ceiling
                    (id? h 'net)   ("(asum " + (tl (e2 x)) + ")")   ; net/+list -- the sum
                    (id? h 'tally) ("(Z.of_nat (length " + (tl (e2 x)) + "))")  ; count
                    (id? h 'max)  ("(amax " + (tl (e2 x)) + ")")
@@ -384,9 +387,13 @@
    (spine acc rest) (? (two? rest)
                        (spine ("(appZ " + acc + " " + (tv (cap rest)) + ")") (cup rest)) acc)
 
-   ; the KIND tag of a literal (syntactic) for the type predicates; "Vbot" if untaggable
+   ; the KIND tag of a literal (syntactic) for the type predicates; "Vbot" if untaggable.
+   ; ⚠ an int-SHAPED expression that is closed answers by its VALUE's kind, not its shape:
+   ; a narrow op widens on a zero divisor ((% 7 0) is 0.0), and a big overflows the lattice,
+   ; which has no big kind -- so that one skips rather than masquerading as Vz.
    (tk x) (? (unitv? x) "Vunit"                                        ; () and every form that reads it
-             (intv? x) (? (&& (concrete-int? x) (! (charm? (ev x)))) "Vbot" "Vz")  ; a concrete overflow (big) is unmodellable -> skip
+             (intv? x) (? (! (concrete-int? x)) "Vz"
+                          (: v (ev x) (? (charm? v) "Vz" (gem? v) "Vflo" "Vbot")))
              (gem? x) "Vflo"  (string? x) "Vstr"  (id? x 'i) "Vcx"
              (two? x) (: h (cap x)
                         (? (id? h bs) (tkq (e2 x))                     ; '(..) or 'x
@@ -577,7 +584,7 @@
      "Definition gpos (a:Z*Z):bool := Z.ltb 0 (fst a)." (string 10)
      ; $ of a twin: its REAL PART once the gate passes, else the 0 floor -- the same
      ; part the gate reads, so clamp and gate agree; the magnitude is abs's
-     "Definition gsat (a:Z*Z):Z := if gpos a then fst a else 0." (string 10)
+     "Definition gsat (a:Z*Z):Z := if gpos a then satZ (fst a) else 0." (string 10)
      ; de Bruijn lambda terms: love compares functions by ALPHA + structure (no eta/beta/numeral bridge),
      ; which is plain structural equality on the de Bruijn form
      "Inductive ltm := LV (n:nat) | LO (o:Z) | LN (z:Z) | LAp (f a:ltm) | LLam (b:ltm)." (string 10)

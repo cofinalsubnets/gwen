@@ -184,8 +184,20 @@ Fixpoint net (v : V) : Z :=
   | Vcons a (Vcons _ _ as b) => net a + net b   (* the car counts; continue the spine *)
   end.
 
-(* $ (sat): one saturating clamp, max(0, ceil net); integer net => ceil is id. *)
-Definition sat (v : V) : Z := Z.max 0 (net v).
+(* THE CHARM CEILING. a charm is the codomain of every rung of the measure tower, so a
+   net that will not fit lands on the EDGE rather than wrapping or widening (love.c's
+   ai_saturate/ai_ceilnet). the charm is the word minus its two tag bits, so the bound is
+   width-dependent -- 2^62-1 on the 64-bit host every gate here runs, and the model names
+   that one. the LAWS below are stated against `maxcharm` and hold at any width; only the
+   literal moves. spec.l asserts the ceiling without naming it: ($(100 2) = $(200 2)) is
+   the whole of "every positive big saturates", true at every width. *)
+Definition maxcharm : Z := 2^62 - 1.
+Theorem maxcharm_pos : 0 < maxcharm.  Proof. reflexivity. Qed.
+
+(* $ (sat): the clamp at BOTH ends -- max(0, ceil net) then the charm ceiling; an integer
+   net makes ceil the identity, and the Z face is what gen.v's instances speak. *)
+Definition satZ (n : Z) : Z := Z.min maxcharm (Z.max 0 n).
+Definition sat (v : V) : Z := satZ (net v).
 (* ! (nilp): false is nothing -- net <= 0. *)
 Definition nilp (v : V) : bool := net v <=? 0.
 (* !! : the truth bit -- positive green, net > 0. *)
@@ -194,14 +206,21 @@ Definition tru (v : V) : bool := 0 <? net v.
 (* THE INVARIANT  !x == (0 = $x)  -- spec.l: (!"" = 0 = $"") *)
 Theorem nilp_iff_sat0 : forall v, nilp v = (sat v =? 0).
 Proof.
-  intro v. unfold nilp, sat. destruct (net v <=? 0) eqn:H.
+  intro v. unfold nilp, sat, satZ. pose proof maxcharm_pos as Hc.
+  destruct (net v <=? 0) eqn:H.
   - apply Z.leb_le in H. symmetry. apply Z.eqb_eq. lia.
   - apply Z.leb_gt in H. symmetry. apply Z.eqb_neq. lia.
 Qed.
 
-(* the saturation law: $ is nonnegative; it keeps the positive and clamps the rest *)
-Theorem sat_nonneg : forall v, 0 <= sat v.                Proof. intro v. unfold sat. lia. Qed.
-Theorem sat_keeps   : forall v, 0 < net v -> sat v = net v. Proof. intros v H. unfold sat. lia. Qed.
+(* the saturation law: $ is nonnegative, it keeps a net that FITS, and it clamps at both
+   ends -- 0 below, the charm ceiling above. sat_ceils is what makes every positive big
+   one value: past the ceiling the net is no longer readable, only its edge. *)
+Theorem sat_nonneg : forall v, 0 <= sat v.
+Proof. intro v. unfold sat, satZ. pose proof maxcharm_pos. lia. Qed.
+Theorem sat_keeps  : forall v, 0 < net v -> net v <= maxcharm -> sat v = net v.
+Proof. intros v H H2. unfold sat, satZ. lia. Qed.
+Theorem sat_ceils  : forall v, maxcharm <= net v -> sat v = maxcharm.
+Proof. intros v H. unfold sat, satZ. pose proof maxcharm_pos. lia. Qed.
 
 (* the nothing surface, by net: every mask of nothing nets 0 (green/false). The empty chain
    () (Vnil) and the number 0 (Vnum 0) are DISTINCT values yet both nilp -- masks of one
@@ -209,7 +228,8 @@ Theorem sat_keeps   : forall v, 0 < net v -> sat v = net v. Proof. intros v H. u
 Theorem nil_nothing  : nilp Vnil = true.        Proof. reflexivity. Qed.
 Theorem zero_nothing : nilp (Vnum 0) = true.    Proof. reflexivity. Qed.
 Theorem nil_neq_zero : Vnil <> Vnum 0.          Proof. discriminate. Qed.
-Theorem sat_clamps  : forall v, net v <= 0 -> sat v = 0.    Proof. intros v H. unfold sat. lia. Qed.
+Theorem sat_clamps  : forall v, net v <= 0 -> sat v = 0.
+Proof. intros v H. unfold sat, satZ. pose proof maxcharm_pos. lia. Qed.
 
 (* the COLORS, by the SIGN of the net (its real part -- not the total order, which
    parts from truth on the imaginary axis): GREEN nonneg (the kept band, what $ keeps;
@@ -680,8 +700,9 @@ Proof. intros A B a b c. unfold cart. induction a as [|x a IH]; simpl.
 
 (* THE TWO COUNT LAWS SPLIT (the associativity arc): `*` repeats by |count|
    (mcount -- smul must be a hom from multiplicative Z, see smul_hom), while numeral-apply
-   composes f a SATURATED count of times (scount, the same Z.max 0 that defines
-   `sat`) -- application is not *, and it owes no product law. count_saturates
+   composes f a SATURATED count of times (scount, the same 0 floor `satZ` puts under
+   `sat` -- with no ceiling: a count is a nat, not a charm, so it has no edge to land
+   on) -- application is not *, and it owes no product law. count_saturates
    is the compose-floor; its value-side twin is sat_clamps (net <= 0 => sat = 0),
    and its third face is the n-ary closure's fire-vs-hold (test/oracle.l,
    test/proof/rocq/extract.v). (Only the COMPOSITION count saturates; the
