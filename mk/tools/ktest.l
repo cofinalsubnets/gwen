@@ -50,8 +50,14 @@
    ; knob turns OVMF's 64-bit MMIO window off, so the BAR lands reachable and
    ; the disk laws run on this door too.
    below4g `("-fw_cfg" "opt/ovmf/X-PciMmio64Mb,string=0")
+   ; the ESP door is the only one handed a framebuffer, and on `virt` nothing
+   ; offers one unasked. ⚠ ramfb, NOT virtio-gpu: edk2 drives that one through
+   ; Blt() and its GOP answers a mode with NO address, which is no framebuffer
+   ; at all. ramfb's lands in ordinary RAM, so the console paints at memory
+   ; speed and the lane costs nothing.
+   gfx  (? (arch = "aarch64") `("-device" "ramfb") ())
    media (? elf? `("-kernel" iso)
-            dir? (fw + (below4g + `("-drive" (+ "format=raw,file=fat:rw:" iso))))
+            dir? (fw + (below4g + (gfx + `("-drive" (+ "format=raw,file=fat:rw:" iso)))))
             (scare 'ktest-media iso))
    ; KVM where the host can back it: 7x on this corpus (50s of TCG against 7s).
    ; ⚠ x86_64-on-x86_64 only -- `virt` is asked for gic-version=2 above, and an

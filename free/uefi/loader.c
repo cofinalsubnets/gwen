@@ -155,16 +155,24 @@ u64 efi_main(void *handle, void *st) {
  if (!kb) return die("no kboot symbol in love.elf");
  kb->hhdm = HHDM;
 
- // the framebuffer, when GOP has one (the interactive door's console)
+ // the framebuffer, when GOP has a LINEAR one (the interactive door's console).
+ // ⚠ a GOP is not a framebuffer: PixelBltOnly (format 3) answers a mode and a
+ // size but NO address, because the pixels only reach the screen through Blt()
+ // -- virtio-gpu is that shape under edk2. taking the mode anyway hands kmain
+ // base 0, and cbinit paints at physical zero: no output, no fault, nothing to
+ // see. so the base and the format are the test, not the protocol's presence.
  void *gop = 0;
  if (!efi_call(bs[40], (u64) gop_guid, 0, (u64) &gop, 0, 0) && gop) {
   u8 *m = (u8 *) ((void **) gop)[3];
   u8 *info = (u8 *) *(u64 *) (m + 8);
-  kb->fb.base = *(u64 *) (m + 24);
-  kb->fb.w = (u16) *(u32 *) (info + 4);
-  kb->fb.h = (u16) *(u32 *) (info + 8);
-  kb->fb.pitch_px = *(u32 *) (info + 32);
-  kb->has_fb = 1; }
+  u64 fb = *(u64 *) (m + 24);
+  u32 fmt = *(u32 *) (info + 12);
+  if (fb && fmt < 3) {                                 // 0/1 are the 32-bit orders, 2 a bitmask
+   kb->fb.base = fb;
+   kb->fb.w = (u16) *(u32 *) (info + 4);
+   kb->fb.h = (u16) *(u32 *) (info + 8);
+   kb->fb.pitch_px = *(u32 *) (info + 32);
+   kb->has_fb = 1; } }
 
  // page tables BEFORE ExitBootServices (say still works): two windows onto one
  // set of blocks, identity for the image to run in and the hhdm to reach ram
