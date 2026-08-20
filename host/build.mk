@@ -66,14 +66,6 @@ host: $(ho)/love $(ho)/love.baked $(ho)/love.1 $(ho)/cook.1
 embed: $(ho)/liblove.so
 love0: $(love0)
 
-# dock: the steering dock, launched from a stable COPY so `adopt` can relink the canonical
-# out/host/love in place without ETXTBSY. Loads the probe ladder, the server and the
-# self-modify loop. ⚠ bind loopback and firewall it -- it evals what it reads.
-.PHONY: dock
-DOCK_PORT ?= 7620
-dock: host
-	@cp $(ho)/love $(ho)/dock
-	exec $(ho)/dock -l free/judge.l -l free/serve.l -l free/drive.l -l free/patch.l -e "(dock $(DOCK_PORT))"
 # the BOOT IMAGE -- the LAYERED CREW BAKE (doc/plan/one-binary.md): `$< bake -L ..` boots
 # the fresh binary, evals the docs layer, FREEZES, evals the rest of the crew, and lays
 # the chain into that binary's OWN .image section -- host/image.c copies the exe, pwrites

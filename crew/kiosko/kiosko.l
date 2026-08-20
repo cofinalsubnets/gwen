@@ -6,7 +6,7 @@
 ; which is why it is its own crew member rather than a verb of the generator: `papel`
 ; happens to be the thing that fills the shelf, but anything can.
 ;
-; the CONCURRENCY is the host's, not ours (free/serve.l learned this first): `await`
+; the CONCURRENCY is the host's, not ours: `await`
 ; parks the accept loop on the listener fd, so the following `accept` never blocks, and
 ; each client is spun as its own task with `twirl`. love's fgetc yields on a not-ready fd,
 ; so a slow client parks itself and the others keep going -- there is no thread, no poll

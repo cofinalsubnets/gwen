@@ -93,7 +93,7 @@ int image_dump(struct ai *g, char const *path) {
 
 // image_bake -- the SELF-bake: lay the post-warm image into the running binary's own
 // .image section on disk (what the Makefile's objdump/truncate/objcopy pipeline did).
-// ETXTBSY-proof by the adopt pattern (free/serve.l): you cannot write your own
+// ETXTBSY-proof by the adopt pattern: you cannot write your own
 // executing file, so copy it, lay the blob in, fsync, and atomically RENAME over the
 // original -- a new inode, so anything still executing keeps the old one. Same build =
 // same layout, so the codec's anchor/refsym guards hold by construction.
