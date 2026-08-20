@@ -8402,72 +8402,6 @@
    ; the global-variable names, and the ai_nifs stream -- the .o emitter turns the rest into a
    ; symbol table + relocations. the DEFINED static functions ride the tail as lnames, laid as
    ; LOCAL FUNC symbols so nm/gdb/vmret see real function boundaries.
-   ; -- WHAT THE COMPILER BUILT, WRITTEN DOWN (-fir=PREFIX): the machine-form IR of every
-   ; function whose name starts with PREFIX, laid in .rodata under this TU's own `ai_ir_<tu>`
-   ; as ONE readable datum -- ((name form..) ..) -- so a runtime holding this binary can splice
-   ; its own op bodies without a compiler, a source tree, or a disassembler. holo assembles these
-   ; forms as they stand (that is what they are), and the reader is `sound`..
-   ; ⚠ PER-TU, and it is not cosmetic: one fixed symbol made -fir a ONE-TU flag, since a second
-   ; object carrying it died at the link with `link-dup "ai_lvm_ir"`. The name says which TU,
-   ; so `nm | grep ai_ir_` is the manifest and a reader never has to guess where a body came from.
-   ; ⚠ NO CAP HERE. The record is COMPLETE -- a function too big to splice is exactly the one a
-   ; reader most wants, having no chance of following it in a disassembler. The splice budget
-   ; that used to live here belongs to the splicer and now sits in lib/splice.l, which declines
-   ; an over-budget body by name just as it declines one it cannot lower.
-   (irblob fs fnames pfx)
-    (: ft (: t {} _ (foldl (\ _ n (pin t (intern n) 1)) 0 fnames) t)
-       ; ⚠ MANY prefixes, comma-joined, and a `-` one SUBTRACTS: the positives are collected
-       ; first and the negatives carved out of them, so `-fir=lvm_,ai_,-ai_gc` is every lvm_
-       ; and ai_ function except the collector's. With NO positive the set opens and only the
-       ; negatives cut, so `-fir=-ai_` is everything but ai_ -- and the empty prefix stays
-       ; everything, which is what it already meant. The flag repeats, moon.l joining the
-       ; occurrences with the same comma.
-       (irsplit s) (: n (tally s)
-                      (go i j acc) (? (n <= i) (rev ((snip s j i) >< acc))
-                                      (= 44 (s i)) (go (i + 1) (i + 1) ((snip s j i) >< acc))
-                                      (go (i + 1) j acc))
-                      (go 0 0 ()))
-       (neg? p) ?(0 < tally p && "-" = snip p 0 1)
-       parts (irsplit pfx)
-       negs (map (\ p (snip p 1 (tally p))) (filter neg? parts))
-       poss (filter (\ p !(neg? p)) parts)
-       (hasp? ps nm) (any (\ p (= p (snip (string nm) 0 (tally p)))) ps)
-       (want? nm) ?((? (two? poss) (hasp? poss nm) 1) && !(hasp? negs nm))
-       ; ⚠ ANY bare label ends a function, not only an exported one. `ft` holds the emitted
-       ; names, and a file-scope STATIC is not among them -- so its entry label did not break
-       ; the slice and its whole body rode into the previous row: lvm_scare carried missing_tag
-       ; and lvm_eval carried ap_next, each row then ending in a stranger's `ret`. Internal
-       ; labels are the dot-prefixed ones, so a label without a dot IS an entry. ⚠ the splicer
-       ; only survived this by luck -- its `ends in the dispatch tail` check happened to reject
-       ; both, and a swallowed neighbour that ended the right way would have spliced in whole.
-       (dotlab? nm) ?(nom? nm && ("." = snip (string nm) 0 1))
-       (fnlab? f) ?(two? f && (<f = 'label) && (peep ft <>f () || !(dotlab? <>f)))
-       ; ⚠ acc arrives REVERSED, so the padding that belongs to the NEXT function sits at its
-       ; head -- drop it, or every row ends in a stranger's alignment
-       (trim l) (? (two? l && two? <l && (<<l = 'align)) (trim >l) l)
-       ; ⚠ AND THE LABELS ARE RESPELLED, because a leading dot does not survive the reader:
-       ; `.e5044` reads back as the two-element list (. e5044) -- `.` is an ordinary punct
-       ; symbol here and there are no dotted pairs. A serialization that cannot be read is
-       ; not one, so the dot becomes `jl` and the name stays a nom on the way home.
-       (relab x) (? (nom? x) (: s (string x)
-                                (? ("." = snip s 0 1) (intern ("jl" + snip s 1 (tally s))) x))
-                     !(two? x) x
-                     (relab <x >< relab >x))
-       (row nm acc rows) (: fs (trim acc)
-                            (? (want? nm) ((nm >< relab (rev fs)) >< rows) rows))
-       (go l nm acc rows)
-        (? !(two? l) (? (nil? nm) rows (row nm acc rows))
-           (: f <l
-              (? (fnlab? f) (go >l <>f () (? (nil? nm) rows (row nm acc rows)))
-                 (nil? nm) (go >l nm acc rows)
-                 (go >l nm (f >< acc) rows))))
-       rows (rev (go fs () () ()))
-       txt (show rows)
-       (bts i acc) (? (i < 0) acc (bts (i - 1) (txt i >< acc)))
-       ; ⚠ an EMPTY set lays no symbol at all, rather than one holding "()". `-fno-ir` asks
-       ; for no record, and a record saying it has nothing is not the same answer -- a reader
-       ; would find the symbol and conclude the compiler wrote down that there was nothing.
-       (? (two? rows) (bts (tally txt - 1) '(0)) ()))
    (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs) | ()
     (: r (cgen-core ast stbl sigs weaks xtra tgt)
        (? (gripe? r) r                               ; a named cause rides out (guard before two?, a gripe is a chain)
@@ -8526,19 +8460,7 @@
                                      (go l 16))
                      (: src (rev (<r 'xfns))
                         (map (\ nm [nm (forsec nm src) (grain nm src)]) (noms src ()))))
-             ; the IR blob rides .rodata as an ordinary global, so the runtime finds it the
-             ; way it finds any symbol -- no section walk, and a compiler that was not asked
-             ; simply lays nothing (a gcc-built love has no record, and says so).
-             ; ⚠ the driver names it (moon.l, off the source's basename); "ai_lvm_ir" is the
-             ; fallback for a caller reaching cgen-obj without one, and one such caller per
-             ; link is the most that can hold -- the collision is the whole reason for the slot.
-             firp (? (two? xtra && 10 < tally xtra) (nthr xtra 10) ())
-             irsym (: s (? (two? xtra && 11 < tally xtra) (nthr xtra 11) ())
-                      (? (string? s) s "ai_lvm_ir"))
-             irb (? (string? firp) (irblob <>r fnames firp) ())
-             [1 <>r <dat fnames (? (two? irb) (gnames + [irsym]) gnames)
-                <>dat <>>dat lnames <>>>dat <>>>>dat
-                (? (two? irb) (<>>>>>dat + [['align 8] ['label (intern irsym)] ['raw irb]])
-                   <>>>>>dat)
+             [1 <>r <dat fnames gnames
+                <>dat <>>dat lnames <>>>dat <>>>>dat <>>>>>dat
                 xfns]))))
 ) ; module 'moon

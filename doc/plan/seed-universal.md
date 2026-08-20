@@ -75,8 +75,7 @@ signalfd → kqueue's EVFILT_SIGNAL behind the same sigfd/sigtake nif shape
 rt_sigreturn simply drop on BSD (the kernel lays its own trampoline) but
 sigsetjmp's inlined mask ABI changes; image.c's bake walk — dl_iterate_phdr
 (nolibc already grows its own off auxv) plus a hard `readlink("/proc/self/exe")`
-that bypasses the selfpath ladder everyone else uses; splice.l's
-/proc/self/maps parse; kore uname's /proc/sys reads (fallbacks exist). pid1,
+that bypasses the selfpath ladder everyone else uses; kore uname's /proc/sys reads (fallbacks exist). pid1,
 mount and namespaces stay Linux-only behind their existing ENOSYS stubs — a
 distro concern, not the artifact's.
 
@@ -133,7 +132,7 @@ owes a roster gate: on linux, assert the linux features are aboard.
   the real syscall 504, unlockpt a no-op by pts(4), ptsname over FIODGNAME).
   With those, THE WHOLE LOVE LINKS AND RUNS on the 14.4 box — the -e lane,
   say, and the stdin repl answer (test_freebsd's new leg holds it). Still
-  owed: sigfd over EVFILT_SIGNAL; splice's maps read over the sysctl; the
+  owed: sigfd over EVFILT_SIGNAL; the
   socket constants + sa_len (compiled with linux values today — the net lanes
   are UNTESTED on freebsd); memfd/unshare/mount stay linux behind stubs.
   The "-e race" RESOLVED 2026-08-17 — never a race: freebsd's kernel hands

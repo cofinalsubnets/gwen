@@ -89,7 +89,7 @@ piece. ~11k lines of love.
 ## the driver
 
 ```
-mooncc [-c] [-pie] [-fno-inline] [-fir=PFX[,PFX..]] [-fno-ir=PFX[,PFX..]] [-t TARGET] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
+mooncc [-c] [-pie] [-fno-inline] [-t TARGET] [-Ttext addr] [-I dir] [-D name[=val]] [-o out] in.c|in.o ..
 ```
 
 Several inputs need `-c` and land each in the cwd as `x.o` (gcc-shaped); the old positional pair
@@ -191,65 +191,6 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
   That is what it is for: comparing one function's codegen against another cc's is impossible
   when a splice has rewritten it into its caller. Gated by `test_moon`, both halves — that it
   bites, and that the answer is unchanged;
-- `-fir=PREFIX[,PREFIX..]` and `-fno-ir=PREFIX[,PREFIX..]` are the second real one, and they are
-  the compiler **writing down what it built**: the machine-form IR of the functions you name,
-  laid in `.rodata` under this TU's own `ai_ir_<basename>` as one readable datum —
-  `((name form..) ..)`, which `sound` reads and holo assembles back as it stands, because that is
-  what those forms are.
-
-  **The set algebra**: positives collect, then negatives carve, and with no positive at all the
-  set opens — so `-fno-ir=` alone means *everything but*. Both flags repeat, and a repeated flag
-  is byte-identical to the comma list (gated). Some shapes:
-
-  ```sh
-  mooncc -fir=lvm_ …                       # every VM op handler
-  mooncc -fir=lvm_ -fir=ai_ …              # ..and the runtime's own
-  mooncc -fir=lvm_,ai_ …                   # the same object, exactly
-  mooncc -fir=lvm_ -fno-ir=lvm_arg,lvm_quo # all but the load family
-  mooncc -fno-ir=ai_ …                     # everything except ai_
-  mooncc -fir= …                           # everything, no exceptions
-  mooncc -fir …                            # ..the same, bare
-  mooncc -fir=lvm_ -fno-ir …               # nothing: bare -fno-ir wins from either end
-  ```
-
-  **Bare, they fall out of the algebra rather than needing a rule.** `-fir` is the empty
-  *positive*, which every name carries as a prefix, so it opens the set from anywhere;
-  `-fno-ir` is the empty *negative*, and since negatives carve after positives whatever their
-  order, it empties the record from either end and beats a later `-fir=`. ⚠ before they were
-  named they matched the advisory `-f` family and were accepted in **silence**, answering a
-  binary with no record at all. ⚠ an empty set lays **no symbol**, never one holding `()` — a
-  reader finding the symbol would conclude the compiler had written down that there was
-  nothing, which is a different claim.
-
-  **Reading one back**: `love mk/tools/ir.l FILE [NAME | -l]`, over `lib/irec.l`. ⚠ **any file, any
-  target, from any machine** — a record is text and an ELF is a table, so an aarch64 object
-  reads on x86-64 with no disassembler, no per-arch mnemonic table and no objdump that has to
-  have been built with the right target list. All six targets and both ELF classes are gated
-  (three of the six are 32-bit ARM, where every header offset moves). ⚠ the reader is
-  deliberately **not** `lib/splice.l`: the creation hook lights its lane on `(from 'splice)`,
-  and looking at a binary must not start a JIT.
-
-  **It is a debugging instrument before it is a JIT input** — the compiler's IR sitting beside
-  the code it emitted, for whoever opens the binary. Read as one it already found a bug in
-  itself: cross-checked against `make vmret`'s objdump reading of the tail-jump law, the two
-  disagreed, and the record was wrong. The splice JIT (`lib/splice.l`) is
-  the other reader: a `love` carries its own op handlers and composes them with **no compiler, no
-  source tree and no disassembler**.
-
-  **The shipped build spends bare `-fir` on every TU** (`$(moon_fir)`), so the artifact carries the
-  machine-form IR of *everything it is* — 757 functions, ~1.4 MB of `.rodata`, `.text` unmoved.
-  ⚠ **the symbol is per-TU**, `ai_ir_<basename>`: one fixed name made `-fir` a one-TU flag, since a
-  second object carrying it died at the link with `link-dup "ai_lvm_ir"`. `nm | grep ai_ir_` is now
-  the manifest of translation units, in link order.
-  ⚠ **no cap at record time.** The splice budget used to live in `gen.l` and cut the record at 64
-  forms, which made the compiler's provenance answer to the JIT's appetite — and a function too big
-  to splice is exactly the one a reader most wants, having no chance of following it in a
-  disassembler. The 64-form budget now sits in `lib/splice.l`, which declines an over-budget body
-  by name just as it declines one it cannot lower. Side effect worth knowing: the JIT went from
-  **105 splice-able handlers to 167**, because the record now covers the host TUs' nifs
-  (`host/posix.c` alone carries 45) and not just love.c's.
-  ⚠ it must MIRROR into `test/gate/fixpoint.sh` — a flag on love.c in one rebuild and not the
-  other is a byte difference that reads as a broken compiler;
 - the **semantic** refusals stay loud (`-shared`, `-Wl,`'s payload, `-m..`) — an ignored one
   would be the silent-no-op trap in a cc suit. ⚠ mooncc **refuses** a `-m` rather than ignoring
   it.
@@ -283,11 +224,11 @@ generations share; `love0` is stamped `$(love_base)+bootstrap` for exactly this,
 tracks files, not flag strings, and a stale love0 would fail the fixpoint at a byte offset with
 nothing to say about the cause). A reader wanting the commit reads `love-version` in `.rodata`.
 
-Read it back without any binutils at all: `lib/irec.l`'s `(irec-secof PATH ".comment")` is the
-same ELF walk one table over, and answers the `(1 bytes)` wrapper — an empty section is a real
-section. It works on gcc's objects and on every target mooncc emits, cross-machine, for the
-reason the IR record does: a section table is a table. Gated by `test_moon`, both halves — the
-union over a foreign `.o`, and the exact string on an all-ours link.
+Read it back without any binutils at all: `lib/elfsec.l`'s `(elfsec PATH ".comment")` answers the
+`(1 bytes)` wrapper — an empty section is a real section. It works on gcc's objects and on every
+target mooncc emits, cross-machine, for the reason anything here does: a section table is a
+table. Gated by `test_moon`, both halves — the union over a foreign `.o`, and the exact string on
+an all-ours link.
 
 ## the toolchain root
 

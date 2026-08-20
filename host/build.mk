@@ -209,29 +209,20 @@ moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/
 moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_math_o) $(moon_d)/sys.o
 # -D AiHaveVersionH + the love_version.h dep: this TU carries the version id into the
 # SHIPPED binary, and mooncc has no __has_include for core/love.c's fallback probe to use.
-# THE RECORD, and it is OFF: `-fir` lays the machine-form IR of every function into
-# .rodata (per-TU `ai_ir_<basename>`), ~1.5 MB, +12.8% on the artifact. It was on for
-# exactly one commit, and the argument that took it off again is the good one: THE
-# SOURCE IS ALREADY IN HERE. A second description of the same program, at a level
-# almost nobody reads, when what a reader lacks is orientation -- and .README buys that
-# for 3 KB. ⚠ the cost is the splice JIT: with no record it declines every op and the
-# natjit lane is dead weight, so `make moon_fir=-fir` is how you get it back (and
-# `rm -rf out/host/moon` first -- make tracks files, not flag strings).
-moon_fir = -fno-ir
 $(moon_d)/love.o: core/love.c $(love_h) $(moon0_dep) out/lib/love_version.h
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) -D AiHaveVersionH $(moon_fir) -I$(ho) -I. -Icore -Iout/lib -c $< $@
+	@$(moon0) -D ai_tco=$(tco) -D AiHaveVersionH -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(moon_d)/host_%.o: host/%.c $(love_h) $(moon0_dep)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -D ai_tco=$(tco) $(moon_fir) -I$(ho) -I. -Icore -Iout/lib -c $< $@
+	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(moon_d)/host_main.o: $(baked_h)
 $(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(moon_d)/m_%.o: crew/moon/lib/math/%.c $(moon0_dep)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) $(moon_fir) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
+	@$(moon0) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
 # sys.o is LAID, not compiled: the syscall trampoline and our sigsetjmp/longjmp have no C
 # spelling. love0 runs the lay, its holo carrying every backend. ⚠ the entry is picked by
 # $(hosta), the HOST's arch, never $a -- a cross lane overrides $a, and this object is

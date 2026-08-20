@@ -10,10 +10,9 @@
 # everywhere" asks for), and mooncc's output does not depend on the arch
 # mooncc runs on.
 #
-# ⚠ the TU flags MIRROR crew/build.mk's x-lane (AiHaveVersionH on love.o,
-# no $(moon_fir) -- the cross lane never carried a record), the fixpoint.sh
-# drift trap wearing its cross face. this gate's first run caught the version
-# flag MISSING from the x-lane: the twin named itself "unknown".
+# ⚠ the TU flags MIRROR crew/build.mk's x-lane (AiHaveVersionH on love.o), the
+# fixpoint.sh drift trap wearing its cross face. this gate's first run caught the
+# version flag MISSING from the x-lane: the twin named itself "unknown".
 #
 # usage: xfixpoint.sh OUTDIR LOVE0 QEMU XTGT MKSYS TCO XD OBJ...
 set -u

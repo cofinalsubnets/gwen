@@ -13,7 +13,7 @@
   test_rp2040 moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
-  test_holo test_as test_elf32 test_objcopy test_gz test_cpio test_splice test_forge test_distboot test_bakerep
+  test_holo test_as test_elf32 test_objcopy test_gz test_cpio test_forge test_distboot test_bakerep
 
 # $m is the WARM love -- the baked image woken, what ships. a gate whose subject is
 # the egg boot spells LOVE_NO_IMAGE=1 itself; love0 is always the egg.
@@ -230,14 +230,6 @@ test_doc: host
 	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$m" ": ok" \
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
 	done
-# the vmsplice JIT pipeline end to end (test/bench/vmsplice/auto.sh): dis a live closure,
-# compose its ops to C, mooncc it, bind against THIS process, nif, differential vs the
-# interp twin. NOT in test_slow (needs mooncc + a host cc, bench-shaped); run by hand.
-# `dis` itself is gated in the corpus by test/dis.l. x86-64 only (compose emits x86 ABI).
-ifeq ($a,x86_64)
-test_vmsplice: host
-	@sh test/bench/vmsplice/auto.sh
-endif
 # Native-codegen self-tests (the love/glaze/ x86-64 jit): test/glaze-x86.l covers emit
 # (the SSE emitter) + auto (ev's source-recognizer), cats the holo backends ahead of
 # itself, and runs each block through base-ev. Needs the `nat` nif; x86-64 only.
@@ -467,20 +459,9 @@ test_clay: host
 test_moonfuzz: host
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 888 mutants of test/cc)"
 	@$m -l test/gate/moonfuzz.l < /dev/null
-# test_splice -- the splice JIT end to end (lib/splice.l, test/bench/vmsplice/README.md): a live
-# closure's op rows, each op's own IR taken out of THIS BINARY's .rodata (mooncc -fir=lvm_ put
-# it there), spliced into one body, assembled by holo, its one external reference bound to a
-# live address, nif'd -- and required to agree with the closure it came from. ⚠ a PLAIN love:
-# no compiler, no source tree, no object file, which is the whole point of the IR being in the
-# binary. LOVE_NO_GLAZE because a glazed closure is a native cell `dis` reads as a husk. A
-# declined sample is a named coverage gap, not a red; a DISAGREEMENT is, and so is zero spliced.
-test_splice: host
-	@echo TEST test/gate/splice.l "(splice JIT: own IR -> holo -> nif -> differential)"
-	@LOVE_NO_IMAGE=1 LOVE_NO_GLAZE=1 $m -l test/gate/splice.l < /dev/null
 # test_forge -- nifs WRITTEN IN LOVE (lib/forge.l): a kernel's holo IR assembled for this cpu,
 # installed through the `nif` seam, and required to agree with the twin it deopts into -- on the
-# monomorphic lane it says and on every lane it hands back. The other half of test_splice's
-# coin: that one re-assembles IR the C compiler wrote down, this one assembles IR love wrote.
+# monomorphic lane it says and on every lane it hands back.
 # ⚠ the twin here is the C nif itself, so a disagreement is one denotation answering two ways.
 # Zero kernels fitted FAILS: a graceful decline is the design, a silent one reads like a pass.
 test_forge: host
@@ -579,7 +560,7 @@ test_vec: host
 # test_extra only, so a deleted host/*.c goes green through test_slow either way.
 # $(moon_o) is the link list: the gate is handed make's objects, it never globs the odir.
 test_fixpoint: host $(love0) out/host/mooncc0.image
-	@sh test/gate/fixpoint.sh $(ho) $(love0) $(moon_fir) $(moon_o)
+	@sh test/gate/fixpoint.sh $(ho) $(love0) $(moon_o)
 # THE CROSS-MACHINE FIXPOINT, in effigy (doc/plan/seed-universal.md U0): the x-lane's
 # twin objects link love1, then love1 under qemu-user rebuilds itself natively and must
 # answer the same bytes -- the twin machine reproducing this machine's, on one box.

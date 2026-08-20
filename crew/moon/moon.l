@@ -432,26 +432,12 @@
    ; ⚠ THE TWO WIDE TUPLES ARE NAMED ONCE, HERE -- parse.l's `tops` answers fourteen fields
    ; and gen.l's cgen-obj twelve. `[]` is the strict arity, so a shape that gains a member is
    ; a refusal naming the file rather than every site quietly reading its NEIGHBOUR.
-   ; the gen's option list is the parser's nine tablets plus the driver's own two words
-   ; (-fno-inline, then -fir's prefix list).
-   ; THE RECORD'S SYMBOL, one per TU: `ai_ir_` and the source's basename, every character
-   ; outside [A-Za-z0-9_] becoming _ so a path or a dash cannot mint an unspellable nom.
-   ; ⚠ one fixed name made -fir a one-TU flag (`link-dup "ai_lvm_ir"` the moment a second
-   ; object carried it), and the basename is what a reader wants anyway: `nm | grep ai_ir_`
-   ; names the translation units, in the order the link laid them.
-   (irsym src)
-    (: b (ubase src ".c") n (tally b)
-       (go i acc) (? (n <= i) acc
-                     (: c (b i)
-                        ok ?(((97 <= c) && (c <= 122)) || ((65 <= c) && (c <= 90))
-                             || ((48 <= c) && (c <= 57)) || (c = 95))
-                        (go (i + 1) (acc + (? ok (snip b i (i + 1)) "_")))))
-       (go 0 "ai_ir_"))
-   (cc-objbytes src (t @ {'ni ni 'fir fir 'tgt tgt}))
+   ; the gen's option list is the parser's nine tablets plus the driver's own word (-fno-inline).
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs]
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni fir (irsym src)] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni] tgt)
           _ (? (okv? ob) () (ccdie ob src ("cc: codegen error in " + src)))
           (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns]
              (: xs (map (\ [nm forms ro] (objsec-named nm forms ro)) xsecs
@@ -822,7 +808,7 @@
              _ (? (two? <>pr) (undie <>pr) 0)
              <pr)))
    (cc-link ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
-                          'nostd nostd 'vb vb 'ni ni 'fir fir 'rdme rdme}))
+                          'nostd nostd 'vb vb 'ni ni 'rdme rdme}))
     ; -os freebsd links on x64 only (the one lane with a table + mksys twin);
     ; any other tgt under it is refused rather than half-built.
     (: _ (? (id? os 'freebsd && ! (id? tgt 'x64))
@@ -896,16 +882,6 @@
    ; artifact stays loud: -shared, -m.., and -Wl,/-Wa,/-Wp, (their payload is
    ; real arguments; dropping them is the silent no-op wearing a cc face).
    (pfx? a p) (: n (tally p) (n <= tally a && snip a 0 n = p))
-   ; -fir= / -fno-ir= accumulate into ONE comma list, a leading `-` on a part being the
-   ; subtraction gen.l reads. ⚠ presence is the wrapper's job here too: an unset f9 is (),
-   ; and `-fir=` with an empty prefix is a legitimate value meaning EVERY function -- so the
-   ; join tests the slot, never the string's length.
-   (irjoin old new) (? (string? old) (old + "," + new) new)
-   (irneg s) (: n (tally s)                                 ; "a,b" -> "-a,-b"
-                (go i j acc) (? (n <= i) (rev (("-" + snip s j i) >< acc))
-                                (= 44 (s i)) (go (i + 1) (i + 1) (("-" + snip s j i) >< acc))
-                                (go (i + 1) j acc))
-                (foldl (\ a p (? (string? a) (a + "," + p) p)) () (go 0 0 ())))
    ; -lm and its family ride through too, and the reason is particular to us: the
    ; driver pulls its runtime BY NEED, so the libc/libm/libdl a recipe asks for is
    ; already in the artifact before it asks. a name we cannot satisfy does not go
@@ -977,7 +953,7 @@
    ; the hazard the tablet retires; it stays a pre-pass because it names the LANGUAGE and
    ; belongs before the line is read at all.
    ; the three LISTS (is ds ins) collect reversed and are righted at the end; every other key
-   ; is last-one-wins, and `fir` alone accumulates into one comma string.
+   ; is last-one-wins.
    ; the one helper that is not already a primitive: prepend onto a keyed list. `pin`
    ; ANSWERS its tablet, so every arm below is a plain pin.
    (fpush t k v) (pin t k (v >< (peep t k ())))
@@ -988,7 +964,7 @@
    ; the positional walk had and the bare tablet lost. ⚠ it is NOT a wrapper on `{}`: the
    ; literal has to be COMPLETE and it is wanted at two sites, so it is spelled once.
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'fir () 'rdme () 'dia dia}
+                    'nostd () 'vb () 'ni () 'rdme () 'dia dia}
    (flags as t)
     (? !(two? as)
        (: _ (pin t 'is (rev (peep t 'is ())))
@@ -1020,36 +996,15 @@
              ; needs a way to say don't. gcc's -fno-inline-functions is the same word.
              ((a = "-fno-inline") || (a = "-fno-inline-functions"))
               (flags r (pin t 'ni 1))
-             ; -fir=PREFIX[,PREFIX..] -- WRITE DOWN WHAT WE BUILT: the machine-form IR of every
-             ; function whose name starts with one of them, laid in .rodata as one readable
-             ; datum. -fno-ir=PREFIX[,..] carves back out, gcc's -fno- word and this file's own
-             ; -fno-inline beside it. BOTH REPEAT, and both are just appended to one comma list
-             ; -- gen.l's irblob splits it and reads a leading `-` as the subtraction, so the
-             ; CLI has two flags and the compiler one string. Positives collect first, then the
-             ; negatives cut; with no positive at all the set opens, so -fno-ir= alone means
-             ; everything but. It is a debugging instrument before it is a JIT input: the
-             ; compiler's IR beside the code it emitted, for whoever opens the binary.
-             ; ⚠ both ahead of tol?, which swallows every other -f.
              ; -freadme=FILE -- plain text into the output's `.README` section, mapped by
              ; nothing, for whoever OPENS the binary. The source is already in our artifact,
              ; so what a reader lacks is not more data but a page telling them where to stand.
              ; ⚠ a LINK flag: with -c there is no output ELF to carry it and it is ignored.
+             ; ⚠ ahead of tol?, which swallows every other -f.
              (pfx? a "-freadme=")
               (: f (snip a 9 (tally a)) rt (uread f)
                  (? (two? rt) (flags r (pin t 'rdme <>rt))
                     (udie 1 ("cc: cannot open " + f))))
-             (pfx? a "-fir=") (flags r (pin t 'fir (irjoin (peep t 'fir ()) (snip a 5 (tally a)))))
-             (pfx? a "-fno-ir=") (flags r (pin t 'fir (irjoin (peep t 'fir ()) (irneg (snip a 8 (tally a))))))
-             ; ⚠ BARE, and the algebra gives them their meaning rather than a rule doing it:
-             ; `-fir` is the EMPTY POSITIVE, which every name has as a prefix, so it opens the
-             ; set wherever it sits -- `-fir=` in front. `-fno-ir` is the empty NEGATIVE, and
-             ; since the negatives carve after the positives whatever their order, it empties
-             ; the set from anywhere -- `-fno-ir=` at the end, and it beats a later `-fir=`
-             ; without anyone writing down that it wins. ⚠ they must be named HERE: `tol?`
-             ; swallows the whole advisory -f family, so before this both were accepted in
-             ; silence and answered a binary with no record at all.
-             (a = "-fir") (flags r (pin t 'fir (irjoin (peep t 'fir ()) "")))
-             (a = "-fno-ir") (flags r (pin t 'fir (irjoin (peep t 'fir ()) "-")))
              (glu? a 73) (flags r (fpush t 'is (snip a 2 (tally a))))
              (glu? a 68) (flags r (fpush t 'ds (snip a 2 (tally a))))
              (glu? a 116) (flags r (pin t 'tgt (totgt (snip a 2 (tally a)))))

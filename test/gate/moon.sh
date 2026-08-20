@@ -228,73 +228,6 @@ nof=$(nm "$ho/.ni-off.o" | grep -c ' [tT] ')
 [ "$nof" -gt "$non" ] || fail "-fno-inline barred no splice ($non text syms either way)"
 echo "mooncc: -fno-inline bars every splice ($non functions emitted, $nof with it) and answers the same"
 
-# ------------------------------------- -fir / -fno-ir: the record, and its set algebra
-# The compiler writing down what it built, for whoever opens the binary. The laws are the
-# SET ALGEBRA: positives collect (repeated flag == comma list, and they must agree), then
-# negatives carve, and with no positive at all the set opens so -fno-ir= alone means
-# everything-but. ⚠ -fno-inline rides along on purpose -- these functions are small enough
-# that a splice would fold them into main and there would be no record to ask about.
-cat > "$ho/.ir.c" <<'EOF'
-int aa_one(int x) { return x + 1; }
-int aa_two(int x) { return x + 2; }
-int bb_one(int x) { return x + 3; }
-int main(void) { return aa_one(1) + aa_two(2) + bb_one(3) - 12; }
-EOF
-irbuild () { o="$1"; shift; moonrun -c -fno-inline "$@" "$ho/.ir.c" "$o" >/dev/null 2>&1 \
-             || fail "-fir: compile ($*)"; }
-# a record is written as `(name form..)`, so the name followed by a space is the probe
-irhas () { grep -qa "($2 " "$1"; }
-irwant () { irhas "$1" "$2" || fail "-fir: $3 -- expected $2 in the record"; }
-irnot ()  { ! irhas "$1" "$2" || fail "-fir: $3 -- did NOT expect $2 in the record"; }
-
-irbuild "$ho/.ir-a.o" -fir=aa_
-irwant "$ho/.ir-a.o" aa_one "one prefix"; irwant "$ho/.ir-a.o" aa_two "one prefix"
-irnot  "$ho/.ir-a.o" bb_one "one prefix"
-irbuild "$ho/.ir-b.o" -fir=aa_,bb_                    # comma list
-irbuild "$ho/.ir-c.o" -fir=aa_ -fir=bb_               # ..and the repeated flag
-for n in aa_one aa_two bb_one; do
-  irwant "$ho/.ir-b.o" $n "comma list"; irwant "$ho/.ir-c.o" $n "repeated flag"
-done
-cmp -s "$ho/.ir-b.o" "$ho/.ir-c.o" || fail "-fir: a comma list and a repeated flag differ"
-irbuild "$ho/.ir-d.o" -fir=aa_ -fno-ir=aa_t           # positives, then the carve
-irwant "$ho/.ir-d.o" aa_one "negative"; irnot "$ho/.ir-d.o" aa_two "negative"
-irbuild "$ho/.ir-e.o" -fno-ir=aa_                     # no positive -> everything but
-irwant "$ho/.ir-e.o" bb_one "bare negative"; irnot "$ho/.ir-e.o" aa_one "bare negative"
-irbuild "$ho/.ir-f.o"                                 # and absent when never asked
-nm "$ho/.ir-f.o" 2>/dev/null | grep -q " ai_ir_" && fail "-fir: a record with no flag"
-# BARE, and the algebra gives them their meaning: -fir is the empty POSITIVE (every name has
-# it as a prefix, so it opens the set from anywhere) and -fno-ir the empty NEGATIVE (and the
-# negatives carve after the positives whatever the order, so it wins from either end without
-# a precedence rule written anywhere). ⚠ before they were named they matched tol?'s advisory
-# -f family and were accepted in SILENCE, answering a binary with no record.
-irbuild "$ho/.ir-g.o" -fir
-for n in aa_one aa_two bb_one; do irwant "$ho/.ir-g.o" $n "bare -fir is everything"; done
-for args in "-fno-ir" "-fir=aa_ -fno-ir" "-fno-ir -fir=aa_"; do
-  irbuild "$ho/.ir-h.o" $args
-  nm "$ho/.ir-h.o" 2>/dev/null | grep -q " ai_ir_" && fail "-fno-ir did not empty the record ($args)"
-done
-# ⚠ and the empty set lays NO SYMBOL, not one holding "()": a reader finding the symbol would
-# conclude the compiler wrote down that there was nothing, which is a different claim.
-irbuild "$ho/.ir-i.o" -fir=zz_no_such_prefix
-nm "$ho/.ir-i.o" 2>/dev/null | grep -q " ai_ir_" && fail "-fir: an empty set still laid a symbol"
-echo "mooncc: -fir collects, -fno-ir carves, a comma list IS the repeated flag (byte-identical),"
-echo "        bare -fir is all and bare -fno-ir is none from either end, and empty lays nothing"
-
-# ------------------------------- the record READS BACK, on every target, from this machine
-# ⚠ THIS IS THE CLAIM WORTH GATING: a record is text and an ELF is a table, so reading one
-# asks nothing of the machine underneath -- no disassembler, no per-arch mnemonic table, no
-# objdump built with the right target list. All six targets, read here on the host, through
-# lib/irec.l (which is NOT lib/splice.l on purpose: the hook lights its lane on `from 'splice`,
-# and looking at a binary must not start a JIT). ⚠ three of the six lay ELF32, where every
-# header offset moves -- thumb2 read as "no record at all" until irec carried both classes.
-for t in x64 arm64 riscv64 thumb2 thumb2sp thumb1; do
-  moonrun -c -fno-inline -t $t -fir= "$ho/.ir.c" "$ho/.ir-$t.o" >/dev/null 2>&1 \
-    || fail "-fir: compile for $t"
-  n=$($m mk/tools/ir.l "$ho/.ir-$t.o" aa_one 2>/dev/null | head -1)
-  case "$n" in aa_one*) ;; *) fail "-fir: $t record does not read back ($n)" ;; esac
-done
-echo "mooncc: the record reads back on all six targets from this one machine (ELF32 and ELF64)"
-
 # ------------------------------------------------------- the failure exits
 moonrun "$ho/.cc-none.c" "$ho/.ccx" > /dev/null 2>&1; r=$?
 [ $r -eq 1 ] || fail "mooncc missing input exit (rc $r)"
@@ -593,8 +526,8 @@ done
 # the VCS suffix names the commit that built the COMPILER, so it would make love1 and
 # love2 differ and name a broken fixpoint (crew/holo/link.l says it at the door).
 # read ./VERSION rather than writing 0.1 down -- a release bump must not fail here.
-cmt() { "$m" -l lib/irec.l \
-          -e "(: r (irec-secof \"$1\" \".comment\") _ (? (two? r) (puts <r) 0) _ (flush out) (quit 0))"; }
+cmt() { "$m" -l lib/elfsec.l \
+          -e "(: r (elfsec \"$1\" \".comment\") _ (? (two? r) (puts <r) 0) _ (flush out) (quit 0))"; }
 c=$(cmt "$ho/.fgnx" | tr '\0' ' ')
 case "$c" in
   *GCC*love*) ;;

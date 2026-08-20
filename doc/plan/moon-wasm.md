@@ -100,20 +100,22 @@ cost ~1,160 lines. Wasm shares neither property; budget a low multiple of that.
   foreign validator/engine at gate time only (node already sits there and already
   skips when absent) — same standing as qemu-user in dist_cross. The product
   path drops emcc; the gate may still borrow eyes.
-- **rung 6 — the splicer in the browser.** Off the AOT path, after the artifact
+- **rung 6 — a splicer in the browser.** Off the AOT path, after the artifact
   ships. Wasm forbids the native JIT by construction (`core/love.c` declines on
   `__wasm__`: a jump to a data address traps), so the browser love has no tier at
-  all. `lib/splice.l`'s architecture is the one that works with no writable-executable
-  page, because it builds a MODULE instead of patching code: `dis` a thread, take each
-  row's own IR — `-fir` now writing wasm forms — strip the dispatch, lay the bodies
-  end to end. Three substitutions: holo becomes rung 0's module writer, `nif` becomes
-  a table index reached by `call_indirect` (rung 4 builds it for `callr` anyway), and
-  the symtab + load-bias + movabs apparatus deletes whole, since a module's external
-  references are imports resolved by name. The splicer's sharpest constraint goes with
-  it — nothing baked means the bytes are not in-process-only. Unchanged: the `Ip`
-  gc-resume trap and its hoisted guard. Open: the per-splice Module+Instance cost, and
-  synchronous instantiation being size-capped on the main thread — the five-verb API
-  has no async-install shape. Prior art for the skeleton: Mono's jiterpreter.
+  all. A template splicer is the shape that works with no writable-executable page,
+  because it builds a MODULE instead of patching code: read a thread back, take each
+  row's own IR, strip the dispatch, lay the bodies end to end. ⚠ the tree had exactly
+  this for native (`lib/splice.l`, over a `mooncc -fir` record) and it was **cut** —
+  `doc/moon-gauge.md`'s census is why: 95% of closures carry a call, which no amount
+  of branch or operand work reaches. Whoever revives the idea here inherits that
+  ceiling and must say what changes it. Three substitutions the native one wanted:
+  holo becomes rung 0's module writer, `nif` becomes a table index reached by
+  `call_indirect` (rung 4 builds it for `callr` anyway), and the symtab + load-bias +
+  movabs apparatus deletes whole, since a module's external references are imports
+  resolved by name — which also drops the in-process-only constraint. Open: the
+  per-splice Module+Instance cost, and synchronous instantiation being size-capped on
+  the main thread. Prior art for the skeleton: Mono's jiterpreter.
 
 ## choices (revisable)
 

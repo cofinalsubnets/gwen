@@ -159,6 +159,10 @@ small ones.
 
 ### ⚠ the splice JIT is not the lever, and the census says why
 
+⚠ **the code is gone** — `lib/splice.l`, `mooncc -fir`, and `dis`/`disg` were cut once this
+census stood. What follows is the measurement that decided it, kept because the idea is worth
+revisiting and the ceiling below is what anyone reviving it has to answer.
+
 With love rebuilt `make moon_fir=-fir` so the binary carries its IR record, `(use 'splice)`
 ahead of the mooncc cat, and codegen re-run: **one closure** native-backed over the whole
 compile, 11,708 → 11,248 ms, which is noise. `LOVE_SPLICE_CENSUS=1` says what happened —
