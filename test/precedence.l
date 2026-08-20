@@ -117,6 +117,17 @@
  (1 < 2 <= 2 < 5)                                     ; ..and they may differ, link by link
  (3 > 2 > 1) !(0 = 1 = 2)                             ; the two that used to be right by accident
  (1 < 1 + 1 < 3)                                      ; a TIGHTER frame between links folds first
+ ; ⚠ A LINK MAY BE A SPAN. juxtaposition binds tighter than any operator, so the link is the whole
+ ; application -- the frame's right operand has GROWN, and the join must read that as filled the
+ ; same way a lone datum is. reading only the head instead is silent: the chain answers a bit
+ ; either way, and (97 <= s 0 <= 122) quietly compared 97 to the string.
+ (: s "a1" (97 <= s 0 <= 122))                        ; the letter, not the string it sits in
+ (: s "a1" !(48 <= s 0 <= 57))                        ; ..and the digit test on that same letter fails
+ (: s "ab" (s 0 < s 1 < 99))                          ; both ends span too -- the leading one already did
+ (: t (tablet 0) _ (pin t 0 0)                        ; a span link is still evaluated ONCE
+    (bump v) (: _ (pin t 0 (1 + (peep t 0 0))) 2)
+    r (1 < bump () < 3)
+    (&& r (1 = (peep t 0 0))))
  (0 = (1 < (2 < 3)))                                  ; parens opt out: (< 2 3) is 1, and (< 1 1) is 0
  ((show (opfix '(a < b))) = (show '(< a b)))          ; one link is a plain comparison, untouched
  ((show (opfix '(< a (< b c)))) = (show '(< a (< b c))))   ; ..and the prefix spelling stays a fixed point

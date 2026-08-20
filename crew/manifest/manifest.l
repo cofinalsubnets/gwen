@@ -31,8 +31,8 @@
  ; --- the cell-name shape: one letter, then digits (a1 .. z999) ---
  (cell? n) (? (name? n) (: s (string n) t (tally s)
             (1 < t < 5 &&
-             97 <= (s 0) <= 122 &&
-             (: (digs i) (i >= t || (48 <= (s i) <= 57 ? (digs (+ i 1))))) 1)))
+             97 <= s 0 <= 122 &&
+             (: (digs i) (i >= t || (48 <= s i <= 57 ? (digs (+ i 1))))) 1)))
 
  ; --- the book of known names, laid once on first use: a name off this
  ; book and off the sheet is a LABEL and binds to its own spelling ---
@@ -48,7 +48,7 @@
                    map (\ n (pin known n 1)) '(tuple list spread mono)),
              known)
  (label? n) (name? n && !(cell? n) && !(peep (knowns ()) n 0) &&
-             (97 <= (string n 0) <= 122))
+             (97 <= string n 0 <= 122))
 
  ; --- dependencies: every cell-shaped or label name in the form, deduped,
  ; in first-sight order (quote interiors over-collect; binding is harmless

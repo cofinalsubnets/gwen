@@ -619,9 +619,12 @@
                 ; (a < (b < c)) arrives as ONE folded datum and never enters this list, which is
                 ; exactly why it stays the nested comparison -- the escape hatch is the parens,
                 ; and the factored form alone could never have told the two apart.
+                ; ⚠ FILLED is op-steal's test (need below 1), not need 0: a right operand grown
+                ; into a span rides -1, and (97 <= s 0 <= 122) is that. a chainable frame never
+                ; carries -2 -- op-ent reads chains before naries, so its need starts at 1.
                 (? (&& (= -2 (cup (cuup en)))
                        (&& (two? pd)
-                           (&& (= 0 (op-frd (cap pd)))
+                           (&& (< (op-frd (cap pd)) 1)
                                (&& (= gp (op-frband (cap pd))) (op-chain? (op-frn (cap pd)))))))
                     (op-w (cup l) ou (>< (op-frw (cap pd) 1 (>< nm (op-frg (cap pd)))) (cup pd)))
                    (two? st) (op-w (cup l) (cap (cup st))
