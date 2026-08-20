@@ -1645,7 +1645,15 @@ static bool cbinit(void) {
   cb_fill(kcb, 0);
   return true; }
 
-static struct ai_def defs[] = {
+// the kernel's nifs ride the ai_nifs section, the same one AiNif lands a host
+// app's in -- so this table is drained by the __start_/__stop_ bracket and named
+// by nothing. `used` is what keeps it, and the whole array in one blob is the
+// AiModNifs shape rather than a row at a time. What it buys: a host/<app>.c
+// dropped into the kernel build registers itself with no edit here, and the
+// image's host slice (core/love.c) indexes a kernel nif the way it does a host
+// one. ⚠ the slice is INDEXED BY POSITION, so this order is part of an image's
+// contract -- append, do not insert.
+static struct ai_def const __attribute__((section("ai_nifs"), used)) defs[] = {
   {"reset", (intptr_t) nif_reset},
   {"draw", (intptr_t) nif_draw},
   {"key", (intptr_t) nif_key},
@@ -1803,7 +1811,8 @@ void kmain(void) {
   // the disk (rung 5): probe the bus, and hand the driver its one DMA block --
   // kmallocw memory, so pa = va - khhdm holds for everything the device reads.
   k_blk_init(kmallocw(b2w(352)));
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs), 0);
+  struct ai *g = ai_defn(ai_ini(), __start_ai_nifs,
+                         (uintptr_t)(__stop_ai_nifs - __start_ai_nifs), 0);
   // BOUND the generational collector to the device's RAM (the Appel knob): without it the nursery's
   // copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive) sizing then asks
   // kmallocw for a contiguous block bigger than physical RAM -> OOM. An eighth of free RAM leaves ample
