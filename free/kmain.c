@@ -188,6 +188,14 @@ static int k_sources_n = (int) countof(k_boot);
 static ai_inline struct k_source *k_source(int fd) {
   return fd >= 0 && fd < k_sources_n ? &k_sources[fd] : NULL; }
 
+// ⚠ IN RANGE IS NOT OPEN, and a syscall face is the caller that has to care: a
+// closed row is ZEROED where it stands (ram_close, pipe_rclose, pipe_wclose),
+// never removed, so k_source keeps answering it. Carrying any method at all is
+// what live means -- k_fd_free's rule, read the other way round.
+static ai_inline bool k_row_live(int fd) {
+  struct k_source const *s = k_source(fd);
+  return s && (s->readn || s->writen || s->putc || s->flush || s->ready || s->close); }
+
 // THE DOOR IN: answer fd's row, making room for it first. Doubling from the boot
 // rows, copying, and freeing the old table unless it is the static one -- there
 // is no realloc down here. -> NULL when there is no memory, which is a REFUSAL
@@ -294,6 +302,10 @@ long k_fd_read(int fd, void *b, long n) {
   if (n < 0) return -22;
   intptr_t r = k_row_read(fd, (unsigned char *) b, (uintptr_t) n);
   return r < 0 ? 0 : (long) r; }
+long k_fd_close(int fd) {
+  if (!k_row_live(fd)) return -9;                        // EBADF
+  ai_fd_close(fd);
+  return 0; }
 static struct ai *fd_flush(struct ai *g) {
   int fd = k_fd_eff(g, (int) ai_io_fd(g->io));
   struct k_source *s = k_source(fd);
@@ -586,6 +598,22 @@ static unsigned char const *k_blob(int i, uintptr_t *len) {
   if (e->own) return *len = e->len, e->bytes;
   return *len = kfiles[e->bake].len, (unsigned char const*) kfiles[e->bake].bytes; }
 
+// free/sys.c's seek. ⚠ it answers an ERRNO where lvm_lseek answers a bare -1:
+// down here a caller can tell "no such fd" from "this row does not seek", which
+// the love door could not, having no errno table to name it with. whence 0/1/2
+// is SEEK_SET/CUR/END -- what the love door already meant by them.
+long k_fd_lseek(int fd, long off, int whence) {
+  if (!k_row_live(fd)) return -9;                        // EBADF
+  struct k_fh *h = k_fh(fd);
+  if (!h) return -29;                                    // ESPIPE: a console or a pipe
+  if (whence < 0 || whence > 2) return -22;              // EINVAL
+  uintptr_t len;
+  k_blob(h->i, &len);
+  intptr_t at = off + (whence == 1 ? (intptr_t) h->pos
+                     : whence == 2 ? (intptr_t) len : 0);
+  if (at < 0) return -22;
+  return (long) (h->pos = (uintptr_t) at); }
+
 // canonical path -> its live entry. LINEAR and unapologetic: the tree is a few
 // dozen entries, and a hash would cost a table the boot has to build before it can
 // open the file that would have justified it.
@@ -753,10 +781,8 @@ static void ram_close(int fd) {
 // on. A row is free when it carries no method at all, which is what k_source_open
 // zeroes a fresh one to and what ram_close puts one back to.
 static int k_fd_free(void) {
-  for (int i = (int) countof(k_boot); i < k_sources_n; i++) {
-    struct k_source *s = &k_sources[i];
-    if (!s->readn && !s->writen && !s->putc && !s->flush && !s->ready && !s->close)
-      return i; }
+  for (int i = (int) countof(k_boot); i < k_sources_n; i++)
+    if (!k_row_live(i)) return i;
   return k_sources_n; }
 
 // open a path -> its fd, or -1. m is r read, w truncate, a append -- the one door
@@ -1557,6 +1583,28 @@ ai_noinline static ai_word k_syswrite(ai_word fw, ai_word sw) {
 static lvm(lvm_syswrite) {
   Sp[1] = k_syswrite(Sp[0], Sp[1]);
   Sp += 1; ai_musttail return Next(1); }
+
+// (syscall "name" a b c) -> the raw answer, errno NEGATIVE as the door gives
+// it; () for a name no row answers to. The instrument for every row whose
+// arguments are numbers, so the next one costs a test and not a nif -- and it
+// takes the NAME because the numbers are arch-keyed and free/sys.c is the only
+// file that may spell them. ⚠ it reaches __ai_sys DIRECTLY, under nolibc: what
+// it gates is the dispatch and the k_fd_* faces, which is where the rows are
+// written. syswrite proves the nolibc half once, so the composition is said.
+extern long __ai_sys(long, long, long, long, long, long, long);
+extern long k_sys_nr(char const *nm, long n);
+ai_noinline static ai_word k_syscall(ai_word nw, ai_word aw, ai_word bw, ai_word cw) {
+  if (!ai_strp(nw)) return ZeroPoint;
+  struct ai_str *pv = (struct ai_str*) nw;
+  long nr = k_sys_nr(pv->bytes, (long) pv->len);
+  if (nr < 0) return ZeroPoint;
+  ai_word ws[3] = { aw, bw, cw };
+  long v[3];
+  for (int i = 0; i < 3; i++) v[i] = (ws[i] & 1) ? (long) getcharm(ws[i]) : 0;
+  return putcharm(__ai_sys(nr, v[0], v[1], v[2], 0, 0, 0)); }
+static lvm(lvm_syscall) {
+  Sp[3] = k_syscall(Sp[0], Sp[1], Sp[2], Sp[3]);
+  Sp += 3; ai_musttail return Next(1); }
 #endif
 
 // (quit code) -- the exit door, and since rung 4 the door with two rooms behind
@@ -1641,6 +1689,7 @@ static union u
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
   nif_syswrite[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_syswrite}, {lvm_ret0}},
+  nif_syscall[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_syscall}, {lvm_ret0}},
 #endif
   nif_fault[] = {{lvm_fault}, {lvm_ret0}};
 
@@ -1747,6 +1796,7 @@ static struct ai_def const __attribute__((section("ai_nifs"), used)) defs[] = {
 #ifdef K_TEST
   {"exit", (intptr_t) nif_exit},
   {"syswrite", (intptr_t) nif_syswrite},
+  {"syscall", (intptr_t) nif_syscall},
 #endif
   {"color", (intptr_t) nif_color} };
 

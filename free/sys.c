@@ -38,10 +38,29 @@ int *__errno_location(void) { return &__errno_v; }
 // running task cannot be cached, only threaded.
 extern long k_fd_write(int fd, void const *b, long n);
 extern long k_fd_read(int fd, void *b, long n);
+extern long k_fd_close(int fd);
+extern long k_fd_lseek(int fd, long off, int whence);
+
+#ifdef K_TEST
+// the test instrument's door (kmain.c's `syscall` nif): a row's NAME to its
+// number. It lives here because the numbers are impl.h's and ARCH-KEYED --
+// close is 3 on x86_64 and 57 on aarch64 -- so a love test that spelled one
+// would pass on the seat it was written on and mean nothing on the other.
+long k_sys_nr(char const *nm, long n) {
+  struct { char const *n; long nr; } const t[] = {
+    {"read", NR_read}, {"write", NR_write},
+    {"close", NR_close}, {"lseek", NR_lseek} };
+  for (unsigned i = 0; i < sizeof t / sizeof *t; i++)
+    if ((long) strlen(t[i].n) == n && !memcmp(t[i].n, nm, (unsigned long) n))
+      return t[i].nr;
+  return -1; }
+#endif
 
 long __ai_sys(long n, long a, long b, long c, long d, long e, long f) {
   (void) d, (void) e, (void) f;
   switch (n) {
     case NR_write: return k_fd_write((int) a, (void const *) b, c);
     case NR_read:  return k_fd_read((int) a, (void *) b, c);
+    case NR_close: return k_fd_close((int) a);
+    case NR_lseek: return k_fd_lseek((int) a, b, (int) c);
     default:       return -38; } }                       // ENOSYS, canonically
