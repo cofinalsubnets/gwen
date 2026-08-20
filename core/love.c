@@ -8551,7 +8551,10 @@ lvm(lvm_abs) {
  if (sunp(a)) { intptr_t n = sun_get(a);
   if (n == INTPTR_MIN) {                              // |INTPTR_MIN| = 2^(W-1): the bignum lane
    Have(b2w(sizeof(struct ai_big) + wlimbs * sizeof(ai_limb)));
-   ai_musttail return Answer(abs_wmin(g)); }
+   Pack(g);                                           // canon bumps the synced g->hp, lvm_bmul's law
+   word r = abs_wmin(g);
+   Unpack(g);
+   ai_musttail return Answer(r); }
   Have(box_req); emit_int(_res, n < 0 ? (intptr_t) (0 - (uintptr_t) n) : n);
   ai_musttail return Answer(_res); }
  if (bigp(a)) {
