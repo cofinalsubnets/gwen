@@ -822,8 +822,11 @@
    ; does, and the bank is not the question -- every other pool starts clear of r4 for this
    ; reason (a64 r19+, riscv r13+, x64 r11+), and v6m for its own (it plants r4 as a BOTTOM
    ; frame base after the sub). the M7 reset before it could print a second line.
+   ;; ⚠ riscv leads with r15: seats fill from the head, and r15 is s1 -- the ONE callee-saved
+   ;; register inside the RVC window (x8..x15 is s0, s1, a0..a5, and the rest is ABI-locked),
+   ;; so the hottest seat is the only one whose ld/sd/mv can wear a 2-byte form.
    (cspool g) (? (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
-                 (rv? g) '(r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
+                 (rv? g) '(r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26)
                  (v6m? g) '(r5 r6 r7 r8 r9 r10)
                  (t32? g) '(r5 r6 r7 r8 r9 r10)
                  (arm? g) ()
