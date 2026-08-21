@@ -499,6 +499,11 @@
    (rvc-cisp f3 rd i)      (le16 ((f3 << 13) | ((((i >> 5) & 1) << 12) | ((rd << 7) | ((((i >> 3) & 3) << 5) | ((((i >> 6) & 7) << 2) | 2))))))
    (rvc-ca f2 rd rs2)      (le16 ((35 << 10) | (((rvc-p rd) << 7) | ((f2 << 5) | (((rvc-p rs2) << 2) | 1)))))
    (rvc-cb f2 rd i)        (le16 ((4 << 13) | ((((i >> 5) & 1) << 12) | ((f2 << 10) | (((rvc-p rd) << 7) | (((i & 31) << 2) | 1))))))
+   ;; c.addi16sp: rd IS sp, which is what parts it from c.lui -- imm[9|4|6|8:7|5], scaled by 16
+   (rvc-c16sp i)           (le16 ((3 << 13) | ((((i >> 9) & 1) << 12) | ((2 << 7)
+                             | ((((i >> 4) & 1) << 6) | ((((i >> 6) & 1) << 5)
+                               | ((((i >> 7) & 3) << 3) | ((((i >> 5) & 1) << 2) | 1))))))))
+   (rvc-s16? n)            ((n >= -512) && ((n <= 496) && ((n % 16) = 0)))
 
    ;; the word -> C-word map. answers () where no form fits, and the caller keeps the 32-bit word.
    (rvc-of w)
@@ -508,6 +513,8 @@
        (? (op = 0x13)                                                    ; OP-IMM
            (? ((f3 = 0) && (!(rd = 0) && ((rs1 = rd) && (!(i = 0) && rvc-s6? i))))
                (rvc-ci 0 1 rd i)                                         ; c.addi
+              ((f3 = 0) && ((rd = 2) && ((rs1 = 2) && (!(i = 0) && rvc-s16? i))))
+               (rvc-c16sp i)                                             ; c.addi16sp
               ((f3 = 0) && (!(rd = 0) && ((rs1 = 0) && rvc-s6? i)))
                (rvc-ci 2 1 rd i)                                         ; c.li
               ((f3 = 0) && (!(rd = 0) && (!(rs1 = 0) && (!(rs1 = rd) && (i = 0)))))
@@ -567,13 +574,20 @@
                (rvc-cr 8 rs1 0) ())                                      ; c.jr -- `ret` rides this
           ()))
 
-   ;; the chunk filter: exactly four plain bytes, no fixup, and a form that fits.
+   ;; the chunk filter, word by word: a chunk is whole instructions, so plain bytes arrive four
+   ;; at a time and a fixup rides as ONE element of its own width. squeezing per WORD rather than
+   ;; per single-word chunk is what reaches the multi-word lowerings -- push/pop are addi+sd, and
+   ;; their sp forms were the largest block of already-encodable words the old filter refused.
+   ;; ⚠ sound because no chunk holds a fixed-offset branch over anything squeezable: rv-br's hop
+   ;; is a B-form (no C shape) and clears exactly the jal fixup, which is never squeezed either.
+   (rvc-4? bs) (: (go i l) (? (i = 4) 1 !(two? l) 0 !(imm? <l) 0 (go (i + 1) >l))
+                  (go 0 bs))
    (rvc-squeeze bs)
-    (? !((tally bs) = 4) bs
-       (: b0 (at bs 0) b1 (at bs 1) b2 (at bs 2) b3 (at bs 3)
-          (? !(imm? b0 && (imm? b1 && (imm? b2 && imm? b3))) bs
-             (: c (rvc-of (b0 | ((b1 << 8) | ((b2 << 16) | (b3 << 24)))))
-                (? (two? c) c bs)))))
+    (? !(two? bs) bs
+       !(imm? <bs) (<bs >< rvc-squeeze >bs)          ; a fixup: its own width, never squeezed
+       !(rvc-4? bs) bs                               ; a ragged tail cannot be an instruction
+       (: c (rvc-of ((at bs 0) | (((at bs 1) << 8) | (((at bs 2) << 16) | ((at bs 3) << 24)))))
+          ((? (two? c) c (rv-first 4 bs)) + rvc-squeeze >>>>bs)))
 
    (rv-lower ins) (: f lower-via
                      (? !(lit? f) (scare 'holo-bake-stale 'lower-via)

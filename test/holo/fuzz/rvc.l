@@ -91,7 +91,10 @@
               (over regs (\ rs2 (fl (map (\ o `((mk-s o 2 rs2 3 0x23) (mk-s o 2 rs2 3 0x27))) alloff))))
               (over pregs (\ rs2 (over pregs (\ rs1 (fl (map (\ o `((mk-s o rs1 rs2 3 0x23)
                                                                     (mk-s o rs1 rs2 3 0x27))) alloff))))))
-              (map (\ rs1 (mk-i 0 rs1 0 0 0x67)) regs))))
+              (map (\ rs1 (mk-i 0 rs1 0 0 0x67)) regs)
+              ; addi sp, sp, k by 8 across c.addi16sp's whole reach and past both ends: the
+              ; multiples of 16 take the sp form, the odd ones must fall back or refuse
+              (map (\ k (mk-i ((k * 8) - 544) 2 0 2 0x13)) (upto 136)))))
 
    ; keep only those that compress, paired with their C word
    pairs (foldl (\ a w (: c (rvc-of w)
