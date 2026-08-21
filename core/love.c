@@ -5154,22 +5154,28 @@ static uintptr_t img_rank_assign(struct ai *g, word const *blob, uintptr_t const
 // layered bake diffs two of them. dumps wherever it is called -- a mid-eval dump's
 // continuation rides as wake-unreachable ballast -- and the guarded entry keeps the boot
 // path honest.
+// ⚠ `why` is the STAGE, set before each fallible step, so a refusal names where it
+// stopped: 1 no major pool, 2 the compaction scared, 3 out of memory, 4 an unencodable
+// heap word, 5 the root table is too small, 6 an unencodable root, 8 the heap outgrew
+// the lane floor -- and 0 only on the way out. (7, not quiet, is the callers' own.) it
+// rides a parameter because it is true of one call and nothing else: a seat that keeps
+// it keeps a stale answer, and love.h's own rule is that the audit owns no state here.
 static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard const *guard,
-                       uintptr_t *outnw) {
- g->image_why = 1;
+                       uintptr_t *outnw, uint8_t *why) {
+ *why = 1;
  if (!g->major_pool) return NULL;                        // needs the major pool (it holds the compacted live half)
  ai_core_of(g)->io = NULL;                               // clear the non-deterministic fd before the bake
- g->image_why = 2;
+ *why = 2;
  if (!ai_ok(gen_major(g))) return NULL;                  // COMPACT: live half -> [major_base, major_hp) (OOM -> no image)
  if (!ai_ok(g = img_canon_symbols(g))) return NULL;      // canonical intern layout (OOM -> no image)
- g->image_why = 3;
+ *why = 3;
  word *base = g->major_base, *hp = g->major_hp;
  uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word);
  // the heap must fit under the lane floor, or a byte offset collides with an index and
  // decodes as an ap.
- g->image_why = 8;
+ *why = 8;
  if (bytes >= ImageIdxBase) return NULL;
- g->image_why = 3;
+ *why = 3;
  word *blob = g->alloc(g, NULL, bytes);                  // the encoded words: scratch, not the file
  if (!blob) return NULL;
  memcpy(blob, base, bytes);
@@ -5228,7 +5234,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard
   else for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(x, ((word*) p)[i]);   // thread interior + terminator
   x->suppress = 0;
   p = (union u*) ((word*) p + sz); }
- g->image_why = 4;
+ *why = 4;
  if (x->fail) { g->alloc(g, slots, 0); g->alloc(g, blob, 0); return NULL; }   // a binary pointer landed in the index range -> refuse (caller boots normally)
  // the rename: mark live serials (the collected nom/mint slots read RAW off the
  // blob -- scalars rode the memcpy -- plus the pids of both task rings), rank
@@ -5272,15 +5278,15 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard
  // roots = symbols + tasks (live OUTSIDE v0), then the whole GC-traced v0..end block, GENERICALLY: any
  // field added to struct ai's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
  uintptr_t nv = (word*) g->end - (word*) &g->v0, nr = 2 + nv;
- g->image_why = 5;
+ *why = 5;
  if (nr > countof(H.root_tag)) { g->alloc(g, blob, 0); return NULL; }    // grew past the header table -> bump root_tag[]
  image_root_enc(x, g->symbols,      &H.root_tag[0], &H.root_val[0]);
  image_root_enc(x, (word) g->tasks, &H.root_tag[1], &H.root_val[1]);
  for (uintptr_t i = 0; i < nv; i++) image_root_enc(x, ((word*) &g->v0)[i], &H.root_tag[2 + i], &H.root_val[2 + i]);
- g->image_why = 6;
+ *why = 6;
  if (x->fail) { g->alloc(g, blob, 0); return NULL; }     // ..a ROOT refused: the walk's own check is behind us
  H.nroot = nr;
- return g->image_why = 0, *Ho = H, *outnw = nw, blob; }
+ return *why = 0, *Ho = H, *outnw = nw, blob; }
 // ..and the wire: {header, dictionary, token stream}, g->alloc'd. fills H.nstream.
 static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintptr_t nw, uintptr_t *outlen) {
  uintptr_t bytes = nw * sizeof(word);
@@ -5312,7 +5318,8 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
 void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
  struct image_hdr H;
  uintptr_t nw = 0;
- word *blob = img_build(g, &H, guard, &nw);
+ uint8_t w_;
+ word *blob = img_build(g, &H, guard, &nw, &w_);
  if (!blob) return NULL;
  void *buf = img_wire(g, &H, blob, nw, outlen);
  return g->alloc(g, blob, 0), buf; }
@@ -5326,11 +5333,12 @@ void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_guard const
 // ============================================================================
 // the first half: compact, pin, and answer this layer as {header, raw blob}. untokenized,
 // since its only reader is ai_image_save_over below. g->alloc'd; the caller owns it.
-void *ai_image_freeze(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
+void *ai_image_freeze(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard,
+                      uint8_t *why) {
  struct image_hdr H;
  uintptr_t nw = 0;
- if ((word*) g->sp != topof(g)) return g->image_why = 7, NULL;   // quiescent, like ai_image_save
- word *blob = img_build(g, &H, guard, &nw);              // ..which compacts under the PREVIOUS pin, if any
+ if ((word*) g->sp != topof(g)) return *why = 7, NULL;   // quiescent, like ai_image_save
+ word *blob = img_build(g, &H, guard, &nw, why);         // ..which compacts under the PREVIOUS pin, if any
  if (!blob) return NULL;
  uintptr_t total = sizeof H + nw * sizeof(word);
  char *rec = g->alloc(g, NULL, total);
@@ -5369,13 +5377,13 @@ static void *img_derive(struct ai *g, void const *base, uintptr_t blen,
 // baseline -- subout[i] for bases[i], NULL where it did not fit (a foreign record, or a
 // prefix longer than this blob). a NULL is not an error: the caller lays that layer
 // whole, which is only bigger.
-void *ai_image_save_over(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard,
+void *ai_image_save_over(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard, uint8_t *why,
                          void *const *bases, uintptr_t const *blens, uintptr_t nbase,
                          void **subout, uintptr_t *sublens) {
  struct image_hdr H;
  uintptr_t nw = 0;
- if ((word*) g->sp != topof(g)) return g->image_why = 7, NULL;   // quiescent, like ai_image_save
- word *blob = img_build(g, &H, guard, &nw);
+ if ((word*) g->sp != topof(g)) return *why = 7, NULL;   // quiescent, like ai_image_save
+ word *blob = img_build(g, &H, guard, &nw, why);
  if (!blob) return NULL;
  for (uintptr_t i = 0; i < nbase; i++)
   subout[i] = img_derive(g, bases[i], blens[i], &H, blob, nw, &sublens[i]);

@@ -185,11 +185,6 @@ struct ai {
                                           // (major_symbols_rebuild), so the first collection after a wake is one.
  int8_t lean;                             // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
                                           // (a resize is a full copy + a total refault)
- uint8_t image_why;                       // why the codec last refused a dump; 0 = it did not.
-                                          // 1 no major pool, 2 the compaction scared, 3 out of
-                                          // memory, 4 an unencodable heap word, 5 the root table
-                                          // is too small, 6 an unencodable root, 7 the stack was
-                                          // not quiescent, 8 the heap outgrew the lane floor
  // the two pools: the main pool is pure MINOR, the young heap being [end, hp); OLD lives
  // in major_pool, its own two-space. a MINOR evacuates young -> major active half; a
  // MAJOR drains both, compacts into the spare half, flips, rebuilds symbols, runs
@@ -428,8 +423,8 @@ struct ai *ai_image_load(void const *buf, uintptr_t len);
 // full image plus each baseline's derived record -- its header and the prefix words that
 // changed -- which load_over wakes against the parent's stream. all g->alloc'd; NULL is
 // no image, never half of one.
-void *ai_image_freeze(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);
-void *ai_image_save_over(struct ai*, uintptr_t *outlen, struct ai_image_guard const*,
+void *ai_image_freeze(struct ai*, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why);
+void *ai_image_save_over(struct ai*, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why,
                          void *const *bases, uintptr_t const *blens, uintptr_t nbase,
                          void **subout, uintptr_t *sublens);
 struct ai *ai_image_load_over(void const *parent, uintptr_t plen, void const *sub, uintptr_t slen);
