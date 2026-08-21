@@ -30,7 +30,6 @@
 ; ⚠ a setting's value is the form's TAIL, so (singleton 1) stores (1) and
 ; (deprecated a b) stores (a b) -- one list, not a list holding one.
 (: lt-sing (lt-conf `(`('singleton 1)))
-   lt-shad (lt-conf `(`('shadow 1)))
    lt-dep  (lt-conf `(`('deprecated 'old-thing '(worse-thing "use better-thing"))))
    ; the 4th field is the RULE, appended -- so <w / <>w / <>>w still read line,
    ; column and text, which is why no consumer had to change
@@ -86,32 +85,6 @@
  !(lint-of "(f \"old-thing\")" lt-dep)                          ; nor is a string
  !(lint-of "(f old-thing-x)" lt-dep)                            ; a longer name is another name
  (2 = (tally (lint-of "(old-thing worse-thing)" lt-dep))))
-
-; the SHADOW rule: a glued sigil factors against the GLUED LANE (`operators` at arity 0)
-; to one of a dozen plain
-; names and then resolves like any other name, so a binding of one re-aims every <x /
-; !x / +x in its scope. the rule speaks at the BINDING, and reserves nothing.
-(assert
- !(lint-scan "(: net 5 (f net))")                              ; off by default, like the rest
- ('(shadow) = (lt-rule (lint-of "(: net 5 (f net))" lt-shad)))
- ("shadow net -- a glued sigil factors to this name"
-   = <(lt-msg (lint-of "(: net 5 (f net))" lt-shad)))
- (: w <(lint-of "(: a 1\n   cap 2 (f a))" lt-shad) (&& (2 = <w) (4 = <>w)))  ; it points AT the name
- (1 = (tally (lint-of "(\\ cap (cap 1))" lt-shad)))            ; a lambda param binds too
- ; a USE is not a binding: the value half of a pair, and any operand of a call
- !(lint-of "(: a 1 (net a))" lt-shad)  !(lint-of "(f cap cup)" lt-shad)
- !(lint-of "(: a net b 2 (f a))" lt-shad)                      ; net here is a VALUE, element 3
- !(lint-of "(: capx 1 (f capx))" lt-shad)                      ; a longer name is another name
- !(lint-of "; cap" lt-shad)  !(lint-of "(: a \"cap\" (f a))" lt-shad)  ; comments and strings are not code
- ; ⚠ a BARE-NAME BODY over-fires -- (: net 5 net) warns TWICE, once for the binding and
- ; once for the body, because which element is last is not known until the closer.
- (2 = (tally (lint-of "(: net 5 net)" lt-shad)))
- ; ⚠ the SUGAR HEADER warns and the far commoner BODY CALL does not, though at token
- ; time they are the same shape -- element 1 of a form in a binder slot. the verdict
- ; DEFERS to the binder's closer, where the final count is known and the body is the
- ; last element: the singleton rule's own machinery, run at the opposite polarity.
- (1 = (tally (lint-of "(: (bit x) x)" lt-shad)))
- !(lint-of "(: a 1 (bit x))" lt-shad))
 
 ; WHICH WARNINGS FAIL splits with the rule: an imbalance always does, because the
 ; file does not read and that is not a matter of opinion; an opinion never does,

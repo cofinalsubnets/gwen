@@ -62,10 +62,9 @@
    ; ⚠ lint.l takes a PLAIN TABLET and reads it with peep -- it does NOT depend on
    ; lib/salt.l. vi cats this file directly (test/test.mk), and a module it had to
    ; carry along would break that. salt fills the tablet; lint only reads it.
-   (lint-on? conf k) (: v (peep conf k ()) (two? v && <v))
-   ; ...and a switch whose default is YES: absent means on, and only an explicit 0
-   ; turns it off. the opinion rules are off until asked; the halves of a rule that
-   ; has BEEN asked for are on until refused.
+   ; a switch whose default is YES: absent means on, and only an explicit 0 turns it
+   ; off. the opinion rule is off until asked; the halves of a rule that has BEEN
+   ; asked for are on until refused.
    (lint-yes? conf k) (: v (peep conf k ()) (? (two? v) (! (! <v)) 1))
    ; the name a token MENTIONS: a leading ' is quote, and 'foo names foo just as
    ; much as bare foo does -- a rename wants both. (a TRAILING ' is the prime
@@ -82,39 +81,14 @@
        h  (? (two? e && two? >e) <>e ())
        ("deprecated " + string nm + (? (string? h) (" -- " + h) "")))
 
-   ; --- the shadow rule ------------------------------------------------------
-   ; the words a glued row names (`operators` at arity 0). a glued sigil factors to ONE of these
-   ; and then
-   ; resolves like any other name, so a binding of one IN SCOPE quietly re-aims every
-   ; `<x` / `!x` / `+x` under it -- rare, real and silent, which is what a rule is for.
-   ; ⚠ this does NOT reserve the names: the rule speaks, the binding stands.
-   lshadow-words '("cap" "cup" "net" "prod" "abs" "negate" "reciprocal" "fraction"
-                   "bit" "saturate" "nil?" "dot")
-   (lsmem? l t) (? !(two? l) 0 (t = <l) 1 (lsmem? >l t))
    ; is frame f a BINDER slot -- a `\` past its head, or a `:` at an even (value)
-   ; element? shared by the shadow rule (is the token that just ended a binding
-   ; name?) and the singleton deferral (does this child sit in pattern position?).
+   ; element? the singleton deferral asks it: does this child sit in pattern position?
    (lbind? src n f)
     (f @ {'e1 e1 'ne ne}
      (: h (ltok-at src n e1)
         (? (h = ":")  (2 <= ne && 0 = ne % 2)
            (h = "\\") (2 <= ne)
            0)))
-   ; is the token that just ended a BINDING NAME? this shape over-fires on a
-   ; BARE-NAME BODY ((: a 1 cap), (\ x cap)) -- the last operand is the body, and
-   ; which element is last is not known until the closer. that shape is rare
-   ; enough to cost one line of noise.
-   (lbind-pos? src n stk) (? (two? stk) (lbind? src n <stk) 0)
-   ; the SUGAR HEADER (: (bit x) ..): at token time element 1 of a form at an ODD `:`
-   ; index, which a body call (: a 1 (cap x)) also is. the two part at the `:` CLOSER,
-   ; where the final count is known -- the body is the LAST element and a name slot is
-   ; not -- so the verdict defers on the binder's pend slot, the singleton rule's own
-   ; machinery run at the opposite polarity.
-   (lsugar-pos? src n stk)
-    (? (! (two? stk && two? >stk)) 0
-       (: f <stk p <>stk
-          (? (! (1 = f 'ne)) 0                         ; not this form's FIRST element
-             (lbind? src n p))))                       ; ..sitting in the parent's binder slot
 
    ; --- the frame ------------------------------------------------------------
    ; a TABLET: {'cl closer 'ln line 'co col 'ne nelem 'e1 e1i 'pl plain 'qd quoted
@@ -220,21 +194,14 @@
        ; session of new code); (singleton 0) turns it off. NO config at all -- lint-scan's
        ; () -- stays balance alone, the contract vi's cat and the fixtures ride.
        sg (? (id? conf ()) 0 (lint-yes? conf 'singleton))
-       sh (lint-on? conf 'shadow)
        dp (peep conf 'deprecated ())
-       ; a token just ENDED at index i, having started at ti/tc: the two token rules
-       ; run here, and each is a no-op until its config asks -- an empty roster for
-       ; `deprecated`, an unset switch for `shadow`.
-       (lend line tc ti i stk warns)
-        (: t  (snip src ti i)
-           w0 (? !(two? dp) warns
-                 (: r (lint-dep dp (lname t))
-                    (? (two? r) (link [line tc (lint-depmsg <>r) 'deprecated] warns) warns)))
-           shw [line tc ("shadow " + t + " -- a glued sigil factors to this name") 'shadow]
-           (? (! (sh && lsmem? lshadow-words t)) w0
-              (lbind-pos? src n stk) (link shw w0)
-              (lsugar-pos? src n stk) (: _ (lpend stk 2 (<>stk 'ne) shw) w0)
-              w0))
+       ; a token just ENDED at index i, having started at ti/tc: the token rule runs
+       ; here, and is a no-op until its config asks -- an empty roster for `deprecated`.
+       (lend line tc ti i warns)
+        (: t (snip src ti i)
+           (? !(two? dp) warns
+              (: r (lint-dep dp (lname t))
+                 (? (two? r) (link [line tc (lint-depmsg <>r) 'deprecated] warns) warns))))
 
        ; stk: the frames above, a matched-pair stack, so ([)] is caught and not
        ; just a net count. sl/sc hold a string's opening spot. it/ti/tc are the
@@ -244,7 +211,7 @@
        ; states: code | cmt (; to EOL) | str (".." with \ escapes).
        (w i st stk line col sl sc it ti tc warns)
         (? (n <= i)
-            (: w0 (? it (lend line tc ti i stk warns) warns)
+            (: w0 (? it (lend line tc ti i warns) warns)
                w1 (? (id? st 'str) (link [sl sc "unclosed string" 'balance] w0) w0)
                (rev (foldl (\ a o (o @ {'cl cl 'ln ln 'co co}
                             (link [ln co ("unclosed " + string (lopen cl)) 'balance] a)))
@@ -260,24 +227,24 @@
                      (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc warns))
                  (c = 59)                                                      ; ; -- start comment
                   (w (i + 1) 'cmt (lat src stk it ti i) line (col + 1) sl sc 0 ti tc
-                     (? it (lend line tc ti i stk warns) warns))
+                     (? it (lend line tc ti i warns) warns))
                  (c = 35 && i + 1 < n && src (i + 1) = 33)                     ; #! shebang, to EOL
                   (w (i + 2) 'cmt stk line (col + 2) sl sc 0 ti tc
-                     (? it (lend line tc ti i stk warns) warns))
+                     (? it (lend line tc ti i warns) warns))
                  (c = 34)                                                      ; " -- start string
                   (w (i + 1) 'str (? it stk (lelem stk i)) line (col + 1) line col 0 ti tc
-                     (? it (lend line tc ti i stk warns) warns))
+                     (? it (lend line tc ti i warns) warns))
                  (c = 10)
                   (w (i + 1) 'code (lat src stk it ti i) (line + 1) 1 sl sc 0 ti tc
-                     (? it (lend line tc ti i stk warns) warns))
+                     (? it (lend line tc ti i warns) warns))
                  (c = 40 || c = 91 || c = 123)                                 ; ( [ {  -- push
                   ; an opener is an element of its PARENT -- unless it is GLUED to
                   ; the token before it, in which case the two are one datum.
                   (w (i + 1) 'code (lpush (? it stk (lelem stk i)) c i line col src it ti)
                      line (col + 1) sl sc 0 ti tc
-                     (? it (lend line tc ti i stk warns) warns))
+                     (? it (lend line tc ti i warns) warns))
                  (c = 41 || c = 93 || c = 125)                                 ; ) ] }  -- match
-                  (: w0 (? it (lend line tc ti i stk warns) warns)
+                  (: w0 (? it (lend line tc ti i warns) warns)
                      (? !(two? stk)
                          (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc
                             (link [line col ("stray " + string c) 'balance] w0))
@@ -286,13 +253,8 @@
                             (link [line col ("mismatched " + string c) 'balance] w0))
                         (: f <stk rest >stk
                            ; the verdicts this binder owed its deferred children. an entry
-                           ; at the FINAL index was the BODY: a singleton there warns, and
-                           ; a shadow there does not -- the two rules read the same fact
-                           ; from opposite sides.
-                           w1 (foldl (\ a p (: wr >p last? (<p = f 'ne)
-                                              (? (id? (wr 3) 'shadow) (? last? a (link wr a))
-                                                 last? (link wr a)
-                                                 a)))
+                           ; at the FINAL index was the BODY, which is where a singleton warns.
+                           w1 (foldl (\ a p (: wr >p (? (<p = f 'ne) (link wr a) a)))
                                      w0 (f 'pd))
                            sw (? sg (lsing src n f) ())
                            (? (id? sw ()) (w (i + 1) 'code rest line (col + 1) sl sc 0 ti tc w1)
@@ -303,7 +265,7 @@
                                     (w (i + 1) 'code (lpend rest <dh <>dh sw) line (col + 1) sl sc 0 ti tc w1)))))))
                  (c < 33)                                                      ; space, tab, the rest
                   (w (i + 1) 'code (lat src stk it ti i) line (col + 1) sl sc 0 ti tc
-                     (? it (lend line tc ti i stk warns) warns))
+                     (? it (lend line tc ti i warns) warns))
                  ; an ordinary character: a token START only if we were not in one
                  (w (i + 1) 'code (? it stk (lelem stk i)) line (col + 1) sl sc
                     1 (? it ti i) (? it tc col) warns))))
