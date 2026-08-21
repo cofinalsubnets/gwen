@@ -5,42 +5,21 @@
 ;   ~/.love/etc/<app>.l    your taste, wherever the binary happens to live
 ;   ./.<app>.l             this tree's own, and it travels in git
 ;
-; the SECOND wins, which is the direction the module walk already runs (cwd's
-; lib/ before the seat's): a project speaks last about itself. the search is the
-; CWD only, no walk upward -- cook's (discover _) sets that precedent, and a
-; config that changes meaning with your shell's pwd is worse than one you have to
-; name. absent files are the NORMAL case: no config at all is the same tablet as
-; two empty ones.
+; the second wins, and the search is the cwd only, with no walk upward. absent
+; files are the normal case: no config at all is the same tablet as two empty ones.
 ;
-; ⚠ HOME, not the seat. the seat of /usr/bin/love is /usr, and nobody's settings
-; live in /usr/etc -- so this is the one place a love program reads the
-; environment to find a file. (the module walk still reads none.)
-;
-; ⚠ A CONFIG IS DATA, NEVER CODE. the file is read with `sound`, the datum
-; reader, and no part of it is ever evaluated -- so a dotfile cannot run anything,
-; and nothing in it needs quoting, because nothing in it is evaluated. write
-; `(deprecated foo bar)`, not `(deprecated 'foo 'bar)`.
-;
-; ⚠ PRESENCE IS THE OPEN (crew/vi/hue.l's law, which this generalizes): a config
-; file with nothing in it means NO OVERRIDES, which is a perfectly good thing for
-; a config file to mean -- so the question is whether it OPENED, never whether it
-; had bytes. `(! (fsize p))` would call an empty config a missing one.
-;
-; ⚠ A FORM THAT IS NOT A SETTING IS SIMPLY NOT A SETTING. a bad line is skipped
-; in silence and the rest of the file still lands: a typo in a dotfile must not
-; take the tool down with it, and half a config is better than none.
+; a config is data, never code -- the file is read with `sound` and no part of it
+; is evaluated, so nothing in it needs quoting: write `(deprecated foo bar)`.
+; a form that is not a setting is skipped in silence and the rest still lands.
 ;
 ; a setting is one form, `(key operand ..)`: the head names it, the tail is its
 ; value. so (singleton 1) is a switch, (deprecated a b c) a roster, and a repeated
-; key REPLACES rather than appends -- one line, one answer.
+; key replaces rather than appends.
 (:
    ; --- reading one file ------------------------------------------------------
-   ; overlay path's settings onto the tablet c (mutated, and answered back). the
-   ; open IS the presence test -- one syscall, no gap between asking and reading.
-   ; ⚠ `sound` answers THREE ways and all three must be caught: the datum CONSED
-   ; ONTO THE REST, () at a clean end, or `torn` on an unfinished shape. ask
-   ; `two?` for the datum -- a config file with a dropped paren must stop with
-   ; what landed, never spin.
+   ; overlay path's settings onto the tablet c, mutated and answered back. the open
+   ; is the presence test. `sound` answers three ways -- the datum consed onto the
+   ; rest, () at a clean end, `torn` on a dropped paren -- so ask two?, never spin.
    (salt-file path c)
     (: q (open path "r")
        (? q (: t (slurp q)
@@ -56,6 +35,8 @@
           c))
 
    ; --- the door --------------------------------------------------------------
+   ; HOME, not the seat: /usr/bin/love seats at /usr and nobody's settings live in
+   ; /usr/etc. reading it wrong looks like no config at all, which is legal here.
    (salt-user app) (: h (getenv "HOME")
                       (? (string? h) (h + "/.love/etc/" + (string app) + ".l") ()))
    (salt-here app) ("." + (string app) + ".l")
@@ -67,14 +48,12 @@
                  c)
 
    ; --- reading a setting -----------------------------------------------------
-   ; the whole tail, or (); and the first operand, or a default. ⚠ salt-all
-   ; cannot tell an ABSENT key from one written with no operand -- both are () --
-   ; so a switch is `(singleton 1)`, never a bare `(singleton)`.
+   ; the whole tail, or (); and the first operand, or a default. an absent key and
+   ; one written with no operand are both (), so a switch is `(singleton 1)`.
    (salt-all c k)   (peep c k ())
    (salt-one c k d) (: v (peep c k ()) (? (two? v) <v d))
 
-   ; is nm listed under k? the roster lane: an entry is either the bare name or
-   ; `(name "hint")`, so this reads the head of a pair and the name of a bare one.
+   ; is nm listed under k? a roster entry is a bare name or `(name "hint")`
    (salt-has? c k nm)
     (: (go l) (? (! (two? l)) ()
                  (: e <l (? ((? (two? e) <e e) = nm) `(1 e) (go >l))))

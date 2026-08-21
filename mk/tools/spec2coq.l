@@ -49,7 +49,7 @@
    (len3? [_ _ _]) 1
    ; opfix wraps an operator form one layer ((f) == f); unwrap a 1-element list
    (unwrap r) (two? r && atom? >r ? <r r)
-   (fix1 x) (unwrap (opfix x))
+   (fix1 x) (unwrap (unglue (opfix x)))          ; unglue: the glued lane emits VALUES, and this file matches WORDS
 
    ; an integer binary operator symbol -> its Coq function (prefix), else 0
    (binop h) (h @ '+ "Z.add"   '- "Z.sub"  '* "Z.mul"

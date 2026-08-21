@@ -1,48 +1,25 @@
 ; bao -- the shell core: the read-eval-print loop, its multi-line line editor,
-; the stream shell (read/reads), the floor handler (welp), and the host-only
-; pty wrapper (wrap). bao is the BAKED shell core for all three frontends -- the
-; host (out/host/love), the freestanding kernel (kmain.c), and the love0 bootstrap
-; self-test -- loaded after the prel.
-;
-; parsing is `sound`, the reader in love (love/p1.l): the editor's flattened
-; charlist is implicitly parenthesized and read as ONE expression -- a line
-; `x y z` is the application (x y z), and infix works at the prompt (factored at
-; compile time by opfix; reading is structural). a line that ends mid-shape comes
-; back TORN and the editor keeps taking input.
-;
-; the editor buffer is a four-zipper threaded positionally through
-; the editor functions: u (lines above the cursor, reversed), l (chars
-; left of cursor on the current line, reversed), r (chars at/after
-; cursor on the current line, in order), d (lines below).
+; the stream shell (read/reads), the floor handler (welp), and the port-driven
+; line reader (edraw/edln/edlnc) that lush drives.
 
-; read: chars -> top, the reverse shell of the compiler -- the lane every shell
-; ultimately feeds into. `s` is a charlist: a bare one (a charm is a sat, a non-negative
-; fixnum), a flowing one, or a PORT, which is lifted to the flowing kind and is the only
-; case that needs saying. read takes any of them, reads ONE form (structurally -- the
-; reader knows no operators) and sends it through ev's core (opfix, feel, ana, cata): the
-; full hull chars -> top in one call. nothing readable -- empty input or an unfinished
-; shape -- is nothing.
+(module (bao read reads forms shell welp edraw bao edln edlnc)
 (: (read s)
    (: r (sound (? (hot? s) (flow s) s))
       (? (two? r) (ev <r) 0)))
 ; reads: the stream shell -- reads and evals every form of a port, the value the last
 ; form's; ev late-binds ((ev 'ev r)) so one definition drives both of love0's passes.
-; ⚠ THE TWO ENDINGS DIFFER: a clean end comes BETWEEN forms (done), `torn` INSIDE one.
-; and `torn` is no longer a maybe: the reader drank for itself and found the end, so
-; there is nothing left to try and it is a scare.
+; the two endings differ: a clean end comes between forms, `torn` inside one -- and torn
+; is a scare, the reader having drunk for itself and found the end.
 (: (reads p)
    (: (walk cl z) (sound cl @ 'torn (scare 'unfinished-form p)
                               (a >< b) (walk b (ev 'ev a))
                               z)
-      ; --- the SHARED lane, for `in`: gulp for speed, hold nothing across an eval ---
-      ; box slot 0 counts every byte DRAWN off p into our charlist, so the walk can say where
-      ; the port ought to be and put it there. ⚠ NO WINDOW, and that is the whole design: the
-      ; tail gulps ON DEMAND, so sound crosses a run boundary transparently and `torn` and the
-      ; clean end mean what they say. A finite window cannot -- a `;` comment straddling one
-      ; comes back a CLEAN END rather than torn, so the next window reads the prose as code, and
-      ; the corpus answers `;; missing so` off an English sentence (doc/io.md part IV).
+      ; the shared lane, for `in`: gulp for speed, hold nothing across an eval. box slot 0 counts
+      ; every byte drawn off p, so the walk can put the port where it belongs. no window on purpose:
+      ; a straddling `;` comment would end one cleanly and the next reads the prose as code.
       box (tablet 0)
       (drew u) (peep box 0 0)
+      ; absolute, not relative -- p is already behind us, so a plain (unchug p rem) re-reads the run
       (drop n) (unchug p (n - inhand p))     ; the port to n pending; we hold the rest
       ; flow, plus the count: one chug per gulp, the run laid down as plain conses.
       (feed u)
@@ -52,110 +29,57 @@
            _ (pin box 0 (drew () + tally t))
            (go k l) (? (0 >= k) l (: j (k - 1) (go j (t j >< l))))
          (go (tally t) (once (\ u (feed ()))))))
-      ; consumed, FORWARDS and by identity: O(consumed), so the sum over the stream is the
-      ; stream. ⚠ never (tally >r) -- the residue is lazy, so that would force the whole rest.
-      ; ⚠ FORCE AT EVERY STEP: a cons holds its tail as an unforced PROMISE, so a plain `cup`
-      ; walk stops dead at a gulp boundary, never reaches the residue, and spins on () forever.
-      ; `once` memoizes, so forcing what is already forced is free and the identities line up
-      ; (test/io.l says the same of counting a flow: by forcing, never by tally).
+      ; consumed, forwards and by identity. never (tally >r) -- the residue is lazy, so that
+      ; forces the whole rest; and force at every step, or a plain `cup` walk stops dead at a
+      ; gulp boundary and spins on () forever. `once` memoizes, so re-forcing is free.
       (frc x) (lit? x ? (x ()) x)
       (upto a b n) (: aa (frc a) bb (frc b)
                       (? (id? aa bb) n
                          (two? aa)   (upto (cup aa) bb (n + 1))
                          n))
-      ; ⚠ torn and the clean end are HONEST here: with no window they can only mean the
-      ; stream itself ended, so torn scares and a clean end takes the port to the end.
+      ; with no window both endings are honest -- they can only mean the stream itself ended
       (step cl walked z)
        (sound cl @
          'torn (scare 'unfinished-form p)
-         ; EXACT BEFORE EVERY EVAL: the port goes to where our walk stands, so an in-form
-         ; (slurp in) and an inheriting child both see the truth.
-         ; ⚠ ABSOLUTE, never relative -- the port is already behind us from the last
-         ; positioning, so this is a delta off what it holds now. A plain (unchug p rem)
-         ; rewinds to the run's start every form and re-reads the whole stream.
-         ; ⚠ ONE BYTE SHORT ON PURPOSE: the byte-exact lane reads the residue head before it
-         ; evals (trickle's cons holds it), so it runs one ahead too. Leave that byte and the
-         ; two doors disagree by exactly it, which is what test_stdincorpus diffs.
-         ; ⚠ what we hold is never more than the run p still has, so the give-back always
-         ; reaches: the tail gulps only when sound wants a byte past the current run, and a
-         ; form that straddles ends inside the NEW run, where unchug can go.
          (a >< b) (: k (upto cl b 0)
                      w2 (walked + k)
                      rem (drew () - w2)
+                     ; one byte short on purpose -- the byte-exact lane runs one ahead, and test_stdincorpus diffs it
                      _ (drop (0 < rem ? (rem - 1) 0))
                      h (inhand p)
                      v (ev 'ev a)
-                     ; ⚠ AND FORWARD AGAIN once the eval is past: the give-back left p holding
-                     ; bytes our charlist already has, so a tail that gulped now would draw them
-                     ; a SECOND time and the list would grow with duplicates (an early false
-                     ; `torn`). p goes back to our list's end, where the next gulp must start.
-                     ; ⚠ else the form DREW on p, so p is the truth and our charlist is stale.
-                     ; CARRY THE HEAD BYTE: p handed it over already and will not again, so
-                     ; dropping the list whole loses it -- and a lost `;` reads a comment as code.
                      (h = inhand p ? (drop 0, step b w2 v)
                                      (start (two? b ? [<b]) v)))
          (drop 0, z))
-      ; ⚠ THE FORK IS THE PORT'S RUN, asked of the port and never guessed: a seekable stdin has a
-      ; borrowed one; a pipe and a tty have none and must drip, because love.c's athand is NULL
-      ; for the fd vt -- a bio-less port chugs ONE byte, and a gulping walk round a one-byte chug
-      ; is dearer than trickle (doc/io.md part IV, measurement 3).
-      ; the primed byte rides the pushback, so whichever lane wins picks it up with its own `see`.
       (start pre z) (: c (see p)
                        (? (= c -1) (? (two? pre) (walk pre z) z)
                           (: _ (unsee p c)
                              (? (nil? (inhand p)) (walk (cat pre (trickle p)) z)
                                 (: _ (pin box 0 (tally pre))
                                    (step (cat pre (feed ())) 0 z))))))
-      ; ⚠ GULP ONLY WHAT WE OWN. a file (cli.l's load1) and a tap (the baked corpus,
-      ; host/main.c's runner) are ours alone -- nobody else reads them, so running ahead is free
-      ; and worth it. `in` is SHARED: the forms we eval can read it, and a child can inherit its
-      ; fd, so it takes the lane above, which gulps and gives back.
-      ; ⚠ THIS TEST IS WHY `in` IS NEVER REBOUND. it folded at egg-compile time, so a frontend
-      ; handing stdin a read run parks it BEHIND the static (love.c's rbio_of) -- bind a fresh
-      ; port to the name and the identity fails here, in silence.
+      ; never rebind `in` -- this identity folded at egg-compile, so a fresh port fails it in silence
       (? (id? p in) (start () 0) (walk (flow p) 0))))
-; forms: every datum of a port, as DATA -- the data twin of `reads`, and the shape half
-; the tools had each copied out by hand. it takes a PORT, like reads, so it needs neither
-; open nor close (a fs-less frontend has neither, and a bare mention would raise at the
-; define). ⚠ a torn tail SCARES: the other choice is handing back the forms that happened
-; to land, which reads exactly like a whole file and is the bug every one of those had.
 (: (forms p)
    ((: (g cl acc) (sound cl @ 'torn (scare 'unfinished-form p)
                               (a >< b) (g b (a >< acc))
                               (rev acc)))
     (flow p) ()))
 
-; --- the shell core: editor + repl + welp + the pty wrapper, all closure-private.
-; the body of this (: ..) returns the public entry points as a list, defglob'd
-; below; everything else (the ed* editor, parseall, do_eval, the history zipper,
-; pump/waitfor, the raw-line decode) stays inside this scope, OFF the global book.
-(: _                                ; the export-list holder: `_` never leaks to the book
- (: m (nom 0) eofsym (nom 0)
+(: m (nom 0) eofsym (nom 0)
 
-   ; the host nifs the shell wants -- raw (termios), the pty pair (tether gather),
-   ; close -- are not on every frontend: the kernel pins none of them, love0
-   ; lacks the ptys. bind the global when it exists, else a no-op stub; the
-   ; mentions below read these locals, so bao compiles quiet everywhere and a
-   ; call answers a clean () where the facility is not.
    (want n) (member? n (names ()) ? (ev n) (\ _ ()))
-   raw (want 'raw) tether (want 'tether) gather (want 'gather) close (want 'close)
+   raw (want 'raw)
 
    (revcat a b) (foldl (flip link) b a)
 
-   ; parse a charlist as ONE expression. read EVERY top-level datum off the line:
-   ; a SINGLE datum is used as-is -- so a leading monadic like `+(-3)` keeps fusing
-   ; (wrapping it in () would put the operator in HEAD position, where it never
-   ; fuses -- the old `(+(-3))` -> `(+ -3)` bug); MULTIPLE datums become the
-   ; application `(a b c)`, so `f x` applies and `1 = 1` factors infix. returns m if
-   ; the line ends inside an unfinished shape, () for a blank line, else a one-form list.
    (rdall cl acc)
     (sound cl @ 'torn m                            ; unfinished shape -> more
                 (a >< b) (rdall b (a >< acc))
                 (rev acc))                         ; a clean end -> the datums, in order
    (parseall cl)
     (rdall cl () @ ^m  m                           ; unfinished shape
-                   [a] [a]                         ; ONE datum: as-is (leading monadic preserved)
-                   ds  (two? ds ? [ds]))           ; MANY: the application; a blank line: ()
+                   [a] [a]                         ; one datum: as-is (leading monadic preserved)
+                   ds  (two? ds ? [ds]))           ; many: the application; a blank line: ()
 
    ; --- editor ---
 
@@ -177,12 +101,8 @@
    ; map non-printables to space; otherwise pass through
    (prc c) (putc $ 32 <= c < 127 ? c 32)
 
-   ; CPS editor primitives. each takes the loop as continuation k
-   ; and forwards a new (u l r d) to it; helpers are no-ops at their
-   ; boundary. left/right wrap across lines; bsp at column 0 merges
-   ; the current line onto the previous; del at end-of-line splices
-   ; the next line on. up/down preserve column, clamped to the
-   ; destination line's length.
+   ; line editor buffer zipper arguments
+   ; u up (reversed), l left (reversed), r right, d down
    (edleft k u l r d)
      (? (two? l) (k u >l (<l >< r) d)
         (two? u) (k >u (rev <u) () (revcat l r >< d))
@@ -201,6 +121,7 @@
         (k u l r d))
    (edhome k u l r d) (k u () (revcat l r) d)
    (edend  k u l r d) (k u (revcat r l) () d)
+
    ; edtop / edbot jump across the whole buffer: cursor at the start of
    ; the topmost line / end of the bottommost line. on a single-line
    ; buffer they degenerate to edhome / edend.
@@ -257,18 +178,7 @@
            (k () () () () nhu hd ()))
         (k u l r d hu hd cur))
 
-   ; map a raw byte (or escape sequence) to an event code:
-   ; printable >0; -1 left, -2 right, -3 bsp, -4 del, -5 home,
-   ; -6 end, -7 quit, -8 up, -9 down, -10 buffer top, -11 buffer end;
-   ; 10 = enter.
-   ;
-   ; after `ESC [ 1` there are two shapes: `~` is plain Home; `; M F`
-   ; carries a modifier digit M (5=ctrl, 2=shift, ...) and a final byte
-   ; F. modified Home/End jump to buffer top/end; modified arrows fold
-   ; back to plain arrow events (we don't act on the modifier).
-   ; the byte -> code tables, shared by both decoders (edesc/edev for the tty,
-   ; besc/bev for a port). ⚠ 0 is the miss, read with id?: an event code nets
-   ; RED, so truthiness cannot tell hit from miss.
+   ; 0 is the miss, read with id? -- an event code nets red, so truth cannot tell hit from miss
    arrow    {68 -1 67 -2 65 -8 66 -9 72 -5 70 -6}    ; ESC [ F -- the plain finals
    modarrow {68 -1 67 -2 65 -8 66 -9 72 -10 70 -11}  ; ESC [ 1 ; M F -- modified home/end jump the buffer
    evk      {-1 -7 4 -7 3 -12 13 10 10 10 8 -3 127 -3 1 -5 5 -6}   ; the raw control bytes
@@ -290,7 +200,7 @@
         (c = 27) (edesc 0)
         (32 <= c < 127 ? c)))
 
-   ; redraw the buffer in place. pra is rows above the cursor from the PREVIOUS
+   ; redraw the buffer in place. pra is rows above the cursor from the previous
    ; render -- move up that many first, so we land back on the prompt's row. all
    ; motion is relative, so terminal scrolling never desyncs us. pl is the prompt's
    ; column; the topmost line shares it, later lines start at column 0.
@@ -318,12 +228,6 @@
 
    ; print the prompt, then dispatch events until ^D or a submitted buffer.
    ; returns eofsym on ^D, else (vs . nhu) so the repl can thread history.
-   ;
-   ; kloop wraps the CPS helpers for non-mutating motion; kedit does
-   ; the same for mutating ops (backspace, delete) and applies detach
-   ; on the way. khist is the continuation used by uphist/downhist
-   ; for history navigation. cur is the pristine frame of the
-   ; currently-recalled entry, or () if the buffer is a free edit.
    (edline hu hd)
      (: pr ps1
         _ (puts ps1c)
@@ -334,16 +238,12 @@
              (kloop uu lz rr dd) (loop npra uu lz rr dd hu hd cur)
              (kedit uu lz rr dd) (loop npra uu lz rr dd (detach hu cur) hd ())
              (khist uu lz rr dd nhu nhd ncur) (loop npra uu lz rr dd nhu nhd ncur)
-             ; the dispatch stays a CHAIN, not a table: every arm runs a different
+             ; the dispatch stays a chain, not a table: every arm runs a different
              ; continuation over the live buffer, so a table would hold closures
              ; built per keystroke. the tables above work because their arms are constants.
              (edev 0 @
               -7 eofsym
-              ; enter CASHES the buffer wherever the cursor sits, as long as it parses
-              ; complete; only an unfinished shape splits the line at the cursor and keeps
-              ; editing. on submit the buffer goes to the END of history (the zipper re-merged
-              ; in original order -- an edited recall's pristine original was already restored
-              ; by detach at the first edit), capped at 100 entries.
+              ; enter cashes the buffer as long as it parses complete
               10 (parseall (flatten u l r d) @
                   ^m (loop npra (rev l >< u) () r d (detach hu cur) hd ())
                   vs (two? d ? (csi (tally d) 66) (),
@@ -367,12 +267,7 @@
               (loop npra u l r d hu hd cur)))
         (loop 0 () () () () hu hd ()))
 
-   ; evaluate a single parsed datum cooperatively. (ev v) is spawned as a
-   ; worker; the main task polls done?/key? and yields. on Ctrl+C (byte 3)
-   ; the worker is killed; any other byte is silently dropped (matches most
-   ; shells). prints the result (or ^C) before returning -1; caller adds
-   ; the trailing newline. a worker that scares is terminated by the default
-   ; help and landed? flips, so the repl survives evaluation errors by construction.
+   ; evaluate a single parsed datum cooperatively.
    (do_eval v)
      (: pid (twirl ev v)
         (poll _)
@@ -388,92 +283,25 @@
     (edline hu hd @ ^eofsym 0
                     (vs >< nhu >< nhd) (each vs (\ v (do_eval v, putc 10)), repl nhu nhd))
 
-   ; welp -- the floor handler, help that has given up: answer the zero point,
-   ; whatever the condition. this is the fromempty the introductions (scare,
-   ; missing) never named: from any condition, a value -- and the value of the
-   ; absorbed condition is the point, the held inhabitant of nothing, so
-   ; (i love you) stays 1. any policy that runs out of cases delegates here:
-   ; (\ a b (? (mine? a) .. (welp a b))).
+   ; no-op () returning scare handler
    (welp a b) ()
 
-   ; the face a raise wears -- ;; a b -- ⚠ ON ERR: a DIAGNOSTIC, and a script's stdout is the
-   ; script's (the C print this stands in for always went there). the two defaults share it and
-   ; differ only in WHAT SURVIVES: at the PROMPT every raise welps to the point (a unit -- a
-   ; number would exponentiate) and the session reads on, where in FILE MODE nobody is listening
-   ; and every scare is TERMINAL -- a deliberate one (239 sites lean on that) and a missing name
-   ; alike, since the point a missing answers is a fake result wearing a real one's face.
-   ; ⚠ file-help welps AFTER the quit, and that line is not dead: a frontend with no `quit`
-   ; nif (wasm) folds the name to the point at this define, so (quit 1) is a no-op there and
-   ; the floor is what answers. never let the quit be the answer -- it would be 1.
+   ; the face a raise wears -- ;; a b
    (hface a b) (say err ";; ", print err a, say err " ", print err b, put err 10)
    (shell-help a b) (hface a b, welp a b)
+   ; the welp after the quit is not dead -- a frontend with no quit nif folds it, and welp answers
    (file-help a b) (hface a b, quit 1, welp a b)
 
-   ; INSTALLED AT LOAD, not at the prompt: file mode is where nobody was listening. an unbound
-   ; global already surfaced from C, a `:` read before its pin did not, and both answer the zero
-   ; point -- a typo reads () and (() x) is 1, a fake result wearing a real one's face.
-   ; (heard ()) is the live read of the installed help (the hot_help slot), so the
-   ; question is what it IS, not whether it is there -- and an already-heard help
-   ; (a frontend's own) is respected, never clobbered.
    _ (!(heard ()) ? (hear file-help))
-   ; ⚠ raw the tty BEFORE reading: the editor is the sole echo, so cooked-mode echo
-   ; must be off or every line doubles.
    (shell _)
     (hear shell-help,             ; the prompt survives every raise; a script must not
      raw 1,
      puts $ ";3 love " love-version "\n",
      repl 0 0)
 
-   ; --- the host-only pty wrapper (wrap) ---
-   ; reachable from the bao prompt to pty-wrap a host program -- (wrap (L
-   ; "python3")). it uses the pty nifs (ptyrun, gather) which live in host/posix.c
-   ; and are NOT present in love0 or the kernel -- there tether/gather are the
-   ; want-stubs, so (wrap ..) answers a clean (). it drives the real in/out tty
-   ; fds, so it is exercised manually.
-
-   ; pump bytes from port `src` to port `dst`, one at a time, until src hits EOF
-   ; (see -> -1); flush after each byte keeps the far side prompt. (Same shape as
-   ; ain's pump -- prel stays socket/pty-free, so each app carries its own.)
-   (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
-
-   ; poll a non-blocking (gather pid) to its exited PAIR. the pair is told from
-   ; still-running (0) STRUCTURALLY (two?), never by net: the status pair (0)
-   ; nets blue, so ! / nil? can't tell it from 0 -- only two? can.
-   (waitfor pid) (: s (gather pid) (two? s ? s (0 = s) (rest 2, waitfor pid) s))
-
-   ; (wrap argv) -- run argv on a fresh pty and become a TRANSPARENT bidirectional
-   ; pump: stdin -> the child, the child's output -> stdout, both live at once
-   ; (the two pumps park on different fds and interleave through the cooperative
-   ; scheduler). the teardown is ASYMMETRIC: a wrapped process can exit while stdin
-   ; is still open, so the child's death is the primary signal -- master->stdout runs
-   ; HERE and ends on master EOF; the stdin->master side runs in `up` and, on the
-   ; user's own EOF, forwards VEOF (byte 4) so a canonical child exits. when master
-   ; EOF lands, join `up` -- wait if it already finished, else chill it (the child is
-   ; dead, so dropping pending input is right). returns the exited status pair, or
-   ; the errno fixnum on hatch failure.
-   (wrap argv) (: r (tether argv) (atom? r ? r (:
-    pid <r m >r
-    up (twirl (\ _ (pump in m, put m 4)) 0)   ; stdin -> child; VEOF on user EOF
-    (pump m out,
-     landed? up ? (catch up) (freeze up),
-     flush out,
-     close m,
-     waitfor pid))))
-
-   ; --- the raw-line editor (bao's own line reader) ---
-   ; repl's `edline` is wrong for wrapping a host program: it parses the buffer
-   ; as love forms (submits only when it reads complete) and prints its own `> `. a
-   ; wrapped program (bash, python) wants the RAW bytes, submitted on Enter no
-   ; matter what. So bao reads its own line -- reusing the PURE zipper primitives
-   ; (edleft/edright/edbsp/eddel/edhome/edend/revcat/edrender, all in/out-free for
-   ; the logic), but with PORT-PARAMETERIZED event decode so the input is any
-   ; port: `in` for the tty, a (tap ..) for tests. bev/besc/besc1 are
-   ; edev/edesc/edesc1 reading (see ip) instead of the global getc.
-   ; ⚠ `@` COSTS mps2 + teensy41 A LIB ROW EACH: bao's `use` lands after the mop, so the
-   ; macro has to be live as a MODULE there, not just ridden in on the post text.
    (besc1 ip c)
     (c @ 126 -5                               ; a line reader never jumps the buffer:
-         59  (see ip, peep arrow (see ip) 0)) ;   the PLAIN finals
+         59  (see ip, peep arrow (see ip) 0)) ;   the plain finals
    (besc ip) (see ip != 91 ? 0
     (: c (see ip) e (peep arrow c 0)
      (? !(id? e 0) e
@@ -482,20 +310,15 @@
            (52 || 56) (see ip, -6)
            51        (see ip, -4)
            0))))
-   ; ⚠ THE `see` COMES FIRST and exactly once: evk is indexed BY the byte, so a walk that
-   ; peeps before it reads has nothing to peep with.
+   ; the `see` comes first and exactly once -- evk is indexed by the byte, so peeping before
+   ; reading has nothing to peep with
    (bev ip) (: c (see ip) e (peep evk c 0)
                (? !(id? e 0) e
                   (c @ 27 (besc ip)
                        9  -13          ; Tab -> the completion event (edlnc's; others ignore)
                        (32 <= c < 127 ? c))))
 
-   ; (edraw ip pr) -- read ONE line off port `ip`, with in-line editing, prompt pr
-   ; echoed to out. Enter submits the raw line (its bytes, in order); ^D / port EOF
-   ; returns eofsym. single line, no history, no parseall -- the text goes straight
-   ; back to the caller (bao's wrapper feeds it to a child). the buffer is the
-   ; (l . r) halves of the zipper with the line count (u d) pinned empty, so the
-   ; single-line primitives drive it unchanged.
+   ; (edraw ip pr) -- read one line off port `ip`, with in-line editing
    (edraw ip pr)
      (: pl (tally (puts pr))
         (loop l r)
@@ -514,25 +337,7 @@
             (loop l r)))
         (loop () ()))
 
-   ; --- the shell line reader: edraw + command history -------------------------
-   ; edraw is historyless; a command shell (lush, crew/lush/) wants up/down recall. edln
-   ; keeps a flat history -- past lines as charlists, most-recent first -- and an
-   ; index i into it: i = 0 is the live draft (saved in `draft` the instant up
-   ; leaves it), i = k recalls the (k-1)th entry. up steps older, down newer;
-   ; editing a recall just edits the buffer (i and hist untouched), so the original
-   ; survives and the EDITED line is what Enter records on front.
-   ;
-   ; (edln ip pr hist) -> 'eof at ^D / port EOF, else (line . nhist): the raw line
-   ; (a charlist) and hist with the line pushed on front (blank lines dropped,
-   ; capped at 100). thread nhist back in for recall across commands.
-   ;
-   ; (edlnc ip pr hist comp) is edln + Tab completion: comp takes the text LEFT
-   ; of the cursor (a charlist, in order) and answers (insert . candidates) --
-   ; insert lands at the cursor (a charlist), candidates (strings) print under
-   ; the line when there is more than one way forward, then the renderer
-   ; re-prompts fresh (pra 0: the prompt row is wherever we are). comp ()
-   ; disables the key -- edln IS edlnc with no comp, so every old consumer
-   ; rides unchanged.
+   ; the shell line reader: edraw + command history
    (edlnc ip pr hist comp)
      (: pl (tally (puts pr)) hn (tally hist)
         (hnth k) <(drop k hist)                       ; hist[k], 0-based (k < hn)
@@ -576,11 +381,7 @@
 
    ; (bao a) -- the interactive entry the host frontend launches. `(bao 0)` is
    ; exactly the baked shell (an arg is taken: love has no nullary calls).
-   ;
-   ; `(bao 'parts)` is the TEST DOOR: an opaque accessor over the editor primitives,
-   ; the same shape `from` hands back for a module. the battery writes against it, so
-   ; the CHECKS live with the tests while the NAMES stay closure-private, off the
-   ; book. the tablet is built ON THE CALL, so a shell that never asks never pays.
+   ; the test door -- test/host/baotest.l writes against these, so the names stay closure-private
    (bao a) (a @ 'parts
               {'edleft edleft 'edright edright 'edbsp edbsp 'eddel eddel
                'edhome edhome 'edend edend 'edtop edtop 'edbot edbot
@@ -591,19 +392,5 @@
               (shell ()))
 
 
-   [shell welp edraw wrap bao edln edlnc])
-
-;;; FIXME no other file in the codebase that exports names this way
- shell <_
- welp  <>_
- edraw <>>_
- wrap  <>>>_
- bao   <>>>>_
- edln  <>>>>>_
- edlnc <>>>>>>_)
-
-; bao.l is DEFINE-ONLY -- loading it (egg-bake or `-l love/bao.l`) installs the shell
-; core but does NOT launch. The frontend launches: host/main.c evals `(bao 0)` on a
-; tty (so `love` on a terminal is the bao shell), a pipe stays the bare stdin runner
-; `(reads in)`, and the kernel calls `(shell 0)`. Define-only is what makes bao
-; loadable for tests (load the defs, read piped forms with the bare reader).
+)
+) ; module bao

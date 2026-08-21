@@ -635,7 +635,12 @@
            (: pre ((tally c) - 5)
               (? ((pre < 0) || !(rvb-fits? (rel - pre))) ()
                  (rv-shorten c (at ins 2) (rel - pre)))))))
-   _ (pin rv 'nop '(19 0 0 0))                 ; the ('align n) filler unit: NOP 00000013 LE
+   ;; the ('align n) filler unit: C.NOP 0001 LE. TWO bytes, not the wide nop's four -- pad-to
+   ;; cycles ONE unit and lays a partial one at the end, and a compressed instruction puts the
+   ;; next address at 2 mod 4, where a torn wide nop leaves 0013: low bits 11, so a decoder
+   ;; reads it as a 32-bit opcode and swallows the instruction after the pad. thumb2 pads with
+   ;; its 16-bit nop for the same reason. c.nop tiles every even count exactly.
+   _ (pin rv 'nop '(1 0))
    _ (defbackend 'riscv64 rv)
    _ (defbackend 'rv64 rv))
 ) ; module 'holo

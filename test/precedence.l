@@ -44,6 +44,16 @@
  ((opfix '(x @ p1 b1 p2 b2)) = '(@ x p1 b1 p2 b2))  ; @ likewise: the scrutinee left, the clauses flat
  ((opfix '(f y z @ p b)) = '(@ (f y z) p b))        ; ..and the whole leading span is the scrutinee -- no parens owed
  ((opfix '(c ? x @ p b)) = '(? c (@ x p b)))        ; equal band, right hand: the inner clause form folds first
+ ((opfix '(c ? a x @ p b)) = '(? c a (@ x p b)))    ; ..so a match nests in a cond's ELSE ..
+ ((opfix '(x @ p c ? a b)) = '(@ x p (? c a b)))    ; ..and a cond in a match's ARM. EQUAL is the fixed point:
+                                                    ;   ranking either one over the other breaks the other line
+ ; ⚠ an n-ary form takes everything after it, so a clause form inside ANOTHER OF ITS OWN kind owes
+ ; parens -- no band can help, the two are one operator. cond survives it, a nested ? meaning what the
+ ; flat one means; MATCH DOES NOT, the inner one eating arms that belonged to the outer.
+ ((opfix '(x @ p1 y @ q c p2 b2)) = '(@ x p1 (@ y q c p2 b2)))
+ ((opfix '(x @ p1 (y @ q c) p2 b2)) = '(@ x p1 (@ y q c) p2 b2))
+ ((opfix '(c1 ? a1 c2 ? a2 e)) = '(? c1 a1 (? c2 a2 e)))
+ (7 = (0 ? 1 1 ? 7 9)) (7 = (? 0 1 1 7 9))         ; ..the cond equivalence, by value
  ((opfix '(x @ p b $ y)) = '($ (@ x p b) y))        ; $ is looser, so it folds the whole match and takes it
  ((opfix '(c ? a + b)) = '(? c (+ a b)))            ; ⚠ an n-ary frame yields its last RIGHT operand to a tighter op
  ((opfix '(? c a b)) = '(? c a b))                  ; ..and the prefix spelling is untouched, a fixed point as ever
@@ -166,14 +176,14 @@
  ; --- the GLUED lane through the same door: arity 0, where a row is the WORD the sigil names.
  ; one nom lives in as many lanes as it has faces, and `?` is the pair:
  ; `bit` glued, cond spaced -- the valence law as two keys of one table. ---
- (: r (grip 0 '? ()) _ (grip 0 '? r) (r = 'bit))  ; a clear-and-restore is the non-destructive READ
+ (: r (grip 0 '? ()) _ (grip 0 '? r) (opnom r = 'bit))  ; a clear-and-restore is the non-destructive READ
  ; ⚠ the fixture needs a sigil whose GLUED row is empty -- `was = ()` is half the law. it was
  ; `^` until ^ became jot; `&` and `=` are what is left free. fill one and move this.
  (: was (grip 0 '& 'cup)                            ; coin a glued sigil ..
     tree (opfix '&x)
     _ (grip 0 '& was)
     (&& (was = ()) (tree = '(cup x))))                 ; .. it factors, then clears
- ((opfix '?5) = '(bit 5))                             ; the glued lane survived intact
+ ((unglue (opfix '?5)) = '(bit 5))                    ; the glued lane survived intact
 
  ; --- && / || stay lazy: the macro rides ?/: , so the right arm never fires when the left decides it.
  ; a mutable tablet witnesses the non-evaluation (kept LOCAL in a body-having `:`). ---

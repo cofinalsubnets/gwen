@@ -128,28 +128,6 @@ flagging them is the point.
 comments and strings are not code and are skipped; a quoted `'foo` names `foo`
 just as much as bare `foo` does, so it counts.
 
-**shadow** (off by default) -- a binding of one of the dozen words a glued row
-(`operators` at arity 0) names: `cap cup net prod abs negate reciprocal fraction bit saturate nil?
-dot`. a glued sigil factors to one of these and then resolves like any other
-name, so `(: net (a + b) .. )` quietly re-aims every `+x` in its scope. rare,
-real, and silent -- which is the whole case for saying it at the binding. it
-**reserves nothing**: the rule speaks, the binding stands.
-
-it catches a plain `:` binder name and a `\` param. two things it does not:
-
-- a **bare-name body** over-fires. `(: net 5 net)` warns twice, once for the
-  binding and once for the body, because which element is last is not known
-  until the closer. a body that is a bare monadic name is rare enough to pay
-  one line for.
-- the **sugar header** `(: (bit x) ..)` warns and the far commoner body call
-  `(: a 1 (bit x))` does not, though at token time they are the same shape.
-  the verdict defers to the binder's closer, where the final count is known and
-  the body is the last element -- the singleton rule's machinery run the other
-  way round.
-
-on this tree the rule finds 20 bindings across 332 files, and they are real
-ones (`abs` in `lush/glob.l`, `dot` in `cook.l`, `net` in `moon/gen.l`).
-
 ## the config
 
 settings live in two files, read in this order, the second overlaying the first:
@@ -167,20 +145,19 @@ person, which is why the project file exists at all.
 ```love
 ; ~/.love/etc/libra.l -- or ./.libra.l
 (singleton 0)                                    ; turn the rule OFF (on by default)
-(shadow 1)                                       ; ...and the sigil-word rule
 (deprecated old-thing (worse-thing "use better-thing"))
 (strict singleton)                               ; ...and make it fail the gate
 ```
 
-⚠ `singleton` and `shadow` are read with `salt-one`, never by PRESENCE: the tail
-of `(singleton 0)` is `two?` just as much as `(singleton 1)`'s is, so asking
-whether the key is there would read an explicit OFF as an on.
+⚠ `singleton` is read with `salt-one`, never by PRESENCE: the tail of
+`(singleton 0)` is `two?` just as much as `(singleton 1)`'s is, so asking whether
+the key is there would read an explicit OFF as an on.
 
 a setting is one form: the head names it, the tail is its value. an entry in the
 roster is a bare name or a `(name "hint")` pair, and the hint is printed after
 the name. a repeated key REPLACES rather than appends -- one line, one answer.
 
-**the rules only SPEAK.** singleton, shadow and deprecated print, and the editor
+**the rules only SPEAK.** singleton and deprecated print, and the editor
 underlines them, but `libra` still exits 0 -- so turning a rule on can never
 redden a tree that was green. `(strict <rule>)` promotes one when a project has
 actually finished with it. balance is always fatal; a tab never is.
@@ -229,3 +206,28 @@ the environment rather than by the seat walk. the module walk still reads none.
 `lib/lint.l` takes a plain tablet and reads it with `peep`; it does NOT depend
 on salt, because vi cats that file directly and a module it had to carry along
 would break the cat. salt fills the tablet, lint only reads it.
+
+## the indent plan, and the width guard that was refused
+
+`lint-lay` aligns a continuation line under its form's first operand, or one past
+the open delimiter when the head stands alone on its line. `:` and `?` take their
+operands two at a time -- name/value, test/result -- and the house sets the second
+of each pair one space past the first, so a value is never mistaken for another
+name at a glance. Every other form aligns its operands flat.
+
+A **width guard** over that rule was tried and pays nowhere. The idea: cap the
+alignment, so a first operand sitting far to the right falls back to one past its
+own open paren (black's bargain), on the theory that it would rescue the hand-laid
+hanging files. Measured over the tree at thresholds 24/32/40/56:
+
+| | changed lines, before -> after |
+|---|---|
+| `love/ev.l` (hanging) | 494 -> 506 |
+| `test/holo/golden.l` (hanging) | flat |
+| `crew/libra/libra.l` (well laid) | 7 -> 22 |
+| `lib/lint.l` (well laid) | 1 -> 4 |
+| tree-wide churn | 12591 -> 16448 |
+
+The hanging files barely move, because their authors broke to a column *left* of
+the enclosing paren, which no cap-and-fallback reproduces; every well-laid file
+gets worse. Alignment it is. Do not re-add the guard without new evidence.

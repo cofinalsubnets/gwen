@@ -3,39 +3,25 @@
 ;   love serve [-p PORT] [DIR]      DIR defaults to the working directory
 ;
 ; kiosko already serves a directory and lists what it holds. what this adds is one
-; HOOK, and three answers through it:
+; hook, and three answers through it:
 ;
-;   *.l        the PAINTED source -- syntax coloured, one span per line, every
+;   *.l        the painted source -- syntax coloured, one span per line, every
 ;              line linkable (lib/hueweb.l)
-;   *.l.md     that file's HEADER COMMENT as a document -- libra lifts it, lapiz
+;   *.l.md     that file's header comment as a document -- libra lifts it, lapiz
 ;              shows it, and the two pages link to each other
-;   *.md       the RENDERED document -- markdown through lapiz's html surface
+;   *.md       the rendered document -- markdown through lapiz's html surface
 ;   /hue.css   the stylesheet that colours both
 ;
-; everything else is kiosko's ordinary static serving, directory listings and all,
-; which is where the tree structure comes from. nothing is written to disk and
-; nothing is generated ahead of time.
+; everything else is kiosko's ordinary static serving, directory listings and all.
+; nothing is written to disk and nothing is generated ahead of time -- a page is
+; built at request time and held in a box until its file's stamp moves.
 ;
-; ⚠ NO papel HERE, so a rendered .md is the DOCUMENT and not a site page: no
-; title, no anchors, no contents nav, no cross-link rewriting -- those are papel's
-; site-level readings and papel is not in the artifact. `make site` is still what
-; builds a site. this is what a browser wants of a tree it is reading.
+; no papel here, so a rendered .md is the document and not a site page: no title,
+; anchors, contents nav or cross-link rewriting. `make site` still builds a site.
 ;
-; ⚠ NOTHING IS CHECKED IN AND NOTHING IS CACHED TO DISK. a painted file is built
-; at request time, ~35 ms for the biggest crew file and under 10 for a typical
-; one, and then held in a box keyed by the file's mtime and size -- so the second
-; request is free and an edit invalidates its own page. a tree of painted html in
-; git would be a copy that rots; this is the same bytes, made when asked.
-;
-; ⚠ IT READS kiosko AND hueweb BARE, for the reason lib/hueweb.l reads hue bare:
-; in the artifact they are CATTED, not registered as modules, so an accessor would
-; answer () -- and a () applied to operands is 1, which is truthy. bare resolves
-; down the splice in both worlds.
-;
-; ⚠ IT IS THE ARTIFACT'S OWN ERRAND. hue.l, config.l and kiosko are already in
-; crew/build.mk's distfiles, so the seed carries everything this needs -- which is
-; why the painter (lib/hueweb.l) borrows no template from papel, which is not in
-; there. `love serve` on a seed binary with nothing else on the box is the point.
+; kiosko, hueweb, lapiz and libra are read bare, never through `from`: in the
+; artifact they are catted rather than registered, so an accessor would answer (),
+; and () applied to operands is 1 -- a miss that reads as success.
 (:
    (sv-nth l k) (? (k = 0) <l (sv-nth >l (k - 1)))
    (sv-ends? s t) (: n (tally s) m (tally t) ((m <= n) && (snip s (n - m) n = t)))
@@ -45,10 +31,7 @@
                 (g k r) (? (k < n) (g (k + 1) (? (p k = 47) (k + 1) r)) (snip p 0 r))
                 (g 0 0))
 
-   ; the stamp a cache entry is keyed by: an edit that changes neither mtime nor
-   ; size is an edit nobody can see anyway (papel's fingerprint takes the same bet,
-   ; and for the same reason -- the alternative is re-reading the file to decide
-   ; whether to re-read the file).
+   ; the cache key: an edit that moves neither mtime nor size is one nobody can see
    (sv-stamp p) (: st (stat p) (? (two? st) (<>st + <st * 7) 0))
 
    ; ..and the box it lives in: `(stamp html) per path, replaced when the stamp moves.
@@ -60,33 +43,24 @@
             _ (pin box p `(k h))
             h)))
 
-   ; the nav line every page wears: back to the directory, then across to the
-   ; other reading of the same file. `alt` is `(href text) or ().
+   ; the nav line every page wears: up to the directory, across to the file's
+   ; other reading. alt is `(href text), or () where there is no other reading.
    (sv-nav path alt)
    ("<p class=\"srcnav\"><a href=\"" + sv-up path + "\">" + sv-up path + "</a> &middot; " + path
     + (? (two? alt) (" &middot; <a href=\"" + <alt + "\">" + <>alt + "</a>") "") + "</p>\n")
    (sv-page path body alt) (hw-page path '("/hue.css") "/" (sv-nav path alt + body))
 
-   ; the page for one markdown file: lapiz reads it and shows it as html, and the
-   ; same small template holds it. ⚠ `mdread`/`htshow` BARE, for the reason kiosko
-   ; and hueweb are bare -- in the artifact lapiz is catted, not registered.
+   ; one markdown file: lapiz reads it, shows it, the same template holds it
    (sv-doc path src alt) (sv-page path (htshow (mdread src)) alt)
 
-   ; ..and the header of a .l as a document: libra lifts it (it reads .l, which is
-   ; libra's beat and nobody else's), lapiz shows it. ⚠ `ldoc-md` BARE -- libra is
-   ; catted into the artifact, not registered, the same as kiosko and lapiz.
-   ; an empty answer is a file with no header, and it says so rather than serving a
-   ; blank page.
+   ; ..and a .l's header as a document: libra lifts it, lapiz shows it
    (sv-head path src)
    (: md (ldoc-md src)
       (? (0 < tally md) ("# " + path + "\n\n" + md)
          ("# " + path + "\n\nthis file has no header comment.\n")))
 
-   ; THE HOOK. `(ctype body) to serve, () to say "not mine" -- and everything that
-   ; is not a .l, a .md or the stylesheet is exactly that.
-   ; ⚠ THE ORDER IS `.l.md` FIRST, and it has to be: that path ends in `.md` as
-   ; much as it ends in `.l.md`, and the file it reads is the .l with the suffix
-   ; taken back off. every other suffix test would claim it first.
+   ; the hook: `(ctype body) to serve, () to say "not mine". `.l.md` is tested
+   ; first because that path ends in `.md` as much as it ends in `.l.md`.
    (sv-make root box p)
    (: hd? (sv-ends? p ".l.md")
       md? (sv-ends? p ".md")
@@ -126,16 +100,14 @@ a .l is painted, a .md rendered, and x.l.md is x.l's header as a document.
       c (loop as 8080 ".")
       port <c
       dir <>c
-      ; ⚠ BARE, never (from 'kiosko ..). in the artifact kiosko is CATTED, not
-      ; registered, so the accessor answers () -- and () applied to five operands is
-      ; 1, which is truthy, so the miss would read as a server that started and the
-      ; command would just exit 0. bare resolves down the splice either way.
+      ; bare, never (from 'kiosko ..) -- a `from` miss here answers () and reads as
+      ; a server that started, so the command would exit 0 having listened on nothing
       _ (? (serve5 dir port 0 () (\ p (sv-make dir box p))) 0
            (: _ (say err ("serve: cannot listen on :" + show port)) _ (put err 10) (quit 1)))
       (quit 0))
 
-   ; the verb, and the seat: `love serve ..` on the artifact, or this file named on
-   ; a command line. kiosko's own shape, and the reason `serve` needs no script.
+   ; the verb, and the seat (kiosko's shape): `love serve ..` on the artifact, or
+   ; this file named on a command line, and neither needs a script
    _ (pins (from 'verbs 'tab) 'serve serve-main)
    s ((from 'verbs 'fire) ["serve" "serve.l"])
    _ (? (two? s) (serve-main >s) ()))

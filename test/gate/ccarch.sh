@@ -54,13 +54,13 @@ case $arch in
            ccnames="aarch64-linux-gnu-gcc aarch64-nerves-linux-gnu-gcc"
            ccglob="/usr/local/data/*/.nerves/artifacts/nerves_toolchain_aarch64*/bin/aarch64-nerves-linux-gnu-gcc"
            ccvar=AARCH64_CC
-           unsupported="100-complex 102-bigstruct 111-int128 117-vastruct" ;;
+           unsupported="100-complex 102-bigstruct 117-vastruct" ;;
   riscv64) name=test_ccriscv ; qemu=qemu-riscv64 ; pretty=riscv64
            ccenv=${RISCV64_CC:-}
            ccnames="riscv64-linux-gnu-gcc riscv64-unknown-linux-gnu-gcc riscv64-unknown-elf-gcc"
            ccglob=""
            ccvar=RISCV64_CC
-           unsupported="100-complex 101-vla 102-bigstruct 111-int128 117-vastruct" ;;
+           unsupported="100-complex 101-vla 102-bigstruct 111-int128 117-vastruct 151-w128fuzz" ;;
   *) echo "ccarch.sh: unknown target $arch" >&2; exit 1 ;;
 esac
 

@@ -673,7 +673,7 @@
    (dbabs x) (? !(dcheap? x) `('abs x) `('? `('< x 0) `('- 0 x) x))                       ; (abs x) = (? (x < 0) (0 - x) x)
    (debool e)                                                                                   ; recursively lower &&/||/abs to ?
     (? (atom? e) e  (dquote? e) e
-       (: y (map debool e) h <y as >y                                                 ; lower operands first (bottom-up)
+       (: y (map debool e) h (opword <y) as >y                    ; lower operands first (bottom-up); opword names a glued VALUE head
           (? (id? h '&&) (dband as)  (id? h '||) (dbor as)
              (id? h 'abs && 1 = (tally as)) (dbabs <as)  y)))
    ; --- SPECIALIZATION (autospec): mix (doc/proto/mix.l, the offline partial evaluator) wired in as a
