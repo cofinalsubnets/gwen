@@ -1058,7 +1058,6 @@ static void major_run_finalizers(struct ai *g, struct ai_gcx *X) {
 // cheney scan starts at the append point, walking only fresh survivors; X.fwd
 // tells a forward made THIS collection from a pointer to a pre-existing major object.
 static void gen_minor(struct ai *g) {
- ai_image_note(0x33);
  struct ai_gcx X = { .p0 = (word const*) g->end, .t0 = g->hp,    // minor from-range
                      .to_lo = g->major_base, .to_hi = g->major_base + g->major_len,
                      .fwd = g->major_hp, .cp = g->major_hp };
@@ -1114,7 +1113,6 @@ static void gen_minor(struct ai *g) {
 // spare half -- reachability, never a linear sweep, which is why a rem-set overflow
 // forces one. then rebuild the intern map, run finalizers, flip, reset the minor.
 static struct ai *gen_major(struct ai *g) {
- ai_image_note(0x34);
  struct ai_gcx X = { .p0 = g->major_base, .t0 = g->major_hp };   // from-range 1: major active
  // size the to-space for the worst case: all of major-active AND all of the minor survive
  uintptr_t used = (uintptr_t)(g->major_hp - g->major_base), young = (uintptr_t)(g->hp - (word*) g->end);
@@ -1239,7 +1237,6 @@ static struct ai *gen_grow(struct ai *g, uintptr_t len1) {
 // the GC entry: a MINOR unless the rem set overflowed or the major lacks headroom --
 // then a MAJOR. afterwards size the minor by appel's rule against the budget.
 static struct ai *gen_please(struct ai *g, uintptr_t req0) {
- ai_image_note(0x32);
  uintptr_t seen_young = (uintptr_t)(g->hp - g->end);
  uintptr_t major_free = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);
  g->since_major += seen_young;                                  // young allocated (∝ scanned) since the last major
@@ -4002,9 +3999,7 @@ static char const evfold[] = "((:(e a b)(? b(e(ev 'ev(cap b))(cup b))a)e)0)";
 // every top-level form of a text, evaluated in order -- the frontends' door for
 // a boot tail, a CLI driver, a corpus runner.
 ai_noinline struct ai *ai_evals_(struct ai *g, char const *s) {
- ai_image_note(0x20);
  g = readtext(g, s);
- ai_image_note(0x22);
  return applyq(g, evfold); }
 
 // the egg takes TWO corpora: `corpus` is sat twice (ev compiles itself), `post`
@@ -5395,7 +5390,6 @@ void *ai_image_save_over(struct ai *g, uintptr_t *outlen, struct ai_image_guard 
 // the image-wake progress hook: weak no-op, overridden by a port bringing the
 // wake up on new metal (a crashed wake with no debugger is otherwise invisible).
 // stages: 1 header, 2 pool, 3 blob, 4 the token stream expanded, 0x100+k walk (per 64K words), 5 walk, 6 roots.
-__attribute__((weak)) void ai_image_note(uintptr_t stage) { (void) stage; }
 // the wake, over a stream that may carry more than this image: `buf` holds the header,
 // dictionary and token stream to read, and `Hw` is the header to wake with -- the same one
 // for a plain image, the derived record's for a prefix of it. `patch` names the prefix
@@ -5414,7 +5408,6 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
  // reserved section and a file may carry a shebang, so "the rest of what you handed me" is
  // the one reading that would make a good image look foreign and fall silently back to the egg.
  if (len < sizeof S + db + ns) return NULL;                       // truncated buffer
- ai_image_note(1);
  struct ai *g = ai_ini_m(al);
  if (!g) return NULL;
  if (nw > g->major_len) {                                // grow the major pool to fit the image
@@ -5430,9 +5423,7 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
  }
  word *base = g->major_base;
  if (!base) return NULL;
- ai_image_note(2);
  g->major_hp = base + nw;
- ai_image_note(3);
  // ⚠ THE CHECK IS A DISTANCE, NEVER TWO ADDRESSES, and that is the last thing between a
  // bake and a hash anyone can check: the two symbols shift together under ASLR, so storing
  // where they LANDED wrote this run's mmap base into the header and two bakes of one tree
@@ -5463,7 +5454,6 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
   uintptr_t ix = (uintptr_t) patch[2 * i];
   if (ix >= nw) return NULL;
   base[ix] = (word) patch[2 * i + 1]; }
- ai_image_note(4);
  word const *src = base;
  for (uintptr_t off = 0; off < nw; ) {
   uintptr_t sz;
@@ -5489,7 +5479,6 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
    base[off + k] = (word) p + ai_thread_tag;                                      // the terminator, decoded by hand: its head went live
    sz = k + 1; }
   off += sz; }
- ai_image_note(5);
  uintptr_t nv = (word*) g->end - (word*) &g->v0;                         // same struct/binary (anchor-checked) -> same layout
  if (H.nroot != 2 + nv) return NULL;                                     // root count mismatch -> stale/foreign image -> normal boot
  g->symbols = image_root_dec(H.root_tag[0], H.root_val[0], base);
@@ -5500,7 +5489,6 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
  for (uintptr_t i = 0; i < nv; i++) ((word*) &g->v0)[i] = image_root_dec(H.root_tag[2 + i], H.root_val[2 + i], base);
  g->next_serial = H.next_serial;
  g->hot_io = zero;   // ⚠ a worn port names an fd, which means nothing in a new process -- a woken task wears the console (the parked ring's rule)
- ai_image_note(6);
  // sp stays at ai_ini's topof(g) (empty AI stack); the dispatch re-establishes ip
  g->major_live0 = nw, g->since_major = 0;
  g->sym_raw = true;   // the map arrives as the image left it; a major must re-home it first

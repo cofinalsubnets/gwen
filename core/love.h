@@ -411,7 +411,6 @@ struct ai
 // the heap-image codec (stdio-free): save compacts g and serializes into a fresh
 // g->alloc'd buffer; load reconstructs a fresh g, or NULL on any mismatch (the
 // caller boots normally). buffer-based so a freestanding frontend needs no filesystem.
-void ai_image_note(uintptr_t stage);   // wake-progress hook, weak no-op; a port bringing the wake up on new metal overrides it
 // a kept ABSOLUTE only survives a wake if it aims inside the binary's own load segments
 // (one ASLR delta shifts them all); anything else -- a JIT W^X page, an mmap, a shared
 // library -- dies with the bake process, so the dump refuses it. only the host can answer
