@@ -11,8 +11,8 @@
 ; by default -- (singleton 0) turns it off -- and this tree's ./.libra.l makes it
 ; STRICT: the gate is no gripes, and a gripe is fixed BY HAND, never auto-applied
 ; -- (f) == f is false for a macro head and for a match pattern, and no scanner
-; can know which is which. the other OPINION rules (shadow, the deprecated
-; roster) are off until a config asks. see doc/libra.md.
+; can know which is which. the OPINION rule (the deprecated roster) is off
+; until a config asks. see doc/libra.md.
 ;
 ; usage:  libra FILE ..      weigh them: balance is the DEFAULT verb, so a bare
 ;                            file list is the whole command
