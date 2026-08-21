@@ -129,9 +129,15 @@
                               (tally (toks (nthl fs 1))) (has? <m "(bad)")] >< acc)))))))
      (go (lines (rdf (tmpd + "/.fuzz.out"))) ()))
 
- ; arm64/riscv: llvm-mc --disassemble; fixed 4-byte insns, so count*4 must equal the
- ; byte count -- the free full-consumption check the reference carried.
- (disasm-mc hx triple mattr cmark)
+ ; arm64/riscv: llvm-mc --disassemble. a fixed-width lane gets full consumption for free
+ ; (count*4 must equal the byte count); riscv rides the C extension and is VARIABLE width, so
+ ; vw walks the stream instead -- an instruction's first byte has its low two bits set on a
+ ; 4-byte word and clear on a 2-byte one, which is the whole of RISC-V's length encoding here.
+ (rv-icount bs)
+  (: n (tally bs)
+     (go i k) (? (n <= i) k (go (i + (? (((bs i) & 3) = 3) 4 2)) (k + 1)))
+     (go 0 0))
+ (disasm-mc hx triple mattr cmark vw)
   (: _ (wrf (tmpd + "/.fuzz.in") (spaced-hex hx))
      _ (sh ("llvm-mc --disassemble --triple=" + triple + mattr + " < " + tmpd + "/.fuzz.in > " + tmpd + "/.fuzz.out 2>/dev/null"))
      (one l0 acc)
@@ -143,7 +149,7 @@
             (: ts (toks ln)
                ([(cap ts) (trim (snip ln (tally <ts) (tally ln))) 4 0] >< acc))))
      got (rev (foldl (\ a ln (one ln a)) () (lines (rdf (tmpd + "/.fuzz.out")))))
-     want (int ((tally hx) / 8))
+     want (? vw (rv-icount (hex-bytes hx)) (int ((tally hx) / 8)))
      (? ((tally got) = want) got
         (got + [["<count>" "" 4 1]])))
 
@@ -639,8 +645,8 @@
  ; ---- the lanes; the 10th column names the disassembler a lane needs ----
  arches
   [["x64" 'x64 gens-x64 (\ hx (disasm-x64 hx)) ops-comma mem-x64 (\ s (abs-x64 s)) imm-x64 1 "objdump"]
-   ["arm64" 'arm64 gens-arm (\ hx (disasm-mc hx "aarch64" "" "//")) ops-arm mem-arm (\ s (abs-arm s)) imm-arm 0 "llvm-mc"]
-   ["riscv" 'riscv64 gens-rv (\ hx (disasm-mc hx "riscv64" " --mattr=+m,+f,+d" "#")) ops-comma mem-rv (\ s (abs-rv s)) imm-rv 0 "llvm-mc"]]
+   ["arm64" 'arm64 gens-arm (\ hx (disasm-mc hx "aarch64" "" "//" 0)) ops-arm mem-arm (\ s (abs-arm s)) imm-arm 0 "llvm-mc"]
+   ["riscv" 'riscv64 gens-rv (\ hx (disasm-mc hx "riscv64" " --mattr=+m,+f,+d,+c" "#" 1)) ops-comma mem-rv (\ s (abs-rv s)) imm-rv 0 "llvm-mc"]]
  (tool? t) ((sh ("command -v " + t + " >/dev/null 2>&1")) = 0)
 
  fz-n (: v ("" + getenv "FUZZ_N") (? (0 < tally v) (s2i v) 8))

@@ -964,7 +964,8 @@ endif
 # via holo (in-process), disassembled (objdump for x64, cross-read by llvm-mc; llvm-mc
 # elsewhere), decode checked against intent. fuzz.l skips a lane whose disassembler is
 # absent and exits 1 on any decode disagreement. sysdiff.l rides the same lane for the
-# SYSTEM ops, byte-exact off holo's own arm64.l tables.
+# SYSTEM ops, byte-exact off holo's own arm64.l tables, and rvc.l sweeps the riscv C
+# squeeze by EQUIVALENCE -- every compressed word against the 32-bit word it replaced.
 test_holofuzz: host
 	@echo TEST test/holo/fuzz/fuzz.l "(holo x64+arm64+riscv encoder differential fuzz)"
 	@FUZZ_N=8 FUZZ_SEED=20250717 $m test/holo/fuzz/fuzz.l \
@@ -973,6 +974,8 @@ test_holofuzz: host
 	   $m test/holo/fuzz/sysdiff.l \
 	     || { echo "FAIL sysdiff -- a holo SYSTEM encoding disagrees with llvm-mc"; exit 1; }; \
 	 else echo "  (sysdiff skipped: no llvm-mc)"; fi
+	@$m test/holo/fuzz/rvc.l \
+	  || { echo "FAIL rvc -- an RVC squeeze changes what the word means"; exit 1; }
 # test/uuwm.l is a COMMITTED GENERATED artifact: lux's zipper ops compiled from crew/lux/core.l
 # into uu terms (mk/tools/uuwmgen.l), so test/uuwmlaw.l proves its theorems OF THE IMPLEMENTATION
 # at corpus time. `make uuwm` refreshes it; test_uuwm regenerates and diffs.
