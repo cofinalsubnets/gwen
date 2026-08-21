@@ -4243,6 +4243,26 @@
    (reop f i9 v) (: (go e i) (? !(two? e) ()
                                 (link (? (i = i9) v <e) (go >e (i + 1))))
                     (go f 0))
+   ; the riscv slot rebase: c.ld/c.sd encode an UNSIGNED offset, so a slot read off a frame base
+   ; at the frame TOP can never wear a 2-byte form. riscv links fp at the frame BOTTOM instead
+   ; (the prologue subs BEFORE it links), which moves fp down by exactly `frame` -- so every
+   ; fp-relative displacement gains it. that is the whole pass: slots go positive, the cs
+   ; restores follow, a taken frame address stays the same address, and the epilogue's own
+   ; (lea sp fp 0) becomes the framesize hop that walks sp back up over the locals.
+   ; runs AFTER a4ize, riscv only.
+   ; ⚠ the displacement is uoff's position, NEVER bp + 1: an indexed op carries its INDEX
+   ; REGISTER there and its displacement at 5, so bp + 1 would add the frame to a register name.
+   (rvreb f i up fr)
+    (? !(two? f) f
+       ((? (i = up) (? (charm? <f) (fr + <f) (scare 'rv-slot-nonum f)) <f)
+          >< rvreb >f (i + 1) up fr))
+   (rvslots fs fr)
+    (? !(two? fs) ()
+       (: f <fs
+          bp (? (two? f) (peep a4base <f -1) -1)
+          up (? (two? f) (peep uoff <f -1) -1)
+          (link (? ((bp >= 0) && ((up >= 0) && id? (nthr f bp) 'fp)) (rvreb f 0 up fr) f)
+                (rvslots >fs fr))))
    ; the x64 frame prologue at fs's head (unframe strips it; repack requires it)
    (pro4? fs) (nthr fs 1 = '(push r4) && nthr fs 2 = '(mov r4 sp))
    (unframe g fs)
@@ -7668,6 +7688,7 @@
                        ; and there is no r3 slot: x3/r3 is caller-saved under AAPCS.
                        ((? (v6m? g) (\ ir (t16la (t16slots ir frame)))   ; v6m: fp-neg slots -> r4-positive (after a4ize), then la -> literal pool
                            (sp64? g) (\ ir (t16la ir))       ; playdate: la -> pooled ABS32 word (its loader can't relocate MOVW/MOVT)
+                           (rv? g) (\ ir (rvslots ir frame))  ; riscv: fp-neg slots -> fp-positive, for the C forms
                            (\ ir ir))
                         (a4ize
                          (sibcall g
@@ -7688,7 +7709,9 @@
                                      '(st sp 0 r0) '(st sp 8 r1) '(st sp 16 r2) '(st sp 24 r3)
                                      '(st sp 32 r4) '(st sp 40 r5) '(st sp 48 r6) '(st sp 56 r7)]
                                   ()) +
-                               ['(push lr) '(push fp) '(lea fp sp 0) ['sub 'sp 'sp frame]])) +
+                               (? (rv? g)     ; riscv links LAST, so fp lands at the frame bottom
+                                  ['(push lr) '(push fp) ['sub 'sp 'sp frame] '(lea fp sp 0)]
+                                  ['(push lr) '(push fp) '(lea fp sp 0) ['sub 'sp 'sp frame]]))) +
                            ; the cs saves ride AFTER the frame is up (their slots are fp-relative)
                            ; and BEFORE the body -- ⚠ past unframe's positional prologue read
                            peep g 'cssv () +
