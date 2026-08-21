@@ -818,7 +818,7 @@ test_gcheck: host
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAiGcCheck test_host
 # test_gcstress: the MUTATOR's side -- whether the C around the collector holds a raw pointer
 # across a call that collects. AiGcStress always collects, poisons the vacated nursery, and
-# majors every 32nd. ~4 min, own tree.
+# majors every 32nd. ~8 min, own tree -- it tracks the glaze, since every major walks it.
 test_gcstress: host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAiGcStress test_host
 # test_imgchain: the PINNED PREFIX, which nothing else can reach -- `love bake -L` is the

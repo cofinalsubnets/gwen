@@ -178,8 +178,11 @@ struct ai {
  // rescanned by the next minor. rem_miss counts drops on overflow -- any miss forces
  // the next collection MAJOR, so a minor only runs under a complete set.
  ai_word *rem; uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by AiRemCap, the fixed capacity
- // the sub-word collector/codec scalars, adjacent so the three ride the rem set's tail
+ // the sub-word collector/codec scalars, adjacent so the four ride the rem set's tail
  bool gc_gen;                             // set during a generational collection: bump() targets major_hp, not hp
+ bool sym_raw;                            // the intern map is still the image's own. a MINOR scans that map in
+                                          // PLACE and a woken one does not survive it; only a major re-homes it
+                                          // (major_symbols_rebuild), so the first collection after a wake is one.
  int8_t lean;                             // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
                                           // (a resize is a full copy + a total refault)
  uint8_t image_why;                       // why the codec last refused a dump; 0 = it did not.
