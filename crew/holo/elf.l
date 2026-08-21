@@ -37,7 +37,7 @@
          '(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)              ; e_ident: \x7fELF, 64-bit LSB SysV
          (le16 etype) (le16 machine) (le32 1)                  ; e_type (2 EXEC / 3 DYN), e_machine, version 1
          (le64 entry) (le64 64) (le64 shoff)                   ; e_entry, e_phoff=64, e_shoff
-         (le32 (? rv? 4 0)) (le16 64) (le16 56)                ; e_flags (riscv: FLOAT_ABI_DOUBLE), e_ehsize=64, e_phentsize=56
+         (le32 (? rv? 5 0)) (le16 64) (le16 56)                ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE), e_ehsize=64, e_phentsize=56
          (le16 (tally phs)) (le16 (? (two? sh) 64 0)) (le16 shnum) (le16 shstrx)
          (catall phs))))
 

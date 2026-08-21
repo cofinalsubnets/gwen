@@ -1,11 +1,11 @@
 ; riscv -- the RV64 BACKEND for the neutral assembler (crew/holo/holo.l), the fifth target (the
 ; pine64 ox64's T-Head C906 and qemu -M virt). like the others it pins a {lower,patch} pair -- here
-; under 'riscv64 and 'rv64 -- and the driver, IR forms and byte plumbing stay untouched. fixed 32-bit
-; little-endian instructions (no compressed forms emitted), native three-address ALU. these tables are
-; RV64IMFD: no Zbb/Zba, and no A -- moon's __sync seam hands its two atomic words (amoswap.aq, the
-; release fence) in raw, so a linked image asks for RV64IMAFD, which is rv64gc less the compressed
-; forms and so runs on every rv64gc core. every word here was checked against `llvm-mc
-; --triple=riscv64` (--show-encoding / --disassemble). load after holo.l.
+; under 'riscv64 and 'rv64 -- and the driver, IR forms and byte plumbing stay untouched. little-endian
+; instructions, native three-address ALU. these tables are RV64IMFD: no Zbb/Zba, and no A -- moon's
+; __sync seam hands its two atomic words (amoswap.aq, the release fence) in raw. the emitted words are
+; then squeezed to their 2-byte C forms where the operands fit (see rvc-of), so a linked image asks
+; for RV64IMAFDC -- rv64gc exactly, which every general-purpose rv64 core is. every word here was
+; checked against `llvm-mc --triple=riscv64` (--show-encoding / --disassemble). load after holo.l.
 ;
 ; the novel bit: RISC-V HAS NO FLAGS REGISTER, and the IR is flag-shaped (cmp .. br cond). so the
 ; assembler itself is the flags register: cmp/test/ucomisd emit nothing (or only an immediate
@@ -430,7 +430,108 @@
            ('nop >< le32 0x13)                                               ; addi x0, x0, 0
            ('trap >< le32 0x100073)))                                        ; ebreak
    _ (foldl (\ _ p (emrow rv-emitters <p (rv-aluop <p))) 0 rv-alu-rows)
-   (rv-lower ins) (: f lower-via (? (lit? f) (f rv-emitters ins) (scare 'holo-bake-stale 'lower-via)))
+
+   ;; -- RVC, the LOCAL squeeze. a lowered chunk that is exactly one 32-bit word carrying no fixup
+   ;;    may collapse to a 2-byte C form when its operands fit. the decision reads only the word --
+   ;;    never an address -- so holo's one-pass `lay` measures the short chunk with no relaxation,
+   ;;    and every label-relative form carries a fixup, which is exactly the set whose size would
+   ;;    otherwise turn on a distance. ⚠ emitting these makes the output ask for rv64gc.
+   (rvc-p? r)      ((r >= 8) && (r <= 15))              ; the 3-bit register window x8..x15
+   (rvc-p r)       (r - 8)
+   (rvc-s6? n)     ((n >= -32) && (n <= 31))
+   (rvc-u? n k hi) ((n >= 0) && ((n <= hi) && ((n % k) = 0)))
+   (rvc-i12 w)     (: u ((w >> 20) & 4095) (? (u > 2047) (u - 4096) u))
+   (rvc-s12 w)     (: u ((((w >> 25) & 127) << 5) | ((w >> 7) & 31)) (? (u > 2047) (u - 4096) u))
+
+   ;; the C formats, each a 16-bit word builder. immediate bits are placed field by field: every
+   ;; format scatters them differently, so there is no one shift to share.
+   (rvc-ci f3 op rd i)     (le16 ((f3 << 13) | ((((i >> 5) & 1) << 12) | ((rd << 7) | (((i & 31) << 2) | op)))))
+   (rvc-cr f4 rd rs2)      (le16 ((f4 << 12) | ((rd << 7) | ((rs2 << 2) | 2))))
+   (rvc-cl f3 lo hi9 i)    (le16 ((f3 << 13) | ((((i >> 3) & 7) << 10) | (((rvc-p hi9) << 7) | ((((i >> 6) & 3) << 5) | (((rvc-p lo) << 2) | 0))))))
+   (rvc-css f3 rs2 i)      (le16 ((f3 << 13) | ((((i >> 3) & 7) << 10) | ((((i >> 6) & 7) << 7) | ((rs2 << 2) | 2)))))
+   (rvc-cisp f3 rd i)      (le16 ((f3 << 13) | ((((i >> 5) & 1) << 12) | ((rd << 7) | ((((i >> 3) & 3) << 5) | ((((i >> 6) & 7) << 2) | 2))))))
+   (rvc-ca f2 rd rs2)      (le16 ((35 << 10) | (((rvc-p rd) << 7) | ((f2 << 5) | (((rvc-p rs2) << 2) | 1)))))
+   (rvc-cb f2 rd i)        (le16 ((4 << 13) | ((((i >> 5) & 1) << 12) | ((f2 << 10) | (((rvc-p rd) << 7) | (((i & 31) << 2) | 1))))))
+
+   ;; the word -> C-word map. answers () where no form fits, and the caller keeps the 32-bit word.
+   (rvc-of w)
+    (: op (w & 127) rd ((w >> 7) & 31) f3 ((w >> 12) & 7)
+       rs1 ((w >> 15) & 31) rs2 ((w >> 20) & 31) f7 ((w >> 25) & 127)
+       i (rvc-i12 w) s (rvc-s12 w) sh (rs2 | ((f7 & 1) << 5))
+       (? (op = 0x13)                                                    ; OP-IMM
+           (? ((f3 = 0) && (!(rd = 0) && ((rs1 = rd) && (!(i = 0) && rvc-s6? i))))
+               (rvc-ci 0 1 rd i)                                         ; c.addi
+              ((f3 = 0) && (!(rd = 0) && ((rs1 = 0) && rvc-s6? i)))
+               (rvc-ci 2 1 rd i)                                         ; c.li
+              ((f3 = 0) && (!(rd = 0) && (!(rs1 = 0) && (!(rs1 = rd) && (i = 0)))))
+               (rvc-cr 8 rd rs1)                                         ; c.mv (addi rd, rs, 0)
+              ((f3 = 1) && (!(rd = 0) && ((rs1 = rd) && (((f7 & 126) = 0) && !(sh = 0)))))
+               (rvc-ci 0 2 rd sh)                                        ; c.slli
+              ((f3 = 5) && ((rvc-p? rd) && ((rs1 = rd) && (((f7 & 126) = 32) && !(sh = 0)))))
+               (rvc-cb 1 rd sh)                                          ; c.srai
+              ((f3 = 5) && ((rvc-p? rd) && ((rs1 = rd) && (((f7 & 126) = 0) && !(sh = 0)))))
+               (rvc-cb 0 rd sh)                                          ; c.srli
+              ((f3 = 7) && ((rvc-p? rd) && ((rs1 = rd) && rvc-s6? i)))
+               (rvc-cb 2 rd i)                                           ; c.andi
+              ())
+          (op = 0x1b)                                                    ; OP-IMM-32
+           (? ((f3 = 0) && (!(rd = 0) && ((rs1 = rd) && rvc-s6? i)))
+               (rvc-ci 1 1 rd i) ())                                     ; c.addiw
+          (op = 0x33)                                                    ; OP
+           (? ((f3 = 0) && ((f7 = 0) && (!(rd = 0) && ((rs1 = rd) && !(rs2 = 0)))))
+               (rvc-cr 9 rd rs2)                                         ; c.add
+              ((f3 = 0) && ((f7 = 0) && (!(rd = 0) && ((rs1 = 0) && !(rs2 = 0)))))
+               (rvc-cr 8 rd rs2)                                         ; c.mv (add rd, x0, rs2)
+              ((f3 = 0) && ((f7 = 32) && ((rvc-p? rd) && ((rs1 = rd) && (rvc-p? rs2)))))
+               (rvc-ca 0 rd rs2)                                         ; c.sub
+              ((f3 = 4) && ((f7 = 0) && ((rvc-p? rd) && ((rs1 = rd) && (rvc-p? rs2)))))
+               (rvc-ca 1 rd rs2)                                         ; c.xor
+              ((f3 = 6) && ((f7 = 0) && ((rvc-p? rd) && ((rs1 = rd) && (rvc-p? rs2)))))
+               (rvc-ca 2 rd rs2)                                         ; c.or
+              ((f3 = 7) && ((f7 = 0) && ((rvc-p? rd) && ((rs1 = rd) && (rvc-p? rs2)))))
+               (rvc-ca 3 rd rs2)                                         ; c.and
+              ())
+          (op = 0x03)                                                    ; LOAD
+           (? ((f3 = 3) && ((rs1 = 2) && (!(rd = 0) && rvc-u? i 8 504)))
+               (rvc-cisp 3 rd i)                                         ; c.ldsp
+              ((f3 = 3) && ((rvc-p? rs1) && ((rvc-p? rd) && rvc-u? i 8 248)))
+               (rvc-cl 3 rd rs1 i)                                       ; c.ld
+              ())
+          (op = 0x23)                                                    ; STORE
+           (? ((f3 = 3) && ((rs1 = 2) && rvc-u? s 8 504))
+               (rvc-css 7 rs2 s)                                         ; c.sdsp
+              ((f3 = 3) && ((rvc-p? rs1) && ((rvc-p? rs2) && rvc-u? s 8 248)))
+               (rvc-cl 7 rs2 rs1 s)                                      ; c.sd
+              ())
+          (op = 0x07)                                                    ; LOAD-FP
+           (? ((f3 = 3) && ((rs1 = 2) && rvc-u? i 8 504))
+               (rvc-cisp 1 rd i)                                         ; c.fldsp
+              ((f3 = 3) && ((rvc-p? rs1) && ((rvc-p? rd) && rvc-u? i 8 248)))
+               (rvc-cl 1 rd rs1 i)                                       ; c.fld
+              ())
+          (op = 0x27)                                                    ; STORE-FP
+           (? ((f3 = 3) && ((rs1 = 2) && rvc-u? s 8 504))
+               (rvc-css 5 rs2 s)                                         ; c.fsdsp
+              ((f3 = 3) && ((rvc-p? rs1) && ((rvc-p? rs2) && rvc-u? s 8 248)))
+               (rvc-cl 5 rs2 rs1 s)                                      ; c.fsd
+              ())
+          (op = 0x67)                                                    ; JALR
+           (? ((f3 = 0) && ((rd = 0) && (!(rs1 = 0) && (i = 0))))
+               (rvc-cr 8 rs1 0) ())                                      ; c.jr -- `ret` rides this
+          ()))
+
+   ;; the chunk filter: exactly four plain bytes, no fixup, and a form that fits.
+   (rvc-squeeze bs)
+    (? !((tally bs) = 4) bs
+       (: b0 (at bs 0) b1 (at bs 1) b2 (at bs 2) b3 (at bs 3)
+          (? !(imm? b0 && (imm? b1 && (imm? b2 && imm? b3))) bs
+             (: c (rvc-of (b0 | ((b1 << 8) | ((b2 << 16) | (b3 << 24)))))
+                (? (two? c) c bs)))))
+
+   (rv-lower ins) (: f lower-via
+                     (? !(lit? f) (scare 'holo-bake-stale 'lower-via)
+                        (<ins = 'raw) (f rv-emitters ins)       ; raw means THESE bytes -- never squeezed
+                        (rvc-squeeze (f rv-emitters ins))))
 
    ;; relocations: j21 is the jal offset bitfield (+-1MB, scares past); pcrel splits target-site
    ;; across the auipc pair in aux (lo word first in memory), hi rounded so lo stays signed 12-bit;
