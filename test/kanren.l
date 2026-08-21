@@ -10,6 +10,7 @@
    smap (K 'smap)  sno (K 'sno)  stake (K 'stake)  walk (K 'walk)  s_app (K 's_app)
    dif (K 'dif)  absent (K 'absent)  apt (K 'apt)  ifte (K 'ifte)  sole (K 'sole)
    naf (K 'naf)  tie (K 'tie)  untie (K 'untie)  scount (K 'scount)  empty_dict (K 'empty_dict)
+   sun (K 'sun)
    (unord_eq a b) (&& (= (sat a) (sat b)) (all (flip member? a) b))
 
  _ (assert
