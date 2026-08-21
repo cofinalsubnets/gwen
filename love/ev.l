@@ -285,7 +285,12 @@
    ; (apx nary head . args) carrying the n-ary-vs-l2r strategy (1 = n-ary, 0 = l2r).
    (fold x bnd) (: h <x
     (? (atom? >x) x                          ; (f) single element -> ana's (atom? b) handles
-       (nil? (nom? h) || member? h bnd) (apx >< 0 >< x)   ; local/computed head
+       ; a VALUE head -- opfix's glued lane emits one, and a macro splice can too. no binding
+       ; reaches a value, so it is a resolved global by construction and takes feels' lane
+       ; straight; without this every `<x` in the tree would pay the generic apply.
+       (nil? (nom? h)) (: hd (? (charm? h || two? h) 0 (feels h))
+                          (? hd (hd x) (apx >< 0 >< x)))
+       (member? h bnd) (apx >< 0 >< x)                    ; a shadowed name: local head
        (: v (gv h ()) hd (feels v)
         (? hd (hd x)
            (napof v >x) (apx >< 1 >< x)

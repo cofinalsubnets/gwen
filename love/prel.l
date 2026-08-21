@@ -385,9 +385,9 @@
 ; --- reader operators: the operators tablet + the opfix factor pass ---------
 (: operators (pins (tablet 0)
  0 (pins (tablet 0)                                 ; --- ARITY 0: glued. takes nothing from the form
- '< 'cap '> 'cup '+ 'net '* 'prod '| 'abs '- 'negate '/ 'reciprocal
- '% 'fraction '? 'bit '$ 'saturate '! 'nil? '^ 'jot   ; `.` is pinned here by post.l, whose dot it is
- '0? 'nil? '1? 'one? '2? 'two?)                ; the arity predicates: a row is a WORD, so it may
+ '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
+ '% fraction '? bit '$ saturate '! nil? '^ jot   ; `.` is pinned here by post.l, whose dot it is
+ '0? nil? '1? one? '2? two?)                   ; the arity predicates: a row is a WORD, so it may
                                                ; spell digits -- 2?<>x is (two? (cap (cup x)))
                                                ; ⚠ ^ ALSO rides arity 2 as xor: the lane is the
                                                ; key, so glued ^x counts up and spaced a ^ b does
@@ -410,8 +410,28 @@
                                                     ; `:` and takes its band -- an alias cannot drift from it
  -2 (pins (tablet 0)                                ; --- ARITY -2: spaced, and it CHAINS. a left and a right, but
  '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40)))          ; a same-band neighbour JOINS the run instead of nesting
- ; ⚠ the rows are NOMS, not values: a value would be unwritable, and an unwritable head is a
- ; form no text can spell -- which is what keeps opfix invertible.
+ ; ⚠ the SPACED rows are NOMS: the sigil IS the name there, so a binding of it is visible in
+ ; the text that uses it. the GLUED lane holds VALUES instead -- `<x` is the function `cap`, not
+ ; the word -- because that link is NOT visible, and a local `cap` would silently re-aim every
+ ; `<x` under it. the price is spellability: a value head is a form no text can write. `opnom`
+ ; buys it back.
+
+; value -> the word the glued sigil means, and the walk that puts the words back through a
+; factored form. every reader of post-opfix source (pat's pin, the glaze, spec2coq, wm2uu)
+; wants a tree of noms, and this is the one place that knows the map.
+(: opnoms (pins (tablet 0)
+   cap 'cap cup 'cup net 'net prod 'prod abs 'abs negate 'negate
+   reciprocal 'reciprocal fraction 'fraction bit 'bit saturate 'saturate
+   nil? 'nil? jot 'jot one? 'one? two? 'two?)
+   (opnom v) (? (two? v) 0 (peep opnoms v 0))       ; a list is never a row; keep it off the hash
+   (opword v) (: n (opnom v) (? n n v))             ; ..and the TOTAL one: the word, or v untouched
+   (unglue x) (? (nil? (two? x)) x
+                 (link (: h (cap x) n (opnom h) (? n n (unglue h)))
+                       (ungluet (cup x))))
+   (ungluet l) (? (nil? (two? l)) l (link (unglue (cap l)) (ungluet (cup l))))
+   _ (pin book 'opnom opnom)
+   _ (pin book 'opword opword)
+   (pin book 'unglue unglue))
 
 ;;; FIXME the code below is rather old and hoary and can probably be freshened up.
 ;;; remember we can't use operators or pattern matching yet here though.

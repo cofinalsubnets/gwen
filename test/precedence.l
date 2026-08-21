@@ -157,14 +157,14 @@
  ; --- the GLUED lane through the same door: arity 0, where a row is the WORD the sigil names.
  ; one nom lives in as many lanes as it has faces, and `?` is the pair:
  ; `bit` glued, cond spaced -- the valence law as two keys of one table. ---
- (: r (grip 0 '? ()) _ (grip 0 '? r) (r = 'bit))  ; a clear-and-restore is the non-destructive READ
+ (: r (grip 0 '? ()) _ (grip 0 '? r) (opnom r = 'bit))  ; a clear-and-restore is the non-destructive READ
  ; ⚠ the fixture needs a sigil whose GLUED row is empty -- `was = ()` is half the law. it was
  ; `^` until ^ became jot; `&` and `=` are what is left free. fill one and move this.
  (: was (grip 0 '& 'cup)                            ; coin a glued sigil ..
     tree (opfix '&x)
     _ (grip 0 '& was)
     (&& (was = ()) (tree = '(cup x))))                 ; .. it factors, then clears
- ((opfix '?5) = '(bit 5))                             ; the glued lane survived intact
+ ((unglue (opfix '?5)) = '(bit 5))                    ; the glued lane survived intact
 
  ; --- && / || stay lazy: the macro rides ?/: , so the right arm never fires when the left decides it.
  ; a mutable tablet witnesses the non-evaluation (kept LOCAL in a body-having `:`). ---

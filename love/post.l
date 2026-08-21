@@ -178,9 +178,13 @@
        _ (put o 40) _ (pfn o (fbase v) sn) _ (go 0) (put o 41))
     (: nm (nifnom v)
        (? (string? nm) (say o nm)
-          (: s (lamsrc v)
-             (? (two? s) (px o (canon s 0 0) sn)
-                (: _ (put o 92) (pnum o (abs (dig v)))))))))   ; opaque: a distinguisher, nothing more -- C spelled the ADDRESS here, this is the digest, which at least survives a collection
+          ; a glued sigil's backing value has no nif name but it has exactly ONE word;
+          ; say that instead of inlining its whole body wherever `<x` was written.
+          (: gn (opnom v)
+             (? gn (say o (string gn))
+                (: s (lamsrc v)
+                   (? (two? s) (px o (canon s 0 0) sn)
+                      (: _ (put o 92) (pnum o (abs (dig v)))))))))))   ; opaque: a distinguisher, nothing more -- C spelled the ADDRESS here, this is the digest, which at least survives a collection
 
   (px o x sn) (? (charm? x) (pnum o x)
                 (coin? x) (pcoin o x sn)

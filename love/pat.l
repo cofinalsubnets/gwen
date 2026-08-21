@@ -143,7 +143,7 @@
      (? (nom? p) (? (= p '_) wnil [() [[p v]] ()])
         (id? p ()) wnil                                      ; () is the form at ZERO: it asks nothing
         (! (link? p)) (wts [['= p v]])
-        (: h <p as >p
+        (: h (opword <p) as >p                     ; opfix's glued heads are VALUES; opword names them
            (? (= h '?) (? (! (two? as)) (wrest p '_ v)        ; a GUARD: (? g1 .. gn pat), or (? g)
                           (! (two? >as)) (wgd <as)           ; ..one operand IS the lone guard
                           (wq as v))                         ; ..else every one but the last guards

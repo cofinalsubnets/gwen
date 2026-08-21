@@ -455,7 +455,9 @@
    aopv [[two? 'two?] [cap 'cap] [cup 'cup] [id? 'id?] [link 'link]
            [tally 'tally] [(+) '+] [(-) '-] [(*) '*] [(<) '<] [(<=) '<=]
            [(>) '>] [(>=) '>=] [(=) '=]]
-   (aopn x l) (? !(two? l) 0  (id? x <<l) <><l  (aopn x >l))
+   ; a miss falls through to `opnom`, the glued lane's own value -> word map (prel), so every
+   ; sigil-backed head is named here without this list having to carry all fourteen.
+   (aopn x l) (? !(two? l) (opnom x)  (id? x <<l) <><l  (aopn x >l))
    ; adesug: rewrite what amble can own by PURE SOURCE IDENTITY, so the twin/deopt story is
    ; untouched -- (X) is X ((f) == f at zero operands: an INFIX span reads as the wrapped
    ; application, (k < n) -> ((k < n)), so every infix-written body wears these singletons),
