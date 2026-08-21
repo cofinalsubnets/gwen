@@ -52,14 +52,20 @@ Three mappings, all of them already half-built:
 * **tasks are the processes.** `twirl` answers a pid, `catch` waits on one, and the scheduler
   already parks a task on an fd and wakes the ready one (``).
 
-⚠ **The kernel links no `host/*.c`** — `k_shared_c` is love.c + am.c + quay + libc only. The
-`AiNif` section glob is the host's trick; a kernel nif is a row in `kmain.c`'s `defs[]` table,
-handed to `ai_defn`. Every nif below is written fresh against the vfs, not `#ifdef`'d out of
-`host/posix.c`.
+⚠ **The kernel links no `host/*.c` yet, and that is a rung rather than a rule** — `k_shared_c`
+is love.c + am.c + quay + libc. The nif MECHANISM is no longer a difference: `kmain.c`'s
+`defs[]` rides the `ai_nifs` section and the kernel drains `[__start_ai_nifs, __stop_ai_nifs)`
+exactly as `host/main.c` does, so a `host/<app>.c` added to this build registers itself with
+no edit. What is still written fresh is the nif BODIES, and `doc/plan/inle-fusion.md` is the
+plan for retiring that: `free/sys.c` answers `__ai_sys`, so nolibc — and everything written
+against it, `host/posix.c` included — can stand on this kernel instead of a hosted one.
 
 ⚠ **The conventions are `doc/posix.md`'s, exactly.** An effect answers `()` | a POSITIVE errno |
 EINVAL on misuse; a value answers the value | `()`. `stat` answers `(size mtime-ms mode ns)`.
 Divergence here is worse than absence — kore reads these shapes and a wrong one is silent.
+⚠ **`chdir` is the exception, on BOTH seats**: it answers a NEGATIVE errno (`putcharm(-e)`, and
+`-1` for misuse), here and in `host/posix.c`'s `host_chdir` alike. The twins agree, which is
+what matters; the sentence above simply never reached this one. Do not "fix" one of them.
 
 ## the ladder
 
