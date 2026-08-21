@@ -39,8 +39,8 @@
     (: n (tally av)
        v (? n <av "")
        (? (! n) (tgz-die "usage: tgz x|t ARCHIVE.tar.gz [DIR]")
-          ((v = "x") & (2 <= n)) (tgz-x (<(>av)) (? (3 <= n) (<(>(>av))) "."))
-          ((v = "t") & (2 <= n)) (tgz-t (<(>av)))
+          ((v = "x") && (2 <= n)) (tgz-x (<(>av)) (? (3 <= n) (<(>(>av))) "."))
+          ((v = "t") && (2 <= n)) (tgz-t (<(>av)))
           (tgz-die "usage: tgz x|t ARCHIVE.tar.gz [DIR]")))
 
    ; ⚠ `argv` is a LIST, not a function -- (argv ()) would apply it and answer the

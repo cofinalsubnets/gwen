@@ -113,18 +113,18 @@
    sno ()
    (sX x s) (x >< s)
    (sun x) (x >< ())
-   (s_plus s t) (s @ (f & (lit? f)) (\ _ (s_plus t (f ())))       ; interleave (disj): the SWAP is the fairness
+   (s_plus s t) (s @ (f && (lit? f)) (\ _ (s_plus t (f ())))       ; interleave (disj): the SWAP is the fairness
                      (x >< r)       (x >< s_plus r t)
                      t)
-   (s_star s g) (s @ (f & (lit? f)) (\ _ (s_star (f ()) g))       ; bind (conj)
+   (s_star s g) (s @ (f && (lit? f)) (\ _ (s_star (f ()) g))       ; bind (conj)
                      (x >< r)       (s_plus (g x) (s_star r g))
                      ())
-   (s_app s t)  (s @ (f & (lit? f)) (\ _ (s_app (f ()) t))        ; ORDERED disj: no swap, so the left side runs
+   (s_app s t)  (s @ (f && (lit? f)) (\ _ (s_app (f ()) t))        ; ORDERED disj: no swap, so the left side runs
                      (x >< r)       (x >< s_app r t)              ; dry first. ⚠ incomplete by construction --
                      t)                                          ; that is the point, and every use owes the word
-   (sfire s) (s @ (f & (lit? f)) (sfire (f ())) s)                ; force to a mature shape: () or a cons
+   (sfire s) (s @ (f && (lit? f)) (sfire (f ())) s)                ; force to a mature shape: () or a cons
    (stake i s) (? (nil? i) () (: m (sfire s) (? (two? m) (<m >< stake (i - 1) >m))))
-   (smap f s) (s @ (g & (lit? g)) (\ _ (smap f (g ()))) (x >< r) (f x >< smap f r) ())
+   (smap f s) (s @ (g && (lit? g)) (\ _ (smap f (g ()))) (x >< r) (f x >< smap f r) ())
    (sfold f z s) (: m (sfire s) (? (two? m) (f <m (sfold f z >m)) z))
    slist (sfold link ())
    (scount s) (: (go a s) (: m (sfire s) (? (two? m) (go (a + 1) >m) a)) (go 0 s))

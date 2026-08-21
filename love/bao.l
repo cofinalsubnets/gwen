@@ -280,7 +280,7 @@
       (? !(id? e 0) e
        (c @ 49 (edesc1 (getc 0))
             55 (getc 0, -5)
-            (52 | 56) (getc 0, -6)
+            (52 || 56) (getc 0, -6)
             51 (getc 0, -4)
             0))))
 
@@ -350,7 +350,7 @@
                       putc 10,
                       [vs (!vs ? (revcat hd (detach hu cur))
                            (take 100 (mkframe u l r d >< revcat hd (detach hu cur)))) ]))
-              (c & 0 < c) (loop npra u (c >< l) r d (detach hu cur) hd ())
+              (c && 0 < c) (loop npra u (c >< l) r d (detach hu cur) hd ())
               -1 (edleft  kloop u l r d)
               -2 (edright kloop u l r d)
               -3 (edbsp   kedit u l r d)
@@ -479,7 +479,7 @@
      (? !(id? e 0) e
       (c @ 49        (besc1 ip (see ip))
            55        (see ip, -5)
-           (52 | 56) (see ip, -6)
+           (52 || 56) (see ip, -6)
            51        (see ip, -4)
            0))))
    ; ⚠ THE `see` COMES FIRST and exactly once: evk is indexed BY the byte, so a walk that
@@ -504,7 +504,7 @@
            (bev ip @
             -7 eofsym
             10 (putc 10, revcat l r)
-            (c & 0 < c) (loop (c >< l) r)            ; insert a printable
+            (c && 0 < c) (loop (c >< l) r)            ; insert a printable
             -1 (edleft  km () l r ())
             -2 (edright km () l r ())
             -3 (edbsp   km () l r ())
@@ -549,7 +549,7 @@
                             ln (revcat l r)
                             nh (? !ln hist (take 100 (ln >< hist)))
                             (ln >< nh))
-                (c & 0 < c) (loop (c >< l) r i draft)
+                (c && 0 < c) (loop (c >< l) r i draft)
                 -12 (: _ (puts "^C") _ (putc 10) (() >< hist))   ; ^C: abandon the line, hist untouched
                 -13
                   (? !comp (loop l r i draft)

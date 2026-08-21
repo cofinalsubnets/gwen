@@ -48,8 +48,8 @@ byte-unchanged. That is the property spec.l's infix-assert law leans on.
 **The hand** is associativity, and it composes with band in one predicate:
 `(? h (<= g (op-frband f)) (< g (op-frband f)))` — a RIGHT-handed incomer steals at equal band
 (its band folds right), a LEFT-handed one yields, so the pending frame folds first and its band
-folds left. Arithmetic (`* / %` at 60, `+ -` at 50) is left-handed; every other band, and every
-coined operator at house band, is right.
+folds left. Arithmetic, the shifts and the bitwise ops are left-handed; every other band, and
+every coined operator at house band, is right.
 
 ## the table
 
@@ -77,39 +77,46 @@ complete, and yields to `<`.
 ⚠ **A band must be positive.** A tablet miss answers `0`, so a zero band would read that miss as
 a live row at the loosest band there is.
 
-**Undeclared is infix at band 95, right-handed** — above every row, so the table holds only
-exceptions:
+**Undeclared is infix at house band, right-handed** — above every row, so the table holds only
+exceptions.
+
+The ladder, TIGHTEST first. `love/prel.l` carries the numbers, and only the order they put these
+rows in means anything — so read them there and never copy one here.
 
 ```
-;   (house)        band 95   coined operators — fresh punct, no row
-;   **             band 70   flip-apply (a ** b = (b a)), tightest DECLARED infix
-;   * / %          band 60   multiplicative, LEFT
-;   + -            band 50   additive, LEFT
-;   = != < <= > >= band 40   comparison   <- the assert-relation band
-;   | & && ||      band 30   logical
-;   ><             band 25   cons — the loosest builder
-;   ?              band 10   cond — infix is the one-armed form; an else arm is prefix (? c a b)
-;   $              band 5    weak apply — a $ b = (a b), the haskell $, loosest
+;   (house)        coined operators — fresh punct, no row
+;   **             flip-apply (a ** b = (b a)), tightest DECLARED infix
+;   * / % //       multiplicative, LEFT
+;   + -            additive, LEFT
+;   << >>          shifts, LEFT
+;   &              bitwise and, LEFT
+;   ^              bitwise xor, LEFT
+;   |              bitwise or, LEFT
+;   = != < <= > >= comparison   <- the assert-relation band
+;   &&             and — and pat.l's GUARD tag
+;   ||             or  — and pat.l's ALTERNATIVE tag
+;   ><             cons — the loosest builder
+;   ?              cond — infix is the one-armed form; an else arm is prefix (? c a b)
+;   $              weak apply — a $ b = (a b), the haskell $, loosest
 ```
 
-Gaps are left so a level can slot in later.
+prel.l leaves numeric gaps between the rows so a level can slot in later.
 
-⚠ **The two rows that catch a C-primed hand, both by being where C is not.**
+The bitwise ops and the shifts are a tier of their own between comparison and arithmetic, in C's
+order, with the shifts above the trio so `f & 1 << n` is the bit test it reads as. That is
+Python's and Rust's ladder exactly.
 
-**`<< >>` are not in the table** — they are coined punct, so they ride **house band 95**, above
-every declared row. C puts the shifts *below* `+ -`; here they are above `* /`. So
-`c - 192 << 6` is `c - (192 << 6)`, not `(c - 192) << 6` — which is how a UTF-8 decoder came to
-compute garbage from a line that reads correctly in C. Parenthesize the arithmetic operand of a
-shift, always.
+⚠ **The shifts sit under `+ -`**, so `c - 192 << 6` is `(c - 192) << 6` and a shifted *sum* owes
+its parens — `lib/fat.l`'s date packing wants `((y - 1980) << 9) + m`.
 
-**`| & && || ` are ONE band**, not four, and band 30 is right-handed like every band but
-arithmetic. So they do not order against each other at all: `x & y && z` folds to
-`x & (y && z)`, and `(ctbl c & 4 && c <= 55)` asks `ctbl c & (4 && c <= 55)` — a mask against a
-truth bit, which read every octal digit wrong and surfaced three files away as a lex error.
-C's `&` -above- `&&` ordering does not exist here; spend the parens: `((ctbl c & 4) && c <= 55)`.
+⚠ **`&` and `|` are bitwise ONLY.** pat.l's guard and alternative are `&&` and `||`. `opfix` is
+context-free and cannot know a `&` is a guard, so the two jobs pulled opposite ways — a guard is
+nearly always a comparison, and the bitwise ops bind above one. A stale `(c & 0 < c)` is now the
+comparison `((c & 0) < c)`, which pat.l reads as a lax SHAPE: a pattern that fits nothing, with no
+error anywhere.
 
-Comparison (40) does bind tighter than the logical band (30), so `1 < 2 && 3 < 4` is the pair of
-comparisons you meant — that one matches C, and it is the reason the other two surprise.
+Comparison still binds tighter than `&&`/`||`, so `1 < 2 && 3 < 4` is the pair of comparisons
+you meant, and a guard chain `(c && 0 < c && c < 10)` still arrives nested for pat.l to flatten.
 
 `**` and `$` are the two **apply** operators, both self-named (the reader emits `(** a b)` /
 `($ a b)`, backed by the prel globals `(: (** a b) (b a))` and `(: $ 1)` — `$` *is* the identity,
@@ -120,9 +127,9 @@ glued monadic `$x` is untouched: it factors through arity 0 to `saturate`, a
 separate valence the spaced dyadic never sees — one nom, two lanes, which is the valence law.
 
 House sits **above every band**, as Haskell's undeclared-is-`infixl 9`. No source in the tree
-rides house — opfixing every top-level form of every tracked `.l` at 27, 35 and 95 differs only
-in prel.l's own literals — and lux, the one production `grip` user, pins both its grips by
-number.
+rides house — opfixing every top-level form of every tracked `.l` at three different house bands,
+loose to tight, differs only in prel.l's own literals — and lux, the one production `grip` user,
+pins both its grips by number.
 
 `&&` and `||` are **already short-circuit macros** riding `?`/`:`, and a fresh punct symbol is
 already infix-at-two, so their rows do not *add* infix — they **pin the band below comparison**
@@ -244,8 +251,8 @@ Four words, each naming exactly one thing, and none of them borrowed:
   sign is the hand. Higher binds tighter, and zero can never be a band because a tablet miss
   answers `0`.
 - **hand** — which way a same-band run folds. It is not a field: **a negative band is
-  left-handed**, and since arithmetic is the only left-handed band in the tree, the minus marks
-  the exception where it can be read.
+  left-handed**, and the left-handed bands are the arithmetic, shift and bitwise ones, so the
+  minus marks them where it can be read.
 
 ⚠ A band being signed makes it **red** under the net, so every test on one must be by kind or by
 identity — `(nil? -60)` is true, and a truth test would read every left-handed row as absent. The

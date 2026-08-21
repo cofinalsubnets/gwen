@@ -25,7 +25,7 @@
  ; band (10, the loosest declared) still decides what the condition is
  ('a = (1 ? 'a)) (() = (0 ? 'a))
  ('big = ((1 < 2) ? 'big))
- ('big = (1 < 2 ? 'big))                        ; (1 < 2) binds first at band 40 -> (? (< 1 2) 'big)
+ ('big = (1 < 2 ? 'big))                        ; (1 < 2) binds first -> (? (< 1 2) 'big)
  ; an else arm is the PREFIX cond -- which is n-ary, where the infix form takes one arm
  ('small = (? (2 < 1) 'big 'small)) ('c = (? 0 'a 0 'b 'c))
 

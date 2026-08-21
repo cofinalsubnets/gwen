@@ -12,7 +12,7 @@
 ; trailing operand is the else, and no match with no else is the zero point.
 ; the reader hands `@` over SPACED (test/reader.l); glued it is still the tray
 ; sigil, so @(1 2) never changed hands and `(@ @(a b) ..)` says both in a breath.
-; and it is INFIX at band 10, n-ary like `?`: (x @ p b .. else) is the same form,
+; and it is INFIX at `?`'s own band, n-ary like it: (x @ p b .. else) is the same form,
 ; scrutinee on the left, where a compound one spends no parens -- (vof en <t @ ..)
 ; not (@ (vof en <t) ..). love/prel.l's `operators` row; this file sees neither.
 ;
@@ -126,12 +126,11 @@
    (wgd g) [() () [g]]
    (wcat x y) [(cat <x <y) (cat <>x <>y) (cat <>>x <>>y)]
 
-   ; `&` IS THE GUARD, LEFT TO RIGHT: (p & g ..) IS (? g .. p) and nothing else, so the
-   ; one operand a pattern reads as an EXPRESSION is the one after the `&`. `&&` aliases it.
-   ; ⚠ `&` is RIGHT-HANDED at band 30, so a chain arrives NESTED -- (p & a & b) is
-   ; (& p (& a b)) -- and that inner `&` is the chain, never a guard on its own. flatten
-   ; it, or the guard becomes the bitwise-and of two bits and (& 1 2) is 0.
-   (gand? x) (? (link? x) (? (id? <x '&) 1 (id? <x '&&)) ())
+   ; `&&` IS THE GUARD, LEFT TO RIGHT: (p && g ..) IS (? g .. p) and nothing else, so the
+   ; one operand a pattern reads as an EXPRESSION is the one after the `&&`.
+   ; ⚠ `&&` is RIGHT-HANDED, so a chain arrives NESTED -- (p && a && b) is (&& p (&& a b))
+   ; -- and that inner `&&` is the chain, never a guard on its own. flatten it.
+   (gand? x) (? (link? x) (id? <x '&&) ())
    (gchain as) (? (! (two? >as)) as
                   (gand? <>as) (link <as (gchain (cup <>as)))
                   as)
@@ -148,8 +147,8 @@
            (? (= h '?) (? (! (two? as)) (wrest p '_ v)        ; a GUARD: (? g1 .. gn pat), or (? g)
                           (! (two? >as)) (wgd <as)           ; ..one operand IS the lone guard
                           (wq as v))                         ; ..else every one but the last guards
-              ; THE GUARD, in the spelling a hand reaches for: (c & 0 < c) is (? (0 < c) c).
-              ((h = '&) || (h = '&&)) (pw (gnorm p) v)
+              ; THE GUARD, in the spelling a hand reaches for: (c && 0 < c) is (? (0 < c) c).
+              (h = '&&) (pw (gnorm p) v)
               ; THE AND-PATTERN, haskell's v@pat and the ONLY spelling of it: both shapes must
               ; fit, and the walks simply CONCATENATE -- one conjunction, no winner to pick,
               ; because both sides read the SAME value and their access forms are already
@@ -169,7 +168,7 @@
               ; ⚠ that conditional re-asks the branch tests. A branch that binds nothing adds
               ; no nom and so asks nothing again, which is why the literal alternative -- the
               ; common one -- stays exactly one test with no second look.
-              ((h = '||) || (h = '|))
+              (h = '||)
               (: ws (map (\ q (pw q v)) as)
                  ds (map (\ w (dedup <>w ())) ws)
                  ts (map (\ e (: w <e d <>e
@@ -312,8 +311,8 @@
    ; guarded alike -- the guard is written once and asked once per branch.
    (arms p) (? (! (link? p)) [[p ()]]
                (: h <p as >p
-                  (? ((h = '||) || (h = '|)) (catmap arms as)
-                     ((h = '&) || (h = '&&)) (arms (gnorm p))   ; the guard, normalised first
+                  (? (h = '||) (catmap arms as)
+                     (h = '&&) (arms (gnorm p))                 ; the guard, normalised first
                      ((h = '?) && (= 2 (tally as)))
                        (map (\ b [<b (link <as <>b)]) (arms <>as))
                      [[p ()]])))

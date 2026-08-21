@@ -263,7 +263,7 @@
 (assert
  (5 = 5 - ()) (5 = () - 5) (2.5 = () - 2.5) ((64 2) = (64 2) - ())     ; - : both sides, every width
  (5 = 5 / ()) (5 = () / 5) (5 = (// 5 ())) (5 = 5 % ()) (5 = (% () 5)) ; / // %
- (5 = (5 | ())) (5 = (() & 5)) (5 = (^ 5 ())) (5 = (<< 5 ())) (5 = (>> () 5))  ; the bitwise lanes -- | & (band 30) sit BELOW =, so parenthesize
+ (5 = 5 | ()) (5 = () & 5) (5 = 5 ^ ()) (5 = 5 << ()) (5 = () >> 5)    ; the bitwise lanes
  (~(1 2) = ~(1 2) - ()) ("@(1 2 3)" = show (@(1 2 3) - ()))            ; complex + array pass through
  (2 = (5 - ()) - 3) (5 = ((- 5) ()))                    ; chains heal; a partial fired with the unit yields its held operand
  !('ef - 3) !("a" - "b") (5 = ('a - 'b) - 5)            ; undefined still answers (): it now vanishes through - too
@@ -607,8 +607,8 @@
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = ~(0 1)) (~(2 3) = (twin 2 3)) ('~x = '(conj x)) (lit? dot)
  ("(. x)" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
- (: was (grip 2 '^ -60) t (opfix '(a ^= b)) _ (grip 2 '^ was)        ; a SPACED sigil is one whole
-    (&& (was = ()) (t = '(^= a b))))                                     ;   name: ^'s row never splits ^=
+ (: was (grip 2 '^ -60) t (opfix '(a ^= b)) back (grip 2 '^ was)     ; a SPACED sigil is one whole
+    (&& (back = -60) (t = '(^= a b))))                                   ;   name: ^'s row never splits ^=
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (5 = --5) (5 = ++5) (-5 = ---5) (: x 5 (-5 = -x))   ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
  (-3 = -3) (-0.5 = -.5) (5 = (2 - -3))               ; ...and a digit or . after them still starts a NUMERAL (the whole exception)

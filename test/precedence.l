@@ -3,10 +3,9 @@
 ; steals a pending filled operand iff its band beats the frame's, so a TIGHTER operator climbs in,
 ; and EQUAL band goes to the incomer's hand: RIGHT-handed steals (its band folds right), LEFT-handed
 ; yields (its band folds left). ARITHMETIC IS LEFT-HANDED -- (1 - 2 - 3) is -4, as everywhere else --
-; and everything else stays right, which is the flat fold the surface started with. bands:
-; house 95 (coined ops -- TIGHTEST, haskell's undeclared-is-infixl-9), apply 70, multiplicative 60,
-; additive 50, comparison 40, logical 30, cons 25,
-; cond 10, weak apply 5. we assert BOTH the factored TREE (via the live `opfix`, the source pass both
+; and so are the shifts and the bitwise ops; everything else stays right, which is the flat fold
+; the surface started with. love/prel.l holds the numbers and the asserts below hold the order,
+; which is all a band means. we assert BOTH the factored TREE (via the live `opfix`, the source pass both
 ; compilers run -- op-core proper is book-private) and the VALUE, on cases where the grouping is
 ; observable in the result.
 (assert
@@ -20,34 +19,47 @@
  ((opfix '(a / b / c)) = '(/ (/ a b) c))            ; the multiplicative band is left-handed too
  ((opfix '(a >< b >< c)) = '(>< a (>< b c)))        ; but cons stays RIGHT-handed -- a builder folds right
  ((opfix '(a <+> b <+> c)) = '(<+> a (<+> b c)))    ; and a coined operator defaults to the right hand at house band
- ((opfix '(3 = 1 + 2)) = '(= 3 (+ 1 2)))            ; + (50) over = (40): the spec.l infix-assert law holds
- ((opfix '(a < b && c < d)) = '(&& (< a b) (< c d))) ; && (30) below comparison (40)
- ((opfix '(a < b || c < d)) = '(|| (< a b) (< c d))) ; || likewise
- ((opfix '(a < b & c < d)) = '(& (< a b) (< c d)))   ; bitwise & (30) likewise
- ((opfix '(1 < 2 ? x)) = '(? (< 1 2) x))            ; ? (10) loosest -> the whole comparison is the condition
+ ((opfix '(3 = 1 + 2)) = '(= 3 (+ 1 2)))            ; + over = : the spec.l infix-assert law holds
+ ((opfix '(a < b && c < d)) = '(&& (< a b) (< c d))) ; && below comparison
+ ((opfix '(a < b || c < d)) = '(|| (< a b) (< c d))) ; || likewise, and a rung under &&
+ ((opfix '(a && b || c && d)) = '(|| (&& a b) (&& c d)))   ; ..so a mix is the disjunction it reads as
+ ((opfix '(c && 0 < c && c < 10))                   ; ..and a guard chain nests for pat.l to flatten
+  = '(&& c (&& (< 0 c) (< c 10))))
+ ; the bitwise ops and the shifts sit between comparison and arithmetic, in C's order.
+ ((opfix '(a + b & c)) = '(& (+ a b) c))            ; + over & -- an align-up owes no parens
+ ((opfix '(a | b + c)) = '(| a (+ b c)))            ; ..and over | the same way
+ ((opfix '(a & b | c ^ d)) = '(| (& a b) (^ c d)))  ; & tighter than ^ tighter than |
+ ((opfix '(a & b & c)) = '(& (& a b) c))            ; ..and the bitwise bands fold left
+ ((opfix '(x & 15 = 15)) = '(= (& x 15) 15))        ; ..all of it above comparison, so a mask reads
+ ((opfix '(x ^ y = z)) = '(= (^ x y) z))
+ ((opfix '(v >> 8 & 255)) = '(& (>> v 8) 255))      ; shifts over the bitwise trio ..
+ ((opfix '(f & 1 << n)) = '(& f (<< 1 n)))          ; ..which is the reading a bit test wants
+ ((opfix '(x << 8 + y)) = '(<< x (+ 8 y)))          ; ..and under additive, so a shifted sum owes parens
+ ((opfix '(a << b << c)) = '(<< (<< a b) c))        ; the shift band folds left
+ ((opfix '(1 < 2 ? x)) = '(? (< 1 2) x))            ; ? loosest -> the whole comparison is the condition
  ; the N-ARY arity: a clause form collects its arms FLAT where a dyadic spans them into one, so
  ; the infix spelling reaches the SAME form the prefix one does -- an else arm included.
  ((opfix '(1 < 2 ? x y)) = '(? (< 1 2) x y))        ; ...and every further arm is another operand
  ((opfix '(c ? a b d e)) = '(? c a b d e))          ; test/result pairs then the else, as `?` always took them
- ((opfix '(x @ p1 b1 p2 b2)) = '(@ x p1 b1 p2 b2))  ; @ (10) likewise: the scrutinee left, the clauses flat
+ ((opfix '(x @ p1 b1 p2 b2)) = '(@ x p1 b1 p2 b2))  ; @ likewise: the scrutinee left, the clauses flat
  ((opfix '(f y z @ p b)) = '(@ (f y z) p b))        ; ..and the whole leading span is the scrutinee -- no parens owed
  ((opfix '(c ? x @ p b)) = '(? c (@ x p b)))        ; equal band, right hand: the inner clause form folds first
- ((opfix '(x @ p b $ y)) = '($ (@ x p b) y))        ; $ (5) is looser, so it folds the whole match and takes it
+ ((opfix '(x @ p b $ y)) = '($ (@ x p b) y))        ; $ is looser, so it folds the whole match and takes it
  ((opfix '(c ? a + b)) = '(? c (+ a b)))            ; ⚠ an n-ary frame yields its last RIGHT operand to a tighter op
  ((opfix '(? c a b)) = '(? c a b))                  ; ..and the prefix spelling is untouched, a fixed point as ever
  (: r (grip -1 '? ()) _ (grip -1 '? r) (r = 10))      ; the arity is the LANE, so the door names it and restores exactly
- ((opfix '(a + b >< c)) = '(>< (+ a b) c))          ; >< (25) the loosest builder, below arithmetic
- ((opfix '(a :+ b >< c)) = '(>< (:+ a b) c))        ; a coined op (house 95) beats >< (25)
- ((opfix '(a :+ b + c)) = '(+ (:+ a b) c))          ; ..and arithmetic (50), and every other band:
+ ((opfix '(a + b >< c)) = '(>< (+ a b) c))          ; >< the loosest builder, below arithmetic
+ ((opfix '(a :+ b >< c)) = '(>< (:+ a b) c))        ; a coined op at house band beats ><
+ ((opfix '(a :+ b + c)) = '(+ (:+ a b) c))          ; ..and arithmetic, and every other band:
  ((opfix '(a :+ b ** c)) = '(** (:+ a b) c))        ;   house is the TIGHTEST, so an undeclared
  ((opfix '(a :+ b && c)) = '(&& (:+ a b) c))        ;   operator groups before anything can steal
  ((opfix '(a + b :+ c)) = '(+ a (:+ b c)))          ;   from it, on either side
 
- ; --- the two apply operators: ** flip-applies (a ** b = (b a)) at the TIGHTEST band (70), $ weak-
- ; applies (a $ b = (a b), the haskell $) at the LOOSEST (5). glued $x is saturate, a separate valence. ---
- ((opfix '(a ** b * c)) = '(* (** a b) c))          ; ** (70) tighter than * (60): folds before the multiply steals
+ ; --- the two apply operators: ** flip-applies (a ** b = (b a)) at the TIGHTEST band, $ weak-
+ ; applies (a $ b = (a b), the haskell $) at the LOOSEST. glued $x is saturate, a separate valence. ---
+ ((opfix '(a ** b * c)) = '(* (** a b) c))          ; ** tighter than *: folds before the multiply steals
  ((opfix '(a * b ** c)) = '(* a (** b c)))          ; on the right too
- ((opfix '(f $ a + b)) = '($ f (+ a b)))            ; $ (5) below arithmetic: the sum groups, then weak-applies
+ ((opfix '(f $ a + b)) = '($ f (+ a b)))            ; $ below arithmetic: the sum groups, then weak-applies
  ((opfix '(f $ g $ x)) = '($ f ($ g x)))            ; equal band -> right-assoc, exactly haskell's $
  ((opfix '(a ** b $ c)) = '($ (** a b) c))          ; ** binds, $ is the loose outer apply
 
@@ -63,7 +75,7 @@
  (3 = (2 - 3 + 4))                                    ; the band folds left as one run: ((2 - 3) + 4)
  (1 = (3 = 1 + 2))                                    ; the assert relation itself, unparenthesized
  (1 = (0 < 5 && 5 < 10))                              ; (&& (< 0 5) (< 5 10)) -- both true
- ('big = (1 < 2 ? 'big))                              ; ? is dyadic: the one-armed cond, (< 1 2) first at band 40
+ ('big = (1 < 2 ? 'big))                              ; ? is dyadic: the one-armed cond, (< 1 2) first
  (4 = (3 ** (+ 1)))                                   ; ** flip-applies: ((+ 1) 3) = 4
  (8 = (2 * 3 ** (+ 1)))                               ; ** tighter than *: (* 2 ((+ 1) 3)) = (* 2 4)
  (6 = ((+ 1) $ 2 + 3))                                ; $ loosest: ((+ 1) (+ 2 3)) = ((+ 1) 5)
