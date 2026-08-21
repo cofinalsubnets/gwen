@@ -105,14 +105,17 @@ struct k_boot kboot;
 // ⚠ THE TABLE GROWS; IT DOES NOT CAP. it was a `k_source[32]` with five `fd <
 // k_sources_max` bounds checks around it -- unreachable while nothing wrote it,
 // and the rung-6 sweep left it as a rule in prose (doc/io.md) rather than a fix.
-// this is the fix: k_source_open is the ONE door in, and it grows the table
-// through g->alloc, which down here lands in the KERNEL'S OWN HEAP. the bug a
-// ceiling would have shipped is worse than the host's was: not a hang but a
-// silent refusal to open the 33rd thing.
+// this is the fix: k_source_open is the ONE door in, and it grows the table in
+// the KERNEL'S OWN HEAP. the bug a ceiling would have shipped is worse than the
+// host's was: not a hang but a silent refusal to open the 33rd thing.
 // ⚠ inle DEFINES the malloc family (below the allocator) rather than importing
 // one, so a bare malloc() here would be ours and would work -- and would read
 // exactly like the libc call nothing in this tree is allowed to make. the door
-// is g->alloc everywhere it can be reached; kmallocw where g does not exist yet.
+// is g->alloc everywhere it can be reached; kmallocw where g cannot be.
+// ⚠ THIS DOOR IS ONE OF THOSE: it takes no g, because free/sys.c's open must
+// reach it and a syscall arrives with none. Same heap either way (g->alloc is
+// love.c's ai_libc_alloc -> malloc -> kmallocw), so what this buys is one
+// allocator for one table rather than two that must agree.
 void *malloc(size_t n);
 void free(void *x);
 static void *kmallocw(uintptr_t n);
@@ -203,16 +206,16 @@ static ai_inline bool k_row_live(int fd) {
 // difference between this and the ceiling it replaces.
 // the ramfs is the caller: every open file is a row past the boot two, so the grow
 // branch runs on the first one (test/kernel/ramfs.l).
-struct k_source *k_source_open(struct ai *g, int fd) {
+struct k_source *k_source_open(int fd) {
   if (fd < 0) return NULL;
   if (fd >= k_sources_n) {
     int m = k_sources_n;
     while (m <= fd) m *= 2;
-    struct k_source *t = g->alloc(g, NULL, (size_t) m * sizeof *t);
+    struct k_source *t = kmallocw(b2w((uintptr_t) m * sizeof *t));
     if (!t) return NULL;
     for (int i = 0; i < m; i++)
       t[i] = i < k_sources_n ? k_sources[i] : (struct k_source) {0};
-    if (k_sources != k_boot) g->alloc(g, k_sources, 0);
+    if (k_sources != k_boot) kfree(k_sources);
     k_sources = t, k_sources_n = m; }
   return &k_sources[fd]; }
 
@@ -790,28 +793,35 @@ static int k_fd_free(void) {
 // host/posix.c spells 0/1/2). w and a CREATE an absent path whose parent is a
 // directory (rung 2); for r absence stays absence. a directory does not open --
 // readdir is its read door.
-static ai_noinline int k_ramopen(struct ai *g, struct ai_str *pv, char m) {
-  if (m != 'r' && m != 'w' && m != 'a') return -1;
-  if (!k_fs_init()) return -1;
+// the PATH FACE: an fd, or a NEGATIVE errno. ⚠ the love doors above answer a
+// bare -1 / () for every failure alike and always did -- down here the reasons
+// are distinct and free/sys.c's openat needs them, so they are told apart HERE
+// and flattened in the marshaling, never the other way round.
+static ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
+  if (m != 'r' && m != 'w' && m != 'a') return -EINVAL;
+  if (!k_fs_init()) return -ENOMEM;
   char cp[256];
-  intptr_t cn = k_canon(pv->bytes, pv->len, cp);
-  if (cn <= 0) return -1;
+  intptr_t cn = k_canon(p, pn, cp);
+  if (cn < 0) return -ENAMETOOLONG;
+  if (!cn) return -EISDIR;                       // the root is a directory
   int i = k_find(cp, (uintptr_t) cn);
-  if (i >= 0 && k_ents[i].dir) return -1;
+  if (i >= 0 && k_ents[i].dir) return -EISDIR;
   bool made = false;
   if (i < 0) {
-    if (m == 'r' || k_parent_ok(cp, (uintptr_t) cn)) return -1;
-    if ((i = k_create(cp, (uintptr_t) cn, false, 0644)) < 0) return -1;
+    if (m == 'r') return -ENOENT;
+    int e = k_parent_ok(cp, (uintptr_t) cn);
+    if (e) return -e;
+    if ((i = k_create(cp, (uintptr_t) cn, false, 0644)) < 0) return -ENOMEM;
     made = true; }
   int fd = k_fd_free();
   struct k_fh *h = kmallocw(b2w(sizeof *h));
-  struct k_source *s = h ? k_source_open(g, fd) : NULL;   // the grow door; NULL is no memory
+  struct k_source *s = h ? k_source_open(fd) : NULL;   // the grow door; NULL is no memory
   if (!s) {
     kfree(h);
     // an open that refuses must leave the tree exactly as it found it -- a file
     // this call minted leaves with it.
     if (made) k_ents[i].live = false, k_ent_gc(i);
-    return -1; }
+    return -ENOMEM; }
   // ⚠ the truncate lands LAST, past every way this can still fail (same law).
   uintptr_t len = 0;
   struct k_ent *e = &k_ents[i];
@@ -822,6 +832,11 @@ static ai_noinline int k_ramopen(struct ai *g, struct ai_str *pv, char m) {
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
                            .ready = ram_ready, .close = ram_close, .state = h };
   return fd; }
+// the love face: every refusal flattens to -1, which is what both doors above
+// have always answered and what kore reads.
+static int k_ramopen(struct ai_str *pv, char m) {
+  int fd = k_fs_open(pv->bytes, pv->len, m);
+  return fd < 0 ? -1 : fd; }
 
 // (open path mode) -- host/main.c's lvm_open for the ramfs door: a heap port
 // (closed on GC) or the zero point on any failure. The kernel links no host/*.c,
@@ -830,7 +845,7 @@ static ai_noinline int k_ramopen(struct ai *g, struct ai_str *pv, char m) {
 static lvm(lvm_open) {
   if (!ai_strp(Sp[0]) || !ai_strp(Sp[1])) goto fail;
   struct ai_str *mv = (struct ai_str*) Sp[1];
-  int fd = mv->len ? k_ramopen(g, (struct ai_str*) Sp[0], mv->bytes[0]) : -1;
+  int fd = mv->len ? k_ramopen((struct ai_str*) Sp[0], mv->bytes[0]) : -1;
   if (fd < 0) goto fail;
   Pack(g);
   struct ai *r = ai_io_alloc(g, fd);
@@ -982,7 +997,7 @@ static lvm(lvm_lseek) {
 static lvm(lvm_openfd) {
   intptr_t m = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
   Sp[1] = putcharm(!ai_strp(Sp[0]) ? -1
-                   : k_ramopen(g, (struct ai_str*) Sp[0],
+                   : k_ramopen((struct ai_str*) Sp[0],
                                m == 1 ? 'w' : m == 2 ? 'a' : 'r'));
   Sp += 1; ai_musttail return Next(1); }
 
@@ -1081,7 +1096,7 @@ ai_noinline static int k_dup_row(struct ai *g, int src) {
     struct k_fh *o = s->state;
     if (!o || !(h = kmallocw(b2w(sizeof *h)))) return -1;
     *h = *o; }
-  struct k_source *t = k_source_open(g, fd);
+  struct k_source *t = k_source_open(fd);
   if (!t) { kfree(h); return -1; }
   s = k_source(src);                            // the grow may have moved the table
   *t = *s;
@@ -1100,11 +1115,11 @@ ai_noinline static struct ai *k_pipe_new(struct ai *g) {
   if (!p) return g->sp[0] = putcharm(-ENOMEM), g;
   *p = (struct k_pipe) { .rrefs = 1, .wrefs = 1 };
   int rfd = k_fd_free();
-  struct k_source *rs = k_source_open(g, rfd);
+  struct k_source *rs = k_source_open(rfd);
   if (rs) *rs = (struct k_source) { .readn = pipe_readn, .ready = pipe_rready,
                                     .close = pipe_rclose, .state = p };
   int wfd = rs ? k_fd_free() : -1;
-  struct k_source *ws = rs ? k_source_open(g, wfd) : NULL;
+  struct k_source *ws = rs ? k_source_open(wfd) : NULL;
   if (!ws) {
     if (rs) k_row_zero(rfd);
     kfree(p);
@@ -1152,7 +1167,7 @@ ai_noinline static ai_word k_dup2(struct ai *g, ai_word sw, ai_word dw) {
   if (src == dst) return ZeroPoint;
   int nfd = k_dup_row(g, src);                  // the alias first: src == a dying dst's twin survives
   if (nfd < 0) return putcharm(EBADF);
-  struct k_source *d = k_source_open(g, dst);
+  struct k_source *d = k_source_open(dst);
   if (!d) { ai_fd_close(nfd); k_row_zero(nfd); return putcharm(ENOMEM); }
   if (d->close) d->close(dst);
   d = k_source(dst);                            // close zeroes through the live table
@@ -1485,11 +1500,18 @@ static ai_word k_chdir(ai_word pw) {
 static lvm(lvm_chdir) { Sp[0] = k_chdir(Sp[0]); ai_musttail return Next(1); }
 
 // (cwd _) -> the seat as an absolute string -- the host's shape, for the prompt.
-ai_noinline static struct ai *k_cwd_read(struct ai *g) {
-  char b[258];
+// the PATH FACE: the seat into a caller's buffer, 0 ok or ERANGE -- getcwd(2)'s
+// own refusal, and the one thing the love door never had to say (its buffer is
+// sized to the seat by construction).
+static int k_fs_getcwd(char *b, uintptr_t n) {
+  if (n < k_cwd_n + 2) return ERANGE;            // '/' + the seat + the NUL
   b[0] = '/';
   memcpy(b + 1, k_cwd, k_cwd_n);
   b[1 + k_cwd_n] = 0;
+  return 0; }
+ai_noinline static struct ai *k_cwd_read(struct ai *g) {
+  char b[258];
+  k_fs_getcwd(b, sizeof b);                      // sizeof b > k_cwd's ceiling: cannot refuse
   if (!ai_ok(g = ai_strof(g, b))) return g;
   return g->sp[1] = g->sp[0], g->sp += 1, g; }  // cwd string over the dummy arg
 static lvm(lvm_cwd) {
