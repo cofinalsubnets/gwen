@@ -287,6 +287,137 @@
       (: dn (rn d) an (rn a) bn (rn b) tn (rn t)
          (catall `((le32 (0x9AC00800 | ((bn << 16) | ((an << 5) | tn))))                   ; udiv t, a, b
                     (le32 (0x9B008000 | ((bn << 16) | ((an << 10) | ((tn << 5) | dn))))))))  ; msub d, t, b, a
+   ;; -- the 128-bit pair kit (moon's i128/u128): a wide value rides hi x2 : lo x0, the LEFT operand
+   ;; of a binop staged in a 16-byte cell at [sp] lo / [sp+8] hi, or -- the r-twins -- in two pool
+   ;; registers. each op is ONE IR form, so no pass can part a carry pair: ADC/SBC read the flags the
+   ;; instruction before them set. x16/x17 are the borrowed scratch, the contract the far-memory lane
+   ;; already holds (mooncc allocates neither). aarch64's three-address ALU says all of this without
+   ;; x86's two-address dance -- the awkward halves are the divide (there is no wide one) and the
+   ;; variable shifts (a count reads MOD 64, so both bands compute and CSEL picks). --
+   arm64-wldp (le32 0xA94047F0)                                                 ; ldp x16, x17, [sp]: x16 = LEFT lo, x17 = LEFT hi
+   (arm64-w3 base d n m)    (le32 (base | ((m << 16) | ((n << 5) | d))))        ; op Xd, Xn, Xm
+   (arm64-w4 base d n m a)  (le32 (base | ((m << 16) | ((a << 10) | ((n << 5) | d)))))    ; madd/msub Xd,Xn,Xm,Xa -- EXTR's imms shares the Ra field
+   (arm64-wsel d n m cond)  (: cc (look arm64-cc cond 'badcc)                   ; csel Xd, Xn, Xm, cond
+                               (le32 (0x9A800000 | ((m << 16) | ((cc << 12) | ((n << 5) | d))))))
+   (arm64-wmov d m)         (arm64-w3 0xAA000000 d 31 m)                        ; mov Xd, Xm (orr from xzr)
+   (arm64-wshi op d n c)                                                        ; lsl/lsr/asr Xd, Xn, #c -- arm64-shift's three-address twin
+      (? (op = 'shl) (le32 (0xD3400000 | ((((64 - c) & 63) << 16) | (((63 - c) << 10) | ((n << 5) | d)))))
+         (op = 'shr) (le32 (0xD3400000 | ((c << 16) | ((63 << 10) | ((n << 5) | d)))))
+         (le32 (0x93400000 | ((c << 16) | ((63 << 10) | ((n << 5) | d))))))
+   (arm64-a128 sp9) (arm64-wldp + (arm64-w3 0xAB000000 0 0 16 + arm64-w3 0x9A000000 2 2 17))    ; adds x0,x0,x16; adc x2,x2,x17
+   (arm64-s128 sp9) (arm64-wldp + (arm64-w3 0xEB000000 0 16 0 + arm64-w3 0xDA000000 2 17 2))    ; subs x0,x16,x0; sbc x2,x17,x2
+   (arm64-mw128 sp9) (le32 0xF94003F0                                           ; ldr x16,[sp] -- the widening product needs the low word alone
+                      + (arm64-w3 0x9BC07C00 2 0 16 + arm64-w3 0x9B007C00 0 0 16))   ; umulh x2,x0,x16; mul x0,x0,x16
+   (arm64-m128 sp9)                                                             ; the low 128 of LEFT * RIGHT: both cross terms onto the widening product
+      (arm64-wldp + (arm64-w3 0x9B007C00 17 17 0                                ; mul   x17, x17, x0        Lhi*Rlo
+       + (arm64-w4 0x9B000000 17 16 2 17                                        ; madd  x17, x16, x2, x17    + Llo*Rhi
+       + (arm64-w3 0x9BC07C00 2 16 0                                            ; umulh x2, x16, x0
+       + (arm64-w3 0x8B000000 2 2 17 + arm64-w3 0x9B007C00 0 16 0)))))          ; add x2,x2,x17; mul x0,x16,x0
+   ;; (c128 cond sp) / (c128r cond rl rh): 0/1 <- (LEFT cond RIGHT). eq/ne fold both halves through
+   ;; XOR; the ordered relations run the borrow chain and read NZCV off the high SBCS; gt/above/le/be
+   ;; reverse the subtraction and read the flipped relation.
+   (arm64-w128cc cond chain rsub zch)
+      (? (member? cond '(eq ne))       (zch + arm64-set cond 'r0)
+         (member? cond '(lt below ge ae)) (chain + arm64-set cond 'r0)
+         (cond = 'gt)    (rsub + arm64-set 'lt 'r0)
+         (cond = 'above) (rsub + arm64-set 'below 'r0)
+         (cond = 'le)    (rsub + arm64-set 'ge 'r0)
+         (cond = 'be)    (rsub + arm64-set 'ae 'r0)
+         (scare 'badcc128 cond))
+   (arm64-c128 cond sp9)
+      (arm64-wldp + arm64-w128cc cond
+         (arm64-cmp 'r16 'r0 + arm64-w3 0xFA000000 31 17 2)                     ; cmp x16,x0; sbcs xzr,x17,x2   (L-R)
+         (arm64-cmp 'r0 'r16 + arm64-w3 0xFA000000 31 2 17)                     ; cmp x0,x16; sbcs xzr,x2,x17   (R-L)
+         (arm64-w3 0xCA000000 16 16 0 + (arm64-w3 0xCA000000 17 17 2            ; eor x16,x16,x0; eor x17,x17,x2
+          + (arm64-w3 0xAA000000 16 16 17 + arm64-cmp 'r16 0))))                ; orr x16,x16,x17; cmp x16,#0
+   ;; the 128/64 divide pair (u128 numerator in the cell, u64 divisor on the protocol lo). aarch64
+   ;; has no wide divide, so the high half rides UDIV/MSUB -- leaving a remainder BELOW the divisor --
+   ;; and the low half a 64-step restoring shift. the cell, spent by the ldp, parks the high quotient.
+   ;; CCMP carries the doubling's own carry-out into the comparison: a remainder under a divisor past
+   ;; 2^63 still leaves 64 bits when it doubles. d = 0 answers all ones and does not trap (x86 faults);
+   ;; C leaves it undefined either way.
+   arm64-divloop
+      (le32 0xF241023F + (le32 0x93D0FE31 + (le32 0xD37FFA10                    ; tst x17,#1<<63; extr x17,x17,x16,#63; lsl x16,x16,#1
+       + (le32 0xFA400222 + (le32 0xCB000222                                    ; ccmp x17,x0,#2,eq (force C on the carry-out); sub x2,x17,x0
+       + (arm64-wsel 17 2 17 'ae + (le32 0x9A903610                             ; csel x17,x2,x17,hs; cinc x16,x16,hs  (the quotient bit)
+       + (le32 0xF1000421 + le32 0x54FFFF01))))))))                             ; subs x1,x1,#1; b.ne -8
+   arm64-divpre
+      (arm64-wldp + (le32 0x9AC00A22 + (le32 0x9B00C451                         ; udiv x2,x17,x0; msub x17,x2,x0,x17 -> the remainder
+       + (le32 0xF90003E2 + (le32 0xD2800801 + arm64-divloop)))))               ; str x2,[sp] (park the high quotient); mov x1,#64
+   (arm64-dv128 sp9) (arm64-divpre + (arm64-wmov 0 16 + le32 0xF94003E2))       ; the low quotient off x16, the high back off the cell
+   (arm64-rm128 sp9) (arm64-divpre + (arm64-wmov 0 17 + arm64-wmov 2 31))       ; the remainder, high half 0 (rem < d)
+   ;; the pair shifts by a CONSTANT: EXTR is the funnel (x86's SHLD/SHRD). at 64 and past it the
+   ;; halves just move -- a shift by 0 IS that move -- and SAR floods the sign. c = 0 lays nothing:
+   ;; EXTR has no #64 field, and gen folds that count away before it reaches here.
+   (arm64-shl128 c)
+      (? (c = 0) ()
+         (c < 64) (arm64-w4 0x93C00000 2 2 0 (64 - c) + arm64-wshi 'shl 0 0 c)  ; extr x2,x2,x0,#64-c; lsl x0,x0,#c
+         (arm64-wshi 'shl 2 0 (c - 64) + arm64-wmov 0 31))                      ; lsl x2,x0,#c-64; x0 = 0
+   (arm64-shr128 c)
+      (? (c = 0) ()
+         (c < 64) (arm64-w4 0x93C00000 0 2 0 c + arm64-wshi 'shr 2 2 c)         ; extr x0,x2,x0,#c; lsr x2,x2,#c
+         (arm64-wshi 'shr 0 2 (c - 64) + arm64-wmov 2 31))                      ; lsr x0,x2,#c-64; x2 = 0
+   (arm64-sar128 c)
+      (? (c = 0) ()
+         (c < 64) (arm64-w4 0x93C00000 0 2 0 c + arm64-wshi 'sar 2 2 c)         ; extr x0,x2,x0,#c; asr x2,x2,#c
+         (arm64-wshi 'sar 0 2 (c - 64) + arm64-wshi 'sar 2 2 63))               ; asr x0,x2,#c-64; the sign flood
+   ;; the pair shifts by a REGISTER count (x1, the IR's pinned count register; 0..127 exact). a
+   ;; variable shift reads its count MOD 64, so both bands compute and CSEL on hs picks the crossed
+   ;; one. c = 0 needs its own guard: the co-shift by 64-c degenerates to a shift by 0, which keeps
+   ;; the whole word where it should contribute none.
+   arm64-shl128v
+      (arm64-w3 0xCB000000 16 31 1                                              ; neg  x16, x1        (= 64-c mod 64)
+       + (arm64-w3 0x9AC02400 16 0 16                                           ; lsr  x16, x0, x16
+       + (arm64-w3 0x9AC02000 17 2 1                                            ; lsl  x17, x2, x1
+       + (arm64-w3 0xAA000000 17 17 16                                          ; orr  x17, x17, x16
+       + (arm64-cmp 'r1 0 + (arm64-wsel 17 2 17 'eq                             ; c = 0: the high half is unmoved
+       + (arm64-addsub-imm 'sub 'r16 'r1 64 + (arm64-w3 0x9AC02000 16 0 16      ; sub x16,x1,#64; lsl x16,x0,x16
+       + (arm64-cmp 'r1 64 + (arm64-wsel 2 16 17 'ae                            ; csel x2, x16, x17, hs
+       + (arm64-w3 0x9AC02000 0 0 1 + arm64-wsel 0 31 0 'ae)))))))))))           ; lsl x0,x0,x1; csel x0,xzr,x0,hs
+   arm64-shr128v
+      (arm64-w3 0xCB000000 16 31 1                                              ; neg  x16, x1
+       + (arm64-w3 0x9AC02000 16 2 16                                           ; lsl  x16, x2, x16
+       + (arm64-w3 0x9AC02400 17 0 1                                            ; lsr  x17, x0, x1
+       + (arm64-w3 0xAA000000 17 17 16                                          ; orr  x17, x17, x16
+       + (arm64-cmp 'r1 0 + (arm64-wsel 17 0 17 'eq                             ; c = 0: the low half is unmoved
+       + (arm64-addsub-imm 'sub 'r16 'r1 64 + (arm64-w3 0x9AC02400 16 2 16      ; sub x16,x1,#64; lsr x16,x2,x16
+       + (arm64-cmp 'r1 64 + (arm64-wsel 0 16 17 'ae                            ; csel x0, x16, x17, hs
+       + (arm64-w3 0x9AC02400 2 2 1 + arm64-wsel 2 31 2 'ae)))))))))))           ; lsr x2,x2,x1; csel x2,xzr,x2,hs
+   arm64-sar128v
+      (arm64-w3 0xCB000000 16 31 1                                              ; neg  x16, x1
+       + (arm64-w3 0x9AC02000 16 2 16                                           ; lsl  x16, x2, x16
+       + (arm64-w3 0x9AC02400 17 0 1                                            ; lsr  x17, x0, x1   (the low half shifts in logically)
+       + (arm64-w3 0xAA000000 17 17 16                                          ; orr  x17, x17, x16
+       + (arm64-cmp 'r1 0 + (arm64-wsel 17 0 17 'eq
+       + (arm64-addsub-imm 'sub 'r16 'r1 64 + (arm64-w3 0x9AC02800 16 2 16      ; sub x16,x1,#64; asr x16,x2,x16
+       + (arm64-cmp 'r1 64 + (arm64-wsel 0 16 17 'ae
+       + (arm64-wshi 'sar 17 2 63 + (arm64-w3 0x9AC02800 2 2 1                  ; the sign flood, then asr x2,x2,x1
+       + arm64-wsel 2 17 2 'ae))))))))))))                                       ; csel x2, x17, x2, hs
+   ;; the register twins: the LEFT pair rides two pool registers (rl lo : rh hi) instead of the cell,
+   ;; the RIGHT keeps the x2:x0 protocol -- one form each, so the carry pair still can't part. the
+   ;; answer lands on the protocol without touching rl/rh (x86's subtract has to go through them).
+   (arm64-a128r rl rh) (: l (rn rl) h (rn rh)
+      (arm64-w3 0xAB000000 0 0 l + arm64-w3 0x9A000000 2 2 h))                  ; adds x0,x0,rl; adc x2,x2,rh
+   (arm64-s128r rl rh) (: l (rn rl) h (rn rh)
+      (arm64-w3 0xEB000000 0 l 0 + arm64-w3 0xDA000000 2 h 2))                  ; subs x0,rl,x0; sbc x2,rh,x2
+   (arm64-mw128r rl) (: l (rn rl)
+      (arm64-w3 0x9BC07C00 2 0 l + arm64-w3 0x9B007C00 0 0 l))                  ; umulh x2,x0,rl; mul x0,x0,rl
+   (arm64-m128r rl rh) (: l (rn rl) h (rn rh)
+      (arm64-w3 0x9B007C00 16 h 0                                               ; mul   x16, rh, x0        Lhi*Rlo
+       + (arm64-w4 0x9B000000 16 l 2 16                                         ; madd  x16, rl, x2, x16    + Llo*Rhi
+       + (arm64-w3 0x9BC07C00 2 l 0                                             ; umulh x2, rl, x0
+       + (arm64-w3 0x8B000000 2 2 16 + arm64-w3 0x9B007C00 0 l 0)))))           ; add x2,x2,x16; mul x0,rl,x0
+   (arm64-c128r cond rl rh) (: l (rn rl) h (rn rh)
+      (arm64-w128cc cond
+         (arm64-cmp rl 'r0 + arm64-w3 0xFA000000 31 h 2)                        ; cmp rl,x0; sbcs xzr,rh,x2
+         (arm64-cmp 'r0 rl + arm64-w3 0xFA000000 31 2 h)                        ; cmp x0,rl; sbcs xzr,x2,rh
+         (arm64-w3 0xCA000000 16 l 0 + (arm64-w3 0xCA000000 17 h 2
+          + (arm64-w3 0xAA000000 16 16 17 + arm64-cmp 'r16 0)))))
+   arm64-sx128  (arm64-wshi 'sar 2 0 63)                                        ; asr x2, x0, #63 -- the sign fills the high half
+   arm64-n128   (arm64-w3 0xEB000000 0 31 0 + arm64-w3 0xDA000000 2 31 2)       ; negs x0,x0; ngc x2,x2
+   arm64-inc128 (arm64-addsub-imm 'adds 'r0 'r0 1 + arm64-w3 0x9A000000 2 2 31) ; adds x0,x0,#1; adc x2,x2,xzr
+   arm64-dec128 (arm64-addsub-imm 'subs 'r0 'r0 1 + arm64-w3 0xDA000000 2 2 31) ; subs x0,x0,#1; sbc x2,x2,xzr
+
    ;; indexed addressing: aarch64 has no [base + ix*scale + disp] single insn, so synthesize. ADD makes
    ;; base + ix*scale (LSL #log2 scale); ldx/leax borrow the dest as the address temp, stx uses x16 (IP0,
    ;; outside the r0..r14 file, so it never clashes with an IR register).
@@ -423,6 +554,15 @@
            ('jmp >< arm64-jmp) ('br >< arm64-br) ('jmpr >< arm64-jmpr) ('callr >< arm64-callr)
            ('mulo >< arm64-mulo) ('set >< arm64-set) ('test >< arm64-test)
            ('div >< arm64-div) ('rem >< arm64-rem) ('udiv >< arm64-udiv) ('urem >< arm64-urem)
+           ('a128 >< arm64-a128) ('s128 >< arm64-s128)               ; -- the 128-bit pair kit --
+           ('m128 >< arm64-m128) ('mw128 >< arm64-mw128)
+           ('a128r >< arm64-a128r) ('s128r >< arm64-s128r) ('m128r >< arm64-m128r)
+           ('mw128r >< arm64-mw128r) ('c128r >< arm64-c128r) ('c128 >< arm64-c128)
+           ('shl128 >< arm64-shl128) ('shr128 >< arm64-shr128) ('sar128 >< arm64-sar128)
+           ('shl128v >< arm64-shl128v) ('shr128v >< arm64-shr128v) ('sar128v >< arm64-sar128v)
+           ('dv128 >< arm64-dv128) ('rm128 >< arm64-rm128)
+           ('sx128 >< arm64-sx128) ('n128 >< arm64-n128)
+           ('inc128 >< arm64-inc128) ('dec128 >< arm64-dec128)
            ('ldx >< arm64-ldx) ('stx >< arm64-stx) ('leax >< arm64-leax)
            ('ldxb >< arm64-ldxb) ('stxb >< arm64-stxb)
            ('call >< arm64-call) ('la >< arm64-la) ('lar >< arm64-lar) ('lia >< arm64-lia)

@@ -539,7 +539,40 @@
       ;; the interrupted code may hold a live value in any of them. ⚠ x16 stays the
       ;; borrowed scratch of the indexed/far accesses; these plain stores are in range.
       ("a64.ip.regs"  "f00300f9f10700f9f20b00f9"
-                                          ((st sp 0 r16) (st sp 8 r17) (st sp 16 r18))))
+                                          ((st sp 0 r16) (st sp 8 r17) (st sp 16 r18)))
+      ;; the 128-bit pair kit (hi x2 : lo x0, the left operand at [sp] lo / [sp+8] hi or -- the
+      ;; r-twins -- in rl:rh). x16/x17 are the borrowed scratch, as in the far-memory lane.
+      ("a64.a128"     "f04740a9000010ab4200119a"  ((a128 sp)))        ; ldp x16,x17,[sp]; adds x0,x0,x16; adc x2,x2,x17
+      ("a64.s128"     "f04740a9000200eb220202da"  ((s128 sp)))        ; subs x0,x16,x0; sbc x2,x17,x2
+      ("a64.mw128"    "f00340f9027cd09b007c109b"  ((mw128 sp)))       ; ldr x16,[sp]; umulh x2,x0,x16; mul x0,x0,x16
+      ("a64.m128"     "f04740a9317e009b1146029b027ec09b4200118b007e009b" ((m128 sp)))
+      ("a64.c128.eq"  "f04740a9100200ca310202ca100211aa1f0200f1e0179f9a" ((c128 eq sp)))
+      ("a64.c128.below" "f04740a91f0200eb3f0202fae0279f9a" ((c128 below sp)))   ; cmp x16,x0; sbcs xzr,x17,x2; cset x0,lo
+      ("a64.c128.gt"  "f04740a91f0010eb5f0011fae0a79f9a" ((c128 gt sp)))        ; the reversed subtraction, read as lt
+      ;; the divide pair: UDIV/MSUB on the high half, then 64 restoring steps for the low
+      ("a64.dv128"    "f04740a9220ac09a51c4009be20300f9010880d23f0241f231fed09310fa7fd3220240fa220200cb5120919a1036909a210400f101ffff54e00310aae20340f9" ((dv128 sp)))
+      ("a64.rm128"    "f04740a9220ac09a51c4009be20300f9010880d23f0241f231fed09310fa7fd3220240fa220200cb5120919a1036909a210400f101ffff54e00311aae2031faa" ((rm128 sp)))
+      ("a64.a128r"    "000007ab4200089a"  ((a128r r7 r8)))            ; adds x0,x0,x7; adc x2,x2,x8
+      ("a64.s128r"    "e00000eb020102da"  ((s128r r7 r8)))            ; subs x0,x7,x0; sbc x2,x8,x2 -- no dance through the pair
+      ("a64.mw128r"   "027cc79b007c079b"  ((mw128r r7)))              ; umulh x2,x0,x7; mul x0,x0,x7
+      ("a64.m128r"    "107d009bf040029be27cc09b4200108be07c009b" ((m128r r7 r8)))
+      ("a64.c128r.eq" "f00000ca110102ca100211aa1f0200f1e0179f9a" ((c128r eq r7 r8)))
+      ("a64.c128r.lt" "ff0000eb1f0102fae0a79f9a" ((c128r lt r7 r8)))
+      ("a64.c128r.gt" "1f0007eb5f0008fae0a79f9a" ((c128r gt r7 r8)))
+      ("a64.sx128"    "02fc7f93"          ((sx128)))                  ; asr x2, x0, #63
+      ("a64.n128"     "e00300ebe20302da"  ((n128)))                   ; negs x0,x0; ngc x2,x2
+      ("a64.inc128"   "000400b142001f9a"  ((inc128)))                 ; adds x0,x0,#1; adc x2,x2,xzr
+      ("a64.dec128"   "000400f142001fda"  ((dec128)))                 ; subs x0,x0,#1; sbc x2,x2,xzr
+      ("a64.shl128.5" "42ecc09300e87bd3"  ((shl128 5)))               ; extr x2,x2,x0,#59; lsl x0,x0,#5
+      ("a64.shl128.64" "02fc40d3e0031faa" ((shl128 64)))              ; the halves move (a shift by 0); x0 = 0
+      ("a64.shl128.100" "026c5cd3e0031faa" ((shl128 100)))            ; lsl x2,x0,#36; x0 = 0
+      ("a64.shr128.5" "4014c09342fc45d3"  ((shr128 5)))               ; extr x0,x2,x0,#5; lsr x2,x2,#5
+      ("a64.shr128.64" "40fc40d3e2031faa" ((shr128 64)))
+      ("a64.sar128.100" "40fc649342fc7f93" ((sar128 100)))            ; asr x0,x2,#36; the sign floods x2
+      ;; the v-forms: both bands compute (a variable shift reads its count MOD 64) and CSEL picks
+      ("a64.shl128v"  "f00301cb1024d09a5120c19a310210aa3f0000f15100919a300001d11020d09a3f0001f10222919a0020c19ae023809a" ((shl128v)))
+      ("a64.shr128v"  "f00301cb5020d09a1124c19a310210aa3f0000f11100919a300001d15024d09a3f0001f10022919a4224c19ae223829a" ((shr128v)))
+      ("a64.sar128v"  "f00301cb5020d09a1124c19a310210aa3f0000f11100919a300001d15028d09a3f0001f10022919a51fc7f934228c19a2222829a" ((sar128v))))
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'arm64 (at t 2))) 0 a64tests)
 
    ;; -- the thumb2 backend: the SAME neutral IR, a THIRD target -- ARMv7E-M (Cortex-M7, the Teensy
