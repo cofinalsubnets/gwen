@@ -1,18 +1,19 @@
-/* the wide pair: __int128 / unsigned __int128 (x64 only -- gen's d128 lane).
+/* the wide pair: __int128 / unsigned __int128 (gen's d128 lane: x64, arm64).
  *
  * the lane's whole surface, one check each: widening 64x64 products (the ONE
- * mulq the bignum kernel lives on), general 128x128 low products, carry chains
- * across the half boundary, every compare at both signednesses (value AND
- * branch positions -- cgbin settles 0/1 via c128, cbranch rides the same op
- * through cmp/br), constant shifts on each side of 64, variable shifts (the
- * branchy v-forms, 0..127 exact), the divq two-step for u128/u64 divide and
- * remainder, negation's borrow, truth off either half, casts in and out, the
- * folded (double)((u128)1<<64) constant, wide ++/-- (step, store, step back),
- * compound assigns, and a static function RETURNING the pair (rdx:rax, the
- * SysV i128 return).
+ * multiply the bignum kernel lives on), general 128x128 low products, carry
+ * chains across the half boundary, every compare at both signednesses (value
+ * AND branch positions -- cgbin settles 0/1 via c128, cbranch rides the same
+ * op through cmp/br), constant shifts on each side of 64, variable shifts (the
+ * v-forms, 0..127 exact), the two-step u128/u64 divide and remainder,
+ * negation's borrow, truth off either half, casts in and out, the folded
+ * (double)((u128)1<<64) constant, wide ++/-- (step, store, step back),
+ * compound assigns, and a static function RETURNING the pair on the protocol
+ * (rdx:rax, the SysV i128 return; x2:x0 on aarch64).
  *
- * every other target refuses this file loud (ccarch.sh expects that, like
- * 100-complex): parse accepts the type everywhere, gen carries it on x64.
+ * a target without the lane refuses this file loud (ccarch.sh expects that,
+ * like 100-complex): parse accepts the type everywhere, gen carries it where
+ * the backend spells the carrying ops.
  *
  * Each check contributes 1, so the exit code IS the number that passed. */
 
@@ -25,7 +26,7 @@ int main(void) {
  int ok = 0;
  unsigned long a = 0xdeadbeefcafebabeUL, b = 0x123456789abcdef1UL;
 
- /* widening product: (u128)u64 * u64 is one mulq */
+ /* widening product: (u128)u64 * u64 is one widening multiply */
  u128 p = (u128) a * b;
  if ((unsigned long) (p >> 64) == 0xfd5bdeeeb2a01d8UL) ok++;
  if ((unsigned long) p == 0xca165e3e6f4690deUL) ok++;
@@ -75,7 +76,7 @@ int main(void) {
  if (((s128) nb >> 64) == -1) ok++;
  if (((s128) nb >> 127) == -1) ok++;
 
- /* variable shifts: the branchy v-forms */
+ /* variable shifts: the v-forms */
  int sh = 13;
  u128 v = ((u128) a << sh) | ((u128) b >> (64 - sh));
  if ((unsigned long) (v >> 64) == 0x1bd5UL) ok++;
@@ -94,7 +95,7 @@ int main(void) {
  if (mk(0, 1)) ok++;
  if (!mk(0, 0)) ok++;
 
- /* the divq two-step: u128 / u64 and %, checked by the division algebra */
+ /* the two-step divide: u128 / u64 and %, checked by the division algebra */
  u128 num = mk(3, 0x8000000000000001UL);
  u128 qq = num / 7, rr = num % 7;
  if (qq * 7 + rr == num) ok++;
