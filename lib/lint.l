@@ -388,7 +388,7 @@
    ; forced over both moves whichever file it was not written for.
    (lhend stk line x)
     (? !(two? stk) stk
-       (<stk @ ({'nt 1 'pr 1 'ol ol} & ol = line)
+       (<stk @ ({'nt 1 'pr 1 'ol ol} && ol = line)
         (pin <stk 'base x, stk)
         stk))
 
@@ -399,7 +399,7 @@
        (: f <stk
           (f @ {'nt 0} (pin f 'nt 1, pin f 'pr (? (lpair? c nx) 1 0), stk)
              ; operand one: this is where the form aligns
-             ({'nt 1 'ol ol} & ol = line) (pin f 'base (tc - 1), pin f 'nt 2, stk)
+             ({'nt 1 'ol ol} && ol = line) (pin f 'base (tc - 1), pin f 'nt 2, stk)
              (pin f 'nt (f 'nt + 1), stk))))
 
    ; ⚠ `it` is 1 while we are INSIDE a token: ltok must fire once per token, at

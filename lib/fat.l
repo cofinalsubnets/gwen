@@ -239,8 +239,8 @@
        d (doy - ((153 * mp + 2) // 5) + 1)
        m (mp < 10 ? (mp + 3) (mp - 9))
        y (m <= 2 ? (y + 1) y)
-       ((y - 1980) << 9 + (m << 5) + d ><
-        (secs // 3600) << 11 + ((secs // 60 % 60) << 5) + (secs % 60 // 2)))
+       (((y - 1980) << 9) + (m << 5) + d ><
+        ((secs // 3600) << 11) + ((secs // 60 % 60) << 5) + (secs % 60 // 2)))
 
    ; --- building one entry group for a name ---
    (mk-short n11 flags at cl sz)

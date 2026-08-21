@@ -137,7 +137,7 @@
    ; every line it yields means 53, but a stub on another port is a real thing to
    ; want and the walk carries the pair either way.
    (dns-ask ns port h ms)
-    (udp-bind 0 @ (p & p)
+    (udp-bind 0 @ (p && p)
      (: id ((clock 0) & 65535)
         q (dns-query id h)
       (? !(string? q) (close p, ())
@@ -185,7 +185,7 @@
    (dns-walk ((a >< u) >< su) h)
     (dns-ask a u h dns-ms @
      'torn (scare 'torn ['dns h])
-     (x & two? x) x
+     (x && two? x) x
      (dns-walk su h))
 
    ; hosts first, then the name as given, then each search domain appended.

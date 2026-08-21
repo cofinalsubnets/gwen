@@ -851,7 +851,7 @@
     (? (a64? g)
        (? (cls = 'addsub) (-16777215 <= n && n <= 16777215)   ; imm12, or the backend's hi12+lo12 split
           (cls = 'cmp) (-4095 <= n && n <= 4095)              ; imm12 only (no split -- flags)
-          (cls = 'log) (0 < n && 0 = (n & n + 1))
+          (cls = 'log) (0 < n && 0 = (n & (n + 1)))
           ())
        (v6m? g)
        (? (cls = 'addsub) (-255 <= n && n <= 255)             ; v6-M ADDS/SUBS imm8 (imm3 3-addr / imm8 2-addr; negative flips)
@@ -914,7 +914,7 @@
    ; laying a wrong ABI, for the day alignment is honored.
    (amem? g ty) (stru? ty && !(aclass g ty) && !(arm? g) && !(t32? g))
    (asalign g ty) (: e (peep (g 'stag) <>ty 0) (? (two? e) <>>e 8))        ; a struct tag's alignment
-   (aslots g ty) ((tsz g ty + 7 & -8) >> 3)                              ; its eightbyte count
+   (aslots g ty) (((tsz g ty + 7) & -8) >> 3)                              ; its eightbyte count
    ; a MEMORY-class RETURN: the caller passes a hidden pointer as the implicit
    ; first gp argument, the callee fills that memory and answers the pointer.
    ; the v6-M base ABI does it past 4 bytes; SysV past 16 (aclass ()).
@@ -5258,7 +5258,7 @@
                           _ (pin nmap b <pr)
                           (place >rs ([hi n <pr] >< act2) <>pr)))
                    high2 (place rows () 8)
-                   K2 (high2 + 15 & -16)
+                   K2 ((high2 + 15) & -16)
                    (radj2 f op9)                       ; a mapped touch -> its packed spelling
                     (: X (nthr f op9)
                        o9 (obj9 slots X)
@@ -7383,13 +7383,13 @@
                     (id? (aone g pty) 'sse && (tsz g pty = 8)) ||       ; mixed/int-pair composites refuse LOUD
                     (id? (aone g pty) 'int && (tsz g pty <= 4)))) 'bad
                  (v6m? g && stru? pty && id? (aone g pty) 'sse)           ; v6-M 8B blob param: the even-odd gp pair (the caller's g2 lane)
-                  (: gpe (gpi + 1 & -2)
+                  (: gpe ((gpi + 1) & -2)
                      (? (gpe + 2 <= ngp g)
                          (: off (nslot g 8)
                             (spill hp >ps (gpe + 2) xmmi ovi ([<p off pty] >< env)
                                    (acc + [['st 'r4 off (nthr (argr g) gpe)]
                                             ['st 'r4 (off + 4) (nthr (argr g) (gpe + 1))]])))
-                        (: ov8 (ovi + 7 & -8)
+                        (: ov8 ((ovi + 7) & -8)
                            (spill hp >ps 4 xmmi (ov8 + 8) ([<p (ovb g + ov8) pty] >< env) acc))))
                  (stru? pty && two? (aeb2 g pty))       ; a 9..16B struct param: two eightbytes into a 16-byte slot, each from a gp or an xmm reg
                   (? (pol? hp && !(sse2? g pty)) 'bad        ; a policy homes gp scalars only -- mixed/int-pair 16B deopts
@@ -7440,26 +7440,26 @@
                                (acc + [['st 'r4 off (nthr (argr g) gpi)]])))
                      (spill hp >ps gpi xmmi (ovi + 4) ([<p (ovb g + ovi) pty] >< env) acc))
                  (v6m? g && flo? pty)                   ; v6-M base ABI: a double param IS a gp pair
-                  (: gpe (gpi + 1 & -2)               ;  (no FPU regs exist) -- spill both words, or
+                  (: gpe ((gpi + 1) & -2)               ;  (no FPU regs exist) -- spill both words, or
                      (? (gpe + 2 <= ngp g)            ;  read the 8-aligned caller stack
                          (: off (nslot g 8)
                           (spill hp >ps (gpe + 2) xmmi ovi ([<p off pty] >< env)
                            (acc + [['st 'r4 off (nthr (argr g) gpe)]
                             ['st 'r4 (off + 4) (nthr (argr g) (gpe + 1))]])))
-                        (: ov8 (ovi + 7 & -8)
+                        (: ov8 ((ovi + 7) & -8)
                          (spill hp >ps 4 xmmi (ov8 + 8) ([<p (ovb g + ov8) pty] >< env) acc))))
                  (flo? pty && xmmi < 8)
                   (: off (nslot g 8)
                      (spill hp >ps gpi (xmmi + 1) ovi ([<p off pty] >< env)
                             (acc + fstf g pty 'r4 off (xmmreg xmmi))))
                  (pair? g pty)                          ; a pair param: an even-odd register pair spills
-                  (: gpe (gpi + 1 & -2)               ;  both words; else the 8-aligned stack (gp closes)
+                  (: gpe ((gpi + 1) & -2)               ;  both words; else the 8-aligned stack (gp closes)
                      (? (gpe + 2 <= ngp g)
                          (: off (nslot g 8)
                             (spill hp >ps (gpe + 2) xmmi ovi ([<p off pty] >< env)
                                    (acc + [['st 'r4 off (nthr (argr g) gpe)]
                                             ['st 'r4 (off + 4) (nthr (argr g) (gpe + 1))]])))
-                        (: ov8 (ovi + 7 & -8)
+                        (: ov8 ((ovi + 7) & -8)
                            (spill hp >ps 4 xmmi (ov8 + 8) ([<p (ovb g + ov8) pty] >< env) acc))))
                  (t32? g && flo? pty)                   ; a t32 double param past d7: the 4-byte slot can't carry it
                   (nolane g ("no lane for a double param past the register file" + ontgt g))
@@ -7679,7 +7679,7 @@
            (: _ (bldreset g)
               body (cgitems g <>sp0 <><>>>f ())
               (? (bad? body) 'bad
-                 (: frame (peep g 'off 0 + 15 & -16)
+                 (: frame ((peep g 'off 0 + 15) & -16)
                     (? (arm? g)
                        ; the sibcall pass rides all targets (epim?/sibjmp read the epilogue off
                        ; g 'epi), but the IR sweeps still model x64 shapes -- so arm rides the raw

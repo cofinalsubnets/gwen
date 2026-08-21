@@ -40,7 +40,7 @@
   ; compiled before any layer is spliced, so an unaccompanied `@` folds to a plain
   ; application and a run of charms church-towers into an apcap naming no seat.
   (esc o c)
-   (c @ (92 | 34) (put o 92, put o c)
+   (c @ (92 || 34) (put o 92, put o c)
         10 (say o "\\n")   9  (say o "\\t")
         13 (say o "\\r")   27 (say o "\\e")
         0  (say o "\\0")

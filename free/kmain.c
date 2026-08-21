@@ -105,14 +105,17 @@ struct k_boot kboot;
 // ⚠ THE TABLE GROWS; IT DOES NOT CAP. it was a `k_source[32]` with five `fd <
 // k_sources_max` bounds checks around it -- unreachable while nothing wrote it,
 // and the rung-6 sweep left it as a rule in prose (doc/io.md) rather than a fix.
-// this is the fix: k_source_open is the ONE door in, and it grows the table
-// through g->alloc, which down here lands in the KERNEL'S OWN HEAP. the bug a
-// ceiling would have shipped is worse than the host's was: not a hang but a
-// silent refusal to open the 33rd thing.
+// this is the fix: k_source_open is the ONE door in, and it grows the table in
+// the KERNEL'S OWN HEAP. the bug a ceiling would have shipped is worse than the
+// host's was: not a hang but a silent refusal to open the 33rd thing.
 // ⚠ inle DEFINES the malloc family (below the allocator) rather than importing
 // one, so a bare malloc() here would be ours and would work -- and would read
 // exactly like the libc call nothing in this tree is allowed to make. the door
-// is g->alloc everywhere it can be reached; kmallocw where g does not exist yet.
+// is g->alloc everywhere it can be reached; kmallocw where g cannot be.
+// ⚠ THIS DOOR IS ONE OF THOSE: it takes no g, because free/sys.c's open must
+// reach it and a syscall arrives with none. Same heap either way (g->alloc is
+// love.c's ai_libc_alloc -> malloc -> kmallocw), so what this buys is one
+// allocator for one table rather than two that must agree.
 void *malloc(size_t n);
 void free(void *x);
 static void *kmallocw(uintptr_t n);
@@ -188,6 +191,14 @@ static int k_sources_n = (int) countof(k_boot);
 static ai_inline struct k_source *k_source(int fd) {
   return fd >= 0 && fd < k_sources_n ? &k_sources[fd] : NULL; }
 
+// ⚠ IN RANGE IS NOT OPEN, and a syscall face is the caller that has to care: a
+// closed row is ZEROED where it stands (ram_close, pipe_rclose, pipe_wclose),
+// never removed, so k_source keeps answering it. Carrying any method at all is
+// what live means -- k_fd_free's rule, read the other way round.
+static ai_inline bool k_row_live(int fd) {
+  struct k_source const *s = k_source(fd);
+  return s && (s->readn || s->writen || s->putc || s->flush || s->ready || s->close); }
+
 // THE DOOR IN: answer fd's row, making room for it first. Doubling from the boot
 // rows, copying, and freeing the old table unless it is the static one -- there
 // is no realloc down here. -> NULL when there is no memory, which is a REFUSAL
@@ -195,16 +206,16 @@ static ai_inline struct k_source *k_source(int fd) {
 // difference between this and the ceiling it replaces.
 // the ramfs is the caller: every open file is a row past the boot two, so the grow
 // branch runs on the first one (test/kernel/ramfs.l).
-struct k_source *k_source_open(struct ai *g, int fd) {
+struct k_source *k_source_open(int fd) {
   if (fd < 0) return NULL;
   if (fd >= k_sources_n) {
     int m = k_sources_n;
     while (m <= fd) m *= 2;
-    struct k_source *t = g->alloc(g, NULL, (size_t) m * sizeof *t);
+    struct k_source *t = kmallocw(b2w((uintptr_t) m * sizeof *t));
     if (!t) return NULL;
     for (int i = 0; i < m; i++)
       t[i] = i < k_sources_n ? k_sources[i] : (struct k_source) {0};
-    if (k_sources != k_boot) g->alloc(g, k_sources, 0);
+    if (k_sources != k_boot) kfree(k_sources);
     k_sources = t, k_sources_n = m; }
   return &k_sources[fd]; }
 
@@ -215,6 +226,10 @@ struct k_source *k_source_open(struct ai *g, int fd) {
 // door. a seat maps the running task's fds 0/1/2 to real rows; every dispatcher
 // below reads it through k_fd_eff. slot -1 is pass-through, -2 is seated CLOSED
 // (an fdmap's () entry: reads answer the end, writes fall away).
+// ⚠ THE SEAT IS THE PORT LAYER'S, AND ONLY ITS: k_fd_eff is reached from
+// fd_readn, fd_writen, ai_fd_close and k_procseat -- never from a nif, which is
+// why k_fdopen takes the fd it was handed. So an fd spelled in love is an
+// absolute row, and free/sys.c's syscall door is seat-blind by the same law.
 struct k_seat { intptr_t pid; int fd[3]; };
 static struct k_seat *k_seats;
 static int k_seats_n;
@@ -261,19 +276,39 @@ static int k_fd_eff(struct ai *g, int fd) {
 // the fd first read through the running task's seat (rung 4). The NULL-guards
 // keep misuse from crashing (read-from-output-fd reads the end;
 // write-to-input-fd discards).
-static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
-  int fd = k_fd_eff(g, (int) ai_io_fd(g->io));
+// the row-level motions, on an ALREADY-RESOLVED fd. The port dispatchers below
+// resolve through the running task's seat first; free/sys.c's syscall door does
+// not, which is the one difference between the two callers.
+static intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) {
   struct k_source *s = k_source(fd);
   if (!s || !s->readn) return -1;
   return s->readn(fd, dst, n); }
-static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
-  int fd = k_fd_eff(*fp, (int) ai_io_fd((*fp)->io));
+static intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
   struct k_source *s = k_source(fd);
   if (!s) return (intptr_t) n;
   if (s->writen) return s->writen(fd, src, n);
   if (!s->putc) return (intptr_t) n;
   for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
   return (intptr_t) n; }
+static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+  return k_row_read(k_fd_eff(g, (int) ai_io_fd(g->io)), dst, n); }
+static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
+  return k_row_write(k_fd_eff(*fp, (int) ai_io_fd((*fp)->io)), src, n); }
+
+// free/sys.c's door: the POSIX shapes over the same rows. ⚠ the port layer says
+// END with -1 and read(2) says it with 0, so the ends are translated here rather
+// than in the syscall table, where every future row would have to remember.
+long k_fd_write(int fd, void const *b, long n) {
+  if (n < 0) return -22;                                 // EINVAL
+  return (long) k_row_write(fd, (unsigned char const *) b, (uintptr_t) n); }
+long k_fd_read(int fd, void *b, long n) {
+  if (n < 0) return -22;
+  intptr_t r = k_row_read(fd, (unsigned char *) b, (uintptr_t) n);
+  return r < 0 ? 0 : (long) r; }
+long k_fd_close(int fd) {
+  if (!k_row_live(fd)) return -9;                        // EBADF
+  ai_fd_close(fd);
+  return 0; }
 static struct ai *fd_flush(struct ai *g) {
   int fd = k_fd_eff(g, (int) ai_io_fd(g->io));
   struct k_source *s = k_source(fd);
@@ -566,6 +601,22 @@ static unsigned char const *k_blob(int i, uintptr_t *len) {
   if (e->own) return *len = e->len, e->bytes;
   return *len = kfiles[e->bake].len, (unsigned char const*) kfiles[e->bake].bytes; }
 
+// free/sys.c's seek. ⚠ it answers an ERRNO where lvm_lseek answers a bare -1:
+// down here a caller can tell "no such fd" from "this row does not seek", which
+// the love door could not, having no errno table to name it with. whence 0/1/2
+// is SEEK_SET/CUR/END -- what the love door already meant by them.
+long k_fd_lseek(int fd, long off, int whence) {
+  if (!k_row_live(fd)) return -9;                        // EBADF
+  struct k_fh *h = k_fh(fd);
+  if (!h) return -29;                                    // ESPIPE: a console or a pipe
+  if (whence < 0 || whence > 2) return -22;              // EINVAL
+  uintptr_t len;
+  k_blob(h->i, &len);
+  intptr_t at = off + (whence == 1 ? (intptr_t) h->pos
+                     : whence == 2 ? (intptr_t) len : 0);
+  if (at < 0) return -22;
+  return (long) (h->pos = (uintptr_t) at); }
+
 // canonical path -> its live entry. LINEAR and unapologetic: the tree is a few
 // dozen entries, and a hash would cost a table the boot has to build before it can
 // open the file that would have justified it.
@@ -663,9 +714,9 @@ static int k_parent_ok(char const *p, uintptr_t n) {
   if (dn) dn--;
   if (!dn) return 0;
   int i = k_find(p, dn);
-  if (i >= 0) return k_ents[i].dir ? 0 : ENOTDIR;
+  if (i >= 0) return k_ents[i].dir ? 0 : -ENOTDIR;
   uintptr_t junk;
-  return k_kids(p, dn, &junk) ? 0 : ENOENT; }
+  return k_kids(p, dn, &junk) ? 0 : -ENOENT; }
 
 // make room for `need` bytes in entry i's heap copy, bringing the baked blob
 // across on the first write. -> false is a REFUSAL the caller must read and say;
@@ -733,10 +784,8 @@ static void ram_close(int fd) {
 // on. A row is free when it carries no method at all, which is what k_source_open
 // zeroes a fresh one to and what ram_close puts one back to.
 static int k_fd_free(void) {
-  for (int i = (int) countof(k_boot); i < k_sources_n; i++) {
-    struct k_source *s = &k_sources[i];
-    if (!s->readn && !s->writen && !s->putc && !s->flush && !s->ready && !s->close)
-      return i; }
+  for (int i = (int) countof(k_boot); i < k_sources_n; i++)
+    if (!k_row_live(i)) return i;
   return k_sources_n; }
 
 // open a path -> its fd, or -1. m is r read, w truncate, a append -- the one door
@@ -744,28 +793,35 @@ static int k_fd_free(void) {
 // host/posix.c spells 0/1/2). w and a CREATE an absent path whose parent is a
 // directory (rung 2); for r absence stays absence. a directory does not open --
 // readdir is its read door.
-static ai_noinline int k_ramopen(struct ai *g, struct ai_str *pv, char m) {
-  if (m != 'r' && m != 'w' && m != 'a') return -1;
-  if (!k_fs_init()) return -1;
+// the PATH FACE: an fd, or a NEGATIVE errno. ⚠ the love doors above answer a
+// bare -1 / () for every failure alike and always did -- down here the reasons
+// are distinct and free/sys.c's openat needs them, so they are told apart HERE
+// and flattened in the marshaling, never the other way round.
+static ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
+  if (m != 'r' && m != 'w' && m != 'a') return -EINVAL;
+  if (!k_fs_init()) return -ENOMEM;
   char cp[256];
-  intptr_t cn = k_canon(pv->bytes, pv->len, cp);
-  if (cn <= 0) return -1;
+  intptr_t cn = k_canon(p, pn, cp);
+  if (cn < 0) return -ENAMETOOLONG;
+  if (!cn) return -EISDIR;                       // the root is a directory
   int i = k_find(cp, (uintptr_t) cn);
-  if (i >= 0 && k_ents[i].dir) return -1;
+  if (i >= 0 && k_ents[i].dir) return -EISDIR;
   bool made = false;
   if (i < 0) {
-    if (m == 'r' || k_parent_ok(cp, (uintptr_t) cn)) return -1;
-    if ((i = k_create(cp, (uintptr_t) cn, false, 0644)) < 0) return -1;
+    if (m == 'r') return -ENOENT;
+    int e = k_parent_ok(cp, (uintptr_t) cn);
+    if (e) return e;
+    if ((i = k_create(cp, (uintptr_t) cn, false, 0644)) < 0) return -ENOMEM;
     made = true; }
   int fd = k_fd_free();
   struct k_fh *h = kmallocw(b2w(sizeof *h));
-  struct k_source *s = h ? k_source_open(g, fd) : NULL;   // the grow door; NULL is no memory
+  struct k_source *s = h ? k_source_open(fd) : NULL;   // the grow door; NULL is no memory
   if (!s) {
     kfree(h);
     // an open that refuses must leave the tree exactly as it found it -- a file
     // this call minted leaves with it.
     if (made) k_ents[i].live = false, k_ent_gc(i);
-    return -1; }
+    return -ENOMEM; }
   // ⚠ the truncate lands LAST, past every way this can still fail (same law).
   uintptr_t len = 0;
   struct k_ent *e = &k_ents[i];
@@ -776,6 +832,11 @@ static ai_noinline int k_ramopen(struct ai *g, struct ai_str *pv, char m) {
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
                            .ready = ram_ready, .close = ram_close, .state = h };
   return fd; }
+// the love face: every refusal flattens to -1, which is what both doors above
+// have always answered and what kore reads.
+static int k_ramopen(struct ai_str *pv, char m) {
+  int fd = k_fs_open(pv->bytes, pv->len, m);
+  return fd < 0 ? -1 : fd; }
 
 // (open path mode) -- host/main.c's lvm_open for the ramfs door: a heap port
 // (closed on GC) or the zero point on any failure. The kernel links no host/*.c,
@@ -784,7 +845,7 @@ static ai_noinline int k_ramopen(struct ai *g, struct ai_str *pv, char m) {
 static lvm(lvm_open) {
   if (!ai_strp(Sp[0]) || !ai_strp(Sp[1])) goto fail;
   struct ai_str *mv = (struct ai_str*) Sp[1];
-  int fd = mv->len ? k_ramopen(g, (struct ai_str*) Sp[0], mv->bytes[0]) : -1;
+  int fd = mv->len ? k_ramopen((struct ai_str*) Sp[0], mv->bytes[0]) : -1;
   if (fd < 0) goto fail;
   Pack(g);
   struct ai *r = ai_io_alloc(g, fd);
@@ -837,32 +898,52 @@ static lvm(lvm_close) {
 // (stat path) -> (size mtime-ms mode ns) | (). ⚠ ns is the ms date times a million,
 // not a finer reading of it: this clock's last hand IS the millisecond (a 100 Hz
 // tick over the boot date), and digits it does not have would be the wrong honesty.
-ai_noinline static struct ai *k_stat(struct ai *g) {
+// what the ramfs KNOWS about a path, and nothing it would have to invent. A
+// struct stat's ino, nlink, uid and dev have no answer down here, so filling
+// them is free/sys.c's fabrication to make in the open -- not this face's to
+// bury, where nobody would ever see what inle had decided an inode is.
+struct k_st { uintptr_t size, ms, mode; };
+
+// -> 0, or -ENOENT for a path that is not there. ⚠ a SYNTHESIZED directory --
+// a prefix that has children but no entry of its own, and the root -- answers
+// like any other, because the initrd carries no directories and so most of the
+// tree is synthesized. That case is also why this fills a struct rather than
+// handing back an entry index: it has no row to point at.
+ai_noinline static int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st) {
   char cp[256];
+  intptr_t cn;
+  if (!k_fs_init()) return -ENOMEM;
+  if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
+  int i = k_find(cp, (uintptr_t) cn);
+  uintptr_t kid;
+  *st = (struct k_st) { 0, 0, 0 };
+  if (i >= 0 && !k_ents[i].dir)
+    k_blob(i, &st->size), st->ms = k_ents[i].ms,
+    st->mode = k_mode_file | k_ents[i].mode;
+  else if (i >= 0) {
+    st->mode = k_mode_dir | k_ents[i].mode;     // an explicit directory: its own date,
+    st->ms = k_ents[i].ms;                      // or its newest child's if newer
+    if (k_kids(cp, (uintptr_t) cn, &kid) && kid > st->ms) st->ms = kid; }
+  else if (k_kids(cp, (uintptr_t) cn, &st->ms) || !cn) st->mode = k_mode_dir | 0755;
+  else return -ENOENT;
+  return 0; }
+
+// the love face: (size mtime mode ns), kore's shape. ⚠ every refusal is the
+// same () here -- absence and misuse alike -- which is the host's answer too.
+ai_noinline static struct ai *k_stat(struct ai *g) {
+  struct k_st st;
   if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
   struct ai_str *pv = (struct ai_str*) g->sp[0];
-  intptr_t cn;
-  if (!k_fs_init() || (cn = k_canon(pv->bytes, pv->len, cp)) < 0)
-    return g->sp[0] = ZeroPoint, g;
-  int i = k_find(cp, (uintptr_t) cn);
-  uintptr_t size = 0, ms = 0, kid, mode;
-  if (i >= 0 && !k_ents[i].dir)
-    k_blob(i, &size), ms = k_ents[i].ms, mode = k_mode_file | k_ents[i].mode;
-  else if (i >= 0) {
-    mode = k_mode_dir | k_ents[i].mode;         // an explicit directory: its own date,
-    ms = k_ents[i].ms;                          // or its newest child's if newer
-    if (k_kids(cp, (uintptr_t) cn, &kid) && kid > ms) ms = kid; }
-  else if (k_kids(cp, (uintptr_t) cn, &ms) || !cn) mode = k_mode_dir | 0755;
-  else return g->sp[0] = ZeroPoint, g;          // absent -> the real ()
+  if (k_fs_stat(pv->bytes, pv->len, &st)) return g->sp[0] = ZeroPoint, g;
   if (!ai_ok(g = ai_have(g, 4 * Width(struct ai_chain)))) return g;
   struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm((intptr_t) (ms * 1000000)), ZeroPoint);
+                                 putcharm((intptr_t) (st.ms * 1000000)), ZeroPoint);
   c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                putcharm((intptr_t) mode), word(c));
+                putcharm((intptr_t) st.mode), word(c));
   c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                putcharm((intptr_t) ms), word(c));
+                putcharm((intptr_t) st.ms), word(c));
   c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                putcharm((intptr_t) size), word(c));
+                putcharm((intptr_t) st.size), word(c));
   return g->sp[0] = word(c), g; }
 static lvm(lvm_stat) {
   Pack(g); g = k_stat(g);
@@ -936,7 +1017,7 @@ static lvm(lvm_lseek) {
 static lvm(lvm_openfd) {
   intptr_t m = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
   Sp[1] = putcharm(!ai_strp(Sp[0]) ? -1
-                   : k_ramopen(g, (struct ai_str*) Sp[0],
+                   : k_ramopen((struct ai_str*) Sp[0],
                                m == 1 ? 'w' : m == 2 ? 'a' : 'r'));
   Sp += 1; ai_musttail return Next(1); }
 
@@ -1035,7 +1116,7 @@ ai_noinline static int k_dup_row(struct ai *g, int src) {
     struct k_fh *o = s->state;
     if (!o || !(h = kmallocw(b2w(sizeof *h)))) return -1;
     *h = *o; }
-  struct k_source *t = k_source_open(g, fd);
+  struct k_source *t = k_source_open(fd);
   if (!t) { kfree(h); return -1; }
   s = k_source(src);                            // the grow may have moved the table
   *t = *s;
@@ -1054,11 +1135,11 @@ ai_noinline static struct ai *k_pipe_new(struct ai *g) {
   if (!p) return g->sp[0] = putcharm(-ENOMEM), g;
   *p = (struct k_pipe) { .rrefs = 1, .wrefs = 1 };
   int rfd = k_fd_free();
-  struct k_source *rs = k_source_open(g, rfd);
+  struct k_source *rs = k_source_open(rfd);
   if (rs) *rs = (struct k_source) { .readn = pipe_readn, .ready = pipe_rready,
                                     .close = pipe_rclose, .state = p };
   int wfd = rs ? k_fd_free() : -1;
-  struct k_source *ws = rs ? k_source_open(g, wfd) : NULL;
+  struct k_source *ws = rs ? k_source_open(wfd) : NULL;
   if (!ws) {
     if (rs) k_row_zero(rfd);
     kfree(p);
@@ -1106,7 +1187,7 @@ ai_noinline static ai_word k_dup2(struct ai *g, ai_word sw, ai_word dw) {
   if (src == dst) return ZeroPoint;
   int nfd = k_dup_row(g, src);                  // the alias first: src == a dying dst's twin survives
   if (nfd < 0) return putcharm(EBADF);
-  struct k_source *d = k_source_open(g, dst);
+  struct k_source *d = k_source_open(dst);
   if (!d) { ai_fd_close(nfd); k_row_zero(nfd); return putcharm(ENOMEM); }
   if (d->close) d->close(dst);
   d = k_source(dst);                            // close zeroes through the live table
@@ -1277,91 +1358,110 @@ static lvm(lvm_vmx_run) {
 // negative lane; cwd answers the string | (). The environment is not here: a
 // tablet in the boot text (kmain, below), as doc/inle.md says.
 
-ai_noinline static ai_word k_mkdir(ai_word pw, ai_word mw) {
+// --- the PATH FACES ------------------------------------------------------
+// k_fs_* take (bytes, len) and answer 0 or a NEGATIVE errno, as k_fd_* and
+// k_parent_ok do -- ONE sign for every C face in this kernel, and it is the
+// one __ai_sys owes its caller (impl.h's er() reads an error as
+// (unsigned long) r > (unsigned long) -4096), so free/sys.c hands these answers
+// straight out with no flip anywhere. The love conventions are the k_* wrappers'
+// business: positive for most doors, negative for chdir, () for absence.
+// ⚠ do not "restore" the positive lane -- it was a fossil of the love bodies
+// these were lifted out of, and a flip per path is a sign to get wrong per path.
+// ⚠ ai_noinline is load-bearing here, not decoration: cp[256] living in an
+// lvm's own frame would block its musttail.
+ai_noinline static int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
   char cp[256];
-  if (!ai_strp(pw)) return putcharm(EINVAL);
-  struct ai_str *pv = (struct ai_str*) pw;
   intptr_t cn;
-  if (!k_fs_init()) return putcharm(ENOMEM);
-  if ((cn = k_canon(pv->bytes, pv->len, cp)) < 0) return putcharm(ENAMETOOLONG);
+  if (!k_fs_init()) return -ENOMEM;
+  if ((cn = k_canon(p, pn, cp)) < 0) return -ENAMETOOLONG;
   uintptr_t junk;
   if (!cn || k_find(cp, (uintptr_t) cn) >= 0 || k_kids(cp, (uintptr_t) cn, &junk))
-    return putcharm(EEXIST);
+    return -EEXIST;
   int e = k_parent_ok(cp, (uintptr_t) cn);
-  if (e) return putcharm(e);
-  uintptr_t mode = (mw & 1) ? (uintptr_t) getcharm(mw) & 07777 : 0755;
-  return k_create(cp, (uintptr_t) cn, true, mode) < 0 ? putcharm(ENOMEM) : ZeroPoint; }
+  if (e) return e;
+  return k_create(cp, (uintptr_t) cn, true, mode) < 0 ? -ENOMEM : 0; }
+static ai_word k_mkdir(ai_word pw, ai_word mw) {
+  if (!ai_strp(pw)) return putcharm(EINVAL);
+  struct ai_str *pv = (struct ai_str*) pw;
+  int e = k_fs_mkdir(pv->bytes, pv->len,
+                     (mw & 1) ? (uintptr_t) getcharm(mw) & 07777 : 0755);
+  return e ? putcharm(-e) : ZeroPoint; }
 static lvm(lvm_mkdir) {
   Sp[1] = k_mkdir(Sp[0], Sp[1]);
   Sp += 1; ai_musttail return Next(1); }
 
-ai_noinline static ai_word k_rmdir(ai_word pw) {
+ai_noinline static int k_fs_rmdir(char const *p, uintptr_t pn) {
   char cp[256];
-  if (!ai_strp(pw)) return putcharm(EINVAL);
-  struct ai_str *pv = (struct ai_str*) pw;
   intptr_t cn;
-  if (!k_fs_init()) return putcharm(ENOMEM);
-  if ((cn = k_canon(pv->bytes, pv->len, cp)) < 0) return putcharm(ENOENT);
-  if (!cn) return putcharm(EBUSY);               // the root stays
+  if (!k_fs_init()) return -ENOMEM;
+  if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
+  if (!cn) return -EBUSY;                         // the root stays
   int i = k_find(cp, (uintptr_t) cn);
-  if (i >= 0 && !k_ents[i].dir) return putcharm(ENOTDIR);
+  if (i >= 0 && !k_ents[i].dir) return -ENOTDIR;
   uintptr_t junk;
-  if (k_kids(cp, (uintptr_t) cn, &junk)) return putcharm(ENOTEMPTY);
-  if (i < 0) return putcharm(ENOENT);
+  if (k_kids(cp, (uintptr_t) cn, &junk)) return -ENOTEMPTY;
+  if (i < 0) return -ENOENT;
   k_ents[i].live = false;
   k_ent_gc(i);
-  return ZeroPoint; }
-static lvm(lvm_rmdir) { Sp[0] = k_rmdir(Sp[0]); ai_musttail return Next(1); }
-
-ai_noinline static ai_word k_unlink(ai_word pw) {
-  char cp[256];
+  return 0; }
+static ai_word k_rmdir(ai_word pw) {
   if (!ai_strp(pw)) return putcharm(EINVAL);
   struct ai_str *pv = (struct ai_str*) pw;
+  int e = k_fs_rmdir(pv->bytes, pv->len);
+  return e ? putcharm(-e) : ZeroPoint; }
+static lvm(lvm_rmdir) { Sp[0] = k_rmdir(Sp[0]); ai_musttail return Next(1); }
+
+ai_noinline static int k_fs_unlink(char const *p, uintptr_t pn) {
+  char cp[256];
   intptr_t cn;
-  if (!k_fs_init()) return putcharm(ENOMEM);
-  if ((cn = k_canon(pv->bytes, pv->len, cp)) < 0) return putcharm(ENOENT);
+  if (!k_fs_init()) return -ENOMEM;
+  if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
   int i = cn ? k_find(cp, (uintptr_t) cn) : -1;
-  if (i < 0) return putcharm(k_dirp(cp, (uintptr_t) cn) ? EISDIR : ENOENT);
-  if (k_ents[i].dir) return putcharm(EISDIR);
+  if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? -EISDIR : -ENOENT;
+  if (k_ents[i].dir) return -EISDIR;
   k_ents[i].live = false;                        // an open fd keeps the bytes; the
   k_ent_gc(i);                                   // last close frees them
-  return ZeroPoint; }
+  return 0; }
+static ai_word k_unlink(ai_word pw) {
+  if (!ai_strp(pw)) return putcharm(EINVAL);
+  struct ai_str *pv = (struct ai_str*) pw;
+  int e = k_fs_unlink(pv->bytes, pv->len);
+  return e ? putcharm(-e) : ZeroPoint; }
 static lvm(lvm_unlink) { Sp[0] = k_unlink(Sp[0]); ai_musttail return Next(1); }
 
 // (rename old new): a file moves whole, a target file unlinked under it; a
 // directory carries everything beneath it -- every live path at or under the
 // prefix respelled, the copies staged FIRST so a refusal leaves the tree whole.
 struct k_ren { struct k_ren *next; int i; char *q; };
-ai_noinline static ai_word k_rename(ai_word ow, ai_word nw) {
+ai_noinline static int k_fs_rename(char const *o, uintptr_t olen,
+                                   char const *n, uintptr_t nlen) {
   char op[256], np[256];
-  if (!ai_strp(ow) || !ai_strp(nw)) return putcharm(EINVAL);
-  struct ai_str *ov = (struct ai_str*) ow, *nv = (struct ai_str*) nw;
   intptr_t on, nn;
-  if (!k_fs_init()) return putcharm(ENOMEM);
-  if ((on = k_canon(ov->bytes, ov->len, op)) < 0
-   || (nn = k_canon(nv->bytes, nv->len, np)) < 0) return putcharm(ENAMETOOLONG);
-  if (!on) return putcharm(EBUSY);               // the root does not move
-  if (on == nn && !memcmp(op, np, (uintptr_t) on)) return ZeroPoint;   // itself: done
-  if (!nn) return putcharm(EEXIST);              // onto the root
+  if (!k_fs_init()) return -ENOMEM;
+  if ((on = k_canon(o, olen, op)) < 0
+   || (nn = k_canon(n, nlen, np)) < 0) return -ENAMETOOLONG;
+  if (!on) return -EBUSY;                         // the root does not move
+  if (on == nn && !memcmp(op, np, (uintptr_t) on)) return 0;           // itself: done
+  if (!nn) return -EEXIST;                        // onto the root
   int e = k_parent_ok(np, (uintptr_t) nn);
-  if (e) return putcharm(e);
+  if (e) return e;
   int si = k_find(op, (uintptr_t) on), di = k_find(np, (uintptr_t) nn);
   uintptr_t junk;
   bool sdir = si >= 0 ? k_ents[si].dir : k_kids(op, (uintptr_t) on, &junk);
-  if (si < 0 && !sdir) return putcharm(ENOENT);
+  if (si < 0 && !sdir) return -ENOENT;
   if (!sdir) {
     if (di >= 0 ? k_ents[di].dir : k_kids(np, (uintptr_t) nn, &junk))
-      return putcharm(EISDIR);                   // a file does not land on a directory
+      return -EISDIR;                             // a file does not land on a directory
     char *q = k_strdup(np, (uintptr_t) nn);
-    if (!q) return putcharm(ENOMEM);
+    if (!q) return -ENOMEM;
     if (di >= 0) k_ents[di].live = false, k_ent_gc(di);
     if (k_ents[si].heap) kfree((void*) k_ents[si].path);
     k_ents[si].path = q, k_ents[si].heap = true;
-    return ZeroPoint; }
+    return 0; }
   // the directory lane
   if ((uintptr_t) nn > (uintptr_t) on && !memcmp(np, op, (uintptr_t) on) && np[on] == '/')
-    return putcharm(EINVAL);                     // never into itself
-  if (di >= 0 || k_kids(np, (uintptr_t) nn, &junk)) return putcharm(EEXIST);
+    return -EINVAL;                               // never into itself
+  if (di >= 0 || k_kids(np, (uintptr_t) nn, &junk)) return -EEXIST;
   struct k_ren *st = NULL;
   for (int i = 0; i < k_ents_n; i++) {
     struct k_ent const *t = &k_ents[i];
@@ -1374,7 +1474,7 @@ ai_noinline static ai_word k_rename(ai_word ow, ai_word nw) {
     if (!r) {                                    // roll the staging back whole
       kfree(q);
       while (st) { struct k_ren *x = st; st = st->next; kfree(x->q), kfree(x); }
-      return putcharm(ENOMEM); }
+      return -ENOMEM; }
     memcpy(q, np, (uintptr_t) nn);
     memcpy(q + nn, t->path + on, tl - (uintptr_t) on);
     q[(uintptr_t) nn + tl - (uintptr_t) on] = 0;
@@ -1387,33 +1487,54 @@ ai_noinline static ai_word k_rename(ai_word ow, ai_word nw) {
     struct k_ren *x = st;
     st = st->next;
     kfree(x); }
-  return ZeroPoint; }
+  return 0; }
+static ai_word k_rename(ai_word ow, ai_word nw) {
+  if (!ai_strp(ow) || !ai_strp(nw)) return putcharm(EINVAL);
+  struct ai_str *ov = (struct ai_str*) ow, *nv = (struct ai_str*) nw;
+  int e = k_fs_rename(ov->bytes, ov->len, nv->bytes, nv->len);
+  return e ? putcharm(-e) : ZeroPoint; }
 static lvm(lvm_rename) {
   Sp[1] = k_rename(Sp[0], Sp[1]);
   Sp += 1; ai_musttail return Next(1); }
 
-ai_noinline static ai_word k_chdir(ai_word pw) {
+ai_noinline static int k_fs_chdir(char const *p, uintptr_t pn) {
   char cp[256];
-  if (!ai_strp(pw)) return putcharm(-1);
-  struct ai_str *pv = (struct ai_str*) pw;
   intptr_t cn;
-  if (!k_fs_init()) return putcharm(-ENOMEM);
-  if ((cn = k_canon(pv->bytes, pv->len, cp)) < 0) return putcharm(-ENAMETOOLONG);
+  if (!k_fs_init()) return -ENOMEM;
+  if ((cn = k_canon(p, pn, cp)) < 0) return -ENAMETOOLONG;
   if (cn) {
     int i = k_find(cp, (uintptr_t) cn);
-    if (i >= 0 && !k_ents[i].dir) return putcharm(-ENOTDIR);
+    if (i >= 0 && !k_ents[i].dir) return -ENOTDIR;
     uintptr_t junk;
-    if (i < 0 && !k_kids(cp, (uintptr_t) cn, &junk)) return putcharm(-ENOENT); }
+    if (i < 0 && !k_kids(cp, (uintptr_t) cn, &junk)) return -ENOENT; }
   memcpy(k_cwd, cp, (uintptr_t) cn), k_cwd_n = (uintptr_t) cn;
-  return ZeroPoint; }
+  return 0; }
+// ⚠ chdir's LOVE face answers a NEGATIVE errno where its six siblings answer a
+// positive one -- and so does the host's (host/posix.c's host_chdir, likewise
+// putcharm(-errno)), which is what makes it a shape rather than a slip. The
+// twins agree; doc/posix.md's "effect ops answer a POSITIVE errno" simply does
+// not cover this one. So this is the wrapper that does NOT flip: the face below
+// already answers negative, like every other C face here.
+static ai_word k_chdir(ai_word pw) {
+  if (!ai_strp(pw)) return putcharm(-1);
+  struct ai_str *pv = (struct ai_str*) pw;
+  int e = k_fs_chdir(pv->bytes, pv->len);
+  return e ? putcharm(e) : ZeroPoint; }
 static lvm(lvm_chdir) { Sp[0] = k_chdir(Sp[0]); ai_musttail return Next(1); }
 
 // (cwd _) -> the seat as an absolute string -- the host's shape, for the prompt.
-ai_noinline static struct ai *k_cwd_read(struct ai *g) {
-  char b[258];
+// the PATH FACE: the seat into a caller's buffer, 0 ok or -ERANGE -- getcwd(2)'s
+// own refusal, and the one thing the love door never had to say (its buffer is
+// sized to the seat by construction).
+static int k_fs_getcwd(char *b, uintptr_t n) {
+  if (n < k_cwd_n + 2) return -ERANGE;            // '/' + the seat + the NUL
   b[0] = '/';
   memcpy(b + 1, k_cwd, k_cwd_n);
   b[1 + k_cwd_n] = 0;
+  return 0; }
+ai_noinline static struct ai *k_cwd_read(struct ai *g) {
+  char b[258];
+  k_fs_getcwd(b, sizeof b);                      // sizeof b > k_cwd's ceiling: cannot refuse
   if (!ai_ok(g = ai_strof(g, b))) return g;
   return g->sp[1] = g->sp[0], g->sp += 1, g; }  // cwd string over the dummy arg
 static lvm(lvm_cwd) {
@@ -1425,32 +1546,39 @@ static lvm(lvm_cwd) {
 // the two attribute writers land on the ENTRY, so a synthesized (prefix)
 // directory takes either as a no-op: it has no row to keep bits on, and its date
 // is its children's. absence stays loud.
-ai_noinline static ai_word k_chmod(ai_word pw, ai_word mw) {
+ai_noinline static int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
   char cp[256];
+  intptr_t cn;
+  if (!k_fs_init()) return -ENOMEM;
+  if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
+  int i = k_find(cp, (uintptr_t) cn);
+  if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? 0 : -ENOENT;
+  k_ents[i].mode = mode & 07777;
+  return 0; }
+static ai_word k_chmod(ai_word pw, ai_word mw) {
   if (!ai_strp(pw) || !(mw & 1)) return putcharm(EINVAL);
   struct ai_str *pv = (struct ai_str*) pw;
-  intptr_t cn;
-  if (!k_fs_init()) return putcharm(ENOMEM);
-  if ((cn = k_canon(pv->bytes, pv->len, cp)) < 0) return putcharm(ENOENT);
-  int i = k_find(cp, (uintptr_t) cn);
-  if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? ZeroPoint : putcharm(ENOENT);
-  k_ents[i].mode = (uintptr_t) getcharm(mw) & 07777;
-  return ZeroPoint; }
+  int e = k_fs_chmod(pv->bytes, pv->len, (uintptr_t) getcharm(mw));
+  return e ? putcharm(-e) : ZeroPoint; }
 static lvm(lvm_chmod) {
   Sp[1] = k_chmod(Sp[0], Sp[1]);
   Sp += 1; ai_musttail return Next(1); }
 
-ai_noinline static ai_word k_utime(ai_word pw, ai_word mw) {
+ai_noinline static int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
   char cp[256];
+  intptr_t cn;
+  if (!k_fs_init()) return -ENOMEM;
+  if ((cn = k_canon(p, pn, cp)) < 0) return -ENOENT;
+  int i = k_find(cp, (uintptr_t) cn);
+  if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? 0 : -ENOENT;
+  k_ents[i].ms = ms;
+  return 0; }
+static ai_word k_utime(ai_word pw, ai_word mw) {
   if (!ai_strp(pw)) return putcharm(EINVAL);
   struct ai_str *pv = (struct ai_str*) pw;
-  intptr_t cn;
-  if (!k_fs_init()) return putcharm(ENOMEM);
-  if ((cn = k_canon(pv->bytes, pv->len, cp)) < 0) return putcharm(ENOENT);
-  int i = k_find(cp, (uintptr_t) cn);
-  if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? ZeroPoint : putcharm(ENOENT);
-  k_ents[i].ms = (mw & 1) ? (uintptr_t) getcharm(mw) : ai_clock();
-  return ZeroPoint; }
+  int e = k_fs_utime(pv->bytes, pv->len,
+                     (mw & 1) ? (uintptr_t) getcharm(mw) : ai_clock());
+  return e ? putcharm(-e) : ZeroPoint; }
 static lvm(lvm_utime) {
   Sp[1] = k_utime(Sp[0], Sp[1]);
   Sp += 1; ai_musttail return Next(1); }
@@ -1523,6 +1651,42 @@ static lvm(lvm_fault) {
 #ifdef K_TEST
 // (exit code) -- quit qemu; the test corpus calls it on completion / failure.
 static lvm(lvm_kexit) { k_qemu_exit(getcharm(Sp[0])); Ip += 1; ai_musttail return Continue(); }
+
+// (syswrite fd str) -> the count landed, or -1 on a non-string. THE SYSCALL
+// SEAM'S ONE GATE: it calls nolibc's write(), which is sc3(NR_write, ..) into
+// free/sys.c, which is the row -- so a green test/kernel/sys.l says that whole
+// path is live and no other test in the tree can say it. K_TEST only: the
+// shipped kernel has no reason to spell a syscall in love.
+extern long write(int, void const *, long);
+ai_noinline static ai_word k_syswrite(ai_word fw, ai_word sw) {
+  if (!ai_strp(sw)) return putcharm(-1);
+  struct ai_str *pv = (struct ai_str*) sw;
+  return putcharm(write((int) getcharm(fw), pv->bytes, (long) pv->len)); }
+static lvm(lvm_syswrite) {
+  Sp[1] = k_syswrite(Sp[0], Sp[1]);
+  Sp += 1; ai_musttail return Next(1); }
+
+// (syscall "name" a b c) -> the raw answer, errno NEGATIVE as the door gives
+// it; () for a name no row answers to. The instrument for every row whose
+// arguments are numbers, so the next one costs a test and not a nif -- and it
+// takes the NAME because the numbers are arch-keyed and free/sys.c is the only
+// file that may spell them. ⚠ it reaches __ai_sys DIRECTLY, under nolibc: what
+// it gates is the dispatch and the k_fd_* faces, which is where the rows are
+// written. syswrite proves the nolibc half once, so the composition is said.
+extern long __ai_sys(long, long, long, long, long, long, long);
+extern long k_sys_nr(char const *nm, long n);
+ai_noinline static ai_word k_syscall(ai_word nw, ai_word aw, ai_word bw, ai_word cw) {
+  if (!ai_strp(nw)) return ZeroPoint;
+  struct ai_str *pv = (struct ai_str*) nw;
+  long nr = k_sys_nr(pv->bytes, (long) pv->len);
+  if (nr < 0) return ZeroPoint;
+  ai_word ws[3] = { aw, bw, cw };
+  long v[3];
+  for (int i = 0; i < 3; i++) v[i] = (ws[i] & 1) ? (long) getcharm(ws[i]) : 0;
+  return putcharm(__ai_sys(nr, v[0], v[1], v[2], 0, 0, 0)); }
+static lvm(lvm_syscall) {
+  Sp[3] = k_syscall(Sp[0], Sp[1], Sp[2], Sp[3]);
+  Sp += 3; ai_musttail return Next(1); }
 #endif
 
 // (quit code) -- the exit door, and since rung 4 the door with two rooms behind
@@ -1606,6 +1770,8 @@ static union u
   nif_quit[] = {{lvm_quit}, {lvm_ret0}},
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
+  nif_syswrite[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_syswrite}, {lvm_ret0}},
+  nif_syscall[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_syscall}, {lvm_ret0}},
 #endif
   nif_fault[] = {{lvm_fault}, {lvm_ret0}};
 
@@ -1645,7 +1811,15 @@ static bool cbinit(void) {
   cb_fill(kcb, 0);
   return true; }
 
-static struct ai_def defs[] = {
+// the kernel's nifs ride the ai_nifs section, the same one AiNif lands a host
+// app's in -- so this table is drained by the __start_/__stop_ bracket and named
+// by nothing. `used` is what keeps it, and the whole array in one blob is the
+// AiModNifs shape rather than a row at a time. What it buys: a host/<app>.c
+// dropped into the kernel build registers itself with no edit here, and the
+// image's host slice (core/love.c) indexes a kernel nif the way it does a host
+// one. ⚠ the slice is INDEXED BY POSITION, so this order is part of an image's
+// contract -- append, do not insert.
+static struct ai_def const __attribute__((section("ai_nifs"), used)) defs[] = {
   {"reset", (intptr_t) nif_reset},
   {"draw", (intptr_t) nif_draw},
   {"key", (intptr_t) nif_key},
@@ -1703,6 +1877,8 @@ static struct ai_def defs[] = {
   {"quit", (intptr_t) nif_quit},
 #ifdef K_TEST
   {"exit", (intptr_t) nif_exit},
+  {"syswrite", (intptr_t) nif_syswrite},
+  {"syscall", (intptr_t) nif_syscall},
 #endif
   {"color", (intptr_t) nif_color} };
 
@@ -1803,7 +1979,8 @@ void kmain(void) {
   // the disk (rung 5): probe the bus, and hand the driver its one DMA block --
   // kmallocw memory, so pa = va - khhdm holds for everything the device reads.
   k_blk_init(kmallocw(b2w(352)));
-  struct ai *g = ai_defn(ai_ini(), defs, countof(defs), 0);
+  struct ai *g = ai_defn(ai_ini(), __start_ai_nifs,
+                         (uintptr_t)(__stop_ai_nifs - __start_ai_nifs), 0);
   // BOUND the generational collector to the device's RAM (the Appel knob): without it the nursery's
   // copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive) sizing then asks
   // kmallocw for a contiguous block bigger than physical RAM -> OOM. An eighth of free RAM leaves ample

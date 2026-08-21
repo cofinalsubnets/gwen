@@ -92,7 +92,7 @@
     ; ⚠ validate HERE. a bad value reaching `tune` writes a non-Z tray, which the nif refuses
     ; whole and in silence -- the flag would then read as accepted and do nothing.
     (size h s) (: n (tally s)                        ; ⚠ v is BOUND, not inlined: a bare infix `//` in
-                  u (peep s (n - 1) 0 @ (107 | 75) 1024 (109 | 77) 1048576 (103 | 71) 1073741824 ())
+                  u (peep s (n - 1) 0 @ (107 || 75) 1024 (109 || 77) 1048576 (103 || 71) 1073741824 ())
                   d (u ? (snip s 0 (n - 1)) s)                       ; the `:` body slot folds into the
                   v <(sound d)                                       ; binding chain and eats the body
                   _ ((charm? v && v >= 0) ? 0 (say err ("love: " + h + ": not a size: " + s), cli-leave 2))
@@ -102,19 +102,19 @@
     ; and the rail would call a command word as a function.
     (vfind h) (: V (from 'verbs) (? (tablet? V) (V 'word h) ()))
     (pre a) (a @ (h >< t)            ; -> (kind . rest): 'eval code.args / 'verb fn.args / 'file prog.args / 'stdin
-      (h @ ("-l" | "--load")    (need h t, load1 <t, pre >t)
-           ("-v" | "--version") (version ())
-           ("-h" | "--help")    (usage ())
-           ("-e" | "--eval")    (need h t, 'eval >< t)
-           ("-n" | "--silent")  (pre t @ ('eval >< r) ('evalq >< r) r r)
-           ("-m" | "--memory")  (need h t, tune (pin (tune ()) 0 (size h <t)), pre >t)
+      (h @ ("-l" || "--load")    (need h t, load1 <t, pre >t)
+           ("-v" || "--version") (version ())
+           ("-h" || "--help")    (usage ())
+           ("-e" || "--eval")    (need h t, 'eval >< t)
+           ("-n" || "--silent")  (pre t @ ('eval >< r) ('evalq >< r) r r)
+           ("-m" || "--memory")  (need h t, tune (pin (tune ()) 0 (size h <t)), pre >t)
            "--"                 (two? t ? ('file >< t) '(stdin))
            (: f (vfind h)       ; a positional: a registered verb first, else the program file
               (f ? ('verb >< f >< a) ('file >< a))))
       '(stdin))
     p (pre >argv)                    ; runs -l preloads + -v/-h + -m; the program kind
     k <p                             ; ..and the kind alone, read six times below
-    av (k @ ('eval | 'evalq | 'verb) >>p >p)   ; the program's view of argv
+    av (k @ ('eval || 'evalq || 'verb) >>p >p)   ; the program's view of argv
     run (\ _
       (k @ 'eval  (print out (eval1 <>p), put out 10)  ; -e ANSWERS OUT LOUD, a repl line printing like
            'evalq (eval1 <>p)         ; one: `print`, the repl's face, not dot's raw one. -n mutes.

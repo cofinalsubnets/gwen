@@ -58,6 +58,9 @@ i = 0.5 -1                   ; complex numbers
 ; language traps
 ; - (x) = x: singleton lists are no-ops
 ; - $ x != $x: spaced and glued are different operators
+; - & ^ | sit between comparison and arithmetic; << >> just above them, UNDER + -:
+;   (a << 8 + b) shifts by (8 + b) -- a shifted sum owes parens
+; - && || are the logical ops, and pat.l's guard/alternative tags
 ; - (+ 2 3 4) = ((+ 2 3) 4) = (5 4) = 1024: no varargs
 ; - (1 +) = (+ 1): no sections
 ; - gem? (3 / 2) = 1: / gives a float; // for int

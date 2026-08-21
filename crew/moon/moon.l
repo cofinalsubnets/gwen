@@ -201,12 +201,12 @@
    ; picked by -t. the arch predefine (__x86_64__ / __aarch64__ / __arm__) rides
    ; the -D channel so cpp stays target-blind.
    (totgt s) (name s @
-    ('x64 | 'amd64)             'x64
-    ('arm64 | 'aarch64)         'arm64
-    ('thumb2 | 'cortex-m7)      'thumb2
-    ('thumb1 | 'cortex-m0)      'thumb1
-    ('thumb2sp | 'playdate)     'thumb2sp
-    ('riscv64 | 'riscv | 'rv64) 'riscv64
+    ('x64 || 'amd64)             'x64
+    ('arm64 || 'aarch64)         'arm64
+    ('thumb2 || 'cortex-m7)      'thumb2
+    ('thumb1 || 'cortex-m0)      'thumb1
+    ('thumb2sp || 'playdate)     'thumb2sp
+    ('riscv64 || 'riscv || 'rv64) 'riscv64
                                 (udie 2 ("cc: unknown target " + s)))
 
    ; the arch predefines, BOTH spellings where gcc gives two -- pdclib's config asks
@@ -215,7 +215,7 @@
    (archdefs tgt)
    (tgt @ 'arm64                          '("__aarch64__")
           'riscv64                        '("__riscv")
-          ('thumb2 | 'thumb2sp | 'thumb1) '("__arm__" "__arm")
+          ('thumb2 || 'thumb2sp || 'thumb1) '("__arm__" "__arm")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
    ; the OS predefines, the driver's like the arch's: -os picks, and UNNAMED is
    ; the ground we stand on -- never a fixed kernel. all three spellings gcc

@@ -12,7 +12,7 @@
                      (go 0))
 
    (src-top es) (? (atom? es) ""
-    (src-head (tar-get <es 'nom "") @ ("." | "") (src-top >es) c c))
+    (src-head (tar-get <es 'nom "") @ ("." || "") (src-top >es) c c))
 
    (src-lay-tgz root top gz)
     (: _ (mkdir (root + "/out") 493)

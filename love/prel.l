@@ -396,8 +396,10 @@
  2 (pins (tablet 0)                                 ; --- ARITY 2: spaced. a left operand and a right
  '** 70
  '* -60 '/ -60 '% -60 '// -60                       ; multiplicative, LEFT -- the MINUS is the hand
- '+ -50 '- -50                                      ; additive, LEFT
- '| 30 '& 30 '&& 30 '|| 30                          ; logical (&& || also macros; the row pins the band below comparison)
+ '+ -50 '- -50                                      ; additive
+ '<< -47 '>> -47                                    ; shifts
+ '& -46 '^ -45 '| -44                               ; bitwise, C's order
+ '&& 31 '|| 30                                      ; logical, below comparison; also pat.l's guard and alternative
  '>< 25                                             ; cons -- the loosest builder
  '$ 5 '\ 6)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate), and the
                                                     ; lambda a hair ABOVE it, so ([a b] \ a * b $ [2 3]) closes the body at
@@ -436,8 +438,8 @@
        0) ;;; they may not even be semantically needed since ? fall-through returns ()
 
    ; a BAND is a SIGNED charm: the magnitude is the level (higher binds tighter) and the sign is
-   ; the hand -- positive right, negative LEFT. arithmetic is the only left-handed band there is,
-   ; so the minus marks the exception and the hand stops being a slot anyone has to count to.
+   ; the hand -- positive right, negative LEFT. the arithmetic, shift and bitwise bands are the
+   ; left-handed ones, so the minus marks them and the hand stops being a slot anyone counts to.
    ; ⚠ zero can never be a band: a tablet MISS answers 0, and a 0 band would read that miss as a
    ; live row at the loosest level there is.
    (op-band? b) (&& (charm? b) (nil? (= 0 b)))   ; ⚠ prefix-only region: != is not a function yet
@@ -587,7 +589,7 @@
    ; fold every pending frame TIGHTER than an incoming (g,h) and answer (out . pend) -- the climb
    ; op-steal makes before it can take anything, split out so the chain JOIN can see the frame it
    ; will actually meet. ⚠ an operator BETWEEN two links is such a frame: (a < b + c < d) reaches
-   ; the second `<` with the multiplicative frame on top, and without this the join never fires.
+   ; the second `<` with the additive frame on top, and without this the join never fires.
    ; op-steal repeats the climb and finds nothing left to do, so nothing else changes.
    (op-climb g h out pend)
     (? (&& (two? pend) (&& (< (op-frd (cap pend)) 1)

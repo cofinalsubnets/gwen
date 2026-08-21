@@ -46,21 +46,20 @@
 ; left alone. `root` and `bn` are exactly the kind of name a leak makes dangerous, and
 ; they stay wherever this file's layer is -- never orth.
 (: (bn p)   (: n (tally p)
-               (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
+               (go k r) (k < n ? (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
                (go 0 0))
    (dirof p) (: n (tally p)
-                (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p 0 r))
+                (go k r) (k < n ? (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p 0 r))
                 (go 0 0))
-   (findme a) (? !(two? a) ()                        ; the word that named this file, if any
-                 (: b (bn <a) ((b = "papel") || (b = "papel.l"))) <a
-                 (findme >a))
-   (up p)     (: n (tally p) (? (0 < n) (dirof (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
+   (findme (a >< u)) ; the word that named this file, if any
+    (bn a @ ("papel" || "papel.l") a (findme u))
+   (up p) (: n (tally p) (0 < n ? (dirof (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
    ; ..and follow a SYMLINK to it. `papel` installs the way cook does, as a link on PATH
    ; pointing at this source file, so the name we were invoked by lives in ~/.local/bin
    ; and the siblings do not. readlink is what turns the link back into the source tree.
    root (: me (findme >cmdline)
-             tgt (? me (: r (readlink me) (? r r me)) ())
-             (? tgt (up (dirof tgt)) "crew/"))                           ; crew/papel/papel.l -> crew/
+           tgt (me ? (readlink me || me))
+         (tgt ? (up (dirof tgt)) "crew/"))                           ; crew/papel/papel.l -> crew/
    ; want: the sibling module, wherever this papel lives -- beside this file in
    ; the source tree (root came off our own seat), else by NAME through the
    ; loader's walk (an installed love's nest: ~/.love/lib/love/<nm>.l). the tree
@@ -84,8 +83,7 @@
    recipe (C 'recipe)  prepped (C 'prepped))
 
 ; --- little utils (papel's own: it leans on lapiz for DOCUMENTS, not for lists) --------
-(: (nth l k)     (? (k = 0) <l (nth >l (k - 1)))
-   (strcat l)    (foldl (+) "" l)
+(: (strcat l)    (foldl (+) "" l)
    (joins l sp)  (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
    (ends? s t)   (: n (tally s) m (tally t) ((m <= n) && (snip s (n - m) n = t)))
    (sub? s t)    (: n (tally s) m (tally t)
@@ -147,18 +145,18 @@
                   (? !(two? l) (rev acc)
                      (: b <l
                         (? (head? b)
-                           (: lab (itext (nth b 2))
+                           (: lab (itext (b 2))
                               s0 (slug lab)
                               k (peep seen s0 0)
                               sn (? (0 < k) (s0 + "-" + show k) s0)
                               _ (pin seen s0 (k + 1))
-                              (g >l seen (`(<>b sn lab) >< acc)))
+                              (g >l seen ([<>b sn lab] >< acc)))
                            (g >l seen acc)))))
                d (tablet 0) ())
    ; the title: the first head-1, else the meta `title`, else the caller's fallback.
    (ptitle d dflt) (: h1 (filter (\ b (head? b && (<>b = 1))) d)
                       mt (mget (pmeta d) 'title)
-                      (? (two? h1) (itext (nth <h1 2))
+                      (? (two? h1) (itext (<h1 2))
                          (0 < tally mt) mt
                          dflt))
    ; the blurb: the first paragraph, clipped on a word boundary. () when the page has none.
@@ -177,20 +175,18 @@
    (? (sub? u "://") u
       !(ends? u ".md") u
       (: b (base u)
-         (? (peep known b 0) (snip u 0 (tally u - 3) + ".html") u)))
-   (rli f l)  (map (\ x (: t <x
-                           (? (id? t 'link) `('link (rli f <>x) (f (nth x 2)))
-                              (id? t 'strong || id? t 'em) `(t (rli f <>x))
-                              x))) l)
-   (rlb f b)  (: t <b
-                 (? (id? t 'para)    `('para (rli f <>b))
-                    (id? t 'head)    `('head <>b (rli f (nth b 2)))
-                    (id? t 'bullets) `('bullets (map (\ i (rli f i)) <>b))
-                    (id? t 'numbers) `('numbers (map (\ i (rli f i)) <>b))
-                    (id? t 'deflist) `('deflist (map (\ it `((rli f <it) (rli f <>it))) <>b))
-                    (id? t 'quote)   `('quote (map (\ x (rlb f x)) <>b))
-                    b))
-   (relink f d) (map (\ b (rlb f b)) d))
+         (peep known b 0 ? (snip u 0 (tally u - 3) + ".html") u)))
+   (rli f l)  (map (\ x (<x @ 'link ['link (rli f <>x) (f <>>x)]
+                              ('strong || 'em) [<x (rli f <>x)]
+                              x)) l)
+   (rlb f b) (<b @ 'para    ['para (rli f <>b)]
+                   'head    ['head <>b (rli f <>>b)]
+                   'bullets ['bullets (map (i \ rli f i) <>b)]
+                   'numbers ['numbers (map (i \ rli f i) <>b)]
+                   'deflist ['deflist (map (it \ [(rli f <it) (rli f <>it)]) <>b)]
+                   'quote   ['quote (map (x \ rlb f x) <>b)]
+                   b)
+   (relink f d) (map (b \ rlb f b) d))
 
 ; --- showing: lapiz shows every block but one ------------------------------------------
 ; the anchored head is the ONE node papel emits itself, because lapiz's html has nowhere
@@ -201,30 +197,30 @@
    (pshow d hs) ((: (g l hs acc)
                     (? !(two? l) (joins (rev acc) "\n")
                        (: b <l
-                          (? (head? b) (g >l >hs (hhead <(<hs) (<>(<hs)) (nth b 2) >< acc))
+                          (? (head? b) (g >l >hs (hhead <(<hs) (<>(<hs)) <>>b >< acc))
                              (g >l hs (htb b >< acc))))))
                  d hs ())
    ; the toc: the same heads, minus the one that became the title. a page with fewer than
    ; two of them gets none -- a one-item contents is furniture, not navigation.
    (ptoc d hs) (: rest (? (two? hs && (1 = <(<hs))) >hs hs)
                   (? !(two? >rest) ""
-                     ("<ul>\n" + strcat (map (\ h ("<li class=\"l" + show <h + "\"><a href=\"#"
-                                                   + hq <>h + "\">" + hq (nth h 2) + "</a></li>\n")) rest)
+                     ("<ul>\n" + strcat (map (h \ "<li class=\"l" + show <h + "\"><a href=\"#"
+                                                   + hq <>h + "\">" + hq <>>h + "</a></li>\n") rest)
                       + "</ul>")))
-   (pmetah kvs) (? (two? kvs) (htb `('meta kvs)) ""))
+   (pmetah kvs) (atom? kvs ? "" (htb ['meta kvs])))
 
 ; --- the page template ------------------------------------------------------------------
 (: (wrap conf ttl metah toch body)
    (: site (peep conf 'title "papel")
       ("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
        + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
-       + "<title>" + hq ttl + (? (ttl = site) "" (" &middot; " + hq site)) + "</title>\n"
+       + "<title>" + hq ttl + (ttl = site ? "" (" &middot; " + hq site)) + "</title>\n"
        + "<link rel=\"stylesheet\" href=\"papel.css\">\n"
-       + (? (0 < tally metah) (metah + "\n") "")
+       + (metah ? (metah + "\n"))
        + "</head>\n<body>\n"
        + "<header><a href=\"index.html\">" + hq site + "</a></header>\n"
        + "<main>\n"
-       + (? (0 < tally toch) ("<nav class=\"toc\">\n" + toch + "\n</nav>\n") "")
+       + (tally toch ? ("<nav class=\"toc\">\n" + toch + "\n</nav>\n"))
        + "<article>\n" + body + "\n</article>\n</main>\n"
        + "<footer>markdown through <b>lapiz</b>, built by <b>cook</b>, laid out by <b>papel</b></footer>\n"
        + "</body>\n</html>\n")))
@@ -270,7 +266,7 @@ table{border-collapse:collapse}
 (: (outname s) (: b (base s) (snip b 0 (tally b - 3) + ".html"))
    (render conf known src dst)
    (: d0 (mdread (slurpf src))
-      d  (relink (\ u (mdurl known u)) d0)
+      d  (relink (u \ mdurl known u) d0)
       body (pbody d)
       hs (pheads body)
       ttl (ptitle body (base src))
@@ -281,22 +277,16 @@ table{border-collapse:collapse}
    (index-doc conf srcs)
    (: site (peep conf 'title "papel")
       rows (map (\ s (: d (mdread (slurpf s))
-                        `(`(`('link `(`('text (ptitle d (base s)))) (outname s))) (blurb d)))) srcs)
-      `(`('head 1 `(`('text site))) `('deflist rows)))
+                      [[['link [['text (ptitle d (base s))]] (outname s)]] (blurb d)])) srcs)
+    [['head 1 [['text site]]] ['deflist rows]])
    (windex conf srcs dst)
    (: _ (spitf dst (wrap conf (peep conf 'title "papel") "" "" (htshow (index-doc conf srcs)))) dst))
 
 ; --- the sources, and the build -----------------------------------------------------------
-(: (mdsof p) (? (dir? p) (map (\ f (p + "/" + f)) (sort (filter (\ f (ends? f ".md")) (readdir p))))
-                (ends? p ".md") `(p)
-                ())
+(: (mdsof p) (? (dir? p) (map (f \ p + "/" + f) (sort (filter (f \ ends? f ".md") (readdir p))))
+                (ends? p ".md") [p])
    (sources conf) (foldl (+) () (map mdsof (peep conf 'src ())))
-   (conf0 _) (: t (tablet 0)
-                _ (pin t 'out "out/site")
-                _ (pin t 'title "papel")
-                _ (pin t 'src ())
-                _ (pin t 'self "crew/papel/papel.l")
-                t)
+   (conf0 _) {'out "out/site" 'title "papel" 'src () 'self "crew/papel/papel.l"}
    ; the BUILD is a declaration, not a loop: one recipe per page, one for the stylesheet,
    ; one for the index, and a phony `site` over the lot -- then cook decides what is stale.
    ; every output also depends on THIS FILE, since the template and the stylesheet live in
@@ -315,36 +305,35 @@ table{border-collapse:collapse}
    ; request compares against that same reading and sees it. and `build` itself is
    ; untouched, so the decision that actually matters stays cook's, at cook's resolution.
    ; mtime AND size, because an edit can preserve either one alone.
-   (fprint conf) (foldl (+) 0 (map (\ s (: st (stat s) (? (two? st) (<>st + <st) 0)))
+   (fprint conf) (foldl (+) 0 (map (\ s (: st (stat s) (two? st ? (<>st + <st) 0)))
                                    (sources conf)))
    (refresh conf box) (: f (fprint conf)
-                         (? (f = peep box 'f -1) 0 (: _ (pin box 'f f) (build conf))))
+                         (f = peep box 'f -1 ? 0 (pin box 'f f, build conf)))
 
    (build conf)
    (: out (peep conf 'out "out/site")
       srcs (sources conf)
-      _ (? (two? srcs) 0 (scare 'papel "papel: no markdown sources"))
+      _ (atom? srcs ? (scare 'papel "papel: no markdown sources"))
       _ (mkdirp out)
-      known (: t (tablet 0) _ (each srcs (\ s (pin t (base s) 1))) t)
+      known (foldl (\ t s (pin t (base s) 1)) {} srcs)
       self (peep conf 'self "")
-      dep (? (stat self) `(self) ())
-      dsts (map (\ s (out + "/" + outname s)) srcs)
-      _ (each srcs (\ s (recipe (out + "/" + outname s) (s >< dep)
-                                `((\ _ (render conf known s (out + "/" + outname s)))))))
+      dep (stat self ? [self])
+      dsts (map (s \ out + "/" + outname s) srcs)
+      _ (each srcs (s \ recipe (out + "/" + outname s) (s >< dep)
+                         [(_ \ render conf known s (out + "/" + outname s))]))
       sheet (out + "/papel.css")
-      _ (recipe sheet dep `((\ _ (spitf sheet css))))
+      _ (recipe sheet dep [(_ \ spitf sheet css)])
       idx (out + "/index.html")
       own? (peep known "index.md" 0)                 ; a real index.md wins; papel adds none
-      _ (? own? 0 (recipe idx (srcs + dep) `((\ _ (windex conf srcs idx)))))
-      _ (recipe 'site (dsts + `(sheet) + (? own? () `(idx))) ())
+      _ (? own? 0 (recipe idx (srcs + dep) [(_ \ windex conf srcs idx)]))
+      _ (recipe 'site (dsts + [sheet] + (? own? () [idx])) ())
       ; cook's own `cook` prints its verdict; papel wants the NUMBER, so it takes the
       ; quiet entry. $ of a map is its key count, and cook marks an item shipped only when
       ; the recipe really advanced its mtime -- so this is exactly "files written".
       n $(prepped 'site)
-      _ (? (peep conf 'quiet 0) 0
-           (: _ (puts (? (0 < n) ("papel: " + show n + " written to " + out + "/")
-                           ("papel: " + out + "/ is up to date")))
-              (putc 10)))
+      _ (? !(peep conf 'quiet 0)
+         (puts $ "papel: " + (0 < n ? (show n + " written to " + out + "/\n")
+                                      (out + "/ is up to date\n"))))
       n))
 
 ; --- the command line ---------------------------------------------------------------------
@@ -365,12 +354,12 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
       c (conf0 ())
       (loop ws) (? !(two? ws) 0
                    (: w <ws r >ws
-                      (? ((w = "-o") || (w = "--out"))   (: _ (need w r) _ (pin c 'out <r) (loop >r))
-                         ((w = "-t") || (w = "--title")) (: _ (need w r) _ (pin c 'title <r) (loop >r))
-                         ((w = "-q") || (w = "--quiet")) (: _ (pin c 'quiet 1) (loop r))
-                         ((w = "-s") || (w = "--serve")) (: _ (need w r) _ (pin c 'serve (numof <r)) (loop >r))
-                         ((w = "-h") || (w = "--help"))  (usage 0)
-                         (: _ (pin c 'src (peep c 'src () + `(w))) (loop r)))))
+                    (w @ ("-o" || "--out") (need w r, pin c 'out <r, loop >r)
+                         ("-t" || "--title") (need w r, pin c 'title <r, loop >r)
+                         ("-q" || "--quiet") (pin c 'quiet 1, loop r)
+                         ("-s" || "--serve") (need w r, pin c 'serve (numof <r), loop >r)
+                         ("-h" || "--help") (usage 0)
+                         (pin c 'src (peep c 'src () + [w]), loop r))))
       _ (loop as)
       _ (? (two? (peep c 'src ())) 0 (pin c 'src '("README.md" "doc")))
       _ (build c)
@@ -390,9 +379,8 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
               q (peep c 'quiet 0)
               _ (pin c 'quiet 1)
               box (: t (tablet 0) _ (pin t 'f (fprint c)) t)
-              _ (? ((from 'kiosko 'serve) (peep c 'out "out/site") port q (\ _ (refresh c box))) 0
-                   (: _ (say err ("papel: cannot listen on :" + show port)) _ (put err 10) (quit 1))))
-           0)
+              _ (? (from 'kiosko 'serve (peep c 'out "out/site") port q (_ \ refresh c box)) 0
+                   (say err $ "papel: cannot listen on :" + show port + "\n", quit 1))))
       (quit 0))
    papel-main)
 
@@ -402,5 +390,4 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
 ; script -- sits in the program seat of the real command line, on the args after it.
 ; body-having, so the machinery leaks nothing; papel-main reads BARE -- whichever
 ; layer holds this file's binds is still the head here.
-(: s ((from 'verbs 'fire) ["papel" "papel.l"])
-   (? (two? s) (papel-main >s) ()))
+(: s (from 'verbs 'fire ["papel" "papel.l"]) (two? s ? (papel-main >s)))

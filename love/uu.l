@@ -159,10 +159,10 @@
       (conv d <as <bs && conv-args d >as >bs))
 
    (inf-sym cx x)
-   (x @ ('UU | 'nat | 'bool | 'unit | 'empty) 'UU
+   (x @ ('UU || 'nat || 'bool || 'unit || 'empty) 'UU
         'zero 'nat
         'tt 'unit
-        ('true | 'false) 'bool
+        ('true || 'false) 'bool
         (assoc x cx @ (_ T) T
            (: g (peep GLOB x 0) (two? g ? <g (scare 'uu-unbound x)))))
 
@@ -205,7 +205,7 @@
    (? (charm? t) 'nat
       (nom? t) (inf-sym cx t)
       (t @
-         (('pi | 'total2) x A B)
+         (('pi || 'total2) x A B)
           (: _ (chk cx en d A 'UU)
              fr ['nv d]
              _ (chk ([x (vof en A)] >< cx) ([x fr] >< en) (d + 1) B 'UU)
@@ -278,7 +278,7 @@
                        _ (chk cx en d r (vapp (vapp Pv av) ['refl av]))
                        (vapp (vapp Pv bv) (vof en e)))
                   (scare 'uu-paths_rect t)))
-         (('lam | 'tpair | 'ii1 | 'ii2) >< _) (scare 'uu-cannot-infer t)
+         (('lam || 'tpair || 'ii1 || 'ii2) >< _) (scare 'uu-cannot-infer t)
          (inf-spine cx en d (inf cx en d <t) >t))))
 
 ; --- drivers: a definition is checked then pinned; an axiom is a book entry
@@ -369,7 +369,7 @@
          ('lam x b)   (Q >< (x >< (u2 b (x >< bs) >< ())))
          ('let x a b) (C >< (x >< (u2 a bs >< (u2 b (x >< bs) >< ()))))
          ('the T u)   (u2 u bs)
-         (('pi | 'total2 | 'coprod | 'paths) >< _) (qlit ['ty <t])
+         (('pi || 'total2 || 'coprod || 'paths) >< _) (qlit ['ty <t])
          ('tpair a b) [(qlit kchain) (u2 a bs) (u2 b bs)]
          ('pr1 w)     [(qlit kp1) (u2 w bs)]
          ('pr2 w)     [(qlit kp2) (u2 w bs)]

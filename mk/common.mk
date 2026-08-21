@@ -61,10 +61,18 @@ love_c = $R/core/love.c $R/crew/moon/lib/math/am.c
 # per-seat -- a 1-bit device wants neither, the host unity-includes nif.c -- so a seat that
 # wants one NAMES it rather than taking it here.
 f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/crew/quay/*.c))
-# inle's libc is nolibc's, named member by member: these six carry no syscall (memmove
-# owes memcpy and nothing else), so a freestanding link takes them whole. mooncc builds
-# the kernel, so it builds the kernel's libc too -- there is no second copy to drift.
-c_c = $(addprefix $R/crew/moon/lib/nolibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c)
+# inle's libc is nolibc's, named member by member. The six string members carry no syscall
+# at all (memmove owes memcpy and nothing else); read and write carry one each, and os.c is
+# the map they reach it through -- which under -D__inle__ is the identity, free/sys.c
+# answering the canonical numbers itself. mooncc builds the kernel, so it builds the
+# kernel's libc too -- there is no second copy to drift.
+# ⚠ NAMING A MEMBER HERE IS A DECISION, and stdio is the one to weigh: printf and
+# friends write fd 1 themselves, and free/sys.c is seat-blind, so a seated task's
+# printf would reach the console where its port reaches the pipe. Member-by-member
+# is what keeps that from arriving by accident.
+c_c = $(addprefix $R/crew/moon/lib/nolibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) \
+  $(addprefix $R/crew/moon/lib/nolibc/sys/,read.c write.c) \
+  $R/crew/moon/lib/nolibc/os.c
 
 # ⚠ CANCEL MAKE'S LEX RULE. `.l` is Lex's extension to make, so a built-in `%.c: %.l`
 # stands over every source file in this tree -- and where a `<name>.l` sits beside a real

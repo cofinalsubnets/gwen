@@ -427,7 +427,7 @@
    fontmacs '((".BR" (strong text) 0) (".RB" (text strong) 0) (".IR" (em text) 0)
               (".RI" (text em) 0) (".SB" (strong) 1) (".SM" (text) 1) (".B" (strong) 1) (".I" (em) 1))
    (macinfo m) ((: (g l) (? (atom? l) () (<<l = m) (>(<l)) (g >l))) fontmacs)
-   (wrapf f l) (f @ ('strong | 'em) [[f l]] l)
+   (wrapf f l) (f @ ('strong || 'em) [[f l]] l)
    (allplain? l) (? (atom? l) 1 (id? <<l 'text) (allplain? >l) 0)
    (argl a f)    (: l (rfinl a) (? (allplain? l) (wrapf f l) l))     ; an explicit \f inside the arg wins
    (argls as fs i sp) (? (atom? as) ()

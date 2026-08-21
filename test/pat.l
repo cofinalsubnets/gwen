@@ -98,33 +98,32 @@
  ('k = (@ '(2 3) (? (a < b) (? (0 < a) [a b])) 'k 'no))       ; ..and guards stack
  ('no = (@ '(2 1) (? (a < b) (? (0 < a) [a b])) 'k 'no))
  (2 = (@ @(1 2) @(a (? (1 < b) b)) b 0))           ; ..anywhere a pattern goes
- ; --- `&` IS THE GUARD, left to right, and lowers to exactly the `?` above. the tag is
+ ; --- `&&` IS THE GUARD, left to right, and lowers to exactly the `?` above. the tag is
  ; what says EXPRESSION: (two? x) is a fine untagged pattern as well as a fine call, so
- ; a bare operand could never be read for truth. `&&` is the same tag.
- (0 = (@ 5 (x & two? x) 1 0))     (1 = (@ 5 (x & atom? x) 1 0))
- (1 = (@ '(1 2) (x & two? x) 1 0))
- (1 = (@ 5 (c & c > 0) 1 0))      (0 = (@ -5 (c & c > 0) 1 0))
- (1 = (@ 5 (c && c > 0) 1 0))     (0 = (@ -5 (c && c > 0) 1 0))   ; ..&& aliases &
- ('y = (@ 5 (? (0 < c) c) 'y 'n)) ('y = (@ 5 (c & 0 < c) 'y 'n))  ; ..the two spellings
- ; ⚠ `&` is RIGHT-HANDED at band 30, so a chain arrives NESTED and is FLATTENED: every
- ; operand past the first is its own guard. left as one expression the guard would be
- ; the BITWISE and of two bits, and (& 1 2) is 0 -- true and true reading false.
- (1 = (@ 5 (c & 0 < c & c < 10) 1 0))
- (0 = (@ 50 (c & 0 < c & c < 10) 1 0))   (0 = (@ -5 (c & 0 < c & c < 10) 1 0))
- (2 = (@ [1 2] ([a b] & a < b) b 0))     (0 = (@ [2 1] ([a b] & a < b) b 0))
+ ; a bare operand could never be read for truth.
+ (0 = (@ 5 (x && two? x) 1 0))    (1 = (@ 5 (x && atom? x) 1 0))
+ (1 = (@ '(1 2) (x && two? x) 1 0))
+ (1 = (@ 5 (c && c > 0) 1 0))     (0 = (@ -5 (c && c > 0) 1 0))
+ ('y = (@ 5 (? (0 < c) c) 'y 'n)) ('y = (@ 5 (c && 0 < c) 'y 'n))  ; ..the two spellings
+ ; ⚠ `&&` is right-handed, so a chain arrives NESTED and is FLATTENED: every
+ ; operand past the first is its own guard.
+ (1 = (@ 5 (c && 0 < c && c < 10) 1 0))
+ (0 = (@ 50 (c && 0 < c && c < 10) 1 0))  (0 = (@ -5 (c && 0 < c && c < 10) 1 0))
+ (2 = (@ [1 2] ([a b] && a < b) b 0))     (0 = (@ [2 1] ([a b] && a < b) b 0))
  ; ..a guard over an alternative still stands over every branch
- ('y = (@ 5 ((3 | 5) & 1) 'y 'n))        ('n = (@ 5 ((3 | 5) & 0) 'y 'n))
+ ('y = (@ 5 ((3 || 5) && 1) 'y 'n))       ('n = (@ 5 ((3 || 5) && 0) 'y 'n))
  ; ..and the SHAPE is earned first, so a guard reading an accessor the shape did not
  ; earn is never run
- (0 = (@ 5 ([a b] & a < b) 1 0))
+ (0 = (@ 5 ([a b] && a < b) 1 0))
  (0 = (@ @(1 1) @(a (? (1 < b) b)) b 0))
  ('(3 4) = (@ '(1 2 3 4) (? (a < b) ([a b] + t)) t 'short))     ; ..a split included
  ('short = (@ '(1 2 3 4) (? (b < a) ([a b] + t)) t 'short))
- ; --- ALTERNATIVES: (p1 || p2) fits when either does. `|` is the same tag, the way
- ; `><` and `link` are -- so neither spelling has to be the one that was right.
+ ; ⚠ `&` and `|` are BITWISE, never tags, so either one in a pattern is an untagged form and
+ ; falls to the lax SHAPE -- it fits nothing here, and says so silently. this is the pin.
+ ('n = (@ 5 (3 | 5) 'y 'n))       ('n = (@ 5 (c & 0 < c) 'y 'n))
+ ; --- ALTERNATIVES: (p1 || p2) fits when either does.
  ('binder = (@ 'sig ('lam || 'pi || 'sig) 'binder 'other))
  ('other = (@ 'app ('lam || 'pi || 'sig) 'binder 'other))
- ('base = (@ 'nat ('nat | 'bool) 'base 'other))                ; ..| says it too
  ('bit = (@ 1 (0 || 1) 'bit 'big)) ('big = (@ 2 (0 || 1) 'bit 'big))
  ('hit = (@ ['k 'b] ['k ('a || 'b)] 'hit 'no))                 ; ..one that binds nothing NESTS
  ('no = (@ ['k 'c] ['k ('a || 'b)] 'hit 'no))

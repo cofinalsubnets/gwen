@@ -327,7 +327,7 @@
         ; and doubles this one. same tree, so G1 holds -- like the deref sugar above.
         ('cast ty x)
          (: dflt ("(" + cty ty "" + ") " + ce x 90)
-            (x @ ('num v & 0 <= v)
+            (x @ ('num v && 0 <= v)
                  (: sfx (? (id? ty 'uint && v <= 4294967295) "u" (id? ty 'ulong) "ul" ())
                     (? sfx (cnum v + sfx) dflt))
                  dflt))
