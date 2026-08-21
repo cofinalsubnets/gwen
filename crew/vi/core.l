@@ -34,6 +34,7 @@
 ; horizontal scroll (long lines clip at the view's edge).
 (module 'vi
 (use 'kore) ; the text/u floors
+(use 'lint)  ; lint-scan and lint-lay, spliced for this module's compile
 (:
    ; -- the small floor --
    ; lists do NOT index by application (a number list would church-tower), so

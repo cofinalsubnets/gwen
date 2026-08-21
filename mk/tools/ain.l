@@ -23,10 +23,10 @@
 ; The whole tool is ONE define: a body-less top-level `:` leaks `ain-main` (args ->
 ; conversation) and nothing else; the SEAT form at the bottom fires it only when the
 ; file itself was invoked (positional or -l), so a multi-call cat stays quiet.
-; dns is a MODULE in the tree and a CATTED SIBLING in the dist artifact, so ask
-; for it only when `dial` is not already here -- the artifact has no lib/ to load
-; from, and a `use` that misses scares rather than shrugging.
-(: _ (? (member? 'dial (names ())) 0 (use 'dns)))
+; dns is a module in the tree and in the dist artifact alike, so this splices it
+; for ain's own compile and leaves the session's book alone.
+(module (ain ain-main)
+(use 'dns)
 
 (: (ain-main as)
  (:
@@ -86,3 +86,4 @@
 ; dispatcher there calls ain-main itself. body-having: nothing leaks.
 (: s ((from 'verbs 'fire) ["ain" "ain.l"])
    (? (two? s) (ain-main >s) ()))
+) ; module ain
