@@ -582,7 +582,13 @@
    _ (pin x64 'lower x64-lower)
    _ (pin x64 'patch x64-patch)
    _ (pin x64 'nop '(144))                     ; the ('align n) filler unit: one-byte nop
-   _ (pin x64 'short 1)                        ; opt into branch relaxation (jmp8/br8 exist here)
+   ;; branch relaxation: rel8 measures from the END of the 2-byte short form, so the distance
+   ;; from the instruction itself is two more than the field carries. this RE-LOWERS rather than
+   ;; rewriting its chunk -- an x86 short jump shares no bytes with its long twin.
+   _ (pin x64 'short (\ ins c rel
+        (? !(fits8 (rel - 2)) ()
+           (id? <ins 'jmp) (emit-jmp8 (at ins 1))
+           (emit-br8 (at ins 1) (at ins 2)))))
    _ (defbackend 'x64 x64)
    _ (defbackend 'amd64 x64))
 ) ; module 'holo

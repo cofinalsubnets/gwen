@@ -237,13 +237,19 @@
    ;; an EPOCH pinned beside each label: same count of 'align forms seen == no boundary inside the
    ;; span. each form lowers exactly ONCE (pass one caches its chunk, pass two splices it).
    ;; the LARGE COLD texts ride this; plain `assemble` stays on lay, so a hot assembling client
-   ;; pays nothing. a backend opts in by pinning 'short; a fixed-width arch falls through to lay.
+   ;; pays nothing. a fixed-width arch falls through to lay. a backend opts in by pinning 'short:
+   ;;   (\ ins chunk rel -> bytes | ())
+   ;; answering a shorter encoding of this jmp/br -- given the form, its already-lowered LONG
+   ;; chunk, and the pessimistic distance from the instruction to its target -- or () to keep the
+   ;; long one. the answer is MEASURED, so a short form may be any width (x64's is 2 bytes, riscv
+   ;; drops a whole jal), and handing the backend its own chunk lets it REWRITE rather than
+   ;; re-lower, which matters where lowering reads state the second pass no longer holds.
    ;; `longs` is a tablet of label names that must stay long-form -- the object writer passes its
    ;; weak-defined set, whose fixups must survive as relocations.
    ;; ⚠ the locals here are spelled to shadow NO caller-side global: a `scan`/`rw`/`skip` would
    ;; collide with moon/kore file-scope names in a cat'd stream. --
    (laylax prog be at0 labels longs)
-      (? !(peep be 'short 0) (lay prog be at0 () labels)
+      (? !(lit? (peep be 'short 0)) (lay prog be at0 () labels)
          (: spots (tablet 0) eras (tablet 0)
             ;; pass one: lower each form once, cache (len . REVERSED chunk) -- the length rides
             ;; along so pass two never re-walks a chunk, and the reversal is already paid since
@@ -260,14 +266,17 @@
                         (: r (revonto (lower-with be ins) () 0)
                            (plumb >p (addr + <r) era (r >< acc))))))
             chunks (plumb prog at0 0 ())
-            ;; the short branch is 2 bytes, so its rel8 measures from addr+2 -- forward spans
-            ;; shrink toward it, backward spans shrink toward zero, both stay inside [-128,127].
-            (near? l addr era)
+            ;; the pessimistic address of a label this span may legally reach, or (). forward
+            ;; spans shrink toward it and backward spans toward zero as branches shorten, so a
+            ;; distance the backend accepts here stays acceptable -- which is what keeps ONE
+            ;; decision pass sound. the backend judges the distance; this only offers it.
+            short-of (peep be 'short 0)
+            (tgt-of l era)
                (: t (peep spots l ())
                   (? !(imm? t) ()
                      (peep longs l 0) ()
                      !(era = peep eras l -1) ()
-                     (fits8 (t - (addr + 2)))))
+                     t))
             ;; pass two: splice the cached chunks -- pessimistic addresses (pa) drive the
             ;; shortening decisions, final addresses (fa) pin the labels and re-lay the pads.
             (stitch p cs pa fa era items)
@@ -279,12 +288,13 @@
                         (: pad (pad-to be fa (at ins 1))
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)
                                    (rev pad + items)))
-                        ((<ins = 'jmp) && near? (at ins 1) pa era)
-                        (: sc (lower-with be `('jmp8 (at ins 1)))
-                           (stitch >p >cs (pa + k) (fa + 2) era (rev sc + items)))
-                        ((<ins = 'br) && near? (at ins 2) pa era)
-                        (: sc (lower-with be `('br8 (at ins 1) (at ins 2)))
-                           (stitch >p >cs (pa + k) (fa + 2) era (rev sc + items)))
+                        (member? <ins '(jmp br))
+                        (: t (tgt-of (? (<ins = 'jmp) (at ins 1) (at ins 2)) era)
+                           sc (? (imm? t) (short-of ins (rev c) (t - pa)) ())
+                           (? (two? sc)
+                              (: r (revonto sc items 0)          ; ⚠ BYTES, not elements: one
+                                 (stitch >p >cs (pa + k) (fa + <r) era >r))   ;  fixup is 4 of them
+                              (stitch >p >cs (pa + k) (fa + k) era (c + items))))
                         (stitch >p >cs (pa + k) (fa + k) era (c + items)))))   ; c is cached REVERSED
             (stitch prog chunks at0 at0 0 ())))
 

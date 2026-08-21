@@ -367,6 +367,27 @@
    ;; one 8-byte fixup whose aux packs both base words -- 'pcrel patches hi20 into the first,
    ;; lo12 into the second). la and lar coincide: auipc is byte pc-relative by nature, so the
    ;; pair is translation-invariant (x86's rip-rel lea already is; arm64 needed ADR for that).
+   ;; -- the SHORT branch (holo's 'short hook). rv-br always ends (.. hop jal): a fused
+   ;;    compare-branch INVERTED so it hops the wide jal. inside the fused form's own +-4KB the
+   ;;    jal is dead weight -- drop it, flip the hop back, and aim it at the label. all four
+   ;;    rv-br shapes end in that pair, so one rewrite serves them and each saves exactly the jal.
+   ;;    ⚠ a REWRITE and not a re-lower: rv-flags carries the cmp that fed this br only while pass
+   ;;    one runs, and by the time the relaxer decides, it has moved on to the last cmp in the text.
+   (rvb-fits? rel) ((rel >= -4096) && (rel <= 4094))
+   (rv-bword rel)  (: u (rel & 8191)                    ; the B-form's scattered 13-bit field
+                      ((((u >> 12) & 1) << 31) | ((((u >> 5) & 63) << 25)
+                        | ((((u >> 1) & 15) << 8) | (((u >> 11) & 1) << 7)))))
+   (rv-first k l)  (? ((k < 1) || !(two? l)) () (<l >< rv-first (k - 1) >l))
+   (rv-shorten bs label)
+      (: n (tally bs)
+         (? (n < 5) ()
+            !(fix? (at bs (n - 1))) ()                  ; the tail must BE the jal fixup
+            (: w ((at bs (n - 5)) | (((at bs (n - 4)) << 8)
+                   | (((at bs (n - 3)) << 16) | ((at bs (n - 2)) << 24))))
+               (? !((w & 127) = 0x63) ()                ; and the word before it a B-form hop
+                  (: base ((w & 0x1FFF07F) ^ 0x1000)    ; keep rs2/rs1/funct3/op, flip the cc bit
+                     (rv-first (n - 5) bs + `((fix 4 'b13 label base))))))))
+
    (rv-jmp label)  `((fix 4 'j21 label 0x6F))
    (rv-jmpr d)     (rv-i 0 (rvn d) 0 0 0x67)                                 ; jalr x0, 0(d)
    (rv-call label) `((fix 8 'pcrel label ((((1 << 15) | ((1 << 7) | 0x67)) * 4294967296) + (0x17 | (1 << 7)))))
@@ -546,12 +567,21 @@
                _ (? ((hi >= -524288) && (hi <= 524287)) 0 (scare 'rv-pcrel-range rb))
                (le32 ((aux % 4294967296) | ((hi & 1048575) << 12))
                 + le32 ((aux // 4294967296) | ((lo & 4095) << 20))))
+            (kind = 'b13)
+            (: _ (? (rvb-fits? rb) 0 (scare 'rv-b13-range rb))
+               (le32 (aux | rv-bword rb)))
             (kind = 'abs64) (le64 (target + aux))
             (scare 'badfix kind)))
 
    rv (tablet 0)
    _ (pin rv 'lower rv-lower)
    _ (pin rv 'patch rv-patch)
+   ;; ⚠ the prefix ahead of the hop (fp predicate, or the s/ns subtract) is plain words, never a
+   ;; fixup, so its element count IS its byte count -- which is what puts the branch at pa + pre.
+   _ (pin rv 'short (\ ins c rel
+        (? !(id? <ins 'br) ()                     ; jmp is already one jal, and reaches +-1MB
+           (: pre ((tally c) - 5)
+              (? ((pre < 0) || !(rvb-fits? (rel - pre))) () (rv-shorten c (at ins 2)))))))
    _ (pin rv 'nop '(19 0 0 0))                 ; the ('align n) filler unit: NOP 00000013 LE
    _ (defbackend 'riscv64 rv)
    _ (defbackend 'rv64 rv))

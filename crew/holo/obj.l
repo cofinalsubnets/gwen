@@ -454,7 +454,7 @@
        ; the in-place-resolvable kinds (translation-invariant). riscv's BOTH label
        ; kinds are pure byte deltas (auipc is byte pc-relative by nature -- no page
        ; math), so intra-.text la/call/jmp all resolve inside the .o.
-       rset (? a64 '(b26 b19) rv '(j21 pcrel) '(rel32 rel8))
+       rset (? a64 '(b26 b19) rv '(j21 pcrel b13) '(rel32 rel8))
        machine (peep elf-machines target 0)
        ; ⚠ the backend must be REGISTERED, not merely named: a frontend bakes holo
        ; with the NATIVE backend only, and a cross target joins the cat at runtime
