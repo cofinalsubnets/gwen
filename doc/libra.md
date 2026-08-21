@@ -206,3 +206,28 @@ the environment rather than by the seat walk. the module walk still reads none.
 `lib/lint.l` takes a plain tablet and reads it with `peep`; it does NOT depend
 on salt, because vi cats that file directly and a module it had to carry along
 would break the cat. salt fills the tablet, lint only reads it.
+
+## the indent plan, and the width guard that was refused
+
+`lint-lay` aligns a continuation line under its form's first operand, or one past
+the open delimiter when the head stands alone on its line. `:` and `?` take their
+operands two at a time -- name/value, test/result -- and the house sets the second
+of each pair one space past the first, so a value is never mistaken for another
+name at a glance. Every other form aligns its operands flat.
+
+A **width guard** over that rule was tried and pays nowhere. The idea: cap the
+alignment, so a first operand sitting far to the right falls back to one past its
+own open paren (black's bargain), on the theory that it would rescue the hand-laid
+hanging files. Measured over the tree at thresholds 24/32/40/56:
+
+| | changed lines, before -> after |
+|---|---|
+| `love/ev.l` (hanging) | 494 -> 506 |
+| `test/holo/golden.l` (hanging) | flat |
+| `crew/libra/libra.l` (well laid) | 7 -> 22 |
+| `lib/lint.l` (well laid) | 1 -> 4 |
+| tree-wide churn | 12591 -> 16448 |
+
+The hanging files barely move, because their authors broke to a column *left* of
+the enclosing paren, which no cap-and-fallback reproduces; every well-laid file
+gets worse. Alignment it is. Do not re-add the guard without new evidence.
