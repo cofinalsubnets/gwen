@@ -11,6 +11,12 @@
 ;
 ; settings come from lib/salt.l -- ~/.love/etc/libra.l, then ./.libra.l over it.
 ; the rules, what they mean, and which fail a gate: doc/libra.md.
+
+; the head names the exports, so the scanner's ~30 helpers stay off the tablet;
+; lint and salt are spliced in here rather than at the top level, where a catted
+; libra would hand the whole session their names as well as its own.
+; `fatal?` is out because test/host/libra.l pins the gate rule against it.
+(module (libra libra-main libra-check libra-doc ldoc-head ldoc-md fatal?)
 (use 'lint)
 (use 'salt)
 
@@ -201,3 +207,4 @@
    ; merely answers leaves cli holding our arguments and loads the first as a
    ; program. the seat miss does return -- that arm is (use 'libra).
    (? (two? s) (: _ (libra-main >s) (quit 0)) ()))
+) ; module libra

@@ -19,9 +19,15 @@
 ; no papel here, so a rendered .md is the document and not a site page: no title,
 ; anchors, contents nav or cross-link rewriting. `make site` still builds a site.
 ;
-; kiosko, hueweb, lapiz and libra are read bare, never through `from`: in the
-; artifact they are catted rather than registered, so an accessor would answer (),
-; and () applied to operands is 1 -- a miss that reads as success.
+; kiosko is read bare, never through `from`: in the artifact it is catted rather
+; than registered, so an accessor would answer (), and () applied to operands is 1
+; -- a miss that reads as success. the rest are modules, asked for by name inside
+; this one, so their names splice for this compile and not for the session.
+(module (serve serve-main sv-make)
+(use 'libra)
+(use 'hueweb)
+(use 'lapiz)
+
 (:
    (sv-nth l k) (? (k = 0) <l (sv-nth >l (k - 1)))
    (sv-ends? s t) (: n (tally s) m (tally t) ((m <= n) && (snip s (n - m) n = t)))
@@ -111,3 +117,4 @@ a .l is painted, a .md rendered, and x.l.md is x.l's header as a document.
    _ (pins (from 'verbs 'tab) 'serve serve-main)
    s ((from 'verbs 'fire) ["serve" "serve.l"])
    _ (? (two? s) (serve-main >s) ()))
+) ; module serve

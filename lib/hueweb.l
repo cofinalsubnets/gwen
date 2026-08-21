@@ -36,7 +36,10 @@
 ; ⚠ hue rides MODULE 'vi. the images that cat crew/vi/{config,hue}.l registered
 ; it (the files' own wraps); a tool outside those images says
 ; (use "crew/vi/config.l") and (use "crew/vi/hue.l") first -- the wraps register
-; the same module -- and the use below splices it for this file's own compile.
+; the same module. the use below sits INSIDE this module, so it splices vi for
+; this file's compile alone: at the top level of a catted file it would hand the
+; whole session vi's ninety-odd names.
+(module (hueweb hw-css hw-body hw-page)
 (use 'vi)
 (:
    (hw-nth l k) (? (k = 0) <l (hw-nth >l (k - 1)))
@@ -131,3 +134,4 @@ hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
     + "</head>\n<body>\n"
     + (? (0 < tally home) ("<header><a href=\"" + hw-q home + "\">love</a></header>\n") "")
     + "<main>\n<article>\n" + body + "\n</article>\n</main>\n</body>\n</html>\n"))
+) ; module hueweb
