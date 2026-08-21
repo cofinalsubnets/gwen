@@ -374,12 +374,24 @@
                   F (? (tablet? r) r (: t (tablet 0) _ (pin t 0 (tablet 0)) t))
                   _ (pin F 31337 (link (books ()) nm))
                   (setbooks (link F (books ()))))
-    (mrun nm fs) (: _ (mopen nm) _ (each fs (\ f (ev 'ev f))) (leave ()))
-    ; ⚠ the quote takes the forms LIST whole -- (\ (f ..)), one element PER FORM.
-    ; an extra (link .. ()) here once made the body ONE application chain: every
-    ; form's effects still ran (the gates stayed green), but each answer was
-    ; APPLIED to the next -- caught only when a bodyless (: answered a function.
-    (:: 'module (\ l (list mrun (cap l) (list '\ (cup l)))))))
+    ; a list head is (name export..): the body defglobs as ever, then every nom not
+    ; named is pulled off the tablet, so from and use each see only the exports. the
+    ; charm keys (0 the macros, 31337 the parent chain) are not noms and so survive.
+    (mrun nm fs) (: n  (? (two? nm) (cap nm) nm)
+                     xs (? (two? nm) (cup nm) ())
+                     _  (mopen n)
+                     _  (each fs (\ f (ev 'ev f)))
+                     F  (cap (books ()))
+                     _  (? (two? xs)
+                           (each (keys F) (\ k (? (nom? k) (? (member? k xs) 0 (pull F k 0)) 0)))
+                           0)
+                     (leave ()))
+    ; the quote takes the forms list whole -- (\ (f ..)), one element per form; an extra
+    ; (link .. ()) here makes the body one application chain, each answer applied to the next.
+    ; the head takes a nom or a list, quoted or not: 'x reads as (\ x), so unwrap one if it is there.
+    (:: 'module (\ l (: h (cap l)
+                        n (? (two? h) (? (id? (cap h) '\) (cap (cup h)) h) h)
+                        (list mrun (list '\ n) (list '\ (cup l))))))))
 
 
 ; --- reader operators: the operators tablet + the opfix factor pass ---------
