@@ -44,6 +44,16 @@
  ((opfix '(x @ p1 b1 p2 b2)) = '(@ x p1 b1 p2 b2))  ; @ likewise: the scrutinee left, the clauses flat
  ((opfix '(f y z @ p b)) = '(@ (f y z) p b))        ; ..and the whole leading span is the scrutinee -- no parens owed
  ((opfix '(c ? x @ p b)) = '(? c (@ x p b)))        ; equal band, right hand: the inner clause form folds first
+ ((opfix '(c ? a x @ p b)) = '(? c a (@ x p b)))    ; ..so a match nests in a cond's ELSE ..
+ ((opfix '(x @ p c ? a b)) = '(@ x p (? c a b)))    ; ..and a cond in a match's ARM. EQUAL is the fixed point:
+                                                    ;   ranking either one over the other breaks the other line
+ ; ⚠ an n-ary form takes everything after it, so a clause form inside ANOTHER OF ITS OWN kind owes
+ ; parens -- no band can help, the two are one operator. cond survives it, a nested ? meaning what the
+ ; flat one means; MATCH DOES NOT, the inner one eating arms that belonged to the outer.
+ ((opfix '(x @ p1 y @ q c p2 b2)) = '(@ x p1 (@ y q c p2 b2)))
+ ((opfix '(x @ p1 (y @ q c) p2 b2)) = '(@ x p1 (@ y q c) p2 b2))
+ ((opfix '(c1 ? a1 c2 ? a2 e)) = '(? c1 a1 (? c2 a2 e)))
+ (7 = (0 ? 1 1 ? 7 9)) (7 = (? 0 1 1 7 9))         ; ..the cond equivalence, by value
  ((opfix '(x @ p b $ y)) = '($ (@ x p b) y))        ; $ is looser, so it folds the whole match and takes it
  ((opfix '(c ? a + b)) = '(? c (+ a b)))            ; ⚠ an n-ary frame yields its last RIGHT operand to a tighter op
  ((opfix '(? c a b)) = '(? c a b))                  ; ..and the prefix spelling is untouched, a fixed point as ever
