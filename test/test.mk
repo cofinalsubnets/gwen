@@ -101,6 +101,22 @@ test_host: $(ho)/love.baked
 	@{ $m out/host/.test_host.l </dev/null; echo $$? > out/host/.test_host.rc; } | tee out/host/.test_host.out; \
 	  s=$$(cat out/host/.test_host.rc); \
 	  [ $$s -eq 0 ] && grep -q "tests pass" out/host/.test_host.out
+# test_hostegg -- the same corpus down the EGG boot, for the gates that can afford both
+# doors. $m wakes the image, so test_host reads one heap only, and the two are not the same
+# heap: a woken one arrives with a pinned prefix it did not copy and an intern map it did
+# not build. three baked-only GC gates once passed a commit that broke the egg lane, and
+# test_stdincorpus -- the one gate that ran both -- caught it on its first run.
+# ⚠ it asks for $(ho)/love, NOT love.baked: an egg lane has no use for the ~12 s bake, and
+# a gate that pulled the stamp would pay it for a binary it then tells to ignore the image.
+# ⚠ it counts TWO asserts fewer than test_host, and that is right: test/holo.l opens on
+# `(lit? (from 'holo))`, and holo lives in the glaze -- so its two backend laws are the
+# baked door's alone. Fewer asserts is not less collector; it is a different heap.
+test_hostegg: $(ho)/love
+	@echo TEST $m "(egg)"
+	@cat $t > out/host/.test_hostegg.l
+	@{ env LOVE_NO_IMAGE=1 $m out/host/.test_hostegg.l </dev/null; echo $$? > out/host/.test_hostegg.rc; } | tee out/host/.test_hostegg.out; \
+	  s=$$(cat out/host/.test_hostegg.rc); \
+	  [ $$s -eq 0 ] && grep -q "tests pass" out/host/.test_hostegg.out
 # test_stdincorpus -- THE ORACLE FOR `reads` OVER STDIN, and nothing else was one. test_host
 # takes the corpus as a FILE (the speed choice above) and test_stdinbuf runs two-line programs,
 # so at the scale where a reader's window arithmetic actually breaks, nothing looked: a `reads`
@@ -816,11 +832,14 @@ test_tools: host out/host$(hsuf)/lush
 # /warn the knob is GCDBG: EXTRA_CFLAGS rides $(ai_cflags), which the mooncc recipes do not use.
 test_gcheck: host
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAiGcCheck test_host
+	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAiGcCheck test_hostegg
 # test_gcstress: the MUTATOR's side -- whether the C around the collector holds a raw pointer
 # across a call that collects. AiGcStress always collects, poisons the vacated nursery, and
-# majors every 32nd. ~8 min, own tree -- it tracks the glaze, since every major walks it.
+# majors every 32nd. ~12 min, own tree -- the baked leg tracks the glaze, since every major
+# walks it, and costs 3.4x the egg one for it (429 s against 126 s).
 test_gcstress: host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAiGcStress test_host
+	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAiGcStress test_hostegg
 # test_imgchain: the PINNED PREFIX, which nothing else can reach -- `love bake -L` is the
 # only thing that sets g->froze, so the branch in gcp, the verbatim block in gen_major and
 # the terminator fixup in evac_thread are dead code in every other lane, test_gcstress
