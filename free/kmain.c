@@ -898,32 +898,52 @@ static lvm(lvm_close) {
 // (stat path) -> (size mtime-ms mode ns) | (). ⚠ ns is the ms date times a million,
 // not a finer reading of it: this clock's last hand IS the millisecond (a 100 Hz
 // tick over the boot date), and digits it does not have would be the wrong honesty.
-ai_noinline static struct ai *k_stat(struct ai *g) {
+// what the ramfs KNOWS about a path, and nothing it would have to invent. A
+// struct stat's ino, nlink, uid and dev have no answer down here, so filling
+// them is free/sys.c's fabrication to make in the open -- not this face's to
+// bury, where nobody would ever see what inle had decided an inode is.
+struct k_st { uintptr_t size, ms, mode; };
+
+// -> 0, or ENOENT for a path that is not there. ⚠ a SYNTHESIZED directory --
+// a prefix that has children but no entry of its own, and the root -- answers
+// like any other, because the initrd carries no directories and so most of the
+// tree is synthesized. That case is also why this fills a struct rather than
+// handing back an entry index: it has no row to point at.
+ai_noinline static int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st) {
   char cp[256];
+  intptr_t cn;
+  if (!k_fs_init()) return ENOMEM;
+  if ((cn = k_canon(p, pn, cp)) < 0) return ENOENT;
+  int i = k_find(cp, (uintptr_t) cn);
+  uintptr_t kid;
+  *st = (struct k_st) { 0, 0, 0 };
+  if (i >= 0 && !k_ents[i].dir)
+    k_blob(i, &st->size), st->ms = k_ents[i].ms,
+    st->mode = k_mode_file | k_ents[i].mode;
+  else if (i >= 0) {
+    st->mode = k_mode_dir | k_ents[i].mode;     // an explicit directory: its own date,
+    st->ms = k_ents[i].ms;                      // or its newest child's if newer
+    if (k_kids(cp, (uintptr_t) cn, &kid) && kid > st->ms) st->ms = kid; }
+  else if (k_kids(cp, (uintptr_t) cn, &st->ms) || !cn) st->mode = k_mode_dir | 0755;
+  else return ENOENT;
+  return 0; }
+
+// the love face: (size mtime mode ns), kore's shape. ⚠ every refusal is the
+// same () here -- absence and misuse alike -- which is the host's answer too.
+ai_noinline static struct ai *k_stat(struct ai *g) {
+  struct k_st st;
   if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
   struct ai_str *pv = (struct ai_str*) g->sp[0];
-  intptr_t cn;
-  if (!k_fs_init() || (cn = k_canon(pv->bytes, pv->len, cp)) < 0)
-    return g->sp[0] = ZeroPoint, g;
-  int i = k_find(cp, (uintptr_t) cn);
-  uintptr_t size = 0, ms = 0, kid, mode;
-  if (i >= 0 && !k_ents[i].dir)
-    k_blob(i, &size), ms = k_ents[i].ms, mode = k_mode_file | k_ents[i].mode;
-  else if (i >= 0) {
-    mode = k_mode_dir | k_ents[i].mode;         // an explicit directory: its own date,
-    ms = k_ents[i].ms;                          // or its newest child's if newer
-    if (k_kids(cp, (uintptr_t) cn, &kid) && kid > ms) ms = kid; }
-  else if (k_kids(cp, (uintptr_t) cn, &ms) || !cn) mode = k_mode_dir | 0755;
-  else return g->sp[0] = ZeroPoint, g;          // absent -> the real ()
+  if (k_fs_stat(pv->bytes, pv->len, &st)) return g->sp[0] = ZeroPoint, g;
   if (!ai_ok(g = ai_have(g, 4 * Width(struct ai_chain)))) return g;
   struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm((intptr_t) (ms * 1000000)), ZeroPoint);
+                                 putcharm((intptr_t) (st.ms * 1000000)), ZeroPoint);
   c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                putcharm((intptr_t) mode), word(c));
+                putcharm((intptr_t) st.mode), word(c));
   c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                putcharm((intptr_t) ms), word(c));
+                putcharm((intptr_t) st.ms), word(c));
   c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                putcharm((intptr_t) size), word(c));
+                putcharm((intptr_t) st.size), word(c));
   return g->sp[0] = word(c), g; }
 static lvm(lvm_stat) {
   Pack(g); g = k_stat(g);
