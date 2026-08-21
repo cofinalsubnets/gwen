@@ -10,6 +10,12 @@
 ; meaning, over ALL of them. a form rvc-of declines is exercised too -- the sweep runs
 ; the boundaries (offset 248/256, immediate 31/32) from both sides.
 ;
+; part two covers the C forms the squeeze never sees: c.j and c.beqz/c.bnez, whose WIDTH
+; turns on a distance, so riscv.l's 'short hook chooses them and rv-patch writes them.
+; there is no 32-bit word to compare against -- the wide form was a whole extra
+; instruction -- so these are checked by INTENT, every reachable even offset against the
+; spelling llvm-mc gives back, plus the cases rv-cbase must REFUSE.
+;
 ; ⚠ ONE alias is normalized: llvm-mc prints the 32-bit `add rd, x0, rs2` as itself but
 ; prints the C form as `mv`. c.mv IS that add by definition (RISC-V spec), so the two
 ; spellings are one instruction and the text compare must not part them.
@@ -131,6 +137,46 @@
    _ (? !(two? bad) 0
         (: _ (say err ("FAIL test_rvc: " + show (tally bad) + " of " + show npair
                         + " compressions change meaning\n")) (quit 1)))
+
+   ;; -- part two: the label-relative C forms. laid consecutively, so instruction i sits at 2i
+   ;;    and its target at 2i + rel -- which is the offset llvm-mc prints back.
+   (flat ls) (foldl (\ a l (a + l)) () ls)
+   (bhex bs) (foldl (\ a b (a + "0x" + hx2 b + " ")) "" bs)
+   (bform f3 rs1 rs2) ((f3 << 12) | ((rs1 << 15) | ((rs2 << 20) | 0x63)))
+   abin   '("s0" "s1" "a0" "a1" "a2" "a3" "a4" "a5")     ; llvm-mc prints the ABI names
+   cjrels (map (\ i ((i * 2) - 2048)) (upto 2047))       ; every even offset CJ reaches
+   cbrels (map (\ i ((i * 2) - 256)) (upto 255))         ; and every even offset CB reaches
+   cbcases (flat (map (\ r (flat (map (\ f3 (map (\ rl [r f3 rl]) cbrels)) '(0 1)))) pregs))
+   cjw (map (\ i (rv-patch 'cj ((i * 2) + (at cjrels i)) (i * 2) 2 0xA001)) (jot (tally cjrels)))
+   cbw (map (\ i (: c (at cbcases i)
+                     (rv-patch 'cb ((i * 2) + (at c 2)) (i * 2) 2
+                               (rv-cbase (bform (at c 1) (at c 0) 0) (at c 2)))))
+            (jot (tally cbcases)))
+   want (map (\ r ("j " + show r)) cjrels
+          + map (\ c ((? ((at c 1) = 0) "beqz " "bnez ") + ((at abin ((at c 0) - 8))
+                        + (", " + show (at c 2))))) cbcases)
+   _ (wrf (tmpd + "/.cbr.s") (foldl (\ a b (a + (bhex b) + "\n")) "" (cjw + cbw)))
+   _ (sh (mc + " < " + tmpd + "/.cbr.s > " + tmpd + "/.cbr.out 2>/dev/null"))
+   dbr (map norm (lines (rdf (tmpd + "/.cbr.out"))))
+   _ (? ((tally dbr) = tally want) 0
+        (: _ (say err ("FAIL test_rvc: llvm-mc decoded " + show (tally dbr) + " of "
+                        + show (tally want) + " compressed branches\n")) (quit 1)))
+   bbad (foldl (\ a i (? ((at dbr i) = (at want i)) a ([(at want i) (at dbr i)] >< a)))
+               () (jot (tally want)))
+   _ (foldl (\ _ b (: _ (say err ("  wanted `" + (at b 0) + "` got `" + (at b 1) + "`\n")) 0))
+            0 (firstn 12 bbad))
+   _ (? !(two? bbad) 0
+        (: _ (say err ("FAIL test_rvc: " + show (tally bbad) + " of " + show (tally want)
+                        + " compressed branches carry the wrong offset\n")) (quit 1)))
+   ;; the domain: rv-cbase must REFUSE what CB cannot say -- out of reach either way, a
+   ;; register outside the window, a second source, a compare that is not beq/bne.
+   nocb '((0 8 0 256) (0 8 0 -258) (0 7 0 100) (0 16 0 100) (0 8 9 100) (4 8 0 100) (6 8 0 100))
+   loose (foldl (\ a c (? (imm? (rv-cbase (bform (at c 0) (at c 1) (at c 2)) (at c 3)))
+                          (c >< a) a)) () nocb)
+   _ (? !(two? loose) 0
+        (: _ (say err ("FAIL test_rvc: rv-cbase took " + show (tally loose)
+                        + " cases CB cannot encode\n")) (quit 1)))
    _ (say out ("test_rvc: " + show npair
-                + " compressed words decode identically to the 32-bit words they replace\n"))
+                + " compressed words decode identically to the 32-bit words they replace, and "
+                + show (tally want) + " c.j/c.beqz/c.bnez offsets read back exactly\n"))
    0)
