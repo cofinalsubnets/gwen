@@ -17,10 +17,12 @@
 ; (no V flag to set), so `br vs` reads a register's sign.
 ;
 ; branches: the fused compare-branch reaches only +-4KB, too short for love.c-scale texts, so every
-; label branch is WIDE (thumb1's move): the INVERTED fused branch hops over a jal x0 (+-1MB, one
-; j21 fixup). call/la/lar are the auipc pair (+-2GB, one 8-byte 'pcrel fixup carrying both base
-; words). immediates never scare: past 12 bits they materialize through a scratch, so moon's immok
-; seam can treat this target like x64.
+; label branch LAYS wide (thumb1's move): the INVERTED fused branch hops over a jal x0 (+-1MB, one
+; j21 fixup). where holo measures the distance (laylax, the 'short hook below) it comes back down
+; -- to the bare fused branch inside +-4KB, and to c.beqz/c.bnez or c.j inside the C forms' own
+; reach. call/la/lar are the auipc pair (+-2GB, one 8-byte 'pcrel fixup carrying both base words).
+; immediates never scare: past 12 bits they materialize through a scratch, so moon's immok seam can
+; treat this target like x64.
 ;
 ; scratch discipline (two, both outside the abstract file): x31 (t6) is the PER-INSTRUCTION
 ; scratch -- address synthesis, immediate materialization, rotate temps -- dead after every lowered
@@ -378,7 +380,28 @@
                       ((((u >> 12) & 1) << 31) | ((((u >> 5) & 63) << 25)
                         | ((((u >> 1) & 15) << 8) | (((u >> 11) & 1) << 7)))))
    (rv-first k l)  (? ((k < 1) || !(two? l)) () (<l >< rv-first (k - 1) >l))
-   (rv-shorten bs label)
+   ;;    one rung tighter, the C branches: c.j for the jal, and c.beqz/c.bnez for a hop that
+   ;;    compares against x0 with its register in the x8..x15 window. these cannot ride the local
+   ;;    rvc-squeeze -- it reads a WORD and these turn on a DISTANCE -- so they are the 'short
+   ;;    hook's own business, answering a 2-byte fixup where the 4-byte one would do.
+   (rvj-fits? rel)  ((rel >= -2048) && (rel <= 2046))
+   (rvcb-fits? rel) ((rel >= -256) && (rel <= 254))
+   (rv-cjword rel) (: u (rel & 4095)                    ; CJ: imm[11|4|9:8|10|6|7|3:1|5]
+                      ((((u >> 11) & 1) << 12) | ((((u >> 4) & 1) << 11)
+                        | ((((u >> 8) & 3) << 9) | ((((u >> 10) & 1) << 8)
+                          | ((((u >> 6) & 1) << 7) | ((((u >> 7) & 1) << 6)
+                            | ((((u >> 1) & 7) << 3) | (((u >> 5) & 1) << 2)))))))))
+   (rv-cbword rel) (: u (rel & 511)                     ; CB: imm[8|4:3] high, imm[7:6|2:1|5] low
+                      ((((u >> 8) & 1) << 12) | ((((u >> 3) & 3) << 10)
+                        | ((((u >> 6) & 3) << 5) | ((((u >> 1) & 3) << 3)
+                          | (((u >> 5) & 1) << 2))))))
+   ;;    the B-form hop -> its CB base word, or (): beq/bne (funct3 0/1 -> c.beqz/c.bnez), rs2 x0,
+   ;;    rs1 in the window, and a reach of +-256 rather than +-4KB.
+   (rv-cbase w rel)
+      (: f3 ((w >> 12) & 7) rs1 ((w >> 15) & 31)
+         (? ((f3 < 2) && ((((w >> 20) & 31) = 0) && ((rvc-p? rs1) && rvcb-fits? rel)))
+            (((6 + f3) << 13) | (((rvc-p rs1) << 7) | 1)) ()))
+   (rv-shorten bs label rel)
       (: n (tally bs)
          (? (n < 5) ()
             !(fix? (at bs (n - 1))) ()                  ; the tail must BE the jal fixup
@@ -386,7 +409,10 @@
                    | (((at bs (n - 3)) << 16) | ((at bs (n - 2)) << 24))))
                (? !((w & 127) = 0x63) ()                ; and the word before it a B-form hop
                   (: base ((w & 0x1FFF07F) ^ 0x1000)    ; keep rs2/rs1/funct3/op, flip the cc bit
-                     (rv-first (n - 5) bs + `((fix 4 'b13 label base))))))))
+                     cb (rv-cbase base rel)
+                     (rv-first (n - 5) bs
+                      + (? (imm? cb) `((fix 2 'cb label cb))
+                           `((fix 4 'b13 label base)))))))))
 
    (rv-jmp label)  `((fix 4 'j21 label 0x6F))
    (rv-jmpr d)     (rv-i 0 (rvn d) 0 0 0x67)                                 ; jalr x0, 0(d)
@@ -570,6 +596,12 @@
             (kind = 'b13)
             (: _ (? (rvb-fits? rb) 0 (scare 'rv-b13-range rb))
                (le32 (aux | rv-bword rb)))
+            (kind = 'cj)
+            (: _ (? (rvj-fits? rb) 0 (scare 'rv-cj-range rb))
+               (le16 (aux | rv-cjword rb)))
+            (kind = 'cb)
+            (: _ (? (rvcb-fits? rb) 0 (scare 'rv-cb-range rb))
+               (le16 (aux | rv-cbword rb)))
             (kind = 'abs64) (le64 (target + aux))
             (scare 'badfix kind)))
 
@@ -579,9 +611,16 @@
    ;; ⚠ the prefix ahead of the hop (fp predicate, or the s/ns subtract) is plain words, never a
    ;; fixup, so its element count IS its byte count -- which is what puts the branch at pa + pre.
    _ (pin rv 'short (\ ins c rel
-        (? !(id? <ins 'br) ()                     ; jmp is already one jal, and reaches +-1MB
+        (? (id? <ins 'jmp)                        ; the lone jal, and pa IS its address
+           (? !((tally c) = 1) ()                 ; the chunk must BE that jal
+              !(fix? <c) ()
+              !(id? (fix-k <c) 'j21) ()
+              (rvj-fits? rel) `((fix 2 'cj (at ins 1) 0xA001))
+              ())
+           !(id? <ins 'br) ()
            (: pre ((tally c) - 5)
-              (? ((pre < 0) || !(rvb-fits? (rel - pre))) () (rv-shorten c (at ins 2)))))))
+              (? ((pre < 0) || !(rvb-fits? (rel - pre))) ()
+                 (rv-shorten c (at ins 2) (rel - pre)))))))
    _ (pin rv 'nop '(19 0 0 0))                 ; the ('align n) filler unit: NOP 00000013 LE
    _ (defbackend 'riscv64 rv)
    _ (defbackend 'rv64 rv))
