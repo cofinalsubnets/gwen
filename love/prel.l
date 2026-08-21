@@ -401,9 +401,9 @@
  '& -46 '^ -45 '| -44                               ; bitwise, C's order
  '&& 31 '|| 30                                      ; logical, below comparison; also pat.l's guard and alternative
  '>< 25                                             ; cons -- the loosest builder
- '$ 5 '\ 6)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate), and the
-                                                    ; lambda a hair ABOVE it, so ([a b] \ a * b $ [2 3]) closes the body at
-                                                    ; the $ and then applies -- at one band the right hand ate the apply
+ '$ 6 '\ 5)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate), and the
+                                                    ; lambda UNDER it, so an infix lambda's body runs to the end of the form
+                                                    ; and swallows the $, as haskell's does
  -1 (pins (tablet 0)                                ; --- ARITY -1: spaced, no bound. a left, then all of them
  '? 10 '@ 10                                        ; the CLAUSE forms: cond, and match -- every arm stays an operand
  ': 3 ':= ':)                                       ; the binder, loosest of all; := is a bare nom, so it NAMES

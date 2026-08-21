@@ -97,7 +97,8 @@ rows in means anything — so read them there and never copy one here.
 ;   ||             or  — and pat.l's ALTERNATIVE tag
 ;   ><             cons — the loosest builder
 ;   ?              cond — infix is the one-armed form; an else arm is prefix (? c a b)
-;   $              weak apply — a $ b = (a b), the haskell $, loosest
+;   $              weak apply — a $ b = (a b), the haskell $
+;   \              the infix lambda, LOOSEST — its body runs to the end of the form
 ```
 
 prel.l leaves numeric gaps between the rows so a level can slot in later.
@@ -121,10 +122,16 @@ you meant, and a guard chain `(c && 0 < c && c < 10)` still arrives nested for p
 `**` and `$` are the two **apply** operators, both self-named (the reader emits `(** a b)` /
 `($ a b)`, backed by the prel globals `(: (** a b) (b a))` and `(: $ 1)` — `$` *is* the identity,
 so `($ a b) = (a b)`). They bracket the range: `**` flip-applies at the tightest band (a
-pipe-like reverse apply that binds before arithmetic), `$` weak-applies at the loosest —
+pipe-like reverse apply that binds before arithmetic), `$` weak-applies near the loose end —
 `f $ a + b` is `f (a + b)`, and `f $ g $ x` folds right to `f (g x)`, exactly haskell's `$`. The
 glued monadic `$x` is untouched: it factors through arity 0 to `saturate`, a
 separate valence the spaced dyadic never sees — one nom, two lanes, which is the valence law.
+
+The **infix lambda is looser than `$`**, so `x \ f $ g x` is `\x -> f (g x)` — the body runs to
+the end of the form and swallows the apply, which is how haskell's lambda reads too. A lambda
+handed to `$` is the case that spends parens: `f $ (x \ x + 1)`. ⚠ `\` is only an operator when
+SPACED with a left operand; prefix `(\ x b)` is a form and no band touches it, which is why
+passing a lambda as an ordinary argument is unaffected.
 
 House sits **above every band**, as Haskell's undeclared-is-`infixl 9`. No source in the tree
 rides house — opfixing every top-level form of every tracked `.l` at three different house bands,

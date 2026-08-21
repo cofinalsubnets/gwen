@@ -56,12 +56,19 @@
  ((opfix '(a + b :+ c)) = '(+ a (:+ b c)))          ;   from it, on either side
 
  ; --- the two apply operators: ** flip-applies (a ** b = (b a)) at the TIGHTEST band, $ weak-
- ; applies (a $ b = (a b), the haskell $) at the LOOSEST. glued $x is saturate, a separate valence. ---
+ ; applies (a $ b = (a b), the haskell $) near the loose end -- the infix lambda alone is looser.
+ ; glued $x is saturate, a separate valence. ---
  ((opfix '(a ** b * c)) = '(* (** a b) c))          ; ** tighter than *: folds before the multiply steals
  ((opfix '(a * b ** c)) = '(* a (** b c)))          ; on the right too
  ((opfix '(f $ a + b)) = '($ f (+ a b)))            ; $ below arithmetic: the sum groups, then weak-applies
  ((opfix '(f $ g $ x)) = '($ f ($ g x)))            ; equal band -> right-assoc, exactly haskell's $
  ((opfix '(a ** b $ c)) = '($ (** a b) c))          ; ** binds, $ is the loose outer apply
+
+ ; --- the infix lambda is LOOSER than $, so a body runs to the end of the form and swallows the
+ ; $, which is the reading haskell's lambda has. handing a lambda TO $ spends the parens. ---
+ ((opfix '(x \ f $ g x)) = '(\ x ($ f (g x))))      ; the body takes the $ ..
+ ((opfix '(x \ a + b)) = '(\ x (+ a b)))            ; ..and everything tighter, which is all of them
+ ((opfix '((x \ x + 1) $ 9)) = '($ (\ x (+ x 1)) 9))  ; ..so applying one owes its parens
 
  ; --- idempotence: factored output carries operators only in head position, so re-running is a no-op ---
  ((opfix (opfix '(a * b + c))) = (opfix '(a * b + c)))
@@ -78,7 +85,9 @@
  ('big = (1 < 2 ? 'big))                              ; ? is dyadic: the one-armed cond, (< 1 2) first
  (4 = (3 ** (+ 1)))                                   ; ** flip-applies: ((+ 1) 3) = 4
  (8 = (2 * 3 ** (+ 1)))                               ; ** tighter than *: (* 2 ((+ 1) 3)) = (* 2 4)
- (6 = ((+ 1) $ 2 + 3))                                ; $ loosest: ((+ 1) (+ 2 3)) = ((+ 1) 5)
+ (6 = ((+ 1) $ 2 + 3))                                ; $ under arithmetic: ((+ 1) (+ 2 3)) = ((+ 1) 5)
+ (10 = ((x \ x + 1) $ 9))                             ; a parenthesized infix lambda, weak-applied
+ (10 = ((x \ x + 1) 9))                               ; ..and applied plainly, the same answer
  (13 = ((+ 1) $ (+ 2) $ 10))                          ; right-assoc: ((+ 1) ((+ 2) 10)) = ((+ 1) 12)
  (0 = $-5) (3 = $2.9)                                 ; glued $x is UNCHANGED -- saturate, not weak-apply
 
