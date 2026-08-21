@@ -25,8 +25,15 @@ callable inside the kernel, which is what lets more of the crew run there.
   `__ai_sys` in C where a hosted seat has a mksys lay issuing `syscall`/`svc`.
   Four numbers: read, write, close, lseek. Gate `test/kernel/sys.l`.
 - **phase A1** (`4433e222`, `37171d37`, `5353380e`) -- the ramfs has a face a
-  syscall can call: nine `k_fs_*` taking (bytes, len), answering 0/errno, with
-  the love marshaling split off above. All behaviour-neutral by gate.
+  syscall can call: nine `k_fs_*` taking (bytes, len), with the love marshaling
+  split off above. All behaviour-neutral by gate.
+- **one sign** -- every C face (`k_fs_*`, `k_fd_*`, `k_parent_ok`) answers 0 or
+  a NEGATIVE errno, because that is what `__ai_sys` owes its caller (impl.h's
+  `er()` reads an error as `(unsigned long) r > (unsigned long) -4096`), so
+  `free/sys.c` forwards their answers untouched. ⚠ the love conventions are the
+  `k_*` wrappers' business and did not move: positive for most doors, `()` for
+  absence, and chdir's negative lane -- which makes chdir the one wrapper that
+  does NOT flip.
 
 ## the numbers that size the rest
 
