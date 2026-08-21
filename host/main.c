@@ -1124,6 +1124,23 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   );                                                     //   tab/word/seat are not names to reach bare, and `get` would shadow half
   g = ai_unsplice_(g);                                   //   the tree. a plain binary carries wake+bake and nothing else; a dist
                                                          //   bake's cat pins the rest into (from 'verbs 'tab)
+  // kanren, overlay and uu come OFF the book. overlay and uu already have the
+  // accessor the boot binds just above -- (: uu (from 'uu)) and overlay's -- so the
+  // splice on top bought nothing but ambient names, and `C`, `Q`, `SRC`, `GLOB`,
+  // `walk`, `var`, `con`, `est` are what this tree calls its locals. A binding you
+  // forgot to write RESOLVED instead of raising.
+  // kanren keeps a surface, named here rather than inherited, the line its own
+  // header draws: unify and its ufail/ufail? contract are the door, and `hoist`
+  // takes the goal macros, which ride the layer's table and not the tablet's noms.
+  // unsplice drops one link at a time, so pat and bao come off with them and go
+  // straight back on: @ for every later compile, read/reads for cli.
+  for (int i = 0; i < 5; i++) g = ai_unsplice_(g);       // bao, uu, pat, overlay, kanren
+  g = ai_evals_(g, "(use 'pat)" "(use 'bao)"
+    "(hoist 'kanren ())"                                 // \\\, &&&, |||, zz
+    "(: unify (from 'kanren 'unify)  ufail (from 'kanren 'ufail)"
+    "   ufail? (from 'kanren 'ufail?)  var (from 'kanren 'var)"
+    "   s_plus (from 'kanren 's_plus)  s_star (from 'kanren 's_star)"
+    "   === (from 'kanren '===)  =/= (from 'kanren '=/=))");           // ..and back: @ for every later compile, read/reads for cli
 #ifdef AiGlazed
   // the glaze, in three moves. (use 'glaze) loads emit.l + auto.l into their own layer and
   // registers it -- ~415 codegen names the book never sees. holo is spliced UNDER that layer

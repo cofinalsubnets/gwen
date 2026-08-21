@@ -14,6 +14,7 @@
 ; the rule: a continuation line aligns under its form's first operand, or one past
 ; the open delimiter when the head stands alone. line-preserving by construction,
 ; since it only ever says where a line starts. see doc/libra.md.
+(module (lint lint-scan lint-of lint-cmts lint-lay)
 (: (lclose c) (? (c = 40) 41 (c = 91) 93 125)          ; ( -> )   [ -> ]   { -> }
    (lopen c)  (? (c = 41) 40 (c = 93) 91 123)          ; ...and back, for the report
 
@@ -324,3 +325,4 @@
                     line (col + 1) 1 plan))))
        (w 0 'code () 1 1 0 [[1 0]]))
 )
+) ; module lint

@@ -393,6 +393,16 @@
                         n (? (two? h) (? (id? (cap h) '\) (cap (cup h)) h) h)
                         (list mrun (list '\ n) (list '\ (cup l))))))))
 
+; a module's macros in the head layer, without its names. a macro rides its own
+; layer's table, which `macros` walks, so a consumer reaching a module through
+; `from` rather than a splice has no other way to spell one. ks names them, ()
+; takes the lot; a macro table is a module's key 0, the one the export prune keeps.
+(: (hoist m ks)
+   (: M (peep (from m) 0 ())
+      (? (tablet? M)
+         (each (? (two? ks) ks (keys M)) (\ k (: v (peep M k 0) (? v (:: k v) 0))))
+         0)))
+
 
 ; --- reader operators: the operators tablet + the opfix factor pass ---------
 (: operators (pins (tablet 0)

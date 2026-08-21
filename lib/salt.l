@@ -15,6 +15,10 @@
 ; a setting is one form, `(key operand ..)`: the head names it, the tail is its
 ; value. so (singleton 1) is a switch, (deprecated a b c) a roster, and a repeated
 ; key replaces rather than appends.
+
+; salt-file is out because test/host/salt.l is written against it: it takes the
+; path, where `salt` reads the two the environment names.
+(module (salt salt salt-all salt-one salt-has? salt-file)
 (:
    ; --- reading one file ------------------------------------------------------
    ; overlay path's settings onto the tablet c, mutated and answered back. the open
@@ -58,3 +62,4 @@
     (: (go l) (? (! (two? l)) ()
                  (: e <l (? ((? (two? e) <e e) = nm) `(1 e) (go >l))))
        (go (salt-all c k))))
+) ; module salt

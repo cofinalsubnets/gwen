@@ -230,7 +230,7 @@
    ; the registry: name -> main (aliases share)
    applets #('diff diff-main
              'nm nm-main
-             'nc ain-main 'ain ain-main
+             'nc (from 'ain 'ain-main) 'ain (from 'ain 'ain-main)   ; ain's wrap registered ahead in the cat
              'make (from 'cook 'cook-main) 'cook (from 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
              'as as-main
              'ar ar-main 'ld ld-main

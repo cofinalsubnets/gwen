@@ -28,9 +28,12 @@
 ;     or: love -l crew/kiosko/kiosko.l [-p PORT] [DIR]
 ; DIR defaults to the working directory, PORT to 8080. it serves until interrupted.
 ;
-; NO BRACKETS HERE: the runtime supplies the layer. a module consumer says
-; (use 'kiosko) (lib/kiosko.l) or probes (from 'kiosko 'serve) -- papel's -s
-; does; a -l load rides the session layer and the seat reads bare.
+; the head names the exports: the two servers, the one-request unit the gate
+; drives, and the verb. catted, an unwrapped kiosko put its whole vocabulary --
+; `nth`, `strcat`, `types`, `reply` -- on the session's book.
+
+; `gulp` is out because test/host/kiosko.l drives the cask/short-read lanes directly.
+(module (kiosko serve serve5 serve1 kiosko-main gulp)
 
 ; --- little utils -------------------------------------------------------------------
 (: (nth l k)    (? (k = 0) <l (nth >l (k - 1)))
@@ -370,3 +373,4 @@ usage: kiosko [-p PORT] [-q] [DIR]
 (: _ (pins (from 'verbs 'tab) 'kiosko kiosko-main)
    s ((from 'verbs 'fire) ["kiosko" "kiosko.l"])
    (? (two? s) (kiosko-main >s) ()))
+) ; module kiosko

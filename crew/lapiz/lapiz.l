@@ -72,7 +72,14 @@
 ; mdread/mdshow/htread/htshow/md->ht/ht->md; everything else is machinery,
 ; reachable for a probe ((keys (from 'lapiz))) but not meant for the eye.
 
-; the combinators (love/peg.l) -- its own top-level form; lapiz wants only the lenient `runp`.
+; the head names the exports: the ten faces, plus the four pieces papel's template
+; reaches through the accessor. everything else is machinery and stays off the
+; tablet -- catted, an unwrapped lapiz put all ~163 of its names on the session.
+(module (lapiz mdread mdshow htread htshow rfread rfshow
+         md->ht ht->md md->rf rf->md convert  htb hti hq mget)
+
+; the combinators (love/peg.l) -- lapiz wants only the lenient `runp`. inside the
+; module, so peg splices for this compile alone.
 (use 'peg)
 
 ; --- little utils ---
@@ -490,5 +497,6 @@
    (ht->md s) (mdshow (htread s))
    (md->rf s) (rfshow (mdread s))
    (rf->md s) (mdshow (rfread s)))
+) ; module lapiz
 
 ; a later surface joins the sealed module the runtime way: (use 'lapiz), then its own text.

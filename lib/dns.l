@@ -31,6 +31,12 @@
 ; ⚠ PRESENCE IS THE WRAPPER here as everywhere: `0.0.0.0` is a perfectly good
 ; address and nets nothing, so every "did it parse" answer is a ONE-LIST tested
 ; with `two?`, never the address itself.
+
+; the head names the exports. `dial` and `resolve` are the door; the rest are the
+; wire-format pieces test/host/dns.l drives directly, a protocol being unit-tested.
+(module (dns dial resolve dns-show
+         dns-answers dns-ask dns-be16 dns-conf dns-query dns-servers
+         dns-hosts dns-labels resolve-in)
 (:
    ; --- files, lines, words ----------------------------------------------------
    ; the two config files are line-oriented text, not love data, so `sound` is no
@@ -212,3 +218,4 @@
    (dns-show a)
     (: (o k) (show $ (a >> k) & 255)
      (o 24 + "." + o 16 + "." + o 8 + "." + o 0)))
+) ; module dns
