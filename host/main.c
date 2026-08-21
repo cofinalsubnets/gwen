@@ -1124,6 +1124,17 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   );                                                     //   tab/word/seat are not names to reach bare, and `get` would shadow half
   g = ai_unsplice_(g);                                   //   the tree. a plain binary carries wake+bake and nothing else; a dist
                                                          //   bake's cat pins the rest into (from 'verbs 'tab)
+  // overlay and uu come OFF the book: both already have the accessor the boot binds
+  // just above -- (: uu (from 'uu)) and overlay's -- so the splice on top bought
+  // nothing but 59 ambient names, and `C`, `Q`, `SRC`, `GLOB`, `spine`, `chk` are
+  // what this tree calls its locals. A binding you forgot to write RESOLVED.
+  // kanren stays: a module's macros ride its layer, so unsplicing takes \\\ and the
+  // goal macros with it. Exporting a macro is the thing standing between kanren and
+  // the same treatment.
+  // unsplice drops one link at a time and uu sits under bao, pat over overlay, so
+  // those two come off with them and go straight back on.
+  for (int i = 0; i < 4; i++) g = ai_unsplice_(g);       // bao, uu, pat, overlay
+  g = ai_evals_(g, "(use 'pat)" "(use 'bao)");           // ..and back: @ for every later compile, read/reads for cli
 #ifdef AiGlazed
   // the glaze, in three moves. (use 'glaze) loads emit.l + auto.l into their own layer and
   // registers it -- ~415 codegen names the book never sees. holo is spliced UNDER that layer
