@@ -1196,16 +1196,6 @@ static struct ai *gen_major(struct ai *g) {
  g->sym_raw = false;                                           // the rebuild above re-homed it
  return g->gc_gen = false, g; }
 
-// a nursery may never stand above what the major can absorb. gen_please forces a MAJOR
-// while major_free < g->len, and every major re-sizes the pool to need + 25%, so a
-// nursery above that quarter forces one at EVERY collection: a generational collector
-// that has quietly stopped being one, correct and quadratic, with no gate the wiser.
-static ai_inline uintptr_t nursery_cap(struct ai *g, uintptr_t want) {
- uintptr_t room = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);
- room -= room >> 3;                                   // the force test adds req0; leave it room
- if (want > room) want = room;
- return want < g->minor0 ? g->minor0 : want; }
-
 // resize the MINOR pool, decoupled from the major. called right after a collection,
 // so the minor is EMPTY: only the core + stack move; the major + intern map ride
 // through untouched (() is ZeroPoint, so nothing points at the moving core).
@@ -1275,10 +1265,15 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  // ⚠ the band is meaningless on a forced schedule (`allocated` ~0 -> the nursery
  // doubles every collection, a 256 MB oom); the HARD FLOOR stays -- it guarantees
  // the pending allocation fits, and skipping it reads like a runtime bug.
+ // ⚠ and it must come BACK DOWN. a nursery parked at its high-water -- the image wake
+ // asks for one block the size of the glaze -- stands above the major's spare, and
+ // `major_free < g->len` then forces a MAJOR every collection: generational in name
+ // only, correct and quadratic. shrink on 4x hysteresis, so a resize is not per-pass.
  { uintptr_t used0 = g->len - avail(g), req = req0 + used0 + (used0 >> 2);
-   uintptr_t want = nursery_cap(g, req);
+   uintptr_t want = req < g->minor0 ? g->minor0 : req;
    if (req > (uintptr_t) g->len) return gen_grow(g, req);        // the floor still wins
-   return want == (uintptr_t) g->len ? g : gen_grow(g, want); }
+   if ((uintptr_t) g->len > 4 * want) return gen_grow(g, want);
+   return g; }
 #endif
  g->win_alloc += seen_young, g->win_copied += copied;
  uintptr_t used = g->len - avail(g), req = req0 + used + (used >> 2), len1 = g->len, arena = len1;
@@ -1302,7 +1297,6 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
   // (live + this whole nursery): the nursery gets ~(budget - 2*live)/4
   uintptr_t lv = 2 * g->major_live0, room = g->budget > lv ? (g->budget - lv) / 4 : 0;
   if (arena > room) arena = room; }
- arena = nursery_cap(g, arena);                                // never above the major's room
  if (arena < g->minor0) arena = g->minor0;                     // floor
  if (arena < req) arena = req;                                 // hard floor: hold the pending allocation
  return arena == len1 ? g : gen_grow(g, arena); }
@@ -5495,7 +5489,7 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
  // seed the nursery against the live set the image arrives with: the resize controller
  // otherwise ramps from the bare floor a doubling -- and a collection -- at a time,
  // and a woken runtime already knows how much it will be scanning past.
- { uintptr_t want = nursery_cap(g, nw >> 1);
+ { uintptr_t want = nw >> 1;
    if (want > (uintptr_t) g->len) { struct ai *h = gen_grow(g, want); if (ai_ok(h)) g = h; } }
  return g; }
 struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t)) {
