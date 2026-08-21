@@ -814,18 +814,24 @@
    ;; cmp/test/ucomisd emit nothing (or materialize an immediate into x30) and REMEMBER their
    ;; operands, which br/set fuse into beq/blt/slt/feq -- so the flag goldens pair the compare with
    ;; its consumer. label branches are WIDE (thumb1's shape); call/la are the auipc pair.
-   ;; goldens from `llvm-mc --disassemble --triple=riscv64 --mattr=+m,+f,+d`. --
+   ;; ⚠ these are the COMPRESSED forms: the squeeze walks a lowered chunk word by word and takes
+   ;; every RVC shape it finds, so a row's byte count is no longer four times its instruction
+   ;; count, and decoding needs +c. the trailing comments name what a disassembler prints, which
+   ;; is the ALIAS (`mv a0, a3`) -- the same word either width spells.
+   ;; goldens from `llvm-mc --disassemble --triple=riscv64 --mattr=+m,+f,+d,+c`, every one read
+   ;; back through riscv64-linux-gnu-objdump as well: a torn instruction desynchronizes a stream
+   ;; rather than failing, and one disassembler agreeing with itself cannot tell you that. --
    rvtests '(
       ;; immediates: addi / lui+addiw (the 32-bit wraparound pair) / the shift-add chunk chain
       ("rv.li"       "1305c003"          ((li r0 60)))                 ; li a0, 60
-      ("rv.li.neg1"  "1305f0ff"          ((li r0 -1)))                 ; li a0, -1
+      ("rv.li.neg1"  "7d55"              ((li r0 -1)))                 ; li a0, -1
       ("rv.li.t"     "9302c003"          ((li r8 60)))                 ; li t0, 60
       ("rv.li.32"    "375534121b058567"  ((li r0 305419896)))          ; lui a0,74565 ; addiw a0,a0,1656
-      ("rv.li.edge"  "370500801b05f5ff"  ((li r0 2147483647)))         ; lui a0,524288 ; addiw a0,a0,-1 (the wraparound)
-      ("rv.li.big"   "3775e3f91b05c5791315c5001305f5971315c5001305854a1315c500130555c1"
+      ("rv.li.edge"  "370500807d35"      ((li r0 2147483647)))         ; lui a0,524288 ; addiw a0,a0,-1 (the wraparound)
+      ("rv.li.big"   "3775e3f91b05c57932051305f59732051305854a3205130555c1"
                       ((li r0 11400714819323198485)))                  ; the hash mult, bignum-safe: lui+addiw+3x(slli 12; addi)
-      ("rv.mov"      "13850600"          ((mov r0 r3)))                ; mv a0, a3
-      ("rv.mov.sp"   "13040100"          ((mov fp sp)))                ; mv s0, sp
+      ("rv.mov"      "3685"              ((mov r0 r3)))                ; mv a0, a3
+      ("rv.mov.sp"   "0a84"              ((mov fp sp)))                ; mv s0, sp
       ;; ALU: native three-address; immediates ride addi/andi/ori/xori, else materialize in x31
       ("rv.add"      "3385c500"          ((add r0 r1 r2)))             ; add a0, a1, a2
       ("rv.sub"      "33870741"          ((sub r4 r5 r6)))             ; sub a4, a5, a6
@@ -835,21 +841,21 @@
       ("rv.mul"      "3385c502"          ((imul r0 r1 r2)))            ; mul a0, a1, a2
       ("rv.addi"     "13854506"          ((add r0 r1 100)))            ; addi a0, a1, 100
       ("rv.subi"     "1385c5f9"          ((sub r0 r1 100)))            ; addi a0, a1, -100 (sub flips)
-      ("rv.andi"     "13757500"          ((and r0 r0 7)))              ; andi a0, a0, 7
-      ("rv.addi.big" "b70f01009b8f4f003385f501" ((add r0 r1 65540)))   ; lui t6,16 ; addiw t6,t6,4 ; add a0,a1,t6
+      ("rv.andi"     "1d89"              ((and r0 r0 7)))              ; andi a0, a0, 7
+      ("rv.addi.big" "b70f0100912f3385f501"     ((add r0 r1 65540)))   ; lui t6,16 ; addiw t6,t6,4 ; add a0,a1,t6
       ("rv.neg"      "3305a040"          ((neg r0)))                   ; neg a0 (sub a0, x0, a0)
       ("rv.not"      "93c6f6ff"          ((not r3)))                   ; not a3 (xori -1)
       ;; shifts and rotates (no rotate in the base ISA: srli/slli/or through x31)
-      ("rv.shl"      "13153500"          ((shl r0 3)))                 ; slli a0, a0, 3
-      ("rv.sar"      "93d61640"          ((sar r3 1)))                 ; srai a3, a3, 1 (the tag math)
-      ("rv.rol"      "935f0502131505023365f501" ((rol r0 32)))         ; srli t6,a0,32 ; slli a0,a0,32 ; or (the map hash)
+      ("rv.shl"      "0e05"              ((shl r0 3)))                 ; slli a0, a0, 3
+      ("rv.sar"      "8586"              ((sar r3 1)))                 ; srai a3, a3, 1 (the tag math)
+      ("rv.rol"      "935f050202153365f501"     ((rol r0 32)))         ; srli t6,a0,32 ; slli a0,a0,32 ; or (the map hash)
       ("rv.shlv"     "3315b500"          ((shlv r0 r1)))               ; sll a0, a0, a1 (count pinned to r1)
       ("rv.sarv"     "b3d6b640"          ((sarv r3 r1)))               ; sra a3, a3, a1
       ;; memory: 12-bit offsets ride the instruction; a far one builds base+hi in x31
       ("rv.ld"       "03358800"          ((ld r0 r6 8)))               ; ld a0, 8(a6)
-      ("rv.st"       "23b4a500"          ((st r1 8 r0)))               ; sd a0, 8(a1)
+      ("rv.st"       "88e5"              ((st r1 8 r0)))               ; sd a0, 8(a1)
       ("rv.ld.neg"   "03b545ed"          ((ld r0 r1 -300)))            ; ld a0, -300(a1)
-      ("rv.ld.far"   "b7ef0100b38fbf0003b50f24" ((ld r0 r1 123456)))   ; lui t6,30 ; add t6,t6,a1 ; ld a0,576(t6)
+      ("rv.ld.far"   "b7ef0100ae9f03b50f24"     ((ld r0 r1 123456)))   ; lui t6,30 ; add t6,t6,a1 ; ld a0,576(t6)
       ("rv.ld1"      "030587ff"          ((ld1 r0 r4 -8)))             ; lb a0, -8(a4) (sign-extends)
       ("rv.ld2"      "83160101"          ((ld2 r3 sp 16)))             ; lh a3, 16(sp)
       ("rv.ld4"      "8328c7f9"          ((ld4 r7 r4 -100)))           ; lw a7, -100(a4)
@@ -857,21 +863,21 @@
       ("rv.ldu4"     "83688700"          ((ldu4 r7 r4 8)))             ; lwu a7, 8(a4)
       ("rv.st1"      "230ca7fe"          ((st1 r4 -8 r0)))             ; sb a0, -8(a4)
       ("rv.st4"      "232e17f9"          ((st4 r4 -100 r7)))           ; sw a7, -100(a4)
-      ("rv.sx1"      "1315850313558543"  ((sx1 r0)))                   ; slli a0,a0,56 ; srai a0,a0,56
-      ("rv.sx4"      "9b860600"          ((sx4 r3)))                   ; sext.w a3 (one addiw)
+      ("rv.sx1"      "62156195"          ((sx1 r0)))                   ; slli a0,a0,56 ; srai a0,a0,56
+      ("rv.sx4"      "8126"              ((sx4 r3)))                   ; sext.w a3 (one addiw)
       ("rv.zx1"      "1375f50f"          ((zx1 r0)))                   ; andi a0, a0, 255
-      ("rv.zx4"      "9398080293d80802"  ((zx4 r7)))                   ; slli a7,a7,32 ; srli a7,a7,32
+      ("rv.zx4"      "821893d80802"      ((zx4 r7)))                   ; slli a7,a7,32 ; srli a7,a7,32
       ;; indexed addressing: synthesized through x31 (ldx borrows d, stx borrows x30 far)
-      ("rv.ldx"      "931f3500b38f1f0103b58f00" ((ldx r0 r7 r0 8 8)))  ; slli t6,a0,3 ; add t6,t6,a7 ; ld a0,8(t6)
-      ("rv.stx"      "931f3500b38f1f0123b45f00" ((stx r7 r0 8 8 r8)))  ; slli ; add ; sd t0,8(t6)
+      ("rv.ldx"      "931f3500c69f03b58f00"     ((ldx r0 r7 r0 8 8)))  ; slli t6,a0,3 ; add t6,t6,a7 ; ld a0,8(t6)
+      ("rv.stx"      "931f3500c69f23b45f00"     ((stx r7 r0 8 8 r8)))  ; slli ; add ; sd t0,8(t6)
       ("rv.ldxb"     "b30fd50003c50f01"  ((ldxb r0 r3 r0 1 16)))       ; add t6,a0,a3 ; lbu a0,16(t6) (string-lane peep)
       ("rv.stxb"     "b30fd5002388af00"  ((stxb r3 r0 1 16 r0)))       ; add t6,a0,a3 ; sb a0,16(t6) (cask-lane pin)
-      ("rv.leax"     "b305630093851500"  ((leax r1 r9 r9 1 1)))        ; add a1,t1,t1 ; addi a1,a1,1
+      ("rv.leax"     "b30563008505"      ((leax r1 r9 r9 1 1)))        ; add a1,t1,t1 ; addi a1,a1,1
       ("rv.lea"      "130507fe"          ((lea r0 r4 -32)))            ; addi a0, a4, -32
       ;; the stack pair (16-byte aligned like arm64), and lr by name across nested calls
-      ("rv.push"     "130101ff2330a100"  ((push r0)))                  ; addi sp,sp,-16 ; sd a0,0(sp)
-      ("rv.pop"      "8336010013010101"  ((pop r3)))                   ; ld a3,0(sp) ; addi sp,sp,16
-      ("rv.push.lr"  "130101ff23301100"  ((push lr)))                  ; addi sp,sp,-16 ; sd ra,0(sp)
+      ("rv.push"     "41112ae0"          ((push r0)))                  ; addi sp,sp,-16 ; sd a0,0(sp)
+      ("rv.pop"      "82664101"          ((pop r3)))                   ; ld a3,0(sp) ; addi sp,sp,16
+      ("rv.push.lr"  "411106e0"          ((push lr)))                  ; addi sp,sp,-16 ; sd ra,0(sp)
       ;; M division: rounds toward zero like x86, never traps; rem/urem ignore the scratch t
       ("rv.div"      "33451503"          ((div r0 r0 r7)))             ; div a0, a0, a7
       ("rv.rem"      "33651503"          ((rem r0 r0 r7 r4)))          ; rem a0, a0, a7
@@ -896,25 +902,28 @@
       ("rv.set.ab"   "b3b6a500"          ((cmp r0 r1) (set above r3)))           ; sltu a3, a1, a0 (swapped)
       ;; adds/subs: the op plus its overflow bit computed into x30 ((d^a)&(d^b) / (a^b)&(a^d));
       ;; br vs/vc read x30's sign, eq/ne/lt read d against x0
-      ("rv.adds.vs"  "138f0500930f05003385ef01b34ff501334fe501337fff0163540f006f004000"
+      ("rv.adds.vs"  "2e8faa8f3385ef01b34ff501334fe501337fff0163540f006f004000"
                       ((adds r0 r0 r1) (br vs l) (label l)))
-      ("rv.subs.vc"  "138f0500930f05003385ef4133cfef01b3cfaf00337fff0163440f006f004000"
+      ("rv.subs.vc"  "2e8faa8f3385ef4133cfef01b3cfaf00337fff0163440f006f004000"
                       ((subs r0 r0 r1) (br vc l) (label l)))
       ;; mulo: mulh vs the low half's sign fill (t clobbered, != a,b,d), flag-free
       ("rv.mulo"     "b396c5023385c502935ff5436384f6016f004000" ((mulo r0 r1 r2 r3 l) (label l)))
       ;; control: jal wide jumps, the auipc pairs (one 8-byte pcrel fixup each), indirect jalr
       ("rv.jmp"      "6f00800013000000"  ((jmp l) (nop) (label l)))              ; j l ; nop
       ("rv.call"     "97000000e780c00013000000" ((call l) (nop) (label l)))      ; auipc ra,0 ; jalr 12(ra) ; nop
-      ("rv.jmpr"     "67800700"          ((jmpr r5)))                  ; jr a5
+      ("rv.jmpr"     "8287"              ((jmpr r5)))                  ; jr a5
       ("rv.callr"    "e7800600"          ((callr r3)))                 ; jalr a3
-      ("rv.grpfn"    "130101ff2330110097000000e78080013305d5008330010013010101678000001385060067800000"
+      ("rv.grpfn"    "411106e097000000e7800001369582604101828036858280"
                       ((push lr) (call sib) (add r0 r0 r3) (pop lr) (ret) (label sib) (mov r0 r3) (ret)))
       ("rv.la"       "1705000013050501970800009388880041424300"
                       ((la r0 x) (la r7 x) (label x) (raw (65 66 67 0))))        ; auipc+addi pairs: x at +16, +8
-      ("rv.ret"      "67800000"          ((ret)))                      ; ret (jalr x0, 0(ra))
+      ("rv.ret"      "8280"              ((ret)))                      ; ret (jalr x0, 0(ra))
       ("rv.sys"      "73000000"          ((sys)))                      ; ecall
       ("rv.trap"     "73001000"          ((trap)))                     ; ebreak
-      ("rv.align"    "678000001300000067800000" ((ret) (align 8) (label x) (ret)))    ; nop pad
+      ;; the pad after a COMPRESSED ret: 2 bytes laid, 6 to the boundary -- so the filler unit
+      ;; has to be c.nop. a torn wide nop leaves 0013, whose low bits say 32-bit, and a decoder
+      ;; eats the ret standing behind it.
+      ("rv.align"    "82800100010001008280"     ((ret) (align 8) (label x) (ret)))    ; ret ; 3x c.nop ; ret
       ;; scalar-double FP (D): f0..f7 -> fa0..fa7, f8..f15 -> ft0..ft7. SSE-named IR two-address;
       ;; ucomisd joins the flag memory (feq/flt/fle compute the predicate at the br/set)
       ("rv.movsd"    "5385b522"          ((movsd f0 f1)))              ; fmv.d fa0, fa1
@@ -930,18 +939,18 @@
       ("rv.cvtss2sd" "53850542"          ((cvtss2sd f0 f1)))           ; fcvt.d.s fa0, fa1
       ("rv.cvtsd2ss" "d3751540"          ((cvtsd2ss f1 f0)))           ; fcvt.s.d fa1, fa0
       ("rv.xorpd"    "530700f2"          ((xorpd f4 f4)))              ; fmv.d.x fa4, zero (zero a double)
-      ("rv.stsd"     "2734a600"          ((stsd r2 8 f0)))             ; fsd fa0, 8(a2)
-      ("rv.ldsd"     "87b50600"          ((ldsd f1 r3 0)))             ; fld fa1, 0(a3)
+      ("rv.stsd"     "08a6"              ((stsd r2 8 f0)))             ; fsd fa0, 8(a2)
+      ("rv.ldsd"     "8c22"              ((ldsd f1 r3 0)))             ; fld fa1, 0(a3)
       ("rv.stss"     "2724a600"          ((stss r2 8 f0)))             ; fsw fa0, 8(a2)
       ("rv.ldss"     "87a50600"          ((ldss f1 r3 0)))             ; flw fa1, 0(a3)
-      ("rv.fld.far"  "b77ffbffb38fbf0007b50fc2" ((ldsd f0 r1 -300000)))    ; lui ; add ; fld fa0,-992(t6)
+      ("rv.fld.far"  "b77ffbffae9f07b50fc2"     ((ldsd f0 r1 -300000)))    ; lui ; add ; fld fa0,-992(t6)
       ("rv.fbr.ab"   "d39fa5a263840f006f004000" ((ucomisd f0 f1) (br above l) (label l)))    ; flt.d t6,fa1,fa0 ; beqz hop ; j
       ("rv.fbr.be"   "d39fa5a263940f006f004000" ((ucomisd f0 f1) (br be l) (label l)))       ; flt.d ; bnez hop (the complement)
       ("rv.fbr.p"    "d32fa5a253afb5a2b3ffef0163940f006f004000"                              ; both-ordered check, hop if set
                        ((ucomisd f0 f1) (br p l) (label l)))
-      ("rv.fset.ab"  "d39fa5a213850f00"  ((ucomisd f0 f1) (set above r0)))       ; flt.d t6,fa1,fa0 ; mv a0,t6
+      ("rv.fset.ab"  "d39fa5a27e85"      ((ucomisd f0 f1) (set above r0)))       ; flt.d t6,fa1,fa0 ; mv a0,t6
       ("rv.fset.be"  "d39fa5a213b51f00"  ((ucomisd f0 f1) (set be r0)))          ; flt.d ; seqz a0,t6
-      ("rv.tp"       "13050200"          ((tp r0))))                   ; mv a0, tp (the thread pointer)
+      ("rv.tp"       "1285"              ((tp r0))))                   ; mv a0, tp (the thread pointer)
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'riscv64 (at t 2))) 0 rvtests)
 
    ;; -- summary; nonzero exit on any miss, so `make`-style gates see the failure. --
