@@ -1,20 +1,13 @@
 ; lib/lint.l -- the .l balance scan, one scanner under every consumer: `libra
-; check` gates `make lint`, `libra doc` rides lint-cmts, vi's reindent rides
-; lint-lay. it is a balance scan, not a parse -- delimiters and strings and
+; check` gates `make lint`, `libra doc` rides lint-cmts, vi's :lint rides
+; lint-scan. it is a balance scan, not a parse -- delimiters and strings and
 ; nothing else. `'` and backtick are reader operators, never delimiters, so they
 ; scan as ordinary code: the trap a C lexer falls into.
 ;
 ; (lint-scan src) answers warnings, each [line col text] 1-based, and an unclosed
 ; opener or string reports where it opened rather than end-of-file.
 ;
-; (lint-lay src) answers the indent plan: one entry per line, [1 n] for "starts at
-; 0-based column n", or () for "leave this line alone" -- a line inside a string,
-; whose leading spaces are the string. column 0 is the commonest plan there is, so
-; a bare number could not say "no plan": the wrapper is not decoration.
-; the rule: a continuation line aligns under its form's first operand, or one past
-; the open delimiter when the head stands alone. line-preserving by construction,
-; since it only ever says where a line starts. see doc/misc/libra.md.
-(module (lint lint-scan lint-of lint-cmts lint-lay)
+(module (lint lint-scan lint-of lint-cmts)
 (: (lclose c) (? (c = 40) 41 (c = 91) 93 125)          ; ( -> )   [ -> ]   { -> }
    (lopen c)  (? (c = 41) 40 (c = 93) 91 123)          ; ...and back, for the report
 
@@ -244,85 +237,5 @@
                  (w (i + 1) 'code line (col + 1) cl cc ti ck acc))))
        (w 0 'code 1 1 0 0 0 'semi ()))
 
-   ; --- the indent plan ------------------------------------------------------
-   ; base where this form's continuation lines align (0-based), ol the line it
-   ; opened on, nt how many of its tokens we have passed (the head is 1), pr
-   ; whether it is a pairing form.
-   ;
-   ; `:` and `?` take their operands two at a time -- name/value, test/result --
-   ; and the house sets the second of each pair one past the first. every other
-   ; form aligns flat. without this the plan is off by one on every second
-   ; operand, which is most of a file. a width guard over this was measured and
-   ; refused: doc/misc/libra.md.
-   (ldelim? c) (c < 33 || c = 40 || c = 41 || c = 91 || c = 93 || c = 123 || c = 125)
-   (lpair? c nx) ((c = 58 || c = 63) && ldelim? nx)     ; a lone : or ?, not a name starting with one
-
-   ; the next line's indent: the frame's base, plus one when the token that will
-   ; start it is the second of a pair
-   (lcont stk)
-    (? !(two? stk) 0
-       (<stk @ {'base base 'nt nt 'pr pr}
-        (? (pr && 0 = nt % 2) (base + 1) base)))
-
-   ; the head token just ended at 1-based column x. a form whose head stands alone
-   ; on its line indents its body where operand one would have gone: one space past
-   ; the head, so a `(:` body lands at 3. only the pairing forms -- `(assert` alone
-   ; indents one past the open paren, and the house style is per-head.
-   (lhend stk line x)
-    (? !(two? stk) stk
-       (<stk @ ({'nt 1 'pr 1 'ol ol} && ol = line)
-        (pin <stk 'base x, stk)
-        stk))
-
-   ; a token (or a nested opener -- it is a token to its parent) begins at 1-based
-   ; column tc; c is its first character and nx the one after
-   (ltok stk line tc c nx)
-    (? !(two? stk) stk
-       (: f <stk
-          (f @ {'nt 0} (pin f 'nt 1, pin f 'pr (? (lpair? c nx) 1 0), stk)
-             ; operand one: this is where the form aligns
-             ({'nt 1 'ol ol} && ol = line) (pin f 'base (tc - 1), pin f 'nt 2, stk)
-             (pin f 'nt (f 'nt + 1), stk))))
-
-   ; it is 1 while we are inside a token, so ltok fires once per token
-   (lint-lay src)
-    (: n (tally src)
-       (w i st stk line col it plan)
-        (? (n <= i) (rev plan)
-           (: c (src i)
-              (? (id? st 'str)
-                  (? (c = 92) (w (i + 2) 'str stk line (col + 2) 1 plan)
-                     (c = 34) (w (i + 1) 'code stk line (col + 1) 0 plan)
-                     ; a line BEGINNING inside a string is the string's own text
-                     (c = 10) (w (i + 1) 'str stk (line + 1) 1 1 (link () plan))
-                     (w (i + 1) 'str stk line (col + 1) 1 plan))
-                 (id? st 'cmt)
-                  (? (c = 10) (w (i + 1) 'code stk (line + 1) 1 0 (link [1 (lcont stk)] plan))
-                     (w (i + 1) 'cmt stk line (col + 1) 0 plan))
-                 (c = 59) (w (i + 1) 'cmt stk line (col + 1) 0 plan)
-                 (c = 35 && i + 1 < n && src (i + 1) = 33)
-                  (w (i + 2) 'cmt stk line (col + 2) 0 plan)
-                 (c = 34) (w (i + 1) 'str (ltok stk line col c 32) line (col + 1) 1 plan)
-                 ; the head's end lands before the plan is read, or the line the
-                 ; body starts on still carries the old fallback
-                 (c = 10) (: s2 (? it (lhend stk line col) stk)
-                             (w (i + 1) 'code s2 (line + 1) 1 0 (link [1 (lcont s2)] plan)))
-                 (c = 40 || c = 91 || c = 123)
-                  ; an opener is a token to its parent, unless glued to the one
-                  ; before it: `'(a b)` and `@(1 2)` are one operand wearing a
-                  ; reader sigil, and counting two flips the pairing parity for
-                  ; every line left in the form -- the one miscount that cascades
-                  (w (i + 1) 'code
-                     (link {'base col 'ol line 'nt 0 'pr 0} (? it stk (ltok stk line col c 32)))
-                     line (col + 1) 0 plan)
-                 (c = 41 || c = 93 || c = 125)
-                  (w (i + 1) 'code (? (two? stk) >stk stk) line (col + 1) 0 plan)
-                 (c = 32 || c = 9)
-                  (w (i + 1) 'code (? it (lhend stk line col) stk) line (col + 1) 0 plan)
-                 ; an ordinary character: a token START only if we were not in one
-                 (w (i + 1) 'code
-                    (? it stk (ltok stk line col c (? (i + 1 < n) (src (i + 1)) 10)))
-                    line (col + 1) 1 plan))))
-       (w 0 'code () 1 1 0 [[1 0]]))
 )
 ) ; module lint

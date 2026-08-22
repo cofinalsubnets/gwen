@@ -596,11 +596,12 @@
    (dotc? p) (: n (tally p) (2 < n && p (n - 2) = 46 && p (n - 1) = 99))
    (doto? p) (: n (tally p) (2 < n && p (n - 2) = 46 && p (n - 1) = 111))
    (dotim? p) (: n (tally p) (6 < n && snip p (n - 6) n = ".image"))
+   (dotcid? p) (: n (tally p) (4 < n && snip p (n - 4) n = ".cid"))
    ; the build tree keeps the images in the love's own directory, an installed
    ; nest one rung over in lib/love/ -- the two seats mseat already knows.
-   ; ⚠ NOT point-free: the mapped lambda reads `d` to build the path it stats, so dropping
+   ; ⚠ NOT point-free: the mapped lambda reads `d` to build the path it hashes, so dropping
    ; the parameter leaves that read free -- `;; missing d`, at the mooncc0 bake.
-   (mcims d) (map (\ f [f (stat (d + f))]) (sort (filter dotim? (readdir d))))
+   (mcims d) (map (\ f [f (mccid (d + f))]) (sort (filter dotim? (readdir d))))
    ; a directory's whole text, names and bytes, sorted and recursive. ⚠ the
    ; HEADERS are an input too: an edited stdio.h changes what nolibc.c means, and
    ; hashing the .c alone would not see it.
@@ -611,7 +612,7 @@
                         (sdir? st) ((a + f) + ("/\n" + (mctree (p + "/"))))
                         (: r (uread p) ((a + f) + ("\n" + (? (two? r) <>r "") + "\n"))))))
            "" (sort (readdir d)))
-   ; ⚠ the exe's PATH rides beside its stat: two worktrees hold the same
+   ; ⚠ the exe's PATH rides beside its CONTENT: two worktrees hold the same
    ; cwd-relative include paths, and only the seat tells their headers apart.
    ; the image is the ONE this session woke, which main.c pins as `love-image`.
    ; ⚠ THE NOM IS DATA HERE, NEVER A BARE REF: a baked consumer folds its bare
@@ -621,7 +622,7 @@
    ; presence ask beside it is the same law -- the nom is pinned only when a
    ; session woke something. unpinned is an egg boot or a love that does not say,
    ; and every *.image beside the binary is the honest reading for both.
-   ; "<baked>" is the binary's own section: no file to stat, and the exe stat
+   ; "<baked>" is the binary's own section: no file of its own, and the exe hash
    ; above already carries its identity.
    (mcid home)
     (: x (selfpath 0)
@@ -630,11 +631,11 @@
        ims (? (two? w) (: im <>w
                           (? !(string? im) ()
                              (im = "<baked>") ["<baked>"]
-                             [[im (stat im)]]))
+                             [[im (mccid im)]]))
               (? (string? d) ((mcims d) + (mcims (d + "../lib/love/"))) ()))
        src (? (two? ims) ((mctree (home + "include/")) + (mctree (home + "lib/"))) "")
        (? !(two? ims) ()
-          (sha256 ((("moon-rt 1\n" + x) + ("\n" + show (stat x))) + (("\n" + show ims) + ("\n" + src))))))
+          (sha256 ((("moon-rt 2\n" + x) + ("\n" + (mccid x))) + (("\n" + show ims) + ("\n" + src))))))
    ; an entry, read back and checked for its magic: the rename below lands it
    ; whole, so a torn file cannot appear, and a mangled one is passed over rather
    ; than linked. the (1 bytes) wrapper -- an empty entry is absence.
@@ -653,6 +654,23 @@
        _ (q ? (say q bs, close q))
        _ (q && !(rename t p) ? () (unlink t))
        ())
+   ; a file's identity is its BYTES: a relink that changed nothing is not a different
+   ; compiler, and an inode cannot say so. reading a whole exe per link would swamp
+   ; the door it serves, so the hash is MEMOIZED under the stat -- one read per
+   ; relink, a 69-byte one per link after it. with no cache in reach the stat stands
+   ; in, which keys nothing worse than itself.
+   (mccid p)
+    (: st (stat p)
+       d (mcdir ())
+       k (? ((string? d) && (two? st)) (sha256 ("moon-cid 1\n" + p + "\n" + show st)) ())
+       hit (? (string? k) (mcget d (k + ".cid") "cid1 ") ())
+       _ (? (two? hit) (utime (d + k + ".cid") (clock ())) 0)   ; the sweep orders by use
+       (? (two? hit) (snip <>hit 5 69)
+          (: r (uread p)
+             (? !(two? r) (show st)
+                (: h (sha256 <>r)
+                   _ (? (string? k) (mcput d (k + ".cid") ("cid1 " + h + "\n")) 0)
+                   h)))))
    ; the bound, and the cache keeps it ITSELF: swept on every link, hit or miss,
    ; so a folder grown fat under an older policy trims on the next one rather than
    ; waiting for a rebuild to notice it. nothing here knows which generations are
@@ -666,21 +684,20 @@
        ; the live set is one generation per (worktree, lane, target) -- a tree
        ; carries the shim's love+mooncc.image and the build's love0+mooncc0.image
        ; as two distinct compilers -- so the room here is deliberate, not slack.
-       ; ⚠ AND ANYTHING THAT IS NOT AN ARCHIVE GOES, which is what the paragraph above
-       ; promised and did not do: the cache held one .o PER MEMBER before it held one .a
-       ; per (compiler, target), and nothing has read a .o since. The count kept the
-       ; archives at 32 while 24130 orphans of the old policy sat beside them -- 116 MB in
-       ; someone's HOME, growing, with no reader. A pass that cannot say which generations
-       ; are dead can still say which SHAPES are.
-       _ (foldl (\ a f (? (dota? f) a (: _ (unlink (d + f)) a))) 0 (readdir d))
-       fs (foldl (\ a f (: st (stat (d + f))
-                          (? (dota? f && two? st) (a + [[(el st 1) f]]) a)))
-                 () (readdir d))
+       ; TWO SHAPES are kept -- the archives, and the .cid memos naming the compiler
+       ; that cut them -- each bounded on its own count. Anything else goes: a pass
+       ; that cannot say which generations are dead can still say which SHAPES are.
+       _ (foldl (\ a f (? (dota? f || dotcid? f) a (: _ (unlink (d + f)) a))) 0 (readdir d))
+       (ages pk) (foldl (\ a f (: st (stat (d + f))
+                                  (? (pk f && two? st) (a + [[(el st 1) f]]) a)))
+                        () (readdir d))
        (go l k) (? !(two? l) 0
                    (: e <l
                       _ (? (mckeep <= k) (unlink (d + <>e)) 0)
                       (go >l (k + 1))))
-       (go (sortby (\ a b (<b <= <a)) fs) 0))
+       (old pk) (go (sortby (\ a b (<b <= <a)) (ages pk)) 0)
+       _ (old dota?)
+       (old dotcid?))
    ; the compiled runtime as one archive: the cache when it can answer, the
    ; compiler otherwise -- and the compile is what fills the cache. a cache that
    ; cannot open is invisible, and the link is the one that happens today, at

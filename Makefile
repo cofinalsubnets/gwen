@@ -109,16 +109,12 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 
 all: host kernel wasm dist
 
-# lint: libra ⚖ over every tracked .l -- balance always, and the singleton rule STRICT
-# (./.libra.l): the gate is NO GRIPES, and a gripe is fixed by hand. Quiet when clean,
-# path:line:col: and exit 1 otherwise. NOT in the test gate: an editing aid, not a
-# semantic check. The roster below is the files whose singletons ARE the subject --
-# reader/pattern/operator specimens and the executable spec's zero-operand laws --
-# plus doc/misc/proto, which is sketches. Everything else answers for every gripe.
-lint_exempt = test/host/p0fix.l test/spec.l test/law.l test/operator.l
+# lint: libra ⚖ over every tracked .l -- BALANCE, and nothing else refuses. libra's
+# other rules print as an editing aid and the exit code ignores them, so no roster
+# of exempt files is owed and none is kept: every tracked .l answers for its parens
+# and for nothing about how it is laid out. NOT in the test gate.
 lint: $(ho)/love
-	@$(ho)/love $R/crew/libra/libra.l $$(git ls-files '*.l' | grep -v '^doc/misc/proto/' \
-	  $(foreach f,$(lint_exempt),| grep -v '^$(f)$$')) && echo "lint: clean -- no gripes"
+	@$(ho)/love $R/crew/libra/libra.l $$(git ls-files '*.l') && echo "lint: parens balance"
 
 # ccdb: emit compile_commands.json so clangd reads the flags the build actually uses --
 # without it the missed core/love.h cascades into a flood of undeclared-name noise. ⚠ the

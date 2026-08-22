@@ -146,7 +146,6 @@ person, which is why the project file exists at all.
 ; ~/.love/etc/libra.l -- or ./.libra.l
 (singleton 0)                                    ; turn the rule OFF (on by default)
 (deprecated old-thing (worse-thing "use better-thing"))
-(strict singleton)                               ; ...and make it fail the gate
 ```
 
 ⚠ `singleton` is read with `salt-one`, never by PRESENCE: the tail of
@@ -157,10 +156,11 @@ a setting is one form: the head names it, the tail is its value. an entry in the
 roster is a bare name or a `(name "hint")` pair, and the hint is printed after
 the name. a repeated key REPLACES rather than appends -- one line, one answer.
 
-**the rules only SPEAK.** singleton and deprecated print, and the editor
-underlines them, but `libra` still exits 0 -- so turning a rule on can never
-redden a tree that was green. `(strict <rule>)` promotes one when a project has
-actually finished with it. balance is always fatal; a tab never is.
+**BALANCE IS THE ONLY GATE, and no setting changes that.** singleton and
+deprecated print, and the editor underlines them, but `libra` exits 0 over both.
+They are an editing aid, read by a person who asked for them. libra weighs parens
+and holds no opinion about how a file is laid out -- there is no indentation rule,
+no tab rule, and nothing to promote one into a refusal.
 
 ⚠ **a config is DATA, never CODE.** the file is read with `sound`, the datum
 reader, and no part of it is ever evaluated. a dotfile cannot run anything, and
@@ -206,28 +206,3 @@ the environment rather than by the seat walk. the module walk still reads none.
 `lib/lint.l` takes a plain tablet and reads it with `peep`; it does NOT depend
 on salt, because vi cats that file directly and a module it had to carry along
 would break the cat. salt fills the tablet, lint only reads it.
-
-## the indent plan, and the width guard that was refused
-
-`lint-lay` aligns a continuation line under its form's first operand, or one past
-the open delimiter when the head stands alone on its line. `:` and `?` take their
-operands two at a time -- name/value, test/result -- and the house sets the second
-of each pair one space past the first, so a value is never mistaken for another
-name at a glance. Every other form aligns its operands flat.
-
-A **width guard** over that rule was tried and pays nowhere. The idea: cap the
-alignment, so a first operand sitting far to the right falls back to one past its
-own open paren (black's bargain), on the theory that it would rescue the hand-laid
-hanging files. Measured over the tree at thresholds 24/32/40/56:
-
-| | changed lines, before -> after |
-|---|---|
-| `love/ev.l` (hanging) | 494 -> 506 |
-| `test/holo/golden.l` (hanging) | flat |
-| `crew/libra/libra.l` (well laid) | 7 -> 22 |
-| `lib/lint.l` (well laid) | 1 -> 4 |
-| tree-wide churn | 12591 -> 16448 |
-
-The hanging files barely move, because their authors broke to a column *left* of
-the enclosing paren, which no cap-and-fallback reproduces; every well-laid file
-gets worse. Alignment it is. Do not re-add the guard without new evidence.

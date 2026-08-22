@@ -86,14 +86,14 @@
  !(lint-of "(f old-thing-x)" lt-dep)                            ; a longer name is another name
  (2 = (tally (lint-of "(old-thing worse-thing)" lt-dep))))
 
-; WHICH WARNINGS FAIL splits with the rule: an imbalance always does, because the
-; file does not read and that is not a matter of opinion; an opinion never does,
-; so turning a rule on cannot redden a tree that was green. `(strict R)` promotes
-; one, for a project that has actually finished with it.
+; WHICH WARNINGS FAIL splits with the rule, and nothing moves the split: an
+; imbalance always does, because the file does not read and that is not a matter
+; of opinion. An opinion never does, whatever a config says -- libra weighs parens,
+; and the rest it merely says out loud.
 (assert
- (fatal? lt-none <(lint-scan "(: a 1\n"))
- !(fatal? lt-sing <(lint-of "(go)" lt-sing))
- (fatal? (lt-conf `(`('strict 'singleton))) <(lint-of "(go)" lt-sing)))
+ (fatal? <(lint-scan "(: a 1\n"))
+ !(fatal? <(lint-of "(go)" lt-sing))
+ !(fatal? <(lint-of "(f old-thing)" lt-dep)))
 
 ; --- doc: the header out of the file ---------------------------------------
 ; the second verb, and the one that keeps comments. three layers of claim:

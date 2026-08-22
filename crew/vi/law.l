@@ -187,8 +187,8 @@
       (: q (vgo '("a") "") _ (pin q 'hl 1) _ (vload q '("z") "n.md") !(q 'hl))
       (: q (vgo '("a") "") _ (vload q () "e.l") (= (lns q) '(""))))             ; an empty read is one empty line
 
-; --- libra ⚖ on the buffer: :lint weighs what you are LOOKING AT, :fmt lays it
-;     out. one scanner (lib/lint.l) under libra's three faces and these two -----
+; --- libra ⚖ on the buffer: :lint weighs what you are LOOKING AT. one scanner
+;     (lib/lint.l) under libra's faces and this one ---------------------------
    (ex ls s) (vgob ls ((bytes (":" + s)) + (L CR)))
    _ (assert
       (= (st? (ex '("(: a 1)") "lint") 'msg) "balance clean")
@@ -196,15 +196,7 @@
       (= (at (ex '("(: a 1") "lint")) '(0 0))                  ; and it goes THERE
       ; an unclosed opener reports where it OPENED, so the jump lands on the cause
       (: q (ex '("(f x)" "(: a 1" "(g y)") "lint")
-         ((= (at q) '(1 0)) && (= (q 'msg) "1 warning: 2,1 unclosed (")))
-      ; :fmt reindents and nothing else -- the break and the text are untouched
-      (= (lns (ex '("(: a 1" "     b 2)") "fmt")) '("(: a 1" "   b 2)"))
-      (= (st? (ex '("(: a 1" "   b 2)") "fmt") 'msg) "already laid out")
-      (st? (ex '("(: a 1" "     b 2)") "fmt") 'dirty)
-      (= (lns (vgob '("(: a 1" "     b 2)")                    ; and it is undoable
-                    (((bytes ":fmt") + (L CR)) + (bytes "u"))))
-         '("(: a 1" "     b 2)"))
-      (= (lns (ex '("(: a 1" "" "   b 2)") "fmt")) '("(: a 1" "" "   b 2)")))  ; a blank line stays blank
+         ((= (at q) '(1 0)) && (= (q 'msg) "1 warning: 2,1 unclosed ("))))
 
 ; --- the status line clips from the LEFT: its tail is the news ---------------
    (miniw ls ks m) (: st (vgo ls ks) _ (vmsg st m) _ (pin st 'w 8) _ (pin st 'h 4)

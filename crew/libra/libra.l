@@ -33,22 +33,15 @@
 
    ; --- the check ------------------------------------------------------------
    ; `path:line:col: text`, the shape an editor's error list already parses
-   (tabcol s) (: n (tally s)
-                 (g i) (? (n <= i) () (s i = 9) (i + 1) (g (i + 1)))
-                 (g 0))
-   (tabwarns ls) (: (g l k acc) (? !(two? l) (rev acc)
-                                   (: c (tabcol <l)
-                                      (g >l (k + 1) (? c (`(k c "tab" 'tab) >< acc) acc))))
-                    (g ls 1 ()))
    (warnline path w) (path + ":" + show <w + ":" + show <>w + ": " + <>>w + "\n")
 
    ; --- the verbs ------------------------------------------------------------
    (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))
 
-   ; only balance fails a gate outright; every other rule speaks until a config
-   ; says (strict <rule>), so turning one on cannot redden a tree that was green
-   (fatal? conf w) (? (id? <>>>w 'balance) 1 (two? (salt-has? conf 'strict <>>>w)))
-   (tally-fatal conf ws) (foldl (\ a w (? (fatal? conf w) (a + 1) a)) 0 ws)
+   ; BALANCE ALONE fails. the other rules SPEAK -- an editing aid, read by hand --
+   ; and nothing promotes one, so libra never refuses a file over a habit.
+   (fatal? w) (id? <>>>w 'balance)
+   (tally-fatal ws) (foldl (\ a w (? (fatal? w) (a + 1) a)) 0 ws)
 
    (libra-check-files conf fs bad)
     (? !(two? fs) bad
@@ -57,9 +50,8 @@
                            (libra-check-files conf >fs (bad + 1)))
              (: src <>r
                 bw (lint-of src conf)
-                _ (foldl (\ _ w (: _ (say err (warnline <fs w)) 0)) 0
-                         (bw + tabwarns (linesof src)))
-                (libra-check-files conf >fs (bad + tally-fatal conf bw))))))
+                _ (foldl (\ _ w (: _ (say err (warnline <fs w)) 0)) 0 bw)
+                (libra-check-files conf >fs (bad + tally-fatal bw))))))
 
    (libra-check conf fs) (: n (libra-check-files conf fs 0) (? (0 < n) (quit 1) 0))
 
@@ -179,7 +171,7 @@
           + "       libra doc FILE ..      the file's HEADER as a document, on stdout\n"
           + "                              markdown by default; -ht for html, -rf for man\n"
           + "  config: ~/.love/etc/libra.l, then ./.libra.l over it -- (singleton 0),\n"
-          + "          (deprecated old (worse \"use better\")), (strict singleton). doc/misc/libra.md\n")
+          + "          (deprecated old (worse \"use better\")). doc/misc/libra.md\n")
 
    ; the config is read once, here, and handed down -- never re-read per file
    (libra-main as)

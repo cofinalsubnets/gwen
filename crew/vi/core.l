@@ -34,7 +34,7 @@
 ; horizontal scroll (long lines clip at the view's edge).
 (module 'vi
 (use 'kore) ; the text/u floors
-(use 'lint)  ; lint-scan and lint-lay, spliced for this module's compile
+(use 'lint)  ; lint-scan, spliced for this module's compile
 (:
    ; -- the small floor --
    ; lists do NOT index by application (a number list would church-tower), so
@@ -309,35 +309,6 @@
              (vmsg st (show (tally ws) + (? (1 = tally ws) " warning: " " warnings: ")
                        + show <w1 + "," + show <>w1 + " " + <>>w1)))))
 
-   ; :fmt -- libra's REINDENTER, in place and undoable. it replaces leading
-   ; whitespace and nothing else: every break, every alignment inside a line,
-   ; every comment stays where its author put it. a () plan means "leave this
-   ; line exactly as it is" -- a line inside a string, whose leading spaces ARE
-   ; the string -- and a line with nothing on it stays empty rather than becoming
-   ; a row of spaces nobody asked for.
-   (vsp n) (? (n < 1) "" (" " + vsp (n - 1)))
-   (vtrimf ln) (: n (tally ln)
-                  (go i) (? (n <= i) n ((ln i = 32) || (ln i = 9)) (go (i + 1)) i)
-                  (snip ln (go 0) n))
-   (vfmt st)
-    (: plan (lint-lay (unlines (st 'lines)))
-       (lay ls pl acc)
-        (? !(two? ls) (rev acc)
-           (: p (? (two? pl) <pl ())
-              body (vtrimf <ls)
-              (lay >ls (? (two? pl) >pl ())
-                   (link (? !(two? p) <ls
-                            (0 = tally body) ""
-                            (vsp <>p + body))
-                         acc))))
-       nl2 (lay (st 'lines) plan ())
-       (? (= nl2 (st 'lines)) (vmsg st "already laid out")
-          (: _ (vsnap st)
-             _ (pin st 'lines nl2)
-             _ (pin st 'dirty 1)
-             _ (vgen st)
-             _ (vclampn st)
-             (vmsg st "laid out"))))
 
    ; -- the ex line --
    ; :e / :o -- put another file in the buffer. this file touches no io, so the
@@ -372,7 +343,6 @@
           (s = "hl") (: _ (pin st 'hl (? (st 'hl) () 1))
                         (vmsg st (? (st 'hl) "syntax on" "syntax off")))
           (s = "lint") (vlint st)                             ; libra's scan, on the buffer
-          (s = "fmt") (vfmt st)                               ; libra's reindenter, in place
           (s = "$") (: _ (pin st 'row (vnl st - 1)) (vgole st 0))
           dig? (: t (uatoi s - 1) nl (vnl st)
                        _ (pin st 'row (? (t < 0) 0 (? (t < nl) t (nl - 1))))
