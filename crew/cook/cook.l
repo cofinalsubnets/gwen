@@ -1288,6 +1288,16 @@
    (mk-ends p suf) (: ls (tally suf) lp (tally p) ((ls <= lp) && (suf = snip p (lp - ls) lp)))
    (makefilep p) (: b (mk-base p)
       ((b = "Makefile") || (b = "makefile") || (b = "GNUmakefile") || mk-ends p ".mk"))
+   ; the love-recipe names, and there are only these: a Cards.l, a Cookfile, or
+   ; anything else spelled .l.
+   (lovefilep p) (: b (mk-base p) (mk-ends p ".l" || (b = "Cookfile")))
+   ; ⚠ -f NAMES THE MAKEFILE, whatever it is called -- make's does. Asking
+   ; makefilep of an explicit -f meant `cook -f build.rules` read a Makefile as
+   ; LOVE SOURCE, and love's complaint about the first line (`;; missing CC`)
+   ; reads as a broken build file rather than as cook looking at the wrong
+   ; language. DISCOVERY still needs the name to tell it what it found; a -f
+   ; already did, and only a love-recipe name argues back.
+   (asmake? p explicit?) (? explicit? !(lovefilep p) (makefilep p))
 
    ; the build file may be named explicitly (the first arg word) or DISCOVERED in
    ; the cwd; the SEAT at the bottom already stripped the program head + -l chain.
@@ -1422,7 +1432,7 @@
              (quit 0))
          file
          (: q (open file "r")
-            _ (? (makefilep file)
+            _ (? (asmake? file xf)
                  (: _ (register-makefile (slurp q)) (cook-all 0))
                  ((: (g x) (: r (sound x)
                                   (? (two? r) (: _ (ev 'ev <r) (g >r))
