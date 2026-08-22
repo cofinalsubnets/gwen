@@ -542,10 +542,17 @@
                   (w = "override") (: a (parse assignP rest) (? (two? a) ('oassign >< a) '(skip)))
                   (w = "export") (: a (parse assignP rest)
                                     (? (two? a) ('xassign >< a) `('xname (trim rest))))
-                  ; a lone $(..) line: make expands it, so its side effect fires --
-                  ; `$(error ..)` is a guard, and a guard cook walks past is worse than
-                  ; no guard. classify has no variable table, so the loop does the work.
-                  ((1 < tally tt) && (tt 0 = 36) && ((tt 1 = 40) || (tt 1 = 123))) `('expand tt)
+                  ; a lone $(..) line -- the WHOLE line, its closer LAST: make expands
+                  ; it, so its side effect fires. `$(error ..)` is a guard, and a guard
+                  ; cook walks past is worse than no guard. classify has no variable
+                  ; table, so the loop does the work. ⚠ a line that merely BEGINS with
+                  ; $( is an ordinary rule or assignment named by a variable, and stays
+                  ; one -- `$(outs): %.out: %.in` is a static pattern rule.
+                  ((1 < tally tt) && (tt 0 = 36)
+                   && (? (tt 1 = 40) ((findclose tt 2 40 41) = ((tally tt) - 1))
+                         (tt 1 = 123) ((findclose tt 2 123 125) = ((tally tt) - 1))
+                         0))
+                    `('expand tt)
                   ((w = "undefine") || (w = "vpath")) (cook-gap w)
                   (w = "ifeq") `('ifeq rest)
                   (w = "ifneq") `('ifneq rest)
@@ -553,8 +560,17 @@
                   (w = "ifndef") `('ifndef rest)
                   (w = "else") `('else rest)
                   (w = "endif") '(endif)
-                  (: a (parse assignP t) (? (two? a) ('assign >< a)
-                     (: r (parse ruleP t) (? (two? r) ('rule >< r) '(skip))))))))))
+                  (: a (parse assignP t)
+                     (? (two? a) ('assign >< a)
+                        (: r (parse ruleP t)
+                           ; `tgts: NAME op VALUE` is a TARGET-SPECIFIC variable, and its
+                           ; prerequisite half is an assignment. cook keeps one variable
+                           ; table, so it cannot scope one to a target -- and reading the
+                           ; line as an ordinary rule invents a prerequisite named for the
+                           ; variable, which is how `no recipe to make "kcppflags"` reads.
+                           (? !(two? r) '(skip)
+                              (two? (parse assignP <>r)) (cook-gap "a target-specific variable")
+                              ('rule >< r))))))))))
 
    ; -- nested-paren-aware variable expansion + make functions --
    ; the index of the ) that matches the ( just opened, counting nested $(..).
