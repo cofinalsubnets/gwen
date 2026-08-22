@@ -59,6 +59,7 @@
    pgen (tablet 0)         ; a 1-cell box: a pattern-rule resolver (item -> a card | 0), installed by the Makefile importer (() until then)
    cookbox (tablet 0)      ; a 1-cell box: the in-image shell verdict (sh-line's `inimg`), decided once a run
    jobs (tablet 0)         ; a 1-cell box: the -j width (1 = serial, and nothing forks)
+   dryrun (tablet 0)       ; ..and one for -n: set, every step is said and none is run
    running (tablet 0)      ; pid -> the item whose recipe that job is running
    verdicts (tablet 0)     ; pid -> the status a reaped job answered, until its land takes it
 
@@ -831,13 +832,17 @@
              two? raws && !(any execp cmds))
        (? one?
           (: r0 <raws
-             (? (peep emitp 0 0) `(((`(sn) + fl) + `((join "\n" cmds))))
+             (? (peep dryrun 0 0) `((\ _ (: _ (puts (join "\n" cmds)) (putc 10))))
+                (peep emitp 0 0) `(((`(sn) + fl) + `((join "\n" cmds))))
                 `((\ _ (sh-line <r0 <>r0 sn fl (join "\n" cmds))))))
           (: (g rs es acc)
               (? !(two? rs) (rev acc)
                  (: raw <rs e <es
                     sil (<raw || <e) ign (<>raw || <>e) cmd >>e
-                    st (? (execp cmd)
+                    ; -n says the line and runs nothing -- and @ does not hide it, which is
+                    ; make's rule: the point of -n is to show the silent ones too.
+                    st (? (peep dryrun 0 0) (\ _ (: _ (puts cmd) (putc 10)))
+                          (execp cmd)
                           (? (peep emitp 0 0) ('exec >< `(sn "-c" cmd))
                              (\ _ (do-exec `(sn "-c" cmd))))
                           (peep emitp 0 0) ((`(sn) + fl) + `(cmd))
@@ -1277,6 +1282,8 @@
              ((w = "-j") || (w = "--jobs"))  (: _ (need-arg w r) _ (pin opt 'jobs (jobn <r)) (loop >r opt))
              ((2 < tally w) && ("-j" = snip w 0 2))          ; glued: -j8
                                              (: _ (pin opt 'jobs (jobn (snip w 2 (tally w)))) (loop r opt))
+             ((w = "-n") || (w = "--dry-run") || (w = "--just-print"))
+                                                  (: _ (pin opt 'dry 1) (loop r opt))
              (w = "--emit")                                       (: _ (pin opt 'emit 1) (loop r opt))
              ((w = "-h") || (w = "--help") || (w = "help"))      (: _ (pin opt 'help 1) (loop r opt))
              ((w = "-v") || (w = "--version") || (w = "version")) (: _ (pin opt 'ver 1) (loop r opt))
@@ -1305,6 +1312,7 @@
       _ (? (peep opt 'ver 0) (version 0) 0)
       _ (pin clivars 0 (peep opt 'var ()))                   ; the VAR=VAL words, for seed-defaults
       _ (pin jobs 0 (peep opt 'jobs 1))                      ; the -j width; 1 is the serial cook
+      _ (pin dryrun 0 (peep opt 'dry 0))                     ; -n: say the steps, run none
       emit? (peep opt 'emit 0)
       pos (peep opt 'pos ())
       xf (peep opt 'file 0)                                       ; an explicit -f file (0 if none)
