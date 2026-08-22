@@ -1112,16 +1112,23 @@ static void gen_minor(struct ai *g) {
 // the MAJOR: one cheney pass from the real roots over BOTH from-spaces into the
 // spare half -- reachability, never a linear sweep, which is why a rem-set overflow
 // forces one. then rebuild the intern map, run finalizers, flip, reset the minor.
-static struct ai *gen_major(struct ai *g) {
+// req0 is the allocation that could not be served; *tight answers whether the pool got the
+// size it asked for, which only gen_please can act on.
+static struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  struct ai_gcx X = { .p0 = g->major_base, .t0 = g->major_hp };   // from-range 1: major active
  // size the to-space for the worst case: all of major-active AND all of the minor survive
  uintptr_t used = (uintptr_t)(g->major_hp - g->major_base), young = (uintptr_t)(g->hp - (word*) g->end);
  uintptr_t need = used + young;
- // grow/shrink by a whole STEP (= ai_major0), need + 25% headroom: one step at a
- // time prevents thrash, and snapping DOWN reclaims floated dead promotions.
- uintptr_t step = g->major0, want = need + (need >> 2) + 16;
+ // grow/shrink by a whole STEP (= ai_major0): one step at a time prevents thrash, and
+ // snapping DOWN reclaims floated dead promotions. headroom is 25% OR a whole nursery
+ // plus the pending request, whichever is larger -- the second is gen_please's forcing
+ // test verbatim, and a pool sized under it leaves that test TRUE after the major it
+ // just forced, so every later collection is a major too.
+ uintptr_t slack = (uintptr_t) g->len + req0 + 16, head = need >> 2;
+ uintptr_t step = g->major0, want = need + (head > slack ? head : slack) + 16;
  uintptr_t to_len = ((want + step - 1) / step) * step;
  if (to_len < step) to_len = step;
+ uintptr_t free_len = to_len;                                   // the size asked for, before any clamp
  uintptr_t need_step = ((need + step - 1) / step) * step;       // the TIGHT size: smallest step-multiple holding `need`
  if (need_step < step) need_step = step;
  // budget cap: keep the major pair within its share, but NEVER below need_step (the
@@ -1139,6 +1146,7 @@ static struct ai *gen_major(struct ai *g) {
   else if (need <= g->major_len) to_len = g->major_len, to = spare;   // alloc failed, but the existing spare half holds the live set
   else return g->gc_gen = false, encode(g, ai_status_scare);         // true OOM: compacting would overflow the spare -> clean scare, no corruption
  } else to = spare;
+ if (tight) *tight = to_len < free_len;   // denied: the budget cap, or the bigger alloc failed
  g->gc_gen = true;
  // the pinned prefix rides across verbatim at the same offsets. the scan starts below it
  // so its words are still rewritten in place -- a frozen object may point at something
@@ -1233,10 +1241,19 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  major = major || g->n_gc % ai_gc_stress_major == 0;
 #endif
  word *before = g->major_hp;
+ bool tight = false;
  if (major) {
-  if (!ai_ok(g = gen_major(g))) return g;     // a true OOM mid-major (compacting would overflow the spare): propagate the scare
+  if (!ai_ok(g = gen_major(g, req0, &tight))) return g;     // a true OOM mid-major (compacting would overflow the spare): propagate the scare
   g->n_gc += 1;
   g->since_major = 0, g->major_live0 = (uintptr_t)(g->major_hp - g->major_base);   // reset the amortization window
+#ifdef AiGcCheck
+  // the forcing test above must read FALSE after the major it forced, unless the sizer was
+  // denied the room -- there thrash beats dying. still true on a pool that got what it asked
+  // for is the two disagreeing over one number, and the collector has latched into permanent
+  // majors: correct, quadratic, and no gate can see it. (make test_gcheck)
+  if (!tight && (uintptr_t)((g->major_base + g->major_len) - g->major_hp) < (uintptr_t) g->len + req0 + 16)
+   __builtin_trap();
+#endif
  } else gen_minor(g), g->n_gc += 1, g->n_minor += 1;
  uintptr_t copied = major ? (uintptr_t)(g->major_hp - g->major_base) : (uintptr_t)(g->major_hp - before);
  g->n_seen += seen_young;
@@ -1285,6 +1302,13 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
   // (live + this whole nursery): the nursery gets ~(budget - 2*live)/4
   uintptr_t lv = 2 * g->major_live0, room = g->budget > lv ? (g->budget - lv) / 4 : 0;
   if (arena > room) arena = room; }
+ // the pool was denied room for a worst-case promotion of this nursery, so the nursery is
+ // what gives. the floors below still win: under real pressure thrash beats failing the
+ // request that asked for the collection.
+ if (tight) {
+  uintptr_t fr = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);
+  uintptr_t fit = fr > req0 + 16 ? fr - req0 - 16 : 0;
+  if (arena > fit) arena = fit; }
  if (arena < g->minor0) arena = g->minor0;                     // floor
  if (arena < req) arena = req;                                 // hard floor: hold the pending allocation
  return arena == len1 ? g : gen_grow(g, arena); }
@@ -5154,7 +5178,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard
  if (!g->major_pool) return NULL;                        // needs the major pool (it holds the compacted live half)
  ai_core_of(g)->io = NULL;                               // clear the non-deterministic fd before the bake
  *why = 2;
- if (!ai_ok(gen_major(g))) return NULL;                  // COMPACT: live half -> [major_base, major_hp) (OOM -> no image)
+ if (!ai_ok(gen_major(g, 0, NULL))) return NULL;                  // COMPACT: live half -> [major_base, major_hp) (OOM -> no image)
  if (!ai_ok(g = img_canon_symbols(g))) return NULL;      // canonical intern layout (OOM -> no image)
  *why = 3;
  word *base = g->major_base, *hp = g->major_hp;
