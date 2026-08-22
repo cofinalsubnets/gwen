@@ -130,10 +130,10 @@ lint: $(ho)/love
 # generated headers under out/ must exist, so build first. Machine-specific: it carries
 # absolute paths, so it is this box's and rides in no archive.
 ccdb: $(ho)/love
-	@$(ho)/love $R/mk/tools/ccdb.l
+	@$(ho)/love $R/tools/ccdb.l
 
 # ⚠ there is deliberately NO pre-commit hook: the committed artifacts (wasm/love.js,
-# test/bench/bench.html) are rebuilt by hand (`make wasm`, `make -C test/bench html`) and staged, so
+# bench/bench.html) are rebuilt by hand (`make wasm`, `make -C bench html`) and staged, so
 # rebuild before committing anything that affects them. An auto-rebuild hook re-ran the
 # benchmarks on every commit, minutes each.
 #
@@ -167,7 +167,7 @@ out/toolmd.stamp: $(sitetools) crew/libra/libra.l $(ho)/love
 	@echo "  toolmd: $(words $(sitetools)) crew headers -> out/toolmd/"
 	@touch $@
 # the source pages and their stylesheet, written into the site papel just built
-huesrc = $(crewtools) crew/vi/hue.l crew/vi/config.l mk/tools/hue2web.l $(ho)/love
+huesrc = $(crewtools) crew/vi/hue.l crew/vi/config.l tools/hue2web.l $(ho)/love
 site: host out/toolmd.stamp
 	@$(ho)/love -l crew/papel/papel.l -t love -o out/site README.md doc out/toolmd
 	@$(MAKE) --no-print-directory out/site/hue.css
@@ -175,9 +175,9 @@ site: host out/toolmd.stamp
 # host for its vocabulary, and under the egg boot that vocabulary is the compiler's own
 # internals rather than the shipped language.
 out/site/hue.css: $(huesrc)
-	@env -u LOVE_NO_IMAGE $(ho)/love $R/mk/tools/hue2web.l css > $@
+	@env -u LOVE_NO_IMAGE $(ho)/love $R/tools/hue2web.l css > $@
 	@for f in $(crewtools); do n=$${f##*/}; n=$${n%.l}; \
-	   env -u LOVE_NO_IMAGE $(ho)/love $R/mk/tools/hue2web.l src $$f > out/site/$$n.src.html \
+	   env -u LOVE_NO_IMAGE $(ho)/love $R/tools/hue2web.l src $$f > out/site/$$n.src.html \
 	     || exit 1; done
 	@echo "  hue2web: $(words $(crewtools)) sources painted -> out/site/*.src.html"
 SITEPORT ?= 8080
@@ -209,14 +209,14 @@ cacheclean:
 # the asserts should find.
 valg: host
 	@cat $t > $(ho)/.valg-corpus.l
-	valgrind --error-exitcode=1 --suppressions=$R/mk/tools/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
+	valgrind --error-exitcode=1 --suppressions=$R/tools/valgrind.supp $m $(ho)/.valg-corpus.l </dev/null
 # the math floor's differential: am.c vs the host libm, max-ulp per fn (`ulp reduce` adds
 # the reduction scan). The EYEBALL lane, opt-in like valg since it needs a hosted oracle;
 # test_ulp is the gate, and it builds am.c with mooncc too, which this never did.
 .PHONY: ulp
 ulp:
 	@mkdir -p out/host
-	@$(CC) -O2 -o out/host/ulp $R/mk/tools/ulp.c $R/crew/moon/lib/math/am.c -lm
+	@$(CC) -O2 -o out/host/ulp $R/tools/ulp.c $R/crew/moon/lib/math/am.c -lm
 	@out/host/ulp
 out/host/perf.data: host
 	cat $t | perf record -o $@ $m
@@ -237,7 +237,7 @@ disasm: host
 	exec rizin -A $m
 gdb: host
 	exec gdb $m
-# mk/tools/vmret.l disassembles $m and flags any lvm_* VM ap that emits a `ret` instead of
+# tools/vmret.l disassembles $m and flags any lvm_* VM ap that emits a `ret` instead of
 # tail-jumping. the sibcall pass only gripes over a call that is MARKED ai_musttail, so a
 # forgotten mark rets silently -- this is the check that the discipline is COMPLETE, ~2 s.
 # No-op with a message when no disassembler is present, so the gate stays portable.
@@ -247,12 +247,12 @@ vmret: host
 	@echo "vmret: skipped (needs objdump or llvm-objdump)"
 else
 vmret: host
-	@$m mk/tools/vmret.l $m
+	@$m tools/vmret.l $m
 endif
 
 # waits pins an invariant whose
 # only failure mode is a HANG, which no assert catches after the fact. The device floor's
-# rule is that the only code here that blocks is the scheduler, and mk/tools/waits.l carries
+# rule is that the only code here that blocks is the scheduler, and tools/waits.l carries
 # the roster of every wait plus the sentence earning it -- a new one reddens here instead
 # of arriving as a wedged gate. It reads the C, never the ELF, so it needs no toolchain,
 # but it does need the tracked file list and so no-ops outside a git checkout.
@@ -262,9 +262,9 @@ waits: host
 	@echo "waits: skipped (needs a git checkout to enumerate the .c files)"
 else
 waits: host
-	@$m mk/tools/waits.l $(WAITS_C)
+	@$m tools/waits.l $(WAITS_C)
 endif
 
 bench: host
-	$(MAKE) -C test/bench bench
+	$(MAKE) -C bench bench
 

@@ -76,7 +76,7 @@ the disk, the UEFI door, the command line, the aarch64 twin, the clang twin. Non
 
 ### rung 0 — the initrd, and a ramfs behind it  ✅ landed
 
-`mk/tools/lcatfs.l` bakes `lib/*.l` per-file into `.rodata` as `{path, bytes, len}` rows
+`tools/lcatfs.l` bakes `lib/*.l` per-file into `.rodata` as `{path, bytes, len}` rows
 (`out/lib/kfs.h`) where `lcatv.l` bakes one file into one literal. Reads come straight off the
 rows; the first write copies the blob into the kernel heap and the entry reads from the copy ever
 after. `open` and `close` land in `defs[]` beside it — the gate needs them, and `open`'s presence

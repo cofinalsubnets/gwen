@@ -1,7 +1,7 @@
 ; lib/hueweb.l -- the .l syntax as a STYLESHEET and as painted html, out of
 ; crew/vi/hue.l's class table and crew/vi/config.l's theme. the THIRD reader of
 ; that one table: the painter in crew/vi/core.l's vframe, the vim syntax
-; (mk/tools/hue2vim.l), and this. nothing here knows what a comment or a sigil is
+; (tools/hue2vim.l), and this. nothing here knows what a comment or a sigil is
 ; -- it asks hue, the way the other two do, so a class added to that table arrives
 ; in all three without anyone being told.
 ;

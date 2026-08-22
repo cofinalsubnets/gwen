@@ -1,5 +1,5 @@
 ; test/uukindlaw.l -- the LAWS of the kinds-lattice join, proved of the GENERATED
-; term (test/uukind.l, lifted from doc/proto/kinds.l by mk/tools/kinds2uu.l). the
+; term (test/uukind.l, lifted from doc/proto/kinds.l by tools/kinds2uu.l). the
 ; abstract domain is FINITE -- seven codes, bot..top plus the incomparable str --
 ; so the semilattice laws are DECIDABLE by exhausting the carrier: we evaluate the
 ; generated `kjoin` in the kernel (vof) over every pairing/tripling of uk-codes and
@@ -33,7 +33,7 @@
 
 ; --- the bridge: kinds.l's four driver cases as uu idpath lemmas. these are real
 ;     kernel proof terms (paths over a computing join), so they export axiom-free
-;     through mk/tools/uu2coq.l + uu2lean.l to Rocq AND Lean alongside the uu corpus. ---
+;     through tools/uu2coq.l + uu2lean.l to Rocq AND Lean alongside the uu corpus. ---
 (assert
  (defq 'kjoin-tier-wins  '(paths nat (kjoin 1 4) 4) '(idpath 4))   ; A. higher tier wins
  (defq 'kjoin-bot-unit   '(paths nat (kjoin 0 3) 3) '(idpath 3))   ; B. bot is the unit

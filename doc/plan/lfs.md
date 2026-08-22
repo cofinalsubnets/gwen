@@ -7,7 +7,7 @@ axes, and only one of them is LFS's own ladder:
 - **A — native equivalents.** Our code doing the package's job (kore, lush, cook, moon,
   holo, `lib/gz.l`, `lib/tar.l`). This is where nearly all the distance is.
 - **B — LFS packages built by our toolchain.** Six, with repeatable harnesses:
-  `mk/tools/moon-{bzip2,gzip,lua,m4,sqlite,tar}.sh`, each with x86-64, arm64 and riscv
+  `tools/moon-{bzip2,gzip,lua,m4,sqlite,tar}.sh`, each with x86-64, arm64 and riscv
   lanes (`make moon-tar`, `make moon-tar-arm64`, …). ⚠ every one is **opt-in** — no tier
   runs them, so a green `test_slow` says nothing about them. Run them by name.
 
@@ -39,7 +39,7 @@ bash (`lush`) · sed · grep · diffutils (diff, cmp) · make (`cook`) · tar (`
 ustar both ways, `love tar`) · gzip (`lib/gz.l`, and `lib/gzcmd.l` wears GNU's flags
 as `love gzip` / `gunzip` / `zcat`) · cpio (`lib/cpio.l` newc, `love cpio`) · zlib ·
 vim (`crew/vi`) · sysvinit
-(`crew/init/boot.l` as `/init`) · openssl-ish (`crew/tls`) · nc (`mk/tools/ain.l`) ·
+(`crew/init/boot.l` as `/init`) · openssl-ish (`crew/tls`) · nc (`tools/ain.l`) ·
 **patch** (`crew/kore/patch.l`, unified diffs) · **procps-ng** (kore's ps, free, uptime,
 pidof, pgrep, pkill, pwdx) and psmisc's killall.
 
@@ -192,7 +192,7 @@ The gap between those two numbers is entirely *other people's build systems*.
     comes back as copies. Half of that job would be worse than none — a reader that
     believes nlink waits for a body that never comes.
   * ⚠ and the bug the boot found, which the packer had nothing to do with:
-    **`lib/dns.l` has to ride into the initramfs**. mk/tools/ain.l is a korefiles member
+    **`lib/dns.l` has to ride into the initramfs**. tools/ain.l is a korefiles member
     and probes for the `dial` nif at load, saying `(use 'dns)` when it is absent — which
     it is in love-raw. With no `/lib/dns.l` that scare takes the whole cat down, and the
     symptom is every applet gone rather than a quiet `nc`.

@@ -245,7 +245,7 @@ the runtime sources the implicit link pulls — are found through three rungs, t
    install — and a version's compiles can never ride a stale copy, because the source it reads
    is the binary's own.
 
-The runtime itself rides COMPILED as well as in source: mk/tools/mkrt.l lays each hosted
+The runtime itself rides COMPILED as well as in source: tools/mkrt.l lays each hosted
 ISA's nolibc archive (x64/arm64/riscv64, ~1.5 MB of archive under DEFLATE, ~210 kB carried,
 one inflate on the ISA a link asks for) beside the source blob, stamped with
 `rtcid` — a pure hash of the include/ + lib/ slice. A link consults the cache, then the

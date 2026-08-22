@@ -6,7 +6,7 @@ Codegen quality is gauged on **love**: `ccbench`'s corpus row, which builds the 
 with each compiler and runs the arch-neutral test corpus through it. That workload is
 love.c's VM — call- and branch-dense dispatch — and it is what mooncc exists to compile.
 
-The cipher rows (chacha20, poly1305, `test/bench/ccrypto.l`) are **subsidiary**. They are a
+The cipher rows (chacha20, poly1305, `bench/ccrypto.l`) are **subsidiary**. They are a
 lever gauge, not a target: chacha indexes a 16-word array in its inner loop and poly keeps
 five scalar limbs, so the pair reads whether a gap is array slots or general residency. A
 win there is worth having and is not the objective. ⚠ but do not read them to zero either —
@@ -21,7 +21,7 @@ below before spending anything on the strength of these two rows.
 header says so). An arc that reports only the corpus row will under-weight array work; an arc
 that reports only the pair will over-weight it. Both rows, every time.
 
-The **heavy-nif rows** (inflate, crc32, sha256 — `test/bench/cnifs.l`, added 2026-08-17) are a
+The **heavy-nif rows** (inflate, crc32, sha256 — `bench/cnifs.l`, added 2026-08-17) are a
 third kind and are read differently again: not a target and not a lever, but *work the tree
 waits on*. `love source` unpacks its own tarball through inflate and checks it with crc32,
 and every svalbard id is a sha256, so a regression there is a regression a user feels. They
@@ -63,7 +63,7 @@ anything finer — a 3% ccbench move is not a result.
 running, reproducibly, and it was still wrong: mooncc's link pulls `crew/moon/lib/nolibc/`
 member by need and caches the archive under `~/.love/cache/moon` keyed on the compiler,
 its stat and its image — and for an image FILE the key carries that file's stat, while
-`test/bench/Makefile` rebuilt `out/host/mooncc.image` as a prerequisite of the very
+`bench/Makefile` rebuilt `out/host/mooncc.image` as a prerequisite of the very
 target. So every run missed and paid a one-time **libc build** inside a per-build row,
 against gcc and clang linking a musl somebody else compiled. Measured directly: 43,754 ms
 after `touch out/host/mooncc.image`, 20,139 ms without. The lane now runs **the artifact**,
@@ -128,7 +128,7 @@ sha256 fall toward 2× the pair was reading rotates all along.
 
 ## the same floors compiled STRAIGHT (2026-08-22, same box)
 
-`test/bench/ccnif.sh` (`make -C test/bench ccnif`) builds host/hash.c, host/deflate.c and
+`bench/ccnif.sh` (`make -C bench ccnif`) builds host/hash.c, host/deflate.c and
 host/inflate.c with mooncc, gcc and clang and reads them three ways: the answers, the .text,
 and the wall clock. It is not a gate and is not wired into one — it is the instrument to
 re-run while working on gen.l.
@@ -307,12 +307,12 @@ costs it **+29.2%** — the array leg's keeps ride callee-saved seats, not the o
 
 ## how to measure
 
-- For the nif floors alone, `make -C test/bench ccnif` — the algorithms compiled straight by
+- For the nif floors alone, `make -C bench ccnif` — the algorithms compiled straight by
   all three compilers, with no love runtime between the timer and the code, and the answers
   diffed across the lanes on the way past (a divergence there is a miscompile, and it is the
   only thing in that script that says a compiler is wrong). Twenty seconds, so it is the one
   to re-run per gen.l edit; ccbench is the one that includes the runtime.
-- Both cipher rows, never one, and the corpus beside them. `make -C test/bench ccbench`
+- Both cipher rows, never one, and the corpus beside them. `make -C bench ccbench`
   refreshes `host` and `dist-seed` first: the crew rides love's own layered image now, so
   there is no sibling image to skew, and the mooncc lane races the ARTIFACT — a stale bake
   reads as a slow egg boot, never a wrong compiler.

@@ -3,7 +3,7 @@
 //
 //   (source-gz ()) -> the embedded love-<ver>.tar.gz bytes | () when none is baked in
 //
-// mk/tools/mksrc.l lays the archive into an object as two .rodata symbols and the dist
+// tools/mksrc.l lays the archive into an object as two .rodata symbols and the dist
 // link pulls it in; love/verbs.l's `source` verb inflates what this answers. doc/dist.md.
 //
 // ⚠ PRESENCE RIDES THE KIND, NOT THE NET. an artifact with no source baked in and one
@@ -47,7 +47,7 @@ AiNif("source-gz", nif_srcgz);
 
 // (runtime-gz "x64"|"arm64"|"riscv64") -> that ISA's nolibc archive, deflated;
 // (runtime-gz "id") -> the pure tree-slice hash the archives were cut from
-// (moon.l's rtcid). () when none is carried. mk/tools/mkrt.l lays them, the
+// (moon.l's rtcid). () when none is carried. tools/mkrt.l lays them, the
 // same weak/strong law as the source blob above; moon.l's rtcarried consumes.
 __attribute__((weak)) const unsigned char ai_rtgz_x64[1] = {0};
 __attribute__((weak)) const uintptr_t ai_rtgz_x64_len = 0;

@@ -9,7 +9,7 @@ kernel + a static `love` + .l files, and kore is busybox's multi-call trick done
 ## the shape
 
 ONE roster — the `$(korefiles)` list in crew/build.mk: kore's own toolboxes, lib/lint.l,
-crew/vi/, mk/tools/ain.l, the lush files, crew/cook/cook.l and the holo linker files. The
+crew/vi/, tools/ain.l, the lush files, crew/cook/cook.l and the holo linker files. The
 crew rides IN the default binary's own layered image (doc/plan/one-binary.md), so the
 build tree's spelling is `love kore TOOL` and the installed `bin/kore` is a two-line verb
 shim — re-evaling the cat per spawn costs ~1.3s, so only the distro, which has no image
@@ -21,7 +21,7 @@ will). The registry is a tablet, so tool names never collide with the globals th
 
 The file discipline, two shapes:
 
-* **a tool with a seat** (mk/tools/ain.l, crew/cook/cook.l): define-only, leaking
+* **a tool with a seat** (tools/ain.l, crew/cook/cook.l): define-only, leaking
   one `<tool>-main`; a body-having tail fires it iff the file's own basename
   sits in the program seat — so the same file is a standalone tool AND a quiet
   cat member.
@@ -32,7 +32,7 @@ The file discipline, two shapes:
 | where | tools |
 | --- | --- |
 | kore.l (thin mains) | diff (the patience/myers engines), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link), objcopy (a linked ELF flattened to `-O binary` or `-O ihex`, byte-identical to llvm/gnu objcopy on both) |
-| mk/tools/ain.l | nc / ain |
+| tools/ain.l | nc / ain |
 | crew/cook/cook.l | make / cook |
 | core.l, the line tools | cat tac echo head tail wc sort uniq tee |
 | core.l, the field tools | cut tr nl rev |

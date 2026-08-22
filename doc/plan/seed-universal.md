@@ -177,7 +177,7 @@ owes a roster gate: on linux, assert the linux features are aboard.
     module 'moon by the modules arc — fixed, the recipe takes the module
     door); and the halves must share the source blob or the fat pays it
     twice.
-  - **U1.1 — the format.** Landed 2026-08-17: mk/tools/fatpack.l lays the
+  - **U1.1 — the format.** Landed 2026-08-17: tools/fatpack.l lays the
     container (page-aligned members behind a one-block `#!/bin/sh` prefix; the
     kernel execs that from ANY caller, where the APE-style bare-word prefix
     only survives shell/execvp fallback), the cache is content-named under
@@ -391,7 +391,7 @@ owes a roster gate: on linux, assert the linux features are aboard.
   and the dist_cross twin are gone as products (`dist-seed` is the tree's
   binary; the x-lane objects remain only for test_xfixpoint); `love seed`
   takes no arch; and a git-less tree re-cuts its archive from itself
-  (mk/tools/selfpack.l, gated by distboot's binary compare). The seed's bytes
+  (tools/selfpack.l, gated by distboot's binary compare). The seed's bytes
   are the tree's, never the builder's — that is the standing invariant. The
   full statement:
   once the invariant holds per target, love-x86_64 and love-aarch64 stop being

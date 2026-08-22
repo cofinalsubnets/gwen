@@ -166,7 +166,7 @@ dashes, and a dash is not a letter.
 ## ✅ the annotated source, and its stylesheet
 
 a THIRD reader of `crew/vi/hue.l`'s class table, after the painter in vi's vframe
-and the vim syntax generator: `mk/tools/hue2web.l`. it knows nothing about what a
+and the vim syntax generator: `tools/hue2web.l`. it knows nothing about what a
 comment or a sigil is -- it asks hue, the way the other two do, so a class added
 to that table arrives in all three without anyone being told.
 
@@ -176,10 +176,10 @@ vim generator uses the first half and leaves the colour to the reader's
 colorscheme; a web page has no colorscheme, so this joins both halves and the
 site wears the editor's theme by construction.
 
-- `love mk/tools/hue2web.l css` -- one rule per class, plus the frame around the
+- `love tools/hue2web.l css` -- one rule per class, plus the frame around the
   code. LINE NUMBERS come from a css counter, so the markup carries none and
   selecting the code copies the code alone.
-- `love mk/tools/hue2web.l src FILE` -- that file as a page, one span per line
+- `love tools/hue2web.l src FILE` -- that file as a page, one span per line
   with an `id` so a line is linkable.
 - `make site` paints all 17 crew tools into `out/site/<stem>.src.html`, and every
   generated doc page carries a `[the source]` link to its own.
@@ -193,7 +193,7 @@ holds.
 `<pre>`, decode the three entities, and what is left is the source file byte for
 byte. a highlighter that drops a line, eats a backslash or mis-carries a
 multi-line string has rewritten the program it was showing you, and nothing about
-the colours would say so. `make -C mk/tools test_hueweb`.
+the colours would say so. `make -C tools test_hueweb`.
 
 ⚠ and `make test_tools` had been unrunnable since the tools/ move (`$(MAKE) -C
 tools`, and two `$(R)/tools/` paths inside it). fixed in passing. it is red for

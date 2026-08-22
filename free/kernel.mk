@@ -104,7 +104,7 @@ $(k_elf): $(k_odir)/klink.l $(k_o) $m
 	@$m $(k_odir)/klink.l $@ $a $(k_o)
 
 # --- the initrd ------------------------------------------------------
-# lib/*.l baked per-file into .rodata as {path, bytes, len} rows (mk/tools/lcatfs.l), which
+# lib/*.l baked per-file into .rodata as {path, bytes, len} rows (tools/lcatfs.l), which
 # the ramfs in kmain.c serves reads off. Paths are baked RELATIVE, exactly as the walk
 # asks: prel tries lib/<x>.l off the cwd, so `use` finds these the moment `open` sits in
 # defs[]. ⚠ the .list stamp is corpus.list's idiom -- a wildcard aggregate leaves every
@@ -115,10 +115,10 @@ out/lib/kfs.list: force_kfs_list
 	@mkdir -p out/lib
 	@tf=$@.$$$$.tmp; echo '$(kfs)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
-out/lib/kfs.h: $(kfs) out/lib/kfs.list $(love0) mk/tools/lcatfs.l love/prel.l
+out/lib/kfs.h: $(kfs) out/lib/kfs.list $(love0) tools/lcatfs.l love/prel.l
 	@mkdir -p out/lib
 	@echo LOVE	$@
-	@$(love0) -l love/prel.l mk/tools/lcatfs.l $(kfs:$R/%=%) > $@
+	@$(love0) -l love/prel.l tools/lcatfs.l $(kfs:$R/%=%) > $@
 
 # --- the kore cat (rung 3) -------------------------------------------
 # the whole $(korefiles) userland (crew/build.mk, included first) baked VERBATIM for the
@@ -174,7 +174,7 @@ $(k_lay_o): $(k_odir)/free/$a/%.o: $(k_odir)/mk%.l $m
 # --- qemu run targets ------------------------------------------------
 # KVM where the host offers it: TCG costs 6x on the boot (22s to the prompt against
 # 5s) and 7x on the corpus. A box without /dev/kvm falls to TCG and answers the same,
-# which is what lets the GATES take it too (mk/tools/ktest.l, mk/tools/kboot.l, vec.sh).
+# which is what lets the GATES take it too (tools/ktest.l, tools/kboot.l, vec.sh).
 # ⚠ x86_64-on-x86_64 only, not any arch match: qemu's arm `virt` is asked for
 # gic-version=2 here, and a host whose GIC cannot back v2 REFUSES the pairing.
 k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x86_64,$a),$(filter x86_64,$(shell uname -m))),-enable-kvm -cpu host,)
@@ -184,7 +184,7 @@ k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio -semihostin
 k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) $(k_kvm)
 # ⚠ the FIRMWARE rides the ESP door ALONE. `qemu -kernel` enters our PVH stub with the
 # machine bare; hand it OVMF as well and the firmware boots first and takes the door.
-# mk/tools/ktest.l draws the same line, which is why its -kernel lane names no pflash.
+# tools/ktest.l draws the same line, which is why its -kernel lane names no pflash.
 k_fw = -drive if=pflash,unit=0,format=raw,file=$(dl)/edk2-ovmf/ovmf-code-$a.fd,readonly=on
 
 # THE TWO DOORS, and they trade: our own BOOTX64.EFI hands over a framebuffer and
@@ -221,7 +221,7 @@ init-container: host
 # The K_TEST corpus: the host $t minus what this seat cannot run, plus the laws that can
 # only run HERE. It bakes into out/lib/ktests.h and boots through the self-hosted ev,
 # printing the usual summary over serial -- the freestanding kernel held to the same
-# corpus test_host and test_love0 hold the host to. mk/tools/ktest.l drives it.
+# corpus test_host and test_love0 hold the host to. tools/ktest.l drives it.
 #
 # Dropped: run.l wants host-OS nifs (subprocess), bell.l's Bell-number bignums are too
 # heavy for an emulated kernel. Added, in order: ramfs.l (the baked initrd, which on the
@@ -254,33 +254,33 @@ out/lib/ktests.l: $(kt) out/lib/corpus.list out/lib/ktests.list
 	@cat $(kt) > $@
 # the two VERBATIM bakes, one shape (lcatv, not lcat: an inspect-reprint diverges
 # when the corpus is read back incrementally through a strin port).
-out/lib/korecat.h out/lib/ktests.h: out/lib/%.h: out/lib/%.l $(love0) mk/tools/lcatv.l love/prel.l
+out/lib/korecat.h out/lib/ktests.h: out/lib/%.h: out/lib/%.l $(love0) tools/lcatv.l love/prel.l
 	@echo LOVE	$@
-	@$(love0) -l love/prel.l mk/tools/lcatv.l $< > $@
+	@$(love0) -l love/prel.l tools/lcatv.l $< > $@
 
 # arm64 EXECUTION validator: cross-build `love` for aarch64 and run the corpus under
 # qemu-aarch64 -- test/holo/golden.l proves the byte encodings, this proves they run.
 test_arm64: host
-	@./mk/tools/arm64check.sh
+	@./tools/arm64check.sh
 
 # The x86_64 gate boots the ELF DIRECT: `qemu -kernel` reads the PVH note and enters our
 # own bring-up -- page tables, GDT, long mode, kboot -- with NOTHING in dl/ involved.
 ifeq ($a,x86_64)
-test_kernel: host $(R)/mk/tools/ktest.l
+test_kernel: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test.elf
 	@echo TEST $(ko)/love-$a-test.elf "(serial, headless, -kernel; ~60s, ceiling 420s)"
-	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test.elf - $a
+	@$m $(R)/tools/ktest.l $(ko)/love-$a-test.elf - $a
 
 # test_disk -- the rung-5 gate: write a file, RESET the machine, read it back. Two boots
 # of the K_TEST kernel over one FRESH scratch image -- the first finds no filesystem and
 # formats, the second must mount what the first wrote; ktest.l's 4th arg demands the kept
 # line on top of the green summary.
-test_disk: host $(R)/mk/tools/ktest.l
+test_disk: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 $(ko)/love-$a-test.elf
 	@rm -f $(ko)/love-$a-test.elf.disk
 	@echo TEST $(ko)/love-$a-test.elf "(two boots, one disk: the reset-persistence gate)"
-	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test.elf - $a
-	@$m $(R)/mk/tools/ktest.l $(ko)/love-$a-test.elf - $a "disk: fat kept across the reset"
+	@$m $(R)/tools/ktest.l $(ko)/love-$a-test.elf - $a
+	@$m $(R)/tools/ktest.l $(ko)/love-$a-test.elf - $a "disk: fat kept across the reset"
 	@echo "test_disk: the machine remembered"
 
 # test_kboot -- inle rung 3's gate: the SHIPPED kernel (no K_TEST) booted direct with a
@@ -288,13 +288,13 @@ test_disk: host $(R)/mk/tools/ktest.l
 # and quitting through the reset door. Four boots at a cold cat eval each (~minutes under
 # TCG), so OPT-IN -- run it when the kernel or the kore cat moves. vi
 # stays the interactive smoke, under run-* -- `-append "vi lib/json.l"`.
-test_kboot: host $(R)/mk/tools/kboot.l
+test_kboot: host $(R)/tools/kboot.l
 	@$(MAKE) -s $(k_elf)
 	@echo TEST $(k_elf) "(the kore cat off cmdline; 4 boots, ceiling 420s each)"
-	@$m $(R)/mk/tools/kboot.l $(k_elf) "kore ls lib" "json.l"
-	@$m $(R)/mk/tools/kboot.l $(k_elf) "kore wc lib/json.l" "lib/json.l" $$(wc -c < $(R)/lib/json.l)
-	@$m $(R)/mk/tools/kboot.l $(k_elf) "sh -c \"cd lib; pwd\"" "/lib"
-	@$m $(R)/mk/tools/kboot.l $(k_elf) "sh -c \"kore ls lib | kore wc -l\"" $$(ls $(R)/lib/*.l | wc -l)
+	@$m $(R)/tools/kboot.l $(k_elf) "kore ls lib" "json.l"
+	@$m $(R)/tools/kboot.l $(k_elf) "kore wc lib/json.l" "lib/json.l" $$(wc -c < $(R)/lib/json.l)
+	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"cd lib; pwd\"" "/lib"
+	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"kore ls lib | kore wc -l\"" $$(ls $(R)/lib/*.l | wc -l)
 else
 test_kernel test_disk test_kboot:
 	@echo "$@: skipped (host arch $a is not x86_64)"
@@ -350,10 +350,10 @@ ifeq ($(and $(filter x86_64,$a),$(OVMF_X64)),)
 test_uefi:
 	@echo "test_uefi: skipped (x86_64 + $(dl)/edk2-ovmf/ovmf-code-x86_64.fd needed)"
 else
-test_uefi: host $(R)/mk/tools/ktest.l
+test_uefi: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 $(ko)/esp-x86_64-test/EFI/BOOT/BOOTX64.EFI $(ko)/esp-x86_64-test/love.elf
 	@echo TEST $(ko)/esp-x86_64-test "(serial, headless, our own BOOTX64.EFI; ~64s, ceiling 420s)"
-	@$m $(R)/mk/tools/ktest.l $(ko)/esp-x86_64-test $(OVMF_X64) x86_64
+	@$m $(R)/tools/ktest.l $(ko)/esp-x86_64-test $(OVMF_X64) x86_64
 endif
 
 # test_uefi_arm64 -- the same door on the other arch, and the ONLY one that gives
@@ -365,10 +365,10 @@ ifeq ($(and $(OVMF_A64),$(QEMU_A64U)),)
 test_uefi_arm64:
 	@echo "test_uefi_arm64: skipped (qemu-system-aarch64 + $(dl)/edk2-ovmf/ovmf-code-aarch64.fd needed)"
 else
-test_uefi_arm64: host $(R)/mk/tools/ktest.l
+test_uefi_arm64: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/esp-aarch64-test/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-aarch64-test/love.elf
 	@echo TEST $(ko)/esp-aarch64-test "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 420s)"
-	@$m $(R)/mk/tools/ktest.l $(ko)/esp-aarch64-test $(OVMF_A64) aarch64
+	@$m $(R)/tools/ktest.l $(ko)/esp-aarch64-test $(OVMF_A64) aarch64
 endif
 
 # test_inle -- the kernel's whole roster, in one word. Every lane below prints its own
@@ -395,10 +395,10 @@ ifeq ($(QEMU_A64),)
 test_kernel_arm64:
 	@echo "test_kernel_arm64: skipped (need qemu-system-aarch64)"
 else
-test_kernel_arm64: host $(R)/mk/tools/ktest.l
+test_kernel_arm64: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/love-aarch64-test.elf
 	@echo TEST $(ko)/love-aarch64-test.elf "(serial, headless, TCG, -kernel; ~90s, ceiling 420s)"
-	@$m $(R)/mk/tools/ktest.l $(ko)/love-aarch64-test.elf - aarch64
+	@$m $(R)/tools/ktest.l $(ko)/love-aarch64-test.elf - aarch64
 endif
 
 # --- wasm headless test (wired into test_slow; emcc + node) -----------------

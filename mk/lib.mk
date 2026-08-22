@@ -1,7 +1,7 @@
 # mk/lib.mk -- the out/lib/*.h egg + service headers. Included by ./Makefile from the
 # project root; shared vars are mk/common.mk.
 #
-# Each love/*.l is serialized to a C string literal by mk/tools/lcat.l, run on the bootstrap
+# Each love/*.l is serialized to a C string literal by tools/lcat.l, run on the bootstrap
 # love0. Frontends #include these and assemble the bootstrap with G_EGG_PRE/POST. Drop a .l
 # into love/ and it is picked up -- no rule to edit.
 lib_h = $(patsubst love/%.l,out/lib/%.h,$(wildcard love/*.l))
@@ -49,9 +49,9 @@ lib: $(lib_h) $(boot_h)
 # the image already. Both lanes then lcat the same bytes.
 lcat_love = $(if $(bundled_love),$(bundled_love),$(love0) -l love/prel.l)
 lcat_h = @mkdir -p out/lib; echo LOVE	$@; t=$@.$$$$.tmp; \
-  $(lcat_love) mk/tools/lcat.l $< > $$t && test -s $$t && mv -f $$t $@ \
+  $(lcat_love) tools/lcat.l $< > $$t && test -s $$t && mv -f $$t $@ \
     || { rm -f $$t; echo "FAIL: $@ empty (lcat failed -- broken bootstrap?)"; exit 1; }
-$(lib_h): out/lib/%.h: love/%.l mk/tools/lcat.l   # + $(love0), stated below
+$(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(love0), stated below
 	$(lcat_h)
 # the sed twin of $(lcat_h): a text->C-literal that needs no interpreter.
 # ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads, for the same reason $(hcc) does: the root
@@ -62,11 +62,11 @@ sed_h = @mkdir -p out/lib; echo AI	$@; LOVE_NO_IMAGE= $(sed_lit) $< > $@
 # wildcard misses them, and an implicit pattern would make these headers INTERMEDIATE.
 # holo rides the same lcat pipeline as the egg (the glaze is its client); rune is the CAS,
 # for device frontends that bake it behind the egg.
-$(holo_h): out/lib/%.h: crew/holo/%.l mk/tools/lcat.l
+$(holo_h): out/lib/%.h: crew/holo/%.l tools/lcat.l
 	$(lcat_h)
-$(ld_h): out/lib/holo-%.h: crew/holo/%.l mk/tools/lcat.l
+$(ld_h): out/lib/holo-%.h: crew/holo/%.l tools/lcat.l
 	$(lcat_h)
-out/lib/rune.h: crew/rune/rune.l mk/tools/lcat.l
+out/lib/rune.h: crew/rune/rune.l tools/lcat.l
 	$(lcat_h)
 # love0's raw-source twins of the same backends, so the corpus tests the assembler under
 # BOTH compilers, and the generic love/*.l twin beside them.

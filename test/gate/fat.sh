@@ -27,7 +27,7 @@ n2=$(ls "$d/.love/fat" | wc -l)
 
 # determinism: the same members answer the same bytes
 # ⚠ the member list MIRRORS crew/build.mk's dist-fat recipe (the drift trap).
-"$boot" mk/tools/fatpack.l "$d/fat2" "$a" "$ho/love" "$xa" "$xd/love" >/dev/null \
+"$boot" tools/fatpack.l "$d/fat2" "$a" "$ho/love" "$xa" "$xd/love" >/dev/null \
   || fail "repack"
 cmp -s "$fat" "$d/fat2" || fail "repack answered different bytes"
 

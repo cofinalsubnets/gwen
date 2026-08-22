@@ -385,7 +385,7 @@
    ; of all so `love bake` can grow it at the tail (host/image.c). funcnames the
    ; DEFINED functions (global FUNC symbols), globnames the global variables (global
    ; OBJECT symbols); locnames the STATIC functions -- LOCAL FUNC symbols, so a
-   ; linked binary's nm/objdump/gdb (and mk/tools/vmret.l's symbol spans) see them;
+   ; linked binary's nm/objdump/gdb (and tools/vmret.l's symbol spans) see them;
    ; static data stays local labels. -> a byte list.
    ; these five sections are what a HOSTED object carries; objsecs below is the
    ; general door, and the kernel's lays go through it for names a compiler never

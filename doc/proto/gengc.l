@@ -1,6 +1,6 @@
 ; layer-2 spike: a GENERATIONAL GC (`gengc`) modelled in ai -- a runnable, value-level model of a
 ; nursery + old-space copying collector over ai's current single-pool Cheney two-space core (love.c
-; gcg/gcp/evac_*). it is the design-by-prototype step the measurement justified: mk/tools/gcstat.l on a
+; gcg/gcp/evac_*). it is the design-by-prototype step the measurement justified: tools/gcstat.l on a
 ; -DAI_STAT host showed ai's interpreted churn is 85-94% INFANT MORTALITY and the persistent live set
 ; is RECOPIED ~150x over a run (every full collection drags the same long-lived objects through to-
 ; space). a nursery removes that rescan tax: a MINOR collection copies only the young survivors, never
@@ -168,7 +168,7 @@
 
  _ (. ";; doc/proto/gengc.l: generational-GC model self-checks pass -- ")
  _ (. "a nursery+old collector with a write barrier; the barrier is shown NECESSARY (3b) and a minor\n")
- _ (. ";; scans young+rem, not all of old (7) -- the ~150x recopy mk/tools/gcstat.l measured, removed.\n")
+ _ (. ";; scans young+rem, not all of old (7) -- the ~150x recopy tools/gcstat.l measured, removed.\n")
  _ (. ";; minor vs major work on 50-old + 1-young: ")
  _ (: w (alloc bigold ()) w (addroot w (w-last w))
       (do (. (minor-scanned w)) (. " scanned by a minor vs ") (. (major-scanned w)) (. " by a major\n"))))

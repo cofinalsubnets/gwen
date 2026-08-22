@@ -60,7 +60,7 @@ exactly this; `test_bakerep` guards the reproducible bake underneath it cheaply 
 to ride the slow gate.
 
 ⚠ **the archive rides along.** `love source` lays the very bytes the seed carried,
-and a re-cut answers the same bytes: `mk/tools/selfpack.l` is the one cutter in every
+and a re-cut answers the same bytes: `tools/selfpack.l` is the one cutter in every
 world — the tree on disk, sorted, mtimes pinned — so same tree in, same blob out,
 same binary out.
 

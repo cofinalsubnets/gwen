@@ -26,7 +26,7 @@ and `cc-clay` gives a native leg with no C text at all.
 **rungs 0 through 6 have landed** (`crew/moon/clay.l`, `make test_clay`, `mx.l` +
 `mx.h` + `kinds.h`, the order of work's rung 1 -- the five node shapes -- its rung 3, the
 nif registry, its rung 2, the preprocessor nodes, and four more node shapes plus
-`mk/tools/clay-g2.l`); the rest is unbuilt. one rung was landed and REVERTED, and it is the
+`tools/clay-g2.l`); the rest is unbuilt. one rung was landed and REVERTED, and it is the
 one that reshaped this doc -- see §the criterion.
 
 ## the state, measured
@@ -213,7 +213,7 @@ name the region in a commit message instead.
    ("mixed/bignum/broadcast falls through to the general loop; results bit-identical"),
    which nothing checks.
    ⚠ those in-function macros mean generated C writes the loop out ~11 times, so
-   BYTE-comparison here is structurally impossible; the AST-vs-AST oracle (`mk/tools/clay-g2.l`)
+   BYTE-comparison here is structurally impossible; the AST-vs-AST oracle (`tools/clay-g2.l`)
    is immune, and this is the rung it was built for.
    then the rest of the family, all the same shape: `vmap1_fill` 7255, `vmap2_fill` 7734,
    `twin_fill` 7932, `cbin_fill` 7958, `twin_pow_fill` 8011, `twin_build_fill` 8062,
@@ -317,7 +317,7 @@ why `vbin_fill` earns its place even though it comes later.
   been the thing standing in front of the bug). run over all 114 files of `test/cc/`: that
   makes "expresses arbitrary C" empirical rather than claimed. currently **63 / 51 / 0**.
   ⚠ emit-only additions must not move it.
-* **G2 conversion equivalence** -- `mk/tools/clay-g2.l`: parse the original translation unit
+* **G2 conversion equivalence** -- `tools/clay-g2.l`: parse the original translation unit
   and the converted one WHOLE, and compare the named top-level definitions as TREES.
   parsing whole is what makes it exact -- both sides meet the same cpp, typedefs and macro
   expansions, so a surviving difference is a difference in MEANING, which is the comparison
@@ -335,7 +335,7 @@ why `vbin_fill` earns its place even though it comes later.
   ARE NOT REDUNDANT (with `40a5a2b7` reverted, arm64 caught the bug while x86-64 and
   riscv64 both answered correctly by accident). for dtoa, add the exhaustive 2^32 float
   sweep.
-* **G4 the theorem** -- `mk/tools/clay2coq.l`, sibling of `spec2coq.l` / `mx2coq.l`.
+* **G4 the theorem** -- `tools/clay2coq.l`, sibling of `spec2coq.l` / `mx2coq.l`.
   axiom-free, tracked in git, regenerated every run, skips loudly without coqc. it has no
   consumer until rung 5 lands.
 * **regeneration drift** -- the generated file is CHECKED INTO GIT and `cmp`'d by a gate
@@ -377,9 +377,9 @@ tells about moon. state it this way or not at all.
    `(asn lv (bin op lv rhs))` would evaluate `lv` twice (doc/moon.md, `calm?`). `clay-ok?`, a validator, because `gen.l` currently TRUSTS its input. honors the
    `gripe` protocol (``).
 1. **`clay-show` and G1.** AST -> C text, plus the round-trip gate over `test/cc/`.
-2. **the dispatch matrices; deleted `mk/tools/mxdump.c`.** `mx.l` is the table; `mx.h` is
+2. **the dispatch matrices; deleted `tools/mxdump.c`.** `mx.l` is the table; `mx.h` is
    laid from it through clay and `#include`d by love.c (its first generated region);
-   `mk/tools/mx2coq.l` reads the same table instead of a dump, so mx.v's bridge moved from
+   `tools/mx2coq.l` reads the same table instead of a dump, so mx.v's bridge moved from
    shape 3 to shape 1. the dumper, its `$(CC)` step, the function-pointer comparison and the
    UNKNOWN case are all gone. net C **-54** lines.
 2b. **the kind lattice the matrices are INDEXED by.** `enum q` was hand-written and
@@ -462,7 +462,7 @@ tells about moon. state it this way or not at all.
    lays both sides, so it had nothing left to catch.
    G1 held at 63/51/0, as it must -- an emit-only node adds nothing to round-trip.
 
-6. **four more node shapes, `mk/tools/clay-g2.l`, and a rung landed then REVERTED.** the
+6. **four more node shapes, `tools/clay-g2.l`, and a rung landed then REVERTED.** the
    α-equivalence cluster -- `salpha`/`shash` and the beta bridge, 156 lines -- was
    converted to `alpha.l` + `alpha.h` and then taken back out. the code is gone; what it
    bought is this doc's criterion (§the criterion, §the parse is enough) and four shapes
@@ -482,7 +482,7 @@ tells about moon. state it this way or not at all.
    it is the tax on converting one that should not be. they are kept because a GENERATION
    rung still owes readable output, and rungs 4-6 of the order of work will spend them.
    G1 held at 63/51/0 throughout, as an emit-only widening must.
-   `mk/tools/clay-g2.l` is the durable half: it proved the reverted conversion exact (10/10
+   `tools/clay-g2.l` is the durable half: it proved the reverted conversion exact (10/10
    definitions tree-identical) and caught two real slips on the way -- a stray list
    constructor, and a `(blk ..)` around statements that stood in the branch directly, a
    scope the original had no brace for and a C compiler would never have noticed.

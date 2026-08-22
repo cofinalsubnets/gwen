@@ -686,14 +686,14 @@
    ; cannot open is invisible, and the link is the one that happens today, at
    ; today's price.
    ; the PURE runtime identity: names and bytes of the headers + lib sources,
-   ; nothing of the machine -- what mk/tools/mkrt.l stamps beside the carried
+   ; nothing of the machine -- what tools/mkrt.l stamps beside the carried
    ; archives, and what a disk home must hash to for them to serve it. (mcid
    ; below is a CACHE key and mixes in the binary's own path and stats; this
    ; one must travel.)
    (rtcid home)
     (sha256 ("moon-rtc 1\n" + ((mctree (home + "include/")) + (mctree (home + "lib/")))))
    ; the carried runtime: the build lays each ISA's compiled archive beside the
-   ; source blob (mk/tools/mkrt.l; host/src.c answers runtime-gz), so a link
+   ; source blob (tools/mkrt.l; host/src.c answers runtime-gz), so a link
    ; owes no member compiles -- the bare door's ~28 s becomes a read. it
    ; serves the DEFAULT lane only, and only when the identity matches: the blob
    ; lane's identity IS the carried source, a disk home serves iff its slice

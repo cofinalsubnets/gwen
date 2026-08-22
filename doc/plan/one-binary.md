@@ -104,7 +104,7 @@ dist lanes shared every seam -- and the re-aimed gates are the discovery story:
   manifest/cb/berth's rowtx folds, luxui-probe's `("" + ch)`, crew/lux/wire.l's
   x-rstr + x-getclass, crew/quay/berth.l's reply fold, lib/json.l's ENTIRE
   writer (every quote/bracket/comma was a byte append -- json-show wrote "" for
-  "[]"), crew/tls/bytes.l's hex, mk/tools/hue2vim.l's vim-brk -- and TWO LINES
+  "[]"), crew/tls/bytes.l's hex, tools/hue2vim.l's vim-brk -- and TWO LINES
   cc9e84ee's perl had EATEN AN OPERAND from (crew/manifest's column letters,
   `(+ 97 cx)` -> `(+ 97 )`). All fixed with string spellings; hostnif ALL-GREEN.
 - **LOVE_NO_IMAGE discipline**: the root's corpus export means every verb site

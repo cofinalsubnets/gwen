@@ -26,7 +26,7 @@ evidence for the slow one.
       (`love up` defaults CC to the artifact's own `mooncc` verb, so it needs no ambient
       toolchain). `make test_dist` and `make test_up` gate it.
 - [ ] **wasm** — rebuild `wasm/love.js` against the release binary.
-- [ ] **the benches** — re-run and refresh the numbers baked into `test/bench/bench.html`.
+- [ ] **the benches** — re-run and refresh the numbers baked into `bench/bench.html`.
       ⚠ Bake first: a bare relink leaves `love` unbaked and its startup is an egg boot, which
       wrecks every timing number.
 
@@ -40,7 +40,7 @@ notes.
       example against `out/host/love`; never write one from memory, and re-probe on any rename or
       semantic change.
 - [ ] `README.md` — keep its roster in step with `index.html`.
-- [ ] the man pages (`doc/love.md`, `doc/cook.md`, `doc/lush.md`, `doc/kore.md`) — `mk/tools/mkman.l`
+- [ ] the man pages (`doc/love.md`, `doc/cook.md`, `doc/lush.md`, `doc/kore.md`) — `tools/mkman.l`
       renders them; check the `@VERSION@` substitution landed.
 
 ## the cut

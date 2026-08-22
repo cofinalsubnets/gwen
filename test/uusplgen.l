@@ -1,4 +1,4 @@
-; test/uusplgen.l -- GENERATED from doc/proto/spl.l by mk/tools/spl2uu.l. Do not
+; test/uusplgen.l -- GENERATED from doc/proto/spl.l by tools/spl2uu.l. Do not
 ; edit; refresh with `make uusplgen`. The call-site samples under the three
 ; compilers -- ecall (args into seats), ebind (the binding splice), esubst
 ; (the substitution splice) -- lifted to uu nlist terms, 2 nats per op (op x),

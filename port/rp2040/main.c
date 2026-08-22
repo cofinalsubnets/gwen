@@ -14,7 +14,7 @@
 // USB-serial adapter.
 //
 // ⚠ what this port does NOT yet have is a LINK: the boot2 stage wants its CRC
-// stamped and the .uf2 packed (mk/tools/, still in the pre-rename .g dialect), and
+// stamped and the .uf2 packed (tools/, still in the pre-rename .g dialect), and
 // thumb relocations are not in holo's linker. `make test_embed` compiles it;
 // nothing links it. See port/rp2040/Makefile.
 #include <stdint.h>

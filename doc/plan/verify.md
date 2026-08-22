@@ -7,7 +7,7 @@ names them all, keeps one, and says what happens to each of the others.
 
 **the native uu prover (love/uu.l) is target number one.** a property worth
 holding is worth stating as a uu term; rocq and lean are EXPORT targets
-(mk/tools/uu2coq.l, uu2lean.l -- both wired: test_uugen, test_uulean), not
+(tools/uu2coq.l, uu2lean.l -- both wired: test_uugen, test_uulean), not
 homes. the fuzz lanes (test/law.l, test/fuzz.l, the seeded walks) stay -- a
 fuzz binds an implementation to a model cheaply -- but they are the refutation
 half of the same ladder, not separate programs.
@@ -23,8 +23,8 @@ half of the same ladder, not separate programs.
 | CLAUDE.md laws fuzz | test/law.l | keep; grows a uu leg (below) |
 | property fuzz | test/fuzz.l | keep |
 | holo encoder fuzz | test/holo/fuzz/{fuzz,sysdiff}.l | PORTED 2026-08-16; py gone |
-| vmret.l vs vmret.py differential | mk/tools/py/ | RETIRED 2026-08-16 |
-| uu-vs-UniMath parity audit | mk/tools/uuparity.l | PORTED 2026-08-16 |
+| vmret.l vs vmret.py differential | tools/py/ | RETIRED 2026-08-16 |
+| uu-vs-UniMath parity audit | tools/uuparity.l | PORTED 2026-08-16 |
 
 ## no python in tree except benchmarks
 
@@ -39,12 +39,12 @@ the standing rule (gwen, 2026-08-16). done 2026-08-16:
 - **test/holo/fuzz/sysdiff.l** -- the system-lane byte-exact differential;
   output count-identical to the python (x64 743/0/0, arm64 167/0/19).
   regmap.py (a one-time register-map probe) deleted with them.
-- **mk/tools/py/** -- gone. vmret.l stands alone (its gate reads the tool's
-  own ret-free verdict); uu_parity.py ported to mk/tools/uuparity.l.
+- **tools/py/** -- gone. vmret.l stands alone (its gate reads the tool's
+  own ret-free verdict); uu_parity.py ported to tools/uuparity.l.
 
 still standing, not verification:
 
-- **mk/tools/ccdb.py** -- compile_commands generator for clangd. dev-only;
+- **tools/ccdb.py** -- compile_commands generator for clangd. dev-only;
   ports to love when touched next.
 - **port/rp2040/tools/py/{elf2uf2,pad_checksum}.py** -- flasher utilities on
   a port lane. port to love with the next rp2040 ride.
@@ -52,7 +52,7 @@ still standing, not verification:
 ## the uuwm freshen (landed 2026-08-16)
 
 crew/lux/core.l is written in the new style (glued accessors, infix, !=,
-bracket literals) and mk/tools/wm2uu.l reads the post-opfix tree it makes:
+bracket literals) and tools/wm2uu.l reads the post-opfix tree it makes:
 cap/cup chains where caup was, ></+ beside link/cat, != as = with the arms
 traded. the regenerated test/uuwm.l is BYTE-IDENTICAL to the pre-freshen
 artifact, so the uuwmlaw theorems and the ten idpath bridges hold unchanged.
@@ -61,7 +61,7 @@ string-aware love scanner did the sweep, proving (forms old) = (forms new)
 per file before writing).
 
 ⚠ the tree still spells `(L ..)` and `(..) widely (test/host/sh.l, the law
-files, several mk/tools translators). the reader KEEPS both spellings; the
+files, several tools translators). the reader KEEPS both spellings; the
 sweep is the canonical-spellings arc's business, and the corpus files that
 TEST the ` sigil (test/valence.l, test/infixop.l) must keep it on purpose.
 

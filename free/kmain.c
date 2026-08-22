@@ -501,7 +501,7 @@ void *malloc(size_t n) { return kmallocw(b2w(n)); }
 void free(void *x) { return kfree(x); }
 
 // --- the ramfs: the baked tree, and the copies writes make -----------------
-// The initrd is .rodata. mk/tools/lcatfs.l bakes one {path, bytes, len} row per file
+// The initrd is .rodata. tools/lcatfs.l bakes one {path, bytes, len} row per file
 // (out/lib/kfs.h) the way lcatv bakes the test corpus, and reads come straight off
 // it; the FIRST write copies that blob into the kernel heap and the entry reads
 // from the copy ever after. So a file nobody writes costs a row and not one word
@@ -1883,7 +1883,7 @@ static struct ai_def const __attribute__((section("ai_nifs"), used)) defs[] = {
   {"color", (intptr_t) nif_color} };
 
 #ifdef K_TEST
-// The whole test corpus, baked VERBATIM to a C string literal by mk/tools/lcatv.l
+// The whole test corpus, baked VERBATIM to a C string literal by tools/lcatv.l
 // (Makefile out/lib/ktests.h). Bound to the global `tests` and run through ev at boot.
 static char const ktests[] =
 #include "ktests.h"

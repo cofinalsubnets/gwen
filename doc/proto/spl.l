@@ -22,7 +22,7 @@
 ; story), scare/abort mid-body (a scare here is a trace record, not a control
 ; exit), recursion. run: cat test/00-init.l doc/proto/spl.l | out/host/love
 ;
-; the uu lift: mk/tools/spl2uu.l emits these threads as test/uusplgen.l;
+; the uu lift: tools/spl2uu.l emits these threads as test/uusplgen.l;
 ; test/uuspllaw.l proves the laws forall states, and the cross-machine theorem
 ; meets the register machine's de5bck there.
 

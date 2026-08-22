@@ -255,7 +255,7 @@ anomaly that hid it. A peer TASK still drains fine, because this parks rather th
 
 ### who waits — `make waits`
 
-`mk/tools/waits.l` (on the fast gate, beside `vmret`) reads every tracked `.c` file and answers
+`tools/waits.l` (on the fast gate, beside `vmret`) reads every tracked `.c` file and answers
 **who waits**: every call to `ai_sleep`, `ai_wait_fds`, `ai_fd_drain` or love.c's `wait_one`
 must name a function on a roster carried in the tool, each with the sentence that earns it.
 Reading the roster IS the invariant:

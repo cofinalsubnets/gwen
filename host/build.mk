@@ -290,8 +290,8 @@ endif
 # source, so the roff cannot drift from the prose. ⚠ a STATIC pattern -- an implicit one
 # would make these intermediate and re-run the lens on every build. mkman takes the version
 # header as its second word and fills @VERSION@ itself, so the roff needs no sed after.
-$(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md mk/tools/mkman.l crew/lapiz/lapiz.l out/lib/love_version.h $(ho)/love
+$(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l crew/lapiz/lapiz.l out/lib/love_version.h $(ho)/love
 	@echo LOVE	$@
 	@mkdir -p $(dir $@)
-	@$(ho)/love mk/tools/mkman.l doc/$*.md out/lib/love_version.h > $@
+	@$(ho)/love tools/mkman.l doc/$*.md out/lib/love_version.h > $@
 

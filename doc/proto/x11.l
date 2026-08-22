@@ -7,7 +7,7 @@
 ;   run: out/host/love doc/proto/x11.l
 ; the wire layout is X Window System Protocol ch. 8-9 (setup), the per-request
 ; encodings from the protocol appendix. everything is one body-having `:` --
-; local names, ain-style (mk/tools/ain.l is the socket idiom source).
+; local names, ain-style (tools/ain.l is the socket idiom source).
 (: s (connect "127.0.0.1" 6007)
    _ (? s 0 (: _ (say err "x11: cannot connect to :7 -- Xephyr up?\n") (quit 1)))
    (line m) (: _ (say out m) _ (say out "\n") (flush out))
