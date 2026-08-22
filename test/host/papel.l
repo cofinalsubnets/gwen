@@ -185,12 +185,13 @@ Only a paragraph, so the title has to come from the meta block.
                 ((slug "A") = (slug "a"))))
 
    ; --- the real thing: this tree's own docs -----------------------------------------
-   ; 28 markdown files through the whole pipe, and the anchor property has to hold on
-   ; every page of it. README.md is deliberately in: it is the widest markdown here.
+   ; every markdown page in the tree through the whole pipe, and the anchor property has
+   ; to hold on all of them. README.md is deliberately in: it is the widest markdown here.
+   ; ⚠ mdsof does not recurse, so a directory that grows a subtree needs naming here.
    rconf (: t (tablet 0)
             _ (pin t 'out (dir + "/love"))
             _ (pin t 'title "love")
-            _ (pin t 'src '("README.md" "doc"))
+            _ (pin t 'src '("README.md" "doc" "doc/misc"))
             _ (pin t 'self "crew/papel/papel.l")
             _ (pin t 'quiet 1)
             t)
