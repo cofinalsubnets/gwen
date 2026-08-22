@@ -108,6 +108,8 @@
    ; a DOUBLE-COLON target is the one place a second recipe does not replace the first:
    ; make runs every `tgt:: ..` rule's steps, in the order written. reg's own rule -- a
    ; later recipe wins -- is `:`'s, and stays.
+   ; the targets carrying a target-specific variable -- see classify. recur asks.
+   tvarbox (tablet 0)
    (regd item ing oo steps)
    (: at (unseat item) ins (unseatl ing) ors (unseatl oo)
       prev (peep cards at ())
@@ -197,8 +199,18 @@
             _ (? (0 = st) 0 (jobdie item st))
             (settle item <>v >>v done shipped))))
 
-   ; run a recipe: each step in order.
-   (recur item steps) (each steps (\ step (step1 step)))
+   ; run a recipe: each step in order. ⚠ first, the one make feature we can see is
+   ; wanted HERE and cannot give: a variable scoped to this target (classify's 'tvar).
+   ; Refusing at parse would refuse a Makefile over a scope no build ever enters.
+   (recur item steps)
+   (: k (unseat item)
+      nm (? (string? k) k (show k))
+      _ (? (tally (peep tvarbox k ""))
+           (: _ (say err ("cook: a target-specific variable (" + nm
+                          + ") is a GNU make feature cook does not implement.  Stop."))
+              _ (put err 10) (quit 2))
+           0)
+      (each steps (\ step (step1 step))))
 
    ; --- the job pool (-j N) --------------------------------------------------
    ; a stale recipe runs in a FORKED CHILD -- the fork nif, no exec: the child owns a
@@ -564,12 +576,14 @@
                      (? (two? a) ('assign >< a)
                         (: r (parse ruleP t)
                            ; `tgts: NAME op VALUE` is a TARGET-SPECIFIC variable, and its
-                           ; prerequisite half is an assignment. cook keeps one variable
-                           ; table, so it cannot scope one to a target -- and reading the
-                           ; line as an ordinary rule invents a prerequisite named for the
-                           ; variable, which is how `no recipe to make "kcppflags"` reads.
+                           ; prerequisite half is an assignment. cook keeps ONE variable
+                           ; table and cannot scope one to a target -- and read as a rule
+                           ; the line invents a prerequisite named for the variable, which
+                           ; is how `no recipe to make "kcppflags"` reads. So it is
+                           ; recorded against its targets, and refuses only if one is
+                           ; ever REMADE: a scope nothing enters changes no build.
                            (? !(two? r) '(skip)
-                              (two? (parse assignP <>r)) (cook-gap "a target-specific variable")
+                              (two? (parse assignP <>r)) `('tvar <r)
                               ('rule >< r))))))))))
 
    ; -- nested-paren-aware variable expansion + make functions --
@@ -968,6 +982,12 @@
                 ; conditional INSIDE a recipe block gates its lines via `on` above.
                 (k = 'defassign) (: _ (? on (do-assign as (r1 c) "=" (r2 c)) 0)
                                     (loop rest (flushr cur rules) 0 cond))
+                ; a target-specific variable: remember WHICH targets, so recur can
+                ; refuse if one is remade. the value is never wanted -- cook has no
+                ; scope to put it in, and a half-applied one would be the silence.
+                (k = 'tvar) (: _ (? on (each (split-ws (expand (r1 c) as 0))
+                                             (\ w (pin tvarbox (unseat w) "1"))) 0)
+                               (loop rest (flushr cur rules) 0 cond))
                 (k = 'expand) (? (on && evalp (r1 c))
                                  (: more (text-lines (expand (eval-args (r1 c)) as 0))
                                     (loop (more + rest) (flushr cur rules) 0 cond))
