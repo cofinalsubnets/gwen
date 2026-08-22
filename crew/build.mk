@@ -197,7 +197,24 @@ dist: dist-source dist-seed   # a release is both
 # against, plus a committed results page. Nothing in the build reaches it and nobody
 # rebuilding love needs it; a reader who wants the numbers wants the repo. ⚠ the drop
 # is a top-segment name, so the WALK prunes it and the tree under it is never read.
-dist_drop = wasm/love.js bench
+#
+# port/ and wasm/ leave on the same test, applied to a RELEASE and not to a checkout:
+# what does `make` in the unpacked tree reach? the default goal there is `dist`, which
+# is dist-source + love.baked, and neither reads either directory. port/ is six
+# bare-metal boards whose gates are opt-in BY NAME (test_mps2, test_playdate, ..) and
+# which want a cross toolchain and hardware the tarball's reader has not got; wasm/ is
+# an emscripten build plus its committed output, and emscripten is precisely the
+# foreign toolchain this artifact exists to not need. ⚠ `wasm/love.js` came off the
+# list because the directory holding it now goes -- one name, not two.
+#
+# ⚠ doc/ CANNOT go the same way, and the reason is one rule: the man pages are
+# WRITTEN in doc/{love,cook,lush}.md and generated from them (host/build.mk), and
+# `install: $(installs)` names all three -- so an unpacked release with no doc/ builds
+# its binary and then dies on `make install` with no rule to make doc/love.md. what
+# goes instead is the two subtrees nothing generates from: doc/plan is the arcs and
+# doc/proto is sketches (lint exempts it for that reason). the .md beside them stay,
+# and they are the design record of the thing the reader just unpacked.
+dist_drop = bench port wasm doc/plan doc/proto
 # THE ARCHIVE IS THE TREE: selfpack walks the root and skips only what is not
 # source -- out bin dl, everything HIDDEN at the root (.git .sb .claude .cache
 # .gitignore .., the machine's and the checkout's), and $(dist_drop) -- pins every

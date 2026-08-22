@@ -192,7 +192,9 @@ wasm:
 clean:
 	rm -rf out
 	@rm -f test/proof/rocq/*.vo test/proof/rocq/*.vok test/proof/rocq/*.vos test/proof/rocq/*.glob test/proof/rocq/.*.aux
-	@$(MAKE) -C wasm clean
+	@# wasm/ does not ride the release (crew/build.mk's dist_drop), so an unpacked
+	@# tree has no such directory to clean and must not fail trying.
+	@[ -d wasm ] && $(MAKE) -C wasm clean || :
 distclean: clean
 	rm -rf dl
 # ⚠ THE COMPILER'S CACHE LIVES IN HOME, so `clean` cannot reach it and should not try -- ~/.love
