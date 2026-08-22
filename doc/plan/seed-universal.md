@@ -308,14 +308,14 @@ owes a roster gate: on linux, assert the linux features are aboard.
     and every since-freeze atom as ballast; and a weak drop + re-intern
     handed a name a fresh serial at a GC-chosen moment. The cures, in the
     codec and the collector: the dump re-inserts the live intern pairs in
-    SPELLING order (img_canon_symbols); gen_major scrubs the pinned copy
-    of an about-to-be-abandoned intern map to a canonical empty husk
-    before the scan can trace it; and the serial rename ranks mints in
-    session order then named noms by spelling (img_rank_assign) — one
-    shared heapsort (img_sort) serves all three orders plus the
-    dictionary. Gated: test_bakerep grew the layered egg-bake budget lane
-    (default vs LOVE_BUDGET_MB=128, byte-compare); a 64..2048 sweep
-    answered identical.
+    SPELLING order (img_canon_symbols); a freeze moves the intern map off
+    the pin the instant it sets one, so the copy it abandons holds
+    exactly what the record took (img_rehome_symbols); and the serial
+    rename ranks mints in session order then named noms by spelling
+    (img_rank_assign) — one shared heapsort (img_sort) serves all three
+    orders plus the dictionary. Gated: test_bakerep grew the layered
+    egg-bake budget lane (default vs LOVE_BUDGET_MB=128, byte-compare);
+    a 64..2048 sweep answered identical.
   - **UV4 — netbsd.** LANDED 2026-08-18 — the one x64 binary answers a THIRD
     kernel. What it took, smaller than feared because the BSDs agree so much:
     ldlink lays the .note.netbsd.ident PT_NOTE + alloc section in every

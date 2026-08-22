@@ -423,7 +423,7 @@ struct ai *ai_image_load(void const *buf, uintptr_t len);
 // full image plus each baseline's derived record -- its header and the prefix words that
 // changed -- which load_over wakes against the parent's stream. all g->alloc'd; NULL is
 // no image, never half of one.
-void *ai_image_freeze(struct ai*, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why);
+void *ai_image_freeze(struct ai**, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why);
 void *ai_image_save_over(struct ai*, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why,
                          void *const *bases, uintptr_t const *blens, uintptr_t nbase,
                          void **subout, uintptr_t *sublens);

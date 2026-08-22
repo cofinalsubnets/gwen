@@ -702,7 +702,7 @@ static struct ai *env_budget(struct ai *g) {
 extern int image_dump(struct ai*, char const*);          // host/image.c (file I/O around love.c's codec)
 extern int image_bake(struct ai*);                       // host/image.c (the self-bake)
 extern int image_bake_layers(struct ai*, void *const *, uintptr_t const *, char *const *, int);  // ..and the layered array
-extern int image_freeze(struct ai*, void**, uintptr_t*);                                         // ..whose two codec doors
+extern int image_freeze(struct ai**, void**, uintptr_t*);                                        // ..whose two codec doors
 extern int image_save_over(struct ai*, void *const *, uintptr_t const *, uintptr_t,
                            void**, uintptr_t*, void**, uintptr_t*);                              // ..wear the wake guard there
 extern int ai_baked_pick(char const*, void const**, uintptr_t*, void const**, uintptr_t*);       // which entry this command line wants
@@ -1058,7 +1058,7 @@ static int bake_layers(struct ai *g, char const *const *spec, int n) {
     verbs[i] = c && !strchr(c, '/') ? (char*) c + 1 : NULL;
     if (!ai_ok(g = bake_eval_file(g, path[i]))) return -2;
     g = bake_empty_glaze(g);                             // ..before every dump, not just the last
-    if (i + 1 < n && (rc = image_freeze(g, &rec[i], &reclen[i]))) return rc; }
+    if (i + 1 < n && (rc = image_freeze(&g, &rec[i], &reclen[i]))) return rc; }
   if ((rc = image_save_over(g, rec, reclen, (uintptr_t)(n - 1), sub, sublen, &full, &fulllen)))
     return rc;
   for (i = 0; i + 1 < n; i++) if (!sub[i]) {

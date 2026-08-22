@@ -1153,19 +1153,7 @@ static struct ai *gen_major(struct ai *g) {
   for (struct ai_fz *z = g->fz; z; z = z->next)
    if ((word*) z >= X.froze_lo && (word*) z < X.froze_hi) {
     word *c = to + ((word*) z - X.froze_lo);
-    c[0] = (word) lvm_chain, c[1] = c[2] = ZeroPoint; }
-  // the intern map's pinned copy is ballast the moment the rebuild below re-homes it,
-  // holding whatever the last intern wrote -- GC timing, not program state. leave the
-  // husk canonically EMPTY before the scan can trace it: the bytes ride every later
-  // image verbatim, and dead entries must not pin their atoms.
-  if (g->symbols) {
-   word *hc = (word*) cell(g->symbols), *bc = (word*) cell(map_back(g->symbols));
-   if (hc >= X.froze_lo && hc < X.froze_hi) (to + (hc - X.froze_lo))[1] = ZeroPoint;
-   if (bc >= X.froze_lo && bc < X.froze_hi) {
-    word *c = to + (bc - X.froze_lo);
-    uintptr_t bcap = getcharm(c[2]);
-    c[1] = putcharm(0);
-    for (uintptr_t j = 0; j < bcap; j++) c[3 + 2 * j] = map_gap, c[4 + 2 * j] = zero; } } }
+    c[0] = (word) lvm_chain, c[1] = c[2] = ZeroPoint; } }
  g->major_hp = to + froze, X.cp = to;
  X.to_lo = to, X.to_hi = to + to_len, X.fwd = to + froze;   // fresh to-space: every copy is a forward
  X.f2lo = (word const*) g->end, X.f2hi = g->hp;             // from-range 2: the minor (promote young in the same pass)
@@ -5331,10 +5319,29 @@ void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_guard const
 // each layer freezes what it dumped, so the next layer's blob begins with this one's and
 // the small image stores its parent's prefix plus the words that changed.
 // ============================================================================
+// the intern map moves off the pin the instant one is set. it is the one live thing a
+// session keeps writing into, and a copy left inside the prefix would hold whatever the
+// last intern wrote when the next major re-homed it -- GC timing, not program state.
+// abandoned here it holds exactly what the record took, so it stays the same bytes under
+// any budget and a derived layer owes it no patches. the slots are already canonical, so
+// the move is verbatim; only the thread tags, which name their own head, are re-laid.
+static struct ai *img_rehome_symbols(struct ai *g) {
+ if (!g->symbols) return g;
+ uintptr_t cap = map_cap(g->symbols), nb = 4 + 2 * cap;
+ if (!ai_ok(g = ai_have(g, nb + 3))) return g;           // may collect: a major re-homes it itself
+ word *bc = (word*) cell(map_back(g->symbols));
+ if (!(bc >= g->major_base && bc < g->major_base + g->froze)) return g;   // off the pin already
+ union u *b = (union u*) g->hp, *hd = (union u*)(g->hp + nb);             // ..still pinned, so nothing grew it
+ memcpy(b, bc, nb * sizeof(word));
+ tagthread(b, 3 + 2 * cap);
+ hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, tagthread(hd, 2);
+ g->hp += nb + 3;
+ return g->symbols = (word) hd, g; }
 // the first half: compact, pin, and answer this layer as {header, raw blob}. untokenized,
 // since its only reader is ai_image_save_over below. g->alloc'd; the caller owns it.
-void *ai_image_freeze(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard,
+void *ai_image_freeze(struct ai **gp, uintptr_t *outlen, struct ai_image_guard const *guard,
                       uint8_t *why) {
+ struct ai *g = *gp;
  struct image_hdr H;
  uintptr_t nw = 0;
  if ((word*) g->sp != topof(g)) return *why = 7, NULL;   // quiescent, like ai_image_save
@@ -5346,6 +5353,9 @@ void *ai_image_freeze(struct ai *g, uintptr_t *outlen, struct ai_image_guard con
  memcpy(rec, &H, sizeof H), memcpy(rec + sizeof H, blob, nw * sizeof(word));
  g->alloc(g, blob, 0);
  g->froze = nw;                                          // ..and from here nothing in it moves again
+ g = img_rehome_symbols(g);                              // ..and the intern map is not in it -- this may MOVE g,
+ *gp = g = ai_core_of(g);                                // so the caller reads it back before its next use
+ if (!ai_ok(g)) return g->alloc(g, rec, 0), *why = 9, NULL;
  return *outlen = total, rec; }
 // the derived record for one frozen baseline against the blob just built: the baseline's
 // own header, then every prefix word changed since the freeze. the prefix itself is never

@@ -332,7 +332,7 @@ int image_bake_layers(struct ai *g, void *const *bufs, uintptr_t const *lens,
 // the layered bake's two codec doors, wrapped so the wake-safety guard -- the host's, and
 // riding the caller's frame -- stays in this file. rec/full are g->alloc'd and the caller
 // frees them; 0 ok, <0 refused.
-int image_freeze(struct ai *g, void **rec, uintptr_t *reclen) {
+int image_freeze(struct ai **g, void **rec, uintptr_t *reclen) {
   struct image_segs segs;
   struct ai_image_guard gd = image_guard(&segs);
   *reclen = 0;
