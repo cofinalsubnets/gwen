@@ -153,7 +153,30 @@ static struct ai *argv_marshal(struct ai *g, char ***cavp) {
 // exec sites, which are outside this file).
 static void sig_dfl_job(void) {
  signal(SIGINT, SIG_DFL); signal(SIGQUIT, SIG_DFL); signal(SIGPIPE, SIG_DFL);
- signal(SIGTSTP, SIG_DFL); signal(SIGTTIN, SIG_DFL); signal(SIGTTOU, SIG_DFL); }
+ signal(SIGTSTP, SIG_DFL); signal(SIGTTIN, SIG_DFL); signal(SIGTTOU, SIG_DFL);
+ // ..and the MASK, which sigaction does not touch and exec does not clear. A shell
+ // watching a signal blocks it (sigfd), and a blocked signal is inherited straight
+ // through the exec -- so `trap .. INT` in lush would have made every command it
+ // runs deaf to ^C. Every exec-bound child here leaves through this one door.
+ sigset_t none; sigemptyset(&none); sigprocmask(SIG_SETMASK, &none, NULL); }
+
+// (sigign? sig) -> 1 if this signal is SIG_IGN right now, else 0. POSIX: a signal
+// IGNORED ON ENTRY to a non-interactive shell cannot be trapped or reset, and a
+// `&` from the calling shell is how a script most often gets one -- so a shell
+// that cannot ask this trapped signals its caller had deliberately turned off.
+ai_noinline static ai_word host_sigignp(ai_word sigw) {
+ struct sigaction sa;
+ if (!(sigw & 1)) return putcharm(0);
+ if (sigaction((int) getcharm(sigw), NULL, &sa)) return putcharm(0);
+ return putcharm(sa.sa_handler == SIG_IGN ? 1 : 0); }
+static lvm(lvm_sigignp) { Sp[0] = host_sigignp(Sp[0]); ai_musttail return Next(1); }
+
+// (sigclear _) -> () -- empty this process's signal mask. The exec children get it
+// from sig_dfl_job above; a shell's FORKED subshell never execs, so it asks here.
+ai_noinline static ai_word host_sigclear(void) {
+ sigset_t none; sigemptyset(&none);
+ return sigprocmask(SIG_SETMASK, &none, NULL) ? putcharm(errno) : ZeroPoint; }
+static lvm(lvm_sigclear) { Sp[0] = host_sigclear(); ai_musttail return Next(1); }
 
 // (spawn argv) -> the child pid, or a negated errno (negative, so a caller tells
 // a pid (positive) from a failure (negative) without a second value). fork +
@@ -867,6 +890,8 @@ static union u const
   nif_posix_readdir[] = {{lvm_posix_readdir}, {lvm_ret0}},
   nif_posix_unlink[]  = {{lvm_posix_unlink}, {lvm_ret0}},
   nif_posix_lseek[]   = {{lvm_cur}, {.x = putcharm(3)}, {lvm_posix_lseek}, {lvm_ret0}},
+  nif_sigclear[]      = {{lvm_sigclear}, {lvm_ret0}},
+  nif_sigignp[]       = {{lvm_sigignp}, {lvm_ret0}},
   nif_posix_signal[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_signal}, {lvm_ret0}},
   nif_posix_ttyfg[]   = {{lvm_posix_ttyfg}, {lvm_ret0}},
   nif_posix_setenv[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_posix_setenv}, {lvm_ret0}},
@@ -875,6 +900,8 @@ AiNif("spawn", nif_spawn);
 AiNif("glean",  nif_reapany);
 AiNif("sigfd", nif_sigfd);
 AiNif("sigtake", nif_sigtake);
+AiNif("sigclear", nif_sigclear);
+AiNif("sigign?", nif_sigignp);
 AiNif("wait",  nif_waitpid);
 AiNif("chdir", nif_chdir);
 AiNif("cwd",   nif_cwd);

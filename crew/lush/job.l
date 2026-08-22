@@ -42,15 +42,80 @@
    ; the action is shell source that only eval can read.
    ; ⚠ ONCE. sh-trapped guards the EXIT action against an `exit` inside it, which
    ; would otherwise re-enter sh-leave and run the cleanup a second time.
-   ; ⚠ AND ONLY EXIT IS DELIVERED. A signal condition is recorded and honoured
-   ; nowhere: the `signal` nif offers SIG_IGN and SIG_DFL and no handler, so a
-   ; caught INT wants sigfd and a park in the wait loop, which is a shape this
-   ; shell does not have yet. `trap .. EXIT INT TERM` therefore cleans up on every
-   ; ordinary end and not on ^C -- said here because a reader of the script would
-   ; otherwise have no way to know.
+   ; EXIT leaves through here; a signal condition rides the sigfd lane below.
    sh-traps (tablet 0)
    sh-runtrap {0}
    sh-trapped {0}
+   ; --- the signal lane: a trapped condition, DELIVERED ------------------------
+   ; sigfd blocks the signals it watches and queues them to an fd, so a caught INT
+   ; stops being a death and becomes a datum to read.
+   ; ⚠ ARMED ONLY WHILE A SIGNAL TRAP EXISTS. With none -- every script in this
+   ; tree but two -- the shell blocks nothing and this lane is one () test on the
+   ; way past, so the ordinary command path is the one it always was.
+   ; ⚠ AND DRAINED, NEVER PARKED ON. `wait` is a 1ms POLL that yields (read its
+   ; nif), so the shell is never asleep inside a syscall and a non-blocking
+   ; sigtake between polls sees the signal without a second wait set to merge.
+   ; That hands us POSIX's rule for free -- the action runs when the foreground
+   ; command COMPLETES -- and ^C reaches the child too, whose own mask sig_dfl_job
+   ; cleared, so the wait it is inside ends on its own.
+   ; ⚠ THE NUMBERS ARE LINUX'S, like sig-int and sig-tstp above. The low ones are
+   ; every kernel's; USR1 USR2 CHLD TSTP are not, and want the ISA/OS table the
+   ; day this rides a BSD.
+   sh-sigport {0}                              ; the signalfd port, or 0
+   sh-signums '(("HUP" 1) ("INT" 2) ("QUIT" 3) ("ABRT" 6) ("USR1" 10) ("USR2" 12)
+                ("PIPE" 13) ("ALRM" 14) ("TERM" 15) ("CHLD" 17) ("CONT" 18) ("TSTP" 20))
+   (sh-signum nm)
+     ((: (g l) (? !(two? l) 0
+                  (: e <l (? (<e = nm) <>e (g >l)))))
+      sh-signums)
+   (sh-signame n)
+     ((: (g l) (? !(two? l) ()
+                  (: e <l (? (<>e = n) <e (g >l)))))
+      sh-signums)
+   ; every trapped condition that is a signal -- EXIT leaves by its own door
+   (sh-sigconds _) (filter (\ k !(k = "EXIT")) (keys sh-traps))
+   ; ⚠ A SIGNAL IGNORED ON ENTRY CANNOT BE TRAPPED (POSIX), and no error is owed
+   ; for trying. The everyday way a script gets one is the caller's `&`: a shell
+   ; backgrounded without job control starts with INT and QUIT set to SIG_IGN, and
+   ; a `trap .. INT` in it must stay off -- the caller has already said this job
+   ; does not answer ^C. Snapshotted ONCE at sh-main, before the interactive entry
+   ; sets ignores of its own, or the shell would read its own hand as the caller's.
+   sh-igno {0}
+   (sh-snapign _)
+     (pin sh-igno ()
+          (filter (\ nm (: n (sh-signum nm) (n && (sigign? n))))
+                  (map cap sh-signums)))
+   (sh-ignored? nm) (: l (sh-igno ()) (? (two? l) (any (\ k (k = nm)) l) 0))
+   ; ⚠ CLEAR, THEN ARM. sigfd's sigprocmask is a SIG_BLOCK and accumulates, and
+   ; closing the fd does not unblock: after `trap - INT` the signal would stay
+   ; blocked with nothing left reading it, which is a shell that cannot be
+   ; interrupted at all. So the mask is emptied first and the live set re-blocked.
+   (sh-rearm _)
+     (: cs (sh-sigconds 0)
+        ns (filter (\ n !(n = 0)) (map sh-signum cs))
+        _ (? (sh-sigport ()) (close (sh-sigport ())) 0)
+        _ (pin sh-sigport () 0)
+        _ (sigclear 0)
+        _ (? (two? ns) (: p (sigfd ns) (? p (pin sh-sigport () p) 0)) 0)
+        0)
+   (sh-disarm _)                               ; a forked child inherits neither
+     (: _ (? (sh-sigport ()) (close (sh-sigport ())) 0)
+        _ (pin sh-sigport () 0) _ (sigclear 0) 0)
+   ; read every queued signal and run what each one traps. the action's own status
+   ; does not become $? -- the command's does, exactly as at the EXIT door.
+   (sh-fire-sig n)
+     (: nm (sh-signame n)
+        a (? (string? nm) (peep sh-traps nm "") "")
+        (? (tally a)
+           (: st (sh-status ()) _ ((sh-runtrap ()) a) _ (pin sh-status () st) 0)
+           0))
+   (sh-sigdrain _)
+     (: p (sh-sigport ())
+        (? !p 0
+           ((: (g _) (: ev (sigtake p)
+                        (? !(two? ev) 0
+                           (: _ (sh-fire-sig (cap ev)) (g 0)))))
+            0)))
    ; ⚠ THE STATUS IS THE ONE THE SHELL WAS LEAVING WITH. POSIX says the action
    ; runs with $? as it stood, and the shell still exits on that -- `false` under
    ; an EXIT trap is still a 1, however well the cleanup went. Only an explicit
@@ -112,6 +177,7 @@
    ; wait a foreground job; a stop registers + reports it instead of hanging the prompt
    (sh-waitfg pids cmd)
      (: sts (map (\ p (wait p)) pids)
+        _   (sh-sigdrain 0)                            ; POSIX: after the command, not during
         _   (? (sh-tty ()) (ttyfg 0) 0)                ; the shell takes the terminal back
         _   (pin sh-status ()                          ; $?: the last stage; a stop folds to 128+sig
              (: st (last sts) (? (charm? st && (255 < st)) (st - 128) st)))

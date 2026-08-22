@@ -266,7 +266,10 @@
    (sh-cond? w) (: c (sh-cond w)
                    (any (\ k (k = c)) '("EXIT" "INT" "TERM" "HUP" "QUIT" "USR1" "USR2"
                                         "ALRM" "PIPE" "CHLD" "TSTP" "CONT" "ABRT")))
-   (sh-trapb args)
+   ; ⚠ EVERY LANE BELOW ENDS AT sh-rearm: the set of watched signals is fixed when
+   ; the fd is made, so adding OR dropping a condition means building a new one.
+   (sh-trapb args) (: r (sh-trapb2 args) _ (sh-rearm 0) r)
+   (sh-trapb2 args)
      (? !(two? args)
         (: _ (each (keys sh-traps)
                    (\ k (puts ("trap -- '" + (peep sh-traps k "") + "' " + k + "\n"))))
@@ -280,9 +283,15 @@
                  bad (filter (\ w !(sh-cond? w)) conds)
                  (? (two? bad)
                     (: _ (say err ("lush: trap: " + <bad + ": bad condition\n")) 1)
+                    ; ⚠ a condition IGNORED ON ENTRY is skipped, silently: POSIX says
+                    ; it cannot be trapped and that no error need be reported. The
+                    ; reset lanes are not filtered -- `trap - INT` on one is already
+                    ; a no-op, and refusing it would be an error POSIX does not want.
                     (: _ (each conds
-                               (\ w (? (tally act) (pin sh-traps (sh-cond w) act)
-                                       (pull sh-traps (sh-cond w) 0))))
+                               (\ w (: c (sh-cond w)
+                                       (? (sh-ignored? c) 0
+                                          (tally act) (pin sh-traps c act)
+                                          (pull sh-traps c 0)))))
                        0))))))
    (sh-localb args)
      (: _ (each args (\ w (: p (sh-eqpos w 0)
@@ -785,7 +794,10 @@
         ; ⚠ and NO TRAP of its parent's: POSIX resets a caught condition in a
         ; subshell, and a `( exit )` that ran the EXIT action would take the
         ; parent's temp dir out from under it while the parent was still working.
+        ; sh-disarm drops the parent's signalfd and EMPTIES THE MASK with it --
+        ; a subshell that inherited the block would be a subshell ^C cannot reach.
         _ (each (keys sh-traps) (\ k (pull sh-traps k 0)))
+        _ (sh-disarm 0)
         0)
    (sh-tabsnap t) (map (\ k (k >< (t k))) (keys t))
    (sh-tabback t sn)
@@ -942,6 +954,9 @@
               0)
            (: full (? (tally buf) (buf + ("\n" + line)) line)
               r (sh-line full)
+              ; a signal that arrived while no child was up has nobody to end its
+              ; wait, so the line boundary is the other place it is read
+              _ (sh-sigdrain 0)
               (? (two? r) (sh-lines port full)
                  (sh-retf ()) (: _ (pin sh-retf () 0) 0)   ; dot-return: stop THIS file
                  (sh-lines port "")))))

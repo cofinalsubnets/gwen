@@ -73,7 +73,8 @@
                            ())))
         (go 1 0))
    (sh-main args)
-     (? !args (sh 0)
+     (: _ (sh-snapign 0)                        ; FIRST: what our caller had turned off
+        (? !args (sh 0)
         (: a <args
            (? (a = "--login") (: _ (pin sh-login () 1) (sh-main >args))
               ((1 < (tally a)) && ((a 0) = 45))
@@ -84,7 +85,7 @@
                            (? r (sh-c <r >r)
                               (: _ (say err "lush: -c needs a command\n") (quit 2))))
                       (sh-main (sh-nth fw 2))))            ; flags only: read on
-              (sh-file a >args))))
+              (sh-file a >args)))))
    ; the interactive entry: ignore the tty's job signals (children reset them),
    ; then probe with (raw 1): () = a tty (interactive), an errno = not a tty
    ; (the cooked fallback). interactively: hear lush-help as the floor IF no

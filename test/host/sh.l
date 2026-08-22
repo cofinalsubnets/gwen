@@ -106,6 +106,48 @@
 (: r (hark (L "out/host/love" "out/host/lush" "-c" "set -u; echo $LUSH_UNDEF_QQ; echo no"))
    (assert (! (= 0 (cap r)))))
 
+; $(( .. )): C's operators at C's precedence, the bases, and truncation toward
+; zero (love's // IS C's division; only >> wanted the floor spelled out)
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+              "n=5; echo $((n*2)) $((2+3*4)) $(((2+3)*4)) $((0x1f)) $((010)) $((-7/2)) $((7%3))"))
+   (assert (= "10 14 20 31 8 -3 1\n" (cup r))))
+; ..the tally that a whole gate's summary line rides on; && NOT taking the side it
+; must not (a live 100/x would be the divide by zero); and the text expanding
+; BEFORE the read, so a $( ) inside is part of one expression
+(: r (hark (L "out/host/love" "out/host/lush" "-c"
+              "i=0; i=$((i+1)); i=$((i+1)); x=0; echo $i $((x!=0 && 100/x)) $(( $(echo 6) * 7 ))"))
+   (assert (= "2 0 42\n" (cup r))))
+
+; trap EXIT: once, at the end, and the status the shell was LEAVING with -- a
+; `false` under a cleanup is still a 1, however well the cleanup went
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "trap 'echo bye' EXIT; echo hi"))
+   (assert (= "hi\nbye\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "trap 'echo bye' EXIT; false"))
+   (assert (= "bye\n" (cup r)) (= 1 (cap r))))
+; ..and a forked subshell runs NEITHER: POSIX resets a caught condition there, or
+; `( exit )` would take the parent's temp dir while the parent was still working
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "trap 'echo bye' EXIT; (exit 0); echo after"))
+   (assert (= "after\nbye\n" (cup r))))
+
+; A SIGNAL CONDITION IS DELIVERED. sigfd blocks INT and queues it to an fd, the
+; drain after the foreground command reads it, and the action runs -- the whole
+; lane, with no race to lose, because the shell signals ITSELF. ⚠ the second line
+; is the one that would catch a shell left blocked with nothing reading: after the
+; trap fires the shell must still be alive and answering.
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "trap 'echo CAUGHT' INT; kill -INT $$; echo done"))
+   (assert (= "CAUGHT\ndone\n" (cup r))))
+(: r (hark (L "out/host/love" "out/host/lush" "-c" "trap 'echo T' TERM; kill -TERM $$; trap; echo alive"))
+   (assert (= "T\ntrap -- 'echo T' TERM\nalive\n" (cup r))))
+; ..but a signal IGNORED ON ENTRY cannot be trapped at all (POSIX), and no error
+; is owed for trying. The everyday way a script gets one is its caller's `&` -- a
+; shell backgrounded without job control starts with INT ignored, and the caller
+; has thereby said this job does not answer ^C. Here the ignore is set on OUR side
+; and inherited, so the child's own trap must never arm.
+(: _ (signal sig-int 1)
+   r (hark (L "out/host/love" "out/host/lush" "-c" "trap 'echo CAUGHT' INT; kill -INT $$; echo done"))
+   _ (signal sig-int 0)
+   (assert (= "done\n" (cup r))))
+
 ; the engine plans: (sh-plan ast) reads the AST once and answers a THUNK, so
 ; firing it twice runs twice. the function book holds that plan -- a closure, so
 ; two? can never see it, and absence is the sh-nofn mint (peep's total test)
