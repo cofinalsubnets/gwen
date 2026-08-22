@@ -484,7 +484,9 @@
     0 0 0 0)
 
    ; -- the line grammar: NAME OP VALUE (op kept) and a rule header (raw text) --
-   opP (alt (lit "::=") (alt (lit ":=") (alt (lit "?=") (alt (lit "+=") (lit "=")))))
+   ; `!=` runs its value and takes the output, the portable spelling of $(shell ..):
+   ; bmake and GNU both read it, where neither reads the other's conditionals.
+   opP (alt (lit "::=") (alt (lit ":=") (alt (lit "?=") (alt (lit "+=") (alt (lit "!=") (lit "="))))))
    assignP (seqs `((skip (span chws)) (span namech)
                     (skip (span chws)) (pmap (\ x `(<x)) opP)
                     (skip (span chws)) (span anyc)))
@@ -521,11 +523,7 @@
                   ; `$(error ..)` is a guard, and a guard cook walks past is worse than
                   ; no guard. classify has no variable table, so the loop does the work.
                   ((1 < tally tt) && (tt 0 = 36) && ((tt 1 = 40) || (tt 1 = 123))) `('expand tt)
-                  ((w = "define") || (w = "endef")) (cook-gap "define/endef")
                   ((w = "undefine") || (w = "vpath")) (cook-gap w)
-                  ; a shell assignment: the op is not in opP, so the line would fall
-                  ; through both grammars and skip in silence.
-                  (: r2 (trim rest) ((1 < tally r2) && (snip r2 0 2 = "!="))) (cook-gap "NAME != VALUE")
                   (w = "ifeq") `('ifeq rest)
                   (w = "ifneq") `('ifneq rest)
                   (w = "ifdef") `('ifdef rest)
@@ -676,7 +674,7 @@
    ; answer is a rule quietly not existing -- and no output diff can see a target that
    ; was never made. These refuse instead. The list is GNU's roster minus ours, so it is
    ; finite and knowable; cookdiff only ever catches the gaps somebody wrote a case for.
-   gapnames '("eval" "file" "let" "intcmp" "guile")
+   gapnames '("file" "let" "intcmp" "guile")
    (cook-gap what)
     (: _ (say err ("cook: " + what + " is a GNU make feature cook does not implement.  Stop."))
        _ (put err 10) (quit 2))
@@ -869,7 +867,8 @@
          ; ⚠ the FLAVOR rides beside the origin: an expanded `:=` and a stored `=` are the
          ; same text afterwards, so nothing in the value itself can answer $(flavor).
          (org f) (: _ (pin origins nm (? ov "override" "file")) (pin flavors nm f))
-         (? (op = ":=")  (: _ (pin as nm (expand v as 0)) (org "simple"))
+         (? (op = "!=")  (: _ (pin as nm (fn-shell (shname as) (expand v as 0))) (org "simple"))
+            (op = ":=")  (: _ (pin as nm (expand v as 0)) (org "simple"))
             (op = "::=") (: _ (pin as nm (expand v as 0)) (org "simple"))
             (op = "?=")  (: cur (peep as nm 'cook.undef)
                             (? (nom? cur) (: _ (pin as nm v) (org "recursive")) 0))
@@ -917,7 +916,12 @@
                 ; conditionals thread `cur` (do NOT flush): a top-level rule is
                 ; already flushed by the blank line before a conditional, while a
                 ; conditional INSIDE a recipe block gates its lines via `on` above.
-                (k = 'expand) (: _ (? on (expand (r1 c) as 0) 0) (loop rest rules cur cond))
+                (k = 'defassign) (: _ (? on (do-assign as (r1 c) "=" (r2 c)) 0)
+                                    (loop rest (flushr cur rules) 0 cond))
+                (k = 'expand) (? (on && evalp (r1 c))
+                                 (: more (text-lines (expand (eval-args (r1 c)) as 0))
+                                    (loop (more + rest) (flushr cur rules) 0 cond))
+                                 (: _ (? on (expand (r1 c) as 0) 0) (loop rest rules cur cond)))
                 (k = 'ifeq)   (loop rest rules cur (push-cond cond on (on && eval-ifeq (r1 c) as)))
                 (k = 'ifneq)  (loop rest rules cur (push-cond cond on (on && !(eval-ifeq (r1 c) as))))
                 (k = 'ifdef)  (loop rest rules cur (push-cond cond on (on && eval-ifdef (r1 c) as)))
@@ -927,9 +931,36 @@
                 (loop rest (flushr cur rules) 0 cond)))))
     cls 0 0 0)
 
+   ; `$(eval TEXT)` ALONE ON A LINE: expand TEXT, then parse it -- the splice `include`
+   ; already does, with a string where the file was. Nested inside an expression it cannot
+   ; work at all, since expand answers a string and cannot reach the rule list, and
+   ; gapnames refuses it there rather than dropping it.
+   (evalp s) (: n (tally s)
+                ((7 < n) && (s 0 = 36) && ((s 1 = 40) || (s 1 = 123))
+                 && (snip s 2 6 = "eval") && (chws (s 6))
+                 && ((findclose s 2 (s 1) (? (s 1 = 40) 41 125)) = (n - 1))))
+   (eval-args s) (ltrim (snip s 6 (tally s - 1)))
+   ; a define block is a MULTI-LINE recursive assignment whose body must survive VERBATIM:
+   ; classify strips comments, trims, and reads a tab-led line as a recipe, and a body
+   ; forbids all three. so the walk takes those lines itself and hands classify the rest.
+   (text-lines src)
+    ((: (g l acc)
+        (? !(two? l) (rev acc)
+           (: t (trim (strip-comment <l))
+              (? (first-word t = "define")
+                 (: nm (trim (after-word t))
+                    (body r bs) (? !(two? r) (: _ (say err "cook: define with no endef.  Stop.")
+                                                 _ (put err 10) (quit 2))
+                                    (trim (strip-comment <r) = "endef") [>r bs]
+                                    (body >r (bs + <r + "\n")))
+                    p (body >l "")
+                    (g <p (`('defassign nm <>p) >< acc)))
+                 (g >l (classify <l >< acc))))))
+     (lines (uncont src)) ())
+
    ; read a file whole (for `include`), then split it into classified lines.
    (slurp-of path) (: q (open path "r") (? q (slurp q) (: _ (say err ("cook: cannot read " + path)) _ (put err 10) (quit 1))))
-   (file-lines ip) (map classify (lines (uncont (slurp-of ip))))
+   (file-lines ip) (text-lines (slurp-of ip))
 
    ; seed the variable table the way make does: the ENVIRONMENT first (every
    ; NAME=value, origin "environment" -- $(HOME) and friends expand for real),
@@ -994,7 +1025,7 @@
    ; for prep-time resolution), or a NORMAL rule. The first registered is the ticket.
    (register-makefile src)
    (: as (seed-defaults (tablet 0) (posixp src))
-      rules (build (map classify (lines (uncont src))) as)
+      rules (build (text-lines src) as)
       phony (: ps (tablet 0)
                _ (each rules (\ r (: tg (expand-words `(<r) as)
                     (? (any (\ t (t = ".PHONY")) tg)
