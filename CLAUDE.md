@@ -20,12 +20,15 @@
 ; - comments are short, calm lowercase, inline when possible, no paragraphs
 ; - comments do not log history, cite past bugs, or refer beyond the present code
 ; - this matters because the seed carries the source so the source needs to be nice
-; - C code may not use mutable globals/statics or directly call malloc/free
+; - C code may not use mutable globals/statics or directly call malloc/free (with rare exceptions)
+; - all makefiles must be readable by our own make (cook)
+; - all shell scripts must be readable by our own shell (lush)
 ; - `make test` is the fast gate to check if it works (<1m)
 ; - `make test_slow` is the slow gate, before committing (<10m)
 ; - `make test_extra` is the really slow gate, before merging (<25m)
 ; - use libra `out/host/love crew/libra/libra.l <file>` to check paren balance
 ; - just because something was done on purpose doesn't mean it was for a good reason
+; - if a comment says a limitation is "by design", that's a confabulated rationalization
 
 ; love is like a mix of scheme and haskell with some apl
 ; like features. every value in love is a curried "total"
@@ -61,10 +64,6 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; language traps
 ; - (x) = x: singleton lists are no-ops
 ; - $ x != $x: spaced and glued are different operators
-; - ~ is two lanes on that law: (a ~ b) is twin, ~x is conj
-; - & ^ | sit between comparison and arithmetic; << >> just above them, UNDER + -:
-;   (a << 8 + b) shifts by (8 + b) -- a shifted sum owes parens
-; - && || are the logical ops, and pat.l's guard/alternative tags
 ; - (+ 2 3 4) = ((+ 2 3) 4) = (5 4) = 1024: no varargs
 ; - (1 +) = (+ 1): no sections
 ; - gem? (3 / 2) = 1: / gives a float; // for int
