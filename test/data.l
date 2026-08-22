@@ -52,10 +52,10 @@
   ; matching the empty string, where ("" k) is Church-numeral k**0 == 1
   (= 104 ("hi" 0))                          ; 'h'
   (= 105 ("hi" 1))                          ; 'i'
-  (= 1 ("hi" 2))                            ; past the end -> 1
+  (nil? ("hi" 2))                            ; past the end -> 1
   (= 105 ("hi" -1)) (= 104 ("hi" -2))       ; a negative index counts from the END
-  (= 1 ("hi" -3))                           ; ... and past the front is out of range too
-  (= 1 ("hi" 'x))                           ; non-numeric index -> 1
+  (nil? ("hi" -3))                           ; ... and past the front is out of range too
+  (= "hix" ("hi" 'x))                       ; a POINT operand is text: it juxtaposes
   (= 255 ((string 255) 0))                  ; high byte returns unsigned 0..255
   ; ⚠ apply and peep agree on the NON-NEGATIVE indexes only: peep answers its default on a
   ; negative (and snip clamps one to the front), so counting from the end is apply's alone.

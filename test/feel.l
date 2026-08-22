@@ -26,7 +26,7 @@
  (= "abcd"   ("ab" "cd"))                     ; juxtaposition
  (= "abcdef" ("ab" "cd" "ef"))                ; ... curried, folded left to right
  (= "abcd"   (: a "ab" b "cd" (a b)))         ; ... through const-propagated binders, no literal in sight
- (= 97 ("abc" 0)) (= 1 ("hi" 9))              ; the byte index and its out-of-range unit
+ (= 97 ("abc" 0)) (nil? ("hi" 9))              ; the byte index and its out-of-range unit
  (= "abcdef"   (: (f x) ("ab" "cd" x) (f "ef")))       ; known PREFIX folds, the unknown tail rides on
  (= "abcdefgh" (: (f x) ("ab" "cd" x "gh") (f "ef")))  ; ... and the operands after it still apply in order
  (= "abZcd"    (: (f x) ("ab" x "cd") (f "Z")))        ; nothing known past the head -> wholly residual
@@ -34,8 +34,8 @@
 
  ; --- ... and the walk is the head VALUE's purity, not text: a point and a numeral fold too ---
  (= 256 (: (f x) (3 2 x) (f 2)))              ; (3 2) is the charm 8, folded; the unknown tail rides on
- (= 9   (: (f x) ('sym 5 x) (f 9)))           ; a point applies const-1 -> (1 x), the identity
- (= 9   (: (f x) (() 5 x) (f 9)))             ; ⚠ () folds too -- nom? is false of it, so it is named apart
+ (nil? (: (f x) ('sym 5 x) (f 9)))            ; a point indexes its spelling; 5 is past "sym" -> ()
+ (nil? (: (f x) (() 5 x) (f 9)))             ; ⚠ () folds too -- nom? is false of it, so it is named apart
  (= 5   (0 0 5)) (= 262144 (2 3 4))           ; const of const is id; the tower, both charm-sized
  (= 1.0 (: (f x) (2 1.5 x) (f 1)))            ; (2 1.5) is the gem 2.25 -- charm-sized, so it folds
  ; ⚠ the bound is owed by BOTH fold lanes. a pure-fn head cleared by pure-head? still reaches
@@ -49,7 +49,7 @@
  (= 8 (: (f x) (peep '(7 8 9) x 0) (f 1)))        ; peep reads a known chain at compile time
  (: (f _) (pin (tablet 0) 1 2) (nil? (id? (f 0) (f 0))))   ; ⚠ a tablet is MUTABLE: pin there is a write, never folded
  (= 256 (: (f x) ('(7 8 9) 1 x) (f 2)))       ; ... and INDEXES: ('(7 8 9) 1) folds to 8, leaving (8 x)
- (= 1 (: (f x) ((link 1 2) x) (f (\ a b (a + b)))))  ; a lambda operand takes the DEFAULT action
+ (nil? (: (f x) ((link 1 2) x) (f (\ a b (a + b)))))  ; a lambda operand takes the DEFAULT action
  ; ⚠ and a numeral whose answer OUTGROWS a charm stays residual rather than baking into the image:
  ; a composition here, 2**200000 in test/task.l -- whose yieldable-multiply gate leans on it
  (= 3 (: (f x) (3 (\ y (y + 1)) x) (f 0)))

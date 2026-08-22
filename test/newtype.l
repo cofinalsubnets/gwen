@@ -97,8 +97,8 @@
     (q -1 1 = q 1 2 - q 3 2)   ; goes red exactly
     (q 1 2 = q 3 2 - 1)          ; an integer rides cap/mint, either side
     (q 1 2 = 1 - q 1 2)
-    (q 1 2 = q 1 2 - ())         ; () is the do-nothing operand for - too
-    (q 1 2 = () - q 1 2)         ; ... either side (the op never happens) ; FIXME this seems wrong!
+    (nil? (q 1 2 - ()))          ; () is absent to -, so there is nothing to compute
+    (nil? (() - q 1 2))          ; ... either side
     !(a - z5 1)                ; a die without slot 5 -> nil, like a monoid's *
     !(a - sm 3)                ; distinct dies never combine
 
@@ -109,8 +109,8 @@
     (q -3 2 = q 1 2 / q -1 3)  ; the sign lands on the numerator, reduced
     !(q 1 2 / q 0 1)         ; by zero -> (): Q holds no inf
     !(q 1 2 / 0)               ; ... the bare zero too
-    (q 1 2 = q 1 2 / ())         ; () is the do-nothing operand for / too
-    (q 1 2 = () / q 1 2)         ; ... either side (the op never happens)
+    (nil? (q 1 2 / ()))          ; ... and absent to / as well
+    (nil? (() / q 1 2))          ; ... either side
     !(a / z5 2)                ; a die without slot 8 -> nil
     !(a / sm 3)                ; distinct dies never combine
 

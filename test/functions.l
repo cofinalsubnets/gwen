@@ -13,11 +13,11 @@
  (= 2 (1 2))                                  ; (1 2) = 2 ** 1
  (= 1 (2 1))                                  ; (2 1) = 1 ** 2
  (= 9 ((\ f n (f n)) 2 3))                    ; (2 3) = 3 ** 2
- (= 1 ('abc 0))                               ; a symbol applies const-1: the name index left
- (= 1 ('abc 2))                               ;   with the string algebra (the mint round)
- (= 1 ('abc 9))                               ; every argument the same: a point is a unit
- (= 1 ('abc 'x))
- (= 1 ((mint 0) 5))                           ; the mint, the purest point, likewise
+ (= 97 ('abc 0))                              ; a NAMED point indexes its spelling, the sequence
+ (= 99 ('abc 2))                              ;   it already is to tally, net and `+`
+ (nil? ('abc 9))                              ; past the spelling: nothing there
+ (= 'abcx ('abc 'x))                          ; two named points join to a point
+ (nil? ((mint 0) 5))                          ; an ANONYMOUS point has no spelling: nothing there
  (= 8 (3 2))                                  ; (3 2) = 2 ** 3
  (= 13 ((3 (+ 1)) 10)))                       ; non-numeric operand -> (+ 1) composed 3 times on 10
 ; the whole numeric tower is a Church numeral, not just fixnums (data.c data_num_apply
@@ -33,7 +33,7 @@
  (= 10 ((-3 (+ 1)) 10)) (= 1 (-3 (+ 1)))      ; (-3 f) = (0 f) = 1 -- negatives have no church content
  (= 10 ((0 (+ 1)) 10))                        ; (0 f) = 1 = identity numeral -> 10 unchanged
  (= 1 (0 'anything))                          ; 0 is const-1: (0 x) = 1 for every x
- (= 1 ((cask 4) 'anything))                 ; opaque handles (cask/port) behave as 0 too
+ (nil? ((cask 4) 'anything))                ; opaque handles (cask/port) hold nothing to answer
  (aall (= (2 (star-tray '(3) '(2 3 4))) (star-tray '(3) '(4 9 16))))  ; array operand: elementwise ** broadcast
  (aall (= ((star-tray '(3) '(2 3 4)) 5) (gem-tray '(3) '(25.0 125.0 625.0))))  ; array OPERATOR: 5 ** [2 3 4] elementwise (vmap2 power)
  (= 15 (((star-tray '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose ($ [2 3]) = 2+3 = 5, the net sum

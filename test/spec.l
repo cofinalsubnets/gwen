@@ -118,7 +118,7 @@
                  (ok v) (nil? (id? () (f v)))
                  (&& (ok 'zz) (&& (ok 0) (&& (ok "") (ok ())))))
    bad (? (member? 'love-image (names ())) ()
-          (filter (\ n (nil? (q-bit? n))) (filter q-nom? (names ()))))
+          (filter (\ n (nil? (q-bit? n))) (filter (\ n (q-nom? n && !(nil? (ev n)))) (names ()))))
    _ (? (two? bad) (: _ (puts ("bit-law offenders: " + (show bad) + "\n")) 0) 0)   ; NAME them: the
    (assert (nil? (two? bad))))                                     ; seat that fails is not always this one
 (hear test-strict)
@@ -255,18 +255,20 @@
  ("ab" * 3 = "ab" + "ab" + "ab")                            ; THE TIE, the whole reason * is `repeated +`:
  ('(1) * 3 = '(1) + '(1) + '(1)))                           ;   s*n IS s+s+..+s, in each lane that repeats
 
-; --- the unit rides through EVERY dyadic arithmetic lane --- () is the DO-NOTHING operand,
-; either side, for - / // % & | ^ << >> just as for + and *: the op never happens. NOT the
-; number 0 -- no face projection (() - 5 is 5, not -5) -- so an undefined op's () vanishes
-; when chained through any arithmetic lane. comparisons and `=` stay strict: () keeps its
-; floor seat in the total order.
+; --- () is ABSENT to every NUMERIC lane --- - / // % & | ^ << >> have nothing to compute
+; with, either side, so they answer (). NOT the number 0 -- no face projection -- and no
+; do-nothing ride-through either: an undefined op's () PROPAGATES through arithmetic rather
+; than healing, so absence stays where it lands, falsy, for `?` to see. the SEQUENCE ops are
+; not this law and keep their band rules: () is the unit of + (joining nothing on) and the
+; annihilator of * (a sequence repeated absently is nothing). comparisons and `=` stay
+; strict: () keeps its floor seat in the total order.
 (assert
- (5 = 5 - ()) (5 = () - 5) (2.5 = () - 2.5) ((64 2) = (64 2) - ())     ; - : both sides, every width
- (5 = 5 / ()) (5 = () / 5) (5 = (// 5 ())) (5 = 5 % ()) (5 = (% () 5)) ; / // %
- (5 = 5 | ()) (5 = () & 5) (5 = 5 ^ ()) (5 = 5 << ()) (5 = () >> 5)    ; the bitwise lanes
- (~(1 2) = ~(1 2) - ()) ("@(1 2 3)" = show (@(1 2 3) - ()))            ; complex + array pass through
- (2 = (5 - ()) - 3) (5 = ((- 5) ()))                    ; chains heal; a partial fired with the unit yields its held operand
- !('ef - 3) !("a" - "b") (5 = ('a - 'b) - 5)            ; undefined still answers (): it now vanishes through - too
+ (nil? (5 - ())) (nil? (() - 5)) (nil? (() - 2.5)) (nil? ((64 2) - ()))     ; - : both sides, every width
+ (nil? (5 / ())) (nil? (() / 5)) (nil? (// 5 ())) (nil? (5 % ())) (nil? (% () 5)) ; / // %
+ (nil? (5 | ())) (nil? (() & 5)) (nil? (5 ^ ())) (nil? (5 << ())) (nil? (() >> 5)) ; the bitwise lanes
+ (nil? (~(1 2) - ())) (nil? (@(1 2 3) - ()))            ; complex + array propagate too
+ (nil? ((5 - ()) - 3)) (nil? ((- 5) ()))                ; chains POISON; a partial fired with () answers ()
+ !('ef - 3) !("a" - "b") (nil? (('a - 'b) - 5))         ; undefined answers (), and it SURVIVES the chain
  !(5 = ()) (() < 5))                                    ; = and < stay strict: () keeps the floor
 
 ; --- list*list is the cartesian product --- the semiring product whose `+` is cat: each
@@ -407,7 +409,7 @@
  (@(240 19) = (@(255 16) ^ @(15 3))) (@(15 0) = (@(255 16) & @(15 3))) (@(12 6) = (@(8 4) | @(4 2)))
  (@(8 16 24) = (@(1 2 3) << 3)) (@(4 -4) = (@(8 -8) >> 1))       ; >> stays ARITHMETIC per cell
  (@(240 252) = (255 ^ @(15 3))) (@(2 16) = (@(1 1) << @(1 4)))   ; a star broadcasts; counts can be per-cell
- (@(5 6) = (@(5 6) | ()))                                        ; ...and the unit still rides through
+ (nil? (@(5 6) | ()))                                            ; ...and a numeric lane answers () on it
  (() = (@(1.5 2.5) ^ @(1 1)))                                    ; a GEM tray is not the word lane: refuses
  (() = ((array '(2) (200 2) (200 2)) & @(255 255)))              ; ...nor an OBJECT tray: boxed cells, not words
  (: m @(1 3 5 7 9) (aall (@(0 1 1 1 0) = ((m > 2) & (m < 8)))))  ; masks combine: the everyday customer
@@ -440,7 +442,7 @@
  (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (member? 3 '(1 2 3)) !(member? 9 '(1 2 3))
  (all (\ x (0 < x)) '(1 2 3)) (any (\ x (2 < x)) '(1 2 3))
  (7 = ('(7 8 9) 0)) (9 = ('(7 8 9) 2)) (9 = ('(7 8 9) -1)) (7 = ('(7 8 9) -3))   ; a charm indexes, negatives from the end
- (1 = ('(7 8 9) 3)) (1 = ('(7 8 9) -4)) (1 = ('(7 8 9) 'x)) (1 = ('(7 8 9) ()))  ; out of range, and every non-index operand, is the unit
+ (nil? ('(7 8 9) 3)) (nil? ('(7 8 9) -4)) (nil? ('(7 8 9) 'x)) (nil? ('(7 8 9) ()))  ; out of range, and every non-index operand, is ()
  ('(1 2 3 4) = ('(1 2) '(3 4))) (('(1 2) '(3 4)) = (+ '(1 2) '(3 4)))            ; a chain juxtaposes: the append, agreeing with +
  ('(1 2 3 4 5) = ('(1 2) '(3 4) '(5)))                                           ; ... and it curries, as text does
  ('(1 X 3) = (pin '(1 2 3) 1 'X)) (: l '(1 2 3) _ (pin l 1 'X) ('(1 2 3) = l))   ; pin answers a FRESH spine; the original is untouched
@@ -471,7 +473,7 @@
     (&& (&& (mint? m) !(name? m)) (&& (name? s) !(mint? s))))
  (&& !(mint? 'x) (&& !(mint? "x") (&& !(mint? 0) !(mint? '(1 2)))))
  (&& ("" = (string (mint 0))) ("" = (string ())))   ; both nameless points spell empty
- (1 = ((mint 0) 5)) (1 = ('xyz 1))               ; units apply const-1; the name index is gone
+ (nil? ((mint 0) 5)) (121 = ('xyz 1))            ; an anonymous point holds nothing; a named one indexes its spelling
  !((mint 0) = (mint 0)) (: m (mint 0) (&& (m = m) (id? m m)))  ; distinct always; itself only
  (nom? (nom 'x)) (name? (nom 'x)) !(mint? (nom 'x)) (name? 'x) !(two? (nom 'x)) ("x" = (string (nom 'x)))  ; a nom is a NAMED point (nom? AND name?, an ATOM, NOT a chain); its name comes via `string`
  (: a (nom 'x) b (nom 'x) (&& (a < b) !(b < a) !(a = b)))   ; same-name noms order by serial (distinct points)
@@ -482,7 +484,7 @@
  (97 = ("abc" 0)) (294 = $"abc") (3 = (tally "abc")) (4 = $3.9) (0 = $-3.9) (7 = $@(3 4)) (5 = (abs -5)) (5.0 = (abs @(3 4)))
  !(string 0) !!(string 1) (1 = (tally (string 0)))   ; a NUL nets nothing: the chain of nothings reaches the BYTES, and (string 0) is one of them
  !(snip (+ "a" 0) 1 2) (97 = $(+ "a" 0))        ; ... an all-NUL text IS nothing, and the NUL byte appends for free
- ("bidden" = (snip "forbidden planet" 3 9)) ("abcd" = (+ "ab" "cd")) (1 = ("hi" 9))
+ ("bidden" = (snip "forbidden planet" 3 9)) ("abcd" = (+ "ab" "cd")) (nil? ("hi" 9))
  ; there is ONE empty string: no 0-length text is ever allocated, so however a caller
  ; arrives at one -- snipped, joined, repeated zero times, coerced, drained -- it is the
  ; same object, and `id?` holds where only `=` was promised. a snip of text answers TEXT
@@ -492,10 +494,10 @@
  (id? "" (slurp (jug 0))) (id? "" (slurp (tap ()))) (id? "" (slurp 42))
  ("" = (puts "")) (0 = (puts 0))                 ; ..and an empty operand writes nothing, answering itself
  ("abcd" = ("ab" "cd")) ("abcdef" = ("ab" "cd" "ef")) (: a "ab" b "cd" ((a b) = (+ a b)))   ; juxtaposition joins text, curried, no literal needed
- (99 = ("abc" -1)) (97 = ("abc" -3)) (1 = ("abc" -4))   ; a negative index counts from the END; past the front is out of range
+ (99 = ("abc" -1)) (97 = ("abc" -3)) (nil? ("abc" -4))   ; a negative index counts from the END; past the front is out of range
  ("aXcd" = (pin "abcd" 1 88)) (: s "abcd" _ (pin s 1 88) ("abcd" = s))   ; pin answers a FRESH text; the original is untouched
  ("abcd" = (pin "abcd" 9 88)) ("abcd" = (pin "abcd" -1 88)) ("abcd" = (pin "abcd" 1 'x))  ; out of range / a non-byte is the no-op (from-the-end is APPLY's alone)
- ("ab" = ("ab" "")) ("ab" = ("" "ab")) ("" = ("" "")) (1 = ("ab" 'cd)) (1 = ("ab" '(1 2)))   ; "" is the unit; a non-text operand stays const-1
+ ("ab" = ("ab" "")) ("ab" = ("" "ab")) ("" = ("" "")) ("abcd" = ("ab" 'cd)) (nil? ("ab" '(1 2)))   ; "" is the unit; a POINT is text; a non-text operand is ()
  ('asdf = (intern "asdf")) !((nom 0) = (nom 0)) ("asdf" = (string 'asdf))
  ('xy = (intern (string 'xy)))                   ; ..so intern . string is the identity on an interned symbol
  ("\"a\\nb\"" = (show "a\nb")))
@@ -836,4 +838,4 @@
 ; --- odds & ends --- show renders a value as its reparsable printed form; an opaque handle
 ; acts as a constant function. the VM's own instruments -- clock/nclock/gauge/please and
 ; gauge's write twin `tune` -- are not the language: test/gauge.l.
-(assert (string? (show @(1 2 3))) (1 = ((cask 4) 'x)))
+(assert (string? (show @(1 2 3))) (nil? ((cask 4) 'x)))

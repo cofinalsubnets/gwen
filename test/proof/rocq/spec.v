@@ -888,14 +888,15 @@ Open Scope Z_scope.
 
 (* --- strings: indexed bytes; net = charm sum; tally = count ---
    sidx is the SEQUENCE index law, shared with the chain: a negative i counts from the end,
-   and out of range in EITHER direction answers the unit 1. *)
-Definition sidx' (v : list Z) (i : Z) : Z :=
+   and out of range in EITHER direction answers (), the None of this model -- so the law is
+   PARTIAL and says so, rather than defaulting into the element domain. *)
+Definition sidx' (v : list Z) (i : Z) : option Z :=
   let j := if i <? 0 then i + Z.of_nat (length v) else i in
-  if j <? 0 then 1 else nth (Z.to_nat j) v 1.
-Definition sidx  (v : list Z) (i : Z) : Z := nth (Z.to_nat i) v 1. (* OOB applies as the unit, 1 *)
+  if j <? 0 then None else nth_error v (Z.to_nat j).
+Definition sidx  (v : list Z) (i : Z) : option Z := nth_error v (Z.to_nat i). (* OOB -> None, which is () *)
 Definition tally (v : list Z) : Z := Z.of_nat (length v).
-Theorem str_index     : sidx [97;98;99] 0 = 97.   Proof. reflexivity. Qed. (* ("abc" 0) = 97 *)
-Theorem str_index_oob : sidx [104;105] 9 = 1.     Proof. reflexivity. Qed. (* ("hi" 9) = 1 *)
+Theorem str_index     : sidx [97;98;99] 0 = Some 97. Proof. reflexivity. Qed. (* ("abc" 0) = 97 *)
+Theorem str_index_oob : sidx [104;105] 9 = None.     Proof. reflexivity. Qed. (* ("hi" 9) = () *)
 Theorem str_net       : asum [97;98;99] = 294.    Proof. reflexivity. Qed. (* $"abc" = 294 *)
 Theorem str_tally     : tally [97;98;99] = 3.     Proof. reflexivity. Qed. (* (tally "abc") = 3 *)
 
@@ -914,21 +915,21 @@ Proof. intros. unfold sjux. now rewrite app_assoc. Qed.
    load-bearing: Z.to_nat sends every negative to 0, so without it an index below
    -(length v) would answer the FIRST element instead of the unit -- which is exactly the
    >= 0 test the C makes after adding the length. *)
-Theorem str_idx_neg1  : sidx' [97;98;99] (-1) = 99.  Proof. reflexivity. Qed. (* ("abc" -1) = 'c' *)
-Theorem str_idx_neg3  : sidx' [97;98;99] (-3) = 97.  Proof. reflexivity. Qed. (* ("abc" -3) = 'a' *)
-Theorem str_idx_neg_oob : sidx' [97;98;99] (-4) = 1. Proof. reflexivity. Qed. (* past the front -> the unit *)
+Theorem str_idx_neg1  : sidx' [97;98;99] (-1) = Some 99. Proof. reflexivity. Qed. (* ("abc" -1) = 'c' *)
+Theorem str_idx_neg3  : sidx' [97;98;99] (-3) = Some 97. Proof. reflexivity. Qed. (* ("abc" -3) = 'a' *)
+Theorem str_idx_neg_oob : sidx' [97;98;99] (-4) = None.  Proof. reflexivity. Qed. (* past the front -> () *)
 Theorem str_idx_pos_agrees : forall v i, 0 <= i -> sidx' v i = sidx v i.      (* non-negative: the old law *)
 Proof. intros v i H. unfold sidx', sidx. apply Z.ltb_ge in H as E. rewrite E. cbn. now rewrite E. Qed.
 
 (* --- chains: the SAME two laws one lattice rung up -- index an ELEMENT, juxtapose by
    APPEND. The Church eliminator ((a . b) g) == (g a b) was retired once the tree was
    checked and nothing applied a chain to a function; every non-index, non-chain operand
-   takes the default action, const-1 (see mx.l). --- *)
-Definition cidx (v : list Z) (i : Z) : Z := sidx' v i.
+   takes the default action, () (see mx.l). --- *)
+Definition cidx (v : list Z) (i : Z) : option Z := sidx' v i.
 Definition cjux (s t : list Z) : list Z := s ++ t.
-Theorem chain_idx      : cidx [7;8;9] 0 = 7.        Proof. reflexivity. Qed. (* ('(7 8 9) 0) = 7 *)
-Theorem chain_idx_neg  : cidx [7;8;9] (-1) = 9.     Proof. reflexivity. Qed. (* ('(7 8 9) -1) = 9 *)
-Theorem chain_idx_oob  : cidx [7;8;9] 3 = 1.        Proof. reflexivity. Qed. (* out of range -> the unit *)
+Theorem chain_idx      : cidx [7;8;9] 0 = Some 7.    Proof. reflexivity. Qed. (* ('(7 8 9) 0) = 7 *)
+Theorem chain_idx_neg  : cidx [7;8;9] (-1) = Some 9. Proof. reflexivity. Qed. (* ('(7 8 9) -1) = 9 *)
+Theorem chain_idx_oob  : cidx [7;8;9] 3 = None.      Proof. reflexivity. Qed. (* out of range -> () *)
 Theorem chain_juxt     : cjux [1;2] [3;4] = [1;2;3;4].  Proof. reflexivity. Qed. (* ('(1 2) '(3 4)) *)
 Theorem chain_juxt_cat : forall s t, cjux s t = s ++ t. Proof. reflexivity. Qed. (* agrees with `+` *)
 (* the two sequence lanes are ONE law, read at two grains: bytes and elements *)

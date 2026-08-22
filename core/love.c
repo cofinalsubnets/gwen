@@ -2222,11 +2222,11 @@ lvm(lvm_sub_coin) { return Ap(lvm_coin_op, g, DieSub); }
 lvm(lvm_quot_coin) { return Ap(lvm_coin_op, g, DieDiv); }
 
 // applying a coin: run the die's APPLY closure as `((f self) arg)`; absent, a coin
-// is an opaque handle (const-1), like a cask/port. self is the value at Ip (the apply
+// is an opaque handle -- nothing to answer with, () -- like a cask/port. self is the value at Ip (the apply
 // trampoline sets Ip = the applied object); arg/ret are on the stack.
 lvm(lvm_coin) {
- if (ai_nilp(g, die_get(g, coin_die(word(Ip)), DieApply))) {   // default opaque-apply: const-1
-  Ip = cell(*++Sp); *Sp = putcharm(1); ai_musttail return Continue(); }
+ if (ai_nilp(g, die_get(g, coin_die(word(Ip)), DieApply))) {   // default opaque-apply: ()
+  Ip = cell(*++Sp); *Sp = ZeroPoint; ai_musttail return Continue(); }
  Have(2);
  word self = word(Ip), f = die_get(g, coin_die(self), DieApply);
  word arg = Sp[0], ret = Sp[1], *dst = Sp - 2;
@@ -4147,9 +4147,9 @@ lvm(lvm_key) {
 // map (lookup-lambda backed by an open-addressed thread; see tabp comment)
 // ============================================================================
 // backing is internal -- only ever reached from a header[1], never applied as a
-// l value; its ap behaves-as-1 like lvm_cask should it ever be (it won't).
+// l value; its ap answers () like lvm_cask should it ever be applied (it won't).
 static lvm(lvm_map_data) {
- Ip = cell(*++Sp); *Sp = putcharm(1); ai_musttail return Continue(); }
+ Ip = cell(*++Sp); *Sp = ZeroPoint; ai_musttail return Continue(); }
 
 // the backing slot of k, or -- if absent -- the first empty slot on its probe
 // chain. load is kept < 3/4 so an empty slot always terminates the sound.
@@ -4517,7 +4517,7 @@ lvm(lvm_snip) {
 // applying a cask behaves as 0 (yields 1); byte-identical to lvm_port_io, kept
 // distinct by ai_noicf so caskp and iop never collide
 lvm(lvm_cask) {
- Ip = cell(*++Sp); *Sp = putcharm(1); ai_musttail return Continue(); }
+ Ip = cell(*++Sp); *Sp = ZeroPoint; ai_musttail return Continue(); }
 // (cask n) — a zeroed n-byte mutable cask; (cask charlist) — one holding those
 // bytes (the bulk way in). n<=0 -> EmptyString, so NO empty cask object exists.
 // two heap objects under one Have, so no GC sees a half-built cask.
@@ -5711,12 +5711,13 @@ lvm(lvm_link) {
   if (!(av == INTPTR_MIN && bv == -1)) { word _res; Have(box_req); emit_int(_res, av c_op bv); \
    ai_musttail return Push(_res); } } \
  return Ap(lvm_bdiv_start, g, vop); }   /* big // and % run yieldable (resumable long division) */
-// a bare mint (() too) RIDES THROUGH every dyadic arithmetic lane, either side:
-// the unit is the do-nothing operand, so x - () = () - x = x, likewise / // % &
-// | ^ << >>. comparisons and `=` stay strict.
+// a bare mint (() too) is NOT A NUMBER, so a numeric lane has nothing to compute with
+// and answers (), either side: - / // % & | ^ << >>. the SEQUENCE ops keep their own
+// band rules and never come here -- () is the unit of + (joining nothing on) and the
+// annihilator of * (repeating a sequence an absent number of times). comparisons and
+// `=` stay strict.
 #define avm_unit(a, b) \
- if (mintp(a)) ai_musttail return Push(b); \
- if (mintp(b)) return *++Sp = a, Ip++, Continue()
+ if (mintp(a) || mintp(b)) ai_musttail return Push(ZeroPoint)
 #define avm_div(op, c_op) lvm(lvm_##op) { \
  word a = Sp[0], b = Sp[1]; \
  if (charmp(a) && charmp(b)) { \
@@ -5842,12 +5843,18 @@ static ai_inline uintptr_t stringlen(struct ai *g, word x) {  // bytes x contrib
  if (strp(x)) return len(x);
  if (nomp(x)) { struct ai_str *n = nom_str(g, x); return n ? n->len : 0; }
  return 1; }                                            // number -> one byte
+// TEXT CONCAT: a's bytes then b's into a caller-owned allocation. `+`'s string lane and
+// the apply lane's juxtaposition both land here, so the two cannot drift apart.
+static ai_inline struct ai_str *seq_cat(struct ai *g, void *w, word a, word b);
 static ai_inline char *add_emit(struct ai *g, char *w, word x) {  // append x's bytes; return advanced w
  if (strp(x)) return (void) memcpy(w, txt(x), len(x)), w + len(x);
  if (nomp(x)) { struct ai_str *n = nom_str(g, x);
   return n ? ((void) memcpy(w, txt(n), n->len), w + n->len) : w; }
  return *w = (char) seq_byte(x), w + 1; }               // number -> one byte (unreachable from + since the
                                                         // degenerate lane; symbol paths never land here)
+static ai_inline struct ai_str *seq_cat(struct ai *g, void *w, word a, word b) {
+ struct ai_str *z = ini_str(str(w), stringlen(g, a) + stringlen(g, b));
+ return add_emit(g, add_emit(g, txt(z), a), b), z; }
 static lvm(lvm_add_string) {
  word a = Sp[0], b = Sp[1];
  if (trayp(a) || trayp(b)) ai_musttail return Push(ZeroPoint); // array <-> string: undefined
@@ -5855,13 +5862,12 @@ static lvm(lvm_add_string) {
  if (!strp(b) && !nomp(b) && seq_byte(b) < 0) ai_musttail return Push(ZeroPoint);
  int rank = min(stringrank(g, a), stringrank(g, b));
  uintptr_t n = stringlen(g, a) + stringlen(g, b);
- if (!n) ai_musttail return Push(rank ? zero : EmptyString);
+ if (!n) ai_musttail return Push(rank ? ZeroPoint : EmptyString);   // the EMPTY spelling is the zero POINT (cf. lvm_intern), not the zero charm
  uintptr_t req = str_type_width + b2w(n);
  Have(req);
  a = Sp[0], b = Sp[1];                                  // re-read post-GC
- struct ai_str *z = ini_str(str(Hp), n);
+ struct ai_str *z = seq_cat(g, Hp, a, b);                     // a's bytes then b's, in order
  Hp += req;
- add_emit(g, add_emit(g, txt(z), a), b);                      // a's bytes then b's, in order
  *++Sp = word(z);
  return rank == 0 ? (Ip++, Continue())                  // string
       : rank == 1 ? Ap(lvm_mint, g)                  // uninterned symbol (fresh)
@@ -5873,6 +5879,9 @@ static lvm(lvm_0) {                             // unsupported mix (array <-> st
 // the matrix stands correct on its own (mx.v checks the whole square).
 static lvm(lvm_bin_unit) {
  word a = Sp[0], b = Sp[1];
+ if (a == ZeroPoint) ai_musttail return Push(b);
+ if (b == ZeroPoint) ai_musttail return Push(a);
+ if (mintp(a) && mintp(b)) ai_musttail return Push(a == b ? a : ZeroPoint);
  ai_musttail return Push(mintp(a) ? b : a); }
 // the DEGENERATE lane: a mixed pair with no lawful crossing answers the higher
 // band's operand whole -- the foreigner arrives as that band's unit, since the
@@ -5950,34 +5959,45 @@ static lvm(lvm_mul_cart) {
 
 // --- apply lane (the data-value `(g x)` aps) ---
 // an applied data value's sentinel tail-jumps straight to its handler -- no table.
-// the sequences INDEX and JUXTAPOSE -- text by byte, a chain by element -- numbers are
-// church numerals; opaque handles behave as 0 via their own sentinels. const-1 is the
-// DEFAULT action: what an operand gets when its kind has no lane of its own (mx.l).
+// the sequences INDEX and JUXTAPOSE -- text by byte, a chain by element, a NAMED point by
+// its spelling -- numbers are church numerals. () is the DEFAULT action: nothing is there
+// to answer with, which is what an anonymous point, an opaque handle, an out-of-range
+// index and a non-index operand all have in common.
 
-// (s k): index the string -- the unsigned byte at k, negatives from the end, else 1
-// (matches "" == 0: a numeric ("" k) is k**0 == 1). a TEXT k JUXTAPOSES instead: (s t)
-// is s then t, C's adjacent-literal law with the literal restriction lifted -- and it
-// curries, so ("a" "b" "c") joins three. agrees with (+ s t) on every text pair.
-static lvm(data_string_apply) {
- if (strp(Sp[0])) {
-  uintptr_t m = len(Ip), n = len(Sp[0]), req = str_type_width + b2w(m + n);
-  if (!(m + n)) { Ip = cell(*++Sp); *Sp = EmptyString; ai_musttail return Continue(); }  // no empty string is ever allocated
-  Have(req);
-  struct ai_str *z = ini_str(str(Hp), m + n);
+// THE TEXT LANE, reached by a string head and by a NAMED point acting as its spelling
+// (`pt` says which). a TEXT operand -- a string or a named point -- JUXTAPOSES: (s t) is
+// s then t, C's adjacent-literal law with the literal restriction lifted, and it curries,
+// so ("a" "b" "c") joins three. it agrees with (+ s t) on every text pair, two named
+// points re-interning to a point. a CHARM operand INDEXES instead -- the unsigned byte,
+// negatives from the end. everything else, out of range included, is (), which no byte
+// is: a read past the end is tellable without a bounds check.
+static lvm(seq_text_apply, bool pt) {
+ struct ai_str *nb = strp(Sp[0]) ? str(Sp[0]) : namep(Sp[0]) ? nom_str(g, Sp[0]) : NULL;
+ if (nb) {
+  bool mk = pt && namep(Sp[0]);                          // point + point -> the interned point
+  uintptr_t m = len(Ip), n = nb->len, req = str_type_width + b2w(m + n);
+  if (!(m + n)) { Ip = cell(*++Sp); *Sp = mk ? ZeroPoint : EmptyString; ai_musttail return Continue(); }  // the empty spelling is the zero POINT; no empty string is ever allocated
+  Have(req + (mk ? intern_reserve(g) : 0));
+  struct ai_str *z = seq_cat(g, Hp, word(Ip), Sp[0]);    // roots both, so a GC in Have moved them
   Hp += req;
-  memcpy(txt(z), txt(Ip), m);
-  memcpy(txt(z) + m, txt(Sp[0]), n);
-  Ip = cell(*++Sp); *Sp = word(z); ai_musttail return Continue(); }
- word v = putcharm(1);
+  word v = word(z);
+  if (mk) Pack(g), v = intern_checked(g, z), Unpack(g);
+  Ip = cell(*++Sp); *Sp = v; ai_musttail return Continue(); }
+ word v = ZeroPoint;
  if (oddp(Sp[0])) {
   word n = getcharm(Sp[0]);
   if (n < 0) n += (word) len(Ip);                       // -1 is the last byte
   if (n >= 0 && n < (word) len(Ip)) v = putcharm((unsigned char) txt(Ip)[n]); }
  Ip = cell(*++Sp); *Sp = v; ai_musttail return Continue(); }
+static lvm(data_string_apply) { ai_musttail return Ap(seq_text_apply, g, false); }
 
-// applying a symbol: a point applies as every unit does -- const-1
+// applying a point: a NAMED point ACTS AS ITS SPELLING, the sequence it already is to
+// tally, net and `+` -- so it indexes and juxtaposes down the text lane. an ANONYMOUS
+// point -- a gensym, and () -- has no spelling to act as, so nothing is there to answer
+// with: (). name? and mint? partition nom? and () is in neither; this is that line.
 static lvm(data_sym_apply) {
- Ip = cell(*++Sp); *Sp = putcharm(1); ai_musttail return Continue(); }
+ if (!namep(word(Ip))) { Ip = cell(*++Sp); *Sp = ZeroPoint; ai_musttail return Continue(); }
+ Ip = cell(word(nom_str(g, word(Ip)))); ai_musttail return Ap(seq_text_apply, g, true); }
 
 // (n x): church-numeral application for the boxed tower -- the same
 // [n, num-ap, x, ret] frame as lvm_numap
@@ -5988,10 +6008,10 @@ static lvm(data_num_apply) {
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }
 
-// (l k): index the spine -- the kth element, negatives from the end, out of range the
-// unit 1. (l m): a chain operand JUXTAPOSES -- the append, agreeing with (+ l m) on
-// the nose (add_seq's list+list lane, spelled here). the text law, one lattice rung up:
-// a chain indexes elements where text indexes bytes. every other operand is const-1.
+// (l k): index the spine -- the kth element, negatives from the end, out of range ().
+// (l m): a chain operand JUXTAPOSES -- the append, agreeing with (+ l m) on the nose
+// (add_seq's list+list lane, spelled here). the text law, one lattice rung up: a chain
+// indexes elements where text indexes bytes. every other operand answers ().
 static lvm(data_pair_apply) {
  if (chainp(Sp[0])) {
   uintptr_t n = llen(word(Ip));
@@ -6001,7 +6021,7 @@ static lvm(data_pair_apply) {
   for (word l = word(Ip); chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
   (w - 1)->b = Sp[0];                        // last cdr -> the operand (a chain is never empty)
   Ip = cell(*++Sp); *Sp = word(base); ai_musttail return Continue(); }
- word v = putcharm(1);
+ word v = ZeroPoint;
  if (oddp(Sp[0])) {
   word k = getcharm(Sp[0]), l = word(Ip);
   if (k < 0) k += (word) llen(l);            // -1 is the last element
@@ -6037,8 +6057,12 @@ lvm(lvm_add) {
      && !__builtin_add_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
      && t >= mincharm && t <= maxcharm)
   ai_musttail return Push(putcharm(t));
- // a bare mint is +'s identity in every lane; the matrix says the same thing
- // (lvm_bin_unit), so this is the fast path, never load-bearing
+ // a bare mint joins nothing on, so it is +'s identity in every lane; two DISTINCT
+ // nothings have no canonical sum -> the zero point, as two distinct dies do
+ // (lvm_coin_op). the matrix says the same thing (lvm_bin_unit): a fast path only.
+ if (a == ZeroPoint) ai_musttail return Push(b);
+ if (b == ZeroPoint) ai_musttail return Push(a);
+ if (mintp(a) && mintp(b)) ai_musttail return Push(a == b ? a : ZeroPoint);
  if (mintp(a)) ai_musttail return Push(b);
  if (mintp(b)) ai_musttail return Push(a);
  ai_musttail return Ap(ai_add_mx[ai_kind(a)][ai_kind(b)], g); }
@@ -6048,9 +6072,9 @@ lvm(lvm_mul) {
   if (!__builtin_mul_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
       && t >= mincharm && t <= maxcharm)
    ai_musttail return Push(putcharm(t)); }
- // a bare mint is the ZERO, and the zero ANNIHILATES under * (the semiring law:
- // 0*x = 0; the identity is 1, which is already the identity function). the
- // matrix says the same thing (lvm_0), so this stays a fast path.
+ // a bare mint is ABSENT, and * repeats: a sequence taken an absent number of times
+ // is nothing, so it annihilates. the matrix says the same thing (lvm_0), so this
+ // stays a fast path.
  if (mintp(a) || mintp(b)) ai_musttail return Push(ZeroPoint);
  ai_musttail return Ap(ai_mul_mx[ai_kind(a)][ai_kind(b)], g); }
 

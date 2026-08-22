@@ -13,9 +13,10 @@
 ;     function arguments -- sections, escaped operators, one-param integer
 ;     lambdas -- as Coq funs (direct beta and n-fold compose ride the same lane);
 ;     predicates as integers (love's =/</! answer 1|0 charms; Z.b2z bridges).
-;   * the UNIT lane: () (and a fresh mint) rides through every dyadic EXCEPT *,
-;     where it ANNIHILATES (the zero; the associativity law) -- modeled over
-;     option Z / option (list Z), None the unit, uop/ulop lifted, umul/ulmul absorbing.
+;   * the UNIT lane: () (and a fresh mint) is the unit of + alone -- joining nothing
+;     on. every NUMERIC lane absorbs it (nothing to compute with), as * always did --
+;     modeled over option Z / option (list Z), None the unit, uop/ulop lifted for +,
+;     uabs/umul/ulmul absorbing.
 ;   * TEXT as spelling (the symbol-as-spelling lane): symbols and strings are
 ;     their byte lists under + (concat) and * (repeat), equality band-guarded
 ;     (symbol never = string).
@@ -97,7 +98,7 @@
    (cmpb f) (two? f && atom? >f ?                                 ; sortby's goes-before test
              (<f @ '< "Z.leb" '> "(fun a b : Z => Z.leb b a)" 0) 0)
 
-   ; -- the unit lane: () (and a fresh mint) rides through every dyadic --
+   ; -- the unit lane: () (and a fresh mint) rides + and absorbs every numeric op --
    (mintv? ('mint >< _)) 1
    (unit? x)  (id? x () || mintv? x)
    ; a unit among the ELEMENTS (never a proper list's own terminal ())
@@ -111,7 +112,8 @@
                    0))
    (tuz x) (? (unit? x) "None"  (intv? x) ("(Some " + tv x + ")")
               (id? <x '*) ("(umul " + tuz <>x + " " + tuz <>>x + ")")   ; * : the unit ANNIHILATES
-              ("(uop " + uzf <x + " " + tuz <>x + " " + tuz <>>x + ")"))
+              (id? <x '+) ("(uop " + uzf <x + " " + tuz <>x + " " + tuz <>>x + ")")   ; + : it RIDES
+              ("(uabs " + uzf <x + " " + tuz <>x + " " + tuz <>>x + ")"))            ; the numeric lanes ABSORB
    ; list u-tree: a unit on either side of + answers the list side; under * it
    ; ANNIHILATES (() is the zero -- the associativity law)
    (ul? x) (? (lst? x) 1
@@ -154,10 +156,10 @@
               (atom? x) 0
               (gneg? x) (gz? <>x)
               (<x @ ('conj && un2? x) (gz? <>x)
-                    ; ⚠ a unit under * leaves the band (() annihilates now), so only
-                    ; + and - let the unit ride here; * demands both sides gaussian-proper
-                    ('* && len3? x) (gz? <>x && gz? <>>x && !(hasu? <>x) && !(hasu? <>>x))
-                    (('+ || '-) && len3? x) (gz? <>x && gz? <>>x)
+                    ; ⚠ a unit under * or - leaves the band (the numeric lanes absorb),
+                    ; so only + lets it ride here; the rest demand both sides gaussian-proper
+                    ((('* || '-)) && len3? x) (gz? <>x && gz? <>>x && !(hasu? <>x) && !(hasu? <>>x))
+                    ('+ && len3? x) (gz? <>x && gz? <>>x)
                     0))
    (tg x) (? (twinv? x) ("(" + tv <>x + ", " + tv <>>x + ")")
              (id? x 'i) "(0, 1)"
@@ -165,7 +167,7 @@
              (gneg? x) ("(gsub (0, 0) " + tg <>x + ")")
              (: h <x
                 (? (id? h 'conj) ("(gconj " + tg <>x + ")")
-                   (unit? <>x) (tg <>>x)                     ; the unit RIDES: the twin side is the answer
+                   (unit? <>x) (tg <>>x)                     ; the unit RIDES + : the twin side is the answer
                    (unit? <>>x) (tg <>x)
                    (id? h '+) ("(gadd " + tg <>x + " " + tg <>>x + ")")
                    (id? h '-) ("(gsub " + tg <>x + " " + tg <>>x + ")")
@@ -513,8 +515,9 @@
      "   generated instances and the hand-written LAWS speak one model. The defs below are\n"
      "   gen-only (no spec.v twin): amin, leqb, the TOTAL vaddt (spec.v's vadd is option-\n"
      "   valued for its shape-mismatch law), vquot, hget, the syntactic kind lattice,\n"
-     "   the word shifts (count mod 64), the option-lifted UNIT lane (None rides through\n"
-     "   uop/ulop -- () the identity of every dyadic), insertion sort, lex order, the\n"
+     "   the word shifts (count mod 64), the option-lifted UNIT lane (None rides uop/ulop,\n"
+     "   () being the unit of + alone, and is ABSORBED by uabs/umul/ulmul -- every numeric\n"
+     "   lane), insertion sort, lex order, the\n"
      "   gaussian twins (exact complex over Z; sign and order LEX on (re, im)), and the\n"
      "   de Bruijn lambda terms (function = is alpha + structural: lteqb). *)\n"
      "From Stdlib Require Import ZArith List.\n"
@@ -534,6 +537,7 @@
      ; the UNIT lane: None is (). it rides through every lifted dyadic untouched --
      ; EXCEPT *, where () is the ZERO and the zero annihilates (the associativity law)
      "Definition uop (f:Z->Z->Z) (a b:option Z) : option Z := match a,b with None,x=>x | x,None=>x | Some x, Some y => Some (f x y) end.\n"
+     "Definition uabs (f:Z->Z->Z) (a b:option Z) : option Z := match a,b with Some x, Some y => Some (f x y) | _,_ => None end.\n"
      "Definition umul (a b:option Z) : option Z := match a,b with Some x, Some y => Some (x*y) | _,_ => None end.\n"
      "Definition ulmul (a b:option (list Z)) : option (list Z) := None.\n"
      "Definition ueq (a b:option Z) : bool := match a,b with None,None=>true | Some x, Some y => Z.eqb x y | _,_=>false end.\n"

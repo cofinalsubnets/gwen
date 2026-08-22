@@ -44,13 +44,13 @@
  ;     Church eliminator ((p f) == (f (A p) (B p))) until the tree was checked and nothing
  ;     at all applied a chain to a function -- so a lambda takes the DEFAULT action, and
  ;     that is the cell worth pinning. the index/append rows are spec.l's chains section. ---
- (= 1 ((link 1 2) 1))                            ; improper chain: the spine is one cell, so 1 is oob
- (= 1 ('(1 2) (\ a b `(a b))))                   ; arg = a lambda: the DEFAULT action, not an eliminator
- (= 1 ('(1 2) "ab"))                             ; ... as for every other kind
+ (nil? ((link 1 2) 1))                            ; improper chain: the spine is one cell, so 1 is oob
+ (nil? ('(1 2) (\ a b `(a b))))                  ; arg = a lambda: the DEFAULT action, not an eliminator
+ (nil? ('(1 2) "ab"))                            ; ... as for every other kind
 
  ; --- row KString: the byte index is spec.l's; the width and the empty row are here ---
  (= 255 ((string 255) 0))                     ; byte is unsigned 0..255
- (= 1 ("" 5)) (= 1 ("" -1))                   ; the empty string indexes to 1
+ (nil? ("" 5)) (nil? ("" -1))                   ; the empty string indexes to 1
 
  ; --- row KMint: a point applies as every unit does, const-1 -- spec.l's mints section
  ;     says it for both the bare mint and the named symbol, so the row is a pointer.

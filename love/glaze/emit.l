@@ -599,7 +599,7 @@
                   ['test A 1] ['br 'eq ld]                                                              ; empty product); any other callee/index falls to the DRIVE (never
                   ['mov X A] ['sar X 1] ['ld SC T 8]                                                  ; a deopt -- a mixed-type call site keeps its closure speed), so the
                   ['cmp X SC] ['br 'below ok]                                                           ; unit-riding and float-index lanes stay C's business. one unsigned
-                  ['li A 3] ['jmp en]                                                                   ; compare covers the negative index (it wraps huge).
+                  ['jmp ld]                                                                             ; compare covers the negative index (it wraps huge).
                   ['label ok] ['ldxb A T X 1 16] ['leax A A A 1 1]
                   ['jmp en] ['label ld]]
                + (adrive cso)
