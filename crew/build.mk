@@ -1,4 +1,4 @@
-# crew/build.mk -- the crew rides IN the default binary (doc/plan/one-binary.md): the
+# crew/build.mk -- the crew rides IN the default binary (doc/misc/plan/one-binary.md): the
 # layered bake host/build.mk runs lays the whole crew into out/host/love's own image, so
 # `love kore|mooncc|sh|..` is the build tree's spelling exactly as it is the artifact's.
 # What remains here: the cat rosters, mooncc0.image (love0's own -- an image keeps its
@@ -133,7 +133,7 @@ $(ho)/.rest-cat.l: $(restfiles) $(ho)/.dist.list $(ho)/.docs.list
 	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(restfiles); } > $@
 .PHONY: dist dist-source dist-seed
 
-# ==== THE RELEASE ARTIFACTS (doc/dist.md) ====
+# ==== THE RELEASE ARTIFACTS (doc/misc/dist.md) ====
 # A release is TWO THINGS, and they sit on the one axis that actually matters to
 # somebody who just downloaded one: do you have a C toolchain?
 #
@@ -207,14 +207,15 @@ dist: dist-source dist-seed   # a release is both
 # foreign toolchain this artifact exists to not need. ⚠ `wasm/love.js` came off the
 # list because the directory holding it now goes -- one name, not two.
 #
-# ⚠ doc/ CANNOT go the same way, and the reason is one rule: the man pages are
+# ⚠ doc/ IS NOT ON THIS LIST and cannot be, because of one rule: the man pages are
 # WRITTEN in doc/{love,cook,lush}.md and generated from them (host/build.mk), and
 # `install: $(installs)` names all three -- so an unpacked release with no doc/ builds
-# its binary and then dies on `make install` with no rule to make doc/love.md. what
-# goes instead is the two subtrees nothing generates from: doc/plan is the arcs and
-# doc/proto is sketches (lint exempts it for that reason). the .md beside them stay,
-# and they are the design record of the thing the reader just unpacked.
-dist_drop = bench port wasm doc/plan doc/proto
+# its binary and then dies on `make install` with no rule to make doc/love.md. so doc/
+# is the three man sources and nothing else, and everything that used to sit beside
+# them -- the design record, the arcs, the sketches -- is doc/misc, which selfpack.l
+# skips on its own (sp-inner). a directory named misc does not need a release policy
+# to know it is not the product.
+dist_drop = bench port wasm
 # THE ARCHIVE IS THE TREE: selfpack walks the root and skips only what is not
 # source -- out bin dl, everything HIDDEN at the root (.git .sb .claude .cache
 # .gitignore .., the machine's and the checkout's), and $(dist_drop) -- pins every

@@ -1,5 +1,5 @@
 ; precedence (band) and associativity (hand) -- infix that binds like schoolbook math
-; (doc/precedence.md). each operator's table entry carries a BAND and a HAND; an incoming operator
+; (doc/misc/precedence.md). each operator's table entry carries a BAND and a HAND; an incoming operator
 ; steals a pending filled operand iff its band beats the frame's, so a TIGHTER operator climbs in,
 ; and EQUAL band goes to the incomer's hand: RIGHT-handed steals (its band folds right), LEFT-handed
 ; yields (its band folds left). ARITHMETIC IS LEFT-HANDED -- (1 - 2 - 3) is -4, as everywhere else --

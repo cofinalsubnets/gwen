@@ -1,4 +1,4 @@
-/* The syntax rungs of doc/moon-c-gaps.md, held to gcc: a brace-less switch body, a
+/* The syntax rungs of doc/misc/moon-c-gaps.md, held to gcc: a brace-less switch body, a
  * declarator list opening with a FUNCTION, an attribute run BEFORE a struct/union
  * tag, _Thread_local, bare typeof. The battery compares EXIT CODES, so a failing
  * check's number comes back. ⚠ _Thread_local is plain static storage here, so this

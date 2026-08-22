@@ -4,7 +4,7 @@
 //   (source-gz ()) -> the embedded love-<ver>.tar.gz bytes | () when none is baked in
 //
 // tools/mksrc.l lays the archive into an object as two .rodata symbols and the dist
-// link pulls it in; love/verbs.l's `source` verb inflates what this answers. doc/dist.md.
+// link pulls it in; love/verbs.l's `source` verb inflates what this answers. doc/misc/dist.md.
 //
 // ⚠ PRESENCE RIDES THE KIND, NOT THE NET. an artifact with no source baked in and one
 // carrying an empty archive must not read alike, and every nothing here is nil by

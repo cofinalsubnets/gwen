@@ -1,5 +1,5 @@
 ; crew/sb/up.l -- the up/down verbs + the verb table: the dist artifact's rail
-; (doc/sb.md, the install answer: install = sync + cook build). this file rides
+; (doc/misc/sb.md, the install answer: install = sync + cook build). this file rides
 ; the dist cat LAST (crew/build.mk distfiles) and module 'sb -- sb-sync/dirty
 ; are the module's own, herald the host nif -- and its tail pins into
 ; `verbs`, the table love/cli.l's verb rail walks. `verbs` is unbound everywhere

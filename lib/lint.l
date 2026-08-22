@@ -13,7 +13,7 @@
 ; a bare number could not say "no plan": the wrapper is not decoration.
 ; the rule: a continuation line aligns under its form's first operand, or one past
 ; the open delimiter when the head stands alone. line-preserving by construction,
-; since it only ever says where a line starts. see doc/libra.md.
+; since it only ever says where a line starts. see doc/misc/libra.md.
 (module (lint lint-scan lint-of lint-cmts lint-lay)
 (: (lclose c) (? (c = 40) 41 (c = 91) 93 125)          ; ( -> )   [ -> ]   { -> }
    (lopen c)  (? (c = 41) 40 (c = 93) 91 123)          ; ...and back, for the report
@@ -253,7 +253,7 @@
    ; and the house sets the second of each pair one past the first. every other
    ; form aligns flat. without this the plan is off by one on every second
    ; operand, which is most of a file. a width guard over this was measured and
-   ; refused: doc/libra.md.
+   ; refused: doc/misc/libra.md.
    (ldelim? c) (c < 33 || c = 40 || c = 41 || c = 91 || c = 93 || c = 123 || c = 125)
    (lpair? c nx) ((c = 58 || c = 63) && ldelim? nx)     ; a lone : or ?, not a name starting with one
 

@@ -11,10 +11,10 @@
 // EVERY nif here PARKS rather than blocking (love.h's nif park: leave Ip
 // unadvanced and yield, so the op re-runs on reschedule) -- accept and udp-recv
 // on their fd, and connect on its HANDSHAKE, which is the write-direction wait
-// doc/io.md held back as rung 7 "until something asks". NOTHING IN THIS FILE
+// doc/misc/io.md held back as rung 7 "until something asks". NOTHING IN THIS FILE
 // WAITS. getaddrinfo is what used to make connect the exception, and it is gone:
 // `connect` takes a dotted quad, and a NAME resolves one layer up in love, where
-// the lookup itself can park. doc/io.md, the nif floor.
+// the lookup itself can park. doc/misc/io.md, the nif floor.
 #define _GNU_SOURCE     // SOCK_CLOEXEC
 #include "love.h"
 #include <unistd.h>
@@ -410,7 +410,7 @@ AiNif("udp-send", nif_udpsend);
 // --- unix-domain connect: lux's X display door ----------------------------------
 // (connectu path) -- connect to a unix-domain stream socket and wrap the fd as a
 // port | (). The load-bearing case is an X display socket (/tmp/.X11-unix/X<n>):
-// real X servers listen only there, so lux's wire codec (doc/proto/x11.l lineage)
+// real X servers listen only there, so lux's wire codec (doc/misc/proto/x11.l lineage)
 // needs this one door the TCP nifs can't open.
 ai_noinline static int call_connectu(struct ai_str *pv) {
  struct sockaddr_un a;

@@ -544,7 +544,7 @@
       (refused? (cgn "int main() { double a = 1.0; return ~a; }"))))                          ; ~ on a double is still invalid
 
 ; --- variadic functions + _Static_assert (stage 6c). the `...` is recorded as
-; the signature's variadic flag (cc's simplified all-stack call ABI -- doc/moon.md);
+; the signature's variadic flag (cc's simplified all-stack call ABI -- doc/misc/moon.md);
 ; the three __builtin_va_* forms parse to (vastart|vaend v) / (vaarg v type);
 ; _Static_assert folds its constant at parse and vanishes to a (tdef) no-op,
 ; refusing the whole compile when the constant is false. ---
@@ -1692,7 +1692,7 @@
       !(emits? '(sub r0 r12 r0)) !(emits? '(shlv r5 r9))
       (emits? '(add r0 r12 r0)) (emits? '(add r7 r7 8))))
 
-; -- the destination die reaches asn/decl (doc/proto/dest.l, the migration's first lane):
+; -- the destination die reaches asn/decl (doc/misc/proto/dest.l, the migration's first lane):
 ; a statement-position CONSTANT store into a static slot delivers as ONE store-immediate
 ; (no li, no cvt, no r0), a slotted scalar's licensed constant init likewise, and a homed
 ; local's init lands IN the home with no bridge mov (irBa above pins the arm64 face).

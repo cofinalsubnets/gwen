@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/xfixpoint.sh -- the CROSS-MACHINE fixpoint, in effigy (doc/plan/
+# test/gate/xfixpoint.sh -- the CROSS-MACHINE fixpoint, in effigy (doc/misc/plan/
 # seed-universal.md U0). the x-lane's twin objects -- this machine's mooncc,
 # -t the other arch -- link love1: machine A's bytes for machine B. Then love1
 # itself, under qemu-user standing in for machine B, bakes its own mooncc

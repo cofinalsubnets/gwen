@@ -12,7 +12,7 @@
 ; 4 bytes in memory but ALWAYS a double in an xmm register (a load widens, a store narrows); a
 ; compound literal ('clit ty init) fills a frame temp whose ADDRESS is the lvalue.
 ; refused, not fudged: ptr+ptr, deref of a non-pointer, assigning to an array. a by-value
-; aggregate rides x64; the lanes the other targets lack are doc/moon-c-gaps' asymmetries.
+; aggregate rides x64; the lanes the other targets lack are doc/misc/moon-c-gaps' asymmetries.
 ; the PIPELINE'S STAGES are typed: crew/moon/stage.l holds each pass's sig (input stage ->
 ; output stage), and the moon gate checks this file as data against it -- a new pass declares
 ; its sig there, and a recomposition of the strict chains is a clash naming its seam.
@@ -6254,7 +6254,7 @@
                         (? (bad? f) 'bad
                            (one >ps env3 (acc + cgzero off span + f)))))
                  (arr? ty) 'bad                          ; a bare-expr init of an array
-                 ; the slot is the DESTINATION (doc/proto/dest.l's mem die): a licensed
+                 ; the slot is the DESTINATION (doc/misc/proto/dest.l's mem die): a licensed
                  ; constant init of a plain slotted scalar delivers as ONE store-immediate
                  ; -- no li, no cvt, no r0. the vmap-hint lane keeps priority (residency
                  ; pays the later reads); bool keeps the protocol (its cvt normalizes to
@@ -8329,7 +8329,7 @@
                            ; type): `extern char x[];` then `char x[1024];` is ONE object of
                            ; 1024 bytes. Keeping the [] would lay it at SIZE ZERO, and the next
                            ; global then shares its address -- a link that succeeds and an
-                           ; alias at run time (gzip's ifname/ofname, doc/moon-c-gaps).
+                           ; alias at run time (gzip's ifname/ofname, doc/misc/moon-c-gaps).
                            _ (? (!(two? old) || two? <>>p || (openarr? <>old && !(openarr? <>p)))
                                 (pin (g 'glob) <p [(intern <p) <>p <>>p]) ())
                            _ (? (!xd && !(peep (g 'laid) <p ()))

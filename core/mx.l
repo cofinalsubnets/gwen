@@ -1,7 +1,7 @@
 ; mx.l -- THE TABLE. love.c's `+` and `*` dispatch matrices as love data, the
 ; KIND LATTICE they are indexed by, and the three derivations that read it: the C
 ; (mx.h and kinds.h, through clay) and the Rocq model (test/proof/rocq/mx.v, through
-; tools/mx2coq.l). doc/clay.md rungs 2 and 2b.
+; tools/mx2coq.l). doc/misc/clay.md rungs 2 and 2b.
 ;
 ; the point is which way the arrow runs. the tables used to BE C -- eleven #defines
 ; that were #undef'd after use, because C cannot say "the same row for every numeric

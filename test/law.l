@@ -16,7 +16,7 @@
    law-rows
     (list
       ; --- the glued lane IS the law: each line states the sigil and its word at once, and the
-      ; valence law names the spaced twin alongside (doc/precedence.md).
+      ; valence law names the spaced twin alongside (doc/misc/precedence.md).
       ['cap      (x \ <x = cap x)]
       ['cup      (x \ >x = cup x)]
       ['net      (x \ +x = net x)]

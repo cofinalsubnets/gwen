@@ -1,4 +1,4 @@
-; tools/spl2uu.l -- EMIT test/uusplgen.l: doc/proto/spl.l's three call-site
+; tools/spl2uu.l -- EMIT test/uusplgen.l: doc/misc/proto/spl.l's three call-site
 ; compilers (ecall the convention, ebind the binding splice, esubst the
 ; substitution splice) run on spl.l's own samples, the threads lifted to uu
 ; nlist terms so test/uuspllaw.l can prove the splice license OF THE EMISSIONS
@@ -12,7 +12,7 @@
 ; its own asserts gate the load. untrusted like every translator here: a wrong
 ; lift can miss a law, never fake one, and each source op prints over its term.
 (: j (jug 0) _ (wear (L in j err))
-   _ (reads (open "doc/proto/spl.l" "r"))
+   _ (reads (open "doc/misc/proto/spl.l" "r"))
    _ (wear ()) ())
 
 (: ops '((pushk 0) (pusha 1) (pushl 2) (pushs 3) (setl 4) (sets 5) (add 6) (emit 7))
@@ -36,7 +36,7 @@
             (L 'sp2subst (esubst (e2 0) (e2 1)))
             (L 'sp3call (ecall (e3 0) (e3 1)))  (L 'sp3bind (ebind (e3 0) (e3 1))))
 
-   _ (puts "; test/uusplgen.l -- GENERATED from doc/proto/spl.l by tools/spl2uu.l. Do not")
+   _ (puts "; test/uusplgen.l -- GENERATED from doc/misc/proto/spl.l by tools/spl2uu.l. Do not")
    _ (puts "\n; edit; refresh with `make uusplgen`. The call-site samples under the three")
    _ (puts "\n; compilers -- ecall (args into seats), ebind (the binding splice), esubst")
    _ (puts "\n; (the substitution splice) -- lifted to uu nlist terms, 2 nats per op (op x),")

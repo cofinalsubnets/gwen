@@ -1,4 +1,4 @@
-; tools/dest2uu.l -- EMIT test/uuhomgen.l: doc/proto/dest.l's two generators (cv
+; tools/dest2uu.l -- EMIT test/uuhomgen.l: doc/misc/proto/dest.l's two generators (cv
 ; the r0 protocol, ck the destination die) run on dest.l's own law-site samples,
 ; the emissions lifted to uu nlist terms so test/uuhomlaw.l can prove the laws
 ; of them (substrate: test/uuhom.l). Run on the host binary:
@@ -18,7 +18,7 @@
 ; top-level leak (uu2coq's door); out rides a jug meanwhile -- dest.l's own asserts
 ; gate the run, its "dest: ok" stays out of the artifact.
 (: j (jug 0) _ (wear (L in j err))
-   _ (reads (open "doc/proto/dest.l" "r"))
+   _ (reads (open "doc/misc/proto/dest.l" "r"))
    _ (wear ()) ())
 
 (: regs '((r0 0) (r1 1) (r2 2) (r3 3) (r4 4) (r5 5) (r6 6) (r7 7)
@@ -97,7 +97,7 @@
             (L 'de5vcv (cv '(v z) e5))   (L 'de5vck (ck '(v z) e5 P ()))
             (L 'de5bcv (cv eb e5))       (L 'de5bck (ck eb e5 P ())))
 
-   _ (puts "; test/uuhomgen.l -- GENERATED from doc/proto/dest.l by tools/dest2uu.l. Do not")
+   _ (puts "; test/uuhomgen.l -- GENERATED from doc/misc/proto/dest.l by tools/dest2uu.l. Do not")
    _ (puts "\n; edit; refresh with `make uuhomgen`. The law-site programs, cv (r0 protocol)")
    _ (puts "\n; and ck (destination die), lifted to uu nlist terms -- 4 nats per instruction")
    _ (puts "\n; (op d a b), operands parity-tagged (reg r = 2r, imm k = 2k+1), frame offsets")

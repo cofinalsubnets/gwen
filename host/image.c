@@ -108,7 +108,7 @@ int image_dump(struct ai *g, char const *path) {
 // --section-start, ld and lld both) and of one riding the tail of the single segment holo
 // lays. A link that laid it anywhere else is refused LOUDLY -- there is nowhere to grow,
 // and quietly booting the egg forever is not a kindness.
-// the in-binary home of the post-boot heap image (doc/snapshot.md): the binary
+// the in-binary home of the post-boot heap image (doc/misc/snapshot.md): the binary
 // loads ITS OWN dump at startup (main.c) -- identical layout by construction, so
 // the codec's same-binary +delta relocation just works. Sentinel-initialized (not
 // {0}) so it lands in PROGBITS, patchable in place, never .bss. The section is
@@ -139,7 +139,7 @@ uintptr_t ai_baked_image_len = ReserveWords * 8u;
 //
 // an entry is either whole or derived, and that is the whole of the dedup: kind 0 names a
 // complete image, kind 1 a derived record whose words are the first nwords of entry
-// `base`'s stream plus the few this layer changed (doc/plan/image-chain.md). the codec
+// `base`'s stream plus the few this layer changed (doc/misc/plan/image-chain.md). the codec
 // still never sees a container -- it is handed one buffer or a parent/sub pair -- so no
 // part of the image format lives here.
 #define ImgdirMagic 0x3241594152524119ULL        /* "..ARRAY2", the container's own (derived entries) */

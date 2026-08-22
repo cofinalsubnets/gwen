@@ -627,7 +627,7 @@ static lvm(lvm_getgid) { Sp[0] = putcharm((intptr_t) getgid()); ai_musttail retu
 
 // (fork _) -> child pid | 0 in the child | -errno. fork WITHOUT exec -- the
 // shell's subshell: the child EVALS a subtree and quits, and must NEVER return
-// to the reader loop (doc/posix.md's open question, answered conservatively:
+// to the reader loop (doc/misc/posix.md's open question, answered conservatively:
 // the child owns a full copy-on-write address space, so the GC is fine; the
 // discipline is all in the caller -- flush out/err before, child = eval+quit).
 ai_noinline static ai_word host_fork(void) {
@@ -698,7 +698,7 @@ static lvm(lvm_newns) {
 static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 #endif
 
-// --- the general POSIX fs surface (the posix_ symbol namespace; doc/posix.md L0,
+// --- the general POSIX fs surface (the posix_ symbol namespace; doc/misc/posix.md L0,
 // staging step 1) -- these serve any program, not just the supervisor, so their C
 // symbols wear the posix_ prefix; the love names stay the plain POSIX words.
 // (stat path)    -> (size mtime mode ns uid gid nlink blocks ino) | () -- absence (or

@@ -35,7 +35,7 @@ endif
 # WHO LINKS `love`: mooncc by default, and the whole vm with it. HCC=1 takes the $(CC) lane
 # instead -- the differential the kernel spells KCC, worn at the host. It is the only build
 # that puts a foreign cc on the vm at ai_tco=1, which is where ai_musttail is live and where
-# a prototype mismatch our own sibcall pass waves through is refused (doc/moon-c-gaps.md).
+# a prototype mismatch our own sibcall pass waves through is refused (doc/misc/moon-c-gaps.md).
 # ⚠ ITS OWN TREE, because the two loves are the same path otherwise: out/host-cc keeps the
 # objects and the binary apart, and $m follows it so a test runs the one you asked for.
 override HCC := $(filter-out 0,$(HCC))
@@ -85,7 +85,7 @@ c_c = $(addprefix $R/crew/moon/lib/nolibc/string/,memchr.c memcmp.c memcpy.c mem
 .l.r:
 .l.ln:
 
-# the dialect we target, and mooncc's own aim -- doc/moon-c-gaps.md is the ledger.
+# the dialect we target, and mooncc's own aim -- doc/misc/moon-c-gaps.md is the ledger.
 ai_std := c11
 
 ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \

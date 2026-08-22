@@ -10,7 +10,7 @@
 #   2. `vmret` is green, per cc. this is the one that earns the lane: ai_musttail is OWED,
 #      and a shape that cannot jump must refuse at compile. mooncc's sibcall pass asks only
 #      whether a jump is EMITTABLE, so it waved through a 5-arg caller jumping into a 4-arg
-#      callee that clang refuses outright (doc/moon-c-gaps.md). vmret cannot catch it
+#      callee that clang refuses outright (doc/misc/moon-c-gaps.md). vmret cannot catch it
 #      either -- it reads the binary mooncc built, sounding our own rule against our own
 #      output. A foreign cc compiling the same file is the only instrument that has.
 #

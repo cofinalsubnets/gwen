@@ -220,7 +220,7 @@
    ; proves the room and the twin takes the near-full heap. 2.1x the shipping nif at 200x200,
    ; and ~10% over gcc's build of the same C, which is the only row here that beats a real cc.
    ; ⚠ love.c's own lvm_outer wrote 4*M of its M*N cells until 2026-08-16 (a mooncc
-   ; declarator-scope bug, doc/moon-c-gaps.md); the differential below is what found it.
+   ; declarator-scope bug, doc/misc/moon-c-gaps.md); the differential below is what found it.
    (forge-outer-ir _)
     ([ '(ld r0 r1 0) '(test r0 1) '(br ne deopt)
        ['li 'r8 forge-trayk] '(ld r7 r0 0) '(cmp r7 r8) '(br ne deopt)

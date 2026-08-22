@@ -4,7 +4,7 @@
 ; module in cat order (job eval line main) -- each part a body-less `:` binding
 ; into the module, so later parts read earlier ones. the shell story is main.l's.
 ;
-; v3 (doc/posix.md step 4): JOB CONTROL. the shell IGNORES the tty's job
+; v3 (doc/misc/posix.md step 4): JOB CONTROL. the shell IGNORES the tty's job
 ; signals (installed in (sh _), main.l; spawn's child side resets them to
 ; default), so ^C/^Z reach only the foreground command. a ^Z stop comes back
 ; from `wait` as 256+sig (above every exit status) and the job parks in

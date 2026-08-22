@@ -1,5 +1,5 @@
 ; tools/fatpack.l -- lay the fat container: one file, every text
-; (doc/plan/seed-universal.md rung U1).
+; (doc/misc/plan/seed-universal.md rung U1).
 ;
 ;   love tools/fatpack.l OUT ARCH FILE [ARCH FILE ..]
 ;
@@ -26,7 +26,7 @@
     (arch + ") b=" + show b + " n=" + show n + " s=" + show s + ";;\n")
    (fp-prefix id arms)
     ("#!/bin/sh\n"
-     + "# love -- one file, every text (doc/plan/seed-universal.md U1)\n"
+     + "# love -- one file, every text (doc/misc/plan/seed-universal.md U1)\n"
      + "m=$(uname -m)\ncase \"$m\" in\n" + arms
      + "*) echo \"love: no text aboard for $m\" >&2; exit 2;;\nesac\n"
      + "d=\"${HOME:-/tmp}/.love/fat\"\n"

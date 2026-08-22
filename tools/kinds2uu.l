@@ -1,5 +1,5 @@
 ; tools/kinds2uu.l -- the kinds-lattice analog of tools/wm2uu.l: read the ABSTRACT
-; DOMAIN of doc/proto/kinds.l AS DATA and emit test/uukind.l -- the join (and its
+; DOMAIN of doc/misc/proto/kinds.l AS DATA and emit test/uukind.l -- the join (and its
 ; num? guard) compiled into uu terms over a nat-coded carrier, so test/uukindlaw.l
 ; proves the semilattice laws OF THE ACTUAL ANALYSIS, not a hand transcription. Run:
 ;
@@ -65,7 +65,7 @@
    (k2-op km ps pr resty ty) (L (k2-pi ps resty) (k2-lams ps (k2-tx km (cap (cup pr)) ty)))
 
    ; --- drive: read kinds.l, lift num? and join ---
-   fs (forms (open "doc/proto/kinds.l" "r"))
+   fs (forms (open "doc/misc/proto/kinds.l" "r"))
    big (cap (filter (\ f (&& (two? f) (id? (cap f) ':))) fs))
    ps (k2-pairs (cup big))
    km0 (k2-rankmap (cap (cup (k2-find 'rank ps))))
@@ -80,7 +80,7 @@
                           _ (pl ("   '" + (show (cap op))))
                           (pl ("   '" + (show (cap (cup op))) + close)))
 
-   _ (puts "; test/uukind.l -- GENERATED from doc/proto/kinds.l by tools/kinds2uu.l. Do")
+   _ (puts "; test/uukind.l -- GENERATED from doc/misc/proto/kinds.l by tools/kinds2uu.l. Do")
    _ (pl "; not edit; refresh with `make uukind`. The abstract kinds-lattice JOIN (and")
    _ (pl "; its num? guard) compiled into uu over a nat-coded carrier, kind = its rank")
    _ (pl "; (str the branch off the spine). test/uukindlaw.l proves the semilattice laws")

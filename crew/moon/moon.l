@@ -18,7 +18,7 @@
 ; which is real here and bars every splice. a link owing
 ; libc symbols pulls the runtime (nolibc + am math + sys) by need from the
 ; sources beside it -- -nostdlib/-ffreestanding turn that off. errors speak on
-; err and exit 1; usage exits 2. LAST in the mooncc cat (its own app, doc/moon.md), after
+; err and exit 1; usage exits 2. LAST in the mooncc cat (its own app, doc/misc/moon.md), after
 ; crew/holo/{elf,obj,link}.l and crew/moon/{lex,cpp,parse,gen}.l; rides the
 ; u-floor (uread udie urun). its tail SEAT fires moon-main when mooncc is the program;
 ; moon-run is the same compile ANSWERING its status, for a caller staying in the image.
@@ -255,7 +255,7 @@
        "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
      + (? (id? tgt 'x64) () '("__STDC_NO_COMPLEX__=1"))
      + (? (member? tgt '(x64 arm64)) () '("__STDC_NO_VLA__=1")))
-   ; the gcc-shaped predefine table (doc/moon-c-gaps: the predefine surface) --
+   ; the gcc-shaped predefine table (doc/misc/moon-c-gaps: the predefine surface) --
    ; the <stdint>/<limits>/<float.h> family a library config reads instead of
    ; probing: pdclib, gnulib and musl typedef straight off these names. one
    ; table forked once on the word width (+ the wchar fork), every value gcc's
@@ -900,7 +900,7 @@
    ; syntax C rejects outright, so moon is a strict SUPERSET: no C program means anything
    ; different here, which is the whole licence for defaulting to it.
    ; `c` is the fence for when that matters: strict C, no extensions, at whatever iteration
-   ; we hover around (C11, doc/moon-c-gaps.md). The ISO names are all one dialect -- we do
+   ; we hover around (C11, doc/misc/moon-c-gaps.md). The ISO names are all one dialect -- we do
    ; not distinguish them from a codegen point of view -- so they differ only in what we can
    ; say we accept, and the bare `c` is the honest spelling of that.
    ; ⚠ NO `holyc` ROW. It named one borrowed extension and would have refused U0, I64 and
@@ -1117,7 +1117,7 @@
 ; the SEAT: fire moon-main iff mooncc sits in the program seat of the real command line
 ; -- the positional program, or a `-l` preload (the installed shebang) -- taking the
 ; args AFTER the seat. `cmdline` is the full C argv, read the same in both load orders.
-; mooncc is its OWN app (its own catted shebang script, doc/moon.md): it does NOT ride the
+; mooncc is its OWN app (its own catted shebang script, doc/misc/moon.md): it does NOT ride the
 ; au multi-call cat, so a cc edit rebuilds only mooncc, never au. matching mooncc/moon.l here
 ; keeps the seat quiet under any other program name.
 ; and the VERB, pinned HERE rather than by whoever cats this file: the app owns its own

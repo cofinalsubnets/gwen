@@ -1,6 +1,6 @@
 ; --- test/host/sh.l: lush's gate -- the lexer / grammar / expansion / glob pure
 ; functions, the job-control nifs (signal / wait's stop lane / sigfd's signal
-; list: doc/posix.md step 4, signals arriving as conditions), and the BUILT
+; list: doc/misc/posix.md step 4, signals arriving as conditions), and the BUILT
 ; shell driven end to end through out/host/love (never env's PATH love). the
 ; interactive loop needs a pty (probed live, the berth pattern); everything
 ; beneath it gates headless here. the parts read bare in cat order; main.l's

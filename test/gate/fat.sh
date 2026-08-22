@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/fat.sh -- the fat container (doc/plan/seed-universal.md U1): the ONE
+# test/gate/fat.sh -- the fat container (doc/misc/plan/seed-universal.md U1): the ONE
 # file answers on the native machine through its prefix + content-named cache,
 # the cache holds (a second run lays nothing new), the pack is deterministic to
 # the byte, and the foreign member extracts and answers under qemu-user (that

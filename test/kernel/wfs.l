@@ -1,7 +1,7 @@
-; The writable tree, inle's rung 2 (doc/inle.md): create, mkdir, rmdir, unlink,
+; The writable tree, inle's rung 2 (doc/misc/inle.md): create, mkdir, rmdir, unlink,
 ; rename, chdir/cwd -- plus chmod and utime, which kore's cp and touch ride -- and
 ; the environment (getenv setenv environ), a tablet in the kernel's boot text. The
-; shapes are doc/posix.md's and the host's exactly: an effect answers () | a
+; shapes are doc/misc/posix.md's and the host's exactly: an effect answers () | a
 ; POSITIVE errno (the host's numbers) | 22 on misuse; a value answers the value |
 ; (); chdir wears the host's negative lane. test/host/fs.l holds sibling laws
 ; against the real tree.

@@ -1,5 +1,5 @@
 ; test/uukindlaw.l -- the LAWS of the kinds-lattice join, proved of the GENERATED
-; term (test/uukind.l, lifted from doc/proto/kinds.l by tools/kinds2uu.l). the
+; term (test/uukind.l, lifted from doc/misc/proto/kinds.l by tools/kinds2uu.l). the
 ; abstract domain is FINITE -- seven codes, bot..top plus the incomparable str --
 ; so the semilattice laws are DECIDABLE by exhausting the carrier: we evaluate the
 ; generated `kjoin` in the kernel (vof) over every pairing/tripling of uk-codes and

@@ -30,7 +30,7 @@
 ;   kore whoami|groups|arch|nproc    the four one-line answers
 ;   kore vi [FILE]                   the editor (crew/vi/)
 ;   kore sh [-c CMD | FILE]          the shell, lush (crew/lush/; also `lush`, and an sh symlink)
-; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/moon.md.)
+; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/misc/moon.md.)
 ;
 ; loads LAST in the kore cat, when every tool main is already defined; the tool files'
 ; own SEATs stay quiet here (no file of theirs sits in the program seat), so this

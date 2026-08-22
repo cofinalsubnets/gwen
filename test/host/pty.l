@@ -93,7 +93,7 @@
 (test_fin ())
 (puts "pty: ok") (putc 10)
 
-; --- the two-task editor + pump topology (doc/io.md part II, "the symptom") ---
+; --- the two-task editor + pump topology (doc/misc/io.md part II, "the symptom") ---
 ; bao's rlwrap upgrade was BUILT AND REVERTED because this hung after one
 ; keystroke: `feedlines` (edraw on one port, rendering to out) in one task while
 ; `pump` reads a different port in a second. the diagnosis was defect 1 -- a task
@@ -101,7 +101,7 @@
 ; (love.c:3997 consults the pushback AND the buffered run before the fd), and
 ; today's `besc` does not push back at all, it discards. re-tested green
 ; 2026-07-31; this pins it. ⚠ no commit ever carried `feedlines` -- it is
-; reconstructed from the snippet in doc/io.md, which is its only other copy.
+; reconstructed from the snippet in doc/misc/io.md, which is its only other copy.
 ; scriptable with two ptys: one plays the keyboard (echo OFF so escape bytes
 ; arrive raw -- with echo on, the line discipline renders ESC as `^[` and the
 ; arrow never decodes), one is the child.

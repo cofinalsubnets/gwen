@@ -13,7 +13,7 @@
 ; task parked on both a timer and an fd wakes when BOTH are ready. so it is three
 ; tasks: the receiver parks on the socket, a watchdog parks on the clock, and the
 ; caller parks in `catch`. whichever finishes first wins, because a FREEZE OUT
-; FROM UNDER A CATCHER wakes it with the zero point (doc/io.md, the catch rung's
+; FROM UNDER A CATCHER wakes it with the zero point (doc/misc/io.md, the catch rung's
 ; law 15). no `cue?` loop, no 1 ms tick.
 ;
 ; ⚠ THIS IS A PORT OF crew/moon/lib/nolibc.c's RESOLVER, which is what a

@@ -1,6 +1,6 @@
 #!/bin/sh
 # moon-parity.sh -- one C feature per row, every mooncc target per column: which
-# lanes exist where. doc/moon-c-gaps.md's parity table is this script's output,
+# lanes exist where. doc/misc/moon-c-gaps.md's parity table is this script's output,
 # and `moon-parity.sh check` holds the doc to it.
 #
 # moon-sweep.sh measures one target against a real package; moon-reject.sh measures
@@ -36,7 +36,7 @@
 # exactly that, which is how the hand-written table got it wrong.
 #
 # usage: moon-parity.sh [table | check | why]
-#   table  (default) the markdown table, ready to paste into doc/moon-c-gaps.md
+#   table  (default) the markdown table, ready to paste into doc/misc/moon-c-gaps.md
 #   check  diff the measured matrix against the table the doc carries; nonzero on drift
 #   why    every refusal with the cause the compiler gave, and every borrow with its symbol
 set -e
@@ -47,7 +47,7 @@ set -e
 love=${LOVE:-out/host/love}
 mc=${MOONCC:-env LOVE_NO_IMAGE= $love mooncc}
 kore=${KORE:-env LOVE_NO_IMAGE= $love kore}
-doc=${DOC:-doc/moon-c-gaps.md}
+doc=${DOC:-doc/misc/moon-c-gaps.md}
 mode=${1:-table}
 d=${TMPDIR:-/tmp}/moon-parity.$$
 [ -x "$love" ] || { echo "moon-parity: no $love -- run make host"; exit 0; }
@@ -79,7 +79,7 @@ p() {
 
 # --- the probes. Each is the smallest program that reaches ONE lane, and each
 # DEFINES what it exercises: a bare prototype compiles on every target and would
-# score a lane that is not there (doc/moon-c-gaps, the 16B-return trap).
+# score a lane that is not there (doc/misc/moon-c-gaps, the 16B-return trap).
 p '`__int128`' \
 'unsigned __int128 f(unsigned long a,unsigned long b){return (unsigned __int128)a*b;}'
 p '`_Complex` arithmetic' \

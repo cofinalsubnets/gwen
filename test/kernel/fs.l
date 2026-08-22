@@ -1,6 +1,6 @@
-; The file nifs, inle's rung 1 (doc/inle.md): stat, readdir, lseek and the raw-fd
+; The file nifs, inle's rung 1 (doc/misc/inle.md): stat, readdir, lseek and the raw-fd
 ; lane under them -- and the wall clock, which is what makes an mtime a date. The
-; shapes are doc/posix.md's and the host's, exactly: (size ms mode ns) and a list of
+; shapes are doc/misc/posix.md's and the host's, exactly: (size ms mode ns) and a list of
 ; entry strings, because kore reads these and a divergence would be silent where an
 ; absence is loud (test/host/init.l holds the same laws against the real tree).
 ;

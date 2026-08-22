@@ -36,7 +36,7 @@
    (rep k f) (? (k < 1) 0 (: _ (f ()) (rep (k - 1) f)))
 
    ; ⚠ the reps are fixed so all three compilers do identical work, and chosen so the
-   ; FASTEST lane still spends ~300 ms of real work -- doc/moon-gauge.md puts the floor on
+   ; FASTEST lane still spends ~300 ms of real work -- doc/misc/moon-gauge.md puts the floor on
    ; a ccbench ratio at 4%, and a row that finishes in 50 ms cannot say anything at all.
    (crc-run _) (: _a (rep 1000 (\ _ (crc32 nifmsg)))
                   (puts "cnifs crc32: ok\n"))

@@ -5,8 +5,8 @@
 ; the ONE cutter, every world: the tree on disk is the source, checkout and
 ; seed-laid tree alike. pack it under TOP (love-<ver>) -- out/ bin/ dl/ and
 ; everything HIDDEN at the root (.git .sb .claude .cache .gitignore ..) are
-; the machine's and the checkout's, never the source's, and each DROP nom is
-; left out by name -- with a sorted walk and every mtime pinned to STAMP, so
+; the machine's and the checkout's, never the source's, doc/misc is the design
+; record rather than the product, and each DROP nom is left out by name -- with a sorted walk and every mtime pinned to STAMP, so
 ; the same files answer the same bytes wherever they sit. test_distboot
 ; holds a re-cut to the byte.
 ;
@@ -36,16 +36,23 @@
                      _ (say q s)
                      (close q))
    sp-skip '("out" "bin" "dl")
+   ; ..and the ones matched WHOLE, for a directory that sits inside one the archive
+   ; keeps. doc/misc is the tree's design record and its sketches; doc/ itself stays,
+   ; because the man pages are written in doc/{love,cook,lush}.md and `make install`
+   ; in an unpacked release generates all three from them.
+   sp-inner '("doc/misc")
    (sp-top nom) (: n (tally nom)
                    (go i) (? (n <= i) nom (nom i = 47) (snip nom 0 i) (go (i + 1)))
                    (go 0))
    ; hidden at the root = the machine's, not the source's
    (sp-hid? nom) (: seg (sp-top nom) (tally seg && (peep seg 0 0 = 46)))
-   ; keep a nom unless its top segment is a build product or hidden, or the
-   ; whole nom is a DROP. handed to the WALK, not run after it: what the archive
-   ; will not carry is never read (out/ and dl/ are gigabytes on a build box).
+   ; keep a nom unless its top segment is a build product or hidden, or the whole
+   ; nom is one of sp-inner or a DROP. handed to the WALK, not run after it: what
+   ; the archive will not carry is never read (out/ and dl/ are gigabytes on a
+   ; build box, and a rejected directory is never descended into at all).
    (sp-keep? drops nom)
-    (! (member? (sp-top nom) sp-skip || sp-hid? nom || member? nom drops))
+    (! (member? (sp-top nom) sp-skip || sp-hid? nom
+        || member? nom sp-inner || member? nom drops))
    ; re-home the kept entries under TOP -- the walk is already sorted, so order
    ; is preserved.
    (sp-take es top acc)

@@ -28,7 +28,7 @@ v = $(DESTDIR)/$(VIMPREFIX)
 # with line 1 rewritten -- which is what a package wants anyway. The pattern matches both
 # shebang forms, leaving a trailing ` -l` alone.
 # the sed these recipes spawn is OURS: kore is the installed binary's own verb now
-# (the layered bake, doc/plan/one-binary.md). ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads,
+# (the layered bake, doc/misc/plan/one-binary.md). ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads,
 # for $(hcc)'s reason: the root exports it=1 for the corpus, and an egg-booted love has
 # no verbs -- `kore` would read as a filename.
 korecmd = LOVE_NO_IMAGE= $(ho)/love kore
@@ -200,7 +200,7 @@ $d/bin/ain: tools/ain.l $(ho)/love.baked
 # a tool-named symlink. It shadows nothing here -- only `kore` lands on PATH, and the distro
 # symlinks the tool names where shadowing is the point.
 # A VERB SHIM: the installed binary carries the crew in its own layered image
-# (doc/plan/one-binary.md), so there is no sibling image and no wake spelling -- the
+# (doc/misc/plan/one-binary.md), so there is no sibling image and no wake spelling -- the
 # picker wakes the crew layer off the `kore` verb, same warm start as ever.
 # ⚠ `n` comes off $0 UNCHASED where `h` is the chased path: a tool symlink must arrive as its
 # own name for the argv[0] door, and only the real file's dir has the $(BIN) sibling.

@@ -1,4 +1,4 @@
-; the rung-4 gate (doc/inle.md): a lush pipeline of kore tools on the kernel.
+; the rung-4 gate (doc/misc/inle.md): a lush pipeline of kore tools on the kernel.
 ; the engine parts (job..eval, in cat order) load just before this file, so
 ; sh-line is the shell -- the same door test/host/sh.l reads on the host. the
 ; tail redirects onto the rung-2 tree and is read back; the tree is restored.

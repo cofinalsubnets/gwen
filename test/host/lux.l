@@ -6,7 +6,7 @@
 ;
 ; (connectu path) opens a unix-domain stream socket. A REAL round trip needs a
 ; unix listener on the other end -- that is an X display socket in practice, so
-; the integration proof lives in the lux spikes (doc/proto/lux.l against Xephyr),
+; the integration proof lives in the lux spikes (doc/misc/proto/lux.l against Xephyr),
 ; not the gate. Here: the nif is present and every refusal lane answers nil,
 ; not a scare -- absence is nothing.
 (assert (lit? connectu))

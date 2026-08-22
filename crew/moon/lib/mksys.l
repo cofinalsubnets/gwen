@@ -11,7 +11,7 @@
 ; C CAN say has no place here.) three targets, one layer: (mksys dst) lays x64,
 ; (mksys-arm64 dst) aarch64, (mksys-riscv dst) riscv64 -- all seed mksys-as, which
 ; picks the arch's IR table. the x64 lane serves TWO kernels from one object
-; (doc/plan/seed-universal.md rung UV1): the tail is OS-blind -- CF cleared
+; (doc/misc/plan/seed-universal.md rung UV1): the tail is OS-blind -- CF cleared
 ; before the insn, and a carry answer (freebsd's error convention) parked
 ; below linux's band as -(errno+4096), so impl.h's __ai_call reads one law --
 ; and the sigprocmask leaves branch on __ai_osv (os.c's probe) between

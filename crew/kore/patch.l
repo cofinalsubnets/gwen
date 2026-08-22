@@ -1,6 +1,6 @@
 ; crew/kore/patch.l -- patch(1), the other half of diff. crew/kore/diff.l WRITES unified
 ; hunks; this reads them back and lays them on a tree, which is what every third-party
-; source in doc/plan/lfs.md's ladder is delivered as. a toolbox of one: patch-main, no
+; source in doc/misc/plan/lfs.md's ladder is delivered as. a toolbox of one: patch-main, no
 ; seat, kore.l is its door.
 ;
 ; UNIFIED DIFFS ONLY, deliberately. The context (`***`/`---`) and normal (`3c3`) formats

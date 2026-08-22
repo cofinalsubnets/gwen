@@ -4,7 +4,7 @@ include mk/common.mk
 
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
-# ==== THE FULL-FAT ARTIFACT'S OWN TOOLCHAIN (doc/dist.md) ====
+# ==== THE FULL-FAT ARTIFACT'S OWN TOOLCHAIN (doc/misc/dist.md) ====
 # A release tarball that ships `bin/love` carries its whole C toolchain in that one
 # file: love wears a `mooncc` verb, and mooncc drives gcc-shaped recipes unchanged
 # (test_drv). So when the bundled binary is here and the user named no compiler, IT
@@ -119,10 +119,10 @@ all: host kernel wasm dist
 # path:line:col: and exit 1 otherwise. NOT in the test gate: an editing aid, not a
 # semantic check. The roster below is the files whose singletons ARE the subject --
 # reader/pattern/operator specimens and the executable spec's zero-operand laws --
-# plus doc/proto, which is sketches. Everything else answers for every gripe.
+# plus doc/misc/proto, which is sketches. Everything else answers for every gripe.
 lint_exempt = test/host/p0fix.l test/spec.l test/law.l test/operator.l
 lint: $(ho)/love
-	@$(ho)/love $R/crew/libra/libra.l $$(git ls-files '*.l' | grep -v '^doc/proto/' \
+	@$(ho)/love $R/crew/libra/libra.l $$(git ls-files '*.l' | grep -v '^doc/misc/proto/' \
 	  $(foreach f,$(lint_exempt),| grep -v '^$(f)$$')) && echo "lint: clean -- no gripes"
 
 # ccdb: emit compile_commands.json so clangd reads the flags the build actually uses --
@@ -156,9 +156,11 @@ ccdb: $(ho)/love
 #               syntax read, so the site wears the editor's colours by construction.
 #
 # a tool with a doc/*.md of its own is skipped for the DOC page (that page is the one
-# someone wrote) but still gets its source page.
+# someone wrote) but still gets its source page. ⚠ BOTH doc/ AND doc/misc/ are asked:
+# doc/ is the three man sources now and every other hand-written page is under misc.
 crewtools = $(foreach d,$(wildcard crew/*),$(wildcard $d/$(notdir $d).l))
-sitetools = $(foreach f,$(crewtools),$(if $(wildcard doc/$(notdir $(basename $f)).md),,$f))
+sitetools = $(foreach f,$(crewtools),\
+  $(if $(wildcard doc/$(notdir $(basename $f)).md doc/misc/$(notdir $(basename $f)).md),,$f))
 out/toolmd.stamp: $(sitetools) crew/libra/libra.l $(ho)/love
 	@rm -rf out/toolmd && mkdir -p out/toolmd
 	@for f in $(sitetools); do n=$${f##*/}; n=$${n%.l}; \

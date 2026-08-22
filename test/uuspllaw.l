@@ -1,5 +1,5 @@
 ; test/uuspllaw.l -- the SPLICE LICENSE, proved of the terms test/uusplgen.l
-; GENERATED from doc/proto/spl.l (loaded just before this by sort order; the
+; GENERATED from doc/misc/proto/spl.l (loaded just before this by sort order; the
 ; stack machine in test/uuhom.l, kernel in test/uu.l). the model pins these
 ; laws by ASSERT at one demo env; here each is a THEOREM forall states -- and
 ; the flip pair is the reason the observation carries a TRACE: substitution

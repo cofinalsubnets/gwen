@@ -1,4 +1,4 @@
-; crew/sb/sb.l -- svalbard: the patch-set vcs (doc/sb.md the interface,
+; crew/sb/sb.l -- svalbard: the patch-set vcs (doc/misc/sb.md the interface,
 ; test/patch.l + test/proof/rocq/patch.v the laws). this cut
 ; is the MVP's local half: `record` (working changes -> a patch in the store),
 ; `log`, `diff`; `sync` rides the same store next (patches + blobs are immutable
@@ -652,7 +652,7 @@
 
 ; --- the CLI face: usage + the verb dispatcher (cook-main's shape) ---
 (:
-   (usage _) (: _ (say err "sb -- svalbard, the patch-set vcs (doc/sb.md)
+   (usage _) (: _ (say err "sb -- svalbard, the patch-set vcs (doc/misc/sb.md)
 usage: sb VERB ..
   record [NOTE]   working changes -> a patch in the store (.sb/)
   sync PEER       EXCHANGE patch sets with a peer nest (a dir holding .sb/),

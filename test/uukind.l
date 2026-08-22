@@ -1,4 +1,4 @@
-; test/uukind.l -- GENERATED from doc/proto/kinds.l by tools/kinds2uu.l. Do
+; test/uukind.l -- GENERATED from doc/misc/proto/kinds.l by tools/kinds2uu.l. Do
 ; not edit; refresh with `make uukind`. The abstract kinds-lattice JOIN (and
 ; its num? guard) compiled into uu over a nat-coded carrier, kind = its rank
 ; (str the branch off the spine). test/uukindlaw.l proves the semilattice laws

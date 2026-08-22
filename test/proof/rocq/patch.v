@@ -1,6 +1,6 @@
 (* proof/patch.v -- the PATCH GROUPOID, the hand-proven slices, machine-checked in Rocq.
 
-   The design lives in doc/proto/patch.l (the runnable toy + the argument that a
+   The design lives in doc/misc/proto/patch.l (the runnable toy + the argument that a
    distribution, a namespace, and a repo state are ONE algebra of selectable sets,
    with COMMUTE the primitive underneath). That toy DEMONSTRATES the laws at
    runtime; this file upgrades demonstrate toward PROVE -- the commute laws as

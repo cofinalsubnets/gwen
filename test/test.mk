@@ -158,7 +158,7 @@ test_stdincorpus: $(ho)/love.baked
 	@echo "  ok   file, redirect and pipe read the corpus identically on both loves"
 # test_front -- the TEST-ONLY FRONTEND: out/host/front links liblove.a (core/love.c only)
 # and supplies the frontend contract itself, so its port vt can answer WOULD-BLOCK on
-# cue (doc/io.md). ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
+# cue (doc/misc/io.md). ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
 $(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/core/love_data.ld \
     out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h
 	@echo CC	$@
@@ -238,9 +238,9 @@ test_hostnif: host out/host$(hsuf)/lush
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
 	done
 # Runnable design companions in doc/ -- pure-love models that pin the shape a C design
-# takes (doc/stream.l ~ doc/io.md part II). Zero-dep, but they leak helper names into the
+# takes (doc/misc/stream.l ~ doc/misc/io.md part II). Zero-dep, but they leak helper names into the
 # one global scope, so they run standalone. Same contract: exit 0 AND a "<name>: ok".
-doc_tests = doc/stream.l doc/proto/dest.l doc/proto/spl.l
+doc_tests = doc/misc/stream.l doc/misc/proto/dest.l doc/misc/proto/spl.l
 test_doc: host
 	@for s in $(doc_tests); do echo "TEST $$s"; \
 	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$m" ": ok" \
@@ -343,7 +343,7 @@ test_sb: host out/host$(hsuf)/sb
 	@rm -rf out/host/.sbtest
 	@cat test/00-init.l test/host/sb.l | sh test/gate/run.sh sb "$m" "sb: ok"
 # the kore smokes drive love's own crew layer (`love kore ..` -- the layered bake,
-# doc/plan/one-binary.md), warm per spawn; the argv0 smoke lays its own two-line shim,
+# doc/misc/plan/one-binary.md), warm per spawn; the argv0 smoke lays its own two-line shim,
 # the distro's shape, since the tree carries no kore binary anymore.
 korerun = $m kore
 test_kore: host
@@ -406,7 +406,7 @@ test_vi: host
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "" ]; } \
 	    || { echo "FAIL kore vi undo (exit $$r)"; exit 1; }; \
 	  echo "kore: vi (laws + piped create/dd/q!/undo end-to-end) ok"
-# The C compiler (crew/moon/, doc/moon.md): the pure pipeline's goldens, then stage-0 end
+# The C compiler (crew/moon/, doc/misc/moon.md): the pure pipeline's goldens, then stage-0 end
 # to end through the real `mooncc` -- compile, run, exit 42, against a gcc -O0 differential
 # on the same source. Drives the crew layer warm (~0.68s -> ~0.1s per compile, 88 of them).
 moonrun = $m mooncc
@@ -456,7 +456,7 @@ $(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
 	 else touch $$@; fi
 endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
-# test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/clay.md): for every file
+# test_clay -- G1, clay's faithfulness gate (crew/moon/clay.l, doc/misc/clay.md): for every file
 # in test/cc/, (cparse (clay-show ast)) == ast, STRUCTURALLY. ⚠ the run PARTITIONS and names
 # both halves: what it can say, and the declarations cparse did not keep -- a measured gap.
 test_clay: host
@@ -577,7 +577,7 @@ test_vec: host
 # $(moon_o) is the link list: the gate is handed make's objects, it never globs the odir.
 test_fixpoint: host $(love0) out/host/mooncc0.image
 	@sh test/gate/fixpoint.sh $(ho) $(love0) $(moon_o)
-# THE CROSS-MACHINE FIXPOINT, in effigy (doc/plan/seed-universal.md U0): the x-lane's
+# THE CROSS-MACHINE FIXPOINT, in effigy (doc/misc/plan/seed-universal.md U0): the x-lane's
 # twin objects link love1, then love1 under qemu-user rebuilds itself natively and must
 # answer the same bytes -- the twin machine reproducing this machine's, on one box.
 # opt-in BY NAME (a full rebuild under emulation is minutes): `make test_xfixpoint`,
@@ -591,7 +591,7 @@ test_xfixpoint: $(xobjs) $(love0) out/host/mooncc0.image
 .PHONY: test_fat
 test_fat: dist-fat
 	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(boot_love)" $(ho) $(xd)
-# the multi-OS gate (doc/plan/seed-universal.md, rung UV): ONE default-lane
+# the multi-OS gate (doc/misc/plan/seed-universal.md, rung UV): ONE default-lane
 # binary answers every kernel with the same text. the box arrives by env --
 # FBSD_SSH / NBSD_SSH = "ssh -p 2222 -i KEY root@HOST" -- and without one the
 # gate skips loudly. opt-in by name, like test_distboot; FBSD_SEED=1 /
@@ -1007,7 +1007,7 @@ test_uuwm: host
 	@cmp -s out/host/.uuwm.l.tmp test/uuwm.l \
 	  || { echo "FAIL: test/uuwm.l is stale (crew/lux/core.l moved?) -- run: make uuwm"; exit 1; }
 	@rm -f out/host/.uuwm.l.tmp
-# test/uukind.l is a COMMITTED GENERATED artifact: doc/proto/kinds.l's abstract kinds-lattice
+# test/uukind.l is a COMMITTED GENERATED artifact: doc/misc/proto/kinds.l's abstract kinds-lattice
 # JOIN compiled into uu terms (tools/kinds2uu.l), so test/uukindlaw.l proves the semilattice
 # laws OF THE ANALYSIS at corpus time. `make uukind` refreshes it; test_uukind diffs it.
 uukind: host
@@ -1017,9 +1017,9 @@ test_uukind: host
 	@echo TEST test/uukind.l "(regenerate + diff)"
 	@$m tools/kinds2uu.l > out/host/.uukind.l.tmp
 	@cmp -s out/host/.uukind.l.tmp test/uukind.l \
-	  || { echo "FAIL: test/uukind.l is stale (doc/proto/kinds.l moved?) -- run: make uukind"; exit 1; }
+	  || { echo "FAIL: test/uukind.l is stale (doc/misc/proto/kinds.l moved?) -- run: make uukind"; exit 1; }
 	@rm -f out/host/.uukind.l.tmp
-# test/uuhomgen.l is a COMMITTED GENERATED artifact: doc/proto/dest.l's two code generators
+# test/uuhomgen.l is a COMMITTED GENERATED artifact: doc/misc/proto/dest.l's two code generators
 # run on its law sites, the emissions lifted to uu terms (tools/dest2uu.l), so test/uuhomlaw.l
 # proves the destination-die laws OF THE EMISSIONS at corpus time. `make uuhomgen` refreshes it; test_uuhomgen regenerates and diffs.
 uuhomgen: host
@@ -1029,9 +1029,9 @@ test_uuhomgen: host
 	@echo TEST test/uuhomgen.l "(regenerate + diff)"
 	@$m tools/dest2uu.l > out/host/.uuhomgen.l.tmp
 	@cmp -s out/host/.uuhomgen.l.tmp test/uuhomgen.l \
-	  || { echo "FAIL: test/uuhomgen.l is stale (doc/proto/dest.l moved?) -- run: make uuhomgen"; exit 1; }
+	  || { echo "FAIL: test/uuhomgen.l is stale (doc/misc/proto/dest.l moved?) -- run: make uuhomgen"; exit 1; }
 	@rm -f out/host/.uuhomgen.l.tmp
-# test/uusplgen.l is a COMMITTED GENERATED artifact: doc/proto/spl.l's three call-site
+# test/uusplgen.l is a COMMITTED GENERATED artifact: doc/misc/proto/spl.l's three call-site
 # compilers (call, binding splice, substitution splice) run on its samples, the threads
 # lifted to uu terms (tools/spl2uu.l), so test/uuspllaw.l proves the SPLICE LICENSE of
 # the emissions at corpus time.
@@ -1043,7 +1043,7 @@ test_uusplgen: host
 	@echo TEST test/uusplgen.l "(regenerate + diff)"
 	@$m tools/spl2uu.l > out/host/.uusplgen.l.tmp
 	@cmp -s out/host/.uusplgen.l.tmp test/uusplgen.l \
-	  || { echo "FAIL: test/uusplgen.l is stale (doc/proto/spl.l moved?) -- run: make uusplgen"; exit 1; }
+	  || { echo "FAIL: test/uusplgen.l is stale (doc/misc/proto/spl.l moved?) -- run: make uusplgen"; exit 1; }
 	@rm -f out/host/.uusplgen.l.tmp
 # test_wake: the BAKE-THEN-WAKE ROUND TRIP, which no other gate runs -- every other lane
 # wakes an image some earlier recipe baked. A CANDIDATE COPY bakes (love.wake, ETXTBSY-proof)

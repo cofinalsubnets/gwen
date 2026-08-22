@@ -2154,7 +2154,7 @@
 ; the ZERO-labelled leaf is 0 itself. etree = nat buys the whole nat kit at
 ; tree grain for free (isdeceq, isaset, natgtb order for canonical forms),
 ; kids come back as a plain nlist (the list kit rides), and the swal/clash/
-; metavariable slices get their element grain. the door: doc/proto/patch.l's
+; metavariable slices get their element grain. the door: doc/misc/proto/patch.l's
 ; rose-tree walks, queued behind this type.
 ; ============================================================================
 ; --- the cantor pairing. npair climbs the triangle; unpair WALKS the

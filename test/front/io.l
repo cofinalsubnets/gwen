@@ -9,7 +9,7 @@
 ; or a frontend that lies, which is what this one is for.
 ;
 ; the fault lives in TEST code. love carries no switch, no env var and no nif for
-; it, which is the standing rule (doc/io.md).
+; it, which is the standing rule (doc/misc/io.md).
 ;
 ; `(stall p k)` arms k would-block answers on the device's readn WHILE `ai_ready`
 ; keeps saying yes. what must then hold: the reading task PARKS and re-runs the op

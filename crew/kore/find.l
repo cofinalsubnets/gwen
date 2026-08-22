@@ -146,7 +146,7 @@
        ws <d maxd <>d mind <>>d
        pr (? (two? ws) (fi-or ws) [['true] ()])
        _ (? ((two? pr) && !(two? <>pr)) ()
-            (udie 1 "usage: find [PATH..] [EXPR]  -- see doc/kore.md for the grammar"))
+            (udie 1 "usage: find [PATH..] [EXPR]  -- see doc/misc/kore.md for the grammar"))
        e (? (fi-acts? <pr) <pr ['and <pr ['print]])
        st (tablet 0)
        ; a named path that is not there is find's one loud failure: it complains,

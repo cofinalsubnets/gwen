@@ -1,4 +1,4 @@
-; tools/clay-g2.l -- G2, doc/clay.md's CONVERSION gate: does the C a generator lays
+; tools/clay-g2.l -- G2, doc/misc/clay.md's CONVERSION gate: does the C a generator lays
 ; mean what the C it replaces meant?
 ;
 ; parse two whole translation units and compare the named top-level DEFINITIONS as

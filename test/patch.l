@@ -1,6 +1,6 @@
 ; test/patch.l -- the PATCH GROUPOID, the executable SOURCE-OF-TRUTH spec.
 ;
-; the drift anchor for the whole patch stack: doc/proto/patch.l is the design (the
+; the drift anchor for the whole patch stack: doc/misc/proto/patch.l is the design (the
 ; argument that a distribution / namespace / repo-state are ONE algebra of
 ; selectable sets, with COMMUTE the primitive underneath). the proofs run on two
 ; legs. the GENERATED leg is the destination and is OPEN: test/uupatch.l encodes
@@ -33,7 +33,7 @@
 ; leak-free form.
 
 (:
- ; --- the model (mirror of doc/proto/patch.l) ---
+ ; --- the model (mirror of doc/misc/proto/patch.l) ---
  (chg k a b) (link 'chg (link k (link a (link b 0))))     ; patch: change slot k, old->new
  (pk p) (cap (cup p))                                     ; the slot it touches
  (pa p) (cap (cup (cup p)))                               ; its context (old value)

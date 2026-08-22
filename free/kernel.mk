@@ -26,7 +26,7 @@ endif
 # and links. KCC names WHICH love drives it, not which compiler -- a foreign cc has no
 # lane here (dropped 2026-08-19: HCC covers foreign-cc on the host and ccbench races them
 # over the same TUs, so a second kernel compiler earned nothing it did not already cost).
-# ⚠ mooncc is love's own verb now (the layered bake, doc/plan/one-binary.md), and the
+# ⚠ mooncc is love's own verb now (the layered bake, doc/misc/plan/one-binary.md), and the
 # LOVE_NO_IMAGE= clear is load-bearing (the guard against an exported egg): an
 # egg-booted love has no verb table -- `mooncc` would read as a filename.
 KCC ?= LOVE_NO_IMAGE= $(ho)/love mooncc
