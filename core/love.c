@@ -5978,40 +5978,43 @@ static lvm(lvm_mul_cart) {
 // to answer with, which is what an anonymous point, an opaque handle, an out-of-range
 // index and a non-index operand all have in common.
 
-// THE TEXT LANE, reached by a string head and by a NAMED point acting as its spelling
-// (`pt` says which). a TEXT operand -- a string or a named point -- JUXTAPOSES: (s t) is
-// s then t, C's adjacent-literal law with the literal restriction lifted, and it curries,
-// so ("a" "b" "c") joins three. it agrees with (+ s t) on every text pair, two named
-// points re-interning to a point. a CHARM operand INDEXES instead -- the unsigned byte,
-// negatives from the end. everything else, out of range included, is (), which no byte
-// is: a read past the end is tellable without a bounds check.
-static lvm(seq_text_apply, bool pt) {
+// THE TEXT LANE: a string head, or a NAMED point acting as its spelling -- the sequence
+// it already is to tally, net and `+`. a TEXT operand -- a string or a named point --
+// JUXTAPOSES: (s t) is s then t, C's adjacent-literal law with the literal restriction
+// lifted, and it curries, so ("a" "b" "c") joins three. it agrees with (+ s t) on every
+// text pair, two named points re-interning to a point. a CHARM operand INDEXES instead --
+// the unsigned byte, negatives from the end. everything else, out of range included, is
+// (), which no byte is: a read past the end is tellable without a bounds check.
+// the head stays at Ip in BOTH shapes, so this keeps the plain lvm signature and its
+// guaranteed tails -- an extra parameter would forbid ai_musttail into Continue.
+static lvm(data_string_apply) {
+ bool pt = namep(word(Ip));                             // a point head can answer a point
+ struct ai_str *na = pt ? nom_str(g, word(Ip)) : str(word(Ip));
  struct ai_str *nb = strp(Sp[0]) ? str(Sp[0]) : namep(Sp[0]) ? nom_str(g, Sp[0]) : NULL;
  if (nb) {
-  bool mk = pt && namep(Sp[0]);                          // point + point -> the interned point
-  uintptr_t m = len(Ip), n = nb->len, req = str_type_width + b2w(m + n);
+  bool mk = pt && namep(Sp[0]);                         // point + point -> the interned point
+  uintptr_t m = na->len, n = nb->len, req = str_type_width + b2w(m + n);
   if (!(m + n)) { Ip = cell(*++Sp); *Sp = mk ? ZeroPoint : EmptyString; ai_musttail return Continue(); }  // the empty spelling is the zero POINT; no empty string is ever allocated
   Have(req + (mk ? intern_reserve(g) : 0));
-  struct ai_str *z = seq_cat(g, Hp, word(Ip), Sp[0]);    // roots both, so a GC in Have moved them
+  na = pt ? nom_str(g, word(Ip)) : str(word(Ip));       // re-read: a GC in Have moved the roots
+  struct ai_str *z = seq_cat(g, Hp, word(na), Sp[0]);
   Hp += req;
   word v = word(z);
   if (mk) Pack(g), v = intern_checked(g, z), Unpack(g);
   Ip = cell(*++Sp); *Sp = v; ai_musttail return Continue(); }
  word v = ZeroPoint;
  if (oddp(Sp[0])) {
-  word n = getcharm(Sp[0]);
-  if (n < 0) n += (word) len(Ip);                       // -1 is the last byte
-  if (n >= 0 && n < (word) len(Ip)) v = putcharm((unsigned char) txt(Ip)[n]); }
+  word k = getcharm(Sp[0]);
+  if (k < 0) k += (word) na->len;                       // -1 is the last byte
+  if (k >= 0 && k < (word) na->len) v = putcharm((unsigned char) txt(na)[k]); }
  Ip = cell(*++Sp); *Sp = v; ai_musttail return Continue(); }
-static lvm(data_string_apply) { ai_musttail return Ap(seq_text_apply, g, false); }
 
-// applying a point: a NAMED point ACTS AS ITS SPELLING, the sequence it already is to
-// tally, net and `+` -- so it indexes and juxtaposes down the text lane. an ANONYMOUS
-// point -- a gensym, and () -- has no spelling to act as, so nothing is there to answer
-// with: (). name? and mint? partition nom? and () is in neither; this is that line.
+// applying a point: a NAMED point acts as its spelling, so it rides the text lane whole.
+// an ANONYMOUS point -- a gensym, and () -- has no spelling to act as, so nothing is
+// there to answer with: (). name? and mint? partition nom? and () is in neither.
 static lvm(data_sym_apply) {
- if (!namep(word(Ip))) { Ip = cell(*++Sp); *Sp = ZeroPoint; ai_musttail return Continue(); }
- Ip = cell(word(nom_str(g, word(Ip)))); ai_musttail return Ap(seq_text_apply, g, true); }
+ if (namep(word(Ip))) ai_musttail return Ap(data_string_apply, g);
+ Ip = cell(*++Sp); *Sp = ZeroPoint; ai_musttail return Continue(); }
 
 // (n x): church-numeral application for the boxed tower -- the same
 // [n, num-ap, x, ret] frame as lvm_numap
