@@ -336,18 +336,20 @@ int image_freeze(struct ai *g, void **rec, uintptr_t *reclen) {
   struct image_segs segs;
   struct ai_image_guard gd = image_guard(&segs);
   *reclen = 0;
-  if ((*rec = ai_image_freeze(g, reclen, &gd))) return 0;
+  uint8_t why = 0;
+  if ((*rec = ai_image_freeze(g, reclen, &gd, &why))) return 0;
   return fprintf(stderr, "love: bake: the layer refused to freeze (why=%lu)\n",
-                 (unsigned long) g->image_why), -2;
+                 (unsigned long) why), -2;
 }
 int image_save_over(struct ai *g, void *const *bases, uintptr_t const *blens, uintptr_t nbase,
                     void **subout, uintptr_t *sublens, void **full, uintptr_t *fulllen) {
   struct image_segs segs;
   struct ai_image_guard gd = image_guard(&segs);
   *fulllen = 0;
-  if ((*full = ai_image_save_over(g, fulllen, &gd, bases, blens, nbase, subout, sublens))) return 0;
+  uint8_t why = 0;
+  if ((*full = ai_image_save_over(g, fulllen, &gd, &why, bases, blens, nbase, subout, sublens))) return 0;
   return fprintf(stderr, "love: bake: the image refused to save (why=%lu)\n",
-                 (unsigned long) g->image_why), -4;
+                 (unsigned long) why), -4;
 }
 
 int image_bake(struct ai *g) {

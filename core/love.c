@@ -536,16 +536,31 @@ static ai_inline bool eql(struct ai *g, word a, word b) {
 static ai_inline bool tagp(word x, word const *lo, word const *hi) {
  word const *p = (word const*) (x & ~(word) 3);
  return (x & 3) == ai_thread_tag && p >= lo && p < hi; }
+// THE COLLECTION: the state that means something only for the span of one pass, held
+// on the C stack of whoever drives it. it is not in the core because between two
+// collections there is no answer for any of it, and a stale range is exactly how a
+// walk leaves the heap. every function below that can be reached from gcp takes it.
+struct ai_gcx {
+ word const *p0, *t0;        // the from-space under trace
+ word const *f2lo, *f2hi;    // a SECOND from-space (0 = unused); a major traces {major ∪ minor} in one pass
+ word *to_lo, *to_hi;        // where survivors land: the tagp range [to_lo, to_hi)
+ word *fwd;                  // the forwarding floor: word0 in [fwd, to_hi) = a copy made THIS pass
+ word *froze_lo, *froze_hi;  // the pinned prefix's from-space window, else 0 (gen_major)
+ word *cp; };                // the cheney scan cursor
+// the pools a heap pointer may live in BETWEEN collections -- the question bio_of asks
+// of a port (heap bio, or the static it cannot own a buffer for).
+static ai_inline bool in_live_pool(struct ai *g, word const *p) {
+ if (p >= ptr(g) && p < ptr(g) + g->len) return true;             // minor / main pool
+ return g->major_pool && p >= g->major_pool && p < g->major_pool + 2 * g->major_len; }   // both major halves
 // GC scans run with DIFFERENT [lo,hi), so a terminator must be recognized by which
 // LIVE pool its head lands in, not the caller's single range -- else a young-pointing
 // terminator under the major range is gcp'd as a field and followed off the heap.
-static ai_inline bool in_live_pool(struct ai *g, word const *p) {
- if (p >= ptr(g) && p < ptr(g) + g->len) return true;             // minor / main pool
- if (g->gc_to_lo && p >= g->gc_to_lo && p < g->gc_to_hi) return true;   // current to-space
- if (g->major_pool && p >= g->major_pool && p < g->major_pool + 2 * g->major_len) return true;   // both major halves
- return false; }
-static ai_inline bool tagl(struct ai *g, word x) {                  // range-independent terminator test
- return (x & 3) == ai_thread_tag && in_live_pool(g, (word const*) (x & ~(word) 3)); }
+// ⚠ mid-pass the to-space is a THIRD range: a fresh pair gen_major has not flipped to
+// yet, or the new pool gen_grow is copying into -- neither is a pool of g's yet.
+static ai_inline bool tagl(struct ai *g, struct ai_gcx *X, word x) {   // range-independent terminator test
+ if ((x & 3) != ai_thread_tag) return false;
+ word const *p = (word const*) (x & ~(word) 3);
+ return (X->to_lo && p >= X->to_lo && p < X->to_hi) || in_live_pool(g, p); }
 static ai_inline union u *tagthread(union u *h, uintptr_t len) {
   return h[len].x = word(h) | ai_thread_tag, h; }
 #define topof(g) ((word*)g+g->len)
@@ -596,8 +611,9 @@ static ai_inline uintptr_t rot(uintptr_t x) {
 // the four doors that are not a device; spelled out beside their readn/writen
 extern struct ai_port_vt const ai_ti_vt, ai_to_vt, ai_closed_vt, ai_ci_vt;
 
-static ai_inline void *off_pool(struct ai *g) {
- return g == g->pool ? (word*) g->pool + g->len : (word*) g->pool; }
+// the pool's SPARE half: the core sits at the base of the active one, so the scratch
+// a walk borrows starts one pool length up
+static ai_inline void *off_pool(struct ai *g) { return (word*) g + g->len; }
 static ai_inline struct ai *pushq(struct ai*g) { return intern(ai_strof(g, "\\")); }
 static ai_inline struct ai *push0(struct ai*g) { return ai_push(g, 1, zero); }
 static ai_inline size_t llen(word l) {
@@ -662,7 +678,7 @@ enum ai_status ai_fin(struct ai *g) {
    // for the next runtime gets nothing back without this.
    if (g->rem) g->alloc(g, g->rem, 0);
    if (g->major_pool) g->alloc(g, g->major_pool, 0);
-   g->alloc(g, g->pool, 0); }                 // ..the pool IS g, so it goes last
+   g->alloc(g, g, 0); }                       // ..the pool IS g, so it goes last
  return s; }
 
 // the module lane's target: find-or-make mod's tablet on the registry (g->mods,
@@ -732,19 +748,18 @@ char const *ai_nif_name(intptr_t x) {
 
 static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t)) {
  memset(g, 0, sizeof(struct ai));      // the core needs no leading ap: () is the const ZeroPoint, never (word)g
- g->len = len0, g->pool = (void*) g, g->alloc = al;
+ g->len = len0, g->alloc = al;
  g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
  g->hot_read = g->hot_numap = g->hot_stack = g->hot_compose = g->hot_opfix = g->hot_help = g->hot_show = zero;   // unsealed: hot_hook traps until (seal-hook) fills them; help zero = nobody listening
  g->hot_io = zero;                     // the task's stdio: zero is the console, the steady state
  g->mods = zero;                       // the module registry: lazily created by the first (mods _) read
- g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c, g->t0 = ai_clock();
- g->minor = g->end;                  // generational watermark: nothing tenured yet (the first collection sets it)
+ g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
  // the rem set + major pool ride g->alloc: a frontend that cannot supply them cannot run
  g->major_len = ai_major0;
  g->rem = g->alloc(g, NULL, AiRemCap * sizeof(word));
  g->major_pool = g->rem ? g->alloc(g, NULL, 2 * g->major_len * sizeof(word)) : NULL;
  if (!g->major_pool) { if (g->rem) g->alloc(g, g->rem, 0); return encode(g, ai_status_scare); }
- g->major_base = g->major_hp = g->major_pool, g->rem_cap = AiRemCap, g->budget = ai_budget;
+ g->major_base = g->major_hp = g->major_pool, g->budget = ai_budget;
  g->minor0 = ai_minor0, g->major0 = ai_major0, g->ratio = ai_gc_ratio;   // the live knobs; `tune` moves them
  g->next_wait_events = ai_wait_in;
  // book + macro maps (lookup-lambdas) then the main task thread.
@@ -868,68 +883,68 @@ lvm(lvm_gc, uintptr_t n) {
  if (!ai_ok(g = ai_please(g, n))) return Ap(_lvm_ghelp, g);
  return Resume(); }
 
-static word gcp(struct ai*, word, word const *, word const *);
+static word gcp(struct ai*, struct ai_gcx*, word);
 
-static ai_inline void evac_chain(struct ai*g, word const*const p0, word const*const t0) {
- struct ai_chain *w = (struct ai_chain*) g->cp;
- g->cp += Width(struct ai_chain);
- w->a = gcp(g, w->a, p0, t0);
- w->b = gcp(g, w->b, p0, t0); }
+static ai_inline void evac_chain(struct ai *g, struct ai_gcx *X) {
+ struct ai_chain *w = (struct ai_chain*) X->cp;
+ X->cp += Width(struct ai_chain);
+ w->a = gcp(g, X, w->a);
+ w->b = gcp(g, X, w->b); }
 
-static ai_inline void evac_tray(struct ai*g, word const*const p0, word const*const t0) {
- struct ai_tray *v = tray(g->cp);
- g->cp += b2w(ai_tray_bytes(v));
+static ai_inline void evac_tray(struct ai *g, struct ai_gcx *X) {
+ struct ai_tray *v = tray(X->cp);
+ X->cp += b2w(ai_tray_bytes(v));
  if (v->type != ai_O) return;                 // numeric trays are GC leaves (flat payload)
  word *e = (word*) tray_data(v);              // object tray: forward each live element word
  uintptr_t n = tray_nelem(v);
- while (n--) e[n] = gcp(g, e[n], p0, t0); }
+ while (n--) e[n] = gcp(g, X, e[n]); }
 
-static ai_inline void evac_str(struct ai*g, word const*const p0, word const*const t0) {
- g->cp += b2w(sizeof(struct ai_str) + str(g->cp)->len); }
+static ai_inline void evac_str(struct ai *g, struct ai_gcx *X) {
+ X->cp += b2w(sizeof(struct ai_str) + str(X->cp)->len); }
 
-static ai_inline void evac_big(struct ai*g, word const*const p0, word const*const t0) {
- g->cp += b2w(ai_big_bytes(big(g->cp))); }
+static ai_inline void evac_big(struct ai *g, struct ai_gcx *X) {
+ X->cp += b2w(ai_big_bytes(big(X->cp))); }
 
 // the lean boxes are flat GC leaves
-static ai_inline void evac_gem(struct ai*g, word const*const p0, word const*const t0) {
- g->cp += gem_req; }
+static ai_inline void evac_gem(struct ai *g, struct ai_gcx *X) {
+ X->cp += gem_req; }
 
-static ai_inline void evac_sun(struct ai*g, word const*const p0, word const*const t0) {
- g->cp += sun_req; }
+static ai_inline void evac_sun(struct ai *g, struct ai_gcx *X) {
+ X->cp += sun_req; }
 
-static ai_inline void evac_twin(struct ai*g, word const*const p0, word const*const t0) {
- g->cp += twin_req; }
+static ai_inline void evac_twin(struct ai *g, struct ai_gcx *X) {
+ X->cp += twin_req; }
 
-static ai_inline void evac_sym(struct ai*g, word const*const p0, word const*const t0) {
- g->cp += Width(struct ai_mint); }              // uniform 2 words; copy_sym forwards the serial
+static ai_inline void evac_sym(struct ai *g, struct ai_gcx *X) {
+ X->cp += Width(struct ai_mint); }              // uniform 2 words; copy_sym forwards the serial
 
-static ai_inline void evac_nom(struct ai*g, word const*const p0, word const*const t0) {
- struct ai_nom *w = (struct ai_nom*) g->cp;
- g->cp += Width(struct ai_nom);                 // 4 words; forward the name string (serial + dig are scalars)
- w->name = gcp(g, w->name, p0, t0); }
+static ai_inline void evac_nom(struct ai *g, struct ai_gcx *X) {
+ struct ai_nom *w = (struct ai_nom*) X->cp;
+ X->cp += Width(struct ai_nom);                 // 4 words; forward the name string (serial + dig are scalars)
+ w->name = gcp(g, X, w->name); }
 
-static ai_inline void evac_thread(struct ai *g, word const *const p0, word const*const t0) {
+static ai_inline void evac_thread(struct ai *g, struct ai_gcx *X) {
   // tagl ends the thread regardless of scan space, so a young-pointing terminator is never gcp'd as a field
-  for (g->cp += 1; !tagl(g, g->cp[-1]); g->cp[-1] = gcp(g, g->cp[-1], p0, t0), g->cp++);
+  for (X->cp += 1; !tagl(g, X, X->cp[-1]); X->cp[-1] = gcp(g, X, X->cp[-1]), X->cp++);
   // a pinned thread's terminator names its own head, which moved with the block.
   // copy_thread re-tags what it copies; a memcpy'd one keeps a from-space self-pointer,
   // and the loop above ends on it without handing it to gcp.
-  if (g->froze_lo) {
-   word *h = (word*)(g->cp[-1] & ~(word) 3);
-   if (h >= g->froze_lo && h < g->froze_hi)
-    g->cp[-1] = (word)(g->gc_to_lo + (h - g->froze_lo)) | ai_thread_tag; } }
+  if (X->froze_lo) {
+   word *h = (word*)(X->cp[-1] & ~(word) 3);
+   if (h >= X->froze_lo && h < X->froze_hi)
+    X->cp[-1] = (word)(X->to_lo + (h - X->froze_lo)) | ai_thread_tag; } }
 
-static ai_inline void evac_data(struct ai *g, word const *const p0, word const*const t0) {
-  switch (typ(g->cp)) {
-   case DTray: return evac_tray(g, p0, t0);
-   case DMint: return evac_sym(g, p0, t0);
-   case DNom: return evac_nom(g, p0, t0);
-   case DChain: return evac_chain(g, p0, t0);
-   case DString: return evac_str(g, p0, t0);
-   case DBig: return evac_big(g, p0, t0);
-   case DGem: return evac_gem(g, p0, t0);
-   case DSun: return evac_sun(g, p0, t0);
-   case DTwin: return evac_twin(g, p0, t0); }
+static ai_inline void evac_data(struct ai *g, struct ai_gcx *X) {
+  switch (typ(X->cp)) {
+   case DTray: return evac_tray(g, X);
+   case DMint: return evac_sym(g, X);
+   case DNom: return evac_nom(g, X);
+   case DChain: return evac_chain(g, X);
+   case DString: return evac_str(g, X);
+   case DBig: return evac_big(g, X);
+   case DGem: return evac_gem(g, X);
+   case DSun: return evac_sun(g, X);
+   case DTwin: return evac_twin(g, X); }
   __builtin_trap(); }                            // a hot outside enum d: the object is not what its ap says
 
 // ===== generational write barrier =====
@@ -938,16 +953,16 @@ static ai_inline void evac_data(struct ai *g, word const *const p0, word const*c
 // minor under a complete set is sound (test/proof/rocq/gc.v barrier_sound).
 // the one escape is overflow (rem_miss): a dropped entry forces the next collection
 // MAJOR, which traces from roots and needs no rem set.
-// young?: the ADDRESS is the generation (no age bits) -- in [minor, hp).
+// young?: the ADDRESS is the generation (no age bits) -- in [end, hp).
 static ai_inline bool ai_young(struct ai *g, word p) {
- return lamp(p) && ptr(p) >= g->minor && ptr(p) < g->hp; }
+ return lamp(p) && ptr(p) >= (word*) g->end && ptr(p) < g->hp; }
 static bool gen_remembered(struct ai *g, word obj) {
  for (uintptr_t i = 0; i < g->rem_n; i++) if (g->rem[i] == obj) return true;
  return false; }
 static void gen_remember(struct ai *g, word obj) {
  if (g->rem_n && g->rem[g->rem_n - 1] == obj) return;          // hot path: same map as last pin
  if (gen_remembered(g, obj)) return;                           // deduped: the set stays small (book + a few)
- if (g->rem_n < g->rem_cap) g->rem[g->rem_n++] = obj;          // full: the miss forces a MAJOR (roots-only trace, no rem set), so a dropped entry can't orphan a young edge
+ if (g->rem_n < AiRemCap) g->rem[g->rem_n++] = obj;            // full: the miss forces a MAJOR (roots-only trace, no rem set), so a dropped entry can't orphan a young edge
  else g->rem_miss++;
  if (g->rem_n > g->rem_hi) g->rem_hi = g->rem_n; }
 // an old `src` gains a young `p` -> remember src. maps and reader spines are the
@@ -970,16 +985,16 @@ static ai_inline void gen_wb_two(struct ai *g, word two, word v) {
 // gen_scan_inplace: a tenured object pointing into the young set stays put, but its
 // young fields must promote -- gcp each outgoing pointer IN PLACE. evac_* without
 // the relocation; a thread's terminator sits in the major to-space.
-static void gen_scan_inplace(struct ai *g, word obj, word const *p0, word const *t0) {
+static void gen_scan_inplace(struct ai *g, struct ai_gcx *X, word obj) {
  union u *p = cell(obj);
  if (datp(obj)) switch (typ(obj)) {
   case DChain: { struct ai_chain *w = two(obj);
-                 w->a = gcp(g, w->a, p0, t0), w->b = gcp(g, w->b, p0, t0); break; }
+                 w->a = gcp(g, X, w->a), w->b = gcp(g, X, w->b); break; }
   case DTray:   { struct ai_tray *v = tray(p); if (v->type == ai_O) { word *e = (word*) tray_data(v);
-                 for (uintptr_t i = 0, ne = tray_nelem(v); i < ne; i++) e[i] = gcp(g, e[i], p0, t0); } break; }
-  case DNom:   { nom(p)->name = gcp(g, nom(p)->name, p0, t0); break; }
+                 for (uintptr_t i = 0, ne = tray_nelem(v); i < ne; i++) e[i] = gcp(g, X, e[i]); } break; }
+  case DNom:   { nom(p)->name = gcp(g, X, nom(p)->name); break; }
   default: break;                                  // DMint/DString/DBig/DGem/DSun/DTwin: pointer-free leaves
- } else { for (union u *q = p; !tagl(g, q->x); q++) q->x = gcp(g, q->x, p0, t0); } }   // a thread: every word to the tag terminator (tagl: head in any live pool)
+ } else { for (union u *q = p; !tagl(g, X, q->x); q++) q->x = gcp(g, X, q->x); } }   // a thread: every word to the tag terminator (tagl: head in any live pool)
           // INCLUDING word0 -- a normal thread's ap is out-of-pool (gcp no-op) but a task-ring node's
           // word0 is its `next` pointer, the very old->young edge the rem set exists to chase.
 
@@ -997,22 +1012,22 @@ static void gen_fz_relocate(struct ai *g) {
   fz = next; } }
 
 // the weak-table sweep + finalizer pass of a MAJOR's compact: symbols_rebuild /
-// run_finalizers, but bumping into the major to-space and testing survival against gc_to_{lo,hi}
-static word major_symbols_rebuild(struct ai *g, word om) {
+// run_finalizers, but bumping into the major to-space and testing survival against X's
+static word major_symbols_rebuild(struct ai *g, struct ai_gcx *X, word om) {
  if (!om) return 0;
  uintptr_t cap = map_cap(om), mask = cap - 1, n = 0;
  union u *b = map_fill_back(bump(g, 4 + 2 * cap), cap), *hd = bump(g, 3);
  hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, tagthread(hd, 2);
  word *os = map_slots(om), *ns = &b[3].x;
- word const *lo = g->gc_to_lo, *hi = g->gc_to_hi;
+ word const *lo = X->to_lo, *hi = X->to_hi;
  for (uintptr_t j = 0; j < cap; j++) {
   word k = os[2 * j];
   if (k == map_gap) continue;
   word e = os[2 * j + 1], fwd;
   // a pinned atom survives without a forward: the prefix is not copied, so word0 is
   // untouched and the test below would read every frozen symbol as dead.
-  if (g->froze_lo && ptr(e) >= g->froze_lo && ptr(e) < g->froze_hi)
-   fwd = (word)(g->gc_to_lo + (ptr(e) - g->froze_lo));
+  if (X->froze_lo && ptr(e) >= X->froze_lo && ptr(e) < X->froze_hi)
+   fwd = (word)(X->to_lo + (ptr(e) - X->froze_lo));
   else {
    fwd = cell(e)->x;                            // the atom's first word: its forward, if it survived
    if (!(lamp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue; }
@@ -1022,13 +1037,13 @@ static word major_symbols_rebuild(struct ai *g, word om) {
   ns[2 * i] = nk, ns[2 * i + 1] = fwd, n++; }
  b[1].x = putcharm(n);
  return (word) hd; }
-static void major_run_finalizers(struct ai *g) {
+static void major_run_finalizers(struct ai *g, struct ai_gcx *X) {
  struct ai_fz *new_fz = NULL;
  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) {
   word fwd = fz->p->x;
-  if (g->froze_lo && (word*) fz->p >= g->froze_lo && (word*) fz->p < g->froze_hi)
-   fwd = (word)(g->gc_to_lo + ((word*) fz->p - g->froze_lo));   // pinned: alive, and it did not move (symbols_rebuild's rule)
-  if (lamp(fwd) && g->gc_to_lo <= ptr(fwd) && ptr(fwd) < g->gc_to_hi) {
+  if (X->froze_lo && (word*) fz->p >= X->froze_lo && (word*) fz->p < X->froze_hi)
+   fwd = (word)(X->to_lo + ((word*) fz->p - X->froze_lo));   // pinned: alive, and it did not move (symbols_rebuild's rule)
+  if (lamp(fwd) && X->to_lo <= ptr(fwd) && ptr(fwd) < X->to_hi) {
    struct ai_fz *nn = bump(g, Width(struct ai_fz));
    nn->p = cell(fwd), nn->fn = fz->fn, nn->next = new_fz, new_fz = nn;
   } else fz->fn(fz->p); }
@@ -1040,50 +1055,48 @@ static void major_run_finalizers(struct ai *g) {
 #define ai_gc_stress_major 32
 
 // the MINOR: evacuate [end, hp) into the major active half, reset hp = end. the
-// cheney scan starts at the append point, walking only fresh survivors; gc_fwd
+// cheney scan starts at the append point, walking only fresh survivors; X.fwd
 // tells a forward made THIS collection from a pointer to a pre-existing major object.
 static void gen_minor(struct ai *g) {
- ai_image_note(0x33);
- word const *p0 = (word const*) g->end, *t0 = g->hp;          // minor from-range
- g->gc_gen = 1, g->gc_f2lo = 0;
- g->gc_to_lo = g->major_base, g->gc_to_hi = g->major_base + g->major_len;
- g->gc_fwd = g->major_hp;
- g->cp = g->major_hp;
- g->ip = cell(gcp(g, word(g->ip), p0, t0));
- g->tasks = cell(gcp(g, word(g->tasks), p0, t0));
- if (g->parked) g->parked = cell(gcp(g, word(g->parked), p0, t0));   // the parked ring is its own root
- for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, (&g->v0)[i], p0, t0);   // core vars
- for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, *s, p0, t0);                       // stack
- for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, *r->x, p0, t0);              // C roots
+ struct ai_gcx X = { .p0 = (word const*) g->end, .t0 = g->hp,    // minor from-range
+                     .to_lo = g->major_base, .to_hi = g->major_base + g->major_len,
+                     .fwd = g->major_hp, .cp = g->major_hp };
+ g->gc_gen = true;
+ g->ip = cell(gcp(g, &X, word(g->ip)));
+ g->tasks = cell(gcp(g, &X, word(g->tasks)));
+ if (g->parked) g->parked = cell(gcp(g, &X, word(g->parked)));   // the parked ring is its own root
+ for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, &X, (&g->v0)[i]);   // core vars
+ for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, &X, *s);                       // stack
+ for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, &X, *r->x);              // C roots
  // the weak intern map is its own field, not a root: promote its STRUCTURE by hand
  // (entries stay weak -- a major drops dead atoms). young header: gcp it; tenured:
  // scan its possibly-young backing in place.
  if (g->symbols) {
-  if (ai_young(g, g->symbols)) g->symbols = gcp(g, g->symbols, p0, t0);
-  else gen_scan_inplace(g, g->symbols, p0, t0), gen_scan_inplace(g, map_back(g->symbols), p0, t0);
+  if (ai_young(g, g->symbols)) g->symbols = gcp(g, &X, g->symbols);
+  else gen_scan_inplace(g, &X, g->symbols), gen_scan_inplace(g, &X, map_back(g->symbols));
  }
- for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, g->rem[i], p0, t0);        // major->young edges
- for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, word(fz->p), p0, t0));
- while (g->cp < g->major_hp) (datp(g->cp) ? evac_data : evac_thread)(g, p0, t0);
+ for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, &X, g->rem[i]);        // major->young edges
+ for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, &X, word(fz->p)));
+ while (X.cp < g->major_hp) (datp(X.cp) ? evac_data : evac_thread)(g, &X);
 #ifdef AiGcCheck
  // the fixpoint IS a fixpoint (gc.v drain_second_pass_copies_nothing): re-drive the
  // whole scan; every gcp must be an identity. if major_hp moves, the first pass LOST
  // a reachable object -- trap at the collection that lost it. (make test_gcheck)
  { word *hp1 = g->major_hp;
-  g->cp = (word*) g->gc_fwd;
-  g->ip = cell(gcp(g, word(g->ip), p0, t0));
-  g->tasks = cell(gcp(g, word(g->tasks), p0, t0));
-  if (g->parked) g->parked = cell(gcp(g, word(g->parked), p0, t0));
-  for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, (&g->v0)[i], p0, t0);
-  for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, *s, p0, t0);
-  for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, *r->x, p0, t0);
+  X.cp = X.fwd;
+  g->ip = cell(gcp(g, &X, word(g->ip)));
+  g->tasks = cell(gcp(g, &X, word(g->tasks)));
+  if (g->parked) g->parked = cell(gcp(g, &X, word(g->parked)));
+  for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, &X, (&g->v0)[i]);
+  for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, &X, *s);
+  for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, &X, *r->x);
   if (g->symbols) {
-   if (ai_young(g, g->symbols)) g->symbols = gcp(g, g->symbols, p0, t0);
-   else gen_scan_inplace(g, g->symbols, p0, t0), gen_scan_inplace(g, map_back(g->symbols), p0, t0);
+   if (ai_young(g, g->symbols)) g->symbols = gcp(g, &X, g->symbols);
+   else gen_scan_inplace(g, &X, g->symbols), gen_scan_inplace(g, &X, map_back(g->symbols));
   }
-  for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, g->rem[i], p0, t0);
-  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, word(fz->p), p0, t0));
-  while (g->cp < g->major_hp) (datp(g->cp) ? evac_data : evac_thread)(g, p0, t0);
+  for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, &X, g->rem[i]);
+  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) fz->p = cell(gcp(g, &X, word(fz->p)));
+  while (X.cp < g->major_hp) (datp(X.cp) ? evac_data : evac_thread)(g, &X);
   if (g->major_hp != hp1) __builtin_trap(); }
 #endif
  if (g->fz) gen_fz_relocate(g);
@@ -1092,16 +1105,15 @@ static void gen_minor(struct ai *g) {
  // ⚠ poison the vacated nursery, or the stress build is half a detector: a stale
  // local otherwise reads a forwarding pointer that still looks live. last thing
  // here -- gen_fz_relocate is the from-space's last reader.
- for (word *p = (word*) p0; p < (word*) t0; p++) *p = ai_gc_poison;
+ for (word *p = (word*) X.p0; p < (word*) X.t0; p++) *p = ai_gc_poison;
 #endif
- g->gc_gen = 0; }
+ g->gc_gen = false; }
 
 // the MAJOR: one cheney pass from the real roots over BOTH from-spaces into the
 // spare half -- reachability, never a linear sweep, which is why a rem-set overflow
 // forces one. then rebuild the intern map, run finalizers, flip, reset the minor.
 static struct ai *gen_major(struct ai *g) {
- ai_image_note(0x34);
- word const *p0 = g->major_base, *t0 = g->major_hp;              // from-range 1: major active
+ struct ai_gcx X = { .p0 = g->major_base, .t0 = g->major_hp };   // from-range 1: major active
  // size the to-space for the worst case: all of major-active AND all of the minor survive
  uintptr_t used = (uintptr_t)(g->major_hp - g->major_base), young = (uintptr_t)(g->hp - (word*) g->end);
  uintptr_t need = used + young;
@@ -1125,22 +1137,22 @@ static struct ai *gen_major(struct ai *g) {
    to_len = need_step, resized = (need_step == g->major_len) ? 0 : g->alloc(g, NULL, 2 * need_step * sizeof(word));
   if (resized) to = resized;
   else if (need <= g->major_len) to_len = g->major_len, to = spare;   // alloc failed, but the existing spare half holds the live set
-  else return g->gc_gen = 0, encode(g, ai_status_scare);             // true OOM: compacting would overflow the spare -> clean scare, no corruption
+  else return g->gc_gen = false, encode(g, ai_status_scare);         // true OOM: compacting would overflow the spare -> clean scare, no corruption
  } else to = spare;
- g->gc_gen = 1;
+ g->gc_gen = true;
  // the pinned prefix rides across verbatim at the same offsets. the scan starts below it
  // so its words are still rewritten in place -- a frozen object may point at something
- // new -- and gc_fwd starts past it, since nothing in it is copied or forwarded.
+ // new -- and X.fwd starts past it, since nothing in it is copied or forwarded.
  uintptr_t froze = g->froze;
  if (froze) {
   memcpy(to, g->major_base, froze * sizeof(word));
-  g->froze_lo = g->major_base, g->froze_hi = g->major_base + froze;
+  X.froze_lo = g->major_base, X.froze_hi = g->major_base + froze;
   // a live finalizer node is three raw words with no header, so the scan below cannot
   // stride it. nothing reaches the copies -- run_finalizers bumps a fresh list past the
   // block -- so forge each into a dead chain of the same width.
   for (struct ai_fz *z = g->fz; z; z = z->next)
-   if ((word*) z >= g->froze_lo && (word*) z < g->froze_hi) {
-    word *c = to + ((word*) z - g->froze_lo);
+   if ((word*) z >= X.froze_lo && (word*) z < X.froze_hi) {
+    word *c = to + ((word*) z - X.froze_lo);
     c[0] = (word) lvm_chain, c[1] = c[2] = ZeroPoint; }
   // the intern map's pinned copy is ballast the moment the rebuild below re-homes it,
   // holding whatever the last intern wrote -- GC timing, not program state. leave the
@@ -1148,26 +1160,25 @@ static struct ai *gen_major(struct ai *g) {
   // image verbatim, and dead entries must not pin their atoms.
   if (g->symbols) {
    word *hc = (word*) cell(g->symbols), *bc = (word*) cell(map_back(g->symbols));
-   if (hc >= g->froze_lo && hc < g->froze_hi) (to + (hc - g->froze_lo))[1] = ZeroPoint;
-   if (bc >= g->froze_lo && bc < g->froze_hi) {
-    word *c = to + (bc - g->froze_lo);
+   if (hc >= X.froze_lo && hc < X.froze_hi) (to + (hc - X.froze_lo))[1] = ZeroPoint;
+   if (bc >= X.froze_lo && bc < X.froze_hi) {
+    word *c = to + (bc - X.froze_lo);
     uintptr_t bcap = getcharm(c[2]);
     c[1] = putcharm(0);
     for (uintptr_t j = 0; j < bcap; j++) c[3 + 2 * j] = map_gap, c[4 + 2 * j] = zero; } } }
- g->major_hp = to + froze, g->cp = to;
- g->gc_to_lo = to, g->gc_to_hi = to + to_len, g->gc_fwd = to + froze;   // fresh to-space: every copy is a forward
- g->gc_f2lo = (word*) g->end, g->gc_f2hi = g->hp;            // from-range 2: the minor (promote young in the same pass)
- g->ip = cell(gcp(g, word(g->ip), p0, t0));
- g->tasks = cell(gcp(g, word(g->tasks), p0, t0));
- if (g->parked) g->parked = cell(gcp(g, word(g->parked), p0, t0));   // the parked ring is its own root
- for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, (&g->v0)[i], p0, t0);
- for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, *s, p0, t0);
- for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, *r->x, p0, t0);
+ g->major_hp = to + froze, X.cp = to;
+ X.to_lo = to, X.to_hi = to + to_len, X.fwd = to + froze;   // fresh to-space: every copy is a forward
+ X.f2lo = (word const*) g->end, X.f2hi = g->hp;             // from-range 2: the minor (promote young in the same pass)
+ g->ip = cell(gcp(g, &X, word(g->ip)));
+ g->tasks = cell(gcp(g, &X, word(g->tasks)));
+ if (g->parked) g->parked = cell(gcp(g, &X, word(g->parked)));   // the parked ring is its own root
+ for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, &X, (&g->v0)[i]);
+ for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, &X, *s);
+ for (struct ai_r *r = g->root; r; r = r->n) *r->x = gcp(g, &X, *r->x);
  word om = g->symbols; g->symbols = 0;                       // weak: rebuilt after the fixpoint
- while (g->cp < g->major_hp) (datp(g->cp) ? evac_data : evac_thread)(g, p0, t0);
- g->symbols = major_symbols_rebuild(g, om);
- major_run_finalizers(g);
- g->gc_f2lo = g->gc_f2hi = 0;                                // the minor range is consumed
+ while (X.cp < g->major_hp) (datp(X.cp) ? evac_data : evac_thread)(g, &X);
+ g->symbols = major_symbols_rebuild(g, &X, om);
+ major_run_finalizers(g, &X);
  if (resized) g->alloc(g, g->major_pool, 0), g->major_pool = resized, g->major_len = to_len;
  g->major_base = to;                                           // flip: active = the to-space
  g->hp = g->end;                                             // the minor's young was promoted: reset it
@@ -1177,13 +1188,13 @@ static struct ai *gen_major(struct ai *g) {
  // copy left a forwarding pointer in word0 (the ap), which faults on dispatch.
  for (word *p = (word*) g->end; p < (word*) g->end + young; p++) *p = ai_gc_poison;
 #endif
- g->froze_lo = g->froze_hi = NULL;                              // the window is one major's; a minor must not see it
  // the rem set dies with the half it named: a major promotes every survivor, so there is
  // no old->young edge left to remember and every address in it points into a half about
  // to be reused. cleared here rather than in gen_please alone, because a major can be
  // called directly -- the image dump compacts before it serializes.
  g->rem_n = 0, g->rem_miss = 0;
- return g->gc_gen = 0, g; }
+ g->sym_raw = false;                                           // the rebuild above re-homed it
+ return g->gc_gen = false, g; }
 
 // resize the MINOR pool, decoupled from the major. called right after a collection,
 // so the minor is EMPTY: only the core + stack move; the major + intern map ride
@@ -1192,37 +1203,38 @@ static struct ai *gen_grow(struct ai *g, uintptr_t len1) {
  struct ai *h = g->alloc(g, NULL, len1 * 2 * sizeof(word));
  if (!h) return encode(g, ai_status_scare);
  memcpy(h, g, sizeof(struct ai));
- h->pool = (void*) h, h->len = len1;
- word const *p0 = ptr(g), *t0 = ptr(g) + g->len, *sp0 = g->sp;
- word sh = t0 - sp0;
+ h->len = len1;
+ word const *sp0 = g->sp;
+ struct ai_gcx X = { .p0 = ptr(g), .t0 = ptr(g) + g->len,      // the whole old pool is the from-space
+                     .to_lo = ptr(h), .to_hi = ptr(h) + len1, .fwd = ptr(h), .cp = h->end };
+ word sh = X.t0 - sp0;
  h->sp = ptr(h) + len1 - sh;
- h->hp = h->cp = h->end;                     // core moves to h; no (word)g root to forward (() is the const ZeroPoint)
- h->gc_gen = 0, h->gc_to_lo = ptr(h), h->gc_to_hi = ptr(h) + len1, h->gc_fwd = ptr(h), h->gc_f2lo = 0;
- h->ip = cell(gcp(h, word(h->ip), p0, t0));
- h->tasks = cell(gcp(h, word(h->tasks), p0, t0));
- if (h->parked) h->parked = cell(gcp(h, word(h->parked), p0, t0));
+ h->hp = h->end;                             // core moves to h; no (word)g root to forward (() is the const ZeroPoint)
+ h->gc_gen = false;
+ h->ip = cell(gcp(h, &X, word(h->ip)));
+ h->tasks = cell(gcp(h, &X, word(h->tasks)));
+ if (h->parked) h->parked = cell(gcp(h, &X, word(h->parked)));
  // h->symbols + the major were memcpy'd and live outside [p0,t0): untouched, NOT rebuilt
- for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, (&h->v0)[i], p0, t0);   // core vars
- for (word n = 0; n < sh; n++) h->sp[n] = gcp(h, sp0[n], p0, t0);                        // stack
- for (struct ai_r *s = h->root; s; s = s->n) *s->x = gcp(h, *s->x, p0, t0);              // C roots
- while (h->cp < h->hp) (datp(h->cp) ? evac_data : evac_thread)(h, p0, t0);               // heap empty -> ~nothing
- h->minor = h->end;
+ for (word i = 0; i < h->end - &h->v0; i++) (&h->v0)[i] = gcp(h, &X, (&h->v0)[i]);   // core vars
+ for (word n = 0; n < sh; n++) h->sp[n] = gcp(h, &X, sp0[n]);                        // stack
+ for (struct ai_r *s = h->root; s; s = s->n) *s->x = gcp(h, &X, *s->x);              // C roots
+ while (X.cp < h->hp) (datp(X.cp) ? evac_data : evac_thread)(h, &X);                 // heap empty -> ~nothing
  h->n_resize += 1;
  if (h->len > h->max_len) h->max_len = h->len;
- g->alloc(g, g->pool, 0);                    // free the old main pool
+ g->alloc(g, g, 0);                          // free the old main pool
  return h; }
 
 // the GC entry: a MINOR unless the rem set overflowed or the major lacks headroom --
 // then a MAJOR. afterwards size the minor by appel's rule against the budget.
 static struct ai *gen_please(struct ai *g, uintptr_t req0) {
- ai_image_note(0x32);
  uintptr_t seen_young = (uintptr_t)(g->hp - g->end);
  uintptr_t major_free = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);
  g->since_major += seen_young;                                  // young allocated (∝ scanned) since the last major
  // a MAJOR: forced by rem-set overflow, by the major lacking room for a worst-case
  // promotion, or by the amortization rule -- live set + 4 minor-pools allocated since
  // the last one -- so floating dead tenured objects sweep and the pool can shrink.
- bool major = g->rem_miss
+ bool major = g->sym_raw
+   || g->rem_miss
    || major_free < (uintptr_t) g->len + req0 + 16
    || g->since_major > g->major_live0 + 4 * (uintptr_t) g->len;
 #ifdef AiGcStress
@@ -1253,8 +1265,15 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  // ⚠ the band is meaningless on a forced schedule (`allocated` ~0 -> the nursery
  // doubles every collection, a 256 MB oom); the HARD FLOOR stays -- it guarantees
  // the pending allocation fits, and skipping it reads like a runtime bug.
+ // ⚠ and it must come BACK DOWN. a nursery parked at its high-water -- the image wake
+ // asks for one block the size of the glaze -- stands above the major's spare, and
+ // `major_free < g->len` then forces a MAJOR every collection: generational in name
+ // only, correct and quadratic. shrink on 4x hysteresis, so a resize is not per-pass.
  { uintptr_t used0 = g->len - avail(g), req = req0 + used0 + (used0 >> 2);
-   return req <= (uintptr_t) g->len ? g : gen_grow(g, req); }
+   uintptr_t want = req < g->minor0 ? g->minor0 : req;
+   if (req > (uintptr_t) g->len) return gen_grow(g, req);        // the floor still wins
+   if ((uintptr_t) g->len > 4 * want) return gen_grow(g, want);
+   return g; }
 #endif
  g->win_alloc += seen_young, g->win_copied += copied;
  uintptr_t used = g->len - avail(g), req = req0 + used + (used >> 2), len1 = g->len, arena = len1;
@@ -1285,105 +1304,100 @@ static struct ai *gen_please(struct ai *g, uintptr_t req0) {
 ai_noinline struct ai *ai_please(struct ai *g, uintptr_t req0) {
  return gen_please(g, req0); }   // generational ONLY: a minor (or major) into the major pool that ai_ini_0 guarantees
 
-static ai_inline word copy_chain(struct ai*g, struct ai_chain *src, word const *const p0, word const *const t0) {
+static ai_inline word copy_chain(struct ai *g, struct ai_chain *src) {
  struct ai_chain *dst = bump(g, Width(struct ai_chain));
  ini_chain(dst, src->a, src->b);
  src->ap = (lvm_t*) dst;
  return word(dst); }
 
-static ai_inline word copy_tray(struct ai*g, struct ai_tray *src, word const *const p0, word const*const t0) {
+static ai_inline word copy_tray(struct ai *g, struct ai_tray *src) {
  uintptr_t bytes = ai_tray_bytes(src);
  struct ai_tray *dst = bump(g, b2w(bytes));
  src->ap = memcpy(dst, src, bytes);
  return word(dst); }
 
-static ai_inline word copy_str(struct ai*g, struct ai_str *src, word const *const p0, word const*const t0) {
+static ai_inline word copy_str(struct ai *g, struct ai_str *src) {
  uintptr_t bytes = sizeof(struct ai_str) + src->len;
  struct ai_str *dst = bump(g, b2w(bytes));
  src->ap = memcpy(dst, src, bytes);
  return word(dst); }
 
 // bignums and the lean boxes are flat: one memcpy, like strings
-static ai_inline word copy_big(struct ai*g, struct ai_big *src, word const *const p0, word const*const t0) {
+static ai_inline word copy_big(struct ai *g, struct ai_big *src) {
  uintptr_t bytes = ai_big_bytes(src);
  struct ai_big *dst = bump(g, b2w(bytes));
  src->ap = memcpy(dst, src, bytes);
  return word(dst); }
 
-static ai_inline word copy_gem(struct ai*g, struct ai_gem *src, word const *const p0, word const*const t0) {
+static ai_inline word copy_gem(struct ai *g, struct ai_gem *src) {
  struct ai_gem *dst = bump(g, gem_req);
  src->ap = memcpy(dst, src, sizeof(struct ai_gem));
  return word(dst); }
 
-static ai_inline word copy_sun(struct ai*g, struct ai_sun *src, word const *const p0, word const*const t0) {
+static ai_inline word copy_sun(struct ai *g, struct ai_sun *src) {
  struct ai_sun *dst = bump(g, sun_req);
  src->ap = memcpy(dst, src, sizeof(struct ai_sun));
  return word(dst); }
 
-static ai_inline word copy_twin(struct ai*g, struct ai_twin *src, word const *const p0, word const*const t0) {
+static ai_inline word copy_twin(struct ai *g, struct ai_twin *src) {
  struct ai_twin *dst = bump(g, twin_req);
  src->ap = memcpy(dst, src, sizeof(struct ai_twin));
  return word(dst); }
 
 // atoms copy like any object; interning maintenance is the post-fixpoint table sweep's
-static ai_inline word copy_sym(struct ai*g, struct ai_mint *src, word const *const p0, word const*const t0) {
+static ai_inline word copy_sym(struct ai *g, struct ai_mint *src) {
  struct ai_mint *dst = bump(g, Width(struct ai_mint));
- (void) p0, (void) t0;                            // a mint carries no name to forward now
  ini_missing(dst, src->code);                     // just the serial rides
  return word(src->ap = (lvm_t*) dst); }
 
-static ai_inline word copy_nom(struct ai*g, struct ai_nom *src, word const *const p0, word const*const t0) {
+static ai_inline word copy_nom(struct ai *g, struct ai_nom *src) {
  struct ai_nom *dst = bump(g, Width(struct ai_nom));
- (void) p0, (void) t0;                            // shallow: evac_nom forwards the name later (Cheney)
+ // shallow: evac_nom forwards the name later (Cheney)
  ini_nom(dst, src->name, src->code, src->dig);    // name copied raw, serial + dig ride
  return word(src->ap = (lvm_t*) dst); }
 
-static ai_inline word copy_data(struct ai *g, union u *src, word const *const p0, word const *const t0) {
+static ai_inline word copy_data(struct ai *g, union u *src) {
  switch (typ(src)) {
-  case DChain: return copy_chain(g, two(src), p0, t0);
-  case DTray: return copy_tray(g, tray(src), p0, t0);
-  case DMint: return copy_sym(g, sym(src), p0, t0);
-  case DNom: return copy_nom(g, nom(src), p0, t0);
-  case DString: return copy_str(g, str(src), p0, t0);
-  case DBig: return copy_big(g, big(src), p0, t0);
-  case DGem: return copy_gem(g, (struct ai_gem*) src, p0, t0);
-  case DSun: return copy_sun(g, (struct ai_sun*) src, p0, t0);
-  case DTwin: return copy_twin(g, (struct ai_twin*) src, p0, t0); }
+  case DChain: return copy_chain(g, two(src));
+  case DTray: return copy_tray(g, tray(src));
+  case DMint: return copy_sym(g, sym(src));
+  case DNom: return copy_nom(g, nom(src));
+  case DString: return copy_str(g, str(src));
+  case DBig: return copy_big(g, big(src));
+  case DGem: return copy_gem(g, (struct ai_gem*) src);
+  case DSun: return copy_sun(g, (struct ai_sun*) src);
+  case DTwin: return copy_twin(g, (struct ai_twin*) src); }
  __builtin_trap(); }
 
-static ai_inline struct ai_tag *ttag2(struct ai *g, union u *k) {
- while (!tagl(g, k->x)) k++;                                 // tagl: terminator head in any live pool
+static ai_inline struct ai_tag *ttag2(struct ai *g, struct ai_gcx *X, union u *k) {
+ while (!tagl(g, X, k->x)) k++;                              // tagl: terminator head in any live pool
  return (struct ai_tag*) k; }
 
-static ai_inline word copy_thread(struct ai *g, union u *src, word const *const p0, word const *const t0) {
+static ai_inline word copy_thread(struct ai *g, struct ai_gcx *X, union u *src) {
  // it's a thread, find the end to find the head
- struct ai_tag *t = ttag2(g, src);
+ struct ai_tag *t = ttag2(g, X, src);
  union u *ini = tag_head(t), *d = bump(g, t->end - ini), *dst = d;
  // copy each content word to dest and leave a forwarding pointer behind,
  // stopping at the terminator; then rewrite it as the new tagged head
- for (union u *s = ini; !tagl(g, s->x); s->x = (word) d, d++, s++) d->x = s->x;
+ for (union u *s = ini; !tagl(g, X, s->x); s->x = (word) d, d++, s++) d->x = s->x;
  return (word) (tagthread(dst, d - dst) + (src - ini)); }
 
-static ai_noinline intptr_t gcp(struct ai *g, word x, word const *p0, word const *t0) {
- // a number stays; else find which from-space range holds x (a major traces two),
- // so copy_thread's terminator scan uses x's own home
+static ai_noinline intptr_t gcp(struct ai *g, struct ai_gcx *X, word x) {
+ // a number stays; else x must sit in a from-space range this pass traces (a major traces two)
  if (charmp(x)) return x;
  // the pinned prefix is not traced: it is memcpy'd to the head of the to-space, so its
  // answer is arithmetic and leaves no forwarding pointer. froze_lo is 0 otherwise.
- if (g->froze_lo && ptr(x) >= g->froze_lo && ptr(x) < g->froze_hi)
-  return (word)(g->gc_to_lo + (ptr(x) - g->froze_lo));
- word const *lo = p0, *hi = t0;
- if (!(ptr(x) >= lo && ptr(x) < hi)) {
-  if (g->gc_f2lo && ptr(x) >= g->gc_f2lo && ptr(x) < g->gc_f2hi) lo = g->gc_f2lo, hi = g->gc_f2hi;
-  else return x;
- }
+ if (X->froze_lo && ptr(x) >= X->froze_lo && ptr(x) < X->froze_hi)
+  return (word)(X->to_lo + (ptr(x) - X->froze_lo));
+ if (!(ptr(x) >= X->p0 && ptr(x) < X->t0)
+  && !(X->f2lo && ptr(x) >= X->f2lo && ptr(x) < X->f2hi)) return x;
  union u *src = cell(x);
  x = src->x; // get its contents
  // if it contains a pointer to the new space then return the pointer (already forwarded)
- word const *flo = g->gc_fwd, *fhi = g->gc_to_hi;   // forwarding window of THIS collection (major/spare/new pool)
+ word const *flo = X->fwd, *fhi = X->to_hi;   // forwarding window of THIS collection (major/spare/new pool)
  return lamp(x) && flo <= ptr(x) && ptr(x) < fhi ? x :
-        in_data((void*) x) ? copy_data(g, src, lo, hi) :
-                                copy_thread(g, src, lo, hi); }
+        in_data((void*) x) ? copy_data(g, src) :
+                             copy_thread(g, X, src); }
 
 // ============================================================================
 // ev
@@ -3107,7 +3121,7 @@ static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
   b->wlen = putcharm(n - (uintptr_t) k); } }
 // io_refill's third answer, beside a byte and EOF: the device has nothing right
 // now. distinct on purpose; never escapes lvm_fgetc.
-#define IoWouldBlock ((uintptr_t) -2)
+#define IoWouldBlock (-2)
 // the three answers for every port. no read method = END; no buffer = ask for one byte.
 // WHICH BIO OWNS THIS PORT'S READ RUN: its own, or -- for the static input port on a seat
 // that lent it one -- the BORROWED one in `inport`. A static cannot own a heap buffer, so a
@@ -3979,9 +3993,7 @@ static char const evfold[] = "((:(e a b)(? b(e(ev 'ev(cap b))(cup b))a)e)0)";
 // every top-level form of a text, evaluated in order -- the frontends' door for
 // a boot tail, a CLI driver, a corpus runner.
 ai_noinline struct ai *ai_evals_(struct ai *g, char const *s) {
- ai_image_note(0x20);
  g = readtext(g, s);
- ai_image_note(0x22);
  return applyq(g, evfold); }
 
 // the egg takes TWO corpora: `corpus` is sat twice (ev compiles itself), `post`
@@ -4020,7 +4032,7 @@ lvm(lvm_please) {
  if ((n & 1) && getcharm(n) > 0)
   g->since_major = g->major_live0 + 4 * (uintptr_t) g->len + 1;
  uintptr_t wa = g->win_alloc, wc = g->win_copied;
- intptr_t ln = g->lean;
+ int8_t ln = g->lean;
  g->win_alloc = g->win_copied = 0, g->lean = 0;
  if (!ai_ok(g = ai_please(g, 0))) ai_musttail return Ap(_lvm_ghelp, g);
  g->win_alloc = wa, g->win_copied = wc, g->lean = ln;
@@ -4037,7 +4049,7 @@ lvm(lvm_please) {
 //   [5] max_heap  peak live heap after a collection (words)
 //   [6] n_seen    Σ heap occupancy entering each collection (scanned = live + dead, words)
 //   [7] n_evac    Σ heap survivors copied out each collection (live, words)
-//   [8] old       the tenured set: words live in the major pool, else [end, minor)
+//   [8] old       the tenured set: words live in the major pool
 //   [9] rem_miss  rem-set entries dropped on overflow since the last collection (a miss forces a major; ~always 0)
 //  [10] rem_hi    peak remembered-set size (distinct old objects with a young field)
 //  [11] n_minor   MINOR collections so far (majors = n_gc - n_minor)
@@ -4065,7 +4077,7 @@ lvm(lvm_gauge) {
  tray_put_int(v, 9, (intptr_t) g->rem_miss);
  tray_put_int(v, 10, (intptr_t) g->rem_hi);
  tray_put_int(v, 11, (intptr_t) g->n_minor);
- tray_put_int(v, 8, (intptr_t) (g->major_pool ? g->major_hp - g->major_base : g->minor - (word*) g->end));  // major live (gen), else [end,minor)
+ tray_put_int(v, 8, (intptr_t) (g->major_hp - g->major_base));            // words live in the major pool
  tray_put_int(v, 12, (intptr_t) (g->major_pool ? 2 * g->major_len : 0));  // major pool capacity (both halves), words
  tray_put_int(v, 13, (intptr_t) g->n_resize);
  tray_put_int(v, 14, (intptr_t) g->minor_hi);
@@ -5142,22 +5154,28 @@ static uintptr_t img_rank_assign(struct ai *g, word const *blob, uintptr_t const
 // layered bake diffs two of them. dumps wherever it is called -- a mid-eval dump's
 // continuation rides as wake-unreachable ballast -- and the guarded entry keeps the boot
 // path honest.
+// ⚠ `why` is the STAGE, set before each fallible step, so a refusal names where it
+// stopped: 1 no major pool, 2 the compaction scared, 3 out of memory, 4 an unencodable
+// heap word, 5 the root table is too small, 6 an unencodable root, 8 the heap outgrew
+// the lane floor -- and 0 only on the way out. (7, not quiet, is the callers' own.) it
+// rides a parameter because it is true of one call and nothing else: a seat that keeps
+// it keeps a stale answer, and love.h's own rule is that the audit owns no state here.
 static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard const *guard,
-                       uintptr_t *outnw) {
- g->image_why = 1;
+                       uintptr_t *outnw, uint8_t *why) {
+ *why = 1;
  if (!g->major_pool) return NULL;                        // needs the major pool (it holds the compacted live half)
  ai_core_of(g)->io = NULL;                               // clear the non-deterministic fd before the bake
- g->image_why = 2;
+ *why = 2;
  if (!ai_ok(gen_major(g))) return NULL;                  // COMPACT: live half -> [major_base, major_hp) (OOM -> no image)
  if (!ai_ok(g = img_canon_symbols(g))) return NULL;      // canonical intern layout (OOM -> no image)
- g->image_why = 3;
+ *why = 3;
  word *base = g->major_base, *hp = g->major_hp;
  uintptr_t nw = (uintptr_t)(hp - base), bytes = nw * sizeof(word);
  // the heap must fit under the lane floor, or a byte offset collides with an index and
  // decodes as an ap.
- g->image_why = 8;
+ *why = 8;
  if (bytes >= ImageIdxBase) return NULL;
- g->image_why = 3;
+ *why = 3;
  word *blob = g->alloc(g, NULL, bytes);                  // the encoded words: scratch, not the file
  if (!blob) return NULL;
  memcpy(blob, base, bytes);
@@ -5216,7 +5234,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard
   else for (uintptr_t i = 1; i < sz; i++) blob[off + i] = img_encode(x, ((word*) p)[i]);   // thread interior + terminator
   x->suppress = 0;
   p = (union u*) ((word*) p + sz); }
- g->image_why = 4;
+ *why = 4;
  if (x->fail) { g->alloc(g, slots, 0); g->alloc(g, blob, 0); return NULL; }   // a binary pointer landed in the index range -> refuse (caller boots normally)
  // the rename: mark live serials (the collected nom/mint slots read RAW off the
  // blob -- scalars rode the memcpy -- plus the pids of both task rings), rank
@@ -5260,15 +5278,15 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard
  // roots = symbols + tasks (live OUTSIDE v0), then the whole GC-traced v0..end block, GENERICALLY: any
  // field added to struct ai's v0 region is serialized automatically, no codec edit (cf. the GC's v0..end loop).
  uintptr_t nv = (word*) g->end - (word*) &g->v0, nr = 2 + nv;
- g->image_why = 5;
+ *why = 5;
  if (nr > countof(H.root_tag)) { g->alloc(g, blob, 0); return NULL; }    // grew past the header table -> bump root_tag[]
  image_root_enc(x, g->symbols,      &H.root_tag[0], &H.root_val[0]);
  image_root_enc(x, (word) g->tasks, &H.root_tag[1], &H.root_val[1]);
  for (uintptr_t i = 0; i < nv; i++) image_root_enc(x, ((word*) &g->v0)[i], &H.root_tag[2 + i], &H.root_val[2 + i]);
- g->image_why = 6;
+ *why = 6;
  if (x->fail) { g->alloc(g, blob, 0); return NULL; }     // ..a ROOT refused: the walk's own check is behind us
  H.nroot = nr;
- return g->image_why = 0, *Ho = H, *outnw = nw, blob; }
+ return *why = 0, *Ho = H, *outnw = nw, blob; }
 // ..and the wire: {header, dictionary, token stream}, g->alloc'd. fills H.nstream.
 static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintptr_t nw, uintptr_t *outlen) {
  uintptr_t bytes = nw * sizeof(word);
@@ -5300,7 +5318,8 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
 void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
  struct image_hdr H;
  uintptr_t nw = 0;
- word *blob = img_build(g, &H, guard, &nw);
+ uint8_t w_;
+ word *blob = img_build(g, &H, guard, &nw, &w_);
  if (!blob) return NULL;
  void *buf = img_wire(g, &H, blob, nw, outlen);
  return g->alloc(g, blob, 0), buf; }
@@ -5314,11 +5333,12 @@ void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_guard const
 // ============================================================================
 // the first half: compact, pin, and answer this layer as {header, raw blob}. untokenized,
 // since its only reader is ai_image_save_over below. g->alloc'd; the caller owns it.
-void *ai_image_freeze(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
+void *ai_image_freeze(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard,
+                      uint8_t *why) {
  struct image_hdr H;
  uintptr_t nw = 0;
- if ((word*) g->sp != topof(g)) return g->image_why = 7, NULL;   // quiescent, like ai_image_save
- word *blob = img_build(g, &H, guard, &nw);              // ..which compacts under the PREVIOUS pin, if any
+ if ((word*) g->sp != topof(g)) return *why = 7, NULL;   // quiescent, like ai_image_save
+ word *blob = img_build(g, &H, guard, &nw, why);         // ..which compacts under the PREVIOUS pin, if any
  if (!blob) return NULL;
  uintptr_t total = sizeof H + nw * sizeof(word);
  char *rec = g->alloc(g, NULL, total);
@@ -5357,13 +5377,13 @@ static void *img_derive(struct ai *g, void const *base, uintptr_t blen,
 // baseline -- subout[i] for bases[i], NULL where it did not fit (a foreign record, or a
 // prefix longer than this blob). a NULL is not an error: the caller lays that layer
 // whole, which is only bigger.
-void *ai_image_save_over(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard,
+void *ai_image_save_over(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard, uint8_t *why,
                          void *const *bases, uintptr_t const *blens, uintptr_t nbase,
                          void **subout, uintptr_t *sublens) {
  struct image_hdr H;
  uintptr_t nw = 0;
- if ((word*) g->sp != topof(g)) return g->image_why = 7, NULL;   // quiescent, like ai_image_save
- word *blob = img_build(g, &H, guard, &nw);
+ if ((word*) g->sp != topof(g)) return *why = 7, NULL;   // quiescent, like ai_image_save
+ word *blob = img_build(g, &H, guard, &nw, why);
  if (!blob) return NULL;
  for (uintptr_t i = 0; i < nbase; i++)
   subout[i] = img_derive(g, bases[i], blens[i], &H, blob, nw, &sublens[i]);
@@ -5372,7 +5392,6 @@ void *ai_image_save_over(struct ai *g, uintptr_t *outlen, struct ai_image_guard 
 // the image-wake progress hook: weak no-op, overridden by a port bringing the
 // wake up on new metal (a crashed wake with no debugger is otherwise invisible).
 // stages: 1 header, 2 pool, 3 blob, 4 the token stream expanded, 0x100+k walk (per 64K words), 5 walk, 6 roots.
-__attribute__((weak)) void ai_image_note(uintptr_t stage) { (void) stage; }
 // the wake, over a stream that may carry more than this image: `buf` holds the header,
 // dictionary and token stream to read, and `Hw` is the header to wake with -- the same one
 // for a plain image, the derived record's for a prefix of it. `patch` names the prefix
@@ -5391,7 +5410,6 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
  // reserved section and a file may carry a shebang, so "the rest of what you handed me" is
  // the one reading that would make a good image look foreign and fall silently back to the egg.
  if (len < sizeof S + db + ns) return NULL;                       // truncated buffer
- ai_image_note(1);
  struct ai *g = ai_ini_m(al);
  if (!g) return NULL;
  if (nw > g->major_len) {                                // grow the major pool to fit the image
@@ -5407,9 +5425,7 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
  }
  word *base = g->major_base;
  if (!base) return NULL;
- ai_image_note(2);
  g->major_hp = base + nw;
- ai_image_note(3);
  // ⚠ THE CHECK IS A DISTANCE, NEVER TWO ADDRESSES, and that is the last thing between a
  // bake and a hash anyone can check: the two symbols shift together under ASLR, so storing
  // where they LANDED wrote this run's mmap base into the header and two bakes of one tree
@@ -5440,7 +5456,6 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
   uintptr_t ix = (uintptr_t) patch[2 * i];
   if (ix >= nw) return NULL;
   base[ix] = (word) patch[2 * i + 1]; }
- ai_image_note(4);
  word const *src = base;
  for (uintptr_t off = 0; off < nw; ) {
   uintptr_t sz;
@@ -5466,7 +5481,6 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
    base[off + k] = (word) p + ai_thread_tag;                                      // the terminator, decoded by hand: its head went live
    sz = k + 1; }
   off += sz; }
- ai_image_note(5);
  uintptr_t nv = (word*) g->end - (word*) &g->v0;                         // same struct/binary (anchor-checked) -> same layout
  if (H.nroot != 2 + nv) return NULL;                                     // root count mismatch -> stale/foreign image -> normal boot
  g->symbols = image_root_dec(H.root_tag[0], H.root_val[0], base);
@@ -5477,9 +5491,9 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
  for (uintptr_t i = 0; i < nv; i++) ((word*) &g->v0)[i] = image_root_dec(H.root_tag[2 + i], H.root_val[2 + i], base);
  g->next_serial = H.next_serial;
  g->hot_io = zero;   // ⚠ a worn port names an fd, which means nothing in a new process -- a woken task wears the console (the parked ring's rule)
- ai_image_note(6);
  // sp stays at ai_ini's topof(g) (empty AI stack); the dispatch re-establishes ip
  g->major_live0 = nw, g->since_major = 0;
+ g->sym_raw = true;   // the map arrives as the image left it; a major must re-home it first
  // seed the nursery against the live set the image arrives with: the resize controller
  // otherwise ramps from the bare floor a doubling -- and a collection -- at a time,
  // and a woken runtime already knows how much it will be scanning past.

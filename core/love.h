@@ -150,48 +150,49 @@ struct ai {
                        // fd-parked -- those move to `parked`, so a switch costs no syscall
  union u *parked;      // the PARKED ring (fd waiters) or NULL; its own ring so the
                        // fairness yield never walks it. never image-serialized.
- uintptr_t yield_ctr,  // ap-cycles since last cooperative yield (level-triggered at yield_interval)
-           sweep_ctr,  // fairness yields since the last PARKED sweep; a slower counter on
+ // the sub-word task scalars, adjacent so the five ride two words
+ uint16_t yield_ctr,   // ap-cycles since last cooperative yield (level-triggered at yield_interval)
+          sweep_ctr;   // fairness yields since the last PARKED sweep; a slower counter on
                        // purpose -- a ring walk and a syscall cannot share one knob
-           next_serial, // THE MINT STREAM: one monotonic counter every fresh identity draws
+ int next_wait_fd,     // fd the task suspended on, -1 = not waiting on I/O. Installed into next yield_sw snapshot's wait_fd slot.
+     next_wait_events, // ai_wait_in (the default) or ai_wait_out (connect's handshake).
+                       // ⚠ a field, not read off the parked op: the op that wants OUT
+                       // may live in a frontend love.c cannot name.
+     b;                // what the last port refill left: a byte, EOF, or IoWouldBlock
+ uintptr_t next_serial, // THE MINT STREAM: one monotonic counter every fresh identity draws
                         // from (task pids and nom serials alike; pre-incremented)
            next_wake_at; // raw deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
- intptr_t next_wait_fd; // fd the task suspended on, -1 = not waiting on I/O. Installed into next yield_sw snapshot's wait_fd slot.
- int next_wait_events;  // ai_wait_in (the default) or ai_wait_out (connect's handshake).
-                        // ⚠ a field, not read off the parked op: the op that wants OUT
-                        // may live in a frontend love.c cannot name.
  ai_word symbols;       // the WEAK intern map (string -> canonical atom), swept after the
                         // cheney fixpoint so dead spellings vanish. 0 only during early init.
- uintptr_t len;
- struct ai *pool;
+ uintptr_t len;         // main-pool size in words: the core sits at its base, [end,hp) is the young heap
  struct ai_r { ai_word *x; struct ai_r *n; } *root; // gc roots list
  struct ai_fz { // finalizers
   union u *p;
   void (*fn)(void *);
   struct ai_fz *next; } *fz;
- union { uintptr_t t0; ai_word *cp; };
- void *(*alloc)(struct ai*, void*, size_t);  // alloc(g,p,n): n>0 reserve n bytes (p ignored), n==0 free p; -> block or NULL
- uintptr_t b;
- ai_word *minor;        // minor watermark: [minor,hp) young, [end,minor) old. a raw pool
-                        // pointer like hp -- recomputed every collection, never forwarded.
+ void *(*alloc)(struct ai*, void*, size_t); // alloc(g,p,n): n>0 reserve n bytes (p ignored), n==0 free p; -> block or NULL
  uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words)
            n_seen, n_evac;          // Σ per collection: occupancy entering / survivors copied.
                                     // mortality = (n_seen-n_evac)/n_seen; copy-amp = n_evac/max_heap
  // the REMEMBERED SET (the whole write barrier): old cells that took a young pointer,
  // rescanned by the next minor. rem_miss counts drops on overflow -- any miss forces
  // the next collection MAJOR, so a minor only runs under a complete set.
- ai_word *rem; uintptr_t rem_cap, rem_n, rem_hi, rem_miss;
- // the two pools: the main pool is pure MINOR (`minor` stays == end); OLD lives in
- // major_pool, its own two-space. a MINOR evacuates minor -> major active half; a
+ ai_word *rem; uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by AiRemCap, the fixed capacity
+ // the sub-word collector/codec scalars, adjacent so the four ride the rem set's tail
+ bool gc_gen;                             // set during a generational collection: bump() targets major_hp, not hp
+ bool sym_raw;                            // the intern map is still the image's own. a MINOR scans that map in
+                                          // PLACE and a woken one does not survive it; only a major re-homes it
+                                          // (major_symbols_rebuild), so the first collection after a wake is one.
+ int8_t lean;                             // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
+                                          // (a resize is a full copy + a total refault)
+ // the two pools: the main pool is pure MINOR, the young heap being [end, hp); OLD lives
+ // in major_pool, its own two-space. a MINOR evacuates young -> major active half; a
  // MAJOR drains both, compacts into the spare half, flips, rebuilds symbols, runs
- // finalizers. gc_fwd is the forwarding floor: word0 in [gc_fwd, gc_to_hi) = a copy
- // made THIS collection. gc_gen redirects bump() to major_hp during a collection.
+ // finalizers. gc_gen redirects bump() to major_hp during a collection; the ranges the
+ // pass itself walks are `struct ai_gcx`, on the collector's own C stack (core/love.c).
  ai_word *major_pool, *major_base, *major_hp;   // major: malloc base (2*major_len words), active-half base, active bump
  uintptr_t major_len;                       // major half size (words)
- ai_word *gc_to_lo, *gc_to_hi, *gc_fwd;   // to-space tagp range [to_lo,to_hi) + forwarding floor (set per collection)
- ai_word *gc_f2lo, *gc_f2hi;              // a SECOND from-space range (0 = unused); a major traces {major ∪ minor} in one pass
- uintptr_t gc_gen;                        // !=0 during a generational collection: bump() targets major_hp, not hp
- uintptr_t n_minor;                       // MINOR collections so far (majors = n_gc - n_minor)
+ uintptr_t n_minor;                    // MINOR collections so far (majors = n_gc - n_minor)
  uintptr_t minor_hi, major_hi;            // the PAUSE gauge: peak words one minor / one major copied
                                           // (gauge[14]/[15]; test/host/gcpause.l puts wall ns against them)
  uintptr_t since_major, major_live0;      // young words scanned since the last major; major live right after it.
@@ -200,21 +201,13 @@ struct ai {
                                           // periodically and the pool can shrink (gen_please)
  uintptr_t win_alloc, win_copied;         // sliding window (words) for the deterministic minor-resize ratio:
                                           // overhead = copied/alloc; reset on a resize (gen_please)
- intptr_t lean;                           // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
-                                          // (a resize is a full copy + a total refault)
  uintptr_t n_resize;                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
  // the pinned prefix: the first `froze` words of major_base ride a major verbatim, so
  // frozen objects keep their heap offsets and a later image's blob begins with an
  // earlier one's (doc/plan/image-chain.md). it makes the frozen closure immortal, so
  // only ai_image_freeze sets it and 0 is every other session.
  uintptr_t froze;
- ai_word *froze_lo, *froze_hi;            // its from-space window; set for the span of one major, else 0
- uintptr_t image_why;                     // why the codec last refused a dump; 0 = it did not.
-                                          // 1 no major pool, 2 the compaction scared, 3 out of
-                                          // memory, 4 an unencodable heap word, 5 the root table
-                                          // is too small, 6 an unencodable root, 7 the stack was
-                                          // not quiescent, 8 the heap outgrew the lane floor
- uintptr_t budget;                        // total memory CAP in words (2*minor + 2*major); 0 = unbounded.
+ uintptr_t budget;                     // total memory CAP in words (2*minor + 2*major); 0 = unbounded.
                                           // appel's rule: the nursery gets the free budget after the major pool.
  uintptr_t minor0, major0, ratio;         // the other three live knobs: nursery floor, the major pool's
                                           // grow/shrink STEP, the copy-overhead setpoint. seeded at ai_ini
@@ -413,7 +406,6 @@ struct ai
 // the heap-image codec (stdio-free): save compacts g and serializes into a fresh
 // g->alloc'd buffer; load reconstructs a fresh g, or NULL on any mismatch (the
 // caller boots normally). buffer-based so a freestanding frontend needs no filesystem.
-void ai_image_note(uintptr_t stage);   // wake-progress hook, weak no-op; a port bringing the wake up on new metal overrides it
 // a kept ABSOLUTE only survives a wake if it aims inside the binary's own load segments
 // (one ASLR delta shifts them all); anything else -- a JIT W^X page, an mmap, a shared
 // library -- dies with the bake process, so the dump refuses it. only the host can answer
@@ -431,8 +423,8 @@ struct ai *ai_image_load(void const *buf, uintptr_t len);
 // full image plus each baseline's derived record -- its header and the prefix words that
 // changed -- which load_over wakes against the parent's stream. all g->alloc'd; NULL is
 // no image, never half of one.
-void *ai_image_freeze(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);
-void *ai_image_save_over(struct ai*, uintptr_t *outlen, struct ai_image_guard const*,
+void *ai_image_freeze(struct ai*, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why);
+void *ai_image_save_over(struct ai*, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why,
                          void *const *bases, uintptr_t const *blens, uintptr_t nbase,
                          void **subout, uintptr_t *sublens);
 struct ai *ai_image_load_over(void const *parent, uintptr_t plen, void const *sub, uintptr_t slen);
