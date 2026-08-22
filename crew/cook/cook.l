@@ -517,6 +517,15 @@
                   (w = "override") (: a (parse assignP rest) (? (two? a) ('oassign >< a) '(skip)))
                   (w = "export") (: a (parse assignP rest)
                                     (? (two? a) ('xassign >< a) `('xname (trim rest))))
+                  ; a lone $(..) line: make expands it, so its side effect fires --
+                  ; `$(error ..)` is a guard, and a guard cook walks past is worse than
+                  ; no guard. classify has no variable table, so the loop does the work.
+                  ((1 < tally tt) && (tt 0 = 36) && ((tt 1 = 40) || (tt 1 = 123))) `('expand tt)
+                  ((w = "define") || (w = "endef")) (cook-gap "define/endef")
+                  ((w = "undefine") || (w = "vpath")) (cook-gap w)
+                  ; a shell assignment: the op is not in opP, so the line would fall
+                  ; through both grammars and skip in silence.
+                  (: r2 (trim rest) ((1 < tally r2) && (snip r2 0 2 = "!="))) (cook-gap "NAME != VALUE")
                   (w = "ifeq") `('ifeq rest)
                   (w = "ifneq") `('ifneq rest)
                   (w = "ifdef") `('ifdef rest)
@@ -658,12 +667,19 @@
                "subst" "filter" "filter-out" "sort" "strip" "if" "or" "and"
                "addprefix" "addsuffix" "firstword" "lastword" "word" "words"
                "abspath" "realpath" "call" "origin"
-               ; ⚠ A NAME OFF THIS LIST IS A VARIABLE, not a refusal -- `$(foo bar)` reads a
-               ; variable of that name and answers empty, which is make's own rule. so a MISSING
-               ; builtin does not announce itself: it evaluates to nothing and the build carries
-               ; on. that is why the differential gate exists (test/gate/cookdiff.sh).
+               ; ⚠ A NAME OFF THIS LIST IS A VARIABLE -- `$(foo bar)` reads a variable of that
+               ; name and answers empty, which is make's own rule, and it stays.
                "findstring" "join" "wordlist" "foreach" "value" "flavor"
                "error" "warning" "info")
+   ; ..but a name MAKE implements and we do not is not that case, and answering empty
+   ; there is not fidelity: make never takes the variable branch for these, so an empty
+   ; answer is a rule quietly not existing -- and no output diff can see a target that
+   ; was never made. These refuse instead. The list is GNU's roster minus ours, so it is
+   ; finite and knowable; cookdiff only ever catches the gaps somebody wrote a case for.
+   gapnames '("eval" "file" "let" "intcmp" "guile")
+   (cook-gap what)
+    (: _ (say err ("cook: " + what + " is a GNU make feature cook does not implement.  Stop."))
+       _ (put err 10) (quit 2))
    ; $(call fn,a,..): bind $0 (the name) and $1.. to the EXPANDED args, expand
    ; fn's body, put the old bindings back (a shadowed outer $1 survives).
    (fn-call args as d)
@@ -734,6 +750,8 @@
    ; ($(VAR:from=to)), or a plain variable ($(VAR)).
    (eval-group body as d)
    (: sp (findws body)
+      nm (snip body 0 (? (sp < tally body) sp (tally body)))
+      _ (? (any (\ g (g = nm)) gapnames) (cook-gap ("$(" + nm + " ..)")) 0)
       (? ((sp < tally body) && funcp (snip body 0 sp))
          (apply-func (snip body 0 sp) (ltrim (snip body (1 + sp) (tally body))) as d)
          (: eb (expand body as (1 + d)) ci (findc eb 0 58)
@@ -899,6 +917,7 @@
                 ; conditionals thread `cur` (do NOT flush): a top-level rule is
                 ; already flushed by the blank line before a conditional, while a
                 ; conditional INSIDE a recipe block gates its lines via `on` above.
+                (k = 'expand) (: _ (? on (expand (r1 c) as 0) 0) (loop rest rules cur cond))
                 (k = 'ifeq)   (loop rest rules cur (push-cond cond on (on && eval-ifeq (r1 c) as)))
                 (k = 'ifneq)  (loop rest rules cur (push-cond cond on (on && !(eval-ifeq (r1 c) as))))
                 (k = 'ifdef)  (loop rest rules cur (push-cond cond on (on && eval-ifdef (r1 c) as)))
