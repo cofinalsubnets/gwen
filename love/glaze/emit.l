@@ -594,12 +594,12 @@
                                   ((acg <as d) + (adrive cso) + [['st SP (spill d) A]]
                                    + (achain >as (spill d) (d + 1))))                                  ; partial -> spill -> next arg (currying)
              (astr1 cso) (: ld (mint 0) ok (mint 0) en (mint 0)                                             ; the STRING fast lane at a 1-arg frame-callee site: (s i) with s a
-              ([['ld T SP cso] ['test T 1] ['br 'ne ld]                                             ; text and i a charm is a byte index, TOTAL by the spec's unit law --
-                  ['ld X T 0] ['li SC (strkind 0)] ['cmp X SC] ['br 'ne ld]                             ; in range the unsigned byte, out of range 1 ((1 = ("hi" 9)), the
-                  ['test A 1] ['br 'eq ld]                                                              ; empty product); any other callee/index falls to the DRIVE (never
-                  ['mov X A] ['sar X 1] ['ld SC T 8]                                                  ; a deopt -- a mixed-type call site keeps its closure speed), so the
-                  ['cmp X SC] ['br 'below ok]                                                           ; unit-riding and float-index lanes stay C's business. one unsigned
-                  ['jmp ld]                                                                             ; compare covers the negative index (it wraps huge).
+              ([['ld T SP cso] ['test T 1] ['br 'ne ld]                                             ; text and i a charm is a byte index: in range, the unsigned byte,
+                  ['ld X T 0] ['li SC (strkind 0)] ['cmp X SC] ['br 'ne ld]                             ; native. EVERYTHING ELSE falls to the DRIVE (never a deopt -- a
+                  ['test A 1] ['br 'eq ld]                                                              ; mixed-type call site keeps its closure speed): another callee or
+                  ['mov X A] ['sar X 1] ['ld SC T 8]                                                  ; index kind, and -- since the one unsigned compare wraps a negative
+                  ['cmp X SC] ['br 'below ok]                                                           ; huge -- BOTH the from-the-end read and the out-of-range (). so the
+                  ['jmp ld]                                                                             ; lane answers what C answers, at the cost of driving a negative.
                   ['label ok] ['ldxb A T X 1 16] ['leax A A A 1 1]
                   ['jmp en] ['label ld]]
                + (adrive cso)
