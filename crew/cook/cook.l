@@ -105,6 +105,14 @@
                                    (? (two? steps) steps >>prev))))
          (: _ (pin cards at (ins >< (ors >< steps)))
              _ (? (peep check 0 0) 0 (pin check 0 at)) at)))
+   ; a DOUBLE-COLON target is the one place a second recipe does not replace the first:
+   ; make runs every `tgt:: ..` rule's steps, in the order written. reg's own rule -- a
+   ; later recipe wins -- is `:`'s, and stays.
+   (regd item ing oo steps)
+   (: at (unseat item) ins (unseatl ing) ors (unseatl oo)
+      prev (peep cards at ())
+      (? prev (pin cards at (link (adds <prev ins) (link (adds <>prev ors) (>>prev + steps))))
+         (reg item ing oo steps)))
    ; the public Cookfile API: (recipe item ingredients steps) -- no order-only prereqs.
    (recipe item ingredients steps) (reg item ingredients 0 steps)
 
@@ -769,7 +777,7 @@
                       (: close (? (nx = 40) 41 125) j (findclose s (2 + i) nx close)
                          (g (1 + j) (acc + eval-group (snip s (2 + i) j) as d)))
                       (nx = 36) (g (2 + i) (acc + "$"))
-                      (namech nx || (nx = 64) || (nx = 60) || (nx = 94) || (nx = 42))
+                      (namech nx || (nx = 64) || (nx = 60) || (nx = 94) || (nx = 42) || (nx = 63))
                       (g (2 + i) (acc + expand (peep as (snip s (1 + i) (2 + i)) "") as (1 + d)))
                       (g (1 + i) (acc + string (s i)))))
                 (g (1 + i) (acc + string (s i))))))
@@ -808,7 +816,13 @@
    (itext x) (? (nom? x) (show x) x)
    (expand-steps raws t pr stem as)
    (: pt (map itext pr)
+       td (date t)
+       ; $?: the prerequisites NEWER than the target -- all of them when the target is
+       ; not on disk, which is make's answer for a phony and for a first build. A phony
+       ; prerequisite counts as newer whatever the clock says: it is remade every pass.
+       nwr (filter (\ x (? (nom? x) 1 (: xd (date x) (? !td (? xd 1 0) (? xd (xd > td) 0))))) pr)
        _ (pins as "@" (itext t) "<" (? (two? pt) <pt "") "^" (join " " pt) "*" stem)
+       _ (pins as "?" (join " " (map itext nwr)))
        _ (pins as "@D" (? (nom? t) "." (dslash t)) "@F" (? (nom? t) (show t) (fnotdir t)))
        fl (shflags as)
        sn (shname as)
@@ -1042,7 +1056,13 @@
       (mk-item nm) (? (peep phony nm 0) (intern nm) nm)
       patbox (tablet 0)        ; accumulates implicit pattern rules: (tgtpat prs oos . raws)
       _ (each rules (\ r
-           (: tgtstext <r prtext <>r raws >>r
+           (: tgtstext <r prtext0 <>r raws >>r
+              ; `tgt:: ..` -- ruleP eats one colon, so a second one leading the
+              ; prerequisites is the marker. Left in place it reads as a static pattern
+              ; rule with an empty target pattern, and the rule vanishes.
+              pl (ltrim prtext0)
+              dbl ((0 < tally pl) && (pl 0 = 58))
+              prtext (? dbl (snip pl 1 (tally pl)) prtext0)
               tgts (expand-words `(tgtstext) as)
               sp (? (two? raws) (sufpat <tgts) 0)   ; an old-style suffix rule, .c.o style
               (? sp (pin patbox 0 (`(<sp (list <>sp) () raws) >< peep patbox 0 0))
@@ -1074,7 +1094,7 @@
                              ; expansion deferred to prep, a bigger change than this.)
                              (each tgts (\ t (: it (mk-item t) ps (map mk-item prs)
                                                 all (adds <(peep cards (unseat it) '(())) ps)
-                                                (reg it ps (map mk-item oos)
+                                                ((? dbl regd reg) it ps (map mk-item oos)
                                                      (expand-steps raws it all "" as)))))))))))))
       ; make's .DEFAULT_GOAL overrides "first rule declared" -- it is a plain
       ; variable, so it survives the dot-target drop above and lands in `as`.
