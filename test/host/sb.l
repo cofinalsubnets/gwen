@@ -8,6 +8,7 @@
 ; it under the session layer: every internal reads bare, and the test's own
 ; helpers stay above in the session.
 (use 'sb)
+(use 'kore)          ; sb splices the text floor below itself, so the session must ask for it too
 
 (: _ (mkdir "out" 493) _ (mkdir "out/host" 493)
    _ (mkdir "out/host/.sbtest" 493)
