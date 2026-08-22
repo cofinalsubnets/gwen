@@ -126,6 +126,67 @@ hypotheses are not separated by anything measured so far. The experiment that se
 is cheap and has not been run: **teach `gen.l` the rotate, re-fill the table.** If chacha and
 sha256 fall toward 2× the pair was reading rotates all along.
 
+## the same floors compiled STRAIGHT (2026-08-22, same box)
+
+`test/bench/ccnif.sh` (`make -C test/bench ccnif`) builds host/hash.c, host/deflate.c and
+host/inflate.c with mooncc, gcc and clang and reads them three ways: the answers, the .text,
+and the wall clock. It is not a gate and is not wired into one — it is the instrument to
+re-run while working on gen.l.
+
+Where the rows above time these nifs through the SHIPPED BINARY, this times the code and
+nothing else: the harnesses include the .c (every entry point in the three files is a
+static, so no seam had to be cut into host/ to reach one), stub the six runtime symbols the
+love-facing wrappers name, and never enter the lvm. No love runtime, no libc in the loop.
+A run is ~20 s against ccbench's minutes, which is what makes it the vehicle for the
+ablation the section above leaves open.
+
+| ms, 64 passes, median of 5 | mooncc | gcc -O2 | clang -O2 | mooncc/gcc | mooncc/clang |
+|---|---:|---:|---:|---:|---:|
+| sha256 | 958 | 215 | 243 | **4.46×** | 3.94× |
+| md5 | 256 | 127 | 139 | **2.02×** | 1.84× |
+| crc32 | 44 | 31 | 35 | 1.42× | 1.26× |
+| cksum | 45 | 33 | 35 | 1.36× | 1.29× |
+| deflate | 562 | 366 | 381 | 1.54× | 1.48× |
+| inflate | 59 | 37 | 33 | 1.59× | 1.79× |
+
+**It reproduces the shipped-binary reading through a different harness**, which is the first
+thing to check of a new instrument: sha256 4.46× against 4.23×, inflate 1.79× against 1.82×,
+crc32 1.42× against 1.43×. Nothing in the love runtime was making those rows.
+
+And .text, whole-file and exact (mooncc / gcc -O2 / clang -O2 bytes):
+
+| | mooncc | gcc -O2 | clang -O2 |
+|---|---:|---:|---:|
+| host/hash.c | 10,832 | 9,636 | 8,187 |
+| host/deflate.c | 10,675 | 9,749 | 15,259 |
+| host/inflate.c | 11,763 | 6,821 | 10,281 |
+
+⚠ **only the whole-file number is a sound total.** gcc and clang inline statics out of
+existence — hash.c is 45 functions under mooncc and 34 under gcc, deflate.c 18 against 9 —
+so summing the names two lanes share charges mooncc for a callee its opposite number already
+paid for inside a caller. The script prints per-function ratios instead, worst first, and
+`sha_block` is the widest cell in the whole table: **1.90× gcc's bytes and 4.30× clang's**,
+beside a 4.46×/3.94× clock. The static and dynamic readings name the same function.
+
+### ⚠ md5 is the control the rotate question wanted, and it is cheap to take further
+
+The section above ends on an unrun experiment — teach `gen.l` the rotate, re-fill the table,
+and see whether sha256 falls toward 2×. This run adds a datum that bears on it directly.
+
+**md5 rotates as hard as sha-256 does and sits at 2.02×, not 4.46×.** `md5_block` runs 64
+rotates a block against `sha_block`'s 576, but the difference that matters is that md5's
+amount is a runtime load (`MS[i]` off a table) where sha-256's are literals. Counted over
+the object: mooncc emits **0** rotate instructions in host/hash.c, gcc 8 — and only 2 of
+gcc's are in `md5_block`, because gcc cannot use a rotate-immediate there either.
+
+So the row where the oracle also gives up the idiom is the row where mooncc's gap collapses
+by more than half. That fits "the rotate is the lever" and not "the array is", since md5
+carries `m[16]` across its loop exactly as sha-256 carries `w[64]`. ⚠ it is not proof: md5
+and sha-256 differ in work per block and in schedule as well as in rotates, and nothing here
+counts instructions. The honest reading is that md5 is now the cheapest place to separate
+the two hypotheses, and that `ccnif.sh` re-fills the whole table in twenty seconds once
+`gen.l` learns the idiom.
+
 ## where the build time goes (2026-08-17, the same box)
 
 Once the row is honest, the 19.2 s has an address. Every number below is a direct
@@ -246,6 +307,11 @@ costs it **+29.2%** — the array leg's keeps ride callee-saved seats, not the o
 
 ## how to measure
 
+- For the nif floors alone, `make -C test/bench ccnif` — the algorithms compiled straight by
+  all three compilers, with no love runtime between the timer and the code, and the answers
+  diffed across the lanes on the way past (a divergence there is a miscompile, and it is the
+  only thing in that script that says a compiler is wrong). Twenty seconds, so it is the one
+  to re-run per gen.l edit; ccbench is the one that includes the runtime.
 - Both cipher rows, never one, and the corpus beside them. `make -C test/bench ccbench`
   refreshes `host` and `dist-seed` first: the crew rides love's own layered image now, so
   there is no sibling image to skew, and the mooncc lane races the ARTIFACT — a stale bake

@@ -112,7 +112,7 @@ txt = $(addprefix $(BDIR)/,$(addsuffix .txt,$(1)))
 # alone (the root does not include it), so it says so itself. see ../Makefile.
 .DELETE_ON_ERROR:
 
-.PHONY: all bench run raw html clean satrace setup ccbench ccsize ccdead $(ALL_LANGS)
+.PHONY: all bench run raw html clean satrace setup ccbench ccsize ccdead ccnif $(ALL_LANGS)
 .DEFAULT_GOAL := bench
 
 # Build/refresh the host binary via the root Makefile.
@@ -188,6 +188,16 @@ ccsize: $(CCBENCH)
 # what tells a fat libc from an indivisible one. CCDEAD_V=1 lists the biggest dead.
 ccdead: $(CCBENCH)
 	@$(GL) ccdead.l
+
+# mooncc against gcc and clang on the three files in host/ that ask the most of it --
+# the checksum and gzip floors, compiled straight (no love runtime, no libc in the
+# picture) and read three ways: answers, .text, wall clock. Where ccbench times these
+# nifs through the shipped binary, this times the CODE. Not cached and not a gate: a
+# development instrument, run while working on gen.l. `make ccnif REPS=64 SAMPLES=5`
+# for a quieter reading.
+REPS ?= 24
+ccnif: $(GL)
+	@./ccnif.sh $(REPS) $(SAMPLES)
 
 # Self-contained results page: test/bench/bench.html, the full roster as columns
 # (a present-but-empty language shows a dotted column), with a transpose button
