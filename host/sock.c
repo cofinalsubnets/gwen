@@ -43,13 +43,13 @@
 // the lvm_port_io discriminator (declared in love.h). A closed port carries the
 // -3 sentinel; we hand that straight back and the syscall answers EBADF.
 static intptr_t port_fd(ai_word x) {
- if ((x & 1) == 0 && ((union u*) x)->ap == lvm_port_io)
+ if (!charmp(x) && ((union u*) x)->ap == lvm_port_io)
     return ai_io_fd((struct ai_io*) x);
  return -1; }
 
 // a cask's (or string's) backing bytes, or 0 -- the wl lanes take either.
 static struct ai_str *cask_bytes(ai_word x) {
- if (x & 1) return 0;
+ if (charmp(x)) return 0;
  if (((union u*) x)->ap == lvm_cask) return ((struct ai_cask*) x)->str;
  return ai_strp(x) ? (struct ai_str*) x : 0; }
 

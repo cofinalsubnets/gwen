@@ -236,7 +236,6 @@ lvm(lvm_twinbox)  { ai_musttail return Ap(data_num_apply, g); }
 #endif
 char const *ai_nif_name(intptr_t);
 #define tray(_) ((struct ai_tray*)(_))
-#define charmp oddp
 #define sym(_) ((struct ai_mint*)(_))
 #define nom(_) ((struct ai_nom*)(_))
 #define big(_) ((struct ai_big*)(_))
@@ -374,8 +373,6 @@ static ai_inline struct ai_zn zn(ai_flo_t re, ai_flo_t im) {
 // it was -- sorting needs totality.
 // a macro, not a fn: a by-value ai_zn argument stages through push/pop, which
 // bars unframe in every fn ai_nilp splices into (the hot truth-test fleet)
-// FIXME open code this as ai_net(g, x).re <= 0
-#define zn_false(z) ((z).re <= 0)
 static struct ai_zn ai_net(struct ai *, word);         // fwd: aggregates sum their elements
 static intptr_t ai_count(struct ai *, word);           // fwd: tally's C body (net-mode 1 reads it)
 // ⚠ only the two lanes that answer with no load and no call earn a line here: they
@@ -3014,8 +3011,7 @@ static struct ai_zn ai_net(struct ai *g, word x) {
       else for (i = 0; i < n; i++) s.re += tray_get_flo(v, i);
       return s; } }
   return zn(1, 0); }
-// $: the net observed once -- max(0, ceil) of its order-signed magnitude (a
-// phaseful net takes |z|, gated by zn_false). lockstep with ai_nilp.
+// $: the net observed once -- max(0, ceil) of its real part
 static intptr_t ai_saturate(struct ai *g, word x) {
   // ⚠ the charm lane is EXACTNESS, not speed: the net is a double, so above 2^53 a
   // charm comes back rounded -- and $ is the identity on every green charm (spec.l).
@@ -3087,15 +3083,19 @@ intptr_t ai_io_fd(struct ai_io const *i) {
 static ai_inline struct ai_bio *bio_of(struct ai *g, struct ai_io *i) {
  return i->vt == &ai_fd_port_vt && in_live_pool(ai_core_of(g), (word const*) i)
       ? (struct ai_bio*) i : NULL; }
+
 static ai_inline bool bio_rpending(struct ai_bio *b) {
- return b && b->rbuf && !(b->rbuf & 1) && getcharm(b->rpos) < getcharm(b->rlen); }
+ return b && b->rbuf && !charmp(b->rbuf) && getcharm(b->rpos) < getcharm(b->rlen); }
+
 static ai_inline bool bio_wpending(struct ai_bio *b) {
- return b && b->wbuf && !(b->wbuf & 1) && getcharm(b->wlen) > 0; }
+ return b && b->wbuf && !charmp(b->wbuf) && getcharm(b->wlen) > 0; }
+
 // the scheduler's half of the park law above, declared up by find_runnable.
 static ai_inline bool wait_buffered(struct ai *g, lvm_t *ap, word x, int fd) {
  return (ap == lvm_fgetc || ap == lvm_await) && iop(x)
      && ai_io_fd((struct ai_io*) x) == fd
      && bio_rpending(bio_of(g, (struct ai_io*) x)); }
+
 // the write run outgrew its backing: double it, pending bytes and all (only
 // reachable when a device took less than the whole run)
 static struct ai *bio_wgrow(struct ai *g) {
@@ -3110,6 +3110,7 @@ static struct ai *bio_wgrow(struct ai *g) {
  gen_wb(fc, word(b), b->wbuf);
  fc->sp += 1;
  return g; }
+
 // ⚠ what did not land stays pending: the run slides down to the front and the next
 // drain carries it (zeroing wlen up front once dropped the tail on a mid-buffer EPIPE)
 static struct ai *io_wdrain(struct ai *g, struct ai_io *i) {
@@ -3162,7 +3163,7 @@ static struct ai *io_refill(struct ai *g) {
  if (bio_wpending(b)) {                          // the crossover: our unsent ask goes first
   if (!ai_ok(g = io_wdrain(g, fc->io))) return g;
   fc = ai_core_of(g), b = rbio_of(g, fc->io); }
- if (!b->rbuf || (b->rbuf & 1)) {                // first buffered read: dress the backing
+ if (!b->rbuf || charmp(b->rbuf)) {              // first buffered read: dress the backing
   if (!ai_ok(g = str0(g, ai_iobuf))) return g;
   fc = ai_core_of(g), b = rbio_of(g, fc->io);    // the GC may have moved the port
   b->rbuf = fc->sp[0];
@@ -3213,7 +3214,7 @@ static struct ai *ioputc(struct ai*g, int c) {
   if (!vt->writen(&g, &x, 1) && ai_ok(g))        // grows on the first ask lands it on
    vt->writen(&g, &x, 1);                        // the second -- the growth made room.
   return g; }
- if (!b->wbuf || (b->wbuf & 1)) {                // dress the write backing
+ if (!b->wbuf || charmp(b->wbuf)) {              // dress the write backing
   if (!ai_ok(g = str0(g, ai_iobuf))) return g;
   fc = ai_core_of(g), b = (struct ai_bio*) fc->io;
   b->wbuf = fc->sp[0];
@@ -3260,7 +3261,7 @@ uintptr_t ai_io_read_drain(struct ai *g, struct ai_io *i, unsigned char *dst, ui
 // ⚠ THE RUN ONLY. The pushback byte chug lays in FRONT of it is `unsee`'s to restore.
 uintptr_t ai_io_unread(struct ai *g, struct ai_io *i, intptr_t n) {
  struct ai_bio *b = rbio_of(g, i);
- if (!b || !b->rbuf || (b->rbuf & 1)) return 0;
+ if (!b || !b->rbuf || charmp(b->rbuf)) return 0;
  uintptr_t p = getcharm(b->rpos), l = getcharm(b->rlen);
  if (n >= 0) { uintptr_t k = p < (uintptr_t) n ? p : (uintptr_t) n;
                b->rpos = putcharm(p - k); return k; }
@@ -3641,12 +3642,12 @@ static void io_close(void *p) {
  struct ai_bio *b = p;                         // every finalized port is a bio (ai_io_alloc made it)
  intptr_t fd = ai_io_fd(&b->f.io);
  if (fd < 0) return;
- if (b->wbuf && !(b->wbuf & 1) && getcharm(b->wlen) > 0)   // unflushed bytes ride out raw --
+ if (b->wbuf && !charmp(b->wbuf) && getcharm(b->wlen) > 0) // unflushed bytes ride out raw --
   ai_fd_drain((int) fd, txt(str(b->wbuf)), (uintptr_t) getcharm(b->wlen));   // from-space is readable here
  ai_fd_close(fd); }
 
 // heap-allocate a stream port for an OS fd: push it on Sp[0], register io_close
-struct ai *ai_io_alloc(struct ai *g, int fd) {
+ai_noinline struct ai *ai_io_alloc(struct ai *g, int fd) {
  uintptr_t const n = Width(struct ai_bio);     // a heap fd port carries the buffer lanes (love.h)
  if (ai_ok(g = ai_have(g, n + Width(struct ai_tag) + Width(struct ai_fz) + 1))) {
   union u *k = bump(g, n + Width(struct ai_tag));
@@ -4031,7 +4032,7 @@ op11(lvm_clock, putcharm(ai_clock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 // degrades to ms*1e6; hosts override with a real ns source.
 __attribute__((weak)) intptr_t ai_nclock(void) {
  return (intptr_t) (ai_clock() * 1000000u); }
-op11(lvm_nclock, putcharm(ai_nclock() - ((Sp[0] & 1) ? getcharm(Sp[0]) : 0)))
+op11(lvm_nclock, putcharm(ai_nclock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 
 // (please x): a collection on demand -- () a minor, a positive charm a major;
 // answers the new n_gc (the real-time lever). a forced collection OBSERVES and
@@ -4041,7 +4042,7 @@ op11(lvm_nclock, putcharm(ai_nclock() - ((Sp[0] & 1) ? getcharm(Sp[0]) : 0)))
 lvm(lvm_please) {
  word n = Sp[0];
  Pack(g);
- if ((n & 1) && getcharm(n) > 0)
+ if (charmp(n) && getcharm(n) > 0)
   g->since_major = g->major_live0 + 4 * (uintptr_t) g->len + 1;
  uintptr_t wa = g->win_alloc, wc = g->win_copied;
  int8_t ln = g->lean;
@@ -5588,7 +5589,8 @@ lvm(lvm_nomctor) {
  word n = Sp[0];                                // re-read post-GC (the stack is rooted)
  struct ai_str *nm = strp(n) ? str(n) : nom_str(g, n);   // a string is the name; a sym lends its spelling
  if (!nm) ai_musttail return Ap(lvm_mint, g);               // no name -> a bare mint
- struct ai_nom *y = (struct ai_nom*) Hp; Hp += Width(struct ai_nom);
+ struct ai_nom *y = (struct ai_nom*) Hp;
+ Hp += Width(struct ai_nom);
  ini_nom(y, word(nm), ++g->next_serial, nom_dig(word(nm)));
  ai_musttail return Answer(word(y)); }
 
@@ -5611,7 +5613,8 @@ uintptr_t intern_reserve(struct ai *g) {
 // and inserts it. one canonical nom per spelling. bump-only in here (see intern_reserve).
 ai_noinline word intern_checked(struct ai *g, struct ai_str *b) {
  word m = g->symbols;
- bool found; uintptr_t i = map_probe(g, m, word(b), &found);
+ bool found;
+ uintptr_t i = map_probe(g, m, word(b), &found);
  if (found) return map_slots(m)[2 * i + 1];
  if ((map_len(m) + 1) * 4 >= map_cap(m) * 3) {           // at load: rehash into a doubled backing
   uintptr_t ncap = 2 * map_cap(m), nmask = ncap - 1;
@@ -5720,7 +5723,9 @@ struct ai *ai_unsplice_(struct ai *g) {
  if (!ai_ok(g)) return g;
  ai_core_of(g)->book = *ai_core_of(g)->sp;
  return ai_pop(g, 1); }
+
 op11(lvm_chainp, (chainp(Sp[0]) && !nomp(Sp[0])) ? putcharm(1) : zero)  // the SURFACE chain?: a real compound list. a named symbol reads (name . mint) but counts as an atom
+
 lvm(lvm_link) {
  Have(Width(struct ai_chain));
  struct ai_chain *w = (struct ai_chain*) Hp;
@@ -5882,6 +5887,7 @@ static lvm(lvm_add_seq) {
 // as one string in operand order, then returned per rank: as-is / fresh mint / interned.
 static ai_inline struct ai_str *nom_str(struct ai *g, word x) {   // symbol -> name string, or 0 (a bare mint / the zero point / a non-symbol)
  return namep(x) ? str(nom(x)->name) : 0; }  // a named point (KNom) carries its name; a bare mint is nameless
+
 static ai_inline int stringrank(struct ai *g, word x) {    // STR 0 / mint 1 / NAMED-sym|NUM 2
  if (strp(x)) return 0;
  if (namep(x)) return 2;          // a NAMED symbol: result re-interns (the min pulls a string operand to 0 -> demote)
@@ -5906,8 +5912,8 @@ static ai_inline struct ai_str *seq_cat(struct ai *g, void *w, word a, word b) {
 static lvm(lvm_add_string) {
  word a = Sp[0], b = Sp[1];
  if (trayp(a) || trayp(b)) ai_musttail return Push(ZeroPoint); // array <-> string: undefined
- if (!strp(a) && !nomp(a) && seq_byte(a) < 0) ai_musttail return Push(ZeroPoint);  // the byte law
- if (!strp(b) && !nomp(b) && seq_byte(b) < 0) ai_musttail return Push(ZeroPoint);
+ if ((!strp(a) && !nomp(a) && seq_byte(a) < 0) ||
+     (!strp(b) && !nomp(b) && seq_byte(b) < 0)) ai_musttail return Push(ZeroPoint);
  int rank = min(stringrank(g, a), stringrank(g, b));
  uintptr_t n = stringlen(g, a) + stringlen(g, b);
  if (!n) ai_musttail return Push(rank ? ZeroPoint : EmptyString);   // the EMPTY spelling is the zero POINT (cf. lvm_intern), not the zero charm
@@ -6012,19 +6018,13 @@ static lvm(lvm_mul_cart) {
 // to answer with, which is what an anonymous point, an opaque handle, an out-of-range
 // index and a non-index operand all have in common.
 
-// THE TEXT LANE: a string head, or a NAMED point acting as its spelling -- the sequence
-// it already is to tally, net and `+`. a TEXT operand -- a string or a named point --
-// JUXTAPOSES: (s t) is s then t, C's adjacent-literal law with the literal restriction
-// lifted, and it curries, so ("a" "b" "c") joins three. it agrees with (+ s t) on every
-// text pair, two named points re-interning to a point. a CHARM operand INDEXES instead --
-// the unsigned byte, negatives from the end. everything else, out of range included, is
-// (), which no byte is: a read past the end is tellable without a bounds check.
-// the head stays at Ip in BOTH shapes, so this keeps the plain lvm signature and its
-// guaranteed tails -- an extra parameter would forbid ai_musttail into Continue.
+// string x charm -> byte by index or ()
+// string x string -> concat
+// string x name -> concat
 static lvm(data_string_apply) {
  bool pt = namep(word(Ip));                             // a point head can answer a point
- struct ai_str *na = pt ? nom_str(g, word(Ip)) : str(word(Ip));
- struct ai_str *nb = strp(Sp[0]) ? str(Sp[0]) : namep(Sp[0]) ? nom_str(g, Sp[0]) : NULL;
+ struct ai_str *na = pt ? nom_str(g, word(Ip)) : str(word(Ip)),
+               *nb = strp(Sp[0]) ? str(Sp[0]) : namep(Sp[0]) ? nom_str(g, Sp[0]) : NULL;
  if (nb) {
   bool mk = pt && namep(Sp[0]);                         // point + point -> the interned point
   uintptr_t m = na->len, n = nb->len, req = str_type_width + b2w(m + n);
@@ -6041,14 +6041,16 @@ static lvm(data_string_apply) {
   word k = getcharm(Sp[0]);
   if (k < 0) k += (word) na->len;                       // -1 is the last byte
   if (k >= 0 && k < (word) na->len) v = putcharm((unsigned char) txt(na)[k]); }
- Ip = cell(*++Sp); *Sp = v; ai_musttail return Continue(); }
+ Ip = cell(*++Sp), *Sp = v;
+ ai_musttail return Continue(); }
 
 // applying a point: a NAMED point acts as its spelling, so it rides the text lane whole.
 // an ANONYMOUS point -- a gensym, and () -- has no spelling to act as, so nothing is
 // there to answer with: (). name? and mint? partition nom? and () is in neither.
 static lvm(data_sym_apply) {
  if (namep(word(Ip))) ai_musttail return Ap(data_string_apply, g);
- Ip = cell(*++Sp); *Sp = ZeroPoint; ai_musttail return Continue(); }
+ Ip = cell(*++Sp), *Sp = ZeroPoint;
+ ai_musttail return Continue(); }
 
 // (n x): church-numeral application for the boxed tower -- the same
 // [n, num-ap, x, ret] frame as lvm_numap
@@ -6057,7 +6059,8 @@ static lvm(data_num_apply) {
  word h = hot_hook(g->hot_numap);
  word n = word(Ip), x = Sp[0], ret = Sp[1], *dst = Sp - 2;
  dst[0] = n, dst[1] = h, dst[2] = x, dst[3] = ret;
- Sp = dst; Ip = (union u*) numap_drive; ai_musttail return Continue(); }
+ Sp = dst, Ip = (union u*) numap_drive;
+ ai_musttail return Continue(); }
 
 // (l k): index the spine -- the kth element, negatives from the end, out of range ().
 // (l m): a chain operand JUXTAPOSES -- the append, agreeing with (+ l m) on the nose
@@ -6108,15 +6111,16 @@ lvm(lvm_add) {
      && !__builtin_add_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t)
      && t >= mincharm && t <= maxcharm)
   ai_musttail return Push(putcharm(t));
- // a bare mint joins nothing on, so it is +'s identity in every lane; two DISTINCT
- // nothings have no canonical sum -> the zero point, as two distinct dies do
- // (lvm_coin_op). the matrix says the same thing (lvm_bin_unit): a fast path only.
+ // ⚠ ZEROPOINT FIRST, and this must mirror lvm_bin_unit exactly -- it is that
+ // matrix lane's fast path, nothing more. () is a mint, so folding these into the
+ // distinct-mints rule makes `() + m` answer () where the matrix answers m.
  if (a == ZeroPoint) ai_musttail return Push(b);
  if (b == ZeroPoint) ai_musttail return Push(a);
  if (mintp(a) && mintp(b)) ai_musttail return Push(a == b ? a : ZeroPoint);
  if (mintp(a)) ai_musttail return Push(b);
  if (mintp(b)) ai_musttail return Push(a);
  ai_musttail return Ap(ai_add_mx[ai_kind(a)][ai_kind(b)], g); }
+
 lvm(lvm_mul) {
  word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) { intptr_t t;
@@ -6149,16 +6153,19 @@ lvm(lvm_quot) {
 // bitwise and/or/xor: the both-fixnum tag trick (two odds stay odd under & and |;
 // ^ clears the tag, re-set it). integer-only: any other operand yields zero.
 bit_slow(band, &) bit_slow(bor, |) bit_slow(bxor, ^)
+
 lvm(lvm_band) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) ai_musttail return Push((a & b) | 1);
  avm_unit(a, b);
  if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_band);
  ai_musttail return Ap(lvm_band_slow, g); }
+
 lvm(lvm_bor) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) ai_musttail return Push((a | b) | 1);
  avm_unit(a, b);
  if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_bor);
  ai_musttail return Ap(lvm_bor_slow, g); }
+
 lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) ai_musttail return Push((a ^ b) | 1);
  avm_unit(a, b);
@@ -6266,8 +6273,7 @@ static ai_inline uint64_t rotl64(uint64_t x, int k) {
 static ai_noinline uint64_t rng_step(void *payload) {
  uint64_t s[4];
  memcpy(s, payload, sizeof s);
- uint64_t const result = rotl64(s[0] + s[3], 23) + s[0];
- uint64_t const t = s[1] << 17;
+ uint64_t const result = rotl64(s[0] + s[3], 23) + s[0], t = s[1] << 17;
  s[2] ^= s[0]; s[3] ^= s[1]; s[1] ^= s[2]; s[0] ^= s[3];
  s[2] ^= t; s[3] = rotl64(s[3], 45);
  memcpy(payload, s, sizeof s);
@@ -6396,6 +6402,7 @@ static bool salpha(struct ai *g, word a, word b, struct arib *env) {
   struct arib r = { pa, pb, na, nb, env };
   return salpha(g, ba, bb, &r); }
  return salpha(g, A(a), A(b), env) && salpha(g, B(a), B(b), env); }  // structural: app / ? / :
+
 // α-invariant hash of a source \-expr, parallel to salpha: a bound variable hashes by its
 // binder coordinate (rib depth, position), a free variable by its symbol code, so α-equal
 // lambdas hash equal and the total order (cmp3, by repr hash) agrees with `=`.
@@ -6426,6 +6433,7 @@ static uintptr_t shash(struct ai *g, word x, struct arib *env) {
 // (conservative, but nf_hash mirrors shash so =-equal closures always hash equal).
 enum { nf_maxcap = 64 };                                  // cap the captured-arg count we bridge; deeper -> fall back
 struct clonf { word body, rem, fsyms; int nr, fn; word fv[nf_maxcap]; };  // residual: body, remaining-binder list (nr), filled-binder list (fn) + values
+
 // Load a closure value's capture-substitution residual. A partial-app over a sourced base, or a
 // no-capture lambda (fn = 0). Returns false for a source-less base (a bif) or a quote -- caller falls back.
 static bool clo_load(struct ai *c, word v, struct clonf *o) {
@@ -6448,6 +6456,7 @@ static bool clo_load(struct ai *c, word v, struct clonf *o) {
  for (int i = 0; i < na; i++) rem = B(rem);               // remaining binders start past the filled ones
  o->body = A(t); o->rem = rem; o->nr = nb - na; o->fsyms = p; o->fn = na;
  return true; }
+
 // α-invariant hash of a residual's body, mirroring shash: a genuine binder by
 // coordinate, a FILLED binder by its captured value's hash, a free var by symbol
 static uintptr_t nf_hash(struct ai *g, word x, struct arib *env, word fs, int fn, word *fv) {
@@ -6475,6 +6484,7 @@ static bool clo_nfhash(struct ai *g, word x, uintptr_t *out) {
  struct arib r = { o.rem, o.rem, o.nr, o.nr, 0 };
  *out = (mix * (uintptr_t) (o.nr + 7)) ^ (nf_hash(g, o.body, &r, o.fsyms, o.fn, o.fv) * mix);
  return true; }
+
 // does runtime value V equal the meaning of source term b? filled binder ->
 // compare captures; literal atom -> compare; anything else conservative false.
 static bool val_vs_src(struct ai *g, word V, word b, struct arib *rb, struct clonf *cb, word *scratch) {
@@ -6484,6 +6494,7 @@ static bool val_vs_src(struct ai *g, word V, word b, struct arib *rb, struct clo
   return j >= 0 ? eqv_at(g, V, cb->fv[j], scratch) : false; }   // filled: both values | free: conservative false
  if (!chainp(b)) return eqv_at(g, V, b, scratch);               // literal atom (number / string)
  return false; }                                               // compound source (app / lambda): conservative
+
 // α + value equality of two residual bodies in lockstep: a nom classifies BOUND
 // (by coordinate), FILLED (a captured value), FREE (by symbol), or NOTNOM
 static bool nf_walk(struct ai *g, word a, struct arib *ra, struct clonf *ca,
@@ -6522,6 +6533,7 @@ static bool clo_eq(struct ai *g, struct clonf *ca, struct clonf *cb, word *scrat
  if (ca->nr != cb->nr) return false;                                   // different residual arity
  struct arib rA = { ca->rem, ca->rem, ca->nr, ca->nr, 0 }, rB = { cb->rem, cb->rem, cb->nr, cb->nr, 0 };
  return nf_walk(g, ca->body, &rA, ca, cb->body, &rB, cb, scratch); }
+
 // `base` is where this frame's worklist starts: the public eqv passes off_pool; a
 // re-entrant beta-bridge call passes the caller's live top, so nested scratch sits
 // ABOVE the pending pairs instead of clobbering them.
@@ -6611,10 +6623,10 @@ static ai_noinline bool tray_eq(struct ai *g, word a, word b) {
  if (va->type == ai_C || vb->type == ai_C) {        // (re,im) per cell; a real reads as (r,0)
   ai_flo_t const *pa = tray_data(va), *pb = tray_data(vb);
   for (uintptr_t i = 0; i < n; i++) {
-   ai_flo_t are = va->type == ai_C ? pa[2*i] : tray_get_flo(va, i);
-   ai_flo_t aim = va->type == ai_C ? pa[2*i+1] : 0;
-   ai_flo_t bre = vb->type == ai_C ? pb[2*i] : tray_get_flo(vb, i);
-   ai_flo_t bim = vb->type == ai_C ? pb[2*i+1] : 0;
+   ai_flo_t are = va->type == ai_C ? pa[2*i] : tray_get_flo(va, i),
+            aim = va->type == ai_C ? pa[2*i+1] : 0,
+            bre = vb->type == ai_C ? pb[2*i] : tray_get_flo(vb, i),
+            bim = vb->type == ai_C ? pb[2*i+1] : 0;
    if (are != bre || aim != bim) return false; }
   return true; }
  if (va->type == ai_Z && vb->type == ai_Z) {        // exact: no double round-trip
@@ -6850,8 +6862,8 @@ word ai_big_canon(ai_word **hp, ai_limb const *limb, int n, bool neg) {
  if (n <= wlimbs) {
   uintptr_t u = 0;
   for (int i = 0; i < n; i++) u |= (uintptr_t) limb[i] << (limb_bits * i);   // combine limbs into a word
-  uintptr_t const fixmag = (uintptr_t) 1 << (Bits - 2);   // |mincharm|  = 2^(W-2)
-  uintptr_t const boxmag = (uintptr_t) 1 << (Bits - 1);   // |INT_MIN|  = 2^(W-1)
+  uintptr_t const fixmag = (uintptr_t) 1 << (Bits - 2),   // |mincharm|  = 2^(W-2)
+                  boxmag = (uintptr_t) 1 << (Bits - 1);   // |INT_MIN|  = 2^(W-1)
   intptr_t val;
   if (!neg) {
    if (u <= fixmag - 1) return putcharm((intptr_t) u);       // maxcharm = 2^(W-2)-1
@@ -6915,9 +6927,9 @@ static int big_mul_mag(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, i
 // ip -- so the caller is just Pack; binop; Unpack; Continue.
 struct ai *ai_big_binop(struct ai *g, int vop) {
  word a = g->sp[0], b = g->sp[1];
- int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
- int bound = na + nb + 2;                        // result magnitude upper bound
- int work = 4 * (na + nb) + 16;                  // divmod scratch upper bound
+ int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2,
+     bound = na + nb + 2,                        // result magnitude upper bound
+     work = 4 * (na + nb) + 16;                  // divmod scratch upper bound
  uintptr_t res_area = Width(struct ai_big) + b2w((size_t) bound * sizeof(ai_limb)),
            ws_words = b2w((size_t) (bound + work) * sizeof(ai_limb));
  if (!ai_ok(g = ai_have(g, res_area + ws_words))) return g;
@@ -6943,10 +6955,7 @@ struct ai *ai_big_binop(struct ai *g, int vop) {
     else {
      int rr = nlb; while (rr > 0 && rem[rr-1] == 0) rr--;
      rn = mag_copy(rmag, rem, rr), rneg = nega; } } } }
- g->sp[1] = ai_big_canon(&g->hp, rmag, rn, rneg);
- g->sp++;
- g->ip = (union u*) g->ip + 1;
- return g; }
+ return *++g->sp = ai_big_canon(&g->hp, rmag, rn, rneg), ++g->ip, g; }
 
 // the integer rungs' EXACT LANE (int / ceil / saturate) for a ratio coin: above
 // 2^53 the float net rounds, so a rung riding it lands on the wrong integer.
@@ -6996,8 +7005,8 @@ struct ai *ai_ratio_rung(struct ai *g, int rung) {
 // at g->sp[0..1] are integers; a zero divisor is screened off by the caller.
 struct ai *ai_big_quot_true(struct ai *g) {
  word a = g->sp[0], b = g->sp[1];
- int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
- int bound = na + nb + 2, work = 4 * (na + nb) + 16;
+ int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2,
+     bound = na + nb + 2, work = 4 * (na + nb) + 16;
  uintptr_t res_area = Width(struct ai_big) + b2w((size_t) bound * sizeof(ai_limb)),
            ws_words = b2w((size_t) (bound + work) * sizeof(ai_limb));
  if (!ai_ok(g = ai_have(g, res_area + ws_words + box_req))) return g;
@@ -7005,8 +7014,8 @@ struct ai *ai_big_quot_true(struct ai *g) {
  ai_limb sa[wlimbs], sb[wlimbs]; ai_limb const *la, *lb; bool nega, negb;
  int nla = load_int_mag(a, sa, &la, &nega), nlb = load_int_mag(b, sb, &lb, &negb);
  ai_limb *rmag = (ai_limb*) (g->hp + res_area), *scr = rmag + bound;
- int rn = 0; bool rneg = false, exact;
- int c = mag_cmp(la, nla, lb, nlb);
+ bool rneg = false, exact;
+ int rn = 0, c = mag_cmp(la, nla, lb, nlb);
  if (c < 0) exact = (nla == 0);                  // |a| < |b|: q = 0, exact iff a == 0
  else {
   ai_limb *q = scr, *rem = q + (nla - nlb + 1), *un = rem + nlb, *vn = un + (nla + 1);
@@ -7126,8 +7135,8 @@ lvm(lvm_kmul) {
                                                    // a once-per-dispatch check yields too rarely here
   ai_limb *J = jobs + (uintptr_t) (top - 1) * KmulJw;
   uintptr_t ar = J[0], br = J[1];
-  int jn = (int) J[2];
   uintptr_t rr = J[3], sr = J[4];
+  int jn = (int) J[2];
   int st = (int) J[5];
   if (jn < kara_cutoff) {                                 // leaf: schoolbook jn x jn -> ws[rr..rr+2jn)
    mag_mul(ws + rr, ws + ar, jn, ws + br, jn);
@@ -7231,9 +7240,9 @@ static union u const bdiv_loop[1] = { { .ap = lvm_bdiv } };
 static struct ai *ai_bdiv_setup(struct ai *g, int which) {
  word a = g->sp[0], b = g->sp[1];
  int mub = bigp(a) ? big_nlimbs(a) : wlimbs, nub = bigp(b) ? big_nlimbs(b) : wlimbs;
- uintptr_t wslimbs = BdivHdr + (uintptr_t) nub + (mub + 1) + (mub - nub + 1);
- uintptr_t sreq = str_type_width + b2w(wslimbs * sizeof(ai_limb));
- uintptr_t breq = Width(struct ai_cask) + Width(struct ai_tag);
+ uintptr_t wslimbs = BdivHdr + (uintptr_t) nub + (mub + 1) + (mub - nub + 1),
+           sreq = str_type_width + b2w(wslimbs * sizeof(ai_limb)),
+           breq = Width(struct ai_cask) + Width(struct ai_tag);
  if (!ai_ok(g = ai_have(g, sreq + breq + 3))) return g;
  a = g->sp[0], b = g->sp[1];                          // re-fetch (ai_have may have GC'd)
  ai_limb sa[wlimbs], sb[wlimbs]; ai_limb const *la, *lb; bool nega, negb;
@@ -7395,8 +7404,8 @@ lvm(lvm_trayctor) {
 lvm(lvm_iota) {
  word nx = Sp[0];
  if (!charmp(nx) || getcharm(nx) < 0) ai_musttail return Answer(ZeroPoint);
- uintptr_t n = (uintptr_t) getcharm(nx);
- uintptr_t bytes = sizeof(struct ai_tray) + 1 * sizeof(word) + n * ai_T[ai_Z];
+ uintptr_t n = (uintptr_t) getcharm(nx),
+           bytes = sizeof(struct ai_tray) + 1 * sizeof(word) + n * ai_T[ai_Z];
  Have(b2w(bytes));
  struct ai_tray *v = (struct ai_tray*) Hp;
  Hp += b2w(bytes);
@@ -7666,8 +7675,8 @@ static ai_noinline void vmap1_fill(struct ai_tray *r, struct ai_tray *a, ai_flo_
 
 lvm(lvm_vmap1, ai_flo_t (*fn)(ai_flo_t)) {
  struct ai_tray *a = tray(Sp[0]);
- uintptr_t rank = a->rank, n = tray_nelem(a);
- uintptr_t bytes = sizeof(struct ai_tray) + rank * sizeof(word) + n * ai_T[ai_R];
+ uintptr_t rank = a->rank, n = tray_nelem(a),
+           bytes = sizeof(struct ai_tray) + rank * sizeof(word) + n * ai_T[ai_R];
  Have(b2w(bytes));
  a = tray(Sp[0]);                               // re-read post-Have
  struct ai_tray *r = (struct ai_tray*) Hp;
@@ -7792,10 +7801,10 @@ static ai_inline bool ratio_iview(word x, int64_t *n, int64_t *d) {
 // u64 x u64 -> 128-bit magnitude product from 32-bit half-word partials -- the exact
 // cross-multiply for builds without __int128 (mooncc's love-raw; the thumb ports).
 static ai_inline void ratio_mag_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo) {
- uint64_t mask = 0xFFFFFFFFu;
- uint64_t a0 = a & mask, a1 = a >> 32, b0 = b & mask, b1 = b >> 32;
- uint64_t p00 = a0 * b0, p01 = a0 * b1, p10 = a1 * b0, p11 = a1 * b1;
- uint64_t mid = (p00 >> 32) + (p01 & mask) + (p10 & mask);
+ uint64_t mask = 0xFFFFFFFFu,
+          a0 = a & mask, a1 = a >> 32, b0 = b & mask, b1 = b >> 32,
+          p00 = a0 * b0, p01 = a0 * b1, p10 = a1 * b0, p11 = a1 * b1,
+          mid = (p00 >> 32) + (p01 & mask) + (p10 & mask);
  *lo = (p00 & mask) | (mid << 32);
  *hi = p11 + (p01 >> 32) + (p10 >> 32) + (mid >> 32); }
 #endif
@@ -7806,11 +7815,11 @@ static ai_inline bool ratio_xcmp(int64_t n1, int64_t d1, int64_t n2, int64_t d2,
  return *c = l == r ? 0 : (l < r ? -s : s), true;
 #else
  // exact sign + magnitude: |n1|*|d2| vs |n2|*|d1| as double-word pairs, signs on top.
- uint64_t la = n1 < 0 ? (uint64_t) 0 - (uint64_t) n1 : (uint64_t) n1;
- uint64_t lb = d2 < 0 ? (uint64_t) 0 - (uint64_t) d2 : (uint64_t) d2;
- uint64_t ra = n2 < 0 ? (uint64_t) 0 - (uint64_t) n2 : (uint64_t) n2;
- uint64_t rb = d1 < 0 ? (uint64_t) 0 - (uint64_t) d1 : (uint64_t) d1;
- uint64_t lhi, llo, rhi, rlo;
+ uint64_t la = n1 < 0 ? (uint64_t) 0 - (uint64_t) n1 : (uint64_t) n1,
+          lb = d2 < 0 ? (uint64_t) 0 - (uint64_t) d2 : (uint64_t) d2,
+          ra = n2 < 0 ? (uint64_t) 0 - (uint64_t) n2 : (uint64_t) n2,
+          rb = d1 < 0 ? (uint64_t) 0 - (uint64_t) d1 : (uint64_t) d1,
+          lhi, llo, rhi, rlo;
  ratio_mag_mul(la, lb, &lhi, &llo);
  ratio_mag_mul(ra, rb, &rhi, &rlo);
  bool zl = !(lhi | llo), zr = !(rhi | rlo);
@@ -7879,6 +7888,7 @@ static intptr_t ai_count(struct ai *g, word l) {
  intptr_t n = 0;
  while (chainp(l)) n++, l = B(l);
  return n; }
+
 lvm(lvm_tally) {
  Sp[0] = putcharm(ai_count(g, Sp[0]));
  ai_musttail return Next(1); }
@@ -7973,11 +7983,11 @@ static ai_inline uintptr_t bdim(uintptr_t da, uintptr_t db) {
 // bshape_n: the broadcast element count, or (uintptr_t) -1 on non-conformance.
 static uintptr_t bshape_n(word a, word b) {
  bool atray = trayp(a), btray = trayp(b);
- uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
- uintptr_t R = ra > rb ? ra : rb, n = 1;
+ uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
+           R = ra > rb ? ra : rb, n = 1;
  for (uintptr_t k = 0; k < R; k++) {
-  uintptr_t da = (atray && k < ra) ? tray(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (btray && k < rb) ? tray(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (atray && k < ra) ? tray(a)->shape[ra - 1 - k] : 1,
+            db = (btray && k < rb) ? tray(b)->shape[rb - 1 - k] : 1;
   if (da != db && da != 1 && db != 1) return (uintptr_t) -1;
   n *= bdim(da, db); }
  return n; }
@@ -7988,8 +7998,8 @@ static void bshape_put(uintptr_t *shape, uintptr_t R, word a, word b) {
  bool atray = trayp(a), btray = trayp(b);
  uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
  for (uintptr_t k = 0; k < R; k++) {
-  uintptr_t da = (atray && k < ra) ? tray(a)->shape[ra - 1 - k] : 1;
-  uintptr_t db = (btray && k < rb) ? tray(b)->shape[rb - 1 - k] : 1;
+  uintptr_t da = (atray && k < ra) ? tray(a)->shape[ra - 1 - k] : 1,
+            db = (btray && k < rb) ? tray(b)->shape[rb - 1 - k] : 1;
   shape[R - 1 - k] = bdim(da, db); } }
 
 // c[j]: the operand's flat-offset contribution of result axis j (0 when that
@@ -8019,9 +8029,9 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
  // CONTIGUOUS MONOTYPE FAST PATH: no broadcasting, so the odometer and dispatch
  // vanish -- raw pointers, the op hoisted once, a body the compiler vectorizes.
  // mixed/bignum/broadcast falls through to the general loop; results bit-identical.
- { bool cmpf = op >= vop_lt;
-   bool aok = !atray || tray_nelem(va) == n, bok = !btray || tray_nelem(vb) == n;
-   bool nobig = !((!atray && bigp(a)) || (!btray && bigp(b)));
+ { bool cmpf = op >= vop_lt,
+        aok = !atray || tray_nelem(va) == n, bok = !btray || tray_nelem(vb) == n,
+        nobig = !((!atray && bigp(a)) || (!btray && bigp(b)));
    if (aok && bok && nobig) {
     if (fdom && (!atray || va->type == ai_R) && (!btray || vb->type == ai_R)) {
      ai_flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b);
@@ -8039,10 +8049,10 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
       #undef VBF
      }
     } else if (!fdom && (!atray || va->type == ai_Z) && (!btray || vb->type == ai_Z)) {
-     intptr_t sia = atray ? 0 : (charmp(a) ? (intptr_t) getcharm(a) : sun_get(a));
-     intptr_t sib = btray ? 0 : (charmp(b) ? (intptr_t) getcharm(b) : sun_get(b));
-     intptr_t *ap = atray ? (intptr_t*) tray_data(va) : 0, *bp = btray ? (intptr_t*) tray_data(vb) : 0;
-     intptr_t *rp = (intptr_t*) tray_data(r);   // r is ai_Z for both int-arith and the mask
+     intptr_t sia = atray ? 0 : (charmp(a) ? (intptr_t) getcharm(a) : sun_get(a)),
+              sib = btray ? 0 : (charmp(b) ? (intptr_t) getcharm(b) : sun_get(b)),
+              *ap = atray ? (intptr_t*) tray_data(va) : 0, *bp = btray ? (intptr_t*) tray_data(vb) : 0,
+              *rp = (intptr_t*) tray_data(r);   // r is ai_Z for both int-arith and the mask
      if (cmpf) {
       #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = atray?ap[p]:sia, bv = btray?bp[p]:sib; rp[p] = (E)?1:0; } } while (0)
       switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
@@ -8125,13 +8135,13 @@ lvm(lvm_vbin, int op) {
   // object tray refuses them whole rather than answering per-element zero.
   if (vop_bitp(op)) return Push(ZeroPoint);
   return Ap(lvm_obin, g, op); }                   // object array -> promoting lane
- uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
- uintptr_t R = ra > rb ? ra : rb;
+ uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
+           R = ra > rb ? ra : rb;
  // compute-type = max element type; a scalar int contributes the lowest type
  // (i8) so it never widens an int array, a scalar float forces the float lane.
- int ta = atray ? (int) tray(a)->type : gemp(a) ? (int) ai_R : (int) ai_Z;
- int tb = btray ? (int) tray(b)->type : gemp(b) ? (int) ai_R : (int) ai_Z;
- int ct = ta > tb ? ta : tb;
+ int ta = atray ? (int) tray(a)->type : gemp(a) ? (int) ai_R : (int) ai_Z,
+     tb = btray ? (int) tray(b)->type : gemp(b) ? (int) ai_R : (int) ai_Z,
+     ct = ta > tb ? ta : tb;
  bool fdom = ct >= ai_R, cmp = op >= vop_lt;
  if (vop_bitp(op) && fdom) return Push(ZeroPoint);   // no bits on a gem
  uintptr_t n = bshape_n(a, b);                     // conformance + result size
@@ -8172,8 +8182,8 @@ lvm(lvm_vmap2, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
  bool atray = trayp(a), btray = trayp(b);
  if (!(atray || isnum(a)) || !(btray || isnum(b)))   // each operand: array or scalar
   return Push(ZeroPoint);
- uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
- uintptr_t R = ra > rb ? ra : rb, n = bshape_n(a, b);
+ uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
+           R = ra > rb ? ra : rb, n = bshape_n(a, b);
  if (n == (uintptr_t) -1) return Push(ZeroPoint);
  uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[ai_R];
  Have(b2w(bytes));
@@ -8270,8 +8280,8 @@ static struct ai *obin_run(struct ai *g, int op) {
  if (atray && tray(a)->type != ai_O) { if (!ai_ok(g = tray_to_obj(g, 0))) return g; }
  if (btray && tray(b)->type != ai_O) { if (!ai_ok(g = tray_to_obj(g, 1))) return g; }
  a = g->sp[0], b = g->sp[1], atray = trayp(a), btray = trayp(b);
- uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
- uintptr_t R = ra > rb ? ra : rb, n = bshape_n(a, b), shp[maxrank];
+ uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
+           R = ra > rb ? ra : rb, n = bshape_n(a, b), shp[maxrank];
  if (n == (uintptr_t) -1) {                                    // non-conforming -> zero
   g->sp[1] = zero, g->sp++, g->ip = (union u*) g->ip + 1; return g; }
  bshape_put(shp, R, a, b);
@@ -8298,8 +8308,7 @@ static struct ai *obin_run(struct ai *g, int op) {
   // frees an element still in the array
   gen_wb(g, g->sp[0], res);
   odo_step(idx, R, shp); }
- word result = g->sp[0];                                       // collapse [r,a,b] -> r, advance ip
- g->sp += 2, g->sp[0] = result, g->ip = (union u*) g->ip + 1;
+ g->sp[2] = g->sp[0], g->sp += 2, g->ip += 1;
  return g; }
 
 lvm(lvm_obin, int op) {
@@ -8363,7 +8372,6 @@ lvm(lvm_twin_bin, int vop) {
  if (!(twinp(a) || isnum(a)) || !(twinp(b) || isnum(b)) || vop > vop_quot)
   return Push(ZeroPoint);
  Have(twin_req);
- a = Sp[0], b = Sp[1];                              // re-read post-Have
  struct ai_twin *v = (struct ai_twin*) Hp; v->ap = lvm_twinbox; Hp += twin_req;
  twin_fill(v, a, b, vop);
  return Push(word(v)); }
@@ -8415,8 +8423,8 @@ lvm(lvm_cbin, int op) {
      || op == vop_rem || op == vop_fquot)
   return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: undefined face -> 0, not ()
  bool cmp = op >= vop_lt;
- uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0;
- uintptr_t R = ra > rb ? ra : rb, n = bshape_n(a, b);
+ uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
+           R = ra > rb ? ra : rb, n = bshape_n(a, b);
  if (n == (uintptr_t) -1) return Push(op == vop_eq ? zero : ZeroPoint);   // non-conformant `=` -> 0
  enum ai_tray_type rt = cmp ? ai_Z : ai_C;              // compare -> i64 mask, else packed complex
  uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[rt];
@@ -8433,9 +8441,9 @@ static ai_noinline void twin_pow_fill(struct ai_twin *v, word wbase, word zexp) 
  ai_flo_t wr, wi, zr, zi;
  twin_parts(wbase, &wr, &wi); twin_parts(zexp, &zr, &zi);
  ai_flo_t lr = (ai_flo_t) 0.5 * ai_log(wr * wr + wi * wi),    // ln|w|
-         li = ai_atan2(wi, wr);                             // arg w
- ai_flo_t pr = zr * lr - zi * li, pi = zr * li + zi * lr,   // z * Log w
-         e = ai_exp(pr);
+          li = ai_atan2(wi, wr),                             // arg w
+          pr = zr * lr - zi * li, pi = zr * li + zi * lr,   // z * Log w
+          e = ai_exp(pr);
  twin_set(v, e * ai_cos(pi), e * ai_sin(pi)); }
 
 // sin/cos of pi*x, the angle reduced BEFORE multiplying by pi so a half-integer
@@ -8467,7 +8475,6 @@ lvm(lvm_pow) {
   if (!(twinp(a) || isnum(a)) || !(twinp(b) || isnum(b)))
    ai_musttail return Push(ZeroPoint);
   Have(twin_req);
-  a = Sp[0], b = Sp[1];                              // re-read post-Have
   struct ai_twin *v = (struct ai_twin*) Hp;
   Hp += twin_req;
   v->ap = lvm_twinbox;
@@ -8542,8 +8549,8 @@ static ai_noinline void cpart_fill(struct ai_tray *r, struct ai_tray *v, int off
 static lvm(lvm_cpart, int off) {
  struct ai_tray *v = tray(Sp[0]);
  enum ai_tray_type rt = off < 0 ? ai_Z : ai_R;
- uintptr_t R = v->rank, n = tray_nelem(v);
- uintptr_t bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[rt];
+ uintptr_t R = v->rank, n = tray_nelem(v),
+           bytes = sizeof(struct ai_tray) + R * sizeof(word) + n * ai_T[rt];
  Have(b2w(bytes));
  v = tray(Sp[0]);                                           // re-read post-Have
  struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);

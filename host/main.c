@@ -328,7 +328,7 @@ static lvm(lvm_open) {
 // existing fputc/etc. convention.
 static lvm(lvm_close) {
   // inline "is x a port": heap pointer whose discriminator is lvm_port_io.
-  if ((Sp[0] & 1) == 0 && ((union u*) Sp[0])->ap == lvm_port_io) {
+  if (!charmp(Sp[0]) && ((union u*) Sp[0])->ap == lvm_port_io) {
     struct ai_io *io = (struct ai_io*) Sp[0];
     intptr_t fd = ai_io_fd(io);
     if (fd >= 0) {

@@ -330,7 +330,7 @@ static lvm(lvm_cksum) {
 #define CkSt 12
 
 static struct ai_str *dig_cask(ai_word x, uintptr_t want) {   // the cask's bytes, or NULL
- if ((x & 1) || ((union u*) x)->ap != lvm_cask) return NULL;
+ if (charmp(x) || ((union u*) x)->ap != lvm_cask) return NULL;
  struct ai_str *s = ((struct ai_cask*) x)->str;
  return s && s->len == want ? s : NULL; }
 

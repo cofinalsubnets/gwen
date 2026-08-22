@@ -15,7 +15,7 @@
 
 static lvm(lvm_peepw) {
  ai_word c = Sp[0], out = ZeroPoint;
- if (!(c & 1) && ((union u*) c)->ap == lvm_cask && (Sp[1] & 1)) {
+ if (!charmp(c) && ((union u*) c)->ap == lvm_cask && charmp(Sp[1])) {
   intptr_t i = getcharm(Sp[1]);
   struct ai_str *s = ((struct ai_cask*) c)->str;
   if (i >= 0 && (uintptr_t) (i + 1) * 8 <= s->len) {
@@ -27,7 +27,7 @@ static lvm(lvm_peepw) {
 
 static lvm(lvm_pinw) {
  ai_word c = Sp[0], out = ZeroPoint;
- if (!(c & 1) && ((union u*) c)->ap == lvm_cask && (Sp[1] & 1) && (Sp[2] & 1)) {
+ if (!charmp(c) && ((union u*) c)->ap == lvm_cask && charmp(Sp[1]) && charmp(Sp[2])) {
   intptr_t i = getcharm(Sp[1]);
   uint64_t v = (uint64_t) getcharm(Sp[2]) & 0xffffffffu;
   struct ai_str *s = ((struct ai_cask*) c)->str;

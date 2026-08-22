@@ -134,9 +134,7 @@ struct ai_mint {
 // never depends on intern history (the reproducible-build law).
 struct ai_nom {
  lvm_t *ap;
- uintptr_t name;
- uintptr_t code;
- uintptr_t dig; };
+ uintptr_t name, code, dig; };
 
 struct ai_port_vt;   // the port's kind, in its head; spelled out below
 
@@ -179,8 +177,8 @@ struct ai {
  // the next collection MAJOR, so a minor only runs under a complete set.
  ai_word *rem; uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by AiRemCap, the fixed capacity
  // the sub-word collector/codec scalars, adjacent so the four ride the rem set's tail
- bool gc_gen;                             // set during a generational collection: bump() targets major_hp, not hp
- bool sym_raw;                            // the intern map is still the image's own. a MINOR scans that map in
+ bool gc_gen,                             // set during a generational collection: bump() targets major_hp, not hp
+      sym_raw;                            // the intern map is still the image's own. a MINOR scans that map in
                                           // PLACE and a woken one does not survive it; only a major re-homes it
                                           // (major_symbols_rebuild), so the first collection after a wake is one.
  int8_t lean;                             // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
@@ -191,53 +189,55 @@ struct ai {
  // finalizers. gc_gen redirects bump() to major_hp during a collection; the ranges the
  // pass itself walks are `struct ai_gcx`, on the collector's own C stack (core/love.c).
  ai_word *major_pool, *major_base, *major_hp;   // major: malloc base (2*major_len words), active-half base, active bump
- uintptr_t major_len;                       // major half size (words)
- uintptr_t n_minor;                    // MINOR collections so far (majors = n_gc - n_minor)
- uintptr_t minor_hi, major_hi;            // the PAUSE gauge: peak words one minor / one major copied
-                                          // (gauge[14]/[15]; test/host/gcpause.l puts wall ns against them)
- uintptr_t since_major, major_live0;      // young words scanned since the last major; major live right after it.
-                                          // a major fires once since_major > major_live0 + 4*minor-pool --
-                                          // amortized against allocation, so dead tenured objects sweep
-                                          // periodically and the pool can shrink (gen_please)
- uintptr_t win_alloc, win_copied;         // sliding window (words) for the deterministic minor-resize ratio:
+ uintptr_t
+   major_len,                       // major half size (words)
+   n_minor,                    // MINOR collections so far (majors = n_gc - n_minor)
+   minor_hi, major_hi,            // the PAUSE gauge: peak words one minor / one major copied
+                                  // (gauge[14]/[15]; test/host/gcpause.l puts wall ns against them)
+   since_major, major_live0,      // young words scanned since the last major; major live right after it.
+                                  // a major fires once since_major > major_live0 + 4*minor-pool --
+                                  // amortized against allocation, so dead tenured objects sweep
+                                  // periodically and the pool can shrink (gen_please)
+   win_alloc, win_copied,         // sliding window (words) for the deterministic minor-resize ratio:
                                           // overhead = copied/alloc; reset on a resize (gen_please)
- uintptr_t n_resize;                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
- // the pinned prefix: the first `froze` words of major_base ride a major verbatim, so
- // frozen objects keep their heap offsets and a later image's blob begins with an
- // earlier one's (doc/misc/plan/image-chain.md). it makes the frozen closure immortal, so
- // only ai_image_freeze sets it and 0 is every other session.
- uintptr_t froze;
- uintptr_t budget;                     // total memory CAP in words (2*minor + 2*major); 0 = unbounded.
-                                          // appel's rule: the nursery gets the free budget after the major pool.
- uintptr_t minor0, major0, ratio;         // the other three live knobs: nursery floor, the major pool's
+   n_resize,                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
+   // the pinned prefix: the first `froze` words of major_base ride a major verbatim, so
+   // frozen objects keep their heap offsets and a later image's blob begins with an
+   // earlier one's (doc/misc/plan/image-chain.md). it makes the frozen closure immortal, so
+   // only ai_image_freeze sets it and 0 is every other session.
+   froze,
+   budget,                     // total memory CAP in words (2*minor + 2*major); 0 = unbounded.
+                                            // appel's rule: the nursery gets the free budget after the major pool.
+   minor0, major0, ratio;         // the other three live knobs: nursery floor, the major pool's
                                           // grow/shrink STEP, the copy-overhead setpoint. seeded at ai_ini
                                           // from ai_minor0/ai_major0/ai_gc_ratio; `tune` moves all four.
                                           // ⚠ untraced scalars: a bake does not carry them (see lvm_tune)
  union {
   intptr_t v0;
   struct {
-   ai_word book;   // global env map; the macro table is book[zero]. GC-forwarded in v0..end.
-   ai_word scare_a, scare_b; // the last scare's condition data, stashed at the raise for
+   ai_word
+     book,   // global env map; the macro table is book[zero]. GC-forwarded in v0..end.
+     scare_a, scare_b, // the last scare's condition data, stashed at the raise for
                   // the exit face (ai_scare_face_); zero zero = the bare oom
    // THE HOOKS: lisp the C lanes must reach, handed over by (seal-hook n f) and read
    // by SLOT -- no name lookup, no rebind can reach them. numbered in seal = boot
    // order; GC-traced (v0..end) + image-serialized. unsealed = zero -> hot_hook
    // traps, except 5 (a steady state the raise lanes nil-test) and 7 (identity).
-   ai_word hot_read;  // 0: the corpus reader (p1's whole-text door, sealed by p1's own
+     hot_read,  // 0: the corpus reader (p1's whole-text door, sealed by p1's own
                   // last act); zero = p1 not up yet, readtext falls back to p0
-   ai_word hot_numap; // 1: the church C->lisp num-ap hook (lvm_numap/numtap, data_num_apply)
-   ai_word hot_stack, hot_compose; // 2, 3: `+` and `*` OF TWO FUNCTIONS -- church add and
+     hot_numap, // 1: the church C->lisp num-ap hook (lvm_numap/numtap, data_num_apply)
+     hot_stack, hot_compose, // 2, 3: `+` and `*` OF TWO FUNCTIONS -- church add and
                   // compose, two lines of prel (lvm_addh/lvm_mulh build the partial)
-   ai_word hot_opfix; // 4: the operator factor pass, sealed last; pre-seal the pass
+     hot_opfix, // 4: the operator factor pass, sealed last; pre-seal the pass
                   // simply skips (everything up to the seal is written prefix)
-   ai_word hot_help;  // 5: the INSTALLED HELP, the one DYNAMIC slot: (hear f) installs,
+     hot_help,  // 5: the INSTALLED HELP, the one DYNAMIC slot: (hear f) installs,
                   // (hear ()) uninstalls, (heard ()) answers; zero = nothing heard, raises
                   // take the default escape. read by ai_raise/lvm_index, never the book.
                   // ⚠ PER TASK: this is the running task's live copy, saved into its node
                   // and restored on the switch (like Ip/Sp), inherited at spawn. one shared
                   // help cannot serve two tasks -- an escaping handler would land in the
                   // wrong stack, and the last install would win for everyone.
-   ai_word hot_io;    // 6: THE TASK'S STDIO, the second dynamic slot: (wear (i o e))
+     hot_io,    // 6: THE TASK'S STDIO, the second dynamic slot: (wear (i o e))
                   // re-seats in/out/err for the running task, (wear ()) hands them back.
                   // zero = the console, and it is the steady state -- every op tests one
                   // word before it looks at anything. ⚠ PER TASK, like the help above:
@@ -245,16 +245,16 @@ struct ai {
                   // dup2 is the process's and cannot serve two tasks at once.
                   // ⚠ OP-LEVEL ONLY: id?, peek and the image still see the static, because
                   // prel's tap/jug poke the port head by index and must keep seeing it.
-   ai_word hot_show;  // 7: `show` -- what `string` coerces the kinds it cannot spell through.
+     hot_show,  // 7: `show` -- what `string` coerces the kinds it cannot spell through.
                   // ⚠ unsealed = identity: show is post.l's, and prel runs before it.
-   ai_word mods;  // the MODULE REGISTRY book: name -> module-book, filled by `leave`,
+     mods,  // the MODULE REGISTRY book: name -> module-book, filled by `leave`,
                   // read by use/from. a lazy singleton, so both bootstrap prel runs
                   // capture the SAME tablet. in v0..end: traced + serialized.
-   ai_word inport; // the BUFFERED stdin port, or 0. a seat that can put fd 0 back where its
+     inport, // the BUFFERED stdin port, or 0. a seat that can put fd 0 back where its
                   // reader stopped mints one at boot and parks it here -- `in` stays the
                   // static and reads THROUGH it (love.c's rbio_of). traced here so a
                   // collection forwards it -- a static port could not hold a heap run.
-   ai_word inflag; // fd 0's flags AS WE FOUND THEM (a charm), or 0 for "we left them alone".
+     inflag; // fd 0's flags AS WE FOUND THEM (a charm), or 0 for "we left them alone".
                   // set when a seat takes the O_NONBLOCK bit for the whole run instead of
                   // toggling it per read; the same handoff sites put it back. raw 0 is no
                   // charm, so the boot value cannot be read as a saved O_RDONLY.
@@ -373,17 +373,19 @@ intptr_t ai_io_fd(struct ai_io const*);
 struct ai_bio { struct ai_fio f; ai_word rbuf, rpos, rlen, wbuf, wlen; };
 // the two faces host nifs need (guards inside; both 0/no-op on a bare port):
 // pending = bytes waiting in the read buffer; drain pops up to n of them into dst
-uintptr_t ai_io_pending(struct ai*, struct ai_io*);
-uintptr_t ai_io_read_drain(struct ai*, struct ai_io*, unsigned char*, uintptr_t);
+uintptr_t
+ ai_io_pending(struct ai*, struct ai_io*),
+ ai_io_read_drain(struct ai*, struct ai_io*, unsigned char*, uintptr_t),
 // unread MOVES the position inside the run and answers how many bytes moved: n > 0 gives back,
 // n < 0 takes. The borrowed run counts, so stdin's seek-back (which is pending) sees it.
 // ⚠ signed because relative does not compose -- a caller that gave back must step forward again.
-uintptr_t ai_io_unread(struct ai*, struct ai_io*, intptr_t);
-struct ai *ai_io_wflush(struct ai*, struct ai_io*);   // TRY to push the write run out
-uintptr_t ai_io_wpending(struct ai*, struct ai_io*);  // ... and what the device would not take.
+ ai_io_unread(struct ai*, struct ai_io*, intptr_t),
+ ai_io_wpending(struct ai*, struct ai_io*);  // ... and what the device would not take.
+struct ai
+ *ai_io_wflush(struct ai*, struct ai_io*),   // TRY to push the write run out
 // close and seal call the pair: wflush, then park on a nonzero wpending (see
 // lvm_yield_sw). ⚠ neither may shut the fd on a residue -- a truncated stream.
-struct ai *ai_io_alloc(struct ai *g, int fd);
+ *ai_io_alloc(struct ai *g, int fd);
 // raw bytes at an fd with NO g machinery -- the GC-context finalizer drains a
 // dying port through it. weak no-op default; the host overrides with write(2).
 void ai_fd_drain(int fd, void const*, uintptr_t);
@@ -415,20 +417,22 @@ struct ai
 // + that object's hot) -- enough for a seat to name an offender in its OWN frame, which
 // is where a report belongs. answer 0 and the dump refuses.
 struct ai_image_guard { uintptr_t (*ok)(void *ctx, uintptr_t v, uintptr_t off, uintptr_t ap); void *ctx; };
-void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);
-void *ai_image_save_(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);   // the unguarded worker: a MID-EVAL dump (the bake nif)
+void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_guard const*),
+     *ai_image_save_(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);   // the unguarded worker: a MID-EVAL dump (the bake nif)
 struct ai *ai_image_load(void const *buf, uintptr_t len);
 // the layered bake (doc/misc/plan/image-chain.md). freeze dumps this layer and pins it, and
 // answers an opaque {header, blob} record the caller hands back. save_over answers the
 // full image plus each baseline's derived record -- its header and the prefix words that
 // changed -- which load_over wakes against the parent's stream. all g->alloc'd; NULL is
 // no image, never half of one.
-void *ai_image_freeze(struct ai**, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why);
-void *ai_image_save_over(struct ai*, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why,
-                         void *const *bases, uintptr_t const *blens, uintptr_t nbase,
-                         void **subout, uintptr_t *sublens);
-struct ai *ai_image_load_over(void const *parent, uintptr_t plen, void const *sub, uintptr_t slen);
-struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*, void*, size_t));   // allocator-parameterized (a device heap has no malloc)
+void
+ *ai_image_freeze(struct ai**, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why),
+ *ai_image_save_over(struct ai*, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why,
+                     void *const *bases, uintptr_t const *blens, uintptr_t nbase,
+                     void **subout, uintptr_t *sublens);
+struct ai
+ *ai_image_load_over(void const *parent, uintptr_t plen, void const *sub, uintptr_t slen),
+ *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*, void*, size_t));   // allocator-parameterized (a device heap has no malloc)
 
 // the terminal scare face: prints ";; a b\n" (show forms) to the err port from
 // the stashed condition data; the bare oom prints ";; oom@len=N\n".
@@ -454,6 +458,7 @@ extern struct ai_fio ai_stdin, ai_stdout, ai_stderr;
 #define oddp(_) ((uintptr_t)(_)&1)
 #define evenp(_) !oddp(_)
 #define cell(_) ((union u*)(_))
+#define charmp oddp
 // the BLUE FLOOR: extra stack slack on every avail check, a buffer against
 // off-by-one overshoots. 0 under LoveBoot so love0 keeps strict discipline;
 // override with -Dai_avail_floor=N.
@@ -508,16 +513,8 @@ struct ai_wait_fd { int fd; short events, revents; };
 #define ai_wait_in  1
 #define ai_wait_out 4
 
-// wait until one of n parked fds is ready for what its `events` asks, or ticks
-// elapse (0 = no deadline). ⚠ n has no ceiling: the block rides the runtime's own
-// uncommitted heap gap. ⚠ the SCHEDULER fills `events` -- a blanket mask would
-// wake readers on writable.
-void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks);
-// the same question WITHOUT the wait, for the fairness path (must not block, one
-// ask covers the ring). ⚠ AUTHORITATIVE, unlike ai_wait_fds's block: the weak
-// default asks ai_ready per fd, so all-zero means "none ready". the host replaces
-// the loop with a single poll(2).
-void ai_ready_fds(struct ai_wait_fd *fds, int n);
+void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ticks), // wait for a fd to be ready
+    ai_ready_fds(struct ai_wait_fd *fds, int n);                  // non-blocking variant
 bool ai_ready(int fd, int events), ai_strp(ai_word);
 struct ai
  *ai_please(struct ai*, uintptr_t),
@@ -526,8 +523,10 @@ struct ai
  *gxl(struct ai*),
  *gxr(struct ai*),
  *intern(struct ai*),
- *str0(struct ai*, uintptr_t);
+ *str0(struct ai*, uintptr_t),
+ *grbufg(struct ai *g, uintptr_t len);
 lvm(lvm_gc, uintptr_t);
+uintptr_t hash(struct ai*, word), ai_tray_bytes(struct ai_tray*);
 // any value -> its enum q: KCharm for a fixnum, KHot for a non-data heap pointer,
 // else ai_typ's rep, a tray refined by element tier (KTrayZ..KTrayO).
 // both the +/* matrices and the apply sentinels dispatch on this.
@@ -564,7 +563,6 @@ static ai_inline enum d ai_typ(union u *o) {
       : p == lvm_gembox ? DGem
       :                   DTwin; }   // the 9th and last: lvm_twinbox
 #endif
-uintptr_t hash(struct ai*, word), ai_tray_bytes(struct ai_tray*);
 #define str(_) ((struct ai_str*)(_))
 #define lamp evenp
 #define two(_) ((struct ai_chain*)(_))
@@ -575,16 +573,11 @@ static ai_inline void *bump(struct ai *g, uintptr_t n) {
  void *x = g->hp; g->hp += n; return x; }
 static ai_inline struct ai_chain *ini_chain(struct ai_chain *w, intptr_t a, intptr_t b) {
  return w->ap = lvm_chain, w->a = a, w->b = b, w; }
+
 static ai_inline struct ai *encode(struct ai *g, enum ai_status s) { return
   (struct ai*) ((uintptr_t) g | s); }
-struct ai *grbufg(struct ai *g, uintptr_t len);
-// re-raise a failed op's scare at the installed help, else the status-encoded core
-// straight back to C (love.c). lvm-SHAPED, so an lvm_ leaves a failure by jump rather
-// than spending a frame on the way out. ⚠ _lvm_ by the house rule (_lvm_help_scare's):
-// ai_raise takes a different shape, so this one's own return is a designed `ret`, and
-// vmret sounds lvm_* only. ⚠ an lvm carrying EXTRA args reaches it with a plain
-// `return Ap(_lvm_ghelp, g)` -- the call is fine, only the musttail is barred, since
-// the attribute wants the callee's prototype to match the CALLER's.
+
+// call installed help with an error. _lvm prefix makes vmret skip it, since it returns to C if no help is installed
 lvm_t _lvm_ghelp;
 // ⚠ ai_have IS the phrase "this call may collect"; under AiGcStress every one
 // DOES, so a raw local held across it goes stale on the first run, not years
