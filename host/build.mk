@@ -232,11 +232,16 @@ endif
 mksys_l = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
           crew/holo/x64.l crew/holo/arm64.l crew/holo/riscv.l \
           crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
-$(ho)/.mksys-cat.list: force_dist_list
+# ⚠ PINNED to out/host, like the src.o that reads it: the cat is $(mksys_l) verbatim and
+# $(mksys_l) is flavour-neutral, so one cut serves every hsuf. Templated on $(ho) it would
+# be re-cut per flavour at a fresh path, and out/host/src.o -- a FIXED target -- would go
+# out of date under each one, leaving the default love stale and the next relink unbaked.
+# Pinning also keeps this rule reachable from a sub-make whose hsuf is not the default.
+out/host/.mksys-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(mksys_l)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
-$(ho)/.mksys-cat.l: $(mksys_l) $(ho)/.mksys-cat.list
+out/host/.mksys-cat.l: $(mksys_l) out/host/.mksys-cat.list
 	@echo CAT	$@
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
@@ -245,10 +250,10 @@ $(ho)/.mksys-cat.l: $(mksys_l) $(ho)/.mksys-cat.list
 # which used to want tests0.h, the whole corpus through one stdin, where distboot kept dying at
 # 139. (The corpus is READ now, not baked, so that particular tail is gone.) A bundled love
 # lays it just as well: the cat carries holo itself, so the layer needs nothing of the bootstrap.
-$(moon_d)/sys.o: $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
+$(moon_d)/sys.o: out/host/.mksys-cat.l $(if $(bundled_love),,$(love0))
 	@echo HOLO	$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(boot_love) -l $(ho)/.mksys-cat.l -n -e "((from 'moon '$(mksys_e)) \"$@\")" && test -s $@
+	@LOVE_NO_IMAGE= $(boot_love) -l out/host/.mksys-cat.l -n -e "((from 'moon '$(mksys_e)) \"$@\")" && test -s $@
 ifneq ($(HCC),)
 # ⚠ the HCC flavor is a foreign-cc DIFFERENTIAL, not the artifact: it links no
 # source blob and no readme ($(hcc) knows neither), and dist refuses it.

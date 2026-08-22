@@ -247,8 +247,8 @@ endif
 # module walk resolves off a NEST, and a fresh seed tree has none. same lane
 # as sys.o, live in both worlds. PINNED to out/host: the blob is the tree's,
 # not a compiler flavor's, and only the moon link takes it.
-out/host/src.o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
-	@$(boot_love) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(src_arch)
+out/host/src.o: $(dist_source) mk/tools/mksrc.l out/host/.mksys-cat.l $(if $(bundled_love),,$(love0))
+	@$(boot_love) -l out/host/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(src_arch)
 
 # THE CARRIED RUNTIME: each hosted ISA's compiled nolibc archive, raw and
 # laid beside the source blob (mk/tools/mkrt.l lays, moon.l's rtcarried
@@ -322,16 +322,16 @@ $(xd)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
 	@$(moonx) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
-$(xd)/sys.o: $(ho)/.mksys-cat.l $(love0)
+$(xd)/sys.o: out/host/.mksys-cat.l $(love0)
 	@echo HOLO	$@
 	@mkdir -p $(dir $@)
-	@$(love0) -l $(ho)/.mksys-cat.l -n -e "((from 'moon '$(xmksys)) \"$@\")" && test -s $@
+	@$(love0) -l out/host/.mksys-cat.l -n -e "((from 'moon '$(xmksys)) \"$@\")" && test -s $@
 
 # ==== the fat container (seed-universal U1) ====
 # the twin SEED: the x-lane link wearing the artifact's clothes -- its own src
 # blob and readme, so the member answers `love source` like the native one.
-$(xd)/src.o: $(dist_source) mk/tools/mksrc.l $(ho)/.mksys-cat.l $(if $(bundled_love),,$(love0))
-	@$(boot_love) -l $(ho)/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(xtgt)
+$(xd)/src.o: $(dist_source) mk/tools/mksrc.l out/host/.mksys-cat.l $(if $(bundled_love),,$(love0))
+	@$(boot_love) -l out/host/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(xtgt)
 $(xd)/rt.o: $(rt_slice) mk/tools/mkrt.l $(if $(bundled_love),,out/host/mooncc0.image $(love0))
 	@$(if $(bundled_love),LOVE_NO_IMAGE= $(bundled_love) mk/tools/mkrt.l $@ $(xtgt),$(love0) wake out/host/mooncc0.image mk/tools/mkrt.l $@ $(xtgt))
 $(xd)/love: $(xobjs) $(xd)/src.o $(xd)/rt.o assets/readme.bin
