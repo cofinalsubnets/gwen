@@ -13,7 +13,8 @@
   test_rp2040 moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
-  test_holo test_as test_elf32 test_objcopy test_gz test_cpio test_forge test_distboot test_bakerep
+  test_holo test_as test_elf32 test_objcopy test_gz test_cpio test_forge test_distboot test_bakerep \
+  uuwm uukind uuhomgen uusplgen test_uuwm test_uukind test_uuhomgen test_uusplgen
 
 # $m is the WARM love -- the baked image woken, what ships. a gate whose subject is
 # the egg boot spells LOVE_NO_IMAGE=1 itself; love0 is always the egg.
@@ -989,56 +990,33 @@ test_holofuzz: host
 	 else echo "  (sysdiff skipped: no llvm-mc)"; fi
 	@$m test/holo/fuzz/rvc.l \
 	  || { echo "FAIL rvc -- an RVC squeeze changes what the word means"; exit 1; }
-# test/uuwm.l is a COMMITTED GENERATED artifact: lux's zipper ops compiled from crew/lux/core.l
-# into uu terms (tools/uuwmgen.l), so test/uuwmlaw.l proves its theorems OF THE IMPLEMENTATION
-# at corpus time. `make uuwm` refreshes it; test_uuwm regenerates and diffs.
-uuwm: host
-	@echo LOVE	test/uuwm.l "(tools/uuwmgen.l on $m)"
-	@$m tools/uuwmgen.l > test/uuwm.l
-test_uuwm: host
-	@echo TEST test/uuwm.l "(regenerate + diff)"
-	@$m tools/uuwmgen.l > out/host/.uuwm.l.tmp
-	@cmp -s out/host/.uuwm.l.tmp test/uuwm.l \
-	  || { echo "FAIL: test/uuwm.l is stale (crew/lux/core.l moved?) -- run: make uuwm"; exit 1; }
-	@rm -f out/host/.uuwm.l.tmp
-# test/uukind.l is a COMMITTED GENERATED artifact: doc/misc/proto/kinds.l's abstract kinds-lattice
-# JOIN compiled into uu terms (tools/kinds2uu.l), so test/uukindlaw.l proves the semilattice
-# laws OF THE ANALYSIS at corpus time. `make uukind` refreshes it; test_uukind diffs it.
-uukind: host
-	@echo LOVE	test/uukind.l "(tools/kinds2uu.l on $m)"
-	@$m tools/kinds2uu.l > test/uukind.l
-test_uukind: host
-	@echo TEST test/uukind.l "(regenerate + diff)"
-	@$m tools/kinds2uu.l > out/host/.uukind.l.tmp
-	@cmp -s out/host/.uukind.l.tmp test/uukind.l \
-	  || { echo "FAIL: test/uukind.l is stale (doc/misc/proto/kinds.l moved?) -- run: make uukind"; exit 1; }
-	@rm -f out/host/.uukind.l.tmp
-# test/uuhomgen.l is a COMMITTED GENERATED artifact: doc/misc/proto/dest.l's two code generators
-# run on its law sites, the emissions lifted to uu terms (tools/dest2uu.l), so test/uuhomlaw.l
-# proves the destination-die laws OF THE EMISSIONS at corpus time. `make uuhomgen` refreshes it; test_uuhomgen regenerates and diffs.
-uuhomgen: host
-	@echo LOVE	test/uuhomgen.l "(tools/dest2uu.l on $m)"
-	@$m tools/dest2uu.l > test/uuhomgen.l
-test_uuhomgen: host
-	@echo TEST test/uuhomgen.l "(regenerate + diff)"
-	@$m tools/dest2uu.l > out/host/.uuhomgen.l.tmp
-	@cmp -s out/host/.uuhomgen.l.tmp test/uuhomgen.l \
-	  || { echo "FAIL: test/uuhomgen.l is stale (doc/misc/proto/dest.l moved?) -- run: make uuhomgen"; exit 1; }
-	@rm -f out/host/.uuhomgen.l.tmp
-# test/uusplgen.l is a COMMITTED GENERATED artifact: doc/misc/proto/spl.l's three call-site
-# compilers (call, binding splice, substitution splice) run on its samples, the threads
-# lifted to uu terms (tools/spl2uu.l), so test/uuspllaw.l proves the SPLICE LICENSE of
-# the emissions at corpus time.
-# `make uusplgen` refreshes it; test_uusplgen regenerates and diffs.
-uusplgen: host
-	@echo LOVE	test/uusplgen.l "(tools/spl2uu.l on $m)"
-	@$m tools/spl2uu.l > test/uusplgen.l
-test_uusplgen: host
-	@echo TEST test/uusplgen.l "(regenerate + diff)"
-	@$m tools/spl2uu.l > out/host/.uusplgen.l.tmp
-	@cmp -s out/host/.uusplgen.l.tmp test/uusplgen.l \
-	  || { echo "FAIL: test/uusplgen.l is stale (doc/misc/proto/spl.l moved?) -- run: make uusplgen"; exit 1; }
-	@rm -f out/host/.uusplgen.l.tmp
+# THE COMMITTED GENERATED CORPORA, one shape four times over: a design's own code
+# compiled into uu terms, so the matching *law.l proves its theorems OF THE
+# IMPLEMENTATION at corpus time and not of a transcription somebody keeps by hand.
+# `make <stem>` refreshes one; test_<stem> regenerates into scratch and diffs, so a
+# source that moved reddens here instead of going quiet.
+# $1 the corpus stem, $2 its generator under tools/, $3 the source that generator reads
+define uu_corpus
+$1: host
+	@echo LOVE	test/$1.l "(tools/$2.l on $$m)"
+	@$$m tools/$2.l > test/$1.l
+test_$1: host
+	@echo TEST test/$1.l "(regenerate + diff)"
+	@$$m tools/$2.l > out/host/.$1.l.tmp
+	@cmp -s out/host/.$1.l.tmp test/$1.l \
+	  || { echo "FAIL: test/$1.l is stale ($3 moved?) -- run: make $1"; exit 1; }
+	@rm -f out/host/.$1.l.tmp
+endef
+# what each row proves, the only part that differs:
+#   uuwm      lux's zipper ops                        -> test/uuwmlaw.l, its theorems
+#   uukind    the abstract kinds-lattice JOIN         -> test/uukindlaw.l, the semilattice laws
+#   uuhomgen  dest.l's two code generators, on its law sites -> test/uuhomlaw.l, the destination-die laws
+#   uusplgen  spl.l's three call-site compilers (call, binding splice, substitution
+#             splice) on its samples                  -> test/uuspllaw.l, the SPLICE LICENSE
+$(eval $(call uu_corpus,uuwm,uuwmgen,crew/lux/core.l))
+$(eval $(call uu_corpus,uukind,kinds2uu,doc/misc/proto/kinds.l))
+$(eval $(call uu_corpus,uuhomgen,dest2uu,doc/misc/proto/dest.l))
+$(eval $(call uu_corpus,uusplgen,spl2uu,doc/misc/proto/spl.l))
 # test_wake: the BAKE-THEN-WAKE ROUND TRIP, which no other gate runs -- every other lane
 # wakes an image some earlier recipe baked. A CANDIDATE COPY bakes (love.wake, ETXTBSY-proof)
 # under a timeout the wake storm cannot meet (fresh lane ~1s, storm >90s; doc/wake-storm.md).

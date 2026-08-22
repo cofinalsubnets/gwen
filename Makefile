@@ -48,8 +48,8 @@ love0 = out/host/love0
 # every verb here is phony: one roster, so adding one is one line and not two. (the gates
 # each fragment owns are rostered in that fragment.)
 .PHONY: all install uninstall clean distclean host kernel wasm love0 site site-serve test test_host \
-  test_hdiff test_slow test_extra test_tools test_love0 test_wasm test_proof test_gen test_uugen test_uuwm \
-  uuwm test_gc test_gcheck test_gcstress test_hostegg test_hostnif test_doc test_glaze test_hook test_sat test_cli \
+  test_hdiff test_slow test_extra test_tools test_love0 test_wasm test_proof test_gen test_uugen \
+  test_gc test_gcheck test_gcstress test_hostegg test_hostnif test_doc test_glaze test_hook test_sat test_cli \
   test_holo test_as test_elf32 test_objcopy test_holofuzz test_glazefuzz test_encver test_lux \
   test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 \
   test_virt test_wake test_embed test_rp2040 valg disasm flame cat cata catav perf repl gdb \
