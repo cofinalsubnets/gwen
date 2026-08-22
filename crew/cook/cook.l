@@ -1052,7 +1052,7 @@
       ; sitting right there, so the builtin links THAT ALONE and the host objects and
       ; the math floor never reach the command -- a wall of undefined references from
       ; a rule nobody wrote. the narrow %.o: rules above cannot do that: their target
-      ; must already end in .o. (test_nest is what caught it.)
+      ; must already end in .o.
       (psrc p item) (: stem <(pmatch <p item) prs <>p (? (two? prs) (stemsub <prs stem) ""))
       ; ⚠ A PATTERN WHOSE SOURCE CANNOT BE HAD DOES NOT APPLY -- make rejects it and
       ; tries the next, and with none left the target is a source leaf that is

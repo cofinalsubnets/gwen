@@ -101,13 +101,8 @@ shape — which is exactly what `psid` hashes.
 
 Install is `sync` + `cook install`: binaries go in the `~/.love` nest, `make install`'s layout
 owns them, and the unit of distribution is a `.sb/` store any static host serves. The
-composition lives *outside* sb's verb set — `love up [URL]` (crew/sb/up.l, a verb of the
-dist artifact's rail, not of sb) syncs `~/.love/src` and cook-installs the nest; run again,
-it is the upgrade. `love down` is its twin — the nest and its `~/.local` links removed, with
-sb refusing for unrecorded work in `~/.love/src`. The build's CC defaults to the artifact's
-own `mooncc` verb, so the download door carries its whole toolchain; an explicit env `CC` (the
-git door's leg) always wins, and the embedding goods (liblove, love.h) are the cc lane's, so up
-installs with `EMBED=0`. Gate: test/gate/dist.sh (`make test_up`).
+composition lives *outside* sb's verb set, and that is the point — sb records and syncs, and
+whoever wants an install runs `cook install` over what it synced.
 
 That install stays a composition rather than an irreducible verb is the design rule in force:
 **design the vcs primitives plus one derivation verb, and let the distro front-doors be named

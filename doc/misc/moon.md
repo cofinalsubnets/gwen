@@ -254,10 +254,9 @@ the stamp, so a laid seed tree serves and an edited dev tree falls through to th
 then compiles. That is what makes the bare door ~0.2 s instead of the ~28 s member build,
 still writing nothing.
 
-Gates: `test/gate/nest.sh` compiles and links from a scratch cwd against the installed nest
-(`cd` matters: from the repo root rung 1 serves and rung 2 is never exercised);
-`test/gate/dist.sh`'s bare leg compiles from an empty cwd with an empty HOME and holds that
-HOME stays empty.
+Gate: `test/gate/dist.sh`'s bare leg compiles from an empty cwd with an empty HOME and
+holds that HOME stays empty. ⚠ `cd` matters here -- from the repo root rung 1 serves and
+rung 2 is never exercised -- so a gate for the installed nest has to leave the tree.
 
 ⚠ **The root is READ AT EACH CALL, never bound.** mooncc rides a baked image, and a captured
 seat would fold the build tree's path into that image and ride it forever.

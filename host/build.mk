@@ -24,17 +24,6 @@ host_cc = $(CC)
 # table, and `mooncc` then reads as a FILENAME ("love: cannot open mooncc"). The love0
 # lane already leads with it; this puts it on every $(hcc) site at once.
 hcc = LOVE_NO_IMAGE= $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Icore -Iout/lib
-# the whole-archive flag differs by linker, and mach-o takes no core/love_data.ld either -- it
-# spells sections `segment,section`, so core/kinds.h's roster asks the sentinels by name.
-ifeq ($(shell uname -s),Darwin)
-so_archive = -Wl,-force_load,$(ho)/liblove.a       # ld64's whole-archive
-# ⚠ the host contract (ai_clock, ai_fd_port_vt, ai_stdin/out/err: in host/main.c, linked
-# into `love` itself and not the archive) is UNRESOLVED in the .so by design -- the loading
-# executable provides it. GNU ld allows that; ld64 must be told to defer.
-so_undef = -Wl,-undefined,dynamic_lookup
-else
-so_archive = -Wl,--whole-archive $(ho)/liblove.a -Wl,--no-whole-archive
-endif
 # the boot image gets its OWN segment at the top of the address space so `love bake` can
 # GROW it: the blob appends at the tail of the file and only that phdr + shdr are rewritten,
 # nothing else moving (host/image.c's bake_tail). --section-start is what buys it -- ld
@@ -54,16 +43,13 @@ $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
 	@tf=$@.$$$$.tmp; printf '%s\n' '$(host_cc) $(image_ldflags)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
-# ⚠ liblove.so is NOT here, and that is the whole point: it was the one thing on this
-# target that a foreign toolchain had to build. holo lays no dynamic section, so a shared
-# object is genuinely CC's job (and the archive is `ar`'s) -- which meant `make host` could
-# never run without an ambient compiler, however self-hosting everything else became.
-# Nothing in the default lane links against it: `love` comes from $(moon_o), and liblove is
-# an EMBEDDING product -- for a C program linking love, installed by mk/install.mk, which
-# builds its own glibc-tree copies anyway. `make embed` when you want them.
+# ⚠ liblove.a is NOT here, and that is the whole point: `ar` is a foreign tool, so a
+# target that owed it could never `make host` without an ambient toolchain, however
+# self-hosting everything else became. Nothing in the default lane links it either --
+# `love` comes from $(moon_o). Its two consumers name it themselves: the HCC lane
+# below, and test/front (test.mk), which is the only thing that links love as a
+# library at all.
 host: $(ho)/love $(ho)/love.baked $(ho)/love.1 $(ho)/cook.1
-.PHONY: embed
-embed: $(ho)/liblove.so
 love0: $(love0)
 
 # the BOOT IMAGE -- the LAYERED CREW BAKE (doc/misc/plan/one-binary.md): `$< bake -L ..` boots
@@ -98,11 +84,6 @@ $(ho)/liblove.a: $(h_o)
 	@echo AR	$@
 	@mkdir -p $(dir $@)
 	@rm -f $@; ar rcs $@ $^
-
-$(ho)/liblove.so: $(ho)/liblove.a $(R)/core/love_data.ld
-	@echo LD	$@
-	@mkdir -p $(dir $@)
-	@$(hcc) -shared -o $@ $(so_archive) $(so_undef) $(data_ld)
 
 # The bootstrap interpreter: -DLoveBoot against the fallback top-level data.h (no
 # -I$(ho)), and -Dai_tco=0, which is also the trampoline-coverage lane. It RUNS the .l

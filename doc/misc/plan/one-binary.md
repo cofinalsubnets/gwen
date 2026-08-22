@@ -58,8 +58,8 @@ LOVE_NO_IMAGE=1, so every verb site needs the clear -- mw already carries it).
 KEPT, revised from the first cut: the korefiles roster (distro.mk cats it over
 love-raw), moonfiles (mooncc0.image's cat), and $(ho)/lush + $(ho)/sb -- source
 cats, no image to retire, and cook's gate uses lush as a literal SHELL. The
-argv0-dispatch smokes (kore.sh's diff/sh symlinks, nest.sh's PATH-fronting lane)
-lay their own two-line shim, which is the distro's own mechanism anyway. Gate:
+argv0-dispatch smokes (kore.sh's diff/sh symlinks) lay their own two-line shim,
+which is the distro's own mechanism anyway. Gate:
 `make test` + test_kore + test_moon + test_cookdiff + test_seat + test_vi.
 
 **Rung 2 -- dist reuses the tree's chain.** dist_seed bakes from the same $(ho)
@@ -110,7 +110,7 @@ dist lanes shared every seam -- and the re-aimed gates are the discovery story:
 - **LOVE_NO_IMAGE discipline**: the root's corpus export means every verb site
   carries the `LOVE_NO_IMAGE=` clear -- mw has it, korerun/moonrun ride mw, the
   gate scripts' runners spell it, KCC spells it, the INSTALLED verb shims spell
-  it (an inherited egg ask read `mooncc` as a filename in test_nest), and the
+  it (an inherited egg ask read `mooncc` as a filename), and the
   two package tools go through `env` because a bare assignment prefix is not
   recognized after $var expansion.
 - **kore.sh's `env print vs GNU`** wanted the oracle under korerun's own prefix,

@@ -214,13 +214,10 @@ cwd `lib/` -- the dev tree's lane, kept with its retirement note until the
 tree stops being special. The seat rungs (`<seat>/../lib/`, its `love/`
 subfolder) are gone, and `selfpath` leaves the loader with them: an artifact's
 modules are baked or image-carried, never found beside the binary. The
-installed lanes prove it whole: test_nest (make == cook, the installed mooncc
-from any cwd) and test_up (the download door, a full from-source nest) run on
-binaries that never touch the walk they used to need. loader.l's seat laws
-flipped to retirement laws -- fixture where the rungs looked, the use scares
-no-module under trap, nothing registers. mk/install.mk still lays the nest's
-lib tree (source on disk); it retires with the self-host arc's `love up`
-story, as planned, not as a side effect here.
+installed lanes proved it whole at the time -- binaries that never touch the
+walk they used to need. loader.l's seat laws flipped to retirement laws --
+fixture where the rungs looked, the use scares no-module under trap, nothing
+registers.
 
 ## ⚠ traps this plan already knows
 

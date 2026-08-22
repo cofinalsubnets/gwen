@@ -5,7 +5,7 @@
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \
   test_filemode test_stdinbuf test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
-  test_sb test_kore test_refuzz test_nest test_cookdiff test_dist test_up test_seed test_vi test_moon test_clay test_moonfuzz \
+  test_sb test_kore test_refuzz test_cookdiff test_dist test_seed test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_vec test_fixpoint test_raw_bake test_riscv \
   test_raw_riscv test_raw_arm64 test_thumb1 test_thumb2 test_virt test_mps2 test_mps2_t1 \
@@ -363,16 +363,10 @@ test_refuzz: host
 # is not on the box, since there is no oracle to ask.
 test_cookdiff: host
 	@sh test/gate/cookdiff.sh $m
-# the install nest, three ways (make / cook / cook+kore PATH lane) -- one shape.
-test_nest: host
-	@sh test/gate/nest.sh $(ho) $m
-# the dist artifact -- the tree's own baked binary: test_dist smokes its verb rail (seconds,
-# test_slow); test_up runs the WHOLE download door -- origin recorded, kiosko serving it,
-# `love up` cooking a scratch nest from source -- and is OPT-IN (minutes).
+# the dist artifact -- the tree's own baked binary: test_dist smokes its verb rail,
+# the bare cc door, the image chain and the in-image lane. seconds, test_slow.
 test_dist: $(ho)/love.baked
 	@sh test/gate/dist.sh smoke $(ho)/love
-test_up: $(ho)/love.baked
-	@sh test/gate/dist.sh up $(ho)/love
 # test_seed -- THE MERGE GATE: the artifact lays its own source into a scratch dir and
 # rebuilds itself through the machine's toolchain; the rebuilt binary must answer the
 # running one's bytes (`love seed`). Minutes -- a whole bootstrap -- and the claim the

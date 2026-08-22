@@ -64,16 +64,14 @@ out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 # the seed IS the default binary: out/host/love links the moon objects plus its
 # own source blob and readme (host/build.mk carries the link), and the layered
 # bake lays the crew warm -- cook + kore + lush (vi and ain ride its cat) +
-# mooncc (all five backends) + sb + kiosko -- and crew/sb/up.l's verb table,
-# which love/cli.l's verb rail reads: `love sb|cook|kore|kiosko|mooncc ..` are
+# mooncc (all five backends) + sb + kiosko -- each pinning its own name into the
+# verb table love/cli.l's rail reads: `love sb|cook|kore|kiosko|mooncc ..` are
 # the same binary being multi-call. there is no leaner host build beside it and
 # no love-<arch> twin: one tree, one binary, and `make dist` is that binary
 # plus the source tarball. the per-ISA bytes remain (a binary is for one
 # machine until U1's container); it is the artifact NAMES that dissolved.
 # member order is the scope: kore's floor first, asbook before the backends
-# (defbackend mutates the spliced holo), every main before kore.l's applet
-# table, up.l LAST so the verbs close over the lot. DIST_ORIGIN pins the
-# default `love up` origin URL ahead of up.l (unset: up asks for a URL).
+# (defbackend mutates the spliced holo), every main before kore.l's applet table.
 distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/sum.l crew/kore/re.l \
             crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
             crew/vi/core.l crew/vi/vi.l \
@@ -83,7 +81,7 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l \
             crew/holo/link.l crew/holo/copy.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
             crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/sb/merge.l \
-            crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l crew/sb/up.l \
+            crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l \
             lib/gz.l lib/tar.l lib/tarcmd.l lib/gzcmd.l lib/cpio.l lib/cpiocmd.l \
             lib/source.l crew/lapiz/lapiz.l \
             lib/salt.l crew/libra/libra.l lib/hueweb.l lib/serve.l
@@ -97,7 +95,6 @@ docsfiles = lib/lint.l lib/salt.l crew/lapiz/lapiz.l crew/libra/libra.l
 # keeps distfiles' order, so the two cats together are the same tree in the same
 # sequence -- only the docs half now goes in FIRST, which is what makes it a prefix.
 restfiles = $(filter-out $(docsfiles),$(distfiles))
-DIST_ORIGIN ?=
 # ⚠ THE MEMBERSHIP IS AN INPUT, and make cannot see it. Adding a file to distfiles
 # changes what the artifact CARRIES while every file make watches keeps its mtime, so
 # a cat older than the new member is "up to date" and the binary links without it --
@@ -124,13 +121,12 @@ $(ho)/.docs-cat.l: $(docsfiles) $(ho)/.docs.list
 $(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list
 	@echo CAT	$(abspath $@)
 	@mkdir -p $(dir $@)
-	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(distfiles); } > $@
-# the second layer: everything the docs layer is not. `origin` rides here because it is
-# the artifact's own (love up), and the docs image has no use for it.
+	@cat $(distfiles) > $@
+# the second layer: everything the docs layer is not.
 $(ho)/.rest-cat.l: $(restfiles) $(ho)/.dist.list $(ho)/.docs.list
 	@echo CAT	$(abspath $@)
 	@mkdir -p $(dir $@)
-	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(restfiles); } > $@
+	@cat $(restfiles) > $@
 .PHONY: dist dist-source dist-seed
 
 # ==== THE RELEASE ARTIFACTS (doc/misc/dist.md) ====

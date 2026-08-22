@@ -1,4 +1,4 @@
-; verbs -- the registry behind `love mooncc ..`, `love up ..`, and a `sed` symlink onto the
+; verbs -- the registry behind `love mooncc ..`, `love cook ..`, and a `sed` symlink onto the
 ; artifact. one tablet, symbol-keyed, and MUTABLE IN PLACE on purpose: a verb table is read at
 ; RUN off a command-line string, so nothing in it folds and sealing it would buy nothing. that
 ; is the whole difference from a module's members, which are compile-time definitions -- `pin`

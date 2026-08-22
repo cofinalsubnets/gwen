@@ -22,9 +22,9 @@ evidence for the slow one.
 
 - [ ] **version stamp** — `./VERSION` is the whole id (surfaced as `love-version`); bump it
       by hand for the cut. No VCS suffix exists anymore: the artifact's bytes are the tree's.
-- [ ] **the dist artifact** — `make dist` bakes the seed, `out/host/love` itself: the one-file download door
-      (`love up` defaults CC to the artifact's own `mooncc` verb, so it needs no ambient
-      toolchain). `make test_dist` and `make test_up` gate it.
+- [ ] **the dist artifact** — `make dist` bakes the seed, `out/host/love` itself: one file
+      carrying its whole toolchain, so a rebuild needs no ambient one. `make test_dist`
+      gates it.
 - [ ] **wasm** — rebuild `wasm/love.js` against the release binary.
 - [ ] **the benches** — re-run and refresh the numbers baked into `bench/bench.html`.
       ⚠ Bake first: a bare relink leaves `love` unbaked and its startup is an egg boot, which

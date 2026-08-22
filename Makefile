@@ -52,7 +52,7 @@ love0 = out/host/love0
   uuwm test_gc test_gcheck test_gcstress test_hostegg test_hostnif test_doc test_glaze test_hook test_sat test_cli \
   test_holo test_as test_elf32 test_objcopy test_holofuzz test_glazefuzz test_encver test_lux \
   test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 \
-  test_virt test_wake test_embed embed test_rp2040 valg disasm flame cat cata catav perf repl gdb \
+  test_virt test_wake test_embed test_rp2040 valg disasm flame cat cata catav perf repl gdb \
   vmret waits bench nettest lint ccdb ulp cacheclean
 
 # ⚠ THE UNPACKED RELEASE BUILDS THE PRODUCT. `tar xzf love-<ver>.tar.gz && make -C love-<ver>`
@@ -99,11 +99,6 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 # test_vec, test_asmops, the boards, the thumb lanes, test_elf32, test_objcopy, test_wasm,
 # test_arm64, test_cc/cts arm64+riscv); test_fixpoint and test_distboot retired to
 # by-name as well -- test_seed proves the circle in the slow gate.
-# ⚠ test_nest is NOT here, and it is not passing: its A/B contents check covers artifacts
-# built from `(names ())`, which carries SESSION facts -- `love-image` is in the book only
-# where that session woke from an image, so syntax.vim (and the heaps baked beside it)
-# differ by whether the love that made them was baked. real, and not worth chasing on a
-# path being retired. `make test_nest` still runs it.
 test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
 	test_uukind test_gc test_gcheck test_gcstress test_imgchain test_extract test_big test_mx \
 	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as \
