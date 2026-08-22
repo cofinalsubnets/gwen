@@ -1,35 +1,13 @@
-; nifs.l -- THE REGISTRY. love.c's nif roster and its instruction roster as love data,
-; and the C laid from them: nifs.h, through clay. doc/misc/clay.md rung 4.
+; nifs.l -- love.c's nif roster and its instruction roster as love data, and the C
+; laid from them: nifs.h, through clay. doc/misc/clay.md rung 4.
 ;
-; it lives HERE, beside love.c and the header it lays, because that is what it is:
-; love.c's definitions, written as data rather than as text. tools/ is for tools.
-;
-; the rosters used to BE C -- five #defines minting the little stream a nif runs, an
-; X-macro per roster, and three CONSUMER macros handed to them, because C cannot say
-; "the same list, a different reader" any other way. two sites expanded them, and the
-; consumer macros existed for nothing else.
-;
-; a love loop says it once. the roster is the source, the stream table and the def1
-; table are both derivations, so a nif cannot enter one and miss the other -- which is
-; the arrangement those five macros were making by hand. this is doc/misc/clay.md's route
-; (b), the one place a macro genuinely goes.
-;
-; ⚠ EDIT THIS FILE, NOT nifs.h. `make test_clay` regenerates it and fails on drift.
-; ⚠ nifs.h is COMMITTED and no make rule depends on this file: a new row builds clean and
-; gates GREEN while its nom is still missing from the book. `make mx` is the refresh.
-; ⚠ and a MERGE drifts them apart with no conflict -- git merges the artifact and its source
-; independently, so a branch that adds a lay from a roster missing your row lands both halves.
+; edit this file, not nifs.h -- make relays it from here, off the mx_gen roster in
+; test/test.mk. `make mx` refreshes by hand, test_clay diffs.
 (:
-   ; clay is a module: `use` splices it, so clay-show / clay-ok? -- and the el/join it
-   ; stands on -- all read bare. no accessor, and it has to come first.
    _ (use 'clay)
 
-   ; --- the nifs. one row per (ARRAY name arity IMPL): the C symbol the row is known
-   ; by, the love name it binds in the book, how many operands it takes, and the lvm_
-   ; that does the work. arity IS the body -- one runs the op straight, and two through
-   ; five curry on lvm_cur first -- so the column is a shape, never a number the C reads.
-   ; `+` and `*` of two functions are prel's stack/compose, reached from
-   ; lvm_addh/lvm_mulh through g->hot_stack / g->hot_compose.
+   ; --- the nifs. one row per (C symbol, love name, arity, impl). arity is a shape,
+   ; not a number the C reads: 1 runs the op straight, 2..5 curry on lvm_cur first.
    nif-rows
     '(
       (nif_clock         "clock"         1 lvm_clock)
@@ -167,11 +145,8 @@
       (nif_calloutresume "calloutresume" 1 lvm_calloutresume)
       )
 
-   ; --- the instructions: the ops the codegen emits. they bind by NAME so the
-   ; compiler can name one while it emits, and the egg pulls every lvm_ off the book
-   ; at birth (love/egg.l) -- scaffolding, never a user's vocabulary. no name column
-   ; and no arity: an instruction is jumped to, not applied, so its C symbol is the
-   ; only spelling it has.
+   ; --- the instructions the codegen emits. no name column and no arity: an
+   ; instruction is jumped to, not applied, so its C symbol is its only spelling.
    nif-insts
     '(
       lvm_unc lvm_index lvm_ret lvm_ap lvm_tap lvm_apn lvm_tapn lvm_jump lvm_cond lvm_arg
@@ -182,10 +157,8 @@
       )
 
    ; --- the C, through clay ------------------------------------------------------
-   ; ONE table, not 126 arrays: a nif's stream is a RUN inside it, and def1 carries the
-   ; run's address. the runs are two shapes -- {impl, ret0} at one operand, and
-   ; {cur, count, impl, ret0} above that -- so they are spliced in flat, and the seam
-   ; between them lives here rather than in the C.
+   ; one table: a nif's stream is a run inside it, and def1 carries the run's address.
+   ; two shapes spliced in flat -- {impl, ret0}, and {cur, count, impl, ret0} above one operand.
    (vr s) `('var s)
    (cell e) `('init `(e))          ; one `union u`: braced, the ap being its first member
    (catl l) (foldl (+) () l)
@@ -201,18 +174,13 @@
                  `('init (catl (map (\ r (nif-run (el r 2) (el r 3))) nif-rows)))))
       '(static))
 
-   ; where each nif's run STARTS. a running sum over the roster, which is the whole
-   ; reason the table can be one object: the offsets are the loop's business, and no
-   ; hand ever has to keep 126 of them straight.
+   ; where each nif's run starts: a running sum over the roster
    nif-ats
     (: (go l n) (? (! (two? l)) () (link n (go >l (n + (? (nif-wide? <l) 4 2)))))
        (go nif-rows 0))
 
-   ; the book table: each row is (love name, the value as a word). a nif carries its
-   ; run's address, an instruction carries itself, and ai_defn reads the pair. UNSIZED
-   ; on purpose -- C counts the rows, so countof cannot disagree with the roster.
-   ; ⚠ `init`, not `irow`: a def1 row is a struct and owns its braces. it is already
-   ; one line, because its two cells are scalars and the flat rule keeps them whole.
+   ; the book table: love name -> the value as a word. a nif carries its run's address,
+   ; an instruction carries itself. unsized, so C's count cannot disagree with the roster.
    (def-row nm v) `('init `(`('str nm) `('cast '(named "intptr_t") v)))
    (nif-at n) (? (n < 1) (vr "nifs") `('bin '+ (vr "nifs") `('num n)))
    (zip a b) (? (! (two? a)) () (link `(<a <b) (zip >a >b)))
@@ -222,31 +190,20 @@
                           + (map (\ i (def-row (string i) (vr (string i)))) nif-insts)))))
       '(static))
 
-   ; --- the third derivation: the BRIDGE the splice JIT needs ----------------------
-   ; a love name to the lvm_ that runs it, as love data in .rodata. `dis` reads a thread
-   ; back and can only name the BOOK key (`cup`) -- every lvm_ nom died at the hatch --
-   ; while `mooncc -fir=lvm_` keys its IR by the C symbol (`lvm_cup`). Only this roster
-   ; holds both, which is the whole argument for the file: a nif cannot enter one table
-   ; and miss another. lib/splice.l reads it out of its own binary beside `ai_lvm_ir`.
-   ; ⚠ names as STRINGS, never bare symbols: `+`, `><` and `two?` are punctuation the
-   ; reader would have to be trusted with, and a string cannot be read two ways.
-   ; ⚠ NOT static: a symbol the runtime asks for by name, and an unused static would
-   ; meet -Werror besides.
+   ; --- the bridge the splice JIT needs ------------------------------------------
+   ; book name -> the lvm_ that runs it, as love data in .rodata: `dis` can name only
+   ; the book key, mooncc's IR only the C symbol. lib/splice.l reads it out of .rodata.
    nif-lvmtext
     (: (row r) ("(\"" + (el r 1) + "\" " + (string (el r 3)) + ")")
        ("(" + (foldl (\ a r (a + row r)) "" nif-rows) + ")"))
-   nif-lvmmap
+   nif-lvmmap                       ; not static: the runtime asks for it by name
     `('gdecl `(`("ai_nif_lvm" '(arr (const char) 0) `('str nif-lvmtext))) ())
 
-   ; the whole header. the banner is not decoration: a hand edit here is lost the next
-   ; time the gate runs, so the file has to say where its source is.
-   ; ⚠ a plain BINDING, not a nullary helper: `(nifs-h)` is `nifs-h` unrun.
    nifs-h
     (join (map clay-show
       `('(note "nifs.h -- the nif + instruction registry. generated by nifs.l, do not edit")
         nif-table '(note "") nif-def1 '(note "") nif-lvmmap)))
-   ; a shape check before anything is written: gen.l and the C compiler both trust
-   ; this, and a malformed tree would arrive as a codegen error naming nothing.
+   ; a shape check first: a malformed tree arrives as a codegen error naming nothing.
    nifs-ok
     (: bad (any (\ c (! (id? (clay-ok? c) 1))) `(nif-table nif-def1))
        (? bad 0 1)))
