@@ -27,7 +27,7 @@
 ; scalar (4-byte) and the compound literal ('clit ty init) -- an unnamed object
 ; from a parenthesized type followed by a brace initializer, (type){ init }.
 ; ⚠ a NEW NODE HERE IS ALSO CLAY'S: clay.l validates and re-says what this file
-; produces, so it wants an arity row, a precedence and a rendering (doc/clay.md).
+; produces, so it wants an arity row, a precedence and a rendering (doc/misc/clay.md).
 (module 'moon
 (use 'kore)
 (:

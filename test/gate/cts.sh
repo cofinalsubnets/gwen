@@ -62,7 +62,7 @@ roster_refuses='
 # comes back it belongs here, and `wrong` is the kind that must stay loud.
 roster_wrong=''
 # the two per-target lines, both of them lanes x64 has and the others do not
-# (doc/moon-c-gaps, "target asymmetries"): a by-value composite in a variadic
+# (doc/misc/moon-c-gaps, "target asymmetries"): a by-value composite in a variadic
 # function, and the variable-length array.
 if [ "$arch" != x64 ]; then
   roster_refuses="$roster_refuses
@@ -152,4 +152,4 @@ done
 
 n=$((npass + nref + nwrong))
 [ $n -gt 0 ] || fail "no programs ran from $cts"
-echo "$name: $npass of $n c-testsuite programs answer exactly what the corpus says on $pretty; $nref refuse cleanly and $nwrong compile clean and answer WRONG, each named in this script and in doc/moon-c-gaps"
+echo "$name: $npass of $n c-testsuite programs answer exactly what the corpus says on $pretty; $nref refuse cleanly and $nwrong compile clean and answer WRONG, each named in this script and in doc/misc/moon-c-gaps"

@@ -37,7 +37,7 @@ $(distro_img): crew/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 	@cp crew/init/boot.l $(distro_root)/init && chmod 755 $(distro_root)/init
 	@cp $(distro_love) $(distro_root)/bin/love && chmod 755 $(distro_root)/bin/love
 	@cat $(lushfiles) > $(distro_root)/lib/sh.l
-# ⚠ lib/dns.l RIDES ALONG OR THE WHOLE TOOLBOX DIES: mk/tools/ain.l, a korefiles member,
+# ⚠ lib/dns.l RIDES ALONG OR THE WHOLE TOOLBOX DIES: tools/ain.l, a korefiles member,
 # probes for the `dial` nif at load and says (use 'dns) when it is absent -- which it is
 # in love-raw -- and an initramfs with no /lib/dns.l answers that with a scare that takes
 # the whole cat down. The symptom is every applet gone, not a quiet nc.

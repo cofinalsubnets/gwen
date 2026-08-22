@@ -4,7 +4,7 @@
 ; stays green -- the driver already said why at boot, on the serial console.
 ; ⚠ the raw probe writes sector 16: inside FAT32's reserved region, which the
 ; fs below never touches -- the two halves share one disk across REBOOTS, and
-; that is the point: mk/tools/kdisk.l boots this corpus twice on one image and
+; that is the point: tools/kdisk.l boots this corpus twice on one image and
 ; greps the second log for "disk: fat kept" -- the reset-persistence gate.
 (: dn (disk ())
    (? (! dn) (: _ (puts "disk: none here, laws skipped") _ (putc 10) ())

@@ -826,7 +826,7 @@
    (say err "love/glaze/emit-ir: neutral-IR leaf + n-ary + group lanes ok (x86 == interp; arm64 assembles)\n")))
 
 ; --- delet soundness (auto.l): a value-let inlines only dup-cheap values. Two real miscompiles
-;     shipped from the same line (found by the x11 wire-codec spike, doc/proto/x11.l): a `_`-bound
+;     shipped from the same line (found by the x11 wire-codec spike, doc/misc/proto/x11.l): a `_`-bound
 ;     (put ..) DROPPED when a pure-integer leaf sibling made the group recognizer walk the form,
 ;     and two single-use effectful call-bindings INLINED into arg positions, breaking the sequence
 ;     law (a 32-bit read came back word-swapped). A user-fn call hides its effects from any head

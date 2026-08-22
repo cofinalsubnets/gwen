@@ -147,7 +147,7 @@
            && (all (\ u (exprn fr u)) updates) && (exprn fr R)         ; updates + RESULT exprs over {n,vars}
            && (all whole? inits))                                     ; inits are fixnum consts
        (? ok `(vars updates T R inits) 0))
-   ; --- C-FINITE smart bignum deopt (doc/proto/cfinite.l): a constant-coefficient LINEAR-state
+   ; --- C-FINITE smart bignum deopt (doc/misc/proto/cfinite.l): a constant-coefficient LINEAR-state
    ;     recurrence with a canonical counter (c: init 0, step (c + 1), test (c < n) -> trips = n) closes
    ;     to its result by EXACT integer MATRIX POWER M^n x0 in O(log n). The native loop above already
    ;     wins IN THE FIXNUM RANGE, so this changes ONLY njit-loop-n's post-overflow path: the deopt
@@ -676,7 +676,7 @@
        (: y (map debool e) h (opword <y) as >y                    ; lower operands first (bottom-up); opword names a glued VALUE head
           (? (id? h '&&) (dband as)  (id? h '||) (dbor as)
              (id? h 'abs && 1 = (tally as)) (dbabs <as)  y)))
-   ; --- SPECIALIZATION (autospec): mix (doc/proto/mix.l, the offline partial evaluator) wired in as a
+   ; --- SPECIALIZATION (autospec): mix (doc/misc/proto/mix.l, the offline partial evaluator) wired in as a
    ;     glaze recognizer -- the 1st Futamura projection COMPOSED with the native lane. an interpreter
    ;     applied to a STATIC program (a const-bound quoted AST) and a DYNAMIC input specializes: the
    ;     dispatch + AST navigation fold away to the program's straight-line arithmetic, which defoliate/
@@ -774,7 +774,7 @@
    ; --- DEFORESTATION: fuse a map/filter pipeline under a CONSUMER into ONE pass, then lower it over
    ;     (jot N) to the named-let LOOP `lift` already glazes -- so a combinator pipeline compiles to
    ;     native. The rewrite-level companion to the codegen recognizers; the standalone spec lives in
-   ;     doc/proto/forest.l. Consumers glazed: foldl/foldr (a reduction -> a counted loop, UP for foldl,
+   ;     doc/misc/proto/forest.l. Consumers glazed: foldl/foldr (a reduction -> a counted loop, UP for foldl,
    ;     DOWN for foldr) and all/any (a short-circuit predicate -> an early-exit loop returning the truth
    ;     BITS 0/1). all/any glaze transparently ONLY because their false value is now the fixnum 0 (the
    ;     green floor) like =/</!, not the zero point `()` -- the integer compiler returns 0, so it matches
@@ -875,7 +875,7 @@
    ; --- LOOP-CLOSER (loopclose): collapse a polynomial accumulation `(foldl/foldr (+) z SRC)` to its
    ;     CLOSED FORM in the (possibly symbolic) bound -- work INDEPENDENT of the trip count, the sequel
    ;     to deforestation, a layer above mix (which only unfolds). Runs BEFORE defoliate (it wants the
-   ;     raw fold, not the lowered loop); the standalone spec is doc/proto/close.l. ENGINE: finite
+   ;     raw fold, not the lowered loop); the standalone spec is doc/misc/proto/close.l. ENGINE: finite
    ;     differences in EXACT integers -- the body's forward differences c_k = Δ^k g(0) (Newton-Gregory)
    ;     + the hockey-stick identity Σ_{i<N} C(i,k) = C(N,k+1), so Σ_{i<N} g(i) = Σ_k c_k C(N,k+1),
    ;     emitted as PURE ARITHMETIC (falling factorial / k!), no runtime helper. The body is a BLACK-BOX

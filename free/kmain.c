@@ -104,7 +104,7 @@ struct k_boot kboot;
 //
 // ⚠ THE TABLE GROWS; IT DOES NOT CAP. it was a `k_source[32]` with five `fd <
 // k_sources_max` bounds checks around it -- unreachable while nothing wrote it,
-// and the rung-6 sweep left it as a rule in prose (doc/io.md) rather than a fix.
+// and the rung-6 sweep left it as a rule in prose (doc/misc/io.md) rather than a fix.
 // this is the fix: k_source_open is the ONE door in, and it grows the table in
 // the KERNEL'S OWN HEAP. the bug a ceiling would have shipped is worse than the
 // host's was: not a hang but a silent refusal to open the 33rd thing.
@@ -501,7 +501,7 @@ void *malloc(size_t n) { return kmallocw(b2w(n)); }
 void free(void *x) { return kfree(x); }
 
 // --- the ramfs: the baked tree, and the copies writes make -----------------
-// The initrd is .rodata. mk/tools/lcatfs.l bakes one {path, bytes, len} row per file
+// The initrd is .rodata. tools/lcatfs.l bakes one {path, bytes, len} row per file
 // (out/lib/kfs.h) the way lcatv bakes the test corpus, and reads come straight off
 // it; the FIRST write copies that blob into the kernel heap and the entry reads
 // from the copy ever after. So a file nobody writes costs a row and not one word
@@ -746,7 +746,7 @@ static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n) {
   uintptr_t len;
   unsigned char const *p = k_blob(h->i, &len);
   // ⚠ the end, never 0: a file does not grow under its reader, so "nothing waiting"
-  // would park the scheduler on a source that will never speak (doc/io.md).
+  // would park the scheduler on a source that will never speak (doc/misc/io.md).
   if (h->pos >= len) return -1;
   uintptr_t k = len - h->pos;
   if (k > n) k = n;
@@ -840,7 +840,7 @@ static int k_ramopen(struct ai_str *pv, char m) {
 
 // (open path mode) -- host/main.c's lvm_open for the ramfs door: a heap port
 // (closed on GC) or the zero point on any failure. The kernel links no host/*.c,
-// so the shape is written fresh rather than shared -- doc/posix.md's conventions
+// so the shape is written fresh rather than shared -- doc/misc/posix.md's conventions
 // exactly, since kore reads these and a wrong one is silent.
 static lvm(lvm_open) {
   if (!ai_strp(Sp[0]) || !ai_strp(Sp[1])) goto fail;
@@ -890,7 +890,7 @@ static lvm(lvm_close) {
   ai_musttail return Continue(); }
 
 // --- the file nifs: stat, readdir, lseek, openfd, fdclose -------------------
-// doc/posix.md's conventions exactly, because kore reads these shapes and a wrong
+// doc/misc/posix.md's conventions exactly, because kore reads these shapes and a wrong
 // one is silent.
 #define k_mode_file 0100000            // (& mode 61440) = 32768: a regular file
 #define k_mode_dir  0040000            //                = 16384: a directory
@@ -1037,7 +1037,7 @@ static lvm(lvm_fdclose) {
 // static port's unbuffered zputc, whose contract on a busy answer is one retry
 // and then a DROPPED byte -- a bounded ring here would shed bytes in silence
 // under exactly the load it exists for. the price rides the same open question
-// as the ramfs's memory ceiling (doc/inle.md).
+// as the ramfs's memory ceiling (doc/misc/inle.md).
 struct k_pipe { unsigned char *buf; uintptr_t cap, rp, wp; int rrefs, wrefs; };
 
 static struct k_pipe *k_pipe_of(int fd) {
@@ -1352,11 +1352,11 @@ static lvm(lvm_vmx_run) {
 #endif
 
 // --- rung 2: the writable tree -- mkdir, rmdir, unlink, rename, chdir/cwd,
-// chmod, utime. doc/posix.md's conventions exactly: an effect answers () | a
+// chmod, utime. doc/misc/posix.md's conventions exactly: an effect answers () | a
 // POSITIVE errno (the host's numbers -- kore reads them back, and mv's EXDEV
 // lane proves a shape can matter) | EINVAL on misuse; chdir wears the host's
 // negative lane; cwd answers the string | (). The environment is not here: a
-// tablet in the boot text (kmain, below), as doc/inle.md says.
+// tablet in the boot text (kmain, below), as doc/misc/inle.md says.
 
 // --- the PATH FACES ------------------------------------------------------
 // k_fs_* take (bytes, len) and answer 0 or a NEGATIVE errno, as k_fd_* and
@@ -1512,7 +1512,7 @@ ai_noinline static int k_fs_chdir(char const *p, uintptr_t pn) {
 // ⚠ chdir's LOVE face answers a NEGATIVE errno where its six siblings answer a
 // positive one -- and so does the host's (host/posix.c's host_chdir, likewise
 // putcharm(-errno)), which is what makes it a shape rather than a slip. The
-// twins agree; doc/posix.md's "effect ops answer a POSITIVE errno" simply does
+// twins agree; doc/misc/posix.md's "effect ops answer a POSITIVE errno" simply does
 // not cover this one. So this is the wrapper that does NOT flip: the face below
 // already answers negative, like every other C face here.
 static ai_word k_chdir(ai_word pw) {
@@ -1883,7 +1883,7 @@ static struct ai_def const __attribute__((section("ai_nifs"), used)) defs[] = {
   {"color", (intptr_t) nif_color} };
 
 #ifdef K_TEST
-// The whole test corpus, baked VERBATIM to a C string literal by mk/tools/lcatv.l
+// The whole test corpus, baked VERBATIM to a C string literal by tools/lcatv.l
 // (Makefile out/lib/ktests.h). Bound to the global `tests` and run through ev at boot.
 static char const ktests[] =
 #include "ktests.h"

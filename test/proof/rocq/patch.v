@@ -1,6 +1,6 @@
 (* proof/patch.v -- the PATCH GROUPOID, the hand-proven slices, machine-checked in Rocq.
 
-   The design lives in doc/proto/patch.l (the runnable toy + the argument that a
+   The design lives in doc/misc/proto/patch.l (the runnable toy + the argument that a
    distribution, a namespace, and a repo state are ONE algebra of selectable sets,
    with COMMUTE the primitive underneath). That toy DEMONSTRATES the laws at
    runtime; this file upgrades demonstrate toward PROVE -- the commute laws as
@@ -14,8 +14,8 @@
    order-free -- the semantic heart that makes merge/cherry-pick sound, L3b a
    frontier is stable under an adjacent independent swap -- the reproducibility
    tie) were the FIRST slice here, and are the first RETIRED: the uu-term rung
-   landed them as uu proof terms (test/uupatch.l), which mk/tools/uu2coq.l +
-   mk/tools/uu2lean.l emit into test/proof/rocq/uugen.v AND test/proof/lean/uugen.lean --
+   landed them as uu proof terms (test/uupatch.l), which tools/uu2coq.l +
+   tools/uu2lean.l emit into test/proof/rocq/uugen.v AND test/proof/lean/uugen.lean --
    uu_commute_involutive / uu_invert_roundtrip / uu_commute_sound /
    uu_applall_swap, axiom-free in BOTH kernels under make test_uugen +
    test_uulean.
@@ -118,7 +118,7 @@
    source of truth; the Rocq/Lean is EMITTED and drift-gated. The route is now
    OPEN: the named-slot slice went first (test/uupatch.l -- the laws as uu proof
    TERMS, isdeceqnat's coprod carrying the evidence Nat.eqb dropped, emitted to
-   both kernels by mk/tools/uu2coq.l + mk/tools/uu2lean.l and audited axiom-free), and
+   both kernels by tools/uu2coq.l + tools/uu2lean.l and audited axiom-free), and
    its hand copy is deleted from here. Each remaining slice migrates the same
    way as its model stabilizes -- the positional slice next (splice/firstn/skipn
    need a list library at uu, the one piece uupatch.l didn't build); the file

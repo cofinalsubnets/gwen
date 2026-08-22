@@ -204,7 +204,7 @@ struct ai {
  uintptr_t n_resize;                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
  // the pinned prefix: the first `froze` words of major_base ride a major verbatim, so
  // frozen objects keep their heap offsets and a later image's blob begins with an
- // earlier one's (doc/plan/image-chain.md). it makes the frozen closure immortal, so
+ // earlier one's (doc/misc/plan/image-chain.md). it makes the frozen closure immortal, so
  // only ai_image_freeze sets it and 0 is every other session.
  uintptr_t froze;
  uintptr_t budget;                     // total memory CAP in words (2*minor + 2*major); 0 = unbounded.
@@ -418,7 +418,7 @@ struct ai_image_guard { uintptr_t (*ok)(void *ctx, uintptr_t v, uintptr_t off, u
 void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);
 void *ai_image_save_(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);   // the unguarded worker: a MID-EVAL dump (the bake nif)
 struct ai *ai_image_load(void const *buf, uintptr_t len);
-// the layered bake (doc/plan/image-chain.md). freeze dumps this layer and pins it, and
+// the layered bake (doc/misc/plan/image-chain.md). freeze dumps this layer and pins it, and
 // answers an opaque {header, blob} record the caller hands back. save_over answers the
 // full image plus each baseline's derived record -- its header and the prefix words that
 // changed -- which load_over wakes against the parent's stream. all g->alloc'd; NULL is

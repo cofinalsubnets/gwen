@@ -1,7 +1,7 @@
 ; love spec -- the executable semantic spec AND the language reference: each section states its
 ; laws in the comment and proves them in the asserts below, on every target. the workflow
 ; narrative -- how to work here, the traps, the vocabulary, the architecture -- lives in
-; CLAUDE.md; deeper rationale in doc/ (doc/measures.md the net/tally design). it runs in the
+; CLAUDE.md; deeper rationale in doc/ (doc/misc/measures.md the net/tally design). it runs in the
 ; corpus SECOND (mk/common.mk, right after test/00-init.l sets up the assert harness), so keep it
 ; green -- `make test` (host + love0, which must print the zz-fin summary twice). when in doubt,
 ; PROBE THE BINARY: never trust a prior over a one-line experiment.
@@ -43,7 +43,7 @@
 ; `$` is the SOLE clamp (a clamped fold is mere composition); the COUNT -- how many, not how much --
 ; is `tally` (text/cask charms, list spine, array cells, map keys: what "length" always was, $ never
 ; was). every value wears a COLOR by its net-sign: GREEN nonnegative (what $ keeps), RED negative,
-; BLUE the zero floor -- true iff POSITIVE green. the two-measure design: doc/measures.md.
+; BLUE the zero floor -- true iff POSITIVE green. the two-measure design: doc/misc/measures.md.
 ; ⚠ TRUTH IS A THRESHOLD ON THE NET, NOT A HOMOMORPHISM, and it CANNOT be one. `net` is the
 ; hom (it sums); `!!$` thresholds it, and a threshold cannot preserve ring structure. the two
 ; connectives pull apart: `*` = AND wants the false set to be an IDEAL, which forces false =
@@ -727,7 +727,7 @@
 ; shape to know -- and a port, having become its own tail, is never handed in twice.
 ; in/out/err are NAMES a task seats for itself: (wear (i o e)) re-seats them for the RUNNING
 ; task, (wear ()) hands the console back, (worn ()) answers what is worn -- carried like the
-; help (saved on the switch, inherited at spawn). two live jugs are two sinks. doc/io.md.
+; help (saved on the switch, inherited at spawn). two live jugs are two sinks. doc/misc/io.md.
 ; ⚠ THE PORT DOOR STREAMS, one buffered run per gulp: the reader takes a heap fd port's 4096-byte
 ; run and stops, so reading one form off a file leaves the rest ON THE PORT. an UNBUFFERED port
 ; (`in`, a tap, a jug) has no run to hand over, so it trickles a byte per force and CANNOT run
@@ -741,7 +741,7 @@
 ; collecting; `dot` (the `.` operator, .x) prints x to out and returns it.
 ; `sound0` is sound's BOOTSTRAP TWIN, same protocol over the PURE LISP SUBSET: parens, comments,
 ; strings, atoms, ' quote, and none of the sigil surface -- so #(a) is the glued tally run to
-; sound and the plain symbol # to sound0. it is what reads prel.l before there is a language (doc/io.md).
+; sound and the plain symbol # to sound0. it is what reads prel.l before there is a language (doc/misc/io.md).
 (assert
  (string? (show out)) ("hi" = (slurp (tap '(104 105)))) (: o (jug 0) _ (print o 42) ("42" = (slurp o)))
  (: a (jug 0) b (jug 0) _ (say a "a") _ (say b "b") (&& ("a" = (slurp a)) ("b" = (slurp b))))   ; two jugs are two sinks

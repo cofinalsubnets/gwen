@@ -65,7 +65,7 @@ smoke)
   HOME=$dabs.nowhere run "$dist" down 2>&1 | grep -q "no nest" || fail "down without a nest"
   run "$dist" -e '(? (2 = (1 + 1)) (quit 0) (quit 1))' || fail "-e still evals"
 
-  # --- the image chain (doc/plan/image-chain.md) ----------------------------
+  # --- the image chain (doc/misc/plan/image-chain.md) ----------------------------
   # `libra` claims the small entry, which is stored derived: its words are the first
   # nwords of the big entry's stream plus the few the second layer changed. a broken
   # derive does not crash, it wakes a session missing half its book -- so the gate is that

@@ -10,7 +10,7 @@
 ;     or: love -l crew/libra/libra.l ..
 ;
 ; settings come from lib/salt.l -- ~/.love/etc/libra.l, then ./.libra.l over it.
-; the rules, what they mean, and which fail a gate: doc/libra.md.
+; the rules, what they mean, and which fail a gate: doc/misc/libra.md.
 
 ; the head names the exports, so the scanner's ~30 helpers stay off the tablet;
 ; lint and salt are spliced in here rather than at the top level, where a catted
@@ -179,7 +179,7 @@
           + "       libra doc FILE ..      the file's HEADER as a document, on stdout\n"
           + "                              markdown by default; -ht for html, -rf for man\n"
           + "  config: ~/.love/etc/libra.l, then ./.libra.l over it -- (singleton 0),\n"
-          + "          (deprecated old (worse \"use better\")), (strict singleton). doc/libra.md\n")
+          + "          (deprecated old (worse \"use better\")), (strict singleton). doc/misc/libra.md\n")
 
    ; the config is read once, here, and handed down -- never re-read per file
    (libra-main as)

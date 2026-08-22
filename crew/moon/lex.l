@@ -1,4 +1,4 @@
-; crew/moon/lex.l -- the C lexer (rung 3 stage 0; doc/moon.md is the plan). text ->
+; crew/moon/lex.l -- the C lexer (rung 3 stage 0; doc/misc/moon.md is the plan). text ->
 ; (1 tokens) | () on a lex error. a token is (kind val line): ('kw nom), ('id
 ; text), ('num charm), ('p text) -- the punctuator by maximal munch. comments
 ; both kinds; line numbers carried for diagnostics. char literals 'a' (with

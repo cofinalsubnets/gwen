@@ -694,7 +694,7 @@ static struct ai *env_budget(struct ai *g) {
   }
   return g; }
 
-// bake [PATH] / wake PATH: the heap-image snapshot (doc/snapshot.md) -- declared
+// bake [PATH] / wake PATH: the heap-image snapshot (doc/misc/snapshot.md) -- declared
 // ABOVE the bootstrap split, because love0 links host/image.c too now: it bakes
 // image FILES (the `bake` nif) and wakes them (wake), which is how the self-host
 // build gets a warm mooncc under love0. The .image-section self-patch stays the
@@ -1237,7 +1237,7 @@ int main(int argc, char const **argv) {
 #ifndef LoveBoot
   if (argc >= 2 && !strcmp(argv[1], "bake")) {
    int i = 2;                                      // bake [-l CAT | -L CAT:verbs ..] [PATH]
-   // `bake -L CAT[:verbs] ..` is the layered bake (doc/plan/image-chain.md): one session,
+   // `bake -L CAT[:verbs] ..` is the layered bake (doc/misc/plan/image-chain.md): one session,
    // the cats evaluated in inclusion order, frozen between, and the array laid into our
    // own section. every -L but the last rides as a derived record.
    while (i + 1 < argc && !strcmp(argv[i], "-L") && nlayer < (int) countof(layer))

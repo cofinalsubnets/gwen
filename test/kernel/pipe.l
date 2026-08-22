@@ -1,4 +1,4 @@
-; rung-4 laws (doc/inle.md): the pipe pair over one kernel-heap queue, its EOF
+; rung-4 laws (doc/misc/inle.md): the pipe pair over one kernel-heap queue, its EOF
 ; protocol (a reader parks while a writer lives, reads the end at the last
 ; close), dup/dup2 as row aliases, and the spawn/wait shim over tasks -- a
 ; spawned tool's stdio seated under the folded ports. kernel corpus only

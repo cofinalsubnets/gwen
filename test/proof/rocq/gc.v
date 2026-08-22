@@ -8,7 +8,7 @@
    copies nothing (the drain_* theorems at the bottom; love.c's AiGcCheck
    build instance-checks the fixpoint on every minor, gate test_gcheck).
 
-   This is the Coq counterpart of doc/proto/gengc.l, the runnable ai model of the
+   This is the Coq counterpart of doc/misc/proto/gengc.l, the runnable ai model of the
    nursery+old collector. That model's load-bearing self-check is assert (3b): an
    old->young edge recorded WITHOUT the remembered-set entry lets a minor wrongly
    reap a live young object -- it reproduces, by construction, the exact bug a
@@ -33,7 +33,7 @@ From Stdlib Require Import List PeanoNat Bool Lia.
 Import ListNotations.
 
 (* ============================================================ *)
-(* the model -- mirrors doc/proto/gengc.l                       *)
+(* the model -- mirrors doc/misc/proto/gengc.l                       *)
 (* ============================================================ *)
 
 (* a heap object is (addr . out-edges): its identity and the addresses it points

@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/osbox.sh -- the multi-OS gate (doc/plan/seed-universal.md, rung
+# test/gate/osbox.sh -- the multi-OS gate (doc/misc/plan/seed-universal.md, rung
 # UV): ONE default-lane x64 binary -- no -os, born branded EI_OSABI=9 and
 # carrying the netbsd ident note -- answers EVERY kernel with the same text
 # and status. one script, one battery, a box per OS: `osbox.sh OUT LOVE0

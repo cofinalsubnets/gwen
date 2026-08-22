@@ -3,7 +3,7 @@
 ; forms state the laws as executable asserts; test/proof/rocq/patch.v hand-proved
 ; them as scaffolding and PROMISED this file (its provenance note): the laws
 ; re-proven inside uu's own kernel, then emitted to Rocq AND Lean by
-; mk/tools/uu2coq.l + mk/tools/uu2lean.l -- two independent kernels re-certifying the
+; tools/uu2coq.l + tools/uu2lean.l -- two independent kernels re-certifying the
 ; same terms, the de Bruijn criterion the rest of the proof corpus already
 ; rides. Substrate: test/uu.l + test/uulay.l's list vocabulary (this file
 ; loads after both by sort order).
@@ -2154,7 +2154,7 @@
 ; the ZERO-labelled leaf is 0 itself. etree = nat buys the whole nat kit at
 ; tree grain for free (isdeceq, isaset, natgtb order for canonical forms),
 ; kids come back as a plain nlist (the list kit rides), and the swal/clash/
-; metavariable slices get their element grain. the door: doc/proto/patch.l's
+; metavariable slices get their element grain. the door: doc/misc/proto/patch.l's
 ; rose-tree walks, queued behind this type.
 ; ============================================================================
 ; --- the cantor pairing. npair climbs the triangle; unpair WALKS the

@@ -371,7 +371,7 @@ static ai_inline struct ai_zn zn(ai_flo_t re, ai_flo_t im) {
 // THE TRUTH GATE, not the total order -- the one place the two part: a net is
 // nothing unless its REAL part is positive, so a pure phase is BLUE (truth cannot
 // depend on which root of x^2+1 we named `i`). the lexicographic order stays as
-// it was -- sorting needs totality. doc/measures.md.
+// it was -- sorting needs totality. doc/misc/measures.md.
 // a macro, not a fn: a by-value ai_zn argument stages through push/pop, which
 // bars unframe in every fn ai_nilp splices into (the hot truth-test fleet)
 // FIXME open code this as ai_net(g, x).re <= 0
@@ -439,7 +439,7 @@ struct ai_sun { lvm_t *ap; intptr_t w; };    // raw intptr_t payload, no bit pun
 struct ai_twin { lvm_t *ap; ai_word re, im; };   // two punned-double payload words
 // pun through a union, NOT memcpy(&local,..): the memcpy form escapes a stack
 // local, and clang -Os then refuses the sibling call out of any inlining VM ap --
-// silently breaking threaded dispatch (mk/tools/vmret.l).
+// silently breaking threaded dispatch (tools/vmret.l).
 _Static_assert(sizeof(ai_flo_t) == sizeof(uintptr_t), "float box assumes ai_flo_t is pointer-width");
 typedef union { uintptr_t u; ai_flo_t d; } ai_flo_pun;
 static ai_inline ai_flo_t gem_get(word x) {
@@ -3837,7 +3837,7 @@ static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c) {
  return g; }
 
 ////
-/// " p0 -- the bootstrap reader "  (doc/io.md rung 5)
+/// " p0 -- the bootstrap reader "  (doc/misc/io.md rung 5)
 //
 // the PURE LISP SUBSET and nothing else: delimiters, comments, strings, atoms,
 // ' quote -- the sigil surface is p1's, and p1.l + egg.l are held to this subset
@@ -3904,7 +3904,7 @@ lvm(lvm_sound0) {
  Unpack(g); ai_musttail return Next(1); }
 
 ////
-/// " the boot stitch "  (doc/io.md rung 6b)
+/// " the boot stitch "  (doc/misc/io.md rung 6b)
 //
 // the egg's corpus is STITCHED: p0 reads the halves it owns (p1.l, prel.l,
 // egg.l) and p1, the reader in love, reads ev.l -- the egg expression never
@@ -4709,7 +4709,7 @@ lvm(lvm_bcopy) {
 bool ai_strp(ai_word x) { return strp(x); }
 
 // ============================================================================
-// the heap-image snapshot (doc/snapshot.md): serialize the compacted live heap
+// the heap-image snapshot (doc/misc/snapshot.md): serialize the compacted live heap
 // with every pointer-bearing word range-encoded in place, so a fresh process
 // reconstructs by re-walking. the core owns the BUFFER codec; the host wraps file io.
 // ============================================================================
@@ -4874,7 +4874,7 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 //   immortal      -> IdxBase + 2*NLVM+2*ii [.., TBOUND)
 //   binary ptr    -> kept ABSOLUTE (>= TBOUND), base-delta-shifted on load
 // the lanes start at a constant, not at the blob's own length, so the encoding is a pure
-// function of the heap and one blob can begin with another (doc/plan/image-chain.md).
+// function of the heap and one blob can begin with another (doc/misc/plan/image-chain.md).
 // a floor is the only way to get that: a string's payload rides raw and can be any even
 // value, so no rule downstream of the encoder can tell a lane from a byte.
 // fixnums (odd) pass through; every encoded pointer is EVEN (indices doubled), so
@@ -5315,7 +5315,7 @@ void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_guard const
  if ((word*) g->sp != topof(g)) return NULL;             // quiescent: an empty AI stack at the dump point
  return ai_image_save_(g, outlen, guard); }
 // ============================================================================
-// the layered bake (doc/plan/image-chain.md): one process, images in inclusion order.
+// the layered bake (doc/misc/plan/image-chain.md): one process, images in inclusion order.
 // each layer freezes what it dumped, so the next layer's blob begins with this one's and
 // the small image stores its parent's prefix plus the words that changed.
 // ============================================================================

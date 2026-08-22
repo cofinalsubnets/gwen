@@ -1,6 +1,6 @@
 #!/bin/sh
 # test/gate/imgchain.sh -- the pinned prefix under a collector that collects at every
-# opportunity (doc/plan/image-chain.md).
+# opportunity (doc/misc/plan/image-chain.md).
 #
 # `love bake -L` is the only thing that sets g->froze, so nothing in the ordinary corpus
 # can reach the pin: the branch in gcp, the verbatim block in gen_major, the terminator

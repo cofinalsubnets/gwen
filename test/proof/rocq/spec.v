@@ -835,7 +835,7 @@ Theorem asum_iota_100 : asum (iota 100) = 4950.  Proof. now vm_compute. Qed.
 (* the Z lane: ONE model, shared with the generated test/proof/rocq/gen.v  *)
 (* ============================================================ *)
 (* The nat `app` (Nat.pow) above carries the numeral LAWS by clean unary induction.
-   The GENERATED corpus checks (test/proof/rocq/gen.v, from mk/tools/spec2coq.l) instead need Z --
+   The GENERATED corpus checks (test/proof/rocq/gen.v, from tools/spec2coq.l) instead need Z --
    3^27 would blow unary-nat vm_compute -- so they run over `appZ`. These are not two
    models: `app_appZ` PROVES appZ and app are ONE function under the nat->Z embedding,
    so gen.v `Require Import spec` and checks its instances against THIS file's

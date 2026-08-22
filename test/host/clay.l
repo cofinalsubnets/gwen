@@ -113,7 +113,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
     ; C has no empty struct, the same way it has no empty enum
     (gripe? (one '(sdef "E" ())))))
 
-; --- the five shapes of doc/clay.md's rung 1, ~750 sites in love.c --------------
+; --- the five shapes of doc/misc/clay.md's rung 1, ~750 sites in love.c --------------
 ; attributes ride fn's 5th slot as SPELLINGS -- love.h's macros used call-shaped,
 ; so clay says "ai_noinline" and never what it expands to. emit-only by necessity:
 ; parse.l balance-skips a trailing attribute run, so none can come back through G1.
@@ -152,7 +152,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
      = ("ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g, union u *Ip, ai_word *Hp, ai_word *restrict Sp) {"
         + nl + " ai_musttail return Continue();" + nl + "}" + nl))))
 
-; --- the preprocessor, doc/clay.md's rung 2 ------------------------------------
+; --- the preprocessor, doc/misc/clay.md's rung 2 ------------------------------------
 ; emit-only more firmly than a note is: cpp runs before the lexer, so no directive
 ; survives to be parsed back. a BODY that is a clay expression renders at the
 ; tightest context, which is macro hygiene falling out of the precedence table --
@@ -203,7 +203,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
     (gripe? (one '(cpp-if ((1 ((tdef)))))))
     (gripe? (one '(cpp-if ((1 ((blk ())))))))))
 
-; --- doc/clay.md's rung 4: the three shapes the alpha cluster asks for ----------
+; --- doc/misc/clay.md's rung 4: the three shapes the alpha cluster asks for ----------
 ; a forward declaration with a REAL signature. cparse keeps a prototype's name and
 ; nothing else, so a bare (proto n) prints the same reconstruction a return-type-less
 ; fn does; the appended slots mirror `fn`'s exactly and ONE `csig` lays both, so a

@@ -89,7 +89,7 @@ struct _IO_FILE {
  * runtime map pairs it with the canonical numbers so ONE binary answers both
  * kernels. ⚠ a canonical name ABSENT here is a MECHANISM that differs, not a
  * number we lack -- the member that wants it owes a freebsd body
- * (doc/plan/seed-universal.md rungs 4 / UV2). ---- */
+ * (doc/misc/plan/seed-universal.md rungs 4 / UV2). ---- */
 #define NR_fb_read            3
 #define NR_fb_write           4
 #define NR_fb_close           6

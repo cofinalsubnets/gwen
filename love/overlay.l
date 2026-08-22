@@ -1,9 +1,9 @@
 ; overlay -- an OPTIONAL, observe-only static-type overlay hooked at the ev seam (spike:
-; doc/proto/overlay.l; design: memory pluggable-types). Install a user DOMAIN + SIG-TABLE with
+; doc/misc/proto/overlay.l; design: memory pluggable-types). Install a user DOMAIN + SIG-TABLE with
 ; (overlay-set DOM SIGS); `ev` then REPORTS a type clash for each top-level `:` def and runs the form
 ; UNCHANGED (observe-only -- never alters eval). (overlay-off ()) uninstalls; uninstalled, `ev` is
 ; transparent (one peep per top-level form). ERASABLE by construction. Engine internals stay private
-; inside `ov-eng`; only ov-*/overlay-*/the ev rebind leak. See doc/proto/overlay-lib.l for the domain
+; inside `ov-eng`; only ov-*/overlay-*/the ev rebind leak. See doc/misc/proto/overlay-lib.l for the domain
 ; shape (a map {'join J 'tr T 'litdie L 'dice D}) and sigs ((name (param-dies..) result-die)..).
 ;
 ; a MODULE (no brackets: the runtime supplies the layer -- the frontend registers this source and

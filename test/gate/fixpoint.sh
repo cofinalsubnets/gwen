@@ -20,7 +20,7 @@ shift 2
 d=$ho/fix
 cat=$ho/.mooncc-cat.l
 
-# any arch a seed can be laid for owes this invariant (doc/plan/seed-universal.md
+# any arch a seed can be laid for owes this invariant (doc/misc/plan/seed-universal.md
 # U0); an arch off the roster skips, it does not fail. the mksys leaf is the
 # host's own (the twin roster, crew/build.mk).
 case "$(uname -m)" in

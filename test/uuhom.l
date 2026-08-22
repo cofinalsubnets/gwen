@@ -147,7 +147,7 @@
         (R 0)))))
    '(lam R (lam F (lam K (idpath (R 0)))))))
 
-; --- the stack machine (ev's shape; the model: doc/proto/spl.l): state =
+; --- the stack machine (ev's shape; the model: doc/misc/proto/spl.l): state =
 ; --- (stack cells, sp, locals, seats, trace cells, trace count) -- sp and the
 ; --- trace count CONCRETE, the maps neutral, same discipline as mst. ops are
 ; --- 2 nats (op x): pushk 0, pusha 1, pushl 2, pushs 3, setl 4, sets 5,

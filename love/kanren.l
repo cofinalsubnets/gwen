@@ -109,7 +109,7 @@
    ; apart by lit?/two?, which is canonical microkanren written in love's own
    ; idiom. (the church encoding this replaces spent no type test and paid for it
    ; in closures -- three per step -- for 26-35% more instructions on every shape
-   ; measured. doc/kanren.md carries the numbers.)
+   ; measured. doc/misc/kanren.md carries the numbers.)
    sno ()
    (sX x s) (x >< s)
    (sun x) (x >< ())

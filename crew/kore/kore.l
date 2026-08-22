@@ -3,7 +3,7 @@
 ; argv[0] through a tool-named symlink, which is how the distro will shadow at will.
 ;
 ;   kore diff OLD NEW    unified diff (patience hunks); exit 0 same / 1 differ / 2 trouble
-;   kore nc HOST PORT    the netcat (mk/tools/ain.l); nc -l PORT listens
+;   kore nc HOST PORT    the netcat (tools/ain.l); nc -l PORT listens
 ;   kore make [F] [T..]  the build tool (crew/cook/cook.l)
 ;   kore as TGT IN OUT   assemble IR forms from IN (x64|arm64) into an ELF at OUT
 ;   kore objcopy -O binary|ihex IN OUT   a linked ELF flattened (crew/holo/copy.l)
@@ -30,7 +30,7 @@
 ;   kore whoami|groups|arch|nproc    the four one-line answers
 ;   kore vi [FILE]                   the editor (crew/vi/)
 ;   kore sh [-c CMD | FILE]          the shell, lush (crew/lush/; also `lush`, and an sh symlink)
-; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/moon.md.)
+; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/misc/moon.md.)
 ;
 ; loads LAST in the kore cat, when every tool main is already defined; the tool files'
 ; own SEATs stay quiet here (no file of theirs sits in the program seat), so this
@@ -166,7 +166,7 @@
    ; executable / B nobits / D writable / R the rest, and a LOCAL bind lowercases it
    ; -- that case IS nm's whole convention. -g keeps the externals, the only view a
    ; link has an opinion about; -u the undefined ones, which is what says a lane was
-   ; BORROWED from libgcc rather than ours (mk/tools/moon-parity.sh reads exactly that).
+   ; BORROWED from libgcc rather than ours (tools/moon-parity.sh reads exactly that).
    ; ⚠ an ARCHIVE is not walked here: `ar t` lists members, and nm's per-member
    ; header shape wants the member walk ar-t owns. an ELF of any e_type is fine.
    ; the sort is by BYTE, which is `LC_ALL=C nm`'s order and not the bare `nm` a

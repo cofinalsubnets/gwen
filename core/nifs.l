@@ -1,8 +1,8 @@
 ; nifs.l -- THE REGISTRY. love.c's nif roster and its instruction roster as love data,
-; and the C laid from them: nifs.h, through clay. doc/clay.md rung 4.
+; and the C laid from them: nifs.h, through clay. doc/misc/clay.md rung 4.
 ;
 ; it lives HERE, beside love.c and the header it lays, because that is what it is:
-; love.c's definitions, written as data rather than as text. mk/tools/ is for tools.
+; love.c's definitions, written as data rather than as text. tools/ is for tools.
 ;
 ; the rosters used to BE C -- five #defines minting the little stream a nif runs, an
 ; X-macro per roster, and three CONSUMER macros handed to them, because C cannot say
@@ -11,7 +11,7 @@
 ;
 ; a love loop says it once. the roster is the source, the stream table and the def1
 ; table are both derivations, so a nif cannot enter one and miss the other -- which is
-; the arrangement those five macros were making by hand. this is doc/clay.md's route
+; the arrangement those five macros were making by hand. this is doc/misc/clay.md's route
 ; (b), the one place a macro genuinely goes.
 ;
 ; ⚠ EDIT THIS FILE, NOT nifs.h. `make test_clay` regenerates it and fails on drift.

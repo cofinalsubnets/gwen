@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/fat.sh -- the fat container (doc/plan/seed-universal.md U1): the ONE
+# test/gate/fat.sh -- the fat container (doc/misc/plan/seed-universal.md U1): the ONE
 # file answers on the native machine through its prefix + content-named cache,
 # the cache holds (a second run lays nothing new), the pack is deterministic to
 # the byte, and the foreign member extracts and answers under qemu-user (that
@@ -27,7 +27,7 @@ n2=$(ls "$d/.love/fat" | wc -l)
 
 # determinism: the same members answer the same bytes
 # ⚠ the member list MIRRORS crew/build.mk's dist-fat recipe (the drift trap).
-"$boot" mk/tools/fatpack.l "$d/fat2" "$a" "$ho/love" "$xa" "$xd/love" >/dev/null \
+"$boot" tools/fatpack.l "$d/fat2" "$a" "$ho/love" "$xa" "$xd/love" >/dev/null \
   || fail "repack"
 cmp -s "$fat" "$d/fat2" || fail "repack answered different bytes"
 

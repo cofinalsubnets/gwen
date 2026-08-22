@@ -4,7 +4,7 @@
 ;   love tar xzf A.tar.gz [DIR]   unpack into DIR (default ".")
 ;   love tar tzf A.tar.gz         list, one path a line
 ;
-; mk/tools/tgz.l is the same two engines behind c|x|t; this is the spelling a hand types.
+; tools/tgz.l is the same two engines behind c|x|t; this is the spelling a hand types.
 ; ⚠ `z` IS READ, not assumed: tgz's door is always gzip because a .tar.gz is the one
 ; thing it exists to make, but a `tar cf` that quietly gzipped would be an archive
 ; whose name lies about its bytes. Without z the ustar rides plain.

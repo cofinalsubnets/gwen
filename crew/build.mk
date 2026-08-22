@@ -1,4 +1,4 @@
-# crew/build.mk -- the crew rides IN the default binary (doc/plan/one-binary.md): the
+# crew/build.mk -- the crew rides IN the default binary (doc/misc/plan/one-binary.md): the
 # layered bake host/build.mk runs lays the whole crew into out/host/love's own image, so
 # `love kore|mooncc|sh|..` is the build tree's spelling exactly as it is the artifact's.
 # What remains here: the cat rosters, mooncc0.image (love0's own -- an image keeps its
@@ -18,7 +18,7 @@ lushfiles = crew/lush/job.l crew/lush/lex.l crew/lush/gram.l crew/lush/glob.l cr
 # ⚠ awk.l sits with sed.l because it rides re.l; find.l sits AFTER $(lushfiles)
 # because it rides lush's fnmatch (sh-match) and a body captures its free names at
 # its define -- the same law that keeps kore.l last.
-korefiles =crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/sum.l crew/kore/re.l crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/kore/patch.l mk/tools/ain.l $(lushfiles) crew/kore/find.l crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l crew/kore/kore.l
+korefiles =crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/sum.l crew/kore/re.l crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/kore/patch.l tools/ain.l $(lushfiles) crew/kore/find.l crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l crew/kore/kore.l
 # mooncc is its OWN app, NOT in the kore cat: a cc edit rebuilds only mooncc, so a kore
 # rebuild in another session cannot tear the compiler. ⚠ member order is the scope -- the
 # u-floor, then asbook splices the boot-registered holo and the CROSS BACKENDS join it
@@ -77,7 +77,7 @@ out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/sum.l crew/kore/re.l \
             crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
             crew/vi/core.l crew/vi/vi.l \
-            crew/kore/diff.l crew/kore/patch.l lib/dns.l mk/tools/ain.l $(lushfiles) crew/kore/find.l \
+            crew/kore/diff.l crew/kore/patch.l lib/dns.l tools/ain.l $(lushfiles) crew/kore/find.l \
             crew/cook/cook.l crew/kore/asbook.l \
             crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l \
             crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l \
@@ -133,7 +133,7 @@ $(ho)/.rest-cat.l: $(restfiles) $(ho)/.dist.list $(ho)/.docs.list
 	@{ echo '(: origin "$(DIST_ORIGIN)")'; cat $(restfiles); } > $@
 .PHONY: dist dist-source dist-seed
 
-# ==== THE RELEASE ARTIFACTS (doc/dist.md) ====
+# ==== THE RELEASE ARTIFACTS (doc/misc/dist.md) ====
 # A release is TWO THINGS, and they sit on the one axis that actually matters to
 # somebody who just downloaded one: do you have a C toolchain?
 #
@@ -190,7 +190,32 @@ dist: dist-source dist-seed   # a release is both
 # proof terms together -- and it is the one thing here a reader could not regenerate
 # without installing a foreign toolchain, inside an artifact whose whole claim is that
 # it needs none. Dropping it from the TARBALL costs the repl nothing.
-dist_drop = wasm/love.js
+#
+# bench/ goes the same way, and for the same reason read from the other side: it is
+# 209 files and ~1 MB of OTHER LANGUAGES -- one implementation of each workload in
+# go, rust, java, julia, lua, python, js, elixir, scheme and lisp -- to time love
+# against, plus a committed results page. Nothing in the build reaches it and nobody
+# rebuilding love needs it; a reader who wants the numbers wants the repo. ⚠ the drop
+# is a top-segment name, so the WALK prunes it and the tree under it is never read.
+#
+# port/ and wasm/ leave on the same test, applied to a RELEASE and not to a checkout:
+# what does `make` in the unpacked tree reach? the default goal there is `dist`, which
+# is dist-source + love.baked, and neither reads either directory. port/ is six
+# bare-metal boards whose gates are opt-in BY NAME (test_mps2, test_playdate, ..) and
+# which want a cross toolchain and hardware the tarball's reader has not got; wasm/ is
+# an emscripten build plus its committed output, and emscripten is precisely the
+# foreign toolchain this artifact exists to not need. ⚠ `wasm/love.js` came off the
+# list because the directory holding it now goes -- one name, not two.
+#
+# ⚠ doc/ IS NOT ON THIS LIST and cannot be, because of one rule: the man pages are
+# WRITTEN in doc/{love,cook,lush}.md and generated from them (host/build.mk), and
+# `install: $(installs)` names all three -- so an unpacked release with no doc/ builds
+# its binary and then dies on `make install` with no rule to make doc/love.md. so doc/
+# is the three man sources and nothing else, and everything that used to sit beside
+# them -- the design record, the arcs, the sketches -- is doc/misc, which selfpack.l
+# skips on its own (sp-inner). a directory named misc does not need a release policy
+# to know it is not the product.
+dist_drop = bench port wasm
 # THE ARCHIVE IS THE TREE: selfpack walks the root and skips only what is not
 # source -- out bin dl, everything HIDDEN at the root (.git .sb .claude .cache
 # .gitignore .., the machine's and the checkout's), and $(dist_drop) -- pins every
@@ -218,9 +243,9 @@ dist_drop = wasm/love.js
 force_src: ;
 $(dist_source): force_src $(if $(bundled_love),,$(love0))
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(boot_love) mk/tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(boot_love) tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
-# THE SOURCE BLOB: the source tarball laid into an object (mk/tools/mksrc.l), so the
+# THE SOURCE BLOB: the source tarball laid into an object (tools/mksrc.l), so the
 # artifact hands out its own source with no second download and no `tar xf` -- love
 # `source` inflates it. host/src.c defines the pair WEAK and empty, so this object's
 # STRONG definitions override them at the link and a plain `make host` needs none of
@@ -247,11 +272,11 @@ endif
 # module walk resolves off a NEST, and a fresh seed tree has none. same lane
 # as sys.o, live in both worlds. PINNED to out/host: the blob is the tree's,
 # not a compiler flavor's, and only the moon link takes it.
-out/host/src.o: $(dist_source) mk/tools/mksrc.l out/host/.mksys-cat.l $(if $(bundled_love),,$(love0))
-	@$(boot_love) -l out/host/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(src_arch)
+out/host/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(if $(bundled_love),,$(love0))
+	@$(boot_love) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(src_arch)
 
 # THE CARRIED RUNTIME: each hosted ISA's compiled nolibc archive, raw and
-# laid beside the source blob (mk/tools/mkrt.l lays, moon.l's rtcarried
+# laid beside the source blob (tools/mkrt.l lays, moon.l's rtcarried
 # consumes), so a bare `love cc` links without compiling 197 members first.
 # RIDES THE MOONCC IMAGE by wake -- the archives ARE mooncc compiles, so the
 # whole compiler must be aboard -- and the image dep also re-cuts them when
@@ -269,8 +294,8 @@ rt_slice = $(wildcard crew/moon/include/*.h crew/moon/include/*/*.h \
 # one lane love0 was ever owed. dragging that dep into the bundled lane cost
 # both box trophies once: love0's C compile met netbsd's gcc and its own
 # linux-isms.
-out/host/rt.o: $(rt_slice) mk/tools/mkrt.l $(if $(bundled_love),,out/host/mooncc0.image $(love0))
-	@$(if $(bundled_love),LOVE_NO_IMAGE= $(bundled_love) mk/tools/mkrt.l $@ $(src_arch),$(love0) wake out/host/mooncc0.image mk/tools/mkrt.l $@ $(src_arch))
+out/host/rt.o: $(rt_slice) tools/mkrt.l $(if $(bundled_love),,out/host/mooncc0.image $(love0))
+	@$(if $(bundled_love),LOVE_NO_IMAGE= $(bundled_love) tools/mkrt.l $@ $(src_arch),$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(src_arch))
 
 # ==== the x-lane: test_xfixpoint's objects (seed-universal U0) ====
 # there is ONE artifact; this lane builds no second one. it compiles the tree's
@@ -330,10 +355,10 @@ $(xd)/sys.o: out/host/.mksys-cat.l $(love0)
 # ==== the fat container (seed-universal U1) ====
 # the twin SEED: the x-lane link wearing the artifact's clothes -- its own src
 # blob and readme, so the member answers `love source` like the native one.
-$(xd)/src.o: $(dist_source) mk/tools/mksrc.l out/host/.mksys-cat.l $(if $(bundled_love),,$(love0))
-	@$(boot_love) -l out/host/.mksys-cat.l mk/tools/mksrc.l $(dist_source) $@ $(xtgt)
-$(xd)/rt.o: $(rt_slice) mk/tools/mkrt.l $(if $(bundled_love),,out/host/mooncc0.image $(love0))
-	@$(if $(bundled_love),LOVE_NO_IMAGE= $(bundled_love) mk/tools/mkrt.l $@ $(xtgt),$(love0) wake out/host/mooncc0.image mk/tools/mkrt.l $@ $(xtgt))
+$(xd)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(if $(bundled_love),,$(love0))
+	@$(boot_love) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xtgt)
+$(xd)/rt.o: $(rt_slice) tools/mkrt.l $(if $(bundled_love),,out/host/mooncc0.image $(love0))
+	@$(if $(bundled_love),LOVE_NO_IMAGE= $(bundled_love) tools/mkrt.l $@ $(xtgt),$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(xtgt))
 $(xd)/love: $(xobjs) $(xd)/src.o $(xd)/rt.o assets/readme.bin
 	@echo MOON	$@
 	@$(moonx) -pie $(xobjs) $(xd)/src.o $(xd)/rt.o -freadme=assets/readme.bin -o $@
@@ -342,13 +367,13 @@ $(xd)/love: $(xobjs) $(xd)/src.o $(xd)/rt.o assets/readme.bin
 # twin is an egg until U1.2 moves the bake to the extraction.
 fat = out/dist/love-fat
 .PHONY: dist-fat
-dist-fat: $(ho)/love.baked $(xd)/love mk/tools/fatpack.l
+dist-fat: $(ho)/love.baked $(xd)/love tools/fatpack.l
 	@mkdir -p out/dist
-	@$(boot_love) mk/tools/fatpack.l $(fat) $a $(ho)/love $(xa) $(xd)/love
+	@$(boot_love) tools/fatpack.l $(fat) $a $(ho)/love $(xa) $(xd)/love
 	@chmod +x $(fat)
 
 # ==== the vim syntax for .l -- GENERATED, so there is no copy to keep up to date ====
-# mk/tools/hue2vim.l reads crew/vi/hue.l's class table the other way round (one table, two
+# tools/hue2vim.l reads crew/vi/hue.l's class table the other way round (one table, two
 # readers: the painter in vframe and vim) and asks THIS host for its vocabulary -- so the
 # file describes the love you built, which makes it an artifact like any other. It lives
 # under out/ for that reason: a checked-in copy can be stale, a built one cannot.
@@ -359,7 +384,7 @@ dist-fat: $(ho)/love.baked $(xd)/love mk/tools/fatpack.l
 # outright rather than freeze build state and call it the language.
 # ⚠ atomic, for $(lcat_h)'s reason: a bare `> $@` truncates first, so a broken generator
 # would leave a 0-byte syntax file make calls up to date.
-huefiles = crew/vi/config.l crew/vi/hue.l mk/tools/hue2vim.l
+huefiles = crew/vi/config.l crew/vi/hue.l tools/hue2vim.l
 $(ho)/syntax.vim: $(huefiles) $(m)
 	@echo HUE	$@
 	@mkdir -p $(dir $@); t=$@.$$$$.tmp; \

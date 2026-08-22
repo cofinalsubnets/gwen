@@ -66,7 +66,7 @@ host: $(ho)/love $(ho)/love.baked $(ho)/love.1 $(ho)/cook.1
 embed: $(ho)/liblove.so
 love0: $(love0)
 
-# the BOOT IMAGE -- the LAYERED CREW BAKE (doc/plan/one-binary.md): `$< bake -L ..` boots
+# the BOOT IMAGE -- the LAYERED CREW BAKE (doc/misc/plan/one-binary.md): `$< bake -L ..` boots
 # the fresh binary, evals the docs layer, FREEZES, evals the rest of the crew, and lays
 # the chain into that binary's OWN .image section -- host/image.c copies the exe, pwrites
 # the blob and renames over the original, so a new inode leaves anyone still executing on
@@ -271,7 +271,7 @@ else
 # is the same glob for the same reason -- keep the two in step.)
 nolibc_src = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
                         crew/moon/lib/nolibc/*/*.c crew/moon/lib/nolibc/*/*.h)
-# THIS LINK IS THE SEED (doc/dist.md, seed-universal U2): the default binary
+# THIS LINK IS THE SEED (doc/misc/dist.md, seed-universal U2): the default binary
 # carries its own source blob and readme, and once baked it IS the artifact --
 # there is no leaner host build for it to subsume anymore.
 # ⚠ the layout stays load-bearing: .image must END the segment for `bake` to
@@ -290,8 +290,8 @@ endif
 # source, so the roff cannot drift from the prose. ⚠ a STATIC pattern -- an implicit one
 # would make these intermediate and re-run the lens on every build. mkman takes the version
 # header as its second word and fills @VERSION@ itself, so the roff needs no sed after.
-$(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md mk/tools/mkman.l crew/lapiz/lapiz.l out/lib/love_version.h $(ho)/love
+$(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l crew/lapiz/lapiz.l out/lib/love_version.h $(ho)/love
 	@echo LOVE	$@
 	@mkdir -p $(dir $@)
-	@$(ho)/love mk/tools/mkman.l doc/$*.md out/lib/love_version.h > $@
+	@$(ho)/love tools/mkman.l doc/$*.md out/lib/love_version.h > $@
 

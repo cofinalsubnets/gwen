@@ -1,12 +1,12 @@
 ; test/patch.l -- the PATCH GROUPOID, the executable SOURCE-OF-TRUTH spec.
 ;
-; the drift anchor for the whole patch stack: doc/proto/patch.l is the design (the
+; the drift anchor for the whole patch stack: doc/misc/proto/patch.l is the design (the
 ; argument that a distribution / namespace / repo-state are ONE algebra of
 ; selectable sets, with COMMUTE the primitive underneath). the proofs run on two
 ; legs. the GENERATED leg is the destination and is OPEN: test/uupatch.l encodes
 ; the named-slot AND positional models below as uu proof TERMS -- the uu kernel
 ; certifies all eight laws (L1..L3b at both grains, the hunk re-aim included),
-; mk/tools/uu2coq.l + mk/tools/uu2lean.l emit them into uugen.v/uugen.lean, and Rocq AND
+; tools/uu2coq.l + tools/uu2lean.l emit them into uugen.v/uugen.lean, and Rocq AND
 ; Lean audit them axiom-free (make test_uugen + test_uulean). the HAND leg,
 ; test/proof/rocq/patch.v, scaffolds the slices whose models are still settling, under
 ; `make test_proof` (the conflictor merge and the frontier
@@ -33,7 +33,7 @@
 ; leak-free form.
 
 (:
- ; --- the model (mirror of doc/proto/patch.l) ---
+ ; --- the model (mirror of doc/misc/proto/patch.l) ---
  (chg k a b) (link 'chg (link k (link a (link b 0))))     ; patch: change slot k, old->new
  (pk p) (cap (cup p))                                     ; the slot it touches
  (pa p) (cap (cup (cup p)))                               ; its context (old value)

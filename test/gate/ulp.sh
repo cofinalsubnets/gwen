@@ -68,7 +68,7 @@ $cc_g -O2 -c -o "$d/am_sys.o" "$am" 2> "$d/sys.build" \
 # the HARNESS is always the system cc's: it calls the libm oracle, and holding
 # it fixed keeps the comparison about am.c's object and nothing else.
 for w in moon sys; do
-  $cc_g -O2 -o "$d/ulp_$w" mk/tools/ulp.c "$d/am_$w.o" -lm 2> "$d/link_$w" \
+  $cc_g -O2 -o "$d/ulp_$w" tools/ulp.c "$d/am_$w.o" -lm 2> "$d/link_$w" \
     || { cat "$d/link_$w" >&2; fail "could not link the $w harness"; }
 done
 
@@ -98,7 +98,7 @@ nf=0
 while read -r fn lim; do
   [ -n "$fn" ] || continue
   got=$(awk -v f="$fn" '$1 == f { print $3; exit }' "$d/sweep.sys")
-  [ -n "$got" ] || fail "no '$fn' line in the report -- mk/tools/ulp.c changed shape"
+  [ -n "$got" ] || fail "no '$fn' line in the report -- tools/ulp.c changed shape"
   awk -v g="$got" -v l="$lim" 'BEGIN { exit !(g + 0 <= l + 0) }' \
     || fail "$fn measured $got ulp, over its documented ceiling of $lim"
   nf=$((nf + 1))

@@ -27,7 +27,7 @@ try() {
 
 want='unclosed ('   ; try "libra (positional)"   crew/libra/libra.l $bad
 want='unclosed ('   ; try "libra (-l preload)"   -l crew/libra/libra.l $bad
-want='usage'        ; try "ain"                  mk/tools/ain.l
+want='usage'        ; try "ain"                  tools/ain.l
 want='not a directory'; try "kiosko"             crew/kiosko/kiosko.l --nope
 want='no markdown'  ; try "papel"                crew/papel/papel.l --nope
 

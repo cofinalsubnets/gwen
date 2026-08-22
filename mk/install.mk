@@ -28,7 +28,7 @@ v = $(DESTDIR)/$(VIMPREFIX)
 # with line 1 rewritten -- which is what a package wants anyway. The pattern matches both
 # shebang forms, leaving a trailing ` -l` alone.
 # the sed these recipes spawn is OURS: kore is the installed binary's own verb now
-# (the layered bake, doc/plan/one-binary.md). ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads,
+# (the layered bake, doc/misc/plan/one-binary.md). ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads,
 # for $(hcc)'s reason: the root exports it=1 for the corpus, and an egg-booted love has
 # no verbs -- `kore` would read as a filename.
 korecmd = LOVE_NO_IMAGE= $(ho)/love kore
@@ -124,7 +124,7 @@ install-src: $(dist_source)
 	@if [ -d "$d/src/love-$(dist_ver)" ]; then \
 	   echo "  install-src: $d/src/love-$(dist_ver) exists -- left alone (delete it to re-lay)"; \
 	 else \
-	   $(ho)/love mk/tools/tgz.l x $(dist_source) $d/src >/dev/null \
+	   $(ho)/love tools/tgz.l x $(dist_source) $d/src >/dev/null \
 	     && echo "  install-src: source laid at $d/src/love-$(dist_ver)"; fi
 
 install: $(installs)
@@ -190,7 +190,7 @@ $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra:
 # ain, the netcat clone: the same shebang mechanism, but installed as a COPY rather than a
 # symlink, so it takes the rewrite unconditionally. At the default BIN the substitution is
 # an identity and the bytes are unchanged.
-$d/bin/ain: mk/tools/ain.l $(ho)/love.baked
+$d/bin/ain: tools/ain.l $(ho)/love.baked
 	@echo CP	$(abspath $@)
 	@install -d $(@D)
 	@$(korecmd) sed '1s|env -S love|env -S $(BIN)|' $< > $@
@@ -200,7 +200,7 @@ $d/bin/ain: mk/tools/ain.l $(ho)/love.baked
 # a tool-named symlink. It shadows nothing here -- only `kore` lands on PATH, and the distro
 # symlinks the tool names where shadowing is the point.
 # A VERB SHIM: the installed binary carries the crew in its own layered image
-# (doc/plan/one-binary.md), so there is no sibling image and no wake spelling -- the
+# (doc/misc/plan/one-binary.md), so there is no sibling image and no wake spelling -- the
 # picker wakes the crew layer off the `kore` verb, same warm start as ever.
 # ⚠ `n` comes off $0 UNCHASED where `h` is the chased path: a tool symlink must arrive as its
 # own name for the argv[0] door, and only the real file's dir has the $(BIN) sibling.

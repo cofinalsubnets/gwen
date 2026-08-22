@@ -1,7 +1,7 @@
 ; crew/moon/clay.l -- clay: C as love data. the AST moon has produced all along,
 ; given a name, a validator and a shower, so a piece of C can be generated from a
 ; love table rather than transcribed by hand. the plan, the ranked slate and the
-; gates are doc/clay.md.
+; gates are doc/misc/clay.md.
 ;
 ; a registered module: (use 'clay), then clay-show / clay-ok? / clay-tags. nothing
 ; here depends on the rest of moon -- a shower is pure AST -> text -- so a generator
@@ -45,7 +45,7 @@
 ; that refusal.
 ;
 ; note and the cpp trio are emit-only: lex.l has no comment token and cpp runs before
-; the lexer, so neither ever comes back from a parse. doc/clay.md prices the capture
+; the lexer, so neither ever comes back from a parse. doc/misc/clay.md prices the capture
 ; side and says why the architecture conditionals cannot be folded away instead.
 ;   (cpp-def NAME [BODY])  NAME a spelling, carrying its own parameter list where it has
 ;                          one ("countof(_)"), which is what cpp reads. BODY absent is a
