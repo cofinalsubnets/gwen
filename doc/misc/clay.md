@@ -218,8 +218,8 @@ name the region in a commit message instead.
    then the rest of the family, all the same shape: `vmap1_fill` 7255, `vmap2_fill` 7734,
    `twin_fill` 7932, `cbin_fill` 7958, `twin_pow_fill` 8011, `twin_build_fill` 8062,
    `cpart_fill` 8108, `carg_fill` 8206. and `bit_slow` (`love.c:5453`, used 5762), where
-   `doc/misc/io.md` lists unfinished tower work -- negatives should SCARE rather than answer
-   `()` -- so clay lands the fix and the generation together.
+   negatives should SCARE rather than answer `()` -- so clay lands the fix and the
+   generation together.
 5. **the `lvm(..)` declarator, at 184 definition sites** -- `lvm(lvm_add)` expands to
    `ai_noinline ai_noicf struct ai *lvm_add(struct ai *restrict g, union u *Ip, ai_word *Hp,
    ai_word *restrict Sp)`, and 184 of them is the most repetitive text in the file. rung 3
@@ -313,8 +313,8 @@ why `vbin_fill` earns its place even though it comes later.
 ## the gates
 
 * **G1 faithfulness** -- `(cparse (clay-show c)) == c`, compared STRUCTURALLY on the parsed
-  AST, never as a string compare of the C text (`doc/misc/io.md` -- twice now the printer has
-  been the thing standing in front of the bug). run over all 114 files of `test/cc/`: that
+  AST, never as a string compare of the C text (twice now the printer has been the
+  thing standing in front of the bug). run over all 114 files of `test/cc/`: that
   makes "expresses arbitrary C" empirical rather than claimed. currently **63 / 51 / 0**.
   ⚠ emit-only additions must not move it.
 * **G2 conversion equivalence** -- `tools/clay-g2.l`: parse the original translation unit

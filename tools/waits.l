@@ -58,7 +58,7 @@
      `("core/love.c" "yield_sw_wait" "ai_wait_fds"
        "THE wait: every parked task and the nearest timer, one call")
      `("core/love.c" "io_close" "ai_fd_drain"
-       "⚠ the finalizer: a dying port's unsent run. runs inside gc, where nothing can park -- the write side's one remaining unbounded wait (doc/misc/io.md)")
+       "⚠ the finalizer: a dying port's unsent run. runs inside gc, where nothing can park -- the write side's one remaining unbounded wait")
      `("port/teensy41/main.c" "main" "ai_sleep"
        "the panic blink after a fatal shell exit -- nothing runs after it"))
 

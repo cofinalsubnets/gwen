@@ -57,7 +57,7 @@ $(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(love0), stated below
 # ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads, for the same reason $(hcc) does: the root
 # Makefile exports it=1 in a tree with no bundled love, a seed-laid tree INHERITS it,
 # and an egg-booted love has no verb table -- so `love sed` would read as a filename.
-sed_h = @mkdir -p out/lib; echo AI	$@; LOVE_NO_IMAGE= $(sed_lit) $< > $@
+sed_h = @mkdir -p out/lib; echo LOVE	$@; LOVE_NO_IMAGE= $(sed_lit) $< > $@
 # ⚠ every rule below is a STATIC pattern -- their sources live outside love/, so the
 # wildcard misses them, and an implicit pattern would make these headers INTERMEDIATE.
 # holo rides the same lcat pipeline as the egg (the glaze is its client); rune is the CAS,

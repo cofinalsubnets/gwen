@@ -104,7 +104,7 @@ struct k_boot kboot;
 //
 // ⚠ THE TABLE GROWS; IT DOES NOT CAP. it was a `k_source[32]` with five `fd <
 // k_sources_max` bounds checks around it -- unreachable while nothing wrote it,
-// and the rung-6 sweep left it as a rule in prose (doc/misc/io.md) rather than a fix.
+// and the sweep that found it left a rule in prose rather than a fix.
 // this is the fix: k_source_open is the ONE door in, and it grows the table in
 // the KERNEL'S OWN HEAP. the bug a ceiling would have shipped is worse than the
 // host's was: not a hang but a silent refusal to open the 33rd thing.
@@ -746,7 +746,7 @@ static intptr_t ram_readn(int fd, unsigned char *dst, uintptr_t n) {
   uintptr_t len;
   unsigned char const *p = k_blob(h->i, &len);
   // ⚠ the end, never 0: a file does not grow under its reader, so "nothing waiting"
-  // would park the scheduler on a source that will never speak (doc/misc/io.md).
+  // would park the scheduler on a source that will never speak.
   if (h->pos >= len) return -1;
   uintptr_t k = len - h->pos;
   if (k > n) k = n;

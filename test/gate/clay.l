@@ -4,7 +4,7 @@
 ; helper names touch the compiler's book.
 ;
 ; the comparison is STRUCTURAL, on the reparsed AST, and never a string compare of
-; the C text -- doc/misc/io.md, twice now the printer has been the thing standing
+; the C text -- twice now the printer has been the thing standing
 ; in front of the bug. so this proves the SHOWER and the PARSER agree about what a
 ; tree means; it deliberately proves nothing about the text resembling its original.
 ;

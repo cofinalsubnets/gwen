@@ -83,7 +83,7 @@
   ; --- chug and unchug: the run, and the run put back ---------------------------
   ; ⚠ unchug rewinds `rpos`, which is AT ONCE the reader's position and what
   ; ai_io_pending counts -- so bytes given back are bytes stdin's seek-back sees
-  ; again, and a reader that gave some back re-reads exactly those (doc/misc/io.md part IV).
+  ; again, and a reader that gave some back re-reads exactly those.
   ; ⚠ ON A FILE, NEVER ON `in`: a real read of `in` eats the corpus feeding this suite.
   (? word (: pth "/tmp/l-io-unchug"
      wp (open pth "w") _ (say wp "abcdefghij") _ (close wp)

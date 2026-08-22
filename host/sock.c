@@ -10,11 +10,11 @@
 //
 // EVERY nif here PARKS rather than blocking (love.h's nif park: leave Ip
 // unadvanced and yield, so the op re-runs on reschedule) -- accept and udp-recv
-// on their fd, and connect on its HANDSHAKE, which is the write-direction wait
-// doc/misc/io.md held back as rung 7 "until something asks". NOTHING IN THIS FILE
+// on their fd, and connect on its HANDSHAKE -- the write-direction wait, and the
+// only one there is. NOTHING IN THIS FILE
 // WAITS. getaddrinfo is what used to make connect the exception, and it is gone:
 // `connect` takes a dotted quad, and a NAME resolves one layer up in love, where
-// the lookup itself can park. doc/misc/io.md, the nif floor.
+// the lookup itself can park.
 #define _GNU_SOURCE     // SOCK_CLOEXEC
 #include "love.h"
 #include <unistd.h>

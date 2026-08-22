@@ -89,8 +89,8 @@
              ((cup r) = "one\ntwo\n")))  ; ... and the capture is still whole
 
 ; --- law 5: connect PARKS on the handshake ------------------------------------
-; the WRITE-direction park, and the only one there is -- doc/misc/io.md held it back as
-; rung 7 "until something asks", and connect is what asked. a socket that has sent
+; the WRITE-direction park, and the only one there is -- held back until something
+; asked for it, and connect is what asked. a socket that has sent
 ; its SYN is not readable and will not be; POLLOUT is the question, which is why
 ; the scheduler carries a direction per parked task at all.
 ;

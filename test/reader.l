@@ -13,8 +13,8 @@
 ; its surface spelling ((mono (< x)) shows as `<x`) and would hide the very
 ; distinction being asserted.
 ;
-; ⚠ this file is the ACCEPTANCE TEST for a reader rewritten in love (doc/misc/io.md
-; -- p0/p1). every law it states must survive that flip byte for byte; a case that
+; ⚠ this file is the ACCEPTANCE TEST for a reader rewritten in love (p0/p1).
+; every law it states must survive that flip byte for byte; a case that
 ; is deliberately allowed to change is a case that must be edited HERE first,
 ; before the reimplementation, or the differential cannot tell the two apart.
 (: (rdr s) (: r (sound s) (? (two? r) (cap r) r)))

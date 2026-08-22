@@ -158,7 +158,7 @@ test_stdincorpus: $(ho)/love.baked
 	@echo "  ok   file, redirect and pipe read the corpus identically on both loves"
 # test_front -- the TEST-ONLY FRONTEND: out/host/front links liblove.a (core/love.c only)
 # and supplies the frontend contract itself, so its port vt can answer WOULD-BLOCK on
-# cue (doc/misc/io.md). ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
+# cue. ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
 $(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/core/love_data.ld \
     out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h
 	@echo CC	$@
@@ -237,10 +237,10 @@ test_hostnif: host out/host$(hsuf)/lush
 	  cat test/00-init.l $$s | sh test/gate/run.sh hostnif "$$L" ": ok" \
 	    || { echo "  (the gate above is $$s)"; exit 1; }; \
 	done
-# Runnable design companions in doc/ -- pure-love models that pin the shape a C design
-# takes (doc/misc/stream.l ~ doc/misc/io.md part II). Zero-dep, but they leak helper names into the
+# Runnable design companions -- pure-love models that pin the shape a C design
+# takes. Zero-dep, but they leak helper names into the
 # one global scope, so they run standalone. Same contract: exit 0 AND a "<name>: ok".
-doc_tests = doc/misc/stream.l doc/misc/proto/dest.l doc/misc/proto/spl.l
+doc_tests = doc/misc/proto/dest.l doc/misc/proto/spl.l
 test_doc: host
 	@for s in $(doc_tests); do echo "TEST $$s"; \
 	  cat test/00-init.l $$s | sh test/gate/run.sh doc "$m" ": ok" \

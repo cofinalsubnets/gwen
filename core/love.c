@@ -371,7 +371,7 @@ static ai_inline struct ai_zn zn(ai_flo_t re, ai_flo_t im) {
 // THE TRUTH GATE, not the total order -- the one place the two part: a net is
 // nothing unless its REAL part is positive, so a pure phase is BLUE (truth cannot
 // depend on which root of x^2+1 we named `i`). the lexicographic order stays as
-// it was -- sorting needs totality. doc/misc/measures.md.
+// it was -- sorting needs totality.
 // a macro, not a fn: a by-value ai_zn argument stages through push/pop, which
 // bars unframe in every fn ai_nilp splices into (the hot truth-test fleet)
 // FIXME open code this as ai_net(g, x).re <= 0
@@ -3861,7 +3861,7 @@ static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c) {
  return g; }
 
 ////
-/// " p0 -- the bootstrap reader "  (doc/misc/io.md rung 5)
+/// " p0 -- the bootstrap reader "
 //
 // the PURE LISP SUBSET and nothing else: delimiters, comments, strings, atoms,
 // ' quote -- the sigil surface is p1's, and p1.l + egg.l are held to this subset
@@ -3928,7 +3928,7 @@ lvm(lvm_sound0) {
  Unpack(g); ai_musttail return Next(1); }
 
 ////
-/// " the boot stitch "  (doc/misc/io.md rung 6b)
+/// " the boot stitch "
 //
 // the egg's corpus is STITCHED: p0 reads the halves it owns (p1.l, prel.l,
 // egg.l) and p1, the reader in love, reads ev.l -- the egg expression never

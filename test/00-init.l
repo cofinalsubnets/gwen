@@ -5,7 +5,7 @@
 (map (\ n (? (member? n (names ())) () (ev `(': `(n 'x) ())))) '(quit close run getenv))
 (? (member? 'open (names ())) () (ev '(: (open x y) ())))
 
-; the READER UNDER TEST -- doc/misc/io.md rung 3's socket. every print->read
+; the READER UNDER TEST -- the socket. every print->read
 ; differential in the tree reads through this ONE binding (test/roundtrip.l,
 ; test/fuzz.l, test/host/rdiff.l), so the whole set moves by rebinding it here
 ; and nowhere else. the protocol is `sound`'s: (r text) answers the datum consed
