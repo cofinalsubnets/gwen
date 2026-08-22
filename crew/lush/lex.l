@@ -85,7 +85,7 @@
    ; ${(FORM)}: the LOVE arm. i is at the ( -- and THE READER IS THE SCANNER.
    ; `sound` speaks love's lexical law, which no shell scanner does: a ' is a
    ; sigil and not a quote, a ; runs to the line's end, a ) inside a "" is text,
-   ; and #( [ ] \ all read as themselves. What it leaves unread measures the
+   ; and { [ ] \ all read as themselves. What it leaves unread measures the
    ; extent, so the form's end is the reader's own answer rather than a second
    ; opinion about it -- and the one that evaluates the form later is this one.
    ; -> (text . j past the }) | 'torn unfinished (PS2's cue) | () no } in place

@@ -17,9 +17,9 @@ doubt settles by probing `sound`.
   `;` and `#!` comments, `"…"` with escapes, atoms, `'` quote. Its lexers are charlist-native.
 * **`p1`** — `love/p1.l`, the real reader, written in love on top of p0. It carries everything
   else: the operator run, the valence law's `mono` wrap with its head-fusion rule and the
-  `:`/`?` suppression, the constructor wraps `` ` `` `#` `@` `~` and their SPLICE rewrites, the
-  `~` twin-vs-conj peek, the empty-collection direct-nif rewrite, the comma datum, the
-  trailing-`-` shed, the bracket spellings (`[..]` is `` `(..) ``, `{..}` is `#(..)`, the three
+  `:`/`?` suppression, the constructor wraps `` ` `` `@` and their SPLICE rewrites, the
+  empty-collection direct-nif rewrite, the comma datum, the
+  trailing-`-` shed, the bracket spellings (`[..]` is `` `(..) ``, `{..}` is the map, the three
   closers are one, and a constructor sigil over any opener renames the wrap -- `@[1 2]` is
   `@(1 2)`), the prime inside names, the number tower and the
   `ieee-inf` named literals.

@@ -18,7 +18,7 @@
    ramp (L 17 18 19 20 26 32 38 44 45 51 87 123 159 195 189 183 147 111 75 69 63 57 25 24)
    (cell n) (+ (+ (+ esc "[48;5;") (show n)) "m ")   ; show: decimal digits (string of a charm is its CHAR)
    pal (: (dab t i l) (? l (: _ (pin t i (cell <l)) (dab t (+ i 1) >l)) t)
-          (dab #(0 (cell 17)) 0 ramp))
+          (dab {0 (cell 17)} 0 ramp))
 
    ; the scene at size (r c): the grid, built once, closed into a frame(t) that
    ; runs headless into a jug. (r 1) + (1 c) broadcasts to (r c); cy doubles y so

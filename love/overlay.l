@@ -4,7 +4,7 @@
 ; UNCHANGED (observe-only -- never alters eval). (overlay-off ()) uninstalls; uninstalled, `ev` is
 ; transparent (one peep per top-level form). ERASABLE by construction. Engine internals stay private
 ; inside `ov-eng`; only ov-*/overlay-*/the ev rebind leak. See doc/proto/overlay-lib.l for the domain
-; shape (a map #('join J 'tr T 'litdie L 'dice D)) and sigs ((name (param-dies..) result-die)..).
+; shape (a map {'join J 'tr T 'litdie L 'dice D}) and sigs ((name (param-dies..) result-die)..).
 ;
 ; a MODULE (no brackets: the runtime supplies the layer -- the frontend registers this source and
 ; its boot says (use 'overlay), then binds the accessor under the module's OWN name and hooks ev

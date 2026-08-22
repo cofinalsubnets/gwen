@@ -21,7 +21,7 @@
    dv-elsz 8                                           ; a gem is 8 bytes (f64)
 
    ;; -- the meter: a mutable tally the sim kernels feed --
-   dv-stats #()
+   dv-stats {}
    (dv-reset _) (pins dv-stats 'flop 0 'byte 0 'launch 0)
    (dv-bump f b) (pins dv-stats
     'flop   (f + peep dv-stats 'flop 0)
@@ -41,11 +41,11 @@
 
    ;; -- the SIM backend: tele's four kernels, native math WRAPPED in the meter.
    ;; keys match tele's seam exactly (gemm/ew/reduce/transp); `ew` takes the op. --
-   sim-dev #('name "sim"
-             'gemm   (\ a b   (: c (dv-gemm-cost a b) _ (dv-bump <c >c) (inner a b)))
-             'ew     (\ op a b (: c (dv-ew-cost a)    _ (dv-bump <c >c) (op a b)))
-             'reduce (\ a     (: c (dv-red-cost a)    _ (dv-bump <c >c) (net a)))
-             'transp (\ m     (: c (dv-tr-cost m)     _ (dv-bump <c >c) (transp2 m))))
+   sim-dev {'name "sim"
+            'gemm   (\ a b   (: c (dv-gemm-cost a b) _ (dv-bump <c >c) (inner a b)))
+            'ew     (\ op a b (: c (dv-ew-cost a)    _ (dv-bump <c >c) (op a b)))
+            'reduce (\ a     (: c (dv-red-cost a)    _ (dv-bump <c >c) (net a)))
+            'transp (\ m     (: c (dv-tr-cost m)     _ (dv-bump <c >c) (transp2 m)))}
 
    ;; -- the roofline: turn the meter into a time estimate for a named device.
    ;; spec = { name tflops gbps }: peak compute (TFLOP/s) and memory BW (GB/s).

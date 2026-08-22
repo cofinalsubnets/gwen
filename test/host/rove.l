@@ -53,7 +53,7 @@
 ;   #...#...#
 ;   #...#...#
 ;   #########
-(: hd #('w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms `(`(1 1 3 3) `(5 1 3 3)))
+(: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms `(`(1 1 3 3) `(5 1 3 3))}
    _ (map (\ y (map (\ x (? (x = 4) () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
    v (fov hd 1 1 8)
  (assert
@@ -86,12 +86,12 @@
  (113 = helm-dec 113 -1 -1))
 
 ; --- the crawl on a hand deck: every verb of the game, deterministic ---
-(: (hand-g _) (: hd #('w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms `(`(1 1 3 3) `(5 1 3 3)))
+(: (hand-g _) (: hd {'w 9 'h 5 't (cask 45) 'seen (cask 45) 'rooms `(`(1 1 3 3) `(5 1 3 3))}
                  _ (map (\ y (map (\ x (? (x = 4) () (dput hd x y 1))) '(1 2 3 4 5 6 7))) '(1 2 3))
                  _ (pin hd 'in `(1 1), pin hd 'down `(7 3))
-                 st (wheel 5) sb #st
-                 pl #('x 1 'y 1 'gl 64 'hue 228 'hp 12 'mx 12 'gold 0)
-                 #('d hd 'lvl 1 'sb sb 'p pl 'ms () 'loot (tablet 0) 'msg "" 'over 0)))
+                 st (wheel 5) sb {st}
+                 pl {'x 1 'y 1 'gl 64 'hue 228 'hp 12 'mx 12 'gold 0}
+                 {'d hd 'lvl 1 'sb sb 'p pl 'ms () 'loot (tablet 0) 'msg "" 'over 0}))
 
 ; the hull holds: a stride into rock stands you still
 (: g (hand-g ())
@@ -140,7 +140,7 @@
 
 ; --- the whole game, generated: a seeded random walk holds every invariant ---
 (: g (crawl-new 60 20 (wheel 3))
-   kb #(wheel 99)
+   kb {wheel 99}
    dirs `(`(1 0) `(-1 0) `(0 1) `(0 -1) `(1 1) `(-1 -1) `(1 -1) `(-1 1) 46 62)
    (turn i ok) (? (&& (i < 300) !(g 'over)) (: k (peep dirs (roll kb 10) 46)
                    _ (crawl-turn g k)

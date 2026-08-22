@@ -1146,7 +1146,7 @@
    ; --- TWIN LOWERING (twolow): a complex(TWIN)-recurrence grid -> the real-pair float grid the
    ;     float-grid lane (autonat/jitfgridn) ALREADY glazes -- so idiomatic complex code glazes with
    ;     NO new codegen (Route A). A `:` whose recurrence carries TWIN params (a var built/updated
-   ;     with ~(re im), `*`, `+`, `-`, read with `re`/`im`) is lowered: each twin param p splits into
+   ;     with (re ~ im), `*`, `+`, `-`, read with `re`/`im`) is lowered: each twin param p splits into
    ;     (p_r p_i), twin ops become real-pair arithmetic ((a+bi)(c+di) = (ac-bd, ad+bc)), and every
    ;     call site's twin args split in two. A small twin-TYPE fixpoint (propagate twin-ness from
    ;     call-site args to callee params) picks which params are twin. BIT-EXACT: z*z's imag rides

@@ -49,17 +49,4 @@ of an n-thing. So cartesian/repeat `*` is not ad hoc — it's the product and mo
 of one semiring multiplication, with tally the witness. (`str*str = nil` / `sym*sym = nil` are a
 closure issue — the product would type-escape the string kind.)
 
-## The three roles
-
-1. **Monadic `*` = `prod`, uniformly.** `*x` is `*` turned inward, the multiplicative fold:
-   aggregate → product of cells, scalar → itself (vacuous, so `*5 = 5`) — the rank-uniform dual
-   of `+x`, exactly as `+5 = 5`. Every glued row keeps that invariant: the sigil is its
-   own dyadic op, turned monadic. (Binding `*` → `tally` would break it — `tally` is not "`*`
-   folded inward" — so tally stays a named word.)
-2. **`tally` is net's measure-twin** — the cardinality rig-hom, with both hom laws.
-   The trinity: **net** (weight, `+`-hom) · **tally** (count, rig-hom) · **prod** (the `*`-fold,
-   an operator, neither measure).
-3. **`jot` is the section of tally** — `(jot n)` is the range `0..n-1`, the canonical witness
-   builder for a count (`tally (jot n) = n`), a *constructor* and the right-inverse of the
-   measure. A third role, distinct from both fold and measure, so it wears its own name rather
-   than a sigil.
+`jot` is tally's section: `tally (jot n) = n`.

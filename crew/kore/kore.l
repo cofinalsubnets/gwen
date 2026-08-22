@@ -228,61 +228,61 @@
        (? any 0 1))
 
    ; the registry: name -> main (aliases share)
-   applets #('diff diff-main
-             'nm nm-main
-             'nc (from 'ain 'ain-main) 'ain (from 'ain 'ain-main)   ; ain's wrap registered ahead in the cat
-             'make (from 'cook 'cook-main) 'cook (from 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
-             'as as-main
-             'ar ar-main 'ld ld-main
-             'objcopy (from 'holo 'objcopy)   ; the applet IS the function: crew/holo/copy.l, module-side
-             'cat cat-main 'tac tac-main 'echo echo-main
-             'head head-main 'tail tail-main
-             'wc wc-main 'sort sort-main
-             'uniq uniq-main 'tee tee-main
-             'seq seq-main 'yes yes-main
-             'true true-main 'false false-main
-             ; ⚠ test/[ are PROGRAMS here, not just shell builtins: cook's in-image lane
-             ; execs a recipe's words directly, so a `test -s $t && mv ..` looks them up
-             ; on PATH. uname and printf are the other two a bootstrap cannot start without.
-             ; ⚠ `[` cannot be QUOTED -- it opens a bracket in the reader -- so the nom
-             ; is interned by name; the map ctor evaluates its keys, which is the door.
-             'test test-main (name "[") bracket-main
-             'uname uname-main 'arch arch-main 'nproc nproc-main 'printf printf-main
-             'basename basename-main 'dirname dirname-main
-             'cut cut-main 'tr tr-main
-             'nl nl-main 'rev rev-main
-             'fold fold-main 'expand expand-main 'unexpand unexpand-main
-             'base64 base64-main 'base32 base32-main
-             'tsort tsort-main 'factor factor-main
-             'paste paste-main 'comm comm-main 'split split-main
-             'join join-main 'od od-main
-             'cksum cksum-main 'md5sum md5sum-main 'sha256sum sha256sum-main
-             'ls ls-main 'cp cp-main 'mv mv-main
-             'rm rm-main 'mkdir mkdir-main 'rmdir rmdir-main
-             'ln ln-main 'touch touch-main
-             'pwd pwd-main 'chmod chmod-main
-             'install install-main 'readlink readlink-main
-             'realpath realpath-main 'link link-main 'unlink unlink-main
-             'cmp cmp-main
-             'stat stat-main 'du du-main 'chown chown-main 'mktemp mktemp-main
-             'expr expr-main 'date date-main 'id id-main
-             'patch patch-main
-             'grep grep-main 'sed sed-main
-             'awk awk-main 'find find-main
-             'vi (from 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
-             'env env-main 'printenv printenv-main 'sleep sleep-main
-             'whoami whoami-main 'groups groups-main
-             ; the /proc family -- no nif of their own, /proc is a filesystem
-             'ps ps-main 'free free-main 'uptime uptime-main
-             'pidof pidof-main 'pgrep pgrep-main 'pkill pkill-main
-             'killall killall-main 'pwdx pwdx-main
-             'kill kill-main 'xargs xargs-main
-             ; the shell: lush's wrap registered ahead of this file in the cat, so sh-main
-             ; folds here. `kore sh ..` and a /bin/sh symlink both land it (the
-             ; symlink usually through lush's OWN seat, which fires first at
-             ; cat load on an sh/lush basename -- this row serves the image
-             ; wake, where only kore-main dispatches)
-             'sh (from 'lush 'sh-main) 'lush (from 'lush 'sh-main))
+   applets {'diff diff-main
+            'nm nm-main
+            'nc (from 'ain 'ain-main) 'ain (from 'ain 'ain-main)   ; ain's wrap registered ahead in the cat
+            'make (from 'cook 'cook-main) 'cook (from 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
+            'as as-main
+            'ar ar-main 'ld ld-main
+            'objcopy (from 'holo 'objcopy)   ; the applet IS the function: crew/holo/copy.l, module-side
+            'cat cat-main 'tac tac-main 'echo echo-main
+            'head head-main 'tail tail-main
+            'wc wc-main 'sort sort-main
+            'uniq uniq-main 'tee tee-main
+            'seq seq-main 'yes yes-main
+            'true true-main 'false false-main
+            ; ⚠ test/[ are PROGRAMS here, not just shell builtins: cook's in-image lane
+            ; execs a recipe's words directly, so a `test -s $t && mv ..` looks them up
+            ; on PATH. uname and printf are the other two a bootstrap cannot start without.
+            ; ⚠ `[` cannot be QUOTED -- it opens a bracket in the reader -- so the nom
+            ; is interned by name; the map ctor evaluates its keys, which is the door.
+            'test test-main (name "[") bracket-main
+            'uname uname-main 'arch arch-main 'nproc nproc-main 'printf printf-main
+            'basename basename-main 'dirname dirname-main
+            'cut cut-main 'tr tr-main
+            'nl nl-main 'rev rev-main
+            'fold fold-main 'expand expand-main 'unexpand unexpand-main
+            'base64 base64-main 'base32 base32-main
+            'tsort tsort-main 'factor factor-main
+            'paste paste-main 'comm comm-main 'split split-main
+            'join join-main 'od od-main
+            'cksum cksum-main 'md5sum md5sum-main 'sha256sum sha256sum-main
+            'ls ls-main 'cp cp-main 'mv mv-main
+            'rm rm-main 'mkdir mkdir-main 'rmdir rmdir-main
+            'ln ln-main 'touch touch-main
+            'pwd pwd-main 'chmod chmod-main
+            'install install-main 'readlink readlink-main
+            'realpath realpath-main 'link link-main 'unlink unlink-main
+            'cmp cmp-main
+            'stat stat-main 'du du-main 'chown chown-main 'mktemp mktemp-main
+            'expr expr-main 'date date-main 'id id-main
+            'patch patch-main
+            'grep grep-main 'sed sed-main
+            'awk awk-main 'find find-main
+            'vi (from 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
+            'env env-main 'printenv printenv-main 'sleep sleep-main
+            'whoami whoami-main 'groups groups-main
+            ; the /proc family -- no nif of their own, /proc is a filesystem
+            'ps ps-main 'free free-main 'uptime uptime-main
+            'pidof pidof-main 'pgrep pgrep-main 'pkill pkill-main
+            'killall killall-main 'pwdx pwdx-main
+            'kill kill-main 'xargs xargs-main
+            ; the shell: lush's wrap registered ahead of this file in the cat, so sh-main
+            ; folds here. `kore sh ..` and a /bin/sh symlink both land it (the
+            ; symlink usually through lush's OWN seat, which fires first at
+            ; cat load on an sh/lush basename -- this row serves the image
+            ; wake, where only kore-main dispatches)
+            'sh (from 'lush 'sh-main) 'lush (from 'lush 'sh-main)}
    (usage _) (: _ (say err "kore -- the love multi-call toolbox
 usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)

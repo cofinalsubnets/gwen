@@ -20,7 +20,7 @@
 (: md (tether `("sh" "-c" "printf 'hi\\033[31mred'; exit 3"))
  _ (assert (two? md))
  s (mkscr 5 20)
- bx #s
+ bx {s}
  _ (moor bx (cup md) ())
  _ (assert
     (= "hired" (snip (rowtx s 0) 0 5))
@@ -33,7 +33,7 @@
 ; --- the pty's ONLCR: a child's bare \n arrives as \r\n, so columns behave ---
 (: md (tether `("sh" "-c" "printf 'a\\nb'"))
  s (mkscr 5 20)
- bx #s
+ bx {s}
  _ (moor bx (cup md) ())
  _ (assert
     (= 97 (chat s 0))
@@ -53,7 +53,7 @@
 ; the bytes cannot tell "\e[1;1R" from "R1;1[\e".
 (: md (tether `("sh" "-c" "stty raw -echo; printf '\\033[6n'; head -c 6 | cat -v"))
  s (mkscr 5 20)
- bx #s
+ bx {s}
  _ (moor bx (cup md) ())
  _ (assert (= "^[[1;1R" (snip (rowtx s 0) 0 7)))
  _ (waitfor (cap md))
@@ -62,7 +62,7 @@
 ; --- a full-screen guest: clear, address, paint, leave ---
 (: md (tether `("sh" "-c" "printf '\\033[2J\\033[3;5Hdeep\\033[7msea'"))
  s (mkscr 6 20)
- bx #s
+ bx {s}
  _ (moor bx (cup md) ())
  _ (assert
     (= "    deepsea" (snip (rowtx s 2) 0 11))
@@ -97,13 +97,13 @@
    ; berth's own opening, with the tty parts left out
    (mkhb r c argv)
     (: p0 (hopen argv r c)
-       panes #()
+       panes {}
        _ (pin panes 1 p0)
-       hb #()
+       hb {}
        _ (pin hb 'plan 1) _ (pin hb 'focus 1) _ (pin hb 'next 2)
        _ (pin hb 'rows r) _ (pin hb 'cols c)
        _ (pin hb 'panes panes) _ (pin hb 'argv argv)
-       _ (pin hb 'dirt #1) _ (pin hb 'jobs ()) _ (pin hb 'lay ())
+       _ (pin hb 'dirt {1}) _ (pin hb 'jobs ()) _ (pin hb 'lay ())
        _ (hrelay hb)
        hb)
    (scrof hb id) (peep (hbox (hpane hb id)) () 0)

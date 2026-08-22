@@ -25,10 +25,10 @@
    (dim-norm d) (? (closed? d) (vof () d) d)                ; closed -> uu computes; open -> leave symbolic
    mat-dims (\ d (? (&& (two? d) (id? (cap d) 'mat) (= 3 (tally d)))
                     (L 'mat (dim-norm (cap (cup d))) (dim-norm (cap (cup (cup d))))) d))
-   mat-dom  #('dice () 'ctors '(mat add succ zero)
-              'join (\ a b (? (= (mat-dims a) (mat-dims b)) a 'top))
-              'okr  (\ bd decl (= (mat-dims bd) (mat-dims decl)))
-              'litdie (\ e 'top) 'tr (\ op a b 'top))
+   mat-dom  {'dice () 'ctors '(mat add succ zero)
+             'join (\ a b (? (= (mat-dims a) (mat-dims b)) a 'top))
+             'okr  (\ bd decl (= (mat-dims bd) (mat-dims decl)))
+             'litdie (\ e 'top) 'tr (\ op a b 'top)}
    _ (overlay-set mat-dom ()))
 
 ; --- FORM 3: declare the primitives' types once ---

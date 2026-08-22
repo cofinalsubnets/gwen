@@ -259,13 +259,13 @@
    (listv? x) (arr? x || lst? x)                     ; any collection value
    ; the list reducers (love surface -> coq): net -> asum, prod -> aprod, max/min, tally -> count
    (lop? h) (member? h '(net prod tally max min))
-   ; a hash literal #(k v ..) = (hash k v ..): an assoc list of fixnum chains (EVEN count)
+   ; a hash literal {k v ..} = (hash k v ..): an assoc list of fixnum chains (EVEN count)
    (even? l) (two? l ? !(even? >l) 1)
    (hashv? x) (two? x && id? <x 'hash && zlist? >x && even? >x)
    (len4? [_ _ _ _]) 1
    (chains l) (atom? l || atom? >l ? ""
                ("(" + tv <l + ", " + tv <>l + ")" + (two? >>l ? ";" "") + chains >>l))
-   (th x) ("[" + chains >x + "]")             ; #(1 10 2 20) -> [(1, 10);(2, 20)]
+   (th x) ("[" + chains >x + "]")             ; {1 10 2 20} -> [(1, 10);(2, 20)]
    ; translate a collection value to a Coq `list Z` -- a unit element reads 0, a nom its spelling
    (zv e) (? (charm? e) (tv e) (nom? e) (show (net e)) "0")
    (joinl l) (two? l ? (zv <l + (two? >l ? ";" "") + joinl >l) "")
@@ -316,7 +316,7 @@
                                (member? h '(cap caup last)) (un2? x && lst? <>x)
                                (member? h '(foldl foldr))
                                               (len4? x && tfn2 <>x && intv? <>>x && lst? <>>>x)
-                               (hashv? h)     (un2? x && intv? <>x)          ; (#(..) k) map lookup
+                               (hashv? h)     (un2? x && intv? <>x)          ; ({..} k) map lookup
                                (two? h && un2? x) (tfn h && intv? <>x)       ; direct beta / an applied section
                                (charm? h)     (allv? x ||
                                                (len3? x && tfn <>x && intv? <>>x))  ; n-fold compose
@@ -358,7 +358,7 @@
                    (id? h 'foldr) ("(fold_right " + tfn2 <>x + " " + tv <>>x + " " + tl <>>>x + ")")
                    (id? h 'peep)  (hashv? <>x ? ("(hget " + th <>x + " " + tv <>>x + " " + tv <>>>x + ")")
                                      ("(nth (Z.to_nat " + tv <>>x + ") " + tl <>x + " " + tv <>>>x + ")"))  ; hash lookup / array index
-                   (hashv? h)     ("(hget " + th h + " " + tv <>x + " 0)")  ; (#(..) k) -- lookup, default 0
+                   (hashv? h)     ("(hget " + th h + " " + tv <>x + " 0)")  ; ({..} k) -- lookup, default 0
                    (two? h && tfn h) ("(" + tfn h + " " + tv <>x + ")")  ; beta / applied section
                    (charm? h && allv? x) (spine (tv h) >x)               ; (app .. ..) power spine
                    (charm? h) ("(Nat.iter (Z.to_nat " + tv h + ") " + tfn <>x + " " + tv <>>x + ")")  ; n-fold compose
@@ -375,8 +375,8 @@
              (gem? x) "Vflo"  (string? x) "Vstr"  (id? x 'i) "Vcx"
              (two? x) (: h <x
                         (? (id? h bs) (tkq <>x)                        ; '(..) or 'x
-                           (member? h '(twin conj)) "Vcx"              ; ~(re im); conj always answers a twin
-                           (id? h 'hash) "Vmap"                        ; #(..)
+                           (member? h '(twin conj)) "Vcx"              ; (re ~ im); conj always answers a twin
+                           (id? h 'hash) "Vmap"                        ; {..}
                            (member? h '(tuple iota)) "Varr"            ; @(..) / (iota n)
                            "Vbot"))
              "Vbot")

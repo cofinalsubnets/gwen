@@ -450,7 +450,7 @@
    ; -- nl: number the lines that hold ink (pad 6, a tab after); a blank line wears
    ; seven spaces and no number, and the count carries across inputs --
    (nl-main as)
-    (: t #('i 1)
+    (: t {'i 1}
        ; nl terminates every line it writes, so term? says nothing here either
        (dot ln term?)
         (: _ (? !ln (: _ (say out "       ") (put out 10))
@@ -906,7 +906,7 @@
           (go 0 -1 ())))
    (unth l k) (? ((k < 1) || !(two? l)) () (k = 1) <l (unth >l (k - 1)))
    (join-main as)
-    (: t #('f1 1 'f2 1 'sep () 'a1 0 'a2 0 'v1 0 'v2 0)
+    (: t {'f1 1 'f2 1 'sep () 'a1 0 'a2 0 'v1 0 'v2 0}
        (fl a fs)
         (? !(two? a) (rev fs)
            (: w <a
@@ -994,7 +994,7 @@
           (k = 117) (? (z = 1) '(u 1 3) (z = 4) '(u 4 10) (z = 2) '(u 2 5) (z = 0) '(u 2 5) ())
           ()))
    (od-main as)
-    (: t #('ad 111 'ty '(o 2 6) 'lim () 'skip 0 'v 0)
+    (: t {'ad 111 'ty '(o 2 6) 'lim () 'skip 0 'v 0}
        (fl a fs)
         (? !(two? a) (rev fs)
            (: w <a

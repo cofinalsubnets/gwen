@@ -20,32 +20,32 @@
 
    sig-int 2 sig-quit 3 sig-tstp 20 sig-cont 18 sig-ttou 22 sig-ttin 21
    sh-jobs (tablet 0)
-   sh-njob #0
-   sh-tty #0                                   ; 1 = interactive: jobs get their own pgrp + the tty
-   sh-login #0                                 ; 1 = a login shell (--login, or a -argv0 seat): profiles read
+   sh-njob {0}
+   sh-tty {0}                                  ; 1 = interactive: jobs get their own pgrp + the tty
+   sh-login {0}                                ; 1 = a login shell (--login, or a -argv0 seat): profiles read
    ; interactive spawns lead a fresh process group (pg 0) and the first stage takes
    ; the terminal (fg 1) -- a job in its OWN group is what makes ^Z real (a stop to
    ; an orphaned group is discarded, and the shell's group is orphaned under a
    ; nested session). the cooked/non-tty lane keeps the legacy in-shell pgrp (-1).
    (sh-pgm _) (? (sh-tty ()) 0 (0 - 1))
    (sh-fgm _) (? (sh-tty ()) 1 0)
-   sh-status #0                                ; $?: the last foreground status
-   sh-substat #0                               ; the last $( )'s status -- ambient for the
+   sh-status {0}                               ; $?: the last foreground status
+   sh-substat {0}                              ; the last $( )'s status -- ambient for the
                                                ; same reason sh-noe is: word.l's expansion
                                                ; sits between sh-cmdsub and the reader
-   sh-curline #0                               ; the source line under eval (job display)
+   sh-curline {0}                              ; the source line under eval (job display)
    sh-vars (tablet 0)                          ; shell variables (name -> value; export promotes)
    sh-funcs (tablet 0)                         ; functions (name -> the PLANNED body)
    sh-nofn (mint 0)                            ; that plan is a closure, so peep names its absence
-   sh-pos #0                                   ; the positionals, a list of strings
-   sh-arg0 #0                                  ; $0 (the script path, or the shell)
-   sh-eflag #0 sh-uflag #0 sh-xflag #0         ; set -e / -u / -x
-   sh-lastbg #0                                ; $!: the last background pid
+   sh-pos {0}                                  ; the positionals, a list of strings
+   sh-arg0 {0}                                 ; $0 (the script path, or the shell)
+   sh-eflag {0} sh-uflag {0} sh-xflag {0}      ; set -e / -u / -x
+   sh-lastbg {0}                               ; $!: the last background pid
    ; ⚠ AMBIENT on purpose, never a parameter: the guard is a dynamic extent every
    ; re-entry reads -- a function body, `eval`, a dot-file, and the forks under a
    ; pipeline stage and a $( ) body (those two take it by memory copy). a plan
    ; parameter would have to cross word.l's expansion. test/host/sh.l pins it.
-   sh-noe #0                                   ; errexit guard depth (conds, && || arms)
+   sh-noe {0}                                  ; errexit guard depth (conds, && || arms)
    ; ⚠ ambient for the same reason: the forkless $( ) captures this shell is
    ; INSIDE, innermost first, each a (read-end . drainer) pair -- empty when none,
    ; and that emptiness is the question `exit` asks (inside one it may not reach
@@ -54,8 +54,8 @@
    ; parent's capture eats the bytes and then blocks the whole child on a pipe
    ; only its parent can end. so a fork shuts each one down first thing
    ; (sh-dropcaps), and a `( )` under a capture does not fork at all (sh-subsh).
-   sh-subfds #0
-   sh-online #0                                ; nesting depth of sh-oneline: a line run HERE for a
+   sh-subfds {0}
+   sh-online {0}                               ; nesting depth of sh-oneline: a line run HERE for a
                                                ; caller in this image, so `exit` ends the line not us
    ; ⚠ THE EXIT DOORS, and there are three: `exit`, errexit (sh-echk) and set -u on
    ; an unset name. all three END THE SHELL -- and which shell that is depends on
@@ -69,7 +69,7 @@
      (? (sh-subfds ()) ('xit >< st)
         (0 < (sh-online ())) (scare 'sh-exit st)
         (quit st))
-   sh-retf #0                                  ; a top-level `return` landed: sh-lines stops its file (dot-return)
+   sh-retf {0}                                 ; a top-level `return` landed: sh-lines stops its file (dot-return)
 
    ; --- read one line (cooked): bytes until \n; 'eof at immediate EOF. here on
    ; the shared floor: eval's `.`/read builtins and the loops all drink from it

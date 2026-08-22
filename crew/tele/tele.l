@@ -31,7 +31,7 @@
    (tl-cat ll)  (? (two? ll) (tl-app <ll (tl-cat >ll)) ())
 
    ;; -- the tape: a global Wengert list of op nodes, newest-first (= reverse-topo)
-   tl-tape #()
+   tl-tape {}
    (tl-reset _) (pin tl-tape 0 ())
    (tl-push n)  (: _ (pin tl-tape 0 (n >< peep tl-tape 0 ())) n)
 
@@ -40,7 +40,7 @@
    (tl-val x)    (peep x 'val 0)
    (node x)      (? (tl-node? x) x (const x))       ; coerce a raw constellation to a const leaf
    (tl-accum n d)(pin n 'grad (peep n 'grad 0 + d))   ; cotangent += d (a fresh galaxy)
-   (tl-mk v bwd) #('val v 'grad 0 'bwd bwd)
+   (tl-mk v bwd) {'val v 'grad 0 'bwd bwd}
    (tl-op v bwd) (tl-push (tl-mk v bwd))            ; an op node: forward value + adjoint, taped
 
    ;; (glass v) wraps a constellation as a leaf that REQUIRES grad; (const v) one
@@ -94,9 +94,9 @@
    ;; below reroutes with NO change to tele's source.
    ;; `ew` takes the elementwise op as its first argument ((+)/(*)/(-)) so one
    ;; kernel slot covers all three lanes.
-   tl-cpu  #('name "cpu" 'gemm inner 'ew id
-             'reduce net 'transp transp2)
-   tl-dev  #()
+   tl-cpu  {'name "cpu" 'gemm inner 'ew id
+            'reduce net 'transp transp2}
+   tl-dev  {}
    (tl-use bk) (pin tl-dev 0 bk)
    (tl-k key)  (peep (peep tl-dev 0 tl-cpu) key 0)      ; the active kernel for `key`
    (tl-gemm a b)  ((tl-k 'gemm) a b)
@@ -167,7 +167,7 @@
    ;; a bare function (an activation) counts as a param-less module. the parameter
    ;; glasses PERSIST across steps (updated in place); each forward builds a fresh
    ;; graph over them (define-by-run), so a held glass trains while the tape resets.
-   (tl-mod fwd ps) #('fwd fwd 'params ps)
+   (tl-mod fwd ps) {'fwd fwd 'params ps}
    (tl-mfwd m)    (? (tablet? m) (peep m 'fwd 0) m)        ; module-or-bare-fn -> its forward
    (tl-mparams m) (? (tablet? m) (peep m 'params 0) ())
    (call m x)     ((tl-mfwd m) x)                        ; apply a module to an input node
@@ -189,7 +189,7 @@
 
    ;; optim: an SGD stepper over a parameter list. step: p <- p - lr*grad (in place,
    ;; swapping the node's immutable val for a fresh one); zero: clear every grad.
-   (sgd ps lr) #('params ps 'lr lr)
+   (sgd ps lr) {'params ps 'lr lr}
    (step opt)  (: ps (peep opt 'params 0) lr (peep opt 'lr 0)
                   (map (\ p (pin p 'val (tl-val p - lr * grad p))) ps))
    (zero opt)  (map (\ p (pin p 'grad 0)) (peep opt 'params 0))

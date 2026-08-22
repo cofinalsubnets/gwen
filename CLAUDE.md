@@ -38,9 +38,12 @@
 262144 = 2 3 4               ; the tower 4 ** (3 ** 2)
 3.0 = (1 / 2) 9              ; (1 / 2) x = sqrt x
 i = 0.5 -1                   ; complex numbers
+i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 [1 2 3] = sort [3 1 2]       ; [x y z] = (list x y z)
+{'a 1 'b 2}                  ; {k v ..} = (hash k v ..), a tablet
 [2 3 4] = map (+ 1) [1 2 3]
 12 = +[3 4 5]                ; +x = (net x)
+3 = #[3 1 2]                 ; #x = (tally x)
 60 = *[[3 2] [2 [5]]]        ; *x = (prod x)
 1 < 2 <= 3                   ; comparison chaining
 ; triangular number sequence
@@ -58,6 +61,7 @@ i = 0.5 -1                   ; complex numbers
 ; language traps
 ; - (x) = x: singleton lists are no-ops
 ; - $ x != $x: spaced and glued are different operators
+; - ~ is two lanes on that law: (a ~ b) is twin, ~x is conj
 ; - & ^ | sit between comparison and arithmetic; << >> just above them, UNDER + -:
 ;   (a << 8 + b) shifts by (8 + b) -- a shifted sum owes parens
 ; - && || are the logical ops, and pat.l's guard/alternative tags

@@ -82,7 +82,7 @@
 ; is mopped at birth, so there is no user-facing call to assert here. what a reader
 ; wants from a tablet is presence, and peep answers that totally: a fresh (mint 0)
 ; is unique, so no stored value can pose as it.
-(assert (: t #(1 0) s (mint 0)
+(assert (: t {1 0} s (mint 0)
            (&& !(id? s (peep t 1 s))               ; a pinned 0 is PRESENT, not absent
                (id? s (peep t 9 s))                ; an absent key is absent
                (id? (:) (peep t 9 ())))))          ; ... and the caller may still name absence ()

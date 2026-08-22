@@ -3885,8 +3885,8 @@
    ; rewritten as a unit with each VCMP-flavored cc mapped onto a boolean helper + sense -- plain
    ; loads restore r0-r3 without touching the flags, so the branch/set reads them across the
    ; restore. anything unrecognized after a compare scares LOUD.
-   sf-bin #('addsd '__aeabi_dadd 'subsd '__aeabi_dsub
-            'mulsd '__aeabi_dmul 'divsd '__aeabi_ddiv)
+   sf-bin {'addsd '__aeabi_dadd 'subsd '__aeabi_dsub
+           'mulsd '__aeabi_dmul 'divsd '__aeabi_ddiv}
    ; VCMP-flavored cc -> (helper sense): sense 'ne = helper-true means the cc
    ; holds; 'eq = helper-false (the negated relations, unordered-TRUE like the
    ; flags they replace: le = !(a>b), lt = !(a>=b))
@@ -6342,7 +6342,7 @@
    ; callee-saved r11-r14; arm64 adds r4 (x4, an argument register there). --
    asmregs '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
    asmpick '(r10 r9 r8 r7 r6 r5 r2 r1 r0)
-   asmnames (foldl (\ t i (: s9 ("r" + show i) (pin t (intern s9) s9))) #() (jot 11))
+   asmnames (foldl (\ t i (: s9 ("r" + show i) (pin t (intern s9) s9))) {} (jot 11))
    (asmreg? g r9) (member? r9 asmregs || (a64? g && id? r9 'r4))
    ; a constraint's register part: "r" -> 'pick, "i" -> 'imm, "rN" -> the nom;
    ; the x86 letters "a"/"d" pin rax/rdx (the divq protocol), "rm" reads as "r"
@@ -6507,7 +6507,7 @@
    (alive g f)
     (: params <>>f
        items <><>>>f
-       dcl #() tak #() n9 #() liv #() crs #() spa #()
+       dcl {} tak {} n9 {} liv {} crs {} spa {}
        ; -- prepass: &-taken names, one generic sweep (sizeof's unevaluated
        ; &v over-records -- harmless, the name just keeps the blanket) --
        (pex e) (? !(two? e) ()
@@ -6751,7 +6751,7 @@
    ; only shrinks the universe, sizeof x being the memcpy idiom's tell anyway). --
    (auniv g f)
     (: items <><>>>f
-       dcl2 #() tak2 #() ar2 #()
+       dcl2 {} tak2 {} ar2 {}
        (ael? ty) (arr? ty && !(gvarr? ty) &&
                   (: et <>ty (ptr? et ||
                               member? et '(char uchar bool short ushort int uint long ulong))))
@@ -7123,7 +7123,7 @@
                  (: items <>>s
                     cr9 (vreg c)
                     lend (nlab g ".d")
-                    tab #()               ; this switch's value->label map (and 'dflt->label)
+                    tab {}                ; this switch's value->label map (and 'dflt->label)
                     cases (rev (scasel-l g items tab ()))   ; pre-scan the body (a stmt LIST) at ANY depth -> (value label) dispatch pairs
                     dflt (peep tab 'dflt lend)
                     disp (: (go l acc)
@@ -7335,7 +7335,7 @@
        ; -- C99 VLA prep: scan the body for runtime-dim locals; each site takes a POINTER slot +
        ; a SIZE slot in the static frame, the size slots ZEROED after the param spill (the decl
        ; lane's re-execution guard reads 0 = never allocated). --
-       _ (pin g 'vslots #())
+       _ (pin g 'vslots {})
        vzf (: (dscan prs a2)
                (? !(two? prs) a2
                   (: ty9 <><prs
@@ -8268,21 +8268,21 @@
        !(two? x) t
        (cg-refs >x (cg-refs <x t)))
    (cgen-core ast stbl sigs weaks xtra tgt)
-    (: g #('n 0 'brk () 'brkm () 'cnt () 'cases () 'glob #() 'globs () 'strs () 'statics ()
-           'laid #()                                 ; names already on 'globs (a tentative repeat lays no twin)
-           'fns #() 'inl #() 'cgitems cgitems 'stag stbl 'sigs sigs
-           'tgt tgt 'epi (? (id? tgt 'thumb1) epi-t16 (member? tgt '(arm64 thumb2 thumb2sp riscv64)) epi-a64 epi)
-           'sects (? (two? xtra) <>>xtra #())
-           'alias (? (two? xtra && 3 < tally xtra) (nthr xtra 3) #())
-           'aligns (? (two? xtra && 4 < tally xtra) (nthr xtra 4) #())
-           'consts (? (two? xtra && 7 < tally xtra) (nthr xtra 7) #())
-           ; the parser's restrict roster, fn name -> its `T *restrict` param names: an ALIAS
-           ; PROMISE, which is why it rides beside the AST instead of in the type -- and the
-           ; type tree has never carried a qualifier node. ⚠ nothing reads it yet: the consumer
-           ; is the interior-store elision at a splice seam (THE LADDER step 7)
-           'rstrs (? (two? xtra && 8 < tally xtra) (nthr xtra 8) #())
-           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
-           'romemo #())                              ; a const candidate's image, laid once and read by both walks
+    (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'statics ()
+          'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
+          'fns {} 'inl {} 'cgitems cgitems 'stag stbl 'sigs sigs
+          'tgt tgt 'epi (? (id? tgt 'thumb1) epi-t16 (member? tgt '(arm64 thumb2 thumb2sp riscv64)) epi-a64 epi)
+          'sects (? (two? xtra) <>>xtra {})
+          'alias (? (two? xtra && 3 < tally xtra) (nthr xtra 3) {})
+          'aligns (? (two? xtra && 4 < tally xtra) (nthr xtra 4) {})
+          'consts (? (two? xtra && 7 < tally xtra) (nthr xtra 7) {})
+          ; the parser's restrict roster, fn name -> its `T *restrict` param names: an ALIAS
+          ; PROMISE, which is why it rides beside the AST instead of in the type -- and the
+          ; type tree has never carried a qualifier node. ⚠ nothing reads it yet: the consumer
+          ; is the interior-store elision at a splice seam (THE LADDER step 7)
+          'rstrs (? (two? xtra && 8 < tally xtra) (nthr xtra 8) {})
+          'xfns ()                                  ; (secname forms) per fn that named a section, newest first
+          'romemo {}}                               ; a const candidate's image, laid once and read by both walks
        ; pass 0: every function name -- so a bare use of one is its address (la). the sig table
        ; too: an mproto sibling (`double sin(..), cos(..);`) has a sig but no proto form of its
        ; own. a small single-return definition also lands in the INLINE table, before any body --
@@ -8357,8 +8357,8 @@
                  ; list-and-member? spelling re-walked every live body per round and cost
                  ; 9x the compile it rides in.
                  (: us (rev acc)                        ; (name forms), emission order
-                    sfns (? (two? xtra) <xtra #())
-                    als (peep g 'alias #())
+                    sfns (? (two? xtra) <xtra {})
+                    als (peep g 'alias {})
                     atg (foldl (\ a k ((peep als k ()) >< a)) () (keys als))
                     (cut? nm) (!(id? (peep sfns nm 'no) 'no) && !(member? nm atg))
                     urefs {}                    ; fn name -> the noms its forms carry
@@ -8449,13 +8449,13 @@
     (: r (cgen-core ast stbl sigs weaks xtra tgt)
        (? (gripe? r) r                               ; a named cause rides out (guard before two?, a gripe is a chain)
           !(two? r) ()
-          (: sfns (? (two? xtra) <xtra #())
-             svars (? (two? xtra) <>xtra #())
-             sects (? (two? xtra) <>>xtra #())
+          (: sfns (? (two? xtra) <xtra {})
+             svars (? (two? xtra) <>xtra {})
+             sects (? (two? xtra) <>>xtra {})
              (loc? nm) (!(id? (peep svars nm 'no) 'no) ||
                         peep sects nm () = "ai_nifs")     ; a nif entry is static by shape; any OTHER
                                                                  ; named section stays exported (.image is read by symbol)
-             als (? (two? xtra && 3 < tally xtra) (nthr xtra 3) #())
+             als (? (two? xtra && 3 < tally xtra) (nthr xtra 3) {})
              fnames (: (go fs acc) (? !(two? fs) (rev acc)
                                       (: f <fs
                                          (go >fs (? (<f = 'fn && id? (peep sfns <>f 'no) 'no)

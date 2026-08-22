@@ -104,7 +104,9 @@
      ; printed "0.0" -- the one value the roundtrip law lost.
      (: _ (? (v < 0 || (v = 0 && (1.0 / v) < 0)) (put o 45) 0) a (abs v)
         (? (a = inf) (say o "ieee-inf") (a = 0) (say o "0.0") (pgem2 o a))))
-  (ptwin o x) (: _ (say o "~(") _ (pgem o (re x)) _ (put o 32) _ (pgem o (im x)) (put o 41))
+  ; a twin prints INFIX, parenthesized: (re ~ im) is self-delimiting, so it reads
+  ; straight back wherever the printer put it.
+  (ptwin o x) (: _ (put o 40) _ (pgem o (re x)) _ (say o " ~ ") _ (pgem o (im x)) (put o 41))
 
   ; --- chains. a one-operand `\` is quote, and a `(mono (run datum))` is a GLUED
   ; monadic -- print run+datum back the way opfix fused them.
@@ -132,7 +134,7 @@
           (ge i) (? (i < n) (: _ (put o 32) _ (pel i) (ge (1 + i))) 0)
           _ (ge 0) (put o 41))))
 
-  ; --- maps print #(k v …), the empty one #(); both read straight back. a map is
+  ; --- maps print {k v …}, the empty one {}; both read straight back. a map is
   ; mutable and can hold itself, so the path is carried and matched by IDENTITY.
   (onpath? x l) (? !(two? l) 0 (id? x <l) 1 (onpath? x >l))
   (pmap o m sn) (? (onpath? m sn) (say o "<cycle>")
@@ -140,7 +142,7 @@
        (go l f) (? (two? l) (: _ (? f 0 (put o 32))
                                 _ (px o <l s2) _ (put o 32) _ (px o (peep m <l ()) s2)
                                 (go >l 0)) 0)
-       (? !(two? ks) (say o "#()") (: _ (say o "#(") _ (go ks 1) (put o 41)))))
+       (? !(two? ks) (say o "{}") (: _ (put o 123) _ (go ks 1) (put o 125)))))
 
   ; --- coins show as (name 'payload): the arity-1 ctor love/coin.l hands out, applied
   ; to what it was given, so the form EVALS BACK to an equal coin when the name is a

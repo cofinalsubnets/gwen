@@ -61,7 +61,7 @@
    ; the entry: the shortest edit script from a to b
    (myers a b)
     (: ax (dindex a) bx (dindex b) n (tally a) m (tally b)
-       v0 #(1 0)
+       v0 {1 0}
        tr (tablet 0)
        r (dfwd ax bx n m v0 0 tr)
        (dback ax bx tr <r n m ()))

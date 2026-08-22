@@ -568,15 +568,15 @@
    ; they open their buffers as "t".
    (vdotl f) (: n (tally f) ((1 < n) && (f (n - 2) = 46) && (f (n - 1) = 108)))
    (vnew ls file)
-    #('lines (? (two? ls) ls '(""))
-      'row 0 'col 0 'goal 0 'top 0
-      'mode 'n 'cnt 0 'op () 'pc () 'gcnt 0
-      'reg () 'undo () 'redo ()
-      'file file 'dirty () 'msg ""
-      'cmd "" 'pat () 'pattx "" 'dir 1
-      'quit () 'dow () 'doe ()
-      'hl (vdotl file) 'pens () 'book () 'hlcar () 'hlgen 0
-      'w 80 'h 24)
+    {'lines (? (two? ls) ls '(""))
+     'row 0 'col 0 'goal 0 'top 0
+     'mode 'n 'cnt 0 'op () 'pc () 'gcnt 0
+     'reg () 'undo () 'redo ()
+     'file file 'dirty () 'msg ""
+     'cmd "" 'pat () 'pattx "" 'dir 1
+     'quit () 'dow () 'doe ()
+     'hl (vdotl file) 'pens () 'book () 'hlcar () 'hlgen 0
+     'w 80 'h 24}
 
    ; -- the frame: one full redraw as a single text --
    (vframe st)

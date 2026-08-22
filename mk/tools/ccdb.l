@@ -75,9 +75,9 @@
                   (! (member? seg skip-top || (tally seg && (peep seg 0 0 = 46)))))
 
    (entry rel)
-    #("directory" root
-      "file" (root + "/" + rel)
-      "arguments" (["/usr/bin/clang" "-fsyntax-only"] + (flags-for rel) + [rel]))
+    {"directory" root
+     "file" (root + "/" + rel)
+     "arguments" (["/usr/bin/clang" "-fsyntax-only"] + (flags-for rel) + [rel])}
 
    (: t (tar-thin? keep? "." "")
       _ (? t 0 (: _ (say err "ccdb: cannot read the tree\n") (quit 1)))

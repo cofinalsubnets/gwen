@@ -78,7 +78,7 @@
                      (? !(two? md) md
                       (: m >md
                          s (screen (cask (screen () r c)) r c)
-                         bx #s
+                         bx {s}
                          _ (setwinsize m r c)
                          (L bx m <md))))
 
@@ -211,13 +211,13 @@
                  _ (setenv "TERM" "xterm-256color")   ; the dialect we actually speak
                  p0 (hopen argv r c)
                  (? !(two? p0) p0
-                  (: panes #()
+                  (: panes {}
                      _ (pin panes 1 p0)
-                     hb #()
+                     hb {}
                      _ (pin hb 'plan 1) _ (pin hb 'focus 1) _ (pin hb 'next 2)
                      _ (pin hb 'rows r) _ (pin hb 'cols c)
                      _ (pin hb 'panes panes) _ (pin hb 'argv argv)
-                     _ (pin hb 'dirt #1)          ; born dirty: paint frame one
+                     _ (pin hb 'dirt {1})         ; born dirty: paint frame one
                      _ (pin hb 'jobs ()) _ (pin hb 'lay ())
                      _ (hrelay hb)
                      _ (raw 1)

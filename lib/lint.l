@@ -23,10 +23,10 @@
    (lin? s c) (: n (tally s) (go k) (? (n <= k) () (s k = c) 1 (go (k + 1))) (go 0))
 
    ; the operator run characters -- love.c's op_break, complemented
-   (lopc? c) (lin? "!$%&*+-./:<=>?\\^|" c)
+   (lopc? c) (lin? "!#$%&*+-./:<=>?\\^|~" c)
    ; the constructor sigils, exhaustive: a ( glued behind one of these is a datum,
-   ; not a form -- '(a) quote, `(a) list, #(a) map, @(a) tray, ~(a) twin
-   (lctc? c) (lin? "'`#@~" c)
+   ; not a form -- '(a) quote, `(a) list, @(a) tray. the map wears {} instead.
+   (lctc? c) (lin? "'`@" c)
    ; a token character: not whitespace, a delimiter, a quote mark or a `;`
    (ltkc? c) !(c < 33 || c = 34 || c = 59 || c = 40 || c = 41
                || c = 91 || c = 93 || c = 123 || c = 125)
@@ -309,7 +309,7 @@
                              (w (i + 1) 'code s2 (line + 1) 1 0 (link [1 (lcont s2)] plan)))
                  (c = 40 || c = 91 || c = 123)
                   ; an opener is a token to its parent, unless glued to the one
-                  ; before it: `'(a b)` and `#(k v)` are one operand wearing a
+                  ; before it: `'(a b)` and `@(1 2)` are one operand wearing a
                   ; reader sigil, and counting two flips the pairing parity for
                   ; every line left in the form -- the one miscount that cascades
                   (w (i + 1) 'code

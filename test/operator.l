@@ -54,4 +54,4 @@
 (assert (3 = (tally '(1 , 2))) (', = (caup '(1 , 2)))
         (nom? ',) ("," = (string ',)) (', = (cap (sound '(44)))))
 ; clauses nest per list, and chain their effects in source order
-(assert (6 = (: t #(0 1) _ ((pin t 0 2), (pin t 1 3)) ((t 0) * (t 1)))))
+(assert (6 = (: t {0 1} _ ((pin t 0 2), (pin t 1 3)) ((t 0) * (t 1)))))

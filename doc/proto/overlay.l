@@ -191,7 +191,7 @@
                  (&& (num? a) (num? b)) (: j (joink a b) (? (id? j 'charm) 'whole j))   ; +/* may overflow charm
                  'top)
    (litk e)  (? (charm? e) 'charm (string? e) 'str 'top)
-   kdom  #('join joink  'tr (\ op a b (tnumk a b))  'litdie litk  'dice '(bot charm whole real cplx top str))
+   kdom  {'join joink  'tr (\ op a b (tnumk a b))  'litdie litk  'dice '(bot charm whole real cplx top str)}
 
    ; --- the generic engine: kinds.l's fix/kindof, now parameterised on `dom` ---
    (look env x)        (? (atom? env) 'bot (: p (cap env) (? (id? x (cap p)) (cup p) (look (cup env) x))))
@@ -245,7 +245,7 @@
                    (id? op '*) (? (id? a 'bot) b (id? b 'bot) a (&& (id? a 'meters) (id? b 'meters)) 'area 'top)  ; m*m -> area
                    'top)
    (ulit e) (? (charm? e) 'bot 'top)                                                     ; a bare numeral is unit-neutral
-   udom #('join ujoin 'tr utr 'litdie ulit 'dice '(bot meters seconds area top clash))
+   udom {'join ujoin 'tr utr 'litdie ulit 'dice '(bot meters seconds area top clash)}
    good '(: (room-area w h) (* w h) (room-area 3 4))
    bad  '(: (bad w t) (+ w t) (bad 3 4))                                                 ; meters + seconds -- a clash
    bbox '(: (f x) (+ x 1) (f 5))
@@ -307,7 +307,7 @@
    ; a VEC domain: type-level Peano `add` normalizer -> a length-indexed (dependent) vector die
    (vadd x y)  (? (id? x 'z) y (&& (two? x) (id? (cap x) 's)) (L 's (vadd (caup x) y)) (L 'add x y))
    (vnorm d)   (? (atom? d) d (&& (id? (cap d) 'add) (= 3 (tally d))) (vadd (vnorm (caup d)) (vnorm (cap (cup (cup d))))) (map vnorm d))
-   vdom #('dice '(meters seconds) 'ctors '(pair vec s z add) 'norm vnorm)
+   vdom {'dice '(meters seconds) 'ctors '(pair vec s z add) 'norm vnorm}
    _ (: _ (puts ";; P2 structured unify -- swap : (pair a b) -> (pair b a)\n")
         _ (chk "swap (pair meters seconds) -> (pair seconds meters)" '(pair seconds meters)
                (ov2-inst vdom '(((pair a b)) (pair b a)) '((pair meters seconds)))) 0)

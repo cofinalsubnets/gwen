@@ -28,7 +28,7 @@
 ; execs the script in place (same pid; the adoption sweep keeps every
 ; window). The live socket is the one that ACCEPTS; dead generations'
 ; leftovers are swept at moor start (lux-sweep).
-(: lux-cell #()
+(: lux-cell {}
    (lux-st u) (peep lux-cell 'st ())
    ; a change QUEUES; the driver's loop drains at its next X event. On a live
    ; desktop that is imminent (any motion, focus or property tick); a headless
@@ -157,7 +157,7 @@
                                (map (\ r [(kb-mods r) (peep km (kb-sym r) 0) (kb-act r)]) lux-keymap)))
    (keys-grab tab) (: _ (map (\ r (map (\ lm (x-grab s root (lm | <r) <>r)) '(0 2 16 18))) tab)
                       (x-flush s))
-   ktabc #()
+   ktabc {}
    (ktab u) (peep ktabc 0 ())
    _ (pin ktabc 0 (keys-resolve ()))
    _ (keys-grab (ktab ()))

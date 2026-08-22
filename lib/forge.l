@@ -134,7 +134,7 @@
        '((label deopt) (ld r7 r5 8) (lea r5 r7 16) (ld r7 r5 0) (jmpr r7)))
 
    ; --- the roster --------------------------------------------------------------------
-   forge-roll #()                                   ; (nom arity mkir twin) rows, in fit order
+   forge-roll {}                                    ; (nom arity mkir twin) rows, in fit order
    forge-fits (tablet 0)                            ; nom -> the value in force
    forge-nat (tablet 0)                             ; nom -> 1 where that value is native
    forge-tally (tablet 0)                           ; decline reason -> count

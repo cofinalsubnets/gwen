@@ -622,8 +622,8 @@
                '(label dfin))
             (cat epi-ir deopt1-ir)))))
    fkers (tablet 0)                                         ; nv -> (bcp conf dec), one assemble per nvars
-   fknob #0                                                 ; pin 1 to force the interpreted twins (the differential switch)
-   fmaxl0 #3000                                             ; the initial learnt-DB cap (the gate lowers it to force reductions)
+   fknob {0}                                                ; pin 1 to force the interpreted twins (the differential switch)
+   fmaxl0 {3000}                                            ; the initial learnt-DB cap (the gate lowers it to force reductions)
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
     (: bs (peep (assemble 'x64 ir) 'bytes 0)
        c (cask (tally bs))

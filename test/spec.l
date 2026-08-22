@@ -38,7 +38,7 @@
 ; --- true and false --- false is *nothing*: whatever NETS <= 0 (a complex-valued measure --
 ; numbers their value, text its charm sum, lists the sum of element nets, SPINE only). `!` (nil?) reads
 ; the net's sign; `$` (sat) is one saturating clamp, max(0, ceil); !x == (0 = $x). a twin gem is
-; read by its REAL part alone -- gate and clamp both ($~(3 4) = 3; the magnitude is abs's) -- so a pure phase is BLUE --
+; read by its REAL part alone -- gate and clamp both ($(3 ~ 4) = 3; the magnitude is abs's) -- so a pure phase is BLUE --
 ; the TRUTH GATE IS NOT THE TOTAL ORDER, the only place the two part (see the true-and-false asserts).
 ; `$` is the SOLE clamp (a clamped fold is mere composition); the COUNT -- how many, not how much --
 ; is `tally` (text/cask charms, list spine, array cells, map keys: what "length" always was, $ never
@@ -54,27 +54,27 @@
 ; "negative is false" is the CONSEQUENCE of truth being a measure, not an extra clause. and the
 ; logical connective was never `*` anyway: `&&` is (and answers the UNIT on failure).
 (assert
- !0 !"" !(tablet 0) !@0 !() !0.0 !~(0 0)         ; zero / empty -> false
- !-5 !-3.9 !~(-3 4) !~(0 -1)                     ; <= 0 in the total order -> false (complex by re then im)
- !!5 !!"x" !!'a !!cap !!~(3 4) !!~(3 -4)         ; positive / nonempty -> true (a twin gem by its RE)
+ !0 !"" !(tablet 0) !@0 !() !0.0 !(0 ~ 0)        ; zero / empty -> false
+ !-5 !-3.9 !(-3 ~ 4) !(0 ~ -1)                   ; <= 0 in the total order -> false (complex by re then im)
+ !!5 !!"x" !!'a !!cap !!(3 ~ 4) !!(3 ~ -4)       ; positive / nonempty -> true (a twin gem by its RE)
  !'(() ()) !'(0 0) !'((0) (())) (0 = $'(() () ()))  ; a chain of nothings is nothing, recursively
  !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
  (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))  ; $ sums the nets, then clamps once
  (? word (: n ((53 2) + 1) m ((53 2) + 3) (&& (n = $n) (m = $m))) 1)  ; $ is the IDENTITY on a green charm, EXACTLY -- past 2^53 the net's double would round it
  (1 = $(link 1 2)) !(link 0 2)                   ; the SPINE carries the measure: a dotted tail is not an element
- (0 = $`(~(3 4) ~(-3 4))) !`(~(0 5) -1)        ; phases sum as VECTORS, then the total is gated once:
- !i !~(0 -1) !~(0 8) (0 = $i)                    ; ...and a PURE PHASE is BLUE. `i` and `-i` are swapped by a
- (i < 5) (~(0 -1) < i)                           ; field automorphism, so truth cannot tell them apart -- but the
+ (0 = $`((3 ~ 4) (-3 ~ 4))) !`((0 ~ 5) -1)     ; phases sum as VECTORS, then the total is gated once:
+ !i !(0 ~ -1) !(0 ~ 8) (0 = $i)                  ; ...and a PURE PHASE is BLUE. `i` and `-i` are swapped by a
+ (i < 5) ((0 ~ -1) < i)                          ; field automorphism, so truth cannot tell them apart -- but the
                                                  ; ORDER still must (sorting needs totality). the one place they part.
- (3 = $~(3 4)) (3 = $~(3 -4))                    ; ...so the AMOUNT is the real part, conjugate-blind
- (1 = $@(0.3 0.4)) (1 = $~(0.001 0))             ; the clamp CEILS, so any positive net reaches 1 at every tier
- (1 = $#0) !!#0                                  ; ... but a box stays truthy: maps count keys
- (120 = $(nom 'x)) (2 = (int (abs #(1 10 2 20))))  ; a nom nets its spelling's charms; a map counts keys either way
+ (3 = $(3 ~ 4)) (3 = $(3 ~ -4))                  ; ...so the AMOUNT is the real part, conjugate-blind
+ (1 = $@(0.3 0.4)) (1 = $(0.001 ~ 0))            ; the clamp CEILS, so any positive net reaches 1 at every tier
+ (1 = ${0}) !!{0}                                ; ... but a box stays truthy: maps count keys
+ (120 = $(nom 'x)) (2 = (int (abs {1 10 2 20})))   ; a nom nets its spelling's charms; a map counts keys either way
  ($(100 2) = $(200 2)) (0 = $(0 - (100 2))) (0 = $(0 - (62 2)))  ; every positive big saturates to the charm ceiling; red is red at every width
  (1 = $'(1)) (0 = $'(0)) (0 = $0) (-1 = +'(-2 1))  ; the COLORS by net-sign: '(1) green, '(0)/0 blue, '(-2 1) red
  (1 = !!$5) (0 = !!$0) (0 = !!$-3)               ; !!$ is the truth bit (1 true, 0 false)
  (0 = !5) (1 = !0) (id? zero? nil?) (1 = (nil? 0))  ; ! negates it; non is nil?
- (star? 5) (star? -3.5) (star? ~(2 3)) (star? (62 2))         ; a STAR is a self-netting SCALAR: charm, sun, float, complex
+ (star? 5) (star? -3.5) (star? (2 ~ 3)) (star? (62 2))        ; a STAR is a self-netting SCALAR: charm, sun, float, complex
  !(star? @(1 2 3)) (star? (net @(1 2 3)))                   ; a TRAY is NOT a star -- it nets DOWN to a scalar star (net is a fresh sum)
  !(star? "x") !(star? 'a) !(star? '(1 2))                    ; text/symbol/list are not stars -- they net to something else
  (? (charm? 5) (star? 5) 1)                                  ; a CHARM is a star, by spec (net = self)
@@ -97,16 +97,16 @@
 ; ⚠ `&&`/`||` are NOT predicates -- they are value-preserving ((5 && 7) is 7, (5 || 7) is 5), so
 ; the zero point is the right answer there and stays.
 (assert
- (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tablet? #(1 2))
+ (charm? 5) (two? '(1 2)) (string? "hi") (nom? 'x) (lit? cap) (tablet? {1 2})
  (big? (100 2)) ((? word sun? big?) (62 2)) (gem? 1.5) (twin? i) (tray? @(1 2 3))
  (constellation? 1.5) (constellation? i) (constellation? (62 2)) (whole? (62 2)) (atom? 'x) !(atom? '(1))
  (hot? (cask 4)) (hot? out) (hot? (tap '(104)))   ; the hot zoo, named
- !(hot? #()) !(hot? cap) !(hot? 5) !(hot? "s")   ; maps/functions/data are not hots
- (lit? (cask 4)) (lit? cap) (lit? #()) !(lit? '(1)) !(lit? "s") !(lit? 5) !(lit? ()) ; lit? = the top region (map/fn/hot); not data leaves (chains/text/numbers) nor the floor
+ !(hot? {}) !(hot? cap) !(hot? 5) !(hot? "s")    ; maps/functions/data are not hots
+ (lit? (cask 4)) (lit? cap) (lit? {}) !(lit? '(1)) !(lit? "s") !(lit? 5) !(lit? ())  ; lit? = the top region (map/fn/hot); not data leaves (chains/text/numbers) nor the floor
  (1 = $cap) (1 = $out) (1 = $(tap 0))            ; tops and ports net 1: present, drained or not
  (charm? (: p (twirl (\ x x) 0) _ (catch p) p))  ; a task id is a number, not a handle
  ((64 2) = 2 * (63 2))                           ; charm overflow -> exact big ((k b) = b**k)
- (5.0 = (abs ~(3 4))) (~(2.0 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
+ (5.0 = (abs (3 ~ 4))) ((2.0 ~ 3.0) = 2 + 3 * i))  ; mixed arithmetic widens to the higher tier
 
 (hear welp)                                      ; the misses answer quietly; the sweep asks about names, not values
 ; ⚠ the census is the CORE book's contract, so it runs on the EGG lane only: a woken
@@ -136,7 +136,7 @@
  (gem? (% 7 0)) (gem? (% 7.0 0.0))                         ; float lane too, sign following the
                                                            ; dividend; and by zero it is a gem, not a scare
  (2 = 4 / 2) (charm? (4 / 2)) (-2 = (// -5 2))
- (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) (~(-1 -2) = ((- 0) ~(1 2)))   ; the sections are the monadics
+ (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) ((-1 ~ -2) = ((- 0) (1 ~ 2))) ; the sections are the monadics
  !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (? word (1e308 < 1 / 0) 1) (0 = (/ 0 0))
  (ieee-inf = 1 / 0) ("ieee-inf" = (show (1 / 0))) ("-ieee-inf" = (show (-1 / 0)))
  (? word ("1.7976931348623157e308" = (show 1.7976931348623157e308)) 1)  ; the WHOLE finite range prints digits -- only true infinity wears ieee-inf
@@ -171,7 +171,7 @@
 (assert
  (3 = 3.0) !(3 = 4) (1 < 1.5) (3.0 >= 3) (id? 'a 'a) !(id? '(1) '(1))
  ('x < "a") ("a" < 1) (1 < '(0)) !(1 < "a")          ; true-blue order: mint < string < number < chain
- ('(0) < #(1 10)) (#(1 10) < cap) !(cap < #(1 10))    ; the map rung: chain < map < hot
+ ('(0) < {1 10}) ({1 10} < cap) !(cap < {1 10})       ; the map rung: chain < map < hot
  ("abc" < "abd") ("ab" < "abc") ('(1 2) < '(1 3))     ; within a band: text and chains order lexicographically
  ; a GALAXY folds into the number band by its net (probe via sort/show -- infix < on an array broadcasts to a mask).
  ("(@(1 1) 5 @(2 4))" = (show (sort `(@(2 4) 5 @(1 1)))))  ; nets 2 < 5 < 6, galaxies interleaving with the star
@@ -223,7 +223,7 @@
     ("A" = string 65) (1 = tally (string 10)) ("hi" = string '(104 105))   ; the four spelled kinds,
     ("abc" = string 'abc) ("" = string ())                                 ; and the empty charlist
     ("1.5" = string 1.5) ("-2.5" = string -2.5)                            ; ..the rest coerce
-    (str? 1.5) (str? i) (str? (100 2)) (str? @(1 2 3)) (str? #(1 2)) (str? cap) (str? out)
+    (str? 1.5) (str? i) (str? (100 2)) (str? @(1 2 3)) (str? {1 2}) (str? cap) (str? out)
     (str? ()) (str? 0) (str? 'x) (str? "s") (str? @(0 0))                  ; incl. every falsy shape
     (: s "x" (id? s (string s)))                                           ; a string is the only identity
     (: g 1.5 !(id? g (string g)))
@@ -242,7 +242,7 @@
  ('(1 2 3 4) = '(1 2) + '(3 4)) ('(1 2) = 5 + '(1 2)) !("a" - "b")
  ('(3) = '(3) + ()) ('(3) = () + '(3)) ('(1 2) = '(1 2) + (mint 0))   ; a bare mint -- the zero point () too -- is +'s
  ("ab" = "ab" + ()) ("ab" = () + "ab") (5 = 5 + ()) (5 = () + 5)      ; IDENTITY in every lane, not just on lists:
- (~(1 2) = () + ~(1 2)) ("@(1 2 3)" = show (() + @(1 2 3))) (() = () + ())  ; string/number/complex/array pass through
+ ((1 ~ 2) = () + (1 ~ 2)) ("@(1 2 3)" = show (() + @(1 2 3))) (() = () + ())  ; string/number/complex/array pass through
  (('ef + '(1 2)) = '(ef 1 2)) ('ef = 'ef + 5)  ; a NAMED symbol still ADJOINS to a list (foo stays foo); a number degenerates against it
  ('ef = 65 + 'ef) ('ef = 'ef + @(1 2)) ('ef = @(1 2) + 'ef)  ; ..either side, and a tray is number-band the same way
  ((\ x x) = () + (\ x x)) (2 = (((\ x x) + (\ x x)) (\ n (+ n 1)) 0))   ; the TOP lane too: () + hot = hot, and
@@ -251,7 +251,7 @@
  (() = () * 5) (() = 5 * ()) (() = "ab" * ()) (() = () * "ab")   ; over the sign crossing); an inexact count is no count.
  (() = '(1 2) * (mint 0)) (() = () * ()) (() = () * @(1 2 3))    ; () is the ZERO and the zero ANNIHILATES * (the
  ("" = "ab" * 0) (() = () * (\ x x))                        ; semiring law; 1 is the identity); the NUMBER 0 still counts: 0 copies = the kind's empty
- !("ab" * ~(3 4))                                           ; ..and a complex is no count either, like the gem
+ !("ab" * (3 ~ 4))                                          ; ..and a complex is no count either, like the gem
  ("ab" * 3 = "ab" + "ab" + "ab")                            ; THE TIE, the whole reason * is `repeated +`:
  ('(1) * 3 = '(1) + '(1) + '(1)))                           ;   s*n IS s+s+..+s, in each lane that repeats
 
@@ -266,7 +266,7 @@
  (nil? (5 - ())) (nil? (() - 5)) (nil? (() - 2.5)) (nil? ((64 2) - ()))     ; - : both sides, every width
  (nil? (5 / ())) (nil? (() / 5)) (nil? (// 5 ())) (nil? (5 % ())) (nil? (% () 5)) ; / // %
  (nil? (5 | ())) (nil? (() & 5)) (nil? (5 ^ ())) (nil? (5 << ())) (nil? (() >> 5)) ; the bitwise lanes
- (nil? (~(1 2) - ())) (nil? (@(1 2 3) - ()))            ; complex + array propagate too
+ (nil? ((1 ~ 2) - ())) (nil? (@(1 2 3) - ()))           ; complex + array propagate too
  (nil? ((5 - ()) - 3)) (nil? ((- 5) ()))                ; chains POISON; a partial fired with () answers ()
  !('ef - 3) !("a" - "b") (nil? (('a - 'b) - 5))         ; undefined answers (), and it SURVIVES the chain
  !(5 = ()) (() < 5))                                    ; = and < stay strict: () keeps the floor
@@ -296,10 +296,10 @@
 ; transcendental nifs are sine cosine log (bignums widen, arrays map elementwise; log climbs
 ; tiers -- a negative/complex gives the principal value). everything else is DERIVED, no nif --
 ; power IS application: (k b) = b**k, sqrt ((/ 1 2) x), exp (x e), nth root ((/ 1 n) x), tan
-; sine/cosine, atan (arg ~(1 x)), atan2 (arg ~(x y)); a negative base to a non-integer power
+; sine/cosine, atan (arg (1 ~ x)), atan2 (arg (x ~ y)); a negative base to a non-integer power
 ; goes principal (the angle pi*e factored exactly), so the derived sqrt is total: ((/ 1 2) -1) = i.
 (assert
- (5 = (abs -5)) (charm? (abs -5)) (5.0 = (abs ~(3 4))) (2 = (int 2.9))
+ (5 = (abs -5)) (charm? (abs -5)) (5.0 = (abs (3 ~ 4))) (2 = (int 2.9))
  ((abs -9223372036854775808) = 9223372036854775808)   ; |sun min| overflows the word: the bignum lane (the big oracle caught the wrap)
  (1024 = (10 2)) (21 = (gcd 1071 462)) (976371285 = (modpow 2 100 1000000007))
  (2.0 = ((/ 1 2) 4)) (1024 = (10 2)) (1 = (0 e)) (2.718281828459045 = e))
@@ -311,13 +311,13 @@
  (27 = (3 3)) (7625597484987 = (3 3 3)) (16 = (2 2 2)) (65536 = (2 2 2 2))   ; tetration
  (-1 = i * i) (-1 = (2 i)) (1 = ((i * 0) e))                                 ; i^2 = -1; e^(i*0) = 1
  ((log -1) = i * pi) ((log i) = i * pi / 2)                                  ; euler, in the exact direction
- (twin? (log -1)) (gem? (log 2)) (twin? (log ~(2 3)))                          ; log widens only when it must
- (i = ((/ 1 2) -1)) (~(0 2) = ((/ 1 2) -4))                                  ; sqrt of a negative: principal, exact
+ (twin? (log -1)) (gem? (log 2)) (twin? (log (2 ~ 3)))                         ; log widens only when it must
+ (i = ((/ 1 2) -1)) ((0 ~ 2) = ((/ 1 2) -4))                                 ; sqrt of a negative: principal, exact
  (-8 = (3 -2)) (twin? ((/ 1 3) -8))                                       ; integer powers stay real; odd roots go principal
  (0.0 = (sine 0) / (cosine 0)) (gem? (sine 0)))                                   ; tan 0 = 0
 
-; --- complex --- a scalar at tier C; the `~` sigil: ~(re im) builds (twin re im), a bare ~x
-; lifts a real or conjugates (an involution); i = ~(0 1). a rank-N complex array packs (re,im)
+; --- complex --- a scalar at tier C; the `~` sigil, TWO LANES: spaced, (re ~ im) builds
+; (twin re im) at the tightest band; glued, ~x lifts a real or conjugates (an involution); i = (0 ~ 1). a rank-N complex array packs (re,im)
 ; into a `c`-typed array; the net is the complex SUM of the cells, $v = $(net v).
 ; re/im/arg read ELEMENTWISE over a tray: a twin-tray answers the gem-tray of that component,
 ; and a REAL tray lifts the scalar law -- re hands it back WHOLE (a real tray is its own real
@@ -325,22 +325,22 @@
 ; any non-number: the twin-tray must not fall through to re's identity face, which would answer
 ; the COMPLEX tray as its own real part.
 (assert
- ((* i i) = -1) (~(2 0) = 2) (~(-5 10) = ~(1 2) * ~(3 4)) (twin? ~5) !(twin? 5)
- (~(0 0) = ~0) ((conj ~(2 3)) = ~~(2 3)) ((conj ~(2 3)) = ~(2 -3)) (~(2 3) = ~~~(2 3))
- ((conj (~(2 3) + ~(4 5))) = (conj ~(2 3)) + (conj ~(4 5)))      ; conj is additive
- ((conj (~(2 3) * ~(4 5))) = (conj ~(2 3)) * (conj ~(4 5)))      ; ... and multiplicative
- (~8 = ~3 + ~5) (~(0 0) < i) ((conj ~(2 3)) < ~(2 3))           ; reals embed; (re,im) order: 0<i, conj below
- (2.0 = (re ~(2 3))) (i < 1) !(1 < i) ("~(0.0 1.0)" = (show i))
- (0.0 = (peep (arg ~(1 @(1 0))) 1 0)))           ; arg broadcasts -- (arg ~(1 x)) = atan, elementwise
+ ((* i i) = -1) ((2 ~ 0) = 2) ((-5 ~ 10) = (1 ~ 2) * (3 ~ 4)) (twin? ~5) !(twin? 5)
+ ((0 ~ 0) = ~0) ((conj (2 ~ 3)) = ~(2 ~ 3)) ((conj (2 ~ 3)) = (2 ~ -3)) ((2 ~ 3) = ~~(2 ~ 3))
+ ((conj ((2 ~ 3) + (4 ~ 5))) = (conj (2 ~ 3)) + (conj (4 ~ 5)))  ; conj is additive
+ ((conj ((2 ~ 3) * (4 ~ 5))) = (conj (2 ~ 3)) * (conj (4 ~ 5)))  ; ... and multiplicative
+ (~8 = ~3 + ~5) ((0 ~ 0) < i) ((conj (2 ~ 3)) < (2 ~ 3))        ; reals embed; (re,im) order: 0<i, conj below
+ (2.0 = (re (2 ~ 3))) (i < 1) !(1 < i) ("(0.0 ~ 1.0)" = (show i))
+ (0.0 = (peep (arg (1 ~ @(1 0))) 1 0)))          ; arg broadcasts -- (arg (1 ~ x)) = atan, elementwise
 (assert
- (: v (array 2 ~(1 2) ~(3 4)) (&& (twin-tray = (tier v)) (~(1 2) = (peep v 0 0)) (~(4 6) = (net v))
-    (~(2 4) = (peep (v + v) 0 0)) (~(2 4) = (peep (~(2 0) * v) 0 0)) !(v < v)
-    ($v = $(net v)) ("@(~(1.0 2.0) ~(3.0 4.0))" = (show v))))
- ; the phases sum as VECTORS to ~(0 8) either way -- and a pure phase is BLUE:
+ (: v (array 2 (1 ~ 2) (3 ~ 4)) (&& (twin-tray = (tier v)) ((1 ~ 2) = (peep v 0 0)) ((4 ~ 6) = (net v))
+    ((2 ~ 4) = (peep (v + v) 0 0)) ((2 ~ 4) = (peep ((2 ~ 0) * v) 0 0)) !(v < v)
+    ($v = $(net v)) ("@((1.0 ~ 2.0) (3.0 ~ 4.0))" = (show v))))
+ ; the phases sum as VECTORS to (0 ~ 8) either way -- and a pure phase is BLUE:
  ; the twin gem is read by its REAL part alone -- $ clamps re, never |z| -- so a
  ; sum with no real component measures 0 however large its magnitude
- (0 = $(array 2 ~(3 4) ~(-3 4))) (0 = $`(~(3 4) ~(-3 4)))
- (3 = $(array 2 ~(3 4) ~(0 0))) (~(0.0 8.0) = (net (array 2 ~(3 4) ~(-3 4)))))
+ (0 = $(array 2 (3 ~ 4) (-3 ~ 4))) (0 = $`((3 ~ 4) (-3 ~ 4)))
+ (3 = $(array 2 (3 ~ 4) (0 ~ 0))) ((0.0 ~ 8.0) = (net (array 2 (3 ~ 4) (-3 ~ 4)))))
 (assert
  (: m (twin (star-tray '(2 2) '(1 2 3 4)) (star-tray '(2 2) '(5 6 7 8)))
     (&& (aall ((re m) = (star-tray '(2 2) '(1 2 3 4)))) (aall ((im m) = (star-tray '(2 2) '(5 6 7 8))))
@@ -502,8 +502,8 @@
  ('xy = (intern (string 'xy)))                   ; ..so intern . string is the identity on an interned symbol
  ("\"a\\nb\"" = (show "a\nb")))
 
-; --- hashes --- #(k v ..)/(hash ..) build, (tablet 0) the empty hash; #() = the EMPTY
-; MAP (the reader emits (tablet 0); () is the zero-point, distinct from 0); #x boxes a datum;
+; --- hashes --- {k v ..}/(hash ..) build, (tablet 0) the empty hash; {} = the EMPTY
+; MAP (the reader emits (tablet 0); () is the zero-point, distinct from 0); {x} boxes a datum;
 ; accessors collection-first peep/pin/pull (peep and pull share the default-if-absent; only pull
 ; mutates the key away). TWO ABSENCE LANES, one miss machinery: peep (the caller names absence)
 ; and apply ((t k) == (peep t k ()) -- a map is a lookup function, absence the zero point).
@@ -520,32 +520,32 @@
  (50 = (peep (pin (tablet 0) 5 50) 5 0)) (99 = (peep (pin "abc" 1 99) 1 0))    ; the pin law, mutable and not
  (9 = (peep (pin '(1 2 3) 2 9) 2 0)) (9 = (peep (pin @(1 2 3) 0 9) 0 0))
  (5 = (pin 5 0 1)) (1.5 = (pin 1.5 0 1))         ; ⚠ ...and the scalar exception: nothing to write
- (: b #0 (&& (tablet? b) (1 = $b) (0 = (peep b () 9)) (: _ (pin b () 7) (7 = (b ())))))
- (tablet? #()) (0 = $#()) !#()                      ; #() is the empty map: 0 keys, falsy
- (: t #(1 10 2 20) (&& (20 = (peep t 2 0)) (20 = (t 2)) (99 = (peep t 9 99))))
- (: t #(1 0) s (mint 0) (&& !(id? s (peep t 1 s)) (id? s (peep t 9 s))))   ; peep as the total presence test: a pinned 0 is PRESENT, an absent key is not
- (50 = (peep (pin (tablet 0) 5 50) 5 0)) (: t #(1 10 2 20) _ (pull t 1 0) (1 = $t))
- (: t #(1 10 2 20) v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peep t 2 99)) (-1 = (pull t 9 -1))))  ; pull: value or default, removes the key
- ('(1 2) = (sort (keys #(1 10 2 20)))) ((dig 'k) = (dig 'k)) (tablet? (tablet 0)) !(tablet? 5)
- !(#(1 10) = #(1 10)) (: t #(1 10) (t = t))      ; mutable -> identity =
- (: t (tablet 0) r (pins t 1 10 2 20) (&& (id? r t) (10 = (t 1)) (20 = (t 2)) (2 = $t)))  ; pins: multi-pin onto a LIVE tablet, returns it (the mutable twin of #(..))
+ (: b {0} (&& (tablet? b) (1 = $b) (0 = (peep b () 9)) (: _ (pin b () 7) (7 = (b ())))))
+ (tablet? {}) (0 = ${}) !{}                      ; {} is the empty map: 0 keys, falsy
+ (: t {1 10 2 20} (&& (20 = (peep t 2 0)) (20 = (t 2)) (99 = (peep t 9 99))))
+ (: t {1 0} s (mint 0) (&& !(id? s (peep t 1 s)) (id? s (peep t 9 s))))    ; peep as the total presence test: a pinned 0 is PRESENT, an absent key is not
+ (50 = (peep (pin (tablet 0) 5 50) 5 0)) (: t {1 10 2 20} _ (pull t 1 0) (1 = $t))
+ (: t {1 10 2 20} v (pull t 2 0) (&& (20 = v) (1 = $t) (99 = (peep t 2 99)) (-1 = (pull t 9 -1))))   ; pull: value or default, removes the key
+ ('(1 2) = (sort (keys {1 10 2 20}))) ((dig 'k) = (dig 'k)) (tablet? (tablet 0)) !(tablet? 5)
+ !({1 10} = {1 10}) (: t {1 10} (t = t))         ; mutable -> identity =
+ (: t (tablet 0) r (pins t 1 10 2 20) (&& (id? r t) (10 = (t 1)) (20 = (t 2)) (2 = $t)))  ; pins: multi-pin onto a LIVE tablet, returns it (the mutable twin of {..})
  (: t (pins (tablet 0) 1 10 2) (&& (10 = (t 1)) (1 = $t))))    ; an odd trailing key is dropped
 
 ; --- the EMPTY SPELLINGS (the nothing surface) --- each kind's empty by its sigil: () the
-; chain (the zero-point, DISTINCT from the number 0), "" the string, @() the array, #() the
-; map, ~(0 0) the zero complex, (cask 0) the buffer -- all net 0 -> blue -> false. spelled via
-; 0/() too: @()/#() are the EMPTIES (the reader emits (iota 0)/(tablet 0)); @0/#0 wrap the
+; chain (the zero-point, DISTINCT from the number 0), "" the string, @() the array, {} the
+; map, (0 ~ 0) the zero complex, (cask 0) the buffer -- all net 0 -> blue -> false. spelled via
+; 0/() too: @()/{} are the EMPTIES (the reader emits (iota 0)/(tablet 0)); @0/{0} wrap the
 ; VALUE 0 (a ONE-CELL array, a box) -- both are PRESENT and both still net 0, so the empty
 ; and the wrapped zero are told apart by tally, not by truth. every nothing is a MASK;
 ; () the bare-ish floor.
 (assert
- !() !0 !"" !@() !#() !~(0 0) !(cask 0)           ; every empty is false (blue)
+ !() !0 !"" !@() !{} !(0 ~ 0) !(cask 0)           ; every empty is false (blue)
  (nil? ()) (nil? 0) !(= () 0) !(id? () 0)        ; () (zero-point) and 0 (number) are DISTINCT, both nothing
  ("@()" = (show @())) (1 = (rank @())) (0 = (tally @())) (star-tray = (tier @()))  ; @() the empty array, round-trips
- (tablet? #()) (0 = $#()) ("#()" = (show #()))   ; #() the empty map, show round-trips it
+ (tablet? {}) (0 = ${}) ("{}" = (show {}))    ; {} the empty map, show round-trips it
  (tray? @0) !(0 = @0) (1 = (rank @0)) (1 = (tally @0))   ; @0 wraps the VALUE 0 -> a ONE-CELL array
  ("@(0)" = (show @0)) (0 = (peep @0 0 -1))              ; ...which shows and reads back as one
- (tablet? #0) (1 = $#0) !!#0)                       ; #0 wraps the VALUE 0 -> a box (present)
+ (tablet? {0}) (1 = ${0}) !!{0})                       ; {0} wraps the VALUE 0 -> a box (present)
 
 ; --- buffers --- (cask n) mutable zeroed bytes; (cask charlist) a cask HOLDING those bytes
 ; (the lane `string` wears for a charlist -- the bulk way in, so a byte blob never needs a
@@ -563,13 +563,13 @@
  !((cask 2) = (cask 2)))
 
 ; --- reader operators --- reading is STRUCTURAL and environment-free: the reader knows tokens,
-; parens, strings, and the value surface (' quote = one-operand \, ` list, # hash, @ tup, ~ twin)
+; parens, strings, and the value surface (' quote = one-operand \, ` list, @ tup)
 ; -- NO operator tables, so the same reader serves data and code. the OPENER CARRIES THE WRAP:
-; [..] is `(..) and {..} is #(..), a second spelling for the two that nest worst, and the three
+; [..] is `(..) and {..} is the map -- the brace is its only spelling -- and the three
 ; closers ) ] } are ONE -- each only ends the open form, so a crossed pair is libra's to catch.
 ; a CONSTRUCTOR sigil over an open form RENAMES that wrap rather than stacking on it (@[1 2] is
-; @(1 2)), so any delimiter serves any wrap; the constructors are exactly the four splicing ones
-; ` # @ ~, since stacking is the one thing they cannot mean. ' and \ are not constructors -- they
+; @(1 2)), so any delimiter serves any wrap; the constructors are exactly the splicing ones
+; ` and @, since stacking is the one thing they cannot mean. ' and \ are not constructors -- they
 ; take the next DATUM whatever it is, so '[a b] is the form (list a b) quoted.
 ; the LEXER LAW splits by leading
 ; char: a name token (alnum/_) keeps - ? ! and the prime inside (kebab law; a LEADING ' is still
@@ -599,7 +599,8 @@
 ; punctuation, and the ONE exception is that a numeral has to start somewhere -- a DIGIT (or a `.`,
 ; for -.5) right after them makes a NUMBER instead (-3 a number, -x negate x, --5 -(-5), -(f x)
 ; negate). the monadic words: < cap, > cup (<< >> <> >< the compounds), + net,
-; * prod, | abs, - negate, / reciprocal, % fraction, ? bit, $ sat, ! nil?, . dot. the COMMA is the
+; * prod, | abs, - negate, / reciprocal, % fraction, ? bit, $ sat, ! nil?, # tally, ~ conj, . dot.
+; the COMMA is the
 ; loosest layer, above infix: a lone one-char datum (never fused), the list split into CLAUSES at
 ; top-level commas BEFORE factoring, the whole the `,` sequencing macro (do its word alias) --
 ; effects in source order, the last clause answers, empty clauses drop; in a FILE the chain needs
@@ -607,17 +608,17 @@
 (assert
  ('(1 (\ x) 3) = `(1 ''x 3)) ('(1 2 3 4) = (: xs '(2 3) ('(1) + xs + '(4))))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
- (i = ~(0 1)) (~(2 3) = (twin 2 3)) ('~x = '(conj x)) (lit? dot)
+ (i = (0 ~ 1)) ((2 ~ 3) = (twin 2 3)) ('~x = '(mono (~ x))) (~5 = (conj 5)) (5 = #"hello") (lit? dot)
  ("(. x)" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
  (: was (grip 2 '^ -60) t (opfix '(a ^= b)) back (grip 2 '^ was)     ; a SPACED sigil is one whole
     (&& (back = -60) (t = '(^= a b))))                                   ;   name: ^'s row never splits ^=
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (5 = --5) (5 = ++5) (-5 = ---5) (: x 5 (-5 = -x))   ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
  (-3 = -3) (-0.5 = -.5) (5 = (2 - -3))               ; ...and a digit or . after them still starts a NUMERAL (the whole exception)
- ([1 2 3] = `(1 2 3)) ([] = `()) (1 = ({'a 1} 'a))            ; the opener carries the wrap: [ is `, { is #
+ ([1 2 3] = `(1 2 3)) ([] = `()) (1 = ({'a 1} 'a))            ; the opener carries the wrap: [ is `, { is the map
  ([[1 2] [3 4]] = `(`(1 2) `(3 4))) (-[1 2] = -`(1 2))       ; ...to any depth, and it glues like the wrap it spells
- ((show (cap (sound "{'a 1}"))) = (show (cap (sound "#('a 1)"))))   ; a hash compares by identity, so the LAW is on the form
- (@[1 2 3] = @(1 2 3)) (~[1 2] = ~(1 2)) (1 = (#['a 1] 'a))  ; a constructor sigil RENAMES the opener's wrap
+ ((show (cap (sound "{'a 1}"))) = (show '(hash 'a 1)))              ; a hash compares by identity, so the LAW is on the form
+ (@[1 2 3] = @(1 2 3)) (1 = ({'a 1} 'a))                     ; a constructor sigil RENAMES the opener's wrap
  ('(\ (list a b)) = (cap (sound "'[a b]")))                  ; ...but ' is not one: it quotes the form
  (3 = 1 + 2) (7 = 1 + 2 * 3) (1 < 2 ? 'big) ('small = (? (2 < 1) 'big 'small))  ; ? is dyadic: infix takes ONE arm ((< 1 2) binds first at 40), an else arm is the prefix cond
  (-4 = 1 - 2 - 3) (1 = 8 / 4 / 2)                ; the LEFT hand: ((1 - 2) - 3), ((8 / 4) / 2)
@@ -739,8 +740,8 @@
 ; `read` rides sound (ONE form, EVALED); `reads` and `forms` walk a flowing port, evaling and
 ; collecting; `dot` (the `.` operator, .x) prints x to out and returns it.
 ; `sound0` is sound's BOOTSTRAP TWIN, same protocol over the PURE LISP SUBSET: parens, comments,
-; strings, atoms, ' quote, and none of the sigil surface -- so #(a) is (hash a) to sound and the
-; plain symbol # to sound0. it is what reads prel.l before there is a language (doc/io.md).
+; strings, atoms, ' quote, and none of the sigil surface -- so #(a) is the glued tally run to
+; sound and the plain symbol # to sound0. it is what reads prel.l before there is a language (doc/io.md).
 (assert
  (string? (show out)) ("hi" = (slurp (tap '(104 105)))) (: o (jug 0) _ (print o 42) ("42" = (slurp o)))
  (: a (jug 0) b (jug 0) _ (say a "a") _ (say b "b") (&& ("a" = (slurp a)) ("b" = (slurp b))))   ; two jugs are two sinks
@@ -756,7 +757,7 @@
     (&& ((th ()) = (th ())) (1 = (peep c 0 0))))     ; a promise forces ONCE and remembers
  ('(a) = (cap (sound0 '(40 97 41)))) (nil? (sound0 ()))
  (id? 'torn (sound0 '(40 97)))                       ; torn, unfinished shape
- ('(hash a) = (cap (sound '(35 40 97 41)))) ((intern "#") = (cap (sound0 '(35 40 97 41)))))
+ ('(mono (# (a))) = (cap (sound '(35 40 97 41)))) ((intern "#") = (cap (sound0 '(35 40 97 41)))))
 
 ; --- bootstrapping --- the key semantics are l closures shared by both compilers (numap,
 ; add/mul, opfix, boxfix, feel, maps); the egg is WARMED and the evaluator sits on it twice;

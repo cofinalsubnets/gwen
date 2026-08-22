@@ -25,7 +25,7 @@
 ; keep the ~20 glaze aliases (loopinfo/emit/calloutinfo/coreir/..) PRIVATE in an inner
 ; body-having `:` (one scope, returns natjit); the outer body-less `:` leaks just those four.
 ; The LAWS are test/glaze-hook.l, under `make test_hook`, which drives those four names.
-(: fires #0                                                                  ; probe counter: how many closures the hook native-backed (natjit writes, fired? reads)
+(: fires {0}                                                                 ; probe counter: how many closures the hook native-backed (natjit writes, fired? reads)
    natjit
     (: arch (intern love-arch)                                                ; the runtime CPU target ('x64 / 'arm64), evaluated at boot on the actual binary -- so the SAME baked hook.h emits x64 on the x86 host and aarch64 under qemu (mirrors auto.l's `arch`). njit-loop/njit-loop-n already close over auto.l's arch; the leaf/float/callout/group lanes below take it explicitly.
                                                                             ; `assemble` below reads BARE: main.c brackets this load with (use 'holo) .. ai_unsplice_, so it folds at compile (the capture law)

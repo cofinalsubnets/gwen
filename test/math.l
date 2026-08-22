@@ -22,14 +22,14 @@
                   (* (cosine (- 0 0.7)) (cosine (- 0 0.7)))))
 
     ; --- atan inverse of tan in (-pi/2, pi/2); tan is now (/ (sine x) (cosine x)) ---
-    (near 0.7 (arg ~(1 (/ (sine 0.7) (cosine 0.7)))))
+    (near 0.7 (arg (1 ~ (/ (sine 0.7) (cosine 0.7)))))
 
     ; --- atan2 quadrants ---
-    (very-near 0.0 (arg ~(1 0)))
-    (very-near (/ pi 2) (arg ~(0 1)))
-    (very-near pi (arg ~(-1 0)))
-    (very-near (- 0 (/ pi 2)) (arg ~(0 -1)))
-    (very-near (/ pi 4) (arg ~(1 1)))
+    (very-near 0.0 (arg (1 ~ 0)))
+    (very-near (/ pi 2) (arg (0 ~ 1)))
+    (very-near pi (arg (-1 ~ 0)))
+    (very-near (- 0 (/ pi 2)) (arg (0 ~ -1)))
+    (very-near (/ pi 4) (arg (1 ~ 1)))
 
     ; --- sqrt ---
     (= 0.0 ((/ 1 2) 0))
@@ -74,7 +74,7 @@
     (aall (= ((gem-tray '(3) '(1 2 3)) 2) (gem-tray '(3) '(2 4 8))))  ; scalar ^ array (array numeral)
     (aall (= ((gem-tray '(3) '(2 2 2)) (gem-tray '(3) '(1 2 3)))      ; array ^ array
              (gem-tray '(3) '(1 4 9))))
-    (near 1.570796326794897 (peep (arg ~((gem-tray '(2) '(1 0)) (gem-tray '(2) '(1 1)))) 1 0))
+    (near 1.570796326794897 (peep (arg ((gem-tray '(2) '(1 0)) ~ (gem-tray '(2) '(1 1)))) 1 0))
 
     ; --- bignum meets array (arithmetic): the array wins, the bignum demotes to
     ;     the array's element form -- full magnitude in a float array, low bits in

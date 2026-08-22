@@ -53,8 +53,8 @@
 ; ⚠ THE THREE EXEMPTIONS, each load-bearing.
 (assert
  ; 1. a CONSTRUCTOR is a datum, not a form -- and a ' makes its contents data too
- !(lint-of "'(x)" lt-sing) !(lint-of "`(x)" lt-sing) !(lint-of "#(x)" lt-sing)
- !(lint-of "@(x)" lt-sing) !(lint-of "~(x)" lt-sing)
+ !(lint-of "'(x)" lt-sing) !(lint-of "`(x)" lt-sing) !(lint-of "@(x)" lt-sing)
+ !(lint-of "{x}" lt-sing)
  !(lint-of "'(a (b))" lt-sing)
  ; ...but a BACKTICK list evaluates its elements, so a form inside one is a form
  (1 = (tally (lint-of "`(a (b))" lt-sing)))

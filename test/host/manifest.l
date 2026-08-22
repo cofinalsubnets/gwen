@@ -92,7 +92,7 @@
  ; a reader task gathers every painted byte into a box, so the test can
  ; HANDSHAKE: keys sent before the child's raw-mode first frame would land
  ; in a COOKED pty (ICRNL eats the \r commit) -- wait for proof, then type
- buf #""
+ buf {""}
  rd (twirl (\ _ (: (pump x) (: ch (see m)
                               (? (= ch -1) ()
                                (: _ (pin buf () (+ (peep buf () "") (string ch)))

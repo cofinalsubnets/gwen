@@ -3,7 +3,7 @@
 ; file is only the ergonomic constructor over it, so prel stays minimal and each frontend
 ; includes the layers it wants (the host, love0, wasm and the K_TEST kernel do -- the corpus
 ; asserts on both; a shipped kernel and the playdate workbench carry neither). love/prel.l
-; first -- the die is a #(..) tablet.
+; first -- the die is a {..} tablet.
 ;
 ; a COIN (coin?) is struck from a die over a payload; the die is the type descriptor (a
 ; monoid/ring -- a map of slot->method); die-of reads it back. + and * dispatch through the
@@ -20,7 +20,7 @@
 ; through their own * (num-ap's open fork) instead of composing them as functions. slot 0 is
 ; the show-name.
 (: (ring name plus times) (:
-      d #(0 name)                                                ; the die; slot 0 = show-name
+      d {0 name}                                                 ; the die; slot 0 = show-name
       _ (pin d 1 (\ a b (coin d (plus (load a) (load b)))))      ; slot 1 = +
       _ (? times (pin d 2 (\ a b (coin d (times (load a) (load b))))) 0)  ; slot 2 = * (a monoid has none)
       (\ p (coin d p)))                                          ; the ctor: payload -> coin

@@ -420,11 +420,11 @@
               (lx px acc) (? (< px 8) (lx (+ px 1) (+ acc (ly px 0 0))) acc)
             (lx 0 0))
        (&& !(id? (autonat g3) g3) (= (base-ev g3) (ev g3))))
-    ; TWIN(complex) grid: idiomatic ~(re im) code -- twolow lowers c/z to real-pairs, autonat glazes
+    ; TWIN(complex) grid: idiomatic twin code -- twolow lowers c/z to real-pairs, autonat glazes
     ; it, bit-exact (== the interpreted twins). The D=2 mandelbrot with z<-z*z+c written in twin gems.
     (: g2t '(: (mand c z it)
                  (? (&& (< it 100) (<= (+ (* (re z) (re z)) (* (im z) (im z))) 4.0)) (mand c (+ (* z z) c) (+ it 1)) it)
-               (col px py acc) (? (< py 64) (col px (+ py 1) (+ acc (mand ~((+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875))) ~(0.0 0.0) 0))) acc)
+               (col px py acc) (? (< py 64) (col px (+ py 1) (+ acc (mand (twin (+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875))) (twin 0.0 0.0) 0))) acc)
                (grid px acc) (? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
              (grid 0 0))
        (&& !(id? (twolow g2t) g2t)                                                    ; twolow rewrote the twin grid

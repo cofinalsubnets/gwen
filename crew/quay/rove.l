@@ -30,7 +30,7 @@
  ; so the whole deck is connected by construction. answers (deck . st').
  (delve w h st) (:
    d {'w w 'h h 't (cask (w * h)) 'seen (cask (w * h)) 'rooms ()}
-   sb #st
+   sb {st}
    (mid rm) [(peep rm 0 0 + peep rm 2 1 // 2) (peep rm 1 0 + peep rm 3 1 // 2)]
    (carve x0 y0 rw rh) (: (row y x) (x < x0 + rw ? (dput d x y 1, row y (x + 1)))
                           (rows y) (y < y0 + rh ? (row y x0, rows (y + 1)))
@@ -194,7 +194,7 @@
  ; a fresh game: deck one delved from the seed state, the player moored at 'in
  (crawl-new w h st) (:
    p0 (delve w h st) d <p0
-   st1 >p0 sb #st1                                 ; #sym boxes; #(..) would read a hash
+   st1 >p0 sb {st1}                                 ; the brace boxes; #st1 would count it
    pl {'x <(d 'in) 'y <>(d 'in) 'gl 64 'hue 228 'hp 12 'mx 12 'gold 0}
    g {'d d 'lvl 1 'sb sb 'p pl 'msg "" 'over 0}
    _ (stock g)

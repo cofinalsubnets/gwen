@@ -32,7 +32,7 @@
   (! (= ((\ a b (+ a b)) 1) (\ b (- 1 b))))          ; a different body stays distinct
   (! (= (\ x (link x)) link))                         ; eta still NOT bridged -- the line holds (= surfaces no NEW reduction)
   (= (+ 1) (+ 1)) (! (= (+ 1) (+ 2)))                ; a source-less (builtin) base: the pairwise fallback, intact
-  (= 9 (peep #(((\ a b (+ a b)) 5) 9) (\ b (+ 5 b)) 0))  ; HASH consistency: a map keyed on the partial-app, found by the residual
+  (= 9 (peep {((\ a b (+ a b)) 5) 9} (\ b (+ 5 b)) 0))   ; HASH consistency: a map keyed on the partial-app, found by the residual
   ; worklist safety: a closure with a CHAIN capture nested in a compared structure -- equal closures
   ; but a differing tail must stay NOT equal (the bridge's re-entrant eqv must not clobber pending pairs)
   (! (= (link ((\ v x (+ x v)) '(1 2)) (link 5 6)) (link ((\ v x (+ x v)) '(1 2)) (link 5 7))))

@@ -662,19 +662,19 @@
               (pop r14) (pop r13) (pop r12) (pop r11) (pop r3))
        + epi-ir + deopt2-ir))
    fkers (tablet 0)                                         ; nv -> (bcp conf dec), one assemble per nvars
-   fknob #0                                                 ; pin 1 to force the interpreted twins (the differential switch)
-   fmaxl0 #2000                                             ; the initial learnt-DB cap (the gate lowers it to force reductions)
-   frp0 #4                                                  ; rephase-wheel cadence in restarts (pin 0 = off)
-   fcmp0 #1048576                                           ; arena-words threshold for the real compaction
-   fru0 #400                                                ; the luby restart unit (conflicts per luby-1 block)
-   fst0 #10000                                              ; the stable/focused mode budget in conflicts (x3/2 per switch)
+   fknob {0}                                                ; pin 1 to force the interpreted twins (the differential switch)
+   fmaxl0 {2000}                                            ; the initial learnt-DB cap (the gate lowers it to force reductions)
+   frp0 {4}                                                 ; rephase-wheel cadence in restarts (pin 0 = off)
+   fcmp0 {1048576}                                          ; arena-words threshold for the real compaction
+   fru0 {400}                                               ; the luby restart unit (conflicts per luby-1 block)
+   fst0 {10000}                                             ; the stable/focused mode budget in conflicts (x3/2 per switch)
    ; --- DRAT proof emission: pin a JUG into fdrat0 and every UNSAT solve leaves a
    ; checkable refutation in it -- each learnt commit a RUP line, each tombstoned
    ; learnt a `d` line, each BVA application its extended-resolution lines (RAT on
    ; the fresh variable), and fcdcl caps an UNSAT verdict with the empty clause.
    ; the proof checks against the ORIGINAL formula: in-gate by fd-check (below),
    ; externally by drat-trim (crew/sat/dratcheck.sh).
-   fdrat0 #0                                                ; 0 off; a jug records the proof
+   fdrat0 {0}                                               ; 0 off; a jug records the proof
    (fdlit el) (: v (el >> 1) (? (1 = (el & 1)) (0 - v) v))  ; encoded -> signed DIMACS literal
    (fdsay j pre c)                                          ; one proof line: prefix, lits, the closing 0
     (: _ (say j pre)
@@ -930,9 +930,9 @@
    ; definitional variables is the extended-resolution move -- the proof system where
    ; pigeonhole has POLYNOMIAL refutations (Cook 1976), which plain resolution (and so
    ; ANY amount of clause learning) provably lacks (Haken 1985).
-   fbva0 #1                                                 ; pin 0 to solve raw (the A/B switch)
-   fbvar0 #8                                                ; BVA round cap
-   fbvac0 #1                                                ; 1 = factor ORIGINAL structure only (no aux cascade)
+   fbva0 {1}                                                ; pin 0 to solve raw (the A/B switch)
+   fbvar0 {8}                                               ; BVA round cap
+   fbvac0 {1}                                               ; 1 = factor ORIGINAL structure only (no aux cascade)
    ; the pass runs over FLAT state, and its hot loop -- the occ-probe / match-count
    ; machinery inside `try` -- is the FOURTH native kernel (fbvag; fbvag3 the honest
    ; twin, phase for phase). a literal is an OFFSET KEY: signed s -> s + NB, so key

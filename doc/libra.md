@@ -107,8 +107,8 @@ is that element, since
 never fires: `(go)` is `go` handed back unrun, silently, with the value you
 wanted one curry away. three things are exempt, and each for a reason:
 
-- a CONSTRUCTOR is a datum, not a form -- `'(x)` `` `(x) `` `#(x)` `@(x)`
-  `~(x)`. a `'` makes its contents data too, inherited all the way down. (a
+- a CONSTRUCTOR is a datum, not a form -- `'(x)` `` `(x) `` `@(x)`, and the
+  brace `{x}`. a `'` makes its contents data too, inherited all the way down. (a
   backtick list EVALUATES its elements, so a form inside one is a real form and
   is flagged.)
 - a `(` GLUED to an operator run, where the parens may be holding two sigil runs

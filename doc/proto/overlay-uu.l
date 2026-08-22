@@ -11,9 +11,9 @@
 (: uunorm (\ d (? (&& (two? d) (id? (cap d) 'vec) (= 3 (tally d)))
                   (L 'vec (caup d) (vof () (cap (cup (cup d)))))    ; length index -> uu normal form (a charm)
                   d))
-   vdom #('dice '(meters) 'ctors '(pair vec succ zero add)
-          'okr    (\ bd decl (= (uunorm bd) (uunorm decl)))         ; result acceptable iff indices uu-CONVERTIBLE
-          'join   (\ a b (? (= a b) a 'top)) 'litdie (\ e 'top) 'tr (\ op a b 'top))
+   vdom {'dice '(meters) 'ctors '(pair vec succ zero add)
+         'okr    (\ bd decl (= (uunorm bd) (uunorm decl)))         ; result acceptable iff indices uu-CONVERTIBLE
+         'join   (\ a b (? (= a b) a 'top)) 'litdie (\ e 'top) 'tr (\ op a b 'top)}
    _ (overlay-off ())
    _ (ev '(: (mk2 x) 0 (mk1 x) 0 (vconcat u v) 0))                  ; runtime stubs (leak), so bodies don't warn
    _ (overlay-set vdom '((mk2 (x) (vec meters (succ (succ zero))))  ; length-2 vector

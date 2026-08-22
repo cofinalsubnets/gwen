@@ -14,7 +14,7 @@
 ; pins the evaluator there at load (word compiles before eval exists).
 
 (module 'lush
-(: sh-subeval #0
+(: sh-subeval {0}
    (sh-ifs? b) (|| (b = 32) (b = 9) (b = 10))
    (sh-chomp t)
      (: (go k) (? ((0 < k) && ((t (k - 1)) = 10)) (go (k - 1)) (snip t 0 k))

@@ -17,7 +17,7 @@
 ; ENTIRELY digits (server chatter shares the pty).
 (: xv (tether `("Xvfb" "-displayfd" "1" "-screen" "0" "640x480x24" "-nolisten" "tcp"))
    (wfx p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wfx p))))
-   camp #()
+   camp {}
    (enlist k pid) (pin camp k pid)
    (strike _) (map (\ k (: p (camp k)
                            _ (? (charm? p) (: _ (still p 15) (wfx p)) 0) 0))

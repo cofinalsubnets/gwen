@@ -16,8 +16,8 @@ and what law the value obeys in the word machine.
   is spelled four times in `word.l` (`sh-textof`, `sh-patmask`, `dqat`, `wseg`).
   Miss one and the form works bare but not in `"…"`, or not in a heredoc.
 - the body scanner cannot be `sh-subp`: it tracks shell quotes, and a love body
-  runs on different lexical law — `'` is a sigil not a quote, `"` strings, `#`
-  comments, `#(`, `[ ]`, `\` lambda. The scanner must speak love's quoting while
+  runs on different lexical law — `'` is a sigil not a quote, `"` strings, `;`
+  comments, `{ }`, `[ ]`, `\` lambda. The scanner must speak love's quoting while
   sitting inside a shell word. This is the one genuinely new piece.
 - the spelling space is tight. `$((…))` is POSIX arithmetic (unimplemented here,
   but taking it forecloses arithmetic and mis-eats imported scripts); `$[…]` is

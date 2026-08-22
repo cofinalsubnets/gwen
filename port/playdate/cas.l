@@ -15,14 +15,14 @@
    ; a card at dial n: 'tm the term, 'vs its variables, 'xp expand the rest
    ; view through the poly bridge, 'fac the B button works, 'as the
    ; assumptions contrast card (renders its own body)
-   (card i n) (? (i = 0) #('vs '(x y) 'xp 1 'fac 1 'tm `('** '(+ x y) n))
-                 (i = 1) #('vs '(x) 'xp 1 'fac 1 'tm `('- `('** 'x n) 1))
-                 (i = 2) #('vs '(x y) 'xp 1 'fac 1 'tm `('- `('** 'x n) `('** 'y n)))
-                 (i = 3) #('vs '(x) 'tm '(* (sin x) (cos x)))
-                 (i = 4) #('vs '(x) 'as 1 'tm '(sqrt (** x 2)))
-                 (i = 5) #('vs '(x) 'tm '(+ (atan 1) (acos 0)))
-                 #('vs '(x) 'tm '(** e x)))
-   st #('card 0 'n 4 'dc 0 'fv 0 'key () 'txt "")
+   (card i n) (? (i = 0) {'vs '(x y) 'xp 1 'fac 1 'tm `('** '(+ x y) n)}
+                 (i = 1) {'vs '(x) 'xp 1 'fac 1 'tm `('- `('** 'x n) 1)}
+                 (i = 2) {'vs '(x y) 'xp 1 'fac 1 'tm `('- `('** 'x n) `('** 'y n))}
+                 (i = 3) {'vs '(x) 'tm '(* (sin x) (cos x))}
+                 (i = 4) {'vs '(x) 'as 1 'tm '(sqrt (** x 2))}
+                 (i = 5) {'vs '(x) 'tm '(+ (atan 1) (acos 0))}
+                 {'vs '(x) 'tm '(** e x)})
+   st {'card 0 'n 4 'dc 0 'fv 0 'key () 'txt ""}
    (clamp lo x hi) (? (x < lo) lo (hi < x) hi x)
    ; a term crosses to the canonical ring through the eval bridge: close it
    ; over its variables, apply the closure to the poly coins, and the coin

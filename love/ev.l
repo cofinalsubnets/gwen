@@ -36,7 +36,7 @@
             snip string intern
             re im conj arg gem twin
             sine cosine log power))
-   (foldl (\ t s (: v (gv s ()) (? v (pin t v 1) t))) #() names)))
+   (foldl (\ t s (: v (gv s ()) (? v (pin t v 1) t))) {} names)))
 ; the CONTAINER DOORS -- pure or not depending on WHAT they are handed, which is why they
 ; cannot sit in pureset. on a tablet peep reads mutable state and pin writes it; on text or a
 ; chain neither can -- pin has no cell there, so it answers a FRESH container and the call is
@@ -44,7 +44,7 @@
 ; reads as a `tuple` CALL, so no tray ever reaches a fold site known -- the gate below would
 ; never fire on one and does not name it.
 (: readset (: names '(peep pin)
-   (foldl (\ t s (: v (gv s ()) (? v (pin t v 1) t))) #() names)))
+   (foldl (\ t s (: v (gv s ()) (? v (pin t v 1) t))) {} names)))
 (: feels (:
    lvm_cur  (peek 0 (+))
    lvm_ret0 (peek 1 cap)
@@ -74,14 +74,14 @@
           ar (? o >o (id? lvm_cur (peek 0 v)) (peek 1 v) 0)   ; nif/multi-arg-fn arity
           (pin t v (hgen v op ar p)))
        t))))
-   (foldl add #() (catmap keys (books ())))))
+   (foldl add {} (catmap keys (books ())))))
 
 (:- (\ x (:
  c (sco 0 [()] ())
  y (feel c (opfix x))    ; opfix (factor sigils), feel (desugar) -- ev = the deserialized-data lane
  (ana c y (k0 c) 0 0)))
   lvm_cur (peek 0 (+))
-  (sco p a i) #('arg a 'imp i 'par p)
+  (sco p a i) {'arg a 'imp i 'par p}
   (rootc c) (? (c 'par) (rootc (c 'par)) c)        ; top scope: where feel stashes 'src
   ; --- THE EMISSION INTERFACE (the codegen seam; the design in one page:) ---
   ; ana walks the analyzed form and emits code through these primitives. an EMITTER is a curried
@@ -609,12 +609,12 @@
   ; a closure CELL is a box (tablet 0) holding the closure chain (entry . imports): mkc makes one,
   ; cof reads it, cput stores into it. ⚠ the letrec* capture fixpoint and the recursive-ref
   ; backpatch mutate THROUGH the box, so the shared mutable cell is a proper heap object.
-  (mkc v) #(0 v)
+  (mkc v) {0 v}
   (cof e) (peep >e 0 0)
   (cput e v) (: _ (pin >e 0 v) v)
   (lz c lfd scope)(: code <(cof lfd)
                    p (? code (em2 lvm_quote code)
-                        (: site (lfd >< #())
+                        (: site (lfd >< {})
                            _ (pin scope 'sites (site >< scope 'sites))
                          (qsite site)))
                    _ (push c 'stk 0)
@@ -715,7 +715,7 @@
      (: pr <ps k <pr d >pr
         a (? (-1 = peep t k -1 && lambp d) (tally >d - 1) 0)
       (farof >ps (pin t k (? (1 < a) a 0)))))
-    _ (pin q 'far (farof <cb #()))
+    _ (pin q 'far (farof <cb {}))
     ; closures: each lambda def -> a closure via ala (a non-lambda -> just a stack slot), building
     ; [names..] on the stack; then PROPAGATE captures to a fixpoint, and return the lambdas with the
     ; let's OWN names dropped from each capture set (those are locals, resolved by wire).

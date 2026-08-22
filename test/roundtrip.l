@@ -4,7 +4,7 @@
 ;   rt: value -> show (print) -> read -> eval  (value round-trip)
 ; Datums (symbols, lists, atoms) print as their literal form, so they re-READ
 ; equal but would re-EVAL as code -- those use rd. Self-evaluating atoms and the
-; value forms (tuple/tray/hash/functions, and the complex form ~(re im))
+; value forms (tuple/tray/hash/functions, and the complex form (re ~ im))
 ; reconstruct the value under eval -- those use rt.
 ; s2cl turns a string into a charlist of byte codes (get is generic over strings).
 (: (s2cl s) ((: (g i) (? (< i (tally s)) (link (peep s i 0) (g (+ 1 i))))) 0)
@@ -40,7 +40,7 @@
  (aall (= (tuple 1 2 3) (rt (tuple 1 2 3))))
  (aall (= (star-tray '(2 2) '(1 2 3 4)) (rt (star-tray '(2 2) '(1 2 3 4)))))
  (aall (= (gem-tray '(2) '(1.5 2.5)) (rt (gem-tray '(2) '(1.5 2.5)))))
- (= ~(2 -3) (rt ~(2 -3)))
+ (= (2 ~ -3) (rt (2 ~ -3)))
  ; complex arrays round-trip: rank-1 via @((C…)…)->tuple, rank>=2 via (array…) (ca-* from complex.l)
  (aall (= ca-v (rt ca-v)))
  (aall (= ca-m (rt ca-m)))

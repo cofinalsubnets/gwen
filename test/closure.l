@@ -106,7 +106,7 @@
    _ (lots 200000)                                       ; force a major -> fa/ga tenured
    (assert
      (= fa ga)                                           ; alpha-equal across the major pool
-     (= 9 (peep #(fa 9) ga 0))                           ; map keyed on fa, found by alpha-equal ga (eq/hash consistent)
+     (= 9 (peep {fa 9} ga 0))                            ; map keyed on fa, found by alpha-equal ga (eq/hash consistent)
      (< 8 (tally (show fa)))))                           ; show finds the tenured source
 
 ; --- a nested loop nom shadows an enclosing letrec sibling --- a lambda (zap)

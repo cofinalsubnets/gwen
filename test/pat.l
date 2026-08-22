@@ -45,8 +45,8 @@
  (7 = (@ '(7 7) [a a] a 0))
  ('pair = (@ '((1 2) (1 2)) [a a] 'pair 'no))
  ('no = (@ '((1 2) (1 3)) [a a] 'pair 'no))
- ('hit = (@ [3 #('f 3)] [n {'f n}] 'hit 'no))     ; ..across shapes, too
- ('no = (@ [3 #('f 4)] [n {'f n}] 'hit 'no))
+ ('hit = (@ [3 {'f 3}] [n {'f n}] 'hit 'no))      ; ..across shapes, too
+ ('no = (@ [3 {'f 4}] [n {'f n}] 'hit 'no))
  ('(1 1 1) = (@ '(1 1 1) [a a a] [a a a] 0))      ; ..and past two
  ('no = (@ '(1 1 2) [a a a] 'yes 'no))
  (2 = (@ '(1 1 2) [a a b] b 0))                    ; ..a fresh nom after a repeat still binds
@@ -64,21 +64,21 @@
  ('no = (@ '(lam x) (['lam a b] + _) 'fits 'no))
  ('exact = (@ '(lam x b) ['lam a b] 'exact 'no)) ('no = (@ '(lam x b j) ['lam a b] 'exact 'no))
  ; --- a map: keys are EXPRESSIONS, values are patterns, the match is by subset
- (9 = (@ #('f 9) {'f x} x 0))
- (0 = (@ #('g 9) {'f x} x 0))
- (9 = (@ #('f 9 'g 1) {'f x} x 0))         ; subset: an extra key is fine
- (12 = (@ #('f 5 'g 7) {'f a 'g b} (a + b) 0))
- ('found = (@ #('f ()) {'f x} 'found 'no))  ; ⚠ PRESENCE, not truth: a pinned () is present
+ (9 = (@ {'f 9} {'f x} x 0))
+ (0 = (@ {'g 9} {'f x} x 0))
+ (9 = (@ {'f 9 'g 1} {'f x} x 0))          ; subset: an extra key is fine
+ (12 = (@ {'f 5 'g 7} {'f a 'g b} (a + b) 0))
+ ('found = (@ {'f ()} {'f x} 'found 'no))   ; ⚠ PRESENCE, not truth: a pinned () is present
  ('no = (@ 5 {'f x} 'found 'no))
- (: k 'f (9 = (@ #('f 9) {k x} x 0)))      ; ...and a key is an expression, so it can be computed
+ (: k 'f (9 = (@ {'f 9} {k x} x 0)))       ; ...and a key is an expression, so it can be computed
  ; --- a tray, spelled with the sigil the space just gave back
  (5 = (@ @(2 3) @(a b) (a + b) 0))
  (0 = (@ @(2 3 4) @(a b) (a + b) 0))       ; exactly two
  (0 = (@ '(2 3) @(a b) (a + b) 0))
  (6 = (@ @(1 @(3 4)) @(a @(b c)) (b + c - a) 0))
  ; --- the shapes nest, and a nested literal still binds nothing
- ('hit = (@ ['k #('f 1)] ['k {'f 1}] 'hit 'no))    ; ⚠ the ` ctor: a quoted #(..) is a FORM, not a map
- ('no = (@ ['k #('f 2)] ['k {'f 1}] 'hit 'no))
+ ('hit = (@ ['k {'f 1}] ['k {'f 1}] 'hit 'no))    ; ⚠ the ` ctor: a quoted {..} is a FORM, not a map
+ ('no = (@ ['k {'f 2}] ['k {'f 1}] 'hit 'no))
  ; --- a GUARD: (? g pat) is the shape AND the side condition, (? g) the condition alone.
  ; g is an expression read for truth, never a pattern -- it binds nothing.
  ('up = (@ [1 2] (? (a < b) [a b]) 'up 'down))     ; ..and it sees what its own arm binds

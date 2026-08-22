@@ -18,12 +18,12 @@
 ; scalar-star boxes are distinct kinds (KGem/KTwin/KSun) but share one apply cell.
 (: mx-fix 5                              ; KCharm
    mx-real 2.5                            ; KGem, the gem (float box)
-   mx-cpx ~(2 3)                        ; KTwin, complex scalar (Cp)
+   mx-cpx (2 ~ 3)                       ; KTwin, complex scalar (Cp)
    mx-box (<< 1 62)                      ; KSun, the sun (wide int)
    mx-big (100 2)                     ; KBig
    mx-az  @(10 20)                       ; KTrayZ (int tray)
    mx-ar  @(1.5 2.5)                     ; KTrayR (float tray)
-   mx-ac  (array 2 ~(1 2) ~(3 4))      ; KTrayC (packed complex tray)
+   mx-ac  (array 2 (1 ~ 2) (3 ~ 4))    ; KTrayC (packed complex tray)
    mx-ao  (array 2 (100 2) 5)         ; KTrayO (object tray)
    mx-str "ab"                           ; KString
    mx-sym 'ef                            ; KMint (interned)
@@ -85,22 +85,22 @@
  (= (+ 1 (100 2)) (+ (100 2) 1))        ; big + fix == fix + big (commutes)
  (= (* 2 (100 2)) (+ (100 2) (100 2))) ; big + big
  (gem? (+ (100 2) 0.5))                    ; big + float -> float (widens)
- (= ~(4 6) (+ ~(1 2) ~(3 4)))              ; complex + complex
- (= ~(7 3) (+ 5 ~(2 3)))                    ; fix + complex (real -> (5,0))
- (= ~(4.0 3.0) (+ 1.5 ~(2.5 3)))            ; float + complex
- (? word (twin? (+ (<< 1 62) ~(0 1))) 1)         ; box + complex -> complex (64-bit word only)
- (twin? (+ (100 2) ~(0 1)))                  ; big + complex -> complex (widens)
+ (= (4 ~ 6) (+ (1 ~ 2) (3 ~ 4)))           ; complex + complex
+ (= (7 ~ 3) (+ 5 (2 ~ 3)))                  ; fix + complex (real -> (5,0))
+ (= (4.0 ~ 3.0) (+ 1.5 (2.5 ~ 3)))          ; float + complex
+ (? word (twin? (+ (<< 1 62) (0 ~ 1))) 1)        ; box + complex -> complex (64-bit word only)
+ (twin? (+ (100 2) (0 ~ 1)))                 ; big + complex -> complex (widens)
 
  ; --- array tower: each tier with a matching array and with a scalar broadcast ---
  (= gem-tray (tier (+ @(10 20) @(1.5 2.5))))      ; Z + R -> widens to R
  (aall (= @(11.5 22.5) (+ @(10 20) @(1.5 2.5))))
  (aall (= @(3.0 5.0) (+ @(1.5 2.5) @(1.5 2.5)))) ; R + R
- (= ~(2 4) (peep (+ mx-ac mx-ac) 0 0))        ; C + C (packed complex)
+ (= (2 ~ 4) (peep (+ mx-ac mx-ac) 0 0))       ; C + C (packed complex)
  (= top-tray (tier (+ mx-ao mx-ao)))                ; O + O stays exact/object
  (= (* 2 (100 2)) (peep (+ mx-ao mx-ao) 0 0))
  (aall (= @(12 22) (+ @(10 20) 2)))           ; Z + scalar (broadcast, no widen)
- (= ~(11 2) (peep (+ ~(10 0) mx-ac) 0 0))    ; C array + complex scalar
- (= ~(11 2) (peep (+ @(10 20) mx-ac) 0 0))    ; R/Z array + C array (real promotes)
+ (= (11 ~ 2) (peep (+ (10 ~ 0) mx-ac) 0 0))  ; C array + complex scalar
+ (= (11 ~ 2) (peep (+ @(10 20) mx-ac) 0 0))   ; R/Z array + C array (real promotes)
 
  ; --- add_string lane: text x text; a NUMBER (tray included) arrives as the unit
  ;     and the text answers whole. the crossings the spec states once, the orders
@@ -133,10 +133,10 @@
  (? word (= (124 2) (* (<< 1 62) (<< 1 62))) 1) ; box * box -> bignum (64-bit word only)
  (= (200 2) (* (100 2) (100 2)))     ; big * big
  (= -1 (* i i))                               ; complex * complex (i^2, bridges to real)
- (= ~(-5 10) (* ~(1 2) ~(3 4)))            ; Gaussian product
- (= ~(4 6) (* 2 ~(2 3)))                    ; fix * complex
+ (= (-5 ~ 10) (* (1 ~ 2) (3 ~ 4)))         ; Gaussian product
+ (= (4 ~ 6) (* 2 (2 ~ 3)))                  ; fix * complex
  (aall (= @(20 60) (* @(10 30) 2)))           ; Z array * scalar
- (= ~(2 4) (peep (* ~(2 0) mx-ac) 0 0))      ; complex scalar * C array
+ (= (2 ~ 4) (peep (* (2 ~ 0) mx-ac) 0 0))    ; complex scalar * C array
  (= top-tray (tier (* mx-ao mx-ao)))                ; O * O exact
  (= (80 2)                                 ; 2^40 * 2^40, exact (an z array would wrap)
     (peep (* (top-tray '(2) `((40 2) (40 2))) (top-tray '(2) `((40 2) (40 2)))) 0 0))
@@ -163,7 +163,7 @@
  ; --- subtraction `-` is NUMERIC ONLY (text/list/lambda operands -> nil) ---
  (= 3 (- 5 2))   (= 2.5 (- 5 2.5))            ; fix/float tower
  (= (100 2) (- (+ (100 2) 5) 5))        ; bignum
- (= ~(-2 -2) (- ~(1 2) ~(3 4)))            ; complex
+ (= (-2 ~ -2) (- (1 ~ 2) (3 ~ 4)))         ; complex
  (aall (= @(9 18) (- @(10 20) @(1 2))))       ; array elementwise
  (nil? (- '(1) '(2)))                         ; non-numeric -> nil
 
@@ -177,7 +177,7 @@
  ; --- modulo `mod` (fmod on floats); UNDEFINED on complex (-> nil) ---
  (= 1 (% 5 2))   (= 1.0 (% 7.0 2.0))
  (= 2 (% (100 2) 7))                     ; bignum mod fixnum
- (nil? (% ~(1 2) 2))                       ; complex -> nil
+ (nil? (% (1 ~ 2) 2))                      ; complex -> nil
  (nil? (% "a" 2))                           ; non-numeric -> nil
 
  ; === ordered comparison (< <= > >=): a TOTAL ORDER over all values. The BANDS -- points at
@@ -191,10 +191,10 @@
  (< 5 (100 2))   (? word (< (<< 1 62) (100 2)) 1)  ; fix/box < bignum (magnitude-exact)
  (< (100 2) (101 2))                             ; bignum < bignum
  ; --- complex: lexicographic (re, im); a real r is (r, 0) ---
- (< i 1)   (< ~(1 9) ~(2 0))   (< ~(2 1) ~(2 2))   ; re decides, then im
- !(< ~(2 2) ~(2 2))   (<= ~(2 2) ~(2 2))        ; equal complexes
+ (< i 1)   (< (1 ~ 9) (2 ~ 0))   (< (2 ~ 1) (2 ~ 2))   ; re decides, then im
+ !(< (2 ~ 2) (2 ~ 2))   (<= (2 ~ 2) (2 ~ 2))    ; equal complexes
  ; --- the band crossings the spec's line does not carry a rep for ---
- (< "" 1.5)   (< 'z (100 2))   (< "x" ~(1 1))      ; ANY string < ANY number
+ (< "" 1.5)   (< 'z (100 2))   (< "x" (1 ~ 1))     ; ANY string < ANY number
  !(< '(0) 'z)                                     ; ...and a chain is above a point
  ; --- LAMBDA is the top class; within it, ordered by representation hash ---
  (< 5 (+ 1))   (> (+ 1) '(0))   (< "z" (+ 1))         ; everything sorts below a lambda
@@ -217,8 +217,8 @@
  (? word (= (<< 1 62) (<< 1 62)) 1)            ; box = box (64-bit word only)
  (? word !(= (<< 1 62) 0) 1)                ; ...never = a fixnum
  (= (100 2) (100 2))                    ; bignum = bignum
- (= ~(2 0) 2)                                ; complex bridges a real (im 0)
- !(= ~(2 1) 2)                            ; ...but not when im != 0
+ (= (2 ~ 0) 2)                               ; complex bridges a real (im 0)
+ !(= (2 ~ 1) 2)                           ; ...but not when im != 0
  (= 'ef 'ef)   !(= 'ef 'gh)                ; symbol identity
  (= "ab" "ab")                                ; string structural eq
  (= '(1 2) '(1 2))                            ; list structural eq

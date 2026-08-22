@@ -14,7 +14,7 @@
    smp (sm 2)
    smq (sm 3)
    ; a COUNTED kind -- net-mode 1 (slot 6): nets by tally, not by content
-   cntd #(0 'cnt 6 1)
+   cntd {0 'cnt 6 1}
    (cnt p) (coin cntd p)
    (assert
     ; --- what a coin IS ---
@@ -174,6 +174,6 @@
     !(lit? (q 1 2))          ; a rational is DATA -- a value, not a reference (like a number)
     !(lit? a)                ; a mod-n residue too
     !(lit? (sm 5))
-    !(lit? (coin #(0 'd) 5)) ; a plain die -> data
-    (lit? (coin #(0 'h 4 1) 5))    ; ... but a die with DieHot (slot 4) strikes lit coins
+    !(lit? (coin {0 'd} 5))  ; a plain die -> data
+    (lit? (coin {0 'h 4 1} 5))     ; ... but a die with DieHot (slot 4) strikes lit coins
     ))

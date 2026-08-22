@@ -32,7 +32,7 @@
                    0)
         st {0 'q 7 1 6 2}                                       ; slot 7: a rational IS a star;
                                                                 ; slot 6 mode 2: C truth by VALUE
-        ; the four methods land in ONE `pins` (the mutable-accumulator twin of #(..)) -- but as a
+        ; the four methods land in ONE `pins` (the mutable-accumulator twin of {..}) -- but as a
         ; SEPARATE step, not folded into the literal above: a method names `st` back, and binding a
         ; die that references itself compiles here yet fails in the love0 lane ((q 1 2) + (q 1 3)
         ; came out unequal to (q 5 6)). bind the die, THEN pin onto it. 1 + / 2 * / 5 - / 8 /.

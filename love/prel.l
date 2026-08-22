@@ -91,7 +91,7 @@
    (whole? n) (| (charm? n) (| (sun? n) (big? n)))       ; integer-valued numeral (exact power exponent / composition count)
    ; apcap: a PUBLIC tunable ceiling. a numeral compose count above it scares instead of
    ; allocating O(k), so (bignum f) asks for help where it would oom. retune: (pin apcap 0 n).
-   apcap (pin (tablet 0) 0 1048576)              ; (a raw box: the # sigil's hash isn't built yet)
+   apcap (pin (tablet 0) 0 1048576)              ; (a raw box: the brace's hash isn't built yet)
    (ipow b k) (? (< k 1) 1 (: h (ipow b (// k 2)) h2 (* h h) (? (= 0 (% k 2)) h2 (* h2 b))))
    ; each site keeps its OWN (scare 'apcap k) as the cond result, so a recovering help's value
    ; lands as the result directly -- no thunk on the hot path. don't factor it out.
@@ -297,7 +297,7 @@
 (:: '?- (\ a (link '? (cat (cup a) (link (cap a) ())))))
 (:: '>>= (\ l (link (last l) (init l))))
 (:: '<=< (\ g (: y (nom 0) (list '\ y (foldr (\ f x (list f x)) y g)))))
-; (pins t k v ..): pin each pair onto an EXISTING tablet -- the mutable-accumulator twin of #(..),
+; (pins t k v ..): pin each pair onto an EXISTING tablet -- the mutable-accumulator twin of {..},
 ; which mints a fresh one. an odd trailing operand is dropped (no lone key).
 (:: 'pins (\ l (: (go t r) (? (two? (cup r)) (go (list pin t (cap r) (caup r)) (cuup r)) t)
                   (go (cap l) (cup l)))))
@@ -409,13 +409,16 @@
  0 (pins (tablet 0)                                 ; --- ARITY 0: glued. takes nothing from the form
  '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
  '% fraction '? bit '$ saturate '! nil? '^ jot   ; `.` is pinned here by post.l, whose dot it is
+ '# tally '~ conj                              ; the COUNT, and the twin's flip
  '0? nil? '1? one? '2? two?)                   ; the arity predicates: a row is a WORD, so it may
                                                ; spell digits -- 2?<>x is (two? (cap (cup x)))
                                                ; ⚠ ^ ALSO rides arity 2 as xor: the lane is the
                                                ; key, so glued ^x counts up and spaced a ^ b does
-                                               ; not -- $ is the same two-lane sigil (saturate/apply)
+                                               ; not -- $ and ~ are the same two-lane sigil
  1 (tablet 0)                                       ; --- ARITY 1: a right operand and no left. no walk yet
  2 (pins (tablet 0)                                 ; --- ARITY 2: spaced. a left operand and a right
+ '~ '(twin 99)                                      ; the twin, TIGHTEST -- above house, so a complex
+                                                    ; literal binds before any operator, coined ones too
  '** 70
  '* -60 '/ -60 '% -60 '// -60                       ; multiplicative, LEFT -- the MINUS is the hand
  '+ -50 '- -50                                      ; additive
@@ -444,7 +447,7 @@
 (: opnoms (pins (tablet 0)
    cap 'cap cup 'cup net 'net prod 'prod abs 'abs negate 'negate
    reciprocal 'reciprocal fraction 'fraction bit 'bit saturate 'saturate
-   nil? 'nil? jot 'jot one? 'one? two? 'two?)
+   nil? 'nil? jot 'jot one? 'one? two? 'two? tally 'tally conj 'conj)
    (opnom v) (? (two? v) 0 (peep opnoms v 0))       ; a list is never a row; keep it off the hash
    (opword v) (: n (opnom v) (? n n v))             ; ..and the TOTAL one: the word, or v untouched
    (unglue x) (? (nil? (two? x)) x
@@ -825,10 +828,10 @@
    (a-shape s) (? (two? s) (map a-dim s) (list (a-dim s))))
 
 ;;; FIXME we new names for these. tuple isn't too bad but "hash" for the tablet constructor is wrong
-; tuple/hash value constructors -- also the read-back targets of the printed @(…) / #(…)
+; tuple/hash value constructors -- also the read-back targets of the printed @(…) / {…}
 (: (spread l) (tray (a-type l) (list (foldl (\ n _ (1 + n)) 0 l)) l))
 (:: 'tuple (\ a (list 'spread ('list >< a))))
-; (hash x) boxes any non-list: a fresh tablet pinning x at 0, so #5 = #(0 5) and #() IS #0.
+; (hash x) boxes any non-list: a fresh tablet pinning x at 0, so {5} = {0 5} and {} IS {0}.
 ; an odd trailing operand lands in that 0 slot.
 (: (hashtx a) (? (atom? a) '(tablet 0)
                  (atom? >a) (list 'pin (hashtx 0) () <a)
