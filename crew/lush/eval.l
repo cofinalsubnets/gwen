@@ -208,7 +208,7 @@
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
    sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false" "command"
                 "read" "set" "shift" "unset" "eval" "." "wait" "local"
-                "break" "continue" "return" "ev")
+                "break" "continue" "return" "ev" "trap")
    (sh-bi? nm) (sh-smem? nm sh-binames)
    (sh-readb args)
      (: args2 (? (two? args && (<args = "-r")) >args args)
@@ -246,6 +246,44 @@
               (: _ (pin sh-retf () 0)            ; a stale interactive `return` must not clip the file
                  p (open f "r") _ (sh-lines p "") _ (close p) (sh-status ()))
               (cmderr (f + ": not found")))))
+   ; trap [ACTION] CONDITION.. -- POSIX. No operands lists what is set, in a form
+   ; that reads back in. `-` as the action restores the default, '' ignores, and
+   ; both are spelled by REMOVING the entry: nothing here delivers a signal, so an
+   ; ignored one and a defaulted one behave alike (see job.l's note).
+   ; ⚠ a CONDITION ALONE is the reset form -- `trap INT` is not "trap with an
+   ; empty action", it is `trap - INT`. A first word that names a condition is
+   ; therefore never an action, which is also why EXIT and 0 both spell the same
+   ; row: sh-cond normalises before anything is stored.
+   (sh-cond w)
+     (: u (sh-upper w)
+        v (? ((tally u) > 3 && (snip u 0 3) = "SIG") (snip u 3 (tally u)) u)
+        (? (v = "0") "EXIT" v))
+   (sh-upper s)                                 ; ⚠ an INDEX walk: foldl does not take a string
+     ((: (g i acc)
+         (? (i = tally s) acc
+            (: b (s i) (g (1 + i) (acc + string (? (97 <= b < 123) (b - 32) b))))))
+      0 "")
+   (sh-cond? w) (: c (sh-cond w)
+                   (any (\ k (k = c)) '("EXIT" "INT" "TERM" "HUP" "QUIT" "USR1" "USR2"
+                                        "ALRM" "PIPE" "CHLD" "TSTP" "CONT" "ABRT")))
+   (sh-trapb args)
+     (? !(two? args)
+        (: _ (each (keys sh-traps)
+                   (\ k (puts ("trap -- '" + (peep sh-traps k "") + "' " + k + "\n"))))
+           0)
+        (: a2 (? (<args = "--") >args args)
+           (? !(two? a2) 0
+              (sh-cond? <a2) (: _ (each a2 (\ w (pull sh-traps (sh-cond w) 0))) 0)
+              (<a2 = "-") (: _ (each >a2 (\ w (pull sh-traps (sh-cond w) 0))) 0)
+              (: act <a2
+                 conds >a2
+                 bad (filter (\ w !(sh-cond? w)) conds)
+                 (? (two? bad)
+                    (: _ (say err ("lush: trap: " + <bad + ": bad condition\n")) 1)
+                    (: _ (each conds
+                               (\ w (? (tally act) (pin sh-traps (sh-cond w) act)
+                                       (pull sh-traps (sh-cond w) 0))))
+                       0))))))
    (sh-localb args)
      (: _ (each args (\ w (: p (sh-eqpos w 0)
                              (? !p (pin sh-vars w "")
@@ -295,6 +333,7 @@
              (: t (? >argv <>argv ("" + (getenv "HOME")))
                 r (chdir t)
                 (? (charm? r) (: _ (say err ("lush: cd: " + (t + "\n"))) 1) 0))
+           (cmd = "trap") (sh-trapb >argv)
            (cmd = "export") (: _ (each >argv sh-export) 0)
            ; `command -v W` -- the probe every configure-shaped script opens with, and a
            ; SPECIAL BUILTIN, so it was forking and answering ENOENT: 12 of them in one
@@ -743,6 +782,10 @@
    (sh-dropcaps _)
      (: _ (each (sh-subfds ()) (\ e (: _ (fdclose <e) _ (catch >e) 0)))
         _ (pin sh-subfds () ())
+        ; ⚠ and NO TRAP of its parent's: POSIX resets a caught condition in a
+        ; subshell, and a `( exit )` that ran the EXIT action would take the
+        ; parent's temp dir out from under it while the parent was still working.
+        _ (each (keys sh-traps) (\ k (pull sh-traps k 0)))
         0)
    (sh-tabsnap t) (map (\ k (k >< (t k))) (keys t))
    (sh-tabback t sn)

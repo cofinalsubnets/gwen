@@ -73,6 +73,19 @@
                      40 (sh-subp s n (i + 1) (depth + 1) 0 0)
                      41 (depth = 1 ? (i + 1) (sh-subp s n (i + 1) (depth - 1) 0 0))
                      _  (sh-subp s n (i + 1) depth 0 0)))))
+   ; $(( .. )): the arithmetic extent. i is past the two ( -- scan to the ) that
+   ; closes the INNER one, then demand a ) hard after it. ⚠ the demand is the whole
+   ; test: `$((cd a) && b)` is a command substitution whose first word opens a
+   ; subshell, and POSIX says a real arithmetic expansion writes `$( (a) )` to say
+   ; the other thing. So a failed match is not an error, it is the other reading.
+   ; -> (text . j past the second )) | ()
+   (sh-arip s n i depth)
+     (? (i = n) ()
+        (: b (s i)
+           (? (b = 40) (sh-arip s n (i + 1) (depth + 1))
+              (b = 41) (? depth (sh-arip s n (i + 1) (depth - 1))
+                           (? ((i + 1) < n && s (i + 1) = 41) i ()))
+              (sh-arip s n (i + 1) depth))))
    ; `...` -> (text . j-past) | ()
    (sh-btesc? b) (b = 96 || b = 92 || b = 36)
    (sh-bt s n i acc)
@@ -143,8 +156,10 @@
            (spec nm) (('var >< nm) >< (i + 1))    ; the one-byte specials, $? $@ ..
            (b @ 63 (spec "?") 64 (spec "@") 42 (spec "*")
                  35 (spec "#") 36 (spec "$") 33 (spec "!")
-              40 (: e (sh-subp s n (i + 1) 1 0 0)
-                    (? !e 'unterm (('sub >< snip s (i + 1) (e - 1)) >< e)))
+              40 (: ar (? ((i + 1) < n && s (i + 1) = 40) (sh-arip s n (i + 2) 0) ())
+                    (? (charm? ar) (('ari >< snip s (i + 2) ar) >< (ar + 2))
+                       (: e (sh-subp s n (i + 1) 1 0 0)
+                          (? !e 'unterm (('sub >< snip s (i + 1) (e - 1)) >< e)))))
               ; ${( -- the love arm takes the extent off the READER, never off
               ; sh-brace, which counts a } inside a love "" or after a ; and would
               ; cut the form in the wrong place

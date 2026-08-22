@@ -36,6 +36,33 @@
    sh-curline {0}                              ; the source line under eval (job display)
    sh-vars (tablet 0)                          ; shell variables (name -> value; export promotes)
    sh-funcs (tablet 0)                         ; functions (name -> the PLANNED body)
+   ; --- trap: the action for a condition, and the door it leaves through -------
+   ; sh-traps holds CONDITION -> action text. sh-runtrap is the evaluator, pinned
+   ; by eval.l at load the way word.l's sh-subeval is -- job compiles first, and
+   ; the action is shell source that only eval can read.
+   ; ⚠ ONCE. sh-trapped guards the EXIT action against an `exit` inside it, which
+   ; would otherwise re-enter sh-leave and run the cleanup a second time.
+   ; ⚠ AND ONLY EXIT IS DELIVERED. A signal condition is recorded and honoured
+   ; nowhere: the `signal` nif offers SIG_IGN and SIG_DFL and no handler, so a
+   ; caught INT wants sigfd and a park in the wait loop, which is a shape this
+   ; shell does not have yet. `trap .. EXIT INT TERM` therefore cleans up on every
+   ; ordinary end and not on ^C -- said here because a reader of the script would
+   ; otherwise have no way to know.
+   sh-traps (tablet 0)
+   sh-runtrap {0}
+   sh-trapped {0}
+   ; ⚠ THE STATUS IS THE ONE THE SHELL WAS LEAVING WITH. POSIX says the action
+   ; runs with $? as it stood, and the shell still exits on that -- `false` under
+   ; an EXIT trap is still a 1, however well the cleanup went. Only an explicit
+   ; `exit` inside the action changes it, and that one leaves through sh-leave.
+   (sh-fire-exit _)
+     (: a (peep sh-traps "EXIT" "")
+        (? ((0 = (sh-trapped ())) && (tally a))
+           (: st (sh-status ())
+              _ (pin sh-trapped () 1)
+              _ ((sh-runtrap ()) a)
+              _ (pin sh-status () st) 0)
+           0))
    sh-nofn (mint 0)                            ; that plan is a closure, so peep names its absence
    sh-pos {0}                                  ; the positionals, a list of strings
    sh-arg0 {0}                                 ; $0 (the script path, or the shell)
@@ -68,7 +95,7 @@
    (sh-leave st)
      (? (sh-subfds ()) ('xit >< st)
         (0 < (sh-online ())) (scare 'sh-exit st)
-        (quit st))
+        (: _ (sh-fire-exit 0) (quit st)))
    sh-retf {0}                                 ; a top-level `return` landed: sh-lines stops its file (dot-return)
 
    ; --- read one line (cooked): bytes until \n; 'eof at immediate EOF. here on

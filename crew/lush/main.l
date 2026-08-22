@@ -30,9 +30,17 @@
    ; ~/.profile, whatever mode it runs in; interactive shells layer $ENV (else
    ; ~/.lushrc) on top, in (sh _) below. the chsh story lives in doc/lush.md.
    (sh-profiles _)
-     (? (sh-login ())
-        (: _ (sh-src "/etc/profile") (sh-src (("" + (getenv "HOME")) + "/.profile")))
-        0)
+     (: _ (sh-armtrap 0)
+        (? (sh-login ())
+           (: _ (sh-src "/etc/profile") (sh-src (("" + (getenv "HOME")) + "/.profile")))
+           0))
+   ; job.l's exit door runs the EXIT action, and it is one file too early to know
+   ; what a shell line is -- the same distance word.l keeps from sh-cmdsub, and
+   ; the same box answer. ⚠ BUT NOT THE SAME PIN. sh-subeval takes the bare name
+   ; sh-cmdsub because eval.l can read it where it stands; sh-line it cannot, since
+   ; reading a name BUILDS it and sh-line and sh-eval-top call each other. HERE the
+   ; name is an ordinary export of a module already loaded, and reads like one.
+   (sh-armtrap _) (pin sh-runtrap () (\ src (sh-line src)))
    ; the script lane rides eval.l's sh-lines ('more gathers continuations,
    ; `exit` quits from inside); $0 and the positionals land before the run
    (sh-file path args)
@@ -40,7 +48,8 @@
         (: _ (pin sh-arg0 () path)
            _ (pin sh-pos () args)
            _ (sh-profiles 0)
-           p (open path "r") _ (sh-lines p "") _ (close p) (quit (sh-status ())))
+           p (open path "r") _ (sh-lines p "") _ (close p)
+           _ (sh-fire-exit 0) (quit (sh-status ())))
         (: _ (say err (("lush: " + path) + ": not found\n")) (quit 127)))
    (sh-c cmd rest)                              ; -c CMD [name [args..]], POSIX
      (: _ (pin sh-arg0 () (? (two? rest) <rest "lush"))
@@ -48,7 +57,7 @@
         _ (sh-profiles 0)
         r (sh-line cmd)
         _ (? (two? r) (: _ (say err "lush: unexpected eof\n") (pin sh-status () 2)) 0)
-        (quit (sh-status ())))
+        _ (sh-fire-exit 0) (quit (sh-status ())))
    ; the flag word: c e u x, bundled or apart. `sh -ec CMD` is what a Makefile's
    ; .SHELLFLAGS writes and what every shell takes, so a bundle is not a courtesy --
    ; without it lush cannot BE the SHELL of a make. answers (1 c? rest) with e/u/x
