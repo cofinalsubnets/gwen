@@ -446,12 +446,26 @@
     0 0 0)
 
    ; -- a Makefile is read line by line; first fold \<newline> continuations --
+   ; ⚠ TWO RULES, because make has two. OFF a recipe, `<ws>*\<newline><ws>*` is ONE
+   ; SPACE and the whitespace either side goes with it. IN a recipe the join is the
+   ; SHELL's: the backslash-newline goes entirely, nothing stands in its place, and
+   ; only the continuation's leading TAB is eaten. A recipe is decided by the FIRST
+   ; physical line of the logical one, so the flag survives every fold.
+   (rtws s) (: i ((: (g j) (? ((0 < j) && ((s (j - 1) = 32) || (s (j - 1) = 9))) (g (j - 1)) j))
+                  (tally s))
+               (snip s 0 i))
    (uncont s)
-   ((: (g i acc)
+   ((: (g i acc rec bol)
        (? (i >= tally s) acc
-          (? ((s i = 92) && ((1 + i) < tally s) && (s (1 + i) = 10))
-             (g (2 + i) (acc + " ")) (g (1 + i) (acc + string (s i))))))
-    0 "")
+          (: c (s i)
+             (? ((c = 92) && ((1 + i) < tally s) && (s (1 + i) = 10))
+                (? rec (: j (2 + i) (g (? ((j < tally s) && (s j = 9)) (1 + j) j) acc rec 0))
+                   (: j ((: (h k) (? ((k < tally s) && ((s k = 32) || (s k = 9))) (h (1 + k)) k))
+                         (2 + i))
+                      (g j (rtws acc + " ") rec 0)))
+                (c = 10) (g (1 + i) (acc + "\n") rec 1)
+                (g (1 + i) (acc + string c) (? bol (c = 9) rec) 0)))))
+    0 "" 0 1)
    (lines s)
    ((: (g i st acc)
        (? (i >= tally s) (rev (snip s st i >< acc))
@@ -826,6 +840,7 @@
        _ (pins as "@D" (? (nom? t) "." (dslash t)) "@F" (? (nom? t) (show t) (fnotdir t)))
        fl (shflags as)
        sn (shname as)
+       quiet? (0 < tally (peep as ".SILENT" ""))
        ; make reads the @/-/+ modifiers AFTER expansion too (the $(Q)-as-@
        ; verbose-build idiom; mk/lib.mk's lcat_h leads with @ from inside the
        ; variable) -- so re-strip the EXPANDED line and fold its flags in.
@@ -852,7 +867,7 @@
           (: (g rs es acc)
               (? !(two? rs) (rev acc)
                  (: raw <rs e <es
-                    sil (<raw || <e) ign (<>raw || <>e) cmd >>e
+                    sil (<raw || <e || quiet?) ign (<>raw || <>e) cmd >>e
                     ; -n says the line and runs nothing -- and @ does not hide it, which is
                     ; make's rule: the point of -n is to show the silent ones too.
                     st (? (peep dryrun 0 0) (\ _ (: _ (puts cmd) (putc 10)))
@@ -1023,15 +1038,21 @@
    ; builtin %.o: %.c then compiles the file with DEFAULT flags instead of the ones
    ; the Makefile spent its whole config.mk computing (st, exactly).
    sufs '("c" "cc" "C" "cpp" "S" "s" "o" "a" "h" "y" "l" "f" "F" "p" "r" "m" "sh")
+   ; ..and the list a Makefile SAYS, which is the whole point of `.SUFFIXES`: bare, it
+   ; clears; with prerequisites, it adds. Held in a box because sufpat is asked per rule
+   ; and the declaration may be any line above. sufs is the seed, make's own default.
+   sufbox (tablet 0)
+   (sufnow _) (peep sufbox 0 sufs)
+   (sufknown x) (any (\ v (v = x)) (sufnow 0))
    (sufpat t)
    (: n (tally t)
       (? (|| (n < 2) !(t 0 = 46)) 0
          (: (lastdot k r) (? (n <= k) r (? (t k = 46) (lastdot (1 + k) k) (lastdot (1 + k) r)))
             d (lastdot 1 0)
             (? (d = 0)                                        ; .c -> % : %.c
-               (? (any (\ s (s = snip t 1 n)) sufs) `("%" ("%" + t)) 0)
+               (? (sufknown (snip t 1 n)) `("%" ("%" + t)) 0)
                (: sr (snip t 1 d) tg (snip t (1 + d) n)       ; .c.o -> %.o : %.c
-                  (? (&& (any (\ s (s = sr)) sufs) (any (\ s (s = tg)) sufs))
+                  (? (&& (sufknown sr) (sufknown tg))
                      `(("%." + tg) ("%." + sr)) 0))))))
 
    ; split a prereq word list at a `|` into (normal . order-only).
@@ -1053,6 +1074,22 @@
       ; expansion -- so record it where expand-steps already looks: `as`.
       _ (each rules (\ r (? (any (\ t (t = ".ONESHELL")) (expand-words `(<r) as))
                             (pin as ".ONESHELL" "1") 0)))
+      ; `.SUFFIXES:` bare EMPTIES the vocabulary, and each one after it adds -- read in
+      ; file order, before any rule asks sufpat, or a rule above its own declaration
+      ; would be judged by the defaults.
+      _ (each rules (\ r (? (any (\ t (t = ".SUFFIXES")) (expand-words `(<r) as))
+                            (: ws (expand-words `(<>r) as)
+                               (? (two? ws)
+                                  (pin sufbox 0 ((sufnow 0) + map (\ w (? ((0 < tally w) && (w 0 = 46))
+                                                                          (snip w 1 (tally w)) w)) ws))
+                                  (pin sufbox 0 ())))
+                            0)))
+      ; .SILENT with NO prerequisites quiets every recipe -- the whole-file form, which
+      ; is the one anybody writes. Named prerequisites quiet only those targets, and
+      ; that wants a per-target ask expand-steps has no room for yet.
+      _ (each rules (\ r (? ((any (\ t (t = ".SILENT")) (expand-words `(<r) as))
+                             && (0 = tally (trim <>r)))
+                            (pin as ".SILENT" "1") 0)))
       (mk-item nm) (? (peep phony nm 0) (intern nm) nm)
       patbox (tablet 0)        ; accumulates implicit pattern rules: (tgtpat prs oos . raws)
       _ (each rules (\ r
