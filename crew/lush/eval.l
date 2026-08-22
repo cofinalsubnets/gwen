@@ -24,6 +24,11 @@
            (setenv (snip w 0 p) (snip w (p + 1) (tally w)))))
 
    (cmderr msg) (: _ (say err ("lush: " + (msg + "\n"))) _ (pin sh-status () 1) 1)
+   ; ⚠ the exec is the CHILD's, and a child that cannot exec has no voice: it can
+   ; only _exit(127). so an unfindable word is answered HERE, before the fork, where
+   ; there is still a shell to say it -- see sh-simple's spawn arm.
+   (sh-saynf w) (say err ("lush: " + (w + ": not found\n")))
+   (sh-nofound w) (: _ (sh-saynf w) _ (pin sh-status () 127) (sh-echk 127))
 
    ; --- redirects -> the fdmap ------------------------------------------------
    ; (sh-rdmap redirs) -> (1 fdmap opens writes) | ('err . msg). opens close in
@@ -367,7 +372,11 @@
    (sh-spawn1 st base allclose pg fgi)
      (: _ (flush out) _ (flush err)
         (? (id? (sh-nth st 0) 'x)
-           (spawnmap (sh-nth st 1) (base + (sh-nth st 2)) allclose pg fgi)
+           ; the stage is spawned either way -- its 127 is the child's own and the
+           ; pipeline's status bookkeeping wants a real pid; only the WORD is ours to say
+           (: w <(sh-nth st 1)
+              _ (? (two? (sh-whichp w)) 0 (sh-saynf w))
+              (spawnmap (sh-nth st 1) (base + (sh-nth st 2)) allclose pg fgi))
            (: p (fork 0)
               (? (p = 0)
                  (: _ (wear ())                   ; ⚠ a child wears the CONSOLE: its fds are the dup2 below, and a jug is not one
@@ -467,11 +476,16 @@
               (? (id? <rm 'err) (cmderr >rm)
                  (: opens (sh-nth rm 2) wrs (sh-nth rm 3)
                     _ (flush out) _ (flush err)      ; see sh-spawn1: the child writes the fd straight
-                    pid (spawnmap argv (sh-nth rm 1) (opens + (map cap wrs))
-                                  (sh-pgm 0) (sh-fgm 0))
+                    ; the redirects are already open, which is where a shell answers an
+                    ; unfindable word from -- `nope > f` still makes f, then says so
+                    pid (? (two? (sh-whichp <argv))
+                           (spawnmap argv (sh-nth rm 1) (opens + (map cap wrs))
+                                     (sh-pgm 0) (sh-fgm 0))
+                           ())
                     _ (each opens fdclose)
                     _ (sh-hwrite wrs)
-                    (? (pid < 0) (cmderr (<argv + ": cannot spawn"))
+                    (? !(charm? pid) (sh-nofound <argv)
+                       (pid < 0) (cmderr (<argv + ": cannot spawn"))
                        (: _ (sh-waitfg [pid] (sh-unwords argv))
                           (sh-echk (sh-status ())))))))))
    (sh-fncall body argv)
