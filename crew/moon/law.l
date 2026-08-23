@@ -1551,23 +1551,24 @@
       (= 0 (spsts df)))
    ; stld: a slot binding rides a mov and survives its source's death (the reload elides);
    ; when every carrier dies the reload stands
+   g4 {}
    sq '((st r4 40 r0) (mov r9 r0) (la r0 s) (cmp r9 r0) (br eq .t7) (ld r9 r4 40) (la r0 s2) (cmp r9 r0))
    _ (assert
-      !(member? '(ld r9 r4 40) (stld sq))
-      (member? '(ld r9 r4 40) (stld '((st r4 40 r0) (mov r9 r0) (la r0 s) (la r9 s2) (ld r9 r4 40)))))
+      !(member? '(ld r9 r4 40) (stld g4 sq))
+      (member? '(ld r9 r4 40) (stld g4 '((st r4 40 r0) (mov r9 r0) (la r0 s) (la r9 s2) (ld r9 r4 40)))))
    ; the narrow adjacent pair forwards on any base wearing the load's extension: same
    ; register becomes the bare extension, a fresh one a mov + extension, the signed load
    ; its sign form -- and a stranger between kills it (adjacency is the whole license)
    _ (assert
-      ('((st4 r4 40 r0) (zx4 r0)) = (stld '((st4 r4 40 r0) (ldu4 r0 r4 40))))
-      ('((st4 r5 40 r0) (mov r9 r0) (zx4 r9)) = (stld '((st4 r5 40 r0) (ldu4 r9 r5 40))))
-      ('((st4 r4 40 r0) (sx4 r0)) = (stld '((st4 r4 40 r0) (ld4 r0 r4 40))))
-      ('((st2 r4 40 r0) (zx2 r0)) = (stld '((st2 r4 40 r0) (ldu2 r0 r4 40))))
-      ('((st1 r4 40 r0) (mov r9 r0) (zx1 r9)) = (stld '((st1 r4 40 r0) (ldu1 r9 r4 40))))
-      (member? '(ldu4 r0 r4 48) (stld '((st4 r4 40 r0) (ldu4 r0 r4 48))))
-      (member? '(ldu4 r0 r4 40) (stld '((st4 r4 40 r0) (mov r9 r1) (ldu4 r0 r4 40))))
+      ('((st4 r4 40 r0) (zx4 r0)) = (stld g4 '((st4 r4 40 r0) (ldu4 r0 r4 40))))
+      ('((st4 r5 40 r0) (mov r9 r0) (zx4 r9)) = (stld g4 '((st4 r5 40 r0) (ldu4 r9 r5 40))))
+      ('((st4 r4 40 r0) (sx4 r0)) = (stld g4 '((st4 r4 40 r0) (ld4 r0 r4 40))))
+      ('((st2 r4 40 r0) (zx2 r0)) = (stld g4 '((st2 r4 40 r0) (ldu2 r0 r4 40))))
+      ('((st1 r4 40 r0) (mov r9 r0) (zx1 r9)) = (stld g4 '((st1 r4 40 r0) (ldu1 r9 r4 40))))
+      (member? '(ldu4 r0 r4 48) (stld g4 '((st4 r4 40 r0) (ldu4 r0 r4 48))))
+      (member? '(ldu4 r0 r4 40) (stld g4 '((st4 r4 40 r0) (mov r9 r1) (ldu4 r0 r4 40))))
       ; a store fed by an adjacent li declines: the triple is the si fold's
-      (member? '(ldu1 r0 r4 40) (stld '((li r0 1) (st1 r4 40 r0) (ldu1 r0 r4 40)))))
+      (member? '(ldu1 r0 r4 40) (stld g4 '((li r0 1) (st1 r4 40 r0) (ldu1 r0 r4 40)))))
    ; rezx: a re-extension over a register the producing op left clean drops; a mov
    ; carries the width, a def dirties it, a label clears the table, and an ask
    ; NARROWER than the known clean width stands
@@ -1580,6 +1581,19 @@
       (member? '(zx1 r0) (rezx '((ldu4 r0 r4 40) (zx1 r0) (ret))))
       (member? '(zx4 r0) (rezx '((ldu4 r0 r4 40) (add r0 r0 r1) (zx4 r0) (ret))))
       (member? '(zx4 r0) (rezx '((ldu4 r0 r4 40) (label .z9) (zx4 r0) (ret)))))
+   ; the a64 lane: the sweeps ride fp as the base past a4ize, a cs restore is an
+   ; anchor there like x64's r3/cs reloads, and the immediate gates decline what
+   ; the target has no encoding for (si, a non-mask logical, a wide cmp)
+   gA {'tgt 'arm64}
+   _ (assert
+      ('((st fp 40 r0) (mov r9 r0)) = (stld gA '((st fp 40 r0) (ld r9 fp 40))))
+      (member? '(ld r19 fp -16) (stld gA '((st fp -16 r19) (ld r19 fp -16))))
+      (member? '(and r0 r0 r1) (cfoldir gA '((li r1 5) (and r0 r0 r1) (ret))))
+      (member? '(and r0 r0 7) (cfoldir gA '((li r1 7) (and r0 r0 r1) (ret))))
+      (member? '(st r5 8 r0) (addrfold gA '((li r0 3) (st r5 8 r0) (ret))))
+      (member? '(si r5 8 3) (addrfold g4 '((li r0 3) (st r5 8 r0) (ret))))
+      (member? '(cmp r0 r1) (addrfold gA '((li r1 70000) (cmp r0 r1) (ret))))
+      (member? '(cmp r0 70000) (addrfold g4 '((li r1 70000) (cmp r0 r1) (ret)))))
    ; end to end: the pointp shape (the vm's hottest compare chain) runs slot-free -- p rides
    ; its park through both compares and the dead store sweeps
    irE (cgn "typedef long word; typedef struct ai { long x; } ai_t; typedef void lvm_t(ai_t *); typedef struct cell { lvm_t *ap; } cell_t; static void lvm_sym(ai_t *g) { g->x = 1; } static void lvm_nom(ai_t *g) { g->x = 2; } static inline int lamp(word x) { return !(x & 1) && x != 0; } static inline cell_t *cell(word x) { return (cell_t *)x; } static inline int pointp(word x) { lvm_t *p; return lamp(x) && ((p = cell(x)->ap) == lvm_sym || p == lvm_nom); } long probe(word a, word b) { if (((a & b & 1)) || pointp(a) || pointp(b)) return a == b; return 7; } int main() { return (int)probe(3, 5); }")
@@ -1635,8 +1649,8 @@
          '((mov r5 r9) (li r9 3) (add r0 r5 r9) (ret))))
    ; cfoldir's root-restore drop rides past reads; the epilogue sp restore stands
    (assert
-      (= (cfoldir '((mov r9 r6) (test r9 1) (mov r6 r9) (ret))) '((mov r9 r6) (test r9 1) (ret)))
-      (member? '(mov sp r4) (cfoldir '((mov r4 sp) (sub sp sp 16) (mov sp r4) (ret))))))
+      (= (cfoldir gP '((mov r9 r6) (test r9 1) (mov r6 r9) (ret))) '((mov r9 r6) (test r9 1) (ret)))
+      (member? '(mov sp r4) (cfoldir gP '((mov r4 sp) (sub sp sp 16) (mov sp r4) (ret))))))
 
 ; -- THE EXHAUSTION: the rename relation is FINITE -- one shape per op rdsp knows, at most two
 ; read positions each, fifteen registers in the gp file -- so "can this pass hand holo a form the

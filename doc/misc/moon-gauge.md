@@ -168,13 +168,36 @@ names the evidence that prices it:
    required zexts (after 64-bit ALU) stand. cc_block 619 → 486 insns; sha256
    204 → **195 ms** (2.57× gcc), crc32 1.42× → 1.33×, cksum 1.38× → 1.23×; .text
    −8,192 B. "Free on Zen" was wrong — same-register 32-bit movs are not eliminated.
-   ⚠ the sweeps run on the x64 lane only (arm rides the raw forms), so the in-order
-   targets still carry the chatter until that older boundary moves.
 4. **chacha's residual is the rung-6 shape, not a gen.l rung.** cc_block's 16-word state
    gets zero residency: 269 of 619 instructions touch the frame, every element op a
    load-op-store round trip. The mechanism that chased this (the vmap) priced negative
    and is deleted; the pare plan's answer is the flat.l valve — a hand kernel in holo's
    neutral IR, built on demand, not another thousand lines of gen.l.
+
+## the arm64 lane rides the sweeps (2026-08-23)
+
+The sweep chain reaches arm64 — at the POST-CHOICE seam (before deadlab), not inside
+build. The seam is the whole design: the rankers price ir1 as built (nreads/ntouch), and
+an in-build sweep starves them — nreads on swept ir1 fell below the home gate and irDa's
+params shipped as slot traffic instead of homes, worse than either the old homed or the
+new swept shape. Post-choice, every pricing decision is exactly as before and the CHOSEN
+ir gets cleaned: pipeline output was the raw forms; it is now the swept forms with homes
+intact. On x64 the sweeps stay inside build — that regime is what the whole census
+priced, and 153/153 battery programs are byte-identical across this change.
+
+What moved: the passes took the target (`cfoldir g` / `stld g` / `addrfold g`), the frame
+base is `(fbase g)` (fp past a4ize — pre-a4ize an r4 is also the 5th argument, so the
+base laws only hold after the retarget), the epilogue anchors are `csregs` (`stldkp`),
+`deadcell`'s path-exit pops are fp/lr, and the imm-form folds ask `imma` (the fold face
+of `immok`: a64 add/sub ±16M, cmp ±4095, logicals bottom-aligned masks, mul never).
+`cmpfuse` and the `si` fold stay home — no memory-operand compare and no store-immediate
+off x64. The epilogue's `(lea sp fp 0)` is teardown, not an address take (stld/deadst).
+
+Priced by count — on fixed-width arm64 count IS bytes, and on in-order cores it is
+close to cycles: the 150-program battery's .text −28,672 B (**−2.76%**), 131/150
+programs changed, riscv byte-identical (still unswept — its lane needs its own rezx
+producer table: `rorw` sign-extends). Gates: ccarm64 150, cts_arm64 211/220, fixpoint,
+test_slow, and a cross-seeded `love-aarch64` bakes and runs `love cc` under qemu.
 
 ## how to measure
 
