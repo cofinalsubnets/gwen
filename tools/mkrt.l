@@ -33,17 +33,36 @@
           (? q (: _ (rt-rdev (flow q)) (close q))
              (rt-die ("no backend aboard and no text at " + f)))))
    (rt-bytes s i acc) (? (i < 0) acc (rt-bytes s (i - 1) ((s i) >< acc)))
-   (rt-le8 v i acc) (? (i = 8) acc (rt-le8 (v >> 8) (i + 1) (acc + `((v & 255)))))
+   (rt-le8 v i acc) (? (i = 8) acc (rt-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
    (rt-zeros k acc) (? (k < 1) acc (rt-zeros (k - 1) (0 >< acc)))
+
+   ; the archives are three independent mooncc runs -- a cold one is ~45 s and
+   ; nothing in it reads another -- so build them at once and let the runtime
+   ; cache be the join: a child's whole output is the entry it writes, which is
+   ; what `one` below reads back. no cache directory, no fan-out: the work
+   ; would die with the child. a fork we asked for and did not get leaves its
+   ; target to `one`, one archive slower.
+   (rt-fan rtarch cd id ts)
+    (? !(string? cd) ()
+       (: _ (flush out) _ (flush err)
+          ps (rt-kids rtarch cd id ts ())
+          (foldl (\ _ p (wait p)) 0 ps)))
+   (rt-kids rtarch cd id ts acc)
+    (? !(two? ts) acc
+       (: p (fork 0)
+          (? (p = 0) (: _ (rtarch cd id "crew/moon/" <ts 'linux ()) (quit 0))
+             (0 < p) (rt-kids rtarch cd id >ts (p >< acc))
+             acc)))
+
    ; one member: label len, label bytes, zero-padded so the NEXT len lands
    ; 8-aligned (a riscv core may trap an unaligned word; the pad is free)
    (rt-forms nm s)
     (: n (tally s)
        pad ((8 - (n & 7)) & 7)
-       `(`('label (name ("ai_rtgz_" + nm + "_len")))
-         `('raw (rt-le8 n 0 ()))
-         `('label (name ("ai_rtgz_" + nm)))
-         `('raw (rt-bytes s (n - 1) (rt-zeros pad ())))))
+       [['label (name ("ai_rtgz_" + nm + "_len"))]
+        ['raw (rt-le8 n 0 ())]
+        ['label (name ("ai_rtgz_" + nm))]
+        ['raw (rt-bytes s (n - 1) (rt-zeros pad ()))]])
 
    (mkrt arch dst)
     ; every ARCHIVE arch joins, not just the object's: the image bakes the
@@ -60,6 +79,7 @@
        mcid (from 'moon 'mcid)
        id (mcid "crew/moon/")
        cd (? (string? id) ((from 'moon 'mcdir) ()) ())
+       _ (rt-fan rtarch cd id '(x64 arm64 riscv64))
        ; DEFLATED: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
        ; and rtcarried pays one inflate for the ISA it wants.
        (one tgt) (: a (rtarch cd id "crew/moon/" tgt 'linux ())

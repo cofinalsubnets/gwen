@@ -22,14 +22,14 @@
 
 (? (lit? (from 'holo 'objelf)) (use 'holo) 0) ; splice the assembler when this love is baked; the guard below says so when not
 
-(: (mksrc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
+(: (mksrc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
    (mksrc-die m) (: _ (say err ("mksrc: " + m + "\n")) (quit 1))
 
    ; text -> the byte list `raw` takes. Built from the tail so the walk is a tail call
    ; and the list comes out in order; ~0.25 s over a 3.6 MB archive.
    (mksrc-bytes s i acc) (? (i < 0) acc (mksrc-bytes s (i - 1) ((s i) >< acc)))
    ; a little-endian 8-byte word, the width host/src.c reads it at
-   (mksrc-le8 v i acc) (? (i = 8) acc (mksrc-le8 (v >> 8) (i + 1) (acc + `((v & 255)))))
+   (mksrc-le8 v i acc) (? (i = 8) acc (mksrc-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
 
    ; a cross arch's backend JOINS at runtime (obj.l's law: registered, not
    ; merely named -- the baked holo carries the native one only). the text
@@ -57,8 +57,8 @@
        s <>g
        n (tally s)
        _ (? (0 < n) 0 (mksrc-die (src + " is empty")))
-       forms `('(label ai_srcgz_len) `('raw (mksrc-le8 n 0 ()))
-               '(label ai_srcgz)     `('raw (mksrc-bytes s (n - 1) ())))
+       forms ['(label ai_srcgz_len) ['raw (mksrc-le8 n 0 ())]
+              '(label ai_srcgz)     ['raw (mksrc-bytes s (n - 1) ())]]
        ob (objelf arch () () () '("ai_srcgz" "ai_srcgz_len") () () () () () forms)
        _ (write-bytes dst ob)
        (say out ("MKSRC\t" + dst + " (" + (show n) + " bytes)\n")))

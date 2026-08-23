@@ -56,8 +56,13 @@
    ; the addend is the fixup's aux -- a data pointer to &arr[i]/&s.field bakes the
    ; constant byte offset there, and the RELA carries it (added to the section-sym
    ; addend below), so the linker's S+A lands on the element, not the base.
-   (o-walk be items labels wkset internal? rset off bacc racc)
-    (? !(two? items) `((rev bacc) (rev racc))
+   ; a fixup-free section is this walk's identity, and one `any` says so -- a laid
+   ; blob (mksrc's tarball, mkrt's archives) skips a recursion per byte.
+   (o-walk be items labels wkset internal? rset)
+    (? (any fix? items) (o-walkr be items labels wkset internal? rset 0 () ())
+       [items ()])
+   (o-walkr be items labels wkset internal? rset off bacc racc)
+    (? !(two? items) [(rev bacc) (rev racc)]
        (: x <items
           (? (fix? x)
               (: lbl (fix-l x) w (fix-w x) k (fix-k x)
@@ -65,8 +70,8 @@
                      o-has? labels lbl && !(o-has? wkset lbl))          ; a weak target stays a reloc
                      (: tgt (peep labels lbl 0)
                         bs (patch-with be k tgt off w (fix-a x))
-                        (o-walk be >items labels wkset internal? rset (off + w)
-                                (rev bs + bacc) racc))
+                        (o-walkr be >items labels wkset internal? rset (off + w)
+                                 (rev bs + bacc) racc))
                     (: fill (? (member? k '(b26 b19 adrp21 addlo12 j21)) (le32 (fix-a x))
                                ; a surviving riscv 'pcrel: the aux packs BOTH base words (auipc low,
                                ; the I-insn high) -- lay them as the 8-byte placeholder CALL_PLT patches
@@ -85,9 +90,9 @@
                        ; carry the byte just BEFORE the field (bacc's head, reversed) -- the
                        ; x64 opcode: E8/E9 (call/jmp) vs a lea's modrm, so reltext can tell a
                        ; control transfer (PLT32) from an address-of (PC32) for an external ref.
-                       (o-walk be >items labels wkset internal? rset (off + w)
-                               (rev fill + bacc) (`(off k lbl (fix-a x) (? (two? bacc) <bacc 0)) >< racc)))))
-             (o-walk be >items labels wkset internal? rset (off + 1) (x >< bacc) racc))))
+                       (o-walkr be >items labels wkset internal? rset (off + w)
+                                (rev fill + bacc) ([off k lbl (fix-a x) (? (two? bacc) <bacc 0)] >< racc)))))
+             (o-walkr be >items labels wkset internal? rset (off + 1) (x >< bacc) racc))))
    (o-zeros n) (? (n < 1) () (0 >< o-zeros (n - 1)))
    ; splice a 4-byte little-endian value into a byte list at OFF (the ARM REL in-place addend: a
    ; pooled abs32 field carries S's section offset there, since REL has no addend column).
@@ -178,7 +183,7 @@
                            (? (lit? r) (r fm be 0 (tablet 0) wkset)
                               (scare 'holo-bake-stale 'laylax)))
                         (lay fm be 0 () (tablet 0)))
-                   w (o-walk be <p >p wkset (? (exec? s) 1 ()) rset 0 () ())
+                   w (o-walk be <p >p wkset (? (exec? s) 1 ()) rset)
                    `((at s 0) (at s 1) (at s 2) (at s 3) <w <>w >p)))
               secs)
        (ln i) (at lanes i)
@@ -486,7 +491,7 @@
                            (? (lit? r) (r fm be 0 (tablet 0) wkset)
                               (scare 'holo-bake-stale 'laylax)))   ; assemble each section at org 0
                         (lay fm be 0 () (tablet 0)))
-                   w (o-walk be <p >p wkset (? (exec? s) 1 ()) rset 0 () ())
+                   w (o-walk be <p >p wkset (? (exec? s) 1 ()) rset)
                    `((at s 0) (at s 1) (at s 2) (at s 3) <w <>w >p)))
               secs)
        (ln i) (at lanes i)
