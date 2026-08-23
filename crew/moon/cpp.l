@@ -433,6 +433,42 @@
    ; buf accumulates REVERSED (a cat per line re-copies the whole run -- love.c's
    ; longest directive-free run is ~50k tokens); tokflush restores source order (its name must not shadow the core port flush -- the crew shares the default book now).
    (tokflush buf macs out) (revcat (expand (rev buf) macs) out)
+   ; -- the header memo. a runtime archive is 197 members that each open with
+   ; the same #include against the same macro table, and re-preprocessing those
+   ; headers is half of what a member costs. so a TU's FIRST include is recorded
+   ; as (path text pre toks post), and a later TU matching all three of those
+   ; replays the tokens and the table instead of doing the work.
+   ; the pre-state is part of the KEY, not a hint: two TUs whose -D lists differ
+   ; never share an entry, and an edited header never matches its own record.
+   ; ⚠ __FILE__ is the one predefine that differs per TU, so it is held out of
+   ; both snapshots -- and a header that EXPANDED it would bake the recording
+   ; TU's name into every replay, which mleak? declines at record time.
+   memo {}                                       ; 'l -> the entries, newest first
+   (mkey? k) ((string? k) && !(k = "__FILE__"))
+   (msnap macs)                                  ; the table as a value `=` can compare
+    (sortby (\ a b (<a <= <b))
+            (foldl (\ acc k (? (mkey? k) (acc + [[k (peep macs k ())]]) acc)) () (keys macs)))
+   ; the pre-state is a subset of the post-state's KEYS -- a header only adds
+   ; names or blanks them (#undef pins ()) -- so pinning the recorded pairs
+   ; over a matching table reproduces it exactly.
+   (mrestore macs snap) (foldl (\ _ e (pin macs <e <>e, 0)) 0 snap)
+   (mleak? toks fname) (any (\ t ((kof t = 'str) && (vof t = fname))) toks)
+   ; COMPARED, never digested: a path, a 4 kB text and a 60-name table are three
+   ; structural equalities, where hashing them costs more per TU than the miss it
+   ; avoids. ⚠ what the key CANNOT see is the -I list a nested include would have
+   ; walked, so this rides one assumption: a process does not compile two TUs
+   ; under one -D set with different search paths. every driver door here builds
+   ; `is` once (moon.l's cc-parse), and the two rtmems lanes differ in their first
+   ; header, so nothing in the tree leans on it.
+   (mfind ip txt pre)
+    (: (go l) (? !(two? l) ()
+                 (: e <l (? ((ip = <e) && (txt = <>e) && (pre = <>>e)) e (go >l))))
+       (go (peep memo 'l ())))
+   ; bounded, oldest dropped: an entry is one header under one -D set, so a
+   ; handful covers a build and nothing here knows which of them are dead.
+   (mput e) (pin memo 'l (e >< mfew (peep memo 'l ()) 3))
+   (mfew l n) (? ((n < 1) || !(two? l)) () (<l >< mfew >l (n - 1)))
+
    (cppgo toks macs cond buf out incf)
     (? !(two? toks) (? (two? cond) (gripe () <>><cond () "unterminated #if -- no #endif")
                           (rev (tokflush buf macs out)))
@@ -534,31 +570,45 @@
           name (incname b)
           txt (? name (incf name sys?) ())
           spelt (? sys? ("<" + name + ">") ("\"" + name + "\""))
+          ; only a TU's FIRST include is a memo candidate: a deeper one runs
+          ; against a table this very include already moved, so its pre-state
+          ; is its includer's business and the compare would never hit.
+          nth (peep macs 'ninc 0)
+          _ (pin macs 'ninc (nth + 1))
           (? !(two? txt) (gripeat body ("cannot resolve #include " + spelt))      ; unresolved -> FATAL
-             (: lr (clex <>txt)
-                ; ⚠ okv?, not two? -- a gripe IS a pair, and a two? here would read
-                ; a refusal as a token list and walk it. a LOCATED refusal is the
-                ; header's own and takes its name; a bare one is knowable only at
-                ; the #include, and stays there.
-                (? !(okv? lr) (? (gripe? lr) (gripein lr name) (gripeat body ("lex error in " + spelt)))
-                   (: itoks <>lr
-                      chf (: c <>>txt (? c c incf))
-                      ; the marks bracket the child's run. `out` is the REVERSED
-                      ; accumulator, so a link onto it appends in source order:
-                      ; the 'in mark lands before the header's tokens, the 'out
-                      ; mark onto (rev done) lands after them.
-                      ; ⚠ the #line delta is the header's OWN: macs is shared, so save
-                      ; it across the recursion or a header's #line follows the return
-                      sv (lndel macs)
-                      _ (pin macs 'lndelta 0)
-                      done (cppgo itoks macs () () (fmin name >< out) chf)       ; recurse with FRESH cond; shares macs; accumulates
-                      _ (pin macs 'lndelta sv)
-                      ; a nested failure PROPAGATES up, wearing the file it happened
-                      ; in (never wipe `out` for it, and never answer () -- an empty
-                      ; answer masks as an empty include, and the ancestor doinc then
-                      ; drops its accumulated `out` and reorders the stream).
-                      (? (gripe? done) (gripein done name)
-                         (cppgo rest macs cond () (fmout >< rev done) incf))))))))
+             (: ipath (? (3 < tally txt) <>>>txt "")   ; incload's resolved path; "" from a bare (1 text)
+                pre (? (nth = 0) (msnap macs) ())
+                got (? (nth = 0) (mfind ipath <>txt pre) ())
+                ; the marks bracket the header's run. `out` is the REVERSED
+                ; accumulator, so a link onto it appends in source order: the
+                ; 'in mark lands before the header's tokens, the 'out mark
+                ; after them. the marks are minted HERE, never memoized -- they
+                ; carry the spelling THIS #include used.
+                (rejoin toks)
+                 (cppgo rest macs cond () (fmout >< ((rev toks) + (fmin name >< out))) incf)
+                (? (two? got) (: _ (mrestore macs <>>>>got) (rejoin <>>>got))
+                   (: lr (clex <>txt)
+                      ; ⚠ okv?, not two? -- a gripe IS a pair, and a two? here would read
+                      ; a refusal as a token list and walk it. a LOCATED refusal is the
+                      ; header's own and takes its name; a bare one is knowable only at
+                      ; the #include, and stays there.
+                      (? !(okv? lr) (? (gripe? lr) (gripein lr name) (gripeat body ("lex error in " + spelt)))
+                         (: itoks <>lr
+                            chf (: c <>>txt (? c c incf))
+                            ; ⚠ the #line delta is the header's OWN: macs is shared, so save
+                            ; it across the recursion or a header's #line follows the return
+                            sv (lndel macs)
+                            _ (pin macs 'lndelta 0)
+                            raw (cppgo itoks macs () () () chf)       ; recurse with FRESH cond; shares macs
+                            _ (pin macs 'lndelta sv)
+                            ; a nested failure PROPAGATES up, wearing the file it happened
+                            ; in (never wipe `out` for it, and never answer () -- an empty
+                            ; answer masks as an empty include, and the ancestor doinc then
+                            ; drops its accumulated `out` and reorders the stream).
+                            (? (gripe? raw) (gripein raw name)
+                               (: _ (? ((nth = 0) && !(mleak? raw (peep macs 'fname "")))
+                                       (mput [ipath <>txt pre raw (msnap macs)]) 0)
+                                  (rejoin raw)))))))))))
    (incname body)                                     ; the header name from #include tokens
     (? !(two? body) ()
        (kof <body = 'str) (vof <body)         ; "file"
@@ -581,6 +631,7 @@
                ; share this table, so it reads the top file's name throughout --
                ; fine for assert/error diagnostics, which live in the .c anyway.
                _ (pin t "__FILE__" ['obj [(tok 'str fname 0)]])
+               _ (pin t 'fname fname)      ; the same name unwrapped, for the memo's leak check
                ; C11: cc has _Static_assert (+ _Alignas/varargs). advertising 201112
                ; lets gnulib take its _Static_assert lane (verify.h) not a fallback trick.
                _ (pin t "__STDC_VERSION__" ['obj [(tok 'num 201112 0)]])

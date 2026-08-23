@@ -173,7 +173,10 @@
                   (: r (uread (<ds + name))
                      (? (two? r)
                         (: hd (cdir (<ds + name))
-                           [1 <>r (\ n2 s2 (incload vb is hd n2 s2))])
+                           ; the RESOLVED PATH rides along as a fourth answer: cpp's
+                           ; header memo keys on it beside the text, so two copies of
+                           ; one header in two trees never share an entry.
+                           [1 <>r (\ n2 s2 (incload vb is hd n2 s2)) (<ds + name)])
                         (go >ds))))
        r (go dirs)
        (? (two? r) r
@@ -182,10 +185,10 @@
           ; headers -- the disk walk's own order
           (: k1 (pnorm (srcdir + name))
              h1 (? sys? () (peep vb k1 ()))
-             (? (string? h1) [1 h1 (\ n2 s2 (incload vb is (cdir k1) n2 s2))]
+             (? (string? h1) [1 h1 (\ n2 s2 (incload vb is (cdir k1) n2 s2)) k1]
                 (: k2 ("include/" + name)
                    h2 (peep vb k2 ())
-                   (? (string? h2) [1 h2 (\ n2 s2 (incload vb is (cdir k2) n2 s2))]
+                   (? (string? h2) [1 h2 (\ n2 s2 (incload vb is (cdir k2) n2 s2)) k2]
                       ()))))))
    (el l i) (? (i < 1) <l (el >l (i - 1)))
    ; a -D definition as #define text: the first = becomes the space, so
