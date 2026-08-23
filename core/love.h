@@ -112,7 +112,7 @@ enum ai_status { ai_status_ok = 0, ai_status_scare = 1, ai_status_more = 2, ai_s
 
 struct ai_str {
  lvm_t *ap;
- uintptr_t len;        // byte count
+ uintptr_t len;        // byte count; bytes[len] is always a NUL, so C may read bytes as a string
  char bytes[]; };
 // a cask: mutable bytes behind a 2-word wrapper, recognized by ap like ports.
 // public so a host nif can wrap a C struct's bytes (host/cb.c).
@@ -419,8 +419,9 @@ struct ai_chain { lvm_t *ap; intptr_t a, b; };
 #include "kinds.h"
 typedef ai_word num, word;
 // the unique empty string: data-segment, never moved (gcp's out-of-pool
-// short-circuit); strings are immutable, so one suffices.
-extern const struct ai_str ai_str_empty;
+// short-circuit); strings are immutable, so one suffices. its own type, so the
+// NUL every string carries behind its bytes has storage here too.
+extern const struct ai_str0 { lvm_t *ap; uintptr_t len; char bytes[8]; } ai_str_empty;
 #define EmptyString ((word) &ai_str_empty)
 // (): the one serial-0 mint, a data-segment const shared by every core -- immortal,
 // never copied, so () is bakeable. serial 0 is never drawn, so it is unique and least;

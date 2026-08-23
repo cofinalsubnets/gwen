@@ -121,6 +121,8 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 #define ai_status_yield ai_status_eof
 #endif
 #define str_type_width (Width(struct ai_str))
+// a string's whole footprint in words: header + bytes + the NUL behind bytes[len]
+#define str_width(n) (str_type_width + b2w((n) + 1))
 #define op1(nom, i, x) lvm(nom) { Sp[0] = (x); Ip += i; ai_musttail return Continue(); }
 #define op11(nom, x) op1(nom, 1, x)
 
@@ -591,11 +593,13 @@ static ai_inline struct ai_nom *ini_nom(struct ai_nom *y, uintptr_t name, uintpt
  return y->ap = lvm_nom, y->name = name, y->code = code, y->dig = dig, y; }
 
 static ai_inline struct ai_str *ini_str(struct ai_str *s, uintptr_t len) {
- return s->ap = lvm_str, s->len = len, s; }
+ s->ap = lvm_str, s->len = len;
+ ((word*) s->bytes)[b2w(len + 1) - 1] = 0;   // tail word first: pad + NUL stay zero under the fill
+ return s; }
 
 // the unique empty string: data-segment, immortal (gcp's out-of-pool
 // short-circuit); a zero-length string is never heap-allocated.
-const struct ai_str ai_str_empty = { .ap = lvm_str, .len = 0 };
+const struct ai_str0 ai_str_empty = { .ap = lvm_str, .len = 0 };
 // () -- the one serial-0 mint, shared by every core (serial 0 is never drawn, so
 // it is unique + least in the order). see the ZeroPoint macro in love.h.
 const struct ai_mint ai_mint_zero = { .ap = lvm_sym, .code = 0 };
@@ -891,7 +895,7 @@ static ai_inline void evac_tray(struct ai *g, struct ai_gcx *X) {
  while (n--) e[n] = gcp(g, X, e[n]); }
 
 static ai_inline void evac_str(struct ai *g, struct ai_gcx *X) {
- X->cp += b2w(sizeof(struct ai_str) + str(X->cp)->len); }
+ X->cp += str_width(str(X->cp)->len); }
 
 static ai_inline void evac_big(struct ai *g, struct ai_gcx *X) {
  X->cp += b2w(ai_big_bytes(big(X->cp))); }
@@ -1317,9 +1321,9 @@ static ai_inline word copy_tray(struct ai *g, struct ai_tray *src) {
  return word(dst); }
 
 static ai_inline word copy_str(struct ai *g, struct ai_str *src) {
- uintptr_t bytes = sizeof(struct ai_str) + src->len;
- struct ai_str *dst = bump(g, b2w(bytes));
- src->ap = memcpy(dst, src, bytes);
+ uintptr_t w = str_width(src->len);
+ struct ai_str *dst = bump(g, w);
+ src->ap = memcpy(dst, src, w * sizeof(word));   // whole words: the zeroed tail rides
  return word(dst); }
 
 // bignums and the lean boxes are flat: one memcpy, like strings
@@ -3555,8 +3559,8 @@ lvm(lvm_nifnom) {
  char const *nm = ai_nif_name(Sp[0]);
  if (!nm) ai_musttail return Answer(ZeroPoint);
  uintptr_t n = strlen(nm);
- Have(str_type_width + b2w(n));
- struct ai_str *s = ini_str(str(Hp), n); Hp += str_type_width + b2w(n);
+ Have(str_width(n));
+ struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
  memcpy(txt(s), nm, n);
  ai_musttail return Answer(word(s)); }
 
@@ -3704,7 +3708,7 @@ lvm(lvm_gem) {
 lvm(lvm_string) {
  word x = Sp[0];
  if (charmp(x)) {                                     // fixnum -> one-byte string
-  uintptr_t req = str_type_width + b2w(1);
+  uintptr_t req = str_width(1);
   Have(req);
   struct ai_str *s = (void*) Hp;
   Hp += req;
@@ -3716,7 +3720,7 @@ lvm(lvm_string) {
   Sp[0] = nm ? word(nm) : word(EmptyString);
   ai_musttail return Next(1); }
  if (chainp(x)) {                                      // charlist -> string
-  uintptr_t n = llen(x), req = str_type_width + b2w(n);
+  uintptr_t n = llen(x), req = str_width(n);
   Have(req);
   struct ai_str *s = (void*) Hp;
   Hp += req;
@@ -3724,7 +3728,7 @@ lvm(lvm_string) {
   for (uintptr_t i = 0; n--; x = B(x)) txt(s)[i++] = (char) getcharm(A(x));
   ai_musttail return Answer(word(s)); }
  if (caskp(x)) {                                      // a cask -> a fresh string copy of its bytes
-  uintptr_t n = len(cask(x)->str), req = str_type_width + b2w(n);
+  uintptr_t n = len(cask(x)->str), req = str_width(n);
   Have(req);
   struct ai_str *src = cask(Sp[0])->str;               // re-read post-Have (a GC may have moved the cask)
   struct ai_str *s = (void*) Hp;
@@ -4361,7 +4365,7 @@ lvm(lvm_pin) {
   case DString: {                                // one byte replaced in a fresh text
    if (!charmp(Sp[1]) || !charmp(Sp[2])) break;
    if ((n = getcharm(Sp[1])) < 0 || n >= (word) len(x)) break;
-   uintptr_t sz = len(x), req = str_type_width + b2w(sz);
+   uintptr_t sz = len(x), req = str_width(sz);
    Have(req);
    struct ai_str *s = ini_str(str(Hp), sz); Hp += req;
    memcpy(s->bytes, txt(Sp[0]), sz);             // re-read coll: the Have may have moved it
@@ -4478,7 +4482,7 @@ uintptr_t hash(struct ai *g, intptr_t x) {
 // ============================================================================
 struct ai *str0(struct ai *g, uintptr_t len) {
  if (!len) { if (ai_ok(g = ai_have(g, 1))) *--g->sp = EmptyString; return g; } // never alloc empty
- uintptr_t req = str_type_width + b2w(len);
+ uintptr_t req = str_width(len);
  if (ai_ok(g = ai_have(g, req + 1)))
   *--g->sp = word(ini_str(bump(g, req), len));
  return g; }
@@ -4506,7 +4510,7 @@ lvm(lvm_snip) {
   // lets two empties be id?-equal wherever they were built.
   if (j == i) Sp[2] = EmptyString;
   else {
-   size_t req = str_type_width + b2w(j - i);
+   size_t req = str_width(j - i);
    Have(req);
    s = bytes_of(Sp[0]);                          // re-read post-Have (GC may have moved it)
    t = str(Hp);
@@ -4528,7 +4532,7 @@ lvm(lvm_casknew) {
  bool listp = chainp(Sp[0]);
  intptr_t n = charmp(Sp[0]) ? getcharm(Sp[0]) : listp ? (intptr_t) llen(Sp[0]) : 0;
  if (n <= 0) ai_musttail return Answer(EmptyString);   // no empty cask: it is ""
- uintptr_t sreq = str_type_width + b2w(n),
+ uintptr_t sreq = str_width(n),
            breq = Width(struct ai_cask) + Width(struct ai_tag);
  Have(sreq + breq);
  struct ai_str *s = ini_str(str(Hp), n);
@@ -4555,7 +4559,7 @@ lvm(lvm_casknew) {
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 static ai_inline size_t code_maplen(size_t codelen) {   // round the arena up to a page; glibc's sysconf is a cached auxv load, not a syscall
- long q = sysconf(_SC_PAGESIZE); size_t ps = q > 0 ? (size_t) q : 4096, need = sizeof(struct ai_str) + codelen;
+ long q = sysconf(_SC_PAGESIZE); size_t ps = q > 0 ? (size_t) q : 4096, need = sizeof(struct ai_str) + codelen + 1;
  return (need + ps - 1) & ~(ps - 1); }
 #endif
 
@@ -4600,8 +4604,8 @@ lvm(lvm_nif) {
  __builtin___clear_cache(txt(s), txt(s) + n);  // AArch64: the I-cache is not coherent with the freshly
 #endif                                         // written D-cache -- flush or it runs stale bytes (no-op on x86)
 #else
- Have(str_type_width + b2w(n) + 9);           // freestanding: HHDM is RWX, a heap copy runs
- struct ai_str *s = ini_str(str(Hp), n); Hp += str_type_width + b2w(n);
+ Have(str_width(n) + 9);                      // freestanding: HHDM is RWX, a heap copy runs
+ struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);
  __builtin___clear_cache(txt(s), txt(s) + n);  // same I-cache flush on the freestanding (RWX) path
 #endif
@@ -4655,9 +4659,9 @@ lvm(lvm_nifx) {
  __builtin___clear_cache(txt(s), txt(s) + n);  // AArch64: the I-cache is not coherent with the freshly
 #endif                                         // written D-cache -- flush or it runs stale bytes (no-op on x86)
 #else
- Have(str_type_width + b2w(n) + 11);          // freestanding: HHDM is RWX, a heap copy runs
+ Have(str_width(n) + 11);                     // freestanding: HHDM is RWX, a heap copy runs
  struct ai_str *s = ini_str(str(Hp), n);
- Hp += str_type_width + b2w(n);
+ Hp += str_width(n);
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);
  __builtin___clear_cache(txt(s), txt(s) + n);  // same I-cache flush on the freestanding (RWX) path
 #endif
@@ -4737,7 +4741,7 @@ static uintptr_t image_datasize(union u *d, void const *s) {
   case DGem:   return Width(struct ai_gem);
   case DSun:  return Width(struct ai_sun);
   case DTwin:  return Width(struct ai_twin);
-  case DString:return b2w(sizeof(struct ai_str) + ((struct ai_str const*) s)->len);
+  case DString:return str_width(((struct ai_str const*) s)->len);
   case DBig:   return b2w(ai_big_bytes((struct ai_big*)(word) s));
   case DTray:  return b2w(ai_tray_bytes((struct ai_tray*)(word) s)); }
  return 0; }                                                     // unreachable: ai_typ covers the 9
@@ -5218,7 +5222,7 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard
                  for (uintptr_t i = 0; i < ne; i++) blob[off + eo + i] = img_encode(x, e[i]); }
                 break;
    // the tail padding is uninitialized heap -- a stale pointer fragment, ASLR-varying
-   case DString: { uintptr_t n = ((struct ai_str*) p)->len, w = b2w(n);
+   case DString: { uintptr_t n = ((struct ai_str*) p)->len, w = b2w(n + 1);
                    if (w) memset((char*)(blob + off + str_type_width) + n, 0,
                                  w * sizeof(word) - n);
                    break; }
@@ -5883,7 +5887,7 @@ static lvm(lvm_add_string) {
  int rank = min(stringrank(g, a), stringrank(g, b));
  uintptr_t n = stringlen(g, a) + stringlen(g, b);
  if (!n) ai_musttail return Push(rank ? ZeroPoint : EmptyString);   // the empty spelling is the zero point (cf. lvm_intern), not the zero charm
- uintptr_t req = str_type_width + b2w(n);
+ uintptr_t req = str_width(n);
  Have(req);
  a = Sp[0], b = Sp[1];                                  // re-read post-GC
  struct ai_str *z = seq_cat(g, Hp, a, b);                     // a's bytes then b's, in order
@@ -5945,7 +5949,7 @@ static lvm(lvm_mul_rep) {
  struct ai_str *src = sym ? str(nom(seq)->name) : str(seq);
  uintptr_t sl = src->len, total = sl * n;
  if (!total) ai_musttail return Push(sym ? ZeroPoint : EmptyString);  // 0 copies: () for a sym, "" for a string
- uintptr_t req = str_type_width + b2w(total);
+ uintptr_t req = str_width(total);
  Have(req);
  word sw = sym ? (namep(Sp[0]) ? Sp[0] : Sp[1]) : (strp(Sp[0]) ? Sp[0] : Sp[1]);  // re-read post-GC
  src = sym ? str(nom(sw)->name) : str(sw);
@@ -5993,7 +5997,7 @@ static lvm(data_string_apply) {
                *nb = strp(Sp[0]) ? str(Sp[0]) : namep(Sp[0]) ? nom_str(g, Sp[0]) : NULL;
  if (nb) {
   bool mk = pt && namep(Sp[0]);                         // point + point -> the interned point
-  uintptr_t m = na->len, n = nb->len, req = str_type_width + b2w(m + n);
+  uintptr_t m = na->len, n = nb->len, req = str_width(m + n);
   if (!(m + n)) { Ip = cell(*++Sp); *Sp = mk ? ZeroPoint : EmptyString; ai_musttail return Continue(); }  // the empty spelling is the zero point; no empty string is ever allocated
   Have(req + (mk ? intern_reserve(g) : 0));
   na = pt ? nom_str(g, word(Ip)) : str(word(Ip));       // re-read: a GC in Have moved the roots
@@ -7024,7 +7028,7 @@ static struct ai *ai_bmul_setup(struct ai *g) {
  word a = g->sp[0], b = g->sp[1];
  int na = bigp(a) ? big_nlimbs(a) : 2, nb = bigp(b) ? big_nlimbs(b) : 2;
  uintptr_t rbytes = (uintptr_t) (na + nb) * sizeof(ai_limb),
-           sreq = str_type_width + b2w(rbytes),
+           sreq = str_width(rbytes),
            breq = Width(struct ai_cask) + Width(struct ai_tag),
            bigmax = Width(struct ai_big) + b2w((size_t) wlimbs * sizeof(ai_limb));
  if (!ai_ok(g = ai_have(g, 2 * bigmax + sreq + breq + 3))) return g;
@@ -7065,7 +7069,7 @@ static struct ai *ai_kmul_setup(struct ai *g) {
            r_off = b_off + n,
            scr_off = r_off + 2 * (uintptr_t) n,
            wslimbs = scr_off + scrn,
-           sreq = str_type_width + b2w(wslimbs * sizeof(ai_limb)),
+           sreq = str_width(wslimbs * sizeof(ai_limb)),
            breq = Width(struct ai_cask) + Width(struct ai_tag);
  if (!ai_ok(g = ai_have(g, sreq + breq + 3))) return g;
  a = g->sp[0], b = g->sp[1];                              // re-fetch (ai_have may have GC'd)
@@ -7207,7 +7211,7 @@ static struct ai *ai_bdiv_setup(struct ai *g, int which) {
  word a = g->sp[0], b = g->sp[1];
  int mub = bigp(a) ? big_nlimbs(a) : wlimbs, nub = bigp(b) ? big_nlimbs(b) : wlimbs;
  uintptr_t wslimbs = BdivHdr + (uintptr_t) nub + (mub + 1) + (mub - nub + 1),
-           sreq = str_type_width + b2w(wslimbs * sizeof(ai_limb)),
+           sreq = str_width(wslimbs * sizeof(ai_limb)),
            breq = Width(struct ai_cask) + Width(struct ai_tag);
  if (!ai_ok(g = ai_have(g, sreq + breq + 3))) return g;
  a = g->sp[0], b = g->sp[1];                          // re-fetch (ai_have may have GC'd)
