@@ -68,24 +68,23 @@ One entry there was already built twice.
   gen.l 8,606 → 7,927, the −2% banked (moon-gauge's *the vmap cut*: the gate found the
   knob's `au` license still buying pointless regens, and the wall clock lying across
   fills — hold hot functions to instruction identity, not the clock). The re-price after
-  it: `cs` HOLDS at +6.0%, and **`csbor` reads −0.2% with base-identical .text — its cut
-  (blscan, `wb`, the `att` grant dance) is licensed next**, then `pcs`. Per cut: `cs`
-  re-priced, the cipher rows ridden (one quiet fill), the fixpoint by name.
-- **rung 4 — the seven names become one loop.** `lokeep`/`loseed`/`lomig`/`lochk`/`lomiss`/
-  `lobar`/`lonone` is seven names for the phases of one mechanism's uncertainty, and the
-  ledger already called them its own progress bar: *"if the ladder is working, most of those
-  names disappear; if they survive, it is not."* All seven survive. ⚠ the constraint under
-  them does not dissolve — the keep decision must precede the emission that determines
-  whether it is valid, and `rdsp` cannot supply a parse-tree fact before emission. So this
-  rung is not "remove the retries", it is **write the fixpoint down as a fixpoint**: the
-  `att` loop already states its convergence in place (bars grow monotonically, only a
-  zero-miss build ships, the capped attempt cannot miss) — what is owed is one named loop
-  owning the seven channels, a consolidation rather than a discovery. Gate: the names
-  shrink to a few, `test_fixpoint` byte-identical, `test_cts` unmoved. ⚠ rung 3 hollowed
-  this rung as predicted: the vmap cut took `lokeep`/`lochk`/`lomig`/`loseed` with it,
-  and the csbor cut takes the `att` grant dance and the `lomiss`/`lobar`/`lonone`
-  channels — what remains afterward is one plain regen choice, and this rung closes by
-  observation rather than work.
+  it: `cs` HOLDS at +6.0%, and `csbor` read −0.2%. **The csbor complex is CUT,
+  2026-08-23** — gen.l 7,927 → 7,879, and the cut binary is byte-identical to the priced
+  ablation reference (moon-gauge's *the csbor cut*: the borrow's grant had been provably
+  empty since the vmap cut; its one live effect was VETOING pcs beside a callish loop,
+  which is why the ablation flipped code at the same .text size). And the fresh number
+  answered `pcs` the other way: **+1.5% cycles on the cut tree — it PAYS, and it stays.**
+  The −0.4%/zero-instructions reading was taken under the veto; the 57 lines had a reason
+  the whole time. `cs` holds at +6–7%. **RUNG CLOSED 2026-08-23**: everything that priced
+  at zero is deleted, and what remains prices above the floor.
+- **rung 4 — the seven names become one loop. CLOSED BY OBSERVATION 2026-08-23.**
+  `lokeep`/`loseed`/`lomig`/`lochk`/`lomiss`/`lobar`/`lonone` was seven names for the
+  phases of one mechanism's uncertainty, and the ledger already called them its own
+  progress bar: *"if the ladder is working, most of those names disappear; if they
+  survive, it is not."* Rung 3 answered: the vmap cut took `lokeep`/`lochk`/`lomig`/
+  `loseed`, the csbor cut took the `att` grant dance and `lomiss`/`lobar`/`lonone` —
+  all seven are gone, `regen` is a straight-line build with one deopt guard, and there
+  is no retry loop left to consolidate. The ladder was working.
 - **rung 5 — the B half, decided on rung 2's evidence.** The census answered the question
   this rung was written around: B's cycles are mostly the LOCALS HOMES (lhome +6.3%, the
   single biggest payer) with the pool at +4.0% — so the machinery that stays is `alive`/

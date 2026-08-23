@@ -436,15 +436,39 @@ is bigger than the ±4% floor; when a cut's rows move, diff the FUNCTIONS before
 believing the clock.
 
 The re-price after the cut (the sequencing law): `cs` holds at **+6.0%** cycles — the
-keeps' zero was not hiding inside it — and **`csbor` now prices at −0.2% with
-base-identical .text**: the borrow license (blscan, `wb`, the `att` grant dance) is dead
-weight and its cut is licensed. `pcs` stays on the roster behind it.
+keeps' zero was not hiding inside it — and **`csbor` now prices at −0.2%** with .text the
+same SIZE as base: the borrow license (blscan, `wb`, the `att` grant dance) is dead
+weight and its cut is licensed. `pcs` stays on the roster behind it. ⚠ same .text size is
+not same .text — the symbol tables disagree in ~24 functions (see the csbor cut, below).
 
 ⚠ a harness run leaves out/host ABLATED (its last configuration's objects); the seed then
 reads FIXPOINT NOT OK against the mixed artifact. `moon-ablate.sh` clears the moon
 objects on exit now so the next make rebuilds clean.
 
-## where the cycles go — the attribution, run 2026-08-16 (Zen 3, Ryzen 7 5825U)
+## the csbor cut (2026-08-23) — the borrow was a veto, and the veto was the cost
+
+What the −0.2% row was actually pricing: since the vmap cut, nothing writes `csbu` or
+`lomiss`, so the borrow's `att` loop always found its grant unused and REBUILT with an
+empty one — the shipped build was the borrowless build every time. The mechanism's one
+live effect was its shadow: `wb` denied `free9` (no pcs grant beside a callish loop) and
+licensed regens of its own, which is why base and the ablation differ in ~24 functions'
+code at the same .text size. The borrow bought nothing and vetoed a priced mechanism.
+
+The cut: `loscan`/`blscan`, the `wb` seam, the whole `att` retry loop (regen is a
+straight-line build with the numbering-guard deopt now), the `lobar`/`lonone`/`csbor`/
+`csbu`/`lomiss` channels — gen.l 7,927 → 7,879. The gate could not be cleaner: the cut
+binary is **byte-identical to the priced `love1.csbor` reference**, all 1,050,440 bytes,
+so the −0.2% carries over by identity rather than re-measurement. The pare plan's rung 4
+question dissolved with it: the seven `lo*` names are gone, and no retry loop remains to
+consolidate.
+
+The re-price on the cut tree closed rung 3's last question the other way: **`pcs` now
+prices at +1.5% cycles** (insns flat, .text same size — the family shape: latency, not
+count). The census's −0.4% was measured under the borrow's veto; unveto it and the
+mechanism pays double the floor. The 57 lines the program "could not explain" were
+explained all along — a dead mechanism was standing on them. `pcs` stays. `cs` re-read
++7.1% against the same base pair that said +6.0% yesterday — cross-day drift just above
+the ±0.7% floor even on corpus cycles; read same-run ratios only. — the attribution, run 2026-08-16 (Zen 3, Ryzen 7 5825U)
 
 Intel's `--topdown` does not apply here; the Zen equivalents are
 `de_dis_uop_queue_empty_di0` (frontend delivered nothing) and the

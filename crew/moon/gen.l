@@ -136,7 +136,7 @@
    ; discipline (the old code compared physicals, so the accident counted).
    (rpeq? g a b) (id? (rp g a) (rp g b))
    ; -- the ablation knob (the pare plan's rung 0): MOON_ABLATE="tpool,cs" holds named
-   ; mechanisms empty for PRICING -- ralloc tpool cs lhome csbor homes pcs. read at
+   ; mechanisms empty for PRICING -- ralloc tpool cs lhome homes pcs. read at
    ; RUN time, once per unit (a value binding folds at bake and would carry the baking
    ; session's environment). no gate rides it; unset is every mechanism on. --
    (ablenv _)
@@ -435,20 +435,6 @@
                       (? ((ptr? et || member? et '(char uchar bool short ushort int uint long ulong)) &&
                           !(pair? g et))
                          [(<>en + <>idx * tsz g et) et] ())))))))
-   (loscan e)                                       ; the borrow license: 'callish = a callish
-    (? !(two? e) 'clean                             ; subtree, 'clean = none, () = refuse
-       (member? <e '(asm goto lbl switch case dflt vastart)) ()
-       (: (go l acc) (? !(two? l) acc
-                        (: v (loscan <l)
-                           (? !v () (go >l (? (id? v 'callish) 'callish acc)))))
-          (go e (? (id? <e 'call) 'callish 'clean))))
-   (blscan e)                                       ; the borrow prescan: does some loop subtree
-    (? !(two? e) ()                                 ; license a CALLISH keep?
-       (: k <e
-          (? ((member? k '(while do)) && id? (loscan >e) 'callish) 1
-             ((id? k 'for) && id? (loscan >>e) 'callish) 1
-             (: (go l) (? !(two? l) () (? (blscan <l) 1 (go >l)))
-                (go e)))))
    ; ⚠ may an ALIAS live across a splice body? only in a register the body's STAGING can
    ; never write. x64 staging owns exactly the protocol quad r0-r3 (r3 the callr park), so
    ; every pool/home/cs register aliases -- but a seat-2/3 ride (r2/r1) must not. elsewhere
@@ -6350,9 +6336,6 @@
      'livtab ()  ; liveness (set only for a wrap-bearing regen)
      'lhome ()   ; locals-homing map (cgdecl's hook reads it)
      'rgon ()    ; ...and its regen flag (the splice decl gate)
-     'lomiss ()  ; recorded edge misses (regen retries on them)
-     'csbor ()   ; the cs borrow grant
-     'csbu ()    ; ...and the seats a build took (the grant shrinks to the use)
      'pcs ()     ; the param cs-seat grant ((gpi reg)..; the shadow spill reads it)
      'homes ())  ; non-leaf home set (call-fixed + sibs read it)
    ; ...and their ARMED state: a regen build homes locals (lh9, lpick's map)
@@ -7395,14 +7378,6 @@
        ; livtab so call-fixed wraps only what a call actually needs
        ng (sr6f || vararg || bad? ir1 || peep g 'hasasm () || anyop? ir1 'sys)
        av (? ng () (alive g f))
-       ; a callish loop somewhere licenses the borrow offer. ⚠ on NO arm/riscv target, where the
-       ; file is new: measured on love.c/a64, insns against no-cs-at-all -- borrow alone −187,
-       ; param homes alone −1,077, both −236, both sharing the file −246. The borrow costs there
-       ; AND takes the seats (wb denies free9), so the new files go to homes until iv's allocator
-       ; subsumes both. ⚠ the x64 borrow's own win was measured in WALL CLOCK at flat insns, so
-       ; this is not a verdict on the mechanism -- it is one on a metric we have no cross-target
-       ; instrument for.
-       wb (? (ng || arm? g || abl? g 'csbor || !(two? (cspool g))) () (blscan f))
        ; -- priced int-param homes (the leaf lane): an int/uint param earns its POSITIONAL
        ; seat only when its ir1 slot touches pay the entry cvt (tc >= 2), the locals picked
        ; first (a hot local's claim wins the register), and an x64 pool seat stays deep
@@ -7444,49 +7419,30 @@
         (: lh9 <st lp9 <>>st cs9 (nthr st 3)
            pc0 (peep g 'pcs ())                     ; the param cs grant, captured across fnreset
            e0 (peep g 'epi epi)
-           ; the borrow offer: the cs seats the homes left, when some loop licenses a
-           ; callish keep (wb) -- granted whole, then shrunk to what a build took
-           bf9 (? wb (filter (\ r9 !(member? r9 cs9)) (cspool g)) ())
-           _ (pins g 'lobar () 'lonone ())
-           (att k9 bor9)
-            (: lp2 (lp9 + filter (\ r9 (member? r9 tpool && !(member? r9 lp9)))   ; the granted
-                           (map (\ e9 (homereg <e9)) pc0))   ; params' homeregs rejoin the pool
-               _ (pins (fnreset g) ; the attempt starts from the clean record at ir1's accumulator snapshot
-                  'n n0 'strs strs0
-                  'pool0 lp2 'pool lp2)
-               _ (rgset g lh9 av)
-               _ (pin g 'csbor bor9)
-               _ (pin g 'pcs pc0)
-               ; the callee-saved homes AND borrows: one slot each past the r3 cell, stored by
-               ; the prologue (g 'cssv) and reloaded on every exit -- the epilogue PIN carries
-               ; the loads through each ret and sib splice, and unframe re-addresses them like
-               ; any slot op
-               csa (cs9 + bor9 + map (\ e9 <>e9) pc0)
-               _ (? (two? csa)
-                    (: sv (map (\ r9 ['st 'r4 (nslot g 8) r9]) csa)
-                       _ (pin g 'cssv sv)
-                       (pin g 'epi (map (\ f9 ['ld (nthr f9 3) 'r4 (nthr f9 2)]) sv + e0)))
-                    ())
-               ir2 (build (spill hp params 0 0 0 () ()))
-               miss (peep g 'lomiss ())
-               bu9 (peep g 'csbu ())
-               _ (pins (rgreset g) 'cssv () 'epi e0)
-               ; the numbering guard: the build's forward ticks must land exactly
-               ; on alive's total, or the wrap sets keyed by statement number
-               ; landed on the wrong statements -- deopt to ir1, whole
-               (? (bad? ir2 || (two? av && !(peep g 'lsq 0 = nthr av 3)))
-                  (deopt ())
-                  ; a loop keep missed on an arriving edge: bar it and REBUILD -- only a
-                  ; zero-miss build ships (the cap's last attempt keeps nothing, so it
-                  ; cannot miss). labels re-mint identically, so bars carry across.
-                  !(two? miss)
-                   (? (tally bu9 < tally bor9)      ; zero-miss, idle seats: rebuild on the used set
-                      (att (k9 - 1) (filter (\ r9 (member? r9 bu9)) bor9))
-                      ir2)
-                  (: _ (? (k9 < 1) (pin g 'lonone 1)
-                          (pin g 'lobar (miss + peep g 'lobar ())))
-                     (att (k9 - 1) (? (k9 < 1) () bor9)))))
-           (att 4 bf9))
+           lp2 (lp9 + filter (\ r9 (member? r9 tpool && !(member? r9 lp9)))   ; the granted
+                  (map (\ e9 (homereg <e9)) pc0))   ; params' homeregs rejoin the pool
+           _ (pins (fnreset g) ; the build starts from the clean record at ir1's accumulator snapshot
+              'n n0 'strs strs0
+              'pool0 lp2 'pool lp2)
+           _ (rgset g lh9 av)
+           _ (pin g 'pcs pc0)
+           ; the callee-saved homes: one slot each past the r3 cell, stored by the
+           ; prologue (g 'cssv) and reloaded on every exit -- the epilogue PIN carries
+           ; the loads through each ret and sib splice, and unframe re-addresses them
+           ; like any slot op
+           csa (cs9 + map (\ e9 <>e9) pc0)
+           _ (? (two? csa)
+                (: sv (map (\ r9 ['st 'r4 (nslot g 8) r9]) csa)
+                   _ (pin g 'cssv sv)
+                   (pin g 'epi (map (\ f9 ['ld (nthr f9 3) 'r4 (nthr f9 2)]) sv + e0)))
+                ())
+           ir2 (build (spill hp params 0 0 0 () ()))
+           _ (pins (rgreset g) 'cssv () 'epi e0)
+           ; the numbering guard: the build's forward ticks must land exactly
+           ; on alive's total, or the wrap sets keyed by statement number
+           ; landed on the wrong statements -- deopt to ir1, whole
+           (? (bad? ir2 || (two? av && !(peep g 'lsq 0 = nthr av 3)))
+              (deopt ()) ir2))
        ; the leaf lane's ride loop: a rider whose arrival picked up a def in the code it licensed
        ; DROPS, and the regen re-runs -- pool, locals picks and homes all recomputed for the
        ; smaller set, so the survivors keep their arrivals and the dropped param homes like any
@@ -7522,9 +7478,8 @@
                         (two? av && ((nh * rcost 'home (pmax ir1 + nthr av 4)) + em < nr))))
              ; the cs-home grant: the homes take callee-saved seats and the per-call wraps
              ; retire for one save + a reload per EXIT (the epilogue rides every ret) --
-             ; fn-wide, the whole set or none (the law above), seats from what lpick left,
-             ; never beside the loop borrow (wb: a keep's claim wins the seat)
-             free9 (? wb () (filter (\ r9 !(member? r9 (nthr st0 3))) (cspool g)))
+             ; fn-wide, the whole set or none (the law above), seats from what lpick left
+             free9 (filter (\ r9 !(member? r9 (nthr st0 3))) (cspool g))
              nx (: (go9 l n9) (? !(two? l) n9
                                  (go9 >l (? (two? <l && id? <<l 'ret) (n9 + 1) n9)))
                    (go9 ir1 0))
@@ -7541,10 +7496,7 @@
                        <pg)
                     ())
              _ (pin g 'pcs pcs)
-             ; the array leg licenses its own regen: element pins are priced by neither
-             ; nr (param reads) nor the homes -- a non-empty universe is the pay; a callish
-             ; loop (wb) licenses too, so its keep can take borrowed cs seats
-             (? (two? pcs || pp || lh || (wb && two? av && two? <>>av))
+             (? (two? pcs || pp || lh)
                 (regen (? (two? pcs || pp) 'shadow ()) st0) ir1)))
        ; ⚠ deadlab and repack join unframe in the POST-CHOICE slot and must never touch the ir1
        ; the rankers read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis,
