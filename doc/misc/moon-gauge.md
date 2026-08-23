@@ -142,13 +142,16 @@ on both ccbench rows, for anything claiming a speed effect.
 Where the remaining ratios live, from disassembly of the current binaries — each lever
 names the evidence that prices it:
 
-1. **inline const-prop — the standing named lever.** An inlined body materializes every
-   argument to a frame slot and reads it back, constants included. sha_block's spliced
-   `rr(x, k)` is 7 instructions + 4 frame ops (`movq $0x6,slot` … `movslq slot,%rcx` …
-   `ror %cl`) where gcc emits `ror $6` — six times per compression iteration, roughly
-   half of the 139-vs-48 insns/iter gap that separates sha256's 3.03× from md5's 1.69×
-   (md5's counts are table loads, the one shape where gcc also forgoes the immediate).
-   The general form pays past the rotate: every splice seam re-buys its arguments.
+1. **inline const-prop — LANDED 2026-08-23 (the CONST bind).** An inlined body used to
+   materialize every argument to a frame slot, constants included: sha_block's spliced
+   `rr(x, k)` was 7 instructions + 4 frame ops per rotate riding `%cl` where gcc emits
+   `ror $6`. A literal arg whose conversion to the param type folds exactly (cnum's
+   arithmetic is the slot round-trip's) now substitutes into the body as
+   `(cast pty (num v))` — no slot, no forms, every immediate lane reads it. Declines:
+   body assigns or shadows the name, asm in the body, `&param` (through clval, the real
+   call stands). sha256 230 → 204 ms (3.03× → 2.68× gcc); compression 139 → 121
+   insns/iter, all counts immediate; corpus flat. What separates 2.68× from gcc now is
+   the VALUE param's slot traffic and the zext chatter — lever 3's territory.
 2. **adjacent store→reload, u32 lane — LANDED 2026-08-23.** cc_block stored an element
    and reloaded the same slot on the very next instruction 32 times; the `stld` adjacent
    lanes only matched full-width `st`/`ld`. The narrow pairs forward now, wearing the

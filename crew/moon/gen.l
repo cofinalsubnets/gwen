@@ -6659,10 +6659,31 @@
        ; the bind pricing, per loop iteration: weighted body reads earn the park
        (paid? nm) (rpays? 'bind 0 (rdw nm body9 1))
        nocall (!(callish? body9) && !(anyc args))
-       (bind ps as benv acc rbs)                     ; arg values -> the alias register, a priced park, else slots
-        (? !(two? ps) [benv acc rbs]
+       (dnames x a9)
+        (? !(two? x) a9
+           (id? <x 'decl && two? >x)
+            (: (dn ps a) (? !(two? ps) a (dn >ps (<<ps >< a)))
+               (dn <>x a9))
+           (dnames <x (dnames >x a9)))
+       dns (dnames body9 ())
+       (anyasm x) (? (id? x 'asm) 1 !(two? x) () (anyasm <x || anyasm >x))
+       asm9 (anyasm body9)
+       ; the CONST bind: a literal arg whose conversion to the param type folds EXACTLY
+       ; (cnum's arithmetic is the slot round-trip's) substitutes into the body -- no
+       ; slot, no forms, and every immediate lane reads the constant where the slot
+       ; bind hid it behind a reload. declined when the body assigns or shadows the
+       ; name, or carries asm (an output could write it unseen); &param declines the
+       ; whole splice through clval and the real call stands.
+       (bind ps as benv acc rbs sbs)                 ; arg values -> a folded constant, the alias register, a priced park, else slots
+        (? !(two? ps) [benv acc rbs sbs]
            (: pty <><ps
-              al (? (nocall && !(flo? pty) && 8 = tsz g pty &&
+              kb (? (asm9 || wrs? <<ps body9 || member? <<ps dns) ()
+                    (: kc (knum g <as)
+                       (? !(two? kc) ()
+                          (: cv (cnum g ['cast pty ['num <kc]])
+                             (? (two? cv) ['cast pty ['num <cv]] ())))))
+              (? (two? kb) (bind >ps >as benv acc rbs ([<<ps kb] >< sbs))
+           (: al (? (nocall && !(flo? pty) && 8 = tsz g pty &&
                      two? <as && <<as = 'var &&
                      !(wrs? <<ps body9))
                     (: v9 (vent g env <><as)
@@ -6672,14 +6693,14 @@
               al (? al (? (alsafe? g al) al ()) ())  ; staging must never write it
               (? al                                  ; the alias bind: zero forms
                   (: _ (pin g 'rpin ((rp g al) >< peep g 'rpin ()))
-                     (bind >ps >as ([<<ps ['reg al] pty] >< benv) acc rbs))
+                     (bind >ps >as ([<<ps ['reg al] pty] >< benv) acc rbs sbs))
                  (: r (cgexpr g env <as ())
                     (? (bad? r) 'bad
                        (pair? g pty)                 ; a pair param: an 8-byte slot, both words land
                         (: off (ntmp g 'llong)
                            (bind >ps >as
                                  ([<<ps off pty] >< benv)
-                                 (acc + asll g r + pst 'r4 off) rbs))
+                                 (acc + asll g r + pst 'r4 off) rbs sbs))
                        (: rb (? (nocall && !(flo? pty) &&
                                  paid? <<ps &&
                                  deep? (peep g 'pool ()))              ; a seat is EARNED: paid reads into a deep pool
@@ -6689,7 +6710,7 @@
                                  (bind >ps >as ([<<ps ['reg rb] pty] >< benv)
                                        (acc + asintt g r pty
                                             + ([['mov rb 'r0]] + cvt pty rb))
-                                       (rb >< rbs)))
+                                       (rb >< rbs) sbs))
                              ; a register-riding value stores ITSELF (no r0 bridge)
                              (: off (ntmp g 'long)
                                 vd (? (flo? (vty r) || id? pty 'bool ||
@@ -6704,19 +6725,13 @@
                                          (acc + asintt g r pty
                                               + (? (id? pty 'bool) (cvt pty 'r0) ())   ; the entry conversion the splice skips
                                               + [['st 'r4 off 'r0]]))
-                                      rbs)))))))))
-       br (bind <>>f args () () ())
+                                      rbs sbs)))))))))))
+       br (bind <>>f args () () () ())
        ; the body-decl license: a decl name whose weighted reads price a pool seat (the
        ; park's discipline) register-binds in cgdecl's splice lane; nesting saves/restores
        rb0 (peep g 'inlrb ())
        rbs0 (peep g 'inlrbs ())
-       (dnames x a9)
-        (? !(two? x) a9
-           (id? <x 'decl && two? >x)
-            (: (dn ps a) (? !(two? ps) a (dn >ps (<<ps >< a)))
-               (dn <>x a9))
-           (dnames <x (dnames >x a9)))
-       _ (pins g 'inlrb (? nocall (filter paid? (dnames body9 ())) ())
+       _ (pins g 'inlrb (? nocall (filter paid? dns) ())
           'inlrbs () 'inlret ilb9 'inlrt rt)
        ; ⚠ cgitems rides the g tablet, not a direct call: the direct edge closes the
        ; cgexpr->cginl->cgitems->cgstmt->cgexpr cycle, and the loader's analysis then re-weaves
@@ -6724,7 +6739,11 @@
        ; stays until the core analysis owns cycles in big body-less letrecs.
        ib0 (peep g 'inlbody 0)
        _ (pin g 'inlbody (ib0 + 1))                ; the body blinds the alias bind (name conflation)
-       ibd (? (bad? br) 'bad ((g 'cgitems) g <br body9 ()))
+       csbs (? (bad? br) () (nthr br 3))
+       (vsub x) (? !(two? x) x
+                   (id? <x 'var) (: p (assoc <>x csbs) (? (two? p) <>p x))
+                   ((vsub <x) >< (vsub >x)))
+       ibd (? (bad? br) 'bad ((g 'cgitems) g <br (? (two? csbs) (vsub body9) body9) ()))
        _ (pins g 'inlbody ib0 'inlret ir0 'inlrt irt0 'inlining il0 'rpin rp0) ; the bind pins die with the splice
        drbs (peep g 'inlrbs ())
        _ (pins g 'inlrb rb0 'inlrbs rbs0)

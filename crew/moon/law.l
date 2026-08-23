@@ -362,6 +362,10 @@
       (rotv "unsigned f(unsigned x, int n){ return (x << n) | (x >> (32 - n)); } int main(){ return f(9u, 3) & 63; }" 'rorv4)
       (negs "unsigned f(unsigned x, int n){ return (x << n) | (x >> (32 - n)); } int main(){ return f(9u, 3) & 63; }")
       (rotv "unsigned long f(unsigned long x, int n){ return (x >> n) | (x << (64 - n)); } int main(){ return f(9ul, 3) & 63; }" 'rorv)
+      ; the splice's CONST bind: a literal count substitutes into the inlined body, so
+      ; the call site rides the immediate beside the standalone body's register form
+      (rotn "unsigned f(unsigned x, int n){ return (x >> n) | (x << (32 - n)); } int main(){ return f(9u, 3) & 63; }" 'ror4 3)
+      (rotn "unsigned f(unsigned x, int n){ return (x << n) | (x >> (32 - n)); } int main(){ return f(9u, 3) & 63; }" 'ror4 29)
       !(two? (rots "int f(int x){ return (x >> 3) | (x << 29); } int main(){ return f(9) & 63; }"))
       !(two? (rots "unsigned f(unsigned x, unsigned y){ return (x >> 5) | (y << 27); } int main(){ return f(9u, 2u) & 63; }"))
       !(two? (rots "unsigned f(unsigned x){ return (x >> 5) | (x << 26); } int main(){ return f(9u) & 63; }"))))
