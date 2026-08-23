@@ -135,7 +135,23 @@
    ; the value comes back wearing the new mint -- honored by ACCIDENT, and the accident is the
    ; discipline (the old code compared physicals, so the accident counted).
    (rpeq? g a b) (id? (rp g a) (rp g b))
-   (ralloc g) (: fr (peep g 'pool ())
+   ; -- the ablation knob (the pare plan's rung 0): MOON_ABLATE="tpool,cs" holds named
+   ; mechanisms empty for PRICING -- ralloc tpool cs lhome vuniv csbor homes pcs. read at
+   ; RUN time, once per unit (a value binding folds at bake and would carry the baking
+   ; session's environment). no gate rides it; unset is every mechanism on. --
+   (ablenv _)
+    (: s (getenv "MOON_ABLATE")
+       (? !(string? s) ()
+          (: n (tally s)
+             (cut i j acc) (? (i < j) ((intern (snip s i j)) >< acc) acc)
+             (go i j acc)
+              (? (n <= j) (cut i j acc)
+                 (member? (s j) '(44 32)) (go (j + 1) (j + 1) (cut i j acc))
+                 (go i (j + 1) acc))
+             (go 0 0 ()))))
+   (abl? g nm) (member? nm (peep g 'abl ()))
+   (ralloc g) (? (abl? g 'ralloc) ()
+                 (: fr (peep g 'pool ())
                  (? (two? fr)
                     (: r9 <fr
                        ; ⚠ armor: a pinned reg on the free list is the free-list/pin split
@@ -147,7 +163,7 @@
                        v9 (intern ("%v" + show k9))
                        _ (pin g 'vrn (k9 + 1))
                        _ (pin (peep g 'vrt ()) v9 r9)
-                       v9) ()))
+                       v9) ())))
    (rfree g rz) (: r (rp g rz)
                    (? (member? r (peep g 'pool0 ()) &&
                        !(member? r (peep g 'pool ())) &&
@@ -825,7 +841,8 @@
    ;; ⚠ riscv leads with r15: seats fill from the head, and r15 is s1 -- the ONE callee-saved
    ;; register inside the RVC window (x8..x15 is s0, s1, a0..a5, and the rest is ABI-locked),
    ;; so the hottest seat is the only one whose ld/sd/mv can wear a 2-byte form.
-   (cspool g) (? (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
+   (cspool g) (? (abl? g 'cs) ()
+                 (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                  (rv? g) '(r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26)
                  (v6m? g) '(r5 r6 r7 r8 r9 r10)
                  (t32? g) '(r5 r6 r7 r8 r9 r10)
@@ -6904,8 +6921,8 @@
    ; and wraps per-call off the liveness (av9, alive's answer)
    (rgset g lh9 av9 au9)
     (pins (vmflush g)      ; vmflush pin set is disjoint from rgset
-     'vuniv <>>av9         ; the vmap rides the regen (univ known)
-     'vuarr au9            ; ...and the array leg its universe
+     'vuniv (? (abl? g 'vuniv) () <>>av9)   ; the vmap rides the regen (univ known)
+     'vuarr (? (abl? g 'vuniv) () au9)      ; ...and the array leg its universe
      'homes ()
      'lhome lh9
      'rgon 1
@@ -8025,7 +8042,7 @@
        ; frame saves only lr+fp, while r0-r3/r12 are args and scratch -- there is no free
        ; caller-saved register to pool. riscv's own pool is t0..t3 (r8..r11), caller-saved and
        ; never args; opool's names land on riscv arg registers, so it can't ride there.
-       tpool (? (t32? g) () (rv? g) '(r8 r9 r10 r11) opool)
+       tpool (? (abl? g 'tpool) () (t32? g) () (rv? g) '(r8 r9 r10 r11) opool)
        _ (pin g 'pool0 tpool) _ (pin g 'pool tpool)
        ; v6-M MEMORY return: this fn's >4B composite result fills the address the caller
        ; passed as the implicit first arg (r0) -- save it in its own slot, params start at
@@ -8049,7 +8066,7 @@
                      uh (filter (\ q !(member? q rh)) (uhomes params 0 ()))
                      (filter (\ q !(member? q uh)) tpool))
        hpool (pools ride)
-       hm (!vararg && !sr6f && !(peep g 'hasasm ()) &&              ; sr6f: the hidden sret arg shifts every
+       hm (!(abl? g 'homes) && !vararg && !sr6f && !(peep g 'hasasm ()) &&   ; sr6f: the hidden sret arg shifts every
            !(anyop? ir1 'sys) && homes? params 0)                   ; param register -- the pickers don't model it
        ; the alive pass runs once per homing-eligible fn: lpick reads cross/
        ; univ (a zero-crossing local homes through calls), the regens pin its
@@ -8064,7 +8081,7 @@
        ; subsumes both. ⚠ the x64 borrow's own win was measured in WALL CLOCK at flat insns, so
        ; this is not a verdict on the mechanism -- it is one on a metric we have no cross-target
        ; instrument for.
-       wb (? (ng || arm? g || !(two? (cspool g))) () (blscan f))
+       wb (? (ng || arm? g || abl? g 'csbor || !(two? (cspool g))) () (blscan f))
        ; -- priced int-param homes (the leaf lane): an int/uint param earns its POSITIONAL
        ; seat only when its ir1 slot touches pay the entry cvt (tc >= 2), the locals picked
        ; first (a hot local's claim wins the register), and an x64 pool seat stays deep
@@ -8090,11 +8107,11 @@
        ; homes (lpick), int-param homes (ihset), the pool left after both, the cs homes
        ; taken. both lanes mint it here; regen consumes it whole. --
        (seats rd hp9 wi)
-        (: lr (? av (lpick ir1 <>av <>>av hp9) ())
+        (: lr (? (av && !(abl? g 'lhome)) (lpick ir1 <>av <>>av hp9) ())
            lp (? (two? lr) <>lr hp9)
            ih (? wi (ihset rd lp) [() lp])
            [(? (two? lr) <lr ()) <ih <>ih (? (two? lr) (nthr lr 2) ())])
-       st0 (seats ride hpool !(ng || peep g 'fesc () || hascall? ir1))
+       st0 (seats ride hpool !(ng || abl? g 'homes || peep g 'fesc () || hascall? ir1))
        lh <st0 ih0 <>st0                            ; the choice below reads these two; regen takes the table whole
        (deopt u) (: _ (pin g 'n n1) _ (pin g 'strs strs1)
                     _ (pin g 'slots sl1) ir1)       ; ir1 stands, accumulators + slot map restored
@@ -8191,7 +8208,7 @@
                                  (go9 >l (? (two? <l && id? <<l 'ret) (n9 + 1) n9)))
                    (go9 ir1 0))
              nra (nrac ir1 (pslots <>sp1 ()))
-             pcs (? (hm && (0 < nh) && (nh <= tally free9) &&
+             pcs (? (hm && !(abl? g 'pcs) && (0 < nh) && (nh <= tally free9) &&
                      (0 < pmin ir1) &&
                      ; per invocation, nh homes at the SEAT rate -- no wraps, one save and a
                      ; reload per exit -- and every path must call, or the entry work earns nothing
@@ -8348,6 +8365,7 @@
        (cg-refs >x (cg-refs <x t)))
    (cgen-core ast stbl sigs weaks xtra tgt)
     (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'statics ()
+          'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
           'fns {} 'inl {} 'cgitems cgitems 'stag stbl 'sigs sigs
           'tgt tgt 'epi (? (id? tgt 'thumb1) epi-t16 (member? tgt '(arm64 thumb2 thumb2sp riscv64)) epi-a64 epi)

@@ -28,16 +28,18 @@ One entry there was already built twice.
 
 ## the ladder
 
-- **rung 0 — the ablation becomes a knob, and the knob becomes a harness.** Every
-  measurement in doc/misc/moon-gauge.md came from hand-editing one binding and rebuilding.
-  The timing half arrived 2026-08-22: `make -C bench ccnif` reads the nif floors straight in
-  ~20 s and is the per-edit instrument; ccbench stays the per-rung one. Still owed: make
-  each mechanism switchable without editing gen.l, and script the pricing — `test_fixpoint`
-  for correctness, `perf` cycles for the number, both ccbench rows for the shape. ⚠ the
-  read must happen at RUNTIME — a plain value folds eagerly at bake time (gen.l's own first
-  binding says so), so the knob would carry the baking session's environment. ⚠ and
-  `test_fixpoint` is a by-name gate now (retired from the slow roster), so the harness
-  invokes it by name or the correctness leg silently doesn't run.
+- **rung 0 — the ablation becomes a knob, and the knob becomes a harness. LANDED
+  2026-08-23.** `MOON_ABLATE="tpool,cs"` holds named mechanisms empty — `ralloc tpool cs
+  lhome vuniv csbor homes pcs` (gen.l's `ablenv`, read at RUN time per unit; a plain value
+  binding folds at bake and would carry the baking session's environment). `tools/
+  moon-ablate.sh` is the pricing: each configuration recompiles all of love, closes
+  `test_fixpoint` by name, and reads perf cycles + instructions + .text against base. It
+  reproduced all four census points (A +12.5%/+4.6%, B +14.3%/+5.3%, C +1.9%/+6.9%,
+  D +22.1%/+12.3% insns/cycles), and every fine knob closes its fixpoint and flips real
+  bytes. ⚠ the knob is part of the compiler's IDENTITY: `mcid` carries it in the runtime-
+  cache key, and the fixpoint said so the hard way (moon-gauge's cache-trap note). ⚠ one
+  uncontrolled sample hinted `vuniv` may price at or below zero cycles on today's corpus —
+  rung 2 settles that with same-run bases and real samples, not this footnote.
 - **rung 1 — the rotate lands, and the pair stops lying. LANDED 2026-08-22.** The
   recognizer is in gen.l (constant and spliced-variable counts, both directions, both
   widths; `ror4`/`rorv`/`rorv4` joined holo on x64 + arm64), pinned by law, by

@@ -634,8 +634,11 @@
                              [[im (mccid im)]]))
               (? (string? d) ((mcims d) + (mcims (d + "../lib/love/"))) ()))
        src (? (two? ims) ((mctree (home + "include/")) + (mctree (home + "lib/"))) "")
+       ; the ablation knob compiles a DIFFERENT runtime, so it is part of the identity;
+       ; unset stays out so every standing key survives
+       ab (: s (getenv "MOON_ABLATE") (? (string? s && 0 < tally s) ("\nabl " + s) ""))
        (? !(two? ims) ()
-          (sha256 ((("moon-rt 2\n" + x) + ("\n" + (mccid x))) + (("\n" + show ims) + ("\n" + src))))))
+          (sha256 (((("moon-rt 2\n" + x) + ("\n" + (mccid x))) + (("\n" + show ims) + ("\n" + src))) + ab))))
    ; an entry, read back and checked for its magic: the rename below lands it
    ; whole, so a torn file cannot appear, and a mangled one is passed over rather
    ; than linked. the (1 bytes) wrapper -- an empty entry is absence.

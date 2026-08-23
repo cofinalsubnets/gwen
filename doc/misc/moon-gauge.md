@@ -360,7 +360,17 @@ costs it **+29.2%** — the array leg's keeps ride callee-saved seats, not the o
 - Cycles, not instructions, for anything claiming a speed effect. Instructions are near
   deterministic here (±0.01%) and make a tempting proxy; §above is why they mislead.
 - An ablation is priced through `test_fixpoint`, so a configuration that cannot rebuild
-  itself never reaches the timer.
+  itself never reaches the timer. `sh tools/moon-ablate.sh [samples] [conf ..]` is the
+  whole procedure as a script (the pare plan's rung 0): each configuration recompiles all
+  of love under `MOON_ABLATE`, closes the fixpoint, and reads cycles + instructions +
+  .text against the base row. It reproduced the hand census (C +1.9%/+6.9%, B
+  +14.3%/+5.3% insns/cycles) on 2026-08-22's corpus.
+- ⚠ **an ablation is part of the compiler's identity, and the runtime cache said so the
+  hard way**: the nolibc archive under `~/.love/cache/moon` is keyed on compiler + image
+  + source, and an env-blind key served BASE-compiled `__ai_*` members into an ablated
+  love1 while love2 compiled its own fresh — a "broken" fixpoint whose only defect was
+  the cache. `mcid` carries `MOON_ABLATE` in the key now (unset stays out, so standing
+  keys survive). Any future config knob must join it the same way.
 - ⚠ the `crew/moon/law.l` goldens pin register identities and residency counts (80 fail
   under A, 106 under B). A lane change churns them. That is not breakage — `test_cts` and
   the fixpoint are the behavioural instruments, and both held in all four ablations.
