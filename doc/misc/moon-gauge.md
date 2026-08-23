@@ -375,6 +375,42 @@ costs it **+29.2%** — the array leg's keeps ride callee-saved seats, not the o
   under A, 106 under B). A lane change churns them. That is not breakage — `test_cts` and
   the fixpoint are the behavioural instruments, and both held in all four ablations.
 
+## the census (2026-08-23) — every mechanism priced alone, and the vmap reads negative
+
+`tools/moon-ablate.sh 3` over every knob, same-run base, quiet box, 3 samples (floor
+±0.7% cycles). The cost of ABLATING a mechanism is what the mechanism buys:
+
+| ablated | cycles | insns | .text | lines owned (approx) |
+|---|---|---|---|---|
+| ralloc (A) | +4.0% | +12.5% | +4.5% | pool + mints ~89 |
+| tpool (B) | +5.9% | +14.3% | +7.5% | (A's machinery + the pool half of the dance) |
+| cs (C) | +5.0% | +1.9% | +2.2% | cskeep 85 + the grant lanes |
+| tpool,cs (D) | +12.0% | +22.1% | +11.9% | — |
+| **lhome** | **+6.3%** | +2.9% | +3.0% | lpick ~120 + alive's share of 245 |
+| **vuniv** | **−2.9%** | −0.7% | ±0 | vm* ~127 + auniv 48 + channels |
+| csbor | +0.4% | −0.2% | −0.7% | blscan + the borrow half of `att` |
+| homes | +1.0% | +1.4% | +1.5% | pricing helpers ~107 |
+| pcs | −0.4% | −0.1% | ±0 | ~57 |
+
+(The whole residency layer owns ~1,450–1,550 of gen.l's 8,606 lines, `call-fixed`'s 328
+serving the wrap side beside it. Overlaps are not additive — lhome alone reads above
+tpool because the knobs are not nested partitions.)
+
+**The payers are locals homes, the cs grant, and the operand pool.** `pcs` confirms the
+ledger's zero. `csbor` prices at the floor. And **the vmap universe prices NEGATIVE** —
+ablating it takes 2.9% of corpus cycles off — so the shape rows were read before believing
+it: ccnif is unmoved to the millisecond (sha256 231→232 ms — the schedule array never
+rode the universe), and a full ccbench fill under `MOON_ABLATE=vuniv` moves chacha
++3.6% — inside the ±4% wall floor — while the corpus row gains 5.2%. The row the
+mechanism was BUILT for no longer misses it; its wins ride the cs-seat keeps and the
+rotate now. The 2026-08-10 array-slot claim was true then and is falsified today —
+which is the census doing the one job the criterion gives a number.
+
+⚠ what this does NOT say: nothing here prices the MCU targets (as ever), and the
+loop-keep family (`lo*`) serves both the vmap keeps and the cs borrows — a deletion of
+the vmap complex has to re-price `cs` after it, since the keeps' zero may be hiding
+inside cs's +5.0%. That sequencing is the pare plan's rung 3.
+
 ## where the cycles go — the attribution, run 2026-08-16 (Zen 3, Ryzen 7 5825U)
 
 Intel's `--topdown` does not apply here; the Zen equivalents are

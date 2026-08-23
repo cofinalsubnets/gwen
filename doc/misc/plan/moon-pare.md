@@ -49,11 +49,14 @@ One entry there was already built twice.
   scalar again. moon-gauge's *the rotate lands* has the tables. Still open from this
   rung's teardown, the named next lever: an inlined body does not constant-propagate,
   so hash.c's rotates ride `%cl` off a frame slot where gcc folds an immediate.
-- **rung 2 — price the six separately.** `pool0`, `lhome`/`lpick`, `vuniv`/the vmap,
-  `csbor`/the cs seats, the param `homes`, `vrt`/the mints. Today only four points exist
-  (A, B, C, D) and they bracket groups, not mechanisms. Publish cycles-bought and lines-owned
-  per mechanism. **Nothing is deleted in this rung** — it is the census every later rung
-  argues from, and the census is what killed the last two plausible stories.
+- **rung 2 — price the six separately. LANDED 2026-08-23**, moon-gauge's *the census*
+  section. The payers: locals homes +6.3% cycles, the cs grant +5.0%, the operand pool
+  +4.0%, param homes +1.0%. At zero or below: `pcs` (−0.4%, the ledger's zero confirmed),
+  `csbor` (+0.4%, the floor), and **`vuniv` at −2.9%** — the vmap universe costs cycles,
+  and the shape rows agree (ccnif unmoved to the millisecond, chacha +3.6% inside the
+  wall floor under the ablation). The 2026-08-10 array-slot story — true when it landed —
+  is falsified on today's tree: chacha's wins ride the cs keeps and the rotate now. The
+  census killed its third plausible story, which is its job.
 - **rung 3 — delete what prices at zero.** `pcs` is already measured: +1,004 B of `.text`,
   **zero** corpus instructions, 57 lines the program cannot explain. It was held under the
   old gate ("regresses nowhere", in bytes); under the criterion above a mechanism that buys
@@ -61,7 +64,12 @@ One entry there was already built twice.
   that ablation is 2026-08-12 and the riscv cs-seat work of 2026-08-21 touched the same
   machinery, and `pcs` threads four sites (the grant, the fnreset capture, the shadow-spill
   read, the accounting the locals wear), so the deletion ships on a fresh number plus
-  `test_fixpoint`, not the archived one. Whatever else rung 2 finds at zero joins it.
+  `test_fixpoint`, not the archived one. Rung 2 grew the roster: **the vmap complex**
+  (`vuniv`/`vuarr`/`auniv`, ~175 lines plus channels) prices negative, and `csbor` at the
+  floor. ⚠ the sequencing law: the `lo*` keeps serve both the vmap and the cs borrows, so
+  the cuts go vmap-first, then csbor, and `cs` is RE-PRICED after each — the keeps' zero
+  may be hiding inside cs's +5.0%, and a cut that moves cs beyond its floor reverts. ⚠ and
+  the cipher rows ride along per cut (one quiet ccbench fill), not just the corpus.
 - **rung 4 — the seven names become one loop.** `lokeep`/`loseed`/`lomig`/`lochk`/`lomiss`/
   `lobar`/`lonone` is seven names for the phases of one mechanism's uncertainty, and the
   ledger already called them its own progress bar: *"if the ladder is working, most of those
@@ -72,16 +80,19 @@ One entry there was already built twice.
   `att` loop already states its convergence in place (bars grow monotonically, only a
   zero-miss build ships, the capped attempt cannot miss) — what is owed is one named loop
   owning the seven channels, a consolidation rather than a discovery. Gate: the names
-  shrink to a few, `test_fixpoint` byte-identical, `test_cts` unmoved.
-- **rung 5 — the B half, decided on rung 2's evidence.** The operand pool and locals homing
-  together buy 4.9% of cycles for 14% of instructions, and they own most of the machinery —
-  the free list, the mints and `vrfix`, the parks and aims, `lpick`/`ihset`/`seats`, the
-  regen dance. The cs seats buy **more** cycles (6.6%) for 2% of instructions. So the
-  cheaper mechanism by instruction count is the better one by time, and the expensive one by
-  line count is the worse one by time. Rung 2 says which specific parts of B are which.
-  Options, in preference order: shrink B to the parts that price; fold its residency into
-  the cs-seat mechanism that already pays; leave it alone with the price written down.
-  ⚠ deleting B outright is a 4.9% regression and is not proposed here.
+  shrink to a few, `test_fixpoint` byte-identical, `test_cts` unmoved. ⚠ rung 3 may
+  hollow this rung out first: the `lo*` family exists to verify the vmap and borrow
+  keeps, and if rung 3's cuts land, most of the seven names leave with them — check
+  what remains before consolidating what is about to be deleted.
+- **rung 5 — the B half, decided on rung 2's evidence.** The census answered the question
+  this rung was written around: B's cycles are mostly the LOCALS HOMES (lhome +6.3%, the
+  single biggest payer) with the pool at +4.0% — so the machinery that stays is `alive`/
+  `lpick` and the pool proper, and the negotiation is over what serves only the parts
+  rung 3 removes (the mints exist for the pool, the regen dance for the seats — re-read
+  the lines-owned column after rung 3 lands). Options, in preference order: shrink B to
+  the parts that price; fold its residency into the cs-seat mechanism that already pays;
+  leave it alone with the price written down. ⚠ deleting B outright is a ~6% regression
+  and is not proposed here.
 - **rung 6 — give the hot shapes somewhere else to go.** Where C plus residency cannot close
   a gap, `gen.l` should not grow to chase it. `crew/sat/flat.l` is the pattern: hand-written
   kernels in holo's **neutral** IR (one body, five backends — `(assemble <target> ir)`), with
