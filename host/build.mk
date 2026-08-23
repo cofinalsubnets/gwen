@@ -30,9 +30,7 @@ hcc = LOVE_NO_IMAGE= $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(
 # gives a section at a far address a PT_LOAD to itself, above .bss and alone in it.
 # 0x2000000 clears .bss with room to grow and is page-aligned, which the loader's
 # offset/vaddr congruence needs; an overlap is a loud ld error. holo lays the same shape
-# its own way, so both toolchains bake alike. no mach-o branch because nothing here
-# builds there: host/image.c wants <link.h> and dl_iterate_phdr, and on Apple silicon a
-# self-patching binary would have to re-sign itself before it could exec again.
+# its own way, so both toolchains bake alike.
 image_ldflags = -Wl,--section-start=.love_image=0x2000000
 # .hostcc -- the tree's compiler+link identity, content-stamped (cmp keeps the mtime when
 # nothing moved). every host object and the link depend on it, so an in-place flavor flip

@@ -8,7 +8,7 @@ enum d { DMint, DNom, DSun, DGem, DTwin, DBig, DTray, DString, DChain };
 // love.h's ai_typ, and core/love_data.ld laid from this same roster.
 // each #if here is a default; the guard over it is the -D door.
 #if !defined(ai_data_section)
-#if defined(__wasm__) || defined(__APPLE__)
+#if defined(__wasm__)
 #define ai_data_section 0
 #else
 #define ai_data_section 1

@@ -88,9 +88,6 @@ For the mooncc lane the bytes are a real section too: `.image` is a fourth strea
 cgdata → objelf → the `image` lane in link.l, beside `ai_nifs` — the other named section whose
 whole point is WHERE it lands.
 
-⚠ There is no `__APPLE__` lane: `image.c` needs `<link.h>` + `dl_iterate_phdr`, so it does not
-build on mach-o at all. A mac host owes it `_NSGetExecutablePath`.
-
 ## core/host split
 
 The core owns the stdio-free buffer codec `ai_image_save` / `ai_image_load` (love.h); file I/O

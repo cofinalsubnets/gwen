@@ -48,7 +48,7 @@
 #elif defined(__linux__)
 # define AiHaveSignalfd 1
 # define AiHaveDontfork 1
-#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__)
+#elif defined(__FreeBSD__) || defined(__NetBSD__)
 # define AiHaveKqueue 1
 # define AiHaveSysctl 1
 #endif
@@ -71,10 +71,6 @@
 #endif
 #if defined(AiHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
-#endif
-#if defined(__APPLE__)
-#include <mach-o/dyld.h>    // _NSGetExecutablePath (selfpath)
-#include <limits.h>         // PATH_MAX -- realpath's buffer is not ours to size
 #endif
 
 // a wait(2) status word -> the value a reaper hands back: the exit code, or
@@ -439,15 +435,6 @@ static lvm(lvm_cwd) {
 // callers here are baked, so the operand would arrive already wrong. a seat with no
 // door below writes the walk where the line is read live.
 ai_noinline size_t host_selfpath(char *b, size_t n) {
-#if defined(__APPLE__)
- char raw[4096], can[PATH_MAX];                        // realpath writes PATH_MAX, not n
- uint32_t sz = sizeof raw;
- if (_NSGetExecutablePath(raw, &sz)) return 0;         // dyld's answer is not canonical
- char const *p = realpath(raw, can) ? can : raw;
- size_t l = strlen(p);
- if (l >= n) return 0;
- return memcpy(b, p, l + 1), l;
-#else
  // a runtime ladder, because one binary meets more than one kernel: linux's
  // link, then netbsd's spelling of it, then freebsd's sysctl door -- each try
  // answers only on its kernel, so the tries are the OS probe.
@@ -464,9 +451,7 @@ ai_noinline size_t host_selfpath(char *b, size_t n) {
  sz = n;
  if (!sysctl(nmib, 4, b, &sz, NULL, 0) && sz) return strlen(b);
 #endif
- return 0;
-#endif
-}
+ return 0; }
 
 ai_noinline static struct ai *host_selfpath_ap(struct ai *g) {
  char buf[4096];
@@ -762,13 +747,8 @@ ai_noinline static struct ai *host_stat_tuple(struct ai *g, int follow) {
  struct stat st;
  if (!str_cbuf(g->sp[0], p, sizeof p) || (follow ? stat(p, &st) : lstat(p, &st)))
   return g->sp[0] = ZeroPoint, g;                             // absent -> the real ()
-#if defined(__APPLE__)
- intptr_t ms = (intptr_t) st.st_mtimespec.tv_sec * 1000 + st.st_mtimespec.tv_nsec / 1000000,
-          ns = (intptr_t) st.st_mtimespec.tv_sec * 1000000000 + st.st_mtimespec.tv_nsec;
-#else
  intptr_t ms = (intptr_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000,
           ns = (intptr_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec;
-#endif
  if (!ai_ok(g = ai_have(g, 9 * Width(struct ai_chain)))) return g;
  size_t const C = Width(struct ai_chain);
  struct ai_chain *c = ini_chain(bump(g, C), putcharm(st.st_ino), ZeroPoint);

@@ -84,9 +84,7 @@ CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*
 # matching set (mk/common.mk) for a standalone run.
 if [ -z "$LOVE_CFLAGS" ]; then
   LOVE_CFLAGS="-std=c11 -g -O2 -pipe -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter -Wmissing-field-initializers -Wno-implicit-fallthrough -falign-functions=16 -fomit-frame-pointer -fno-stack-check -fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables"
-  if [ "$(uname -s)" = Darwin ]
-  then LOVE_CFLAGS="$LOVE_CFLAGS -D_DARWIN_C_SOURCE"
-  else LOVE_CFLAGS="$LOVE_CFLAGS -fcf-protection=none -D_POSIX_C_SOURCE=200809L"; fi
+  LOVE_CFLAGS="$LOVE_CFLAGS -fcf-protection=none -D_POSIX_C_SOURCE=200809L"
 fi
 # drop -Werror: this table times compile+link, and -Werror is a lint GATE, not a
 # codegen or speed factor. Keeping it would bench a compiler's warning set, not its
@@ -96,9 +94,8 @@ CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$h
 # mk/common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
 # sentinels' tiling IS core/love.h's ai_typ, and ld left to itself keeps each love_data.N an
 # orphan in first-encountered order -- gcc emits love_data.7 first, so lvm_str lands
-# below lvm_sym and every string reads as a closure. mach-o goes without, as there.
-LDFLAGS=
-[ "$(uname -s)" = Darwin ] || LDFLAGS="-Wl,-T,$R/core/love_data.ld"
+# below lvm_sym and every string reads as a closure.
+LDFLAGS="-Wl,-T,$R/core/love_data.ld"
 
 # wall-clock (ms) of a command; echoes just the number. Runs in a subshell so a cd can't leak.
 wall() { t0=$(date +%s.%N); ( eval "$1" ) >/dev/null 2>&1; t1=$(date +%s.%N)

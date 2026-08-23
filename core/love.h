@@ -130,31 +130,25 @@ struct ai_nom {
 
 struct ai_port_vt;   // the port's kind, in its head; spelled out below
 
+union u {
+ lvm_t *ap;
+ ai_word x;
+ union u *m; };
+
 struct ai {
- union u {
-  lvm_t *ap;
-  ai_word x;
-  union u *m; } *ip;
+ union u *ip;
  ai_word *hp, *sp;
- union u *tasks;       // run ring head; non-NULL after ai_ini. no node here is
-                       // fd-parked -- those move to `parked`, so a switch costs no syscall
- union u *parked;      // the parked ring (fd waiters) or NULL; its own ring so the
-                       // fairness yield never walks it. never image-serialized.
- // the sub-word task scalars, adjacent so the five ride two words
- uint16_t yield_ctr,   // ap-cycles since last cooperative yield (level-triggered at yield_interval)
-          sweep_ctr;   // fairness yields since the last parked sweep; slower on purpose --
-                       // a ring walk and a syscall cannot share one knob
- int next_wait_fd,     // fd the task suspended on, -1 = not waiting on I/O; installed into
-                       // the next yield_sw snapshot's wait_fd slot
-     next_wait_events, // ai_wait_in (the default) or ai_wait_out (connect's handshake). a
-                       // field, not read off the parked op: the op that wants out may live
-                       // in a frontend love.c cannot name.
+ union u *tasks,  // running tasks; the head is the running one, [6]/[7] its help and stdio
+         *parked; // paused tasks
+ uint16_t yield_ctr,   // cycles since last cooperative yield
+          sweep_ctr;   // fairness yields since the last parked sweep;
+ int next_wait_fd,     // fd the task suspended on, -1 = not waiting on I/O
+     next_wait_events, // ai_wait_in (the default) or ai_wait_out (connect's handshake)
      b;                // what the last port refill left: a byte, EOF, or IoWouldBlock
- uintptr_t next_serial, // the mint stream: one monotonic counter every fresh identity draws
-                        // from (task pids and nom serials alike; pre-incremented)
-           next_wake_at; // raw deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
- ai_word symbols;       // the weak intern map (string -> canonical atom), swept after the
-                        // cheney fixpoint so dead spellings vanish. 0 only during early init.
+ ai_word inflag;       // fd 0's flags as we found them (a charm), 0 = we left them alone
+ uintptr_t next_serial, // mint id counter
+           next_wake_at; // deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
+ ai_word symbols;       // intern map (string -> canonical atom), swept each gc
  uintptr_t len;         // main-pool size in words: the core sits at its base, [end,hp) is the young heap
  struct ai_r { ai_word *x; struct ai_r *n; } *root; // gc roots list
  struct ai_fz { // finalizers
@@ -168,7 +162,8 @@ struct ai {
  // the remembered set, which is the whole write barrier: old cells that took a young
  // pointer, rescanned by the next minor. rem_miss counts drops on overflow -- any miss
  // forces the next collection major, so a minor only runs under a complete set.
- ai_word *rem; uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by AiRemCap, the fixed capacity
+ ai_word *rem;
+ uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by AiRemCap, the fixed capacity
  // the sub-word collector/codec scalars, adjacent so the four ride the rem set's tail
  bool gc_gen,                             // set during a generational collection: bump() targets major_hp, not hp
       sym_raw;                            // the intern map is still the image's own: a minor scans it in place
@@ -183,8 +178,8 @@ struct ai {
  // own C stack (core/love.c).
  ai_word *major_pool, *major_base, *major_hp;   // major: malloc base (2*major_len words), active-half base, active bump
  uintptr_t
-   major_len,                       // major half size (words)
-   n_minor,                    // minor collections so far (majors = n_gc - n_minor)
+   major_len,                     // major half size (words)
+   n_minor,                       // minor collections so far (majors = n_gc - n_minor)
    minor_hi, major_hi,            // the pause gauge: peak words one minor / one major copied
                                   // (gauge[14]/[15]; test/host/gcpause.l puts wall ns against them)
    since_major, major_live0,      // young words scanned since the last major; major live right
@@ -209,41 +204,16 @@ struct ai {
    ai_word
      book,   // global env map; the macro table is book[zero]. GC-forwarded in v0..end.
      scare_a, scare_b, // the last scare's condition data, stashed at the raise for
-                  // the exit face (ai_scare_face_); zero zero = the bare oom
-   // the hooks: lisp the C lanes must reach, handed over by (seal-hook n f) and read by
-   // slot -- no name lookup, so no rebind can reach them. numbered in seal = boot order;
-   // GC-traced (v0..end) and image-serialized. unsealed = zero traps, except 5 and 7.
-     hot_read,  // 0: the corpus reader (p1's whole-text door, sealed by p1's own
-                  // last act); zero = p1 not up yet, readtext falls back to p0
-     hot_numap, // 1: the church C->lisp num-ap hook (lvm_numap/numtap, data_num_apply)
-     hot_stack, hot_compose, // 2, 3: `+` and `*` of two functions -- church add and
-                  // compose, two lines of prel (lvm_addh/lvm_mulh build the partial)
-     hot_opfix, // 4: the operator factor pass, sealed last; pre-seal the pass
-                  // simply skips (everything up to the seal is written prefix)
-     hot_help,  // 5: the installed help, the one dynamic slot: (hear f) installs, (hear ())
-                  // uninstalls, (heard ()) answers; zero = nothing heard and raises take the
-                  // default escape. read by ai_raise/lvm_index, never the book. per task --
-                  // saved into the node and restored on the switch, inherited at spawn: one
-                  // shared help would land an escaping handler in the wrong stack.
-     hot_io,    // 6: the task's stdio, the second dynamic slot: (wear (i o e)) re-seats
-                  // in/out/err for the running task, (wear ()) hands them back. zero = the
-                  // console and the steady state, so every op tests one word first. per task
-                  // like the help above -- dup2 is the process's. op-level only: id?, peek
-                  // and the image still see the static, because prel's tap/jug poke the port
-                  // head by index and must keep seeing it.
-     hot_show,  // 7: `show` -- what `string` coerces the kinds it cannot spell through.
-                  // unsealed = identity: show is post.l's, and prel runs before it.
-     mods,  // the module registry book: name -> module-book, filled by `leave`, read by
-                  // use/from. a lazy singleton, so both bootstrap prel runs capture the same
-                  // tablet. in v0..end: traced and serialized.
-     inport, // the buffered stdin port, or 0. a seat that can put fd 0 back where its
-                  // reader stopped mints one at boot and parks it here -- `in` stays the
-                  // static and reads through it (love.c's rbio_of). traced here so a
-                  // collection forwards it: a static port could not hold a heap run.
-     inflag; // fd 0's flags as we found them (a charm), or 0 for "we left them alone".
-                  // set when a seat takes the O_NONBLOCK bit for the whole run instead of
-                  // toggling it per read; the same handoff sites put it back. raw 0 is no
-                  // charm, so the boot value cannot be read as a saved O_RDONLY.
+     // hooks: lisp functions that C calls
+     hot_read,    // 0: the p1 reader
+     hot_numap,   // 1: numeric application (church exponentiation)
+     hot_stack,   // 2: church addition
+     hot_compose, // 3: composition (church multiplication)
+     hot_opfix,   // 4: the operator factor pass
+                  // 5 the help and 6 the stdio are the running task's, in its node
+     hot_show,    // 7: show a value as a string
+     mods,        // the module registry book: name -> module-book
+     inport;      // the buffered stdin port, or 0
    union {
     ai_word x;
     struct ai_io {
@@ -271,18 +241,6 @@ struct ai_lib const *ai_libs(void);
 // AiModNifs("mod", table) is the module twin: one row per (module, def table), so an
 // app's nifs register under its module and (module 'mod ..) text reopens the same one.
 struct ai_mod { char const *mod; struct ai_def const *defs; uintptr_t n; };
-#if defined(__APPLE__)
-extern struct ai_def const __start_ai_nifs[] __asm("section$start$__DATA$ai_nifs");
-extern struct ai_def const __stop_ai_nifs[]  __asm("section$end$__DATA$ai_nifs");
-extern struct ai_mod const __start_ai_mods[] __asm("section$start$__DATA$ai_mods");
-extern struct ai_mod const __stop_ai_mods[]  __asm("section$end$__DATA$ai_mods");
-#define AiNif(nm, fn) \
-  static struct ai_def const __attribute__((section("__DATA,ai_nifs"), used)) \
-    _ainif_##fn = { (nm), (intptr_t) (fn) }
-#define AiModNifs(m, tab) \
-  static struct ai_mod const __attribute__((section("__DATA,ai_mods"), used)) \
-    _aimod_##tab = { (m), (tab), sizeof(tab)/sizeof*(tab) }
-#else
 extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
 extern struct ai_mod const __start_ai_mods[], __stop_ai_mods[];
 #define AiNif(nm, fn) \
@@ -291,7 +249,6 @@ extern struct ai_mod const __start_ai_mods[], __stop_ai_mods[];
 #define AiModNifs(m, tab) \
   static struct ai_mod const __attribute__((section("ai_mods"), used)) \
     _aimod_##tab = { (m), (tab), sizeof(tab)/sizeof*(tab) }
-#endif
 
 // port vtable -- what a device owes, and nothing else. a NULL slot means no method
 // (no readn reads end, no writen discards). neither blocks the scheduler; the generic

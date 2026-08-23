@@ -73,7 +73,7 @@ _Static_assert(Bytes == sizeof(uintptr_t), "word size sanity check");
 _Static_assert(sizeof(union u) == sizeof(intptr_t), "cell size equals word size");
 
 // remembered-set capacity in words; g->alloc'd, so the collector stays freestanding
-#define AiRemCap (1u << 16)
+#define AiRemCap (1u << 12)
 // initial pool sizes, words per half; both grow on demand (a tiny device overrides
 // with -Dai_minor0/-Dai_major0 and accepts more collections)
 #ifndef ai_minor0
@@ -678,16 +678,11 @@ enum ai_status ai_fin(struct ai *g) {
    g->alloc(g, g, 0); }                       // ..the pool is g, so it goes last
  return s; }
 
-// the module lane's target: find-or-make mod's tablet on the registry (g->mods,
-// the same lazy singleton lvm_mods answers -- the drain runs at boot, before
-// prel, so both are creatable here, and again over a woken image, where the
-// found tablet takes the re-pin) and push it where the book map would sit.
+// the module lane's target: find-or-make mod's tablet on the registry and push it
+// where the book map would sit. over a woken image the found tablet takes the re-pin.
 static struct ai *ai_modtab(struct ai *g, char const *mod) {
  if (!ai_ok(g)) return g;
  struct ai *c = ai_core_of(g);
- if (c->mods == zero) {
-  if (!ai_ok(g = map_new(g))) return g;
-  c = ai_core_of(g), c->mods = c->sp[0], c->sp++; }
  if (!ai_ok(g = intern(ai_strof(g, mod)))) return g;   // [modnom ..]
  c = ai_core_of(g);
  word m = ai_mapget(c, zero, c->sp[0], c->mods);
@@ -747,9 +742,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  memset(g, 0, sizeof(struct ai));      // the core needs no leading ap: () is the const ZeroPoint, never (word)g
  g->len = len0, g->alloc = al;
  g->scare_a = g->scare_b = zero;        // v0..end is GC-walked: raw 0 is not a value
- g->hot_read = g->hot_numap = g->hot_stack = g->hot_compose = g->hot_opfix = g->hot_help = g->hot_show = zero;   // unsealed: hot_hook traps until (seal-hook) fills them; help zero = nobody listening
- g->hot_io = zero;                     // the task's stdio: zero is the console, the steady state
- g->mods = zero;                       // the module registry: lazily created by the first (mods _) read
+ g->hot_read = g->hot_numap = g->hot_stack = g->hot_compose = g->hot_opfix = g->hot_show = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
  // the rem set + major pool ride g->alloc: a frontend that cannot supply them cannot run
  g->major_len = ai_major0;
@@ -790,6 +783,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   // v0 region: a collection clones it untraced and sweeps it at the fixpoint.
   g = map_new(g);
   if (ai_ok(g)) g->symbols = ai_pop1(g);
+  if (ai_ok(g = map_new(g))) g->mods = ai_pop1(g);   // the registry, before the first ai_modtab
   struct ai_def def0[] = {
    {"book", A(g->book)},   // the l-level book = the orth map (the chain stays C-side; `books` reads it)
    {"in", (word) &ai_stdin},
@@ -2007,6 +2001,10 @@ lvm(lvm_eval) { Ip++; Pack(g);
 // the hooks (love.h): lisp the C lanes reach by slot, handed over by (seal-hook n f).
 // hot_hook traps on an unsealed slot -- a clean failure, never a wild read.
 static ai_inline ai_word hot_hook(ai_word h) { if (!lamp(h)) __builtin_trap(); return h; }
+// hooks 5 and 6 are the running task's, so they ride its ring node -- the head (cf.
+// lvm_myself). a write is a store into a maybe-tenured node: gen_wb_cell, on a packed g.
+static ai_inline word *task_help(struct ai *g) { return &g->tasks[6].x; }
+static ai_inline word *task_io(struct ai *g) { return &g->tasks[7].x; }
 
 // `+`/`*` of two functions build a new function (church add / composition) from
 // hooks 2 and 3; the C aps reuse numap_drive to compute the partial.
@@ -2065,13 +2063,13 @@ static union u const help_drive[] =
 // the scare_a/b stash, so the raise buys its own frame and never allocates.
 static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K) {
  c->scare_a = a, c->scare_b = b;  // for the exit face
- word h = c->hot_help;
+ word h = *task_help(c);
  if (!ai_nilp(c, h) && avail(c) < 4) {
   struct ai *p = ai_please(c, 4);
   if (!ai_ok(p)) return encode(ai_core_of(p), ai_status_scare);
   c = ai_core_of(p);                            // moved: re-derive every pointer
   a = c->scare_a, b = c->scare_b;
-  h = c->hot_help; }
+  h = *task_help(c); }
  if (!ai_nilp(c, h) && avail(c) >= 4) {
   word *sp = c->sp -= 4;          // [a h b K | raise site data ..]
   sp[0] = a, sp[1] = h;
@@ -2123,7 +2121,7 @@ lvm(lvm_index) {
   *--Sp = v,                       // present: push the live value, no quote patch
   Ip += 2,
   Continue();
- word h = g->hot_help;
+ word h = *task_help(g);
  if (ai_nilp(g, h)) {
 #if __STDC_HOSTED__
   // nothing heard (file mode): the zero point is silent, so surface ";; missing <nom>"
@@ -2173,24 +2171,25 @@ static lvm(lvm_numtap) {
 // scratch rule).
 lvm(lvm_seal) {
  if (getcharm(Sp[0]) != 5 && getcharm(Sp[0]) != 6 && !lamp(Sp[1])) __builtin_trap();   // the two dynamic slots alone skip the gate
+ Pack(g);                        // 5 and 6 store into the node, and their barrier reads g->hp
  switch (getcharm(Sp[0])) {
   case 0: g->hot_read = Sp[1]; break;
   case 1: g->hot_numap = Sp[1]; break;
   case 2: g->hot_stack = Sp[1]; break;
   case 3: g->hot_compose = Sp[1]; break;
   case 4: g->hot_opfix = Sp[1]; break;
-  case 5: g->hot_help = Sp[1]; break;
-  case 6: g->hot_io = chainp(Sp[1]) ? Sp[1] : zero; break;   // anything but a chain hands the console back
+  case 5: *task_help(g) = Sp[1], gen_wb_cell(g, task_help(g), Sp[1]); break;
+  case 6: *task_io(g) = chainp(Sp[1]) ? Sp[1] : zero, gen_wb_cell(g, task_io(g), *task_io(g)); break;   // anything but a chain hands the console back
   case 7: g->hot_show = Sp[1]; break;
   default: __builtin_trap(); }
  Sp += 1, Sp[0] = zero, Ip += 1;
  ai_musttail return Continue(); }
 // (heard x) -> the installed help (x ignored): the live read of hook 5, what
 // prel's cellread and bao's launcher ask before choosing to raise or install.
-op11(lvm_heard, (intptr_t) g->hot_help)
+op11(lvm_heard, (intptr_t) *task_help(g))
 // (worn x) -> the stdio this task wears (x ignored): the live read of hook 6, the
 // zero point when it wears the console. what a caller saves before re-seating.
-op11(lvm_worn, (intptr_t) g->hot_io)
+op11(lvm_worn, (intptr_t) *task_io(g))
 // (myself x) -> the running task's own id (x ignored): the charm `twirl` answered for it,
 // and the zero point for the task nobody twirled. the run ring's head is the running
 // task, so this is a read of its pid slot. what a per-task escape compares against
@@ -2618,8 +2617,8 @@ lvm(lvm_yield_sw) {
  N[3].x = putcharm((intptr_t) my_wake);
  N[4].x = putcharm(my_wait_fd);
  N[5].x = putcharm(my_events);
- N[6].x = g->hot_help;            // the help is the task's: saved here, restored below
- N[7].x = g->hot_io;              // ...and so is the stdio it wears
+ N[6].x = g->tasks[6].x;          // the help the departing task heard..
+ N[7].x = g->tasks[7].x;          // ..and the stdio it wears ride the snapshot
  memcpy(N + 8, Sp, my_height * sizeof(word));
  tagthread(N, 8 + my_height);
  // the run ring closes over the departing head either way: onto the snapshot when it
@@ -2637,8 +2636,6 @@ lvm(lvm_yield_sw) {
   else g->parked = N; }
  g->yield_ctr = 0;
  g->tasks = next;
- g->hot_help = next[6].x;
- g->hot_io = next[7].x;
  Sp = memmove(topof(g) - restore_h, next_stack, restore_h * sizeof(word));
  Ip = next[1].m;
  ai_musttail return Continue(); }
@@ -2659,8 +2656,8 @@ lvm(lvm_spawn) {
  N[3].x = zero;         // wake_at: sentinel for "always runnable"
  N[4].x = putcharm(-1);  // wait_fd: -1 = not waiting on I/O
  N[5].x = putcharm(ai_wait_in);   // wait_events: the read direction, the default
- N[6].x = g->hot_help;   // inherited: a child starts under its parent's help, never without one
- N[7].x = g->hot_io;     // ...and under its parent's stdio, the console until it wears its own
+ N[6].x = g->tasks[6].x;   // inherited: a child starts under its parent's help, never without one
+ N[7].x = g->tasks[7].x;   // ...and under its parent's stdio, the console until it wears its own
  N[8].x = x;
  N[9].x = fn;
  g->tasks->m = tagthread(N, 10);
@@ -3051,8 +3048,8 @@ static ai_inline bool iop(word x) { return lamp(x) && cell(x)->ap == lvm_port_io
 // op-level only -- id?, peek, hot? and the image still answer the static, since prel's
 // tap/jug read the port head by index and a routed peek would lie to them.
 static ai_inline word io_route(struct ai *g, word x) {
- if (g->hot_io == zero) return x;
- word l = g->hot_io, s;
+ word l = *task_io(g), s;
+ if (l == zero) return x;
  if (x == (word) &ai_stdin)       s = A(l);
  else if (x == (word) &ai_stdout) s = chainp(B(l)) ? A(B(l)) : zero;
  else if (x == (word) &ai_stderr) s = chainp(B(l)) && chainp(BB(l)) ? A(BB(l)) : zero;
@@ -3277,7 +3274,7 @@ ai_noinline static struct ai *chug_str(struct ai *g, struct ai_io *i) {
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
 
 lvm(lvm_chug) {
- if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
  if (!iop(Sp[0])) { Sp[0] = EmptyString; ai_musttail return Next(1); }
  Pack(g); g = chug_str(g, (struct ai_io*) Sp[0]);
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
@@ -3288,7 +3285,7 @@ lvm(lvm_chug) {
 // the borrowed run counts, so a reader can ask whether anyone else has drawn on the port
 // since it last looked, which is the only way to know its own charlist is still the port's.
 lvm(lvm_inhand) {
- if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
  Sp[0] = putcharm(iop(Sp[0]) ? (ai_word) ai_io_pending(g, (struct ai_io*) Sp[0]) : 0);
  ai_musttail return Next(1); }
 
@@ -3296,7 +3293,7 @@ lvm(lvm_inhand) {
 // caller that chugged more than it used leaves the rest where the port's position sees it.
 // answers how many went back -- a short answer is the refusal (ai_io_unread's notes).
 lvm(lvm_unchug) {
- if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
  Sp[1] = putcharm(iop(Sp[0]) && charmp(Sp[1]) && getcharm(Sp[1]) != 0
                   ? (ai_word) ai_io_unread(g, (struct ai_io*) Sp[0],
                                            (intptr_t) getcharm(Sp[1])) : 0);
@@ -3384,7 +3381,7 @@ struct ai_port_vt const
 
 // (fputc port byte) — write byte to port; return byte.
 lvm(lvm_fputc) {
- if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0])) {
   g->io = (struct ai_io*) Sp[0];
   Pack(g);
@@ -3404,7 +3401,7 @@ lvm(lvm_fputc) {
 // (fflush port): flush means deliver -- a short-answering device parks the task
 // and the op re-runs (safe: a flush consumes nothing)
 lvm(lvm_fflush) {
- if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0])) {
   g->io = (struct ai_io*) Sp[0];
   Pack(g);
@@ -3419,7 +3416,7 @@ lvm(lvm_fflush) {
 // (fputs port s) — write every byte of string-or-cask s; no-op on misuse. bytes_of
 // re-reads each iteration so GC inside ioputc can forward it.
 lvm(lvm_fputs) {
- if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0]) && (strp(Sp[1]) || caskp(Sp[1]))) {
   g->io = (struct ai_io*) Sp[0];
   uintptr_t i = 0, l = len(bytes_of(Sp[1]));
@@ -3450,7 +3447,7 @@ lvm(lvm_fputs) {
 
 static struct ai*gfputbn(struct ai *g, intptr_t n, uint8_t b, struct ai_io *o);
 lvm(lvm_fputbn) {
- if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0])) {
    Pack(g);
    g = gfputbn(g, getcharm(Sp[1]), getcharm(Sp[2]), (struct ai_io*) Sp[0]);
@@ -3571,7 +3568,7 @@ static ai_inline bool lam_isp(struct ai *g, word x) {         // (\ b.. body): >
 // (fgetc port): a non-port reads as an already-empty stream (EOF), so a
 // read-until-(-1) loop over a misused port is bounded
 lvm(lvm_fgetc) {
- if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0])) {
   struct ai_io *i = (struct ai_io*) Sp[0];
   struct ai_bio *bb = bio_of(g, i);
@@ -3598,7 +3595,7 @@ lvm(lvm_fgetc) {
 // the port (so it chains into a read) -- for fds you can't drain a byte at a time
 // (signalfd, timerfd). Ip is unadvanced, so the task re-checks on reschedule.
 lvm(lvm_await) {
- if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);   // and the routed port is what it answers -- the read that chains off it lands there too
+ if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);   // and the routed port is what it answers -- the read that chains off it lands there too
  if (iop(Sp[0])) {
   intptr_t fd = ai_io_fd((struct ai_io*) Sp[0]);
   // the buffer counts: a port holding bytes is readable however quiet its fd is
@@ -3609,7 +3606,7 @@ lvm(lvm_await) {
 
 // (fungetc port byte) — push back one byte, return the byte.
 lvm(lvm_fungetc) {
- if (g->hot_io != zero) Sp[0] = io_route(g, Sp[0]);
+ if (*task_io(g) != zero) Sp[0] = io_route(g, Sp[0]);
  if (iop(Sp[0])) {
   struct ai_io *i = (struct ai_io*) Sp[0];
   Pack(g);
@@ -5001,12 +4998,21 @@ static ai_inline intptr_t img_decode(intptr_t v, word *base, intptr_t delta) {
 // an arm32 load has 12 bits of displacement -- port/mps2 refused to compile them onto the stack.
 struct img_dic { word dict[ImageNDict], key[ImageDHash]; unsigned char tk[ImageDHash]; };
 static uintptr_t img_hash(word v) {
- uintptr_t h = (uintptr_t) v; h ^= h >> 17; h *= 0x9e3779b1u; h ^= h >> 13; return h; }
+ uintptr_t h = (uintptr_t) v;
+ return h ^= h >> 17,
+        h *= 0x9e3779b1u,
+        h ^= h >> 13; }
+
 // one heapsort for the codec's three orders (dictionary words, intern pairs, serial
 // ranks): the arrays differ in shape, so lt and stride are the caller's and the heap
 // walk is shared. no recursion, no scratch, no worst case.
-struct img_ord { int (*lt)(struct img_ord const*, uintptr_t, uintptr_t);
-                 word *a; uintptr_t stride; word const *blob; uintptr_t const *nm; };
+struct img_ord {
+ int (*lt)(struct img_ord const*, uintptr_t, uintptr_t);
+ word *a;
+ uintptr_t stride;
+ word const *blob;
+ uintptr_t const *nm; };
+
 static void img_ord_swap(struct img_ord const *o, uintptr_t i, uintptr_t j) {
  for (uintptr_t k = 0; k < o->stride; k++) {
   word t = o->a[o->stride * i + k];
@@ -5030,7 +5036,8 @@ static uintptr_t img_dict(word *sorted, uintptr_t nw, word *dict) {
  struct img_ord o = { img_lt_word, sorted, 1, NULL, NULL };
  img_sort(&o, nw);
  for (uintptr_t i = 0; i < nw; ) {
-  uintptr_t j = i; while (j < nw && sorted[j] == sorted[i]) j++;
+  uintptr_t j = i;
+  while (j < nw && sorted[j] == sorted[i]) j++;
   uintptr_t n = j - i;
   if (nd < ImageNDict || n > cnt[nd - 1]) {                               // beats the weakest seat
    uintptr_t k = nd < ImageNDict ? nd++ : ImageNDict - 1;
@@ -5049,7 +5056,10 @@ static uintptr_t img_stream(unsigned char *out, word const *blob, uintptr_t nw,
  uintptr_t n = 0;
  for (uintptr_t i = 0; i < nw; i++) {
   int t = img_tok(key, tk, blob[i]);
-  if (t >= 0) { if (out) out[n] = (unsigned char) t; n++; continue; }
+  if (t >= 0) {
+    if (out) out[n] = (unsigned char) t;
+    n++;
+    continue; }
   uintptr_t uv = (uintptr_t) blob[i], q = uv; unsigned wd = 0;
   do wd++, q >>= 8; while (q);                             // unsigned: word is signed, and a
   if (out) { out[n] = (unsigned char)(ImageNDict + wd - 1);   // negative one would shift forever
@@ -5090,8 +5100,8 @@ static struct ai *img_canon_symbols(struct ai *g) {
  word m = g->symbols;
  if (!m) return g;
  uintptr_t cap = map_cap(m), mask = cap - 1, n = 0;
- word *s = map_slots(m);
- word *pairs = g->alloc(g, NULL, 2 * cap * sizeof(word));
+ word *s = map_slots(m),
+      *pairs = g->alloc(g, NULL, 2 * cap * sizeof(word));
  if (!pairs) return encode(g, ai_status_scare);
  for (uintptr_t j = 0; j < cap; j++)
   if (s[2 * j] != map_gap) pairs[2 * n] = s[2 * j], pairs[2 * n + 1] = s[2 * j + 1], n++;
@@ -5121,9 +5131,9 @@ static int img_lt_rank(struct img_ord const *o, uintptr_t i, uintptr_t j) {
 // (word-offset << 1 | named); a named slot's word -1 is the encoded name.
 static uintptr_t img_rank_assign(struct ai *g, word const *blob, uintptr_t const *slots,
                                  uintptr_t nslot, word *rank, uintptr_t nser) {
- uintptr_t *nm = g->alloc(g, NULL, nser * sizeof(uintptr_t));
- uintptr_t *live = g->alloc(g, NULL, nser * sizeof(uintptr_t));
- uintptr_t n = 0, k;
+ uintptr_t *nm = g->alloc(g, NULL, nser * sizeof(uintptr_t)),
+           *live = g->alloc(g, NULL, nser * sizeof(uintptr_t)),
+           n = 0, k;
  if (!nm || !live) { g->alloc(g, nm, 0); g->alloc(g, live, 0); return (uintptr_t) -1; }
  memset(nm, 0, nser * sizeof(uintptr_t));
  for (uintptr_t i = 0; i < nslot; i++) {
@@ -5491,7 +5501,7 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
  g->parked  = NULL;
  for (uintptr_t i = 0; i < nv; i++) ((word*) &g->v0)[i] = image_root_dec(H.root_tag[2 + i], H.root_val[2 + i], base);
  g->next_serial = H.next_serial;
- g->hot_io = zero;   // a worn port names an fd, which means nothing in a new process -- a woken task wears the console (the parked ring's rule)
+ g->tasks[7].x = zero;   // a worn port names an fd, which means nothing in a new process -- a woken task wears the console (the parked ring's rule)
  // sp stays at ai_ini's topof(g) (empty ai stack); the dispatch re-establishes ip
  g->major_live0 = nw, g->since_major = 0;
  g->sym_raw = true;   // the map arrives as the image left it; a major must re-home it first
@@ -5638,17 +5648,7 @@ op11(lvm_cap, chainp(Sp[0]) ? A(Sp[0]) : Sp[0])
 op11(lvm_cup, chainp(Sp[0]) ? B(Sp[0]) : ZeroPoint)   // cup of an atom -> the const () (ZeroPoint), not the moving core (which had serial g->ip, not 0)
 op11(lvm_books, g->book)   // the live layer chain (the abyss) -- runtime-internal, mopped at birth; ev.l's gv walks it
 op11(lvm_setbooks, (g->book = Sp[0], zero))   // set the layer chain: the scope-layer door (open/use/close ride it); runtime-internal, mopped at birth
-// (mods _): the module registry book (g->mods), a lazy singleton so both
-// bootstrap prel runs capture the same tablet; runtime-internal, mopped at birth
-lvm(lvm_mods) {
- if (g->mods == zero) {
-  uintptr_t cap = map_min_cap, nb = 4 + 2 * cap;
-  Have(nb + 3);
-  union u *b = map_fill_back((union u*) Hp, cap), *h = (union u*) (Hp + nb);
-  h[0].ap = lvm_map_lookup, h[1].x = (word) b, tagthread(h, 2);
-  Hp += nb + 3;
-  g->mods = (word) h; }
- ai_musttail return Answer(g->mods); }
+op11(lvm_mods, g->mods)   // (mods _): the module registry book; runtime-internal, mopped at birth
 // a frontend bakes no sources unless it says so (love.h)
 __attribute__((weak)) struct ai_lib const *ai_libs(void) { return NULL; }
 // (lib nm): the source library -- the frontend's static table (love.h), answering nm's

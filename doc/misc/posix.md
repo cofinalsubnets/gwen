@@ -4,7 +4,7 @@ love user programs (and lush) get a real POSIX environment — files, processes,
 sockets — so people can write real apps. The design decision: **don't reimplement POSIX; expose
 the one already under us.** On the host, love is already a Unix process — the OS layer isn't
 something to build, it's something to *surface*. And it is **host-agnostic**: the target is the
-POSIX standard, not a kernel, so the same nifs run on Linux, a BSD, or macOS.
+POSIX standard, not a kernel, so the same nifs run on Linux and on the BSDs.
 
 This is the **`ain` pattern, generalized.** ain wraps the socket syscalls as host nifs; the
 POSIX layer is "do that for the rest of the syscall surface."

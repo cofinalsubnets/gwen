@@ -128,10 +128,10 @@
    mx-strides '((lean 16  ("__x86_64__" "__aarch64__"))
                 (fat  128 ()))              ; no predicate: the #else, and there is one
    ; and whether a seat lays the sections at all: 0 asks the sentinels by name and
-   ; answers the same enum d -- wasm has none to lay, mach-o spells them
-   ; `segment,section`, love0 opts out. a layout never crosses between two binaries:
-   ; the heap image carries an ap as its index in image_extra_aps.
-   mx-sections '((byname 0 ("__wasm__" "__APPLE__"))
+   ; answers the same enum d -- wasm has none to lay, love0 opts out. a layout never
+   ; crosses between two binaries: the heap image carries an ap as its index in
+   ; image_extra_aps.
+   mx-sections '((byname 0 ("__wasm__"))
                  (tiled  1 ()))
    (mx-stride cls) (: (go l) (atom? l ? (scare 'mx-stride cls)
                               (: r <l (id? <r cls ? <>r (go >l))))

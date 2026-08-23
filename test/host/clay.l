@@ -177,21 +177,21 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; place has no spelling at all. `#ifdef X` needs no node: `defined` wears call
 ; syntax in C's own grammar, so it is a plain (call (var "defined") ..).
 (: cl-def (\ n `('call `('var "defined") `(`('var n))))
-   cl-if `('cpp-if `(`(`('lor (cl-def "__wasm__") (cl-def "__APPLE__"))
-                        `(`('cpp-def "ai_data_section" 0))))
-                   `(`('cpp-def "ai_data_section" 1)))
+   cl-if `('cpp-if `(`(`('lor (cl-def "__x86_64__") (cl-def "__aarch64__"))
+                        `(`('cpp-def "ai_data_stride" 16))))
+                   `(`('cpp-def "ai_data_stride" 128)))
    ; the shape love.h actually wants: a guard with a conditional nested inside it,
    ; every directive at column 0 whatever the depth -- love.h's own style
    cl-nest `('cpp-if `(`(`('un 'not (cl-def "ai_data_stride"))
                           `(cl-if))))
    (assert
-    ((one cl-if) = ("#if defined(__wasm__) || defined(__APPLE__)" + nl
-                    + "#define ai_data_section 0" + nl + "#else" + nl
-                    + "#define ai_data_section 1" + nl + "#endif" + nl))
+    ((one cl-if) = ("#if defined(__x86_64__) || defined(__aarch64__)" + nl
+                    + "#define ai_data_stride 16" + nl + "#else" + nl
+                    + "#define ai_data_stride 128" + nl + "#endif" + nl))
     ((one cl-nest) = ("#if !defined(ai_data_stride)" + nl
-                      + "#if defined(__wasm__) || defined(__APPLE__)" + nl
-                      + "#define ai_data_section 0" + nl + "#else" + nl
-                      + "#define ai_data_section 1" + nl + "#endif" + nl + "#endif" + nl))
+                      + "#if defined(__x86_64__) || defined(__aarch64__)" + nl
+                      + "#define ai_data_stride 16" + nl + "#else" + nl
+                      + "#define ai_data_stride 128" + nl + "#endif" + nl + "#endif" + nl))
     ; an #elif arm, and an arm's body carrying more than a directive
     ((one '(cpp-if (((var "A") ((note "a"))) ((var "B") ((note "b")))) ((note "c"))))
      = ("#if A" + nl + "// a" + nl + "#elif B" + nl + "// b" + nl

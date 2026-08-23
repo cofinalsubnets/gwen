@@ -94,12 +94,10 @@ ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
   -falign-functions=16 -fno-stack-protector
 # ⚠ a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- host/main.c
 # owes clock_gettime and kill, so the level is asked for by name.
-# -fcf-protection (Intel CET) is x86-only and Apple/arm clang rejects it outright, so it
-# rides every non-Darwin build and macOS does without -- it has no CET to turn off.
-ifneq ($(shell uname -s),Darwin)
+# -fcf-protection (Intel CET) is x86-only; the non-x86 seats have no CET to turn off and
+# take it as a no-op.
 ai_cflags += -fcf-protection=none -D_POSIX_C_SOURCE=200809L
 # the data-sentinel tiling core/love.h's ai_typ reads (core/love.c's DSENT), on every ld/lld link.
-# mach-o goes without: it names sections `segment,section`, so core/love.h asks them by name.
 data_ld = -Wl,-T,$R/core/love_data.ld
 # ⚠ AN EMPTY BRACKET IS STILL A BRACKET. core/love.c indexes the host nif slice off
 # [__start_ai_nifs, __stop_ai_nifs), which the toolchain synthesises only where the
@@ -108,7 +106,3 @@ data_ld = -Wl,-T,$R/core/love_data.ld
 # undefined at 0 even where the section IS there, which silently unregisters every host
 # nif. naming the empty pair at the one link that wants it keeps the host lane untouched.
 nifs_ld = -Wl,--defsym=__start_ai_nifs=0,--defsym=__stop_ai_nifs=0
-else
-# apple's is one word for the whole surface, so it needs no _POSIX_C_SOURCE beside it.
-ai_cflags += -D_DARWIN_C_SOURCE
-endif
