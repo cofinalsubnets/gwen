@@ -34,6 +34,13 @@ callable inside the kernel, which is what lets more of the crew run there.
   `k_*` wrappers' business and did not move: positive for most doors, `()` for
   absence, and chdir's negative lane -- which makes chdir the one wrapper that
   does NOT flip.
+- **the pointer instrument** -- core strings now carry a NUL behind their bytes
+  (one sizing macro, `str_width`; love semantics untouched), so `(syscall
+  "name" a b c d)` marshals by kind: charm = integer, string = its bytes (a
+  path as C expects), cask = an output buffer read back with snip, anything
+  else -1 before the door. gated through write (string in) and read (cask out)
+  over pipes and the ramfs. every remaining A2 number now costs a test, no
+  nif, pointer arguments included.
 
 ## the numbers that size the rest
 
@@ -104,10 +111,9 @@ have no answer in a ramfs and the fabrication belongs where it is visible.
 twenty-one behaviours stop existing twice.
 
 - A1 ✅ the path and fd faces.
-- A2 -- the syscall table: ~13 real numbers, the rest refusing. ⚠ the gate's
-  instrument `(syscall "name" a b c)` takes INTEGERS only; every path number
-  needs a pointer, so it wants a love-string argument passing its bytes, and
-  `stat`'s output buffer needs more than that.
+- A2 -- the syscall table: ~13 real numbers, the rest refusing. the
+  instrument ✅ takes pointer arguments now (strings in, casks out), so each
+  number is a dispatch arm in `free/sys.c` plus its tests.
 - A3 -- link the ~64 nolibc members, add `host/posix.c` to the kernel build,
   delete the 21 duplicate nifs. ⚠ the deletion must be in the SAME commit as the
   link, or 21 names are defined twice.
