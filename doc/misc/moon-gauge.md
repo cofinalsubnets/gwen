@@ -468,7 +468,41 @@ count). The census's −0.4% was measured under the borrow's veto; unveto it and
 mechanism pays double the floor. The 57 lines the program "could not explain" were
 explained all along — a dead mechanism was standing on them. `pcs` stays. `cs` re-read
 +7.1% against the same base pair that said +6.0% yesterday — cross-day drift just above
-the ±0.7% floor even on corpus cycles; read same-run ratios only. — the attribution, run 2026-08-16 (Zen 3, Ryzen 7 5825U)
+the ±0.7% floor even on corpus cycles; read same-run ratios only.
+
+## the census on the cut tree (2026-08-23) — rung 5's read, and the rung closes
+
+The full roster re-priced after both cuts, one run, quiet box:
+
+| ablated | cycles | insns | .text | (pre-cut cycles) |
+|---|---|---|---|---|
+| ralloc | +7.4% | +13.8% | +3.7% | +4.0% |
+| tpool | +11.7% | +15.0% | +6.7% | +5.9% |
+| cs | +8.6% | +2.8% | +3.0% | +5.0% |
+| **lhome** | **+11.4%** | **+8.1%** | +3.7% | +6.3% |
+| homes | +0.9% | +1.0% | +1.5% | +1.0% |
+| pcs | +1.1% | −0.0% | ±0 | −0.4% |
+
+Every survivor's price ROSE, and the instruction column says why it is real: `lhome`'s
+insn cost tripled (+2.9% → +8.1%). The vmap keeps used to carry loop locals; the homes
+carry that load alone now — **the cuts transferred the deleted mechanisms' work onto the
+survivors**, which is what the census's negative vmap price predicted and the opposite of
+a license for more deletion. The weakest knobs hold above the floor (`homes` +0.9%
+cycles at +1.0% insns; `pcs` +1.1%).
+
+The rung-5 negotiation, settled on this evidence: option 1 (shrink B to the parts that
+price) was performed BY rung 3 — the cuts took their whole dependency cones, and an
+orphan scan over gen.l's 334 definitions finds zero names without a live caller. Option 2
+(fold B's residency into the cs seats) is the ledger's twice-refused retrofit — a cs seat
+can never be the store's source, sources are caller-saved — reachable only under vreg
+emission, an allocator rebuild this plan refuses to be. Option 3 is this section: **the
+B half stays whole, at these prices (chosen, revisable).** Two ledger debts dissolved in
+passing: the a64 borrow verdict ("owed before this is settled") retired with the borrow,
+and `pcs`'s "57 lines the program cannot explain" found its explanation.
+
+⚠ same-DAY cross-run ratios wobble past the floor too: `cs` read +7.1% and +8.6% hours
+apart on byte-identical binary pairs. The ±0.7% floor is a SAME-RUN property — the
+harness's whole-roster-in-one-run design is the instrument, not a convenience. — the attribution, run 2026-08-16 (Zen 3, Ryzen 7 5825U)
 
 Intel's `--topdown` does not apply here; the Zen equivalents are
 `de_dis_uop_queue_empty_di0` (frontend delivered nothing) and the

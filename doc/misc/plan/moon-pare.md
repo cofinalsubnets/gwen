@@ -85,15 +85,18 @@ One entry there was already built twice.
   `loseed`, the csbor cut took the `att` grant dance and `lomiss`/`lobar`/`lonone` —
   all seven are gone, `regen` is a straight-line build with one deopt guard, and there
   is no retry loop left to consolidate. The ladder was working.
-- **rung 5 — the B half, decided on rung 2's evidence.** The census answered the question
-  this rung was written around: B's cycles are mostly the LOCALS HOMES (lhome +6.3%, the
-  single biggest payer) with the pool at +4.0% — so the machinery that stays is `alive`/
-  `lpick` and the pool proper, and the negotiation is over what serves only the parts
-  rung 3 removes (the mints exist for the pool, the regen dance for the seats — re-read
-  the lines-owned column after rung 3 lands). Options, in preference order: shrink B to
-  the parts that price; fold its residency into the cs-seat mechanism that already pays;
-  leave it alone with the price written down. ⚠ deleting B outright is a ~6% regression
-  and is not proposed here.
+- **rung 5 — the B half, decided on rung 2's evidence. CLOSED 2026-08-23** (moon-gauge's
+  *the census on the cut tree*). The negotiation settled in preference order: shrinking B
+  to the parts that price was performed BY rung 3 (the cuts took whole dependency cones —
+  an orphan scan over gen.l's 334 definitions finds zero names without a live caller);
+  folding into the cs seats is the ledger's twice-refused retrofit (a cs seat can never
+  be the store's source — reachable only under vreg emission, a rebuild this plan is
+  not); so the B half stays whole with the price written down — and the price ROSE: on
+  the cut tree lhome ablates to +11.4% cycles at +8.1% insns (was +6.3%/+2.9%), tpool
+  +11.7%, ralloc +7.4%, cs +8.6%, with homes +0.9% and pcs +1.1% still above the floor.
+  The survivors absorbed the deleted mechanisms' work; every knob is a payer now.
+  (chosen, revisable — what would reopen it: a survivor pricing at the floor on a future
+  same-run census.)
 - **rung 6 — give the hot shapes somewhere else to go.** Where C plus residency cannot close
   a gap, `gen.l` should not grow to chase it. `crew/sat/flat.l` is the pattern: hand-written
   kernels in holo's **neutral** IR (one body, five backends — `(assemble <target> ir)`), with
