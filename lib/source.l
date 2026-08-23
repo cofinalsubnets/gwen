@@ -210,17 +210,24 @@
    ; lays a seed for a machine it is not -- which is the portability story now
    ; that one binary per ISA is the shape. Every love carries every ISA's
    ; runtime (mkrt joins all three), so any version builds any other.
-   seed-arches '("x86_64" "aarch64" "riscv64")
+   seed-arches '(x86_64 aarch64 riscv64)
+   ; the other spellings of the same three machines -- uname's, Debian's, the ISA
+   ; shorthands and holo's own -- each normalized to the make spelling above.
+   ; the word arrives as an argv string and leaves as one (exec, the artifact
+   ; name); between the doors it is a symbol.
+   seed-spell '((arm64 aarch64) (amd64 x86_64) (x64 x86_64)
+                (x86-64 x86_64) (rv64 riscv64) (riscv riscv64))
+   (seed-canon w) (: s (intern w) a (assoc s seed-spell) (? (two? a) <>a s))
    ; the arch word is positional and A PATH STILL WINS: `./aarch64` is the
    ; directory, the verb rail's own rule worn one level down.
    (seed-arch? w) (: n (tally w)
-                     (go i) (? (n <= i) (member? w seed-arches)
+                     (go i) (? (n <= i) (member? (seed-canon w) seed-arches)
                                (w i = 47) 0
                                (go (i + 1)))
                      (go 0))
    ; this machine's arch in seed-arches' spelling -- holo names its arches and
    ; uname names them differently, and love-arch speaks holo's.
-   (seed-native _) (? (love-arch = "x64") "x86_64" (love-arch = "arm64") "aarch64" love-arch)
+   (seed-native _) (? (love-arch = "x64") 'x86_64 (love-arch = "arm64") 'aarch64 (intern love-arch))
 
    (seed-lay as0)
     (: first? (two? as0 ? (<as0 = "-first") 0)
@@ -232,9 +239,9 @@
        ; output ought to BE this binary -- which `love seed x86_64` on an x86_64
        ; box asks for exactly as much as a bare `love seed`. ⚠ the WORD is eaten
        ; either way, or the arch would go on to be read as the directory.
-       xa0 (? ((two? as2) && (seed-arch? <as2)) <as2 ())
-       xa (? ((string? xa0) && (xa0 = (seed-native 0))) () xa0)
-       as (string? xa0 ? >as2 as2)
+       xa0 (? ((two? as2) && (seed-arch? <as2)) (seed-canon <as2) ())
+       xa (? ((nom? xa0) && (id? xa0 (seed-native 0))) () xa0)
+       as (nom? xa0 ? >as2 as2)
        dir (two? as ? <as ".")
        r (src-lay dir)
        root <>r
@@ -250,10 +257,10 @@
        _ (? (two? ours)
           (puts $ ";; using own tools: " + (src-words ours) + "\n"))
        cc (? (string? env) env (two? amb) <>amb "this binary")
-       _ (puts (";; seeding " + (string? xa ? (xa + " ") "") + "with " + cc + "\n"))
-       dst (string? xa ? (dir + "/love-" + xa) ())
-       e (string? xa ? (exec [exe "seed" "-wait" root xa dst])
-                       (exec [exe "seed" "-wait" root]))
+       _ (puts (";; seeding " + (nom? xa ? (show xa + " ") "") + "with " + cc + "\n"))
+       dst (nom? xa ? (dir + "/love-" + show xa) ())
+       e (nom? xa ? (exec [exe "seed" "-wait" root (show xa) dst])
+                    (exec [exe "seed" "-wait" root]))
        (src-die ("can't wait for the build (exec: " + show e + ")")))
 
    (seed-main as0)
