@@ -5312,6 +5312,45 @@
                          (member? 'r4 <>rd) (f >< stldw r ())
                          (f >< stldw r (filter (\ e9 !(member? <>e9 <>rd)) bs)))))))))
 
+   ; -- redundant re-extension (rezx): a zxN over a register already CLEAN to N drops.
+   ; cleanliness is the producing op's contract -- the zx family and the unsigned loads,
+   ; the 32-bit rotates (their dests wear the w-form on every target that has them), an
+   ; li's own value, a mov carrying its source's. everything else clears what it
+   ; defines; a bar clears the table. --
+   (rezx fs)
+    (: (go l t acc)
+        (? !(two? l) (rev acc)
+           (: f <l r >l
+              (? !(two? f) (go r t (f >< acc))
+                 (: op <f
+                    (? (member? op '(zx1 zx2 zx4))
+                        (: w (? (op = 'zx1) 8 (op = 'zx2) 16 32)
+                           c (peep t <>f 0)
+                           (? ((0 < c) && (c <= w)) (go r t acc)
+                              (: _ (pin t <>f w) (go r t (f >< acc)))))
+                       (member? op '(ldu1 ldu2 ldu4))
+                        (: _ (pin t <>f (? (op = 'ldu1) 8 (op = 'ldu2) 16 32))
+                           (go r t (f >< acc)))
+                       (op = 'ror4)
+                        (: _ (pin t <>f 32) (go r t (f >< acc)))
+                       (op = 'rorv4)
+                        (: _ (pin t 'r1 0) _ (pin t <>f 32) (go r t (f >< acc)))
+                       (op = 'li)
+                        (: k <>>f
+                           _ (pin t <>f (? !(charm? k) 0 (k < 0) 0
+                                           (k < 256) 8 (k < 65536) 16
+                                           (k < 4294967296) 32 0))
+                           (go r t (f >< acc)))
+                       (op = 'mov)
+                        (: _ (pin t <>f (peep t <>>f 0)) (go r t (f >< acc)))
+                       (: rd (rdsp f)
+                          (? (id? rd 'bar) (go r {} (f >< acc))
+                             (: (dirty ds) (? !(two? ds) 0
+                                              (: _ (pin t <ds 0) (dirty >ds)))
+                                _ (dirty <>rd)
+                                (go r t (f >< acc))))))))))
+       (go fs {} ()))
+
    ; -- COPY PROPAGATION: after (mov a b) the two registers hold ONE value, so every later read
    ; of a may say b instead, and once nothing reads a the copy is a dead def and drops. one
    ; forward walk carrying reg -> source, killed at each def and at every control edge, then one
@@ -7155,6 +7194,7 @@
                         (deaddef      ; rerun: the widened addrfold strands live-dest addr insns
                         (cmpfuse
                         (addrfold
+                        (rezx         ; after stld: the forward mints zx, this drops the redundant
                         (copyprop
                         (stld
                         (spmerge
@@ -7167,7 +7207,7 @@
                               '(push r4) '(mov r4 sp) ['sub 'sp 'sp frame]
                               '(st r4 -8 r3)] +
                            peep g 'cssv () + <sp0 +
-                           body + '((li r0 0)) + peep g 'epi epi))))))))))))))))))
+                           body + '((li r0 0)) + peep g 'epi epi)))))))))))))))))))
        ; the operand pool rides BESIDE the homes: pass 1 owns all of opool, a
        ; regen loses the registers its param homes occupy
        (uhomes ps gpi acc) (homefold g ps gpi acc (\ a2 i9 p9 (? (homable? <>p9) (homereg i9 >< a2) a2)))

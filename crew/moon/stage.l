@@ -30,7 +30,7 @@
                 (vrfix (gst ir-vreg) ir-chosen)
                 (sibcall (gst a) a) (soften (gst a) a) (a4ize (a) a)
                 (cfoldir (a) a) (deadcell (a) a) (deaddef (a) a) (spmerge (a) a)
-                (stld (a) a) (copyprop (a) a) (addrfold (a) a) (cmpfuse (a) a)
+                (stld (a) a) (copyprop (a) a) (rezx (a) a) (addrfold (a) a) (cmpfuse (a) a)
                 (deadst (gst a) a) (repack (gst a) a)
                 ; the post-choice chain ADVANCES: deadlab must never touch what the
                 ; rankers read, unframe re-addresses before jr0 retargets, unhome

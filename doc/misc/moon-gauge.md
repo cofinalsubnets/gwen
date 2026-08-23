@@ -159,11 +159,17 @@ names the evidence that prices it:
    is a full `ld`, so only the full-width r4 pair stays reserved. A store fed by an
    adjacent `li` declines (that triple is the si fold's). chacha −2–4% cycles at flat
    instructions, interleaved same-run.
-3. **u32 zext chatter.** 96 of cc_block's 619 instructions are `mov %eax,%eax` — pure
-   zero-extension re-assertion, often back-to-back duplicated, plus a three-step
-   store path (`mov %r8,%rax; mov %eax,%eax; mov %eax,slot`). Zero-cost on Zen (renamed)
-   so it fails the cycle criterion HERE — but the thumbs and riscv are in-order, where
-   count IS cycles, and they run this emission today.
+3. **u32 zext chatter — LANDED 2026-08-23 (`rezx`).** 96 of cc_block's 619 instructions
+   were `mov %eax,%eax` re-asserting a cleanliness the producing op already guaranteed.
+   `rezx` (after `copyprop` in the x64 sweep chain, stage-sigged `(a) a`) tracks each
+   register's clean width — the zx family and unsigned loads by contract, the 32-bit
+   rotates' w-form dests, an li's own value, a mov carrying its source's — and drops a
+   zxN over a register already clean to N; any other def dirties, a bar clears. The
+   required zexts (after 64-bit ALU) stand. cc_block 619 → 486 insns; sha256
+   204 → **195 ms** (2.57× gcc), crc32 1.42× → 1.33×, cksum 1.38× → 1.23×; .text
+   −8,192 B. "Free on Zen" was wrong — same-register 32-bit movs are not eliminated.
+   ⚠ the sweeps run on the x64 lane only (arm rides the raw forms), so the in-order
+   targets still carry the chatter until that older boundary moves.
 4. **chacha's residual is the rung-6 shape, not a gen.l rung.** cc_block's 16-word state
    gets zero residency: 269 of 619 instructions touch the frame, every element op a
    load-op-store round trip. The mechanism that chased this (the vmap) priced negative
@@ -185,14 +191,17 @@ names the evidence that prices it:
 - ⚠ the ±0.7% cycle floor is a **same-run** property. Identical binary pairs read 1.5%
   apart across runs hours apart on a quiet box; same-day is not same-run. The harness's
   whole-roster-in-one-run design is the instrument, not a convenience.
-- ⚠ **corpus cycles across DIFFERENT layouts carry a ~±2% BTB lottery.** Function
-  entries are 2-aligned by law (parity is the image codec's pointer discriminator, and
-  16-alignment was measured and REVERTED at ~4% slower — gen.l's fn-start note), so any
-  size change reshuffles every downstream entry and deals a new branch-predictor hand:
-  a binary whose hot functions are instruction-identical read +2.4% corpus cycles on
-  branch-misses alone. Before believing a small cross-binary delta, check instructions
-  (near-deterministic), hot-function identity, and branch-misses. Census rows inside
-  ±2% (homes, pcs) are lottery-sized; the big payers stand.
+- ⚠ **corpus cycles across DIFFERENT layouts carry a frontend-layout LOTTERY, observed
+  to ±4%.** Function entries are 2-aligned by law (parity is the image codec's pointer
+  discriminator, and 16-alignment was measured and REVERTED at ~4% slower — gen.l's
+  fn-start note), so any size change reshuffles every downstream entry and deals a new
+  branch-predictor and op-cache hand: binaries whose hot functions are
+  instruction-identical have read +2.4% and +3.7% corpus cycles on branch-misses,
+  icache and uop-queue-empty alone. Before believing a cross-binary delta of that
+  size, check instructions (near-deterministic), hot-function identity, and the
+  frontend counters — and read the rows the change actually touches through a direct
+  driver (the ciphers moved −5% cycles in the same build whose corpus read +3.7%).
+  Census rows inside the band (homes, pcs) are lottery-sized; the big payers stand.
 - ⚠ **a row priced under another mechanism's veto is not that mechanism's price**: pcs
   read −0.4% while the cs borrow's `wb` denied it beside every callish loop, and +1.1%
   once the borrow was cut. When mechanisms gate each other, ablate the gater first.
