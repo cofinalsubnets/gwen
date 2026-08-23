@@ -1666,27 +1666,36 @@ static lvm(lvm_syswrite) {
   Sp[1] = k_syswrite(Sp[0], Sp[1]);
   Sp += 1; ai_musttail return Next(1); }
 
-// (syscall "name" a b c) -> the raw answer, errno NEGATIVE as the door gives
-// it; () for a name no row answers to. The instrument for every row whose
-// arguments are numbers, so the next one costs a test and not a nif -- and it
-// takes the NAME because the numbers are arch-keyed and free/sys.c is the only
-// file that may spell them. ⚠ it reaches __ai_sys DIRECTLY, under nolibc: what
-// it gates is the dispatch and the k_fd_* faces, which is where the rows are
-// written. syswrite proves the nolibc half once, so the composition is said.
+// (syscall "name" a b c d) -> the raw answer, errno NEGATIVE as the door gives
+// it; () for a name no row answers to. The instrument for every row, so the
+// next one costs a test and not a nif -- and it takes the NAME because the
+// numbers are arch-keyed and free/sys.c is the only file that may spell them.
+// an argument spells itself by kind: a charm is the integer, a string passes
+// its bytes (core keeps a NUL behind them, so a path lands as C expects), a
+// cask lends its bytes as an output buffer the test reads back. any other kind
+// is misuse and answers -1 before the door is asked -- 0 there would be an
+// argument. ⚠ it reaches __ai_sys DIRECTLY, under nolibc: what it gates is the
+// dispatch and the k_* faces, which is where the rows are written. syswrite
+// proves the nolibc half once, so the composition is said.
 extern long __ai_sys(long, long, long, long, long, long, long);
 extern long k_sys_nr(char const *nm, long n);
-ai_noinline static ai_word k_syscall(ai_word nw, ai_word aw, ai_word bw, ai_word cw) {
+ai_noinline static ai_word k_syscall(ai_word nw, ai_word aw, ai_word bw, ai_word cw, ai_word dw) {
   if (!ai_strp(nw)) return ZeroPoint;
   struct ai_str *pv = (struct ai_str*) nw;
   long nr = k_sys_nr(pv->bytes, (long) pv->len);
   if (nr < 0) return ZeroPoint;
-  ai_word ws[3] = { aw, bw, cw };
-  long v[3];
-  for (int i = 0; i < 3; i++) v[i] = (ws[i] & 1) ? (long) getcharm(ws[i]) : 0;
-  return putcharm(__ai_sys(nr, v[0], v[1], v[2], 0, 0, 0)); }
+  ai_word ws[4] = { aw, bw, cw, dw };
+  long v[4];
+  for (int i = 0; i < 4; i++) {
+    if (ws[i] & 1) v[i] = (long) getcharm(ws[i]);
+    else if (ai_strp(ws[i])) v[i] = (long) ((struct ai_str*) ws[i])->bytes;
+    else if (((union u*) ws[i])->ap == lvm_cask)
+      v[i] = (long) ((struct ai_cask*) ws[i])->str->bytes;
+    else return putcharm(-1); }
+  return putcharm(__ai_sys(nr, v[0], v[1], v[2], v[3], 0, 0)); }
 static lvm(lvm_syscall) {
-  Sp[3] = k_syscall(Sp[0], Sp[1], Sp[2], Sp[3]);
-  Sp += 3; ai_musttail return Next(1); }
+  Sp[4] = k_syscall(Sp[0], Sp[1], Sp[2], Sp[3], Sp[4]);
+  Sp += 4; ai_musttail return Next(1); }
 #endif
 
 // (quit code) -- the exit door, and since rung 4 the door with two rooms behind
@@ -1771,7 +1780,7 @@ static union u
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
   nif_syswrite[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_syswrite}, {lvm_ret0}},
-  nif_syscall[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_syscall}, {lvm_ret0}},
+  nif_syscall[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_syscall}, {lvm_ret0}},
 #endif
   nif_fault[] = {{lvm_fault}, {lvm_ret0}};
 
