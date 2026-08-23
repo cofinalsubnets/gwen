@@ -7680,6 +7680,12 @@
     (? (nom? x) (: _ (pin t x 1) t)
        !(two? x) t
        (cg-refs >x (cg-refs <x t)))
+   ; the same relation over an AST, where a name is still TEXT (laid forms wear
+   ; the interned nom). the data lane's roots are read here, before it is laid.
+   (cg-srefs x t)
+    (? (string? x) (: _ (pin t x 1) t)
+       !(two? x) t
+       (cg-srefs >x (cg-srefs <x t)))
    (cgen-core ast stbl sigs weaks xtra tgt)
     (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
@@ -7751,94 +7757,145 @@
                            (one >ps)))
                     (one <>f)))))
        ok (rec <>ast)
-       ; always emit text + data (a library TU has no main); `saw` rides out so the EXECUTABLE
-       ; path can insist on one. acc rides REVERSED -- a cat per fn re-copies every prior fn's
-       ; forms, quadratic over love.c's 611 -- and the tail restores emission order.
-       (gfns fs acc saw)
-        (? !(two? fs)
-           (: dat (cgdata g)
-              (? (bad? dat)
-                 (: c (peep g 'datacause ())            ; the static-data refusal, minted here (globs pinned it)
-                    (gripe () () () (? c c "cannot lay the static data (cause unnamed)")))
-                 ; -- THE DEAD-STATIC SWEEP. we splice a small static into its call sites and
-                 ; still lay the body, so one inlined everywhere ships referenced by nothing
-                 ; (33 KB of love's own text before this:). Only a static may
-                 ; go, and only when no root names it. ⚠ the roots are every EXPORTED fn, every
-                 ; alias target, the section-named fns (xfns -- placed for their address), and
-                 ; every nom the DATA lane names: love's kind-indexed tables carry fn addresses,
-                 ; and one missed there is a jump into the heap, not a bigger binary.
-                 ; ⚠ every set here is a TABLET and each unit's noms are read ONCE: the
-                 ; list-and-member? spelling re-walked every live body per round and cost
-                 ; 9x the compile it rides in.
-                 (: us (rev acc)                        ; (name forms), emission order
-                    sfns (? (two? xtra) <xtra {})
-                    als (peep g 'alias {})
-                    atg (foldl (\ a k ((peep als k ()) >< a)) () (keys als))
-                    (cut? nm) (!(id? (peep sfns nm 'no) 'no) && !(member? nm atg))
-                    urefs {}                    ; fn name -> the noms its forms carry
-                    _ (map (\ u (pin urefs <u (keys (cg-refs <>u {})))) us)
-                    unom {}                     ; a nom -> the fn of that name
-                    _ (map (\ u (pin unom (intern <u) <u)) us)
-                    live {}
-                    (walk q)                            ; worklist over the reference graph
-                     (? !(two? q) ()
-                        (: n <q
-                           (? (peep live n ()) (walk >q)
-                              (: _ (pin live n 1)
-                                 (walk (foldl (\ a r (: t (peep unom r ())
-                                                        (? (t && !(peep live t ())) (t >< a) a)))
-                                              >q (peep urefs n ())))))))
-                    ; the roots: every fn no sweep may touch, then every fn the data lane
-                    ; and the sectioned bodies name by address
-                    _ (walk (foldl (\ a r (: t (peep unom r ()) (? t (t >< a) a)))
-                                   (foldl (\ a u (? (cut? <u) a (<u >< a))) () us)
-                                   (keys (cg-refs (g 'xfns) (cg-refs dat {})))))
-                    _ (pin g 'dropped (foldl (\ a u (? (peep live <u ()) a (<u >< a))) () us))
-                    txt (foldl (\ a u (? (peep live <u ()) (revcat <>u a) a)) () us)
-                    [g (rev txt) dat saw])))
-           (: f <fs
-              (? (member? <f '(proto gdecl xdecl tdef)) (gfns >fs acc saw)
-                 (: _ (pin g 'undecl ()) _ (pin g 'nolane ()) _ (pin g 'arity ())   ; fresh per fn: the pins the refusal reads name THIS fn's cause
-                    r (cgfn g f)
-                    ; a refusal answers ONE gripe, and the driver puts it on stderr: half a
-                    ; sentence on each of two channels is what a build log then keeps
-                    (? (bad? r)
-                       (: u (peep g 'undecl ())         ; rung 1: an undeclared id was named -> a gripe carrying it + the enclosing fn
-                          nl (peep g 'nolane ())        ; rung 4: a deliberate refusal named the feature it has no lane for
-                          ar (peep g 'arity ())         ; a direct call disagreeing with its own prototype
-                          (? u (gripe () () () ("undeclared '" + u + "' (in " + <>f + ")"))
-                             ar (gripe () () () (ar + (" (in " + <>f + ")")))
-                             nl (gripe () () () (nl + (" (in " + <>f + ")")))
-                             (gripe () () () ("cannot compile '" + <>f + "' (cause unnamed)"))))
-                       ; ⚠ fn-start alignment to EVEN (2): a function's address can ride into the
-                       ; heap as an object's ap, and the image codec's pointer/fixnum
-                       ; discriminator is PARITY -- an odd-addressed fn pointer reads back as a
-                       ; fixnum and the woken heap desyncs. ⚠ WIDER alignment was measured and
-                       ; REVERTED (16 ran ~4% slower, 32 ~5%, branch-misses +9%: zeroing 4-5 low
-                       ; bits aliases the BTB on this frontend-bound core). don't widen it.
-                       ; an ALIAS is another NAME for the same address, so its label rides
-                       ; immediately before the fn's own; the align stays outermost.
-                       (: als (: (go l a2) (? !(two? l) a2
-                                              (go >l (? (peep (g 'alias) <l () = <>f)
-                                                        (['label (intern <l)] >< a2) a2)))
-                                (go (keys (g 'alias)) ()))
-                          ; an aligned(N) fn lands ON its boundary, the global lane's
-                          ; rule; 2 is the floor the parity law above sets.
-                          an (: a (peep (g 'aligns) <>f 2) (? (a < 2) 2 a))
-                          fm (['align an] >< (als + r))
-                          ; a fn that named its own section leaves .text for that
-                          ; stream (love.c's data sentinels): where the code lands
-                          ; is the point, the same reason a global gets the lane.
-                          ; the align rides out too -- it is the section's grain, and
-                          ; a run of one-fn sections at grain N tiles at exactly N.
-                          sc (peep (g 'sects) <>f ())
-                          sw (saw || (<>f = "main"))
-                          (? sc (: _ (pin g 'xfns ([sc fm an] >< g 'xfns))
-                                   (gfns >fs acc sw))
-                             ; a UNIT, not a flat splice: the sweep above needs each fn's
-                             ; forms addressable by name before they are concatenated.
-                             (gfns >fs ([<>f fm] >< acc) sw))))))))
-       (? ok (gfns <>ast () ()) ()))
+       ; -- LAZY LOWERING, which is why no sweep follows it. we splice a small
+       ; static into its call sites, and the out-of-line body then ships named
+       ; by nothing -- 143 of love.c's 675, and 15 of the 16 syscall wrappers
+       ; every nolibc member inherits from impl.h. so lay the ROOTS, read what
+       ; their laid forms still call, and lay that, to closure.
+       ; ⚠ THE ROOTS are every EXPORTED fn, every alias target, the
+       ; section-named fns (placed for their address), and every fn an
+       ; INITIALIZER names: love's kind-indexed tables carry fn addresses, and
+       ; one missed there is a wild jump, not a bigger binary.
+       ; ⚠ discovery order is NOT declaration order, so the pool and the label
+       ; counter fall differently than laying every body would leave them. the
+       ; units emit by declaration order, so .text still reads like the source
+       ; -- but the bytes are not the bytes a sweep left.
+       (glay _)
+        (: fnix {}                              ; fn name -> its AST form
+           _ (foldl (\ _ f (? (<f = 'fn) (pin fnix <>f f, 0) 0)) 0 <>ast)
+           unom {}                              ; the interned nom -> that name
+           _ (foldl (\ _ nm (pin unom (intern nm) nm, 0)) 0 (keys fnix))
+           sfns (? (two? xtra) <xtra {})
+           als (peep g 'alias {})
+           atg (foldl (\ a k ((peep als k ()) >< a)) () (keys als))
+           (cut? nm) (!(id? (peep sfns nm 'no) 'no) && !(member? nm atg))
+           ; ⚠ TWO tablets, and they have to be: a truth test reads a form list
+           ; by its NET, which lands on zero often enough, so presence is its own
+           ; mark and the forms ride beside it. laid-as-the-forms re-lays a body
+           ; whose forms happen to sum to nothing, forever.
+           laid {}                              ; fn name -> 1 once its body is laid
+           lfm {}                               ; ..and the forms, for the ones that stayed in .text
+           ; lay ONE body; answer the noms it still names. a refusal parks in
+           ; 'genfail because the driver below is a loop, not an expression
+           ; chain, and the cause wanted is the FIRST one.
+           (lay1 nm)
+            (: f (peep fnix nm ())
+               _ (pin g 'undecl ()) _ (pin g 'nolane ()) _ (pin g 'arity ())   ; fresh per fn: the pins the refusal reads name THIS fn's cause
+               r (cgfn g f)
+               ; a refusal answers ONE gripe, and the driver puts it on stderr: half a
+               ; sentence on each of two channels is what a build log then keeps
+               (? (bad? r)
+                  (: u (peep g 'undecl ())      ; rung 1: an undeclared id was named -> a gripe carrying it + the enclosing fn
+                     nl (peep g 'nolane ())     ; rung 4: a deliberate refusal named the feature it has no lane for
+                     ar (peep g 'arity ())      ; a direct call disagreeing with its own prototype
+                     _ (? (gripe? (peep g 'genfail ())) 0        ; the FIRST cause stands
+                          (pin g 'genfail
+                               (? u (gripe () () () ("undeclared '" + u + "' (in " + nm + ")"))
+                                  ar (gripe () () () (ar + (" (in " + nm + ")")))
+                                  nl (gripe () () () (nl + (" (in " + nm + ")")))
+                                  (gripe () () () ("cannot compile '" + nm + "' (cause unnamed)")))))
+                     ())
+                  ; ⚠ fn-start alignment to EVEN (2): a function's address can ride into the
+                  ; heap as an object's ap, and the image codec's pointer/fixnum
+                  ; discriminator is PARITY -- an odd-addressed fn pointer reads back as a
+                  ; fixnum and the woken heap desyncs. ⚠ WIDER alignment was measured and
+                  ; REVERTED (16 ran ~4% slower, 32 ~5%, branch-misses +9%: zeroing 4-5 low
+                  ; bits aliases the BTB on this frontend-bound core). don't widen it.
+                  ; an ALIAS is another NAME for the same address, so its label rides
+                  ; immediately before the fn's own; the align stays outermost.
+                  (: al2 (: (go l a2) (? !(two? l) a2
+                                         (go >l (? (peep (g 'alias) <l () = nm)
+                                                   (['label (intern <l)] >< a2) a2)))
+                           (go (keys (g 'alias)) ()))
+                     ; an aligned(N) fn lands ON its boundary, the global lane's
+                     ; rule; 2 is the floor the parity law above sets.
+                     an (: a (peep (g 'aligns) nm 2) (? (a < 2) 2 a))
+                     fm (['align an] >< (al2 + r))
+                     ; a fn that named its own section leaves .text for that
+                     ; stream (love.c's data sentinels): where the code lands
+                     ; is the point, the same reason a global gets the lane.
+                     ; the align rides out too -- it is the section's grain, and
+                     ; a run of one-fn sections at grain N tiles at exactly N.
+                     sc (peep (g 'sects) nm ())
+                     _ (? (nm = "main") (pin g 'saw 1) 0)
+                     _ (? sc (pin g 'xfns ([sc fm an] >< g 'xfns)) (pin lfm nm fm))
+                     _ (pin laid nm 1)          ; BEFORE the walk: a recursive fn names itself
+                     (keys (cg-refs fm {})))))
+           (drive q)
+            (? ((gripe? (peep g 'genfail ())) || !(two? q)) 0
+               (: nm <q
+                  (? (peep laid nm ()) (drive >q)
+                     (drive (foldl (\ a x (: t (peep unom x ())
+                                             (? (t && !(peep laid t ())) (t >< a) a)))
+                                   >q (lay1 nm))))))
+           ; ⚠ THE SECTIONED BODIES FIRST, and in DECLARATION ORDER. where the
+           ; members of a named section land is the program's business, never
+           ; ours: love.c's data sentinels each take their own love_data.N at a
+           ; fixed stride, and ai_typ reads a kind by DIVIDING the offset. the
+           ; worklist lays a root's callees before the next root, so driving
+           ; these through it tiles them in discovery order and every heap
+           ; object then reports the wrong rep.
+           (secs fs acc)
+            (? (!(two? fs) || (gripe? (peep g 'genfail ()))) acc
+               (: f <fs
+                  (? ((<f = 'fn) && peep (g 'sects) <>f () && !(peep laid <>f ()))
+                     (secs >fs (acc + (lay1 <>f)))
+                     (secs >fs acc))))
+           snoms (secs <>ast ())
+           ; the roots, in declaration order, so what gets laid first still
+           ; tracks the source and the pool falls the same way twice
+           roots (: (go fs acc)
+                     (? !(two? fs) (rev acc)
+                        (: f <fs
+                           (go >fs (? ((<f = 'fn) && !(cut? <>f)) (<>f >< acc) acc))))
+                    (go <>ast ()))
+           ; what the sectioned bodies call joins the worklist like any other ref
+           sq (foldl (\ a x (: t (peep unom x ())
+                               (? (t && !(peep laid t ())) (t >< a) a)))
+                     () snoms)
+           _ (drive (roots + sq))
+           ; ⚠ THE DATA LANE NAMES FUNCTIONS TOO -- love's kind-indexed tables
+           ; carry their addresses -- and it is laid LAST, so its roots are read
+           ; from the INITIALIZERS instead: g 'glob holds every one, both the
+           ; file-scope globals `rec` recorded and the block-scope statics a laid
+           ; body adds. a body laid this round can carry its own, so this closes
+           ; rather than passes. over-approximated the way cg-refs is: a literal
+           ; that happens to spell a function's name keeps that function.
+           (datclose _)
+            (: t {}
+               _ (foldl (\ _ k (: e (peep (g 'glob) k ())
+                                  (? (two? e) (cg-srefs <>>e t, 0) 0)))
+                        0 (keys (g 'glob)))
+               q (foldl (\ a s (? ((peep fnix s ()) && !(peep laid s ())) (s >< a) a))
+                        () (keys t))
+               (? ((two? q) && !(gripe? (peep g 'genfail ()))) (drive q, datclose 0) 0))
+           _ (datclose 0)
+           gf (peep g 'genfail ())
+           (? (gripe? gf) gf
+              (: dat (cgdata g)
+                 (? (bad? dat)
+                    (: c (peep g 'datacause ())   ; the static-data refusal, minted here (globs pinned it)
+                       (gripe () () () (? c c "cannot lay the static data (cause unnamed)")))
+                    ; txt rides REVERSED -- a cat per fn re-copies every prior fn's
+                    ; forms, quadratic over love.c's 611 -- and the rev restores order.
+                    (: _ (pin g 'dropped
+                              (foldl (\ a f (? ((<f = 'fn) && !(peep laid <>f ())) (<>f >< a) a))
+                                     () <>ast))
+                       txt (foldl (\ a f (: u (? (<f = 'fn) (peep lfm <>f ()) ())
+                                             (? (two? u) (revcat u a) a)))
+                                  () <>ast)
+                       [g (rev txt) dat (peep g 'saw ())])))))
+       (? ok (glay 0) ()))
    (cgen ast stbl sigs weaks xtra tgt)              ; the STATIC EXECUTABLE: _start (crt0) + text + data -> (1 forms) | () -- needs main
     (: crt0 (? (id? tgt 'arm64)
                '((call main) (li r8 93) (sys))            ; x0 already the exit code; x8 = __NR_exit (93), svc
