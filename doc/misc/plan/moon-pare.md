@@ -64,12 +64,13 @@ One entry there was already built twice.
   that ablation is 2026-08-12 and the riscv cs-seat work of 2026-08-21 touched the same
   machinery, and `pcs` threads four sites (the grant, the fnreset capture, the shadow-spill
   read, the accounting the locals wear), so the deletion ships on a fresh number plus
-  `test_fixpoint`, not the archived one. Rung 2 grew the roster: **the vmap complex**
-  (`vuniv`/`vuarr`/`auniv`, ~175 lines plus channels) prices negative, and `csbor` at the
-  floor. ⚠ the sequencing law: the `lo*` keeps serve both the vmap and the cs borrows, so
-  the cuts go vmap-first, then csbor, and `cs` is RE-PRICED after each — the keeps' zero
-  may be hiding inside cs's +5.0%, and a cut that moves cs beyond its floor reverts. ⚠ and
-  the cipher rows ride along per cut (one quiet ccbench fill), not just the corpus.
+  `test_fixpoint`, not the archived one. **The vmap complex is CUT, 2026-08-23** —
+  gen.l 8,606 → 7,927, the −2% banked (moon-gauge's *the vmap cut*: the gate found the
+  knob's `au` license still buying pointless regens, and the wall clock lying across
+  fills — hold hot functions to instruction identity, not the clock). The re-price after
+  it: `cs` HOLDS at +6.0%, and **`csbor` reads −0.2% with base-identical .text — its cut
+  (blscan, `wb`, the `att` grant dance) is licensed next**, then `pcs`. Per cut: `cs`
+  re-priced, the cipher rows ridden (one quiet fill), the fixpoint by name.
 - **rung 4 — the seven names become one loop.** `lokeep`/`loseed`/`lomig`/`lochk`/`lomiss`/
   `lobar`/`lonone` is seven names for the phases of one mechanism's uncertainty, and the
   ledger already called them its own progress bar: *"if the ladder is working, most of those
@@ -80,10 +81,11 @@ One entry there was already built twice.
   `att` loop already states its convergence in place (bars grow monotonically, only a
   zero-miss build ships, the capped attempt cannot miss) — what is owed is one named loop
   owning the seven channels, a consolidation rather than a discovery. Gate: the names
-  shrink to a few, `test_fixpoint` byte-identical, `test_cts` unmoved. ⚠ rung 3 may
-  hollow this rung out first: the `lo*` family exists to verify the vmap and borrow
-  keeps, and if rung 3's cuts land, most of the seven names leave with them — check
-  what remains before consolidating what is about to be deleted.
+  shrink to a few, `test_fixpoint` byte-identical, `test_cts` unmoved. ⚠ rung 3 hollowed
+  this rung as predicted: the vmap cut took `lokeep`/`lochk`/`lomig`/`loseed` with it,
+  and the csbor cut takes the `att` grant dance and the `lomiss`/`lobar`/`lonone`
+  channels — what remains afterward is one plain regen choice, and this rung closes by
+  observation rather than work.
 - **rung 5 — the B half, decided on rung 2's evidence.** The census answered the question
   this rung was written around: B's cycles are mostly the LOCALS HOMES (lhome +6.3%, the
   single biggest payer) with the pool at +4.0% — so the machinery that stays is `alive`/

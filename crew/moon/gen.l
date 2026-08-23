@@ -136,7 +136,7 @@
    ; discipline (the old code compared physicals, so the accident counted).
    (rpeq? g a b) (id? (rp g a) (rp g b))
    ; -- the ablation knob (the pare plan's rung 0): MOON_ABLATE="tpool,cs" holds named
-   ; mechanisms empty for PRICING -- ralloc tpool cs lhome vuniv csbor homes pcs. read at
+   ; mechanisms empty for PRICING -- ralloc tpool cs lhome csbor homes pcs. read at
    ; RUN time, once per unit (a value binding folds at bake and would carry the baking
    ; session's environment). no gate rides it; unset is every mechanism on. --
    (ablenv _)
@@ -156,7 +156,7 @@
                     (: r9 <fr
                        ; ⚠ armor: a pinned reg on the free list is the free-list/pin split
                        ; (the callish-aim window) resurfacing -- refuse LOUD
-                       _ (? (member? r9 (peep g 'vpin ()) || member? r9 (peep g 'rpin ()))
+                       _ (? (member? r9 (peep g 'rpin ()))
                             (scare 'ralloc-pinned r9) ())
                        _ (pin g 'pool >fr)
                        k9 (peep g 'vrn 0)
@@ -167,14 +167,12 @@
    (rfree g rz) (: r (rp g rz)
                    (? (member? r (peep g 'pool0 ()) &&
                        !(member? r (peep g 'pool ())) &&
-                       !(member? r (peep g 'vpin ())) &&           ; a vmap pin is not ours to free
-                       !(member? r (peep g 'rpin ())))             ; nor a splice's register bind
+                       !(member? r (peep g 'rpin ())))             ; a splice's register bind is not ours to free
                       (pin g 'pool (r >< peep g 'pool ())) ()))
    (wr? g rz) (? (id? rz 'r0) 1                        ; writable: protocol r0 or an OWNED pool reg
                  (: r (rp g rz)
-                    (member? r (peep g 'pool0 ()) &&   ; (a borrowed home, a vmap pin or a bind
-                     !(member? r (peep g 'vpin ())) && ;  reg is read-only)
-                     !(member? r (peep g 'rpin ())))))
+                    (member? r (peep g 'pool0 ()) &&   ; (a borrowed home or a bind
+                     !(member? r (peep g 'rpin ())))))  ;  reg is read-only)
    ; -- the ASSIGNMENT (5.1b): move a mint onto its copy's other side, so the copy
    ; substitutes to (mov X X) and the sweep drops it. LOCAL by construction: a move is
    ; licensed only over a straight-line window (measured: every interval-licensed drop in
@@ -186,7 +184,7 @@
    ;   window   -- no control/opaque form strictly inside the span
    ;   tenancy  -- no bare-X mention inside the span but the copy itself, and no co-tenant
    ;               mint on X whose mention span overlaps
-   ;   release  -- %m's token T still LOOKS occupied downstream (the vmap's mixed-name
+   ;   release  -- %m's token T still LOOKS occupied downstream (a mixed-name
    ;               continuation reads T bare): a bare-T mention inside the span, or a
    ;               bare-T read after it before a def, refuses -- and a branch/label before
    ;               the answer refuses too, since control could route to one (a call/ret is
@@ -401,61 +399,6 @@
    ; the result register for an op consuming rA: reuse a writable operand,
    ; else a fresh pool reg, else the protocol r0
    (rdst g rA) (? (wr? g rA) rA (: rX (ralloc g) (? rX rX 'r0)))
-   ; -- the vmap (the allocator's cross-statement leg): a universe local's value, once written
-   ; through or initialized in a pool register, stays mapped name -> reg, so a re-read is ZERO
-   ; forms. the pinned reg rides the borrowed-home contract, and the SLOT stays the single source
-   ; of truth (every write still stores), so a flush never spills -- it only forgets. soundness is
-   ; basic-block locality in GENERATION order: vmflush fires at every label and call emission
-   ; point, and g 'vuniv already excludes address-taken and multiply-declared names. off while
-   ; inlining (an inlinee's names would conflate with the caller's). --
-   (vmon? g) ((two? (peep g 'vuniv ()) || two? (peep g 'vuarr ())) && !(peep g 'inlining ()))
-   ; the READ side stays live through a splice's ARG binds (caller scope, caller names) --
-   ; only the inlinee BODY blinds it ('inlbody depth: its names would conflate with the
-   ; caller's). births stay gated on vmon? (no pin is born anywhere inside a splice).
-   (vmget g nm)
-    (? (!(two? (peep g 'vuniv ()) || two? (peep g 'vuarr ())) || (0 < peep g 'inlbody 0)) ()
-       (vrg (assoc nm (peep g 'vmap ()))))          ; a miss falls through the pattern: no entry, no register
-   ; ⚠ NOT `pins`: that is a prel MACRO (chained tablet pins), and a macro expands at head
-   ; position over any local binding -- the collision answers the map itself, silently
-   (vmregs l acc) (? !(two? l) acc
-                     (: r9 (vrg <l)
-                        (? (member? r9 acc) (vmregs >l acc)
-                           (vmregs >l (r9 >< acc)))))
-   ; ⚠ by CONTENT: scalar names are parse-minted strings, per-site distinct -- an id?
-   ; filter never matches across statements and the drop is INERT (the stale pin then
-   ; serves a read after the write: the loop keeps surfaced it, in p0chars's strlen)
-   (vmdrop g nm)
-    (: m2 (filter (\ [n9 _ _] !(= n9 nm)) (peep g 'vmap ()))
-       (pins g 'vmap m2 'vpin (vmregs m2 ())))
-   ; ⚠ no pin is BORN while a call's arguments stage (the argseal depth, set by call-fixed): the
-   ; staging splices args right-to-left while generation runs left-to-right, so a pin born inside
-   ; one arg would read STALE from a later-generated, earlier-spliced sibling. pins from BEFORE
-   ; the call stay readable -- their loads precede the whole staging in every splice order. a
-   ; depth count, not a flag: an argument may hold a nested call.
-   ; ⚠ ONE reg, ONE name: a pin means r holds nm's slot value, so any other claim on r is
-   ; stale by definition -- the write-aim (a kept loop pin re-establishes IN r) makes this
-   ; load-bearing: without it a co-tenant would survive the overwrite and read wrong.
-   (vmxdrop g nm r)
-    (: m2 (filter (\ [n9 r9 _] ((= n9 nm) || !(id? r9 r))) (peep g 'vmap ()))
-       (pins g 'vmap m2 'vpin (vmregs m2 ())))
-   ; -- AN ENTRY IS (nm reg class), and the class is the residency it lives under: 'pool a
-   ; statement-scoped pool register, dead at the next call; 'bor a borrowed cs seat, riding
-   ; calls; 'ros a pool register the roster reloads after each call. () is no residency at all,
-   ; so the class doubles as the eligibility. it is what a kill site MEANS -- "pool residency
-   ; ends here" is sayable, where without it a site has flush-everything and nothing else.
-   ; ⚠ the shape is stated in these three accessors and nowhere else; every reader takes a
-   ; pattern, so an entry of another arity answers () rather than a silently shifted field. --
-   (vnm [nm _ _]) nm
-   (vrg [_ r _]) r
-   (vcls [_ _ cls]) cls
-   (vke g nm r) [nm r (vpcls g nm r)]               ; a keep entry, classed where it stands (vmset re-reads
-                                                    ; it at the install: a grant can change in between)
-   (vpcls g nm r)                                   ; the class this register carries, off the grants in force
-    (? (member? r (peep g 'csbor ())) 'bor
-       !(member? r (peep g 'pool0 ())) ()
-       (: o (assoc nm (peep g 'saro ()))
-          (? (two? o && id? <>o r) 'ros 'pool)))
-   (vmborn? g) (vmon? g && !(0 < peep g 'argseal 0))
    ; -- WHAT A REGISTER COSTS, per class, in memory operations. every gate that grants one
    ; weighs its own EXTENT -- the traffic the residency erases -- against this. the extents
    ; differ on purpose and stay where they are (ir1 touches, weighted source reads, unerasable
@@ -476,79 +419,9 @@
     (: c (rcost cls n) (? (id? c 'never) 'never (ext - c)))
    (rpays? cls n ext)                               ; ...and it must WIN
     (: m (rprice cls n ext) (? (id? m 'never) 0 (? (0 < m) 1 0)))
-   (rclears? cls n ext)                             ; ⚠ ...or merely TIE, which the two loop gates
-    (: m (rprice cls n ext)                         ; accept and the four others refuse. an
-       (? (id? m 'never) 0 (? (0 <= m) 1 0)))       ; inconsistency, visible here and unsettled
-   ; -- the cs BORROW (call-crossing keeps): a free callee-saved seat, granted by the regen
-   ; (g 'csbor) and saved like any cs home, carries a loop keep THROUGH calls -- the callee
-   ; preserves it, the slot stays the source of truth, and the same lochk edges verify the
-   ; survival. 'csbu records the seats a build actually took (the grant shrinks to it). --
-   (vmpin9 g nm r cls drop)                         ; the pin: retire the stale claims, record under cls
-    (: _ (drop g nm)
-       _ (vmxdrop g nm r)
-       _ (pin g 'vmap ([nm r cls] >< peep g 'vmap ()))
-       _ (? (id? cls 'bor && !(member? r (peep g 'csbu ())))
-            (pin g 'csbu (r >< peep g 'csbu ())) 0)
-       _ (pin g 'pool (filter (\ q !(id? q r)) (peep g 'pool ())))   ; a pinned reg is never free
-       (? (member? r (peep g 'vpin ())) ()
-          (pin g 'vpin (r >< peep g 'vpin ()))))
-   (vmpin g nm rz)                                  ; a universe SCALAR, in whatever class its register carries
-    (: r (rp g rz) cls (vpcls g nm r)
-       (? (vmborn? g && cls && member? nm (peep g 'vuniv ()))
-          (vmpin9 g nm r cls vmdrop) ()))
-   (vmflush g) (pins g 'vmap () 'vpin ())
-   (vmcflush g)                                     ; the CALL: POOL residency ends here (the callee owns
-    (: sr (peep g 'saro ())                         ; those registers). a borrowed seat rides; a ROSTERED
-       (ld9 [nm r _]) (: o (assoc nm sr)            ; pin reloads from its slot -- the reload forms answer,
-                         (? (two? o && id? <>o r) (nthr o 2) ()))    ; and lay after the call
-       (ros? e9) ((id? (vcls e9) 'ros) && two? (ld9 e9))
-       m2 (filter (\ e9 ((id? (vcls e9) 'bor) || ros? e9)) (peep g 'vmap ()))
-       rl (: (go l acc) (? !(two? l) (rev acc)
-                           (go >l (? (ros? <l) ((ld9 <l) >< acc) acc)))
-             (go m2 ()))
-       _ (pins g 'vmap m2 'vpin (vmregs m2 ()))
-       rl)
-   ; -- the ARRAY leg of the vmap: a once-declared 1-D
-   ; gp-scalar array whose EVERY appearance is x[e] (any bare x is decay -- an escape,
-   ; and under & or sizeof nothing licenses) gets element pins under MINTED keys ("x[3]").
-   ; minted keys have no shared object identity, so this leg compares by CONTENT (=)
-   ; throughout. reads pin (the load is canonicalizing); writes only DROP -- a constant
-   ; index its own key, a variable index (or a fill, or an rmw) the whole array. the slot
-   ; stays the single source of truth (write-through), so a variable-index READ needs no
-   ; care at all -- and a non-escaping array admits no alias: no pointer analysis. --
-   (akey nm k) (nm + "[" + show k + "]")
-   (aelem g env e)                                  ; -> ('el key elty) | ('arr nm) | ()
-    (? !(two? e && id? <e 'deref && two? <>e) ()
-       (: X <>e
-          (? !(id? <X 'bin && two? >X && id? <>X '+ &&
-               two? <>>X && id? <<>>X 'var) ()
-             (: nm <><>>X
-                (? !(member? nm (peep g 'vuarr ())) ()
-                   (: en (vent g env nm)
-                      (? !(two? en && id? <en 'loc && arr? <>>en) ()
-                         (: idx <>>>X
-                            (? (two? idx && id? <idx 'num) ['el (akey nm <>idx) <>(<>>en)]
-                               ['arr nm])))))))))
-   (vadrop9 g p)                                    ; drop by CONTENT prefix ("x[" the array, "x[3]" one key)
-    (: n9a (tally p)
-       m2 (filter (\ [k9 _ _] !((n9a <= tally k9) && (= p (snip k9 0 n9a))))
-                  (peep g 'vmap ()))
-       (pins g 'vmap m2 'vpin (vmregs m2 ())))
-   (adrop9 g env lhs)                               ; the write retires element pins
-    (: ae (aelem g env lhs)
-       (? !(two? ae) ()
-          (id? <ae 'el) (vadrop9 g <>ae)
-          (vadrop9 g (<>ae + "["))))
-   ; the element pin: sans the universe check (the key's array was gated by vuarr when it was
-   ; minted). ⚠ ONE door, seats included: the pool-only twin it used to have was reachable but
-   ; changed nothing -- a seat an element takes is never one another name is claiming, so the
-   ; gate was defending an eviction that does not occur (the census under `traps paid for`).
-   (vapin g nm rz)
-    (: r (rp g rz) cls (vpcls g nm r)
-       (? (vmborn? g && cls) (vmpin9 g nm r cls vadrop9) ()))
    ; -- frame-direct: a constant-indexed frame-array element is a STATIC slot (off + k*elsize) --
    ; no address compute at all. the address is consumed by its own load/store, so this holds for
-   ; ESCAPING arrays too (no vuarr gate); pair/d128 elements keep the address lanes. --
+   ; ESCAPING arrays too; pair/d128 elements keep the address lanes. --
    (afd g env e)                                    ; -> (off elty) | ()
     (? !(two? e && id? <e 'deref && two? <>e) ()
        (: X <>e
@@ -562,17 +435,8 @@
                       (? ((ptr? et || member? et '(char uchar bool short ushort int uint long ulong)) &&
                           !(pair? g et))
                          [(<>en + <>idx * tsz g et) et] ())))))))
-   ; -- loop-head survival (the vmap crossing its first boundary): at a loop head the map need
-   ; not die. OPTIMISM WITH VERIFICATION: keep the pinned map at the head (nothing when the
-   ; loop's subtree carries a call/asm/goto/label/switch/case -- those flush or admit foreign
-   ; edges), then CHECK map ⊇ keep at every arriving edge: the back jmp, each continue, the
-   ; fall-through into the cont/cond label, and breaks against the ENCLOSING keeps. a miss
-   ; records (headlab nm) and the regen retries with it barred -- only a zero-miss build
-   ; ships, so mid-build optimism never escapes. soundness rides the map invariant itself:
-   ; (nm r) present ⇒ r holds nm's slot value on the generation line, and nothing runs on an
-   ; edge. writes re-establish by AIM: the store hints prefer the existing pin's register. --
-   (loscan e)                                       ; the static license: 'clean = a pool keep,
-    (? !(two? e) 'clean                             ; 'callish = a cs-borrow keep, () = refuse
+   (loscan e)                                       ; the borrow license: 'callish = a callish
+    (? !(two? e) 'clean                             ; subtree, 'clean = none, () = refuse
        (member? <e '(asm goto lbl switch case dflt vastart)) ()
        (: (go l acc) (? !(two? l) acc
                         (: v (loscan <l)
@@ -585,178 +449,6 @@
              ((id? k 'for) && id? (loscan >>e) 'callish) 1
              (: (go l) (? !(two? l) () (? (blscan <l) 1 (go >l)))
                 (go e)))))
-   (nreads e nm)                                    ; read occurrences of nm (an asn's own lhs is no read)
-    (? !(two? e) 0
-       (id? <e 'var) (? (= <>e nm) 1 0)             ; names are text: content compare
-       (id? <e 'asn) ((? (two? <>e && id? <<>e 'var && (= <><>e nm)) 0 (nreads <>e nm)) + nreads <>>e nm)
-       (: (go l a) (? !(two? l) a (go >l (a + nreads <l nm)))
-          (go e 0)))
-   (ncls e)                                         ; the call count; a nested loop's repeat (x8)
-    (? !(two? e) 0
-       (: (go l a) (? !(two? l) a (go >l (a + ncls <l)))
-          s (go e (? (id? <e 'call) 1 0))
-          (? (member? <e '(while do for)) (8 * s) s)))
-   (lobar? g lab nm)
-    (: (go l) (? !(two? l) ()
-                 (: b <l (? (id? <b lab && (= <>b nm)) 1 (go >l))))
-       (go (peep g 'lobar ())))
-   (lokeep g lab)                                   ; the keep: today's pinned map minus the bars
-    (? (peep g 'lonone ()) ()
-       (filter (\ [nm _ _] !(lobar? g lab nm)) (peep g 'vmap ())))
-   (lochk g lab kp)                                 ; an arriving edge: map ⊇ kp or record the miss
-    (: m (peep g 'vmap ())
-       (go l) (? !(two? l) ()
-                 (: nm (vnm <l) o (assoc nm m)
-                    _ (? (two? o && id? <>o (vrg <l)) ()
-                         (pin g 'lomiss ([lab nm] >< peep g 'lomiss ())))
-                    (go >l)))
-       (go kp))
-   ; the loop EXIT is a forward join too: its arriving edges are exactly the cond's false
-   ; branch and this loop's breaks (the license refused goto/switch/label subtrees), so the
-   ; meet of those edge maps survives ld -- kept pins ride out of the loop, post-loop reads
-   ; are zero forms, and a seat-riding slot whose loads all die loses its write-through
-   ; stores to deadst. break edges snap onto g 'brkm (a stack in lock-step with g 'brk).
-   (lomt g ms)                                      ; ms: one map per arriving edge
-    (? !(two? ms) (: _ (vmflush g) ())
-       (: (go l a) (? !(two? l) a (go >l (vmeet a <l)))
-          (vmset g (go >ms <ms))))
-   (vmraw g nm) (vrg (assoc nm (peep g 'vmap ())))  ; the current pin, gates aside (the write-aim reads it)
-   ; a minted element key ("x[3]") names a STATIC frame slot: recover it from the key --
-   ; the array is vuarr (local, non-escaping), so vent has the base and the index is the
-   ; digits between the brackets. afd's own width gate (pair/d128/flo keep their lanes).
-   (aeoff g env nm)                                 ; -> [off elty] | ()
-    (: (go l) (? !(two? l) ()
-                 (: a <l p (a + "[")
-                    n9 (tally p)
-                    (? ((n9 < tally nm) && (= p (snip nm 0 n9)))
-                       (: en (vent g env a)
-                          (? !(two? en && id? <en 'loc && arr? <>>en) ()
-                             (: et <>(<>>en)
-                                r9 (sound (snip nm n9 ((tally nm) - 1)))
-                                k9 (? (two? r9) <r9 ())
-                                (? ((ptr? et || member? et '(char uchar bool short ushort int uint long ulong)) &&
-                                    !(pair? g et) && charm? k9 && (0 <= k9))
-                                   [(<>en + k9 * tsz g et) et] ()))))
-                       (go >l))))
-       (go (peep g 'vuarr ())))
-   (nrdse g env e key)                              ; read occurrences of one element key (a write's own lhs is no read)
-    (? !(two? e) 0
-       (: n9 (? (id? <e 'deref)
-                (: ae (aelem g env e) (? (two? ae && id? <ae 'el && (= <>ae key)) 1 0)) 0)
-          (go l a) (? !(two? l) a (go >l (a + nrdse g env <l key)))
-          t9 (go e n9)
-          (? (id? <e 'asn && two? <>e && id? <<>e 'deref)
-             (: a2 (aelem g env <>e)
-                (? (two? a2 && id? <a2 'el && (= <>a2 key)) (t9 - 1) t9))
-             t9)))
-   (lomig g env sub lab)                            ; a CALLISH keep: scalar pool pins migrate onto
-    (: base (lokeep g lab)                          ; granted cs seats -> (kp movs); the movs lay
-       bs (peep g 'csbor ())                        ; before the head label. seats gone, a pin still
-       used (vmregs (peep g 'vmap ()) ())           ; worth its reloads SPILLS AROUND: kept on its
-       nc (ncls sub)                                ; pool reg, rostered (g 'saro), and every call
-       (go l free kp mvs sr)                        ; in the loop reloads it (vmcflush)
-        (? !(two? l) (: _ (pin g 'saro sr) [(rev kp) (rev mvs)])
-           (: e9 <l nm (vnm e9) r (vrg e9)
-              (? (member? r bs) (go >l free (e9 >< kp) mvs sr)     ; already seated (an enclosing keep)
-                 (two? (assoc nm sr)) (go >l free (e9 >< kp) mvs sr)   ; already rostered (an enclosing loop)
-                 !(member? nm (peep g 'vuniv ()))
-                  ; the ELEMENT arm: a minted key is a static frame slot -- it seats or
-                  ; rosters exactly like a scalar (the per-call reload is one direct ld)
-                  (: eo (aeoff g env nm)
-                     (? !(two? eo) (go >l free kp mvs sr)
-                        (two? free)
-                         (: c <free
-                            _ (vapin g nm c)
-                            (go >l >free ((vke g nm c) >< kp) (['mov c r] >< mvs) sr))
-                        ; per loop iteration: element reads against one reload per call
-                        (rclears? 'ros nc (nrdse g env sub nm))
-                         (go >l free (e9 >< kp) mvs ([nm r [(ldop <>eo) r 'r4 <eo]] >< sr))
-                        (go >l free kp mvs sr)))
-                 (two? free)
-                  (: c <free
-                     _ (vmpin g nm c)
-                     (go >l >free ((vke g nm c) >< kp) (['mov c r] >< mvs) sr))
-                 ; the spill-around license: reads outstrip the calls, so the per-call
-                 ; reload beats the per-use load it replaces (per loop iteration)
-                 (: en (vent g env nm)
-                    (? (two? en && id? <en 'loc && homable? <>>en &&
-                        rclears? 'ros nc (nreads sub nm))
-                       (go >l free (e9 >< kp) mvs ([nm r [(ldop <>>en) r 'r4 <>en]] >< sr))
-                       (go >l free kp mvs sr))))))
-       (go base (filter (\ r9 !(member? r9 used)) bs) () () (peep g 'saro ())))
-   (rdscan e t acc)                                 ; one pass: read counts land in t (interned
-    (? !(two? e) acc                                ; keys), names answer once, source order (rev'd)
-       (id? <e 'var) (: k9 (intern <>e)
-                        n9 (peep t k9 0)
-                        _ (pin t k9 (n9 + 1))
-                        (? n9 acc (<>e >< acc)))
-       (id? <e 'asn) (rdscan <>>e t (? (two? <>e && id? <<>e 'var) acc (rdscan <>e t acc)))
-       (: (go l a) (? !(two? l) a (go >l (rdscan <l t a)))
-          (go e acc)))
-   ; -- entry SEEDING (keep depth): a keep only ever PRESERVED existing pins, so a hot
-   ; scalar arriving unpinned (an outer keep dropped it, or its reads sit mid-expression
-   ; and never pinned) stayed a per-use load forever. seed it: one slot load laid before
-   ; the head (beside the seat movs) establishes the pin truthfully, and it rides the keep
-   ; under the SAME edge verification -- a clobber misses and bars it like any entry.
-   ; callish loops seat first, then the roster's own pricing; clean loops pin the pool,
-   ; both capped to leave the pool workable. --
-   (loseed g env sub lab lic kp)                    ; -> (seeds movs), appended to the keep
-    (: bs (peep g 'csbor ())
-       kregs (vmregs kp ())
-       fs0 (filter (\ r9 !(member? r9 kregs)) bs)   ; the seats the keep left
-       ; the free file is pool0 minus the KEEP's regs -- not g 'pool: a dying pin's reg
-       ; waits for psreset, but the seed's vmpin evicts the corpse (one reg, one name)
-       ; and the seed load lays after the movs that read it. one reg stays for the body.
-       pf0 (filter (\ r9 !(member? r9 kregs)) (peep g 'pool0 ()))
-       nc (ncls sub)
-       rt {}
-       nms (rev (rdscan sub rt ()))
-       (cand nm) (: en (vent g env nm)
-                    (? (two? (assoc nm kp)) ()
-                       (lobar? g lab nm) ()
-                       !(member? nm (peep g 'vuniv ())) ()
-                       !(two? en && id? <en 'loc && homable? <>>en) ()
-                       (: nr (peep rt (intern nm) 0) (? (0 < nr) [en nr] ()))))
-       (go l fs pf kp2 mvs sr2)
-        (? !(two? l) (: _ (? (id? lic 'callish) (pin g 'saro sr2) 0)
-                        [(rev kp2) (rev mvs)])
-           (: nm <l c (cand nm)
-              (? !(two? c) (go >l fs pf kp2 mvs sr2)
-                 (: en <c nr <>c off <>en ty <>>en
-                    (? (id? lic 'callish)
-                       (? (two? fs)
-                           (: r <fs _ (vmpin g nm r)
-                              (go >l >fs pf ((vke g nm r) >< kp2) ([(ldop ty) r 'r4 off] >< mvs) sr2))
-                          ; per loop iteration: the seed's reads against one reload per call
-                          (rclears? 'ros nc nr && two? >pf)
-                           (: r <pf _ (vmpin g nm r)
-                              (go >l fs >pf ((vke g nm r) >< kp2) ([(ldop ty) r 'r4 off] >< mvs)
-                                  ([nm r [(ldop ty) r 'r4 off]] >< sr2)))
-                          (go >l fs pf kp2 mvs sr2))
-                       (? (two? >pf)
-                          (: r <pf _ (vmpin g nm r)
-                             (go >l fs >pf ((vke g nm r) >< kp2) ([(ldop ty) r 'r4 off] >< mvs) sr2))
-                          (go >l fs pf kp2 mvs sr2)))))))
-       ; ⚠ lonone is the cap's keep-nothing attempt: it CANNOT miss, so it must not seed
-       (? ((0 < peep g 'argseal 0) || peep g 'lonone ()) [() ()]
-          (go nms fs0 pf0 () () (peep g 'saro ()))))
-   ; -- the forward joins: at a label whose arriving edges are all KNOWN (an if/?: join -- never
-   ; a loop head, a user label, or a case), the map need not die. an entry survives iff EVERY
-   ; arriving edge carries the same (nm r) -- on each edge r held nm's slot value when the
-   ; edge left, and nothing runs ON an edge, so the intersection holds at the join. an arm whose
-   ; forms end in ret/jmp/jmpr never arrives and stays out of the meet. a pinned reg is never on
-   ; the free list (ralloc took it, rfree refuses vpin, a dropped pin waits for psreset), so a
-   ; restored branch-point map cannot be clobbered by the other arm's scratch. --
-   (vmsnap g) (peep g 'vmap ())
-   (vmset g m)                                      ; a pin door too: a set pin's reg leaves the pool. and the
-    (: m2 (map (\ [nm r _] (: c (vpcls g nm r)      ; ONE stamp point: a map outlives the grant it was
-                              [nm r (? c c 'pool)])); pinned under -- a roster dies with its loop and the
-               m)                                   ; exit meet rides its pins out, unrostered
-       R (vmregs m2 ())
-       (pins g 'vmap m2 'vpin R
-               'pool (filter (\ q !(member? q R)) (peep g 'pool ()))))
-   (vmeet a b) (filter (\ [nm r _] (: o (assoc nm b)
-                                       (? (two? o) (id? <>o r) ()))) a)
    ; ⚠ may an ALIAS live across a splice body? only in a register the body's STAGING can
    ; never write. x64 staging owns exactly the protocol quad r0-r3 (r3 the callr park), so
    ; every pool/home/cs register aliases -- but a seat-2/3 ride (r2/r1) must not. elsewhere
@@ -785,14 +477,9 @@
        (: w9 (? (member? <e '(while do for)) (w * 8) w)
           (go l a) (? !(two? l) a (go >l (a + rdw nm <l w9)))
           ((? (two? <e) (rdw nm <e w9) 0) + go >e 0)))
-   (vmout? fs)                                      ; does control fall out the bottom of the forms?
-    (? !(two? fs) 1
-       (: (go l) (? (two? >l) (go >l) <l)
-          lf (go fs)
-          !(member? <lf '(ret jmp jmpr))))
-   ; the per-statement pool reset: pool0 minus the vmap pins
+   ; the per-statement pool reset: pool0 minus the splice binds
    (psreset g)
-    (: vp (peep g 'vpin () + peep g 'rpin ())
+    (: vp (peep g 'rpin ())
        (? !(two? vp) (pin g 'pool (peep g 'pool0 ()))
           (pin g 'pool (filter (\ r9 !(member? r9 vp)) (peep g 'pool0 ())))))
    ; -- the TARGET seam: g 'tgt ('x64 | 'arm64 | 'thumb2) picks the ABI shapes; the IR stays
@@ -1221,7 +908,6 @@
    ; instruction's own indefinite -- C leaves every one of them undefined. --
    (dtoul g)
     (: lb (nlab g ".du") ld (nlab g ".dv")
-       _ (vmflush g)
        [['li 'r1 0x43e0000000000000] '(movqxr f1 r1)         ; 2^63
           '(ucomisd f0 f1) ['br 'ae lb]
           '(cvttsd2si r0 f0) ['jmp ld]                        ; d < 2^63: straight
@@ -1327,7 +1013,7 @@
              ; (call-by-value holds: wrs? bars a body that assigns the param, and a later drop
              ; leaves the alias holding the passed value); anything else parks canonically in a
              ; fresh pool reg. rpin holds every bind reg against wr?/rfree/psreset for the splice's
-             ; span (a body label's flush forgets vpin, never rpin). the slot bind stands when
+             ; span. the slot bind stands when
              ; the type narrows to the alias, a call rides anywhere, or the pool is SHALLOW --
              ; a park may only take a register when two stay free: parks that drained the pool
              ; starved the hints and pins around them and the shuttle spushed (measured: corpus
@@ -1341,12 +1027,9 @@
                     al (? (nocall && !(flo? pty) && (8 = tsz g pty) &&
                            two? <as && (<<as = 'var) &&
                            !(wrs? <<ps <><>>>inlf))
-                          (: nm9 <><as
-                             pM (vmget g nm9)               ; a pinned local -- or a homed/riding
-                             (? pM pM                       ; one (regv): both are read-only regs
-                                (: v9 (vent g env nm9)      ; holding the canonical current value
-                                   (? (two? v9 && (<v9 = 'regv) && !(flo? <>>v9))
-                                      <>v9 ()))))
+                          (: v9 (vent g env <><as)         ; a homed/riding local (regv): a
+                             (? (two? v9 && (<v9 = 'regv) && !(flo? <>>v9))   ; read-only reg holding the
+                                <>v9 ()))                  ; canonical current value
                           ())
                     al (? al (? (alsafe? g al) al ()) ())   ; staging must never write it
                     (? al                          ; the alias bind: zero forms
@@ -1380,7 +1063,7 @@
                  (: d9 <ds (dtmp >ds ([<d9 (ntmp g <>d9) <>d9] >< benv9))))
              br (cbind <>>inlf args () () ())
              ib0 (peep g 'inlbody 0)
-             _ (pin g 'inlbody (ib0 + 1))          ; the body blinds vmget (name conflation)
+             _ (pin g 'inlbody (ib0 + 1))          ; the body blinds the alias bind (name conflation)
              bf (? (bad? br) 'bad (cbranch g (dtmp <rx <br) e9 cc lbl))
              _ (pins g 'inlbody ib0 'inlining il0 'rpin rp0) ; the bind pins die with the splice
              (unrb l) (? !(two? l) ()
@@ -1416,12 +1099,8 @@
               f2 (cbranch g env <>>e 'eq lbl)
               (? (bad? f1 || bad? f2) 'bad (f1 + f2)))
            (: lf (nlab g ".f")
-              m0 (vmsnap g)
               f1 (cbranch g env <>e 'eq lf)
               f2 (cbranch g env <>>e 'ne lbl)
-              ; label lf joins the first-false edge and the fall: meet, not flush
-              ; (kills are monotone along the cond, the land value lane's rule)
-              _ (vmset g (vmeet m0 (vmsnap g)))
               (? (bad? f1 || bad? f2) 'bad (f1 + f2 + [['label lf]]))))
        (<e = 'lor)
         (? (cc = 'ne)
@@ -1429,30 +1108,22 @@
               f2 (cbranch g env <>>e 'ne lbl)
               (? (bad? f1 || bad? f2) 'bad (f1 + f2)))
            (: lt (nlab g ".t")
-              m0 (vmsnap g)
               f1 (cbranch g env <>e 'ne lt)
               f2 (cbranch g env <>>e 'eq lbl)
-              _ (vmset g (vmeet m0 (vmsnap g)))       ; label lt joins: the land meet's twin
               (? (bad? f1 || bad? f2) 'bad (f1 + f2 + [['label lt]]))))
        ((<e = 'bin) && member? <>e '(eq ne lt le gt ge))
         (: op <>e
            lhs <>>e rhs <>>>e
-           m9 (vmsnap g)                                ; the pre-lane map: fcb's ROLLBACK point
            ; ⚠ LAZY left-then-right: the left PARKS (allocates) before the right evaluates --
            ; allocation order must match execution order, or the right's freed inner temps alias
-           ; the parked left. the float lane FUSES: discard the int-flavored emission (⚠ and the
-           ; map ROLLS BACK to m9 -- a pin born in the dropped forms would survive with its
-           ; establishing load gone, while a pin from BEFORE the lane keeps its load and its
-           ; truth. a transaction, not a clobber), re-evaluate both sides through the double
-           ; shuttle, then branch off the compare. the re-evaluation's own drops and pins land
-           ; on the rolled-back map exactly as they would have on a fresh entry.
+           ; the parked left. the float lane FUSES: discard the int-flavored emission,
+           ; re-evaluate both sides through the double shuttle, then branch off the compare.
            ; UNORDERED (a NaN side) is false for every relation and true only for !=.
            ; x64: above/ae read CF=0, which unordered sets, so < and <= compare SWAPPED, and
            ; ==/!= carry the parity bit in the BRANCH STRUCTURE. arm64: fcmp's gt/ge/eq/ne are
            ; unordered-false natively, so every relation is ONE branch and negrel spells false.
            (fcb z9)
-            (: _ (vmset g m9)
-               a (cgexpr g env lhs ())
+            (: a (cgexpr g env lhs ())
                (? (bad? a) 'bad
                   (: af (? (t32? g)                      ; the gp shuttle moves the PAIR on t32
                            (asflo g a + '((movqrx r0 f0)) + spush2)
@@ -1480,7 +1151,6 @@
                               (? (cc = 'ne) (op = 'ne) (op = 'eq))
                                (mid + cf + [['br 'p lbl] ['br 'ne lbl]])
                               (: sk (nlab g ".u")
-                                 _ (vmflush g)
                                  (mid + cf + [['br 'p sk] ['br 'eq lbl] ['label sk]]))))))))
            (bcc o u) (scc (? (cc = 'ne) o (negrel o)) u)
            ; a pair side (t32 llong) branches off subs/sbcs via pbrf; a constant other side
@@ -1627,7 +1297,6 @@
                        (? (arm? g) (fs + [['br cc lbl]])   ; VCMP/FCMP ne/eq are NaN-honest whole
                           (cc = 'ne) (fs + [['br 'p lbl] ['br 'ne lbl]])
                           (: sk (nlab g ".u")
-                             _ (vmflush g)
                              (fs + [['br 'p sk] ['br 'eq lbl] ['label sk]]))))
                    (pair? g (vty c))                     ; pair truth: either word nonzero (v6-M: no r12 dest; r0 is dead past the branch)
                     (vfs c + [['ors (? (v6m? g) 'r0 'r12) 'r0 'r1] ['br cc lbl]])
@@ -1693,7 +1362,7 @@
    ; bf, read -- nothing generates between), so the free list keeps its order untouched.
    (spare g bf)
     (: (go l) (? !(two? l) ()
-                 (member? <l (peep g 'vpin ()) || member? <l (peep g 'rpin ()))
+                 (member? <l (peep g 'rpin ()))
                   (scare 'spare-pinned <l)
                  (psafe? g bf <l) <l
                  (go >l))
@@ -1768,7 +1437,6 @@
     (? (v6m? g)
        [['call (? (kind = 'shl) '__aeabi_llsl (kind = 'shr) '__aeabi_llsr '__aeabi_lasr)]]
     (: lb (nlab g ".pb") ls (nlab g ".ps") ld (nlab g ".pd")
-       _ (vmflush g)
        one (? (kind = 'shl) '((mov r1 r0) (shlv r1 r2) (li r0 0))
               (kind = 'shr) '((mov r0 r1) (shrv r0 r2) (li r1 0))
                             '((mov r0 r1) (sarv r0 r2) (sar r1 31)))
@@ -1789,7 +1457,6 @@
     (? (v6m? g)
        [['call (? sgn '__aeabi_ul2d '__aeabi_l2d)] '(movqxr f0 r0)]
     (: lu (nlab g ".lu") ld (nlab g ".ld")
-       _ (vmflush g)
        u2d '((cvtui2sd f0 r1)
              (li r2 0) (li r3 1106247680) (movqxr f1 r2)   ; 2^32 (0x41F00000:0)
               (mulsd f0 f1)
@@ -1809,7 +1476,6 @@
     (? (v6m? g)
        ['(movqrx r0 f0) ['call (? usg '__aeabi_d2ulz '__aeabi_d2lz)]]
     (: l1 (nlab g ".d1") lr (nlab g ".dr") ls (nlab g ".ds") ld (nlab g ".dd")
-       _ (vmflush g)
        (['(movqrx r0 f0)
            '(mov r2 r1) '(shr r2 31) '(sub sp sp 16) '(st sp 0 r2)   ; park the sign
            '(mov r2 r1) '(shr r2 20) '(li r3 2047) '(and r2 r2 r3)   ; e
@@ -1872,8 +1538,8 @@
           ()))
    ; load a value from the address in r0, by type -- the dot/deref/clit value tail
    ; (arrays and functions decay to the address; a struct has no register value). the scalar
-   ; tail honors the want hint: the load lands straight in the hinted register, so a decl/asn
-   ; hint holds and the vmap pin fires (the wide/float/aggregate lanes keep their protocols)
+   ; tail honors the want hint: the load lands straight in the hinted register
+   ; (the wide/float/aggregate lanes keep their protocols)
    (loadval g r W9)                                 ; the VALUE at an lvalue rec (mem face consumed: one fused
     (: ty (vty r) fs (vfs r)                        ;  form, and the face's base register is freed here)
        b (? (vm? r) (vmb r) 'r0) o (? (vm? r) (vmo r) 0)
@@ -1982,8 +1648,8 @@
 
    ; the STATIC face of a store target, one door: a deref-const element (afd), or a dot
    ; chain over a frame local whose clval face is (r4, off) with NO emission -- (off ty)
-   ; | (). the frame-direct store lanes ride either identically (a dot's aelem/adrop9 are
-   ; no-ops); afd's type gate is mirrored so every rider stores flat. ⚠ only a pure
+   ; | (). the frame-direct store lanes ride either identically; afd's type gate is
+   ; mirrored so every rider stores flat. ⚠ only a pure
    ; var/dot chain over a loc enters clval -- any other base could emit into the discard.
    (sfd g env e)
     (? (id? <e 'deref) (afd g env e)
@@ -2030,7 +1696,6 @@
         (? !(a64? g) (mkv 'long 'r0 ())
            (: e1 (cgexpr g env <args ())
               e2 (cgexpr g env <>args ())
-              _ (vmflush g)                 ; labels join + the splice clobbers pool regs
               lb (nlab g ".ccd") db (nlab g ".ccdd")
               li9 (nlab g ".cci") di (nlab g ".ccid")
               (? (bad? e1 || bad? e2) 'bad
@@ -2078,7 +1743,6 @@
                   (? (v6m? g) '((call __clzsi2)) '((clz r0 r0)))))
               (t32? g)                     ; the pair: clz(hi), or 32 + clz(lo) when hi is 0
                (: lz (nlab g ".cz") ld (nlab g ".czd")
-                  _ (vmflush g)
                   (mkv 'long 'r0 (asll g e1 +
                     (? (v6m? g)   ; no CLZ on v6-M: libgcc's __clzsi2 (arg/result r0)
                        ['(cmp r1 0) ['br 'eq lz] '(mov r0 r1) '(call __clzsi2) ['jmp ld]
@@ -2087,7 +1751,6 @@
                           ['label lz] '(clz r0 r0) '(add r0 r0 32) ['label ld]]))))
               (rv? g)                      ; no clz in RV64I: the 6-stage binary search (branchy; clz(0) stays UB)
                (: ls (map (\ k (nlab g ".cz")) '(0 1 2 3 4 5))
-                  _ (vmflush g)
                   step (\ kk lb2 ['(mov r2 r0) ['shr 'r2 (64 - kk)] '(cmp r2 0) ['br 'ne lb2]
                                    ['add 'r1 'r1 kk] ['shl 'r0 kk] ['label lb2]])
                   (mkv 'long 'r0 (asint g e1 + pre +
@@ -2114,7 +1777,6 @@
                         (clz r0 r0) (li r1 31) (sub r0 r1 r0)))))
               (rv? g)
                (: ls (map (\ k (nlab g ".tz")) '(0 1 2 3 4 5))
-                  _ (vmflush g)
                   step (\ kk mk lb2 [['li 'r3 mk] '(mov r2 r0) '(and r2 r2 r3) '(cmp r2 0)
                                       ['br 'ne lb2] ['add 'r1 'r1 kk] ['shr 'r0 kk] ['label lb2]])
                   (mkv 'long 'r0 (asint g e1 +
@@ -2204,7 +1866,7 @@
                  (? (bad? e2) 'bad
                     (: pre (tor0 g e1 + spush 'r0 + asint g e2 + spop 'r1)   ; val r0, ptr r1
                        body (? (a64? g)
-                               (: lb (nlab g ".ts") _ (vmflush g)
+                               (: lb (nlab g ".ts")
                                   [['label lb]
                                      ['raw (? (w = 4) '(34 252 95 136) '(34 252 95 200))]   ; ldaxr w2/x2, [x1]
                                      ['raw (? (w = 4) '(32 124 3 136) '(32 124 3 200))]     ; stxr w3, w0/x0, [x1]
@@ -2263,7 +1925,6 @@
            ; declines every following tail. the address is consumed by the splice's own store,
            ; so it reads lean here; x64 IR stays untouched (byte-identity).
            e3f (? (arm? g) (relean (tor0 g e3)) (tor0 g e3))
-           _ (vmflush g)                    ; the a64 mulo lane's labels join
            (? (bad? e1 || bad? e2 || bad? e3) 'bad
               (mkv 'long 'r0 $
                asint g e1 + spush 'r0 + asint g e2 + spush 'r0 +
@@ -2358,10 +2019,8 @@
                             (mkv ty 'r0 [['ld 'r0 'r4 <>en] ['ld 'r2 'r4 (<>en + 8)]])
                            (mkv ty 'r0 [['la 'r1 <>en] '(ld r0 r1 0) '(ld r2 r1 8)]))
                        (? (<en = 'loc)
-                          (: rM (vmget g <>e)          ; a mapped local reads from its pinned register: ZERO forms
-                             (? rM (mkv ty rM ())
-                                (: W (? wnt wnt 'r0)
-                                   (mkv ty W [[(ldop ty) W 'r4 <>en]]))))
+                          (: W (? wnt wnt 'r0)
+                             (mkv ty W [[(ldop ty) W 'r4 <>en]]))
                           (mkv ty 'r0 [['la 'r1 <>en] [(ldop ty) 'r0 'r1 0]]))))))
           (k = 'addr)
            (: r (clval g env <>e)
@@ -2384,26 +2043,8 @@
                   (mkv ['ptr (fnty g <><>e)] 'r0 [['la 'r0 (intern <><>e)]])
                  'bad))
           (k = 'deref)
-           ; the array leg: a pinned element reads as ZERO forms; a miss loads into a
-           ; pinnable register (the consumer's want, else a fresh one) and pins if that
-           ; register carries residency, so the NEXT read is free -- deliver where the
-           ; consumer asked, pin where the class permits, and the two are separate
-           ; questions. pin refused (splice, staging) -> today's path.
-           (: ae (aelem g env e)
-              (? (two? ae && id? <ae 'el)
-                  (: rM (vmget g <>ae)
-                     (? rM (mkv <>>ae rM ())
-                        (: pino (vmon? g && !(0 < peep g 'argseal 0))
-                           W (? wnt wnt (? pino (ralloc g) ()))
-                           r (clval g env e)
-                           (? (bad? r) (: _ (? (W && !wnt) (rfree g W) ()) 'bad)
-                              (: v (loadval g r W)
-                                 _ (? (W && rpeq? g (vreg v) W) (vapin g <>ae W) ())
-                                 _ (? (W && !wnt && !(member? (rp g W) (peep g 'vpin ())))
-                                      (rfree g W) ())
-                                 v)))))
-                 (: r (clval g env e)                ; clval already walked the pointer
-                    (? (bad? r) 'bad (loadval g r wnt)))))
+           (: r (clval g env e)                  ; clval already walked the pointer
+              (? (bad? r) 'bad (loadval g r wnt)))
           (k = 'asn)
            (: rv (? (<<>e = 'var) (vent g env <><>e) 'bad)
               fd (sfd g env <>e)
@@ -2426,24 +2067,7 @@
                      (: ty9 <>>rv !(stru? ty9 || arr? ty9 || flo? ty9)))
                   (: ty <>>rv
                      nm <><>e
-                     ; the vmap hint: aim the rhs at the EXISTING pin's register (a kept
-                     ; loop pin re-establishes in place), else a fresh pool one -- the
-                     ; stored value stays RESIDENT (an unhonored hint goes back)
-                     ; ⚠ the aim HOLD (rpin across the rhs) is what licenses a CALLISH
-                     ; rhs here: a mid-rhs call flush unpins the aim register, a splice
-                     ; body's psreset then frees it, and a later ralloc in the SAME
-                     ; statement (ana_d's comma chains) double-books it -- the hold keeps
-                     ; it off the pool for the statement, the way splice binds already do
-                     hint (? (vmon? g && id? <rv 'loc &&
-                               (homable? ty && member? nm (peep g 'vuniv ())))
-                             (: kr (vmraw g nm) (? kr kr (ralloc g))) ())
-                     _ (? hint (pin g 'rpin ((rp g hint) >< peep g 'rpin ())) ())
-                     r (cgexpr g env <>>e hint)
-                     _ (? hint (pin g 'rpin >(peep g 'rpin ())) ())   ; the hold dies with the rhs
-                     ; unhonored int values FORCE below instead of freeing: only a bad
-                     ; or float rhs hands the hint back
-                     _ (? (hint && (bad? r || flo? (vty r))) (rfree g hint) ())
-                     _ (vmdrop g nm)                  ; the write retires the old mapping
+                     r (cgexpr g env <>>e ())
                      (? (bad? r) 'bad
                         (pair? g ty)                     ; a pair target stores both words (r2 the address
                          (mkv ty 'r0                    ;  temp -- r1 is the pair's own high half)
@@ -2471,24 +2095,9 @@
                                 (? (<rv = 'loc)
                                    [[(stop ty) 'r4 <>rv 'r0]]
                                    [['la 'r1 <>rv] [(stop ty) 'r1 0 'r0]]))
-                            ; forced re-establishment: the canonical (converted) value also
-                            ; lands in the hint and pins -- dead if never re-read (deaddef),
-                            ; a kept loop pin if it is
-                            (? hint (: _ (vmpin g nm hint)
-                                       (mkv ty 'r0 (fs + [['mov hint 'r0]])))
-                               (mkv ty 'r0 fs)))
+                            (mkv ty 'r0 fs))
                         (<rv = 'loc)
-                         (? (member? (rp g (vreg r)) (peep g 'pool0 ()))
-                            (: _ (vmpin g nm (vreg r))       ; the stored value stays mapped
-                               (mkv ty (vreg r) (vfs r + [['st 'r4 <>rv (vreg r)]])))
-                            hint
-                             ; forced re-establishment (the homed-var rhs that declined the
-                             ; hint): store as today, the value ALSO lands in the hint and pins
-                             (: _ (vmpin g nm hint)
-                                (mkv ty (vreg r)
-                                     (vfs r + [['st 'r4 <>rv (vreg r)]
-                                                ['mov hint (vreg r)]])))
-                            (mkv ty (vreg r) (vfs r + [['st 'r4 <>rv (vreg r)]])))
+                         (mkv ty (vreg r) (vfs r + [['st 'r4 <>rv (vreg r)]]))
                         (mkv ty (vreg r) (vfs r + [['la 'r1 <>rv] ['st 'r1 0 (vreg r)]]))))
                  ; FRAME-DIRECT (store-direct's element twin): the slot is static, so no address
                  ; compute, no park, no shuttle -- even past a call on the right. the write
@@ -2496,35 +2105,15 @@
                  ; place and re-pins; unhonored hands the register back (drop-only stands).
                  (two? fd)
                   (: off <fd ty <>fd
-                     ael (aelem g env <>e)
-                     hint (? (two? ael && id? <ael 'el &&
-                              vmon? g && !(0 < peep g 'argseal 0))
-                             (: kr (vmraw g <>ael) (? kr kr (ralloc g))) ())
-                     _ (? hint (pin g 'rpin ((rp g hint) >< peep g 'rpin ())) ())   ; the aim hold (see the scalar lane)
-                     r (cgexpr g env <>>e hint)
-                     _ (? hint (pin g 'rpin >(peep g 'rpin ())) ())
-                     (? (bad? r) (: _ (? hint (rfree g hint) ()) 'bad)
-                        (: _ (adrop9 g env <>e)     ; the write retires its pin(s)
-                           (? (hint && rpeq? g (vreg r) hint && !(flo? (vty r)))
-                               (: fs (vfs r + cvt ty hint + [[(stop ty) 'r4 off hint]])
-                                  _ (vapin g <>ael hint)
-                                  (mkv ty hint fs))
-                              (hint && !(flo? (vty r)))
-                               ; forced re-establishment: the canonical value also lands in
-                               ; the hint and pins (dead if never re-read; a kept loop pin
-                               ; when the element rides a loop)
-                               (: fs (asintt g r ty + cvt ty 'r0 +
-                                      [[(stop ty) 'r4 off 'r0] ['mov hint 'r0]])
-                                  _ (vapin g <>ael hint)
-                                  (mkv ty 'r0 fs))
-                              (: _ (? hint (rfree g hint) ())
-                                 ; a register-riding value stores ITSELF (no r0 bridge; the
-                                 ; consumer owns the register, 2c's ownership rule)
-                                 (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
-                                     !(id? (vreg r) 'r0))
-                                    (mkv ty (vreg r) (vfs r + [[(stop ty) 'r4 off (vreg r)]]))
-                                    (mkv ty 'r0 (asintt g r ty + cvt ty 'r0 +
-                                                 [[(stop ty) 'r4 off 'r0]]))))))))
+                     r (cgexpr g env <>>e ())
+                     (? (bad? r) 'bad
+                        ; a register-riding value stores ITSELF (no r0 bridge; the
+                        ; consumer owns the register, 2c's ownership rule)
+                        (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
+                            !(id? (vreg r) 'r0))
+                           (mkv ty (vreg r) (vfs r + [[(stop ty) 'r4 off (vreg r)]]))
+                           (mkv ty 'r0 (asintt g r ty + cvt ty 'r0 +
+                                        [[(stop ty) 'r4 off 'r0]])))))
                  (: lv0 (clval g env <>e)
                     ; face-direct: the base register survives a write-free rhs, so the
                     ; store reads through the face -- no matv, no address park, no cell
@@ -2599,110 +2188,56 @@
                            (mkv (vty lv) 'r0 (vfs lv + spush 'r0 +
                             as128 g r + spop 'r1 + '((st r1 0 r0) (st r1 8 r2)))))))
                  ; face-direct: the store reads through the face's own base -- no matv, no
-                 ; address park. the element residency rides unchanged (hint/vapin)
+                 ; address park
                  fdd
                   (: b (vmb lv0) o (vmo lv0)
                      ty (vty lv0)
-                     ael (aelem g env <>e)
-                     hint (? (two? ael && id? <ael 'el &&
-                              vmon? g && !(0 < peep g 'argseal 0))
-                             (ralloc g) ())
-                     r (cgexpr g env <>>e hint)
-                     (? (bad? r) (: _ (? hint (rfree g hint) ()) _ (rfree g b) 'bad)
-                        (: _ (adrop9 g env <>e)
-                           (? (hint && rpeq? g (vreg r) hint && !(flo? (vty r)))
-                               (: fs (vfs lv0 + vfs r + cvt ty hint + [[(stop ty) b o hint]])
-                                  _ (rfree g b)
-                                  _ (vapin g <>ael hint)
-                                  (mkv ty hint fs))
-                              (: _ (? (hint && !(rpeq? g (vreg r) hint)) (rfree g hint) ())
-                                 (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
-                                     !(id? (vreg r) 'r0) && !(rpeq? g (vreg r) b))
-                                    (: fs (vfs lv0 + vfs r + [[(stop ty) b o (vreg r)]])
-                                       _ (rfree g b)
-                                       (mkv ty (vreg r) fs))
-                                    (: fs (vfs lv0 + asintt g r ty + cvt ty 'r0 +
-                                           [[(stop ty) b o 'r0]])
-                                       _ (rfree g b)
-                                       (mkv ty 'r0 fs))))))))
+                     r (cgexpr g env <>>e ())
+                     (? (bad? r) (: _ (rfree g b) 'bad)
+                        (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
+                            !(id? (vreg r) 'r0) && !(rpeq? g (vreg r) b))
+                           (: fs (vfs lv0 + vfs r + [[(stop ty) b o (vreg r)]])
+                              _ (rfree g b)
+                              (mkv ty (vreg r) fs))
+                           (: fs (vfs lv0 + asintt g r ty + cvt ty 'r0 +
+                                  [[(stop ty) b o 'r0]])
+                              _ (rfree g b)
+                              (mkv ty 'r0 fs)))))
                  ; the ADDRESS parks in a pool register past a call-free rhs (the vpark
                  ; discipline, extended to the store shuttle): no memory round-trip on the
                  ; address. a call on the right keeps the shuttle -- it would clobber the park.
-                 ; the ARRAY leg's write residency: an element store aims its rhs at a
-                 ; fresh pool register, converts IN PLACE (canonical, like an int home's
-                 ; def), stores from it and RE-PINS the key -- the written value stays
-                 ; resident and the read-after-write is zero forms. write-through holds
-                 ; (the store still emits); unhonored (a homed var, a float) hands the
-                 ; register back and the drop-only path stands.
                  (: lv (matv g lv0)
-                    ael (aelem g env <>e)
                     aR (? (callish? <>>e) () (ralloc g))
-                    hint (? (aR && two? ael && id? <ael 'el &&
-                             vmon? g && !(0 < peep g 'argseal 0))
-                            (ralloc g) ())
-                    r (cgexpr g env <>>e hint)
-                    (? (bad? r) (: _ (? aR (rfree g aR) ())
-                                   _ (? hint (rfree g hint) ()) 'bad)
+                    r (cgexpr g env <>>e ())
+                    (? (bad? r) (: _ (? aR (rfree g aR) ()) 'bad)
                        (: ty (vty lv)
-                          _ (adrop9 g env <>e)     ; an element store retires its pin(s)
-                          (? (hint && rpeq? g (vreg r) hint && !(flo? (vty r) || flo? ty))
-                              (: fs (vfs lv +
-                                     [['mov aR 'r0]] +
-                                     vfs r +
-                                     cvt ty hint +
-                                     [[(stop ty) aR 0 hint]])
-                                 _ (rfree g aR)
-                                 _ (vapin g <>ael hint)
-                                 (mkv ty hint fs))
-                             (: _ (? (hint && !(rpeq? g (vreg r) hint)) (rfree g hint) ())
-                                (? aR
-                                   ; a register-riding value stores ITSELF (no r0 bridge)
-                                   (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
-                                       !(id? (vreg r) 'r0) && !(rpeq? g (vreg r) aR))
-                                      (: fs (vfs lv +
-                                             [['mov aR 'r0]] +
-                                             vfs r +
-                                             [[(stop ty) aR 0 (vreg r)]])
-                                         _ (rfree g aR)
-                                         (mkv ty (vreg r) fs))
-                                      (: fs (vfs lv +
-                                             [['mov aR 'r0]] +
-                                             asintt g r ty +
-                                             cvt ty 'r0 +
-                                             [[(stop ty) aR 0 'r0]])
-                                         _ (rfree g aR)
-                                         (mkv ty 'r0 fs)))
-                                   (mkv ty 'r0
-                                    (vfs lv + spush 'r0 + asintt g r ty + spop 'r1 +
-                                     cvt ty 'r0 + [[(stop ty) 'r1 0 'r0]]))))))))))))
+                          (? aR
+                             ; a register-riding value stores ITSELF (no r0 bridge)
+                             (? (!(flo? (vty r)) && !(two? (cvt ty 'r0)) &&
+                                 !(id? (vreg r) 'r0) && !(rpeq? g (vreg r) aR))
+                                (: fs (vfs lv +
+                                       [['mov aR 'r0]] +
+                                       vfs r +
+                                       [[(stop ty) aR 0 (vreg r)]])
+                                   _ (rfree g aR)
+                                   (mkv ty (vreg r) fs))
+                                (: fs (vfs lv +
+                                       [['mov aR 'r0]] +
+                                       asintt g r ty +
+                                       cvt ty 'r0 +
+                                       [[(stop ty) aR 0 'r0]])
+                                   _ (rfree g aR)
+                                   (mkv ty 'r0 fs)))
+                             (mkv ty 'r0
+                              (vfs lv + spush 'r0 + asintt g r ty + spop 'r1 +
+                               cvt ty 'r0 + [[(stop ty) 'r1 0 'r0]]))))))))))
           (k = 'post)
            (: rv (? (<<>e = 'var) (vent g env <><>e) 'bad)
               fd (sfd g env <>e)
-              ; a PINNED scalar/element steps IN its register (old value to r0, step, store,
-              ; the pin stays valid) -- the loop-carried counter's shape. bool keeps the
-              ; normalize lane; pair/d128 never pin. ⚠ the vmon?/argseal gate is LOAD-
-              ; BEARING: an inlinee's i++ would find the CALLER's pin under the colliding
-              ; name and step the caller's register (the conflation vmon? exists to bar).
-              kr (? (vmon? g && !(0 < peep g 'argseal 0) &&
-                     two? rv && <rv = 'loc &&
-                     (: t9 <>>rv !(stru? t9 || arr? t9 || flo? t9 || bitf? t9 ||
-                                   pair? g t9 || d128? t9 || id? t9 'bool)))
-                    (vmraw g <><>e) ())
-              ka (? (vmon? g && !(0 < peep g 'argseal 0) &&
-                     two? fd && !(id? <>fd 'bool))
-                    (: ae (aelem g env <>e)
-                       (? (two? ae && id? <ae 'el) (vmraw g <>ae) ())) ())
-              _ (? (<<>e = 'var && !kr) (vmdrop g <><>e) ())   ; the RMW retires any mapping
               (? (two? rv && <rv = 'regv)   ; p++ on a register-homed scalar: old in r0, home += step
                   (: ty <>>rv stp (? (ptr? ty) (tsz g <>ty) 1)
                      (mkv ty 'r0 ([['mov 'r0 <>rv]
                                     ['add <>rv <>rv (* stp <>>e)]] + cvt ty <>rv)))
-                 (two? rv && <rv = 'loc && kr)
-                  (: ty <>>rv off <>rv stp (? (ptr? ty) (tsz g <>ty) 1)
-                     (mkv ty 'r0 ([['mov 'r0 kr]
-                                    ['add kr kr (* stp <>>e)]]
-                                  + cvt ty kr
-                                  + [[(stop ty) 'r4 off kr]])))
                  ; STORE-DIRECT (the asn twin): a frame scalar's slot is a STATIC offset --
                  ; read/step/write with a direct frame ld+st. leaves no lean, so a loop
                  ; counter's slot never reads as address-taken and the local can home
@@ -2724,21 +2259,14 @@
                  ; frame-direct element ++/-- (the store-direct twin; pair/d128 stay on afd's far side)
                  (two? fd)
                   (: ty <>fd off <fd stp (? (ptr? ty) (tsz g <>ty) 1)
-                     (? ka
-                        (mkv ty 'r0 ([['mov 'r0 ka]
-                                       ['add ka ka (* stp <>>e)]]
-                                     + cvt ty ka
-                                     + [[(stop ty) 'r4 off ka]]))
-                        (: _ (adrop9 g env <>e)     ; the RMW retires its pin(s)
-                           (mkv ty 'r0 ([[(ldop ty) 'r0 'r4 off]
-                                          ['add 'r1 'r0 (* stp <>>e)]]
-                                        + (? (id? ty 'bool) (cvt ty 'r1) ())
-                                        + [[(stop ty) 'r4 off 'r1]])))))
+                     (mkv ty 'r0 ([[(ldop ty) 'r0 'r4 off]
+                                    ['add 'r1 'r0 (* stp <>>e)]]
+                                  + (? (id? ty 'bool) (cvt ty 'r1) ())
+                                  + [[(stop ty) 'r4 off 'r1]])))
                  (: lv0 (clval g env <>e)
               (? (bad? lv0) 'bad
                  (: ty (vty lv0)
                     stp (? (ptr? ty) (tsz g <>ty) 1)
-                    _ (adrop9 g env <>e)           ; an element RMW retires its pin(s)
                     (? (arr? ty) 'bad
                        (bitf? ty) 'bad             ; bitfield ++/-- -- refuse (rare; use `f = f + 1`)
                        (d128? ty) (nolane g "++/-- is not carried on a wide value (use `x = x + 1`)")
@@ -2778,7 +2306,6 @@
                        (: off (ntmp g 'long)
                           mo ['moor off ty]
                           r (cgexpr g env ['asn mo ['bin <>e mo <>>>e]] ())
-                          _ (adrop9 g env <>>e)    ; the moored store retires element pin(s)
                           (? (bad? r) 'bad
                              (mkv (vty r) (vreg r)
                                   (vfs lv + [['st 'r4 off 'r0]] + vfs r))))))))
@@ -2880,31 +2407,21 @@
                  (mkv (vty b) (vreg b) (vdrop g a + vfs b))))
           (k = 'land)                                ; as a VALUE: cbranch the short-circuit, then settle the bit
            (: lf (nlab g ".f") ld (nlab g ".d")
-              m0 (vmsnap g)
               f (cbranch g env e 'eq lf)
-              ; labels lf/ld JOIN, but need not flush: kills are monotone along the cond, so
-              ; a pin in both the before and after maps held on every arriving edge
-              _ (vmset g (vmeet m0 (vmsnap g)))
               (? (bad? f) 'bad
                  (mkv 'long 'r0 (f + ['(li r0 1) ['jmp ld]
                                           ['label lf] '(li r0 0) ['label ld]]))))
           (k = 'lor)
            (: lt (nlab g ".t") ld (nlab g ".d")
-              m0 (vmsnap g)
               f (cbranch g env e 'ne lt)
-              _ (vmset g (vmeet m0 (vmsnap g)))      ; labels lt/ld join (the land meet's twin)
               (? (bad? f) 'bad
                  (mkv 'long 'r0 (f + ['(li r0 0) ['jmp ld]
                                           ['label lt] '(li r0 1) ['label ld]]))))
           (k = 'cond)
            (: le (nlab g ".e") ld (nlab g ".d")
               c (cbranch g env <>e 'eq le)
-              m0 (vmsnap g)                          ; the branch edge into le
               t (cgexpr g env <>>e ())
-              mt (vmsnap g)                          ; an expression arm always falls out
-              _ (vmset g m0)                         ; the else arm enters off the branch edge
               el (cgexpr g env <>>>e ())
-              _ (vmset g (vmeet mt (vmsnap g)))      ; label ld joins the two edges
               (? (bad? c || bad? t || bad? el) 'bad
                  ; ⚠ C's conditional CONVERTS its arms: one flo arm makes the whole result flo,
                  ; so the INTEGER arm rides asflo at its edge -- typing by the then-arm alone
@@ -2977,7 +2494,6 @@
                             ['jmp ld] ['label lov]
                             '(ld r2 r0 8) '(mov r3 r2) '(add r3 r3 8) '(st r0 8 r3)   ; p = overflow; overflow += 8
                             ['label ld]]))
-              _ (vmflush g)                           ; the walk's labels join
               (? (bad? lv) 'bad
                  (t32? g && (flo? ty || llt? ty || stru? ty))        ; t32 va_arg reads WORDS only (love.c's shape)
                   (nolane g ("no lane for a double/pair/struct va_arg" + ontgt g))
@@ -3115,13 +2631,7 @@
                           (fin ['ptr <>ty] [['la rT <>en]]))
                       (stru? ty || flo? ty) 'no
                       (<en = 'loc)
-                       ; a call-crossing keep serves the arg from its seat: a cs pin survives
-                       ; every sibling's own call (vmcflush) and staging never allocates the
-                       ; seat, so the late emission stays true where a pool pin would not
-                       (: pr (vmget g <>e)
-                          (? (pr && homable? ty && member? pr (peep g 'csbor ()))
-                             (fin ty [['mov rT pr]])
-                             (fin ty [[(ldop ty) rT 'r4 <>en]])))
+                       (fin ty [[(ldop ty) rT 'r4 <>en]])
                       (fin ty [['la rT <>en] [(ldop ty) rT rT 0]])))))))   ; a global: la then a self-based load
    ; the SysV register call, stack overflow included: args 1..6 gp / 1..8 xmm ride registers, the
    ; REST the caller stack (arg7 shallowest). evaluation order is free in C, so the overflow group
@@ -3244,7 +2754,7 @@
                                                 (asll g a + [['st 'sp ov8 'r0] ['st 'sp (ov8 + 4) 'r1]])]
                                              acc)))))
                        ; the delivered seat: aimed and honored by the arg's OWN emission --
-                       ; a zero-form answer (a riding home, a vmap pin) predates the staging
+                       ; a zero-form answer (a riding home) predates the staging
                        ; and an earlier-emitted callish sibling would clobber it: cell.
                        (aim && rpeq? g (vreg a) aim && two? (vfs a) &&
                            !(flo? (vty a) || flo? aty || stru? aty))
@@ -3307,7 +2817,6 @@
        ; address materializes fresh right before the call and again after it (the result)
        sr6 (sretm? g ret)
        sroff (? sr6 (ntmp g ret) 0)
-       _ (pin g 'argseal (peep g 'argseal 0 + 1))       ; the vmap seals across the staging (see vmon?)
        ; a call whose every argument is a pure leaf runs no sibling evaluation, so
        ; nothing between the reads and the call can clobber a register-resident
        ; param -- ezarg's ride lane asks for this.
@@ -3315,7 +2824,6 @@
                           (pure? ags)))
        kr (kls ags 0 (? sr6 1 0) 0 0 ())
        _ (pin g 'ezride ())
-       _ (pin g 'argseal (peep g 'argseal 0 - 1))
        (? (bad? kr) 'bad
           (: ov? (\ kent (<<kent = 'ov))
              ovr (: (go1 l1 acc1) (? !(two? l1) acc1
@@ -3422,8 +2930,7 @@
                                                     (a7 + <><l7)))))))
                     (go7 kr ()))
              (? dir
-                 (: rl (vmcflush g)                       ; the call clobbers every pool reg -- a borrowed cs seat rides, a rostered pin reloads
-                    ; v6-M base ABI: a double result arrives in r0:r1, a bare float as one word
+                 (: ; v6-M base ABI: a double result arrives in r0:r1, a bare float as one word
                     ; (binary32 in r0 -- widen it) -- either lands on the f0 fiction
                     fres (? !(v6m? g && flo? ret) ()
                             (id? ret 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
@@ -3432,10 +2939,9 @@
                     ; on arm), and the result is the temp's address, materialized fresh in r0
                     srin (? sr6 [['lea (nthr (argr g) 0) 'r4 sroff]] ())
                     srout (? sr6 [['lea 'r0 'r4 sroff]] ())
-                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + srout + clean + relods + rl)))
+                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + srout + clean + relods)))
                 (: hr (cgexpr g env hd ())                   ; a function-pointer value: park (x64 rbx; arm64 x15), callr
                    pk (pkr g)
-                   rl (vmcflush g)                        ; the call clobbers every pool reg -- a borrowed cs seat rides, a rostered pin reloads
                    fres (? !(v6m? g && flo? (fnret (vty hr))) ()
                            (id? (fnret (vty hr)) 'float) '((movqxr f0 r0) (cvtss2sd f0 f0))
                            '((movqxr f0 r0)))
@@ -3450,9 +2956,9 @@
                       (t32? g)
                        (: pko (ntmp g 'long)
                           (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['st 'r4 pko 'r0]] +
-                                    spills + ezf + pops + setal + [['ld pk 'r4 pko] ['callr pk]] + fres + clean + relods + rl)))
+                                    spills + ezf + pops + setal + [['ld pk 'r4 pko] ['callr pk]] + fres + clean + relods)))
                       (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['mov pk 'r0]] +
-                                spills + ezf + pops + setal + [['callr pk]] + clean + relods + rl))))))))
+                                spills + ezf + pops + setal + [['callr pk]] + clean + relods))))))))
    ; -- the C99 complex lane (x64): a complex value is its seeded two-member struct (gcplx?), so
    ; it flows everywhere a struct value flows. ARITHMETIC runs here: each side MATERIALIZES into a
    ; double-pair frame temp (the other side's evaluation may call), f0..f3 then carry
@@ -6287,7 +5793,6 @@
               (: po <sl so <>sl
                  es (tsz g (varel ty))
                  _ (pin g 'fesc 1) _ (pin g 'hasasm 1)
-                 _ (vmflush g)
                  dr (cgexpr g env2 (varn ty) ())
                  (? (bad? dr) 'bad
                     (: lf (nlab g ".vla")
@@ -6346,21 +5851,17 @@
                  ((<init = 'init) || ((<init = 'str) && arr? ty) || clarr? ty init)
                   (? ((<init = 'init) && !(aggish? ty)) 'bad      ; a brace for a scalar
                      (: f (cgfill g env3 off ty init)
-                        _ (? (arr? ty) (vadrop9 g (<p + "[")) ())   ; a fill retires element pins (designated overrides re-store)
                         (? (bad? f) 'bad
                            (one >ps env3 (acc + cgzero off span + f)))))
                  (arr? ty) 'bad                          ; a bare-expr init of an array
                  ; the slot is the DESTINATION (doc/misc/proto/dest.l's mem die): a licensed
                  ; constant init of a plain slotted scalar delivers as ONE store-immediate
-                 ; -- no li, no cvt, no r0. the vmap-hint lane keeps priority (residency
-                 ; pays the later reads); bool keeps the protocol (its cvt normalizes to
+                 ; -- no li, no cvt, no r0. bool keeps the protocol (its cvt normalizes to
                  ; 0/1 where si would store the raw constant).
                  (x64t? g && !hreg && (<init = 'num) && charm? <>init &&
                   !(flo? ty || pair? g ty || d128? ty || id? ty 'bool) &&
-                  !(vmon? g && homable? ty && member? <p (peep g 'vuniv ())) &&
                   siop9 ty <>init)
-                  (: _ (vmdrop g <p)
-                     (one >ps env3 (acc + [[(siop9 ty <>init) 'r4 off <>init]])))
+                  (one >ps env3 (acc + [[(siop9 ty <>init) 'r4 off <>init]]))
                  (stru? ty)                              ; a struct local from a struct VALUE (an address): copy its bytes
                   (: r (cgexpr g env3 init ())
                      (? (bad? r) 'bad
@@ -6374,13 +5875,8 @@
                                       acc9)
                                   (go 0 ()))
                            (one >ps env3 (acc + tor0 g r + cpf)))))
-                 (: hint (? (vmon? g && !hreg &&
-                             homable? ty && member? <p (peep g 'vuniv ()))
-                            (ralloc g) ())               ; the vmap hint (asn's twin)
-                    w9 (? hint hint (hreg && !(two? hreg)) hreg ())   ; the home is the DESTINATION (the asn regv arm's shape)
+                 (: w9 (? (hreg && !(two? hreg)) hreg ())   ; the home is the DESTINATION (the asn regv arm's shape)
                     r (cgexpr g env3 init w9)               ; a scalar (a pointer = string rides cgexpr -> la)
-                    _ (? (hint && (bad? r || !(rpeq? g (vreg r) hint))) (rfree g hint) ())
-                    _ (vmdrop g <p)
                     (? (bad? r) 'bad
                        (flo? ty) (one >ps env3 (acc + asflo g r + fstf g ty 'r4 off 'f0))
                        (pair? g ty) (one >ps env3 (acc + asll g r + pst 'r4 off))
@@ -6397,10 +5893,6 @@
                            (: fs (vfs r + ([['mov hreg (vreg r)]] + cvt ty hreg))
                               _ (rfree g (vreg r))
                               (one >ps env3 (acc + fs))))
-                       (hint && !(flo? (vty r)) &&
-                        member? (rp g (vreg r)) (peep g 'pool0 ()))  ; hint set = vmap on + universe local
-                        (: _ (vmpin g <p (vreg r))       ; the init value stays resident
-                           (one >ps env3 (acc + vfs r + [['st 'r4 off (vreg r)]])))
                        (one >ps env3
                             (acc + asintt g r ty +
                              cvt ty 'r0 +
@@ -6840,56 +6332,6 @@
        _ (pin n9 'q (peep n9 'n 0))
        _ (litems items () () () 1)
        (? (0 = peep n9 'q 0) [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0) spa] ()))
-   ; -- the array universe (the vmap's array leg): once-declared 1-D arrays of a gp
-   ; scalar whose every appearance is the element shape (deref (bin + (var x) idx)).
-   ; the scan LICENSES exactly that shape -- recursing into the index only -- and any
-   ; other (var x) marks decay; under & and sizeof nothing licenses (the over-mark
-   ; only shrinks the universe, sizeof x being the memcpy idiom's tell anyway). --
-   (auniv g f)
-    (: items <><>>>f
-       dcl2 {} tak2 {} ar2 {}
-       (ael? ty) (arr? ty && !(gvarr? ty) &&
-                  (: et <>ty (ptr? et ||
-                              member? et '(char uchar bool short ushort int uint long ulong))))
-       (adcl s)
-        (? !(two? s) ()
-           (: k <s
-              (? (member? k '(decl sdecl))
-                  (: (go ps) (? !(two? ps) ()
-                                (: p <ps
-                                   _ (pin dcl2 <p (1 + peep dcl2 <p 0))
-                                   _ (? ((k = 'decl) && ael? <>p)
-                                        (pin ar2 'l (<p >< peep ar2 'l ())) ())
-                                   (go >ps)))
-                     (go <>s))
-                 (adcll (stkids s)))))
-       (adcll l) (? !(two? l) () (: _ (adcl <l) (adcll >l)))
-       (axx e) (? !(two? e) ()                       ; & / sizeof context: every var marks
-                  (? (id? <e 'var && two? >e) (pin tak2 <>e 1)
-                     (: (go l) (? !(two? l) () (: _ (axx <l) (go >l))) (go e))))
-       (aex e)
-        (? !(two? e) ()
-           (id? <e 'deref && two? >e && two? <>e &&
-            (: X <>e (id? <X 'bin && two? >X && id? <>X '+ &&
-                      two? <>>X && id? <<>>X 'var)))
-            (aex <>>>(<>e))                          ; the licensed shape: only the index scans
-           ; a bare array handed to the non-retaining mem trio stays eligible: the callee
-           ; keeps no copy of the address, and the call's own vmflush retires every pin
-           ; (memcpy(x, in, sizeof x) is cc_block's fill -- THE motivating idiom)
-           (id? <e 'call && two? >e && two? <>e && id? <<>e 'var &&
-            member? <><>e '("memcpy" "memset" "memcmp"))
-            (: (goa l) (? !(two? l) ()
-                          (: a2 <l
-                             _ (? (two? a2 && id? <a2 'var) () (aex a2))
-                             (goa >l)))
-               (goa <>>e))
-           (member? <e '(addr szof)) (axx >e)
-           (id? <e 'var && two? >e) (pin tak2 <>e 1)
-           (: (go l) (? !(two? l) () (: _ (aex <l) (go >l))) (go e)))
-       _ (adcll items)
-       _ (aex items)
-       (filter (\ nm ((peep dcl2 nm 0 = 1) && !(peep tak2 nm ())))
-               (peep ar2 'l ())))
    ; the alive pass's forward twin: cgstmt/cgdecl/cgsdecl entries tick this counter and pin the
    ; statement's wrapset (g 'stwrap) off g 'livtab -- a miss pins 'all, the blanket wrap. an
    ; inline splice neither ticks nor re-pins: it compiles under its statement's set.
@@ -6904,25 +6346,19 @@
    ; the regen channels' NEUTRAL state, spelled once: per-fn entry and the
    ; regen teardown ride the same reset (a wrap set dies with its fn)
    (rgreset g)
-    (pins (vmflush g)
+    (pins g
      'livtab ()  ; liveness (set only for a wrap-bearing regen)
-     'vuniv ()   ; vmap off (no universe)
-     'vuarr ()   ; ...and its array leg
      'lhome ()   ; locals-homing map (cgdecl's hook reads it)
      'rgon ()    ; ...and its regen flag (the splice decl gate)
-     'vkeep ()   ; the loop-keep stack (loop-head survival)
-     'lomiss ()  ; ...and its recorded edge misses (regen retries on them)
-     'csbor ()   ; the cs borrow grant (call-crossing keeps take seats from it)
+     'lomiss ()  ; recorded edge misses (regen retries on them)
+     'csbor ()   ; the cs borrow grant
      'csbu ()    ; ...and the seats a build took (the grant shrinks to the use)
-     'saro ()    ; ...and the spill-around roster (vmcflush reloads its pins)
      'pcs ()     ; the param cs-seat grant ((gpi reg)..; the shadow spill reads it)
      'homes ())  ; non-leaf home set (call-fixed + sibs read it)
    ; ...and their ARMED state: a regen build homes locals (lh9, lpick's map)
    ; and wraps per-call off the liveness (av9, alive's answer)
-   (rgset g lh9 av9 au9)
-    (pins (vmflush g)      ; vmflush pin set is disjoint from rgset
-     'vuniv (? (abl? g 'vuniv) () <>>av9)   ; the vmap rides the regen (univ known)
-     'vuarr (? (abl? g 'vuniv) () au9)      ; ...and the array leg its universe
+   (rgset g lh9 av9)
+    (pins g
      'homes ()
      'lhome lh9
      'rgon 1
@@ -6945,18 +6381,16 @@
      'off 8                    ; the frame cursor: slot -8 = saved r3 (see epi)
      'slots ()                 ; the frame's object map ((off n)..; nslot appends)
      'fesc ()                  ; escape flag (the sibcall gate reads it)
-     'inlining () 'inlbody 0   ; splice depth + body depth (vmget's blind)
+     'inlining () 'inlbody 0   ; splice depth + body depth (the bind lanes' blind)
      'inlret () 'inlrt ()      ; splice return label + type (cgstmt's ret door)
-     'inlsnp ()                ; splice ret-edge maps (cginl's end-label meet)
      'inlrb () 'inlrbs ()      ; splice decl-license + its reg roster
      'rpin ()                  ; splice bind pins
-     'argseal 0                ; the vmap's staging seal depth
      'hasasm ()                ; an asm statement pins it (homing off)
      'cssv ()                  ; the callee-saved save forms (a cs regen pins)
      'sret ())                 ; the memory-return slot (the driver re-pins under sr6f)
 
    (cgstmt g env s)
-    (: _ (psreset g)                                 ; a statement never carries a live operand in (vmap pins do)
+    (: _ (psreset g)                                 ; a statement never carries a live operand in (splice binds do)
        myw (stq g)                                   ; this statement's wrapset (alive's forward twin)
        k <s
        (? (k = 'ret)                                                     ; inside an inline splice a return JUMPS to the
@@ -7014,9 +6448,6 @@
                        (tor0 g r + cvt rt 'r0 + (? il [['jmp il]] epj))
                       (tor0 g r + (? il [['jmp il]] epj)))      ; int -> int, as before (a pair value narrows to its lo)
                    (? (!mt || bad? res) res (mustret g res))))
-             ; a splice ret's map rides its jmp edge into the end label (cginl meets the edges)
-             _ (? (il && !(bad? rr9))
-                  (pin g 'inlsnp ((vmsnap g) >< peep g 'inlsnp ())) 0)
              rr9)         ; a musttail ret MARKS its call for sibs
           (k = 'expr)
            (: pe <>s
@@ -7028,20 +6459,17 @@
                  ; statement-position asn of a CONSTANT into a static slot: the value is
                  ; dead and the slot is the destination, so it delivers as ONE store-
                  ; immediate (x64; a value-position asn keeps the protocol -- its answer
-                 ; is read). the vmap-hint lane keeps priority: a resident store pays reads.
+                 ; is read).
                  (: sv (? ((<pe = 'asn) && (<<>pe = 'var)) (vent g env <><>pe) 'bad)
                     sk (? (x64t? g && two? sv && member? <sv '(loc glo) &&
                            (: t9 <>>sv
                               !(stru? t9 || arr? t9 || flo? t9 || pair? g t9 ||
                                 d128? t9 || id? t9 'bool)) &&
-                           !(vmon? g && id? <sv 'loc && homable? <>>sv &&
-                             member? <><>pe (peep g 'vuniv ())) &&
                            (<<>>pe = 'num) && charm? <><>>pe)
                           (siop9 <>>sv <><>>pe) ())
-                    (? sk (: _ (vmdrop g <><>pe)
-                             (? (id? <sv 'loc)
-                                [[sk 'r4 <>sv <><>>pe]]
-                                [['la 'r1 <>sv] [sk 'r1 0 <><>>pe]]))
+                    (? sk (? (id? <sv 'loc)
+                             [[sk 'r4 <>sv <><>>pe]]
+                             [['la 'r1 <>sv] [sk 'r1 0 <><>>pe]])
                        (: r (cgexpr g env pe ())
                           (? (bad? r) 'bad (vdrop g r)))))))
           (k = 'nop) ()
@@ -7050,52 +6478,24 @@
           (k = 'if)
            (: le (nlab g ".e")
               c (cbranch g env <>s 'eq le)
-              m0 (vmsnap g)                            ; the map on le's arriving branch edge
               t (cgstmt g env <>>s)
               (? (bad? c || bad? t) 'bad
                  !(two? <>>>s)
-                  (: _ (vmset g (? (vmout? t) (vmeet m0 (vmsnap g)) m0))   ; label le joins
-                     (c + t + [['label le]]))
-                 (: mt (? (vmout? t) [(vmsnap g)] ()) ; the then edge into ld, when it arrives
-                    _ (vmset g m0)                     ; the else arm enters off the branch edge
-                    el (cgstmt g env <>>>s)
+                  (c + t + [['label le]])
+                 (: el (cgstmt g env <>>>s)
                     ld (nlab g ".d")
-                    me (? (vmout? el) [(vmsnap g)] ())
-                    _ (vmset g (? (two? mt) (? (two? me) (vmeet <mt <me) <mt)
-                                  (two? me) <me ()))   ; label ld joins the arriving edges
                     (? (bad? el) 'bad
                      (c + t + [['jmp ld] ['label le]] + (el + [['label ld]]))))))
           (k = 'while)
            (: lc (nlab g ".c") ld (nlab g ".d")
-              lic (? (vmon? g) (loscan [<>s <>>s]) ())
-              sv9 (peep g 'saro ())
-              km (? (id? lic 'callish) (lomig g env [<>s <>>s] lc)
-                    lic [(lokeep g lc) ()]
-                    [() ()])
-              sd (? lic (loseed g env [<>s <>>s] lc lic <km) [() ()])
-              kp (<km + <sd) mg (<>km + <>sd)          ; the keep + seeds + their movs (laid before lc)
-              _ (vmset g kp)   ; label lc heads the loop block; the keep survives
-              _ (pin g 'vkeep ([lc lc ld kp] >< peep g 'vkeep ()))
               c (cbranch g env <>s 'eq ld)
-              _ (lochk g lc kp)                        ; the exit edge (and the body entry)
-              ; ⚠ the exit map is kp-verified pairs ONLY: a short-circuit cond exits to ld
-              ; from EVERY false leg, and a pin born in a later leg never ran on an earlier
-              ; leg's edge (kills are monotone along the cond, so kp survivors hold on all)
-              mx (vmeet (vmsnap g) kp)
               _ (pins g 'brk (ld >< g 'brk)
-                        'brkm (() >< peep g 'brkm ())
                         'cnt (lc >< g 'cnt))
               b (cgstmt g env <>>s)
-              bs9 <(peep g 'brkm ())
               _ (pins g 'brk >(g 'brk)
-                        'brkm >(peep g 'brkm ())
                         'cnt >(g 'cnt))
-              _ (lochk g lc kp)                        ; the back edge
-              _ (pin g 'vkeep >(peep g 'vkeep ()))
-              _ (pin g 'saro sv9)                      ; the roster dies with its loop
-              _ (lomt g (mx >< bs9))                   ; label ld joins: the exit meet
               (? (bad? c || bad? b) 'bad
-               (mg + [['label lc]] + c + (b + [['jmp lc] ['label ld]]))))
+               ([['label lc]] + c + (b + [['jmp lc] ['label ld]]))))
           (k = 'for)
            (: init <>s cnd <>>s stp <>>>s body <>>>>s
               lc (nlab g ".c") ls (nlab g ".s") ld (nlab g ".d")
@@ -7107,111 +6507,49 @@
               (? (bad? ir) 'bad
                  (: env2 <>ir
                     _ (pin g 'stwrap myw)            ; a decl init re-pinned; the cond is OURS
-                    lic (? (vmon? g) (loscan [cnd stp body]) ())
-                    sv9 (peep g 'saro ())
-                    km (? (id? lic 'callish) (lomig g env2 [cnd stp body] lc)
-                          lic [(lokeep g lc) ()]
-                          [() ()])
-                    sd (? lic (loseed g env2 [cnd stp body] lc lic <km) [() ()])
-                    kp (<km + <sd) mg (<>km + <>sd)  ; the keep + seeds + their movs (after init, before lc)
-                    _ (vmset g kp)   ; label lc heads the loop block
-                    _ (pin g 'vkeep ([ls lc ld kp] >< peep g 'vkeep ()))
                     c (? (two? cnd) (cbranch g env2 cnd 'eq ld) ())
-                    _ (lochk g lc kp)                ; the exit edge (and the body entry)
-                    ; kp-verified pairs only: a short-circuit cond exits from every false leg
-                    mx (? (two? cnd) [(vmeet (vmsnap g) kp)] ())   ; (no edge for a bare for(;;))
                     _ (pins g 'brk (ld >< g 'brk)
-                              'brkm (() >< peep g 'brkm ())
                               'cnt (ls >< g 'cnt))
                     b (cgstmt g env2 body)
-                    bs9 <(peep g 'brkm ())
                     _ (pins g 'brk >(g 'brk)
-                              'brkm >(peep g 'brkm ())
                               'cnt >(g 'cnt)
                               'stwrap myw)           ; the body re-pinned as it went; the step is OURS
-                    _ (lochk g lc kp)                ; the fall-through into ls
-                    _ (vmset g kp)   ; label ls heads the step block (edges verified)
                     st2 (? (two? stp) (cgexpr g env2 stp ()) ())
-                    _ (lochk g lc kp)                ; the back edge
-                    _ (pin g 'vkeep >(peep g 'vkeep ()))
-                    _ (pin g 'saro sv9)              ; the roster dies with its loop
-                    _ (lomt g (mx + bs9))            ; label ld joins: the exit meet
                     (? (bad? c || bad? b || bad? st2) 'bad
-                       (<ir + mg + [['label lc]] + (? (two? cnd) c ()) +
+                       (<ir + [['label lc]] + (? (two? cnd) c ()) +
                         b + [['label ls]] + (? (two? st2) (vdrop g st2) ()) +
                         [['jmp lc] ['label ld]])))))
           (k = 'brk)
-           (? (two? (g 'brk))
-              (: tgt <(g 'brk)
-                 ; leaving loops: check the map against every keep OUTSIDE the broken one
-                 ; (a switch break matches no record and leaves nothing)
-                 (go l) (? !(two? l) 0
-                           (id? (nthr <l 2) tgt)
-                            (: (go2 l2) (? !(two? l2) 0
-                                           (: r2 <l2 _ (lochk g <>r2 (nthr r2 3)) (go2 >l2)))
-                               (go2 >l))
-                           (go >l))
-                 _ (go (peep g 'vkeep ()))
-                 ; the break edge's map snaps onto the innermost roster (ld's exit meet reads it)
-                 bm (peep g 'brkm ())
-                 _ (? (two? bm) (pin g 'brkm (((vmsnap g) >< <bm) >< >bm)) 0)
-                 [['jmp tgt]])
-              'bad)
+           (? (two? (g 'brk)) [['jmp <(g 'brk)]] 'bad)
           (k = 'cont)
-           (? (two? (g 'cnt))
-              (: tgt <(g 'cnt)
-                 rec (assoc tgt (peep g 'vkeep ()))
-                 _ (? (two? rec) (lochk g <>rec (nthr rec 3)) ())   ; a continue edge
-                 [['jmp tgt]])
-              'bad)
+           (? (two? (g 'cnt)) [['jmp <(g 'cnt)]] 'bad)
           (k = 'do)
            (: lt (nlab g ".t") lc (nlab g ".c") ld (nlab g ".d")
-              lic (? (vmon? g) (loscan [<>s <>>s]) ())
-              sv9 (peep g 'saro ())
-              km (? (id? lic 'callish) (lomig g env [<>s <>>s] lt)
-                    lic [(lokeep g lt) ()]
-                    [() ()])
-              sd (? lic (loseed g env [<>s <>>s] lt lic <km) [() ()])
-              kp (<km + <sd) mg (<>km + <>sd)        ; the keep + seeds + their movs (laid before lt)
               _ (pins g 'brk (ld >< g 'brk)
-                        'brkm (() >< peep g 'brkm ())
                         'cnt (lc >< g 'cnt))
-              _ (vmset g kp)   ; label lt heads the loop block
-              _ (pin g 'vkeep ([lc lt ld kp] >< peep g 'vkeep ()))
               b (cgstmt g env <>s)
-              bs9 <(peep g 'brkm ())
               _ (pins g 'brk >(g 'brk)
-                        'brkm >(peep g 'brkm ())
                         'cnt >(g 'cnt)
                         'stwrap myw)                 ; the body re-pinned as it went; the cond is OURS
-              _ (lochk g lt kp)                      ; the fall-through into lc
-              _ (vmset g kp)   ; label lc heads the cond block (edges verified)
               c (cbranch g env <>>s 'ne lt)
-              _ (lochk g lt kp)                      ; the back edge (and the exit edge)
-              _ (pin g 'vkeep >(peep g 'vkeep ()))
-              _ (pin g 'saro sv9)                    ; the roster dies with its loop
-              ; kp-verified pairs only, same as while/for: a short-circuit cond falls out
-              ; from every false leg, and a later leg's cond-born pin never ran on an
-              ; earlier leg's edge
-              _ (lomt g ((vmeet (vmsnap g) kp) >< bs9))   ; label ld joins: the exit meet
               (? (bad? b || bad? c) 'bad
-                 (mg + [['label lt]] +
+                 ([['label lt]] +
                   b +
                   [['label lc]] +
                   (c + [['label ld]]))))
           (k = 'goto) [['jmp (intern (g 'fn + "." + <>s))]]
-          (k = 'lbl) (: _ (vmflush g) [['label (intern (g 'fn + "." + <>s))]])
+          (k = 'lbl) [['label (intern (g 'fn + "." + <>s))]]
           (k = 'asm) (cgasm g env s)
           ; a case/default label -- anywhere in the body, tied to the nearest enclosing switch by
           ; VALUE: the switch's pre-scan pinned value->label into the tablet atop g 'cases, and
           ; this emits it. no enclosing switch, or an unscanned value, refuses rather than mislabel.
           (k = 'case)
            (? !(two? (g 'cases)) 'bad
-              (: lab (peep <(g 'cases) <>s 'no) _ (vmflush g)
+              (: lab (peep <(g 'cases) <>s 'no)
                  (? (lab = 'no) 'bad [['label lab]])))
           (k = 'dflt)
            (? !(two? (g 'cases)) 'bad
-              (: lab (peep <(g 'cases) 'dflt 'no) _ (vmflush g)
+              (: lab (peep <(g 'cases) 'dflt 'no)
                  (? (lab = 'no) 'bad [['label lab]])))
           (k = 'switch)
            (: c (cgexpr g env <>s ())
@@ -7238,7 +6576,6 @@
                     _ (pins g 'brk >(g 'brk)
                               'brkm >(peep g 'brkm ())
                               'cases >(g 'cases))      ; POP
-                    _ (vmflush g)                       ; label lend joins
                     (? (bad? body) 'bad
                        (vfs c + disp + [['jmp dflt]] + (body + [['label lend]]))))))
           'bad))
@@ -7308,7 +6645,6 @@
        il0 (peep g 'inlining ())
        ir0 (peep g 'inlret ())
        irt0 (peep g 'inlrt ())
-       is0 (peep g 'inlsnp ())
        _ (pin g 'inlining ((? !il0 0 il0) + 1))
        rt <(peep (g 'sigs) <>f ['long ()])
        ilb9 (nlab g ".il")
@@ -7332,12 +6668,9 @@
               al (? (nocall && !(flo? pty) && 8 = tsz g pty &&
                      two? <as && <<as = 'var &&
                      !(wrs? <<ps body9))
-                    (: nm9 <><as
-                       pM (vmget g nm9)
-                       (? pM pM
-                          (: v9 (vent g env nm9)
-                             (? (two? v9 && <v9 = 'regv && !(flo? <>>v9))
-                                <>v9 ()))))
+                    (: v9 (vent g env <><as)
+                       (? (two? v9 && <v9 = 'regv && !(flo? <>>v9))
+                          <>v9 ()))
                     ())
               al (? al (? (alsafe? g al) al ()) ())  ; staging must never write it
               (? al                                  ; the alias bind: zero forms
@@ -7387,32 +6720,21 @@
                (dn <>x a9))
            (dnames <x (dnames >x a9)))
        _ (pins g 'inlrb (? nocall (filter paid? (dnames body9 ())) ())
-          'inlrbs () 'inlret ilb9 'inlrt rt 'inlsnp ())
+          'inlrbs () 'inlret ilb9 'inlrt rt)
        ; ⚠ cgitems rides the g tablet, not a direct call: the direct edge closes the
        ; cgexpr->cginl->cgitems->cgstmt->cgexpr cycle, and the loader's analysis then re-weaves
        ; the scope so several `epi` reads compile as book reads before the pin. the indirection
        ; stays until the core analysis owns cycles in big body-less letrecs.
        ib0 (peep g 'inlbody 0)
-       _ (pin g 'inlbody (ib0 + 1))                ; the body blinds vmget (name conflation)
+       _ (pin g 'inlbody (ib0 + 1))                ; the body blinds the alias bind (name conflation)
        ibd (? (bad? br) 'bad ((g 'cgitems) g <br body9 ()))
-       snaps (peep g 'inlsnp ())
-       _ (pins g 'inlbody ib0 'inlret ir0 'inlrt irt0 'inlining il0 'rpin rp0 'inlsnp is0) ; the bind pins die with the splice
+       _ (pins g 'inlbody ib0 'inlret ir0 'inlrt irt0 'inlining il0 'rpin rp0) ; the bind pins die with the splice
        drbs (peep g 'inlrbs ())
        _ (pins g 'inlrb rb0 'inlrbs rbs0)
        (unrb l) (? !(two? l) ()
                    (: _ (rfree g <l) (unrb >l)))
        _ (? (two? br) (unrb (nthr br 2)) ())          ; the park regs return to the pool...
        _ (unrb drbs)                                  ; ...and the body-decl binds with them
-       ; the end label is a forward JOIN, not a clobber: no pin is born inside a splice, so
-       ; every edge map (the ret jmps + the fall-through) descends from entry by deaths only
-       ; and the meet holds -- a caller's loop keep rides an inlined call. a DECLINE discards
-       ; its emission, so it flushes (the hygiene law).
-       ms9 (? (bad? br || bad? ibd) ()
-              ((? (vmout? ibd) [(vmsnap g)] ()) + snaps))
-       _ (? (two? ms9)
-            (: (go l a) (? !(two? l) a (go >l (vmeet a <l)))
-               (vmset g (go >ms9 <ms9)))
-            (: _ (vmflush g) ()))
        (? (bad? br || bad? ibd)                       ; a shape the splice can't take: the real call still can
            (: _ (pin g 'fesc fe0) _ (pin g 'strs strs0) 'no)
           (!fe0 && peep g 'fesc ())                   ; the splice took a frame address (an & arg too -- the
@@ -8073,7 +7395,6 @@
        ; livtab so call-fixed wraps only what a call actually needs
        ng (sr6f || vararg || bad? ir1 || peep g 'hasasm () || anyop? ir1 'sys)
        av (? ng () (alive g f))
-       au (? ng () (auniv g f))                     ; the array leg's universe rides the same gate
        ; a callish loop somewhere licenses the borrow offer. ⚠ on NO arm/riscv target, where the
        ; file is new: measured on love.c/a64, insns against no-cs-at-all -- borrow alone −187,
        ; param homes alone −1,077, both −236, both sharing the file −246. The borrow costs there
@@ -8116,7 +7437,7 @@
        (deopt u) (: _ (pin g 'n n1) _ (pin g 'strs strs1)
                     _ (pin g 'slots sl1) ir1)       ; ir1 stands, accumulators + slot map restored
        ; the REGEN dance: reset the accumulators and the frame to the ir1 snapshot, pin the
-       ; analyses' channels (the vmap universe, the locals homes, the livtab), rebuild under
+       ; analyses' channels (the locals homes, the livtab), rebuild under
        ; the spill policy hp with the seat table's pool, then clear every channel. a 'bad ir2
        ; deopts: ir1 stands.
        (regen hp st)
@@ -8133,7 +7454,7 @@
                _ (pins (fnreset g) ; the attempt starts from the clean record at ir1's accumulator snapshot
                   'n n0 'strs strs0
                   'pool0 lp2 'pool lp2)
-               _ (rgset g lh9 av au)
+               _ (rgset g lh9 av)
                _ (pin g 'csbor bor9)
                _ (pin g 'pcs pc0)
                ; the callee-saved homes AND borrows: one slot each past the r3 cell, stored by
@@ -8179,7 +7500,7 @@
               (: rs (filter (\ k (rideok2 i2 (nthr (argr g) k))) rd)
                  (? (tally rs < tally rd) (leaf rs) (deopt ())))))
        irf (? (bad? ir1) 'bad
-          ((hm || lh || two? ride || two? ih0 || two? au) && !(peep g 'fesc ()) && !(hascall? ir1))
+          ((hm || lh || two? ride || two? ih0) && !(peep g 'fesc ()) && !(hascall? ir1))
            (leaf ride)
           ; calls remain: home + spill where reads beat the wraps -- FN-WIDE, all homable params
           ; or none. ⚠ per-param verdicts were measured BOTH ways and lost: pruning a "losing"
@@ -8223,7 +7544,7 @@
              ; the array leg licenses its own regen: element pins are priced by neither
              ; nr (param reads) nor the homes -- a non-empty universe is the pay; a callish
              ; loop (wb) licenses too, so its keep can take borrowed cs seats
-             (? (two? pcs || pp || lh || two? au || (wb && two? av && two? <>>av))
+             (? (two? pcs || pp || lh || (wb && two? av && two? <>>av))
                 (regen (? (two? pcs || pp) 'shadow ()) st0) ir1)))
        ; ⚠ deadlab and repack join unframe in the POST-CHOICE slot and must never touch the ir1
        ; the rankers read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis,

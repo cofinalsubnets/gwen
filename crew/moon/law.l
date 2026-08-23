@@ -1190,50 +1190,27 @@
    ; -- callee-saved locals (the cs lane): a local touched under NESTED loops (depth >= 2)
    ; homes on r11..r14 (machine r12-r15) even while it CROSSES calls -- the callee preserves
    ; the register, so the home takes no wrap; the price is one save/restore pair in the
-   ; owner's frame, and only compounding iteration counts repay it. here s and the inner j
-   ; ride r11/r12 through g(j) unwrapped; the depth-1 i takes a BORROWED seat (r13, the
-   ; call-crossing keep); and the spilled param n takes the LAST seat by entry SEED --
-   ; stld turns its slot load into the arrival mov and deadst sweeps the spill, so n
-   ; never touches memory and both loop conds run register-register.
+   ; owner's frame, and only compounding iteration counts repay it. here s, i and the inner
+   ; j ride r11/r12/r13 through g(j) unwrapped; the params keep their slots.
    irQ (cgn (pre9 + "long ql(long a, long n) { long s = 0; long i = 0; while (i < n) { long j = 0; while (j < n) { s = s + g(j) + a; j = j + 1; } i = i + 1; } return s; } int main() { return ql(3, 4); }"))
    qf (fnf 'ql <>irQ)
    _ (assert
       (two? irQ)
       (cspair? qf 'r11)                              ; s's save/restore pair, ONCE each -- the calls never wrap it
-      (cspair? qf 'r12)                              ; j's pair likewise
-      (cspair? qf 'r13)                              ; the borrow pairs: i's seat saves like a home
-      (cspair? qf 'r14)                              ; ...and seeded n's
-      (member? '(mov r14 r5) qf)                     ; n enters its seat straight from the arrival
-      (member? '(cmp r13 r14) qf)                    ; both conds register-register
-      (member? '(cmp r12 r14) qf)
-      (member? '(add r12 r12 1) qf)                  ; the inner step is register-only
-      (member? '(add r13 r13 1) qf))                 ; ...and the kept i steps its seat in place
-   ; -- the aim HOLD (the ana_d why, found and fixed): a callish rhs may aim at the pin.
-   ; the hold keeps the aim register on rpin across the rhs, so a mid-rhs call flush plus a
-   ; splice body's psreset cannot hand it to a same-statement ralloc (the comma chain was
-   ; the reachable shape). g rides a borrowed seat (r13) through the chain -- the splice-
-   ; crossing meet keeps it -- and the spliced ok()'s AND lands in a FRESH register, and
-   ; pop() reads g->sp through the live pin.
-   irH (cgn "struct E { long a; long b; long c; long stack; }; struct S { long tag; long x; long sp; }; struct S *push2(struct S *g, long z, long e); static struct S *gx(struct S *g) { g->x = g->x + 1; return g; } static struct S *cix(struct S *g, struct E **b, long k) { g = push2(g, k, (*b)->a); return gx(g); } static long ok(struct S *g) { return ((long)g & 7) == 0; } static long pop(struct S *g) { long *p = (long*)g->sp; g->sp = (long)(p + 1); return *p; } struct S *ana2(struct S *g, struct E **b); long run(struct S *g, struct E **b, long globp, long n) { long i; for (i = 0; i < n; i = i + 1) g = ana2(g, b), g = globp ? cix(g, b, i) : g, g = gx(push2(g, 0, (*b)->stack)), (*b)->stack = ok(g) ? pop(g) : 0; return (long)g; } int main() { return 0; }")
-   hf (fnf 'run <>irH)
-   _ (assert
-      (two? irH)
-      !(member? '(and r13 r13 7) hf)                 ; the spliced ok() must not land its AND on the pin
-      (member? '(and r7 r13 7) hf)                   ; ...it reads the pin into a fresh register
-      (member? '(ld r0 r13 16) hf)                   ; ...and pop() reads g->sp through the LIVE pin
-      (member? '(mov r13 r0) hf)                     ; g = ana2(..) re-establishes IN its seat...
-      (member? '(cmp r11 r12) hf))                   ; ...and the loop cond runs register-register
-   ; -- slot-load elision: loadval honors the want hint (a decl/asn init from a member/deref
-   ; lands straight in the hinted register, so the vmap pin fires and re-reads are zero forms),
-   ; and stld rides a whole straight-line run (a bound slot's reload forwards from the register
-   ; until a redef, an overlapping store, a label, or a bar).
+      (cspair? qf 'r12)                              ; i's pair likewise
+      (cspair? qf 'r13)                              ; ...and the inner j's
+      (member? '(cmprm r12 sp 16) qf)                ; the outer cond fuses against n's slot
+      (member? '(add r13 r13 1) qf)                  ; the inner step is register-only
+      (member? '(add r12 r12 1) qf))                 ; ...and so is i's
+   ; -- slot-load elision: stld rides a whole straight-line run (a bound slot's reload
+   ; forwards from the register until a redef, an overlapping store, a label, or a bar).
    irE (cgn (pre9 + "long f2(long *p) { long a = p[0]; if (a & 1) return a; return g(a); } int main() { return f2((long*)0); }"))
    irF (cgn (pre9 + "long q2(long *p) { long a = p[0]; g(a); return a + (a >> 3); } int main() { return q2((long*)0); }"))
    _ (assert
       (two? irE) (two? irF)
-      ; the pinned deref: a lands in r5 and rides it end to end -- slot-free, frameless
-      (member? '(ld r5 r6 0) (fnf 'f2 <>irE))
-      (member? '(test r5 1) (fnf 'f2 <>irE))
+      ; the deref lands on the protocol and rides it -- slot-free, frameless
+      (member? '(ld r0 r6 0) (fnf 'f2 <>irE))
+      (member? '(test r0 1) (fnf 'f2 <>irE))
       (= 0 (splds (fnf 'f2 <>irE)))
       ; a crosses the call (one wrap reload), then the second read FORWARDS: one sp load total
       (= 1 (splds (fnf 'q2 <>irF))))
@@ -1285,17 +1262,15 @@
    _ (assert
       (two? irZp)
       (spillrd? zpf 'r6 'ld4 'r0))                   ; n spills at entry, every read re-extends from the slot
-   ; ...and the callish accumulator s now RIDES: the aim hold lets `s += ext(..)` keep s
-   ; on a borrowed cs seat through the call (the write re-establishes in the seat), the
-   ; exit meet carries it OUT of the loop (the return reads the seat), and with the slot
-   ; load-free deadst sweeps the write-through stores entirely;
-   ; the pointer param a rides a SEEDED seat, so the indexed arg serves from r12
+   ; ...and the callish accumulator s homes a cs seat (the callee preserves it), so the
+   ; loop never touches its slot and the return reads the seat; the pointer param a
+   ; reloads per iteration
    _ (assert
       (member? '(add r11 r1 r0) zpf)                 ; s's def lands in its seat
       (member? '(mov r0 r11) zpf)                    ; ...and the return reads the seat
       (= 1 (nldrg zpf 'r11))                       ; s's slot is gone: r11 reloads at its cs restore, nowhere else
-      (member? '(mov r13 r5) zpf)                    ; a's seed: arrival straight to the seat (stld+deadst)
-      (member? '(ldx r6 r13 r12 8 0) zpf))           ; ...and the indexed arg reads the seat, indexed by i's own
+      (member? '(ld r6 sp 8) zpf)                    ; a reads its slot per iteration...
+      (member? '(ldx r6 r6 r12 8 0) zpf))            ; ...and the indexed arg rides it, indexed by i's home
    ; -- priced int-param homes (the leaf lane): an int param whose slot touches pay the
    ; entry cvt takes its POSITIONAL pool seat -- after the locals pick, and only while the
    ; pool stays deep (>= 2 free after the take). f4: n homes its own arrival seat (one sx4,
@@ -1398,10 +1373,9 @@
 (: irB (cgn "long g(long x); long f(long n) { g(n); long s = 0; long i = 0; while (i < n) { s = s + i*i; i = i + 1; } return s; } int main() { return f(4); }")
    (assert
       (two? irB)
-      (two? (ldofs <>irB 'ld 'r10))                   ; n's seed, laid before the head
-      (member? '(cmp r9 r10) <>irB)                   ; the cond rides it
-      (member? '(imul r7 r9 r9) <>irB)                ; i*i on the home, 3-address
-      (member? '(add r5 r5 r7) <>irB)                 ; s accumulates in its home
+      (member? '(cmprm r9 sp 0) <>irB)                ; the cond fuses against n's slot
+      (member? '(imul r10 r9 r9) <>irB)               ; i*i on the home, 3-address
+      (member? '(add r5 r5 r10) <>irB)                ; s accumulates in its home
       (member? '(add r9 r9 1) <>irB)))                ; i++ is ONE add on the home
 
 ; -- arm64 homing (stage D): the same alive machinery rides AAPCS64. homes come
@@ -1458,9 +1432,9 @@
       (= 0 (hmovs <>irKa))                           ; born-at-a-call locals keep their slots
       (member? '(li r6 0) <>irBa)                    ; the free local s homes and its init
       !(member? '(mov r6 r0) <>irBa)                 ;  DELIVERS there (the die: no r0 bridge)
-      (member? '(ld r9 fp -16) <>irBa)               ; n re-enters by SEED (the call killed its pin)
-      (member? '(cmp r5 r9) <>irBa)                  ; ...so the cond runs register-register
-      (member? '(add r6 r6 r7) <>irBa)               ; ...and s accumulates 3-address (i*i in r7)
+      (member? '(ld r0 fp -16) <>irBa)               ; n reloads per iteration (no cross-call pin)
+      (member? '(cmp r5 r0) <>irBa)                  ; ...and the cond compares off the reload
+      (member? '(add r6 r6 r9) <>irBa)               ; s accumulates 3-address (i*i in r9)
       (member? '(add r5 r5 1) <>irBa)                ; the loop counter i ALSO homes (r5): its
       (= 0 (wrapsa <>irBa))))                        ; ++ no longer leans its own slot. zero wraps
 
@@ -1822,176 +1796,6 @@
       (spillrd? bc 'r0 'ld 'r1)                      ; ...and the cell holds the left across the call
       (member? '(ld r0 r6 0) bi)                     ; a constant right: the immop lane unchanged
       (member? '(add r0 r0 1) bi)))
-
-; -- array slots: a once-declared
-; 1-D gp-scalar array whose every appearance is x[e] gets element pins under minted
-; keys -- a READ pins (the next read is zero forms), a WRITE drops (a constant index
-; its own key, a variable index the whole array), the slot stays the source of truth.
-; any bare x is decay: the escape gate keeps the array out and every read reloads.
-(: ; the whole-frame twins and the array-base anchor (repack seats the array, so the laws
-   ; that survive slot traffic speak RELATIVE to the lea the escape leaves standing)
-   (ldspa fs) (tally (filter (\ f (two? f && id? <f 'ld && id? <>>f 'sp)) fs))
-   (stspa fs) (tally (filter (\ f (two? f && member? <f '(st si) && id? <>f 'sp)) fs))
-   irA (cgn "long f(long a, long b) { long x[4]; x[0] = a; x[1] = b; x[2] = x[0] + x[1]; x[3] = x[0] + x[2] + x[1]; return x[3] - x[2]; } long u(long a) { long x[2]; x[0] = a; long t = x[0] + x[0]; x[0] = t + 1; return t*10 + x[0]; } long u2(long a, long b) { long x[2]; x[0] = a + 1; long t = x[0]; x[0] = b; return t*10 + x[0]; } long v(long a, long i) { long x[2]; x[0] = a; x[1] = a + 3; long s = x[0] + x[1]; x[i] = 9; return s*100 + x[0] + x[1]; } long e(long a) { long x[2]; long *p = x; x[0] = a; p[0] = 5; return x[0] + x[0]; } long gg; long q0(void) { long x[2]; x[0] = gg; x[1] = gg + 1; x[0] = x[0] + x[1]; return x[0] + x[1] + x[1]; } int main() { return 0; }")
-   ff (fnf 'f <>irA)
-   uf (fnf 'u <>irA)
-   u2f (fnf 'u2 <>irA)
-   vf (fnf 'v <>irA)
-   ef (fnf 'e <>irA)
-   q0f (fnf 'q0 <>irA)
-   (assert
-      (two? irA)
-      ; -- frame-direct + write residency + FORCED re-establishment: every write lands its
-      ; canonical value in a pool register and pins (honored free, unhonored one mov --
-      ; dead if never re-read), so a call-free fn's eligible traffic registerizes FULLY:
-      ; no loads, no frame address, and deadst elides every write-only slot's stores. --
-      (= 0 (ldspa ff))                               ; f: all element reads ride pins -- no slot load at all
-      (= 0 (leac ff))                                ; no lea/lean: every touch frame-direct
-      (= 0 (stspa ff))                               ; no slot is ever read: stores ELIDED whole
-      (= 0 (ldspa uf))                               ; the write re-pins: reads-after-write zero forms
-      (= 0 (ldspa u2f))                              ; the homed-var rhs that DECLINED the hint now
-                                                     ;   FORCES: one mov re-establishes, no reload
-      (= 1 (ldsp vf (aeb vf)))                       ; x[i]=9 drops the whole array: x[0] reloads
-      (= 1 (ldsp vf ((aeb vf) + 8)))                 ;   after (each pre-drop read rode its pin)
-      (= 1 (stsp vf (aeb vf)))                       ; the variable write keeps slots LIVE (a lea
-                                                     ;   stands): write-through survives here
-      (= 2 (ldsp ef (aeb ef)))                       ; bare x escaped: no pin, every read loads
-      ; -- the leg licenses its own regen (nothing else pays in q0: no params, no
-      ; scalar locals -- without the au license the vmap never arms here) --
-      (= 0 (ldspa q0f))                              ; x[0] and x[1]: every read rides its pin
-      (= 0 (stspa q0f))                              ; ...so the slots are write-only and the stores drop
-      (= 0 (leac q0f))))                             ; frame-direct throughout
-
-; -- loop-head survival (the vmap crossing its first boundary): at a loop head the pinned
-; map is KEPT and verified at every arriving edge (back jmp, continues, the label
-; fall-throughs, breaks vs the enclosing keeps); a miss bars the entry and the regen
-; retries, so only a zero-miss build ships. writes re-establish IN the pinned register
-; (the aim + the force + the kept post twin), so counters, accumulators and constant-
-; indexed elements ride registers across iterations -- with deadst's elision, a
-; call-free loop fn drops its frame entirely. a call/asm/goto/label/switch in the
-; subtree refuses the keep statically; a variable-index element write drops the array
-; mid-loop and the CHECK bars it (lo7 -- the reload proves the bar engaged).
-(: irL (cgn "long lp1(long n) { long x[2]; long s = 0; long i = 0; x[0] = n; x[1] = n + 1; while (i < 100) { s = s + x[0] + x[1]; i = i + 1; } return s + i; } long lp2(long n) { long a = 0; long i; for (i = 0; i < n; i++) a += i; return a; } long lp3(long n) { long s = 0; long i = 0; while (i < n) { s += lp2(i); i = i + 1; } return s; } long lo6(long n) { long s = 0; long j = 0; for (j = 0; j < n; j++) { long k = j; while (k > 0) { s = s + k; k = k - 1; } } return s; } long lo7(long n) { long x[2]; x[0] = n; x[1] = n + 1; long i = 0; long s = 0; while (i < n) { s = s + x[0]; x[i & 1] = i; i = i + 1; } return s + x[0] + x[1]; } long tick(long v); long lp4(long n) { long s = 0; long i = 0; while (i < n) { s = s + tick(i); i = i + 1; } return s + i; } long lo8(long n) { long x[2]; long s; long i; long b; x[0] = n; s = 0; i = 0; b = 0; while (i < n) { b = n; s = s + b + i + x[0] + n; i++; } tick(s); return s + i + b + x[0]; } int main() { return 0; }")
-   lp1f (fnf 'lp1 <>irL)
-   lp2f (fnf 'lp2 <>irL)
-   lp3f (fnf 'lp3 <>irL)
-   lp4f (fnf 'lp4 <>irL)
-   lo6f (fnf 'lo6 <>irL)
-   lo7f (fnf 'lo7 <>irL)
-   lo8f (fnf 'lo8 <>irL)
-   (assert
-      (two? irL)
-      (= 0 (ldc lp1f)) (= 0 (stc lp1f)) (= 0 (leac lp1f))   ; while: s/i/x[0]/x[1] register-resident, frame gone
-      (= 0 (ldc lp2f)) (= 0 (stc lp2f))                     ; for: the counter and the accumulator ride (i++ steps in place)
-      (2 <= ldc lp3f)                                       ; an inlinee carrying its OWN loop refuses the keep (the inner
-                                                            ;   head flush empties every ret edge): reloads stand
-      (member? '(mov r6 r12) lp4f)                          ; an EXTERN call: i keeps on a borrowed cs seat -- the arg rides it
-      (member? '(add r12 r12 1) lp4f)                       ; ...steps in place across the call
-      (member? '(mov r11 r1) lp4f)                          ; s (callish-written) re-establishes in ITS seat -- the aim hold's class
-      (member? '(st sp 8 r11) lp4f)                         ; ...and the pre-call park reads the seat, not the slot
-      (member? '(mov r13 r6) lp4f)                          ; n's seed: arrival straight to the last seat (stld+deadst)
-      (member? '(cmp r12 r13) lp4f)                         ; ...and the cond runs register-register
-      (member? '(add r0 r11 r12) lp4f)                      ; the exit meet: s + i both ride OUT of the loop...
-      (= 4 (ldc lp4f)) (= 4 (stc lp4f))                     ; ...so i/s never touch their slots at all -- the only
-                                                            ;    sp traffic is the park pair + three cs save/restores
-      (= 0 (ldc lo6f)) (= 0 (stc lo6f))                     ; nested: the outer keeps survive the inner loop
-      (2 <= ldsp lo7f (aeb lo7f))                           ; x[i&1]=i drops x[0] mid-loop: the edge CHECK barred the
-                                                            ;   keep (a zero-miss build ships) -- x[0] reloads in-loop
-                                                            ;   AND after (2+; an unbarred keep would serve the first)
-      (= 1 (ldsp lo7f ((aeb lo7f) + 8)))                    ; x[1], dropped too, reloads once after the loop
-      ; -- lo8: a call AFTER the loop bars the POOL homes (s/i/b cross it), but the cs lane
-      ; does not care -- the callee preserves a seat, so s and i home there outright and
-      ; the loop never touches their slots. b = n still re-establishes by FORCE (the regv
-      ; rhs that ignores the aim) and reloads once after the call --
-      (= 1 (ldsp lo8f 8))                                   ; b: the force (one mov, no in-loop reload)
-      (= 1 (ldsp lo8f 16))                                  ; x[0]: the element pin rides the loop
-      (member? '(add r11 r10 r6) lo8f)                      ; s accumulates in its cs home...
-      (member? '(add r12 r12 1) lo8f)                       ; ...and i steps in its own -- no slot for either
-      (cspair? lo8f 'r11)                                   ; ...each paying one save/restore, once
-      (cspair? lo8f 'r12)))
-
-; -- spill-around (the keep past seat exhaustion): a callish loop with more scalar pins
-; than free cs seats keeps the surplus on their POOL regs -- write-through makes the spill
-; half free, so every call in the loop just reloads the rostered pin from its slot
-; (vmcflush answers the forms). the license is static: reads in the subtree >= its calls
-; (a nested loop's count x8), so a written-only or barely-read pin refuses and the dead
-; per-call reload never exists. soundness rides the same lochk edges as every keep.
-(: irR (cgn "long tick(long v); long spl(long n) { long a = 1; long b = 2; long c = 3; long d = 4; long e = 5; long f = 6; long i = 0; long s = 0; while (i < n) { s = s + tick(i) + a + b + c + d + e + f; i = i + 1; } return s + a + b + c + d + e + f; } long nrg(long n) { long x = 0; long a = 1; long b = 2; long c = 3; long d = 4; long e = 5; long i = 0; long s = 0; while (i < n) { x = tick(i); s = s + a + b + c + d + e; i = i + 1; } return s + x + a + b + c + d + e; } int main() { return 0; }")
-   splf (fnf 'spl <>irR)
-   nrgf (fnf 'nrg <>irR)
-   (assert
-      (two? irR)
-      (member? '(mov r14 r7) splf)                   ; i and s take seats now, so only d and e follow ...
-      (= 1 (nldrg splf 'r5))                         ; ...then a spills around: the post-call reload into ITS
-                                                     ;    pin is a's ONLY load -- the exit meet carries the
-                                                     ;    pin out, so even the post-loop read rides the register
-      (member? '(add r8 r1 r5) splf)                 ; the in-loop use reads the register
-      (member? '(mov r7 r6) splf)                    ; n's SEED, stld'd to the arrival mov
-      (member? '(cmp r11 r7) splf)                   ; ...so the cond runs register-register (i on its seat)
-      (member? '(mov r14 r7) nrgf)                   ; nrg: c and d seat, a/b/e roster ...
-      (= 1 (ldsp nrgf 24))                           ; ...but write-only x REFUSES the roster: store + post-loop
-                                                     ;    read only, no dead per-call reload
-      (= 1 (ldsp nrgf 16))))                         ; a (seeded, rostered): the per-call reload only --
-                                                     ;    the post-loop read rides the surviving pin
-
-; -- splice-crossing keeps: a splice's end label is a forward JOIN (its ret jmps + the
-; fall-through), not a clobber -- no pin is born inside a splice, so every edge map descends
-; from entry by deaths only and the meet holds. a loop keep therefore RIDES an inlined call:
-; a call-free or branchy inlinee costs the pins nothing, and a callish inlinee's real call
-; is spared by the same vmcflush the extern call gets (seats ride, rostered pins reload).
-; an inlinee carrying its own loop still refuses honestly (the inner head flush empties
-; every edge map -- lp3 above keeps that law).
-(: (ldc9 fs) (tally (filter (\ f (two? f && member? <f '(ld ld1 ldu1 ld2 ldu2 ld4 ldu4) && id? <>>f 'sp)) fs))
-   (stc9 fs) (tally (filter (\ f (two? f && member? <f '(st st1 st2 st4 si si1 si2 si4) && id? <>f 'sp)) fs))
-   irS (cgn "static long half(long v) { return v / 2; } static long pick(long v) { if (v > 10) return v - 10; return v; } long tick(long v); static long wrap(long v) { return tick(v) + 1; } long slk(long n) { long a = 1; long b = 2; long i = 0; long s = 0; while (i < n) { s = s + half(i) + a + b; i = i + 1; } return s + a + b; } long erk(long n) { long a = 3; long b = 5; long i = 0; long s = 0; while (i < n) { s = s + pick(i) + a + b; i = i + 1; } return s + a + b; } long wlk(long n) { long a = 4; long i = 0; long s = 0; while (i < n) { s = s + wrap(i) + a; i = i + 1; } return s + a; } int main() { return 0; }")
-   slkf (fnf 'slk <>irS)
-   erkf (fnf 'erk <>irS)
-   wlkf (fnf 'wlk <>irS)
-   (assert
-      (two? irS)
-      (member? '(mov r11 r7) slkf)                   ; slk: a's pin migrates onto a seat...
-      (member? '(add r7 r1 r11) slkf)                ; ...and the use past the call-free splice reads it
-      (member? '(add r7 r10 r11) slkf)               ; the exit meet: the return reads the seat...
-      (= 1 (ldc9 slkf)) (= 1 (stc9 slkf))            ; ...so the only sp traffic is the one cs save/restore
-      (member? '(mov r11 r7) erkf)                   ; erk: the same keep through an EARLY-RETURN inlinee --
-      (member? '(add r7 r1 r11) erkf)                ;   two ret edges meet at the end label and a still rides
-      (member? '(add r7 r9 r11) erkf)                ;   (s's seat: the left now rides its pin through the splice)
-      (= 1 (ldc9 erkf)) (= 1 (stc9 erkf))
-      (member? '(mov r14 r6) wlkf)                   ; wlk (a CALLISH inlinee): n seats...
-      (member? '(cmp r11 r14) wlkf)                  ; ...the cond runs register-register
-      (member? '(mov r6 r11) wlkf)                   ; the inner real call's arg served from i's seat
-      (member? '(add r11 r11 1) wlkf)                ; i steps in place, its slot never touched
-      (member? '(add r12 r1 r13) wlkf)               ; a reads its seat, s lands in its own
-      (member? '(add r0 r12 r13) wlkf)               ; the exit meet: s + a ride out on their seats
-      (= 1 (nldrg wlkf 'r1))                         ; s: the pre-call park read (the recorded residue) --
-      (= 1 (nldrg wlkf 'r12))))                      ;   its slot and every other in-loop load are gone
-
-; -- element pins across calls: a constant-indexed element of a non-escaping frame array
-; is a static slot, so its pin seats and rosters exactly like a scalar's (lomig's element
-; arm; the per-call reload is one direct ld). a written element re-establishes IN its
-; seat (vaepin, the borrow-aware re-pin), and a seat-riding element whose slot is never
-; re-read loses the slot entirely (deadst sweeps the dead write-through store).
-(: irP (cgn "long tick(long v); long epc(long n) { long x[2]; long s = 0; long i = 0; x[0] = n; x[1] = n + 1; while (i < n) { s = s + tick(i) + x[0] + x[1]; i = i + 1; } return s + x[0]; } long epw(long n) { long x[2]; long s = 0; long i = 0; x[0] = n; x[1] = 3; while (i < n) { s = s + tick(i) + x[0] + x[1]; x[1] = i; i = i + 1; } return s + x[1]; } int main() { return 0; }")
-   epcf (fnf 'epc <>irP)
-   epwf (fnf 'epw <>irP)
-   (assert
-      (two? irP)
-      (member? '(mov r14 r6) epcf)                   ; epc: x[0]'s pin migrates onto a seat...
-      (member? '(mov r13 r9) epcf)                   ; ...and x[1]'s
-      (member? '(add r9 r1 r14) epcf)                ; the in-loop element reads ride the seats
-      (member? '(add r11 r9 r13) epcf)
-      (member? ['ld 'r5 'sp (sof epcf 'st 'r6)] epcf)  ; n spills around: the post-call reload into ITS pin
-      (member? '(cmp r12 r5) epcf)                   ; ...and the cond runs register-register
-      (member? '(add r0 r11 r14) epcf)               ; the exit meet: s + x[0] ride out on their seats...
-      (= 1 (nldrg epcf 'r14))                        ; ...so x[0]'s slot is gone entirely
-      (= 1 (ldsp epcf (sof epcf 'st 'r6)))           ; n: the roster reload is its only load
-      (= 1 (nldrg epcf 'r13))                        ; x[1] rides its seat end to end: deadst swept
-                                                     ;   the dead store, the slot never exists
-      (member? '(mov r13 r12) epwf)                  ; epw: the mid-loop element write re-establishes IN
-                                                     ;   the seat (vaepin)...
-      (member? '(add r0 r11 r13) epwf)               ; ...the exit meet rides it out...
-      (= 1 (nldrg epwf 'r13))                        ; ...and the WRITTEN element never touches memory either
-      (member? '(add r9 r1 r14) epwf)))              ; x[0] still rides
 
 ; -- the liveness kit, on hand-laid forms rather than through a compile: these are the
 ; kit's OWN laws, and they are unit-shaped on purpose -- every consumer reads it as an

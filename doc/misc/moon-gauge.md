@@ -411,6 +411,39 @@ loop-keep family (`lo*`) serves both the vmap keeps and the cs borrows — a del
 the vmap complex has to re-price `cs` after it, since the keeps' zero may be hiding
 inside cs's +5.0%. That sequencing is the pare plan's rung 3.
 
+## the vmap cut (2026-08-23) — rung 3's first stroke, and what the gate caught
+
+The complex is out of gen.l: the pins and their 29 flush sites, the array leg (`auniv`,
+the element keys), the loop keeps (`lokeep`/`lochk`/`lomig`/`loseed`/`lomt`), the forward
+joins and the staging seal — 8,606 → 7,927 lines, plus four law blocks that pinned the
+mechanism (−198 in law.l; five neighboring blocks re-pinned to the new emission). The
+knob's seams stay for the surviving mechanisms.
+
+The gate: the fixpoint closes, and the cut's base prices as the census's ablation —
+corpus instructions match to five digits (32.545 G both), cycles 11.435 G → **11.200 G**,
+the −2% the census promised, banked. Byte-identity against the ablated reference was the
+first gate and it FAILED at one seam, which is the finding: the knob had left `two? au`
+(the array universe, still computed) licensing REGENS whose seat table withheld unhomed
+params' home registers — a pointless rebuild whose only trace was a rotated pool pick in
+the memcpy-idiom functions. The cut removes the license too, and the hot bodies were held
+to the stronger instrument instead: `host_chacha20` and `host_poly1305` are
+**instruction-identical** between the reference and the cut.
+
+⚠ **cross-fill wall clocks lied here twice, and the identity check is the instrument.**
+chacha read +12% against a fill from the previous day — with byte-equal machine code.
+crc32, a control this cut cannot touch, moved +4.5% the same way. A day of thermal drift
+is bigger than the ±4% floor; when a cut's rows move, diff the FUNCTIONS before
+believing the clock.
+
+The re-price after the cut (the sequencing law): `cs` holds at **+6.0%** cycles — the
+keeps' zero was not hiding inside it — and **`csbor` now prices at −0.2% with
+base-identical .text**: the borrow license (blscan, `wb`, the `att` grant dance) is dead
+weight and its cut is licensed. `pcs` stays on the roster behind it.
+
+⚠ a harness run leaves out/host ABLATED (its last configuration's objects); the seed then
+reads FIXPOINT NOT OK against the mixed artifact. `moon-ablate.sh` clears the moon
+objects on exit now so the next make rebuilds clean.
+
 ## where the cycles go — the attribution, run 2026-08-16 (Zen 3, Ryzen 7 5825U)
 
 Intel's `--topdown` does not apply here; the Zen equivalents are

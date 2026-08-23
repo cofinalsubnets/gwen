@@ -6,7 +6,7 @@
 # subtracted, median of N), and .text bytes. Deltas against the base row.
 #   sh tools/moon-ablate.sh [samples] [conf ..]
 # no confs: base ralloc tpool cs tpool,cs -- the gauge's A/B/C/D points.
-# knob names: ralloc tpool cs lhome vuniv csbor homes pcs (gen.l's ablenv).
+# knob names: ralloc tpool cs lhome csbor homes pcs (gen.l's ablenv).
 set -u
 R=$(cd "$(dirname "$0")/.." && pwd)
 cd "$R" || exit 1
@@ -66,3 +66,7 @@ for conf in $CONFS; do
            n, c, (c/bc-1)*100, i, (i/bi-1)*100, t, (t/bt-1)*100}'
 done
 echo "moon-ablate: deltas vs the FIRST row; +-0.7% is the cycle floor on this box (moon-gauge)"
+# the last configuration left out/host ablated: dirty the moon objects so the next
+# make rebuilds clean -- a seed against an ablated artifact reads FIXPOINT NOT OK
+rm -rf "$R"/out/host/moon "$R"/out/host/fix
+echo "moon-ablate: out/host/moon cleared -- the next make rebuilds the artifact clean"
