@@ -3,26 +3,26 @@
 //
 //   (inflate s n) -> the bytes | ()    s a raw DEFLATE stream, n its inflated size or 0
 //
-// a TWIN, not a replacement: gz-puff stays the readable statement of RFC 1951 and the
+// a twin, not a replacement: gz-puff stays the readable statement of RFC 1951 and the
 // differential oracle (test/host/gzc.l holds the two to the same bytes over corpora and
 // over torn and doctored streams). `gz-inflate` reaches for this and falls back to it.
 //
-// ⚠ THE ALGORITHM IS NOT THE LOVE FILE'S, and here that is the whole point. gz-puff
-// walks a canonical code ONE BIT AT A TIME because in love a table would cost more to
+// the algorithm is not the love file's, and here that is the whole point. gz-puff
+// walks a canonical code one bit at a time because in love a table would cost more to
 // build than it saves; this reads a 64-bit window and indexes a table built per block.
-// The two are held to the same BYTES, never to the same shape -- so a divergence is a
+// the two are held to the same bytes, never to the same shape -- so a divergence is a
 // bug in one of them and never a licensed difference.
 //
-// ⚠ AND WHERE THE STREAM IS MALFORMED THE TWIN'S ANSWER IS STILL THE LAW. gz-huff does
+// and where the stream is malformed the twin's answer is still the law. gz-huff does
 // not check that the code lengths describe a code, so an over-subscribed one decodes to
 // nonsense there rather than failing -- and this file reproduces that nonsense exactly:
-// the table is filled FIRST-WRITER-WINS so a doubly-claimed slot answers the shortest
+// the table is filled first-writer-wins so a doubly-claimed slot answers the shortest
 // code, which is what the bit walk finds, and the symbol array is zeroed so an index off
-// its end reads 0, which is what `peep` on a tablet answers. Checking would be better
+// its end reads 0, which is what `peep` on a tablet answers. checking would be better
 // engineering and a differential failure, and the differential is what we have.
 //
-//   ⚠ the size argument is a HINT AND A BOUND: nothing grows here (host/ has no malloc,
-//   and a love string cannot be extended), so the output is allocated once. A positive n
+// the size argument is a hint and a bound: nothing grows here (host/ has no malloc,
+//   and a love string cannot be extended), so the output is allocated once. a positive n
 //   is believed and verified -- the gzip trailer always has it -- and a wrong or absent
 //   one costs a counting pass first, which is the decode with the stores dropped.
 #include "love.h"
@@ -44,10 +44,10 @@ static const uint8_t inf_dext[30] = {
 static const uint8_t inf_clord[19] = {
  16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 
-// eight unaligned bytes as a word, little-endian BY CONSTRUCTION rather than by the
-// machine's say-so. ⚠ NOT memcpy AND NOT A CAST: gcc folds this to one load, and mooncc
+// eight unaligned bytes as a word, little-endian by construction rather than by the
+// machine's say-so. not memcpy and not a cast: gcc folds this to one load, and mooncc
 // -- which is what compiles the shipped artifact -- emits eight loads and shifts where it
-// would emit a CALL for the memcpy, which measured 1.5x slower over the whole decode.
+// would emit a call for the memcpy, which measured 1.5x slower over the whole decode.
 #define LD64(p) ((uint64_t) (p)[0]       | (uint64_t) (p)[1] <<  8 \
                | (uint64_t) (p)[2] << 16 | (uint64_t) (p)[3] << 24 \
                | (uint64_t) (p)[4] << 32 | (uint64_t) (p)[5] << 40 \
@@ -64,7 +64,7 @@ static const uint8_t inf_clord[19] = {
 // an entry is (symbol << 4) | length, and 0 -- no code is 0 bits -- means "walk it".
 struct inf_code { uint16_t cnt[16], sym[288], *tab; unsigned root; };
 
-// ⚠ FILE SCOPE, not the decoder's frame: 9 KB of table has no business on a stack this
+// FILE scope, not the decoder's frame: 9 KB of table has no business on a stack this
 // deep, and the nif runs to completion inside one lvm step, so nothing re-enters it.
 static uint16_t inf_ltab[1 << LROOT], inf_dtab[1 << DROOT], inf_ctab[1 << CROOT];
 static struct inf_code inf_lit, inf_dst, inf_cl;
@@ -103,14 +103,14 @@ static int inf_walk(const struct inf_code *c, uint64_t bb, unsigned *used) {
 
 // -1 where the twin answers (), -2 where the output outruns cap. out may be NULL, and
 // then nothing is stored and the answer is only how long the stream inflates to --
-// which is exact, because NOTHING THE BUFFER HOLDS EVER REACHES A BRANCH.
+// which is exact, because nothing the buffer holds ever reaches a branch.
 static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap) {
  uintptr_t ip = 0, op = 0;
  uint64_t bb = 0;
  unsigned bc = 0, last, typ, i;
  uint8_t lens[320];
 
-// ⚠ ONE UNALIGNED LOAD WHERE THERE IS ROOM. the byte loop below is the same act and
+// one unaligned load where there is room. the byte loop below is the same act and
 // eight times the work; the arithmetic is libdeflate's -- absorb what fits, step by the
 // bytes that wholly landed, and round the count up to 56 or 63. what spilled off the top
 // belongs to a byte `ip` has not passed, so it is read again and not lost.
@@ -160,8 +160,8 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
    inf_build(&inf_cl, cl, 19, inf_ctab, CROOT);
    memset(lens, 0, sizeof lens);
    tot = hlit + hdist;
-   // ⚠ A RUN MAY OVERSHOOT `tot` and the twin lets it: it writes into a tablet, which has
-   // no end, and stops on the next look. So the write is clamped and the cursor is not.
+   // a run may overshoot `tot` and the twin lets it: it writes into a tablet, which has
+   // no end, and stops on the next look. so the write is clamped and the cursor is not.
    for (i = 0; i < tot; ) {
     unsigned sy, r, v, k;
     SYM(inf_cl, inf_ctab, CROOT, sy);
@@ -194,13 +194,13 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
    if (d > op) return -1;                        // a reach before the start
    if (op + l > cap) return -2;
    if (out) {
-    // ⚠ EIGHT IN ORDER, AND THAT IS NOT A WORD MOVE. deflate lets a run overlap its own
+    // eight in order, and that is not a word move. deflate lets a run overlap its own
     // source -- dist 1 len 100 is a hundred of one byte -- and written out in sequence
     // these read each byte back as they go, so they are the byte loop with its counter
-    // gone and are right at every distance, no guard to get wrong. A real word move,
-    // guarded at eight, was measured and is SLOWER IN BOTH LANES (gcc 22 ms against 20,
+    // gone and are right at every distance, no guard to get wrong. a real word move,
+    // guarded at eight, was measured and is slower in both lanes (gcc 22 ms against 20,
     // mooncc 39 against 37): mean match here is 8.5 bytes, one word and a tail, and the
-    // branch to choose costs what the wide store saves. The plain loop is slower again
+    // branch to choose costs what the wide store saves. the plain loop is slower again
     // (mooncc 42), which is the counter and nothing else.
     uint8_t *dp = out + op, *sp = dp - d;
     unsigned k = 0;
@@ -217,7 +217,7 @@ static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t c
 #undef SYM
 }
 
-// ⚠ str0 collects, so the stream is re-read off the stack after it: a C local's pointer
+// str0 collects, so the stream is re-read off the stack after it: a C local's pointer
 // into the heap is stale across the bump. tls.c pays the same toll.
 ai_noinline static struct ai *host_inflate(struct ai *g) {
  ai_word sw = g->sp[0], nw = g->sp[1];

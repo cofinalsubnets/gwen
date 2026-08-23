@@ -1,6 +1,6 @@
 // host/mem.c -- 8-byte word slots on a cask, low 4 bytes live: the flat solver's
 // state (crew/sat/flat.l), where the byte-at-a-time accessors cost 4 dispatches
-// per read. Host-only, auto-globbed + AiModNifs-registered under MODULE 'mem
+// per read. host-only, auto-globbed + AiModNifs-registered under module 'mem
 // (no love.c/love.h/main.c edit; nothing on the bare book).
 //
 //   ((from 'mem 'peepw) c i)   -> the word at slot i, low 4 bytes | () misuse

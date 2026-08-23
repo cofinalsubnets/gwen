@@ -1,18 +1,18 @@
 // host/posix.c -- the POSIX surface, in one place: process (spawn/reap/wait/
 // signal, the pid-1 supervisor's primitives and the shell's job control), fs
 // effects and values (stat/readdir/rename/chmod/..), the environment, pipes and
-// raw-fd plumbing, and the pty wrapper (bao's rlwrap/debugger muscle). Host-only,
-// auto-globbed + AiNif-registered (no love.c/love.h/main.c edit). The
+// raw-fd plumbing, and the pty wrapper (bao's rlwrap/debugger muscle). host-only,
+// auto-globbed + AiNif-registered (no love.c/love.h/main.c edit). the
 // conventions, kept throughout:
-//   effect ops answer () ok | a POSITIVE errno | EINVAL misuse
-//   value ops answer the value | () absence (or a NEGATIVE -errno where a
+//   effect ops answer () ok | a positive errno | EINVAL misuse
+//   value ops answer the value | () absence (or a negative -errno where a
 //   pid/fd/offset result must stay tellable from failure)
 //
 // argv marshaling mirrors host_exec (main.c): a chain of strings -> a NUL-
 // terminated char** in the uncommitted heap gap at Hp (GC-invisible, holds no l
-// pointers, consumed before any further alloc), valid across the fork -- ONE
+// pointers, consumed before any further alloc), valid across the fork -- one
 // copy here (argv_marshal) shared by spawn, spawnio and tether; main.c keeps its
-// own (main.c is CORE, an app file can't reach in).
+// own (main.c is core, an app file can't reach in).
 #define _GNU_SOURCE     // unshare / CLONE_* (newns), posix_openpt/grantpt/unlockpt/ptsname
 #include "love.h"
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid symlink readlink chown
@@ -29,16 +29,16 @@
 #include <dirent.h>     // opendir/readdir/closedir
 #include <sys/mman.h>       // madvise (the spawn guard)
 
-// --- WHAT THIS LIBC CARRIES, asked once -------------------------------------
+// --- what this LIBC carries, asked once -------------------------------------
 // the question a lane owes is which doors it may call, never which kernel it is
 // standing on: ours carries every door on all three (crew/moon/include/sys), and
-// a foreign libc carries what its own box does. So these are build facts under
+// a foreign libc carries what its own box does. so these are build facts under
 // AiNolibc and box facts under anything else.
-// ⚠ mount(2) and unshare are LINUX-REACHING, and still not this file's question:
+// mount(2) and unshare are LINUX-reaching, and still not this file's question:
 // ours carries both symbols and os.c leaves their rows unmapped, so the call
-// refuses with ENOSYS off linux at RUN time -- which is the only place that can
-// know, since one binary meets three kernels. Compiling them out by the kernel
-// we were BUILT on would refuse them on a linux box too. Widening them is the
+// refuses with ENOSYS off linux at run time -- which is the only place that can
+// know, since one binary meets three kernels. compiling them out by the kernel
+// we were built on would refuse them on a linux box too. widening them is the
 // libc's job (mount wants the BSD argument shapes; unshare is linux's own).
 #if defined(AiNolibc)
 # define AiHaveSignalfd 1
@@ -77,17 +77,17 @@
 #include <limits.h>         // PATH_MAX -- realpath's buffer is not ours to size
 #endif
 
-// A wait(2) status word -> the value a reaper hands back: the exit code, or
+// a wait(2) status word -> the value a reaper hands back: the exit code, or
 // 128+signal for a signalled death (the shell convention), or -1 for the
-// (shouldn't-happen) neither case. The way hark (main.c) decodes it -- the
-// one copy every reaper here shares, so they agree on what an exit code MEANS.
+// (shouldn't-happen) neither case. the way hark (main.c) decodes it -- the
+// one copy every reaper here shares, so they agree on what an exit code means.
 static ai_inline int proc_status(int st) {
  return WIFEXITED(st) ? WEXITSTATUS(st)
        : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1; }
 
-// Pull a live OS fd out of a port arg, or -1 if it isn't a port. Same inline
+// pull a live OS fd out of a port arg, or -1 if it isn't a port. same inline
 // "is x a port" as main.c's lvm_close: a heap word whose discriminator is the
-// port vtable. A closed port carries the -3 sentinel; we hand that straight back
+// port vtable. a closed port carries the -3 sentinel; we hand that straight back
 // to the syscall, which fails with EBADF -- the honest answer.
 static intptr_t port_fd(ai_word x) {
  if (!charmp(x) && ((union u*) x)->ap == lvm_port_io)
@@ -103,12 +103,12 @@ static bool str_cbuf(ai_word x, char *buf, size_t cap) {
  buf[s->len] = 0;
  return true; }
 
-// The argv marshal: the chain of strings at g->sp[0] -> argc+1 char** + the
+// the argv marshal: the chain of strings at g->sp[0] -> argc+1 char** + the
 // NUL-joined byte blob, laid in the uncommitted heap gap at Hp -- GC-invisible,
 // holds no l pointers, valid across a fork, consumed (execvp'd) before any
-// further allocation. Called with g Packed. Two failure faces: a misuse (non-
+// further allocation. called with g Packed. two failure faces: a misuse (non-
 // string element / empty argv) pushes putcharm(-1) and leaves *cavp NULL (the
-// caller returns g as-is, the -1 already the net value); OOM returns !ok g
+// caller returns g as-is, the -1 already the net value); oom returns !ok g
 // (*cavp NULL too, so `if (!*cavp) return g` covers both).
 static struct ai *argv_marshal(struct ai *g, char ***cavp) {
  *cavp = NULL;
@@ -134,19 +134,19 @@ static struct ai *argv_marshal(struct ai *g, char ***cavp) {
  return g; }
 
 // --- the supervisor pair: spawn without waiting, reap any dead child ------------
-// (spawn argv)  -> child pid (a fixnum) | a NEGATIVE fixnum (-errno / -1 misuse)
+// (spawn argv)  -> child pid (a fixnum) | a negative fixnum (-errno / -1 misuse)
 // (glean _)     -> (pid . status) of one reaped child
 //                | ()                 none pending
-//                | a NEGATIVE fixnum  (-errno, e.g. -ECHILD: no children left)
-// crew/init/init.l drives REAL processes with these plus the generic `still` (kill):
+//                | a negative fixnum  (-errno, e.g. -ECHILD: no children left)
+// crew/init/init.l drives real processes with these plus the generic `still` (kill):
 // spawn returns a pid to track, glean is the SIGCHLD core (poll it, map the pid
-// back to a unit, restart per policy). On a real pid1 glean also collects
+// back to a unit, restart per policy). on a real pid1 glean also collects
 // reparented orphans (waitpid(-1)).
 
-// the child side of the ignore dance: a disposition set to SIG_IGN SURVIVES exec,
+// the child side of the ignore dance: a disposition set to SIG_IGN survives exec,
 // so a shell that ignores the job-control signals must undo that in every child
 // between fork and exec -- or ^C could never kill anything it launches.
-// ⚠ SIGPIPE RIDES THIS TOO, and it is the one that bites hardest: love ignores it
+// SIGPIPE rides this too, and it is the one that bites hardest: love ignores it
 // so a write to a hung-up peer answers "the device is gone" instead of killing the
 // runtime -- but a child that inherited the ignore is a `yes | head` that never
 // stops. every fork/exec in the tree resets it (here, and by hand at main.c's two
@@ -154,14 +154,14 @@ static struct ai *argv_marshal(struct ai *g, char ***cavp) {
 static void sig_dfl_job(void) {
  signal(SIGINT, SIG_DFL); signal(SIGQUIT, SIG_DFL); signal(SIGPIPE, SIG_DFL);
  signal(SIGTSTP, SIG_DFL); signal(SIGTTIN, SIG_DFL); signal(SIGTTOU, SIG_DFL);
- // ..and the MASK, which sigaction does not touch and exec does not clear. A shell
+ // ..and the mask, which sigaction does not touch and exec does not clear. a shell
  // watching a signal blocks it (sigfd), and a blocked signal is inherited straight
  // through the exec -- so `trap .. INT` in lush would have made every command it
- // runs deaf to ^C. Every exec-bound child here leaves through this one door.
+ // runs deaf to ^C. every exec-bound child here leaves through this one door.
  sigset_t none; sigemptyset(&none); sigprocmask(SIG_SETMASK, &none, NULL); }
 
 // (sigign? sig) -> 1 if this signal is SIG_IGN right now, else 0. POSIX: a signal
-// IGNORED ON ENTRY to a non-interactive shell cannot be trapped or reset, and a
+// ignored on entry to a non-interactive shell cannot be trapped or reset, and a
 // `&` from the calling shell is how a script most often gets one -- so a shell
 // that cannot ask this trapped signals its caller had deliberately turned off.
 ai_noinline static ai_word host_sigignp(ai_word sigw) {
@@ -171,8 +171,8 @@ ai_noinline static ai_word host_sigignp(ai_word sigw) {
  return putcharm(sa.sa_handler == SIG_IGN ? 1 : 0); }
 static lvm(lvm_sigignp) { Sp[0] = host_sigignp(Sp[0]); ai_musttail return Next(1); }
 
-// (sigclear _) -> () -- empty this process's signal mask. The exec children get it
-// from sig_dfl_job above; a shell's FORKED subshell never execs, so it asks here.
+// (sigclear _) -> () -- empty this process's signal mask. the exec children get it
+// from sig_dfl_job above; a shell's forked subshell never execs, so it asks here.
 ai_noinline static ai_word host_sigclear(void) {
  sigset_t none; sigemptyset(&none);
  return sigprocmask(SIG_SETMASK, &none, NULL) ? putcharm(errno) : ZeroPoint; }
@@ -180,8 +180,8 @@ static lvm(lvm_sigclear) { Sp[0] = host_sigclear(); ai_musttail return Next(1); 
 
 // (spawn argv) -> the child pid, or a negated errno (negative, so a caller tells
 // a pid (positive) from a failure (negative) without a second value). fork +
-// execvp; the parent returns immediately -- NON-BLOCKING, unlike run (waits +
-// captures) and exec (replaces in place). The child inherits init's stdio (a real
+// execvp; the parent returns immediately -- non-blocking, unlike run (waits +
+// captures) and exec (replaces in place). the child inherits init's stdio (a real
 // pid1 redirects to the journal); a failed exec _exit(127)s, seen by the next glean.
 // spawn guard: the heap pools leave an exec-bound fork's inheritance, so a
 // swapless box is not asked to double-charge a budget-sized commitment the
@@ -198,7 +198,7 @@ static void guard1(void *lo, void *hi, int adv) {
 void host_spawn_guard(struct ai *g, int on) {
 #if defined(AiHaveDontfork)
  int adv = on ? MADV_DONTFORK : MADV_DOFORK;
- // the ceiling is the FRONTIER, not the block top: a marshal (argv_marshal,
+ // the ceiling is the frontier, not the block top: a marshal (argv_marshal,
  // main.c's own) lays the child's argv at g->hp, so the window above hp
  // stays mapped; the live bulk below it is what a swapless box cannot
  // double-charge. nothing allocates between the two calls, so the ranges
@@ -213,7 +213,7 @@ void host_spawn_guard(struct ai *g, int on) {
 ai_noinline static struct ai *host_spawn(struct ai *g) {
  char **cav;
  g = argv_marshal(g, &cav);
- if (!cav) return g;                                         // misuse pushed -1, or OOM
+ if (!cav) return g;                                         // misuse pushed -1, or oom
  fflush(NULL);                                               // flush now, not twice in the child
  host_spawn_guard(g, 1);
  pid_t pid = fork();
@@ -231,10 +231,10 @@ static lvm(lvm_spawn) {
  ai_musttail return Nextp(1, 1); }
 
 // (glean _) -> (pid . status) of one reaped child, () if none are pending, or a
-// negated errno (e.g. -ECHILD when no children remain). The pid is the CAR so the
+// negated errno (e.g. -ECHILD when no children remain). the pid is the car so the
 // supervisor maps it back to a unit; status is proc_status (exit code / 128+sig).
-// waitpid(-1, WNOHANG) reaps ANY child -- incl. reparented orphans on a real pid1.
-// The arg is a dummy (ignored), so a bare (glean) curries; call it (glean 0).
+// waitpid(-1, WNOHANG) reaps any child -- incl. reparented orphans on a real pid1.
+// the arg is a dummy (ignored), so a bare (glean) curries; call it (glean 0).
 ai_noinline static struct ai *host_reapany(struct ai *g) {
  int st;
  pid_t r = waitpid(-1, &st, WNOHANG);
@@ -254,21 +254,21 @@ static lvm(lvm_reapany) {
  Ip += 1; ai_musttail return Continue(); }
 
 // --- the signal perceive source (signalfd; kqueue on the BSDs) ------------------
-// (sigfd sigs)  -> a PORT over a signalfd watching `sigs` (a list of signal numbers;
+// (sigfd sigs)  -> a port over a signalfd watching `sigs` (a list of signal numbers;
 //                  a non-list keeps the supervisor default SIGCHLD + SIGTERM), those signals
-//                  first BLOCKED (sigprocmask) so they QUEUE to the fd instead of
-//                  their default disposition -- SIGCHLD's discard, SIGTERM's KILL.
-//                  That queuing is exactly what turns a TERM into a graceful EVENT,
+//                  first blocked (sigprocmask) so they queue to the fd instead of
+//                  their default disposition -- SIGCHLD's discard, SIGTERM's kill.
+//                  that queuing is exactly what turns a TERM into a graceful event,
 //                  not a death. () on failure. SIGINT is left unblocked so ^C bails.
-// (sigtake port) -> (signo . pid) of ONE pending signal, or () if none ready.
-// The supervisor PARKS with the core `(await sig)` (cooperative -- the scheduler
+// (sigtake port) -> (signo . pid) of one pending signal, or () if none ready.
+// the supervisor parks with the core `(await sig)` (cooperative -- the scheduler
 // merges the sigfd with a heartbeat task's timer in one wait, the {nic, clock}
 // story for {signals, clock}), then sigtake reads the record. SIGCHLD coalesces, so a
 // 'chld wake still loops `glean` to harvest every zombie.
 #if defined(AiHaveSignalfd) || defined(AiHaveKqueue)
 #if defined(AiHaveKqueue)
 // the BSD door: the port holds a kqueue fd instead. EVFILT_SIGNAL fires on
-// SEND -- before delivery processing -- so the same blocked mask queues here
+// send -- before delivery processing -- so the same blocked mask queues here
 // too (probed on both boxes). one kernel per process, so one flavor: a flag.
 static int host_sigkq;
 ai_noinline static int host_sigfd_kq(ai_word a) {
@@ -289,7 +289,7 @@ ai_noinline static int host_sigfd_kq(ai_word a) {
  host_sigkq = 1;
  return kq; }
 #endif
-// the arg may be a LIST of signal numbers to watch; anything else (the dummy-0
+// the arg may be a list of signal numbers to watch; anything else (the dummy-0
 // convention) keeps the supervisor's classic pair, SIGCHLD + SIGTERM.
 ai_noinline static struct ai *host_sigfd(struct ai *g) {
  sigset_t m;
@@ -301,7 +301,7 @@ ai_noinline static struct ai *host_sigfd(struct ai *g) {
  else { sigaddset(&m, SIGCHLD); sigaddset(&m, SIGTERM); }
  if (sigprocmask(SIG_BLOCK, &m, NULL)) return g->sp[0] = ZeroPoint, g;
  // every door this libc carries, in order: the canonical one, then the BSD one
- // where it answers -- the try IS the probe, as selfpath's ladder below.
+ // where it answers -- the try is the probe, as selfpath's ladder below.
  int fd = -1;
 #if defined(AiHaveSignalfd)
  fd = signalfd(-1, &m, SFD_NONBLOCK | SFD_CLOEXEC);
@@ -311,7 +311,7 @@ ai_noinline static struct ai *host_sigfd(struct ai *g) {
 #endif
  if (fd < 0) return g->sp[0] = ZeroPoint, g;
  struct ai *r = ai_io_alloc(g, fd);
- if (!ai_ok(r)) return close(fd), g->sp[0] = ZeroPoint, g;    // OOM -> zero (cf. net.c lvm_listen)
+ if (!ai_ok(r)) return close(fd), g->sp[0] = ZeroPoint, g;    // oom -> zero (cf. net.c lvm_listen)
  g = r;
  return g->sp[1] = g->sp[0], g->sp += 1, g; }                 // port over the dummy arg
 static lvm(lvm_sigfd) {
@@ -363,7 +363,7 @@ static lvm(lvm_sigtake) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
 #endif
 
 // --- foreground job control + cwd (the muscle a real shell needs) ---------------
-// (wait pid)   -> BLOCK until pid exits OR STOPS: an exit is its proc_status (exit /
+// (wait pid)   -> block until pid exits or stops: an exit is its proc_status (exit /
 //                 128+sig), a stop (^Z: SIGTSTP/SIGSTOP) is 256 + the stopping signal
 //                 -- a charm above every exit status, so a shell tells "stopped, job
 //                 it" (< 255 st) from "done". -errno on failure. the foreground wait:
@@ -372,12 +372,12 @@ static lvm(lvm_sigtake) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
 // (signal sig disp) -> sigaction: disp 0 = default, 1 = ignore. () | positive errno |
 //                 EINVAL misuse (the effect convention). the shell ignores INT/QUIT/
 //                 TSTP so the tty's ^C/^Z reach only the foreground child; spawn's
-//                 child side resets them (an IGNORED disposition survives exec).
+//                 child side resets them (an ignored disposition survives exec).
 // (chdir path) -> () ok | -errno | -1 misuse. the `cd` builtin.
 // (cwd _)      -> the current directory as a string, or () on failure. for the prompt.
-// The syscall body lives in an ai_noinline helper so the lvm_ wrapper stays a pure tail-jump (no ret):
+// the syscall body lives in an ai_noinline helper so the lvm_ wrapper stays a pure tail-jump (no ret):
 // the syscall + any stack buffer would otherwise block the sibcall to Continue() and trip `make vmret`.
-// ⚠ WNOHANG, and the unit means "still running". Every real answer is a charm (a
+// WNOHANG, and the unit means "still running". every real answer is a charm (a
 // status, 256+sig for a stop, -errno for a failure), so the zero point is free to
 // carry the fourth term -- no sentinel is overloaded.
 ai_noinline static ai_word host_waitpid(ai_word arg) {
@@ -389,12 +389,12 @@ ai_noinline static ai_word host_waitpid(ai_word arg) {
  if (r < 0) return putcharm(-errno);
  if (WIFSTOPPED(st)) return putcharm(256 + WSTOPSIG(st));
  return putcharm(proc_status(st)); }
-// (wait pid) waits by PARKING, not by blocking: a live child re-arms the task for the
-// next tick and yields, so a peer task runs while a foreground job is up. ⚠ IT IS A
-// POLL AND SHOULD BE READ AS ONE -- one waitpid per millisecond per waiting task,
-// because SIGCHLD is not in the scheduler's wait set and a pid is not an fd. That is
+// (wait pid) waits by parking, not by blocking: a live child re-arms the task for the
+// next tick and yields, so a peer task runs while a foreground job is up. it is A
+// poll and should be read as one -- one waitpid per millisecond per waiting task,
+// because SIGCHLD is not in the scheduler's wait set and a pid is not an fd. that is
 // rung 5's shape for the write residue, and the same trade: honest and small, and
-// correct until something measures it hurting. Nothing is consumed before the park
+// correct until something measures it hurting. nothing is consumed before the park
 // (WNOHANG left the child exactly as it found it), so the op re-runs whole.
 static lvm(lvm_waitpid) {
  ai_word r = host_waitpid(Sp[0]);
@@ -422,7 +422,7 @@ static lvm(lvm_chdir) { Sp[0] = host_chdir(Sp[0]); ai_musttail return Next(1); }
 ai_noinline static struct ai *host_cwd(struct ai *g) {
  char buf[4096];
  if (!getcwd(buf, sizeof buf)) return g->sp[0] = ZeroPoint, g;
- if (!ai_ok(g = ai_strof(g, buf))) return g;            // OOM -> !ok, wrapper ghelps
+ if (!ai_ok(g = ai_strof(g, buf))) return g;            // oom -> !ok, wrapper ghelps
  return g->sp[1] = g->sp[0], g->sp += 1, g; }           // cwd string over the dummy arg
 static lvm(lvm_cwd) {
  Pack(g); g = host_cwd(g);
@@ -430,17 +430,17 @@ static lvm(lvm_cwd) {
  Unpack(g);
  ai_musttail return Next(1); }
 
-// (selfpath _) -> the path of the RUNNING BINARY, or () where the seat cannot say.
-// The one door for it: the prel's library walk, the seed's bin/love, moon's include
+// (selfpath _) -> the path of the running binary, or () where the seat cannot say.
+// the one door for it: the prel's library walk, the seed's bin/love, moon's include
 // root, lux's re-exec, lush's am-I-that-tool test and the self-bake's re-open
 // (host/image.c) all start here.
-// ⚠ NO ARGV[0] FALLBACK, and not for want of argv[0] -- the book has it as `cmdline`.
-// It is that a bare `cmdline` read from BAKED code folds to the BAKE's line, and the
-// callers here are baked, so the operand would arrive already wrong. A seat with no
+// no argv[0] fallback, and not for want of argv[0] -- the book has it as `cmdline`.
+// it is that a bare `cmdline` read from baked code folds to the bake's line, and the
+// callers here are baked, so the operand would arrive already wrong. a seat with no
 // door below writes the walk where the line is read live.
 ai_noinline size_t host_selfpath(char *b, size_t n) {
 #if defined(__APPLE__)
- char raw[4096], can[PATH_MAX];                        // ⚠ realpath writes PATH_MAX, not n
+ char raw[4096], can[PATH_MAX];                        // realpath writes PATH_MAX, not n
  uint32_t sz = sizeof raw;
  if (_NSGetExecutablePath(raw, &sz)) return 0;         // dyld's answer is not canonical
  char const *p = realpath(raw, can) ? can : raw;
@@ -448,9 +448,9 @@ ai_noinline size_t host_selfpath(char *b, size_t n) {
  if (l >= n) return 0;
  return memcpy(b, p, l + 1), l;
 #else
- // a RUNTIME ladder, because one binary meets more than one kernel: linux's
+ // a runtime ladder, because one binary meets more than one kernel: linux's
  // link, then netbsd's spelling of it, then freebsd's sysctl door -- each try
- // answers only on its kernel, so the tries ARE the OS probe.
+ // answers only on its kernel, so the tries are the OS probe.
  ssize_t r = readlink("/proc/self/exe", b, n - 1);
  if (r <= 0) r = readlink("/proc/curproc/exe", b, n - 1);
  if (r > 0) return b[r] = 0, (size_t) r;
@@ -484,30 +484,30 @@ static lvm(lvm_selfpath) {
 // (pipe _)       -> (readfd . writefd) of a fresh pipe (raw fds), or -errno.
 // (openfd path m) -> a raw fd opening `path`: m 0 = read, 1 = write/create/trunc,
 //                   2 = write/create/append, 3 = write/create/EXCL at mode 0600 --
-//                   the one that FAILS on an existing name, which is what makes a
+//                   the one that fails on an existing name, which is what makes a
 //                   mktemp a claim and not a guess. -errno on failure, -1 on a bad path.
-// (spawnio argv in out err closes pg fg) -> pid. fork; in the child: the JOB-CONTROL
+// (spawnio argv in out err closes pg fg) -> pid. fork; in the child: the job-control
 //                   dance first -- pg < 0 stays in the parent's pgrp (the legacy /
-//                   non-tty lane), pg = 0 LEADS a fresh process group, pg > 0 JOINS
+//                   non-tty lane), pg = 0 leads a fresh process group, pg > 0 joins
 //                   that group (pipeline members join their stage-0 leader) -- and fg
-//                   nonzero hands the child's group the TERMINAL (tcsetpgrp on fd 0
-//                   BEFORE the dup2s, TTOU ignored for the handoff; the parent
-//                   setpgids too, closing the race). A job in its OWN pgrp is what
-//                   makes ^Z real: a stop signal to an ORPHANED group is discarded
+//                   nonzero hands the child's group the terminal (tcsetpgrp on fd 0
+//                   before the dup2s, TTOU ignored for the handoff; the parent
+//                   setpgids too, closing the race). a job in its own pgrp is what
+//                   makes ^Z real: a stop signal to an orphaned group is discarded
 //                   by POSIX, and the shell's own group is exactly that under a
 //                   nested session. then dup2 `in`/`out`/`err` (each >=0) onto fd
 //                   0/1/2, close every fd in the list `closes` (the pipe ends the
 //                   child must not leak, so a downstream reader sees EOF), reset the
-//                   job signals, execvp. The parent keeps its fds and closes the
+//                   job signals, execvp. the parent keeps its fds and closes the
 //                   pipe ends itself with fdclose. -errno on a fork/marshal failure.
 // (ttyfg pg)     -> give the terminal (fd 0) to process group pg; pg <= 0 takes it
-//                   BACK to the caller's own group (the shell reclaiming the tty
+//                   back to the caller's own group (the shell reclaiming the tty
 //                   after a foreground job ends or stops). () | positive errno.
 // (fdclose fd)    -> close a raw fd (the parent's pipe ends). () ok | -errno.
 ai_noinline static struct ai *host_pipe(struct ai *g) {
  int fds[2];
  if (pipe(fds)) return g->sp[0] = putcharm(-errno), g;
- if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return close(fds[0]), close(fds[1]), g;   // OOM -> !ok
+ if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return close(fds[0]), close(fds[1]), g;   // oom -> !ok
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
                                 putcharm(fds[0]), putcharm(fds[1]));
  return g->sp[0] = word(w), g; }
@@ -533,7 +533,7 @@ ai_noinline static struct ai *host_spawnio(struct ai *g, int in, int out, int er
                                             intptr_t pg, intptr_t fg) {
  char **cav;
  g = argv_marshal(g, &cav);
- if (!cav) return g;                         // misuse pushed -1, or OOM
+ if (!cav) return g;                         // misuse pushed -1, or oom
  ai_word closes = g->sp[4];                  // re-read post-marshal (ai_have may have GC'd)
  fflush(NULL);
  pid_t pid = fork();
@@ -582,9 +582,9 @@ static lvm(lvm_shutfd) {
  Sp[0] = (fd >= 0 && close((int) fd)) ? putcharm(-errno) : ZeroPoint;
  ai_musttail return Next(1); }
 
-// (fdopen fd) -> a PORT over a raw fd -- pipe/openfd's other half, so love reads
+// (fdopen fd) -> a port over a raw fd -- pipe/openfd's other half, so love reads
 // and writes its own plumbing (a command substitution drains a pipe with slurp, a
-// heredoc body pours in with say). () on a non-charm / negative fd or OOM. The
+// heredoc body pours in with say). () on a non-charm / negative fd or oom. the
 // port's GC finalizer owns the fd from here: hand it over, don't fdclose it too.
 static lvm(lvm_fdopen) {
  intptr_t fd = charmp(Sp[0]) ? getcharm(Sp[0]) : -1;
@@ -592,13 +592,13 @@ static lvm(lvm_fdopen) {
  Pack(g);
  if (!ai_ok(g = ai_io_alloc(g, (int) fd))) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
- Sp[1] = Sp[0];                              // port over the fd arg -- alloc PUSHED it
+ Sp[1] = Sp[0];                              // port over the fd arg -- alloc pushed it
  ai_musttail return Nextp(1, 1); }
 
 // (spawnmap argv fdmap closes pg fg) -> pid | -errno. spawnio generalized: instead
 // of the hardwired in/out/err triple, `fdmap` is a list of (childfd . srcfd) pairs
-// applied IN ORDER in the child -- dup2(srcfd, childfd) for a charm srcfd >= 0,
-// close(childfd) for () -- and each srcfd reads the fd table AS REMAPPED SO FAR,
+// applied in order in the child -- dup2(srcfd, childfd) for a charm srcfd >= 0,
+// close(childfd) for () -- and each srcfd reads the fd table as remapped so far,
 // which is exactly the POSIX left-to-right redirection law (`>f 2>&1` maps
 // ((1 . f) (2 . 1)) and the second entry sees the first's work). pg/fg and the
 // closes list ride unchanged from spawnio (the job-control dance + the pipe ends
@@ -606,7 +606,7 @@ static lvm(lvm_fdopen) {
 ai_noinline static struct ai *host_spawnmap(struct ai *g, intptr_t pg, intptr_t fg) {
  char **cav;
  g = argv_marshal(g, &cav);
- if (!cav) return g;                         // misuse pushed -1, or OOM
+ if (!cav) return g;                         // misuse pushed -1, or oom
  ai_word fdmap = g->sp[1], closes = g->sp[2];   // re-read post-marshal (ai_have may have GC'd)
  fflush(NULL);
  pid_t pid = fork();
@@ -644,13 +644,13 @@ static lvm(lvm_spawnmap) {
  ai_musttail return Nextp(1, 5); }
 
 // (getuid _) -> the real uid, a charm. the shell's # vs $ prompt; always succeeds.
-// (getgid _) -> the real gid, its pair -- `id` owes the primary group as a FACT, and
+// (getgid _) -> the real gid, its pair -- `id` owes the primary group as a fact, and
 //               the /etc/passwd row is only where the group usually is, not where it is.
 static lvm(lvm_getuid) { Sp[0] = putcharm(getuid()); ai_musttail return Next(1); }
 static lvm(lvm_getgid) { Sp[0] = putcharm(getgid()); ai_musttail return Next(1); }
 
-// (fork _) -> child pid | 0 in the child | -errno. fork WITHOUT exec -- the
-// shell's subshell: the child EVALS a subtree and quits, and must NEVER return
+// (fork _) -> child pid | 0 in the child | -errno. fork without exec -- the
+// shell's subshell: the child evals a subtree and quits, and must never return
 // to the reader loop (doc/misc/posix.md's open question, answered conservatively:
 // the child owns a full copy-on-write address space, so the GC is fine; the
 // discipline is all in the caller -- flush out/err before, child = eval+quit).
@@ -684,10 +684,10 @@ static lvm(lvm_dup) { Sp[0] = host_dup(Sp[0]); ai_musttail return Next(1); }
 // also makes cgroup dirs (cgroup-v2 placement is then `open` + `say` the control file).
 // (mount src tgt type) -> mount(2), flags 0 / no data (enough for proc/sysfs/tmpfs).
 //   () | -errno | -1 misuse. needs privilege: run as pid1/root, or after (newns 0).
-// (newns _) -> unshare a private USER+MOUNT namespace and selfmap to root-in-ns, so
-//   (mount ...) works UNPRIVILEGED (the standard setgroups-deny + uid_map/gid_map).
-//   () | -errno. a real pid1 skips this -- it already IS root.
-// () on success, a POSITIVE errno on failure (so `!`/truthiness tells them apart --
+// (newns _) -> unshare a private user+mount namespace and selfmap to root-in-ns, so
+//   (mount ...) works unprivileged (the standard setgroups-deny + uid_map/gid_map).
+//   () | -errno. a real pid1 skips this -- it already is root.
+// () on success, a positive errno on failure (so `!`/truthiness tells them apart --
 // the pty/net convention; -errno would net falsey like the () success).
 static lvm(lvm_mkdir) {
  char p[4096];
@@ -735,27 +735,27 @@ static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 // symbols wear the posix_ prefix; the love names stay the plain POSIX words.
 // (stat path)    -> (size mtime mode ns uid gid nlink blocks ino) | () -- absence (or
 //                   unreadability) is nothing.
-//                   size in bytes, mtime in MILLISECONDS (the (clock t) scale), mode
+//                   size in bytes, mtime in milliseconds (the (clock t) scale), mode
 //                   the raw st_mode charm: kind reads off the S_IFMT bits in love
 //                   ((& mode 61440): 32768 file, 16384 dir, 40960 link) and the
-//                   permission bits ride along; ns the same mtime whole in NANOSECONDS,
+//                   permission bits ride along; ns the same mtime whole in nanoseconds,
 //                   one charm (fits a fixnum to year 2262) -- the resolution a builder
 //                   wants, where two writes in one millisecond still order (cook).
-//                   blocks is st_blocks, 512-byte units, which is DISK USAGE and not
+//                   blocks is st_blocks, 512-byte units, which is disk usage and not
 //                   the size (du's whole subject; a sparse file says less than it is).
-//                   ⚠ THE TAIL IS APPEND-ONLY and a reader asks `tally` before it
+// the tail is append-only and a reader asks `tally` before it
 //                   reads past ns: the kernel's own stat (free/kmain.c) answers the
 //                   first four alone, having no ownership to tell about.
-// (lstat path)   -> the same tuple, of the LINK ITSELF where the path names one. du and
+// (lstat path)   -> the same tuple, of the link itself where the path names one. du and
 //                   `stat` owe the link's own blocks and mode, not its target's, and a
 //                   dangling link still has a truth to tell about itself.
 // (readdir path) -> the entry names, a list of strings ("." and ".." dropped), or ()
-//                   on failure. NO order promised (readdir order, prepended) -- sort in love.
-// (unlink path)  -> () ok | a POSITIVE errno | EINVAL misuse (the mkdir convention:
+//                   on failure. no order promised (readdir order, prepended) -- sort in love.
+// (unlink path)  -> () ok | a positive errno | EINVAL misuse (the mkdir convention:
 //                   an effect op nets truthy exactly when something went wrong).
 // (lseek fd off whence) -> the new offset | -errno | -1 misuse (the value-op
-//                   convention: negative = failure, like spawn/wait). RAW fds, the
-//                   openfd lane -- NOT ports (a port's read buffer would desync
+//                   convention: negative = failure, like spawn/wait). raw fds, the
+//                   openfd lane -- not ports (a port's read buffer would desync
 //                   under a seek). whence: 0 SET, 1 CUR, 2 END.
 ai_noinline static struct ai *host_stat_tuple(struct ai *g, int follow) {
  char p[4096];
@@ -832,9 +832,9 @@ static lvm(lvm_posix_unlink) {
   Sp[0] = host_posix_unlink(Sp[0]);
   ai_musttail return Next(1); }
 
-// (setenv name val) -> () | positive errno | EINVAL misuse; a NON-STRING val UNSETS
+// (setenv name val) -> () | positive errno | EINVAL misuse; a non-string val unsets
 // (the absence lane: (setenv n ()) clears n from the environment).
-// (environ _)       -> the environment as a list of "NAME=value" strings (the raw
+// (environ _)       -> the environment as a list of "name=value" strings (the raw
 //                      POSIX shape -- split at the first '=' in love; no order promised).
 ai_noinline static ai_word host_posix_setenv(ai_word nw, ai_word vw) {
  char n[1024], v[4096];
@@ -944,13 +944,13 @@ AiNif("environ", nif_posix_environ);
 // --- the rest of the fs surface: the effect ops the fs tools ride ---------------
 // (mv, ln, touch, chmod, chown -- crew/kore/fs.l and friends).
 //   (rename old new)      -> () | errno | EINVAL   (mv's heart; same filesystem)
-//   (symlink target path) -> () | errno | EINVAL   (path becomes a link TO target)
+//   (symlink target path) -> () | errno | EINVAL   (path becomes a link to target)
 //   (readlink path)       -> the target string | ()
 //   (chmod path mode)     -> () | errno | EINVAL   (mode the raw permission charm)
 //   (chown path uid gid)  -> () | errno | EINVAL   (-1 leaves that id alone)
-//   (utime path ms)       -> () | errno | EINVAL   (mtime AND atime on the stat
-//                            scale, MILLISECONDS; a non-charm ms reads "now")
-//   (umask mask)          -> the PREVIOUS mask | -1 misuse (always succeeds)
+//   (utime path ms)       -> () | errno | EINVAL   (mtime and atime on the stat
+//                            scale, milliseconds; a non-charm ms reads "now")
+//   (umask mask)          -> the previous mask | -1 misuse (always succeeds)
 //   (rmdir path)          -> () | errno | EINVAL   (the empty-directory unlink)
 //   (hardlink old new)    -> () | errno | EINVAL   (link(2); `link` the word is
 //                            the chain ctor, the most spoken name in the prel,
@@ -1030,17 +1030,17 @@ static lvm(lvm_posix_hardlink) {
  Sp[1] = host_posix_hardlink(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
-// (copyfile src dst) -> BYTES COPIED | a NEGATIVE fixnum (-errno / -1 misuse).
-// SRC's bytes into DST, without either passing through the heap.
-// The one that wanted it is the seed: `love source` lays bin/love by copying the running
+// (copyfile src dst) -> bytes copied | a negative fixnum (-errno / -1 misuse).
+// src's bytes into dst, without either passing through the heap.
+// the one that wanted it is the seed: `love source` lays bin/love by copying the running
 // artifact, ~12 MB, and slurping that made a love string the collector then had to carry
-// through a two-space flip. BYTES ONLY -- mode is the caller's to set, which is what both
+// through a two-space flip. bytes only -- mode is the caller's to set, which is what both
 // callers already did (kore's ucopy chmods from its own stat, src-lay-love wants 493).
-// ⚠ a plain read/write loop, and NOT because copy_file_range is unavailable: that call is
+// a plain read/write loop, and not because copy_file_range is unavailable: that call is
 // linux-only (4.5, cross-fs 5.3) and may short-copy or refuse with EXDEV/EINVAL anyway, so
 // a correct use needs this loop under it regardless. the loop is the contract; the syscall
 // would be one guarded branch inside it, worth adding when a profile asks.
-// ⚠ AND THE BUFFER LIVES IN A HELPER, not in the lvm_ -- 64K owed at a tail turns the jump
+// and the buffer lives in a helper, not in the lvm_ -- 64K owed at a tail turns the jump
 // into a ret and grows the stack every dispatch (love.h's no-scratch rule).
 ai_noinline static ai_word host_posix_copyfile(ai_word sw, ai_word dw) {
  char s[4096], d[4096];
@@ -1095,14 +1095,14 @@ AiNif("hardlink", nif_posix_hardlink);
 AiNif("copyfile", nif_posix_copyfile);
 // --- the pty wrapper: bao's rlwrap/debugger muscle ------------------------------
 // spawn a program on a fresh pseudo-terminal, reap it without blocking, signal
-// it, and read/write its window size. The keystone, (tether argv), is hark
-// (main.c) with the stdout PIPE swapped for a pty pair: the same argv marshal +
-// close-on-exec errno-pipe handshake, but the child's 0/1/2 become the pty SLAVE
-// and the parent keeps the MASTER as a heap port (ai_io_alloc). So bao's editor
+// it, and read/write its window size. the keystone, (tether argv), is hark
+// (main.c) with the stdout pipe swapped for a pty pair: the same argv marshal +
+// close-on-exec errno-pipe handshake, but the child's 0/1/2 become the pty slave
+// and the parent keeps the master as a heap port (ai_io_alloc). so bao's editor
 // talks to any program over the master the way a terminal would.
 //
 //   (tether argv)      -> (pid . master-port) | a fixnum (errno, or -1 = misuse)
-//   (reap pid)         -> (status)   exited (a PAIR, truthy even at status 0)
+//   (reap pid)         -> (status)   exited (a pair, truthy even at status 0)
 //                       | ()         still running
 //                       | errno      waitpid error (e.g. ECHILD)
 //   (kill pid sig)     -> () ok | errno   (caller passes (0 - pid) for the group)
@@ -1112,17 +1112,17 @@ AiNif("copyfile", nif_posix_copyfile);
 // (winsize) takes a dummy arg (ignored, like getpid): a bare (winsize) is the
 // function itself -- (f) == f at zero operands -- so the call is (winsize 0).
 
-// Workhorse for (tether argv), called with g Packed; argv is the single arg and
-// the sole GC root at g->sp[0]. Leaves EXACTLY ONE net value above argv on every
-// non-OOM path (so lvm_tether collapses uniformly, cf. hark): the
-// (pid . master-port) chain on success, an errno/-1 fixnum otherwise. Returns a
-// not-ok g only on OOM (lvm_tether routes that to ghelp).
+// workhorse for (tether argv), called with g Packed; argv is the single arg and
+// the sole GC root at g->sp[0]. leaves exactly one net value above argv on every
+// non-oom path (so lvm_tether collapses uniformly, cf. hark): the
+// (pid . master-port) chain on success, an errno/-1 fixnum otherwise. returns a
+// not-ok g only on oom (lvm_tether routes that to ghelp).
 ai_noinline static struct ai *host_tether(struct ai *g) {
-  // NO l allocation between the marshal and the fork: openpt/grantpt/unlockpt/
+  // no l allocation between the marshal and the fork: openpt/grantpt/unlockpt/
   // ptsname/pipe don't touch the heap, so the uncommitted gap holds.
  char **cav;
  g = argv_marshal(g, &cav);
- if (!cav) return g;                               // misuse pushed -1, or OOM
+ if (!cav) return g;                               // misuse pushed -1, or oom
 
   // open the master, unlock the slave, copy the slave path (ptsname's buffer is
   // static -- snapshot it for the child, which inherits the snapshot across fork).
@@ -1171,7 +1171,7 @@ ai_noinline static struct ai *host_tether(struct ai *g) {
 
   // success: master -> heap port (pushes it to sp[0]; argv slides to sp[1]).
  struct ai *io = ai_io_alloc(g, mfd);
- if (!ai_ok(io)) {                                 // OOM: tear the child down, then ghelp
+ if (!ai_ok(io)) {                                 // oom: tear the child down, then ghelp
   kill(pid, SIGKILL);
   int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
   close(mfd);
@@ -1191,11 +1191,11 @@ static lvm(lvm_tether) {
  Sp[1] = Sp[0];                                    // result over argv
  ai_musttail return Nextp(1, 1); }
 
-// Workhorse for (reap pid), called with g Packed and pid at g->sp[0]. The &st
+// workhorse for (reap pid), called with g Packed and pid at g->sp[0]. the &st
 // waitpid + the chain alloc live here (off the wrapper's frame so lvm_reap's
-// Continue() tail-jumps, cf. host_tether). Leaves exactly one net value at sp[0]:
-// the (status) one-element list, () still-running, or an errno fixnum. Returns a
-// not-ok g only on OOM (lvm_reap routes that to ghelp).
+// Continue() tail-jumps, cf. host_tether). leaves exactly one net value at sp[0]:
+// the (status) one-element list, () still-running, or an errno fixnum. returns a
+// not-ok g only on oom (lvm_reap routes that to ghelp).
 ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
  intptr_t pid = charmp(pidw) ? getcharm(pidw) : 0;
  int st;
@@ -1204,14 +1204,14 @@ ai_noinline static struct ai *host_reap(struct ai *g, ai_word pidw) {
  if (r < 0)  { g->sp[0] = putcharm(errno); return g; }   // waitpid error
  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm(proc_status(st)), ZeroPoint);   // a REAL ()-tailed list, not the charm-0 fossil
+                                 putcharm(proc_status(st)), ZeroPoint);   // a real ()-tailed list, not the charm-0 fossil
  g->sp[0] = word(w);
  return g; }
 
-// (reap pid): non-blocking wait. A reaped child returns its decoded status as a
-// ONE-ELEMENT LIST so the result is a present chain even at status 0 -- a caller
+// (reap pid): non-blocking wait. a reaped child returns its decoded status as a
+// one-element list so the result is a present chain even at status 0 -- a caller
 // polling in a loop tells "exited 0" (a pair) from "still running" (()) without
-// the two collapsing to the same blue. A bare fixnum means waitpid itself erred.
+// the two collapsing to the same blue. a bare fixnum means waitpid itself erred.
 static lvm(lvm_reap) {
  Pack(g);
  g = host_reap(g, Sp[0]);
@@ -1219,18 +1219,18 @@ static lvm(lvm_reap) {
  Unpack(g);
  ai_musttail return Next(1); }
 
-// (kill pid sig): POSIX kill(2). A negative pid signals the process group.
-// Returns () on success, the errno fixnum on failure.
+// (kill pid sig): POSIX kill(2). a negative pid signals the process group.
+// returns () on success, the errno fixnum on failure.
 static lvm(lvm_kill) {
  intptr_t pid = charmp(Sp[0]) ? getcharm(Sp[0]) : 0,
           sig = charmp(Sp[1]) ? getcharm(Sp[1]) : 0;
  Sp[1] = kill((pid_t) pid, (int) sig) ? putcharm(errno) : zero;
  ai_musttail return Nextp(1, 1); }
 
-// Workhorse for (winsize), called with g Packed (the dummy arg sits at sp[0]).
-// The &ws ioctl + the chain alloc live here so lvm_winsize's Continue() tail-jumps
-// (cf. host_tether). Overwrites sp[0] with (rows . cols), or () if stdout isn't a
-// tty. Returns a not-ok g only on OOM (lvm_winsize routes that to ghelp).
+// workhorse for (winsize), called with g Packed (the dummy arg sits at sp[0]).
+// the &ws ioctl + the chain alloc live here so lvm_winsize's Continue() tail-jumps
+// (cf. host_tether). overwrites sp[0] with (rows . cols), or () if stdout isn't a
+// tty. returns a not-ok g only on oom (lvm_winsize routes that to ghelp).
 ai_noinline static struct ai *host_winsize(struct ai *g) {
  struct winsize ws;
  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) < 0) { g->sp[0] = zero; return g; }
@@ -1241,7 +1241,7 @@ ai_noinline static struct ai *host_winsize(struct ai *g) {
  return g; }
 
 // (winsize): the controlling tty's size as (rows . cols), read off stdout; () if
-// stdout isn't a tty (ioctl fails). The size to MIRROR onto a wrapped child.
+// stdout isn't a tty (ioctl fails). the size to mirror onto a wrapped child.
 static lvm(lvm_winsize) {
  Pack(g);
  g = host_winsize(g);
@@ -1252,8 +1252,8 @@ static lvm(lvm_winsize) {
 // (setwinsize port rows cols): push a window size onto a master port; the kernel
 // raises SIGWINCH on the slave's foreground group. () on success, errno on
 // failure (incl. a non-port / closed port -> EBADF).
-// The &ws ioctl for (setwinsize), off lvm_setwinsize's frame so its Continue()
-// tail-jumps. Returns 0 or the errno.
+// the &ws ioctl for (setwinsize), off lvm_setwinsize's frame so its Continue()
+// tail-jumps. returns 0 or the errno.
 ai_noinline static int host_setwinsize(intptr_t fd, intptr_t row, intptr_t col) {
  struct winsize ws = {0};
  ws.ws_row = (unsigned short) row;
@@ -1273,8 +1273,8 @@ static lvm(lvm_setwinsize) {
 // echo doesn't double it; a truthy `on` restores it. ICANON is left intact -- the
 // child still reads whole lines and sees VEOF. tcsetattr on the master fd sets the
 // shared pty termios. () on success, errno on failure (non-port / closed -> EBADF).
-// The &t tcget/tcsetattr for (ptyecho), off lvm_ptyecho's frame so its Continue()
-// tail-jumps. Returns 0 or the errno (EBADF for a non-port / closed fd).
+// the &t tcget/tcsetattr for (ptyecho), off lvm_ptyecho's frame so its Continue()
+// tail-jumps. returns 0 or the errno (EBADF for a non-port / closed fd).
 ai_noinline static int host_ptyecho(intptr_t fd, intptr_t on) {
  struct termios t;
  if (fd < 0) return EBADF;
@@ -1289,23 +1289,22 @@ static lvm(lvm_ptyecho) {
  Sp[1] = rc ? putcharm(rc) : zero;
  ai_musttail return Nextp(1, 1); }
 
-// (raw on): own the interactive terminal discipline on stdin (fd 0). A truthy
+// (raw on): own the interactive terminal discipline on stdin (fd 0). a truthy
 // `on` puts the tty in raw mode (no ICANON/ECHO/ISIG, VMIN=1) so bao's editor is
-// the SOLE echo; on = 0 / () restores the cooked termios captured at the first
+// the sole echo; on = 0 / () restores the cooked termios captured at the first
 // raw-on. bao's (shell _) calls (raw 1) because the bin/bao launch
 // (love -l bao.l -e "(bao 0)") passes argv, so main.c's argp path never raws --
 // without this the kernel tty echo doubles every line the editor draws. () on
 // success, errno on failure (stdin not a tty).
-// ⚠ ONE terminal, so one saved baseline and one atexit: main.c's repl calls this
-// too (ai_raw_mode). Two owners each capturing their own cooked state and each
-// registering their own handler was only ever correct by atexit's LIFO -- the
-// first to register held the true baseline and so ran last.
+// one terminal, so one saved baseline and one atexit -- main.c's repl calls this too
+// (ai_raw_mode). two owners each capturing their own cooked state would be correct only
+// by atexit's LIFO ordering.
 static struct termios raw_cooked;
 static int raw_have_cooked = 0;
 static void raw_restore(void) {
  if (raw_have_cooked) tcsetattr(STDIN_FILENO, TCSANOW, &raw_cooked); }
-// All the &t termios work + the capture-once/atexit state for (raw on), off
-// lvm_raw's frame so its Continue() tail-jumps. Returns 0 or the errno.
+// all the &t termios work + the capture-once/atexit state for (raw on), off
+// lvm_raw's frame so its Continue() tail-jumps. returns 0 or the errno.
 ai_noinline int ai_raw_mode(intptr_t on) {
  struct termios t;
  if (tcgetattr(STDIN_FILENO, &t)) return errno;
@@ -1321,10 +1320,10 @@ static lvm(lvm_raw) {
  Sp[0] = rc ? putcharm(rc) : zero;
  ai_musttail return Next(1); }
 
-// (swig port b): drink whatever the fd has waiting into cask b, WITHOUT blocking
+// (swig port b): drink whatever the fd has waiting into cask b, without blocking
 // (the caller parks on `see` for the first byte; swig drains the rest of the gulp).
 // n bytes read; 0 = nothing waiting or eof (the next see tells those apart); a
-// negative charm = -errno / misuse. The CHUNK lane a per-byte see cannot be.
+// negative charm = -errno / misuse. the chunk lane a per-byte see cannot be.
 static lvm(lvm_swig) {
  ai_word p = Sp[0], x = Sp[1], out = putcharm(-1);
  if (!charmp(p) && ((union u*) p)->ap == lvm_port_io
@@ -1332,7 +1331,7 @@ static lvm(lvm_swig) {
   struct ai_io *io = (struct ai_io*) p;
   intptr_t fd = ai_io_fd(io);
   struct ai_str *s = ((struct ai_cask*) x)->str;
-    // the port's OWN pending run comes first: a buffered see may have gulped
+    // the port's own pending run comes first: a buffered see may have gulped
     // ahead of us, and reading the fd past it would scramble the byte order
   if (s->len && ai_io_pending(g, io)) {
    uintptr_t k = ai_io_read_drain(g, io, (unsigned char*) s->bytes, s->len);

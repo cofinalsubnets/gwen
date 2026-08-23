@@ -1,4 +1,4 @@
-// host/hash.c -- a digest over a string's bytes. Host-only, auto-globbed + AiNif-
+// host/hash.c -- a digest over a string's bytes. host-only, auto-globbed + AiNif-
 // registered (no love.c/love.h/main.c edit), the fs.c discipline:
 //
 //   (sha256 str) -> the 64-char lowercase hex digest | () misuse
@@ -6,7 +6,7 @@
 //   (crc32 str)  -> the IEEE crc32, a charm          | () misuse
 //   (cksum str)  -> POSIX cksum's crc, length folded in, a charm | () misuse
 //
-// and three of them stream, the state in a cask the CALLER allocates (the nifs do not
+// and three of them stream, the state in a cask the caller allocates (the nifs do not
 // allocate) -- see the layouts below:
 //   (sha256-init b) / (sha256-feed b str) / (sha256-done b)   b a 105-byte cask
 //   (md5-init b)    / (md5-feed b str)    / (md5-done b)      b an 89-byte cask
@@ -16,13 +16,13 @@
 // shape; value ops, so absence/misuse answers (). crew/kore's cksum, md5sum and
 // sha256sum applets are these four plus a line of output.
 //
-// ⚠ THEY ARE NOT ALL IN THE SAME POSITION and it is worth knowing which is which.
+// they are not all in the same position and it is worth knowing which is which.
 // crc32 shadows lib/gz.l's gz-crcwalk and cksum test/host/hash.l's hash-ckwalk: both
-// polynomials are STATED in love, and test/host/{gzc,hash}.l hold the C to the walk at
+// polynomials are stated in love, and test/host/{gzc,hash}.l hold the C to the walk at
 // every length, so a disagreement there has a right answer. sha256 and md5 shadow
-// NOTHING -- so crew/sb's blob and patch ids and crew/moon's cache key rest on this
+// nothing -- so crew/sb's blob and patch ids and crew/moon's cache key rest on this
 // file, and what holds those two honest is the published vectors in test/host/hash.l
-// and GNU coreutils in test/gate/kore.sh. That is a thinner rope than the rest of
+// and GNU coreutils in test/gate/kore.sh. that is a thinner rope than the rest of
 // host/ hangs from, and the fix is a love sha-256, not another vector.
 #include "love.h"
 #include <stdint.h>
@@ -64,7 +64,7 @@ static void sha_block(uint32_t h[8], const uint8_t *p) {
  h[4] += e; h[5] += f; h[6] += gg; h[7] += hh; }
 
 // --- the buffering md5 and sha-256 share -------------------------------------------
-// ⚠ THE ONLY DIFFERENCE between them here is which compression function runs and which
+// the only difference between them here is which compression function runs and which
 // way the length is laid; the block arithmetic is the same, so it is written once and
 // both the one-shots and the streams below go through it.
 typedef void (*blkfn)(uint32_t *h, const uint8_t *p);
@@ -83,7 +83,7 @@ static unsigned blk_feed(uint32_t *h, uint8_t *buf, unsigned rem, blkfn f,
  if (n) memcpy(buf, p, n);
  return (unsigned) n; }
 
-// the pad: 0x80, zeros, then the BIT count -- big-endian for sha-256, little for md5
+// the pad: 0x80, zeros, then the bit count -- big-endian for sha-256, little for md5
 static void blk_done(uint32_t *h, const uint8_t *buf, unsigned r, uint64_t len,
                      blkfn f, int be) {
  uint8_t tail[128];
@@ -133,7 +133,7 @@ static lvm(lvm_sha256) {
 
 // --- md5 (RFC 1321) ---------------------------------------------------------------
 // the same shape as sha256 above with the endianness turned around: md5 loads its
-// words and lays its length LITTLE-endian, where sha-256 does both big.
+// words and lays its length little-endian, where sha-256 does both big.
 static const uint32_t MK[64] = {
  0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
  0x698098d8,0x8b44f7af,0xffff5bb1,0x895cd7be,0x6b901122,0xfd987193,0xa679438e,0x49b40821,
@@ -189,11 +189,11 @@ static lvm(lvm_md5) {
  ai_musttail return Next(1); }
 
 // --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -------------------------
-// EIGHT BYTES AT A TIME, and that is the whole difference: the byte-at-a-time walk
+// eight bytes at a time, and that is the whole difference: the byte-at-a-time walk
 // lib/gz.l spells is a dependency chain one link per byte, where slicing spends eight
-// INDEPENDENT lookups and lets the machine overlap them. gz.l cannot do this -- eight
+// independent lookups and lets the machine overlap them. gz.l cannot do this -- eight
 // tray reads per byte would cost eight times what one does.
-// ⚠ the tables are built on the first call rather than laid in .rodata: 2048 entries
+// the tables are built on the first call rather than laid in .rodata: 2048 entries
 // off a one-line recurrence, and nothing for a reader to check against the polynomial.
 static uint32_t crc_t[8][256];
 static int crc_ready;
@@ -235,16 +235,15 @@ static lvm(lvm_crc32) {
  Unpack(g);
  ai_musttail return Next(1); }
 
-// --- cksum (POSIX: NOT reflected, polynomial 0x04c11db7, the LENGTH folded in) -----
-// ⚠ a different crc from the one above in every part: the register runs the other way,
+// --- cksum (POSIX: not reflected, polynomial 0x04c11db7, the length folded in) -----
+// a different crc from the one above in every part: the register runs the other way,
 // the seed is 0, and the message does not end at the last byte -- the byte count goes
 // through the same walk, low byte first, which is what makes cksum answer 4294967295
-// for the empty file rather than 0. Its tables are its own for that reason: crc32's
+// for the empty file rather than 0. its tables are its own for that reason: crc32's
 // are the reflected polynomial's and answer a different number.
-// ⚠ ck_bit IS THE STATEMENT of the polynomial, and it is the table's only source --
-// the walk below is derived from it, not a second spelling of it. (It was the walk
-// itself until the tables landed, at 8 shifts and a branch a byte: 90% of a `cksum`
-// run, and 3.5 s of the 3.9 s over 100 MB.)
+// ck_bit is the statement of the polynomial, and it is the table's only source -- the
+// walk below is derived from it, not a second spelling of it. the tables are worth their
+// space: bit-at-a-time is 8 shifts and a branch a byte, 3.5 s of a 3.9 s run over 100 MB.
 static uint32_t ck_bit(uint32_t c, uint8_t b) {
  c ^= (uint32_t) b << 24;
  for (int k = 0; k < 8; k++) c = (c & 0x80000000u) ? (c << 1) ^ 0x04c11db7u : c << 1;
@@ -266,7 +265,7 @@ static void ck_init(void) {
 #define LD32BE(p) ((uint32_t) (p)[0] << 24 | (uint32_t) (p)[1] << 16 \
                  | (uint32_t) (p)[2] << 8  | (uint32_t) (p)[3])
 
-// EIGHT BYTES AT A TIME, the same trade crc32 takes above: eight INDEPENDENT lookups
+// eight bytes at a time, the same trade crc32 takes above: eight independent lookups
 // the machine can overlap, against a dependency chain one link per byte.
 static uint32_t ck_run(uint32_t c, const uint8_t *p, uintptr_t n) {
  if (!ck_ready) ck_init();
@@ -304,21 +303,21 @@ static lvm(lvm_cksum) {
 
 // --- the same digests, resumable ---------------------------------------------------
 // the one-shots want their whole message contiguous, and for a file that is the file.
-// each triple below carries the state in a CASK instead, so a caller feeds it a gulp
+// each triple below carries the state in a cask instead, so a caller feeds it a gulp
 // at a time and holds nothing. the block loops above are untouched -- one spelling of
 // each compression function, two ways in, so a streamed digest cannot drift from its
 // one-shot, and test/host/hash.l holds the two together at every chunking.
 //
-// THE LAYOUT IS THIS FILE'S; love allocates the cask, carries it, and never reads it.
+// the layout is this file's; love allocates the cask, carries it, and never reads it.
 // big-endian throughout, whatever the algorithm's own order, so the state is bytes and
 // not this machine's words -- it can be written down, and an image carrying one wakes
 // on any box.
 //
-//   sha-256, 105:  0..31 h[8] BE | 32..39 count BE | 40 remainder len | 41.. remainder
-//   md5,      89:  0..15 h[4] BE | 16..23 count BE | 24 remainder len | 25.. remainder
-//   cksum,    12:  0..3 crc BE   | 4..11 count BE                    (no block, no rem)
+//   sha-256, 105:  0..31 h[8] be | 32..39 count be | 40 remainder len | 41.. remainder
+//   md5,      89:  0..15 h[4] be | 16..23 count be | 24 remainder len | 25.. remainder
+//   cksum,    12:  0..3 crc be   | 4..11 count be                    (no block, no rem)
 //
-// ⚠ THE SIZE IS THE TYPE. Three states of three widths, and every entry point checks
+// the size is the type. three states of three widths, and every entry point checks
 // the one it wants -- which is what stops an md5 state being fed to sha256-feed and
 // answering a number that looks like a digest.
 #define ShaSt 105
@@ -428,8 +427,8 @@ static lvm(lvm_md5_done) {
  Unpack(g);
  ai_musttail return Next(1); }
 
-// cksum streams with NO block and NO remainder: its walk is a byte at a time, so the
-// whole state is the register and the count. ⚠ and the count is not bookkeeping here
+// cksum streams with no block and no remainder: its walk is a byte at a time, so the
+// whole state is the register and the count. and the count is not bookkeeping here
 // -- cksum folds it into the message at the end, which is why an empty file answers
 // 4294967295 and not 0, and why `done` is where the length finally speaks.
 ai_noinline static ai_word host_ck_init(ai_word x) {

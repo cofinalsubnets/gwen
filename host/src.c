@@ -1,4 +1,4 @@
-// host/src.c -- the artifact's own source, handed back out. Host-only, auto-globbed
+// host/src.c -- the artifact's own source, handed back out. host-only, auto-globbed
 // + AiNif-registered (no love.c/love.h/main.c edit), the fs.c discipline:
 //
 //   (source-gz ()) -> the embedded love-<ver>.tar.gz bytes | () when none is baked in
@@ -6,18 +6,18 @@
 // tools/mksrc.l lays the archive into an object as two .rodata symbols and the dist
 // link pulls it in; love/verbs.l's `source` verb inflates what this answers. doc/misc/dist.md.
 //
-// ⚠ PRESENCE RIDES THE KIND, NOT THE NET. an artifact with no source baked in and one
+// presence rides the kind, not the net. an artifact with no source baked in and one
 // carrying an empty archive must not read alike, and every nothing here is nil by
-// design -- so absence is the ZERO POINT and any archive at all is a STRING, which
+// design -- so absence is the zero point and any archive at all is a string, which
 // `string?` separates even at zero bytes. `(! s)` would call both of them absent.
 //
-// ⚠ THE EMPTY BLOB IS DEFINED HERE, WEAKLY, and the dist link overrides it with a
+// the empty blob is defined here, weakly, and the dist link overrides it with a
 // strong one -- ldsyms' "a strong def beats any weak", the same override test_moon
-// already pins. So the symbols are ALWAYS defined and the length alone says whether
+// already pins. so the symbols are always defined and the length alone says whether
 // there is source: no null test, and nothing to link specially for a plain build.
-// ⚠ A WEAK *UNDEFINED* DATUM WOULD NOT HAVE WORKED, which is worth writing down: we
-// link -pie, gcc reaches such a symbol through the GOT so it reads a true NULL, and
-// ours emits a plain rip-relative lea -- which answers LOAD_BASE + 0, never null. The
+// a weak *undefined* datum would not have worked, which is worth writing down: we
+// link -pie, gcc reaches such a symbol through the got so it reads a true NULL, and
+// ours emits a plain rip-relative lea -- which answers LOAD_BASE + 0, never null. the
 // test silently never fires and the length is read out of the ELF header.
 #include "love.h"
 #include <string.h>
@@ -30,7 +30,7 @@ ai_noinline static struct ai *host_srcgz(struct ai *g) {
  uintptr_t n = ai_srcgz_len;
  if (!n) return g->sp[0] = ZeroPoint, g;
  if (!ai_ok(g = str0(g, n))) return g;             // pushes: the archive over the arg
- // ⚠ no re-read after str0's collect: the source is .rodata, not the heap, so the
+ // no re-read after str0's collect: the source is .rodata, not the heap, so the
  // pointer cannot have moved -- unlike the port in love.c's readn.
  if (n) memcpy(txt(g->sp[0]), p, (size_t) n);
  g->sp[1] = g->sp[0];

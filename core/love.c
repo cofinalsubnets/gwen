@@ -4858,12 +4858,12 @@ static word img_nif_interp(struct img_ctx *x, word v) {   // v -> a cell value; 
      && img_wxp(x, c[2]) && c[4] == (word) lvm_ret && oddp(c[5])) e = c[3];
  else if (c + 4 <= hp && c - 2 >= base && c[-2] == (word) lvm_cur && oddp(c[-1])
      && img_wxp(x, c[0]) && c[2] == (word) lvm_ret && oddp(c[3])
-     && c[1]) e = c[1] + 2 * sizeof(word);            // a LINK (value+2): twin's value+2, contract kept
+     && c[1]) e = c[1] + 2 * sizeof(word);            // a link (value+2): twin's value+2, contract kept
  return e; }
 // encode a live value (post-compaction) -> portable (tag,payload):
 //  0 FIX raw | 1 PTR word-offset into the blob | 2 LVM table index | 3 IMM immortal index
 static void image_root_enc(struct img_ctx *x, word v, uint64_t *tag, uint64_t *val) {
- intptr_t li = image_ap_index((intptr_t) v); if (li >= 0) { *tag = 2, *val = (uint64_t) li; return; }  // ap table FIRST: thumb aps are ODD (see img_encode)
+ intptr_t li = image_ap_index((intptr_t) v); if (li >= 0) { *tag = 2, *val = (uint64_t) li; return; }  // ap table first: thumb aps are odd (see img_encode)
  if (oddp(v)) { *tag = 0, *val = (uint64_t) v; return; }
  if ((word*) v >= x->base && (word*) v < x->hp) {
   word e = img_nif_interp(x, v);                 // a root holding a dead-native cell: its twin rides instead
@@ -4908,7 +4908,7 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 #define ImageAbsBias ((uintptr_t) 1 << (sizeof(uintptr_t) == 8 ? 40 : 26))
 static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  uintptr_t const hb = ImageIdxBase;
- // the ap table FIRST, before parity: on thumb every fn address is ODD and would
+ // the ap table first, before parity: on thumb every fn address is odd and would
  // ride raw as a "fixnum", valid only at the baker's base (the qemu-twins trap
  // that walled the teensy wake). a colliding fixnum: ~300 values out of 2^31.
  intptr_t idx = image_ap_index(v);
@@ -5474,7 +5474,7 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
     default:     break; }                                                         // flat leaves: payload is already seated
   } else {                                                                        // thread: the encoded terminator is its head's byte offset | tag
    word term = (word)(off * sizeof(word) + ai_thread_tag); uintptr_t k = 1;
-   uintptr_t kmax = nw - off;                                                     // BOUND the walk: a mis-decoded word0 must refuse
+   uintptr_t kmax = nw - off;                                                     // bound the walk: a mis-decoded word0 must refuse
    for (;; k++) {                                                                 // one pass, decoding to the terminator (rung 2):
     if (k >= kmax) return NULL;                                                   // the load, never march off the pool (on metal the                                               // the load, never march off the pool (on metal the
     if (s[k] == term) break;                                                      // pool's edge is a dead bus, and a dead bus is mute)
@@ -6392,7 +6392,7 @@ static uintptr_t shash(struct ai *g, word x, struct arib *env) {
 
 // --- the beta bridge: a closure value compares up to the capture-substitution
 // ev already performed -- (adder 5) = (\ x (+ x 5)). done without allocating: the
-// base source is walked virtually, its leading binders split FILLED (resolve to
+// base source is walked virtually, its leading binders split filled (resolve to
 // the captured value) and remaining (post-substitution de Bruijn coordinates).
 // sound by construction; a captured closure vs a source lambda stays unbridged
 // (conservative, but nf_hash mirrors shash so =-equal closures always hash equal).
@@ -6423,7 +6423,7 @@ static bool clo_load(struct ai *c, word v, struct clonf *o) {
  return true; }
 
 // α-invariant hash of a residual's body, mirroring shash: a genuine binder by
-// coordinate, a FILLED binder by its captured value's hash, a free var by symbol
+// coordinate, a filled binder by its captured value's hash, a free var by symbol
 static uintptr_t nf_hash(struct ai *g, word x, struct arib *env, word fs, int fn, word *fv) {
  if (nomp(x)) {
   int d = 0;

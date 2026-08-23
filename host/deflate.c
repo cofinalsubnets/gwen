@@ -3,7 +3,7 @@
 //
 //   (deflate s) -> the raw DEFLATE stream | ()
 //
-// A TWIN held to the BYTES, like gz-find's machine-code presentation and unlike a
+// a twin held to the bytes, like gz-find's machine-code presentation and unlike a
 // licensed re-compressor: same greedy parse (chain 32, min match 3, the far-3
 // refusal at 4096), same 16384-symbol blocks each costed stored/fixed/dynamic,
 // same two-queue Huffman merge with its leaf-wins tie, same halving walk back
@@ -11,15 +11,15 @@
 // divergence is a bug in one of them and never a licensed difference. gz-deflate
 // stays the readable statement; test/host/gzc.l holds the two to the same bytes.
 //
-// ⚠ WHY THIS EXISTS: the love coder is correct and 35x-to-13x off C -- but its
-// real cost is the HEAP, not the clock. Interpreted DEFLATE churns cells per
+// why this exists: the love coder is correct and 35x-to-13x off C -- but its
+// real cost is the heap, not the clock. interpreted DEFLATE churns cells per
 // symbol, and on the love0 egg that runs selfpack the heap grows toward the
-// budget -- half the box's RAM by default -- before a collection pays. This file
+// budget -- half the box's RAM by default -- before a collection pays. this file
 // is a fixed window and some tables.
 //
-// ⚠ SCRATCH IS NOT THE HEAP: the off semispace where it is big enough (the major
+// scratch is not the heap: the off semispace where it is big enough (the major
 // pool's spare half is dead between collections), one g->alloc block where it is
-// not. And the shape is inflate's counting pass twice over: count, str0 the exact
+// not. and the shape is inflate's counting pass twice over: count, str0 the exact
 // answer, re-derive and emit -- because str0 may collect, and a collection flips
 // the spare half out from under any pointer held across it.
 #include "love.h"
@@ -255,7 +255,7 @@ static uintptr_t df_block(const uint8_t *s, uintptr_t n, uintptr_t i, struct df_
    dyn = 17 + hclen * 3 + df_ccost(a->rlb, a->lenc, nr)
        + df_cost(a->fl, a->lenl, 286) + df_cost(a->fd, a->lend, 30) + xb;
    fix = 3 + df_cost(a->fl, a->fixll, 286) + df_cost(a->fd, a->fixld, 30) + xb;
-   raw = (i - i0) < 65536 ? 42 + (uint64_t) (i - i0) * 8 : dyn + fix;   // no stored spelling past LEN
+   raw = (i - i0) < 65536 ? 42 + (uint64_t) (i - i0) * 8 : dyn + fix;   // no stored spelling past len
    if (raw < (dyn <= fix ? dyn : fix)) df_wstored(t, s, i0, i, last);
    else if (fix < dyn) {
     df_put(t, last ? 1 : 0, 1); df_put(t, 1, 2);
@@ -291,8 +291,8 @@ static int64_t df_go(const uint8_t *s, uintptr_t n, uint8_t *out, uintptr_t cap,
  df_align(&t);
  return t.err ? -2 : (int64_t) t.op; }
 
-// ⚠ str0 collects, so both the source and the spare half are re-derived after it:
-// a pointer held across the bump is stale, and a major collection FLIPS the halves.
+// str0 collects, so both the source and the spare half are re-derived after it:
+// a pointer held across the bump is stale, and a major collection flips the halves.
 static uint8_t *df_arena(struct ai *g, int *alloced) {
  *alloced = 0;
  if (g->major_pool && g->major_len * sizeof(ai_word) >= DF_ARENA)

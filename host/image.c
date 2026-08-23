@@ -1,9 +1,9 @@
 // host/image.c -- file I/O around the core's stdio-free image codec (ai_image_save /
-// ai_image_load, love.c). The CORE owns the heap serialization (compact + range-encode a
-// {header, blob} buffer, and its inverse); the HOST owns stdio -- so love.c stays
+// ai_image_load, love.c). the core owns the heap serialization (compact + range-encode a
+// {header, blob} buffer, and its inverse); the host owns stdio -- so love.c stays
 // freestanding-clean. main.c calls image_bake (bake: lay the image back into the
 // binary's own .image section), image_dump (bake PATH: write a plain image file), and
-// image_load (wake PATH). Conventions: bake/dump 0 ok / <0 error; load NULL on any
+// image_load (wake PATH). conventions: bake/dump 0 ok / <0 error; load NULL on any
 // problem so the caller falls back to a normal egg boot.
 #define _GNU_SOURCE
 #include "love.h"
@@ -19,9 +19,9 @@
 extern size_t host_selfpath(char*, size_t);       // host/posix.c: the one selfpath door (per-OS ladder)
 
 // the wake-safety guard: a kept-absolute pointer only survives a wake if it aims inside
-// the MAIN PROGRAM's load segments (one ASLR base delta shifts them all). Anything else --
+// the main program's load segments (one ASLR base delta shifts them all). anything else --
 // a JIT W^X page, an mmap, a shared library -- dies with the bake process, so the dump
-// refuses it. the bounds ride the CALLER's frame and reach the codec by parameter: one
+// refuses it. the bounds ride the caller's frame and reach the codec by parameter: one
 // phdr walk per bake, and the audit keeps no state between them.
 struct image_segs { struct { uintptr_t lo, hi; } s[16]; int n; };
 static int image_seg_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
@@ -42,7 +42,7 @@ static uintptr_t image_abs_ok(void *ctx, uintptr_t v, uintptr_t off, uintptr_t a
     if (v >= q->s[i].lo && v < q->s[i].hi) return 1;
   return 0;
 }
-// ⚠ segs must outlive the dump: it is what the guard reads. keep it in the frame that
+// segs must outlive the dump: it is what the guard reads. keep it in the frame that
 // makes the ai_image_save call, never a temporary.
 static struct ai_image_guard image_guard(struct image_segs *segs) {
   segs->n = 0;
@@ -51,20 +51,20 @@ static struct ai_image_guard image_guard(struct image_segs *segs) {
   return gd;
 }
 
-// `bake PATH` lays the image DIRECTLY EXECUTABLE -- ./img runs `love wake ./img args..`,
+// `bake PATH` lays the image directly executable -- ./img runs `love wake ./img args..`,
 // which is the one shape a shebang can carry (a single argument, then the file itself).
 // `env -S` rather than a baked-in path, the same spelling the tree's other shebang tools
 // install with, so the image follows love on PATH instead of pinning one build.
-// ⚠ ALWAYS WRITTEN, never a flag: a #! line the reader steps over costs the file 32 bytes
-// and an option costs every caller a decision it has no grounds to make. Reading is the
+// always written, never a flag: a #! line the reader steps over costs the file 32 bytes
+// and an option costs every caller a decision it has no grounds to make. reading is the
 // half that stays tolerant -- an image with no shebang loads exactly as it always did,
 // which is what keeps an already-dumped one working across this change.
-// ⚠ PADDED TO A WORD. The core reads its header at offset 0 of whatever it is handed
+// padded to a word. the core reads its header at offset 0 of whatever it is handed
 // and takes the blob as `word*` straight after; an odd-length line would hand it an
-// unaligned header, which x86 tolerates and aarch64 faults on. Spaces before the
+// unaligned header, which x86 tolerates and aarch64 faults on. spaces before the
 // newline cost nothing and keep every later field where the codec expects it.
-// ⚠ and the load side skips it in the HOST, never the core: a shebang is a POSIX exec
-// convention, and love.c stays freestanding-clean. The .image section lane never has one.
+// and the load side skips it in the host, never the core: a shebang is a POSIX exec
+// convention, and love.c stays freestanding-clean. the .image section lane never has one.
 #define ImageShebang "#!/usr/bin/env -S love wake"
 static size_t image_shebang(char *sb, size_t cap) {
   size_t n = (size_t) snprintf(sb, cap, "%s", ImageShebang);
@@ -91,48 +91,47 @@ int image_dump(struct ai *g, char const *path) {
   return rc;
 }
 
-// image_bake -- the SELF-bake: lay the post-warm image into the running binary's own
-// .image section on disk (what the Makefile's objdump/truncate/objcopy pipeline did).
-// ETXTBSY-proof by the adopt pattern: you cannot write your own
-// executing file, so copy it, lay the blob in, fsync, and atomically RENAME over the
-// original -- a new inode, so anything still executing keeps the old one. Same build =
+// image_bake -- the self-bake: lay the post-warm image into the running binary's own
+// .image section on disk. ETXTBSY-proof by the adopt pattern: you cannot write your own
+// executing file, so copy it, lay the blob in, fsync, and atomically rename over the
+// original -- a new inode, so anything still executing keeps the old one. same build =
 // same layout, so the codec's anchor/refsym guards hold by construction.
 //
-// The image is bytes we have to PUT somewhere, and .image is laid LAST so there is room:
-// the blob is APPENDED where the section already sits and the one phdr + one shdr that
-// name it are rewritten to say how far it now reaches. No reserve, no ceiling. Nothing
+// the image is bytes we have to put somewhere, and .image is laid last so there is room:
+// the blob is appended where the section already sits and the one phdr + one shdr that
+// name it are rewritten to say how far it now reaches. no reserve, no ceiling. nothing
 // else in the file moves -- no vaddr changes at all -- so the anchor/refsym deltas the
-// wake checks still hold. What bake_tail requires is read off the binary's own section
-// headers, never told to it by a build flag, and it is one thing: .image ENDS the segment
-// that carries it. True of a section alone in the highest PT_LOAD (host/build.mk's
+// wake checks still hold. what bake_tail requires is read off the binary's own section
+// headers, never told to it by a build flag, and it is one thing: .image ends the segment
+// that carries it. true of a section alone in the highest PT_LOAD (host/build.mk's
 // --section-start, ld and lld both) and of one riding the tail of the single segment holo
-// lays. A link that laid it anywhere else is refused LOUDLY -- there is nowhere to grow,
+// lays. a link that laid it anywhere else is refused loudly -- there is nowhere to grow,
 // and quietly booting the egg forever is not a kindness.
 // the in-binary home of the post-boot heap image (doc/misc/snapshot.md): the binary
-// loads ITS OWN dump at startup (main.c) -- identical layout by construction, so
-// the codec's same-binary +delta relocation just works. Sentinel-initialized (not
-// {0}) so it lands in PROGBITS, patchable in place, never .bss. The section is
-// laid LAST -- alone in the highest segment on the host (host/build.mk's
+// loads its own dump at startup (main.c) -- identical layout by construction, so
+// the codec's same-binary +delta relocation just works. sentinel-initialized (not
+// {0}) so it lands in PROGBITS, patchable in place, never .bss. the section is
+// laid last -- alone in the highest segment on the host (host/build.mk's
 // --section-start), riding the tail of the single segment holo lays -- so the
-// bake GROWS it: nothing is pre-allocated and there is no ceiling; this stub
+// bake grows it: nothing is pre-allocated and there is no ceiling; this stub
 // exists only to give the section an address.
 #define ReserveWords 2u
 __attribute__((section(".love_image"))) uint64_t ai_baked_image[ReserveWords] = {1};
 uintptr_t ai_baked_image_len = ReserveWords * 8u;
-// ⚠ AND THE STUB'S SIZE IS A LIE gcc believes: ReserveWords is 2 because the bake grows
-// the object, so every read past the second word is out of bounds of the DECLARATION and
+// and the stub's size is a lie gcc believes: ReserveWords is 2 because the bake grows
+// the object, so every read past the second word is out of bounds of the declaration and
 // in bounds of the section. main.c says `extern uint64_t ai_baked_image[]` and never
 // hears about it; this file holds the sized definition, so it does.
 #if defined(__GNUC__) && !defined(__clang__) && !defined(__mooncc__)
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
-// --- the image ARRAY ---------------------------------------------------------
-// the section holds EITHER one image -- its first word is the codec's own magic,
-// which is what every binary before this laid -- or a DIRECTORY: magic, count,
+// --- the image array ---------------------------------------------------------
+// the section holds either one image -- its first word is the codec's own magic,
+// which is what every binary before this laid -- or a directory: magic, count,
 // then one {off, len, kind, base, verbs} record per image, then the blobs. offsets
 // are from the section's first byte.
 //
-// the entries are laid SMALLEST FIRST and `verbs` names what each can serve, so
+// the entries are laid smallest first and `verbs` names what each can serve, so
 // "the first entry that claims this verb" is the walk up the chain, decided
 // before anything is woken -- it has to be, since the verb table lives in the
 // image we have not woken yet.
@@ -235,11 +234,11 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
   for (size_t i = 1; i < nsh; i++)
     if (sh[i].sh_name < sh[eh.e_shstrndx].sh_size && !strcmp(str + sh[i].sh_name, ".love_image")) { si = i; break; }
   if (!si) goto out;                              // no .image section at all
-  // The blob goes exactly where the section already sits -- the offset never moves, so
+  // the blob goes exactly where the section already sits -- the offset never moves, so
   // the loader's offset/vaddr congruence is inherited rather than recomputed, and a
-  // rebake lands on its own footprint. What has to be true is only that .image is LAST:
+  // rebake lands on its own footprint. what has to be true is only that .image is last:
   // nothing allocated above it, and it ends the segment that carries it, so growing it
-  // grows nothing else. That covers a section alone in the highest PT_LOAD (ld's
+  // grows nothing else. that covers a section alone in the highest PT_LOAD (ld's
   // --section-start, the gcc/clang lane) and one riding the tail of the single segment
   // holo lays, with the same arithmetic.
   off = sh[si].sh_offset;
@@ -359,9 +358,9 @@ int image_bake(struct ai *g) {
   void *buf = ai_image_save(g, &len, &gd);
   // the codec silently reverts any would-be-dead native reference to the bytecode
   // twin the cell carries (ai_image_redir); the bake stays correct, so there is
-  // nothing to announce. only a REFUSED bake (below) is worth a word.
+  // nothing to announce. only a refused bake (below) is worth a word.
   if (!buf) return -2;
-  // ai_baked_image_len is patched by FILE OFFSET, and the offset comes from the running
+  // ai_baked_image_len is patched by FILE offset, and the offset comes from the running
   // program's own phdrs (dl_iterate_phdr, first object) -- the one place a live address
   // and a file position are known to name the same byte.
   struct bake_at bl = { (uintptr_t) &ai_baked_image_len, 0, 0 };
@@ -383,12 +382,12 @@ int image_bake(struct ai *g) {
   return rc;
 }
 
-// (bake path) -- snapshot the LIVE session to an image file, mid-eval: the running
+// (bake path) -- snapshot the live session to an image file, mid-eval: the running
 // stack's objects ride into the blob as wake-unreachable ballast and the load side
 // resets sp/ip, so `love wake path prog.l ..` boots a session carrying every global
 // this one had pinned (an app baked warm: the mooncc image erases its per-run load).
 // natives cannot serialize -- the glaze's own bake wrapper (love/glaze/hook.l) empties its cache
-// first (they re-JIT lazily in the woken session); any OTHER live native closure at
+// first (they re-JIT lazily in the woken session); any other live native closure at
 // bake time is on the caller. answers 1 | ().
 // the frame-heavy body lives in a plain helper: path[4096] + &len escape (to
 // fopen / ai_image_save_) and pin the frame, which would defeat the lvm_ ap's
@@ -399,7 +398,7 @@ static ai_noinline ai_word image_bake_do(struct ai *g) {
  struct ai_str *s = (struct ai_str*) g->sp[0];
  char path[4096];
  if (s->len >= sizeof path) return ai_zero;
- memcpy(path, s->bytes, s->len);                 // copy OUT first: the dump's gen_major moves the string
+ memcpy(path, s->bytes, s->len);                 // copy out first: the dump's gen_major moves the string
  path[s->len] = 0;
  struct image_segs segs;
  struct ai_image_guard gd = image_guard(&segs);
@@ -430,7 +429,7 @@ struct ai *image_load(char const *path) {
     void *buf = mmap(NULL, n, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
     if (buf != MAP_FAILED) {
       // step over a `bake -x` shebang, if the image wears one (image_dump pads the line
-      // so what follows is still word-aligned). A plain image starts at the magic.
+      // so what follows is still word-aligned). a plain image starts at the magic.
       size_t off = 0;
       if (n > 2 && ((char*) buf)[0] == '#' && ((char*) buf)[1] == '!') {
         char *nl = memchr(buf, '\n', n);

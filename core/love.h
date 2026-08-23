@@ -294,7 +294,7 @@ extern struct ai_mod const __start_ai_mods[], __stop_ai_mods[];
 #endif
 
 // port vtable -- what a device owes, and nothing else. a NULL slot means no method
-// (no readn reads END, no writen discards). neither blocks the scheduler; the generic
+// (no readn reads end, no writen discards). neither blocks the scheduler; the generic
 // layer above owns ungetc_buf.
 //   writen: land up to n bytes in one motion: >0 landed, 0 no room now (caller keeps
 //     the residue), -1 the device is gone (io_wdrain drops the run). it may allocate,
@@ -332,7 +332,7 @@ lvm_t lvm_ret0, lvm_cur, lvm_port_io, lvm_help, lvm_cask,
 // and its address is what says "there is an fd behind this one" (ai_io_fd).
 extern struct ai_port_vt const ai_fd_port_vt;
 // what a closed port wears: every door a no-op, and no fd behind it. a frontend
-// owning `close` swaps this in -- that swap IS the close, there is no other mark.
+// owning `close` swaps this in -- that swap is the close, there is no other mark.
 extern struct ai_port_vt const ai_closed_vt;
 
 // close an OS fd backing a heap port; weak no-op default, the host overrides
@@ -365,7 +365,7 @@ struct ai
 // close and seal call the pair: wflush, then park on a nonzero wpending (see
 // lvm_yield_sw). neither may shut the fd on a residue -- a truncated stream.
  *ai_io_alloc(struct ai *g, int fd);
-// raw bytes at an fd with NO g machinery -- the GC-context finalizer drains a
+// raw bytes at an fd with no g machinery -- the GC-context finalizer drains a
 // dying port through it. weak no-op default; the host overrides with write(2).
 void ai_fd_drain(int fd, void const*, uintptr_t);
 
@@ -380,7 +380,7 @@ struct ai
  *ai_evals_(struct ai*, const char*),
  *ai_egg_(struct ai*, char const*, char const*, char const*, char const*),  // (egg, p1, corpus, post)
  *ai_defn(struct ai*, struct ai_def const*, uintptr_t, char const*),   // immortal values only; mod (or NULL = the book)
- *ai_defv(struct ai*, char const*),                // its twin for a LIVE heap value (rides sp[0], stays there)
+ *ai_defv(struct ai*, char const*),                // its twin for a live heap value (rides sp[0], stays there)
  *ai_layer_(struct ai*),      // push a fresh writable layer (the runtime's enter); every frontend opens its session with it
  *ai_unsplice_(struct ai*);   // drop the link below the head (the runtime's bare leave)
 
@@ -395,7 +395,7 @@ struct ai
 // plus that object's hot). answer 0 and the dump refuses.
 struct ai_image_guard { uintptr_t (*ok)(void *ctx, uintptr_t v, uintptr_t off, uintptr_t ap); void *ctx; };
 void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_guard const*),
-     *ai_image_save_(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);   // the unguarded worker: a MID-EVAL dump (the bake nif)
+     *ai_image_save_(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);   // the unguarded worker: a mid-eval dump (the bake nif)
 struct ai *ai_image_load(void const *buf, uintptr_t len);
 // the layered bake (doc/misc/plan/image-chain.md). freeze dumps this layer and pins it, and
 // answers an opaque {header, blob} record the caller hands back. save_over answers the

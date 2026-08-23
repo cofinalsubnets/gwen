@@ -4,15 +4,15 @@
 //   (chacha20 key nonce ctr txt) -> a string as long as txt   | () misuse
 //   (poly1305 key msg)           -> the 16-byte tag           | () misuse
 //
-// these are TWINS, not replacements: crew/tls/chacha.l and crew/tls/poly1305.l
+// these are twins, not replacements: crew/tls/chacha.l and crew/tls/poly1305.l
 // stay the readable statement of each cipher and the differential oracle
 // (test/host/tlsc.l asserts the two agree byte-for-byte on the RFC's vectors and
 // on every length around a block edge). value ops, so misuse answers ().
 //
-// ⚠ the ALGORITHM is the love file's, deliberately: poly1305 keeps the five
+// the algorithm is the love file's, deliberately: poly1305 keeps the five
 // 26-bit limbs rather than reaching for __int128, so what the timing compares is
 // the two languages running one algorithm, not two algorithms. chacha is the one
-// place they differ in SHAPE and cannot not: love vectorises across blocks
+// place they differ in shape and cannot not: love vectorises across blocks
 // because its per-op cost dominates, C walks one block at a time.
 // crew/tls/bench.l times both, and says whose binary the number belongs to.
 #include "love.h"
@@ -96,7 +96,7 @@ static void po_mul(uint64_t h[5], const uint64_t r[5]) {
  d4 += c; c = d4 >> 26; h[4] = d4 & M26;
  h[0] += c * 5; c = h[0] >> 26; h[0] &= M26; h[1] += c; }
 
-// ⚠ the conditional subtract is a MASK, never an if: both h and h-p are always
+// the conditional subtract is a mask, never an if: both h and h-p are always
 // computed and one is selected, so nothing branches on the accumulator.
 static void po_fin(const uint64_t h[5], const uint8_t *key, uint8_t out[16]) {
  int64_t h0 = (int64_t) h[0], h1 = (int64_t) h[1], h2 = (int64_t) h[2],
@@ -142,7 +142,7 @@ static void po_mac(const uint8_t *key, const uint8_t *msg, uintptr_t n,
  po_fin(h, key, out); }
 
 // --- the two nifs -----------------------------------------------------------------
-// ⚠ str0 can collect, so the result is allocated FIRST and the arguments re-read
+// str0 can collect, so the result is allocated first and the arguments re-read
 // off the stack after it: the pointers a C local held are stale across the bump.
 ai_noinline static struct ai *host_chacha20(struct ai *g) {
  ai_word kw = g->sp[0], nw = g->sp[1], cw = g->sp[2], tw = g->sp[3];
