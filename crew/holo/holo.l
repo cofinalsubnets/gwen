@@ -23,6 +23,7 @@
 ;   (stx base ix sc dp s)  ; [base + ix*sc + dp] <- s
 ;   (leax d base ix sc dp) ; d <- base + ix*sc + dp
 ;   (shl/shr/sar/rol/ror d c)                  ; shift / rotate d in place by immediate count c
+;   (ror4 d c) (rorv/rorv4 d c)                ; 32-bit rotate right (imm; count via r1) + the 64-bit count form
 ;   (test a b)             ; set flags from a AND b
 ;   (div d a b) (rem d a b t)                  ; signed truncating quotient / remainder; t a scratch (arm64 rem; x86 ignores)
 ;   (push s) (pop d)
@@ -134,8 +135,8 @@
            ('jmp >< 1) ('jmp8 >< 1) ('jmpr >< 1) ('callr >< 1) ('call >< 1) ('raw >< 1) ('lapool >< 1)
            ('li >< 2) ('mov >< 2) ('cmp >< 2) ('test >< 2) ('set >< 2) ('br >< 2) ('br8 >< 2)
            ('la >< 2) ('lar >< 2) ('lia >< 2) ('ldseg >< 2) ('clz >< 2)
-           ('shl >< 2) ('shr >< 2) ('sar >< 2) ('rol >< 2) ('ror >< 2)
-           ('shlv >< 2) ('shrv >< 2) ('sarv >< 2)
+           ('shl >< 2) ('shr >< 2) ('sar >< 2) ('rol >< 2) ('ror >< 2) ('ror4 >< 2)
+           ('shlv >< 2) ('shrv >< 2) ('sarv >< 2) ('rorv >< 2) ('rorv4 >< 2)
            ('movupd >< 2) ('movsd >< 2) ('movhlps >< 2) ('unpcklpd >< 2)
            ('mulpd >< 2) ('addpd >< 2) ('subpd >< 2) ('divpd >< 2)
            ('mulsd >< 2) ('addsd >< 2) ('subsd >< 2) ('divsd >< 2)

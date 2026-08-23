@@ -343,6 +343,29 @@
       (two? (cgn "char *s = \"hi\"; int main() { return 0; }"))       ; a label-valued global: abs64 (4d)
       (refused? (cgn "int main() { int a[2] = 5; return 0; }"))))          ; a scalar cannot initialize an array
 
+; -- the rotate idiom: (x >> n) | (x << (W - n)) in either order is ONE rotate --
+; constant counts ride ror4/ror (always rotate-right: rotl c lands as W-c), a variable
+; count rides rorv4/rorv off the splice's param (rotl negates the count), and a shape
+; off the law -- signed, split operands, counts that miss W -- keeps its shifts.
+(: (rots src) (filter (\ f (two? f && member? <f '(ror4 ror rorv4 rorv))) <>(cgn src))
+   (rotn src op c) (two? (filter (\ f (id? <f op && (= <>>f c))) (rots src)))
+   (rotv src op) (two? (filter (\ f (id? <f op)) (rots src)))
+   (negs src) (two? (filter (\ f (two? f && id? <f 'neg)) <>(cgn src)))
+   (assert
+      (rotn "unsigned f(unsigned x){ return (x >> 7) | (x << 25); } int main(){ return f(9u) & 63; }" 'ror4 7)
+      (rotn "unsigned f(unsigned x){ return (x << 12) | (x >> 20); } int main(){ return f(9u) & 63; }" 'ror4 20)
+      (rotn "unsigned a[4]; int main(){ a[1] = 5u; return ((a[1] << 16) | (a[1] >> 16)) & 63; }" 'ror4 16)
+      ; the macro spelling arrives unfolded -- ((x) << (12)) | ((x) >> (32 - (12))) is still constant
+      (rotn "unsigned f(unsigned x){ return ((x) << (12)) | ((x) >> (32 - (12))); } int main(){ return f(9u) & 63; }" 'ror4 20)
+      (rotn "unsigned long f(unsigned long x){ return (x >> 17) | (x << 47); } int main(){ return f(9ul) & 63; }" 'ror 17)
+      (rotv "unsigned f(unsigned x, int n){ return (x >> n) | (x << (32 - n)); } int main(){ return f(9u, 3) & 63; }" 'rorv4)
+      (rotv "unsigned f(unsigned x, int n){ return (x << n) | (x >> (32 - n)); } int main(){ return f(9u, 3) & 63; }" 'rorv4)
+      (negs "unsigned f(unsigned x, int n){ return (x << n) | (x >> (32 - n)); } int main(){ return f(9u, 3) & 63; }")
+      (rotv "unsigned long f(unsigned long x, int n){ return (x >> n) | (x << (64 - n)); } int main(){ return f(9ul, 3) & 63; }" 'rorv)
+      !(two? (rots "int f(int x){ return (x >> 3) | (x << 29); } int main(){ return f(9) & 63; }"))
+      !(two? (rots "unsigned f(unsigned x, unsigned y){ return (x >> 5) | (y << 27); } int main(){ return f(9u, 2u) & 63; }"))
+      !(two? (rots "unsigned f(unsigned x){ return (x >> 5) | (x << 26); } int main(){ return f(9u) & 63; }"))))
+
 ; --- stage 4a: aggregates -- layout to the C rules, members, the new statements ---
 (: (cast src) <>(cparse <>(clex src))
    (cexpp pre e) (: ast (cast (+ pre (+ " int main() { return " (+ e "; }"))))
@@ -1632,7 +1655,7 @@
             (add r5 r9 r10) (sub r5 r9 r10) (and r5 r9 r10) (or r5 r9 r10)
             (xor r5 r9 r10) (imul r5 r9 r10) (add sp sp 16)
             (push r5) (pop r5)
-            (shl r5 3) (shr r5 3) (sar r5 3) (rol r5 3) (ror r5 3)
+            (shl r5 3) (shr r5 3) (sar r5 3) (rol r5 3) (ror r5 3) (ror4 r5 3)
             (ld r5 r9 8) (ld1 r5 r9 8) (ld2 r5 r9 8) (ld4 r5 r9 8)
             (ldu1 r5 r9 8) (ldu2 r5 r9 8) (ldu4 r5 r9 8)
             (st r9 8 r5) (st1 r9 8 r5) (st2 r9 8 r5) (st4 r9 8 r5)
@@ -1649,11 +1672,11 @@
             (addsd f0 f1) (subsd f0 f1) (mulsd f0 f1) (divsd f0 f1) (movsd f0 f1)
             (ucomisd f0 f1) (cvtss2sd f0 f1) (cvtsd2ss f0 f1)
             (div r5 r9 r10) (udiv r5 r9 r10) (rem r5 r9 r10 r2) (urem r5 r9 r10 r2)
-            (shlv r5 r1) (shrv r5 r1) (sarv r5 r1))
+            (shlv r5 r1) (shrv r5 r1) (sarv r5 r1) (rorv r5 r1) (rorv4 r5 r1))
    heads (map (\ f9 <f9) shapes)
    rostered (aluops + divops + vshops + unops + ldops9 + gstops + stxops + siops +
              leaops + xops + fldops + fstops + xmmops +
-             '(li mov push pop shl shr sar rol ror cmpm cmprm la set cmp test
+             '(li mov push pop shl shr sar rol ror ror4 cmpm cmprm la set cmp test
                movqxr movqrx cvtsi2sd cvttsd2si))
    ; the FORWARD carrier: seed the map with (mov orig sub) and let the pass itself rewrite the
    ; form -- no guard is restated here, cpwalk decides and holo judges
@@ -1679,11 +1702,11 @@
    bad2 (catmap bwd shapes)
    (assert
       ; the carrier is what it says it is, and every shape is one both halves already accept
-      (= 75 (tally shapes))
+      (= 78 (tally shapes))
       !(two? (filter (\ f9 (id? (rdsp f9) 'bar)) shapes))
       (all emits? shapes)
       !(two? (filter (\ o9 !(member? o9 heads)) rostered))    ; the drift gate
-      (= 390 nfwd) (= 570 nbwd)                               ; ⚠ a silent narrowing shows up here
+      (= 390 nfwd) (= 585 nbwd)                               ; ⚠ a silent narrowing shows up here
       !(two? bad1)                                            ; forward: 390 renames, all encodable
       !(two? bad2)                                            ; backward: 570 folds, all encodable
       ; and the law has TEETH -- these are the two shapes the guards exist for, refused by holo

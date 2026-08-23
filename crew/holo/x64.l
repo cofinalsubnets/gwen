@@ -120,6 +120,12 @@
       (: dn (rn d) ext (shift-ext op)
          (? (c = 1) `((rex 1 0 0 (hi dn)) 209 (modrm 3 ext dn))                       ; D1 /ext        (count 1)
             (`((rex 1 0 0 (hi dn)) 193 (modrm 3 ext dn)) + `((byte c)))))           ; C1 /ext ib
+   ;; the 32-bit form (ror4): same table, no REX.W -- the write zero-extends
+   (emit-shift4 op d c)
+      (: dn (rn d) ext (shift-ext op)
+         ((? (hi dn = 0) () `((rex 0 0 0 1))) +
+          (? (c = 1) `(209 (modrm 3 ext dn))
+             (`(193 (modrm 3 ext dn)) + `((byte c))))))
 
    ;; test: set flags from a AND b, discarding the result. 0x85 /r for reg,reg; 0xF7 /0 id for reg,imm32.
    (emit-test a b)
@@ -301,8 +307,10 @@
       (: _ (? (reg-eq c 'r1) 0 (scare 'shiftv-count-not-r1 `(op d c)))
          _ (? (reg-eq d 'r1) (scare 'shiftv-dst-is-r1 `(op d c)) 0)
          dn (rn d)
-         ext (? (op = 'shlv) 4 (op = 'shrv) 5 7)
-         (`((rex 1 0 0 (hi dn)) 211) + `((modrm 3 ext (lo dn)))))
+         ext (? (op = 'shlv) 4 (op = 'shrv) 5 (op = 'sarv) 7 1)      ; rorv/rorv4: /1
+         (? (op = 'rorv4)                                            ; 32-bit: no REX.W, the write zero-extends
+            ((? (hi dn = 0) () `((rex 0 0 0 1))) + `(211 (modrm 3 ext (lo dn))))
+            (`((rex 1 0 0 (hi dn)) 211) + `((modrm 3 ext (lo dn))))))
 
    ;; push/pop: 0x50+rd / 0x58+rd, a bare REX.B (0x41) for the extended registers, no REX.W.
    ;; push takes a register OR an immediate -- 6A ib for a signed byte, 68 id for a
@@ -507,8 +515,9 @@
            ('sx1 >< emit-sx 1) ('sx2 >< emit-sx 2) ('sx4 >< emit-sx 4)
            ('zx1 >< emit-zx 1) ('zx2 >< emit-zx 2) ('zx4 >< emit-zx 4)
            ('shlv >< emit-shiftv 'shlv) ('shrv >< emit-shiftv 'shrv) ('sarv >< emit-shiftv 'sarv)
+           ('rorv >< emit-shiftv 'rorv) ('rorv4 >< emit-shiftv 'rorv4)
            ('shl >< emit-shift 'shl) ('shr >< emit-shift 'shr) ('sar >< emit-shift 'sar)
-           ('rol >< emit-shift 'rol) ('ror >< emit-shift 'ror)
+           ('rol >< emit-shift 'rol) ('ror >< emit-shift 'ror) ('ror4 >< emit-shift4 'ror)
            ('test >< emit-test) ('push >< emit-push) ('pop >< emit-pop)
            ('neg >< emit-un 247 3) ('not >< emit-un 247 2) ('inc >< emit-un 255 0) ('dec >< emit-un 255 1)
            ('jmp >< emit-jmp) ('br >< emit-br) ('jmp8 >< emit-jmp8) ('br8 >< emit-br8)

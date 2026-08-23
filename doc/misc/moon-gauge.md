@@ -12,10 +12,11 @@ five scalar limbs, so the pair reads whether a gap is array slots or general res
 win there is worth having and is not the objective. ⚠ but do not read them to zero either —
 `core/love.c:6138`'s z-tray comparison is the same array-indexed shape.
 
-⚠ **AND THE PAIR IS CONFOUNDED** — chacha rotates 320 times a block and poly1305 not once,
+⚠ **AND THE PAIR WAS CONFOUNDED** — chacha rotates 320 times a block and poly1305 not once,
 so the pair separates rotate-heavy from rotate-free just as cleanly as it separates array
-from scalar, and mooncc emits no rotate instruction at all. See *the reason is the ROTATE*
-below before spending anything on the strength of these two rows.
+from scalar, and mooncc emitted no rotate instruction at all. Resolved 2026-08-22: gen.l
+learned the idiom and the re-fill (*the rotate lands*, below) split the two signals — the
+pair reads array vs scalar again.
 
 ⚠ **the corpus average is flattering and the pair exists because of it** (`ccbench.sh`'s own
 header says so). An arc that reports only the corpus row will under-weight array work; an arc
@@ -187,7 +188,45 @@ counts instructions. The honest reading is that md5 is now the cheapest place to
 the two hypotheses, and that `ccnif.sh` re-fills the whole table in twenty seconds once
 `gen.l` learns the idiom.
 
-## where the build time goes (2026-08-17, the same box)
+## the rotate lands (2026-08-22, the same box) — and the pair was reading BOTH signals
+
+`gen.l` recognizes the idiom now — `(x >> n) | (x << (W - n))` in either order, constant
+or variable count, W 32 or 64, the operand unsigned and pure — and emits one rotate where
+it emitted up to sixteen instructions: `ror4`/`rorv`/`rorv4` joined holo's neutral IR
+(x64 + arm64 carry them; riscv and the thumbs keep their shifts, and the recognizer stays
+off there). A spliced variable count rides the register form, a rotl count negated; the
+macro spelling `(32 - (16))` folds through `cfold`, so chacha's four ROTL constants land
+as rotate-immediates. Pinned by law (the emission per shape, and the near-misses that must
+stay shifts), by `test/cc/152-rotate.c` across the gcc differential and both cross
+targets, and the fixpoint holds with 45 rotates in love1's own body.
+
+The re-fill, one quiet fill of each instrument (ccbench, then ccnif):
+
+| | mooncc | gcc-musl | clang-musl | mooncc/clang | was (08-17) |
+|---|---|---|---|---|---|
+| build | 19,292.8 ms | 10,018.8 | 6,104.3 | 3.16× | 3.35× |
+| corpus | 3,035.6 ms | 2,439.8 | 2,374.4 | **1.28×** | 1.30× |
+| chacha20 | 690.2 ms | 295.5 | 192.5 | **3.59×** | 5.80× |
+| poly1305 | 1,154.3 ms | 1,290.9 | 771.2 | 1.50× (**0.89× vs gcc**) | 1.55× |
+| inflate | 586.5 ms | 372.8 | 290.2 | 2.02× | 1.82× |
+| crc32 | 573.9 ms | 402.5 | 446.3 | 1.29× (1.43× vs gcc) | 1.43× |
+| sha256 | 974.3 ms | 320.3 | 335.9 | **2.90×** | 4.23× |
+
+and the straight floors: sha256 4.46× → **3.11×** gcc, md5 2.02× → 1.80×, crc32/cksum/
+deflate/inflate unmoved.
+
+**The answer: both hypotheses were true, each owning a row.** The rotate-heavy rows fell
+hard (sha256 4.23× → 2.90×, chacha 5.80× → 3.59×) and every rotate-free row sat inside
+the noise floor (poly 1.55 → 1.50, crc32-vs-gcc 1.43 → 1.43 exactly, corpus 1.30 → 1.28).
+Neither fell TO 2×, so the pair was never reading one signal: the rotate took ~40-45% of
+the excess on both rotate rows, and what remains of chacha is the array-slot reading,
+intact — its keeps ride cs seats, exactly as the ablation said.
+
+⚠ **the second defect stands and is now the named next lever**: an inlined body still does
+not constant-propagate, so all of hash.c's rotates ride `%cl` off a frame-loaded count
+(love1: 13 register-count rotates from the splices, 32 immediates from the macro
+spellings) where gcc folds `rr(e, 6)` to a rotate-immediate. The count's frame round-trip
+is most of what separates sha256's 2.90× from md5's control at 1.58×.
 
 Once the row is honest, the 19.2 s has an address. Every number below is a direct
 measurement, not a subtraction:

@@ -187,7 +187,8 @@
       (: _ (? (reg-eq c 'r1) 0 (scare 'shiftv-count-not-r1 `(op d c)))
          _ (? (reg-eq d 'r1) (scare 'shiftv-dst-is-r1 `(op d c)) 0)
          dn (rn d) cn (rn c)
-         base (? (op = 'shlv) 0x9AC02000 (op = 'shrv) 0x9AC02400 0x9AC02800)
+         base (? (op = 'shlv) 0x9AC02000 (op = 'shrv) 0x9AC02400 (op = 'sarv) 0x9AC02800
+                 (op = 'rorv) 0x9AC02C00 0x1AC02C00)         ; rorv4: the W form, count mod 32
          (le32 (base | ((cn << 16) | ((dn << 5) | dn)))))
    (arm64-lea d base off)  (arm64-addsub-imm 'add d base off)
 
@@ -269,6 +270,7 @@
             (op = 'sar) (le32 (0x93400000 | ((c << 16) | ((63 << 10) | ((dn << 5) | dn)))))                        ; asr = sbfm immr=c, imms=63
             (op = 'ror) (le32 (0x93C00000 | ((dn << 16) | ((c << 10) | ((dn << 5) | dn)))))                        ; ror = extr Rm=Rn=d, imms=c
             (op = 'rol) (le32 (0x93C00000 | ((dn << 16) | ((((64 - c) & 63) << 10) | ((dn << 5) | dn)))))          ; rol #c = ror #(64-c)
+            (op = 'ror4) (le32 (0x13800000 | ((dn << 16) | ((c << 10) | ((dn << 5) | dn)))))                       ; the W form (sf=0 N=0): writes zero-extend
             (scare 'badshift op)))
    ;; test a, b -> TST = ANDS XZR, a, b (set NZCV from a AND b). a register, or a bitmask immediate
    ;; (the map probe's `test r0 1` low-bit/gap check) via the bitmask encoder; Rd = xzr (31).
@@ -546,8 +548,9 @@
            ('sx1 >< arm64-sx 1) ('sx2 >< arm64-sx 2) ('sx4 >< arm64-sx 4)
            ('zx1 >< arm64-zx 1) ('zx2 >< arm64-zx 2) ('zx4 >< arm64-zx 4)
            ('shlv >< arm64-shiftv 'shlv) ('shrv >< arm64-shiftv 'shrv) ('sarv >< arm64-shiftv 'sarv)
+           ('rorv >< arm64-shiftv 'rorv) ('rorv4 >< arm64-shiftv 'rorv4)
            ('shl >< arm64-shift 'shl) ('shr >< arm64-shift 'shr) ('sar >< arm64-shift 'sar)
-           ('rol >< arm64-shift 'rol) ('ror >< arm64-shift 'ror)
+           ('rol >< arm64-shift 'rol) ('ror >< arm64-shift 'ror) ('ror4 >< arm64-shift 'ror4)
            ('lea >< arm64-lea) ('lean >< arm64-lea)          ; a consumed lea (x64 tells them apart for the escape gate)
            ('push >< arm64-push) ('pop >< arm64-pop)
            ('neg >< arm64-neg) ('not >< arm64-not) ('inc >< arm64-inc) ('dec >< arm64-dec)

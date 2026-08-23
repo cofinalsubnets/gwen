@@ -75,7 +75,7 @@
    ; owns the r0..r3 protocol quad (r4..r7 are pushed and popped inside it, so they survive).
    wmops '(umull smull)
    llops '(udivll uremll)
-   vshops '(shlv shrv sarv)                         ; the variable shifts (count via r1)
+   vshops '(shlv shrv sarv rorv rorv4)              ; the variable shifts/rotates (count via r1)
    unops '(neg not sx1 sx2 sx4 zx1 zx2 zx4)         ; one-register rewrites
    xmmops '(addsd subsd mulsd divsd movsd ucomisd cvtss2sd cvtsd2ss)   ; xmm-only: no gp effect
    barops '(call callr raw sys)                     ; the opaque barriers
@@ -1821,6 +1821,7 @@
    (d128? ty) (ty = 'i128 || ty = 'u128)
    (x64t? g) !(arm? g)
    (w128? g) (x64t? g || a64? g)             ; carries the wide pair: x64's rdx:rax, aarch64's x2:x0
+   (rot4? g) (x64t? g || a64? g)             ; carries the rotate ops (ror4/rorv/rorv4); elsewhere the shifts stand
    (wbin ta tb) (? (d128? ta && d128? tb) (? (id? ta 'u128 || id? tb 'u128) 'u128 'i128)
                    (d128? ta) ta tb)                ; a word side converts to the wide side's type
    ; land a value on the wide protocol: a pair rides; a word widens by its SOURCE signedness
@@ -3038,7 +3039,11 @@
           (k = 'clit)                              ; a compound literal as a value: fill the temp, load it
            (: lv (clval g env e)
               (? (bad? lv) 'bad (loadval g lv wnt)))
-          (k = 'bin) (cgbin g env e wnt)
+          (k = 'bin)
+           (? (id? <>e '|)
+               (: r9 (cgror g env <>>e <>>>e wnt)
+                  (? (id? r9 'no) (cgbin g env e wnt) r9))
+              (cgbin g env e wnt))
           'bad))
    ; a TARGETABLE gp register argument: pure and single-emission, reading only an immediate, the
    ; frame, a home register, or a label -- so it skips the push/pop cell and lands straight in its
@@ -3509,6 +3514,80 @@
                                    gcplx? tb && id? (cxb tb) 'float)
                                   '(struct "__cplx_float") cxdty)
                             (cxout g rt (<>pa + (<>mb + (cxload <pa <mb + arith))))))))))))
+   ; -- the rotate idiom: (x >> n) | (x << (W - n)) in either order, x an unsigned W-bit pure
+   ; operand -- one eval of x, one rotate (ror4/rorv4 the 32-bit pair, ror/rorv the 64-bit).
+   ; a rotl count rides negated (both ISAs read the count mod W). --
+   (rotp? e)                                        ; pure: safe to evaluate ONCE for the source's twice
+    (? !(two? e) ()
+       (: k <e
+          (? (member? k '(num flo flof str var)) 1
+             (member? k '(deref dot moor addr)) (rotp? <>e)
+             (k = 'cast) (rotp? <>>e)
+             (k = 'bin) (rotp? <>>e && rotp? <>>>e)
+             (k = 'un) (rotp? <>>e)
+             ())))
+   (rotty g env e)                                  ; the operand's declared type, by static peek
+    (? !(two? e) ()
+       (: k <e
+          (? (k = 'var) (: en (vent g env <>e) (? (bad? en) () <>>en))
+             (k = 'cast) <>e
+             (k = 'deref) (: t (rotty g env <>e) (? (ptr? t) <>t (arr? t) <>t ()))
+             ((k = 'bin) && member? <>e '(+ -))     ; index arithmetic keeps the ptr/arr side's type
+              (: a (rotty g env <>>e)
+                 (? (ptr? a || arr? a) a
+                    (: b (rotty g env <>>>e) (? (ptr? b || arr? b) b ()))))
+             ())))
+   (rotw g env e)                                   ; -> 32 | 64 | (): the unsigned rotate width
+    (: t (rotty g env e)
+       (? (id? t 'uint) 32 (member? t '(ulong ullong)) 64 ()))
+   (rotk g e)                                       ; a count as a NUMBER: knum, then the const fold
+    (: k (knum g e) (? (two? k) <k (cfold e)))
+   (rotc? g w big n)                                ; big reads (W - n), n pure and shared
+    (? !(two? big && (<big = 'bin) && id? <>big '-) ()
+       (: kb (rotk g <>>big)
+          (charm? kb && (kb = w) && (<>>>big = n) && rotp? n)))
+   (cgrimm g env x w c wnt)                         ; the immediate rotate: mirror of the constant shift
+    (: xv (cgexpr g env x ())
+       (? (bad? xv) 'bad
+          (: rt (? (w = 32) 'uint 'ulong)
+             iop (? (w = 32) 'ror4 'ror)
+             (? (wr? g (vreg xv))
+                (mkv rt (vreg xv) (vfs xv + [[iop (vreg xv) c]]))
+                (: rd (? wnt wnt (rdst g (vreg xv)))
+                   (mkv rt rd (vfs xv + [['mov rd (vreg xv)] [iop rd c]])))))))
+   (cgrvar g env x w ce ng)                         ; the register-count rotate: mirror of the variable shift
+    (: xv (cgexpr g env x ())
+       (? (bad? xv) 'bad
+          (: cv (cgexpr g env ce ())
+             (? (bad? cv) 'bad
+                (: rt (? (w = 32) 'uint 'ulong)
+                   vop (? (w = 32) 'rorv4 'rorv)
+                   af (tor0 g xv)
+                   bf (tor0 g cv)
+                   st (: s (spare g bf)             ; the value holds in a pool reg past the count's eval
+                         (? s (([['mov s 'r0]] + bf) + ['(mov r1 r0) ['mov 'r0 s]])
+                            (spush 'r0 + bf + ('((mov r1 r0)) + spop 'r0))))
+                   (mkv rt 'r0 (af + st + ((? ng '((neg r1)) ()) + [[vop 'r0 'r1]]))))))))
+   (cgror g env L R wnt)                            ; -> tuple | 'bad | 'no (the general lane stands)
+    (? !(rot4? g) 'no
+       (: a (? (two? L && (<L = 'bin) && member? <>L '(shl shr)) L ())
+          b (? (two? R && (<R = 'bin) && member? <>R '(shl shr)) R ())
+          (? (!(two? a) || !(two? b) || id? <>a <>b) 'no
+             (: s (? (id? <>a 'shr) a b)            ; the shr side: a rotate is ror by ITS count
+                l (? (id? <>a 'shr) b a)
+                x <>>s
+                (? (!(<>>l = x) || !(rotp? x)) 'no
+                   (: w (rotw g env x)
+                      (? !w 'no
+                         (: cs <>>>s cl <>>>l
+                            ks (rotk g cs) kl (rotk g cl)
+                            (? (charm? ks && charm? kl)
+                                (? ((ks + kl = w) && (0 < ks) && (ks < w))
+                                   (cgrimm g env x w ks wnt) 'no)
+                               (charm? ks || charm? kl) 'no
+                               (rotc? g w cl cs) (cgrvar g env x w cs ())   ; rotr: ror by the shr count
+                               (rotc? g w cs cl) (cgrvar g env x w cl 1)    ; rotl: ror by the negated shl count
+                               'no)))))))))
    (cgbin g env e wnt)
     (: op <>e
        lhs <>>e rhs <>>>e
@@ -4029,7 +4108,7 @@
           (member? op flagops) [(rg1 <>>f + rg1 <>>>f) [<>f] ()]
           (op = 'push) [[<>f] () ()]
           (op = 'pop) [() [<>f] ()]
-          (member? op '(shl shr sar rol ror)) [[<>f] [<>f] 1]
+          (member? op '(shl shr sar rol ror ror4)) [[<>f] [<>f] 1]
           (member? op ldops9) [[<>>f] [<>f] 1]
           (member? op gstops) [[<>f <>>>f] () ()]
           (member? op stxops) [[<>f <>>f (nthr f 5)] () ()]
