@@ -1551,6 +1551,19 @@
    _ (assert
       !(member? '(ld r9 r4 40) (stld sq))
       (member? '(ld r9 r4 40) (stld '((st r4 40 r0) (mov r9 r0) (la r0 s) (la r9 s2) (ld r9 r4 40)))))
+   ; the narrow adjacent pair forwards on any base wearing the load's extension: same
+   ; register becomes the bare extension, a fresh one a mov + extension, the signed load
+   ; its sign form -- and a stranger between kills it (adjacency is the whole license)
+   _ (assert
+      ('((st4 r4 40 r0) (zx4 r0)) = (stld '((st4 r4 40 r0) (ldu4 r0 r4 40))))
+      ('((st4 r5 40 r0) (mov r9 r0) (zx4 r9)) = (stld '((st4 r5 40 r0) (ldu4 r9 r5 40))))
+      ('((st4 r4 40 r0) (sx4 r0)) = (stld '((st4 r4 40 r0) (ld4 r0 r4 40))))
+      ('((st2 r4 40 r0) (zx2 r0)) = (stld '((st2 r4 40 r0) (ldu2 r0 r4 40))))
+      ('((st1 r4 40 r0) (mov r9 r0) (zx1 r9)) = (stld '((st1 r4 40 r0) (ldu1 r9 r4 40))))
+      (member? '(ldu4 r0 r4 48) (stld '((st4 r4 40 r0) (ldu4 r0 r4 48))))
+      (member? '(ldu4 r0 r4 40) (stld '((st4 r4 40 r0) (mov r9 r1) (ldu4 r0 r4 40))))
+      ; a store fed by an adjacent li declines: the triple is the si fold's
+      (member? '(ldu1 r0 r4 40) (stld '((li r0 1) (st1 r4 40 r0) (ldu1 r0 r4 40)))))
    ; end to end: the pointp shape (the vm's hottest compare chain) runs slot-free -- p rides
    ; its park through both compares and the dead store sweeps
    irE (cgn "typedef long word; typedef struct ai { long x; } ai_t; typedef void lvm_t(ai_t *); typedef struct cell { lvm_t *ap; } cell_t; static void lvm_sym(ai_t *g) { g->x = 1; } static void lvm_nom(ai_t *g) { g->x = 2; } static inline int lamp(word x) { return !(x & 1) && x != 0; } static inline cell_t *cell(word x) { return (cell_t *)x; } static inline int pointp(word x) { lvm_t *p; return lamp(x) && ((p = cell(x)->ap) == lvm_sym || p == lvm_nom); } long probe(word a, word b) { if (((a & b & 1)) || pointp(a) || pointp(b)) return a == b; return 7; } int main() { return (int)probe(3, 5); }")

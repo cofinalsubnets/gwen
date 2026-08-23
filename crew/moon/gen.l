@@ -5224,24 +5224,38 @@
     (: (esc? l) (? !(two? l) ()
                    (: f <l
                       (? (two? f && member? <f '(lea lean) && <>>f = 'r4) 1 (esc? >l))))
-       fs2 (stldp fs)
+       fs2 (stldp fs ())
        (? (esc? fs2) (stlda fs2) (stldw fs2 ())))
-   ; the adjacent pair on ANY base but r4 -- a store then a load of the SAME address, nothing
-   ; between, needs no aliasing story at all (stlda's own law, which only ever asked r4). r4
-   ; stays with the lanes below so the slot map, stldkeep and the epilogue anchors are untouched.
+   ; the adjacent pair -- a store then a load of the SAME address, nothing between, needs
+   ; no aliasing story at all (stlda's own law, which only ever asked r4). The full-width
+   ; r4 pair stays with the lanes below so the slot map, stldkeep and the epilogue anchors
+   ; are untouched; every anchor shape is a full ld, so the narrow pairs forward on any
+   ; base, wearing the extension the load promised (a slot holds the store's low bytes,
+   ; so the reload is that extension of the source register).
    ; the client is a spliced VM body: every op boundary writes Sp[0] and the next op reads it.
-   (stldp fs)
+   (fwext s l) (? (s = 'st) (? (l = 'ld) 'mov ())
+                  (s = 'st4) (? (l = 'ldu4) 'zx4 (l = 'ld4) 'sx4 ())
+                  (s = 'st2) (? (l = 'ldu2) 'zx2 (l = 'ld2) 'sx2 ())
+                  (s = 'st1) (? (l = 'ldu1) 'zx1 (l = 'ld1) 'sx1 ())
+                  ())
+   (fwfs w rY rX) (? (id? w 'mov) (? (rY = rX) () [['mov rY rX]])
+                     (rY = rX) [[w rX]]
+                     [['mov rY rX] [w rY]])
+   ; a store fed by an adjacent li declines: that triple is the si fold's (the forward
+   ; would read the source and pin the li live, trading the store-immediate away)
+   (stldp fs pv)
     (? !(two? fs) ()
        (: f <fs r >fs
-          (? !(two? r && two? f && (<f = 'st) && !(<>f = 'r4))
-             (f >< stldp r)
+          (? !(two? r && two? f && member? <f gstops && !((<f = 'st) && (<>f = 'r4)))
+             (f >< stldp r f)
              (: nx <r
                 rX <>>>f
-                (? !(two? nx && (<nx = 'ld) && (<>>nx = <>f) && (<>>>nx = <>>f))
-                   (f >< stldp r)
-                   (: rY <>nx
-                      (? (rY = rX) (f >< stldp >r)
-                         (f >< ['mov rY rX] >< stldp >r))))))))
+                w (? (two? nx) (fwext <f <nx) ())
+                (? ((id? w ()) ||
+                    (two? pv && (<pv = 'li) && (<>pv = rX)) ||
+                    !((<>>nx = <>f) && (<>>>nx = <>>f)))
+                   (f >< stldp r f)
+                   (f >< ((fwfs w <>nx rX) + (stldp >r f))))))))
    (stlda fs)                                        ; the escape lane: only the pair with nothing between is aliasing-proof
     (? !(two? fs) ()
        (: f <fs r >fs

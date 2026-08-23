@@ -149,11 +149,13 @@ names the evidence that prices it:
    half of the 139-vs-48 insns/iter gap that separates sha256's 3.03× from md5's 1.69×
    (md5's counts are table loads, the one shape where gcc also forgoes the immediate).
    The general form pays past the rotate: every splice seam re-buys its arguments.
-2. **adjacent store→reload, u32 lane.** cc_block stores an element and reloads the same
-   slot on the very next instruction 32 times (`mov %eax,slot; mov slot,%eax; ror …`).
-   The `stld` forwarding pass already claims exactly this adjacency and misses these —
-   the program is guessing something it already knows how to state. Worth a look at the
-   matcher before any new mechanism.
+2. **adjacent store→reload, u32 lane — LANDED 2026-08-23.** cc_block stored an element
+   and reloaded the same slot on the very next instruction 32 times; the `stld` adjacent
+   lanes only matched full-width `st`/`ld`. The narrow pairs forward now, wearing the
+   extension the load promised (`zx4`/`sx4` and kin), on any base — every anchor shape
+   is a full `ld`, so only the full-width r4 pair stays reserved. A store fed by an
+   adjacent `li` declines (that triple is the si fold's). chacha −2–4% cycles at flat
+   instructions, interleaved same-run.
 3. **u32 zext chatter.** 96 of cc_block's 619 instructions are `mov %eax,%eax` — pure
    zero-extension re-assertion, often back-to-back duplicated, plus a three-step
    store path (`mov %r8,%rax; mov %eax,%eax; mov %eax,slot`). Zero-cost on Zen (renamed)
@@ -180,6 +182,14 @@ names the evidence that prices it:
 - ⚠ the ±0.7% cycle floor is a **same-run** property. Identical binary pairs read 1.5%
   apart across runs hours apart on a quiet box; same-day is not same-run. The harness's
   whole-roster-in-one-run design is the instrument, not a convenience.
+- ⚠ **corpus cycles across DIFFERENT layouts carry a ~±2% BTB lottery.** Function
+  entries are 2-aligned by law (parity is the image codec's pointer discriminator, and
+  16-alignment was measured and REVERTED at ~4% slower — gen.l's fn-start note), so any
+  size change reshuffles every downstream entry and deals a new branch-predictor hand:
+  a binary whose hot functions are instruction-identical read +2.4% corpus cycles on
+  branch-misses alone. Before believing a small cross-binary delta, check instructions
+  (near-deterministic), hot-function identity, and branch-misses. Census rows inside
+  ±2% (homes, pcs) are lottery-sized; the big payers stand.
 - ⚠ **a row priced under another mechanism's veto is not that mechanism's price**: pcs
   read −0.4% while the cs borrow's `wb` denied it beside every callish loop, and +1.1%
   once the borrow was cut. When mechanisms gate each other, ablate the gater first.
