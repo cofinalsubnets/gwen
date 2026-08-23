@@ -6,9 +6,9 @@ That reads as a month spent for nothing, and it is not what happened — chacha 
 5.34× over the same period, which the corpus under-weights by construction. What actually
 went wrong is smaller and fixable: **the arc was steered by instruction counts on a core
 that hides instructions**, and the layer it was tuning turned out to hold two mechanisms
-with opposite economics. doc/misc/moon-gauge.md has both measurements — and, revised
-2026-08-22, the ROTATE finding with its md5 control, which this ladder now carries as
-rung 1 because it contaminates every row the later rungs read.
+with opposite economics. doc/misc/moon-gauge.md carries the current
+measurements (the superseded fills live in its git history); the ROTATE finding is
+rung 1 here because it contaminated every row the later rungs read.
 
 ⚠ **this is not a plan to delete register residency.** Ablated whole it costs +12.5% of
 corpus cycles and moves mooncc 1.19× → ~1.34× against clang. The layer earns its place.
@@ -46,11 +46,13 @@ One entry there was already built twice.
   `test/cc/152-rotate.c` on three targets, and the fixpoint. The re-fill answered the
   confound: sha256 4.23× → 2.90×, chacha 5.80× → 3.59×, every rotate-free row inside
   noise — **both hypotheses were true, each owning a row**, and the pair reads array vs
-  scalar again. moon-gauge's *the rotate lands* has the tables. Still open from this
-  rung's teardown, the named next lever: an inlined body does not constant-propagate,
+  scalar again. The landing fill's tables are in moon-gauge's history (d52aea0a). Still
+  open from this rung's teardown, the named next lever: an inlined body does not
+  constant-propagate,
   so hash.c's rotates ride `%cl` off a frame slot where gcc folds an immediate.
-- **rung 2 — price the six separately. LANDED 2026-08-23**, moon-gauge's *the census*
-  section. The payers: locals homes +6.3% cycles, the cs grant +5.0%, the operand pool
+- **rung 2 — price the six separately. LANDED 2026-08-23**, the pre-cut table is in
+  moon-gauge's history (e2cea5c3); the current one is its *what the residency layer is
+  worth*. The payers: locals homes +6.3% cycles, the cs grant +5.0%, the operand pool
   +4.0%, param homes +1.0%. At zero or below: `pcs` (−0.4%, the ledger's zero confirmed),
   `csbor` (+0.4%, the floor), and **`vuniv` at −2.9%** — the vmap universe costs cycles,
   and the shape rows agree (ccnif unmoved to the millisecond, chacha +3.6% inside the
@@ -65,12 +67,12 @@ One entry there was already built twice.
   machinery, and `pcs` threads four sites (the grant, the fnreset capture, the shadow-spill
   read, the accounting the locals wear), so the deletion ships on a fresh number plus
   `test_fixpoint`, not the archived one. **The vmap complex is CUT, 2026-08-23** —
-  gen.l 8,606 → 7,927, the −2% banked (moon-gauge's *the vmap cut*: the gate found the
+  gen.l 8,606 → 7,927, the −2% banked (the gate found the
   knob's `au` license still buying pointless regens, and the wall clock lying across
   fills — hold hot functions to instruction identity, not the clock). The re-price after
   it: `cs` HOLDS at +6.0%, and `csbor` read −0.2%. **The csbor complex is CUT,
   2026-08-23** — gen.l 7,927 → 7,879, and the cut binary is byte-identical to the priced
-  ablation reference (moon-gauge's *the csbor cut*: the borrow's grant had been provably
+  ablation reference (the borrow's grant had been provably
   empty since the vmap cut; its one live effect was VETOING pcs beside a callish loop,
   which is why the ablation flipped code at the same .text size). And the fresh number
   answered `pcs` the other way: **+1.5% cycles on the cut tree — it PAYS, and it stays.**
@@ -86,7 +88,7 @@ One entry there was already built twice.
   all seven are gone, `regen` is a straight-line build with one deopt guard, and there
   is no retry loop left to consolidate. The ladder was working.
 - **rung 5 — the B half, decided on rung 2's evidence. CLOSED 2026-08-23** (moon-gauge's
-  *the census on the cut tree*). The negotiation settled in preference order: shrinking B
+  *what the residency layer is worth*). The negotiation settled in preference order: shrinking B
   to the parts that price was performed BY rung 3 (the cuts took whole dependency cones —
   an orphan scan over gen.l's 334 definitions finds zero names without a live caller);
   folding into the cs seats is the ledger's twice-refused retrofit (a cs seat can never
