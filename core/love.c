@@ -6356,7 +6356,8 @@ static bool salpha(struct ai *g, word a, word b, struct arib *env) {
  if (!chainp(a) || !chainp(b)) return eqv(g, a, b);             // numbers / strings / atoms
  if (ai_isbs(g, A(a)) && ai_isbs(g, A(b))) {                        // both `\`-headed
   word pa = B(a), pb = B(b);
-  if (!chainp(B(pa)) || !chainp(B(pb))) return eqv(g, a, b);    // one-operand \ = quote: data
+  if (!chainp(pa) || !chainp(pb)
+   || !chainp(B(pa)) || !chainp(B(pb))) return eqv(g, a, b);    // one-operand \ = quote: data
   int na = 0, nb = 0;                                       // (\ p1..pn body): params = init, body = last
   word t = pa;
   for (; chainp(B(t)); t = B(t)) na++;
@@ -6381,7 +6382,7 @@ static uintptr_t shash(struct ai *g, word x, struct arib *env) {
  if (!chainp(x)) return hash(g, x);
  if (ai_isbs(g, A(x))) {
   word p = B(x);
-  if (!chainp(B(p))) return hash(g, x);                       // one-operand \ = quote: data
+  if (!chainp(p) || !chainp(B(p))) return hash(g, x);         // one-operand \ = quote: data
   int n = 0;
   word t = p;
   for (; chainp(B(t)); t = B(t)) n++;
