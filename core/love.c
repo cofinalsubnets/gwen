@@ -544,7 +544,6 @@ struct ai_gcx {
  word const *f2lo, *f2hi;    // a second from-space (0 = unused); a major traces {major ∪ minor} in one pass
  word *to_lo, *to_hi;        // where survivors land: the tagp range [to_lo, to_hi)
  word *fwd;                  // the forwarding floor: word0 in [fwd, to_hi) = a copy made this pass
- word *froze_lo, *froze_hi;  // the pinned prefix's from-space window, else 0 (gen_major)
  word *cp; };                // the cheney scan cursor
 // the pools a heap pointer may live in between collections -- the question bio_of asks
 // of a port (heap bio, or the static it cannot own a buffer for).
@@ -920,14 +919,7 @@ static ai_inline void evac_nom(struct ai *g, struct ai_gcx *X) {
 
 static ai_inline void evac_thread(struct ai *g, struct ai_gcx *X) {
   // tagl ends the thread regardless of scan space, so a young-pointing terminator is never gcp'd as a field
-  for (X->cp += 1; !tagl(g, X, X->cp[-1]); X->cp[-1] = gcp(g, X, X->cp[-1]), X->cp++);
-  // a pinned thread's terminator names its own head, which moved with the block.
-  // copy_thread re-tags what it copies; a memcpy'd one keeps a from-space self-pointer,
-  // and the loop above ends on it without handing it to gcp.
-  if (X->froze_lo) {
-   word *h = (word*)(X->cp[-1] & ~(word) 3);
-   if (h >= X->froze_lo && h < X->froze_hi)
-    X->cp[-1] = (word)(X->to_lo + (h - X->froze_lo)) | ai_thread_tag; } }
+  for (X->cp += 1; !tagl(g, X, X->cp[-1]); X->cp[-1] = gcp(g, X, X->cp[-1]), X->cp++); }
 
 static ai_inline void evac_data(struct ai *g, struct ai_gcx *X) {
   switch (typ(X->cp)) {
@@ -1018,14 +1010,9 @@ static word major_symbols_rebuild(struct ai *g, struct ai_gcx *X, word om) {
  for (uintptr_t j = 0; j < cap; j++) {
   word k = os[2 * j];
   if (k == map_gap) continue;
-  word e = os[2 * j + 1], fwd;
-  // a pinned atom survives without a forward: the prefix is not copied, so word0 is
-  // untouched and the test below would read every frozen symbol as dead.
-  if (X->froze_lo && ptr(e) >= X->froze_lo && ptr(e) < X->froze_hi)
-   fwd = (word)(X->to_lo + (ptr(e) - X->froze_lo));
-  else {
-   fwd = cell(e)->x;                            // the atom's first word: its forward, if it survived
-   if (!(lamp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue; }
+  word e = os[2 * j + 1];
+  word fwd = cell(e)->x;                        // the atom's first word: its forward, if it survived
+  if (!(lamp(fwd) && lo <= ptr(fwd) && ptr(fwd) < hi)) continue;
   word nk = nom(fwd)->name;
   uintptr_t i = hash(g, nk) & mask;
   while (ns[2 * i] != map_gap) i = (i + 1) & mask;
@@ -1036,8 +1023,6 @@ static void major_run_finalizers(struct ai *g, struct ai_gcx *X) {
  struct ai_fz *new_fz = NULL;
  for (struct ai_fz *fz = g->fz; fz; fz = fz->next) {
   word fwd = fz->p->x;
-  if (X->froze_lo && (word*) fz->p >= X->froze_lo && (word*) fz->p < X->froze_hi)
-   fwd = (word)(X->to_lo + ((word*) fz->p - X->froze_lo));   // pinned: alive, and it did not move (symbols_rebuild's rule)
   if (lamp(fwd) && X->to_lo <= ptr(fwd) && ptr(fwd) < X->to_hi) {
    struct ai_fz *nn = bump(g, Width(struct ai_fz));
    nn->p = cell(fwd), nn->fn = fz->fn, nn->next = new_fz, new_fz = nn;
@@ -1143,22 +1128,8 @@ static struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight) {
  } else to = spare;
  if (tight) *tight = to_len < free_len;   // denied: the budget cap, or the bigger alloc failed
  g->gc_gen = true;
- // the pinned prefix rides across verbatim at the same offsets. the scan starts below it
- // so its words are still rewritten in place -- a frozen object may point at something
- // new -- and X.fwd starts past it, since nothing in it is copied or forwarded.
- uintptr_t froze = g->froze;
- if (froze) {
-  memcpy(to, g->major_base, froze * sizeof(word));
-  X.froze_lo = g->major_base, X.froze_hi = g->major_base + froze;
-  // a live finalizer node is three raw words with no header, so the scan below cannot
-  // stride it. nothing reaches the copies -- run_finalizers bumps a fresh list past the
-  // block -- so forge each into a dead chain of the same width.
-  for (struct ai_fz *z = g->fz; z; z = z->next)
-   if ((word*) z >= X.froze_lo && (word*) z < X.froze_hi) {
-    word *c = to + ((word*) z - X.froze_lo);
-    c[0] = (word) lvm_chain, c[1] = c[2] = ZeroPoint; } }
- g->major_hp = to + froze, X.cp = to;
- X.to_lo = to, X.to_hi = to + to_len, X.fwd = to + froze;   // fresh to-space: every copy is a forward
+ g->major_hp = to, X.cp = to;
+ X.to_lo = to, X.to_hi = to + to_len, X.fwd = to;           // fresh to-space: every copy is a forward
  X.f2lo = (word const*) g->end, X.f2hi = g->hp;             // from-range 2: the minor (promote young in the same pass)
  g->ip = cell(gcp(g, &X, word(g->ip)));
  g->tasks = cell(gcp(g, &X, word(g->tasks)));
@@ -1389,10 +1360,6 @@ static ai_inline word copy_thread(struct ai *g, struct ai_gcx *X, union u *src) 
 static ai_noinline intptr_t gcp(struct ai *g, struct ai_gcx *X, word x) {
  // a number stays; else x must sit in a from-space range this pass traces (a major traces two)
  if (charmp(x)) return x;
- // the pinned prefix is not traced: it is memcpy'd to the head of the to-space, so its
- // answer is arithmetic and leaves no forwarding pointer. froze_lo is 0 otherwise.
- if (X->froze_lo && ptr(x) >= X->froze_lo && ptr(x) < X->froze_hi)
-  return (word)(X->to_lo + (ptr(x) - X->froze_lo));
  if (!(ptr(x) >= X->p0 && ptr(x) < X->t0)
   && !(X->f2lo && ptr(x) >= X->f2lo && ptr(x) < X->f2hi)) return x;
  union u *src = cell(x);
@@ -4902,7 +4869,7 @@ static word image_root_dec(uint64_t tag, uint64_t val, word *base) {
 //   immortal      -> IdxBase + 2*NLVM+2*ii [.., TBOUND)
 //   binary ptr    -> kept absolute (>= TBOUND), base-delta-shifted on load
 // the lanes start at a constant, not at the blob's own length, so the encoding is a pure
-// function of the heap and one blob can begin with another (doc/misc/plan/image-chain.md).
+// function of the heap, so one live set is one byte string under any budget.
 // a floor is the only way to get that: a string's payload rides raw and can be any even
 // value, so no rule downstream of the encoder can tell a lane from a byte.
 // fixnums (odd) pass through; every encoded pointer is even (indices doubled), so
@@ -5343,112 +5310,21 @@ void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard cons
 void *ai_image_save(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
  if ((word*) g->sp != topof(g)) return NULL;             // quiescent: an empty ai stack at the dump point
  return ai_image_save_(g, outlen, guard); }
-// ============================================================================
-// the layered bake (doc/misc/plan/image-chain.md): one process, images in inclusion order.
-// each layer freezes what it dumped, so the next layer's blob begins with this one's and
-// the small image stores its parent's prefix plus the words that changed.
-// ============================================================================
-// the intern map moves off the pin the instant one is set. it is the one live thing a
-// session keeps writing into, and a copy left inside the prefix would hold whatever the
-// last intern wrote when the next major re-homed it -- GC timing, not program state.
-// abandoned here it holds exactly what the record took, so it stays the same bytes under
-// any budget and a derived layer owes it no patches. the slots are already canonical, so
-// the move is verbatim; only the thread tags, which name their own head, are re-laid.
-static struct ai *img_rehome_symbols(struct ai *g) {
- if (!g->symbols) return g;
- uintptr_t cap = map_cap(g->symbols), nb = 4 + 2 * cap;
- if (!ai_ok(g = ai_have(g, nb + 3))) return g;           // may collect: a major re-homes it itself
- word *bc = (word*) cell(map_back(g->symbols));
- if (!(bc >= g->major_base && bc < g->major_base + g->froze)) return g;   // off the pin already
- union u *b = (union u*) g->hp, *hd = (union u*)(g->hp + nb);             // ..still pinned, so nothing grew it
- memcpy(b, bc, nb * sizeof(word));
- tagthread(b, 3 + 2 * cap);
- hd[0].ap = lvm_map_lookup, hd[1].x = (word) b, tagthread(hd, 2);
- g->hp += nb + 3;
- return g->symbols = (word) hd, g; }
-// the first half: compact, pin, and answer this layer as {header, raw blob}. untokenized,
-// since its only reader is ai_image_save_over below. g->alloc'd; the caller owns it.
-void *ai_image_freeze(struct ai **gp, uintptr_t *outlen, struct ai_image_guard const *guard,
-                      uint8_t *why) {
- struct ai *g = *gp;
- struct image_hdr H;
- uintptr_t nw = 0;
- if ((word*) g->sp != topof(g)) return *why = 7, NULL;   // quiescent, like ai_image_save
- word *blob = img_build(g, &H, guard, &nw, why);         // ..which compacts under the previous pin, if any
- if (!blob) return NULL;
- uintptr_t total = sizeof H + nw * sizeof(word);
- char *rec = g->alloc(g, NULL, total);
- if (!rec) return g->alloc(g, blob, 0), NULL;
- memcpy(rec, &H, sizeof H), memcpy(rec + sizeof H, blob, nw * sizeof(word));
- g->alloc(g, blob, 0);
- g->froze = nw;                                          // ..and from here nothing in it moves again
- g = img_rehome_symbols(g);                              // ..and the intern map is not in it -- this may move g,
- *gp = g = ai_core_of(g);                                // so the caller reads it back before its next use
- if (!ai_ok(g)) return g->alloc(g, rec, 0), *why = 9, NULL;
- return *outlen = total, rec; }
-// the derived record for one frozen baseline against the blob just built: the baseline's
-// own header, then every prefix word changed since the freeze. the prefix itself is never
-// stored -- the loader reads it out of the parent's stream.
-static void *img_derive(struct ai *g, void const *base, uintptr_t blen,
-                        struct image_hdr const *H, word const *blob, uintptr_t nw, uintptr_t *outlen) {
- struct image_hdr B;
- if (blen < sizeof B) return NULL;
- memcpy(&B, base, sizeof B);
- uintptr_t bn = B.nwords;
- if (B.magic != ImageMagic || bn > nw || blen < sizeof B + bn * sizeof(word)) return NULL;
- word const *bb = (word const*)((char const*) base + sizeof B);
- // a plain comparison: the encoding is a pure function of the heap, so a pinned object
- // keeps its offset and every lane is a constant plus an index. nothing to re-seat.
- uintptr_t np = 0;
- for (uintptr_t i = 0; i < bn; i++) if (bb[i] != blob[i]) np++;
- uintptr_t total = sizeof B + (1 + 2 * np) * sizeof(uint64_t);
- char *rec = g->alloc(g, NULL, total);
- if (!rec) return NULL;
- memcpy(rec, &B, sizeof B);
- { struct image_hdr *D = (struct image_hdr*)(void*) rec;
-   D->nstream = 0; }                                      // ..and it carries no stream of its own
- uint64_t *w = (uint64_t*)(void*)(rec + sizeof B);
- *w++ = (uint64_t) np;
- for (uintptr_t i = 0; i < bn; i++)
-  if (bb[i] != blob[i]) *w++ = (uint64_t) i, *w++ = (uint64_t) bb[i];
- return *outlen = total, rec; }
-// the second half: the full image, and beside it the derived record for each frozen
-// baseline -- subout[i] for bases[i], NULL where it did not fit (a foreign record, or a
-// prefix longer than this blob). a NULL is not an error: the caller lays that layer
-// whole, which is only bigger.
-void *ai_image_save_over(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard, uint8_t *why,
-                         void *const *bases, uintptr_t const *blens, uintptr_t nbase,
-                         void **subout, uintptr_t *sublens) {
- struct image_hdr H;
- uintptr_t nw = 0;
- if ((word*) g->sp != topof(g)) return *why = 7, NULL;   // quiescent, like ai_image_save
- word *blob = img_build(g, &H, guard, &nw, why);
- if (!blob) return NULL;
- for (uintptr_t i = 0; i < nbase; i++)
-  subout[i] = img_derive(g, bases[i], blens[i], &H, blob, nw, &sublens[i]);
- void *buf = img_wire(g, &H, blob, nw, outlen);
- return g->alloc(g, blob, 0), buf; }
 // the image-wake progress hook: weak no-op, overridden by a port bringing the
 // wake up on new metal (a crashed wake with no debugger is otherwise invisible).
 // stages: 1 header, 2 pool, 3 blob, 4 the token stream expanded, 0x100+k walk (per 64K words), 5 walk, 6 roots.
-// the wake, over a stream that may carry more than this image: `buf` holds the header,
-// dictionary and token stream to read, and `Hw` is the header to wake with -- the same one
-// for a plain image, the derived record's for a prefix of it. `patch` names the prefix
-// words the deriving session changed.
-static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr const *Hw,
-                           uint64_t const *patch, uintptr_t npatch,
+// the wake: `buf` holds the header, dictionary and token stream to read.
+static struct ai *img_wake(void const *buf, uintptr_t len,
                            void *(*al)(struct ai*, void*, size_t)) {
- struct image_hdr S, H = *Hw;                            // S: the stream's own header
- if (len < sizeof S) return NULL;
- memcpy(&S, buf, sizeof S);
- if (S.magic != ImageMagic || S.wordsize != sizeof(word) || S.arch != ImageArch) return NULL;
+ struct image_hdr H;
+ if (len < sizeof H) return NULL;
+ memcpy(&H, buf, sizeof H);
  if (H.magic != ImageMagic || H.wordsize != sizeof(word) || H.arch != ImageArch) return NULL;
- if (H.nwords > S.nwords) return NULL;                   // a derived image is a prefix, never longer
- uintptr_t nw = H.nwords, db = ImageNDict * sizeof(word), ns = S.nstream;
+ uintptr_t nw = H.nwords, db = ImageNDict * sizeof(word), ns = H.nstream;
  // the stream's length is the header's, never the buffer's: a baked image arrives inside a
  // reserved section and a file may carry a shebang, so "the rest of what you handed me" is
  // the one reading that would make a good image look foreign and fall silently back to the egg.
- if (len < sizeof S + db + ns) return NULL;                       // truncated buffer
+ if (len < sizeof H + db + ns) return NULL;                       // truncated buffer
  struct ai *g = ai_ini_m(al);
  if (!g) return NULL;
  if (nw > g->major_len) {                                // grow the major pool to fit the image
@@ -5481,17 +5357,9 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
  // expand the token stream into the pool, then decode it there in place. the two passes
  // read and write one word at a time at the same index, so src and base are the same array
  // -- and a payload word arrives already seated, which is why the flat-leaf memcpys are gone.
- { unsigned char const *p0 = (unsigned char const*) buf + sizeof S + db,
-                       *q = img_expand(base, nw, p0, p0 + ns, (word const*)((char const*) buf + sizeof S));
-   // a whole image consumes its stream exactly; a prefix stops where its words end and
-   // the tail is the parent's business.
-   if (!q || (nw == S.nwords && q != p0 + ns)) return NULL; }
- // ..then the words this layer changed since it was frozen; every other word of the
- // prefix is the parent's, byte for byte.
- for (uintptr_t i = 0; i < npatch; i++) {
-  uintptr_t ix = (uintptr_t) patch[2 * i];
-  if (ix >= nw) return NULL;
-  base[ix] = (word) patch[2 * i + 1]; }
+ { unsigned char const *p0 = (unsigned char const*) buf + sizeof H + db,
+                       *q = img_expand(base, nw, p0, p0 + ns, (word const*)((char const*) buf + sizeof H));
+   if (!q || q != p0 + ns) return NULL; }                          // an image consumes its stream exactly
  word const *src = base;
  for (uintptr_t off = 0; off < nw; ) {
   uintptr_t sz;
@@ -5537,23 +5405,8 @@ static struct ai *img_wake(void const *buf, uintptr_t len, struct image_hdr cons
    if (want > (uintptr_t) g->len) { struct ai *h = gen_grow(g, want); if (ai_ok(h)) g = h; } }
  return g; }
 struct ai *ai_image_load_m(void const *buf, uintptr_t len, void *(*al)(struct ai*, void*, size_t)) {
- struct image_hdr H;
- if (len < sizeof H) return NULL;
- memcpy(&H, buf, sizeof H);
- return img_wake(buf, len, &H, NULL, 0, al); }
+ return img_wake(buf, len, al); }
 struct ai *ai_image_load(void const *buf, uintptr_t len) { return ai_image_load_m(buf, len, ai_libc_alloc); }
-// ..and a derived image: the first H.nwords words of the parent's stream, patched. `sub`
-// is what ai_image_save_over answered; a torn one answers NULL and the caller boots the
-// egg. the record must be word-aligned -- the container lays entries at 8.
-struct ai *ai_image_load_over(void const *parent, uintptr_t plen, void const *sub, uintptr_t slen) {
- struct image_hdr D;
- if (slen < sizeof D + sizeof(uint64_t)) return NULL;
- memcpy(&D, sub, sizeof D);
- uint64_t const *w = (uint64_t const*)(void const*)((char const*) sub + sizeof D);
- uint64_t np = w[0];
- if (np > (uint64_t) D.nwords
-     || slen < sizeof D + (1 + 2 * (uintptr_t) np) * sizeof(uint64_t)) return NULL;
- return img_wake(parent, plen, &D, w + 1, (uintptr_t) np, ai_libc_alloc); }
 
 // ============================================================================
 // sym

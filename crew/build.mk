@@ -85,24 +85,14 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             lib/gz.l lib/tar.l lib/tarcmd.l lib/gzcmd.l lib/cpio.l lib/cpiocmd.l \
             lib/source.l crew/lapiz/lapiz.l \
             lib/salt.l crew/libra/libra.l lib/hueweb.l lib/serve.l
-# THE DOCS LANE -- the small image of the array below. a one-shot `love libra ..`
-# wants the .l reader, the config door, the factor pass and the document lens, and
-# nothing else: it is 1.8 MB against the full image's 7.6, and the wake is linear in
-# that (~17 ms/MB measured), so the command starts in a quarter of the time.
-# ⚠ ITS MEMBERSHIP IS AN INPUT, exactly as distfiles' is -- same list guard below.
-docsfiles = lib/lint.l lib/salt.l crew/lapiz/lapiz.l crew/libra/libra.l
-# ..and the REST of the dist, which is the second layer of the bake below. filter-out
-# keeps distfiles' order, so the two cats together are the same tree in the same
-# sequence -- only the docs half now goes in FIRST, which is what makes it a prefix.
-restfiles = $(filter-out $(docsfiles),$(distfiles))
 # ⚠ THE MEMBERSHIP IS AN INPUT, and make cannot see it. Adding a file to distfiles
 # changes what the artifact CARRIES while every file make watches keeps its mtime, so
 # a cat older than the new member is "up to date" and the binary links without it --
 # silently, and it looks exactly like the feature not working. (mk/lib.mk's
 # corpus.list is the same guard for $t, and for the same reason.) Depend on the LIST:
 # rewritten only when membership moves, so the cat re-lays on an add OR a delete.
-# ⚠ the cats live in $(ho): they are the DEFAULT binary's own bake layers now
-# (host/build.mk's love.baked), and the dist lanes read the same files -- one roster,
+# ⚠ the cat lives in $(ho): it is the DEFAULT binary's own bake load now
+# (host/build.mk's love.baked), and the dist lanes read the same file -- one roster,
 # one set of bytes, so the tree binary and the artifact cannot drift.
 .PHONY: force_dist_list
 force_dist_list: ;
@@ -110,23 +100,10 @@ $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
-$(ho)/.docs.list: force_dist_list
-	@mkdir -p $(dir $@)
-	@tf=$@.$$$$.tmp; echo '$(docsfiles)' > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
-$(ho)/.docs-cat.l: $(docsfiles) $(ho)/.docs.list
-	@echo CAT	$(abspath $@)
-	@mkdir -p $(dir $@)
-	@cat $(docsfiles) > $@
 $(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list
 	@echo CAT	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@cat $(distfiles) > $@
-# the second layer: everything the docs layer is not.
-$(ho)/.rest-cat.l: $(restfiles) $(ho)/.dist.list $(ho)/.docs.list
-	@echo CAT	$(abspath $@)
-	@mkdir -p $(dir $@)
-	@cat $(restfiles) > $@
 .PHONY: dist dist-source dist-seed
 
 # ==== THE RELEASE ARTIFACTS (doc/misc/dist.md) ====

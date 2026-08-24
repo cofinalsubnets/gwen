@@ -188,10 +188,6 @@ struct ai {
    win_alloc, win_copied,         // sliding window (words) for the deterministic minor-resize ratio:
                                           // overhead = copied/alloc; reset on a resize (gen_please)
    n_resize,                      // pool reallocations so far -- gauge[13]; catches pool-cliff contamination
-   // the pinned prefix: the first `froze` words of major_base ride a major verbatim, so
-   // frozen objects keep their heap offsets and a later image's blob begins with an earlier
-   // one's (doc/misc/plan/image-chain.md). immortal, so only ai_image_freeze sets it.
-   froze,
    budget,                     // total memory cap in words (2*minor + 2*major); 0 = unbounded.
                                             // appel's rule: the nursery gets the free budget after the major pool.
    minor0, major0, ratio;         // the other three live knobs: nursery floor, the major pool's
@@ -358,18 +354,7 @@ struct ai_image_guard { uintptr_t (*ok)(void *ctx, uintptr_t v, uintptr_t off, u
 void *ai_image_save(struct ai*, uintptr_t *outlen, struct ai_image_guard const*),
      *ai_image_save_(struct ai*, uintptr_t *outlen, struct ai_image_guard const*);   // the unguarded worker: a mid-eval dump (the bake nif)
 struct ai *ai_image_load(void const *buf, uintptr_t len);
-// the layered bake (doc/misc/plan/image-chain.md). freeze dumps this layer and pins it, and
-// answers an opaque {header, blob} record the caller hands back. save_over answers the
-// full image plus each baseline's derived record -- its header and the prefix words that
-// changed -- which load_over wakes against the parent's stream. all g->alloc'd; NULL is
-// no image, never half of one.
-void
- *ai_image_freeze(struct ai**, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why),
- *ai_image_save_over(struct ai*, uintptr_t *outlen, struct ai_image_guard const*, uint8_t *why,
-                     void *const *bases, uintptr_t const *blens, uintptr_t nbase,
-                     void **subout, uintptr_t *sublens);
 struct ai
- *ai_image_load_over(void const *parent, uintptr_t plen, void const *sub, uintptr_t slen),
  *ai_image_load_m(void const *buf, uintptr_t len, void *(*)(struct ai*, void*, size_t));   // allocator-parameterized (a device heap has no malloc)
 
 // the terminal scare face: prints ";; a b\n" (show forms) to the err port from

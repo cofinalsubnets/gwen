@@ -57,14 +57,10 @@ exactly as well and is the same number every run; `test_bakerep` is what holds i
 
 ## the section carries an ARRAY
 
-`.image` holds either one image — its first word is the codec's own magic — or a DIRECTORY of
-them, each naming the verbs it can serve, so a one-shot `love libra ..` wakes a small image and
-a full session wakes the big one. Entries are laid smallest first and the picker takes the first
-that claims `argv[1]`, before anything is woken (it has to be: the verb table lives in the image
-being chosen). An entry is either WHOLE or DERIVED — a derived one stores only its header and
-the prefix words a later layer changed, and is baked by `love bake -L CAT:verbs ..`, which
-evaluates the layers in inclusion order and pins each for the next. host/image.c is the
-container, doc/misc/plan/image-chain.md is why. The CODEC never sees the difference.
+`.image` holds one image; its first word is the codec's own magic, and every verb wakes it
+whole. (The layered directory — per-verb entries, derived records, `bake -L` — was built,
+measured, and retired 2026-08-24: the shell's fork lane made the per-stage wake it existed
+to shave disappear, and one plain image is simpler everywhere.)
 
 ## the section is GROWN, not reserved
 

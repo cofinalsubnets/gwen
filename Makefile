@@ -100,7 +100,7 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 # test_arm64, test_cc/cts arm64+riscv); test_fixpoint and test_distboot retired to
 # by-name as well -- test_seed proves the circle in the slow gate.
 test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
-	test_uukind test_gc test_gcheck test_gcstress test_imgchain test_extract test_big test_mx \
+	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
 	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as \
 	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_refuzz test_sb test_vi \
 	test_moon test_clay test_moonfuzz test_forge \

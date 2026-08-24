@@ -48,18 +48,17 @@ if ! cmp -s "$w/b1" "$w/b2"; then
   fail "a bake is not reproducible -- something of the MACHINE is in the image"
 fi
 
-# ..and the same bytes under a DIFFERENT GC BUDGET, through the layered egg bake the
-# build runs. the collector's timing once chose the intern layout, which frozen ballast
-# the abandoned backing pinned, and the serial ranks -- each budget its own stable
-# fixpoint. the canonical orders make the bake a function of the live set alone.
+# ..and the same bytes under a DIFFERENT GC BUDGET, through the crew bake the build
+# runs. the collector's timing once chose the intern layout and the serial ranks --
+# each budget its own stable fixpoint. the canonical orders make the bake a function
+# of the live set alone.
 # (cwd stays the TREE -- the egg boot reads modules through cwd lib/ -- while both
 # lanes bake the one path $w/love, so the baked-in path cancels in the compare.)
 for lane in "b4:LOVE_BUDGET_MB=128" "b3:"; do
   cp "$w/seed" "$w/love" || fail "cannot stage the budget bake"
-  env LOVE_NO_IMAGE=1 ${lane#*:} "$w/love" bake \
-      -L "$ho/.docs-cat.l:libra,help" -L "$ho/.rest-cat.l" > "$w/bake.log" 2>&1 \
-    || { cat "$w/bake.log"; fail "layered bake (${lane#*:}) failed"; }
-  mv "$w/love" "$w/${lane%%:*}" || fail "layered bake produced nothing"
+  env LOVE_NO_IMAGE=1 ${lane#*:} "$w/love" bake -l "$ho/.dist-cat.l" > "$w/bake.log" 2>&1 \
+    || { cat "$w/bake.log"; fail "crew bake (${lane#*:}) failed"; }
+  mv "$w/love" "$w/${lane%%:*}" || fail "crew bake produced nothing"
 done
 cmp -s "$w/b3" "$w/b4" \
   || fail "the GC budget is in the image -- a bake must not care when collections fire"

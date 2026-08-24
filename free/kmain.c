@@ -74,10 +74,9 @@ extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
 // can carry. the sentinel is loud: unpatched, the memmap excludes nothing and
 // the heap eats the kernel at once.
 uintptr_t const k_image_top = 1;
-// the baked-image door (host/image.c): pure reads off two symbols the
+// the baked-image door (host/image.c): a pure read off two symbols the
 // projection re-bases, so the wake needs no finding on this seat either
-int ai_baked_pick(char const *verb, void const **blob, uintptr_t *blen,
-                  void const **sub, uintptr_t *sublen);
+int ai_baked_pick(void const **blob, uintptr_t *blen);
 uint64_t k_rtc(void);                  // the machine's own clock, unix seconds (0 = none)
 #ifdef K_TEST
 void k_qemu_exit(int);
@@ -1924,11 +1923,9 @@ void kmain(void) {
   // any problem (an unbaked cross pie's 16-byte stub, a torn blob) answers
   // NULL and the egg bakes from source below, the host's own law.
   struct ai *g = NULL;
-  { uintptr_t blen = 0, slen = 0;
-    void const *bimg = NULL, *bsub = NULL;
-    if (ai_baked_pick(NULL, &bimg, &blen, &bsub, &slen))
-      g = bsub ? ai_image_load_over(bimg, blen, bsub, slen)
-               : ai_image_load(bimg, blen); }
+  { uintptr_t blen = 0;
+    void const *bimg = NULL;
+    if (ai_baked_pick(&bimg, &blen)) g = ai_image_load(bimg, blen); }
   bool woke = g != NULL;
   { char const *s = woke ? "; inle -- image awake\n" : "; inle -- baking the egg\n";
     for (; *s; s++) serial_putc(*s); }

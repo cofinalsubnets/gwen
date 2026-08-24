@@ -26,11 +26,11 @@ The end state, per environment:
   any index change: that cost must not enter `make host`. After this arc the
   tree binary and the seed differ by two objects and nothing else.
 
-What the machinery already grants: the image chain landed (doc/misc/plan/image-chain.md)
-so the layers cost their difference, a verbed spawn wakes only its prefix
-(`love libra` 23 ms against the full image's 107), and `bake -L` + the picker
-are the dist artifact's tested path -- this arc makes the tested path the only
-path.
+What the machinery already grants: the image chain landed so the layers cost
+their difference, a verbed spawn wakes only its prefix, and `bake -L` + the
+picker are the dist artifact's tested path -- this arc makes the tested path
+the only path. (RETIRED 2026-08-24: with the shell's fork lane absorbing the
+per-stage wake, the chain came back out -- one plain image, `bake -l`.)
 
 ## the rungs
 

@@ -154,13 +154,12 @@
        _ (chmod dst 493)
        here (cwd 0)
        abs (? (dst 0 = 47) dst (here + "/" + dst))
-       d0 "out/host/.docs-cat.l:libra,help"
-       d1 "out/host/.rest-cat.l"
+       d0 "out/host/.dist-cat.l"
        q (src-onpath? ("qemu-" + xa))
        _ (two? q ? (puts (";; baking through qemu-" + xa + " -- minutes, and the crew\n"
                           + ";; is what makes it a seed and not a three-verb egg\n")))
        _ (two? q ? (? (charm? (chdir root)) (src-die ("can't enter " + root)) 0))
-       s (two? q ? (herald [<>q abs "bake" "-L" d0 "-L" d1]))
+       s (two? q ? (herald [<>q abs "bake" "-l" d0]))
        _ (two? q ? (chdir here))
        st (two? s ? <s s)                       ; herald answers a pair or a status
        ok (two? q ? (0 = st) 0)
@@ -172,10 +171,10 @@
               (two? q)
               (puts (";; the bake FAILED under qemu-" + xa + " (exit " + show st + ") and the\n"
                      + ";; lay is three verbs (bake wake verbs). To see it again:\n"
-                     + ";;   cd " + root + " && " + abs + " bake -L " + d0 + " -L " + d1 + "\n"))
+                     + ";;   cd " + root + " && " + abs + " bake -l " + d0 + "\n"))
               (puts (";; three verbs (bake wake verbs), and no qemu-" + xa + " here to\n"
                      + ";; grow them. On the " + xa + " machine, or with the emulator:\n"
-                     + ";;   cd " + root + " && " + abs + " bake -L " + d0 + " -L " + d1 + "\n")))
+                     + ";;   cd " + root + " && " + abs + " bake -l " + d0 + "\n")))
        ; a bake we ASKED FOR and did not get is a failure; no emulator is not.
        (ok ? 0 (two? q ? 1 0)))
 
@@ -193,7 +192,7 @@
        _ (? (charm? (chdir root)) (src-die ("can't enter " + root)) 0)
        ; the cats ride along: they are the crew a bake needs, and arch-blind
        s (herald (string? xa ? [exe "make" ("xa=" + xa) ("out/x-" + xa + "/love")
-                                "out/host/.docs-cat.l" "out/host/.rest-cat.l"]
+                                "out/host/.dist-cat.l"]
                               [exe "make" "dist"]))
        st (two? s ? <s s)
        _ (chdir here)

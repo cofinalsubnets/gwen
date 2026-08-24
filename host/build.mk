@@ -50,20 +50,19 @@ $(ho)/.hostcc: force_hostcc
 host: $(ho)/love $(ho)/love.baked $(ho)/love.1 $(ho)/cook.1
 love0: $(love0)
 
-# the boot image -- the layered crew bake (doc/misc/plan/one-binary.md): `$< bake -L ..` boots
-# the fresh binary, evals the docs layer, freezes, evals the rest of the crew, and lays
-# the chain into that binary's own .image section -- host/image.c copies the exe, pwrites
-# the blob and renames over the original, so a new inode leaves anyone still executing on
-# the old one. the tree's love then is the artifact's shape: `love kore|mooncc|sh|libra ..`
-# with no shim and no sibling image, a verb waking only its layer (libra ~22 ms, the full
-# crew ~104 ms -- and no verb picks the largest entry, so a bare `love` pays the full
-# wake; the corpus never does, riding LOVE_NO_IMAGE). the load is an optimization: main.c
-# falls back to an egg boot on any mismatch, so a stale bake is slower, never fatal. the
-# .baked stamp carries the dependency, since the bake mutates the binary itself -- and it
-# now watches the cats too, so a crew edit rebakes (~12 s) without relinking.
-$(ho)/love.baked $(ho)/love.cand.baked: %.baked: % $(ho)/.docs-cat.l $(ho)/.rest-cat.l
-	@echo LOVE	$< "(bake -L)"
-	@$< bake -L $(ho)/.docs-cat.l:libra,help -L $(ho)/.rest-cat.l
+# the boot image -- the crew bake (doc/misc/plan/one-binary.md): `$< bake -l ..` boots
+# the fresh binary, evals the whole dist cat, and lays ONE image into that binary's own
+# .image section -- host/image.c copies the exe, pwrites the blob and renames over the
+# original, so a new inode leaves anyone still executing on the old one. the tree's love
+# then is the artifact's shape: `love kore|mooncc|sh|libra ..` with no shim and no
+# sibling image (the corpus never wakes it, riding LOVE_NO_IMAGE). the load is an
+# optimization: main.c falls back to an egg boot on any mismatch, so a stale bake is
+# slower, never fatal. the .baked stamp carries the dependency, since the bake mutates
+# the binary itself -- and it watches the cat too, so a crew edit rebakes without
+# relinking.
+$(ho)/love.baked $(ho)/love.cand.baked: %.baked: % $(ho)/.dist-cat.l
+	@echo LOVE	$< "(bake)"
+	@$< bake -l $(ho)/.dist-cat.l
 	@touch $@
 
 
