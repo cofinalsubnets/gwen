@@ -74,6 +74,10 @@ extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
 // can carry. the sentinel is loud: unpatched, the memmap excludes nothing and
 // the heap eats the kernel at once.
 uintptr_t const k_image_top = 1;
+// the baked-image door (host/image.c): pure reads off two symbols the
+// projection re-bases, so the wake needs no finding on this seat either
+int ai_baked_pick(char const *verb, void const **blob, uintptr_t *blen,
+                  void const **sub, uintptr_t *sublen);
 uint64_t k_rtc(void);                  // the machine's own clock, unix seconds (0 = none)
 #ifdef K_TEST
 void k_qemu_exit(int);
@@ -1910,11 +1914,37 @@ void kmain(void) {
   // the disk (rung 5): probe the bus, and hand the driver its one DMA block --
   // kmallocw memory, so pa = va - khhdm holds for everything the device reads.
   k_blk_init(kmallocw(b2w(352)));
-  struct ai *g = ai_defn(ai_ini(), __start_ai_nifs,
-                         (uintptr_t)(__stop_ai_nifs - __start_ai_nifs), 0);
+#ifdef K_TEST
+  bool woke = false;                             // the test pie is unbaked by construction
+  struct ai *g = ai_ini();
+#else
+  // THE WAKE (phase D): the projection carries the artifact's baked image at
+  // its re-based address, and ai_baked_pick reads it off the same two symbols
+  // the hosted start does -- the image needs no finding on this seat either.
+  // any problem (an unbaked cross pie's 16-byte stub, a torn blob) answers
+  // NULL and the egg bakes from source below, the host's own law.
+  struct ai *g = NULL;
+  { uintptr_t blen = 0, slen = 0;
+    void const *bimg = NULL, *bsub = NULL;
+    if (ai_baked_pick(NULL, &bimg, &blen, &bsub, &slen))
+      g = bsub ? ai_image_load_over(bimg, blen, bsub, slen)
+               : ai_image_load(bimg, blen); }
+  bool woke = g != NULL;
+  { char const *s = woke ? "; inle -- image awake\n" : "; inle -- baking the egg\n";
+    for (; *s; s++) serial_putc(*s); }
+  if (!woke) g = ai_ini();
+#endif
+  // the nif drains re-pin over a woken book too (the host's law, main.c): the
+  // section rides this binary, so the addresses are the image's own.
+  g = ai_defn(g, __start_ai_nifs,
+              (uintptr_t)(__stop_ai_nifs - __start_ai_nifs), 0);
   // ..then the kernel's own bracket, so a kernel row wins any name it shares
   g = ai_defn(g, __start_ai_knifs,
               (uintptr_t)(__stop_ai_knifs - __start_ai_knifs), 0);
+  // ..and the module tables, one ai_defn per row (an app's nifs land under its
+  // module; over a woken image the drain refreshes the registry's rows)
+  for (struct ai_mod const *mt = __start_ai_mods; mt < __stop_ai_mods; mt++)
+    g = ai_defn(g, mt->defs, mt->n, mt->mod);
   // BOUND the generational collector to the device's RAM (the Appel knob): without it the nursery's
   // copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive) sizing then asks
   // kmallocw for a contiguous block bigger than physical RAM -> OOM. An eighth of free RAM leaves ample
@@ -1937,10 +1967,11 @@ void kmain(void) {
   g = ai_strof(g, kboot.cmdline);
   struct ai_def bd[] = {{"bootline", ai_pop1(g)}};
   g = ai_defn(g, bd, countof(bd), 0);
-  // load the prel, then run the l read-eval-print loop. its line
-  // editor (in love/bao.l, the baked shell core) drives the console; PS/2 keyboard
-  // and serial input both arrive as ANSI escape sequences the l edev decodes.
-  struct ai *r = ai_egg_(g,
+  // the EGG lane: load the prel, warm the module layers -- everything a woken
+  // image already carries. the seat text below runs on BOTH lanes.
+  struct ai *r = g;
+  if (!woke) {
+  r = ai_egg_(g,
 #include "egg.h"
  ,
 #include "p1.h"
@@ -1958,6 +1989,12 @@ void kmain(void) {
  "(use 'pat)"   // ⚠ pat BEFORE uu: uu.l is written in @, and a macro reaches a reader
  "(use 'uu) (: uu (from 'uu))"                         // the uu kernel: the corpus's uu files drive it through the
  "(use 'bao)"                                          //   one-name `uu` surface on this target too
+  );
+  }
+  // THE SEAT TEXT, both lanes: what this machine is that a host is not. over a
+  // woken book these shadow the hosted bindings (getenv reads envt here, not
+  // an environ that starts empty), which is the point.
+  r = ai_evals_(r,
  // the environment (rung 2): a TABLET, the pairs on slot 0, closures over it
  // wearing the host's names and shapes -- getenv the value | () absent/misused,
  // setenv () | EINVAL misuse (a non-string value UNSETS, the absence lane),
@@ -2067,6 +2104,15 @@ void kmain(void) {
  "(use 'kanren)"                                       //   rationals and no unifier (~65K of heap for the last two alone)
 #endif
   );
+  // a woken image's crew captured the seat-doors wrappers (host/main.c), which
+  // read the live door off the tablet -- aim them at this seat's task shim, so
+  // a baked lush or cook spawns tasks here. the egg book has no tablet (its cat
+  // captures the shim directly below), and the probe answers that.
+  r = ai_evals_(r,
+   "(? (member? 'seat-doors (names ()))"
+   "   (: _ (pin seat-doors 0 spawn) _ (pin seat-doors 1 spawnio)"
+   "      _ (pin seat-doors 2 spawnmap) (pin seat-doors 3 wait))"
+   "   0)");
   // THE SESSION: a fresh writable layer, C-side (the host's run_program shape) --
   // the shell's defglobs (and the corpus stream's) land here, never in the base.
   r = ai_layer_(r);
@@ -2095,6 +2141,9 @@ void kmain(void) {
   // here, so every member's own seat sits out and the whole userland lands.
   // the cat is BUILT here, member by member off the blob initrd -- korelist is
   // the baked roster (space-separated), and the concat walks it in order.
+  // ⚠ EGG LANE ONLY: a woken image carries the whole crew already baked, and
+  // re-loading the cat over it would re-pin every verb the bake sealed.
+  if (!woke) {
   r = ai_evals_(r,
    "(: (kwords s i j acc)"
    "    (? (< j (tally s))"
@@ -2106,6 +2155,7 @@ void kmain(void) {
    "   (kcat l) (? (two? l) (+ (kslurp (cap l)) (kcat (cup l))) \"\")"
    "   korecat (kcat (kwords korelist 0 0 ())))");
   r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally korecat)) (link (peep korecat i 0) (g (+ 1 i))))) 0)))");
+  }
   // now the line wears its real shape and the program word dispatches off the
   // registry -- spawn's own door. a seated program quits with its status (the
   // reset door); an empty line falls to the console shell, the toolbox warm.

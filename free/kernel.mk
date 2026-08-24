@@ -147,12 +147,15 @@ $(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
 # its own pie (the corpus rides its kmain), and a cross arch keeps the odir
 # pie (no artifact of that arch stands here).
 k_pie_in = $(k_pie)
+k_pie_dep =
 ifndef K_TEST
 ifeq ($a,$(hosta))
 k_pie_in = $(ho)/love
+# the projection carries the baked image, so it must follow the in-place bake
+k_pie_dep = $(kcc_dep)
 endif
 endif
-$(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $m
+$(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $m
 	@echo KPROJ	$@
 	@mkdir -p "$(dir $@)"
 	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $a && test -s $@

@@ -942,6 +942,20 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   g = ai_unsplice_(g);                                   // holo back to non-ambient
 #endif
 
+  // the seat doors: the process quartet, wrapped to read the LIVE door off a
+  // tablet per call. a crew bake captures the wrappers, so a baked closure's
+  // spawn still lands wherever the running seat aims the tablet -- the metal
+  // wake (free/kmain.c) pins its task shim in; here the slots hold the posix
+  // nifs the drain just laid. slot order: spawn spawnio spawnmap wait.
+  g = ai_evals_(g,
+    "(: spawn0 spawn  spawnio0 spawnio  spawnmap0 spawnmap  wait0 wait"
+    "   seat-doors (: t (tablet 4) _ (pin t 0 spawn0) _ (pin t 1 spawnio0)"
+    "                 _ (pin t 2 spawnmap0) _ (pin t 3 wait0) t)"
+    "   (spawn argv) ((peep seat-doors 0 0) argv)"
+    "   (spawnio argv i o e cl pg fg) ((peep seat-doors 1 0) argv i o e cl pg fg)"
+    "   (spawnmap argv fdm cl pg fg) ((peep seat-doors 2 0) argv fdm cl pg fg)"
+    "   (wait p) ((peep seat-doors 3 0) p))");
+
   // the seal, and it runs on every boot -- an egg boot and a woken image must differ in
   // startup time and nothing else. `book` goes so a program cannot reassign the globals
   // under everyone (the same reason a module book hands out a lookup closure, not its
