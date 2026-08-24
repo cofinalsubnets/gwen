@@ -34,14 +34,31 @@
 ;
 ; loads LAST in the kore cat, when every tool main is already defined; the tool files'
 ; own SEATs stay quiet here (no file of theirs sits in the program seat), so this
-; dispatcher is the one thing that fires. ONE body-having `:` -- the registry, the
-; thin mains that live here (diff over the engines, as over the holo book), and the
-; dispatch as the body; nothing leaks, and every path ANSWERS a charm through core.l's
-; urun, so an in-image caller lives through a tool that would have quit (the SEAT below
-; is the one site that quits). ⚠ a main here leaves deep through `die`, never `quit`.
-(module 'kore
+; dispatcher is the one thing that fires. the module head is the EXPORT LIST -- this is
+; the last kore block in every cat, so its leave prunes the whole module down to the
+; names below: every tool's <name>-main (lush's in-image lane and any (from 'kore ..)
+; reach them by that spelling), the u/text floors later cat members read bare, and
+; kore-main. the helpers this file defines (die, read-text, the registry) stay private.
+; every path ANSWERS a charm through core.l's urun, so an in-image caller lives through
+; a tool that would have quit (the SEAT below is the one site that quits).
+; ⚠ a main here leaves deep through `die`, never `quit`.
+(module (kore kore-main
+        diff-main as-main ar-main ld-main nm-main
+        arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
+        chmod-main chomp chown-main cksum-main cmp-main cnames comm-main cp-main cut-main
+        date-main dirname-main dsplit du-main echo-main env-main expand-main expr-main
+        factor-main false-main find-main fold-main free-main gfind grep-main groups-main
+        head-main id-main install-main join-main killall-main kill-main lastn lines link-main
+        ln-main ls-main md5sum-main mkdir-main mktemp-main mv-main myers nl-main nproc-main
+        od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
+        printf-main ps-main pwd-main pwdx-main readlink-main realpath-main rebre refind refold
+        rem reparse rev-main rmdir-main rm-main sed-main seq-main sha256sum-main sleep-main
+        sort-main sparse split-main srun stat-main tac-main tail-main tee-main test-main
+        touch-main tr-main true-main tsort-main uatoi ubase uclk ucopy udie udiff udirp ujoin
+        uleave uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
+        uset usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main)
 (use 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
-(: kore-main (: (read-text p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))   ; (1 text) | ()
+(: (read-text p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))   ; (1 text) | ()
    (die m) (: _ (say err m) _ (put err 10) (uleave 2))
 
    ; diff: two files -> unified hunks on out; the classic exit triple
@@ -347,27 +364,28 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
    ; ⚠ each row closes over ITS OWN f -- the inner `:` is a fresh scope per step, so the
    ; closures do not all end up holding the last applet.
    _ (: T (from 'verbs 'tab)
-        ; ⚠ kore-main is UNBOUND here -- the outer form binds it only after this
-        ; whole form answers -- so the closure reads it through the registry at
-        ; the call, when module 'kore holds it. a bare read compiled here would
-        ; ride a missing cell against the CALLER's walk, where kore never walks.
+        ; ⚠ kore-main is UNBOUND here -- it binds later in this same form -- so the
+        ; closure reads it through the registry at the call, when module 'kore holds
+        ; it. a bare read compiled here would ride a missing cell against the
+        ; CALLER's walk, where kore never walks.
         _ (pin T 'kore (\ as ((from 'kore 'kore-main) ("kore" >< as))))
         (go ks) (? (two? ks) (: f (applets <ks) _ (pin T <ks (\ as (urun f as))) (go >ks)) 0)
         (go (keys applets)))
-   ; kore-main is the ONE leaked global, and the in-image door too: it dispatches a
+   ; kore-main is the dispatch door, and the in-image door too: it dispatches a
    ; program-relative arg list -- argv0 a tool symlink, or `kore`/a dev path then the
    ; tool word -- and ANSWERS the status charm, () when kore is not seated (the bake
    ; stays quiet; an unknown tool is usage's 2, a status like any other). the baked
    ; kore.image wakes to it with a synthetic "kore" argv0, so a caller holding the
    ; image runs a tool by handing it (link "kore" "ls" "-l") and reading the charm.
    ; ⚠ two doors: a list handed in is SCANNED, () means "the line I was started with".
-   (\ a (: s (? (two? a) ((from 'verbs 'scan) mynames a) ((from 'verbs 'fire) mynames))
-           (? !(two? s) ()
-              (: f0 (applets (intern (bn <s)))
-                 (? f0 (urun f0 >s)
-                    (: t >s
-                       f (? (two? t) (applets (intern <t)) ())
-                       (? f (urun f >t) (usage ()))))))))))
+   (kore-main a)
+    (: s (? (two? a) ((from 'verbs 'scan) mynames a) ((from 'verbs 'fire) mynames))
+       (? !(two? s) ()
+          (: f0 (applets (intern (bn <s)))
+             (? f0 (urun f0 >s)
+                (: t >s
+                   f (? (two? t) (applets (intern <t)) ())
+                   (? f (urun f >t) (usage ()))))))))
 ; the SEAT: file mode (cat | love) dispatches on the real command line and quits with
 ; the status. the -l bake preload seats a flag, not kore, so the scan answers () and
 ; kore-main answers () -- the presence guard, and the one answer that is not a status.

@@ -145,11 +145,8 @@
               "basename" "dirname" "readlink" "seq" "ls" "cmp" "diff"
               "mkdir" "rmdir" "rm" "ln" "touch" "chmod" "mv" "cp" "install"
               "objcopy" "cksum" "md5sum" "sha256sum")
-   ; ⚠ nm/ar/ld/as are NOT here and could not be: the lane resolves a word to a GLOBAL by
-   ; name (or a MODULE member, the row's third slot), and those four reach kore's applet
-   ; table as folded values from a `:` scope that never pins them. The guard already
-   ; refuses them, so this is a note, not a bug -- but an allow-list naming words the
-   ; lane cannot reach would read as a wider claim.
+   ; nm/ar/ld/as are reachable now (module 'kore exports every <word>-main) but stay
+   ; off the list on the qualifying test alone: nothing measured wants them in-image.
    ; the words whose main is not spelled <word>-main. kore-main wants the WHOLE argv
    ; (it reads its own program seat); the rest take the args after the name.
    sh-imgalias '(("mooncc" "moon-run" "moon") ("cc" "moon-run" "moon") ("kore" "kore-main")
