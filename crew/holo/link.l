@@ -450,12 +450,20 @@
    ; THE LEDGER a set of objects leaves: every nom it defines (plus the ones the
    ; linker synthesizes rather than any object defining them), and the strong
    ; undefineds still owed. -> (dt owed), dt a tablet the caller goes on pinning into.
+   ; a __start_X/__stop_X pair is the linker's to answer for ANY named lane
+   ; (ldres's generic rule), so the ledger leaves every such name to it -- a
+   ; bracket over a lane that never lays still scares, at the link.
+   (ld-bracket? nm)
+    (: z (tally nm)
+       (? ((8 < z) && (snip nm 0 8 = "__start_")) 1
+          ((7 < z) && (snip nm 0 7 = "__stop_")) 1 0))
    (ldledger srcs mach)
     (: duos (map (\ p (dusyms <p <>p mach)) srcs)
        dt (tablet 0)
        _ (map (\ nm (pin dt nm 1)) ldsynth)
        _ (map (\ du (map (\ nm (pin dt nm 1)) <du)) duos)
-       `(dt (foldl (\ a du (foldl (\ a2 nm (? (peep dt nm () || member? nm a2) a2 (nm >< a2)))
+       `(dt (foldl (\ a du (foldl (\ a2 nm (? (peep dt nm () || member? nm a2
+                                               || ld-bracket? nm) a2 (nm >< a2)))
                                   a <>du))
                    () duos)))
    ; an ARCHIVE resolves BY NEED and BY INDEX: for each nom the link still owes, the

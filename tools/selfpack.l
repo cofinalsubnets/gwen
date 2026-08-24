@@ -100,7 +100,10 @@
        arch <av
        top (<(>av))
        stamp (? (3 <= n) (<(sound (<(>(>av))))) 0)
-       drops (? (3 <= n) (>(>(>av))) ())
+       ; ⚠ TOP joins the drops: a tree never packs an unpacked copy of itself.
+       ; a release untarred at the root (a field test's leftover) otherwise
+       ; rides the next blob, and the artifact swallows a whole second love.
+       drops (top >< (? (3 <= n) (>(>(>av))) ()))
        side (arch + ".sha")
        ; THE THIN PASS: stat the tree, hash the archive it describes, and settle the
        ; run when that id is the one the sidecar already names and the archive is

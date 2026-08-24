@@ -67,6 +67,8 @@ void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc
 void k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct ai_wait_fd*, int, uintptr_t);
 bool k_ready(int fd, int events);
 void k_seat_init(void);                // free/sys.c: arm environ + the std streams
+// the kernel-only nif bracket (defs[] below); the linker synthesizes the pair
+extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
 // the metal image's far edge, PATCHED INTO THE FILE by the projection
 // (tools/kproject.l) -- the flat link's kimage_end, as a value the one binary
 // can carry. the sentinel is loud: unpatched, the memmap excludes nothing and
@@ -1636,15 +1638,16 @@ static bool cbinit(void) {
   cb_fill(kcb, 0);
   return true; }
 
-// the kernel's nifs ride the ai_nifs section, the same one AiNif lands a host
-// app's in -- so this table is drained by the __start_/__stop_ bracket and named
-// by nothing. `used` is what keeps it, and the whole array in one blob is the
-// AiModNifs shape rather than a row at a time. What it buys: a host/<app>.c
-// dropped into the kernel build registers itself with no edit here, and the
-// image's host slice (core/love.c) indexes a kernel nif the way it does a host
-// one. ⚠ the slice is INDEXED BY POSITION, so this order is part of an image's
-// contract -- append, do not insert.
-static struct ai_def const __attribute__((section("ai_nifs"), used)) defs[] = {
+// the kernel's OWN nifs ride ai_knifs, a section apart (plan C2, the artifact
+// unification): the one binary is also the hosted love, whose book must not
+// carry reset, fault, the disk or the virt doors -- machinery that would
+// misbehave under an OS rather than refuse. kmain drains ai_nifs (the whole
+// posix surface) and then this bracket, so the kernel book carries both; the
+// hosted main drains ai_nifs alone and never sees these. the linker
+// synthesizes the bracket for any named lane, so no registration line exists
+// anywhere. ⚠ INDEXED BY POSITION like its sibling, so this order is part of
+// an image's contract -- append, do not insert.
+static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   {"reset", (intptr_t) nif_reset},
   {"draw", (intptr_t) nif_draw},
   {"key", (intptr_t) nif_key},
@@ -1783,6 +1786,9 @@ void kmain(void) {
   k_blk_init(kmallocw(b2w(352)));
   struct ai *g = ai_defn(ai_ini(), __start_ai_nifs,
                          (uintptr_t)(__stop_ai_nifs - __start_ai_nifs), 0);
+  // ..then the kernel's own bracket, so a kernel row wins any name it shares
+  g = ai_defn(g, __start_ai_knifs,
+              (uintptr_t)(__stop_ai_knifs - __start_ai_knifs), 0);
   // BOUND the generational collector to the device's RAM (the Appel knob): without it the nursery's
   // copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive) sizing then asks
   // kmallocw for a contiguous block bigger than physical RAM -> OOM. An eighth of free RAM leaves ample

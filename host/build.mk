@@ -258,10 +258,13 @@ nolibc_src = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
 # -freadme rides only this link, so test_fixpoint's relink of $(moon_o) needs
 # no mirror of it. assets/readme.bin is the page a reader lands on --
 # `readelf -p .README`, mapped by nothing.
+# $(kart_o), the SHIPPED KERNEL's objects (free/kernel.mk owns the list and
+# their rules): the artifact is the fused binary now (plan C2) -- what boots
+# on metal is tools/kproject.l's projection of exactly this file.
 $(ho)/love $(ho)/love.cand: $(moon_o) out/host/src.o out/host/rt.o assets/readme.bin $(nolibc_src)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) out/host/src.o out/host/rt.o -freadme=assets/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_o) out/host/src.o out/host/rt.o -freadme=assets/readme.bin -o $@
 endif
 
 # the man pages are written in doc/*.md and generated here through the lapiz lens: one

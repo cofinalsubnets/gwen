@@ -132,10 +132,20 @@ $(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
 	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
 	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(kproject_l)); } > $@
 
-$(k_elf): $(k_odir)/kproject.l $(k_pie) $(k_boot_o) $m
+# THE SHIPPED KERNEL IS THE ARTIFACT'S PROJECTION -- one binary, worn two
+# ways; test_kboot boots exactly what `make` installs. the TEST kernel keeps
+# its own pie (the corpus rides its kmain), and a cross arch keeps the odir
+# pie (no artifact of that arch stands here).
+k_pie_in = $(k_pie)
+ifndef K_TEST
+ifeq ($a,$(hosta))
+k_pie_in = $(ho)/love
+endif
+endif
+$(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $m
 	@echo KPROJ	$@
 	@mkdir -p "$(dir $@)"
-	@$m $(k_odir)/kproject.l $(k_pie) $(k_boot_o) $@ $a && test -s $@
+	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $a && test -s $@
 
 # --- the initrd ------------------------------------------------------
 # lib/*.l baked per-file into .rodata as {path, bytes, len} rows (tools/lcatfs.l), which
@@ -153,6 +163,11 @@ out/lib/kfs.h: $(kfs) out/lib/kfs.list $(love0) tools/lcatfs.l love/prel.l
 	@mkdir -p out/lib
 	@echo LOVE	$@
 	@$(love0) -l love/prel.l tools/lcatfs.l $(kfs:$R/%=%) > $@
+# the ARTIFACT's twin, ms pinned to the stamp (kart_inc says why)
+out/lib/kart/kfs.h: $(kfs) out/lib/kfs.list $(love0) tools/lcatfs.l love/prel.l
+	@mkdir -p out/lib/kart
+	@echo LOVE	$@
+	@$(love0) -l love/prel.l tools/lcatfs.l -s $(dist_stamp) $(kfs:$R/%=%) > $@
 
 # --- the kore cat (rung 3) -------------------------------------------
 # the whole $(korefiles) userland (crew/build.mk, included first) baked VERBATIM for the
@@ -174,6 +189,48 @@ $(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p
 # caller's `a=` / `K_TEST=` say. test_embed asks for it three ways; the odir is spelled here
 # so a caller never re-derives it (KCC decides half of it).
 kmain_o: $(k_free_o)
+
+# --- THE ARTIFACT CARRIES THE KERNEL (plan C2, the unification) --------------
+# out/host/love's link gains the SHIPPED kernel for the HOST's arch: kmain
+# (the kore cats aboard), the ramfs and rows, the syscall door, the arch
+# bring-up and the vector lay. boot.o stays out (the projection's). these ride
+# the MOON LANE -- moon0-compiled, the vec lay under boot_love -- because a
+# seed builds the artifact before any $m exists; KCC has no seat here.
+# spelled at $(hosta), never $a: a cross `make kernel a=..` must not move the
+# host artifact. the prereqs live here (kernel.mk owns the shape); the link
+# recipe in host/build.mk reads $(kart_o) at run time, where it is defined.
+# ⚠ -Iout/lib/kart FIRST: the artifact's kfs.h is the STAMPED bake (every
+# row's ms pinned to $(dist_stamp), selfpack's own mtime law) -- the seed
+# fixpoint demands a binary that is a function of the tree's bytes alone,
+# where the test kernel's kfs keeps real dates for the corpus's stat laws.
+kart_inc = -Iout/lib/kart -I$(ho) -I. -Icore -Iout/lib -I$R -I$R/free -I$R/free/$(hosta) \
+  -I$R/crew/quay -I$R/crew/moon/include
+kart_h = $(love_h) $(wildcard $(R)/free/*.h $(R)/free/$(hosta)/*.h)
+kart_cats = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h \
+  out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h out/lib/kart/kfs.h \
+  out/lib/korecat.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h
+kart_arch_o = $(patsubst $R/free/$(hosta)/%.c,$(moon_d)/k_$(hosta)_%.o,$(wildcard $R/free/$(hosta)/*.c))
+# the console's painter and its fonts: kernel-only draws the host link never had
+kart_quay_o = $(patsubst %,$(moon_d)/k_q_%.o,paint cga_8x8 moderndos_8x16)
+kart_o = $(moon_d)/k_kmain.o $(moon_d)/k_blk.o $(moon_d)/k_sys.o $(kart_arch_o) $(kart_quay_o) $(moon_d)/kvec.o
+$(moon_d)/k_%.o: $R/free/%.c $(kart_h) $(kart_cats) $(moon0_dep)
+	@echo MOON	$@
+	@mkdir -p "$(dir $@)"
+	@$(moon0) $(kart_inc) -c $< $@
+$(moon_d)/k_$(hosta)_%.o: $R/free/$(hosta)/%.c $(kart_h) $(kart_cats) $(moon0_dep)
+	@echo MOON	$@
+	@mkdir -p "$(dir $@)"
+	@$(moon0) $(kart_inc) -c $< $@
+$(moon_d)/k_q_%.o: $R/crew/quay/%.c $(moon0_dep)
+	@echo MOON	$@
+	@mkdir -p "$(dir $@)"
+	@$(moon0) $(kart_inc) -c $< $@
+# the vector lay, under whatever love a fresh tree has (mksys's own idiom)
+$(moon_d)/kvec.o: $(ko)/$(hosta)/mkvec.l $(if $(bundled_love),,$(love0))
+	@echo HOLO	$@
+	@mkdir -p "$(dir $@)"
+	@LOVE_NO_IMAGE= $(boot_love) -l $< -n -e '(lay-vec "$@" "$(hosta)")' && test -s $@
+$(ho)/love $(ho)/love.cand: $(kart_o)
 
 # l.o carries the version string; recompile it when the id changes. ⚠ the -D is what MAKES
 # it carry one -- mooncc has no __has_include for core/love.c's fallback probe, so without it

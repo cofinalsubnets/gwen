@@ -61,9 +61,12 @@
             + `(x-intr x-intr x-trap x-trap x-intr)   ; 32 PIT, 33 PS/2, 34, 35, 36 COM1
             + (v-rep 11 x-trap))                        ; 37..47
 
-   ;; .rodata: the two lockstep tables, then the two LIDT operands. an entry is
-   ;; an 8-byte absolute pointer -- a relocation in the .o, since the address is
-   ;; the linker's to know.
+   ;; the two lockstep tables, then the two LIDT operands. an entry is an
+   ;; 8-byte absolute pointer -- a relocation in the .o, since the address is
+   ;; the linker's to know. ⚠ laid as .data, not .rodata: under the fused -pie
+   ;; artifact these sites ride the ai_rela table and __ai_reloc WRITES them at
+   ;; a hosted start -- a read-only segment there is a startup segfault, and
+   ;; our linker has no relro middle ground. metal never cared either way.
    (x-quad nm) `('raw `(`('fix 8 'abs64 nm 0)))
    x-rodata
     (`(`('label 'isrs))
@@ -231,7 +234,7 @@
     (? (arch = "x86_64")
        (objsecs 'x64
                 `(`(".text"   1 6 16 x-text)
-                  `(".rodata" 1 2 8  x-rodata)
+                  `(".data"   1 3 8  x-rodata)
                   `(".bss"    8 3 16 x-bss))
                 '("archinit" "k_reset" "k_halt" "timer_isr" "keyboard_isr" "uart_isr")
                 ()                       ; idt/isrs/idtreg are ours alone -- no C names them
