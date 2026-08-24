@@ -12,7 +12,7 @@ dl = dl
 
 # every gate and verb below is phony: one roster, so adding one is one line and not two.
 .PHONY: force_kfs_list kmain_o run run-$a run-sh run-headless init-container \
-  uefi test_arm64 test_kernel test_disk test_uefi test_uefi_arm64 test_kboot test_kernel_arm64 \
+  uefi test_arm64 test_kernel test_disk test_uefi test_uefi_arm64 test_kboot test_kverb test_kernel_arm64 \
   test_inle test_wasm
 
 # K_TEST=1 builds a headless serial test kernel (batch read-eval over COM1, with an
@@ -390,6 +390,19 @@ test_disk: host $(R)/tools/ktest.l
 # and quitting through the reset door. Four boots at a cold cat eval each (~minutes under
 # TCG), so OPT-IN -- run it when the kernel or the kore cat moves. vi
 # stays the interactive smoke, under run-* -- `-append "vi lib/json.l"`.
+# test_kverb -- the artifact emits its own boot image (`love kernel`, from
+# nothing but what it carries), and the answer is BYTE-IDENTICAL to this
+# makefile's projection: one derivation, two drivers, no drift possible
+# between what a box gets and what the tree builds. run from out/free, so a
+# cwd dependence would fail it.
+test_kverb: host
+	@$(MAKE) -s $(k_elf)
+	@echo TEST love kernel "(the projection verb; byte-identical to make's)"
+	@rm -f $(ko)/.kverb.elf
+	@cd $(ko) && $(abspath $m) kernel .kverb.elf > /dev/null
+	@cmp $(ko)/.kverb.elf $(k_elf)
+	@rm -f $(ko)/.kverb.elf
+
 test_kboot: host $(R)/tools/kboot.l
 	@$(MAKE) -s $(k_elf)
 	@echo TEST $(k_elf) "(the kore cat off cmdline; 4 boots, ceiling 420s each)"
@@ -484,6 +497,7 @@ test_inle:
 	@$(MAKE) -s test_disk
 	@$(MAKE) -s test_uefi
 	@$(MAKE) -s test_kboot
+	@$(MAKE) -s test_kverb
 	@$(MAKE) -s test_kernel_arm64
 	@$(MAKE) -s test_uefi_arm64
 	@echo "test_inle: boot, disk, command line, firmware -- both arches"

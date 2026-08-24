@@ -7,6 +7,10 @@
 ; the flat ELF the doors have always eaten. cat after crew/holo/{elf,obj,link}.l:
 ;
 ;   love <cat> IN.pie BOOT.o OUT.elf ARCH
+;
+; (kproject pie bootb out arch) is the callable half -- pie and boot.o as
+; BYTES -- which is how the `love kernel` verb projects the running binary
+; over a boot.o it laid itself (lib/source.l).
 
 (: (kparams arch)                       ; target, kernel base, entry symbol
     (? (arch = "x86_64")  ['x64   0x200000   "kmain"]
@@ -14,12 +18,10 @@
        (scare 'kproject-arch arch))
    (kread p) (: r (uread p) (two? r ? [p <>r] (scare 'kproject-open p)))
 
-   (: as >argv
-      inp <as bootp <>as out (at as 2) arch (at as 3)
-      kp (kparams arch)
+   (kproject pie bootb out arch)
+   (: kp (kparams arch)
       tgt (at kp 0) kbase (at kp 1) entnm (at kp 2)
       mach (peep elf-machines tgt 0)
-      pie <>(kread inp)
 
       ; --- the pie, parsed: program headers, the named sections, the symtab --
       phoff (rle64 pie 32) shoff (rle64 pie 40)
@@ -61,7 +63,7 @@
                                (go >l))))) loads)
 
       ; --- boot.o, laid below the image: ldkern's own head, one object -------
-      objs `((: b (kread bootp) (ld-read <b <>b mach)))
+      objs `((ld-read "boot.o" bootb mach))
       ne (ldlay1 'note kbase objs)
       b0 (ld-align 4096 ne) b1 (ldlay1 'boot b0 objs)
       t1 (ldlayn 'text (ldlay1 'text b1 objs) objs)
@@ -169,4 +171,15 @@
                  + <>body
                  + `((ld-zeros (syo - fsz)))
                  + (esy + `((snip pie stro (stro + strz)) <shstr
-                            (ld-zeros (shto - (ssto + sstz))) sht)))))))
+                            (ld-zeros (shto - (ssto + sstz))) sht))))))
+
+   ; the file driver (kernel.mk's KPROJ). arity-gated: the `love kernel` verb
+   ; evals this file too (lib/source.l), and ITS argv is the verb's own.
+   ; ⚠ a def, so the outer `:` stays define-mode and `kproject` survives the
+   ; read -- the call below is its own form.
+   (kdrive as)
+    (? (= 4 (tally as))
+       (kproject <>(kread <as) <>(kread <>as) (at as 2) (at as 3))
+       0))
+
+(kdrive >argv)

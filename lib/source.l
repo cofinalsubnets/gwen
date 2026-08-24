@@ -273,9 +273,71 @@
           dst (two? a3 ? <a3 ())
           (seed-wait root xa dst)))
 
+   ; --- `love kernel OUT.elf` -- the metal projection of THIS binary ----------
+   ; the artifact is the kernel (doc/misc/plan/inle-fusion.md): this verb emits
+   ; the flat image a boot door eats, from nothing but what it already carries.
+   ; the boot stub is LAID here, not stored: mkboot.l rides the source blob and
+   ; holo is baked, so the lay's cat (kore text/u/asbook, then mkboot, then
+   ; kproject) evals off the in-memory tar, exactly the shape kernel.mk cats
+   ; from the tree. the arch is the binary's own -- e_machine says it, and a
+   ; projection of self can be nothing else.
+   (kern-pick es top nm)
+    (: want (top + "/" + nm)
+       (go l) (? (atom? l) (src-die ("the blob carries no " + nm))
+                 ((tar-get <l 'nom "") = want) (tar-get <l 'body "")
+                 (go >l))
+       (go es))
+   (kern-b16 s i) ((s i) + (256 * (s (+ i 1))))
+   kern-box (tablet 0)                  ; the verb's inputs, read back by the stream
+   (kernel-main as)
+    (: _ (? (two? as) 0 (src-die "usage: love kernel OUT.elf"))
+       out <as
+       exe (selfpath 0)
+       _ (string? exe ? 0 (src-die "can't read the seed path"))
+       pie (: h (open exe "r")
+             (? h (: s (slurp h) _ (close h) s)
+                (src-die "can't read this binary")))
+       m (kern-b16 pie 18)
+       arch (? (m = 62) "x86_64" (m = 183) "aarch64"
+               (src-die "no boot door for this machine"))
+       gz (source-gz "x")
+       _ (string? gz ? 0 (src-die "this love carries no source"))
+       u (gz-unzip gz)
+       _ (two? u ? 0 (src-die "the embedded archive did not inflate"))
+       t (tar-unpack <>u)
+       _ (two? t ? 0 (src-die "the embedded archive is torn"))
+       es <>t
+       top (src-top es)
+       ; the INPUTS cross on the verb table -- the one tablet every layer can
+       ; reach ((from 'verbs 'tab) hands the real thing) -- under a key pulled
+       ; back off below, so `love verbs` never lists it. the stream evals in
+       ; its own layer, where a plain name cannot cross either way; its LAST
+       ; FORM does the whole projection where everything is visible, so
+       ; nothing has to cross back out either.
+       _ (pin kern-box 'pie pie)
+       _ (pin kern-box 'out out)
+       _ (pin kern-box 'arch arch)
+       vt (from 'verbs 'tab)
+       _ (pin vt 'kern-in kern-box)
+       cat ("(use 'holo)"
+            + (kern-pick es top "crew/kore/text.l")
+            + (kern-pick es top "crew/kore/u.l")
+            + "(use 'kore)"
+            + (kern-pick es top "crew/kore/asbook.l")
+            + (kern-pick es top "free/mkboot.l")
+            + (kern-pick es top "tools/kproject.l")
+            + "(: kb (peep (from 'verbs 'tab) 'kern-in 0)"
+            + "   bb (string (cask (lay-boot-bytes (peep kb 'arch 0))))"
+            + "   (kproject (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0)))")
+       _ (reads (tap ((: (g i) (? (< i (tally cat)) (link (peep cat i 0) (g (+ 1 i))))) 0)))
+       _ (pull vt 'kern-in 0)
+       _ (puts (";; wrote " + out + " (" + arch + ")\n"))
+       0)
+
    (pins (from 'verbs 'tab)
     'source source-main
     'src    source-main
-    'seed   seed-main))
+    'seed   seed-main
+    'kernel kernel-main))
 
 ) ; module 'source
