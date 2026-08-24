@@ -39,11 +39,15 @@
    mach (? (arch = "aarch64")
            `("-M" "virt,gic-version=2" "-cpu" "cortex-a72" "-semihosting")
            `("-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"))
-   ; 512M + 420s: the corpus outgrew the old 256M/90s budgets. under 256M the
-   ; kernel died SILENTLY mid-corpus at a deterministic dot, no fault text, the
-   ; crash point MOVING with unrelated image growth (a budget wall's face, not
-   ; a logic bug); and a full green run is ~3min wall under TCG (the kernel's
-   ; own summary clock reads ~17s -- don't trust it for the timeout).
+   ; 768M + 420s. the corpus outgrew 256M (a silent death mid-corpus) and then
+   ; 512M (";; oom@len=N" at a deterministic dot) -- both the same wall: a major
+   ; collection grows the pool by allocating a NEW contiguous 2x pair while the
+   ; old pair still stands, so the ask (~78M at today's corpus) must fit a HOLE
+   ; in RAM the old pair fragments -- and whether one fits is a placement
+   ; lottery any image-size change re-rolls. the margin here is the mitigation;
+   ; the cure would be a pool pair in two blocks. a full green run is ~3min
+   ; wall under TCG (the kernel's own summary clock reads ~17s -- don't trust
+   ; it for the timeout).
    fw   `("-drive" (+ "if=pflash,unit=0,format=raw,file=" (+ ovmf ",readonly=on")))
    ; the uefi door only: OVMF parks 64-bit BARs ABOVE 4G, past every door's
    ; 0..4G map, and the driver then skips the disk (its honest fallback). this
@@ -80,7 +84,7 @@
                (d + `("-device" "virtio-blk-device,drive=d0"
                       "-global" "virtio-mmio.force-legacy=false"))
                (d + `("-device" "virtio-blk-pci,drive=d0"))))
-   r    (hark (cat `("timeout" "420" (+ "qemu-system-" arch) "-m" "512M")
+   r    (hark (cat `("timeout" "420" (+ "qemu-system-" arch) "-m" "768M")
              (cat mach
              (cat kvm
              (cat dargs
