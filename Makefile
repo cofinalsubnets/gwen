@@ -93,11 +93,9 @@ lint: $(ho)/love
 ccdb: $(ho)/love
 	@$(ho)/love $R/tools/ccdb.l
 
-# the committed artifacts (wasm/love.js, bench/bench.html) are rebuilt BY HAND and staged --
-# `make wasm`, `make -C bench html` -- so rebuild before committing anything that moves them.
-# there is deliberately no pre-commit hook, and love.js cannot be cmp-gated either: it bakes
-# `git describe`, so it is one revision behind by construction and a rebuild at HEAD always
-# differs in those 8 bytes.
+# wasm/love.js is the one committed build artifact: `make wasm` refreshes it by hand, so do
+# that before committing anything that moves it. it bakes ./VERSION and nothing of the
+# revision, so a rebuild at HEAD is byte-identical and test_wasm may cmp it once regenerated.
 
 # this tree's own docs as a browsable site: README.md + doc/*.md through papel, plus one page
 # per crew tool (its header comment IS its documentation) and the annotated source beside it.

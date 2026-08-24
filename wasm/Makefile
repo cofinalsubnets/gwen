@@ -52,26 +52,14 @@ all: love.js
 ../out/lib/egg.h ../out/lib/post.h ../out/lib/p1.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/pat.h ../out/lib/uu.h ../out/lib/coin.h ../out/lib/rng.h ../out/lib/q.h ../out/lib/kanren.h ../out/lib/love_version.h:
 	$(MAKE) -C .. out/lib/$(notdir $@)
 
-# love.o bakes the version string, so regenerate it through the parent and recompile when
-# the id changes -- else the browser banner drifts to whatever revision love.o last saw.
-# ⚠ the committed love.js is always built from a tree love.js itself dirties, so
-# `git describe --dirty` would brand the banner "-dirty" in perpetuity. Map it to "-wasm"
-# in a wasm-local copy: same revision, honest about being the browser build. -I$(o) wins
-# the quote-include over ../out/lib, so the host build's honest -dirty is untouched.
-$(o)/love_version.h: ../out/lib/love_version.h
-	@echo CP	$@
-	@mkdir -p $(dir $@)
-	@sed 's/-dirty"/-wasm"/' $< > $@
+# love.c bakes the version string (its __has_include of love_version.h), so recompile it
+# when ./VERSION moves -- else the browser banner keeps whatever id love.o last saw.
+$(o)/core/love.o: ../out/lib/love_version.h
 
-$(o)/love.o: ../core/love.c $(g_h) $(o)/love_version.h
-	@echo CC	$@
-	@mkdir -p $(dir $@)
-	@$(emcc) -I$(o) $(CFLAGS) -c $< -o $@
-
-# the link is multi-input, so ccache cannot cache it -- bare $(EMCC), and EMFLAGS apply
-# only here. Spelled ONCE for two places: `love.js` is the COMMITTED artifact refreshed by
-# hand, $(o)/love.js the same bytes under out/, which is what test_wasm runs. ⚠ a gate must
-# not rewrite the working tree. ../Makefile says why a cmp-against-committed gate cannot work.
+# the link is multi-input, so ccache cannot cache it -- bare $(EMCC), and EMFLAGS apply only
+# here. spelled once for two places: `love.js` is the committed artifact refreshed by hand,
+# $(o)/love.js the same bytes under out/, which is what test_wasm runs -- a gate must not
+# rewrite the working tree.
 emlink = $(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
 
 love.js: $(objs)
@@ -100,8 +88,7 @@ $(o)/%.o: ../%.c $(g_h)
 serve: all
 	python3 -m http.server 8000
 
-# ⚠ clean takes only the build intermediates: love.js is a TRACKED, committed artifact
-# refreshed BY HAND (`make wasm` -- there is no pre-commit hook; see ../Makefile), so
+# clean takes only the build intermediates: love.js is tracked and refreshed by hand, so
 # deleting it here would leave a spurious `D wasm/love.js` after every top-level clean.
 # SINGLE_FILE=1 embeds the wasm into love.js, so no standalone .wasm is ever emitted.
 clean:
