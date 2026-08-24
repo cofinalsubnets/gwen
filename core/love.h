@@ -164,11 +164,8 @@ struct ai {
  // forces the next collection major, so a minor only runs under a complete set.
  ai_word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // all three bounded by AiRemCap, the fixed capacity
- // the sub-word collector/codec scalars, adjacent so the four ride the rem set's tail
- bool gc_gen,                             // set during a generational collection: bump() targets major_hp, not hp
-      sym_raw;                            // the intern map is still the image's own: a minor scans it in place
-                                          // and a woken one does not survive that, so the first collection after
-                                          // a wake must be a major (major_symbols_rebuild)
+ // the sub-word collector scalars, adjacent so both ride the rem set's tail
+ bool gc_gen;                             // set during a generational collection: bump() targets major_hp, not hp
  int8_t lean;                             // resize-stickiness streak (+grow/-shrink); a resize needs |lean| >= 2
                                           // (a resize is a full copy + a total refault)
  // the two pools: the main pool is pure minor, the young heap being [end, hp); old lives
