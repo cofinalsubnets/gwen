@@ -571,7 +571,8 @@ static struct ai *boot(struct ai *g, bool argp) {
     "(use 'verbs)"                                     // the verb registry the cli rail walks -- registered, then
     );                                                 //   unspliced below: this lane runs the same cli.l
     g = ai_unsplice_(g);
-    return ai_evals_(g, cli); }
+    g = ai_evals_(g, cli);                             // defines; cli-line is the dispatch
+    return ai_evals_(g, "(cli-line cmdline 0)"); }     // a build tool is never a repl
   g = ai_evals_(g,                                    // p1 first: prel's loader reads `sound`, and a
 #include "p10.h"                                      // global folds at its reader's compile, so the
   );                                                  // reader in love has to exist before prel compiles
@@ -661,7 +662,7 @@ static char const cli[] =
 // `love bake` (the binary boots, snapshots itself, and lays the result back into its own body).
 // loaded at startup when its magic validates; else a normal egg boot.
 // the post-warm dispatch (shared by boot() and the wake path, which skips the warm).
-static struct ai *run_program(struct ai *g, bool argp, bool replp) {
+static struct ai *run_program(struct ai *g, bool replp) {
   // the session layer. boot is over; from here the base (orth -- prel/ev, the nifs,
   // every module the frontend warmed) is read-only, and it is read-only for the
   // plainest possible reason: it is never the head again. lvm_defglob writes
@@ -688,24 +689,13 @@ static struct ai *run_program(struct ai *g, bool argp, bool replp) {
   // sees it -- the knob governs a session, not the baked artifact.
   if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, "(: ev (from 'glaze 'base-ev) natjit ())");
 #endif
-  // the argv[0] door of the verb rail (love/cli.l has the positional door): when the
-  // binary was invoked under a verb's name -- a `seed` symlink onto the dist artifact
-  // -- that verb fires on the args, even at argc 1 (a bare `seed` wants its usage),
-  // which is exactly where the cli never runs. the basename decides, so no shadow rule
-  // applies here; the whole walk lives in the module (love/verbs.l's `seat`) and this is
-  // the call. tablet?, never a bare truth test -- an unregistered module reads () and
-  // (() 'seat) is the church const 1, which would answer argv[0] itself and dispatch it.
-  // a verb answers a status charm and we quit with it; one that quits internally never
-  // returns here. that is kore's convention, and it is why `love kore sed ..` nests.
-  g = ai_evals_(g,
-    "(: V (from 'verbs)"
-    "   f (? (tablet? V) (V 'seat (cap cmdline)) ())"
-    "   (? f (: r (f (cup cmdline)) (quit (? (charm? r) r 0))) 0))");
-  if (argp) return ai_evals_(g, cli);
-  if (!replp) return ai_evals_(g, "(reads in)");         // non-tty stdin: the stream shell (love/bao.l) drinks the in port
-  return ai_evals_(g, "((from 'bao 'bao) 0)"); }                      // a tty: bao (the baked shell core) is define-only -- installs
-                                                         //   (bao _)/shell/... but never launches, so one image serves a
-                                                         //   pipe and the self-test too; the frontend fires it here.
+  // love/cli.l DEFINES rather than runs -- a body-less top-level `:` -- and `cli-line`
+  // is this tail entire: the argv[0] verb door, the positional rail, the repl, the
+  // stdin drink. one call, and the only thing C still owns is the isatty answer it
+  // carries in. a forked lush child reaches the same door with the same line, which is
+  // what lets a word whose PATH winner is this binary run without an exec.
+  g = ai_evals_(g, cli);
+  return ai_evals_(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
 // the module sources, name-keyed (the love0 twins above): registered in the source
 // library and loaded by `use` -- one layer per load, leave registers, the splice
@@ -943,7 +933,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     int rc = *bake ? image_dump(g, bake) : image_bake(g);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
-  return run_program(g, argp, replp); }
+  return run_program(g, replp); }
 #endif
 
 // marshal a word list onto the stack as one chain, left on top. `skip` drops that many
@@ -1241,13 +1231,13 @@ int main(int argc, char const **argv) {
     if (!bake) g = stdin_take(g);
 #ifdef LoveBoot
     if (!image_load_path) g = boot(g, argp);
-    else g = ai_evals_(ai_layer_(g), cli);   // woken: the image carries the warm base; push the session layer, run the CLI
+    else g = ai_evals_(ai_evals_(ai_layer_(g), cli), "(cli-line cmdline 0)");   // woken: the image carries the warm base; push the session layer, run the CLI
 #else
     if (!image_load_path) g = boot(g, argp, bake, bake_load);
     else {              // wake: skip the egg warm, dispatch straight to the program
       bool replp = !argp && isatty(STDIN_FILENO);
       if (replp) raw_mode();
-      g = run_program(g, argp, replp); }
+      g = run_program(g, replp); }
 #endif
   }
   if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);   // the honest face: ";; a b", or ";; oom@len=N" bare

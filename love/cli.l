@@ -1,4 +1,4 @@
-; host CLI driver -- parse argv (after the program-name head) left to right:
+; host CLI driver -- parse a command line (after the program-name head) left to right:
 ;   -l/--load <file>    preload a file (read-eval it) before the program
 ;   -e/--eval <string>  eval the string as ONE expression (the repl's line law: many
 ;                       datums fold to one application, so infix works; one datum as-is)
@@ -6,34 +6,43 @@
 ;   -h/--help           print usage and exit
 ;   --                  end of options: the next arg is the program, the rest are its args
 ;   <file>              load the file (a program)
-; with no program (no -e, no file), read-eval stdin to EOF. Loaded by main.c when args are
-; present.
+; with no program (no -e, no file), read-eval stdin to EOF.
+;
+; TWO FUNCTIONS, and the file DEFINES rather than runs -- a body-less top-level `:`, so
+; both defglob out and any caller may reach them:
+;   (cli-rail ln)      the walk above over ln = (program-name . args)
+;   (cli-line ln tty)  a frontend's whole tail: the argv[0] door, the rail, the repl, stdin
+; host/main.c calls the second and so does a forked lush child, which is the point: a
+; word whose PATH winner is this very binary need not exec to be run, and the thing it
+; would have exec'd is exactly (cli-line its-argv) on a heap already warm.
 ;
 ; the VERB RAIL: the registry is the `verbs` MODULE (love/verbs.l), so it rides the image and
 ; needs no global -- a frontend that never registers it simply has none, and the presence guard
 ; below is that answer. (V 'word h) turns a first positional NAME into its FN, applying the
 ; shadow rule in one place: a verb wins over a same-named file, but a `/` or a `.l` is always
 ; the file, so `love -- up` and `love ./up` still read one. the table's OTHER door -- argv[0]
-; naming a verb (a `seed` symlink onto the artifact) -- lives in main.c's run_program: it must
-; fire even at argc 1, where this file never runs.
+; naming a verb (a `seed` symlink onto the artifact) -- is `cli-line`'s first move: it must
+; fire even at argc 1, where the rail never runs.
 ;
 ; `pre` handles leading -l preloads + -v/-h and returns (kind . rest); the global
-; argv is then rebound (top-level (: argv ..) DEFGLOB -- book is mopped post-egg, so a
-; pin/peep on it is a no-op; defglob writes g->book directly) to the program's view
-; (program . args). every lane that evals this file has the prel up already -- the build-tool
-; lane loads prel0 ahead of it, the woken lane carries it in the image -- so prel fns, the
-; macros (|| list) and the bracket ctors are all in hand. `pat` too: the build-tool lane was
-; the one holdout and now says (use 'pat) like every other, so `@` reads here.
+; argv is then rebound (defglob -- book is mopped post-egg, so a pin/peep on it is a
+; no-op; defglob writes g->book directly) to the program's view (program . args). every
+; lane that evals this file has the prel up already -- the build-tool lane loads prel0
+; ahead of it, the woken lane carries it in the image -- so prel fns, the macros (|| list)
+; and the bracket ctors are all in hand. `pat` too: the build-tool lane was the one holdout
+; and now says (use 'pat) like every other, so `@` reads here.
+;
+; ⚠ THE DEFGLOBS GO THROUGH `ev`, because a `:` inside a function body is a local
+; binding and only a top-level one writes the book. `(ev (list ': 'nm (list 'quote v)))`
+; is that top-level form, built rather than written -- and the inner `quote` is not
+; decoration: without it `ev` would take the VALUE apart as a form to run.
 ;
 ; the helpers (load1 eval1 bye version usage need vfind pre) are CLOSURE-PRIVATE in the inner
-; body-having `:`, OFF the global book -- only `parsed` and `argv` (the kept publics; argv is
-; read by test/run.l + host/main.c) are defglob'd out, the cli sibling of the repl->bao
-; consolidation. The triple holder `cli3` is the third and last, and it is a NAME rather
-; than the `_` it used to be -- see the trap note below for what `_` cost. The reads
-; below pick it up by the sequence law. The inner body returns (parsed program-view-argv run),
-; where `run` is the dispatch THUNK. Order matters: we defglob `argv` to the program's view
-; FIRST, THEN call `(run ())` -- the loaded program reads the global `argv`, so it must already
-; be rebound before the load fires. (-v/-h still exit inside `pre`, before the rebind, as before.)
+; body-having `:`. The pair holder `cli2` is read by the sequence law below. The inner body
+; returns (program-view-argv run), where `run` is the dispatch THUNK. Order matters: we
+; defglob `argv` to the program's view FIRST, THEN call `(run ())` -- the loaded program reads
+; the global `argv`, so it must already be rebound before the load fires. (-v/-h still exit
+; inside `pre`, before the rebind, as before.)
 ;
 ; THE EXIT DOOR, kore's two faces (crew/kore/u.l's uleave/urun): every leave in the
 ; walk -- -v, -h, a bad -m, a missing operand, an unopenable file, a torn -e, and a
@@ -44,15 +53,15 @@
 ; a charm where it used to get a dead process, the reason kore's applets may ride
 ; lush's in-image lane and this one may not.
 ; ⚠ TWO SPANS, so the handler is written out twice rather than named: `pre` runs
-; -v/-h/-l/-m while the triple is still being built and `run` dispatches after argv
+; -v/-h/-l/-m while the pair is still being built and `run` dispatches after argv
 ; is rebound, a leave lands in either, and the defglob has to sit between them. A
-; name for it would be a third global, and this file spends as few as it can.
+; name for it would cost a binding this file would rather not spend.
 ; ⚠ nothing unwinds through a scare, so a port held at the leave is lost -- exactly
 ; what `quit` lost, no better and no worse.
-; ⚠ the triple is `cli3`, a NAME. It was `_`, to keep it off the book -- but `_` is
-; also what every throwaway lambda parameter is called, so the `\ _` this trap added
-; between the binding and its reads shadowed it, and the reads took the UNIT apart.
-(: cli3
+; ⚠ the line is `ln`, never `a`: `a` is what the trap handler's first parameter is
+; called, and a shadow between the binding and its reads is what once took a value apart.
+(: (cli-rail ln)
+ (: cli2
  (trap (\ x
  (: (cli-leave c) (scare 'cli-leave c)
     (load1 p) (: q (open p "r")
@@ -112,7 +121,7 @@
            (: f (vfind h)       ; a positional: a registered verb first, else the program file
               (f ? ('verb >< f >< a) ('file >< a))))
       '(stdin))
-    p (pre >argv)                    ; runs -l preloads + -v/-h + -m; the program kind
+    p (pre >ln)                      ; runs -l preloads + -v/-h + -m; the program kind
     k <p                             ; ..and the kind alone, read six times below
     av (k @ ('eval || 'evalq || 'verb) >>p >p)   ; the program's view of argv
     run (\ _
@@ -122,9 +131,33 @@
                      (cli-leave (charm? r ? r 0)))  ; out the one door, which is what quits
            'file  (load1 <>p)
            (reads in)))
-    [p av run]))                     ; the body: return (parsed program-argv run)
+    [av run]))                       ; the body: return (program-argv run)
        () (\ a b (id? a 'cli-leave ? (quit (charm? b ? b 0)) (scare a b))))
- parsed <cli3                        ; DEFGLOB the kept publics out of the triple
- argv   <>cli3                       ; rebind argv to the program's view, BEFORE the run
- _ (trap (\ x (<>>cli3 ()))          ; (run ()): dispatch, argv now the program's view
-       () (\ a b (id? a 'cli-leave ? (quit (charm? b ? b 0)) (scare a b)))))
+ _ (ev (list ': 'argv (list 'quote <cli2)))   ; the program's view, BEFORE the run
+ (trap (\ x (<>cli2 ()))                      ; (run ()): dispatch, argv now the program's view
+     () (\ a b (id? a 'cli-leave ? (quit (charm? b ? b 0)) (scare a b)))))
+
+ ; a frontend's whole tail over one command line, and the only door a caller needs.
+ ; four ways a line can end and they are tried in this order: the argv[0] verb, the
+ ; rail, the repl, the stdin drink. `tty` is the caller's isatty answer, which is C's
+ ; to know -- a forked lush child says 0, having a shell of its own already.
+ ; ⚠ cmdline and argv are DEFGLOB'D HERE and not read from the book: this runs in a
+ ; forked lush child too, where the globals still name the SHELL's invocation.
+ ; ln is the WHOLE invocation, `wake IMAGE` included, and the program's view is
+ ; derived from it by the registry's own `unprime` -- the same two words host/main.c
+ ; counts in C as `skip`. so both globals keep the readings they document.
+ ; the argv[0] door fires even at argc 1, where a bare `seed` symlink wants its usage.
+ ; a verb answers a status charm and we quit with it; one that quits internally never
+ ; returns. ⚠ tablet?, never a bare truth test -- an unregistered module reads () and
+ ; (() 'seat) is the church const 1, which would answer argv[0] itself and dispatch it.
+ (cli-line ln tty)
+   (: V  (from 'verbs)
+      up (? (tablet? V) (V 'unprime) ())
+      av (? up (cap ln >< (up (cup ln))) ln)   ; the program's view: argv[0], then past the primes
+      _  (ev (list ': 'cmdline (list 'quote ln)))
+      _  (ev (list ': 'argv (list 'quote av)))
+      f  (? (tablet? V) (V 'seat (cap ln)) ())
+      (? f         (: r (f (cup ln)) (quit (? (charm? r) r 0)))
+         (two? >av) (cli-rail av)
+         tty        ((from 'bao 'bao) 0)   ; the baked shell core is define-only; this fires it
+         (reads in))))                     ; non-tty stdin: bao's stream face drinks the in port

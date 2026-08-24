@@ -204,19 +204,36 @@
    ; --- the FORK lane: an external word whose PATH winner IS this binary runs in
    ; a FORKED child -- the warm heap rides, no exec, no wake. the img list's three
    ; disqualifiers are a child's own business: a quit is its exit status, kept
-   ; state is a copy, a block has a pid for ^C and `kill %1` to name. the word
-   ; must be a VERB ((from 'verbs 'word): kore's applets, sh, make, vi -- and it
-   ; refuses a slashed or .l word itself: an explicit path is a demand, and
-   ; spawns). a foreign binary spawns as ever. decided once per word, sh-imgc's
-   ; shape -- and on a seat with no selfpath (the kernel) sh-ours? never answers,
-   ; so the lane is dormant there and the task shim keeps the spawn.
-   sh-forkc (tablet 0)                          ; word -> (1 verbfn) | 0, decided once
-   (sh-forkask w)
-     (: f ((from 'verbs 'word) w)
-        (? (f && (sh-ours? w)) [1 f] 0))
+   ; state is a copy, a block has a pid for ^C and `kill %1` to name. NO VERB TABLE
+   ; is read here and none is wanted: the child hands its whole line to `cli-line`,
+   ; love/cli.l's own tail, which is the very thing the exec would have reached --
+   ; argv[0] door, rail, and the registry lookup inside it. a foreign binary spawns
+   ; as ever, and so does a slashed or .l word: an explicit path is a demand.
+   ; decided once per word, sh-imgc's shape -- and cli-line is absent on a frontend
+   ; that never evaluated cli.l (the kernel, whose seat has no selfpath either), so
+   ; the lane is dormant there and the task shim keeps the spawn.
+   sh-forkc (tablet 0)                          ; word -> 1 | 0, decided once
+   (sh-dotl? w) (: n (tally w) ?((2 < n) && (snip w (n - 2) n = ".l")))
+   (sh-cliline _) (? (member? 'cli-line (names ())) (ev 'cli-line) ())   ; a bare global, read at the call
+   (sh-forkask w) (? (|| (sh-slashed? w) (sh-dotl? w)) 0
+                     (&& (sh-cliline ()) (sh-ours? w)) 1
+                     0)
    (sh-forkfn w) (: v (peep sh-forkc w 'no)
                     (? !(id? v 'no) v
                        (: f (sh-forkask w) _ (pin sh-forkc w f) f)))
+   ; ..and three shapes the word alone cannot answer for, so they are asked per
+   ; command. all three are settled BEFORE a heap exists, which is the one thing a
+   ; fork can never redo: `bake` and `wake` are read in C ahead of any love (wake
+   ; picks which heap there is, bake must snapshot before the session layer), and
+   ; LOVE_NO_IMAGE asks for a boot this process already made the other way. the
+   ; bare word goes too -- with nothing past it a line may want a terminal, and the
+   ; repl is the caller's isatty answer to give, not a pipeline stage's.
+   (sh-forkok? av)
+     (: a >av
+        (? !(two? a) 0
+           (|| (<a = "bake") (<a = "wake")) 0
+           ((0 < tally (getenv "LOVE_NO_IMAGE")) && (member? 'love-image (names ()))) 0
+           1))
 
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
    sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false" "command"
@@ -434,12 +451,12 @@
      (: _ (flush out) _ (flush err)
         (? (id? (sh-nth st 0) 'x)
            (: w <(sh-nth st 1)
-              fk (sh-forkfn w)
-              (? (two? fk)
-                 ; OURS: fork, no exec -- the child runs the word's verb on this
-                 ; warm heap and quits with its status: a real pid, so the
-                 ; pipeline's bookkeeping and the job table read it like any
-                 ; spawn. pg/fg are not taken (the 'a lane's stance): the child
+              fk (? (sh-forkok? (sh-nth st 1)) (sh-forkfn w) 0)
+              (? fk
+                 ; OURS: fork, no exec -- the child runs the whole line through
+                 ; cli-line on this warm heap and quits with its status: a real
+                 ; pid, so the pipeline's bookkeeping and the job table read it
+                 ; like any spawn. pg/fg are not taken (the 'a lane's stance): the child
                  ; stays in the shell's group, which keeps the tty for a
                  ; foreground job, and sheds the group's ignores below.
                  (: p (fork 0)
@@ -459,7 +476,7 @@
                                                _ (put err 10) (quit 1)))))
                           _ (each (base + (sh-nth st 2)) (\ e (dup2 >e <e)))
                           _ (each allclose (\ fd (? (2 < fd) (fdclose fd) 0)))
-                          r (<>fk (cup (sh-nth st 1)))
+                          r ((sh-cliline ()) (sh-nth st 1) 0)   ; 0: a child has a shell already
                           (quit (? (charm? r) r 0)))
                        p))
                  ; foreign, or an explicit path: spawned as ever -- its 127 is the

@@ -636,7 +636,25 @@ fsh 'kore false'; r=$?; [ $r -eq 1 ] || fail "fork lane status (rc $r)"
 fsh 'kore sh -c "kore echo deep"' | grep -qx deep || fail "fork lane nested sh"
 [ "$(fsh 'echo n=$(kore echo abc | kore wc -c)')" = "n=4" ] || fail "fork lane cmdsub"
 fsh 'kore seq 3 > '"$HO"'/.fork-r' ; [ "$(wc -l < "$HO/.fork-r")" = "3" ] || fail "fork lane redirect"
-echo "kore: the fork lane (self-PATH pipelines, status, cmdsub, nesting) ok"
+# ..and the lane's reach is the BINARY, never a verb list: the child hands its whole
+# line to cli-line (love/cli.l), the very door an exec would have reached, so a word
+# that dispatches through argv[1] rides it too -- `love -e`, `love VERB`, and the
+# status either answers with.
+ln -sf "$K" "$fb/love"
+[ "$(fsh 'echo x | love -e "(3 + 4)"')" = "7" ] || fail "fork lane love -e"
+[ "$(fsh 'echo x | love kore echo nested')" = "nested" ] || fail "fork lane love VERB"
+fsh 'echo x | love -e "(quit 9)"'; r=$?; [ $r -eq 9 ] || fail "fork lane love status (rc $r)"
+# THE REFUSALS. A knob read at boot cannot be honoured by a fork -- the heap is
+# already whichever one this process woke -- so the ask has to spawn, and this is the
+# one refusal observable from out here: a 1 means the lane forked and swallowed it.
+# (the knob rides the COMMAND, never the shell: an egg-booted love has no verb table,
+# so `love sh` there would read "sh" as a filename.)
+[ "$(fsh 'echo x | LOVE_NO_IMAGE=1 love -e "(member? (quote love-image) (names ()))"')" = "0" ] \
+  || fail "fork lane swallowed LOVE_NO_IMAGE"
+# a line with nothing past the word may want a terminal, and the repl is the caller's
+# isatty answer to give: it spawns, and the stdin drink still lands.
+[ "$(fsh 'echo "(puts \"bare\")" | love')" = "bare" ] || fail "fork lane bare word"
+echo "kore: the fork lane (self-PATH pipelines, status, cmdsub, nesting, love's own line) ok"
 
 # ------------------------------------------------------------------ awk
 # gawk is the oracle and every check is byte-identical stdout. the input is a
