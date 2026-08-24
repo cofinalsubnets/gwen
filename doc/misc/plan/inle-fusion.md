@@ -47,7 +47,7 @@ callable inside the kernel, which is what lets more of the crew run there.
 | | |
 |---|---|
 | syscalls `host/posix.c` reaches | **34** (not 78 -- that is all of nolibc) |
-| ..answered so far | **19**: read/write/close/lseek; the path family (openat, newfstatat, mkdirat, unlinkat, renameat, chdir, getcwd, fchmodat, utimensat); the fd family (pipe2, dup3, fcntl, fstat, getdents64) + getpid |
+| ..answered so far | **20**: read/write/close/lseek; the path family (openat, newfstatat, mkdirat, unlinkat, renameat, chdir, getcwd, fchmodat, utimensat); the fd family (pipe2, dup3, fcntl, fstat, getdents64); getpid + clock_gettime |
 | ..that inle simply lacks, and `-ENOSYS` already answers | ~9 (clone, wait4, kill, setpgid, setsid, mount, unshare, madvise, getpgid) |
 | `posix.c` changes needed to compile freestanding | **none** -- verified, it builds clean under the kernel's flags today |
 | its undefined symbols | 84: 17 love-core (kernel has them), 3 nolibc string (linked), ~64 nolibc members to link |
@@ -142,15 +142,38 @@ posix surface it hosts rather than mirrors.
 **B -- one "which kernel" flag, while still two binaries.** The de-risking step:
 every runtime branch fusion needs becomes live and gated before anything merges.
 
-- B1 -- `__ai_osv` for inle; metal entry writes it; `__ai_call` branches. ⚠
-  `-D__inle__` and impl.h's `&& !defined(__inle__)` come back OUT here: fusion
-  needs `AiOsTranslate` ON, since one binary must also be able to be freebsd.
-  The compile-time guard is a stepping stone, correct only while the kernel is a
-  separate link.
-- B2 -- one definition each of `ai_clock`, `ai_fd_port_vt`, `ai_stdin/out/err`,
-  `ai_libs`, currently in both `kmain.c` and `host/main.c`, branching on that
-  same flag.
-- Gate: both binaries still build and pass.
+- B1 ✅ inle is `__ai_osv` -1, written at kmain (metal has no `__ai_start`);
+  `-D__inle__` is gone and the kernel compiles nolibc with `AiOsTranslate` ON.
+  ⚠ the value is NEGATIVE by necessity: ~25 member sites read `v >= 2` as "a
+  BSD" and ~5 read `v < 2` as "speak canonical linux", which inle does -- a
+  positive value would take freebsd shapes. `__ai_call`'s first arm takes v<0
+  to `__ai_inle` (free/sys.c's renamed dispatch); os.c carries a weak -ENOSYS
+  default for links without the door; and the kernel links the REAL mksys tail
+  (dead on metal, but it is the fused shape and it answers `__ai_sigret` and
+  the netbsd leaves the stubs used to fake).
+- B2 ✅ `host/seat.c`, one TU both links carry: `ai_clock` is one
+  clock_gettime body (free/sys.c's arm serves it from `k_clock_ms`);
+  `ai_fd_port_vt` + the statics exist once, the host bodies branching to
+  kmain's exported `k_port_*` lanes on v<0 -- the port protocol keeps busy
+  and end distinct, which read(2) cannot carry, so the vt branches ABOVE the
+  syscall door; `ai_libs` picks between per-frontend `k_libs`/`host_libs`.
+  the mechanism is weak defaults for whichever side a link lacks, plus a weak
+  `__ai_osv` for foreign-libc links (love0) that carry no os.c -- zero reads
+  hosted, which such a link is. the ports (playdate/mps2/virt/teensy) define
+  their own vt and never link seat.c.
+- Gate: both binaries build and pass, the whole roster. ⚠ landing B2 tripped
+  the KERNEL LANES' MEMORY WALL, not a defect: gen_major grows the pool by
+  allocating a new contiguous 2x pair beside the old one, so the ask (~78M at
+  today's corpus) must fit a hole the old pair fragments -- a placement
+  lottery any image-size change re-rolls (a 5 KB delta lost it on
+  test_uefi_arm64, `;; oom@len=16384`, len being the NURSERY size -- the ask
+  showed only under a kmallocw-refusal probe). the lanes run 768M now
+  (tools/ktest.l, kboot.l); the cure would be a pool pair in two blocks.
+
+**phase B is climbed.** the C2 collision survey (nm over kernel-only vs
+host-only TUs): FOUR symbols remain defined on both sides -- `ai_fd_close`,
+`ai_ready`, `ai_sleep`, `ai_wait_fds` -- plus the planned pair-ups (`main` vs
+`kmain`, and the open/close/getpid nif twins).
 
 **C -- one link.**
 
@@ -169,8 +192,7 @@ carries the AOT glaze.
 - **C1**, above -- could be trivial or could be the hardest thing here.
 - **`getpid` through a syscall** has no `g`, so it cannot know the running task.
   Same shape as the seat divergence, and it wants the same answer.
-- **`getdents64`** -- variable-length output into a caller's buffer, the one
-  face whose syscall shape and nif shape genuinely differ rather than being
-  wrapped differently.
+- **the kernel lanes' memory wall** (phase B's gate note) -- 768M is margin,
+  not a cure; the cure is gen_major's pool pair in two blocks.
 - **No door has booted on metal.** Every loader here is proven against OVMF in
   qemu only.
