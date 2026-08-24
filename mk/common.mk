@@ -61,17 +61,33 @@ love_c = $R/core/love.c $R/crew/moon/lib/math/am.c
 # per-seat -- a 1-bit device wants neither, the host unity-includes nif.c -- so a seat that
 # wants one NAMES it rather than taking it here.
 f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/crew/quay/*.c))
-# inle's libc is nolibc's, named member by member. The six string members carry no syscall
-# at all (memmove owes memcpy and nothing else); read and write carry one each, and os.c is
-# the map they reach it through -- which under -D__inle__ is the identity, free/sys.c
-# answering the canonical numbers itself. mooncc builds the kernel, so it builds the
-# kernel's libc too -- there is no second copy to drift.
-# ⚠ NAMING A MEMBER HERE IS A DECISION, and stdio is the one to weigh: printf and
+# inle's libc is nolibc's, named member by member; os.c is the map every syscall
+# reaches it through -- which under -D__inle__ is the identity, free/sys.c
+# answering the canonical numbers itself. mooncc builds the kernel, so it builds
+# the kernel's libc too -- there is no second copy to drift. this is host/posix.c's
+# closure exactly (plan A3): the members its nifs call, what those pull, and
+# nothing more. core.c stays OUT -- it carries malloc, the process entry and the
+# std streams, every one of which the kernel owns; free/sys.c answers its four
+# seat symbols (environ, stdout/stderr, the sigaction restorer) instead.
+# ⚠ NAMING A MEMBER HERE IS A DECISION, and stdio was the one weighed: printf and
 # friends write fd 1 themselves, and free/sys.c is seat-blind, so a seated task's
-# printf would reach the console where its port reaches the pipe. Member-by-member
-# is what keeps that from arriving by accident.
+# C-level printf reaches the console where its port reaches the pipe. That is the
+# documented divergence (free/sys.c) -- love code writes through ports, which seat.
 c_c = $(addprefix $R/crew/moon/lib/nolibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) \
-  $(addprefix $R/crew/moon/lib/nolibc/sys/,read.c write.c) \
+  $(addprefix $R/crew/moon/lib/nolibc/sys/,read.c write.c \
+    chdir.c chmod.c chown.c close.c dup2.c fcntl.c fork.c fstat.c getcwd.c \
+    getgid.c getpgrp.c getpid.c getuid.c ioctl.c kevent.c kill.c kqueue.c \
+    link.c lseek.c lstat.c madvise.c mkdir.c mount.c open.c pipe.c readlink.c \
+    rename.c rmdir.c setpgid.c setsid.c stat.c symlink.c sysctl.c umask.c \
+    unlink.c unshare.c utimensat.c waitpid.c) \
+  $(addprefix $R/crew/moon/lib/nolibc/dirent/,closedir.c opendir.c readdir.c) \
+  $(addprefix $R/crew/moon/lib/nolibc/signal/,grantpt.c posix_openpt.c ptsname.c \
+    sigaction.c sigaddset.c sigemptyset.c signal.c signalfd.c sigprocmask.c \
+    tcgetattr.c tcsetattr.c tcsetpgrp.c unlockpt.c) \
+  $(addprefix $R/crew/moon/lib/nolibc/proc/,atexit.c execv.c execvp.c exit.c) \
+  $(addprefix $R/crew/moon/lib/nolibc/env/,getenv.c setenv.c unsetenv.c) \
+  $(addprefix $R/crew/moon/lib/nolibc/stdio/,fflush.c femit.c pad.c semit.c) \
+  $R/crew/moon/lib/nolibc/fmt/fprintf.c \
   $R/crew/moon/lib/nolibc/os.c
 
 # ⚠ CANCEL MAKE'S LEX RULE. `.l` is Lex's extension to make, so a built-in `%.c: %.l`

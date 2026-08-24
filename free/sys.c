@@ -23,6 +23,20 @@
 int __errno_v;
 int *__errno_location(void) { return &__errno_v; }
 
+// the rest of the seat, sized for a kernel that IS the process: an environment
+// that starts empty, std streams unbuffered over the console rows (cap 0, so
+// every byte goes straight through write -- ⚠ SEAT-BLIND: a seated task's
+// C-level printf reaches the console where its port reaches the pipe; love
+// writes through ports, which seat), and sigaction's restorer, which no
+// handler ever returns through since rt_sigaction refuses below. mutable on
+// purpose, like __errno_v above: the libc seat is state.
+static char *k_env0[] = { 0 };
+char **environ = k_env0;
+static struct _IO_FILE k_stdf[3] = {
+  { .fd = 0 }, { .fd = 1, .wr = 1 }, { .fd = 2, .wr = 1 } };
+FILE *stdin = &k_stdf[0], *stdout = &k_stdf[1], *stderr = &k_stdf[2];
+void __ai_sigret(void) { }
+
 // the kernel side (kmain.c): a raw fd through the k_sources row, no port above
 // it -- and SEAT-BLIND, which is the law and not a gap. The seat is a property
 // of the PORT layer: k_fd_eff is called from fd_readn, fd_writen, ai_fd_close

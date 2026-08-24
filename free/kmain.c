@@ -937,106 +937,6 @@ ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st) {
   else return -ENOENT;
   return 0; }
 
-// the love face: (size mtime mode ns), kore's shape. ⚠ every refusal is the
-// same () here -- absence and misuse alike -- which is the host's answer too.
-ai_noinline static struct ai *k_stat(struct ai *g) {
-  struct k_st st;
-  if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
-  struct ai_str *pv = (struct ai_str*) g->sp[0];
-  if (k_fs_stat(pv->bytes, pv->len, &st)) return g->sp[0] = ZeroPoint, g;
-  if (!ai_ok(g = ai_have(g, 4 * Width(struct ai_chain)))) return g;
-  struct ai_chain *c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm((intptr_t) (st.ms * 1000000)), ZeroPoint);
-  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                putcharm((intptr_t) st.mode), word(c));
-  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                putcharm((intptr_t) st.ms), word(c));
-  c = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                putcharm((intptr_t) st.size), word(c));
-  return g->sp[0] = word(c), g; }
-static lvm(lvm_stat) {
-  Pack(g); g = k_stat(g);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  Unpack(g);
-  ai_musttail return Next(1); }
-
-// (readdir path) -> the entry names, one string each, or () -- for a path that is
-// no directory as much as for one that is missing, which is the host's answer too
-// (an EMPTY directory answers the same (), told from absence by stat). NO order
-// promised (entry order); "." and ".." are not entries here, since this tree has
-// no link to hold them.
-ai_noinline static struct ai *k_readdir(struct ai *g) {
-  // ⚠ the prefix is COPIED out (the canon buffer): every ai_have below may
-  // collect, and the string it came from is a heap object that moves. Entry paths
-  // live in .rodata or the kernel heap and never do, which is why the names
-  // themselves are read in place.
-  char cp[256], nb[128];
-  if (!ai_strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
-  struct ai_str *pv = (struct ai_str*) g->sp[0];
-  intptr_t cn;
-  if (!k_fs_init() || (cn = k_canon(pv->bytes, pv->len, cp)) < 0)
-    return g->sp[0] = ZeroPoint, g;
-  if (!k_dirp(cp, (uintptr_t) cn)) return g->sp[0] = ZeroPoint, g;
-  g->sp[0] = ZeroPoint;                                 // the accumulator, over the path
-  for (int i = 0; i < k_ents_n; i++) {
-    uintptr_t k;
-    char const *e = k_entry(i, cp, (uintptr_t) cn, &k);
-    if (!e) continue;
-    bool seen = false;                                  // one name per entry, not per path
-    for (int j = 0; j < i && !seen; j++) {
-      uintptr_t k2;
-      char const *e2 = k_entry(j, cp, (uintptr_t) cn, &k2);
-      seen = e2 && k2 == k && !memcmp(e, e2, k); }
-    if (seen || k >= sizeof nb) continue;
-    memcpy(nb, e, k), nb[k] = 0;                        // ai_strof's door is a C string
-    if (!ai_ok(g = ai_strof(g, nb))) return g;          // pushes: name over acc
-    if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
-    struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                   g->sp[0], g->sp[1]); // slots re-read post-GC
-    g->sp[1] = word(w);
-    g->sp += 1; }                                       // pop the name
-  return g; }
-static lvm(lvm_readdir) {
-  Pack(g); g = k_readdir(g);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  Unpack(g);
-  ai_musttail return Next(1); }
-
-// (lseek fd off whence) -> the new offset | -1. RAW fds, openfd's lane and never a
-// port's -- a port buffers, and a seek under the buffer desyncs it. whence: 0 SET,
-// 1 CUR, 2 END. ⚠ PAST THE END IS LEGAL and lands there; a write from that offset
-// leaves a gap that reads as zeros (ram_writen), which is the hole POSIX promises.
-static lvm(lvm_lseek) {
-  intptr_t r = -1;
-  struct k_fh *h = (Sp[0] & 1) ? k_fh((int) getcharm(Sp[0])) : NULL;
-  if (h && (Sp[1] & 1)) {
-    uintptr_t len;
-    int wh = (Sp[2] & 1) ? (int) getcharm(Sp[2]) : 0;
-    k_blob(h->i, &len);
-    intptr_t at = getcharm(Sp[1])
-                + (wh == 1 ? (intptr_t) h->pos : wh == 2 ? (intptr_t) len : 0);
-    if (at >= 0) h->pos = (uintptr_t) at, r = at; }
-  Sp[2] = putcharm(r);
-  Sp += 2; ai_musttail return Next(1); }
-
-// (openfd path mode) -> a RAW fd | -1. mode 0 read, 1 write+truncate, 2 append, the
-// charm host/posix.c spells. ⚠ the failure is a bare -1 where the host answers
-// -errno: down here the only failure IS absence, and there is no errno table to
-// name it with -- the sign is what every caller reads either way.
-static lvm(lvm_openfd) {
-  intptr_t m = (Sp[1] & 1) ? getcharm(Sp[1]) : 0;
-  Sp[1] = putcharm(!ai_strp(Sp[0]) ? -1
-                   : k_ramopen((struct ai_str*) Sp[0],
-                               m == 1 ? 'w' : m == 2 ? 'a' : 'r'));
-  Sp += 1; ai_musttail return Next(1); }
-
-// (fdclose fd) -> (). openfd's other half. A row nobody opened is already closed,
-// which is why this cannot fail and answers the zero point either way.
-static lvm(lvm_fdclose) {
-  if (Sp[0] & 1) ai_fd_close((int) getcharm(Sp[0]));
-  Sp[0] = ZeroPoint;
-  ai_musttail return Next(1); }
-
 // --- rung 4: pipes, and the fd plumbing over them ---------------------------
 // a pipe is a k_source PAIR over one byte queue in the kernel heap: the read end
 // answers 0 while a writer is open and -1 when the last one closes -- exactly
@@ -1172,60 +1072,6 @@ long k_fd_pipe(int fds[2]) {
   *ws = (struct k_source) { .writen = pipe_writen, .close = pipe_wclose, .state = p };
   fds[0] = rfd, fds[1] = wfd;
   return 0; }
-
-// (pipe _) -> (rfd . wfd) | a NEGATIVE errno -- host/posix.c's shape exactly.
-// the body rides an ai_noinline helper (k_stat's model) so the wrapper stays a
-// pure tail jump.
-ai_noinline static struct ai *k_pipe_new(struct ai *g) {
-  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
-  int fds[2];
-  long e = k_fd_pipe(fds);
-  if (e) return g->sp[0] = putcharm(e), g;
-  struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm(fds[0]), putcharm(fds[1]));
-  return g->sp[0] = word(w), g; }
-static lvm(lvm_pipe) {
-  Pack(g); g = k_pipe_new(g);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  Unpack(g);
-  ai_musttail return Next(1); }
-
-// (fdopen fd) -> a PORT over a raw fd | () -- pipe/openfd's other half, so love
-// reads and writes its own plumbing. the port's GC finalizer owns the fd from
-// here: hand it over, don't fdclose it too (host/posix.c's law).
-ai_noinline static struct ai *k_fdopen(struct ai *g) {
-  ai_word a = g->sp[0];
-  int fd = (a & 1) ? (int) getcharm(a) : -1;
-  struct k_source *s = k_source(fd);
-  if (!s || !(s->readn || s->writen || s->putc)) return g->sp[0] = ZeroPoint, g;
-  struct ai *r = ai_io_alloc(g, fd);
-  if (!ai_ok(r)) return g->sp[0] = ZeroPoint, g;   // OOM -> the zero point (host's face)
-  g = r;
-  return g->sp[1] = g->sp[0], g->sp += 1, g; }     // port over the fd arg
-static lvm(lvm_fdopen) {
-  Pack(g); g = k_fdopen(g);
-  Unpack(g);                                       // every failure folds to (), no ghelp
-  ai_musttail return Next(1); }
-
-// (dup fd) -> a fresh row aliasing fd | -errno.  (dup2 src dst) -> () | errno |
-// EINVAL: dst's old row closes first, then src's alias lands IN that slot.
-ai_noinline static ai_word k_dup(ai_word w) {
-  int fd = (w & 1) ? (int) getcharm(w) : -1;
-  int r = fd < 0 ? -1 : k_dup_row(fd, 0);
-  return putcharm(r < 0 ? -EBADF : r); }
-static lvm(lvm_dup) {
-  Sp[0] = k_dup(Sp[0]);
-  ai_musttail return Next(1); }
-
-ai_noinline static ai_word k_dup2(ai_word sw, ai_word dw) {
-  if (!(sw & 1) || !(dw & 1)) return putcharm(EINVAL);
-  int src = (int) getcharm(sw), dst = (int) getcharm(dw);
-  if (src == dst) return ZeroPoint;
-  long e = k_fd_dup3(src, dst);
-  return e < 0 ? putcharm(-e) : ZeroPoint; }
-static lvm(lvm_dup2) {
-  Sp[1] = k_dup2(Sp[0], Sp[1]);
-  Sp += 1; ai_musttail return Next(1); }
 
 // --- directory rows: opendir(2)'s door, free/sys.c's only caller ------------
 // a directory opens as a row with a close and a dents cursor, nothing else --
@@ -1499,15 +1345,6 @@ ai_noinline int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
   int e = k_parent_ok(cp, (uintptr_t) cn);
   if (e) return e;
   return k_create(cp, (uintptr_t) cn, true, mode) < 0 ? -ENOMEM : 0; }
-static ai_word k_mkdir(ai_word pw, ai_word mw) {
-  if (!ai_strp(pw)) return putcharm(EINVAL);
-  struct ai_str *pv = (struct ai_str*) pw;
-  int e = k_fs_mkdir(pv->bytes, pv->len,
-                     (mw & 1) ? (uintptr_t) getcharm(mw) & 07777 : 0755);
-  return e ? putcharm(-e) : ZeroPoint; }
-static lvm(lvm_mkdir) {
-  Sp[1] = k_mkdir(Sp[0], Sp[1]);
-  Sp += 1; ai_musttail return Next(1); }
 
 ai_noinline int k_fs_rmdir(char const *p, uintptr_t pn) {
   char cp[256];
@@ -1523,12 +1360,6 @@ ai_noinline int k_fs_rmdir(char const *p, uintptr_t pn) {
   k_ents[i].live = false;
   k_ent_gc(i);
   return 0; }
-static ai_word k_rmdir(ai_word pw) {
-  if (!ai_strp(pw)) return putcharm(EINVAL);
-  struct ai_str *pv = (struct ai_str*) pw;
-  int e = k_fs_rmdir(pv->bytes, pv->len);
-  return e ? putcharm(-e) : ZeroPoint; }
-static lvm(lvm_rmdir) { Sp[0] = k_rmdir(Sp[0]); ai_musttail return Next(1); }
 
 ai_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
   char cp[256];
@@ -1541,12 +1372,6 @@ ai_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
   k_ents[i].live = false;                        // an open fd keeps the bytes; the
   k_ent_gc(i);                                   // last close frees them
   return 0; }
-static ai_word k_unlink(ai_word pw) {
-  if (!ai_strp(pw)) return putcharm(EINVAL);
-  struct ai_str *pv = (struct ai_str*) pw;
-  int e = k_fs_unlink(pv->bytes, pv->len);
-  return e ? putcharm(-e) : ZeroPoint; }
-static lvm(lvm_unlink) { Sp[0] = k_unlink(Sp[0]); ai_musttail return Next(1); }
 
 // (rename old new): a file moves whole, a target file unlinked under it; a
 // directory carries everything beneath it -- every live path at or under the
@@ -1607,14 +1432,6 @@ ai_noinline int k_fs_rename(char const *o, uintptr_t olen,
     st = st->next;
     kfree(x); }
   return 0; }
-static ai_word k_rename(ai_word ow, ai_word nw) {
-  if (!ai_strp(ow) || !ai_strp(nw)) return putcharm(EINVAL);
-  struct ai_str *ov = (struct ai_str*) ow, *nv = (struct ai_str*) nw;
-  int e = k_fs_rename(ov->bytes, ov->len, nv->bytes, nv->len);
-  return e ? putcharm(-e) : ZeroPoint; }
-static lvm(lvm_rename) {
-  Sp[1] = k_rename(Sp[0], Sp[1]);
-  Sp += 1; ai_musttail return Next(1); }
 
 ai_noinline int k_fs_chdir(char const *p, uintptr_t pn) {
   char cp[256];
@@ -1628,39 +1445,14 @@ ai_noinline int k_fs_chdir(char const *p, uintptr_t pn) {
     if (i < 0 && !k_kids(cp, (uintptr_t) cn, &junk)) return -ENOENT; }
   memcpy(k_cwd, cp, (uintptr_t) cn), k_cwd_n = (uintptr_t) cn;
   return 0; }
-// ⚠ chdir's LOVE face answers a NEGATIVE errno where its six siblings answer a
-// positive one -- and so does the host's (host/posix.c's host_chdir, likewise
-// putcharm(-errno)), which is what makes it a shape rather than a slip. The
-// twins agree; doc/misc/posix.md's "effect ops answer a POSITIVE errno" simply does
-// not cover this one. So this is the wrapper that does NOT flip: the face below
-// already answers negative, like every other C face here.
-static ai_word k_chdir(ai_word pw) {
-  if (!ai_strp(pw)) return putcharm(-1);
-  struct ai_str *pv = (struct ai_str*) pw;
-  int e = k_fs_chdir(pv->bytes, pv->len);
-  return e ? putcharm(e) : ZeroPoint; }
-static lvm(lvm_chdir) { Sp[0] = k_chdir(Sp[0]); ai_musttail return Next(1); }
 
-// (cwd _) -> the seat as an absolute string -- the host's shape, for the prompt.
-// the PATH FACE: the seat into a caller's buffer, 0 ok or -ERANGE -- getcwd(2)'s
-// own refusal, and the one thing the love door never had to say (its buffer is
-// sized to the seat by construction).
+// the seat into a caller's buffer, 0 ok or -ERANGE -- getcwd(2)'s own refusal
 int k_fs_getcwd(char *b, uintptr_t n) {
   if (n < k_cwd_n + 2) return -ERANGE;            // '/' + the seat + the NUL
   b[0] = '/';
   memcpy(b + 1, k_cwd, k_cwd_n);
   b[1 + k_cwd_n] = 0;
   return 0; }
-ai_noinline static struct ai *k_cwd_read(struct ai *g) {
-  char b[258];
-  k_fs_getcwd(b, sizeof b);                      // sizeof b > k_cwd's ceiling: cannot refuse
-  if (!ai_ok(g = ai_strof(g, b))) return g;
-  return g->sp[1] = g->sp[0], g->sp += 1, g; }  // cwd string over the dummy arg
-static lvm(lvm_cwd) {
-  Pack(g); g = k_cwd_read(g);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-  Unpack(g);
-  ai_musttail return Next(1); }
 
 // the two attribute writers land on the ENTRY, so a synthesized (prefix)
 // directory takes either as a no-op: it has no row to keep bits on, and its date
@@ -1674,14 +1466,6 @@ ai_noinline int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
   if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? 0 : -ENOENT;
   k_ents[i].mode = mode & 07777;
   return 0; }
-static ai_word k_chmod(ai_word pw, ai_word mw) {
-  if (!ai_strp(pw) || !(mw & 1)) return putcharm(EINVAL);
-  struct ai_str *pv = (struct ai_str*) pw;
-  int e = k_fs_chmod(pv->bytes, pv->len, (uintptr_t) getcharm(mw));
-  return e ? putcharm(-e) : ZeroPoint; }
-static lvm(lvm_chmod) {
-  Sp[1] = k_chmod(Sp[0], Sp[1]);
-  Sp += 1; ai_musttail return Next(1); }
 
 ai_noinline int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
   char cp[256];
@@ -1692,15 +1476,6 @@ ai_noinline int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
   if (i < 0) return k_dirp(cp, (uintptr_t) cn) ? 0 : -ENOENT;
   k_ents[i].ms = ms;
   return 0; }
-static ai_word k_utime(ai_word pw, ai_word mw) {
-  if (!ai_strp(pw)) return putcharm(EINVAL);
-  struct ai_str *pv = (struct ai_str*) pw;
-  int e = k_fs_utime(pv->bytes, pv->len,
-                     (mw & 1) ? (uintptr_t) getcharm(mw) : ai_clock());
-  return e ? putcharm(-e) : ZeroPoint; }
-static lvm(lvm_utime) {
-  Sp[1] = k_utime(Sp[0], Sp[1]);
-  Sp += 1; ai_musttail return Next(1); }
 
 static lvm(ai_kreset) { return k_reset(), g; }
 
@@ -1867,23 +1642,6 @@ static union u
   nif_color[] = {{lvm_cur}, {.x = putcharm(2)}, {color}, {lvm_ret0}},
   nif_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
   nif_close[] = {{lvm_close}, {lvm_ret0}},
-  nif_stat[] = {{lvm_stat}, {lvm_ret0}},
-  nif_readdir[] = {{lvm_readdir}, {lvm_ret0}},
-  nif_lseek[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_lseek}, {lvm_ret0}},
-  nif_openfd[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_openfd}, {lvm_ret0}},
-  nif_fdclose[] = {{lvm_fdclose}, {lvm_ret0}},
-  nif_mkdir[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_mkdir}, {lvm_ret0}},
-  nif_rmdir[] = {{lvm_rmdir}, {lvm_ret0}},
-  nif_unlink[] = {{lvm_unlink}, {lvm_ret0}},
-  nif_rename[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_rename}, {lvm_ret0}},
-  nif_chdir[] = {{lvm_chdir}, {lvm_ret0}},
-  nif_cwd[] = {{lvm_cwd}, {lvm_ret0}},
-  nif_chmod[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_chmod}, {lvm_ret0}},
-  nif_utime[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_utime}, {lvm_ret0}},
-  nif_pipe[] = {{lvm_pipe}, {lvm_ret0}},
-  nif_fdopen[] = {{lvm_fdopen}, {lvm_ret0}},
-  nif_dup[] = {{lvm_dup}, {lvm_ret0}},
-  nif_dup2[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_dup2}, {lvm_ret0}},
   nif_getpid[] = {{lvm_getpid}, {lvm_ret0}},
   nif_procseat[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_procseat}, {lvm_ret0}},
   nif_disk[] = {{lvm_disk}, {lvm_ret0}},
@@ -1957,29 +1715,11 @@ static struct ai_def const __attribute__((section("ai_nifs"), used)) defs[] = {
   // the name being in the book, so this row is the whole wiring.
   {"open", (intptr_t) nif_open},
   {"close", (intptr_t) nif_close},
-  // the rest of the read surface (rung 1). ⚠ these wear the HOST'S names and the
-  // host's shapes on purpose: kore reads (size mtime mode ns) and a list of entry
-  // strings, and a divergence here would be silent where an absence is loud.
-  {"stat", (intptr_t) nif_stat},
-  {"readdir", (intptr_t) nif_readdir},
-  {"lseek", (intptr_t) nif_lseek},
-  {"openfd", (intptr_t) nif_openfd},
-  {"fdclose", (intptr_t) nif_fdclose},
-  // the writable tree (rung 2), the host's names and shapes again
-  {"mkdir", (intptr_t) nif_mkdir},
-  {"rmdir", (intptr_t) nif_rmdir},
-  {"unlink", (intptr_t) nif_unlink},
-  {"rename", (intptr_t) nif_rename},
-  {"chdir", (intptr_t) nif_chdir},
-  {"cwd", (intptr_t) nif_cwd},
-  {"chmod", (intptr_t) nif_chmod},
-  {"utime", (intptr_t) nif_utime},
-  // rung 4: the pipe pair, the fd plumbing, and the process seat under the
-  // spawn shim (the boot text below). host names, host shapes, as ever.
-  {"pipe", (intptr_t) nif_pipe},
-  {"fdopen", (intptr_t) nif_fdopen},
-  {"dup", (intptr_t) nif_dup},
-  {"dup2", (intptr_t) nif_dup2},
+  // the rest of the posix surface is host/posix.c's, linked whole (plan A3):
+  // its nifs land in this same section and their libc calls bottom out in
+  // free/sys.c's table. what stays below is what has no host twin -- plus
+  // getpid, whose answer here is the TASK pid (the machine multiplexes tasks
+  // where a host getpid answers its one process).
   {"getpid", (intptr_t) nif_getpid},
   {"procseat", (intptr_t) nif_procseat},
   // rung 5: the disk -- the raw block door lib/fat.l's filesystem rides. these
