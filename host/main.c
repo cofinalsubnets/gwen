@@ -17,6 +17,7 @@ extern void host_spawn_guard(struct ai*, int);   // host/posix.c (exec-bound for
 #include <stdnoreturn.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <sys/mman.h>    // the first boot's inflate buffer (mmap, no malloc)
 
 // ai_clock lives in host/seat.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
@@ -956,6 +957,141 @@ ai_noinline static struct ai *argv_chain(struct ai *g, char const **v, int argc,
   for (g = ai_push(g, 1, ai_zero); n--; g = gxr(g));
   return g; }
 
+#if !defined(LoveBoot) && !defined(__wasm__)
+// THE FIRST BOOT: an unbaked binary that carries its source finishes ITSELF --
+// the dist roster members catted off the carried blob into a sibling file, a
+// child `bake -l` over it (the one bake path, so the bytes are the tree's own,
+// byte-identical to make's), and a re-exec on the patched binary. the cross
+// seed's egg becomes the full artifact on first contact: no tree, no emulator,
+// nothing foreign. any refusal prints its story and the egg boots -- slower,
+// never fatal. dead on the kernel link (kmain is that entry) and absent from
+// love0 (LoveBoot) and wasm (no processes).
+extern intptr_t ai_inflate_raw(const unsigned char*, uintptr_t, unsigned char*, uintptr_t);
+extern const unsigned char ai_srcgz[];
+extern const uintptr_t ai_srcgz_len;
+extern size_t host_selfpath(char*, size_t);
+static char const src_distlist[] =
+#include "distlist.h"
+ ;
+static uintptr_t fb_octal(unsigned char const *p, int n) {
+  uintptr_t v = 0;
+  for (int i = 0; i < n && p[i] >= '0' && p[i] <= '7'; i++) v = v * 8 + (uintptr_t)(p[i] - '0');
+  return v; }
+// join a symlink's target against the link's own directory, ".." and "." squashed
+// (free/kmain.c k_lnk_canon's law) -- the tree keeps crew modules behind lib/ links
+static uintptr_t fb_canon(char const *at, char const *ln, char *out, uintptr_t cap) {
+  uintptr_t n = 0;
+  if (ln[0] != '/') {
+    uintptr_t d = strlen(at);
+    while (d && at[d - 1] != '/') d--;
+    if (d && d <= cap) memcpy(out, at, n = d - 1); }
+  for (uintptr_t i = 0; ln[i];) {
+    while (ln[i] == '/') i++;
+    uintptr_t j = i;
+    while (ln[j] && ln[j] != '/') j++;
+    uintptr_t k = j - i;
+    if (!k) break;
+    if (k == 1 && ln[i] == '.') { i = j; continue; }
+    if (k == 2 && ln[i] == '.' && ln[i + 1] == '.') {
+      while (n && out[n - 1] != '/') n--;
+      if (n) n--;
+      i = j; continue; }
+    if (n && n < cap - 1) out[n++] = '/';
+    while (i < j && n < cap - 1) out[n++] = ln[i++]; }
+  return n; }
+// inflate the carried blob (gzip: skip the header fields, ISIZE names the tar)
+static unsigned char *fb_untar(uintptr_t *outn) {
+  unsigned char const *z = ai_srcgz; uintptr_t zn = ai_srcgz_len;
+  if (zn < 18 || z[0] != 0x1f || z[1] != 0x8b || z[2] != 8) return NULL;
+  uintptr_t o = 10; unsigned f = z[3];
+  if (f & 4) o += 2 + (uintptr_t) z[o] + ((uintptr_t) z[o + 1] << 8);
+  if (f & 8) { while (o < zn && z[o]) o++; o++; }
+  if (f & 16) { while (o < zn && z[o]) o++; o++; }
+  if (f & 2) o += 2;
+  if (o + 8 >= zn) return NULL;
+  uintptr_t un = (uintptr_t) z[zn - 4] | (uintptr_t) z[zn - 3] << 8
+               | (uintptr_t) z[zn - 2] << 16 | (uintptr_t) z[zn - 1] << 24;
+  unsigned char *t = mmap(NULL, un ? un : 1, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (t == MAP_FAILED) return NULL;
+  if (ai_inflate_raw(z + o, zn - o - 8, t, un) != (intptr_t) un)
+    return munmap(t, un), NULL;
+  return *outn = un, t; }
+// find a tree-relative path in the ustar block. the archive's paths carry a TOP
+// component (the tree looks the same from inside as a checkout), so match past
+// it; a symlink member chases its target against its own directory.
+static unsigned char const *fb_find(unsigned char const *t, uintptr_t n,
+                                    char const *path, uintptr_t *len, int hop) {
+  uintptr_t pl = strlen(path);
+  if (hop > 3 || !pl) return NULL;
+  for (uintptr_t o = 0; o + 512 <= n && t[o];) {
+    unsigned char const *h = t + o;
+    uintptr_t sz = fb_octal(h + 124, 12);
+    if ((h[156] == '0' || h[156] == 0 || h[156] == '2') && !memcmp(h + 257, "ustar", 5)) {
+      char nm[256]; uintptr_t ln = 0;
+      for (int i = 345; i < 500 && h[i] && ln < 254; i++) nm[ln++] = (char) h[i];
+      if (ln) nm[ln++] = '/';
+      for (int i = 0; i < 100 && h[i] && ln < 255; i++) nm[ln++] = (char) h[i];
+      uintptr_t cut = 0;
+      while (cut < ln && nm[cut] != '/') cut++;
+      cut = cut < ln ? cut + 1 : 0;
+      if (ln - cut == pl && !memcmp(nm + cut, path, pl)) {
+        if (h[156] != '2') return *len = sz, t + o + 512;
+        char tgt[101], cn[256]; uintptr_t tn = 0;
+        while (tn < 100 && h[157 + tn]) { tgt[tn] = (char) h[157 + tn]; tn++; }
+        tgt[tn] = 0;
+        uintptr_t cl = fb_canon(path, tgt, cn, sizeof cn - 1);
+        cn[cl] = 0;
+        return fb_find(t, n, cn, len, hop + 1); } }
+    o += 512 + ((sz + 511) & ~(uintptr_t) 511); }
+  return NULL; }
+static void first_boot(char const **argv) {
+  if (ai_srcgz_len < 18) return;                       // no carried source: a dev link, egg on
+  if (getenv("LOVE_FIRST_BOOT")) {                     // the latch: one try per exec chain
+    fprintf(stderr, "; first boot: still unbaked after a bake -- running from source\n");
+    return; }
+  char exe[4096], cat[4104];
+  if (!host_selfpath(exe, sizeof exe)) return;
+  uintptr_t un = 0;
+  unsigned char *t = fb_untar(&un);
+  if (!t) {
+    fprintf(stderr, "; first boot: the carried source will not inflate -- running from source\n");
+    return; }
+  snprintf(cat, sizeof cat, "%s.firstboot.l", exe);
+  int fd = open(cat, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) {                                        // a read-only seat: the honest story, no bake
+    fprintf(stderr, "; first boot: %s is not writable -- running from source this session\n", cat);
+    munmap(t, un);
+    return; }
+  for (char const *p = src_distlist; *p;) {
+    while (*p == ' ' || *p == '\n') p++;
+    char w[256]; size_t wl = 0;
+    while (*p && *p != ' ' && *p != '\n' && wl < 255) w[wl++] = *p++;
+    if (!wl) break;
+    w[wl] = 0;
+    uintptr_t ml = 0;
+    unsigned char const *m = fb_find(t, un, w, &ml, 0);
+    if (!m || (ml && write(fd, m, ml) != (ssize_t) ml)) {
+      fprintf(stderr, "; first boot: %s %s -- running from source\n", w,
+              m ? "would not write" : "is not in the carried source");
+      close(fd), unlink(cat), munmap(t, un);
+      return; } }
+  close(fd), munmap(t, un);
+  fprintf(stderr, "; first boot -- baking the crew from the carried source (about a minute, once)\n");
+  pid_t p = fork();
+  if (!p) { char *args[] = { exe, (char*) "bake", (char*) "-l", cat, NULL };
+            execv(exe, args); _exit(127); }
+  int st = -1;
+  if (p > 0) waitpid(p, &st, 0);
+  unlink(cat);
+  if (p < 0 || !WIFEXITED(st) || WEXITSTATUS(st)) {
+    fprintf(stderr, "; first boot: the bake failed -- running from source\n");
+    return; }
+  setenv("LOVE_FIRST_BOOT", "1", 1);
+  execv(exe, (char *const *)(void *) argv);            // the patched file: same path, new inode
+  fprintf(stderr, "; first boot: cannot re-exec -- running from source\n"); }
+#endif
+
 int main(int argc, char const **argv) {
   signal(SIGPIPE, SIG_IGN);        // a hung-up peer is an answer, not a death (fd_writen)
   struct ai *g = NULL;
@@ -1014,6 +1150,12 @@ int main(int argc, char const **argv) {
    if (ai_baked_pick(&bimg, &blen) && (g = ai_image_load(bimg, blen)))
     woke_ms = ai_clock() - t0,
     image_load_path = "<baked>"; }                                     // a loaded image is the booted state: skip the egg warm
+#if !defined(LoveBoot) && !defined(__wasm__)
+  // unbaked, with source aboard, and nothing explicit asked for: finish first.
+  // a `wake` names its own image and a `bake` is the finishing move itself.
+  if (!g && !bake && !(noimg && *noimg) && !(argc >= 2 && !strcmp(argv[1], "wake")))
+    first_boot(argv);                                  // returns only on refusal; success re-execs
+#endif
   if (!g) g = ai_ini();
   g = env_budget(g);                               // the LOVE_BUDGET_MB cap, on whichever g won (fresh or woken image)
   bool argp = argc - skip > 1;

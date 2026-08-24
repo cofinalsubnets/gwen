@@ -80,13 +80,6 @@
                (src-foreign? p && src-ccworks? p dir ? [1 p] (go >ds))))
       (go (src-dirs ())))
      (try '("cc" "gcc" "clang")))
-   ; is there an executable by this name on PATH -- no foreign test, unlike
-   ; src-cc: the question is only whether the emulator is installed.
-   (src-onpath? w)
-    (: (go ds) (? (!(two? ds)) ()
-                  (: d (tally <ds ? <ds ".") p (d + "/" + w)
-                     (two? (stat p) ? [1 p] (go >ds))))
-       (go (src-dirs ())))
    (src-farm root exe)
     (d : (root + "/out/.seedbin")
        (mkdir d 493,
@@ -139,44 +132,21 @@
    ; ought to BE this binary, and a cross lay is the one case the invocation
    ; itself says it cannot -- so it is skipped for a reason the caller NAMED,
    ; never for one that was discovered. A dirty tree still fails.
-   ; ⚠ AND THE LAY IS PRE-CREW: the link answers three verbs (bake wake verbs),
-   ; because the crew arrives at BAKE and a bake means RUNNING the artifact --
-   ; which this machine cannot do for another ISA. qemu-user can where it is
-   ; installed; where it is not, the target machine runs the line we print.
-   ; ⚠ THE BAKE RUNS IN THE LAID TREE. `use` reaches a module through the baked
-   ; table or lib/ off the CWD and nowhere else, so a bake standing anywhere but
-   ; the root scares no-module on the first `use` the cats reach. The binary is
-   ; named absolutely across the chdir, since dst is the caller's cwd's.
+   ; ⚠ AND THE LAY IS AN EGG: the crew arrives at BAKE and a bake means RUNNING
+   ; the artifact, which this machine cannot do for another ISA. it does not have
+   ; to: the egg carries its source and the dist roster, and its FIRST BOOT on
+   ; the target machine bakes and patches it in place (host/main.c) -- the same
+   ; bytes a native `make dist` lays, with nothing foreign anywhere in the chain.
    (seed-cross root xa dst)
     (: made (root + "/out/x-" + xa + "/love")
        e (copyfile made dst)
        _ (e < 0 ? (src-die ("can't write " + dst)))
        _ (chmod dst 493)
-       here (cwd 0)
-       abs (? (dst 0 = 47) dst (here + "/" + dst))
-       d0 "out/host/.dist-cat.l"
-       q (src-onpath? ("qemu-" + xa))
-       _ (two? q ? (puts (";; baking through qemu-" + xa + " -- minutes, and the crew\n"
-                          + ";; is what makes it a seed and not a three-verb egg\n")))
-       _ (two? q ? (? (charm? (chdir root)) (src-die ("can't enter " + root)) 0))
-       s (two? q ? (herald [<>q abs "bake" "-l" d0]))
-       _ (two? q ? (chdir here))
-       st (two? s ? <s s)                       ; herald answers a pair or a status
-       ok (two? q ? (0 = st) 0)
-       _ (puts (";; laid " + dst + (ok ? " -- baked\n" " -- an EGG\n")))
-       ; three ends, three stories: baked, no emulator to bake with, and a bake
-       ; that ran and failed -- which is never the emulator's absence.
-       _ (? ok (puts (";; no fixpoint: a cross lay cannot BE this binary, so the claim\n"
-                      + ";; is not made. `love seed` on the " + xa + " machine proves it.\n"))
-              (two? q)
-              (puts (";; the bake FAILED under qemu-" + xa + " (exit " + show st + ") and the\n"
-                     + ";; lay is three verbs (bake wake verbs). To see it again:\n"
-                     + ";;   cd " + root + " && " + abs + " bake -l " + d0 + "\n"))
-              (puts (";; three verbs (bake wake verbs), and no qemu-" + xa + " here to\n"
-                     + ";; grow them. On the " + xa + " machine, or with the emulator:\n"
-                     + ";;   cd " + root + " && " + abs + " bake -l " + d0 + "\n")))
-       ; a bake we ASKED FOR and did not get is a failure; no emulator is not.
-       (ok ? 0 (two? q ? 1 0)))
+       _ (puts (";; laid " + dst + " -- an egg for " + xa + ": its first run on that\n"
+                + ";; machine bakes the crew from the carried source and patches itself.\n"
+                + ";; no fixpoint claimed here: a cross lay cannot BE this binary --\n"
+                + ";; `love seed` on the " + xa + " machine proves it.\n"))
+       0)
 
    ; ⚠ THE WAIT RUNS IN A FRESH PROCESS. src-lay's inflate leaves ~200 MB of
    ; heap that the parent would otherwise hold through the whole build, for
@@ -190,9 +160,7 @@
        _ (string? exe ? 0 (src-die "can't find seed path"))
        here (cwd 0)
        _ (? (charm? (chdir root)) (src-die ("can't enter " + root)) 0)
-       ; the cats ride along: they are the crew a bake needs, and arch-blind
-       s (herald (string? xa ? [exe "make" ("xa=" + xa) ("out/x-" + xa + "/love")
-                                "out/host/.dist-cat.l"]
+       s (herald (string? xa ? [exe "make" ("xa=" + xa) ("out/x-" + xa + "/love")]
                               [exe "make" "dist"]))
        st (two? s ? <s s)
        _ (chdir here)

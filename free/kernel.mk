@@ -189,7 +189,7 @@ out/lib/korelist.h: crew/build.mk free/kernel.mk
 
 # Shared C sources (core/love.c, crew/quay/, nolibc's six) + per-arch free/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h $(if $(K_TEST),out/lib/kfs.h out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h,out/lib/korelist.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h)
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h out/lib/distlist.h $(if $(K_TEST),out/lib/kfs.h out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h,out/lib/korelist.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h)
 	@echo MOON	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -213,7 +213,7 @@ kart_inc = -I$(ho) -I. -Icore -Iout/lib -I$R -I$R/free -I$R/free/$(hosta) \
 kart_h = $(love_h) $(wildcard $(R)/free/*.h $(R)/free/$(hosta)/*.h)
 kart_cats = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h \
   out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h \
-  out/lib/korelist.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h
+  out/lib/korelist.h out/lib/distlist.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h
 kart_arch_o = $(patsubst $R/free/$(hosta)/%.c,$(moon_d)/k_$(hosta)_%.o,$(wildcard $R/free/$(hosta)/*.c))
 # the console's painter and its fonts: kernel-only draws the host link never had
 kart_quay_o = $(patsubst %,$(moon_d)/k_q_%.o,paint cga_8x8 moderndos_8x16)

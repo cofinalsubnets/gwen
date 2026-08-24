@@ -104,6 +104,12 @@ $(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list
 	@echo CAT	$(abspath $@)
 	@mkdir -p $(dir $@)
 	@cat $(distfiles) > $@
+# the same roster, baked into the binary: the FIRST BOOT (host/main.c) cats the
+# members off the carried source blob exactly as the rule above does off the tree.
+out/lib/distlist.h: crew/build.mk
+	@echo SH	$@
+	@mkdir -p out/lib
+	@printf '"%s"\n' '$(distfiles)' > $@
 .PHONY: dist dist-source dist-seed
 
 # ==== THE RELEASE ARTIFACTS (doc/misc/dist.md) ====
