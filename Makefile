@@ -6,20 +6,17 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
 # ==== the full-fat artifact's own toolchain (doc/misc/dist.md) ====
 # a release tarball's bin/love wears a `mooncc` verb, so a seed-laid tree compiles with the
-# binary it shipped with and touches no ambient cc.
-# the filter asks whether a HUMAN named a compiler: `CC ?=` cannot (make defines CC itself,
-# so it never fires) and `default` cannot (mk/common.mk says CC = clang, so the origin is
-# "file" by now). an explicit CC= still outranks the bundle.
-# CCACHE goes with it: ccache takes the compiler as its first argument, and a two-word
-# `love mooncc` would run love with mooncc as a source file. it caches nothing here anyway.
-# a bundled love is already past the self-host circle -- it IS a love with mooncc baked in --
+# binary it shipped with and touches no ambient cc. it is already past the self-host circle,
 # so love0, mooncc0.image and the sed-laid 0.h twins are never built there (mk/lib.mk).
+# `cc_named` is `make CC=gcc` or CC in the environment -- PATH is not consulted, and `CC ?=`
+# could not ask it (make defines CC itself, so `?=` never fires).
+cc_named := $(filter command line environment override,$(origin CC))
 bundled_love := $(if $(wildcard $(R)/bin/love),$(abspath $(R)/bin/love),)
 
-ifeq ($(filter command line environment override,$(origin CC)),)
+ifeq ($(cc_named),)
 ifneq ($(bundled_love),)
 CC := $(bundled_love) mooncc
-CCACHE :=
+CCACHE :=                     # ccache takes the compiler as argv[1]; `love mooncc` is two words
 endif
 endif
 

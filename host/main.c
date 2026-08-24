@@ -1040,7 +1040,7 @@ static void first_boot(char const **argv) {
   if (getenv("LOVE_FIRST_BOOT")) {                     // the latch: one try per exec chain
     fprintf(stderr, "; first boot: still unbaked after a bake -- running from source\n");
     return; }
-  char exe[4096], cat[4104];
+  char exe[4096], cat[sizeof exe + 16];              // + ".firstboot.l" and its NUL
   if (!host_selfpath(exe, sizeof exe)) return;
   uintptr_t un = 0;
   unsigned char *t = fb_untar(&un);

@@ -25,12 +25,8 @@ love_base := $(shell cat $R/VERSION 2>/dev/null || echo 0)
 # our test binaries.
 in_git := $(wildcard $R/.git)
 
-# clang is the default host/love0 compiler. ⚠ `CC ?= clang` would be a NO-OP: make ships a
-# built-in default `CC = cc` whose origin is `default`, not `undefined`, so `?=` never
-# fires -- the origin test is what overrides it while still honoring `make CC=gcc`.
-ifeq ($(origin CC),default)
-CC = clang
-endif
+# $(CC) is the ambient compiler and the tree names no favourite: mooncc builds everything but
+# love0, which by definition cannot be built by the compiler it exists to bootstrap.
 
 # WHO LINKS `love`: mooncc by default, and the whole vm with it. HCC=1 takes the $(CC) lane
 # instead -- the differential the kernel spells KCC, worn at the host. It is the only build
