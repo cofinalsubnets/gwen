@@ -210,17 +210,31 @@ host-only TUs): FOUR symbols remain defined on both sides -- `ai_fd_close`,
   kboot's real pipelines on the projected SHIPPED kernel, test_slow + the
   seed fixpoint.
 
-**D -- the image, and the artifact.** what remains of "one binary":
-`out/host/love` itself does not yet carry kmain and the metal machinery -- the
-kernel's pie carries the host, not yet the reverse. the closing moves: the
-artifact's object list gains the kernel objects (shipped kmain flavor), a
-`love kernel`-shaped verb runs the projection so the artifact emits its own
-boot image anywhere, and the baked image rides the projection (kills the ~2 s
-boot eval, carries the AOT glaze).
+**THE ARTIFACT IS UNIFIED** (8e6f472c): `out/host/love` carries the shipped
+kernel -- kmain with the kore cats, the ramfs, the syscall door, the arch
+bring-up, the vector lay -- compiled through the MOON LANE (a seed builds the
+artifact before any $m exists), and the shipped kernel is the ARTIFACT'S OWN
+PROJECTION: test_kboot boots exactly what `make` installs, source blob and
+all. the moves it took: the kernel-only nifs ride `ai_knifs`, a bracket
+apart, so reset/fault/the virt doors never enter the hosted book; vec.o's
+pointer tables lay as .data (under the pie `__ai_reloc` WRITES them hosted --
+a read-only segment there is a startup segfault, and the linker has no
+relro); the artifact's ramfs dates pin to the dist stamp (lcatfs -s) so the
+seed fixpoint stays a function of the tree's bytes, while the test kernel
+keeps real dates for the corpus's stat laws. the whole roster + the fixpoint
+are green on the fused binary: 15.2 MB baked, of which 8.9 MB is the image
+and 3.1 MB the source blob.
+
+**D -- the image, and the last verbs.** what remains: a `love kernel`-shaped
+verb so the artifact emits its own boot image anywhere (today the projection
+runs in-tree -- the verb wants boot.o and the kproject cat carried or
+re-derivable from the source blob); the baked image riding the projection
+(kills the ~2 s boot eval, carries the AOT glaze); and the arm64 artifact via
+the cross lane, whose kernel today still projects from the odir pie.
 
 ## what is still open
 
-- **the artifact unification + D**, above.
+- **D + the projection verb**, above.
 - **`getpid` through a syscall** has no `g`, so it cannot know the running task.
   Same shape as the seat divergence, and it wants the same answer.
 - **the kernel lanes' memory wall** (phase B's gate note) -- 768M is margin,
