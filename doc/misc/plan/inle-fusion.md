@@ -125,9 +125,19 @@ twenty-one behaviours stop existing twice.
   stays with the nif, where g is threaded. per-task fd tables, if ever, take
   identity as an explicit pid into pid-keyed kernel tables (k_seats' shape),
   never an ambient g.
-- A3 -- link the ~64 nolibc members, add `host/posix.c` to the kernel build,
-  delete the 21 duplicate nifs. ⚠ the deletion must be in the SAME commit as the
-  link, or 21 names are defined twice.
+- A3 ✅ `host/posix.c` rides the kernel whole: 66 nolibc members named into
+  `c_c` (core.c stays out; free/sys.c answers its four seat symbols -- environ,
+  the unbuffered std streams, `__ai_sigret`), and kmain shed its SEVENTEEN
+  posix twins in the same commit. `open`/`close` stay -- their host twins live
+  in main.c, which fuses at C -- and `getpid` stays as the TASK pid. posix's
+  spawn family registers and refuses at runtime (fork is -ENOSYS); the boot
+  text's task shim shadows those names regardless. ledger: kmain -274, +51
+  across the seat and the build. the corpus runs on the adopted nifs, kboot's
+  real pipelines included.
+
+**phase A is climbed.** what "kernel" means now: the machine bring-up, the
+ramfs faces, the seat/task plumbing, the disk and virt doors -- plus one shared
+posix surface it hosts rather than mirrors.
 
 **B -- one "which kernel" flag, while still two binaries.** The de-risking step:
 every runtime branch fusion needs becomes live and gated before anything merges.
