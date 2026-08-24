@@ -79,7 +79,7 @@ c_c = $(addprefix $R/crew/moon/lib/nolibc/string/,memchr.c memcmp.c memcpy.c mem
   $(addprefix $R/crew/moon/lib/nolibc/sys/,read.c write.c \
     chdir.c chmod.c chown.c clock_gettime.c close.c dup2.c fcntl.c fork.c fstat.c getcwd.c \
     getgid.c getpgrp.c getpid.c getuid.c ioctl.c kevent.c kill.c kqueue.c \
-    link.c lseek.c lstat.c madvise.c mkdir.c mmap.c mount.c mprotect.c munmap.c open.c pipe.c raise.c readlink.c \
+    link.c lseek.c lstat.c madvise.c mkdir.c mmap.c mount.c mprotect.c munmap.c open.c pipe.c poll.c raise.c readlink.c \
     rename.c rmdir.c setpgid.c setsid.c stat.c symlink.c sysconf.c sysctl.c umask.c \
     unlink.c unshare.c utimensat.c waitpid.c) \
   $(addprefix $R/crew/moon/lib/nolibc/dirent/,closedir.c opendir.c readdir.c) \

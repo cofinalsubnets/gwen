@@ -38,7 +38,7 @@ FILE *stdin = &k_stdf[0], *stdout = &k_stdf[1], *stderr = &k_stdf[2];
 
 // the kernel side (kmain.c): a raw fd through the k_sources row, no port above
 // it -- and SEAT-BLIND, which is the law and not a gap. The seat is a property
-// of the PORT layer: k_fd_eff is called from k_port_readn, k_port_writen, ai_fd_close
+// of the PORT layer: k_fd_eff is called from k_port_readn, k_port_writen, k_row_close
 // and k_procseat, and from nowhere else, so an fd spelled in love is already an
 // absolute row and only a port's own fd is ever remapped. A syscall sits under
 // the port by construction, exactly as on a real kernel, where the number the

@@ -6,7 +6,9 @@
 #include "love.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
+#include <stddef.h>      // offsetof (the struct ai_wait_fd / struct pollfd assert)
 #include <stdio.h>
 #include <stdnoreturn.h>
 #include <time.h>
@@ -129,3 +131,84 @@ void ai_fd_drain(int fd, void const *p, uintptr_t n) { ai_fd_write_all(fd, p, n)
 __attribute__((weak)) struct ai_lib const *k_libs(void) { return NULL; }
 __attribute__((weak)) struct ai_lib const *host_libs(void) { return NULL; }
 struct ai_lib const *ai_libs(void) { return __ai_osv < 0 ? k_libs() : host_libs(); }
+
+// waiting -- the frontier's fd-keyed park/wake and the fd close, one
+// definition each (plan C2). hosted, one poll(2) covers a whole block
+// (love.h lays struct ai_wait_fd as poll's own struct for exactly this); on
+// inle the rows and the tick clock answer, through the weak k_ hooks kmain
+// overrides -- conservative no-ops here, so a hosted link closes without them.
+__attribute__((weak)) void k_row_close(int fd) { (void) fd; }
+__attribute__((weak)) bool k_ready(int fd, int events) { (void) fd, (void) events; return true; }
+__attribute__((weak)) void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
+  (void) fds, (void) n, (void) ms; }
+__attribute__((weak)) void k_sleep(uintptr_t ms) { (void) ms; }
+
+// shared EINTR-retry skeleton for poll-based wait. ms=0 means infinite.
+// returns only when poll succeeds (data ready / deadline elapsed) or fails
+// for a non-EINTR reason.
+static void poll_wait(struct pollfd *fds, nfds_t nfds, uintptr_t ms) {
+  uintptr_t deadline = ms == 0 ? 0 : ai_clock() + ms;
+  for (;;) {
+    int t = ms == 0 ? -1 :
+            ms > (uintptr_t) __INT_MAX__ ? __INT_MAX__ : (int) ms;
+    if (poll(fds, nfds, t) >= 0 || errno != EINTR) return;
+    if (!deadline) continue;
+    uintptr_t now = ai_clock();
+    if (now >= deadline) return;
+    ms = deadline - now; } }
+
+void ai_sleep(uintptr_t ms) {
+  if (__ai_osv < 0) return k_sleep(ms);
+  poll_wait(NULL, 0, ms); }
+
+static ai_noinline int poll_wrap(int fd, int events) {
+  struct pollfd p = { .fd = fd, .events = (short) events };
+  return poll(&p, 1, 0); }
+
+bool ai_ready(int fd, int events) {
+  if (__ai_osv < 0) return k_ready(fd, events);
+  return fd < 0 || poll_wrap(fd, events) > 0; }
+
+// love.h lays the block out as poll(2)'s own struct, so there is nothing to copy
+// and no vector of ours to size -- which is the whole reason the count needs no
+// ceiling, and why `revents` comes back to the scheduler for free.
+_Static_assert(sizeof(struct ai_wait_fd) == sizeof(struct pollfd)
+            && offsetof(struct ai_wait_fd, fd) == offsetof(struct pollfd, fd)
+            && offsetof(struct ai_wait_fd, events) == offsetof(struct pollfd, events),
+               "struct ai_wait_fd must be this platform's struct pollfd");
+// ... and the two directions must be poll's own bits, for the same reason.
+_Static_assert(ai_wait_in == POLLIN && ai_wait_out == POLLOUT,
+               "ai_wait_in/out must be this platform's POLLIN/POLLOUT");
+
+// the events come in filled, per fd -- the scheduler knows each task's park
+// direction and a blanket mask would wake readers on writable. poll(2) fills
+// `revents` on the way back out and the scheduler reads it (love.h).
+void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
+  if (__ai_osv < 0) return k_wait_fds(fds, n, ms);
+  if (n <= 0) { ai_sleep(ms); return; }
+  poll_wait((struct pollfd*) fds, (nfds_t) n, ms); }
+
+// the same block, asked and not waited on -- one poll(2) for the whole parked ring,
+// where the weak default would spend one per fd. that is what lets the scheduler sweep
+// the parked tasks on a fairness yield at all (love.c, over sweep_interval).
+// no EINTR retry: a zero timeout means poll returns at once, and a signal that beats
+// it is answered by leaving every revents zero -- "none ready", asked again next sweep.
+// retrying would be the one thing this call must never do, which is block.
+// on inle the sweep is per row (love.c's weak default's law: every slot filled,
+// so "none ready" never reads as "nobody answered").
+void ai_ready_fds(struct ai_wait_fd *fds, int n) {
+  if (__ai_osv < 0) {
+    for (int i = 0; i < n; i++)
+      fds[i].revents = k_ready(fds[i].fd, fds[i].events) ? fds[i].events : 0;
+    return; }
+  if (n <= 0) return;
+  if (poll((struct pollfd*) fds, (nfds_t) n, 0) >= 0) return;
+  for (int i = 0; i < n; i++) fds[i].revents = 0; }
+
+// override the weak g.c default with the real close. called by the finalizer
+// that ai_io_alloc registers, so it runs when a heap port becomes unreachable.
+// static stdin/stdout don't go through this path -- they live outside the l
+// heap and the GC never visits them. on inle the row's own close method runs.
+void ai_fd_close(int fd) {
+  if (__ai_osv < 0) return k_row_close(fd);
+  close(fd); }

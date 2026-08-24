@@ -63,6 +63,9 @@ static struct font const kfont = { .glyphs = (uint8_t*) moderndos_8x16, .w = 8, 
 
 void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc(int),
      k_fault_trigger(intptr_t n);
+// the seat hooks host/seat.c branches to on a negative osv (weak no-ops there)
+void k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct ai_wait_fd*, int, uintptr_t);
+bool k_ready(int fd, int events);
 uint64_t k_rtc(void);                  // the machine's own clock, unix seconds (0 = none)
 #ifdef K_TEST
 void k_qemu_exit(int);
@@ -227,7 +230,7 @@ struct k_source *k_source_open(int fd) {
 // below reads it through k_fd_eff. slot -1 is pass-through, -2 is seated CLOSED
 // (an fdmap's () entry: reads answer the end, writes fall away).
 // ⚠ THE SEAT IS THE PORT LAYER'S, AND ONLY ITS: k_fd_eff is reached from
-// k_port_readn, k_port_writen, ai_fd_close and k_procseat -- never from a nif, which is
+// k_port_readn, k_port_writen, k_row_close and k_procseat -- never from a nif, which is
 // why k_fdopen takes the fd it was handed. So an fd spelled in love is an
 // absolute row, and free/sys.c's syscall door is seat-blind by the same law.
 struct k_seat { intptr_t pid; int fd[3]; };
@@ -313,7 +316,7 @@ long k_fd_read(int fd, void *b, long n) {
   return r < 0 ? 0 : (long) r; }
 long k_fd_close(int fd) {
   if (!k_row_live(fd)) return -9;                        // EBADF
-  ai_fd_close(fd);
+  k_row_close(fd);
   return 0; }
 struct ai *k_port_flush(struct ai *g) {
   int fd = k_fd_eff(g, (int) ai_io_fd(g->io));
@@ -321,9 +324,9 @@ struct ai *k_port_flush(struct ai *g) {
   if (s && s->flush) s->flush(fd);
   return g; }
 
-// Override the weak g.c default; route close through k_sources[fd].
+// ai_fd_close's inle lane (host/seat.c): close through k_sources[fd].
 // Statics (stdin/stdout) have NULL close -- nothing to release.
-void ai_fd_close(int fd) {
+void k_row_close(int fd) {
   struct k_source *s = k_source(fd);
   if (s && s->close) s->close(fd); }
 
@@ -334,7 +337,7 @@ void ai_fd_close(int fd) {
 // -- so a query on 0 sweeps every seat's read slot and takes the false wake: the
 // woken reader re-asks through its own seat and re-parks. seats are pipeline
 // stages, a handful; the spurious wake costs one re-read.
-bool ai_ready(int fd, int events) {
+bool k_ready(int fd, int events) {
   if (fd < 0) return true;
   if (events != ai_wait_in) return true;
   struct k_source *s = k_source(fd);
@@ -352,13 +355,13 @@ bool ai_ready(int fd, int events) {
 // reads `revents` back and skips re-asking about every fd it names (love.h). A
 // sweep of the whole block costs one flag read per source and saves the scheduler
 // a walk of the ring per parked task.
-void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
-  if (n <= 0) { ai_sleep(ms); return; }
+void k_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
+  if (n <= 0) { k_sleep(ms); return; }
   uintptr_t deadline = kticks + k_ticks_for(ms);
   for (;;) {
     int any = 0;
     for (int i = 0; i < n; i++) {
-      int r = ai_ready(fds[i].fd, fds[i].events);
+      int r = k_ready(fds[i].fd, fds[i].events);
       fds[i].revents = r ? fds[i].events : 0;
       any |= r; }
     if (any || (ms && kticks >= deadline)) return;
@@ -373,7 +376,7 @@ uintptr_t k_clock_ms(void) { return (uintptr_t) (kboot.date * 1000 + kticks * k_
 
 // Pure time-wait. ms=0 means infinite (caller is expected to chain with an
 // input wait via ai_in->wait, so this should only be hit when no I/O is intended).
-void ai_sleep(uintptr_t ms) {
+void k_sleep(uintptr_t ms) {
   uintptr_t deadline = kticks + k_ticks_for(ms);
   for (;;) {
     if (ms && kticks >= deadline) break;
@@ -833,62 +836,9 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   *s = (struct k_source) { .readn = ram_readn, .writen = ram_writen,
                            .ready = ram_ready, .close = ram_close, .state = h };
   return fd; }
-// the love face: every refusal flattens to -1, which is what both doors above
-// have always answered and what kore reads.
-static int k_ramopen(struct ai_str *pv, char m) {
-  int fd = k_fs_open(pv->bytes, pv->len, m);
-  return fd < 0 ? -1 : fd; }
-
-// (open path mode) -- host/main.c's lvm_open for the ramfs door: a heap port
-// (closed on GC) or the zero point on any failure. The kernel links no host/*.c,
-// so the shape is written fresh rather than shared -- doc/misc/posix.md's conventions
-// exactly, since kore reads these and a wrong one is silent.
-static lvm(lvm_open) {
-  if (!ai_strp(Sp[0]) || !ai_strp(Sp[1])) goto fail;
-  struct ai_str *mv = (struct ai_str*) Sp[1];
-  int fd = mv->len ? k_ramopen((struct ai_str*) Sp[0], mv->bytes[0]) : -1;
-  if (fd < 0) goto fail;
-  Pack(g);
-  struct ai *r = ai_io_alloc(g, fd);
-  if (!ai_ok(r)) { ai_fd_close(fd); goto fail; }
-  g = r;
-  Unpack(g);
-  // stack: [port, path, mode, ..] -> [port, ..]
-  Sp[2] = Sp[0];
-  Sp += 2;
-  Ip += 1;
-  ai_musttail return Continue();
- fail:
-  Sp[1] = ZeroPoint;
-  Sp += 1;
-  Ip += 1;
-  ai_musttail return Continue(); }
-
-// (close p) -- flush, release the row, and HAND THE PORT THE CLOSED VT, so every
-// later read/write/flush finds the door that does nothing and the finalizer, which
-// asks the vt for an fd, skips. Answers (). No-op on a non-port.
-static lvm(lvm_close) {
-  if ((Sp[0] & 1) == 0 && ((union u*) Sp[0])->ap == lvm_port_io) {
-    struct ai_io *io = (struct ai_io*) Sp[0];
-    intptr_t fd = ai_io_fd(io);
-    if (fd >= 0) {
-      g->io = io;
-      Pack(g);
-      g = ai_io_wflush(g, io);        // buffered bytes land before the row dies
-      if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-      // the device would not take the whole run: PARK and come back. nothing has
-      // been mutated yet -- the row is live and Ip unadvanced -- so the re-run is
-      // this same close from the top.
-      if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {
-        Unpack(g);
-        g->next_wake_at = k_clock_ms() + 1;
-        ai_musttail return Ap(lvm_yield_sw, g); }
-      Unpack(g);
-      ai_fd_close((int) fd);
-      ((struct ai_io*) Sp[0])->vt = &ai_closed_vt; } }   // ⚠ re-read: wflush may collect
-  Sp[0] = ZeroPoint;
-  Ip += 1;
-  ai_musttail return Continue(); }
+// the open/close nifs are host/posix.c's now (plan C2): its open(2)/close(2)
+// land in free/sys.c's arms, so the ramfs answers the same door -- and a
+// directory opens as a dents row there, where the old ramfs-only nif said ().
 
 // --- the file nifs: stat, readdir, lseek, openfd, fdclose -------------------
 // doc/misc/posix.md's conventions exactly, because kore reads these shapes and a wrong
@@ -1037,7 +987,7 @@ long k_fd_dup3(int src, int dst) {
   int nfd = k_dup_row(src, 0);
   if (nfd < 0) return -EBADF;
   struct k_source *d = k_source_open(dst);
-  if (!d) { ai_fd_close(nfd); k_row_zero(nfd); return -ENOMEM; }
+  if (!d) { k_row_close(nfd); k_row_zero(nfd); return -ENOMEM; }
   if (d->close) d->close(dst);
   d = k_source(dst);                            // close zeroes through the live table
   struct k_source *n = k_source(nfd);
@@ -1603,7 +1553,7 @@ ai_noinline static int k_seat_exit(struct ai *g) {
   intptr_t pid = k_cur_pid(g);
   struct k_seat *s = pid ? k_seat_find(pid) : NULL;
   if (!s) return 0;
-  for (int i = 0; i < 3; i++) if (s->fd[i] >= 0) ai_fd_close(s->fd[i]);
+  for (int i = 0; i < 3; i++) if (s->fd[i] >= 0) k_row_close(s->fd[i]);
   s->pid = 0;                                   // the slot is free for the next spawn
   g->next_wake_at = 0;                          // a stale intention would gate the park
   g->next_wait_fd = -1;
@@ -1632,8 +1582,6 @@ static union u
   nif_draw[] = {{draw}, {lvm_ret0}},
   nif_key[] = {{key}, {lvm_ret0}},
   nif_color[] = {{lvm_cur}, {.x = putcharm(2)}, {color}, {lvm_ret0}},
-  nif_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
-  nif_close[] = {{lvm_close}, {lvm_ret0}},
   nif_getpid[] = {{lvm_getpid}, {lvm_ret0}},
   nif_procseat[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_procseat}, {lvm_ret0}},
   nif_disk[] = {{lvm_disk}, {lvm_ret0}},
@@ -1702,16 +1650,12 @@ static struct ai_def const __attribute__((section("ai_nifs"), used)) defs[] = {
   {"draw", (intptr_t) nif_draw},
   {"key", (intptr_t) nif_key},
   {"fault", (intptr_t) nif_fault},
-  // the ramfs door. ⚠ `open`'s PRESENCE is what lights up prel's module walk
-  // (love/prel.l's fsopen, by peep) and salt's config read -- both are gated on
-  // the name being in the book, so this row is the whole wiring.
-  {"open", (intptr_t) nif_open},
-  {"close", (intptr_t) nif_close},
-  // the rest of the posix surface is host/posix.c's, linked whole (plan A3):
-  // its nifs land in this same section and their libc calls bottom out in
-  // free/sys.c's table. what stays below is what has no host twin -- plus
-  // getpid, whose answer here is the TASK pid (the machine multiplexes tasks
-  // where a host getpid answers its one process).
+  // the posix surface -- open and close included now (plan C2) -- is
+  // host/posix.c's, linked whole (plan A3): its nifs land in this same section
+  // and their libc calls bottom out in free/sys.c's table. what stays below is
+  // what has no host twin -- plus getpid, whose answer here is the TASK pid
+  // (the machine multiplexes tasks where a host getpid answers its one
+  // process).
   {"getpid", (intptr_t) nif_getpid},
   {"procseat", (intptr_t) nif_procseat},
   // rung 5: the disk -- the raw block door lib/fat.l's filesystem rides. these

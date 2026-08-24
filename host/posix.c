@@ -1346,3 +1346,83 @@ AiNif("setwinsize", nif_setwinsize);
 AiNif("ptyecho", nif_ptyecho);
 AiNif("raw", nif_raw);
 AiNif("swig", nif_swig);
+
+// --- the port doors: (open path mode) and (close p) --------------------------
+// posix surface like everything above, and one body per behaviour (plan C2):
+// on inle the open(2)/close(2) below land in free/sys.c's arms, so the ramfs
+// answers the same nif. ⚠ `open`'s PRESENCE in the book is what lights up
+// prel's module walk (love/prel.l's fsopen, by peep) and salt's config read --
+// both gate on the name, so the registration below is the whole wiring.
+
+// mode is a l string; only the first byte is consulted: r read, w truncate-or-
+// create, a append-or-create. every refusal (path too long, unknown mode,
+// open(2) failure) flattens to -1, which is what the door has always answered.
+static ai_noinline int call_open(struct ai_str *pv, struct ai_str *mv) {
+  uintptr_t plen = pv->len;
+  char path[4096];
+  if (plen >= sizeof path || mv->len == 0) return -1;
+  memcpy(path, pv->bytes, plen);
+  path[plen] = 0;
+  int flags;
+  switch (mv->bytes[0]) {
+    case 'r': flags = O_RDONLY; break;
+    case 'w': flags = O_WRONLY | O_CREAT | O_TRUNC; break;
+    case 'a': flags = O_WRONLY | O_CREAT | O_APPEND; break;
+    default: return -1; }
+  return open(path, flags, 0644); }
+
+// (open path mode) -- a heap port (closed on GC) or the zero point on failure.
+static lvm(lvm_open) {
+  if (!ai_strp(Sp[0]) || !ai_strp(Sp[1])) goto fail;
+  struct ai_str *pv = (struct ai_str*) Sp[0];
+  struct ai_str *mv = (struct ai_str*) Sp[1];
+  int fd = call_open(pv, mv);
+  if (fd < 0) goto fail;
+  Pack(g);
+  struct ai *r = ai_io_alloc(g, fd);
+  if (!ai_ok(r)) { close(fd); goto fail; }
+  g = r;
+  Unpack(g);
+  // stack: [port, path, mode, ...] -> [port, ...]
+  Sp[2] = Sp[0];
+  Sp += 2;
+  Ip += 1;
+  ai_musttail return Continue();
+ fail:
+  Sp[1] = ZeroPoint;
+  Sp += 1;
+  Ip += 1;
+  ai_musttail return Continue(); }
+
+// (close p) -- flush, close, and HAND THE PORT THE CLOSED VT, so every later
+// read, write and flush finds the door that does nothing and the finalizer,
+// which asks the vt for an fd, skips. answers (). no-op on misuse.
+static lvm(lvm_close) {
+  // inline "is x a port": heap pointer whose discriminator is lvm_port_io.
+  if (!charmp(Sp[0]) && ((union u*) Sp[0])->ap == lvm_port_io) {
+    struct ai_io *io = (struct ai_io*) Sp[0];
+    intptr_t fd = ai_io_fd(io);
+    if (fd >= 0) {
+      g->io = io;
+      Pack(g);
+      g = ai_io_wflush(g, io);   // buffered bytes land before the fd dies
+      if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+      // the device would not take the whole run: park and come back. nothing has been
+      // mutated yet -- the fd is open and Ip unadvanced -- so the re-run is this same
+      // close from the top. blocking here would stop every task for one slow peer.
+      if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {
+        Unpack(g);
+        g->next_wake_at = ai_clock() + 1;
+        ai_musttail return Ap(lvm_yield_sw, g); }
+      Unpack(g);
+      close(fd);
+      ((struct ai_io*) Sp[0])->vt = &ai_closed_vt; } }   // re-read: wflush may collect
+  Sp[0] = ZeroPoint;
+  Ip += 1;
+  ai_musttail return Continue(); }
+
+static union u const
+  nif_open[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
+  nif_close[] = {{lvm_close}, {lvm_ret0}};
+AiNif("open", nif_open);
+AiNif("close", nif_close);

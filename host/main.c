@@ -80,65 +80,11 @@ static struct ai *stdin_take(struct ai *g) {
 // `noreturn` empty, so mooncc can't cut the fall-through tail itself; the loop
 // leaves no ret for vmret to flag (gcc emits identical code either way).
 static noreturn lvm(lvm_exit) { for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
-// shared EINTR-retry skeleton for poll-based wait. ms=0 means infinite.
-// returns only when poll succeeds (data ready / deadline elapsed) or fails
-// for a non-EINTR reason.
-static void poll_wait(struct pollfd *fds, nfds_t nfds, uintptr_t ms) {
-  uintptr_t deadline = ms == 0 ? 0 : ai_clock() + ms;
-  for (;;) {
-    int t = ms == 0 ? -1 :
-            ms > (uintptr_t) __INT_MAX__ ? __INT_MAX__ : (int) ms;
-    if (poll(fds, nfds, t) >= 0 || errno != EINTR) return;
-    if (!deadline) continue;
-    uintptr_t now = ai_clock();
-    if (now >= deadline) return;
-    ms = deadline - now; } }
+// the wait cluster -- ai_sleep, ai_ready, ai_wait_fds, ai_ready_fds -- lives
+// in host/seat.c, one definition for this frontend and the kernel's.
 
-void ai_sleep(uintptr_t ms) { poll_wait(NULL, 0, ms); }
-
-static ai_noinline int poll_wrap(int fd, int events) {
-  struct pollfd p = { .fd = fd, .events = (short) events };
-  return poll(&p, 1, 0); }
-
-bool ai_ready(int fd, int events) { return fd < 0 || poll_wrap(fd, events) > 0; }
-
-// love.h lays the block out as poll(2)'s own struct, so there is nothing to copy
-// and no vector of ours to size -- which is the whole reason the count needs no
-// ceiling, and why `revents` comes back to the scheduler for free.
-_Static_assert(sizeof(struct ai_wait_fd) == sizeof(struct pollfd)
-            && offsetof(struct ai_wait_fd, fd) == offsetof(struct pollfd, fd)
-            && offsetof(struct ai_wait_fd, events) == offsetof(struct pollfd, events),
-               "struct ai_wait_fd must be this platform's struct pollfd");
-// ... and the two directions must be poll's own bits, for the same reason.
-_Static_assert(ai_wait_in == POLLIN && ai_wait_out == POLLOUT,
-               "ai_wait_in/out must be this platform's POLLIN/POLLOUT");
-
-// the events come in filled, per fd -- the scheduler knows each task's park
-// direction and a blanket mask would wake readers on writable. poll(2) fills
-// `revents` on the way back out and the scheduler reads it (love.h).
-void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
-  if (n <= 0) { ai_sleep(ms); return; }
-  poll_wait((struct pollfd*) fds, (nfds_t) n, ms); }
-
-// the same block, asked and not waited on -- one poll(2) for the whole parked ring,
-// where the weak default would spend one per fd. that is what lets the scheduler sweep
-// the parked tasks on a fairness yield at all (love.c, over sweep_interval).
-// no EINTR retry: a zero timeout means poll returns at once, and a signal that beats
-// it is answered by leaving every revents zero -- "none ready", asked again next sweep.
-// retrying would be the one thing this call must never do, which is block.
-void ai_ready_fds(struct ai_wait_fd *fds, int n) {
-  if (n <= 0) return;
-  if (poll((struct pollfd*) fds, (nfds_t) n, 0) >= 0) return;
-  for (int i = 0; i < n; i++) fds[i].revents = 0; }
-
-// the fd port -- ai_fd_port_vt, the three statics, ai_fd_drain -- lives in
-// host/seat.c, one definition for this frontend and the kernel's.
-
-// override the weak g.c default with the real POSIX close. called by the
-// finalizer that ai_io_alloc registers, so it runs when a heap port becomes
-// unreachable. static stdin/stdout don't go through this path -- they live
-// outside the l heap and the GC never visits them.
-void ai_fd_close(int fd) { close(fd); }
+// the fd port -- ai_fd_port_vt, the three statics, ai_fd_drain, ai_fd_close --
+// lives in host/seat.c, one definition for this frontend and the kernel's.
 
 // --- handing fd 0 to a child: the unseekable half of stdin_give, up top ---
 // a forked pumper writes the residue into a fresh pipe, splices whatever the old fd 0 still
@@ -182,77 +128,8 @@ static void stdin_hand(struct ai *g) {
  close(p[1]);
  if (p[0] != STDIN_FILENO) dup2(p[0], STDIN_FILENO), close(p[0]); }
 
-// (open path mode) — open a file with mode "r"/"w"/"a"; returns a heap port
-// (closed on GC) or zero on error or misuse. mode is a l string; only the
-// first byte is consulted.
-//   r = read-only
-//   w = write-only, truncate-or-create
-//   a = write-only, append-or-create
-// errors (path too long, unknown mode, open(2) failure) all return zero.
-
-static ai_noinline int call_open(struct ai_str *pv, struct ai_str *mv) {
-  uintptr_t plen = pv->len;
-  char path[4096];
-  if (plen >= sizeof path || mv->len == 0) return -1;
-  memcpy(path, pv->bytes, plen);
-  path[plen] = 0;
-  int flags;
-  switch (mv->bytes[0]) {
-    case 'r': flags = O_RDONLY; break;
-    case 'w': flags = O_WRONLY | O_CREAT | O_TRUNC; break;
-    case 'a': flags = O_WRONLY | O_CREAT | O_APPEND; break;
-    default: return -1; }
-  return open(path, flags, 0644); }
-
-static lvm(lvm_open) {
-  if (!ai_strp(Sp[0]) || !ai_strp(Sp[1])) goto fail;
-  struct ai_str *pv = (struct ai_str*) Sp[0];
-  struct ai_str *mv = (struct ai_str*) Sp[1];
-  int fd = call_open(pv, mv);
-  if (fd < 0) goto fail;
-  Pack(g);
-  struct ai *r = ai_io_alloc(g, fd);
-  if (!ai_ok(r)) { close(fd); goto fail; }
-  g = r;
-  Unpack(g);
-  // stack: [port, path, mode, ...] -> [port, ...]
-  Sp[2] = Sp[0];
-  Sp += 2;
-  Ip += 1;
-  ai_musttail return Continue();
- fail:
-  Sp[1] = ZeroPoint;
-  Sp += 1;
-  Ip += 1;
-  ai_musttail return Continue(); }
-
-// (close p) — close a port and hand it the closed vt, so every later read,
-// write and flush finds the door that does nothing and the finalizer, which
-// asks the vt for an fd, skips. returns (). no-op on misuse, matching the
-// existing fputc/etc. convention.
-static lvm(lvm_close) {
-  // inline "is x a port": heap pointer whose discriminator is lvm_port_io.
-  if (!charmp(Sp[0]) && ((union u*) Sp[0])->ap == lvm_port_io) {
-    struct ai_io *io = (struct ai_io*) Sp[0];
-    intptr_t fd = ai_io_fd(io);
-    if (fd >= 0) {
-      g->io = io;
-      Pack(g);
-      g = ai_io_wflush(g, io);   // buffered bytes land before the fd dies
-      if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
-      // the device would not take the whole run: park and come back. nothing has been
-      // mutated yet -- the fd is open and Ip unadvanced -- so the re-run is this same
-      // close from the top. blocking here would stop every task for one slow peer.
-      if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {
-        Unpack(g);
-        g->next_wake_at = ai_clock() + 1;
-        ai_musttail return Ap(lvm_yield_sw, g); }
-      Unpack(g);
-      close(fd);
-      ((struct ai_io*) Sp[0])->vt = &ai_closed_vt; } }   // re-read: wflush may collect
-  Sp[0] = ZeroPoint;
-  Ip += 1;
-  ai_musttail return Continue(); }
+// the open/close nifs live in host/posix.c now (plan C2): they are the posix
+// surface's, and on inle their open(2)/close(2) land in free/sys.c's arms.
 
 // --- subprocess (hark) + environment (getenv) ---------------------------
 // both are host-only nifs (POSIX fork/exec/wait, getenv), like open/close.
@@ -541,8 +418,6 @@ static lvm(lvm_getpid) { ai_musttail return Answer(putcharm(getpid())); }
 
 static union u const
  nif_exit[] = {{lvm_exit}, {lvm_ret0}},
- nif_open[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_open}, {lvm_ret0}},
- nif_close[] = {{lvm_close}, {lvm_ret0}},
  nif_hark[] = {{lvm_hark}, {lvm_harkdrain}, {lvm_ret0}},
  nif_herald[] = {{lvm_herald}, {lvm_harkdrain}, {lvm_ret0}},
  nif_exec[] = {{lvm_exec}, {lvm_ret0}},
@@ -556,8 +431,6 @@ static union u const
 //   static union u const nif_foo[] = {{lvm_foo}, {lvm_ret0}};  // 1-arg; curry for more
 //   AiNif("foo", nif_foo);
 AiNif("quit", nif_exit);
-AiNif("open", nif_open);
-AiNif("close", nif_close);
 AiNif("hark", nif_hark);
 AiNif("herald", nif_herald);
 AiNif("exec", nif_exec);
