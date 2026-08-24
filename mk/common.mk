@@ -62,8 +62,9 @@ love_c = $R/core/love.c $R/crew/moon/lib/math/am.c
 # wants one NAMES it rather than taking it here.
 f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/crew/quay/*.c))
 # inle's libc is nolibc's, named member by member; os.c is the map every syscall
-# reaches it through -- which under -D__inle__ is the identity, free/sys.c
-# answering the canonical numbers itself. mooncc builds the kernel, so it builds
+# reaches it through -- and a negative __ai_osv (written at kmain) takes the
+# __ai_inle arm, free/sys.c answering the canonical numbers in C. mooncc builds
+# the kernel, so it builds
 # the kernel's libc too -- there is no second copy to drift. this is host/posix.c's
 # closure exactly (plan A3): the members its nifs call, what those pull, and
 # nothing more. core.c stays OUT -- it carries malloc, the process entry and the

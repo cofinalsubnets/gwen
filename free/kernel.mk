@@ -53,7 +53,12 @@ k_free_o = $(k_free_c:$(R)/%.c=$(k_odir)/%.o)
 # boot.o is the bring-up, vec.o the interrupt tail; both are holo IR written in
 # love (free/mk{boot,vec}.l), so no assembler runs in this build at all.
 k_lay_o = $(k_odir)/free/$a/boot.o $(k_odir)/free/$a/vec.o
-k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_lay_o)
+# the mksys machine tail, the same object the hosted link carries: __ai_call
+# compiles with both doors now, so the raw `syscall`/`svc` leaf must resolve --
+# dead on metal (a negative osv takes __ai_inle first), and it brings the seat
+# symbols the stubs used to fake (__ai_sigret, the netbsd leaves).
+k_tail_o = $(k_odir)/free/$a/sys.o
+k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_lay_o) $(k_tail_o)
 
 # The kernel runs the GENERATIONAL collector bounded by g->budget: kmain sums the boot
 # memmap into kram_words and sets budget = kram_words/8 after ai_ini (the Appel knob).
@@ -66,7 +71,6 @@ kcppflags := \
   -I. -Icore -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/free \
   -I$(R)/free/$a \
   -I$(R)/crew/moon/include \
-  -D__inle__ \
   $(kcppflags)
 ifdef K_TEST
 # tail-threaded, matching the real kernel and the host; love0 stays the trampoline lane.
@@ -174,6 +178,15 @@ $(k_lay_o): $(k_odir)/free/$a/%.o: $(k_odir)/mk%.l $m
 	@echo HOLO	$@
 	@mkdir -p "$(dir $@)"
 	@$m -l $< -n -e '(lay-$* "$@" "$a")' && test -s $@
+
+# the machine tail rides the host's own cat (flavour-neutral, one cut for every
+# consumer); only the entry names the arch.
+k_mksys_x86_64 = mksys
+k_mksys_aarch64 = mksys-arm64
+$(k_tail_o): out/host/.mksys-cat.l $m
+	@echo HOLO	$@
+	@mkdir -p "$(dir $@)"
+	@$m -l out/host/.mksys-cat.l -n -e "((from 'moon '$(k_mksys_$a)) \"$@\")" && test -s $@
 
 # --- qemu run targets ------------------------------------------------
 # KVM where the host offers it: TCG costs 6x on the boot (22s to the prompt against

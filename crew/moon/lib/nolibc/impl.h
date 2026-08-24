@@ -55,10 +55,7 @@ extern long __ai_sys(long n, long a, long b, long c, long d, long e, long f);
  * lays x64 and arm64). Where it is absent netbsd's sigaction refuses BY NAME
  * rather than register a trampoline that is not there; freebsd on the same arch
  * is unaffected. */
-/* ⚠ inle is out for a different reason than riscv: not a missing machine tail
- * but a kernel that is ONLY ever itself. free/sys.c answers __ai_sys in C, at
- * the canonical numbers, so there is no second kernel to translate to. */
-#if !defined(__riscv) && !defined(__inle__)
+#if !defined(__riscv)
 # define AiOsTranslate 1        /* os.c's tables, and the leaves they call */
 # define AiNbTramp 1            /* netbsd's signal return path */
 #endif
@@ -350,13 +347,19 @@ static long er(long r) {
  * __ai_sys is the raw OS-blind tail (sys.o): CF cleared going in, and a carry
  * answer -- freebsd's error convention -- comes back parked BELOW linux's
  * band as -(errno+4096), so the kernels' answers cannot collide. __ai_osv is
- * the kernel under us (os.c probes it once: 1 linux, 2 freebsd); __ai_call
+ * the kernel under us (os.c probes it once: 1 linux, 2 freebsd; -1 says we
+ * ARE the kernel, and __ai_inle answers in C); __ai_call
  * translates numbers by os.c's map and errnos by its row. every member wears
  * ONE body: the canonical (linux-valued) face, with a freebsd branch on
  * __ai_osv where the shapes part -- fb0..fb6 reach the calls the map cannot
  * carry, by their NR_fb_* number, errno translated the same. */
 extern long __ai_osv;
 extern long __ai_osdetect(void);
+/* inle's door (free/sys.c): the same seam in C, for the kernel that is only
+ * ever itself. it answers the canonical numbers, so a negative osv takes every
+ * member's lanes as linux does; os.c carries a weak refusal for links without
+ * it. */
+extern long __ai_inle(long n, long a, long b, long c, long d, long e, long f);
 extern long __ai_nrfb(long n);
 extern long __ai_errfb(long e);
 extern long __ai_sigfb(long sig);
@@ -379,6 +382,7 @@ extern void __ai_saout(void *a, unsigned int n);                   /* ..and back
 static long __ai_call(long n, long a, long b, long c, long d, long e, long f) {
   long v = __ai_osv;
   if (!v) v = __ai_osv = __ai_osdetect();
+  if (v < 0) return __ai_inle(n, a, b, c, d, e, f);   /* before the BSD read: inle translates nothing */
   if (v >= 2) {
     n = __ai_nrfb(n);
     if (n < 0) return -38; }                          /* ENOSYS, canonically */

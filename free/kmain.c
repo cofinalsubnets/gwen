@@ -1326,7 +1326,7 @@ static lvm(lvm_vmx_run) {
 // --- the PATH FACES ------------------------------------------------------
 // k_fs_* take (bytes, len) and answer 0 or a NEGATIVE errno, as k_fd_* and
 // k_parent_ok do -- ONE sign for every C face in this kernel, and it is the
-// one __ai_sys owes its caller (impl.h's er() reads an error as
+// one __ai_inle owes its caller (impl.h's er() reads an error as
 // (unsigned long) r > (unsigned long) -4096), so free/sys.c hands these answers
 // straight out with no flip anywhere. The love conventions are the k_* wrappers'
 // business: positive for most doors, negative for chdir, () for absence.
@@ -1568,10 +1568,10 @@ static lvm(lvm_syswrite) {
 // its bytes (core keeps a NUL behind them, so a path lands as C expects), a
 // cask lends its bytes as an output buffer the test reads back. any other kind
 // is misuse and answers -1 before the door is asked -- 0 there would be an
-// argument. ⚠ it reaches __ai_sys DIRECTLY, under nolibc: what it gates is the
-// dispatch and the k_* faces, which is where the rows are written. syswrite
-// proves the nolibc half once, so the composition is said.
-extern long __ai_sys(long, long, long, long, long, long, long);
+// argument. ⚠ it reaches __ai_inle DIRECTLY, under nolibc: what it gates is
+// the dispatch and the k_* faces, which is where the rows are written.
+// syswrite proves the nolibc half once, so the composition is said.
+extern long __ai_inle(long, long, long, long, long, long, long);
 extern long k_sys_nr(char const *nm, long n);
 ai_noinline static ai_word k_syscall(ai_word nw, ai_word aw, ai_word bw, ai_word cw, ai_word dw) {
   if (!ai_strp(nw)) return ZeroPoint;
@@ -1586,7 +1586,7 @@ ai_noinline static ai_word k_syscall(ai_word nw, ai_word aw, ai_word bw, ai_word
     else if (((union u*) ws[i])->ap == lvm_cask)
       v[i] = (long) ((struct ai_cask*) ws[i])->str->bytes;
     else return putcharm(-1); }
-  return putcharm(__ai_sys(nr, v[0], v[1], v[2], v[3], 0, 0)); }
+  return putcharm(__ai_inle(nr, v[0], v[1], v[2], v[3], 0, 0)); }
 static lvm(lvm_syscall) {
   Sp[4] = k_syscall(Sp[0], Sp[1], Sp[2], Sp[3], Sp[4]);
   Sp += 4; ai_musttail return Next(1); }
@@ -1823,6 +1823,7 @@ static struct ai_lib const libs[] = {
   {NULL, NULL} };
 struct ai_lib const *ai_libs(void) { return libs; }
 
+extern long __ai_osv;                  // nolibc's "which kernel" (os.c)
 void kmain(void) {
 #if defined(__x86_64__)
  // Enable x87/SSE before ANY other C runs -- a compiler vectorizes freely on
@@ -1831,6 +1832,10 @@ void kmain(void) {
  // point; archinit no longer repeats it.
  k_sse_enable();
 #endif
+ // which kernel: -1, we ARE it. on metal __ai_start is not the entry, so the
+ // value is written here, before any libc member can ask -- unwritten, the
+ // lazy probe would issue a real `syscall` into our own #UD handler.
+ __ai_osv = -1;
  khhdm = kboot.hhdm;
  archinit();
  // the wall date, in the one order that can answer on every door: whatever the

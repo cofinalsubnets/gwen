@@ -1,15 +1,15 @@
 // free/sys.c -- inle's syscall door, and the whole of it. nolibc's 76 sys/*
-// members reach __ai_sys and nothing else (impl.h's sc0..sc6 -> __ai_call, no
-// inline asm anywhere in that C), so answering it here is what lets that libc --
-// and every lane written against it -- stand on this kernel instead of a hosted
-// one. On a hosted seat the same symbol is a mksys.l lay that issues `syscall`
-// or `svc`; here it is a C function, because the kernel it would have called is
-// this file's other side.
+// members reach one seam (impl.h's sc0..sc6 -> __ai_call, no inline asm
+// anywhere in that C), and __ai_call parts its callers by __ai_osv: a hosted
+// kernel takes the mksys.l lay that issues `syscall` or `svc`, and a negative
+// osv -- written at kmain, we ARE the kernel -- takes __ai_inle, this file's C
+// answer. That one arm is what lets nolibc, and every lane written against it,
+// stand on this kernel instead of a hosted one.
 //
 // The numbers are LINUX'S, per arch, straight off impl.h's NR_* -- the tree
 // carries those tables for x86_64 and aarch64 already, and inle owes no
-// compatibility to anyone, so taking them costs nothing and translates nothing.
-// os.c hands __ai_call a 1 under __inle__: the no-translation lane riscv takes.
+// compatibility to anyone, so taking them costs nothing and translates nothing:
+// a negative osv reads as linux at every member's own branch.
 //
 // ⚠ AN UNMAPPED NUMBER ANSWERS -ENOSYS, and that is the refusal protocol, not a
 // gap to be ashamed of -- the same one mount and unshare wear off linux. A lane
@@ -24,18 +24,17 @@ int __errno_v;
 int *__errno_location(void) { return &__errno_v; }
 
 // the rest of the seat, sized for a kernel that IS the process: an environment
-// that starts empty, std streams unbuffered over the console rows (cap 0, so
-// every byte goes straight through write -- ⚠ SEAT-BLIND: a seated task's
+// that starts empty, and std streams unbuffered over the console rows (cap 0,
+// so every byte goes straight through write -- ⚠ SEAT-BLIND: a seated task's
 // C-level printf reaches the console where its port reaches the pipe; love
-// writes through ports, which seat), and sigaction's restorer, which no
-// handler ever returns through since rt_sigaction refuses below. mutable on
-// purpose, like __errno_v above: the libc seat is state.
+// writes through ports, which seat). mutable on purpose, like __errno_v above:
+// the libc seat is state. (sigaction's restorer rides the mksys lay the link
+// carries anyway; no handler ever returns through it, rt_sigaction refuses.)
 static char *k_env0[] = { 0 };
 char **environ = k_env0;
 static struct _IO_FILE k_stdf[3] = {
   { .fd = 0 }, { .fd = 1, .wr = 1 }, { .fd = 2, .wr = 1 } };
 FILE *stdin = &k_stdf[0], *stdout = &k_stdf[1], *stderr = &k_stdf[2];
-void __ai_sigret(void) { }
 
 // the kernel side (kmain.c): a raw fd through the k_sources row, no port above
 // it -- and SEAT-BLIND, which is the law and not a gap. The seat is a property
@@ -168,7 +167,7 @@ long k_sys_nr(char const *nm, long n) {
   return -1; }
 #endif
 
-long __ai_sys(long n, long a, long b, long c, long d, long e, long f) {
+long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
   (void) e, (void) f;
   long r;
   switch (n) {

@@ -6,7 +6,17 @@
  * answers whichever kernel -os named. */
 #include "impl.h"
 
-long __ai_osv;                    /* 0 unprobed; 1 linux; 2 freebsd; 3 netbsd */
+long __ai_osv;         /* 0 unprobed; 1 linux; 2 freebsd; 3 netbsd; -1 inle,
+                        * written at its entry: we ARE the kernel, nothing to probe */
+
+/* the inle door's default, for a link that carries no free/sys.c: refuse, and
+ * name the protocol. a negative osv is only ever written by inle's own entry,
+ * so a hosted binary never takes __ai_call's arm and this body is dead weight
+ * the dead-static sweep cannot drop -- one line, kept for the symbol. */
+__attribute__((weak))
+long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
+  (void) n, (void) a, (void) b, (void) c, (void) d, (void) e, (void) f;
+  return -38; }
 
 long __ai_osdetect(void) {
 #ifndef AiOsTranslate
@@ -15,12 +25,7 @@ long __ai_osdetect(void) {
    * assumed -- linux is where we started, not a default, and a build naming a
    * kernel this arch has no tail for owes a diagnostic and not another
    * kernel's numbers. */
-  /* ⚠ inle is not linux, and 1 does not say it is: the value names the NUMBERING
-   * __ai_call is to speak, and inle's door (free/sys.c) answers the canonical
-   * one. Nothing translates because there is nothing to translate to. */
-# if defined(__inle__)
-  return 1;
-# elif defined(__linux__)
+# if defined(__linux__)
   return 1;
 # elif defined(__FreeBSD__)
 #  error "nolibc: -os freebsd wants the translation tables, and this arch has no machine tail for them"
