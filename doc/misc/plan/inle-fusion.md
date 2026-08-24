@@ -47,9 +47,8 @@ callable inside the kernel, which is what lets more of the crew run there.
 | | |
 |---|---|
 | syscalls `host/posix.c` reaches | **34** (not 78 -- that is all of nolibc) |
-| ..answered so far | 13 (read/write/close/lseek + the path family: openat, newfstatat, mkdirat, unlinkat, renameat, chdir, getcwd, fchmodat, utimensat) |
+| ..answered so far | **19**: read/write/close/lseek; the path family (openat, newfstatat, mkdirat, unlinkat, renameat, chdir, getcwd, fchmodat, utimensat); the fd family (pipe2, dup3, fcntl, fstat, getdents64) + getpid |
 | ..that inle simply lacks, and `-ENOSYS` already answers | ~9 (clone, wait4, kill, setpgid, setsid, mount, unshare, madvise, getpgid) |
-| ..still wanting backends | pipe2, dup3, fcntl(F_DUPFD), fstat, getdents64 -- the fd family; pipe/dup faces take `g` today (the seat question), getdents64 is the open shape question |
 | `posix.c` changes needed to compile freestanding | **none** -- verified, it builds clean under the kernel's flags today |
 | its undefined symbols | 84: 17 love-core (kernel has them), 3 nolibc string (linked), ~64 nolibc members to link |
 | boot spent evaluating source | ~2 s (`test_kernel` 10.41 s wall vs its own 7.8 s corpus) |
@@ -111,14 +110,21 @@ have no answer in a ramfs and the fabrication belongs where it is visible.
 twenty-one behaviours stop existing twice.
 
 - A1 ✅ the path and fd faces.
-- A2 -- the syscall table. the instrument ✅ takes pointer arguments (strings
-  in, casks out); the path family ✅ answers (13 numbers live, the ledger
-  above). remains: the fd family -- pipe2/dup3/fcntl want faces that do not
-  take `g` (today's k_pipe_new/k_dup thread it), fstat wants a row-stat face,
-  getdents64 its shape answer. ⚠ `k_fs_open` keeps its 'r' misses ONE k_find
-  deep: they are the load path's probe lane, and a k_dirp there ran the corpus
-  24x slower. only a create pays k_dirp; the openat arm upgrades ENOENT to
-  EISDIR for a synthesized directory on its own slow path.
+- A2 ✅ the syscall table: 19 numbers live, the ledger above. the instrument
+  takes pointer arguments (strings in, casks out); every number is a dispatch
+  arm plus tests. ⚠ `k_fs_open` keeps its 'r' misses ONE k_find deep: they are
+  the load path's probe lane, and a k_dirp there ran the corpus 24x slower.
+  only a create pays k_dirp; the openat arm assembles the directory answers on
+  its own slow path -- and a directory opens READ-ONLY there as a dents row
+  (close + cursor, read(2) on it EISDIR), which is getdents64's shape answer.
+- **the g question, settled**: g holds exactly one fact the kernel tables do
+  not -- WHICH TASK RUNS (`k_cur_pid` reads the run ring's head). the fd faces
+  never needed it (k_dup_row took g and never read it), so they split the A1
+  way and are g-free. the residue splits by layer: inle is ONE process, love
+  tasks its threads -- getpid(2) answers the machine's constant, the task pid
+  stays with the nif, where g is threaded. per-task fd tables, if ever, take
+  identity as an explicit pid into pid-keyed kernel tables (k_seats' shape),
+  never an ambient g.
 - A3 -- link the ~64 nolibc members, add `host/posix.c` to the kernel build,
   delete the 21 duplicate nifs. ⚠ the deletion must be in the SAME commit as the
   link, or 21 names are defined twice.
