@@ -56,15 +56,15 @@
                               (nm + ": new file"))))))
        ; one key, arrows decoded, with the one-byte pushback: (byte next-pend)
        (rd pend)
-        (? (<= 0 pend) (L pend -1)
+        (? (<= 0 pend) [pend -1]
            (: c (see in)
-              (? !(= c 27) (L c -1)
+              (? !(= c 27) [c -1]
                  (: c2 (see in)
                     (? (= c2 91)
                        (: c3 (see in)
-                          (L (? (= c3 65) 107 (= c3 66) 106
-                                (= c3 67) 108 (= c3 68) 104 27) -1))
-                       (L 27 c2))))))
+                          [(? (= c3 65) 107 (= c3 66) 106
+                              (= c3 67) 108 (= c3 68) 104 27) -1])
+                       [27 c2])))))
        (fin _) (: _ (puts (e + "[0m" + e + "[?1049l")) _ (flush out) (quit 0))
        (go pend)
         (: _ (puts (vframe st)) _ (flush out)

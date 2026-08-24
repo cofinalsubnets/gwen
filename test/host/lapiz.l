@@ -24,31 +24,31 @@
 
 ; --- the corpus: every block, every span, and the edges around them ------------
 (: corpus
-   (L "" "# a title" "###### deep" "just a paragraph"
-      "a wrapped paragraph
+   ["" "# a title" "###### deep" "just a paragraph"
+    "a wrapped paragraph
 continued on a second line"
-      "hello *world* and `code` and **bold** here"
-      "**bold with *em* inside** and [a *link*](http://x.y/p?q=1&r=2)"
-      "sigils that start nothing: a - b, 2 * 3, x[1], a \\* literal star"
-      "\\- not a bullet"  "\\# not a head"  "\\--- not a rule"
-      "5 < 6 & 7 > 2 -- the html escapes"
-      "- one
+    "hello *world* and `code` and **bold** here"
+    "**bold with *em* inside** and [a *link*](http://x.y/p?q=1&r=2)"
+    "sigils that start nothing: a - b, 2 * 3, x[1], a \\* literal star"
+    "\\- not a bullet"  "\\# not a head"  "\\--- not a rule"
+    "5 < 6 & 7 > 2 -- the html escapes"
+    "- one
 - two **bold**"
-      "1. first
+    "1. first
 2. second
 3. third"
-      "> quoted *text*
+    "> quoted *text*
 > and more
 >
 > a second quoted block"
-      "```love
+    "```love
 (+ 1 2)
 ```"
-      "```
+    "```
 no language tag
 ```"
-      "---"
-      "---
+    "---"
+    "---
 title: LOVE
 section: 1
 manual: love manual
@@ -57,12 +57,12 @@ manual: love manual
 # NAME
 
 love \\- a curried lisp"
-      "-l *lib*
+    "-l *lib*
 :   load **lib** first
 
 --emit
 :   transpile it"
-      "# everything
+    "# everything
 
 a paragraph, then a list:
 
@@ -77,7 +77,7 @@ int main(void) { return 0; }
 
 ---
 
-the [end](e).")
+the [end](e)."]
 
    (nrm s) (mdshow (mdread s))                 ; the markdown normalizer: read then show
    (hrm s) (htshow (htread s))                 ; ..and the html one
@@ -151,24 +151,24 @@ the [end](e).")
  ; para, fence with no language, quote, bullets, numbers, deflist, and text/strong/
  ; em/code inline. every one of those appears below.
  _ (: rfcorpus
-    (L "# NAME" "## OPTIONS" "plain paragraph text" "a *b* **c** `d`"
-       "- one
+    ["# NAME" "## OPTIONS" "plain paragraph text" "a *b* **c** `d`"
+     "- one
 - two"
-       "- an item that wraps onto
+     "- an item that wraps onto
   a second line
 - and one that does not"
-       "1. first
+     "1. first
 2. second"
-       "-l *lib*
+     "-l *lib*
 :   load **lib** first
 --emit
 :   transpile it"
-       "> an indented note with `code`"
-       "```
+     "> an indented note with `code`"
+     "```
 literal
 block
 ```"
-       "---
+     "---
 title: LOVE
 section: 1
 manual: love manual
@@ -190,7 +190,7 @@ love \\- a curried lisp
 
 ```
 some literal
-```")
+```"]
     _ (map (\ s (: d (mdread s)
                    (assert (d = (rfread (rfshow d)))        ; LAW 1, the roff surface
                            (! (t0? (rfread (rfshow d))))))) rfcorpus)
@@ -228,19 +228,19 @@ some literal
                         (d = (mdread (mdshow d)))        ; LAW 1 on real markdown
                         (d = (htread (htshow d)))
                         (! (t0? d)))))
-             (L "README.md" "doc/love.md" "doc/cook.md"))
+             ["README.md" "doc/love.md" "doc/cook.md"])
       ; ..and the roff law only on the MAN PAGES: README.md is deliberately outside the
       ; roff domain (deep headings, fence languages, links, rules), which is the domain
       ; doing its job rather than a failure.
       _ (map (\ f (: d (mdread (slurpf f))
                      (assert (d = (rfread (rfshow d))))))   ; LAW 1 on the roff the build ships
-             (L "doc/love.md" "doc/cook.md"))
+             ["doc/love.md" "doc/cook.md"])
       ; the man pages are man-page-shaped: every block is in the roff domain, so the
       ; generated page loses nothing (verified against groff by hand, byte-identical
       ; to the hand-written pages these replaced).
       _ (map (\ f (: d (mdread (slurpf f))
                      (assert (id? 'meta (cap (cap d)))    ; a .TH, and it leads
-                             (! (member? 'rule (map cap d)))))) (L "doc/love.md" "doc/cook.md"))
+                             (! (member? 'rule (map cap d)))))) ["doc/love.md" "doc/cook.md"])
       0)
 
  _ (test_fin ())

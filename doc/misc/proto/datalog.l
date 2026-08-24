@@ -17,7 +17,7 @@
 
 (:
  ; ---- terms: a var is (v . name); consts are syms/nums; atoms are lists ----
- (vr n) (L 'v n)
+ (vr n) ['v n]
  (var? x) (&& (two? x) (id? (cap x) 'v))
  (nm x) (caup x)
  (vsym? x) (&& (nom? x) (: c ((string x) 0) (&& (<= 65 c) (<= c 90))))   ; UPPER -> var
@@ -48,15 +48,15 @@
  (reify s t path) (?
    (var? t) (: w (walk s t)
                (? (id? w t) t
-                  (member? (nm t) path) (L 'mu (nm t))
+                  (member? (nm t) path) ['mu (nm t)]
                   (reify s w (link (nm t) path))))
    (two? t) (link (reify s (cap t) path) (reify s (cup t) path))
    t)
  (rei s t) (reify s t 0)
 
  ; ---- seminaive evaluation (set saturation; delta = last round's new facts) ----
- (matches s atom facts) (catmap (\ f (: s1 (unify s atom f 0) (? (fail? s1) 0 (L s1)))) facts)
- (solve s atoms facts) (? (atom? atoms) (L s)
+ (matches s atom facts) (catmap (\ f (: s1 (unify s atom f 0) (? (fail? s1) 0 [s1]))) facts)
+ (solve s atoms facts) (? (atom? atoms) [s]
    (catmap (\ s1 (solve s1 (cup atoms) facts)) (matches s (cap atoms) facts)))
  (solveD s atoms facts delta) (? (atom? atoms) 0        ; >=1 atom MUST come from delta
    (cat (catmap (\ s1 (solve  s1 (cup atoms) facts))       (matches s (cap atoms) delta))

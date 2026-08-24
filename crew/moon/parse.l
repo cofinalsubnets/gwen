@@ -2097,7 +2097,7 @@
    ; each sibling's OWN stars ride into its sig's return slot -- dropping them read
    ; `struct ai *ai_strof(..)` as a struct-by-value return, and every host-TU call
    ; to an mproto sibling refused (invisible from love.c: the DEFINITIONS re-pin).
-   ; registers each sig; answers (L rest-after-`;`) | ().
+   ; registers each sig; answers [rest-after-`;`] | ().
    (mproto ps base ts)
     (: (stars s ty) (: s2 (pquals s) (? (peekp s2 "*") (stars >s2 ['ptr ty]) [ty s2]))
        sr (stars ts base)
@@ -2110,7 +2110,7 @@
                       (: _ (pin (ps 'sigs) nm [rty (map caup <rp) <>>rp])
                          af <>rp
                          (? (peekp af ",") (mproto ps base >af)
-                            ; answer WRAPPED (L rest): a bare rest conflates the
+                            ; answer WRAPPED [rest]: a bare rest conflates the
                             ; empty remainder (a proto list at EOF) with refusal
                             (peekp af ";") [>af]
                             ()))))))))

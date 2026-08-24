@@ -23,8 +23,8 @@
 ;   C-a C-a         send a literal C-a through
 ; a guest never sees the prefix and never has to cooperate.
 ;
-; run: out/host/love -l crew/quay/berth.l -e '(berth (L "sh"))'
-;      out/host/love -l crew/quay/berth.l -e '(berth (L "vim" "README.md"))'
+; run: out/host/love -l crew/quay/berth.l -e '(berth ["sh"])'
+;      out/host/love -l crew/quay/berth.l -e '(berth ["vim" "README.md"])'
 ;
 ; host-only (screen/scribe + tether/gather + raw/winsize ride host/*.c), so
 ; berth never joins the corpus; the moor core needs no tty and is smoke-
@@ -80,7 +80,7 @@
                          s (screen (cask (screen () r c)) r c)
                          bx {s}
                          _ (setwinsize m r c)
-                         (L bx m <md))))
+                         [bx m <md])))
 
  ; --- the relay: the plan says where every berth is, so every screen is opened
  ; to its rectangle and every pty told its new size. content is the guest's to
@@ -189,8 +189,8 @@
  ; recovers. the opening had this floor; the tide did not, and quietly undid it
  ; half a second in.
  (hsize u) (: ws (winsize 0)
-              (L (? (two? ws && (< 5 <ws)) <ws 24)
-                 (? (two? ws && (< 19 >ws)) >ws 80)))
+              [(? (two? ws && (< 5 <ws)) <ws 24)
+               (? (two? ws && (< 19 >ws)) >ws 80)])
  (htide hb) (: sz (hsize 0) r <sz c <>sz
                (? ((= r (hb 'rows)) && (= c (hb 'cols))) ()
                 (: _ (pin hb 'rows r) _ (pin hb 'cols c) (hrelay hb))))

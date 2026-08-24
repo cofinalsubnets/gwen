@@ -346,7 +346,7 @@
  (1 = (0 (poly rx)))                   ; the zero numeral: p**0 = 1
  (star? pp1)                           ; a declared star self-nets: the vocabulary follows
  (star? zp)                            ; the zero poly is a star, like 0
- ((net (L pp1 pp1)) = (+ pp1 pp1)))    ; net of a list of polys is their SUM -- the hom in the ring
+ ((net [pp1 pp1]) = (+ pp1 pp1)))      ; net of a list of polys is their SUM -- the hom in the ring
 
 ; --- the field: Q[x]/(x^2 - 2), where root-two squares to two --------------
 (: sq2xd `((q 2 1) (q 0 1))                     ; x^2 == 2

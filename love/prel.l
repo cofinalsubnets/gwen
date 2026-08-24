@@ -288,7 +288,7 @@
  ; where the DEVICE gulps behind it (chug asks the port, which is the static, not the run
  ; borrowed under it), so this stays the only door that reads stdin exactly.
  (trickle p) (: c (see p) (? (= c -1) () (link c (once (\ u (trickle p)))))))
-(: l (foldr (\ a l (link link (link a (link l ())))) ()) (: _ (:: 'L l) _ (:: 'list l)))
+(: l (foldr (\ a l (link link (link a (link l ())))) ()) (:: 'list l))
 ; the false answer is the unit, not 0: (&& a ..) expands to (? a .. ()) and ||'s exhausted tail
 ; reads (). test a result with ? or id?, not arithmetic.
 (:: '&& (\ l (: (and l) (? (two? (cup l)) (list '? (cap l) (and (cup l)) ()) (cap l)) (? (two? l) (and l) 1))))

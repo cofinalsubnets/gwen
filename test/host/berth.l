@@ -78,7 +78,7 @@
                   0)
  ; (the octal escapes ride through TWO love readers before sh: hence \\\\)
  md (tether `("out/host/love" "-l" "crew/quay/berth.l"
-            "-e" "(berth (L \"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"))"))
+            "-e" "(berth [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"])"))
  outb (slurp (cup md))
  st (: (wf p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wf p)))) (wf (cap md)))
  _ (assert
@@ -178,7 +178,7 @@
                    (? (= n (snip h i (+ i (tally n)))) 1 (sub? h n (+ i 1)))
                    0)
  md (tether `("out/host/love" "-l" "crew/quay/berth.l"
-              "-e" "(berth (L \"sh\" \"-c\" \"sleep 5\"))"))
+              "-e" "(berth [\"sh\" \"-c\" \"sleep 5\"])"))
  _ (assert (two? md))
  m (cup md)
  _ (rest 1200)                            ; let berth come up and moor its first child

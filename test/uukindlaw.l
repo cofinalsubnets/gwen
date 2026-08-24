@@ -12,7 +12,7 @@
 ; kernel (a cryptic ;; missing vof -> BADJJ). Fail loudly and by name instead if that ever recurs.
 (assert (member? 'vof (names ())))
 (:
-   (uk-jj a b) (vof 0 (L 'kjoin a b))                        ; kjoin a b, run in the kernel
+   (uk-jj a b) (vof 0 ['kjoin a b])                          ; kjoin a b, run in the kernel
    (uk-all f)  (foldl (\ acc x (&& acc (f x))) 1 uk-codes)   ; forall over the carrier
    (uk-all2 f) (uk-all (\ a (uk-all (\ b (f a b)))))
    (uk-all3 f) (uk-all (\ a (uk-all (\ b (uk-all (\ c (f a b c)))))))

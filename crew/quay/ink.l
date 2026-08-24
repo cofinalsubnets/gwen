@@ -15,7 +15,7 @@
 
    ; the ocean ramp: 24 chromatophores, deep blue out to pale pink and back,
    ; each pre-rendered as one SGR background cell so a frame is pure lookup
-   ramp (L 17 18 19 20 26 32 38 44 45 51 87 123 159 195 189 183 147 111 75 69 63 57 25 24)
+   ramp [17 18 19 20 26 32 38 44 45 51 87 123 159 195 189 183 147 111 75 69 63 57 25 24]
    (cell n) (+ (+ (+ esc "[48;5;") (show n)) "m ")   ; show: decimal digits (string of a charm is its CHAR)
    pal (: (dab t i l) (? l (: _ (pin t i (cell <l)) (dab t (+ i 1) >l)) t)
           (dab {0 (cell 17)} 0 ramp))
@@ -24,8 +24,8 @@
    ; runs headless into a jug. (r 1) + (1 c) broadcasts to (r c); cy doubles y so
    ; the ripple is round in cell aspect (a cell is about twice as tall as wide).
    (ink-scene r c) (:
-     ycol (star-tray (L r 1) (jot r))
-     xrow (star-tray (L 1 c) (jot c))
+     ycol (star-tray [r 1] (jot r))
+     xrow (star-tray [1 c] (jot c))
      y2 (+ (* ycol 1.0) (* xrow 0.0))
      x2 (+ (* ycol 0.0) (* xrow 1.0))
      cx (- x2 (/ c 2.0))
@@ -40,7 +40,7 @@
 
      ; one frame: quantize the skin to ramp indices, say every cell into a jug,
      ; slurp it back as one write (home first; reset + newline per row)
-     (row j k i q) (? (< q c) (: _ (say j (pal (int (peep k (L i q) 0)))) (row j k i (+ q 1))) ())
+     (row j k i q) (? (< q c) (: _ (say j (pal (int (peep k [i q] 0)))) (row j k i (+ q 1))) ())
      (rows j k i) (? (< i r) (: _ (row j k i 0) _ (say j (+ esc "[0m\n")) (rows j k (+ i 1))) ())
      (frame t) (: k (// (* (+ (field t) 4.001) 2.9) 1)
                   j (jug 0)

@@ -43,7 +43,7 @@
  ; --- little list / vector helpers ---------------------------------------------------------------
  (zeros m)      (? (= m 0) () (link 0 (zeros (- m 1))))
  (unitrow m i)  (: (go j) (? (< j m) (link (? (= j i) 1 0) (go (+ j 1))) ()) (go 0))   ; e_i in dim m
- (constrow m k) (cat (zeros (- m 1)) (L k))             ; [0..0 k] -- a constant as a row's last coeff
+ (constrow m k) (cat (zeros (- m 1)) [k])               ; [0..0 k] -- a constant as a row's last coeff
  (idx l v)      (: (go xs i) (? (nul? xs) -1 (id? (cap xs) v) i (go (cup xs) (+ i 1))) (go l 0))
  (vdot a b)      (? (nul? a) 0 (+ (* (cap a) (cap b)) (vdot (cup a) (cup b))))
  (row2 f a b)   (? (nul? a) () (link (f (cap a) (cap b)) (row2 f (cup a) (cup b))))    ; elementwise binop
@@ -74,7 +74,7 @@
  (lcmat vars updates)
   (: m    (+ (tally vars) 1)
      rows (map (\ u (lclin vars u)) updates)
-     (? (any nul? rows) () (cat rows (L (unitrow m (- m 1))))))
+     (? (any nul? rows) () (cat rows [(unitrow m (- m 1))])))
 
  ; --- exact integer matrix algebra -----------------------------------------------------------------
  (ident m)      (: (go i) (? (< i m) (link (unitrow m i) (go (+ i 1))) ()) (go 0))
@@ -93,7 +93,7 @@
  (nilp? M)   (: D (tally M) (mzero? (mpow (msub M (ident D)) D)))   ; (M-I)^D = 0  <=>  nilpotent (index <= D)
 
  ; --- the closer + the dispatch classifier ---------------------------------------------------------
- (augvec inits) (cat inits (L 1))                       ; x0 = [inits.. 1]
+ (augvec inits) (cat inits [1])                         ; x0 = [inits.. 1]
  (cf-closed vars updates inits R n)                     ; the closed form: a number, or () on decline
   (: M (lcmat vars updates) rrow (lclin vars R)
      (? (|| (nul? M) (nul? rrow)) () (vdot rrow (matvec (mpow M n) (augvec inits)))))

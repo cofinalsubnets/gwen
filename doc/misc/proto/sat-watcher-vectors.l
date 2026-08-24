@@ -307,10 +307,10 @@
    ; body (args still on Sp). callee-saved r3/r11-r14 pushed after the guards.
    ; ===============================================================================
    (guard-ir i bufk)                                        ; Sp[i] must be a cask
-    (L (L 'ld 'r0 'r1 (* 8 i)) '(test r0 1) '(br ne deopt)
-       '(ld r7 r0 0) (L 'li 'r8 bufk) '(cmp r7 r8) '(br ne deopt))
+    [['ld 'r0 'r1 (* 8 i)] '(test r0 1) '(br ne deopt)
+     '(ld r7 r0 0) ['li 'r8 bufk] '(cmp r7 r8) '(br ne deopt)]
    (fixg-ir i)                                              ; Sp[i] must be a fixnum
-    (L (L 'ld 'r0 'r1 (* 8 i)) '(test r0 1) '(br eq deopt))
+    [['ld 'r0 'r1 (* 8 i)] '(test r0 1) '(br eq deopt)]
    epi-ir '((shl r0 1) (or r0 r0 1) (st r1 0 r0) (add r5 r5 16) (ld r7 r5 0) (jmpr r7))
    deopt2-ir '((label deopt) (ld r7 r5 8) (lea r5 r7 16) (ld r7 r5 0) (jmpr r7))   ; arity>=2
    deopt1-ir '((label deopt) (ld r7 r5 8) (mov r5 r7) (ld r7 r5 0) (jmpr r7))      ; arity 1
@@ -328,111 +328,111 @@
               (ld r0 r1 0)  (ld r0 r0 8) (lea r11 r0 16)
               (ld r0 r1 8)  (ld r0 r0 8) (lea r12 r0 16)
               (ld r0 r1 16) (ld r0 r0 8) (lea r13 r0 16))
-       (cat (L '(label drain)
-               '(ld r0 r11 8) '(ld r7 r11 0) '(cmp r0 r7) '(br ge noconf)
-               (L 'ldx 'r14 'r11 'r0 8 tro8)
-               '(xor r14 r14 1)
-               '(add r0 r0 1) '(st r11 8 r0)
-               (L 'ldx 'r3 'r11 'r14 8 wvo8)                      ; seg
-               '(leax r3 r13 r3 8 8)                              ; walk base = &wv[seg+1]
-               (L 'ldx 'r10 'r11 'r14 8 wvs8)                     ; sz
-               '(mov r9 r10) '(sub r9 r9 1)                       ; i = sz-1: BACKWARD (newest first)
-               '(label wloop)
-               '(cmp r9 0) '(br lt wend)
-               '(mov r0 r9) '(add r0 r0 r0)
-               '(ldx r8 r3 r0 8 0)                                ; blk
-               '(ldx r7 r3 r0 8 8)                                ; c2
-               '(mov r0 r8) '(sar r0 1) (L 'ldx 'r0 'r11 'r0 8 vao8)
-               '(cmp r0 r8) '(br eq inext)                        ; blocker satisfied: i++, ZERO stores
-               '(test r7 1) '(br eq longc)
-               '(cmp r0 0) '(br ne bconfl)                        ; BINARY, not sat: free -> unit, else conflict
-               '(sar r7 1) '(add r7 r7 1)                         ; unit: assign(blk, cid+1)
-               '(mov r0 r8) '(sar r0 1)
-               (L 'stx 'r11 'r0 8 vao8 'r8)
-               (L 'stx 'r11 'r0 8 rso8 'r7)
-               '(ld r7 r11 16) (L 'stx 'r11 'r0 8 lvo8 'r7)
-               '(ld r7 r11 0) (L 'stx 'r11 'r7 8 tro8 'r8) '(add r7 r7 1) '(st r11 0 r7)
-               '(jmp inext)
-               '(label bconfl)
-               '(sar r7 1) '(mov r8 r7) '(jmp confl)
-               '(label longc)
-               '(sar r7 1)                                        ; cid
-               '(ldx r0 r12 r7 8 8) '(cmp r0 r14) '(br ne nsw)    ; normalize: f at slot cid+2
-               '(ldx r8 r12 r7 8 16) '(stx r12 r7 8 8 r8) '(stx r12 r7 8 16 r0)
-               '(label nsw)
-               '(ldx r8 r12 r7 8 8)                               ; oth
-               '(mov r0 r8) '(sar r0 1) (L 'ldx 'r0 'r11 'r0 8 vao8)
-               '(cmp r0 r8) '(br eq fresh)                        ; sat by oth: freshen blocker, i++
-               '(st r11 56 r8)                                    ; w7 = oth
-               '(ldx r0 r12 r7 8 0) '(add r0 r0 r7) '(add r0 r0 1) '(push r0)   ; [lim]
-               '(add r0 r7 3)                                     ; j2
-               '(label scan)
-               '(ld r8 sp 0) '(cmp r0 r8) '(br ge scfail)
-               '(ldx r8 r12 r0 8 0)                               ; e
-               '(mov r7 r8) '(sar r7 1) (L 'ldx 'r7 'r11 'r7 8 vao8)
-               '(xor r8 r8 1)
-               '(cmp r7 r8) '(br ne found)                        ; not falsified
-               '(add r0 r0 1) '(jmp scan)
-               '(label found)
-               '(add sp sp 8)
-               '(xor r8 r8 1)                                     ; e (r8); j2 (r0)
-               '(push r0)                                         ; [j2]
-               (L 'ldx 'r0 'r11 'r8 8 wvs8)                       ; sz2
-               (L 'ldx 'r7 'r11 'r8 8 wvo8)                       ; sg2
-               '(cmp r7 0) '(br eq growx)
-               '(push r7)                                         ; [sg2 j2]
-               '(ldx r7 r13 r7 8 0)                               ; cap
-               '(cmp r0 r7) '(br ge growy)
-               '(pop r7)                                          ; sg2
-               '(add r7 r7 1) '(add r7 r7 r0) '(add r7 r7 r0)     ; addr = sg2+1+2sz2
-               '(add r0 r0 1) (L 'stx 'r11 'r8 8 wvs8 'r0)        ; commit sz2+1
-               '(ld r0 r11 56) '(stx r13 r7 8 0 r0)               ; blocker = oth
-               '(mov r0 r9) '(add r0 r0 r0) '(ldx r0 r3 r0 8 8) '(stx r13 r7 8 8 r0)   ; c2
-               '(pop r0)                                          ; j2
-               '(stx r12 r0 8 0 r14)                              ; ar[j2] = f
-               '(mov r7 r9) '(add r7 r7 r7) '(ldx r7 r3 r7 8 8) '(sar r7 1)   ; cid reload
-               '(stx r12 r7 8 16 r8)                              ; ar[cid+2] = e
-               '(sub r10 r10 1)                                   ; swap-remove: last -> slot i
-               '(mov r0 r10) '(add r0 r0 r0)
-               '(ldx r7 r3 r0 8 0) '(ldx r8 r3 r0 8 8)
-               '(mov r0 r9) '(add r0 r0 r0)
-               '(stx r3 r0 8 0 r7) '(stx r3 r0 8 8 r8)
-               '(jmp inext)                                       ; last was already visited: i--
-               '(label growy)
-               '(pop r7)
-               '(label growx)
-               '(pop r0)                                          ; e (r8) survives
-               (L 'stx 'r11 'r14 8 wvs8 'r10)                     ; commit sz
-               '(ld r0 r11 8) '(sub r0 r0 1) '(st r11 8 r0)       ; qhead--: f re-propagates
-               '(mov r0 r8) '(neg r0) '(sub r0 r0 2) '(jmp ret)   ; -2-e: the grow request
-               '(label scfail)
-               '(add sp sp 8)
-               '(ld r8 r11 56)                                    ; oth
-               '(mov r0 r8) '(sar r0 1) (L 'ldx 'r7 'r11 'r0 8 vao8)
-               '(cmp r7 0) '(br ne lconfl)
-               '(mov r7 r9) '(add r7 r7 r7) '(ldx r7 r3 r7 8 8) '(sar r7 1) '(add r7 r7 1)   ; cid+1
-               '(mov r0 r8) '(sar r0 1)
-               (L 'stx 'r11 'r0 8 vao8 'r8)                       ; unit: assign(oth, cid+1)
-               (L 'stx 'r11 'r0 8 rso8 'r7)
-               '(ld r7 r11 16) (L 'stx 'r11 'r0 8 lvo8 'r7)
-               '(ld r7 r11 0) (L 'stx 'r11 'r7 8 tro8 'r8) '(add r7 r7 1) '(st r11 0 r7)
-               '(jmp fresh)                                       ; freshen blocker to oth
-               '(label lconfl)
-               '(mov r8 r9) '(add r8 r8 r8) '(ldx r8 r3 r8 8 8) '(sar r8 1)   ; cid
-               '(label confl)
-               (L 'stx 'r11 'r14 8 wvs8 'r10)                     ; commit sz
-               '(mov r0 r8) '(jmp ret)
-               '(label fresh)                                     ; store r8 as the blocker at slot i
-               '(mov r0 r9) '(add r0 r0 r0) '(stx r3 r0 8 0 r8)
-               '(label inext)
-               '(sub r9 r9 1) '(jmp wloop)
-               '(label wend)
-               (L 'stx 'r11 'r14 8 wvs8 'r10)
-               '(jmp drain)
-               '(label noconf)
-               '(li r0 -1)
-               '(label ret)
-               '(pop r14) '(pop r13) '(pop r12) '(pop r11) '(pop r3))
+       (cat ['(label drain)
+             '(ld r0 r11 8) '(ld r7 r11 0) '(cmp r0 r7) '(br ge noconf)
+             ['ldx 'r14 'r11 'r0 8 tro8]
+             '(xor r14 r14 1)
+             '(add r0 r0 1) '(st r11 8 r0)
+             ['ldx 'r3 'r11 'r14 8 wvo8]                          ; seg
+             '(leax r3 r13 r3 8 8)                                ; walk base = &wv[seg+1]
+             ['ldx 'r10 'r11 'r14 8 wvs8]                         ; sz
+             '(mov r9 r10) '(sub r9 r9 1)                         ; i = sz-1: BACKWARD (newest first)
+             '(label wloop)
+             '(cmp r9 0) '(br lt wend)
+             '(mov r0 r9) '(add r0 r0 r0)
+             '(ldx r8 r3 r0 8 0)                                  ; blk
+             '(ldx r7 r3 r0 8 8)                                  ; c2
+             '(mov r0 r8) '(sar r0 1) ['ldx 'r0 'r11 'r0 8 vao8]
+             '(cmp r0 r8) '(br eq inext)                          ; blocker satisfied: i++, ZERO stores
+             '(test r7 1) '(br eq longc)
+             '(cmp r0 0) '(br ne bconfl)                          ; BINARY, not sat: free -> unit, else conflict
+             '(sar r7 1) '(add r7 r7 1)                           ; unit: assign(blk, cid+1)
+             '(mov r0 r8) '(sar r0 1)
+             ['stx 'r11 'r0 8 vao8 'r8]
+             ['stx 'r11 'r0 8 rso8 'r7]
+             '(ld r7 r11 16) ['stx 'r11 'r0 8 lvo8 'r7]
+             '(ld r7 r11 0) ['stx 'r11 'r7 8 tro8 'r8] '(add r7 r7 1) '(st r11 0 r7)
+             '(jmp inext)
+             '(label bconfl)
+             '(sar r7 1) '(mov r8 r7) '(jmp confl)
+             '(label longc)
+             '(sar r7 1)                                          ; cid
+             '(ldx r0 r12 r7 8 8) '(cmp r0 r14) '(br ne nsw)      ; normalize: f at slot cid+2
+             '(ldx r8 r12 r7 8 16) '(stx r12 r7 8 8 r8) '(stx r12 r7 8 16 r0)
+             '(label nsw)
+             '(ldx r8 r12 r7 8 8)                                 ; oth
+             '(mov r0 r8) '(sar r0 1) ['ldx 'r0 'r11 'r0 8 vao8]
+             '(cmp r0 r8) '(br eq fresh)                          ; sat by oth: freshen blocker, i++
+             '(st r11 56 r8)                                      ; w7 = oth
+             '(ldx r0 r12 r7 8 0) '(add r0 r0 r7) '(add r0 r0 1) '(push r0)     ; [lim]
+             '(add r0 r7 3)                                       ; j2
+             '(label scan)
+             '(ld r8 sp 0) '(cmp r0 r8) '(br ge scfail)
+             '(ldx r8 r12 r0 8 0)                                 ; e
+             '(mov r7 r8) '(sar r7 1) ['ldx 'r7 'r11 'r7 8 vao8]
+             '(xor r8 r8 1)
+             '(cmp r7 r8) '(br ne found)                          ; not falsified
+             '(add r0 r0 1) '(jmp scan)
+             '(label found)
+             '(add sp sp 8)
+             '(xor r8 r8 1)                                       ; e (r8); j2 (r0)
+             '(push r0)                                           ; [j2]
+             ['ldx 'r0 'r11 'r8 8 wvs8]                           ; sz2
+             ['ldx 'r7 'r11 'r8 8 wvo8]                           ; sg2
+             '(cmp r7 0) '(br eq growx)
+             '(push r7)                                           ; [sg2 j2]
+             '(ldx r7 r13 r7 8 0)                                 ; cap
+             '(cmp r0 r7) '(br ge growy)
+             '(pop r7)                                            ; sg2
+             '(add r7 r7 1) '(add r7 r7 r0) '(add r7 r7 r0)       ; addr = sg2+1+2sz2
+             '(add r0 r0 1) ['stx 'r11 'r8 8 wvs8 'r0]            ; commit sz2+1
+             '(ld r0 r11 56) '(stx r13 r7 8 0 r0)                 ; blocker = oth
+             '(mov r0 r9) '(add r0 r0 r0) '(ldx r0 r3 r0 8 8) '(stx r13 r7 8 8 r0)     ; c2
+             '(pop r0)                                            ; j2
+             '(stx r12 r0 8 0 r14)                                ; ar[j2] = f
+             '(mov r7 r9) '(add r7 r7 r7) '(ldx r7 r3 r7 8 8) '(sar r7 1)     ; cid reload
+             '(stx r12 r7 8 16 r8)                                ; ar[cid+2] = e
+             '(sub r10 r10 1)                                     ; swap-remove: last -> slot i
+             '(mov r0 r10) '(add r0 r0 r0)
+             '(ldx r7 r3 r0 8 0) '(ldx r8 r3 r0 8 8)
+             '(mov r0 r9) '(add r0 r0 r0)
+             '(stx r3 r0 8 0 r7) '(stx r3 r0 8 8 r8)
+             '(jmp inext)                                         ; last was already visited: i--
+             '(label growy)
+             '(pop r7)
+             '(label growx)
+             '(pop r0)                                            ; e (r8) survives
+             ['stx 'r11 'r14 8 wvs8 'r10]                         ; commit sz
+             '(ld r0 r11 8) '(sub r0 r0 1) '(st r11 8 r0)         ; qhead--: f re-propagates
+             '(mov r0 r8) '(neg r0) '(sub r0 r0 2) '(jmp ret)     ; -2-e: the grow request
+             '(label scfail)
+             '(add sp sp 8)
+             '(ld r8 r11 56)                                      ; oth
+             '(mov r0 r8) '(sar r0 1) ['ldx 'r7 'r11 'r0 8 vao8]
+             '(cmp r7 0) '(br ne lconfl)
+             '(mov r7 r9) '(add r7 r7 r7) '(ldx r7 r3 r7 8 8) '(sar r7 1) '(add r7 r7 1)     ; cid+1
+             '(mov r0 r8) '(sar r0 1)
+             ['stx 'r11 'r0 8 vao8 'r8]                           ; unit: assign(oth, cid+1)
+             ['stx 'r11 'r0 8 rso8 'r7]
+             '(ld r7 r11 16) ['stx 'r11 'r0 8 lvo8 'r7]
+             '(ld r7 r11 0) ['stx 'r11 'r7 8 tro8 'r8] '(add r7 r7 1) '(st r11 0 r7)
+             '(jmp fresh)                                         ; freshen blocker to oth
+             '(label lconfl)
+             '(mov r8 r9) '(add r8 r8 r8) '(ldx r8 r3 r8 8 8) '(sar r8 1)     ; cid
+             '(label confl)
+             ['stx 'r11 'r14 8 wvs8 'r10]                         ; commit sz
+             '(mov r0 r8) '(jmp ret)
+             '(label fresh)                                       ; store r8 as the blocker at slot i
+             '(mov r0 r9) '(add r0 r0 r0) '(stx r3 r0 8 0 r8)
+             '(label inext)
+             '(sub r9 r9 1) '(jmp wloop)
+             '(label wend)
+             ['stx 'r11 'r14 8 wvs8 'r10]
+             '(jmp drain)
+             '(label noconf)
+             '(li r0 -1)
+             '(label ret)
+             '(pop r14) '(pop r13) '(pop r12) '(pop r11) '(pop r3)]
             (cat epi-ir deopt2-ir)))))))
    ; --- kernel 2: the CONFLICT handler -- (conf fx ar wv confl). ---------------------
    ; registers: r11=fx r12=ar r13=wv (pushed), r3 scratch (pushed), r14 counter/glue
@@ -440,41 +440,41 @@
    ; holds the current skip-var (later: the learnt's c2). the twin above is the spec.
    (cls-ir nv seo8)                                         ; clear the seen section (fresh labels)
     (: L1 (mint 0) L2 (mint 0)
-       (L '(li r0 0) '(li r8 0) (L 'label L1) (L 'cmp 'r0 nv) (L 'br 'gt L2)
-          (L 'stx 'r11 'r0 8 seo8 'r8) '(add r0 r0 1) (L 'jmp L1) (L 'label L2)))
+       ['(li r0 0) '(li r8 0) ['label L1] ['cmp 'r0 nv] ['br 'gt L2]
+        ['stx 'r11 'r0 8 seo8 'r8] '(add r0 r0 1) ['jmp L1] ['label L2]])
    (abs-ir lvo8 seo8 aco8)                                  ; absorb the clause at r7 (fresh labels);
     (: Ll (mint 0) Lt (mint 0) Ln (mint 0) Le (mint 0)      ; counter r14, write r9, skipv fx w7
-       (L '(ldx r0 r12 r7 8 0) '(add r0 r0 r7) '(add r0 r0 1) '(push r0)
-          '(add r7 r7 1)
-          (L 'label Ll) '(ld r0 sp 0) '(cmp r7 r0) (L 'br 'ge Le)
-          '(ldx r3 r12 r7 8 0)
-          '(mov r0 r3) '(sar r0 1)
-          '(ld r8 r11 56) '(cmp r0 r8) (L 'br 'eq Ln)
-          (L 'ldx 'r8 'r11 'r0 8 seo8) '(cmp r8 0) (L 'br 'ne Ln)
-          (L 'ldx 'r8 'r11 'r0 8 lvo8) '(cmp r8 0) (L 'br 'eq Ln)
-          '(li r8 1) (L 'stx 'r11 'r0 8 seo8 'r8)
-          (L 'ldx 'r8 'r11 'r0 8 aco8) '(ld r3 r11 48) '(add r8 r8 r3) (L 'stx 'r11 'r0 8 aco8 'r8)
-          (L 'ldx 'r8 'r11 'r0 8 lvo8) '(ld r3 r11 16) '(cmp r8 r3) (L 'br 'ne Lt)
-          '(add r14 r14 1) (L 'jmp Ln)
-          (L 'label Lt) '(ldx r3 r12 r7 8 0) '(stx r12 r9 8 0 r3) '(add r9 r9 1)
-          (L 'label Ln) '(add r7 r7 1) (L 'jmp Ll)
-          (L 'label Le) '(add sp sp 8)))
+       ['(ldx r0 r12 r7 8 0) '(add r0 r0 r7) '(add r0 r0 1) '(push r0)
+        '(add r7 r7 1)
+        ['label Ll] '(ld r0 sp 0) '(cmp r7 r0) ['br 'ge Le]
+        '(ldx r3 r12 r7 8 0)
+        '(mov r0 r3) '(sar r0 1)
+        '(ld r8 r11 56) '(cmp r0 r8) ['br 'eq Ln]
+        ['ldx 'r8 'r11 'r0 8 seo8] '(cmp r8 0) ['br 'ne Ln]
+        ['ldx 'r8 'r11 'r0 8 lvo8] '(cmp r8 0) ['br 'eq Ln]
+        '(li r8 1) ['stx 'r11 'r0 8 seo8 'r8]
+        ['ldx 'r8 'r11 'r0 8 aco8] '(ld r3 r11 48) '(add r8 r8 r3) ['stx 'r11 'r0 8 aco8 'r8]
+        ['ldx 'r8 'r11 'r0 8 lvo8] '(ld r3 r11 16) '(cmp r8 r3) ['br 'ne Lt]
+        '(add r14 r14 1) ['jmp Ln]
+        ['label Lt] '(ldx r3 r12 r7 8 0) '(stx r12 r9 8 0 r3) '(add r9 r9 1)
+        ['label Ln] '(add r7 r7 1) ['jmp Ll]
+        ['label Le] '(add sp sp 8)])
    (try-ir wvo8 wvs8 bit)                                   ; append the learnt watcher (el r7, blk r8, c2
     (: Lp (mint 0) Lpp (mint 0) Ld (mint 0)                 ; in w7) or set the pend bit in r9 (fresh labels)
-       (L (L 'ldx 'r0 'r11 'r7 8 wvo8)
-          '(cmp r0 0) (L 'br 'eq Lp)
-          '(ldx r10 r13 r0 8 0)                             ; cap
-          '(push r8)
-          (L 'ldx 'r8 'r11 'r7 8 wvs8)                      ; sz
-          '(cmp r8 r10) (L 'br 'ge Lpp)
-          '(mov r10 r8) '(add r10 r10 r10) '(add r10 r10 r0) '(add r10 r10 1)   ; addr
-          '(add r8 r8 1) (L 'stx 'r11 'r7 8 wvs8 'r8)
-          '(pop r0) '(stx r13 r10 8 0 r0)                   ; blocker
-          '(ld r0 r11 56) '(stx r13 r10 8 8 r0)             ; c2
-          (L 'jmp Ld)
-          (L 'label Lpp) '(add sp sp 8)
-          (L 'label Lp) (L 'or 'r9 'r9 bit)
-          (L 'label Ld)))
+       [['ldx 'r0 'r11 'r7 8 wvo8]
+        '(cmp r0 0) ['br 'eq Lp]
+        '(ldx r10 r13 r0 8 0)                               ; cap
+        '(push r8)
+        ['ldx 'r8 'r11 'r7 8 wvs8]                          ; sz
+        '(cmp r8 r10) ['br 'ge Lpp]
+        '(mov r10 r8) '(add r10 r10 r10) '(add r10 r10 r0) '(add r10 r10 1)     ; addr
+        '(add r8 r8 1) ['stx 'r11 'r7 8 wvs8 'r8]
+        '(pop r0) '(stx r13 r10 8 0 r0)                     ; blocker
+        '(ld r0 r11 56) '(stx r13 r10 8 8 r0)               ; c2
+        ['jmp Ld]
+        ['label Lpp] '(add sp sp 8)
+        ['label Lp] ['or 'r9 'r9 bit]
+        ['label Ld]])
    (fconf-ir nv)
     (: tro8 64 lvo8 (* 8 (lvo-of nv)) rso8 (* 8 (rso-of nv)) wvo8 (* 8 (wvo-of nv)) wvs8 (* 8 (wvs-of nv))
        vao8 (* 8 (vao-of nv)) aco8 (* 8 (aco-of nv)) pho8 (* 8 (pho-of nv)) seo8 (* 8 (seo-of nv))
@@ -491,18 +491,18 @@
               (ld r9 r11 32) (add r9 r9 2)                        ; widx = cid0+2
               (li r0 0) (st r11 56 r0))                           ; skipv = 0
        (cat (abs-ir lvo8 seo8 aco8)                               ; phase 2: absorb the conflict clause
-       (cat (L '(ld r10 r11 0) '(sub r10 r10 1)                   ; t = top-1
-               '(label walk)
-               (L 'ldx 'r0 'r11 'r10 8 tro8)                      ; np = trail[t]
-               '(mov r3 r0) '(sar r3 1)
-               (L 'ldx 'r8 'r11 'r3 8 seo8) '(cmp r8 0) '(br ne got)
-               '(sub r10 r10 1) '(jmp walk)
-               '(label got)
-               '(li r8 0) (L 'stx 'r11 'r3 8 seo8 'r8)            ; seen[v] = 0
-               '(sub r14 r14 1) '(cmp r14 0) '(br eq uip)
-               (L 'ldx 'r7 'r11 'r3 8 rso8) '(sub r7 r7 1)        ; cs = rsn[v]-1
-               '(st r11 56 r3)                                    ; skipv = v
-               '(push r10))
+       (cat ['(ld r10 r11 0) '(sub r10 r10 1)                     ; t = top-1
+             '(label walk)
+             ['ldx 'r0 'r11 'r10 8 tro8]                          ; np = trail[t]
+             '(mov r3 r0) '(sar r3 1)
+             ['ldx 'r8 'r11 'r3 8 seo8] '(cmp r8 0) '(br ne got)
+             '(sub r10 r10 1) '(jmp walk)
+             '(label got)
+             '(li r8 0) ['stx 'r11 'r3 8 seo8 'r8]                ; seen[v] = 0
+             '(sub r14 r14 1) '(cmp r14 0) '(br eq uip)
+             ['ldx 'r7 'r11 'r3 8 rso8] '(sub r7 r7 1)            ; cs = rsn[v]-1
+             '(st r11 56 r3)                                      ; skipv = v
+             '(push r10)]
        (cat (abs-ir lvo8 seo8 aco8)                               ; absorb the reason clause
        (cat '((pop r10) (sub r10 r10 1) (jmp walk)
               (label uip)
@@ -515,83 +515,83 @@
               (ldx r0 r12 r10 8 0)
               (mov r3 r0) (sar r3 1)
               (st r11 56 r3))                                     ; w7 = v
-       (cat (L (L 'ldx 'r7 'r11 'r3 8 rso8)
-               '(cmp r7 0) '(br eq mkeep)
-               '(sub r7 r7 1)
-               '(ldx r0 r12 r7 8 0) '(add r0 r0 r7) '(push r0)    ; inner lim (inclusive)
-               '(add r7 r7 1)
-               '(label mck) '(ld r0 sp 0) '(cmp r7 r0) '(br gt mred)
-               '(ldx r0 r12 r7 8 0) '(sar r0 1)
-               '(ld r8 r11 56) '(cmp r0 r8) '(br eq mcknx)
-               (L 'ldx 'r8 'r11 'r0 8 lvo8) '(cmp r8 0) '(br eq mcknx)
-               (L 'ldx 'r8 'r11 'r0 8 seo8) '(cmp r8 0) '(br ne mcknx)
-               '(add sp sp 8) '(jmp mkeep)                        ; a fresh lit -> NOT redundant
-               '(label mcknx) '(add r7 r7 1) '(jmp mck)
-               '(label mred) '(add sp sp 8) '(jmp mnnext)
-               '(label mkeep) '(ldx r0 r12 r10 8 0) '(stx r12 r9 8 0 r0) '(add r9 r9 1)
-               '(label mnnext) '(add r10 r10 1) '(jmp mn)
-               '(label mnend) '(add sp sp 8))                     ; r9 = wend after compaction
+       (cat [['ldx 'r7 'r11 'r3 8 rso8]
+             '(cmp r7 0) '(br eq mkeep)
+             '(sub r7 r7 1)
+             '(ldx r0 r12 r7 8 0) '(add r0 r0 r7) '(push r0)      ; inner lim (inclusive)
+             '(add r7 r7 1)
+             '(label mck) '(ld r0 sp 0) '(cmp r7 r0) '(br gt mred)
+             '(ldx r0 r12 r7 8 0) '(sar r0 1)
+             '(ld r8 r11 56) '(cmp r0 r8) '(br eq mcknx)
+             ['ldx 'r8 'r11 'r0 8 lvo8] '(cmp r8 0) '(br eq mcknx)
+             ['ldx 'r8 'r11 'r0 8 seo8] '(cmp r8 0) '(br ne mcknx)
+             '(add sp sp 8) '(jmp mkeep)                          ; a fresh lit -> NOT redundant
+             '(label mcknx) '(add r7 r7 1) '(jmp mck)
+             '(label mred) '(add sp sp 8) '(jmp mnnext)
+             '(label mkeep) '(ldx r0 r12 r10 8 0) '(stx r12 r9 8 0 r0) '(add r9 r9 1)
+             '(label mnnext) '(add r10 r10 1) '(jmp mn)
+             '(label mnend) '(add sp sp 8)]                       ; r9 = wend after compaction
        (cat (cls-ir nv seo8)                                      ; phase 4: clear seen (-> level marks)
-       (cat (L '(ld r0 r11 16)                                    ; mark dl
-               '(li r8 1) (L 'stx 'r11 'r0 8 seo8 'r8)
-               '(li r14 1) '(li r10 0)                            ; glue=1, bj=0
-               '(ld r7 r11 32) '(add r7 r7 2)
-               '(label gb) '(cmp r7 r9) '(br ge gbe)
-               '(ldx r0 r12 r7 8 0) '(sar r0 1)
-               (L 'ldx 'r0 'r11 'r0 8 lvo8)                       ; L
-               '(cmp r10 r0) '(br ge gb1) '(mov r10 r0)
-               '(label gb1)
-               (L 'ldx 'r8 'r11 'r0 8 seo8) '(cmp r8 0) '(br ne gb2)
-               '(li r8 1) (L 'stx 'r11 'r0 8 seo8 'r8) '(add r14 r14 1)
-               '(label gb2) '(add r7 r7 1) '(jmp gb)
-               '(label gbe)
+       (cat ['(ld r0 r11 16)                                      ; mark dl
+             '(li r8 1) ['stx 'r11 'r0 8 seo8 'r8]
+             '(li r14 1) '(li r10 0)                              ; glue=1, bj=0
+             '(ld r7 r11 32) '(add r7 r7 2)
+             '(label gb) '(cmp r7 r9) '(br ge gbe)
+             '(ldx r0 r12 r7 8 0) '(sar r0 1)
+             ['ldx 'r0 'r11 'r0 8 lvo8]                           ; L
+             '(cmp r10 r0) '(br ge gb1) '(mov r10 r0)
+             '(label gb1)
+             ['ldx 'r8 'r11 'r0 8 seo8] '(cmp r8 0) '(br ne gb2)
+             '(li r8 1) ['stx 'r11 'r0 8 seo8 'r8] '(add r14 r14 1)
+             '(label gb2) '(add r7 r7 1) '(jmp gb)
+             '(label gbe)
                ; phase 5: backjump to bj (r10)
-               '(ld r7 r11 0)
-               '(label bjl) '(cmp r7 0) '(br eq bje)
-               '(mov r8 r7) '(sub r8 r8 1)
-               (L 'ldx 'r0 'r11 'r8 8 tro8)                       ; el = trail[t-1]
-               '(mov r3 r0) '(sar r3 1)
-               (L 'ldx 'r8 'r11 'r3 8 lvo8) '(cmp r8 r10) '(br le bje)
-               '(and r0 r0 1) '(add r0 r0 1) (L 'stx 'r11 'r3 8 pho8 'r0)
-               '(li r0 0) (L 'stx 'r11 'r3 8 vao8 'r0) (L 'stx 'r11 'r3 8 lvo8 'r0) (L 'stx 'r11 'r3 8 rso8 'r0)
-               '(sub r7 r7 1) '(jmp bjl)
-               '(label bje) '(st r11 0 r7) '(st r11 8 r7) '(st r11 16 r10)
+             '(ld r7 r11 0)
+             '(label bjl) '(cmp r7 0) '(br eq bje)
+             '(mov r8 r7) '(sub r8 r8 1)
+             ['ldx 'r0 'r11 'r8 8 tro8]                           ; el = trail[t-1]
+             '(mov r3 r0) '(sar r3 1)
+             ['ldx 'r8 'r11 'r3 8 lvo8] '(cmp r8 r10) '(br le bje)
+             '(and r0 r0 1) '(add r0 r0 1) ['stx 'r11 'r3 8 pho8 'r0]
+             '(li r0 0) ['stx 'r11 'r3 8 vao8 'r0] ['stx 'r11 'r3 8 lvo8 'r0] ['stx 'r11 'r3 8 rso8 'r0]
+             '(sub r7 r7 1) '(jmp bjl)
+             '(label bje) '(st r11 0 r7) '(st r11 8 r7) '(st r11 16 r10)
                ; phase 6: size, aru, reorder, watches
-               '(ld r3 r11 32)                                    ; cid0
-               '(mov r0 r9) '(sub r0 r0 r3) '(sub r0 r0 1)        ; size
-               '(stx r12 r3 8 0 r0) '(st r11 32 r9)               ; ar[cid0]=size; aru=wend
-               '(cmp r0 2) '(br lt small)
-               '(mov r10 r3) '(add r10 r10 2)                     ; reorder: argmax level
-               '(ldx r0 r12 r10 8 0) '(sar r0 1) (L 'ldx 'r8 'r11 'r0 8 lvo8)
-               '(mov r7 r10) '(add r7 r7 1)
-               '(label ro) '(cmp r7 r9) '(br ge roe)
-               '(ldx r0 r12 r7 8 0) '(sar r0 1) (L 'ldx 'r0 'r11 'r0 8 lvo8)
-               '(cmp r0 r8) '(br le ro2) '(mov r8 r0) '(mov r10 r7)
-               '(label ro2) '(add r7 r7 1) '(jmp ro)
-               '(label roe)
-               '(ldx r0 r12 r3 8 16) '(ldx r7 r12 r10 8 0) '(stx r12 r3 8 16 r7) '(stx r12 r10 8 0 r0)
-               '(li r9 0)                                         ; pend bits
-               '(mov r7 r3) '(add r7 r7 r7)                       ; c2 = 2*cid0 (+1 if binary)
-               '(ldx r0 r12 r3 8 0) '(cmp r0 2) '(br ne c2n) '(add r7 r7 1)
-               '(label c2n) '(st r11 56 r7)                       ; w7 = c2
-               '(ldx r7 r12 r3 8 8) '(ldx r8 r12 r3 8 16))        ; el=l0, blk=l1
+             '(ld r3 r11 32)                                      ; cid0
+             '(mov r0 r9) '(sub r0 r0 r3) '(sub r0 r0 1)          ; size
+             '(stx r12 r3 8 0 r0) '(st r11 32 r9)                 ; ar[cid0]=size; aru=wend
+             '(cmp r0 2) '(br lt small)
+             '(mov r10 r3) '(add r10 r10 2)                       ; reorder: argmax level
+             '(ldx r0 r12 r10 8 0) '(sar r0 1) ['ldx 'r8 'r11 'r0 8 lvo8]
+             '(mov r7 r10) '(add r7 r7 1)
+             '(label ro) '(cmp r7 r9) '(br ge roe)
+             '(ldx r0 r12 r7 8 0) '(sar r0 1) ['ldx 'r0 'r11 'r0 8 lvo8]
+             '(cmp r0 r8) '(br le ro2) '(mov r8 r0) '(mov r10 r7)
+             '(label ro2) '(add r7 r7 1) '(jmp ro)
+             '(label roe)
+             '(ldx r0 r12 r3 8 16) '(ldx r7 r12 r10 8 0) '(stx r12 r3 8 16 r7) '(stx r12 r10 8 0 r0)
+             '(li r9 0)                                           ; pend bits
+             '(mov r7 r3) '(add r7 r7 r7)                         ; c2 = 2*cid0 (+1 if binary)
+             '(ldx r0 r12 r3 8 0) '(cmp r0 2) '(br ne c2n) '(add r7 r7 1)
+             '(label c2n) '(st r11 56 r7)                         ; w7 = c2
+             '(ldx r7 r12 r3 8 8) '(ldx r8 r12 r3 8 16)]          ; el=l0, blk=l1
        (cat (try-ir wvo8 wvs8 1)
-       (cat (L '(ldx r7 r12 r3 8 16) '(ldx r8 r12 r3 8 8))        ; el=l1, blk=l0
+       (cat ['(ldx r7 r12 r3 8 16) '(ldx r8 r12 r3 8 8)]          ; el=l1, blk=l0
        (cat (try-ir wvo8 wvs8 2)
-       (cat (L '(jmp assert)
-               '(label small) '(li r9 0)
-               '(label assert)                                    ; phase 7: assign learnt[0], reason cid0+1
-               '(ldx r8 r12 r3 8 8) '(mov r0 r8) '(sar r0 1)
-               (L 'stx 'r11 'r0 8 vao8 'r8)
-               '(ld r7 r11 16) (L 'stx 'r11 'r0 8 lvo8 'r7)
-               '(mov r7 r3) '(add r7 r7 1) (L 'stx 'r11 'r0 8 rso8 'r7)
-               '(ld r7 r11 0) (L 'stx 'r11 'r7 8 tro8 'r8) '(add r7 r7 1) '(st r11 0 r7)
-               '(mov r0 r3) '(shl r0 8)                           ; return (cid0<<8)|(pend<<6)|min(glue,63)
-               '(cmp r14 63) '(br le pk) '(li r14 63)
-               '(label pk) '(or r0 r0 r14) '(shl r9 6) '(or r0 r0 r9) '(jmp fin)
-               '(label retm1) '(li r0 -1)
-               '(label fin)
-               '(pop r14) '(pop r13) '(pop r12) '(pop r11) '(pop r3))
+       (cat ['(jmp assert)
+             '(label small) '(li r9 0)
+             '(label assert)                                      ; phase 7: assign learnt[0], reason cid0+1
+             '(ldx r8 r12 r3 8 8) '(mov r0 r8) '(sar r0 1)
+             ['stx 'r11 'r0 8 vao8 'r8]
+             '(ld r7 r11 16) ['stx 'r11 'r0 8 lvo8 'r7]
+             '(mov r7 r3) '(add r7 r7 1) ['stx 'r11 'r0 8 rso8 'r7]
+             '(ld r7 r11 0) ['stx 'r11 'r7 8 tro8 'r8] '(add r7 r7 1) '(st r11 0 r7)
+             '(mov r0 r3) '(shl r0 8)                             ; return (cid0<<8)|(pend<<6)|min(glue,63)
+             '(cmp r14 63) '(br le pk) '(li r14 63)
+             '(label pk) '(or r0 r0 r14) '(shl r9 6) '(or r0 r0 r9) '(jmp fin)
+             '(label retm1) '(li r0 -1)
+             '(label fin)
+             '(pop r14) '(pop r13) '(pop r12) '(pop r11) '(pop r3)]
             (cat epi-ir deopt2-ir))))))))))))))))))))
    ; --- kernel 3: DECIDE -- (dec fx). caller-saved regs only, no pushes. -------------
    (fdec-ir nv)
@@ -600,26 +600,26 @@
        (cat (guard-ir 0 bufk)
        (cat '((ld r9 r1 0) (ld r9 r9 8) (lea r9 r9 16)
               (li r7 0) (li r8 -1) (li r0 1))
-       (cat (L '(label dl) (L 'cmp 'r0 nv) '(br gt dle)
-               (L 'ldx 'r3 'r9 'r0 8 vao8) '(cmp r3 0) '(br ne dn)
-               (L 'ldx 'r3 'r9 'r0 8 aco8)
-               '(cmp r7 0) '(br eq take)
-               '(cmp r3 r8) '(br gt take) '(jmp dn)
-               '(label take) '(mov r7 r0) '(mov r8 r3)
-               '(label dn) '(add r0 r0 1) '(jmp dl)
-               '(label dle) '(cmp r7 0) '(br eq ret0)
-               '(ld r0 r9 16) '(add r0 r0 1) '(st r9 16 r0)       ; level++
-               (L 'ldx 'r3 'r9 'r7 8 pho8)
-               '(mov r0 r7) '(add r0 r0 r0)                       ; el = 2v (+1 unless phase 1)
-               '(cmp r3 1) '(br eq pos) '(add r0 r0 1)
-               '(label pos)
-               (L 'stx 'r9 'r7 8 vao8 'r0)                        ; assign(el, 0)
-               '(ld r3 r9 16) (L 'stx 'r9 'r7 8 lvo8 'r3)
-               '(li r3 0) (L 'stx 'r9 'r7 8 rso8 'r3)
-               '(ld r3 r9 0) (L 'stx 'r9 'r3 8 tro8 'r0) '(add r3 r3 1) '(st r9 0 r3)
-               '(mov r0 r7) '(jmp dfin)
-               '(label ret0) '(li r0 0)
-               '(label dfin))
+       (cat ['(label dl) ['cmp 'r0 nv] '(br gt dle)
+             ['ldx 'r3 'r9 'r0 8 vao8] '(cmp r3 0) '(br ne dn)
+             ['ldx 'r3 'r9 'r0 8 aco8]
+             '(cmp r7 0) '(br eq take)
+             '(cmp r3 r8) '(br gt take) '(jmp dn)
+             '(label take) '(mov r7 r0) '(mov r8 r3)
+             '(label dn) '(add r0 r0 1) '(jmp dl)
+             '(label dle) '(cmp r7 0) '(br eq ret0)
+             '(ld r0 r9 16) '(add r0 r0 1) '(st r9 16 r0)         ; level++
+             ['ldx 'r3 'r9 'r7 8 pho8]
+             '(mov r0 r7) '(add r0 r0 r0)                         ; el = 2v (+1 unless phase 1)
+             '(cmp r3 1) '(br eq pos) '(add r0 r0 1)
+             '(label pos)
+             ['stx 'r9 'r7 8 vao8 'r0]                            ; assign(el, 0)
+             '(ld r3 r9 16) ['stx 'r9 'r7 8 lvo8 'r3]
+             '(li r3 0) ['stx 'r9 'r7 8 rso8 'r3]
+             '(ld r3 r9 0) ['stx 'r9 'r3 8 tro8 'r0] '(add r3 r3 1) '(st r9 0 r3)
+             '(mov r0 r7) '(jmp dfin)
+             '(label ret0) '(li r0 0)
+             '(label dfin)]
             (cat epi-ir deopt1-ir)))))
    fkers (tablet 0)                                         ; nv -> (bcp conf dec), one assemble per nvars
    fknob {0}                                                ; pin 1 to force the interpreted twins (the differential switch)
@@ -633,9 +633,9 @@
     (? (! (&& (lit? nif) (id? (intern love-arch) 'x64))) ()
        (: hit (peep fkers nv ())
           (? (two? hit) hit
-             (: ks (L (fnif (fbcp-ir nv) fbcp3 3)
-                      (fnif (fconf-ir nv) fconf3 4)
-                      (fnif (fdec-ir nv) fdec3 1))
+             (: ks [(fnif (fbcp-ir nv) fbcp3 3)
+                    (fnif (fconf-ir nv) fconf3 4)
+                    (fnif (fdec-ir nv) fdec3 1)]
                 _ (pin fkers nv ks) ks))))
    (fmk formula nvars)                                      ; build the flat solver state
     (: s (tablet 0) nv nvars

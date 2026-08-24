@@ -25,9 +25,9 @@
    ws        (skip (span ws?))                              ; a (possibly empty) whitespace run
    cline     (seq (lit "c") (span notnl?))                  ; a 'c' comment: 'c' + rest of line (the newline is ws)
    pre       (skip (many (seq ws cline)))                   ; leading comment lines
-   header    (seqs (L ws (lit "p") ws (lit "cnf") ws pint ws pint))   ; -> ("p" "cnf" nvars nclauses)
+   header    (seqs [ws (lit "p") ws (lit "cnf") ws pint ws pint])     ; -> ("p" "cnf" nvars nclauses)
    body      (many (seq ws pint))                           ; -> all body integers (lits + 0 terminators)
-   cnf       (seqs (L pre header body))                     ; -> ("p" "cnf" nvars nclauses . ints)
+   cnf       (seqs [pre header body])                       ; -> ("p" "cnf" nvars nclauses . ints)
    (nthl l k) (? (= k 0) <l (nthl >l (- k 1)))
    (dropl l k) (? (= k 0) l (dropl >l (- k 1)))
    (split0 ints)                                            ; split an int stream into clauses, dropping the 0 terminators

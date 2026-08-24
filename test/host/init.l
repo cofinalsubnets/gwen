@@ -15,7 +15,7 @@
      (: ev (glean 0) (? (two? ev) ev (< n 1) () (: _ (rest 2) (glean-until (- n 1)))))
    _ (assert
        ; spawn is NON-BLOCKING: a real live pid, the child runs on
-       (: p (spawn (L "sleep" "5"))
+       (: p (spawn ["sleep" "5"])
           (&& (charm? p) (< 0 p)
               ; a child ALIVE, none exited -> glean is the REAL () (not charm 0), nil?-true
               (id? (glean 0) ()) (nil? (glean 0)) !(charm? (glean 0))
@@ -25,8 +25,8 @@
        ; no children left -> -ECHILD: a NEGATIVE charm, nil?-true, but NOT the () above
        (charm? (glean 0)) (< (glean 0) 0) (nil? (glean 0)) !(id? (glean 0) ())
        ; the blocking foreground wait: spawn then wait -> the child's exit status
-       (= 0 (wait (spawn (L "true"))))
-       (= 3 (wait (spawn (L "sh" "-c" "exit 3"))))
+       (= 0 (wait (spawn ["true"])))
+       (= 3 (wait (spawn ["sh" "-c" "exit 3"])))
        ; the "()"-returns are the REAL zero point now (the ai_nil -> () flip), not charm 0:
        ; (id? x ()) holds and (charm? x) is false -- charm 0 would fail both.
        (id? (fdclose -1) ()) !(charm? (fdclose -1))               ; fdclose nothing -> the real ()

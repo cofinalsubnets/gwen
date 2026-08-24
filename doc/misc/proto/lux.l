@@ -96,7 +96,7 @@
    _ (line (+ "wm: grabbed mod1+j/k/ret, keycodes " (+ (show kj) (+ " " (+ (show kk) (+ " " (show kret)))))))
 
    ; --- the pure core: the stack zipper (test/wm.l, spike-local copy) ---
-   (stk f up dn) (L f up dn)
+   (stk f up dn) [f up dn]
    (whole zs) (? (two? zs) (cat (rev (caup zs)) (link (cap zs) (caup (cup zs)))) ())
    (srev zs) (? (two? zs) (stk (cap zs) (caup (cup zs)) (caup zs)) ())
    (fup zs) (? (! (two? zs)) ()
@@ -123,12 +123,12 @@
    (tile row)
     (: n (tally row)
        (? (< n 1) ()
-          (= n 1) (L (L (cap row) 0 0 wpx hpx))
+          (= n 1) [[(cap row) 0 0 wpx hpx]]
           (: mw (// wpx 2) k (- n 1) rh (// hpx k)
-             (link (L (cap row) 0 0 mw hpx)
+             (link [(cap row) 0 0 mw hpx]
                    (: (go i l) (? (! (two? l)) ()
-                                  (link (L (cap l) mw (* i rh) (- wpx mw)
-                                           (? (= i (- k 1)) (- hpx (* (- k 1) rh)) rh))
+                                  (link [(cap l) mw (* i rh) (- wpx mw)
+                                         (? (= i (- k 1)) (- hpx (* (- k 1) rh)) rh)]
                                         (go (+ i 1) (cup l))))
                       (go 0 (cup row)))))))
    (retile zs)

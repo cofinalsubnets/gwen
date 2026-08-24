@@ -470,12 +470,12 @@ if [ -n "$sd" ]; then
   # the love-level sigfd round rides the shipped binary: the port IS a kqueue
   # here -- the pending take, then the PARKED take (await merges the kq fd).
   cat > "$d/sigkq.l" <<'EOF'
-(: sp (sigfd (L 10 17))
+(: sp (sigfd [10 17])
    me (getpid 0)
    _  (still me 10)
    ev (sigtake sp)
    _  (assert (hot? sp) (two? ev) (= 10 (cap ev)))
-   p  (spawn (L "sh" "-c" "sleep 0.3; exit 0"))
+   p  (spawn ["sh" "-c" "sleep 0.3; exit 0"])
    _  (await sp)
    e2 (sigtake sp)
    _  (assert (two? e2) (= 17 (cap e2)))

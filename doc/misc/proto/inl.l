@@ -93,7 +93,7 @@
    (inline x) (cprop x () 64 0)
 
    ; --- demonstration: the closure-bench HOFs collapse; an escaping closure is preserved ---
-   se (L (link 'twice '(\ f (\ x (f (f x))))) (link 'adder '(\ i (\ x (+ x i)))))
+   se [(link 'twice '(\ f (\ x (f (f x))))) (link 'adder '(\ i (\ x (+ x i))))]
    (cp x) (cprop x se 64 0)
  (: _ (assert (= '(+ (+ i i) i) (cp '((twice (adder i)) i))))   ; HOFs collapse to 3i (a value)
     _ (assert (= '((\ n (\ x (+ x n))) 5) (cp '((\ n (\ x (+ x n))) 5))))   ; escapes -> NOT beta'd (capturing closure kept)

@@ -57,7 +57,7 @@
        pmap (: t {}
                (add l) (? !(two? l) t
                           (: pat <l  h (pat 0)
-                             _ (pin t h (peep t h () + L pat))
+                             _ (pin t h (peep t h () + [pat]))
                              (add >l)))
                (add (p3 + p2)))
        kwt (: t {} (go l) (? !(two? l) t (: _ (pin t <l 1) (go >l))) (go kws))

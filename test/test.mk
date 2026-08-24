@@ -55,7 +55,7 @@ test_filemode: $(ho)/love.baked
 test_stdinbuf: $(ho)/love.baked
 	@echo TEST stdin borrows a run
 	@printf '(say out (+ "rest: [" (+ (slurp in) "]")))\n(say out "tail form")\n' > out/host/.test_stdinbuf1.l
-	@printf '(exec (L "cat"))\nHANDOFF-TAIL\n' > out/host/.test_stdinbuf2.l
+	@printf '(exec ["cat"])\nHANDOFF-TAIL\n' > out/host/.test_stdinbuf2.l
 	@for f in out/host/.test_stdinbuf1.l out/host/.test_stdinbuf2.l; do \
 	   $m < $$f > $$f.seek 2>&1; cat $$f | $m > $$f.pipe 2>&1; \
 	   cmp -s $$f.seek $$f.pipe \
@@ -67,11 +67,11 @@ test_stdinbuf: $(ho)/love.baked
 	  || { cat out/host/.test_stdinbuf2.l.$$w; echo "FAIL the exec'd child lost the fd position ($$w)"; exit 1; }; done
 	@# ..and the residue is only the FIRST gulp: past it the pumper must splice the rest of the
 	@# pipe, whose writer is still going (200000 bytes against a 64K pipe, so cat really blocks).
-	@{ printf '(exec (L "cat"))\n'; yes HANDOFF-BULK | head -c 200000; } > out/host/.test_stdinbuf4.l
+	@{ printf '(exec ["cat"])\n'; yes HANDOFF-BULK | head -c 200000; } > out/host/.test_stdinbuf4.l
 	@cat out/host/.test_stdinbuf4.l | $m 2>/dev/null | wc -c > out/host/.test_stdinbuf4.n
 	@n=`cat out/host/.test_stdinbuf4.n`; [ $$n -eq 200000 ] \
 	  || { echo "FAIL the pumper delivered $$n of 200000 -- the splice past the residue stopped short"; exit 1; }
-	@printf '(exec (L "cat" "/proc/self/fdinfo/0"))\n' > out/host/.test_stdinbuf3.l
+	@printf '(exec ["cat" "/proc/self/fdinfo/0"])\n' > out/host/.test_stdinbuf3.l
 	@cat out/host/.test_stdinbuf3.l | $m > out/host/.test_stdinbuf3.out 2>&1; \
 	  fl=$$(sed -n 's/^flags:[[:space:]]*//p' out/host/.test_stdinbuf3.out); \
 	  [ -n "$$fl" ] && [ $$(( $$fl & 04000 )) -eq 0 ] \
@@ -85,8 +85,8 @@ test_stdinbuf: $(ho)/love.baked
 # answer 0 here while every file-port law in test/io.l still passed.
 	@printf 'abcdefghij' > out/host/.test_stdinbuf4.in
 	@p='(: c (see in) _ (unsee in c) t (chug in)'; \
-	  a=`$m -e "$$p k (unchug in 99) (exec (L \"cat\")))" < out/host/.test_stdinbuf4.in`; \
-	  b=`$m -e "$$p (exec (L \"cat\")))" < out/host/.test_stdinbuf4.in`; \
+	  a=`$m -e "$$p k (unchug in 99) (exec [\"cat\"]))" < out/host/.test_stdinbuf4.in`; \
+	  b=`$m -e "$$p (exec [\"cat\"]))" < out/host/.test_stdinbuf4.in`; \
 	  { [ "$$a" = abcdefghij ] && [ -z "$$b" ]; } \
 	    || { echo "FAIL unchug is not in the inherited fd offset (with=[$$a] without=[$$b])"; exit 1; }
 # test_host takes the corpus as a FILE, and that is a SPEED choice, not a necessity:

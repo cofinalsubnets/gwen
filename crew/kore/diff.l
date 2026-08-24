@@ -24,7 +24,7 @@
                              (dsnake ax bx n m (x + 1) (y + 1))
                              `(x y))
    ; round d: fill row vd over k = -d..d step 2 from the previous row vp, pin vd into the
-   ; trace, answer (L d) the moment (n m) is reached -- else recurse into round d+1.
+   ; trace, answer [d] the moment (n m) is reached -- else recurse into round d+1.
    ; d is bounded by n+m, so the recursion always lands.
    (dfwd ax bx n m vp d tr)
     (: vd (tablet 0)

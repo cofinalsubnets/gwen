@@ -51,15 +51,15 @@
    (id? 'eof (edln (keys `(4)) "" ()))                           ; ^D -> the 'eof sentinel
    (id? 'eof (edln (keys 0) "" ()))                              ; port EOF -> the same
    ; a submitted line is pushed onto history (most-recent first); blanks dropped:
-   (= (L abc) (cup (edln (keys `(97 98 99 13)) "" ())))          ; nhist on empty -> (abc)
-   (= (L abc abc) (cup (edln (keys `(97 98 99 13)) "" (L abc)))) ; ... pushed on front
-   (nil? (cap (edln (keys `(13)) "" (L abc))))                   ; blank line -> ()
-   (= (L abc) (cup (edln (keys `(13)) "" (L abc))))              ; ... NOT recorded
+   (= [abc] (cup (edln (keys `(97 98 99 13)) "" ())))            ; nhist on empty -> (abc)
+   (= [abc abc] (cup (edln (keys `(97 98 99 13)) "" [abc])))     ; ... pushed on front
+   (nil? (cap (edln (keys `(13)) "" [abc])))                     ; blank line -> ()
+   (= [abc] (cup (edln (keys `(13)) "" [abc])))                  ; ... NOT recorded
    ; up recalls the most-recent entry; down past the draft is the empty draft:
-   (= abc (cap (edln (keys `(27 91 65 13)) "" (L abc))))         ; UP, enter -> "abc"
-   (nil? (cap (edln (keys `(27 91 66 13)) "" (L abc))))          ; DOWN (no newer) -> ""
+   (= abc (cap (edln (keys `(27 91 65 13)) "" [abc])))           ; UP, enter -> "abc"
+   (nil? (cap (edln (keys `(27 91 66 13)) "" [abc])))            ; DOWN (no newer) -> ""
    ; the live draft survives an up/down round-trip:
-   (= `(120) (cap (edln (keys `(120 27 91 65 27 91 66 13)) "" (L abc))))))  ; x, UP, DOWN -> "x"
+   (= `(120) (cap (edln (keys `(120 27 91 65 27 91 66 13)) "" [abc])))))    ; x, UP, DOWN -> "x"
 
 (test_fin ())
 (puts "baoedit: ok") (putc 10)

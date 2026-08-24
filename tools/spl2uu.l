@@ -11,7 +11,7 @@
 ; samples leak from its body-less binder, so the roster below IS the model's;
 ; its own asserts gate the load. untrusted like every translator here: a wrong
 ; lift can miss a law, never fake one, and each source op prints over its term.
-(: j (jug 0) _ (wear (L in j err))
+(: j (jug 0) _ (wear [in j err])
    _ (reads (open "doc/misc/proto/spl.l" "r"))
    _ (wear ()) ())
 
@@ -28,13 +28,13 @@
                th)
        _ (puts (+ "\n    nnil" (+ (")" * (2 * (tally th))) ")")))
        ())
-   progs (L (L 'sp0call (ecall (e0 0) (e0 1)))  (L 'sp0bind (ebind (e0 0) (e0 1)))
-            (L 'sp0subst (esubst (e0 0) (e0 1)))
-            (L 'sp1call (ecall (e1 0) (e1 1)))  (L 'sp1bind (ebind (e1 0) (e1 1)))
-            (L 'sp1subst (esubst (e1 0) (e1 1)))
-            (L 'sp2call (ecall (e2 0) (e2 1)))  (L 'sp2bind (ebind (e2 0) (e2 1)))
-            (L 'sp2subst (esubst (e2 0) (e2 1)))
-            (L 'sp3call (ecall (e3 0) (e3 1)))  (L 'sp3bind (ebind (e3 0) (e3 1))))
+   progs [['sp0call (ecall (e0 0) (e0 1))]  ['sp0bind (ebind (e0 0) (e0 1))]
+          ['sp0subst (esubst (e0 0) (e0 1))]
+          ['sp1call (ecall (e1 0) (e1 1))]  ['sp1bind (ebind (e1 0) (e1 1))]
+          ['sp1subst (esubst (e1 0) (e1 1))]
+          ['sp2call (ecall (e2 0) (e2 1))]  ['sp2bind (ebind (e2 0) (e2 1))]
+          ['sp2subst (esubst (e2 0) (e2 1))]
+          ['sp3call (ecall (e3 0) (e3 1))]  ['sp3bind (ebind (e3 0) (e3 1))]]
 
    _ (puts "; test/uusplgen.l -- GENERATED from doc/misc/proto/spl.l by tools/spl2uu.l. Do not")
    _ (puts "\n; edit; refresh with `make uusplgen`. The call-site samples under the three")

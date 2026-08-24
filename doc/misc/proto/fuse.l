@@ -49,7 +49,7 @@
  (match pat subj env) (?
    (id? env none) none                                     ; a prior failure propagates
    (inset pat pvars) (: b (lookv env pat)
-                       (? (id? b none) (link (L pat subj) env)   ; fresh -> bind
+                       (? (id? b none) (link [pat subj] env)     ; fresh -> bind
                           (= b subj) env                          ; bound -> must agree
                           none))                                  ; ... or conflict -> fail
    (atom? pat) (? (= pat subj) env none)                   ; a literal atom (head, op, ())
@@ -73,13 +73,13 @@
  ;     1. fold/map fusion  (the catamorphism)        foldl(+) . map g  ==>  one foldl
  ;     2. functor composition                        map f . map g     ==>  map (f.g)
  ;     3. the net/cat measure-hom (naturality)        net . cat         ==>  + . (net x net)
- laws (L
-   (L '(foldl (+) z (map g x))
-      '(foldl (\ acc elt (+ acc (g elt))) z x))
-   (L '(map f (map g x))
-      '(map (\ w (f (g w))) x))
-   (L '(net (cat a b))
-      '(+ (net a) (net b))))
+ laws [
+  ['(foldl (+) z (map g x))
+   '(foldl (\ acc elt (+ acc (g elt))) z x)]
+  ['(map f (map g x))
+   '(map (\ w (f (g w))) x)]
+  ['(net (cat a b))
+   '(+ (net a) (net b))]]
 
  ; --- driver: fuse a subject, ev BOTH, check they agree on the binary ----------
  (run1 nm subj) (: f (fuse laws subj)

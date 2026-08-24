@@ -18,7 +18,7 @@
 ; leaks. Nominal units domain: +/- must match units (else clash); * gives `top` (untracked).
 ; See doc/misc/proto/overlay-macros.l (worked demo) and memory pluggable-types.
 ; ============================================================================
-(: overlay-sig (\ s    (: v (peep ov-slot 0 ()) (? (two? v) (pin ov-slot 0 (L (cap v) (link s (caup v)))) 0)))   ; append a boundary sig
+(: overlay-sig (\ s    (: v (peep ov-slot 0 ()) (? (two? v) (pin ov-slot 0 [(cap v) (link s (caup v))]) 0)))     ; append a boundary sig
    overlay-chk (\ form (: v (peep ov-slot 0 ()) (? (two? v) (ov-eng (cap v) (caup v) form) 0)))                  ; check a def vs the installed overlay
    (units-tr op x y) (? (id? x 'top) 'top (id? y 'top) 'top
                         (member? op '(+ -)) (? (= x y) x (id? x 'bot) y (id? y 'bot) x 'clash)

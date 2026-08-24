@@ -39,11 +39,11 @@
  _ (cell! sh (\ i1) "@(1 2 3)")
  _ (cell! sh (\ j1) "net i1")
  _ (cell! sh (\ n1) "(: x 3 (x * a1))")   ; a local x shadows its label
- _ (cell! sh (\ o1) "(map (+ a1) (L 1 2))")
+ _ (cell! sh (\ o1) "(map (+ a1) [1 2])")
  _ (assert
     (= 6 (worth sh (\ j1)))
     (= 9 (worth sh (\ n1)))
-    (= (L 4 5) (worth sh (\ o1)))))
+    (= [4 5] (worth sh (\ o1)))))
 
 ; --- cycles: flagged at every cell on the loop, and taint what reads them
 ; (a bare whirl is the unit and would otherwise ride quietly through) ---

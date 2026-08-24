@@ -50,7 +50,7 @@
  (rupd a f r)(map (\ o (? (= (cap o) a) (link a (f (cup o))) o)) r)  ; map f over object a's edges
 
  ; --- the world (nur old rem roots next) and its accessors ---
- (world n o m r x) (L n o m r x)
+ (world n o m r x) [n o m r x]
  (w-nur w) (nth w 0)  (w-old w) (nth w 1)  (w-rem w) (nth w 2)  (w-roots w) (nth w 3)  (w-next w) (nth w 4)
  (w-last w) (- (w-next w) 1)                                     ; the addr the last alloc handed out
  fresh (world () () () () 0)
@@ -142,8 +142,8 @@
  ; (6) a chain of young objects reachable from one root all promote together (transitive reach).
  _ (assert "(6) a transitively-reachable young chain promotes whole"
      (: w (alloc fresh ()) a (w-last w)                          ; a
-        w (alloc w (L a)) b (w-last w)                           ; b -> a
-        w (alloc w (L b)) c (w-last w)                           ; c -> b -> a
+        w (alloc w [a]) b (w-last w)                             ; b -> a
+        w (alloc w [b]) c (w-last w)                             ; c -> b -> a
         w (addroot w c)
         w (minor w)
       (&& (rhas? a (w-old w)) (rhas? b (w-old w)) (rhas? c (w-old w)))) )

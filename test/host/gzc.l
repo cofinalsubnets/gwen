@@ -157,7 +157,7 @@
                    l (gz-puff c (tally s))
                    i (inflate c (tally s))
                    (? ((two? l) & (string? i) & (= (<(>l)) s) & (= i s)) 1 0))
-   gzd-corp (L gzc-empty gzc-one gzc-run gzc-long gzc-per gzc-near gzc-text)
+   gzd-corp [gzc-empty gzc-one gzc-run gzc-long gzc-per gzc-near gzc-text]
    _ (assert
       (lit? deflate)
       (gzc-all gzd-same gzd-corp)                       ; the bytes, corpus-wide

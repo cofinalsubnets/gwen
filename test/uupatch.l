@@ -2143,8 +2143,8 @@
  q0 '(mkh 3 (ncons 3 nnil) (ncons 9 nnil))
  q0p '(mkh 2 (ncons 3 nnil) (ncons 9 nnil))
  _ (assert
-    ((vof 0 (L 'hap (L 'hap s0 p0) q0)) = (vof 0 (L 'hap (L 'hap s0 q0p) p0)))
-    ((vof 0 (L 'hcommute p0 q0)) = (vof 0 (L 'ii1 (L 'tpair q0p p0)))))
+    ((vof 0 ['hap ['hap s0 p0] q0]) = (vof 0 ['hap ['hap s0 q0p] p0]))
+    ((vof 0 ['hcommute p0 q0]) = (vof 0 ['ii1 ['tpair q0p p0]])))
  0)
 
 ; ============================================================================

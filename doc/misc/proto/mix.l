@@ -33,11 +33,11 @@
  (nul? l) (! (two? l))                          ; end-of-list = spine test, not the net
 
  ; --- pe-values: (s v) static, (r c) residual source ---
- (stat v) (L 's v)
- (dyn c)  (L 'r c)
+ (stat v) ['s v]
+ (dyn c)  ['r c]
  (stat? p) ('s = (cap p))
  (pval p)  (caup p)
- (qv v)    (L '\ v)                             ; quote a static datum so re-eval/residual sees DATA, not a call
+ (qv v)    ['\ v]                               ; quote a static datum so re-eval/residual sees DATA, not a call
  (reify p) (: v (caup p) (? (&& (stat? p) (! (constellation? v))) (qv v) v))   ; non-number static -> quoted
  (statval? p v) (&& (stat? p) (v = (pval p)))
 
@@ -46,7 +46,7 @@
  (alls l)     (? (nul? l) 1 (? (cap l) (alls (cup l)) 0))
  (allstat apv)(alls (map stat? apv))
  (sig apv)    (map (\ p (? (stat? p) (pval p) '_)) apv)        ; static signature (dynamic slots -> _)
- (zipenv ps apv) (? (nul? ps) () (link (L (cap ps) (cap apv)) (zipenv (cup ps) (cup apv))))
+ (zipenv ps apv) (? (nul? ps) () (link [(cap ps) (cap apv)] (zipenv (cup ps) (cup apv))))
 
  ; --- env: name -> pe-value; an unbound name is a residual variable (dynamic) ---
  (look env k)
@@ -55,33 +55,33 @@
                              (look (cup env) k))
 
  ; --- the function definition table: (name params body). closed recursive source. ---
- defs (L
-   (L 'power '(n b) '(? (! n) 1 (* b (power (- n 1) b))))      ; b^n
-   (L 'down  '(b)   '(? (! b) 0 (down (- b 1))))               ; recursion driven by DYNAMIC b
-   (L 'poly  '(x)   '(+ (* 3 (power 2 x)) (+ (* 2 x) 1)))      ; 3x^2 + 2x + 1, calls power
-   (L 'ev1   '(nd x) '(? (id? (cap nd) 'lit) (caup nd)          ; a tiny AST interpreter: (lit n)(var)(add ..)(mul ..)
-                         (id? (cap nd) 'var) x                  ;   nd STATIC (the program), x DYNAMIC (the input)
-                         (id? (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
-                         (id? (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
-                         0)))
+ defs [
+  ['power '(n b) '(? (! n) 1 (* b (power (- n 1) b)))]         ; b^n
+  ['down  '(b)   '(? (! b) 0 (down (- b 1)))]                  ; recursion driven by DYNAMIC b
+  ['poly  '(x)   '(+ (* 3 (power 2 x)) (+ (* 2 x) 1))]         ; 3x^2 + 2x + 1, calls power
+  ['ev1   '(nd x) '(? (id? (cap nd) 'lit) (caup nd)             ; a tiny AST interpreter: (lit n)(var)(add ..)(mul ..)
+                      (id? (cap nd) 'var) x                     ;   nd STATIC (the program), x DYNAMIC (the input)
+                      (id? (cap nd) 'add) (+ (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
+                      (id? (cap nd) 'mul) (* (ev1 (caup nd) x) (ev1 (cap (cuup nd)) x))
+                      0)]]
  (deflook nm)      (deflook-go nm defs)
  (deflook-go nm l) (? (nul? l) () (? (nm = (cap (cap l))) (cap l) (deflook-go nm (cup l))))
 
  ; --- apcap fuel: charged per unfold; exhausted -> a one-shot escape (the real apcap scares) ---
  pe-fuel (tablet 0)
  (tick u) (: n (peep pe-fuel 'n 0)              ; u is a dummy: a 0-arg (tick) is a VALUE, not a fn
-             (? (! n) ((peep pe-fuel 'esc 0) (L 'APCAP (peep pe-fuel 'cap 0)))
+             (? (! n) ((peep pe-fuel 'esc 0) ['APCAP (peep pe-fuel 'cap 0)])
                       (pin pe-fuel 'n (- n 1))))
 
  ; --- primitives: arithmetic + structural AST navigation. fold when all args static (quoting each,
  ;     so a static LIST/SYM folds as DATA), else residualize (unit-aware on the binary * and +). ---
- (prim? h) (inset? h (L '* '- '+ '! 'cap 'cup 'caap 'caup 'cuap 'cuup 'id?))
+ (prim? h) (inset? h ['* '- '+ '! 'cap 'cup 'caap 'caup 'cuap 'cuup 'id?])
  (simp1 h a b)
    (? (&& (h = '*) (statval? a 1)) b
       (&& (h = '*) (statval? b 1)) a
       (&& (h = '+) (statval? a 0)) b
       (&& (h = '+) (statval? b 0)) a
-                                  (dyn (L h (reify a) (reify b))))
+                                  (dyn [h (reify a) (reify b)]))
  (pe-prim h apv)
    (? (allstat apv)     (stat (ev (link h (map qv (map pval apv)))))   ; quote args -> fold over data
       (2 = (tally apv)) (simp1 h (cap apv) (caup apv))                  ; binary: residualize, drop units
@@ -99,11 +99,11 @@
  (resid-cl cv then rest env seen)
    (link (reify cv) (link (reify (pe then env seen)) (resid-tl rest env seen)))
  (resid-tl cs env seen)
-   (? (nul? (cup cs)) (L (reify (pe (cap cs) env seen)))               ; trailing else
+   (? (nul? (cup cs)) [(reify (pe (cap cs) env seen))]                 ; trailing else
       (: cv (pe (cap cs) env seen)
          (? (! (stat? cv)) (resid-cl cv (caup cs) (cuup cs) env seen)
             (! (pval cv))  (resid-tl (cuup cs) env seen)
-                           (L (reify (pe (caup cs) env seen))))))      ; static true -> becomes the else
+                           [(reify (pe (caup cs) env seen))])))        ; static true -> becomes the else
 
  ; --- a defined-function call: unfold, unless this static instance is already in progress ---
  (pe-call def apv seen)
@@ -131,10 +131,10 @@
    (call-cc (\ esc (: _ (pin pe-fuel 'n fuel) _ (pin pe-fuel 'cap fuel) _ (pin pe-fuel 'esc esc)
                       (pe expr env ()))))
  (mix expr env)       (mixf expr env (apcap 0))
- (envb nv) (L (L 'n (stat nv)) (L 'b (dyn 'b)))               ; n static, b dynamic
+ (envb nv) [['n (stat nv)] ['b (dyn 'b)]]                     ; n static, b dynamic
 
  ; --- residual source -> a compiled unary lambda, for the equivalence checks ---
- (resid expr env v) ((ev (L '\ v (reify (mix expr env)))))    ; () outer: ev returns the closure
+ (resid expr env v) ((ev ['\ v (reify (mix expr env))]))      ; () outer: ev returns the closure
 
  ; ============================ self-checks ============================
  ; the first Futamura projection, take one: the residual of `power` specialized to a static exponent
@@ -144,11 +144,11 @@
  _ (assert (32  = ((resid '(power n b) (envb 5) 'b) 2))         "residual(power,5)(2) == 2^5")
  _ (assert ('b  = (reify (mix '(power n b) (envb 1))))          "power n=1 -> b (unit simp)")
  _ (assert (1   = (reify (mix '(power n b) (envb 0))))          "power n=0 -> 1")
- _ (assert (8   = (pval (mix '(power n b) (L (L 'n (stat 3)) (L 'b (stat 2)))))) "both static folds")
+ _ (assert (8   = (pval (mix '(power n b) [['n (stat 3)] ['b (stat 2)]]))) "both static folds")
  ; a nested call unrolls inside a larger expression:
- _ (assert (57  = ((resid '(poly x) (L (L 'x (dyn 'x))) 'x) 4)) "residual(poly)(4) == 3*16+8+1")
+ _ (assert (57  = ((resid '(poly x) [['x (dyn 'x)]] 'x) 4)) "residual(poly)(4) == 3*16+8+1")
  ; recursion driven by a DYNAMIC value cannot unroll -> the guard leaves it intact:
- _ (assert ('(? (! b) 0 (down (- b 1))) = (reify (mix '(down b) (L (L 'b (dyn 'b)))))) "down stays residual")
+ _ (assert ('(? (! b) 0 (down (- b 1))) = (reify (mix '(down b) [['b (dyn 'b)]]))) "down stays residual")
  ; the apcap fuel bounds a huge static unfold instead of building a million-node residual:
  _ (assert ('APCAP = (cap (mixf '(power n b) (envb 1000) 8)))   "apcap guard fires")
 
@@ -157,7 +157,7 @@
  ; is left is P's straight-line arithmetic -- the exact `hand` residual interp-spec.l hand-wrote, which
  ; runs ~8x faster than interpreting P (measured, host). this is the win the in-compiler unfold missed.
  P '(add (mul (add (mul (add (mul (lit 2) (var)) (lit 3)) (var)) (lit 5)) (var)) (lit 7))
- envP (L (L 'nd (stat P)) (L 'x (dyn 'x)))
+ envP [['nd (stat P)] ['x (dyn 'x)]]
  _ (assert ('(+ (* (+ (* (+ (* 2 x) 3) x) 5) x) 7) = (reify (mix '(ev1 nd x) envP)))
            "ev1 specialized to P == the straight-line Horner residual")
  ; the residual computes the SAME function as the interpreter, across a spread of inputs:

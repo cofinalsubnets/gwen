@@ -269,7 +269,7 @@
       ;     the KeyPress state, so the grab must cover the variant or every
       ;     chord goes dead while plain typing sails on (the 2026-07-27
       ;     symptom) ---
-      kmn (x-keymap s (scr-mink sc) (scr-maxk sc) (L 32 65407))                   ; space, Num_Lock
+      kmn (x-keymap s (scr-mink sc) (scr-maxk sc) [32 65407])                     ; space, Num_Lock
       spk (peep kmn 32 0) nlk (peep kmn 65407 0)
       _ (must "space-keycode" (< 0 spk)) _ (must "numlock-keycode" (< 0 nlk))
       (chord u) (: _ (fake 2 sk 0 0) _ (rest 60) _ (fake 2 spk 0 0) _ (rest 60)

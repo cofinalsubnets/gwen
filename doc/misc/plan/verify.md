@@ -60,10 +60,10 @@ the whole crew/lux/ also dropped the `(..) sugar for [..] (a comment- and
 string-aware love scanner did the sweep, proving (forms old) = (forms new)
 per file before writing).
 
-⚠ the tree still spells `(L ..)` and `(..) widely (test/host/sh.l, the law
-files, several tools translators). the reader KEEPS both spellings; the
-sweep is the canonical-spellings arc's business, and the corpus files that
-TEST the ` sigil (test/valence.l, test/infixop.l) must keep it on purpose.
+⚠ the tree still spells `(..) widely (test/host/sh.l, the law files, several
+tools translators). the reader KEEPS both spellings; the sweep is the
+canonical-spellings arc's business, and the corpus files that TEST the `
+sigil (test/valence.l, test/infixop.l) must keep it on purpose.
 
 ## next rung: the CLAUDE.md laws get a proof leg
 

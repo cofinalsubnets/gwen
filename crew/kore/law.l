@@ -35,7 +35,7 @@
                        (goj i (+ j 1))))
        (goi i) (? (< n i) (get n m) (: _ (goj i 1) (goi (+ i 1))))
        (goi 1))
-   (rlist i st acc) (? (< i 1) (L acc st)                   ; a random list over the alphabet 1..4; answers (list state)
+   (rlist i st acc) (? (< i 1) [acc st]                     ; a random list over the alphabet 1..4; answers (list state)
                        (: r (random st 4) (rlist (- i 1) >r ((+ 1 <r) >< acc))))
    (fz i st)
     (? (< i 1) 'ok
@@ -46,7 +46,7 @@
           s (myers a b)
           ok (&& (= (dold s) a) (= (dnew s) b)
                  (= (dcost s) (- (+ (tally a) (tally b)) (* 2 (lcslen a b)))))
-          (? ok (fz (- i 1) <>lb) (L 'broke a b))))
+          (? ok (fz (- i 1) <>lb) ['broke a b])))
    r (fz 100 (wheel 7))
    (assert (= r 'ok)))
 
@@ -73,7 +73,7 @@
 
 ; --- the patience fuzz: a wider alphabet (so anchors actually occur), projections per
 ; draw, and the trade law dcost(patience) >= dcost(myers) held against the myers core ---
-(: (rlist2 i st acc) (? (< i 1) (L acc st)
+(: (rlist2 i st acc) (? (< i 1) [acc st]
                         (: r (random st 12) (rlist2 (- i 1) >r ((+ 1 <r) >< acc))))
    (fzp i st)
     (? (< i 1) 'ok
@@ -84,7 +84,7 @@
           sp (patience a b)
           ok (&& (= (dold sp) a) (= (dnew sp) b)
                  !(< (dcost sp) (dcost (myers a b))))
-          (? ok (fzp (- i 1) <>lb) (L 'broke a b))))
+          (? ok (fzp (- i 1) <>lb) ['broke a b])))
    r (fzp 100 (wheel 11))
    (assert (= r 'ok)))
 
@@ -401,7 +401,7 @@
                    (: a <>nd lo <>>nd hi <>>>nd
                       (? (hi && (< hi 1)) ()
                          (: lo2 (? (< 0 lo) (- lo 1) 0) hi2 (? hi (- hi 1) ())
-                            (map (\ u (u + (L (L 'rep a lo2 hi2)))) (dn a c)))))))
+                            (map (\ u (u + [['rep a lo2 hi2]])) (dn a c)))))))
    ; a node LIST's derivative: the head's, and past a nullable head the tail's
    (dl ns c) (? !(two? ns) ()
                 (: d1 (map (\ u (u + >ns)) (dn <ns c))
@@ -418,7 +418,7 @@
                         (<= n j) ()
                         (: a2 (dstep alts (s j))
                            (? (two? a2) (walk a2 (+ j 1)) ())))
-       (from i) (? (walk (L ns) i) 1 (< i n) (from (+ i 1)) ())
+       (from i) (? (walk [ns] i) 1 (< i n) (from (+ i 1)) ())
        (from 0))
    ; the draws: 1..4 tokens make a pattern, 0..6 charms of abc a subject
    ; ⚠ EVERY TOKEN HERE MUST PARSE and the oracle must know its node -- an entry
@@ -427,10 +427,10 @@
    toks '("a" "b" "c" "." "a*" ".*" "[ab]" "[^a]" "[a-c]" "b\\+" "c\\?" "\\(ab\\)*"
           "\\(a\\|b\\)" "a\\|b" "\\(a\\|bc\\)*" "b\\{2\\}" "a\\{1,2\\}" "[[:alpha:]]")
    ntok 18
-   (rpat k st acc) (? (< k 1) (L acc st)
+   (rpat k st acc) (? (< k 1) [acc st]
                       (: r (random st ntok) (rpat (- k 1) >r (+ acc (toks <r)))))
-   (rsub k st acc) (? (< k 1) (L acc st)
-                      (: r (random st 3) (rsub (- k 1) >r (+ acc ((L "a" "b" "c") <r)))))
+   (rsub k st acc) (? (< k 1) [acc st]
+                      (: r (random st 3) (rsub (- k 1) >r (+ acc (["a" "b" "c"] <r)))))
    (fzr i st)
     (? (< i 1) 'ok
        (: r1 (random st 4) r2 (random >r1 7)
@@ -441,7 +441,7 @@
              (: e (? (rehas <>r <ss) 1 0)
                 o (? (dhas <>r <ss) 1 0)
                 (? (= e o) (fzr (- i 1) <>ss)
-                   (L 'broke <pp <ss))))))
+                   ['broke <pp <ss])))))
    r (fzr 200 (wheel 13))
    (assert (= r 'ok)))
 

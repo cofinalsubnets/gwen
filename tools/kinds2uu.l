@@ -15,7 +15,7 @@
 ; a body-LESS `:` -- the k2-* vocabulary leaks; none shadows a nif.
 (:
    (k2-pairs bs) (? (! (two? bs)) () (! (two? (cup bs))) ()
-                    (link (L (cap bs) (cap (cup bs))) (k2-pairs (cup (cup bs)))))
+                    (link [(cap bs) (cap (cup bs))] (k2-pairs (cup (cup bs)))))
    (k2-find nm ps) (cap (filter (\ p (&& (two? (cap p)) (id? (cap (cap p)) nm))) ps))
    k2-a1 (\ e (cap (cup e)))                 ; first operand
    k2-a2 (\ e (cap (cup (cup e))))           ; second operand
@@ -27,7 +27,7 @@
    (k2-rankmap body) (: (go cs) (? (! (two? (cup cs))) ()   ; the trailing -1 else: stop
                           (: c (cap cs) r (cap (cup cs))
                              sym (k2-qdat (k2-a2 c))         ; c = (id? k 'SYM)
-                             (link (L sym r) (go (cup (cup cs))))))
+                             (link [sym r] (go (cup (cup cs))))))
                         (go (cup body)))
    (k2-max l) (foldl (\ a x (? (< a x) x a)) 0 l)
    (k2-codes km) (map (\ p (cap (cup p))) km)
@@ -43,33 +43,33 @@
        (: h (cap e)
           (? (id? h '?)    (k2-cond km (cup e) ty)
              (id? h ':)    (k2-lets km (cup e) ty)
-             (id? h 'id?)  (L 'nateqb (k2-tx km (k2-a1 e) 'nat) (k2-tx km (k2-a2 e) 'nat))
-             (id? h '<)    (L 'natgtb (k2-tx km (k2-a2 e) 'nat) (k2-tx km (k2-a1 e) 'nat))
-             (id? h '&&)   (L 'andb (k2-tx km (k2-a1 e) 'bool) (k2-tx km (k2-a2 e) 'bool))
+             (id? h 'id?)  ['nateqb (k2-tx km (k2-a1 e) 'nat) (k2-tx km (k2-a2 e) 'nat)]
+             (id? h '<)    ['natgtb (k2-tx km (k2-a2 e) 'nat) (k2-tx km (k2-a1 e) 'nat)]
+             (id? h '&&)   ['andb (k2-tx km (k2-a1 e) 'bool) (k2-tx km (k2-a2 e) 'bool)]
              (id? h 'rank) (k2-tx km (k2-a1 e) ty)     ; code IS rank -- fold
-             (id? h 'num?) (L 'numq (k2-tx km (k2-a1 e) 'nat))
+             (id? h 'num?) ['numq (k2-tx km (k2-a1 e) 'nat)]
              'k2-untranslatable)))
    (k2-cond km cs ty)
     (? (! (two? (cup cs))) (k2-tx km (cap cs) ty)      ; the bare else
        (: c (cap cs) r (cap (cup cs))
-          (L 'bool_rect (L 'lam 'gx ty)
-             (k2-tx km r ty) (k2-cond km (cup (cup cs)) ty) (k2-tx km c 'bool))))
+          ['bool_rect ['lam 'gx ty]
+           (k2-tx km r ty) (k2-cond km (cup (cup cs)) ty) (k2-tx km c 'bool)]))
    (k2-lets km bs ty)
     (? (! (two? (cup bs))) (k2-tx km (cap bs) ty)      ; the trailing body
-       (L 'let (cap bs) (k2-tx km (cap (cup bs)) 'nat)
-          (k2-lets km (cup (cup bs)) ty)))
+       ['let (cap bs) (k2-tx km (cap (cup bs)) 'nat)
+        (k2-lets km (cup (cup bs)) ty)])
 
    ; --- assemble one op: (name (pi params) (lam params body)) ---
-   (k2-pi ps res) (? (two? ps) (L 'pi (cap ps) 'nat (k2-pi (cup ps) res)) res)
-   (k2-lams ps b) (? (two? ps) (L 'lam (cap ps) (k2-lams (cup ps) b)) b)
-   (k2-op km ps pr resty ty) (L (k2-pi ps resty) (k2-lams ps (k2-tx km (cap (cup pr)) ty)))
+   (k2-pi ps res) (? (two? ps) ['pi (cap ps) 'nat (k2-pi (cup ps) res)] res)
+   (k2-lams ps b) (? (two? ps) ['lam (cap ps) (k2-lams (cup ps) b)] b)
+   (k2-op km ps pr resty ty) [(k2-pi ps resty) (k2-lams ps (k2-tx km (cap (cup pr)) ty))]
 
    ; --- drive: read kinds.l, lift num? and join ---
    fs (forms (open "doc/misc/proto/kinds.l" "r"))
    big (cap (filter (\ f (&& (two? f) (id? (cap f) ':))) fs))
    ps (k2-pairs (cup big))
    km0 (k2-rankmap (cap (cup (k2-find 'rank ps))))
-   km  (link (L 'str ((k2-max (k2-codes km0)) + 1)) km0)   ; str: the branch off rank
+   km  (link ['str ((k2-max (k2-codes km0)) + 1)] km0)     ; str: the branch off rank
    nump (k2-find 'num? ps) joinp (k2-find 'join ps)
    numq  (k2-op km (cup (cap nump))  nump  'bool 'bool)
    kjoin (k2-op km (cup (cap joinp)) joinp 'nat  'nat)

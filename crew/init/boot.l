@@ -24,13 +24,13 @@
    ; the console job: a fresh `love` running the shell over the inherited console fds.
    ; the -l registers module 'lush (the parts' own wraps); the -e reads it through
    ; one use -- compile is per-binding, so (sh 0) compiles after the splice.
-   (console _) (L "/bin/love" "-l" "/lib/sh.l" "-e" "(: _ (use 'lush) (sh 0))")
+   (console _) ["/bin/love" "-l" "/lib/sh.l" "-e" "(: _ (use 'lush) (sh 0))"]
 
    ; a boot self-check: run a real userland command (kore, forked + captured) so the
    ; console SHOWS the base system works end to end before we hand off the tty. `hark`
    ; returns (exit . stdout); the shebang on /bin/kore points at /bin/love.
    (selfcheck _)
-     (: r (hark (L "/bin/kore" "ls" "/proc"))
+     (: r (hark ["/bin/kore" "ls" "/proc"])
         (say1 (+ "-- self-check: kore ls /proc -> exit " (+ (show (cap r))
                  (+ ", " (+ (show (tally (cup r))) " bytes --"))))))
 

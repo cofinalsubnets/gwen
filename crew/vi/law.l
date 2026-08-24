@@ -13,7 +13,7 @@
    (vgo ls ks) (vfeed (vnew ls "t") (bytes ks))
    (vgob ls bs) (vfeed (vnew ls "t") bs)
    BS 127 CR 13
-   (lns st) (st 'lines) (at st) (L (st 'row) (st 'col))
+   (lns st) (st 'lines) (at st) [(st 'row) (st 'col)]
    (st? st k) (st k)
 
 ; --- motion: hjkl, 0 ^ $, counts, the goal column, G/gg ---
@@ -59,7 +59,7 @@
 ; --- insert: i a I A o O, enter, backspace, escape ---
    _ (assert
       (= (lns (vgo '("bc") "iaX")) '("aXbc"))                  ; i, then a and X insert
-      (= (lns (vgob '("ac") (L 105 98 27 88))) '("bac"))       ; i b ESC, then X at col 0 bites nothing
+      (= (lns (vgob '("ac") [105 98 27 88])) '("bac"))         ; i b ESC, then X at col 0 bites nothing
       (= (lns (vgo '("") "ihello")) '("hello"))
       (= (lns (vgo '("xy") "aZ")) '("xZy"))
       (= (lns (vgo '("xy") "AZ")) '("xyZ"))
@@ -69,13 +69,13 @@
       (= (lns (vgo '("ab") "Ocd")) '("cd" "ab"))
       (= (lns (vgo '("ab" "cd") "jOx")) '("ab" "x" "cd")))
    _ (assert
-      (= (lns (vgob '("abcd") (L 108 108 105 13))) '("ab" "cd"))          ; ll i CR splits
-      (= (at (vgob '("abcd") (L 108 108 105 13))) '(1 0))
-      (= (lns (vgob '("abcd") (L 65 120 BS BS 121))) '("abcy"))           ; A x bsp bsp y
-      (= (lns (vgob '("ab" "cd") (L 106 105 BS))) '("abcd"))              ; bsp at col 0 joins up
-      (= (at (vgob '("ab" "cd") (L 106 105 BS))) '(0 2))
-      (= (at (vgob '("abc") (L 65 27))) '(0 2))                           ; esc steps left, fenced
-      (= (st? (vgob '("a") (L 105 120 27)) 'mode) 'n))
+      (= (lns (vgob '("abcd") [108 108 105 13])) '("ab" "cd"))            ; ll i CR splits
+      (= (at (vgob '("abcd") [108 108 105 13])) '(1 0))
+      (= (lns (vgob '("abcd") [65 120 BS BS 121])) '("abcy"))             ; A x bsp bsp y
+      (= (lns (vgob '("ab" "cd") [106 105 BS])) '("abcd"))                ; bsp at col 0 joins up
+      (= (at (vgob '("ab" "cd") [106 105 BS])) '(0 2))
+      (= (at (vgob '("abc") [65 27])) '(0 2))                             ; esc steps left, fenced
+      (= (st? (vgob '("a") [105 120 27]) 'mode) 'n))
 
 ; --- operators: x X D C s r J, dd yy cc, d+motion, spans ---
    _ (assert
@@ -124,31 +124,31 @@
 ; --- undo / redo ---
    _ (assert
       (= (lns (vgo '("abc") "xu")) '("abc"))
-      (= (lns (vgob '("abc") (L 105 122 27 117))) '("abc"))    ; the whole insert, one undo
-      (= (lns (vgob '("abc") (L 120 117 18))) '("bc"))        ; x u ^R
+      (= (lns (vgob '("abc") [105 122 27 117])) '("abc"))      ; the whole insert, one undo
+      (= (lns (vgob '("abc") [120 117 18])) '("bc"))          ; x u ^R
       (= (lns (vgo '("a" "b") "dduu")) '("a" "b"))
       (= (at (vgo '("abc") "lxu")) '(0 1)))
 
 ; --- search over re.l: / ? n N, wrap ---
-   (skeys s) ((bytes "/") + (bytes s) + (L CR))
+   (skeys s) ((bytes "/") + (bytes s) + [CR])
    _ (assert
       (= (at (vgob '("foo" "bar" "foobar") (skeys "bar"))) '(1 0))
       (= (at (vgob '("foo" "bar" "foobar") ((skeys "bar") + (bytes "n")))) '(2 3))
       (= (at (vgob '("foo" "bar" "foobar") ((skeys "bar") + (bytes "nn")))) '(1 0))     ; wraps
       (= (at (vgob '("foo" "bar" "foobar") ((skeys "bar") + (bytes "nN")))) '(1 0))
-      (= (at (vgob '("ab" "cd") ((bytes "j$?ab") + (L CR)))) '(0 0))
+      (= (at (vgob '("ab" "cd") ((bytes "j$?ab") + [CR]))) '(0 0))
       (= (at (vgob '("xax" "b") (skeys "q"))) '(0 0)))         ; a miss stands still
 
 ; --- the ex line: :N, :$, :q with dirt, :q!, :w's request ---
    _ (assert
-      (= (at (vgob '("a" "b" "c") ((bytes ":3") + (L CR)))) '(2 0))
-      (= (at (vgob '("a" "b" "c") ((bytes ":$") + (L CR)))) '(2 0))
-      (= (st? (vgob '("a") ((bytes ":q") + (L CR))) 'quit) 1)
-      !(st? (vgob '("a") ((bytes "x:q") + (L CR))) 'quit)      ; dirty q refuses
-      (= (st? (vgob '("a") ((bytes "x:q!") + (L CR))) 'quit) 1)
-      (= (st? (vgob '("a") ((bytes ":w") + (L CR))) 'dow) '("t"))
-      (= (st? (vgob '("a") ((bytes ":w other") + (L CR))) 'dow) '("other"))
-      (: q (vgob '("a") ((bytes "x:wq") + (L CR)))
+      (= (at (vgob '("a" "b" "c") ((bytes ":3") + [CR]))) '(2 0))
+      (= (at (vgob '("a" "b" "c") ((bytes ":$") + [CR]))) '(2 0))
+      (= (st? (vgob '("a") ((bytes ":q") + [CR])) 'quit) 1)
+      !(st? (vgob '("a") ((bytes "x:q") + [CR])) 'quit)        ; dirty q refuses
+      (= (st? (vgob '("a") ((bytes "x:q!") + [CR])) 'quit) 1)
+      (= (st? (vgob '("a") ((bytes ":w") + [CR])) 'dow) '("t"))
+      (= (st? (vgob '("a") ((bytes ":w other") + [CR])) 'dow) '("other"))
+      (: q (vgob '("a") ((bytes "x:wq") + [CR]))
          ((= (q 'dow) '("t")) && (= (q 'quit) 1)))
       (: q (vgob '("a") (bytes "xZZ"))
          ((= (q 'dow) '("t")) && (= (q 'quit) 1))))
@@ -167,17 +167,17 @@
       ; scrolling: the cursor's row stays inside the 3 text rows
       (: st (vgo '("a" "b" "c" "d" "e") "G") _ (pin st 'w 8) _ (pin st 'h 4)
          f (vframe st)
-         ((= (st 'top) 2) && two? (L f))))
+         ((= (st 'top) 2) && two? [f])))
 
 ; --- :e and :o -- the request the face performs, and the buffer swap it calls -
    _ (assert
-      (= (st? (vgob '("a") ((bytes ":e other") + (L CR))) 'doe) '("other"))
-      (= (st? (vgob '("a") ((bytes ":o other") + (L CR))) 'doe) '("other"))     ; the same door
-      (= (st? (vgob '("a") ((bytes ":e") + (L CR))) 'doe) '("t"))               ; bare :e reloads
-      !(st? (vgob '("a") ((bytes "x:e other") + (L CR))) 'doe)                  ; dirty refuses ...
-      (= (st? (vgob '("a") ((bytes "x:e! other") + (L CR))) 'doe) '("other"))   ; ... and ! overrides
-      (= (st? (vgob '("a") ((bytes "x:e!") + (L CR))) 'doe) '("t"))
-      !(st? (vgob '("a") ((bytes ":e ") + (L CR))) 'doe))                       ; no name, no request
+      (= (st? (vgob '("a") ((bytes ":e other") + [CR])) 'doe) '("other"))
+      (= (st? (vgob '("a") ((bytes ":o other") + [CR])) 'doe) '("other"))       ; the same door
+      (= (st? (vgob '("a") ((bytes ":e") + [CR])) 'doe) '("t"))                 ; bare :e reloads
+      !(st? (vgob '("a") ((bytes "x:e other") + [CR])) 'doe)                    ; dirty refuses ...
+      (= (st? (vgob '("a") ((bytes "x:e! other") + [CR])) 'doe) '("other"))     ; ... and ! overrides
+      (= (st? (vgob '("a") ((bytes "x:e!") + [CR])) 'doe) '("t"))
+      !(st? (vgob '("a") ((bytes ":e ") + [CR])) 'doe))                         ; no name, no request
    _ (assert
       ; the swap starts the file over -- and re-decides the paint from the NEW name
       (: q (vgo '("a" "b") "jx") _ (vload q '("x" "y" "z") "n.l")
@@ -189,7 +189,7 @@
 
 ; --- libra ⚖ on the buffer: :lint weighs what you are LOOKING AT. one scanner
 ;     (lib/lint.l) under libra's faces and this one ---------------------------
-   (ex ls s) (vgob ls ((bytes (":" + s)) + (L CR)))
+   (ex ls s) (vgob ls ((bytes (":" + s)) + [CR]))
    _ (assert
       (= (st? (ex '("(: a 1)") "lint") 'msg) "balance clean")
       (= (st? (ex '("(: a 1") "lint") 'msg) "1 warning: 1,1 unclosed (")
@@ -342,8 +342,8 @@
       !(st? (vnew '("a") "l") 'hl)
       (st? (vnew '("a") "x.l") 'hl)
       (st? (vnew '("a") "crew/vi/hue.l") 'hl)
-      (st? (vgob '("a") ((bytes ":hl") + (L CR))) 'hl)
-      !(st? (vgob '("a") ((bytes ":hl") + (L CR) + (bytes ":hl") + (L CR))) 'hl))
+      (st? (vgob '("a") ((bytes ":hl") + [CR])) 'hl)
+      !(st? (vgob '("a") ((bytes ":hl") + [CR] + (bytes ":hl") + [CR])) 'hl))
 
    _ (test_fin ())                                    ; ⚠ no zz-fin here: quit before claiming ok
    _ (say err "crew/vi/law: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue ok") _ (put err 10) 0)

@@ -40,7 +40,7 @@
    ; (the highest we speak is __wait450 at 449); 4 kB of sys.o, aarch64 only.
    ; ⚠ the bound is spelled at the two sites, not bound once: a forward VALUE in
    ; this group does not resolve the way a forward lambda does (c0's letrec).
-   (nb-tab i acc) (? (i < 0) acc (nb-tab (i - 1) ((L 'svcn i) >< ((L 'ret) >< acc))))
+   (nb-tab i acc) (? (i < 0) acc (nb-tab (i - 1) (['svcn i] >< (['ret] >< acc))))
    ; the bytes alone -- moon.l's runtime pull lays sys in-memory through this
    (mksys-bytes arch)
     (: ir (? (id? arch 'x64)

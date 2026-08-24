@@ -64,7 +64,7 @@
 ; DEFAULT INFIX: any all-punct symbol acts dyadic (arity two) with NO table pin --
 ; the table holds only the EXCEPTIONS -- the other grips and hands.
 ; a fresh punct symbol, never registered, reads infix all the same.
-(: >< (\ a b (L a b))                            ; a fresh punct op, never registered
+(: >< (\ a b [a b])                              ; a fresh punct op, never registered
  (assert
   ('(3 5) = (3 >< 5))                             ; infix: captures the left operand
   ('(7 (3 5)) = (7 >< 3 >< 5))                    ; nests RIGHT-associatively
@@ -79,8 +79,8 @@
 ; (compared through show: opfix threads its spines with the 0-nil terminator, the
 ; reader with (); show renders both the same reparsable form, so the factor shows.)
 (assert
- ((show '(: >< (\ a b (L a b)) (>< 3 5))) = (show (opfix '(: >< (\ a b (L a b)) (3 >< 5)))))  ; explicit binder kept
- ((show '(: (>< a b) (L a b) (>< 3 5))) = (show (opfix '(: (>< a b) (L a b) (3 >< 5)))))      ; sugar header kept
+ ((show '(: >< (\ a b [a b]) (>< 3 5))) = (show (opfix '(: >< (\ a b [a b]) (3 >< 5)))))      ; explicit binder kept
+ ((show '(: (>< a b) [a b] (>< 3 5))) = (show (opfix '(: (>< a b) [a b] (3 >< 5)))))          ; sugar header kept
  ((show '(\ a b (+ a b))) = (show (opfix '(\ a b (a + b)))))                                  ; \ args verbatim, body factored
  ((show '(: a 1 b 2 (+ a b))) = (show (opfix '(: a 1 b 2 (a + b)))))                          ; : values/body factored, names kept
  (2 = (: x 1 x (x + 1) x)))                                                                     ; the sequence law, intact

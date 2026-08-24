@@ -236,7 +236,7 @@
                                            (: env (zipenv ps (caup sg)) cl (clashes dom sigs env body)
                                               bd (kindof dom sigs env body) decl (nthl sg 2)          ; body die vs DECLARED result
                                               ok (&& (atom? cl) (id? ((dom 'join) bd decl) decl))      ; no clash AND bd <= decl
-                                              (? ok 0 (L (link nm (? (atom? cl) (L 'result bd decl) cl))))))))   ; clash sites OR (result bd decl)
+                                              (? ok 0 [(link nm (? (atom? cl) ['result bd decl] cl))])))))       ; clash sites OR (result bd decl)
                                  (filter (\ p (! (atom? (cap p)))) (pairs (cup prog))))  ; strip `:`; function defs only
    ; the UNITS domain -- user-supplied: meters/seconds/area; `clash` = provably-wrong, `bot` = scalar/neutral
    (ujoin a b) (? (id? a 'bot) b (id? b 'bot) a (id? a b) a (|| (id? a 'clash) (id? b 'clash)) 'clash 'top)
@@ -305,7 +305,7 @@
        s  (ov2-uall (map (\ p (ov2-term vm p)) params) args '(()))        ; unify param patterns (fresh vars) vs arg dies AS-IS (a caller's rigid symbol is a constant -- no capture)
        (? (ufail? s) 'clash ((dom 'norm) (subst s (ov2-term vm result)))))                           ; reify + normalize (dependent index)
    ; a VEC domain: type-level Peano `add` normalizer -> a length-indexed (dependent) vector die
-   (vadd x y)  (? (id? x 'z) y (&& (two? x) (id? (cap x) 's)) (L 's (vadd (caup x) y)) (L 'add x y))
+   (vadd x y)  (? (id? x 'z) y (&& (two? x) (id? (cap x) 's)) ['s (vadd (caup x) y)] ['add x y])
    (vnorm d)   (? (atom? d) d (&& (id? (cap d) 'add) (= 3 (tally d))) (vadd (vnorm (caup d)) (vnorm (cap (cup (cup d))))) (map vnorm d))
    vdom {'dice '(meters seconds) 'ctors '(pair vec s z add) 'norm vnorm}
    _ (: _ (puts ";; P2 structured unify -- swap : (pair a b) -> (pair b a)\n")

@@ -63,7 +63,7 @@
  (peel B e felse P)
    (? (map? P)  (peel (sub e (ap1 (forest (sfn P)) e) B) e felse (ssrc P))   ; e := (f e)
       (filt? P) (peel (cnd3 (ap1 (forest (sfn P)) e) B felse) e felse (ssrc P)) ; (? (p e) B felse)
-      (L B (forest P)))                                                       ; base: forest nested pipelines
+      [B (forest P)])                                                         ; base: forest nested pipelines
 
  ; --- consumer drivers. each names a fresh step over its base body, peels the chain, reassembles. ---
  (deffold x tag)                                        ; (foldl/foldr c z P)
@@ -72,22 +72,22 @@
       B0 (? (id? tag 'foldl) (ap2 c a e) (ap2 c e a))   ; foldl: (c acc elem); foldr: (c elem acc)
       r  (peel B0 e a P)
       hd (? (id? tag 'foldl) (lam2 a e (cap r)) (lam2 e a (cap r)))
-      (L tag hd (forest z) (caup r)))
+      [tag hd (forest z) (caup r)])
  (defeach x)                                            ; (each l f) -- effect; skip-value is ()
    (: as (cup x) l (cap as) f (caup as)
       e (nom 'e)  r (peel (ap1 f e) e () l)
-      (L 'each (caup r) (lam1 e (cap r))))
+      ['each (caup r) (lam1 e (cap r))])
  (defaa x tag unit)                                     ; (all/any q P) -- skip-value is the short-circuit unit
    (: as (cup x) q (cap as) P (caup as)
       e (nom 'e)  r (peel (ap1 q e) e unit P)
-      (L tag (lam1 e (cap r)) (caup r)))
+      [tag (lam1 e (cap r)) (caup r)])
  (defto x)                                              ; a bare producer chain -> one foldr/link pass
    (: e (nom 'e) a (nom 'a)
       r (peel (ap2 'link e a) e a x)
-      (L 'foldr (lam2 e a (cap r)) () (caup r)))
+      ['foldr (lam2 e a (cap r)) () (caup r)])
 
  ; --- a lambda: forest its body, keep its params; a one-operand (\ datum) is quote -- leave it. ---
- (lamforest l) (? (nul? (cup l)) (L (forest (cap l))) (link (cap l) (lamforest (cup l))))
+ (lamforest l) (? (nul? (cup l)) [(forest (cap l))] (link (cap l) (lamforest (cup l))))
  (deflam x)    (? (nul? (cuup x)) x (link '\ (lamforest (cup x))))
 
  ; --- simp: reduce the fused residual to FIRST-ORDER form so the glaze can take it. two rewrites,

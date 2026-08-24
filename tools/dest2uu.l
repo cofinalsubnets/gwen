@@ -17,7 +17,7 @@
 ; references resolve at ITS compile, which must follow this run. reads carries the
 ; top-level leak (uu2coq's door); out rides a jug meanwhile -- dest.l's own asserts
 ; gate the run, its "dest: ok" stays out of the artifact.
-(: j (jug 0) _ (wear (L in j err))
+(: j (jug 0) _ (wear [in j err])
    _ (reads (open "doc/misc/proto/dest.l" "r"))
    _ (wear ()) ())
 
@@ -30,7 +30,7 @@
    LAB (tablet 0) OFF (tablet 0)
    (dyn t x) (: e (peep t x ())
                 (? (two? e) <e
-                   (: k (peep t 'n 0) _ (pin t 'n (k + 1)) _ (pin t x (L k)) k)))
+                   (: k (peep t 'n 0) _ (pin t 'n (k + 1)) _ (pin t x [k]) k)))
    (tr r) (2 * (look regs r))
    (ti k) (1 + 2 * k)
    (toff o) (ti (dyn OFF o))
@@ -43,29 +43,29 @@
     (? !(two? fs) ()
        (? (&& (id? (<fs 0) 'sub) (id? (<fs 1) 'sp) (two? >fs)
               (id? ((cap >fs) 0) 'st) (id? ((cap >fs) 1) 'sp))
-          (link (L 'push ((cap >fs) 3)) (plift (cup >fs)))
+          (link ['push ((cap >fs) 3)] (plift (cup >fs)))
           (&& (id? (<fs 0) 'ld) (id? (<fs 2) 'sp) (two? >fs)
               (id? ((cap >fs) 0) 'add) (id? ((cap >fs) 1) 'sp))
-          (link (L 'pop (<fs 1)) (plift (cup >fs)))
+          (link ['pop (<fs 1)] (plift (cup >fs)))
           (link <fs (plift >fs))))
    (lift1 f)
     (: h (f 0)
-       (? (id? h 'li)    (L 0 (tr (f 1)) (tx (f 2)) 0)
-          (id? h 'mov)   (L 1 (tr (f 1)) (tr (f 2)) 0)
-          (id? h 'ld)    (L 2 (tr (f 1)) (tr (f 2)) (toff (f 3)))
-          (id? h 'st)    (L 3 (tr (f 1)) (toff (f 2)) (tr (f 3)))
-          (id? h 'si)    (L 4 (tr (f 1)) (toff (f 2)) (ti (f 3)))
-          (id? h 'add)   (L 5 (tr (f 1)) (tx (f 2)) (tx (f 3)))
-          (id? h 'sub)   (L 6 (tr (f 1)) (tx (f 2)) (tx (f 3)))
-          (id? h 'cmp)   (L 7 (tx (f 1)) (tx (f 2)) 0)
-          (id? h 'set)   (L 8 (ti (look rels (f 1))) (tr (f 2)) 0)
-          (id? h 'br)    (L 9 (ti (look rels (f 1))) (tlab (f 2)) 0)
-          (id? h 'jmp)   (L 10 (tlab (f 1)) 0 0)
-          (id? h 'label) (L 11 (tlab (f 1)) 0 0)
-          (id? h 'call)  (L 12 (tlab (f 1)) 0 0)
-          (id? h 'ret)   (L 13 0 0 0)
-          (id? h 'push)  (L 14 (tr (f 1)) 0 0)
-          (id? h 'pop)   (L 15 (tr (f 1)) 0 0)
+       (? (id? h 'li)    [0 (tr (f 1)) (tx (f 2)) 0]
+          (id? h 'mov)   [1 (tr (f 1)) (tr (f 2)) 0]
+          (id? h 'ld)    [2 (tr (f 1)) (tr (f 2)) (toff (f 3))]
+          (id? h 'st)    [3 (tr (f 1)) (toff (f 2)) (tr (f 3))]
+          (id? h 'si)    [4 (tr (f 1)) (toff (f 2)) (ti (f 3))]
+          (id? h 'add)   [5 (tr (f 1)) (tx (f 2)) (tx (f 3))]
+          (id? h 'sub)   [6 (tr (f 1)) (tx (f 2)) (tx (f 3))]
+          (id? h 'cmp)   [7 (tx (f 1)) (tx (f 2)) 0]
+          (id? h 'set)   [8 (ti (look rels (f 1))) (tr (f 2)) 0]
+          (id? h 'br)    [9 (ti (look rels (f 1))) (tlab (f 2)) 0]
+          (id? h 'jmp)   [10 (tlab (f 1)) 0 0]
+          (id? h 'label) [11 (tlab (f 1)) 0 0]
+          (id? h 'call)  [12 (tlab (f 1)) 0 0]
+          (id? h 'ret)   [13 0 0 0]
+          (id? h 'push)  [14 (tr (f 1)) 0 0]
+          (id? h 'pop)   [15 (tr (f 1)) 0 0]
           (scare 'dest2uu-op h)))
 
    (pre fs) (? !(two? fs) ()
@@ -88,14 +88,14 @@
    _ (relab 0)  a3 (cvs s3 e3)
    _ (relab 0)  b3 (cks s3 e3 P)
    a4 (cvs s4 e4)  b4 (cks s4 e4 P)
-   progs (L (L 'ds1cv (cvs s1 e1))    (L 'ds1ck (cks s1 e1 P))
-            (L 'ds2cv (cvs s2 e2))    (L 'ds2ck (cks s2 e2 P))
-            (L 'ds3cv a3)             (L 'ds3ck b3)
-            (L 'ds4cv a4)             (L 'ds4ck b4)
-            (L 'ds4cvargs (pre a4))   (L 'ds4ckargs (pre b4))
-            (L 'de5kcv (cv '(k 7) e5))   (L 'de5kck (ck '(k 7) e5 P ()))
-            (L 'de5vcv (cv '(v z) e5))   (L 'de5vck (ck '(v z) e5 P ()))
-            (L 'de5bcv (cv eb e5))       (L 'de5bck (ck eb e5 P ())))
+   progs [['ds1cv (cvs s1 e1)]    ['ds1ck (cks s1 e1 P)]
+          ['ds2cv (cvs s2 e2)]    ['ds2ck (cks s2 e2 P)]
+          ['ds3cv a3]             ['ds3ck b3]
+          ['ds4cv a4]             ['ds4ck b4]
+          ['ds4cvargs (pre a4)]   ['ds4ckargs (pre b4)]
+          ['de5kcv (cv '(k 7) e5)]   ['de5kck (ck '(k 7) e5 P ())]
+          ['de5vcv (cv '(v z) e5)]   ['de5vck (ck '(v z) e5 P ())]
+          ['de5bcv (cv eb e5)]       ['de5bck (ck eb e5 P ())]]
 
    _ (puts "; test/uuhomgen.l -- GENERATED from doc/misc/proto/dest.l by tools/dest2uu.l. Do not")
    _ (puts "\n; edit; refresh with `make uuhomgen`. The law-site programs, cv (r0 protocol)")

@@ -21,9 +21,8 @@
                          (id? nm (cap (cap sigs))) (cap sigs)
                          (w2-sigof (cup sigs) nm))
    (w2-zip ps ks) (? (two? ps) (link [(cap ps) (cap ks)] (w2-zip (cup ps) (cup ks))) ())
-   ; ⚠ the list ctor wears TWO noms for one closure: `L` the ancient written-out
-   ; name, `list` what [..] and the ` sigil read to.
-   (w2-list? h) (|| (id? h 'L) (id? h 'list))
+   ; the list ctor: `list` is what [..] and the ` sigil read to.
+   (w2-list? h) (id? h 'list)
    ; ⚠ and so does negation: `!` is the SIGIL, `nil?` what opfix factors it to.
    ; the forms arrive factored, so match the core word and the surface one both.
    (w2-not? h) (|| (id? h '!) (id? h 'nil?))

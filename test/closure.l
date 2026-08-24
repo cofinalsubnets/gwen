@@ -119,7 +119,7 @@
 ; truthy PARTIAL, the body never ran, silently (rm -r walked a tree and deleted
 ; nothing). avw's shadow guard ('far keys every binding name) now stops the
 ; escape, and weave scares 'imports-grew if a frozen import row ever grows again.
-(: rq (cap (L 1))
+(: rq (cap [1])
    (zap q)
     (? (two? q)
        (: (go m ok) (? (! (two? m)) ok
@@ -128,7 +128,7 @@
           (go q 1))
        ())                                             ; the leaf: nothing (falsy) -- a partial is truthy
    (go a) (? rq (zap a) 0)
-   (assert (= 1 (go (L 5 6 7)))))                      ; ran to every leaf, no partial anywhere
+   (assert (= 1 (go [5 6 7]))))                        ; ran to every leaf, no partial anywhere
 
 ; --- capture that reaches THROUGH a later sibling -----------------------------
 ; the read that wants a cell need not sit in the value's own def-prefix: an earlier

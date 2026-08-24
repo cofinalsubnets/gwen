@@ -57,7 +57,7 @@
              (: w (wcut c pct) t (wrest c w)
                 (cat (wlay a row col r w)
                      (wlay b row (? (0 < t) (col + w + 1) col) r t)))))
-       (L (L p row col r c)))
+       [[p row col r c]])
    ; ⚠ () is the EMPTY WHARF, never a berth named () -- wharf-shut answers it when
    ; the last one leaves, and a door that missed this would hand back one phantom
    ; berth wearing the empty name. the same guard rides bars and berths below.
@@ -71,18 +71,18 @@
        (: pct <>p a <>>p b <>>>p
           (? (= <p 'stack)
              (: h (wcut r pct) t (wrest r h)
-                (cat (? (&& (0 < h) (0 < t)) (L (L 'across (row + h) col c)) ())
+                (cat (? (&& (0 < h) (0 < t)) [['across (row + h) col c]] ())
                      (cat (wbars a row col h c)
                           (wbars b (row + h + 1) col t c))))
              (: w (wcut c pct) t (wrest c w)
-                (cat (? (&& (0 < w) (0 < t)) (L (L 'down row (col + w) r)) ())
+                (cat (? (&& (0 < w) (0 < t)) [['down row (col + w) r]] ())
                      (cat (wbars a row col r w)
                           (wbars b row (col + w + 1) r t))))))
        ())
    (wharf-bars p r c) (? (() = p) () (wbars p 0 0 r c))
 
    ; --- the roster and the hit test -------------------------------------------
-   (wberths p) (? (two? p) (cat (wberths <>>p) (wberths <>>>p)) (L p))
+   (wberths p) (? (two? p) (cat (wberths <>>p) (wberths <>>>p)) [p])
    (wharf-berths p) (? (() = p) () (wberths p))
 
    ; which berth owns this cell, or () for none -- a zero-extent one owns nothing,
@@ -137,13 +137,13 @@
    ; split the berth named id in two; the new one takes the second half. an id
    ; that is not in the plan changes nothing, which is what a stale focus deserves.
    (wharf-split p id d pct new)
-    (? (two? p) (L <p <>p (wharf-split <>>p id d pct new) (wharf-split <>>>p id d pct new))
-       (? (= p id) (L d pct p new) p))
+    (? (two? p) [<p <>p (wharf-split <>>p id d pct new) (wharf-split <>>>p id d pct new)]
+       (? (= p id) [d pct p new] p))
 
    ; shut a berth; its sibling takes the whole of what the pair held, bar and all.
    ; shutting the last one answers () -- a wharf with nothing tied up at it.
    (wharf-shut p id)
     (? (two? p)
        (: a (wharf-shut <>>p id) b (wharf-shut <>>>p id)
-          (? (() = a) b (() = b) a (L <p <>p a b)))
+          (? (() = a) b (() = b) a [<p <>p a b]))
        (? (= p id) () p)))

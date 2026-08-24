@@ -30,15 +30,15 @@
    ts <>r
    (assert
       (two? r) (= (tally ts) 9)
-      (= (tn ts 0) (L 'kw 'int 1))
-      (= (tn ts 1) (L 'id "main" 1))
-      (= (tn ts 2) (L 'p "(" 1 1))              ; a '(' GLUED to `main` carries the 4th field (function-macro paren marker)
-      (= (tn ts 3) (L 'p ")" 1))
-      (= (tn ts 4) (L 'p "{" 1))
-      (= (tn ts 5) (L 'kw 'return 1))
-      (= (tn3 ts 6) (L 'num 42 1))
-      (= (tn ts 7) (L 'p ";" 1))
-      (= (tn ts 8) (L 'p "}" 1))))
+      (= (tn ts 0) ['kw 'int 1])
+      (= (tn ts 1) ['id "main" 1])
+      (= (tn ts 2) ['p "(" 1 1])                ; a '(' GLUED to `main` carries the 4th field (function-macro paren marker)
+      (= (tn ts 3) ['p ")" 1])
+      (= (tn ts 4) ['p "{" 1])
+      (= (tn ts 5) ['kw 'return 1])
+      (= (tn3 ts 6) ['num 42 1])
+      (= (tn ts 7) ['p ";" 1])
+      (= (tn ts 8) ['p "}" 1])))
 (: (tn ts k) (? (< k 1) <ts (tn >ts (- k 1)))
 (tn3 ts k) (: t (tn ts k) [<t <>t <>>t])   ; kind/value/line: not the slot-4 spelling
    ; kind/value/line alone: a numeric or string token also carries its SOURCE
@@ -50,27 +50,27 @@
    c3 <>(clex "a+++b")
    c4 <>(clex "x <<= 1; y >>= 2;")
    (assert
-      (= (tally c1) 2) (= (tn c1 1) (L 'id "b" 2))          ; // eats the line, lines count
-      (= (tally c2) 2) (= (tn c2 1) (L 'id "b" 2))          ; /* */ spans, lines count
+      (= (tally c1) 2) (= (tn c1 1) ['id "b" 2])            ; // eats the line, lines count
+      (= (tally c2) 2) (= (tn c2 1) ['id "b" 2])            ; /* */ spans, lines count
       ; clexat: the driver's door -- its prepended -D text stamps 1-k..0, so
       ; the TU's own first line is 1 and every stamped line (__LINE__, gripes)
       ; is TRUE with no pay-back pass
-      (= (tn <>(clexat "a\nb\nc" -1) 0) (L 'id "a" -1))
-      (= (tn <>(clexat "a\nb\nc" -1) 1) (L 'id "b" 0))
-      (= (tn <>(clexat "a\nb\nc" -1) 2) (L 'id "c" 1))
+      (= (tn <>(clexat "a\nb\nc" -1) 0) ['id "a" -1])
+      (= (tn <>(clexat "a\nb\nc" -1) 1) ['id "b" 0])
+      (= (tn <>(clexat "a\nb\nc" -1) 2) ['id "c" 1])
       (= (tally c3) 4)                                       ; maximal munch: a ++ + b
-      (= (tn c3 1) (L 'p "++" 1)) (= (tn c3 2) (L 'p "+" 1))
-      (= (tn c4 1) (L 'p "<<=" 1)) (= (tn c4 5) (L 'p ">>=" 1))
-      (= (tn3 <>(clex "'a' '\\n' '\\''") 0) (L 'num 97 1))        ; char literals are numbers
-      (= (tn3 <>(clex "'a' '\\n' '\\''") 1) (L 'num 10 1))
-      (= (tn3 <>(clex "'a' '\\n' '\\''") 2) (L 'num 39 1))
+      (= (tn c3 1) ['p "++" 1]) (= (tn c3 2) ['p "+" 1])
+      (= (tn c4 1) ['p "<<=" 1]) (= (tn c4 5) ['p ">>=" 1])
+      (= (tn3 <>(clex "'a' '\\n' '\\''") 0) ['num 97 1])          ; char literals are numbers
+      (= (tn3 <>(clex "'a' '\\n' '\\''") 1) ['num 10 1])
+      (= (tn3 <>(clex "'a' '\\n' '\\''") 2) ['num 39 1])
       ; a multi-char constant packs left to right into an int, gcc's rule (0x6162);
       ; an UNTERMINATED one still refuses.
-      (= (tn3 <>(clex "'ab'") 0) (L 'num 24930 1))
+      (= (tn3 <>(clex "'ab'") 0) ['num 24930 1])
       !(clex "'")                                            ; malformed literals refuse
-      (= (tn3 <>(clex "\"hi\"") 0) (L 'str "hi" 1))
-      (= (tn3 <>(clex "\"a\\nb\"") 0) (L 'str "a\nb" 1))
-      (= (tn3 <>(clex "\"ab\\\ncd\"") 0) (L 'str "abcd" 1))        ; \<newline> inside a string SPLICES (the pair vanishes) -- tar's --help strings
+      (= (tn3 <>(clex "\"hi\"") 0) ['str "hi" 1])
+      (= (tn3 <>(clex "\"a\\nb\"") 0) ['str "a\nb" 1])
+      (= (tn3 <>(clex "\"ab\\\ncd\"") 0) ['str "abcd" 1])          ; \<newline> inside a string SPLICES (the pair vanishes) -- tar's --help strings
       !(clex "\"open")                                       ; unterminated string refuses
       ; the SOURCE SPELLING beside the value, slot 4: what a value cannot answer
       ; back (0777 and 511 are one value) and what # owes. cpp's sof reads it.
@@ -81,37 +81,37 @@
       ; wide/prefixed literals: the KIND carries the width (L -> wstr, u -> str16,
       ; U -> str32; u8 stays narrow bytes), the value is canonical UTF-8 -- an escape
       ; re-encodes, so utf8dec answers the elements whatever spelled them.
-      (= (tn3 <>(clex "L'a'") 0) (L 'num 97 1))               ; L'a' == 'a'
-      (= (tn3 <>(clex "u'B'") 0) (L 'num 66 1))               ; u'B'
-      (= (tn3 <>(clex "U'C'") 0) (L 'num 67 1))               ; U'C'
-      (= (tn3 <>(clex "L'\\n'") 0) (L 'num 10 1))             ; an escape rides through the prefix
-      (= (tn3 <>(clex "L'ab'") 0) (L 'num 98 1))              ; multi-cp: the LAST one (gcc's reading; clang refuses the shape)
-      (= (tn3 <>(clex "L\"hi\"") 0) (L 'wstr "hi" 1))
-      (= (tn3 <>(clex "u\"hi\"") 0) (L 'str16 "hi" 1))
-      (= (tn3 <>(clex "U\"hi\"") 0) (L 'str32 "hi" 1))
-      (= (tn3 <>(clex "u8\"hi\"") 0) (L 'str "hi" 1))         ; u8 (two-char prefix): byte semantics
+      (= (tn3 <>(clex "L'a'") 0) ['num 97 1])                 ; L'a' == 'a'
+      (= (tn3 <>(clex "u'B'") 0) ['num 66 1])                 ; u'B'
+      (= (tn3 <>(clex "U'C'") 0) ['num 67 1])                 ; U'C'
+      (= (tn3 <>(clex "L'\\n'") 0) ['num 10 1])               ; an escape rides through the prefix
+      (= (tn3 <>(clex "L'ab'") 0) ['num 98 1])                ; multi-cp: the LAST one (gcc's reading; clang refuses the shape)
+      (= (tn3 <>(clex "L\"hi\"") 0) ['wstr "hi" 1])
+      (= (tn3 <>(clex "u\"hi\"") 0) ['str16 "hi" 1])
+      (= (tn3 <>(clex "U\"hi\"") 0) ['str32 "hi" 1])
+      (= (tn3 <>(clex "u8\"hi\"") 0) ['str "hi" 1])           ; u8 (two-char prefix): byte semantics
       (= (utf8dec <>(tn <>(clex "L\"\\x4f60\"") 0)) '(20320))         ; a high escape re-encoded, one element back
       (= (utf8dec "h\xc3\xa9!") '(104 233 33))                 ; the codec bare: UTF-8 text decodes
       (= (utf8dec "\xff") '(255))                              ; ..and a stray byte answers itself
       (= (spl (clex "L\"hi\"") 0) "L\"hi\"")                  ; the spelling keeps the prefix (# owes it)
-      (= (tn <>(clex "Long") 0) (L 'id "Long" 1))            ; an id STARTING with L/u/U is NOT a prefix (no quote follows)
+      (= (tn <>(clex "Long") 0) ['id "Long" 1])              ; an id STARTING with L/u/U is NOT a prefix (no quote follows)
       (= (tally <>(clex "L L'a'")) 2)                        ; bare L stays an id; L'a' a number
       !(clex "int @")                                        ; not C: the lex error rides up
       (= (tally <>(clex "abc")) 3)                        ; form-feed + vertical-tab are WHITESPACE (GNU page breaks); real FF/VT bytes here
       !(clex "a /* open")                                    ; unterminated comment refused
-      (= (tn3 <>(clex "0644") 0) (L 'num 420 1))            ; octal integer literal (0644 = 420); gzip's 0777/0666 modes
-      (= (tn3 <>(clex "0777") 0) (L 'num 511 1))
-      (= (tn3 <>(clex "0") 0) (L 'num 0 1))                 ; a plain 0 stays 0
-      (= (tn3 <>(clex "08") 0) (L 'num 8 1))                ; 8/9 aren't octal digits -> falls to decimal
-      (= (tn3 <>(clex "0x1F") 0) (L 'num 31 1))              ; 7c-ii: hex literals
-      (= (tn3 <>(clex "0xFF & 1") 0) (L 'num 255 1))
-      (= (tn3 <>(clex "255L") 0) (L 'lnum 255 1))            ; an l/L suffix makes the constant a LONG
-      (= (tn3 <>(clex "100U") 0) (L 'unum 100 1))            ; a u/U marks the token UNSIGNED (neg/div/shift go unsigned):
-      (= (tn3 <>(clex "100UL") 0) (L 'ulnum 100 1))          ; bare u an unsigned INT, u+l/L (or a >32-bit value) an unsigned LONG
-      (= (tn3 <>(clex "0x8ULL") 0) (L 'ullnum 8 1))          ; the LL pair is its own kind (t32 types it llong)
-      (= (tn3 <>(clex "'\\f'") 0) (L 'num 12 1))             ; \f form feed, \a bell, \v vtab
-      (= (tn3 <>(clex "'\\a'") 0) (L 'num 7 1))
-      (= (tn3 <>(clex "'\\v'") 0) (L 'num 11 1))
+      (= (tn3 <>(clex "0644") 0) ['num 420 1])              ; octal integer literal (0644 = 420); gzip's 0777/0666 modes
+      (= (tn3 <>(clex "0777") 0) ['num 511 1])
+      (= (tn3 <>(clex "0") 0) ['num 0 1])                   ; a plain 0 stays 0
+      (= (tn3 <>(clex "08") 0) ['num 8 1])                  ; 8/9 aren't octal digits -> falls to decimal
+      (= (tn3 <>(clex "0x1F") 0) ['num 31 1])                ; 7c-ii: hex literals
+      (= (tn3 <>(clex "0xFF & 1") 0) ['num 255 1])
+      (= (tn3 <>(clex "255L") 0) ['lnum 255 1])              ; an l/L suffix makes the constant a LONG
+      (= (tn3 <>(clex "100U") 0) ['unum 100 1])              ; a u/U marks the token UNSIGNED (neg/div/shift go unsigned):
+      (= (tn3 <>(clex "100UL") 0) ['ulnum 100 1])            ; bare u an unsigned INT, u+l/L (or a >32-bit value) an unsigned LONG
+      (= (tn3 <>(clex "0x8ULL") 0) ['ullnum 8 1])            ; the LL pair is its own kind (t32 types it llong)
+      (= (tn3 <>(clex "'\\f'") 0) ['num 12 1])               ; \f form feed, \a bell, \v vtab
+      (= (tn3 <>(clex "'\\a'") 0) ['num 7 1])
+      (= (tn3 <>(clex "'\\v'") 0) ['num 11 1])
       (= <>(clex "") ())))                                   ; empty text, empty tokens
 
 ; --- the parser: precedence, associativity, desugarings, statement shapes ---
@@ -533,15 +533,15 @@
    (has op forms) (: (go l) (? !(two? l) () (two? <l && (= <<l op)) 1 (go >l)) (go forms))
    (assert
       ; the lexer: a float literal is a 'flo token carrying a gem
-      (= (tn3 <>(clex "3.5") 0) (L 'flo 3.5 1))
-      (= (tn3 <>(clex ".25") 0) (L 'flo 0.25 1))
-      (= (tn3 <>(clex "1e3") 0) (L 'flo 1000.0 1))
-      (= (tn3 <>(clex "2.") 0) (L 'flo 2.0 1))
+      (= (tn3 <>(clex "3.5") 0) ['flo 3.5 1])
+      (= (tn3 <>(clex ".25") 0) ['flo 0.25 1])
+      (= (tn3 <>(clex "1e3") 0) ['flo 1000.0 1])
+      (= (tn3 <>(clex "2.") 0) ['flo 2.0 1])
       ; the imaginary suffix (i/j, either order with f/l) is its own kind
-      (= (tn3 <>(clex "1.0fi") 0) (L 'iflo 1.0 1))
-      (= (tn3 <>(clex "2.5if") 0) (L 'iflo 2.5 1))
-      (= (tn3 <>(clex ".5i") 0) (L 'iflo 0.5 1))
-      (= (tn3 <>(clex "42") 0) (L 'num 42 1))               ; an integer stays 'num
+      (= (tn3 <>(clex "1.0fi") 0) ['iflo 1.0 1])
+      (= (tn3 <>(clex "2.5if") 0) ['iflo 2.5 1])
+      (= (tn3 <>(clex ".5i") 0) ['iflo 0.5 1])
+      (= (tn3 <>(clex "42") 0) ['num 42 1])                 ; an integer stays 'num
       ; the parser: a double type and a 'flo primary
       (= (cast "int main() { double d = 1.5; return 0; }")
          '(prog ((fn "main" () (blk ((decl (("d" double (flo 1.5)))) (ret (num 0))))))))

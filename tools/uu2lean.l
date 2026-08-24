@@ -48,8 +48,8 @@
    ; --- collect (kind nm T t) entries from the uu.l forms (defns live inside asserts) ---
    (deq? c) (&& (two? c) (| (id? (cap c) 'defn) (id? (cap c) 'defq)))
    (axq? c) (&& (two? c) (id? (cap c) 'axm))
-   (entry c) (? (deq? c) (L 'def (unq (e2 c)) (unq (e3 c)) (unq (e4 c)))
-                (axq? c) (L 'axm (unq (e2 c)) (unq (e3 c)) ()))
+   (entry c) (? (deq? c) ['def (unq (e2 c)) (unq (e3 c)) (unq (e4 c))]
+                (axq? c) ['axm (unq (e2 c)) (unq (e3 c)) ()])
    (kids ks acc) (? (two? ks) (kids (cup ks) (? (| (deq? (cap ks)) (axq? (cap ks))) (link (entry (cap ks)) acc) acc)) acc)
    (gather fs acc) (? (two? fs)
                       (gather (cup fs) (: F (cap fs)

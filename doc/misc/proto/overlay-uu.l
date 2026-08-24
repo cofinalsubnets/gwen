@@ -9,7 +9,7 @@
 ; flagged. This is the overlay's `norm`/`okr` slot connected to uu (memory
 ; pluggable-types, the Phase-2 "dial up to uu" rung).
 (: uunorm (\ d (? (&& (two? d) (id? (cap d) 'vec) (= 3 (tally d)))
-                  (L 'vec (caup d) (vof () (cap (cup (cup d)))))    ; length index -> uu normal form (a charm)
+                  ['vec (caup d) (vof () (cap (cup (cup d))))]      ; length index -> uu normal form (a charm)
                   d))
    vdom {'dice '(meters) 'ctors '(pair vec succ zero add)
          'okr    (\ bd decl (= (uunorm bd) (uunorm decl)))         ; result acceptable iff indices uu-CONVERTIBLE

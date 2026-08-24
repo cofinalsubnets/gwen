@@ -41,7 +41,7 @@
 (: (rd-dn a b) (&& (! (= a b)) (two? a) (two? b))
    (rd-small a b) (? (rd-dn <a <b) (rd-small <a <b)
                      (rd-dn >a >b) (rd-small >a >b)
-                     (L a b)))
+                     [a b]))
 
 ; --- the input set: every .l under the root, off readdir --------------------
 ; out/ is generated, dot-directories are not ours. stat's mode word decides
@@ -82,7 +82,7 @@
            ; print->read rides reader A's forms so it still measures something
            ; when A and B are the same reader
            (each fa (\ f (: g (rd-forms r (show f))
-                            (? (= (L f) g) 0 (say "print->read" path (L f) g))))))
+                            (? (= [f] g) 0 (say "print->read" path [f] g))))))
       _ (each paths one)
       n))
 
@@ -100,7 +100,7 @@
 (: rd-files (rd-walk "." ())
    _ (puts ("rdiff: " + (show (tally rd-files)) + " .l files\n"))
    rd-clean (rd-run rd-test rd-files 1)
-   rd-hurtn (rd-run rd-hurt (L "test/spec.l") 0)
+   rd-hurtn (rd-run rd-hurt ["test/spec.l"] 0)
    _ (puts ("rdiff: files=" + (show (peep rd-clean 'files 0))
             + " forms=" + (show (peep rd-clean 'forms 0))
             + " bad=" + (show (peep rd-clean 'bad 0))
@@ -116,11 +116,11 @@
 ; divergence instead of the agreement. p1.l and egg.l are what p0 reads at boot;
 ; p0fix.l spans the grammar they are too thin to cover. a sigil creeping into any
 ; of the three fails HERE -- and prel.l is NOT among them: it rides p1 now.
-(: rd-p0 (rd-run sound0 (L "test/host/p0fix.l" "love/p1.l" "love/egg.l") 1)
+(: rd-p0 (rd-run sound0 ["test/host/p0fix.l" "love/p1.l" "love/egg.l"] 1)
    ; and the same rig pointed at a file OUTSIDE the subset, which must go red:
    ; the proof this leg can fail, the rd-hurt discipline applied to a real reader
    ; rather than a spoiled one.
-   rd-p0x (rd-run sound0 (L "love/ev.l") 0)
+   rd-p0x (rd-run sound0 ["love/ev.l"] 0)
    ; p0 puts NESTING ON THE C STACK -- the trade that buys its size, and the one
    ; thing the stackless reader has over it. so pin the depth it reaches, far
    ; past the deepest form in the tree (38, test/uupatch.l).
@@ -132,7 +132,7 @@
    (rd-p0hurt cl) (: x (sound0 cl)
                      _ (pin rd-p0hn 0 (1 + (peep rd-p0hn 0 0)))
                      (? (= 3 (peep rd-p0hn 0 0)) 'rd-spoiled x))
-   rd-p0hurtn (rd-run rd-p0hurt (L "test/host/p0fix.l") 0)
+   rd-p0hurtn (rd-run rd-p0hurt ["test/host/p0fix.l"] 0)
    _ (puts ("rdiff: p0 forms=" + (show (peep rd-p0 'forms 0))
             + " bad=" + (show (peep rd-p0 'bad 0))
             + " off-subset=" + (show (peep rd-p0x 'bad 0))

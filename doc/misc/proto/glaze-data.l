@@ -82,7 +82,7 @@
   ; collect every operator from `ops` that appears anywhere in the source expr e (over-approximates:
   ; a head symbol in `ops` counts wherever it textually occurs -- exactly "does this body REQUIRE it").
   (collect e ops) (? (two? e)
-                      (+ (? (member? (cap e) ops) (L (cap e)) ())
+                      (+ (? (member? (cap e) ops) [(cap e)] ())
                          (foldl (\ a x (+ a (collect x ops))) () e))
                       ())
   (allocs e) (collect e alloc-ops)                    ; heap producers this body needs
@@ -140,7 +140,7 @@
 
   _ (. ";; doc/misc/proto/glaze-data.l: glaze-coverage self-checks pass\n")
   _ (. ";;   STAGE A/B LANDED: ck glazes (native chain fold, 6.7x); the typing gate rejects (+ (cap t) 0)\n")
-  _ (. ";;   today's grammar admits ") _ (. (show (L 'fib 'primes))) _ (. ", rejects tree/hash (heap ops)\n")
+  _ (. ";;   today's grammar admits ") _ (. (show ['fib 'primes])) _ (. ", rejects tree/hash (heap ops)\n")
   _ (. ";;   tree walk  needs ") _ (. (show (reads ck)))   _ (. " (reads only)   -> stage B\n")
   _ (. ";;   tree build needs ") _ (. (show (allocs mk)))  _ (. " (allocator)    -> stage D\n")
   _ (. ";;   hash read  needs ") _ (. (show (reads scan))) _ (. " (read only)    -> stage C\n")

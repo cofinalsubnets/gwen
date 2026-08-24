@@ -34,7 +34,7 @@
    ; the long-running process). `restart` is 'no | 'on-fail | 'always (systemd's Restart=).
    ; `deps` is the After= list -- names that must be up before this one starts.
    (nth l i) (? (= i 0) (cap l) (nth (cup l) (- i 1)))
-   (unit name kind cmd restart deps) (L name kind cmd restart deps)
+   (unit name kind cmd restart deps) [name kind cmd restart deps]
    (u-name u) (nth u 0)   (u-kind u) (nth u 1)   (u-cmd u) (nth u 2)
    (u-restart u) (nth u 3) (u-deps u) (nth u 4)
    (find units name) (? !units ()                    ; the unit with this name, or ()
@@ -99,7 +99,7 @@
 
    ; --- checkpoint --- the live book -> an immutable (name status) list, show/read-able
    ; (a book does not round-trip; the list does). persistence is show/read, end to end.
-   (snap reg names) (map (\ n (L n (peep reg n 'down))) names))
+   (snap reg names) (map (\ n [n (peep reg n 'down)]) names))
 
 ; --- install the watchdog as the global help (the floor that turns a service's fault
 ; into () so the supervisor sees a falsey `catch`) --- read control keeps the protocol;
@@ -139,9 +139,9 @@
               (: _ (rest 2) (rloop units pids tries live (- steps 1))))))      ; nothing yet: wait
    (real _)
      (: pids (tablet 0) tries (tablet 0)
-        units (L
-          (unit 'worker 'service (L "sh" "-c" "exit 0") 'on-fail ())    ; exits 0 -> settles
-          (unit 'flaky  'service (L "sh" "-c" "exit 1") 'on-fail ()))   ; exits 1 -> restart, then give up
+        units [
+         (unit 'worker 'service ["sh" "-c" "exit 0"] 'on-fail ())       ; exits 0 -> settles
+         (unit 'flaky  'service ["sh" "-c" "exit 1"] 'on-fail ())]      ; exits 1 -> restart, then give up
         _ (note "-- REAL processes: spawn each, then poll glean (the SIGCHLD core) --")
         _ (each units (\ u (rstart pids u)))
         _ (rloop units pids tries (tally units) 500)
@@ -185,8 +185,8 @@
      (: sig (sigfd 0)
         (? !sig (note "  perceive: no signal source here")
            (: pids (tablet 0) tries (tablet 0)
-              units (L (unit 'slow 'service (L "sh" "-c" "sleep 0.15; exit 0") 'on-fail ())
-                       (unit 'flap 'service (L "sh" "-c" "exit 1")             'on-fail ()))
+              units [(unit 'slow 'service ["sh" "-c" "sleep 0.15; exit 0"] 'on-fail ())
+                     (unit 'flap 'service ["sh" "-c" "exit 1"]             'on-fail ())]
               _ (note "-- PERCEIVE: park on a signalfd; a heartbeat task ticks alongside (the merge) --")
               hb (twirl (\ _ (heart 5 40)) 0)             ; heartbeat TASK: parks on the clock
               _ (each units (\ u (rstart pids u)))
@@ -263,7 +263,7 @@
         _ (mount1 "proc"  "/tmp/love-proc" "proc")
         pids (tablet 0)
         _ (note "-- spawn a child that orphans a grandchild, then glean (pid 1's duty) --")
-        p (spawn (L "sh" "-c" "(sleep 0.2; exit 7) & exit 0"))    ; parent exits 0; grandchild orphaned
+        p (spawn ["sh" "-c" "(sleep 0.2; exit 7) & exit 0"])      ; parent exits 0; grandchild orphaned
         _ (pin pids p 'orphan-parent)
         n (glean-tour pids 0 2 800)                                ; parent settles fast; the orphan after its sleep
         _ (note (+ "-- reaped " (+ (show n) " children, one a reparented orphan -- love supervised pid 1 --")))
@@ -277,14 +277,14 @@
       svc    (\ name k (\ _ (: n (+ 1 (peep cr name 0)) _ (pin cr name n)
                                (? (< n k) (scare 'crash name) 'ok))))
       ok-svc (\ _ 'ok)                                ; a clean service: up on the first try
-      units (L
-        (unit 'netd    'service ok-svc            'on-fail ())
-        (unit 'logd    'service ok-svc            'on-fail ())
-        (unit 'dbusd   'service ok-svc            'on-fail (L 'logd))           ; after logd
-        (unit 'app     'service (svc 'app 3)      'on-fail (L 'netd 'dbusd))    ; crashes twice, then up
-        (unit 'brittle 'service (svc 'brittle 9)  'no      ())                  ; crashes, Restart=no -> failed
-        (unit 'hello   'oneshot (L "echo" "-n" "init: a real child says hi")
-                                                  'no      (L 'app)))           ; a REAL forked child, after app
+      units [
+       (unit 'netd    'service ok-svc            'on-fail ())
+       (unit 'logd    'service ok-svc            'on-fail ())
+       (unit 'dbusd   'service ok-svc            'on-fail ['logd])              ; after logd
+       (unit 'app     'service (svc 'app 3)      'on-fail ['netd 'dbusd])       ; crashes twice, then up
+       (unit 'brittle 'service (svc 'brittle 9)  'no      ())                   ; crashes, Restart=no -> failed
+       (unit 'hello   'oneshot ["echo" "-n" "init: a real child says hi"]
+                                                 'no      ['app])]              ; a REAL forked child, after app
       _   (note "-- love-init: bring up the unit graph (deps first; services modeled, oneshot real) --")
       reg (boot units)
       _   (note "-- final state (the checkpoint -- a show/read-able value) --")

@@ -1744,13 +1744,13 @@
    ;     positive cycle exists. COMPLETE where lle is conservative: it catches cross-site cycles
    ;     (a<=b, b<a) no local check sees. (Whole-corpus IMPLICIT inference -- generalize a def
    ;     over its level vars + instantiate per use -- is the remaining integration on top.)
-   (lparse l) (? (charm? l) (L 'ground l)
-                 (&& (two? l) (id? <l 'lsuc)) (: p (lparse <>l) (L <p (+ 1 <>p)))
-                 (&& (two? l) (id? <l 'lv)) (L l 0)
-                 (L 'ground 0))
+   (lparse l) (? (charm? l) ['ground l]
+                 (&& (two? l) (id? <l 'lsuc)) (: p (lparse <>l) [<p (+ 1 <>p)])
+                 (&& (two? l) (id? <l 'lv)) [l 0]
+                 ['ground 0])
    (atomset prs) (: s (tablet 0) _ (map (\ e (: _ (pin s <e 1) (pin s <>e 1))) prs) (keys s))
-   (usat? cs)                                                          ; cs: list of (L x y), each meaning x <= y
-   (: prs (map (\ c (: x (lparse <c) y (lparse <>c) (L <x <y (- <>x <>y)))) cs)
+   (usat? cs)                                                          ; cs: list of [x y], each meaning x <= y
+   (: prs (map (\ c (: x (lparse <c) y (lparse <>c) [<x <y (- <>x <>y)])) cs)
       atoms (atomset prs) pot (tablet 0) _ (map (\ a (pin pot a 0)) atoms)
       (relax1 z) (foldl (\ ch e (: uu (peep pot <e 0) w <>>e v (peep pot <>e 0)
                                    (? (> (+ uu w) v) (: _ (pin pot <>e (+ uu w)) 1) ch))) 0 prs)
@@ -1779,7 +1779,7 @@
    (sortof cx en d T) (: l (ulvl (pinf cx en d T)) (? (id? l 'no) (scare 'uu-not-a-type T) l))
 
    (cleq d ti t)
-   (? (&& !(id? (ulvl ti) 'no) !(id? (ulvl t) 'no)) (usat? (L (L (ulvl ti) (ulvl t)))) (conv d ti t))
+   (? (&& !(id? (ulvl ti) 'no) !(id? (ulvl t) 'no)) (usat? [[(ulvl ti) (ulvl t)]]) (conv d ti t))
 
    (predpi cx en d t)                                                  ; PI / SIGMA formation -> U_max(i,j)
    (: i (sortof cx en d <>>t) fr `('nv d)
@@ -1843,11 +1843,11 @@
  (id? 'idf1 (pdefn 'idf1 '(pi T (UU 1) (pi x T T)) '(lam T (lam x x))))            ; ... and at UU1 (multi-level use Stage 1 concrete couldn't do)
  (! (cleq 0 (pinf 0 0 0 '(UU (lv a))) (vof 0 '(UU (lv a)))))                       ; SOUNDNESS over a VARIABLE level: UU_a : UU_a rejected
  ; --- the CONSTRAINT SOLVER (usat?): global satisfiability, beyond the conservative lle ---
- (usat? (L (L '(lv a) '(lv b)) (L '(lv b) '(lv c))))                              ; a<=b<=c : satisfiable
- (usat? (L (L '(lv a) '(lv b)) (L '(lv b) '(lv a))))                              ; a<=b, b<=a : SAT (forces a=b)
- (! (usat? (L (L '(lsuc (lv a)) '(lv a)))))                                       ; a+1<=a : UNSAT (a<a)
- (! (usat? (L (L '(lv a) '(lv b)) (L '(lsuc (lv b)) '(lv a)))))                   ; a<=b, b+1<=a : UNSAT -- a CROSS-SITE cycle no local check sees
- (! (usat? (L (L 1 0))))                                                          ; 1<=0 : UNSAT (the keystone constraint, concretely)
+ (usat? [['(lv a) '(lv b)] ['(lv b) '(lv c)]])                                    ; a<=b<=c : satisfiable
+ (usat? [['(lv a) '(lv b)] ['(lv b) '(lv a)]])                                    ; a<=b, b<=a : SAT (forces a=b)
+ (! (usat? [['(lsuc (lv a)) '(lv a)]]))                                           ; a+1<=a : UNSAT (a<a)
+ (! (usat? [['(lv a) '(lv b)] ['(lsuc (lv b)) '(lv a)]]))                         ; a<=b, b+1<=a : UNSAT -- a CROSS-SITE cycle no local check sees
+ (! (usat? [[1 0]]))                                                              ; 1<=0 : UNSAT (the keystone constraint, concretely)
  ; --- IMPLICIT inference: real UniMath defs check with BARE UU (no (UU l) annotations), levels inferred ---
  (id? 'qidfun (qdefn 'qidfun '(pi T UU (pi x T T)) '(lam T (lam x x))))           ; idfun: forall(T:UU),T->T -- UU's level inferred
  (id? 'qfuncomp (qdefn 'qfuncomp

@@ -3530,7 +3530,7 @@
    epi-t16va '((lea sp fp 0) (pop r4) (pop fp) (pop r3) (add sp sp 16) (jmpr r3))
    ; rdsp: the table's dataflow view of one form -- what it reads, what it defines, whether it's
    ; droppable when its defs die. an op off the table answers 'bar (assume everything).
-   (rdsp f)                                         ; -> (L reads defs pure?) | 'bar
+   (rdsp f)                                         ; -> [reads defs pure?] | 'bar
     (: op <f
        (rg1 x) (? (charm? x) () [x])
        (? (op = 'li) [() [<>f] 1]
@@ -6469,7 +6469,7 @@
    ; switch, whose cases belong to IT -- a case ties to its NEAREST enclosing switch, per C.
    (scasel g it tab acc)
     (? !(two? it) acc
-       (it @ ('case cv)     (: lab (nlab g ".k") _ (pin tab cv lab) (L cv lab >< acc))
+       (it @ ('case cv)     (: lab (nlab g ".k") _ (pin tab cv lab) [cv lab >< acc])
              ('dflt >< _)   (: lab (nlab g ".k") _ (pin tab 'dflt lab) acc)
              ('switch >< _) acc                                   ; a nested switch owns its labels
              (scasel-l g (stkids it) tab acc)))
@@ -7100,7 +7100,7 @@
        ; -- the LOCALS picker: rank the homable locals ir1 recorded by residual frame touches,
        ; drop any whose slot is lea'd, gate each on touches beating the per-call wrap, and hand
        ; the hottest the FRONT of hpool -- the operand pool keeps the rest (two reserved, so
-       ; expressions never go dry). answers (L lhome-tablet remaining-pool) | (). --
+       ; expressions never go dry). answers [lhome-tablet remaining-pool] | (). --
        (ntouch fs off n)
         (? !(two? fs) n
            (: f2 <fs

@@ -53,15 +53,15 @@ let prelude = {ai|
    (vname i) (intern (+ "v" (show i)))
    (render d t)
      (? (= (dtag t) 0) (vname (- (- d 1) (dn t)))
-        (= (dtag t) 1) (L lam-sym (vname d) (render (+ d 1) (dbody t)))
-        (L (render d (dfun t)) (render d (darg t))))
+        (= (dtag t) 1) [lam-sym (vname d) (render (+ d 1) (dbody t))]
+        [(render d (dfun t)) (render d (darg t))])
    (ground v) (v 'm1 'm2 'm3 'm4 'm5)
    (oline t nf) (? (= (ground (ev (render 0 t))) (ground (ev (render 0 nf)))) 1 0)
-   got (foldl (+) 0 (L|ai}
+   got (foldl (+) 0 [|ai}
 
 (* footer: total count is spliced in so the verdict line is self-describing *)
 let footer n =
-  Printf.sprintf {ai|))
+  Printf.sprintf {ai|])
    _ (. "extracted-oracle: ") _ (. (show got)) _ (. " / %d ")
    (. (? (= got %d) "PASS\n" "FAIL\n")))
 |ai} n n
