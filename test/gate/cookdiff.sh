@@ -21,6 +21,14 @@ case "$(make --version 2>/dev/null | head -1)" in
   *) echo "cookdiff: ambient make is not GNU make -- skipped"; exit 0 ;;
 esac
 
+# ⚠ THE ORACLE RUNS TOP-LEVEL. under `make -jN` the outer make exports MAKEFLAGS with
+# its jobserver, and the make below would inherit it -- a parallel oracle reorders any
+# case whose target has two independent prerequisites, so `all: a | b` prints [b] before
+# [a] about 1 run in 12 and the gate reports COOK as failing when the oracle moved. cook
+# is serial, so only one side of the differential was drifting. a differential is worth
+# exactly what its oracle's determinism is worth.
+unset MAKEFLAGS MFLAGS GNUMAKEFLAGS MAKELEVEL
+
 work=$(mktemp -d) || exit 1
 trap 'rm -rf "$work"' EXIT
 fail=0; ran=0; known=0
