@@ -11,6 +11,15 @@
 ; a binding inside the body-having `:` below would be local to that form.
 (: bake-smoke-marker 4242)
 
+; the dump hash-conses equal chains and strings (doc/misc/snapshot.md). these ride the
+; snapshot as top-level globals like the marker above, and the woken child asks what
+; merged: the two lists are one value, and the two casks -- equal bytes, but written
+; THROUGH their holder -- are not, or a write to either would land on both.
+(: bake-dedup-l1 [1 2 3 4 5]
+   bake-dedup-l2 [1 2 3 4 5]
+   bake-dedup-c1 (cask 4)
+   bake-dedup-c2 (cask 4))
+
 (: img "out/.bake-nif-smoke.image"
    drv "out/.bake-nif-drive.l"
    _ (unlink img) _ (unlink drv)                    ; a clean slate, tolerated if absent
@@ -23,6 +32,16 @@
    _ (: p (open drv "w") _ (say p "(: _ (putn bake-smoke-marker) (quit 0))") (close p))
    r (hark `("out/host/love" "wake" img drv))
    _ (assert (two? r) (<r = 0) (>r = "4242"))
+
+   ; ..and what the hash-cons did to the pair of each kind
+   _ (: p (open drv "w")
+        _ (say p "(: _ (pin bake-dedup-c1 0 65) ok (? (id? bake-dedup-l1 bake-dedup-l2) ")
+        _ (say p "(? (id? bake-dedup-c1 bake-dedup-c2) 0 ")
+        _ (say p "((peep bake-dedup-c1 0 -1) = 65 && (peep bake-dedup-c2 0 -1) = 0) 1 0) 0) ")
+        _ (say p "_ (putn ok) (quit 0))")
+        (close p))
+   r2 (hark `("out/host/love" "wake" img drv))
+   _ (assert (two? r2) (<r2 = 0) (>r2 = "1"))
 
    _ (unlink img) _ (unlink drv)
    _ (test_fin ())

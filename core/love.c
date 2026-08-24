@@ -5137,6 +5137,137 @@ static uintptr_t img_rank_assign(struct ai *g, word const *blob, uintptr_t const
  for (k = 0; k < n; k++) rank[live[k]] = k + 1;
  g->alloc(g, nm, 0), g->alloc(g, live, 0);
  return n; }
+// --- the bake-time hash-cons (doc/misc/snapshot.md) ----------------------------
+// two structurally equal chains are one value wearing two addresses. nothing writes a
+// chain's field -- lvm_poke's contract names the exclusion -- so merging them is
+// invisible to `=`, which is structural already, and to the printer; `id?` is the one
+// witness, and after this it answers 1 on quoted data that was written out twice.
+// the walk is bottom-up, so both children are canonical before their parent is looked
+// up and a candidate compares by POINTER on both fields -- the hash decides nothing and
+// no collision can merge unequals. duplicates are left unreferenced and the compaction
+// after this drops them; a reference from a root is not rewritten, so whatever the
+// stack still holds simply survives.
+// a STRING is merged only where nothing can write its bytes: a cask's payload and a
+// port's buffers are memcpy'd through their holder, and those two pin (below).
+enum { HcHead = 1, HcChain = 2, HcStr = 4, HcPin = 8, HcDone = 16, HcProg = 32 };
+struct hc { word *base, *hp; unsigned char *fl; word *cn, *tab, *stk; uintptr_t mask; };
+static ai_inline uintptr_t hc_off(struct hc *h, word x) { return (uintptr_t) ((word*) x - h->base); }
+// the flags at x, or 0 where x does not name an object head in the walked heap
+static ai_inline unsigned char hc_flag(struct hc *h, word x) {
+ return !(x & (word) (sizeof(word) - 1)) && (word*) x >= h->base && (word*) x < h->hp
+      ? h->fl[hc_off(h, x)] : 0; }
+static ai_inline word hc_can(struct hc *h, word x) {
+ return hc_flag(h, x) & HcDone ? h->cn[hc_off(h, x)] : x; }
+static uintptr_t hc_hstr(struct ai_str *s) {
+ uintptr_t r = 1469598103934665603u ^ s->len * 1099511628211u;
+ for (uintptr_t i = 0; i < s->len; i++) r = (r ^ (unsigned char) s->bytes[i]) * 1099511628211u;
+ return r; }
+static uintptr_t hc_hchain(struct ai_chain *c) {
+ return (uintptr_t) c->a * 0x9E3779B97F4A7C15u ^ (uintptr_t) c->b * 0xC2B2AE3D27D4EB4Fu; }
+// the class representative for p: the first object of its shape the walk reached
+static word hc_intern(struct hc *h, union u *p, uintptr_t hv) {
+ for (uintptr_t i = hv & h->mask; ; i = (i + 1) & h->mask) {
+  word q = h->tab[i];
+  if (!q) return h->tab[i] = (word) p;
+  union u *r = (union u*) q;
+  if (ai_typ(r) != ai_typ(p)) continue;
+  if (ai_typ(p) == DString) {
+   if (len(r) == len(p) && !memcmp(txt(r), txt(p), len(p))) return q; }
+  else if (two(r)->a == two(p)->a && two(r)->b == two(p)->b) return q; } }
+// the object stride, forging a live finalizer node's width (three raw words, no header)
+static uintptr_t hc_stride(struct ai *g, union u *p, int *fzp) {
+ struct ai_fz *z = g->fz;
+ while (z && (union u*) z != p) z = z->next;
+ return (*fzp = !!z) ? Width(struct ai_fz) : image_objsize(g, p); }
+static void img_hashcons(struct ai *g) {
+ word *base = g->major_base, *hp = g->major_hp;
+ uintptr_t nw = (uintptr_t) (hp - base), nobj = 0, cap = 16;
+ int fz;
+ for (union u *p = (union u*) base; (word*) p < hp; nobj++)
+  p = (union u*) ((word*) p + hc_stride(g, p, &fz));
+ while (cap < 2 * nobj) cap <<= 1;
+ struct hc H = { base, hp, 0, 0, 0, 0, cap - 1 }, *h = &H;
+ h->fl = g->alloc(g, NULL, nw);
+ h->cn = g->alloc(g, NULL, nw * sizeof(word));
+ h->tab = g->alloc(g, NULL, cap * sizeof(word));
+ h->stk = g->alloc(g, NULL, (nobj + 1) * sizeof(word));
+ if (h->fl && h->cn && h->tab) {                       // no scratch -> no dedup, never half of one
+  memset(h->fl, 0, nw);
+  memset(h->tab, 0, cap * sizeof(word));
+  // 1. the heads, by kind. a finalizer node is not an object and never merges.
+  for (union u *p = (union u*) base; (word*) p < hp; ) {
+   uintptr_t sz = hc_stride(g, p, &fz), off = (uintptr_t) ((word*) p - base);
+   h->fl[off] = HcHead | (fz || !in_data(p->ap) ? 0
+                        : ai_typ(p) == DChain ? HcChain : ai_typ(p) == DString ? HcStr : 0);
+   h->cn[off] = (word) p;
+   p = (union u*) ((word*) p + sz); }
+  // 2. pin every string a byte-writable holder names. the non-code thread aps are a
+  // closed roster (image_extra_aps): a tablet's two halves, a coin, a cask, a port --
+  // and of those only a cask's payload and a port's buffers are memcpy'd through in
+  // place. every other slot anywhere replaces a POINTER and never a byte, so it says
+  // nothing here. ⚠ a byte-writable holder added to that roster has to be added here.
+  for (union u *p = (union u*) base; (word*) p < hp; ) {
+   uintptr_t sz = hc_stride(g, p, &fz);
+   if (!fz && (p->ap == lvm_cask || p->ap == lvm_port_io))
+    for (uintptr_t i = 0; i + 1 < sz; i++) {
+     word v = ((word*) p)[i];
+     if (hc_flag(h, v) & HcStr) h->fl[hc_off(h, v)] |= HcPin; }
+   p = (union u*) ((word*) p + sz); }
+  for (word *s = g->sp; s < topof(g); s++)
+   if (hc_flag(h, *s) & HcStr) h->fl[hc_off(h, *s)] |= HcPin;
+  for (word i = 0; i < g->end - &g->v0; i++) {
+   word v = (&g->v0)[i];
+   if (hc_flag(h, v) & HcStr) h->fl[hc_off(h, v)] |= HcPin; }
+  for (struct ai_r *r = g->root; r; r = r->n)
+   if (hc_flag(h, *r->x) & HcStr) h->fl[hc_off(h, *r->x)] |= HcPin;
+  // 3. strings have no children, so one pass settles them
+  for (union u *p = (union u*) base; (word*) p < hp; ) {
+   uintptr_t sz = hc_stride(g, p, &fz), off = (uintptr_t) ((word*) p - base);
+   if ((h->fl[off] & (HcStr | HcPin)) == HcStr)
+    h->cn[off] = hc_intern(h, p, hc_hstr(str(p))), h->fl[off] |= HcDone;
+   p = (union u*) ((word*) p + sz); }
+  // 4. chains, children first. an explicit stack: a long list is a deep chain, and the
+  // recursion that shape would ask for is the one this walk cannot afford. a child still
+  // in progress is a cycle -- unreachable for a chain, which nothing can rewrite into one
+  // -- and leaves its whole ring unmerged rather than guessed at.
+  if (h->stk) for (union u *p0 = (union u*) base; (word*) p0 < hp; ) {
+   uintptr_t sz = hc_stride(g, p0, &fz), off0 = (uintptr_t) ((word*) p0 - base);
+   union u *p1 = (union u*) ((word*) p0 + sz);
+   if (h->fl[off0] & HcChain && !(h->fl[off0] & (HcDone | HcProg))) {
+    uintptr_t sp = 0;
+    h->fl[off0] |= HcProg, h->stk[sp++] = (word) p0;
+    while (sp) {
+     word y = h->stk[sp - 1];
+     struct ai_chain *c = two(y);
+     unsigned char fa = hc_flag(h, c->a), fb = hc_flag(h, c->b);
+     if (fa & HcChain && !(fa & (HcDone | HcProg)))
+      { h->fl[hc_off(h, c->a)] |= HcProg, h->stk[sp++] = c->a; continue; }
+     if (fb & HcChain && !(fb & (HcDone | HcProg)))
+      { h->fl[hc_off(h, c->b)] |= HcProg, h->stk[sp++] = c->b; continue; }
+     sp--;
+     uintptr_t oy = hc_off(h, y);
+     if ((fa & HcChain && !(fa & HcDone)) || (fb & HcChain && !(fb & HcDone)))
+      { h->fl[oy] |= HcDone; continue; }                       // on a cycle: its own class
+     c->a = hc_can(h, c->a), c->b = hc_can(h, c->b);
+     h->cn[oy] = hc_intern(h, (union u*) y, hc_hchain(c)), h->fl[oy] |= HcDone; } }
+   p0 = p1; }
+  // 5. the references chain fields did not already carry: a thread's words, a tray's
+  // elements, a nom's spelling. roots are left alone -- a duplicate a root still names
+  // survives, which costs a few words and keeps the running stack's values identical.
+  for (union u *p = (union u*) base; (word*) p < hp; ) {
+   uintptr_t sz = hc_stride(g, p, &fz);
+   if (!fz) {
+    if (!in_data(p->ap))
+     for (uintptr_t i = 0; i + 1 < sz; i++) ((word*) p)[i] = hc_can(h, ((word*) p)[i]);
+    else switch (ai_typ(p)) {
+     case DNom: nom(p)->name = (uintptr_t) hc_can(h, (word) nom(p)->name); break;
+     case DTray: if (tray(p)->type == ai_O) {
+      word *e = (word*) tray_data(tray(p));
+      for (uintptr_t i = 0, ne = tray_nelem(tray(p)); i < ne; i++) e[i] = hc_can(h, e[i]); }
+      break;
+     default: break; } }
+   p = (union u*) ((word*) p + sz); } }
+ g->alloc(g, h->fl, 0), g->alloc(g, h->cn, 0), g->alloc(g, h->tab, 0), g->alloc(g, h->stk, 0); }
 // compact g and encode its live half into a fresh g->alloc'd blob, filling *Ho; NULL on
 // failure. the blob is words, not the wire: img_wire tokenizes it for a file and the
 // layered bake diffs two of them. dumps wherever it is called -- a mid-eval dump's
@@ -5154,6 +5285,8 @@ static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard
  ai_core_of(g)->io = NULL;                               // clear the non-deterministic fd before the bake
  *why = 2;
  if (!ai_ok(gen_major(g, 0, NULL))) return NULL;                  // compact: live half -> [major_base, major_hp) (oom -> no image)
+ img_hashcons(g);                                        // merge equal chains/strings, in place
+ if (!ai_ok(gen_major(g, 0, NULL))) return NULL;                  // ..and compact the duplicates away
  if (!ai_ok(g = img_canon_symbols(g))) return NULL;      // canonical intern layout (oom -> no image)
  *why = 3;
  word *base = g->major_base, *hp = g->major_hp;

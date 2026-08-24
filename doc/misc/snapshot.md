@@ -141,16 +141,51 @@ Three seams make mid-eval dumping honest where the boot bake could assume purity
 Smoke: test/host/bake.l (`test_hostnif`) round-trips a pinned marker through `bake` + `wake`
 in a child process.
 
+## the dump hash-conses
+
+A chain is immutable — `lvm_poke`'s contract names the exclusion — so two structurally equal ones
+are one value wearing two addresses, and an image that is mostly source AST holds a great many.
+`img_hashcons` runs between the compaction and the encode — walk, merge, compact again — and the
+crew image loses **35.0%** of its words (3,689,068 → 2,398,817), the wire **36.0%** (8,428 → 5,390
+KB), the binary **24.2%** (12,517,064 → 9,483,528 B). The stream keeps the whole raw saving rather
+than having been quietly paying for the redundancy already.
+
+Resident size does not move: the major pool is sized off the image with headroom, so a smaller
+live set lands in the same pair. Wake gets SLOWER, 43.1 → 54.0 ms, and the decode is not why — it
+roughly halves with the words. The woken session now runs one major collection during boot that
+the larger image did not, because `img_wake` seeds the nursery at `nw >> 1` while the pool carries
+`nw >> 2` of slack: `gen_please`'s `major_free < g->len` is then true by construction, and
+`g->sym_raw` forces the same major independently. A boot's allocation is a fixed cost and does not
+shrink with the live set, so the smaller nursery no longer swallows it. Lifting BOTH (slack over
+the seeded nursery, and the intern map re-homed at wake instead of by a whole collection) takes
+the wake to 32 ms and RSS to 37 MB; lifting either alone changes nothing, since each still fires.
+
+`=` is structural already and the printer spells binders `d0 d1 …` either way, so `id?` is the one
+witness: `(id? '(1 2) '(1 2))` written at two sites answers 1 after a bake where it answered 0.
+emit.l's quote pool indexes by `id?` (`amemq`/`aposq`) on the ground that the interpreter's quote
+answers the source node itself — still true, and the merge is over before the glaze compiles that
+source, so pool and interpreter agree on the one surviving node.
+
+Three things carry it:
+
+- **Bottom-up, so the hash decides nothing.** Both children are canonical before their parent is
+  looked up, so a candidate compares by POINTER on both fields and no collision can merge
+  unequals. The walk rides an explicit stack — a long list is a deep chain, and the recursion that
+  shape asks for is the one a dump cannot afford. A child still in progress is a cycle,
+  unreachable for a chain, and leaves its ring unmerged rather than guessed at.
+- **A string is opt-in.** The non-code thread aps are a closed roster (`image_extra_aps`), and of
+  them only a cask's payload and a port's buffers are memcpy'd through in place; every other slot
+  in the heap replaces a POINTER and never a byte. Those two pin their strings, and the stack pins
+  what it is still filling. ⚠ a byte-writable holder added to that roster has to be added there.
+- **Roots are not rewritten.** A duplicate the stack still names simply survives — a few words, and
+  a mid-eval bake's continuation keeps its values identical.
+
+The pass is a pure function of the heap, which `test_bakerep` and `love seed`'s fixpoint both
+hold it to.
+
 ## open
 
-1. **Chain dedup at dump time is UNSOUND as things stand.** The compacted image is ~71% source-AST
-   chains, and hash-consing structurally-equal sub-trees shrinks it by about a third — but the
-   glaze reads source by IDENTITY, so merging two structurally-equal cells changes its native
-   codegen. The fix is upstream: make the glaze key its CSE/codegen on structural equality
-   (`=`), not cell `id?`, so `=`-equal sub-expressions are already one; then a union-find
-   hash-cons over chain starts can land safely. Scope: audit emit.l/auto.l for `id?` on source
-   sub-terms.
-2. **A kernel-loadable image.** The codec is buffer-based and stdio-free, so it compiles into the
+1. **A kernel-loadable image.** The codec is buffer-based and stdio-free, so it compiles into the
    freestanding kernel, and the kernel runs the generational collector bounded by `g->budget`,
    which the codec needs (it relocates into the major pool). What is left is that a host-dumped
    image will not load in the kernel: the arch+anchor stamp rejects a different binary (different
