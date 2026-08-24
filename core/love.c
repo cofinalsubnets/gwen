@@ -4589,33 +4589,33 @@ static void nat_unmap(void *p) {
 // (the deopt fallback, so native is never wrong), lvm_ret at the same offset in
 // both, so the emitted body is layout-blind. cell[0] duplicates the code addr:
 // run_finalizers' dead/live discriminator. internal: the egg mops it.
+// a decline (bad args, no code pages, inle) answers the interp twin itself,
+// so every caller transparently falls back to bytecode.
 lvm(lvm_nif) {
  word codebuf = Sp[0];                        // Sp[0]=code Sp[1]=interp Sp[2]=src Sp[3]=arity
  intptr_t ar = oddp(Sp[3]) ? getcharm(Sp[3]) : 0;
- if (!(strp(codebuf) || caskp(codebuf)) || ar < 1) ai_musttail return Answerp(3, zero);
+ if (!(strp(codebuf) || caskp(codebuf)) || ar < 1) ai_musttail return Answerp(3, Sp[1]);
  uintptr_t n = len(bytes_of(codebuf));
- if (n == 0) ai_musttail return Answerp(3, zero);
+ if (n == 0) ai_musttail return Answerp(3, Sp[1]);
 #ifdef __wasm__                                // wasm has no executable code pages: a jump to a data address traps.
- ai_musttail return Answerp(3, zero); //  decline unconditionally -> the interp twin runs (emscripten's mprotect
+ ai_musttail return Answerp(3, Sp[1]); //  decline unconditionally -> the interp twin runs (emscripten's mprotect
 #endif                                         //  is a no-op returning 0, so the mprotect guard below does not catch this).
 #if __STDC_HOSTED__
+ // inle declines: its heap rides the NX hhdm window (a wild jump into the
+ // heap faults by design), and a heap copy would move under the collector
+ // besides. the interp twin runs; a metal nat door would want out-of-pool
+ // pages through the low window, which keeps X.
+ if (__ai_osv < 0) ai_musttail return Answerp(3, Sp[1]);
  struct ai_str *s;
- if (__ai_osv < 0) {                          // inle: the HHDM is executable, a heap copy runs
-  Have(str_width(n) + 9);
-  s = ini_str(str(Hp), n); Hp += str_width(n);
-  memcpy(txt(s), txt(bytes_of(Sp[0])), n);
-#ifndef __wasm__
-  __builtin___clear_cache(txt(s), txt(s) + n);
-#endif
- } else {
+ {
   Have(9 + Width(struct ai_fz));              // 9 covers both cells (6/8 words) + tag + fz
   size_t maplen = code_maplen(n);
   void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (base == MAP_FAILED) ai_musttail return Answerp(3, zero);
+  if (base == MAP_FAILED) ai_musttail return Answerp(3, Sp[1]);
   s = ini_str(str(base), n);
   memcpy(txt(s), txt(bytes_of(Sp[0])), n);    // reload codebuf: a GC in Have may have moved it
   if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
-   { munmap(base, maplen); ai_musttail return Answerp(3, zero); }
+   { munmap(base, maplen); ai_musttail return Answerp(3, Sp[1]); }
 #ifndef __wasm__                               // guarded: emscripten's clang has no clear_cache intrinsic (dead here anyway -- wasm early-declined above)
   __builtin___clear_cache(txt(s), txt(s) + n); // AArch64: the I-cache is not coherent with the freshly
 #endif                                         // written D-cache -- flush or it runs stale bytes (no-op on x86)
@@ -4649,39 +4649,32 @@ lvm(lvm_nif) {
   tagthread(k, 8);
  }
 #if __STDC_HOSTED__
- if (__ai_osv >= 0) {                         // only a mapping owes a finalizer; a heap copy dies with its cell
-  struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
-  z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z; }
+ struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
+ z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z;
 #endif
  ai_musttail return Answerp(3, word(k + 2)); }
 
 lvm(lvm_nifx) {
  word codebuf = Sp[0];                        // Sp[0]=code Sp[1]=interp Sp[2]=src Sp[3]=arity Sp[4]=extras
  intptr_t ar = oddp(Sp[3]) ? getcharm(Sp[3]) : 0;
- if (!(strp(codebuf) || caskp(codebuf)) || ar < 1) ai_musttail return Answerp(4, zero);
+ if (!(strp(codebuf) || caskp(codebuf)) || ar < 1) ai_musttail return Answerp(4, Sp[1]);
  uintptr_t n = len(bytes_of(codebuf));
- if (n == 0) ai_musttail return Answerp(4, zero);
+ if (n == 0) ai_musttail return Answerp(4, Sp[1]);
 #ifdef __wasm__                                // wasm has no executable code pages: a jump to a data address traps.
- ai_musttail return Answerp(4, zero); //  decline unconditionally -> the interp twin runs (emscripten's mprotect
+ ai_musttail return Answerp(4, Sp[1]); //  decline unconditionally -> the interp twin runs (emscripten's mprotect
 #endif                                         //  is a no-op returning 0, so the mprotect guard below does not catch this).
 #if __STDC_HOSTED__
+ if (__ai_osv < 0) ai_musttail return Answerp(4, Sp[1]);   // inle declines: the twin above says why
  struct ai_str *s;
- if (__ai_osv < 0) {                          // inle: the HHDM is executable, a heap copy runs
-  Have(str_width(n) + 11);
-  s = ini_str(str(Hp), n); Hp += str_width(n);
-  memcpy(txt(s), txt(bytes_of(Sp[0])), n);
-#ifndef __wasm__
-  __builtin___clear_cache(txt(s), txt(s) + n);
-#endif
- } else {
+ {
   Have(11 + Width(struct ai_fz));             // 11 covers both cells (7/9 words) + tag + fz
   size_t maplen = code_maplen(n);
   void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (base == MAP_FAILED) ai_musttail return Answerp(4, zero);
+  if (base == MAP_FAILED) ai_musttail return Answerp(4, Sp[1]);
   s = ini_str(str(base), n);
   memcpy(txt(s), txt(bytes_of(Sp[0])), n);    // reload codebuf: a GC in Have may have moved it
   if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
-   { munmap(base, maplen); ai_musttail return Answerp(4, zero); }
+   { munmap(base, maplen); ai_musttail return Answerp(4, Sp[1]); }
 #ifndef __wasm__                               // guarded: emscripten's clang has no clear_cache intrinsic (dead here anyway -- wasm early-declined above)
   __builtin___clear_cache(txt(s), txt(s) + n); // AArch64: the I-cache is not coherent with the freshly
 #endif                                         // written D-cache -- flush or it runs stale bytes (no-op on x86)
@@ -4718,9 +4711,8 @@ lvm(lvm_nifx) {
   tagthread(k, 9);
  }
 #if __STDC_HOSTED__
- if (__ai_osv >= 0) {                         // only a mapping owes a finalizer; a heap copy dies with its cell
-  struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
-  z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z; }
+ struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
+ z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z;
 #endif
  ai_musttail return Answerp(4, word(k + 2)); }
 
