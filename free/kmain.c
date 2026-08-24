@@ -797,7 +797,7 @@ static int k_fd_free(void) {
 // bare -1 / () for every failure alike and always did -- down here the reasons
 // are distinct and free/sys.c's openat needs them, so they are told apart HERE
 // and flattened in the marshaling, never the other way round.
-static ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
+ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (m != 'r' && m != 'w' && m != 'a') return -EINVAL;
   if (!k_fs_init()) return -ENOMEM;
   char cp[256];
@@ -808,7 +808,10 @@ static ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   if (i >= 0 && k_ents[i].dir) return -EISDIR;
   bool made = false;
   if (i < 0) {
+    // ⚠ 'r' misses stay one k_find: they are the load path's probe lane. only a
+    // CREATE pays k_dirp, so a file never shadows a synthesized directory.
     if (m == 'r') return -ENOENT;
+    if (k_dirp(cp, (uintptr_t) cn)) return -EISDIR;
     int e = k_parent_ok(cp, (uintptr_t) cn);
     if (e) return e;
     if ((i = k_create(cp, (uintptr_t) cn, false, 0644)) < 0) return -ENOMEM;
@@ -909,7 +912,7 @@ struct k_st { uintptr_t size, ms, mode; };
 // like any other, because the initrd carries no directories and so most of the
 // tree is synthesized. That case is also why this fills a struct rather than
 // handing back an entry index: it has no row to point at.
-ai_noinline static int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st) {
+ai_noinline int k_fs_stat(char const *p, uintptr_t pn, struct k_st *st) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1369,7 +1372,7 @@ static lvm(lvm_vmx_run) {
 // these were lifted out of, and a flip per path is a sign to get wrong per path.
 // ⚠ ai_noinline is load-bearing here, not decoration: cp[256] living in an
 // lvm's own frame would block its musttail.
-ai_noinline static int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
+ai_noinline int k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1390,7 +1393,7 @@ static lvm(lvm_mkdir) {
   Sp[1] = k_mkdir(Sp[0], Sp[1]);
   Sp += 1; ai_musttail return Next(1); }
 
-ai_noinline static int k_fs_rmdir(char const *p, uintptr_t pn) {
+ai_noinline int k_fs_rmdir(char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1411,7 +1414,7 @@ static ai_word k_rmdir(ai_word pw) {
   return e ? putcharm(-e) : ZeroPoint; }
 static lvm(lvm_rmdir) { Sp[0] = k_rmdir(Sp[0]); ai_musttail return Next(1); }
 
-ai_noinline static int k_fs_unlink(char const *p, uintptr_t pn) {
+ai_noinline int k_fs_unlink(char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1433,7 +1436,7 @@ static lvm(lvm_unlink) { Sp[0] = k_unlink(Sp[0]); ai_musttail return Next(1); }
 // directory carries everything beneath it -- every live path at or under the
 // prefix respelled, the copies staged FIRST so a refusal leaves the tree whole.
 struct k_ren { struct k_ren *next; int i; char *q; };
-ai_noinline static int k_fs_rename(char const *o, uintptr_t olen,
+ai_noinline int k_fs_rename(char const *o, uintptr_t olen,
                                    char const *n, uintptr_t nlen) {
   char op[256], np[256];
   intptr_t on, nn;
@@ -1497,7 +1500,7 @@ static lvm(lvm_rename) {
   Sp[1] = k_rename(Sp[0], Sp[1]);
   Sp += 1; ai_musttail return Next(1); }
 
-ai_noinline static int k_fs_chdir(char const *p, uintptr_t pn) {
+ai_noinline int k_fs_chdir(char const *p, uintptr_t pn) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1526,7 +1529,7 @@ static lvm(lvm_chdir) { Sp[0] = k_chdir(Sp[0]); ai_musttail return Next(1); }
 // the PATH FACE: the seat into a caller's buffer, 0 ok or -ERANGE -- getcwd(2)'s
 // own refusal, and the one thing the love door never had to say (its buffer is
 // sized to the seat by construction).
-static int k_fs_getcwd(char *b, uintptr_t n) {
+int k_fs_getcwd(char *b, uintptr_t n) {
   if (n < k_cwd_n + 2) return -ERANGE;            // '/' + the seat + the NUL
   b[0] = '/';
   memcpy(b + 1, k_cwd, k_cwd_n);
@@ -1546,7 +1549,7 @@ static lvm(lvm_cwd) {
 // the two attribute writers land on the ENTRY, so a synthesized (prefix)
 // directory takes either as a no-op: it has no row to keep bits on, and its date
 // is its children's. absence stays loud.
-ai_noinline static int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
+ai_noinline int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;
@@ -1564,7 +1567,7 @@ static lvm(lvm_chmod) {
   Sp[1] = k_chmod(Sp[0], Sp[1]);
   Sp += 1; ai_musttail return Next(1); }
 
-ai_noinline static int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
+ai_noinline int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms) {
   char cp[256];
   intptr_t cn;
   if (!k_fs_init()) return -ENOMEM;

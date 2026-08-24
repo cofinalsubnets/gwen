@@ -47,6 +47,7 @@ int *__errno_location(void);
 #define ENOSYS          38
 #define ENOTEMPTY       39
 #define ELOOP           40
+#define ENOTSUP         95
 #define ECONNRESET     104
 #define ENOTCONN       107
 #define ETIMEDOUT      110

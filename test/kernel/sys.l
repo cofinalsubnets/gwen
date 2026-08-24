@@ -133,3 +133,141 @@
    r (syscall "write" wfd 'nope 4 0)
    _ (fdclose wfd) _ (fdclose rfd)
  (assert (= -1 r)))
+
+; --- the *at path family -----------------------------------------------------
+; nolibc's path members all issue the *at numbers with AT_FDCWD (-100), so the
+; dispatch honors exactly that; an absolute path ignores its dirfd (POSIX's own
+; rule) and any other seat refuses ENOTSUP. a NULL path is EFAULT, not a crash.
+
+; openat reads: O_RDONLY is 0, the fd hands over the same bytes the love door
+; slurps, and close by number retires it
+(: at (- 0 100)
+   fd (syscall "openat" at "lib/dns.l" 0 0)
+   b (cask 16)
+   n (syscall "read" fd b 16 0)
+   c (syscall "close" fd 0 0 0)
+   p (open "lib/dns.l" "r") s (slurp p) _ (close p)
+ (assert (<= 0 fd) (= n 16) (= (snip b 0 16) (snip s 0 16)) (= 0 c)))
+
+; openat refusals, each with its own reason -- absence, a directory, the rdwr
+; door the ramfs does not have, a stranger dirfd, and the NULL path
+(: at (- 0 100)
+   fd (syscall "openat" 5 "/lib/dns.l" 0 0)
+   _ (syscall "close" fd 0 0 0)
+ (assert (= -2 (syscall "openat" at "lib/no-such" 0 0))
+         (= -21 (syscall "openat" at "lib" 0 0))
+         (= -22 (syscall "openat" at "lib/dns.l" 2 0))
+         (= -95 (syscall "openat" 5 "lib/dns.l" 0 0))
+         (<= 0 fd)
+         (= -14 (syscall "openat" at 0 0 0))))
+
+; openat creates (O_WRONLY|O_CREAT = 65), append (O_WRONLY|O_APPEND = 1025)
+; extends, and unlinkat takes the file back out
+(: at (- 0 100)
+   fd (syscall "openat" at "lib/sys-t1" 65 438)
+   _ (syscall "write" fd "half" 4 0)
+   _ (syscall "close" fd 0 0 0)
+   fa (syscall "openat" at "lib/sys-t1" 1025 0)
+   _ (syscall "write" fa "moon" 4 0)
+   _ (syscall "close" fa 0 0 0)
+   p (open "lib/sys-t1" "r") s (slurp p) _ (close p)
+   u (syscall "unlinkat" at "lib/sys-t1" 0 0)
+   g (syscall "openat" at "lib/sys-t1" 0 0)
+ (assert (= s "halfmoon") (= 0 u) (= -2 g)))
+
+; newfstatat fills the kernel's own struct stat: size at 48 and mtime at 88
+; land on BOTH arches; st_mode moves (16 aarch64, 24 x86_64) but the other
+; arch's word there carries no type bits, so the union picks the true one
+(: at (- 0 100)
+   ; ⚠ + is binary: (+ a b c) applies the sum -- these chain infix instead
+   (le4 v i) ((v i) + ((v (+ i 1)) << 8) + ((v (+ i 2)) << 16) + ((v (+ i 3)) << 24))
+   (le8 v i) ((le4 v i) + ((le4 v (+ i 4)) << 32))
+   b (cask 144)
+   r (syscall "newfstatat" at "lib/dns.l" b 0)
+   v (string b)                                 ; a string applies as byte index
+   st (stat "lib/dns.l")
+   md (| (& 61440 (le4 v 16)) (& 61440 (le4 v 24)))
+   ms (+ (* 1000 (le8 v 88)) (// (le4 v 96) 1000000))
+   d (cask 144)
+   rd (syscall "newfstatat" at "lib" d 0)
+   w (string d)
+   dd (| (& 61440 (le4 w 16)) (& 61440 (le4 w 24)))
+ (assert (= 0 r) (= <st (le8 v 48)) (= 32768 md) (= <>st ms)
+         (= 0 rd) (= 16384 dd)
+         (= -2 (syscall "newfstatat" at "lib/no-such" b 0))))
+
+; mkdirat mints a directory, EEXIST the second time; unlinkat wants the
+; AT_REMOVEDIR bit (512) to take one, refuses a full one ENOTEMPTY, and
+; without the bit a directory is EISDIR
+(: at (- 0 100)
+   a1 (syscall "mkdirat" at "lib/sys-d" 493 0)
+   a2 (syscall "mkdirat" at "lib/sys-d" 493 0)
+   fd (syscall "openat" at "lib/sys-d/f" 65 438)
+   _ (syscall "close" fd 0 0 0)
+   nf (syscall "unlinkat" at "lib/sys-d" 512 0)
+   wf (syscall "unlinkat" at "lib/sys-d" 0 0)
+   _ (syscall "unlinkat" at "lib/sys-d/f" 0 0)
+   ok (syscall "unlinkat" at "lib/sys-d" 512 0)
+   gone (syscall "newfstatat" at "lib/sys-d" (cask 144) 0)
+ (assert (= 0 a1) (= -17 a2) (= -39 nf) (= -21 wf) (= 0 ok) (= -2 gone)))
+
+; renameat moves a file whole -- the old name gone, the bytes under the new --
+; and a missing source says so
+(: at (- 0 100)
+   fd (syscall "openat" at "lib/sys-a" 65 438)
+   _ (syscall "write" fd "ren" 3 0)
+   _ (syscall "close" fd 0 0 0)
+   r (syscall "renameat" at "lib/sys-a" at "lib/sys-b")
+   old (syscall "openat" at "lib/sys-a" 0 0)
+   p (open "lib/sys-b" "r") s (slurp p) _ (close p)
+   _ (syscall "unlinkat" at "lib/sys-b" 0 0)
+   miss (syscall "renameat" at "lib/sys-a" at "lib/sys-b")
+ (assert (= 0 r) (= -2 old) (= s "ren") (= -2 miss)))
+
+; chdir moves the one seat and getcwd spells it back, length NUL-counted; a
+; file refuses ENOTDIR, absence ENOENT, a tight buffer ERANGE -- and the seat
+; goes home after, because every other test spells relative paths
+(: b (cask 64)
+   nd (syscall "chdir" "lib/dns.l" 0 0 0)
+   miss (syscall "chdir" "lib/no-such" 0 0 0)
+   r (syscall "chdir" "lib" 0 0 0)
+   n (syscall "getcwd" b 64 0 0)
+   seat (snip b 0 4)                            ; read the corner before the next fill
+   tight (syscall "getcwd" (cask 64) 2 0 0)
+   home (syscall "chdir" "/" 0 0 0)
+   hn (syscall "getcwd" b 64 0 0)
+ (assert (= -20 nd) (= -2 miss) (= 0 r) (= n 5) (= "/lib" seat)
+         (= -34 tight) (= 0 home) (= hn 2) (= "/" (snip b 0 1))
+         (= -14 (syscall "chdir" 0 0 0 0)) (= -14 (syscall "getcwd" 0 64 0 0))))
+
+; fchmodat wears the new bits where the love stat reads them, and puts the
+; old ones back
+(: at (- 0 100)
+   was (stat "lib/dns.l")
+   r (syscall "fchmodat" at "lib/dns.l" 384 0)
+   now (stat "lib/dns.l")
+   _ (syscall "fchmodat" at "lib/dns.l" (& 4095 <>>was) 0)
+   back (stat "lib/dns.l")
+ (assert (= 0 r) (= 384 (& 4095 <>>now)) (= <>>was <>>back)
+         (= -2 (syscall "fchmodat" at "lib/no-such" 384 0))))
+
+; utimensat: the cask spells two timespecs and the SECOND is the mtime -- an
+; explicit 1700000000s lands whole; UTIME_OMIT (nsec 2^30-2) moves nothing;
+; NULL says now, which is also what puts the date back in the living present
+(: at (- 0 100)
+   ts (cask [0 0 0 0 0 0 0 0  0 0 0 0 0 0 0 0
+             0 241 83 101 0 0 0 0  0 0 0 0 0 0 0 0])
+   r (syscall "utimensat" at "lib/dns.l" ts 0)
+   md (stat "lib/dns.l")
+   om (cask [0 0 0 0 0 0 0 0  0 0 0 0 0 0 0 0
+             9 9 9 9 0 0 0 0  254 255 255 63 0 0 0 0])
+   ro (syscall "utimensat" at "lib/dns.l" om 0)
+   still (stat "lib/dns.l")
+   t0 (clock 0)
+   rn (syscall "utimensat" at "lib/dns.l" 0 0)
+   nw (stat "lib/dns.l")
+   t1 (clock 0)
+ (assert (= 0 r) (= 1700000000000 <>md)
+         (= 0 ro) (= 1700000000000 <>still)
+         (= 0 rn) (<= t0 <>nw t1)
+         (= -2 (syscall "utimensat" at "lib/no-such" 0 0))))
