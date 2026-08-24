@@ -17,24 +17,18 @@
 #include "../crew/moon/lib/nolibc/impl.h"
 #include <stdint.h>
 
-// errno lives here rather than by linking nolibc's core.c: that member also
-// carries malloc, environ, stdio and the process entry, every one of which this
-// kernel already owns. Its other halves belong to a seat, and inle is the seat.
-int __errno_v;
-int *__errno_location(void) { return &__errno_v; }
-
-// the rest of the seat, sized for a kernel that IS the process: an environment
-// that starts empty, and std streams unbuffered over the console rows (cap 0,
-// so every byte goes straight through write -- ⚠ SEAT-BLIND: a seated task's
-// C-level printf reaches the console where its port reaches the pipe; love
-// writes through ports, which seat). mutable on purpose, like __errno_v above:
-// the libc seat is state. (sigaction's restorer rides the mksys lay the link
-// carries anyway; no handler ever returns through it, rt_sigaction refuses.)
+// the seat is nolibc's core.c now (plan C2: the fused link carries it whole --
+// errno, the streams, the mmap-arena malloc). what a hosted __ai_start would
+// arm, the kernel arms here instead: an environment that starts empty, and the
+// std streams write-through on fds 1 and 2 with no buffer (cap 0, so every
+// byte goes straight through write -- ⚠ SEAT-BLIND: a seated task's C-level
+// printf reaches the console where its port reaches the pipe; love writes
+// through ports, which seat). kmain calls this right after it writes the osv.
 static char *k_env0[] = { 0 };
-char **environ = k_env0;
-static struct _IO_FILE k_stdf[3] = {
-  { .fd = 0 }, { .fd = 1, .wr = 1 }, { .fd = 2, .wr = 1 } };
-FILE *stdin = &k_stdf[0], *stdout = &k_stdf[1], *stderr = &k_stdf[2];
+void k_seat_init(void) {
+  environ = k_env0;
+  stdout->fd = 1; stdout->wr = 1;
+  stderr->fd = 2; stderr->wr = 1; }
 
 // the kernel side (kmain.c): a raw fd through the k_sources row, no port above
 // it -- and SEAT-BLIND, which is the law and not a gap. The seat is a property
@@ -54,6 +48,9 @@ extern long k_fd_write(int fd, void const *b, long n);
 extern long k_fd_read(int fd, void *b, long n);
 extern long k_fd_close(int fd);
 extern long k_fd_lseek(int fd, long off, int whence);
+// the kernel free list (kmain.c), the page supply under the mmap arm below
+extern void *kmallocw(uintptr_t n);
+extern void kfree(void *p);
 
 // the ramfs path faces (kmain.c), each 0 or a negative errno. k_st is what the
 // ramfs KNOWS about a path; a struct stat's ino/nlink/uid/dev have no answer
@@ -223,6 +220,24 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
     case NR_getdents64:
       if (!b) return -EFAULT;
       return k_fd_dents((int) a, (void *) b, c);
+    // the allocator's page door: nolibc's malloc runs its mmap arenas on this
+    // kernel as on any other -- kmallocw supplies the pages. anonymous and
+    // kernel-placed only; the true base rides the word below the aligned
+    // block, where munmap's arm reads it back. zeroed, because MAP_ANONYMOUS
+    // promises zeroed pages and calloc's direct lane trusts exactly that.
+    case NR_mmap: {
+      if (a || (int) e != -1 || b <= 0) return -38;         // ENOSYS: not our shape
+      void *m = kmallocw(((uintptr_t) b + 2 * 4096) / sizeof(uintptr_t));
+      if (!m) return -12;                                   // ENOMEM
+      uintptr_t p = ((uintptr_t) m + sizeof(void *) + 4095) & ~4095ull;
+      ((void **) p)[-1] = m;
+      memset((void *) p, 0, (size_t) b);
+      return (long) p; }
+    case NR_munmap:
+      if (!a || (a & 4095)) return -22;                     // EINVAL
+      kfree(((void **) a)[-1]);
+      return 0;
+    case NR_mprotect: return 0;                             // one flat RWX map: nothing to change
     // one clock, the wall: ai_clock's body is clock_gettime now (host/seat.c),
     // so this arm is where the kernel's scale becomes a timespec.
     case NR_clock_gettime: {

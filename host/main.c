@@ -79,7 +79,16 @@ static struct ai *stdin_take(struct ai *g) {
 // for (;;): the standard noreturn-defensive shape -- moon's stdnoreturn.h defines
 // `noreturn` empty, so mooncc can't cut the fall-through tail itself; the loop
 // leaves no ret for vmret to flag (gcc emits identical code either way).
-static noreturn lvm(lvm_exit) { for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
+// the kernel's task-aware twins (free/kmain.c) take these on a negative osv:
+// quit is the seat/task door there -- seat-aware, machine-resetting unseated --
+// and getpid the TASK pid, where this process's answers would be wrong. weak
+// ghelp bodies so a kernel-less link closes; hosted never takes the branch.
+__attribute__((weak)) lvm(k_lvm_quit) { ai_musttail return Ap(_lvm_ghelp, g); }
+__attribute__((weak)) lvm(k_lvm_getpid) { ai_musttail return Ap(_lvm_ghelp, g); }
+
+static lvm(lvm_exit) {
+  if (__ai_osv < 0) ai_musttail return Ap(k_lvm_quit, g);
+  for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
 // the wait cluster -- ai_sleep, ai_ready, ai_wait_fds, ai_ready_fds -- lives
 // in host/seat.c, one definition for this frontend and the kernel's.
 
@@ -414,7 +423,9 @@ static lvm(lvm_getenv) {
 
 // (getpid x) -> the running process id (x ignored). main.c is linked into love0
 // too, so unlike the host/*.c glob nifs this one exists in the bootstrap as well.
-static lvm(lvm_getpid) { ai_musttail return Answer(putcharm(getpid())); }
+static lvm(lvm_getpid) {
+  if (__ai_osv < 0) ai_musttail return Ap(k_lvm_getpid, g);
+  ai_musttail return Answer(putcharm(getpid())); }
 
 static union u const
  nif_exit[] = {{lvm_exit}, {lvm_ret0}},

@@ -8,11 +8,12 @@
 
 #define a64_hhdm 0xffff800000000000ull
 
-// the linker lays this at the end of .bss; everything from the RAM base up
-// to it (the dtb, the 2 MiB hole, the image itself) is spoken for, and the
-// qemu loader reserves nothing -- hand it to the heap and the kernel eats
-// itself. the link is flat, so the symbol IS that physical far edge.
-extern char kimage_end[];
+// everything from the RAM base up to the image's far edge (the dtb, the
+// 2 MiB hole, the image itself) is spoken for, and the qemu loader reserves
+// nothing -- hand it to the heap and the kernel eats itself. a VALUE the
+// projection patches into the file (tools/kproject.l), where the flat link's
+// kimage_end symbol used to stand.
+extern uintptr_t const k_image_top;
 
 static uint32_t be32(uint8_t const *p) {
   return (uint32_t) p[0] << 24 | (uint32_t) p[1] << 16
@@ -42,7 +43,7 @@ void dtb_to_kboot(uint64_t dtb_pa) {
   if (be32(f) != 0xd00dfeed) return;
   uint8_t const *p   = f + be32(f + 8);            // off_dt_struct
   char const *str    = (char const *) (f + be32(f + 12));   // off_dt_strings
-  uint64_t k1 = ((uintptr_t) kimage_end + 0xfff) & ~0xfffull;   // page-rounded physical far edge
+  uint64_t k1 = (k_image_top + 0xfff) & ~0xfffull;   // page-rounded physical far edge
   kboot.hhdm = a64_hhdm;
   uint32_t ac = 2, sc = 2;                         // root's cell counts (virt: 2/2)
   int depth = 0, memd = 0, chos = 0;               // memd/chos: the depth of a memory / chosen node we are inside

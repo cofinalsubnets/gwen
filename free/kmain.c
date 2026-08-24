@@ -66,6 +66,12 @@ void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc
 // the seat hooks host/seat.c branches to on a negative osv (weak no-ops there)
 void k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct ai_wait_fd*, int, uintptr_t);
 bool k_ready(int fd, int events);
+void k_seat_init(void);                // free/sys.c: arm environ + the std streams
+// the metal image's far edge, PATCHED INTO THE FILE by the projection
+// (tools/kproject.l) -- the flat link's kimage_end, as a value the one binary
+// can carry. the sentinel is loud: unpatched, the memmap excludes nothing and
+// the heap eats the kernel at once.
+uintptr_t const k_image_top = 1;
 uint64_t k_rtc(void);                  // the machine's own clock, unix seconds (0 = none)
 #ifdef K_TEST
 void k_qemu_exit(int);
@@ -111,18 +117,12 @@ struct k_boot kboot;
 // this is the fix: k_source_open is the ONE door in, and it grows the table in
 // the KERNEL'S OWN HEAP. the bug a ceiling would have shipped is worse than the
 // host's was: not a hang but a silent refusal to open the 33rd thing.
-// ⚠ inle DEFINES the malloc family (below the allocator) rather than importing
-// one, so a bare malloc() here would be ours and would work -- and would read
-// exactly like the libc call nothing in this tree is allowed to make. the door
-// is g->alloc everywhere it can be reached; kmallocw where g cannot be.
-// ⚠ THIS DOOR IS ONE OF THOSE: it takes no g, because free/sys.c's open must
-// reach it and a syscall arrives with none. Same heap either way (g->alloc is
-// love.c's ai_libc_alloc -> malloc -> kmallocw), so what this buys is one
-// allocator for one table rather than two that must agree.
-void *malloc(size_t n);
-void free(void *x);
-static void *kmallocw(uintptr_t n);
-static void kfree(void *p);
+// ⚠ malloc is nolibc's now (plan C2: core.c rides the fused link), running its
+// mmap arenas over free/sys.c's page arm -- which kmallocw supplies. so the
+// door here stays kmallocw where g cannot be reached, and g->alloc (love.c's
+// ai_libc_alloc -> malloc) everywhere it can: one page supply under both.
+void *kmallocw(uintptr_t n);
+void kfree(void *p);
 
 struct k_source {
   // the read door (love.h's readn contract, one fd deeper): >0 = bytes,
@@ -459,7 +459,7 @@ void kb_int(const uint8_t code) {
 static ai_inline struct mem *after(struct mem *r) {
   return (struct mem*) ((uintptr_t*) r + r->len); }
 
-static void *kmallocw(uintptr_t n) {
+void *kmallocw(uintptr_t n) {
   if (!n) return NULL;
   void *p = NULL;
   struct mem *r = NULL, *t;
@@ -480,7 +480,7 @@ static void *kmallocw(uintptr_t n) {
     kmem = t;
   return p; }
 
-static void kfree(void *p) {
+void kfree(void *p) {
   if (!p) return;
   struct mem *m = (struct mem*)p - 1, *r = NULL, *t;
   while (kmem && kmem < m)
@@ -495,8 +495,6 @@ static void kfree(void *p) {
     kmem = m;
     if (!r) return; } }
 
-void *malloc(size_t n) { return kmallocw(b2w(n)); }
-void free(void *x) { return kfree(x); }
 
 // --- the ramfs: the baked tree, and the copies writes make -----------------
 // The initrd is .rodata. tools/lcatfs.l bakes one {path, bytes, len} row per file
@@ -1106,8 +1104,10 @@ long k_fd_stat(int fd, struct k_st *st) {
   st->mode = 0020000 | 0620;                    // the console twins: a character device
   return 0; }
 
-// (getpid _) -> the running task's pid, a charm; the main task reads 0.
-static lvm(lvm_getpid) {
+// (getpid _) -> the running task's pid, a charm; the main task reads 0. the
+// TASK pid: host/main.c's getpid nif branches here on a negative osv, where
+// its own answer would be the machine's constant 1.
+lvm(k_lvm_getpid) {
   Sp[0] = putcharm(k_cur_pid(g));
   ai_musttail return Next(1); }
 
@@ -1558,7 +1558,8 @@ ai_noinline static int k_seat_exit(struct ai *g) {
   g->next_wake_at = 0;                          // a stale intention would gate the park
   g->next_wait_fd = -1;
   return 1; }
-static lvm(lvm_quit) {
+// host/main.c's quit nif branches here on a negative osv: the seat/task door.
+lvm(k_lvm_quit) {
   if (k_seat_exit(g)) {
     // the love-machine _exit: the stack becomes just [code] and Ip a task-exit
     // cell, exactly the shape lvm_task_exit leaves -- catch reads node[7], donep
@@ -1582,7 +1583,6 @@ static union u
   nif_draw[] = {{draw}, {lvm_ret0}},
   nif_key[] = {{key}, {lvm_ret0}},
   nif_color[] = {{lvm_cur}, {.x = putcharm(2)}, {color}, {lvm_ret0}},
-  nif_getpid[] = {{lvm_getpid}, {lvm_ret0}},
   nif_procseat[] = {{lvm_cur}, {.x = putcharm(4)}, {lvm_procseat}, {lvm_ret0}},
   nif_disk[] = {{lvm_disk}, {lvm_ret0}},
   nif_disk_read[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_read}, {lvm_ret0}},
@@ -1593,7 +1593,6 @@ static union u
   nif_vmx[] = {{lvm_vmx}, {lvm_ret0}},
   nif_vmx_run[] = {{lvm_vmx_run}, {lvm_ret0}},
 #endif
-  nif_quit[] = {{lvm_quit}, {lvm_ret0}},
 #ifdef K_TEST
   nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
   nif_syswrite[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_syswrite}, {lvm_ret0}},
@@ -1650,13 +1649,11 @@ static struct ai_def const __attribute__((section("ai_nifs"), used)) defs[] = {
   {"draw", (intptr_t) nif_draw},
   {"key", (intptr_t) nif_key},
   {"fault", (intptr_t) nif_fault},
-  // the posix surface -- open and close included now (plan C2) -- is
-  // host/posix.c's, linked whole (plan A3): its nifs land in this same section
-  // and their libc calls bottom out in free/sys.c's table. what stays below is
-  // what has no host twin -- plus getpid, whose answer here is the TASK pid
-  // (the machine multiplexes tasks where a host getpid answers its one
-  // process).
-  {"getpid", (intptr_t) nif_getpid},
+  // the posix surface -- open, close, quit and getpid included (plan C2) -- is
+  // host/posix.c's and host/main.c's, linked whole: their nifs land in this
+  // same section, libc calls bottom out in free/sys.c's table, and quit and
+  // getpid branch to k_lvm_quit / k_lvm_getpid on a negative osv (the seat
+  // door and the TASK pid). what stays below has no host twin.
   {"procseat", (intptr_t) nif_procseat},
   // rung 5: the disk -- the raw block door lib/fat.l's filesystem rides. these
   // three are OURS (no host twin: the host has no raw disk), so the shapes are
@@ -1673,12 +1670,6 @@ static struct ai_def const __attribute__((section("ai_nifs"), used)) defs[] = {
   {"vmx", (intptr_t) nif_vmx},
   {"vmx-run", (intptr_t) nif_vmx_run},
 #endif
-  // quit is seat-aware now (rung 4): a spawned task's exit is the TASK's, so
-  // the row is owed on BOTH kernels. unseated it resets the shipped machine;
-  // the TEST kernel's unseated arm answers the code instead (kore0.l's identity
-  // pin, one door deeper), so a failing assert still cannot eat the summary,
-  // and `exit` stays qemu's one door out.
-  {"quit", (intptr_t) nif_quit},
 #ifdef K_TEST
   {"exit", (intptr_t) nif_exit},
   {"syswrite", (intptr_t) nif_syswrite},
@@ -1770,8 +1761,10 @@ void kmain(void) {
 #endif
  // which kernel: -1, we ARE it. on metal __ai_start is not the entry, so the
  // value is written here, before any libc member can ask -- unwritten, the
- // lazy probe would issue a real `syscall` into our own #UD handler.
+ // lazy probe would issue a real `syscall` into our own #UD handler. the seat
+ // arming rides with it: what a hosted start would set (free/sys.c).
  __ai_osv = -1;
+ k_seat_init();
  khhdm = kboot.hhdm;
  archinit();
  // the wall date, in the one order that can answer on every door: whatever the

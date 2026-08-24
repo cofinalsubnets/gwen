@@ -6,7 +6,7 @@
 ;   (lay-boot dst "aarch64")  the translation tables, MAIR/TCR/TTBR, the MMU
 ;                             switch, the hop into the mapped world, khop
 ;
-; the link is FLAT on both arches (klink.l: vaddr = paddr, bias 0), so a label's
+; the link is FLAT on both arches (the projection: vaddr = paddr at the kernel base), so a label's
 ; running address, its linked address, and the address a page table wants to hold
 ; are ONE number. `la` (x86 rip-relative lea; aarch64 adrp+add) answers it, and a
 ; field can name it whole -- the PVH note's entry word, the GDT register's base,
@@ -297,7 +297,7 @@
                   `(".boot.text" 1 6 16   a-boot-text)
                   `(".text"      1 6 16   a-text)
                   `(".bss"       8 3 16   b-stack))
-                '("a64boot")             ; klink.l names it as the ELF entry
+                '("a64boot")             ; kproject.l names it as the ELF entry
                 () ()
                 '("khop"))
        (scare 'mkboot-arch arch)))

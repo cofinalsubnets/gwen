@@ -32,34 +32,41 @@ endif
 KCC ?= LOVE_NO_IMAGE= $(ho)/love mooncc
 
 k_arch_c = $(wildcard $(R)/free/$a/*.c)
-# posix.c rides the kernel whole (plan A3): its 51 nifs land in the ai_nifs
-# section beside kmain's defs[], every libc call bottoming out in free/sys.c's
-# table. the spawn family among them refuses at runtime (fork is -ENOSYS) and
-# the boot text's task shim shadows those names anyway. seat.c (plan B2) is the
-# shared seat plumbing -- one ai_clock over the same seam.
-k_free_c = $R/free/kmain.c $R/free/blk.c $R/free/sys.c $R/host/posix.c $R/host/seat.c
-# paint.c is named rather than wildcarded (mk/common.mk): the console renders 32bpp,
-# so this seat wants the shared painter. nif.c stays out until the kernel grows
-# defs[] rows for it -- bodies nothing calls are bytes the image cannot spend.
-k_shared_c = $(love_c) $(f_c) $R/crew/quay/paint.c $(c_c)
+k_free_c = $R/free/kmain.c $R/free/blk.c $R/free/sys.c
+# THE WHOLE HOST SURFACE rides the kernel now (plan C2): the fused -pie link
+# is one object set, host frontend included -- posix.c's nifs (A3), seat.c's
+# plumbing (B2), and main.c with the rest, every libc call bottoming out in
+# free/sys.c's table. the spawn family registers and refuses at runtime, the
+# boot text's task shim shadows those names, and quit/getpid branch to their
+# k_lvm_ twins on a negative osv. ⚠ no quay.c here: cb.c carries it by unity
+# include, exactly as the host link does.
+k_host_c = $(patsubst %,$R/host/%.c,main cb image mem hash sock tls deflate inflate src posix seat)
+k_quay_c = $R/crew/quay/cga_8x8.c $R/crew/quay/moderndos_8x16.c $R/crew/quay/paint.c
+k_shared_c = $(love_c) $(k_quay_c) $(c_c)
 k_h = $(love_h) $(wildcard *.h $(R)/free/*.h $(R)/free/$a/*.h)
 
 k_odir = $(ko)/$a$(ksuf)
 k_elf = $(ko)/love-$a$(ksuf).elf
+k_pie = $(k_odir)/love.pie
 
 k_shared_o = $(k_shared_c:$(R)/%.c=$(k_odir)/%.o)
 k_arch_o = $(k_arch_c:$(R)/%.c=$(k_odir)/%.o)
 k_free_o = $(k_free_c:$(R)/%.c=$(k_odir)/%.o)
-# the two LAYS: what used to be four .S files.
-# boot.o is the bring-up, vec.o the interrupt tail; both are holo IR written in
-# love (free/mk{boot,vec}.l), so no assembler runs in this build at all.
-k_lay_o = $(k_odir)/free/$a/boot.o $(k_odir)/free/$a/vec.o
+k_host_o = $(k_host_c:$(R)/%.c=$(k_odir)/%.o)
+# the two LAYS (holo IR written in love, free/mk{boot,vec}.l -- no assembler
+# runs in this build). vec.o is an ordinary object and rides the pie; boot.o
+# is the bring-up, and its 32-bit stub carries abs32 sites a pie cannot
+# slide -- it stays out of the link and the PROJECTION lays and patches it.
+k_lay_o = $(k_odir)/free/$a/vec.o
+k_boot_o = $(k_odir)/free/$a/boot.o
 # the mksys machine tail, the same object the hosted link carries: __ai_call
 # compiles with both doors now, so the raw `syscall`/`svc` leaf must resolve --
 # dead on metal (a negative osv takes __ai_inle first), and it brings the seat
 # symbols the stubs used to fake (__ai_sigret, the netbsd leaves).
 k_tail_o = $(k_odir)/free/$a/sys.o
-k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_lay_o) $(k_tail_o)
+# the runtime archive slice (crt0 and kin), laid per arch like the cross lane's
+k_rt_o = $(k_odir)/rt.o
+k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_host_o) $(k_lay_o) $(k_tail_o) $(k_rt_o)
 
 # The kernel runs the GENERATIONAL collector bounded by g->budget: kmain sums the boot
 # memmap into kram_words and sets budget = kram_words/8 after ai_ini (the Appel knob).
@@ -95,29 +102,40 @@ kcc_dep = $(ho)/love.baked
 
 kernel: $(k_elf)
 
-# The LINK is ours, and only ours: holo's kernel lane (crew/holo/link.l's ldkern, driven
-# by free/klink.l) lays the shape -- the note, five page-aligned PT_LOADs,
-# p_paddr = p_vaddr - bias, entry by symbol, kimage_end -- and all three doors boot what
-# it writes. The <a>.lds files and the KLINK=lld lane that read them went 2026-08-19: a
-# linker twin nothing ran, and it was the one thing keeping the two kernel seats on
-# core/mx.l's hand-spliced roster. No --gc-sections either -- the image carries some dead
-# code, and it is RAM the kernel has plenty of.
-klink_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
-  $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/free/klink.l
-$(k_odir)/klink.list: force_dist_list
+# THE LINK IS THE HOST'S OWN (plan C2): one mooncc -pie over the whole object
+# set, the same lane that links out/host/love. what the doors eat is the
+# PROJECTION of that pie -- tools/kproject.l re-bases every PT_LOAD at the
+# kernel base, applies the ai_rela table there (the law nolibc's __ai_reloc
+# runs at a hosted start, run ahead of time), lays and patches boot.o below
+# the image, writes k_image_top, and emits the flat ELF all three doors have
+# always booted -- the note, the entry by symbol, paddr = vaddr.
+# main.o bakes the host cats; cb.o rides the quay sources by unity include.
+$(k_odir)/host/main.o: $(baked_h)
+$(k_odir)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
+$(k_odir)/rt.o: $(rt_slice) tools/mkrt.l $m
+	@echo LOVE	$@
 	@mkdir -p "$(dir $@)"
-	@tf=$@.$$$$.tmp; echo '$(klink_l)' > $$tf; \
+	@$m tools/mkrt.l $@ $(k_be_$a)
+$(k_pie): $(k_o) $m
+	@echo MOON	$@
+	@mkdir -p "$(dir $@)"
+	@$(KCC) -pie -t $(k_be_$a) $(k_o) -o $@
+kproject_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
+  $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/tools/kproject.l
+$(k_odir)/kproject.list: force_dist_list
+	@mkdir -p "$(dir $@)"
+	@tf=$@.$$$$.tmp; echo '$(kproject_l)' > $$tf; \
 	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
-$(k_odir)/klink.l: $(klink_l) $(k_odir)/klink.list
+$(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
 	@echo CAT	$@
 	@mkdir -p "$(dir $@)"
 	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
-	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(klink_l)); } > $@
+	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(kproject_l)); } > $@
 
-$(k_elf): $(k_odir)/klink.l $(k_o) $m
-	@echo HOLO	$@
+$(k_elf): $(k_odir)/kproject.l $(k_pie) $(k_boot_o) $m
+	@echo KPROJ	$@
 	@mkdir -p "$(dir $@)"
-	@$m $(k_odir)/klink.l $@ $a $(k_o)
+	@$m $(k_odir)/kproject.l $(k_pie) $(k_boot_o) $@ $a && test -s $@
 
 # --- the initrd ------------------------------------------------------
 # lib/*.l baked per-file into .rodata as {path, bytes, len} rows (tools/lcatfs.l), which
@@ -171,7 +189,7 @@ k_be_x86_64 = x64
 k_be_aarch64 = arm64
 klay_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/$(k_be_$a).l $R/crew/holo/elf.l $R/crew/holo/obj.l
-# klink.l's shape, twice. ⚠ STATIC pattern, never an implicit one: a pattern-MADE
+# kproject.l's cat shape, twice. ⚠ STATIC pattern, never an implicit one: a pattern-MADE
 # prerequisite is an INTERMEDIATE make deletes after the link, and the cat would then run
 # again on every build. naming the targets keeps them ordinary files.
 $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/free/%.l $(klay_l)
@@ -182,7 +200,7 @@ $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/free/%.l $(klay_l)
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
 # kernel boots into nothing.
-$(k_lay_o): $(k_odir)/free/$a/%.o: $(k_odir)/mk%.l $m
+$(k_lay_o) $(k_boot_o): $(k_odir)/free/$a/%.o: $(k_odir)/mk%.l $m
 	@echo HOLO	$@
 	@mkdir -p "$(dir $@)"
 	@$m -l $< -n -e '(lay-$* "$@" "$a")' && test -s $@
