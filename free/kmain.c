@@ -301,8 +301,11 @@ static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
 long k_fd_write(int fd, void const *b, long n) {
   if (n < 0) return -22;                                 // EINVAL
   return (long) k_row_write(fd, (unsigned char const *) b, (uintptr_t) n); }
+static void k_dir_close(int fd);       // the directory row's close, and its brand
 long k_fd_read(int fd, void *b, long n) {
   if (n < 0) return -22;
+  struct k_source *s = k_source(fd);
+  if (s && s->close == k_dir_close) return -21;          // EISDIR: a directory reads via getdents
   intptr_t r = k_row_read(fd, (unsigned char *) b, (uintptr_t) n);
   return r < 0 ? 0 : (long) r; }
 long k_fd_close(int fd) {
@@ -782,11 +785,14 @@ static void ram_close(int fd) {
 
 // the lowest free row at or past the boot two -- POSIX's rule, which scripts lean
 // on. A row is free when it carries no method at all, which is what k_source_open
-// zeroes a fresh one to and what ram_close puts one back to.
-static int k_fd_free(void) {
-  for (int i = (int) countof(k_boot); i < k_sources_n; i++)
+// zeroes a fresh one to and what ram_close puts one back to. the floor is
+// F_DUPFD's "lowest >= arg"; every other caller passes 0.
+static int k_fd_free_at(int at) {
+  int lo = at > (int) countof(k_boot) ? at : (int) countof(k_boot);
+  for (int i = lo; i < k_sources_n; i++)
     if (!k_row_live(i)) return i;
-  return k_sources_n; }
+  return k_sources_n > lo ? k_sources_n : lo; }
+static int k_fd_free(void) { return k_fd_free_at(0); }
 
 // open a path -> its fd, or -1. m is r read, w truncate, a append -- the one door
 // under both `open` (which reads it off a mode string) and `openfd` (off the charm
@@ -1110,10 +1116,10 @@ static void k_row_zero(int fd) {
 // offset then DIVERGES where POSIX shares it -- the shell's save/restore dance
 // never seeks, and a shared-offset handle costs a refcounted box nothing asks
 // for yet); a boot twin gets k_row_zero so its close frees the row.
-ai_noinline static int k_dup_row(struct ai *g, int src) {
+ai_noinline static int k_dup_row(int src, int at) {
   struct k_source *s = k_source(src);
   if (!s || !(s->readn || s->writen || s->putc)) return -1;
-  int fd = k_fd_free();
+  int fd = k_fd_free_at(at);
   struct k_fh *h = NULL;
   if (s->readn == ram_readn) {
     struct k_fh *o = s->state;
@@ -1128,14 +1134,30 @@ ai_noinline static int k_dup_row(struct ai *g, int src) {
   else if (s->writen == pipe_writen) ((struct k_pipe*) s->state)->wrefs++;
   else if (!t->close) t->close = k_row_zero;
   return fd; }
+// free/sys.c's doors over the same motions: fcntl's F_DUPFD (at = the floor)
+// and dup3. src == dst is dup3's own refusal; the love face answers () there.
+long k_fd_dup(int src, int at) {
+  if (at < 0) return -EINVAL;
+  int fd = k_dup_row(src, at);
+  return fd < 0 ? -EBADF : fd; }
+long k_fd_dup3(int src, int dst) {
+  if (src == dst || dst < 0) return -EINVAL;
+  int nfd = k_dup_row(src, 0);
+  if (nfd < 0) return -EBADF;
+  struct k_source *d = k_source_open(dst);
+  if (!d) { ai_fd_close(nfd); k_row_zero(nfd); return -ENOMEM; }
+  if (d->close) d->close(dst);
+  d = k_source(dst);                            // close zeroes through the live table
+  struct k_source *n = k_source(nfd);
+  *d = *n;
+  *n = (struct k_source) {0};                   // the temp row retires; its state moved whole
+  return dst; }
 
-// (pipe _) -> (rfd . wfd) | a NEGATIVE errno -- host/posix.c's shape exactly.
-// the body rides an ai_noinline helper (k_stat's model) so the wrapper stays a
-// pure tail jump.
-ai_noinline static struct ai *k_pipe_new(struct ai *g) {
-  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+// the row mechanics of pipe(2), g-free: two rows over one queue. free/sys.c's
+// pipe2 arm calls it with the caller's own int pair.
+long k_fd_pipe(int fds[2]) {
   struct k_pipe *p = kmallocw(b2w(sizeof *p));
-  if (!p) return g->sp[0] = putcharm(-ENOMEM), g;
+  if (!p) return -ENOMEM;
   *p = (struct k_pipe) { .rrefs = 1, .wrefs = 1 };
   int rfd = k_fd_free();
   struct k_source *rs = k_source_open(rfd);
@@ -1146,10 +1168,21 @@ ai_noinline static struct ai *k_pipe_new(struct ai *g) {
   if (!ws) {
     if (rs) k_row_zero(rfd);
     kfree(p);
-    return g->sp[0] = putcharm(-ENOMEM), g; }
+    return -ENOMEM; }
   *ws = (struct k_source) { .writen = pipe_writen, .close = pipe_wclose, .state = p };
+  fds[0] = rfd, fds[1] = wfd;
+  return 0; }
+
+// (pipe _) -> (rfd . wfd) | a NEGATIVE errno -- host/posix.c's shape exactly.
+// the body rides an ai_noinline helper (k_stat's model) so the wrapper stays a
+// pure tail jump.
+ai_noinline static struct ai *k_pipe_new(struct ai *g) {
+  if (!ai_ok(g = ai_have(g, Width(struct ai_chain)))) return g;
+  int fds[2];
+  long e = k_fd_pipe(fds);
+  if (e) return g->sp[0] = putcharm(e), g;
   struct ai_chain *w = ini_chain((struct ai_chain*) bump(g, Width(struct ai_chain)),
-                                 putcharm(rfd), putcharm(wfd));
+                                 putcharm(fds[0]), putcharm(fds[1]));
   return g->sp[0] = word(w), g; }
 static lvm(lvm_pipe) {
   Pack(g); g = k_pipe_new(g);
@@ -1176,31 +1209,114 @@ static lvm(lvm_fdopen) {
 
 // (dup fd) -> a fresh row aliasing fd | -errno.  (dup2 src dst) -> () | errno |
 // EINVAL: dst's old row closes first, then src's alias lands IN that slot.
-ai_noinline static ai_word k_dup(struct ai *g, ai_word w) {
+ai_noinline static ai_word k_dup(ai_word w) {
   int fd = (w & 1) ? (int) getcharm(w) : -1;
-  int r = fd < 0 ? -1 : k_dup_row(g, fd);
+  int r = fd < 0 ? -1 : k_dup_row(fd, 0);
   return putcharm(r < 0 ? -EBADF : r); }
 static lvm(lvm_dup) {
-  Sp[0] = k_dup(g, Sp[0]);
+  Sp[0] = k_dup(Sp[0]);
   ai_musttail return Next(1); }
 
-ai_noinline static ai_word k_dup2(struct ai *g, ai_word sw, ai_word dw) {
+ai_noinline static ai_word k_dup2(ai_word sw, ai_word dw) {
   if (!(sw & 1) || !(dw & 1)) return putcharm(EINVAL);
   int src = (int) getcharm(sw), dst = (int) getcharm(dw);
   if (src == dst) return ZeroPoint;
-  int nfd = k_dup_row(g, src);                  // the alias first: src == a dying dst's twin survives
-  if (nfd < 0) return putcharm(EBADF);
-  struct k_source *d = k_source_open(dst);
-  if (!d) { ai_fd_close(nfd); k_row_zero(nfd); return putcharm(ENOMEM); }
-  if (d->close) d->close(dst);
-  d = k_source(dst);                            // close zeroes through the live table
-  struct k_source *n = k_source(nfd);
-  *d = *n;
-  *n = (struct k_source) {0};                   // the temp row retires; its state moved whole
-  return ZeroPoint; }
+  long e = k_fd_dup3(src, dst);
+  return e < 0 ? putcharm(-e) : ZeroPoint; }
 static lvm(lvm_dup2) {
-  Sp[1] = k_dup2(g, Sp[0], Sp[1]);
+  Sp[1] = k_dup2(Sp[0], Sp[1]);
   Sp += 1; ai_musttail return Next(1); }
+
+// --- directory rows: opendir(2)'s door, free/sys.c's only caller ------------
+// a directory opens as a row with a close and a dents cursor, nothing else --
+// read(2) on it is EISDIR (k_fd_read's check, keyed on this close), and the
+// love doors never make one (readdir is their lane). the cursor is the count
+// of names already handed out; the scan re-walks and skips, so no enumeration
+// state outlives the call but the number.
+struct k_dh { uintptr_t pn; int at; char p[256]; };
+static void k_dir_close(int fd) {
+  struct k_source *s = k_source(fd);
+  if (!s) return;
+  kfree(s->state);
+  *s = (struct k_source) {0}; }
+
+long k_fs_opendir(char const *p, uintptr_t pn) {
+  char cp[256];
+  intptr_t cn;
+  if (!k_fs_init()) return -ENOMEM;
+  if ((cn = k_canon(p, pn, cp)) < 0) return -ENAMETOOLONG;
+  if (!k_dirp(cp, (uintptr_t) cn))
+    return k_find(cp, (uintptr_t) cn) >= 0 ? -ENOTDIR : -ENOENT;
+  int fd = k_fd_free();
+  struct k_dh *h = kmallocw(b2w(sizeof *h));
+  struct k_source *s = h ? k_source_open(fd) : NULL;
+  if (!s) { kfree(h); return -ENOMEM; }
+  h->pn = (uintptr_t) cn, h->at = 0;
+  memcpy(h->p, cp, (uintptr_t) cn);
+  *s = (struct k_source) { .close = k_dir_close, .state = h };
+  return fd; }
+
+// linux_dirent64: 19 header bytes then the name, NUL kept, the record rounded
+// to 8 -- so every record stays 8-aligned in the caller's buffer.
+struct k_dent { unsigned long ino; long off; unsigned short reclen;
+                unsigned char type; char name[]; };
+long k_fd_dents(int fd, void *buf, long cap) {
+  if (!k_row_live(fd)) return -EBADF;
+  struct k_source *s = k_source(fd);
+  if (s->close != k_dir_close) return -ENOTDIR;
+  struct k_dh *h = s->state;
+  long off = 0;
+  int walked = 0;                               // distinct names passed this scan
+  for (int i = 0; i < k_ents_n; i++) {
+    uintptr_t k;
+    char const *e = k_entry(i, h->p, h->pn, &k);
+    if (!e) continue;
+    bool seen = false;                          // one name per entry, k_readdir's rule
+    for (int j = 0; j < i && !seen; j++) {
+      uintptr_t k2;
+      char const *e2 = k_entry(j, h->p, h->pn, &k2);
+      seen = e2 && k2 == k && !memcmp(e, e2, k); }
+    if (seen) continue;
+    if (walked++ < h->at) continue;             // already handed out
+    long rl = (long) ((19 + k + 1 + 7) & ~(uintptr_t) 7);
+    if (off + rl > cap) return off ? off : -EINVAL;
+    struct k_dent *d = (struct k_dent*) ((char*) buf + off);
+    d->ino = (unsigned long) i + 1;             // fabricated: the first carrier's row
+    d->off = h->at + 1;
+    d->reclen = (unsigned short) rl;
+    d->type = (e[k] == '/' || k_ents[i].dir) ? 4 : 8;   // DT_DIR : DT_REG
+    memcpy(d->name, e, k);
+    d->name[k] = 0;
+    off += rl;
+    h->at++; }
+  return off; }
+
+// fstat(2)'s row face: what each row kind knows. the ramfs handle answers its
+// entry, a pipe end is a fifo, a directory row its tree, the boot rows a
+// character device. the struct stat fabrication stays free/sys.c's.
+long k_fd_stat(int fd, struct k_st *st) {
+  if (!k_row_live(fd)) return -EBADF;
+  struct k_source *s = k_source(fd);
+  *st = (struct k_st) { 0, 0, 0 };
+  if (s->readn == ram_readn) {
+    struct k_fh *h = s->state;
+    k_blob(h->i, &st->size);
+    st->ms = k_ents[h->i].ms;
+    st->mode = k_mode_file | k_ents[h->i].mode;
+    return 0; }
+  if (s->readn == pipe_readn || s->writen == pipe_writen) {
+    st->mode = 0010000 | 0600;                  // a fifo
+    return 0; }
+  if (s->close == k_dir_close) {
+    struct k_dh *h = s->state;
+    int i = k_find(h->p, h->pn);
+    st->mode = k_mode_dir | (i >= 0 ? k_ents[i].mode : 0755);
+    st->ms = i >= 0 ? k_ents[i].ms : 0;
+    uintptr_t kid;
+    if (k_kids(h->p, h->pn, &kid) && kid > st->ms) st->ms = kid;
+    return 0; }
+  st->mode = 0020000 | 0620;                    // the console twins: a character device
+  return 0; }
 
 // (getpid _) -> the running task's pid, a charm; the main task reads 0.
 static lvm(lvm_getpid) {
@@ -1229,7 +1345,7 @@ ai_noinline static ai_word k_procseat(struct ai *g, ai_word pw,
       f = k_fd_eff(g, (int) f);                 // PARENT's view of it (2>&1 under
       if (f < 0) { s->fd[i] = -2; continue; }   // a seat follows the seat)
       if (f == i) continue; }                   // the identity seat is no seat
-    int d = k_dup_row(g, (int) f);
+    int d = k_dup_row((int) f, 0);
     s = k_seat_find(pid);                       // the dup may have grown tables
     if (d < 0) { s->fd[i] = -2; continue; }     // a dead fd seats closed, not silent
     s->fd[i] = d; }

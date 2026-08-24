@@ -58,6 +58,18 @@ extern int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode);
 extern int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms);
 extern uintptr_t ai_clock(void);
 
+// the fd faces (kmain.c), g-free by construction: rows, pipe queues and the
+// dents cursor are kernel memory, and g only ever entered their old shapes to
+// build love answers. what g truly knows -- WHICH TASK RUNS -- never crosses
+// this seam: the syscall door is the PROCESS's (inle is one process, tasks its
+// threads), and per-task questions stay with the nifs, where g is threaded.
+extern long k_fd_pipe(int fds[2]);
+extern long k_fd_dup(int src, int at);
+extern long k_fd_dup3(int src, int dst);
+extern long k_fd_stat(int fd, struct k_st *st);
+extern long k_fd_dents(int fd, void *buf, long cap);
+extern long k_fs_opendir(char const *p, uintptr_t pn);
+
 // a dirfd is honored as AT_FDCWD only: the ramfs has one cwd, and an absolute
 // path ignores its dirfd by POSIX's own rule. any other seat refuses loudly.
 static long at_ok(long dfd, char const *p) {
@@ -69,15 +81,36 @@ static long k_openat(long dfd, char const *p, long fl, long mode) {
   long r = at_ok(dfd, p);
   if (r) return r;
   long acc = fl & 3;
+  if (fl & O_DIRECTORY) {                       // opendir's lane, read-only by nature
+    if (acc != O_RDONLY) return -EINVAL;
+    return k_fs_opendir(p, strlen(p)); }
   char m = acc == O_RDONLY ? 'r'
          : acc != O_WRONLY ? 0
          : (fl & O_APPEND) ? 'a' : 'w';
   if (!m) return -EINVAL;                       // the ramfs has no O_RDWR door
   r = k_fs_open(p, strlen(p), m);
-  if (r == -ENOENT && m == 'r') {               // the face keeps its 'r' misses cheap, so a
-    struct k_st t;                              // synthesized directory is told apart here
-    if (!k_fs_stat(p, strlen(p), &t) && (t.mode & 040000)) return -EISDIR; }
+  // POSIX opens a directory read-only; the face keeps its 'r' misses cheap
+  // (one k_find), so the directory answer is assembled on this slow path --
+  // -EISDIR for an explicit entry, a stat for a synthesized one.
+  if (r == -EISDIR && m == 'r') return k_fs_opendir(p, strlen(p));
+  if (r == -ENOENT && m == 'r') {
+    struct k_st t;
+    if (!k_fs_stat(p, strlen(p), &t) && (t.mode & 040000))
+      return k_fs_opendir(p, strlen(p)); }
   return r; }
+
+// what the ramfs knows lands as it is; ino/nlink/uid/dev are invented here,
+// where the invention shows. fstat and newfstatat share the one shape.
+static void stat_fab(struct stat *st, struct k_st const *t) {
+  *st = (struct stat) {0};
+  st->st_mode = (unsigned) t->mode;
+  st->st_nlink = 1;
+  st->st_size = (long) t->size;
+  st->st_blksize = 4096;
+  st->st_blocks = (long) ((t->size + 511) / 512);
+  st->st_mtim.tv_sec = (long) (t->ms / 1000);
+  st->st_mtim.tv_nsec = (long) (t->ms % 1000) * 1000000;
+  st->st_atim = st->st_ctim = st->st_mtim; }
 
 static long k_statat(long dfd, char const *p, struct stat *st, long fl) {
   (void) fl;                                    // no symlinks to not-follow
@@ -85,15 +118,7 @@ static long k_statat(long dfd, char const *p, struct stat *st, long fl) {
   if (r || !st) return r ? r : -EFAULT;
   struct k_st t;
   if ((r = k_fs_stat(p, strlen(p), &t))) return r;
-  *st = (struct stat) {0};
-  st->st_mode = (unsigned) t.mode;
-  st->st_nlink = 1;
-  st->st_size = (long) t.size;
-  st->st_blksize = 4096;
-  st->st_blocks = (long) ((t.size + 511) / 512);
-  st->st_mtim.tv_sec = (long) (t.ms / 1000);
-  st->st_mtim.tv_nsec = (long) (t.ms % 1000) * 1000000;
-  st->st_atim = st->st_ctim = st->st_mtim;
+  stat_fab(st, &t);
   return 0; }
 
 static long k_utimeat(long dfd, char const *p, struct timespec const *ts, long fl) {
@@ -119,7 +144,10 @@ long k_sys_nr(char const *nm, long n) {
     {"mkdirat", NR_mkdirat}, {"unlinkat", NR_unlinkat},
     {"renameat", NR_renameat}, {"chdir", NR_chdir},
     {"getcwd", NR_getcwd}, {"fchmodat", NR_fchmodat},
-    {"utimensat", NR_utimensat} };
+    {"utimensat", NR_utimensat},
+    {"pipe2", NR_pipe2}, {"dup3", NR_dup3}, {"fcntl", NR_fcntl},
+    {"fstat", NR_fstat}, {"getdents64", NR_getdents64},
+    {"getpid", NR_getpid} };
   for (unsigned i = 0; i < sizeof t / sizeof *t; i++)
     if ((long) strlen(t[i].n) == n && !memcmp(t[i].n, nm, (unsigned long) n))
       return t[i].nr;
@@ -159,4 +187,31 @@ long __ai_sys(long n, long a, long b, long c, long d, long e, long f) {
     case NR_fchmodat:
       if ((r = at_ok(a, (char const *) b))) return r;
       return k_fs_chmod((char const *) b, strlen((char const *) b), (uintptr_t) c);
+    case NR_pipe2:
+      if (!a) return -EFAULT;
+      if (b) return -EINVAL;                    // no close-on-exec where nothing execs
+      return k_fd_pipe((int *) a);
+    case NR_dup3:
+      if (c) return -EINVAL;
+      return k_fd_dup3((int) a, (int) b);
+    case NR_fcntl:
+      switch (b) {
+        case F_DUPFD: return k_fd_dup((int) a, (int) c);
+        case F_GETFD: case F_SETFD: case F_GETFL: {   // flag words this seat does not keep
+          struct k_st t;
+          return k_fd_stat((int) a, &t) ? -EBADF : 0; }
+        default: return -EINVAL; }
+    case NR_fstat: {
+      if (!b) return -EFAULT;
+      struct k_st t;
+      if ((r = k_fd_stat((int) a, &t))) return r;
+      stat_fab((struct stat *) b, &t);
+      return 0; }
+    case NR_getdents64:
+      if (!b) return -EFAULT;
+      return k_fd_dents((int) a, (void *) b, c);
+    // inle is ONE process and love tasks are its threads, so getpid answers
+    // the machine's constant -- what every thread of a process reads. the
+    // TASK pid is love's question, and its nif keeps g, where the answer is.
+    case NR_getpid: return 1;
     default:       return -38; } }                       // ENOSYS, canonically

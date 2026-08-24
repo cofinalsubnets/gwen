@@ -149,13 +149,13 @@
    p (open "lib/dns.l" "r") s (slurp p) _ (close p)
  (assert (<= 0 fd) (= n 16) (= (snip b 0 16) (snip s 0 16)) (= 0 c)))
 
-; openat refusals, each with its own reason -- absence, a directory, the rdwr
-; door the ramfs does not have, a stranger dirfd, and the NULL path
+; openat refusals, each with its own reason -- absence, writing a directory,
+; the rdwr door the ramfs does not have, a stranger dirfd, and the NULL path
 (: at (- 0 100)
    fd (syscall "openat" 5 "/lib/dns.l" 0 0)
    _ (syscall "close" fd 0 0 0)
  (assert (= -2 (syscall "openat" at "lib/no-such" 0 0))
-         (= -21 (syscall "openat" at "lib" 0 0))
+         (= -21 (syscall "openat" at "lib" 1 0))
          (= -22 (syscall "openat" at "lib/dns.l" 2 0))
          (= -95 (syscall "openat" 5 "lib/dns.l" 0 0))
          (<= 0 fd)
@@ -271,3 +271,103 @@
          (= 0 ro) (= 1700000000000 <>still)
          (= 0 rn) (<= t0 <>nw t1)
          (= -2 (syscall "utimensat" at "lib/no-such" 0 0))))
+
+; --- the fd family -----------------------------------------------------------
+
+; pipe2 fills the caller's int pair, and the ends behave as the rows they are;
+; a flag word carries nothing here (nothing execs), and a NULL pair is EFAULT
+(: b (cask 8)
+   r (syscall "pipe2" b 0 0 0)
+   v (string b)
+   rfd ((v 0) + ((v 1) << 8) + ((v 2) << 16) + ((v 3) << 24))
+   wfd ((v 4) + ((v 5) << 8) + ((v 6) << 16) + ((v 7) << 24))
+   n (syscall "write" wfd "fdfam" 5 0)
+   d (cask 8)
+   m (syscall "read" rfd d 8 0)
+   _ (syscall "close" wfd 0 0 0)
+   _ (syscall "close" rfd 0 0 0)
+ (assert (= 0 r) (= n 5) (= m 5) (= "fdfam" (snip d 0 5))
+         (= -22 (syscall "pipe2" b 1 0 0))
+         (= -14 (syscall "pipe2" 0 0 0 0))))
+
+; dup3 lands the alias IN the named slot; a write through either twin reaches
+; the one queue. src == dst is dup3's own refusal, a dead src EBADF
+(: pp (pipe 0) rfd (cap pp) wfd (cup pp)
+   r (syscall "dup3" wfd 40 0 0)
+   _ (syscall "write" 40 "one" 3 0)
+   _ (syscall "write" wfd "two" 3 0)
+   _ (syscall "close" 40 0 0 0)
+   _ (syscall "close" wfd 0 0 0)
+   d (cask 16)
+   n (syscall "read" rfd d 16 0)
+   _ (syscall "close" rfd 0 0 0)
+ (assert (= 40 r) (= n 6) (= "onetwo" (snip d 0 6))
+         (= -22 (syscall "dup3" rfd rfd 0 0))
+         (= -9 (syscall "dup3" 4096 41 0 0))))
+
+; fcntl: F_DUPFD takes the lowest row at or past its floor; the flag words
+; answer 0 for a live row (this seat keeps none), and a stranger cmd refuses
+(: pp (pipe 0) rfd (cap pp) wfd (cup pp)
+   d (syscall "fcntl" rfd 0 30 0)
+   g0 (syscall "fcntl" rfd 1 0 0)
+   bad (syscall "fcntl" rfd 99 0 0)
+   _ (syscall "close" d 0 0 0)
+   _ (syscall "close" rfd 0 0 0) _ (syscall "close" wfd 0 0 0)
+ (assert (<= 30 d) (= 0 g0) (= -22 bad)
+         (= -9 (syscall "fcntl" 4096 1 0 0))))
+
+; fstat answers the row's kind: a ramfs fd its entry, a pipe end a fifo, a
+; directory row its tree, and a dead row EBADF
+(: at (- 0 100)
+   (le4 s i) ((s i) + ((s (+ i 1)) << 8) + ((s (+ i 2)) << 16) + ((s (+ i 3)) << 24))
+   fd (openfd "lib/fat.l" 0)
+   b (cask 144)
+   r (syscall "fstat" fd b 0 0)
+   v (string b)
+   st (stat "lib/fat.l")
+   md (| (& 61440 (le4 v 16)) (& 61440 (le4 v 24)))
+   sz ((le4 v 48) + ((le4 v 52) << 32))
+   _ (fdclose fd)
+   pp (pipe 0) rfd (cap pp) wfd (cup pp)
+   p2 (cask 144)
+   pr (syscall "fstat" rfd p2 0 0)
+   w2 (string p2)
+   pm (| (& 61440 (le4 w2 16)) (& 61440 (le4 w2 24)))
+   _ (fdclose rfd) _ (fdclose wfd)
+   dfd (syscall "openat" at "lib" 0 0)
+   d3 (cask 144)
+   dr (syscall "fstat" dfd d3 0 0)
+   w3 (string d3)
+   dm (| (& 61440 (le4 w3 16)) (& 61440 (le4 w3 24)))
+   _ (syscall "close" dfd 0 0 0)
+ (assert (= 0 r) (= 32768 md) (= <st sz)
+         (= 0 pr) (= 4096 pm)
+         (= 0 dr) (= 16384 dm)
+         (= -9 (syscall "fstat" 4096 b 0 0))))
+
+; a directory opens read-only (POSIX's own rule) as a dents row: read(2) on it
+; is EISDIR, and getdents64 walks exactly the names readdir answers -- each
+; record 8-aligned, reclen at 16, the name behind 19 with its NUL. the cursor
+; is the row's, so a second call says done, and a buffer too small for even
+; one record refuses
+(: at (- 0 100)
+   fd (syscall "openat" at "lib" 0 0)
+   b (cask 4096)
+   n (syscall "getdents64" fd b 4096 0)
+   v (string b)
+   (le2 s i) ((s i) + ((s (+ i 1)) << 8))
+   (walk o k) (? (<= n o) k (walk (+ o (le2 v (+ o 16))) (+ k 1)))
+   z (syscall "getdents64" fd b 4096 0)
+   rr (syscall "read" fd (cask 8) 8 0)
+   _ (syscall "close" fd 0 0 0)
+   f2 (syscall "openat" at "lib" 0 0)
+   tiny (syscall "getdents64" f2 (cask 8) 8 0)
+   _ (syscall "close" f2 0 0 0)
+ (assert (<= 0 fd) (< 0 n) (= (walk 0 0) (tally (readdir "lib")))
+         (= 0 z) (= -21 rr) (= -22 tiny)
+         (= -20 (syscall "getdents64" 1 b 4096 0))))
+
+; getpid: inle is ONE process and love tasks are its threads, so the syscall
+; answers the machine's constant -- the task pid stays (getpid _)'s, a nif
+; with g, which is where that answer lives
+(assert (= 1 (syscall "getpid" 0 0 0 0)))
