@@ -225,16 +225,28 @@ keeps real dates for the corpus's stat laws. the whole roster + the fixpoint
 are green on the fused binary: 15.2 MB baked, of which 8.9 MB is the image
 and 3.1 MB the source blob.
 
-**D -- the image, and the last verbs.** what remains: a `love kernel`-shaped
-verb so the artifact emits its own boot image anywhere (today the projection
-runs in-tree -- the verb wants boot.o and the kproject cat carried or
-re-derivable from the source blob); the baked image riding the projection
-(kills the ~2 s boot eval, carries the AOT glaze); and the arm64 artifact via
-the cross lane, whose kernel today still projects from the odir pie.
+**THE INITRD IS THE BLOB, AND THE VERB EXISTS** (1b739c83, 54ce6907). the
+2 MB carriage question answered itself: the freight was the kernel's file
+trees in PLAIN TEXT beside their compressed twins in ai_srcgz -- so the
+shipped kernel inflates the blob it already carries and walks the tar into
+the ramfs (symlinks resolved; the K_TEST kernel keeps the lcatfs bake for its
+real-mtime stat laws), korecat is catted off the ramfs from a baked roster,
+and the baked fused artifact is 13.46 MB -- THE PRE-FUSION SIZE. the whole
+tree lands on metal, which is the metal seed's doorstep. and `love kernel
+OUT.elf` (lib/source.l) emits the boot image ANYWHERE from nothing but what
+the binary carries -- the boot stub laid from the blob's mkboot.l over baked
+holo, the arch read off its own e_machine -- gated by test_kverb, which
+demands BYTE-IDENTITY with make's own projection.
+
+**D -- the image.** what remains: the baked image riding the projection
+(kills the ~2 s boot eval, carries the AOT glaze); the arm64 artifact via the
+cross lane, whose kernel today still projects from the odir pie; and the
+right inverse (`love hostbin` on metal -- the projection is bias-invertible,
+the pie's own header rides the flat image at bias+0).
 
 ## what is still open
 
-- **D + the projection verb**, above.
+- **D**, above.
 - **`getpid` through a syscall** has no `g`, so it cannot know the running task.
   Same shape as the seat divergence, and it wants the same answer.
 - **the kernel lanes' memory wall** (phase B's gate note) -- 768M is margin,
