@@ -513,9 +513,130 @@ void kfree(void *p) {
 // ⚠ ms is the SOURCE's mtime, baked: the initrd carries no directory, so the date a
 // file was last written on the machine that built it exists nowhere else.
 struct k_file { char const *path, *bytes; uintptr_t len, ms; };
+#ifdef K_TEST
+// the TEST kernel keeps the lcatfs bake: its pie carries no source blob, and
+// the corpus's stat laws want the real mtimes only the bake preserves.
 static struct k_file const kfiles[] = {
 #include "kfs.h"
 };
+static struct k_file const *k_bakes = kfiles;
+static int k_bakes_n = (int) countof(kfiles);
+#else
+// THE INITRD IS THE SOURCE BLOB (plan D's first step): the artifact already
+// carries its whole tree as ai_srcgz, so the shipped kernel inflates that and
+// walks the tar instead of baking a second plain-text copy of anything. rows
+// point into the inflated block, which lives as long as the kernel does.
+static struct k_file const *k_bakes;
+static int k_bakes_n;
+extern const unsigned char ai_srcgz[];
+extern const uintptr_t ai_srcgz_len;           // host/src.c; weak zero without a blob
+extern intptr_t ai_inflate_raw(const unsigned char*, uintptr_t, unsigned char*, uintptr_t);
+static uintptr_t k_octal(unsigned char const *p, int n) {
+  uintptr_t v = 0;
+  for (int i = 0; i < n && p[i] >= '0' && p[i] <= '7'; i++) v = v * 8 + (uintptr_t)(p[i] - '0');
+  return v; }
+// join a symlink's target against the link's own directory, ".." and "."
+// squashed -- k_canon's law with an explicit base and no cwd. -> the length.
+static uintptr_t k_lnk_canon(char const *at, char const *ln, char *out, uintptr_t cap) {
+  uintptr_t n = 0;
+  if (ln[0] != '/') {
+    uintptr_t d = strlen(at);
+    while (d && at[d - 1] != '/') d--;
+    if (d && d <= cap) memcpy(out, at, n = d - 1); }         // dirname, no trailing slash
+  for (uintptr_t i = 0; ln[i];) {
+    while (ln[i] == '/') i++;
+    uintptr_t j = i;
+    while (ln[j] && ln[j] != '/') j++;
+    uintptr_t k = j - i;
+    if (!k) break;
+    if (k == 1 && ln[i] == '.') { i = j; continue; }
+    if (k == 2 && ln[i] == '.' && ln[i + 1] == '.') {
+      while (n && out[n - 1] != '/') n--;
+      if (n) n--;
+      i = j; continue; }
+    if (n && n < cap - 1) out[n++] = '/';
+    while (i < j && n < cap - 1) out[n++] = ln[i++]; }
+  return n; }
+// one ustar pass: count on the first, fill on the second. paths re-home below
+// the archive's TOP (the tree looks the same from inside as a checkout does).
+// plain files land whole; a SYMLINK lands as a row whose target path rides
+// lnks[k] for the caller to resolve -- the lib/ door to the crew modules is
+// symlinks, and the old lcatfs bake followed them, so this walk must too.
+static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_file *rows, char **lnks) {
+  int k = 0;
+  for (uintptr_t o = 0; o + 512 <= n && t[o];) {
+    unsigned char const *h = t + o;
+    uintptr_t sz = k_octal(h + 124, 12);
+    int lnk = h[156] == '2';
+    if ((h[156] == '0' || h[156] == 0 || lnk) && !memcmp(h + 257, "ustar", 5)) {
+      if (rows) {
+        // name (+ optional ustar prefix), TOP stripped, NUL-terminated fresh
+        char nm[256]; uintptr_t ln = 0;
+        for (int i = 345; i < 500 && h[i] && ln < 254; i++) nm[ln++] = (char) h[i];
+        if (ln) nm[ln++] = '/';
+        for (int i = 0; i < 100 && h[i] && ln < 255; i++) nm[ln++] = (char) h[i];
+        uintptr_t cut = 0;
+        while (cut < ln && nm[cut] != '/') cut++;
+        cut = cut < ln ? cut + 1 : 0;
+        char *p = kmallocw(b2w(ln - cut + 1));
+        if (!p) return -1;
+        memcpy(p, nm + cut, ln - cut);
+        p[ln - cut] = 0;
+        rows[k] = (struct k_file) { .path = p, .bytes = (char const *) t + o + 512,
+                                    .len = sz, .ms = 1000 * k_octal(h + 136, 12) };
+        if (lnk) {
+          char tgt[101]; uintptr_t tn = 0;
+          while (tn < 100 && h[157 + tn]) { tgt[tn] = (char) h[157 + tn]; tn++; }
+          tgt[tn] = 0;
+          char cn[256];
+          uintptr_t cl = k_lnk_canon(p, tgt, cn, sizeof cn);
+          char *q = kmallocw(b2w(cl + 1));
+          if (!q) return -1;
+          memcpy(q, cn, cl);
+          q[cl] = 0;
+          lnks[k] = q; } }
+      k++; }
+    o += 512 + ((sz + 511) & ~511ull); }
+  return k; }
+static bool k_untar(void) {
+  unsigned char const *z = ai_srcgz; uintptr_t zn = ai_srcgz_len;
+  if (zn < 18 || z[0] != 0x1f || z[1] != 0x8b || z[2] != 8) return false;
+  uintptr_t o = 10; unsigned f = z[3];
+  if (f & 4) o += 2 + (uintptr_t) z[o] + ((uintptr_t) z[o + 1] << 8);
+  if (f & 8) { while (o < zn && z[o]) o++; o++; }
+  if (f & 16) { while (o < zn && z[o]) o++; o++; }
+  if (f & 2) o += 2;
+  if (o + 8 >= zn) return false;
+  uintptr_t un = (uintptr_t) z[zn - 4] | (uintptr_t) z[zn - 3] << 8
+               | (uintptr_t) z[zn - 2] << 16 | (uintptr_t) z[zn - 1] << 24;
+  unsigned char *t = kmallocw(b2w(un + 1));
+  if (!t || ai_inflate_raw(z + o, zn - o - 8, t, un) != (intptr_t) un) return false;
+  int n = k_tar_walk(t, un, NULL, NULL);
+  if (n <= 0) return false;
+  struct k_file *rows = kmallocw(b2w((uintptr_t) n * sizeof *rows));
+  char **lnks = kmallocw(b2w((uintptr_t) n * sizeof *lnks));
+  if (!rows || !lnks) return false;
+  memset(lnks, 0, (uintptr_t) n * sizeof *lnks);
+  if (k_tar_walk(t, un, rows, lnks) != n) return false;
+  // resolve the symlinks against the rows (two passes cover a link to a link),
+  // then compact: a dangling or directory link has no bytes to serve and the
+  // old bake never carried one either.
+  for (int pass = 0; pass < 2; pass++)
+    for (int i = 0; i < n; i++)
+      if (lnks[i])
+        for (int j = 0; j < n; j++)
+          if (!lnks[j] && !strcmp(rows[j].path, lnks[i])) {
+            rows[i].bytes = rows[j].bytes, rows[i].len = rows[j].len;
+            rows[i].ms = rows[j].ms;
+            lnks[i] = NULL;
+            break; }
+  int m = 0;
+  for (int i = 0; i < n; i++)
+    if (!lnks[i]) rows[m++] = rows[i];
+  kfree(lnks);
+  k_bakes = rows, k_bakes_n = m;
+  return true; }
+#endif
 
 // the tree itself (rung 2): a table of ENTRIES in the kernel heap, one per baked
 // row at first touch, growing as create and mkdir add paths the bake never knew.
@@ -540,12 +661,15 @@ static int k_ents_n, k_ents_cap;
 // a refusal leaves the console standing (the caller answers absence or ENOMEM).
 static bool k_fs_init(void) {
   if (k_ents) return true;
-  int n = (int) countof(kfiles), cap = n + 8;
+#ifndef K_TEST
+  if (!k_bakes && !k_untar()) return false;
+#endif
+  int n = k_bakes_n, cap = n + 8;
   struct k_ent *t = kmallocw(b2w((uintptr_t) cap * sizeof *t));
   if (!t) return false;
   for (int i = 0; i < n; i++)
-    t[i] = (struct k_ent) { .path = kfiles[i].path, .bake = i,
-                            .ms = kfiles[i].ms, .mode = 0644, .live = true };
+    t[i] = (struct k_ent) { .path = k_bakes[i].path, .bake = i,
+                            .ms = k_bakes[i].ms, .mode = 0644, .live = true };
   t[n] = (struct k_ent) { .path = "tmp", .bake = -1, .ms = k_clock_ms(),
                           .mode = 0755, .own = true, .dir = true, .live = true };
   k_ents = t, k_ents_n = n + 1, k_ents_cap = cap;
@@ -597,7 +721,7 @@ static ai_inline struct k_fh *k_fh(int fd) {
 static unsigned char const *k_blob(int i, uintptr_t *len) {
   struct k_ent const *e = &k_ents[i];
   if (e->own) return *len = e->len, e->bytes;
-  return *len = kfiles[e->bake].len, (unsigned char const*) kfiles[e->bake].bytes; }
+  return *len = k_bakes[e->bake].len, (unsigned char const*) k_bakes[e->bake].bytes; }
 
 // free/sys.c's seek. ⚠ it answers an ERRNO where lvm_lseek answers a bare -1:
 // down here a caller can tell "no such fd" from "this row does not seek", which
@@ -722,10 +846,10 @@ static int k_parent_ok(char const *p, uintptr_t n) {
 static bool k_fit(int i, uintptr_t need) {
   struct k_ent *e = &k_ents[i];
   if (!e->own) {
-    uintptr_t n = kfiles[e->bake].len, cap = n > need ? n : need;
+    uintptr_t n = k_bakes[e->bake].len, cap = n > need ? n : need;
     unsigned char *p = cap ? kmallocw(b2w(cap)) : NULL;
     if (cap && !p) return false;
-    if (n) memcpy(p, kfiles[e->bake].bytes, n);
+    if (n) memcpy(p, k_bakes[e->bake].bytes, n);
     e->bytes = p, e->len = n, e->cap = cap, e->own = true;
     return true; }
   if (e->cap >= need) return true;
@@ -1721,8 +1845,10 @@ static char const src_holo[] =
 #include "arm64.h"
 #endif
 ;
-static char const src_kore[] =
-#include "korecat.h"
+// the kore cat is CATTED FROM THE RAMFS at boot now -- the blob initrd carries
+// every member, so only the ORDER is baked: the korefiles roster, one line.
+static char const src_korelist[] =
+#include "korelist.h"
 ;
 // peg: cook.l (in the cat) opens with (use 'peg)
 static char const src_peg[] =
@@ -1802,9 +1928,9 @@ void kmain(void) {
   struct ai_def td[] = {{"tests", ai_pop1(g)}};
   g = ai_defn(g, td, countof(td), 0);
 #else
-  // the kore cat, bound whole (rung 3); the session below drinks it through a tap.
-  g = ai_strof(g, src_kore);
-  struct ai_def kd[] = {{"korecat", ai_pop1(g)}};
+  // the kore ROSTER (rung 3): the cat itself is read off the ramfs below.
+  g = ai_strof(g, src_korelist);
+  struct ai_def kd[] = {{"korelist", ai_pop1(g)}};
   g = ai_defn(g, kd, countof(kd), 0);
 #endif
   // the boot cmdline, raw; the boot text below splits it into the argv shape.
@@ -1967,6 +2093,18 @@ void kmain(void) {
    "       accept udp-bind udp-send udp-recv hark winsize))");
   // then the kore cat through the stream shell, quietly: the line is seatless
   // here, so every member's own seat sits out and the whole userland lands.
+  // the cat is BUILT here, member by member off the blob initrd -- korelist is
+  // the baked roster (space-separated), and the concat walks it in order.
+  r = ai_evals_(r,
+   "(: (kwords s i j acc)"
+   "    (? (< j (tally s))"
+   "       (? (= 32 (peep s j 0))"
+   "          (? (< i j) (kwords s (+ j 1) (+ j 1) (link (snip s i j) acc)) (kwords s (+ j 1) (+ j 1) acc))"
+   "          (kwords s i (+ j 1) acc))"
+   "       (? (< i j) (rev (link (snip s i j) acc)) (rev acc)))"
+   "   (kslurp p) (: h (open p \"r\") s (slurp h) _ (close h) s)"
+   "   (kcat l) (? (two? l) (+ (kslurp (cap l)) (kcat (cup l))) \"\")"
+   "   korecat (kcat (kwords korelist 0 0 ())))");
   r = ai_evals_(r, "(reads (tap ((: (g i) (? (< i (tally korecat)) (link (peep korecat i 0) (g (+ 1 i))))) 0)))");
   // now the line wears its real shape and the program word dispatches off the
   // registry -- spawn's own door. a seated program quits with its status (the

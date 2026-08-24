@@ -66,7 +66,13 @@ k_boot_o = $(k_odir)/free/$a/boot.o
 k_tail_o = $(k_odir)/free/$a/sys.o
 # the runtime archive slice (crt0 and kin), laid per arch like the cross lane's
 k_rt_o = $(k_odir)/rt.o
-k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_host_o) $(k_lay_o) $(k_tail_o) $(k_rt_o)
+# the shipped odir pie (a CROSS arch's kernel) carries its own arch-tagged
+# source blob -- the blob IS the initrd now (kmain.c's k_untar). the K_TEST
+# pie stays blobless (src.c's weak zero) and keeps the lcatfs bake instead.
+ifndef K_TEST
+k_src_o = $(k_odir)/src.o
+endif
+k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_host_o) $(k_lay_o) $(k_tail_o) $(k_rt_o) $(k_src_o)
 
 # The kernel runs the GENERATIONAL collector bounded by g->budget: kmain sums the boot
 # memmap into kram_words and sets budget = kram_words/8 after ai_ini (the Appel knob).
@@ -116,6 +122,10 @@ $(k_odir)/rt.o: $(rt_slice) tools/mkrt.l $m
 	@echo LOVE	$@
 	@mkdir -p "$(dir $@)"
 	@$m tools/mkrt.l $@ $(k_be_$a)
+$(k_odir)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $m
+	@echo HOLO	$@
+	@mkdir -p "$(dir $@)"
+	@LOVE_NO_IMAGE= $m -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(k_be_$a)
 $(k_pie): $(k_o) $m
 	@echo MOON	$@
 	@mkdir -p "$(dir $@)"
@@ -163,24 +173,20 @@ out/lib/kfs.h: $(kfs) out/lib/kfs.list $(love0) tools/lcatfs.l love/prel.l
 	@mkdir -p out/lib
 	@echo LOVE	$@
 	@$(love0) -l love/prel.l tools/lcatfs.l $(kfs:$R/%=%) > $@
-# the ARTIFACT's twin, ms pinned to the stamp (kart_inc says why)
-out/lib/kart/kfs.h: $(kfs) out/lib/kfs.list $(love0) tools/lcatfs.l love/prel.l
-	@mkdir -p out/lib/kart
-	@echo LOVE	$@
-	@$(love0) -l love/prel.l tools/lcatfs.l -s $(dist_stamp) $(kfs:$R/%=%) > $@
 
-# --- the kore cat (rung 3) -------------------------------------------
-# the whole $(korefiles) userland (crew/build.mk, included first) baked VERBATIM for the
-# SHIPPED kernel only: kmain.c evals it at boot and the cmdline's program seat picks the
-# tool. the K_TEST kernel skips it -- its corpus bakes the kore subset it drives.
-out/lib/korecat.l: $(korefiles)
-	@echo CAT	$@
+# --- the kore roster (rung 3) ----------------------------------------
+# the blob initrd carries every member, so the SHIPPED kernel bakes only the
+# ORDER: $(korefiles) (crew/build.mk, included first) as one love string, and
+# the boot text cats the members off the ramfs. the K_TEST kernel skips it --
+# its corpus bakes the kore subset it drives.
+out/lib/korelist.h: crew/build.mk free/kernel.mk
+	@echo SH	$@
 	@mkdir -p out/lib
-	@cat $(korefiles) > $@
+	@printf '"%s"\n' '$(korefiles)' > $@
 
 # Shared C sources (core/love.c, crew/quay/, nolibc's six) + per-arch free/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h out/lib/kfs.h $(if $(K_TEST),out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h,out/lib/korecat.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h)
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h $(if $(K_TEST),out/lib/kfs.h out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h,out/lib/korelist.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h)
 	@echo MOON	$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -199,16 +205,12 @@ kmain_o: $(k_free_o)
 # spelled at $(hosta), never $a: a cross `make kernel a=..` must not move the
 # host artifact. the prereqs live here (kernel.mk owns the shape); the link
 # recipe in host/build.mk reads $(kart_o) at run time, where it is defined.
-# ⚠ -Iout/lib/kart FIRST: the artifact's kfs.h is the STAMPED bake (every
-# row's ms pinned to $(dist_stamp), selfpack's own mtime law) -- the seed
-# fixpoint demands a binary that is a function of the tree's bytes alone,
-# where the test kernel's kfs keeps real dates for the corpus's stat laws.
-kart_inc = -Iout/lib/kart -I$(ho) -I. -Icore -Iout/lib -I$R -I$R/free -I$R/free/$(hosta) \
+kart_inc = -I$(ho) -I. -Icore -Iout/lib -I$R -I$R/free -I$R/free/$(hosta) \
   -I$R/crew/quay -I$R/crew/moon/include
 kart_h = $(love_h) $(wildcard $(R)/free/*.h $(R)/free/$(hosta)/*.h)
 kart_cats = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h \
-  out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h out/lib/kart/kfs.h \
-  out/lib/korecat.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h
+  out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h \
+  out/lib/korelist.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h
 kart_arch_o = $(patsubst $R/free/$(hosta)/%.c,$(moon_d)/k_$(hosta)_%.o,$(wildcard $R/free/$(hosta)/*.c))
 # the console's painter and its fonts: kernel-only draws the host link never had
 kart_quay_o = $(patsubst %,$(moon_d)/k_q_%.o,paint cga_8x8 moderndos_8x16)
@@ -354,7 +356,7 @@ out/lib/ktests.l: $(kt) out/lib/corpus.list out/lib/ktests.list
 	@cat $(kt) > $@
 # the two VERBATIM bakes, one shape (lcatv, not lcat: an inspect-reprint diverges
 # when the corpus is read back incrementally through a strin port).
-out/lib/korecat.h out/lib/ktests.h: out/lib/%.h: out/lib/%.l $(love0) tools/lcatv.l love/prel.l
+out/lib/ktests.h: out/lib/%.h: out/lib/%.l $(love0) tools/lcatv.l love/prel.l
 	@echo LOVE	$@
 	@$(love0) -l love/prel.l tools/lcatv.l $< > $@
 
@@ -394,7 +396,7 @@ test_kboot: host $(R)/tools/kboot.l
 	@$m $(R)/tools/kboot.l $(k_elf) "kore ls lib" "json.l"
 	@$m $(R)/tools/kboot.l $(k_elf) "kore wc lib/json.l" "lib/json.l" $$(wc -c < $(R)/lib/json.l)
 	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"cd lib; pwd\"" "/lib"
-	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"kore ls lib | kore wc -l\"" $$(ls $(R)/lib/*.l | wc -l)
+	@$m $(R)/tools/kboot.l $(k_elf) "sh -c \"kore ls lib | kore wc -l\"" $$(ls $(R)/lib | wc -l)
 else
 test_kernel test_disk test_kboot:
 	@echo "$@: skipped (host arch $a is not x86_64)"
