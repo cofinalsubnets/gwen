@@ -66,8 +66,9 @@ f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/crew/quay/*.c))
 # __ai_inle arm, free/sys.c answering the canonical numbers in C. mooncc builds
 # the kernel, so it builds
 # the kernel's libc too -- there is no second copy to drift. this is host/posix.c's
-# closure exactly (plan A3): the members its nifs call, what those pull, and
-# nothing more. core.c stays OUT -- it carries malloc, the process entry and the
+# closure (plan A3) plus the members love.c's hosted compile reaches (plan C1:
+# the mmap family behind the W^X arena's runtime branch, refused -ENOSYS on
+# metal). core.c stays OUT -- it carries malloc, the process entry and the
 # std streams, every one of which the kernel owns; free/sys.c answers its four
 # seat symbols (environ, stdout/stderr, the sigaction restorer) instead.
 # ⚠ NAMING A MEMBER HERE IS A DECISION, and stdio was the one weighed: printf and
@@ -78,8 +79,8 @@ c_c = $(addprefix $R/crew/moon/lib/nolibc/string/,memchr.c memcmp.c memcpy.c mem
   $(addprefix $R/crew/moon/lib/nolibc/sys/,read.c write.c \
     chdir.c chmod.c chown.c clock_gettime.c close.c dup2.c fcntl.c fork.c fstat.c getcwd.c \
     getgid.c getpgrp.c getpid.c getuid.c ioctl.c kevent.c kill.c kqueue.c \
-    link.c lseek.c lstat.c madvise.c mkdir.c mount.c open.c pipe.c raise.c readlink.c \
-    rename.c rmdir.c setpgid.c setsid.c stat.c symlink.c sysctl.c umask.c \
+    link.c lseek.c lstat.c madvise.c mkdir.c mmap.c mount.c mprotect.c munmap.c open.c pipe.c raise.c readlink.c \
+    rename.c rmdir.c setpgid.c setsid.c stat.c symlink.c sysconf.c sysctl.c umask.c \
     unlink.c unshare.c utimensat.c waitpid.c) \
   $(addprefix $R/crew/moon/lib/nolibc/dirent/,closedir.c opendir.c readdir.c) \
   $(addprefix $R/crew/moon/lib/nolibc/signal/,grantpt.c posix_openpt.c ptsname.c \

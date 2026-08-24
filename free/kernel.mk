@@ -65,8 +65,15 @@ k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_lay_o) $(k_tail_o)
 # memmap into kram_words and sets budget = kram_words/8 after ai_ini (the Appel knob).
 # ⚠ unbounded, the nursery's copy-overhead resizer grows until gen_major's all-survive
 # sizing asks kmallocw for a block bigger than any physical RAM range. gen_please, core/love.c.
-kcflags = $(ai_cflags) -nostdinc -ffreestanding -fno-lto -fno-PIC \
-  -ffunction-sections -fdata-sections
+# NO FLAGS BEYOND -I/-D/-t, and none are missing (plan C1): mooncc hears
+# -c -o -I -D -t -os -std= -Ttext/-Tdata -fno-inline -pie -freadme and
+# -ffreestanding, and tolerates-and-discards the traditional soup (-g -O -W*
+# and the -f family) -- verified by byte-identical objects. even
+# -ffreestanding is gone: the kernel compiles HOSTED, the same line as the
+# host's moon lane, because love.c's one hosted/metal fork (the W^X code
+# arena) branches on __ai_osv at run time now, and the mmap family it then
+# links answers -ENOSYS through the same door as everything else.
+kcflags =
 kcppflags := \
   -I$(k_odir) \
   -I. -Icore -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) -I$(R)/free \

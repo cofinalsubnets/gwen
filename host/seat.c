@@ -12,11 +12,8 @@
 #include <time.h>
 #include <unistd.h>
 
-// which kernel this binary stands on: nolibc's os.c defines it (0 unprobed;
-// negative says we ARE the kernel). weak so a foreign-libc link (love0) still
-// resolves it -- nothing overrides there, and zero reads as hosted, which such
-// a link always is.
-__attribute__((weak)) long __ai_osv;
+// __ai_osv, "which kernel this binary stands on", rides love.h: os.c defines
+// it hosted, love.c carries the weak zero for links with no nolibc at all.
 
 // CLOCK_REALTIME in milliseconds -- the one scale for the scheduler's
 // deadlines, (clock t), and every mtime. on inle the call lands in the

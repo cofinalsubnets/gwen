@@ -328,6 +328,10 @@ void ai_fd_drain(int fd, void const*, uintptr_t);
 
 uintptr_t ai_clock(void); // used by garbage collector
 intptr_t ai_nclock(void); // the fine interval clock (ns); weak ms-degraded default in love.c, hosts override with a real ns source
+// which kernel underneath (nolibc's os.c: 0 unprobed; 1 linux, 2 freebsd,
+// 3 netbsd; NEGATIVE = we ARE the kernel, inle). love.c carries a weak zero
+// for seats with no nolibc aboard, where hosted is what zero reads as.
+extern long __ai_osv;
 void ai_sleep(uintptr_t ticks); // per-frontend deep wait for at most `ticks` ai_clock()
 // units (0 = infinite); no input wakeup (parked streams go via ai_wait_fds). default no-op.
 

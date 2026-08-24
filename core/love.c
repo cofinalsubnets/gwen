@@ -4548,11 +4548,18 @@ lvm(lvm_casknew) {
  tagthread(k, Width(struct ai_cask));
  ai_musttail return Answer(word(k)); }
 
-// the W^X code arena (hosted only): the malloc heap is NX, so `nat` copies
-// emitted bytes into a W^X mapping -- mmap RW, write, mprotect R+X, never write
-// again. the code address lives outside the GC pool; nat_unmap frees it when the
-// native closure dies. the kernel's HHDM is executable, so it needs none of this.
+// the W^X code arena: hosted, the malloc heap is NX, so `nat` copies emitted
+// bytes into a W^X mapping -- mmap RW, write, mprotect R+X, never write again;
+// the code address lives outside the GC pool and nat_unmap frees it when the
+// native closure dies. on inle -- one hosted-compiled binary, so the question
+// is asked at RUN TIME, a negative __ai_osv -- and on a freestanding seat,
+// RAM is executable and a heap copy runs, with no finalizer owed.
 #if __STDC_HOSTED__
+// which kernel underneath: nolibc's os.c defines it (0 unprobed; 1..3 the
+// hosted kernels; negative = we ARE the kernel). weak for seats with no
+// nolibc aboard (love0 under a foreign libc, wasm), where zero reads as
+// hosted -- which such a seat is.
+__attribute__((weak)) long __ai_osv;
 #include <sys/mman.h>
 #include <unistd.h>
 #ifndef MAP_ANONYMOUS
@@ -4592,19 +4599,29 @@ lvm(lvm_nif) {
  ai_musttail return Answerp(3, zero); //  decline unconditionally -> the interp twin runs (emscripten's mprotect
 #endif                                         //  is a no-op returning 0, so the mprotect guard below does not catch this).
 #if __STDC_HOSTED__
- Have(9 + Width(struct ai_fz));               // 9 covers both cells (6/8 words) + tag + fz
- size_t maplen = code_maplen(n);
- void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
- if (base == MAP_FAILED) ai_musttail return Answerp(3, zero);
- struct ai_str *s = ini_str(str(base), n);
- memcpy(txt(s), txt(bytes_of(Sp[0])), n);     // reload codebuf: a GC in Have may have moved it
- if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
-  { munmap(base, maplen); ai_musttail return Answerp(3, zero); }
+ struct ai_str *s;
+ if (__ai_osv < 0) {                          // inle: the HHDM is executable, a heap copy runs
+  Have(str_width(n) + 9);
+  s = ini_str(str(Hp), n); Hp += str_width(n);
+  memcpy(txt(s), txt(bytes_of(Sp[0])), n);
+#ifndef __wasm__
+  __builtin___clear_cache(txt(s), txt(s) + n);
+#endif
+ } else {
+  Have(9 + Width(struct ai_fz));              // 9 covers both cells (6/8 words) + tag + fz
+  size_t maplen = code_maplen(n);
+  void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (base == MAP_FAILED) ai_musttail return Answerp(3, zero);
+  s = ini_str(str(base), n);
+  memcpy(txt(s), txt(bytes_of(Sp[0])), n);    // reload codebuf: a GC in Have may have moved it
+  if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
+   { munmap(base, maplen); ai_musttail return Answerp(3, zero); }
 #ifndef __wasm__                               // guarded: emscripten's clang has no clear_cache intrinsic (dead here anyway -- wasm early-declined above)
- __builtin___clear_cache(txt(s), txt(s) + n);  // AArch64: the I-cache is not coherent with the freshly
+  __builtin___clear_cache(txt(s), txt(s) + n); // AArch64: the I-cache is not coherent with the freshly
 #endif                                         // written D-cache -- flush or it runs stale bytes (no-op on x86)
+ }
 #else
- Have(str_width(n) + 9);                      // freestanding: HHDM is RWX, a heap copy runs
+ Have(str_width(n) + 9);                      // freestanding: RAM is executable, a heap copy runs
  struct ai_str *s = ini_str(str(Hp), n); Hp += str_width(n);
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);
  __builtin___clear_cache(txt(s), txt(s) + n);  // same I-cache flush on the freestanding (RWX) path
@@ -4632,8 +4649,9 @@ lvm(lvm_nif) {
   tagthread(k, 8);
  }
 #if __STDC_HOSTED__
- struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
- z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z;
+ if (__ai_osv >= 0) {                         // only a mapping owes a finalizer; a heap copy dies with its cell
+  struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
+  z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z; }
 #endif
  ai_musttail return Answerp(3, word(k + 2)); }
 
@@ -4647,19 +4665,29 @@ lvm(lvm_nifx) {
  ai_musttail return Answerp(4, zero); //  decline unconditionally -> the interp twin runs (emscripten's mprotect
 #endif                                         //  is a no-op returning 0, so the mprotect guard below does not catch this).
 #if __STDC_HOSTED__
- Have(11 + Width(struct ai_fz));              // 11 covers both cells (7/9 words) + tag + fz
- size_t maplen = code_maplen(n);
- void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
- if (base == MAP_FAILED) ai_musttail return Answerp(4, zero);
- struct ai_str *s = ini_str(str(base), n);
- memcpy(txt(s), txt(bytes_of(Sp[0])), n);     // reload codebuf: a GC in Have may have moved it
- if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
-  { munmap(base, maplen); ai_musttail return Answerp(4, zero); }
+ struct ai_str *s;
+ if (__ai_osv < 0) {                          // inle: the HHDM is executable, a heap copy runs
+  Have(str_width(n) + 11);
+  s = ini_str(str(Hp), n); Hp += str_width(n);
+  memcpy(txt(s), txt(bytes_of(Sp[0])), n);
+#ifndef __wasm__
+  __builtin___clear_cache(txt(s), txt(s) + n);
+#endif
+ } else {
+  Have(11 + Width(struct ai_fz));             // 11 covers both cells (7/9 words) + tag + fz
+  size_t maplen = code_maplen(n);
+  void *base = mmap(0, maplen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (base == MAP_FAILED) ai_musttail return Answerp(4, zero);
+  s = ini_str(str(base), n);
+  memcpy(txt(s), txt(bytes_of(Sp[0])), n);    // reload codebuf: a GC in Have may have moved it
+  if (mprotect(base, maplen, PROT_READ | PROT_EXEC))
+   { munmap(base, maplen); ai_musttail return Answerp(4, zero); }
 #ifndef __wasm__                               // guarded: emscripten's clang has no clear_cache intrinsic (dead here anyway -- wasm early-declined above)
- __builtin___clear_cache(txt(s), txt(s) + n);  // AArch64: the I-cache is not coherent with the freshly
+  __builtin___clear_cache(txt(s), txt(s) + n); // AArch64: the I-cache is not coherent with the freshly
 #endif                                         // written D-cache -- flush or it runs stale bytes (no-op on x86)
+ }
 #else
- Have(str_width(n) + 11);                     // freestanding: HHDM is RWX, a heap copy runs
+ Have(str_width(n) + 11);                     // freestanding: RAM is executable, a heap copy runs
  struct ai_str *s = ini_str(str(Hp), n);
  Hp += str_width(n);
  memcpy(txt(s), txt(bytes_of(Sp[0])), n);
@@ -4690,8 +4718,9 @@ lvm(lvm_nifx) {
   tagthread(k, 9);
  }
 #if __STDC_HOSTED__
- struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
- z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z;
+ if (__ai_osv >= 0) {                         // only a mapping owes a finalizer; a heap copy dies with its cell
+  struct ai_fz *z = (struct ai_fz*) Hp; Hp += Width(struct ai_fz);
+  z->p = k, z->fn = nat_unmap, z->next = g->fz, g->fz = z; }
 #endif
  ai_musttail return Answerp(4, word(k + 2)); }
 
