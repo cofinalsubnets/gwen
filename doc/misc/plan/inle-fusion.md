@@ -177,19 +177,50 @@ host-only TUs): FOUR symbols remain defined on both sides -- `ai_fd_close`,
 
 **C -- one link.**
 
-- C1 -- reconcile the flag sets. ⚠ **UNEXAMINED, and the largest remaining
-  unknown**: the kernel builds `-nostdinc -ffreestanding -fno-PIC
-  -ffunction-sections`, the host `-fpic` with a different include set.
-- C2 -- one object set, one holo link, dual entry.
-- C3 -- aarch64's raw Image projection.
-- Gate: one ELF passes the host corpus AND `test_inle`.
+- C1 ✅ the flag sets reconcile to ONE LINE: mooncc hears `-c -o -I -D -t -os
+  -std= -Ttext/-Tdata -fno-inline -pie -freadme -ffreestanding` and
+  tolerates-and-discards the traditional soup (`-g -O -W*` and the `-f`
+  family) -- verified by byte-identical objects. even `-ffreestanding` went:
+  love.c's one hosted/metal fork (the W^X code arena) branches on `__ai_osv`
+  at run time, so the kernel compiles with the host moon lane's exact line,
+  and the mmap family refuses -ENOSYS through the door like everything else.
+- **the shape, chosen (revisable): PIE + PROJECTIONS.** the artifact stays a
+  hosted static pie (ASLR kept -- the binary's one code-reuse mitigation, with
+  tls/inflate/the reader as real C surfaces); metal boots a file DERIVED from
+  it. the ET_EXEC-everywhere alternative was priced and declined for the ASLR
+  loss; the ai_rela machinery stays, so it remains reachable.
+- C2 ✅ the kernel build IS the host's link: one `mooncc -pie` over one object
+  set (main.c and the whole host surface aboard), and `tools/kproject.l`
+  PROJECTS it for the doors -- every PT_LOAD re-based at the kernel base, the
+  ai_rela table applied there (the law `__ai_reloc` runs at a hosted start,
+  run ahead of time), boot.o laid and patched below the image (its 32-bit PVH
+  stub carries abs32 sites a pie cannot slide -- the one object that stays out
+  of the link), `k_image_top` patched into the file where the flat link's
+  `kimage_end` stood, symtab slid (the UEFI loader reads `kboot` off it).
+  klink.l retired; ldkern stays for the ports. with core.c aboard the LAST
+  twins fell: errno and the streams are nolibc's (`k_seat_init` arms what a
+  hosted `__ai_start` would), malloc runs its mmap arenas over free/sys.c's
+  page arm -- kmallocw supplies pages like any kernel does, zeroed because
+  MAP_ANONYMOUS promises that -- and quit/getpid branch to `k_lvm_` twins.
+- C3 ✅ absorbed by the projection: the projected ELF's `e_entry` IS `a64boot`,
+  and qemu's arm64 `-kernel` reads exactly that -- the raw-Image question was
+  an artifact of the one-file-everywhere shape and never arises under
+  projection. arm64 came through the same tool with zero arch-specific code.
+- Gate ✅ the whole roster on the fused pipeline: every door, both arches,
+  kboot's real pipelines on the projected SHIPPED kernel, test_slow + the
+  seed fixpoint.
 
-**D -- the image.** Nearly free once C lands; kills the ~2 s boot eval and
-carries the AOT glaze.
+**D -- the image, and the artifact.** what remains of "one binary":
+`out/host/love` itself does not yet carry kmain and the metal machinery -- the
+kernel's pie carries the host, not yet the reverse. the closing moves: the
+artifact's object list gains the kernel objects (shipped kmain flavor), a
+`love kernel`-shaped verb runs the projection so the artifact emits its own
+boot image anywhere, and the baked image rides the projection (kills the ~2 s
+boot eval, carries the AOT glaze).
 
 ## what is still open
 
-- **C1**, above -- could be trivial or could be the hardest thing here.
+- **the artifact unification + D**, above.
 - **`getpid` through a syscall** has no `g`, so it cannot know the running task.
   Same shape as the seat divergence, and it wants the same answer.
 - **the kernel lanes' memory wall** (phase B's gate note) -- 768M is margin,
