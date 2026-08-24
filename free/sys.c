@@ -38,7 +38,7 @@ FILE *stdin = &k_stdf[0], *stdout = &k_stdf[1], *stderr = &k_stdf[2];
 
 // the kernel side (kmain.c): a raw fd through the k_sources row, no port above
 // it -- and SEAT-BLIND, which is the law and not a gap. The seat is a property
-// of the PORT layer: k_fd_eff is called from fd_readn, fd_writen, ai_fd_close
+// of the PORT layer: k_fd_eff is called from k_port_readn, k_port_writen, ai_fd_close
 // and k_procseat, and from nowhere else, so an fd spelled in love is already an
 // absolute row and only a port's own fd is ever remapped. A syscall sits under
 // the port by construction, exactly as on a real kernel, where the number the
@@ -69,7 +69,7 @@ extern int k_fs_chdir(char const *p, uintptr_t pn);
 extern int k_fs_getcwd(char *b, uintptr_t n);
 extern int k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode);
 extern int k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms);
-extern uintptr_t ai_clock(void);
+extern uintptr_t k_clock_ms(void);     // ms since the epoch, the kernel's one scale
 
 // the fd faces (kmain.c), g-free by construction: rows, pipe queues and the
 // dents cursor are kernel memory, and g only ever entered their old shapes to
@@ -139,7 +139,7 @@ static long k_utimeat(long dfd, char const *p, struct timespec const *ts, long f
   long r = at_ok(dfd, p);
   if (r) return r;
   uintptr_t ms;
-  if (!ts || ts[1].tv_nsec == UTIME_NOW) ms = ai_clock();
+  if (!ts || ts[1].tv_nsec == UTIME_NOW) ms = k_clock_ms();
   else if (ts[1].tv_nsec == UTIME_OMIT) return 0;   // nothing asked of the mtime
   else ms = (uintptr_t) ts[1].tv_sec * 1000 + (uintptr_t) ts[1].tv_nsec / 1000000;
   return k_fs_utime(p, strlen(p), ms); }
@@ -160,7 +160,7 @@ long k_sys_nr(char const *nm, long n) {
     {"utimensat", NR_utimensat},
     {"pipe2", NR_pipe2}, {"dup3", NR_dup3}, {"fcntl", NR_fcntl},
     {"fstat", NR_fstat}, {"getdents64", NR_getdents64},
-    {"getpid", NR_getpid} };
+    {"getpid", NR_getpid}, {"clock_gettime", NR_clock_gettime} };
   for (unsigned i = 0; i < sizeof t / sizeof *t; i++)
     if ((long) strlen(t[i].n) == n && !memcmp(t[i].n, nm, (unsigned long) n))
       return t[i].nr;
@@ -223,6 +223,16 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
     case NR_getdents64:
       if (!b) return -EFAULT;
       return k_fd_dents((int) a, (void *) b, c);
+    // one clock, the wall: ai_clock's body is clock_gettime now (host/seat.c),
+    // so this arm is where the kernel's scale becomes a timespec.
+    case NR_clock_gettime: {
+      if (a) return -EINVAL;                    // CLOCK_REALTIME only
+      if (!b) return -EFAULT;
+      struct timespec *ts = (struct timespec *) b;
+      uintptr_t ms = k_clock_ms();
+      ts->tv_sec = (long) (ms / 1000);
+      ts->tv_nsec = (long) (ms % 1000) * 1000000;
+      return 0; }
     // inle is ONE process and love tasks are its threads, so getpid answers
     // the machine's constant -- what every thread of a process reads. the
     // TASK pid is love's question, and its nif keeps g, where the answer is.

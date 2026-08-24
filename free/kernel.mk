@@ -35,8 +35,9 @@ k_arch_c = $(wildcard $(R)/free/$a/*.c)
 # posix.c rides the kernel whole (plan A3): its 51 nifs land in the ai_nifs
 # section beside kmain's defs[], every libc call bottoming out in free/sys.c's
 # table. the spawn family among them refuses at runtime (fork is -ENOSYS) and
-# the boot text's task shim shadows those names anyway.
-k_free_c = $R/free/kmain.c $R/free/blk.c $R/free/sys.c $R/host/posix.c
+# the boot text's task shim shadows those names anyway. seat.c (plan B2) is the
+# shared seat plumbing -- one ai_clock over the same seam.
+k_free_c = $R/free/kmain.c $R/free/blk.c $R/free/sys.c $R/host/posix.c $R/host/seat.c
 # paint.c is named rather than wildcarded (mk/common.mk): the console renders 32bpp,
 # so this seat wants the shared painter. nif.c stays out until the kernel grows
 # defs[] rows for it -- bodies nothing calls are bytes the image cannot spend.

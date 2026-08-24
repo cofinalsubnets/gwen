@@ -18,11 +18,7 @@ extern void host_spawn_guard(struct ai*, int);   // host/posix.c (exec-bound for
 #include <signal.h>
 #include <sys/wait.h>
 
-ai_noinline uintptr_t ai_clock(void) {
-  struct timespec ts;
-  return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1
-       : (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
-
+// ai_clock lives in host/seat.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
 // FIXME this seems useless on 32 bit. who uses it? maybe squash back to just
 // one ai_clock() and pick resolution at compile time based on INTPTR_MAX
@@ -135,94 +131,14 @@ void ai_ready_fds(struct ai_wait_fd *fds, int n) {
   if (poll((struct pollfd*) fds, (nfds_t) n, 0) >= 0) return;
   for (int i = 0; i < n; i++) fds[i].revents = 0; }
 
-// SIGPIPE is ignored (main) and the console re-raises it by hand: a runtime that answers
-// "the device is gone" must not be killed before it reads the answer, but a shell tool must
-// still die on a closed pipe or `love ... | head` runs to completion writing into nothing.
-// so a heap port reports (writen answers -1, io_wdrain drops the run) and a static
-// re-raises. re-raising rather than exiting keeps the wait status a signal death, so the
-// shell's reporting and every `$?` downstream read as they always did.
-static noreturn void console_hangup(void) {
- signal(SIGPIPE, SIG_DFL);
- raise(SIGPIPE);
- _exit(128 + SIGPIPE); }               // unreached unless someone caught it
+// the fd port -- ai_fd_port_vt, the three statics, ai_fd_drain -- lives in
+// host/seat.c, one definition for this frontend and the kernel's.
 
-static struct ai *fd_flush(struct ai *g) {
- if (g->io == &ai_stdout.io && fflush(stdout) && errno == EPIPE) console_hangup();
- return g; }
-
-// land every byte, waiting on the device as long as it takes. answers how many
-// got there, so a caller can tell a full write from a dead fd.
-static uintptr_t fd_write_all(int fd, unsigned char const *src, uintptr_t n) {
- uintptr_t i = 0;
- while (i < n) {
-  ssize_t k = write(fd, src + i, n - i);
-  if (k < 0) { if (errno == EINTR) continue; break; }
-  i += (uintptr_t) k; }
- return i; }
-
-// the bulk lanes (contract in love.h). stdout rides stdio -- the static port has
-// no buffer of love's own (nothing traces a static), so without fwrite every
-// byte of every print would be its own write(2). one door, so there is no ordering to keep.
-//
-// nonblocking where a residue can be kept, and only there. a heap port carries love's write
-// run behind it and io_wdrain re-offers whatever this call refuses, so the door answers what
-// one stroke took and the writing task goes on rather than a peer that never reads stopping
-// the whole vm. the three statics have no such run (nothing traces a static) and their
-// per-byte lane prints from inside a structural printer, with nowhere to park mid-shape, so
-// a refusal there would be a byte on the floor: their door lands what it takes and is the
-// one place in this frontend still allowed to wait -- bounded, because a console drains.
-//
-// the O_NONBLOCK toggle is per-call for every fd we did not take. the flags ride the open
-// file description, which a pty child and the shell that launched us both share, and leaving
-// a terminal nonblocking at exit hands the user's shell back broken ("resource temporarily
-// unavailable" on their next line) -- so an fd we merely inherited gets its flags read and
-// put back around each call and we cache nothing. the pair is skipped where it already says
-// nonblocking, which is free and covers the fds love opens itself. per call is the whole
-// story: at 953 KB it would be 2.9M fcntls, which is why the run above pays the pair once
-// per 4096 and a pipe -- whose bit is taken for the session (`inflag`) -- skips it outright.
-static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
- struct ai_io *io = (*fp)->io;
- intptr_t fd = ai_io_fd(io);
- if (io == &ai_stdout.io || io == &ai_stdin.io || io == &ai_stderr.io) {
-  uintptr_t k = io == &ai_stdout.io ? fwrite(src, 1, n, stdout)
-                                 : fd_write_all((int) fd, src, n);
-  if (k < n && errno == EPIPE) console_hangup();
-  return (intptr_t) k; }
- int fl = fcntl((int) fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
- if (off) fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
- ssize_t k;
- do k = write((int) fd, src, n); while (k < 0 && errno == EINTR);
- if (off) fcntl((int) fd, F_SETFL, fl);
- return k > 0 ? (intptr_t) k
-      : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }   // busy vs gone
-static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
- intptr_t fd = ai_io_fd(g->io);
- ssize_t k;
- if (fd == STDIN_FILENO && ai_core_of(g)->inflag) k = read((int) fd, dst, n);   // the bit is already ours
- else {
-  int fl = fcntl((int) fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
-  if (off) fcntl((int) fd, F_SETFL, fl | O_NONBLOCK);
-  k = read((int) fd, dst, n);
-  if (off) fcntl((int) fd, F_SETFL, fl); }
- return k > 0 ? (intptr_t) k
-      : k == 0 ? -1
-      : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }
-
-struct ai_port_vt const ai_fd_port_vt =
- { fd_flush, fd_writen, fd_readn, NULL };
-
-struct ai_fio
- ai_stdin = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDIN_FILENO) },
- ai_stdout = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDOUT_FILENO) },
- ai_stderr = { { lvm_port_io, &ai_fd_port_vt, putcharm(EOF) }, putcharm(STDERR_FILENO) };
 // override the weak g.c default with the real POSIX close. called by the
 // finalizer that ai_io_alloc registers, so it runs when a heap port becomes
 // unreachable. static stdin/stdout don't go through this path -- they live
 // outside the l heap and the GC never visits them.
 void ai_fd_close(int fd) { close(fd); }
-// the GC-context drain (a collected port's unflushed write run): raw write(2),
-// no g machinery -- safe inside run_finalizers.
-void ai_fd_drain(int fd, void const *p, uintptr_t n) { fd_write_all(fd, p, n); }
 
 // --- handing fd 0 to a child: the unseekable half of stdin_give, up top ---
 // a forked pumper writes the residue into a fresh pipe, splices whatever the old fd 0 still
@@ -237,6 +153,7 @@ void ai_fd_drain(int fd, void const *p, uintptr_t n) { fd_write_all(fd, p, n); }
 // bytes, so it goes in front of the run, as chug_str splits it.
 // the pumper is a fork: it copies every fd love had open and nobody reaps it. narrow while
 // exec is the only caller, but a live pipe love still held would keep a second writer on it.
+extern uintptr_t ai_fd_write_all(int, unsigned char const*, uintptr_t);   // host/seat.c
 static void stdin_hand(struct ai *g) {
  stdin_give(g);
  if (!g || !ai_ok(g)) return;
@@ -255,12 +172,12 @@ static void stdin_hand(struct ai *g) {
  if (pid < 0) { close(p[0]); close(p[1]); return; }
  if (!pid) {                                                        // the pumper: residue, then the rest
   close(p[0]);
-  if (fd_write_all(p[1], res, n) == n)
+  if (ai_fd_write_all(p[1], res, n) == n)
    for (;;) {
     unsigned char buf[ai_iobuf];
     ssize_t k = read(STDIN_FILENO, buf, sizeof buf);
     if (k < 0 && errno == EINTR) continue;                          // a signal is not an end
-    if (k <= 0 || fd_write_all(p[1], buf, (uintptr_t) k) < (uintptr_t) k) break; }
+    if (k <= 0 || ai_fd_write_all(p[1], buf, (uintptr_t) k) < (uintptr_t) k) break; }
   _exit(0); }                                                       // _exit: no atexit, no flush, no love
  close(p[1]);
  if (p[0] != STDIN_FILENO) dup2(p[0], STDIN_FILENO), close(p[0]); }
@@ -749,7 +666,7 @@ static struct ai_lib const libs0[] = {
   {"holo", src0_holo},                                 // which the mooncc cat's cpp/gen read (the self-host build lane)
   {"verbs", src0_verbs},                               // the verb registry: love0 runs the same cli.l rail
   {NULL, NULL} };
-struct ai_lib const *ai_libs(void) { return libs0; }
+struct ai_lib const *host_libs(void) { return libs0; }   // ai_libs picks (host/seat.c)
 
 static struct ai *boot(struct ai *g, bool argp) {
   if (argp) {                                        // a build tool (lcat etc.): bake prel + bao first so the CLI's
@@ -986,7 +903,7 @@ static struct ai_lib const libs[] = {
   {"glaze", src_glaze},
 #endif
   {NULL, NULL} };
-struct ai_lib const *ai_libs(void) { return libs; }
+struct ai_lib const *host_libs(void) { return libs; }    // ai_libs picks (host/seat.c)
 
 // read-eval one .l file into the booting session, loudly: a bake's cat has no shell help,
 // so a raise in it must end the bake rather than seal a half-built artifact.

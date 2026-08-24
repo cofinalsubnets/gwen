@@ -371,3 +371,16 @@
 ; answers the machine's constant -- the task pid stays (getpid _)'s, a nif
 ; with g, which is where that answer lives
 (assert (= 1 (syscall "getpid" 0 0 0 0)))
+
+; clock_gettime: the wall clock only, a timespec whose seconds agree with
+; (clock 0)'s scale -- ai_clock is one body over this arm now, so the law is
+; that both readings sit within a beat of each other
+(: b (cask 16)
+   r (syscall "clock_gettime" 0 b 0 0)
+   v (string b)
+   (le8 s i o) (? (= 8 o) 0 (((s (+ i o)) << (8 * o)) + (le8 s i (+ o 1))))
+   sec (le8 v 0 0)
+   ms (clock 0)
+ (assert (= 0 r) (<= sec (// ms 1000) (+ sec 1))
+         (= -22 (syscall "clock_gettime" 1 b 0 0))
+         (= -14 (syscall "clock_gettime" 0 0 0 0))))

@@ -227,7 +227,7 @@ struct k_source *k_source_open(int fd) {
 // below reads it through k_fd_eff. slot -1 is pass-through, -2 is seated CLOSED
 // (an fdmap's () entry: reads answer the end, writes fall away).
 // ⚠ THE SEAT IS THE PORT LAYER'S, AND ONLY ITS: k_fd_eff is reached from
-// fd_readn, fd_writen, ai_fd_close and k_procseat -- never from a nif, which is
+// k_port_readn, k_port_writen, ai_fd_close and k_procseat -- never from a nif, which is
 // why k_fdopen takes the fd it was handed. So an fd spelled in love is an
 // absolute row, and free/sys.c's syscall door is seat-blind by the same law.
 struct k_seat { intptr_t pid; int fd[3]; };
@@ -290,9 +290,12 @@ static intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
   if (!s->putc) return (intptr_t) n;
   for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
   return (intptr_t) n; }
-static intptr_t fd_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
+// the port lanes ai_fd_port_vt (host/seat.c) takes on a negative osv: the seat
+// translation, then the rows -- a protocol read(2) cannot carry (busy and end
+// are distinct answers), which is why these do not ride the syscall door.
+intptr_t k_port_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
   return k_row_read(k_fd_eff(g, (int) ai_io_fd(g->io)), dst, n); }
-static intptr_t fd_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
+intptr_t k_port_writen(struct ai **fp, unsigned char const *src, uintptr_t n) {
   return k_row_write(k_fd_eff(*fp, (int) ai_io_fd((*fp)->io)), src, n); }
 
 // free/sys.c's door: the POSIX shapes over the same rows. ⚠ the port layer says
@@ -312,20 +315,11 @@ long k_fd_close(int fd) {
   if (!k_row_live(fd)) return -9;                        // EBADF
   ai_fd_close(fd);
   return 0; }
-static struct ai *fd_flush(struct ai *g) {
+struct ai *k_port_flush(struct ai *g) {
   int fd = k_fd_eff(g, (int) ai_io_fd(g->io));
   struct k_source *s = k_source(fd);
   if (s && s->flush) s->flush(fd);
   return g; }
-
-struct ai_fio ai_stdin = { { .ap = lvm_port_io,
-                        .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
-struct ai_fio ai_stdout = { { .ap = lvm_port_io,
-                         .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(1) };
-struct ai_fio ai_stderr = { { .ap = lvm_port_io,
-                         .vt = &ai_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(2) };
-
-struct ai_port_vt const ai_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
 // Override the weak g.c default; route close through k_sources[fd].
 // Statics (stdin/stdout) have NULL close -- nothing to release.
@@ -370,14 +364,12 @@ void ai_wait_fds(struct ai_wait_fd *fds, int n, uintptr_t ms) {
     if (any || (ms && kticks >= deadline)) return;
     k_wait(); } }
 
-// ⚠ MILLISECONDS SINCE THE EPOCH, the host's scale exactly (its ai_clock is
-// CLOCK_REALTIME in ms) -- one scale for the scheduler's deadlines, for (clock t),
-// and for every mtime. This used to answer kticks: an uptime in TENTHS OF A SECOND
-// wearing the millisecond name, which made (rest 30) a third of a second and every
-// date a fiction. The date rides kboot (the door's, or the machine's RTC); when
-// nobody knew it, this degrades to milliseconds since boot and says so by reading
-// as 1970.
-uintptr_t ai_clock(void) { return (uintptr_t) (kboot.date * 1000 + kticks * k_tick_ms); }
+// ⚠ MILLISECONDS SINCE THE EPOCH, one scale for the scheduler's deadlines, for
+// (clock t), and for every mtime. ai_clock is one body now (host/seat.c, over
+// clock_gettime), and free/sys.c's arm serves it from here. The date rides
+// kboot (the door's, or the machine's RTC); when nobody knew it, this degrades
+// to milliseconds since boot and says so by reading as 1970.
+uintptr_t k_clock_ms(void) { return (uintptr_t) (kboot.date * 1000 + kticks * k_tick_ms); }
 
 // Pure time-wait. ms=0 means infinite (caller is expected to chain with an
 // input wait via ai_in->wait, so this should only be hit when no I/O is intended).
@@ -551,7 +543,7 @@ static bool k_fs_init(void) {
   for (int i = 0; i < n; i++)
     t[i] = (struct k_ent) { .path = kfiles[i].path, .bake = i,
                             .ms = kfiles[i].ms, .mode = 0644, .live = true };
-  t[n] = (struct k_ent) { .path = "tmp", .bake = -1, .ms = ai_clock(),
+  t[n] = (struct k_ent) { .path = "tmp", .bake = -1, .ms = k_clock_ms(),
                           .mode = 0755, .own = true, .dir = true, .live = true };
   k_ents = t, k_ents_n = n + 1, k_ents_cap = cap;
   return true; }
@@ -664,7 +656,7 @@ static int k_create(char const *p, uintptr_t n, bool dir, uintptr_t mode) {
   if (!q) return -1;
   int i = k_ent_slot();
   if (i < 0) return kfree(q), -1;
-  k_ents[i] = (struct k_ent) { .path = q, .bake = -1, .ms = ai_clock(),
+  k_ents[i] = (struct k_ent) { .path = q, .bake = -1, .ms = k_clock_ms(),
                                .mode = mode, .own = true, .heap = true,
                                .dir = dir, .live = true };
   return i; }
@@ -770,7 +762,7 @@ static intptr_t ram_writen(int fd, unsigned char const *src, uintptr_t n) {
   memcpy(e->bytes + h->pos, src, n);
   h->pos += n;
   if (h->pos > e->len) e->len = h->pos;
-  e->ms = ai_clock();
+  e->ms = k_clock_ms();
   return (intptr_t) n; }
 
 static bool ram_ready(int fd) { (void) fd; return true; }
@@ -834,7 +826,7 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
   // ⚠ the truncate lands LAST, past every way this can still fail (same law).
   uintptr_t len = 0;
   struct k_ent *e = &k_ents[i];
-  if (m == 'w') e->own = true, e->len = 0, e->ms = ai_clock();
+  if (m == 'w') e->own = true, e->len = 0, e->ms = k_clock_ms();
   if (m == 'a') k_blob(i, &len);
   e->refs++;
   *h = (struct k_fh) { .i = i, .pos = len, .w = m != 'r' };
@@ -889,7 +881,7 @@ static lvm(lvm_close) {
       // this same close from the top.
       if (ai_io_wpending(g, (struct ai_io*) g->sp[0])) {
         Unpack(g);
-        g->next_wake_at = ai_clock() + 1;
+        g->next_wake_at = k_clock_ms() + 1;
         ai_musttail return Ap(lvm_yield_sw, g); }
       Unpack(g);
       ai_fd_close((int) fd);
@@ -1821,7 +1813,7 @@ static struct ai_lib const libs[] = {
   {"holo", src_holo}, {"peg", src_peg},
 #endif
   {NULL, NULL} };
-struct ai_lib const *ai_libs(void) { return libs; }
+struct ai_lib const *k_libs(void) { return libs; }   // ai_libs picks (host/seat.c)
 
 extern long __ai_osv;                  // nolibc's "which kernel" (os.c)
 void kmain(void) {
