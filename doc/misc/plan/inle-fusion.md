@@ -238,15 +238,29 @@ the binary carries -- the boot stub laid from the blob's mkboot.l over baked
 holo, the arch read off its own e_machine -- gated by test_kverb, which
 demands BYTE-IDENTITY with make's own projection.
 
-**D -- the image.** what remains: the baked image riding the projection
-(kills the ~2 s boot eval, carries the AOT glaze); the arm64 artifact via the
-cross lane, whose kernel today still projects from the odir pie; and the
-right inverse (`love hostbin` on metal -- the projection is bias-invertible,
-the pie's own header rides the flat image at bias+0).
+**D -- THE METAL BOOT WAKES THE IMAGE** (ab77f859, 550b15bd). kmain asks
+`ai_baked_pick` for the projection's re-based image and wakes it; the egg,
+the module warmup and the korecat drink are the fallback lane (an unbaked
+cross pie's stub, a torn blob). boot: ~2.2 s -> ~0.26 s under TCG. two seams
+the wake found, both fixed at their root:
+
+- a declined `nif` answered ZERO and ala installed it as a closure entry --
+  latent everywhere, fatal on the first seat that actually declines. the
+  decline now answers the interp twin itself, so the glaze transparently
+  interps wherever code pages are refused (inle, wasm, a failed map).
+- a baked closure CAPTURES its doors, so the seat text's by-name shadows
+  don't reach a woken lush's spawn. the crew now bakes against `seat-doors`
+  wrappers (spawn/spawnio/spawnmap/wait read a tablet per call) and the
+  wake pins its task shim into the slots. captures heal at one choke point;
+  the egg lanes are untouched (their cat captures the live door directly).
+
+still D-adjacent: the arm64 artifact via the cross lane (its kernel projects
+from the odir pie and egg-boots); the right inverse (`love hostbin` on metal
+-- the projection is bias-invertible, the pie's own header rides the flat
+image at bias+0); a metal nat door (out-of-pool pages through the low
+window, which keeps X) if the interp twins ever want company.
 
 ## what is still open
-
-- **D**, above.
 - **`getpid` through a syscall** has no `g`, so it cannot know the running task.
   Same shape as the seat divergence, and it wants the same answer.
 - **the kernel lanes' memory wall** (phase B's gate note) -- 768M is margin,
