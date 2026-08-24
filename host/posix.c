@@ -440,7 +440,17 @@ ai_noinline size_t host_selfpath(char *b, size_t n) {
  // answers only on its kernel, so the tries are the OS probe.
  ssize_t r = readlink("/proc/self/exe", b, n - 1);
  if (r <= 0) r = readlink("/proc/curproc/exe", b, n - 1);
- if (r > 0) return b[r] = 0, (size_t) r;
+ if (r > 0) {
+  b[r] = 0;
+  // ⚠ the suffix is the KERNEL's, not the path's: once our own inode is unlinked the
+  // link reads "PATH (deleted)", and every use of it after that -- an open, a rename
+  // target -- names a file that is not there. a concurrent self-bake unlinks us the
+  // moment it renames its image over the path we both live at, so the door that answers
+  // "where am I" has to answer the place, not the inode's obituary.
+  size_t dl = sizeof " (deleted)" - 1;
+  if ((size_t) r > dl && !memcmp(b + (size_t) r - dl, " (deleted)", dl))
+   r -= (ssize_t) dl, b[r] = 0;
+  return (size_t) r; }
 #if defined(AiHaveSysctl)
  // ours always links sysctl (ENOSYS off the BSDs); glibc dropped the symbol,
  // and that build is the linux bootstrap scaffold -- /proc answered above.

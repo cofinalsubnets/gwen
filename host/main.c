@@ -1040,14 +1040,16 @@ static void first_boot(char const **argv) {
   if (getenv("LOVE_FIRST_BOOT")) {                     // the latch: one try per exec chain
     fprintf(stderr, "; first boot: still unbaked after a bake -- running from source\n");
     return; }
-  char exe[4096], cat[sizeof exe + 16];              // + ".firstboot.l" and its NUL
+  char exe[4096], cat[sizeof exe + 40];              // + ".firstboot.<pid>.l" and its NUL
   if (!host_selfpath(exe, sizeof exe)) return;
   uintptr_t un = 0;
   unsigned char *t = fb_untar(&un);
   if (!t) {
     fprintf(stderr, "; first boot: the carried source will not inflate -- running from source\n");
     return; }
-  snprintf(cat, sizeof cat, "%s.firstboot.l", exe);
+  // per-process, for the reason the bake's scratch is (host/image.c): concurrent first
+  // boots on one name write the cat into each other and unlink it under each other.
+  snprintf(cat, sizeof cat, "%s.firstboot.%ld.l", exe, (long) getpid());
   int fd = open(cat, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) {                                        // a read-only seat: the honest story, no bake
     fprintf(stderr, "; first boot: %s is not writable -- running from source this session\n", cat);

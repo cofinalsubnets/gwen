@@ -244,9 +244,15 @@ int image_bake(struct ai *g) {
   struct bake_at bl = { (uintptr_t) &ai_baked_image_len, 0, 0 };
   dl_iterate_phdr(bake_phdr, &bl);
   if (!bl.found) return -5;
-  char exe[4096], tmp[4104];
+  // ⚠ THE SCRATCH PATH IS PER-PROCESS. two loves bake the same binary concurrently all
+  // the time -- `make -jN` runs the .baked rule beside a build step whose own unbaked
+  // first boot (main.c) forks one -- and on one shared name they interleave into each
+  // other's bytes, and whichever renames second finds its scratch already carried off
+  // and answers ENOENT. the pid separates them; the rename is atomic either way, so the
+  // last one to land installs a whole image and the other's is dropped, never merged.
+  char exe[4096], tmp[sizeof exe + 32];            // + ".bake.<pid>" and its NUL
   if (!host_selfpath(exe, sizeof exe)) return -6;
-  snprintf(tmp, sizeof tmp, "%s.bake", exe);
+  snprintf(tmp, sizeof tmp, "%s.bake.%ld", exe, (long) getpid());
   struct stat st;
   int src = open(exe, O_RDONLY);
   if (src < 0 || fstat(src, &st)) { if (src >= 0) close(src); return -6; }
