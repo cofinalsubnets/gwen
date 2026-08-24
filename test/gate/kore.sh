@@ -620,6 +620,24 @@ ln -sf .koreshim "$ho/sh"
 [ $r -eq 0 ] && [ "$(cat "$o")" = "via-symlink" ] || fail "kore sh symlink (exit $r)"
 echo "kore: sh (lush aboard -- kore sh + the argv0 symlink) ok"
 
+# ------------------------------------------------------ the shell's fork lane
+# an external word whose PATH winner IS this binary FORKS instead of exec'ing
+# (crew/lush/eval.l sh-forkfn): the child rides the warm heap and no stage pays
+# a second wake. fork-vs-spawn is not portably observable from out here (landed
+# against an execve trace: one exec for the shell, none for the stages) -- so
+# these assert the lane's PLUMBING with the winner self-symlinked, the distro's
+# shadow shape: pipes, redirects, status, cmdsub, nesting, the symlink word.
+fb=$HO/.forkbin
+mkdir -p "$fb"; ln -sf "$K" "$fb/kore"; ln -sf "$K" "$fb/wc"
+fsh() { PATH=$fb:$PATH LOVE_NO_IMAGE= "$m" sh -c "$1"; }
+[ "$(fsh 'kore echo hi | kore wc -l')" = "1" ] || fail "fork lane pipeline"
+[ "$(fsh 'kore seq 5 | wc -l')" = "5" ] || fail "fork lane symlink word"
+fsh 'kore false'; r=$?; [ $r -eq 1 ] || fail "fork lane status (rc $r)"
+fsh 'kore sh -c "kore echo deep"' | grep -qx deep || fail "fork lane nested sh"
+[ "$(fsh 'echo n=$(kore echo abc | kore wc -c)')" = "n=4" ] || fail "fork lane cmdsub"
+fsh 'kore seq 3 > '"$HO"'/.fork-r' ; [ "$(wc -l < "$HO/.fork-r")" = "3" ] || fail "fork lane redirect"
+echo "kore: the fork lane (self-PATH pipelines, status, cmdsub, nesting) ok"
+
 # ------------------------------------------------------------------ awk
 # gawk is the oracle and every check is byte-identical stdout. the input is a
 # small table so fields, numbers and text all have something to bite on.

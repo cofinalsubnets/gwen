@@ -201,6 +201,22 @@
    (sh-imgfn w) (: v (peep sh-imgc w 'no)
                    (? !(id? v 'no) v
                       (: f (sh-imgask w) _ (pin sh-imgc w f) f)))
+   ; --- the FORK lane: an external word whose PATH winner IS this binary runs in
+   ; a FORKED child -- the warm heap rides, no exec, no wake. the img list's three
+   ; disqualifiers are a child's own business: a quit is its exit status, kept
+   ; state is a copy, a block has a pid for ^C and `kill %1` to name. the word
+   ; must be a VERB ((from 'verbs 'word): kore's applets, sh, make, vi -- and it
+   ; refuses a slashed or .l word itself: an explicit path is a demand, and
+   ; spawns). a foreign binary spawns as ever. decided once per word, sh-imgc's
+   ; shape -- and on a seat with no selfpath (the kernel) sh-ours? never answers,
+   ; so the lane is dormant there and the task shim keeps the spawn.
+   sh-forkc (tablet 0)                          ; word -> (1 verbfn) | 0, decided once
+   (sh-forkask w)
+     (: f ((from 'verbs 'word) w)
+        (? (f && (sh-ours? w)) [1 f] 0))
+   (sh-forkfn w) (: v (peep sh-forkc w 'no)
+                    (? !(id? v 'no) v
+                       (: f (sh-forkask w) _ (pin sh-forkc w f) f)))
 
    ; --- builtins: a charm status, a control pair (brk/cnt/ret), or 'nope --------
    sh-binames '("exit" "cd" "export" "pwd" "jobs" "fg" "bg" ":" "true" "false" "command"
@@ -417,11 +433,40 @@
    (sh-spawn1 st base allclose pg fgi)
      (: _ (flush out) _ (flush err)
         (? (id? (sh-nth st 0) 'x)
-           ; the stage is spawned either way -- its 127 is the child's own and the
-           ; pipeline's status bookkeeping wants a real pid; only the WORD is ours to say
            (: w <(sh-nth st 1)
-              _ (? (two? (sh-whichp w)) 0 (sh-saynf w))
-              (spawnmap (sh-nth st 1) (base + (sh-nth st 2)) allclose pg fgi))
+              fk (sh-forkfn w)
+              (? (two? fk)
+                 ; OURS: fork, no exec -- the child runs the word's verb on this
+                 ; warm heap and quits with its status: a real pid, so the
+                 ; pipeline's bookkeeping and the job table read it like any
+                 ; spawn. pg/fg are not taken (the 'a lane's stance): the child
+                 ; stays in the shell's group, which keeps the tty for a
+                 ; foreground job, and sheds the group's ignores below.
+                 (: p (fork 0)
+                    (? (p = 0)
+                       (: _ (wear ())               ; ⚠ a child wears the CONSOLE: its fds are the dup2 below
+                          _ (sh-dropcaps ())        ; ...and it is inside no capture of ours
+                          ; the five tty ignores are the SHELL's (main.l): a spawned
+                          ; child sheds them through exec, this one by hand -- or a
+                          ; forked `sleep` would shrug off the very ^C that names it
+                          _ (signal sig-int 0) _ (signal sig-quit 0) _ (signal sig-tstp 0)
+                          _ (signal sig-ttou 0) _ (signal sig-ttin 0)
+                          ; any scare is the CHILD's death, never a second shell:
+                          ; 'leave carries the tool's status, the rest die at 1
+                          _ (hear (\ a b (? (id? a 'leave) (quit b)
+                                            (: _ (say err ";; ") _ (print err a)
+                                               _ (say err " ") _ (print err b)
+                                               _ (put err 10) (quit 1)))))
+                          _ (each (base + (sh-nth st 2)) (\ e (dup2 >e <e)))
+                          _ (each allclose (\ fd (? (2 < fd) (fdclose fd) 0)))
+                          r (<>fk (cup (sh-nth st 1)))
+                          (quit (? (charm? r) r 0)))
+                       p))
+                 ; foreign, or an explicit path: spawned as ever -- its 127 is the
+                 ; child's own and the pipeline's status bookkeeping wants a real
+                 ; pid; only the WORD is ours to say
+                 (: _ (? (two? (sh-whichp w)) 0 (sh-saynf w))
+                    (spawnmap (sh-nth st 1) (base + (sh-nth st 2)) allclose pg fgi))))
            (: p (fork 0)
               (? (p = 0)
                  (: _ (wear ())                   ; ⚠ a child wears the CONSOLE: its fds are the dup2 below, and a jug is not one
