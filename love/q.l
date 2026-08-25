@@ -19,6 +19,7 @@
 ; answers () -- the undefined-op law, and the fence that keeps a foreign operand (a
 ; chain of coins, say) from dragging gcd into a loop. `reduce`/`ok?`/`parts` are local
 ; plumbing; q is the only name this leaks.
+(module 'q
 (: q (: (reduce n d) (? (0 = n) [0 1]                           ; gcd out, sign on num, den > 0
                         (: g (gcd (abs n) (abs d)) s (? (d < 0) -1 1)
                            [(s * n // g) (s * d // g)]))
@@ -59,3 +60,5 @@
                      ()))))
         (\ n (? (two? n) (coin st (reduce <n <>n))              ; (q (n d)) -- the show form
                 (\ d (coin st (reduce n d)))))))               ; (q n d) -- the ergonomic curried form
+
+) ; module q

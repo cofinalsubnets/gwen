@@ -36,6 +36,7 @@
 ; rides the layer like everything else here -- what the module buys is not
 ; secrecy (from reaches any member) but a QUIET BASE: the state key never
 ; touches orth, in a session or a baked image.
+(module '(rng rand randf random rng-get rng-set)
 (: rng-box {0}
    (random st n) (? (gem? n) (: r (turnf st) ((n * <r) >< >r))
                     (0 < n)  (: r (turn st)  ((<r % n) >< >r))
@@ -52,3 +53,5 @@
                (? (charm? n && 0 < n) (<r % n) <r))
    (randf n) (: r (turnf (rng-get 0)) _ (pin rng-box () >r)
                (? (constellation? n && 0 < n) (n * <r) <r)))
+
+) ; module rng

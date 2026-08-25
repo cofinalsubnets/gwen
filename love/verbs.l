@@ -19,6 +19,7 @@
 ;             shadow rule applies.
 ; a verb takes the args AFTER its name and ANSWERS A STATUS CHARM; the rail quits with it.
 ; that is kore's convention and it is why `love kore sed ..` nests.
+(module '(verbs any? bn dash fire get prime scan seat seatof tab unprime word)
 (: tab (tablet 0)
    (get k)   (peep tab k 0)
    (bn p)    (: n (tally p)
@@ -82,3 +83,5 @@
                     ())                                          ; seats someone else: not me
    (scan ws a) (seatof ws (unprime a))
    (fire ws)   (scan ws (? (member? 'cmdline (names ())) >cmdline ())))
+
+) ; module verbs

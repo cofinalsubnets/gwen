@@ -12,6 +12,7 @@
 ; crew/sat/dimacs.l. ⚠ the (use ..) must be its OWN top-level form: a `:` body compiles as one unit,
 ; so a use nested inside the form that reads the names runs too late to serve it.
 
+(module 'peg
 (: (eps s y n) (y s ())
    (lit l s y n) (? (tally l <= tally s && l = snip s 0 (tally l))
                   (y (snip s (tally l) (tally s)) [l])
@@ -38,3 +39,5 @@
     (\ _ (y s ())))
    (parse p s) (p s (\ r x (? (0 = tally r) x ())) (\ _ ()))     ; STRICT: whole input must parse
    (runp p s)  (p s (\ r x x) (\ _ ())))                           ; LENIENT: keep the payload, ignore trailing slack
+
+) ; module peg

@@ -24,6 +24,8 @@
 ; axm macros land in this layer's macro slot and ride the boot splice.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
+(module '(uu axm bridge BRIDGE C capp chk comp conv defn defq GLOB HELPC inf kseq lof Q rejects spine
+   SRC u2 uu2l vof)
 (: GLOB (tablet 0) HELPC (tablet 0)
    SRC (tablet 0) CMEM (tablet 0) BRIDGE (tablet 0))
 
@@ -402,3 +404,5 @@
    _ (:: 'defq (\ l (? (3 = (tally l)) ('(1 defq) >< l) ['scare ['\ 'uu-defq-arity] ['\ l]])))
    _ (:: 'axm  (\ l (? (2 = (tally l)) ('(1 axm) >< l) ['scare ['\ 'uu-axm-arity]  ['\ l]])))
    0)
+
+) ; module uu

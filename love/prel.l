@@ -377,6 +377,9 @@
     ; a list head is (name export..): the body defglobs as ever, then every nom not
     ; named is pulled off the tablet, so from and use each see only the exports. the
     ; charm keys (0 the macros, 31337 the parent chain) are not noms and so survive.
+    ; ⚠ QUOTE THE LIST HEAD -- '(nm a b ..). unquoted it rides the opfix pass, and one
+    ; operator nom in it (===, =/=) re-associates the whole list: the prune then matches
+    ; nothing, pulls every name AND the macro table, and the module leaves empty.
     (mrun nm fs) (: n  (? (two? nm) (cap nm) nm)
                      xs (? (two? nm) (cup nm) ())
                      _  (mopen n)

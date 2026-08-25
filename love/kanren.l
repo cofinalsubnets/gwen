@@ -23,6 +23,9 @@
 ; ⚠ the scan asks two?, never ?: a key list is DATA, and `?` would read it for net --
 ; so a key that sums to nothing (a var labelled 0, a bare nom) would end the scan early
 ; and answer "unbound" for a binding that is right there.
+(module '(kanren =/= === absent apt closed? con dif empty_dict est ifte inside mintp naf nay query rel
+   residual rewrite s_app scount slist smap sno sole s_plus s_star st0 stake subst sun
+   sX tie ufail ufail? unify untie var var? walk)
 (: (dict_has d k) (: (loop k ks vs) (? (two? ks) (? (k = <ks) vs (loop k >ks >vs))) (loop k <d >d))
    (dict_set d k v) ((k >< <d) >< v >< >d)
    empty_dict '(())
@@ -214,3 +217,5 @@
 (:: '&&& (\ xs (foldl (\ a b [conj2 a b]) <xs >xs)))   ; conj of goals -- the ring's *
 (:: '||| (\ xs (foldl (\ a b [disj2 a b]) <xs >xs)))   ; disj of goals -- the ring's +
 (:: '\\\ (\ a (('\ >< a) >< map (\ a [var ['\ a]]) (init a))))                         ; lambda w/ fresh logic vars
+
+) ; module kanren

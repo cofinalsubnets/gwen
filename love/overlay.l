@@ -12,6 +12,7 @@
 ; (overlay-set / overlay-off / ov-slot / ov-eng).
 ; kanren must load FIRST -- the engine reads subst through the registry and unify/ufail?/var bare.
 
+(module '(overlay ov-check ov-eng overlay-off overlay-set ov-hook ov-slot)
 (: ov-both
     (: subst (from 'kanren 'subst)                    ; through the kanren module (unify/ufail?/var stay global)
        (ov-nthl l n)     (? (n = 0) <l (ov-nthl >l (n - 1)))   ; nth (nthl is glaze-layer, absent here)
@@ -76,3 +77,5 @@
    ; ⚠ two params where the caller hands ONE: currying, so (ov-hook ev) is still the wrapper.
    (ov-hook e0 e)
      (: v (peep ov-slot 0 ()) (? (two? v) (: _ (ov-eng <v <>v e) (e0 e)) (e0 e))))
+
+) ; module overlay
