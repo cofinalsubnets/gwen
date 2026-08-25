@@ -1,10 +1,8 @@
-# The gates for the tools that ride beside the build rather than in it. Three shapes: a
-# tool run over every build artifact present (vmret), a generator's output weighed for
-# shape rather than byte-compared (hue, whose file the build owns), and a library's own
-# law file (cook, tele). Each checks only what is already built.
+# The gates for the tools that ride beside the build rather than in it. Two shapes: a
+# generator's output weighed for shape rather than byte-compared (hue, whose file the
+# build owns), and a library's own law file (cook, tele).
 #
-# `make test_tools` from the repo root, or `make -C tools` here. Needs objdump or
-# llvm-objdump for vmret.
+# `make test_tools` from the repo root, or `make -C tools` here.
 
 R := ..
 include $(R)/mk/common.mk
@@ -13,26 +11,12 @@ include $(R)/mk/common.mk
 # (where $(m)'s ../ prefix would point one level above the root).
 mr = out/host$(hsuf)/love
 
-.PHONY: all test_vmret test_cook test_tele test_xor test_hue test_hueweb
-all: test_vmret test_cook test_tele test_xor test_hue test_hueweb
+.PHONY: all test_cook test_tele test_xor test_hue test_hueweb
+all: test_cook test_tele test_xor test_hue test_hueweb
 
 # Build the host love on demand (it runs the .l tools); only if it's missing.
 $(m):
 	@$(MAKE) -C $(R)/host
-
-# vmret.l over the host binary plus any kernel ELFs present (each arch exercises a
-# different ret matcher). exit 0 AND the ret-free summary line -- vmret exits 1 on
-# suspects and 2 on a stripped binary, and the line proves it scanned to the end.
-# ⚠ love0 is skipped: it builds -Dai_tco=0, the trampoline, where handler rets are
-# expected and the vmret signal is noise.
-test_vmret: | $(m)
-	@echo TEST vmret.l
-	@for e in $(R)/out/host/love `find $(R)/out/free -name 'love-*.elf' 2>/dev/null`; do \
-	  $(m) $(R)/tools/vmret.l $$e > $(R)/out/host/.vmret.l 2>&1 \
-	    && grep -q 'ret-free' $(R)/out/host/.vmret.l && echo "  ok   $$e" \
-	    || { echo "  FAIL $$e"; cat $(R)/out/host/.vmret.l; rm -f $(R)/out/host/.vmret.l; exit 1; }; \
-	done; rm -f $(R)/out/host/.vmret.l
-
 
 # the syntax file is BUILT (crew/build.mk) out of crew/vi/hue.l's class table and the
 # vocabulary the host answers to, so there is no checked-in second copy to drift from and

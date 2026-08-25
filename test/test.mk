@@ -818,8 +818,9 @@ PORT ?= 7390
 nettest: host
 	@echo TEST $m "(127.0.0.1:$(PORT))"
 	@sh $R/test/net/loopback.sh $m $(PORT)
-# The tool gates beside the build: vmret over every built ELF, the hue generators, cook,
-# tele. See tools/Makefile. ⚠ lush is a real
+# The tool gates beside the build: the hue generators, cook, tele. See tools/Makefile.
+# vmret is NOT here -- it rides test_slow over $m, and after plan C2 every other love in
+# the tree is a projection of that one. ⚠ lush is a real
 # prerequisite: test/host/cook.l's SHELL pair sets `SHELL := out/host/lush` to prove cook honors it.
 test_tools: host out/host$(hsuf)/lush
 	@$(MAKE) -C tools

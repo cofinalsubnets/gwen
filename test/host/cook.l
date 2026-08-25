@@ -29,14 +29,17 @@
    (write-file path content) (: q (open path "w") _ (say q content) (close q))
    (sh cmd) (hark ["sh" "-c" cmd])
    ; run cook on a fixture Makefile, return its captured stdout.
+   ; ⚠ -f NAMES THE BUILD FILE. a positional is a goal wherever discovery can name the
+   ; build file itself, and every spawn here runs from the repo root, where it names
+   ; ./Makefile -- so a positional fixture would read as a goal against THIS tree.
    (run-cook src tgt)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (hark [love "-l" "crew/cook/cook.l" (+ dir "/Makefile") tgt])
+       r (hark [love "-l" "crew/cook/cook.l" "-f" (+ dir "/Makefile") tgt])
        (? (two? r) >r ""))
    ; --emit a fixture Makefile, return the generated Cookfile text (stdout).
    (run-emit src)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (hark [love "-l" "crew/cook/cook.l" "--emit" (+ dir "/Makefile")])
+       r (hark [love "-l" "crew/cook/cook.l" "--emit" "-f" (+ dir "/Makefile")])
        (? (two? r) >r ""))
 
    _ (sh (+ "rm -rf " (+ dir "; mkdir -p " dir)))
@@ -197,7 +200,7 @@
    (D2 f) (+ dir f)
    (run-cookv src args)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (hark ([love "-l" "crew/cook/cook.l" (+ dir "/Makefile")] + args))
+       r (hark ([love "-l" "crew/cook/cook.l" "-f" (+ dir "/Makefile")] + args))
        (? (two? r) >r ""))
    _ (setenv "COOKT_ENV" "from-env")
    env (run-cookv (mk '("COOKT_ENV ?= nope"
@@ -274,7 +277,7 @@
                        (+ dir "/e/out.txt:") "\techo HI > $@"]))
    _ (write-file (+ dir "/e/Cookfile") emc)
    _ (sh (+ "rm -f " (+ dir "/e/out.txt")))
-   _ (hark [love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile") "all"])
+   _ (hark [love "-l" "crew/cook/cook.l" "-f" (+ dir "/e/Cookfile") "all"])
    _ (ok "emit: round-trip cooks the emitted Cookfile" (= 0 <(sh (+ "test -f " (+ dir "/e/out.txt")))))
 
    ; .DEFAULT_GOAL overrides "the first rule declared" as the default ticket --
@@ -285,10 +288,10 @@
                "first:"  "\techo FIRST"
                "second:" "\techo SECOND"))
    _ (write-file (+ dir "/Makefile") dgsrc)
-   dgr (: r (hark [love "-l" "crew/cook/cook.l" (+ dir "/Makefile")]) (? (two? r) >r ""))
+   dgr (: r (hark [love "-l" "crew/cook/cook.l" "-f" (+ dir "/Makefile")]) (? (two? r) >r ""))
    _ (ok ".DEFAULT_GOAL is the default ticket" (has dgr "SECOND"))
    _ (write-file (+ dir "/e/Cookfile") (run-emit dgsrc))
-   dgc (: r (hark [love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile")]) (? (two? r) >r ""))
+   dgc (: r (hark [love "-l" "crew/cook/cook.l" "-f" (+ dir "/e/Cookfile")]) (? (two? r) >r ""))
    _ (ok "emit: .DEFAULT_GOAL survives the round-trip" (has dgc "SECOND"))
 
    ; ------------------------------------------------- side-effect writes are seen
@@ -307,7 +310,7 @@
                 (+ (D "/second: ") (D "/shared.txt"))
                 (+ "\tcp " (+ (D "/shared.txt") (+ " " (D "/second"))))])
    _ (write-file (D "/Makefile") sidesrc)
-   _ (: r (hark [love "-l" "crew/cook/cook.l" (D "/Makefile") "all"]) 0)
+   _ (: r (hark [love "-l" "crew/cook/cook.l" "-f" (D "/Makefile") "all"]) 0)
    side (: r (sh (+ "cat " (D "/second"))) (? (two? r) >r ""))
    _ (ok "a recipe's side-effect write invalidates the date cache" (has side "NEW"))
 
@@ -396,7 +399,7 @@
    ; which is the one thing a gate cannot hold still.
    (run-cookj src tgt j)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (hark [love "-l" "crew/cook/cook.l" "-j" j (+ dir "/Makefile") tgt])
+       r (hark [love "-l" "crew/cook/cook.l" "-j" j "-f" (+ dir "/Makefile") tgt])
        (? (two? r) >r ""))
    _ (sh (+ "mkdir -p " (D "/j")))
    jsrc (mk [".PHONY: all"
@@ -416,7 +419,7 @@
                       (+ " && test -f " (+ (D "/j/c") (+ " && test -f " (D "/j/d")))))))))))
    ; a glued -jN is the same flag
    _ (sh (+ "rm -f " (D "/j/[abcd]")))
-   jg (: r (hark [love "-l" "crew/cook/cook.l" "-j4" (+ dir "/Makefile") "all"]) (? (two? r) >r ""))
+   jg (: r (hark [love "-l" "crew/cook/cook.l" "-j4" "-f" (+ dir "/Makefile") "all"]) (? (two? r) >r ""))
    _ (ok "-j4 glued reads as -j 4" (= j1 jg))
 
    ; an EDGE still orders: one must finish before two starts, however wide the pool.
@@ -437,13 +440,13 @@
              (D "/j/ok:") (+ "\t@sleep 1; echo OK > " (D "/j/ok"))
              (D "/j/red:") "\t@exit 3"])
    _ (write-file (+ dir "/Makefile") jred)
-   jrst (: r (hark [love "-l" "crew/cook/cook.l" "-j" "4" (+ dir "/Makefile") "all"]) (? (two? r) <r 0))
+   jrst (: r (hark [love "-l" "crew/cook/cook.l" "-j" "4" "-f" (+ dir "/Makefile") "all"]) (? (two? r) <r 0))
    _ (ok "-j4: a failed recipe fails the run" (!(= 0 jrst)))
    _ (ok "-j4: outstanding jobs finish first" (= 0 <(sh (+ "test -f " (D "/j/ok")))))
 
    ; the width is the caller's to say: a bare -j is make's "unlimited", and one
    ; translation unit here peaks at 2.3 GB, so cook asks for the number instead.
-   jbad (: r (hark [love "-l" "crew/cook/cook.l" "-j" "x" (+ dir "/Makefile") "all"]) (? (two? r) <r 0))
+   jbad (: r (hark [love "-l" "crew/cook/cook.l" "-j" "x" "-f" (+ dir "/Makefile") "all"]) (? (two? r) <r 0))
    _ (ok "-j wants a count" (!(= 0 jbad)))
 
    ; ---------------------------------------------------------------- summary
