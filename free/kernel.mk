@@ -217,6 +217,7 @@ kart_cats = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.
 kart_arch_o = $(patsubst $R/free/$(hosta)/%.c,$(moon_d)/k_$(hosta)_%.o,$(wildcard $R/free/$(hosta)/*.c))
 # the console's painter and its fonts: kernel-only draws the host link never had
 kart_quay_o = $(patsubst %,$(moon_d)/k_q_%.o,paint cga_8x8 moderndos_8x16)
+# the twin link takes the same set at $(xa) -- $(xkart_o), below the lays
 kart_o = $(moon_d)/k_kmain.o $(moon_d)/k_blk.o $(moon_d)/k_sys.o $(kart_arch_o) $(kart_quay_o) $(moon_d)/kvec.o
 $(moon_d)/k_%.o: $R/free/%.c $(kart_h) $(kart_cats) $(moon0_dep)
 	@echo MOON	$@
@@ -259,6 +260,47 @@ $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/free/%.l $(klay_l)
 	@mkdir -p "$(dir $@)"
 	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
 	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(klay_l)) $<; } > $@
+
+# --- THE TWIN CARRIES IT TOO (the cross road) --------------------------------
+# an egg laid for another machine must BE the binary that machine's own `love
+# seed` builds, so it takes the kernel at $(xa) exactly as the host link takes it
+# at $(hosta) -- an egg short of it first-boots fine and then fails the fixpoint,
+# a whole machine away from the lane that laid it. spelled here rather than in
+# crew/build.mk because kernel.mk owns the shape and is included second:
+# $(kart_cats) expands to nothing up there. an arch with no free/<a>/ carries
+# none, which is what the $(if) reads.
+xkart_inc = -I$(ho) -I. -Icore -Iout/lib -I$R -I$R/free -I$R/free/$(xa) \
+  -I$R/crew/quay -I$R/crew/moon/include
+xkart_h = $(love_h) $(wildcard $(R)/free/*.h $(R)/free/$(xa)/*.h)
+xkart_arch_o = $(patsubst $R/free/$(xa)/%.c,$(xd)/k_$(xa)_%.o,$(wildcard $R/free/$(xa)/*.c))
+xkart_quay_o = $(patsubst %,$(xd)/k_q_%.o,paint cga_8x8 moderndos_8x16)
+xkart_o = $(if $(xkart_arch_o),$(xd)/k_kmain.o $(xd)/k_blk.o $(xd)/k_sys.o $(xkart_arch_o) $(xkart_quay_o) $(xd)/kvec.o,)
+$(xd)/k_%.o: $R/free/%.c $(xkart_h) $(kart_cats) $(moon0_dep)
+	@echo MOON	$@
+	@mkdir -p "$(dir $@)"
+	@$(moonx) $(xkart_inc) -c $< $@
+$(xd)/k_$(xa)_%.o: $R/free/$(xa)/%.c $(xkart_h) $(kart_cats) $(moon0_dep)
+	@echo MOON	$@
+	@mkdir -p "$(dir $@)"
+	@$(moonx) $(xkart_inc) -c $< $@
+$(xd)/k_q_%.o: $R/crew/quay/%.c $(moon0_dep)
+	@echo MOON	$@
+	@mkdir -p "$(dir $@)"
+	@$(moonx) $(xkart_inc) -c $< $@
+# the twin's own cat, the shape above worn at $(xa): the kernel's is cut at $a
+# and this is the other machine. one target, so an ordinary rule serves.
+xklay_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
+  $R/crew/holo/$(k_be_$(xa)).l $R/crew/holo/elf.l $R/crew/holo/obj.l
+$(xd)/mkvec.l: $R/free/mkvec.l $(xklay_l)
+	@echo CAT	$@
+	@mkdir -p "$(dir $@)"
+	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
+	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(xklay_l)) $<; } > $@
+$(xd)/kvec.o: $(xd)/mkvec.l $(if $(bundled_love),,$(love0))
+	@echo HOLO	$@
+	@mkdir -p "$(dir $@)"
+	@LOVE_NO_IMAGE= $(boot_love) -l $< -n -e '(lay-vec "$@" "$(xa)")' && test -s $@
+$(xd)/love: $(xkart_o)
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
 # kernel boots into nothing.

@@ -338,9 +338,13 @@ $(xd)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(if $(bundled_l
 	@$(boot_love) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xtgt)
 $(xd)/rt.o: $(rt_slice) tools/mkrt.l $(if $(bundled_love),,out/host/mooncc0.image $(love0))
 	@$(if $(bundled_love),LOVE_NO_IMAGE= $(bundled_love) tools/mkrt.l $@ $(xtgt),$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(xtgt))
+# $(xkart_o), the twin's kernel objects, in the host link's own order -- the
+# artifact is fused, so an egg without them is not the binary the far machine
+# rebuilds. free/kernel.mk owns the list and the prereq line; a recipe expands
+# late, so reading it here is enough.
 $(xd)/love: $(xobjs) $(xd)/src.o $(xd)/rt.o assets/readme.bin
 	@echo MOON	$@
-	@$(moonx) -pie $(xobjs) $(xd)/src.o $(xd)/rt.o -freadme=assets/readme.bin -o $@
+	@$(moonx) -pie $(xobjs) $(xkart_o) $(xd)/src.o $(xd)/rt.o -freadme=assets/readme.bin -o $@
 # dist-fat -- OPT-IN: ONE file, both texts, behind fatpack's sh prefix and its
 # content-named cache under ~/.love/fat. the native member rides baked; the
 # twin is an egg until U1.2 moves the bake to the extraction.

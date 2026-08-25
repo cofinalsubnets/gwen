@@ -569,17 +569,18 @@ test_vec: host
 # love1 (love0's lane, relinked) bakes its own compiler image, recompiles every TU, links
 # love2, and the two must be byte-identical. A headline invariant -- but it runs in
 # test_extra only, so a deleted host/*.c goes green through test_slow either way.
-# $(moon_o) is the link list: the gate is handed make's objects, it never globs the odir.
+# $(moon_o) $(kart_o) is the link list, the artifact's own: the gate is handed make's
+# objects, it never globs the odir, and it links no less than `make` does.
 test_fixpoint: host $(love0) out/host/mooncc0.image
-	@sh test/gate/fixpoint.sh $(ho) $(love0) $(moon_o)
+	@sh test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_o) $(kart_o)
 # THE CROSS-MACHINE FIXPOINT, in effigy (doc/misc/plan/seed-universal.md U0): the x-lane's
 # twin objects link love1, then love1 under qemu-user rebuilds itself natively and must
 # answer the same bytes -- the twin machine reproducing this machine's, on one box.
 # opt-in BY NAME (a full rebuild under emulation is minutes): `make test_xfixpoint`,
 # or `make xa=riscv64 test_xfixpoint` for the other twin. skips loudly without qemu.
 .PHONY: test_xfixpoint
-test_xfixpoint: $(xobjs) $(love0) out/host/mooncc0.image
-	@sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xtgt) $(xmksys) $(tco) $(xd) $(xobjs)
+test_xfixpoint: $(xobjs) $(xkart_o) $(love0) out/host/mooncc0.image
+	@sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xtgt) $(xmksys) $(tco) $(xd) $(xa) $(xobjs) $(xkart_o)
 # test_fat -- the fat container (seed-universal U1): the one file answers through
 # its prefix + cache on the native machine, the pack is byte-deterministic, and
 # the foreign member answers under qemu-user. opt-in by name, like the x-lane.

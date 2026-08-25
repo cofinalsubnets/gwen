@@ -11,23 +11,26 @@
 # make owns the dependency graph (the moon_o objects + mooncc0.image exist);
 # this owns the procedure. NOT set -e: the compile loop reports its own file.
 #
-# usage: fixpoint.sh OUTDIR LOVE0 OBJ...
+# usage: fixpoint.sh OUTDIR LOVE0 HOSTA OBJ...
 set -u
 
 ho=$1
 love0=$2
-shift 2
+ha=$3
+shift 3
 d=$ho/fix
 cat=$ho/.mooncc-cat.l
 
 # any arch a seed can be laid for owes this invariant (doc/misc/plan/seed-universal.md
 # U0); an arch off the roster skips, it does not fail. the mksys leaf is the
 # host's own (the twin roster, crew/build.mk).
-case "$(uname -m)" in
+# ⚠ the spelling arrives as $(hosta), never from `uname -m` here: on the BSDs those two
+# disagree (amd64, evbarm), and a gate that spells the arch itself is a second authority.
+case "$ha" in
   x86_64)  mks=mksys ;;
   aarch64) mks=mksys-arm64 ;;
   riscv64) mks=mksys-riscv ;;
-  *) echo "test_fixpoint: no seed for $(uname -m), skipped"; exit 0
+  *) echo "test_fixpoint: no seed for $ha, skipped"; exit 0
 esac
 
 fail() { echo "FAIL test_fixpoint: $*" >&2; exit 1; }
@@ -36,7 +39,7 @@ mkdir -p "$d"
 rm -f "$d"/*.o "$d"/love1 "$d"/love2 "$d"/mooncc1.image
 
 # love1: relink the generation make already compiled (love0's lane, byte-cheap).
-# ⚠ the list arrives FROM make ($(moon_o), source-derived) and is never globbed out of
+# ⚠ the list arrives FROM make ($(moon_o) $(kart_o), source-derived) and is never globbed out of
 # the odir: a deleted host/*.c leaves its .o sitting there, and a glob relinks the ghost --
 # love1 carrying a TU love2 never compiles, which reads as a broken fixpoint.
 moon0() { "$love0" wake "$ho/mooncc0.image" mooncc "$@"; }
@@ -66,6 +69,27 @@ for f in crew/moon/lib/math/*.c; do
 done
 LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "((from 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
+
+# the kernel the artifact carries (free/kernel.mk's $(kart_o)): the link takes it,
+# so the rebuild owes it. ⚠ a gate that links what make links and compiles less
+# still answers love1 == love2 -- it just answers it about a shorter binary than
+# anyone ships. an arch with no free/<a>/ carries none, which is the test -d.
+if test -d "free/$ha"; then
+  kinc="-I$ho -I. -Icore -Iout/lib -Ifree -Ifree/$ha -Icrew/quay -Icrew/moon/include"
+  for f in free/kmain.c free/blk.c free/sys.c free/$ha/*.c crew/quay/paint.c \
+           crew/quay/cga_8x8.c crew/quay/moderndos_8x16.c; do
+    b=$(basename "$f" .c)
+    case "$f" in
+      free/$ha/*)  o=$d/k_${ha}_$b.o ;;
+      crew/quay/*) o=$d/k_q_$b.o ;;
+      *)           o=$d/k_$b.o ;;
+    esac
+    moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
+  done
+  LOVE_NO_IMAGE=1 "$d/love1" -l "out/free/$ha/mkvec.l" -n -e "(lay-vec \"$d/kvec.o\" \"$ha\")" \
+    || fail "love1 lay-vec"
+  test -s "$d/kvec.o" || fail "love1 lay-vec laid an empty kvec.o"
+fi
 
 # love2 takes the SAME list in the SAME order, one directory over -- link order is layout,
 # so two globs agreeing by luck is not one list. A name love1 linked and the loops above
