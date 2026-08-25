@@ -113,6 +113,16 @@ function pointers, multi-character constants (`'ab'` is 0x6162, gcc's packing, s
 chars), binary literals (`0b1010`, gcc's extension and C23's spelling), `__func__`, and
 `__typeof__` over locals, globals, struct members, dereferences and function names.
 
+**A block-scope `extern` declaration names the FILE-SCOPE object, landed 2026-08-25**
+(test/cc/154-blockextern.c, held to gcc). C11 6.2.2p4: `extern int x;` inside a function
+declares the external object — no slot, no local name, the linker binds it. It was binding a
+LOCAL, so the body read and wrote a slot nothing else could see, and a `.o` carried no
+reference to the symbol at all. ⚠ **a silent wrong answer, over a construct that reads like
+nothing** — the class §4 cannot catch, since the program is strictly conforming and we
+compiled it without a word. It is how the linux kernel and doom both reach a global from one
+function without a header. The decls hoist to the TU's top as `('xdecl ..)`, where the global
+pass already reads them, and C's tentative rule lets a real definition take the entry back.
+
 **A float constant through a cast to an integer type landed 2026-08-25**
 (test/cc/153-flocast.c, held to gcc) — C11 6.6p6's one float an integer constant expression
 may hold, truncating toward zero. It folds in BOTH places, because they are different folds:

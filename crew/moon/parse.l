@@ -212,6 +212,7 @@
    ; (a real global), not a stack slot (a stack `static` is uninitialised garbage
    ; every call -- the ai_pagesize bug).
    (leadstatic? ts) (leadkw? ts 'static)
+   (leadextern? ts) (leadkw? ts 'extern)
    ; `const` in the SPECIFIER run. it names the object only when the declarator
    ; adds no pointer of its own, which cobj? decides per declarator.
    (leadconst? ts) (leadkw? ts 'const)
@@ -377,6 +378,7 @@
                 _ (pin t 'aligns {})        ; global name -> its __attribute__((aligned(N))) boundary
                 _ (pin t 'locals {})        ; local/param name -> its declared type (for parse-time sizeof folding)
                 _ (pin t 'globals {})       ; file-scope name -> ty, so sizeof over a GLOBAL settles at parse too
+                _ (pin t 'hoist ())                 ; block-scope `extern` decls, lifted to the TU's top as ('xdecl ..)
                 _ (pin t 'qtys {})          ; the same names -> the QUALIFIER-marked type, _Generic's alone (see qmark)
                 _ (pin t 'qstage {})        ; ..staged by the declarator parse, consumed by the bind that follows
                 _ (pin t 'qtdef {})         ; typedef name -> the const/volatile mask its own leaf wears
@@ -1691,6 +1693,12 @@
    (pdecl ps ts)
     (: br (pbty ps ts)
        stat (leadstatic? ts)                          ; block-scope `static` -> ('sdecl ..), laid in .bss
+       ; ⚠ block-scope `extern` DECLARES the file-scope object -- it lays no slot and takes
+       ; no local name, exactly as the function declaration below already reads. without
+       ; this the name bound a LOCAL and the body read a slot the linker never wrote:
+       ; doom's d_net.c says `extern boolean advancedemo;` inside a function, and the
+       ; object it tested was not the one d_main.c writes.
+       ext (leadextern? ts)
        (? !(two? br) ()
           (: base <br ts0 <>br
              bq (qspec ps ts base)   ; the run's const/volatile -- _Generic's, staged below
@@ -1737,7 +1745,15 @@
                           (peekp <>r ",") (more ><>r (<r >< acc))
                           (: rest (want <>r ";")
                              es (filter (\ e !(fn? <>e)) (rev (<r >< acc)))
-                             (? (two? rest) [[(? stat 'sdecl 'decl) es] rest] ()))))
+                             ; the extern entries hoist to the TU's top, where gen's global
+                             ; pass reads them, and the block keeps none of them
+                             _ (? (ext && two? es)
+                                  (: (gox l) (? !(two? l) 1
+                                                (: _ (pin (ps 'globals) <<l <><l (gox >l))))
+                                     _ (pin ps 'hoist (['xdecl es] >< (ps 'hoist)))
+                                     (gox es))
+                                  ())
+                             (? (two? rest) [[(? stat 'sdecl 'decl) (? ext () es)] rest] ()))))
                    ; the marks live for THIS declaration only -- saved and put back, because a
                    ; declaration nests (a `for` init, an initializer carrying a compound literal)
                    olddecl (ps 'declaring)
@@ -2463,7 +2479,9 @@
            _ (pin ps 'scopacc ())        ; what a file-scope specifier bound is nobody's to take back
            (pin ps 'cursect ()))
        (tops ts2 acc)
-        (? !(two? ts2) [1 ['prog (rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)      ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure
+        ; the hoisted block-scope externs lead the program: gen's global pass reads them,
+        ; and C's tentative rule lets a real definition later in the TU take the entry back
+        (? !(two? ts2) [1 ['prog ((ps 'hoist) + (rev acc))] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; empty acc = a valid EMPTY TU (crypt.c), not a parse failure
                               (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
                               (ps 'consts) (ps 'rstrs)]
            (: r (ptop ps ts2)
