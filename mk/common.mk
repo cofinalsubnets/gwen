@@ -6,7 +6,23 @@ R ?= .
 m = $R/out/host$(hsuf)/love
 # ⚠ the HOST's arch, which $a is NOT: a cross lane overrides $a on the command line, and
 # anything under out/host reading $a then lays a cross artifact into the host tree.
-hosta := $(shell uname -m)
+# ⚠ AND `uname -m` IS NOT THE ISA. It answers the kernel's MACHINE, which only linux
+# spells the way free/<a>/, the mksys leaves and the holo backends do: the BSDs say
+# amd64 for x86_64, freebsd says arm64 and netbsd evbarm for aarch64. evbarm names a
+# 32-bit port too, so there the ISA has to come from `uname -p` -- the one place a
+# second fork is owed, and only on that branch. flat ifeqs, no else-chain: cook reads
+# `else ifeq` as a bare else and drops the condition.
+uname_m := $(shell uname -m)
+hosta := $(uname_m)
+ifeq ($(uname_m),amd64)
+hosta := x86_64
+endif
+ifeq ($(uname_m),arm64)
+hosta := aarch64
+endif
+ifeq ($(uname_m),evbarm)
+hosta := $(shell uname -p)
+endif
 # ⚠ `?=` MAKES A RECURSIVE VARIABLE, so `a ?= $(shell uname -m)` re-forks uname at every
 # single reference -- 203 of them before this build even reached out/lib/egg.h. Deferring
 # to the simply-expanded $(hosta) keeps the override and spends one fork for the tree.
