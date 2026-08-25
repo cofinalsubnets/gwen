@@ -219,17 +219,17 @@ static void __fmt(void (*put)(void *, int), void *ctx, char const *fmt, va_list 
       unsigned long u = (unsigned long) v;
       int neg = v < 0;
       if (neg) u = 0UL - u;
-      __fmtnum(put, ctx, u, 10, neg, width, fl, 0); }
+      __fmtnum(put, ctx, u, 10, neg, prec, width, fl, 0); }
     else if (*fmt == 'u')
-      __fmtnum(put, ctx, wide ? va_arg(ap, unsigned long) : (unsigned long) va_arg(ap, unsigned int), 10, 0, width, fl, 0);
+      __fmtnum(put, ctx, wide ? va_arg(ap, unsigned long) : (unsigned long) va_arg(ap, unsigned int), 10, 0, prec, width, fl, 0);
     else if (*fmt == 'x' || *fmt == 'X')
-      __fmtnum(put, ctx, wide ? va_arg(ap, unsigned long) : (unsigned long) va_arg(ap, unsigned int), 16, 0, width, fl, *fmt == 'X');
+      __fmtnum(put, ctx, wide ? va_arg(ap, unsigned long) : (unsigned long) va_arg(ap, unsigned int), 16, 0, prec, width, fl, *fmt == 'X');
     else if (*fmt == 'o')
-      __fmtnum(put, ctx, wide ? va_arg(ap, unsigned long) : (unsigned long) va_arg(ap, unsigned int), 8, 0, width, fl, 0);
+      __fmtnum(put, ctx, wide ? va_arg(ap, unsigned long) : (unsigned long) va_arg(ap, unsigned int), 8, 0, prec, width, fl, 0);
     else if (*fmt == 'f' || *fmt == 'F' || *fmt == 'e' || *fmt == 'E' || *fmt == 'g' || *fmt == 'G'
              || *fmt == 'a' || *fmt == 'A')
       __fmtflo(put, ctx, va_arg(ap, double), *fmt, prec, width, fl);
-    else if (*fmt == 'p') { put(ctx, 48); put(ctx, 120); __fmtnum(put, ctx, (unsigned long) va_arg(ap, void *), 16, 0, 0, 0, 0); }
+    else if (*fmt == 'p') { put(ctx, 48); put(ctx, 120); __fmtnum(put, ctx, (unsigned long) va_arg(ap, void *), 16, 0, -1, 0, 0, 0); }
     else if (*fmt == '%') put(ctx, 37);
     else { put(ctx, 37); if (*fmt) put(ctx, *fmt); else fmt--; } }
 }

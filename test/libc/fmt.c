@@ -69,6 +69,20 @@ int main(void)
 	F("p.strover", snprintf(b, sizeof b, "[%.9s]", "abc"));
 	F("p.strzero", snprintf(b, sizeof b, "[%.0s]", "abc"));
 	F("p.both", snprintf(b, sizeof b, "[%8.2s]", "abcdef"));
+	/* on an integer the precision is a MINIMUM digit count, it retires the 0
+	   flag, and .0 of a zero is the empty field (C99 7.19.6.1p6). */
+	F("p.d", snprintf(b, sizeof b, "[%.3d]", 33));
+	F("p.dover", snprintf(b, sizeof b, "[%.2d]", 12345));
+	F("p.dneg", snprintf(b, sizeof b, "[%.4d]", -7));
+	F("p.dzero", snprintf(b, sizeof b, "[%.0d]", 0));
+	F("p.dzero1", snprintf(b, sizeof b, "[%.1d]", 0));
+	F("p.dwidth", snprintf(b, sizeof b, "[%8.3d]", 33));
+	F("p.dwidthleft", snprintf(b, sizeof b, "[%-8.3d]", 33));
+	F("p.dzeroflag", snprintf(b, sizeof b, "[%08.3d]", 33));
+	F("p.x", snprintf(b, sizeof b, "[%.4x]", 255));
+	F("p.xalt", snprintf(b, sizeof b, "[%#.4x]", 255));
+	F("p.u", snprintf(b, sizeof b, "[%.5u]", 42));
+	F("p.o", snprintf(b, sizeof b, "[%.4o]", 8));
 
 	/* --- TRUNCATION: the bytes stop, the return does not --- */
 	memset(b, '#', sizeof b);

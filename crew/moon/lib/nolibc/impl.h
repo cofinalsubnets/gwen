@@ -543,7 +543,7 @@ extern char const *__ai_progname;
 
 /* helpers a sibling member calls or passes as a pointer: one definition, named here. */
 void __fmtnum(void (*put)(void *, int), void *ctx, unsigned long v, unsigned base,
-              int neg, int width, int fl, int up);
+              int neg, int prec, int width, int fl, int up);
 int __fmtsgn(int neg, int fl);
 void __pad(void (*put)(void *, int), void *ctx, int n, int ch);
 void __femit(void *ctx, int c);
