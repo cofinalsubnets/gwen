@@ -582,7 +582,14 @@
   ; multi-arg fn (fold/napof) OR a letrec lambda sibling the args saturate (falook -- locals fold
   ; can't see).
   (apxh c b) (: nary <b head <>b args >>b
-              n2 (? nary nary (nom? head && (: a (falook c head) (? (1 < a && a <= tally args) a 0))))
+              ; ⚠ THE SURPLUS LANE IS napof's ALONE. lvm_apn enters the callee at cell+2, PAST the
+              ; lvm_cur prologue, so `apn n` is only sound where n IS the callee's arity -- napof
+              ; reads that off the value itself, but falook reads a name out of a compile-time
+              ; far map and can answer an ENCLOSING binding's arity where an inner scope rebinds
+              ; the name (its walk passes frames carrying no far at all). Guessing n < the real
+              ; arity then skips the saturation check and enters a body short of its arguments.
+              ; Exact saturation is the most a guess can carry.
+              n2 (? nary nary (nom? head && (: a (falook c head) (? (1 < a && a = tally args) a 0))))
               f (ana c head) s (c 'stk) _ (push c 'stk 0) s2 (c 'stk)
               g (? n2 (napn c args n2 s2) (apl2r c args))
               _ (pin c 'stk s)

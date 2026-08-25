@@ -176,3 +176,20 @@
     (8 = (oa3 1 9 8 1))                             ; arity 3, four args -- [9 8] indexed at 1
     ; a curried NIF splits the same way -- the tower is the surplus applied to its answer
     (4096 = (* (oan 0) 2 4)) (1024 = (+ (oan 0) 2 4)) (4 = (- (oan 0) 1 2))))
+
+; --- ..and a SHADOWED name is not the arity the outer one wore --- lvm_apn enters the
+; callee past its lvm_cur prologue, so `apn n` is sound only where n IS that callee's
+; arity. falook answers by NAME out of a compile-time map, and its walk can reach an
+; enclosing binding where an inner scope rebinds the name -- so a guess may be spent only
+; on an exactly saturated call, never on a surplus. Guessing short here entered a 3-arity
+; body with two arguments and answered the partial.
+; ⚠ THE GLAZE HIDES THIS ONE. A native closure is compiled by its own emitter and never
+; runs the apn, so the corpus is green on any glazed lane; love0 carries no glaze and a
+; crew bake reverts its natives, which is where it surfaced (kore join, GNU-differential).
+(: (oas-w a b) (? (two? a) (oas-w >a b) b)              ; the OUTER oas-w: arity 2
+   (oas-in l) (: (oas-w x y z) (? (two? x) (oas-w >x y z) (y + z))   ; shadows it at arity 3
+                 (oas-w l 1 2))
+   (assert
+    (3 = (oas-in [1 2 3]))                              ; the inner arity is the one that runs
+    (3 = (oas-in ()))                                   ; ..including where the walk ends at once
+    (9 = (oas-w [1 2] 9))))                             ; and the outer still answers for itself
