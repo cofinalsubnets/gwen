@@ -1346,9 +1346,11 @@
    ;   -h, --help, help  print usage and exit
    ;   -v, --version, version   print the version and exit
    ;   RECIPE ...        the items to cook (default: the first recipe declared)
-   ; for back-compat with `cook <Makefile> [recipe]`, when no -f is given the first
-   ; positional word that names an existing file is taken as the build file and the
-   ; rest are recipes; with -f, every positional word is a recipe.
+   ; for back-compat with `cook <Makefile> [recipe]`, when no -f is given a first
+   ; positional word that names an existing file MAY be the build file -- but only where
+   ; discovery would find nothing else, or where the word is the very file it would find.
+   ; everywhere else a positional is a recipe, whether or not a file of that name exists.
+   ; with -f, every positional word is a recipe.
    (bye s) (: _ (puts s) _ (putc 10) _ (flush out) (quit 0))
    (version _) (bye ("cook (love " + love-version + ")"))
    (usage _) (bye ("usage: cook [-f FILE] [-j N] [--emit] [-v] [-h] [VAR=VAL ...] [RECIPE ...]\n"
@@ -1420,7 +1422,13 @@
       pos (peep opt 'pos ())
       xf (peep opt 'file 0)                                       ; an explicit -f file (0 if none)
       _ (? (xf && !(exists? xf)) (: _ (say err ("cook: cannot open " + xf)) _ (put err 10) (quit 1)) 0)
-      posfile (? (!xf && two? pos && exists? <pos) <pos 0)           ; a positional build file (back-compat)
+      ; ⚠ A POSITIONAL IS A RECIPE wherever discovery can name the build file itself.
+      ; taking any existing file meant `cook prog` read `prog` AS THE BUILD FILE the moment
+      ; a previous run had made one -- no rules in it, no tickets, exit 0 having built
+      ; nothing, and the goal you named going silently unbuilt. the back-compat form is
+      ; kept for the case it was written for: a build file discovery cannot find.
+      disc0 (? xf 0 (discover 0))                                    ; what discovery would name, if anything
+      posfile (? (!xf && two? pos && exists? <pos && (? disc0 (disc0 = <pos) 1)) <pos 0)
       file (? xf xf (? posfile posfile (: _ (autoregen 0) (discover 0))))     ; discovery may auto-regen a stale Cookfile from a newer Makefile
       _ (pin tickets 0 (? posfile >pos pos))                 ; the recipe words; the positional file is not a recipe
       (? emit?

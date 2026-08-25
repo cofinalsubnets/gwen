@@ -29,6 +29,12 @@ esac
 # exactly what its oracle's determinism is worth.
 unset MAKEFLAGS MFLAGS GNUMAKEFLAGS MAKELEVEL
 
+# cook REPORTS where make is silent: it names the goal it cooked, or says it was already
+# up to date. Neither line is a recipe's output -- they are cook's own progress -- so both
+# are filtered out of the comparison. ⚠ nothing else may join them: every other line cook
+# prints and make does not IS the difference the gate exists to find.
+cooknoise='is already up to date|^cook: cooked '
+
 work=$(mktemp -d) || exit 1
 trap 'rm -rf "$work"' EXIT
 fail=0; ran=0; known=0
@@ -41,7 +47,7 @@ case_() {
   nm=$1; kind=$2
   d=$work/$nm; mkdir -p "$d"; cat > "$d/Makefile"
   g=$(cd "$d" && make -s 2>&1)
-  c=$(cd "$d" && LOVE_NO_IMAGE= "$K" kore make 2>&1 | grep -v 'is already up to date')
+  c=$(cd "$d" && LOVE_NO_IMAGE= "$K" kore make 2>&1 | grep -vE "$cooknoise")
   ran=$((ran + 1))
   [ "$g" = "$c" ] && return 0
   if [ "$kind" = known ]; then
@@ -231,15 +237,64 @@ all:
 	@echo "[$(shell echo R >> ./n.txt; wc -l < ./n.txt)]" ; rm -f ./n.txt
 E
 
+# ---- the two-run law -------------------------------------------------------
+# ⚠ EVERY CASE ABOVE RUNS FROM SCRATCH, and a make that rebuilds nothing at all looks
+# CORRECT there: no output exists, so anything gets built. These build, age the artifact,
+# and build AGAIN, comparing both runs as one -- so "did nothing the second time" and
+# "did it twice" are each a failure. `cook prog` reading an existing `prog` as its build
+# file is the bug that asked for this, and it is invisible on a first run by construction.
+# ⚠ AGE THE ARTIFACT, never touch the source forward: a future mtime makes GNU make print
+# a clock-skew warning that is not cook's to match, and the diff would be of the warning.
+# case2_ NAME KIND ARTIFACT [GOAL] -- GOAL reaches both makes; empty means the default.
+case2_() {
+  nm=$1; kind=$2; art=$3; goal=${4-}; body=$(cat)
+  ran=$((ran + 1))
+  dg=$work/$nm.gnu;  mkdir -p "$dg"; printf '%s' "$body" > "$dg/Makefile"; printf 'one\n' > "$dg/src"
+  dc=$work/$nm.cook; mkdir -p "$dc"; printf '%s' "$body" > "$dc/Makefile"; printf 'one\n' > "$dc/src"
+  g1=$(cd "$dg" && make -s $goal 2>&1)
+  c1=$(cd "$dc" && LOVE_NO_IMAGE= "$K" kore make $goal 2>&1 | grep -vE "$cooknoise")
+  touch -t 200001010000 "$dg/$art" "$dc/$art" 2>/dev/null
+  g2=$(cd "$dg" && make -s $goal 2>&1)
+  c2=$(cd "$dc" && LOVE_NO_IMAGE= "$K" kore make $goal 2>&1 | grep -vE "$cooknoise")
+  g="$g1 | $g2"; c="$c1 | $c2"
+  [ "$g" = "$c" ] && return 0
+  if [ "$kind" = known ]; then
+    known=$((known + 1)); echo "cookdiff: KNOWN  $nm"; return 0
+  fi
+  echo "cookdiff: FAIL   $nm"
+  echo "  gnu : $(printf '%s' "$g" | tr '\n' '|')"
+  echo "  cook: $(printf '%s' "$c" | tr '\n' '|')"
+  fail=$((fail + 1))
+}
+# a target already built must REBUILD when its prerequisite outlives it. The plainest
+# incremental law there is, and nothing above asks it.
+case2_ stale same out <<'E'
+all: out
+out: src
+	@cp src out; echo "[built]"
+E
+# ..and the same law when the GOAL IS NAMED and the first run left a file wearing that
+# name. cook took any existing positional as its build file, so the second run read
+# `prog` as a Cookfile, found no rules, and exited 0 having built nothing.
+case2_ goal_names_a_file same prog prog <<'E'
+prog: src
+	@cp src prog; echo "[built]"
+E
+# a goal whose file exists and whose rule has NO prerequisites is up to date -- the
+# other half of the same reading, where doing nothing is the right answer.
+case2_ goal_no_prereqs same stamp stamp <<'E'
+stamp:
+	@echo "[made]"; : > stamp
+E
+
 # ---- recorded differences, reported and not failed -------------------------
 # ⚠ each of these is a KNOWN divergence with a reason, not a shrug. Promote one to
 # `same` the moment it is fixed; never add a row here to make the gate quiet.
 #
 # continuation: make folds \<newline> AND the next line's indent into one space in a
-# variable, but a RECIPE's backslash-newline is passed to the shell with the indent
-# intact. cook's uncont runs over the whole file before recipe lines are told apart,
-# so the two wants collide -- fixing the variable side alone would regress recipes.
-case_ continuation known <<'E'
+# variable, where a RECIPE's backslash-newline reaches the shell with the indent intact.
+# cook tells the two apart now and agrees.
+case_ continuation same <<'E'
 A = one \
     two
 all:;@echo "[$(A)]"
