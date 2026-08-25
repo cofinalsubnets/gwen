@@ -37,9 +37,9 @@
    ; --- the readers. a roster entry is a name or a form; anything else (the lone
    ;     `()` that spells "empty") drops out, and an ABSENT roster takes d. ---
    (conf-live? e) (two? e || name? e || string? e)
-   (conf-roster c k d) (: r (salt-all c k) (? (two? r) (filter conf-live? r) d))
-   (conf-mod c) (: m (kmod-of (salt-one c 'mod 'sup) supm) (? m m supm))
-   (conf-tags c) (: n (salt-one c 'tags 9) (? (charm? n && (0 < n)) n 9))
+   (conf-roster c k d) (: r (salt-all c k) (two? r ? (filter conf-live? r) d))
+   (conf-mod c) (: m (kmod-of (salt-one c 'mod 'sup) supm) (m ? m supm))
+   (conf-tags c) (: n (salt-one c 'tags 9) (charm? n && (0 < n) ? n 9))
 
    lux-conf (salt 'lux)
 
@@ -56,16 +56,16 @@
    ;   (avoidStruts lives in the driver as ewmh-rect; windowNavigation is
    ;    nav-target under the directional keys -- both always-on, not records)
    ;   l2 = Dwindle R CW phi 1.1 where phi = fib 32 / fib 31 -- the fib, verbatim
-   (lux-fib m n i) (? (i < 1) m (lux-fib n (m + n) (i - 1)))
+   (lux-fib m n i) (i < 1 ? m (lux-fib n (m + n) (i - 1)))
    lux-phi (lux-fib 0 1 32 / lux-fib 0 1 31)
    ; one ||| member as data: the head names the layout, the tail its operands, and
    ; `phi` stands for the golden ratio wherever a number would go.
    (lux-arg a i d) (: (go l k) (? !(two? l) d
                                   (0 < k) (go >l (k - 1))
-                                  (: v <l (? (id? v 'phi) lux-phi (? (constellation? v) v d))))
+                                  (: v <l (id? v 'phi ? lux-phi (constellation? v ? v d))))
                       (go a i))
    (lux-lay-of sp)
-    (: h (? (two? sp) <sp sp) a (? (two? sp) >sp ())
+    (: h (two? sp ? <sp sp) a (two? sp ? >sp ())
        (? (id? h 'rtall)   (resizable-tall (lux-arg a 0 1) (lux-arg a 1 0.02) (lux-arg a 2 0.5))
           (id? h 'tall)    (tall (lux-arg a 0 1))
           (id? h 'dwindle) (dwindle (lux-arg a 0 lux-phi))
@@ -104,12 +104,12 @@
    ;   -- every other X client reads it that way, and a display manager that parks
    ;   the live cookie elsewhere (ly's /run/user/<uid>/lyxauth) leaves a stale
    ;   ~/.Xauthority behind, whose cookie the server refuses
-   (lux-dispof d) (? (tally d < 2) "7"                                           ; unset: the Xephyr harness habit
-                     (: b (snip d 1 (tally d))
-                        (: (go i) (? ((i = tally b) || (b i = 46)) (snip b 0 i) (go (i + 1)))
+   (lux-dispof d) (? (#d < 2) "7"                                           ; unset: the Xephyr harness habit
+                     (: b (snip d 1 #d)
+                        (: (go i) ((i = tally b) || (b i = 46) ? (snip b 0 i) (go (i + 1)))
                            (go 0))))
-   (lux-dispnum u) (lux-dispof (: d (salt-one lux-conf 'display ()) (? (string? d) d (getenv "DISPLAY"))))
-   (lux-xauth u) (: v (getenv "XAUTHORITY") (? (0 < tally v) v (getenv "HOME" + "/.Xauthority")))
+   (lux-dispnum u) (lux-dispof (: d (salt-one lux-conf 'display ()) (string? d ? d (getenv "DISPLAY"))))
+   (lux-xauth u) (: v (getenv "XAUTHORITY") (0 < tally v ? v (getenv "HOME" + "/.Xauthority")))
    (lux-auth-for disp) (xauth-cookie (salt-one lux-conf 'xauthority (lux-xauth ())) disp)
    lux-display ("/tmp/.X11-unix/X" + lux-dispnum ())
    lux-auth (lux-auth-for (lux-dispnum ())))

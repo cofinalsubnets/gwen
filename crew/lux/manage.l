@@ -22,7 +22,7 @@
 (grip 2 '-?> 25)
 (:
    (mg-ctx s win screen geom) [s win screen geom]
-   (mg-sock c) (nthl c 0)  (mg-win c) (nthl c 1)  (mg-screen c) (nthl c 2)  (mg-geom c) (nthl c 3)
+   (mg-sock c) (c 0)  (mg-win c) (c 1)  (mg-screen c) (c 2)  (mg-geom c) (c 3)
 
    ; --- actions: (ctx sh) -> sh. The float trio move the (already-tiled) window
    ;     into the floating half; ignore evicts it; raise restacks it (X). ---
@@ -35,22 +35,22 @@
    (do-raise c sh) (: _ (x-raise (mg-sock c) (mg-win c)) sh)                     ; restack above (X); returns the sheaf unchanged
 
    ; --- predicates: (ctx) -> bool. prop?/class-of? query X properties. ---
-   (prop? propnm valnm) (\ c (x-has-atom (mg-sock c) (mg-win c) propnm valnm))   ; isInProperty ATOM VALUE
-   (class-of? names) (? !(two? names) (\ c 0)                                    ; an empty roster asks X nothing
-                        (\ c (: cl (x-getclass (mg-sock c) (mg-win c)) (any (\ n (n = cl)) names))))
-   (<||> p q) (\ c (p c || q c))                                                 ; predicate OR
+   (prop? propnm valnm) (c \ x-has-atom (mg-sock c) (mg-win c) propnm valnm)   ; isInProperty ATOM VALUE
+   (class-of? names) (? !(two? names) (c \ 0)                                    ; an empty roster asks X nothing
+                        (c \ : cl (x-getclass (mg-sock c) (mg-win c)) (any (n \ n = cl) names)))
+   (<||> p q) (c \ p c || q c)                                                 ; predicate OR
 
    ; --- combinators. A Maybe-hook (from -?>) is (ctx sh) -> (sh') | () : matched
    ;     yields a 1-list, else nothing. compose-one takes the FIRST match;
    ;     compose-all threads a list of plain hooks. ---
-   (-?> pred act) (\ c sh (? (pred c) [(act c sh)] ()))
+   (-?> pred act) (\ c sh (pred c ? [(act c sh)] ()))
    (compose-one mhs) (\ c sh (: (go l) (? !(two? l) sh
-                                          (: r (<l c sh) (? (two? r) <r (go >l)))) (go mhs)))
+                                          (: r (<l c sh) (two? r ? <r (go >l)))) (go mhs)))
    (compose-all hs) (\ c sh (foldl (\ s h (h c s)) sh hs))
 
    ; --- xmonad's transience' and manageDocks as plain hooks (VALUES, not nullary
    ;     helpers -- (f) == f would hand back the wrapper unrun) ---
-   transience (\ c sh (? (x-transient (mg-sock c) (mg-win c)) (do-center-float c sh) sh))   ; a dialog floats centered on its parent
+   transience (\ c sh (x-transient (mg-sock c) (mg-win c) ? (do-center-float c sh) sh))   ; a dialog floats centered on its parent
    manage-docks (\ c sh (? ((prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DOCK"          ; checkDock: a dock OR a desktop --
                              <||> prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DESKTOP") c)     ; the file manager's wallpaper window
                            (do-ignore c sh) sh))                                                    ; is a client only by accident
@@ -61,7 +61,7 @@
    ; --- the class ROSTERS a config can name (crew/lux/config.l reads them out of
    ;     salt). they come in as symbols or strings; WM_CLASS is text, so spell
    ;     every entry as text once, here. ---
-   (mg-classes ns) (map (\ n (? (name? n) (string n) n)) (filter (\ n (name? n || string? n)) ns))
+   (mg-classes ns) (map (n \ name? n ? (string n) n) (filter (n \ name? n || string? n) ns))
    mg-center-def '("Xmessage" "Xscreensaver-settings" "feh" "vlc")               ; dialogs by nature, whatever they say they are
    mg-float-def  '("steam" "Gimp" "krita")                                       ; toolkits that place their own windows
    mg-panel-def  '("Xfce4-panel")

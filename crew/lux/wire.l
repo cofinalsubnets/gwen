@@ -22,7 +22,7 @@
    (x-pad4 n) ((4 - (n % 4)) % 4)
    (x-wname s t) (: (go i) (i < #t ? (put s (t i), go (i + 1))) (go 0))
    (x-rbytes s n) (: (go i acc) (i >= n ? (rev acc) (go (i + 1) (see s >< acc))) (go 0 ()))       ; n raw bytes -> a list
-   (u16 l off) (nthl l off | (nthl l (off + 1) << 8))                            ; little-endian reads out of a byte list
+   (u16 l off) (l off | (l (off + 1) << 8))                            ; little-endian reads out of a byte list
    (u32 l off) (u16 l off | (u16 l (off + 2) << 16))
 
    ; --- the reply/event demux. With SubstructureNotify selected, a request's
@@ -66,8 +66,8 @@
              _ (x-skip s ((4 * alen) - (32 + ((vlen + x-pad4 vlen) + ((8 * nfmt) + 40)))))
              [root wpx hpx minkc maxkc idbase cmap vis depth])))
    (scr-root sc) <sc  (scr-w sc) <>sc  (scr-h sc) <>>sc
-   (scr-mink sc) (nthl sc 3)  (scr-maxk sc) (nthl sc 4)  (scr-idbase sc) (nthl sc 5)
-   (scr-cmap sc) (nthl sc 6)  (scr-visual sc) (nthl sc 7)  (scr-depth sc) (nthl sc 8)
+   (scr-mink sc) (sc 3)  (scr-maxk sc) (sc 4)  (scr-idbase sc) (sc 5)
+   (scr-cmap sc) (sc 6)  (scr-visual sc) (sc 7)  (scr-depth sc) (sc 8)
 
    ; --- requests ---
    (x-cwa-events s win mask)                                                     ; ChangeWindowAttributes: CWEventMask
@@ -98,14 +98,14 @@
        (? !(<hdr = 1) [0 0 ()]                                                   ; the window died: no property
           (: rlen (u32 hdr 4)
              bytes (x-rbytes s (rlen * 4))
-             [(nthl hdr 1) (u32 hdr 12) bytes])))
+             [(hdr 1) (u32 hdr 12) bytes])))
    (x-atoms-of bytes) (? (#bytes < 4) ()                                         ; group 4 LE bytes -> a 32-bit atom/window list
                          (u32 bytes 0 >< x-atoms-of (drop 4 bytes)))
-   (x-getprop-atoms s win prop) (x-atoms-of (nthl (x-getprop s win prop) 2))
+   (x-getprop-atoms s win prop) (x-atoms-of ((x-getprop s win prop) 2))
    (x-has-atom s win propnm valnm) (: at (x-getprop-atoms s win (x-intern s propnm)) va (x-intern s valnm)   ; isInProperty
                                       (any (a \ a = va) at))
    (x-getclass s win)                                                            ; WM_CLASS (atom 67) = "instance\0class\0"; the class is the 2nd
-    (: bytes (nthl (x-getprop s win 67) 2)
+    (: bytes ((x-getprop s win 67) 2)
        (go l seen acc) (? !(two? l) acc                                          ; walk past the first NUL, then collect to the next
                           (<l = 0) (seen ? acc (go >l 1 acc))
                           (go >l seen (seen ? (acc + string <l) acc)))
@@ -175,7 +175,7 @@
        hdr (x-reply s)
        (? !(<hdr = 1) '(0 1)                                                    ; the window died: reads as unmanageable
           (: _ (x-rbytes s (u32 hdr 4 * 4))                                     ; drain the trailing reply data
-             [(nthl hdr 26) (nthl hdr 27)])))
+             [(hdr 26) (hdr 27)])))
    (x-manageable? s win) (: a (x-attrs s win) (<a = 2 && <>a = 0))               ; viewable and not override-redirect
 
    ; --- become the WM: SubstructureRedirect|Notify on the root, synced by an
@@ -203,7 +203,7 @@
        ; errors whose codes (0, 159) are not even valid -- the tell that the bytes
        ; are misaligned rather than the server complaining. 0 keysyms degrades to
        ; "no chords", the inert value this file answers everywhere else. --
-       kpc (<hdr = 1 ? (nthl hdr 1) 0)
+       kpc (<hdr = 1 ? (hdr 1) 0)
        km (tablet 8)
        _ (: (go i) (i < nkc * kpc ?
                     (: sym (x-r32 s)
@@ -258,7 +258,7 @@
    ; --- the event decoder: one 32-byte event -> (code detail window state) | ()
    ;     code 0 = X error (window is garbage). window at byte 8, state at byte 28,
    ;     detail (keycode) at byte 1 -- enough for every event the WM handles. ---
-   (x-decode pkt) [(127 & <pkt) (nthl pkt 1) (u32 pkt 8) (u16 pkt 28) pkt]         ; code, detail(keycode), window@8, state@28, + the raw bytes
+   (x-decode pkt) [(127 & <pkt) (pkt 1) (u32 pkt 8) (u16 pkt 28) pkt]         ; code, detail(keycode), window@8, state@28, + the raw bytes
    (x-next s)                                                                    ; a stashed event first, else the socket
     (: q (evq 0)
        (two? q ? (pin evq 0 >q, x-decode <q)
@@ -267,5 +267,5 @@
             (: pkt (b0 >< x-rbytes s 31)
                (b0 = 1 ? (x-skip s (4 * u32 pkt 4), x-next s)                    ; an orphaned reply (its wait ended on an error): drain + skip
                 (x-decode pkt)))))))
-   (ev-code e) <e  (ev-detail e) <>e  (ev-window e) (nthl e 2)  (ev-state e) (nthl e 3)
-   (ev-raw e) (nthl e 4))                                                        ; the 32 raw bytes (ConfigureRequest reads its geometry here)
+   (ev-code e) <e  (ev-detail e) <>e  (ev-window e) (e 2)  (ev-state e) (e 3)
+   (ev-raw e) (e 4))                                                        ; the 32 raw bytes (ConfigureRequest reads its geometry here)

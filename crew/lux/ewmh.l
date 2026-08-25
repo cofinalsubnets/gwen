@@ -15,9 +15,9 @@
    ;     relative reserved widths; shrinking clamps the rect off each edge. ---
    (strut-parse vals) (#vals >= 4 ? (take 4 vals))                      ; _PARTIAL's 12 values: the first 4 are the strut
    (strut-shrink r st swp shp)
-    (: x1 (mx2 (rx r) (nthl st 0)) y1 (mx2 (ry r) (nthl st 2))
-       x2 (mn2 (rx r + rw r) (swp - nthl st 1))
-       y2 (mn2 (ry r + rh r) (shp - nthl st 3))
+    (: x1 (mx2 (rx r) (st 0)) y1 (mx2 (ry r) (st 2))
+       x2 (mn2 (rx r + rw r) (swp - st 1))
+       y2 (mn2 (ry r + rh r) (shp - st 3))
        (rct x1 y1 (mx2 0 (x2 - x1)) (mx2 0 (y2 - y1))))
 
    ; --- the EWMH state: one tablet (the evq pattern) ---
@@ -29,9 +29,9 @@
    (ewmh-toggle u) (pin ewst 'avoid !(ewst 'avoid))
    (ewmh-track s win)                                                            ; read the window's strut; () if it has none
     (: vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT_PARTIAL"))
-       vals (? (two? vals) vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT")))
+       vals (two? vals ? vals (x-getprop-atoms s win (ewmh-atom "_NET_WM_STRUT")))
        st (strut-parse vals)
-       (? st (pin ewst 'struts ([win st] >< filter (p \ <p != win) (ewst 'struts)), st)))
+       (st ? (pin ewst 'struts ([win st] >< filter (p \ <p != win) (ewst 'struts)), st)))
    (ewmh-untrack win) (pin ewst 'struts (filter (p \ <p != win) (peep ewst 'struts ())))
 
    ; --- CreateWindow (opcode 1): the 1x1 InputOnly support window at (-1,-1) ---
@@ -77,7 +77,7 @@
 
    ; --- sync: publish the sheaf whenever it changed (pagers track us) ---
    (ewmh-sync s sh)
-    (: wins (wswins sh) cur (wscur sh - 1) foc (? (wsfoc sh) (wsfoc sh) 0)
+    (: wins (wswins sh) cur (wscur sh - 1) foc (wsfoc sh ? (wsfoc sh) 0)
        key [cur foc wins]
        (? (key = ewst 'last) 0
           (: _ (pin ewst 'last key) root (peep ewst 'root 0)
@@ -88,7 +88,7 @@
              _ (x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 [foc])
              _ (map (p \ (: t (<p - 1)                                           ; tiled windows wear their workspace...
                             (map (w \ x-chprop32 s w (ewmh-atom "_NET_WM_DESKTOP") 6 [t]) (zrow <>p)))) (wsboard sh))
-             _ (map (p \ x-chprop32 s <p (ewmh-atom "_NET_WM_DESKTOP") 6 [(nthl p 2 - 1)]) (wsfloat sh))           ; ...floats wear their HOME tag (per-workspace now)
+             _ (map (p \ x-chprop32 s <p (ewmh-atom "_NET_WM_DESKTOP") 6 [(p 2 - 1)]) (wsfloat sh))           ; ...floats wear their HOME tag (per-workspace now)
              (x-flush s))))
 
    ; --- ClientMessage (event 33) field reads, off the raw bytes ---

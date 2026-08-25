@@ -27,12 +27,12 @@
 
    ; --- a binding row ---
    (kb mods sym act) [mods sym act]
-   (kb-mods r) <r  (kb-sym r) <>r  (kb-act r) (nthl r 2)
-   (keys-has t mods sym) (any (\ r ((kb-mods r = mods) && (kb-sym r = sym))) t)
-   (keys-find t mods sym) (: hit (afind (\ r ((kb-mods r = mods) && (kb-sym r = sym))) t)
-                             (? (two? hit) (kb-act hit) ()))
-   (keys-union custom def) (custom + (filter (\ r !(keys-has custom (kb-mods r) (kb-sym r))) def))
-   (keys-syms t) (foldl (\ a r (? (any (\ x (x = kb-sym r)) a) a (kb-sym r >< a))) () t)
+   (kb-mods r) <r  (kb-sym r) <>r  (kb-act r) (r 2)
+   (keys-has t mods sym) (any (r \ (kb-mods r = mods) && (kb-sym r = sym)) t)
+   (keys-find t mods sym) (: hit (afind (r \ (kb-mods r = mods) && (kb-sym r = sym)) t)
+                             (two? hit ? (kb-act hit) ()))
+   (keys-union custom def) (custom + (filter (r \ !(keys-has custom (kb-mods r) (kb-sym r))) def))
+   (keys-syms t) (foldl (\ a r (any (x \ x = kb-sym r) a ? a (kb-sym r >< a))) () t)
 
    ; --- KEY SPECS: a LIST, `(sup shift e)` -- the LAST element is the key, every
    ;     one before it a modifier. a config writes these (crew/lux/config.l reads
@@ -43,7 +43,7 @@
    ;       "," / "1"     a one-char STRING is that character, punctuation and digits included
    ;       65027         a bare charm IS the keysym, so the table is a convenience,
    ;                     never a ceiling (⚠ 32 and up: a digit key is "1" or 49, not 1) ---
-   xk-fkeys (map (\ i [("F" + show (i + 1)) (65470 + i)]) (jot 12))             ; F1..F12
+   xk-fkeys (map (i \ [("F" + show (i + 1)) (65470 + i)]) (jot 12))             ; F1..F12
    xk-names (xk-fkeys + [
      ["Return" xk-ret]   ["Tab" xk-tab]     '("space" 32)       '("Escape" 65307)
      ["Left" xk-left]    ["Up" xk-up]       ["Right" xk-right] ["Down" xk-down]
@@ -58,12 +58,12 @@
      '("XF86AudioStop" 269025045)        '("XF86AudioPrev" 269025046)
      '("XF86AudioNext" 269025047)
      '("XF86MonBrightnessUp" 269025026)  '("XF86MonBrightnessDown" 269025027)])
-   (xk-of k) (? (charm? k) (? (31 < k) k ())                                     ; a keysym, verbatim -- the escape hatch past the table
-                (: nm (? (name? k) (string k) k)
+   (xk-of k) (? (charm? k) (31 < k ? k ())                                     ; a keysym, verbatim -- the escape hatch past the table
+                (: nm (name? k ? (string k) k)
                    (? !(string? nm) ()
-                      (tally nm = 1) (nm 0)                                      ; one char IS its ascii keysym
-                      (: hit (afind (\ r (<r = nm)) xk-names)
-                         (? (two? hit) <>hit ())))))                             ; unknown name -> () (no keysym is 0, so nothing is lost)
+                      (#nm = 1) (nm 0)                                      ; one char IS its ascii keysym
+                      (: hit (afind (r \ <r = nm) xk-names)
+                         (two? hit ? <>hit ())))))                             ; unknown name -> () (no keysym is 0, so nothing is lost)
    (kmod-of m modm) (? (id? m 'sup || id? m 'super || id? m 'mod4) supm
                        (id? m 'alt || id? m 'mod1) altm
                        (id? m 'ctrl || id? m 'control) ctrlm
@@ -75,11 +75,11 @@
    ; answer and would read as failure on its own.
    (kspec modm spec)
     (? !(two? spec) ()
-       (: n (tally spec)
-          ks (xk-of (nthl spec (n - 1)))
-          ms (foldl (\ a m (: b (kmod-of m modm) (? (two? a && b) [(<a | b)] ())))
+       (: n #spec
+          ks (xk-of (spec (n - 1)))
+          ms (foldl (\ a m (: b (kmod-of m modm) (two? a && b ? [(<a | b)] ())))
                     '(0) (take (n - 1) spec))
-          (? (ks && two? ms) [<ms ks] ())))
+          (ks && two? ms ? [<ms ks] ())))
 
    ; --- a config's own rows. `spawn`/`exec` carry their argv FLAT in a config
    ;     ((spawn "rofi" "-show" "drun")) and nested in a binding row, so they are
@@ -88,13 +88,13 @@
                     (id? <a 'spawn || id? <a 'exec) [<a >a]
                     a)
    (keys-rows modm rows)                                                         ; ((spec action) ..) -> binding rows; an unreadable spec is dropped
-    (foldr (\ r acc (: k (? (two? r) (kspec modm <r) ())
-                       (? (two? k && two? >r) (kb <k <>k (kb-act-of <>r) >< acc) acc)))
+    (foldr (\ r acc (: k (two? r ? (kspec modm <r) ())
+                       (two? k && two? >r ? (kb <k <>k (kb-act-of <>r) >< acc) acc)))
            () rows)
    (keys-drop modm t specs)                                                      ; remove every chord named in specs
-    (: ks (filter two? (map (\ s (kspec modm s)) specs))
+    (: ks (filter two? (map (s \ kspec modm s) specs))
        (? !(two? ks) t
-          (filter (\ r !(any (\ k ((<k = kb-mods r) && (<>k = kb-sym r))) ks)) t)))
+          (filter (r \ !(any (k \ (<k = kb-mods r) && (<>k = kb-sym r)) ks)) t)))
 
    ; --- the directional block: the .hs list comprehension as a map --
    ;     (dir keysyms delta) x {hjkl, arrows} x {mod, mod+shift, mod+ctrl} ---
@@ -102,12 +102,12 @@
                      ['down  [106 xk-down]  [0 nud]]
                      ['up    [107 xk-up]    [0 (0 - nud)]]
                      ['right [108 xk-right] [nud 0]]]
-   (kdir-rows modm d) (: dir <d delta (nthl d 2)
-                         (foldl cat () (map (\ sym [(kb modm sym ['go dir delta])
+   (kdir-rows modm d) (: dir <d delta (d 2)
+                         (foldl cat () (map (sym \ [(kb modm sym ['go dir delta])
                                                      (kb (modm | shiftm) sym ['swapd dir delta])
                                                      (kb (modm | ctrlm) sym ['resize dir delta])])
                                             <>d)))
-   (keys-dir-for modm nud) (foldl cat () (map (\ d (kdir-rows modm d)) (kdirs-for nud)))
+   (keys-dir-for modm nud) (foldl cat () (map (d \ kdir-rows modm d) (kdirs-for nud)))
 
    ; --- the custom command block, exactly the config's table ---
    (keys-cmd-for modm) [
@@ -137,7 +137,7 @@
    ;     mod+shift+/ help are not ported; some rows are overridden by custom).
    ;     the digit rows follow the TAG COUNT, and stop at 9 -- there is no tenth
    ;     digit key to hang a tenth workspace on. ---
-   (keys-def-for modm ntags) (: ds (map (+ 1) (jot (? (9 < ntags) 9 ntags)))
+   (keys-def-for modm ntags) (: ds (map (+ 1) (jot (9 < ntags ? 9 ntags)))
     (cat [
      (kb (modm | shiftm) xk-ret '(spawn ("xterm")))                              ; mod+shift+return  terminal
      (kb modm 112 '(spawn ("dmenu_run")))                                        ; mod+p             (custom overrides)
@@ -160,8 +160,8 @@
      (kb modm 46 '(msg dec-master))
      (kb (modm | shiftm) 113 '(quit))                                            ; mod+shift+q
      (kb modm 113 '(restart))]                                                   ; mod+q
-     (cat (map (\ d (kb modm (48 + d) ['view d])) ds)                           ; mod+1..9
-          (map (\ d (kb (modm | shiftm) (48 + d) ['shift d])) ds))))            ; mod+shift+1..9
+     (cat (map (d \ kb modm (48 + d) ['view d]) ds)                           ; mod+1..9
+          (map (d \ kb (modm | shiftm) (48 + d) ['shift d]) ds))))            ; mod+shift+1..9
 
    ; --- the STOCK table: what lux drives with no config file anywhere ---
    keys-dir (keys-dir-for supm 20)
@@ -184,7 +184,7 @@
    ;     the most recently used OTHER window (the alt-tab flip); Backward to
    ;     the least. Windows never yet focused count as oldest. ---
    (nm-pick row f hist fwd)
-    (: cands (filter (\ w (!(w = f) && any (\ x (x = w)) row)) hist)
-       fresh (filter (\ w (!(w = f) && !(any (\ x (x = w)) cands))) row)
+    (: cands (filter (w \ !(w = f) && any (x \ x = w) row) hist)
+       fresh (filter (w \ !(w = f) && !(any (x \ x = w) cands)) row)
        order (cands + fresh)
        (? !(two? order) () fwd <order <(rev order))))
