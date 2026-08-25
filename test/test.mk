@@ -826,14 +826,19 @@ test_tools: host out/host$(hsuf)/lush
 # test_gcheck: the copy loop's FIXPOINT instance check. AiGcCheck makes gen_minor re-drive
 # its WHOLE scan after the drain and trap if the second pass copies a word, in its own tree.
 # /warn the knob is GCDBG: EXTRA_CFLAGS rides $(ai_cflags), which the mooncc recipes do not use.
-test_gcheck: host
+# â  the shared unsuffixed prerequisites are named HERE so the PARENT makes them once.
+# both debug lanes recurse, and a target two sub-makes each decide to remake is a partial
+# file to whoever reads it meanwhile -- a half-written mooncc0.image wakes with no verb
+# table and `mooncc` then reads as a filename (host/build.mk). test_fixpoint names them
+# for the same reason.
+test_gcheck: host $(love0) out/host/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAiGcCheck test_host
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAiGcCheck test_hostegg
 # test_gcstress: the MUTATOR's side -- whether the C around the collector holds a raw pointer
 # across a call that collects. AiGcStress always collects, poisons the vacated nursery, and
 # majors every 32nd. ~12 min, own tree -- the baked leg tracks the glaze, since every major
 # walks it, and costs 3.4x the egg one for it (429 s against 126 s).
-test_gcstress: host
+test_gcstress: host $(love0) out/host/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAiGcStress test_host
 	@$(MAKE) --no-print-directory hsuf=/gcs GCDBG=-DAiGcStress test_hostegg
 # --- the machine-checked half: test/proof/rocq/ + test/proof/lean/ ---------------------------------

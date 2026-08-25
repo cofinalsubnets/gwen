@@ -289,9 +289,18 @@ static ai_noinline ai_word image_bake_do(struct ai *g) {
  uintptr_t len = 0;
  void *buf = ai_image_save_(g, &len, &gd);
  if (!buf) return ai_zero;
- FILE *f = fopen(path, "wb");
+ // ⚠ REPLACE the file, never truncate it: fopen("wb") empties it and only then writes the
+ // megabytes back, so anything reading meanwhile gets a short image -- and a short image
+ // wakes with no verb table, which is how `love0 wake mooncc0.image mooncc` ends up
+ // reading `mooncc` as a filename. the scratch carries the pid for the reason the
+ // self-bake's does (above): two bakers on one name interleave into each other.
+ char tmp[sizeof path + 32];                     // + ".bake.<pid>" and its NUL
+ snprintf(tmp, sizeof tmp, "%s.bake.%ld", path, (long) getpid());
+ FILE *f = fopen(tmp, "wb");
  int rc = !f ? -1 : (fwrite(buf, 1, len, f) == len) ? 0 : -1;
- if (f) fclose(f);
+ if (f && fclose(f)) rc = -1;
+ if (!rc && rename(tmp, path)) rc = -1;          // the adopt: atomic, a whole file or none
+ if (rc) remove(tmp);
  g->alloc(g, buf, 0);                            // a session lives on after a bake: no leak
  return rc ? ai_zero : putcharm(1); }
 static lvm(lvm_bake) {
