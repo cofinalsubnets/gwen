@@ -8,11 +8,9 @@
 //   value ops answer the value | () absence (or a negative -errno where a
 //   pid/fd/offset result must stay tellable from failure)
 //
-// argv marshaling mirrors host_exec (main.c): a chain of strings -> a NUL-
-// terminated char** in the uncommitted heap gap at Hp (GC-invisible, holds no l
-// pointers, consumed before any further alloc), valid across the fork -- one
-// copy here (argv_marshal) shared by spawn, spawnio and tether; main.c keeps its
-// own (main.c is core, an app file can't reach in).
+// the argv marshal is src/seat.c's (main.c wants it too and must not reach into an
+// app file). the local face here adds the -1: a misuse answers it on the stack, which
+// is what every caller in this file hands back as the net value.
 #define _GNU_SOURCE     // unshare / CLONE_* (newns), posix_openpt/grantpt/unlockpt/ptsname
 #include "love.h"
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid symlink readlink chown
@@ -71,6 +69,7 @@
 #endif
 #if defined(AiHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
+extern struct ai *ai_argv_marshal(struct ai*, char***);   // src/seat.c: argv -> char** in the heap gap
 extern intptr_t ai_port_fd(ai_word);   // src/seat.c: the fd under a love port, or -1
 #endif
 
@@ -100,27 +99,8 @@ static char const *str_c(ai_word x) { return ai_strp(x) ? txt(x) : NULL; }
 // caller returns g as-is, the -1 already the net value); oom returns !ok g
 // (*cavp NULL too, so `if (!*cavp) return g` covers both).
 static struct ai *argv_marshal(struct ai *g, char ***cavp) {
- *cavp = NULL;
- ai_word argv = g->sp[0];
- intptr_t argc = 0; uintptr_t total = 0;
- for (ai_word p = argv; chainp(p); p = B(p)) {
-  if (!ai_strp(A(p))) return ai_push(g, 1, putcharm(-1));   // misuse: non-string argv
-  argc++, total += len(A(p)) + 1; }
- if (!argc) return ai_push(g, 1, putcharm(-1));              // empty argv
- if (!ai_ok(g = ai_have(g, (uintptr_t) argc + 1 + b2w(total)))) return g;
- argv = g->sp[0];                                            // re-root post-ai_have
- char **cav = (char**) g->hp;
- char *blob = (char*) (g->hp + (argc + 1));
- { uintptr_t off = 0; intptr_t i = 0;
-  for (ai_word p = argv; chainp(p); p = B(p), i++) {
-   struct ai_str *s = str(A(p));
-   memcpy(blob + off, txt(s), len(s));
-   blob[off + len(s)] = 0;
-   cav[i] = blob + off;
-   off += len(s) + 1; }
-  cav[argc] = NULL; }
- *cavp = cav;
- return g; }
+ g = ai_argv_marshal(g, cavp);
+ return !*cavp && ai_ok(g) ? ai_push(g, 1, putcharm(-1)) : g; }
 
 // --- the supervisor pair: spawn without waiting, reap any dead child ------------
 // (spawn argv)  -> child pid (a fixnum) | a negative fixnum (-errno / -1 misuse)

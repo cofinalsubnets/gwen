@@ -18,6 +18,7 @@ extern void host_spawn_guard(struct ai*, int);   // src/posix.c (exec-bound fork
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/mman.h>    // the first boot's inflate buffer (mmap, no malloc)
+extern struct ai *ai_argv_marshal(struct ai*, char***);   // src/seat.c: argv -> char** in the heap gap
 
 // ai_clock lives in src/seat.c, one body for this frontend and the kernel's.
 // the fine clock's real source (the weak default in love.c degrades to ms*1e6)
@@ -100,32 +101,10 @@ static struct ai *host_harkst(struct ai *g, intptr_t fd, intptr_t pid, int tee) 
 // the first ap: marshal argv, fork, and confirm the exec. called with g Packed;
 // argv is at sp[0]. returns a not-ok g only on oom.
 ai_noinline static struct ai *host_harkstart(struct ai *g, int tee) {
- // pass 1: validate every element is a string; size the arg-byte blob.
- ai_word argv = g->sp[0];
- uintptr_t argc = 0, total = 0;
- for (ai_word p = argv; chainp(p); p = B(p)) {
-  if (!ai_strp(A(p)))                                     // misuse
-   return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-1));
-  argc++, total += len(A(p)) + 1; }                       // +1 for the NUL
- if (!argc)                                               // empty argv
-  return ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-1));
-
- // reserve gap for cav (argc+1 pointers, word-aligned) + the byte blob.
- // written into the uncommitted region at Hp -- invisible to GC, holds no
- // l pointers, consumed before any further allocation. never bump Hp.
- if (!ai_ok(g = ai_have(g, (uintptr_t) argc + 1 + b2w(total)))) return g;
- argv = g->sp[0];          // ai_have may have GC'd; argv (the only root, at sp[0])
-                           // is forwarded there -- the C local is now stale.
- char **cav = (char**) g->hp,                             // at Hp: aligned
-      *blob = (char*) (g->hp + (argc + 1));               // whole words after
- uintptr_t off = 0, i = 0;
- for (ai_word p = argv; chainp(p); p = B(p), i++) {         // re-walk post-ai_have
-  struct ai_str *s = str(A(p));
-  memcpy(blob + off, txt(s), len(s));
-  blob[off + len(s)] = 0;
-  cav[i] = blob + off;
-  off += len(s) + 1; }
- cav[argc] = NULL;
+ char **cav;
+ g = ai_argv_marshal(g, &cav);
+ if (!cav)                                                // a misuse, or the reserve
+  return ai_ok(g) ? ai_push(host_harkst(g, -1, 0, tee), 1, putcharm(-1)) : g;
 
  int op[2], ep[2];
  // errno into a local before the state push, on every one of these: the push
@@ -240,25 +219,10 @@ static lvm(lvm_harkdrain) {
  Sp += 4; Ip += 1;
  ai_musttail return Continue(); }
 
-ai_noinline static struct ai *host_exec(struct ai *g, ai_word argv) {
- intptr_t argc = 0;
- uintptr_t total = 0;
- for (ai_word p = argv; chainp(p); p = B(p)) {
-  if (!ai_strp(A(p))) return ai_push(g, 1, putcharm(-1));   // misuse
-  argc++, total += len(A(p)) + 1; }
- if (!argc) return ai_push(g, 1, putcharm(-1));            // empty argv
- if (!ai_ok(g = ai_have(g, (uintptr_t) argc + 1 + b2w(total)))) return g;
- argv = g->sp[0];                                          // re-root post-ai_have
- char **cav = (char**) g->hp,
-      *blob = (char*) (g->hp + (argc + 1));
- uintptr_t off = 0, i = 0;
- for (word p = argv; chainp(p); p = B(p), i++) {
-  struct ai_str *s = str(A(p));
-  memcpy(blob + off, txt(s), len(s));
-  blob[off + len(s)] = 0;
-  cav[i] = blob + off;
-  off += len(s) + 1; }
- cav[argc] = NULL;
+ai_noinline static struct ai *host_exec(struct ai *g) {
+ char **cav;
+ g = ai_argv_marshal(g, &cav);
+ if (!cav) return ai_ok(g) ? ai_push(g, 1, putcharm(-1)) : g;
  fflush(stdout);
  fflush(stderr);
  signal(SIGPIPE, SIG_DFL);                                 // ... nor this one
@@ -268,7 +232,7 @@ ai_noinline static struct ai *host_exec(struct ai *g, ai_word argv) {
 
 static lvm(lvm_exec) {
  Pack(g);
- g = host_exec(g, Sp[0]);                                  // returns only on failure
+ g = host_exec(g);                                         // returns only on failure
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  Unpack(g);
  Sp[1] = Sp[0];                                            // errno fixnum over argv

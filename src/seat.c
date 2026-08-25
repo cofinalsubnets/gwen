@@ -13,6 +13,7 @@
 #include <stdnoreturn.h>
 #include <time.h>
 #include <unistd.h>
+#include <string.h>   // memcpy, for the argv marshal at the foot of this file
 
 // __ai_osv, "which kernel this binary stands on", rides love.h: os.c defines
 // it hosted, love.c carries the weak zero for links with no nolibc at all.
@@ -212,3 +213,36 @@ intptr_t ai_port_fd(ai_word x) {
  if (!charmp(x) && ((union u*) x)->ap == lvm_port_io)
     return ai_io_fd((struct ai_io*) x);
  return -1; }
+
+// argv: the chain of strings at g->sp[0] -> a NUL-terminated char** laid in the
+// uncommitted heap gap at Hp. GC-invisible, holds no l pointers, and valid across a
+// fork -- host_spawn_guard (src/posix.c) leaves the window above hp mapped for exactly
+// this, so what execvp reads must live here and not in the strings themselves.
+// consumed before any further allocation; never bumps Hp.
+//
+// -> g, and *cavp is the vector or NULL. the two failures are told apart by the g:
+// argv not a chain of strings, or empty, leaves g OK (each caller says what a misuse
+// answers -- they do not agree), and a failed reserve leaves it not ok.
+struct ai *ai_argv_marshal(struct ai *g, char ***cavp) {
+ *cavp = NULL;
+ ai_word argv = g->sp[0];
+ uintptr_t argc = 0, total = 0;
+ for (ai_word p = argv; chainp(p); p = B(p)) {
+  if (!ai_strp(A(p))) return g;                              // misuse: non-string argv
+  argc++, total += len(A(p)) + 1; }                          // +1 for the NUL
+ if (!argc) return g;                                        // empty argv
+ if (!ai_ok(g = ai_have(g, argc + 1 + b2w(total)))) return g;
+ argv = g->sp[0];                            // ai_have may have GC'd; argv is the only
+                                             // root, at sp[0], so it is forwarded there
+ char **cav = (char**) g->hp,                                // at Hp: aligned
+      *blob = (char*) (g->hp + (argc + 1));                  // whole words after
+ uintptr_t off = 0, i = 0;
+ for (ai_word p = argv; chainp(p); p = B(p), i++) {
+  struct ai_str *s = str(A(p));
+  memcpy(blob + off, txt(s), len(s));
+  blob[off + len(s)] = 0;
+  cav[i] = blob + off;
+  off += len(s) + 1; }
+ cav[argc] = NULL;
+ *cavp = cav;
+ return g; }
