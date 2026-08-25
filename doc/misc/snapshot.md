@@ -143,22 +143,26 @@ in a child process.
 
 ## the dump hash-conses
 
-A chain is immutable — `lvm_poke`'s contract names the exclusion — so two structurally equal ones
-are one value wearing two addresses, and an image that is mostly source AST holds a great many.
+A chain's fields are immutable by convention, not by structure: `poke` writes whatever cell it is
+handed, and c0 patches a cons in five places (`gen_wb_two`). Each of those patches a spine c0
+consed during the compile running it — young, held by nobody — so no chain the bake can reach is
+ever written, and two structurally equal ones are one value wearing two addresses. An image that
+is mostly source AST holds a great many.
 `img_hashcons` runs between the compaction and the encode — walk, merge, compact again — and the
 crew image loses **35.0%** of its words (3,689,068 → 2,398,817), the wire **36.0%** (8,428 → 5,390
 KB), the binary **24.2%** (12,517,064 → 9,483,528 B). The stream keeps the whole raw saving rather
 than having been quietly paying for the redundancy already.
 
-Resident size does not move: the major pool is sized off the image with headroom, so a smaller
-live set lands in the same pair. Wake gets SLOWER, 43.1 → 54.0 ms, and the decode is not why — it
-roughly halves with the words. The woken session now runs one major collection during boot that
-the larger image did not, because `img_wake` seeds the nursery at `nw >> 1` while the pool carries
-`nw >> 2` of slack: `gen_please`'s `major_free < g->len` is then true by construction, and
-`g->sym_raw` forces the same major independently. A boot's allocation is a fixed cost and does not
-shrink with the live set, so the smaller nursery no longer swallows it. Lifting BOTH (slack over
-the seeded nursery, and the intern map re-homed at wake instead of by a whole collection) takes
-the wake to 32 ms and RSS to 37 MB; lifting either alone changes nothing, since each still fires.
+Resident size does not move by itself: the major pool is sized off the image with headroom, so a
+smaller live set lands in the same pair. Wake first got SLOWER, 43.1 → 54.0 ms, and the decode is
+not why — it roughly halves with the words. The woken session ran one major collection during boot
+that the larger image did not, because `img_wake` seeded the nursery at `nw >> 1` while the pool
+carried `nw >> 2` of slack, making `gen_please`'s `major_free < g->len` true by construction. A
+boot's allocation is a fixed cost and does not shrink with the live set, so the smaller nursery no
+longer swallowed it. The slack now clears the seeded nursery (`nw + (nw >> 1)`, and a floor for
+the small end), and the wake clears the remembered set it invalidates — a forced first major had
+been supplying that clear as a side effect. Together the wake is 30.7 ms, peak RSS 37 MB, and the
+boot's one collection is a minor rather than a major over 2.4M words.
 
 `=` is structural already and the printer spells binders `d0 d1 …` either way, so `id?` is the one
 witness: `(id? '(1 2) '(1 2))` written at two sites answers 1 after a bake where it answered 0.

@@ -5136,10 +5136,13 @@ static uintptr_t img_rank_assign(struct ai *g, word const *blob, uintptr_t const
  g->alloc(g, nm, 0), g->alloc(g, live, 0);
  return n; }
 // --- the bake-time hash-cons (doc/misc/snapshot.md) ----------------------------
-// two structurally equal chains are one value wearing two addresses. nothing writes a
-// chain's field -- lvm_poke's contract names the exclusion -- so merging them is
-// invisible to `=`, which is structural already, and to the printer; `id?` is the one
-// witness, and after this it answers 1 on quoted data that was written out twice.
+// two structurally equal chains are one value wearing two addresses. a chain's fields are
+// immutable by convention and not by structure -- poke writes whatever cell it is handed,
+// and c0 patches a cons in five places (gen_wb_two) -- but each of those patches a spine
+// c0 consed during the compile running it, young and held by nobody, so no chain the bake
+// can reach is ever written. merging is invisible to `=`, which is structural already, and
+// to the printer; `id?` is the one witness, and after this it answers 1 on quoted data
+// that was written out twice.
 // the walk is bottom-up, so both children are canonical before their parent is looked
 // up and a candidate compares by POINTER on both fields -- the hash decides nothing and
 // no collision can merge unequals. duplicates are left unreferenced and the compaction
