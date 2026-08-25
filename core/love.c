@@ -1778,10 +1778,15 @@ static ai_inline bool lambp(struct ai *g, word x) {
  return chainp(x) && chainp(B(x)) && chainp(B(B(x))) &&
   (n = nom_str(g, A(x))) && len(n) == 1 && txt(n)[0] == '\\'; }
 
-static ai_inline word rev(struct ai *g, word l) {
- word m, n = zero;   // reversal points each cons at its (younger) predecessor: barrier it
- while (chainp(l)) m = l, l = B(l), B(m) = n, gen_wb_two(g, m, n), n = m;
- return n; }
+// reversal onto a FRESH spine: the source is read and never written, so no holder of it
+// sees a list turn around. l is rooted because gxl allocates and a collection moves it;
+// ai_push roots its own argument (ai_pushr), so A(l) crossing one is safe.
+static struct ai *rev(struct ai *g, word l) {          // answers the reversed copy, pushed
+ struct ai_r *mm0 = ai_core_of(g)->root;
+ mm(g, &l);
+ g = ai_push(g, 1, zero);
+ for (; ai_ok(g) && chainp(l); l = B(l)) g = gxl(ai_push(g, 1, A(l)));
+ return forget(); }
 
 static word ldels(struct ai *g, word lam, word l);
 
@@ -1922,12 +1927,16 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
   cell(B(A(d)))->x = AB(A(A(d))), gen_wb_cell(g, cell(B(A(d))), AB(A(A(d))));
  (*c)->sites = zero;
 
- nom = rev(g, nom); // put in literal order
+ g = rev(g, nom);   // put in literal order
+ if (!ai_ok(g)) return forget();
+ nom = pop1(g);
  g = analyze(g, b, exp);
  g = gxl(ai_push(g, 2, zero, e = (*b)->stack)); // push function stack rep
  (*b)->stack = ai_ok(g) ? pop1(g) : zero;
  gen_wb_cell(g, &(*b)->stack, (*b)->stack);
- for (def = rev(g, def); chainp(nom); nom = B(nom), def = B(def))
+ g = rev(g, def);
+ if (!ai_ok(g)) return forget();
+ for (def = pop1(g); chainp(nom); nom = B(nom), def = B(def))
   g = analyze(g, b, A(def)),
   g = globp ? c0_ix(g, b, lvm_defglob, A(nom)) : g,
   g = gxl(ai_push(g, 2, A(nom), (*b)->stack)),
