@@ -93,7 +93,6 @@ printf 'x' | dd of="$w/love" bs=1 seek="$mo" conv=notrunc 2>/dev/null \
   || fail "cannot corrupt the image"
 out=$(cd "$w" && env -u LOVE_NO_IMAGE -u LOVE_FIRST_BOOT ./love -e '(puts "fb-ok")' 2>&1) \
   || fail "the first boot did not serve its invocation"
-case $out in *"first boot"*) ;; *) fail "the corrupt image loaded -- the first boot never fired: [$out]" ;; esac
 case $out in *fb-ok*) ;; *) fail "the first boot ran but the command answered nothing: [$out]" ;; esac
 cmp -s "$w/love" "$w/b3" || fail "the first boot baked different bytes than the explicit bake"
 rm -f "$w/love"

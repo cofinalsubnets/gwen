@@ -90,14 +90,10 @@ static intptr_t port_fd(ai_word x) {
     return ai_io_fd((struct ai_io*) x);
  return -1; }
 
-// copy a love string into a NUL-terminated C buffer; false on non-string / too long.
-static bool str_cbuf(ai_word x, char *buf, size_t cap) {
- if (!ai_strp(x)) return false;
- struct ai_str *s = (struct ai_str*) x;
- if ((size_t) s->len >= cap) return false;
- memcpy(buf, s->bytes, s->len);
- buf[s->len] = 0;
- return true; }
+// a love string as a C string, or NULL for a non-string: bytes[len] is always a NUL
+// (core/love.h), so the bytes go to the syscall where they lie. a path the kernel finds
+// too long comes back ENAMETOOLONG, which is a truer answer than a cap of ours.
+static char const *str_c(ai_word x) { return ai_strp(x) ? txt(x) : NULL; }
 
 // the argv marshal: the chain of strings at g->sp[0] -> argc+1 char** + the
 // NUL-joined byte blob, laid in the uncommitted heap gap at Hp -- GC-invisible,
@@ -410,8 +406,8 @@ static lvm(lvm_posix_signal) {
  ai_musttail return Nextp(1, 1); }
 
 ai_noinline static ai_word host_chdir(ai_word arg) {
- char buf[4096];
- if (!str_cbuf(arg, buf, sizeof buf)) return putcharm(-1);
+ char const *buf = str_c(arg);
+ if (!buf) return putcharm(-1);
  return chdir(buf) ? putcharm(-errno) : ZeroPoint; }
 static lvm(lvm_chdir) { Sp[0] = host_chdir(Sp[0]); ai_musttail return Next(1); }
 
@@ -513,8 +509,8 @@ static lvm(lvm_pipe) {
  ai_musttail return Next(1); }
 
 static lvm(lvm_openfd) {
- char buf[4096];
- if (!str_cbuf(Sp[0], buf, sizeof buf)) { Sp[1] = putcharm(-1); Sp += 1; ai_musttail return Next(1); }
+ char const *buf = str_c(Sp[0]);
+ if (!buf) { Sp[1] = putcharm(-1); Sp += 1; ai_musttail return Next(1); }
  intptr_t m = charmp(Sp[1]) ? getcharm(Sp[1]) : 0;
  int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
            : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
@@ -685,17 +681,16 @@ static lvm(lvm_dup) { Sp[0] = host_dup(Sp[0]); ai_musttail return Next(1); }
 // () on success, a positive errno on failure (so `!`/truthiness tells them apart --
 // the pty/net convention; -errno would net falsey like the () success).
 static lvm(lvm_mkdir) {
- char p[4096];
- if (!str_cbuf(Sp[0], p, sizeof p)) { Sp[1] = putcharm(EINVAL); Sp += 1; ai_musttail return Next(1); }
+ char const *p = str_c(Sp[0]);
+ if (!p) { Sp[1] = putcharm(EINVAL); Sp += 1; ai_musttail return Next(1); }
  intptr_t mode = charmp(Sp[1]) ? getcharm(Sp[1]) : 0755;
  Sp[1] = mkdir(p, (mode_t) mode) ? putcharm(errno) : ZeroPoint;
  ai_musttail return Nextp(1, 1); }
 
 #if defined(AiHaveMount)
 ai_noinline static ai_word host_mount(ai_word a, ai_word b, ai_word c) {
- char src[1024], tgt[1024], typ[64];
- if (!str_cbuf(a, src, sizeof src) || !str_cbuf(b, tgt, sizeof tgt) || !str_cbuf(c, typ, sizeof typ))
-  return putcharm(EINVAL);
+ char const *src = str_c(a), *tgt = str_c(b), *typ = str_c(c);
+ if (!src || !tgt || !typ) return putcharm(EINVAL);
  return mount(src, tgt, typ, 0, NULL) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_mount) { Sp[2] = host_mount(Sp[0], Sp[1], Sp[2]); Sp += 2; ai_musttail return Next(1); }
 #else
@@ -753,9 +748,9 @@ static lvm(lvm_newns) { Sp[0] = putcharm(ENOSYS); ai_musttail return Next(1); }
 //                   openfd lane -- not ports (a port's read buffer would desync
 //                   under a seek). whence: 0 SET, 1 CUR, 2 END.
 ai_noinline static struct ai *host_stat_tuple(struct ai *g, int follow) {
- char p[4096];
+ char const *p = str_c(g->sp[0]);
  struct stat st;
- if (!str_cbuf(g->sp[0], p, sizeof p) || (follow ? stat(p, &st) : lstat(p, &st)))
+ if (!p || (follow ? stat(p, &st) : lstat(p, &st)))
   return g->sp[0] = ZeroPoint, g;                             // absent -> the real ()
  intptr_t ms = (intptr_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000,
           ns = (intptr_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec;
@@ -790,8 +785,8 @@ static lvm(lvm_posix_stat) {
  ai_musttail return Next(1); }
 
 ai_noinline static struct ai *host_posix_readdir(struct ai *g) {
- char p[4096];
- if (!str_cbuf(g->sp[0], p, sizeof p)) return g->sp[0] = ZeroPoint, g;
+ char const *p = str_c(g->sp[0]);
+ if (!p) return g->sp[0] = ZeroPoint, g;
  DIR *d = opendir(p);
  if (!d) return g->sp[0] = ZeroPoint, g;
  g->sp[0] = ZeroPoint;                                        // the accumulator, over the path
@@ -814,8 +809,8 @@ static lvm(lvm_posix_readdir) {
  ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_unlink(ai_word arg) {
- char p[4096];
- if (!str_cbuf(arg, p, sizeof p)) return putcharm(EINVAL);
+ char const *p = str_c(arg);
+ if (!p) return putcharm(EINVAL);
  return unlink(p) ? putcharm(errno) : ZeroPoint; }
 
 static lvm(lvm_posix_unlink) {
@@ -827,10 +822,9 @@ static lvm(lvm_posix_unlink) {
 // (environ _)       -> the environment as a list of "name=value" strings (the raw
 //                      POSIX shape -- split at the first '=' in love; no order promised).
 ai_noinline static ai_word host_posix_setenv(ai_word nw, ai_word vw) {
- char n[1024], v[4096];
- if (!str_cbuf(nw, n, sizeof n)) return putcharm(EINVAL);
- if (!ai_strp(vw)) return unsetenv(n) ? putcharm(errno) : ZeroPoint;
- if (!str_cbuf(vw, v, sizeof v)) return putcharm(EINVAL);
+ char const *n = str_c(nw), *v = str_c(vw);
+ if (!n) return putcharm(EINVAL);
+ if (!v) return unsetenv(n) ? putcharm(errno) : ZeroPoint;
  return setenv(n, v, 1) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_setenv) {
  Sp[1] = host_posix_setenv(Sp[0], Sp[1]);
@@ -946,24 +940,25 @@ AiNif("environ", nif_posix_environ);
 //                            the chain ctor, the most spoken name in the prel,
 //                            so the nif wears the long form)
 ai_noinline static ai_word host_posix_rename(ai_word ow, ai_word nw) {
- char o[4096], n[4096];
- if (!str_cbuf(ow, o, sizeof o) || !str_cbuf(nw, n, sizeof n)) return putcharm(EINVAL);
+ char const *o = str_c(ow), *n = str_c(nw);
+ if (!o || !n) return putcharm(EINVAL);
  return rename(o, n) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_rename) {
  Sp[1] = host_posix_rename(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
 ai_noinline static ai_word host_posix_symlink(ai_word tw, ai_word pw) {
- char t[4096], p[4096];
- if (!str_cbuf(tw, t, sizeof t) || !str_cbuf(pw, p, sizeof p)) return putcharm(EINVAL);
+ char const *t = str_c(tw), *p = str_c(pw);
+ if (!t || !p) return putcharm(EINVAL);
  return symlink(t, p) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_symlink) {
  Sp[1] = host_posix_symlink(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
 ai_noinline static struct ai *host_posix_readlink(struct ai *g) {
- char p[4096], b[4096];
- if (!str_cbuf(g->sp[0], p, sizeof p)) return g->sp[0] = ZeroPoint, g;
+ char const *p = str_c(g->sp[0]);
+ char b[4096];
+ if (!p) return g->sp[0] = ZeroPoint, g;
  ssize_t n = readlink(p, b, sizeof b - 1);
  if (n < 0) return g->sp[0] = ZeroPoint, g;
  b[n] = 0;
@@ -976,24 +971,24 @@ static lvm(lvm_posix_readlink) {
  ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_chmod(ai_word pw, ai_word mw) {
- char p[4096];
- if (!str_cbuf(pw, p, sizeof p) || !charmp(mw)) return putcharm(EINVAL);
+ char const *p = str_c(pw);
+ if (!p || !charmp(mw)) return putcharm(EINVAL);
  return chmod(p, (mode_t) getcharm(mw)) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_chmod) {
  Sp[1] = host_posix_chmod(Sp[0], Sp[1]);
  ai_musttail return Nextp(1, 1); }
 
 ai_noinline static ai_word host_posix_chown(ai_word pw, ai_word uw, ai_word gw) {
- char p[4096];
- if (!str_cbuf(pw, p, sizeof p) || !charmp(uw) || !charmp(gw)) return putcharm(EINVAL);
+ char const *p = str_c(pw);
+ if (!p || !charmp(uw) || !charmp(gw)) return putcharm(EINVAL);
  return chown(p, (uid_t) getcharm(uw), (gid_t) getcharm(gw)) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_chown) {
  Sp[2] = host_posix_chown(Sp[0], Sp[1], Sp[2]);
  ai_musttail return Nextp(1, 2); }
 
 ai_noinline static ai_word host_posix_utime(ai_word pw, ai_word msw) {
- char p[4096];
- if (!str_cbuf(pw, p, sizeof p)) return putcharm(EINVAL);
+ char const *p = str_c(pw);
+ if (!p) return putcharm(EINVAL);
  struct timespec ts[2];
  if charmp(msw) {
   intptr_t ms = getcharm(msw);
@@ -1007,14 +1002,14 @@ static lvm(lvm_posix_utime) {
  ai_musttail return Nextp(1, 1); }
 
 ai_noinline static ai_word host_posix_rmdir(ai_word pw) {
- char p[4096];
- if (!str_cbuf(pw, p, sizeof p)) return putcharm(EINVAL);
+ char const *p = str_c(pw);
+ if (!p) return putcharm(EINVAL);
  return rmdir(p) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_rmdir) { Sp[0] = host_posix_rmdir(Sp[0]); ai_musttail return Next(1); }
 
 ai_noinline static ai_word host_posix_hardlink(ai_word ow, ai_word nw) {
- char o[4096], n[4096];
- if (!str_cbuf(ow, o, sizeof o) || !str_cbuf(nw, n, sizeof n)) return putcharm(EINVAL);
+ char const *o = str_c(ow), *n = str_c(nw);
+ if (!o || !n) return putcharm(EINVAL);
  return link(o, n) ? putcharm(errno) : ZeroPoint; }
 static lvm(lvm_posix_hardlink) {
  Sp[1] = host_posix_hardlink(Sp[0], Sp[1]);
@@ -1033,8 +1028,8 @@ static lvm(lvm_posix_hardlink) {
 // and the buffer lives in a helper, not in the lvm_ -- 64K owed at a tail turns the jump
 // into a ret and grows the stack every dispatch (love.h's no-scratch rule).
 ai_noinline static ai_word host_posix_copyfile(ai_word sw, ai_word dw) {
- char s[4096], d[4096];
- if (!str_cbuf(sw, s, sizeof s) || !str_cbuf(dw, d, sizeof d)) return putcharm(-1);
+ char const *s = str_c(sw), *d = str_c(dw);
+ if (!s || !d) return putcharm(-1);
  int in = open(s, O_RDONLY);
  if (in < 0) return putcharm(-errno);
  int out = open(d, O_WRONLY | O_CREAT | O_TRUNC, 0666);
@@ -1365,21 +1360,17 @@ AiNif("swig", nif_swig);
 // both gate on the name, so the registration below is the whole wiring.
 
 // mode is a l string; only the first byte is consulted: r read, w truncate-or-
-// create, a append-or-create. every refusal (path too long, unknown mode,
-// open(2) failure) flattens to -1, which is what the door has always answered.
-static ai_noinline int call_open(struct ai_str *pv, struct ai_str *mv) {
-  uintptr_t plen = pv->len;
-  char path[4096];
-  if (plen >= sizeof path || mv->len == 0) return -1;
-  memcpy(path, pv->bytes, plen);
-  path[plen] = 0;
+// create, a append-or-create. every refusal (unknown mode, open(2) failure)
+// flattens to -1, which is what the door has always answered.
+static int call_open(struct ai_str *pv, struct ai_str *mv) {
+  if (mv->len == 0) return -1;
   int flags;
   switch (mv->bytes[0]) {
     case 'r': flags = O_RDONLY; break;
     case 'w': flags = O_WRONLY | O_CREAT | O_TRUNC; break;
     case 'a': flags = O_WRONLY | O_CREAT | O_APPEND; break;
     default: return -1; }
-  return open(path, flags, 0644); }
+  return open(pv->bytes, flags, 0644); }
 
 // (open path mode) -- a heap port (closed on GC) or the zero point on failure.
 static lvm(lvm_open) {

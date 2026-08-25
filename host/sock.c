@@ -58,11 +58,8 @@ static struct ai_str *cask_bytes(ai_word x) {
 // lookup can park -- lib/dns.l's `dial`.
 static int quad(struct ai_str *hv, uint32_t *out) {
  if (hv->len < 7 || hv->len > 15) return -1;      // "0.0.0.0" .. "255.255.255.255"
- char s[16];
- memcpy(s, hv->bytes, hv->len);
- s[hv->len] = 0;
  uint32_t a = 0;
- char const *p = s;
+ char const *p = hv->bytes;                      // NUL-terminated where it lies, so the walk stops
  for (int i = 0; i < 4; i++) {
   uint32_t b = 0, any = 0;
   while (*p >= '0' && *p <= '9') {
