@@ -1589,6 +1589,24 @@
                (<e = 'un) (uic? <>>e)
                ())
    (u32w e v) (? (uic? e && !(w64c? e)) (v & 4294967295) v)
+   ; a const FLOAT expression -> its gem | 'bad, for the one place cfold above needs
+   ; one. gen.l's ffold is the image-time twin; this is the parse-time one, and both
+   ; stand on love's own doubles, which ARE the target's.
+   (fcfold e)
+    (? !(two? e) 'bad
+       (: iv (cfold e)
+          (? (cint? iv) (0.0 + iv)
+             (<e = 'flo) (0.0 + <>e)
+             (<e = 'cast) (? (member? <>e '(double float)) (fcfold <>>e) 'bad)
+             (<e = 'un) (: v (fcfold <>>e)
+                           (? (id? v 'bad) 'bad (<>e = 'neg) (0.0 - v) 'bad))
+             (<e = 'bin)
+              (: op <>e a (fcfold <>>e) b (fcfold <>>>e)
+                 (? (id? a 'bad || id? b 'bad) 'bad
+                    (op = '+) (a + b) (op = '-) (a - b) (op = '*) (* a b)
+                    (op = '/) (? (b = 0.0) 'bad (a / b))
+                    'bad))
+             'bad)))
    (cfold e)
     (? !(two? e) ()
        (<e = 'num) <>e
@@ -1612,7 +1630,19 @@
            (? !(cint? v) () (<>e = 'neg) (0 - v)
               (<>e = 'not) (? (v = 0) 1 0) (<>e = 'bnot) ((0 - v) - 1) ()))
        (<e = 'cast)
-        (: v (cfold <>>e) ty <>e
+        (: ty <>e
+           v0 (cfold <>>e)
+           ; C11 6.6p6: a cast to an integer type may take a FLOAT constant, and that
+           ; is the one float an integer constant expression holds -- an array dim is
+           ; where it matters, since an unfoldable one reads as a VLA in silence.
+           ; ⚠ the target must be an INTEGER type and the roster has to be spelled:
+           ; a cast to `double` takes the same fold and must keep its fraction.
+           v (? (cint? v0 || !(member? ty '(bool char uchar short ushort int uint
+                                            long ulong llong ullong))) v0
+                (: f (fcfold <>>e)
+                   (? (id? f 'bad) v0
+                      (ty = 'bool) (? (f = 0.0) 0 1)   ; to _Bool is a compare, never a truncation
+                      (ceil (f // 1)))))              ; and every other one truncates toward zero
            (? !(cint? v) v                          ; non-integer / non-const: fold through
               (ty = 'bool) (? (v = 0) 0 1)          ; conversion to _Bool compares with 0 (C11 6.3.1.2)
               (ty = 'uchar) (v & 255)

@@ -5480,8 +5480,13 @@
    (icfold e)
     (? !(two? e) 'no
     (<e @ 'num <>e
+       ; a cast TO an integer type may carry a FLOAT operand (C11 6.6p6) -- the one float an
+       ; integer constant expression holds. it truncates toward zero, which is what `// 1` does.
        'cast (: v (icfold <>>e)
-              (? (v = 'no) 'no (flo? <>e) 'no (<>e = 'bool) (v != 0) v))
+              (? (flo? <>e) 'no
+                 !(v = 'no) (? (<>e = 'bool) (v != 0) v)
+                 (: f (ffold <>>e)
+                    (? (bad? f) 'no (<>e = 'bool) (? (f = 0.0) 0 1) (ceil (f // 1))))))
        'un
         (: v (icfold <>>e)
            (? (v = 'no) 'no (<>e = 'neg) -v (<>e = 'bnot) (-v - 1) 'no))
@@ -5583,7 +5588,12 @@
        ; still the label's address; a non-label cast folds through to its value
        (<ini = 'cast && !(aggish? ty) && !(flo? ty) && tsz g ty = wsize g)
         (: r (imaddr g ini)
-           (? !(id? r 'no) [['fix (wsize g) (? (t32? g) 'abs32 'abs64) <r <>r]] (imgbytes g ty <>>ini)))
+           (? !(id? r 'no) [['fix (wsize g) (? (t32? g) 'abs32 'abs64) <r <>r]]
+              (: v (icfold ini) (? (id? v 'no) (imgbytes g ty <>>ini) (imnum g ty v)))))
+       ; an integer scalar off a constant expression parse's cfold could not take: its fold is
+       ; integer, so a float through a cast ((int)(0.867 * (1 << 16))) stands until here.
+       (!(aggish? ty) && !(flo? ty) && member? <ini '(bin un cast))
+        (: v (icfold ini) (? (id? v 'no) 'bad (imnum g ty v)))
        (<ini = 'init)
         (: nini (unelide g ty ini)                     ; normalize elided braces (idempotent)
          (? !(id? <nini 'init) (imgbytes g ty nini)           ; unwrapped ({ "s" } -> the bare literal): re-dispatch

@@ -113,6 +113,14 @@ function pointers, multi-character constants (`'ab'` is 0x6162, gcc's packing, s
 chars), binary literals (`0b1010`, gcc's extension and C23's spelling), `__func__`, and
 `__typeof__` over locals, globals, struct members, dereferences and function names.
 
+**A float constant through a cast to an integer type landed 2026-08-25**
+(test/cc/153-flocast.c, held to gcc) — C11 6.6p6's one float an integer constant expression
+may hold, truncating toward zero. It folds in BOTH places, because they are different folds:
+`cfold` (parse.l) is what an array dimension asks, and gen.l's `imgbytes` is what a static
+initializer's image asks. ⚠ the parse half is the one that was answering WRONG rather than
+refusing — an unfoldable dimension reads as a VLA, so `char d[(int) 3.9]` sized 8 in silence.
+The row came off doom's `am_map.c`, which writes `((int)(-.867 * (1 << 16)))`.
+
 **The GNU builtins and the attribute positions landed 2026-08-18** (test/cc/144-gnubuiltins.c
 and 145-attrpos.c hold both to gcc):
 
