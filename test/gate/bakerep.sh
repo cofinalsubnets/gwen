@@ -82,7 +82,7 @@ case $out in *wake-ok*) ;; *) fail "the reproducible bake woke wrong: [$out]" ;;
 # what the self-bake rewrites. b3 is the yardstick: the first boot IS the crew
 # bake off the egg, where b1 re-baked an already-woken image.
 cp "$w/b3" "$w/love" || fail "cannot stage the first boot"     # the SAME PATH the bakes ran at (the path law above)
-mo=$(grep -abo 'AISNO04' "$w/love" | tail -1 | cut -d: -f1)
+mo=$(grep -abo 'AISNO05' "$w/love" | tail -1 | cut -d: -f1)
 [ -n "$mo" ] || fail "no image magic to corrupt"
 printf 'x' | dd of="$w/love" bs=1 seek="$mo" conv=notrunc 2>/dev/null \
   || fail "cannot corrupt the image"

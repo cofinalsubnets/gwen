@@ -220,14 +220,6 @@ struct ai {
 
 struct ai_def { char const *n; intptr_t x; };
 
-// the source library: the .l texts lcat'd into this binary, name -> source, the rung
-// `use` tries before the filesystem walk. a frontend defines ai_libs over its own table;
-// the weak default answers none, so one that bakes nothing links unchanged. immortal C
-// strings -- nothing here is on the heap, traced by a collection, or in an image.
-// terminated by a {NULL, NULL} row; there is no count to pass and none to keep.
-struct ai_lib { char const *nom, *src; };
-struct ai_lib const *ai_libs(void);
-
 // host nif auto-registration: AiNif("name", fn) lands the entry in the ai_nifs section
 // and boot drains [__start_ai_nifs, __stop_ai_nifs) through ai_defn, so an app adds nifs
 // in its own host/<app>.c. no linker script -- the toolchain defines the bracket symbols.

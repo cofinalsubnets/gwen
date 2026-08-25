@@ -23,7 +23,6 @@
       (nif_books         "books"         1 lvm_books)
       (nif_setbooks      "setbooks"      1 lvm_setbooks)
       (nif_mods          "mods"          1 lvm_mods)
-      (nif_lib           "lib"           1 lvm_lib)
       (nif_add           "+"             2 lvm_add)
       (nif_sub           "-"             2 lvm_sub)
       (nif_mul           "*"             2 lvm_mul)

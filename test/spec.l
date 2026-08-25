@@ -779,11 +779,10 @@
 ; load and around the session itself (the base is read-only because it is never the head), and
 ; the layer verbs live on only inside the loader's closures, mopped at birth like books/setbooks.
 ; a module arrives by NAME: (use 'x) splices a registered module just below the top -- its names
-; resolve on the walk but can never shadow the top's own -- and LOADS it on a miss: the baked
-; source library (the frontend's static ai_libs table), or the filesystem walk -- lib/<x>.l off the cwd, then the SEAT
-; rungs, <seat>/../lib/ and its love/ subfolder, the seat being the running binary's own home
-; (the selfpath nif): PATH picks the love, the love carries its library. a STRING is an
-; explicit path
+; resolve on the walk but can never shadow the top's own -- and LOADS it on a miss, off the one
+; walk left: lib/<x>.l on the cwd, the dev tree's lane. what a frontend BAKES never reaches that
+; walk -- the source declares its own (module 'x ..) and the boot evals it, so the name is
+; registered before anything asks. a STRING is an explicit path
 ; (the module named by its basename); a SLASHED name ('x/y) INCLUDES lib/x/y.l into the current
 ; head instead, no new layer, no registration. test/host/loader.l is the load law in anger (fs
 ; fixtures, so it lives outside this corpus); here the boot-loaded modules prove the registry

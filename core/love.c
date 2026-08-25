@@ -152,7 +152,7 @@ uintptr_t hash(struct ai*, intptr_t);
 static ai_inline union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
  lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, // the data sentinels; each tail-jumps to its apply handler
- lvm_putn, lvm_gauge, lvm_tune, lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_heard, lvm_worn, lvm_myself, lvm_books, lvm_setbooks, lvm_mods, lvm_lib,
+ lvm_putn, lvm_gauge, lvm_tune, lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_heard, lvm_worn, lvm_myself, lvm_books, lvm_setbooks, lvm_mods,
  lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
  lvm_saturate, lvm_ceil, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_casknew, lvm_bcopy,
  lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
@@ -609,7 +609,7 @@ static ai_inline uintptr_t rot(uintptr_t x) {
   return (x << s) | (x >> s); }
 
 // the four doors that are not a device; spelled out beside their readn/writen
-extern struct ai_port_vt const ai_ti_vt, ai_to_vt, ai_closed_vt, ai_ci_vt;
+extern struct ai_port_vt const ai_to_vt, ai_closed_vt, ai_ci_vt;
 
 // the pool's spare half: the core sits at the base of the active one, so the scratch
 // a walk borrows starts one pool length up
@@ -3297,11 +3297,6 @@ __attribute__((weak)) void ai_fd_drain(int fd, void const *p, uintptr_t n) {
  (void) fd; (void) p; (void) n; }
 
 struct ci { struct ai_io io; ai_word head; }; // charlist input
-// `t` is A C pointer riding a thread word, and that is sound for one reason: gcp
-// forwards only what lies inside a from-space, so a .rodata address passes through
-// every collection untouched. it also means the text must outlive the port -- only
-// immortal strings here (the baked library, love.h's struct ai_lib).
-struct ti { struct ai_io io; ai_word t; ai_word i; }; // C string input
 struct to { struct ai_io io; struct ai_str *buf; ai_word i; }; // lisp string output
 static struct ai *noop_flush(struct ai *g) { return g; }
 
@@ -3320,23 +3315,6 @@ static intptr_t ci_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
  uintptr_t k = 0;
  while (k < n && chainp(i->head))
   dst[k++] = (unsigned char) getcharm(A(i->head)), i->head = B(i->head);
- return k ? (intptr_t) k : -1; }
-
-// the C string source's read door: NUL ends it, so the text needs no length beside
-// it. no buffer, and none wanted: the text is already in memory, so athand scans
-// ahead for the run and the source never becomes a love value.
-static uintptr_t ti_athand(struct ai *g, uintptr_t n) {
- struct ti *i = (struct ti*) g->io;
- char const *t = (char const*) i->t + (uintptr_t) getcharm(i->i);
- uintptr_t k = 0;
- while (k < n && t[k]) k++;
- return k; }
-static intptr_t ti_readn(struct ai *g, unsigned char *dst, uintptr_t n) {
- struct ti *i = (struct ti*) g->io;
- char const *t = (char const*) i->t;
- uintptr_t p = (uintptr_t) getcharm(i->i), k = 0;
- while (k < n && t[p]) dst[k++] = (unsigned char) t[p++];
- i->i = putcharm((intptr_t) p);
  return k ? (intptr_t) k : -1; }
 
 // the string sink's write door: land what fits, else double and answer 0 having
@@ -3361,7 +3339,6 @@ static intptr_t to_writen(struct ai **fp, unsigned char const *src, uintptr_t n)
  return 0; }
 
 struct ai_port_vt const
- ai_ti_vt     = { noop_flush, NULL,      ti_readn, ti_athand },  // a C string: the baked library's door (lvm_lib)
  ai_to_vt     = { noop_flush, to_writen, NULL,     NULL },       // a string sink: prel's `jug`
  ai_closed_vt = { noop_flush, NULL,      NULL,     NULL },       // what `close` leaves behind
  ai_ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand };  // a charlist: prel's `tap`
@@ -4803,7 +4780,7 @@ static intptr_t image_fn_resolve(intptr_t j) {
 // every port vtable belongs here: a port's head carries its vt, so an imaged
 // port holds a binary address that only an index survives the trip.
 static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin, (word) &ai_stdout, (word) &ai_stderr, 0, map_gap,
- (word) &ai_fd_port_vt, (word) &ai_ti_vt, (word) &ai_to_vt, (word) &ai_closed_vt, (word) &ai_ci_vt,
+ (word) &ai_fd_port_vt, (word) &ai_to_vt, (word) &ai_closed_vt, (word) &ai_ci_vt,
  (word) yield_c };   // g->ip's parked value: a root holds this binary address, so only an index survives
 static intptr_t image_imm_index(word v) {
  for (uintptr_t i = 0; i < countof(image_immortals); i++) if (image_immortals[i] == v) return (intptr_t) i;
@@ -4811,7 +4788,11 @@ static intptr_t image_imm_index(word v) {
 // ai_image_save / ai_image_load, the buffer codec: save compacts g and serializes
 // {header, dictionary, token stream}; load validates, expands, decodes in place.
 // a mismatched buffer -> NULL, so the caller boots normally -- never wrong.
-#define ImageMagic 0x34304f4e53494119ULL   /* bump if the wire format changes ("..04": the header carries its encode base) */
+/* bump if the wire format changes -- which includes RENUMBERING image_immortals, since a
+   saved index means nothing to a binary that lays the table differently. "..05": the
+   immortals lost the C-string vt with the baked-source port. ⚠ test/gate/bakerep.sh greps
+   the SPELLING ("AISNO05") to corrupt a header, so the two move together. */
+#define ImageMagic 0x35304f4e53494119ULL
 #if defined(__x86_64__)
 #define ImageArch 1
 #elif defined(__aarch64__)
@@ -5685,27 +5666,6 @@ op11(lvm_cup, chainp(Sp[0]) ? B(Sp[0]) : ZeroPoint)   // cup of an atom -> the c
 op11(lvm_books, g->book)   // the live layer chain (the abyss) -- runtime-internal, mopped at birth; ev.l's gv walks it
 op11(lvm_setbooks, (g->book = Sp[0], zero))   // set the layer chain: the scope-layer door (open/use/close ride it); runtime-internal, mopped at birth
 op11(lvm_mods, g->mods)   // (mods _): the module registry book; runtime-internal, mopped at birth
-// a frontend bakes no sources unless it says so (love.h)
-__attribute__((weak)) struct ai_lib const *ai_libs(void) { return NULL; }
-// (lib nm): the source library -- the frontend's static table (love.h), answering nm's
-// baked .l text as a read port over the C string itself, or nothing on a miss. the text
-// is never copied: no source is a love value, none is traced by a collection, and none
-// reaches an image. a miss falls through to `use`'s filesystem walk (love/prel.l).
-lvm(lvm_lib) {
- struct ai_lib const *t = ai_libs();
- struct ai_str *nm = nomp(Sp[0]) ? nom_str(g, Sp[0]) : NULL;
- if (t && nm) for (; t->nom; t++) {
-  if (strlen(t->nom) != len(nm) || memcmp(t->nom, txt(nm), len(nm))) continue;
-  Have(Width(struct ti) + Width(struct ai_tag));   // nm dies here; the re-run re-finds the row
-  struct ti *p = (struct ti*) Hp;
-  Hp += Width(struct ti) + Width(struct ai_tag);
-  p->io.ap = lvm_port_io;
-  p->io.vt = &ai_ti_vt;
-  p->io.ungetc_buf = putcharm(EOF);
-  p->t = (ai_word) t->src, p->i = putcharm(0);
-  tagthread((union u*) p, Width(struct ti));
-  ai_musttail return Answer(word(p)); }
- ai_musttail return Answer(zero); }
 // push a fresh writable layer at the head of the book chain -- the runtime's
 // enter: the session's scope, every defglob's target
 struct ai *ai_layer_(struct ai *g) {

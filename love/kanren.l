@@ -12,14 +12,13 @@
 ; is (\ st stream) over a STATE (substitution . constraints); est/=== unify, +
 ; interleaves (disjunction), * binds (conjunction) -- so a relation is a
 ; polynomial in unifications (see the ring).
-; a REGISTERED MODULE with NO BRACKETS: the runtime supplies the layer -- a
-; frontend lists this source in its ai_libs table and its boot says (use 'kanren),
-; which loads, registers and splices in one motion. the splice serves every
-; bare consumer (unify/ufail?/var/s_plus/s_star/===/=/=, and the goal macros'
-; expansions); internals answer to (from 'kanren ..) -- subst, walk, query,
-; the dict kit; (keys (from 'kanren)) introspects. love/overlay.l's engine
-; reads subst through the registry, so kanren must be REGISTERED before overlay
-; evals (boot order, not just splice order).
+; a REGISTERED MODULE: a frontend cats this source into the text its boot evals, the
+; declaration below registers the layer, and its boot says (use 'kanren) to splice it.
+; the splice serves every bare consumer (unify/ufail?/var/s_plus/s_star/===/=/=, and
+; the goal macros' expansions); internals answer to (from 'kanren ..) -- subst, walk,
+; query, the dict kit; (keys (from 'kanren)) introspects. love/overlay.l's engine
+; reaches this whole surface through the registry, so kanren must be REGISTERED before
+; overlay evals -- cat order, and it needs no splice.
 ; ⚠ the scan asks two?, never ?: a key list is DATA, and `?` would read it for net --
 ; so a key that sums to nothing (a var labelled 0, a bare nom) would end the scan early
 ; and answer "unbound" for a binding that is right there.

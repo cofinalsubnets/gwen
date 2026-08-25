@@ -30,30 +30,26 @@ static const char src_post[] =
 #include "post.h"
 ;
 static const char boot_ai[] =
-  "(use 'uu) (: uu (from 'uu))"   // the library layers, ALL modules (registered in ai_init, loaded by
-  "(use 'coin)"                   //   name; the corpus asserts on each): the uu kernel keeps its
+  "(use 'uu) (: uu (from 'uu))"   // the library layers, ALL modules (registered by src_mods just
+  "(use 'coin)"                   //   below; the corpus asserts on each): the uu kernel keeps its
   "(use 'rng)"                    //   one-name surface, then coin, rng, q, kanren in the old eval order
   "(use 'q)"
   "(use 'kanren)"
   "(use 'bao)"                    // the shell core, last and spliced, as host/main.c has it:
 ;                                 //   read/reads/welp are reached bare (test/help.l's floor handler)
-// the module sources, name-keyed (see host/main.c): registered before boot_ai evals
-static const char src_uu[] =
+// THE BAKED MODULES, one text (see host/main.c): each opens with its own
+// (module 'nm ..), so evaling this registers the lot and boot_ai's uses are splices.
+static const char src_mods[] =
 #include "uu.h"
-;
-static const char src_coin[] =
+" "
 #include "coin.h"
-;
-static const char src_rng[] =
+" "
 #include "rng.h"
-;
-static const char src_q[] =
+" "
 #include "q.h"
-;
-static const char src_kanren[] =
+" "
 #include "kanren.h"
-;
-static const char src_bao[] =
+" "
 #include "bao.h"
 ;
 
@@ -125,12 +121,6 @@ struct ai_port_vt const ai_fd_port_vt = { _flush, _writen, _readn, NULL };
 static noreturn lvm(lvm_exit) { exit(getcharm(Sp[0])); }
 static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
 
-// the source library (love.h): .rodata, name -> baked .l text, read by `use`.
-static struct ai_lib const libs[] = {
-  {"uu", src_uu}, {"coin", src_coin}, {"rng", src_rng}, {"q", src_q},
-  {"kanren", src_kanren}, {"bao", src_bao}, {NULL, NULL} };
-struct ai_lib const *ai_libs(void) { return libs; }
-
 // --- exported entry points ------------------------------------------------
 static struct ai *F;
 
@@ -148,6 +138,7 @@ int ai_init(void) {
   F = ai_defn(F, d, countof(d), 0);
   if (!ai_ok(F)) return ai_code_of(F);
   F = ai_egg_(F, src_egg, src_p1, src_corpus, src_post);
+  F = ai_evals_(F, src_mods);                 // register every baked module
   F = ai_evals_(F, boot_ai);
   // THE SESSION: a fresh writable layer, C-side -- everything the page ever
   // feeds through ai_eval defglobs here, never in the base.

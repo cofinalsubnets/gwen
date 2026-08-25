@@ -6,15 +6,18 @@
 ; inside `ov-eng`; only ov-*/overlay-*/the ev rebind leak. See doc/misc/proto/overlay-lib.l for the domain
 ; shape (a map {'join J 'tr T 'litdie L 'dice D}) and sigs ((name (param-dies..) result-die)..).
 ;
-; a MODULE (no brackets: the runtime supplies the layer -- the frontend registers this source and
-; its boot says (use 'overlay), then binds the accessor under the module's OWN name and hooks ev
-; through ov-hook below). the ambient splice serves the bare names
-; (overlay-set / overlay-off / ov-slot / ov-eng).
-; kanren must load FIRST -- the engine reads subst through the registry and unify/ufail?/var bare.
+; a MODULE: the frontend cats this source into the text its boot evals, the declaration below
+; registers the layer, and the boot says (use 'overlay), then binds the accessor under the
+; module's OWN name and hooks ev through ov-hook below. the ambient splice serves the bare
+; names (overlay-set / overlay-off / ov-slot / ov-eng).
+; kanren must be REGISTERED first -- the engine reaches its whole surface through the
+; registry, and never needs it spliced.
 
 (module '(overlay ov-check ov-eng overlay-off overlay-set ov-hook ov-slot)
 (: ov-both
-    (: subst (from 'kanren 'subst)                    ; through the kanren module (unify/ufail?/var stay global)
+    (: subst (from 'kanren 'subst)                    ; the kanren surface, all of it through the module
+       unify (from 'kanren 'unify)  ufail (from 'kanren 'ufail)
+       ufail? (from 'kanren 'ufail?)  var (from 'kanren 'var)
        (ov-nthl l n)     (? (n = 0) <l (ov-nthl >l (n - 1)))   ; nth (nthl is glaze-layer, absent here)
        (ov-sigof sigs nm) (? (atom? sigs) () (id? nm <<sigs) <sigs (ov-sigof >sigs nm))
        (ov-look env x)    (? (atom? env) 'bot (: p <env (? (id? x <p) >p (ov-look >env x))))

@@ -240,3 +240,52 @@ registers.
   globals during the reopen (zz was 41, (+ zz 1) answered 42) -- that is the
   point, and it is the same divergence hazard `from` already documents:
   consumers compiled earlier keep what they folded.
+
+## coda -- the baked table goes too
+
+Rung 3 kept `ai_libs()` as "the principled baked-in libs door". It was not a
+door, it was a second spelling of the registry. Once every baked source wore
+its own `(module 'nm ..)` head, the table's whole job was to hand `use` a text
+that would declare the very name the table had just been keyed by -- so the
+frontends eval the cat at boot instead, the modules register themselves, and
+every `(use 'x)` in a boot is a pure splice.
+
+What went with it: `struct ai_lib`, `ai_libs()`, `k_libs`/`host_libs` and
+seat.c's picker, the `lib` nif, and the whole `struct ti` C-string port
+(`ti_athand`/`ti_readn`/`ai_ti_vt`) that existed only to read a table row.
+Eight frontends lost their table and their ~20 `src_*` arrays for one
+`src_mods` apiece. −113 lines, −4360 bytes of binary, image boot unchanged.
+
+- **the laziness was never spent.** The table's stated worth was that "an entry
+  nothing loads costs a row and no heap". Every row in every frontend turned
+  out to be loaded -- by the C boot, or by a cat that runs at boot or bake.
+  `peg` looked lazy on the host and is not: it rides the crew cat into the
+  image (a real peg compile is 11M insns; `use 'peg` on the baked binary is
+  1.0M, which is a splice). The kernel's `holo`/`peg` rows exist *because* the
+  kore cat opens with them. So dropping the table cost nothing that was being
+  used -- but it does mean **a header a frontend includes is now a module it
+  COMPILES at boot**, where before it was a row it could ignore. That is why
+  the generated headers stay per-module: the frontends take different subsets
+  (host 10, kernel-test 7, kernel-ship 5, wasm 6, playdate 3, teensy 1), and
+  one combined header would put all 116K of module source on a board that
+  wants 7K of it.
+- **a module has to be self-contained now.** The cat evals with nothing
+  spliced, so a module reading another's names bare misses. `overlay.l` was
+  the one -- `subst` through the registry, `unify`/`ufail?`/`var` bare -- and
+  it says `(from 'kanren ..)` for all four now. ⚠ the symptom is a `;; missing`
+  printed during the BUILD and no failure: a closure captures its free globals
+  at creation, so the scare lands at the define and the build walks on.
+- **glaze is the one text a flat cat cannot hold.** It folds `assemble` at its
+  own compile, so holo must be SPLICED while it evals -- which the boot
+  arranges. It also declares itself in host/main.c rather than in emit.l or
+  auto.l, because neither file is the module: the pair is.
+- **renumbering `image_immortals` is a wire-format change.** Dropping
+  `ai_ti_vt` shifted every index after it, so `ImageMagic` moved to `AISNO05`.
+  ⚠ `test/gate/bakerep.sh` greps the magic's SPELLING to corrupt a header --
+  an undocumented coupling until it failed the gate.
+- **love0's build tools pay for the eagerness.** Registering is compiling, so
+  every lcat run (33 in a full header lay) now compiles all ten modules:
+  `make lib` 3.80s -> 5.57s, of which 1.4s is holo alone -- a service exactly
+  one argp invocation (`mooncc0.image`'s bake) wants. Open, and the fix is to
+  put `crew/holo/holo.l` in `$(moonfiles)` ahead of asbook.l and the backends
+  already there, so that cat carries its own core and holo leaves love0's text.

@@ -137,21 +137,18 @@ void *_sbrk(intptr_t n) { return (void *) -1; }
 static void *pd_alloc(struct ai *g, void *p, size_t n) {
   return n ? pdg_realloc(NULL, n) : (pdg_realloc(p, 0), NULL); }
 
-// q, kanren and rune are MODULES: the source library (love.h) holds their text, the
-// boot below loads them by name -- q is rune's coefficient field, kanren its matcher's
-// unifier (subst through the registry, unify/ufail?/var down the splice).
-static char const src_q[] =
+// THE BAKED MODULES, one text: q is rune's coefficient field, kanren its matcher's
+// unifier (subst through the registry, unify/ufail?/var down the splice). q and kanren
+// declare themselves; rune does not, so the wrapper is here.
+static char const src_mods[] =
 #include "q.h"
-;
-static char const src_kanren[] =
+" "
 #include "kanren.h"
-;
-static char const src_rune[] =
+" "
+"(module 'rune "
 #include "rune.h"
+")"
 ;
-static struct ai_lib const libs[] = {
-  {"q", src_q}, {"kanren", src_kanren}, {"rune", src_rune}, {NULL, NULL} };
-struct ai_lib const *ai_libs(void) { return libs; }
 
 void love_init(void) {
   pdg_log("love: init");
@@ -197,6 +194,7 @@ void love_init(void) {
     ,
 #include "post.h"
     );
+  K.g = ai_evals_(K.g, src_mods);
   K.g = ai_evals_(K.g,
     "(use 'q)"
     " "

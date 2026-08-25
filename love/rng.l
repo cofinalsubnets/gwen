@@ -28,9 +28,9 @@
 ; compiler's own letrec cells. it must be BOUND, not inlined: four `#0`s would be
 ; four separate streams.
 ;
-; NO BRACKETS HERE: the runtime supplies the layer. a frontend registers this
-; source (a row in its ai_libs table) and its boot says (use 'rng) -- the loader opens the layer,
-; leave registers it, the splice stays, and every bare consumer (the corpus,
+; the brackets below are the module: a frontend cats this source into the text its boot
+; evals, and the declaration registers the layer. its boot then says (use 'rng) -- a pure
+; splice, and it stays, so every bare consumer (the corpus,
 ; test/fuzz.l's generators, lux's seeded fuzz, sat's restarts) resolves
 ; random/rand/randf/rng-get/rng-set down the chain at its own compile. the box
 ; rides the layer like everything else here -- what the module buys is not

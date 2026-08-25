@@ -243,30 +243,22 @@ static uintptr_t img_reject_all(void *ctx, uintptr_t v, uintptr_t off, uintptr_t
   if (b->n < 2) b->q[3 * b->n] = off, b->q[3 * b->n + 1] = v, b->q[3 * b->n + 2] = ap, b->n++;
   return 0; }
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
-// rune / bao are MODULES (no brackets of their own): the source library (love.h) holds
-// the text and the boot loads it by name, so the woken image serves ((from 'bao 'shell) 0)
-// -- the teensy and nucleo launchers. the source strings carry no absolutes, so the
-// absguard stays satisfied.
-#ifdef BAKER_RUNE
-static char const src_rune[] =
-#include "rune.h"
-;
-#else
-static char const src_bao[] =
-#include "bao.h"
-;
-#endif
-// bao is written in @, and its `use` lands after the mop, so the MODULE has to be here
+// THE BAKED MODULE, the one this baker wants: the boot evals it to register the layer,
+// so the woken image serves ((from 'bao 'shell) 0) -- the teensy and nucleo launchers.
+// the source strings carry no absolutes, so the absguard stays satisfied.
+// bao declares itself; rune does not, so the wrapper is here -- rune is a plain text
+// that every consumer loads through `use`, and this is the frontend that names it.
+// bao is written in @, and its eval lands after the mop, so the MODULE has to be here
 // for the macro to be live.
-static struct ai_lib const libs[] = {
-  
+static char const src_mods[] =
 #ifdef BAKER_RUNE
-  {"rune", src_rune},
+"(module 'rune "
+#include "rune.h"
+")"
 #else
-  {"bao", src_bao},
+#include "bao.h"
 #endif
-  {NULL, NULL} };
-struct ai_lib const *ai_libs(void) { return libs; }
+;
 int main(void) {
   sh_puts("\n; love/mps2 baker -- baking the corpus\n");
   freelist = (struct mem*) POOL;
@@ -286,6 +278,7 @@ int main(void) {
     ,
 #include "post.h"
     );
+  r = ai_evals_(r, src_mods);
   r = ai_evals_(r,
 #ifdef BAKER_RUNE
     // the PLAYDATE corpus: rune (registered module) + the cas workbench, no

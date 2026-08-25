@@ -507,45 +507,46 @@ extern uintptr_t ai_baked_image_len;
 static char const cli[] =
 #include "cli0.h"
  , runner[] = "(reads (tap (s2cl tests)))"   // the stream shell (love/bao.l) drinks the corpus
- , src0_bao[] =
-#include "bao0.h"
- , src0_rng[] =
-#include "rng0.h"
- , src0_kanren[] =
-#include "kanren0.h"
- , src0_uu[] =
-#include "uu0.h"
- , src0_coin[] =
+ ;
+// THE BAKED MODULES, one text: every one of them opens with its own (module 'nm ..),
+// so evaling this registers the lot and every later `use` is a pure splice. holo's
+// three files are one module reopened twice -- love0 keeps the cross backends so the
+// corpus's cross-arch asserts run under both its compilers.
+// both lanes eval it: a build tool's (use 'x) (the mooncc cat's (use 'holo)) resolves
+// the same as the self-test's.
+// ⚠ AND THE BUILD TOOLS PAY FOR IT, holo above all. registering is COMPILING, so every
+// lcat run (33 a full header lay) compiles all ten -- +1.8 s over the lay, of which 1.4 s
+// is holo alone, for a service only ONE argp invocation wants (mooncc0.image's bake).
+// the fix is to make that cat carry its own core: crew/holo/holo.l into $(moonfiles),
+// ahead of asbook.l and the backends already there, and holo comes out of this text.
+static char const src0_mods[] =
 #include "coin0.h"
- , src0_q[] =
+" "
+#include "rng0.h"
+" "
 #include "q0.h"
- , src0_peg[] =
-#include "peg0.h"
- , src0_overlay[] =
+" "
+#include "kanren0.h"
+" "
 #include "overlay0.h"
- , src0_holo[] =
+" "
+#include "uu0.h"
+" "
 #include "holo0.h"
 #include "x640.h"
 #include "arm640.h"
- , src0_verbs[] =
+" "
+#include "bao0.h"
+" "
 #include "verbs0.h"
+" "
+#include "peg0.h"
  ;
 
 // with args, run the build tool (lcat / gen_data) through the CLI driver.
 // with no args, self-test: eval prel, load bao (the shell core) as a module, and run
 // the baked corpus via c0, then bootstrap the self-hosted ev (egg) and run the corpus
 // again through it.
-// the source library: both lanes load bao by name, and both get the whole table -- a
-// build tool's (use 'x) (the mooncc cat's (use 'holo)) resolves the same as the
-// self-test's. overlay and peg are listed, never used here: each consumer opens with
-// its own (use ..), the boot owes nothing. an unlisted-for entry costs a row, nothing more.
-static struct ai_lib const libs0[] = {
-  {"bao", src0_bao}, {"rng", src0_rng}, {"kanren", src0_kanren}, {"uu", src0_uu},
-  {"coin", src0_coin}, {"q", src0_q}, {"overlay", src0_overlay}, {"peg", src0_peg},
-  {"holo", src0_holo},                                 // which the mooncc cat's cpp/gen read (the self-host build lane)
-  {"verbs", src0_verbs},                               // the verb registry: love0 runs the same cli.l rail
-  {NULL, NULL} };
-struct ai_lib const *host_libs(void) { return libs0; }   // ai_libs picks (host/seat.c)
 
 static struct ai *boot(struct ai *g, bool argp) {
   if (argp) {                                        // a build tool (lcat etc.): bake prel + bao first so the CLI's
@@ -556,7 +557,9 @@ static struct ai *boot(struct ai *g, bool argp) {
 #include "prel0.h"                                     // p1 seals hook 0 only when the call above evaluates
     " "
 #include "post0.h"                                     // the printer, and `@` with it -- post's first half
-        
+    );
+    g = ai_evals_(g, src0_mods);                       // register every baked module; the uses below are splices
+    g = ai_evals_(g,
     "(use 'bao)"                                       // p1 goes first: this lane never hatches an egg, and prel's
     "(use 'kanren)"                                    // loader folds `sound` at its own compile; kanren splices
                                                        //   because the corpus reads unify/ufail bare
@@ -573,8 +576,9 @@ static struct ai *boot(struct ai *g, bool argp) {
     " "
 #include "post0.h"                                    // ..and the printer, which pass 1 below already needs
   );
+  g = ai_evals_(g, src0_mods);                         // register every baked module; the uses below are splices
   g = ai_evals_(g,
-    "(use 'bao)"                                       // bao (the shell core): loaded, registered, spliced
+    "(use 'bao)"                                       // bao (the shell core): registered above, spliced here
     "(use 'holo)");                                    // the assembler service: load + register..
   g = ai_unsplice_(g);                                 //   ..and the C unsplice keeps it non-ambient, like the host
   g = ai_evals_(g,
@@ -684,49 +688,32 @@ static struct ai *run_program(struct ai *g, bool replp) {
   g = ai_evals_(g, cli);
   return ai_evals_(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
-// the module sources, name-keyed (the love0 twins above): registered in the source
-// library and loaded by `use` -- one layer per load, leave registers, the splice
-// serves the bare names. the lib entries ride the image too, so a woken session
-// keeps the same registry.
-static char const src_coin[] =
-#include "coin.h"
- ;
-static char const src_rng[] =
-#include "rng.h"
- ;
-static char const src_q[] =
-#include "q.h"
- ;
-static char const src_kanren[] =
-#include "kanren.h"
- ;
-static char const src_peg[] =
-#include "peg.h"
- ;
-static char const src_overlay[] =
-#include "overlay.h"
- ;
-static char const src_uu[] =
-#include "uu.h"
- ;
-static char const src_bao[] =
-#include "bao.h"
- ;
-static char const src_verbs[] =
-#include "verbs.h"
- ;
-// holo, the crew/holo/ assembler: one entry = the arch-neutral core plus the native
-// backend (C string concatenation; the glaze emits for the running arch only --
-// mooncc's cat joins the cross backends at its own build, and love0 bakes x64+arm64
-// so the corpus's cross-arch asserts run under both its compilers).
-// the linker half rides the same entry, in load order: elf.l wraps assembled bytes in an
-// executable, obj.l lays a relocatable .o, link.l links a set. they read holo's internals
+// THE BAKED MODULES, one text (the love0 twin above): every one opens with its own
+// (module 'nm ..), so evaling this registers the lot -- one layer each, leave registers
+// -- and every later `use` is a pure splice serving the bare names. it rides the image
+// too, so a woken session keeps the same registry.
+// holo, the crew/holo/ assembler, is three of those files: the arch-neutral core plus
+// the NATIVE backend, which reopens the module. the glaze emits for the running arch
+// only -- mooncc's cat joins the cross backends at its own build, and love0 bakes
+// x64+arm64 so the corpus's cross-arch asserts run under both its compilers.
 // the LINKER HALF IS NOT HERE, and none of the three holos carries it: love0's is
 // holo0+x64+arm64, the kernel's is holo plus its native backend, and this one matches.
 // the egg's holo exists to feed the glaze, which emits for the machine it runs on and
 // never writes a file; elf/obj/link come off the crew cat, laid at bake with the glaze
 // live. a copy here was 48K of .rodata nothing called.
-static char const src_holo[] =
+static char const src_mods[] =
+#include "coin.h"
+" "
+#include "rng.h"
+" "
+#include "q.h"
+" "
+#include "kanren.h"
+" "
+#include "overlay.h"
+" "
+#include "uu.h"
+" "
 #include "holo.h"
 #if defined(__x86_64__)
 #include "x64.h"
@@ -735,29 +722,27 @@ static char const src_holo[] =
 #elif defined(__riscv)
 #include "riscv.h"
 #endif
+" "
+#include "bao.h"
+" "
+#include "verbs.h"
+" "
+#include "peg.h"
  ;
 
 #ifdef AiGlazed
 // the glaze, one module in two files: emit.l (the SSE/native emitter) then auto.l (ev's
 // source recognizer), which reads emit's names bare -- so the order here is the module.
-// hook.l is deliberately not in it; see the (use 'glaze) block in boot().
-static char const src_glaze[] =
+// it declares itself HERE rather than in either file, because neither one is the module:
+// the pair is. hook.l is deliberately outside it; see the glaze block in boot().
+// ⚠ NOT IN src_mods, and the reason is `assemble`: the glaze folds it at its own compile,
+// so holo has to be SPLICED while this evals -- which the boot arranges and a flat cat
+// cannot. it is also the one text a build without AiGlazed must not pay for.
+static char const src_glaze[] = "(module 'glaze "
 #include "emit.h"
 #include "auto.h"
- ;
+")" ;
 #endif
-
-// the source library (love.h): .rodata, so an entry nothing loads costs a row and no
-// heap at all -- overlay and peg are here for consumers that open with their own (use ..).
-static struct ai_lib const libs[] = {
-  {"coin", src_coin}, {"rng", src_rng}, {"q", src_q}, {"kanren", src_kanren},
-  {"overlay", src_overlay}, {"peg", src_peg}, {"uu", src_uu}, {"bao", src_bao},
-  {"holo", src_holo}, {"verbs", src_verbs},
-#ifdef AiGlazed
-  {"glaze", src_glaze},
-#endif
-  {NULL, NULL} };
-struct ai_lib const *host_libs(void) { return libs; }    // ai_libs picks (host/seat.c)
 
 // read-eval one .l file into the booting session, loudly: a bake's cat has no shell help,
 // so a raise in it must end the bake rather than seal a half-built artifact.
@@ -813,6 +798,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     ,
 #include "post.h"                                       // the printer, and `@` with it -- post's first half
     );
+  g = ai_evals_(g, src_mods);                            // register every baked module; the uses below are splices
   g = ai_evals_(g,
     "(use 'coin)"                                        // the library layers, all modules now, in the old eval order: coin
     "(use 'rng)"                                         //   (ring/monoid over the C coin lane), rng (the random stream), q
@@ -853,11 +839,11 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     "   s_plus (from 'kanren 's_plus)  s_star (from 'kanren 's_star)"
     "   === (from 'kanren '===)  =/= (from 'kanren '=/=))");           // ..and back: @ for every later compile, read/reads for cli
 #ifdef AiGlazed
-  // the glaze, in three moves. (use 'glaze) loads emit.l + auto.l into their own layer and
-  // registers it -- ~415 codegen names the book never sees. holo is spliced under that layer
-  // so `assemble` folds at the glaze's compile, and both come off after.
-  g = ai_evals_(g, "(use 'holo)" "(use 'glaze)");
-  g = ai_unsplice_(g);                                   // the glaze layer: registered, non-ambient
+  // the glaze, in three moves. src_glaze declares the module and registers it -- ~415
+  // codegen names the book never sees. holo is spliced under it so `assemble` folds at
+  // the glaze's compile, and comes off after.
+  g = ai_evals_(g, "(use 'holo)");
+  g = ai_evals_(g, src_glaze);
   // then orth's two names, which a module layer cannot write and the boot can: `ev` becomes
   // auto-native, `member?` its glazed self. both carry their own re-load/trampoline gates.
   // last the ala creation hook (love/glaze/hook.l), which is not in the module -- it leaks

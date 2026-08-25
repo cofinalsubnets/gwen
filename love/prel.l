@@ -313,10 +313,11 @@
    _ (:: 'quote lamx) _ (:: 'lambda lamx))
 
 ; --- the loader: use-on-miss ------------------------------------------------
-; the `use` up top splices a registered module; here it also loads one it lacks, from the baked
-; lib book or the filesystem walk. a load is one fresh layer: enter, read-eval, leave registers.
+; the `use` up top splices a registered module; here it also loads one it lacks, off the
+; filesystem walk. a load is one fresh layer: enter, read-eval, leave registers.
 ; a slashed name includes into the current head instead; a string is an explicit path.
-; `open` is captured by peep, so a fs-less frontend holds () there and falls back to the table.
+; `open` is captured by peep, so a fs-less frontend holds () there and every miss is a miss --
+; which is right: what such a frontend bakes, it evals at boot, and the registry answers first.
 (: use
    (: prior use
       ; read-eval every form of a module source; a torn form scares.
@@ -333,15 +334,15 @@
                    e (? (? (< 2 (- n b)) (= ".l" (snip s (- n 2) n)) 0) (- n 2) n)
                    (intern (snip s b e)))
       fsopen (peep book 'open ())      ; the host's open nif, by peep -- see above
-      ; the walk: the baked table, then lib/ off the cwd -- the dev tree's lane, kept
-      ; for a tree and its tools (papel's want, the gates); it too retires when the
-      ; tree stops being special. the SEAT rungs (<seat>/../lib/, its love/ subfolder
-      ; -- the nest and FHS shapes) retired with the modules arc: an artifact's
-      ; modules are baked or image-carried, never found beside the binary.
-      (libsrc nm) (: s (lib nm)                                ; the baked table: a read port over the C text
-                     (? (port? s) s
-                        (nil? fsopen) ()
-                        (fsopen (+ "lib/" (+ (string nm) ".l")) "r")))
+      ; the walk: lib/ off the cwd, and only that -- the dev tree's lane, kept for a tree
+      ; and its tools (papel's want, the gates); it retires when the tree stops being
+      ; special. the SEAT rungs (<seat>/../lib/, its love/ subfolder -- the nest and FHS
+      ; shapes) retired with the modules arc: an artifact's modules are baked or
+      ; image-carried, never found beside the binary. a BAKED module is not found at all:
+      ; it declares itself in the text its frontend evals at boot, so it is registered
+      ; before anything asks and the walk never sees the name.
+      (libsrc nm) (? (nil? fsopen) ()
+                     (fsopen (+ "lib/" (+ (string nm) ".l")) "r"))
       (\ m (? (tablet? m) (prior m)
               (string? m)
               (: nm (mname m)
@@ -355,7 +356,7 @@
                              (prior nm))))))
               (tablet? (peep (mods ()) m ())) (prior m)
               (: q (libsrc m)
-                 (? (nil? (port? q)) (prior m)                ; every source is a port now, baked or on disk
+                 (? (nil? (port? q)) (prior m)                ; no file: let the splice raise by name
                     (slashy? (string m)) (: _ (rdev q) ())
                     (: _ (enter m) _ (rdev q) t (peep (mods ()) m ()) _ (leave ())
                        _ (? (nil? t) 0 (pin (mods ()) m t))

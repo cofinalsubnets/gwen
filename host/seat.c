@@ -125,13 +125,6 @@ struct ai_fio
 // k_fd_write's row, which is that port's absolute fd by the seat law.
 void ai_fd_drain(int fd, void const *p, uintptr_t n) { ai_fd_write_all(fd, p, n); }
 
-// the source library: each frontend keeps its own table -- the baked cat is
-// the seat's -- and the one ai_libs picks by the same value. weak NULLs so
-// either link closes with only its own table on board.
-__attribute__((weak)) struct ai_lib const *k_libs(void) { return NULL; }
-__attribute__((weak)) struct ai_lib const *host_libs(void) { return NULL; }
-struct ai_lib const *ai_libs(void) { return __ai_osv < 0 ? k_libs() : host_libs(); }
-
 // waiting -- the frontier's fd-keyed park/wake and the fd close, one
 // definition each (plan C2). hosted, one poll(2) covers a whole block
 // (love.h lays struct ai_wait_fd as poll's own struct for exactly this); on

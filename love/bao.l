@@ -2,7 +2,7 @@
 ; the stream shell (read/reads), the floor handler (welp), and the port-driven
 ; line reader (edraw/edln/edlnc) that lush drives.
 
-(module (bao read reads forms shell welp edraw bao edln edlnc)
+(module '(bao read reads forms shell welp edraw bao edln edlnc)
 (: (read s)
    (: r (sound (? (hot? s) (flow s) s))
       (? (two? r) (ev <r) 0)))

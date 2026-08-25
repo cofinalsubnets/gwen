@@ -45,11 +45,12 @@
 ; ALU ops take either in the same slot with no syntax. the abstract register file is what makes the
 ; IR neutral: each backend maps r0..r14/sp onto its own encoding.
 
-; ⚠ NO BRACKETS HERE: the runtime supplies the layer. a frontend registers this file PLUS the
-; backends it wants as ONE lib entry under 'holo, and its boot says (use 'holo) then ai_unsplice_
-; -- so holo registers without staying AMBIENT: a consumer either (use 'holo) and reads bare, or
-; probes one member through (from 'holo 'assemble). a backend outside the entry joins at runtime
-; the same way every cat does: (use 'holo), then the backend text.
+; ⚠ THE BACKENDS REOPEN THIS MODULE, each wearing the same (module 'holo head, so a frontend
+; cats this file plus the backends it wants into the text its boot evals and gets one layer.
+; its boot then says (use 'holo) and ai_unsplice_ -- so holo registers without staying
+; AMBIENT: a consumer either (use 'holo) and reads bare, or probes one member through
+; (from 'holo 'assemble). a backend the frontend left out joins at runtime the same way every
+; cat does: (use 'holo), then the backend text.
 
 (module 'holo
 (: ;; -- a 0-based list accessor (prel has none; `nth` is not bound -- it absorbs as the zero

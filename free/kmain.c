@@ -1815,69 +1815,51 @@ static char const ktests[] =
 ;
 #endif
 
-// the module sources, name-keyed (see host/main.c): the source library `use` reads
-// in the boot text below -- one layer per load, leave registers, the splice serves
-// the bare names (the console editor reads bao's). .rodata: a source the kernel
-// never loads costs a row and not one word of its bounded heap.
+// THE BAKED MODULES, one text (see host/main.c): each opens with its own
+// (module 'nm ..), so the boot below evals this once to register the lot and every
+// later `use` is a pure splice serving the bare names (the console editor reads bao's).
 // verbs: the verb REGISTRY (love/verbs.l). the kernel wants one for the plainest
 // reason -- its userland IS a verb table, and the boot cmdline's program seat reads
 // it. cook.l and lush ride the cat and seat themselves through the same door.
-static char const src_verbs[] =
+// the two kernels want different sets. the shipped one (rung 3) adds holo -- the
+// arch-neutral core plus the NATIVE backend, host/main.c's shape -- because the kore
+// cat's asbook.l opens with (use 'holo), and peg, because cook.l opens with (use 'peg).
+// the TEST kernel takes neither (its corpus bakes the kore subset it drives, and the
+// full cat would only slow every gate boot) and the corpus's own four instead.
+static char const src_mods[] =
 #include "verbs.h"
- ;
-static char const src_uu[] =
+" "
 #include "uu.h"
-;
-static char const src_bao[] =
+" "
 #include "bao.h"
-;
-#ifndef K_TEST
-// the shipped kernel's userland (rung 3): holo -- the arch-neutral core plus the
-// NATIVE backend, host/main.c's shape -- because the kore cat's asbook.l opens
-// with (use 'holo); then the whole $(korefiles) cat, evaled at boot through the
-// stream shell. (the TEST kernel skips both: its corpus bakes the kore subset it
-// drives, and the full cat would only slow every gate boot.)
-static char const src_holo[] =
+#ifdef K_TEST
+" "
+#include "coin.h"
+" "
+#include "rng.h"
+" "
+#include "q.h"
+" "
+#include "kanren.h"
+#else
+" "
 #include "holo.h"
 #if defined(__x86_64__)
 #include "x64.h"
 #elif defined(__aarch64__)
 #include "arm64.h"
 #endif
+" "
+#include "peg.h"
+#endif
 ;
+#ifndef K_TEST
 // the kore cat is CATTED FROM THE RAMFS at boot now -- the blob initrd carries
 // every member, so only the ORDER is baked: the korefiles roster, one line.
 static char const src_korelist[] =
 #include "korelist.h"
 ;
-// peg: cook.l (in the cat) opens with (use 'peg)
-static char const src_peg[] =
-#include "peg.h"
-;
 #endif
-#ifdef K_TEST
-static char const src_coin[] =
-#include "coin.h"
-;
-static char const src_rng[] =
-#include "rng.h"
-;
-static char const src_q[] =
-#include "q.h"
-;
-static char const src_kanren[] =
-#include "kanren.h"
-;
-#endif
-static struct ai_lib const libs[] = {
-  {"verbs", src_verbs}, {"uu", src_uu}, {"bao", src_bao},
-#ifdef K_TEST
-  {"coin", src_coin}, {"rng", src_rng}, {"q", src_q}, {"kanren", src_kanren},
-#else
-  {"holo", src_holo}, {"peg", src_peg},
-#endif
-  {NULL, NULL} };
-struct ai_lib const *k_libs(void) { return libs; }   // ai_libs picks (host/seat.c)
 
 extern long __ai_osv;                  // nolibc's "which kernel" (os.c)
 void kmain(void) {
@@ -1976,6 +1958,7 @@ void kmain(void) {
  ,
 #include "post.h"
  );
+  r = ai_evals_(r, src_mods);                            // register every baked module; the uses below are splices
   r = ai_evals_(r,
  "(use 'verbs)" // the registry FIRST: the cat's apps pin their own names at load
  "(use 'uu) (: uu (from 'uu))"                         // the uu kernel: the corpus's uu files drive it through the

@@ -7,10 +7,11 @@
 ; way out and `=` tells the two terminators apart -- a payload that should equal a map-built list would
 ; not. The unit is the only nil that leaves here.
 ;
-; a MODULE, and the BOOT DOES NOT LOAD IT: each consumer opens with its own top-level (use 'peg) and
-; then reads the names bare off the splice -- crew/holo/text.l, crew/cook/cook.l, crew/lapiz/lapiz.l,
-; crew/sat/dimacs.l. ⚠ the (use ..) must be its OWN top-level form: a `:` body compiles as one unit,
-; so a use nested inside the form that reads the names runs too late to serve it.
+; a MODULE THE BOOT NEVER SPLICES: it is registered with the rest, and each consumer opens with
+; its own top-level (use 'peg), then reads the names bare off that splice -- crew/holo/text.l,
+; crew/cook/cook.l, crew/lapiz/lapiz.l, crew/sat/dimacs.l. ⚠ the (use ..) must be its OWN
+; top-level form: a `:` body compiles as one unit, so a use nested inside the form that reads
+; the names runs too late to serve it.
 
 (module 'peg
 (: (eps s y n) (y s ())
