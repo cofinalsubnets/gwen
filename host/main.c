@@ -843,8 +843,8 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   // kanren keeps a surface, named here rather than inherited, the line its own
   // header draws: unify and its ufail/ufail? contract are the door, and `hoist`
   // takes the goal macros, which ride the layer's table and not the tablet's noms.
-  // unsplice drops one link at a time, so pat and bao come off with them and go
-  // straight back on: @ for every later compile, read/reads for cli.
+  // unsplice drops one link at a time, so bao comes off with them and goes straight
+  // back on: read/reads for cli.
   for (int i = 0; i < 4; i++) g = ai_unsplice_(g);       // bao, uu, overlay, kanren
   g = ai_evals_(g, "(use 'bao)"
     "(hoist 'kanren ())"                                 // \\\, &&&, |||, zz

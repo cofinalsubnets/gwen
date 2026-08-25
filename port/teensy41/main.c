@@ -205,9 +205,8 @@ static uintptr_t pool[384 * (1 << 10) / sizeof(uintptr_t)];   // word-typed: nat
 static char const src_bao[] =
 #include "bao.h"
 ;
-// ⚠ pat is a SECOND copy of the text the egg's post already carries: the egg text is a
-// literal concatenation and cannot name an array. bao is written in @, and its `use`
-// lands after the mop, so the MODULE has to be here for the macro to be live.
+// bao is written in @, and its `use` lands after the mop, so the MODULE has to be here
+// for the macro to be live.
 static struct ai_lib const libs[] = {{"bao", src_bao}, {NULL, NULL}};
 struct ai_lib const *ai_libs(void) { return libs; }
 
