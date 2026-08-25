@@ -38,7 +38,11 @@ static struct {
 // enqueues input bytes -- arrow/Delete keys as the ANSI escape sequences
 // the line editor decodes; kb_readn and the (key) builtin drain the queue.
 // g holds the live modifier flags.
-static struct { uint8_t g, q[16], qh, qt; uint16_t lost; } kkb;
+// `raw` is the SCANCODE tap beside it: a program that wants make and break
+// (a game, not a line editor) arms it and drains the codes the decode below
+// folds away. armed, the ascii queue still fills and nobody reads it.
+static struct { uint8_t g, q[16], qh, qt; uint16_t lost;
+                uint8_t raw, r[64], rh, rt; } kkb;
 // enqueue one input byte. non-static: the COM1 serial RX ap (k_uart, in
 // x86_64/arch.c) feeds this same queue.
 // ⚠ A DROPPED KEYSTROKE SAYS SO. an interrupt cannot wait, so the ring must be
@@ -415,6 +419,22 @@ _Static_assert(countof(kb2ascii) == countof(shift_kb2ascii), "one scancode table
 #define kb_code_down 80
 #define kb_code_home 71
 #define kb_code_end 79
+// the scancode tap: arm it, then drain. a code is the PS/2 byte with the 0xe0
+// prefix folded onto the one that follows it (bit 7 is the break bit, so an
+// extended key wears 0x100) -- one word out, no state for the reader to keep.
+void k_scan_arm(int on) { kkb.raw = on ? 1 : 0, kkb.rh = kkb.rt = 0; }
+int k_scan_pop(void) {
+  if (kkb.rh == kkb.rt) return -1;
+  int b = kkb.r[kkb.rh];
+  kkb.rh = (kkb.rh + 1) & 63;
+  if (b != kb_code_extend) return b;
+  if (kkb.rh == kkb.rt) return -1;         // the pair is not whole yet
+  b = kkb.r[kkb.rh], kkb.rh = (kkb.rh + 1) & 63;
+  return b | 0x100; }
+static void kraw(uint8_t b) {
+  uint8_t n = (kkb.rt + 1) & 63;
+  if (n != kkb.rh) kkb.r[kkb.rt] = b, kkb.rt = n; }
+
 // decode a PS/2 scancode (interrupt context) and enqueue input bytes.
 // arrows, Home, End, and Delete become the ANSI escape sequences the
 // line editor decodes; with Ctrl held, Home / End emit the modified
@@ -422,6 +442,7 @@ _Static_assert(countof(kb2ascii) == countof(shift_kb2ascii), "one scancode table
 // buffer end. Ctrl+letter becomes the matching control byte (so
 // Ctrl-A/E reach the editor as home/end, Ctrl-D as quit).
 void kb_int(const uint8_t code) {
+  if (kkb.raw) kraw(code);
   if (code == kb_code_extend) { kkb.g |= kb_flag_extend; return; }
   bool ext = kkb.g & kb_flag_extend, up = code & 128;
   uint8_t sc = code & 127;
@@ -641,6 +662,20 @@ static bool k_untar(void) {
   return true; }
 #endif
 
+// an object in this link may bake files of its own into the tree beside the
+// initrd's: a strong k_baked overrides the weak nothing here and k_fs_init lays
+// a row apiece (free/doom.c's WAD is the first). the rows are read-only .rodata
+// like every other bake, so a write copies them into the heap the same way.
+// ⚠ it is asked TWICE -- with no room for the count, then to fill -- so the
+// table is the kernel's memory and the definer keeps no state of its own.
+__attribute__((weak)) int k_baked(struct k_file *rows, int cap) {
+  return (void) rows, (void) cap, 0; }
+static struct k_file const *k_extra;
+static int k_extra_n;
+// what bake row i is: the initrd's, then the linked-in ones behind it.
+static struct k_file const *k_bake_row(int i) {
+  return i < k_bakes_n ? &k_bakes[i] : &k_extra[i - k_bakes_n]; }
+
 // the tree itself (rung 2): a table of ENTRIES in the kernel heap, one per baked
 // row at first touch, growing as create and mkdir add paths the bake never knew.
 // ⚠ `own` is the presence bit and has to be one: a file written and then emptied
@@ -667,12 +702,18 @@ static bool k_fs_init(void) {
 #ifndef K_TEST
   if (!k_bakes && !k_untar()) return false;
 #endif
-  int n = k_bakes_n, cap = n + 8;
+  int xn = k_baked(NULL, 0);
+  if (xn > 0) {
+    struct k_file *xr = kmallocw(b2w((uintptr_t) xn * sizeof *xr));
+    if (!xr) return false;
+    k_extra = xr, k_extra_n = k_baked(xr, xn); }
+  int n = k_bakes_n + k_extra_n, cap = n + 8;
   struct k_ent *t = kmallocw(b2w((uintptr_t) cap * sizeof *t));
   if (!t) return false;
-  for (int i = 0; i < n; i++)
-    t[i] = (struct k_ent) { .path = k_bakes[i].path, .bake = i,
-                            .ms = k_bakes[i].ms, .mode = 0644, .live = true };
+  for (int i = 0; i < n; i++) {
+    struct k_file const *f = k_bake_row(i);
+    t[i] = (struct k_ent) { .path = f->path, .bake = i,
+                            .ms = f->ms, .mode = 0644, .live = true }; }
   t[n] = (struct k_ent) { .path = "tmp", .bake = -1, .ms = k_clock_ms(),
                           .mode = 0755, .own = true, .dir = true, .live = true };
   k_ents = t, k_ents_n = n + 1, k_ents_cap = cap;
@@ -724,7 +765,8 @@ static ai_inline struct k_fh *k_fh(int fd) {
 static unsigned char const *k_blob(int i, uintptr_t *len) {
   struct k_ent const *e = &k_ents[i];
   if (e->own) return *len = e->len, e->bytes;
-  return *len = k_bakes[e->bake].len, (unsigned char const*) k_bakes[e->bake].bytes; }
+  struct k_file const *f = k_bake_row(e->bake);
+  return *len = f->len, (unsigned char const*) f->bytes; }
 
 // free/sys.c's seek. ⚠ it answers an ERRNO where lvm_lseek answers a bare -1:
 // down here a caller can tell "no such fd" from "this row does not seek", which
@@ -849,10 +891,11 @@ static int k_parent_ok(char const *p, uintptr_t n) {
 static bool k_fit(int i, uintptr_t need) {
   struct k_ent *e = &k_ents[i];
   if (!e->own) {
-    uintptr_t n = k_bakes[e->bake].len, cap = n > need ? n : need;
+    struct k_file const *f = k_bake_row(e->bake);
+    uintptr_t n = f->len, cap = n > need ? n : need;
     unsigned char *p = cap ? kmallocw(b2w(cap)) : NULL;
     if (cap && !p) return false;
-    if (n) memcpy(p, k_bakes[e->bake].bytes, n);
+    if (n) memcpy(p, f->bytes, n);
     e->bytes = p, e->len = n, e->cap = cap, e->own = true;
     return true; }
   if (e->cap >= need) return true;
@@ -1580,6 +1623,14 @@ void fbdraw(void) {
       cb_paint(&paper, kcb, &kfont, i, 0, 0, blink ? cur : ~0u); }
   for (int k = 0; k < 8; k++) kcb->dmg[k] = 0;
   fbcur = cur, fbblink = blink; }
+
+// the framebuffer as a program may borrow it whole: the base, the size, and the
+// stride in PIXELS. false where the door handed over none (PVH has nothing to
+// hand), which is the caller's cue to want the ESP door instead.
+bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch) {
+  if (!kfb._) return false;
+  *p = kfb._, *w = kfb.width, *h = kfb.height, *pitch = kfb.pitch;
+  return true; }
 
 static lvm(draw) {
   fbdraw();

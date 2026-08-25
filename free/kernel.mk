@@ -72,7 +72,7 @@ k_rt_o = $(k_odir)/rt.o
 ifndef K_TEST
 k_src_o = $(k_odir)/src.o
 endif
-k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_host_o) $(k_lay_o) $(k_tail_o) $(k_rt_o) $(k_src_o)
+k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_host_o) $(k_lay_o) $(k_tail_o) $(k_rt_o) $(k_src_o) $(k_doom_o)
 
 # The kernel runs the GENERATIONAL collector bounded by g->budget: kmain sums the boot
 # memmap into kram_words and sets budget = kram_words/8 after ai_ini (the Appel knob).
@@ -219,6 +219,58 @@ kart_arch_o = $(patsubst $R/free/$(hosta)/%.c,$(moon_d)/k_$(hosta)_%.o,$(wildcar
 kart_quay_o = $(patsubst %,$(moon_d)/k_q_%.o,paint cga_8x8 moderndos_8x16)
 # the twin link takes the same set at $(xa) -- $(xkart_o), below the lays
 kart_o = $(moon_d)/k_kmain.o $(moon_d)/k_blk.o $(moon_d)/k_sys.o $(kart_arch_o) $(kart_quay_o) $(moon_d)/kvec.o
+
+# --- the doom lane (DOOM=1) -------------------------------------------------
+# OPT-IN and absent from every default build: doomgeneric is not ours and not in
+# this tree, so the lane wants the source at dl/doomgeneric and the IWAD at
+# dl/doom1.wad -- test_cts's dl/c-testsuite posture, for the same reason. absent
+# either, the lane names the missing file as a missing prerequisite.
+#
+#   git clone --depth 1 https://github.com/ozkl/doomgeneric.git dl/doomgeneric
+#   curl -Lo dl/doom1.wad <the shareware IWAD>
+#   make run DOOM=1
+#
+# free/doom.c answers doomgeneric's four platform doors off the framebuffer, the
+# scancode tap and the clock; the WAD rides kmain.c's k_baked hook into the
+# ramfs, so doom's own fopen finds it. ⚠ the FRAMEBUFFER door is the ESP one:
+# `qemu -kernel` hands over none, so `make run DOOM=1` (UEFI) is the lane and
+# run-sh is not. the vendored platform backends carry their own main and stay
+# out of the build.
+ifdef DOOM
+doom_d = $R/dl/doomgeneric/doomgeneric
+# ⚠ ONE `%` per filter-out pattern, so the drops are spelled as a wildcard of
+# their own: the platform backends (each carries a main) and the two library
+# sound lanes, which want allegro and SDL headers nothing here has.
+doom_drop = $(wildcard $(doom_d)/doomgeneric_*.c $(doom_d)/i_allegro*.c $(doom_d)/i_sdl*.c)
+doom_c = $(filter-out $(doom_drop),$(wildcard $(doom_d)/*.c))
+k_doom_o = $(patsubst $(doom_d)/%.c,$(k_odir)/doom/%.o,$(doom_c)) $(k_odir)/doom/wad.o
+k_free_c += $R/free/doom.c
+kcppflags += -I$(doom_d)
+$(k_odir)/doom/%.o: $(doom_d)/%.c $(kcc_dep)
+	@echo 'DOOM	'$@
+	@mkdir -p "$(dir $@)"
+	@$(kcc) -c $< -o $@
+$(k_odir)/doom/wad.o: $R/dl/doom1.wad tools/mkblob.l out/host/.mksys-cat.l $m
+	@echo 'MKBLOB	'$@
+	@mkdir -p "$(dir $@)"
+	@LOVE_NO_IMAGE= $m -l out/host/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(k_be_$a)
+# and the same set on the KART lane, which is where the host's own kernel is
+# built (plan C2: the artifact carries it) -- so `make kernel DOOM=1` at $(hosta)
+# rides these and the cross odir rides the rows above.
+kart_inc += -I$(doom_d)
+kart_doom_o = $(patsubst $(doom_d)/%.c,$(moon_d)/kd_%.o,$(doom_c)) \
+  $(moon_d)/kd_wad.o $(moon_d)/k_doom.o
+kart_o += $(kart_doom_o)
+$(moon_d)/kd_%.o: $(doom_d)/%.c $(moon0_dep)
+	@echo 'DOOM	'$@
+	@mkdir -p "$(dir $@)"
+	@$(moon0) $(kart_inc) -c $< $@
+$(moon_d)/kd_wad.o: $R/dl/doom1.wad tools/mkblob.l out/host/.mksys-cat.l $(love0)
+	@echo 'MKBLOB	'$@
+	@mkdir -p "$(dir $@)"
+	@LOVE_NO_IMAGE= $(boot_love) -l out/host/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(k_be_$(hosta))
+endif
+
 $(moon_d)/k_%.o: $R/free/%.c $(kart_h) $(kart_cats) $(moon0_dep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"

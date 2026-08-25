@@ -348,6 +348,51 @@ If none of those is the goal, rung 6 is the end of the road and the machine is f
 * **a `g` per process** — if real processes ever land, each one is a whole heap. The egg makes the
   boot cheap (0.03 s baked against 1.10 s cold); the memory floor is the open question.
 
+## can it run doom  ✅ yes, opt-in
+
+`make run DOOM=1` boots the machine with doomgeneric linked in and `doom 0` at the console
+starts it: the title screen, the menus, and E1M1 on the framebuffer. It is **opt-in and in no
+default build** — the source is not ours and not in this tree, so the lane wants
+`dl/doomgeneric` and `dl/doom1.wad` and is otherwise absent (test_cts's posture). free/doom.c
+is the glue, ~120 lines, and the whole of what it needed:
+
+* **the compiler was the question, and it answered.** mooncc compiles all 83 translation units
+  of doomgeneric and links them with our own linker, on the host and into the kernel alike.
+  **Nothing foreign is in the build**: 83 DOOM + 27 MOON objects, the WAD blob, the runtime
+  slices, the vector lay and the projection — and not one `CC` line in the log. The subtlety
+  worth naming is `out/host/love0`, the bootstrap that RUNS mooncc: a bare `make` builds it
+  with the ambient cc, because a bare make has no love (Makefile's own note). It is not in the
+  artifact — but the claim is only airtight if it need not be, so it was checked:
+  `make CC='out/host/love mooncc' love0` builds the bootstrap with our own compiler, and the
+  kernel above was then rebuilt from it. gcc is nowhere in that chain.
+  Three real bugs came out of the port, all fixed with gates:
+  * a **block-scope `extern` declaration did not name the file-scope object** — it bound a
+    local and the body read a slot the linker never wrote. doom's `d_net.c` says
+    `extern boolean advancedemo;` inside a function, so `if (advancedemo)` tested garbage and
+    the demo loop advanced every tic; a started game was cancelled within a tic of starting.
+    ⚠ this is the WORST class the tree has: a silent wrong answer over a construct that reads
+    like nothing. test/cc/154-blockextern.c.
+  * a **float constant through a cast to an integer type** would not fold
+    (doc/misc/moon-c-gaps.md; the parse half was answering WRONG, not refusing).
+  * nolibc's **printf dropped the precision on `%d`**, so `"%.3d"` of 33 read `33` — which is
+    how doom asks for the lump name `STCFN033` (test/libc/fmt.c had precision rows for `%s`
+    alone).
+* **three doors, and they existed.** `k_fb` hands over the framebuffer whole, `k_scan_arm` /
+  `k_scan_pop` are the SCANCODE tap beside the ascii queue (a game wants make and break, where
+  the line editor wants a byte), and `k_clock_ms` was already milliseconds.
+* **the WAD is a baked file.** `k_baked` is kmain.c's hook for an object that wants a file in
+  the tree: tools/mkblob.l lays the 4 MB IWAD into .rodata and doom's own `fopen`/`fseek`/
+  `fread` reach it through free/sys.c with nothing mounted. That door is not doom's — it is
+  the general one, and this is its first taker.
+* ⚠ **the ESP door only.** `qemu -kernel` hands over no framebuffer, so `run-sh` cannot show
+  it; `make run DOOM=1` (UEFI) is the lane.
+* ⚠ **quitting doom resets the machine**, because doom's exit IS `(quit)` and rung 3 says a
+  quit resets. Honest rather than fixed.
+* **not finished:** the blit is a per-pixel loop into the GOP framebuffer with no double
+  buffer, so a screenshot can catch a frame mid-copy (it costs ~4 ms of a ~260 fps loop, so
+  the frame rate is not what wants fixing — the tear is). No sound: there is no audio door on
+  this machine at all, and an AC'97 twin of free/blk.c is what one would cost.
+
 ## what is cheaper than it looks, and why
 
 Worth stating, because it is the reason this ladder is weeks and not years:
