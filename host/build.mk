@@ -154,10 +154,11 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # opt-in, and the only lane that puts one on the vm at ai_tco=1 where ai_musttail is live
 # (mk/common.mk says why). one link rule, two names -- `love` and the candidate.
 # two shapes, and the second builds no bootstrap at all. normally love0 wakes
-# mooncc0.image, the image that breaks the self-host circle. with a bundled love beside the
-# tree (the binary a seed laid beside itself -- ./Makefile's bundled_love) there is no circle: that
-# binary already carries mooncc as a verb, so it compiles the tree directly and love0,
-# mooncc0.image and the sed-laid 0.h twins are never made. moon0_dep carries the difference
+# mooncc0.image, the image that breaks the self-host circle. where the bundled love is the
+# TOOLCHAIN (./Makefile's bundled_love -- a love laid beside the tree with no foreign cc
+# deferred to) there is no circle: that binary already carries mooncc as a verb, so it
+# compiles the tree directly and love0, mooncc0.image and the sed-laid 0.h twins are
+# never made. moon0_dep carries the difference
 # into the rules below, so nothing names an image that will not exist.
 # boot_love: whoever runs a build-time .l tool -- love0 normally, the bundled artifact
 # when one is here. every such site must ask for it by this name, or it resurrects love0.

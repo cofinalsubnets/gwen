@@ -24,8 +24,8 @@ glaze_h = out/lib/emit.h out/lib/auto.h out/lib/hook.h
 # corpus rides along so love0 self-tests both compilers in one run.
 # ⚠ AMBIENT sed WHILE BOOTSTRAPPING, OURS ONCE WE HAVE ONE -- the same discipline as $(CC)
 # and $(lcat_love). These headers are INPUTS to love0, so a from-scratch tree has no love
-# to lay them with; a seed-laid tree has a bundled love whose sed is the artifact's own,
-# and builds none of the 0.h twins anyway (./Makefile's bundled_love).
+# to lay them with; where the bundled love is the TOOLCHAIN its sed is the artifact's own,
+# and that tree builds no twin at all, love0 being unbuilt (./Makefile's bundled_love).
 # ⚠ THE ORDER OF THE FOUR IS THE CORRECTNESS: backslash first, or the escapes it writes
 # get escaped again by the quote pass.
 sed_lit = $(if $(bundled_love),$(bundled_love) sed,sed) \
@@ -43,8 +43,9 @@ lib: $(lib_h) $(boot_h)
 # holo.h => `assemble` unbound => the glaze emits nothing => a corrupt native).
 # ⚠ and the scratch takes the PID: the ports RECURSE onto these, so -j runs the recipe
 # twice at once and one shared temp is renamed out from under the other.
-# ⚠ the lcat is run by love0 NORMALLY and by the BUNDLED love when a seed laid one
-# beside the tree: love0 is not built at all there (see ./Makefile's bundled_love).
+# ⚠ the lcat is run by love0 NORMALLY and by the BUNDLED love where that love is the
+# TOOLCHAIN: love0 is not built at all there (see ./Makefile's bundled_love). a seed that
+# defers to a foreign cc is NOT that tree -- it wants love0, cc-built, holding the scaffold.
 # ⚠ AND THE PRELOAD BELONGS TO LOVE0 ALONE. `-l love/prel.l` feeds prel's SOURCE to a
 # pre-egg love, which is the only kind that can read it: prel.l:19 calls `(tray 0)`, and
 # `tray` is one of the raw ctors THE EGG MOPS AT BIRTH -- so a baked love handed its own

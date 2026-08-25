@@ -5,19 +5,29 @@ include mk/common.mk
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
 # ==== the full-fat artifact's own toolchain (doc/misc/dist.md) ====
-# a release tarball's bin/love wears a `mooncc` verb, so a seed-laid tree compiles with the
-# binary it shipped with and touches no ambient cc. it is already past the self-host circle,
-# so love0, mooncc0.image and the sed-laid 0.h twins are never built there (mk/lib.mk).
+# a release tarball's bin/love wears a `mooncc` verb, so a tree laid beside one CAN compile
+# with the binary it shipped with and touch no ambient cc: already past the self-host circle,
+# love0 and mooncc0.image and the sed-laid 0.h twins all unbuilt (mk/lib.mk).
+# ⚠ CAN, not DOES. `love seed` prefers a foreign compiler and takes the work itself only
+# when there is none (lib/source.l), because a binary that rebuilds itself byte for byte
+# proves consistency and not trustworthiness -- a compiler carrying a Thompson attack
+# reproduces itself perfectly too. bundled_love below is where that choice lands.
 # `cc_named` is `make CC=gcc` or CC in the environment -- PATH is not consulted, and `CC ?=`
 # could not ask it (make defines CC itself, so `?=` never fires).
 cc_named := $(filter command line environment override,$(origin CC))
-bundled_love := $(if $(wildcard $(R)/bin/love),$(abspath $(R)/bin/love),)
+# ⚠ TWO QUESTIONS, and one name answered both until a DEFERRING seed proved they differ.
+# `bin/love` being HERE is not the same as its being THE TOOLCHAIN: `love seed` exports CC
+# when it finds a foreign compiler (lib/source.l), and that deference is a request for
+# love0's lane BACK -- the ambient cc holding the scaffold, which is the one thing a self
+# build cannot say (a compiler carrying a Thompson attack reproduces itself perfectly too).
+# bundled_here answers the file question and nothing reads it but the line below;
+# bundled_love, which every rule in the tree reads, answers the toolchain one.
+bundled_here := $(if $(wildcard $(R)/bin/love),$(abspath $(R)/bin/love),)
+bundled_love := $(if $(cc_named),,$(bundled_here))
 
-ifeq ($(cc_named),)
 ifneq ($(bundled_love),)
 CC := $(bundled_love) mooncc
 CCACHE :=                     # ccache takes the compiler as argv[1]; `love mooncc` is two words
-endif
 endif
 
 # bootstrap interpreter
