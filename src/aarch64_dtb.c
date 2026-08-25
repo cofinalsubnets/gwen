@@ -21,11 +21,6 @@ static uint32_t be32(uint8_t const *p) {
 static uint64_t be64(uint8_t const *p) {
   return (uint64_t) be32(p) << 32 | be32(p + 4); }
 
-static void give(uint64_t base, uint64_t len) {
-  if (len < 2 * sizeof(uintptr_t) || kboot.ram_n >= k_boot_ram_max) return;
-  kboot.ram[kboot.ram_n].base = base;
-  kboot.ram[kboot.ram_n].len  = len;
-  kboot.ram_n++; }
 
 // flat-tree tokens (all fields big-endian, everything 4-aligned)
 #define FDT_BEGIN_NODE 1
@@ -84,5 +79,5 @@ void dtb_to_kboot(uint64_t dtb_pa) {
         uint64_t b = a + s;
         if (a < k1) a = k1;                        // dtb + hole + image, one span
         if (b > 0x100000000ull) b = 0x100000000ull;   // above the mapped 4G
-        if (b > a) give(a, b - a); } }
+        if (b > a) k_ram_give(a, b - a); } }
     p += (len + 3) & ~3u; } }

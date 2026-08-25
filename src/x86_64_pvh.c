@@ -21,11 +21,6 @@ struct hvm_memmap_entry { uint64_t addr, size; uint32_t type, reserved; };
 // where the flat link's kimage_end symbol used to stand.
 extern uintptr_t const k_image_top;
 
-static void give(uint64_t base, uint64_t len) {
-  if (len < 2 * sizeof(uintptr_t) || kboot.ram_n >= k_boot_ram_max) return;
-  kboot.ram[kboot.ram_n].base = base;
-  kboot.ram[kboot.ram_n].len  = len;
-  kboot.ram_n++; }
 
 void pvh_to_kboot(uint32_t si_paddr) {
   struct hvm_start_info *si = (void *) (pvh_hhdm + si_paddr);
@@ -41,6 +36,6 @@ void pvh_to_kboot(uint32_t si_paddr) {
     if (a < 0x100000) a = 0x100000;                  // low memory: the IVT, the
     if (b > 0x100000000ull) b = 0x100000000ull;      // start_info itself; >4G: unmapped
     if (b <= a) continue;
-    if (b <= k0 || a >= k1) { give(a, b - a); continue; }
-    if (a < k0) give(a, k0 - a);                     // the piece under the image
-    if (b > k1) give(k1, b - k1); } }                // and the piece past it
+    if (b <= k0 || a >= k1) { k_ram_give(a, b - a); continue; }
+    if (a < k0) k_ram_give(a, k0 - a);                     // the piece under the image
+    if (b > k1) k_ram_give(k1, b - k1); } }                // and the piece past it

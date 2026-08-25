@@ -597,6 +597,7 @@ ai_noinline static struct ai *argv_chain(struct ai *g, char const **v, int argc,
 
 #if !defined(LoveBoot) && !defined(__wasm__)
 extern intptr_t ai_inflate_raw(const unsigned char*, uintptr_t, unsigned char*, uintptr_t);
+#include "ustar.h"
 extern const unsigned char ai_srcgz[];
 extern const uintptr_t ai_srcgz_len;
 extern size_t host_selfpath(char*, size_t);
@@ -604,50 +605,14 @@ static char const src_distlist[] =
 #include "distlist.h"
  ;
 
-static uintptr_t fb_octal(unsigned char const *p, int n) {
-  uintptr_t v = 0;
-  for (int i = 0; i < n && p[i] >= '0' && p[i] <= '7'; i++) v = v * 8 + (uintptr_t)(p[i] - '0');
-  return v; }
-
-// join a symlink's target against the link's own directory, ".." and "." squashed
-// (src/kmain.c k_lnk_canon's law) -- the tree keeps crew modules behind lib/ links
-static uintptr_t fb_canon(char const *at, char const *ln, char *out, uintptr_t cap) {
-  uintptr_t n = 0;
-  if (ln[0] != '/') {
-    uintptr_t d = strlen(at);
-    while (d && at[d - 1] != '/') d--;
-    if (d && d <= cap) memcpy(out, at, n = d - 1); }
-  for (uintptr_t i = 0; ln[i];) {
-    while (ln[i] == '/') i++;
-    uintptr_t j = i;
-    while (ln[j] && ln[j] != '/') j++;
-    uintptr_t k = j - i;
-    if (!k) break;
-    if (k == 1 && ln[i] == '.') { i = j; continue; }
-    if (k == 2 && ln[i] == '.' && ln[i + 1] == '.') {
-      while (n && out[n - 1] != '/') n--;
-      if (n) n--;
-      i = j; continue; }
-    if (n && n < cap - 1) out[n++] = '/';
-    while (i < j && n < cap - 1) out[n++] = ln[i++]; }
-  return n; }
-
 // inflate the carried blob (gzip: skip the header fields, ISIZE names the tar)
 static unsigned char *fb_untar(uintptr_t *outn) {
-  unsigned char const *z = ai_srcgz; uintptr_t zn = ai_srcgz_len;
-  if (zn < 18 || z[0] != 0x1f || z[1] != 0x8b || z[2] != 8) return NULL;
-  uintptr_t o = 10; unsigned f = z[3];
-  if (f & 4) o += 2 + (uintptr_t) z[o] + ((uintptr_t) z[o + 1] << 8);
-  if (f & 8) { while (o < zn && z[o]) o++; o++; }
-  if (f & 16) { while (o < zn && z[o]) o++; o++; }
-  if (f & 2) o += 2;
-  if (o + 8 >= zn) return NULL;
-  uintptr_t un = (uintptr_t) z[zn - 4] | (uintptr_t) z[zn - 3] << 8
-               | (uintptr_t) z[zn - 2] << 16 | (uintptr_t) z[zn - 1] << 24;
+  uintptr_t o = 0, un = 0;
+  if (!ai_gz_body(ai_srcgz, ai_srcgz_len, &o, &un)) return NULL;
   unsigned char *t = mmap(NULL, un ? un : 1, PROT_READ | PROT_WRITE,
                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (t == MAP_FAILED) return NULL;
-  if (ai_inflate_raw(z + o, zn - o - 8, t, un) != (intptr_t) un)
+  if (ai_inflate_raw(ai_srcgz + o, ai_srcgz_len - o - 8, t, un) != (intptr_t) un)
     return munmap(t, un), NULL;
   return *outn = un, t; }
 
@@ -660,22 +625,15 @@ static unsigned char const *fb_find(unsigned char const *t, uintptr_t n,
   if (hop > 3 || !pl) return NULL;
   for (uintptr_t o = 0; o + 512 <= n && t[o];) {
     unsigned char const *h = t + o;
-    uintptr_t sz = fb_octal(h + 124, 12);
-    if ((h[156] == '0' || h[156] == 0 || h[156] == '2') && !memcmp(h + 257, "ustar", 5)) {
-      char nm[256]; uintptr_t ln = 0;
-      for (int i = 345; i < 500 && h[i] && ln < 254; i++) nm[ln++] = (char) h[i];
-      if (ln) nm[ln++] = '/';
-      for (int i = 0; i < 100 && h[i] && ln < 255; i++) nm[ln++] = (char) h[i];
-      uintptr_t cut = 0;
-      while (cut < ln && nm[cut] != '/') cut++;
-      cut = cut < ln ? cut + 1 : 0;
-      if (ln - cut == pl && !memcmp(nm + cut, path, pl)) {
-        if (h[156] != '2') return *len = sz, t + o + 512;
-        char tgt[101], cn[256]; uintptr_t tn = 0;
-        while (tn < 100 && h[157 + tn]) { tgt[tn] = (char) h[157 + tn]; tn++; }
-        tgt[tn] = 0;
-        uintptr_t cl = fb_canon(path, tgt, cn, sizeof cn - 1);
-        cn[cl] = 0;
+    uintptr_t sz = ai_ustar_octal(h + 124, 12);
+    if (ai_ustar_member(h)) {
+      char nm[256];
+      uintptr_t ln = ai_ustar_name(h, nm, sizeof nm);
+      if (ln == pl && !memcmp(nm, path, pl)) {
+        if (!ai_ustar_islink(h)) return *len = sz, t + o + 512;
+        char tgt[101], cn[256];
+        tgt[ai_ustar_link(h, tgt, sizeof tgt - 1)] = 0;
+        cn[ai_lnk_canon(path, tgt, cn, sizeof cn - 1)] = 0;
         return fb_find(t, n, cn, len, hop + 1); } }
     o += 512 + ((sz + 511) & ~(uintptr_t) 511); }
   return NULL; }

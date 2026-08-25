@@ -6,6 +6,7 @@
 // k_reset), different hardware.
 #include <stdint.h>
 #include "asmops.h"                    // the privileged instructions, both spellings
+#include "k.h"                       // kboot, and kputc/kputs/kputn (src/kmain.c)
 
 // khhdm is the higher-half direct map offset the door left; kmain sets it
 // before archinit runs, so physical address P is reachable at khhdm+P.
@@ -214,13 +215,6 @@ static char const *fault_kind(uint64_t esr) {
 // panic-path console output. kputc stamps a char into the framebuffer
 // ring buffer (kcb, when present) and mirrors it to serial; it takes no
 // l state, so it runs from a fault handler with no live `struct g`.
-static void kputc(int c) { if (kcb) cb_putc(kcb, (char) c); serial_putc(c); }
-static void kputs(char const *s) { while (*s) kputc(*s++); }
-static void kputn(uintptr_t n, int base) {
-  static char const d[] = "0123456789abcdef";
-  char buf[24]; int i = 0;
-  do buf[i++] = d[n % base], n /= base; while (n);
-  while (i) kputc(buf[--i]); }
 
 // reached from the sync/FIQ/SError vectors. report and halt -- faults
 // are not resumed (returning would just re-fault). kput* reach the

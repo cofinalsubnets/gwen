@@ -71,6 +71,17 @@ void k_reset(void), archinit(void), fbdraw(void), serial_init(void), serial_putc
 void k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct ai_wait_fd*, int, uintptr_t);
 bool k_ready(int fd, int events);
 void k_seat_init(void);                // src/sys.c: arm environ + the std streams
+
+// the panic-time console: the ring buffer (kcb) when there is one, mirrored to
+// serial. takes no l state, so it runs from a fault handler with no live `struct g`
+// -- which is what both arch backends want it for. serial_putc is theirs.
+void kputc(int c) { if (kcb) cb_putc(kcb, (char) c); serial_putc(c); }
+void kputs(char const *s) { while (*s) kputc(*s++); }
+void kputn(uintptr_t n, int base) {
+  static char const d[] = "0123456789abcdef";
+  char buf[24]; int i = 0;
+  do buf[i++] = d[n % base], n /= base; while (n);
+  while (i) kputc(buf[--i]); }
 // the kernel-only nif bracket (defs[] below); the linker synthesizes the pair
 extern struct ai_def const __start_ai_knifs[], __stop_ai_knifs[];
 // the metal image's far edge, PATCHED INTO THE FILE by the projection
@@ -555,32 +566,7 @@ static int k_bakes_n;
 extern const unsigned char ai_srcgz[];
 extern const uintptr_t ai_srcgz_len;           // src/src.c; weak zero without a blob
 extern intptr_t ai_inflate_raw(const unsigned char*, uintptr_t, unsigned char*, uintptr_t);
-static uintptr_t k_octal(unsigned char const *p, int n) {
-  uintptr_t v = 0;
-  for (int i = 0; i < n && p[i] >= '0' && p[i] <= '7'; i++) v = v * 8 + (uintptr_t)(p[i] - '0');
-  return v; }
-// join a symlink's target against the link's own directory, ".." and "."
-// squashed -- k_canon's law with an explicit base and no cwd. -> the length.
-static uintptr_t k_lnk_canon(char const *at, char const *ln, char *out, uintptr_t cap) {
-  uintptr_t n = 0;
-  if (ln[0] != '/') {
-    uintptr_t d = strlen(at);
-    while (d && at[d - 1] != '/') d--;
-    if (d && d <= cap) memcpy(out, at, n = d - 1); }         // dirname, no trailing slash
-  for (uintptr_t i = 0; ln[i];) {
-    while (ln[i] == '/') i++;
-    uintptr_t j = i;
-    while (ln[j] && ln[j] != '/') j++;
-    uintptr_t k = j - i;
-    if (!k) break;
-    if (k == 1 && ln[i] == '.') { i = j; continue; }
-    if (k == 2 && ln[i] == '.' && ln[i + 1] == '.') {
-      while (n && out[n - 1] != '/') n--;
-      if (n) n--;
-      i = j; continue; }
-    if (n && n < cap - 1) out[n++] = '/';
-    while (i < j && n < cap - 1) out[n++] = ln[i++]; }
-  return n; }
+#include "ustar.h"
 // one ustar pass: count on the first, fill on the second. paths re-home below
 // the archive's TOP (the tree looks the same from inside as a checkout does).
 // plain files land whole; a SYMLINK lands as a row whose target path rides
@@ -590,30 +576,21 @@ static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_file *rows, 
   int k = 0;
   for (uintptr_t o = 0; o + 512 <= n && t[o];) {
     unsigned char const *h = t + o;
-    uintptr_t sz = k_octal(h + 124, 12);
-    int lnk = h[156] == '2';
-    if ((h[156] == '0' || h[156] == 0 || lnk) && !memcmp(h + 257, "ustar", 5)) {
+    uintptr_t sz = ai_ustar_octal(h + 124, 12);
+    if (ai_ustar_member(h)) {
       if (rows) {
-        // name (+ optional ustar prefix), TOP stripped, NUL-terminated fresh
-        char nm[256]; uintptr_t ln = 0;
-        for (int i = 345; i < 500 && h[i] && ln < 254; i++) nm[ln++] = (char) h[i];
-        if (ln) nm[ln++] = '/';
-        for (int i = 0; i < 100 && h[i] && ln < 255; i++) nm[ln++] = (char) h[i];
-        uintptr_t cut = 0;
-        while (cut < ln && nm[cut] != '/') cut++;
-        cut = cut < ln ? cut + 1 : 0;
-        char *p = kmallocw(b2w(ln - cut + 1));
+        char nm[256];
+        uintptr_t ln = ai_ustar_name(h, nm, sizeof nm);      // TOP stripped
+        char *p = kmallocw(b2w(ln + 1));
         if (!p) return -1;
-        memcpy(p, nm + cut, ln - cut);
-        p[ln - cut] = 0;
+        memcpy(p, nm, ln);
+        p[ln] = 0;
         rows[k] = (struct k_file) { .path = p, .bytes = (char const *) t + o + 512,
-                                    .len = sz, .ms = 1000 * k_octal(h + 136, 12) };
-        if (lnk) {
-          char tgt[101]; uintptr_t tn = 0;
-          while (tn < 100 && h[157 + tn]) { tgt[tn] = (char) h[157 + tn]; tn++; }
-          tgt[tn] = 0;
-          char cn[256];
-          uintptr_t cl = k_lnk_canon(p, tgt, cn, sizeof cn);
+                                    .len = sz, .ms = 1000 * ai_ustar_octal(h + 136, 12) };
+        if (ai_ustar_islink(h)) {
+          char tgt[101], cn[256];
+          tgt[ai_ustar_link(h, tgt, sizeof tgt - 1)] = 0;
+          uintptr_t cl = ai_lnk_canon(p, tgt, cn, sizeof cn);
           char *q = kmallocw(b2w(cl + 1));
           if (!q) return -1;
           memcpy(q, cn, cl);
@@ -623,18 +600,11 @@ static int k_tar_walk(unsigned char const *t, uintptr_t n, struct k_file *rows, 
     o += 512 + ((sz + 511) & ~511ull); }
   return k; }
 static bool k_untar(void) {
-  unsigned char const *z = ai_srcgz; uintptr_t zn = ai_srcgz_len;
-  if (zn < 18 || z[0] != 0x1f || z[1] != 0x8b || z[2] != 8) return false;
-  uintptr_t o = 10; unsigned f = z[3];
-  if (f & 4) o += 2 + (uintptr_t) z[o] + ((uintptr_t) z[o + 1] << 8);
-  if (f & 8) { while (o < zn && z[o]) o++; o++; }
-  if (f & 16) { while (o < zn && z[o]) o++; o++; }
-  if (f & 2) o += 2;
-  if (o + 8 >= zn) return false;
-  uintptr_t un = (uintptr_t) z[zn - 4] | (uintptr_t) z[zn - 3] << 8
-               | (uintptr_t) z[zn - 2] << 16 | (uintptr_t) z[zn - 1] << 24;
+  uintptr_t o = 0, un = 0;
+  if (!ai_gz_body(ai_srcgz, ai_srcgz_len, &o, &un)) return false;
   unsigned char *t = kmallocw(b2w(un + 1));
-  if (!t || ai_inflate_raw(z + o, zn - o - 8, t, un) != (intptr_t) un) return false;
+  if (!t || ai_inflate_raw(ai_srcgz + o, ai_srcgz_len - o - 8, t, un) != (intptr_t) un)
+    return false;
   int n = k_tar_walk(t, un, NULL, NULL);
   if (n <= 0) return false;
   struct k_file *rows = kmallocw(b2w((uintptr_t) n * sizeof *rows));

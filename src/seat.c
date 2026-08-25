@@ -205,3 +205,10 @@ void ai_ready_fds(struct ai_wait_fd *fds, int n) {
 void ai_fd_close(int fd) {
   if (__ai_osv < 0) return k_row_close(fd);
   close(fd); }
+
+// a love port -> the fd under it, or -1 for anything that is not an fd port. the fd
+// port is this file's (ai_fd_port_vt below), so the question belongs here too.
+intptr_t ai_port_fd(ai_word x) {
+ if (!charmp(x) && ((union u*) x)->ap == lvm_port_io)
+    return ai_io_fd((struct ai_io*) x);
+ return -1; }

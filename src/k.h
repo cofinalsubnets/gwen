@@ -53,3 +53,17 @@ static inline void k_cmdline(char const *s, uintptr_t n) {
   uintptr_t i = 0;
   for (; i < n && i + 1 < sizeof kboot.cmdline && s[i]; i++) kboot.cmdline[i] = s[i];
   kboot.cmdline[i] = 0; }
+
+// hand kmain one usable span of RAM. every backend walks its own map (PVH's
+// e820, the DTB's /memory) and lands here; a span too small to hold a pointer
+// pair is not worth a row.
+static inline void k_ram_give(uint64_t base, uint64_t len) {
+  if (len < 2 * sizeof(uintptr_t) || kboot.ram_n >= k_boot_ram_max) return;
+  kboot.ram[kboot.ram_n].base = base;
+  kboot.ram[kboot.ram_n].len  = len;
+  kboot.ram_n++; }
+
+// the panic-time console (src/kmain.c), for a backend with no live `struct g`
+void kputc(int c);
+void kputs(char const *s);
+void kputn(uintptr_t n, int base);

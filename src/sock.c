@@ -25,6 +25,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+extern intptr_t ai_port_fd(ai_word);   // src/seat.c: the fd under a love port, or -1
 
 // every socket fd is close-on-exec. a run/exec/spawn child must never inherit
 // these, and a server that re-execs onto a new binary must not carry its own
@@ -40,10 +41,6 @@
 // "is x a port" as main.c's lvm_close: an even (heap) word whose first slot is
 // the lvm_port_io discriminator (declared in love.h). a closed port carries the
 // -3 sentinel; we hand that straight back and the syscall answers EBADF.
-static intptr_t port_fd(ai_word x) {
- if (!charmp(x) && ((union u*) x)->ap == lvm_port_io)
-    return ai_io_fd((struct ai_io*) x);
- return -1; }
 
 // a cask's (or string's) backing bytes, or 0 -- the wl lanes take either.
 static struct ai_str *cask_bytes(ai_word x) {
@@ -208,7 +205,7 @@ ai_noinline static int call_accept(int lfd) {
 // re-running the op is exact: nothing is consumed before the park. () on misuse or
 // a real accept() failure.
 static lvm(lvm_accept) {
- int lfd = (int) port_fd(Sp[0]);
+ int lfd = (int) ai_port_fd(Sp[0]);
  if (lfd < 0) goto fail;
  int fd = call_accept(lfd);
  if (fd == -2) { g->next_wait_fd = lfd; ai_musttail return Ap(lvm_yield_sw, g); }
@@ -236,7 +233,7 @@ static lvm(lvm_accept) {
 // delivered by blocking, a truncated response the moment the door could answer
 // short (rung 4). kiosko's own shape is `(say c body) (seal c 1) (close c)`.
 static lvm(lvm_shutdown) {
- int fd = (int) port_fd(Sp[0]);
+ int fd = (int) ai_port_fd(Sp[0]);
  if (fd >= 0 && oddp(Sp[1])) {
   intptr_t how = getcharm(Sp[1]);
   if (how >= 1 && how <= 2) {                 // fd >= 0 already proved it a port
@@ -319,7 +316,7 @@ ai_noinline static struct dgram call_udprecv(int fd, char *buf, size_t cap) {
                           | (uintptr_t) ntohs(peer.sin_port) }; }
 
 static lvm(lvm_udprecv) {
- int fd = (int) port_fd(Sp[0]);
+ int fd = (int) ai_port_fd(Sp[0]);
  if (fd < 0) goto fail;
  // a stack buffer is safe in an lvm_ only while its address never reaches the tail:
  // every exit here unwinds the frame before it jumps. ai_musttail is owed rather than
@@ -369,7 +366,7 @@ ai_noinline static ssize_t call_udpsend(int fd, uintptr_t peerfix, void const *p
 
 static lvm(lvm_udpsend) {
  if (!oddp(Sp[1]) || !ai_strp(Sp[2])) goto fail;
- int fd = (int) port_fd(Sp[0]);
+ int fd = (int) ai_port_fd(Sp[0]);
  if (fd < 0) goto fail;
  struct ai_str *s = str(Sp[2]);
  ssize_t w = call_udpsend(fd, getcharm(Sp[1]), txt(s), len(s));

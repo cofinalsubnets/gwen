@@ -4,6 +4,7 @@
 // k_exception; uart_isr funnels IRQ4 into k_uart (see the bottom).
 #include <stdint.h>
 #include "asmops.h"                    // the privileged instructions, both spellings
+#include "k.h"                       // kboot, and kputc/kputs/kputn (src/kmain.c)
 void k_halt(void);
 
 // the frame exc_common hands us, lowest address (rsp) first:
@@ -25,13 +26,6 @@ extern void serial_putc(int);
 extern void fbdraw(void);
 extern struct cb *kcb;
 
-static void kputc(int c) { if (kcb) cb_putc(kcb, (char) c); serial_putc(c); }
-static void kputs(char const *s) { while (*s) kputc(*s++); }
-static void kputn(uintptr_t n, int base) {
-  static char const d[] = "0123456789abcdef";
-  char buf[24]; int i = 0;
-  do buf[i++] = d[n % base], n /= base; while (n);
-  while (i) kputc(buf[--i]); }
 
 static char const *const exc_name[32] = {
   [0]  = "#DE", [1]  = "#DB", [2]  = "NMI", [3]  = "#BP", [4]  = "#OF",

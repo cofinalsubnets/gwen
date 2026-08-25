@@ -71,6 +71,7 @@
 #endif
 #if defined(AiHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
+extern intptr_t ai_port_fd(ai_word);   // src/seat.c: the fd under a love port, or -1
 #endif
 
 // a wait(2) status word -> the value a reaper hands back: the exit code, or
@@ -85,10 +86,6 @@ static ai_inline int proc_status(int st) {
 // "is x a port" as main.c's lvm_close: a heap word whose discriminator is the
 // port vtable. a closed port carries the -3 sentinel; we hand that straight back
 // to the syscall, which fails with EBADF -- the honest answer.
-static intptr_t port_fd(ai_word x) {
- if (!charmp(x) && ((union u*) x)->ap == lvm_port_io)
-    return ai_io_fd((struct ai_io*) x);
- return -1; }
 
 // a love string as a C string, or NULL for a non-string: bytes[len] is always a NUL
 // (src/love.h), so the bytes go to the syscall where they lie. a path the kernel finds
@@ -341,7 +338,7 @@ ai_noinline static struct ai *host_sigtake(struct ai *g, int fd) {
  return g; }
 
 static lvm(lvm_sigtake) {
- int fd = (int) port_fd(Sp[0]);
+ int fd = (int) ai_port_fd(Sp[0]);
  if (fd < 0) { Sp[0] = ZeroPoint; ai_musttail return Next(1); }
  Pack(g);
  g = host_sigtake(g, fd);
@@ -1246,7 +1243,7 @@ ai_noinline static int host_setwinsize(intptr_t fd, intptr_t row, intptr_t col) 
  return ioctl((int) fd, TIOCSWINSZ, &ws) ? errno : 0; }
 
 static lvm(lvm_setwinsize) {
- intptr_t fd  = port_fd(Sp[0]),
+ intptr_t fd  = ai_port_fd(Sp[0]),
           row = charmp(Sp[1]) ? getcharm(Sp[1]) : 0,
           col = charmp(Sp[2]) ? getcharm(Sp[2]) : 0;
  int rc = host_setwinsize(fd, row, col);
@@ -1268,7 +1265,7 @@ ai_noinline static int host_ptyecho(intptr_t fd, intptr_t on) {
  return tcsetattr((int) fd, TCSANOW, &t) ? errno : 0; }
 
 static lvm(lvm_ptyecho) {
- intptr_t fd = port_fd(Sp[0]),
+ intptr_t fd = ai_port_fd(Sp[0]),
           on = charmp(Sp[1]) ? getcharm(Sp[1]) : 0;
  int rc = host_ptyecho(fd, on);
  Sp[1] = rc ? putcharm(rc) : zero;

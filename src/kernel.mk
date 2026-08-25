@@ -40,10 +40,10 @@ k_free_c = $R/src/kmain.c $R/src/blk.c $R/src/sys.c
 # boot text's task shim shadows those names, and quit/getpid branch to their
 # k_lvm_ twins on a negative osv. ⚠ no quay.c here: cb.c carries it by unity
 # include, exactly as the host link does.
-k_host_c = $(patsubst %,$R/src/%.c,main cb image mem hash sock tls deflate inflate src posix seat)
+k_host_c = $(patsubst %,$R/src/%.c,main cb image mem hash sock tls deflate inflate src posix seat ustar)
 k_quay_c = $R/crew/quay/cga_8x8.c $R/crew/quay/moderndos_8x16.c $R/crew/quay/paint.c
 k_shared_c = $(love_c) $(k_quay_c) $(c_c)
-k_h = $(love_h) $(R)/src/k.h $(wildcard *.h $(R)/src/$a_*.h)
+k_h = $(love_h) $(R)/src/k.h $(R)/src/ustar.h $(wildcard *.h $(R)/src/$a_*.h)
 
 k_odir = $(ko)/$a$(ksuf)
 k_elf = $(ko)/love-$a$(ksuf).elf
@@ -209,7 +209,7 @@ kmain_o: $(k_free_o)
 # recipe in src/build.mk reads $(kart_o) at run time, where it is defined.
 kart_inc = -I$(ho) -I. -Isrc -Iout/lib -I$R \
   -I$R/crew/quay -I$R/crew/moon/include
-kart_h = $(love_h) $(R)/src/k.h $(wildcard $(R)/src/$(hosta)_*.h)
+kart_h = $(love_h) $(R)/src/k.h $(R)/src/ustar.h $(wildcard $(R)/src/$(hosta)_*.h)
 kart_cats = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h \
   out/lib/verbs.h out/lib/uu.h out/lib/bao.h \
   out/lib/korelist.h out/lib/distlist.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h
