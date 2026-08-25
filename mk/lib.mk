@@ -11,11 +11,9 @@ lib_h = $(patsubst love/%.l,out/lib/%.h,$(wildcard love/*.l))
 # cross-arch asserts run under both its compilers. Both flavors are generated either way:
 # holo_h is the lcat header, asm0_h the sed-wrapped raw source love0 needs.
 holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/arm64.h  out/lib/riscv.h
-# holo's LINKER half, baked beside the backends: elf.l wraps assembled bytes in an
-# executable, obj.l lays a relocatable .o, link.l links a set (ldkern is the kernel's door).
-# ⚠ the holo- prefix is load-bearing: a quoted #include "link.h" sits next to glibc's
-# <link.h>, and a missing header would find that one instead of failing.
-ld_h = out/lib/holo-elf.h out/lib/holo-obj.h out/lib/holo-link.h
+# holo's LINKER half is NOT baked: elf/obj/link ride the crew cat, laid at bake with the
+# glaze live. no egg carries them -- the egg's holo feeds the glaze, which emits for the
+# machine it runs on and never writes a file.
 asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h
 # the glaze (native JIT): raw-text headers, no lcat round-trip. Evaled ONLY before a
 # `love bake`, so a normal boot never pays the ~810 ms and the baked snapshot carries an
@@ -64,8 +62,6 @@ sed_h = @mkdir -p out/lib; echo 'LOVE	'$@; LOVE_NO_IMAGE= $(sed_lit) $< > $@
 # for device frontends that bake it behind the egg.
 $(holo_h): out/lib/%.h: crew/holo/%.l tools/lcat.l
 	$(lcat_h)
-$(ld_h): out/lib/holo-%.h: crew/holo/%.l tools/lcat.l
-	$(lcat_h)
 out/lib/rune.h: crew/rune/rune.l tools/lcat.l
 	$(lcat_h)
 # love0's raw-source twins of the same backends, so the corpus tests the assembler under
@@ -102,4 +98,4 @@ out/lib/love_version.h: $(R)/VERSION
 # the lcat'd headers are PRODUCED BY running the lcat love, so re-lay them whenever it
 # moves. ⚠ EMPTY when a seed bundled one: love0 is never built there, and naming
 # it as a prerequisite would build it for no reason -- the lane the artifact exists to skip.
-$(lib_h) $(holo_h) $(ld_h) out/lib/rune.h: $(if $(bundled_love),,$(love0))
+$(lib_h) $(holo_h) out/lib/rune.h: $(if $(bundled_love),,$(love0))

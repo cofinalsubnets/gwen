@@ -141,7 +141,7 @@ $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 $(ho)/love.o: out/lib/love_version.h
 # the lcat'd headers host/main.c bakes inline. one roster: the mooncc twin and the
 # HCC link below read the same name, and three spellings is how they drift.
-baked_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/overlay.h out/lib/peg.h out/lib/pat.h out/lib/uu.h out/lib/verbs.h out/lib/distlist.h $(holo_h) $(ld_h) $(glaze_h)
+baked_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/overlay.h out/lib/peg.h out/lib/pat.h out/lib/uu.h out/lib/verbs.h out/lib/distlist.h $(holo_h) $(glaze_h)
 $(ho)/host/main.o: $(baked_h)
 # host/cb.c rides the crew/quay sources by unity include -- recompile when they move.
 $(ho)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h

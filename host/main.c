@@ -735,11 +735,11 @@ static char const src_verbs[] =
 // backend (C string concatenation; the glaze emits for the running arch only --
 // mooncc's cat joins the cross backends at its own build, and love0 bakes x64+arm64
 // so the corpus's cross-arch asserts run under both its compilers).
-// the linker half rides the same entry, in load order: elf.l wraps assembled bytes in an
-// executable, obj.l lays a relocatable .o, link.l links a set. they read holo's internals
-// bare (catall, le*, lay, laylax, patch-with), which is why they sit inside the module text
-// rather than loading over it -- one layer, so there is no splice to arrange. the cats keep
-// their own copies: love0's holo carries no linker, and it bakes mooncc0.image.
+// the LINKER HALF IS NOT HERE, and none of the three holos carries it: love0's is
+// holo0+x64+arm64, the kernel's is holo plus its native backend, and this one matches.
+// the egg's holo exists to feed the glaze, which emits for the machine it runs on and
+// never writes a file; elf/obj/link come off the crew cat, laid at bake with the glaze
+// live. a copy here was 48K of .rodata nothing called.
 static char const src_holo[] =
 #include "holo.h"
 #if defined(__x86_64__)
@@ -749,9 +749,6 @@ static char const src_holo[] =
 #elif defined(__riscv)
 #include "riscv.h"
 #endif
-#include "holo-elf.h"
-#include "holo-obj.h"
-#include "holo-link.h"
  ;
 
 #ifdef AiGlazed
