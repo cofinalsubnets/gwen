@@ -58,38 +58,58 @@
    (redundant? ctx cs) (? (&& (two? ctx) (opb? (cap ctx)) (dstart? (cap cs))) 0
                           (: lt (string (rev ctx)) rt (form1 cs)
                              (? rt (= (datums (+ lt rt)) (datums (+ (+ lt " ") rt))) 0)))
-   ; emit one byte to out, C-escaped for the string literal.
-   (eb c) (? (= c 10) (say out "\\n")
-              (| (= c 92) (= c 34)) (: _ (put out 92) (put out c))
-              (put out c)))
+   ; emit one byte to o, C-escaped for the string literal.
+   (eb o c) (? (= c 10) (say o "\\n")
+               (| (= c 92) (= c 34)) (: _ (put o 92) (put o c))
+               (put o c))
+   ; a path's module stem: past the last /, minus a trailing .l
+   (stem s) (: n (tally s)
+               b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep s k 0)) (+ k 1) r)) r)) 0 0)
+               e (? (? (< 2 (- n b)) (= ".l" (snip s (- n 2) n)) 0) (- n 2) n)
+               (snip s b e))
+   ; serialize src into dst as one C string literal.
+   (lcat1 src dst)
+    (: p (open src "r")
+       _ (? p 0 (: _ (say err (+ "lcat: cannot open " src)) (quit 1)))
+       ; gather every canonical form into one space-joined string. ⚠ a TORN input dies
+       ; loudly: a header silently short of its last forms is the empty-lcat disaster
+       ; wearing a subtler face -- the build would take it as fresh and fail somewhere else.
+       acc ((: (g acc cl first)
+              (: r (sound cl)
+                 (? (two? r) (g (? first (show (cap r)) (+ (+ acc " ") (show (cap r)))) (cup r) 0)
+                    (id? r 'torn) (: _ (say err (+ "lcat: unfinished form in " src)) (quit 1))
+                    acc)))
+            "" (slurp p) 1)
+       _ (close p)
+       o (open dst "w")
+       _ (? o 0 (: _ (say err (+ "lcat: cannot write " dst)) (quit 1)))
+       _ (put o 34)                                    ; opening "
+       ; walk acc: drop redundant spaces (outside string literals), C-escape the rest.
+       ; ctx = bytes since the last hard boundary (reversed); instr = inside a "..."
+       ; literal (where \ escapes).
+       _ ((: (g cs ctx instr)
+            (? (two? cs)
+               (: c (cap cs)
+                  (? instr
+                     (? (= c 92) (: _ (eb o c) _ (eb o (cap (cup cs))) (g (cup (cup cs)) 0 1))
+                        (: _ (eb o c) (g (cup cs) 0 (? (= c 34) 0 1))))
+                     (? (= c 32)
+                        (? (redundant? ctx (cup cs))
+                           (g (cup cs) ctx 0)             ; drop the space; ctx keeps accruing
+                           (: _ (eb o c) (g (cup cs) 0 0)))   ; keep it: a real boundary
+                        (: _ (eb o c)
+                           (g (cup cs) (? (hardb c) 0 (link c ctx)) (= c 34))))))))
+            (s2cl acc) 0 0)
+       _ (put o 34)                                    ; closing "
+       _ (put o 10)
+       (close o)))
 
-(: p (open (cap (cup argv)) "r")
-   _ (? p 0 (: _ (say err "lcat: cannot open input") (quit 1)))
-   ; gather every canonical form into one space-joined string. ⚠ a TORN input dies
-   ; loudly: a header silently short of its last forms is the empty-lcat disaster
-   ; wearing a subtler face -- the build would take it as fresh and fail somewhere else.
-   acc ((: (g acc cl first)
-          (: r (sound cl)
-             (? (two? r) (g (? first (show (cap r)) (+ (+ acc " ") (show (cap r)))) (cup r) 0)
-                (id? r 'torn) (: _ (say err "lcat: unfinished form in input") (quit 1))
-                acc)))
-        "" (slurp p) 1)
-   _ (put out 34)                                      ; opening "
-   ; walk acc: drop redundant spaces (outside string literals), C-escape the rest.
-   ; ctx = bytes since the last hard boundary (reversed); instr = inside a "..."
-   ; literal (where \ escapes).
-   _ ((: (g cs ctx instr)
-        (? (two? cs)
-           (: c (cap cs)
-              (? instr
-                 (? (= c 92) (: _ (eb c) _ (eb (cap (cup cs))) (g (cup (cup cs)) 0 1))
-                    (: _ (eb c) (g (cup cs) 0 (? (= c 34) 0 1))))
-                 (? (= c 32)
-                    (? (redundant? ctx (cup cs))
-                       (g (cup cs) ctx 0)                 ; drop the space; ctx keeps accruing
-                       (: _ (eb c) (g (cup cs) 0 0)))     ; keep it: a real boundary
-                    (: _ (eb c)
-                       (g (cup cs) (? (hardb c) 0 (link c ctx)) (= c 34))))))))
-        (s2cl acc) 0 0)
-   _ (put out 34)                                      ; closing "
-   (put out 10))
+; usage: lcat.l OUTDIR SRC.l ..  -- one header per source, <OUTDIR>/<stem>.h.
+; ⚠ MANY SOURCES, ONE RUN, and that is the whole point: ~98% of an lcat invocation is
+; love0 booting (2.45G of the 2.52G a 2.2K file costs), so the per-file lane spent its
+; time starting up. the caller lays into a scratch dir and moves what CHANGED, which is
+; why nothing here compares or renames.
+(: dir (cap (cup argv))
+   srcs (cup (cup argv))
+   _ (? (two? srcs) 0 (: _ (say err "lcat: usage: lcat.l OUTDIR SRC.l ..") (quit 1)))
+   (each srcs (\ s (lcat1 s (+ (+ (+ dir "/") (stem s)) ".h")))))

@@ -33,11 +33,16 @@ sed_lit = $(if $(bundled_love),$(bundled_love) sed,sed) \
 boot_h = out/lib/cli0.h out/lib/egg0.h out/lib/post0.h out/lib/p10.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/coin0.h out/lib/rng0.h out/lib/q0.h out/lib/kanren0.h out/lib/overlay0.h out/lib/peg0.h out/lib/verbs0.h $(asm0_h)
 .PHONY: lib
 lib: $(lib_h) $(boot_h)
-# ⚠ lcat a .l into its header ATOMICALLY -- temp, require non-empty, then mv. A bare `> $@`
-# truncates first, so a broken love0 leaves a 0-byte header make calls up to date, which
-# SILENTLY drops a baked service (an empty holo.h => `assemble` unbound => the glaze emits
-# nothing => a corrupt native). ⚠ and the temp takes the PID: the ports RECURSE onto these,
-# so -j runs the recipe twice at once and one shared temp is renamed out from under the other.
+# ⚠ ONE LCAT RUN LAYS THEM ALL, and that is where the build time went: ~98% of an
+# invocation is love0 booting (2.45G insns of the 2.52G a 2.2K file costs), so fifteen
+# runs paid fifteen startups to serialize 300K of text. One run, a scratch dir, and the
+# loop below moves only what CHANGED -- which is also what keeps an edit to one .l from
+# restamping every header and rebuilding every frontend.
+# ⚠ lcat lays into a SCRATCH DIR and the move is here, so a broken love0 cannot leave a
+# 0-byte header make calls up to date -- which SILENTLY drops a baked service (an empty
+# holo.h => `assemble` unbound => the glaze emits nothing => a corrupt native).
+# ⚠ and the scratch takes the PID: the ports RECURSE onto these, so -j runs the recipe
+# twice at once and one shared temp is renamed out from under the other.
 # ⚠ the lcat is run by love0 NORMALLY and by the BUNDLED love when a seed laid one
 # beside the tree: love0 is not built at all there (see ./Makefile's bundled_love).
 # ⚠ AND THE PRELOAD BELONGS TO LOVE0 ALONE. `-l love/prel.l` feeds prel's SOURCE to a
@@ -46,24 +51,37 @@ lib: $(lib_h) $(boot_h)
 # prel source dies `;; missing tray`. A baked love does not need it either, having prel in
 # the image already. Both lanes then lcat the same bytes.
 lcat_love = $(if $(bundled_love),$(bundled_love),$(love0) -l love/prel.l)
-lcat_h = @mkdir -p out/lib; echo 'LOVE	'$@; t=$@.$$$$.tmp; \
-  $(lcat_love) tools/lcat.l $< > $$t && test -s $$t && mv -f $$t $@ \
-    || { rm -f $$t; echo "FAIL: $@ empty (lcat failed -- broken bootstrap?)"; exit 1; }
-$(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(love0), stated below
-	$(lcat_h)
-# the sed twin of $(lcat_h): a text->C-literal that needs no interpreter.
+# the sources and the headers they lay, in step: lib_h is love/*.l by construction, and
+# the two outsiders (holo's four, rune) name their own.
+lcat_src = $(wildcard love/*.l) $(patsubst out/lib/%.h,crew/holo/%.l,$(holo_h)) crew/rune/rune.l
+lcat_out = $(lib_h) $(holo_h) out/lib/rune.h
+# ⚠ THE STAMP IS THE WORK and the headers only depend on it -- a rule per header would be
+# a run per header again. Each header keeps a recipe rather than none, because a
+# prerequisite-less rule fires only when the target is MISSING (port/port.mk learned the
+# same thing); the recipe never WRITES the file, so an unchanged header keeps its mtime
+# and nothing downstream rebuilds. What it does check is the one hole a stamp opens: a
+# header deleted by hand under a current stamp would otherwise be served as up to date
+# and fail at the cc, which is exactly how out/lib/rune.h once froze (port/playdate).
+out/lib/.lcat.stamp: $(lcat_src) tools/lcat.l $(if $(bundled_love),,$(love0))
+	@mkdir -p out/lib; d=out/lib/.lcat.$$$$; rm -rf $$d; mkdir -p $$d; \
+	 $(lcat_love) tools/lcat.l $$d $(lcat_src) \
+	   || { rm -rf $$d; echo "FAIL: lcat laid nothing (broken bootstrap?)"; exit 1; }; \
+	 for h in $(notdir $(lcat_out)); do \
+	   test -s $$d/$$h \
+	     || { rm -rf $$d; echo "FAIL: out/lib/$$h empty (lcat failed -- broken bootstrap?)"; exit 1; }; \
+	   cmp -s $$d/$$h out/lib/$$h || { echo 'LOVE	out/lib/'$$h; mv -f $$d/$$h out/lib/$$h; }; \
+	 done; rm -rf $$d; touch $@
+$(lcat_out): out/lib/.lcat.stamp
+	@test -s $@ || { echo "FAIL: $@ is missing but $< is current -- rm $< and re-make"; exit 1; }
+# the sed twin of the lcat lay: a text->C-literal that needs no interpreter, so the tag
+# says SED -- it is sed running, ambient or ours, and never the lcat love.
 # ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads, for the same reason $(hcc) does: the root
 # Makefile exports it=1 in a tree with no bundled love, a seed-laid tree INHERITS it,
 # and an egg-booted love has no verb table -- so `love sed` would read as a filename.
-sed_h = @mkdir -p out/lib; echo 'LOVE	'$@; LOVE_NO_IMAGE= $(sed_lit) $< > $@
-# ⚠ every rule below is a STATIC pattern -- their sources live outside love/, so the
-# wildcard misses them, and an implicit pattern would make these headers INTERMEDIATE.
-# holo rides the same lcat pipeline as the egg (the glaze is its client); rune is the CAS,
-# for device frontends that bake it behind the egg.
-$(holo_h): out/lib/%.h: crew/holo/%.l tools/lcat.l
-	$(lcat_h)
-out/lib/rune.h: crew/rune/rune.l tools/lcat.l
-	$(lcat_h)
+sed_h = @mkdir -p out/lib; echo 'SED	'$@; LOVE_NO_IMAGE= $(sed_lit) $< > $@
+# holo rides the same lcat run as the egg (the glaze is its client); rune is the CAS, for
+# device frontends that bake it behind the egg. Both are in $(lcat_src) above -- their
+# sources live outside love/, where the wildcard misses them.
 # love0's raw-source twins of the same backends, so the corpus tests the assembler under
 # BOTH compilers, and the generic love/*.l twin beside them.
 $(asm0_h): out/lib/%0.h: crew/holo/%.l
@@ -95,7 +113,7 @@ out/lib/love_version.h: $(R)/VERSION
 	@printf '#define AiVersion "%s"\n' "$$(cat $(R)/VERSION)" > $@
 	@echo 'SH	'$@
 
-# the lcat'd headers are PRODUCED BY running the lcat love, so re-lay them whenever it
-# moves. ⚠ EMPTY when a seed bundled one: love0 is never built there, and naming
-# it as a prerequisite would build it for no reason -- the lane the artifact exists to skip.
-$(lib_h) $(holo_h) out/lib/rune.h: $(if $(bundled_love),,$(love0))
+# the lcat'd headers are PRODUCED BY running the lcat love, so the stamp above names it as
+# a prerequisite and re-lays whenever it moves. ⚠ EMPTY when a seed bundled one: love0 is
+# never built there, and naming it would build it for no reason -- the lane the artifact
+# exists to skip.
