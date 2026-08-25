@@ -1378,16 +1378,13 @@ static struct ai *ai_eval(struct ai *g);
 // function state using this type
 struct env {
  struct env *par; // enclosing scope
- word args, imps, // positional and closure variables
-  stack, // computed arguments and let bindings on stack
-  lams, // lambdas defined in a local let form
-  len,  // thread length accumulator
-  branches, // stack for conditional alternate branch addresses
-  exits,
-  sites, // recursive-fn ref backpatch: list of (lams-entry . operand-cell)
-  src,  // a lambda's source \-expr, stashed at the thread head for printing (zero = none)
-  fars, // a let's binding names, pinned before its lambdas compile: the shadow set
-  end[]; }; // stach for conditional exit addresses
+ word tab, // the mutable scope, keyed by the E* fixnums: positional and closure variables,
+           //   the stack of computed args and let bindings, the let's lambdas, the cond
+           //   branch and exit addresses, the backpatch sites, a lambda's source \-expr,
+           //   and fars, the binding names pinned before a let's lambdas compile. ev.l's
+           //   own scope is a tablet read the same way -- (c 'stk), (c 'imp), (c 'lam).
+  len,     // thread length accumulator: a fixnum, so no store to it needs a barrier
+  end[]; };
 
 typedef Ana(ana);
 typedef Cata(cata);
@@ -1403,15 +1400,32 @@ static ai_inline struct ai *c0_ix(struct ai *g, struct env **c, lvm_t *i, word x
 static ai_inline struct ai *c0_i(struct ai *g, struct env **c, lvm_t *i) {
  return incl(*c, 1), ai_push(g, 2, c1_i, i); }
 
+// the scope's mutable fields ride a tablet, the way ev.l's own scope does ((c 'stk),
+// (c 'imp), ..). ai_mapput barriers its own stores, so none of these writes carries a
+// barrier of its own -- the hand-kept invariant retires with them.
+enum { EStack, EArgs, EImps, ELams, EBranch, EExit, ESites, ESrc, EFars };
+static ai_inline word eget(struct ai *g, struct env *e, int k) {
+ return ai_mapget(g, zero, putcharm(k), e->tab); }
+static struct ai *eset(struct ai *g, struct env **c, int k, word v) {
+ g = ai_push(g, 3, putcharm(k), v, (*c)->tab);   // sp0 key, sp1 val, sp2 map
+ if (ai_ok(g = ai_mapput(g))) g->sp++;           // mapput leaves the map: drop it
+ return g; }
 static struct ai *enscope(struct ai *g, struct env *par, word args, word imps) {
  uintptr_t const n = Width(struct env) + Width(struct ai_tag);
  g = ai_push(g, 3, args, imps, par);
+ g = map_new(g);                                   // sp0 = tab, then args/imps/par
  if (ai_ok(g = ai_have(g, n))) {
   struct env *c = bump(g, n);
-  c->stack = c->branches = c->exits = c->lams = c->len = c->sites = c->src = c->fars = zero;
-  c->args = g->sp[0], c->imps = g->sp[1], c->par = (struct env*) g->sp[2];
-  *(g->sp += 2) = (word) tagthread((union u*)c, Width(struct env)); }
- return g; }
+  c->len = zero;
+  c->tab = g->sp[0];
+  c->par = (struct env*) g->sp[3];
+  g->sp[3] = (word) tagthread((union u*)c, Width(struct env)); }   // env at sp3; tab/args/imps stay
+ if (!ai_ok(g)) return g;
+ { struct env *e = (struct env*) g->sp[3];                     // re-read after every put: a
+   g = eset(g, &e, EArgs, g->sp[1]);                           // grow inside mapput would move it
+   if (ai_ok(g)) e = (struct env*) g->sp[3], g = eset(g, &e, EImps, g->sp[2]); }
+ return ai_ok(g) ? (g->sp += 3, g) : g; }
+
 
 static word memq(struct ai *g, word l, word k) {
  for (; chainp(l); l = B(l)) if (eql(g, k, A(l))) return l;
@@ -1462,7 +1476,7 @@ static Cata(c1) {
  // a lambda carries its source \-expr: reserve one extra leading word for it so
  // it sits at value[-1] (the printer's discriminator) and rides inside the thread
  // span (head = src word) for free GC tracing. top-level/aux threads have no src.
- uintptr_t extra = zerop((*c)->src) ? 0 : 1;
+ uintptr_t extra = zerop(eget(g, (*c), ESrc)) ? 0 : 1;
  g = ai_have(g, l + extra + Width(struct ai_tag));
  if (ai_ok(g)) {
   union u *k = bump(g, l + extra + Width(struct ai_tag));
@@ -1470,7 +1484,7 @@ static Cata(c1) {
   Kp = tagthread(k, l + extra) + l + extra;
   if (ai_ok(g = pull(g, c))) {           // pull emits l words (may GC); Kp now = entry
    // read src after all allocation: ai_have/pull can GC and relocate the env's src.
-   if (extra) Kp[-1].x = (*c)->src,     // value[-1] = source \-expr
+   if (extra) Kp[-1].x = eget(g, (*c), ESrc),     // value[-1] = source \-expr
               gen_wb_cell(g, Kp - 1, Kp[-1].x),
               clip(g, Kp - 1);          // tag head spans [src .. body]; value stays Kp
    else clip(g, Kp); } }
@@ -1479,8 +1493,7 @@ static Cata(c1) {
 static Cata(c1_yield) { return g; }
 
 static Cata(c1_cond_pop_exit) { return
- (*c)->exits = B((*c)->exits), // pops cond expression exit address off env stack exits
- gen_wb_cell(g, &(*c)->exits, (*c)->exits),
+ g = eset(g, c, EExit, B(eget(g, *c, EExit))), // pops cond expression exit address off env exits
  pull(g, c); }
 
 static Cata(c1_apn) {
@@ -1527,21 +1540,21 @@ static Cata(c1_ar, lvm_t *i, word ar) { return
 
 static Cata(c1_cur) {
  struct env *e = (void*) pop1(g);
- uintptr_t ar = llen(e->args) + llen(e->imps);
+ uintptr_t ar = llen(eget(g, e, EArgs)) + llen(eget(g, e, EImps));
  return ar == 1 ? pull(g, c) : c1_ar(g, c, lvm_cur, ar); }
 
 static Cata(c1_ret) {
  struct env *e = (struct env*) pop1(g);
- uintptr_t ar = llen(e->args) + llen(e->imps);
+ uintptr_t ar = llen(eget(g, e, EArgs)) + llen(eget(g, e, EImps));
  return c1_ar(g, c, lvm_ret, ar); }
 
-cata1(c1_cond_push_branch, g = gxl(ai_push(g, 2, Kp, (*c)->branches)), (*c)->branches = ai_ok(g) ? pop1(g) : zero, gen_wb_cell(g, &(*c)->branches, (*c)->branches))
-cata1(c1_cond_push_exit, g = gxl(ai_push(g, 2, Kp, (*c)->exits)), (*c)->exits = ai_ok(g) ? pop1(g) : zero, gen_wb_cell(g, &(*c)->exits, (*c)->exits))
-cata1(c1_cond_pop_branch, Kp -= 2, Kp[0].ap = lvm_cond, Kp[1].x = A((*c)->branches),   // Kp[1] = a same-thread address: no cross-gen edge
-      (*c)->branches = B((*c)->branches), gen_wb_cell(g, &(*c)->branches, (*c)->branches))
+cata1(c1_cond_push_branch, g = gxl(ai_push(g, 2, Kp, eget(g, *c, EBranch))), g = eset(g, c, EBranch, ai_ok(g) ? pop1(g) : zero))
+cata1(c1_cond_push_exit, g = gxl(ai_push(g, 2, Kp, eget(g, *c, EExit))), g = eset(g, c, EExit, ai_ok(g) ? pop1(g) : zero))
+cata1(c1_cond_pop_branch, Kp -= 2, Kp[0].ap = lvm_cond, Kp[1].x = A(eget(g, (*c), EBranch)),   // Kp[1] = a same-thread address: no cross-gen edge
+      g = eset(g, c, EBranch, B(eget(g, *c, EBranch))))
 
 static Cata(c1_cond_exit) {
- union u *a = cell(A((*c)->exits));
+ union u *a = cell(A(eget(g, (*c), EExit)));
  if (a->ap == lvm_ret || a->ap == lvm_tap)
   Kp = memcpy(Kp - 2, a, 2 * sizeof(*Kp));
  else if (a->ap == lvm_tapn)
@@ -1587,12 +1600,12 @@ static Ana(ana_v) {
    // free variable only when nested -- at top level imps would alias an
    // uninitialized arg slot. re-read x from the imps hook: the push above can GC.
    if (!zerop((*c)->par))
-    g = gxl(ai_push(g, 2, x, (*c)->imps)),
-    x = ai_ok(g) ? A((*c)->imps = pop1(g)) : zero,
-    gen_wb_cell(g, &(*c)->imps, (*c)->imps);
+    g = gxl(ai_push(g, 2, x, eget(g, *c, EImps))),
+    g = eset(g, c, EImps, ai_ok(g) ? pop1(g) : zero),
+    x = ai_ok(g) ? A(eget(g, *c, EImps)) : zero;
    return c0_ix(g, c, lvm_index, x); }
   // lambda definition of local let form?
-  if ((y = assq(g, d->lams, x))) {
+  if ((y = assq(g, eget(g, d, ELams), x))) {
    // recursive-fn ref: record a backpatch site on d (the lams-owning scope) when
    // the closure isn't built yet, then apply the captured imports.
    word site = zero;
@@ -1600,42 +1613,42 @@ static Ana(ana_v) {
     mm(g, &d), mm(g, &y);
     g = gxl(ai_push(g, 2, y, zero)); // site = (y . zero)
     if (ai_ok(g)) {
-     g = gxl(ai_push(g, 2, g->sp[0], d->sites)); // (site . d->sites)
-     if (ai_ok(g)) d->sites = pop1(g), gen_wb_cell(g, &d->sites, d->sites), site = pop1(g); }
+     g = gxl(ai_push(g, 2, g->sp[0], eget(g, d, ESites))); // (site . eget(g, d, ESites))
+     if (ai_ok(g)) g = eset(g, &d, ESites, pop1(g)), site = pop1(g); }
     um(g), um(g); }
    incl(*c, 2);
    if (ai_ok(g = ai_push(g, 3, c1_recv, y, site)))
     g = ana_ap(g, c, BB(g->sp[1]));
    return g; }
   // let binding in the *current* scope -> a direct stack slot.
-  if (d == *c && memq(g, d->stack, x)) return
-    c0_ix(g, c, lvm_arg, putcharm(lidx(g, x, d->stack)));
+  if (d == *c && memq(g, eget(g, d, EStack), x)) return
+    c0_ix(g, c, lvm_arg, putcharm(lidx(g, x, eget(g, d, EStack))));
   // the shadow guard: d's let binds x (fars) but x is not yet a lams entry or a
   // slot -- the nom is this let's, so the walk must not escape to an enclosing
   // binding of the same spelling. import it; the rebuild resolves it through lams.
-  if (!zerop(d->fars) && memq(g, d->fars, x) &&
-      !(!zerop(d->par) && memq(g, d->par->stack, x))) {
+  if (!zerop(eget(g, d, EFars)) && memq(g, eget(g, d, EFars), x) &&
+      !(!zerop(d->par) && memq(g, eget(g, d->par, EStack), x))) {
    if (!zerop((*c)->par))
-    g = gxl(ai_push(g, 2, x, (*c)->imps)),
-    x = ai_ok(g) ? A((*c)->imps = pop1(g)) : zero,
-    gen_wb_cell(g, &(*c)->imps, (*c)->imps);
+    g = gxl(ai_push(g, 2, x, eget(g, *c, EImps))),
+    g = eset(g, c, EImps, ai_ok(g) ? pop1(g) : zero),
+    x = ai_ok(g) ? A(eget(g, *c, EImps)) : zero;
    return c0_ix(g, c, lvm_index, x); }
   // a let binding, closure var, or lambda arg. if from an enclosing scope, import
   // it into this scope's imps so the offset c1_var emits is valid in this frame.
-  if (memq(g, d->stack, x) || memq(g, d->imps, x) || memq(g, d->args, x)) {
+  if (memq(g, eget(g, d, EStack), x) || memq(g, eget(g, d, EImps), x) || memq(g, eget(g, d, EArgs), x)) {
    incl(*c, 2);
    if (d != *c) // found in an enclosing scope -> import (capture) it
-    g = gxl(ai_push(g, 2, x, (*c)->imps)),
-    x = ai_ok(g) ? A((*c)->imps = pop1(g)) : zero,
-    gen_wb_cell(g, &(*c)->imps, (*c)->imps);
-   return ai_push(g, 3, c1_var, x, (*c)->stack); } } }
+    g = gxl(ai_push(g, 2, x, eget(g, *c, EImps))),
+    g = eset(g, c, EImps, ai_ok(g) ? pop1(g) : zero),
+    x = ai_ok(g) ? A(eget(g, *c, EImps)) : zero;
+   return ai_push(g, 3, c1_var, x, eget(g, *c, EStack)); } } }
 
 
 static Cata(c1_var) {
  word v = pop1(g), i = llen(pop1(g)); // stack inset
- for (word l = (*c)->imps; !zerop(l); l = B(l), i++)
+ for (word l = eget(g, (*c), EImps); !zerop(l); l = B(l), i++)
   if (eql(g, v, A(l))) goto out;
- for (word l = (*c)->args; !zerop(l); l = B(l), i++)
+ for (word l = eget(g, (*c), EArgs); !zerop(l); l = B(l), i++)
   if (eql(g, v, A(l))) break;
 out:
  return Kp -= 2,
@@ -1669,15 +1682,14 @@ static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_
 
  if (ai_ok(g)) {
   d = (struct env*) pop1(g);
-  exp = d->args;
+  exp = eget(g, d, EArgs);
   int n = 0; // push exp args onto stack
   for (; chainp(B(exp)); exp = B(exp), n++) g = ai_push(g, 1, A(exp));
   for (g = push0(g); n--; g = gxr(g));
   exp = A(exp); }
 
  if (ai_ok(g)) {
-  d->args = g->sp[0];
-  gen_wb_cell(g, &d->args, d->args);
+  g = eset(g, &d, EArgs, g->sp[0]);
   g->sp[0] = (word) c1_yield;
   incl(d, 4);
   g = ai_push(g, 2, c1_cur, d);
@@ -1685,19 +1697,19 @@ static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_
   // stash the source \-expr for the printer after analyze (imps now known),
   // prepending the imports as leading params so a closure round-trips
   if (ai_ok(g)) {
-   word l = d->imps; int ni = 0;
+   word l = eget(g, d, EImps); int ni = 0;
    mm(g, &l);
    for (; chainp(l); l = B(l), ni++) g = ai_push(g, 1, A(l));  // push imp1..impN
    um(g);
    g = ai_push(g, 1, ops);                                   // tail = (params… body)
    while (ni-- > 0) g = gxr(g);                             // fold: imps ++ ops
    g = gxl(pushl(g));                                       // link '\ onto the front
-   if (ai_ok(g)) d->src = pop1(g), gen_wb_cell(g, &d->src, d->src); }
+   if (ai_ok(g)) g = eset(g, &d, ESrc, pop1(g)); }
   if (ai_ok(g = ai_push(g, 2, c1_ret, d)))
     ip = g->ip,
     avec(g, ip, g = c1(g, &d)); }
 
- if (ai_ok(g)) k = g->ip, g->ip = ip, g = gxl(ai_push(g, 2, k, d->imps));
+ if (ai_ok(g)) k = g->ip, g->ip = ip, g = gxl(ai_push(g, 2, k, eget(g, d, EImps)));
 
  return um(g), um(g), um(g), g; }
 
@@ -1744,22 +1756,22 @@ static struct ai *ana_ap(struct ai *g, struct env **c, intptr_t x) {
   lvm_t *i = cell(g->sp[2])[2].ap;
   g->sp += 3;
   g = c0_i(ana_ap_r2l(g, c, x), c, i); // r2l arg eval
-  if (ai_ok(g)) { while (ca--) (*c)->stack = B((*c)->stack); gen_wb_cell(g, &(*c)->stack, (*c)->stack); }
+  if (ai_ok(g)) { word s = eget(g, *c, EStack); while (ca--) s = B(s); g = eset(g, c, EStack, s); }
   return g; }
 
- if (ai_ok(g = gxl(ai_push(g, 3, zero, (*c)->stack, x)))) {
-  (*c)->stack = pop1(g), gen_wb_cell(g, &(*c)->stack, (*c)->stack), x = pop1(g), mm(g, &x);
+ if (ai_ok(g = gxl(ai_push(g, 3, zero, eget(g, *c, EStack), x)))) {
+  g = eset(g, c, EStack, pop1(g)), x = pop1(g), mm(g, &x);
   if (anp) { // r2l 1 n-ary ap
    g = ana_ap_r2l(g, c, x),
    incl(*c, 2),
    g = ai_push(g, 2, c1_apn, putcharm(ca));
-   if (ai_ok(g)) { while (ca--) (*c)->stack = B((*c)->stack); gen_wb_cell(g, &(*c)->stack, (*c)->stack); } }
+   if (ai_ok(g)) { word s = eget(g, *c, EStack); while (ca--) s = B(s); g = eset(g, c, EStack, s); } }
   else while (chainp(x)) // l2r n 1-ary ap
    g = analyze(g, c, A(x)),
    incl(*c, 2),
    g = ai_push(g, 2, c1_apn, putcharm(1)),
    x = B(x);
-  um(g), (*c)->stack = B((*c)->stack), gen_wb_cell(g, &(*c)->stack, (*c)->stack); }
+  um(g), g = eset(g, c, EStack, B(eget(g, *c, EStack))); }
 
  return g; }
 
@@ -1769,8 +1781,8 @@ static struct ai *ana_ap_r2l(struct ai *g, struct env **c, word x) {
   word y = A(x);
   avec(g, y, g = ana_ap_r2l(g, c, B(x)));
   g = analyze(g, c, y);
-  g = gxl(ai_push(g, 2, zero, (*c)->stack));
-  if (ai_ok(g)) (*c)->stack = pop1(g), gen_wb_cell(g, &(*c)->stack, (*c)->stack); }
+  g = gxl(ai_push(g, 2, zero, eget(g, *c, EStack)));
+  if (ai_ok(g)) g = eset(g, c, EStack, pop1(g)); }
  return g; }
 
 static ai_inline bool lambp(struct ai *g, word x) {
@@ -1794,8 +1806,8 @@ static word ldels(struct ai *g, word lam, word l);
 // carry the twin guard). binder rosters only -- imps may record undefined globals.
 static bool lexbound(struct ai *g, struct env *d, word x) {
  for (; !zerop(d); d = d->par)
-  if (memq(g, d->args, x) || memq(g, d->stack, x) ||
-      memq(g, d->fars, x) || assq(g, d->lams, x)) return true;
+  if (memq(g, eget(g, d, EArgs), x) || memq(g, eget(g, d, EStack), x) ||
+      memq(g, eget(g, d, EFars), x) || assq(g, eget(g, d, ELams), x)) return true;
  return false; }
 
 static ai_inline Ana(ana_2, word a, word b) {
@@ -1831,7 +1843,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
   if (bf && lamp(bf)) {
    g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, exp, zero, zero, bf)))))));
    if (ai_ok(g)) exp = pop1(g); } }
- g = enscope(g, *b, (*b)->args, (*b)->imps);
+ g = enscope(g, *b, eget(g, (*b), EArgs), eget(g, (*b), EImps));
  if (!ai_ok(g)) return forget();
  struct env *q = (struct env*) pop1(g), **c = &q;
  // lots of variables :(
@@ -1845,14 +1857,14 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  // or it resolves to an enclosing sibling and under-applies (cf. ev.l avb's 'far guard)
  for (d = exp; chainp(d) && chainp(B(d)); d = BB(d)) {
   for (e = A(d); chainp(e) && !nomp(e); e = A(e)); // unroll (f x..) define-sugar to the name
-  g = gxl(ai_push(g, 2, e, q->fars));
+  g = gxl(ai_push(g, 2, e, eget(g, q, EFars)));
   if (!ai_ok(g)) return forget();
-  q->fars = pop1(g), gen_wb_cell(g, &q->fars, q->fars); }
+  g = eset(g, &q, EFars, pop1(g)); }
 
  // collect vars and defs into two lists, exposing the preceding bindings on the
  // enclosing stack so a sibling ref captures as a free variable instead of a
  // same-named global; the stack is restored before any code is emitted.
- os = (*b)->stack;
+ os = eget(g, *b, EStack);
  while (chainp(exp) && chainp(B(exp))) {
   for (d = A(exp), e = AB(exp); chainp(d) && !nomp(d); e = pop1(g), d = A(d)) {  // a named sym is a chain now: stop the (f x) define-sugar unroll at the name
    g = gxl(ai_push(g, 2, e, zero));
@@ -1868,15 +1880,14 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
    g = gxl(gxr(c0_lambda(g, c, zero, B(e))));
    if (!ai_ok(g)) return forget();
    lam = pop1(g); }
-  g = gxl(ai_push(g, 2, d, (*b)->stack)); // expose this binding to later siblings
-  (*b)->stack = ai_ok(g) ? pop1(g) : zero;
-  gen_wb_cell(g, &(*b)->stack, (*b)->stack);
+  g = gxl(ai_push(g, 2, d, eget(g, *b, EStack))); // expose this binding to later siblings
+  g = eset(g, b, EStack, ai_ok(g) ? pop1(g) : zero);
   exp = BB(exp); }
- (*b)->stack = os, gen_wb_cell(g, &(*b)->stack, os); // restore: emission below rebuilds the real frame
+ g = eset(g, b, EStack, os);  // restore: emission below rebuilds the real frame
 
  intptr_t l = llen(nom);
  bool oddp = chainp(exp),
-      globp = !oddp && zerop((*b)->args); // we check this again later to make global bindings at top level
+      globp = !oddp && zerop(eget(g, (*b), EArgs)); // we check this again later to make global bindings at top level
  if (!oddp) { // if there's no body then evaluate the name of the last definition
   g = gxl(ai_push(g, 2, A(nom), zero));
   if (!ai_ok(g)) return forget();
@@ -1899,7 +1910,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  // they will be bound lazily when the function runs
  for (e = lam; chainp(e); BB(A(e)) = ldels(g, lam, BB(A(e))), gen_wb_two(g, B(A(e)), BB(A(e))), e = B(e));
 
- (*c)->lams = lam, gen_wb_cell(g, &(*c)->lams, lam);
+ g = eset(g, c, ELams, lam);
  g = append(gxl(pushl(ai_push(g, 2, nom, exp))));
 
  if (!ai_ok(g)) return forget();
@@ -1923,27 +1934,25 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
    if (llen(BB(d)) != nb) __builtin_trap(); } // growth = those sites under-apply (cf. ev.l weave's 'imports-grew scare)
 
  // closures final -> backpatch each recorded recursive-fn ref with its thread.
- for (d = (*c)->sites; chainp(d); d = B(d))
+ for (d = eget(g, (*c), ESites); chainp(d); d = B(d))
   cell(B(A(d)))->x = AB(A(A(d))), gen_wb_cell(g, cell(B(A(d))), AB(A(A(d))));
- (*c)->sites = zero;
+ g = eset(g, c, ESites, zero);
 
  g = rev(g, nom);   // put in literal order
  if (!ai_ok(g)) return forget();
  nom = pop1(g);
  g = analyze(g, b, exp);
- g = gxl(ai_push(g, 2, zero, e = (*b)->stack)); // push function stack rep
- (*b)->stack = ai_ok(g) ? pop1(g) : zero;
- gen_wb_cell(g, &(*b)->stack, (*b)->stack);
+ g = gxl(ai_push(g, 2, zero, e = eget(g, *b, EStack))); // push function stack rep
+ g = eset(g, b, EStack, ai_ok(g) ? pop1(g) : zero);
  g = rev(g, def);
  if (!ai_ok(g)) return forget();
  for (def = pop1(g); chainp(nom); nom = B(nom), def = B(def))
   g = analyze(g, b, A(def)),
   g = globp ? c0_ix(g, b, lvm_defglob, A(nom)) : g,
-  g = gxl(ai_push(g, 2, A(nom), (*b)->stack)),
-  (*b)->stack = ai_ok(g) ? pop1(g) : zero,
-  gen_wb_cell(g, &(*b)->stack, (*b)->stack);
+  g = gxl(ai_push(g, 2, A(nom), eget(g, *b, EStack))),
+  g = eset(g, b, EStack, ai_ok(g) ? pop1(g) : zero);
  return
-  (*b)->stack = e, gen_wb_cell(g, &(*b)->stack, e),
+  g = eset(g, b, EStack, e),
   incl(*b, 2),
   g = ai_push(g, 2, c1_apn, putcharm(l)),
   forget(); }
