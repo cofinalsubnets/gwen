@@ -7,6 +7,14 @@
 
 (: (src-die m) (say err (";; " + m + "\n"), quit 1)
 
+   ; the directory is positional, so a mistyped flag would be TAKEN as one and a whole
+   ; tree laid under it. a leading dash is never a directory here: name the flags, ask
+   ; about anything else.
+   (src-dash? w) (: n (tally w) ((0 < n) && (w 0 = 45)))
+   (src-help? w) ((w = "-h") || (w = "--help") || (w = "-help") || (w = "help"))
+   (src-not-dir m w)
+    (src-die (w + " is not a directory -- `love " + m + " help` for usage"))
+
    (src-head nom) (: n (tally nom)
                      (go i) (? (n <= i) nom (nom i = 47) (snip nom 0 i) (go (i + 1)))
                      (go 0))
@@ -52,8 +60,15 @@
         src-lay-tgz root top gz,
         [1 root <>w]))
 
+   (src-usage _)
+    (puts ("usage: love source [DIR]\n"
+           + "  lay this binary's carried source tree under DIR (default .)\n"))
+
    (source-main as)
-    (: r (src-lay (? (two? as) <as "."))
+    (: d (? (two? as) <as ".")
+       _ (src-help? d ? (src-usage 0, quit 0))
+       _ (src-dash? d ? (src-not-dir "source" d))
+       r (src-lay d)
      (puts (";; wrote " + <>r + "\n"), 0))
 
    (src-dirs _)
@@ -63,14 +78,20 @@
                         (go (k + 1) st acc))
        (go 0 0 ()))
    (src-foreign? p) (: a (stat p) b (stat (selfpath 0)) (two? a ? !(a = b) 0))
+   ; the probe asks a yes/no question of a candidate we may well reject, so its own
+   ; diagnostics are not the caller's news -- both streams go to the hole and only the
+   ; status is read. herald tees stdout and leaves stderr on the terminal, which is how
+   ; a `cc` that exists and fails used to print its complaint before the first `;;` line.
    (src-ccworks? cc dir)
     (: c (dir + "/.ccprobe.c") o (dir + "/.ccprobe.o")
        q (open c "w")
        (? !q 0
           (: _ (say q "int main(void){return 0;}\n")
              _ (close q)
-             s (herald [cc "-c" "-o" o c])
-             st (? (two? s) <s s)
+             nul (openfd "/dev/null" 1)
+             p (spawnio [cc "-c" "-o" o c] -1 nul nul () -1 0)
+             st (0 <= p ? (wait p) 1)
+             _ (0 <= nul ? (fdclose nul) 0)
              _ (unlink c) _ (unlink o)
              (0 = st))))
    (src-cc dir)
@@ -170,7 +191,7 @@
           ; binary, and the rebuild must BE this binary, byte for byte.
           (: out (root + "/out/host/love")
              (? (src-same? exe out)
-               (puts ";; fixpoint ok\n", 0)
+               (puts (";; fixpoint ok -- " + out + "\n"), 0)
               (say err ";; FIXPOINT NOT OK\n", 1)))))
 
    ; the cross door: we are a cross compiler carrying our own source, so a seed
@@ -196,8 +217,17 @@
    ; uname names them differently, and love-arch speaks holo's.
    (seed-native _) (? (love-arch = "x64") 'x86_64 (love-arch = "arm64") 'aarch64 (intern love-arch))
 
+   (seed-usage _)
+    (puts ("usage: love seed [-first|-self] [ARCH] [DIR]\n"
+           + "  lay this binary's source under DIR (default .) and rebuild it there;\n"
+           + "  the result has to BE this binary, byte for byte.\n"
+           + "  ARCH    x86_64 | aarch64 | riscv64 -- an egg for that machine instead\n"
+           + "  -first  our own tools ahead of the ambient ones on PATH\n"
+           + "  -self   build with this binary's mooncc, probing for no ambient cc\n"))
+
    (seed-lay as0)
-    (: first? (two? as0 ? (<as0 = "-first") 0)
+    (: _ ((two? as0) && (src-help? <as0) ? (seed-usage 0, quit 0))
+       first? (two? as0 ? (<as0 = "-first") 0)
        as1 (first? ? >as0 as0)
        self? (two? as1 ? (<as1 = "-self") 0)
        as2 (? self? >as1 as1)
@@ -210,8 +240,10 @@
        xa (? ((nom? xa0) && (id? xa0 (seed-native 0))) () xa0)
        as (nom? xa0 ? >as2 as2)
        dir (two? as ? <as ".")
+       _ (src-dash? dir ? (src-not-dir "seed" dir))
        r (src-lay dir)
        root <>r
+       _ (puts (";; laid " + root + "\n"))
        exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't find seed path"))
        farm (src-farm root exe)
