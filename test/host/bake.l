@@ -40,7 +40,7 @@
         _ (say p "((peep bake-dedup-c1 0 -1) = 65 && (peep bake-dedup-c2 0 -1) = 0) 1 0) 0) ")
         _ (say p "_ (putn ok) (quit 0))")
         (close p))
-   r2 (hark `("out/host/love" "wake" img drv))
+   r2 (hark ["out/host/love" "wake" img drv])
    _ (assert (two? r2) (<r2 = 0) (>r2 = "1"))
 
    _ (unlink img) _ (unlink drv)
