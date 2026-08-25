@@ -222,4 +222,44 @@ EOF
 "$love" "$w/hash.l" || fail "tar-hash disagrees with sha256 of tar-pack"
 echo "  OK the streamed archive digest equals the packed one"
 
+# ---- 6. THE UMASK IS NOT CONTENT -------------------------------------------
+# Section 2 compares modes over `find -type f`, and the DIRECTORIES are the blind
+# spot that hides in: `mkdir` wears the umask exactly as `open` does, so a lay that
+# chmods its files and not its dirs answers every file right and every directory
+# 0700 under 077. Invisible on a dev box, where 022 is the only umask anyone has.
+# The second leg is the seed's own fixpoint in miniature -- lay an archive down and
+# pack it again, and the packer must answer the tree rather than its own umask.
+mkdir -p "$w/um"
+cat > "$w/unpack6.l" <<EOF
+(use 'tar)
+(use 'gz)
+(: q (open "$w/ours.tar.gz" "r") z (: s (slurp q) _ (close q) (s + ""))
+   u (gz-unzip z)
+   _ (? (! u) (: _ (say err "gunzip failed\n") (quit 1)) 0)
+   r (tar-unpack (<(>u)))
+   _ (? (! r) (: _ (say err "untar failed\n") (quit 1)) 0)
+   v (tar-scatter "$w/um" (<(>r)))
+   _ (? (! v) (: _ (say err "scatter failed\n") (quit 1)) 0)
+   0)
+EOF
+( umask 077; "$love" "$w/unpack6.l" ) || fail "love could not lay the archive under umask 077"
+( cd "$w/tree" && find . -mindepth 1 \( -type f -o -type d \) | sort | xargs stat -c '%a %n' ) > "$w/m6.want"
+( cd "$w/um"   && find . -mindepth 1 \( -type f -o -type d \) | sort | xargs stat -c '%a %n' ) > "$w/m6.got"
+diff "$w/m6.want" "$w/m6.got" || fail "a lay under umask 077 lost the archived modes"
+cat > "$w/repack6.l" <<EOF
+(use 'tar)
+(: g1 (tar-gather "$w/tree" "")
+   g2 (tar-gather "$w/um" "")
+   _ (? (g1 && g2) 0 (: _ (say err "walk failed\n") (quit 1)))
+   a1 (tar-pack (tar-level (<(>g1)) 0))
+   a2 (tar-pack (tar-level (<(>g2)) 0))
+   _ (? (a1 && a2) 0 (: _ (say err "pack failed\n") (quit 1)))
+   h1 (sha256 a1)
+   h2 (sha256 a2)
+   _ (? (= h1 h2) 0 (: _ (say err ("tree " + h1 + " relaid " + h2 + "\n")) (quit 1)))
+   0)
+EOF
+"$love" "$w/repack6.l" || fail "the re-pack of a 077 lay is not the pack of the tree"
+echo "  OK a lay under umask 077 keeps every archived mode, dirs included, and re-packs to one sha"
+
 echo "targz: lib/tar.l + lib/gz.l agree with GNU tar and GNU gzip both ways -- ok"

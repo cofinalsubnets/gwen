@@ -331,14 +331,22 @@
     (? (((tally nom) > 1) && (((nom 0) = 46) && ((nom 1) = 47))) (snip nom 2 (tally nom)) nom)
    ; ⚠ A RELEASE TARBALL MUST NOT CARRY THE CLOCK OR THE PACKER'S UID. Two cuts of
    ; one tree would hash differently, and "this is that release" stops being a thing
-   ; anyone can check. mtime, uid and gid are the three fields that drift with who
-   ; ran the pack and when; MODE is deliberately left alone, because the executable
-   ; bit is content (a binary that unpacks unrunnable is a broken artifact).
+   ; anyone can check. mtime, uid and gid drift with who ran the pack and when -- and
+   ; so does the MODE, for the same reason: `mkdir` and `open` wear the packer's
+   ; UMASK, so one tree cut under 022 and under 077 disagrees in every directory.
+   ; Only the x bit of it is content (a binary that unpacks unrunnable is a broken
+   ; artifact), so that is the half kept and the rest is spelled canonically.
+   (tar-canon e) (: k (tar-get e 'kind 'file)
+                    (? (id? k 'link) 511
+                       (id? k 'dir)  493
+                       (((tar-get e 'mode 420) & 73) > 0) 493
+                       420))
    (tar-level es stamp)
     (map (\ e (: t (tablet 0)
                  _ (map (\ k (pin t k (peep e k ()))) (keys e))
                  _ (pin t 'mtime stamp) _ (pin t 'uid 0) _ (pin t 'gid 0)
                  _ (pin t 'uname "root") _ (pin t 'gname "root")
+                 _ (pin t 'mode (tar-canon e))
                  t))
          es)
    (tar-scatter root es)                    ; -> (1 count) | ()
@@ -348,11 +356,15 @@
                        p (? (tally nom) (? (tally root) (root + "/" + nom) nom) root)
                        kind (tar-get e 'kind 'file)
                        ; ⚠ THE MODE IS CONTENT, and it must be laid back EXPLICITLY: `open`
-                       ; creates at the umask's pleasure, so a file written here comes out
-                       ; 0644 whatever the header said, and an extracted BINARY is not
-                       ; executable. The archive carried 0755 and we dropped it -- which
-                       ; `diff -r` cannot see, because it compares bytes and not modes.
-                       ok (? (id? kind 'dir)  (: _ (mkdir p (tar-get e 'mode 493)) (tar-there? p))
+                       ; and `mkdir` both create at the umask's pleasure, so a file written
+                       ; here comes out 0644 whatever the header said, an extracted BINARY is
+                       ; not executable, and under 077 every directory lands 0700. The archive
+                       ; carried the mode and we dropped it -- which `diff -r` cannot see,
+                       ; because it compares bytes and not modes. chmod is the only door: it
+                       ; is the one call the umask does not touch.
+                       ok (? (id? kind 'dir)  (: _ (mkdir p (tar-get e 'mode 493))
+                                                 _ (? (tar-there? p) (chmod p (tar-get e 'mode 493)) 0)
+                                                 (tar-there? p))
                              (id? kind 'link) (: _ (symlink (tar-get e 'to "") p)
                                                   (? (string? (readlink p)) 1 0))
                              (: _ (tar-blurt p (tar-get e 'body ""))
