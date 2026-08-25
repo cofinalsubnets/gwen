@@ -24,11 +24,10 @@ glaze_h = out/lib/emit.h out/lib/auto.h out/lib/hook.h
 # corpus rides along so love0 self-tests both compilers in one run.
 # ⚠ AMBIENT sed WHILE BOOTSTRAPPING, OURS ONCE WE HAVE ONE -- the same discipline as $(CC)
 # and $(lcat_love). These headers are INPUTS to love0, so a from-scratch tree has no love
-# to lay them with; where the bundled love is the TOOLCHAIN its sed is the artifact's own,
-# and that tree builds no twin at all, love0 being unbuilt (./Makefile's bundled_love).
+# to lay them with, and none is laid beside one either -- so this is ambient sed, always.
 # ⚠ THE ORDER OF THE FOUR IS THE CORRECTNESS: backslash first, or the escapes it writes
 # get escaped again by the quote pass.
-sed_lit = $(if $(bundled_love),$(bundled_love) sed,sed) \
+sed_lit = sed \
   -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
 boot_h = out/lib/cli0.h out/lib/egg0.h out/lib/post0.h out/lib/p10.h out/lib/prel0.h out/lib/ev0.h out/lib/bao0.h out/lib/uu0.h out/lib/coin0.h out/lib/rng0.h out/lib/q0.h out/lib/kanren0.h out/lib/overlay0.h out/lib/peg0.h out/lib/verbs0.h $(asm0_h)
 .PHONY: lib
@@ -43,15 +42,14 @@ lib: $(lib_h) $(boot_h)
 # every frontend that includes it. Re-derive, compare, move only on a difference -- the
 # discipline out/lib/corpus.list and out/host/0/.love0cc already keep. The tag line rides
 # the move, so what prints is what changed.
-# ⚠ the lcat is run by love0 NORMALLY and by the BUNDLED love where that love is the
-# TOOLCHAIN: love0 is not built at all there (see ./Makefile's bundled_love). a seed that
-# defers to a foreign cc is NOT that tree -- it wants love0, cc-built, holding the scaffold.
+# ⚠ the lcat is run by love0, and only ever by love0: the tree carries no love of its own,
+# so the bootstrap is the bootstrap wherever this builds (see ./Makefile).
 # ⚠ AND THE PRELOAD BELONGS TO LOVE0 ALONE. `-l love/prel.l` feeds prel's SOURCE to a
 # pre-egg love, which is the only kind that can read it: prel.l:19 calls `(tray 0)`, and
 # `tray` is one of the raw ctors THE EGG MOPS AT BIRTH -- so a baked love handed its own
 # prel source dies `;; missing tray`. A baked love does not need it either, having prel in
 # the image already. Both lanes then lcat the same bytes.
-lcat_love = $(if $(bundled_love),$(bundled_love),$(love0) -l love/prel.l)
+lcat_love = $(love0) -l love/prel.l
 lcat_h = @mkdir -p out/lib; t=$@.$$$$.tmp; \
   $(lcat_love) tools/lcat.l $< > $$t && test -s $$t \
     || { rm -f $$t; echo "FAIL: $@ empty (lcat failed -- broken bootstrap?)"; exit 1; }; \
@@ -104,7 +102,5 @@ out/lib/love_version.h: $(R)/VERSION
 	@printf '#define AiVersion "%s"\n' "$$(cat $(R)/VERSION)" > $@
 	@echo 'SH	'$@
 
-# the lcat'd headers are PRODUCED BY running the lcat love, so re-lay them whenever it
-# moves. ⚠ EMPTY where the bundled love is the toolchain: love0 is never built there, and
-# naming it as a prerequisite would build it for no reason -- the lane that tree skips.
-$(lib_h) $(holo_h) out/lib/rune.h: $(if $(bundled_love),,$(love0))
+# the lcat'd headers are PRODUCED BY running love0, so re-lay them whenever it moves.
+$(lib_h) $(holo_h) out/lib/rune.h: $(love0)

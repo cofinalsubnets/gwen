@@ -32,17 +32,6 @@
        _ (close q)
        p)
 
-   (src-lay-love root)
-    (: exe (selfpath 0)
-       _ (string? exe ? 0 (src-die "can't read seed path"))
-       _ (mkdir (root + "/bin") 493)
-       p (root + "/bin/love")
-       ; ⚠ the SIGN is the test, not truth: copyfile answers the byte count, and an empty
-       ; source would answer 0 -- which reads false exactly as a -errno does.
-       e (copyfile exe p)
-       _ (e < 0 ? (src-die ("can't write " + p)))
-       (chmod p 493, p))
-
    (src-lay dir)
     (: gz (source-gz "x")
        _ (!(string? gz) ? (src-die "this love carries no source"))
@@ -56,8 +45,13 @@
        w (tar-scatter dir es)
        _ (atom? w ? (src-die ("can't write " + dir)))
        root (dir = "." ? top (dir + "/" + top))
-       (src-lay-love root,
-        src-lay-tgz root top gz,
+       ; ⚠ NO LOVE IS LAID BESIDE THE SOURCE, and the tree has no opinion about who
+       ; compiles it. A copy in bin/ was the toolchain BY BEING THERE, so a plain `make`
+       ; preferred it over the machine's own compiler -- the weaker claim, chosen by a
+       ; file existing rather than by anyone deciding. Which mode a build is in belongs to
+       ; whoever DRIVES it: bare make has no love and can only mean the ambient cc; a love
+       ; driving knows its own selfpath and says so in CC. Neither needs a copy.
+       (src-lay-tgz root top gz,
         [1 root <>w]))
 
    (src-usage _)
@@ -251,7 +245,14 @@
        _ (setenv "PATH" (first? ? (farm + ":" + path) (path + ":" + farm)))
        env (getenv "CC")
        amb (!self? && !first? && !(string? env) ? (src-cc $ root + "/out"))
-       _ (two? amb ? (setenv "CC" <>amb) 0)
+       ; ⚠ SOMETHING HAS TO BE NAMED. The tree carries no love, so an unnamed CC is the
+       ; ambient cc and nothing else -- right as make's default, wrong as this verb's
+       ; answer where the probe just found no cc that works. A working ambient one is the
+       ; STRONGER claim (a foreign compiler holding the scaffold is the one thing a self
+       ; build cannot say); this binary's own mooncc is the fallback, and -self asks for
+       ; it outright.
+       _ (string? env ? 0
+          (two? amb ? (setenv "CC" <>amb) (setenv "CC" (exe + " mooncc"))))
        ours (src-ours src-needs)
        _ (? (two? ours)
           (puts $ ";; using own tools: " + (src-words ours) + "\n"))

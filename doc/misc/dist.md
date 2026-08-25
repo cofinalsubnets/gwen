@@ -19,9 +19,14 @@ that nobody has to learn anything.
 With the seed: download one file, and
 
 ```sh
-./love source            # lays love-<ver>/ with bin/love already inside
-cd love-<ver> && make    # calls no ambient compiler at all
+./love seed              # lays love-<ver>/ and rebuilds it, byte for byte
 ```
+
+`seed` is the verb because the tree it lays is **source and nothing else** — no binary
+beside it — so who compiles it is a decision, not a file. The seed probes for an ambient
+cc that *works* and names it in `CC`; where there is none it names its own `mooncc`, so
+one downloaded file still needs no compiler. `love source` lays the same tree without
+building; a bare `make` there means the ambient cc, like any other tree.
 
 Both answer **the same binary**. There is no installer, no package manager, and no
 download-that-downloads-more.
@@ -100,7 +105,10 @@ binary that unpacks unrunnable is a broken artifact.
 ## what the seed retired
 
 There used to be a third artifact: a **full** tarball, `love-<ver>-<arch>.tar.gz`, the
-source tree with a baked `bin/love` laid beside it. The seed does that job strictly
+source tree with a baked `bin/love` laid beside it. (The seed laid a `bin/love` of its
+own for a while, and that went too: a binary beside the source is the toolchain by
+BEING there, so a plain `make` preferred it over the machine's compiler — the weaker
+claim, chosen by a file existing rather than by anyone deciding.) The seed does that job strictly
 better — one file instead of an archive, nothing needed to unpack it, and the same
 bytes at the far end — so the full tarball became a second way of saying what the seed
 already says, and a third bootstrap to keep honest in every release gate. Retired
@@ -114,11 +122,12 @@ control is consulted anywhere — an id with a VCS suffix would make the artifac
 bytes depend on something outside the tree, which is exactly what the seed invariant
 forbids. It moves when a release does, by hand.
 
-⚠ **`CC ?=` cannot express "unless the user chose one".** make defines `CC=cc`
-itself, so `?=` never fires and the ambient compiler wins silently. `$(origin CC)`
-is the only way to ask whether a *human* set it. The Makefile uses that to let a
-bundled `bin/love` be the compiler, and an explicit `CC=` still outranks it — which
-is exactly what the source artifact is for, and what the DDC leg needs.
+⚠ **make does not guess who compiles.** It used to: a `bin/love` beside the source was
+the toolchain by being there. Which mode a build is in belongs to whoever DRIVES it — a
+bare make has no love and can only mean the ambient cc, which is what `$(CC)` already
+says; a love driving knows its own `selfpath` and names `CC` outright. So the tree holds
+no switch, and the DDC leg is the DEFAULT rather than a thing you opt into: the seed
+prefers a foreign compiler and falls back to itself only where none works.
 
 ⚠ **a release is cut from the TREE.** `selfpack` walks the root and skips only what
 is not source (`out bin dl`, everything hidden at the root, and `wasm/love.js`), so

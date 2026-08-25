@@ -232,7 +232,7 @@ $(moon_d)/k_q_%.o: $R/crew/quay/%.c $(moon0_dep)
 	@mkdir -p "$(dir $@)"
 	@$(moon0) $(kart_inc) -c $< $@
 # the vector lay, under whatever love a fresh tree has (mksys's own idiom)
-$(moon_d)/kvec.o: $(ko)/$(hosta)/mkvec.l $(if $(bundled_love),,$(love0))
+$(moon_d)/kvec.o: $(ko)/$(hosta)/mkvec.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $(boot_love) -l $< -n -e '(lay-vec "$@" "$(hosta)")' && test -s $@
@@ -296,7 +296,7 @@ $(xd)/mkvec.l: $R/free/mkvec.l $(xklay_l)
 	@mkdir -p "$(dir $@)"
 	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
 	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(xklay_l)) $<; } > $@
-$(xd)/kvec.o: $(xd)/mkvec.l $(if $(bundled_love),,$(love0))
+$(xd)/kvec.o: $(xd)/mkvec.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $(boot_love) -l $< -n -e '(lay-vec "$@" "$(xa)")' && test -s $@

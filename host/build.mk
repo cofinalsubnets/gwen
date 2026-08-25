@@ -153,23 +153,16 @@ $(ho)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # does not lay. HCC=1 takes the $(CC) link below instead -- the foreign-cc differential,
 # opt-in, and the only lane that puts one on the vm at ai_tco=1 where ai_musttail is live
 # (mk/common.mk says why). one link rule, two names -- `love` and the candidate.
-# two shapes, and the second builds no bootstrap at all. normally love0 wakes
-# mooncc0.image, the image that breaks the self-host circle. where the bundled love is the
-# TOOLCHAIN (./Makefile's bundled_love -- a love laid beside the tree with no foreign cc
-# deferred to) there is no circle: that binary already carries mooncc as a verb, so it
-# compiles the tree directly and love0, mooncc0.image and the sed-laid 0.h twins are
-# never made. moon0_dep carries the difference
-# into the rules below, so nothing names an image that will not exist.
-# boot_love: whoever runs a build-time .l tool -- love0 normally, the bundled artifact
-# when one is here. every such site must ask for it by this name, or it resurrects love0.
-boot_love = $(if $(bundled_love),$(bundled_love),$(love0))
-ifneq ($(bundled_love),)
-moon0 = LOVE_NO_IMAGE= $(bundled_love) mooncc $(GCDBG)
-moon0_dep =
-else
+# ⚠ ONE SHAPE, and it was two: a love laid beside the tree compiled it directly, so love0,
+# mooncc0.image and the sed-laid 0.h twins were never made there. Nothing lays one now
+# (lib/source.l), so the self-host circle is always there to break and love0 always wakes
+# mooncc0.image to break it. $(CC) builds love0 -- the ambient compiler, or whatever a
+# driving love named -- and mooncc builds every object after it.
+# boot_love: whoever runs a build-time .l tool. every such site asks by this name rather
+# than spelling love0, so the one place that answers stays one place.
+boot_love = $(love0)
 moon0 = $(love0) wake out/host/mooncc0.image mooncc $(GCDBG)
 moon0_dep = out/host/mooncc0.image
-endif
 moon_d = $(ho)/moon
 moon_host_o = $(patsubst host/%.c,$(moon_d)/host_%.o,$(wildcard host/*.c))
 moon_math_o = $(patsubst crew/moon/lib/math/%.c,$(moon_d)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
@@ -228,7 +221,7 @@ out/host/.mksys-cat.l: $(mksys_l) out/host/.mksys-cat.list
 # which used to want tests0.h, the whole corpus through one stdin, where distboot kept dying at
 # 139. (The corpus is read now, not baked, so that particular tail is gone.) A bundled love
 # lays it just as well: the cat carries holo itself, so the layer needs nothing of the bootstrap.
-$(moon_d)/sys.o: out/host/.mksys-cat.l $(if $(bundled_love),,$(love0))
+$(moon_d)/sys.o: out/host/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_love) -l out/host/.mksys-cat.l -n -e "((from 'moon '$(mksys_e)) \"$@\")" && test -s $@

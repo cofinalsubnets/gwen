@@ -4,30 +4,21 @@ include mk/common.mk
 
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
-# ==== the full-fat artifact's own toolchain (doc/misc/dist.md) ====
-# a release tarball's bin/love wears a `mooncc` verb, so a tree laid beside one CAN compile
-# with the binary it shipped with and touch no ambient cc: already past the self-host circle,
-# love0 and mooncc0.image and the sed-laid 0.h twins all unbuilt (mk/lib.mk).
-# ⚠ CAN, not DOES. `love seed` prefers a foreign compiler and takes the work itself only
-# when there is none (lib/source.l), because a binary that rebuilds itself byte for byte
-# proves consistency and not trustworthiness -- a compiler carrying a Thompson attack
-# reproduces itself perfectly too. bundled_love below is where that choice lands.
+# ==== who compiles this tree (doc/misc/dist.md) ====
+# ⚠ MAKE DOES NOT GUESS, and it used to: a `bin/love` laid beside the source WAS the
+# toolchain by being there, so a plain `make` preferred it over the machine's own compiler
+# -- the weaker claim, picked by a file existing. Which mode a build is in belongs to
+# whoever DRIVES it. A bare make has no love, so it can only mean the ambient cc, which is
+# what $(CC) already says. A love driving (lib/source.l's `seed`) knows its own selfpath
+# and names CC outright: a working ambient cc where it probed one -- the STRONGER claim,
+# since a foreign compiler holding the scaffold is the one thing a self build cannot say
+# -- and its own mooncc where it did not. Nothing here needs to ask.
 # `cc_named` is `make CC=gcc` or CC in the environment -- PATH is not consulted, and `CC ?=`
-# could not ask it (make defines CC itself, so `?=` never fires).
+# could not ask it (make defines CC itself, so `?=` never fires). ⚠ CCACHE goes when CC is
+# two words: ccache takes the compiler as argv[1], and `love mooncc` is not one.
 cc_named := $(filter command line environment override,$(origin CC))
-# ⚠ TWO QUESTIONS, and one name answered both until a DEFERRING seed proved they differ.
-# `bin/love` being HERE is not the same as its being THE TOOLCHAIN: `love seed` exports CC
-# when it finds a foreign compiler (lib/source.l), and that deference is a request for
-# love0's lane BACK -- the ambient cc holding the scaffold, which is the one thing a self
-# build cannot say (a compiler carrying a Thompson attack reproduces itself perfectly too).
-# bundled_here answers the file question and nothing reads it but the line below;
-# bundled_love, which every rule in the tree reads, answers the toolchain one.
-bundled_here := $(if $(wildcard $(R)/bin/love),$(abspath $(R)/bin/love),)
-bundled_love := $(if $(cc_named),,$(bundled_here))
-
-ifneq ($(bundled_love),)
-CC := $(bundled_love) mooncc
-CCACHE :=                     # ccache takes the compiler as argv[1]; `love mooncc` is two words
+ifneq ($(words $(CC)),1)
+CCACHE :=
 endif
 
 # bootstrap interpreter

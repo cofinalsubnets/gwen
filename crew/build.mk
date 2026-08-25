@@ -220,7 +220,7 @@ dist_drop = bench port wasm
 # exist before the binary can link.
 .PHONY: force_src
 force_src: ;
-$(dist_source): force_src $(if $(bundled_love),,$(love0))
+$(dist_source): force_src $(love0)
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(boot_love) tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
@@ -251,7 +251,7 @@ endif
 # module walk resolves off a NEST, and a fresh seed tree has none. same lane
 # as sys.o, live in both worlds. PINNED to out/host: the blob is the tree's,
 # not a compiler flavor's, and only the moon link takes it.
-out/host/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(if $(bundled_love),,$(love0))
+out/host/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(love0)
 	@$(boot_love) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(src_arch)
 
 # THE CARRIED RUNTIME: each hosted ISA's compiled nolibc archive, raw and
@@ -273,8 +273,8 @@ rt_slice = $(wildcard crew/moon/include/*.h crew/moon/include/*/*.h \
 # one lane love0 was ever owed. dragging that dep into the bundled lane cost
 # both box trophies once: love0's C compile met netbsd's gcc and its own
 # linux-isms.
-out/host/rt.o: $(rt_slice) tools/mkrt.l $(if $(bundled_love),,out/host/mooncc0.image $(love0))
-	@$(if $(bundled_love),LOVE_NO_IMAGE= $(bundled_love) tools/mkrt.l $@ $(src_arch),$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(src_arch))
+out/host/rt.o: $(rt_slice) tools/mkrt.l out/host/mooncc0.image $(love0)
+	@$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(src_arch)
 
 # ==== the x-lane: test_xfixpoint's objects (seed-universal U0) ====
 # there is ONE artifact; this lane builds no second one. it compiles the tree's
@@ -334,10 +334,10 @@ $(xd)/sys.o: out/host/.mksys-cat.l $(love0)
 # ==== the fat container (seed-universal U1) ====
 # the twin SEED: the x-lane link wearing the artifact's clothes -- its own src
 # blob and readme, so the member answers `love source` like the native one.
-$(xd)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(if $(bundled_love),,$(love0))
+$(xd)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(love0)
 	@$(boot_love) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xtgt)
-$(xd)/rt.o: $(rt_slice) tools/mkrt.l $(if $(bundled_love),,out/host/mooncc0.image $(love0))
-	@$(if $(bundled_love),LOVE_NO_IMAGE= $(bundled_love) tools/mkrt.l $@ $(xtgt),$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(xtgt))
+$(xd)/rt.o: $(rt_slice) tools/mkrt.l out/host/mooncc0.image $(love0)
+	@$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(xtgt)
 # $(xkart_o), the twin's kernel objects, in the host link's own order -- the
 # artifact is fused, so an egg without them is not the binary the far machine
 # rebuilds. free/kernel.mk owns the list and the prereq line; a recipe expands
