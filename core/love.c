@@ -1410,6 +1410,28 @@ static struct ai *eset(struct ai *g, struct env **c, int k, word v) {
  g = ai_push(g, 3, putcharm(k), v, (*c)->tab);   // sp0 key, sp1 val, sp2 map
  if (ai_ok(g = ai_mapput(g))) g->sp++;           // mapput leaves the map: drop it
  return g; }
+// a let's lambda entry is (name . box). the box holds the closure's thread and its
+// import row, and both a backpatch site and the capture fixpoint write THROUGH it, so
+// the shared mutable cell is a real heap object rather than a cons somebody patches --
+// ev.l's closure cell is the same thing (mkc/cof/cput, a tablet under key 0).
+enum { LThread, LImps };
+static ai_inline word lget(struct ai *g, word y, int k) {
+ return ai_mapget(g, zero, putcharm(k), B(y)); }
+static struct ai *lset(struct ai *g, word y, int k, word v) {   // ⚠ y must be rooted: a
+ g = ai_push(g, 3, putcharm(k), v, B(y));                       //   growing put allocates
+ if (ai_ok(g = ai_mapput(g))) g->sp++;
+ return g; }
+// sp0 is c0_lambda's (thread . imports); answers a box carrying it, in its place
+static struct ai *lbox(struct ai *g) {
+ g = map_new(g);                                       // sp0 map, sp1 pair
+ if (!ai_ok(g)) return g;
+ g = ai_push(g, 3, putcharm(LThread), A(g->sp[1]), g->sp[0]);
+ if (ai_ok(g = ai_mapput(g))) g->sp++;                 // back to sp0 map, sp1 pair
+ if (!ai_ok(g)) return g;
+ g = ai_push(g, 3, putcharm(LImps), B(g->sp[1]), g->sp[0]);
+ if (ai_ok(g = ai_mapput(g))) g->sp++;
+ if (!ai_ok(g)) return g;
+ return g->sp[1] = g->sp[0], g->sp++, g; }
 static struct ai *enscope(struct ai *g, struct env *par, word args, word imps) {
  uintptr_t const n = Width(struct env) + Width(struct ai_tag);
  g = ai_push(g, 3, args, imps, par);
@@ -1522,13 +1544,13 @@ static Cata(c1_ix) {
  gen_wb_cell(g, Kp + 1, x);
  return pull(g, c); }
 
-// emit a recursive-function ref: bake `quote AB(y)` if the closure is final, else
+// emit a recursive-function ref: bake `quote <the box's thread>` if the closure is final, else
 // `quote zero` + stash the operand cell in the site for ana_d to backpatch.
 static Cata(c1_recv) {
  word y = pop1(g), site = pop1(g);
  Kp -= 2;
  Kp[0].ap = lvm_quote;
- if (zerop(site)) Kp[1].x = AB(y), gen_wb_cell(g, Kp + 1, Kp[1].x);
+ if (zerop(site)) Kp[1].x = lget(g, y, LThread), gen_wb_cell(g, Kp + 1, Kp[1].x);
  else Kp[1].x = zero, B(site) = (word) &Kp[1], gen_wb_two(g, site, B(site));
  return pull(g, c); }
 
@@ -1609,7 +1631,7 @@ static Ana(ana_v) {
    // recursive-fn ref: record a backpatch site on d (the lams-owning scope) when
    // the closure isn't built yet, then apply the captured imports.
    word site = zero;
-   if (zerop(AB(y))) {
+   if (zerop(lget(g, y, LThread))) {
     mm(g, &d), mm(g, &y);
     g = gxl(ai_push(g, 2, y, zero)); // site = (y . zero)
     if (ai_ok(g)) {
@@ -1618,7 +1640,7 @@ static Ana(ana_v) {
     um(g), um(g); }
    incl(*c, 2);
    if (ai_ok(g = ai_push(g, 3, c1_recv, y, site)))
-    g = ana_ap(g, c, BB(g->sp[1]));
+    g = ana_ap(g, c, lget(g, g->sp[1], LImps));
    return g; }
   // let binding in the *current* scope -> a direct stack slot.
   if (d == *c && memq(g, eget(g, d, EStack), x)) return
@@ -1800,7 +1822,7 @@ static struct ai *rev(struct ai *g, word l) {          // answers the reversed c
  for (; ai_ok(g) && chainp(l); l = B(l)) g = gxl(ai_push(g, 1, A(l)));
  return forget(); }
 
-static word ldels(struct ai *g, word lam, word l);
+static struct ai *ldels(struct ai *g, word lam, word l);
 
 // a lexically bound nom shadows a macro of the same spelling (ev.l's wx/cprop
 // carry the twin guard). binder rosters only -- imps may record undefined globals.
@@ -1877,7 +1899,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
   // if it's a lambda compile it and record in lam list
   if (lambp(g, e)) {
    g = ai_push(g, 2, d, lam);
-   g = gxl(gxr(c0_lambda(g, c, zero, B(e))));
+   g = gxl(gxr(lbox(c0_lambda(g, c, zero, B(e)))));
    if (!ai_ok(g)) return forget();
    lam = pop1(g); }
   g = gxl(ai_push(g, 2, d, eget(g, *b, EStack))); // expose this binding to later siblings
@@ -1897,18 +1919,19 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  word j, vars, var;
  do for (j = 0, d = lam; chainp(d); d = B(d)) // for each bound function variable
   for (e = lam; chainp(e); e = B(e)) if (d != e) // for each other bound function variable
-   if (memq(g, BB(A(e)), AA(d))) // if you need this function
-    for (v = BB(A(d)); chainp(v); v = B(v)) // then you need its variables
-     if (!memq(g, vars = BB(A(e)), var = A(v))) // only add if it's not already there
+   if (memq(g, lget(g, A(e), LImps), AA(d))) // if you need this function
+    for (v = lget(g, A(d), LImps); chainp(v); v = B(v)) // then you need its variables
+     if (!memq(g, vars = lget(g, A(e), LImps), var = A(v))) // only add if it's not already there
       j++,
       g = gxl(ai_push(g, 2, var, vars)),
-      BB(A(e)) = ai_ok(g) ? pop1(g) : zero,
-      gen_wb_two(g, B(A(e)), BB(A(e)));
+      g = lset(g, A(e), LImps, ai_ok(g) ? pop1(g) : zero);
  while (j);
 
  // now delete defined functions from the closure variable lists
  // they will be bound lazily when the function runs
- for (e = lam; chainp(e); BB(A(e)) = ldels(g, lam, BB(A(e))), gen_wb_two(g, B(A(e)), BB(A(e))), e = B(e));
+ for (e = lam; ai_ok(g) && chainp(e); e = B(e)) {
+  g = ldels(g, lam, lget(g, A(e), LImps));
+  if (ai_ok(g)) g = lset(g, A(e), LImps, pop1(g)); }
 
  g = eset(g, c, ELams, lam);
  g = append(gxl(pushl(ai_push(g, 2, nom, exp))));
@@ -1922,20 +1945,23 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
 
  // clear each function's provisional closure so a ref hit mid-rebuild defers to a
  // backpatch site rather than baking the stale closure; keep the import sets (BB).
- for (d = lam; chainp(d); d = B(d)) AB(A(d)) = zero;
+ for (d = lam; ai_ok(g) && chainp(d); d = B(d)) g = lset(g, A(d), LThread, zero);
 
  for (e = nom, v = def; chainp(e); e = B(e), v = B(v))
   if (lambp(g, A(v))) {
    d = assq(g, lam, A(e));
-   size_t nb = llen(BB(d)); // the import row is frozen here: sites already applied it
-   g = c0_lambda(g, c, BB(d), BA(v));
+   size_t nb = llen(lget(g, d, LImps)); // the import row is frozen here: sites already applied it
+   g = c0_lambda(g, c, lget(g, d, LImps), BA(v));
    if (!ai_ok(g)) return forget();
-   A(v) = B(d) = pop1(g), gen_wb_two(g, v, A(v)), gen_wb_two(g, d, A(v));
-   if (llen(BB(d)) != nb) __builtin_trap(); } // growth = those sites under-apply (cf. ev.l weave's 'imports-grew scare)
+   g = lset(g, d, LThread, A(g->sp[0]));        // the pair stays on the stack across both
+   if (ai_ok(g)) g = lset(g, d, LImps, B(g->sp[0]));   // puts: either can move it
+   if (!ai_ok(g)) return forget();
+   A(v) = g->sp[0], gen_wb_two(g, v, A(v)), g->sp++;
+   if (llen(lget(g, d, LImps)) != nb) __builtin_trap(); } // growth = those sites under-apply (cf. ev.l weave's 'imports-grew scare)
 
  // closures final -> backpatch each recorded recursive-fn ref with its thread.
  for (d = eget(g, (*c), ESites); chainp(d); d = B(d))
-  cell(B(A(d)))->x = AB(A(A(d))), gen_wb_cell(g, cell(B(A(d))), AB(A(A(d))));
+  cell(B(A(d)))->x = lget(g, A(A(d)), LThread), gen_wb_cell(g, cell(B(A(d))), lget(g, A(A(d)), LThread));
  g = eset(g, c, ESites, zero);
 
  g = rev(g, nom);   // put in literal order
@@ -1957,11 +1983,18 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
   g = ai_push(g, 2, c1_apn, putcharm(l)),
   forget(); }
 
-static word ldels(struct ai *g, word lam, word l) {
- if (!chainp(l)) return zero;
- word m = ldels(g, lam, B(l));
- if (!assq(g, lam, A(l))) B(l) = m, m = l;
- return m; }
+// drop the bound functions from a closure-variable list, onto a FRESH spine: the source
+// is read and never written. tail first, so the copy builds back to front and the kept
+// cells cons onto an answer that is already whole. lam and l are rooted across it --
+// gxl allocates, and the recursion carries both over that.
+static struct ai *ldels(struct ai *g, word lam, word l) {
+ if (!ai_ok(g)) return g;
+ if (!chainp(l)) return ai_push(g, 1, zero);
+ struct ai_r *mm0 = ai_core_of(g)->root;
+ mm(g, &lam), mm(g, &l);
+ g = ldels(g, lam, B(l));
+ if (ai_ok(g) && !assq(g, lam, A(l))) g = gxl(ai_push(g, 1, A(l)));
+ return forget(); }
 
 lvm(lvm_defglob) {
  Have(3);
