@@ -161,18 +161,37 @@
   (nargs v) (: (go u n) (: l (peek 2 u) (? (id? unc (peek 0 l)) (go l (1 + n)) n)) (go (unc0 v) 1))
   (fbase v) (: (go u) (: l (peek 2 u) (? (id? unc (peek 0 l)) (go l) (seek -2 l))) (go (unc0 v)))
   (farg v i n) (: (go u w) (? (0 < w) (go (peek 2 u) (w - 1)) (peek 1 u)) (go (unc0 v) ((n - 1) - i)))
-  ; --- a lambda's source, de Bruijn renamed: a \-bound variable prints d<level>,
-  ; so a-equivalent lambdas print alike and inspect agrees with `=`. free, global
+  ; --- a lambda's source, de Bruijn renamed: a \-bound variable prints as its level's
+  ; letter, so a-equivalent lambdas print alike and inspect agrees with `=`. free, global
   ; and :-bound names keep their spelling; quoted data is shared verbatim.
-  (dnom d) (name ("d" + dstr d))
+  (inq x l) (? !(two? l) 0 (id? x <l) 1 (inq x >l))
+  ; the shortlex letters: a b .. z aa ab .. , one-based so the digits carry no zero
+  (sxch n a) (: q ((n - 1) // 26) c (97 + ((n - 1) % 26))
+              (? (0 < q) (sxch q (c >< a)) (c >< a)))
+  (lnom i) (name (string (sxch (1 + i) ())))
+  ; a binder takes the next letter not spelled free anywhere in the source -- a name kept
+  ; as written is a name a rename would capture, and skipping it is the whole guard.
+  ; (\ a b (+ a b)) canonicalizes to itself; a body naming e takes f in e's place. the
+  ; candidate index is what threads, so the letters are walked once across the whole term.
+  (nxt i fv) (? (peep fv (lnom i) 0) (nxt (1 + i) fv) i)
   (lam? x) (two? x && id? <x '\ && two? >x && two? >>x)
   (qot? x) (two? x && id? <x '\ && two? >x && !(two? >>x))
-  (canon x sc d) (? !(two? x) (? (nom? x) (: r (assoc x sc) (? r >r x)) x)
-                    (qot? x) x
-                    (lam? x) ('\ >< cops >x sc d)
-                    (canon <x sc d >< canon >x sc d))
-  (cops l sc d) (? !(two? >l) ((canon <l sc d) >< ())                ; the last operand is the body
-                   (: nm (dnom d) (nm >< cops >l ((<l >< nm) >< sc) (1 + d))))
+  ; the noms canon leaves spelled as written: free, global and :-bound. quoted data is
+  ; data, never a reference, so a binder cannot capture into it. one walk, into a tablet
+  ; the proposals then read by key; bd is the binders in scope, a stack, so it stays a list.
+  (fvs x bd t) (? !(two? x) (? (nom? x) (? (inq x bd) t (pin t x 1)) t)
+                  (qot? x) t
+                  (lam? x) (fvl >x bd t)
+                  (fvs >x bd (fvs <x bd t)))
+  (fvl l bd t) (? !(two? >l) (fvs <l bd t)
+                  (fvl >l (<l >< bd) t))
+  (canon x sc i fv) (? !(two? x) (? (nom? x) (: r (assoc x sc) (? r >r x)) x)
+                       (qot? x) x
+                       (lam? x) ('\ >< cops >x sc i fv)
+                       (canon <x sc i fv >< canon >x sc i fv))
+  (cops l sc i fv) (? !(two? >l) ((canon <l sc i fv) >< ())          ; the last operand is the body
+                      (: j (nxt i fv) nm (lnom j)
+                       (nm >< cops >l ((<l >< nm) >< sc) (1 + j) fv)))
 
   (pfn o v sn) (? (partp v)
     (: n (nargs v)
@@ -185,7 +204,7 @@
           (: gn (opnom v)
              (? gn (say o (string gn))
                 (: s (lamsrc v)
-                   (? (two? s) (px o (canon s 0 0) sn)
+                   (? (two? s) (px o (canon s 0 0 (fvs s () {})) sn)
                       (: _ (put o 92) (pnum o (abs (dig v)))))))))))   ; opaque: a distinguisher, nothing more -- C spelled the ADDRESS here, this is the digest, which at least survives a collection
 
   (px o x sn) (? (charm? x) (pnum o x)
