@@ -387,7 +387,7 @@
    ; rather than riding back up, so the walk keeps its original shape: adding a
    ; return value would have meant either a rev of the whole stream or a pair
    ; allocated per token, and this pass runs over every token of every compile.
-   ; ⚠ the join must see THROUGH a mark: host/main.c splices the egg by
+   ; ⚠ the join must see THROUGH a mark: src/main.c splices the egg by
    ; #include-ing bare string literals between two of its own ("(" then egg.h
    ; then "'(" ..), so the strings a mark sits between are exactly the ones
    ; that have to join. a mark consumed mid-join takes effect AFTER the merged
@@ -557,7 +557,7 @@
 
    ; #include: resolve via incf, lex, and preprocess sharing macs. incf may
    ; answer (1 text child-incf): the child resolves the INCLUDED file's own
-   ; quote includes relative to ITS dir (gcc's rule -- host/cb.c's unity
+   ; quote includes relative to ITS dir (gcc's rule -- src/cb.c's unity
    ; include of ../crew/quay/quay.c needs quay.c's "quay.h" found beside it);
    ; a plain (1 text) keeps this incf (the laws feed includes as data).
    (doinc body macs cond out rest incf)

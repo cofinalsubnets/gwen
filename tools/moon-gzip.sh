@@ -99,7 +99,7 @@ done
 
 # the rung-4 libc floor: am math + the syscall leaf (mksys lays sys.o). ⚠ NO nolibc
 # object -- the link owes its symbols and the driver's runtime table pulls
-# crew/moon/lib/nolibc/ MEMBER BY NEED (host/build.mk says the same thing about love
+# crew/moon/lib/nolibc/ MEMBER BY NEED (src/build.mk says the same thing about love
 # itself). Naming an object would take every member instead.
 for f in crew/moon/lib/math/*.c; do
   b=`basename "$f" .c`

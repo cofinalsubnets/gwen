@@ -1,9 +1,9 @@
 # crew/build.mk -- the crew rides IN the default binary (doc/misc/plan/one-binary.md): the
-# layered bake host/build.mk runs lays the whole crew into out/host/love's own image, so
+# layered bake src/build.mk runs lays the whole crew into out/host/love's own image, so
 # `love kore|mooncc|sh|..` is the build tree's spelling exactly as it is the artifact's.
 # What remains here: the cat rosters, mooncc0.image (love0's own -- an image keeps its
 # binary's layout), the lush/sb PATH scripts, and the dist artifact. Included by
-# ./Makefile after host/build.mk, so $(ho) is already spelled; shared vars are
+# ./Makefile after src/build.mk, so $(ho) is already spelled; shared vars are
 # mk/common.mk.
 
 # kore: the diff engines, the text/tool surface, the line tools, and `kore` itself -- the
@@ -55,14 +55,14 @@ $(ho)/sb $(ho)/lush:
 # self-host circle -- the default love is mooncc-built, so its own image cannot drive its
 # build, and love0 waking this one can. PINNED to out/host like love0 itself. The ONLY
 # standalone image left: the default love's crew rides its own .image (the layered bake,
-# host/build.mk), and an image cannot cross binaries anyway.
+# src/build.mk), and an image cannot cross binaries anyway.
 out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
 	@echo 'LOVE	'$@
 	@$(love0) -l out/host/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
 # ==== dist: the ONE artifact (self-host rung 3; seed-universal U2) ====
 # the seed IS the default binary: out/host/love links the moon objects plus its
-# own source blob and readme (host/build.mk carries the link), and the layered
+# own source blob and readme (src/build.mk carries the link), and the layered
 # bake lays the crew warm -- cook + kore + lush (vi and ain ride its cat) +
 # mooncc (all five backends) + sb + kiosko -- each pinning its own name into the
 # verb table love/cli.l's rail reads: `love sb|cook|kore|kiosko|mooncc ..` are
@@ -92,7 +92,7 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
 # corpus.list is the same guard for $t, and for the same reason.) Depend on the LIST:
 # rewritten only when membership moves, so the cat re-lays on an add OR a delete.
 # ⚠ the cat lives in $(ho): it is the DEFAULT binary's own bake load now
-# (host/build.mk's love.baked), and the dist lanes read the same file -- one roster,
+# (src/build.mk's love.baked), and the dist lanes read the same file -- one roster,
 # one set of bytes, so the tree binary and the artifact cannot drift.
 .PHONY: force_dist_list
 force_dist_list: ;
@@ -104,7 +104,7 @@ $(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list
 	@echo 'CAT	'$@
 	@mkdir -p $(dir $@)
 	@cat $(distfiles) > $@
-# the same roster, baked into the binary: the FIRST BOOT (host/main.c) cats the
+# the same roster, baked into the binary: the FIRST BOOT (src/main.c) cats the
 # members off the carried source blob exactly as the rule above does off the tree.
 out/lib/distlist.h: crew/build.mk
 	@echo 'SH	'$@
@@ -125,7 +125,7 @@ out/lib/distlist.h: crew/build.mk
 #                                compiler at all.
 #
 # ⚠ AND THEY ANSWER THE SAME BINARY, which is the whole claim and is not a thing we
-# had to engineer: the local cc only ever builds `love0` (host/build.mk), and every
+# had to engineer: the local cc only ever builds `love0` (src/build.mk), and every
 # object in the shipped binary is mooncc's, compiled by love0 waking mooncc0.image.
 # So the bootstrap compiler is a scaffold that leaves no trace in the product --
 # which is exactly what test_fixpoint already asserts to the byte, and what its DDC
@@ -187,7 +187,7 @@ dist: dist-source dist-seed   # a release is both
 # list because the directory holding it now goes -- one name, not two.
 #
 # ⚠ doc/ IS NOT ON THIS LIST and cannot be, because of one rule: the man pages are
-# WRITTEN in doc/{love,cook,lush}.md and generated from them (host/build.mk), and
+# WRITTEN in doc/{love,cook,lush}.md and generated from them (src/build.mk), and
 # `install: $(installs)` names all three -- so an unpacked release with no doc/ builds
 # its binary and then dies on `make install` with no rule to make doc/love.md. so doc/
 # is the three man sources and nothing else, and everything that used to sit beside
@@ -226,7 +226,7 @@ $(dist_source): force_src $(love0)
 
 # THE SOURCE BLOB: the source tarball laid into an object (tools/mksrc.l), so the
 # artifact hands out its own source with no second download and no `tar xf` -- love
-# `source` inflates it. host/src.c defines the pair WEAK and empty, so this object's
+# `source` inflates it. src/src.c defines the pair WEAK and empty, so this object's
 # STRONG definitions override them at the link and a plain `make host` needs none of
 # it. ⚠ holo names its arches (uname's and holo's disagree on x86_64).
 # ⚠ THE BLOB FOLLOWS $(hosta), NOT $a. Only the host link takes this object, and the
@@ -305,21 +305,21 @@ endif
 # up-to-date for an aarch64 link, and the mismatch shows only at the far end.
 xd = out/x-$(xa)
 moonx = $(moon0) -t $(xtgt)
-xhost_o = $(patsubst host/%.c,$(xd)/host_%.o,$(wildcard host/*.c))
+xhost_o = $(host_c:$(R)/src/%.c=$(xd)/host_%.o)
 xmath_o = $(patsubst crew/moon/lib/math/%.c,$(xd)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
 # no nolibc.o: the link owes its symbols and the driver pulls the members by need
 # (crew/moon/lib/nolibc/), so a dist takes no calendar and no resolver.
 xobjs = $(xd)/love.o $(xhost_o) $(xmath_o) $(xd)/sys.o
 # -D AiHaveVersionH like the host lane (build.mk's love.o): mooncc has no
 # __has_include, so the flag is the only door to the version header.
-$(xd)/love.o: core/love.c $(love_h) out/host/mooncc0.image out/lib/love_version.h
+$(xd)/love.o: src/love.c $(love_h) out/host/mooncc0.image out/lib/love_version.h
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moonx) -D ai_tco=$(tco) -D AiHaveVersionH -I$(ho) -I. -Icore -Iout/lib -c $< $@
-$(xd)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
+	@$(moonx) -D ai_tco=$(tco) -D AiHaveVersionH -I$(ho) -I. -Isrc -Iout/lib -c $< $@
+$(xd)/host_%.o: $(R)/src/%.c $(love_h) out/host/mooncc0.image
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c $< $@
+	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Isrc -Iout/lib -c $< $@
 $(xd)/host_main.o: $(baked_h)
 $(xd)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(xd)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
@@ -340,7 +340,7 @@ $(xd)/rt.o: $(rt_slice) tools/mkrt.l out/host/mooncc0.image $(love0)
 	@$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(xtgt)
 # $(xkart_o), the twin's kernel objects, in the host link's own order -- the
 # artifact is fused, so an egg without them is not the binary the far machine
-# rebuilds. free/kernel.mk owns the list and the prereq line; a recipe expands
+# rebuilds. src/kernel.mk owns the list and the prereq line; a recipe expands
 # late, so reading it here is enough.
 $(xd)/love: $(xobjs) $(xd)/src.o $(xd)/rt.o assets/readme.bin
 	@echo 'MOON	'$@

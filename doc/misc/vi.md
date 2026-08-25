@@ -60,5 +60,5 @@ lines); no horizontal scroll (long lines clip at the view's edge); no UTF-8 widt
 As need arises, in rough order: `.` (the repeat — record the last change's byte string, replay
 it), visual mode (a span-selection over the same operators), `:s` ranges over re.l (sed's engine
 is right there), named registers, tab-stop-aware rendering + horizontal scroll, and a pty smoke
-that drives the face under a real terminal via host/posix.c (as test/host/baoedit.l does for bao's
+that drives the face under a real terminal via src/posix.c (as test/host/baoedit.l does for bao's
 line editor).

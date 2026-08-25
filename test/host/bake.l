@@ -1,4 +1,4 @@
-; --- test/host/bake.l: smoke test for the bake nif (host/image.c + ai_image_save_) ---
+; --- test/host/bake.l: smoke test for the bake nif (src/image.c + ai_image_save_) ---
 ; (bake path) snapshots the LIVE session to an image file MID-EVAL -- the running
 ; stack rides along as wake-unreachable ballast, live finalizer nodes forge into
 ; dead chains, and a NULL bio-buffer word encodes as an immortal -- and `love wake

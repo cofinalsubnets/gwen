@@ -3,7 +3,7 @@
 // and the C side stays a pure byte machine re-derived from the cask on every call.
 //
 // the BODIES only. registration is each seat's own trick -- the host's ai_nifs
-// section glob (host/cb.c), the kernel's defs[] table, the playdate's own -- so this
+// section glob (src/cb.c), the kernel's defs[] table, the playdate's own -- so this
 // file names no seat and links nothing but the engine beside it.
 //
 //   (screen b rows cols) -> b    open a cb over cask b (cb_open)

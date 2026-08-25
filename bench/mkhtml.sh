@@ -162,7 +162,7 @@ cat <<'CC'
 <code>love</code> with <i>no gcc, glibc, or ld</i> &mdash; mooncc lays every object,
 <code>mksys</code> emits the syscall leaf, and our own linker (<code>crew/holo/</code>)
 binds the executable. The <b>build</b> row is the wall-clock to compile every C
-translation unit (<code>core/love.c</code> + <code>host/*.c</code> + the <code>am</code> math
+translation unit (<code>src/love.c</code> + <code>host/*.c</code> + the <code>am</code> math
 floor) and link a working binary; the <b>test</b> row runs the full corpus (the same
 files <code>test_host</code>/<code>test_raw</code> feed) through the binary that build
 produced. All three lanes egg-boot (no baked image), so the corpus runs off the freshly
@@ -179,7 +179,7 @@ optimizing compilers is modest, and the binary it emits passes the identical cor
 <p class="note">The <b>chacha</b> and <b>poly1305</b> rows are single C functions rather
 than the whole corpus
 (<code>bench/ccrypto.l</code> drives the <code>chacha20</code> and <code>poly1305</code>
-nifs in <code>host/tls.c</code>), and they are here because an average can hide a
+nifs in <code>src/tls.c</code>), and they are here because an average can hide a
 lopsided one. <b>chacha</b> indexes a sixteen-word state <i>array</i> in its inner loop;
 <b>poly1305</b> keeps its five limbs as scalar <i>locals</i>. mooncc gives a register
 home to the second shape and not the first, so the two rows are a gauge: wide chacha

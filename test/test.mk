@@ -23,7 +23,7 @@
 # (-Dai_tco=0, the trampoline lane too), so it must print TWO "tests pass" summaries: a
 # reader stop drops the rest of the stream and exits 0. Status rides `.rc` -- no pipefail.
 # ⚠ corpus.list IS A RUNTIME INPUT NOW, not only a stamp: love0 reads it to find the corpus
-# (host/main.c), so it has to EXIST before love0 runs. It used to be pulled in as tests0.h's
+# (src/main.c), so it has to EXIST before love0 runs. It used to be pulled in as tests0.h's
 # prerequisite; with the corpus off the bootstrap's dependency graph, nothing else asks for it,
 # and a fresh tree died with `love0: corpus: cannot open out/lib/corpus.list` -- which the
 # unpacked-release path found and no in-tree run could, out/lib always being warm here.
@@ -44,7 +44,7 @@ test_filemode: $(ho)/love.baked
 	      && ! grep -q "^past$$" out/host/.test_filemode.out; } \
 	    || { cat out/host/.test_filemode.out; echo "FAIL file mode not terminal (exit $$r)"; exit 1; }
 # test_stdinbuf -- WHAT WE BORROW OF fd 0 IS INVISIBLE, and we borrow two things. Both doors
-# read the device in 4096-byte gulps (core/love.c's rbio_of), so the first law is that BOTH ANSWER
+# read the device in 4096-byte gulps (src/love.c's rbio_of), so the first law is that BOTH ANSWER
 # THE SAME: the bytes our reader has not taken are still there for an in-form (slurp in), and
 # still there for a child that inherits the fd. A seekable door puts them back with an lseek;
 # a pipe has no rewind, so stdin_hand DELIVERS them down a fresh pipe instead -- which is why
@@ -93,7 +93,7 @@ test_stdinbuf: $(ho)/love.baked
 # stdin works (test/io.l used to poke `in` and eat a byte of whatever fed the suite --
 # it taps a charlist now), and it is equally strict, quitting 1 on a scare either way.
 # What is left of the gap is the READER, not the device: a redirect gulps 4096 like
-# the file does (core/love.c's rbio_of), but `reads` trickles `in` a byte at a time to keep
+# the file does (src/love.c's rbio_of), but `reads` trickles `in` a byte at a time to keep
 # its position exact, which costs ~1.45x here. This is the gate that runs constantly.
 # cat'ing also keeps the corpus's one-global-scope property.
 test_host: $(ho)/love.baked
@@ -124,7 +124,7 @@ test_hostegg: $(ho)/love
 # that parsed the corpus's own English COMMENTS as code still printed "3959 tests pass" on the
 # file door and exited 0. It was caught by hand-diffing the doors; this is that diff, kept.
 # ⚠ ALL THREE DOORS, because they are three different readers -- a file and a redirect share the
-# borrowed run (core/love.c's rbio_of), a pipe has none and drips.
+# borrowed run (src/love.c's rbio_of), a pipe has none and drips.
 # ⚠ the summary line carries a DURATION, so that is normalised away and everything else must
 # match byte for byte -- the dots included, since a dropped assert is exactly what this catches.
 # ⚠ AND BOTH LOVES. The egg lane and the baked image are not interchangeable here: a
@@ -157,10 +157,10 @@ test_stdincorpus: $(ho)/love.baked
 	 done; \
 	 done
 	@echo "  ok   file, redirect and pipe read the corpus identically on both loves"
-# test_front -- the TEST-ONLY FRONTEND: out/host/front links liblove.a (core/love.c only)
+# test_front -- the TEST-ONLY FRONTEND: out/host/front links liblove.a (src/love.c only)
 # and supplies the frontend contract itself, so its port vt can answer WOULD-BLOCK on
 # cue. ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
-$(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/core/love_data.ld \
+$(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/src/love_data.ld \
     out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h
 	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
@@ -168,7 +168,7 @@ $(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/core
 test_front: $(ho)/front
 	@echo TEST $(ho)/front
 	@sh test/gate/run.sh -a front "$(ho)/front" "front: ok" test/front/io.l
-# test_embed -- EVERY FRONTEND BUILT, NONE BOOTED. Each embed site spells core/love.h's structs and
+# test_embed -- EVERY FRONTEND BUILT, NONE BOOTED. Each embed site spells src/love.h's structs and
 # its own ai_libs table, so a core ABI edit breaks them -- but every gate that would SAY so
 # boots, sits in test_extra, and costs minutes. Two phases: COMPILE every frontend (seconds,
 # ours is the only toolchain, no qemu), then LINK every binary that can be linked here.
@@ -193,27 +193,27 @@ embed_elfs = mps2/love.elf nucleo446/firm.elf rp2040/love.elf
 embed_arm := $(and $(shell command -v arm-none-eabi-gcc 2>/dev/null),\
                    $(shell command -v arm-none-eabi-ld 2>/dev/null))
 test_embed: host
-	@echo TEST the frontends compile against core/love.h "(object only)"
+	@echo TEST the frontends compile against src/love.h "(object only)"
 	@$(MAKE) -s kmain_o
 	@$(MAKE) -s a=aarch64 kmain_o
 	@$(MAKE) -s K_TEST=1 kmain_o
 	@for p in $(embed_ports); do \
 	   $(MAKE) -s -C port/$$p ../../out/$$p/main.o \
-	     || { echo "FAIL port/$$p/main.c does not compile against core/love.h"; exit 1; }; \
+	     || { echo "FAIL port/$$p/main.c does not compile against src/love.h"; exit 1; }; \
 	 done
 	@$(if $(wildcard $(EMCC)),$(MAKE) -s -C wasm ../out/wasm/host.o,echo "  (wasm/host.c skipped: no emcc)")
 	@echo TEST the frontends link "(no boot, no qemu)"
 	@$(MAKE) -s kernel || { echo "FAIL the $a kernel does not link"; exit 1; }
 	@$(MAKE) -s a=aarch64 kernel
 	@$(MAKE) -s -C port/virt ../../out/virt/love.elf || { echo "FAIL port/virt does not link"; exit 1; }
-	@echo "test_embed: host, free (x86_64 + aarch64 + riscv) and wasm build against core/love.h"
+	@echo "test_embed: host, free (x86_64 + aarch64 + riscv) and wasm build against src/love.h"
 
 # the SECONDARY boards, same checks one tier down -- real targets that cannot hold a commit.
 test_embed_boards: host
-	@echo TEST the secondary boards compile against core/love.h "(object only)"
+	@echo TEST the secondary boards compile against src/love.h "(object only)"
 	@for p in $(embed_boards); do \
 	   $(MAKE) -s -C port/$$p ../../out/$$p/main.o \
-	     || { echo "FAIL port/$$p/main.c does not compile against core/love.h"; exit 1; }; \
+	     || { echo "FAIL port/$$p/main.c does not compile against src/love.h"; exit 1; }; \
 	 done
 	@if [ -n "$(embed_arm)" ]; then \
 	   for t in $(embed_elfs); do p=$${t%%/*}; f=$${t#*/}; \
@@ -417,18 +417,18 @@ moonrun = $m mooncc
 # lane can lose the feature while this one keeps it.
 test_moon: host $(love0)
 	@sh test/gate/moon.sh $(ho) $m $(love0)
-# the COMMITTED GENERATED artifacts, laid from the tables that define them (core/mx.l the +/*
-# dispatch matrices and the kind lattice they index, core/nifs.l the nif + instruction registry,
+# the COMMITTED GENERATED artifacts, laid from the tables that define them (src/mx.l the +/*
+# dispatch matrices and the kind lattice they index, src/nifs.l the nif + instruction registry,
 # quay.l the xterm-256 palette host and kernel share). `make mx` refreshes; test_clay diffs.
-# ⚠ core/mx.h/kinds.h/nifs.h are CORE headers -- a refresh rebuilds the tree, so the gate to run
+# ⚠ src/mx.h/kinds.h/nifs.h are CORE headers -- a refresh rebuilds the tree, so the gate to run
 # after is `make test`, not test_clay alone. Each is written aside and moved only once the
 # whole set lays, so a shape check that quits leaves every committed file untouched.
-# core/love_data.ld is the last linker script in the tree and is laid WHOLE: every other
+# src/love_data.ld is the last linker script in the tree and is laid WHOLE: every other
 # seat's link became ours, and holo needs no script at all.
 # dest:source:value:shape-check -- ONE roster, read by `make mx` (which writes) and by
 # test_clay (which regenerates and diffs). Two spellings of this list is how they drift.
-mx_gen = core/mx.h:core/mx.l:mx-h:mx-ok core/kinds.h:core/mx.l:kinds-h:mx-ok core/nifs.h:core/nifs.l:nifs-h:nifs-ok \
-         crew/quay/xterm256.h:crew/quay/quay.l:q-c:q-ok core/love_data.ld:core/mx.l:mx-ld:mx-ok
+mx_gen = src/mx.h:src/mx.l:mx-h:mx-ok src/kinds.h:src/mx.l:kinds-h:mx-ok src/nifs.h:src/nifs.l:nifs-h:nifs-ok \
+         crew/quay/xterm256.h:crew/quay/quay.l:q-c:q-ok src/love_data.ld:src/mx.l:mx-ld:mx-ok
 # /warn the \# escapes are load-bearing: a bare # in a make VARIABLE starts a comment and
 # would eat the rest of the line (a recipe line passes # through, a variable does not).
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
@@ -437,16 +437,16 @@ mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${
 # two-arg `join` shadowed clay's one-arg at mx-h's define and the .h came out empty.
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo 'LOVE	'core/mx.h core/kinds.h core/nifs.h xterm256.h core/love_data.ld "(core/mx.l + core/nifs.l + quay.l on $m)"
+	@echo 'LOVE	'src/mx.h src/kinds.h src/nifs.h xterm256.h src/love_data.ld "(src/mx.l + src/nifs.l + quay.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
 # ...and the DEPENDENCY, off the same roster: a committed generated file is stale the moment
 # its table moves, and the objects that include it then rebuild from the fresh one. Without
-# this a new core/nifs.l row builds clean and gates GREEN with its nom still off the book -- the
+# this a new src/nifs.l row builds clean and gates GREEN with its nom still off the book -- the
 # drift diff lives in test_clay, which only test_extra reaches.
 # ⚠ the prerequisite is the TABLE ALONE, never $(m): love is built FROM these headers, so
 # naming it as a prerequisite closes the loop and make drops the lot. The recipe instead takes
-# whatever love ALREADY exists -- sound because the generator is core/nifs.l/mx.l themselves, and a
+# whatever love ALREADY exists -- sound because the generator is src/nifs.l/mx.l themselves, and a
 # stale love lays a fresh table. A tree with no love yet is the bootstrap case: the committed
 # file is what builds the first one, so the rule stands aside and only marks it seen.
 define mx_dep
@@ -469,7 +469,7 @@ test_clay: host
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
-	@echo "clay-mx: core/mx.h, core/kinds.h, core/nifs.h, xterm256.h and core/love_data.ld regenerate identically"
+	@echo "clay-mx: src/mx.h, src/kinds.h, src/nifs.h, xterm256.h and src/love_data.ld regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
 # test_moonfuzz -- moon's REFUSAL surface: each test/cc file broken
 # eight ways from a fixed seed. Two reds -- no SCARE, no hang -- plus G1 on every mutant that
@@ -520,15 +520,15 @@ test_libc: host
 # right, never whether OUR compiler builds it -- and float BITS are where codegen hides.
 test_ulp: host
 	@sh test/gate/ulp.sh $(ho) $m
-# The rung-2 self-host gate: compile core/love.c AND every host/*.c with mooncc (gcc/clang only
+# The rung-2 self-host gate: compile src/love.c AND every host/*.c with mooncc (gcc/clang only
 # LINKS), then run the whole corpus through the all-mooncc binary -- the compiler compiles
 # the runtime it runs on. OPT-IN; x86-64 only; the binary carries no image, so a fresh egg.
 test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
-	  $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c core/love.c $$d/love.o \
-	    || { echo "FAIL mooncc -c core/love.c"; exit 1; }; \
+	  $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c src/love.c $$d/love.o \
+	    || { echo "FAIL mooncc -c src/love.c"; exit 1; }; \
 	  for f in host/*.c; do b=`basename $$f .c`; \
 	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
@@ -541,7 +541,7 @@ test_selfhost: host
 	  tail -1 $(ho)/.test_selfhost.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_selfhost.out; } \
 	    || { echo "FAIL all-mooncc corpus (exit $$s)"; exit 1; }; \
-	  echo "test_selfhost: core/love.c + all `ls host/*.c | wc -l` host/*.c built by mooncc, corpus passes"
+	  echo "test_selfhost: src/love.c + all `ls host/*.c | wc -l` host/*.c built by mooncc, corpus passes"
 # The rung-4 gate: the GCC-FREE fixpoint. Everything test_selfhost builds PLUS our own raw
 # libc (nolibc.c), math floor (am.c) and sys.o, bound by OUR OWN static linker -- no gcc,
 # no glibc, no ld anywhere. In test_slow, x86-64 only; supersedes test_selfhost.
@@ -565,7 +565,7 @@ test_drv: host
 test_asmops: host
 	@sh test/gate/asmops.sh $(ho)
 # test_vec -- the INTERRUPT gate: raises a real CPU exception with (fault n) and reads the
-# report, the only way to reach free/mkvec.l's 32 stubs and the fault vector, then
+# report, the only way to reach src/mkvec.l's 32 stubs and the fault vector, then
 # checks the stubs no boot can reach against the architecture's own error-code list.
 test_vec: host
 	@$(MAKE) -s a=x86_64 kernel
@@ -842,7 +842,7 @@ test_tools: host out/host$(hsuf)/lush
 # â  the shared unsuffixed prerequisites are named HERE so the PARENT makes them once.
 # both debug lanes recurse, and a target two sub-makes each decide to remake is a partial
 # file to whoever reads it meanwhile -- a half-written mooncc0.image wakes with no verb
-# table and `mooncc` then reads as a filename (host/build.mk). test_fixpoint names them
+# table and `mooncc` then reads as a filename (src/build.mk). test_fixpoint names them
 # for the same reason.
 test_gcheck: host $(love0) out/host/mooncc0.image
 	@$(MAKE) --no-print-directory hsuf=/gck GCDBG=-DAiGcCheck test_host
@@ -903,11 +903,11 @@ test_uugen: host
 	@echo TEST test/proof/rocq/uugen.v "(coqc)"
 	@$(COQC) -q test/proof/rocq/uugen.v
 	@$(call vclean,uugen)
-# core/mx.l IS the +/* dispatch matrices; core/mx.h is laid from it through clay and tools/mx2coq.l models
+# src/mx.l IS the +/* dispatch matrices; src/mx.h is laid from it through clay and tools/mx2coq.l models
 # it in Rocq -- two derivations of ONE datum.
 test_mx: host
 	@echo TEST test/proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
-	@cat core/mx.l tools/mx2coq.l | $m > test/proof/rocq/mx.v
+	@cat src/mx.l tools/mx2coq.l | $m > test/proof/rocq/mx.v
 	@cd test/proof/rocq && $(COQC) -q mx.v >/dev/null
 	@$(call vclean,mx)
 endif

@@ -7,8 +7,8 @@
 # the refusal surface against gcc. This measures the TARGETS AGAINST EACH OTHER,
 # which neither of those can see: a lane that x64 has and riscv64 does not is
 # invisible to any single-target sweep, and invisible to gcc, because gcc has them
-# all. Cross-target drift is the failure this tree actually ships -- core/love.c compiles
-# everywhere, so the gaps live in the C that core/love.c never writes.
+# all. Cross-target drift is the failure this tree actually ships -- src/love.c compiles
+# everywhere, so the gaps live in the C that src/love.c never writes.
 #
 # THREE VERDICTS per cell, and the third is the interesting one:
 #   ok       -- an object came out, referencing nothing the probe did not declare.

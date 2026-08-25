@@ -20,12 +20,12 @@
 ; flag is exactly the 62-bit fixnum boundary); jno; or rax,1.
 
 ; nif/nifx -- the C install seam (love.c), taken into the module as members. The book loses
-; them on EVERY boot now (host/main.c), so this is the one door left onto raw byte
+; them on EVERY boot now (src/main.c), so this is the one door left onto raw byte
 ; installation, and it is the glaze's: the glaze is the only thing that installs machine code.
 ; ⚠ the RHS is the OUTER nif, by the sequence law -- a body-less `:` rebinds, it does not letrec.
 (: nif nif  nifx nifx)
 
-(: ; the glaze consumes the crew/holo/ assembler by BARE NAME -- host/main.c brackets this whole
+(: ; the glaze consumes the crew/holo/ assembler by BARE NAME -- src/main.c brackets this whole
    ; load with (use 'holo) .. ai_unsplice_, so assemble/assemble-at resolve through the spliced
    ; module at compile and FOLD (the capture law): every glaze closure is self-contained after
    ; the unsplice. (the byte-piece concat helper is `bcat` -- it must NEVER be named `holo`: this :

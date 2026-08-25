@@ -1,6 +1,6 @@
 ; wm -- rungs 2+4 of the xmonad-in-ai port: BECOME the window manager, then
 ; TILE. Rides the x11.l wire codec (rung 1) over the REAL door -- the unix
-; display socket via (connectu path) (host/sock.c). The WM handshake is one
+; display socket via (connectu path) (src/sock.c). The WM handshake is one
 ; request: ChangeWindowAttributes on the ROOT selecting SubstructureRedirect|
 ; SubstructureNotify -- from then on no client maps/resizes a top-level without
 ; the server ASKING US. The event loop drives the pure core (test/wm.l's stack

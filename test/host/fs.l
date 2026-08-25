@@ -1,4 +1,4 @@
-; --- test/host/fs.l: smoke test for the fs nifs (host/posix.c) ---
+; --- test/host/fs.l: smoke test for the fs nifs (src/posix.c) ---
 ; rename/symlink/readlink/chmod/chown/utime/umask link into `love` AND love0 now
 ; (love0 carries the whole host/*.c glob since the self-host promotion); this
 ; still runs standalone against the built binary, like test/host/init.l --

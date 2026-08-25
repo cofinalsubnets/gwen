@@ -10,7 +10,7 @@
 // double-bake under emulation -- then the driver tail asserts a few spec
 // laws and exits through vexit, so `make test_virt` sees 42 (98 = a trap,
 // reported by start.o's mtvec tail through fault_report below).
-#include "../../core/love.h"
+#include "../../src/love.h"
 
 #ifndef EOF
 #define EOF (-1)
@@ -59,7 +59,7 @@ void ai_sleep(uintptr_t ms) {
   uintptr_t start = ai_clock();
   while (ai_clock() - start < ms) ; }
 
-// the readiness law (host/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
+// the readiness law (src/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
 // ready -- a string port waits on nothing external, and answering "not ready"
 // parks its task on a wait no scheduler can satisfy. fd 0 is the honest poll;
 // others nominal.

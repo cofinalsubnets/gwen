@@ -62,7 +62,7 @@ Smaller than feared. **Already portable:** the scheduler waits on plain poll
 (no epoll/futex/timerfd/eventfd anywhere in shipped code); no threads, no
 thread-local storage, no vdso use; subprocess is fork+execvp+waitpid; sockets
 are BSD sockets; and exactly two C files test `__linux__` — three blocks in
-host/posix.c, each with a working `#else` stub. Everything else is Linux by
+src/posix.c, each with a working `#else` stub. Everything else is Linux by
 *content*, not by `#if`. **Mechanical tables:** 77 invoked syscalls per arch,
 all behind the one `__ai_sys` trampoline and one decode point (`er()`'s -4096
 negative-errno law, impl.h); the O_*/MAP_*/SO_*/SA_* flag values and the errno

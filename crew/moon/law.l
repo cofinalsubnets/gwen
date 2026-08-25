@@ -853,7 +853,7 @@
       ; form's first: a body that dies on line 5 must not point at line 2
       (: g (cparse <>(clex "int ok(void) { return 1; }\nint bad(void)\n{\n  int x = 1;\n  x = x + ;\n  return x;\n}\n"))
          (gripe? g && (gline g = 5)))
-      ; adjacent string literals JOIN ACROSS an include boundary -- host/main.c
+      ; adjacent string literals JOIN ACROSS an include boundary -- src/main.c
       ; splices the egg exactly so ("(" then #include egg.h then "'(" ..), so
       ; the file marks must stay invisible to phase 6
       (= <>(pgi "char *s = \"a\"\n#include \"h.h\"\n\"c\";\n" "\"b\"\n")

@@ -71,27 +71,40 @@ tco ?= 1
 # code, so they ride their own arch-guarded targets, never the arch-neutral corpus.
 t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
-love_h = $(wildcard $R/core/*.h)
-# the core rides with its math floor: our own transcendentals, no libm anywhere
-love_c = $R/core/love.c $R/crew/moon/lib/math/am.c
+# the runtime's own headers. named, not globbed: src/ holds the metal seat's k.h and the
+# per-ISA asmops beside these, and a touch on those must not rebuild every love object.
+love_h = $R/src/love.h $R/src/love_int.h $R/src/kinds.h $R/src/nifs.h $R/src/mx.h
+# the core rides with its math floor: our own transcendentals, no libm anywhere.
+# love.c broke into TUs so the biggest one is not the whole build's critical path;
+# src/love_int.h is what they share. the order here is the link's, not a dependency.
+love_tu = love.c ev.c io.c map.c snap.c num.c arr.c
+love_c = $(patsubst %,$R/src/%,$(love_tu)) $R/crew/moon/lib/math/am.c
+# src/ is ONE folder, so these name the lanes a directory used to: the metal seat
+# (src/kernel.mk builds them) and the per-ISA files, which `a` picks by prefix.
+kernel_tu = kmain.c sys.c blk.c doom.c
+kernel_c = $(patsubst %,$R/src/%,$(kernel_tu))
+arch_c = $(wildcard $R/src/x86_64_*.c) $(wildcard $R/src/aarch64_*.c) $(wildcard $R/src/uefi_*.c)
+# ..and the host lane is the remainder, still a glob: drop a src/<app>.c in and its
+# nifs register with no rule edit, exactly as the old host/*.c wildcard promised.
+host_c = $(filter-out $(love_c) $(kernel_c) $(arch_c),$(wildcard $R/src/*.c))
 # the quay engine every seat carries. paint.c (32bpp) and nif.c (the love door) are
 # per-seat -- a 1-bit device wants neither, the host unity-includes nif.c -- so a seat that
 # wants one NAMES it rather than taking it here.
 f_c = $(filter-out %/paint.c %/nif.c,$(wildcard $R/crew/quay/*.c))
 # inle's libc is nolibc's, named member by member; os.c is the map every syscall
 # reaches it through -- and a negative __ai_osv (written at kmain) takes the
-# __ai_inle arm, free/sys.c answering the canonical numbers in C. mooncc builds
+# __ai_inle arm, src/sys.c answering the canonical numbers in C. mooncc builds
 # the kernel, so it builds
-# the kernel's libc too -- there is no second copy to drift. this is host/posix.c's
+# the kernel's libc too -- there is no second copy to drift. this is src/posix.c's
 # closure (plan A3) plus the members love.c's hosted compile reaches (plan C1:
 # the mmap family behind the W^X arena's runtime branch, refused -ENOSYS on
 # metal). core.c stays OUT -- it carries malloc, the process entry and the
-# std streams, every one of which the kernel owns; free/sys.c answers its four
+# std streams, every one of which the kernel owns; src/sys.c answers its four
 # seat symbols (environ, stdout/stderr, the sigaction restorer) instead.
 # ⚠ NAMING A MEMBER HERE IS A DECISION, and stdio was the one weighed: printf and
-# friends write fd 1 themselves, and free/sys.c is seat-blind, so a seated task's
+# friends write fd 1 themselves, and src/sys.c is seat-blind, so a seated task's
 # C-level printf reaches the console where its port reaches the pipe. That is the
-# documented divergence (free/sys.c) -- love code writes through ports, which seat.
+# documented divergence (src/sys.c) -- love code writes through ports, which seat.
 c_c = $(addprefix $R/crew/moon/lib/nolibc/string/,memchr.c memcmp.c memcpy.c memmove.c memset.c strlen.c) \
   $(addprefix $R/crew/moon/lib/nolibc/sys/,read.c write.c \
     chdir.c chmod.c chown.c clock_gettime.c close.c dup2.c fcntl.c fork.c fstat.c getcwd.c \
@@ -127,14 +140,14 @@ ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
   -Wall -Wextra -Werror -Wstrict-prototypes -Wno-unused-parameter \
   -Wmissing-field-initializers -Wno-implicit-fallthrough\
   -falign-functions=16 -fno-stack-protector
-# ⚠ a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- host/main.c
+# ⚠ a strict -std sets __STRICT_ANSI__ and glibc then hides its POSIX half -- src/main.c
 # owes clock_gettime and kill, so the level is asked for by name.
 # -fcf-protection (Intel CET) is x86-only; the non-x86 seats have no CET to turn off and
 # take it as a no-op.
 ai_cflags += -fcf-protection=none -D_POSIX_C_SOURCE=200809L
-# the data-sentinel tiling core/love.h's ai_typ reads (core/love.c's DSENT), on every ld/lld link.
-data_ld = -Wl,-T,$R/core/love_data.ld
-# ⚠ AN EMPTY BRACKET IS STILL A BRACKET. core/love.c indexes the host nif slice off
+# the data-sentinel tiling src/love.h's ai_typ reads (src/love.c's DSENT), on every ld/lld link.
+data_ld = -Wl,-T,$R/src/love_data.ld
+# ⚠ AN EMPTY BRACKET IS STILL A BRACKET. src/love.c indexes the host nif slice off
 # [__start_ai_nifs, __stop_ai_nifs), which the toolchain synthesises only where the
 # SECTION exists -- so an embedder registering its defs by hand owns no AiNif and the
 # pair goes undefined at the link. weak declarations do not answer it: ld leaves a weak

@@ -1,5 +1,5 @@
 ; lib/dns.l -- THE RESOLVER, in love. `connect` takes a dotted quad and nothing
-; else (host/sock.c), because getaddrinfo is not a syscall with an O_NONBLOCK to
+; else (src/sock.c), because getaddrinfo is not a syscall with an O_NONBLOCK to
 ; set but a config read that may speak DNS, and there is no nonblocking form of
 ; it. So the name half lives up here instead, where a lookup can PARK like
 ; anything else:
@@ -61,7 +61,7 @@
 
    ; --- a dotted quad ----------------------------------------------------------
    ; -> a ONE-LIST holding the address in host order, or (). the same four-octet
-   ; walk host/sock.c's `quad` does, because both have to agree on what a numeric
+   ; walk src/sock.c's `quad` does, because both have to agree on what a numeric
    ; host is: whatever this refuses is what gets a lookup.
    (dns-digit? c) (&& (47 < c) (c < 58))
    (dns-quad s)

@@ -54,7 +54,7 @@ are emit-only.
 
 ## the criterion -- GENERATE, DON'T TRANSCRIBE
 
-`free/mkvec.l:4-6` states it, about assembly:
+`src/mkvec.l:4-6` states it, about assembly:
 
 > this one is generated rather than transcribed: the 32 x86 stubs and the 16 aarch64
 > vector slots were `.macro`/`.rept` loops in GAS, and a love loop says the same thing
@@ -183,7 +183,7 @@ expensive thing standing between per-region migration and the whole file.
 
 `note` stays, emit-only, for the banner every generated region owes: "edit `love.c.l`, not
 this file". `lex.l` has no comment token and `cpp.l` runs first, so a note is AUTHORED in
-the generator -- exactly as `free/mkvec.l` carries its narrative in the love that lays
+the generator -- exactly as `src/mkvec.l` carries its narrative in the love that lays
 the assembly.
 
 ## the order of work

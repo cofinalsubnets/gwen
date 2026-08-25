@@ -13,7 +13,7 @@
 ; run: out/host/love -l crew/quay/rove.l -e '(rove ())'
 ; the engine core is pure love (delve/fov/paint/crawl-* run headless, gated by
 ; test/host/rove.l); only rove itself ties the tty (raw/winsize/cue? ride
-; host/posix.c), so rove never joins the corpus.
+; src/posix.c), so rove never joins the corpus.
 
 (:
  ; --- the deck: tiles in a cask, (x y) indexed; 0 rock, 1 floor, 2 the hatch ---

@@ -1,5 +1,5 @@
 # Teensy 4.1 (i.MX RT1062) build -- love compiled END TO END by mooncc. `make -C
-# port/teensy41` from the project root. Every C file -- core/love.c, the am math floor, libc,
+# port/teensy41` from the project root. Every C file -- src/love.c, the am math floor, libc,
 # teensy41.c, main.c -- goes through `mooncc -t thumb2`; boot.o (the ROM-facing
 # FlexSPI/IVT/vector blocks + crt0 + the asm helpers) is laid from holo IR by mkboot.l, the
 # baked heap image by mkimg.l, tlink.l LINKS over holo's ldbare32 and ocopy.l writes the
@@ -26,11 +26,11 @@ objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(libc_o) \
 default: teensy41
 teensy41: $(R)/$(o)/love.hex
 
-$(eval $(call p_obj,love,core/love.c,$(R)/core/love.c $(R)/core/love.h $(lib_hR) $(mc),$(te_cc)))
+$(eval $(call p_obj,love,src/love.c,$(R)/src/love.c $(R)/src/love.h $(lib_hR) $(mc),$(te_cc)))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,crew/moon/lib/nolibc/string/$m.c,\
   $(R)/crew/moon/lib/nolibc/string/$m.c $(libc_dep),$(te_cc) -Icrew/moon/include)))
-$(eval $(call p_obj,teensy41,port/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/core/love.h $(mc),$(te_cc)))
-$(eval $(call p_obj,main,port/teensy41/main.c,main.c teensy41.h $(R)/core/love.h $(lib_hR) $(mc),$(te_cc)))
+$(eval $(call p_obj,teensy41,port/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/src/love.h $(mc),$(te_cc)))
+$(eval $(call p_obj,main,port/teensy41/main.c,main.c teensy41.h $(R)/src/love.h $(lib_hR) $(mc),$(te_cc)))
 
 # boot.o: the ROM-facing FlexSPI/IVT/vector blocks, crt0 and the asm helpers, laid from
 # holo IR -- no gas. port/mps2/mkstart.l is the same shape with one section,

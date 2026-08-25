@@ -8,7 +8,7 @@
 // The boot bakes the egg from source on the M7 -- the whole self-hosting
 // double-bake runs under emulation -- then the driver tail asserts a few
 // spec laws and exits through m7exit, so `make test_mps2` sees 42.
-#include "../../core/love.h"
+#include "../../src/love.h"
 
 #ifndef EOF
 #define EOF (-1)
@@ -65,7 +65,7 @@ void ai_sleep(uintptr_t ms) {
   uintptr_t start = ai_clock();
   while (ai_clock() - start < ms) ; }
 
-// the readiness law (host/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
+// the readiness law (src/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
 // ready -- a string port waits on nothing external, and answering "not ready"
 // parks its task on a wait no scheduler can satisfy (lvm_sound's park law
 // spins sound -> yield -> sound forever: the Enter-key freeze, walled here

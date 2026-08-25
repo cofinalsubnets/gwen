@@ -31,7 +31,7 @@ surface as nifs:
 > (auto-globbed — no love.c/love.h/main.c edit; main.c is core). The fd→port path is
 > free: `ai_io_alloc(g,fd)` wraps any fd as a port with a close finalizer, and
 > read/write then come free via getc/putc. The general-POSIX nifs wear the
-> `posix_` C-symbol prefix (host/posix.c: `lvm_posix_stat` &c); the love names stay
+> `posix_` C-symbol prefix (src/posix.c: `lvm_posix_stat` &c); the love names stay
 > the plain POSIX words.
 
 The payoff: **lush is a real shell whose external commands are the host's programs** — love
@@ -62,7 +62,7 @@ processes, this surface answered against a ramfs.
 | POSIX                          | love surface / backing                                   |
 |--------------------------------|--------------------------------------------------------|
 | process / thread               | **task** — `spawn`/`wait`/`done?`/`chill` (the cooperative scheduler) |
-| `fork`/`exec`/`waitpid`/`_exit`| `fork` `exec` `wait` `quit` (host/posix.c)             |
+| `fork`/`exec`/`waitpid`/`_exit`| `fork` `exec` `wait` `quit` (src/posix.c)             |
 | file descriptor                | **port** via `ai_io_alloc` + the `k_sources[]` vtable  |
 | `open`/`read`/`write`/`close`  | `open`/`close` + getc/putc; `lseek` over the raw-fd `openfd` lane |
 | `dup2`/`pipe`                  | `dup` `dup2` `pipe` (a pair of fds)                    |
@@ -72,7 +72,7 @@ processes, this surface answered against a ramfs.
 | environment                    | `getenv` `setenv` `environ`; cli.l parses argv          |
 | ids — `getuid`/`getgid`        | `getuid` `getgid` (the REAL pair; no effective ids here) |
 | exit codes / std streams       | `in`/`out`/`err` ports; `quit`                          |
-| sockets (BSD)                  | **ain** — `connect`/`listen`/`accept`/`shutdown`/DNS (host/sock.c) |
+| sockets (BSD)                  | **ain** — `connect`/`listen`/`accept`/`shutdown`/DNS (src/sock.c) |
 | time — `clock_gettime`         | `ai_clock` / `(clock t)`                                |
 | `select`/`poll`                | `ai_wait_fds` / `ai_ready` (the scheduler's core)       |
 
@@ -94,7 +94,7 @@ the value | `()`. `stat` answers `(size mtime-ms mode ns uid gid nlink blocks in
 whole mtime in nanoseconds, one charm, cook's build-grade resolution; blocks is `st_blocks`,
 512-byte units, which is DISK USAGE and not the size — or `()` for absence. `lstat` answers the
 same of the LINK itself. ⚠ **the tail is append-only and a reader asks `tally` before reading past
-`ns`**: the kernel's own stat (free/kmain.c) answers the first four alone, an image tree having no
+`ns`**: the kernel's own stat (src/kmain.c) answers the first four alone, an image tree having no
 ownership to tell about, and kore's `stat`/`du` say so rather than reading a 0 someone might
 believe. `openfd`'s mode 3 is O_CREAT|O_EXCL at 0600 — the one that FAILS on an existing name,
 which is what makes a `mktemp` a claim and not a guess. `spawn` answers a pid or a

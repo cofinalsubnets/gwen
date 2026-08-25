@@ -1,4 +1,4 @@
-/* the GZIP floor -- host/deflate.c and host/inflate.c through mooncc, gcc and
+/* the GZIP floor -- src/deflate.c and src/inflate.c through mooncc, gcc and
  * clang, with the three reports diffed and the three builds timed. ccnif.sh
  * drives it.
  *
@@ -16,16 +16,16 @@
  * licensed choice: a differing byte is a differing compiler.
  *
  * ⚠ THE SUMMARY IS THIS FILE'S OWN ARITHMETIC. an FNV-1a over the output, not
- * the crc32 next door in host/hash.c -- a summary computed by the code under
+ * the crc32 next door in src/hash.c -- a summary computed by the code under
  * test can agree with itself while both halves are wrong.
  *
  * ⚠ AND THE MALFORMED STREAMS ARE PART OF THE SUBJECT, not a robustness check.
- * host/inflate.c reproduces gz-puff's answer for a stream that does not
+ * src/inflate.c reproduces gz-puff's answer for a stream that does not
  * describe a code -- first-writer-wins in the table, a zeroed symbol array --
  * so what it answers on garbage is as specified as what it answers on a valid
  * block, and the refusal paths are where the bit reader's edges live. */
-#include "../../host/deflate.c"
-#include "../../host/inflate.c"
+#include "../../src/deflate.c"
+#include "../../src/inflate.c"
 #include "stub.h"
 #include "say.h"
 

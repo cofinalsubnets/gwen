@@ -15,17 +15,17 @@ than mine prefers one.
 
 ## what already exists, and it is most of it
 
-* **the port vtable is the ring contract, verbatim.** `core/love.h`: *"writen: land up to n bytes
+* **the port vtable is the ring contract, verbatim.** `src/love.h`: *"writen: land up to n bytes
   in one motion: >0 landed, 0 no room now (caller keeps the residue), -1 the device is gone."*
   That is a DMA ring with backpressure, described without knowing it. A full audio buffer
   answers 0, the caller keeps the residue, and the scheduler's existing fd-park wakes it.
 * ⚠ **it must be a HEAP port, and the vtable says why:** *"only a door whose port keeps a write
   run may refuse; the static ports cannot park."* So the horn is `ai_io_alloc`'s, never a boot
   row — and that is the same sentence on both seats.
-* **an fd is a port on both seats already.** host/sock.c's whole method is "produce an OS fd,
+* **an fd is a port on both seats already.** src/sock.c's whole method is "produce an OS fd,
   hand it to `ai_io_alloc`, and read and write come free"; doc/misc/inle.md says `ai_io_alloc`
   is core, not host. Neither seat needs a new mechanism, only a new device.
-* **the PCI walk is written** (free/blk.c, CF8/CFC) and so is virtio-mmio on aarch64. The disk
+* **the PCI walk is written** (src/blk.c, CF8/CFC) and so is virtio-mmio on aarch64. The disk
   rung already paid for both transports.
 * **the flow doors are written** — spout/drip, backpressure, parking, the reader-bootstrap
   arc's whole rung 9. PCM is a byte stream that must not be dropped, which is the one shape
@@ -39,7 +39,7 @@ One device, two faces, the way the framebuffer already has two:
   the ordinary write path, and a full ring is backpressure rather than a dropped frame. Rate,
   channels and format are the ONE thing an fd cannot carry, so they ride the open.
 * **the C face** is a direct call (`k_horn_write`), for a program linked into the image that
-  has no love heap in hand — free/doom.c reaches `k_fb` the same way today.
+  has no love heap in hand — src/doom.c reaches `k_fb` the same way today.
 
 ⚠ **the door is a vtable, not an AC'97 shape.** qemu's aarch64 `virt` has no AC'97 (it offers
 virtio-sound), and the hosted seats have neither. If the second device is a rewrite, the first
@@ -88,7 +88,7 @@ bar on the ladder.
 `-device AC97`, and it is the friendly one: **two I/O-port BARs**, so none of the 64-bit-MMIO
 grief rung 5 hit under OVMF. A 32-entry buffer descriptor list of `kmallocw` buffers, the run
 bit set, and the current-index register read from the write path — **polled, no interrupt**,
-free/blk.c's own posture and for blk.c's own reason.
+src/blk.c's own posture and for blk.c's own reason.
 
 ⚠ `pa = va - khhdm` holds for heap memory and NOT for image statics — blk.c's warning, and the
 BDL and every sample buffer are subject to it. ⚠ every door's map stops at 4 GiB.
@@ -111,7 +111,7 @@ The work is a mixer, not plumbing: DMX lumps are 8-bit unsigned mono at 11025 Hz
 the device's rate. ⚠ `i_sdlsound.c` is 1076 lines and that number will mislead you — most of it
 is SDL_mixer, libsamplerate and caching that a 200-line mixer does not need.
 
-⚠ **it rides the C face**, like free/doom.c's framebuffer: doom is linked into the image and has
+⚠ **it rides the C face**, like src/doom.c's framebuffer: doom is linked into the image and has
 no love heap in hand at `I_UpdateSound`. **~2 days on top of any one device rung.**
 
 *gate:* the honest headless one — `-audiodev none` and assert the ring index advances, since a

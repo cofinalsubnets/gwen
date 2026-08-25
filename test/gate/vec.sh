@@ -1,7 +1,7 @@
 #!/bin/sh
 # test/gate/vec.sh -- the INTERRUPT gate.
 #
-# free/mkvec.l lays the exception and IRQ entry points that used to be
+# src/mkvec.l lays the exception and IRQ entry points that used to be
 # x86_64/x86_64.S and aarch64/aarch64.S. a green `make test_kernel` already
 # proves most of that lay by running it: nothing boots without archinit's IDT,
 # and the corpus is FED over the serial line and CLOCKED by the timer, so

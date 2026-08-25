@@ -1,7 +1,7 @@
 #!/bin/sh
 # ccbench.sh -- the COMPILER shootout (the page's FOURTH table). Builds the love host
 # binary with three C compilers and, for each, reports four wall-clock costs:
-#   build : compile every C translation unit (core/love.c + host/*.c + the am math floor)
+#   build : compile every C translation unit (src/love.c + host/*.c + the am math floor)
 #           and link a working `love` -- source to runnable binary. ⚠ the mooncc lane
 #           builds ONCE UNTIMED first; the note above that call says why, and the row read
 #           2.2x too high until it did.
@@ -10,7 +10,7 @@
 #           (subtracted) so it times the suite executing, not the compiler self-install.
 #   chacha / poly1305 : one C function each, same subtraction (bench/ccrypto.l).
 #           These are here because the corpus row averages a compiler's work over all
-#           of core/love.c, and the average is flattering: mooncc/clang reads ~1.1x there
+#           of src/love.c, and the average is flattering: mooncc/clang reads ~1.1x there
 #           and ~23x on chacha. chacha20 indexes a 16-word state ARRAY in its inner
 #           loop, poly1305 keeps five limbs as scalar LOCALS, and mooncc has register
 #           residency for the second shape only -- so the PAIR is the reading. Wide
@@ -60,7 +60,7 @@
 #   build is timed once (a stable multi-second cost, and the artifact is reused);
 #   test subtracts two medians of `samples` runs each (corpus, then empty boot), default 3.
 # resolve the repo root ABSOLUTELY: the build lanes cd into it to reach the source
-# globs (core/love.c, host/*.c, crew/...), so every output/include path below must be absolute.
+# globs (src/love.c, host/*.c, crew/...), so every output/include path below must be absolute.
 R=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TIMEOUT=${1:-180}
 SAMPLES=${2:-3}
@@ -88,14 +88,14 @@ if [ -z "$LOVE_CFLAGS" ]; then
 fi
 # drop -Werror: this table times compile+link, and -Werror is a lint GATE, not a
 # codegen or speed factor. Keeping it would bench a compiler's warning set, not its
-# throughput -- gcc's -Wall flags a benign construct in core/love.c (-Wmisleading-indentation)
+# throughput -- gcc's -Wall flags a benign construct in src/love.c (-Wmisleading-indentation)
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
 CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/core -I$R/out/lib"
 # mk/common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
-# sentinels' tiling IS core/love.h's ai_typ, and ld left to itself keeps each love_data.N an
+# sentinels' tiling IS src/love.h's ai_typ, and ld left to itself keeps each love_data.N an
 # orphan in first-encountered order -- gcc emits love_data.7 first, so lvm_str lands
 # below lvm_sym and every string reads as a closure.
-LDFLAGS="-Wl,-T,$R/core/love_data.ld"
+LDFLAGS="-Wl,-T,$R/src/love_data.ld"
 
 # wall-clock (ms) of a command; echoes just the number. Runs in a subshell so a cd can't leak.
 wall() { t0=$(date +%s.%N); ( eval "$1" ) >/dev/null 2>&1; t1=$(date +%s.%N)
@@ -104,13 +104,13 @@ wall() { t0=$(date +%s.%N); ( eval "$1" ) >/dev/null 2>&1; t1=$(date +%s.%N)
 med() { i=0; while [ "$i" -lt "$SAMPLES" ]; do wall "$1"; echo; i=$((i+1)); done \
         | sort -n | awk '{v[NR]=$0} END{print v[int((NR+1)/2)]}'; }
 
-# -- gcc / clang: the ordinary lane. Compile the liblove.a translation units (core/love.c +
+# -- gcc / clang: the ordinary lane. Compile the liblove.a translation units (src/love.c +
 #    am.c) and the host/*.c glob (main.c carries the egg), then link the objects. --
 build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<binname>
   cc=$1; bin=$2; xf=$3; od=$WORK/o-$(basename "$bin")   # o- prefix: $bin itself lives in $WORK
   rm -rf "$od"; mkdir -p "$od/host"
   ( cd "$R" || exit 1
-    $cc $CFLAGS $xf -c core/love.c                    -o "$od/love.o" || exit 1
+    $cc $CFLAGS $xf -c src/love.c                    -o "$od/love.o" || exit 1
     $cc $CFLAGS $xf -c crew/moon/lib/math/am.c -o "$od/am.o" || exit 1
     for f in host/*.c; do b=$(basename "$f" .c)
       $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
@@ -139,7 +139,7 @@ mc() { env LOVE_NO_IMAGE= "$SEED" mooncc "$@"; }
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
-    mc -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c core/love.c "$od/love.o" || exit 1
+    mc -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c src/love.c "$od/love.o" || exit 1
     for f in host/*.c; do b=$(basename "$f" .c)
       mc -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
     # no nolibc object: the link owes its symbols and the driver supplies them
@@ -155,7 +155,7 @@ build_mooncc() { # $1=binpath
 
 # the corpus as ONE file, fed by REDIRECT. It arrives on stdin either way (which keeps
 # the one-global-scope property), but a redirect is seekable and a pipe is not, and only
-# a seekable fd 0 gets a read run (host/main.c). Piping still costs 953K reads over this
+# a seekable fd 0 gets a read run (src/main.c). Piping still costs 953K reads over this
 # corpus -- one per byte, which no pipe can be spared -- and syscall time is the SAME work
 # in all three lanes: kernel, not codegen, so it only dilutes what this table is seeing.
 CORPUS1=$WORK/corpus.l
@@ -200,7 +200,7 @@ drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
 # ⚠ if this fails the inflate row is dnf and the other two are unaffected: a missing
 # stream must not read as a compiler that could not build.
 INF=$WORK/bench.deflate
-INFN=$(cd "$R" && out/host/love bench/ccgen.l core/love.c "$INF" 2>/dev/null)
+INFN=$(cd "$R" && out/host/love bench/ccgen.l src/love.c "$INF" 2>/dev/null)
 case $INFN in ''|*[!0-9]*) INFN=0;; esac
 
 # one compiler lane: build (timed once), verify, then time the corpus and the two

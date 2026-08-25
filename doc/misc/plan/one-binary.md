@@ -86,7 +86,7 @@ The collapse landed whole -- rungs 1+2+3 in one motion, since install.mk and the
 dist lanes shared every seam -- and the re-aimed gates are the discovery story:
 
 - **the mw lane now judges the crew book, and it convicted.** Three findings, in
-  escalating order: (1) core/mx.l's generators under $(mw) captured KORE's
+  escalating order: (1) src/mx.l's generators under $(mw) captured KORE's
   two-arg `join` (mx-h came out a curried partial -> an EMPTY mx.h), so mxlay
   moved to the EGG lane -- core tables want the boot vocabulary. (2)
   crew/moon/cpp.l's `(flush buf macs out)` shadowed the core port flush and
@@ -131,7 +131,7 @@ argv0 farm could point at the one binary once cli.l learns argv[0] dispatch.
   compiler shim survives; after rung 1 any crew edit rebakes love itself. The
   in-place bake renames over a fresh inode so running sessions survive on the
   old one -- but a concurrent session's NEXT spawn gets the new binary. Same
-  hazard class as a core/love.c edit today; now it includes .l edits.
+  hazard class as a src/love.c edit today; now it includes .l edits.
 - **bundled_love must not see the tree's own binary.** After rung 1
   out/host/love IS bundle-shaped, but the bundle test keys on ./bin/love
   (a seed-laid tree), not on out/host -- keep it that way, or the tree's build

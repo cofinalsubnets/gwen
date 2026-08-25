@@ -14,7 +14,7 @@
 ;             never shadow a local script; `love ./up` and `love -- up` stay the file. with
 ;             fifty applets registered that rule is what keeps `make`, `env`, `true` and `cmp`
 ;             from eating a script of the same name.
-;   (seat p)  argv[0] -- host/main.c's door, which fires before the cli runs at all (a bare
+;   (seat p)  argv[0] -- src/main.c's door, which fires before the cli runs at all (a bare
 ;             `seed` at argc 1 wants its usage). always a path, so the basename decides and no
 ;             shadow rule applies.
 ; a verb takes the args AFTER its name and ANSWERS A STATUS CHARM; the rail quits with it.
@@ -62,7 +62,7 @@
    ; ⚠ THE LINE IS READ HERE, and the guard is the whole licence. This module compiles
    ; into the egg, where a bare global read once folded to the baking session's value and
    ; every caller then scanned the line that baked the image -- so a bake pins no `cmdline`
-   ; at all now (host/main.c), which leaves the read a lookup. The absence IS the bake's
+   ; at all now (src/main.c), which leaves the read a lookup. The absence IS the bake's
    ; honest answer: nothing was typed, nothing seats, and the feet go quiet without scaring.
    ; the seat WORD rides back because a multi-name app reads it: lush's login dash, an
    ; applet symlink. ⚠ () means "not seated", the presence answer -- ask it with two?.

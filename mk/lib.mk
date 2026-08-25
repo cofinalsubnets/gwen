@@ -83,7 +83,7 @@ $(glaze_h): out/lib/%.h: love/glaze/%.l
 # ⚠ the corpus SET stamp: ktests.l aggregates $t, a wildcard, so a DELETED test leaves every
 # remaining prereq older than the target and make keeps baking the ghost. Depend on the LIST:
 # rewritten only when membership changes, so it re-lays on add OR delete. love0 READS this file
-# at run time to find the corpus (host/main.c), which is what took the corpus out of its
+# at run time to find the corpus (src/main.c), which is what took the corpus out of its
 # dependency graph -- so the list is a manifest now, not only a stamp.
 .PHONY: force_corpus_list
 force_corpus_list: ;

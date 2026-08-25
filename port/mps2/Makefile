@@ -1,5 +1,5 @@
 # qemu MPS2+ AN500 (Cortex-M7) build -- love compiled END TO END by mooncc. `make -C
-# port/mps2` from the project root. Every C file -- core/love.c, the am math floor, libc, main.c
+# port/mps2` from the project root. Every C file -- src/love.c, the am math floor, libc, main.c
 # -- goes through `mooncc -t thumb2`, start.o is laid from holo IR by mkstart.l, and
 # mooncc's own -Ttext/-Tdata drive the link over holo's 32-bit lane: no arm-none-eabi
 # anywhere.
@@ -32,12 +32,12 @@ default: mps2
 mps2: $(R)/$(o)/love.elf
 mps2t1: $(R)/$(o)/love-t1.elf
 
-$(eval $(call p_obj,love,core/love.c,$(R)/core/love.c $(R)/core/love.h $(lib_hR) $(mc),$(mps2_cc)))
+$(eval $(call p_obj,love,src/love.c,$(R)/src/love.c $(R)/src/love.h $(lib_hR) $(mc),$(mps2_cc)))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,crew/moon/lib/nolibc/string/$m.c,\
   $(R)/crew/moon/lib/nolibc/string/$m.c $(libc_dep),$(mps2_cc) -Icrew/moon/include)))
 
 # main.c, once per face -- the -D is the whole difference.
-mainc = main.c $(R)/core/love.h $(lib_hR) $(mc)
+mainc = main.c $(R)/src/love.h $(lib_hR) $(mc)
 $(eval $(call p_obj,main,port/mps2/main.c,$(mainc),$(mps2_cc)))
 $(eval $(call p_obj,main-baker,port/mps2/main.c,$(mainc),$(mps2_cc) -D BAKER))
 $(eval $(call p_obj,main-waker,port/mps2/main.c,$(mainc),$(mps2_cc) -D WAKER))
@@ -75,7 +75,7 @@ imgpd: $(R)/$(o)/love-pd.img
 $(R)/out/playdate/cas.h:
 	@$(MAKE) -C $(R)/port/playdate ../../out/playdate/cas.h
 
-pdmainc = main.c $(R)/core/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
+pdmainc = main.c $(R)/src/love.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
 $(eval $(call p_obj,main-baker-pd,port/mps2/main.c,$(pdmainc),$(mps2_cc) -D BAKER -D BAKER_RUNE -Iout/playdate))
 $(eval $(call p_obj,main-waker-pd,port/mps2/main.c,$(pdmainc),$(mps2_cc) -D WAKER -D BAKER_RUNE -Iout/playdate))
 
@@ -108,7 +108,7 @@ t1_libc_o = $(addprefix $(R)/$(o)/,$(addsuffix -t1.o,$(libc_m)))
 t1_objs = $(R)/$(o)/start.o $(R)/$(o)/love-t1.o $(R)/$(o)/am-t1.o $(t1_libc_o) \
   $(R)/$(o)/main-t1.o
 
-$(eval $(call p_obj,love-t1,core/love.c,$(R)/core/love.c $(R)/core/love.h $(lib_hR) $(mc),$(mps2t1_cc)))
+$(eval $(call p_obj,love-t1,src/love.c,$(R)/src/love.c $(R)/src/love.h $(lib_hR) $(mc),$(mps2t1_cc)))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m-t1,crew/moon/lib/nolibc/string/$m.c,\
   $(R)/crew/moon/lib/nolibc/string/$m.c $(libc_dep),$(mps2t1_cc) -Icrew/moon/include)))
 $(eval $(call p_obj,main-t1,port/mps2/main.c,$(mainc),$(mps2t1_cc)))

@@ -1,6 +1,6 @@
 ; crew/lux/wire.l -- the X11 wire protocol: connect, the setup handshake, request
 ; writers, the substructure redirect, keyboard mapping/grabs, and the event
-; decoder. Host-only (needs the connectu nif, host/sock.c). Every op takes the
+; decoder. Host-only (needs the connectu nif, src/sock.c). Every op takes the
 ; socket port `s` EXPLICITLY -- so these leak as globals with no closure over a
 ; free `s` and no nif shadow (the codec's byte writers call the real `put`/`get`
 ; nifs, never a WM helper). A body-LESS `:` -- all of it leaks to the driver.

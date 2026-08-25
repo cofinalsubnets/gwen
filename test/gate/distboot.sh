@@ -6,7 +6,7 @@
 # toolchain, and touches no ambient compiler at all. Both answer the same bytes.
 #
 # ⚠ WHY THAT IS EVEN POSSIBLE, and it is not something we engineered for this gate:
-# the local cc builds `love0` and NOTHING else (host/build.mk). Every object in the
+# the local cc builds `love0` and NOTHING else (src/build.mk). Every object in the
 # shipped binary is mooncc's, compiled by love0 waking mooncc0.image. The bootstrap
 # compiler is a scaffold that leaves no trace in the product -- which is the same
 # property test_fixpoint asserts within one tree, and whose DDC leg (a foreign
@@ -23,7 +23,7 @@
 # fail loudly, and the build has to come out the far side anyway.
 #
 # ⚠ THE SEED CARRIES ITS OWN SOURCE. It holds the source tarball in .rodata
-# (tools/mksrc.l, host/src.c) and lays it out itself, so one downloaded file needs no tar
+# (tools/mksrc.l, src/src.c) and lays it out itself, so one downloaded file needs no tar
 # and no second fetch. "It unpacked something" is not the claim -- the tree it lays has to
 # BUILD, compilers poisoned. ⚠ and `love seed` is what drives that build, not a bare make:
 # the tree carries no love of its own now, so make alone can only mean the ambient cc (and

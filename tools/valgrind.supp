@@ -1,6 +1,6 @@
 # Valgrind suppressions for the ll host binary (`make valg`).
 #
-# The (run argv) subprocess capability (host/main.c) fork()s, and when the
+# The (run argv) subprocess capability (src/main.c) fork()s, and when the
 # child's execvp fails -- e.g. test/run.l's deliberate ENOENT cases like
 # "/no/such/prog-xyzzy" -- the child _exit()s while still holding the ll heap
 # arena it inherited from the parent. Freeing between fork and exec is an

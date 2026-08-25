@@ -10,7 +10,7 @@
 ; the file defines and does not run -- a body-less top-level `:`, so both names defglob out:
 ;   (cli-rail ln)      the walk above over ln = (program-name . args)
 ;   (cli-line ln tty)  a frontend's whole tail: the argv[0] door, the rail, the repl, stdin
-; host/main.c calls the second and so does a forked lush child: a word whose PATH winner is
+; src/main.c calls the second and so does a forked lush child: a word whose PATH winner is
 ; this binary need not exec, and what it would have exec'd is (cli-line its-line) on a warm heap.
 ;
 ; the shadow rule lives in one place, love/verbs.l's `word`: a verb wins over a same-named
@@ -107,7 +107,7 @@
  ; cmdline and argv are defglob'd here rather than read: a forked child arrives with both
  ; still naming the shell's invocation.
  ; ln is the whole invocation, `wake IMAGE` included, and the program's view comes off it
- ; through the registry's own `unprime` -- the two words host/main.c counts as `skip`.
+ ; through the registry's own `unprime` -- the two words src/main.c counts as `skip`.
  ; the argv[0] door fires even at argc 1, where a bare `seed` symlink wants its usage; a verb
  ; that quits internally never returns. tablet?, never a bare truth test: (() 'seat) is the
  ; church const 1, which would answer argv[0] itself and dispatch it.

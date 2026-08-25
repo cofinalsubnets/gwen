@@ -1,7 +1,7 @@
 ; crew/kore/fs.l -- the fs tools of kore: ls, cp, mv, rm, mkdir, rmdir, ln,
 ; touch, pwd, chmod. every tool a <name>-main dispatched by kore (crew/kore/kore.l),
 ; same as core.l -- a toolbox, no seat, kore is its door. loads after core.l in the
-; cat and rides its u-floor (udie, uread, ubase); the effects ride host/posix.c's
+; cat and rides its u-floor (udie, uread, ubase); the effects ride src/posix.c's
 ; posix_ lane (stat readdir unlink mkdir rename symlink hardlink rmdir
 ; chmod utime cwd), whose convention shapes every loop here: an effect op nets
 ; truthy exactly when something went wrong. a body-less top-level `:` leaking
@@ -19,7 +19,7 @@
    (udest src dst) (? (udirp dst) (dst + "/" + ubase src "") dst)
    ; copy bytes + permission bits (cp's heart; mv's cross-device leg)
    ; the bytes, by whichever door this love has. ⚠ KORE RUNS IN TWO WORLDS AND THEY DO NOT
-   ; CARRY THE SAME NIFS: free/kernel.mk bakes this whole cat verbatim (korecat) and the
+   ; CARRY THE SAME NIFS: src/kernel.mk bakes this whole cat verbatim (korecat) and the
    ; kernel compiles no host/*.c, so `copyfile` is hosted-only and the slurp stays as the
    ; freestanding leg. ⚠ ASKED AT THE CALL, never bound at the top: the kernel's image is
    ; baked by a HOST love, so a load-time answer would freeze this world's nif set into
@@ -295,9 +295,9 @@
           (? !e 0 (udie 1 ("unlink: cannot unlink " + <as)))))
 
    ; ---- the reporting tools: stat, du -- and chown, mktemp ---------------------
-   ; ⚠ THESE READ THE STAT TAIL. host/posix.c's stat answers
+   ; ⚠ THESE READ THE STAT TAIL. src/posix.c's stat answers
    ; (size mtime mode ns uid gid nlink blocks ino), append-only, and the KERNEL's own
-   ; stat (free/kmain.c) answers the first four alone -- an image tree has no ownership
+   ; stat (src/kmain.c) answers the first four alone -- an image tree has no ownership
    ; to tell about. so the tail is asked by TALLY and a world that does not carry it
    ; says so rather than reading a 0 someone might believe.
    (ust-at st k) (? (tally st <= k) () (st k))

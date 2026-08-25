@@ -50,10 +50,10 @@ endif
 
 # --- build fragments, pushed down into the folders they build ---
 include mk/lib.mk
-include host/build.mk
+include src/build.mk
 include crew/build.mk
 include mk/distro.mk
-include free/kernel.mk
+include src/kernel.mk
 include test/test.mk
 include mk/install.mk
 
@@ -75,7 +75,7 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 
 # really really really slow gate: the depth behind the seed -- the proofs, the gc lanes, the
 # moon and holo batteries, the crew apps. the embedded, board and cross-arch lanes are by
-# name only (free/kernel.mk, port/, wasm/), as are test_fixpoint and test_distboot.
+# name only (src/kernel.mk, port/, wasm/), as are test_fixpoint and test_distboot.
 test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
 	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
 	test_tools test_hostnif test_doc test_glaze test_hook test_sat test_holo test_as \
@@ -177,7 +177,7 @@ out/host/flamegraph.svg: out/host/perf.data
 repl: host
 	@exec $m
 cloc:
-	cloc --by-file love core/love.c core/love.h main.c port tools test vim crew
+	cloc --by-file love src/love.c src/love.h main.c port tools test vim crew
 cat: clean all test
 cata: clean all test_slow
 # full clean rebuild, every frontend, all tests, then the corpus under valgrind

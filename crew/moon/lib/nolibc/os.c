@@ -9,7 +9,7 @@
 long __ai_osv;         /* 0 unprobed; 1 linux; 2 freebsd; 3 netbsd; -1 inle,
                         * written at its entry: we ARE the kernel, nothing to probe */
 
-/* the inle door's default, for a link that carries no free/sys.c: refuse, and
+/* the inle door's default, for a link that carries no src/sys.c: refuse, and
  * name the protocol. a negative osv is only ever written by inle's own entry,
  * so a hosted binary never takes __ai_call's arm and this body is dead weight
  * the dead-static sweep cannot drop -- one line, kept for the symbol. */

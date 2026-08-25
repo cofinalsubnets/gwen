@@ -53,11 +53,11 @@ LOVE_NO_IMAGE=1 "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (q
 
 # ...and rebuilds every TU with it, in the exact order make links them
 moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
-# ⚠ core/love.c's flags must MIRROR make's ($(moon_d)/love.o in host/build.mk), not just its
+# ⚠ src/love.c's flags must MIRROR make's ($(moon_d)/love.o in src/build.mk), not just its
 # order: -D AiHaveVersionH is what puts the version id in this TU, and love1 was linked
 # from make's object. Drop it here and love2 carries "unknown" -- the compare fails at the
 # string, naming a broken fixpoint where the only difference is a build flag.
-moon1 -D ai_tco=1 -D AiHaveVersionH -I"$ho" -I. -Icore -Iout/lib -c core/love.c "$d/love.o" || fail "love1 mooncc -c core/love.c"
+moon1 -D ai_tco=1 -D AiHaveVersionH -I"$ho" -I. -Icore -Iout/lib -c src/love.c "$d/love.o" || fail "love1 mooncc -c src/love.c"
 for f in host/*.c; do
   b=$(basename "$f" .c)
   moon1 -D ai_tco=1 -I"$ho" -I. -Icore -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
@@ -70,13 +70,13 @@ done
 LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "((from 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 
-# the kernel the artifact carries (free/kernel.mk's $(kart_o)): the link takes it,
+# the kernel the artifact carries (src/kernel.mk's $(kart_o)): the link takes it,
 # so the rebuild owes it. ⚠ a gate that links what make links and compiles less
 # still answers love1 == love2 -- it just answers it about a shorter binary than
 # anyone ships. an arch with no free/<a>/ carries none, which is the test -d.
 if test -d "free/$ha"; then
   kinc="-I$ho -I. -Icore -Iout/lib -Ifree -Ifree/$ha -Icrew/quay -Icrew/moon/include"
-  for f in free/kmain.c free/blk.c free/sys.c free/$ha/*.c crew/quay/paint.c \
+  for f in src/kmain.c src/blk.c src/sys.c free/$ha/*.c crew/quay/paint.c \
            crew/quay/cga_8x8.c crew/quay/moderndos_8x16.c; do
     b=$(basename "$f" .c)
     case "$f" in

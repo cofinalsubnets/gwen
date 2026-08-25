@@ -27,9 +27,9 @@ pd_opt = -Os -falign-functions=16 -fomit-frame-pointer
 pd_fpu = -mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
 pd_mcflags = -mthumb -mcpu=cortex-m7 $(pd_fpu)
 pd_incdir = -I. -Icore -I$(o) -I$(R) -I$(R)/out/lib -I$(R)/crew/quay -I$(pd_sdk)/C_API
-# ai_data_section=0: the sentinel tiling core/love.h's ai_typ reads needs the link to
+# ai_data_section=0: the sentinel tiling src/love.h's ai_typ reads needs the link to
 # place love_data.NN, and this seat links through the SDK's own link_map.ld --
-# not ours to write a block into. core/love.h asks the sentinels by name here.
+# not ours to write a block into. src/love.h asks the sentinels by name here.
 pd_defs = -DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dai_data_section=0
 pd_cpflags = $(pd_mcflags) $(pd_opt) $(pd_defs) -std=gnu2x -ffreestanding \
   -gdwarf-2 -Wall -Wno-unused -Wstrict-prototypes -Wno-unknown-pragmas \
@@ -49,7 +49,7 @@ mc_flags = -t thumb2sp -D ai_tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D 
 lib_hs = $(patsubst %,$(R)/out/lib/%.h,egg prel ev q kanren rune)
 pd_h = $(love_h) $(wildcard $(R)/crew/quay/*.h) $(o)/cas.h $(lib_hs)
 
-# the split: mooncc carries core/love.c + am + quay + main.c; gcc carries pdglue.c
+# the split: mooncc carries src/love.c + am + quay + main.c; gcc carries pdglue.c
 # (the pd_api.h owner) + the SDK's setup.c. the sim build compiles everything
 # hosted, so pd_src keeps the full wildcard.
 pd_local_c = $(wildcard *.c)

@@ -39,7 +39,7 @@ Not because we engineered it. Because of the shape the bootstrap already has:
 local cc  ──builds──▶  love0  ──wakes──▶  mooncc0.image  ──compiles──▶  every shipped object
 ```
 
-`$(CC)` builds **`love0` and nothing else** (host/build.mk). Every object in the
+`$(CC)` builds **`love0` and nothing else** (src/build.mk). Every object in the
 binary you end up running is mooncc's. The bootstrap compiler is a scaffold that
 leaves no trace in the product — so which compiler held the scaffold cannot show in
 the result.
@@ -93,7 +93,7 @@ make test_distboot
 The archive is **ours end to end** — `lib/tar.l` writes the ustar, `lib/gz.l` the
 DEFLATE — so cutting a release needs neither `tar` nor `gzip` on the box.
 The coder blocks and costs three spellings (stored, fixed, its own code) and lands
-~4% above `gzip -9` (lib/gz.l carries the measured numbers); host/deflate.c is its
+~4% above `gzip -9` (lib/gz.l carries the measured numbers); src/deflate.c is its
 C twin, held to the same bytes, so cutting is cheap wherever the nifs are aboard.
 
 **Reproducible by construction.** The pack pins every mtime/uid/gid to `dist_stamp`

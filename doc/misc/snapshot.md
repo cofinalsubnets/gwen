@@ -65,7 +65,7 @@ to shave disappear, and one plain image is simpler everywhere.)
 ## the section is GROWN, not reserved
 
 `.image` is laid LAST — alone in the highest `PT_LOAD`, above `.bss`
-(`-Wl,--section-start=.image=0x2000000`, host/build.mk) — so the bake APPENDS the blob at the
+(`-Wl,--section-start=.image=0x2000000`, src/build.mk) — so the bake APPENDS the blob at the
 first page past every other allocated byte and rewrites the one phdr and one shdr that name it,
 relaying the non-allocated tail (symtab/strtab/shstrtab) after it. No vaddr moves, so the
 two-anchor stamp holds by construction. This is why there is no fixed reserve to bump whenever
@@ -74,7 +74,7 @@ the image outgrows it, and no shipped zeros.
 It has to stay a real allocated section rather than loose bytes at EOF: `strip` (which
 `install -s` runs) keeps the section and drops a bare trailer.
 
-The rule `host/image.c` checks is only that **`.image` ENDS the segment carrying it**, which
+The rule `src/image.c` checks is only that **`.image` ENDS the segment carrying it**, which
 covers both shapes with the same arithmetic: a section alone in the highest `PT_LOAD` (ld/lld)
 and one riding the tail of the single segment holo lays. It reads that off the binary's own
 section headers rather than a build flag, so neither lane is told which it is, and a link that
@@ -87,7 +87,7 @@ whole point is WHERE it lands.
 ## core/host split
 
 The core owns the stdio-free buffer codec `ai_image_save` / `ai_image_load` (love.h); file I/O
-lives in `host/image.c`. The codec sits OUTSIDE the one `#if __STDC_HOSTED__` region, so it
+lives in `src/image.c`. The codec sits OUTSIDE the one `#if __STDC_HOSTED__` region, so it
 compiles into the freestanding kernel.
 
 ## `bake` and `wake`
@@ -134,7 +134,7 @@ Three seams make mid-eval dumping honest where the boot bake could assume purity
   `v0..end` root window, so the woken session starts with no finalizables. The dump-time fds
   meant nothing in the new process anyway.
 - **The glaze cache is emptied first.** The `bake` global is a glaze wrapper
-  (love/glaze/hook.l) over the host nif (host/image.c, the AiNif glob): a native closure cannot
+  (love/glaze/hook.l) over the host nif (src/image.c, the AiNif glob): a native closure cannot
   serialize, and entries re-JIT lazily in the woken session. Any OTHER live native at bake time
   is on the caller — the same contract as the boot bake.
 

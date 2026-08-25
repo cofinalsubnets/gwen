@@ -59,7 +59,7 @@ rm -f "$d"/*.o
 # shellcheck disable=SC2086  # $tflag is a word pair or empty, deliberately unquoted
 moonc() { LOVE_NO_IMAGE= "$m" mooncc $tflag "$@"; }
 
-moonc -D ai_tco=1 -I"$ho" -I. -Icore -Iout/lib -c core/love.c "$d/love.o" || fail "mooncc $tflag -c core/love.c"
+moonc -D ai_tco=1 -I"$ho" -I. -Icore -Iout/lib -c src/love.c "$d/love.o" || fail "mooncc $tflag -c src/love.c"
 
 for f in host/*.c; do
   b=$(basename "$f" .c)
@@ -102,6 +102,6 @@ tail -1 "$ho/$out"
 [ $s -eq 0 ] && grep -q "tests pass" "$ho/$out" || fail "corpus (exit $s)"
 
 case $target in
-  x64) echo "test_raw: core/love.c + host/*.c + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes" ;;
+  x64) echo "test_raw: src/love.c + host/*.c + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes" ;;
   *)   echo "$name: the gcc-free $pretty love -- mooncc objects, $mksys, our linker, corpus under qemu" ;;
 esac

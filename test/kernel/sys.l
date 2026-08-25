@@ -1,4 +1,4 @@
-; the syscall seam (free/sys.c): nolibc's write() reaching a k_sources row
+; the syscall seam (src/sys.c): nolibc's write() reaching a k_sources row
 ; through __ai_sys, with nothing hosted underneath. kernel corpus only
 ; (kernel.mk's kt) -- no other seat can ask this question, since on a host the
 ; same __ai_sys is a mksys lay issuing the machine's own trap.

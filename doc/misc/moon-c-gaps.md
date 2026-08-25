@@ -67,7 +67,7 @@ test/gate/moon.sh), and the deliberate readings in them:
 - **`int f(int), a;`** — `one`/`more` hoisted out of the dispatch's inner scope, so the
   function-first list reaches the object lane mproto cannot take.
 - **bare `typeof`**, and an attribute run **before** a struct/union tag.
-- **an integer where a pointer is owed** — the §4 row that took `host/main.c`'s `return 1` in
+- **an integer where a pointer is owed** — the §4 row that took `src/main.c`'s `return 1` in
   silence and handed back address 1. `return <non-zero literal>` from a `T *` now refuses and
   says so; a cast still passes, because a cast says the program means it.
 - **`_Generic` over QUALIFIED types** (test/cc/143-genericqual.c) — the row below, and the last
@@ -162,7 +162,7 @@ and 145-attrpos.c hold both to gcc):
 - `__label__ a, b;` at a block head parses and drops — a label already mangles to `fn.NAME`.
   ⚠ so a name DECLARED in two blocks of one function refuses (above) where gcc compiles it.
 
-The whole set costs **+0.081% of the instructions** compiling core/love.c (perf, 136.115G vs
+The whole set costs **+0.081% of the instructions** compiling src/love.c (perf, 136.115G vs
 136.005G, the same tree built twice and stable to eight figures). `pprim` sees every identifier
 in the TU, so the four arms' string compares hide behind `bib?` — a length test and one
 character. Without it the same features cost +0.128%, which is what the shape test is for.
@@ -304,7 +304,7 @@ outlive the declaration that described it. The sources of a mark are the specifi
 slot for), and — for a cast, whose `('cast ty ..)` node keeps the bare type gen reads — a
 re-read of the type-name off the tokens (`qctl`).
 
-It costs **+0.09% of the instructions** compiling core/love.c (perf, 130.348G vs 130.231G,
+It costs **+0.09% of the instructions** compiling src/love.c (perf, 130.348G vs 130.231G,
 stable to five figures across runs), and the `.o` is byte-identical. Two things buy that back and both are load-bearing: nothing is staged for
 an unqualified declaration (the common path never touches a table), and `qrun` walks the
 specifier run rather than taking a token span — a span by `tally` is O(the rest of the stream),

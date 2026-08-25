@@ -50,7 +50,7 @@
 ; run. so the IR is built at fit time, never earlier, and never kept.
 ;
 ; ⚠ A NATIVE CELL DOES NOT SURVIVE A BAKE, and it does not say so. the image codec reverts it
-; to its twin (core/love.c img_nif_interp) because the W^X mapping dies with the baking
+; to its twin (src/love.c img_nif_interp) because the W^X mapping dies with the baking
 ; process, so the bake SUCCEEDS, the value wakes, it answers correctly -- and it is the twin.
 ; measured on the 4096-cell battery: 4 ms native, 13 ms after a bake and a wake, which is the C
 ; nif's own 13. what bakes is the ROSTER -- thunks and twins, ordinary love data -- so a woken
@@ -60,11 +60,11 @@
 ; are this process's, and the wake is where they are read.
 ;
 ; ⚠ THE FIT IS A BATCH -- every kernel assembles before any installs -- because `nif` mmaps a
-; page-rounded arena PER CALL (core/love.c code_maplen), so a roster of n costs n pages and n
+; page-rounded arena PER CALL (src/love.c code_maplen), so a roster of n costs n pages and n
 ; vmas today. one arena for the batch is a change to that seam and this shape is what will feed it.
 ;
 ; ⚠ AND IT NEEDS THE GLAZE MODULE, not the glaze hook. the seal pulls `nif`/`nifx` off the book
-; on every boot (host/main.c) and `(from 'glaze 'nif)` is the one door left. LOVE_NO_GLAZE=1
+; on every boot (src/main.c) and `(from 'glaze 'nif)` is the one door left. LOVE_NO_GLAZE=1
 ; clears the jit hook and keeps the module, so a pure-interpreter session still forges.
 (:
    ; --- the ABI kit -------------------------------------------------------------------

@@ -1,7 +1,7 @@
 ; crew/kore/sum.l -- the checksum tools: cksum, md5sum, sha256sum. one shape three
 ; times -- read a file whole, digest its bytes, say a line -- so what is actually here
 ; is the two GNU faces (cksum's "CRC BYTES NAME", the digest tools' "DIGEST  NAME")
-; and the -c lane that reads those lines back. the digests are host/hash.c; there is
+; and the -c lane that reads those lines back. the digests are src/hash.c; there is
 ; no love statement of any of the three, so an image carrying no host nif (the
 ; kernel's, which compiles none) says which one is missing and leaves with 2.
 ; loads after fs.l for udirp. a body-less top-level `:` -- the three mains leak,

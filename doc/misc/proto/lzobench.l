@@ -43,7 +43,7 @@
 ; `gzip -9` where it was 35x, and LZO's lead on the pack is 4.4x where it was 11.9x --
 ; which narrows what this file concluded without changing it.
 ;
-; ⚠ ** AND THE UNPACK MOVED FURTHER, AND OFF THIS FILE'S TERMS. host/inflate.c is a C
+; ⚠ ** AND THE UNPACK MOVED FURTHER, AND OFF THIS FILE'S TERMS. src/inflate.c is a C
 ; twin of gz-puff, so the `gzd` lane no longer times love at all where the artifact
 ; carries the nif -- it times C, 20 ms under gcc and 37 under mooncc against gz-puff's
 ; 6294 and 7377 on the later tarball. That is FASTER THAN `gzip -d`, which is the first

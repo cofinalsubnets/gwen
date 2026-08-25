@@ -1,6 +1,6 @@
-; --- test/host/pty.l: a runnable smoke test for bao's pty nifs (host/posix.c) ---
+; --- test/host/pty.l: a runnable smoke test for bao's pty nifs (src/posix.c) ---
 ; NOT in the test/*.l corpus on purpose: the pty nifs (tether/gather/still/winsize)
-; live in host/posix.c, which the final `love` links but love0 does NOT -- and love0
+; live in src/posix.c, which the final `love` links but love0 does NOT -- and love0
 ; bakes the whole corpus, so a corpus test would read these names as missing and
 ; fail love0's self-test. So this is verified the host-nif way: standalone, against
 ; the built binary. Run it (the assert macro comes from test/00-init.l):

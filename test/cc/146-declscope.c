@@ -3,7 +3,7 @@
  * covers the block case (a local hides an enum constant for the rest of its block);
  * this covers the declaration itself, which is a separate scope point and was the one
  * that broke: `unsigned long M = f(), N = g(), n = M * N;` folded N to the enum
- * constant and compiled `n = M * 4`. core/love.c has `enum { N = 4 }` in one function
+ * constant and compiled `n = M * 4`. src/love.c has `enum { N = 4 }` in one function
  * and N as a local in another, so lvm_outer's outer product wrote 4*M of its M*N
  * elements and handed back a tray with uninitialized heap in the tail.
  *

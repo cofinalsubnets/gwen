@@ -1,4 +1,4 @@
-; --- test/host/init.l: smoke test for the init (pid1 supervisor) nifs (host/posix.c) ---
+; --- test/host/init.l: smoke test for the init (pid1 supervisor) nifs (src/posix.c) ---
 ; spawn/glean/wait/still link into `love` but NOT love0 (which bakes the corpus), so this
 ; runs standalone against the built binary, like test/host/pty.l -- not in test/*.l. Run
 ; (assert comes from test/00-init.l):
@@ -34,7 +34,7 @@
        !(charm? (getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY"))))
 
 
-; --- the fs nifs: stat readdir unlink lseek (the posix_ lane in host/posix.c) -----
+; --- the fs nifs: stat readdir unlink lseek (the posix_ lane in src/posix.c) -----
 (: d "out/.fs-nif-probe" f (+ d "/x")
    _ (mkdir d 493)                                  ; EEXIST from a prior run is fine
    _ (unlink f)                                     ; a clean slate, tolerated if absent

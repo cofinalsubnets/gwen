@@ -4,7 +4,7 @@
 ; spawn + wait -- inherited stdio, so output is LIVE and the command owns the
 ; terminal (not captured like `run`). this is also the shell init execs on the
 ; distro console (mk/distro.mk cats the parts to /lib/sh.l): the pid1 story
-; end to end (init -> lush -> real programs). it rides the host/posix.c
+; end to end (init -> lush -> real programs). it rides the src/posix.c
 ; job-control nifs (spawn/spawnmap/wait/chdir/cwd) + getenv, fdopen for its
 ; own pipe ends, and bao's edln for the line.
 ;

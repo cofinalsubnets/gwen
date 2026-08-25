@@ -150,7 +150,7 @@
    ; ⚠ AND THE LAY IS AN EGG: the crew arrives at BAKE and a bake means RUNNING
    ; the artifact, which this machine cannot do for another ISA. it does not have
    ; to: the egg carries its source and the dist roster, and its FIRST BOOT on
-   ; the target machine bakes and patches it in place (host/main.c) -- the same
+   ; the target machine bakes and patches it in place (src/main.c) -- the same
    ; bytes a native `make dist` lays, with nothing foreign anywhere in the chain.
    (seed-cross root xa dst)
     (: made (root + "/out/x-" + xa + "/love")
@@ -324,7 +324,7 @@
             + (kern-pick es top "crew/kore/u.l")
             + "(use 'kore)"
             + (kern-pick es top "crew/kore/asbook.l")
-            + (kern-pick es top "free/mkboot.l")
+            + (kern-pick es top "src/mkboot.l")
             + (kern-pick es top "tools/kproject.l")
             + "(: kb (peep (from 'verbs 'tab) 'kern-in 0)"
             + "   bb (string (cask (lay-boot-bytes (peep kb 'arch 0))))"

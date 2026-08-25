@@ -38,7 +38,7 @@
 ; the conf caller pre-ensures arena room (aru+nv+3 words) and node room (wnu+4): the
 ; kernels never grow a cask.
 (:
-   ; --- 8-byte word slots, low 4 bytes live: the host's word nifs (host/mem.c,
+   ; --- 8-byte word slots, low 4 bytes live: the host's word nifs (src/mem.c,
    ; module 'mem -- (from 'mem) answers () off a host, so presence is an ordinary
    ; read), the byte path as the portable twin -- picked once at bind time --------
    memw (from 'mem)

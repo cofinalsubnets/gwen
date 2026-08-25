@@ -1,7 +1,7 @@
 ; crew/tls/bench.l -- the two ciphers, love against their C twins.
 ;
 ; crew/tls/chacha.l and crew/tls/poly1305.l are the readable statement of each
-; cipher; host/tls.c holds a C twin of each behind a nif, and test/host/tlsc.l
+; cipher; src/tls.c holds a C twin of each behind a nif, and test/host/tlsc.l
 ; proves the two answer the same bytes. this asks the other question: what does
 ; the readable one cost?
 ;

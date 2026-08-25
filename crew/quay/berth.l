@@ -1,7 +1,7 @@
 ; berth -- quay's terminal multiplexer: where programs tie up.
 ;
 ; each child rides its own pty (tether); its bytes pour through a quay cb screen
-; -- the same VT parser the kernel console runs, hosted in a cask by host/cb.c --
+; -- the same VT parser the kernel console runs, hosted in a cask by src/cb.c --
 ; and the grids repaint the OUTER terminal as painted cells. keys pour down the
 ; other way; DSR/DA answers ride home off each screen's reply queue; the outer
 ; size is polled each second-ish and mirrored onto every pty (the kernel raises

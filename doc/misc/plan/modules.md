@@ -42,13 +42,13 @@ that registers nothing. Nothing else moves. Gate: `make test`.
 
 **Rung 1 -- ai_defn's module target. CLIMBED.** The module is the CALL's, not
 the row's: ai_defn grew a fourth parameter (NULL = the book, so struct ai_def
-stays two words), and ai_modtab (core/love.c) pushes the found-or-made module
+stays two words), and ai_modtab (src/love.c) pushes the found-or-made module
 tablet where the book map would sit -- the binding loop is one loop either
 way. The registry is made C-side at boot (the drain runs BEFORE prel) and
 FOUND over a woken image, where the drain re-pins the current addresses (the
 same freshness the book lane always had). AiModNifs("mod", table) is the
 section spelling: one exported struct ai_mod row = one (module, def table) =
-one ai_defn call at the drain. The proof: host/mem.c's peepw/pinw moved into
+one ai_defn call at the drain. The proof: src/mem.c's peepw/pinw moved into
 module 'mem -- off the bare book everywhere -- and flat.l's presence probe
 collapsed from the out-of-band (names ()) dance to an ordinary `(from 'mem)`
 read. test/host/modnif.l holds the laws, including the C+.l one-module story:
@@ -79,7 +79,7 @@ What the climb taught: (1) `(: _ (use 'x) ..)` serves LATER BINDINGS in the
 same form -- compile is per-binding -- so a one-form -e reads a module through
 one use; the macro-needs-the-next-FORM rule is macros only. (2) The consumers
 were exactly the -e/-l lanes: the sys.o recipes and package harnesses spell
-`((from 'moon '<mksys>) ..)` (ten sh sites + host/build.mk), moon.sh's warm
+`((from 'moon '<mksys>) ..)` (ten sh sites + src/build.mk), moon.sh's warm
 lane binds moon-run by `from`, and the three in-process gates (gate/clay.l,
 moonfuzz.l, clay-g2.l) lead with (use 'moon) -- moon.sh's law cat echoes the
 same line between gen.l and law.l. (3) The one QUIET regression was lush's
@@ -103,7 +103,7 @@ doors), and a head there BROKE the egg lane's file loads (papel loads cook;
 grew the applets' home-module fallback (sh-imgask tries the book, then
 (from 'kore nm)) and the urun wrap door reads the module -- a miss absorbs
 to (), keeping the no-wrap lane. asbook.l stays bare on purpose: its ambient
-(use 'holo) is load-bearing for the cats' holo copies (host/main.c:966's
+(use 'holo) is load-bearing for the cats' holo copies (src/main.c:966's
 double-carry note) -- that ambience is holo's own wrap to dissolve.
 THE FIND: since rung 0 the module macro emitted `(\ ((f ..)))` -- ONE extra
 list level -- so a body's forms evaluated as ONE APPLICATION CHAIN: every
@@ -277,7 +277,7 @@ Eight frontends lost their table and their ~20 `src_*` arrays for one
   at creation, so the scare lands at the define and the build walks on.
 - **glaze is the one text a flat cat cannot hold.** It folds `assemble` at its
   own compile, so holo must be SPLICED while it evals -- which the boot
-  arranges. It also declares itself in host/main.c rather than in emit.l or
+  arranges. It also declares itself in src/main.c rather than in emit.l or
   auto.l, because neither file is the module: the pair is.
 - **renumbering `image_immortals` is a wire-format change.** Dropping
   `ai_ti_vt` shifted every index after it, so `ImageMagic` moved to `AISNO05`.

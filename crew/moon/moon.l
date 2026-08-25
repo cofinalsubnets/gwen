@@ -709,7 +709,7 @@
    (rtcid home)
     (sha256 ("moon-rtc 1\n" + ((mctree (home + "include/")) + (mctree (home + "lib/")))))
    ; the carried runtime: the build lays each ISA's compiled archive beside the
-   ; source blob (tools/mkrt.l; host/src.c answers runtime-gz), so a link
+   ; source blob (tools/mkrt.l; src/src.c answers runtime-gz), so a link
    ; owes no member compiles -- the bare door's ~28 s becomes a read. it
    ; serves the DEFAULT lane only, and only when the identity matches: the blob
    ; lane's identity IS the carried source, a disk home serves iff its slice

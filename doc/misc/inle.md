@@ -55,16 +55,16 @@ Three mappings, all of them already half-built:
 ⚠ **The kernel links no `host/*.c` yet, and that is a rung rather than a rule** — `k_shared_c`
 is love.c + am.c + quay + libc. The nif MECHANISM is no longer a difference: `kmain.c`'s
 `defs[]` rides the `ai_nifs` section and the kernel drains `[__start_ai_nifs, __stop_ai_nifs)`
-exactly as `host/main.c` does, so a `host/<app>.c` added to this build registers itself with
+exactly as `src/main.c` does, so a `host/<app>.c` added to this build registers itself with
 no edit. What is still written fresh is the nif BODIES, and `doc/misc/plan/inle-fusion.md` is the
-plan for retiring that: `free/sys.c` answers `__ai_sys`, so nolibc — and everything written
-against it, `host/posix.c` included — can stand on this kernel instead of a hosted one.
+plan for retiring that: `src/sys.c` answers `__ai_sys`, so nolibc — and everything written
+against it, `src/posix.c` included — can stand on this kernel instead of a hosted one.
 
 ⚠ **The conventions are `doc/misc/posix.md`'s, exactly.** An effect answers `()` | a POSITIVE errno |
 EINVAL on misuse; a value answers the value | `()`. `stat` answers `(size mtime-ms mode ns)`.
 Divergence here is worse than absence — kore reads these shapes and a wrong one is silent.
 ⚠ **`chdir` is the exception, on BOTH seats**: it answers a NEGATIVE errno (`putcharm(-e)`, and
-`-1` for misuse), here and in `host/posix.c`'s `host_chdir` alike. The twins agree, which is
+`-1` for misuse), here and in `src/posix.c`'s `host_chdir` alike. The twins agree, which is
 what matters; the sentence above simply never reached this one. Do not "fix" one of them.
 
 ## the ladder
@@ -284,7 +284,7 @@ and `wait` is `catch`.
 
 PCI config-space enumeration (CF8/CFC), then **virtio-blk** — modern virtio-pci on x86_64,
 virtio-mmio on aarch64 (qemu virt's 32 fixed slots), one split virtqueue, polled, synchronous,
-all in `free/blk.c` (~250 lines, the one part that had to be C). Over it three nifs —
+all in `src/blk.c` (~250 lines, the one part that had to be C). Over it three nifs —
 `(disk _)` the sector count, `(disk-read l n)`, `(disk-write l s)` — and over those **FAT32
 r/w written in love**: `lib/fat.l`, which rides the ramfs into every kernel via the module
 walk, zero registration. The fs is device-parameterized (a dev is `(rd wr nsec)`), so the same
@@ -353,7 +353,7 @@ If none of those is the goal, rung 6 is the end of the road and the machine is f
 `make run DOOM=1` boots the machine with doomgeneric linked in and `doom 0` at the console
 starts it: the title screen, the menus, and E1M1 on the framebuffer. It is **opt-in and in no
 default build** — the source is not ours and not in this tree, so the lane wants
-`dl/doomgeneric` and `dl/doom1.wad` and is otherwise absent (test_cts's posture). free/doom.c
+`dl/doomgeneric` and `dl/doom1.wad` and is otherwise absent (test_cts's posture). src/doom.c
 is the glue, ~120 lines, and the whole of what it needed:
 
 * **the compiler was the question, and it answered.** mooncc compiles all 83 translation units
@@ -382,7 +382,7 @@ is the glue, ~120 lines, and the whole of what it needed:
   the line editor wants a byte), and `k_clock_ms` was already milliseconds.
 * **the WAD is a baked file.** `k_baked` is kmain.c's hook for an object that wants a file in
   the tree: tools/mkblob.l lays the 4 MB IWAD into .rodata and doom's own `fopen`/`fseek`/
-  `fread` reach it through free/sys.c with nothing mounted. That door is not doom's — it is
+  `fread` reach it through src/sys.c with nothing mounted. That door is not doom's — it is
   the general one, and this is its first taker.
 * ⚠ **the ESP door only.** `qemu -kernel` hands over no framebuffer, so `run-sh` cannot show
   it; `make run DOOM=1` (UEFI) is the lane.
@@ -391,7 +391,7 @@ is the glue, ~120 lines, and the whole of what it needed:
 * **not finished:** the blit is a per-pixel loop into the GOP framebuffer with no double
   buffer, so a screenshot can catch a frame mid-copy (it costs ~4 ms of a ~260 fps loop, so
   the frame rate is not what wants fixing — the tear is). No sound: there is no audio door on
-  this machine at all, and an AC'97 twin of free/blk.c is what one would cost.
+  this machine at all, and an AC'97 twin of src/blk.c is what one would cost.
 
 ## what is cheaper than it looks, and why
 

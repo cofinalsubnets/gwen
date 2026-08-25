@@ -21,7 +21,7 @@
 #
 # ⚠ THE PATH IS NOT IN THE IMAGE, though this line once said it was and gave that as the
 # reason the two bakes share a path. `love-image` is the literal "<baked>" wherever the
-# binary carries its own .image section (host/main.c), and a bake unpins it besides; the
+# binary carries its own .image section (src/main.c), and a bake unpins it besides; the
 # seat rungs the loader once walked off selfpath retired with the modules arc. Bake one
 # binary at two names of different lengths and the bytes agree -- so a second name would
 # not "differ legitimately", it would just be a second name. The two below still run at
@@ -77,7 +77,7 @@ out=$(cd "$w" && env -u LOVE_NO_IMAGE ./b1 -e '(puts (? (3 = 1 + 2) "wake-ok" "w
   || fail "the reproducible bake does not run"
 case $out in *wake-ok*) ;; *) fail "the reproducible bake woke wrong: [$out]" ;; esac
 
-# THE FIRST BOOT (host/main.c): an unbaked binary that carries its source bakes and
+# THE FIRST BOOT (src/main.c): an unbaked binary that carries its source bakes and
 # patches ITSELF, serves the invocation it was given -- and the bytes are the same
 # bake. flip the image HEADER's magic (its byte string's LAST occurrence: the
 # section is laid last, past the immediates in .text that spell the same constant)

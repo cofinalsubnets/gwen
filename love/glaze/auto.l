@@ -18,7 +18,7 @@
 ; rebind; njit-loop/njit-loop-n call the captured base-ev -> no jit<->ev re-entry. Load AFTER
 ; love/glaze/emit.l (uses emit/cgv/ld-x/ld-i/epilogue/loopcode/nat). ⚠ x86-64.
 ;
-; emit.l + this file ARE the `glaze` module (host/main.c registers the pair and says
+; emit.l + this file ARE the `glaze` module (src/main.c registers the pair and says
 ; (use 'glaze)), so every name here is a member reached by (from 'glaze 'k) and none of
 ; them touches the book. `ev` and `member?` are the exceptions the tail explains.
 (: sfuel (tablet 0))   ; autospec's unfold-fuel -- its OWN global (a sibling-captured value-local in the letrec below misses in the hatched ev; smix re-seeds it per specialization, so the shared tablet is safe)

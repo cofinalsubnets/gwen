@@ -920,7 +920,7 @@
        ; the difference already zeroed -- which is the whole meaning of .bss.
        bend (ldlayn 'bss (ldlay1 'bss r1 objs) objs)
        ; .image last of all -- past .bss, on a page, so `love bake` can GROW it at
-       ; the tail of the file (host/image.c: the section that ENDS the segment is the
+       ; the tail of the file (src/image.c: the section that ENDS the segment is the
        ; one that can grow without moving anything). ⚠ it takes a SEGMENT of its own,
        ; because .bss sits between it and everything written: one segment would have to
        ; carry that gap as file zeros, and a real .bss makes that the whole of it. two

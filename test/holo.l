@@ -1,5 +1,5 @@
 ; the crew/holo/ assembler -- a CORE language service, baked into the post-egg layer of both
-; the host `love` and the bootstrap `love0` (host/main.c), so the corpus exercises it under
+; the host `love` and the bootstrap `love0` (src/main.c), so the corpus exercises it under
 ; BOTH compilers, like prel/ev. Its whole surface is ONE public name: `holo`, a book --
 ; reached through the module registry: (from 'holo) answers the opaque accessor, so
 ; (A 'assemble) is the call and the internals live one probe away (the loader wraps the

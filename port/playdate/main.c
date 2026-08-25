@@ -14,7 +14,7 @@
 // single-precision, so every f64 op softens to __aeabi_* -- the same libgcc
 // helpers Panic's own toolchain leans on). The SDK lives behind pdglue.c's
 // word-only surface; nothing here sees pd_api.h, a float ABI, or a variadic.
-#include "../../core/love.h"
+#include "../../src/love.h"
 #include "quay.h"
 #include "pdglue.h"
 
@@ -39,7 +39,7 @@ void ai_sleep(uintptr_t ms) {
   uintptr_t start = ai_clock();
   if (ms) while (ai_clock() - start < ms) ;
 }
-// the readiness law (host/main.c, the teensy's Enter-freeze lesson): a
+// the readiness law (src/main.c, the teensy's Enter-freeze lesson): a
 // NEGATIVE fd is ALWAYS ready -- a string port waits on nothing external.
 // fd 0 answers instantly too (it is always at the end), so every fd is
 // honestly ready here.

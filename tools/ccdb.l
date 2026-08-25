@@ -8,7 +8,7 @@
 ; about the code. a database carries an absolute directory per entry, so the paths land
 ; where they mean.
 ;
-; the flag groups mirror the real builds: host/build.mk (hcc) and free/kernel.mk
+; the flag groups mirror the real builds: src/build.mk (hcc) and src/kernel.mk
 ; (kcflags + kcppflags). they are few and they are stable; when one moves, move it here.
 ;
 ; THE TREE IS THE SOURCE: the same pruned walk selfpack cuts the archive with finds the
@@ -47,13 +47,11 @@
 
    (flags-for rel)
     (? (pre? rel "crew/moon/lib/") moonlibc
-       ; asmops.h lives once per arch under the same name, so the arch dir is named
-       ; here and never both at once.
-       (pre? rel "free/aarch64/") (inle + [(inc "/free/aarch64") "--target=aarch64-unknown-none-elf"])
-       (pre? rel "free/") (inle + [(inc "/free/x86_64")])
-       ; the asm seam probe reads free/<a>/asmops.h from OUTSIDE free/, deliberately:
-       ; kernel.mk globs that directory and a file there would join the kernel build.
-       (rel = "test/gate/asmops.c") (host + [(inc "/free/x86_64")])
+       ; src/asmops.h picks the machine's set off a predefine, so only the aarch64
+       ; lane needs saying -- the rest read as the host's.
+       (pre? rel "src/aarch64_") (inle + ["--target=aarch64-unknown-none-elf"])
+       ((pre? rel "src/kmain") || (pre? rel "src/sys") || (pre? rel "src/blk")
+        || (pre? rel "src/doom") || (pre? rel "src/x86_64_")) inle
        (pre? rel "port/playdate/") (? (tally pd-sdk) (playdate + [("-I" + pd-sdk + "/C_API")]) playdate)
        (pre? rel "wasm/") (host + [("-I" + emsdk + "/upstream/emscripten/system/include")])
        host)

@@ -173,7 +173,7 @@ setup: $(SETUP)
 # invalidated the cached nolibc archive on every run. Cached; `make ccbench` to refresh it
 # on its own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt
-$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(R)/core/love.c $(wildcard $(R)/host/*.c) | $(BDIR)
+$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(R)/src/love.c $(wildcard $(R)/host/*.c) | $(BDIR)
 	@$(MAKE) -s -C $(R) host dist-seed
 	@LOVE_CFLAGS='$(ai_cflags)' CORPUS='$(t)' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
 ccbench: $(CCBENCH)

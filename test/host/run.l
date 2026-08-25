@@ -1,4 +1,4 @@
-; --- test/host/run.l: smoke test for the hark / herald nifs (host/main.c) ---
+; --- test/host/run.l: smoke test for the hark / herald nifs (src/main.c) ---
 ; (hark argv) forks, captures the child's stdout into a string, and answers
 ; (status . output). (herald argv) is the SAME answer, but relays each chunk to our
 ; stdout as it is read instead of holding it to the exit -- what make does, and
@@ -66,7 +66,7 @@
 ;   rather than hanging, so this reddens as a slow run, not a wedged gate.
 ; ⚠ 2. AN IGNORED DISPOSITION SURVIVES exec, so a child that inherited it is a
 ;   `yes | head` that never stops. every fork site resets it: main.c's two exec
-;   sites by hand, and host/posix.c's sig_dfl_job for spawn/spawnio/spawnmap/tether.
+;   sites by hand, and src/posix.c's sig_dfl_job for spawn/spawnio/spawnmap/tether.
 ;   the law below reaches `hark`'s door only -- the posix.c half is lush's, and
 ;   shares the one line.
 ; ⚠ the status has to come out of the PIPELINE, and $? there is head's, so love's

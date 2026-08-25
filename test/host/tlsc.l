@@ -1,5 +1,5 @@
 ; --- test/host/tlsc.l: the C twins, held to the love ciphers ---
-; NOT in the test/*.l corpus: chacha20/poly1305 are host nifs (host/tls.c) and
+; NOT in the test/*.l corpus: chacha20/poly1305 are host nifs (src/tls.c) and
 ; the love side is a crew module, so neither is visible to the love0 bake.
 ;
 ; test/host/tls.l is where the RFC's own numbers live; this file asks the other

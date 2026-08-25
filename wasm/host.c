@@ -35,9 +35,9 @@ static const char boot_ai[] =
   "(use 'rng)"                    //   one-name surface, then coin, rng, q, kanren in the old eval order
   "(use 'q)"
   "(use 'kanren)"
-  "(use 'bao)"                    // the shell core, last and spliced, as host/main.c has it:
+  "(use 'bao)"                    // the shell core, last and spliced, as src/main.c has it:
 ;                                 //   read/reads/welp are reached bare (test/help.l's floor handler)
-// THE BAKED MODULES, one text (see host/main.c): each opens with its own
+// THE BAKED MODULES, one text (see src/main.c): each opens with its own
 // (module 'nm ..), so evaling this registers the lot and boot_ai's uses are splices.
 static const char src_mods[] =
 #include "uu.h"

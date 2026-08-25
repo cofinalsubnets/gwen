@@ -13,7 +13,7 @@ second signal too — chacha rotates 320 times a block, poly never — until gen
 rotate idiom, 2026-08-22: `ror4`/`rorv`/`rorv4` in holo's IR on x64 + arm64, sha256
 4.23× → 2.90× and chacha 5.80× → 3.59× on landing, every rotate-free row inside noise.
 Both hypotheses had been true, each owning a row.) ⚠ do not read the pair to zero:
-`core/love.c:6138`'s z-tray comparison is the same array-indexed shape.
+`src/love.c:6138`'s z-tray comparison is the same array-indexed shape.
 
 ⚠ **the corpus average is flattering and the pair exists because of it** (`ccbench.sh`'s
 own header says so). Both rows, every time.
@@ -44,7 +44,7 @@ noise-plus-real-difference to hold in mind before reading a mooncc move of the s
 
 ## the same floors compiled STRAIGHT (ccnif, 2026-08-23)
 
-`make -C bench ccnif` builds host/hash.c, host/deflate.c, host/inflate.c with every lane
+`make -C bench ccnif` builds src/hash.c, src/deflate.c, src/inflate.c with every lane
 and reads them three ways — answers (a divergence is a miscompile, the only thing in the
 script that says a compiler is *wrong*), .text, wall clock. No love runtime, no libc in
 the loop; ~20 s, so it is the per-edit instrument where ccbench is the per-rung one.
@@ -70,7 +70,7 @@ function).
 
 ## where the build's ~18 s goes (measured 2026-08-22)
 
-Direct per-step timing, not subtraction: `core/love.c` is 68% of the build, and 88% of
+Direct per-step timing, not subtraction: `src/love.c` is 68% of the build, and 88% of
 that one compile is codegen (`cgen-obj`) — lex+cpp+parse 10%, object write 2%. The perf
 profile of the compile is flat VM dispatch (`lvm_argtwocond` 13%, `lvm_eq` 12%, `lvm_tapn`
 8%, then the arg family; gcp 2.2%): no data structure to fix, no collector to tune — it is

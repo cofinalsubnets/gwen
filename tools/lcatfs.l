@@ -1,6 +1,6 @@
 ; lcatfs: bake a file TREE into .rodata -- one `{"path", "bytes", len, ms},` row per
 ; file, where lcatv bakes one file into one literal. The kernel's ramfs
-; (free/kmain.c) serves reads straight off these rows, so a file nobody opens
+; (src/kmain.c) serves reads straight off these rows, so a file nobody opens
 ; costs a row and not one word of the bounded heap. Bytes are VERBATIM, lcatv's
 ; escaping and not lcat's show-reprint: the reader must read them back the way the
 ; host reads the file. argv = (this-file path..); each path is baked under the

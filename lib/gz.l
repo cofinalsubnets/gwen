@@ -28,7 +28,7 @@
 ; apply and the compare wants an instruction. test/gate/gzfind.l is the differential.
 ;
 ; ⚠ AND SO DOES INFLATE, IN C. `gz-puff` below is the whole of RFC 1951 and the oracle;
-; `gz-inflate` is a door that reaches for host/inflate.c's nif and falls back to it. That
+; `gz-inflate` is a door that reaches for src/inflate.c's nif and falls back to it. That
 ; one is 205x, not 2.7x, and the difference is the ALGORITHM: the C indexes a table where
 ; puff walks a canonical code one bit at a time, which is the right trade at C's per-op
 ; cost and the wrong one at love's -- building the same table in love costs 44 ms on this
@@ -82,7 +82,7 @@
        (? (charm? v) v
           (: w (trap (\ _ (: _ (f 0) 1)) () (\ a b 0)) _ (pin gz-door k w) w)))
 
-   ; host/hash.c where the artifact carries it, the walk above where it does not.
+   ; src/hash.c where the artifact carries it, the walk above where it does not.
    ; ⚠ THE FALLBACK IS NOT WHY THE WALK IS HERE: it is the statement of the polynomial and
    ; the oracle test/host/gzc.l holds the C to, and it would earn its place in a tree where
    ; every build carried every nif.
@@ -261,7 +261,7 @@
    ;
    ; ⚠ AND THE REASON IS NOT "IT IS HOT", which lib/forge.l's own header says is not a
    ; reason. it is VOCABULARY: `(s i)` is a VM apply, and no compiler improvement hands
-   ; love code an instruction the VM has no name for. the ablation, on core/love.c
+   ; love code an instruction the VM has no name for. the ablation, on src/love.c
    ; (461101 bytes), sweeping gz-chain to price the walk:
    ;
    ;                            twin    native
@@ -551,7 +551,7 @@
        _ (gz-blocks (gz-finder n) s n j t head prev 0)
        _ (gz-align j t)
        ((slurp j) + ""))
-   ; host/deflate.c where the artifact carries it, the coder above where it does not --
+   ; src/deflate.c where the artifact carries it, the coder above where it does not --
    ; and the C is a twin held to the BYTES, so the door changes cost and never content.
    ; the love lane is the oracle test/host/gzc.l holds it to.
    (gz-deflate s)
@@ -749,7 +749,7 @@
                     (<(>r)) [1 (gz-take b)]
                     (go ())))
        (? n (go ()) ()))
-   ; the door. host/inflate.c where the artifact carries it, gz-puff where it does not
+   ; the door. src/inflate.c where the artifact carries it, gz-puff where it does not
    ; and wherever it declines -- and a TORN STREAM DECLINES, so a torn one is read twice
    ; and answers () both times. ⚠ `string?`, never `?`: a string of NULs sums to zero and
    ; would read as absent. The presence probe is gz-nif's, and why is written there.

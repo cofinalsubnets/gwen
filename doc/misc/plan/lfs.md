@@ -22,7 +22,7 @@ LFS spends two chapters here and calls it the hard part. It is the part we are d
 | glibc | `crew/moon/lib/nolibc/` | by-need members, no host libc |
 | linux-headers | `crew/moon/include/` | our own minimal set, not the host's |
 
-Plus one rung LFS never attempts: `free/kernel.mk` builds a whole kernel with
+Plus one rung LFS never attempts: `src/kernel.mk` builds a whole kernel with
 `KCC ?= mooncc` and our own linker, on two arches, with nothing foreign left.
 
 **The one structural hole: no C++.** Real gcc and binutils need a C++ compiler to build
@@ -99,7 +99,7 @@ The gap between those two numbers is entirely *other people's build systems*.
   comm join split` in core.l, `stat du chown mktemp` in fs.l, `date id` in proc.l. All in
   `make test_kore`, all GNU-byte-identical where GNU has an opinion, plus laws over the
   pure floors — the calendar, the record floor, the report floor, expr's, patch's.
-  Three nifs grew with them (host/posix.c): **`stat`'s tuple gained
+  Three nifs grew with them (src/posix.c): **`stat`'s tuple gained
   `uid gid nlink blocks ino`** (append-only; the kernel's own stat still answers the
   first four, and the tail is asked by `tally`), a **`lstat`** beside it (du and stat owe
   the link's own blocks, not its target's), **`getgid`**, and `openfd` gained mode 3,
@@ -133,7 +133,7 @@ The gap between those two numbers is entirely *other people's build systems*.
     only mangles the high bit.
   Left deliberately: fmt, pr, csplit, ptx and numfmt (each its own layout language),
   dir/vdir (they are `ls -C`/`ls -l`), shuf (a seed decision first), the sha1/sha512
-  family (host/hash.c carries three digests), and who/users/logname (no utmp).
+  family (src/hash.c carries three digests), and who/users/logname (no utmp).
 - **rung 1c — gzip's face — BUILT.** `lib/gzcmd.l`: `love gzip`, `love gunzip` and
   `love zcat`, GNU's flag spelling (`-cdfklnNqrtv`, `-1..-9`, `-S SUF`, the long forms)
   over lib/gz.l's two doors, registered as verbs the way `love tar` is. The in-place

@@ -27,10 +27,10 @@ virt: $(R)/$(o)/love.elf
 
 $(eval $(call p_lay,start,mkstart,"$(o)/start.o"))
 
-$(eval $(call p_obj,love,core/love.c,$(R)/core/love.c $(R)/core/love.h $(lib_hR) $(mc),$(virt_cc)))
+$(eval $(call p_obj,love,src/love.c,$(R)/src/love.c $(R)/src/love.h $(lib_hR) $(mc),$(virt_cc)))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,crew/moon/lib/nolibc/string/$m.c,\
   $(R)/crew/moon/lib/nolibc/string/$m.c $(libc_dep),$(virt_cc) -Icrew/moon/include)))
-$(eval $(call p_obj,main,port/virt/main.c,main.c $(R)/core/love.h $(lib_hR) $(mc),$(virt_cc)))
+$(eval $(call p_obj,main,port/virt/main.c,main.c $(R)/src/love.h $(lib_hR) $(mc),$(virt_cc)))
 
 $(R)/$(o)/love.elf: $(objs)
 	@echo MOON	$@

@@ -16,7 +16,7 @@ DESTDIR ?= $(HOME)/
 # (Arch's extra/love owns /usr/bin/love and man1/love.1 outright). Nothing below hardcodes
 # the command name, so `make install BIN=lovelang` moves the binary, both shims, every
 # shebang and the man page together. ⚠ the PROJECT is still love: lib/love/, liblove,
-# core/love.h and love/*.l keep the name -- data paths, not PATH entries.
+# src/love.h and love/*.l keep the name -- data paths, not PATH entries.
 BIN ?= love
 BINUP = $(shell echo '$(BIN)' | tr '[:lower:]' '[:upper:]')
 d = $(DESTDIR)/$(PREFIX)

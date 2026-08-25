@@ -6,7 +6,7 @@
 // The standing rule: love must not gain a feature whose only purpose is letting
 // a test break it -- the deleted LOVE_FAULT_EAGAIN hook is the recorded reason.
 // The port vt has always been the frontend's job --
-// host/build.mk builds liblove.a from love.c ONLY and links host/*.c direct --
+// src/build.mk builds liblove.a from love.c ONLY and links host/*.c direct --
 // so a frontend that lies to the runtime is test code, not language surface.
 // Nothing in this file is compiled into `love`.
 //

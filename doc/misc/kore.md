@@ -82,9 +82,9 @@ The file discipline, two shapes:
   quits with what it answers (doc/misc/moon.md). ⚠ nothing unwinds through a scare, so a port a tool
   still holds at the leave is lost, exactly as `quit` lost it. The property is gated in
   test/gate/kore.sh and test/gate/moon.sh; a regression to `quit` passes every other check.
-* **the nif lane.** fs effects ride host/posix.c (app-glob AiNif, no core edit) and its
+* **the nif lane.** fs effects ride src/posix.c (app-glob AiNif, no core edit) and its
   `posix_` conventions: an effect op answers () ok | a POSITIVE errno | EINVAL misuse; a value
-  op answers the value | (). host/posix.c holds rename symlink readlink chmod chown utime
+  op answers the value | (). src/posix.c holds rename symlink readlink chmod chown utime
   umask rmdir hardlink (`link` the word belongs to the chain ctor). test/host/fs.l smokes them
   under test_hostnif.
 * **exit codes.** 0 clean, 1 something failed (reported on err, the loop continued), 2 usage;
@@ -255,7 +255,7 @@ faces are GNU's: cksum's `CRC BYTES NAME` (and no name at all reading stdin), th
 `NAME: OK` / `NAME: FAILED` per line, leaving with 1 if any did not match; the gate holds both
 directions, GNU reading ours and ours reading GNU's.
 
-The digests themselves are **host/hash.c** (`sha256`, `md5`, `cksum` — the last being POSIX's
+The digests themselves are **src/hash.c** (`sha256`, `md5`, `cksum` — the last being POSIX's
 own crc, a different polynomial from `crc32`'s and with the byte count folded in, which is why
 an empty file is `4294967295 0`). There is no love statement of any of the three, so an image
 that carries no host nif — the kernel's, which compiles no `host/*.c` — answers 2 and names the
@@ -272,9 +272,9 @@ STRICTER than GNU's (it wants the path to exist), which is GNU's `readlink -e`; 
 the GNU-shaped door. `link` and `unlink` are the two syscalls said plainly, no face on them.
 
 `stat -c FORMAT` (or `--printf=`, which reads the escapes and adds no newline where `-c` does
-neither), `du`, `chown`, `mktemp`. They read the **stat tail**: host/posix.c's `stat` answers
+neither), `du`, `chown`, `mktemp`. They read the **stat tail**: src/posix.c's `stat` answers
 `(size mtime mode ns uid gid nlink blocks ino)` and `lstat` the same of the link itself. The tail
-is append-only and the KERNEL's own stat (free/kmain.c) answers the first four alone — an image
+is append-only and the KERNEL's own stat (src/kmain.c) answers the first four alone — an image
 tree has no ownership to tell about — so it is asked by `tally` and a world without it says so.
 
 * ⚠ **there is no default `stat` face.** GNU's is four lines of access, change and birth times
@@ -364,7 +364,7 @@ way still READS here).
 Left out of the coreutils batch deliberately: `fmt` `pr` `csplit` `ptx` `numfmt` (each its own
 layout language, not another row), `dir`/`vdir` (they are `ls -C` and `ls -l`, neither of which
 ls wears yet), `shuf` (it wants a decision about the seed before it wants code), `sha1sum` and
-the sha512 family (host/hash.c carries sha256, md5 and cksum alone), and `who`/`users`/`logname`
+the sha512 family (src/hash.c carries sha256, md5 and cksum alone), and `who`/`users`/`logname`
 (no utmp here, and there will not be one).
 Out of the /proc family, deliberately: `top` (a full-screen loop, and its data is `ps`'s),
 `pmap` and `vmstat` (each its own layout), `dmesg` (the ring buffer wants a syscall, not a

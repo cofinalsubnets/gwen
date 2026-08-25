@@ -13,7 +13,7 @@
 ; AND THE ONE STAMP: the sha of the leveled tar is the tree's content id, kept
 ; in ARCHIVE.sha. run every make (a force rule); the gzip is paid only when the
 ; tree's content actually moved -- a touch settles, a delete or rename is seen.
-; the walk PRUNES before it reads (sp-keep?), and the coder is host/deflate.c
+; the walk PRUNES before it reads (sp-keep?), and the coder is src/deflate.c
 ; through gz.l's door, so a full cut is seconds -- on a runner that carries the
 ; nifs; love0 carries none, which is why the recipe prefers the tree's own love.
 ;

@@ -9,7 +9,7 @@
 // timer, and GPIO; this file is just the love glue plus a few GPIO nifs. The
 // shell line editor (love/bao.l, the baked shell core) drives the console
 // exactly as it drives the kernel's.
-#include "../../core/love.h"
+#include "../../src/love.h"
 #include "teensy41.h"
 #include "psram.h"
 
@@ -28,7 +28,7 @@ void ai_sleep(uintptr_t ms) {
   uintptr_t start = ai_clock();
   while (ai_clock() - start < ms) ; }
 
-// the readiness law (host/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
+// the readiness law (src/main.c, inle's kmain.c): a NEGATIVE fd is ALWAYS
 // ready -- a string port waits on nothing external, and answering "not ready"
 // parks its task on a wait no scheduler can satisfy (lvm_sound's park law
 // spins sound -> yield -> sound forever: the Enter-key freeze that walled

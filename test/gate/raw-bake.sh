@@ -2,7 +2,7 @@
 # test/gate/raw-bake.sh -- the WAKE half of the gcc-free image cycle. mooncc could
 # never bake before (an EXEC's low load address collides the codec's pointer/fixnum
 # index range); a -pie ET_DYN loads high and clears it. Reuses test_raw's objects,
-# links them PIE, bakes the post-warm image into the binary's OWN .image (host/image.c
+# links them PIE, bakes the post-warm image into the binary's OWN .image (src/image.c
 # self-patch), then WAKES that image and runs the corpus over the woken heap. This is
 # the ONLY gate that exercises ai_image_load on a mooncc binary -- the seam where an
 # odd-addressed lvm_* ap mis-encodes as a fixnum, invisible to every egg-boot gate.

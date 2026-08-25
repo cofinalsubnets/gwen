@@ -355,7 +355,7 @@ static long er(long r) {
  * carry, by their NR_fb_* number, errno translated the same. */
 extern long __ai_osv;
 extern long __ai_osdetect(void);
-/* inle's door (free/sys.c): the same seam in C, for the kernel that is only
+/* inle's door (src/sys.c): the same seam in C, for the kernel that is only
  * ever itself. it answers the canonical numbers, so a negative osv takes every
  * member's lanes as linux does; os.c carries a weak refusal for links without
  * it. */

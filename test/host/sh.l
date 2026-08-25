@@ -408,7 +408,7 @@
    (assert (= "[tail]\n" (cup r))))
 ; the drainer earns its keep: a body saying more than one pipe buffer would stop
 ; forever against a reader that is us. a builtin's buffered bytes come first
-(: r (hark ["out/host/love" "out/host/lush" "-c" "f() { pwd; cat core/love.c; cat core/love.c; }; x=$(f); echo ${#x}"])
+(: r (hark ["out/host/love" "out/host/lush" "-c" "f() { pwd; cat src/love.c; cat src/love.c; }; x=$(f); echo ${#x}"])
    t (cup r)
    (assert (< 800000 (sh-int (snip t 0 (- (tally t) 1))))))
 

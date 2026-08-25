@@ -1,4 +1,4 @@
-; --- test/host/hash.l: the digests in host/hash.c, held to what publishes them ---
+; --- test/host/hash.l: the digests in src/hash.c, held to what publishes them ---
 ; NOT in the test/*.l corpus: sha256, md5 and cksum are host nifs, so none is visible
 ; to the love0 bake. crew/kore's cksum, md5sum and sha256sum are these three plus a
 ; line of output, and test/gate/kore.sh holds THOSE to GNU coreutils -- so this file is

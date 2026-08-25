@@ -37,13 +37,13 @@ O=out/arm64; mkdir -p $O; rm -f $O/*.o
 CF="-std=gnu2x -O2 -Dai_tco=1 -I. -Icore -Iout/lib -fomit-frame-pointer -fno-stack-protector -fno-exceptions -w"
 echo "AARCH64 cross-build ($GCC)"
 # crew/moon/lib/math/am.c is the math floor (fdlibm/-lm retired) -- link it like the host does.
-for f in core/love.c host/*.c crew/moon/lib/math/am.c; do
+for f in src/love.c host/*.c crew/moon/lib/math/am.c; do
   o=$O/$(basename "$f" .c).o
   $GCC $CF -c "$f" -o "$o"
 done
-# core/love_data.ld pins the data-sentinel tiling core/love.h's ai_typ reads; without it
+# src/love_data.ld pins the data-sentinel tiling src/love.h's ai_typ reads; without it
 # ai_ini traps at boot (SIGTRAP), which is how this lane announced itself.
-LD_ARGS="-Wl,-T,core/love_data.ld"
+LD_ARGS="-Wl,-T,src/love_data.ld"
 $GCC -static $LD_ARGS -o $O/love $O/*.o 2>/dev/null || $GCC -static $LD_ARGS -o $O/love $O/*.o
 
 # the corpus (or the files named on the command line), under qemu. Mirror mk/common.mk's

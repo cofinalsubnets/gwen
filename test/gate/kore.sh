@@ -842,7 +842,7 @@ echo "kore: od across the gulps (rows, -j, -N and the * run over 4096) ok"
 
 # -------------------------------------------------------------- the checksums
 # cksum, md5sum and sha256sum against GNU. these three are the tools whose entire
-# output is one number, so a single wrong byte in host/hash.c is a wrong line here and
+# output is one number, so a single wrong byte in src/hash.c is a wrong line here and
 # nowhere else. THE LENGTHS ARE THE POINT of the battery: a digest pads its last block
 # with the message length in the final 8 bytes, so 55/56 and 119/120 are where a pad
 # off by one shows, and 0 is where cksum's own length fold does (an empty file is

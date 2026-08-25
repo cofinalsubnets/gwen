@@ -1,7 +1,7 @@
 ; crew/kore/proc.l -- the process and world tools of kore: env, printenv, sleep,
 ; kill, xargs, date, id, whoami, groups.
 ; a toolbox file, no seat -- kore is its door; loads after core.l and rides the
-; u-floor. no nifs of its own: environ/getenv/setenv (host/main.c + init.c),
+; u-floor. no nifs of its own: environ/getenv/setenv (src/main.c + init.c),
 ; spawn/wait (init.c's posix lane -- spawn answers the pid or a NEGATIVE errno,
 ; a child that cannot exec _exit(127)s), still (pty.c's kill), rest (the core
 ; sleep, milliseconds). a body-less top-level `:` leaking one pure helper
@@ -227,7 +227,7 @@
    ; ---- the /proc family: ps, free, uptime, pidof, pgrep, pkill, killall, pwdx ----
    ; ⚠ NO NIF GREW FOR ANY OF THESE. /proc is a filesystem, so the whole family is
    ; `uread` and a parser -- which is also why a world without one (the kernel's own
-   ; image, free/kmain.c, mounts no procfs) reads as NO PROCESSES rather than as an
+   ; image, src/kmain.c, mounts no procfs) reads as NO PROCESSES rather than as an
    ; error. The tools say what they found; they do not invent a reason.
    ; ⚠ AND NONE OF THEM CAN BE SMOKED BYTE-FOR-BYTE against procps: the process table
    ; moves between two runs, and every number here is a clock. So the PARSERS are lawed

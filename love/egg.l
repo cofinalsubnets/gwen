@@ -14,6 +14,6 @@
  _ (sit (peep book 'ev 0) 0 post)
  _ (pin book 'born (clock now))
  ; the mop sweeps the compiler's internal noms off the book. the debug door
- ; (LOVE_NO_MOP, host/main.c) sets `nomop` before the warm to keep them for cell
+ ; (LOVE_NO_MOP, src/main.c) sets `nomop` before the warm to keep them for cell
  ; introspection; every normal boot and every gate mops.
  (? (peep book 'nomop 0) () (mop ())))))
