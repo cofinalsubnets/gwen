@@ -35,9 +35,9 @@ moonfiles = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/x64.l cr
 $(ho)/.mooncc-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(moonfiles)' > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo 'SH	'$@; fi
 $(ho)/.mooncc-cat.l: $(moonfiles) $(ho)/.mooncc-cat.list
-	@echo CAT	$(abspath $@)
+	@echo 'CAT	'$@
 	@mkdir -p $(dir $@)
 	@cat $(filter %.l,$^) > $@
 # sb 🌱 the patch-set vcs (svalbard), and lush 🐚 the love shell -- also the distro's console shell,
@@ -47,7 +47,7 @@ sbfiles = crew/kore/text.l crew/kore/diff.l lib/dns.l crew/sb/merge.l crew/sb/ht
 $(ho)/sb: $(sbfiles)
 $(ho)/lush: $(lushfiles)
 $(ho)/sb $(ho)/lush:
-	@echo CAT	$(abspath $@)
+	@echo 'CAT	'$@
 	@mkdir -p $(dir $@)
 	@{ echo '#!/usr/bin/env -S love'; cat $^; } > $@
 	@chmod 755 $@
@@ -57,7 +57,7 @@ $(ho)/sb $(ho)/lush:
 # standalone image left: the default love's crew rides its own .image (the layered bake,
 # host/build.mk), and an image cannot cross binaries anyway.
 out/host/mooncc0.image: out/host/.mooncc-cat.l $(love0)
-	@echo LOVE	$(abspath $@)
+	@echo 'LOVE	'$@
 	@$(love0) -l out/host/.mooncc-cat.l -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
 # ==== dist: the ONE artifact (self-host rung 3; seed-universal U2) ====
@@ -99,15 +99,15 @@ force_dist_list: ;
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo 'SH	'$@; fi
 $(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list
-	@echo CAT	$(abspath $@)
+	@echo 'CAT	'$@
 	@mkdir -p $(dir $@)
 	@cat $(distfiles) > $@
 # the same roster, baked into the binary: the FIRST BOOT (host/main.c) cats the
 # members off the carried source blob exactly as the rule above does off the tree.
 out/lib/distlist.h: crew/build.mk
-	@echo SH	$@
+	@echo 'SH	'$@
 	@mkdir -p out/lib
 	@printf '"%s"\n' '$(distfiles)' > $@
 .PHONY: dist dist-source dist-seed
@@ -313,21 +313,21 @@ xobjs = $(xd)/love.o $(xhost_o) $(xmath_o) $(xd)/sys.o
 # -D AiHaveVersionH like the host lane (build.mk's love.o): mooncc has no
 # __has_include, so the flag is the only door to the version header.
 $(xd)/love.o: core/love.c $(love_h) out/host/mooncc0.image out/lib/love_version.h
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moonx) -D ai_tco=$(tco) -D AiHaveVersionH -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(xd)/host_%.o: host/%.c $(love_h) out/host/mooncc0.image
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(xd)/host_main.o: $(baked_h)
 $(xd)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(xd)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moonx) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
 $(xd)/sys.o: out/host/.mksys-cat.l $(love0)
-	@echo HOLO	$@
+	@echo 'HOLO	'$@
 	@mkdir -p $(dir $@)
 	@$(love0) -l out/host/.mksys-cat.l -n -e "((from 'moon '$(xmksys)) \"$@\")" && test -s $@
 
@@ -343,7 +343,7 @@ $(xd)/rt.o: $(rt_slice) tools/mkrt.l $(if $(bundled_love),,out/host/mooncc0.imag
 # rebuilds. free/kernel.mk owns the list and the prereq line; a recipe expands
 # late, so reading it here is enough.
 $(xd)/love: $(xobjs) $(xd)/src.o $(xd)/rt.o assets/readme.bin
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@$(moonx) -pie $(xobjs) $(xkart_o) $(xd)/src.o $(xd)/rt.o -freadme=assets/readme.bin -o $@
 # dist-fat -- OPT-IN: ONE file, both texts, behind fatpack's sh prefix and its
 # content-named cache under ~/.love/fat. the native member rides baked; the
@@ -369,7 +369,7 @@ dist-fat: $(ho)/love.baked $(xd)/love tools/fatpack.l
 # would leave a 0-byte syntax file make calls up to date.
 huefiles = crew/vi/config.l crew/vi/hue.l tools/hue2vim.l
 $(ho)/syntax.vim: $(huefiles) $(m)
-	@echo HUE	$@
+	@echo 'HUE	'$@
 	@mkdir -p $(dir $@); t=$@.$$$$.tmp; \
 	  cat $(huefiles) | env -u LOVE_NO_IMAGE $(m) > $$t && test -s $$t && mv -f $$t $@ \
 	    || { rm -f $$t; echo "FAIL: $@ empty (hue2vim.l failed)"; exit 1; }

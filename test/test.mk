@@ -162,7 +162,7 @@ test_stdincorpus: $(ho)/love.baked
 # cue. ⚠ it EXITS 97 on a wait with no deadline -- a deadlock, said loudly.
 $(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/core/love_data.ld \
     out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/bao.h
-	@echo CC	$@
+	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ test/front/main.c $(ho)/liblove.a $(data_ld) $(nifs_ld)
 test_front: $(ho)/front
@@ -430,7 +430,7 @@ mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${
 # two-arg `join` shadowed clay's one-arg at mx-h's define and the .h came out empty.
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo LOVE	core/mx.h core/kinds.h core/nifs.h xterm256.h core/love_data.ld "(core/mx.l + core/nifs.l + quay.l on $m)"
+	@echo 'LOVE	'core/mx.h core/kinds.h core/nifs.h xterm256.h core/love_data.ld "(core/mx.l + core/nifs.l + quay.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
 # ...and the DEPENDENCY, off the same roster: a committed generated file is stale the moment
@@ -501,7 +501,7 @@ test_cts_riscv: host
 # leaves it and only `make distclean` asks the network again. NOTHING depends on this rule:
 # a gate that downloads is a gate that fails on a train.
 $(dl)/c-testsuite:
-	@echo MK	c-testsuite
+	@echo 'MK	'c-testsuite
 	@git clone --depth=1 https://github.com/c-testsuite/c-testsuite.git $@ > /dev/null 2>&1
 # test_libc -- OUR C LIBRARY against the system's, function by function:
 # test/libc/*.c built by mooncc (pulling crew/moon/lib/nolibc.c by need) and by gcc, run,
@@ -871,7 +871,7 @@ test_gc:
 # The .l -> .v pipeline: tools/spec2coq.l reads test/spec.l and EMITS gen.v, the spec generating
 # theorems for its own numeral facts. Regenerated every run, so asserts and proofs cannot diverge.
 test_gen: host $(rocq_kept)
-	@echo LOVE	test/proof/rocq/gen.v "(tools/spec2coq.l on $m)"
+	@echo 'LOVE	'test/proof/rocq/gen.v "(tools/spec2coq.l on $m)"
 	@$m tools/spec2coq.l > test/proof/rocq/gen.v
 	@echo TEST test/proof/rocq/gen.v "(coqc, against spec.v's shared model)"
 	@cd test/proof/rocq && $(COQC) -R . "" gen.v
@@ -880,7 +880,7 @@ test_gen: host $(rocq_kept)
 # has uu's kernel TYPE-CHECK a proof term and emits the same term in Gallina for coqc to re-check
 # -- a law proved in love's own kernel and certified by Rocq.
 test_uugen: host
-	@echo LOVE	test/proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
+	@echo 'LOVE	'test/proof/rocq/uugen.v "(tools/uu2coq.l on $m)"
 	@$m tools/uu2coq.l > test/proof/rocq/uugen.v
 	@echo TEST test/proof/rocq/uugen.v "(coqc)"
 	@$(COQC) -q test/proof/rocq/uugen.v
@@ -960,7 +960,7 @@ test_uulean:
 else
 test_uulean: host
 	@mkdir -p test/proof/lean
-	@echo LOVE	test/proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
+	@echo 'LOVE	'test/proof/lean/uugen.lean "(tools/uu2lean.l on $m)"
 	@$m tools/uu2lean.l > test/proof/lean/uugen.lean
 	@echo TEST test/proof/lean/uugen.lean "(lean)"
 	@$(LEAN) test/proof/lean/uugen.lean > out/host/.uulean.out 2>&1; r=$$?; \
@@ -991,7 +991,7 @@ test_holofuzz: host
 # $1 the corpus stem, $2 its generator under tools/, $3 the source that generator reads
 define uu_corpus
 $1: host
-	@echo LOVE	test/$1.l "(tools/$2.l on $$m)"
+	@echo 'LOVE	'test/$1.l "(tools/$2.l on $$m)"
 	@$$m tools/$2.l > test/$1.l
 test_$1: host
 	@echo TEST test/$1.l "(regenerate + diff)"

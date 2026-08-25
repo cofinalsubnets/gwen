@@ -51,7 +51,7 @@ installs = $(patsubst %,$d/bin/%,$(binnames)) \
   $v/ftdetect/love.vim $v/syntax/love.vim $v/ftplugin/love.vim
 
 # the plain data install, spelled once -- a dozen rules below wear it.
-inst644 = @echo CP	$(abspath $@); install -D -m 644 $< $@
+inst644 = @echo 'CP	'$(abspath $@); install -D -m 644 $< $@
 
 # the PATH door, nest-only: each bin and man page gets a ~/.local compat symlink, since
 # those are already on PATH and manpath. A real PREFIX (a distro) skips them.
@@ -59,7 +59,7 @@ ifeq ($(PREFIX),.love/)
 compat = $(DESTDIR)/.local
 installs += $(patsubst %,$(compat)/bin/%,$(binnames)) \
   $(patsubst %,$(compat)/share/man/man1/%.1,$(mannames))
-inln = @echo LN	$(abspath $@); mkdir -p $(@D); ln -sf $(abspath $<) $@
+inln = @echo 'LN	'$(abspath $@); mkdir -p $(@D); ln -sf $(abspath $<) $@
 $(compat)/bin/%: $d/bin/%
 	$(inln)
 $(compat)/share/man/man1/%.1: $d/share/man/man1/%.1
@@ -68,14 +68,14 @@ endif
 
 install: $(installs)
 uninstall:
-	@echo RM	$(abspath $(installs))
+	@echo 'RM	'$(abspath $(installs))
 	@rm -f $(installs)
 
 # UNSTRIPPED deliberately: stripping drops the symbol table holo lays on purpose, for ~2%
 # of a baked binary. binutils strip IS safe on our ELF (every loaded byte has a covering
 # section header), so a user who wants it smaller can strip their own.
 $d/bin/$(BIN): $(ho)/love $(ho)/love.baked
-	@echo CP	$(abspath $@)
+	@echo 'CP	'$(abspath $@)
 	@install -D -m 755 $< $@
 # the boot image travels INSIDE the binary (.image is an allocated PROGBITS section, the
 # layered crew chain riding it), so the plain-copy install keeps the warm wake and every verb.
@@ -102,7 +102,7 @@ $d/bin/cook $d/bin/papel $d/bin/kiosko $d/bin/libra:
 # symlink, so it takes the rewrite unconditionally. At the default BIN the substitution is
 # an identity and the bytes are unchanged.
 $d/bin/ain: tools/ain.l $(ho)/love.baked
-	@echo CP	$(abspath $@)
+	@echo 'CP	'$(abspath $@)
 	@install -d $(@D)
 	@$(korecmd) sed '1s|env -S love|env -S $(BIN)|' $< > $@
 	@chmod 755 $@
@@ -116,7 +116,7 @@ $d/bin/ain: tools/ain.l $(ho)/love.baked
 # ⚠ `n` comes off $0 UNCHASED where `h` is the chased path: a tool symlink must arrive as its
 # own name for the argv[0] door, and only the real file's dir has the $(BIN) sibling.
 $d/bin/kore: $(MAKEFILE_LIST)
-	@echo CAT	$(abspath $@)
+	@echo 'CAT	'$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
@@ -130,7 +130,7 @@ $d/bin/kore: $(MAKEFILE_LIST)
 $d/bin/sb: $(sbfiles)
 $d/bin/lush: $(lushfiles)
 $d/bin/sb $d/bin/lush:
-	@echo CAT	$(abspath $@)
+	@echo 'CAT	'$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S $(BIN)'; cat $^; } > $@
 	@chmod 755 $@
@@ -140,7 +140,7 @@ $d/bin/sb $d/bin/lush:
 # off the CHASED path (readlink -f): invoked through a ~/.local compat symlink, $0's own
 # dir has no $(BIN) sibling -- the nest does.
 $d/bin/mooncc: $(MAKEFILE_LIST)
-	@echo CAT	$(abspath $@)
+	@echo 'CAT	'$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
@@ -152,7 +152,7 @@ $d/bin/mooncc: $(MAKEFILE_LIST)
 # DISPLAY/XAUTHORITY will not do; mod+q restarts in place by exec'ing this script.
 luxfiles = crew/lux/core.l crew/lux/layout.l crew/lux/wire.l crew/lux/ewmh.l crew/lux/manage.l crew/lux/keys.l crew/lux/config.l crew/lux/lux.l
 $d/bin/lux: $(luxfiles)
-	@echo CAT	$(abspath $@)
+	@echo 'CAT	'$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/usr/bin/env -S $(BIN) -l'; cat $(luxfiles); } > $@
 	@chmod 755 $@
@@ -161,7 +161,7 @@ $d/bin/lux: $(luxfiles)
 # fires `(bao 0)` on a tty -- so the bin is a tiny launcher that fires it. ⚠ the module
 # rides the binary, so there is nothing to -l and no nest path to get wrong.
 $d/bin/bao: $(MAKEFILE_LIST)
-	@echo CAT	$(abspath $@)
+	@echo 'CAT	'$(abspath $@)
 	@install -d $(dir $@)
 	@{ echo '#!/bin/sh'; \
 	   echo 'h=$$(CDPATH= cd -- "$$(dirname -- "$$(readlink -f -- "$$0")")" && pwd)'; \
@@ -171,7 +171,7 @@ $d/bin/bao: $(MAKEFILE_LIST)
 # the .TH command name follows BIN too (`man lovelang` should not head LOVE(1));
 # the other `love`s on that line are the PROJECT and the version string, so they stay.
 $d/share/man/man1/$(BIN).1: $(ho)/love.1 $(ho)/love.baked
-	@echo CP	$(abspath $@)
+	@echo 'CP	'$(abspath $@)
 	@install -d $(@D)
 	@$(korecmd) sed '1s|"LOVE"|"$(BINUP)"|' $< > $@
 	@chmod 644 $@

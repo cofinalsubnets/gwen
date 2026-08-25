@@ -64,11 +64,11 @@ $(o)/core/love.o: ../out/lib/love_version.h
 emlink = $(EMCC) $(CFLAGS) $(EMFLAGS) $(objs) -o $@
 
 love.js: $(objs)
-	@echo LD	$@
+	@echo 'LD	'$@
 	@$(emlink)
 
 $(o)/love.js: $(objs)
-	@echo LD	$@
+	@echo 'LD	'$@
 	@mkdir -p $(dir $@)
 	@$(emlink)
 
@@ -77,12 +77,12 @@ $(o)/love.js: $(objs)
 gate: $(o)/love.js
 
 $(o)/host.o: host.c ../out/lib/egg.h ../out/lib/post.h ../out/lib/p1.h ../out/lib/prel.h ../out/lib/ev.h ../out/lib/pat.h ../out/lib/uu.h ../out/lib/coin.h ../out/lib/rng.h ../out/lib/q.h ../out/lib/kanren.h ../out/lib/bao.h $(g_h)
-	@echo CC	$@
+	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@$(emcc) $(CFLAGS) -c $< -o $@
 
 $(o)/%.o: ../%.c $(g_h)
-	@echo CC	$@
+	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@$(emcc) $(CFLAGS) -c $< -o $@
 

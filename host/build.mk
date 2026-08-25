@@ -40,7 +40,7 @@ force_hostcc: ;
 $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
 	@tf=$@.$$$$.tmp; printf '%s\n' '$(host_cc) $(image_ldflags)' > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo 'SH	'$@; fi
 # liblove.a is not here, and that is the whole point: `ar` is a foreign tool, so a
 # target that owed it could never `make host` without an ambient toolchain, however
 # self-hosting everything else became. nothing in the default lane links it either --
@@ -61,7 +61,7 @@ love0: $(love0)
 # the binary itself -- and it watches the cat too, so a crew edit rebakes without
 # relinking.
 $(ho)/love.baked $(ho)/love.cand.baked: %.baked: % $(ho)/.dist-cat.l
-	@echo LOVE	$< "(bake)"
+	@echo 'LOVE	'$< "(bake)"
 	@$< bake -l $(ho)/.dist-cat.l
 	@touch $@
 
@@ -78,7 +78,7 @@ candidate: $(ho)/love.cand.baked
 # rm the archive first: `ar r` replaces and adds but never removes, so a renamed or
 # dropped source leaves a stale .o behind and the link dies on multiple definitions.
 $(ho)/liblove.a: $(h_o)
-	@echo AR	$@
+	@echo 'AR	'$@
 	@mkdir -p $(dir $@)
 	@rm -f $@; ar rcs $@ $^
 
@@ -117,22 +117,22 @@ force_love0cc: ;
 out/host/0/.love0cc: force_love0cc
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; printf '%s\n' '$(boot_cc)' > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo 'SH	'$@; fi
 out/host/0/%.o: $(R)/%.c $(love_h) out/host/0/.love0cc
-	@echo CC	$@
+	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_cc) -c $< -o $@
 # -pie is load-bearing: love0 bakes mooncc0.image, and the image codec refuses a binary
 # whose text sits in its index range -- a PIE loads high and clears it. gcc/clang default
 # to PIE anyway; mooncc, the download door's CC, does not.
 $(love0): $(love0_o)
-	@echo LD	$@
+	@echo 'LD	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(CC) $(ai_cflags) -pie -o $@ $(love0_o)
 
 # core/love.c -> out/host/*.o
 $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
-	@echo CC	$@
+	@echo 'CC	'$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -c $< -o $@
 
@@ -179,17 +179,17 @@ moon_o = $(moon_d)/love.o $(moon_host_o) $(moon_math_o) $(moon_d)/sys.o
 # -D AiHaveVersionH + the love_version.h dep: this TU carries the version id into the
 # shipped binary, and mooncc has no __has_include for core/love.c's fallback probe to use.
 $(moon_d)/love.o: core/love.c $(love_h) $(moon0_dep) out/lib/love_version.h
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -D ai_tco=$(tco) -D AiHaveVersionH -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(moon_d)/host_%.o: host/%.c $(love_h) $(moon0_dep)
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c $< $@
 $(moon_d)/host_main.o: $(baked_h)
 $(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(moon_d)/m_%.o: crew/moon/lib/math/%.c $(moon0_dep)
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
 # sys.o is laid, not compiled: the syscall trampoline and our sigsetjmp/longjmp have no C
@@ -217,9 +217,9 @@ mksys_l = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
 out/host/.mksys-cat.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(mksys_l)' > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo 'SH	'$@; fi
 out/host/.mksys-cat.l: $(mksys_l) out/host/.mksys-cat.list
-	@echo CAT	$@
+	@echo 'CAT	'$@
 	@mkdir -p $(dir $@)
 	@cat $(mksys_l) > $@
 # the last love0 in the default lane. sys.o is laid by running a love over the mksys cat,
@@ -228,14 +228,14 @@ out/host/.mksys-cat.l: $(mksys_l) out/host/.mksys-cat.list
 # 139. (The corpus is read now, not baked, so that particular tail is gone.) A bundled love
 # lays it just as well: the cat carries holo itself, so the layer needs nothing of the bootstrap.
 $(moon_d)/sys.o: out/host/.mksys-cat.l $(if $(bundled_love),,$(love0))
-	@echo HOLO	$@
+	@echo 'HOLO	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_love) -l out/host/.mksys-cat.l -n -e "((from 'moon '$(mksys_e)) \"$@\")" && test -s $@
 ifneq ($(HCC),)
 # the HCC flavor is a foreign-cc differential, not the artifact: it links no
 # source blob and no readme ($(hcc) knows neither), and dist refuses it.
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/core/love_data.ld $(baked_h)
-	@echo LD	$@
+	@echo 'LD	'$@
 	@mkdir -p $(dir $@)
 	@$(hcc) -o $@ $(host_o) $(ho)/liblove.a $(image_ldflags) $(data_ld)
 else
@@ -261,7 +261,7 @@ nolibc_src = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
 # their rules): the artifact is the fused binary now (plan C2) -- what boots
 # on metal is tools/kproject.l's projection of exactly this file.
 $(ho)/love $(ho)/love.cand: $(moon_o) out/host/src.o out/host/rt.o assets/readme.bin $(nolibc_src)
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) $(kart_o) out/host/src.o out/host/rt.o -freadme=assets/readme.bin -o $@
 endif
@@ -271,7 +271,7 @@ endif
 # would make these intermediate and re-run the lens on every build. mkman takes the version
 # header as its second word and fills @version@ itself, so the roff needs no sed after.
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md tools/mkman.l crew/lapiz/lapiz.l out/lib/love_version.h $(ho)/love
-	@echo LOVE	$@
+	@echo 'LOVE	'$@
 	@mkdir -p $(dir $@)
 	@$(ho)/love tools/mkman.l doc/$*.md out/lib/love_version.h > $@
 

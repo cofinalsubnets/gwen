@@ -3,6 +3,11 @@
 # these resolve from any cwd; per-frontend output lands in $R/out/<frontend>/.
 R ?= .
 
+# THE RECIPE TAG COLUMN: `@echo 'MOON<TAB>'$@`, and the quote is load-bearing. A bare tab
+# in an echo line only separates argv, which echo rejoins with a space -- so the column
+# has to be a character echo passes through. Paths print relative to the tree; `make
+# install` is the exception, where the artifact lands outside it.
+
 m = $R/out/host$(hsuf)/love
 # ⚠ the HOST's arch, which $a is NOT: a cross lane overrides $a on the command line, and
 # anything under out/host reading $a then lays a cross artifact into the host tree.

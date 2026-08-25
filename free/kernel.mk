@@ -119,15 +119,15 @@ kernel: $(k_elf)
 $(k_odir)/host/main.o: $(baked_h)
 $(k_odir)/host/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(k_odir)/rt.o: $(rt_slice) tools/mkrt.l $m
-	@echo LOVE	$@
+	@echo 'LOVE	'$@
 	@mkdir -p "$(dir $@)"
 	@$m tools/mkrt.l $@ $(k_be_$a)
 $(k_odir)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $m
-	@echo HOLO	$@
+	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $m -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(k_be_$a)
 $(k_pie): $(k_o) $m
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(KCC) -pie -t $(k_be_$a) $(k_o) -o $@
 kproject_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
@@ -135,9 +135,9 @@ kproject_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
 $(k_odir)/kproject.list: force_dist_list
 	@mkdir -p "$(dir $@)"
 	@tf=$@.$$$$.tmp; echo '$(kproject_l)' > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo 'SH	'$@; fi
 $(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
-	@echo CAT	$@
+	@echo 'CAT	'$@
 	@mkdir -p "$(dir $@)"
 	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
 	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(kproject_l)); } > $@
@@ -156,7 +156,7 @@ k_pie_dep = $(kcc_dep)
 endif
 endif
 $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $m
-	@echo KPROJ	$@
+	@echo 'KPROJ	'$@
 	@mkdir -p "$(dir $@)"
 	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $a && test -s $@
 
@@ -171,10 +171,10 @@ force_kfs_list: ;
 out/lib/kfs.list: force_kfs_list
 	@mkdir -p out/lib
 	@tf=$@.$$$$.tmp; echo '$(kfs)' > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo 'SH	'$@; fi
 out/lib/kfs.h: $(kfs) out/lib/kfs.list $(love0) tools/lcatfs.l love/prel.l
 	@mkdir -p out/lib
-	@echo LOVE	$@
+	@echo 'LOVE	'$@
 	@$(love0) -l love/prel.l tools/lcatfs.l $(kfs:$R/%=%) > $@
 
 # --- the kore roster (rung 3) ----------------------------------------
@@ -183,14 +183,14 @@ out/lib/kfs.h: $(kfs) out/lib/kfs.list $(love0) tools/lcatfs.l love/prel.l
 # the boot text cats the members off the ramfs. the K_TEST kernel skips it --
 # its corpus bakes the kore subset it drives.
 out/lib/korelist.h: crew/build.mk free/kernel.mk
-	@echo SH	$@
+	@echo 'SH	'$@
 	@mkdir -p out/lib
 	@printf '"%s"\n' '$(korefiles)' > $@
 
 # Shared C sources (core/love.c, crew/quay/, nolibc's six) + per-arch free/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
 $(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/verbs.h out/lib/pat.h out/lib/uu.h out/lib/bao.h out/lib/distlist.h $(if $(K_TEST),out/lib/kfs.h out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h,out/lib/korelist.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h)
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
 
@@ -220,20 +220,20 @@ kart_quay_o = $(patsubst %,$(moon_d)/k_q_%.o,paint cga_8x8 moderndos_8x16)
 # the twin link takes the same set at $(xa) -- $(xkart_o), below the lays
 kart_o = $(moon_d)/k_kmain.o $(moon_d)/k_blk.o $(moon_d)/k_sys.o $(kart_arch_o) $(kart_quay_o) $(moon_d)/kvec.o
 $(moon_d)/k_%.o: $R/free/%.c $(kart_h) $(kart_cats) $(moon0_dep)
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moon0) $(kart_inc) -c $< $@
 $(moon_d)/k_$(hosta)_%.o: $R/free/$(hosta)/%.c $(kart_h) $(kart_cats) $(moon0_dep)
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moon0) $(kart_inc) -c $< $@
 $(moon_d)/k_q_%.o: $R/crew/quay/%.c $(moon0_dep)
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moon0) $(kart_inc) -c $< $@
 # the vector lay, under whatever love a fresh tree has (mksys's own idiom)
 $(moon_d)/kvec.o: $(ko)/$(hosta)/mkvec.l $(if $(bundled_love),,$(love0))
-	@echo HOLO	$@
+	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $(boot_love) -l $< -n -e '(lay-vec "$@" "$(hosta)")' && test -s $@
 $(ho)/love $(ho)/love.cand: $(kart_o)
@@ -256,7 +256,7 @@ klay_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
 # prerequisite is an INTERMEDIATE make deletes after the link, and the cat would then run
 # again on every build. naming the targets keeps them ordinary files.
 $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/free/%.l $(klay_l)
-	@echo CAT	$@
+	@echo 'CAT	'$@
 	@mkdir -p "$(dir $@)"
 	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
 	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(klay_l)) $<; } > $@
@@ -276,15 +276,15 @@ xkart_arch_o = $(patsubst $R/free/$(xa)/%.c,$(xd)/k_$(xa)_%.o,$(wildcard $R/free
 xkart_quay_o = $(patsubst %,$(xd)/k_q_%.o,paint cga_8x8 moderndos_8x16)
 xkart_o = $(if $(xkart_arch_o),$(xd)/k_kmain.o $(xd)/k_blk.o $(xd)/k_sys.o $(xkart_arch_o) $(xkart_quay_o) $(xd)/kvec.o,)
 $(xd)/k_%.o: $R/free/%.c $(xkart_h) $(kart_cats) $(moon0_dep)
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moonx) $(xkart_inc) -c $< $@
 $(xd)/k_$(xa)_%.o: $R/free/$(xa)/%.c $(xkart_h) $(kart_cats) $(moon0_dep)
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moonx) $(xkart_inc) -c $< $@
 $(xd)/k_q_%.o: $R/crew/quay/%.c $(moon0_dep)
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moonx) $(xkart_inc) -c $< $@
 # the twin's own cat, the shape above worn at $(xa): the kernel's is cut at $a
@@ -292,12 +292,12 @@ $(xd)/k_q_%.o: $R/crew/quay/%.c $(moon0_dep)
 xklay_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/$(k_be_$(xa)).l $R/crew/holo/elf.l $R/crew/holo/obj.l
 $(xd)/mkvec.l: $R/free/mkvec.l $(xklay_l)
-	@echo CAT	$@
+	@echo 'CAT	'$@
 	@mkdir -p "$(dir $@)"
 	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
 	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(xklay_l)) $<; } > $@
 $(xd)/kvec.o: $(xd)/mkvec.l $(if $(bundled_love),,$(love0))
-	@echo HOLO	$@
+	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@LOVE_NO_IMAGE= $(boot_love) -l $< -n -e '(lay-vec "$@" "$(xa)")' && test -s $@
 $(xd)/love: $(xkart_o)
@@ -305,7 +305,7 @@ $(xd)/love: $(xkart_o)
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
 # kernel boots into nothing.
 $(k_lay_o) $(k_boot_o): $(k_odir)/free/$a/%.o: $(k_odir)/mk%.l $m
-	@echo HOLO	$@
+	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m -l $< -n -e '(lay-$* "$@" "$a")' && test -s $@
 
@@ -314,7 +314,7 @@ $(k_lay_o) $(k_boot_o): $(k_odir)/free/$a/%.o: $(k_odir)/mk%.l $m
 k_mksys_x86_64 = mksys
 k_mksys_aarch64 = mksys-arm64
 $(k_tail_o): out/host/.mksys-cat.l $m
-	@echo HOLO	$@
+	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m -l out/host/.mksys-cat.l -n -e "((from 'moon '$(k_mksys_$a)) \"$@\")" && test -s $@
 
@@ -394,15 +394,15 @@ kt = $(filter-out %/run.l %/bell.l %/zz-fin.l,$t) \
 out/lib/ktests.list: force_dist_list
 	@mkdir -p out/lib
 	@tf=$@.$$$$.tmp; echo '$(kt)' > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo 'SH	'$@; fi
 out/lib/ktests.l: $(kt) out/lib/corpus.list out/lib/ktests.list
-	@echo CAT	$@
+	@echo 'CAT	'$@
 	@mkdir -p out/lib
 	@cat $(kt) > $@
 # the two VERBATIM bakes, one shape (lcatv, not lcat: an inspect-reprint diverges
 # when the corpus is read back incrementally through a strin port).
 out/lib/ktests.h: out/lib/%.h: out/lib/%.l $(love0) tools/lcatv.l love/prel.l
-	@echo LOVE	$@
+	@echo 'LOVE	'$@
 	@$(love0) -l love/prel.l tools/lcatv.l $< > $@
 
 # arm64 EXECUTION validator: cross-build `love` for aarch64 and run the corpus under
@@ -479,11 +479,11 @@ k_efiname = $(k_efiname_$a)
 k_uefid = $(ko)/uefi-$a$(ksuf)
 k_espd = $(ko)/esp-$a$(ksuf)
 $(k_uefid)/loader.o: $R/free/uefi/loader.c $(ho)/love.baked
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(ho)/love mooncc -t $(k_be_$a) -c $< $@
 $(k_uefid)/$(k_efiname): $(k_uefid)/loader.o $(uefi_l) $m
-	@echo HOLO	$@
+	@echo 'HOLO	'$@
 	@mkdir -p $(dir $@)
 	@{ echo "(use 'holo)"; cat $(uefi_l); echo '(mkboot "$@" "$a" (list "$<"))'; } | $m
 # the ESP: the loader at that path, and the kernel beside it (the loader opens
@@ -491,7 +491,7 @@ $(k_uefid)/$(k_efiname): $(k_uefid)/loader.o $(uefi_l) $m
 $(k_espd)/EFI/BOOT/$(k_efiname): $(k_uefid)/$(k_efiname)
 $(k_espd)/love.elf: $(ko)/love-$a$(ksuf).elf
 $(k_espd)/EFI/BOOT/$(k_efiname) $(k_espd)/love.elf:
-	@echo CP	$@
+	@echo 'CP	'$@
 	@mkdir -p $(dir $@)
 	@cp $< $@
 uefi: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf
@@ -583,7 +583,7 @@ endif
 
 # --- downloads -------------------------------------------------------
 $(dl)/edk2-ovmf/ovmf-code-%.fd:
-	@echo MK	ovmf
+	@echo 'MK	'ovmf
 	@mkdir -p $(dl)
 	@curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/edk2-ovmf.tar.gz | gunzip | tar -C $(dl) -xf -
 	@case "$a" in \

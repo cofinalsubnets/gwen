@@ -81,7 +81,7 @@ libc_o    = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(libc_m)))
 
 # the am math floor: the one object every port compiles exactly alike.
 $(R)/$(o)/am.o: $(R)/crew/moon/lib/math/am.c $(mc)
-	@echo MOON	$@
+	@echo 'MOON	'$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(MOONCC) -t $(p_tgt) -Icrew/moon/lib/math -Icrew/moon/include -c crew/moon/lib/math/am.c $(o)/am.o
 
@@ -91,7 +91,7 @@ $(R)/$(o)/am.o: $(R)/crew/moon/lib/math/am.c $(mc)
 # (virt, mps2) never asks for it.
 define p_ocopy
 $$(R)/$$(o)/ocopy.l: $$(copy_l)
-	@echo CAT	$$@
+	@echo 'CAT	'$$@
 	@mkdir -p $$(R)/$$(o)
 	@{ echo "(use 'holo)"; cat $$(kore_l); echo "(use 'kore)"; \
 	   cat $$(filter-out $$(kore_l),$$(copy_l)); echo '(objcopy >argv)'; } > $$@
@@ -101,7 +101,7 @@ endef
 # $4 the compile command (a port's own <x>_cc, plus any -D this object alone wants).
 define p_obj
 $$(R)/$$(o)/$1.o: $3
-	@echo MOON	$$@
+	@echo 'MOON	'$$@
 	@mkdir -p $$(R)/$$(o)
 	@cd $$(R) && $4 -c $2 $$(o)/$1.o
 endef
@@ -110,7 +110,7 @@ endef
 # (whose name is the function too), $3 that function's arguments.
 define p_lay
 $$(R)/$$(o)/$1.o: $2.l $$(p_be_l) $$(lay_l) $$(lv)
-	@echo HOLO	$$@
+	@echo 'HOLO	'$$@
 	@mkdir -p $$(R)/$$(o)
 	@cd $$(R) && { echo "(use 'holo)"; cat $$(be_lc) $$(kore_lc); echo "(use 'kore)"; \
 	  cat $$(filter-out $$(kore_lc),$$(lay_lc)) port/$$(p_dir)/$2.l; \
@@ -122,7 +122,7 @@ endef
 # would then run again on every build.
 define p_link
 $$(R)/$$(o)/$1.l: $1.l $$(link_l)
-	@echo CAT	$$@
+	@echo 'CAT	'$$@
 	@mkdir -p $$(R)/$$(o)
 	@{ echo "(use 'holo)"; cat $$(kore_l); echo "(use 'kore)"; \
 	   cat $$(filter-out $$(kore_l),$$(link_l)) $$<; } > $$@

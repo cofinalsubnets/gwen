@@ -48,7 +48,7 @@ lib: $(lib_h) $(boot_h)
 # prel source dies `;; missing tray`. A baked love does not need it either, having prel in
 # the image already. Both lanes then lcat the same bytes.
 lcat_love = $(if $(bundled_love),$(bundled_love),$(love0) -l love/prel.l)
-lcat_h = @mkdir -p out/lib; echo LOVE	$@; t=$@.$$$$.tmp; \
+lcat_h = @mkdir -p out/lib; echo 'LOVE	'$@; t=$@.$$$$.tmp; \
   $(lcat_love) tools/lcat.l $< > $$t && test -s $$t && mv -f $$t $@ \
     || { rm -f $$t; echo "FAIL: $@ empty (lcat failed -- broken bootstrap?)"; exit 1; }
 $(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(love0), stated below
@@ -57,7 +57,7 @@ $(lib_h): out/lib/%.h: love/%.l tools/lcat.l   # + $(love0), stated below
 # ⚠ LOVE_NO_IMAGE= (empty = UNSET) leads, for the same reason $(hcc) does: the root
 # Makefile exports it=1 in a tree with no bundled love, a seed-laid tree INHERITS it,
 # and an egg-booted love has no verb table -- so `love sed` would read as a filename.
-sed_h = @mkdir -p out/lib; echo LOVE	$@; LOVE_NO_IMAGE= $(sed_lit) $< > $@
+sed_h = @mkdir -p out/lib; echo 'LOVE	'$@; LOVE_NO_IMAGE= $(sed_lit) $< > $@
 # ⚠ every rule below is a STATIC pattern -- their sources live outside love/, so the
 # wildcard misses them, and an implicit pattern would make these headers INTERMEDIATE.
 # holo rides the same lcat pipeline as the egg (the glaze is its client); rune is the CAS,
@@ -87,7 +87,7 @@ force_corpus_list: ;
 out/lib/corpus.list: force_corpus_list
 	@mkdir -p out/lib
 	@tf=$@.$$$$.tmp; echo '$t' > $$tf; \
-	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo SH	$@; fi
+	 if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo 'SH	'$@; fi
 
 # love_version.h: the build's version, surfaced as the `love-version` global.
 # ./VERSION is the WHOLE id -- an arbitrary string, ours to bump deliberately, and no
@@ -97,7 +97,7 @@ out/lib/corpus.list: force_corpus_list
 out/lib/love_version.h: $(R)/VERSION
 	@mkdir -p out/lib
 	@printf '#define AiVersion "%s"\n' "$$(cat $(R)/VERSION)" > $@
-	@echo SH	$@
+	@echo 'SH	'$@
 
 # the lcat'd headers are PRODUCED BY running the lcat love, so re-lay them whenever it
 # moves. ⚠ EMPTY when a seed bundled one: love0 is never built there, and naming

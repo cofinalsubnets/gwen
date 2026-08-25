@@ -31,7 +31,7 @@ BZIMAGE ?= /boot/vmlinuz-linux
 distro-initramfs: $(distro_img)
 $(distro_img): crew/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 	@test -n "$(distro_love)" || { echo "distro: no out/host/love-raw -- run 'make test_raw' to lay it"; exit 1; }
-	@echo DISTRO	$(abspath $@)  '(base: $(distro_love))'
+	@echo 'DISTRO	'$@ '(base: $(distro_love))'
 	@rm -rf $(distro_root)
 	@mkdir -p $(distro_root)/bin $(distro_root)/lib $(distro_root)/proc $(distro_root)/sys $(distro_root)/dev $(distro_root)/tmp
 	@cp crew/init/boot.l $(distro_root)/init && chmod 755 $(distro_root)/init
