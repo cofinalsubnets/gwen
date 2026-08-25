@@ -38,7 +38,8 @@ static const char boot_ai[] =
   "(use 'rng)"                    //   one-name surface, then coin, rng, q, kanren in the old eval order
   "(use 'q)"
   "(use 'kanren)"
-;
+  "(use 'bao)"                    // the shell core, last and spliced, as host/main.c has it:
+;                                 //   read/reads/welp are reached bare (test/help.l's floor handler)
 // the module sources, name-keyed (see host/main.c): registered before boot_ai evals
 static const char src_pat[] =
 #include "pat.h"
@@ -57,6 +58,9 @@ static const char src_q[] =
 ;
 static const char src_kanren[] =
 #include "kanren.h"
+;
+static const char src_bao[] =
+#include "bao.h"
 ;
 
 // 256K: a single ai_eval can emit a lot before the page drains it -- the
@@ -130,7 +134,7 @@ static union u const nif_exit[] = {{lvm_exit}, {lvm_ret0}};
 // the source library (love.h): .rodata, name -> baked .l text, read by `use`.
 static struct ai_lib const libs[] = {
   {"pat", src_pat}, {"uu", src_uu}, {"coin", src_coin}, {"rng", src_rng}, {"q", src_q},
-  {"kanren", src_kanren}, {NULL, NULL} };
+  {"kanren", src_kanren}, {"bao", src_bao}, {NULL, NULL} };
 struct ai_lib const *ai_libs(void) { return libs; }
 
 // --- exported entry points ------------------------------------------------

@@ -520,7 +520,7 @@ test_kernel_arm64: host $(R)/tools/ktest.l
 	@$m $(R)/tools/ktest.l $(ko)/love-aarch64-test.elf - aarch64
 endif
 
-# --- wasm headless test (wired into test_slow; emcc + node) -----------------
+# --- wasm headless test (BY NAME: `make test_wasm`; needs emcc + node) ------
 # Build love.js and run the SAME $t corpus through it under node -- a third runtime after
 # the host and love0, exercising wasm's <data.h> override (sentinel-ap data kinds, no flat
 # code-address space). The harness evals the corpus in one ai_eval and greps the drained
