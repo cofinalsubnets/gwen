@@ -515,9 +515,9 @@ static char const cli[] =
 // both lanes eval it: a build tool's (use 'x) (the mooncc cat's (use 'holo)) resolves
 // the same as the self-test's.
 // ⚠ AND A BUILD TOOL PAYS FOR IT AT STARTUP, holo above all: registering is COMPILING,
-// so a love0 spends ~0.96G insns on these ten before it reads its first file. That was
-// once per HEADER while lcat ran per file; the lay is one run now (mk/lib.mk), so it is
-// once per lay, and the whole lay costs less than the per-file lane did.
+// so a love0 spends ~0.96G insns on these ten before it reads its first file, once per
+// header lcat lays -- ~1.7 s over a fully touched tree. mk/lib.mk names the standing
+// option, which is to take holo out of this text and into the mooncc cat that wants it.
 static char const src0_mods[] =
 #include "coin0.h"
 " "

@@ -283,11 +283,15 @@ Eight frontends lost their table and their ~20 `src_*` arrays for one
   `ai_ti_vt` shifted every index after it, so `ImageMagic` moved to `AISNO05`.
   ⚠ `test/gate/bakerep.sh` greps the magic's SPELLING to corrupt a header --
   an undocumented coupling until it failed the gate.
-- **love0's build tools pay for the eagerness, once per lay.** Registering is
-  compiling, so a love0 startup spends ~0.96G insns on the ten modules
-  before it reads its first file. That was once per HEADER while lcat ran per
-  file (`make lib` 3.80s -> 5.57s), which is what sent the per-file lane to the
-  batched lay -- one run for every header, 2.50s, under where it started. The
-  standing option should holo's share ever matter again: `crew/holo/holo.l` into
-  `$(moonfiles)`, ahead of asbook.l and the backends already there, so that cat
-  carries its own core and holo leaves love0's text.
+- **love0's build tools pay for the eagerness, once per header.** Registering is
+  compiling, so a love0 startup spends ~0.96G insns on the ten modules before it
+  reads its first file, and lcat runs once per header: `make lib` over a fully
+  touched tree goes 3.80s -> 5.50s. A batched lay took that to 2.50s and was
+  REVERTED -- it needed a stamp with the headers hanging off it, and a stamp is
+  not a thing this tree wants for two seconds. What the revert kept is the
+  compare before the move (out/lib/corpus.list's discipline), so a touch that
+  changes no bytes now rewrites nothing and rebuilds nothing, where before it
+  rewrote every header and relinked love0. The standing option should holo's
+  share ever matter: `crew/holo/holo.l` into `$(moonfiles)`, ahead of asbook.l
+  and the backends already there, so that cat carries its own core and holo
+  leaves love0's text.
