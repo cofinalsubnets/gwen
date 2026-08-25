@@ -66,10 +66,10 @@ let ops = [|
 let prelude = {ai|
 (: (oline v r) (? (= (show v) r) 1
                   (: _ (. "MISMATCH ") _ (. (show v)) _ (. " want ") _ (. r) _ (. "\n") 0))
-   got (foldl (+) 0 (L|ai}
+   got (foldl (+) 0 [|ai}
 
 let footer n =
-  Printf.sprintf {ai|))
+  Printf.sprintf {ai|])
    _ (. "big-oracle: ") _ (. (show got)) _ (. " / %d ")
    (. (? (= got %d) "PASS\n" "FAIL\n")))
 |ai} n n
