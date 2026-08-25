@@ -19,9 +19,14 @@
 # long, so a regression here would sit unnoticed until a release. This is the same law
 # asked cheaply enough to run every time.
 #
-# ⚠ the two bakes run at the SAME PATH, one after the other, because a love bakes its
-# own path into the heap (`love-image`, and the seat the loader walks from). Two names
-# would differ legitimately and say nothing about determinism.
+# ⚠ THE PATH IS NOT IN THE IMAGE, though this line once said it was and gave that as the
+# reason the two bakes share a path. `love-image` is the literal "<baked>" wherever the
+# binary carries its own .image section (host/main.c), and a bake unpins it besides; the
+# seat rungs the loader once walked off selfpath retired with the modules arc. Bake one
+# binary at two names of different lengths and the bytes agree -- so a second name would
+# not "differ legitimately", it would just be a second name. The two below still run at
+# one path because that is the question's own shape (bake THIS binary twice), and for no
+# reason beyond it.
 #
 # usage: bakerep.sh OUTDIR
 set -u
@@ -52,8 +57,8 @@ fi
 # runs. the collector's timing once chose the intern layout and the serial ranks --
 # each budget its own stable fixpoint. the canonical orders make the bake a function
 # of the live set alone.
-# (cwd stays the TREE -- the egg boot reads modules through cwd lib/ -- while both
-# lanes bake the one path $w/love, so the baked-in path cancels in the compare.)
+# (cwd stays the TREE, and that one IS load-bearing: the egg boot reads modules through
+# cwd lib/. the path both lanes bake at is not -- see above.)
 for lane in "b4:LOVE_BUDGET_MB=128" "b3:"; do
   cp "$w/seed" "$w/love" || fail "cannot stage the budget bake"
   env LOVE_NO_IMAGE=1 ${lane#*:} "$w/love" bake -l "$ho/.dist-cat.l" > "$w/bake.log" 2>&1 \

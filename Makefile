@@ -67,6 +67,9 @@ test:
 # slow gate -- the MERGE gate, headlined by test_seed: the artifact lays its own source and
 # rebuilds itself byte-identically, which is the product's whole claim. the embedded lanes
 # are off the roster and run by name; the kernel's six are one name, `make test_inle`.
+# ⚠ test_seed IS NOT test_distboot's little brother, and reading it that way is how the
+# seed's cc deference died unnoticed for eleven days. They prove DIFFERENT things and
+# neither contains the other -- test/test.mk says which is which at each recipe.
 test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_cookdiff test_dist test_seed
 
 

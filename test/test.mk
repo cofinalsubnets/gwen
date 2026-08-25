@@ -372,6 +372,13 @@ test_dist: $(ho)/love.baked
 # rebuilds itself through the machine's toolchain; the rebuilt binary must answer the
 # running one's bytes (`love seed`). Minutes -- a whole bootstrap -- and the claim the
 # product makes, so it rides the slow gate. The scratch stays on a red for the autopsy.
+# ⚠ WHAT ONLY THIS GATE SAYS: the DEFAULT lane, where the seed probes for an ambient cc
+# that works and DEFERS to it (lib/source.l). test_distboot runs `love seed` too, but with
+# every compiler poisoned, so it takes the fallback and can never exercise the deference.
+# That deference is the diverse-double-compiling leg -- a foreign compiler holding the
+# scaffold, the one thing a self build cannot say -- and it stopped working for eleven
+# days (2026-08-14 to 08-25) with every gate green, because this is the only gate that
+# runs it and a roster note had called it the same claim as test_distboot's circle.
 test_seed: $(ho)/love.baked
 	@echo TEST love seed "(the fixpoint)"
 	@rm -rf $(ho)/.seedtest && mkdir -p $(ho)/.seedtest
@@ -747,12 +754,17 @@ $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 $(eval $(call moon_pkg,gzip,GZIPSRC,host))
 $(eval $(call moon_pkg,bzip2,BZIP2SRC,host))
 # test_distboot -- THE RELEASE CLAIM: take either artifact, type make, get the same
-# binary. SOURCE bootstraps through the machine's own cc; SEED carries its source in
-# .rodata, lays it with `love source`, and builds with cc/gcc/clang shadowed by scripts
-# that fail loudly -- so "the bundled love was the compiler" is proved, not assumed.
-# Then the circle: the seed rebuilds ITSELF, byte for byte. Minutes, opt-in, by name --
-# and the reason the claim can hold at all is that the local cc builds love0 and
-# nothing else (see the script).
+# binary. SOURCE bootstraps through the machine's own cc; SEED lays the source it carries
+# in .rodata and builds it with cc/gcc/clang shadowed by scripts that fail loudly -- so
+# "no ambient compiler did the work" is proved, not assumed. Then the circle: `love seed`
+# with nothing on PATH that compiles, which is where its FALLBACK is exercised -- it takes
+# its own mooncc and rebuilds ITSELF byte for byte. Minutes, opt-in, by name -- and the
+# reason the claim can hold at all is that the local cc builds love0 and nothing else
+# (see the script).
+# ⚠ IT DOES NOT SUBSUME test_seed, and must not be read as doing so: no leg here runs a
+# DEFAULT `love seed`, so nothing here tests the seed choosing to defer to a working
+# ambient cc. Both lanes are covered; only one of the two DECISIONS is. Three full builds
+# against test_seed's one, and still not a superset.
 # test_bakerep -- A BAKE IS A FUNCTION OF THE TREE. Seconds, and it rides the slow gate
 # because test_distboot proves the same law over the whole circle but is opt-in and
 # minutes long; a regression would otherwise wait for a release to surface.
