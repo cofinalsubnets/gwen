@@ -283,9 +283,11 @@ Eight frontends lost their table and their ~20 `src_*` arrays for one
   `ai_ti_vt` shifted every index after it, so `ImageMagic` moved to `AISNO05`.
   ⚠ `test/gate/bakerep.sh` greps the magic's SPELLING to corrupt a header --
   an undocumented coupling until it failed the gate.
-- **love0's build tools pay for the eagerness.** Registering is compiling, so
-  every lcat run (33 in a full header lay) now compiles all ten modules:
-  `make lib` 3.80s -> 5.57s, of which 1.4s is holo alone -- a service exactly
-  one argp invocation (`mooncc0.image`'s bake) wants. Open, and the fix is to
-  put `crew/holo/holo.l` in `$(moonfiles)` ahead of asbook.l and the backends
-  already there, so that cat carries its own core and holo leaves love0's text.
+- **love0's build tools pay for the eagerness, once per lay.** Registering is
+  compiling, so a love0 startup spends ~0.96G insns on the ten modules
+  before it reads its first file. That was once per HEADER while lcat ran per
+  file (`make lib` 3.80s -> 5.57s), which is what sent the per-file lane to the
+  batched lay -- one run for every header, 2.50s, under where it started. The
+  standing option should holo's share ever matter again: `crew/holo/holo.l` into
+  `$(moonfiles)`, ahead of asbook.l and the backends already there, so that cat
+  carries its own core and holo leaves love0's text.

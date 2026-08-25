@@ -514,11 +514,10 @@ static char const cli[] =
 // corpus's cross-arch asserts run under both its compilers.
 // both lanes eval it: a build tool's (use 'x) (the mooncc cat's (use 'holo)) resolves
 // the same as the self-test's.
-// ⚠ AND THE BUILD TOOLS PAY FOR IT, holo above all. registering is COMPILING, so every
-// lcat run (33 a full header lay) compiles all ten -- +1.8 s over the lay, of which 1.4 s
-// is holo alone, for a service only ONE argp invocation wants (mooncc0.image's bake).
-// the fix is to make that cat carry its own core: crew/holo/holo.l into $(moonfiles),
-// ahead of asbook.l and the backends already there, and holo comes out of this text.
+// ⚠ AND A BUILD TOOL PAYS FOR IT AT STARTUP, holo above all: registering is COMPILING,
+// so a love0 spends ~0.96G insns on these ten before it reads its first file. That was
+// once per HEADER while lcat ran per file; the lay is one run now (mk/lib.mk), so it is
+// once per lay, and the whole lay costs less than the per-file lane did.
 static char const src0_mods[] =
 #include "coin0.h"
 " "
