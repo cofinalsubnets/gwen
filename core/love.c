@@ -958,17 +958,14 @@ static ai_inline void gen_wb(struct ai *g, word src, word p) {
  if (lamp(src) && ai_young(g, p) && !ai_young(g, src)) gen_remember(g, src); }
 static ai_inline bool ai_major_cell(struct ai *g, word *c) {       // a tenured cell: inside the major pool
  return (ai_word*) c >= g->major_base && (ai_word*) c < g->major_hp; }
-// the cell barrier (c0's stores, ev's poke): remember the smallest scannable unit
-// around a young-into-tenured store. gen_wb_cell: a cell in a tagged span, never a
-// chain's field (data has no terminator). gen_wb_two: a cons mutation -- not A
-// door: patching a cons in place is off-road; the five callers left each patch a
-// list they consed moments earlier and nobody else holds. both mask g.
+// the cell barrier (c0's emit, ev's poke): remember the smallest scannable unit around a
+// young-into-tenured store. the cell sits in a tagged span -- a thread, a scope -- and
+// never in a chain's field, which has no terminator for the remembered walk to stop at.
+// there is no door for a cons: nothing patches one, so nothing needs to say it does.
+// masks g.
 static ai_inline void gen_wb_cell(struct ai *g, void *cl, word v) {
  g = ai_core_of(g);
  if (ai_young(g, v) && ai_major_cell(g, cl)) gen_remember(g, (word) cl); }
-static ai_inline void gen_wb_two(struct ai *g, word two, word v) {
- g = ai_core_of(g);
- if (ai_young(g, v) && ai_major_cell(g, ptr(two))) gen_remember(g, two); }
 // gen_scan_inplace: a tenured object pointing into the young set stays put, but its
 // young fields must promote -- gcp each outgoing pointer in place. evac_* without
 // the relocation; a thread's terminator sits in the major to-space.
@@ -1415,6 +1412,18 @@ static struct ai *eset(struct ai *g, struct env **c, int k, word v) {
 // the shared mutable cell is a real heap object rather than a cons somebody patches --
 // ev.l's closure cell is the same thing (mkc/cof/cput, a tablet under key 0).
 enum { LThread, LImps };
+// a backpatch site is a box too: the entry whose thread fills the hole, and the hole.
+// ⚠ the hole is an interior pointer and has to be -- c1's clip re-points the terminator
+// at the entry once emission ends, so the head this cell was indexed from is no longer
+// the thread's, and no base available here stays one. gcp relocates an interior pointer
+// into a thread by preserving its offset, which is what carries this across a move.
+enum { SEntry, SCell };
+static ai_inline word sget(struct ai *g, word s, int k) {
+ return ai_mapget(g, zero, putcharm(k), s); }
+static struct ai *sset(struct ai *g, word s, int k, word v) {
+ g = ai_push(g, 3, putcharm(k), v, s);
+ if (ai_ok(g = ai_mapput(g))) g->sp++;
+ return g; }
 static ai_inline word lget(struct ai *g, word y, int k) {
  return ai_mapget(g, zero, putcharm(k), B(y)); }
 static struct ai *lset(struct ai *g, word y, int k, word v) {   // ⚠ y must be rooted: a
@@ -1550,8 +1559,13 @@ static Cata(c1_recv) {
  word y = pop1(g), site = pop1(g);
  Kp -= 2;
  Kp[0].ap = lvm_quote;
- if (zerop(site)) Kp[1].x = lget(g, y, LThread), gen_wb_cell(g, Kp + 1, Kp[1].x);
- else Kp[1].x = zero, B(site) = (word) &Kp[1], gen_wb_two(g, site, B(site));
+ if (zerop(site)) return
+   Kp[1].x = lget(g, y, LThread), gen_wb_cell(g, Kp + 1, Kp[1].x), pull(g, c);
+ { struct ai_r *mm0 = ai_core_of(g)->root;             // sset allocates: root site first
+   mm(g, &site);
+   Kp[1].x = zero;
+   g = sset(g, site, SCell, (word) &Kp[1]);
+   ai_core_of(g)->root = mm0; }
  return pull(g, c); }
 
 static Cata(c1_ar, lvm_t *i, word ar) { return
@@ -1633,7 +1647,9 @@ static Ana(ana_v) {
    word site = zero;
    if (zerop(lget(g, y, LThread))) {
     mm(g, &d), mm(g, &y);
-    g = gxl(ai_push(g, 2, y, zero)); // site = (y . zero)
+    g = map_new(g);                                    // site = a box, at sp0
+    if (ai_ok(g)) g = sset(g, g->sp[0], SEntry, y);    // re-read sp0: a grow can move it
+    if (ai_ok(g)) g = sset(g, g->sp[0], SCell, zero);
     if (ai_ok(g)) {
      g = gxl(ai_push(g, 2, g->sp[0], eget(g, d, ESites))); // (site . eget(g, d, ESites))
      if (ai_ok(g)) g = eset(g, &d, ESites, pop1(g)), site = pop1(g); }
@@ -1869,9 +1885,9 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  if (!ai_ok(g)) return forget();
  struct env *q = (struct env*) pop1(g), **c = &q;
  // lots of variables :(
- word nom = zero, def = zero, lam = zero,
+ word nom = zero, def = zero, ndef = zero, lam = zero,
       v = zero, d = zero, e = zero, os = zero;
- mm(g, &nom), mm(g, &def), mm(g, &lam);
+ mm(g, &nom), mm(g, &def), mm(g, &ndef), mm(g, &lam);
  mm(g, &d); mm(g, &e); mm(g, &v); mm(g, &q); mm(g, &os);
 
  // pin the let's binding names on q before any lambda compiles (the shadow set):
@@ -1947,7 +1963,10 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  // backpatch site rather than baking the stale closure; keep the import sets (BB).
  for (d = lam; ai_ok(g) && chainp(d); d = B(d)) g = lset(g, A(d), LThread, zero);
 
- for (e = nom, v = def; chainp(e); e = B(e), v = B(v))
+ // ndef is def with each closure standing where its source did. built by consing over a
+ // def that is still in reverse order, so ndef lands in literal order and needs no rev.
+ for (e = nom, v = def; ai_ok(g) && chainp(e); e = B(e), v = B(v)) {
+  word nv;
   if (lambp(g, A(v))) {
    d = assq(g, lam, A(e));
    size_t nb = llen(lget(g, d, LImps)); // the import row is frozen here: sites already applied it
@@ -1956,12 +1975,17 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
    g = lset(g, d, LThread, A(g->sp[0]));        // the pair stays on the stack across both
    if (ai_ok(g)) g = lset(g, d, LImps, B(g->sp[0]));   // puts: either can move it
    if (!ai_ok(g)) return forget();
-   A(v) = g->sp[0], gen_wb_two(g, v, A(v)), g->sp++;
-   if (llen(lget(g, d, LImps)) != nb) __builtin_trap(); } // growth = those sites under-apply (cf. ev.l weave's 'imports-grew scare)
+   if (llen(lget(g, d, LImps)) != nb) __builtin_trap(); // growth = those sites under-apply (cf. ev.l weave's 'imports-grew scare)
+   nv = g->sp[0], g->sp++; }
+  else nv = A(v);
+  g = gxl(ai_push(g, 2, nv, ndef));
+  if (ai_ok(g)) ndef = pop1(g); }
+ if (!ai_ok(g)) return forget();
 
  // closures final -> backpatch each recorded recursive-fn ref with its thread.
- for (d = eget(g, (*c), ESites); chainp(d); d = B(d))
-  cell(B(A(d)))->x = lget(g, A(A(d)), LThread), gen_wb_cell(g, cell(B(A(d))), lget(g, A(A(d)), LThread));
+ for (d = eget(g, (*c), ESites); chainp(d); d = B(d)) {
+  union u *hole = cell(sget(g, A(d), SCell));
+  hole->x = lget(g, sget(g, A(d), SEntry), LThread), gen_wb_cell(g, hole, hole->x); }
  g = eset(g, c, ESites, zero);
 
  g = rev(g, nom);   // put in literal order
@@ -1970,9 +1994,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  g = analyze(g, b, exp);
  g = gxl(ai_push(g, 2, zero, e = eget(g, *b, EStack))); // push function stack rep
  g = eset(g, b, EStack, ai_ok(g) ? pop1(g) : zero);
- g = rev(g, def);
- if (!ai_ok(g)) return forget();
- for (def = pop1(g); chainp(nom); nom = B(nom), def = B(def))
+ for (def = ndef; chainp(nom); nom = B(nom), def = B(def))
   g = analyze(g, b, A(def)),
   g = globp ? c0_ix(g, b, lvm_defglob, A(nom)) : g,
   g = gxl(ai_push(g, 2, A(nom), eget(g, *b, EStack))),
@@ -5169,10 +5191,10 @@ static uintptr_t img_rank_assign(struct ai *g, word const *blob, uintptr_t const
  return n; }
 // --- the bake-time hash-cons (doc/misc/snapshot.md) ----------------------------
 // two structurally equal chains are one value wearing two addresses. a chain's fields are
-// immutable by convention and not by structure -- poke writes whatever cell it is handed,
-// and c0 patches a cons in five places (gen_wb_two) -- but each of those patches a spine
-// c0 consed during the compile running it, young and held by nobody, so no chain the bake
-// can reach is ever written. merging is invisible to `=`, which is structural already, and
+// immutable by convention and not by structure -- poke writes whatever cell it is handed --
+// but nothing in the tree writes one: c0 kept the last few, and they became boxes and
+// copies, so the convention is now unbroken rather than merely respected where it counts.
+// merging is invisible to `=`, which is structural already, and
 // to the printer; `id?` is the one witness, and after this it answers 1 on quoted data
 // that was written out twice.
 // the walk is bottom-up, so both children are canonical before their parent is looked
