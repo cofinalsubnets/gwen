@@ -967,7 +967,7 @@
 ; and REPLACES the condition c was firing for, which is the one way out of a lost raise.
 (: mind (: mark (mint 0)
            (\ f x c
-              (: r (trap f x (\ a b (mark >< `(a b))))
+              (: r (trap f x (\ a b (mark >< [a b])))
                  _ (c ())
                  (? (&& (two? r) (id? <r mark)) (scare <>r <>>r) r)))))
 ; boxfix-core: same prep, rewriting refs via sub/subl since c0 has no analysis-time redirect.

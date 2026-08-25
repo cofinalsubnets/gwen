@@ -107,10 +107,10 @@ is that element, since
 never fires: `(go)` is `go` handed back unrun, silently, with the value you
 wanted one curry away. three things are exempt, and each for a reason:
 
-- a CONSTRUCTOR is a datum, not a form -- `'(x)` `` `(x) `` `@(x)`, and the
-  brace `{x}`. a `'` makes its contents data too, inherited all the way down. (a
-  backtick list EVALUATES its elements, so a form inside one is a real form and
-  is flagged.)
+- a CONSTRUCTOR is a datum, not a form -- `'(x)` and `@(x)`, and the bracket
+  `[x]` and brace `{x}`. a `'` makes its contents data too, inherited all the
+  way down. (a bracket list EVALUATES its elements, so a form inside one is a
+  real form and is flagged.)
 - a `(` GLUED to an operator run, where the parens may be holding two sigil runs
   apart. merged, two runs lex as ONE — and that is sometimes the same value and
   sometimes a *different operator*: `<(<l)` survives (`<<` is the same caap), but
@@ -188,7 +188,7 @@ app can call `(salt 'its-own-name)` and get the same two-file overlay. see
 (salt app)          ; -> a tablet of that app's settings
 (salt-one c k d)    ; -> the first operand of setting k, or d
 (salt-all c k)      ; -> the whole tail of setting k, or ()
-(salt-has? c k nm)  ; -> `(1 entry) if nm is listed under k, else ()
+(salt-has? c k nm)  ; -> [1 entry] if nm is listed under k, else ()
 ```
 
 ⚠ `salt-all` cannot tell an ABSENT key from one written with no operand -- both

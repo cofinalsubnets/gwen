@@ -68,10 +68,10 @@
    ; it changes what lands, so it is honoured. (ucopy already carries the mode; the
    ; mtime is the half that was missing.) A recipe saying `mv -f` fails without this.
    (cpf-split as)                              ; -> (p? rest) off a leading -f/-p cluster
-    (: (fl a p) (? !(two? a) `(p a)
+    (: (fl a p) (? !(two? a) [p a]
                     (member? <a '("-f" "-p" "-fp" "-pf"))
                      (fl >a (? (member? <a '("-p" "-fp" "-pf")) 1 p))
-                    `(p a))
+                    [p a])
        (fl as 0))
    (cp-main as)
     (: q (cpf-split as) p? <q rest <>q
@@ -92,11 +92,11 @@
 
    ; -- rm: unlink, -r walks a tree bottom-up, -f keeps quiet about misses --
    (rm-main as)
-    (: (fl a r f) (? !(two? a) `(r f a)
+    (: (fl a r f) (? !(two? a) [r f a]
                      (<a = "-r") (fl >a 1 f)
                      (<a = "-f") (fl >a r 1)
                      ((<a = "-rf") || (<a = "-fr")) (fl >a 1 1)
-                     `(r f a))
+                     [r f a])
        p (fl as 0 0)
        r? <p f? <>p fs <>>p
        (zap q)
@@ -148,11 +148,11 @@
 
    ; -- ln: two names for one thing (-s the pointing kind, -f moves the old name aside) --
    (ln-main as)
-    (: (fl a s f rest) (? !(two? a) `(s f rest)
+    (: (fl a s f rest) (? !(two? a) [s f rest]
                           (<a = "-s") (fl >a 1 f rest)
                           (<a = "-f") (fl >a s 1 rest)
                           ((<a = "-sf") || (<a = "-fs")) (fl >a 1 1 rest)
-                          `(s f (rest + a)))
+                          [s f (rest + a)])
        p (fl as 0 0 ())
        s? <p f? <>p rest <>>p
        _ (? (two? >rest) () (udie 2 "usage: ln [-s] [-f] TARGET LINKNAME"))
@@ -193,12 +193,12 @@
                  ())
        (go 1))
    (install-main as)
-    (: (fl a d D m s fs) (? !(two? a) `(d D m s fs)
+    (: (fl a d D m s fs) (? !(two? a) [d D m s fs]
                             (<a = "-d") (fl >a 1 D m s fs)
                             (<a = "-D") (fl >a d 1 m s fs)
                             ((<a = "-m") && two? >a) (fl >>a d D (uoct <>a) s fs)
                             (<a = "-s") (fl >a d D m 1 fs)
-                            (fl >a d D m s (fs + `(<a))))
+                            (fl >a d D m s (fs + [<a])))
        p (fl as 0 0 493 0 ())
        d? <p D? <>p m <>>p s? <>>>p fs <>>>>p
        _ (? s? (: _ (say err "install: -s noted, not stripped (no kore stripper yet)") (put err 10)) ())
@@ -253,7 +253,7 @@
    (rp-parts p) (filter (\ w (0 < tally w)) (usplit 47 p))
    (rp-canon q n)                      ; the resolved path, or () past n links
     (: (walk acc parts d)
-        (? !(two? parts) `(1 acc)
+        (? !(two? parts) [1 acc]
            (0 = d) ()
            (: p <parts
               (? (p = ".") (walk acc >parts d)
@@ -270,7 +270,7 @@
        _ (? (two? fs) () (udie 1 "usage: realpath [-e|-m|-s] PATH.."))
        e? (peep t 101 0) m? (peep t 109 0) s? (peep t 115 0)
        (one q ok)
-        (: r (? s? `(1 (rl-clean (rl-abs q))) (rp-canon q 40))
+        (: r (? s? [1 (rl-clean (rl-abs q))] (rp-canon q 40))
            (? !(two? r)
               (: _ (say err ("realpath: " + q + ": too many levels of symbolic links"))
                  _ (put err 10) 0)
@@ -314,7 +314,7 @@
        (? !(two? r) ()
           (: (go ls) (? !(two? ls) ()
                         (: f (usplit 58 <ls)
-                           (? ((3 <= tally f) && (f 0 = nm)) `(1 (uatoi (f 2)))
+                           (? ((3 <= tally f) && (f 0 = nm)) [1 (uatoi (f 2))]
                               (go >ls))))
              (go (lines <>r)))))
    ; every group a user belongs to: the primary first, then the /etc/group rows naming
@@ -404,7 +404,7 @@
    (stat-main as)
     (: (long? w n s) ((n < tally w) && (snip w 0 n = s))
        (fl a fmt L pf fs)
-        (? !(two? a) `(fmt L pf (rev fs))
+        (? !(two? a) [fmt L pf (rev fs)]
            (<a = "-L") (fl >a fmt 1 pf fs)
            (<a = "-c") (? (two? >a) (fl >>a <>a L 0 fs) (udie 2 "stat: -c wants a format"))
            ((2 < tally <a) && (snip <a 0 2 = "-c")) (fl >a (snip <a 2 (tally <a)) L 0 fs)
@@ -444,7 +444,7 @@
              (? (tenths < 100) ((show (// tenths 10)) + "." + (show (% tenths 10)) + u)
                 ((show whole) + u)))))
    (du-main as)
-    (: (fl a t fs) (? !(two? a) `(t (rev fs))
+    (: (fl a t fs) (? !(two? a) [t (rev fs)]
                       (<a = "-d") (? (two? >a) (: _ (pin t 'd (uatoi <>a)) (fl >>a t fs))
                                      (udie 2 "du: -d wants a depth"))
                       ((tally <a < 2) || !(<a 0 = 45)) (fl >a t (<a >< fs))
@@ -510,7 +510,7 @@
                            (? (two? r) <>r
                               (: c (w 0) (? ((48 <= c) && (c <= 57)) (uatoi w)
                                              (udie 1 ("chown: invalid user: '" + spec + "'")))))))
-       `((side <ps "/etc/passwd") (? (two? >ps) (side <>ps "/etc/group") -1)))
+       [(side <ps "/etc/passwd") (? (two? >ps) (side <>ps "/etc/group") -1)])
    (chown-main as)
     (: r? (two? as && (<as = "-R"))
        rest (? r? >as as)
@@ -544,7 +544,7 @@
        (slurp o))
    (mktemp-main as)
     (: (fl a d u q dir fs)
-        (? !(two? a) `(d u q dir (rev fs))
+        (? !(two? a) [d u q dir (rev fs)]
            (<a = "-d") (fl >a 1 u q dir fs)
            (<a = "-u") (fl >a d 1 q dir fs)
            (<a = "-q") (fl >a d u 1 dir fs)

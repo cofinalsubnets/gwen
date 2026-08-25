@@ -50,7 +50,7 @@
           c (cn 0)
           host (? (c < 0) auth (snip auth 0 c))
           port (? (c < 0) 80 (digits (snip auth (c + 1) a)))
-          (? ((0 < tally host) && port) `(host port path) ())))
+          (? ((0 < tally host) && port) [host port path] ())))
 
    ; one GET -> (status body) | (). () is a DEAD SOCKET or an unreadable
    ; response; a 404 is a perfectly good answer and comes back as (404 ..), so
@@ -70,7 +70,7 @@
                          body (snip r (k + 4) (tally r))
                          sp (findsub head " " 0 64)
                          code (? (sp < 0) () (digits (snip head (sp + 1) (sp + 4))))
-                         (? code `(code body) ()))))))))
+                         (? code [code body] ()))))))))
 
    ; GET a store object under a base url -> (1 body) | (). the PRESENCE WRAPPER,
    ; not the bare body: a 0-byte blob is a legitimate object and `!""` is true,
@@ -81,7 +81,7 @@
     (: u (url-split (base + rel))
        (? !(two? u) ()
           (: r (http-get <u <>u <>>u)
-             (? (two? r && (200 = <r)) `(1 <>r) ()))))
+             (? (two? r && (200 = <r)) [1 <>r] ()))))
 
    ; the first form of a string, if it is a list; () for anything else.
    (readform s)

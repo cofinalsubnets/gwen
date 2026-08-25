@@ -12,8 +12,8 @@
 (use 'holo)
 (: (elf32-write tgt path)
    (: msg "love-asm speaks arm32 linux\n"
-      (prog a) `(`('li 'r0 1) `('li 'r1 a) `('li 'r2 (tally msg)) `('li 'r7 4) `('sys)
-                 `('li 'r0 42) `('li 'r7 1) `('sys))
+      (prog a) [['li 'r0 1] ['li 'r1 a] ['li 'r2 (tally msg)] ['li 'r7 4] ['sys]
+                ['li 'r0 42] ['li 'r7 1] ['sys]]
       e (elf32 tgt prog (map msg (jot (tally msg))))
       _ (write-bytes path (peep e 'bytes 0))
       (flush out)))

@@ -57,13 +57,13 @@
                   (go 1))
    (uclip-args who as)                      ; -> (n files many?)
     (: nr (? (two? as && (<as = "-n"))
-             (? (two? >as) `((uatoi <>as) >>as)
+             (? (two? >as) [(uatoi <>as) >>as]
                 (udie 2 (who + ": -n wants a count")))
              (two? as && ((<as 0) = 45) && (digits? <as))
-             `((uatoi (snip <as 1 (tally <as))) >as)
-             `(10 as))
+             [(uatoi (snip <as 1 (tally <as))) >as]
+             [10 as])
        n <nr fs <>nr
-       `(n fs (? (two? fs && two? >fs) 1 0)))
+       [n fs (? (two? fs && two? >fs) 1 0)])
    (uclip-hdr many first f)
     (? many (say out (uhdr first (? (f = "-") "standard input" f))) 0)
    ; ⚠ HEAD STOPS -- it used to `lines` the whole input and take n off the front, so
@@ -95,11 +95,11 @@
 
    ; -- wc: lines, words, bytes (flags pick; bare wc reads all three) --
    (wc-main as)
-    (: (fl a l w c) (? !(two? a) `(l w c a)
+    (: (fl a l w c) (? !(two? a) [l w c a]
                        (<a = "-l") (fl >a 1 w c)
                        (<a = "-w") (fl >a l 1 c)
                        (<a = "-c") (fl >a l w 1)
-                       `(l w c a))
+                       [l w c a])
        p (fl as 0 0 0)
        none !(<p || <>p || <>>p)
        l? (? none 1 <p) w? (? none 1 <>p) c? (? none 1 <>>p)
@@ -113,7 +113,7 @@
                   (\ f first rd
                      (: (go acc) (: h (urd-gulp rd) (? (tally h) (go (ucount-go acc h)) acc))
                         c (ucount-say (go ucount0))
-                        _ (pin st 'rows (`((? (two? fs) f ()) c) >< (peep st 'rows ())))
+                        _ (pin st 'rows ([(? (two? fs) f ()) c] >< (peep st 'rows ())))
                         1))
                   fs)
        rows (rev (peep st 'rows ())) ok (peep st 'ok 0)
@@ -125,7 +125,7 @@
        ; A one-digit byte count hides this, which is every fixture until .gs1.
        wdt (? (((? l? 1 0) + (? w? 1 0) + (? c? 1 0) = 1) && !(two? >rows))
               1 (tally (show tb)))
-       (fmt cnt) (: a (? c? `((upad wdt (show (c3 cnt)))) ())
+       (fmt cnt) (: a (? c? [(upad wdt (show (c3 cnt)))] ())
                     a (? w? (upad wdt (show <>cnt) >< a) a)
                     a (? l? (upad wdt (show <cnt) >< a) a)
                     (ujoin a))
@@ -137,15 +137,15 @@
                        (emit >rs)))
        _ (emit rows)
        _ (? (two? rows && two? >rows)
-            (: _ (say out (fmt `(tl tw tb))) _ (say out " total") (put out 10)) ())
+            (: _ (say out (fmt [tl tw tb])) _ (say out " total") (put out 10)) ())
        _ (flush out) (? ok 0 1))
 
    ; -- sort: the prel sort IS byte order (the LC_ALL=C face); -r reverses, -u keeps firsts --
    (sort-main as)
-    (: (fl a r u) (? !(two? a) `(r u a)
+    (: (fl a r u) (? !(two? a) [r u a]
                      (<a = "-r") (fl >a 1 u)
                      (<a = "-u") (fl >a r 1)
-                     `(r u a))
+                     [r u a])
        p (fl as 0 0)
        r? <p u? <>p fs <>>p
        (rd a acc) (? !(two? a) acc
@@ -207,9 +207,9 @@
    ; -- seq: FIRST INCR LAST, one a line (one and two args fill in the 1s) --
    (seq-main as)
     (: n (tally as)
-       trip (? (n = 1) `(1 1 (uatoi <as))
-               (n = 2) `((uatoi <as) 1 (uatoi <>as))
-               (n = 3) `((uatoi <as) (uatoi <>as) (uatoi <>>as))
+       trip (? (n = 1) [1 1 (uatoi <as)]
+               (n = 2) [(uatoi <as) 1 (uatoi <>as)]
+               (n = 3) [(uatoi <as) (uatoi <>as) (uatoi <>>as)]
                (udie 2 "usage: seq [FIRST [INCR]] LAST"))
        a <trip d <>trip z <>>trip
        _ (? (d = 0) (udie 2 "seq: increment must not be 0") ())
@@ -239,11 +239,11 @@
     (: n (tally s)
        neg (? (0 < n) (s 0 = 45) 0)
        st (? neg 1 0)
-       (go k acc) (? (n <= k) `(1 acc)
+       (go k acc) (? (n <= k) [1 acc]
                      (: c (s k) (? ((c < 48) || (57 < c)) ()
                                    (go (k + 1) (acc * 10 + c - 48)))))
        (? (n <= st) () (: r (go st 0)
-                          (? (two? r) `(1 (? neg (0 - <>r) <>r)) ()))))
+                          (? (two? r) [1 (? neg (0 - <>r) <>r)] ()))))
    ; the stat tuple is (size mtime mode ..); 61440 masks the kind, 32768 a file, 16384 a dir
    (t-file op p)                               ; a file test, or 'no if op is not one
     (: s (stat p) m (? (two? s) <>>s 0)
@@ -302,10 +302,10 @@
    (uname-main as)
     (: fl (? (two? as) as '("-s"))
        (want f) (? (member? "-a" fl) 1 (member? f fl))
-       ws ((? (want "-s") `((u-1line "/proc/sys/kernel/ostype" "Linux")) ())
-           + (? (want "-n") `((u-1line "/proc/sys/kernel/hostname" "unknown")) ())
-           + (? (want "-r") `((u-1line "/proc/sys/kernel/osrelease" "unknown")) ())
-           + (? (want "-m") `((u-mach ())) ()))
+       ws ((? (want "-s") [(u-1line "/proc/sys/kernel/ostype" "Linux")] ())
+           + (? (want "-n") [(u-1line "/proc/sys/kernel/hostname" "unknown")] ())
+           + (? (want "-r") [(u-1line "/proc/sys/kernel/osrelease" "unknown")] ())
+           + (? (want "-m") [(u-mach ())] ()))
        (? !(two? ws) (udie 2 "usage: uname [-snrma]")
           (: _ (say out (u-join ws)) _ (put out 10) _ (flush out) 0)))
 
@@ -376,7 +376,7 @@
    ; -- cut: -f LIST [-d C] [-s] over fields, -c LIST over charms (flags glue or not) --
    (cut-main as)
     (: (fl a d f c s?)
-        (? !(two? a) `(d f c s? a)
+        (? !(two? a) [d f c s? a]
            (: h <a
               (? (h = "-s") (fl >a d f c 1)
                  (h = "-d") (? (two? >a) (fl >>a (<>a 0) f c s?)
@@ -388,7 +388,7 @@
                  ((2 < tally h) && (snip h 0 2 = "-d")) (fl >a (h 2) f c s?)
                  ((2 < tally h) && (snip h 0 2 = "-f")) (fl >a d (snip h 2 (tally h)) c s?)
                  ((2 < tally h) && (snip h 0 2 = "-c")) (fl >a d f (snip h 2 (tally h)) s?)
-                 `(d f c s? a))))
+                 [d f c s? a])))
        p (fl as 9 () () 0)
        d <p fspec <>p cspec <>>p s? <>>>p
        fs <>>>>p
@@ -497,7 +497,7 @@
    (fold-main as)
     (: t (tablet 0)
        (pre a wid acc)                 ; the obsolescent -N width, as head takes its own
-        (? !(two? a) `(wid (rev acc))
+        (? !(two? a) [wid (rev acc)]
            ((1 < tally <a) && (<a 0 = 45) && (digits? <a))
             (pre >a (uatoi (snip <a 1 (tally <a))) acc)
            (pre >a wid (<a >< acc)))
@@ -589,7 +589,7 @@
        mp (// ((* 5 doy) + 2) 153)
        d ((doy - (// ((* 153 mp) + 2) 5)) + 1)
        m (mp + (? (mp < 10) 3 -9))
-       `((? (m <= 2) (y + 1) y) m d))
+       [(? (m <= 2) (y + 1) y) m d])
    (udays y0 m d)                      ; (year month day) -> days since 1970-01-01
     (: y (? (m <= 2) (y0 - 1) y0)
        era (// y 400)
@@ -636,13 +636,13 @@
        (? (0 < w) (go 0) s))
    (ubdec set bits s)                           ; (1 text), or () when it will not read
     (: ns (tally set) n (tally s) o (jug 0)
-       (ix c) (: (go k) (? (ns <= k) () (set k = c) `(1 k) (go (k + 1))) (go 0))
+       (ix c) (: (go k) (? (ns <= k) () (set k = c) [1 k] (go (k + 1))) (go 0))
        (go k acc nb)
-        (? (n <= k) `(1 (slurp o))
+        (? (n <= k) [1 (slurp o)]
            (: c (s k)
               (? ((c = 10) || (c = 13)) (go (k + 1) acc nb)
                  (c = 61) (: (tail j)               ; past the pad, only pad and newline
-                              (? (n <= j) `(1 (slurp o))
+                              (? (n <= j) [1 (slurp o)]
                                  (: d (s j)
                                     (? (((d = 61) || (d = 10)) || (d = 13)) (tail (j + 1))
                                        ())))
@@ -665,7 +665,7 @@
        d? (peep t 100 0)
        fs <>>o
        _ (? (two? >fs) (udie 1 (who + ": extra operand")) ())
-       txt (? (two? fs) (: r (? (<fs = "-") `(1 (slurp in)) (uread <fs))
+       txt (? (two? fs) (: r (? (<fs = "-") [1 (slurp in)] (uread <fs))
                            (? (two? r) <>r (udie 1 (who + ": cannot open " + <fs))))
               (slurp in))
        _ (? d? (: r (ubdec set bits txt)
@@ -683,7 +683,7 @@
    ; err, broken at the first node still standing, and leaves 1, as GNU's does --
    (tsort-main as)
     (: _ (? (two? >as) (udie 1 "usage: tsort [FILE]") ())
-       t (? (two? as) (: r (? (<as = "-") `(1 (slurp in)) (uread <as))
+       t (? (two? as) (: r (? (<as = "-") [1 (slurp in)] (uread <as))
                          (? (two? r) <>r (udie 1 ("tsort: cannot open " + <as))))
               (slurp in))
        ws (uwords t)
@@ -699,7 +699,7 @@
                       (pin deg b ((peep deg b 0) + 1))))
               (rd >>l o2)))
        order (rd ws ())
-       (loose l) (? !(two? l) () ((peep deg <l 0) = 0) `(1 <l) (loose >l))
+       (loose l) (? !(two? l) () ((peep deg <l 0) = 0) [1 <l] (loose >l))
        (ts-drop x l) (? !(two? l) () (id? <l x) >l (<l >< ts-drop x >l))
        (emit k) (: _ (say out (string k)) _ (put out 10)
                    (foldl (\ _ b (pin deg b ((peep deg b 0) - 1))) 0 (peep succ k ())))
@@ -757,7 +757,7 @@
    ; an input's lines, or a leave naming the file (the record tools read whole files:
    ; they walk several at once, so ureach's one-at-a-time walk is not their shape)
    (urows who f)
-    (: r (? (f = "-") `(1 (slurp in)) (uread f))
+    (: r (? (f = "-") [1 (slurp in)] (uread f))
        (? (two? r) (lines <>r) (udie 1 (who + ": cannot open " + f))))
 
    ; -- paste: the files' lines side by side, a row at a time; the delimiters cycle
@@ -765,13 +765,13 @@
    ; file ALONG one row instead, which is the transpose and not a variant --
    (paste-main as)
     (: (fl a d s?)
-        (? !(two? a) `(d s? a)
+        (? !(two? a) [d s? a]
            (<a = "-s") (fl >a d 1)
            (<a = "-d") (? (two? >a) (fl >>a (udels <>a) s?)
                           (udie 2 "paste: -d wants a list"))
            ((2 < tally <a) && (snip <a 0 2 = "-d"))
             (fl >a (udels (snip <a 2 (tally <a))) s?)
-           `(d s? a))
+           [d s? a])
        p (fl as '("\t") 0)
        ds <p s? <>p
        fs (? (two? <>>p) <>>p '("-"))
@@ -800,8 +800,8 @@
    ; -1/-2/-3 drop a column and the tabs close up behind it, GNU's own arithmetic --
    (comm-main as)
     (: (fl a s1 s2 s3)
-        (? !(two? a) `(s1 s2 s3 a)
-           ((tally <a < 2) || !(<a 0 = 45)) `(s1 s2 s3 a)
+        (? !(two? a) [s1 s2 s3 a]
+           ((tally <a < 2) || !(<a 0 = 45)) [s1 s2 s3 a]
            (: w <a
               (cl k b1 b2 b3)
                (? (tally w <= k) (fl >a b1 b2 b3)
@@ -844,7 +844,7 @@
     (: (fl a ln by sw d? fs)
         (: (val w) (snip w 2 (tally w))
            (long? w) ((2 < tally w) && (snip w 0 2 = "-l"))
-           (? !(two? a) `(ln by sw d? (rev fs))
+           (? !(two? a) [ln by sw d? (rev fs)]
               (<a = "-l") (? (two? >a) (fl >>a (uatoi <>a) () sw d? fs)
                              (udie 2 "split: -l wants a count"))
               (<a = "-b") (? (two? >a) (fl >>a () (usize <>a) sw d? fs)
@@ -886,7 +886,7 @@
    ; `two?` here reads every glued value as absent (the bug that ate `grep -m2`).
    (uopt w)                            ; "-tx1" -> ("t" "x1"), a bare word -> ()
     (: n (tally w)
-       (? ((1 < n) && (w 0 = 45)) `((snip w 1 2) (snip w 2 n)) ()))
+       (? ((1 < n) && (w 0 = 45)) [(snip w 1 2) (snip w 2 n)] ()))
 
    ; -- join: two files SORTED on their join field, merged into one. a row is the key,
    ; then the first file's other fields, then the second's; a key repeated on either

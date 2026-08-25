@@ -34,6 +34,6 @@
        bs ((: (go i acc) (? (252 <= i) (rev acc) (go (i + 1) ((? ((tally s) <= i) 0 (s i)) >< acc)))
               (go 0 ()))
            + (le32 crc))
-       ir `(`('label 'boot2) `('raw bs))
+       ir [['label 'boot2] ['raw bs]]
        ; PROGBITS, ALLOC (read-only -- it is flash), on its own 256-byte grain
-       (write-bytes dst (objsecs32 'thumb1 `(`(".boot2" 1 2 256 ir)) () '("boot2") ()))))
+       (write-bytes dst (objsecs32 'thumb1 [[".boot2" 1 2 256 ir]] () '("boot2") ()))))

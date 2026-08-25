@@ -29,8 +29,8 @@
 ; and turning a rule on can never redden a tree that was green.
 ; ⚠ a setting's value is the form's TAIL, so (singleton 1) stores (1) and
 ; (deprecated a b) stores (a b) -- one list, not a list holding one.
-(: lt-sing (lt-conf `(`('singleton 1)))
-   lt-dep  (lt-conf `(`('deprecated 'old-thing '(worse-thing "use better-thing"))))
+(: lt-sing (lt-conf [['singleton 1]])
+   lt-dep  (lt-conf [['deprecated 'old-thing '(worse-thing "use better-thing")]])
    ; the 4th field is the RULE, appended -- so <w / <>w / <>>w still read line,
    ; column and text, which is why no consumer had to change
    (lt-rule ws) (map (\ w <>>>w) ws)
@@ -53,11 +53,11 @@
 ; ⚠ THE THREE EXEMPTIONS, each load-bearing.
 (assert
  ; 1. a CONSTRUCTOR is a datum, not a form -- and a ' makes its contents data too
- !(lint-of "'(x)" lt-sing) !(lint-of "`(x)" lt-sing) !(lint-of "@(x)" lt-sing)
+ !(lint-of "'(x)" lt-sing) !(lint-of "@(x)" lt-sing)
  !(lint-of "{x}" lt-sing)
  !(lint-of "'(a (b))" lt-sing)
- ; ...but a BACKTICK list evaluates its elements, so a form inside one is a form
- (1 = (tally (lint-of "`(a (b))" lt-sing)))
+ ; ...but a BRACKET list evaluates its elements, so a form inside one is a form
+ (1 = (tally (lint-of "[a (b)]" lt-sing)))
  ; 2. GLUED to an operator run: merged, two runs lex as ONE, and that is sometimes
  ; the same value and sometimes a DIFFERENT operator -- <(<l) survives (<< is the
  ; same caap) but <(= x) is (< (= x)) while <=x is the single operator <=. the scan

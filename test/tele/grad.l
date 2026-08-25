@@ -65,34 +65,34 @@
    w23 (gem-tray (quote (2 3)) (quote (0.1 -0.2 0.3 0.4 -0.5 0.6)))
 
    ;; -- the cases (loss is always a scalar via sum) --
-   _ (gradcheck "sum(v)"                `(v3)      (\ ls (sum (nth ls 0))))
-   _ (gradcheck "sum(a+b)"              `(v3 w3)   (\ ls (sum (add (nth ls 0) (nth ls 1)))))
-   _ (gradcheck "sum(a*b)"             `(v3 w3)   (\ ls (sum (mul (nth ls 0) (nth ls 1)))))
-   _ (gradcheck "sum(s*v) scalar bcast" `(2.0 v3)  (\ ls (sum (mul (nth ls 0) (nth ls 1)))))
-   _ (gradcheck "sum((a+b)*b) fan-out"  `(v3 w3)   (\ ls (sum (mul (add (nth ls 0) (nth ls 1)) (nth ls 1)))))
-   _ (gradcheck "sum(mm(A,B))"          `(m23 m32) (\ ls (sum (mm (nth ls 0) (nth ls 1)))))
-   _ (gradcheck "sum(mm+mm) fan-out"    `(m23 m32) (\ ls (sum (add (mm (nth ls 0) (nth ls 1))
+   _ (gradcheck "sum(v)"                [v3]      (\ ls (sum (nth ls 0))))
+   _ (gradcheck "sum(a+b)"              [v3 w3]   (\ ls (sum (add (nth ls 0) (nth ls 1)))))
+   _ (gradcheck "sum(a*b)"             [v3 w3]   (\ ls (sum (mul (nth ls 0) (nth ls 1)))))
+   _ (gradcheck "sum(s*v) scalar bcast" [2.0 v3]  (\ ls (sum (mul (nth ls 0) (nth ls 1)))))
+   _ (gradcheck "sum((a+b)*b) fan-out"  [v3 w3]   (\ ls (sum (mul (add (nth ls 0) (nth ls 1)) (nth ls 1)))))
+   _ (gradcheck "sum(mm(A,B))"          [m23 m32] (\ ls (sum (mm (nth ls 0) (nth ls 1)))))
+   _ (gradcheck "sum(mm+mm) fan-out"    [m23 m32] (\ ls (sum (add (mm (nth ls 0) (nth ls 1))
                                                                     (mm (nth ls 0) (nth ls 1))))))
 
    ;; -- Stage 2: activations, loss, the bias un-broadcast (colsum sumto) --
-   _ (gradcheck "sum(relu(x))"          `(r4)      (\ ls (sum (relu (nth ls 0)))))
-   _ (gradcheck "sum(sig(x))"           `(v3)      (\ ls (sum (sig (nth ls 0)))))
-   _ (gradcheck "sum(tanh(x))"          `(v3)      (\ ls (sum (tanh (nth ls 0)))))
-   _ (gradcheck "sum(a-b)"              `(v3 w3)   (\ ls (sum (sub (nth ls 0) (nth ls 1)))))
-   _ (gradcheck "mean(x)"               `(v3)      (\ ls (mean (nth ls 0))))
-   _ (gradcheck "mse(p,t)"              `(v3 t3)   (\ ls (mse (nth ls 0) (nth ls 1))))
-   _ (gradcheck "bias bcast sumto"      `(b3)      (\ ls (sum (add m23 (nth ls 0)))))
-   _ (gradcheck "linear+sig layer"      `(x22 w23 b3)
+   _ (gradcheck "sum(relu(x))"          [r4]      (\ ls (sum (relu (nth ls 0)))))
+   _ (gradcheck "sum(sig(x))"           [v3]      (\ ls (sum (sig (nth ls 0)))))
+   _ (gradcheck "sum(tanh(x))"          [v3]      (\ ls (sum (tanh (nth ls 0)))))
+   _ (gradcheck "sum(a-b)"              [v3 w3]   (\ ls (sum (sub (nth ls 0) (nth ls 1)))))
+   _ (gradcheck "mean(x)"               [v3]      (\ ls (mean (nth ls 0))))
+   _ (gradcheck "mse(p,t)"              [v3 t3]   (\ ls (mse (nth ls 0) (nth ls 1))))
+   _ (gradcheck "bias bcast sumto"      [b3]      (\ ls (sum (add m23 (nth ls 0)))))
+   _ (gradcheck "linear+sig layer"      [x22 w23 b3]
        (\ ls (sum (sig (add (mm (nth ls 0) (nth ls 1)) (nth ls 2))))))
 
    ;; -- Stage 3: nn modules, optim, end-to-end training --
    ;; param collection: a 2-layer seq has 4 param glasses (2 linears x {W,b})
-   _ (ok "seq collects 4 params" (= 4 (tally (params (seq `((linear 2 3) relu (linear 3 1)))))))
+   _ (ok "seq collects 4 params" (= 4 (tally (params (seq [(linear 2 3) relu (linear 3 1)])))))
 
    ;; seq forward == an explicit hand composition over the same fixed params
    _ (: W1 (glass (gem-tray (quote (2 2)) (quote (0.1 0.2 0.3 0.4)))) b1 (glass @(0.5 -0.5))
         W2 (glass (gem-tray (quote (2 1)) (quote (0.7 -0.3))))       b2 (glass 0.2)
-        net (seq `((linear-wb W1 b1) relu (linear-wb W2 b2)))
+        net (seq [(linear-wb W1 b1) relu (linear-wb W2 b2)])
         x  (gem-tray (quote (1 2)) (quote (1.0 2.0)))
         _ (tl-reset 0) got  (tl-val (call net x))
         _ (tl-reset 0) want (tl-val (add (mm (relu (add (mm x W1) b1)) W2) b2))
@@ -100,12 +100,12 @@
 
    ;; sgd step: a param with a known grad moves by -lr*grad
    _ (: p (glass @(1.0 2.0 3.0)) _ (pin p (quote grad) @(0.5 0.5 0.5))
-        opt (sgd `(p) 0.1) _ (step opt)
+        opt (sgd [p] 0.1) _ (step opt)
         (ok "sgd step: p -= lr*grad" (close-c? (peep p (quote val) 0) @(0.95 1.95 2.95))))
 
    ;; zero clears the grad
    _ (: p (glass @(1.0 2.0)) _ (pin p (quote grad) @(9.0 9.0))
-        opt (sgd `(p) 0.1) _ (zero opt)
+        opt (sgd [p] 0.1) _ (zero opt)
         (ok "zero clears grad" (= 0 (grad p))))
 
    ;; end-to-end: a linear layer learns a linear target; the loss collapses

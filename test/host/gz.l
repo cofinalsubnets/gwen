@@ -19,7 +19,7 @@
    gz-run   (gz-mk 300 (\ i 65))                          ; one byte 300 times
    gz-text  "the quick brown fox jumps over the lazy dog. the quick brown fox jumps over the lazy dog."
    gz-noise (gz-mk 2000 (\ i (& ((i * 2654435761) >> 7) 255)))   ; no runs, no matches
-   gz-shapes `(gz-empty gz-one gz-run gz-text gz-noise)
+   gz-shapes [gz-empty gz-one gz-run gz-text gz-noise]
    ; a round trip through the raw stream, and again through the container
    (gz-rt s) (: r (gz-inflate (gz-deflate s) 0) (? (! r) 0 (? ((<(>r)) = s) 1 0)))
    (gz-crt s) (: r (gz-unzip (gz-zip s "" 0)) (? (! r) 0 (? ((<(>r)) = s) 1 0)))
@@ -81,9 +81,9 @@
  ((tar-sum tz-h) = (tar-oct tz-h 148 8)))
 
 ; --- pack and unpack --- a whole archive, ours through ours.
-(: tz-es `((tar-entry "a.txt" 'file "alpha\n")
-           (tar-entry "sub" 'dir "")
-           (tar-entry "sub/b.txt" 'file "beta beta\n"))
+(: tz-es [(tar-entry "a.txt" 'file "alpha\n")
+          (tar-entry "sub" 'dir "")
+          (tar-entry "sub/b.txt" 'file "beta beta\n")]
    tz-a (tar-pack tz-es)
    tz-r (tar-unpack tz-a)
    tz-back (? (! tz-r) () (<(>tz-r))))
@@ -120,8 +120,8 @@
 
 ; --- the two together --- a .tar.gz built and taken apart entirely in love, which
 ; is the whole errand: `make dist` shells out to neither tar nor gzip.
-(: tgz-a (tar-pack `((tar-entry "x/one.txt" 'file "first\n")
-                     (tar-entry "x/two.txt" 'file (gz-mk 5000 (\ i (+ 97 (% i 26)))))))
+(: tgz-a (tar-pack [(tar-entry "x/one.txt" 'file "first\n")
+                    (tar-entry "x/two.txt" 'file (gz-mk 5000 (\ i (+ 97 (% i 26)))))])
    tgz-z (gz-zip tgz-a "archive.tar" 0)
    tgz-u (gz-unzip tgz-z)
    tgz-back (? (! tgz-u) () (tar-unpack (<(>tgz-u)))))

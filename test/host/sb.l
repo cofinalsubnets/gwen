@@ -30,7 +30,7 @@
 
 (assert
  (64 = tally p1)                                       ; a real content address
- (seq (tips ()) `(p1))                              ; the one tip
+ (seq (tips ()) [p1])                               ; the one tip
  (2 = tally s1)                                        ; junk/ stayed out
  ("a.txt" = <<s1)                                      ; path-sorted
  (blob <><s1 = "one\ntwo\nthree\n")                 ; the blob rides its hash
@@ -47,9 +47,9 @@
 
 (assert
  (3 = nd)                                              ; diff saw all three
- (seq (fld f2 'deps) `(p1))                         ; the context reads p1's writes
+ (seq (fld f2 'deps) [p1])                          ; the context reads p1's writes
  (3 = tally (fld f2 'hunks))
- (seq (tips ()) `(p2))                              ; p1 is no longer maximal
+ (seq (tips ()) [p2])                               ; p1 is no longer maximal
  !(member? "sub/b.txt" (: (go m acc) (? (two? m) (go >m (<<m >< acc)) acc)
                           (go (snap ()) ())))       ; the death left the snap
  (0 = sb-diff ()))                                   ; recorded = working again
@@ -226,11 +226,11 @@
    _ (lay "a" "v1\n") pa (sb-record "a born")
    _ (lay "a" "v2\n") pb (sb-record "a edited")
    _ (lay "b" "x\n")  pc (sb-record "b born -- independent")
-   n1 (sb-apply `(pa))                                 ; checkout: the tree AS OF pa
+   n1 (sb-apply [pa])                                  ; checkout: the tree AS OF pa
    a1 (<>(look "a")) b1 (look "b")
-   n2 (sb-apply `(pa pc))                              ; cherry-pick: pc taken, pb SKIPPED
+   n2 (sb-apply [pa pc])                               ; cherry-pick: pc taken, pb SKIPPED
    a2 (<>(look "a")) b2 (look "b")
-   n3 (sb-apply `(pb))                                 ; the closure drags pa in behind pb
+   n3 (sb-apply [pb])                                  ; the closure drags pa in behind pb
    n4 (sb-apply ())                                    ; no id: the way back
    a4 (<>(look "a"))
    bad (sb-apply '("deadbeef"))                        ; a prefix that resolves to nothing
@@ -258,18 +258,18 @@
    _ (lay "f" "one\nBAD\nthree\n") pbad (sb-record "the bad edit, line 2")
    _ (lay "f" "one\nBAD\nTHREE!\n") _ (sb-record "later work, line 3")
    n0 (tally (readdir ".sb/patch"))
-   u1 (sb-undo `(pbad))
+   u1 (sb-undo [pbad])
    ftext (<>(look "f"))
    n1 (tally (readdir ".sb/patch"))
    clean (dirty ())
    _ (lay "g" "born\n") pg (sb-record "g born")       ; a birth undone is a death
-   u2 (sb-undo `(pg))
+   u2 (sb-undo [pg])
    gone (look "g")
    _ (lay "h" "a\nb\n") _ (sb-record "h base")        ; the OVERLAP: same line, later patch
    _ (lay "h" "a\nB2\n") pq (sb-record "h -> B2")
    _ (lay "h" "a\nB3\n") _ (sb-record "h -> B3")
    n2 (tally (readdir ".sb/patch"))
-   u3 (sb-undo `(pq))
+   u3 (sb-undo [pq])
    n3 (tally (readdir ".sb/patch"))
    _ (lay "h" "a\nB3\n")                                ; settle the markers by hand
    _ (chdir "../.."))

@@ -62,8 +62,8 @@
    gzc-noise (gzc-mk 2000 (\ i (((i * 2654435761) >> 7) & 255)))   ; no matches: stored
    gzc-mixed (: (go k a) (? (k < 1) a (go (k - 1) (a + gzc-text + gzc-run + gzc-noise)))
                 (go 8 ""))
-   gzc-shapes `(gzc-empty gzc-one gzc-run gzc-long gzc-per gzc-near gzc-text gzc-noise
-                gzc-mixed)
+   gzc-shapes [gzc-empty gzc-one gzc-run gzc-long gzc-per gzc-near gzc-text gzc-noise
+               gzc-mixed]
 
    ; a round trip, and the same stream read both ways with the size and without it
    (gzc-rt s) (: d (gz-deflate s)   n (tally s)
@@ -108,7 +108,7 @@
    ; ⚠ a corrupt stream inflates to NONSENSE, and gz-puff walks that nonsense at love
    ; speed -- so the streams here are small on purpose. the shapes, not the sizes, are
    ; what the fuzz is for: a dynamic block (text), a stored one (noise), a fixed one (one).
-   gzc-fz `(gzc-text gzc-run gzc-one))
+   gzc-fz [gzc-text gzc-run gzc-one])
 (assert
  (gzc-all (\ s (gzc-fuzz s 1)) gzc-fz)
  (gzc-fuzz gzc-noise 29))

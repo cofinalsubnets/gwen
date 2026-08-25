@@ -246,7 +246,7 @@
       (= (klass "#!/x") '(comment))
       (= (klass "\"a ; b\"") '(string))               ; a ; inside a string is no comment
       (= (klass "'foo") '(atom))
-      (= (klass "`(1)") '(ctor paren number paren))
+      (= (klass "[1]") '(paren number paren))
       (= (klass "map") '(book))
       (= (klass "zzznope") ())                        ; not in the book: plain, and that is the tell
       (= (klass "zzz?") ())

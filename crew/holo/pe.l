@@ -32,8 +32,8 @@
    (pe-secname s) (: b (map s (jot (tally s)))
                      (b + map (\ _ 0) (jot (8 - tally s))))
    (pe-sect nm vsz rva raw off ch)
-    (catall `((pe-secname nm) (le32 vsz) (le32 rva) (le32 raw) (le32 off)
-              (le32 0) (le32 0) (le16 0) (le16 0) (le32 ch)))
+    (catall [(pe-secname nm) (le32 vsz) (le32 rva) (le32 raw) (le32 off)
+             (le32 0) (le32 0) (le16 0) (le16 0) (le32 ch)])
 
    ;; base relocations: ascending site addresses -> per-page blocks of
    ;; (page-rva u32, block-size u32, entries u16: type 10 = DIR64 high nibble).
@@ -41,22 +41,22 @@
    ;; no sites at all still emits one dummy block: an empty-handed .reloc is what
    ;; marks the image relocatable (RELOCS_STRIPPED unset means firmware may slide).
    (pe-relocs sites)
-    (? !(two? sites) (catall `((le32 4096) (le32 12) (le16 0) (le16 0)))
+    (? !(two? sites) (catall [(le32 4096) (le32 12) (le16 0) (le16 0)])
        (: (blocks ss acc)
            (? !(two? ss) (rev acc)
               (: pg (& (- <ss pe-ibase) (- 0 4096))
                  (grab l es) (? (two? l && (< (- <l pe-ibase) (+ pg 4096)))
                                (grab >l ((| 40960 (& (- <l pe-ibase) 4095)) >< es))
-                               `(l (rev es)))
+                               [l (rev es)])
                  g (grab ss ())
                  es <>g
                  es (? (& (tally es) 1) (es + '(0)) es)
-                 (blocks <g (catall `((le32 pg) (le32 (+ 8 (* 2 (tally es)))) (catall (map le16 es))) >< acc))))
+                 (blocks <g (catall [(le32 pg) (le32 (+ 8 (* 2 (tally es)))) (catall (map le16 es))] >< acc))))
           (catall (blocks sites ()))))
 
    ;; the COFF machine, elf.l's elf-machines in the other clothing
-   pe-machines (tabof `(('x64 >< 34404) ('amd64 >< 34404)          ; 0x8664
-                        ('arm64 >< 43620) ('aarch64 >< 43620)))    ; 0xAA64
+   pe-machines (tabof [('x64 >< 34404) ('amd64 >< 34404)           ; 0x8664
+                       ('arm64 >< 43620) ('aarch64 >< 43620)])     ; 0xAA64
 
    ;; link a set -- ((id bytes)..), the mkefi thunk FIRST -- into a PE32+ at out.
    (pelink target srcs out)
@@ -72,14 +72,14 @@
        glo (ldsyms objs)
        o1 <objs
        ent (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)
-       cx `(glo n0 end end end relbox ())
+       cx [glo n0 end end end relbox ()]
        ;; the read-only half. each lane is emitted AT the address ldlay gave it,
        ;; so the gap the alignment opened is written out as zeros.
        et (ldemit cx 'text base objs ())
-       eo (ldemit cx 'rodata o0 objs (>et + `((ld-zeros (- o0 <et)))))
+       eo (ldemit cx 'rodata o0 objs (>et + [(ld-zeros (- o0 <et))]))
        ;; ..and the writable half, its own run of bytes from d0.
        ed (ldemit cx 'data d0 objs ())
-       en (ldemit cx 'nifs n0 objs (>ed + `((ld-zeros (- n0 <ed)))))
+       en (ldemit cx 'nifs n0 objs (>ed + [(ld-zeros (- n0 <ed))]))
        tfsz (- <eo base)                  ; .text: text + rodata
        traw (pe-al pe-falign tfsz)
        dfsz (- <en d0)                    ; .data: data + nifs, and bss past it
@@ -92,37 +92,37 @@
        rsz (tally reloc)
        rraw (pe-al pe-falign rsz)
        img-sz (+ reloc-rva (pe-al 4096 rsz))
-       opt (catall `(
-          (le16 523) '(0 0)                              ; PE32+ magic, linker 0.0
-          (le32 traw) (le32 draw) (le32 0)
-          (le32 (- ent pe-ibase)) (le32 4096)            ; entry RVA, base of code
-          (le64 pe-ibase)
-          (le32 4096) (le32 pe-falign)                   ; section / file alignment
-          (le16 0) (le16 0) (le16 0) (le16 0) (le16 0) (le16 0) (le32 0)
-          (le32 img-sz) (le32 pe-hraw)
-          (le32 0) (le16 10) (le16 0)                    ; subsystem EFI_APPLICATION
-          (le64 1048576) (le64 4096) (le64 1048576) (le64 4096)
-          (le32 0) (le32 16)
-          (le64 0) (le64 0) (le64 0) (le64 0) (le64 0)
-          (le32 reloc-rva) (le32 rsz)                    ; dir 5: base relocations
-          (le64 0) (le64 0) (le64 0) (le64 0) (le64 0)
-          (le64 0) (le64 0) (le64 0) (le64 0) (le64 0)))
-       hdr (catall `(
-          '(77 90) (map (\ _ 0) (jot 58)) (le32 64)      ; MZ, e_lfanew = 64
-          '(80 69 0 0)
-          (le16 mach) (le16 3)                           ; the COFF machine, three sections
-          (le32 0) (le32 0) (le32 0)
-          (le16 (tally opt)) (le16 34)                   ; EXE | LARGE_ADDRESS_AWARE
-          opt
-          (pe-sect ".text" tfsz 4096 traw pe-hraw 1610612768)          ; 0x60000020 code|r-x
-          (pe-sect ".data" data-vsz data-rva draw (+ pe-hraw traw) 3221225536)   ; 0xC0000040 data|rw-
-          (pe-sect ".reloc" rsz reloc-rva rraw (pe-hraw + traw + draw) 1107296320)))  ; 0x42000040
+       opt (catall [
+         (le16 523) '(0 0)                               ; PE32+ magic, linker 0.0
+         (le32 traw) (le32 draw) (le32 0)
+         (le32 (- ent pe-ibase)) (le32 4096)             ; entry RVA, base of code
+         (le64 pe-ibase)
+         (le32 4096) (le32 pe-falign)                    ; section / file alignment
+         (le16 0) (le16 0) (le16 0) (le16 0) (le16 0) (le16 0) (le32 0)
+         (le32 img-sz) (le32 pe-hraw)
+         (le32 0) (le16 10) (le16 0)                     ; subsystem EFI_APPLICATION
+         (le64 1048576) (le64 4096) (le64 1048576) (le64 4096)
+         (le32 0) (le32 16)
+         (le64 0) (le64 0) (le64 0) (le64 0) (le64 0)
+         (le32 reloc-rva) (le32 rsz)                     ; dir 5: base relocations
+         (le64 0) (le64 0) (le64 0) (le64 0) (le64 0)
+         (le64 0) (le64 0) (le64 0) (le64 0) (le64 0)])
+       hdr (catall [
+         '(77 90) (map (\ _ 0) (jot 58)) (le32 64)       ; MZ, e_lfanew = 64
+         '(80 69 0 0)
+         (le16 mach) (le16 3)                            ; the COFF machine, three sections
+         (le32 0) (le32 0) (le32 0)
+         (le16 (tally opt)) (le16 34)                    ; EXE | LARGE_ADDRESS_AWARE
+         opt
+         (pe-sect ".text" tfsz 4096 traw pe-hraw 1610612768)           ; 0x60000020 code|r-x
+         (pe-sect ".data" data-vsz data-rva draw (+ pe-hraw traw) 3221225536)    ; 0xC0000040 data|rw-
+         (pe-sect ".reloc" rsz reloc-rva rraw (pe-hraw + traw + draw) 1107296320)])   ; 0x42000040
        _ (? (< pe-hraw (tally hdr)) (scare 'pe-headers-overflow (tally hdr)) 0)
        ;; headers, the read-only half padded to its file size, then the writable
        ;; half padded to its own, then .reloc. `+` folds right, so the chunks
        ;; concatenate in the order written.
        (ld-write out
-          (`(hdr (ld-zeros (- pe-hraw (tally hdr))))
-           + >eo + `((ld-zeros (- traw tfsz)))
-           + >en + `((ld-zeros (- draw dfsz)) reloc (ld-zeros (- rraw rsz)))))))
+          ([hdr (ld-zeros (- pe-hraw (tally hdr)))]
+           + >eo + [(ld-zeros (- traw tfsz))]
+           + >en + [(ld-zeros (- draw dfsz)) reloc (ld-zeros (- rraw rsz))]))))
 ) ; module 'holo

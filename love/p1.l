@@ -20,7 +20,7 @@
                     (go 0))
    (p1-bits c) (+ (? (? (= c 12) 1 (p1-cin? " \t\n\r" c)) 2 0)
                 (+ (? (p1-cin? "!#$%&*+-./:<=>?\\^|~" c) 4 0)
-                (+ (? (? (= c 12) 1 (p1-cin? " \t\n\r;#()[]{}\"`," c)) 8 0)
+                (+ (? (? (= c 12) 1 (p1-cin? " \t\n\r;#()[]{}\"," c)) 8 0)
                 (+ (? (p1-cin? "([{" c) 16 0)
                 (+ (? (p1-cin? ")]}" c) 32 0)
                 (+ (? (p1-cin? "+-" c) 64 0)
@@ -162,18 +162,18 @@
               (p1-str (p1-cup r) (link (p1-esc (cap r)) acc)))))
 
    ; --- the wraps -----------------------------------------------------------
-   ; the value surface, the printer's read-back contract: ' ` @ each wrap the next
-   ; datum. a SPLICING wrap (hash tuple list) over a list splices instead: {k v}
-   ; is (hash k v), not (hash (k v)).
+   ; the value surface, the printer's read-back contract: ' and @ each wrap the
+   ; next datum. a SPLICING wrap (hash tuple list) over a list splices instead:
+   ; {k v} is (hash k v), not (hash (k v)).
    (p1-splice? w) (? (= w 'hash) 1 (? (= w 'tuple) 1 (= w 'list)))
    (p1-wrap w d)
      (? (? (= d ()) (= w 'hash) ()) (link 'tablet (link 0 ()))     ; {} -> (tablet 0)
         (? (= d ()) (= w 'tuple) ()) (link 'iota (link 0 ()))      ; @() -> (iota 0)
         (? (p1-splice? w) (? (link? d) 1 (? (= d ()) (nil? (= w 'hash)) ())) ()) (link w d)
         (link w (link d ())))
-   ; A BRACKET IS ITS WRAP: [a b] is `(a b) and {k v} is the map -- the brace is the
-   ; hash wrap's ONLY spelling, so the splice law carries the empties too
-   ; ([] -> (list), {} -> (tablet 0)) and the box is {x}.
+   ; A BRACKET IS ITS WRAP: [a b] is (list a b) and {k v} is the map -- each brace
+   ; and bracket is its wrap's ONLY spelling, so the splice law carries the empties
+   ; too ([] -> (list), {} -> (tablet 0)) and the box is {x}.
    ; p1-lift reaches here too, with the wrap the sigil named instead.
    (p1-open w cl)
      (: d (p1-list cl 1 ())
@@ -196,7 +196,6 @@
                  (& (p1-cls c) 32) ()
                  (= c 34) (p1-str r ())
                  (= c 39) (p1-lift (name "\\") r head)
-                 (= c 96) (p1-lift 'list r head)
                  (= c 64) (? (p1-glued? r) (p1-lift 'tuple r head) (link (name "@") r))
                  (= c 44) (link (name ",") r)
                  (? (p1-opc? c) (nil? numlead) ()) (p1-op cl)
@@ -207,10 +206,10 @@
    ; a wrap takes the next datum; an unfinished one is MORE, never EOF.
    ; ⚠ a CONSTRUCTOR sigil over an open form RENAMES the wrap rather than stacking
    ; on it: @[1 2] is @(1 2). the constructors are exactly the splicing wraps, and
-   ; stacking is what they cannot mean -- `[a b] would otherwise splice `'s own
-   ; list in and read (list list a b), a wrong value with nothing to raise. ' and
-   ; \ are NOT constructors: they take the next datum whatever it is, so '[a b]
-   ; stays the FORM (list a b) quoted.
+   ; stacking is what they cannot mean -- @[a b] would otherwise splice the
+   ; bracket's own list in and read (tuple list a b), a wrong value with nothing
+   ; to raise. ' and \ are NOT constructors: they take the next datum whatever it
+   ; is, so '[a b] stays the FORM (list a b) quoted.
    ; ⚠ @ reads GLUE (p1-read1): spaced it is the plain symbol, the head of the
    ; match form. the other sigils reach across the space.
    (p1-lift w cl head)

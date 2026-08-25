@@ -20,7 +20,7 @@
 ; invariant, standing as a live seatbelt -- or it is refused and the old
 ; state kept. ONE HAND ON THE WIRE: the repl never touches any X socket (the
 ; the painter's law, absolute); with layout.l's open dispatch lane,
-; (lay! `(my-closure state..)) swaps in a layout written at the prompt.
+; (lay! [my-closure state..]) swaps in a layout written at the prompt.
 ; The socket is an EVAL SERVER -- $XDG_RUNTIME_DIR (0700) when set, /tmp
 ; otherwise (a socket refuses connect without write permission). The socket
 ; is also the BACK DOOR when the chords are dead or an install went in:

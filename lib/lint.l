@@ -1,8 +1,8 @@
 ; lib/lint.l -- the .l balance scan, one scanner under every consumer: `libra
 ; check` gates `make lint`, `libra doc` rides lint-cmts, vi's :lint rides
 ; lint-scan. it is a balance scan, not a parse -- delimiters and strings and
-; nothing else. `'` and backtick are reader operators, never delimiters, so they
-; scan as ordinary code: the trap a C lexer falls into.
+; nothing else. `'` is a reader operator, never a delimiter, so it scans as
+; ordinary code: the trap a C lexer falls into.
 ;
 ; (lint-scan src) answers warnings, each [line col text] 1-based, and an unclosed
 ; opener or string reports where it opened rather than end-of-file.
@@ -18,8 +18,8 @@
    ; the operator run characters -- love.c's op_break, complemented
    (lopc? c) (lin? "!#$%&*+-./:<=>?\\^|~" c)
    ; the constructor sigils, exhaustive: a ( glued behind one of these is a datum,
-   ; not a form -- '(a) quote, `(a) list, @(a) tray. the map wears {} instead.
-   (lctc? c) (lin? "'`@" c)
+   ; not a form -- '(a) quote, @(a) tray. the list wears [] and the map {} instead.
+   (lctc? c) (lin? "'@" c)
    ; a token character: not whitespace, a delimiter, a quote mark or a `;`
    (ltkc? c) !(c < 33 || c = 34 || c = 59 || c = 40 || c = 41
                || c = 91 || c = 93 || c = 123 || c = 125)

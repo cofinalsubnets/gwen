@@ -13,7 +13,7 @@
    cbody '(? (< py 64) (col px (+ py 1) (+ acc (mand (+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875)) 0.0 0.0 0))) acc)
    gbody '(? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
    ; the interpreted reference (what the bench runs today): rebuild the nest and call grid(0,0)
-   interp ((ev `('\ '_ `(': `('mand 'cx 'cy 'zx 'zy 'it) mbody `('col 'px 'py 'acc) cbody `('grid 'px 'acc) gbody `('grid 0 0)))) 0)
+   interp ((ev ['\ '_ [': ['mand 'cx 'cy 'zx 'zy 'it] mbody ['col 'px 'py 'acc] cbody ['grid 'px 'acc] gbody ['grid 0 0]]]) 0)
 
    ; --- the AUTO-HOOK: recognize the nest from source and glaze it. NO change to the source. ---
    ng (grok '(\ _ 0) mps mbody cbody gbody 'x64)

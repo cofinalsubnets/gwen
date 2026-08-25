@@ -101,7 +101,7 @@
        r (go 0 <st <>st <>>st)
        [<r <>r <>>r (<>>>st + n)])
    ucount0 [0 0 0 0]
-   (ucount-say st) `(<>st <>>st <>>>st)     ; the state's (lines words bytes) face
+   (ucount-say st) [<>st <>>st <>>>st]      ; the state's (lines words bytes) face
    ; text -> (lines words bytes), a word a maximal ink run (lawed in law.l)
    (ucount t) (ucount-say (ucount-go ucount0 t))
    ; the two pure path clips (basename NAME [SUFFIX] / dirname NAME; lawed in law.l)
@@ -142,10 +142,10 @@
         (: n (tally p)
            (dash k) (? (k < n) (? (p k = 45) k (dash (k + 1))) -1)
            i (dash 0)
-           (? (i < 0) (: v (uatoi p) `(v v))
+           (? (i < 0) (: v (uatoi p) [v v])
               (: lo (? (i = 0) 1 (uatoi (snip p 0 i)))
                  hi (? ((i + 1) = n) 536870911 (uatoi (snip p (i + 1) n)))
-                 `(lo hi))))
+                 [lo hi])))
        (map one (usplit 44 s)))
    ; does 1-based seat k sit in the spec
    (upick spec k)

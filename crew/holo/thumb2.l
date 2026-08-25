@@ -25,17 +25,17 @@
 (: ;; -- registers. abstract number = hardware number for r0..r12; sp/lr/pc/fp are named. r12 (IP) is
    ;;    the AAPCS intra-call scratch; the indexed stores borrow it as an unnamed address temp. --
    thumb-regs (tabof
-        `(('sp >< 13) ('lr >< 14) ('pc >< 15) ('fp >< 11)
-           ('r0 >< 0) ('r1 >< 1) ('r2 >< 2) ('r3 >< 3)  ('r4 >< 4)
-           ('r5 >< 5) ('r6 >< 6) ('r7 >< 7) ('r8 >< 8)  ('r9 >< 9)
-           ('r10 >< 10) ('r11 >< 11) ('r12 >< 12)))
+        [('sp >< 13) ('lr >< 14) ('pc >< 15) ('fp >< 11)
+          ('r0 >< 0) ('r1 >< 1) ('r2 >< 2) ('r3 >< 3)  ('r4 >< 4)
+          ('r5 >< 5) ('r6 >< 6) ('r7 >< 7) ('r8 >< 8)  ('r9 >< 9)
+          ('r10 >< 10) ('r11 >< 11) ('r12 >< 12)])
    (rn r) (look thumb-regs r 'badreg)
 
    ;; -- condition codes: IR name -> the AArch32 cond field (same 4-bit encoding aarch64 uses). --
    thumb-cc (tabof
-        `(('eq >< 0) ('ne >< 1) ('ae >< 2) ('below >< 3) ('s >< 4) ('ns >< 5)
-           ('vs >< 6) ('vc >< 7) ('p >< 6) ('np >< 7)
-           ('above >< 8) ('be >< 9) ('ge >< 10) ('lt >< 11) ('gt >< 12) ('le >< 13)))
+        [('eq >< 0) ('ne >< 1) ('ae >< 2) ('below >< 3) ('s >< 4) ('ns >< 5)
+          ('vs >< 6) ('vc >< 7) ('p >< 6) ('np >< 7)
+          ('above >< 8) ('be >< 9) ('ge >< 10) ('lt >< 11) ('gt >< 12) ('le >< 13)])
 
    ;; -- emit: a narrow halfword, or a 32-bit word as hi-halfword-first little-endian pair. --
    (t16 w) (le16 w)
@@ -57,11 +57,11 @@
    ;; own 4-byte fixup (movw16/movt16, aux = Rd's hw number; patch scatters the resolved half in).
    ;; always BOTH (a fixup's size is fixed before the address is known). a .o leaves the pair as
    ;; R_ARM_THM_MOVW_ABS_NC / R_ARM_THM_MOVT_ABS (obj.l); v6-M has no MOVW/MOVT and pools instead.
-   (thumb-la d label) (: dn (rn d) `((fix 4 'movw16 label dn) (fix 4 'movt16 label dn)))
+   (thumb-la d label) (: dn (rn d) [(fix 4 'movw16 label dn) (fix 4 'movt16 label dn)])
    ;; (lapool Rd): LDR.W Rd,[pc,#4] + B.N over the pad+word + NOP pad -- the literal-pool
    ;; la (gen's t16la lays (align 4) before and the abs32 word after). the playdate face:
    ;; its loader relocates ABS32 words at load time, never a MOVW/MOVT pair.
-   (thumb-lapool d) (: dn (rn d) (catall `((t32 (0xF8DF0004 | (dn << 12))) (t16 0xE002) (t16 0xBF00))))
+   (thumb-lapool d) (: dn (rn d) (catall [(t32 (0xF8DF0004 | (dn << 12))) (t16 0xE002) (t16 0xBF00)]))
 
    ;; (mov Rd, Rm). MOV.W is ORR with Rn=15, and that form can name neither sp nor pc in
    ;; either slot -- UNPREDICTABLE, which a core is free to execute as the move you meant.
@@ -75,11 +75,11 @@
    ;; -- ALU register form (wide, three-address): op -> the hw1 base (S=0). d = a OP b.
    ;; the row list stays bound: the emitter tablet below pins the group off it. --
    thumb-alu-rows
-        `(('add >< 0xEB00) ('sub >< 0xEBA0) ('and >< 0xEA00) ('or >< 0xEA40) ('xor >< 0xEA80)
-           ('adds >< 0xEB10) ('subs >< 0xEBB0)                 ; the S-variant: set the flags
-           ('adc >< 0xEB40) ('adcs >< 0xEB50)                  ; the carry family -- the 64-bit
-           ('sbc >< 0xEB60) ('sbcs >< 0xEB70)                  ;   pair lanes (moon rung 3)
-           ('ors >< 0xEA50))                                   ; ORRS: pair equality / pair truth
+        [('add >< 0xEB00) ('sub >< 0xEBA0) ('and >< 0xEA00) ('or >< 0xEA40) ('xor >< 0xEA80)
+          ('adds >< 0xEB10) ('subs >< 0xEBB0)                  ; the S-variant: set the flags
+          ('adc >< 0xEB40) ('adcs >< 0xEB50)                   ; the carry family -- the 64-bit
+          ('sbc >< 0xEB60) ('sbcs >< 0xEB70)                   ;   pair lanes (moon rung 3)
+          ('ors >< 0xEA50)]                                    ; ORRS: pair equality / pair truth
    thumb-alu (tabof thumb-alu-rows)
    (thumb-alu-rrr base d a b)                                 ; hw1 = base|Rn(a); hw2 = Rd<<8 | Rm(b)
       (: dn (rn d) an (rn a) bn (rn b) (t32 (((base | an) << 16) | ((dn << 8) | bn))))
@@ -97,7 +97,7 @@
       (: base (peep thumb-alu op 0)
          (? (reg? b) (thumb-alu-rrr base d a b)
             (member? op '(add sub)) (thumb-addsub-imm op d a b)
-            (scare 'thumb-logimm `(op d a b))))                ; and/or/xor #imm: materialize instead (immok blocks it)
+            (scare 'thumb-logimm [op d a b])))                 ; and/or/xor #imm: materialize instead (immok blocks it)
 
    (thumb-cmp a b)                                            ; CMP.W Rn, Rm  /  CMP Rn, #imm8 (T2)
       (: an (rn a)
@@ -109,7 +109,7 @@
 
    (thumb-imul d a b)                                         ; MUL Rd, Rn, Rm (T2); no immediate form
       (? (reg? b) (: dn (rn d) an (rn a) bn (rn b) (t32 (((0xFB00 | an) << 16) | (0xF000 | ((dn << 8) | bn)))))
-         (scare 'thumb-mul-imm `('imul d a b)))
+         (scare 'thumb-mul-imm ['imul d a b]))
    ;; the widening multiply family (the 64-bit pair lanes): UMULL RdLo,RdHi,Rn,Rm (T1) and
    ;; MLA Rd,Rn,Rm,Ra (T1, mls without bit4). CLZ Rd,Rm (T1) for clzll.
    (thumb-umull dl dh a b)
@@ -128,26 +128,26 @@
    ;;   0 push*4, 16 movw*3, 28 LOOP adds/adcs*3, 44 bcs+12, 46 subs, 50 sbcs, 54 bcc+14,
    ;;   56 SUB subs, 60 sbcs, 64 addw#1, 68 NEXT subw, 72 cmp, 76 bne LOOP(-52), 78 tail.
    (t2-udivmod which)
-      (catall `((thumb-push 'r4) (thumb-push 'r5) (thumb-push 'r6) (thumb-push 'r7)
-                 (thumb-movw 'r4 0) (thumb-movw 'r5 0) (thumb-movw 'r6 64)
-                 (thumb-aluop 'adds 'r2 'r2 'r2)               ; loop: (rem:dividend) <<= 1
-                 (thumb-aluop 'adcs 'r3 'r3 'r3)
-                 (thumb-aluop 'adcs 'r4 'r4 'r4)
-                 (thumb-aluop 'adcs 'r5 'r5 'r5)
-                 (t16 0xD204)                                  ; bcs +8 -> the subtract (bit 64 set)
-                 (thumb-aluop 'subs 'r7 'r4 'r0)               ; trial rem - divisor (flags only)
-                 (thumb-aluop 'sbcs 'r7 'r5 'r1)
-                 (t16 0xD305)                                  ; bcc +10 -> next (rem < divisor)
-                 (thumb-aluop 'subs 'r4 'r4 'r0)               ; commit: rem -= divisor
-                 (thumb-aluop 'sbcs 'r5 'r5 'r1)
-                 (thumb-addsub-imm 'add 'r2 'r2 1)             ; quotient bit (bit 0 is clear)
-                 (thumb-addsub-imm 'sub 'r6 'r6 1)             ; next: counter
-                 (thumb-cmp 'r6 0)
-                 (t16 0xD1E6)                                  ; bne loop (-52)
-                 (? (id? which 'div)
-                    (thumb-movr 'r0 'r2 + thumb-movr 'r1 'r3)
-                    (thumb-movr 'r0 'r4 + thumb-movr 'r1 'r5))
-                 (thumb-pop 'r7) (thumb-pop 'r6) (thumb-pop 'r5) (thumb-pop 'r4)))
+      (catall [(thumb-push 'r4) (thumb-push 'r5) (thumb-push 'r6) (thumb-push 'r7)
+                (thumb-movw 'r4 0) (thumb-movw 'r5 0) (thumb-movw 'r6 64)
+                (thumb-aluop 'adds 'r2 'r2 'r2)                ; loop: (rem:dividend) <<= 1
+                (thumb-aluop 'adcs 'r3 'r3 'r3)
+                (thumb-aluop 'adcs 'r4 'r4 'r4)
+                (thumb-aluop 'adcs 'r5 'r5 'r5)
+                (t16 0xD204)                                   ; bcs +8 -> the subtract (bit 64 set)
+                (thumb-aluop 'subs 'r7 'r4 'r0)                ; trial rem - divisor (flags only)
+                (thumb-aluop 'sbcs 'r7 'r5 'r1)
+                (t16 0xD305)                                   ; bcc +10 -> next (rem < divisor)
+                (thumb-aluop 'subs 'r4 'r4 'r0)                ; commit: rem -= divisor
+                (thumb-aluop 'sbcs 'r5 'r5 'r1)
+                (thumb-addsub-imm 'add 'r2 'r2 1)              ; quotient bit (bit 0 is clear)
+                (thumb-addsub-imm 'sub 'r6 'r6 1)              ; next: counter
+                (thumb-cmp 'r6 0)
+                (t16 0xD1E6)                                   ; bne loop (-52)
+                (? (id? which 'div)
+                   (thumb-movr 'r0 'r2 + thumb-movr 'r1 'r3)
+                   (thumb-movr 'r0 'r4 + thumb-movr 'r1 'r5))
+                (thumb-pop 'r7) (thumb-pop 'r6) (thumb-pop 'r5) (thumb-pop 'r4)])
 
    ;; loads/stores. LDR/STR Rt,[Rn,#imm12] (T3, positive 0..4095) else the T4 8-bit signed offset
    ;; (a frame slot's small negative), else the FAR lane: r12 (IP, the unnamed temp) carries
@@ -181,17 +181,17 @@
       (: dn (rn d) bn (rn b) xn (rn ix)
          (t32 (((0xEB00 | bn) << 16) | ((dn << 8) | (((amt & 3) << 6) | xn)))))
    (thumb-leax d base ix scale disp)
-      (catall `((thumb-addsh d base ix (thumb-shamt scale))
-                 (? (disp = 0) () (thumb-addsub-imm 'add d d disp))))
+      (catall [(thumb-addsh d base ix (thumb-shamt scale))
+                (? (disp = 0) () (thumb-addsub-imm 'add d d disp))])
    (thumb-memsh lbase d b ix amt)                             ; LDR/LDRB Rt, [Rn, Rm, LSL #amt]
       (: dn (rn d) bn (rn b) xn (rn ix)
          (t32 (((lbase | bn) << 16) | ((dn << 12) | ((amt << 4) | xn)))))
    (thumb-ldx d base ix scale disp)
       (? (disp = 0) (thumb-memsh 0xF850 d base ix (thumb-shamt scale))
-         (catall `((thumb-addsh d base ix (thumb-shamt scale)) (thumb-ld d d disp))))
+         (catall [(thumb-addsh d base ix (thumb-shamt scale)) (thumb-ld d d disp)]))
    (thumb-ldxb d base ix scale disp)                          ; zero-extending byte (x64 movzx)
       (? (disp = 0) (thumb-memsh 0xF810 d base ix (thumb-shamt scale))
-         (catall `((thumb-addsh d base ix (thumb-shamt scale)) (thumb-ldu1 d d disp))))
+         (catall [(thumb-addsh d base ix (thumb-shamt scale)) (thumb-ldu1 d d disp)]))
 
    ;; MOV (register) T1, the 16-bit hi-register form -- the ONLY move that legally targets sp
    ;; (MOV.W / ADDW with Rd=sp,Rn!=sp are UNPREDICTABLE on ARMv7-M). reaches all of r0..r15.
@@ -238,13 +238,13 @@
    ;; test a, b -> TST.W (ANDS Rn, Rm, Rd discarded to pc/15). register only for M1.
    (thumb-test a b)
       (? (reg? b) (: an (rn a) bn (rn b) (t32 (((0xEA10 | an) << 16) | (0x0F00 | bn))))
-         (scare 'thumb-test-imm `('test a b)))
+         (scare 'thumb-test-imm ['test a b]))
 
    ;; set: d <- (cond) ? 1 : 0, via an IT block. MOV d,#0 ; IT cond ; MOV d,#1 (the conditional one).
    ;; MOVW reaches all of r0..r12 (the narrow MOV only r0..r7), so use it uniformly.
    (thumb-set cond d)
       (: cc (look thumb-cc cond 'badcc)
-         (catall `((thumb-movw d 0) (t16 (0xBF08 | (cc << 4))) (thumb-movw d 1))))
+         (catall [(thumb-movw d 0) (t16 (0xBF08 | (cc << 4))) (thumb-movw d 1)]))
 
    ;; -- scalar-double VFP (moon rung 4): f0..f15 -> d0..d15 (fpv5-d16, the M7's FPU). the IR
    ;; keeps the SSE mnemonics two-address (d = op(d, s)); VFP is three-address, so d repeats as
@@ -303,10 +303,10 @@
    ;; control. B/BL carry a scrambled pc-relative offset in a bitfield; the fixup stashes the cond (or 0)
    ;; in aux and `patch` builds the whole 4-byte word. an unconditional B (jmp) rides T4, a conditional
    ;; one (br) rides T3, and BL (call) rides T1 -- all 32-bit, all 4-byte fixups.
-   (thumb-jmp  label) `((fix 4 'b   label 0))
-   (thumb-call label) `((fix 4 'bl  label 0))
+   (thumb-jmp  label) [(fix 4 'b   label 0)]
+   (thumb-call label) [(fix 4 'bl  label 0)]
    (thumb-br cond label) (: cc (look thumb-cc cond 'badcc)
-                            `((fix 4 'bcc label cc)))
+                            [(fix 4 'bcc label cc)])
    (thumb-jmpr d)  (: dn (rn d) (t16 (0x4700 | (dn << 3))))    ; BX Rm
    (thumb-callr d) (: dn (rn d) (t16 (0x4780 | (dn << 3))))    ; BLX Rm
 
@@ -323,7 +323,7 @@
    ;; MRS Rd, <sysm> -- the special registers, which are not in the general file and so have
    ;; no other door. only the two stack pointers are named: a fault handler asks which one was
    ;; active, and that is the whole of what this tree needs to read.
-   thumb-sysm (tabof `(('msp >< 8) ('psp >< 9)))
+   thumb-sysm (tabof [('msp >< 8) ('psp >< 9)])
    (thumb-mrs d sys)
       (: sm (look thumb-sysm sys 'badsysm)
          (t32 (0xF3EF0000 | (0x8000 | (rn d << 8) | sm))))
@@ -331,45 +331,45 @@
    ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied,
    ;; nullaries their halfwords outright, `raw` the identity. the alu group pins off its rows.
    thumb-emitters (emsof
-        `(('li >< thumb-li) ('mov >< thumb-mov) ('cmp >< thumb-cmp) ('imul >< thumb-imul)
-           ('umull >< thumb-umull) ('smull >< thumb-smull) ('mla >< thumb-mla)
-           ('addsd >< thumb-addsd) ('subsd >< thumb-subsd) ('mulsd >< thumb-mulsd)
-           ('divsd >< thumb-divsd) ('movsd >< thumb-movsd) ('ucomisd >< thumb-ucomisd)
-           ('cvtsi2sd >< thumb-cvtsi2sd) ('cvtui2sd >< thumb-cvtui2sd)
-           ('cvttsd2si >< thumb-cvttsd2si) ('cvttsd2ui >< thumb-cvttsd2ui)
-           ('movqxr >< thumb-movqxr) ('movqrx >< thumb-movqrx)
-           ('stsd >< thumb-stsd) ('ldsd >< thumb-ldsd) ('stss >< thumb-stss) ('ldss >< thumb-ldss)
-           ('cvtss2sd >< thumb-cvtss2sd) ('cvtsd2ss >< thumb-cvtsd2ss)
-           ('clz >< thumb-clz)
-           ('udivll >< t2-udivmod 'div) ('uremll >< t2-udivmod 'rem)       ; nullary: the whole expansion
-           ('ld >< thumb-ld) ('st >< thumb-st)
-           ('ld1 >< thumb-ld1) ('ld2 >< thumb-ld2) ('ld4 >< thumb-ld4)
-           ('st1 >< thumb-st1) ('st2 >< thumb-st2) ('st4 >< thumb-st4)
-           ('ldu1 >< thumb-ldu1) ('ldu2 >< thumb-ldu2)
-           ('ldu4 >< thumb-ld4)                              ; 32-bit zero-extend == word load here
-           ('sx1 >< thumb-sx 1) ('sx2 >< thumb-sx 2) ('sx4 >< thumb-sx 4)
-           ('zx1 >< thumb-zx 1) ('zx2 >< thumb-zx 2) ('zx4 >< thumb-zx 4)
-           ('shlv >< thumb-shiftv 'shlv) ('shrv >< thumb-shiftv 'shrv) ('sarv >< thumb-shiftv 'sarv)
-           ('shl >< thumb-shift 'shl) ('shr >< thumb-shift 'shr) ('sar >< thumb-shift 'sar)
-           ('rol >< thumb-shift 'rol) ('ror >< thumb-shift 'ror)
-           ('lea >< thumb-lea) ('lean >< thumb-lea)
-           ('la >< thumb-la) ('lapool >< thumb-lapool)
-           ('leax >< thumb-leax) ('ldx >< thumb-ldx) ('ldxb >< thumb-ldxb)
-           ('push >< thumb-push) ('pop >< thumb-pop)
-           ('neg >< thumb-neg) ('not >< thumb-not) ('inc >< thumb-inc) ('dec >< thumb-dec)
-           ('jmp >< thumb-jmp) ('br >< thumb-br) ('jmpr >< thumb-jmpr) ('callr >< thumb-callr)
-           ('set >< thumb-set) ('test >< thumb-test)
-           ('div >< thumb-div) ('rem >< thumb-rem) ('udiv >< thumb-udiv) ('urem >< thumb-urem)
-           ('call >< thumb-call)
-           ('raw >< 1)
-           ('dsb >< thumb-dsb) ('brk >< thumb-brk)           ; -- the system lane --
-           ('mrs >< thumb-mrs)
-           ('isb >< t32 0xF3BF8F6F)                          ; isb sy
-           ('wfi >< t16 0xBF30)                              ; wait for interrupt
-           ('ret >< t16 0x4770)                              ; BX lr
-           ('sys >< t16 0xDF00)                              ; SVC #0
-           ('nop >< t16 0xBF00)
-           ('trap >< t16 0xBE00)))                           ; BKPT #0
+        [('li >< thumb-li) ('mov >< thumb-mov) ('cmp >< thumb-cmp) ('imul >< thumb-imul)
+          ('umull >< thumb-umull) ('smull >< thumb-smull) ('mla >< thumb-mla)
+          ('addsd >< thumb-addsd) ('subsd >< thumb-subsd) ('mulsd >< thumb-mulsd)
+          ('divsd >< thumb-divsd) ('movsd >< thumb-movsd) ('ucomisd >< thumb-ucomisd)
+          ('cvtsi2sd >< thumb-cvtsi2sd) ('cvtui2sd >< thumb-cvtui2sd)
+          ('cvttsd2si >< thumb-cvttsd2si) ('cvttsd2ui >< thumb-cvttsd2ui)
+          ('movqxr >< thumb-movqxr) ('movqrx >< thumb-movqrx)
+          ('stsd >< thumb-stsd) ('ldsd >< thumb-ldsd) ('stss >< thumb-stss) ('ldss >< thumb-ldss)
+          ('cvtss2sd >< thumb-cvtss2sd) ('cvtsd2ss >< thumb-cvtsd2ss)
+          ('clz >< thumb-clz)
+          ('udivll >< t2-udivmod 'div) ('uremll >< t2-udivmod 'rem)        ; nullary: the whole expansion
+          ('ld >< thumb-ld) ('st >< thumb-st)
+          ('ld1 >< thumb-ld1) ('ld2 >< thumb-ld2) ('ld4 >< thumb-ld4)
+          ('st1 >< thumb-st1) ('st2 >< thumb-st2) ('st4 >< thumb-st4)
+          ('ldu1 >< thumb-ldu1) ('ldu2 >< thumb-ldu2)
+          ('ldu4 >< thumb-ld4)                               ; 32-bit zero-extend == word load here
+          ('sx1 >< thumb-sx 1) ('sx2 >< thumb-sx 2) ('sx4 >< thumb-sx 4)
+          ('zx1 >< thumb-zx 1) ('zx2 >< thumb-zx 2) ('zx4 >< thumb-zx 4)
+          ('shlv >< thumb-shiftv 'shlv) ('shrv >< thumb-shiftv 'shrv) ('sarv >< thumb-shiftv 'sarv)
+          ('shl >< thumb-shift 'shl) ('shr >< thumb-shift 'shr) ('sar >< thumb-shift 'sar)
+          ('rol >< thumb-shift 'rol) ('ror >< thumb-shift 'ror)
+          ('lea >< thumb-lea) ('lean >< thumb-lea)
+          ('la >< thumb-la) ('lapool >< thumb-lapool)
+          ('leax >< thumb-leax) ('ldx >< thumb-ldx) ('ldxb >< thumb-ldxb)
+          ('push >< thumb-push) ('pop >< thumb-pop)
+          ('neg >< thumb-neg) ('not >< thumb-not) ('inc >< thumb-inc) ('dec >< thumb-dec)
+          ('jmp >< thumb-jmp) ('br >< thumb-br) ('jmpr >< thumb-jmpr) ('callr >< thumb-callr)
+          ('set >< thumb-set) ('test >< thumb-test)
+          ('div >< thumb-div) ('rem >< thumb-rem) ('udiv >< thumb-udiv) ('urem >< thumb-urem)
+          ('call >< thumb-call)
+          ('raw >< 1)
+          ('dsb >< thumb-dsb) ('brk >< thumb-brk)            ; -- the system lane --
+          ('mrs >< thumb-mrs)
+          ('isb >< t32 0xF3BF8F6F)                           ; isb sy
+          ('wfi >< t16 0xBF30)                               ; wait for interrupt
+          ('ret >< t16 0x4770)                               ; BX lr
+          ('sys >< t16 0xDF00)                               ; SVC #0
+          ('nop >< t16 0xBF00)
+          ('trap >< t16 0xBE00)])                            ; BKPT #0
    _ (foldl (\ _ p (emrow thumb-emitters <p (thumb-aluop <p))) 0 thumb-alu-rows)
    (thumb-lower ins) (: f lower-via (? (lit? f) (f thumb-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 

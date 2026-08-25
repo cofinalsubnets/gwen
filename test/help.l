@@ -47,7 +47,7 @@
            ra (catch pa) rb (catch pb)
            (&& (id? ra 'A) (id? rb 'B))))
 ; a child starts under its parent's help, and its own install stays its own
-(hear (\ a b `('parent a)))
+(hear (\ a b ['parent a]))
 (assert (: pc (twirl (\ _ (: _ (rest 0) (scare 'from-c 0))) ())        ; installs none
            rc (catch pc)
            pd (twirl (\ _ (: _ (hear (\ a b 'child)) _ (rest 0) (scare 'x 0))) ())
@@ -66,12 +66,12 @@
 ; pending restore between the raise and here, so a cleanup belongs in n.
 (assert (3 = (trap (+ 1) 2 (\ a b 'no)))
         (id? (:) (trap (\ _ ()) () (\ a b 'no)))              ; a clean nothing is clean
-        ('(boom 7) = (trap (\ _ (scare 'boom 7)) () (\ a b `(a b))))
+        ('(boom 7) = (trap (\ _ (scare 'boom 7)) () (\ a b [a b])))
         (id? (:) (trap (\ _ (scare 'x 0)) () welp))           ; the floor handler IS an n
         (3 = (trap (foldl (\ a x (? (x = 3) (scare 'hit x) a)) 0)   ; caught from depth,
                    '(1 2 3 4) (\ a b b)))                          ; ..and x is curried in
         ('(outer in) = (trap (\ _ (trap (\ _ (scare 'in 0)) () (\ a b (scare 'outer a))))
-                             () (\ a b `(a b))))              ; n may re-raise: the outer help hears it
+                             () (\ a b [a b])))               ; n may re-raise: the outer help hears it
         ; one trap per task, all open at once: each catches its own
         (: (sess i) (twirl (\ _ (: _ (rest 0) (trap (\ _ (scare 'boom i)) () (\ a b b)))) ())
            ('(1 2 3) = (map catch (map sess '(1 2 3))))))
@@ -79,7 +79,7 @@
 ; OUTSIDE, never to this one -- and the restore rides both paths
 (hear (\ a b 'floor))
 (assert ('(outer-saw from-n) = (trap (\ _ (trap (\ _ (scare 'x 0)) () (\ a b (scare 'from-n a))))
-                                     () (\ a b `('outer-saw a))))
+                                     () (\ a b ['outer-saw a])))
         (: _ (trap (\ _ (scare 'x 0)) () (\ a b 0)) (id? 'floor (scare 'y 0))))
 (hear 0)
 
@@ -89,7 +89,7 @@
 ; catch it still does -- which is what lets a helper hold its own port however deep
 ; under one it sits.
 (: mlog (tablet 0)
-   (note s) (pin mlog 0 (mlog 0 + `(s)))
+   (note s) (pin mlog 0 (mlog 0 + [s]))
    (fresh _) (pin mlog 0 ())
    (assert
     ; the clean path: c fires after f, and f's own value is the form's
@@ -99,7 +99,7 @@
     ; the raised path: c fires, and the condition goes on to the catcher outside
     (: _ (fresh ())
        r (trap (\ _ (mind (\ _ (: _ (note 'body) (scare 'boom 7))) () (\ _ (note 'freed))))
-               () (\ a b `(a b)))
+               () (\ a b [a b]))
        (&& ('(boom 7) = r) ('(body freed) = (mlog 0))))
     ; one raise fires EVERY c between it and the catcher, innermost first
     (: _ (fresh ())
@@ -135,7 +135,7 @@
 (: prev (heard ())
    _ (hear (\ a b 'delegated))
    log (tablet 0)
-   (note s) (pin log 0 (log 0 + `(s)))
+   (note s) (pin log 0 (log 0 + [s]))
    ; the child's raise is answered in the CHILD, and both tasks run to their ends
    r (trap (\ _ (: p (twirl (\ _ (: v (scare 'child-boom 0) _ (note 'child-lived) v)) ())
                      _ (catch p) _ (note 'parent-lived) 'clean))
@@ -143,7 +143,7 @@
    _ (hear prev)
    (assert (id? r 'clean) ('(child-lived parent-lived) = (log 0))
            ; ..and a trap the child installs ITSELF still escapes: home is its own task
-           (: q (twirl (\ _ (trap (\ _ (scare 'mine 7)) () (\ a b `(a b)))) ())
+           (: q (twirl (\ _ (trap (\ _ (scare 'mine 7)) () (\ a b [a b]))) ())
               ('(mine 7) = (catch q)))))
 
 ; welp -- the floor handler (repl.l), the fromempty the introductions never

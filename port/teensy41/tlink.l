@@ -24,7 +24,7 @@
 (: ocram2-top 0x20280000                    ; 0x20200000 + 512 KB
    ; presence out of band: an unreadable file and an EMPTY one are the same value,
    ; and an empty .o here would link a firmware with a silent hole in it.
-   (tread p) (: r (uread p) (? (two? r) `(p <>r) (scare 'tlink-open p)))
+   (tread p) (: r (uread p) (? (two? r) [p <>r] (scare 'tlink-open p)))
    (tar? p) (: n (tally p) (&& (2 < n) ((snip p (n - 2) n) = ".a")))
    (: as >argv
       out <as ins >as
@@ -33,9 +33,9 @@
       _ (? (two? objs) 0 (scare 'tlink-no-objects out))
       set (map tread objs)
       lib (set + (ldarch set (map tread ars) 'thumb2))
-      runs `(`('at 0x60000000 (intern ".flashconfig"))
-             `('at 0x60001000 (intern ".ivt") (intern ".bootdata") (intern ".vectors")
-                              'text 'rodata 'image)
-             `('copy 0x20200000 'data 'nifs 'bss))
-      _ (ld-write out (ldbare32 'thumb2 runs lib `(`("__stack_top__" ocram2-top))))
+      runs [['at 0x60000000 (intern ".flashconfig")]
+            ['at 0x60001000 (intern ".ivt") (intern ".bootdata") (intern ".vectors")
+                            'text 'rodata 'image]
+            ['copy 0x20200000 'data 'nifs 'bss]]
+      _ (ld-write out (ldbare32 'thumb2 runs lib [["__stack_top__" ocram2-top]]))
       0))

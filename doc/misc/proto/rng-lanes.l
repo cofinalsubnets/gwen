@@ -38,7 +38,7 @@
     (: r (((rotl ((a + d) & M) 7) + a) & M)       ; the ++ scrambler
        t ((b << 9) & M)
        c2 (c ^ a) d2 (d ^ b)                      ; s2 ^= s0 ; s3 ^= s1
-       `(r (a ^ d2) (b ^ c2) (c2 ^ t) (rotl d2 11)))   ; s0 ^= s3' ; s1 ^= s2' ; s2' ^= t ; rotl s3'
+       [r (a ^ d2) (b ^ c2) (c2 ^ t) (rotl d2 11)])    ; s0 ^= s3' ; s1 ^= s2' ; s2' ^= t ; rotl s3'
 
    ; a W-lane state word: lane i takes (i*4 + o), so the four words start every
    ; lane on a distinct nonzero quadruple (xoshiro refuses an all-zero state).
@@ -48,7 +48,7 @@
    ; through a splitmix-style scrambler or xoshiro's own jump().
    (lanes W o) (: (go i acc) (? (i < W) (go (i + 1) (link ((i * 4) + o) acc)) (rev acc))
                   (star-tray (list W) (go 0 ())))
-   (state W) `((lanes W 1) (lanes W 2) (lanes W 3) (lanes W 4))
+   (state W) [(lanes W 1) (lanes W 2) (lanes W 3) (lanes W 4)]
 
    ; --- the scalar reference: one stream, plain charms, no trays ---
    (scalar n a b c d acc)

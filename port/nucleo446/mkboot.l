@@ -18,7 +18,7 @@
 ; sealed holo module (the mkboot2 shape; port/nucleo446/Makefile drives it).
 (: (mkboot dst)
    (: (zeros n) (? (n < 1) () (0 >< (zeros (n - 1))))
-      (wsym l) `(`('fix 4 'abs32 l 0))         ; a word the linker fills: (S + A) | T
+      (wsym l) [['fix 4 'abs32 l 0]]           ; a word the linker fills: (S + A) | T
 
       ;; -- the ARM vector table at flash base ----------------------------------------
       ;; every fault lands somewhere that speaks: the four faults go to the reporter,
@@ -33,9 +33,9 @@
              + (wsym 'default_handler) + (wsym 'default_handler))  ; PendSV, SysTick
 
       ;; -- crt0 ----------------------------------------------------------------------
-      startup `(`('label 'cstartup)
-                `('la 'r0 '__stack_top__) `('mov 'sp 'r0)
-                `('jmp 'cmain))
+      startup [['label 'cstartup]
+               ['la 'r0 '__stack_top__] ['mov 'sp 'r0]
+               ['jmp 'cmain]]
 
       ;; -- the instructions C cannot say ----------------------------------------------
       ;; HardFault: hand the active stack's exception frame to hardfault_report (C).
@@ -46,32 +46,32 @@
       ;; ⚠ the reporter runs on a FRESH stack: if the fault WAS a stack overflow (or sp
       ;; is garbage), pushing its frame on the old sp double-faults into lockup and the
       ;; report never reaches the wire (the teensy41 lesson).
-      text `(`('label 'isr_hardfault)
-             `('li 'r1 4) `('test 'lr 'r1) `('br 'eq 'hf-msp)
-             `('mrs 'r0 'psp) `('jmp 'hf-frame)
-             `('label 'hf-msp) `('mrs 'r0 'msp)
-             `('label 'hf-frame)
-             `('la 'r1 '__stack_top__) `('mov 'sp 'r1)
-             `('jmp 'hardfault_report)
-             `('label 'default_handler) `('wfi) `('jmp 'default_handler)
+      text [['label 'isr_hardfault]
+            ['li 'r1 4] ['test 'lr 'r1] ['br 'eq 'hf-msp]
+            ['mrs 'r0 'psp] ['jmp 'hf-frame]
+            ['label 'hf-msp] ['mrs 'r0 'msp]
+            ['label 'hf-frame]
+            ['la 'r1 '__stack_top__] ['mov 'sp 'r1]
+            ['jmp 'hardfault_report]
+            ['label 'default_handler] ['wfi] ['jmp 'default_handler]
              ;; semihosting SYS_EXIT_EXTENDED, the qemu gate's exit door: r1 points at
              ;; a two-word block of (reason, code). the pushes lay it in that order --
              ;; r0's code goes down first so the reason lands under it, at sp.
              ;; ⚠ on silicon a bkpt with no debugger escalates to lockup, so QSMOKE only.
-             `('label 'sh_exit)
-             `('li 'r1 0x20026)                 ; ADP_Stopped_ApplicationExit
-             `('push 'r0) `('push 'r1) `('mov 'r1 'sp)
-             `('li 'r0 0x20) `('brk 171)
-             `('label 'shx-spin) `('jmp 'shx-spin)
+            ['label 'sh_exit]
+            ['li 'r1 0x20026]                   ; ADP_Stopped_ApplicationExit
+            ['push 'r0] ['push 'r1] ['mov 'r1 'sp]
+            ['li 'r0 0x20] ['brk 171]
+            ['label 'shx-spin] ['jmp 'shx-spin]
              ;; the helpers nucleo446.c calls where it would otherwise want inline asm
-             `('label 'arm_dsb_isb) `('dsb 'sy) `('isb) `('ret)
-             `('label 'arm_wfi) `('wfi) `('ret))
+            ['label 'arm_dsb_isb] ['dsb 'sy] ['isb] ['ret]
+            ['label 'arm_wfi] ['wfi] ['ret]]
 
       ;; ALLOC-only for the table (2), ALLOC|EXEC for the two code lanes (6).
       (write-bytes dst
        (objsecs32 'thumb2sp
-        `(`(".vectors" 1 2 4 `(`('label 'vectors) `('raw vecs)))
-          `(".startup" 1 6 4 startup)
-          `(".text"    1 6 4 text))
+        [[".vectors" 1 2 4 [['label 'vectors] ['raw vecs]]]
+         [".startup" 1 6 4 startup]
+         [".text"    1 6 4 text]]
         '("cstartup" "isr_hardfault" "default_handler" "sh_exit" "arm_dsb_isb" "arm_wfi")
         '("vectors") ()))))

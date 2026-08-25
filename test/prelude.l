@@ -1,4 +1,4 @@
-(: l `(0 1 2 3 4 5 6 7 8 9)
+(: l [0 1 2 3 4 5 6 7 8 9]
    (diag f x) (f x x)
    (ln x) (foldl (\ n _ (+ 1 n)) 0 x)
    m (map (diag (+)) l)

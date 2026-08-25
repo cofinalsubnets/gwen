@@ -16,7 +16,7 @@
 (: sram-top 0x20042000                      ; 0x20000000 + 264 KB
    ; presence out of band: an unreadable file and an EMPTY one are the same value,
    ; and an empty .o here would link a firmware with a silent hole in it.
-   (rread p) (: r (uread p) (? (two? r) `(p <>r) (scare 'rlink-open p)))
+   (rread p) (: r (uread p) (? (two? r) [p <>r] (scare 'rlink-open p)))
    (rar? p) (: n (tally p) (&& (2 < n) ((snip p (n - 2) n) = ".a")))
    (: as >argv
       out <as ins >as
@@ -31,8 +31,8 @@
       ; handler ADDRESSES that make it writable to any compiler (gcc's answer too), and
       ; nothing on the run is written once the linker has resolved them. rp2040.lds
       ; asserted the same thing in a PHDRS block, for the same reason.
-      runs `(`('at 0x10000000 '(flags 5) (intern ".boot2"))
-             `('at 0x10000100 (intern ".vectors") 'text 'rodata)
-             `('copy 0x20000000 'data 'bss))
-      _ (ld-write out (ldbare32 'thumb1 runs lib `(`("__stack_top__" sram-top))))
+      runs [['at 0x10000000 '(flags 5) (intern ".boot2")]
+            ['at 0x10000100 (intern ".vectors") 'text 'rodata]
+            ['copy 0x20000000 'data 'bss]]
+      _ (ld-write out (ldbare32 'thumb1 runs lib [["__stack_top__" sram-top]]))
       0))

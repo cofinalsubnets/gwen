@@ -12,19 +12,19 @@
    d "/tmp/l-kore"
  (assert
    (= 0 (pwd-main ()))                          ; prints the seat, answers 0
-   (= 0 (mkdir-main `("-p" (d + "/a/b"))))
+   (= 0 (mkdir-main ["-p" (d + "/a/b")]))
    (udirp (d + "/a/b"))
    (wr (d + "/f") "hi kore")
-   (= 0 (ls-main `(d)))
-   (= 1 (ls-main `("/tmp/l-kore-ghost")))       ; a miss says so and exits 1
-   (= 0 (cp-main `((d + "/f") (d + "/a"))))     ; a dir destination pulls the name in
+   (= 0 (ls-main [d]))
+   (= 1 (ls-main ["/tmp/l-kore-ghost"]))        ; a miss says so and exits 1
+   (= 0 (cp-main [(d + "/f") (d + "/a")]))      ; a dir destination pulls the name in
    (= "hi kore" (rd (d + "/a/f")))
-   (= 0 (touch-main `((d + "/t"))))             ; be there, and be now
+   (= 0 (touch-main [(d + "/t")]))              ; be there, and be now
    (two? (stat (d + "/t")))
-   (= 0 (mv-main `((d + "/t") (d + "/t2"))))
+   (= 0 (mv-main [(d + "/t") (d + "/t2")]))
    (id? (stat (d + "/t")) ())
    (two? (stat (d + "/t2")))
-   (= 0 (rm-main `((d + "/t2"))))
+   (= 0 (rm-main [(d + "/t2")]))
    (id? (stat (d + "/t2")) ())
-   (= 0 (rm-main `("-r" d)))                    ; the tree walks out bottom-up
+   (= 0 (rm-main ["-r" d]))                     ; the tree walks out bottom-up
    (id? (stat d) ())))

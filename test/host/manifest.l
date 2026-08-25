@@ -87,7 +87,7 @@
    (rowtx s r) (: c (gaze s 2)
                 (foldl (\ a i (+ a (string (: ch (& 255 (glass s (+ (* r c) i))) (? (= 0 ch) 32 ch)))))
                        "" (jot c)))
- md (tether `("out/host/love" "-l" "crew/manifest/manifest.l" "-e" "(manifest ())"))
+ md (tether ["out/host/love" "-l" "crew/manifest/manifest.l" "-e" "(manifest ())"])
  m (cup md)
  ; a reader task gathers every painted byte into a box, so the test can
  ; HANDSHAKE: keys sent before the child's raw-mode first frame would land

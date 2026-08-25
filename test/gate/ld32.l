@@ -19,7 +19,7 @@
       ; ⚠ a defined FUNC's st_value carries the THUMB BIT. lose it and the caller
       ; enters ARM state, which an M-profile part does not have: an instant fault.
       (swalk i nf nu)
-       (? (nsym <= i) `(nf nu)
+       (? (nsym <= i) [nf nu]
           (: v (peep syms i ()) nm (at v 0) ty (at v 2) sx (at v 3) val (at v 4)
              fn? (&& (ty = 2) (0 < sx))
              _ (? fn? (? (1 = (val & 1)) 0 (scare 'ld32-thumb-bit nm)) 0)

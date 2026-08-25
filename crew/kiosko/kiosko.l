@@ -238,7 +238,7 @@
 ; but consuming them lets the peer finish its write before we close, which is the
 ; difference between a clean close and a reset.
 ; ⚠ `make` is a HOOK, not a route table: kiosko still knows nothing about what it
-; serves. it is handed the decoded path and answers `(ctype body) to serve, or ()
+; serves. it is handed the decoded path and answers [ctype body] to serve, or ()
 ; to say "not mine" -- and it is asked FIRST, so a caller can answer for a path
 ; that is also a file on disk (`love serve` paints a .l that is right there).
 ; () for the hook is the ordinary static server, unchanged.
@@ -249,12 +249,12 @@
          (: meth (word1 line)
             raw (word1 (after1 line))
             head? (meth = "HEAD")
-            (? !((meth = "GET") || head?) (: _ (oops c 405 "Method Not Allowed" 0) `(405 meth raw))
+            (? !((meth = "GET") || head?) (: _ (oops c 405 "Method Not Allowed" 0) [405 meth raw])
                (: p (pdecode (cutq raw))
-                  (? !(safe? p) (: _ (oops c 403 "Forbidden" head?) `(403 meth raw))
+                  (? !(safe? p) (: _ (oops c 403 "Forbidden" head?) [403 meth raw])
                      (: m (? make (make p) ())
                         (? (two? m)
-                           (: _ (reply c 200 "OK" <m <>m head?) `(200 meth raw))
+                           (: _ (reply c 200 "OK" <m <>m head?) [200 meth raw])
                      (: full (root + p)
                         (? (dir? full)
                            ; a directory: redirect to the slashed form first, so the
@@ -263,16 +263,16 @@
                            (? !(ends? p "/")
                               (: _ (say c ("HTTP/1.1 301 Moved Permanently\r\nLocation: " + p
                                            + "/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
-                                 _ (flush c) `(301 meth raw))
+                                 _ (flush c) [301 meth raw])
                               (fhere? (full + "index.html"))
                               (: b (gulp (full + "index.html"))
                                  _ (reply c 200 "OK" "text/html; charset=utf-8" b head?)
-                                 `(200 meth raw))
-                              (: _ (listing c root p head?) `(200 meth raw)))
-                           !(fhere? full) (: _ (oops c 404 "Not Found" head?) `(404 meth raw))
+                                 [200 meth raw])
+                              (: _ (listing c root p head?) [200 meth raw]))
+                           !(fhere? full) (: _ (oops c 404 "Not Found" head?) [404 meth raw])
                            (: b (gulp full)
-                              (? (got? b) (: _ (reply c 200 "OK" (mime full) b head?) `(200 meth raw))
-                                 (: _ (oops c 403 "Forbidden" head?) `(403 meth raw)))))))))))))))
+                              (? (got? b) (: _ (reply c 200 "OK" (mime full) b head?) [200 meth raw])
+                                 (: _ (oops c 403 "Forbidden" head?) [403 meth raw]))))))))))))))
 
 ; --- the loop ---------------------------------------------------------------------------
 (: (note quiet l) (? quiet 0
@@ -311,7 +311,7 @@
                 ; hold five of these at once without seeing each other's.
                 (twirl (\ _ (: r (trap (serve1 root make) c
                                        (\ a b (: _ (oops c 500 "Internal Server Error" 0)
-                                                 `(500 "-" (show a)))))
+                                                 [500 "-" (show a)])))
                                _ (? r (note quiet r) 0) _ (seal c 1) (close c))) ()))
            0)
       (accept-loop root l quiet before make))

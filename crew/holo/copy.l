@@ -26,8 +26,8 @@
         (? (<= n i) (rev acc)
            (: h (po + (i * e))
               (go (i + 1) (? (ld-f fs s h 'ph-type = 1)
-                             (`((ld-f fs s h 'ph-off) (ld-f fs s h 'ph-fsz)
-                                (ld-f fs s h 'ph-pa)) >< acc)
+                             ([(ld-f fs s h 'ph-off) (ld-f fs s h 'ph-fsz)
+                               (ld-f fs s h 'ph-pa)] >< acc)
                              acc))))
        (go 0 ()))
    (oc-lma id segs off)
@@ -67,10 +67,10 @@
               ty (ld-f fs s h 'sh-type) fl (ld-f fs s h 'sh-flags)
               off (ld-f fs s h 'sh-off) sz (ld-f fs s h 'sh-size)
               keep (!(ty = 8) && (0 < (fl & 2)) && (0 < sz))
-              (go (i + 1) (? keep (`((oc-lma id segs off) off sz) >< acc) acc))))
+              (go (i + 1) (? keep ([(oc-lma id segs off) off sz] >< acc) acc))))
        secs (go 1 ())
        _ (? (two? secs) 0 (scare 'copy-nothing id))
-       `((sortby (\ a b (<a <= <b)) secs) (ld-f fs s 0 'e-entry)))
+       [(sortby (\ a b (<a <= <b)) secs) (ld-f fs s 0 'e-entry)])
 
    ;; -- the flat image, as a list of pieces for ld-write. a gap between two sections
    ;; is ZEROS: the file lays down from the lowest load address, so whatever is not a
@@ -102,25 +102,25 @@
    (oc-x2 b) (snip oc-pairs (b + b) (b + b + 2))
    (oc-cat ls) (foldl (+) "" ls)
    (oc-rec ty addr bs)
-    (: all (`((tally bs) ((addr >> 8) & 255) (addr & 255) ty) + bs)
+    (: all ([(tally bs) ((addr >> 8) & 255) (addr & 255) ty] + bs)
        ck ((256 - (foldl (+) 0 all % 256)) % 256)
-       (oc-cat (":" >< (map oc-x2 (all + `(ck)) + '("\r\n")))))
-   (oc-be4 v) `(((v >> 24) & 255) ((v >> 16) & 255) ((v >> 8) & 255) (v & 255))
+       (oc-cat (":" >< (map oc-x2 (all + [ck]) + '("\r\n")))))
+   (oc-be4 v) [((v >> 24) & 255) ((v >> 16) & 255) ((v >> 8) & 255) (v & 255)]
    ;; the entry wears the same two ages as the base: type 03 is CS:IP under 1 MB, and
    ;; type 05 the flat address above it.
    (oc-start e)
     (? (0xFFFFF < e) (oc-rec 5 0 (oc-be4 e))
-       (oc-rec 3 0 `((((e >> 16) & 15) << 4) 0 ((e >> 8) & 255) (e & 255))))
+       (oc-rec 3 0 [(((e >> 16) & 15) << 4) 0 ((e >> 8) & 255) (e & 255)]))
    (oc-chunks secs)
     (: (go a o left acc)
         (? (left < 1) acc
            (: room (65536 - (a % 65536))
               m (? (16 < left) 16 left)
               n (? (room < m) room m)
-              (go (a + n) (o + n) (left - n) (`(a o n) >< acc))))
+              (go (a + n) (o + n) (left - n) ([a o n] >< acc))))
        (rev (foldl (\ acc c (go <c (at c 1) (at c 2) acc)) () secs)))
-   (oc-b02 nb) (oc-rec 2 0 `(((nb >> 12) & 255) ((nb >> 4) & 255)))
-   (oc-b04 nb) (oc-rec 4 0 `(((nb >> 24) & 255) ((nb >> 16) & 255)))
+   (oc-b02 nb) (oc-rec 2 0 [((nb >> 12) & 255) ((nb >> 4) & 255)])
+   (oc-b04 nb) (oc-rec 4 0 [((nb >> 24) & 255) ((nb >> 16) & 255)])
    ;; base is the 64K window in force, sg whether a segment base is standing in it
    (oc-ihex s secs entry)
     (: (go l base sg acc)

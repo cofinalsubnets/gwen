@@ -37,30 +37,30 @@
 (: (die m) (: _ (say err "waits: ") _ (say err m) _ (say err "\n") (quit 2))
 
    ; --- what counts as a wait -------------------------------------------------
-   hooks `("ai_sleep" "ai_wait_fds" "ai_fd_drain" "wait_one")
+   hooks ["ai_sleep" "ai_wait_fds" "ai_fd_drain" "wait_one"]
    (hook? nm) (any (\ h (h = nm)) hooks)
    ; the three love.h CONTRACT symbols, whose bodies are the wait itself: a
    ; frontend's `ai_wait_fds` reaching ai_sleep is what a wait hook IS, so the
    ; family's own implementations are exempt and only callers from outside it
    ; have to answer. love.c's wait_one is NOT one of these -- it is ordinary
    ; code that happens to wait, so it answers on the roster like anyone else.
-   (impl? nm) (any (\ h (h = nm)) `("ai_sleep" "ai_wait_fds" "ai_fd_drain"))
+   (impl? nm) (any (\ h (h = nm)) ["ai_sleep" "ai_wait_fds" "ai_fd_drain"])
 
    ; --- THE ROSTER: (file function hook why) ----------------------------------
    ; every wait in the tree, and the sentence that earns it.
    roster
-   `(`("core/love.c" "wait_one" "ai_wait_fds"
-       "the scheduler's one-fd shim -- an lvm_ frame may hold no scratch")
-     `("core/love.c" "lvm_yield_sw_mono" "wait_one"
-       "the monotask scheduler, parked on one fd")
-     `("core/love.c" "lvm_yield_sw_mono" "ai_sleep"
-       "the monotask scheduler, a timer and no fd")
-     `("core/love.c" "yield_sw_wait" "ai_wait_fds"
-       "THE wait: every parked task and the nearest timer, one call")
-     `("core/love.c" "io_close" "ai_fd_drain"
-       "⚠ the finalizer: a dying port's unsent run. runs inside gc, where nothing can park -- the write side's one remaining unbounded wait")
-     `("port/teensy41/main.c" "main" "ai_sleep"
-       "the panic blink after a fatal shell exit -- nothing runs after it"))
+   [["core/love.c" "wait_one" "ai_wait_fds"
+     "the scheduler's one-fd shim -- an lvm_ frame may hold no scratch"]
+    ["core/love.c" "lvm_yield_sw_mono" "wait_one"
+     "the monotask scheduler, parked on one fd"]
+    ["core/love.c" "lvm_yield_sw_mono" "ai_sleep"
+     "the monotask scheduler, a timer and no fd"]
+    ["core/love.c" "yield_sw_wait" "ai_wait_fds"
+     "THE wait: every parked task and the nearest timer, one call"]
+    ["core/love.c" "io_close" "ai_fd_drain"
+     "⚠ the finalizer: a dying port's unsent run. runs inside gc, where nothing can park -- the write side's one remaining unbounded wait"]
+    ["port/teensy41/main.c" "main" "ai_sleep"
+     "the panic blink after a fatal shell exit -- nothing runs after it"]]
 
    ; --- character classes ------------------------------------------------------
    (idc? c) (|| (&& (c >= 97) (c <= 122))
@@ -105,11 +105,11 @@
                   c (? (n < 1) 32 (s 0))
                   (&& (n > 0)
                    (&& (! (blank? c))
-                    (&& (! (any (\ x (x = c)) `(35 47 42 125 41)))
+                    (&& (! (any (\ x (x = c)) [35 47 42 125 41]))
                      (&& (inch? s 40)
                          (|| (inch? s 123) (! ((s (n - 1)) = 59))))))))
    ; a name that is a qualifier or a keyword, never the function being defined
-   nonfn `("__attribute__" "if" "while" "for" "switch" "return" "sizeof" "defined")
+   nonfn ["__attribute__" "if" "while" "for" "switch" "return" "sizeof" "defined"]
    (ident-from s i) (: n (tally s)
                        (go k) (? (&& (k < n) (idc? (s k))) (go (k + 1)) (snip s i k))
                        (go i))
@@ -149,7 +149,7 @@
               ; a definition line names its own function, and that is not a call
               hits (? (impl? fn2) ()
                       (filter (\ c (&& (hook? c) (! (&& hdr (c = fn2))))) (calls line)))
-              acc2 (foldl (\ a c (: e `(path fn2 c n)
+              acc2 (foldl (\ a c (: e [path fn2 c n]
                                     (? (seen? (map key a) (key e)) a (link e a))))
                           acc hits)
               (go >ls (n + 1) fn2 acc2)))

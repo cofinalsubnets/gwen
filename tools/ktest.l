@@ -37,8 +37,8 @@
    ; isa-debug-exit port; 'virt' has no such device, so aarch64 goes out through
    ; ARM semihosting instead -- see k_qemu_exit in each port's arch.c.
    mach (? (arch = "aarch64")
-           `("-M" "virt,gic-version=2" "-cpu" "cortex-a72" "-semihosting")
-           `("-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"))
+           ["-M" "virt,gic-version=2" "-cpu" "cortex-a72" "-semihosting"]
+           ["-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"])
    ; 768M + 420s. the corpus outgrew 256M (a silent death mid-corpus) and then
    ; 512M (";; oom@len=N" at a deterministic dot) -- both the same wall: a major
    ; collection grows the pool by allocating a NEW contiguous 2x pair while the
@@ -48,28 +48,28 @@
    ; the cure would be a pool pair in two blocks. a full green run is ~3min
    ; wall under TCG (the kernel's own summary clock reads ~17s -- don't trust
    ; it for the timeout).
-   fw   `("-drive" (+ "if=pflash,unit=0,format=raw,file=" (+ ovmf ",readonly=on")))
+   fw   ["-drive" (+ "if=pflash,unit=0,format=raw,file=" (+ ovmf ",readonly=on"))]
    ; the uefi door only: OVMF parks 64-bit BARs ABOVE 4G, past every door's
    ; 0..4G map, and the driver then skips the disk (its honest fallback). this
    ; knob turns OVMF's 64-bit MMIO window off, so the BAR lands reachable and
    ; the disk laws run on this door too.
-   below4g `("-fw_cfg" "opt/ovmf/X-PciMmio64Mb,string=0")
+   below4g ["-fw_cfg" "opt/ovmf/X-PciMmio64Mb,string=0"]
    ; the ESP door is the only one handed a framebuffer, and on `virt` nothing
    ; offers one unasked. ⚠ ramfb, NOT virtio-gpu: edk2 drives that one through
    ; Blt() and its GOP answers a mode with NO address, which is no framebuffer
    ; at all. ramfb's lands in ordinary RAM, so the console paints at memory
    ; speed and the lane costs nothing.
-   gfx  (? (arch = "aarch64") `("-device" "ramfb") ())
-   media (? elf? `("-kernel" iso)
-            dir? (fw + (below4g + (gfx + `("-drive" (+ "format=raw,file=fat:rw:" iso)))))
+   gfx  (? (arch = "aarch64") ["-device" "ramfb"] ())
+   media (? elf? ["-kernel" iso]
+            dir? (fw + (below4g + (gfx + ["-drive" (+ "format=raw,file=fat:rw:" iso)])))
             (scare 'ktest-media iso))
    ; KVM where the host can back it: 7x on this corpus (50s of TCG against 7s).
    ; ⚠ x86_64-on-x86_64 only -- `virt` is asked for gic-version=2 above, and an
    ; arm host whose GIC cannot back v2 REFUSES the pairing rather than degrading.
    ; A box without /dev/kvm falls to TCG, so the verdict never rides on this.
    kvm  (? (&& (two? (stat "/dev/kvm"))
-           (&& (arch = "x86_64") (has? (cup (hark `("uname" "-m"))) "x86_64")))
-           `("-enable-kvm" "-cpu" "host") ())
+           (&& (arch = "x86_64") (has? (cup (hark ["uname" "-m"])) "x86_64")))
+           ["-enable-kvm" "-cpu" "host"] ())
    ; the scratch disk (rung 5): a sparse raw image beside the artifact, virtio-blk
    ; to the kernel. truncate CREATES it and leaves an existing one's bytes alone
    ; (same size), so a marker written by one boot survives into the next -- the
@@ -78,17 +78,17 @@
    ; slots default to the LEGACY layout -- force-legacy=false is what makes them
    ; speak version 2, the one blk.c drives.
    disk (+ iso ".disk")
-   _    (hark `("truncate" "-s" "35840000" disk))
-   dargs (: d `("-drive" (+ "file=" (+ disk ",if=none,format=raw,id=d0")))
+   _    (hark ["truncate" "-s" "35840000" disk])
+   dargs (: d ["-drive" (+ "file=" (+ disk ",if=none,format=raw,id=d0"))]
             (? (arch = "aarch64")
-               (d + `("-device" "virtio-blk-device,drive=d0"
-                      "-global" "virtio-mmio.force-legacy=false"))
-               (d + `("-device" "virtio-blk-pci,drive=d0"))))
-   r    (hark (cat `("timeout" "420" (+ "qemu-system-" arch) "-m" "768M")
+               (d + ["-device" "virtio-blk-device,drive=d0"
+                     "-global" "virtio-mmio.force-legacy=false"])
+               (d + ["-device" "virtio-blk-pci,drive=d0"])))
+   r    (hark (cat ["timeout" "420" (+ "qemu-system-" arch) "-m" "768M"]
              (cat mach
              (cat kvm
              (cat dargs
-             (cat `("-serial" "stdio" "-display" "none" "-no-reboot") media))))))
+             (cat ["-serial" "stdio" "-display" "none" "-no-reboot"] media))))))
    out  (cup r)
    line (lineof out "tests pass")
    ; ⚠ "0 tests pass" is a corpus that died before its first assert wearing a

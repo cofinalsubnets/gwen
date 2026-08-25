@@ -92,7 +92,7 @@
    ; -- longest, because it is the tail that is tight.
    (tar-split nom)                          ; -> (prefix name) | ()
     (: n (tally nom)
-       (? (n < 101) `("" nom)
+       (? (n < 101) ["" nom]
           (: (go i best) (? (n <= i) best
                             (: c (nom i)
                                ok (((c = 47) && (i < 156)) && ((n - i - 1) < 101))
@@ -101,7 +101,7 @@
              (? (k < 0) ()
                 (: p (cask k) _ (pour p 0 nom 0 k)
                    q (cask (n - k - 1)) _ (pour q 0 nom (k + 1) (n - k - 1))
-                   `((string p) (string q)))))))
+                   [(string p) (string q)])))))
 
    ; host/hash.c's streaming state: 105 bytes, opaque, allocated here because the
    ; nifs do not allocate -- they fold into a cask the caller owns.
@@ -240,7 +240,7 @@
                                               (string c))
                                           ""))
                       blocks (? sz (* tar-blk (// (sz + tar-blk - 1) tar-blk)) 0)
-                      `(1 e (o + tar-blk + blocks))))))))
+                      [1 e (o + tar-blk + blocks)]))))))
    ; ⚠ AN ARCHIVE ENDS AT ITS ZERO BLOCK, never at the end of the bytes. Running
    ; out of input mid-walk is TORN, not a clean finish -- a truncated download that
    ; answered the members it happened to contain would extract half a tree in
@@ -250,7 +250,7 @@
     (: n (tally s)
        (go o acc) (? ((n - o) < tar-blk) ()
                      (: r (tar-read1 s n o)
-                        (? (id? r 'end) `(1 (rev acc))
+                        (? (id? r 'end) [1 (rev acc)]
                            (! r) ()
                            (go <>>r (<(>r) >< acc)))))
        (go 0 ()))
@@ -259,7 +259,7 @@
    ; ⚠ a walk answers PATHS RELATIVE TO root and stores them that way: an archive
    ; carrying "/home/gwen/..." is one that unpacks over somebody's system. tar's own
    ; "removing leading /" warning exists because the naive spelling does that.
-   (tar-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
+   (tar-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
    (tar-blurt p s) (: q (open p "w") (? q (: _ (say q s) _ (close q) 1) ()))
    (tar-join a b) (? (tally a) (a + "/" + b) b)
    ; stat answers (size mtime-ms mode mtime-ns), and its mtime is MILLISECONDS where
@@ -290,7 +290,7 @@
              _ (? (two? st) (pin e 'mtime (tar-secs st)) 0)
              ; ⚠ the inner ` is load-bearing: `(1 (e)) would APPLY e to nothing, and
              ; (f) == f, so the caller would take a bare entry for a list of them.
-             `(1 `(e)))
+             [1 [e]])
           (! (two? st)) ()
           (tar-dir? st)
           (: e (tar-entry (? (tally rel) rel ".") 'dir "")
@@ -298,26 +298,26 @@
              ; sorted, so an archive of the same tree is the same bytes -- readdir's
              ; order is the filesystem's and varies between two boxes holding one tree.
              kids (sort (readdir full))
-             (go ks acc) (? (! (two? ks)) `(1 (rev acc))
+             (go ks acc) (? (! (two? ks)) [1 (rev acc)]
                             (: k2 (tar-join rel <ks)
                                (? (! (keep k2)) (go >ks acc)
                                   (: r (tar-walk? keep root k2 fat)
                                      (? (! r) ()
                                         (go >ks (foldl (\ a x (x >< a)) acc (<(>r)))))))))
              r (go kids ())
-             (? (! r) () `(1 (e >< (<(>r))))))
+             (? (! r) () [1 (e >< (<(>r)))]))
           (! fat)
           (: e (tar-entry rel 'file "")
              _ (pin e 'mode (tar-mode st)) _ (pin e 'mtime (tar-secs st))
              _ (pin e 'size <st) _ (pin e 'path full)
-             `(1 `(e)))
+             [1 [e]])
           (: b (tar-slurp full)
              (? (! b) ()
                 (: e (tar-entry rel 'file (<(>b)))
                    _ (pin e 'mode (tar-mode st)) _ (pin e 'mtime (tar-secs st))
                    ; ⚠ the inner ` is load-bearing: `(1 (e)) would APPLY e to nothing, and
              ; (f) == f, so the caller would take a bare entry for a list of them.
-             `(1 `(e)))))))
+             [1 [e]])))))
    (tar-gather root rel) (tar-gather? (\ _ 1) root rel)
    ; ⚠ `mkdir` IS DYADIC (path, mode). At one operand it hands back a CLOSURE and makes
    ; no directory -- (f x) curries, it does not default -- and the closure is truthy, so
@@ -342,7 +342,7 @@
                  t))
          es)
    (tar-scatter root es)                    ; -> (1 count) | ()
-    (: (go xs k) (? (! (two? xs)) `(1 k)
+    (: (go xs k) (? (! (two? xs)) [1 k]
                     (: e <xs
                        nom (tar-strip (tar-get e 'nom ""))
                        p (? (tally nom) (? (tally root) (root + "/" + nom) nom) root)

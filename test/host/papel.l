@@ -58,7 +58,7 @@
 
    ; from a CLEAN slate: the freshness clauses below count files written, so a left-over
    ; site from a previous run would make the first build a no-op and every count wrong.
-   _ (hark `("rm" "-rf" dir))
+   _ (hark ["rm" "-rf" dir])
    _ (mkdir dir 493)
    _ (mkdir (dir + "/src") 493)
 
@@ -89,7 +89,7 @@ Only a paragraph, so the title has to come from the meta block.
    conf (: t (tablet 0)
            _ (pin t 'out (dir + "/site"))
            _ (pin t 'title "Fixture")
-           _ (pin t 'src `((dir + "/src")))
+           _ (pin t 'src [(dir + "/src")])
            _ (pin t 'self "crew/papel/papel.l")
            _ (pin t 'quiet 1)
            t)

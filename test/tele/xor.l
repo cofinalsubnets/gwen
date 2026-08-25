@@ -21,7 +21,7 @@
    X (gem-tray '(4 2) '(0.0 0.0  0.0 1.0  1.0 0.0  1.0 1.0))   ; the four inputs
    Y (gem-tray '(4 1) '(0.0 1.0 1.0 0.0))                       ; XOR of each
 
-   model (seq `((linear 2 H) tanh (linear H 1) sig))
+   model (seq [(linear 2 H) tanh (linear H 1) sig])
    opt   (sgd (params model) lr)
 
    ;; NB: these take a dummy arg -- a nullary call (f) does NOT fire in love, it just

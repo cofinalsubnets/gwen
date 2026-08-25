@@ -8,7 +8,7 @@
 (use 'tar)
 (use 'gz)
 
-(: (tgz-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
+(: (tgz-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
    (tgz-die m) (: _ (say err ("tgz: " + m + "\n")) (quit 1))
 
    ; ⚠ every read here is guarded separately so the message NAMES which step failed:

@@ -45,7 +45,7 @@
  ;     at all applied a chain to a function -- so a lambda takes the DEFAULT action, and
  ;     that is the cell worth pinning. the index/append rows are spec.l's chains section. ---
  (nil? ((link 1 2) 1))                            ; improper chain: the spine is one cell, so 1 is oob
- (nil? ('(1 2) (\ a b `(a b))))                  ; arg = a lambda: the DEFAULT action, not an eliminator
+ (nil? ('(1 2) (\ a b [a b])))                   ; arg = a lambda: the DEFAULT action, not an eliminator
  (nil? ('(1 2) "ab"))                            ; ... as for every other kind
 
  ; --- row KString: the byte index is spec.l's; the width and the empty row are here ---
@@ -139,7 +139,7 @@
  (= (2 ~ 4) (peep (* (2 ~ 0) mx-ac) 0 0))    ; complex scalar * C array
  (= top-tray (tier (* mx-ao mx-ao)))                ; O * O exact
  (= (80 2)                                 ; 2^40 * 2^40, exact (an z array would wrap)
-    (peep (* (top-tray '(2) `((40 2) (40 2))) (top-tray '(2) `((40 2) (40 2)))) 0 0))
+    (peep (* (top-tray '(2) [(40 2) (40 2)]) (top-tray '(2) [(40 2) (40 2)])) 0 0))
 
  ; --- mul_rep: the repeat law and its |count| are the spec's; the cells here are the
  ;     ones no band law reaches -- the reversed order, and a non-number count ---

@@ -74,7 +74,7 @@
 ; and a fixture is the only way to say that: pointing at the machine's own file
 ; would make the gate depend on the machine.
 (: dir "out/host/.dns-t"
-   _ (cap (hark `("mkdir" "-p" dir)))
+   _ (cap (hark ["mkdir" "-p" dir]))
    hp (dir + "/hosts")
    cp (dir + "/conf")
    h (open hp "w")

@@ -19,7 +19,7 @@
 
 ; --- character classes + cursors over a line (string s) --------------
 ; ws = Python \s within a line (space tab cr ff vtab); hex = [0-9a-fA-F].
-(: (ws?  c) (any (\ x (= x c)) `(32 9 13 12 11))
+(: (ws?  c) (any (\ x (= x c)) [32 9 13 12 11])
    (hex? c) (? (&& (>= c 48)  (<= c 57))  1
             (? (&& (>= c 97)  (<= c 102)) 1
                (&& (>= c 65)  (<= c 70))))
@@ -60,7 +60,7 @@
          0)))
 
 ; --- mnemonic = first whitespace token that isn't an x86 prefix -------
-(: PREFIXES `("rep" "repz" "repe" "repnz" "repne" "lock" "bnd" "notrack" "data16")
+(: PREFIXES ["rep" "repz" "repe" "repnz" "repne" "lock" "bnd" "notrack" "data16"]
    (mnemonic text)
    ((: (f i)
        (: ts (skip-ws text i)
@@ -84,7 +84,7 @@
    ((: (f start i)
        (? (< i (tally s))
           (? (= 10 (peep s i 0)) (link (snip s start i) (f (+ i 1) (+ i 1))) (f start (+ i 1)))
-          (? (< start i) `((snip s start i)) 0)))
+          (? (< start i) [(snip s start i)] 0)))
     0 0))
 
 ; --- ELF64 symbol sizes: bound each function to its real extent -------
@@ -194,14 +194,14 @@
          (? (dash? a) (die (+ "unknown option: " a))
          (? path (die (+ "unexpected argument: " a))
             (parse-args (cup args) a prefix od)))))))
-      `(path prefix od)))
+      [path prefix od]))
 
 ; --- try candidate disassemblers in order ----------------------------
 ; (hark ...) returns (status . output) when the tool ran, else a fixnum errno
 ; (spawn failed -> try the next). -> (cand status . output) or 0 if exhausted.
 (: (try-cands cs elf)
    (? (two? cs)
-      (: r (hark `((cap cs) "-d" "--no-show-raw-insn" elf))
+      (: r (hark [(cap cs) "-d" "--no-show-raw-insn" elf])
          (? (two? r) (link (cap cs) r) (try-cands (cup cs) elf)))
       0))
 
@@ -232,8 +232,8 @@
    ; objdump preference: GNU objdump for x86 (host-arch), llvm-objdump for the
    ; cross arches; an explicit --objdump or $OBJDUMP wins. execvp does the PATH
    ; search, so a candidate that isn't found just spawn-fails -> next one.
-   cands    (filter id `(od (getenv "OBJDUMP")
-                          (? x86? "objdump" "llvm-objdump") (? x86? "llvm-objdump" "objdump")))
+   cands    (filter id [od (getenv "OBJDUMP")
+                         (? x86? "objdump" "llvm-objdump") (? x86? "llvm-objdump" "objdump")])
    chosen   (try-cands cands path)
    _        (? chosen 0 (die "no disassembler found (tried llvm-objdump, objdump); pass --objdump"))
    status   (cap (cup chosen))

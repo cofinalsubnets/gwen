@@ -85,7 +85,7 @@
    ; papel's dev server calls `build` per source change, and its index card climbed 28
    ; ingredients per rebuild -- 2828 after a hundred -- which `prep` then walks every pass.
    ; unbounded memory and quadratic time, from a tool that looked idle.
-   (adds a b) (foldl (\ acc x (? (member? x acc) acc (acc + `(x)))) a b)
+   (adds a b) (foldl (\ acc x (? (member? x acc) acc (acc + [x]))) a b)
    ; a Cookfile is written on one seat and read on another, so its paths name the
    ; seat symbolically: a LEADING $HOME or $PWD opens here, at registration. step
    ; strings want none of this -- sh -c expands them itself. a non-string item is
@@ -341,7 +341,7 @@
        _ (flush out)
        f (inimg sh)
        o (? f (f flags cmd) ())
-       r (? (two? o) `(<>o) (herald ((`(sh) + flags) + `(cmd))))
+       r (? (two? o) [<>o] (herald (([sh] + flags) + [cmd])))
        ec (? (two? r) <r -1)
        (? (0 = ec) 0
           !(two? r) (: _ (say err ("cook: cannot run " + cmd)) _ (put err 10) (quit 1))
@@ -522,10 +522,10 @@
    ; `!=` runs its value and takes the output, the portable spelling of $(shell ..):
    ; bmake and GNU both read it, where neither reads the other's conditionals.
    opP (alt (lit "::=") (alt (lit ":=") (alt (lit "?=") (alt (lit "+=") (alt (lit "!=") (lit "="))))))
-   assignP (seqs `((skip (span chws)) (span namech)
-                    (skip (span chws)) (pmap (\ x `(<x)) opP)
-                    (skip (span chws)) (span anyc)))
-   ruleP (seqs `((skip (span chws)) (span notcolon) (skip (lit ":")) (span anyc)))
+   assignP (seqs [(skip (span chws)) (span namech)
+                   (skip (span chws)) (pmap (\ x [<x]) opP)
+                   (skip (span chws)) (span anyc)])
+   ruleP (seqs [(skip (span chws)) (span notcolon) (skip (lit ":")) (span anyc)])
 
    ; classify a line -> (recipe TEXT) | (assign NAME OP VAL) | (rule TGTS PREREQS)
    ; | (inc TEXT) | (ifeq|ifneq|ifdef|ifndef|else REST) | (endif) | (skip).
@@ -541,19 +541,19 @@
           (sil >< (ign >< snip s i (tally s))))) 0 0 0)
    (recipe-parse l) (parse-mods (snip l 1 (tally l)))   ; drop the leading tab, then the modifier run
    (classify l)
-   (? (recipep l) `('recipe (recipe-parse l))
+   (? (recipep l) ['recipe (recipe-parse l)]
       (: t (strip-comment l) tt (trim t)
          (? (0 = tally tt) '(skip)
             (: w (first-word tt) rest (after-word tt)
-               (? (w = "include") `('inc rest)
-                  (w = "-include") `('inc rest)
-                  (w = "sinclude") `('inc rest)
+               (? (w = "include") ['inc rest]
+                  (w = "-include") ['inc rest]
+                  (w = "sinclude") ['inc rest]
                   ; `override NAME op VAL` assigns past a command-line VAR=VAL;
                   ; `export NAME [op VAL]` assigns (when an op is there) and hands the
                   ; final value to the process environment, so recipes inherit it.
                   (w = "override") (: a (parse assignP rest) (? (two? a) ('oassign >< a) '(skip)))
                   (w = "export") (: a (parse assignP rest)
-                                    (? (two? a) ('xassign >< a) `('xname (trim rest))))
+                                    (? (two? a) ('xassign >< a) ['xname (trim rest)]))
                   ; a lone $(..) line -- the WHOLE line, its closer LAST: make expands
                   ; it, so its side effect fires. `$(error ..)` is a guard, and a guard
                   ; cook walks past is worse than no guard. classify has no variable
@@ -564,13 +564,13 @@
                    && (? (tt 1 = 40) ((findclose tt 2 40 41) = ((tally tt) - 1))
                          (tt 1 = 123) ((findclose tt 2 123 125) = ((tally tt) - 1))
                          0))
-                    `('expand tt)
+                    ['expand tt]
                   ((w = "undefine") || (w = "vpath")) (cook-gap w)
-                  (w = "ifeq") `('ifeq rest)
-                  (w = "ifneq") `('ifneq rest)
-                  (w = "ifdef") `('ifdef rest)
-                  (w = "ifndef") `('ifndef rest)
-                  (w = "else") `('else rest)
+                  (w = "ifeq") ['ifeq rest]
+                  (w = "ifneq") ['ifneq rest]
+                  (w = "ifdef") ['ifdef rest]
+                  (w = "ifndef") ['ifndef rest]
+                  (w = "else") ['else rest]
                   (w = "endif") '(endif)
                   (: a (parse assignP t)
                      (? (two? a) ('assign >< a)
@@ -583,7 +583,7 @@
                            ; recorded against its targets, and refuses only if one is
                            ; ever REMADE: a scope nothing enters changes no build.
                            (? !(two? r) '(skip)
-                              (two? (parse assignP <>r)) `('tvar <r)
+                              (two? (parse assignP <>r)) ['tvar <r]
                               ('rule >< r))))))))))
 
    ; -- nested-paren-aware variable expansion + make functions --
@@ -622,7 +622,7 @@
          (: pre (snip pat 0 pi) suf (snip pat (1 + pi) (tally pat))
             lp (tally pre) ls (tally suf) ls2 (tally s)
             (? ((ls2 >= (lp + ls)) && (pre = snip s 0 lp) && (suf = snip s (ls2 - ls) ls2))
-               `((snip s lp (ls2 - ls))) ()))))
+               [(snip s lp (ls2 - ls))] ()))))
    (haspct t) (findc t 0 37 < tally t)
    (matchany pats w) (any (\ p (two? (pmatch p w))) pats)
 
@@ -637,7 +637,7 @@
    ; -- function helpers --
    (chomp s) ((: (g i) (? ((0 < i) && (s (i - 1) = 10)) (g (i - 1)) (snip s 0 i))) (tally s))
    (nl->sp s) ((: (g i acc) (? (i >= tally s) acc (g (1 + i) (acc + string (? (s i = 10) 32 (s i)))))) 0 "")
-   (fn-shell sh cmd) (: r (hark `(sh "-c" cmd)) (? (two? r) (nl->sp (chomp >r)) ""))
+   (fn-shell sh cmd) (: r (hark [sh "-c" cmd]) (? (two? r) (nl->sp (chomp >r)) ""))
    ; $(wildcard), native both ways: lush's glob (cook-glob -- classes, multi-
    ; segment patterns, the mask law) when it is aboard; else glob1 below -- a
    ; word with no * or ? is an existence test; otherwise the
@@ -654,7 +654,7 @@
           0))
     0 0)
    (glob1 pat)
-   (? !(globch pat) (? (exists? pat) `(pat) 0)
+   (? !(globch pat) (? (exists? pat) [pat] 0)
       (: k (mk-lastslash pat)
          dir (? (0 < k) (snip pat 0 (? (1 < k) (k - 1) k)) ".")
          pfx (sub pat 0 k)
@@ -891,9 +891,9 @@
              two? raws && !(any execp cmds))
        (? one?
           (: r0 <raws
-             (? (peep dryrun 0 0) `((\ _ (: _ (puts (join "\n" cmds)) (putc 10))))
-                (peep emitp 0 0) `(((`(sn) + fl) + `((join "\n" cmds))))
-                `((\ _ (sh-line <r0 <>r0 sn fl (join "\n" cmds))))))
+             (? (peep dryrun 0 0) [(\ _ (: _ (puts (join "\n" cmds)) (putc 10)))]
+                (peep emitp 0 0) [(([sn] + fl) + [(join "\n" cmds)])]
+                [(\ _ (sh-line <r0 <>r0 sn fl (join "\n" cmds)))]))
           (: (g rs es acc)
               (? !(two? rs) (rev acc)
                  (: raw <rs e <es
@@ -902,9 +902,9 @@
                     ; make's rule: the point of -n is to show the silent ones too.
                     st (? (peep dryrun 0 0) (\ _ (: _ (puts cmd) (putc 10)))
                           (execp cmd)
-                          (? (peep emitp 0 0) ('exec >< `(sn "-c" cmd))
-                             (\ _ (do-exec `(sn "-c" cmd))))
-                          (peep emitp 0 0) ((`(sn) + fl) + `(cmd))
+                          (? (peep emitp 0 0) ('exec >< [sn "-c" cmd])
+                             (\ _ (do-exec [sn "-c" cmd])))
+                          (peep emitp 0 0) (([sn] + fl) + [cmd])
                           (\ _ (sh-line sil ign sn fl cmd)))
                     (g >rs >es (st >< acc))))
              (g raws exs ()))))
@@ -954,12 +954,12 @@
    ; command after the second `;` -- silently, since what remained still ran.
    (: prr (r2 c) sc (splittop prr 59)
       rec (? (two? >sc) (join ";" >sc) "")
-      inl (? (0 < tally (trim rec)) `((parse-mods (trim rec))) 0)
+      inl (? (0 < tally (trim rec)) [(parse-mods (trim rec))] 0)
       (r1 c >< (<sc >< inl)))
    (condon cond) (? (two? cond) <>><cond 1)
-   (push-cond cond pon active) (`(pon active active) >< cond)
+   (push-cond cond pon active) ([pon active active] >< cond)
    (else-cond cond) (: f <cond pon <f taken <>f na (pon && !taken)
-                       (`(pon (taken || na) na) >< >cond))
+                       ([pon (taken || na) na] >< >cond))
    (build cls as)
    ((: (loop cs rules cur cond)
        (? !(two? cs) (rev (flushr cur rules))
@@ -1024,7 +1024,7 @@
                                     (trim (strip-comment <r) = "endef") [>r bs]
                                     (body >r (bs + <r + "\n")))
                     p (body >l "")
-                    (g <p (`('defassign nm <>p) >< acc)))
+                    (g <p (['defassign nm <>p] >< acc)))
                  (g >l (classify <l >< acc))))))
      (lines (uncont src)) ())
 
@@ -1086,10 +1086,10 @@
          (: (lastdot k r) (? (n <= k) r (? (t k = 46) (lastdot (1 + k) k) (lastdot (1 + k) r)))
             d (lastdot 1 0)
             (? (d = 0)                                        ; .c -> % : %.c
-               (? (sufknown (snip t 1 n)) `("%" ("%" + t)) 0)
+               (? (sufknown (snip t 1 n)) ["%" ("%" + t)] 0)
                (: sr (snip t 1 d) tg (snip t (1 + d) n)       ; .c.o -> %.o : %.c
                   (? (&& (sufknown sr) (sufknown tg))
-                     `(("%." + tg) ("%." + sr)) 0))))))
+                     [("%." + tg) ("%." + sr)] 0))))))
 
    ; split a prereq word list at a `|` into (normal . order-only).
    (splitbar ws) ((: (g l acc) (? !(two? l) (rev acc >< 0)
@@ -1103,18 +1103,18 @@
    (: as (seed-defaults (tablet 0) (posixp src))
       rules (build (text-lines src) as)
       phony (: ps (tablet 0)
-               _ (each rules (\ r (: tg (expand-words `(<r) as)
+               _ (each rules (\ r (: tg (expand-words [<r] as)
                     (? (any (\ t (t = ".PHONY")) tg)
-                       (each (expand-words `(<>r) as) (\ p (pin ps p 1))) 0)))) ps)
+                       (each (expand-words [<>r] as) (\ p (pin ps p 1))) 0)))) ps)
       ; .ONESHELL is a TARGET, not a variable, but what it governs is recipe
       ; expansion -- so record it where expand-steps already looks: `as`.
-      _ (each rules (\ r (? (any (\ t (t = ".ONESHELL")) (expand-words `(<r) as))
+      _ (each rules (\ r (? (any (\ t (t = ".ONESHELL")) (expand-words [<r] as))
                             (pin as ".ONESHELL" "1") 0)))
       ; `.SUFFIXES:` bare EMPTIES the vocabulary, and each one after it adds -- read in
       ; file order, before any rule asks sufpat, or a rule above its own declaration
       ; would be judged by the defaults.
-      _ (each rules (\ r (? (any (\ t (t = ".SUFFIXES")) (expand-words `(<r) as))
-                            (: ws (expand-words `(<>r) as)
+      _ (each rules (\ r (? (any (\ t (t = ".SUFFIXES")) (expand-words [<r] as))
+                            (: ws (expand-words [<>r] as)
                                (? (two? ws)
                                   (pin sufbox 0 ((sufnow 0) + map (\ w (? ((0 < tally w) && (w 0 = 46))
                                                                           (snip w 1 (tally w)) w)) ws))
@@ -1123,7 +1123,7 @@
       ; .SILENT with NO prerequisites quiets every recipe -- the whole-file form, which
       ; is the one anybody writes. Named prerequisites quiet only those targets, and
       ; that wants a per-target ask expand-steps has no room for yet.
-      _ (each rules (\ r (? ((any (\ t (t = ".SILENT")) (expand-words `(<r) as))
+      _ (each rules (\ r (? ((any (\ t (t = ".SILENT")) (expand-words [<r] as))
                              && (0 = tally (trim <>r)))
                             (pin as ".SILENT" "1") 0)))
       (mk-item nm) (? (peep phony nm 0) (intern nm) nm)
@@ -1136,26 +1136,26 @@
               pl (ltrim prtext0)
               dbl ((0 < tally pl) && (pl 0 = 58))
               prtext (? dbl (snip pl 1 (tally pl)) prtext0)
-              tgts (expand-words `(tgtstext) as)
+              tgts (expand-words [tgtstext] as)
               sp (? (two? raws) (sufpat <tgts) 0)   ; an old-style suffix rule, .c.o style
-              (? sp (pin patbox 0 (`(<sp (list <>sp) () raws) >< peep patbox 0 0))
+              (? sp (pin patbox 0 ([<sp (list <>sp) () raws] >< peep patbox 0 0))
                  (any (\ t ((0 < tally t) && (t 0 = 46))) tgts) 0        ; drop .PHONY / .SUFFIXES / ...
                  (: cp (splittop prtext 58)
                     (? (two? >cp)
                        ; static pattern rule
-                       (: tpat <(expand-words `(<cp) as) ppats (expand-words `(<>cp) as)
+                       (: tpat <(expand-words [<cp] as) ppats (expand-words [<>cp] as)
                           (each tgts (\ t (: m (pmatch tpat t)
                              (? (two? m) (: stem <m ping (map (\ pp (stemsub pp stem)) ppats)
                                             (reg (mk-item t) (map mk-item ping) 0 (expand-steps raws (mk-item t) ping stem as))) 0)))))
                        ; implicit pattern rule, or normal rule
-                       (: sb (splitbar (expand-words `(prtext) as)) prs <sb oos >sb
+                       (: sb (splitbar (expand-words [prtext] as)) prs <sb oos >sb
                           (? (any haspct tgts)
                              ; ⚠ an EMPTY recipe is make's CANCELLATION idiom ("an empty recipe
                              ; unmakes the rule"). we carry no lex builtin, so cancelling is
                              ; registering nothing. (a cancellation over OUR builtpats has no
                              ; consumer yet; it would filter there.)
                              (? !(two? raws) 0
-                                (each tgts (\ t (? (haspct t) (pin patbox 0 (`(t prs oos raws) >< peep patbox 0 0)) 0))))
+                                (each tgts (\ t (? (haspct t) (pin patbox 0 ([t prs oos raws] >< peep patbox 0 0)) 0))))
                              ; ⚠ the automatics read the target's WHOLE prerequisite list,
                              ; which an earlier line may have stated and this one not repeat:
                              ;   a.out: a.c
@@ -1252,8 +1252,8 @@
    (estep steps) (? (two? steps) (qshow (map seatl steps)) "0")
    (emit-line o item ings oo steps)
    (: row (? (two? oo)
-             `("(reg" (qshow (seat item)) (qshow (? (two? ings) (seatl ings) 0)) (qshow (seatl oo)) (estep steps))
-             `("(recipe" (qshow (seat item)) (qshow (? (two? ings) (seatl ings) 0)) (estep steps)))
+             ["(reg" (qshow (seat item)) (qshow (? (two? ings) (seatl ings) 0)) (qshow (seatl oo)) (estep steps)]
+             ["(recipe" (qshow (seat item)) (qshow (? (two? ings) (seatl ings) 0)) (estep steps)])
       _ (say o (join " " row)) _ (say o ")") (put o 10))
    ; pre-order walk; `seen` (a tablet) keeps a shared prerequisite to one card.
    ; the card lookup mirrors prep: an explicit recipe wins, else a pattern rule.
@@ -1391,8 +1391,8 @@
              ((w = "-h") || (w = "--help") || (w = "help"))      (: _ (pin opt 'help 1) (loop r opt))
              ((w = "-v") || (w = "--version") || (w = "version")) (: _ (pin opt 'ver 1) (loop r opt))
              (: vw (varw w)
-                (? (two? vw) (: _ (pin opt 'var (peep opt 'var () + `(vw))) (loop r opt))
-                   (: _ (pin opt 'pos (peep opt 'pos () + `(w))) (loop r opt))))))))
+                (? (two? vw) (: _ (pin opt 'var (peep opt 'var () + [vw])) (loop r opt))
+                   (: _ (pin opt 'pos (peep opt 'pos () + [w])) (loop r opt))))))))
     ws (tablet 0))
 
    ; -- cook-main (this form's body ANSWERS it) --

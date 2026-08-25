@@ -35,8 +35,8 @@
    (txnum p)   (? (<p = "-") (0 - txint (txjoin >p)) (txint (txjoin p)))
 
    ;; -- the line grammar. a token is at least one char (so `many` can't twirl on the empty match). --
-   txtsym (pmap (\ x `((intern (txjoin x)))) (seq (one txidc?) (span txidc?)))
-   txtnum (pmap (\ x `((txnum x))) (seq (opt (lit "-")) (seq (one txdig?) (span txdig?))))
+   txtsym (pmap (\ x [(intern (txjoin x))]) (seq (one txidc?) (span txidc?)))
+   txtnum (pmap (\ x [(txnum x)]) (seq (opt (lit "-")) (seq (one txdig?) (span txdig?))))
    txop   (alt txtnum txtsym)                                   ; an operand: number first, else symbol
    txgap  (skip (span txsep?))                                  ; a run of spaces/commas, dropped
    txline (seq txtsym (many (seq txgap txop)))                  ; head symbol then operands -> one form

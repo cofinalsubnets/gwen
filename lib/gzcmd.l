@@ -40,7 +40,7 @@ usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]
 no file, or a bare -, is the filter: stdin -> stdout"
 
    ; --- the small floor ------------------------------------------------------
-   (gzc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
+   (gzc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
    (gzc-blurt p s) (: q (open p "w") (? q (: _ (say q s) _ (close q) 1) ()))
    (gzc-moan t m) (? (peep t 'q 0) 0
                      (: _ (say err ("gzip: " + m)) _ (put err 10) (flush err)))
@@ -65,13 +65,13 @@ no file, or a bare -, is the filter: stdin -> stdout"
           (: flg (s 3)
              stamp (((s 4) + ((s 5) << 8)) + (((s 6) << 16) + ((s 7) << 24)))
              i1 (? (flg & 4) ((10 + 2) + ((s 10) + ((s 11) << 8))) 10)
-             r2 (? (flg & 8) (: e (skip i1) (? e `(1 (snip s i1 (e - 1)) e) ())) `(1 "" i1))
+             r2 (? (flg & 8) (: e (skip i1) (? e [1 (snip s i1 (e - 1)) e] ())) [1 "" i1])
              (? !r2 ()
                 (: nom <>r2
                    i3 (? (flg & 16) (skip <>>r2) <>>r2)
                    (? !i3 ()
                       (: i4 (? (flg & 2) (i3 + 2) i3)
-                         (? (n < (i4 + 8)) () `(1 stamp nom i4)))))))))
+                         (? (n < (i4 + 8)) () [1 stamp nom i4]))))))))
    (gzc-isize s) (: n (tally s)
                     (((s (n - 4)) + ((s (n - 3)) << 8))
                      + (((s (n - 2)) << 16) + ((s (n - 1)) << 24))))
@@ -100,17 +100,17 @@ no file, or a bare -, is the filter: stdin -> stdout"
        (one p acc)                     ; acc: (status compressed uncompressed payload)
         (: r (gzc-slurp p)
            (? !r (: _ (gzc-moan t (p + ": No such file or directory"))
-                    `((gzc-worse <acc 1) <>acc <>>acc <>>>acc))
+                    [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
               (: s <>r h (gzc-hdr s)
                  (? !h (: _ (gzc-moan t (p + ": not in gzip format"))
-                          `((gzc-worse <acc 1) <>acc <>>acc <>>>acc))
+                          [(gzc-worse <acc 1) <>acc <>>acc <>>>acc])
                     (: fs2 (tally s) un (gzc-isize s) pay (fs2 - <>>>h - 8)
                        ; ⚠ the name column is the PATH as it was typed, stem and all --
                        ; only -N's stored name arrives without a directory to keep
                        nom (? ((peep t 'N 0) && (0 < tally <>>h)) (gzc-base <>>h)
                               (: st (gzc-stem p suf) (? st <>st p)))
                        _ (say out ((gzc-lrow fs2 un pay nom) + "\n"))
-                       `(<acc (<>acc + fs2) (<>>acc + un) (<>>>acc + pay)))))))
+                       [<acc (<>acc + fs2) (<>>acc + un) (<>>>acc + pay)])))))
        a (foldl (\ acc p (one p acc)) '(0 0 0 0) fs)
        _ (? (two? >fs) (say out ((gzc-lrow <>a <>>a <>>>a "(totals)") + "\n")) 0)
        _ (flush out)
@@ -120,8 +120,8 @@ no file, or a bare -, is the filter: stdin -> stdout"
    ; .gz (or -S's) comes off; .tgz answers .tar, which is the one rename gzip does.
    (gzc-stem p suf)                    ; -> (1 stem) | ()
     (: n (tally p)
-       (? (gzc-ends? p suf) `(1 (snip p 0 (n - (tally suf))))
-          (gzc-ends? p ".tgz") `(1 ((snip p 0 (n - 4)) + ".tar"))
+       (? (gzc-ends? p suf) [1 (snip p 0 (n - (tally suf)))]
+          (gzc-ends? p ".tgz") [1 ((snip p 0 (n - 4)) + ".tar")]
           ()))
 
    ; --- one file, compressed -------------------------------------------------
@@ -235,9 +235,9 @@ no file, or a bare -, is the filter: stdin -> stdout"
           ()))
    (gzc-opts as t)                     ; -> (1 files) | ()  -- () is a bad option
     (: (go a fs)
-        (? !(two? a) `(1 (rev fs))
+        (? !(two? a) [1 (rev fs)]
            (: w <a n (tally w)
-              (? (w = "--") `(1 ((rev fs) + >a))
+              (? (w = "--") [1 ((rev fs) + >a)]
                  ((n < 2) || !(w 0 = 45)) (go >a (w >< fs))     ; a name, and "-" is one
                  (w 1 = 45)
                   (: r (gzc-long t (snip w 2 n))

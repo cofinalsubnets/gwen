@@ -36,7 +36,7 @@
                ns (nclock t0)
                dg ((gget G_MINOR) - g0) de ((gget G_EVAC) - e0)
                _  (tally keep)                       ; keep lives ACROSS the minor
-             `(dg de ns))
+             [dg de ns])
 
    ; a forced major fires on a near-empty nursery, so gen_major sizes its
    ; to-space just 25% over the live set -- less headroom than one full
@@ -56,7 +56,7 @@
    (churn k) (: (go i ww wn cs)
                 (? (i < k) (: r (step ())
                           (go (i + 1) (mx ww <>r) (mx wn <>>r) (cs + <r)))
-                         `(ww wn cs))
+                         [ww wn cs])
               (go 0 0 0 0))
 
    ; tenure n 64KB casks: build them young, then the TIMED forced major
@@ -68,7 +68,7 @@
                  _  (please 1)
                  ns (nclock t0)
                  de ((gget G_EVAC) - e0)
-               `(de ns l))
+               [de ns l])
 
    (row maj r) (: _ (puts "live-w ") _ (putx (gget G_OLD))
                   _ (puts "  major-w ") _ (putx <maj) _ (puts "  major-ns ") _ (putx <>maj)

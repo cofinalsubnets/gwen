@@ -74,7 +74,7 @@
     x (f 0 1)
     m (- p (cap x))
     n (- (cup x) m)
-    `(m n))
+    [m n])
    p (c1895 103 110)
    l (c1895_inv p)
    (assert (= 103 (cap l)) (= 110 (cap (cup l)))))

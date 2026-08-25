@@ -6,13 +6,13 @@
 ; human to re-probe it on every rename.)
 ;
 ; it reads .l by lib/lint.l's rules -- `;` and `#!` comment to end of line,
-; "..." is the only string with \ escapes, `'` and backtick are READER OPERATORS
-; and never delimiters (the trap a C lexer falls into) -- one step further than
-; lint: lint knows delimiters, this knows TOKENS. it is still not a parse.
+; "..." is the only string with \ escapes, `'` is a READER OPERATOR and never a
+; delimiter (the trap a C lexer falls into) -- one step further than lint: lint
+; knows delimiters, this knows TOKENS. it is still not a parse.
 ;
 ; --- the table ---------------------------------------------------------------
 ; a row is `(class vim-group rule)`. the rule's head is its TAG, and the tag set
-; is CLOSED at nine: eol span mark char delim num word punct sep. each tag has
+; is CLOSED at eight: eol span mark delim num word punct sep. each tag has
 ; exactly two interpreters -- hue-lex below (bytes -> runs) and hue-vim in the
 ; generator (tag -> syn lines) -- and neither is a regex engine. when a class
 ; wants a shape neither can say, that is the signal to add a TAG, not to hand-
@@ -34,10 +34,9 @@
     '((comment    Comment    (eol (";" "#!")))
       (string     String     (span 34 92))                 ; " with \ escapes
       (atom       Identifier (mark 39))                    ; 'foo -- the mark and its token
-      (ctor       Special    (char 96))                    ; ` -- the list ctor
       (paren      Delimiter  (delim "()[]{}"))
       ; `,` earns a tag of its own because it is its own case everywhere else too:
-      ; the C reader stops ON it like a quote or a tick, and opfix SPLITS a form at
+      ; the C reader stops ON it like a quote, and opfix SPLITS a form at
       ; it (prel's op-cm?/op-take/op-drop). it is in no vocabulary -- (member? ',
       ; (names ())) is nothing -- so no word lane claims it; it is not a sigil, so
       ; no punct lane does; and it has no partner, so it cannot ride the pair above.
@@ -67,12 +66,11 @@
    hue-eols (hue-arg (hue-one 'eol))                       ; the comment openers
    hue-brk  (hue-arg (hue-one 'delim))                     ; the bracket bytes
    hue-quo  (hue-arg (hue-one 'mark))
-   hue-tick (hue-arg (hue-one 'char))
    hue-sep  (hue-arg (hue-one 'sep))                       ; the byte the grammar splits at
    hue-str  (hue-arg (hue-one 'span))                      ; the quote byte
    hue-esc  (hue-nth (hue-rule (hue-one 'span)) 2)         ; the escape byte
    ; a token ends only on whitespace, a bracket, or a reader operator
-   hue-stop (hue-brk + "\"'`;,")
+   hue-stop (hue-brk + "\"';,")
 
    (hue-has? t c) (: n (tally t) (go i) (? (n <= i) () (t i = c) 1 (go (i + 1))) (go 0))
    (hue-blank? c) ((c = 32) || (c = 9))
@@ -172,8 +170,8 @@
    (hue-word bk t) (? (tablet? bk) (bk t) ())
 
    ; --- the lexer -------------------------------------------------------------
-   ; (hue-lex bk s in keep) answers `(runs out): the classified runs over the one
-   ; line s, each `(class from to) with `to` EXCLUSIVE, and the string state at
+   ; (hue-lex bk s in keep) answers [runs out]: the classified runs over the one
+   ; line s, each [class from to] with `to` EXCLUSIVE, and the string state at
    ; the line's end -- 0 code, 1 still inside a string, which is what carries a
    ; multi-line literal (crew/papel/papel.l's css is forty lines of one string)
    ; onto the next line.
@@ -183,7 +181,7 @@
    ; one, and this is what makes that true rather than merely intended.
    (hue-lex bk s in keep)
     (: n (tally s)
-       (emit acc k a b) (? (keep && (a < b)) (`(k a b) >< acc) acc)
+       (emit acc k a b) (? (keep && (a < b)) ([k a b] >< acc) acc)
        (tend i) (? ((n <= i) || hue-term? (s i)) i (tend (i + 1)))
        (srun i) (? ((i < n) && hue-sig? (s i)) (srun (i + 1)) i)
        ; GLUED means the whole run touches a datum start: syntax.vim's rule, and
@@ -204,19 +202,18 @@
                            (w p (emit acc (? (glued? p) 'mono 'dyad) i p))
                           (w j acc)))))))
        (wstr i a acc)                                      ; inside "..."
-        (? (n <= i) `((rev (emit acc 'string a n)) 1)
+        (? (n <= i) [(rev (emit acc 'string a n)) 1]
            (: c (s i)
               (? (c = hue-esc) (wstr (i + 2) a acc)
                  (c = hue-str) (w (i + 1) (emit acc 'string a (i + 1)))
                  (wstr (i + 1) a acc))))
        (w i acc)
-        (? (n <= i) `((rev acc) 0)
+        (? (n <= i) [(rev acc) 0]
            (: c (s i)
               (? (hue-blank? c) (w (i + 1) acc)
-                 (any (\ t (hue-at? s i t)) hue-eols) `((rev (emit acc 'comment i n)) 0)
+                 (any (\ t (hue-at? s i t)) hue-eols) [(rev (emit acc 'comment i n)) 0]
                  (c = hue-str) (wstr (i + 1) i acc)
                  (c = hue-quo) (: j (tend (i + 1)) (w j (emit acc 'atom i j)))
-                 (c = hue-tick) (w (i + 1) (emit acc 'ctor i (i + 1)))
                  (hue-delim? c) (w (i + 1) (emit acc 'paren i (i + 1)))
                  (c = hue-sep) (w (i + 1) (emit acc 'comma i (i + 1)))
                  ; a stop no lane claims (a control byte) is one plain char --

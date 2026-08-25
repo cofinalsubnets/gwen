@@ -148,13 +148,12 @@
  (8.0 = (rdr "08")))
 
 ; --- quote and the constructor wraps -------------------------------------------
-; a sigil GLUED to its datum builds it: ' quote, ` list, @ tuple. those three are
-; the exhaustive set -- the map wears the BRACKET {…} instead, and the twin is the
-; infix `~`. a list operand SPLICES into the call rather than being wrapped, and
-; the empty collections go to a direct one-arg nif.
+; a sigil GLUED to its datum builds it: ' quote, @ tuple. those two are the
+; exhaustive set -- the list wears the BRACKET […] and the map the brace {…},
+; and the twin is the infix `~`. a list operand SPLICES into the call rather than
+; being wrapped, and the empty collections go to a direct one-arg nif.
 (assert
  ('(\ x) = (rdr "'x"))
- ('(list a b) = (rdr "`(a b)"))
  ('(hash a b) = (rdr "{a b}"))
  ('(tuple 1 2) = (rdr "@(1 2)"))
  ('(0 ~ 1) = (rdr "(0 ~ 1)"))                         ; ~ SPACED is a plain operator symbol:
@@ -206,36 +205,35 @@
  ('(mono (+ (tuple 3 4))) = (rdr "+@(3 4)")))         ; ...or to a constructor
 
 ; --- delimiters and the zero point ---------------------------------------------
-; THE OPENER CARRIES THE WRAP: [..] is `(..) and {..} is the hash -- the brace is
-; the map's ONLY spelling, and the bracket a second one for `, so the empties follow
-; the splice law ([] -> (list), {} -> (tablet 0)).
+; THE OPENER CARRIES THE WRAP: [..] is the list and {..} the hash -- each is its
+; wrap's ONLY spelling, so the empties follow the splice law ([] -> (list),
+; {} -> (tablet 0)).
 ; the THREE CLOSERS ARE ONE: ) ] } each only end the open form, so a crossed pair
 ; reads the opener's wrap in silence -- matching them is libra's, not the reader's.
 ; the empty form is the ZERO POINT, not the number 0.
 (assert
  ('(list a b) = (rdr "[a b]"))          ('(hash a b) = (rdr "{a b}"))
- ((rdr "`(a b)") = (rdr "[a b]"))       ((rdr "`()") = (rdr "[]"))
  ('(list) = (rdr "[]"))                 ('(tablet 0) = (rdr "{}"))
- ((rdr "`(`(a b) `(c d))") = (rdr "[[a b] [c d]]"))   ; the nest is the whole point
- ((rdr "-`(1 2)") = (rdr "-[1 2]"))                   ; and it glues like its wrap
+ ('(list (list a b) (list c d)) = (rdr "[[a b] [c d]]"))   ; the nest is the whole point
+ ((rdr "-(list 1 2)") = (rdr "-[1 2]"))               ; and it glues like a form does
  ('(list a b) = (rdr "[a b)")) ('(a b) = (rdr "(a b]"))    ; a crossed pair, silent
  (() = (rdr "()")) !(0 = (rdr "()"))
  (', = (rdr ",")))                                    ; the comma is its own datum
 
 ; --- a constructor sigil over an open form RENAMES the wrap ---------------------
-; ` and @ -- the two SPLICING wraps that still wear a sigil -- name the constructor
-; the opener would otherwise have picked, so @[1 2] is @(1 2) and any delimiter
-; serves any wrap. stacking is what they cannot mean: `[a b] would splice `'s own
-; list in and read (list list a b), a wrong VALUE with nothing to raise. ⚠ ' and \
+; @ -- the one SPLICING wrap that still wears a sigil -- names the constructor the
+; opener would otherwise have picked, so @[1 2] is @(1 2) and any delimiter serves
+; any wrap. stacking is what it cannot mean: @[a b] would splice the bracket's own
+; list in and read (tuple list a b), a wrong VALUE with nothing to raise. ⚠ ' and \
 ; are not constructors -- they take the next datum whatever it is, so '[a b] is the
-; form (list a b) quoted, and a sigil over a SIGIL still stacks (`@(1 2) is unchanged).
+; form (list a b) quoted, and a sigil over a SIGIL still stacks ('@(1 2) is unchanged).
 ; ⚠ @ reads GLUE, and it alone: spaced it is the plain symbol -- the head of the
 ; match form, which is why a tray never wears a space.
 (assert
  ((rdr "@(1 2 3)") = (rdr "@[1 2 3]")) ((rdr "@()") = (rdr "@[]"))
- ((rdr "`(a b)") = (rdr "`[a b]"))     ((rdr "@(a b)") = (rdr "@{a b}"))
+ ((rdr "@(a b)") = (rdr "@{a b}"))
  ((rdr "@(1 2)") = (rdr "@[1 2]"))
  ('@ = (rdr "@ [1 2]")) ('(@ x (list _a b) b) = (rdr "(@ x [_a b] b)"))  ; @ reads glue
  ('(\ (list a b)) = (rdr "'[a b]"))                   ; ' is not a constructor: it quotes the FORM
- ('(list tuple 1 2) = (rdr "`@(1 2)"))                ; sigil over sigil still stacks
+ ('(\ (tuple 1 2)) = (rdr "'@(1 2)"))                 ; sigil over sigil still stacks
  ('torn = (rdr "@[")))

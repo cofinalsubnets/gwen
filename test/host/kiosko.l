@@ -30,7 +30,7 @@
 ; --- the shelf ------------------------------------------------------------------------
 (: dir "/tmp/kioskotest"
    (put-file f s) (: q (open (dir + "/" + f) "w") _ (say q s) (close q))
-   _ (hark `("rm" "-rf" dir))
+   _ (hark ["rm" "-rf" dir])
    _ (mkdir dir 493)
    _ (mkdir (dir + "/sub") 493)
    _ (mkdir (dir + "/bare") 493)

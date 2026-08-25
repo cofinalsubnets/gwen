@@ -79,7 +79,7 @@
                     _ (pin got 0 n)
                     _ (close c) 1)) 0)
  c (connect "127.0.0.1" port)
- _ (each `(104 105) (\ b (put c b)))      ; held in the write run, not sent
+ _ (each [104 105] (\ b (put c b)))       ; held in the write run, not sent
  _ (seal c 1)                             ; ... and the FIN it sends is the server's EOF
  _ (catch srv)
  _ (assert

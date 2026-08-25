@@ -180,7 +180,7 @@
                             (go (i + 1) (? (m < d) d m))))
              (go 0 0))
        (? ((lim < mx) & (pass < 32)) (: _ (gz-hhalve f nsym 0) (gz-hpass f nsym lim (pass + 1)))
-          `(lens mx)))
+          [lens mx]))
    ; ⚠ A CODE NEEDS TWO SYMBOLS even where the block used one or none: a lone symbol
    ; would want a zero-bit code, and the format cannot spell one. the two cheapest are
    ; conjured at count one, which is the shape zlib writes too.
@@ -244,13 +244,13 @@
    (gz-find s n i head prev)                ; -> (len dist), len 0 for no match
     (: lim (? ((n - i) < gz-maxmatch) (n - i) gz-maxmatch)
        (go k d bl bd)
-        (? (! k) `(bl bd)
-           (! d) `(bl bd)
+        (? (! k) [bl bd]
+           (! d) [bl bd]
            (: p (k - 1) dist (i - p)
-              (? (gz-wsize < dist) `(bl bd)
+              (? (gz-wsize < dist) [bl bd]
                  (: l (gz-mlen s n i p lim)
                     nx (gz-c32 prev (p & gz-wmask))
-                    (? (bl < l) (? (lim <= l) `(l dist) (go nx (d - 1) l dist))
+                    (? (bl < l) (? (lim <= l) [l dist] (go nx (d - 1) l dist))
                                 (go nx (d - 1) bl bd))))))
        (go (gz-c32 head (gz-hash s i)) gz-chain 0 0))
    ; --- the same finder, in machine code -------------------------------------
@@ -407,8 +407,8 @@
    ; ⚠ `fn` IS THE FINDER, handed down rather than read: gz-find above or the machine
    ; code that says the same thing, and which one is settled once per deflate.
    (gz-tok fn s n head prev tok fl fd i k xb)  ; -> (i tokens extra-bits)
-    (? (n <= i) `(i k xb)
-       (gz-tokmax <= k) `(i k xb)
+    (? (n <= i) [i k xb]
+       (gz-tokmax <= k) [i k xb]
        (: m (? ((i + gz-minmatch) <= n) (fn s n i head prev) '(0 0))
           l (? (<m = 3) (? (gz-toofar < <>m) 0 <m) <m)
           (? (l < gz-minmatch)
@@ -442,10 +442,10 @@
    (gz-run cl tot rl)                       ; -> how many entries rl holds
     (: (span v k) (? (tot <= k) k ((peep cl k 0) = v) (span v (k + 1)) k)
        (put j sy ex) (: _ (gz-c32! rl j ((sy << 7) + ex)) (j + 1))
-       (zeros i r j) (? (r < 3) (? r (zeros (i + 1) (r - 1) (put j 0 0)) `(i j))
+       (zeros i r j) (? (r < 3) (? r (zeros (i + 1) (r - 1) (put j 0 0)) [i j])
                           (r < 11) (zeros (i + r) 0 (put j 17 (r - 3)))
                           (: t (? (138 < r) 138 r) (zeros (i + t) (r - t) (put j 18 (t - 11)))))
-       (reps i r v j) (? (r < 3) (? r (reps (i + 1) (r - 1) v (put j v 0)) `(i j))
+       (reps i r v j) (? (r < 3) (? r (reps (i + 1) (r - 1) v (put j v 0)) [i j])
                           (: t (? (6 < r) 6 r) (reps (i + t) (r - t) v (put j 16 (t - 3)))))
        (go i j) (? (tot <= i) j
                    (: v (peep cl i 0)
@@ -639,7 +639,7 @@
                           _ (? l (: o (peep ofs l 0) _ (pin sym o i) _ (pin ofs l (o + 1)) 0) 0)
                           (go (i + 1))))
             (go 0))
-       `(cnt sym))
+       [cnt sym])
    ; ..and the decode walks up to fifteen bits for ONE symbol, which is where the
    ; per-bit cursor cost lands hardest -- so it takes the position in hand too, and
    ; writes it back on every way out, the failing one included.
@@ -652,7 +652,7 @@
               c (? over code (code | (((s (p >> 3)) >> (p & 7)) & 1)))
               p2 (? over p (p + 1))
               k (peep cnt l 0)
-              (? ((c - k) < first) (: _ (pin t 0 p2) `(1 (peep sym (index + (c - first)) 0)))
+              (? ((c - k) < first) (: _ (pin t 0 p2) [1 (peep sym (index + (c - first)) 0)])
                  (go (l + 1) (c << 1) ((first + k) << 1) (index + k) p2))))
        (go 1 0 0 0 (peep t 0 0)))
 
@@ -738,7 +738,7 @@
             (typ = 1) (gz-codes s n t b gz-fixlithuff gz-fixdisthuff)
             (typ = 2) (gz-dynamic s n t b)
             ())
-       (? r `(1 fin) ()))
+       (? r [1 fin] ()))
 
    (gz-puff s hint)
     (: n (tally s)
@@ -746,7 +746,7 @@
        (go u) (: r (gz-block s n t b)
                  (? (! r) ()
                     (peep t 1 0) ()
-                    (<(>r)) `(1 (gz-take b))
+                    (<(>r)) [1 (gz-take b)]
                     (go ())))
        (? n (go ()) ()))
    ; the door. host/inflate.c where the artifact carries it, gz-puff where it does not
@@ -755,7 +755,7 @@
    ; would read as absent. The presence probe is gz-nif's, and why is written there.
    (gz-inflate s hint)
     (? (gz-nif 1 gz-infprobe)
-       (: r (inflate s hint) (? (string? r) `(1 r) (gz-puff s hint)))
+       (: r (inflate s hint) (? (string? r) [1 r] (gz-puff s hint)))
        (gz-puff s hint))
 
    ; --- the container (RFC 1952) --------------------------------------------
@@ -809,6 +809,6 @@
                          ; and saying so is the only thing the crc is for.
                          (? (! ((gz-crc32 out) = crc)) ()
                             (! ((tally out) = (isize & 4294967295))) ()
-                            `(1 out))))))))))
+                            [1 out])))))))))
 
 ) ; module 'gz

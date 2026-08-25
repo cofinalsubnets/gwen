@@ -30,7 +30,7 @@
 
    ; the woken child reads the marker this session pinned before its bake
    _ (: p (open drv "w") _ (say p "(: _ (putn bake-smoke-marker) (quit 0))") (close p))
-   r (hark `("out/host/love" "wake" img drv))
+   r (hark ["out/host/love" "wake" img drv])
    _ (assert (two? r) (<r = 0) (>r = "4242"))
 
    ; ..and what the hash-cons did to the pair of each kind

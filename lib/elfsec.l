@@ -31,7 +31,7 @@
        (cstr i) (: (go j) (? (peep exe j 0 = 0) (snip exe i j) (go (j + 1))) (go i))
        (go i) (? (i = shnum) ()
                  (= nm (cstr (stro + (shf i 4))))
-                  (: o (shf i 6) `((snip exe o (o + (shf i 8)))))
+                  (: o (shf i 6) [(snip exe o (o + (shf i 8)))])
                  (go (i + 1)))
        (go 0))
    (elfsec path nm) (: s (es-slurp path) (? (string? s) (es-sec s nm) ()))

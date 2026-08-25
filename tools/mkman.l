@@ -16,7 +16,7 @@
        (go i a) (? (n <= i) ""
                    !(t i = 34) (go (i + 1) a)
                    (two? a) (snip t <a i)
-                   (go (i + 1) `((i + 1))))
+                   (go (i + 1) [(i + 1)]))
        (go 0 ()))
    ; segments onto a list and joined once -- a per-hit concat would re-copy the whole
    ; page each time, which on a man page is quadratic for no reason

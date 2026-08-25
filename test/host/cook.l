@@ -27,16 +27,16 @@
                             (? (= sub (snip s i (+ i (tally sub)))) 1 (g (+ 1 i))))) 0)
 
    (write-file path content) (: q (open path "w") _ (say q content) (close q))
-   (sh cmd) (hark `("sh" "-c" cmd))
+   (sh cmd) (hark ["sh" "-c" cmd])
    ; run cook on a fixture Makefile, return its captured stdout.
    (run-cook src tgt)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (hark `(love "-l" "crew/cook/cook.l" (+ dir "/Makefile") tgt))
+       r (hark [love "-l" "crew/cook/cook.l" (+ dir "/Makefile") tgt])
        (? (two? r) >r ""))
    ; --emit a fixture Makefile, return the generated Cookfile text (stdout).
    (run-emit src)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (hark `(love "-l" "crew/cook/cook.l" "--emit" (+ dir "/Makefile")))
+       r (hark [love "-l" "crew/cook/cook.l" "--emit" (+ dir "/Makefile")])
        (? (two? r) >r ""))
 
    _ (sh (+ "rm -rf " (+ dir "; mkdir -p " dir)))
@@ -110,7 +110,7 @@
    ; so name it absolutely.)
    _ (sh (+ "mkdir -p " (+ dir "/mk")))
    _ (write-file (+ dir "/mk/common.mk") "FROM_INC = included-ok\n")
-   inc (run-cook (mk `((+ "include " (+ dir "/mk/common.mk")) "all:" "\techo \"I[$(FROM_INC)]\"")) "all")
+   inc (run-cook (mk [(+ "include " (+ dir "/mk/common.mk")) "all:" "\techo \"I[$(FROM_INC)]\""]) "all")
    _ (ok "include" (has inc "I[included-ok]"))
 
    ; ----------------------------------------------------- automatic vars + dir
@@ -121,23 +121,23 @@
    ; --------------------------------------------------------- pattern rules
    ; build x.o from x.c via an implicit pattern rule; check the file appears.
    _ (sh (+ "mkdir -p " (+ (+ dir "/p; echo SRC > ") (+ dir "/p/x.c"))))
-   _ (run-cook (mk `((+ "all: " (+ dir "/p/x.o"))
-                      (+ (+ dir "/p/%.o: ") (+ dir "/p/%.c")) "\tcp $< $@")) (+ dir "/p/x.o"))
+   _ (run-cook (mk [(+ "all: " (+ dir "/p/x.o"))
+                     (+ (+ dir "/p/%.o: ") (+ dir "/p/%.c")) "\tcp $< $@"]) (+ dir "/p/x.o"))
    _ (ok "pattern rule builds target" (= 0 <(sh (+ "test -f " (+ dir "/p/x.o")))))
 
    ; static pattern rule: targets: tgtpat: prereqpats
    _ (sh (+ "echo S > " (+ dir "/p/y.in")))
-   _ (run-cook (mk `((+ "outs = " (+ dir "/p/y.out"))
-                      "all: $(outs)"
-                      (+ "$(outs): " (+ dir (+ "/p/%.out: " (+ dir "/p/%.in")))) "\tcp $< $@")) "all")
+   _ (run-cook (mk [(+ "outs = " (+ dir "/p/y.out"))
+                     "all: $(outs)"
+                     (+ "$(outs): " (+ dir (+ "/p/%.out: " (+ dir "/p/%.in")))) "\tcp $< $@"]) "all")
    _ (ok "static pattern rule builds target" (= 0 <(sh (+ "test -f " (+ dir "/p/y.out")))))
 
    ; the CANCELLATION idiom: an EMPTY recipe unmakes a pattern rule ("an empty
    ; recipe unmakes the rule" -- mk/common.mk cancels make's lex builtin exactly
    ; so). a live `%.c: %.l` would make every .c demand a sibling .l.
    _ (sh (+ "echo C > " (+ dir "/p/n.c")))
-   ca (run-cook (mk `("%.c: %.l"
-                      (+ "all: " (+ dir "/p/n.c")) "\t@echo \"CA[ok]\"")) "all")
+   ca (run-cook (mk ["%.c: %.l"
+                     (+ "all: " (+ dir "/p/n.c")) "\t@echo \"CA[ok]\""]) "all")
    _ (ok "an empty pattern recipe cancels, not registers" (has ca "CA[ok]"))
 
    ; ---------------------------------------------- the BUILTIN implicit rules
@@ -147,16 +147,16 @@
    ; the assertion is on the COMMAND cook issues, not on an object -- so the gate
    ; needs no host compiler, and it reads the rule's shape (-c -o $@ $<) directly.
    _ (sh (+ "mkdir -p " (+ dir "/b; echo SRCB > " (+ dir "/b/z.c"))))
-   bi (run-cook (mk `("CC = echo-cc"
-                      (+ "all: " (+ dir "/b/z.o")) "\t@echo BUILTIN-DONE")) "all")
+   bi (run-cook (mk ["CC = echo-cc"
+                     (+ "all: " (+ dir "/b/z.o")) "\t@echo BUILTIN-DONE"]) "all")
    _ (ok "builtin %.o: %.c fires" (&& (has bi "echo-cc") (has bi "-c -o") (has bi "z.c")))
    ; ..and the MATCH-ANYTHING builtins (`%: %.c`, `%: %.o`) must stay OUT: they match
    ; every target there is, and this resolver does not model the conditions GNU only
    ; dares them under. with `x.o` on disk, a link target `x` must still be the
    ; Makefile's own recipe -- not a builtin linking that one object alone.
    _ (sh (+ "echo O > " (+ dir "/b/lone.o")))
-   ma (run-cook (mk `((+ "all: " (+ dir "/b/lone")) (+ (+ dir "/b/lone: ") (+ dir "/b/lone.o"))
-                      "\t@echo \"MA[mine]\"")) "all")
+   ma (run-cook (mk [(+ "all: " (+ dir "/b/lone")) (+ (+ dir "/b/lone: ") (+ dir "/b/lone.o"))
+                     "\t@echo \"MA[mine]\""]) "all")
    _ (ok "no match-anything builtin hijacks a link" (has ma "MA[mine]"))
 
    ; -------------------------------------------------- old-style suffix rules
@@ -164,9 +164,9 @@
    ; the dot-target drop would otherwise eat it in SILENCE, leaving the builtin above
    ; to compile the file with default flags instead of the Makefile's own.
    _ (sh (+ "echo SRCS > " (+ dir "/b/s.c")))
-   _ (run-cook (mk `(".SUFFIXES: .c .o"
-                     ".c.o:" "\tcp $< $@"
-                     (+ "all: " (+ dir "/b/s.o")))) "all")
+   _ (run-cook (mk [".SUFFIXES: .c .o"
+                    ".c.o:" "\tcp $< $@"
+                    (+ "all: " (+ dir "/b/s.o"))]) "all")
    _ (ok "suffix rule .c.o builds the target" (= 0 <(sh (+ "test -f " (+ dir "/b/s.o")))))
 
    ; ------------------------------------------------------------------ .POSIX
@@ -197,7 +197,7 @@
    (D2 f) (+ dir f)
    (run-cookv src args)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (hark (`(love "-l" "crew/cook/cook.l" (+ dir "/Makefile")) + args))
+       r (hark ([love "-l" "crew/cook/cook.l" (+ dir "/Makefile")] + args))
        (? (two? r) >r ""))
    _ (setenv "COOKT_ENV" "from-env")
    env (run-cookv (mk '("COOKT_ENV ?= nope"
@@ -232,11 +232,11 @@
                        "foo/bar.o:" "\techo \"D[$(@D) $(@F)]\"")) "foo/bar.o")
    _ (ok "$(@D) and $(@F)" (has adf "D[foo bar.o]"))
    _ (sh (+ "mkdir -p " (+ (D2 "/w; touch ") (+ (D2 "/w/b.c ") (+ (D2 "/w/a.c ") (D2 "/w/.h.c"))))))
-   wc (run-cook (mk `((+ "ws := $(wildcard " (+ (D2 "/w/*.c") ")"))
-                      (+ "ex := $(wildcard " (+ (D2 "/w/a.c") ")"))
-                      "no := $(wildcard nothing/here/*.q)"
-                      "all:"
-                      "\techo \"W[$(notdir $(ws))|$(notdir $(ex))|$(no)]\"")) "all")
+   wc (run-cook (mk [(+ "ws := $(wildcard " (+ (D2 "/w/*.c") ")"))
+                     (+ "ex := $(wildcard " (+ (D2 "/w/a.c") ")"))
+                     "no := $(wildcard nothing/here/*.q)"
+                     "all:"
+                     "\techo \"W[$(notdir $(ws))|$(notdir $(ex))|$(no)]\""]) "all")
    _ (ok "wildcard: sorted glob, no dotfiles, existence word, empty miss"
          (has wc "W[a.c b.c|a.c|]"))
    ab (run-cook (mk '("p := $(abspath /x//y/./../z)"
@@ -254,11 +254,11 @@
    ; one passed only on the last-resort fallback 4bfac33b removed.
    _ (sh (+ "mkdir -p " (+ dir "/e; touch " (+ dir "/e/a.c " (+ dir "/e/b.c")))))
    eo (+ dir "/e/a.o " (+ dir "/e/b.o"))
-   em (run-emit (mk `("CC := cc"  (+ "OBJ := " eo)  ".PHONY: all clean"
-                       "all: prog"
-                       "prog: $(OBJ)"  "\t$(CC) -o $@ $(OBJ)"
-                       "%.o: %.c"      "\t$(CC) -c -o $@ $<"
-                       "clean:"        "\t-rm -f prog $(OBJ)")))
+   em (run-emit (mk ["CC := cc"  (+ "OBJ := " eo)  ".PHONY: all clean"
+                      "all: prog"
+                      "prog: $(OBJ)"  "\t$(CC) -o $@ $(OBJ)"
+                      "%.o: %.c"      "\t$(CC) -c -o $@ $<"
+                      "clean:"        "\t-rm -f prog $(OBJ)"]))
    _ (ok "emit: .PHONY target -> symbol"   (has em "(recipe 'all "))
    _ (ok "emit: file target -> string"     (has em "(recipe '\"prog\" "))
    _ (ok "emit: var-resolved step"         (has em (+ "(\"sh\" \"-c\" \"cc -o prog " (+ eo "\")"))))
@@ -269,12 +269,12 @@
    ; round-trip: cook the emitted Cookfile and confirm it runs the recipe. The
    ; rule just writes a file (no compiler / source lookup), so the test is hermetic.
    _ (sh (+ "mkdir -p " (+ dir "/e")))
-   emc (run-emit (mk `(".PHONY: all"
-                        (+ "all: " (+ dir "/e/out.txt"))
-                        (+ dir "/e/out.txt:") "\techo HI > $@")))
+   emc (run-emit (mk [".PHONY: all"
+                       (+ "all: " (+ dir "/e/out.txt"))
+                       (+ dir "/e/out.txt:") "\techo HI > $@"]))
    _ (write-file (+ dir "/e/Cookfile") emc)
    _ (sh (+ "rm -f " (+ dir "/e/out.txt")))
-   _ (hark `(love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile") "all"))
+   _ (hark [love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile") "all"])
    _ (ok "emit: round-trip cooks the emitted Cookfile" (= 0 <(sh (+ "test -f " (+ dir "/e/out.txt")))))
 
    ; .DEFAULT_GOAL overrides "the first rule declared" as the default ticket --
@@ -285,10 +285,10 @@
                "first:"  "\techo FIRST"
                "second:" "\techo SECOND"))
    _ (write-file (+ dir "/Makefile") dgsrc)
-   dgr (: r (hark `(love "-l" "crew/cook/cook.l" (+ dir "/Makefile"))) (? (two? r) >r ""))
+   dgr (: r (hark [love "-l" "crew/cook/cook.l" (+ dir "/Makefile")]) (? (two? r) >r ""))
    _ (ok ".DEFAULT_GOAL is the default ticket" (has dgr "SECOND"))
    _ (write-file (+ dir "/e/Cookfile") (run-emit dgsrc))
-   dgc (: r (hark `(love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile"))) (? (two? r) >r ""))
+   dgc (: r (hark [love "-l" "crew/cook/cook.l" (+ dir "/e/Cookfile")]) (? (two? r) >r ""))
    _ (ok "emit: .DEFAULT_GOAL survives the round-trip" (has dgc "SECOND"))
 
    ; ------------------------------------------------- side-effect writes are seen
@@ -301,13 +301,13 @@
    ;  not from `dir`, so a bare `> out.txt` writes into the repo.)
    (D f) (+ dir f)
    _ (sh (+ "echo OLD > " (+ (D "/shared.txt") (+ " && sleep 0.01 && echo STALE > " (D "/second")))))
-   sidesrc (mk `(".PHONY: all first"
-                 (+ "all: first " (D "/second"))
-                 "first:" (+ "\techo NEW > " (D "/shared.txt"))
-                 (+ (D "/second: ") (D "/shared.txt"))
-                 (+ "\tcp " (+ (D "/shared.txt") (+ " " (D "/second"))))))
+   sidesrc (mk [".PHONY: all first"
+                (+ "all: first " (D "/second"))
+                "first:" (+ "\techo NEW > " (D "/shared.txt"))
+                (+ (D "/second: ") (D "/shared.txt"))
+                (+ "\tcp " (+ (D "/shared.txt") (+ " " (D "/second"))))])
    _ (write-file (D "/Makefile") sidesrc)
-   _ (: r (hark `(love "-l" "crew/cook/cook.l" (D "/Makefile") "all")) 0)
+   _ (: r (hark [love "-l" "crew/cook/cook.l" (D "/Makefile") "all"]) 0)
    side (: r (sh (+ "cat " (D "/second"))) (? (two? r) >r ""))
    _ (ok "a recipe's side-effect write invalidates the date cache" (has side "NEW"))
 
@@ -354,9 +354,9 @@
    ; tree masked it, since an existing output reads as a source leaf. asking
    ; cook for the SECOND target is what proves the registration went wide.
    _ (sh (+ "echo x > " (D "/msrc")))
-   _ (run-cook (mk `((+ (D "/m1.out ") (+ (D "/m2.out: ") (D "/msrc")))
-                     (+ "\techo M4 > " (D "/m1.out"))
-                     (+ "\techo M4 > " (D "/m2.out"))))
+   _ (run-cook (mk [(+ (D "/m1.out ") (+ (D "/m2.out: ") (D "/msrc")))
+                    (+ "\techo M4 > " (D "/m1.out"))
+                    (+ "\techo M4 > " (D "/m2.out"))])
                (D "/m2.out"))
    m2 (: r (sh (+ "cat " (D "/m2.out"))) (? (two? r) >r ""))
    _ (ok "a multi-target rule registers every target" (has m2 "M4"))
@@ -396,16 +396,16 @@
    ; which is the one thing a gate cannot hold still.
    (run-cookj src tgt j)
    (: _ (write-file (+ dir "/Makefile") src)
-       r (hark `(love "-l" "crew/cook/cook.l" "-j" j (+ dir "/Makefile") tgt))
+       r (hark [love "-l" "crew/cook/cook.l" "-j" j (+ dir "/Makefile") tgt])
        (? (two? r) >r ""))
    _ (sh (+ "mkdir -p " (D "/j")))
-   jsrc (mk `(".PHONY: all"
-              (+ "all: " (+ (D "/j/a ") (+ (D "/j/b ") (+ (D "/j/c ") (D "/j/d")))))
-              "\t@echo J[all]"
-              (D "/j/a:") (+ "\t@echo A > " (D "/j/a"))
-              (D "/j/b:") (+ "\t@echo B > " (D "/j/b"))
-              (D "/j/c:") (+ "\t@echo C > " (D "/j/c"))
-              (D "/j/d:") (+ "\t@echo D > " (D "/j/d"))))
+   jsrc (mk [".PHONY: all"
+             (+ "all: " (+ (D "/j/a ") (+ (D "/j/b ") (+ (D "/j/c ") (D "/j/d")))))
+             "\t@echo J[all]"
+             (D "/j/a:") (+ "\t@echo A > " (D "/j/a"))
+             (D "/j/b:") (+ "\t@echo B > " (D "/j/b"))
+             (D "/j/c:") (+ "\t@echo C > " (D "/j/c"))
+             (D "/j/d:") (+ "\t@echo D > " (D "/j/d"))])
    _ (sh (+ "rm -f " (D "/j/[abcd]")))
    j1 (run-cookj jsrc "all" "1")
    _ (sh (+ "rm -f " (D "/j/[abcd]")))
@@ -416,15 +416,15 @@
                       (+ " && test -f " (+ (D "/j/c") (+ " && test -f " (D "/j/d")))))))))))
    ; a glued -jN is the same flag
    _ (sh (+ "rm -f " (D "/j/[abcd]")))
-   jg (: r (hark `(love "-l" "crew/cook/cook.l" "-j4" (+ dir "/Makefile") "all")) (? (two? r) >r ""))
+   jg (: r (hark [love "-l" "crew/cook/cook.l" "-j4" (+ dir "/Makefile") "all"]) (? (two? r) >r ""))
    _ (ok "-j4 glued reads as -j 4" (= j1 jg))
 
    ; an EDGE still orders: one must finish before two starts, however wide the pool.
    _ (sh (+ "rm -f " (+ (D "/j/log") (+ " " (+ (D "/j/one ") (D "/j/two"))))))
-   jchain (mk `(".PHONY: all"
-                (+ "all: " (D "/j/two"))
-                (D "/j/one:") (+ "\t@sleep 1; echo one >> " (+ (D "/j/log") (+ "; touch " (D "/j/one"))))
-                (+ (D "/j/two: ") (D "/j/one")) (+ "\t@echo two >> " (+ (D "/j/log") (+ "; touch " (D "/j/two"))))))
+   jchain (mk [".PHONY: all"
+               (+ "all: " (D "/j/two"))
+               (D "/j/one:") (+ "\t@sleep 1; echo one >> " (+ (D "/j/log") (+ "; touch " (D "/j/one"))))
+               (+ (D "/j/two: ") (D "/j/one")) (+ "\t@echo two >> " (+ (D "/j/log") (+ "; touch " (D "/j/two"))))])
    _ (run-cookj jchain "all" "4")
    jlog (: r (sh (+ "cat " (D "/j/log"))) (? (two? r) >r ""))
    _ (ok "-j4 keeps an edge in order" (has jlog "one\ntwo"))
@@ -432,18 +432,18 @@
    ; a red recipe under -j is still red, and its siblings are let finish rather than
    ; killed -- a half-written file left behind would read as up to date next run.
    _ (sh (+ "rm -f " (+ (D "/j/ok ") (D "/j/red"))))
-   jred (mk `(".PHONY: all"
-              (+ "all: " (+ (D "/j/ok ") (D "/j/red")))
-              (D "/j/ok:") (+ "\t@sleep 1; echo OK > " (D "/j/ok"))
-              (D "/j/red:") "\t@exit 3"))
+   jred (mk [".PHONY: all"
+             (+ "all: " (+ (D "/j/ok ") (D "/j/red")))
+             (D "/j/ok:") (+ "\t@sleep 1; echo OK > " (D "/j/ok"))
+             (D "/j/red:") "\t@exit 3"])
    _ (write-file (+ dir "/Makefile") jred)
-   jrst (: r (hark `(love "-l" "crew/cook/cook.l" "-j" "4" (+ dir "/Makefile") "all")) (? (two? r) <r 0))
+   jrst (: r (hark [love "-l" "crew/cook/cook.l" "-j" "4" (+ dir "/Makefile") "all"]) (? (two? r) <r 0))
    _ (ok "-j4: a failed recipe fails the run" (!(= 0 jrst)))
    _ (ok "-j4: outstanding jobs finish first" (= 0 <(sh (+ "test -f " (D "/j/ok")))))
 
    ; the width is the caller's to say: a bare -j is make's "unlimited", and one
    ; translation unit here peaks at 2.3 GB, so cook asks for the number instead.
-   jbad (: r (hark `(love "-l" "crew/cook/cook.l" "-j" "x" (+ dir "/Makefile") "all")) (? (two? r) <r 0))
+   jbad (: r (hark [love "-l" "crew/cook/cook.l" "-j" "x" (+ dir "/Makefile") "all"]) (? (two? r) <r 0))
    _ (ok "-j wants a count" (!(= 0 jbad)))
 
    ; ---------------------------------------------------------------- summary

@@ -122,28 +122,28 @@
                             (&& ee (! (two? ex)))     ()   ; "1e" is not json either
                             (: sgn (? neg -1 1)
                                (? (&& (fl = 0) (! ee))
-                                  `((sgn * iv) d)
+                                  [(sgn * iv) d]
                                   (: mant ((iv * (fl 10)) + fv)
                                      base (((1.0 * sgn) * mant) / (fl 10))
-                                     (? (two? ex) `((base * (jpow10 <ex)) d)
-                                        `(base d)))))))))
+                                     (? (two? ex) [(base * (jpow10 <ex)) d]
+                                        [base d]))))))))
 
    (jlit? s i n w) (: e (i + (tally w)) (&& (e <= n) ((snip s i e) = w)))
 
-   (jlit s i n) (? (jlit? s i n "true")  `(json-true (i + 4))
-                   (jlit? s i n "false") `(json-false (i + 5))
-                   (jlit? s i n "null")  `(json-null (i + 4))
+   (jlit s i n) (? (jlit? s i n "true")  [json-true (i + 4)]
+                   (jlit? s i n "false") [json-false (i + 5)]
+                   (jlit? s i n "null")  [json-null (i + 4)]
                    (jnum s i n))
 
    (jarr s i n) (: a (jws s (i + 1) n)
-                   (? (&& (a < n) ((s a) = 93)) `(() (a + 1))
+                   (? (&& (a < n) ((s a) = 93)) [() (a + 1)]
                       ((: (go k acc)
                           (: r (jval s k n)
                              (? (! (two? r)) ()
                                 (: e (jws s <>r n)
                                    (? (! (e < n))    ()
                                       ((s e) = 44)   (go (e + 1) (link <r acc))
-                                      ((s e) = 93)   `((rev (link <r acc)) (e + 1))
+                                      ((s e) = 93)   [(rev (link <r acc)) (e + 1)]
                                       ())))))
                        a ())))
 

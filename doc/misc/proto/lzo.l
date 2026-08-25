@@ -262,4 +262,4 @@
             (: k ((s 0) - 17)
                (? (k < 4) (lzo-mnext b s n 1 k) (lzo-lits b s n 1 k)))
             (lzo-top b s n 0))
-       (? r `(1 (lzo-take b)) ())))
+       (? r [1 (lzo-take b)] ())))

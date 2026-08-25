@@ -92,10 +92,10 @@
    ; const array of pointers, so clay places the const on the declarator not the base.
    mx-ty '(arr (arr (const (ptr (named "lvm_t"))) KN) KN)
    (mx-clay1 nm g)
-    (: rows (map (\ p `('didx <p `('init (map (\ q `('didx <q `('var (string <>q)))) (zip mx-kinds <>p)))))
+    (: rows (map (\ p ['didx <p ['init (map (\ q ['didx <q ['var (string <>q)]]) (zip mx-kinds <>p))]])
                  (zip mx-kinds g))
-       `('gdecl `(`((string nm) mx-ty `('init rows))) '(static)))
-   (zip a b) (? (! (two? a)) () (link `(<a <b) (zip >a >b)))
+       ['gdecl [[(string nm) mx-ty ['init rows]]] '(static)])
+   (zip a b) (? (! (two? a)) () (link [<a <b] (zip >a >b)))
 
    ; --- the enums the matrices are indexed by -------------------------------------
    ; KN rides at the end of `enum q` and is not a kind: it is the roster's own length,

@@ -38,24 +38,24 @@
    ;;    callee-saved bank (arm64's r19..r28 shape) for a future glaze. x3 (gp) and x4 (tp) are
    ;;    platform-reserved and never touched; x30/x31 (t5/t6) are the two scratches above.
    rv-regs (tabof
-        `(('sp >< 2) ('fp >< 8) ('lr >< 1)
-           ('r0 >< 10) ('r1 >< 11) ('r2 >< 12) ('r3 >< 13) ('r4 >< 14)
-           ('r5 >< 15) ('r6 >< 16) ('r7 >< 17)
-           ('r8 >< 5) ('r9 >< 6) ('r10 >< 7) ('r11 >< 28) ('r12 >< 29)
-           ('r13 >< 18) ('r14 >< 19) ('r15 >< 9)
-           ('r19 >< 20) ('r20 >< 21) ('r21 >< 22) ('r22 >< 23)
-           ('r23 >< 24) ('r24 >< 25) ('r25 >< 26) ('r26 >< 27)))
+        [('sp >< 2) ('fp >< 8) ('lr >< 1)
+          ('r0 >< 10) ('r1 >< 11) ('r2 >< 12) ('r3 >< 13) ('r4 >< 14)
+          ('r5 >< 15) ('r6 >< 16) ('r7 >< 17)
+          ('r8 >< 5) ('r9 >< 6) ('r10 >< 7) ('r11 >< 28) ('r12 >< 29)
+          ('r13 >< 18) ('r14 >< 19) ('r15 >< 9)
+          ('r19 >< 20) ('r20 >< 21) ('r21 >< 22) ('r22 >< 23)
+          ('r23 >< 24) ('r24 >< 25) ('r25 >< 26) ('r26 >< 27)])
    (rvn r) (look rv-regs r 'badreg)
    (rv-reg-eq a b) (rvn a = rvn b)
 
    ;; -- f0..f7 -> fa0..fa7 (f10..f17, the D argument file), f8..f15 -> ft0..ft7 (f0..f7 pure
    ;;    temps), f16..f19 -> ft8..ft11 (f28..f31, the narrow scratch bank). --
    rv-fregs (tabof
-        `(('f0 >< 10) ('f1 >< 11) ('f2 >< 12) ('f3 >< 13) ('f4 >< 14)
-           ('f5 >< 15) ('f6 >< 16) ('f7 >< 17)
-           ('f8 >< 0) ('f9 >< 1) ('f10 >< 2) ('f11 >< 3) ('f12 >< 4)
-           ('f13 >< 5) ('f14 >< 6) ('f15 >< 7)
-           ('f16 >< 28) ('f17 >< 29) ('f18 >< 30) ('f19 >< 31)))
+        [('f0 >< 10) ('f1 >< 11) ('f2 >< 12) ('f3 >< 13) ('f4 >< 14)
+          ('f5 >< 15) ('f6 >< 16) ('f7 >< 17)
+          ('f8 >< 0) ('f9 >< 1) ('f10 >< 2) ('f11 >< 3) ('f12 >< 4)
+          ('f13 >< 5) ('f14 >< 6) ('f15 >< 7)
+          ('f16 >< 28) ('f17 >< 29) ('f18 >< 30) ('f19 >< 31)])
    (rvf r) (look rv-fregs r 'badfreg)
 
    ;; -- the six instruction formats, each a word builder. immediates arrive SIGNED; & masks
@@ -80,14 +80,14 @@
       (? (rv-fits12 s) (rv-i s 0 0 dn 0x13)                                 ; addi d, x0, s
          (fits32 s)
          (: lo (rv-lo12 s) hi ((s - lo) // 4096)                            ; addiw wraps mod 2^32, so
-            (catall `(                                                      ; hi=2^19 lands s=2^31-ish exactly
-               (rv-u hi dn 0x37)                                            ; lui d, hi
-               (? (lo = 0) () (rv-i lo dn 0 dn 0x1B)))))                    ; addiw d, d, lo
+            (catall [                                                       ; hi=2^19 lands s=2^31-ish exactly
+(rv-u hi dn 0x37)                                                           ; lui d, hi
+(? (lo = 0) () (rv-i lo dn 0 dn 0x1B))]))                                   ; addiw d, d, lo
          (: lo (rv-lo12 s)
-            (catall `(
-               (rv-li-rec dn ((s - lo) // 4096))                            ; the high chunks
-               (rv-i 12 dn 1 dn 0x13)                                       ; slli d, d, 12
-               (? (lo = 0) () (rv-i lo dn 0 dn 0x13))))))                   ; addi d, d, lo
+            (catall [
+              (rv-li-rec dn ((s - lo) // 4096))                             ; the high chunks
+              (rv-i 12 dn 1 dn 0x13)                                        ; slli d, d, 12
+              (? (lo = 0) () (rv-i lo dn 0 dn 0x13))])))                    ; addi d, d, lo
    (rv-li d imm) (rv-li-rec (rvn d) (? (imm > 9223372036854775807) (imm - 18446744073709551616) imm))
 
    (rv-mov d s) (rv-i 0 (rvn s) 0 (rvn d) 0x13)                             ; addi d, s, 0
@@ -95,8 +95,8 @@
    ;; -- ALU: op -> (funct3 . funct7). three-address native; an immediate rides addi/andi/ori/xori
    ;;    when it fits 12 bits, else materializes in x31 -- no immediate ever scares here. --
    rv-alu-rows
-        `(('add >< '(0 0)) ('sub >< '(0 32)) ('and >< '(7 0)) ('or >< '(6 0)) ('xor >< '(4 0))
-           ('imul >< '(0 1)))
+        [('add >< '(0 0)) ('sub >< '(0 32)) ('and >< '(7 0)) ('or >< '(6 0)) ('xor >< '(4 0))
+          ('imul >< '(0 1))]
    rv-alu (tabof rv-alu-rows)
    (rv-alu-rrr f3 f7 dn an bn) (rv-r f7 bn an f3 dn 0x33)
    (rv-aluop op d a b)
@@ -107,7 +107,7 @@
             ((op = 'sub) && rv-fits12 (0 - b)) (rv-i (0 - b) an 0 dn 0x13)
             (rv-fits12 b && member? op '(add and or xor))
              (rv-i b an (? (op = 'add) 0 f3) dn 0x13)
-            (catall `((rv-li-rec 31 b) (rv-alu-rrr f3 f7 dn an 31)))))
+            (catall [(rv-li-rec 31 b) (rv-alu-rrr f3 f7 dn an 31)])))
 
    ;; -- the flag memory: what the last cmp/test/ucomisd/adds left behind. 'a/'b are hardware
    ;;    numbers (GPR, or FPR when 'f), 'v the overflow-bit register (-1 = no adds/subs yet). --
@@ -124,7 +124,7 @@
       (: an (rvn a)
          bs (? (reg? b) (rv-alu-rrr 7 0 30 an (rvn b))
                (rv-fits12 b) (rv-i b an 7 30 0x13)                           ; andi x30, a, b
-               (catall `((rv-li-rec 31 b) (rv-alu-rrr 7 0 30 an 31))))
+               (catall [(rv-li-rec 31 b) (rv-alu-rrr 7 0 30 an 31)]))
          _ (rv-flag-set 0 30 0 -1)
          bs)
 
@@ -136,25 +136,25 @@
          pre (? (reg? b) (rv-i 0 (rvn b) 0 30 0x13) (rv-li-rec 30 b))        ; x30 = b's old value
          f7  (? (op = 'adds) 0 32)
          _   (rv-flag-set 0 dn 0 30)
-         (catall `(
-            pre
-            (rv-i 0 an 0 31 0x13)                                            ; x31 = a's old value
-            (rv-alu-rrr 0 f7 dn 31 30)                                       ; d = a op b (off the saves)
-            (? (op = 'adds)
-               (catall `((rv-alu-rrr 4 0 31 dn 31)                           ; x31 = d ^ a
-                          (rv-alu-rrr 4 0 30 dn 30)))                        ; x30 = d ^ b
-               (catall `((rv-alu-rrr 4 0 30 31 30)                           ; x30 = a ^ b
-                          (rv-alu-rrr 4 0 31 31 dn))))                       ; x31 = a ^ d
-            (rv-alu-rrr 7 0 30 30 31))))                                     ; x30 = the overflow sign
+         (catall [
+           pre
+           (rv-i 0 an 0 31 0x13)                                             ; x31 = a's old value
+           (rv-alu-rrr 0 f7 dn 31 30)                                        ; d = a op b (off the saves)
+           (? (op = 'adds)
+              (catall [(rv-alu-rrr 4 0 31 dn 31)                             ; x31 = d ^ a
+                        (rv-alu-rrr 4 0 30 dn 30)])                          ; x30 = d ^ b
+              (catall [(rv-alu-rrr 4 0 30 31 30)                             ; x30 = a ^ b
+                        (rv-alu-rrr 4 0 31 31 dn)]))                         ; x31 = a ^ d
+           (rv-alu-rrr 7 0 30 30 31)]))                                      ; x30 = the overflow sign
 
    ;; the fused compare-branch: cond -> (funct3 rs1 rs2), gt/le/above/be by swapping. inversion is
    ;; f3 ^ 1 (beq/bne, blt/bge, bltu/bgeu pair on the low bit), operands unmoved.
    (rv-int-b cond an bn)
-      (? (cond = 'eq) `(0 an bn) (cond = 'ne) `(1 an bn)
-         (cond = 'lt) `(4 an bn) (cond = 'ge) `(5 an bn)
-         (cond = 'gt) `(4 bn an) (cond = 'le) `(5 bn an)
-         (cond = 'below) `(6 an bn) (cond = 'ae) `(7 an bn)
-         (cond = 'above) `(6 bn an) (cond = 'be) `(7 bn an)
+      (? (cond = 'eq) [0 an bn] (cond = 'ne) [1 an bn]
+         (cond = 'lt) [4 an bn] (cond = 'ge) [5 an bn]
+         (cond = 'gt) [4 bn an] (cond = 'le) [5 bn an]
+         (cond = 'below) [6 an bn] (cond = 'ae) [7 an bn]
+         (cond = 'above) [6 bn an] (cond = 'be) [7 bn an]
          (scare 'rv-badcc cond))
    ;; fp conds compute a 0/1 predicate into x31 (flt/fle/feq write GPRs, quiet on NaN), plus the
    ;; branch SENSE: 1 = taken when x31 is set, 0 = taken when clear (below = NOT ae, etc; p/np
@@ -163,83 +163,83 @@
    ;; exact complements (unordered-TRUE, so a branch on the NEGATED relation is NaN-honest --
    ;; the arm-family convention moon's fcmp lanes lean on). so lt == below and le == be here.
    (rv-fp-pred cond fa fb)
-      (? (cond = 'above) `((rv-r 0x51 fa fb 1 31 0x53) 1)                    ; flt.d x31, fb, fa
-         (cond = 'gt)    `((rv-r 0x51 fa fb 1 31 0x53) 1)
-         (cond = 'be)    `((rv-r 0x51 fa fb 1 31 0x53) 0)
-         (cond = 'le)    `((rv-r 0x51 fa fb 1 31 0x53) 0)                    ; le = !gt (fires on NaN)
-         (cond = 'ae)    `((rv-r 0x51 fa fb 0 31 0x53) 1)                    ; fle.d x31, fb, fa
-         (cond = 'ge)    `((rv-r 0x51 fa fb 0 31 0x53) 1)
-         (cond = 'below) `((rv-r 0x51 fa fb 0 31 0x53) 0)
-         (cond = 'lt)    `((rv-r 0x51 fa fb 0 31 0x53) 0)                    ; lt = !ge (fires on NaN)
-         (cond = 'eq)    `((rv-r 0x51 fb fa 2 31 0x53) 1)                    ; feq.d x31, fa, fb (ordered)
-         (cond = 'ne)    `((rv-r 0x51 fb fa 2 31 0x53) 0)
-         (cond = 'p)     `((catall `((rv-r 0x51 fa fa 2 31 0x53)             ; x31 = (fa ordered)
-                                      (rv-r 0x51 fb fb 2 30 0x53)            ; x30 = (fb ordered)
-                                      (rv-alu-rrr 7 0 31 31 30))) 0)         ; and -> 0 iff unordered
-         (cond = 'np)    `((catall `((rv-r 0x51 fa fa 2 31 0x53)
-                                      (rv-r 0x51 fb fb 2 30 0x53)
-                                      (rv-alu-rrr 7 0 31 31 30))) 1)
+      (? (cond = 'above) [(rv-r 0x51 fa fb 1 31 0x53) 1]                     ; flt.d x31, fb, fa
+         (cond = 'gt)    [(rv-r 0x51 fa fb 1 31 0x53) 1]
+         (cond = 'be)    [(rv-r 0x51 fa fb 1 31 0x53) 0]
+         (cond = 'le)    [(rv-r 0x51 fa fb 1 31 0x53) 0]                     ; le = !gt (fires on NaN)
+         (cond = 'ae)    [(rv-r 0x51 fa fb 0 31 0x53) 1]                     ; fle.d x31, fb, fa
+         (cond = 'ge)    [(rv-r 0x51 fa fb 0 31 0x53) 1]
+         (cond = 'below) [(rv-r 0x51 fa fb 0 31 0x53) 0]
+         (cond = 'lt)    [(rv-r 0x51 fa fb 0 31 0x53) 0]                     ; lt = !ge (fires on NaN)
+         (cond = 'eq)    [(rv-r 0x51 fb fa 2 31 0x53) 1]                     ; feq.d x31, fa, fb (ordered)
+         (cond = 'ne)    [(rv-r 0x51 fb fa 2 31 0x53) 0]
+         (cond = 'p)     [(catall [(rv-r 0x51 fa fa 2 31 0x53)               ; x31 = (fa ordered)
+                                    (rv-r 0x51 fb fb 2 30 0x53)              ; x30 = (fb ordered)
+                                    (rv-alu-rrr 7 0 31 31 30)]) 0]           ; and -> 0 iff unordered
+         (cond = 'np)    [(catall [(rv-r 0x51 fa fa 2 31 0x53)
+                                    (rv-r 0x51 fb fb 2 30 0x53)
+                                    (rv-alu-rrr 7 0 31 31 30)]) 1]
          (scare 'rv-fp-badcc cond))
    (rv-flag-read tag)
       (: a (peep rv-flags 'a -1)
          _ (? (a < 0) (scare 'rv-no-cmp tag) 0)
-         `(a (peep rv-flags 'b -1) (peep rv-flags 'f 0) (peep rv-flags 'v -1)))
+         [a (peep rv-flags 'b -1) (peep rv-flags 'f 0) (peep rv-flags 'v -1)])
 
    ;; (br cond label): the INVERTED fused branch hops the wide jal (thumb1's shape). s/ns re-derive
    ;; the sign of a-b through x31; vs/vc read the adds/subs overflow register.
    (rv-br cond label)
       (: st (rv-flag-read 'br) an (at st 0) bn (at st 1)
-         jal `((fix 4 'j21 label 0x6F))                                      ; jal x0, label
+         jal [(fix 4 'j21 label 0x6F)]                                       ; jal x0, label
          (? (at st 2)                                                        ; fp memory
             (: p (rv-fp-pred cond an bn)
-               (catall `((at p 0)
-                          (rv-b (? (at p 1) 0 1) 31 0 8)                     ; hop: beqz/bnez x31, +8
-                          jal)))
+               (catall [(at p 0)
+                         (rv-b (? (at p 1) 0 1) 31 0 8)                      ; hop: beqz/bnez x31, +8
+                         jal]))
             (member? cond '(s ns))
-            (catall `((rv-alu-rrr 0 32 31 an bn)                             ; x31 = a - b (the SF bit)
-                       (rv-b (? (cond = 's) 5 4) 31 0 8)                     ; hop: bgez/bltz x31, +8
-                       jal))
+            (catall [(rv-alu-rrr 0 32 31 an bn)                              ; x31 = a - b (the SF bit)
+                      (rv-b (? (cond = 's) 5 4) 31 0 8)                      ; hop: bgez/bltz x31, +8
+                      jal])
             (member? cond '(vs vc))
             (: v (at st 3) _ (? (v < 0) (scare 'rv-no-overflow cond) 0)
-               (catall `((rv-b (? (cond = 'vs) 5 4) v 0 8) jal)))
+               (catall [(rv-b (? (cond = 'vs) 5 4) v 0 8) jal]))
             (: t (rv-int-b cond an bn)
-               (catall `((rv-b (at t 0 ^ 1) (at t 1) (at t 2) 8) jal)))))
+               (catall [(rv-b (at t 0 ^ 1) (at t 1) (at t 2) 8) jal]))))
 
    ;; (set cond d): the compare-into-register forms. eq/ne against x0 collapse to seqz/snez.
    (rv-set cond d)
       (: st (rv-flag-read 'set) an (at st 0) bn (at st 1) dn (rvn d)
          (? (at st 2)
             (: p (rv-fp-pred cond an bn)
-               (catall `((at p 0)
-                          (? (at p 1) (rv-i 0 31 0 dn 0x13)                  ; d = x31
-                             (rv-i 1 31 3 dn 0x13)))))                       ; d = (x31 < 1)  (seqz)
+               (catall [(at p 0)
+                         (? (at p 1) (rv-i 0 31 0 dn 0x13)                   ; d = x31
+                            (rv-i 1 31 3 dn 0x13))]))                        ; d = (x31 < 1)  (seqz)
             (member? cond '(eq ne))
             (: xs (? (bn = 0) () (rv-alu-rrr 4 0 31 an bn))                  ; x31 = a ^ b
                t  (? (bn = 0) an 31)
-               (catall `(xs (? (cond = 'eq) (rv-i 1 t 3 dn 0x13)             ; sltiu d, t, 1
-                               (rv-alu-rrr 3 0 dn 0 t)))))                   ; sltu d, x0, t
+               (catall [xs (? (cond = 'eq) (rv-i 1 t 3 dn 0x13)              ; sltiu d, t, 1
+                              (rv-alu-rrr 3 0 dn 0 t))]))                    ; sltu d, x0, t
             (member? cond '(s ns))
-            (catall `((rv-alu-rrr 0 32 31 an bn)
-                       (rv-alu-rrr 2 0 dn 31 0)                              ; slt d, x31, x0
-                       (? (cond = 's) () (rv-i 1 dn 4 dn 0x13))))            ; xori d, d, 1
+            (catall [(rv-alu-rrr 0 32 31 an bn)
+                      (rv-alu-rrr 2 0 dn 31 0)                               ; slt d, x31, x0
+                      (? (cond = 's) () (rv-i 1 dn 4 dn 0x13))])             ; xori d, d, 1
             (member? cond '(vs vc))
             (: v (at st 3) _ (? (v < 0) (scare 'rv-no-overflow cond) 0)
-               (catall `((rv-alu-rrr 2 0 dn v 0)
-                          (? (cond = 'vs) () (rv-i 1 dn 4 dn 0x13)))))
+               (catall [(rv-alu-rrr 2 0 dn v 0)
+                         (? (cond = 'vs) () (rv-i 1 dn 4 dn 0x13))]))
             (: neg (member? cond '(ge le ae be))                             ; the complement conds
                t (rv-int-b (? (cond = 'ge) 'lt (cond = 'le) 'gt
                               (cond = 'ae) 'below (cond = 'be) 'above cond) an bn)
-               (catall `((rv-alu-rrr (? (at t 0 = 4) 2 3) 0 dn (at t 1) (at t 2))     ; slt/sltu
-                          (? neg (rv-i 1 dn 4 dn 0x13) ()))))))              ; xori d, d, 1
+               (catall [(rv-alu-rrr (? (at t 0 = 4) 2 3) 0 dn (at t 1) (at t 2))      ; slt/sltu
+                         (? neg (rv-i 1 dn 4 dn 0x13) ())]))))               ; xori d, d, 1
 
    ;; -- memory: one core, sd/ld and every sized/fp face a spelling of it. a 12-bit offset rides
    ;;    the instruction; a far one builds base+hi in x31 and rides the low 12. --
    (rv-mem-far bn off go)                                                    ; go: (basereg lo12) -> bytes
       (: lo (rv-lo12 off) hi ((off - lo) // 4096)
          _ (? ((hi >= -524288) && (hi <= 524287)) 0 (scare 'rv-mem-range off))
-         (catall `((rv-u hi 31 0x37)                                         ; lui x31, hi
-                    (rv-alu-rrr 0 0 31 31 bn)                                ; add x31, x31, base
-                    (go 31 lo))))
+         (catall [(rv-u hi 31 0x37)                                          ; lui x31, hi
+                   (rv-alu-rrr 0 0 31 31 bn)                                 ; add x31, x31, base
+                   (go 31 lo)]))
    (rv-ld-f3 f3 opc dt bn off)
       (? (rv-fits12 off) (rv-i off bn f3 dt opc)
          (rv-mem-far bn off (\ b lo (rv-i lo b f3 dt opc))))
@@ -270,13 +270,13 @@
    (rv-sx w d) (: dn (rvn d)
                   (? (w = 4) (rv-i 0 dn 0 dn 0x1B)                           ; addiw d, d, 0 (sext.w)
                      (: c (? (w = 1) 56 48)
-                        (catall `((rv-i c dn 1 dn 0x13)                      ; slli d, d, c
-                                   (rv-i (1024 + c) dn 5 dn 0x13))))))       ; srai d, d, c
+                        (catall [(rv-i c dn 1 dn 0x13)                       ; slli d, d, c
+                                  (rv-i (1024 + c) dn 5 dn 0x13)]))))        ; srai d, d, c
    (rv-zx w d) (: dn (rvn d)
                   (? (w = 1) (rv-i 255 dn 7 dn 0x13)                         ; andi d, d, 255
                      (: c (? (w = 2) 48 32)
-                        (catall `((rv-i c dn 1 dn 0x13)                      ; slli d, d, c
-                                   (rv-i c dn 5 dn 0x13))))))                ; srli d, d, c
+                        (catall [(rv-i c dn 1 dn 0x13)                       ; slli d, d, c
+                                  (rv-i c dn 5 dn 0x13)]))))                 ; srli d, d, c
 
    ;; shifts by immediate; rol/ror synthesize through x31 (no rotate in the base ISA).
    (rv-shift op d c)
@@ -286,13 +286,13 @@
             (op = 'sar) (rv-i (1024 + c) dn 5 dn 0x13)                       ; srai
             (member? op '(rol ror))
             (: k (? (op = 'ror) c ((64 - c) & 63))                           ; rol c = ror 64-c
-               (catall `((rv-i k dn 5 31 0x13)                               ; srli x31, d, k
-                          (rv-i ((64 - k) & 63) dn 1 dn 0x13)                ; slli d, d, 64-k
-                          (rv-alu-rrr 6 0 dn dn 31))))                       ; or d, d, x31
+               (catall [(rv-i k dn 5 31 0x13)                                ; srli x31, d, k
+                         (rv-i ((64 - k) & 63) dn 1 dn 0x13)                 ; slli d, d, 64-k
+                         (rv-alu-rrr 6 0 dn dn 31)]))                        ; or d, d, x31
             (scare 'rv-badshift op)))
    (rv-shiftv op d c)                                                        ; count pinned to r1 (the IR contract)
-      (: _ (? (rv-reg-eq c 'r1) 0 (scare 'shiftv-count-not-r1 `(op d c)))
-         _ (? (rv-reg-eq d 'r1) (scare 'shiftv-dst-is-r1 `(op d c)) 0)
+      (: _ (? (rv-reg-eq c 'r1) 0 (scare 'shiftv-count-not-r1 [op d c]))
+         _ (? (rv-reg-eq d 'r1) (scare 'shiftv-dst-is-r1 [op d c]) 0)
          dn (rvn d) cn (rvn c)
          (? (op = 'shlv) (rv-alu-rrr 1 0 dn dn cn)                           ; sll
             (op = 'shrv) (rv-alu-rrr 5 0 dn dn cn)                           ; srl
@@ -301,7 +301,7 @@
    (rv-lea d base off)
       (: dn (rvn d) bn (rvn base)
          (? (rv-fits12 off) (rv-i off bn 0 dn 0x13)                          ; addi d, base, off
-            (catall `((rv-li-rec 31 off) (rv-alu-rrr 0 0 dn bn 31)))))
+            (catall [(rv-li-rec 31 off) (rv-alu-rrr 0 0 dn bn 31)])))
 
    ;; indexed addressing: no [base + ix*scale] form, so synthesize -- x31 carries the address,
    ;; ldx borrows its own dest for a far displacement's high half, stx borrows x30 (the caveat
@@ -310,36 +310,36 @@
    (rv-ixaddr bn ixn sc)                                                     ; x31 = base + ix*scale
       (: amt (rv-shamt sc)
          (? (amt = 0) (rv-alu-rrr 0 0 31 ixn bn)
-            (catall `((rv-i amt ixn 1 31 0x13)                               ; slli x31, ix, amt
-                       (rv-alu-rrr 0 0 31 31 bn)))))                         ; add x31, x31, base
+            (catall [(rv-i amt ixn 1 31 0x13)                                ; slli x31, ix, amt
+                      (rv-alu-rrr 0 0 31 31 bn)])))                          ; add x31, x31, base
    (rv-ix-far dp tn go)                                                      ; tn carries hi; go lo -> bytes
       (? (rv-fits12 dp) (go dp)
          (: lo (rv-lo12 dp) hi ((dp - lo) // 4096)
-            (catall `((rv-u hi tn 0x37)                                      ; lui t, hi
-                       (rv-alu-rrr 0 0 31 31 tn)                             ; add x31, x31, t
-                       (go lo)))))
+            (catall [(rv-u hi tn 0x37)                                       ; lui t, hi
+                      (rv-alu-rrr 0 0 31 31 tn)                              ; add x31, x31, t
+                      (go lo)])))
    (rv-ldx-f3 f3 d base index scale disp)
       (: dn (rvn d)
-         (catall `((rv-ixaddr (rvn base) (rvn index) scale)
-                    (rv-ix-far disp dn (\ lo (rv-i lo 31 f3 dn 0x03))))))
+         (catall [(rv-ixaddr (rvn base) (rvn index) scale)
+                   (rv-ix-far disp dn (\ lo (rv-i lo 31 f3 dn 0x03)))]))
    (rv-ldx d base index scale disp)  (rv-ldx-f3 3 d base index scale disp)   ; ld
    (rv-ldxb d base index scale disp) (rv-ldx-f3 4 d base index scale disp)   ; lbu
    (rv-stx-f3 f3 base index scale disp s)
-      (catall `((rv-ixaddr (rvn base) (rvn index) scale)
-                 (rv-ix-far disp 30 (\ lo (rv-s lo 31 (rvn s) f3)))))
+      (catall [(rv-ixaddr (rvn base) (rvn index) scale)
+                (rv-ix-far disp 30 (\ lo (rv-s lo 31 (rvn s) f3)))])
    (rv-stx base index scale disp s)  (rv-stx-f3 3 base index scale disp s)   ; sd
    (rv-stxb base index scale disp s) (rv-stx-f3 0 base index scale disp s)   ; sb
    (rv-leax d base index scale disp)
       (: dn (rvn d) amt (rv-shamt scale)
-         (catall `((? (amt = 0) (rv-alu-rrr 0 0 dn (rvn index) (rvn base))
-                      (catall `((rv-i amt (rvn index) 1 31 0x13)
-                                 (rv-alu-rrr 0 0 dn 31 (rvn base)))))
-                    (? (disp = 0) ()
-                       (rv-fits12 disp) (rv-i disp dn 0 dn 0x13)
-                       (catall `((rv-li-rec 31 disp) (rv-alu-rrr 0 0 dn dn 31)))))))
+         (catall [(? (amt = 0) (rv-alu-rrr 0 0 dn (rvn index) (rvn base))
+                     (catall [(rv-i amt (rvn index) 1 31 0x13)
+                               (rv-alu-rrr 0 0 dn 31 (rvn base))]))
+                   (? (disp = 0) ()
+                      (rv-fits12 disp) (rv-i disp dn 0 dn 0x13)
+                      (catall [(rv-li-rec 31 disp) (rv-alu-rrr 0 0 dn dn 31)]))]))
 
-   (rv-push s) (catall `((rv-i -16 2 0 2 0x13) (rv-s 0 2 (rvn s) 3)))        ; addi sp,sp,-16 ; sd s,0(sp)
-   (rv-pop d)  (catall `((rv-i 0 2 3 (rvn d) 0x03) (rv-i 16 2 0 2 0x13)))    ; ld d,0(sp) ; addi sp,sp,16
+   (rv-push s) (catall [(rv-i -16 2 0 2 0x13) (rv-s 0 2 (rvn s) 3)])         ; addi sp,sp,-16 ; sd s,0(sp)
+   (rv-pop d)  (catall [(rv-i 0 2 3 (rvn d) 0x03) (rv-i 16 2 0 2 0x13)])     ; ld d,0(sp) ; addi sp,sp,16
 
    (rv-neg d) (rv-alu-rrr 0 32 (rvn d) 0 (rvn d))                            ; sub d, x0, d
    (rv-not d) (rv-i -1 (rvn d) 4 (rvn d) 0x13)                               ; xori d, d, -1
@@ -359,11 +359,11 @@
    ;; the hop-over-jal shape directly.
    (rv-mulo d a b t lbl)
       (: dn (rvn d) an (rvn a) bn (rvn b) tn (rvn t)
-         (catall `((rv-alu-rrr 1 1 tn an bn)                                 ; mulh t, a, b
-                    (rv-alu-rrr 0 1 dn an bn)                                ; mul  d, a, b
-                    (rv-i 1087 dn 5 31 0x13)                                 ; srai x31, d, 63
-                    (rv-b 0 tn 31 8)                                         ; beq t, x31, +8 (hop)
-                    `((fix 4 'j21 lbl 0x6F)))))                              ; jal x0, lbl
+         (catall [(rv-alu-rrr 1 1 tn an bn)                                  ; mulh t, a, b
+                   (rv-alu-rrr 0 1 dn an bn)                                 ; mul  d, a, b
+                   (rv-i 1087 dn 5 31 0x13)                                  ; srai x31, d, 63
+                   (rv-b 0 tn 31 8)                                          ; beq t, x31, +8 (hop)
+                   [(fix 4 'j21 lbl 0x6F)]]))                                ; jal x0, lbl
 
    ;; control. jmp is the wide jal (+-1MB, scares beyond); call/la/lar are auipc pairs (+-2GB,
    ;; one 8-byte fixup whose aux packs both base words -- 'pcrel patches hi20 into the first,
@@ -411,19 +411,19 @@
                   (: base ((w & 0x1FFF07F) ^ 0x1000)    ; keep rs2/rs1/funct3/op, flip the cc bit
                      cb (rv-cbase base rel)
                      (rv-first (n - 5) bs
-                      + (? (imm? cb) `((fix 2 'cb label cb))
-                           `((fix 4 'b13 label base)))))))))
+                      + (? (imm? cb) [(fix 2 'cb label cb)]
+                           [(fix 4 'b13 label base)])))))))
 
-   (rv-jmp label)  `((fix 4 'j21 label 0x6F))
+   (rv-jmp label)  [(fix 4 'j21 label 0x6F)]
    (rv-jmpr d)     (rv-i 0 (rvn d) 0 0 0x67)                                 ; jalr x0, 0(d)
-   (rv-call label) `((fix 8 'pcrel label ((((1 << 15) | ((1 << 7) | 0x67)) * 4294967296) + (0x17 | (1 << 7)))))
+   (rv-call label) [(fix 8 'pcrel label ((((1 << 15) | ((1 << 7) | 0x67)) * 4294967296) + (0x17 | (1 << 7))))]
    (rv-callr d)    (rv-i 0 (rvn d) 0 1 0x67)                                 ; jalr ra, 0(d)
    (rv-la d label) (: dn (rvn d)
-                      `((fix 8 'pcrel label ((((dn << 15) | ((dn << 7) | 0x13)) * 4294967296) + (0x17 | (dn << 7))))))
+                      [(fix 8 'pcrel label ((((dn << 15) | ((dn << 7) | 0x13)) * 4294967296) + (0x17 | (dn << 7))))])
 
    ;; -- scalar-double FP (D). SSE-named IR two-address; d repeats as the first source. rm rides
    ;;    the funct3 slot: 7 = dynamic for arithmetic, 1 = toward-zero for the C-cast cvttsd2si. --
-   rv-fp3 (tabof `(('addsd >< 1) ('subsd >< 5) ('mulsd >< 9) ('divsd >< 13)))
+   rv-fp3 (tabof [('addsd >< 1) ('subsd >< 5) ('mulsd >< 9) ('divsd >< 13)])
    (rv-fp3op op d s) (: dn (rvf d) (rv-r (peep rv-fp3 op 0) (rvf s) dn 7 dn 0x53))
    (rv-fmov d s)   (: sn (rvf s) (rv-r 0x11 sn sn 0 (rvf d) 0x53))           ; fsgnj.d d, s, s
    (rv-fcmp a b)   (rv-flag-set 1 (rvf a) (rvf b) -1)                        ; remember, emit nothing
@@ -435,47 +435,47 @@
    (rv-fnarrow d s) (rv-r 0x20 1 (rvf s) 7 (rvf d) 0x53)                     ; fcvt.s.d (rounds)
    (rv-xorpd d s)                                                            ; zero a double (d==s only)
       (? (rvf d = rvf s) (rv-r 0x79 0 0 0 (rvf d) 0x53)                      ; fmv.d.x d, x0
-         (scare 'rv-xorpd-general `(d s)))
+         (scare 'rv-xorpd-general [d s]))
 
    (rv-tp d) (rv-i 0 4 0 (rvn d) 0x13)                                       ; addi d, tp, 0
 
    ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied.
    rv-emitters (emsof
-        `(('li >< rv-li) ('mov >< rv-mov) ('cmp >< rv-cmp) ('test >< rv-test)
-           ('imul >< rv-imul)
-           ('ld >< rv-ld) ('st >< rv-st)
-           ('ld1 >< rv-ld1) ('ld2 >< rv-ld2) ('ld4 >< rv-ld4)
-           ('st1 >< rv-st1) ('st2 >< rv-st2) ('st4 >< rv-st4)
-           ('ldu1 >< rv-ldu1) ('ldu2 >< rv-ldu2) ('ldu4 >< rv-ldu4)
-           ('sx1 >< rv-sx 1) ('sx2 >< rv-sx 2) ('sx4 >< rv-sx 4)
-           ('zx1 >< rv-zx 1) ('zx2 >< rv-zx 2) ('zx4 >< rv-zx 4)
-           ('shlv >< rv-shiftv 'shlv) ('shrv >< rv-shiftv 'shrv) ('sarv >< rv-shiftv 'sarv)
-           ('shl >< rv-shift 'shl) ('shr >< rv-shift 'shr) ('sar >< rv-shift 'sar)
-           ('rol >< rv-shift 'rol) ('ror >< rv-shift 'ror)
-           ('lea >< rv-lea) ('lean >< rv-lea)
-           ('push >< rv-push) ('pop >< rv-pop)
-           ('neg >< rv-neg) ('not >< rv-not) ('inc >< rv-inc) ('dec >< rv-dec)
-           ('jmp >< rv-jmp) ('br >< rv-br) ('jmpr >< rv-jmpr) ('callr >< rv-callr)
-           ('mulo >< rv-mulo) ('set >< rv-set)
-           ('adds >< rv-addsub-s 'adds) ('subs >< rv-addsub-s 'subs)
-           ('div >< rv-div) ('rem >< rv-rem) ('udiv >< rv-udiv) ('urem >< rv-urem)
-           ('ldx >< rv-ldx) ('stx >< rv-stx) ('leax >< rv-leax)
-           ('ldxb >< rv-ldxb) ('stxb >< rv-stxb)
-           ('call >< rv-call) ('la >< rv-la) ('lar >< rv-la)
-           ('tp >< rv-tp)
-           ('movsd >< rv-fmov)
-           ('addsd >< rv-fp3op 'addsd) ('subsd >< rv-fp3op 'subsd)
-           ('mulsd >< rv-fp3op 'mulsd) ('divsd >< rv-fp3op 'divsd)
-           ('ucomisd >< rv-fcmp) ('cvtsi2sd >< rv-scvtf) ('cvttsd2si >< rv-fcvtzs)
-           ('movqxr >< rv-fmovxr) ('movqrx >< rv-fmovrx)
-           ('stsd >< rv-fst) ('ldsd >< rv-fld) ('stss >< rv-fsts) ('ldss >< rv-flds)
-           ('cvtss2sd >< rv-fwiden) ('cvtsd2ss >< rv-fnarrow)
-           ('xorpd >< rv-xorpd)
-           ('raw >< 1)
-           ('ret >< rv-i 0 1 0 0 0x67)                                       ; jalr x0, 0(ra)
-           ('sys >< le32 0x73)                                               ; ecall
-           ('nop >< le32 0x13)                                               ; addi x0, x0, 0
-           ('trap >< le32 0x100073)))                                        ; ebreak
+        [('li >< rv-li) ('mov >< rv-mov) ('cmp >< rv-cmp) ('test >< rv-test)
+          ('imul >< rv-imul)
+          ('ld >< rv-ld) ('st >< rv-st)
+          ('ld1 >< rv-ld1) ('ld2 >< rv-ld2) ('ld4 >< rv-ld4)
+          ('st1 >< rv-st1) ('st2 >< rv-st2) ('st4 >< rv-st4)
+          ('ldu1 >< rv-ldu1) ('ldu2 >< rv-ldu2) ('ldu4 >< rv-ldu4)
+          ('sx1 >< rv-sx 1) ('sx2 >< rv-sx 2) ('sx4 >< rv-sx 4)
+          ('zx1 >< rv-zx 1) ('zx2 >< rv-zx 2) ('zx4 >< rv-zx 4)
+          ('shlv >< rv-shiftv 'shlv) ('shrv >< rv-shiftv 'shrv) ('sarv >< rv-shiftv 'sarv)
+          ('shl >< rv-shift 'shl) ('shr >< rv-shift 'shr) ('sar >< rv-shift 'sar)
+          ('rol >< rv-shift 'rol) ('ror >< rv-shift 'ror)
+          ('lea >< rv-lea) ('lean >< rv-lea)
+          ('push >< rv-push) ('pop >< rv-pop)
+          ('neg >< rv-neg) ('not >< rv-not) ('inc >< rv-inc) ('dec >< rv-dec)
+          ('jmp >< rv-jmp) ('br >< rv-br) ('jmpr >< rv-jmpr) ('callr >< rv-callr)
+          ('mulo >< rv-mulo) ('set >< rv-set)
+          ('adds >< rv-addsub-s 'adds) ('subs >< rv-addsub-s 'subs)
+          ('div >< rv-div) ('rem >< rv-rem) ('udiv >< rv-udiv) ('urem >< rv-urem)
+          ('ldx >< rv-ldx) ('stx >< rv-stx) ('leax >< rv-leax)
+          ('ldxb >< rv-ldxb) ('stxb >< rv-stxb)
+          ('call >< rv-call) ('la >< rv-la) ('lar >< rv-la)
+          ('tp >< rv-tp)
+          ('movsd >< rv-fmov)
+          ('addsd >< rv-fp3op 'addsd) ('subsd >< rv-fp3op 'subsd)
+          ('mulsd >< rv-fp3op 'mulsd) ('divsd >< rv-fp3op 'divsd)
+          ('ucomisd >< rv-fcmp) ('cvtsi2sd >< rv-scvtf) ('cvttsd2si >< rv-fcvtzs)
+          ('movqxr >< rv-fmovxr) ('movqrx >< rv-fmovrx)
+          ('stsd >< rv-fst) ('ldsd >< rv-fld) ('stss >< rv-fsts) ('ldss >< rv-flds)
+          ('cvtss2sd >< rv-fwiden) ('cvtsd2ss >< rv-fnarrow)
+          ('xorpd >< rv-xorpd)
+          ('raw >< 1)
+          ('ret >< rv-i 0 1 0 0 0x67)                                        ; jalr x0, 0(ra)
+          ('sys >< le32 0x73)                                                ; ecall
+          ('nop >< le32 0x13)                                                ; addi x0, x0, 0
+          ('trap >< le32 0x100073)])                                         ; ebreak
    _ (foldl (\ _ p (emrow rv-emitters <p (rv-aluop <p))) 0 rv-alu-rows)
 
    ;; -- RVC, the LOCAL squeeze. a lowered chunk that is exactly one 32-bit word carrying no fixup
@@ -629,7 +629,7 @@
            (? !((tally c) = 1) ()                 ; the chunk must BE that jal
               !(fix? <c) ()
               !(id? (fix-k <c) 'j21) ()
-              (rvj-fits? rel) `((fix 2 'cj (at ins 1) 0xA001))
+              (rvj-fits? rel) [(fix 2 'cj (at ins 1) 0xA001)]
               ())
            !(id? <ins 'br) ()
            (: pre ((tally c) - 5)

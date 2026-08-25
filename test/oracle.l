@@ -22,7 +22,7 @@
 ; unreachable here (weak CBV on closed terms only ever fires a closed function, so
 ; free vars are never renumbered) -- that arithmetic is covered by spec.v, not ev.
 (: ; de Bruijn terms as tagged chains: (0 n) Var | (1 b) Lam | (2 f a) App
- (dvar n) `(0 n)   (dlam b) `(1 b)   (dapp f a) `(2 f a)
+ (dvar n) [0 n]   (dlam b) [1 b]   (dapp f a) [2 f a]
  (dtag t) (cap t)   (dn t) (caup t)   (dbody t) (caup t)
  (dfun t) (caup t)  (darg t) (cauup t)
 
@@ -57,30 +57,30 @@
  (vname i) (intern (+ "v" (show i)))
  (render d t)
    (? (= (dtag t) 0) (vname (- (- d 1) (dn t)))
-      (= (dtag t) 1) `(lam-sym (vname d) (render (+ d 1) (dbody t)))
-      `((render d (dfun t)) (render d (darg t))))
+      (= (dtag t) 1) [lam-sym (vname d) (render (+ d 1) (dbody t))]
+      [(render d (dfun t)) (render d (darg t))])
 
  ; random CLOSED AFFINE term: partition splits a scope so f/a never share a var
  (partition sc st)
-   (? !sc `(0 0 st)
+   (? !sc [0 0 st]
       (: r (random st 2) rest (partition (cup sc) (cup r))
          (? (= (cap r) 0)
-            `((link (cap sc) (cap rest)) (caup rest) (cauup rest))
-            `((cap rest) (link (cap sc) (caup rest)) (cauup rest)))))
+            [(link (cap sc) (cap rest)) (caup rest) (cauup rest)]
+            [(cap rest) (link (cap sc) (caup rest)) (cauup rest)])))
  tI (dlam (dvar 0))
  (gen g sc st)
    (: r (random st 10) pick (cap r) st1 (cup r)
-      (? (< g 1) (? !sc `(tI 0 st1) `((dvar (cap sc)) (cup sc) st1))
-         (&& !!sc (< pick 4)) `((dvar (cap sc)) (cup sc) st1)
+      (? (< g 1) (? !sc [tI 0 st1] [(dvar (cap sc)) (cup sc) st1])
+         (&& !!sc (< pick 4)) [(dvar (cap sc)) (cup sc) st1]
          (< pick 7)
            (: bsc (link 0 (map (+ 1) sc))
               res (gen (- g 1) bsc st1) b (cap res) lo (caup res) st2 (cauup res)
               lo' (map (\ x (- x 1)) (filter (\ x (< 0 x)) lo))
-              `((dlam b) lo' st2))
+              [(dlam b) lo' st2])
            (: pr (partition sc st1) sc1 (cap pr) sc2 (caup pr) st2 (cauup pr)
               rf (gen (- g 1) sc1 st2) f (cap rf) lof (caup rf) st3 (cauup rf)
               ra (gen (- g 1) (cat lof sc2) st3) a (cap ra) st4 (cauup ra)
-              `((dapp f a) (caup ra) st4))))
+              [(dapp f a) (caup ra) st4])))
 
  ; EXTENSIONAL agreement: apply both results to marker symbols, then compare
  (ground v) (v 'm1 'm2 'm3 'm4 'm5)

@@ -2,7 +2,7 @@
 ; (kernel, wasm) binds few of them, and an unbound mention raises missing at every
 ; define that names one. this file leads the corpus, so pin a no-op fallback for
 ; whichever are absent: every later mention compiles quiet, and absence answers ().
-(map (\ n (? (member? n (names ())) () (ev `(': `(n 'x) ())))) '(quit close run getenv))
+(map (\ n (? (member? n (names ())) () (ev [': [n 'x] ()]))) '(quit close run getenv))
 (? (member? 'open (names ())) () (ev '(: (open x y) ())))
 
 ; the READER UNDER TEST -- the socket. every print->read
@@ -50,6 +50,6 @@
    (? v (term_text green_dot)
     (do (term_text red_x)
        (test_set 'fail (x >< (? (two? (test_get 'fail)) (test_get 'fail) ()))))))
- (link 'do (map (\ l `(report `('\ l) l)) l)))))
+ (link 'do (map (\ l [report ['\ l] l]) l)))))
 
 (hear test-strict)

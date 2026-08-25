@@ -33,14 +33,14 @@
    ;; push15/pop15: every GPR but rsp, in the order struct k_frame (arch.c)
    ;; reads them -- lowest address first is the REVERSE of the push order.
    x-save '(r4 r0 r3 r1 r2 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)   ; rbp rax rbx rcx rdx rsi rdi r8..r15
-   x-push (map (\ r `('push r)) x-save)
-   x-pop  (map (\ r `('pop r)) (rev x-save))
+   x-push (map (\ r ['push r]) x-save)
+   x-pop  (map (\ r ['pop r]) (rev x-save))
    ;; an EOI to the primary PIC. the port rides dx, the datum al.
    x-eoi '((li r0 0x20) (li r2 0x20) (outb))
    (x-stub v)
-    (`(`('label (intern ("exc_stub_" + (show v)))))
-     + (? (member? v xerr-vecs) () `(`('push 0)))     ; the dummy error code
-     + `(`('push v) `('jmp 'exc_common)))
+    ([['label (intern ("exc_stub_" + (show v)))]]
+     + (? (member? v xerr-vecs) () [['push 0]])       ; the dummy error code
+     + [['push v] ['jmp 'exc_common]])
    x-stub-names (map (\ v ("exc_stub_" + (show v))) (v-upto 32))
 
    ;; the ISR table archinit walks: 0..31 the exception stubs, then the 16
@@ -56,9 +56,9 @@
            + (v-rep 11 'k_reset))                       ; 37..47: a stray IRQ reboots
    x-trap 0x8f                                        ; present, DPL 0, 64-bit TRAP gate
    x-intr 0x8e                                        ; ..and INTERRUPT gate (clears IF on entry)
-   x-types (`(x-trap x-trap x-intr)                   ; 0 #DE, 1 #DB, 2 NMI
+   x-types ([x-trap x-trap x-intr]                    ; 0 #DE, 1 #DB, 2 NMI
             + (v-rep 29 x-trap)                         ; 3..31
-            + `(x-intr x-intr x-trap x-trap x-intr)   ; 32 PIT, 33 PS/2, 34, 35, 36 COM1
+            + [x-intr x-intr x-trap x-trap x-intr]    ; 32 PIT, 33 PS/2, 34, 35, 36 COM1
             + (v-rep 11 x-trap))                        ; 37..47
 
    ;; the two lockstep tables, then the two LIDT operands. an entry is an
@@ -67,22 +67,22 @@
    ;; artifact these sites ride the ai_rela table and __ai_reloc WRITES them at
    ;; a hosted start -- a read-only segment there is a startup segfault, and
    ;; our linker has no relro middle ground. metal never cared either way.
-   (x-quad nm) `('raw `(`('fix 8 'abs64 nm 0)))
+   (x-quad nm) ['raw [['fix 8 'abs64 nm 0]]]
    x-rodata
-    (`(`('label 'isrs))
+    ([['label 'isrs]]
      + (map x-quad x-isrs)
-     + `(`('label 'isr_types) `('raw x-types))
+     + [['label 'isr_types] ['raw x-types]]
      ;; the LIDT operands: a 2-byte limit then the 8-byte base. `.balign 2` in
      ;; GAS, and the offset is already even, so this pads nothing -- it says
      ;; the requirement out loud.
-     + `(`('align 2) `('label 'idtreg) `('raw (le16 4095)))   ; the limit: sizeof idt - 1
-     + `((x-quad 'idt))
-     + `(`('label 'idtreg_null) `('raw `(0 0)))               ; an EMPTY IDT: int 0 triple-faults
-     + `(`('raw (v-zeros 8))))
+     + [['align 2] ['label 'idtreg] ['raw (le16 4095)]]       ; the limit: sizeof idt - 1
+     + [(x-quad 'idt)]
+     + [['label 'idtreg_null] ['raw [0 0]]]                   ; an EMPTY IDT: int 0 triple-faults
+     + [['raw (v-zeros 8)]])
 
    ;; .bss: the IDT itself, 256 entries of 16 bytes. NOBITS -- the loader hands
    ;; it over zeroed and archinit fills every entry before LIDT.
-   x-bss `(`('label 'idt) `('raw (v-zeros 4096)))
+   x-bss [['label 'idt] ['raw (v-zeros 4096)]]
 
    ;; .text.
    x-text
@@ -91,7 +91,7 @@
      ;; k_frame, so rdi = rsp is the whole argument marshalling. rsp is
      ;; 16-byte aligned at the call: the CPU aligns it on entry and pushes
      ;; five qwords, the stub two, push15 fifteen -- 176 bytes, 11 x 16.
-     + `(`('align 8) `('label 'exc_common))
+     + [['align 8] ['label 'exc_common]]
      + x-push
      + '((mov r6 sp) (call k_exception))
      + x-pop
@@ -101,14 +101,14 @@
      ;; [rip + kticks]`; the neutral surface has no read-modify-write to
      ;; memory, so it is a load, an add and a store through two registers we
      ;; save ourselves. no call, so no stack-alignment duty.
-     + `(`('align 8) `('label 'timer_isr))
+     + [['align 8] ['label 'timer_isr]]
      + '((push r0) (push r2)
          (la r0 kticks) (ld r2 r0 0) (add r2 r2 1) (st r0 0 r2))
      + x-eoi
      + '((pop r2) (pop r0) (iretq))
      ;; the PS/2 keyboard (IRQ1): read the scancode off port 0x60 and hand it
      ;; to kb_int as an unsigned byte.
-     + `(`('align 8) `('label 'keyboard_isr))
+     + [['align 8] ['label 'keyboard_isr]]
      + x-push
      + '((li r2 0x60) (inb)        ; al <- scancode
          (mov r6 r0) (zx1 r6)    ; rdi = (uint8_t) al
@@ -117,7 +117,7 @@
      + x-pop
      + '((iretq))
      ;; COM1 RX (IRQ4).
-     + `(`('align 8) `('label 'uart_isr))
+     + [['align 8] ['label 'uart_isr]]
      + x-push
      + '((call k_uart))
      + x-eoi
@@ -127,7 +127,7 @@
      ;; pair into a 16-byte IDT descriptor, LIDT, then the PIT and the PIC.
      ;; x87/SSE is enabled earlier, at the top of kmain -- it must be on before
      ;; any C runs at all, so there is nothing to do for the FPU here.
-     + `(`('align 8) `('label 'archinit))
+     + [['align 8] ['label 'archinit]]
      + '((la r6 idt)             ; rdi = the entry being filled
          (la r1 isrs)            ; rcx = the handler cursor
          (la r2 isr_types)       ; rdx = the type cursor
@@ -170,7 +170,7 @@
          (ret))
      ;; reset by TRIPLE FAULT: LIDT a zero-size IDT, then int 0 -- the CPU
      ;; cannot dispatch the vector, escalates through #DF, and the host reboots.
-     + `(`('align 8) `('label 'k_reset))
+     + [['align 8] ['label 'k_reset]]
      + '((la r0 idtreg_null)
          (lidt r0 0)
          (int 0)
@@ -198,21 +198,21 @@
    a-save '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 fp lr)
    a-frame 176
    (a-slot-off i) (8 * i)
-   a-push (v-mapi (\ i r `('st 'sp (a-slot-off i) r)) a-save)
-   a-pop  (v-mapi (\ i r `('ld r 'sp (a-slot-off i))) a-save)
+   a-push (v-mapi (\ i r ['st 'sp (a-slot-off i) r]) a-save)
+   a-pop  (v-mapi (\ i r ['ld r 'sp (a-slot-off i)]) a-save)
    ;; the align rides AFTER each slot, the last one included, so the table is
    ;; exactly the 16 x 0x80 the architecture defines and the handlers start past
    ;; it. GAS packed .Lirq into the tail of the sixteenth slot (its branch is the
    ;; only live word there) and saved the 124 bytes; a whole table is worth them.
    a-text
-    ((foldl (\ a s (a + `(`('jmp s) `('align 128)))) `(`('label 'vectors)) a-slots)
+    ((foldl (\ a s (a + [['jmp s] ['align 128]])) [['label 'vectors]] a-slots)
      ;; the CPU masks DAIF.I on entry, so the handler cannot nest and
      ;; ELR_EL1/SPSR_EL1 stay valid across the call; eret returns through them.
-     + `(`('label 'a_irq) `('sub 'sp 'sp a-frame))
+     + [['label 'a_irq] ['sub 'sp 'sp a-frame]]
      + a-push
      + '((call k_irq))
      + a-pop
-     + `(`('add 'sp 'sp a-frame) `('eret))
+     + [['add 'sp 'sp a-frame] ['eret]]
      ;; the fault path. pass ESR/ELR/FAR to k_fault, which reports and halts --
      ;; like x86_64's k_exception, faults are not resumed.
      + '((label a_fault)
@@ -233,9 +233,9 @@
    (lay-vec-bytes arch)
     (? (arch = "x86_64")
        (objsecs 'x64
-                `(`(".text"   1 6 16 x-text)
-                  `(".data"   1 3 8  x-rodata)
-                  `(".bss"    8 3 16 x-bss))
+                [[".text"   1 6 16 x-text]
+                 [".data"   1 3 8  x-rodata]
+                 [".bss"    8 3 16 x-bss]]
                 '("archinit" "k_reset" "k_halt" "timer_isr" "keyboard_isr" "uart_isr")
                 ()                       ; idt/isrs/idtreg are ours alone -- no C names them
                 ()
@@ -245,7 +245,7 @@
                 (x-stub-names + '("exc_common")))
        (arch = "aarch64")
        (objsecs 'arm64
-                `(`(".text.vectors" 1 6 2048 a-text))
+                [[".text.vectors" 1 6 2048 a-text]]
                 '("vectors")             ; arch.c: extern uint8_t vectors[] -> VBAR_EL1
                 () ()
                 '("a_irq" "a_fault"))

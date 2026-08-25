@@ -26,7 +26,7 @@
 (: sram-top 0x20020000                      ; 0x20000000 + 128 KB
    ; presence out of band: an unreadable file and an EMPTY one are the same value,
    ; and an empty .o here would link a firmware with a silent hole in it.
-   (nread p) (: r (uread p) (? (two? r) `(p <>r) (scare 'nlink-open p)))
+   (nread p) (: r (uread p) (? (two? r) [p <>r] (scare 'nlink-open p)))
    (nar? p) (: n (tally p) (&& (2 < n) ((snip p (n - 2) n) = ".a")))
    (: as >argv
       out <as ins >as
@@ -39,7 +39,7 @@
       ; link reads and not a tool it runs.
       set (map nread objs)
       lib (set + (ldarch set (map nread ars) 'thumb2sp))
-      runs `(`('at 0x08000000 (intern ".vectors") 'text 'rodata)
-             `('copy 0x20000000 'data 'bss))
-      _ (ld-write out (ldbare32 'thumb2sp runs lib `(`("__stack_top__" sram-top))))
+      runs [['at 0x08000000 (intern ".vectors") 'text 'rodata]
+            ['copy 0x20000000 'data 'bss]]
+      _ (ld-write out (ldbare32 'thumb2sp runs lib [["__stack_top__" sram-top]]))
       0))

@@ -21,7 +21,7 @@
 ; sealed holo module (the mkboot2 shape; port/teensy41/Makefile drives it).
 (: (mkboot dst)
    (: (zeros n) (? (n < 1) () (0 >< (zeros (n - 1))))
-      (wsym l) `(`('fix 4 'abs32 l 0))         ; a word the linker fills: (S + A) | T
+      (wsym l) [['fix 4 'abs32 l 0]]           ; a word the linker fills: (S + A) | T
 
       ;; -- 1. the FlexSPI configuration block at flash 0x000 (RT1060 RM 9.6.3.1) ------
       ;; how the ROM is to talk to the QSPI NOR. a 512-byte block of mostly zero with
@@ -69,9 +69,9 @@
              + (wsym 'default_handler) + (wsym 'default_handler))  ; PendSV, SysTick
 
       ;; -- 4. crt0: the ROM jumps here with a ROM-provided SP ------------------------
-      startup `(`('label 'cstartup)
-                `('la 'r0 '__stack_top__) `('mov 'sp 'r0)
-                `('jmp 'cmain))
+      startup [['label 'cstartup]
+               ['la 'r0 '__stack_top__] ['mov 'sp 'r0]
+               ['jmp 'cmain]]
 
       ;; -- 5. the instructions C cannot say ------------------------------------------
       ;; HardFault: hand the active stack's exception frame to hardfault_report (C).
@@ -82,30 +82,30 @@
       ;; ⚠ the reporter runs on a FRESH stack: if the fault WAS a stack overflow (or sp
       ;; is garbage), pushing its frame on the old sp double-faults into lockup and the
       ;; report never reaches the wire.
-      text `(`('label 'isr_hardfault)
-             `('li 'r1 4) `('test 'lr 'r1) `('br 'eq 'hf-msp)
-             `('mrs 'r0 'psp) `('jmp 'hf-frame)
-             `('label 'hf-msp) `('mrs 'r0 'msp)
-             `('label 'hf-frame)
-             `('la 'r1 '__stack_top__) `('mov 'sp 'r1)
-             `('jmp 'hardfault_report)
-             `('label 'default_handler) `('wfi) `('jmp 'default_handler)
+      text [['label 'isr_hardfault]
+            ['li 'r1 4] ['test 'lr 'r1] ['br 'eq 'hf-msp]
+            ['mrs 'r0 'psp] ['jmp 'hf-frame]
+            ['label 'hf-msp] ['mrs 'r0 'msp]
+            ['label 'hf-frame]
+            ['la 'r1 '__stack_top__] ['mov 'sp 'r1]
+            ['jmp 'hardfault_report]
+            ['label 'default_handler] ['wfi] ['jmp 'default_handler]
              ;; the helpers teensy41.c calls where it would otherwise want inline asm
-             `('label 'arm_dsb_isb) `('dsb 'sy) `('isb) `('ret)
-             `('label 'arm_dsb) `('dsb 'sy) `('ret)
-             `('label 'arm_wfi) `('wfi) `('ret)
-             `('label 'arm_bkpt) `('brk 0) `('ret))
+            ['label 'arm_dsb_isb] ['dsb 'sy] ['isb] ['ret]
+            ['label 'arm_dsb] ['dsb 'sy] ['ret]
+            ['label 'arm_wfi] ['wfi] ['ret]
+            ['label 'arm_bkpt] ['brk 0] ['ret]]
 
       ;; ALLOC-only for the four data blocks (2), ALLOC|EXEC for the two code ones (6);
       ;; PROGBITS throughout -- the ROM is handed these bytes, zeros included.
       (write-bytes dst
        (objsecs32 'thumb2
-        `(`(".flashconfig" 1 2 4 `(`('raw (fcfb-lay fcfb-words 0))))
-          `(".ivt"         1 2 4 `(`('label 'image_vector_table) `('raw ivt)))
-          `(".bootdata"    1 2 4 `(`('label 'boot_data) `('raw bdata)))
-          `(".vectors"     1 2 4 `(`('label 'vectors) `('raw vecs)))
-          `(".startup"     1 6 4 startup)
-          `(".text"        1 6 4 text))
+        [[".flashconfig" 1 2 4 [['raw (fcfb-lay fcfb-words 0)]]]
+         [".ivt"         1 2 4 [['label 'image_vector_table] ['raw ivt]]]
+         [".bootdata"    1 2 4 [['label 'boot_data] ['raw bdata]]]
+         [".vectors"     1 2 4 [['label 'vectors] ['raw vecs]]]
+         [".startup"     1 6 4 startup]
+         [".text"        1 6 4 text]]
         '("cstartup" "isr_hardfault" "default_handler"
           "arm_dsb_isb" "arm_dsb" "arm_wfi" "arm_bkpt")
         '("image_vector_table" "boot_data" "vectors") ()))))

@@ -36,7 +36,7 @@
    (warnline path w) (path + ":" + show <w + ":" + show <>w + ": " + <>>w + "\n")
 
    ; --- the verbs ------------------------------------------------------------
-   (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))
+   (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) [1 t]) ()))
 
    ; BALANCE ALONE fails. the other rules SPEAK -- an editing aid, read by hand --
    ; and nothing promotes one, so libra never refuses a file over a habit.
@@ -70,7 +70,7 @@
    (dbody s) (: n (tally s) (? ((0 < n) && (s 0 = 32)) (snip s 1 n) s))
    (dcmts src) (: t (tablet 0) _ (each (lint-cmts src) (\ c (pin t <c c))) t)
    (dalone ln c) (: k (<>c - 1)
-                    (? (dblank? (snip ln 0 k)) `(1 (snip ln 0 k + dbody <>>c)) ()))
+                    (? (dblank? (snip ln 0 k)) [1 (snip ln 0 k + dbody <>>c)] ()))
    (drtrim l) (? !(two? l) () (: r (drtrim >l) (? ((two? r) || !(dblank? <l)) (<l >< r) ())))
 
    ; a `#!` line is a seat, not a sentence -- six crew tools open with one
@@ -91,13 +91,13 @@
    ; fence because its alignment is the content, and a leading ⚠ is bolded.
    (dind s) (: n (tally s) (g i) (? ((i < n) && ((s i = 32) || (s i = 9))) (g (i + 1)) i) (g 0))
    (ddashy? c) ((c = 45) || (c = 32))
-   ; `--- name ------------` -> `(1 "name"); dashes both sides are marker and padding
+   ; `--- name ------------` -> [1 "name"]; dashes both sides are marker and padding
    (dbanner s)
     (: n (tally s)
        (? !((3 <= n) && (snip s 0 3 = "---")) ()
           (: a ((: (f i) (? ((i < n) && (ddashy? (s i))) (f (i + 1)) i)) 0)
              b ((: (f j) (? ((a < j) && (ddashy? (s (j - 1)))) (f (j - 1)) j)) n)
-             (? (a < b) `(1 (snip s a b)) ()))))
+             (? (a < b) [1 (snip s a b)] ()))))
    (dstarts? s t) (: n (tally s) m (tally t) ((m <= n) && (snip s 0 m = t)))
    (ditem? s) (: n (tally s)
                  (((2 <= n) && (snip s 0 2 = "- "))
@@ -111,7 +111,7 @@
 
    ; a display: the run of indented lines at the head of ls, and what is left.
    (dtake ls)
-    (: (g l acc) (? (!(two? l) || (dblank? <l) || !(0 < dind <l)) `((rev acc) l)
+    (: (g l acc) (? (!(two? l) || (dblank? <l) || !(0 < dind <l)) [(rev acc) l]
                     (g >l (<l >< acc)))
        (g ls ()))
    ; ..fenced, dedented by its own least indent: the alignment inside a display is

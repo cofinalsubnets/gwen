@@ -58,7 +58,7 @@
         uleave uname-main unexpand-main uniq-main unlines unlink-main uptime-main uread urun
         uset usplit ustatf utag utty uupsay wc-main whoami-main xargs-main yes-main)
 (use 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
-(: (read-text p) (: q (open p "r") (? q (: t (slurp q) _ (close q) `(1 t)) ()))   ; (1 text) | ()
+(: (read-text p) (: q (open p "r") (? q (: t (slurp q) _ (close q) [1 t]) ()))    ; (1 text) | ()
    (die m) (: _ (say err m) _ (put err 10) (uleave 2))
 
    ; diff: two files -> unified hunks on out; the classic exit triple
@@ -135,7 +135,7 @@
                 fs >>as
                 _ (? (two? fs) () (die "ar: no members"))
                 ms (map (\ f (: r (uread f)
-                                 (? (two? r) `((ubase f "") <>r) (die ("ar: cannot open " + f)))))
+                                 (? (two? r) [(ubase f "") <>r] (die ("ar: cannot open " + f)))))
                         fs)
                 _ (ar-write dst ms)
                 0))))
@@ -156,7 +156,7 @@
                               a)
                   (go (? hex 2 0) 0))
        (go a fs o pie org tgt rd)
-        (? !(two? a) `((rev fs) o pie org tgt rd)
+        (? !(two? a) [(rev fs) o pie org tgt rd]
            (<a = "-o")     (? (two? >a) (go >>a fs <>a pie org tgt rd) (die "ld: -o wants a path"))
            (<a = "-pie")   (go >a fs o 1 org tgt rd)
            (<a = "-t")     (? (two? >a) (go >>a fs o pie org (intern <>a) rd) (die "ld: -t wants a target"))
@@ -171,7 +171,7 @@
        fs <r o <>r pie <>>r org (at r 3) tgt (at r 4) rdme (at r 5)
        _ (? (two? fs) () (die "usage: kore ld [-pie] [-t x64|arm64|riscv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"))
        _ (? (tally o) () (die "ld: no -o OUT"))
-       srcs (map (\ f (: r2 (uread f) (? (two? r2) `(f <>r2) (die ("ld: cannot open " + f))))) fs)
+       srcs (map (\ f (: r2 (uread f) (? (two? r2) [f <>r2] (die ("ld: cannot open " + f))))) fs)
        ps (ldlink tgt pie org srcs ("love " + <(usplit 43 love-version)) rdme)
        _ (ld-write o ps)
        _ (chmod o 493)
@@ -225,14 +225,14 @@
    (nm-main as)
     ; flags CLUSTER: -gu is -g -u, which is what a hand types and what nm takes
     (: (nm-flags t k g u srt)
-        (? (tally t <= k) `(g u srt)
+        (? (tally t <= k) [g u srt]
            (: c (t k)
               (? (c = 103) (nm-flags t (k + 1) 1 u srt)
                  (c = 117) (nm-flags t (k + 1) g 1 srt)
                  (c = 112) (nm-flags t (k + 1) g u 1)
                  (die ("nm: unknown flag -" + (string c))))))
        (go a g u srt fs)
-        (? !(two? a) `(g u srt (rev fs))
+        (? !(two? a) [g u srt (rev fs)]
            ((1 < tally <a) && (<a 0 = 45))
             (: f (nm-flags <a 1 g u srt) (go >a <f <>f <>>f fs))
            (go >a g u srt (<a >< fs)))

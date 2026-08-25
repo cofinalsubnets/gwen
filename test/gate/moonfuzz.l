@@ -88,13 +88,13 @@
    ; been measuring the harness.
    (front txt)
     (: lx (clex txt)
-       (? (! (okv? lx)) `('bad 'lex lx)
+       (? (! (okv? lx)) ['bad 'lex lx]
           (: pp (cpp <>lx (\ n s (incload () () "test/cc/" n s)) "<fuzz>")
-             (? (! (okv? pp)) `('bad 'cpp pp)
+             (? (! (okv? pp)) ['bad 'cpp pp]
                 (: ps (cparse-t <>pp 'x64)
-                   (? (! (okv? ps)) `('bad 'parse ps)
+                   (? (! (okv? ps)) ['bad 'parse ps]
                       (: g (cgen-obj <>ps (cauup ps) (caup (cuup ps)) (cauup (cuup ps)) () 'x64)
-                         (? (! (okv? g)) `('bad 'gen g) `('ok <>ps)))))))))
+                         (? (! (okv? g)) ['bad 'gen g] ['ok <>ps]))))))))
 
    ; --- one mutant -> a verdict symbol, plus the stage it died in when it died.
    ; ('scare ..) beats everything: a case that scared is not a refusal, it is a fall.
@@ -105,20 +105,20 @@
        ; ⚠ the scare's stage is 'late when the front end still ANSWERED -- (el r 1)
        ; there is the whole AST, and it is a census KEY. a red run has to stay
        ; readable, so a tree never becomes one.
-       (? sc `('scare (? (id? <r 'bad) (el r 1) 'late))
+       (? sc ['scare (? (id? <r 'bad) (el r 1) 'late)]
           (id? <r 'bad)
           (: st (el r 1) cy (el r 2)
-             (? (gripe? cy) `('named st) `('bare st)))
+             (? (gripe? cy) ['named st] ['bare st]))
           ; it parsed. the clay leg -- G1 over a tree the corpus never had.
           (: a (el r 1)
              v (cok? a)
-             (? (! (id? v 1)) `('badshape 'clay)
+             (? (! (id? v 1)) ['badshape 'clay]
                 (: t (cshow a)
-                   (? (gripe? t) `('inexpr 'clay)
+                   (? (gripe? t) ['inexpr 'clay]
                       (: b (front t)
-                         (? (! (id? <b 'ok)) `('reparse 'clay)
-                            ((el b 1) = a) `('ok 'clay)
-                            `('diff 'clay)))))))))
+                         (? (! (id? <b 'ok)) ['reparse 'clay]
+                            ((el b 1) = a) ['ok 'clay]
+                            ['diff 'clay]))))))))
 
    files (filter dotc? (readdir "test/cc"))
    ; per file: MUTS mutants, from a seed keyed by the file's own index, so a red

@@ -7,10 +7,10 @@
 (: (oa-list n acc) (? (< n 1) acc (oa-list (- n 1) (link n acc)))   ; build (1 .. n)
    (oa-churn n)    (? (< n 1) 0 (: g (oa-list 300) (oa-churn (- n 1)))) ; alloc + discard
    oa-big     (100 2)                          ; a bignum (past fixnum/box range)
-   oa-vals  `(oa-big (* oa-big oa-big) (+ oa-big 7) "hi" 'sym)
+   oa-vals  [oa-big (* oa-big oa-big) (+ oa-big 7) "hi" 'sym]
    oa-a     (top-tray '(5) oa-vals)
    oa-z     (top-tray '(3) 0)                         ; nil-filled
-   oa-nest  (top-tray '(2) `((top-tray '(2) '(1 2)) (top-tray '(2) '(3 4)))))
+   oa-nest  (top-tray '(2) [(top-tray '(2) '(1 2)) (top-tray '(2) '(3 4))]))
 
 (assert
  ; --- construction / accessors ---
@@ -51,13 +51,13 @@
 ; --- elementwise arithmetic: transparent bignums, full broadcasting ----------
 ; the whole point of g_O: ops route through the promoting scalar dispatch, so a
 ; bignum array adds/multiplies EXACTLY where an z array would wrap.
-(: oa-x   (top-tray '(3) `((100 2) 2 3))
-   oa-y   (top-tray '(3) `(1 (100 2) 4))
+(: oa-x   (top-tray '(3) [(100 2) 2 3])
+   oa-y   (top-tray '(3) [1 (100 2) 4])
    oa-sum (+ oa-x oa-y)
    oa-prd (* oa-x oa-y)
    oa-w   (40 2)                              ; 2^40 fits z; 2^40 * 2^40 = 2^80 overflows it
-   oa-zar (star-tray '(2) `(oa-w oa-w))          ; typed int array -> wraps
-   oa-oar (top-tray   '(2) `(oa-w oa-w)))         ; object array   -> exact
+   oa-zar (star-tray '(2) [oa-w oa-w])           ; typed int array -> wraps
+   oa-oar (top-tray   '(2) [oa-w oa-w]))          ; object array   -> exact
 
 (assert
  ; result of an op on a g_O array is itself g_O
@@ -85,8 +85,8 @@
  ; --- reductions fold exactly through the same dispatch ---
  (= (+ (100 2) 5) (net oa-x))
  (= (* 6 (100 2)) (prod oa-x))
- (= (100 2) (max (top-tray '(3) `(5 (100 2) 7))))
- (= -3 (min (top-tray '(3) `(5 -3 7))))
+ (= (100 2) (max (top-tray '(3) [5 (100 2) 7])))
+ (= -3 (min (top-tray '(3) [5 -3 7])))
  (aall (top-tray '(2) '(1 2)))
  (nil? (aall (top-tray '(2) '(1 0))))
  (sat (top-tray '(2) '(0 5)))
@@ -103,7 +103,7 @@
 ; non-number data lifts the whole array to o automatically -> exact, never lossy.
 (: oa-q (array 2 'hello 'world)                  ; symbols -> object array
    oa-bn (array 2 (100 2) 5)                  ; bignum -> o, stored exactly
-   oa-m  (array `(2 2) 1 2 3 4))                ; rank-2 from a shape list
+   oa-m  (array [2 2] 1 2 3 4))                 ; rank-2 from a shape list
 (assert
  ; type inference: pure ints -> z, any float -> r, anything past the real
  ; 64-bit tower (bignum/symbol/...) -> o
@@ -115,7 +115,7 @@
  (= 1 (rank (array 4 1 2 3 4)))
  (= 0 (tally (array -3))) (= "@()" (show (array -3)))
  ; shape list -> rank-N
- (= 2 (rank oa-m))   (= 4 (peep oa-m `(1 1) 0))
+ (= 2 (rank oa-m))   (= 4 (peep oa-m [1 1] 0))
  ; elements stored verbatim, in order
  (= 'world (peep oa-q 1 0))
  (= (100 2) (peep oa-bn 0 0))                  ; full bignum, not truncated to z
@@ -128,7 +128,7 @@
  ; saturating shape coercion: a float / complex / vector dimension -> ($ d)
  (= 3 (tally (array 2.9 7 8 9)))                   ; ($ 2.9) = 3 : rank-1 length 3
  (= 3 (tally (array (3 ~ 4) 0 0 0)))               ; ($ (3 ~ 4)) = 3, the real part
- (= 8 (tally (array `(2.0 3.5) 1 2 3 4 5 6 7 8)))  ; dims (2 4) -> 8 elems
+ (= 8 (tally (array [2.0 3.5] 1 2 3 4 5 6 7 8)))   ; dims (2 4) -> 8 elems
  ; @ reader macro: @(e …) is sugar for a rank-1 array, type inferred
  (= top-tray (tier @((100 2) 1)))                    ; bignum element -> object array
  (aall (= @(1 2 3) (array 3 1 2 3))))

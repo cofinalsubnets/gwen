@@ -109,7 +109,7 @@ hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
    (hw-paint bk s in)
    (: r (hue-lex bk s in 1)
       (go rs i acc)
-       (? !(two? rs) `((acc + hw-q (snip s i (tally s))) <>r)
+       (? !(two? rs) [(acc + hw-q (snip s i (tally s))) <>r]
           (: u <rs c <u a <>u b <>>u
              (go >rs b (acc + hw-q (snip s i a) + hw-span c a b s))))
       (go <r 0 ""))

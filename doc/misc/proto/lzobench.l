@@ -75,7 +75,7 @@
 ; and changing both hands a stranger an archive their gunzip cannot open.
 (use 'gz)
 
-(: (bench-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
+(: (bench-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
    (bench-blurt p s) (: q (open p "w") (? q (: _ (say q s) _ (close q) 1) ()))
    (bench-die m) (: _ (say err ("lzobench: " + m + "\n")) (quit 1))
 

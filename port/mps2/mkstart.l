@@ -38,28 +38,28 @@
       ;; fault exits 98 -- loud, never a lockup with no word about why. a relocated
       ;; word is a `fix` ITEM riding the `raw` escape, which is the one door that takes
       ;; bytes and fixups mixed -- lay knows `label` and `align` and lowers all else.
-      (w32 l) `(`('fix 4 'abs32 l 0))
-      txt `(`('raw ((le32 stack-top) + (w32 '_start)
-                    + (foldl (\ a _ (a + (w32 '_fault))) () (jot 14))))
-            `('label '_start)
-            `('li 'r0 cpacr) `('ld4 'r1 'r0 0)
-            `('li 'r2 cp1011) `('or 'r1 'r1 'r2) `('st4 'r0 0 'r1)
-            `('dsb 'sy) `('isb)
-            `('la 'r0 '__data_load__) `('la 'r1 '__data_start__) `('la 'r2 '__data_end__)
-            `('label 'dcopy) `('cmp 'r1 'r2) `('br 'ae 'dzero)
-            `('ldu1 'r3 'r0 0) `('st1 'r1 0 'r3)
-            `('add 'r0 'r0 1) `('add 'r1 'r1 1) `('jmp 'dcopy)
-            `('label 'dzero) `('la 'r0 '__bss_start__) `('la 'r1 '__bss_end__) `('li 'r2 0)
-            `('label 'bloop) `('cmp 'r0 'r1) `('br 'ae 'bdone)
-            `('st1 'r0 0 'r2) `('add 'r0 'r0 1) `('jmp 'bloop)
-            `('label 'bdone)
-            `('call 'main)
-            `('label 'spin) `('jmp 'spin)          ; main never returns (m7_exit leaves through qemu)
+      (w32 l) [['fix 4 'abs32 l 0]]
+      txt [['raw ((le32 stack-top) + (w32 '_start)
+                  + (foldl (\ a _ (a + (w32 '_fault))) () (jot 14)))]
+           ['label '_start]
+           ['li 'r0 cpacr] ['ld4 'r1 'r0 0]
+           ['li 'r2 cp1011] ['or 'r1 'r1 'r2] ['st4 'r0 0 'r1]
+           ['dsb 'sy] ['isb]
+           ['la 'r0 '__data_load__] ['la 'r1 '__data_start__] ['la 'r2 '__data_end__]
+           ['label 'dcopy] ['cmp 'r1 'r2] ['br 'ae 'dzero]
+           ['ldu1 'r3 'r0 0] ['st1 'r1 0 'r3]
+           ['add 'r0 'r0 1] ['add 'r1 'r1 1] ['jmp 'dcopy]
+           ['label 'dzero] ['la 'r0 '__bss_start__] ['la 'r1 '__bss_end__] ['li 'r2 0]
+           ['label 'bloop] ['cmp 'r0 'r1] ['br 'ae 'bdone]
+           ['st1 'r0 0 'r2] ['add 'r0 'r0 1] ['jmp 'bloop]
+           ['label 'bdone]
+           ['call 'main]
+           ['label 'spin] ['jmp 'spin]             ; main never returns (m7_exit leaves through qemu)
             ;; uintptr_t sh_call(uintptr_t op, uintptr_t arg) -- AAPCS already placed
             ;; op/arg in r0/r1, and the trap answers in r0.
-            `('label 'sh_call) `('brk 171) `('ret)
+           ['label 'sh_call] ['brk 171] ['ret]
             ;; the fault tail: hand the stacked frame to C, which prints pc/lr and exits 98
-            `('label '_fault) `('mov 'r0 'sp) `('call 'fault_report)
-            `('label 'spin2) `('jmp 'spin2))
-      (write-bytes dst (objsecs32 'thumb2 `(`(".text" 1 6 4 txt))
+           ['label '_fault] ['mov 'r0 'sp] ['call 'fault_report]
+           ['label 'spin2] ['jmp 'spin2]]
+      (write-bytes dst (objsecs32 'thumb2 [[".text" 1 6 4 txt]]
                                   '("_start" "sh_call") () ()))))

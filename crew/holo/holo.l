@@ -62,8 +62,8 @@
    ;; it normalizes negatives into [0,2^64) and slices with //%, both bignum-exact. --
    (catall ls) (foldr (+) () ls)                     ; concat a list of byte-lists
    (byte n)  (n & 255)
-   (le16 n)  `((byte n) (byte (n >> 8)))
-   (le32 n)  `((byte n) (byte (n >> 8)) (byte (n >> 16)) (byte (n >> 24)))
+   (le16 n)  [(byte n) (byte (n >> 8))]
+   (le32 n)  [(byte n) (byte (n >> 8)) (byte (n >> 16)) (byte (n >> 24))]
    (le64 n)  (: u (? (n < 0) (n + 18446744073709551616) n)                            ; two's-complement into [0,2^64)
               ((: (go i) (? (i < 8) (((u // i 256) % 256) >< go (i + 1)) ())) 0))       ; 8 LE bytes via //% (i 256)=256^i
    (fits8  n) ((n >= -128) && (n <= 127))
@@ -78,7 +78,7 @@
    ;; `patch`, carried inline among the bytes as ('fix w kind label aux) so length and order fall
    ;; out. `aux` is backend scratch -- x86 ignores it; a fixed-width arch stashes the base
    ;; instruction word there, its branch offset being a bitfield WITHIN the word, not bytes. --
-   (fix w kind label aux) `('fix w kind label aux)
+   (fix w kind label aux) ['fix w kind label aux]
    (fix? x)   (? (two? x) (<x = 'fix) 0)
    (fix-w x)  (at x 1)
    (fix-k x)  (at x 2)
@@ -103,65 +103,65 @@
    ;; (an arity-0 row IS its chunk), and its 'lower is the lower-via shim -- so the op ->
    ;; operand-shape mapping lives HERE, once, instead of four hand-kept dispatch chains. --
    ir-arity (tabof
-        `(('ret >< 0) ('sys >< 0) ('nop >< 0) ('trap >< 0) ('udivll >< 0) ('uremll >< 0)
+        [('ret >< 0) ('sys >< 0) ('nop >< 0) ('trap >< 0) ('udivll >< 0) ('uremll >< 0)
            ; x86 PORT I/O, register-contracted like `sys` (dx the port, al/ax/eax the datum; the
            ; string forms walk rsi/rdi by rcx). zero operands: the contract IS the register file.
-           ('inb >< 0) ('inw >< 0) ('inl >< 0) ('outb >< 0) ('outw >< 0) ('outl >< 0)
-           ('cld >< 0)
-           ('insb >< 0) ('insw >< 0) ('insl >< 0) ('outsb >< 0) ('outsw >< 0) ('outsl >< 0)
+          ('inb >< 0) ('inw >< 0) ('inl >< 0) ('outb >< 0) ('outw >< 0) ('outl >< 0)
+          ('cld >< 0)
+          ('insb >< 0) ('insw >< 0) ('insl >< 0) ('outsb >< 0) ('outsw >< 0) ('outsl >< 0)
            ; the SYSTEM lane -- privileged instructions, arch-specific like the port i/o above.
            ; x86: interrupt flag, halt, the MSR pair, the descriptor tables, the control registers.
            ; aarch64: the sysreg pair, the PSTATE-field immediate, barriers, the SYS operations (an
            ; operation NAME then a register, `zr` whole-system), the exception generators, the waits.
-           ('cli >< 0) ('sti >< 0) ('hlt >< 0) ('ud2 >< 0) ('iretq >< 0) ('swapgs >< 0)
-           ('rdmsr >< 0) ('wrmsr >< 0) ('cpuid >< 0) ('rdtsc >< 0)
+          ('cli >< 0) ('sti >< 0) ('hlt >< 0) ('ud2 >< 0) ('iretq >< 0) ('swapgs >< 0)
+          ('rdmsr >< 0) ('wrmsr >< 0) ('cpuid >< 0) ('rdtsc >< 0)
            ; the SVM lane: register-contracted too -- the VMCB's physical address rides rax.
-           ('vmrun >< 0) ('vmload >< 0) ('vmsave >< 0) ('stgi >< 0) ('clgi >< 0)
+          ('vmrun >< 0) ('vmload >< 0) ('vmsave >< 0) ('stgi >< 0) ('clgi >< 0)
            ; the VMX lane, where nothing is register-contracted: vmxon/vmclear/vmptrld take a
            ; MEMORY operand holding a physical address (base + displacement, lgdt's shape),
            ; vmread/vmwrite move a field to or from a GPR, vmlaunch/vmxoff are bare. sgdt/sidt
            ; join them because VMX must WRITE DOWN the descriptor-table bases it will restore.
-           ('vmlaunch >< 0) ('vmxoff >< 0)
-           ('vmxon >< 2) ('vmclear >< 2) ('vmptrld >< 2) ('sgdt >< 2) ('sidt >< 2)
-           ('vmread >< 2) ('vmwrite >< 2)
-           ('isb >< 0) ('wfi >< 0) ('wfe >< 0) ('eret >< 0)
-           ('int >< 1) ('ltr >< 1) ('dsb >< 1) ('dmb >< 1)
-           ('brk >< 1) ('dbrk >< 1) ('hvc >< 1) ('smc >< 1) ('udf >< 1) ('svcn >< 1)
-           ('ldcr >< 2) ('stcr >< 2) ('lgdt >< 2) ('lidt >< 2) ('invlpg >< 2)
-           ('mrs >< 2) ('msr >< 2) ('msri >< 2)
-           ('tlbi >< 2) ('ic >< 2) ('dc >< 2) ('at >< 2)
-           ('sx1 >< 1) ('sx2 >< 1) ('sx4 >< 1) ('zx1 >< 1) ('zx2 >< 1) ('zx4 >< 1)
-           ('push >< 1) ('pop >< 1) ('neg >< 1) ('not >< 1) ('inc >< 1) ('dec >< 1) ('tp >< 1)
-           ('jmp >< 1) ('jmp8 >< 1) ('jmpr >< 1) ('callr >< 1) ('call >< 1) ('raw >< 1) ('lapool >< 1)
-           ('li >< 2) ('mov >< 2) ('cmp >< 2) ('test >< 2) ('set >< 2) ('br >< 2) ('br8 >< 2)
-           ('la >< 2) ('lar >< 2) ('lia >< 2) ('ldseg >< 2) ('clz >< 2)
-           ('shl >< 2) ('shr >< 2) ('sar >< 2) ('rol >< 2) ('ror >< 2) ('ror4 >< 2)
-           ('shlv >< 2) ('shrv >< 2) ('sarv >< 2) ('rorv >< 2) ('rorv4 >< 2)
-           ('movupd >< 2) ('movsd >< 2) ('movhlps >< 2) ('unpcklpd >< 2)
-           ('mulpd >< 2) ('addpd >< 2) ('subpd >< 2) ('divpd >< 2)
-           ('mulsd >< 2) ('addsd >< 2) ('subsd >< 2) ('divsd >< 2)
-           ('xorpd >< 2) ('pcmpeqd >< 2) ('andpd >< 2) ('psubq >< 2)
-           ('cvtss2sd >< 2) ('cvtsd2ss >< 2) ('ucomisd >< 2) ('movmskpd >< 2)
-           ('cvtsi2sd >< 2) ('cvtui2sd >< 2) ('cvttsd2si >< 2) ('cvttsd2ui >< 2)
-           ('movqxr >< 2) ('movqrx >< 2)
-           ('add >< 3) ('sub >< 3) ('and >< 3) ('or >< 3) ('xor >< 3) ('imul >< 3)
-           ('adds >< 3) ('subs >< 3) ('adc >< 3) ('adcs >< 3) ('sbc >< 3) ('sbcs >< 3) ('ors >< 3)
-           ('div >< 3) ('udiv >< 3)
-           ('ld >< 3) ('st >< 3) ('lea >< 3) ('lean >< 3)
-           ('cas >< 3) ('cas4 >< 3)
-           ('ld1 >< 3) ('ld2 >< 3) ('ld4 >< 3) ('st1 >< 3) ('st2 >< 3) ('st4 >< 3)
-           ('si >< 3) ('si1 >< 3) ('si2 >< 3) ('si4 >< 3)
-           ('cmpm >< 3) ('cmprm >< 3)
-           ('divq >< 1) ('dv128 >< 1) ('rm128 >< 1)
-           ('a128 >< 1) ('s128 >< 1) ('m128 >< 1) ('mw128 >< 1)
-           ('a128r >< 2) ('s128r >< 2) ('m128r >< 2) ('mw128r >< 1) ('c128r >< 3)
-           ('shl128 >< 1) ('shr128 >< 1) ('sar128 >< 1) ('c128 >< 2)
-           ('sx128 >< 0) ('n128 >< 0) ('inc128 >< 0) ('dec128 >< 0)
-           ('shl128v >< 0) ('shr128v >< 0) ('sar128v >< 0)
-           ('ldu1 >< 3) ('ldu2 >< 3) ('ldu4 >< 3)
-           ('stsd >< 3) ('ldsd >< 3) ('stss >< 3) ('ldss >< 3) ('cmppd >< 3)
-           ('rem >< 4) ('urem >< 4) ('umull >< 4) ('smull >< 4) ('mla >< 4)
-           ('ldx >< 5) ('stx >< 5) ('leax >< 5) ('ldxb >< 5) ('stxb >< 5) ('mulo >< 5)))
+          ('vmlaunch >< 0) ('vmxoff >< 0)
+          ('vmxon >< 2) ('vmclear >< 2) ('vmptrld >< 2) ('sgdt >< 2) ('sidt >< 2)
+          ('vmread >< 2) ('vmwrite >< 2)
+          ('isb >< 0) ('wfi >< 0) ('wfe >< 0) ('eret >< 0)
+          ('int >< 1) ('ltr >< 1) ('dsb >< 1) ('dmb >< 1)
+          ('brk >< 1) ('dbrk >< 1) ('hvc >< 1) ('smc >< 1) ('udf >< 1) ('svcn >< 1)
+          ('ldcr >< 2) ('stcr >< 2) ('lgdt >< 2) ('lidt >< 2) ('invlpg >< 2)
+          ('mrs >< 2) ('msr >< 2) ('msri >< 2)
+          ('tlbi >< 2) ('ic >< 2) ('dc >< 2) ('at >< 2)
+          ('sx1 >< 1) ('sx2 >< 1) ('sx4 >< 1) ('zx1 >< 1) ('zx2 >< 1) ('zx4 >< 1)
+          ('push >< 1) ('pop >< 1) ('neg >< 1) ('not >< 1) ('inc >< 1) ('dec >< 1) ('tp >< 1)
+          ('jmp >< 1) ('jmp8 >< 1) ('jmpr >< 1) ('callr >< 1) ('call >< 1) ('raw >< 1) ('lapool >< 1)
+          ('li >< 2) ('mov >< 2) ('cmp >< 2) ('test >< 2) ('set >< 2) ('br >< 2) ('br8 >< 2)
+          ('la >< 2) ('lar >< 2) ('lia >< 2) ('ldseg >< 2) ('clz >< 2)
+          ('shl >< 2) ('shr >< 2) ('sar >< 2) ('rol >< 2) ('ror >< 2) ('ror4 >< 2)
+          ('shlv >< 2) ('shrv >< 2) ('sarv >< 2) ('rorv >< 2) ('rorv4 >< 2)
+          ('movupd >< 2) ('movsd >< 2) ('movhlps >< 2) ('unpcklpd >< 2)
+          ('mulpd >< 2) ('addpd >< 2) ('subpd >< 2) ('divpd >< 2)
+          ('mulsd >< 2) ('addsd >< 2) ('subsd >< 2) ('divsd >< 2)
+          ('xorpd >< 2) ('pcmpeqd >< 2) ('andpd >< 2) ('psubq >< 2)
+          ('cvtss2sd >< 2) ('cvtsd2ss >< 2) ('ucomisd >< 2) ('movmskpd >< 2)
+          ('cvtsi2sd >< 2) ('cvtui2sd >< 2) ('cvttsd2si >< 2) ('cvttsd2ui >< 2)
+          ('movqxr >< 2) ('movqrx >< 2)
+          ('add >< 3) ('sub >< 3) ('and >< 3) ('or >< 3) ('xor >< 3) ('imul >< 3)
+          ('adds >< 3) ('subs >< 3) ('adc >< 3) ('adcs >< 3) ('sbc >< 3) ('sbcs >< 3) ('ors >< 3)
+          ('div >< 3) ('udiv >< 3)
+          ('ld >< 3) ('st >< 3) ('lea >< 3) ('lean >< 3)
+          ('cas >< 3) ('cas4 >< 3)
+          ('ld1 >< 3) ('ld2 >< 3) ('ld4 >< 3) ('st1 >< 3) ('st2 >< 3) ('st4 >< 3)
+          ('si >< 3) ('si1 >< 3) ('si2 >< 3) ('si4 >< 3)
+          ('cmpm >< 3) ('cmprm >< 3)
+          ('divq >< 1) ('dv128 >< 1) ('rm128 >< 1)
+          ('a128 >< 1) ('s128 >< 1) ('m128 >< 1) ('mw128 >< 1)
+          ('a128r >< 2) ('s128r >< 2) ('m128r >< 2) ('mw128r >< 1) ('c128r >< 3)
+          ('shl128 >< 1) ('shr128 >< 1) ('sar128 >< 1) ('c128 >< 2)
+          ('sx128 >< 0) ('n128 >< 0) ('inc128 >< 0) ('dec128 >< 0)
+          ('shl128v >< 0) ('shr128v >< 0) ('sar128v >< 0)
+          ('ldu1 >< 3) ('ldu2 >< 3) ('ldu4 >< 3)
+          ('stsd >< 3) ('ldsd >< 3) ('stss >< 3) ('ldss >< 3) ('cmppd >< 3)
+          ('rem >< 4) ('urem >< 4) ('umull >< 4) ('smull >< 4) ('mla >< 4)
+          ('ldx >< 5) ('stx >< 5) ('leax >< 5) ('ldxb >< 5) ('stxb >< 5) ('mulo >< 5)])
    ;; an emitter ROW is (arity . emitter): `emsof` builds a backend's tablet from the same
    ;; ('op >< f) pairs `tabof` takes, stamping each row with its count off ir-arity. so ir-arity
    ;; is read at BAKE time, once per op, and lowering reads arity and emitter in ONE lookup.

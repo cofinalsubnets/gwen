@@ -26,10 +26,10 @@
     (: n (tally s)
        neg (? (0 < n) (s 0 = 45) 0)
        st (? neg 1 0)
-       (go k acc) (? (n <= k) `(1 acc)
+       (go k acc) (? (n <= k) [1 acc]
                      (: c (s k) (? ((c < 48) || (57 < c)) ()
                                    (go (k + 1) (((* 10 acc) + c) - 48)))))
-       (? (n <= st) () (: r (go st 0) (? (two? r) `(1 (? neg (0 - <>r) <>r)) ()))))
+       (? (n <= st) () (: r (go st 0) (? (two? r) [1 (? neg (0 - <>r) <>r)] ()))))
    (ex-true? v) (!(v = "") && !(v = "0"))
    (ex-bool b) (? b "1" "0")
    ; ⚠ the division TRUNCATES toward zero and the remainder wears the DIVIDEND's sign,

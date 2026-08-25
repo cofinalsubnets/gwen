@@ -3799,7 +3799,7 @@ static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c) {
      // note: '\'' is not here -- a name keeps a trailing/internal prime (x', n'',
      // the prover idiom). a leading ' is still quote: p0read1 dispatches it as a
      // wrap before this sounder ever runs, so only a continuation ' reaches here.
-     case '"': case '`': case ',': case 0 : case EOF: {   // the cursor stays on the terminator
+     case '"': case ',': case 0 : case EOF: {   // the cursor stays on the terminator
       struct ai_str *s = str(g->sp[0]);
       txt(s)[len(s) = n] = 0; // zero terminate for am_strtod ; n < lim so this is safe
       // the three predicates are exhaustive over what a base-0 strtol accepts whole,

@@ -18,14 +18,14 @@
        s (? sfx (snip s0 0 (n0 - 1)) s0)
        n (tally s)
        (dig? c) ((48 <= c) && (c <= 57))
-       (ip i acc) (? ((i < n) && dig? (s i)) (ip (i + 1) ((* 10 acc) + (s i - 48))) `(acc i))
+       (ip i acc) (? ((i < n) && dig? (s i)) (ip (i + 1) ((* 10 acc) + (s i - 48))) [acc i])
        r (ip 0 0)
        whole <r i <>r
        (? ((i = n) && (0 < n)) (* whole mul)
           ((i < n) && (s i = 46))
            (: (fp j acc sc) (? ((j < n) && dig? (s j))
                                (fp (j + 1) ((* 10 acc) + (s j - 48)) (* sc 10))
-                               `(acc sc j))
+                               [acc sc j])
               fr (fp (i + 1) 0 1)
               (? ((<>>fr = n) && ((0 < i) || ((i + 1) < n)))
                  ((* whole mul) + (// (* <fr mul) <>fr))
@@ -156,7 +156,7 @@
        (udie 1 ("date: cannot read the date '" + w + "' (only @SECONDS here)")))
    (date-main as)
     (: (fl a when fmt)
-        (? !(two? a) `(when fmt)
+        (? !(two? a) [when fmt]
            ((<a = "-u") || (<a = "--utc")) (fl >a when fmt)
            (<a = "-d") (? (two? >a) (fl >>a (udt-when <>a) fmt)
                           (udie 1 "date: -d wants a time"))
@@ -455,9 +455,9 @@
        cmd (? (two? rest) rest '("echo"))
        ws (uwords (slurp in))
        (chunks k l) (? !(two? l) () (take k l >< chunks k (drop k l)))
-       runs (? !(two? ws) `(())                      ; no input still runs once, like GNU
+       runs (? !(two? ws) [()]                       ; no input still runs once, like GNU
                nn (chunks nn ws)
-               `(ws))
+               [ws])
        (go rs bad)
         (? !(two? rs)
            (: _ (flush out) bad)

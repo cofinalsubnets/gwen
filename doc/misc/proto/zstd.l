@@ -99,7 +99,7 @@
    ; grows its import row after the analyser has frozen it, and the compiler says
    ; `imports-grew` rather than miscompile -- so the shape is forced, not chosen.
    (zs-narrow rem thr nb)                  ; spend the budget: the width shrinks with it
-    (? (rem < thr) (zs-narrow rem (thr >> 1) (nb - 1)) `(thr nb))
+    (? (rem < thr) (zs-narrow rem (thr >> 1) (nb - 1)) [thr nb])
    (zs-zeros s n base t a)                 ; a run of absent symbols, 2 bits at a time
     (: v (zs-fb s n base t 2) (? (v = 3) (zs-zeros s n base t (a + 3)) (a + v)))
    (zs-one s n base t thr nb rem)          ; one count, at the current budget
@@ -109,7 +109,7 @@
           (: v (lo + ((zs-fb s n base t 1) << (nb - 1)))
              (? (thr <= v) (v - mx) v))))
    (zs-nc2 s n base t norms sym thr nb prev0 rem)
-    (? (rem <= 1) `(norms (sym - 1) (// ((peep t 0 0) + 7) 8))
+    (? (rem <= 1) [norms (sym - 1) (// ((peep t 0 0) + 7) 8)]
        (255 < sym) ()
        (peep t 1 0) ()
        (: s2 (? prev0 (sym + (zs-zeros s n base t 0)) sym)
@@ -128,7 +128,7 @@
        norms (tablet 0)
        al ((zs-fb s n base t 4) + 5)
        r (? (peep t 1 0) () (zs-nc2 s n base t norms 0 (1 << al) (al + 1) 0 ((1 << al) + 1)))
-       (? (! r) () `(<r <>r al <>>r)))
+       (? (! r) () [<r <>r al <>>r]))
 
    ; the table: low-probability symbols are laid at the top walking down, the rest are
    ; SPREAD over the remaining slots by a stride that visits each exactly once.
@@ -165,7 +165,7 @@
                    _ (pin nst ((u * 2) + 1) ((ns >> 8) & 255))
                    (go (u + 1))))
             (go 0))
-       `(sym nbb nst al))
+       [sym nbb nst al])
    (zs-tsym t st) (peep <t st 0)
    (zs-tnst t st) (: c <>>t o (st * 2) ((peep c o 0) + ((peep c (o + 1) 0) << 8)))
    (zs-tnb t st) (peep <>t st 0)
@@ -215,7 +215,7 @@
                               0)
                          (go (i + 1))))
                   (go 0))
-             `(sym nbb log))))
+             [sym nbb log])))
    (zs-hufend ws cnt bytes)                ; deduce the unwritten last weight
     (: tot (: (go i a) (? (cnt <= i) a
                           (: w (peep ws i 0) (go (i + 1) (? w (a + (1 << (w - 1))) a))))
@@ -225,7 +225,7 @@
              rest ((1 << log) - tot)
              (? (! rest) ()
                 (: _ (pin ws cnt ((zs-hb rest) + 1))
-                   `(ws (cnt + 1) bytes))))))
+                   [ws (cnt + 1) bytes])))))
    ; the weights themselves: either four bits apiece, or an FSE stream of their own
    ; read with TWO interleaved states.
    (zs-hufws s n base)                     ; -> (ws nsym bytes) | ()
@@ -316,12 +316,12 @@
        (? (kind < 2)
           (: hb (? (sf = 1) 2 (sf = 3) 3 1)
              regen (? (hb = 1) (h0 >> 3) ((zs-le s base hb) >> 4))
-             (? (kind = 0) (? (n < (base + hb + regen)) () `((zs-cut s (base + hb) regen) (hb + regen)))
+             (? (kind = 0) (? (n < (base + hb + regen)) () [(zs-cut s (base + hb) regen) (hb + regen)])
                 (? (n <= (base + hb)) ()
                    (: c (cask regen) ch (s (base + hb))
                       (go i) (? (regen <= i) 0 (: _ (pin c i ch) (go (i + 1))))
                       _ (go 0)
-                      `((string c) (hb + 1))))))
+                      [(string c) (hb + 1)]))))
           (: hb (? (sf < 2) 3 (sf = 2) 4 5)
              w (zs-le s base hb)
              bits (? (sf < 2) 10 (sf = 2) 14 18)
@@ -338,7 +338,7 @@
                       (: _ (pin cx 'huf tab)
                          body (zs-cut s (base + hb + tb) (csize - tb))
                          lit (zs-hufdec tab body regen streams)
-                         (? (! lit) () `(lit (hb + csize))))))))))
+                         (? (! lit) () [lit (hb + csize)]))))))))
 
    ; --- the sequence ladders -------------------------------------------------
    zs-lbase (star-tray '(36) '(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
@@ -367,18 +367,18 @@
    ; --- the sequences section ------------------------------------------------
    (zs-nseq s n base)                      ; -> (count bytes) | ()
     (: b0 (s base)
-       (? (! b0) `(0 1)
-          (b0 < 128) `(b0 1)
-          (b0 < 255) (? (n <= (base + 1)) () `((((b0 - 128) << 8) + (s (base + 1))) 2))
-          (? (n <= (base + 2)) () `(((s (base + 1)) + ((s (base + 2)) << 8) + 32512) 3))))
+       (? (! b0) [0 1]
+          (b0 < 128) [b0 1]
+          (b0 < 255) (? (n <= (base + 1)) () [(((b0 - 128) << 8) + (s (base + 1))) 2])
+          (? (n <= (base + 2)) () [((s (base + 1)) + ((s (base + 2)) << 8) + 32512) 3])))
    ; a mode picks where a table comes from: the predefined one, a single repeated
    ; symbol, one written here, or the one the last block left behind.
    (zs-mode s n base mode pre old)         ; -> (table bytes) | ()
-    (? (mode = 0) `(pre 0)
-       (mode = 3) (? old `(old 0) ())
-       (mode = 1) (? (n <= base) () (: t (zs-fse (zs-norms `((s base))) (s base) 0) `(t 1)))
+    (? (mode = 0) [pre 0]
+       (mode = 3) (? old [old 0] ())
+       (mode = 1) (? (n <= base) () (: t (zs-fse (zs-norms [(s base)]) (s base) 0) [t 1]))
        (: r (zs-ncount s n base)
-          (? (! r) () (: t (zs-fse <r <>r <>>r) `(t <>>>r)))))
+          (? (! r) () (: t (zs-fse <r <>r <>>r) [t <>>>r]))))
 
    ; ⚠ THE THREE STATES ARE STARTED IN THE ORDER LL, OF, ML and updated in the order
    ; LL, ML, OF -- they are not the same order, and nothing downstream complains if you
@@ -459,8 +459,8 @@
           sz (h >> 3)
           q (p + 3)
           (? (n < (q + (? (kind = 1) 1 sz))) ()
-             (kind = 0) (: _ (zs-blit b s q sz) `(last (q + sz)))
-             (kind = 1) (: _ (zs-copy2 b (s q) sz) `(last (q + 1)))
+             (kind = 0) (: _ (zs-blit b s q sz) [last (q + sz)])
+             (kind = 1) (: _ (zs-copy2 b (s q) sz) [last (q + 1)])
              (kind = 2)
              (: body (zs-cut s q sz)
                 bn (tally body)
@@ -469,7 +469,7 @@
                    (: lit <r
                       off <>r
                       ok (zs-seqs body bn off cx b lit)
-                      (? ok `(last (q + sz)) ()))))
+                      (? ok [last (q + sz)] ()))))
              ())))
 
    (zs-decompress s)
@@ -491,7 +491,7 @@
                                 <r (? (n < (<>r + (? ck 4 0))) () 1)
                                 (go <>r)))
                    ok (go hdr)
-                   (? ok `(1 (zs-take b)) ()))))))
+                   (? ok [1 (zs-take b)] ()))))))
 
    ; --- the coder ------------------------------------------------------------
    ; ⚠ THE SEQUENCE STREAM IS WRITTEN IN THE REVERSE OF THE ORDER IT IS READ. bits go
@@ -550,7 +550,7 @@
             (go 0))
        dnb (tablet 0) dfs (tablet 0)
        _ (zs-ctt norms maxs al dnb dfs 0 0)
-       `(nxt dnb dfs al))
+       [nxt dnb dfs al])
    (zs-cinit ct sy)                        ; the state a first symbol leaves
     (: d (peep <>ct sy 0)
        nb ((d + 32768) >> 16)
@@ -594,8 +594,8 @@
    ; the scan over one block. `lit` gathers every byte no match covered; `sq` collects
    ; the sequences in REVERSE, which is the order the coder wants them in anyway.
    (zs-scan s d lit end ip ii sq)          ; -> (sq ii)
-    (? (end <= ip) `(sq ii)
-       ((end - 4) < ip) `(sq ii)
+    (? (end <= ip) [sq ii]
+       ((end - 4) < ip) [sq ii]
        (: dv (zs-le32 s ip)
           h (zs-hash dv)
           m (zs-c32 d h)
@@ -608,12 +608,12 @@
                       run (ip - ii)
                       _ (? run (zs-blit lit s ii run) 0)
                       (zs-scan s d lit end (ip + len) (ip + len)
-                               (`(run len (off + 3)) >< sq))))))))
+                               ([run len (off + 3)] >< sq))))))))
 
    ; the bitstream: the last sequence starts the three states, every earlier one writes
    ; its transition and then its own extra bits, and the states go out at the end.
    (zs-wseq b t r ls os ms)
-    (? (! (two? r)) `(ls os ms)
+    (? (! (two? r)) [ls os ms]
        (: e <r
           ll <e  mb <>e  ob <>>e
           lc (zs-llcode ll)  mc (zs-mlcode mb)  oc (zs-hb ob)
@@ -655,7 +655,7 @@
    ; the two lightest live nodes. a linear sweep, because the alphabet is 256 wide and a
    ; heap would cost more to write than it saves.
    (zs-h2 wt ac top i a b)
-    (? (top <= i) `(a b)
+    (? (top <= i) [a b]
        (! (peep ac i 0)) (zs-h2 wt ac top (i + 1) a b)
        (: v (zs-c32 wt i)
           (? (a < 0) (zs-h2 wt ac top (i + 1) i b)
@@ -691,7 +691,7 @@
           (: _ (zs-hmerge wt pa ac 256)
              ws (tablet 0)
              r (: (go i mx ms)
-                   (? (255 < i) `(mx ms)
+                   (? (255 < i) [mx ms]
                       (! (zs-c32 wt i)) (go (i + 1) mx ms)
                       (: d (zs-hdep pa i 0)
                          _ (pin ws i d)
@@ -707,7 +707,7 @@
                                      _ (pin ws i (? d (mx + 1 - d) 0))
                                      (go (i + 1))))
                        (go 0))
-                   `(ws ms mx))))))
+                   [ws ms mx])))))
    (zs-hcode ws ms log)                    ; -> (code bits), the layout zs-huftab reads
     (: rank (tablet 0)
        code (cask 256)  bits (cask 256)
@@ -728,7 +728,7 @@
                               0)
                          (go (i + 1))))
             (go 0))
-       `(code bits))
+       [code bits])
 
    ; --- the tree description --------------------------------------------------
    ; ⚠ THE LAST WEIGHT IS NEVER WRITTEN. it is whatever makes the total a power of two,
@@ -796,7 +796,7 @@
        blast (? ((n - 1) & 1) (n - 1) (n - 2))
        sa (zs-cinit ct (peep ws alast 0))
        sb (zs-cinit ct (peep ws blast 0))
-       (go i x y) (? (i < 0) `(x y)
+       (go i x y) (? (i < 0) [x y]
                      ((i & 1) = 0) (: x2 (zs-cput b t ct x (peep ws i 0)) (go (i - 1) x2 y))
                      (: y2 (zs-cput b t ct y (peep ws i 0)) (go (i - 1) x y2)))
        r (go (n - 3) sa sb)

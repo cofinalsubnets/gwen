@@ -15,9 +15,9 @@
    ; a card at dial n: 'tm the term, 'vs its variables, 'xp expand the rest
    ; view through the poly bridge, 'fac the B button works, 'as the
    ; assumptions contrast card (renders its own body)
-   (card i n) (? (i = 0) {'vs '(x y) 'xp 1 'fac 1 'tm `('** '(+ x y) n)}
-                 (i = 1) {'vs '(x) 'xp 1 'fac 1 'tm `('- `('** 'x n) 1)}
-                 (i = 2) {'vs '(x y) 'xp 1 'fac 1 'tm `('- `('** 'x n) `('** 'y n))}
+   (card i n) (? (i = 0) {'vs '(x y) 'xp 1 'fac 1 'tm ['** '(+ x y) n]}
+                 (i = 1) {'vs '(x) 'xp 1 'fac 1 'tm ['- ['** 'x n] 1]}
+                 (i = 2) {'vs '(x y) 'xp 1 'fac 1 'tm ['- ['** 'x n] ['** 'y n]]}
                  (i = 3) {'vs '(x) 'tm '(* (sin x) (cos x))}
                  (i = 4) {'vs '(x) 'as 1 'tm '(sqrt (** x 2))}
                  (i = 5) {'vs '(x) 'tm '(+ (atan 1) (acos 0))}
@@ -27,8 +27,8 @@
    ; a term crosses to the canonical ring through the eval bridge: close it
    ; over its variables, apply the closure to the poly coins, and the coin
    ; arithmetic (die + - * and DieStar power) lands the monomial list.
-   (tpoly t vs) (? (1 = tally vs) ((ev `('\ 'x t)) px1)
-                   ((ev `('\ 'x 'y t)) px2 py2))
+   (tpoly t vs) (? (1 = tally vs) ((ev ['\ 'x t]) px1)
+                   ((ev ['\ 'x 'y t]) px2 py2))
    (fshow p vs) (show (unfix (pemit p vs)))
    (joins l) (? (0 = tally l) "" (<l + (joins >l)))
    (count x l) (? (0 = tally l) 0
@@ -81,7 +81,7 @@
               fresh (? (c2 = c0) (? (n1 = n0) 0 1) 1)
               dc (? fresh 0 (& p 32) (clamp 0 ((st 'dc) + 1) 4) (st 'dc))
               fv (? fresh 0 (& p 16) (1 - (st 'fv)) (st 'fv))
-              key `(c2 n1 dc fv)
+              key [c2 n1 dc fv]
               _ (? (key = (st 'key)) 0
                    (: _ (pin st 'card c2) _ (pin st 'n n1)
                       _ (pin st 'dc dc) _ (pin st 'fv fv)

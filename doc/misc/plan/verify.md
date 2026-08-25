@@ -56,14 +56,14 @@ bracket literals) and tools/wm2uu.l reads the post-opfix tree it makes:
 cap/cup chains where caup was, ></+ beside link/cat, != as = with the arms
 traded. the regenerated test/uuwm.l is BYTE-IDENTICAL to the pre-freshen
 artifact, so the uuwmlaw theorems and the ten idpath bridges hold unchanged.
-the whole crew/lux/ also dropped the `(..) sugar for [..] (a comment- and
-string-aware love scanner did the sweep, proving (forms old) = (forms new)
+the whole crew/lux/ also dropped the backtick list sugar for [..] (a comment-
+and string-aware love scanner did the sweep, proving (forms old) = (forms new)
 per file before writing).
 
-⚠ the tree still spells `(..) widely (test/host/sh.l, the law files, several
-tools translators). the reader KEEPS both spellings; the sweep is the
-canonical-spellings arc's business, and the corpus files that TEST the `
-sigil (test/valence.l, test/infixop.l) must keep it on purpose.
+the sweep then reached the whole tree, and the sigil itself is retired: the
+list wears [..] and (list ..) and nothing else. the backtick is an ordinary
+name character in both readers now (p1's class table, p0's ioread1sym), so
+lint's constructor set, vi's syntax table and libra's doc all lost a row.
 
 ## next rung: the CLAUDE.md laws get a proof leg
 

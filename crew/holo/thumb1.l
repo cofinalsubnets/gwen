@@ -26,11 +26,11 @@
 (: ;; -- registers: abstract number = hardware number for r0..r12; sp/lr/pc/fp named. (shared shape
    ;;    with thumb2.l -- could be factored to an arm32-common, but it's ~15 lines, little leverage.) --
    t1-regs (tabof
-        `(('sp >< 13) ('lr >< 14) ('pc >< 15) ('fp >< 7)   ; fp=r7: the Thumb frame pointer (a LOW reg, so slot
+        [('sp >< 13) ('lr >< 14) ('pc >< 15) ('fp >< 7)    ; fp=r7: the Thumb frame pointer (a LOW reg, so slot
            ;; loads reach it with the imm5 form -- r11 could not; moon speaks 'fp, this backend numbers it)
-           ('r0 >< 0) ('r1 >< 1) ('r2 >< 2) ('r3 >< 3)  ('r4 >< 4)
-           ('r5 >< 5) ('r6 >< 6) ('r7 >< 7) ('r8 >< 8)  ('r9 >< 9)
-           ('r10 >< 10) ('r11 >< 11) ('r12 >< 12)))
+          ('r0 >< 0) ('r1 >< 1) ('r2 >< 2) ('r3 >< 3)  ('r4 >< 4)
+          ('r5 >< 5) ('r6 >< 6) ('r7 >< 7) ('r8 >< 8)  ('r9 >< 9)
+          ('r10 >< 10) ('r11 >< 11) ('r12 >< 12)])
    (rn r) (look t1-regs r 'badreg)
    (reg-eq a b) (rn a = rn b)
    (lo? r) (rn r <= 7)                   ; a "low" register -- the only ones most 16-bit ops reach
@@ -38,9 +38,9 @@
 
    ;; -- condition codes: IR name -> the 4-bit AArch32 cond field (same encoding aarch64/thumb2 use). --
    t1-cc (tabof
-        `(('eq >< 0) ('ne >< 1) ('ae >< 2) ('below >< 3) ('s >< 4) ('ns >< 5)
-           ('vs >< 6) ('vc >< 7) ('p >< 6) ('np >< 7)
-           ('above >< 8) ('be >< 9) ('ge >< 10) ('lt >< 11) ('gt >< 12) ('le >< 13)))
+        [('eq >< 0) ('ne >< 1) ('ae >< 2) ('below >< 3) ('s >< 4) ('ns >< 5)
+          ('vs >< 6) ('vc >< 7) ('p >< 6) ('np >< 7)
+          ('above >< 8) ('be >< 9) ('ge >< 10) ('lt >< 11) ('gt >< 12) ('le >< 13)])
    (ccn c) (look t1-cc c 'badcc)
 
    ;; -- emit. one narrow halfword; t32 is the BL pair (hi halfword first, each little-endian). --
@@ -57,10 +57,10 @@
    ;; byte-build any 32-bit u: MOVS top byte, then (LSLS 8; ADDS byte) down the word. 7 halfwords worst
    ;; case -- a literal pool (LDR Rd,[pc,#off] + a pooled word + a pc-rel fixup) is the size win, LATER.
    (t1-li-synth d u)
-      (catall `((t1-movs d ((u >> 24) & 255))
-                (t1-lsls-imm d 8) (t1-adds-i8 d ((u >> 16) & 255))
-                (t1-lsls-imm d 8) (t1-adds-i8 d ((u >> 8) & 255))
-                (t1-lsls-imm d 8) (t1-adds-i8 d (u & 255))))
+      (catall [(t1-movs d ((u >> 24) & 255))
+               (t1-lsls-imm d 8) (t1-adds-i8 d ((u >> 16) & 255))
+               (t1-lsls-imm d 8) (t1-adds-i8 d ((u >> 8) & 255))
+               (t1-lsls-imm d 8) (t1-adds-i8 d (u & 255))])
    (t1-li d imm)
       (: u (? (imm < 0) (imm + 4294967296) imm)
          (? (u <= 255) (t1-movs d u)
@@ -99,11 +99,11 @@
             ; (the ADDS/SUBS family sets flags regardless, so t1-li's flag writes cost nothing new)
             (: _ (need-lo d 'addsub-far-hi) _ (need-lo a 'addsub-far-hi)
                s (t1-lowscratch d a '(r0 r1 r2 r3 r4 r5 r6 r7))
-               (catall `((t1-push s) (t1-li s pos)
-                         ((? (fop = 'add) t1-add-rrr t1-sub-rrr) d a s) (t1-pop s))))))
+               (catall [(t1-push s) (t1-li s pos)
+                        ((? (fop = 'add) t1-add-rrr t1-sub-rrr) d a s) (t1-pop s)]))))
    ;; the two-address logicals + mul (format-4, low regs): Rd = Rd OP Rm. every f4 op here is
    ;; COMMUTATIVE (and/or/xor/mul), so d==b just swaps the operand read; else mov-first when d != a.
-   t1-f4 (tabof `(('and >< 0x4000) ('or >< 0x4300) ('xor >< 0x4040) ('imul >< 0x4340)))
+   t1-f4 (tabof [('and >< 0x4000) ('or >< 0x4300) ('xor >< 0x4040) ('imul >< 0x4340)])
    (t1-alu2 op d a b)
       (: base (peep t1-f4 op 0)
          dn (rn d)
@@ -123,8 +123,8 @@
          (? (reg-eq d a) (t16 (0x4180 | ((rn b << 3) | dn)))
             (reg-eq d b)
              (: s (t1-lowscratch d a '(r0 r1 r2 r3 r4 r5 r6 r7))
-                (catall `((t1-push s) (t1-movr s b) (t1-movr d a)
-                          (t16 (0x4180 | ((rn s << 3) | rn d))) (t1-pop s))))
+                (catall [(t1-push s) (t1-movr s b) (t1-movr d a)
+                         (t16 (0x4180 | ((rn s << 3) | rn d))) (t1-pop s)]))
             (t1-movr d a + t16 (0x4180 | ((rn b << 3) | dn)))))
 
    (t1-cmp a b)                                            ; CMP Rn,Rm (low T1 / hi T2) or CMP Rn,#imm8
@@ -138,7 +138,7 @@
 
    (t1-test a b)                                           ; TST Rn,Rm (format-4, register only, low)
       (? (reg? b) (: an (rn a) bn (rn b) (t16 (0x4200 | ((bn << 3) | an))))
-         (scare 'test-imm `('test a b)))
+         (scare 'test-imm ['test a b]))
 
    ;; ---- loads / stores. 5-bit POSITIVE imm (word imm5*4, half imm5*2, byte imm5). sp-rel word is imm8*4.
    ;;      an out-of-reach offset (or a hi register) rides the FAR lane below. ----
@@ -151,12 +151,12 @@
    (t1-mem-far base16 sh d base off ldq)
       (: (op1 rd rb) (t16 (base16 | ((rn rb << 3) | rn rd)))           ; the [Rb,#0] form (imm5=0)
          (? (ldq && lo? d && !(reg-eq d base))
-            (catall `((t1-li d off) (t1-add-any d base) (op1 d d)))
+            (catall [(t1-li d off) (t1-add-any d base) (op1 d d)])
             (: s (t1-lowscratch d base '(r0 r1 r2 r3 r4 r5 r6 r7))
                (? ldq
-                  (catall `((t1-push s) (t1-li s off) (t1-add-any s base) (op1 s s) (t1-movr d s) (t1-pop s)))
+                  (catall [(t1-push s) (t1-li s off) (t1-add-any s base) (op1 s s) (t1-movr d s) (t1-pop s)])
                   (: _ (need-lo d 'st-src-hi)                          ; a STORE's source has no bounce: must be low
-                     (catall `((t1-push s) (t1-li s off) (t1-add-any s base) (op1 d s) (t1-pop s))))))))
+                     (catall [(t1-push s) (t1-li s off) (t1-add-any s base) (op1 d s) (t1-pop s)]))))))
    (t1-mem base16 sp16 sh d base off ldq)                 ; base16: [Rn,#imm5] op ; sp16: [sp,#imm8] op
       (: dn (rn d)
          (? (reg-eq base 'sp)
@@ -188,14 +188,14 @@
    ;;      unless d==base (that shift would clobber base first), so that lone case borrows a saved low temp.
    (t1-lg2 scale) (? (scale = 2) 1 (scale = 4) 2 (scale = 8) 3 (scale = 1) 0 (scare 'badscale scale))
    (t1-lowscratch a b lst)                                ; first low reg not aliasing a or b
-      (? !lst (scare 'no-scratch `(a b))
+      (? !lst (scare 'no-scratch [a b])
          (: r <lst (? (reg-eq r a || reg-eq r b) (t1-lowscratch a b >lst) r)))
    (t1-eaddr d base index scale)                          ; d <- base + index*scale, honoring d==base|index
       (: k (t1-lg2 scale)
          (? (scale = 1) (t1-add-rrr d base index)
             !(reg-eq d base) (t1-lsls-rri d index k + t1-add-rrr d base d)
             (: s (t1-lowscratch d index '(r0 r1 r2 r3 r4 r5 r6 r7))
-               (catall `((t1-push s) (t1-lsls-rri s index k) (t1-add-rrr d base s) (t1-pop s))))))
+               (catall [(t1-push s) (t1-lsls-rri s index k) (t1-add-rrr d base s) (t1-pop s)]))))
    (t1-leax d base index scale disp)
       (t1-eaddr d base index scale + (? (disp = 0) () (t1-addsub-imm 'add d d disp)))
    (t1-ldx  d base index scale disp) (t1-eaddr d base index scale + t1-ld  d d disp)       ; fused leax+LDR
@@ -218,7 +218,7 @@
    ;; by register (any LOW count reg; d in place, d != count): LSLS/LSRS/ASRS/RORS Rd,Rs (format-4).
    (t1-shiftv op d c)
       (: _ (need-lo c 'shiftv-count-hi) _ (need-lo d 'shiftv-hi)
-         _ (? (reg-eq d c) (scare 'shiftv-dest-is-count `(op d c)) 0)
+         _ (? (reg-eq d c) (scare 'shiftv-dest-is-count [op d c]) 0)
          dn (rn d) cn (rn c)
          base (? (op = 'shlv) 0x4080 (op = 'shrv) 0x40C0 (op = 'sarv) 0x4100 (scare 'badshiftv op))
          (t16 (base | ((cn << 3) | dn))))
@@ -229,52 +229,52 @@
    ;; clobber r0..r3 (gen.l's rdsp), so the routine OWNS all four scratch regs. branch offsets are
    ;; FIXED within the blob (like t1-set's branch-over) -- no labels, so many div sites never collide.
    (t1-div-shape d a b)   ; the canonical arrival is all this backend lowers; anything else is loud
-      (? (reg-eq d 'r1 && reg-eq a 'r1 && reg-eq b 'r0) 0 (scare 'div-operands `(d a b)))
+      (? (reg-eq d 'r1 && reg-eq a 'r1 && reg-eq b 'r0) 0 (scare 'div-operands [d a b]))
    ;; UDIVMOD core: N=r1 (dividend), D=r0 (divisor) -> quotient r1, remainder r2 (D kept, r3 spent).
    ;; 32 restoring steps: LSLS shifts N left leaving old bit31 in carry, ADCS folds it into R (=R<<1|c);
    ;; BLO skips the subtract when R<D. verified byte-exact vs llvm-mc (thumbv6m); the two branches are
    ;; blo #2 (over the subtract) and bne #-18 (back to the shift).
    (t1-udivmod u)
-      (catall `((t16 0x2200) (t16 0x2320)      ; movs r2,#0 ; movs r3,#32
-                (t16 0x0049) (t16 0x4152)      ; L: lsls r1,r1,#1 ; adcs r2,r2,r2
-                (t16 0x4282) (t16 0xD301)      ;    cmp r2,r0 ; blo S
-                (t16 0x1A12) (t16 0x1C49)      ;    subs r2,r2,r0 ; adds r1,r1,#1
-                (t16 0x1E5B) (t16 0xD1F7)))    ; S: subs r3,r3,#1 ; bne L
+      (catall [(t16 0x2200) (t16 0x2320)       ; movs r2,#0 ; movs r3,#32
+               (t16 0x0049) (t16 0x4152)       ; L: lsls r1,r1,#1 ; adcs r2,r2,r2
+               (t16 0x4282) (t16 0xD301)       ;    cmp r2,r0 ; blo S
+               (t16 0x1A12) (t16 0x1C49)       ;    subs r2,r2,r0 ; adds r1,r1,#1
+               (t16 0x1E5B) (t16 0xD1F7)])     ; S: subs r3,r3,#1 ; bne L
    ;; SABS: |a|,|b| by the (x^m)-m trick (m = x>>31 arithmetic mask); leaves sa in r2, sb in r3.
    (t1-sabs u)
-      (catall `((t16 0x17CA) (t16 0x17C3)      ; asrs r2,r1,#31 (sa) ; asrs r3,r0,#31 (sb)
-                (t16 0x4051) (t16 0x1A89)      ; eors r1,r1,r2 ; subs r1,r1,r2  -> |a|
-                (t16 0x4058) (t16 0x1AC0)))    ; eors r0,r0,r3 ; subs r0,r0,r3  -> |b|
+      (catall [(t16 0x17CA) (t16 0x17C3)       ; asrs r2,r1,#31 (sa) ; asrs r3,r0,#31 (sb)
+               (t16 0x4051) (t16 0x1A89)       ; eors r1,r1,r2 ; subs r1,r1,r2  -> |a|
+               (t16 0x4058) (t16 0x1AC0)])     ; eors r0,r0,r3 ; subs r0,r0,r3  -> |b|
    ;; unsigned: udiv leaves the quotient in r1 already; urem copies the remainder r2 -> r1.
    (t1-udiv d a b)   (: _ (t1-div-shape d a b) (t1-udivmod ()))
-   (t1-urem d a b t) (: _ (t1-div-shape d a b) (catall `((t1-udivmod ()) (t16 0x0011))))  ; movs r1,r2
+   (t1-urem d a b t) (: _ (t1-div-shape d a b) (catall [(t1-udivmod ()) (t16 0x0011)]))   ; movs r1,r2
    ;; signed: abs, run unsigned, re-apply the sign. quotient's sign = sa^sb; remainder's = sa
    ;; (C truncates toward zero, so the remainder follows the dividend). the sign mask rides the
    ;; stack across the loop (which spends r2/r3); (x^m)-m negates when m=-1, is identity when m=0.
    (t1-div d a b)
       (: _ (t1-div-shape d a b)
-         (catall `((t1-sabs ()) (t16 0x405A)   ; eors r2,r2,r3 -> qsign = sa^sb
-                   (t1-push 'r2) (t1-udivmod ()) (t1-pop 'r3)
-                   (t16 0x4059) (t16 0x1AC9))))  ; eors r1,r1,r3 ; subs r1,r1,r3
+         (catall [(t1-sabs ()) (t16 0x405A)    ; eors r2,r2,r3 -> qsign = sa^sb
+                  (t1-push 'r2) (t1-udivmod ()) (t1-pop 'r3)
+                  (t16 0x4059) (t16 0x1AC9)]))   ; eors r1,r1,r3 ; subs r1,r1,r3
    (t1-rem d a b t)
       (: _ (t1-div-shape d a b)
-         (catall `((t1-sabs ())                ; sa already in r2
-                   (t1-push 'r2) (t1-udivmod ()) (t1-pop 'r3)
-                   (t16 0x0011)                ; movs r1,r2  -> |rem|
-                   (t16 0x4059) (t16 0x1AC9))))  ; eors r1,r1,r3 ; subs r1,r1,r3
+         (catall [(t1-sabs ())                 ; sa already in r2
+                  (t1-push 'r2) (t1-udivmod ()) (t1-pop 'r3)
+                  (t16 0x0011)                 ; movs r1,r2  -> |rem|
+                  (t16 0x4059) (t16 0x1AC9)]))   ; eors r1,r1,r3 ; subs r1,r1,r3
 
    ;; la (part 2): the literal-pool LOAD. v6-M has no MOVW/MOVT to build an address, so gen.l expands
    ;; (la Rd lbl) into (align 4) (lapool Rd) (raw ((fix 4 abs32 lbl 0))) -- the pooled address word sits
    ;; immediately after, 4-aligned by the align, so LDR Rd,[pc,#0] (Align(pc+4,4)=here+4) reaches it;
    ;; then B #2 hops the 4-byte word. Rd must be low (LDR-literal T1 is 3-bit).
-   (t1-lapool d) (: _ (need-lo d 'lapool-hi) (catall `((t16 (0x4800 | (rn d << 8))) (t16 0xE001))))
+   (t1-lapool d) (: _ (need-lo d 'lapool-hi) (catall [(t16 (0x4800 | (rn d << 8))) (t16 0xE001)]))
 
    ;; set: d <- (cond) ? 1 : 0 without IT. the branch must come FIRST: MOVS sets N/Z on v6-M (no
    ;; flag-preserving MOV #imm exists below r8), so any movs before the Bcc destroys the compare.
    ;; Bcond .one ; MOVS d,#0 ; B .end ; .one: MOVS d,#1 ; .end: -- fixed offsets (imm8=1, imm11=0).
    (t1-set cond d)
       (: cc (ccn cond) _ (need-lo d 'set-hi)
-         (catall `((t16 (0xD000 | ((cc << 8) | 1))) (t1-movs d 0) (t16 0xE000) (t1-movs d 1))))
+         (catall [(t16 (0xD000 | ((cc << 8) | 1))) (t1-movs d 0) (t16 0xE000) (t1-movs d 1)]))
 
    ;; lea. off 0 -> movr (sp-legal). sp base: ADD/SUB sp (imm7*4) when d==sp, else ADD Rd,sp,#imm8*4.
    ;; small non-sp: ADDS #imm3. bigger -> TODO scratch materialize.
@@ -287,15 +287,15 @@
                (t16 (0xA800 | ((rn d << 8) | (off >> 2)))))
          (off > 0 && (off <= 255)) (t1-addsub-imm 'add d base off)     ; imm3 3-addr, or mov+imm8 2-addr
          (!(reg-eq d base) && lo? d)                       ; far (or negative): build the offset in d, fold the base in
-            (catall `((t1-li d off) (t1-add-any d base)))
+            (catall [(t1-li d off) (t1-add-any d base)])
          ;; a HI dest cannot hold the offset (t1-li is low-only), so borrow a saved low scratch --
          ;; t1-mem-far's own lane, worn by lea. sp base is barred: the push would shift it under us.
          ;; ⚠ t1-li sets flags, as it already did in the low-dest lane above -- so a lea between a
          ;; cmp and its branch would breach, on both lanes. inherited, not introduced here.
          !(reg-eq base 'sp)
             (: s (t1-lowscratch d base '(r0 r1 r2 r3 r4 r5 r6 r7))
-               (catall `((t1-push s) (t1-li s off) (t1-add-any s base) (t1-movr d s) (t1-pop s))))
-         (scare 'lea-range `(d base off)))
+               (catall [(t1-push s) (t1-li s off) (t1-add-any s base) (t1-movr d s) (t1-pop s)]))
+         (scare 'lea-range [d base off]))
 
    ;; push/pop are register-LIST 16-bit forms; single-reg lists cover r0..r7 (+ lr on push / pc on pop).
    ;; a hi reg (r8..r12) can't be pushed directly on v6-M -- route through a low scratch (TODO if it arises).
@@ -308,11 +308,11 @@
    ;; BL) then BL. AArch32 condition codes invert by cc^1 (the table is adjacent true/false pairs).
    ;; the fixed-offset blob branches (div/set/lapool) stay short. a relax pass that narrows the
    ;; near ones back to 2 bytes is a size optimization for later; the 'b/'bcc patch lanes remain.
-   (t1-jmp  label) `((fix 4 'bl  label 0))
+   (t1-jmp  label) [(fix 4 'bl  label 0)]
    (t1-br cond label) (: cc (ccn cond)
       (cat (t16 (0xD000 | (((cc ^ 1) << 8) | 1)))   ; B<inv> .+4: hop the BL
-           `((fix 4 'bl label 0))))
-   (t1-call label) `((fix 4 'bl  label 0))
+           [(fix 4 'bl label 0)]))
+   (t1-call label) [(fix 4 'bl  label 0)]
    (t1-jmpr d)  (: dn (rn d) (t16 (0x4700 | (dn << 3))))       ; BX Rm
    (t1-callr d) (: dn (rn d) (t16 (0x4780 | (dn << 3))))       ; BLX Rm
 
@@ -320,34 +320,34 @@
    ;; nullaries their halfwords outright, `raw` the identity. every ALU op sets flags on
    ;; v6-M, so adds/subs ARE add/sub and the S-names alias their plain rows.
    t1-emitters (emsof
-        `(('li >< t1-li) ('mov >< t1-movr) ('cmp >< t1-cmp) ('test >< t1-test)
-           ('add >< t1-addsub 'add) ('adds >< t1-addsub 'add)
-           ('sub >< t1-addsub 'sub) ('subs >< t1-addsub 'sub)
-           ('adc >< t1-adc) ('adcs >< t1-adc) ('sbc >< t1-sbc) ('sbcs >< t1-sbc)
-           ('and >< t1-alu2 'and) ('or >< t1-alu2 'or) ('ors >< t1-alu2 'or)
-           ('xor >< t1-alu2 'xor) ('imul >< t1-alu2 'imul)
-           ('ld >< t1-ld) ('ld4 >< t1-ld) ('ldu4 >< t1-ld)
-           ('st >< t1-st) ('st4 >< t1-st)
-           ('ldu1 >< t1-ldb) ('ldu2 >< t1-ldh) ('ld1 >< t1-lds1) ('ld2 >< t1-lds2)
-           ('st1 >< t1-stb) ('st2 >< t1-sth)
-           ('sx1 >< t1-sx 1) ('sx2 >< t1-sx 2) ('sx4 >< t1-sx 4)
-           ('zx1 >< t1-zx 1) ('zx2 >< t1-zx 2) ('zx4 >< t1-zx 4)
-           ('shl >< t1-shift 'shl) ('shr >< t1-shift 'shr) ('sar >< t1-shift 'sar)
-           ('ror >< (\ d c (scare 'v6m-no-ror-imm 'ror)))     ; RORS is register-only on v6-M
-           ('shlv >< t1-shiftv 'shlv) ('shrv >< t1-shiftv 'shrv) ('sarv >< t1-shiftv 'sarv)
-           ('lea >< t1-lea) ('lean >< t1-lea)
-           ('leax >< t1-leax) ('ldx >< t1-ldx) ('ldxb >< t1-ldxb)
-           ('push >< t1-push) ('pop >< t1-pop)
-           ('neg >< t1-neg) ('not >< t1-not) ('inc >< t1-inc) ('dec >< t1-dec)
-           ('set >< t1-set)
-           ('jmp >< t1-jmp) ('br >< t1-br) ('jmpr >< t1-jmpr) ('callr >< t1-callr) ('call >< t1-call)
-           ('div >< t1-div) ('rem >< t1-rem) ('udiv >< t1-udiv) ('urem >< t1-urem)
-           ('lapool >< t1-lapool)
-           ('raw >< 1)
-           ('ret >< t16 0x4770)                               ; BX lr
-           ('sys >< t16 0xDF00)                               ; SVC #0
-           ('nop >< t16 0xBF00)
-           ('trap >< t16 0xBE00)))                            ; BKPT #0
+        [('li >< t1-li) ('mov >< t1-movr) ('cmp >< t1-cmp) ('test >< t1-test)
+          ('add >< t1-addsub 'add) ('adds >< t1-addsub 'add)
+          ('sub >< t1-addsub 'sub) ('subs >< t1-addsub 'sub)
+          ('adc >< t1-adc) ('adcs >< t1-adc) ('sbc >< t1-sbc) ('sbcs >< t1-sbc)
+          ('and >< t1-alu2 'and) ('or >< t1-alu2 'or) ('ors >< t1-alu2 'or)
+          ('xor >< t1-alu2 'xor) ('imul >< t1-alu2 'imul)
+          ('ld >< t1-ld) ('ld4 >< t1-ld) ('ldu4 >< t1-ld)
+          ('st >< t1-st) ('st4 >< t1-st)
+          ('ldu1 >< t1-ldb) ('ldu2 >< t1-ldh) ('ld1 >< t1-lds1) ('ld2 >< t1-lds2)
+          ('st1 >< t1-stb) ('st2 >< t1-sth)
+          ('sx1 >< t1-sx 1) ('sx2 >< t1-sx 2) ('sx4 >< t1-sx 4)
+          ('zx1 >< t1-zx 1) ('zx2 >< t1-zx 2) ('zx4 >< t1-zx 4)
+          ('shl >< t1-shift 'shl) ('shr >< t1-shift 'shr) ('sar >< t1-shift 'sar)
+          ('ror >< (\ d c (scare 'v6m-no-ror-imm 'ror)))      ; RORS is register-only on v6-M
+          ('shlv >< t1-shiftv 'shlv) ('shrv >< t1-shiftv 'shrv) ('sarv >< t1-shiftv 'sarv)
+          ('lea >< t1-lea) ('lean >< t1-lea)
+          ('leax >< t1-leax) ('ldx >< t1-ldx) ('ldxb >< t1-ldxb)
+          ('push >< t1-push) ('pop >< t1-pop)
+          ('neg >< t1-neg) ('not >< t1-not) ('inc >< t1-inc) ('dec >< t1-dec)
+          ('set >< t1-set)
+          ('jmp >< t1-jmp) ('br >< t1-br) ('jmpr >< t1-jmpr) ('callr >< t1-callr) ('call >< t1-call)
+          ('div >< t1-div) ('rem >< t1-rem) ('udiv >< t1-udiv) ('urem >< t1-urem)
+          ('lapool >< t1-lapool)
+          ('raw >< 1)
+          ('ret >< t16 0x4770)                                ; BX lr
+          ('sys >< t16 0xDF00)                                ; SVC #0
+          ('nop >< t16 0xBF00)
+          ('trap >< t16 0xBE00)])                             ; BKPT #0
    (t1-lower ins) (: f lower-via (? (lit? f) (f t1-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; a relocation. Thumb pc reads as (site + 4); branch fields hold a /2 (halfword) offset.

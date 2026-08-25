@@ -35,7 +35,7 @@
    ; (domain NAME die..) -> binds NAME to the domain map (dice = the given units)
    _ (:: 'domain (\ a (: nm (cap a)
         dom (hash 'dice (cup a) 'ctors () 'tr units-tr 'join units-join 'litdie units-lit)
-        `(': nm `('\ dom)))))
+        [': nm ['\ dom]])))
    ; (deft (NAME (p TYPE)..) RET body) -> register the sig, check the body, expand to a plain def
    _ (:: 'deft (\ a (: header (cap a) ret (cap (cup a)) body (cap (cup (cup a)))
         name (cap header) tparams (cup header)

@@ -17,9 +17,9 @@
       _ (? (two? r) 0 (scare 'mkimg-no-image src))     ; presence out of band: a 0-byte
       s <>r  n (tally s)                               ; image reads the same as none
       _ (? (0 < n) 0 (scare 'mkimg-empty src))
-      ir `(`('label '_binary_love_img_start)
-           `('raw (map (\ i (s i)) (jot n)))
-           `('label '_binary_love_img_end))
+      ir [['label '_binary_love_img_start]
+          ['raw (map (\ i (s i)) (jot n))]
+          ['label '_binary_love_img_end]]
       (write-bytes dst
-       (objsecs32 'thumb2 `(`(".love_image" 1 2 8 ir)) ()
+       (objsecs32 'thumb2 [[".love_image" 1 2 8 ir]] ()
         '("_binary_love_img_start" "_binary_love_img_end") ()))))

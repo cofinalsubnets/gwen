@@ -51,7 +51,7 @@
    ; compiled as `acc + k` and answered triangular numbers for three spaces. The two free-capture guards
    ; below (opnd-ok?, gdefs-ok?) are earlier patches of this same class, one shape at a time; grpfix closes
    ; it whole -- the recognizer and the codegen are one pair again, wherever the lane is entered from.
-   (grp-ok? gds) (: cands (map (\ gd `(<<gd (tally <gd - 1))) gds)   ; (name arity), autogroup's armap
+   (grp-ok? gds) (: cands (map (\ gd [<<gd (tally <gd - 1)]) gds)    ; (name arity), autogroup's armap
                     ((tally (grpfix gds cands)) = (tally gds)))
    (exprn ps e) (? (member? e ps) 1  (whole? e) 1                          ; var in frame | int literal
                    (two? e) (: op <e
@@ -152,10 +152,10 @@
                       (: pd (? (two? body && id? <body ':) (anat-defs >body) ())
                          dds (? pd <pd ())  tail (? pd <>pd ())
                          okshape (pd && two? tail && all (\ dd (two? dd && name? <dd && two? >dd && id? <>dd '\ && two? >>dd)) dds)   ; every def is name (\ p.. B)
-                         gdefs (? okshape (map (\ dd (: lam >dd (`(<dd) + (init >lam) >< last >lam))) dds) ())   ; ((name p..) . B)
+                         gdefs (? okshape (map (\ dd (: lam >dd ([<dd] + (init >lam) >< last >lam))) dds) ())    ; ((name p..) . B)
                          gnames (map (\ d <<d) gdefs)
                          flat? (okshape && member? <tail gnames && >tail = ps)       ; tail IS (entry frame..)
-                         osym '__outer  agdefs (? okshape (gdefs + `(((osym >< ps) >< tail))) ())   ; group + synthetic ((__outer . frame) . tail)
+                         osym '__outer  agdefs (? okshape (gdefs + [((osym >< ps) >< tail)]) ())    ; group + synthetic ((__outer . frame) . tail)
                          (? (flat? && grp-ok? gdefs && jgir-ok? gdefs && gdefs-ok? gdefs)                         ; FLAT: entry direct, zero indirection
                             (: _ (pin fires () (1 + (peep fires () 0))) (jitgroupirx gdefs <tail arch e s))   ; stamp the OUTER src s -> =/show transparent vs the bytecode twin
                             (okshape && !(member? osym gnames) && opnd-ok? ps tail && grp-ok? agdefs && jgir-ok? agdefs && gdefs-ok? gdefs)   ; GENERAL tail via the synthetic entry

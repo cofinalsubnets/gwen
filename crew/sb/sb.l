@@ -36,7 +36,7 @@
    ; the port is MINDED, not closed at the tail: a torn read raises, and the close has
    ; to ride that way out too or the fd sits until a major compact.
    (look p) (: q (open p "r")                                            ; (1 text) | ()
-                 (? q (mind (\ _ (: s (slurp q) `(1 (s + "")))) () (\ _ (close q))) ()))
+                 (? q (mind (\ _ (: s (slurp q) [1 (s + "")])) () (\ _ (close q))) ()))
    (lay p s) (: q (open p "w") (? q (mind (\ _ (: _ (say q s) 1)) () (\ _ (close q))) 0))
    (form p) (: q (open p "r")                                 ; the file's one form | ()
                   (? q (mind (\ _ (: r (sound (slurp q))
@@ -88,21 +88,21 @@
    ;     blob writes); a hunk is (path old new), old/new content hashes | () ---
    (h1 p e)                                                   ; one path vs its snap entry|()
     (: t (look p)
-       (? !(two? t) (? (two? e) `(p <>e ()) ())                ; unreadable: dead if known
+       (? !(two? t) (? (two? e) [p <>e ()] ())                 ; unreadable: dead if known
           (: h (sha256 <>t)
-             (? !(two? e) `(p () h)                              ; born
+             (? !(two? e) [p () h]                               ; born
                 (<>e = h) ()                                   ; unchanged
-                `(p <>e h)))))                                 ; changed
+                [p <>e h]))))                                  ; changed
    (scan ps sn acc)                                           ; ps sorted paths, sn the snap
     (? !(two? ps)
        (? !(two? sn) (rev acc)
-          (scan ps >sn (`(<<sn <><sn ()) >< acc)))        ; the tail of snap: dead
+          (scan ps >sn ([<<sn <><sn ()] >< acc)))         ; the tail of snap: dead
        !(two? sn)
        (: h (h1 <ps ()) (scan >ps sn (? (two? h) (h >< acc) acc)))
        (: p <ps e <sn
           (? (p = <e) (: h (h1 p e) (scan >ps >sn (? (two? h) (h >< acc) acc)))
              (p < <e) (: h (h1 p ()) (scan >ps sn (? (two? h) (h >< acc) acc)))
-             (scan ps >sn (`(<e <>e ()) >< acc)))))       ; snap-only: dead
+             (scan ps >sn ([<e <>e ()] >< acc)))))        ; snap-only: dead
 
    ; --- record ---
    (sb-record note)
@@ -141,16 +141,16 @@
    (snap+ sn hs pid acc)
     (? !(two? hs) (rev acc + sn)
        !(two? sn) (: h <hs nw <>>h
-                        (snap+ () >hs pid (? !nw acc (`(<h nw pid) >< acc))))
+                        (snap+ () >hs pid (? !nw acc ([<h nw pid] >< acc))))
        (: h <hs e <sn
           (? (<h = <e) (: nw <>>h
-                            (snap+ >sn >hs pid (? !nw acc (`(<h nw pid) >< acc))))
+                            (snap+ >sn >hs pid (? !nw acc ([<h nw pid] >< acc))))
              (<h < <e) (: nw <>>h
-                            (snap+ sn >hs pid (? !nw acc (`(<h nw pid) >< acc))))
+                            (snap+ sn >hs pid (? !nw acc ([<h nw pid] >< acc))))
              (snap+ >sn hs pid (<sn >< acc)))))
 
    ; --- log: the patches newest first; * marks a tip ---
-   (ins e l) (? !(two? l) `(e)                                ; insert desc by time (seat 0)
+   (ins e l) (? !(two? l) [e]                                 ; insert desc by time (seat 0)
                    (<<l <= <e) (e >< l)
                    (<l >< ins e >l))
    (sb-log _)
@@ -213,7 +213,7 @@
    (copy sub from to)
     (: fd (from + "/.sb/" + sub + "/") td (to + "/.sb/" + sub + "/")
        (go m n bad)
-        (? !(two? m) `(n bad)
+        (? !(two? m) [n bad]
            (: h <m
               (? !(64 = tally h) (go >m n bad)                   ; only the sha256-named files
                  (two? (look (td + h))) (go >m n bad)         ; already there
@@ -253,7 +253,7 @@
        cfs (filter (\ e ((0 < <>e) || !(peep op <e () = peep np <e ()))) <>dr)
        _ (lay ".sb/snap" (show newsnap))
        nf (mater oldsnap newsnap)
-       `((tally ids) nf cfs))
+       [(tally ids) nf cfs])
    (derive-tips ids)                                          ; the ids nobody depends on
     (: dep (tablet 0)
        _ (: (go m) (? !(two? m) ()
@@ -291,18 +291,18 @@
    (bl h) (? !h '(1 "") (look (".sb/blob/" + h)))        ; (1 text) | () -- presence, not net
    (mend old curh nw curpid pid)
     (: bw (bl old) ow (bl curh) tw (bl nw)
-       (? !nw `(curh 1 ("kept the edit -- " + sh pid + " deletes what " + sh curpid + " wrote"))
-          !curh `(nw 1 ("kept the edit -- " + sh pid + " writes what was deleted here"))
+       (? !nw [curh 1 ("kept the edit -- " + sh pid + " deletes what " + sh curpid + " wrote")]
+          !curh [nw 1 ("kept the edit -- " + sh pid + " writes what was deleted here")]
           !(two? ow && two? tw)
-             `(curh 1 ("a blob is missing, cannot merge -- kept " + sh curh))
+             [curh 1 ("a blob is missing, cannot merge -- kept " + sh curh)]
           (: bt (? (two? bw) <>bw "") ot <>ow tt <>tw
              (? (bin? bt || bin? ot || bin? tt)
-                `(curh 1 ("binary, cannot merge -- kept " + sh curh + ", incoming " + sh nw))
+                [curh 1 ("binary, cannot merge -- kept " + sh curh + ", incoming " + sh nw)]
                 (: r (diff3 bt ot tt ("recorded (" + sh curpid + ")")
                                       ("incoming (" + sh pid + ")"))
                    mh (keep <r) n <>r
-                   (? (0 = n) `(mh 0 "both sides kept")
-                      `(mh n (show n + " region" + (? (1 = n) "" "s") + " left in markers"))))))))
+                   (? (0 = n) [mh 0 "both sides kept"]
+                      [mh n (show n + " region" + (? (1 = n) "" "s") + " left in markers")]))))))
    (derive-snap ids)                                          ; fold the DAG -> (snap conflicts)
     (: order (topo ids) snap (tablet 0) cf (tablet 0)
        _ (: (go m) (? !(two? m) ()
@@ -326,7 +326,7 @@
             (: p <ps e (peep snap p ()) (em >ps (list p <e <>e >< a))))
           (cm ps a) (? !(two? ps) (rev a)
             (: p <ps e (peep cf p ()) (cm >ps (list p <e <>e >< a))))
-          `((em (sort (keys snap)) ()) (cm (sort (keys cf)) ()))))
+          [(em (sort (keys snap)) ()) (cm (sort (keys cf)) ())]))
    (mkparents p)                                              ; mkdir every "/"-prefix of a nested path
     (: (go i) (? (< i (tally p))
                  (: _ (? (p i = 47) (mkdir (snip p 0 i) 493) ()) (go (i + 1)))
@@ -405,7 +405,7 @@
                    theirs (? (two? rt) (readform <>rt) ())
                    ru (refadd (refs ()) theirs 1)
                    _ (? (two? <ru) (lay ".sb/refs" (show <ru)) ())
-                   `(ok (peep n 'p 0) (peep n 'b 0) <>ru))))))
+                   [ok (peep n 'p 0) (peep n 'b 0) <>ru])))))
 
    (sync-url peer)
     (: _ (mk ())
@@ -500,7 +500,7 @@
           (: _ (say err ("sb: " + show (tally hits) + " patches match " + pfx + "\n")) ())))
    (idsof a)                                                     ; a REF -> its whole tip set;
     (: r (refof a)                                               ; else one patch from a prefix
-       (? (two? r) r (: i (idpfx a) (? i `(i) ()))))
+       (? (two? r) r (: i (idpfx a) (? i [i] ()))))
    (closure ids)                                                 ; ids + every dep, transitively
     (: seen (tablet 0)
        (go m) (? !(two? m) ()
@@ -563,7 +563,7 @@
    ;     answers (merged nclash) ---
    (refadd base extra loud)                                     ; loud: only ONE side tells it
     (: (go m acc n)
-        (? !(two? m) `((sort acc) n)
+        (? !(two? m) [(sort acc) n]
            (: e <m mine (refof-in base <e)
               (? !(two? mine) (go >m (e >< acc) n)               ; theirs alone: take it
                  (show mine = show <>e) (go >m acc n)          ; the same head: already ours

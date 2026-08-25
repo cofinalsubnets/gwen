@@ -27,7 +27,7 @@
    (g2-front src)
     (: r (uread src)
        (? (! (two? r)) 'noread
-          (: lx (clex ((deftext `((archdef 'x64))) + <>r))
+          (: lx (clex ((deftext [(archdef 'x64)]) + <>r))
              (? (! (okv? lx)) 'lexfail
                 (: pp (cpp <>lx (\ n s (incload () () (cdir src) n s)) src)
                    (? (! (okv? pp)) 'cppfail
@@ -39,7 +39,7 @@
    (g2-find tops nm)
     (: (go l) (? (! (two? l)) ()
                  (: e <l (? (&& (id? <e 'fn) (: w (g2-el e 1) (&& (string? w) (w = nm))))
-                            `(1 e) (go >l))))
+                            [1 e] (go >l))))
        (go tops))
 
    (clay-g2 old new names)

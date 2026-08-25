@@ -303,13 +303,13 @@
 
  ; a worn jug takes what the task says, and the console comes back after
  (: j (jug 0)
-    _ (wear `(() j ()))
+    _ (wear [() j ()])
     _ (puts "into the jug")
     _ (wear ())
     (&& ("into the jug" = (slurp j)) (nil? (worn ()))))
 
  ; a worn tap is what the task reads
- (: _ (wear `((tap '(104 105 33)) () ()))
+ (: _ (wear [(tap '(104 105 33)) () ()])
     s (slurp in)
     _ (wear ())
     ("hi!" = s))
@@ -317,14 +317,14 @@
  ; PER TASK, across a switch: two tasks wearing different jugs never cross, and
  ; the main task keeps the console through both
  (: a (jug 0) b (jug 0)
-    p (twirl (\ _ (: _ (wear `(() a ())) _ (puts "a1") _ (rest 0) _ (puts "a2") 1)) 0)
-    q (twirl (\ _ (: _ (wear `(() b ())) _ (puts "b1") _ (rest 0) _ (puts "b2") 2)) 0)
+    p (twirl (\ _ (: _ (wear [() a ()]) _ (puts "a1") _ (rest 0) _ (puts "a2") 1)) 0)
+    q (twirl (\ _ (: _ (wear [() b ()]) _ (puts "b1") _ (rest 0) _ (puts "b2") 2)) 0)
     _ (catch p) _ (catch q)
     (&& ("a1a2" = (slurp a)) ("b1b2" = (slurp b)) (nil? (worn ()))))
 
  ; INHERITED at spawn: a child says its piece into the jug its parent wears
  (: j (jug 0)
-    _ (wear `(() j ()))
+    _ (wear [() j ()])
     p (twirl (\ _ (: _ (puts "the child's") 0)) 0)
     _ (catch p)
     _ (wear ())
@@ -332,8 +332,8 @@
 
  ; a child that wears its own leaves the parent's alone
  (: a (jug 0) b (jug 0)
-    _ (wear `(() a ()))
-    p (twirl (\ _ (: _ (wear `(() b ())) _ (puts "child") 0)) 0)
+    _ (wear [() a ()])
+    p (twirl (\ _ (: _ (wear [() b ()]) _ (puts "child") 0)) 0)
     _ (catch p)
     _ (puts "parent")
     _ (wear ())

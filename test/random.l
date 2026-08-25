@@ -8,7 +8,7 @@
 
 (: (rdraw s) (cap (random (wheel s) 0))                  ; 1st full-width functional draw
    (rseq3 s) (: st (wheel s) a (random st 0) b (random (cup a) 0) c (random (cup b) 0)
-                `((cap a) (cap b) (cap c))))            ; first 3 full-width functional draws
+                [(cap a) (cap b) (cap c)]))             ; first 3 full-width functional draws
 (assert
  ; --- state-tuple structure: rank-1, length 4, 64-bit limbs (Z array, or C on
  ; a 32-bit word where C is the 8-byte-wide kind -- the 256-bit payload either way) ---

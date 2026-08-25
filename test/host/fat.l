@@ -8,9 +8,9 @@
 
 ; the device: 70000 sectors in one cask. rd answers fresh strings, wr pours.
 (: img (cask (* 70000 512))
-   (mkdev im) `((\ lba n (: b (cask (n * 512)) _ (pour b 0 im (lba * 512) (n * 512)) (string b)))
-                (\ lba s (: _ (pour im (lba * 512) s 0 (tally s)) ((tally s) // 512)))
-                (// (tally im) 512))
+   (mkdev im) [(\ lba n (: b (cask (n * 512)) _ (pour b 0 im (lba * 512) (n * 512)) (string b)))
+               (\ lba s (: _ (pour im (lba * 512) s 0 (tally s)) ((tally s) // 512)))
+               (// (tally im) 512)]
    dev (mkdev img))
 
 ; mkfs: a whole format answers 1; a device under FAT32's own floor refuses
@@ -84,18 +84,18 @@
 (: (lines* s) (: n (tally s)
                  (go i w acc) (? (<= n i) (rev (? (tally w) (link w acc) acc))
                                  (? (= (s i) 10) (go (+ i 1) "" (link w acc))
-                                    (go (+ i 1) (+ w (string `((s i)))) acc)))
+                                    (go (+ i 1) (+ w (string [(s i)])) acc)))
                  (go 0 "" ()))
    have-mtools (: r (hark '("sh" "-c" "command -v mdir >/dev/null && echo yes"))
                   (&& (! (cap r)) (< 0 (tally (cup r)))))
    _ (? have-mtools
         (: ip "out/.fat-probe.img"
            _ (: p (open ip "w") _ (say p (string img)) (close p))
-           md (hark `("mdir" "-i" ip "-b" "::/"))
-           mt (hark `("mtype" "-i" ip "::/limine.conf"))
+           md (hark ["mdir" "-i" ip "-b" "::/"])
+           mt (hark ["mtype" "-i" ip "::/limine.conf"])
            lp "out/.fat-probe.txt"
            _ (: p (open lp "w") _ (say p "from the host side") (close p))
-           mc (hark `("mcopy" "-i" ip lp "::/fromhost.txt"))
+           mc (hark ["mcopy" "-i" ip lp "::/fromhost.txt"])
            s (: q (open ip "r") t (slurp q) _ (close q) t)
            im2 (cask (tally s))
            _ (pour im2 0 s 0 (tally s))

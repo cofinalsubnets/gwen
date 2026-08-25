@@ -19,14 +19,14 @@
    want (cup (cup a))
    ; KVM where the host can back it -- this lane is x86_64 only, so the arch
    ; question is just the host's. Without /dev/kvm it falls to TCG, same verdict.
-   kvm  (? (&& (two? (stat "/dev/kvm")) (has? (cup (hark `("uname" "-m"))) "x86_64"))
-           `("-enable-kvm" "-cpu" "host") ())
+   kvm  (? (&& (two? (stat "/dev/kvm")) (has? (cup (hark ["uname" "-m"])) "x86_64"))
+           ["-enable-kvm" "-cpu" "host"] ())
    ; 768M for the same reason as ktest.l's: the major pool's contiguous 2x
    ; grow wants a hole the old pair fragments, and margin is the mitigation.
-   r    (hark (cat `("timeout" "420" "qemu-system-x86_64" "-m" "768M" "-M" "q35")
+   r    (hark (cat ["timeout" "420" "qemu-system-x86_64" "-m" "768M" "-M" "q35"]
               (cat kvm
-                   `("-kernel" elf "-append" app
-                     "-serial" "stdio" "-display" "none" "-no-reboot"))))
+                   ["-kernel" elf "-append" app
+                    "-serial" "stdio" "-display" "none" "-no-reboot"])))
    out  (cup r)
    miss ((: (g w acc) (? (! (two? w)) (rev acc)
                          (g (cup w) (? (has? out (cap w)) acc (link (cap w) acc))))) want ())

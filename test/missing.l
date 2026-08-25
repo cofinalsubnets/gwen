@@ -25,7 +25,7 @@
 (hear 0)
 
 ; the help hears (help 'missing nom) and its result is the value at the site
-(hear (\ a b (? (id? a 'missing) `('missing-was b) 0)))
+(hear (\ a b (? (id? a 'missing) ['missing-was b] 0)))
 (assert (: r an-ghost
            (&& (two? r) (id? 'missing-was (cap r)) (id? 'an-ghost (caup r)))))
 (hear 0)

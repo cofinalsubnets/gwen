@@ -30,7 +30,7 @@
 (use 'gz)
 
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)
-   (sp-read p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
+   (sp-read p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
    (sp-write p s) (: q (open p "w")
                      _ (? q 0 (sp-die ("cannot write " + p)))
                      _ (say q s)

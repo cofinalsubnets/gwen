@@ -91,11 +91,9 @@
                      + "\\|" + e + e + q + "' end='" + q + "'")))
           (id? tag 'mark)
            (line ("syn match " + g + " \"" + (string a) + "[^" + stop + "]*\""))
-          (id? tag 'char)
-           (line ("syn match " + g + " \"" + (string a) + "\""))
-          ; sep: one byte standing alone, the same shape as char and a separate tag
-          ; because both readings reach a tag through its FIRST row, so a second
-          ; `char` row would be read by neither
+          ; sep: one byte standing alone, and a tag of its own because both
+          ; readings reach a tag through its FIRST row, so a second row under
+          ; one tag would be read by neither
           (id? tag 'sep)
            (line ("syn match " + g + " \"" + (string a) + "\""))
           (id? tag 'num)
@@ -169,8 +167,8 @@
    _ (line "endif")
    _ (blank ())
    _ (line "\" symbol-constituent chars (the reader ends a token only on whitespace and")
-   _ (line "\" ( ) \" ' ` , # ; ). operators @ # $ are excluded so they highlight standalone.")
-   _ (line "syn iskeyword @,33,37,38,42-43,45-47,48-57,58,60-63,92,94-95,124,126")
+   _ (line "\" ( ) \" ' , # ; ). operators @ # $ are excluded so they highlight standalone.")
+   _ (line "syn iskeyword @,33,37,38,42-43,45-47,48-57,58,60-63,92,94-96,124,126")
    _ (blank ())
    _ (line "\" vim's one nicety with no counterpart in the painter: TODO words inside a")
    _ (line "\" comment. contained, so it fires only inside the comment lane.")

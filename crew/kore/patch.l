@@ -50,13 +50,13 @@
    (pt-side w)
     (: b (snip w 1 (tally w))
        ps (usplit 44 b)
-       `((uatoi <ps) (? (two? ps && two? >ps) (uatoi <>ps) 1)))
+       [(uatoi <ps) (? (two? ps && two? >ps) (uatoi <>ps) 1)])
    (pt-hdr ln)
     (: ws (filter (\ w (0 < tally w)) (usplit 32 ln))
        (? (tally ws < 3) ()
           (: ow <>ws nw <>>ws
              (? (((0 < tally ow) && (0 < tally nw)) && ((ow 0 = 45) && (nw 0 = 43)))
-                (: o (pt-side ow) n (pt-side nw) `(<o <>o <n <>n))
+                (: o (pt-side ow) n (pt-side nw) [<o <>o <n <>n])
                 ()))))
 
    ; --- the reader: a patch text -> ((oldname newname hunks)..) -------------------
@@ -68,31 +68,31 @@
    ; after both counters have hit zero -- and a body that stopped on the counts alone
    ; would leave every "the patch takes the newline away" case unmarked.
    (pt-body m no nn acc)
-    (? !(two? m) `((rev acc) m)
+    (? !(two? m) [(rev acc) m]
        (: ln <m
           c (? (0 < tally ln) (ln 0) 32)
           (? (c = 92)
              (pt-body >m no nn (? (two? acc)
-                                  ((: h <acc `(<h <>h 0)) >< >acc)
+                                  ((: h <acc [<h <>h 0]) >< >acc)
                                   acc))
-             ((no < 1) && (nn < 1)) `((rev acc) m)
+             ((no < 1) && (nn < 1)) [(rev acc) m]
              (: txt (? (0 < tally ln) (snip ln 1 (tally ln)) "")
-                (? (c = 45) (pt-body >m (no - 1) nn (`(45 txt 1) >< acc))
-                   (c = 43) (pt-body >m no (nn - 1) (`(43 txt 1) >< acc))
-                   ((c = 32) || (c = 0)) (pt-body >m (no - 1) (nn - 1) (`(32 txt 1) >< acc))
-                   `((rev acc) m))))))
+                (? (c = 45) (pt-body >m (no - 1) nn ([45 txt 1] >< acc))
+                   (c = 43) (pt-body >m no (nn - 1) ([43 txt 1] >< acc))
+                   ((c = 32) || (c = 0)) (pt-body >m (no - 1) (nn - 1) ([32 txt 1] >< acc))
+                   [(rev acc) m])))))
    (pt-hunks m acc)
-    (? (!(two? m) || !(pt-pfx <m "@@")) `((rev acc) m)
+    (? (!(two? m) || !(pt-pfx <m "@@")) [(rev acc) m]
        (: hd (pt-hdr <m)
-          (? !(two? hd) `((rev acc) m)
+          (? !(two? hd) [(rev acc) m]
              (: b (pt-body >m <>hd (hd 3) ())
-                (pt-hunks <>b (`(<hd <>>hd <b) >< acc))))))
+                (pt-hunks <>b ([<hd <>>hd <b] >< acc))))))
    (pt-parse ls)
     (: (go m acc)
         (? !(two? m) (rev acc)
            (? ((pt-pfx <m "--- ") && ((two? >m) && (pt-pfx <>m "+++ ")))
               (: h (pt-hunks >>m ())
-                 (go <>h (? (two? <h) (`((pt-hname <m) (pt-hname <>m) <h) >< acc) acc)))
+                 (go <>h (? (two? <h) ([(pt-hname <m) (pt-hname <>m) <h] >< acc) acc)))
               (go >m acc)))
        (go ls ()))
 
@@ -100,7 +100,7 @@
    (pt-pairs t)
     (: ls (lines t) n (tally ls) e (nl-end? t)
        (go m i acc) (? !(two? m) (rev acc)
-                       (go >m (i + 1) (`(<m (? ((i + 1) = n) e 1)) >< acc)))
+                       (go >m (i + 1) ([<m (? ((i + 1) = n) e 1)] >< acc)))
        (go ls 0 ()))
    (pt-render ps)
     (: o (jug 0)
@@ -109,7 +109,7 @@
        (go ps))
    ; the two sides of a hunk: the old TEXTS to look for, the new PAIRS to lay down
    (pt-old h) (map (\ l <>l) (filter (\ l !(<l = 43)) (h 2)))
-   (pt-new h) (map (\ l `(<>l (l 2))) (filter (\ l !(<l = 45)) (h 2)))
+   (pt-new h) (map (\ l [<>l (l 2)]) (filter (\ l !(<l = 45)) (h 2)))
 
    ; --- the search: where does this hunk's old side actually sit ------------------
    (pt-match ps k old)
@@ -121,10 +121,10 @@
    (pt-seek ps old want)
     (: far ((tally ps + 1) + (abs want))
        (try d) (? (far < d) ()
-                  (pt-fits ps (want - d) old) `(1 (want - d))
-                  (pt-fits ps (want + d) old) `(1 (want + d))
+                  (pt-fits ps (want - d) old) [1 (want - d)]
+                  (pt-fits ps (want + d) old) [1 (want + d)]
                   (try (d + 1)))
-       (? (pt-fits ps want old) `(1 want) (try 1)))
+       (? (pt-fits ps want old) [1 want] (try 1)))
 
    ; --- the reject, written back as the patch it failed to be ---------------------
    (pt-rej nm hs)
@@ -146,14 +146,14 @@
    ; the two starts turns the patch around, and everything downstream then reads one
    ; shape. a -R that reversed at apply time would owe every later step a second lane.
    (pt-flip h)
-    `(<>h <h (map (\ l `((? (<l = 45) 43 (<l = 43) 45 32) <>l (l 2))) (h 2)))
+    [<>h <h (map (\ l [(? (<l = 45) 43 (<l = 43) 45 32) <>l (l 2)]) (h 2))]
    (pt-file nm hs dry? silent?)
     (: r (uread nm)
        fresh !(two? r)
        ps0 (? fresh () (pt-pairs <>r))
        _ (? silent? () (pt-say ((? dry? "checking file " "patching file ") + nm)))
        (go m ps delta i bad off? rej)
-        (? !(two? m) `(ps bad (rev rej) off?)
+        (? !(two? m) [ps bad (rev rej) off?]
            (: h <m
               old (pt-old h) new (pt-new h)
               ; the -0,0 convention: a side with no lines names the seat BEFORE it, so
@@ -190,7 +190,7 @@
 
    (patch-main as)
     (: (fl a p R inp dry silent outp rest)
-        (? !(two? a) `(p R inp dry silent outp (rev rest))
+        (? !(two? a) [p R inp dry silent outp (rev rest)]
            ((<a = "-R") || (<a = "--reverse")) (fl >a p 1 inp dry silent outp rest)
            (<a = "--dry-run") (fl >a p R inp 1 silent outp rest)
            ((<a = "-s") || (<a = "--silent")) (fl >a p R inp dry 1 outp rest)

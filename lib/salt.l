@@ -60,6 +60,6 @@
    ; is nm listed under k? a roster entry is a bare name or `(name "hint")`
    (salt-has? c k nm)
     (: (go l) (? (! (two? l)) ()
-                 (: e <l (? ((? (two? e) <e e) = nm) `(1 e) (go >l))))
+                 (: e <l (? ((? (two? e) <e e) = nm) [1 e] (go >l))))
        (go (salt-all c k))))
 ) ; module salt

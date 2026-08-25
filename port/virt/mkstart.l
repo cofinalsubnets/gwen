@@ -19,20 +19,20 @@
        mtv  (le32 (csrw 1 0 5 773))     ; csrrw x0, mtvec, t0   -- direct mode (0x305)
        mcz  (le32 (csrw 2 10 0 834))    ; csrrs a0, mcause, x0  (0x342)
        mez  (le32 (csrw 2 11 0 833))    ; csrrs a1, mepc, x0    (0x341)
-       ir `(`('label '__ai_start)
-            `('li 'sp 2181038080)       ; 0x82000000 -- tops out under the pool
-            `('li 'r8 24576)            ; t0 = 0x6000: mstatus.FS = Dirty
-            `('raw fsen)                ; the FPU opens before any fld/fsd
-            `('la 'r8 '__ai_trap)
-            `('raw mtv)
-            `('call 'main)
-            `('label 'spin) `('jmp 'spin)
+       ir [['label '__ai_start]
+           ['li 'sp 2181038080]         ; 0x82000000 -- tops out under the pool
+           ['li 'r8 24576]              ; t0 = 0x6000: mstatus.FS = Dirty
+           ['raw fsen]                  ; the FPU opens before any fld/fsd
+           ['la 'r8 '__ai_trap]
+           ['raw mtv]
+           ['call 'main]
+           ['label 'spin] ['jmp 'spin]
             ;; the machine-trap tail: a fresh stack (the faulting one may BE
             ;; the fault), cause and pc into the argument file, then C.
-            `('label '__ai_trap)
-            `('li 'sp 2181038080)
-            `('raw mcz)
-            `('raw mez)
-            `('call 'fault_report)
-            `('label 'spin2) `('jmp 'spin2))
+           ['label '__ai_trap]
+           ['li 'sp 2181038080]
+           ['raw mcz]
+           ['raw mez]
+           ['call 'fault_report]
+           ['label 'spin2] ['jmp 'spin2]]
        (write-bytes dst (objelf 'riscv64 ir () '("__ai_start") () () () () () () ()))))

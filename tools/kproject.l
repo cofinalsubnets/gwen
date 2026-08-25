@@ -63,7 +63,7 @@
                                (go >l))))) loads)
 
       ; --- boot.o, laid below the image: ldkern's own head, one object -------
-      objs `((ld-read "boot.o" bootb mach))
+      objs [(ld-read "boot.o" bootb mach)]
       ne (ldlay1 'note kbase objs)
       b0 (ld-align 4096 ne) b1 (ldlay1 'boot b0 objs)
       t1 (ldlayn 'text (ldlay1 'text b1 objs) objs)
@@ -83,17 +83,17 @@
                    _ (? (&& (0 < sx) (sx < 0xff00) (member? bind '(1 2)))
                         (: nm (ld-cstr pie (stro + rle32 pie e))
                            (? (two? (peep glo nm ())) 0
-                              (pin glo nm `((bias + rle64 pie (e + 8)) 0))))
+                              (pin glo nm [(bias + rle64 pie (e + 8)) 0])))
                         0)
                    (go (e + 24))))) symo)
       eaddr (: r (peep glo entnm ())
                (? (two? r) <r (scare 'kproject-entry entnm)))
-      cx `(glo b0 b0 b0 b0 () 0 () () (ld-extents objs))
+      cx [glo b0 b0 b0 b0 () 0 () () (ld-extents objs)]
 
       ; --- the patch list: every ai_rela site slides by bias, and k_image_top
       ; takes the image's far edge -- ascending, for the one-pass surgery below
       ; (the table already lays ascending; the walk reverses it back)
-      (ins s l) (? !(two? l) `(s)
+      (ins s l) (? !(two? l) [s]
                    ((at <l 0) < (at s 0)) (<l >< (ins s >l))
                    (s >< l))
       sites (ins [(pie-sym "k_image_top") top]
@@ -117,20 +117,20 @@
       hdrsz (64 + (56 * nph))
       _ (? ((hdrsz + nsz) <= 4096) 0 (scare 'kproject-headers hdrsz))
       (fo a) ((a - kbase) + 4096)
-      phs (: bs `(1 7 (fo b0) b0 b0 (d1 - b0) (bootend - b0) 4096)
-             ps (map (\ g `(1 (at g 4) (fo (bias + at g 0)) (bias + at g 0)
-                            (bias + at g 0) (at g 2) (at g 3) 4096))
+      phs (: bs [1 7 (fo b0) b0 b0 (d1 - b0) (bootend - b0) 4096]
+             ps (map (\ g [1 (at g 4) (fo (bias + at g 0)) (bias + at g 0)
+                           (bias + at g 0) (at g 2) (at g 3) 4096])
                      loads)
-             (? (0 < nsz) (`(4 4 hdrsz kbase kbase nsz nsz 4) >< (bs >< ps))
+             (? (0 < nsz) ([4 4 hdrsz kbase kbase nsz nsz 4] >< (bs >< ps))
                 (bs >< ps)))
       en (ldemit cx 'note kbase objs ())
-      (gapz a b) (? (a < b) `((ld-zeros (b - a))) ())
+      (gapz a b) (? (a < b) [(ld-zeros (b - a))] ())
       ; ⚠ the file is address-linear from kbase plus one page (fo), so the boot
       ; chain is seeded with the kbase..b0 gap -- without it every byte lands
       ; one page below where its phdr points. each stage takes the PIECES of
       ; the one before (never the [cur pieces] pair), bridged by its gap; bss
       ; owns address space and no bytes, so it is laid above and never emitted.
-      eb (ldemit cx 'boot b0 objs `((ld-zeros (b0 - kbase))))
+      eb (ldemit cx 'boot b0 objs [(ld-zeros (b0 - kbase))])
       et (ldemitn cx 'text objs (ldemit cx 'text b1 objs (>eb + (gapz <eb b1))))
       eo (ldemitn cx 'rodata objs (ldemit cx 'rodata t1 objs (>et + (gapz <et t1))))
       ed (ldemitn cx 'data objs (ldemit cx 'data o1 objs (>eo + (gapz <eo o1))))
@@ -139,7 +139,7 @@
                 (? !(two? l) [c acc]
                    (: g <l o (fo (bias + at g 0))
                       (go >l (o + at g 2)
-                          (acc + (`((ld-zeros (o - c))) + spliced (at g 1) (at g 0) (at g 2) sites))))))
+                          (acc + ([(ld-zeros (o - c))] + spliced (at g 1) (at g 0) (at g 2) sites))))))
            loads (fo d1) ())
       fsz <body
       ; the symtab, values slid: the uefi loader reads `kboot` out of exactly this
@@ -158,20 +158,20 @@
       syo (ld-align 8 fsz)
       sto (syo + symz) ssto (sto + strz) sstz (tally <shstr)
       shto (ld-align 8 (ssto + sstz))
-      sht (catall `((ld-shdr 0 0 0 0 0 0 0 0 0 0)
-                    (ld-shdr (snm 0) 2 0 0 syo symz 2 syminf 8 24)
-                    (ld-shdr (snm 1) 3 0 0 sto strz 0 0 1 0)
-                    (ld-shdr (snm 2) 3 0 0 ssto sstz 0 0 1 0)))
-      hdr (elf64-hdrn 2 eaddr mach `(shto 4 3)
+      sht (catall [(ld-shdr 0 0 0 0 0 0 0 0 0 0)
+                   (ld-shdr (snm 0) 2 0 0 syo symz 2 syminf 8 24)
+                   (ld-shdr (snm 1) 3 0 0 sto strz 0 0 1 0)
+                   (ld-shdr (snm 2) 3 0 0 ssto sstz 0 0 1 0)])
+      hdr (elf64-hdrn 2 eaddr mach [shto 4 3]
                       (map (\ g (elf64-phdr <g (at g 1) (at g 2) (at g 3)
                                             (at g 4) (at g 5) (at g 6) (at g 7)))
                            phs))
       (ld-write out
-        (hdr >< (>en + `((ld-zeros (4096 - (hdrsz + nsz)))) + >ed
+        (hdr >< (>en + [(ld-zeros (4096 - (hdrsz + nsz)))] + >ed
                  + <>body
-                 + `((ld-zeros (syo - fsz)))
-                 + (esy + `((snip pie stro (stro + strz)) <shstr
-                            (ld-zeros (shto - (ssto + sstz))) sht))))))
+                 + [(ld-zeros (syo - fsz))]
+                 + (esy + [(snip pie stro (stro + strz)) <shstr
+                           (ld-zeros (shto - (ssto + sstz))) sht])))))
 
    ; the file driver (kernel.mk's KPROJ). arity-gated: the `love kernel` verb
    ; evals this file too (lib/source.l), and ITS argv is the verb's own.

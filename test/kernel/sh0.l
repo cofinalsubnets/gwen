@@ -5,6 +5,6 @@
 ; real ones -- spawn/spawnmap/wait/pipe/fdopen/dup/dup2/getpid already left the
 ; list by existing (rung 4).
 (: (raw m) () (signal n h) ())
-(map (\ n (? (member? n (names ())) () (ev `(': `(n 'x) ()))))
+(map (\ n (? (member? n (names ())) () (ev [': [n 'x] ()])))
      '(symlink hardlink readlink fork exec herald still getuid seal ttyfg
        glean connect listen accept udp-bind udp-send udp-recv hark winsize))

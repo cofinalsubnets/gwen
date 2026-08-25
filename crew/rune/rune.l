@@ -433,7 +433,7 @@
                       (? (c = 0) r (padd [(c >< [<(mkey <f)])] r))))
    (a1y2 g) (map (\ m2 (mco m2 >< [0 <(mkey m2)])) g)
    (a2y1 f) (map (\ m2 (mco m2 >< [<>(mkey m2)])) f)
-   (lpow k L) (k (pmul L) `((1 >< '(0))))
+   (lpow k L) (k (pmul L) [(1 >< '(0))])
    (ysub f aa) (? (aa = 0) f
                 (: yp [(1 >< '(0 1)) (aa >< '(0 0))]
                    one [(1 >< '(0 0))]
@@ -642,7 +642,7 @@
    (mfacts key syms) (? (0 = tally key) ()
                         (0 = <key) (mfacts >key >syms)
                         (1 = <key) (<syms >< mfacts >key >syms)
-                        (`('** <syms <key) >< mfacts >key >syms))
+                        (['** <syms <key] >< mfacts >key >syms))
    (mterm m syms) (: fs (mfacts (mkey m) syms) c (mco m)
                      (? (0 = tally fs) c
                         (c = 1) (mulfold fs)
@@ -1033,4 +1033,4 @@
                   (vrem xd (vadd (vinit v)
                                  (vshift (vscale (vlast v) xd) (tally v - (tally xd + 1))))))
    (kmul xd a b) (vrem xd (vmul a b))
-   (knum d c) (vpad `((q c 1)) d))
+   (knum d c) (vpad [(q c 1)] d))

@@ -33,7 +33,7 @@
                                   (flush qw))) ())))
 
    ; the one byte from outside, a second from now: by then all 17 are parked.
-   pid (spawnio `("sh" "-c" "sleep 1; printf x") 0 (cup (cap ps)) 2 `() -1 0)
+   pid (spawnio ["sh" "-c" "sleep 1; printf x"] 0 (cup (cap ps)) 2 [] -1 0)
 
    b (see qr)                      ; parks; only the woken peer's byte releases it
    _ (wait pid)
@@ -55,7 +55,7 @@
    r (fdopen (cap p))               ; ONE heap port; the write end stays a bare fd
    t (twirl (\ _ (see r)) ())
    _ (rest 20)                      ; t reaches its park BEFORE anything is written
-   pid (spawnio `("sh" "-c" "sleep 0.3; printf AB") 0 (cup p) 2 `() -1 0)
+   pid (spawnio ["sh" "-c" "sleep 0.3; printf AB"] 0 (cup p) 2 [] -1 0)
    a (see r)
    b (catch t)                      ; hangs with the port half of the test taken out
    _ (wait pid)
@@ -67,7 +67,7 @@
 ; nothing left to say. one task is enough here, and the hang is the monotask wait.
 (: p2 (pipe 0)
    r2 (fdopen (cap p2))
-   pid2 (spawnio `("sh" "-c" "printf AB") 0 (cup p2) 2 `() -1 0)
+   pid2 (spawnio ["sh" "-c" "printf AB"] 0 (cup p2) 2 [] -1 0)
    _ (wait pid2)
    a2 (see r2)                      ; gulps both; the second is in the buffer now
    _ (await r2)                     ; hangs with the buffer term taken out
@@ -91,7 +91,7 @@
    _ (rest 30)                      ; t3 reaches its park before the compute starts
    c1 (twirl (\ _ (spin 4000000)) ())
    c2 (twirl (\ _ (spin 4000000)) ())
-   pid3 (spawnio `("sh" "-c" "sleep 0.2; printf Z") 0 (cup p3) 2 `() -1 0)
+   pid3 (spawnio ["sh" "-c" "sleep 0.2; printf Z"] 0 (cup p3) 2 [] -1 0)
    got (catch t3)                   ; never returns if the parked peer starves
    _ (wait pid3)
    _ (freeze c1) _ (freeze c2)

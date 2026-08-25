@@ -12,7 +12,7 @@
 ; outgrows its buffer and MOVES mid-drain -- is checked by hand instead:
 ;   (: c `("sh" "-c" "i=0; while [ $i -lt 20000 ]; do echo abcdefgh; i=$((i+1)); done")
 ;      (assert ((>(hark c)) = (>(herald c)))))
-(: cmd `("sh" "-c" "printf 'tee-me\n'")
+(: cmd ["sh" "-c" "printf 'tee-me\n'"]
 
    ; the two agree on BOTH halves of the answer: teeing changes when the bytes
    ; reach stdout, never what the caller is handed.
@@ -22,11 +22,11 @@
    _ (assert (>a = >b) (>a = "tee-me\n"))
 
    ; a nonzero exit still rides back through the tee path
-   bad (herald `("sh" "-c" "printf 'nope\n'; exit 3"))
+   bad (herald ["sh" "-c" "printf 'nope\n'; exit 3"])
    _ (assert (two? bad) (<bad = 3) (>bad = "nope\n"))
 
    ; no output -> the EmptyString singleton, tee or not
-   quiet (herald `("sh" "-c" "exit 0"))
+   quiet (herald ["sh" "-c" "exit 0"])
    _ (assert (two? quiet) (<quiet = 0) (! >quiet))
 
    (puts "run: ok\n"))
@@ -43,7 +43,7 @@
 ; reddening, and a gate that hangs is worse than one that fails.
 (: pr (pipe 0)
    rfd (cap pr) wfd (cup pr)
-   pid (spawnio `("sh" "-c" "sleep 1; cat >/dev/null") rfd 1 2 `(wfd) -1 0)
+   pid (spawnio ["sh" "-c" "sleep 1; cat >/dev/null"] rfd 1 2 [wfd] -1 0)
    _ (fdclose rfd)
    w (fdopen wfd)
    t0 (clock 0)
@@ -72,8 +72,8 @@
 ; ⚠ the status has to come out of the PIPELINE, and $? there is head's, so love's
 ; own goes to a file from inside the subshell -- POSIX, no PIPESTATUS.
 (: spew "( echo '(: (go n) (? (n = 0) 0 (: _ (putc 120) _ (putc 10) (go (n - 1)))) _ (go 300000) 0)' | out/host/love; echo $? > out/host/.sigst ) | head -1 > /dev/null; cat out/host/.sigst; rm -f out/host/.sigst"
-   st (cup (hark `("sh" "-c" spew)))
-   sig (cup (hark `("sh" "-c" "grep SigIgn /proc/self/status")))
+   st (cup (hark ["sh" "-c" spew]))
+   sig (cup (hark ["sh" "-c" "grep SigIgn /proc/self/status"]))
    _ (assert
       (st = "141\n")                       ; 128 + SIGPIPE: the death the shell has always seen
       (sig = "SigIgn:\t0000000000000000\n")))  ; the child inherits NO ignore at all
@@ -85,7 +85,7 @@
 ; timeout, because its regression is a HANG (the scheduler sleeping on a fd set
 ; the ninth parked task never got into) and a wedged gate is worse than a red one.
 ; ⚠ it must be a subprocess for that reason alone; nothing about it needs one.
-(: rc (cap (hark `("sh" "-c" "timeout 20 out/host/love test/host/parked.l")))
+(: rc (cap (hark ["sh" "-c" "timeout 20 out/host/love test/host/parked.l"]))
    _ (assert (rc = 0)))                    ; 124 is the timeout: the old cap's hang
 
 (puts "run parked: ok\n")
@@ -96,7 +96,7 @@
 ; waits for a connection only the wedged vm could still make), and a wedged gate is
 ; worse than a red one. 124 IS the control's answer, and each law was verified by
 ; putting its own blocking call back.
-(: rc (cap (hark `("sh" "-c" "timeout 20 out/host/love test/host/nifpark.l")))
+(: rc (cap (hark ["sh" "-c" "timeout 20 out/host/love test/host/nifpark.l"]))
    _ (assert (rc = 0)))
 
 (puts "run nifpark: ok\n")
@@ -106,7 +106,7 @@
 ; the loopback. driven from HERE for the usual reason: a resolver whose deadline
 ; stops working does not redden, it HANGS -- there is no answer coming and nothing
 ; to wake the caller.
-(: rc (cap (hark `("sh" "-c" "timeout 20 out/host/love test/host/dns.l")))
+(: rc (cap (hark ["sh" "-c" "timeout 20 out/host/love test/host/dns.l"]))
    _ (assert (rc = 0)))
 
 (test_fin ())

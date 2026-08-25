@@ -17,7 +17,7 @@
                        "" (jot c))))
 
 ; --- a child's plain output lands on the grid, colours and all ---
-(: md (tether `("sh" "-c" "printf 'hi\\033[31mred'; exit 3"))
+(: md (tether ["sh" "-c" "printf 'hi\\033[31mred'; exit 3"])
  _ (assert (two? md))
  s (mkscr 5 20)
  bx {s}
@@ -31,7 +31,7 @@
  (close (cup md)))
 
 ; --- the pty's ONLCR: a child's bare \n arrives as \r\n, so columns behave ---
-(: md (tether `("sh" "-c" "printf 'a\\nb'"))
+(: md (tether ["sh" "-c" "printf 'a\\nb'"])
  s (mkscr 5 20)
  bx {s}
  _ (moor bx (cup md) ())
@@ -51,7 +51,7 @@
 ; `head -c 6 >/dev/null`, which passed just as happily while moor wrote the
 ; answer BACKWARDS -- a reply is a byte stream, and a test that never looks at
 ; the bytes cannot tell "\e[1;1R" from "R1;1[\e".
-(: md (tether `("sh" "-c" "stty raw -echo; printf '\\033[6n'; head -c 6 | cat -v"))
+(: md (tether ["sh" "-c" "stty raw -echo; printf '\\033[6n'; head -c 6 | cat -v"])
  s (mkscr 5 20)
  bx {s}
  _ (moor bx (cup md) ())
@@ -60,7 +60,7 @@
  (close (cup md)))
 
 ; --- a full-screen guest: clear, address, paint, leave ---
-(: md (tether `("sh" "-c" "printf '\\033[2J\\033[3;5Hdeep\\033[7msea'"))
+(: md (tether ["sh" "-c" "printf '\\033[2J\\033[3;5Hdeep\\033[7msea'"])
  s (mkscr 6 20)
  bx {s}
  _ (moor bx (cup md) ())
@@ -77,8 +77,8 @@
                   (? (= n (snip h i (+ i (tally n)))) 1 (find h n (+ i 1)))
                   0)
  ; (the octal escapes ride through TWO love readers before sh: hence \\\\)
- md (tether `("out/host/love" "-l" "crew/quay/berth.l"
-            "-e" "(berth [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"])"))
+ md (tether ["out/host/love" "-l" "crew/quay/berth.l"
+           "-e" "(berth [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"])"])
  outb (slurp (cup md))
  st (: (wf p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wf p)))) (wf (cap md)))
  _ (assert
@@ -109,7 +109,7 @@
    (scrof hb id) (peep (hbox (hpane hb id)) () 0)
 
  ; --- one berth is the whole wharf, and its frame starts at the home cell ---
- hb (mkhb 10 20 `("sh" "-c" "printf hi"))
+ hb (mkhb 10 20 ["sh" "-c" "printf hi"])
  _ (moor (hbox (hpane hb 1)) (hmas (hpane hb 1)) ())
  f (hframe hb)
  _ (assert
@@ -122,7 +122,7 @@
 
  ; --- a split re-opens BOTH screens to their new rectangles ----------------
  ; 21 columns divide 10 + bar + 10, and every pty is told what it now has.
- hb2 (mkhb 10 21 `("sh" "-c" "sleep 30"))
+ hb2 (mkhb 10 21 ["sh" "-c" "sleep 30"])
  _ (hsplit hb2 'beside)
  lay (hb2 'lay)
  _ (assert
@@ -177,8 +177,8 @@
 (: (sub? h n i) (? (< (+ i (tally n)) (+ (tally h) 1))
                    (? (= n (snip h i (+ i (tally n)))) 1 (sub? h n (+ i 1)))
                    0)
- md (tether `("out/host/love" "-l" "crew/quay/berth.l"
-              "-e" "(berth [\"sh\" \"-c\" \"sleep 5\"])"))
+ md (tether ["out/host/love" "-l" "crew/quay/berth.l"
+             "-e" "(berth [\"sh\" \"-c\" \"sleep 5\"])"])
  _ (assert (two? md))
  m (cup md)
  _ (rest 1200)                            ; let berth come up and moor its first child

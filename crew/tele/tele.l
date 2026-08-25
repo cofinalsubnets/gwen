@@ -62,8 +62,8 @@
    ;; bias un-broadcast: a (C,) added to an (N,C) output sums its cotangent over
    ;; the N rows it was stretched across.
    (tl-colsum g) (: sh (shape g) r <sh c <>sh
-      (gem-tray `(c)
-           (map (\ j (tl-lsum (map (\ i (peep g `(i j) 0)) (jot r)))) (jot c))))
+      (gem-tray [c]
+           (map (\ j (tl-lsum (map (\ i (peep g [i j] 0)) (jot r)))) (jot c))))
    ;; sh is the 1-vector (C,) where C is g's last axis -- checked element-wise.
    (tl-can-colsum g sh)
       (? (tray? g)
@@ -83,8 +83,8 @@
    ;; -- 2D transpose (functional rebuild; arrays are immutable). mm's adjoint
    ;; needs A-transpose, and `inner` only contracts last-of-a vs first-of-b.
    (transp2 m) (: sh (shape m) r <sh c <>sh
-      (gem-tray `(c r)
-           (tl-cat (map (\ j (map (\ i (peep m `(i j) 0)) (jot r))) (jot c)))))
+      (gem-tray [c r]
+           (tl-cat (map (\ j (map (\ i (peep m [i j] 0)) (jot r))) (jot c)))))
 
    ;; -- the device seam -- tele's heavy array ops (matmul, elementwise, reduce,
    ;; transpose) route through a SWAPPABLE backend record { gemm ew reduce transp }.
@@ -174,13 +174,13 @@
    (params m)     (tl-mparams m)                         ; the parameter list (for the optimizer)
 
    ;; weight init: small uniform in [-0.5, 0.5). seed with (rng-set (wheel n)).
-   (tl-randmat r c) (gem-tray `(r c) (map (\ _ (randf 0 - 0.5)) (jot $ r * c)))
-   (tl-zeros n)     (gem-tray `(n) 0)
+   (tl-randmat r c) (gem-tray [r c] (map (\ _ (randf 0 - 0.5)) (jot $ r * c)))
+   (tl-zeros n)     (gem-tray [n] 0)
 
    ;; linear: y = x@W + b. linear-wb builds from given param glasses (handy for
    ;; tests); (linear i o) inits W (i,o) random, b (o,) zero. rides mm + the bias
    ;; broadcast, whose adjoint is the colsum sumto from Stage 2.
-   (linear-wb W b) (tl-mod (\ x (add (mm x W) b)) `(W b))
+   (linear-wb W b) (tl-mod (\ x (add (mm x W) b)) [W b])
    (linear i o)    (linear-wb (glass (tl-randmat i o)) (glass (tl-zeros o)))
 
    ;; seq: compose modules/functions left-to-right; params = the concatenation.

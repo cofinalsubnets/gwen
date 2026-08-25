@@ -14,7 +14,7 @@
 ; bytes stay immutable -- a bake belongs to the extraction (rung U1.2).
 
 (: (fp-die m) (: _ (say err ("fatpack: " + m + "\n")) (quit 1))
-   (fp-read p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
+   (fp-read p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
    (fp-write p s) (: q (open p "w") _ (? q 0 (fp-die ("cannot write " + p))) _ (say q s) (close q))
    bs 4096
    (fp-blocks n) ((n + bs - 1) // bs)

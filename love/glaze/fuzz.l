@@ -67,29 +67,29 @@
    (xpr d lf op) (? (d < 1) (lf 0)
                     (: r (rand 4)
                        (? (r = 0) (lf 0)
-                          (r = 1) `((op 0) (xpr (d - 1) lf op) (xpr (d - 1) lf op))
-                          (r = 2) `('? `('< (xpr (d - 1) lf op) 3) (xpr (d - 1) lf op) (xpr (d - 1) lf op))
-                          `('+ (xpr (d - 1) lf op) (lf 0)))))
+                          (r = 1) [(op 0) (xpr (d - 1) lf op) (xpr (d - 1) lf op)]
+                          (r = 2) ['? ['< (xpr (d - 1) lf op) 3] (xpr (d - 1) lf op) (xpr (d - 1) lf op)]
+                          ['+ (xpr (d - 1) lf op) (lf 0)])))
    ; thirteen shapes, one per lane the hook offers. the lane each one lands in was PROBED
    ; (((from 'glaze) 'loopinfo) &c), not assumed -- 9 reaches calloutinfo with every earlier lane
    ; declining, 10 reaches calloutinfo-frame, 11 reaches loopinfo.
    (shape i)
     (: r (% i 13)
-       (? (r = 0) `('\ 'x (xpr 2 ileaf iop))                                            ; leaf
-          (r = 1) `('\ 'x 'y (xpr 2 ileaf iop))                                         ; n-ary leaf
-          (r = 2) `('\ 'x (xpr 2 fleaf fop))                                            ; float-RESULT leaf (qualfr)
-          (r = 3) `('\ 'n `(': `('go 'k 'acc) `('? '(< k 1) 'acc `('go '(- k 1) (xpr 2 bleaf iop))) '(go n 0)))
-          (r = 4) `('\ 'n `(': `('go 'k 'acc) `('? '(< k 1) 'acc `('go '(- k 1) (xpr 2 bleaf iop))) `('go 'n (bleaf 0))))
-          (r = 5) `('\ 'n `(': `('go 'k) `('? '(< k 1) (bleaf 0) `('+ (bleaf 0) `('go '(- k 1)))) '(go n)))
-          (r = 6) `('\ 'n `(': `('evn 'k) `('? '(< k 1) (bleaf 0) `('odd '(- k 1)))     ; a MUTUALLY-recursive pair: the group lane proper
-                                `('odd 'k) `('? '(< k 1) (bleaf 0) `('+ (bleaf 0) `('evn '(- k 1))))
-                                '(evn n)))
-          (r = 7) `('\ 'n `(': `('go 'i 'a 'b) `('? '(< i n) `('go '(+ i 1) 'b (xpr 1 bleaf iop)) 'a) '(go 0 0 1)))   ; 3-var loop
-          (r = 8) `('\ 'n `(': `('go 'k 'acc) `('? '(< k 1) 'acc `('go '(- k 1) `('+ 'acc (xpr 1 bleaf iop)))) '(go n 0)))
-          (r = 9) `('\ 'n `(`(': `('go 'i 'a) `('? '(< i n) `('go '(+ i 1) `('+ 'a `((gfn 0) 'i))) 'a)) 0 0))   ; CALL-OUT over a resolvable global
-          (r = 10) `('\ 'f 'n `(`(': `('go 'i 'a) `('? '(< i n) `('go '(+ i 1) `('+ 'a '(f i))) 'a)) 0 0))      ; CALL-OUT with F a frame param
-          (r = 11) `('\ 'n `(`(': `('go 'i 'a) `('? '(< i n) `('go '(+ i 1) `('+ 'a (xpr 1 bleaf iop))) 'a)) 0 0))   ; counted loop (loopinfo)
-          `('\ 'x `('? '(< x 1) (bleaf 0) (xpr 2 bleaf iop)))))                         ; branchy fall-through
+       (? (r = 0) ['\ 'x (xpr 2 ileaf iop)]                                             ; leaf
+          (r = 1) ['\ 'x 'y (xpr 2 ileaf iop)]                                          ; n-ary leaf
+          (r = 2) ['\ 'x (xpr 2 fleaf fop)]                                             ; float-RESULT leaf (qualfr)
+          (r = 3) ['\ 'n [': ['go 'k 'acc] ['? '(< k 1) 'acc ['go '(- k 1) (xpr 2 bleaf iop)]] '(go n 0)]]
+          (r = 4) ['\ 'n [': ['go 'k 'acc] ['? '(< k 1) 'acc ['go '(- k 1) (xpr 2 bleaf iop)]] ['go 'n (bleaf 0)]]]
+          (r = 5) ['\ 'n [': ['go 'k] ['? '(< k 1) (bleaf 0) ['+ (bleaf 0) ['go '(- k 1)]]] '(go n)]]
+          (r = 6) ['\ 'n [': ['evn 'k] ['? '(< k 1) (bleaf 0) ['odd '(- k 1)]]          ; a MUTUALLY-recursive pair: the group lane proper
+                              ['odd 'k] ['? '(< k 1) (bleaf 0) ['+ (bleaf 0) ['evn '(- k 1)]]]
+                              '(evn n)]]
+          (r = 7) ['\ 'n [': ['go 'i 'a 'b] ['? '(< i n) ['go '(+ i 1) 'b (xpr 1 bleaf iop)] 'a] '(go 0 0 1)]]        ; 3-var loop
+          (r = 8) ['\ 'n [': ['go 'k 'acc] ['? '(< k 1) 'acc ['go '(- k 1) ['+ 'acc (xpr 1 bleaf iop)]]] '(go n 0)]]
+          (r = 9) ['\ 'n [[': ['go 'i 'a] ['? '(< i n) ['go '(+ i 1) ['+ 'a [(gfn 0) 'i]]] 'a]] 0 0]]           ; CALL-OUT over a resolvable global
+          (r = 10) ['\ 'f 'n [[': ['go 'i 'a] ['? '(< i n) ['go '(+ i 1) ['+ 'a '(f i)]] 'a]] 0 0]]             ; CALL-OUT with F a frame param
+          (r = 11) ['\ 'n [[': ['go 'i 'a] ['? '(< i n) ['go '(+ i 1) ['+ 'a (xpr 1 bleaf iop)]] 'a]] 0 0]]          ; counted loop (loopinfo)
+          ['\ 'x ['? '(< x 1) (bleaf 0) (xpr 2 bleaf iop)]]))                           ; branchy fall-through
    ; apply FULLY, per shape: two ints for the n-ary leaf, (F n) for the frame call-out, else one
    (try f i a) (: r (% i 13) (? (r = 1) (f a a) (r = 10) (f gfz0 a) (f a)))
    n0 (peep fires () 0)

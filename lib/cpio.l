@@ -130,11 +130,11 @@
                       _ (pin e 'mtime mtime)
                       _ (pin e 'uid uid) _ (pin e 'gid gid)
                       _ (? (id? kind 'link) (pin e 'to body) 0)
-                      `(1 e ((b0 + nb) + (cpio-pad nb)))))))))
+                      [1 e ((b0 + nb) + (cpio-pad nb))]))))))
    (cpio-unpack s)
     (: n (tally s)
        (go o acc) (: r (cpio-read1 s n o)
-                     (? (id? r 'end) `(1 (rev acc))
+                     (? (id? r 'end) [1 (rev acc)]
                         !r ()
                         (go <>>r (<>r >< acc))))
        (go 0 ()))
@@ -154,7 +154,7 @@
     (: st (stat p) (? (two? st) (! ((// <>st 1000) < ms)) 0))
    (cpio-scatter root es u)                 ; -> (1 count) | ()
     (: (go xs k)
-        (? !(two? xs) `(1 k)
+        (? !(two? xs) [1 k]
            (: e <xs
               nom (tar-strip (peep e 'nom ""))
               p (? (tally nom) (? (tally root) ((root + "/") + nom) nom) root)

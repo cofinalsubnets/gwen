@@ -74,7 +74,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 
 ; --- a real typedef, the form cparse cannot emit --------------------------------
 (: cl-vas '(prog ((fn "f" () (blk ((expr (vastart (var "ap"))))))))
-   cl-inf `('gdecl `(`("d" 'double `('flo (1.0 / 0.0)))))
+   cl-inf ['gdecl [["d" 'double ['flo (1.0 / 0.0)]]]]
    (assert
     ((one '(tdef "lvm_t" (fn void))) = ("typedef void lvm_t();" + nl))
     ; ...and the empty marker it emits INSTEAD refuses, rather than printing a `;`
@@ -176,14 +176,14 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; the arms are ((cond items)..) and the else is its own slot, so an else out of
 ; place has no spelling at all. `#ifdef X` needs no node: `defined` wears call
 ; syntax in C's own grammar, so it is a plain (call (var "defined") ..).
-(: cl-def (\ n `('call `('var "defined") `(`('var n))))
-   cl-if `('cpp-if `(`(`('lor (cl-def "__x86_64__") (cl-def "__aarch64__"))
-                        `(`('cpp-def "ai_data_stride" 16))))
-                   `(`('cpp-def "ai_data_stride" 128)))
+(: cl-def (\ n ['call ['var "defined"] [['var n]]])
+   cl-if ['cpp-if [[['lor (cl-def "__x86_64__") (cl-def "__aarch64__")]
+                     [['cpp-def "ai_data_stride" 16]]]]
+                  [['cpp-def "ai_data_stride" 128]]]
    ; the shape love.h actually wants: a guard with a conditional nested inside it,
    ; every directive at column 0 whatever the depth -- love.h's own style
-   cl-nest `('cpp-if `(`(`('un 'not (cl-def "ai_data_stride"))
-                          `(cl-if))))
+   cl-nest ['cpp-if [[['un 'not (cl-def "ai_data_stride")]
+                       [cl-if]]]]
    (assert
     ((one cl-if) = ("#if defined(__x86_64__) || defined(__aarch64__)" + nl
                     + "#define ai_data_stride 16" + nl + "#else" + nl
@@ -236,7 +236,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; `k[0].ap` and `(k + 0)->ap` are the same tree, so G1 cannot tell them apart and the
 ; choice is clay's. love.c writes the first; an index binds like the POSTFIX it is
 ; written as, so `dot` spends its arrow on the star and never on the bracket.
-(: (ex x) (cs `('gdecl `(`("r" 'int x))))
+(: (ex x) (cs ['gdecl [["r" 'int x]]])
    (assert
     ((ex '(dot (deref (bin + (var "k") (num 0))) "ap")) = ("int r = k[0].ap;" + nl))
     ((ex '(dot (deref (bin + (var "u") (num 2))) "m")) = ("int r = u[2].m;" + nl))
@@ -280,7 +280,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 
 ; --- precedence: the shower is not fully parenthesized, so the table has to be
 ; right. these are the pairs that go wrong when it is not.
-(: (e x) (cs `('gdecl `(`("r" 'int x))))
+(: (e x) (cs ['gdecl [["r" 'int x]]])
    (assert
     ((e '(bin * (bin + (var "a") (var "b")) (var "c"))) = ("int r = (a + b) * c;" + nl))
     ((e '(bin + (bin * (var "a") (var "b")) (var "c"))) = ("int r = a * b + c;" + nl))
@@ -301,7 +301,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
     ((e '(dot (deref (var "p")) "f")) = ("int r = p->f;" + nl))))
 
 ; --- strings: the escapes C needs, and an octal fallback for the rest -----------
-(: cl-str `('gdecl `(`("s" '(ptr char) `('str ("a" + (string 10) + "\"b\\" + (string 1))))))
+(: cl-str ['gdecl [["s" '(ptr char) ['str ("a" + (string 10) + "\"b\\" + (string 1))]]]]
    (assert
     ((one cl-str) = ("char *s = \"a\\n\\\"b\\\\\\001\";" + nl))))
 
@@ -309,7 +309,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; exists for the sites where the number is the wrong thing to read. the two quotes
 ; swap roles against a string's -- the apostrophe is the delimiter here and the
 ; double quote is not -- and nothing else about the escapes changes.
-(: (ec x) (cs `('gdecl `(`("r" 'int x))))
+(: (ec x) (cs ['gdecl [["r" 'int x]]])
    (assert
     ((ec '(chr 92)) = ("int r = '\\\\';" + nl))
     ((ec '(chr 39)) = ("int r = '\\'';" + nl))

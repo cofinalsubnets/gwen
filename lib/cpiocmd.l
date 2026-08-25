@@ -33,7 +33,7 @@
 
 (: cpioc-usage "usage: cpio {-o|-i|-t} [-H newc] [-dutv] [-F|-I|-O FILE] [--quiet]"
    (cpioc-moan m) (: _ (say err ("cpio: " + m)) _ (put err 10) (flush err))
-   (cpioc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
+   (cpioc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
    (cpioc-blurt p s) (: q (open p "w") (? q (: _ (say q s) _ (close q) 1) ()))
    (cpioc-blocks t n)                       ; GNU's parting word, on err, in 512s
     (? (peep t 'quiet 0) 0
@@ -63,21 +63,21 @@
                   _ (? (two? st) (pin e 'mtime (// <>st 1000)) 0)
                   e)
        (? (string? lnk)
-          (: e (tar-entry nom 'link "") _ (pin e 'to lnk) _ (pin e 'mode 511) `(1 (own e)))
+          (: e (tar-entry nom 'link "") _ (pin e 'to lnk) _ (pin e 'mode 511) [1 (own e)])
           !(two? st) (: _ (cpioc-moan (p + ": No such file or directory")) ())
           ((& 61440 <>>st) = 16384)
-           (: e (tar-entry nom 'dir "") _ (pin e 'mode (& 4095 <>>st)) `(1 (own e)))
+           (: e (tar-entry nom 'dir "") _ (pin e 'mode (& 4095 <>>st)) [1 (own e)])
           (: b (cpioc-slurp p)
              (? !b (: _ (cpioc-moan (p + ": cannot read")) ())
                 (: e (tar-entry nom 'file <>b)
                    _ (pin e 'mode (& 4095 <>>st))
-                   `(1 (own e)))))))
+                   [1 (own e)])))))
 
    ; --- the three modes -------------------------------------------------------
    (cpioc-o t)
     (: ns (cpioc-lines ((slurp in) + ""))
        (go l acc ok)
-        (? !(two? l) `((rev acc) ok)
+        (? !(two? l) [(rev acc) ok]
            (: p <l
               (? !(tally p) (go >l acc ok)         ; find's trailing empty line
                  (: r (cpioc-one p)
@@ -95,7 +95,7 @@
     (: src (peep t 'in ())
        (? (string? src) (: r (cpioc-slurp src)
                            (? r r (: _ (cpioc-moan ("cannot read " + src)) ())))
-          `(1 ((slurp in) + ""))))
+          [1 ((slurp in) + "")]))
    (cpioc-strip nom)                        ; no leading /, ever
     (: n (tally nom)
        (go k) (? ((k < n) && (nom k = 47)) (go (k + 1)) k)
@@ -145,8 +145,8 @@
        (go a)
         (? !(two? a) '(1 ())
            (: w <a n (tally w)
-              (? (w = "--") `(1 >a)
-                 ((n < 2) || !(w 0 = 45)) `(1 a)
+              (? (w = "--") [1 >a]
+                 ((n < 2) || !(w 0 = 45)) [1 a]
                  (w 1 = 45)
                   (: k (snip w 2 n)
                      r (cpioc-long t k)

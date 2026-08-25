@@ -17,16 +17,16 @@
    ;; -- the x86-64 userland program: write the message via the Linux syscall ABI, then exit(7).
    ;; r0=rax(syscall#), r6=rdi(fd/arg0), r5=rsi(arg1), r2=rdx(arg2). --
    xmsg "hi from love-asm (x86-64 linux)\n"
-   (x64-prog a) `('(li r0 1) '(li r6 1) `('li 'r5 a) `('li 'r2 (tally xmsg)) '(sys)
-                   '(li r0 60) '(li r6 7) '(sys))
+   (x64-prog a) ['(li r0 1) '(li r6 1) ['li 'r5 a] ['li 'r2 (tally xmsg)] '(sys)
+                  '(li r0 60) '(li r6 7) '(sys)]
    xe (elf64 'x64 x64-prog (map xmsg (jot (tally xmsg))))
    _ (write-bytes "/tmp/love-x64.elf" (peep xe 'bytes 0))
 
    ;; -- the aarch64 bare-metal program: no syscalls (there's no OS), just store each byte to the
    ;; UART data register, then loop. li the UART base once into r1; per char li r2,c ; st r1,0,r2. --
    amsg "hi from love-asm running on emulated aarch64!\n"
-   (a-char c) `(`('li 'r2 c) '(st r1 0 r2))
-   a-prog (`(`('li 'r1 0x09000000))
+   (a-char c) [['li 'r2 c] '(st r1 0 r2)]
+   a-prog ([['li 'r1 0x09000000]]
            + foldr (\ c acc (a-char c + acc)) () (map amsg (jot (tally amsg)))
            + '((label hang) (jmp hang)))
    ae (elf64-at 0x40000000 'arm64 (\ a a-prog) ())          ; 0x40000000 = qemu-virt RAM base

@@ -1724,7 +1724,7 @@
 ; level expr) is ('U l); the surface (UU l) picks the level. The univalence tower still
 ; stays PARKED in the type-in-type checker above (it needs that inference) -- the fragment
 ; uu2coq already skips.
-(: (lsuc l) (? (charm? l) (+ l 1) `('lsuc l))                          ; smart successor: fold concretes, else build the expr
+(: (lsuc l) (? (charm? l) (+ l 1) ['lsuc l])                           ; smart successor: fold concretes, else build the expr
    (lle a b)                                                           ; CONSERVATIVE a <= b over level exprs (the universe constraint, decided structurally)
    (? (= a b) 1
       (= a 0) 1                                                        ; 0 <= any level
@@ -1732,9 +1732,9 @@
       (&& (two? b) (id? <b 'lsuc)) (lle a <>b)                 ; a <= b' => a <= (lsuc b')
       0)
    (umax a b) (? (&& (charm? a) (charm? b)) (? (< a b) b a)            ; max of level exprs
-                 (lle a b) b  (lle b a) a  `('lmax a b))
+                 (lle a b) b  (lle b a) a  ['lmax a b])
    (ulvl u) (? (id? u 'UU) 0 (&& (two? u) (id? <u 'U)) <>u 'no)   ; universe value -> level expr ('no = not a universe)
-   (umk l) (? (= l 0) 'UU `('U l))                                     ; level expr -> universe value
+   (umk l) (? (= l 0) 'UU ['U l])                                      ; level expr -> universe value
 
    ; --- the universe CONSTRAINT SOLVER: difference constraints + positive-cycle detection.
    ;     A level expr parses to (base offset): lparse (lsuc^k atom) = (atom k). A constraint
@@ -1766,8 +1766,8 @@
    ;     recursor/sigma checker, and generalize/instantiate-per-use. The type-in-type-exploiting
    ;     defs (the_world_explodes, the ordinal descent) stay correctly REJECTED -- by design.
    MVC (tablet 0)                                                     ; fresh-metavar counter
-   (freshmv z) (: i (peep MVC 0 0) _ (pin MVC 0 (+ i 1)) `('mv i))    ; a fresh universe level metavariable (mv i)
-   (elab t) (? (id? t 'UU) `('UU (freshmv ()))                        ; bare UU -> (UU (mv i)); leave annotated (UU l) alone
+   (freshmv z) (: i (peep MVC 0 0) _ (pin MVC 0 (+ i 1)) ['mv i])     ; a fresh universe level metavariable (mv i)
+   (elab t) (? (id? t 'UU) ['UU (freshmv ())]                         ; bare UU -> (UU (mv i)); leave annotated (UU l) alone
               (&& (two? t) (id? <t 'UU)) t  (two? t) (map elab t)  t)
 
    (psym cx x)                                                         ; UU0 : UU1
@@ -1782,8 +1782,8 @@
    (? (&& !(id? (ulvl ti) 'no) !(id? (ulvl t) 'no)) (usat? [[(ulvl ti) (ulvl t)]]) (conv d ti t))
 
    (predpi cx en d t)                                                  ; PI / SIGMA formation -> U_max(i,j)
-   (: i (sortof cx en d <>>t) fr `('nv d)
-      j (sortof (link `(<>t (vof en <>>t)) cx) (link `(<>t fr) en) (+ d 1) <>>>t)
+   (: i (sortof cx en d <>>t) fr ['nv d]
+      j (sortof (link [<>t (vof en <>>t)] cx) (link [<>t fr] en) (+ d 1) <>>>t)
       (umk (umax i j)))
 
    (pinf-spine cx en d f as)
@@ -1803,21 +1803,21 @@
                               _ (pchk cx en d <>>t Av) _ (pchk cx en d <>>>t Av) (umk l))
             (id? h 'succ)   (: _ (pchk cx en d <>t 'nat) 'nat)
             (id? h 'the)    (: l (sortof cx en d <>t) Tv (vof en <>t) _ (pchk cx en d <>>t Tv) Tv)
-            (id? h 'let)    (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pinf (link `(x Av) cx) (link `(x va) en) d <>>>t))
-            (id? h 'idpath) (: Av (pinf cx en d <>t) v (vof en <>t) `('paths Av v v))
+            (id? h 'let)    (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pinf (link [x Av] cx) (link [x va] en) d <>>>t))
+            (id? h 'idpath) (: Av (pinf cx en d <>t) v (vof en <>t) ['paths Av v v])
             (pinf-spine cx en d (pinf cx en d h) >t))))
 
    (pchk cx en d t T)
    (? (&& (two? t) (id? <t 'lam))
       (? (id? <T 'pi)
-         (: x <>t fr `('nv d) (pchk (link `(x <>T) cx) (link `(x fr) en) (+ d 1) <>>t (capp <>>T fr)))
+         (: x <>t fr ['nv d] (pchk (link [x <>T] cx) (link [x fr] en) (+ d 1) <>>t (capp <>>T fr)))
          (scare 'uu-lam-needs-pi t))
       (&& (two? t) (id? <t 'idpath))
       (? (id? <T 'paths)
          (: _ (pchk cx en d <>t <>T) v (vof en <>t) (? (&& (conv d v <>>T) (conv d v <>>>T)) 1 (scare 'uu-idpath-mismatch t)))
          (scare 'uu-idpath-needs-paths t))
       (&& (two? t) (id? <t 'let))
-      (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pchk (link `(x Av) cx) (link `(x va) en) d <>>>t T))
+      (: x <>t Av (pinf cx en d <>>t) va (vof en <>>t) (pchk (link [x Av] cx) (link [x va] en) d <>>>t T))
       (: Ti (pinf cx en d t) (? (cleq d Ti T) 1 (scare 'uu-type-mismatch t))))
 
    (pdefn nm T t) (: _ (sortof 0 0 0 T) Tv (vof 0 T) _ (pchk 0 0 0 t Tv) nm)   ; vof now normalizes (UU l)

@@ -15,7 +15,7 @@
 
 ; the display number off Xvfb's -displayfd stdout: take the first line that is
 ; ENTIRELY digits (server chatter shares the pty).
-(: xv (tether `("Xvfb" "-displayfd" "1" "-screen" "0" "640x480x24" "-nolisten" "tcp"))
+(: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "640x480x24" "-nolisten" "tcp"])
    (wfx p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wfx p))))
    camp {}
    (enlist k pid) (pin camp k pid)
@@ -55,20 +55,20 @@
  ; stock layout -- so the box's own lux config must not reach this gate.
  luxhome "out/host/.luxui-home"
  _ (mkdir luxhome 493)                                                          ; already there -> -EEXIST, which is the same good news
- ph (tether `("env" (+ "DISPLAY=:" (show dn)) (+ "HOME=" luxhome)
-            "out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
-            "-l" "crew/lux/wire.l" "-l" "crew/lux/ewmh.l"
-            "-l" "crew/lux/manage.l" "-l" "crew/lux/keys.l"
-            "-l" "crew/lux/config.l" "-l" "crew/lux/lux.l"))
+ ph (tether ["env" (+ "DISPLAY=:" (show dn)) (+ "HOME=" luxhome)
+           "out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
+           "-l" "crew/lux/wire.l" "-l" "crew/lux/ewmh.l"
+           "-l" "crew/lux/manage.l" "-l" "crew/lux/keys.l"
+           "-l" "crew/lux/config.l" "-l" "crew/lux/lux.l"])
  _ (must 'lux-up (two? ph))
  _ (enlist 'ph (cap ph))
 
  ; the probe: its own process, its own streams; it waits for lux itself
  ; (_NET_SUPPORTED on the root), drives, asserts, and exits 0 or names its
  ; failure. Its pty is echoed either way -- a red run tells its story here.
- pr (tether `("out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
-            "-l" "crew/lux/wire.l" "-l" "test/host/luxui-probe.l"
-            "-e" (+ "(probe \"" (+ dpy "\")"))))
+ pr (tether ["out/host/love" "-l" "crew/lux/core.l" "-l" "crew/lux/layout.l"
+           "-l" "crew/lux/wire.l" "-l" "test/host/luxui-probe.l"
+           "-e" (+ "(probe \"" (+ dpy "\")"))])
  _ (must 'probe-up (two? pr))
  _ (enlist 'pr (cap pr))
  g (wfx (cap pr))

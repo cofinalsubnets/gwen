@@ -15,7 +15,7 @@
 (use "crew/vi/hue.l")
 (use 'hueweb)
 
-(: (h2w-rdf p) (: q (open p "r") (? q (: s (slurp q) _ (close q) (? (string? s) `(1 s) ())) ()))
+(: (h2w-rdf p) (: q (open p "r") (? q (: s (slurp q) _ (close q) (? (string? s) [1 s] ())) ()))
    (h2w-usage _) (: _ (say err "usage: love tools/hue2web.l css | src FILE\n") (quit 2))
 
    ; the site's own chrome: papel.css first, so a painted page and a doc page are

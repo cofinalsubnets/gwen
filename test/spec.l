@@ -62,7 +62,7 @@
  (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))  ; $ sums the nets, then clamps once
  (? word (: n ((53 2) + 1) m ((53 2) + 3) (&& (n = $n) (m = $m))) 1)  ; $ is the IDENTITY on a green charm, EXACTLY -- past 2^53 the net's double would round it
  (1 = $(link 1 2)) !(link 0 2)                   ; the SPINE carries the measure: a dotted tail is not an element
- (0 = $`((3 ~ 4) (-3 ~ 4))) !`((0 ~ 5) -1)     ; phases sum as VECTORS, then the total is gated once:
+ (0 = $[(3 ~ 4) (-3 ~ 4)]) ![(0 ~ 5) -1]       ; phases sum as VECTORS, then the total is gated once:
  !i !(0 ~ -1) !(0 ~ 8) (0 = $i)                  ; ...and a PURE PHASE is BLUE. `i` and `-i` are swapped by a
  (i < 5) ((0 ~ -1) < i)                          ; field automorphism, so truth cannot tell them apart -- but the
                                                  ; ORDER still must (sorting needs totality). the one place they part.
@@ -174,9 +174,9 @@
  ('(0) < {1 10}) ({1 10} < cap) !(cap < {1 10})       ; the map rung: chain < map < hot
  ("abc" < "abd") ("ab" < "abc") ('(1 2) < '(1 3))     ; within a band: text and chains order lexicographically
  ; a GALAXY folds into the number band by its net (probe via sort/show -- infix < on an array broadcasts to a mask).
- ("(@(1 1) 5 @(2 4))" = (show (sort `(@(2 4) 5 @(1 1)))))  ; nets 2 < 5 < 6, galaxies interleaving with the star
- ("(3 @(1 2))" = (show (sort `(@(1 2) 3))))          ; net tie -> a star seats below a galaxy
- ("(@('a 'b) (7 8))" = (show (sort `(@('a 'b) '(7 8)))))   ; a tray (object array) stays BELOW link (chain is the grammar substrate, seated high)
+ ("(@(1 1) 5 @(2 4))" = (show (sort [@(2 4) 5 @(1 1)])))   ; nets 2 < 5 < 6, galaxies interleaving with the star
+ ("(3 @(1 2))" = (show (sort [@(1 2) 3])))           ; net tie -> a star seats below a galaxy
+ ("(@('a 'b) (7 8))" = (show (sort [@('a 'b) '(7 8)])))    ; a tray (object array) stays BELOW link (chain is the grammar substrate, seated high)
  (tray? @(5)) !(@(5) = 5))                            ; a ONE-CELL array is an array, never its scalar
 
 ; --- comparing functions --- `=` on functions is alpha + structural (binders by position,
@@ -339,7 +339,7 @@
  ; the phases sum as VECTORS to (0 ~ 8) either way -- and a pure phase is BLUE:
  ; the twin gem is read by its REAL part alone -- $ clamps re, never |z| -- so a
  ; sum with no real component measures 0 however large its magnitude
- (0 = $(array 2 (3 ~ 4) (-3 ~ 4))) (0 = $`((3 ~ 4) (-3 ~ 4)))
+ (0 = $(array 2 (3 ~ 4) (-3 ~ 4))) (0 = $[(3 ~ 4) (-3 ~ 4)])
  (3 = $(array 2 (3 ~ 4) (0 ~ 0))) ((0.0 ~ 8.0) = (net (array 2 (3 ~ 4) (-3 ~ 4)))))
 (assert
  (: m (twin (star-tray '(2 2) '(1 2 3 4)) (star-tray '(2 2) '(5 6 7 8)))
@@ -438,7 +438,7 @@
  ('(2 3 4) = (map (+ 1) '(1 2 3))) (24 = (foldl (*) 1 '(1 2 3 4))) (6 = (foldr (+) 0 '(1 2 3)))
  ('(1 3) = (filter (\ x (x % 2)) '(1 2 3 4))) ('(1 2 3) = (sort '(3 1 2))) ('(3 2 1) = (sortby (>) '(1 2 3)))
  ('(1 2 3 4) = (cat '(1 2) '(3 4))) ('(3 2 1) = (rev '(1 2 3))) ('(1 2) = (map cap (zip '(1 2) '(3 4))))
- (20 = (caup (assoc 2 (list `(1 10) `(2 20))))) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
+ (20 = (caup (assoc 2 (list [1 10] [2 20])))) ('(1 2) = (take 2 '(1 2 3 4))) ('(3 4) = (drop 2 '(1 2 3 4)))
  (3 = (last '(1 2 3))) ('(1 2) = (init '(1 2 3))) (member? 3 '(1 2 3)) !(member? 9 '(1 2 3))
  (all (\ x (0 < x)) '(1 2 3)) (any (\ x (2 < x)) '(1 2 3))
  (7 = ('(7 8 9) 0)) (9 = ('(7 8 9) 2)) (9 = ('(7 8 9) -1)) (7 = ('(7 8 9) -3))   ; a charm indexes, negatives from the end
@@ -606,7 +606,7 @@
 ; effects in source order, the last clause answers, empty clauses drop; in a FILE the chain needs
 ; its outer parens, a repl line is one expression. in anger: test/operator.l, test/infixop.l.
 (assert
- ('(1 (\ x) 3) = `(1 ''x 3)) ('(1 2 3 4) = (: xs '(2 3) ('(1) + xs + '(4))))
+ ('(1 (\ x) 3) = [1 ''x 3]) ('(1 2 3 4) = (: xs '(2 3) ('(1) + xs + '(4))))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = (0 ~ 1)) ((2 ~ 3) = (twin 2 3)) ('~x = '(mono (~ x))) (~5 = (conj 5)) (5 = #"hello") (lit? dot)
  ("(. x)" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
@@ -615,8 +615,8 @@
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
  (5 = --5) (5 = ++5) (-5 = ---5) (: x 5 (-5 = -x))   ; + and - are runs: --5 is -(-5), -x is negate x -- symmetric with !!5 / !x
  (-3 = -3) (-0.5 = -.5) (5 = (2 - -3))               ; ...and a digit or . after them still starts a NUMERAL (the whole exception)
- ([1 2 3] = `(1 2 3)) ([] = `()) (1 = ({'a 1} 'a))            ; the opener carries the wrap: [ is `, { is the map
- ([[1 2] [3 4]] = `(`(1 2) `(3 4))) (-[1 2] = -`(1 2))       ; ...to any depth, and it glues like the wrap it spells
+ ([1 2 3] = (list 1 2 3)) ([] = (list)) (1 = ({'a 1} 'a))     ; the opener carries the wrap: [ is list, { is the map
+ ([[1 2] [3 4]] = (list (list 1 2) (list 3 4))) (-[1 2] = -(list 1 2))  ; ...to any depth, and it glues like a form does
  ((show (cap (sound "{'a 1}"))) = (show '(hash 'a 1)))              ; a hash compares by identity, so the LAW is on the form
  (@[1 2 3] = @(1 2 3)) (1 = ({'a 1} 'a))                     ; a constructor sigil RENAMES the opener's wrap
  ('(\ (list a b)) = (cap (sound "'[a b]")))                  ; ...but ' is not one: it quotes the form
@@ -645,19 +645,19 @@
 ; compile); the guarded asserts live in the bootstrapping section's welp window.
 
 ; --- macros --- a macro maps an arg list to code; install with `::`. quasiquote is GONE: the
-; ` list ctor EVALUATES every element, so QUOTE the literal positions instead of unquoting the
+; list ctor EVALUATES every element, so QUOTE the literal positions instead of unquoting the
 ; computed ones -- the convention inverts (numbers self-eval, so bare). the prel ships
-; do/let/if/cond/quote, && and || (short-circuiting), L/list, tuple/map/array, :- and ?-, >>= <=<.
+; do/let/if/cond/quote, && and || (short-circuiting), list, tuple/map/array, :- and ?-, >>= <=<.
 ; ⚠ A MACRO EXPANDS AT ZERO OPERANDS TOO -- (f) == f is a law about VALUES, and a macro has none
-; to be, so (list) is () and never a read of `list`. the empties ride it: [] and `() ARE (list).
-(:: 'unless (\ a `('? (cap a) 0 (caup a))))
+; to be, so (list) is () and never a read of `list`. the empty rides it: [] IS (list).
+(:: 'unless (\ a ['? (cap a) 0 (caup a)]))
 (assert
  ('ok = (unless 0 'ok)) (0 = (unless 1 'ok)) (3 = (&& 1 2 3)) !(&& 1 0 3)
  ; the false answer is the UNIT, never a 0-fossil: a && with any failing
  ; operand, or a || with none passing, reads () -- blue like 0, but
  ; nothing, not a number
  (id? (&& () 5) ()) (id? (&& 1 0 3) ()) (id? (|| () ()) ()) (id? (|| () 0) ())
- (2 = (|| 0 2 3)) ('(1 2 3) = `(1 2 3)) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
+ (2 = (|| 0 2 3)) ('(1 2 3) = [1 2 3]) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
  (1 = (quote 1)) ('a = (quote a))                                  ; quote, the macro spelling of '
  (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big)) (9 = ((<=< (+ 1) (\ x (x * 2))) 4))
  (id? () (list)) (tray? (tuple)) (tablet? (hash)) (id? () (unless))   ; ⚠ the zero-operand macro
@@ -694,7 +694,7 @@
 ; test/missing.l, test/apcap.l, test/task.l (the scoop ring), test/random.l.
 (assert
  (3 = (ev '(+ 1 2))) (lit? ev) (41 = (call-cc (\ k (k 41)))) (42 = 1 + (call-cc (\ k 41)))
- ('(boom 7) = (trap (\ _ (scare 'boom 7)) () (\ a b `(a b)))) (3 = (trap (+ 1) 2 welp))
+ ('(boom 7) = (trap (\ _ (scare 'boom 7)) () (\ a b [a b]))) (3 = (trap (+ 1) 2 welp))
  (: t (tablet 0) _ (pin t 0 'held)                            ; mind: c fires, f's value answers
     v (mind (\ _ 'value) () (\ _ (pin t 0 'freed)))
     (&& (id? v 'value) (id? (t 0) 'freed)))

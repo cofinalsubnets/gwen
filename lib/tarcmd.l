@@ -22,7 +22,7 @@
 (use 'tar)
 
 (: (tarc-die m) (: _ (say err ("tar: " + m + "\n")) (quit 1))
-   (tarc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) `(1 (s + ""))) ()))
+   (tarc-slurp p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
    (tarc-blurt p s) (: q (open p "w") (? q (: _ (say q s) _ (close q) 1) ()))
    (tarc-has? fl c) (: n (tally fl)
                        (go k) (? (n <= k) 0 (fl k = c) 1 (go (k + 1)))
@@ -42,7 +42,7 @@
    (tarc-open arch z?)
     (: b (tarc-slurp arch)
        _ (? !b (tarc-die ("cannot read " + arch)) 0)
-       u (? z? (gz-unzip <>b) `(1 <>b))
+       u (? z? (gz-unzip <>b) [1 <>b])
        _ (? !u (tarc-die (arch + ": not a gzip stream, or its crc32 disagrees")) 0)
        r (tar-unpack <>u)
        _ (? !r (tarc-die (arch + ": not a tar archive, or it is truncated")) 0)

@@ -40,7 +40,7 @@
                 (: pp (cpp <>lx (\ n s (incload () () (cdir src) n s)) src)
                    (? (! (okv? pp)) ()
                       (: ps (cparse-t <>pp 'x64)
-                         (? (okv? ps) `(1 (caup ps)) ()))))))))
+                         (? (okv? ps) [1 (caup ps)] ()))))))))
    ; the same, off TEXT rather than a path: the reparse leg
    (front2 txt)
     (: lx (clex txt)
@@ -48,7 +48,7 @@
           (: pp (cpp <>lx (\ n s ()) "<clay>")
              (? (! (okv? pp)) ()
                 (: ps (cparse-t <>pp 'x64)
-                   (? (okv? ps) `(1 (caup ps)) ()))))))
+                   (? (okv? ps) [1 (caup ps)] ()))))))
 
    files (filter dotc? (readdir "test/cc"))
 
@@ -69,14 +69,14 @@
    ; the tally, and the NAMES of everything that is not plain ok -- a count alone
    ; would let a regression hide inside a category.
    (go l ok df ix np rp bs bad)
-    (? (! (two? l)) `(ok df ix np rp bs (rev bad))
+    (? (! (two? l)) [ok df ix np rp bs (rev bad)]
        (: f <l v (one f)
           (? (id? v 'ok) (go >l (ok + 1) df ix np rp bs bad)
-             (id? v 'diff) (go >l ok (df + 1) ix np rp bs (link `('diff f) bad))
-             (id? v 'inexpr) (go >l ok df (ix + 1) np rp bs (link `('inexpr f) bad))
+             (id? v 'diff) (go >l ok (df + 1) ix np rp bs (link ['diff f] bad))
+             (id? v 'inexpr) (go >l ok df (ix + 1) np rp bs (link ['inexpr f] bad))
              (id? v 'noparse) (go >l ok df ix (np + 1) rp bs bad)
-             (id? v 'reparse) (go >l ok df ix np (rp + 1) bs (link `('reparse f) bad))
-             (go >l ok df ix np rp (bs + 1) (link `('badshape f) bad)))))
+             (id? v 'reparse) (go >l ok df ix np (rp + 1) bs (link ['reparse f] bad))
+             (go >l ok df ix np rp (bs + 1) (link ['badshape f] bad)))))
    r (go files 0 0 0 0 0 0 ())
    ok (el r 0) df (el r 1) ix (el r 2) np (el r 3) rp (el r 4) bs (el r 5)
    bad (el r 6)

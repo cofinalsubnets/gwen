@@ -31,7 +31,7 @@
 (:
    (sv-nth l k) (? (k = 0) <l (sv-nth >l (k - 1)))
    (sv-ends? s t) (: n (tally s) m (tally t) ((m <= n) && (snip s (n - m) n = t)))
-   (sv-rdf p) (: q (open p "r") (? q (: s (slurp q) _ (close q) (? (string? s) `(1 s) ())) ()))
+   (sv-rdf p) (: q (open p "r") (? q (: s (slurp q) _ (close q) (? (string? s) [1 s] ())) ()))
    ; the directory a path sits in, as a link back up: "/a/b/c.l" -> "/a/b/"
    (sv-up p) (: n (tally p)
                 (g k r) (? (k < n) (g (k + 1) (? (p k = 47) (k + 1) r)) (snip p 0 r))
@@ -46,7 +46,7 @@
       e (peep box p ())
       (? (&& (two? e) (<e = k)) <>e
          (: h (make ())
-            _ (pin box p `(k h))
+            _ (pin box p [k h])
             h)))
 
    ; the nav line every page wears: up to the directory, across to the file's
@@ -71,16 +71,16 @@
    (: hd? (sv-ends? p ".l.md")
       md? (sv-ends? p ".md")
       src (? hd? (snip p 0 (tally p - 3)) p)      ; "/x.l.md" -> "/x.l"
-      (? (p = "/hue.css") `("text/css; charset=utf-8" (hw-css 0))
+      (? (p = "/hue.css") ["text/css; charset=utf-8" (hw-css 0)]
          (! (md? || (sv-ends? p ".l"))) ()
          (: f (root + src)
             r (sv-rdf f)
             (? !(two? r) ()                       ; not there: let kiosko say 404
-               `("text/html; charset=utf-8"
-                 (sv-cached box p
-                   (\ _ (? hd? (sv-doc p (sv-head src <>r) `(src "the source"))
-                            md? (sv-doc p <>r ())
-                            (sv-page p (hw-body p <>r) `((p + ".md") "the header, as a document"))))))))))
+               ["text/html; charset=utf-8"
+                (sv-cached box p
+                  (\ _ (? hd? (sv-doc p (sv-head src <>r) [src "the source"])
+                           md? (sv-doc p <>r ())
+                           (sv-page p (hw-body p <>r) [(p + ".md") "the header, as a document"]))))]))))
 
    (sv-usage _)
    (: _ (say err "love serve -- the tree in a browser, painted on the way out
@@ -97,7 +97,7 @@ a .l is painted, a .md rendered, and x.l.md is x.l's header as a document.
    (serve-main as)
    (: box (tablet 0)
       (loop ws port dir)
-       (? !(two? ws) `(port dir)
+       (? !(two? ws) [port dir]
           (: w <ws r >ws
              (? ((w = "-p") || (w = "--port"))
                  (? (two? r) (loop >r (sv-num <r) dir) (sv-usage 0))

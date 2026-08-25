@@ -165,7 +165,7 @@
                     (: b ((: (f i) (? ((0 < i) && !(s (i - 1) = 32)) (f (i - 1)) i)) n)
                        (snip s 0 (? (0 < b) (b - 1) n) + "..."))))
    (blurb d)  (: ps (filter (\ b (id? <b 'para)) d)
-                 (? (two? ps) `(`('text (clip (itext (<>(<ps))) 160))) ())))
+                 (? (two? ps) [['text (clip (itext (<>(<ps))) 160)]] ())))
 
 ; --- cross-links: .md becomes .html, but only inside the site --------------------------
 ; a url is rewritten iff it is a bare relative `*.md` naming a page the site actually

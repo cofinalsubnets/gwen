@@ -58,7 +58,7 @@
   ('(2 4 6) = (map (jit '(\ x (+ x 1))) '(1 3 5)))           ; compose with higher-order fns
   ((isum 1000) = (g 1000))                                   ; the loop agrees with the interpreter
   (9000000000000000000 = ((jit '(\ x (* x x))) 3000000000))  ; OVERFLOW -> deopt -> correct bignum
-  (1 = ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jit `('\ 'x `('* 'x i))) 7) (* 7 i)))) a)) 0 1))  ; agree 0..60
+  (1 = ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jit ['\ 'x ['* 'x i]]) 7) (* 7 i)))) a)) 0 1))    ; agree 0..60
   ; comparisons (-> 0/1) and conditionals
   (: lt (jit '(\ x (< x 5))) (&& (1 = (lt 3)) (1 = (lt -2)) (0 = (lt 5)) (0 = (lt 9))))
   (: ab (jit '(\ x (? (< x 0) (- 0 x) x))) (&& (7 = (ab -7)) (7 = (ab 7)) (0 = (ab 0))))   ; abs
@@ -156,7 +156,7 @@
   (: ltn (jit2 '(\ x y (< x y))) (&& (1 = (ltn 3 5)) (0 = (ltn 5 3))))                      ; cgn -> cmpseq
   (: mnn (jit2 '(\ x y (? (< x y) x y))) (&& (3 = (mnn 3 5)) (4 = (mnn 9 4))))              ; cgn -> condcode (min)
   ; *-fold counted loop -- jitsum hardcodes +/<, so drive acc-mul + nonzero r11-init via loopcode
-  (: prodf (: psrc `('\ 'n `(`(': `('go 'i 'a) `('? `('< 'i 'n) `('go `('+ 'i 1) `('* 'a `('+ 'i 1))) 'a)) 0 1))
+  (: prodf (: psrc ['\ 'n [[': ['go 'i 'a] ['? ['< 'i 'n] ['go ['+ 'i 1] ['* 'a ['+ 'i 1]]] 'a]] 0 1]]
               (nif (emit (loopcode '(+ i 1) 'i '* '< 'x64)) (ev psrc) psrc 1))
      pf (\ n ((: (go i a) (? (< i n) (go (+ i 1) (* a (+ i 1))) a)) 0 1))
      (&& (120 = (prodf 5)) (= (pf 8) (prodf 8))))                                           ; n! via a product fold
@@ -743,7 +743,7 @@
       (= (+ '(1 2) 1) ((jitir '(\ x (+ x 1)) 'x64) '(1 2)))                                ; non-fixnum arg -> deopt -> interp
       ((\ x (+ (* x 3) 1)) = (jitir '(\ x (+ (* x 3) 1)) 'x64))                            ; =-IDENTICAL to source (transparent)
       (= '(2 4 6) (map (jitir '(\ x (+ x 1)) 'x64) '(1 3 5)))                              ; composes with higher-order fns
-      (= 1 ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jitir `('\ 'x `('* 'x i)) 'x64) 7) (* 7 i)))) a)) 0 1))   ; agree 0..60
+      (= 1 ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jitir ['\ 'x ['* 'x i]] 'x64) 7) (* 7 i)))) a)) 0 1))     ; agree 0..60
       ; --- n-ary lane (jitnir, arity>=2): native == interp, curries to saturation, transparent, deopts
       (7 = ((jitnir '(\ x y (+ x y)) 'x64) 3 4)) (7 = (((jitnir '(\ x y (+ x y)) 'x64) 3) 4))      ; saturated + curried
       (= ((ev '(\ x y (- (* x x) y))) 5 3) ((jitnir '(\ x y (- (* x x) y)) 'x64) 5 3))
