@@ -60,7 +60,7 @@
       (? (pure && <cv) (go (hv >cv) >a)         ; static arg: fold it into the partial
          (op && n = ar) (iop >< op >< as)              ; matching-arity nif -> inline (the hot path, keep)
          (id? hv v)                                            ; no static prefix folded -> the original apply
-          (? (1 < ar && n = ar) (apx >< 1 >< x)      ;   multi-arg fn -> n-ary apply
+          (? (1 < ar && ar <= n) (apx >< ar >< x)   ;   multi-arg fn the args saturate -> n-ary apply
              (apx >< 0 >< x))                            ;   generic l2r apply
          (apx >< 0 >< bake hv >< a))))             ; static prefix folded -> apply the partial to the rest
     (go v as))
@@ -225,7 +225,7 @@
                 (wxl1 c x (lp x) bnd))                 ; opfix (op-flat-ol) already flattened nested lambdas at the source, shared with c0
      (h = ':) (? (atom? >x) ':                      ; (:) = the head read -- (f)==f at zero operands, a missing name (c0 agrees)
                  (atom? >>x) (keep x (keep1 >x (wx <>x bnd)) ':)
-                 (keep x (wxl (boxfix >x) bnd) ':))   ; boxfix = the capture-by-location source rewrite, post-macroexpand
+                 (keep x (wxl (boxfix (lflat >x)) bnd) ':))   ; boxfix = the capture-by-location source rewrite, post-macroexpand
                                                        ;   (eager reads see let*, closures see letrec* -- prel's law)
                                                        ;   (it passes an unboxed let VERBATIM, so identity rides through)
      (h = '?) (? (atom? >x) '?                      ; (?) likewise: the empty form is the head's value
@@ -233,6 +233,32 @@
      ; no macro lane: cprop's output is MACRO-FREE -- it expands every nom-headed call (under the
      ; same shadow guard) and emits COMPOUND heads walked (h2, below).
      (fold (mapi (\ e (wx e bnd)) x) bnd)))
+   ; lflat: (: a b (: c d e)) -> (: a b c d e). a body-position `:` is the same letrec* scope one
+   ; frame and one apply deeper, so splice its list up. three gates: BOTH lets carry a body (a
+   ; body-less inner would hand the outer's names its defglob lane), the names are DISJOINT, and no
+   ; inner name is read by an outer def -- merging widens every outer def's scope over the inner
+   ; names, and either would rebind or capture where the nesting shadowed. it re-runs on its own
+   ; answer, so a chain of any depth lands in one frame.
+   (lend bs) (? (atom? bs) 0 (atom? >bs) bs (lend >>bs))             ; the body's one-cell tail, 0 = body-less
+   (lsub? b) (two? b && id? <b ': && two? (lend >b))                 ; a spliceable inner let?
+   (lup bs) (? (atom? >bs) (cup <bs) (<bs >< lup >bs))               ; the body's list, in its place
+   ; lrd/lrdl: does x read any name in ms? the whole ROW in one walk, where wl asks per name --
+   ; and no macro lane, cprop's output having none (the same reading wx's own fold takes).
+   (lrd ms x bnd) (?
+    (nom? x) (member? x ms && nil? (member? x bnd))
+    (atom? x) 0
+    (id? <x '\) (? (atom? >>x) 0 (: r (lp x) (lrd ms >r (<r + bnd))))
+    (id? <x ':) (lrdl ms >x (ln >x + bnd))
+    (any (\ e (lrd ms e bnd)) x))
+   (lrdl ms bs bnd) (? (atom? bs) 0
+    (atom? >bs) 0                                                    ; the trailing body is not a def
+    (: nd (dsug <bs <>bs) (lrd ms >nd bnd || lrdl ms >>bs bnd)))
+   (lflat bs) (: t (lend bs)
+    (? (nil? (two? t && lsub? <t)) bs
+     (: b <t ns (ln bs) ms (ln >b)
+      (? (any (\ m (member? m ns)) ms) bs                            ; a name collision
+         (lrdl ms bs ns) bs                                          ; an outer def reads an inner name
+         (lflat (lup bs))))))
    ; --- the identity kit: unchanged -> the ORIGINAL, no copy --------------------------------
    ; cprop/wx hand back the input tree wherever nothing rewrote, so an untouched subtree costs zero
    ; allocation (and fold/apx/'src share its spine). ⚠ the shape law is love-alloc's: a `:`-bound
@@ -277,12 +303,15 @@
         (? (atom? k) (keep3 fb t (wx <>fb bnd) (wxc >>fb bnd))   ; unknown -> keep the clause
            >k   (wxc >>fb bnd)               ; statically FALSE -> drop this clause, try the rest
                      [(wx <>fb bnd)]))))     ; statically TRUE  -> this result IS the cond, drop rest
-   ; napof: v is a non-nif multi-arg fn whose arity matches the n>1 call args -> n-ary apply.
+   ; napof: v is a non-nif multi-arg fn the n>1 call args SATURATE -> its arity, the width of the
+   ; leading n-ary apply. a SURPLUS arg curries onto that answer instead of onto the head, one
+   ; frame in place of one closure per arg. 0 = no n-ary lane.
    ; `id?`-safe peeps (a non-fn value never matches lvm_cur).
    (napof v args) (? (charm? v || !(id? lvm_cur (peek 0 v))) 0
-    (: ar (peek 1 v) ( 1 < ar && tally args = ar)))
+    (: ar (peek 1 v) (? (1 < ar && ar <= tally args) ar 0)))
    ; fold: un-shadowed global head -> ap (fold/iop/apx); else mark the call as an apx node
-   ; (apx nary head . args) carrying the n-ary-vs-l2r strategy (1 = n-ary, 0 = l2r).
+   ; (apx n head . args) carrying the apply strategy: n > 1 = the leading n-ary apply's width,
+   ; 0 = the l2r chain.
    (fold x bnd) (: h <x
     (? (atom? >x) x                          ; (f) single element -> ana's (atom? b) handles
        ; a VALUE head -- opfix's glued lane emits one, and a macro splice can too. no binding
@@ -293,8 +322,7 @@
        (member? h bnd) (apx >< 0 >< x)                    ; a shadowed name: local head
        (: v (gv h ()) hd (feels v)
         (? hd (hd x)
-           (napof v >x) (apx >< 1 >< x)
-           (apx >< 0 >< x)))))
+           (apx >< (napof v >x) >< x)))))
    ; cprop: the partial-evaluation pre-pass. it threads a static VALUE env `se` (name . const-form)
    ; and (1) propagates a constant-bound var to its value, (2) FOLDS a pure-fn call on constant args
    ; -- gv resolves the nif and pureset, the same curated effect-free set feels' purity gates read,
@@ -548,16 +576,23 @@
   (falook c h) (?- 0 c
    (: far (c 'far) a (? (tablet? far) (peep far h -1) -1)
     (? (0 < a) a (-1 = a) (falook (c 'par) h) 0)))
-  ; apxh: (apx nary head . args) -> apply. nary -> r2l arg eval + a single n-ary apply; else l2r
-  ; 1-ary chain (kap detects tail vs non-tail by peeking the continuation). n-ary fires for a
-  ; book-global multi-arg fn (fold/napof set nary) OR a saturated call to a letrec lambda sibling of
-  ; matching arity (falook -- locals fold can't see).
+  ; apxh: (apx n head . args) -> apply. n > 1 -> r2l eval of the leading n args and one n-ary
+  ; apply, with any surplus arg curried onto the ANSWER l2r; n = 0 -> the plain 1-ary chain (kap
+  ; detects tail vs non-tail by peeking the continuation). the width comes from a book-global
+  ; multi-arg fn (fold/napof) OR a letrec lambda sibling the args saturate (falook -- locals fold
+  ; can't see).
   (apxh c b) (: nary <b head <>b args >>b
-              n2 (? nary 1 (nom? head && (: a (falook c head) (1 < a && a = tally args))))
-              f (ana c head) s (c 'stk) _ (push c 'stk 0)
-              g (? n2 (apr2l c args * kap (tally args)) (apl2r c args))
+              n2 (? nary nary (nom? head && (: a (falook c head) (? (1 < a && a <= tally args) a 0))))
+              f (ana c head) s (c 'stk) _ (push c 'stk 0) s2 (c 'stk)
+              g (? n2 (napn c args n2 s2) (apl2r c args))
               _ (pin c 'stk s)
             (f * g))
+  ; napn: the n-ary apply, then the surplus. the pin puts the compile-time stack back at the head
+  ; slot -- apn consumes its arg slots and leaves the answer there, which is where l2r addresses from.
+  (napn c args n s) (: rest (drop n args)
+                       g (apr2l c (take n args) * kap n)
+                       _ (pin c 'stk s)
+                     (? (two? rest) (g * apl2r c rest) g))
   (app c a b) (: f (ana c a)
                s (c 'stk) _ (push c 'stk 0)
                g (apl2r c b) _ (pin c 'stk s)

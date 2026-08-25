@@ -152,3 +152,27 @@
     (15 = (: (g i) ((ustw (usadd i)) i) (g 5)))          ; the doc's promise: collapses to first-order
     (7 = ((ustw (us3 1 2)) 1))                           ; two params short, then cascaded
     (9 = (: h (usadd 4) (h (h 1))))))                    ; value position: the partial REVERTS, still right
+
+; --- the body-position `:` splices into its parent (lflat) --- one frame where the source
+; nested two, and the same meaning either way. shadowing and capture are the gates: an inner
+; name that collides with an outer one, or that an outer def reads, keeps its own frame.
+(: (lf-h n) (? (n = 0) 4 (lf-h (n - 1)))         ; recursive, so cprop neither folds nor inlines it
+   (assert
+    (3 = (: a 1 (: b 2 (a + b))))                   ; the plain splice
+    (6 = (: a 1 (: b 2 (: c 3 (a + b + c)))))       ; a chain of any depth lands in one frame
+    (2 = (: a 1 (: a 2 a)))                         ; a collision -- the inner still shadows
+    (4 = (: a 1 (: b a (: a 3 (b + a)))))           ; ... and the outer a is what b read
+    (4 = (: (f _) (lf-h 1) (: lf-h (\ y 99) (f 0))))))   ; an outer def reads the name -> no capture
+
+; --- an OVER-APPLIED known-arity head splits (napof/napn) --- the n-ary apply takes the
+; arity prefix and the surplus curries onto its ANSWER, so (f 1 2 3) is ((f 1 2) 3). the
+; heads recurse so the inliner declines them and the apply lane is what runs.
+(: (oa2 a b) (? (a = 0) (\ c (b + c)) (oa2 (a - 1) b))
+   (oa3 a b c) (? (a = 0) [b c] (oa3 (a - 1) b c))
+   (oan x) (? (x = 0) 3 (oan (x - 1)))              ; an operand no fold knows -- 3
+   (assert
+    (7 = (oa2 1 3 4))                               ; arity 2, three args
+    (7 = ((oa2 1 3) 4))                             ; ... the same, spelled split
+    (8 = (oa3 1 9 8 1))                             ; arity 3, four args -- [9 8] indexed at 1
+    ; a curried NIF splits the same way -- the tower is the surplus applied to its answer
+    (4096 = (* (oan 0) 2 4)) (1024 = (+ (oan 0) 2 4)) (4 = (- (oan 0) 1 2))))
