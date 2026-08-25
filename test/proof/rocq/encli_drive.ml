@@ -40,10 +40,10 @@ let prelude = {ai|
         (? (= want got) (bump pass)
            (: _ (bump fail)
               (say (+ "FAIL " (+ nm (+ " want " (+ want (+ " got " (+ got "\n"))))))))))
-   _ (L|ai}
+   _ [|ai}
 
 let footer =
-  {ai|)
+  {ai|]
    total (+ (peep pass 0 0) (peep fail 0 0))
    _ (say (+ "encli-oracle: " (+ (show (peep pass 0 0)) (+ " / " (+ (show total)
         (? (= 0 (peep fail 0 0)) " PASS\n" " FAIL\n")))))))
