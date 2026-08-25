@@ -1825,9 +1825,6 @@ static char const ktests[] =
 static char const src_verbs[] =
 #include "verbs.h"
  ;
-static char const src_pat[] =
-#include "pat.h"
- ;
 static char const src_uu[] =
 #include "uu.h"
 ;
@@ -1873,7 +1870,7 @@ static char const src_kanren[] =
 ;
 #endif
 static struct ai_lib const libs[] = {
-  {"verbs", src_verbs}, {"pat", src_pat}, {"uu", src_uu}, {"bao", src_bao},
+  {"verbs", src_verbs}, {"uu", src_uu}, {"bao", src_bao},
 #ifdef K_TEST
   {"coin", src_coin}, {"rng", src_rng}, {"q", src_q}, {"kanren", src_kanren},
 #else
@@ -1977,13 +1974,10 @@ void kmain(void) {
  " "
 #include "ev.h"
  ,
-#include "pat.h"                                     // ⚠ pat RIDES THE POST TEXT: post is written in @, and a
-    " "                                              //   macro reaches a reader only once it is in the book
 #include "post.h"
  );
   r = ai_evals_(r,
  "(use 'verbs)" // the registry FIRST: the cat's apps pin their own names at load
- "(use 'pat)"   // ⚠ pat BEFORE uu: uu.l is written in @, and a macro reaches a reader
  "(use 'uu) (: uu (from 'uu))"                         // the uu kernel: the corpus's uu files drive it through the
  "(use 'bao)"                                          //   one-name `uu` surface on this target too
   );

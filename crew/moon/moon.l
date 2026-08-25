@@ -23,16 +23,9 @@
 ; u-floor (uread udie urun). its tail SEAT fires moon-main when mooncc is the program;
 ; moon-run is the same compile ANSWERING its status, for a caller staying in the image.
 ;
-; ⚠ THE `use` IS LOAD-BEARING, and love0 is why. This cat is read TWICE -- once by the
-; full love to bake mooncc.image, and once by LOVE0 to bake mooncc0.image, the image that
-; breaks the self-host circle. pat rides love0's library (pat0.h is in boot_h) but the boot
-; splices it for neither, so `@` is simply an unbound name there: without this line moon.l
-; reads fine under `love` and answers `;; missing @` under love0 -- at BAKE time, in the
-; one lane the compiler cannot be built without. asbook.l's (use 'holo) is the same shape.
 (module 'moon
 (use 'kore)
 (use 'holo) ; the assembler module: asm-text, arbytes, the linker
-(use 'pat)
 
 (:
    ; the directory portion of a path (up to and including the last '/'), or ""

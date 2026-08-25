@@ -7898,7 +7898,7 @@ lvm(lvm_tally) {
 // (long? n l): is l a chain at least n links deep -- the arity question, asked once.
 // `two?` per step is the spelling that reads, and it costs a cup, a load and a
 // dispatch each; a destructuring pattern asks it n times to reach n fields
-// (love/pat.l). n <= 0 is true of anything: no link is claimed.
+// (love/post.l). n <= 0 is true of anything: no link is claimed.
 lvm(lvm_longp) { word l = Sp[1];
  if (!charmp(Sp[0])) ai_musttail return Push(zero);
  for (intptr_t k = getcharm(Sp[0]); k > 0; k--) {

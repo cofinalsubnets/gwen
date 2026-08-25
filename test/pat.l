@@ -1,6 +1,6 @@
-; test/pat.l -- the LAWS of `@`, pattern matching. the macro itself is love/pat.l
-; (a module: the boot splices it, so the corpus reads `@` bare); this file is what
-; keeps it honest. read love/pat.l for the grammar -- every tag it documents has
+; test/pat.l -- the LAWS of `@`, pattern matching. the macro itself is the first half
+; of love/post.l (on the book, so the corpus reads `@` bare); this file is what
+; keeps it honest. read love/post.l for the grammar -- every tag it documents has
 ; its clause below, and the sections here follow that order.
 
 (assert

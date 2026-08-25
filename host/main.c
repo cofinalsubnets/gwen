@@ -513,8 +513,6 @@ static char const cli[] =
 #include "rng0.h"
  , src0_kanren[] =
 #include "kanren0.h"
- , src0_pat[] =
-#include "pat0.h"
  , src0_uu[] =
 #include "uu0.h"
  , src0_coin[] =
@@ -542,7 +540,7 @@ static char const cli[] =
 // self-test's. overlay and peg are listed, never used here: each consumer opens with
 // its own (use ..), the boot owes nothing. an unlisted-for entry costs a row, nothing more.
 static struct ai_lib const libs0[] = {
-  {"bao", src0_bao}, {"rng", src0_rng}, {"kanren", src0_kanren}, {"pat", src0_pat}, {"uu", src0_uu},
+  {"bao", src0_bao}, {"rng", src0_rng}, {"kanren", src0_kanren}, {"uu", src0_uu},
   {"coin", src0_coin}, {"q", src0_q}, {"overlay", src0_overlay}, {"peg", src0_peg},
   {"holo", src0_holo},                                 // which the mooncc cat's cpp/gen read (the self-host build lane)
   {"verbs", src0_verbs},                               // the verb registry: love0 runs the same cli.l rail
@@ -557,19 +555,13 @@ static struct ai *boot(struct ai *g, bool argp) {
     g = ai_evals_(g,                                   // its own call: readtext picks its reader once per text, and
 #include "prel0.h"                                     // p1 seals hook 0 only when the call above evaluates
     " "
-#include "pat0.h"                                      // pat rides the post text: post is written in @, and a macro
-    " "                                                //   reaches a reader only once it is in the book. the `use`
-#include "post0.h"                                     //   below still registers the module, for cli and uu
+#include "post0.h"                                     // the printer, and `@` with it -- post's first half
         
     "(use 'bao)"                                       // p1 goes first: this lane never hatches an egg, and prel's
     "(use 'kanren)"                                    // loader folds `sound` at its own compile; kanren splices
                                                        //   because the corpus reads unify/ufail bare
-    "(use 'pat)"                                       // pat before cli (cli.l is written in @, and a macro
-                                                       //   reaches a reader only once its layer is spliced) and
-                                                       //   before verbs: the unsplice below pops the last splice,
-                                                       //   which has to stay verbs
     "(use 'verbs)"                                     // the verb registry the cli rail walks -- registered, then
-    );                                                 //   unspliced below: this lane runs the same cli.l
+    );                                                 //   unspliced below, which pops the LAST splice: verbs is it
     g = ai_unsplice_(g);
     g = ai_evals_(g, cli);                             // defines; cli-line is the dispatch
     return ai_evals_(g, "(cli-line cmdline 0)"); }     // a build tool is never a repl
@@ -579,8 +571,6 @@ static struct ai *boot(struct ai *g, bool argp) {
   g = ai_evals_(g,
 #include "prel0.h"                                    // prel, read by p1 now that hook 0 is sealed
     " "
-#include "pat0.h"                                     // pat rides the post text (see the argp lane above)
-    " "
 #include "post0.h"                                    // ..and the printer, which pass 1 below already needs
   );
   g = ai_evals_(g,
@@ -588,10 +578,9 @@ static struct ai *boot(struct ai *g, bool argp) {
     "(use 'holo)");                                    // the assembler service: load + register..
   g = ai_unsplice_(g);                                 //   ..and the C unsplice keeps it non-ambient, like the host
   g = ai_evals_(g,
-    "(use 'pat)"                                       // pat first: uu.l is written in @, and a macro reaches a
-    "(use 'uu) (: uu (from 'uu))"                      //   reader only once its layer is spliced. then the library
-                                                       //   layers, all by name in the old eval order (uu's
-    "(use 'coin)"                                      //   one-name surface rebinds like the host); every layer, splice
+    "(use 'uu) (: uu (from 'uu))"                      // the uu kernel, then the library layers, all by name in the
+                                                       //   old eval order (uu's one-name surface rebinds like the
+    "(use 'coin)"                                      //   host); every layer, splice
     "(use 'rng)"                                       //   and registry entry persists across the egg warm below, so one
     "(use 'q)"                                         //   load serves both corpus passes
     "(use 'kanren)"
@@ -629,8 +618,6 @@ static struct ai *boot(struct ai *g, bool argp) {
     " "
 #include "ev0.h"
     ,
-#include "pat0.h"                                     // pat rides the post text here too: the egg compiles post
-    " "                                               //   after the hatch and before the mop, and @ must be in hand
 #include "post0.h"
 );
   return ai_evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
@@ -719,9 +706,6 @@ static char const src_peg[] =
 static char const src_overlay[] =
 #include "overlay.h"
  ;
-static char const src_pat[] =
-#include "pat.h"
- ;
 static char const src_uu[] =
 #include "uu.h"
  ;
@@ -735,6 +719,8 @@ static char const src_verbs[] =
 // backend (C string concatenation; the glaze emits for the running arch only --
 // mooncc's cat joins the cross backends at its own build, and love0 bakes x64+arm64
 // so the corpus's cross-arch asserts run under both its compilers).
+// the linker half rides the same entry, in load order: elf.l wraps assembled bytes in an
+// executable, obj.l lays a relocatable .o, link.l links a set. they read holo's internals
 // the LINKER HALF IS NOT HERE, and none of the three holos carries it: love0's is
 // holo0+x64+arm64, the kernel's is holo plus its native backend, and this one matches.
 // the egg's holo exists to feed the glaze, which emits for the machine it runs on and
@@ -765,7 +751,7 @@ static char const src_glaze[] =
 // heap at all -- overlay and peg are here for consumers that open with their own (use ..).
 static struct ai_lib const libs[] = {
   {"coin", src_coin}, {"rng", src_rng}, {"q", src_q}, {"kanren", src_kanren},
-  {"overlay", src_overlay}, {"peg", src_peg}, {"pat", src_pat}, {"uu", src_uu}, {"bao", src_bao},
+  {"overlay", src_overlay}, {"peg", src_peg}, {"uu", src_uu}, {"bao", src_bao},
   {"holo", src_holo}, {"verbs", src_verbs},
 #ifdef AiGlazed
   {"glaze", src_glaze},
@@ -825,9 +811,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     " "
 #include "ev.h"
     ,
-#include "pat.h"                                        // pat rides the post text: post is written in @, and the egg
-    " "                                                 //   is the first thing this lane runs -- there is no seam to
-#include "post.h"                                       //   splice a layer into. (use 'pat) below still registers it.
+#include "post.h"                                       // the printer, and `@` with it -- post's first half
     );
   g = ai_evals_(g,
     "(use 'coin)"                                        // the library layers, all modules now, in the old eval order: coin
@@ -837,8 +821,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     "(use 'overlay)"                                     // overlay for the ev seam, whose hook lands in orth -- a module
     "(: overlay (from 'overlay)"                         //   layer cannot write it, the boot can. peg is registered above
     "   ev ((from 'overlay 'ov-hook) ev))"               //   and used by its consumers, not here.
-    "(use 'pat)"                                         // pat before uu: uu.l is written in @, and a macro reaches
-    "(use 'uu)"                                          //   a reader only once its layer is spliced
+    "(use 'uu)"                                          // uu.l is written in @, off the book's own macro table
                                                          // uu's NbE kernel: (: uu (from 'uu)) keeps the one-name surface --
     "(: uu (from 'uu))"                                  //   the corpus + an overlay reach (uu 'vof) through it
     "(use 'holo)"                                        // the crew/holo/ assembler, a post-egg language service: load + register,
@@ -862,8 +845,8 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   // takes the goal macros, which ride the layer's table and not the tablet's noms.
   // unsplice drops one link at a time, so pat and bao come off with them and go
   // straight back on: @ for every later compile, read/reads for cli.
-  for (int i = 0; i < 5; i++) g = ai_unsplice_(g);       // bao, uu, pat, overlay, kanren
-  g = ai_evals_(g, "(use 'pat)" "(use 'bao)"
+  for (int i = 0; i < 4; i++) g = ai_unsplice_(g);       // bao, uu, overlay, kanren
+  g = ai_evals_(g, "(use 'bao)"
     "(hoist 'kanren ())"                                 // \\\, &&&, |||, zz
     "(: unify (from 'kanren 'unify)  ufail (from 'kanren 'ufail)"
     "   ufail? (from 'kanren 'ufail?)  var (from 'kanren 'var)"

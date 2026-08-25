@@ -16,12 +16,9 @@
 ; the PIPELINE'S STAGES are typed: crew/moon/stage.l holds each pass's sig (input stage ->
 ; output stage), and the moon gate checks this file as data against it -- a new pass declares
 ; its sig there, and a recomposition of the strict chains is a clash naming its seam.
-; ⚠ ahead of the form: a \ param that is not a nom lowers through pat's `@`, and a macro is
-; in the chain only once its layer is spliced -- the cat's other preamble (asbook.l's holo).
 (module 'moon
 (use 'kore)
 (use 'holo) ; the assembler module: asm-text, arbytes, the linker
-(use 'pat)
 (:
    ; ⚠ FIRST binding on purpose: a plain VALUE folds EAGERLY when the baking compiler reaches
    ; a reader (a lambda resolves lazily), and the fold order is NOT textual. the t32 pair push;

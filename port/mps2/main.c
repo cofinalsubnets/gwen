@@ -259,11 +259,8 @@ static char const src_bao[] =
 // ⚠ pat is a SECOND copy of the text the egg's post already carries: the egg text is a
 // literal concatenation and cannot name an array. bao is written in @, and its `use`
 // lands after the mop, so the MODULE has to be here for the macro to be live.
-static char const src_pat[] =
-#include "pat.h"
-;
 static struct ai_lib const libs[] = {
-  {"pat", src_pat},
+  
 #ifdef BAKER_RUNE
   {"rune", src_rune},
 #else
@@ -288,8 +285,6 @@ int main(void) {
     " "
 #include "ev.h"
     ,
-#include "pat.h"                                     // ⚠ pat RIDES THE POST TEXT: post is written in @, and a
-    " "                                              //   macro reaches a reader only once it is in the book
 #include "post.h"
     );
   r = ai_evals_(r,
@@ -302,7 +297,7 @@ int main(void) {
     " "
 #include "cas.h"
 #else
-    "(use 'pat) (use 'bao)"
+    "(use 'bao)"
 #endif
     "(: _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
   if (!ai_ok(r)) {
@@ -374,8 +369,6 @@ int main(void) {
     " "
 #include "ev.h"
     ,
-#include "pat.h"                                     // ⚠ pat RIDES THE POST TEXT: post is written in @, and a
-    " "                                              //   macro reaches a reader only once it is in the book
 #include "post.h"
     );
   r = ai_evals_(r,
