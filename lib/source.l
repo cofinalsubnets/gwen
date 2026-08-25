@@ -212,27 +212,24 @@
    (seed-native _) (? (love-arch = "x64") 'x86_64 (love-arch = "arm64") 'aarch64 (intern love-arch))
 
    (seed-usage _)
-    (puts ("usage: love seed [-first|-self] [ARCH] [DIR]\n"
+    (puts ("usage: love seed [--self] [ARCH] [DIR]\n"
            + "  lay this binary's source under DIR (default .) and rebuild it there;\n"
            + "  the result has to BE this binary, byte for byte.\n"
            + "  ARCH    x86_64 | aarch64 | riscv64 -- an egg for that machine instead\n"
-           + "  -first  our own tools ahead of the ambient ones on PATH\n"
-           + "  -self   build with this binary's mooncc, probing for no ambient cc\n"))
+           + "  --self  build with nothing ambient: our own mooncc, our own userland\n"))
 
    (seed-lay as0)
     (: _ ((two? as0) && (src-help? <as0) ? (seed-usage 0, quit 0))
-       first? (two? as0 ? (<as0 = "-first") 0)
-       as1 (first? ? >as0 as0)
-       self? (two? as1 ? (<as1 = "-self") 0)
-       as2 (? self? >as1 as1)
+       self? (two? as0 ? (<as0 = "--self") 0)
+       as1 (self? ? >as0 as0)
        ; naming THIS machine is a NATIVE seed, fixpoint and all: the cross lane
        ; exists for a machine we are not, and the fixpoint is scoped to where the
        ; output ought to BE this binary -- which `love seed x86_64` on an x86_64
        ; box asks for exactly as much as a bare `love seed`. ⚠ the WORD is eaten
        ; either way, or the arch would go on to be read as the directory.
-       xa0 (? ((two? as2) && (seed-arch? <as2)) (seed-canon <as2) ())
+       xa0 (? ((two? as1) && (seed-arch? <as1)) (seed-canon <as1) ())
        xa (? ((nom? xa0) && (id? xa0 (seed-native 0))) () xa0)
-       as (nom? xa0 ? >as2 as2)
+       as (nom? xa0 ? >as1 as1)
        dir (two? as ? <as ".")
        _ (src-dash? dir ? (src-not-dir "seed" dir))
        r (src-lay dir)
@@ -242,20 +239,23 @@
        _ (string? exe ? 0 (src-die "can't find seed path"))
        farm (src-farm root exe)
        path ("" + getenv "PATH")
-       _ (setenv "PATH" (first? ? (farm + ":" + path) (path + ":" + farm)))
+       ; ours LAST fills the gaps only; --self puts them FIRST, so ours win wherever
+       ; we carry a tool of that name.
+       _ (setenv "PATH" (self? ? (farm + ":" + path) (path + ":" + farm)))
        env (getenv "CC")
-       amb (!self? && !first? && !(string? env) ? (src-cc $ root + "/out"))
+       amb (!self? && !(string? env) ? (src-cc $ root + "/out"))
        ; ⚠ SOMETHING HAS TO BE NAMED. The tree carries no love, so an unnamed CC is the
        ; ambient cc and nothing else -- right as make's default, wrong as this verb's
        ; answer where the probe just found no cc that works. A working ambient one is the
        ; STRONGER claim (a foreign compiler holding the scaffold is the one thing a self
-       ; build cannot say); this binary's own mooncc is the fallback, and -self asks for
-       ; it outright.
+       ; build cannot say); this binary's own mooncc is the fallback, and --self takes
+       ; it outright. Naming CC reaches any other mix: `CC="<love> mooncc" love seed`
+       ; is our compiler under an ambient userland.
        _ (string? env ? 0
           (two? amb ? (setenv "CC" <>amb) (setenv "CC" (exe + " mooncc"))))
-       ours (src-ours src-needs)
-       _ (? (two? ours)
-          (puts $ ";; using own tools: " + (src-words ours) + "\n"))
+       _ (? self? (puts ";; using own tools throughout\n")
+            (: ours (src-ours src-needs)
+               (two? ours ? (puts $ ";; using own tools: " + (src-words ours) + "\n") 0)))
        cc (? (string? env) env (two? amb) <>amb "this binary")
        _ (puts (";; seeding " + (nom? xa ? (show xa + " ") "") + "with " + cc + "\n"))
        dst (nom? xa ? (dir + "/love-" + show xa) ())
