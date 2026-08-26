@@ -10,6 +10,9 @@
 # lay_l/link_l/copy_l cats, the am.o and ocopy.l rules, and the p_obj/p_lay/p_link shapes.
 
 R := ../..
+# the shared variables, love_tu among them: a port reads the membership rather than
+# restating it, since nothing in a makefile can see that a list has grown.
+include $(R)/mk/common.mk
 p_dir = $(notdir $(CURDIR))
 o = out/$(p_dir)
 # mooncc is love's own verb (the layered bake, doc/misc/plan/one-binary.md). MOONCC is the
@@ -68,6 +71,13 @@ copy_l = $(link_l) $(R)/crew/holo/copy.l
 lay_lc  = $(subst $(R)/,,$(lay_l))
 kore_lc = $(subst $(R)/,,$(kore_l))
 be_lc   = $(subst $(R)/,,$(p_be_l))
+
+# the runtime, seven translation units deep (mk/common.mk's love_tu names them): a port
+# compiles every one under its own <x>_cc, since love.c owes the other six. love_m is the
+# object stems, love_dep what each one watches.
+love_m   = $(basename $(love_tu))
+love_dep = $(love_h) $(lib_hR) $(mc)
+love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 
 # nolibc's pure members: the libc a bare-metal seat gets, the same six the kernel takes
 # (mk/common.mk) out of the same source -- there is no second libc in this tree. A port

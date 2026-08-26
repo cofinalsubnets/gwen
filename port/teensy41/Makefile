@@ -1,9 +1,9 @@
 # Teensy 4.1 (i.MX RT1062) build -- love compiled END TO END by mooncc. `make -C
-# port/teensy41` from the project root. Every C file -- src/love.c, the am math floor, libc,
-# teensy41.c, main.c -- goes through `mooncc -t thumb2`; boot.o (the ROM-facing
-# FlexSPI/IVT/vector blocks + crt0 + the asm helpers) is laid from holo IR by mkboot.l, the
-# baked heap image by mkimg.l, tlink.l LINKS over holo's ldbare32 and ocopy.l writes the
-# .hex and .bin over holo's copy.l -- so the port owes no gas, no ld, no linker script and
+# port/teensy41` from the project root. Every C file -- the runtime's seven, the am
+# floor, libc, teensy41.c, main.c -- goes through `mooncc -t thumb2`; boot.o (the
+# ROM-facing FlexSPI/IVT/vector blocks + crt0 + the asm helpers) is laid from holo IR by
+# mkboot.l, the baked heap image by mkimg.l, tlink.l LINKS over holo's ldbare32 and
+# ocopy.l writes the .hex and .bin over holo's copy.l -- so the port owes no gas, no ld, no linker script and
 # no objcopy. No libgcc either: mooncc's thumb2 lanes are self-contained (zero __aeabi_*).
 # The one outside program left is qemu, and only to BAKE the heap image (port/mps2 runs the
 # baker; no qemu leaves the blob empty and the device egg-boots).
@@ -18,7 +18,7 @@ include ../port.mk
 
 te_cc = $(MOONCC) -t thumb2 -D ai_tco=1 -D __STDC_HOSTED__=0 -I. -Icore -Iout/lib
 
-objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(libc_o) \
+objs = $(love_o) $(R)/$(o)/am.o $(libc_o) \
   $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
   $(R)/$(o)/love-img.o
 
@@ -26,7 +26,8 @@ objs = $(R)/$(o)/love.o $(R)/$(o)/am.o $(libc_o) \
 default: teensy41
 teensy41: $(R)/$(o)/love.hex
 
-$(eval $(call p_obj,love,src/love.c,$(R)/src/love.c $(R)/src/love.h $(lib_hR) $(mc),$(te_cc)))
+$(foreach u,$(love_m),$(eval $(call p_obj,$u,src/$u.c,\
+  $(R)/src/$u.c $(love_dep),$(te_cc))))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,crew/moon/lib/nolibc/string/$m.c,\
   $(R)/crew/moon/lib/nolibc/string/$m.c $(libc_dep),$(te_cc) -Icrew/moon/include)))
 $(eval $(call p_obj,teensy41,port/teensy41/teensy41.c,teensy41.c teensy41.h $(R)/src/love.h $(mc),$(te_cc)))
