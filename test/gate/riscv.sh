@@ -33,8 +33,10 @@ mkdir -p "$d"
 p=0
 r=0
 
-# the features riscv64 has no lane for -- kept in step with ccarch.sh's riscv64 case
-unsupported="100-complex 101-vla 102-bigstruct 111-int128 117-vastruct"
+# the features riscv64 has no lane for. ⚠ TWO SPELLINGS OF ONE LIST: ccarch.sh's riscv64
+# case is the same set, and a program added to test/cc/ has to join both or this gate reads
+# a clean refusal as a broken compile. Diff them when either moves.
+unsupported="100-complex 101-vla 102-bigstruct 111-int128 117-vastruct 151-w128fuzz"
 
 for f in test/cc/*.c; do
   b=$(basename "$f" .c)
