@@ -1,0 +1,32 @@
+# svalbard's ignore list: one rule a line, read by sb's walk and by the dist cut
+# (tools/selfpack.l). a rule holding * ? [ is a glob over the whole relative path
+# and `*` crosses `/`; every other rule is a path prefix at a segment boundary.
+# the built-ins .sb .git out need no line here.
+
+# downloaded, never built
+dl
+
+# the engineering narratives, and the design record: read locally, never shipped
+doc/archive
+
+# rocq/lean build products. these sit UNDER test/proof, which the archive keeps
+# for its 14 tracked sources -- so they are globs, not a prefix.
+*.vo
+*.vok
+*.vos
+*.glob
+*.cache
+test/proof/rocq/.*.aux
+test/proof/lean/*.olean
+
+# generated proof terms: their gates lay them from the corpus on every run
+test/proof/rocq/gen.v
+test/proof/rocq/uugen.v
+test/proof/lean/uugen.lean
+
+# the clangd compilation database, written by the build
+compile_commands.json
+
+# editor and debugger leavings
+vgcore.*
+.gdb_history

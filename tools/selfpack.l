@@ -3,10 +3,13 @@
 ;   love tools/selfpack.l ARCHIVE.tar.gz TOP [STAMP [DROP..]]
 ;
 ; the ONE cutter, every world: the tree on disk is the source, checkout and
-; seed-laid tree alike. pack it under TOP (love-<ver>) -- out/ bin/ dl/ and
-; everything HIDDEN at the root (.git .sb .claude .cache .gitignore ..) are
-; the machine's and the checkout's, never the source's, doc/misc is the design
-; record rather than the product, and each DROP nom is left out by name -- with a sorted walk and every mtime pinned to STAMP, so
+; seed-laid tree alike. pack it under TOP (love-<ver>) -- everything sb ignores
+; (.sb/ignore + its built-ins, so the vcs walk and this cut read ONE list and a
+; generated file named there leaves both), plus this cut's own structural skips:
+; bin/ dl/, everything HIDDEN at the root (.git .sb .claude .cache .gitignore ..)
+; is the machine's and the checkout's and never the source's, doc/misc is the
+; design record rather than the product, and each DROP nom is left out by name
+; -- with a sorted walk and every mtime pinned to STAMP, so
 ; the same files answer the same bytes wherever they sit. test_distboot
 ; holds a re-cut to the byte.
 ;
@@ -28,6 +31,7 @@
 ; that was written and never the pass that only looked.
 (use 'tar)
 (use 'gz)
+(use 'sb)   ; for the ignore law only -- .sb/ignore is sb's file
 
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)
    (sp-read p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))
@@ -35,24 +39,21 @@
                      _ (? q 0 (sp-die ("cannot write " + p)))
                      _ (say q s)
                      (close q))
-   sp-skip '("out" "bin" "dl")
-   ; ..and the ones matched WHOLE, for a directory that sits inside one the archive
-   ; keeps. doc/misc is the tree's design record and its sketches; doc/ itself stays,
-   ; because the man pages are written in doc/{love,cook,lush}.md and `make install`
-   ; in an unpacked release generates all three from them.
-   sp-inner '("doc/misc")
-   (sp-top nom) (: n (tally nom)
-                   (go i) (? (n <= i) nom (nom i = 47) (snip nom 0 i) (go (i + 1)))
-                   (go 0))
-   ; hidden at the root = the machine's, not the source's
-   (sp-hid? nom) (: seg (sp-top nom) (tally seg && (peep seg 0 0 = 46)))
-   ; keep a nom unless its top segment is a build product or hidden, or the whole
-   ; nom is one of sp-inner or a DROP. handed to the WALK, not run after it: what
-   ; the archive will not carry is never read (out/ and dl/ are gigabytes on a
-   ; build box, and a rejected directory is never descended into at all).
-   (sp-keep? drops nom)
-    (! (member? (sp-top nom) sp-skip || sp-hid? nom
-        || member? nom sp-inner || member? nom drops))
+   ; THE RULES, AND SB OWNS THEM: .sb/ignore plus sb's own built-ins, so the vcs
+   ; walk and the dist cut cannot disagree about what this tree is -- one law, one
+   ; file, and a generated file named there drops out of BOTH. then the cut's own
+   ; structural skips, which no ignore file may take away: `.*` is hidden at the
+   ; ROOT, the machine's and the checkout's and never the source's; doc/misc is
+   ; the design record rather than the product (doc/ itself stays -- the man pages
+   ; are written in doc/{love,cook,lush}.md and `make install` in an unpacked
+   ; release generates all three from them); and each DROP nom by name.
+   sp-own '("bin" "dl" "doc/misc" ".*")
+   sp-ign? (from 'sb 'ign?)
+   (sp-rules drops) (((from 'sb 'igs) 0) + sp-own + drops)
+   ; handed to the WALK, not run after it: what the archive will not carry is never
+   ; read (out/ and dl/ are gigabytes on a build box, and a rejected directory is
+   ; never descended into at all).
+   (sp-keep? rules nom) (! (sp-ign? nom rules))
    ; re-home the kept entries under TOP -- the walk is already sorted, so order
    ; is preserved.
    (sp-take es top acc)
@@ -71,8 +72,8 @@
        (tar-level (root >< (te >< (sp-take >es top ()))) stamp))
 
    ; the cut that reads: pack, hash, and write when the content actually moved.
-   (sp-cut arch side top stamp drops)
-    (: g (tar-gather? (sp-keep? drops) "." "")
+   (sp-cut arch side top stamp rules)
+    (: g (tar-gather? (sp-keep? rules) "." "")
        _ (? g 0 (sp-die "cannot read the tree"))
        lev (sp-lev <>g top stamp)
        a (tar-pack lev)
@@ -112,11 +113,12 @@
        ; ⚠ a () is not an answer. a torn read (a file that moved under the walk) or
        ; a nom too long for ustar answers one, and both fall through to the cut,
        ; which reads each file once and so cannot disagree with itself.
-       t (tar-thin? (sp-keep? drops) "." "")
+       rules (sp-rules drops)
+       t (tar-thin? (sp-keep? rules) "." "")
        _ (? t 0 (sp-die "cannot read the tree"))
        hq (tar-hash (sp-lev <>t top stamp))
        old (sp-read side)
        quiet ((string? hq) && (two? old) && (= (<(>old)) hq) && (two? (stat arch)))
-       (? quiet 0 (sp-cut arch side top stamp drops)))
+       (? quiet 0 (sp-cut arch side top stamp rules)))
 
    (sp-main >argv))

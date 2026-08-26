@@ -60,15 +60,25 @@
                              (go >m))
                    (go >f))
 
-   ; --- ignores: path prefixes; a line in .sb/ignore adds to the built-ins ---
+   ; --- ignores: one rule a line in .sb/ignore, over the built-ins. a rule holding
+   ;     * ? [ is a GLOB against the WHOLE relative path -- `*` crosses `/`, so
+   ;     `*.vo` catches one at any depth and wants no basename rule of its own.
+   ;     every other rule is a path PREFIX at a SEGMENT boundary: `out` takes out
+   ;     and out/host/love, never output. blank lines and # comments are skipped.
+   ;     ⚠ tools/selfpack.l reads these too, so the dist cut and the walk agree.
    igs0 '(".sb" ".git" "out")
+   ig-glob? (from 'glob 'anyglob)
+   ig-match (from 'glob 'match)
+   (ig-live? l) ((0 < tally l) && !((l 0) = 35))
    (igs _) (: t (look ".sb/ignore")
-                 (? (two? t) (igs0 + filter (\ l (0 < tally l)) (lines <>t))
+                 (? (two? t) (igs0 + filter ig-live? (lines <>t))
                     igs0))
-   (ign? p igs) (? !(two? igs) 0
-                      (: g <igs n (tally g)
-                         (? ((p = g) || (((n + 1) < tally p) && (snip p 0 (n + 1) = (g + "/"))))
-                            1 (ign? p >igs))))
+   (ign1? p g) (: n (tally g)
+                  (? (ig-glob? g) (ig-match g p)
+                     (p = g) 1
+                     (((n + 1) < tally p) && (snip p 0 (n + 1) = (g + "/"))) 1
+                     0))
+   (ign? p igs) (? !(two? igs) 0 (ign1? p <igs) 1 (ign? p >igs))
 
    ; --- the walk: every regular file under the root, paths relative ---
    (walk dir igs acc)
