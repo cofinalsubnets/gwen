@@ -5,12 +5,13 @@
 ; instead of arriving as a hang in somebody's test six months later.
 ;
 ; the hooks it watches are the four that actually stop the world -- ai_sleep,
-; ai_wait_fds, ai_fd_drain, and love.c's own wait_one shim. every call to one of
+; ai_wait_fds, ai_fd_drain, and the runtime's own wait_one shim. every call to one of
 ; them, in every tracked .c file, must name a function on the roster below.
+; the roster keys on the FILE, so a function that moves TUs moves its entry.
 ;
 ; ⚠ IT READS THE C AS WRITTEN, not the binary, and that is the whole design.
-; every io_* and z* function in love.c is `static`, so the compiler inlines them
-; and their names are gone from the ELF; a call graph read off the image would
+; every io_* and z* function in the runtime is `static`, so the compiler inlines
+; them and their names are gone from the ELF; a call graph read off the image would
 ; answer GREEN because it could not find the caller, which is the worst answer a
 ; gate can give. vmret can disassemble because lvm_* aps are addressed and survive.
 ;
@@ -27,8 +28,8 @@
 ;    stop writing about it. block comments are not stripped; nothing needs it.
 ;
 ; ⚠ WHAT IT DOES NOT SEE, so nobody reads it as more than it is: the four hooks by
-; NAME, never blocking in general. a raw read(2) in love.c, a fresh primitive, or a
-; hook reached through a function pointer all walk past it. it says "the named waits
+; NAME, never blocking in general. a raw read(2) in the runtime, a fresh primitive,
+; or a hook through a function pointer all walk past it. it says "the named waits
 ; are where we put them", which is the thing that regresses.
 ;
 ; Usage: love tools/waits.l FILE ..   (paths as the roster spells them: repo-relative)
@@ -42,22 +43,22 @@
    ; the three love.h CONTRACT symbols, whose bodies are the wait itself: a
    ; frontend's `ai_wait_fds` reaching ai_sleep is what a wait hook IS, so the
    ; family's own implementations are exempt and only callers from outside it
-   ; have to answer. love.c's wait_one is NOT one of these -- it is ordinary
+   ; have to answer. the runtime's wait_one is NOT one of these -- it is ordinary
    ; code that happens to wait, so it answers on the roster like anyone else.
    (impl? nm) (any (\ h (h = nm)) ["ai_sleep" "ai_wait_fds" "ai_fd_drain"])
 
    ; --- THE ROSTER: (file function hook why) ----------------------------------
    ; every wait in the tree, and the sentence that earns it.
    roster
-   [["src/love.c" "wait_one" "ai_wait_fds"
+   [["src/ev.c" "wait_one" "ai_wait_fds"
      "the scheduler's one-fd shim -- an lvm_ frame may hold no scratch"]
-    ["src/love.c" "lvm_yield_sw_mono" "wait_one"
+    ["src/ev.c" "lvm_yield_sw_mono" "wait_one"
      "the monotask scheduler, parked on one fd"]
-    ["src/love.c" "lvm_yield_sw_mono" "ai_sleep"
+    ["src/ev.c" "lvm_yield_sw_mono" "ai_sleep"
      "the monotask scheduler, a timer and no fd"]
-    ["src/love.c" "yield_sw_wait" "ai_wait_fds"
+    ["src/ev.c" "yield_sw_wait" "ai_wait_fds"
      "THE wait: every parked task and the nearest timer, one call"]
-    ["src/love.c" "io_close" "ai_fd_drain"
+    ["src/io.c" "io_close" "ai_fd_drain"
      "⚠ the finalizer: a dying port's unsent run. runs inside gc, where nothing can park -- the write side's one remaining unbounded wait"]
     ["port/teensy41/main.c" "main" "ai_sleep"
      "the panic blink after a fatal shell exit -- nothing runs after it"]]
@@ -96,18 +97,24 @@
                 (go 0 ()))
 
    ; --- naming the enclosing function ------------------------------------------
-   ; a top-level definition line: column 0, has a paren, is not a preprocessor
-   ; line / comment / brace, and either opens a body or does not end in `;` --
-   ; ⚠ the `{` half is load-bearing. love.c puts the first statement on the
+   ; a top-level line: column 0, has a paren, and is not a preprocessor line /
+   ; comment / brace. it either DEFINES (a header) or DECLARES (a prototype).
+   (top? s) (: n (tally s)
+               c (? (n < 1) 32 (s 0))
+               (&& (n > 0)
+                (&& (! (blank? c))
+                 (&& (! (any (\ x (x = c)) [35 47 42 125 41]))
+                     (inch? s 40)))))
+   ; ⚠ the `{` half is load-bearing. the runtime puts the first statement on the
    ; header line (`static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = ..;`), so
    ; a bare "ends in a semicolon means prototype" test throws away the scheduler.
    (header? s) (: n (tally s)
-                  c (? (n < 1) 32 (s 0))
-                  (&& (n > 0)
-                   (&& (! (blank? c))
-                    (&& (! (any (\ x (x = c)) [35 47 42 125 41]))
-                     (&& (inch? s 40)
-                         (|| (inch? s 123) (! ((s (n - 1)) = 59))))))))
+                  (&& (top? s) (|| (inch? s 123) (! ((s (n - 1)) = 59)))))
+   ; ..and the other half declares. a prototype names a function and CALLS none:
+   ; `static void wait_one(int fd, int events, uintptr_t ms);` is a wait's spelling,
+   ; not a wait. the seam between the runtime's TUs is a block of these, so a scan
+   ; that read them as calls would redden on the declaration of every hook.
+   (proto? s) (&& (top? s) (! (header? s)))
    ; a name that is a qualifier or a keyword, never the function being defined
    nonfn ["__attribute__" "if" "while" "for" "switch" "return" "sizeof" "defined"]
    (ident-from s i) (: n (tally s)
@@ -147,7 +154,7 @@
               hdr (header? line)
               fn2 (? hdr (hdr-name line) fn)
               ; a definition line names its own function, and that is not a call
-              hits (? (impl? fn2) ()
+              hits (? (|| (impl? fn2) (proto? line)) ()
                       (filter (\ c (&& (hook? c) (! (&& hdr (c = fn2))))) (calls line)))
               acc2 (foldl (\ a c (: e [path fn2 c n]
                                     (? (seen? (map key a) (key e)) a (link e a))))
