@@ -12,10 +12,13 @@
 # only the native one), which mksys entry lays the syscall leaf, and the runner. A
 # fourth target is a case here, not another copy.
 #
-# make owns the dependency graph and the corpus list; this owns the procedure.
-# NOT set -e: the corpus run captures $? for its own failure message.
+# make owns the dependency graph, the corpus list AND the source lanes; this owns the
+# procedure. NOT set -e: the corpus run captures $? for its own failure message.
+# ⚠ the lanes arrive in the environment because the corpus already has the variadic
+# tail -- gate_love_c / gate_host_c, mk/common.mk's own. one folder, named lanes: a
+# gate that globs a directory instead is a second authority on what the binary is.
 #
-# usage: raw.sh TARGET OUTDIR LOVE CORPUS.l ..
+# usage: gate_love_c=.. gate_host_c=.. raw.sh TARGET OUTDIR LOVE CORPUS.l ..
 set -u
 
 target=$1
@@ -59,11 +62,9 @@ rm -f "$d"/*.o
 # shellcheck disable=SC2086  # $tflag is a word pair or empty, deliberately unquoted
 moonc() { LOVE_NO_IMAGE= "$m" mooncc $tflag "$@"; }
 
-moonc -D ai_tco=1 -I"$ho" -I. -Icore -Iout/lib -c src/love.c "$d/love.o" || fail "mooncc $tflag -c src/love.c"
-
-for f in host/*.c; do
+for f in $gate_love_c $gate_host_c; do
   b=$(basename "$f" .c)
-  moonc -D ai_tco=1 -I"$ho" -I. -Icore -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
+  moonc -D ai_tco=1 -I"$ho" -I. -Isrc -Iout/lib -c "$f" "$d/$b.o" || fail "mooncc $tflag -c $f"
 done
 
 # nolibc is NOT compiled here: the link below owes its symbols and the driver's
@@ -102,6 +103,6 @@ tail -1 "$ho/$out"
 [ $s -eq 0 ] && grep -q "tests pass" "$ho/$out" || fail "corpus (exit $s)"
 
 case $target in
-  x64) echo "test_raw: src/love.c + host/*.c + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes" ;;
+  x64) echo "test_raw: the src/*.c lanes + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes" ;;
   *)   echo "$name: the gcc-free $pretty love -- mooncc objects, $mksys, our linker, corpus under qemu" ;;
 esac

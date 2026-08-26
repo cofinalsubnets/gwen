@@ -52,10 +52,14 @@ LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\")
 
 # ...and rebuilds every TU with it, natively, in the order make links them
 moon1() { "$qemu" "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
-moon1 -D ai_tco="$tco" -D AiHaveVersionH -I"$ho" -I. -Icore -Iout/lib -c src/love.c "$d/love.o" || fail "love1 mooncc -c src/love.c"
-for f in host/*.c; do
+for f in $gate_love_c; do
   b=$(basename "$f" .c)
-  moon1 -D ai_tco="$tco" -I"$ho" -I. -Icore -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
+  moon1 -D ai_tco="$tco" -D AiHaveVersionH -I"$ho" -I. -Isrc -Iout/lib -c "$f" "$d/$b.o" \
+    || fail "love1 mooncc -c $f"
+done
+for f in $gate_host_c; do
+  b=$(basename "$f" .c)
+  moon1 -D ai_tco="$tco" -I"$ho" -I. -Isrc -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
 done
 for f in crew/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
@@ -65,15 +69,14 @@ LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -n -e "((from 'moon '$m
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 
 # the kernel the artifact carries (src/kernel.mk's $(xkart_o)), rebuilt native
-# and laid the same way. an arch with no free/<a>/ carries none, which is the
-# test -d -- the makefile draws that line with the same wildcard.
-if test -d "free/$xa"; then
-  kinc="-I$ho -I. -Icore -Iout/lib -Ifree -Ifree/$xa -Icrew/quay -Icrew/moon/include"
-  for f in src/kmain.c src/blk.c src/sys.c free/$xa/*.c crew/quay/paint.c \
+# and laid the same way. an arch with no seat carries none, and $gate_arch_c is
+# empty there -- the makefile draws that line with its own wildcard.
+if [ -n "$gate_arch_c" ]; then
+  kinc="-I$ho -I. -Isrc -Iout/lib -Icrew/quay -Icrew/moon/include"
+  for f in src/kmain.c src/blk.c src/sys.c $gate_arch_c crew/quay/paint.c \
            crew/quay/cga_8x8.c crew/quay/moderndos_8x16.c; do
     b=$(basename "$f" .c)
     case "$f" in
-      free/$xa/*)  o=$d/k_${xa}_$b.o ;;
       crew/quay/*) o=$d/k_q_$b.o ;;
       *)           o=$d/k_$b.o ;;
     esac

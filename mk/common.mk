@@ -78,12 +78,17 @@ love_h = $R/src/love.h $R/src/love_int.h $R/src/kinds.h $R/src/nifs.h $R/src/mx.
 # love.c broke into TUs so the biggest one is not the whole build's critical path;
 # src/love_int.h is what they share. the order here is the link's, not a dependency.
 love_tu = love.c ev.c io.c map.c snap.c num.c arr.c
-love_c = $(patsubst %,$R/src/%,$(love_tu)) $R/crew/moon/lib/math/am.c
+love_tu_c = $(patsubst %,$R/src/%,$(love_tu))
+love_c = $(love_tu_c) $R/crew/moon/lib/math/am.c
 # src/ is ONE folder, so these name the lanes a directory used to: the metal seat
 # (src/kernel.mk builds them) and the per-ISA files, which `a` picks by prefix.
 kernel_tu = kmain.c sys.c blk.c doom.c
 kernel_c = $(patsubst %,$R/src/%,$(kernel_tu))
 arch_c = $(wildcard $R/src/x86_64_*.c) $(wildcard $R/src/aarch64_*.c) $(wildcard $R/src/uefi_*.c)
+# ..and the per-ISA set ONE machine's build takes. the rebuild gates link what the
+# artifact links, and that is the host's arch alone -- empty on an arch with no seat,
+# which is what those gates read to skip their kernel half.
+hosta_c = $(wildcard $R/src/$(hosta)_*.c)
 # ..and the host lane is the remainder, still a glob: drop a src/<app>.c in and its
 # nifs register with no rule edit, exactly as the old host/*.c wildcard promised.
 host_c = $(filter-out $(love_c) $(kernel_c) $(arch_c),$(wildcard $R/src/*.c))

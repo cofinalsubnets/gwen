@@ -225,7 +225,7 @@ test_embed_boards: host
 	     || { echo "FAIL port/playdate does not link"; exit 1; }; \
 	 else echo "  (playdate link skipped: needs arm-none-eabi + PLAYDATE_SDK_PATH)"; fi
 	@echo "test_embed_boards: the secondary boards build (any skip is named above)"
-# Host-nif smoke tests: host/*.c nifs link into `love` but NOT love0, so they live under
+# Host-nif smoke tests: the host lane's nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; a cold lane opts in via hostnif_cold.
 hostnif_tests = test/host/rdiff.l test/host/loader.l test/host/gcpause.l test/host/run.l test/host/pty.l test/host/net.l test/host/lux.l test/host/luxui.l test/host/baoedit.l test/host/baotest.l test/host/init.l test/host/fs.l test/host/sh.l test/host/cb.l test/host/berth.l test/host/wharf.l test/host/limn.l test/host/manifest.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/rune.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/serve.l test/host/sbhttp.l test/host/json.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/fat.l test/host/tls.l test/host/tlsc.l test/host/gz.l test/host/gzc.l test/host/hash.l test/host/modnif.l
@@ -520,17 +520,15 @@ test_libc: host
 # right, never whether OUR compiler builds it -- and float BITS are where codegen hides.
 test_ulp: host
 	@sh test/gate/ulp.sh $(ho) $m
-# The rung-2 self-host gate: compile src/love.c AND every host/*.c with mooncc (gcc/clang only
+# The rung-2 self-host gate: compile the love AND host lanes with mooncc (gcc/clang only
 # LINKS), then run the whole corpus through the all-mooncc binary -- the compiler compiles
 # the runtime it runs on. OPT-IN; x86-64 only; the binary carries no image, so a fresh egg.
 test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
 	@if [ "`uname -m`" != x86_64 ]; then echo "test_selfhost: x86-64 only, skipped on `uname -m`"; exit 0; fi; \
 	  d=$(ho)/selfhost; mkdir -p $$d; rm -f $$d/*.o; \
-	  $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c src/love.c $$d/love.o \
-	    || { echo "FAIL mooncc -c src/love.c"; exit 1; }; \
-	  for f in host/*.c; do b=`basename $$f .c`; \
-	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Icore -Iout/lib -c $$f $$d/$$b.o \
+	  for f in $(love_tu_c) $(host_c); do b=`basename $$f .c`; \
+	    $(moonrun) -D ai_tco=$(tco) -I$(ho) -I. -Isrc -Iout/lib -c $$f $$d/$$b.o \
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  $(moonrun) -Icrew/moon/include -c crew/moon/lib/math/am.c $$d/am.o \
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
@@ -541,12 +539,13 @@ test_selfhost: host
 	  tail -1 $(ho)/.test_selfhost.out; \
 	  { [ $$s -eq 0 ] && grep -q "tests pass" $(ho)/.test_selfhost.out; } \
 	    || { echo "FAIL all-mooncc corpus (exit $$s)"; exit 1; }; \
-	  echo "test_selfhost: src/love.c + all `ls host/*.c | wc -l` host/*.c built by mooncc, corpus passes"
+	  echo "test_selfhost: all `echo $(love_tu_c) $(host_c) | wc -w` src/*.c built by mooncc, corpus passes"
 # The rung-4 gate: the GCC-FREE fixpoint. Everything test_selfhost builds PLUS our own raw
 # libc (nolibc.c), math floor (am.c) and sys.o, bound by OUR OWN static linker -- no gcc,
 # no glibc, no ld anywhere. In test_slow, x86-64 only; supersedes test_selfhost.
 test_raw: host
-	@sh test/gate/raw.sh x64 $(ho) $m $t
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
+	  sh test/gate/raw.sh x64 $(ho) $m $t
 # test_hdiff -- the FOREIGN-CC differential at the host (KCC's twin one level up). gcc and
 # clang each link the whole vm at ai_tco=1, which the default mooncc lane never does, and
 # each must build, answer, pass the quick host suite and come out ret-free. NOT the corpus
@@ -559,7 +558,7 @@ test_hdiff: host
 # stay loud (-shared usage-refuses, -nostdlib names its undefined references). In test_slow.
 test_drv: host
 	@sh test/gate/drv.sh $(ho) $(ai_cflags)
-# the kernel's inline-asm SEAM: free/<a>/asmops.h says every
+# the kernel's inline-asm SEAM: src/<a>_asmops.h says every
 # privileged instruction twice -- holo's neutral template for mooncc, GNU's for clang -- so
 # the gate compiles one probe with both and compares op by op. Skips without llvm-objdump.
 test_asmops: host
@@ -575,11 +574,12 @@ test_vec: host
 # THE FIXPOINT: the default love IS mooncc-built, so this gate has it rebuild ITSELF --
 # love1 (love0's lane, relinked) bakes its own compiler image, recompiles every TU, links
 # love2, and the two must be byte-identical. A headline invariant -- but it runs in
-# test_extra only, so a deleted host/*.c goes green through test_slow either way.
+# test_extra only, so a deleted src/*.c goes green through test_slow either way.
 # $(moon_o) $(kart_o) is the link list, the artifact's own: the gate is handed make's
 # objects, it never globs the odir, and it links no less than `make` does.
 test_fixpoint: host $(love0) out/host/mooncc0.image
-	@sh test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_o) $(kart_o)
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
+	  sh test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_o) $(kart_o)
 # THE CROSS-MACHINE FIXPOINT, in effigy (doc/misc/plan/seed-universal.md U0): the x-lane's
 # twin objects link love1, then love1 under qemu-user rebuilds itself natively and must
 # answer the same bytes -- the twin machine reproducing this machine's, on one box.
@@ -587,7 +587,8 @@ test_fixpoint: host $(love0) out/host/mooncc0.image
 # or `make xa=riscv64 test_xfixpoint` for the other twin. skips loudly without qemu.
 .PHONY: test_xfixpoint
 test_xfixpoint: $(xobjs) $(xkart_o) $(love0) out/host/mooncc0.image
-	@sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xtgt) $(xmksys) $(tco) $(xd) $(xa) $(xobjs) $(xkart_o)
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(wildcard $R/src/$(xa)_*.c)' \
+	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xtgt) $(xmksys) $(tco) $(xd) $(xa) $(xobjs) $(xkart_o)
 # test_fat -- the fat container (seed-universal U1): the one file answers through
 # its prefix + cache on the native machine, the pack is byte-deterministic, and
 # the foreign member answers under qemu-user. opt-in by name, like the x-lane.
@@ -627,12 +628,14 @@ test_riscv: host
 # leaf, OUR linker binds, qemu-riscv64 runs the whole corpus over the fresh egg. The riscv
 # backend loads into the sealed holo module at runtime for mksys. Opt-in; skips w/o qemu.
 test_raw_riscv: host out/lib/riscv.h
-	@sh test/gate/raw.sh riscv64 $(ho) $m $t
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
+	  sh test/gate/raw.sh riscv64 $(ho) $m $t
 # test_raw's aarch64 twin: mooncc -t arm64 lays every object, mksys-arm64 the syscall leaf,
 # OUR linker binds, qemu-user runs the WHOLE C-sorted $t over the fresh egg. ⚠ $t must stay
 # in C/byte order: test/uu.l defines the kernel test/uukindlaw.l calls. Opt-in; needs qemu.
 test_raw_arm64: host
-	@sh test/gate/raw.sh arm64 $(ho) $m $t
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
+	  sh test/gate/raw.sh arm64 $(ho) $m $t
 # test_thumb1 -- the ELF32/EM_ARM object writer (crew/holo/obj.l objsecs32) end to end and the
 # 32-bit data model: a cross-object BL, the inline v6-M soft divide/rem, a global via the
 # literal-pool `la`, a gcc-built pointer-bearing struct mooncc reads a field back from, and a

@@ -8,10 +8,12 @@
 # half in a single compare (the DDC leg proper adds a foreign-compiled love0;
 # the 2026-07-27 audit ran that lane green).
 #
-# make owns the dependency graph (the moon_o objects + mooncc0.image exist);
-# this owns the procedure. NOT set -e: the compile loop reports its own file.
+# make owns the dependency graph (the moon_o objects + mooncc0.image exist) AND the
+# source lanes; this owns the procedure. NOT set -e: the compile loop reports its own
+# file. ⚠ the lanes arrive in the environment because the object list already has the
+# variadic tail -- gate_love_c / gate_host_c / gate_arch_c, mk/common.mk's own.
 #
-# usage: fixpoint.sh OUTDIR LOVE0 HOSTA OBJ...
+# usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. fixpoint.sh OUTDIR LOVE0 HOSTA OBJ...
 set -u
 
 ho=$1
@@ -40,7 +42,7 @@ rm -f "$d"/*.o "$d"/love1 "$d"/love2 "$d"/mooncc1.image
 
 # love1: relink the generation make already compiled (love0's lane, byte-cheap).
 # ⚠ the list arrives FROM make ($(moon_o) $(kart_o), source-derived) and is never globbed out of
-# the odir: a deleted host/*.c leaves its .o sitting there, and a glob relinks the ghost --
+# the odir: a deleted src/*.c leaves its .o sitting there, and a glob relinks the ghost --
 # love1 carrying a TU love2 never compiles, which reads as a broken fixpoint.
 moon0() { "$love0" wake "$ho/mooncc0.image" mooncc "$@"; }
 moon0 -pie "$@" -o "$d/love1" || fail "love1 relink"
@@ -57,10 +59,14 @@ moon1() { "$d/love1" wake "$d/mooncc1.image" mooncc "$@"; }
 # order: -D AiHaveVersionH is what puts the version id in this TU, and love1 was linked
 # from make's object. Drop it here and love2 carries "unknown" -- the compare fails at the
 # string, naming a broken fixpoint where the only difference is a build flag.
-moon1 -D ai_tco=1 -D AiHaveVersionH -I"$ho" -I. -Icore -Iout/lib -c src/love.c "$d/love.o" || fail "love1 mooncc -c src/love.c"
-for f in host/*.c; do
+for f in $gate_love_c; do
   b=$(basename "$f" .c)
-  moon1 -D ai_tco=1 -I"$ho" -I. -Icore -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
+  moon1 -D ai_tco=1 -D AiHaveVersionH -I"$ho" -I. -Isrc -Iout/lib -c "$f" "$d/$b.o" \
+    || fail "love1 mooncc -c $f"
+done
+for f in $gate_host_c; do
+  b=$(basename "$f" .c)
+  moon1 -D ai_tco=1 -I"$ho" -I. -Isrc -Iout/lib -c "$f" "$d/host_$b.o" || fail "love1 mooncc -c $f"
 done
 # nolibc rides the implicit runtime, as in raw.sh -- pulled member by need.
 for f in crew/moon/lib/math/*.c; do
@@ -73,14 +79,15 @@ test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 # the kernel the artifact carries (src/kernel.mk's $(kart_o)): the link takes it,
 # so the rebuild owes it. ⚠ a gate that links what make links and compiles less
 # still answers love1 == love2 -- it just answers it about a shorter binary than
-# anyone ships. an arch with no free/<a>/ carries none, which is the test -d.
-if test -d "free/$ha"; then
-  kinc="-I$ho -I. -Icore -Iout/lib -Ifree -Ifree/$ha -Icrew/quay -Icrew/moon/include"
-  for f in src/kmain.c src/blk.c src/sys.c free/$ha/*.c crew/quay/paint.c \
+# anyone ships. an arch with no seat carries none, and $gate_arch_c is empty there.
+# ⚠ the arch is in the FILENAME now (src/x86_64_arch.c), so k_$b.o already spells
+# what make spells -- the object names have to match, love2 links them by basename.
+if [ -n "$gate_arch_c" ]; then
+  kinc="-I$ho -I. -Isrc -Iout/lib -Icrew/quay -Icrew/moon/include"
+  for f in src/kmain.c src/blk.c src/sys.c $gate_arch_c crew/quay/paint.c \
            crew/quay/cga_8x8.c crew/quay/moderndos_8x16.c; do
     b=$(basename "$f" .c)
     case "$f" in
-      free/$ha/*)  o=$d/k_${ha}_$b.o ;;
       crew/quay/*) o=$d/k_q_$b.o ;;
       *)           o=$d/k_$b.o ;;
     esac
