@@ -262,7 +262,8 @@ struct ai *gxr(struct ai *g) {
 // ============================================================================
 // gc
 // ============================================================================
-lvm(lvm_gc, uintptr_t n) {
+lvm(lvm_gc) {
+ uintptr_t n = (uintptr_t) g->b;                // Have's ask, left in the scratch slot
  Pack(g);
  if (!ai_ok(g = ai_please(g, n))) return Ap(_lvm_ghelp, g);
  return Resume(); }
@@ -1144,8 +1145,8 @@ lvm(lvm_link) {
 
 #define avm_slow(op, vop, ovf, fexpr) lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
- if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop); \
- if (twinp(a) || twinp(b)) return Ap(lvm_twin_bin, g, vop); \
+ if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_vbin, g); } \
+ if (twinp(a) || twinp(b)) { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_twin_bin, g); } \
  if (!isnum(a) || !isnum(b)) ai_musttail return Push(ZeroPoint); \
  if (gemp(a) || gemp(b)) { word _res; Have(box_req); \
   ai_flo_t ad = toflo(a), bd = toflo(b); \
@@ -1160,8 +1161,8 @@ lvm(lvm_link) {
  ai_musttail return Resume(); }
 #define avm_slowdiv(op, vop, c_op, fexpr) lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
- if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop); \
- if (twinp(a) || twinp(b)) return Ap(lvm_twin_bin, g, vop); \
+ if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_vbin, g); } \
+ if (twinp(a) || twinp(b)) { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_twin_bin, g); } \
  if (!isnum(a) || !isnum(b)) ai_musttail return Push(ZeroPoint); \
  if (gemp(a) || gemp(b) || b == zero) { word _res; Have(box_req); \
   ai_flo_t ad = toflo(a), bd = toflo(b); \
@@ -1170,7 +1171,7 @@ lvm(lvm_link) {
  if (!bigp(a) && !bigp(b)) { intptr_t av = toint(a), bv = toint(b); \
   if (!(av == INTPTR_MIN && bv == -1)) { word _res; Have(box_req); emit_int(_res, av c_op bv); \
    ai_musttail return Push(_res); } } \
- return Ap(lvm_bdiv_start, g, vop); }   /* big // and % run yieldable (resumable long division) */
+ { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_bdiv_start, g); } }   /* big // and % run yieldable (resumable long division) */
 // a bare mint (() too) is not a number, so a numeric lane has nothing to compute with
 // and answers (), either side: - / // % & | ^ << >>. the sequence ops keep their own
 // band rules and never come here -- () is the unit of + (joining nothing on) and the
@@ -1191,8 +1192,8 @@ avm_slowdiv(rem, vop_rem, %, ai_fmod(ad, bd))    // NaN on bd == 0
 // (the truncating quotient is `//`)
 lvm(lvm_quotn) {
  word a = Sp[0], b = Sp[1];
- if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_quot);
- if (twinp(a) || twinp(b)) return Ap(lvm_twin_bin, g, vop_quot);
+ if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_quot); ai_musttail return Ap(lvm_vbin, g); }
+ if (twinp(a) || twinp(b)) { g->b = (ai_word) (vop_quot); ai_musttail return Ap(lvm_twin_bin, g); }
  if (!isnum(a) || !isnum(b)) ai_musttail return Push(ZeroPoint);
  if (gemp(a) || gemp(b) || b == zero) { word _res; Have(box_req);   // ±inf/NaN on ÷0
   ai_flo_t ad = toflo(a), bd = toflo(b);

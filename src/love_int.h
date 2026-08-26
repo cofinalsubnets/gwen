@@ -130,6 +130,9 @@ _Static_assert(-1 >> 1 == -1, "sign extended shift");
 // (evac_tray); O elements route through the promoting scalar dispatch (lvm_obin),
 // which is what makes a bignum array add exactly instead of wrapping.
 enum ai_tray_type { ai_Z, ai_R, ai_C, ai_O, };
+// the math lvms' function argument, carried in g->b like every other extra arg
+typedef ai_flo_t (*ai_flo1)(ai_flo_t);
+typedef ai_flo_t (*ai_flo2)(ai_flo_t, ai_flo_t);
 // elementwise dyadic opcodes for lvm_vbin. codes >= vop_lt produce a 0/1 mask
 // (vop_eq is table-shared machinery only -- tray_eq answers `=` as a boolean).
 // vop_quot is `/` (true division), vop_fquot `//` (truncating); both in the arith group.
@@ -189,13 +192,13 @@ lvm_t lvm_kcall,
  lvm_resume,      // the walkable call-out resume: jump blob-base + untag(offset) after delivering the result -- the frame carries an odd charm + an out-of-pool code address, so a GC (gen_grow included) with a call-out pending walks it clean (the retB stack-interior pointer is retired)
  lvm_calloutdrive, lvm_calloutresume;   // the drive addresses as fixnums (the glaze emitter bakes them as `li Ip` immediates)
 // these carry extra operands, so they are declared apart from the plain lvm_t list
-lvm(lvm_vbin, int);   // the elementwise/broadcast dyadic engine (vop selects the op)
-lvm(lvm_bdiv_start, int);   // resumable long-division entry; the int is vop (vop_fquot / vop_rem)
-lvm(lvm_vmap1, ai_flo_t (*)(ai_flo_t));            // monadic math fn elementwise, e.g. (sin a-tray)
-lvm(lvm_vmap2, ai_flo_t (*)(ai_flo_t, ai_flo_t));  // ..dyadic with broadcast, e.g. (pow a-tray a-tray)
-lvm(lvm_twin_bin, int);   // complex scalar lane; vop selects add/sub/mul/quot (rem -> zero)
-lvm(lvm_cbin, int);   // complex-array lane: vbin's broadcast in the complex domain; `=` -> mask, ordering/% -> zero
-lvm(lvm_obin, int);   // object-array lane: each element op runs the promoting scalar dispatch
+lvm(lvm_vbin);   // the elementwise/broadcast dyadic engine (the vop rides g->b)
+lvm(lvm_bdiv_start);   // resumable long-division entry; the vop (vop_fquot / vop_rem) rides g->b
+lvm(lvm_vmap1);            // monadic math fn elementwise, e.g. (sin a-tray)
+lvm(lvm_vmap2);  // ..dyadic with broadcast, e.g. (pow a-tray a-tray)
+lvm(lvm_twin_bin);   // complex scalar lane; the vop selects add/sub/mul/quot (rem -> zero)
+lvm(lvm_cbin);   // complex-array lane: vbin's broadcast in the complex domain; `=` -> mask, ordering/% -> zero
+lvm(lvm_obin);   // object-array lane: each element op runs the promoting scalar dispatch
 // the data sentinels: each is the first word (ap) of its rep's heap objects and
 // tail-jumps straight to its apply handler -- the sentinel is the rep (enum d).
 // bodies are byte-identical, kept distinct by address (ai_noicf).
@@ -666,7 +669,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
  Have(box_req);                                                       \
  emit_int(_res, toint(a) c_op toint(b));                                    \
  ai_musttail return Push(_res); }
-#define mvm1(n) lvm(lvm_##n) { return Ap(lvm_math1, g, ai_##n); }
+#define mvm1(n) lvm(lvm_##n) { { g->b = (ai_word) (uintptr_t) (ai_##n); ai_musttail return Ap(lvm_math1, g); } }
 #define m1(_) _(sin) _(cos)   // sqrt/exp/tan/atan derived; sin/cos/log are the kept transcendentals (log has its own ap)
 #define cmp_lt(nom, vop) lvm(nom) { \
  word a = Sp[0], b = Sp[1]; \
@@ -674,7 +677,7 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
   intptr_t r = vcmp_int(vop, a, b); \
   if (Ip[1].ap == lvm_cond) { Sp += 2; Ip = r ? Ip + 3 : Ip[2].m; ai_musttail return Continue(); } \
   ai_musttail return Push(r ? putcharm(1) : zero); } \
- return Ap(lvm_cmp_ord, g, vop); }
+ { g->b = (ai_word) (vop); ai_musttail return Ap(lvm_cmp_ord, g); } }
 
 // --------------------------------------------------------------------------
 // THE TU SEAM. src/love*.c is one runtime cut into translation units so no single
@@ -761,15 +764,15 @@ lvm(lvm_cap);
 lvm(lvm_chainp);
 lvm(lvm_clock);
 lvm(lvm_coinp);
-lvm(lvm_cpart, int off);
+lvm(lvm_cpart);
 lvm(lvm_cup);
 lvm(lvm_dieof);
 lvm(lvm_dig);
 lvm(lvm_gemp);
 lvm(lvm_heard);
 lvm(lvm_hotp);
-lvm(lvm_math1, ai_flo_t (*fn)(ai_flo_t));
-lvm(lvm_math2, ai_flo_t (*fn)(ai_flo_t, ai_flo_t));
+lvm(lvm_math1);
+lvm(lvm_math2);
 lvm(lvm_mintp);
 lvm(lvm_mods);
 lvm(lvm_mulh);

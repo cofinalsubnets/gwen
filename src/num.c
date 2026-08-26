@@ -29,8 +29,8 @@ static intptr_t galaxy_tie(struct ai_tray *va, struct ai_tray *vb);
 static intptr_t mint_cmp(struct ai *g, word a, word b);
 static intptr_t vcmp_sign(int op, int s);
 static intptr_t vop_int(int op, intptr_t a, intptr_t b);
-static lvm(lvm_aextreme, int kind);
-static lvm(lvm_cmp_ord, int op);
+static lvm(lvm_aextreme);
+static lvm(lvm_cmp_ord);
 static struct ai *ai_bdiv_setup(struct ai *g, int which);
 static struct ai *ai_bmul_setup(struct ai *g);
 static struct ai *ai_kmul_setup(struct ai *g);
@@ -639,7 +639,8 @@ static struct ai *ai_bdiv_setup(struct ai *g, int which) {
  g->ip = (union u*) bdiv_loop;
  return g; }
 
-lvm(lvm_bdiv_start, int vop) {
+lvm(lvm_bdiv_start) {
+ int vop = (int) g->b;
  word a = Sp[0], b = Sp[1];
  int m = bigp(a) ? big_nlimbs(a) : wlimbs, n = bigp(b) ? big_nlimbs(b) : wlimbs;
  // one-shot the cheap cases: |a|<|b| (q=0), single-limb divisor, or a short quotient.
@@ -892,7 +893,8 @@ lvm(lvm_aprod) {
 
 // max / min over a non-empty array (kind 2 = max, 3 = min, matching ored);
 // empty -> zero; scalar -> identity. the kind selects the comparison sense.
-static lvm(lvm_aextreme, int kind) {
+static lvm(lvm_aextreme) {
+ int kind = (int) g->b;
  word x = Sp[0];
  if (!packp(x)) return Next(1);
  if (tray(x)->type == ai_O) {
@@ -929,8 +931,8 @@ static lvm(lvm_aextreme, int kind) {
   if (ismax?m3>m0:m3<m0) m0=m3;
   emit_int(_res, m0); }
  return Answer(_res); }
-lvm(lvm_max) { return Ap(lvm_aextreme, g, 2); }
-lvm(lvm_min) { return Ap(lvm_aextreme, g, 3); }
+lvm(lvm_max) { { g->b = (ai_word) (2); ai_musttail return Ap(lvm_aextreme, g); } }
+lvm(lvm_min) { { g->b = (ai_word) (3); ai_musttail return Ap(lvm_aextreme, g); } }
 
 // aall: the bool conjunction reduction ("no zero element"; empty -> vacuously
 // true; scalar -> identity). the disjunction is just `len`.
@@ -1042,7 +1044,8 @@ static ai_noinline void vmap1_fill(struct ai_tray *r, struct ai_tray *a, ai_flo_
  uintptr_t n = tray_nelem(r);
  for (uintptr_t i = 0; i < n; i++) tray_put_flo(r, i, fn(tray_get_flo(a, i))); }
 
-lvm(lvm_vmap1, ai_flo_t (*fn)(ai_flo_t)) {
+lvm(lvm_vmap1) {
+ ai_flo1 fn = (ai_flo1) (uintptr_t) g->b;
  struct ai_tray *a = tray(Sp[0]);
  uintptr_t rank = a->rank, n = tray_nelem(a),
            bytes = sizeof(struct ai_tray) + rank * sizeof(word) + n * ai_T[ai_R];
@@ -1303,9 +1306,10 @@ lvm(lvm_sort) {
 // the `<` / `<=` lane (op is vop_lt or vop_le). an array operand -> elementwise
 // mask (lvm_vbin); a top-level float/complex chain is IEEE-faithful (NaN ->
 // unordered -> false), so e.g. (<= nan nan) is zero.
-static lvm(lvm_cmp_ord, int op) {
+static lvm(lvm_cmp_ord) {
+ int op = (int) g->b;
  word a = Sp[0], b = Sp[1]; intptr_t r;
- if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, op);      // array -> elementwise
+ if (trayp(a) || trayp(b)) { g->b = (ai_word) (op); ai_musttail return Ap(lvm_vbin, g); }      // array -> elementwise
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) r = vcmp_int(op, ra, rb);                   // cross-kind: the true-blue lattice (cmp_rank)
  else if (!(isnum(a) || twinp(a)) || coinp(b)) r = vcmp_int(op, cmp3(g, a, b), 0);  // same non-number band, or a ratio coin either side (a coin as `a` fails isnum; as `b` this catches it): via cmp3
@@ -1481,7 +1485,8 @@ static ai_noinline bool vquot_needs_float(word a, word b) {
   odo_step(idx, R, shp); }
  return false; }
 
-lvm(lvm_vbin, int op) {
+lvm(lvm_vbin) {
+ int op = (int) g->b;
  word a = Sp[0], b = Sp[1];
  bool atray = trayp(a), btray = trayp(b);
  // complex lane first (a complex scalar isn't isnum, so it must divert before
@@ -1489,14 +1494,14 @@ lvm(lvm_vbin, int op) {
  if (((atray && tray(a)->type == ai_C) || (btray && tray(b)->type == ai_C) || twinp(a) || twinp(b))
      && !(atray && tray(a)->type == ai_O) && !(btray && tray(b)->type == ai_O)) {
   if (vop_bitp(op)) return Push(ZeroPoint);   // no bits on a complex
-  return Ap(lvm_cbin, g, op); }
+  { g->b = (ai_word) (op); ai_musttail return Ap(lvm_cbin, g); } }
  if (!(atray || isnum(a)) || !(btray || isnum(b)))   // each operand: array or scalar
   return Push(op == vop_eq ? zero : ZeroPoint);   // `=` is boolean: undefined face -> 0, not ()
  if ((atray && tray(a)->type == ai_O) || (btray && tray(b)->type == ai_O)) {
   // boxed cells are not the word lane: a big refuses the bits on a star, so the
   // object tray refuses them whole rather than answering per-element zero.
   if (vop_bitp(op)) return Push(ZeroPoint);
-  return Ap(lvm_obin, g, op); }                   // object array -> promoting lane
+  { g->b = (ai_word) (op); ai_musttail return Ap(lvm_obin, g); } }                   // object array -> promoting lane
  uintptr_t ra = atray ? tray(a)->rank : 0, rb = btray ? tray(b)->rank : 0,
            R = ra > rb ? ra : rb;
  // compute-type = max element type; a scalar int contributes the lowest type
@@ -1539,7 +1544,8 @@ static ai_noinline void vmap2_fill(struct ai_tray *r, word a, word b, ai_flo_t (
   tray_put_flo(r, p, fn(av, bv));
   odo_step(idx, R, r->shape); } }
 
-lvm(lvm_vmap2, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
+lvm(lvm_vmap2) {
+ ai_flo2 fn = (ai_flo2) (uintptr_t) g->b;
  word a = Sp[0], b = Sp[1];
  bool atray = trayp(a), btray = trayp(b);
  if (!(atray || isnum(a)) || !(btray || isnum(b)))   // each operand: array or scalar

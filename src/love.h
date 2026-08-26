@@ -67,7 +67,7 @@
 // clang/gcc 15+ take the attribute, mooncc's sibcall pass spells it or refuses the
 // compile -- an opportunistic miss is one frame per dispatch and a stack overflow down
 // some long read. `make vmret` cross-checks the shipped binary. the extra-arg lvms
-// (vbin, gc, vmap*..) keep plain returns: musttail wants matching prototypes.
+// (vbin, vmap*..) keep plain returns: musttail wants matching prototypes.
 #if defined(__mooncc__) || defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 15)
 #define ai_musttail __attribute__((musttail))
 #if defined(__GNUC__) && !defined(__clang__)
@@ -143,8 +143,12 @@ struct ai {
  uint16_t yield_ctr,   // cycles since last cooperative yield
           sweep_ctr;   // fairness yields since the last parked sweep;
  int next_wait_fd,     // fd the task suspended on, -1 = not waiting on I/O
-     next_wait_events, // ai_wait_in (the default) or ai_wait_out (connect's handshake)
-     b;                // what the last port refill left: a byte, EOF, or IoWouldBlock
+     next_wait_events; // ai_wait_in (the default) or ai_wait_out (connect's handshake)
+ // the VM's one word-size scratch: what the last port refill left (a byte, EOF, or
+ // IoWouldBlock), and the word count a Have() asks lvm_gc for. ⚠ the two never
+ // overlap -- every refill writes b as the last act before the return that hands it
+ // back, so nothing allocates between the deposit and the read.
+ ai_word b;
  ai_word inflag;       // fd 0's flags as we found them (a charm), 0 = we left them alone
  uintptr_t next_serial, // mint id counter
            next_wake_at; // deadline for next yield_sw snapshot's wake_at slot; 0 = always runnable
@@ -378,7 +382,11 @@ extern struct ai_fio ai_stdin, ai_stdout, ai_stderr;
 #  define ai_avail_floor 8
 # endif
 #endif
-#define Have(n) if (Sp < Hp + (n) + ai_avail_floor) return Ap(lvm_gc, g, (n) + ai_avail_floor)
+// the GC tail is ai_musttail like every other, and that is why lvm_gc takes its word
+// count in g->b instead of a fifth parameter: musttail wants matching prototypes, so an
+// extra-arg callee left this tail to the compiler's mood. it is owed now, per Have.
+#define Have(n) do { if (Sp < Hp + (n) + ai_avail_floor) { \
+   g->b = (n) + ai_avail_floor; ai_musttail return Ap(lvm_gc, g); } } while (0)
 #define Have1() Have(1)
 #define ai_pop1(g) (*(g)->sp++)
 #define op(nom, n, x) lvm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; ai_musttail return Continue(); }
@@ -430,7 +438,7 @@ struct ai
  *intern(struct ai*),
  *str0(struct ai*, uintptr_t),
  *grbufg(struct ai *g, uintptr_t len);
-lvm(lvm_gc, uintptr_t);
+lvm(lvm_gc);                                    // takes its word count in g->b
 uintptr_t hash(struct ai*, word), ai_tray_bytes(struct ai_tray*);
 // any value -> its enum q: KCharm for a fixnum, KHot for a non-data heap pointer,
 // else ai_typ's rep, a tray refined by element tier (KTrayZ..KTrayO).

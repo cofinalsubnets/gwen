@@ -216,19 +216,19 @@ bit_slow(band, &) bit_slow(bor, |) bit_slow(bxor, ^)
 lvm(lvm_band) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) ai_musttail return Push((a & b) | 1);
  avm_unit(a, b);
- if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_band);
+ if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_band); ai_musttail return Ap(lvm_vbin, g); }
  ai_musttail return Ap(lvm_band_slow, g); }
 
 lvm(lvm_bor) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) ai_musttail return Push((a | b) | 1);
  avm_unit(a, b);
- if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_bor);
+ if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_bor); ai_musttail return Ap(lvm_vbin, g); }
  ai_musttail return Ap(lvm_bor_slow, g); }
 
 lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) ai_musttail return Push((a ^ b) | 1);
  avm_unit(a, b);
- if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_bxor);
+ if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_bxor); ai_musttail return Ap(lvm_vbin, g); }
  ai_musttail return Ap(lvm_bxor_slow, g); }
 // (bitwise complement is `(^ x -1)`; logical not is the `!` reader sigil / `zerop`.)
 
@@ -242,14 +242,14 @@ lvm(lvm_bsr) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b))
   ai_musttail return Push(putcharm(getcharm(a) >> shmask(getcharm(b))));
  avm_unit(a, b);
- if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_bsr);
+ if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_bsr); ai_musttail return Ap(lvm_vbin, g); }
  ai_musttail return Ap(lvm_bsr_slow, g); }
 
 // << : can overflow the tag, so it always runs the box/demote path; the shift is
 // done in uintptr_t for well-defined overflow
 lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
  avm_unit(a, b);
- if (trayp(a) || trayp(b)) return Ap(lvm_vbin, g, vop_bsl);
+ if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_bsl); ai_musttail return Ap(lvm_vbin, g); }
  if (!(charmp(a) || sunp(a)) || !charmp(b)) ai_musttail return Push(ZeroPoint);
  Have(box_req);
  emit_int(_res, (intptr_t)((uintptr_t) toint(a) << shmask(getcharm(b))));
@@ -263,22 +263,24 @@ op11(lvm_nilp, ai_nilp(g, Sp[0]) ? putcharm(1) : zero)
 
 // unary math nif: numeric arg → double, call fn, box the rank-0 f64 result.
 // non-numeric arg → zero. TCO-clean (no & escapes).
-lvm(lvm_math1, ai_flo_t (*fn)(ai_flo_t)) {
+lvm(lvm_math1) {
+ ai_flo1 fn = (ai_flo1) (uintptr_t) g->b;
  word a = Sp[0];
  if (trayp(a)) {                               // (sin a-tray) etc. -> gem tray; a twin tray is undefined
   if (tray(a)->type == ai_C) return Answer(ZeroPoint);
-  return Ap(lvm_vmap1, g, fn); }
+  { g->b = (ai_word) (uintptr_t) (fn); ai_musttail return Ap(lvm_vmap1, g); } }
  if (!isnum(a)) return Answer(ZeroPoint);
  ai_flo_t ad = toflo(a), rd = fn(ad);
  Have(gem_req);
  Sp[0] = mk_gem(&Hp, rd); return Next(1); }
 
-lvm(lvm_math2, ai_flo_t (*fn)(ai_flo_t, ai_flo_t)) {
+lvm(lvm_math2) {
+ ai_flo2 fn = (ai_flo2) (uintptr_t) g->b;
  word a = Sp[0], b = Sp[1];
  if (trayp(a) || trayp(b)) {                               // (pow arr ..) etc. -> float array
   if ((trayp(a) && tray(a)->type == ai_C) || (trayp(b) && tray(b)->type == ai_C))
    return Push(ZeroPoint);                 // complex array undefined here
-  return Ap(lvm_vmap2, g, fn); }
+  { g->b = (ai_word) (uintptr_t) (fn); ai_musttail return Ap(lvm_vmap2, g); } }
  if (!isnum(a) || !isnum(b)) return Push(ZeroPoint);
  ai_flo_t ad = toflo(a), bd = toflo(b), rd = fn(ad, bd);
  Have(gem_req);
@@ -296,7 +298,7 @@ lvm(lvm_log) {
  if (twinp(a)) m = ai_log(twin_mod(a)), th = ai_atan2(twin_im(a), twin_re(a));
  else if (isnum(a) && toflo(a) < 0) { ai_flo_t ad = toflo(a);
   m = ai_log(-ad), th = ai_atan2(0, ad); }
- else return Ap(lvm_math1, g, ai_log);
+ else { g->b = (ai_word) (uintptr_t) (ai_log); ai_musttail return Ap(lvm_math1, g); }
  Have(twin_req);
  Sp[0] = mk_twin(&Hp, m, th); ai_musttail return Next(1); }
 
@@ -839,7 +841,8 @@ struct ai *obin_run(struct ai *g, int op) {
  g->sp[2] = g->sp[0], g->sp += 2, g->ip += 1;
  return g; }
 
-lvm(lvm_obin, int op) {
+lvm(lvm_obin) {
+ int op = (int) g->b;
  Pack(g);
  g = obin_run(g, op);
  if (!ai_ok(g)) return Ap(_lvm_ghelp, g);
@@ -895,7 +898,8 @@ ai_noinline void twin_fill(struct ai_twin *v, word a, word b, int vop) {
 
 // the complex arithmetic lane: a real operand promotes to (r, 0); non-numeric,
 // or % (undefined on complex), yields zero
-lvm(lvm_twin_bin, int vop) {
+lvm(lvm_twin_bin) {
+ int vop = (int) g->b;
  word a = Sp[0], b = Sp[1];
  if (!(twinp(a) || isnum(a)) || !(twinp(b) || isnum(b)) || vop > vop_quot)
   return Push(ZeroPoint);
@@ -942,7 +946,8 @@ ai_noinline void cbin_fill(struct ai_tray *r, word a, word b, int op, bool cmp) 
    rf[2*p] = re; rf[2*p+1] = im; }
   odo_step(idx, R, r->shape); } }
 
-lvm(lvm_cbin, int op) {
+lvm(lvm_cbin) {
+ int op = (int) g->b;
  word a = Sp[0], b = Sp[1];
  bool atray = trayp(a), btray = trayp(b);
  // % and // stay undefined on complex, but the orderings hold ((re,im)
@@ -1014,7 +1019,7 @@ lvm(lvm_pow) {
    ai_flo_t m = ai_pow(-ad, bd), re = m * ai_cospi(bd), im = m * ai_sinpi(bd);
    Have(twin_req);
    *++Sp = mk_twin(&Hp, re, im); ai_musttail return Next(1); } }
- return Ap(lvm_math2, g, ai_pow); }
+ { g->b = (ai_word) (uintptr_t) (ai_pow); ai_musttail return Ap(lvm_math2, g); } }
 
 // fill a packed ai_C array with (re = a-element, im = b-element) under broadcast
 ai_noinline void twin_build_fill(struct ai_tray *r, word a, word b) {
@@ -1074,7 +1079,8 @@ ai_noinline void cpart_fill(struct ai_tray *r, struct ai_tray *v, int off) {
  for (uintptr_t p = 0; p < n; p++) rf[p] = fp[2*p + off]; }
 
 // the array lane of re/im: result carries the operand's shape
-lvm(lvm_cpart, int off) {
+lvm(lvm_cpart) {
+ int off = (int) g->b;
  struct ai_tray *v = tray(Sp[0]);
  enum ai_tray_type rt = off < 0 ? ai_Z : ai_R;
  uintptr_t R = v->rank, n = tray_nelem(v),
@@ -1100,7 +1106,7 @@ lvm(lvm_re) {
   enum ai_tray_type t = tray(a)->type;
   if (t == ai_O) ai_musttail return Answer(ZeroPoint);   // a tray is not a number
   if (t != ai_C) ai_musttail return Next(1);          // a real array is its own real part
-  return Ap(lvm_cpart, g, 0); }
+  { g->b = (ai_word) (0); ai_musttail return Ap(lvm_cpart, g); } }
  if (isnum(a)) ai_musttail return Next(1);            // re of a real is itself
  ai_musttail return Answer(ZeroPoint); }
 
@@ -1114,7 +1120,7 @@ lvm(lvm_im) {
  if (trayp(a)) {
   enum ai_tray_type t = tray(a)->type;
   if (t == ai_O) ai_musttail return Answer(ZeroPoint);
-  return Ap(lvm_cpart, g, t == ai_C ? 1 : -1); }   // real array -> zeros of its shape
+  { g->b = (ai_word) (t == ai_C ? 1 : -1); ai_musttail return Ap(lvm_cpart, g); } }   // real array -> zeros of its shape
  if (isnum(a)) ai_musttail return Answer(putcharm(0));   // im of a real is 0
  ai_musttail return Answer(ZeroPoint); }
 

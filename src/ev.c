@@ -39,7 +39,7 @@ intptr_t ai_ceilnet(struct ai *g, word x);
 static lvm(ap_next);
 static lvm(help_ret_more);
 static lvm(help_ret_scare);
-static lvm(lvm_coin_op, intptr_t slot);
+static lvm(lvm_coin_op);
 static lvm(lvm_numtap);
 static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K);
 struct ai *ana_ap(struct ai *g, struct env **c, intptr_t x);
@@ -961,7 +961,8 @@ lvm(lvm_mulh) {
 // a foreign payload); a missing method is zero too. the ()-identity never
 // reaches here -- the dispatchers hoist the mint case. Ip is still the opcode
 // (Ap preserves it), so word(Ip + 1) is the true return.
-static lvm(lvm_coin_op, intptr_t slot) {
+static lvm(lvm_coin_op) {
+ intptr_t slot = g->b;                              // the die slot, off the scratch
  word a = Sp[0], b = Sp[1];
  if (coinp(a) && coinp(b) && coin_die(a) != coin_die(b))
   return Push(ZeroPoint);             // two distinct newtypes: no canonical +/*
@@ -973,11 +974,11 @@ static lvm(lvm_coin_op, intptr_t slot) {
  word *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = a, dst[1] = f, dst[2] = b, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; return Continue(); }
-lvm(lvm_add_coin) { return Ap(lvm_coin_op, g, DieAdd); }
-lvm(lvm_mul_coin) { return Ap(lvm_coin_op, g, DieMul); }
+lvm(lvm_add_coin) { { g->b = (ai_word) (DieAdd); ai_musttail return Ap(lvm_coin_op, g); } }
+lvm(lvm_mul_coin) { { g->b = (ai_word) (DieMul); ai_musttail return Ap(lvm_coin_op, g); } }
 // `-` and `/` have no kind matrix; lvm_sub/lvm_quot intercept coins themselves and land here.
-lvm(lvm_sub_coin) { return Ap(lvm_coin_op, g, DieSub); }
-lvm(lvm_quot_coin) { return Ap(lvm_coin_op, g, DieDiv); }
+lvm(lvm_sub_coin) { { g->b = (ai_word) (DieSub); ai_musttail return Ap(lvm_coin_op, g); } }
+lvm(lvm_quot_coin) { { g->b = (ai_word) (DieDiv); ai_musttail return Ap(lvm_coin_op, g); } }
 
 // applying a coin: run the die's apply closure as `((f self) arg)`; absent, a coin
 // is an opaque handle -- nothing to answer with, () -- like a cask/port. self is the value at Ip (the apply
