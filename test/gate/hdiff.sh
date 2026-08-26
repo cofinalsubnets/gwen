@@ -21,8 +21,30 @@
 set -u
 fail() { echo "FAIL test_hdiff: $*" >&2; exit 1; }
 
+# vmret is what earns this lane, and it is a NO-OP with a message where no
+# disassembler is present -- so without one the loop below would build, run the
+# suite, and report "tail-jump clean" having read no instruction at all.
+command -v objdump > /dev/null 2>&1 || command -v llvm-objdump > /dev/null 2>&1 || {
+  echo "test_hdiff: no objdump or llvm-objdump, so vmret reads nothing -- SKIPPED, not passed"
+  exit 0; }
+
+# ..and the cc has to be able to HONOUR ai_musttail. love.h refuses to build the
+# tail-threaded vm without it, so a cc that lacks it would look like "could not
+# build love" -- a failure report for a tree that is fine and a toolchain that is old.
+mtc=out/host/.hdiff-musttail.c
+mkdir -p out/host
+printf '%s\n' \
+  '#if !defined(__clang__) && !(defined(__GNUC__) && __GNUC__ >= 15)' \
+  '#error no musttail' \
+  '#endif' \
+  'int main(void) { return 0; }' > "$mtc"
+
+ran=""
 for cc in "$@"; do
   command -v "$cc" > /dev/null 2>&1 || { echo "test_hdiff: no $cc, skipped"; continue; }
+  "$cc" -c "$mtc" -o "$mtc".o > /dev/null 2>&1 || {
+    echo "test_hdiff: $cc has no musttail -- ai_tco=1 is this lane's point, so SKIPPED, not passed"
+    continue; }
   echo "  $cc: building love (HCC=1, ai_tco=1)"
   make --no-print-directory HCC=1 CC="$cc" host > /dev/null 2>&1 \
     || fail "$cc could not build love"
@@ -36,6 +58,11 @@ for cc in "$@"; do
   echo "  $cc: vmret"
   make --no-print-directory HCC=1 CC="$cc" vmret > /dev/null 2>&1 \
     || fail "$cc: vmret -- an lvm_ kept a ret"
+  ran="$ran $cc"
 done
 
-echo "test_hdiff: gcc and clang each build love, pass the host suite and tail-jump clean"
+rm -f "$mtc" "$mtc".o
+# ⚠ the summary names what RAN. a line that says "gcc and clang" after skipping both
+# is the same silence this gate exists to end, one level up.
+[ -n "$ran" ] || { echo "test_hdiff: no cc here could run this lane -- nothing was proved"; exit 0; }
+echo "test_hdiff:$ran each build love, pass the host suite and tail-jump clean"

@@ -40,6 +40,18 @@
 #define ai_tco 1
 #endif
 
+// musttail IS the tail-threaded vm: without it every dispatch keeps its frame and a
+// long read overflows the stack, so tco=1 without it is not slower, it is broken.
+// refuse rather than ship it, and name the lane that works -- tco=0 is the trampoline.
+#if defined(__mooncc__) || defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 15)
+#define ai_have_musttail 1
+#else
+#define ai_have_musttail 0
+#endif
+#if ai_tco && !ai_have_musttail
+#error "no musttail: build -Dai_tco=0"
+#endif
+
 // port read-buffer size in bytes (the one buffered-io knob)
 #ifndef ai_iobuf
 #define ai_iobuf 4096
@@ -70,15 +82,13 @@
 // ⚠ AN LVM TAKES NO OTHER ARGUMENT, and the macros above cannot spell one: musttail
 // wants matching prototypes, so a fifth parameter would leave that op's tails to the
 // compiler's mood. what an op needs beyond the stack rides g->b, read at entry.
-#if defined(__mooncc__) || defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 15)
+// ai_tco=1 now IMPLIES ai_have_musttail -- the refusal above makes that structural,
+// so there is no opportunistic lane left to fall into here.
 #define ai_musttail __attribute__((musttail))
 #if defined(__GNUC__) && !defined(__clang__)
 // gcc's "maybe" escape lint: an address-taken local handed to an earlier helper trips
 // it, and the no-scratch-in-lvm_ discipline already forbids a frame address outliving its call
 #pragma GCC diagnostic ignored "-Wmaybe-musttail-local-addr"
-#endif
-#else
-#define ai_musttail
 #endif
 #else
 #define _lvm(n) struct ai *n(struct ai *restrict g)
