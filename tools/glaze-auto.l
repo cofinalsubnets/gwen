@@ -16,7 +16,7 @@
    interp ((ev ['\ '_ [': ['mand 'cx 'cy 'zx 'zy 'it] mbody ['col 'px 'py 'acc] cbody ['grid 'px 'acc] gbody ['grid 0 0]]]) 0)
 
    ; --- the AUTO-HOOK: recognize the nest from source and glaze it. NO change to the source. ---
-   ng (grok '(\ _ 0) mps mbody cbody gbody 'x64)
+   ng (grok '(\ _ 0) mps mbody cbody gbody 'amd64)
    _ (? (id? ng ()) (: _ (. "grok did NOT recognize the nest\n") (exit 1)) 0)
    native (ng 0)
 

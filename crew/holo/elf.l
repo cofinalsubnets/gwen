@@ -2,7 +2,7 @@
 ; will load and run them. one PT_LOAD segment maps the whole file (headers included) at a fixed base;
 ; the entry point is the first byte of code. it is the smallest thing that turns the assembler's
 ; output into a file you can chmod +x and run -- the literal "probe the binary" proof. it is target-
-; aware: pass 'x64 or 'arm64 and it assembles with that backend and stamps the matching e_machine
+; aware: pass 'amd64 or 'arm64 and it assembles with that backend and stamps the matching e_machine
 ; (the rest of the ELF is identical across both -- 64-bit LSB ET_EXEC).
 ;
 ; `elf64` takes a target and a program-BUILDER (\ dataddr -> IR): the builder is handed the absolute
@@ -14,10 +14,13 @@
 (module 'holo
 (: elf-base 4194304                                            ; 0x400000, the classic ET_EXEC base
    elf-hdr  120                                                ; 64-byte ELF header + 56-byte phdr (catall is in holo.l)
+   ; CANONICAL KEYS ONLY (love/prel.l's arch-canon): every spelling anyone types is
+   ; already one of these by the time a target reaches holo, so a second alias here would
+   ; be a second place to keep in step.
    elf-machines (tabof
-        [('x64 >< 62) ('amd64 >< 62) ('arm64 >< 183) ('aarch64 >< 183)
-          ('thumb1 >< 40) ('thumb2 >< 40) ('thumb2sp >< 40) ('cortex-m0 >< 40) ('cortex-m7 >< 40) ('arm >< 40)    ; EM_ARM
-          ('riscv64 >< 243) ('rv64 >< 243)])                   ; EM_RISCV
+        [('amd64 >< 62) ('arm64 >< 183)
+          ('thumb1 >< 40) ('thumb2 >< 40) ('thumb2sp >< 40) ('arm >< 40)    ; EM_ARM
+          ('rv64 >< 243)])                                  ; EM_RISCV
 
    ;; one 56-byte program header. p_paddr is p_vaddr's twin on every hosted target -- the
    ;; kernel lane is where they part (a high virtual address loaded at a low physical one).

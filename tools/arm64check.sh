@@ -34,10 +34,13 @@ O=out/arm64; mkdir -p $O; rm -f $O/*.o
 # its own Continue (advance Ip, br [Ip]). Under tco=0 the native is entered as
 # ap(g) with x1/x2/x3 garbage, so the codegen ONLY runs under tco=1. -O2 gives
 # the sibling-call optimization the threaded loop relies on.
-CF="-std=gnu2x -O2 -Dai_tco=1 -I. -Icore -Iout/lib -fomit-frame-pointer -fno-stack-protector -fno-exceptions -w"
+CF="-std=gnu2x -O2 -Dai_tco=1 -I. -Isrc -Iout/lib -fomit-frame-pointer -fno-stack-protector -fno-exceptions -w"
 echo "AARCH64 cross-build ($GCC)"
 # crew/moon/lib/math/am.c is the math floor (fdlibm/-lm retired) -- link it like the host does.
-for f in src/love.c host/*.c crew/moon/lib/math/am.c; do
+# ⚠ src/ IS ONE FOLDER (the TU split): the hosted set is every src/*.c except the metal
+# seat's four and the per-ISA files, which mk/common.mk names the same way.
+for f in $(ls src/*.c | grep -vE '/(kmain|sys|blk|doom)\.c$|/(x86_64|aarch64|uefi)_') \
+         crew/moon/lib/math/am.c; do
   o=$O/$(basename "$f" .c).o
   $GCC $CF -c "$f" -o "$o"
 done

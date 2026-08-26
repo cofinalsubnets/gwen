@@ -229,7 +229,7 @@
 ; its own cgna). laws speak SHAPE and count, never a slot offset -- the seat is
 ; repack's to choose, an offset binds only WITHIN a save/reread pair. ---
 (: (cgn src) (: r (cparse <>(clex src))
-              (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'x64) ()))
+              (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'amd64) ()))
    ; one fn's own forms, label to the next align seam (the inliner copies bodies into
    ; main, where a folded store may read a home register legitimately)
    (fnf nm fs) (: (seek l) (? !(two? l) () (? (= <l ['label nm]) >l (seek >l)))
@@ -715,7 +715,7 @@
 ; relocatable .o (the ELF bytes are gated end-to-end by the make .o link/interop
 ; smoke, which needs the holo book + the system linker). ---
 (: (cob src) (: r (cparse <>(clex src))
-                (? (okv? r) (cgen-obj <>r <>>r <>>>r <>>>>r () 'x64) ()))
+                (? (okv? r) (cgen-obj <>r <>>r <>>>r <>>>>r () 'amd64) ()))
    (el l i) (? (< i 1) <l (el >l (- i 1)))
    ob (cob "int f(int x) { return x; } int g = 5; int main() { return f(g); }")
    (assert
@@ -739,7 +739,7 @@
 (: (cobx src)
     (: r (cparse <>(clex src))
        (? (okv? r) (cgen-obj (el r 1) (el r 2) (el r 3) (el r 4)
-                             [(el r 5) (el r 6) (el r 7) (el r 8) (el r 9)] 'x64) ()))
+                             [(el r 5) (el r 6) (el r 7) (el r 8) (el r 9)] 'amd64) ()))
    (el l i) (? (< i 1) <l (el >l (- i 1)))
    ob (cobx "__attribute__((used, section(\".vectors\"))) static volatile long m = 7;
              __attribute__((section(\".vectors_tail\"))) static volatile long e = 1;
@@ -891,10 +891,10 @@
    big "struct b { long a,b,c,d,e; };\n"
    (assert
       ; the C99 VLA: x64 and arm64 carry the lane, riscv64 does not -- and says which
-      (okv? (cgt vla 'x64))
+      (okv? (cgt vla 'amd64))
       (okv? (cgt vla 'arm64))
-      (: g (cgt vla 'riscv64)
-         (gripe? g && (gmsg g = "no lane for a variable-length array on riscv64 (in s)")))
+      (: g (cgt vla 'rv64)
+         (gripe? g && (gmsg g = "no lane for a variable-length array on rv64 (in s)")))
       ; a >16-byte struct by value. the two halves refuse SEPARATELY and each
       ; names which half it is -- passing and returning are different lanes, and
       ; "codegen error" could never tell you which one you had
@@ -902,19 +902,19 @@
          (gripe? g && (gmsg g = "no lane for passing this 40-byte struct by value on arm64 (in t)")))
       (: g (cgt (big + "struct b m(long x){ struct b r; r.a=x; return r; }") 'arm64)
          (gripe? g && (gmsg g = "no lane for returning this 40-byte struct by value on arm64 (in m)")))
-      (okv? (cgt (big + "int t(struct b f){ return (int)f.a; }") 'x64))
+      (okv? (cgt (big + "int t(struct b f){ return (int)f.a; }") 'amd64))
       ; C99 complex arithmetic is an x64 lane only
       (: g (cgt "double _Complex f(double _Complex a, double _Complex b){ return a*b; }" 'arm64)
          (gripe? g && (gmsg g = "no lane for C99 complex arithmetic on arm64 (in f)")))
       ; a refusal with NO named cause is still ONE gripe, never a note on one
       ; channel and an error on another -- the whole message reaches whichever
       ; stream a build log kept
-      (: g (cgt "int f(void){ return nope; }" 'x64)
+      (: g (cgt "int f(void){ return nope; }" 'amd64)
          (gripe? g && (gmsg g = "undeclared 'nope' (in f)")))
       ; the static-data lane refuses through the same door: a cause pinned by
       ; globs, a gripe minted at gfns's tail (cgdata's callers thread a bare
       ; 'bad through a dozen joins, and a gripe is not one)
-      (: g (cgt "int g = nope;\n" 'x64)
+      (: g (cgt "int g = nope;\n" 'amd64)
          (gripe? g && (gmsg g = "cannot lay the initializer of 'g' ((var \"nope\"))")))))
 
 ; -- 7c-i: freestanding-header surface. cc keeps no linkage/qualifier state, so
@@ -1120,12 +1120,12 @@
 (: (cast src) <>(cparse <>(clex src))
    hb (from 'holo 'holo-bytes)
    g1 (cgn "int main() { long v; asm(\"li %0, 40\" : \"=r\"(v)); return v + 2; }")
-   want (hb 'x64 (asm-text "li r10, 40"))
+   want (hb 'amd64 (asm-text "li r10, 40"))
    (hasraw fs) (? !(two? fs) ()
                   (: f2 <fs
                      (? (two? f2 && (= <f2 'raw) && (= <>f2 want)) 1 (hasraw >fs))))
    g2 (cgn "void o(unsigned char v, unsigned short p) { asm volatile(\"outb\" : : \"r0\"(v), \"r2\"(p)); } int main() { o(1, 2); return 0; }")
-   want2 (hb 'x64 (asm-text "outb"))
+   want2 (hb 'amd64 (asm-text "outb"))
    (hasraw2 fs) (? !(two? fs) ()
                    (: f2 <fs
                       (? (two? f2 && (= <f2 'raw) && (= <>f2 want2)) 1 (hasraw2 >fs))))
@@ -1133,7 +1133,7 @@
    ;; zero displacement holo spells a memory operand with -- so `vmxon %0` has to read
    ;; back as `vmxon r10, 0`, two tokens where every other constraint substitutes one.
    g3 (cgn "void f(unsigned long *p) { asm volatile(\"vmxon %0\" : : \"m\"(*p) : \"memory\"); } int main() { return 0; }")
-   want3 (hb 'x64 (asm-text "vmxon r10, 0"))
+   want3 (hb 'amd64 (asm-text "vmxon r10, 0"))
    (hasraw3 fs) (? !(two? fs) ()
                    (: f2 <fs
                       (? (two? f2 && (= <f2 'raw) && (= <>f2 want3)) 1 (hasraw3 >fs))))
@@ -1327,7 +1327,7 @@
 ; (the stld-folded restore) passes, and the cs9 shape (written bare) scares. the
 ; breach probes ride a counting help; the checker RESUMES through it, so one run
 ; logs every scare it meets.
-(: ck9 {} _ (pin ck9 'tgt 'x64)
+(: ck9 {} _ (pin ck9 'tgt 'amd64)
    kf1 '((label f9) (push r4) (mov r4 sp) (sub sp sp 32) (st r4 -8 r3) (st r4 -16 r11)
          (mov r11 r6) (mov r3 r11) (ld r3 r4 -8) (ld r11 r4 -16) (mov sp r4) (pop r4) (ret))
    kf2 '((label f9) (sub sp sp 16) (st sp 8 r12)                ; the early exit's path never
@@ -1364,7 +1364,7 @@
 ; the tail jmp and the marker dies with the rewrite; a shape that cannot tail SCARES
 ; (musttail-not-a-tail), and a fn sibcall declines whole (fesc) scares musttail-escape.
 ; the breach probes ride the counting help, like the cs breaches above.
-(: mg9 {} _ (pin mg9 'tgt 'x64) _ (pin mg9 'fn "f9")
+(: mg9 {} _ (pin mg9 'tgt 'amd64) _ (pin mg9 'fn "f9")
    mepi '((ld r3 r4 -8) (mov sp r4) (pop r4) (ret))
    _ (assert
       (member? '(jmp g9) (sibcall mg9 ('((label f9) (call g9 must)) + mepi)))
@@ -1372,7 +1372,7 @@
    mlog {}
    _ (hear (\ p e (: _ (pin mlog p (+ 1 (peep mlog p 0))) 0)))
    _ (sibcall mg9 ('((label f9) (call g9 must) (mov r0 r5)) + mepi))   ; a live insn after the call: no tail
-   _ (: t9 {} _ (pin t9 'tgt 'x64) _ (pin t9 'fesc 1) _ (pin t9 'fn "f9")
+   _ (: t9 {} _ (pin t9 'tgt 'amd64) _ (pin t9 'fesc 1) _ (pin t9 'fn "f9")
         (sibcall t9 '((label f9) (call g9 must) (ret))))               ; the whole-fn decline
    _ (hear ())
    (assert
@@ -1673,7 +1673,7 @@
 ; shiftv-count-not-r1) were found by a build breaking; this is what replaces that.
 (: hb9 (from 'holo 'holo-bytes)
    ; the label rides along for la's fixup; a scare anywhere in the encode answers 0
-   (emits? f) (trap (\ _ (: _ (hb9 'x64 [f '(label zz9)]) 1)) () (\ a b 0))
+   (emits? f) (trap (\ _ (: _ (hb9 'amd64 [f '(label zz9)]) 1)) () (\ a b 0))
    gX {}
    cpfile '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)
    pro9 '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3))
@@ -1770,7 +1770,7 @@
 ; ANOTHER value (an arrival -- memchr's c spilled from r5 while s homed r5, and the
 ; delivery lane's zero-form init unshielded the rename); such a pair declines. with
 ; no pre-pair mention the rename still fires and the pair drops.
-(: g9 {} _ (pin g9 'tgt 'x64)
+(: g9 {} _ (pin g9 'tgt 'amd64)
    keep '((st sp 16 r5) (mov r5 r6) (ldu1 r0 r5 0) (ret))
    ren9 '((mov r5 r6) (ldu1 r0 r5 0) (ret))
    _ (assert

@@ -609,3 +609,28 @@ r=$?
 cmp -s "$ho/.wa-cold.o" "$ho/.wa-warm.o" \
   || fail "warm mooncc: the object after two failures differs from the cold one"
 echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a failure) ok"
+
+
+# ------------------------------------------------ the carried runtime is KERNEL-NEUTRAL
+# one archive per ISA, all three cut under -os linux -- and that pin does not reach the
+# bytes, because impl.h parts the kernels at RUN time on __ai_osv. so every hosted kernel
+# must take the CARRIED archive, and the way to see that it did is the clock: falling
+# back to compiling ~197 members is ~9 s where a carried read is well under one.
+# ⚠ THIS LEG IS THE ONE THAT WOULD CATCH A RE-REFUSAL. `-os freebsd` spent 9 s here
+# reproducing the carried bytes to the byte, and nothing said so.
+printf '#include <stdio.h>\nint main(void){ printf("os lane\\n"); return 0; }\n' > "$ho/.os.c"
+for os in linux freebsd netbsd; do
+  s0=$(date +%s)
+  moonrun -os $os "$ho/.os.c" -o "$ho/.os.$os" > /dev/null 2>&1 \
+    || fail "carried runtime: -os $os did not link"
+  [ $(( $(date +%s) - s0 )) -lt 5 ] \
+    || fail "carried runtime: -os $os took the member-compile lane (it refused the carried archive)"
+done
+# ..and where the arch has NO translation tables the refusal must stand: riscv's os.c
+# reads -os and only linux has an answer, so a BSD there owes a compile that #errors.
+# handing it the carried (linux-built) archive would link linux's numbers in silence.
+moonrun -t riscv64 "$ho/.os.c" -o "$ho/.os.rv" > /dev/null 2>&1 \
+  || fail "carried runtime: -t riscv64 did not link"
+moonrun -t riscv64 -os netbsd "$ho/.os.c" -o "$ho/.os.rvnb" > /dev/null 2>&1 \
+  && fail "carried runtime: -t riscv64 -os netbsd linked -- it took linux's archive for a BSD"
+echo "mooncc: the carried runtime is kernel-neutral (linux/freebsd/netbsd all take it; riscv's BSDs still refuse) ok"

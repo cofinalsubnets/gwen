@@ -253,7 +253,7 @@ test_doc: host
 ifeq ($a,x86_64)
 test_glaze: host
 	@echo TEST test/glaze-x86.l "(emit + auto)"
-	@{ echo "(use 'holo)"; cat crew/holo/x64.l crew/holo/arm64.l test/glaze-x86.l; } \
+	@{ echo "(use 'holo)"; cat crew/holo/amd64.l crew/holo/arm64.l test/glaze-x86.l; } \
 	  | sh test/gate/run.sh glaze "env LOVE_NO_IMAGE=1 $m" "test/glaze-x86:"
 else
 test_glaze:
@@ -816,15 +816,15 @@ test_cpio: host
 # 0 failed" sentinel.
 test_holo: host
 	@echo TEST test/holo/golden.l
-	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l \
-	    crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l \
+	@cat crew/holo/holo.l crew/holo/amd64.l crew/holo/arm64.l crew/holo/thumb2.l \
+	    crew/holo/rv64.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l \
 	    test/holo/golden.l | sh test/gate/run.sh holo "$m" ", 0 failed"
 # as.l -- the real AT&T x86-64 front over holo. test/holo/as.l's goldens are byte-identical
 # to /usr/bin/as (frozen, no shell-out at gate time). Same sentinel gate as test_holo.
 # asrefuse.sh is the other half: what must RAISE, one love per case.
 test_as: host
 	@echo TEST test/holo/as.l
-	@cat crew/holo/holo.l crew/holo/x64.l crew/holo/as.l test/holo/as.l \
+	@cat crew/holo/holo.l crew/holo/amd64.l crew/holo/as.l test/holo/as.l \
 	  | sh test/gate/run.sh as "$m" ", 0 failed"
 	@sh test/gate/asrefuse.sh "$m"
 # test_elf32 -- holo's ELF32 executable writer, judged by a real loader: both thumb backends
@@ -976,7 +976,7 @@ test_encver: host
 	@for s in $(encver); do n=$${s%%:*}; r=$${s#*:}; c=$${r%%:*}; l=$${r#*:}; \
 	   o=out/.$${n}_oracle; \
 	   test/proof/rocq/$${n}_drive > $$o.l; \
-	   { cat crew/holo/holo.l crew/holo/x64.l; echo "(use 'holo)"; cat $$o.l; } | $m > $$o.out 2>&1; r=$$?; \
+	   { cat crew/holo/holo.l crew/holo/amd64.l; echo "(use 'holo)"; cat $$o.l; } | $m > $$o.out 2>&1; r=$$?; \
 	   { [ $$r -eq 0 ] && grep -q "$$c / $$c PASS" $$o.out; } \
 	     || { echo "FAIL the $$n oracle, $$l (exit $$r):"; cat $$o.out; exit 1; }; \
 	   cat $$o.out; done

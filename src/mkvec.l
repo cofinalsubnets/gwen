@@ -232,7 +232,7 @@
    (lay-vec dst arch) (write-bytes dst (lay-vec-bytes arch))
    (lay-vec-bytes arch)
     (? (arch = "x86_64")
-       (objsecs 'x64
+       (objsecs 'amd64
                 [[".text"   1 6 16 x-text]
                  [".data"   1 3 8  x-rodata]
                  [".bss"    8 3 16 x-bss]]

@@ -625,12 +625,12 @@
    fknob {0}                                                ; pin 1 to force the interpreted twins (the differential switch)
    fmaxl0 {3000}                                            ; the initial learnt-DB cap (the gate lowers it to force reductions)
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
-    (: bs (peep (assemble 'x64 ir) 'bytes 0)
+    (: bs (peep (assemble 'amd64 ir) 'bytes 0)
        c (cask (tally bs))
        _ (foldl (\ i b (: _ (pin c i b) (+ i 1))) 0 bs)
        (nif c fb '(\ q (q)) ar))
    (fbcpk nv)                                               ; -> (bcp conf dec), or () when they can't build
-    (? (! (&& (lit? nif) (id? (intern love-arch) 'x64))) ()
+    (? (! (&& (lit? nif) (id? (intern love-arch) 'amd64))) ()
        (: hit (peep fkers nv ())
           (? (two? hit) hit
              (: ks [(fnif (fbcp-ir nv) fbcp3 3)

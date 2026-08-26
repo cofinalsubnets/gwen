@@ -40,7 +40,8 @@
        (mksrc-die "no holo aboard -- this love is unbaked (make host bakes it)"))
    (mksrc-be2 arch)
     (? (lit? (peep backends arch ())) 0
-       (: f ("crew/holo/" + (arch @ 'arm64 "arm64" 'riscv64 "riscv" "x64") + ".l")
+       ; the backend file IS the canonical arch word now -- one spelling, no map
+       (: f ("crew/holo/" + string arch + ".l")
           q (open f "r")
           (? q (: _ (mksrc-rdev (flow q)) (close q))
              (mksrc-die ("no backend aboard and no text at " + f)))))
@@ -71,7 +72,7 @@
    ; call later.
    (mksrc-main av)
     (: n (tally av)
-       (? (2 <= n) (mksrc (? (3 <= n) (name <>>av) 'x64) <av <>av)
+       (? (2 <= n) (mksrc (? (3 <= n) (name <>>av) 'amd64) <av <>av)
           (mksrc-die "usage: mksrc ARCHIVE.tar.gz OUT.o [ARCH]")))
 
    (mksrc-main >argv))

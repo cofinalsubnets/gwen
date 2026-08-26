@@ -77,14 +77,14 @@
                                                              (100000000000000000000 = (cb 100)))) ; == interp bignum
          ; * FOLD (product-over-(F i)): jitcalloutx with op '*, SA kept RAW (mulo accumulator, retag+overflow at end)
          (: iprod (\ f n ((: (go i a) (? (< i n) (go (+ i 1) (* a (f i))) a)) 0 1))                ; the faithful interp product twin
-            inc (\ i (+ i 1))  pr (jitcalloutx inc '(\ n 0) '* 'i 'i 'x64)                               ; native product of (i+1) = n!
+            inc (\ i (+ i 1))  pr (jitcalloutx inc '(\ n 0) '* 'i 'i 'amd64)                               ; native product of (i+1) = n!
             (&& (lit? pr) (1 = (pr 0)) (120 = (pr 5)) ((pr 6) = (iprod inc 6))                     ; fast path: 5!=120, empty=1 (product identity)
-                (: pf (jitcalloutx (\ i (+ i 0.5)) '(\ n 0) '* 'i 'i 'x64)                               ; GATE 1: float result -> deopt -> interp product
+                (: pf (jitcalloutx (\ i (+ i 0.5)) '(\ n 0) '* 'i 'i 'amd64)                               ; GATE 1: float result -> deopt -> interp product
                    (1.875 = (pf 3)))
-                (: pb (jitcalloutx inc '(\ n 0) '* 'i 'i 'x64)                                           ; GATE 2: product leaves fixnum range -> deopt -> bignum
+                (: pb (jitcalloutx inc '(\ n 0) '* 'i 'i 'amd64)                                           ; GATE 2: product leaves fixnum range -> deopt -> bignum
                    (&& (51090942171709440000 = (pb 21)) ((pb 25) = (iprod inc 25))))
                 ; the [2^62, 2^63) TAG-boundary window: 3*2^61 is out of fixnum yet < 2^63 -> the end-retag adds-vc gate must deopt
-                (: p3 (jitcalloutx (\ i (? (= i 0) 3 2)) '(\ n 0) '* 'i 'i 'x64)
+                (: p3 (jitcalloutx (\ i (? (= i 0) 3 2)) '(\ n 0) '* 'i 'i 'amd64)
                    (6917529027641081856 = (p3 62)))))
          ; NON-(F i) ARG: the per-step term is (F ARG), ARG a computed expr over i (not the bare counter) --
          ; caarg compiles ARG natively (mirroring cgir), tags it, and an ARG that leaves fixnum range deopts
@@ -92,9 +92,9 @@
          (: isumg  (\ f g n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f (g i)))) a)) 0 0))         ; interp: sum f(g(i))
             iprodg (\ f g n ((: (go i a) (? (< i n) (go (+ i 1) (* a (f (g i)))) a)) 0 1))         ; interp: product f(g(i))
             sqx (\ x (* x x))  md7 (\ x (% x 7))
-            cae  (jitcalloutx sqx '(\ n 0) '+ 'i '(+ i 1) 'x64)                                    ; sum sq(i+1)
-            cap  (jitcalloutx sqx '(\ n 0) '* 'i '(+ i 1) 'x64)                                    ; product sq(i+1) = (n!)^2
-            caov (jitcalloutx md7 '(\ n 0) '+ 'i '(* (* i i) 1000000000) 'x64)                     ; ARG overflows ~i=68k; bounded clos so ONLY the arg deopts
+            cae  (jitcalloutx sqx '(\ n 0) '+ 'i '(+ i 1) 'amd64)                                    ; sum sq(i+1)
+            cap  (jitcalloutx sqx '(\ n 0) '* 'i '(+ i 1) 'amd64)                                    ; product sq(i+1) = (n!)^2
+            caov (jitcalloutx md7 '(\ n 0) '+ 'i '(* (* i i) 1000000000) 'amd64)                     ; ARG overflows ~i=68k; bounded clos so ONLY the arg deopts
             mkq  (\ f (\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a (f (* i i)))) a)) 0 0)))        ; captured f, computed arg (* i i) -> the FRAME lane (hook)
             cq   (mkq sqx)
             (&& (lit? cae) (55 = (cae 5)) (0 = (cae 0)) ((cae 6) = (isumg sqx (\ i (+ i 1)) 6))    ; computed arg, native fast path
@@ -132,17 +132,17 @@
      (&& (15 = (a5 10)) (17 = (a7 10)) ('(6 7 8) = (map a5 '(1 2 3)))                 ; native captured closure, composes
          (8000000000000000000 = ((mk 4000000000000000000) 4000000000000000000))))    ; ... and deopts through the capture
   ; HEAP RESULT (jitfr): a float-result leaf BOXES on the heap -- a gem out, == interp, transparent, deopts
-  (: fr (jitfr '(\ x (+ (* x 1.5) 2.0)) 'x64)  ifr (\ x (+ (* x 1.5) 2.0))
+  (: fr (jitfr '(\ x (+ (* x 1.5) 2.0)) 'amd64)  ifr (\ x (+ (* x 1.5) 2.0))
      (&& (gem? (fr 4)) (8.0 = (fr 4)) (= (ifr 7) (fr 7))                  ; a FLOAT box; 4*1.5+2=8.0; == interp
          (lit? fr) ((\ x (+ (* x 1.5) 2.0)) = fr)                         ; applicable + =-IDENTICAL to source
          (= (map ifr '(1 2 3)) (map fr '(1 2 3)))                         ; composes with map, == interp
          (= (ifr (:)) (fr (:)))))                                         ; non-fixnum arg -> fxv deopt -> interp
-  (: frz (jitfr '(\ x (/ (- x x) (- x x))) 'x64) (&& (gem? (frz 5)) (0.0 = (frz 5))))   ; 0/0 -> NaN -> 0.0 (mk_gem's law)
+  (: frz (jitfr '(\ x (/ (- x x) (- x x))) 'amd64) (&& (gem? (frz 5)) (0.0 = (frz 5))))   ; 0/0 -> NaN -> 0.0 (mk_gem's law)
   ; GC-SAFETY: a native-written box is a normal ai_gem (kind=lvm_gembox, 2 words) -> the cheney copier
   ; traces/moves it like any gem. hold one across a big alloc (forces GC), and box thousands under
   ; pressure -- if the box were malformed or the bump corrupted Sp's region, these would diverge/crash.
-  (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)) 'x64)  b (gfr 4)  _ (tally (jot 200000))  (8.0 = b))   ; the box survives a forced GC
-  (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)) 'x64)  ys (map gfr (jot 4000))  zs (map (\ x (+ (* x 1.5) 2.0)) (jot 4000)) (= ys zs))  ; 4000 boxes under GC pressure == interp
+  (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)) 'amd64)  b (gfr 4)  _ (tally (jot 200000))  (8.0 = b))   ; the box survives a forced GC
+  (: gfr (jitfr '(\ x (+ (* x 1.5) 2.0)) 'amd64)  ys (map gfr (jot 4000))  zs (map (\ x (+ (* x 1.5) 2.0)) (jot 4000)) (= ys zs))  ; 4000 boxes under GC pressure == interp
   ; --- added coverage: setcc <=/>/>=/=, multi-arg (cgn) %/&/|/cmp/?, *-fold loop, //-by-0 deopt ---
   ; comparison RESULT codes -- only `<` reached a setcc before, 4 of 5 opcodes were dark
   (: le (jit '(\ x (<= x 5))) (&& (1 = (le 5)) (1 = (le 3)) (0 = (le 6))))            ; setcc <=
@@ -157,7 +157,7 @@
   (: mnn (jit2 '(\ x y (? (< x y) x y))) (&& (3 = (mnn 3 5)) (4 = (mnn 9 4))))              ; cgn -> condcode (min)
   ; *-fold counted loop -- jitsum hardcodes +/<, so drive acc-mul + nonzero r11-init via loopcode
   (: prodf (: psrc ['\ 'n [[': ['go 'i 'a] ['? ['< 'i 'n] ['go ['+ 'i 1] ['* 'a ['+ 'i 1]]] 'a]] 0 1]]
-              (nif (emit (loopcode '(+ i 1) 'i '* '< 'x64)) (ev psrc) psrc 1))
+              (nif (emit (loopcode '(+ i 1) 'i '* '< 'amd64)) (ev psrc) psrc 1))
      pf (\ n ((: (go i a) (? (< i n) (go (+ i 1) (* a (+ i 1))) a)) 0 1))
      (&& (120 = (prodf 5)) (= (pf 8) (prodf 8))))                                           ; n! via a product fold
   ; divide-by-zero takes the guardz deopt -- only nonzero divisors were tested
@@ -180,14 +180,14 @@
                  (grid 0 0)))
      mg (jitfgrid gsrc 64 64 '(- (* px 0.046875) 2.0) '(- (* py 0.046875) 1.5)
                   '(zx zy) '((+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy))
-                  '(+ (* zx zx) (* zy zy)) '<= 4.0 100 'x64)
+                  '(+ (* zx zx) (* zy zy)) '<= 4.0 100 'amd64)
      (&& (= 87130 (mg 0)) (= ((ev gsrc) 0) (mg 0))))
   ; --- AUTO-HOOK: recognize the (mand col grid) nest from SOURCE and glaze it -> checksum 87130 ---
   (: gmand '(? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))
                (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
      gcol '(? (< py 64) (col px (+ py 1) (+ acc (mand (+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875)) 0.0 0.0 0))) acc)
      ggrid '(? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
-     ng (grok '(\ _ 0) '(cx cy zx zy it) gmand gcol ggrid 'x64)
+     ng (grok '(\ _ 0) '(cx cy zx zy it) gmand gcol ggrid 'amd64)
      (= 87130 (ng 0))))
     (say err "love/glaze/emit: native codegen ok (arith + loop + D-dim float grid, transparent, deopt)\n"))
 ))
@@ -728,98 +728,98 @@
       (lit? assemble) (lit? jitir) (lit? jitnir) (lit? jitgroupir) (lit? coreir) (lit? deoptir)
       (lit? cggir) (lit? cggvir) (lit? consir) (lit? mkhir) (lit? mkouterir)
       ; x86 native == interp
-      (31 = ((jitir '(\ x (+ (* x 3) 1)) 'x64) 10))
-      (= ((ev '(\ x (+ (* x 3) 1))) 10) ((jitir '(\ x (+ (* x 3) 1)) 'x64) 10))
-      (49 = ((jitir '(\ x (* x x)) 'x64) 7))
-      (8 = ((jitir '(\ x (- x 2)) 'x64) 10)) (-8 = ((jitir '(\ x (- 2 x)) 'x64) 10))     ; - keeps a-b order
-      (3 = ((jitir '(\ x (// x 3)) 'x64) 10)) (1 = ((jitir '(\ x (% x 7)) 'x64) 8))
-      (8 = ((jitir '(\ x (& x 12)) 'x64) 10)) (3 = ((jitir '(\ x (| x 1)) 'x64) 2)) (15 = ((jitir '(\ x (^ x 5)) 'x64) 10))
-      (1 = ((jitir '(\ x (< x 5)) 'x64) 3)) (0 = ((jitir '(\ x (< x 5)) 'x64) 9))         ; cmp -> set
-      (1 = ((jitir '(\ x (<= x 5)) 'x64) 5)) (1 = ((jitir '(\ x (>= x 5)) 'x64) 9)) (1 = ((jitir '(\ x (= x 5)) 'x64) 5))
-      (7 = ((jitir '(\ x (? (< x 0) (- 0 x) x)) 'x64) -7)) (0 = ((jitir '(\ x (? (< x 0) (- 0 x) x)) 'x64) 0))   ; abs (?)
-      (9000000000000000000 = ((jitir '(\ x (* x x)) 'x64) 3000000000))                    ; overflow -> deopt -> bignum
-      (16000000000000000001 = ((jitir '(\ x (+ 1 (* x x))) 'x64) 4000000000))             ; mid-nest overflow: sp unwind on deopt
-      (= (// 10 0) ((jitir '(\ x (// x 0)) 'x64) 10))                                      ; /-by-0 guard -> deopt -> interp
-      (= (+ '(1 2) 1) ((jitir '(\ x (+ x 1)) 'x64) '(1 2)))                                ; non-fixnum arg -> deopt -> interp
-      ((\ x (+ (* x 3) 1)) = (jitir '(\ x (+ (* x 3) 1)) 'x64))                            ; =-IDENTICAL to source (transparent)
-      (= '(2 4 6) (map (jitir '(\ x (+ x 1)) 'x64) '(1 3 5)))                              ; composes with higher-order fns
-      (= 1 ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jitir ['\ 'x ['* 'x i]] 'x64) 7) (* 7 i)))) a)) 0 1))     ; agree 0..60
+      (31 = ((jitir '(\ x (+ (* x 3) 1)) 'amd64) 10))
+      (= ((ev '(\ x (+ (* x 3) 1))) 10) ((jitir '(\ x (+ (* x 3) 1)) 'amd64) 10))
+      (49 = ((jitir '(\ x (* x x)) 'amd64) 7))
+      (8 = ((jitir '(\ x (- x 2)) 'amd64) 10)) (-8 = ((jitir '(\ x (- 2 x)) 'amd64) 10))     ; - keeps a-b order
+      (3 = ((jitir '(\ x (// x 3)) 'amd64) 10)) (1 = ((jitir '(\ x (% x 7)) 'amd64) 8))
+      (8 = ((jitir '(\ x (& x 12)) 'amd64) 10)) (3 = ((jitir '(\ x (| x 1)) 'amd64) 2)) (15 = ((jitir '(\ x (^ x 5)) 'amd64) 10))
+      (1 = ((jitir '(\ x (< x 5)) 'amd64) 3)) (0 = ((jitir '(\ x (< x 5)) 'amd64) 9))         ; cmp -> set
+      (1 = ((jitir '(\ x (<= x 5)) 'amd64) 5)) (1 = ((jitir '(\ x (>= x 5)) 'amd64) 9)) (1 = ((jitir '(\ x (= x 5)) 'amd64) 5))
+      (7 = ((jitir '(\ x (? (< x 0) (- 0 x) x)) 'amd64) -7)) (0 = ((jitir '(\ x (? (< x 0) (- 0 x) x)) 'amd64) 0))   ; abs (?)
+      (9000000000000000000 = ((jitir '(\ x (* x x)) 'amd64) 3000000000))                    ; overflow -> deopt -> bignum
+      (16000000000000000001 = ((jitir '(\ x (+ 1 (* x x))) 'amd64) 4000000000))             ; mid-nest overflow: sp unwind on deopt
+      (= (// 10 0) ((jitir '(\ x (// x 0)) 'amd64) 10))                                      ; /-by-0 guard -> deopt -> interp
+      (= (+ '(1 2) 1) ((jitir '(\ x (+ x 1)) 'amd64) '(1 2)))                                ; non-fixnum arg -> deopt -> interp
+      ((\ x (+ (* x 3) 1)) = (jitir '(\ x (+ (* x 3) 1)) 'amd64))                            ; =-IDENTICAL to source (transparent)
+      (= '(2 4 6) (map (jitir '(\ x (+ x 1)) 'amd64) '(1 3 5)))                              ; composes with higher-order fns
+      (= 1 ((: (go i a) (? (< i 60) (go (+ i 1) (&& a (= ((jitir ['\ 'x ['* 'x i]] 'amd64) 7) (* 7 i)))) a)) 0 1))     ; agree 0..60
       ; --- n-ary lane (jitnir, arity>=2): native == interp, curries to saturation, transparent, deopts
-      (7 = ((jitnir '(\ x y (+ x y)) 'x64) 3 4)) (7 = (((jitnir '(\ x y (+ x y)) 'x64) 3) 4))      ; saturated + curried
-      (= ((ev '(\ x y (- (* x x) y))) 5 3) ((jitnir '(\ x y (- (* x x) y)) 'x64) 5 3))
-      (16000000000000000000 = ((jitnir '(\ x y (- (* x x) y)) 'x64) 4000000000 0))                 ; overflow -> deopt -> bignum
-      (13 = ((jitnir '(\ x y z (+ (+ x y) (* z 2))) 'x64) 1 2 5))
-      (13 = (((jitnir '(\ x y z (+ (+ x y) (* z 2))) 'x64) 1) 2 5))                                 ; arity-3, saturate at any split
-      ((\ x y z (+ (+ x y) (* z 2))) = (jitnir '(\ x y z (+ (+ x y) (* z 2))) 'x64))                ; =-identical to source
-      (16000000000000000005 = ((jitnir '(\ x y z (+ (+ (* x x) y) z)) 'x64) 4000000000 0 5))        ; deopt through a MIDDLE param
-      (3 = ((jitnir '(\ x y (// x y)) 'x64) 13 4)) (1 = ((jitnir '(\ x y (% x y)) 'x64) 8 7))       ; n-ary // and %
+      (7 = ((jitnir '(\ x y (+ x y)) 'amd64) 3 4)) (7 = (((jitnir '(\ x y (+ x y)) 'amd64) 3) 4))      ; saturated + curried
+      (= ((ev '(\ x y (- (* x x) y))) 5 3) ((jitnir '(\ x y (- (* x x) y)) 'amd64) 5 3))
+      (16000000000000000000 = ((jitnir '(\ x y (- (* x x) y)) 'amd64) 4000000000 0))                 ; overflow -> deopt -> bignum
+      (13 = ((jitnir '(\ x y z (+ (+ x y) (* z 2))) 'amd64) 1 2 5))
+      (13 = (((jitnir '(\ x y z (+ (+ x y) (* z 2))) 'amd64) 1) 2 5))                                 ; arity-3, saturate at any split
+      ((\ x y z (+ (+ x y) (* z 2))) = (jitnir '(\ x y z (+ (+ x y) (* z 2))) 'amd64))                ; =-identical to source
+      (16000000000000000005 = ((jitnir '(\ x y z (+ (+ (* x x) y) z)) 'amd64) 4000000000 0 5))        ; deopt through a MIDDLE param
+      (3 = ((jitnir '(\ x y (// x y)) 'amd64) 13 4)) (1 = ((jitnir '(\ x y (% x y)) 'amd64) 8 7))       ; n-ary // and %
       ; --- arm64: the SAME source assembles for aarch64 (data; exec needs qemu), and differs from x64
       (< 0 (tally (peep (assemble 'arm64 (coreir 'arm64 '(x) '(+ (* x 3) 1) (deoptir 'arm64 0))) 'bytes 0)))   ; leaf
       (< 0 (tally (peep (assemble 'arm64 (coreir 'arm64 '(x y) '(+ (* x x) y) (deoptir 'arm64 1))) 'bytes 0))) ; n-ary (deopt -> interp body)
-      !(= (peep (assemble 'x64   (coreir 'x64   '(x) '(+ x 1) (deoptir 'x64 0))) 'bytes 0)
+      !(= (peep (assemble 'amd64   (coreir 'amd64   '(x) '(+ x 1) (deoptir 'amd64 0))) 'bytes 0)
           (peep (assemble 'arm64 (coreir 'arm64 '(x) '(+ x 1) (deoptir 'arm64 0))) 'bytes 0))       ; per-target codegen differs
       ; --- call-out bridge: the SAME drive IR lays for aarch64 (data; exec rides the corpus), and differs from x64
       (< 0 (tally (peep (assemble 'arm64 (calloutir 'arm64 '+ 'i)) 'bytes 0)))                         ; global-F sum-over-(F i)
       (< 0 (tally (peep (assemble 'arm64 (calloutframeir 'arm64 1 0 2 '+ 'i)) 'bytes 0)))              ; frame F@1 N@0 arity 2
-      !(= (peep (assemble 'x64   (calloutir 'x64 '+ 'i)) 'bytes 0)
+      !(= (peep (assemble 'amd64   (calloutir 'amd64 '+ 'i)) 'bytes 0)
           (peep (assemble 'arm64 (calloutir 'arm64 '+ 'i)) 'bytes 0))                                  ; per-target callout codegen differs
-      !(= (peep (assemble 'x64 (calloutir 'x64 '+ 'i)) 'bytes 0)
-          (peep (assemble 'x64 (calloutir 'x64 '* 'i)) 'bytes 0))                                      ; the * fold lays differently from + (mulo accumulator)
-      !(= (peep (assemble 'x64 (calloutir 'x64 '+ 'i)) 'bytes 0)
-          (peep (assemble 'x64 (calloutir 'x64 '+ '(* i i))) 'bytes 0))                                ; a computed arg (F (* i i)) lays differently from bare (F i)
+      !(= (peep (assemble 'amd64 (calloutir 'amd64 '+ 'i)) 'bytes 0)
+          (peep (assemble 'amd64 (calloutir 'amd64 '* 'i)) 'bytes 0))                                      ; the * fold lays differently from + (mulo accumulator)
+      !(= (peep (assemble 'amd64 (calloutir 'amd64 '+ 'i)) 'bytes 0)
+          (peep (assemble 'amd64 (calloutir 'amd64 '+ '(* i i))) 'bytes 0))                                ; a computed arg (F (* i i)) lays differently from bare (F i)
       ; --- group lane (jitgroupir): mutually-recursive first-order integer fns, native == interp
-      (55 = ((jitgroupir [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64) 10))
+      (55 = ((jitgroupir [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'amd64) 10))
       (= ((ev '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) fib)) 25)
-         ((jitgroupir [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64) 25))            ; fib(25)=75025 == interp
-      (1180591620717411303424 = ((jitgroupir [(link '(p2 n) '(? (< n 1) 1 (* 2 (p2 (- n 1)))))] 'p2 'x64) 70))   ; 2^70: mul overflow -> OVF -> deopt -> bignum
+         ((jitgroupir [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'amd64) 25))            ; fib(25)=75025 == interp
+      (1180591620717411303424 = ((jitgroupir [(link '(p2 n) '(? (< n 1) 1 (* 2 (p2 (- n 1)))))] 'p2 'amd64) 70))   ; 2^70: mul overflow -> OVF -> deopt -> bignum
       ; integer-param FIXNUM GUARD (mkouterir's, distinct from the leaf coreir guard): a HEAP arg to a plain
       ; int param must DEOPT to the interp, never sar+re-tag into a garbage fixnum (pointer|1). glazed == interp.
-      (: gidh ((jitgroupir [(link '(id1 x) 'x)] 'id1 'x64) '(a b)) (&& ('(a b) = gidh) !(charm? gidh)))     ; identity on a list -> the list, not a mangled fixnum
-      (= (+ '(1 2) 1) ((jitgroupir [(link '(inc n) '(+ n 1))] 'inc 'x64) '(1 2)))                            ; arith on a heap arg -> deopt == interp
+      (: gidh ((jitgroupir [(link '(id1 x) 'x)] 'id1 'amd64) '(a b)) (&& ('(a b) = gidh) !(charm? gidh)))     ; identity on a list -> the list, not a mangled fixnum
+      (= (+ '(1 2) 1) ((jitgroupir [(link '(inc n) '(+ n 1))] 'inc 'amd64) '(1 2)))                            ; arith on a heap arg -> deopt == interp
       ; // and % in the GROUP lane (divir), with /-by-0 deopt -- a path the jitir/jitnir cases don't reach
-      (3 = ((jitgroupir [(link '(q n d) '(// n d))] 'q 'x64) 10 3)) (-3 = ((jitgroupir [(link '(q n d) '(// n d))] 'q 'x64) -10 3))
-      (1 = ((jitgroupir [(link '(r n d) '(% n d))] 'r 'x64) 10 3)) (= (% 7 0) ((jitgroupir [(link '(r n d) '(% n d))] 'r 'x64) 7 0))       ; /-by-0 -> deopt -> interp
-      (7 = ((jitgroupir [(link '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))] 'tak 'x64) 18 12 6))     ; multi-arg, nested self-calls
-      (7 = (((jitgroupir [(link '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))] 'tak 'x64) 18 12) 6))   ; ... curries at any split
+      (3 = ((jitgroupir [(link '(q n d) '(// n d))] 'q 'amd64) 10 3)) (-3 = ((jitgroupir [(link '(q n d) '(// n d))] 'q 'amd64) -10 3))
+      (1 = ((jitgroupir [(link '(r n d) '(% n d))] 'r 'amd64) 10 3)) (= (% 7 0) ((jitgroupir [(link '(r n d) '(% n d))] 'r 'amd64) 7 0))       ; /-by-0 -> deopt -> interp
+      (7 = ((jitgroupir [(link '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))] 'tak 'amd64) 18 12 6))     ; multi-arg, nested self-calls
+      (7 = (((jitgroupir [(link '(tak x y z) '(? (< y x) (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)) z))] 'tak 'amd64) 18 12) 6))   ; ... curries at any split
       (: eo [(link '(evn n) '(? (= n 0) 1 (odn (- n 1)))) (link '(odn n) '(? (= n 0) 0 (evn (- n 1))))]
-         (&& (1 = ((jitgroupir eo 'evn 'x64) 10)) (0 = ((jitgroupir eo 'evn 'x64) 7)) (1 = ((jitgroupir eo 'odn 'x64) 7))))   ; MUTUAL recursion (either entry)
-      (= (jitgroupir [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64)
-         (jitgroupir [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64))                 ; two natives, same source -> = (transparent)
+         (&& (1 = ((jitgroupir eo 'evn 'amd64) 10)) (0 = ((jitgroupir eo 'evn 'amd64) 7)) (1 = ((jitgroupir eo 'odn 'amd64) 7))))   ; MUTUAL recursion (either entry)
+      (= (jitgroupir [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'amd64)
+         (jitgroupir [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'amd64))                 ; two natives, same source -> = (transparent)
       ; jitgroupirx stamps the SUPPLIED outer src (=/show) -- the hook passes `s` so a group-glazed closure
       ; is transparent against its bytecode twin; the elam entry-lambda is only the FALLBACK (jitgroupir).
-      (: dfs [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))]  dopt (jitgroupir dfs 'fib 'x64)
-         (&& (55 = ((jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))) 10))                                          ; runs correct
-             (= (jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))) (jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))))  ; same supplied src -> =
-             !(= (jitgroupirx dfs 'fib 'x64 dopt '(\ m (fib m))) (jitgroupir dfs 'fib 'x64))))                     ; supplied src differs from the elam default
+      (: dfs [(link '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))]  dopt (jitgroupir dfs 'fib 'amd64)
+         (&& (55 = ((jitgroupirx dfs 'fib 'amd64 dopt '(\ m (fib m))) 10))                                          ; runs correct
+             (= (jitgroupirx dfs 'fib 'amd64 dopt '(\ m (fib m))) (jitgroupirx dfs 'fib 'amd64 dopt '(\ m (fib m))))  ; same supplied src -> =
+             !(= (jitgroupirx dfs 'fib 'amd64 dopt '(\ m (fib m))) (jitgroupir dfs 'fib 'amd64))))                     ; supplied src differs from the elam default
       ; STRING lane (peep/tally): s a string param (kind-guarded, passed RAW); peep reads byte [s+16], tally the len [s+8]
       (: data (string [72 105 90 33 65])                                                                         ; "HiZ!A": byte-sum 365, len 5
-         sbn (jitgroupir [(link '(sb s i) '(? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))))] 'sb 'x64)              ; recursive byte-sum
-         tln (jitgroupir [(link '(tl s) '(tally s))] 'tl 'x64)
-         pkn (jitgroupir [(link '(pk s i) '(peep s i 0))] 'pk 'x64)
+         sbn (jitgroupir [(link '(sb s i) '(? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))))] 'sb 'amd64)              ; recursive byte-sum
+         tln (jitgroupir [(link '(tl s) '(tally s))] 'tl 'amd64)
+         pkn (jitgroupir [(link '(pk s i) '(peep s i 0))] 'pk 'amd64)
          (&& (365 = (sbn data 4)) (= ((ev '(: (sb s i) (? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))) sb)) data 4) (sbn data 4))   ; native byte-sum == interp
              (5 = (tln data)) (! (tln 5))                                                                         ; tally native; a FIXNUM arg -> guard rejects -> deopt -> interp tally of a scalar = ()
              (72 = (pkn data 0)) (0 = (pkn data 99))))                                                            ; peep in-bounds (byte 'H'=72); OOB -> the default 0 (pure-native branch, no deopt)
       ; CASK lane (pin): c a cask param (kind-guarded, raw); pin stores V's low byte at backing[i], returns c (so it threads as a call arg)
       (: c (cask 5)
-         fil (jitgroupir [(link '(fill c i) '(? (< i 0) 0 (fill (pin c i (+ 65 i)) (- i 1))))] 'fill 'x64)          ; fill bytes 0..i with 65+i, recursing on (pin ..)'s returned cask
+         fil (jitgroupir [(link '(fill c i) '(? (< i 0) 0 (fill (pin c i (+ 65 i)) (- i 1))))] 'fill 'amd64)          ; fill bytes 0..i with 65+i, recursing on (pin ..)'s returned cask
          _ (fil c 4)
          (&& (= '(65 66 67 68 69) [(peep c 0 0) (peep c 1 0) (peep c 2 0) (peep c 3 0) (peep c 4 0)])               ; each byte written natively
-             (88 = (: c2 (cask 4) _ ((jitgroupir [(link '(g c) '(pin c 2 88))] 'g 'x64) c2) (peep c2 2 0)))))       ; a single native pin -> byte 2
+             (88 = (: c2 (cask 4) _ ((jitgroupir [(link '(g c) '(pin c 2 88))] 'g 'amd64) c2) (peep c2 2 0)))))       ; a single native pin -> byte 2
       ; MAP lane (mpeep/mpin): m a map param (kind-guarded, raw); the open-addressed probe (mprobe-ir relabeled per site, deopt -> OVF)
-      (: rn (jitgroupir [(link '(run m i) '(? (< i 0) (mpeep m 3 -1) (run (mpin m (+ 1 i) (* 10 i)) (- i 1))))] 'run 'x64)     ; fill keys 1..i+1 with 10*i (threading (mpin ..)'s map), then read key 3
+      (: rn (jitgroupir [(link '(run m i) '(? (< i 0) (mpeep m 3 -1) (run (mpin m (+ 1 i) (* 10 i)) (- i 1))))] 'run 'amd64)     ; fill keys 1..i+1 with 10*i (threading (mpin ..)'s map), then read key 3
          m16 (tablet 16) r16 (rn m16 8)                                                                              ; presized -> pure native
          m2 (tablet 2) r2 (rn m2 8)                                                                                  ; undersized -> mpin grow-miss -> OVF deopt -> interp grows (faithful)
          (&& (20 = r16) (40 = (peep m16 5 -1)) (0 = (peep m16 1 -1))                                                 ; native mpin wrote REAL entries (the core map accessor reads them)
              (20 = r2) (80 = (peep m2 9 -1))                                                                         ; grow-deopt faithful: same result + the map actually grew & inserted
-             (-1 = ((jitgroupir [(link '(g m k) '(mpeep m k -1))] 'g 'x64) 5 3))))                                   ; a FIXNUM map arg -> guard rejects -> deopt -> interp peep on a scalar = the default -1
+             (-1 = ((jitgroupir [(link '(g m k) '(mpeep m k -1))] 'g 'amd64) 5 3))))                                   ; a FIXNUM map arg -> guard rejects -> deopt -> interp peep on a scalar = the default -1
       ; CHAIN lane (cap/cup/two?): t a chain param (raw, NO entry guard -- two? is TOTAL; cap/cup chain-guard inline, deopting a non-chain)
       (: (mk d) (? (< d 1) 0 (link (mk (- d 1)) (mk (- d 1))))                                                       ; an interp tree builder (the allocating mk stays interp)
-         ckn (jitgroupir [(link '(ck t) '(? (two? t) (+ 1 (+ (ck (cap t)) (ck (cup t)))) 0))] 'ck 'x64)              ; native node-count walk
+         ckn (jitgroupir [(link '(ck t) '(? (two? t) (+ 1 (+ (ck (cap t)) (ck (cup t)))) 0))] 'ck 'amd64)              ; native node-count walk
          (&& (255 = (ckn (mk 8))) (15 = (ckn (mk 4)))                                                                ; 2^d-1 nodes, native cap/cup recursion
              (0 = (ckn 0)) (1 = (ckn (link 0 0)))))                                                                  ; two? total: a fixnum leaf -> 0; a lone chain -> 1
       ; TCO: a tail self-call loops IN PLACE (reuse the frame, O(1) stack) -- 1M deep would SIGSEGV without it
-      (1000000 = ((jitgroupir [(link '(loop i) '(? (< i 1000000) (loop (+ i 1)) i))] 'loop 'x64) 0))                 ; single-arg counted loop
-      (499999500000 = ((jitgroupir [(link '(sm i a) '(? (< i 1000000) (sm (+ i 1) (+ a i)) a))] 'sm 'x64) 0 0))      ; multi-arg tail accumulator (sum 0..1M-1)
+      (1000000 = ((jitgroupir [(link '(loop i) '(? (< i 1000000) (loop (+ i 1)) i))] 'loop 'amd64) 0))                 ; single-arg counted loop
+      (499999500000 = ((jitgroupir [(link '(sm i a) '(? (< i 1000000) (sm (+ i 1) (+ a i)) a))] 'sm 'amd64) 0 0))      ; multi-arg tail accumulator (sum 0..1M-1)
       ; arm64: the group assembles (data); the H saves lr + uses 16-byte slots + bl calls (llvm-mc-verified)
       (< 0 (tally (peep (assemble 'arm64 (bcat [(mkouterir 'arm64 1 'fib 1 0 () () () () ())
                 (mkhir 'arm64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))])) 'bytes 0))))
@@ -882,7 +882,7 @@
       (0 = (member? () '(1 2))) (1 = (member? () (link () ())))                  ; the zero point is a mint
       (0 = (member? 'x ())) (0 = (member? 'x 5))                                 ; no chain -> the walk never starts
       (200000 = ((: (go i a) (? (< i 200000) (go (+ i 1) (+ a (member? 'q '(a b q)))) a)) 0 0))
-      (: pg (jitgroupir [(link '(pm2 x l) '(? (two? l) (? (= x (cap l)) 1 (pm2 x (cup l))) 0))] 'pm2 'x64)     ; the group lane direct: exec x64 ...
+      (: pg (jitgroupir [(link '(pm2 x l) '(? (two? l) (? (= x (cap l)) 1 (pm2 x (cup l))) 0))] 'pm2 'amd64)     ; the group lane direct: exec x64 ...
          (&& (1 = (pg 'b '(a b))) (0 = (pg 'z '(a b))) (0 = (pg 'z 7))))
       (< 0 (tally (peep (assemble 'arm64 (bcat [(mkouterir 'arm64 2 'pm3 2 0 () () () () '(0))     ; ... and the point-guarded outer assembles on arm64
                 (mkhir 'arm64 '(pm3) 'pm3 '(x l) '(? (two? l) (? (= x (cap l)) 1 (pm3 x (cup l))) 0))])) 'bytes 0))))

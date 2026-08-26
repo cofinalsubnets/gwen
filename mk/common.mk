@@ -153,7 +153,15 @@ ai_cflags = -std=$(ai_std) -g -O2 -pipe $(EXTRA_CFLAGS) \
 # owes clock_gettime and kill, so the level is asked for by name.
 # -fcf-protection (Intel CET) is x86-only; the non-x86 seats have no CET to turn off and
 # take it as a no-op.
-ai_cflags += -fcf-protection=none -D_POSIX_C_SOURCE=200809L
+ai_cflags += -fcf-protection=none
+# ..and the POSIX level is GLIBC'S ASK, so it goes only where glibc is. A BSD header
+# defaults to its whole surface and reads this as a NARROWING: freebsd drops __BSD_VISIBLE
+# to 0 the moment it is defined -- taking MSG_DONTWAIT, SOCK_CLOEXEC and the pty quartet
+# with it -- and there is no additive macro to win them back. Asking for less than the
+# default is how a portable-looking flag became the one thing the BSD lane could not build.
+ifeq ($(filter FreeBSD NetBSD,$(shell uname -s)),)
+ai_cflags += -D_POSIX_C_SOURCE=200809L
+endif
 # the data-sentinel tiling src/love.h's ai_typ reads (src/love.c's DSENT), on every ld/lld link.
 data_ld = -Wl,-T,$R/src/love_data.ld
 # ⚠ AN EMPTY BRACKET IS STILL A BRACKET. src/love.c indexes the host nif slice off

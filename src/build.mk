@@ -99,7 +99,10 @@ $(ho)/liblove.a: $(h_o)
 # -Dai_data_section=0: the bootstrap asks the sentinels by name and owes no linker script.
 # both ai_typ bodies answer the same enum d for the same ap, and no layout crosses binaries
 # (love.h: the heap image carries an ap as its index).
-boot_cc = $(CCACHE) $(CC) $(ai_cflags) -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Isrc -Iout/lib
+# -fPIE is the compile half of the -pie link below, said out loud rather than inherited:
+# gcc on linux defaults to it, the BSDs' clang does not, and the mismatch is an
+# R_X86_64_32S the linker refuses at the very end of a from-scratch bootstrap.
+boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Isrc -Iout/lib
 # ⚠ src/cats.c is NOT love0's: it bakes the out/lib/*.h headers love0 itself lays, so a
 # from-scratch tree has none of them to compile against. love0's boot reads the sed-wrapped
 # 0.h twins instead (src/main.c, #ifdef LoveBoot).
@@ -209,7 +212,7 @@ endif
 # cross lay for the third ISA answered `obj-no-backend`. asbook.l first, then
 # the backends join the module, then elf/obj: asbook.l's own stated order.
 mksys_l = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
-          crew/holo/x64.l crew/holo/arm64.l crew/holo/riscv.l \
+          crew/holo/amd64.l crew/holo/arm64.l crew/holo/rv64.l \
           crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
 # pinned to out/host, like the src.o that reads it: the cat is $(mksys_l) verbatim and
 # $(mksys_l) is flavour-neutral, so one cut serves every hsuf. templated on $(ho) it would

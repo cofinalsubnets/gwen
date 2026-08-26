@@ -91,9 +91,9 @@
        (? (! (okv? lx)) ['bad 'lex lx]
           (: pp (cpp <>lx (\ n s (incload () () "test/cc/" n s)) "<fuzz>")
              (? (! (okv? pp)) ['bad 'cpp pp]
-                (: ps (cparse-t <>pp 'x64)
+                (: ps (cparse-t <>pp 'amd64)
                    (? (! (okv? ps)) ['bad 'parse ps]
-                      (: g (cgen-obj <>ps (cauup ps) (caup (cuup ps)) (cauup (cuup ps)) () 'x64)
+                      (: g (cgen-obj <>ps (cauup ps) (caup (cuup ps)) (cauup (cuup ps)) () 'amd64)
                          (? (! (okv? g)) ['bad 'gen g] ['ok <>ps]))))))))
 
    ; --- one mutant -> a verdict symbol, plus the stage it died in when it died.

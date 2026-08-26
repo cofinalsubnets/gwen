@@ -27,11 +27,11 @@
    (g2-front src)
     (: r (uread src)
        (? (! (two? r)) 'noread
-          (: lx (clex ((deftext [(archdef 'x64)]) + <>r))
+          (: lx (clex ((deftext [(archdef 'amd64)]) + <>r))
              (? (! (okv? lx)) 'lexfail
                 (: pp (cpp <>lx (\ n s (incload () () (cdir src) n s)) src)
                    (? (! (okv? pp)) 'cppfail
-                      (: ps (cparse-t <>pp 'x64)
+                      (: ps (cparse-t <>pp 'amd64)
                          (? (okv? ps) (g2-el (caup ps) 1) 'parsefail))))))))
 
    ; the DEFINITION, never the prototype that announces it: the two wear one name, and

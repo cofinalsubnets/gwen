@@ -153,7 +153,7 @@
    ; the target machine bakes and patches it in place (src/main.c) -- the same
    ; bytes a native `make dist` lays, with nothing foreign anywhere in the chain.
    (seed-cross root xa dst)
-    (: made (root + "/out/x-" + xa + "/love")
+    (: made (root + "/out/x-" + (arch-mach (intern xa)) + "/love")
        e (copyfile made dst)
        _ (e < 0 ? (src-die ("can't write " + dst)))
        _ (chmod dst 493)
@@ -175,7 +175,8 @@
        _ (string? exe ? 0 (src-die "can't find seed path"))
        here (cwd 0)
        _ (? (charm? (chdir root)) (src-die ("can't enter " + root)) 0)
-       s (herald (string? xa ? [exe "make" ("xa=" + xa) ("out/x-" + xa + "/love")]
+       xm (? (string? xa) (arch-mach (intern xa)) ())     ; make's word for it
+       s (herald (string? xa ? [exe "make" ("xa=" + xm) ("out/x-" + xm + "/love")]
                               [exe "make" "dist"]))
        st (two? s ? <s s)
        _ (chdir here)
@@ -192,14 +193,12 @@
    ; lays a seed for a machine it is not -- which is the portability story now
    ; that one binary per ISA is the shape. Every love carries every ISA's
    ; runtime (mkrt joins all three), so any version builds any other.
-   seed-arches '(x86_64 aarch64 riscv64)
-   ; the other spellings of the same three machines -- uname's, Debian's, the ISA
-   ; shorthands and holo's own -- each normalized to the make spelling above.
-   ; the word arrives as an argv string and leaves as one (exec, the artifact
-   ; name); between the doors it is a symbol.
-   seed-spell '((arm64 aarch64) (amd64 x86_64) (x64 x86_64)
-                (x86-64 x86_64) (rv64 riscv64) (riscv riscv64))
-   (seed-canon w) (: s (intern w) a (assoc s seed-spell) (? (two? a) <>a s))
+   ; ⚠ CANONICAL INSIDE, the world's word only at the doors. the prel's arch-canon takes
+   ; every other spelling anyone types -- uname's, Debian's, the ISA shorthands -- so there
+   ; is no second table here; `arch-mach` puts the triple word back on where make wants it
+   ; (a cross toolchain's prefix is spelled aarch64-, never arm64-).
+   seed-arches '(amd64 arm64 rv64)
+   (seed-canon w) (: a (archof w) (? a a (intern w)))
    ; the arch word is positional and A PATH STILL WINS: `./aarch64` is the
    ; directory, the verb rail's own rule worn one level down.
    (seed-arch? w) (: n (tally w)
@@ -207,15 +206,14 @@
                                (w i = 47) 0
                                (go (i + 1)))
                      (go 0))
-   ; this machine's arch in seed-arches' spelling -- holo names its arches and
-   ; uname names them differently, and love-arch speaks holo's.
-   (seed-native _) (? (love-arch = "x64") 'x86_64 (love-arch = "arm64") 'aarch64 (intern love-arch))
+   ; this machine's arch: love-arch is already canonical, which is seed-arches' spelling.
+   (seed-native _) love-arch
 
    (seed-usage _)
     (puts ("usage: love seed [--self] [ARCH] [DIR]\n"
            + "  lay this binary's source under DIR (default .) and rebuild it there;\n"
            + "  the result has to BE this binary, byte for byte.\n"
-           + "  ARCH    x86_64 | aarch64 | riscv64 -- an egg for that machine instead\n"
+           + "  ARCH    amd64 | arm64 | rv64 -- an egg for that machine instead\n"
            + "  --self  build with nothing ambient: our own mooncc, our own userland\n"))
 
    (seed-lay as0)

@@ -35,11 +35,11 @@ char const ai_cat_mods[] =
 #ifndef K_TEST
 #include "holo.h"
 #if defined(__x86_64__)
-#include "x64.h"
+#include "amd64.h"
 #elif defined(__aarch64__)
 #include "arm64.h"
 #elif defined(__riscv)
-#include "riscv.h"
+#include "rv64.h"
 #endif
 #endif
 #include "bao.h"

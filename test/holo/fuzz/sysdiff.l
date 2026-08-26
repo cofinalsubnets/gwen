@@ -12,9 +12,9 @@
 ;   out/host/love test/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
 
 (reads (open "crew/holo/holo.l" "r"))
-(reads (open "crew/holo/x64.l" "r"))
+(reads (open "crew/holo/amd64.l" "r"))
 (reads (open "crew/holo/arm64.l" "r"))
-(reads (open "crew/holo/riscv.l" "r"))
+(reads (open "crew/holo/rv64.l" "r"))
 ; holo rides module 'holo: reading the source REGISTERS it, and the names come
 ; through the door rather than off this file's layer.
 (use 'holo)
@@ -177,7 +177,7 @@
  (sweep arch)
   (: cs (? (arch = "arm64") (cases-a64 0) (cases-x64 0))
      _ (puts ("\n=== holo " + arch + " system-lane differential vs llvm-mc ===\n"))
-     tgt (? (arch = "arm64") 'arm64 'x64)
+     tgt (? (arch = "arm64") 'arm64 'amd64)
      ref (llvm arch (map (\ c (nthl c 1)) cs))
      seen (tablet 0)
      _ (map (\ c (? (id? (nthl c 2) ()) 0
@@ -213,6 +213,6 @@
      (? (two? fails) 1 0))
 
  sd-arch ("" + getenv "SYSDIFF_ARCH")
- arches (? (sd-arch = "x64") '("x64") (sd-arch = "arm64") '("arm64") '("x64" "arm64"))
+ arches (? (sd-arch = "amd64") '("amd64") (sd-arch = "arm64") '("arm64") '("amd64" "arm64"))
  bad (foldl (\ a x (a + sweep x)) 0 arches)
  (? (0 < bad) (quit 1) (quit 0)))

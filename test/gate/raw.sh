@@ -31,7 +31,7 @@ case $target in
            out=.test_raw.out    ; mksys=mksys        ; backend=""
            run=""               ; need=""            ; pretty=x64 ;;
   riscv64) name=test_raw_riscv  ; tflag="-t riscv64" ; sub=raw-rv  ; bin=love-raw-rv
-           out=.test_raw_rv.out ; mksys=mksys-riscv  ; backend=crew/holo/riscv.l
+           out=.test_raw_rv.out ; mksys=mksys-riscv  ; backend=crew/holo/rv64.l
            run=qemu-riscv64     ; need=qemu-riscv64  ; pretty=riscv64 ;;
   arm64)   name=test_raw_arm64  ; tflag="-t arm64"   ; sub=raw-a64 ; bin=love-raw-a64
            out=.test_raw_a64.out; mksys=mksys-arm64  ; backend=crew/holo/arm64.l

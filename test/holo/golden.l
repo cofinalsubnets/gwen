@@ -18,7 +18,7 @@
        (bump fail,
         sayln $ "FAIL " + name + ": want " + show want + " got " + show got + "\n"))
    (chk2 name want target prog) (chk-eq name want (holo-hex target prog))
-   (chk name want prog) (chk2 name want 'x64 prog)
+   (chk name want prog) (chk2 name want 'amd64 prog)
 
    ;; -- the golden table: (name  expected-hex  IR-program). --
    tests '(
@@ -253,14 +253,14 @@
    _ (foldl (\ _ t (chk (at t 0) (at t 1) (at t 2))) 0 tests)
 
    ;; -- label addresses are exposed on the assemble result, for a loader/linker to read. --
-   loopres (assemble 'x64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)))
+   loopres (assemble 'amd64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)))
    _ (chk-eq "addr.top"  0  (label-at loopres 'top))
    _ (chk-eq "addr.done" 17 (label-at loopres 'done))
 
    ;; -- the relaxing layout (laylax): the object writer's entry. in-range jmp/br land as the
    ;; 2-byte short forms (EB rel8 / 7x rel8); an external or weak-marked target stays rel32.
    ;; same (items . labels) shape as lay, resolved the same way.
-   rx-be (peep backends 'x64 ())
+   rx-be (peep backends 'amd64 ())
    (rx prog longs)
       (: p (laylax prog rx-be 0 (tablet 0) longs)
          (hexs (resolve <p >p rx-be 0)))
@@ -283,7 +283,7 @@
    ;; that scare and delegates everything else back to welp. --
    caught (tablet 0) _ (pin caught 0 0)
    _ (hear (\ a b (? (a = 'alias-dst) (: _ (pin caught 0 1) ()) (welp a b))))
-   _ (holo-bytes 'x64 '((sub r0 r3 r0)))
+   _ (holo-bytes 'amd64 '((sub r0 r3 r0)))
    _ (chk-eq "alias.refused" 1 (peep caught 0 0))
 
    ;; -- the same principle one target over: aarch64's register-form ALU is the SHIFTED-register
@@ -295,28 +295,28 @@
    _ (chk-eq "a64.alu.sp.refused" 1 (peep spcaught 0 0))
 
    ;; -- the text front-end (crew/holo/text.l) parses to the same IR, so it assembles byte-identically. --
-   _ (chk-eq "text.basic" (holo-hex 'x64 '((li r0 60) (ret)))
-                          (holo-hex 'x64 (asm-text "li r0, 60\nret")))
+   _ (chk-eq "text.basic" (holo-hex 'amd64 '((li r0 60) (ret)))
+                          (holo-hex 'amd64 (asm-text "li r0, 60\nret")))
    _ (chk-eq "text.full"
-        (holo-hex 'x64 '((add r0 r0 r1) (label loop) (dec r0) (br ne loop) (ret)))
-        (holo-hex 'x64 (asm-text "add r0, r0, r1   ; with a comment\nlabel loop\n  dec r0\n  br ne, loop\n\n  ret\n")))
+        (holo-hex 'amd64 '((add r0 r0 r1) (label loop) (dec r0) (br ne loop) (ret)))
+        (holo-hex 'amd64 (asm-text "add r0, r0, r1   ; with a comment\nlabel loop\n  dec r0\n  br ne, loop\n\n  ret\n")))
    ;; the SYSTEM lane rides the text front-end with no grammar change -- an operation name and a
    ;; system register are ordinary symbols, underscores and all. this is the seam mooncc's inline
    ;; asm parses through, so the kernel's templates land here.
-   _ (chk-eq "text.sys.x64" (holo-hex 'x64 '((cli) (ldcr r0 2) (lidt r6 0) (iretq)))
-                            (holo-hex 'x64 (asm-text "cli\nldcr r0, 2\nlidt r6, 0\niretq")))
+   _ (chk-eq "text.sys.x64" (holo-hex 'amd64 '((cli) (ldcr r0 2) (lidt r6 0) (iretq)))
+                            (holo-hex 'amd64 (asm-text "cli\nldcr r0, 2\nlidt r6, 0\niretq")))
    _ (chk-eq "text.sys.a64"
         (holo-hex 'arm64 '((mrs r0 ttbr1_el1) (dsb ish) (tlbi vmalle1is zr) (isb) (eret)))
         (holo-hex 'arm64 (asm-text "mrs r0, ttbr1_el1\ndsb ish\ntlbi vmalle1is, zr\nisb\neret")))
 
    ;; -- the ELF linker (crew/holo/elf.l) wraps assembled bytes in a well-formed static executable. --
    elfprog '((li r0 60) (li r6 0) (sys))
-   elfres  (elf64 'x64 (\ a elfprog) '(65 66 67))
+   elfres  (elf64 'amd64 (\ a elfprog) '(65 66 67))
    elfimg  (peep elfres 'bytes 0)
    _ (chk-eq "elf.magic"   127     (at elfimg 0))        ; \x7f E L F
    _ (chk-eq "elf.machine" 62      (at elfimg 18))       ; e_machine = x86-64
    _ (chk-eq "elf.entry"   4194424 (peep elfres 'entry 0))
-   _ (chk-eq "elf.size"    (120 + (tally (holo-bytes 'x64 elfprog) + 3)) (tally elfimg))
+   _ (chk-eq "elf.size"    (120 + (tally (holo-bytes 'amd64 elfprog) + 3)) (tally elfimg))
    _ (chk-eq "elf.arm64-machine" 183 (at (peep (elf64 'arm64 (\ a elfprog) ()) 'bytes 0) 18))
 
    ;; ..and the ELF32 twin: a 52-byte header + a 32-byte phdr. the two facts a width knob
@@ -951,7 +951,7 @@
       ("rv.fset.ab"  "d39fa5a27e85"      ((ucomisd f0 f1) (set above r0)))       ; flt.d t6,fa1,fa0 ; mv a0,t6
       ("rv.fset.be"  "d39fa5a213b51f00"  ((ucomisd f0 f1) (set be r0)))          ; flt.d ; seqz a0,t6
       ("rv.tp"       "1285"              ((tp r0))))                   ; mv a0, tp (the thread pointer)
-   _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'riscv64 (at t 2))) 0 rvtests)
+   _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'rv64 (at t 2))) 0 rvtests)
 
    ;; -- summary; nonzero exit on any miss, so `make`-style gates see the failure. --
    np (peep pass 0 0) nf (peep fail 0 0)

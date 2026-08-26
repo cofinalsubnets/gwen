@@ -9,7 +9,7 @@
 ;                        qemu-system-aarch64 -M virt -cpu cortex-a57 -nographic -kernel /tmp/love-arm64.elf
 ;                      (ctrl-a x to quit qemu.)
 ;
-; run: out/host/love -l crew/holo/holo.l -l crew/holo/x64.l -l crew/holo/arm64.l -l crew/holo/elf.l crew/holo/demo.l
+; run: out/host/love -l crew/holo/holo.l -l crew/holo/amd64.l -l crew/holo/arm64.l -l crew/holo/elf.l crew/holo/demo.l
 
 (module 'holo
 (: say (\ s (: _ (puts s) (flush out)))
@@ -19,7 +19,7 @@
    xmsg "hi from love-asm (x86-64 linux)\n"
    (x64-prog a) ['(li r0 1) '(li r6 1) ['li 'r5 a] ['li 'r2 (tally xmsg)] '(sys)
                   '(li r0 60) '(li r6 7) '(sys)]
-   xe (elf64 'x64 x64-prog (map xmsg (jot (tally xmsg))))
+   xe (elf64 'amd64 x64-prog (map xmsg (jot (tally xmsg))))
    _ (write-bytes "/tmp/love-x64.elf" (peep xe 'bytes 0))
 
    ;; -- the aarch64 bare-metal program: no syscalls (there's no OS), just store each byte to the

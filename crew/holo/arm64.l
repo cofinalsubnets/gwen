@@ -1,6 +1,6 @@
 ; arm64 -- the aarch64 BACKEND for the neutral assembler (crew/holo/holo.l), the second target. it shows
 ; the IR really is arch-neutral: the driver, the IR forms, the text front-end and the ELF linker are
-; all untouched -- this file just pins a {lower,patch} pair under 'arm64 and 'aarch64. every word
+; all untouched -- this file just pins a {lower,patch} pair under 'arm64. every word
 ; here was checked against llvm-mc (--show-encoding) and llvm-objdump.
 ;
 ; aarch64 is a joy to target: fixed 32-bit little-endian instructions, native three-address ALU, 31
@@ -620,6 +620,5 @@
    _ (pin arm64 'lower arm64-lower)
    _ (pin arm64 'patch arm64-patch)
    _ (pin arm64 'nop '(31 32 3 213))           ; the ('align n) filler unit: NOP d503201f LE
-   _ (defbackend 'arm64 arm64)
-   _ (defbackend 'aarch64 arm64))
+   (defbackend 'arm64 arm64))
 ) ; module 'holo

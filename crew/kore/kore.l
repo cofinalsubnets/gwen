@@ -5,7 +5,7 @@
 ;   kore diff OLD NEW    unified diff (patience hunks); exit 0 same / 1 differ / 2 trouble
 ;   kore nc HOST PORT    the netcat (tools/ain.l); nc -l PORT listens
 ;   kore make [F] [T..]  the build tool (crew/cook/cook.l)
-;   kore as TGT IN OUT   assemble IR forms from IN (x64|arm64) into an ELF at OUT
+;   kore as TGT IN OUT   assemble IR forms from IN (amd64|arm64) into an ELF at OUT
 ;   kore objcopy -O binary|ihex IN OUT   a linked ELF flattened (crew/holo/copy.l)
 ;   kore nm [-gup] FILE..   an ELF's symbols, nm's three columns (crew/holo/link.l)
 ;   kore cat|tac|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
@@ -74,9 +74,9 @@
 
    ; as: IR forms -> a runnable ELF (crew/holo/elf.l over the baked holo book)
    (as-main as)
-    (? !(two? >>as) (die "usage: kore as TARGET IN OUT   (TARGET: x64 | arm64)")
+    (? !(two? >>as) (die "usage: kore as TARGET IN OUT   (TARGET: amd64 | arm64)")
        (: tgt (intern <as) src <>as dst <>>as
-          _ (? ((tgt = 'x64) || (tgt = 'amd64) || (tgt = 'arm64) || (tgt = 'aarch64)) ()
+          _ (? ((tgt = 'amd64) || (tgt = 'amd64) || (tgt = 'arm64) || (tgt = 'aarch64)) ()
                (die ("as: unknown target " + <as)))
           q (open src "r")
           _ (? q () (die ("as: cannot open " + src)))
@@ -167,9 +167,9 @@
                                                     (die ("ld: cannot open " + <>a))))
                                 (die "ld: --readme wants a path"))
            (go >a (<a >< fs) o pie org tgt rd))
-       r (go as () () 0 () 'x64 ())
+       r (go as () () 0 () 'amd64 ())
        fs <r o <>r pie <>>r org (at r 3) tgt (at r 4) rdme (at r 5)
-       _ (? (two? fs) () (die "usage: kore ld [-pie] [-t x64|arm64|riscv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"))
+       _ (? (two? fs) () (die "usage: kore ld [-pie] [-t amd64|arm64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"))
        _ (? (tally o) () (die "ld: no -o OUT"))
        srcs (map (\ f (: r2 (uread f) (? (two? r2) [f <>r2] (die ("ld: cannot open " + f))))) fs)
        ps (ldlink tgt pie org srcs ("love " + <(usplit 43 love-version)) rdme)
@@ -305,9 +305,9 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   diff OLD NEW       unified diff, patience hunks (0 same / 1 differ / 2 trouble)
   nc HOST PORT       netcat; nc -l PORT listens
   make [FILE] [T..]  the build tool (Cards.l / Cookfile / Makefile)
-  as TGT IN OUT      assemble IR forms from IN (x64|arm64) into ELF OUT
+  as TGT IN OUT      assemble IR forms from IN (amd64|arm64) into ELF OUT
   ar rcs OUT M..     the archive, GNU shape + ranlib index (ar t OUT lists)
-  ld A.o.. -o OUT    holo's static linker (-pie, -t x64|arm64|riscv64, -Ttext)
+  ld A.o.. -o OUT    holo's static linker (-pie, -t amd64|arm64|rv64, -Ttext)
   objcopy -O F IN OUT   flatten a linked ELF: F is binary or ihex (Intel HEX)
   nm [-gup] FILE..   an ELF's symbols; -g externals, -u undefined, -p unsorted
   cat tac head tail wc sort uniq tee      the line tools (crew/kore/core.l)

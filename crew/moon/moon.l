@@ -193,24 +193,20 @@
                          (go (i + 1)))
                (go 0))
    (deftext ds) (foldl (\ a d (a + "#define " + eqsp d + "\n")) "" ds)
-   ; the target: 'x64 (the default), 'arm64, or 'thumb2 (ARMv7E-M / Cortex-M7),
-   ; picked by -t. the arch predefine (__x86_64__ / __aarch64__ / __arm__) rides
-   ; the -D channel so cpp stays target-blind.
-   (totgt s) (name s @
-    ('x64 || 'amd64)             'x64
-    ('arm64 || 'aarch64)         'arm64
-    ('thumb2 || 'cortex-m7)      'thumb2
-    ('thumb1 || 'cortex-m0)      'thumb1
-    ('thumb2sp || 'playdate)     'thumb2sp
-    ('riscv64 || 'riscv || 'rv64) 'riscv64
-                                (udie 2 ("cc: unknown target " + s)))
+   ; the target -t names: 'amd64 (the default), 'arm64, 'rv64, or one of the embedded
+   ; three. the spellings are the PREL's (arch-canon), which is also what uname's answer
+   ; and a `seed` argument come through -- so `-t x86_64` and `-t riscv` land where
+   ; `-t amd64` and `-t rv64` do, and this file keeps no second list to drift.
+   ; the arch predefine (__x86_64__ / __aarch64__ / __arm__) rides the -D channel so cpp
+   ; stays target-blind.
+   (totgt s) (: t (archof s) (? t t (udie 2 ("cc: unknown target " + s))))
 
    ; the arch predefines, BOTH spellings where gcc gives two -- pdclib's config asks
    ; `defined(__x86_64)` for its varargs lane, and one spelling missing reads as an
    ; unsupported machine rather than as a compiler that only knows the other word.
    (archdefs tgt)
    (tgt @ 'arm64                          '("__aarch64__")
-          'riscv64                        '("__riscv")
+          'rv64                        '("__riscv")
           ('thumb2 || 'thumb2sp || 'thumb1) '("__arm__" "__arm")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
    ; the OS predefines, the driver's like the arch's: -os picks, and UNNAMED is
@@ -219,12 +215,15 @@
    ; one missing is a header silently not included. the unprefixed `linux`/`unix`
    ; stay out -- gcc drops them outside gnu89, and they collide with ordinary
    ; identifiers. 'none is freestanding's word: a board owes no OS macro.
-   (toos s) (name s @
+   ; takes a flag's text or love-os's nom -- both doors, one row set. 'inle falls to the
+   ; refusal on purpose: we ARE the kernel there, and a compile owes a named -os rather
+   ; than whichever hosted kernel reads closest.
+   (toos s) ((? (string? s) (name s) s) @
     'linux   'linux
     'none    'none
     'freebsd 'freebsd
     'netbsd  'netbsd
-             (udie 2 ("cc: unknown os " + s)))
+             (udie 2 ("cc: unknown os " + string s)))
    ; the ground: main.c pins `love-os` per RUN, because one binary meets three
    ; kernels and the compile that made it cannot say which. ⚠ THE NOM IS DATA,
    ; for mcid's reason -- a bare ref folds the bake session's absence in forever.
@@ -232,7 +231,7 @@
    ; there rather than a guess at whichever kernel we happen to have started on.
    (host-os _)
     (: n (? (member? 'love-os (names ())) (ev 'love-os) ())
-       (? (string? n) (toos n)
+       (? (nom? n) (toos n)
           (udie 2 "cc: cannot tell which kernel this is -- name one with -os")))
    (osdefs os0)
     (: os (id? os0 () ? (host-os 0) os0)
@@ -249,8 +248,8 @@
    (featdefs tgt)
     ('("__STDC_NO_ATOMICS__=1" "__STDC_NO_THREADS__=1"
        "__STDC_UTF_16__=1" "__STDC_UTF_32__=1")
-     + (? (id? tgt 'x64) () '("__STDC_NO_COMPLEX__=1"))
-     + (? (member? tgt '(x64 arm64)) () '("__STDC_NO_VLA__=1")))
+     + (? (id? tgt 'amd64) () '("__STDC_NO_COMPLEX__=1"))
+     + (? (member? tgt '(amd64 arm64)) () '("__STDC_NO_VLA__=1")))
    ; the gcc-shaped predefine table (doc/misc/moon-c-gaps: the predefine surface) --
    ; the <stdint>/<limits>/<float.h> family a library config reads instead of
    ; probing: pdclib, gnulib and musl typedef straight off these names. one
@@ -398,7 +397,7 @@
                  + '("AiNolibc=1")
                  + (? (id? dia 'moon) '("__moon__=1") ())   ; the DIALECT's own macro: extensions on
                  +   ; ds9, not ds: a :-local shadows the PARAM over the whole scope (the boxfix cell trap)
-                 (? (member? tgt '(x64 arm64)) ("__SIZEOF_INT128__=16" >< ds) ds))     ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
+                 (? (member? tgt '(amd64 arm64)) ("__SIZEOF_INT128__=16" >< ds) ds))     ; the wide pair (gen's d128 lane); love.c's limb seam reads it, and gcc says the same on both
        ; ⚠ `-` is READ HERE and nowhere else, so every door onto a TU gets stdin for
        ; free -- and cdir answers "" for it, which is the cwd, gcc's own rule for a
        ; source with no directory of its own.
@@ -564,8 +563,11 @@
    ; -- THE RUNTIME CACHE. a member must be COMPILED to know what it defines, so
    ; the pull below cannot select without paying for all of them -- ~23s of the
    ; ~23s a cold hello-world link costs. so the whole compiled runtime rides
-   ; ~/.love/cache/moon/<sha256>.a, ONE archive per (compiler, target), keyed on
-   ; everything that decides its bytes. an archive because the ranlib index IS
+   ; out/cache/moon/<sha256>.a, ONE archive per (compiler, target), keyed on
+   ; everything that decides its bytes. ⚠ the CARRIED archives answer that for every
+   ; stock tree now (rtcarried), so what is left for this cache is the build itself --
+   ; tools/mkrt.l cutting the carried set under love0, which has none -- and a toolchain
+   ; edited past the stamp. an archive because the ranlib index IS
    ; what each member defines, written once and read back rather than recomputed
    ; over 190 objects on every warm link -- and because one file is one
    ; generation: whole the moment it lands, and countable when mcsweep asks
@@ -582,11 +584,15 @@
    ; in reach does not open it.
    ; ⚠ read at each call, never bound -- mhome's law, for mhome's reason.
    (sdir? st) ((two? st) && (16384 = (& (el st 2) 61440)))
+   ; the cache seat is the BUILD TREE's own out/, never a home directory. who wants it:
+   ; tools/mkrt.l under love0, which carries no archives of its own (22 s of member
+   ; compiles against 0.2 s), and a toolchain tree edited past the carried stamp. both
+   ; are a checkout, and a checkout is what has an out/ -- so presence is the wrapper,
+   ; the way mhome reads its roots, and out/ itself is never created here.
    (mcdir _)
-    (: h (getenv "HOME")
-       _ (? (string? h) (map (\ s (mkdir (h + s) 493)) '("/.love" "/.love/cache" "/.love/cache/moon")) 0)
-       d (? (string? h) (h + "/.love/cache/moon/") ())
-       (? ((string? d) && (sdir? (stat d))) d ()))
+    (: d "out/cache/moon/"
+       _ (? (sdir? (stat "out")) (map (\ s (mkdir s 493)) '("out/cache" "out/cache/moon")) 0)
+       (? (sdir? (stat d)) d ()))
    ; the input-name predicates, ahead of every reader of them.
    (dota? p) (: n (tally p) (2 < n && p (n - 2) = 46 && p (n - 1) = 97))
    (dotc? p) (: n (tally p) (2 < n && p (n - 2) = 46 && p (n - 1) = 99))
@@ -608,6 +614,34 @@
                         (sdir? st) ((a + f) + ("/\n" + (mctree (p + "/"))))
                         (: r (uread p) ((a + f) + ("\n" + (? (two? r) <>r "") + "\n"))))))
            "" (sort (readdir d)))
+   ; the same walk with the stats where the bytes go -- a stat per member against
+   ; mctree's 1.2 MB of reads. it moves whenever an edit does, which is all a key needs.
+   (mcshape d)
+    (foldl (\ a f (: p (d + f)
+                     st (stat p)
+                     (? !(two? st) a
+                        (sdir? st) ((a + f) + ("/\n" + (mcshape (p + "/"))))
+                        ((a + f) + ("\n" + show st + "\n")))))
+           "" (sort (readdir d)))
+   ; the two dirs that ARE the toolchain, as bytes and as shape. every digest below wants
+   ; one or the other of these and nothing else of the tree.
+   (mcsrctext home) ((mctree (home + "include/")) + (mctree (home + "lib/")))
+   (mcsrcshape home) ((mcshape (home + "include/")) + (mcshape (home + "lib/")))
+   ; a digest memoized under a shape -- mccid's law, one rung up from a file: the bytes are
+   ; the identity, and a stat says when to go read them. `mk` is the real read, taken only
+   ; on a miss; a touch re-reads and lands on the same digest, so a stale shape costs one
+   ; pass and no caller's answer moves. tag parts the memos sharing a shape.
+   (mcmemo tag shape mk)
+    (: d (mcdir ())
+       k (? (string? d) (sha256 (tag + "\n" + shape)) ())
+       hit (? (string? k) (mcget d (k + ".cid") "cid1 ") ())
+       _ (? (two? hit) (utime (d + k + ".cid") (clock ())) 0)   ; the sweep orders by use
+       (? (two? hit) (snip <>hit 5 69)
+          (: h (mk ())
+             _ (? (string? k) (mcput d (k + ".cid") ("cid1 " + h + "\n")) 0)
+             h)))
+   (mcsrcid home)
+    (mcmemo "moon-src 1" (mcsrcshape home) (\ _ (sha256 (mcsrctext home))))
    ; ⚠ the exe's PATH rides beside its CONTENT: two worktrees hold the same
    ; cwd-relative include paths, and only the seat tells their headers apart.
    ; the image is the ONE this session woke, which main.c pins as `love-image`.
@@ -629,7 +663,7 @@
                              (im = "<baked>") ["<baked>"]
                              [[im (mccid im)]]))
               (? (string? d) ((mcims d) + (mcims (d + "../lib/love/"))) ()))
-       src (? (two? ims) ((mctree (home + "include/")) + (mctree (home + "lib/"))) "")
+       src (? (two? ims) (mcsrcid home) "")
        ; the ablation knob compiles a DIFFERENT runtime, so it is part of the identity;
        ; unset stays out so every standing key survives
        ab (: s (getenv "MOON_ABLATE") (? (string? s && 0 < tally s) ("\nabl " + s) ""))
@@ -706,18 +740,28 @@
    ; archives, and what a disk home must hash to for them to serve it. (mcid
    ; below is a CACHE key and mixes in the binary's own path and stats; this
    ; one must travel.)
+   ; ⚠ THE VALUE TRAVELS, so the formula is fixed: tools/mkrt.l stamps this number beside
+   ; the archives and a link compares against the stamp. the memo is around it, never in it.
    (rtcid home)
-    (sha256 ("moon-rtc 1\n" + ((mctree (home + "include/")) + (mctree (home + "lib/")))))
+    (mcmemo "moon-rtcid 1" (mcsrcshape home)
+            (\ _ (sha256 ("moon-rtc 1\n" + (mcsrctext home)))))
    ; the carried runtime: the build lays each ISA's compiled archive beside the
    ; source blob (tools/mkrt.l; src/src.c answers runtime-gz), so a link
-   ; owes no member compiles -- the bare door's ~28 s becomes a read. it
-   ; serves the DEFAULT lane only, and only when the identity matches: the blob
-   ; lane's identity IS the carried source, a disk home serves iff its slice
-   ; hashes to the stamped id (a laid seed tree does; an edited dev tree does
-   ; not, and falls through to the compile).
+   ; owes no member compiles -- the bare door's ~28 s becomes a read. only when the
+   ; identity matches: the blob lane's identity IS the carried source, a disk home
+   ; serves iff its slice hashes to the stamped id (a laid seed tree does; an edited
+   ; dev tree does not, and falls through to the compile).
+   ; ⚠ THE REFUSAL IS THE TARGET'S, NOT THE KERNEL'S. one archive per ISA, all three cut
+   ; under -os linux -- and that pin does not reach the bytes, because impl.h parts the
+   ; kernels at RUN time on __ai_osv. os.c is the only member with an OS predefine in it
+   ; and its arms sit under #ifndef AiOsTranslate, so on x64 and arm64 linux, freebsd and
+   ; netbsd compile to the same object. riscv is where that stops: no translation tables,
+   ; so os.c reads -os and only linux has an answer -- the BSDs there owe a compile, which
+   ; refuses by #error rather than quietly linking linux's.
    (rtcarried home tgt os)
-    (? (member? os '(freebsd none)) ()       ; the default lane only ((), or -os linux said)
-       (: nm (tgt @ 'x64 "x64" 'arm64 "arm64" 'riscv64 "riscv64" ())
+    (? (id? os 'none) ()                                     ; freestanding owes no runtime
+       (id? tgt 'rv64 && member? os '(freebsd netbsd)) ()
+       (: nm (? (member? tgt '(amd64 arm64 rv64)) (string tgt) ())
           (? (! (string? nm)) ()
              (: z (runtime-gz nm)
                 (? (! (string? z)) ()
@@ -731,20 +775,27 @@
                       a (? ok (inflate z 0) ())
                       (? ((string? a) && (8 <= (tally a))
                           && ((snip a 0 8) = "!<arch>\n")) a ())))))))
-   (rtarch cd id home tgt os vb)
-    ; the key carries the OS beside the target: a freebsd runtime archive and a
-    ; linux one are different bytes wearing one target name.
-    (: k (? (string? cd && string? id) (sha256 $ id + "\n" + show tgt + "\n" + show os) ())
-       hit (? (string? k) (mcget cd (k + ".a") "!<arch>\n") ())
-       _ (? (two? hit) (utime (cd + k + ".a") (clock ())) 0)   ; the sweep orders by use
-       cr (? (two? hit) () (rtcarried home tgt os))
-       bs (? (two? hit) <>hit
-             (string? cr) cr
-             (: b (arbytes (rtmems home tgt os vb))
-                _ (? (string? k) (mcput cd (k + ".a") b) 0)
-                b))
-       _ (? (string? cd) (mcsweep cd) 0)
-       bs)
+   ; THE CARRIED ARCHIVE FIRST, and the whole default lane ends there: what the binary
+   ; carries is the stamped truth, so a cache entry could only ever agree with it. asking
+   ; the cache first meant every stock link built a key -- the tree digest, the exe digest,
+   ; a read that must miss, a sweep -- to be told what rtcid had already settled. the key
+   ; is now cut where it is used: on the lane the carried bytes refused.
+   (rtarch home tgt os vb)
+    (: cr (rtcarried home tgt os)
+       (? (string? cr) cr
+          ; the key carries the OS beside the target: two kernels' archives can wear one
+          ; target name here even where the carried set has no such pair.
+          (: id (? (string? home) (mcid home) ())
+             cd (? (string? id) (mcdir ()) ())   ; no identity, no cache, no directory made
+             k (? (string? cd && string? id) (sha256 $ id + "\n" + show tgt + "\n" + show os) ())
+             hit (? (string? k) (mcget cd (k + ".a") "!<arch>\n") ())
+             _ (? (two? hit) (utime (cd + k + ".a") (clock ())) 0)   ; the sweep orders by use
+             bs (? (two? hit) <>hit
+                   (: b (arbytes (rtmems home tgt os vb))
+                      _ (? (string? k) (mcput cd (k + ".a") b) 0)
+                      b))
+             _ (? (string? cd) (mcsweep cd) 0)
+             bs)))
    ; every member compiled, ready to index. the IMPLICIT runtime compiles like
    ; everything else: our own sources reaching only our own headers.
    ; nolibc is a TREE: every .c directly under lib/nolibc/ and
@@ -791,7 +842,7 @@
              (nlmems ndir))
         + map (\ f [("m_" + dotobj f) (string (cc-objbytes (mdir + f) (f9 [mdir inc])))])
               mfs
-        + (? (member? tgt '(x64 arm64 riscv64)) [["mksys.o" (string (mksys-bytes tgt))]] ())))
+        + (? (member? tgt '(amd64 arm64 rv64)) [["mksys.o" (string (mksys-bytes tgt))]] ())))
    (rtpull srcs tgt os nostd vb)
     (: mach (peep elf-machines tgt 0)
        lg (ldledger srcs mach) dt <lg owed <>lg
@@ -812,11 +863,7 @@
                      + mfew (mroots ()) + ") -- check the spelling, then the nest"))
             0)
        (? (nostd || ((!(string? home)) && (id? vb ()))) ()
-          ; the blob lane has no disk identity, so no cache: id () -> cd () --
-          ; a bare compile pays the runtime build each link, honestly
-          (: id (? (string? home) (mcid home) ())
-             cd (? (string? id) (mcdir ()) ())   ; no identity, no cache, no directory made
-             pr (arpull "moon-runtime" (rtarch cd id home tgt os vb) dt owed mach)
+          (: pr (arpull "moon-runtime" (rtarch home tgt os vb) dt owed mach)
              ; ⚠ the OWE AT TERMINATION IS THE ANSWER: no member defines anything
              ; left in it, so it is exactly the set nothing anywhere defines --
              ; said here, whole, rather than one nom at a time by whichever holo
@@ -827,7 +874,7 @@
                           'nostd nostd 'vb vb 'ni ni 'rdme rdme}))
     ; -os freebsd links on x64 only (the one lane with a table + mksys twin);
     ; any other tgt under it is refused rather than half-built.
-    (: _ (? (id? os 'freebsd && ! (id? tgt 'x64))
+    (: _ (? (id? os 'freebsd && ! (id? tgt 'amd64))
             (udie 1 "cc: -os freebsd links x64 only for now") ())
        ars (filter dota? ins)
        srcs (map (\ f (? (dotc? f) [f (string (cc-objbytes f t))]
@@ -854,7 +901,7 @@
        runs (? (charm? dorg) [['at org 'text 'rodata 'nifs]
                               ['copy dorg 'data 'bss]]
               [['at org 'text 'rodata 'data 'nifs 'bss]])
-       c9 (tgt @ 'arm64 crt0-a64 'riscv64 crt0-rv crt0)   ; x64's serves both kernels
+       c9 (tgt @ 'arm64 crt0-a64 'rv64 crt0-rv crt0)   ; x64's serves both kernels
        all (? arm? srcs
               (["crt0" (string (objelf tgt c9 () '("__ai_start") () '("__ai_start") () () () () ()))] >< srcs))
        ; the archives first, then whatever the runtime still owes: a library the
@@ -1087,7 +1134,7 @@
     (: sd (std-take as)
        dia <sd
        as9 <>sd                                    ; the line with -std= lifted off it
-       ntv (? (love-arch = "arm64") 'arm64 (love-arch = "riscv64") 'riscv64 'x64)
+       ntv (? (member? love-arch '(amd64 arm64 rv64)) love-arch 'amd64)   ; unknown grounds keep amd64
        f (flags as9 (fseed ntv dia))       ; the flag set, seeded whole
        ; ⚠ NORMALISE IN THE TABLET, not at a reader. -I dirs want a trailing slash, and the
        ; consumers now take `f` itself -- so a `dirn` applied on the way out of one reader

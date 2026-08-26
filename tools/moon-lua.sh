@@ -46,7 +46,7 @@ case $target in
   arm64) name=moon-lua-arm64 ; tflag="-t arm64" ; sub=moonlua-a64
          mksys=mksys-arm64 ; backend=crew/holo/arm64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
   riscv64) name=moon-lua-riscv ; tflag="-t riscv64" ; sub=moonlua-rv
-         mksys=mksys-riscv ; backend=crew/holo/riscv.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+         mksys=mksys-riscv ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
   *) echo "moon-lua.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
 esac
 

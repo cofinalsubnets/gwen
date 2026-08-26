@@ -155,7 +155,7 @@
    ; so presence is the guard and a build without the module simply stays interpreted.
    forge-seam (from 'glaze 'nif)
    forge-seamx (from 'glaze 'nifx)                  ; the same door, one extras slot wider
-   forge-arch (intern love-arch)
+   forge-arch love-arch
    forge-asm (from 'holo 'assemble)
    ; assemble one kernel -> its bytes | (). the DEOPT TAIL is the module's, because it is
    ; arity-determined and mechanical; the EPILOGUE is the kernel's, because only the kernel

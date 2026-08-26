@@ -199,18 +199,20 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
   g = ai_defn(g, def1, countof(def1), 0);
   if (ai_ok(g = ai_strof(g, AiVersion)))            // a live string: off the stack, never an ai_def
    g = ai_pop(ai_defv(g, "love-version"), 1);
-  // `love-arch`: the host CPU the glaze emits for. auto-ev interns it as the assembler
-  // target ('x64 / 'arm64) and gates the still-x86-only lanes (float / loops).
+  // `love-arch`: the host CPU the glaze emits for, and the assembler target every backend
+  // is registered under. A NOM, in the prel's canonical spelling (love/prel.l's arch-canon)
+  // -- so a reader compares it against 'amd64 rather than interning a string first, and
+  // there is one word for this machine across holo, moon, kore and the seed.
 #if defined(__x86_64__)
-  #define AiArch "x64"
+  #define AiArch "amd64"
 #elif defined(__aarch64__)
   #define AiArch "arm64"
 #elif defined(__riscv)
-  #define AiArch "riscv64"
+  #define AiArch "rv64"
 #else
   #define AiArch "other"
 #endif
-  if (ai_ok(g = ai_strof(g, AiArch)))
+  if (ai_ok(g = intern(ai_strof(g, AiArch))))
    g = ai_pop(ai_defv(g, "love-arch"), 1);
   // the 'missing tag needs nothing here (the raise sites mint it); the reader owns
   // no operator tables -- book['operators] is seeded by the prel and factored at compile time

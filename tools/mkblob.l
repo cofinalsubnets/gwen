@@ -32,7 +32,8 @@
        (mkblob-die "no holo aboard -- this love is unbaked (make host bakes it)"))
    (mkblob-be2 arch)
     (? (lit? (peep backends arch ())) 0
-       (: f ("crew/holo/" + (arch @ 'arm64 "arm64" 'riscv64 "riscv" "x64") + ".l")
+       ; the backend file IS the canonical arch word now -- one spelling, no map
+       (: f ("crew/holo/" + string arch + ".l")
           q (open f "r")
           (? q (: _ (mkblob-rdev (flow q)) (close q))
              (mkblob-die ("no backend aboard and no text at " + f)))))
@@ -61,7 +62,7 @@
    ; answer is the very symbol the backend table is keyed by.
    (mkblob-main av)
     (: n (tally av)
-       (? (3 <= n) (mkblob (? (4 <= n) (name (av 3)) 'x64) <av <>av <>>av)
+       (? (3 <= n) (mkblob (? (4 <= n) (name (av 3)) 'amd64) <av <>av <>>av)
           (mkblob-die "usage: mkblob IN OUT.o SYM [ARCH]")))
 
    (mkblob-main >argv))

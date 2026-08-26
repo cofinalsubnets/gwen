@@ -35,11 +35,11 @@
    (front src)
     (: r (uread src)
        (? (! (two? r)) ()
-          (: lx (clex ((deftext (archdefs 'x64)) + <>r))
+          (: lx (clex ((deftext (archdefs 'amd64)) + <>r))
              (? (! (okv? lx)) ()
                 (: pp (cpp <>lx (\ n s (incload () () (cdir src) n s)) src)
                    (? (! (okv? pp)) ()
-                      (: ps (cparse-t <>pp 'x64)
+                      (: ps (cparse-t <>pp 'amd64)
                          (? (okv? ps) [1 (caup ps)] ()))))))))
    ; the same, off TEXT rather than a path: the reparse leg
    (front2 txt)
@@ -47,7 +47,7 @@
        (? (! (okv? lx)) ()
           (: pp (cpp <>lx (\ n s ()) "<clay>")
              (? (! (okv? pp)) ()
-                (: ps (cparse-t <>pp 'x64)
+                (: ps (cparse-t <>pp 'amd64)
                    (? (okv? ps) [1 (caup ps)] ()))))))
 
    files (filter dotc? (readdir "test/cc"))

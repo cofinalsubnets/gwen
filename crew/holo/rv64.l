@@ -1,6 +1,6 @@
 ; riscv -- the RV64 BACKEND for the neutral assembler (crew/holo/holo.l), the fifth target (the
 ; pine64 ox64's T-Head C906 and qemu -M virt). like the others it pins a {lower,patch} pair -- here
-; under 'riscv64 and 'rv64 -- and the driver, IR forms and byte plumbing stay untouched. little-endian
+; under 'rv64 and 'rv64 -- and the driver, IR forms and byte plumbing stay untouched. little-endian
 ; instructions, native three-address ALU. these tables are RV64IMFD: no Zbb/Zba, and no A -- moon's
 ; __sync seam hands its two atomic words (amoswap.aq, the release fence) in raw. the emitted words are
 ; then squeezed to their 2-byte C forms where the operands fit (see rvc-of), so a linked image asks
@@ -641,6 +641,5 @@
    ;; reads it as a 32-bit opcode and swallows the instruction after the pad. thumb2 pads with
    ;; its 16-bit nop for the same reason. c.nop tiles every even count exactly.
    _ (pin rv 'nop '(1 0))
-   _ (defbackend 'riscv64 rv)
-   _ (defbackend 'rv64 rv))
+   (defbackend 'rv64 rv))
 ) ; module 'holo

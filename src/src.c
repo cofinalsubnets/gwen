@@ -45,16 +45,16 @@ static lvm(lvm_srcgz) {
 static union u const nif_srcgz[] = {{lvm_srcgz}, {lvm_ret0}};
 AiNif("source-gz", nif_srcgz);
 
-// (runtime-gz "x64"|"arm64"|"riscv64") -> that ISA's nolibc archive, deflated;
+// (runtime-gz "amd64"|"arm64"|"rv64") -> that ISA's nolibc archive, deflated;
 // (runtime-gz "id") -> the pure tree-slice hash the archives were cut from
 // (moon.l's rtcid). () when none is carried. tools/mkrt.l lays them, the
 // same weak/strong law as the source blob above; moon.l's rtcarried consumes.
-__attribute__((weak)) const unsigned char ai_rtgz_x64[1] = {0};
-__attribute__((weak)) const uintptr_t ai_rtgz_x64_len = 0;
+__attribute__((weak)) const unsigned char ai_rtgz_amd64[1] = {0};
+__attribute__((weak)) const uintptr_t ai_rtgz_amd64_len = 0;
 __attribute__((weak)) const unsigned char ai_rtgz_arm64[1] = {0};
 __attribute__((weak)) const uintptr_t ai_rtgz_arm64_len = 0;
-__attribute__((weak)) const unsigned char ai_rtgz_riscv64[1] = {0};
-__attribute__((weak)) const uintptr_t ai_rtgz_riscv64_len = 0;
+__attribute__((weak)) const unsigned char ai_rtgz_rv64[1] = {0};
+__attribute__((weak)) const uintptr_t ai_rtgz_rv64_len = 0;
 __attribute__((weak)) const unsigned char ai_rtgz_id[1] = {0};
 __attribute__((weak)) const uintptr_t ai_rtgz_id_len = 0;
 
@@ -65,10 +65,12 @@ ai_noinline static struct ai *host_rtgz(struct ai *g) {
  if (ai_strp(a)) {
   const char *s = (const char*) txt(a);
   uintptr_t sl = len(a);
-  if (sl == 3 && !memcmp(s, "x64", 3))          p = ai_rtgz_x64,     n = ai_rtgz_x64_len;
-  else if (sl == 5 && !memcmp(s, "arm64", 5))   p = ai_rtgz_arm64,   n = ai_rtgz_arm64_len;
-  else if (sl == 7 && !memcmp(s, "riscv64", 7)) p = ai_rtgz_riscv64, n = ai_rtgz_riscv64_len;
-  else if (sl == 2 && !memcmp(s, "id", 2))      p = ai_rtgz_id,      n = ai_rtgz_id_len; }
+  // the canonical ISA words (love/prel.l's arch-canon), each with its own length --
+  // the pair is the match, so a name and a width that disagree can only ever miss.
+  if      (sl == 5 && !memcmp(s, "amd64", 5)) p = ai_rtgz_amd64, n = ai_rtgz_amd64_len;
+  else if (sl == 5 && !memcmp(s, "arm64", 5)) p = ai_rtgz_arm64, n = ai_rtgz_arm64_len;
+  else if (sl == 4 && !memcmp(s, "rv64",  4)) p = ai_rtgz_rv64,  n = ai_rtgz_rv64_len;
+  else if (sl == 2 && !memcmp(s, "id",    2)) p = ai_rtgz_id,    n = ai_rtgz_id_len; }
  if (!n) return g->sp[0] = ZeroPoint, g;
  if (!ai_ok(g = str0(g, n))) return g;
  memcpy(txt(g->sp[0]), p, (size_t) n);          // .rodata: no re-read after the collect

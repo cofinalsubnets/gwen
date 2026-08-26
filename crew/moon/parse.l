@@ -388,7 +388,7 @@
                 ; gen bakes the va offsets, so only size/align/decay ride the type here
                 _ (pin (t 'stag) "__va_list_tag"
                        (? (member? tgt '(thumb2 thumb2sp thumb1)) '((("__ap" 0 (ptr void))) 4 4)
-                          (id? tgt 'riscv64) '((("__ap" 0 (ptr void))) 8 8)   ; LP64: one walking pointer, 8-byte slots
+                          (id? tgt 'rv64) '((("__ap" 0 (ptr void))) 8 8)   ; LP64: one walking pointer, 8-byte slots
                           (id? tgt 'arm64)
                            '((("__stack" 0 (ptr void)) ("__gr_top" 8 (ptr void)) ("__vr_top" 16 (ptr void))
                               ("__gr_offs" 24 int) ("__vr_offs" 28 int)) 32 8)
@@ -2401,7 +2401,7 @@
        (? !(two? t) (gripe () () () "parse error at end of input")
           (gripe (? (two? dt) (filof t) (filat spans i0)) <>>t ()
                  (? why why ("parse error near " + spell t)))))
-   (cparse ts) (cparse-t ts 'x64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
+   (cparse ts) (cparse-t ts 'amd64)          ; the law tests + any bare caller: 64-bit widths (unchanged behavior)
    (cparse-t ts tgt) (cparse-d ts tgt 'moon)  ; ..and the default dialect, which is what a bare caller means
    (cparse-d ts tgt dia)
     (: ps (psnew-d tgt dia)
