@@ -15,6 +15,11 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <link.h>
+// the prefault hint is linux's alone. neither BSD has the flag, and there the wake takes
+// its faults as the decode walks -- a slower map, never a different one.
+#ifndef MAP_POPULATE
+#define MAP_POPULATE 0
+#endif
 
 extern size_t host_selfpath(char*, size_t);       // src/posix.c: the one selfpath door (per-OS ladder)
 

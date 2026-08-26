@@ -69,9 +69,11 @@
 #endif
 #if defined(AiHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
+#endif
+// ⚠ OUTSIDE every guard: both are called unconditionally below (argv_marshal, sigtake, the
+// pty pair), so declaring them under one kernel's feature is a build that only stands there.
 extern struct ai *ai_argv_marshal(struct ai*, char***);   // src/seat.c: argv -> char** in the heap gap
 extern intptr_t ai_port_fd(ai_word);   // src/seat.c: the fd under a love port, or -1
-#endif
 
 // a wait(2) status word -> the value a reaper hands back: the exit code, or
 // 128+signal for a signalled death (the shell convention), or -1 for the

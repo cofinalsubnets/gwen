@@ -99,7 +99,10 @@ $(ho)/liblove.a: $(h_o)
 # -Dai_data_section=0: the bootstrap asks the sentinels by name and owes no linker script.
 # both ai_typ bodies answer the same enum d for the same ap, and no layout crosses binaries
 # (love.h: the heap image carries an ap as its index).
-boot_cc = $(CCACHE) $(CC) $(ai_cflags) -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Isrc -Iout/lib
+# -fPIE is the compile half of the -pie link below, said out loud rather than inherited:
+# gcc on linux defaults to it, the BSDs' clang does not, and the mismatch is an
+# R_X86_64_32S the linker refuses at the very end of a from-scratch bootstrap.
+boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Isrc -Iout/lib
 # ⚠ src/cats.c is NOT love0's: it bakes the out/lib/*.h headers love0 itself lays, so a
 # from-scratch tree has none of them to compile against. love0's boot reads the sed-wrapped
 # 0.h twins instead (src/main.c, #ifdef LoveBoot).
