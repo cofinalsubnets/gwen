@@ -80,7 +80,8 @@
    ; high-water offset, 'brk/'cnt the loop label stacks, 'glob the global
    ; table (name -> (label ty init)), 'globs the emission order, 'strs the
    ; string table ((label . text)..). env: ((name off ty)..) frame locals.
-   (nlab g pfx) (: k (peep g 'n 0) (pin g 'n (k + 1), name (pfx + show k)))
+   ; the dot parts prefix from count -- glued, ".d1" and ".d" share names
+   (nlab g pfx) (: k (peep g 'n 0) (pin g 'n (k + 1), name (pfx + "." + show k)))
    argregs '(r6 r5 r2 r1 r7 r8)                      ; the SysV integer/pointer arg registers
    argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7 (early: rasg reads them
    argregs-t32 '(r0 r1 r2 r3)                        ; AAPCS32: r0..r3  through argr -- a VALUE
