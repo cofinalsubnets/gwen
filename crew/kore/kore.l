@@ -75,8 +75,8 @@
    ; as: IR forms -> a runnable ELF (crew/holo/elf.l over the baked holo book)
    (as-main as)
     (? !(two? >>as) (die "usage: kore as TARGET IN OUT   (TARGET: amd64 | arm64)")
-       (: tgt (intern <as) src <>as dst <>>as
-          _ (? ((tgt = 'amd64) || (tgt = 'amd64) || (tgt = 'arm64) || (tgt = 'aarch64)) ()
+       (: tgt (arch-nom <as) src <>as dst <>>as
+          _ (? ((tgt = 'amd64) || (tgt = 'arm64)) ()
                (die ("as: unknown target " + <as)))
           q (open src "r")
           _ (? q () (die ("as: cannot open " + src)))

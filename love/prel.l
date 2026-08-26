@@ -1079,4 +1079,7 @@
    ; any spelling -> the canonical nom, () for one nobody here knows. takes a nom or a
    ; string, since a flag arrives as text where a table key is a nom.
    (archof s) (peep arch-canon (? (string? s) (intern s) s) ())
+   ; the total face: a spelling nobody here knows rides through as its own nom, so
+   ; whoever refuses it names what it was handed
+   (arch-nom s) (: a (archof s) (? a a (? (string? s) (intern s) s)))
    (arch-mach a) (peep arch-uname a ()))

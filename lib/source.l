@@ -198,11 +198,10 @@
    ; is no second table here; `arch-mach` puts the triple word back on where make wants it
    ; (a cross toolchain's prefix is spelled aarch64-, never arm64-).
    seed-arches '(amd64 arm64 rv64)
-   (seed-canon w) (: a (archof w) (? a a (intern w)))
    ; the arch word is positional and A PATH STILL WINS: `./aarch64` is the
    ; directory, the verb rail's own rule worn one level down.
    (seed-arch? w) (: n (tally w)
-                     (go i) (? (n <= i) (member? (seed-canon w) seed-arches)
+                     (go i) (? (n <= i) (member? (arch-nom w) seed-arches)
                                (w i = 47) 0
                                (go (i + 1)))
                      (go 0))
@@ -225,7 +224,7 @@
        ; output ought to BE this binary -- which `love seed x86_64` on an x86_64
        ; box asks for exactly as much as a bare `love seed`. ⚠ the WORD is eaten
        ; either way, or the arch would go on to be read as the directory.
-       xa0 (? ((two? as1) && (seed-arch? <as1)) (seed-canon <as1) ())
+       xa0 (? ((two? as1) && (seed-arch? <as1)) (arch-nom <as1) ())
        xa (? ((nom? xa0) && (id? xa0 (seed-native 0))) () xa0)
        as (nom? xa0 ? >as1 as1)
        dir (two? as ? <as ".")

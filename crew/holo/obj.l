@@ -150,7 +150,7 @@
    ; a 52-byte header, 16-byte symbols, and REL (not RELA) relocations, since ARM's
    ; ABI keeps the addend IN the field, so a surviving thumb branch carries its base
    ; encoding (o-walk fills it) and the .rel tables need no addend column. --
-   arm32-targets '(thumb1 thumb2 thumb2sp cortex-m0 cortex-m7 arm)
+   arm32-targets '(thumb1 thumb2 thumb2sp arm)
    (arm32? t) (member? t arm32-targets)
    r-thm-call 10                                    ; R_ARM_THM_CALL   ((S+A)|T) - P  (a thumb BL to a symbol)
    r-thm-jump24 30                                  ; R_ARM_THM_JUMP24 same math      (a thumb2 B.W tail-jump)
@@ -165,8 +165,9 @@
    (sh32 nameoff typ flags off sz link info align entsz)
     (catall [(le32 nameoff) (le32 typ) (le32 flags) (le32 0)
               (le32 off) (le32 sz) (le32 link) (le32 info) (le32 align) (le32 entsz)])
-   (objsecs32 target secs funcnames globnames wknames)
-    (: machine (peep elf-machines target 0)
+   (objsecs32 target0 secs funcnames globnames wknames)
+    (: target (arch-nom target0)
+       machine (peep elf-machines target 0)
        _ (? (machine = 0) (scare 'no-elf-machine target) 0)
        be (peep backends target ())
        rset '(b bcc bl)                              ; thumb internal branches are pc-relative -> resolve in place
@@ -438,12 +439,13 @@
         [".bss"    8 3 4 bssforms]
         ["ai_nifs" 1 3 4 nifforms]])
 
-   (objelf target textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)
-    (? (arm32? target)
+   (objelf target0 textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)
+    (: target (arch-nom target0)
+     (? (arm32? target)
        (objsecs32 target (objsecs3 target textforms dataforms nifforms imgforms bssforms rodataforms)
                   funcnames globnames wknames)          ; locnames unrepresented on arm32
        (objsecs target (objsecs4 textforms dataforms nifforms imgforms bssforms rodataforms)
-                funcnames globnames wknames locnames))
+                funcnames globnames wknames locnames)))
 
    ; -- the general object: a LIST of sections, each (name type flags align forms).
    ; one section is one LAY, which is exactly what a section boundary means: a
@@ -452,8 +454,9 @@
    ; relaxer; everything else relocates every fixup it carries. a NOBITS section
    ; (type 8) still lays its forms -- that is where its labels and its SIZE come
    ; from -- but writes no file bytes, which is the whole meaning of .bss.
-   (objsecs target secs funcnames globnames wknames locnames)
-    (: a64 (id? target 'arm64)
+   (objsecs target0 secs funcnames globnames wknames locnames)
+    (: target (arch-nom target0)
+       a64 (id? target 'arm64)
        rv (id? target 'rv64)
        _ (? (id? target 'amd64 || a64 || rv) 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds (translation-invariant). riscv's BOTH label
