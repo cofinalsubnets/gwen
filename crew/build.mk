@@ -311,13 +311,21 @@ xhost_o = $(host_c:$(R)/src/%.c=$(xd)/host_%.o)
 xmath_o = $(patsubst crew/moon/lib/math/%.c,$(xd)/m_%.o,$(wildcard crew/moon/lib/math/*.c))
 # no nolibc.o: the link owes its symbols and the driver pulls the members by need
 # (crew/moon/lib/nolibc/), so a dist takes no calendar and no resolver.
-xobjs = $(xd)/love.o $(xhost_o) $(xmath_o) $(xd)/sys.o
+# ⚠ ALL SEVEN love TUs, the host lane's moon_love_o worn at $(xa): love.c became seven
+# files and a rule naming one of them links 191 undefined noms -- the twin has to take the
+# set, not the name that used to be the set.
+xlove_o = $(love_tu:%.c=$(xd)/%.o)
+xobjs = $(xlove_o) $(xhost_o) $(xmath_o) $(xd)/sys.o
 # -D AiHaveVersionH like the host lane (build.mk's love.o): mooncc has no
 # __has_include, so the flag is the only door to the version header.
-$(xd)/love.o: src/love.c $(love_h) out/host/mooncc0.image out/lib/love_version.h
+$(xlove_o): $(xd)/%.o: $(R)/src/%.c $(love_h) out/host/mooncc0.image
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moonx) -D ai_tco=$(tco) -D AiHaveVersionH -I$(ho) -I. -Isrc -Iout/lib -c $< $@
+$(xd)/love.o: out/lib/love_version.h            # only this TU carries the version id
+# ..and the lcat headers these two #include, which the host lane names and this one did
+# not: from a FRESH tree the cross target reached cats.c before out/lib/egg.h existed.
+$(xd)/host_main.o $(xd)/host_cats.o: $(baked_h)
 $(xd)/host_%.o: $(R)/src/%.c $(love_h) out/host/mooncc0.image
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
