@@ -167,9 +167,12 @@
 ; the monadic words behind the glued sigils. net is the content measure -- `+` turned inward --
 ; and a coin's lane is by DECLARATION: die slot 7 nets itself (so additivity lands in the die's
 ; own ring), else its tally under net-mode 1, else its payload signed.
-(: (net x) (? (tray? x) (asum x)
+; one walk, tail-recursive: the spine's cars and then the TAIL, which a dotted link
+; carries and `()` nets away -- so net(link a b) = net a + net b at every link.
+(: (netsum a l) (? (two? l) (netsum (+ a (net (cap l))) (cup l)) (+ a (net l)))
+   (net x) (? (tray? x) (asum x)
               (constellation? x) x
-              (two? x) (foldl (\ a e (+ a (net e))) 0 x)
+              (two? x) (netsum 0 x)
               (coin? x) (? (= 1 (peep (die-of x) 7 0)) x
                            (= 1 (peep (die-of x) 6 0)) (tally x)
                            (net (load x)))

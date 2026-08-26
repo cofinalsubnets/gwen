@@ -1687,8 +1687,8 @@ lvm(lvm_spin) {
 
 // the net: the complex-valued measure. a complex scalar nets itself (additivity
 // needs phase, so the codomain is C and the order retraction happens once, in the
-// observers); every other scalar nets real; a chain or rank>=1 array nets the sum
-// of its elements' nets -- recursive, unclamped, spine only -- so negatives cancel
+// observers); every other scalar nets real; a link nets net(car) + net(cdr) and a
+// rank>=1 array the sum of its elements -- recursive, unclamped -- so negatives cancel
 // and opposite phases annihilate by vector cancellation. net(asum v) = net(v).
 struct ai_zn ai_net(struct ai *g, word x) {
   if (charmp(x)) return zn((ai_flo_t) getcharm(x), 0);               // fixnum: its value
@@ -1717,10 +1717,13 @@ struct ai_zn ai_net(struct ai *g, word x) {
     case DString: { ai_flo_t t = 0;                                 // a string is packed chars: Σ charms
       for (uintptr_t i = 0; i < len(x); i++) t += (uint8_t) txt(x)[i];
       return zn(t, 0); }                                           // (the count moved to tally)
-    case DChain: { struct ai_zn s = zn(0, 0); word p = x;           // chain: sum the spine's nets --
+    case DChain: { struct ai_zn s = zn(0, 0); word p = x;           // chain: net a + net b at every link --
       do { struct ai_zn e = ai_net(g, A(p));                       // complex sums, so negatives cancel,
            s.re += e.re, s.im += e.im;                           // phases cancel, and a chain of
            p = B(p); } while (chainp(p));                          // nothings nets to nothing
+      if (!mintp(p)) { struct ai_zn e = ai_net(g, p);              // ..and the TAIL, so the hom
+        s.re += e.re, s.im += e.im; }                          // holds at a dotted one. every
+                                                               // mint nets 0, so `()` skips
       return s; }
     case DBig: return zn(ai_big_to_flo(x), 0);                   // bignum: full magnitude, sign intact
     case DGem: return zn(gem_get(x), 0);                         // a boxed float nets its value

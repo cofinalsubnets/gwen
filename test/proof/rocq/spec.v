@@ -164,10 +164,11 @@ Proof. intros f a. exists (vapp f a). reflexivity. Qed.
 
 (* false is NOTHING: a value is false iff its net measure is <= 0. The net is
    a complex-valued content measure; this slice models the REAL fragment
-   (net : V -> Z): a number is its own value, () is 0, and a product sums its
-   SPINE -- the car always counts, the cdr continues the spine unless it is a
-   dotted-tail atom, which is "not an element". The complex extension (! and $
-   both read the REAL part alone; the magnitude is abs's business) needs
+   (net : V -> Z): a number is its own value, () is 0, and a link is the sum of
+   its two halves -- net (Vcons a b) = net a + net b, with no case on b, so a
+   proper list's Vnil tail adds nothing and a dotted tail counts like any car.
+   The complex extension (! and $ both read the REAL part alone; the
+   magnitude is abs's business) needs
    reals and is the next slice; everything here is exact over the integer net. *)
 
 From Stdlib Require Import ZArith Lia Permutation.
@@ -179,9 +180,7 @@ Fixpoint net (v : V) : Z :=
   match v with
   | Vnum z              => z
   | Vnil                => 0
-  | Vcons a Vnil        => net a            (* end of a proper list *)
-  | Vcons a (Vnum _)    => net a            (* a DOTTED tail is not a spine element *)
-  | Vcons a (Vcons _ _ as b) => net a + net b   (* the car counts; continue the spine *)
+  | Vcons a b           => net a + net b    (* every link: the car and the cdr *)
   end.
 
 (* THE CHARM CEILING. a charm is the codomain of every rung of the measure tower, so a
@@ -271,8 +270,9 @@ Proof. intros xs ys. rewrite !net_vlist. apply netl_app. Qed.
 
 (* the concrete corpus computations *)
 Theorem sat_123    : sat (vlist [Vnum 1; Vnum 2; Vnum 3]) = 6.  Proof. reflexivity. Qed. (* $'(1 2 3) *)
-Theorem sat_dotted : sat (Vcons (Vnum 1) (Vnum 2)) = 1.          Proof. reflexivity. Qed. (* $(cons 1 2) -- tail dropped *)
-Theorem nil_dotted : nilp (Vcons (Vnum 0) (Vnum 2)) = true.      Proof. reflexivity. Qed. (* !(cons 0 2) *)
+Theorem sat_dotted : sat (Vcons (Vnum 1) (Vnum 2)) = 3.          Proof. reflexivity. Qed. (* $(cons 1 2) -- the tail counts *)
+Theorem sat_dotted3 : sat (Vcons (Vnum 1) (Vcons (Vnum 2) (Vnum 3))) = 6.  Proof. reflexivity. Qed.
+Theorem nil_dotted : nilp (Vcons (Vnum 0) (Vnum 2)) = false.     Proof. reflexivity. Qed. (* !(cons 0 2) -- a live tail is content *)
 Theorem nothings   : nilp (vlist [Vnil; Vnil]) = true.           Proof. reflexivity. Qed. (* a product of nothings is nothing *)
 Theorem net_red    : net (vlist [Vnum (-2); Vnum 1]) = -1.       Proof. reflexivity. Qed. (* +'(-2 1) -- the net is unclamped *)
 Theorem red_red    : red (vlist [Vnum (-2); Vnum 1]).            Proof. reflexivity. Qed. (* ... and red *)

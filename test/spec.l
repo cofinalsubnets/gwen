@@ -61,7 +61,7 @@
  !'(-5) !@(-3 -4) !'(-2 1) !!'(0 1)              ; negatives net <= 0 at every rank; -2+1 < 0 < 0+1
  (3 = $'(1 () 2)) (6 = $'(1 2 3)) (7 = $@(3 4))  ; $ sums the nets, then clamps once
  (? word (: n ((53 2) + 1) m ((53 2) + 3) (&& (n = $n) (m = $m))) 1)  ; $ is the IDENTITY on a green charm, EXACTLY -- past 2^53 the net's double would round it
- (1 = $(link 1 2)) !(link 0 2)                   ; the SPINE carries the measure: a dotted tail is not an element
+ (3 = $(link 1 2)) !!(link 0 2) (6 = $(1 >< 2 >< 3))  ; EVERY link nets car + cdr, so a dotted tail counts too
  (0 = $[(3 ~ 4) (-3 ~ 4)]) ![(0 ~ 5) -1]       ; phases sum as VECTORS, then the total is gated once:
  !i !(0 ~ -1) !(0 ~ 8) (0 = $i)                  ; ...and a PURE PHASE is BLUE. `i` and `-i` are swapped by a
  (i < 5) ((0 ~ -1) < i)                          ; field automorphism, so truth cannot tell them apart -- but the
