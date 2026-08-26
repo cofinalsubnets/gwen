@@ -703,7 +703,11 @@ extern union u const yield_c[];
 lvm(_lvm_yieldk);
 ai_noinline word abs_wmin(struct ai *g);
 ai_flo_t ai_cospi(ai_flo_t x);
-struct ai *ai_eval(struct ai *g);
+// ⚠ THE TRAILING _ IS THE POINT: this was static in the one love.c and the TU split had
+// to export it (io.c calls it), which put an INTERNAL name into the global namespace --
+// where wasm/host.c's ai_eval, the frontend's published JS export, already lived. It is
+// not in love.h and never was; the underscore is what ai_evals_/ai_layer_ already say.
+struct ai *ai_eval_(struct ai *g);
 bool ai_isbs(struct ai *g, word h);
 void *ai_libc_alloc(struct ai*g, void *p, size_t n);
 struct ai *ai_pushr(struct ai *g, uintptr_t m, uintptr_t n, va_list xs);

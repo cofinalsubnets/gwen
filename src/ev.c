@@ -71,7 +71,7 @@ static word sget(struct ai *g, word s, int k);
 // ============================================================================
 static ai_inline struct ai *pushl(struct ai*g) { return intern(ai_strof(g, "\\")); }
 struct ai *c0(struct ai *g, lvm_t *y);
-struct ai *ai_eval(struct ai *g);
+struct ai *ai_eval_(struct ai *g);
 
 // function state using this type
 struct env {
@@ -182,13 +182,13 @@ ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
  // every in-place store below is precisely barriered (gen_wb_cell/two), so a
  // mid-compile collection stays minor. the opfix prepass runs first; a chain whose
  // head is already a top is a constructed direct application (never readable
- // source): skipped, which also terminates the recursion through ai_eval.
+ // source): skipped, which also terminates the recursion through ai_eval_.
  { word x0 = g->sp[0];
    if (chainp(x0) && (!lamp(A(x0)) || datp(A(x0)))) {
     word of = ai_core_of(g)->hot_opfix;          // sealed: a book rebind can't reach this lane;
     if (lamp(of)) {                              // pre-seal (mid-prel bootstrap) it is zero and
                                                  // the pass skips -- everything there is prefix
-     g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, x0, zero, zero, of)))))));
+     g = ai_eval_(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, x0, zero, zero, of)))))));
      if (!ai_ok(g)) return g;
      g->sp[1] = g->sp[0], g->sp += 1; } } }
  if (!ai_ok(g = enscope(g, (struct env*) zero, zero, zero))) return g;
@@ -307,7 +307,7 @@ lvm(_lvm_yieldk) { return
 // a hardware fault is a crash on every target: no handler, no recovery -- a fault
 // means an invariant is already broken, and the immediate core dump names the site.
 // (a barrier here once turned that class into a silent per-call siglongjmp storm.)
-struct ai *ai_eval(struct ai *g) {
+struct ai *ai_eval_(struct ai *g) {
  if (!ai_ok(g)) return g;                        // c0 reads g->sp[0] before any guard of its own
  g = c0(g, _lvm_yieldk);
 #if ai_tco
@@ -549,7 +549,7 @@ bool lexbound(struct ai *g, struct env *d, word x) {
 
 static ai_inline Ana(ana_2, word a, word b) {
  if ((x = macroget(ai_core_of(g), a)) && !lexbound(g, *c, a))   // macro table = each layer's [zero] slot, walked; the scope walk only on a macro hit
-  return g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, b, zero, zero, x))))))),
+  return g = ai_eval_(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, b, zero, zero, x))))))),
          analyze(g, c, ai_ok(g) ? pop1(g) : 0);
  if (!chainp(b)) return analyze(g, c, a);  // (f) == f -- below the macro lane, which has no value to be
  return avec(g, b, g = analyze(g, c, a)),
@@ -578,7 +578,7 @@ static ai_inline struct ai *ana_d(struct ai *g, struct env **b, word exp) {
  if (ai_ok(g = intern(ai_strof(g, "boxfix")))) {
   word bf = bookget(g, 0, pop1(g));
   if (bf && lamp(bf)) {
-   g = ai_eval(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, exp, zero, zero, bf)))))));
+   g = ai_eval_(gxr(gxl(gxl(pushq(gxl(ai_push(g, 4, exp, zero, zero, bf)))))));
    if (ai_ok(g)) exp = pop1(g); } }
  g = enscope(g, *b, eget(g, (*b), EArgs), eget(g, (*b), EImps));
  if (!ai_ok(g)) return forget();

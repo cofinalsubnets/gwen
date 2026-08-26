@@ -940,7 +940,7 @@ static struct ai *p1text(struct ai *g, char const *s) {
  g = gxr(push0(g));                                  // ("<text>")
  if (!ai_ok(g = ai_push(g, 1, zero))) return g;       // reserve first, then read the slot:
  g->sp[0] = ai_core_of(g)->hot_read;                 //   a push can gc, and the gc is what
- if (!ai_ok(g = ai_eval(gxl(g)))) return g;          //   moves hot_read. (<reader> "<text>")
+ if (!ai_ok(g = ai_eval_(gxl(g)))) return g;          //   moves hot_read. (<reader> "<text>")
  // p1 answers `torn` for an unfinished shape; the egg would fold over it as an
  // empty corpus and silently pin ev to 0, so refuse it here (chainp and not nomp)
  word r = g->sp[0];
@@ -961,7 +961,7 @@ static struct ai *qtop(struct ai *g) {                // x on top -> 'x
 static struct ai *applyq(struct ai *g, char const *driver) {
  if (!ai_ok(g)) return g;                            // ai_pop bumps sp unguarded
  g = p0onto(gxr(push0(qtop(g))), driver);            // ('(list)), then (driver '(list))
- return ai_pop(ai_eval(g), 1); }
+ return ai_pop(ai_eval_(g), 1); }
 
 // the plain eval fold: run a list of forms in order, answer the last one's
 // value. `ev` is read late so one text drives both of love0's passes.
@@ -984,5 +984,5 @@ ai_noinline struct ai *ai_egg_(struct ai *g, char const *egg, char const *p1,
  g = p1text(g, corpus);                              // prel + ev, through the reader in love
  g = p0onto(g, p1);                                  // and p1 at the head of the corpus
  g = p0onto(gxl(qtop(g)), egg);                      // (egg 'corpus 'post)
- return ai_pop(ai_eval(g), 1); }
+ return ai_pop(ai_eval_(g), 1); }
 

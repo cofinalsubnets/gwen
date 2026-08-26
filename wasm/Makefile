@@ -7,9 +7,12 @@ emcc = $(CCACHE) $(EMCC)
 # This frontend's build output directory under the top-level out/.
 o = ../out/wasm
 
-# g.c was split into per-concern translation units (kernel/*.c); build them all.
-g_c = ../src/love.c ../crew/moon/lib/math/am.c
-g_h = $(wildcard ../core/*.h)
+# ⚠ THE WHOLE CORE, not the file that used to be it: love.c became seven TUs and src/ is
+# one folder now, so both of these named a layout that is gone -- g_c compiled a seventh
+# of the core and g_h wildcarded a directory that does not exist, which left every object
+# here with NO header dependency at all.
+g_c = $(patsubst %,../src/%,love.c ev.c io.c map.c snap.c num.c arr.c) ../crew/moon/lib/math/am.c
+g_h = $(wildcard ../src/*.h)
 
 # One object per source, so an edit recompiles just that TU and ccache can cache each.
 # Local host.c stays rooted in cwd; shared kernel/*.c carry ../, mapped in by the patsubst.
@@ -20,7 +23,7 @@ objs = $(host_o) $(core_o)
 CFLAGS = -std=gnu2x -O2 -g0 -Dai_tco=0 \
   -Wall -Wno-unused-parameter -Wno-shift-negative-value \
   -fno-exceptions \
-  -I.. -I../core -I../out/lib
+  -I.. -I../src -I../out/lib
 
 EMFLAGS = \
   -sMODULARIZE=1 -sEXPORT_NAME=Love \
@@ -54,7 +57,10 @@ all: love.js
 
 # love.c bakes the version string (its __has_include of love_version.h), so recompile it
 # when ./VERSION moves -- else the browser banner keeps whatever id love.o last saw.
-$(o)/core/love.o: ../out/lib/love_version.h
+# ..and the version header lands on the TU that carries the id. ⚠ the path is the one
+# core_o's patsubst actually makes: ../src/love.c -> $(o)/src/love.o. Spelled core/ this
+# rule named a target nothing builds, so the dependency was simply not there.
+$(o)/src/love.o: ../out/lib/love_version.h
 
 # the link is multi-input, so ccache cannot cache it -- bare $(EMCC), and EMFLAGS apply only
 # here. spelled once for two places: `love.js` is the committed artifact refreshed by hand,
