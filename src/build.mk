@@ -100,7 +100,10 @@ $(ho)/liblove.a: $(h_o)
 # both ai_typ bodies answer the same enum d for the same ap, and no layout crosses binaries
 # (love.h: the heap image carries an ap as its index).
 boot_cc = $(CCACHE) $(CC) $(ai_cflags) -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Isrc -Iout/lib
-love0_host_o = $(host_c:$(R)/%.c=out/host/0/%.o)
+# ⚠ src/cats.c is NOT love0's: it bakes the out/lib/*.h headers love0 itself lays, so a
+# from-scratch tree has none of them to compile against. love0's boot reads the sed-wrapped
+# 0.h twins instead (src/main.c, #ifdef LoveBoot).
+love0_host_o = $(patsubst $(R)/%.c,out/host/0/%.o,$(filter-out $(R)/src/cats.c,$(host_c)))
 love0_o = $(love0_host_o) $(love_c:$(R)/%.c=out/host/0/%.o)   # pinned (not $(ho)/0)
 out/host/0/src/main.o: $(boot_h)
 out/host/0/src/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
@@ -139,10 +142,11 @@ $(ho)/%.o: $(R)/%.c $(love_h) $(ho)/.hostcc
 # l.o carries the version string; recompile it when the id changes. love0's twin is
 # deliberately not here -- see the -DAiVersion note on boot_cc.
 $(ho)/love.o: out/lib/love_version.h
-# the lcat'd headers src/main.c bakes inline. one roster: the mooncc twin and the
-# HCC link below read the same name, and three spellings is how they drift.
+# the lcat'd headers the frontends bake inline -- src/cats.c takes the egg and the module
+# set, src/main.c the CLI and the glaze. one roster for both: the mooncc twin and the HCC
+# link below read the same name, and three spellings is how they drift.
 baked_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h out/lib/overlay.h out/lib/peg.h out/lib/uu.h out/lib/verbs.h out/lib/distlist.h $(holo_h) $(glaze_h)
-$(ho)/src/main.o: $(baked_h)
+$(ho)/src/main.o $(ho)/src/cats.o: $(baked_h)
 # the carried-blob reader both the first boot and the kernel's ram fs decode with
 $(ho)/src/main.o $(ho)/src/ustar.o: $(R)/src/ustar.h
 # src/cb.c rides the crew/quay sources by unity include -- recompile when they move.
@@ -184,7 +188,7 @@ $(moon_d)/host_%.o: $(R)/src/%.c $(love_h) $(moon0_dep)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Isrc -Iout/lib -c $< $@
-$(moon_d)/host_main.o: $(baked_h)
+$(moon_d)/host_main.o $(moon_d)/host_cats.o: $(baked_h)
 $(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(moon_d)/m_%.o: crew/moon/lib/math/%.c $(moon0_dep)
 	@echo 'MOON	'$@

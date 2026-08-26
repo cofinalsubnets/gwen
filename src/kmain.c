@@ -1,5 +1,6 @@
 #include "k.h"
 #include "love.h"
+#include "cats.h"
 #include "quay.h"
 #include "asmops.h"                    // the privileged instructions, both spellings
 #include <stdarg.h>
@@ -1836,44 +1837,6 @@ static char const ktests[] =
 ;
 #endif
 
-// THE BAKED MODULES, one text (see src/main.c): each opens with its own
-// (module 'nm ..), so the boot below evals this once to register the lot and every
-// later `use` is a pure splice serving the bare names (the console editor reads bao's).
-// verbs: the verb REGISTRY (love/verbs.l). the kernel wants one for the plainest
-// reason -- its userland IS a verb table, and the boot cmdline's program seat reads
-// it. cook.l and lush ride the cat and seat themselves through the same door.
-// the two kernels want different sets. the shipped one (rung 3) adds holo -- the
-// arch-neutral core plus the NATIVE backend, src/main.c's shape -- because the kore
-// cat's asbook.l opens with (use 'holo), and peg, because cook.l opens with (use 'peg).
-// the TEST kernel takes neither (its corpus bakes the kore subset it drives, and the
-// full cat would only slow every gate boot) and the corpus's own four instead.
-static char const src_mods[] =
-#include "verbs.h"
-" "
-#include "uu.h"
-" "
-#include "bao.h"
-#ifdef K_TEST
-" "
-#include "coin.h"
-" "
-#include "rng.h"
-" "
-#include "q.h"
-" "
-#include "kanren.h"
-#else
-" "
-#include "holo.h"
-#if defined(__x86_64__)
-#include "x64.h"
-#elif defined(__aarch64__)
-#include "arm64.h"
-#endif
-" "
-#include "peg.h"
-#endif
-;
 #ifndef K_TEST
 // the kore cat is CATTED FROM THE RAMFS at boot now -- the blob initrd carries
 // every member, so only the ORDER is baked: the korefiles roster, one line.
@@ -1968,20 +1931,12 @@ void kmain(void) {
   // image already carries. the seat text below runs on BOTH lanes.
   struct ai *r = g;
   if (!woke) {
-  r = ai_egg_(g,
-#include "egg.h"
- ,
-#include "p1.h"
- ,
-#include "prel.h"
- " "
-#include "ev.h"
- ,
-#include "post.h"
- );
-  r = ai_evals_(r, src_mods);                            // register every baked module; the uses below are splices
+  r = ai_egg_(g, ai_cat_egg, ai_cat_p1, ai_cat_prel, ai_cat_post);
+  r = ai_evals_(r, ai_cat_mods);                        // register every baked module; the uses below are splices
   r = ai_evals_(r,
- "(use 'verbs)" // the registry FIRST: the cat's apps pin their own names at load
+ // verbs FIRST: this machine's userland IS a verb table -- the cat's apps pin their
+ // own names as they load, and the boot cmdline's program seat reads the registry.
+ "(use 'verbs)"
  "(use 'uu) (: uu (from 'uu))"                         // the uu kernel: the corpus's uu files drive it through the
  "(use 'bao)"                                          //   one-name `uu` surface on this target too
   );

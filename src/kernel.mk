@@ -40,7 +40,7 @@ k_free_c = $R/src/kmain.c $R/src/blk.c $R/src/sys.c
 # boot text's task shim shadows those names, and quit/getpid branch to their
 # k_lvm_ twins on a negative osv. ⚠ no quay.c here: cb.c carries it by unity
 # include, exactly as the host link does.
-k_host_c = $(patsubst %,$R/src/%.c,main cb image mem hash sock tls deflate inflate src posix seat ustar)
+k_host_c = $(patsubst %,$R/src/%.c,main cats cb image mem hash sock tls deflate inflate src posix seat ustar)
 k_quay_c = $R/crew/quay/cga_8x8.c $R/crew/quay/moderndos_8x16.c $R/crew/quay/paint.c
 k_shared_c = $(love_c) $(k_quay_c) $(c_c)
 k_h = $(love_h) $(R)/src/k.h $(R)/src/ustar.h $(wildcard *.h $(R)/src/$a_*.h)
@@ -114,8 +114,8 @@ kernel: $(k_elf)
 # runs at a hosted start, run ahead of time), lays and patches boot.o below
 # the image, writes k_image_top, and emits the flat ELF all three doors have
 # always booted -- the note, the entry by symbol, paddr = vaddr.
-# main.o bakes the host cats; cb.o rides the quay sources by unity include.
-$(k_odir)/src/main.o: $(baked_h)
+# cb.o rides the quay sources by unity include; the baked cats reach every object
+# through the pattern rule below.
 $(k_odir)/src/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(k_odir)/rt.o: $(rt_slice) tools/mkrt.l $m
 	@echo 'LOVE	'$@
@@ -188,7 +188,7 @@ out/lib/korelist.h: crew/build.mk src/kernel.mk
 
 # Shared C sources (src/love.c, crew/quay/, nolibc's six) + per-arch free/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/verbs.h out/lib/uu.h out/lib/bao.h out/lib/distlist.h $(if $(K_TEST),out/lib/kfs.h out/lib/ktests.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/kanren.h,out/lib/korelist.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h)
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) $(baked_h) $(if $(K_TEST),out/lib/kfs.h out/lib/ktests.h,out/lib/korelist.h)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@
@@ -210,9 +210,9 @@ kmain_o: $(k_free_o)
 kart_inc = -I$(ho) -I. -Isrc -Iout/lib -I$R \
   -I$R/crew/quay -I$R/crew/moon/include
 kart_h = $(love_h) $(R)/src/k.h $(R)/src/ustar.h $(wildcard $(R)/src/$(hosta)_*.h)
-kart_cats = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h \
-  out/lib/verbs.h out/lib/uu.h out/lib/bao.h \
-  out/lib/korelist.h out/lib/distlist.h out/lib/holo.h out/lib/x64.h out/lib/arm64.h out/lib/peg.h
+# kmain.c's own bake is the kore ROSTER now; the egg and the module set are src/cats.c's,
+# and that object rides the host lane above.
+kart_bake = out/lib/korelist.h
 kart_arch_o = $(patsubst $R/src/%.c,$(moon_d)/k_%.o,$(wildcard $R/src/$(hosta)_*.c))
 # the console's painter and its fonts: kernel-only draws the host link never had
 kart_quay_o = $(patsubst %,$(moon_d)/k_q_%.o,paint cga_8x8 moderndos_8x16)
@@ -270,7 +270,7 @@ $(moon_d)/kd_wad.o: $R/dl/doom1.wad tools/mkblob.l out/host/.mksys-cat.l $(love0
 	@LOVE_NO_IMAGE= $(boot_love) -l out/host/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(k_be_$(hosta))
 endif
 
-$(moon_d)/k_%.o: $R/src/%.c $(kart_h) $(kart_cats) $(moon0_dep)
+$(moon_d)/k_%.o: $R/src/%.c $(kart_h) $(kart_bake) $(moon0_dep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moon0) $(kart_inc) -c $< $@
@@ -314,7 +314,7 @@ $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/src/%.l $(klay_l)
 # at $(hosta) -- an egg short of it first-boots fine and then fails the fixpoint,
 # a whole machine away from the lane that laid it. spelled here rather than in
 # crew/build.mk because kernel.mk owns the shape and is included second:
-# $(kart_cats) expands to nothing up there. an arch with no free/<a>/ carries
+# $(kart_bake) expands to nothing up there. an arch with no free/<a>/ carries
 # none, which is what the $(if) reads.
 xkart_inc = -I$(ho) -I. -Isrc -Iout/lib -I$R \
   -I$R/crew/quay -I$R/crew/moon/include
@@ -322,7 +322,7 @@ xkart_h = $(love_h) $(R)/src/k.h $(wildcard $(R)/src/$(xa)_*.h)
 xkart_arch_o = $(patsubst $R/src/%.c,$(xd)/k_%.o,$(wildcard $R/src/$(xa)_*.c))
 xkart_quay_o = $(patsubst %,$(xd)/k_q_%.o,paint cga_8x8 moderndos_8x16)
 xkart_o = $(if $(xkart_arch_o),$(xd)/k_kmain.o $(xd)/k_blk.o $(xd)/k_sys.o $(xkart_arch_o) $(xkart_quay_o) $(xd)/kvec.o,)
-$(xd)/k_%.o: $R/src/%.c $(xkart_h) $(kart_cats) $(moon0_dep)
+$(xd)/k_%.o: $R/src/%.c $(xkart_h) $(kart_bake) $(moon0_dep)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(moonx) $(xkart_inc) -c $< $@

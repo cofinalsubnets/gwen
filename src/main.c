@@ -1,4 +1,5 @@
 #include "love.h"
+#include "cats.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -392,24 +393,6 @@ extern int ai_raw_mode(intptr_t on);
 
 static char const cli[] =
 #include "cli.h"
- , src_mods[] =
-#include "coin.h"
-#include "rng.h"
-#include "q.h"
-#include "kanren.h"
-#include "overlay.h"
-#include "uu.h"
-#include "holo.h"
-#if defined(__x86_64__)
-#include "x64.h"
-#elif defined(__aarch64__)
-#include "arm64.h"
-#elif defined(__riscv)
-#include "riscv.h"
-#endif
-#include "bao.h"
-#include "verbs.h"
-#include "peg.h"
 ;
 
 // the glaze, in one text. emit.l (the native emitter) then auto.l (ev's source
@@ -486,18 +469,9 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   // default, so the shipped surface and every gate stay swept.
   { char const *nm = getenv("LOVE_NO_MOP");
     if (nm && *nm) g = ai_evals_(g, "(: nomop 1)"); }
-  g = ai_egg_(g,
-#include "egg.h"
-    ,
-#include "p1.h"
-    ,
-#include "prel.h"
-    " "
-#include "ev.h"
-    ,
-#include "post.h"                                       // the printer, and `@` with it -- post's first half
-    );
-  g = ai_evals_(g, src_mods);                            // register every baked module; the uses below are splices
+  g = ai_egg_(g, ai_cat_egg, ai_cat_p1, ai_cat_prel,    // prel, then ev's half
+                 ai_cat_post);                           // the printer, and `@` with it
+  g = ai_evals_(g, ai_cat_mods);                         // register every baked module; the uses below are splices
   g = ai_evals_(g,
     "(use 'coin)"
     "(use 'rng)"
