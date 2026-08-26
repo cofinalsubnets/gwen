@@ -82,7 +82,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_holofuzz test_glazefuzz test_encver test_lux test_kore test_refuzz test_sb test_vi \
 	test_moon test_clay test_moonfuzz test_forge \
 	test_cts test_libc test_ulp test_raw \
-	test_drv test_hdiff nettest test_wake test_gz test_cpio
+	test_drv test_hdiff test_tco0 nettest test_wake test_gz test_cpio
 
 all: host kernel wasm dist
 

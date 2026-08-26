@@ -56,13 +56,17 @@ in_git := $(wildcard $R/.git)
 # ⚠ ITS OWN TREE, because the two loves are the same path otherwise: out/host-cc keeps the
 # objects and the binary apart, and $m follows it so a test runs the one you asked for.
 override HCC := $(filter-out 0,$(HCC))
-hsuf := $(if $(HCC),-cc,)
 
 # ai_tco for the builds that can take it: 1 = the tail-threaded VM (aps tail-jump, never
 # return -- `make vmret` verifies it per binary), 0 = the trampoline loop. The host runs
 # $(tco). PINNED to 0 elsewhere: love0 and wasm (the deliberate trampoline-coverage lanes),
 # and the two seats with no sibcall -- mps2's thumb1 face and the playdate simulator.
 tco ?= 1
+
+# ⚠ tco EARNS A TREE THE SAME WAY HCC does, and for the same reason: a tco=0 love is a
+# different binary at the same path, so sharing out/host would make every following make
+# rebuild the world, and a test would run whichever flavour was built last.
+hsuf := $(if $(HCC),-cc,)$(if $(filter 0,$(tco)),-tco0,)
 
 # the corpus: 00-init's harness first, the spec second, then uu.l, then the rest. ⚠ uu.l is
 # front-loaded EXPLICITLY so its dependents (uukind*, uulay, uupatch, uuwm*) see it whatever

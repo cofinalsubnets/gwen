@@ -546,6 +546,19 @@ test_selfhost: host
 test_raw: host
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
 	  sh test/gate/raw.sh x64 $(ho) $m $t
+# test_tco0 -- THE TRAMPOLINE, at full strength. `tco=0` is a documented knob
+# (mk/common.mk) and it had rotted to a segfault in `bake`: the glaze emits the
+# TAIL-THREADED lvm shape, and nothing stopped a trampoline build from calling it.
+# ⚠ love0 is the tree's other tco=0 lane and it cannot cover this -- it is the
+# LoveBoot branch, which never reaches AiGlazed, so the one build that exercised
+# the trampoline was the one build that could not meet the bug. this is the full
+# love at tco=0: it must build, BAKE (where the segfault was), and pass the corpus.
+# it takes its own hsuf'd tree, so it neither clobbers nor is clobbered by the
+# default flavour. no vmret here -- at tco=0 an lvm returns, which is the point.
+test_tco0:
+	@$(MAKE) --no-print-directory tco=0 host
+	@$(MAKE) --no-print-directory tco=0 test_host
+	@echo "test_tco0: the trampoline builds, bakes and passes the host corpus"
 # test_hdiff -- the FOREIGN-CC differential at the host (KCC's twin one level up). gcc and
 # clang each link the whole vm at ai_tco=1, which the default mooncc lane never does, and
 # each must build, answer, pass the quick host suite and come out ret-free. NOT the corpus
