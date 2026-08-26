@@ -243,7 +243,10 @@
 ; fnmatch + the glob walk: classes, ranges, negation, the mask law
 (assert (sh-match "*.l" "job.l") (! (sh-match "*.l" "job.c"))
         (sh-match "j??.l" "job.l") (sh-match "[a-j]ob.l" "job.l")
-        (! (sh-match "[!a-j]ob.l" "job.l"))
+        (! (sh-match "[!a-j]ob.l" "job.l")) (sh-match "[!a-j]ob.l" "zob.l")
+        (sh-match "[!a]bc" "zbc") (! (sh-match "[!a]bc" "abc"))     ; negation, BOTH ways
+        (sh-match "[^a]bc" "zbc") (! (sh-match "[abz]bc" "qbc"))    ; ^ is the same word
+        (sh-match "a[bc" "a[bc")                                    ; unterminated [ is itself
         (= '("crew/lush/job.l") (sh-glob "crew/lush/j[m-p]b.l" (sh-ones 19))))
 
 ; completion (rung 2): (insert . candidates) -- one path candidate lands its

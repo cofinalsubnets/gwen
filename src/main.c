@@ -299,6 +299,7 @@ static char const
 #include "coin0.h"
 #include "rng0.h"
 #include "q0.h"
+#include "glob0.h"
 #include "kanren0.h"
 #include "overlay0.h"
 #include "uu0.h"

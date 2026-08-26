@@ -28,6 +28,7 @@ char const ai_cat_mods[] =
 #include "coin.h"
 #include "rng.h"
 #include "q.h"
+#include "glob.h"
 #include "kanren.h"
 #include "overlay.h"
 #include "uu.h"
