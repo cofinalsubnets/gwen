@@ -8,7 +8,7 @@ static bool gen_remembered(struct ai *g, word obj);
 static char *add_emit(struct ai *g, char *w, word x);
 static int stringrank(struct ai *g, word x);
 static intptr_t seq_byte(word x);
-static lvm(_lvm_help_scare, enum ai_status s);
+static lvm(_lvm_help_scare);
 static lvm(_lvm_yield_c);
 static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t));
 static struct ai *ai_modtab(struct ai *g, char const *mod);
@@ -120,11 +120,13 @@ union u const yield_c[] = { {_lvm_yield_c} };
 
 // lvm_help: the default help ap -- re-encode the raised status, yield to C.
 // _lvm_help_scare sits outside lvm_* on purpose: the one designed `ret`
-// (vmret sounds lvm_* only), reached by tail call.
-static lvm(_lvm_help_scare, enum ai_status s) { return Pack(g), encode(g, s); }
+// (vmret sounds lvm_* only), reached by tail call. the status rides the core's b,
+// like every other thing an op needs beyond the stack.
+static lvm(_lvm_help_scare) { return Pack(g), encode(g, (enum ai_status) g->b); }
 lvm(lvm_help) {
- enum ai_status s = ai_code_of(g);
- return Ap(_lvm_help_scare, ai_core_of(g), s); }
+ struct ai *c = ai_core_of(g);
+ c->b = (ai_word) ai_code_of(g);
+ return Ap(_lvm_help_scare, c); }
 
 // reverse-lookup a nif value -> its source name or NULL (the printer renders nifs by name)
 char const *ai_nif_name(intptr_t x) {

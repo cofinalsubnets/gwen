@@ -46,8 +46,8 @@
 #endif
 
 #if ai_tco
-#define _lvm(n, ...) struct ai *n(struct ai *restrict g, union u *Ip, ai_word *Hp, ai_word *restrict Sp, ##__VA_ARGS__)
-#define Ap(fn, g, ...) fn(g, Ip, Hp, Sp, ##__VA_ARGS__)
+#define _lvm(n) struct ai *n(struct ai *restrict g, union u *Ip, ai_word *Hp, ai_word *restrict Sp)
+#define Ap(fn, g) fn(g, Ip, Hp, Sp)
 #define Continue() Ap(Ip->ap, g)
 // the stepped/answering tails as bare calls (ai_musttail's operand may not be a comma):
 // Next steps n cells, Nextp also pops k, Answer stores v at the top, Answerp under a pop
@@ -66,8 +66,10 @@
 // every VM tail spells `ai_musttail return ..` and every compiler is held to the jump:
 // clang/gcc 15+ take the attribute, mooncc's sibcall pass spells it or refuses the
 // compile -- an opportunistic miss is one frame per dispatch and a stack overflow down
-// some long read. `make vmret` cross-checks the shipped binary. the extra-arg lvms
-// (vbin, vmap*..) keep plain returns: musttail wants matching prototypes.
+// some long read. `make vmret` cross-checks the shipped binary.
+// ⚠ AN LVM TAKES NO OTHER ARGUMENT, and the macros above cannot spell one: musttail
+// wants matching prototypes, so a fifth parameter would leave that op's tails to the
+// compiler's mood. what an op needs beyond the stack rides g->b, read at entry.
 #if defined(__mooncc__) || defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 15)
 #define ai_musttail __attribute__((musttail))
 #if defined(__GNUC__) && !defined(__clang__)
@@ -79,8 +81,8 @@
 #define ai_musttail
 #endif
 #else
-#define _lvm(n, ...) struct ai *n(struct ai *restrict g, ##__VA_ARGS__)
-#define Ap(fn, g, ...) fn(g, ##__VA_ARGS__)
+#define _lvm(n) struct ai *n(struct ai *restrict g)
+#define Ap(fn, g) fn(g)
 #define Continue() g
 #define Next(n) (Ip += (n), g)
 #define Nextp(n, k) (Sp += (k), Ip += (n), g)
@@ -95,7 +97,7 @@
 #define Pack(g) ((void)0)
 #define Unpack(g) ((void)0)
 #endif
-#define lvm(...) ai_noinline ai_noicf _lvm(__VA_ARGS__)
+#define lvm(n) ai_noinline ai_noicf _lvm(n)
 
 typedef intptr_t ai_word;
 
