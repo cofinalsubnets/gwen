@@ -28,8 +28,8 @@
                ((c >= 65) && (c <= 90)) ||                      ; A-Z
                txdig? c || (c = 95) || (c = 45))                ; 0-9 _ -  (kebab labels welcome)
 
-   ;; -- small string helpers (a payload piece is a one-char byte from `one` or a substring from
-   ;; `span`; `+` joins either onto a string via the byte law). --
+   ;; -- small string helpers (a payload piece is a one-char string from `one` or a substring
+   ;; from `span`, so `+` joins either by plain concat). --
    (txjoin ss) (foldl (\ a x (a + x)) "" ss)
    (txint s)   (foldl (\ a i ((a * 10) + (s i - 48))) 0 (jot (tally s)))
    (txnum p)   (? (<p = "-") (0 - txint (txjoin >p)) (txint (txjoin p)))

@@ -145,7 +145,7 @@ lvm(data_pair_apply) {
 
 // === the two generic-op dispatch matrices (+ and *), indexed by ai_kind =====
 // lanes: *n numeric/broadcast (every star and tray kind routes identically), add_seq
-// a list anywhere, add_string strings (+ a number as one byte -- the byte law),
+// a list anywhere, add_string strings and symbols (a number arrives as the unit),
 // mul_rep sequence * count, *l a lambda-or-map operand (church add / compose),
 // lvm_0 undefined -> zero. precedence: lambda > tablet > chain > text > number.
 // the tables are generated: one datum (mx.l) feeds this header and the rocq model

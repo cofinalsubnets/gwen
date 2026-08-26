@@ -491,8 +491,7 @@
    (after-word s) (ltrim (snip s (findc-ws s 0) (tally s)))
    (nth l i d) (? (two? l) (? (0 = i) <l (nth >l (i - 1) d)) d)
    (lastl l) (? (two? >l) (lastl >l) <l)
-   ; an empty snip (start>=end) yields the zero point 0, not "" -- and (+ 0 str)
-   ; prepends a NUL byte (the byte law). `sub` is the empty-safe snip: "" for empty.
+   ; `sub` is snip with the ends ordered: "" when start >= end.
    (sub s a b) (? (a < b) (snip s a b) "")
    ; strip a make comment (an unescaped #) from a NON-recipe line; \# is a literal #.
    (strip-comment l)

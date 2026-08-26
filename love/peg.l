@@ -19,9 +19,8 @@
                   (y (snip s (tally l) (tally s)) [l])
                   (n s))
    ; ⚠ the payload element is a ONE-CHAR STRING, not the charm: every element a peg
-   ; parser yields is then a string fragment, so a consumer's join is pure concat
-   ; (the byte law that used to glue a charm into a fold is gone). the predicate
-   ; still sees the charm.
+   ; parser yields is then a string fragment, so a consumer's join is pure concat.
+   ; the predicate still sees the charm.
    (one p s y n) (? (0 < tally s && p (s 0))
                   (y (snip s 1 (tally s)) [(snip s 0 1)])
                   (n s))
