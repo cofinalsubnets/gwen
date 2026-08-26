@@ -252,7 +252,8 @@
  ('(3) = '(3) + ()) ('(3) = () + '(3)) ('(1 2) = '(1 2) + (mint 0))   ; a bare mint -- the zero point () too -- is +'s
  ("ab" = "ab" + ()) ("ab" = () + "ab") (5 = 5 + ()) (5 = () + 5)      ; IDENTITY in every lane, not just on lists:
  ((1 ~ 2) = () + (1 ~ 2)) ("@(1 2 3)" = show (() + @(1 2 3))) (() = () + ())  ; string/number/complex/array pass through
- (('ef + '(1 2)) = '(ef 1 2)) ('ef = 'ef + 5)  ; a NAMED symbol still ADJOINS to a list (foo stays foo); a number degenerates against it
+ (('ef + '(1 2)) = '(101 102 1 2)) ('ef = 'ef + 5)  ; a NAMED symbol takes the string lane against a list too -- its
+                                              ; spelling SPLICES; a number degenerates against it
  ('ef = 65 + 'ef) ('ef = 'ef + @(1 2)) ('ef = @(1 2) + 'ef)  ; ..either side, and a tray is number-band the same way
  ((\ x x) = () + (\ x x)) (2 = (((\ x x) + (\ x x)) (\ n (+ n 1)) 0))   ; the TOP lane too: () + hot = hot, and
  ("ababab" = "ab" * 3) ('xyxy = 'xy * 2) ('(1 2 1 2) = '(1 2) * 2) !("ab" * "cd")   ; sym * count re-interns; + on two hots IS church add (id+id acts as 2)

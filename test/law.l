@@ -58,18 +58,45 @@
       ['add-assoc
        (\ x (? (lit? x || coin? x || tray? x) 1
                (: ws (list 0 2 -5 2.5 (twin 3 4) () "" "ab" 'sym '(1 2) '(-2 1))
-                  (txt? v) (string? v || (? (id? v ()) 0 (nom? v)))
-                  (mix? a b c) ((txt? a || txt? b || txt? c) && (two? a || two? b || two? c))
-                  (ok? y z) (? (mix? x y z) 1 (((x + y) + z) = (x + (y + z))))
+                  ; no carve: text splices into a chain by the charlist hom, so every
+                  ; band crossing associates and the law quantifies over the whole corpus.
+                  (ok? y z) (((x + y) + z) = (x + (y + z)))
                   (all (\ y (all (ok? y) ws)) ws))))]
       ['mul-assoc
        (\ x (? (lit? x || coin? x) 1
                (: ws (list 0 2 -5 2.5 (twin 3 4) () "" "ab" 'sym '(1 2) @(1 2))
                   (ch v) (? (two? v) 1 0)
+                  (txt? v) (string? v || (? (id? v ()) 0 (nom? v)))
+                  ; the cartesian order seam: a left chain against another chain
+                  ; reassociates into a different nesting. text on either side demotes
+                  ; to repetition, which does associate.
                   (ok? y z) (? (coin? y || coin? z) 1
-                               (1 < (ch x + ch y + ch z)) 1
+                               (ch x && (ch y || ch z) && !(txt? y) && !(txt? z)) 1
                                (((x * y) * z) = (x * (y * z))))
                   (all (\ y (all (ok? y) ws)) ws))))]
+      ; --- * on chains is the CARTESIAN PRODUCT, so it associates up to the canonical
+      ; --- reassociation, not on the nose: ((a b) c) and (a (b c)) are the same triple
+      ; --- nested two ways. reL is that iso, and the ORDER agrees under it too.
+      ['mul-reassoc
+       (\ x (? !(two? x) 1
+               (: cs (list '(1 2) '(3) '(4 5 6) ())
+                  (reL p) (: q <p [<q [<>q <>p]])
+                  (ok? b c) ((map reL ((x * b) * c)) = (x * (b * c)))
+                  (all (\ b (all (ok? b) cs)) cs))))]
+      ; a COUNT floats out of the product: repeating then pairing is pairing then
+      ; repeating. this is the sharp form of the count seam mul-assoc carves.
+      ['mul-count-out
+       (\ x (? !(two? x) 1
+               (: cs (list '(1 2) '(3) '(4 5 6) ())
+                  ns (list 0 1 2 3)
+                  (ok? n c) (((x * n) * c) = ((x * c) * n))
+                  (all (\ n (all (ok? n) cs)) ns))))]
+      ; tally is the product's homomorphism into (naturals, *)
+      ['mul-tally-hom
+       (\ x (? !(two? x) 1
+               (: cs (list '(1 2) '(3) '(4 5 6) ())
+                  (ok? b) ((tally (x * b)) = (tally x * tally b))
+                  (all ok? cs))))]
       ['mul-dist
        (\ x (? (lit? x || coin? x) 1
                (: ms (list 0 1 2 5)

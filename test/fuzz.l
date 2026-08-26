@@ -196,3 +196,38 @@
  (fz-ok 300 63 fz-s (\ s ('oob = peep s (tally s) 'oob && 'oob = peep s -1 'oob)))
  ; print -> read round trip over arbitrary byte strings
  (fz-ok 250 64 fz-s (\ s (s = fz-rd s))))
+
+; ---- mixed-band + and *: associativity ACROSS the bands ----
+; rows 3/4 and 51 fuzz associativity WITHIN a band; these cross one. `+` holds
+; everywhere: a number arrives as the winning band's unit, and text contributes
+; its BYTES to a chain, so text and chain share one monoid. `*` on chains is the
+; cartesian product, which associates up to the canonical reassociation rather
+; than on the nose -- fz-mul-skip names those shapes, and test/law.l's
+; mul-reassoc / mul-count-out state what holds there instead.
+;
+; the rows carry their own name, trial count and seed, so a red one says WHICH
+; property failed and prints the counterexample -- test/law.l's reporter, over a
+; generator instead of a fixed corpus.
+(: fz-nomv (fz-elt '(sym alpha b))
+   ; * against a chain REPEATS it, so the count stays small here; rows 3/4 already
+   ; carry the numeric tower, and this lane is about crossing bands, not width.
+   fz-small (fz-int -4 5)
+   fz-mix  (fz-oneof [fz-small fz-s fz-nomv fz-l])
+   fz-mix3 (fz-trip fz-mix fz-mix fz-mix)
+   (fz-txt? v) ((string? v || (? (id? v ()) 0 (nom? v))) ? 1 0)   ; a ?-name owes a BIT
+   (fz-ch? v)  (two? v ? 1 0)
+   (fz-mul-skip a b c) (fz-ch? a && (fz-ch? b || fz-ch? c) && !(fz-txt? b) && !(fz-txt? c))
+   (fz-add-assoc v)
+    (v @ (a b c) (((a + b) + c) = (a + (b + c))))
+   (fz-mul-assoc v)
+    (v @ (a b c) (? (fz-mul-skip a b c) 1 (((a * b) * c) = (a * (b * c)))))
+   fz-rows
+    (list ['add-assoc-mixed 400 70 fz-mix3 fz-add-assoc]
+          ['mul-assoc-mixed 400 71 fz-mix3 fz-mul-assoc])
+   (fz-row r)
+    (r @ (nom n sd g p)
+       (: res (fz-find n sd g p)
+          (? <res 1
+             (: _ (puts ("fuzz FAILED: " + string nom + "   at " + show >res + "\n")) 0))))
+   (fz-all rs) (? (atom? rs) 1 ((fz-row <rs) && fz-all >rs)))
+(assert (fz-all fz-rows))

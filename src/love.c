@@ -1230,12 +1230,15 @@ lvm(lvm_sub) {
 // sequence on the side it appears:
 //   str + str  -> byte concat          list + list -> spine append
 //   str + list -> (link str list)      list + str  -> (append list (list str))
-//   num + str  -> byte at front        num + list  -> (link num list)  (etc.)
-// ai_add_lr selects the ordered reading.
+//   nom + str  -> byte concat          text + list -> the bytes SPLICE in
+// text and chain are one monoid: a string or named symbol against a list contributes
+// its bytes as elements, never itself as one. a number is foreign to both bands: it
+// arrives as the band's unit, so the other operand answers whole. ai_add_lr selects
+// the ordered reading.
 // FIXME if we always want to allow commutative reading should this be false?
 static const bool ai_add_lr = true;
-// the byte law: text + number is one byte, strictly an exact integer 0..255
-// (rep-blind: 66.0 is 66); anything else zero. answers the byte or -1.
+// one byte from a number, strictly an exact integer 0..255 (rep-blind: 66.0 is
+// 66); anything else answers -1.
 ai_inline intptr_t seq_byte(word x) {
  if (charmp(x)) { intptr_t v = getcharm(x); return v < 0 || v > 255 ? -1 : v; }
  if (gemp(x)) { ai_flo_t f = gem_get(x);
@@ -1260,6 +1263,24 @@ lvm(lvm_add_seq) {
  if (chainp(a) || chainp(b)) {                          // elt <-> list (a bare mint never
   bool front = !ai_add_lr || chainp(b);               // reaches here -- lvm_add's identity early-out caught it)
   word lst = chainp(a) ? a : b, elt = chainp(a) ? b : a;
+  if (strp(elt) || nomp(elt)) {              // TEXT SPLICES as its bytes -- the charlist hom, so text
+   uintptr_t n = stringlen(g, elt);          // and chain are ONE monoid and + associates across the two.
+   uintptr_t m = front ? 0 : llen(lst);      // adjoining instead would merge two texts concatenated first.
+   Have((n + m) * Width(struct ai_chain));
+   a = Sp[0], b = Sp[1];                                        // re-read post-GC
+   front = !ai_add_lr || chainp(b);
+   lst = chainp(a) ? a : b, elt = chainp(a) ? b : a;
+   struct ai_str *sx = strp(elt) ? str(elt) : nom_str(g, elt);   // a nameless mint has no bytes: n = 0
+   unsigned char const *t = sx ? (unsigned char const*) txt(sx) : 0;
+   struct ai_chain *base = (struct ai_chain*) Hp, *bw = base + m;
+   Hp += (n + m) * Width(struct ai_chain);
+   for (uintptr_t i = 0; i < n; i++) ini_chain(bw + i, putcharm(t[i]), word(bw + i + 1));
+   if (n) bw[n - 1].b = front ? lst : ZeroPoint;
+   if (front) ai_musttail return Push(n ? word(bw) : lst);
+   struct ai_chain *w = base;                                    // text on the right: spine, then the bytes
+   for (word l = lst; chainp(l); l = B(l), w++) ini_chain(w, A(l), word(w + 1));
+   w[-1].b = n ? word(bw) : ZeroPoint;
+   ai_musttail return Push(word(base)); }
   if (front) { Sp[0] = elt, Sp[1] = lst; ai_musttail return Ap(lvm_link, g); }  // (link elt list)
   uintptr_t n = llen(lst) + 1; Have(n * Width(struct ai_chain));        // append elt at tail
   lst = chainp(Sp[0]) ? Sp[0] : Sp[1], elt = chainp(Sp[0]) ? Sp[1] : Sp[0];

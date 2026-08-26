@@ -112,7 +112,7 @@
 
  ; --- add_seq lane: a list against text (chain wins); a NUMBER degenerates ---
  (= '(1 2) (+ '(1 2) 5))                      ; list <-> num, the order the spec leaves open
- (= '("ab" 1 2) (+ "ab" '(1 2)))              ; str <-> list (str is one element)
+ (= '(97 98 1 2) (+ "ab" '(1 2)))             ; str <-> list: the bytes SPLICE (the charlist hom)
  (= "(7 8)" (show (+ @(1 2) '(7 8))))         ; array <-> list: the tray is number-band, it degenerates
 
  ; --- addl lane: a lambda operand anywhere -> CHURCH-NUMERAL add (not pointwise):
