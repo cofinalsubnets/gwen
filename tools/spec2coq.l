@@ -493,7 +493,7 @@
    (bump b) (pin b 0 (1 + peep b 0 0))
    (walkops ops) (? !ops 0
                  (: f <ops _ (bump ns) s (tp (fix1 f))
-                    _ (? s (: _ (bump nt) (. (thm (peep nt 0 0) f s)))
+                    _ (? s (: _ (bump nt) (dot (thm (peep nt 0 0) f s)))
                            (say err ("  UNMODELED: " + show f + "\n")))   ; LOUD: an assert the generator can't translate -> never proved
                     (walkops >ops)))
    (walk fs) (? !fs 0
@@ -501,7 +501,7 @@
                    _ (? (two? f && id? <f 'assert) (walkops >f) 0)
                    (walk >fs)))
 
-   _ (. (join [
+   _ (dot (join [
      "(* test/proof/rocq/gen.v -- GENERATED from test/spec.l by tools/spec2coq.l. Do not edit;\n"
      "   regenerate with `make test_gen`. Each integer-comparison corpus assert is\n"
      "   translated to Coq, with its source assert shown in the comment above it.\n"
@@ -588,7 +588,7 @@
      "Definition vband v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vunit|Vbot => 9 end.\n\n"]))
    _ (say err "spec2coq: UNMODELED asserts (seen but never proved) --\n")
    _ (walk (forms (open "test/spec.l" "r")))
-   _ (. ("\n(* " + show (peep nt 0 0) + " theorems generated from " + show (peep ns 0 0) + " asserts seen *)\n"))
+   _ (dot ("\n(* " + show (peep nt 0 0) + " theorems generated from " + show (peep ns 0 0) + " asserts seen *)\n"))
    _ (say err $ "spec2coq: " + show (peep nt 0 0) + " translated, "
                 + show (peep ns 0 0 - peep nt 0 0) + " UNMODELED, of "
                 + show (peep ns 0 0) + " asserts seen\n")

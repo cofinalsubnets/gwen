@@ -53,5 +53,5 @@
 ; --- FORM 3: typed defs -- read like typed functions, get checked, and RUN ---
 (: _ (puts "-- deft total (meters,meters)->meters : ") _ (deft (total (a meters) (b meters)) meters (+ a b)) _ (puts "(silent = ok)\n")
    _ (puts "-- deft mix   (meters,seconds)->meters: ") _ (deft (mix (a meters) (t seconds)) meters (+ a t)) _ (putc 10)
-   _ (puts "-- total 3 4 = ") _ (. (total 3 4)) _ (puts "   (runs -- types erased)\n")
+   _ (puts "-- total 3 4 = ") _ (dot (total 3 4)) _ (puts "   (runs -- types erased)\n")
    0)

@@ -1,5 +1,5 @@
 ; (show x) -> string. Heap-allocates a data-sink port, prints x through
-; gfputx, returns the harvested bytes. Should match what (. x) writes to stdout.
+; gfputx, returns the harvested bytes. Should match what (dot x) writes to stdout.
 
 (assert
   ; numbers

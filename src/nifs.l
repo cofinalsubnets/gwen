@@ -76,7 +76,7 @@
       (nif_sin           "sine"          1 lvm_sin)
       (nif_cos           "cosine"        1 lvm_cos)
       (nif_log           "log"           1 lvm_log)
-      (nif_pow           "power"         2 lvm_pow)
+      (nif_pow           "fpow"          2 lvm_pow)
       (nif_twin          "twin"          2 lvm_twin)
       (nif_twinp         "twin?"         1 lvm_twinp)
       (nif_re            "re"            1 lvm_re)

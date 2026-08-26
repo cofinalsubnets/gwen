@@ -35,7 +35,7 @@
             charm? nom? two? tablet? lit? string? nil? gem? twin? atom?
             snip string intern
             re im conj arg gem twin
-            sine cosine log power))
+            sine cosine log fpow))
    (foldl (\ t s (: v (gv s ()) (? v (pin t v 1) t))) {} names)))
 ; the CONTAINER DOORS -- pure or not depending on WHAT they are handed, which is why they
 ; cannot sit in pureset. on a tablet peep reads mutable state and pin writes it; on text or a

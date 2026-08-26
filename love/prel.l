@@ -12,10 +12,16 @@
 (: : () ? () \ ())
 (: pi 3.141592653589793
    tau (* 2 pi)
-   e 2.718281828459045                          ; exp is (\ x (x e))
+   e 2.718281828459045
    true 1 false 0
    i (twin 0 1) ;; FIXME up top
    (tangent x) (/ (sine x) (cosine x))
+   ; the math.h spellings, so C's names read here too. `pow` waits for `**`, below.
+   sin sine cos cosine tan tangent fabs abs
+   (sqrt x) ((/ 1 2) x)
+   (exp x) (x e)
+   (atan x) (arg (twin 1 x))
+   (atan2 y x) (arg (twin x y))
    star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray (twin 0 0)) top-tray (tray ())  ; the four typed-tray ctors (witness baked in)
    (tier v) (? (tray? v) (: c (atype v) (? (= c 0) star-tray (= c 1) gem-tray (= c 2) twin-tray top-tray)) ())  ; a tray's tier IS its ctor; nil off a tray
    zero? nil?
@@ -51,7 +57,7 @@
    (cauap x) (cap (cup (cap x))) (cauup x) (cap (cup (cup x)))
    (cuaap x) (cup (cap (cap x))) (cuaup x) (cup (cap (cup x)))
    (cuuap x) (cup (cup (cap x))) (cuuup x) (cup (cup (cup x)))
-   >< link)                                         ; the infix cons: (a >< b) IS (link a b); glued ><x stays the cup-cap accessor (valence)
+   >< link . link)                                  ; the infix cons: (a >< b) and (a . b) ARE (link a b); glued ><x stays the cup-cap accessor (valence)
 (: (gcd a b) (? (= b 0) (? (< a 0) (- 0 a) a) (gcd b (% a b)))
    (modpow b k m) (? (< k 1) 1 (: h (modpow b (// k 2) m) h2 (% (* h h) m)
                                  (? (= 0 (% k 2)) h2 (% (* h2 b) m)))))
@@ -106,23 +112,24 @@
                        0)
                     0)
    ; x ** n across the whole tower: array exponent -> elementwise, integer -> exact squaring
-   ; (a NEGATIVE one gives the reciprocal power, so (-1 x) == (/ 1 x)), else `power`.
-   (powg x n) (? (tray? n) (power x n)
+   ; (a NEGATIVE one gives the reciprocal power, so (-1 x) == (/ 1 x)), else `fpow` -- the
+   ; INEXACT leaf this tower stands on, and the name `power` spells the tower.
+   (powg x n) (? (tray? n) (fpow x n)
                  (whole? n) (: m (abs n)
                              (? (powover x m) (scare 'apcap m)
                                 (< n 0) (/ 1 (ipow x m)) (ipow x m)))
-                 (power x n))
+                 (fpow x n))
    ; church application across the tower: a numeric operand gives x ** n, a function composes
    ; ($ n) times, saturation reducing any numeral to a fixnum nat. cmp2..cmp8 are cached
    ; combinators; past them numfn assembles the thread. keep the straight-line bodies -- a
    ; counting applier measures ~45% slower at k=2..8.
-   _ (: cmp2 (\ f (\ x (f (f x))))
-        cmp3 (\ f (\ x (f (f (f x)))))
-        cmp4 (\ f (\ x (f (f (f (f x))))))
-        cmp5 (\ f (\ x (f (f (f (f (f x)))))))
-        cmp6 (\ f (\ x (f (f (f (f (f (f x))))))))
-        cmp7 (\ f (\ x (f (f (f (f (f (f (f x)))))))))
-        cmp8 (\ f (\ x (f (f (f (f (f (f (f (f x))))))))))
+   _ (: (cmp2 f x) (f (f x))
+        (cmp3 f x) (f (f (f x)))
+        (cmp4 f x) (f (f (f (f x))))
+        (cmp5 f x) (f (f (f (f (f x)))))
+        (cmp6 f x) (f (f (f (f (f (f x))))))
+        (cmp7 f x) (f (f (f (f (f (f (f x)))))))
+        (cmp8 f x) (f (f (f (f (f (f (f (f x))))))))
         ; frequency-ordered, so it stays a chain: k=2/3 costs one or two compares. a table would
         ; only pay past k=6.
         (cmp k) (? (= k 2) cmp2 (= k 3) cmp3 (= k 4) cmp4 (= k 5) cmp5 (= k 6) cmp6 (= k 7) cmp7 (= k 8) cmp8 0)
@@ -135,7 +142,7 @@
         nfcap 1024
         ; an open star: a coin whose die pins slot 7 is numeric by declaration, so a numeral powers
         ; it through its own * (ipow is generic). no size to read, so this lane keeps the count cap.
-        (starred? x) (? (coin? x) (= 1 (peep (die-of x) 7 0)) 0)
+        (starred? x) (? (coin? x) (= 1 (die-of x 7)) 0)
         (num-ap n x) (? (constellation? x) (powg x n)
                         (starred? x)
                         (? (whole? n) (: m (abs n)
@@ -183,6 +190,7 @@
    negate (- 0)
    reciprocal (/ 1)
    (fraction x) (% x 1)
+   neg negate recip reciprocal frac fraction        ; the short spellings (`sat` is up top, before saturate's users)
    (bit x) (nil? (nil? x))
    ; a star is the fixpoint of net. id?, not `=`: a number comes back unchanged where a tray's
    ; net is a fresh sum, so star? and galaxy? stay disjoint.
@@ -305,10 +313,12 @@
 (:: 'pins (\ l (: (go t r) (? (two? (cup r)) (go (list pin t (cap r) (caup r)) (cuup r)) t)
                   (go (cap l) (cup l)))))
 
-(: (** a b) (b a) $ 1 ! nil?  (!= a b) (nil? (= a b)))   ; prefix: infix is not live until seal-hook 4
+(: (** a b) (b a) pow ** power **                        ; prefix: infix is not live until seal-hook 4
+   $ 1 ! nil?  (!= a b) (nil? (= a b)))                  ; the exponent answers to all three spellings
 
 ; lisp compatibility synonyms
-(: seqx (\ l (>< ': (foldr (\ l r (>< '_ (>< l r))) (list (last l)) (init l))))
+(: car cap cdr cup cons link
+   seqx (\ l (>< ': (foldr (\ l r (>< '_ (>< l r))) (list (last l)) (init l))))
    ifx (>< '?) letx (>< ':) lamx (>< '\ )
    _ (:: ', seqx) _ (:: 'do seqx) _ (:: 'begin seqx) _ (:: 'progn seqx)
    _ (:: 'let letx)
@@ -415,7 +425,7 @@
 (: operators (pins (tablet 0)
  0 (pins (tablet 0)                                 ; --- ARITY 0: glued. takes nothing from the form
  '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
- '% fraction '? bit '$ saturate '! nil? '^ jot   ; `.` is pinned here by post.l, whose dot it is
+ '% fraction '? bit '$ saturate '! nil? '^ jot
  '# tally '~ conj                              ; the COUNT, and the twin's flip
  '0? nil? '1? one? '2? two?)                   ; the arity predicates: a row is a WORD, so it may
                                                ; spell digits -- 2?<>x is (two? (cap (cup x)))
@@ -432,7 +442,7 @@
  '<< -47 '>> -47                                    ; shifts
  '& -46 '^ -45 '| -44                               ; bitwise, C's order
  '&& 31 '|| 30                                      ; logical, below comparison; also pat.l's guard and alternative
- '>< 25                                             ; cons -- the loosest builder
+ '>< 25 '. 25                                       ; cons -- the loosest builder, under both its spellings
  '$ 6 '\ 5)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate), and the
                                                     ; lambda UNDER it, so an infix lambda's body runs to the end of the form
                                                     ; and swallows the $, as haskell's does
@@ -496,8 +506,8 @@
    ; live row at the loosest level there is.
    (op-band? b) (&& (charm? b) (nil? (= 0 b)))   ; ⚠ prefix-only region: != is not a function yet
    (op-row nm b ar) (>< nm (>< (abs b) (>< (? (< b 0) 1 0) ar)))       ; -> (name band hand . arity)
-   ; an alias tail. ⚠ SOURCE can only spell the list form -- love has no dotted-pair syntax, so a
-   ; written (pin . 20) is the three-element list (pin . 20) -- but a pair BUILT with >< reads too.
+   ; an alias tail. ⚠ this table is compiled BEFORE `.` has its row, so up here source can only
+   ; spell the list form -- a written (pin . 20) is the three-element list. a pair BUILT with >< reads too.
    (op-tail v) (? (charm? (cup v)) (cup v) (&& (two? (cup v)) (charm? (caup v))) (caup v) 0)
    ; k's row in the SPACED lane t of arity ar -> (name band hand . ar), or 0. the row is read BY
    ; KIND, three shapes and no positions: a CHARM is the band and the sigil names itself; a NOM is
@@ -895,23 +905,23 @@
 ; its own binding is forward, and indirects through a cell keyed by the binding site's nom, so a
 ; pre-fill read is a map miss = the missing condition. it emits nif values, not names, so the
 ; egg's mop cannot break it. 0 when nothing needs boxing, else (prs' . body').
-(: (lambp x) (? (two? x) (&& (id? '\ (cap x)) (two? (cuup x)))) ; \ with >=1 param (one-operand \ is quote)
-   (dsug n d) (? (atom? n) (link n d) (dsug (cap n) (link '\ (cup n + list d))))
-   (lp x) (: a (cup x) (? (atom? (cup a)) (0 >< cap a) (init a >< last a)))
-   (ln bs) (? (atom? bs) 0 (atom? (cup bs)) 0 (link (cap (dsug (cap bs) 0)) (ln (cuup bs))))
+(: (lambp x) (? (two? x) (&& (id? '\ <x) (two? >>x))) ; \ with >=1 param (one-operand \ is quote)
+   (dsug n d) (? (atom? n) (link n d) (dsug <n (link '\ (>n + list d))))
+   (lp x) (: a >x (? (atom? >a) (0 >< <a) (init a >< last a)))
+   (ln bs) (? (atom? bs) 0 (atom? >bs) 0 (link <(dsug <bs 0) (ln >>bs)))
    ; w/wl: does x / binding-list bs reference symbol v? \ and : shadow, one-operand \ is quote,
    ; macros expand. u tracks lambda depth; dm counts only references NOT under a lambda.
    (w v x bnd u dm) (?
-    (nom? x) (&& (? dm (nil? u) 1) (id? x v) (nil? (member? v bnd)))
+    (nom? x) (&& (? dm !u 1) (id? x v) !(member? v bnd))
     (atom? x) 0
-    (: h (cap x) (?
-      (id? h '\) (? (atom? (cuup x)) 0 (: r (lp x) (w v (cup r) (cat (cap r) bnd) 1 dm)))
-      (id? h ':) (wl v (cup x) (cat (ln (cup x)) bnd) u dm)
-      (: m (? (nom? h) (macros h) 0) (? (&& m (nil? (member? h bnd))) (w v (m (cup x)) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
+    (: h <x (?
+      (id? h '\) (? (atom? >>x) 0 (: r (lp x) (w v >r (cat <r bnd) 1 dm)))
+      (id? h ':) (wl v >x (cat (ln >x) bnd) u dm)
+      (: m (? (nom? h) (macros h) 0) (? (&& m !(member? h bnd)) (w v (m >x) bnd u dm) (any (\ e (w v e bnd u dm)) x))))))
    (wl v bs bnd u dm) (?
     (atom? bs) 0
-    (atom? (cup bs)) (w v (cap bs) bnd u dm)
-    (: nd (dsug (cap bs) (caup bs)) (? (w v (cup nd) bnd u dm) 1 (wl v (cuup bs) bnd u dm))))
+    (atom? >bs) (w v <bs bnd u dm)
+    (: nd (dsug <bs <>bs) (? (w v >nd bnd u dm) 1 (wl v >>bs bnd u dm))))
    ; a name wants a cell when something that runs BEFORE its slot is filled can read it. two
    ; doors: a direct read from a binding at or before it (for a lambda name, only one not
    ; shielded by a \ -- a call comes after the pin), and, for a VALUE name, a read from
@@ -925,27 +935,27 @@
      ; a one-operand \ is quote, macros expand -- except a head THIS let binds, which is a
      ; variable and never a macro (boxfix-core's sub reads it the same way).
      (bref x bnd u acc) (?
-      (nom? x) (? (&& (member? x nm) (nil? (member? x bnd))) (link (link x u) acc) acc)
+      (nom? x) (? (&& (member? x nm) !(member? x bnd)) (link (link x u) acc) acc)
       (atom? x) acc
-      (: h (cap x) (?
-        (id? h '\) (? (atom? (cuup x)) acc (: r (lp x) (bref (cup r) (cat (cap r) bnd) 1 acc)))
-        (id? h ':) (brefl (cup x) (cat (ln (cup x)) bnd) u acc)
+      (: h <x (?
+        (id? h '\) (? (atom? >>x) acc (: r (lp x) (bref >r (cat <r bnd) 1 acc)))
+        (id? h ':) (brefl >x (cat (ln >x) bnd) u acc)
         (: m (? (nom? h) (macros h) 0)
-           (? (&& m (nil? (member? h bnd)) (nil? (member? h nm))) (bref (m (cup x)) bnd u acc)
+           (? (&& m (nil? (member? h bnd)) (nil? (member? h nm))) (bref (m >x) bnd u acc)
               (foldl (\ a e (bref e bnd u a)) acc x))))))
      (brefl bs bnd u acc) (?
       (atom? bs) acc
-      (atom? (cup bs)) (bref (cap bs) bnd u acc)
-      (: nd (dsug (cap bs) (caup bs)) (brefl (cuup bs) bnd u (bref (cup nd) bnd u acc))))
-     es (map (\ p (link (cap p) (bref (cup p) 0 0 ()))) prs)   ; the read graph, source order
-     (reads m) (: e (assoc m es) (? (two? e) (cup e) ()))
+      (atom? >bs) (bref <bs bnd u acc)
+      (: nd (dsug <bs <>bs) (brefl >>bs bnd u (bref >nd bnd u acc))))
+     es (map (\ p (link <p (bref (cup p) 0 0 ()))) prs)   ; the read graph, source order
+     (reads m) >(assoc m es)
      (anyname m) (map cap (reads m))                           ; read anywhere
-     (barename m) (map cap (filter (\ r (nil? (cup r))) (reads m)))   ; read NOT under a \
+     (barename m) (map cap (filter (\ r (nil? >r)) (reads m)))   ; read NOT under a \
      (grow s) (: s2 (foldl (\ a m (cat a (filter (\ k (nil? (member? k a))) (anyname m)))) s s)
                   (? (= (tally s2) (tally s)) s (grow s2)))
      ; near: a read from a binding at or before v. a lambda name takes only the bare ones --
      ; a call comes after the pin -- a value name every one.
-     (near v) (: d (lambp (cup (assoc v prs)))
+     (near v) (: d (lambp >(assoc v prs))
                  (any (\ m (member? v (? d (barename m) (anyname m))))
                       (take (1 + lidx v nm) nm)))
      ; reach: v is read from anywhere the bindings BEFORE it get to through the let's own
@@ -974,8 +984,8 @@
 ; the same way (to catch a one-armed nif) segfaults the image bake, so the nif case stays open.
 (: hcur (peek 0 (\ a b a))
    (binary? f) (? (charm? f) 0                      ; a charm is no handler at all
-                  (id? hcur (peek 0 f)) (= 2 (peek 1 f))
-                  (: s (lamsrc f) (? (two? s) (= 4 (tally s)) 1)))
+                  (id? hcur (peek 0 f)) (2 = peek 1 f)
+                  (: s (lamsrc f) (? (two? s) (4 = #s) 1)))
    (hear f) (? !f (seal-hook 5 f)                   ; every nothing uninstalls
                (binary? f) (seal-hook 5 f)
                (scare 'help-arity f)))
@@ -1059,7 +1069,7 @@
                (: r (bpr >>fs) ((dsug <fs <>fs >< <r) >< >r)))
    (? (ev fs) fs
     (: pb (bpr fs) r (boxfix-core <pb >pb)
-       (? r (catmap (\ p (list <p >p)) <r + list >r) fs)))))
+       (? r (catmap (p \ list <p >p) <r + list >r) fs)))))
 
 ; THE ISA VOCABULARY, and it is one word per machine: 'amd64 'arm64 'rv64, with the
 ; embedded targets keeping theirs. Every other spelling anyone says -- a -t flag, a `seed`
@@ -1078,8 +1088,28 @@
    arch-uname {'amd64 "x86_64" 'arm64 "aarch64" 'rv64 "rv64"}
    ; any spelling -> the canonical nom, () for one nobody here knows. takes a nom or a
    ; string, since a flag arrives as text where a table key is a nom.
-   (archof s) (peep arch-canon (? (string? s) (intern s) s) ())
+   archof (arch-canon * name)
    ; the total face: a spelling nobody here knows rides through as its own nom, so
    ; whoever refuses it names what it was handed
-   (arch-nom s) (: a (archof s) (? a a (? (string? s) (intern s) s)))
-   (arch-mach a) (peep arch-uname a ()))
+   (arch-nom s) (: s (name s) (peep arch-canon s s))
+   arch-mach arch-uname)
+
+; --- scheme and common lisp spellings ---------------------------------------
+; a name you half-remember should work. every row here is the SAME function under
+; another name, so nothing below can drift; where the lisp semantics differ from
+; love's -- memq/assq/member answer a TAIL where member? answers a bit, for-each
+; takes its function first -- it is a definition and not an alias, and says so.
+(: car cap cdr cup cons link
+   caar caap cadr caup cdar cuap cddr cuup
+   caaar caaap caadr caaup cadar cauap caddr cauup
+   cdaar cuaap cdadr cuaup cddar cuuap cdddr cuuup
+   eq? id? length tally pair? two? atom atom? identity id
+   reverse rev append + constantly const ceiling ceil
+   fold-left foldl fold-right foldr append-map catmap flat-map catmap
+   every all some any delete-duplicates uniq butlast init
+   (for-each f l) (each l f)                     ; scheme takes the function first
+   ; the -q trio walks by identity and answers what it found, () for a miss --
+   ; `member?`/`assoc` above stay love's, a bit and a pair by `=`.
+   (memq x l)   (? (two? l) (? (id? x (cap l)) l (memq x (cup l))))
+   (assq x l)   (? (two? l) (? (id? x (caap l)) (cap l) (assq x (cup l))))
+   (member x l) (? (two? l) (? (= x (cap l)) l (member x (cup l)))))

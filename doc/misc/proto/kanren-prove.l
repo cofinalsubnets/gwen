@@ -37,7 +37,7 @@
 ; a SEARCH, because a binder whose body is still a logic var is not yet a function.)
 
 (:
- (say lbl v) (: _ (puts lbl) _ (. v) _ (putc 10) 0)
+ (say lbl v) (: _ (puts lbl) _ (dot v) _ (putc 10) 0)
  (membero x l) (\\\ h t (&&& (est l (link h t)) (||| (est x h) (zz (membero x t)))))
  ; if x is still a hole, name it with a fresh atom -- otherwise leave the type's name alone
  (mintname x) (\ st (: w (walk <st x) (? (var? w) ((est w (nom 0)) st) (sun st))))

@@ -192,7 +192,7 @@
    ; ⚠ foldr KEEPS ents' order, and lean wants every definition before its uses (foldl flips)
    exports (foldr (\ e a (? (peep keep (e2 e) 0) (link e a) a)) () ents)
 
-   _ (. (lines [
+   _ (dot (lines [
       "/- test/proof/lean/uugen.lean -- GENERATED from test/uu.l by tools/uu2lean.l. Do not edit;"
       "   regenerate with `make test_uulean`. The SAME uu proof terms Rocq certifies"
       "   (test/proof/rocq/uugen.v) re-checked by a SECOND independent kernel, Lean 4 -- so each law"
@@ -219,8 +219,8 @@
       "/- CERTIFY, never run: defs use bare recursors the code generator rejects. -/"
       "noncomputable section"
       ""]))
-   _ (map (\ e (. (emit e))) exports)
-   _ (. (lines [
+   _ (map (\ e (dot (emit e))) exports)
+   _ (dot (lines [
       ""
       "end"
       "/- the de Bruijn witness: Lean agrees these carry NO axioms (closed under the"
@@ -255,6 +255,6 @@
       "#print axioms uu_idisweq"
       "#print axioms uu_iscontrcoconustot"
       ""]))
-   _ (. ("/- " + (show $keep) + " exported / " + (show (tally ents)) + " corpus entries swept;" + nl
+   _ (dot ("/- " + (show $keep) + " exported / " + (show (tally ents)) + " corpus entries swept;" + nl
          + "   re-certified by Lean 4 -- a second kernel beside Rocq's uugen.v -/" + nl))
    (quit 0))

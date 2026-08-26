@@ -168,4 +168,4 @@
                0)
  ev1P (resid '(ev1 nd x) envP 'x)
  _ (assert (alls (map (\ v (= (ev1P v) (ev1 P v))) '(0 1 2 5 9 12 100))) "residual matches interp on every input")
- (. ";; doc/misc/proto/mix.l: partial evaluator self-checks pass (power unroll + interpreter specialization)\n"))
+ (dot ";; doc/misc/proto/mix.l: partial evaluator self-checks pass (power unroll + interpreter specialization)\n"))

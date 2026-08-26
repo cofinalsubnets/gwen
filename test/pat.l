@@ -27,11 +27,11 @@
  ('no = (@ 5 (a >< t) a 'no))
  ('no = (@ '(1) (a >< b >< t) t 'no))      ; ..and every step still owes a two?
  ('(1 2) = (@ '(1 2) (h >< t) (h >< t)))   ; THE LAW: one text, matching and building
- (id? link ><)                             ; ..and >< IS link -- the tag is one, the spelling two
+ (id? link ><)                             ; ..and >< IS link, but only the SIGILS tag a pattern
  ; ..so a bracket stays closed: [a b >< t] is ([a b] >< t) is (>< (list a b) t)
  ('yes = (@ '((1 2) 3) [a b >< t] 'yes 'no))
  ('yes = (@ '((1 2) 3) ([a b] >< t) 'yes 'no))
- ('yes = (@ '((1 2) 3) (link [a b] t) 'yes 'no))
+ ('yes = (@ '((1 2) 3) ([a b] . t) 'yes 'no))
  ('no = (@ '(1 2 3) [a b >< t] 'yes 'no))  ; ..1 is not the chain (a b)
  ; ..and "this tag, then more" is the cons chain, which is what says it
  ('at3 = (@ '(lam x b) ('lam >< x >< b >< _) 'at3 'no))

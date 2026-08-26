@@ -55,10 +55,10 @@
 
  ; --- report ---
  (showenv bs) (: env (infer bs)
-   (: _ (each (pairs bs) (\ p (: _ (puts "    ") _ (. (string (cap p))) _ (puts " : ")
-                                _ (. (string (look env (cap p)))) (putc 10))))
+   (: _ (each (pairs bs) (\ p (: _ (puts "    ") _ (dot (string (cap p))) _ (puts " : ")
+                                _ (dot (string (look env (cap p)))) (putc 10))))
       (: ss (catmap (\ p (sites env (cup p))) (pairs bs))
-       (: _ (puts "    devirt (numeric, skip dispatch): ") _ (. (show ss)) (putc 10)))))
+       (: _ (puts "    devirt (numeric, skip dispatch): ") _ (dot (show ss)) (putc 10)))))
 
  _ (: _ (puts ";; A. linear chain  (: x 5 y (+ x 1) z (* y y))\n") (showenv '(x 5 y (+ x 1) z (* y y))))
  _ (: _ (puts ";; B. fixpoint join (: x (? cnd 5 x))  -- x is 5-or-itself -> charm\n") (showenv '(x (? cnd 5 x))))

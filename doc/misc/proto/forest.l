@@ -169,8 +169,8 @@
  _ (assert (ok? I) "fold/map over (jot N) fuses to a first-order loop")
  _ (assert (firstorder? (deforest I)) "...producer- & redex-free: the loop auto.l glazes")
 
- _ (. ";; doc/misc/proto/forest.l: deforestation self-checks pass -- ")
- _ (. "map/filter pipelines fuse to one first-order pass (value-preserving, producer- & redex-free)\n")
- _ (. ";; fold/map   -- ") _ (. (show A)) _ (. "\n;;            -> ") _ (. (show (deforest A))) _ (. "\n")
- _ (. ";; map/filter -- ") _ (. (show B)) _ (. "\n;;            -> ") _ (. (show (deforest B))) _ (. "\n")
- _ (. ";; glaze-ready-- ") _ (. (show I)) _ (. "\n;;            -> ") _ (. (show (deforest I))) _ (. "\n"))
+ _ (dot ";; doc/misc/proto/forest.l: deforestation self-checks pass -- ")
+ _ (dot "map/filter pipelines fuse to one first-order pass (value-preserving, producer- & redex-free)\n")
+ _ (dot ";; fold/map   -- ") _ (dot (show A)) _ (dot "\n;;            -> ") _ (dot (show (deforest A))) _ (dot "\n")
+ _ (dot ";; map/filter -- ") _ (dot (show B)) _ (dot "\n;;            -> ") _ (dot (show (deforest B))) _ (dot "\n")
+ _ (dot ";; glaze-ready-- ") _ (dot (show I)) _ (dot "\n;;            -> ") _ (dot (show (deforest I))) _ (dot "\n"))

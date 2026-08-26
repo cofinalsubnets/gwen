@@ -80,7 +80,7 @@
                         (? (seteq top nxt) top (cot edb rules nxt)))
 
  (only tag facts) (filter (\ f (id? (cap f) tag)) facts)
- (say lbl v) (: _ (puts lbl) _ (. v) _ (putc 10) 0)
+ (say lbl v) (: _ (puts lbl) _ (dot v) _ (putc 10) 0)
 
  ; ============ demo A: transitive closure over a CYCLIC graph ============
  edbA  (map termify '((edge a b) (edge b c) (edge c a)))

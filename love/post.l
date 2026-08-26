@@ -184,7 +184,8 @@
                  [[('|| >< ts)] (map (\ n [n (pick n bss ts)]) uni) ()])
               (= h '\) (? (two? >as) (wrest p '_ v) (wts (weq <as v)))   ; (\ x b) is a LAMBDA, a form
               (= h 'list) (wlist as v)
-              (h = 'link || h = '><) (? (= 2 (tally as))    ; ONE tag: >< IS link, prefix or infix
+              (h = '>< || h = '.) (? (= 2 (tally as))              ; ONE tag, two spellings; prefix
+                                                                   ; `link` is the function, not a tag
                                         (wcat (wts [['two? v]])
                                               (wcat (pw <as ['cap v]) (pw <>as ['cup v])))
                                         (wrest p '_ v))
@@ -460,8 +461,11 @@
 
   ; --- chains. a one-operand `\` is quote, and a `(mono (run datum))` is a GLUED
   ; monadic -- print run+datum back the way opfix fused them.
+  ; an improper tail prints as the ` . ` pair it is -- the dyadic `.` reads it straight back.
   (plist o x sn) (: (go l) (: _ (px o <l sn)
-                              (? (two? >l) (: _ (put o 32) (go >l)) 0))
+                              (? (two? >l) (: _ (put o 32) (go >l))
+                                 (nil? >l) 0
+                                 (: _ (say o " . ") (px o >l sn))))
                     _ (put o 40) _ (go x) (put o 41))
   (pchain o x sn) (: h <x t >x one (two? t && !(two? >t))
     (? (id? h '\ && one) (: _ (put o 39) (px o <t sn))
@@ -573,15 +577,10 @@
                 o)
   px)))
 
-; the surface. `dot` takes a string or cask VERBATIM -- the `.` sigil's raw face --
-; and everything else in external form; it answers its operand, so it drops into
-; any sequence. the glued lane -- `operators` at arity 0 -- gets its `.` row here,
-; where dot exists; the row is the NOM, so a glued `.x` resolves through whatever
-; `.` names at the use site.
+; the surface. `dot` takes a string or cask VERBATIM and everything else in external
+; form; it answers its operand, so it drops into any sequence.
 (: (print o x) (: _ (px o x ()) x)
    (show x) (: o (jug 0) _ (px o x ()) (slurp o))
    (dot x) (: _ (? (string? x || (hot? x && !(port? x))) (say out x) (px out x ())) _ (flush out) x))
 (: putx (print out)
-   . dot
-   _ (seal-hook 7 show)                            ; `string` coerces through it from here on
-   _ (pin (operators 0) '. '.))
+   _ (seal-hook 7 show))                           ; `string` coerces through it from here on

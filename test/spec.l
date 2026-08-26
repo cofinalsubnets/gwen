@@ -609,7 +609,7 @@
 ; punctuation, and the ONE exception is that a numeral has to start somewhere -- a DIGIT (or a `.`,
 ; for -.5) right after them makes a NUMBER instead (-3 a number, -x negate x, --5 -(-5), -(f x)
 ; negate). the monadic words: < cap, > cup (<< >> <> >< the compounds), + net,
-; * prod, | abs, - negate, / reciprocal, % fraction, ? bit, $ sat, ! nil?, # tally, ~ conj, . dot.
+; * prod, | abs, - negate, / reciprocal, % fraction, ? bit, $ sat, ! nil?, # tally, ~ conj.
 ; the COMMA is the
 ; loosest layer, above infix: a lone one-char datum (never fused), the list split into CLAUSES at
 ; top-level commas BEFORE factoring, the whole the `,` sequencing macro (do its word alias) --
@@ -619,7 +619,7 @@
  ('(1 (\ x) 3) = [1 ''x 3]) ('(1 2 3 4) = (: xs '(2 3) ('(1) + xs + '(4))))
  (532 = $"hello") (5 = (tally "hello")) (42 = $42) (1 = !0) (0 = !5) !!5
  (i = (0 ~ 1)) ((2 ~ 3) = (twin 2 3)) ('~x = '(mono (~ x))) (~5 = (conj 5)) (5 = #"hello") (lit? dot)
- ("(. x)" = (show (opfix '(. x)))) ('! = (caup '(a ! b)))   ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
+ ("(# x)" = (show (opfix '(# x)))) ('! = (caup '(a ! b)))   ; a monadic-only sigil has no row, so opfix hands the plain symbol to the function (cmp via show: internal forms stay 0-tailed); quotes stay data
  (: was (grip 2 '^ -60) t (opfix '(a ^= b)) back (grip 2 '^ was)     ; a SPACED sigil is one whole
     (&& (back = -60) (t = '(^= a b))))                                   ;   name: ^'s row never splits ^=
  (6 = ((\ x' (x' + 1)) 5)) (nom? 'ab') (7 = (: n' 7 n'))   ; the prime: x' is a name (binder, symbol, let); leading ' is still quote
@@ -635,10 +635,15 @@
  (: was (grip 2 '<+> -60) t (opfix '(a <+> b <+> c)) _ (grip 2 '<+> was)   ; the grip door,
     (&& (was = ()) (t = '(<+> (<+> a b) c))))     ;   restored inside the form: the next one reparses
  ('(1 2 3) = 1 >< 2 >< '(3))                     ; ... while a right-handed band still folds right
+ (id? (.) link) ((1 . 2) = (link 1 2)) ("(1 . 2)" = (show (1 >< 2)))   ; `.` is >< under its other name --
+ ((1 >< 2) @ (a . b) (a = 1 && b = 2) _ 0)                            ;   valid in a pattern too, and
+ ((1 . 2) @ (a >< b) (a = 1 && b = 2) _ 0)                            ;   the two spellings interchange
+ ((1 . 2 . 3) = (1 >< 2 >< 3)) (3 = tally '(1 . 2))                  ;   the pair reads and prints, but a
+                                                                     ;   QUOTED (1 . 2) is data: a 3-list
  (3 = abs -3) (66 = (2 + 3 4))                   ; application binds tighter than infix: (= 3 (abs -3)), (+ 2 (3 4))
  (1 = (3 != 4)) (0 = (3 != 3)) (: t (opfix '(a != b && c)) (t = '(&& (!= a b) c)))  ; != is a plain
  (: was (grip 2 '! ()) _ (grip 2 '! was) (was = ()))  ; dyad at the comparison band, and ! -- glued-lane
- ("(! x)" = (show (opfix '(! x)))) (id? (!) nil?) (id? (.) dot)   ; and nothing else -- carries NO row:
+ ("(! x)" = (show (opfix '(! x)))) (id? (!) nil?)   ; and nothing else -- carries NO row:
  (1 = (! 0)) (0 = (! 5)) (1 = (! ""))            ;   the walk hands the symbol to an ordinary function
  (197 = ($"ab" + 2))                             ; one binds tightest: (+ ($ "ab") 2)
  (3 = ((1 +) 2))                                 ; the curry law: (1 +) folds to (+ 1)
@@ -748,7 +753,7 @@
 ; forces implicitly. (once f) is that promise on its own: it runs f at most once and remembers,
 ; through a tablet, wrapping the answer because a promise of NOTHING is the ordinary case.
 ; `read` rides sound (ONE form, EVALED); `reads` and `forms` walk a flowing port, evaling and
-; collecting; `dot` (the `.` operator, .x) prints x to out and returns it.
+; collecting; `dot` prints x to out and returns it.
 ; `sound0` is sound's BOOTSTRAP TWIN, same protocol over the PURE LISP SUBSET: parens, comments,
 ; strings, atoms, ' quote, and none of the sigil surface -- so #(a) is the glued tally run to
 ; sound and the plain symbol # to sound0. it is what reads prel.l before there is a language.

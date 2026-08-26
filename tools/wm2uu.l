@@ -27,7 +27,7 @@
    ; the forms arrive factored, so match the core word and the surface one both.
    (w2-not? h) (|| (id? h '!) (id? h 'nil?))
    ; ..and the pair ops: >< is link, + is cat on a row. both spellings match.
-   (w2-link? h) (|| (id? h '><) (id? h 'link))
+   (w2-link? h) (|| (id? h '><) (|| (id? h 'link) (id? h '.)))
    (w2-cat? h) (|| (id? h '+) (id? h 'cat))
 
    ; --- kinds -> the model's types; zdel is the one Maybe op ---

@@ -1,4 +1,4 @@
-; transcendentals + sqrt + power + pi.
+; transcendentals + sqrt + power + pi, under both the love and the math.h spellings.
 ; host uses libm; precision is ~1 ulp so identities don't need a slop band
 ; except where two errors compound (e.g. (sine pi) is ~1e-16, not exactly 0).
 
@@ -57,6 +57,17 @@
     (gem? (sine 0))
     (gem? ((/ 1 2) 4))
     (gem? (3.0 2))               ; 2^3.0 -> float
+
+    ; --- the math.h spellings name the same functions ---
+    (id? sin sine) (id? cos cosine) (id? fabs abs)
+    (= (tan 0.7) (tangent 0.7))                  ; tangent is a lambda: the glaze respins it, so ask the VALUE
+    (= 3.0 (sqrt 9.0)) (very-near e (exp 1))
+    ; one exponent, three spellings -- and it is the TOWER, not the inexact leaf `fpow`
+    ; underneath it: exact on whole exponents, elementwise on an array one.
+    (= (power 2 10) (2 ** 10)) (= (pow 2 10) (2 ** 10)) (= 1024 (power 2 10))
+    (= 8.0 (power 2.0 3.0)) (= (gem-tray '(2) '(4.0 9.0)) (power @(2.0 3.0) 2))
+    (very-near (/ pi 4) (atan 1.0)) (very-near (/ pi 4) (atan2 1.0 1.0))
+    (very-near pi (atan2 0 -1))
 
     ; --- non-numeric arg → nil ---
     ; (nil counts as numeric — it's putnum(0).)

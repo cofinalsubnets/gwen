@@ -180,7 +180,7 @@
  (depends p q) (atom? (commute p q))                        ; q needs p iff they don't commute
 
  ; --- report helpers ---
- (line label v) (: _ (puts label) _ (. (show v)) (putc 10))
+ (line label v) (: _ (puts label) _ (dot (show v)) (putc 10))
  (cat2 a b) (? (atom? a) b (link (cap a) (cat2 (cup a) b)))
 
  ; ---- demos ----
@@ -189,7 +189,7 @@
       t2 (applall 0 (link py (link px 0)))                  ; opposite pull order
       _ (puts ";; A. independent patches commute -- both pull orders agree\n")
       _ (puts "     commute(px,py) = ")
-      _ (. (show (commute px py)))
+      _ (dot (show (commute px py)))
       _ (putc 10)
       _ (line "     order px;py -> x,y = " (link (tget t1 'x) (link (tget t1 'y) 0)))
       (line "     order py;px -> x,y = " (link (tget t2 'x) (link (tget t2 'y) 0))))

@@ -152,7 +152,7 @@
    ; ⚠ foldr KEEPS ents' order, and coq wants every definition before its uses (foldl flips)
    exports (foldr (\ e a (? (peep keep (e2 e) 0) (link e a) a)) () ents)
 
-   _ (. (cat [
+   _ (dot (cat [
       "(* test/proof/rocq/uugen.v -- GENERATED from test/uu.l by tools/uu2coq.l. Do not edit;" (string 10)
       "   regenerate with `make test_uugen`. uu's kernel type-checked each term below" (string 10)
       "   against its theorem (test/uu.l, green under `make test`); this is the SAME term" (string 10)
@@ -180,12 +180,12 @@
       "   a path can be a Sigma CARRIER (an element of UU), as in the hProp-valued nat order." (string 10)
       "   paths_to_eq (below) bridges it back to Coq's = for the Nat.* headline laws. *)" (string 10)
       "Inductive paths {A : Type} (a : A) : A -> Type := idpath : paths a a." (string 10) (string 10)]))
-   _ (map (\ e (. (emit e))) exports)
+   _ (map (\ e (dot (emit e))) exports)
    ; --- the bridge: a STATIC tail tying uu's nat ops to Coq's standard ones, so the
    ;     headline laws RESTATE on Nat.* (spec.v's vocabulary) and discharge FROM the
    ;     uu exports above. Tactic proofs (induction over the shared recursion); the
    ;     substantive content stays the exported uu terms. ---
-   _ (. (cat [(string 10)
+   _ (dot (cat [(string 10)
      "(* === bridge: uu's nat ops ARE Coq's standard ones, so the laws above land on" (string 10)
      "   Nat.add / Nat.mul -- the operations spec.v's own laws speak. uu_add_std/uu_mul_std" (string 10)
      "   (induction over the shared recursion) tie them to the standard vocabulary, by which" (string 10)
@@ -205,7 +205,7 @@
      "Proof. intros n m k; rewrite <- !uu_add_std; apply paths_to_eq, uu_natplusassoc. Qed." (string 10)
      "Theorem mul_comm_std : forall n m, Nat.mul n m = Nat.mul m n." (string 10)
      "Proof. intros n m; rewrite <- (uu_mul_std n m), <- (uu_mul_std m n); apply paths_to_eq, uu_natmultcomm. Qed." (string 10)]))
-   _ (. (cat [(string 10) "Print Assumptions uu_natplusr0." (string 10)
+   _ (dot (cat [(string 10) "Print Assumptions uu_natplusr0." (string 10)
 "Print Assumptions uu_zcountins." (string 10)
 "Print Assumptions uu_zinsane." (string 10)
 "Print Assumptions uu_rtwinsrow." (string 10)
