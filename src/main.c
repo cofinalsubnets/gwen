@@ -314,9 +314,13 @@ static char const
 // love0 is never interactive -- a build tool or the self-test -- so replp is the full
 // love's word and this lane only takes it to share main's one dispatch. love0 wakes an
 // image file (its own mooncc0.image bake); the .image self-patch is the full binary's.
-static struct ai *run_program(struct ai *g, bool replp) {
+// mooncc0.image is the `bake` nif's, called from a -e, so it seals the session layer with
+// cli0 already on it -- and every build-time object compile is one wake of it.
+static struct ai *run_program(struct ai *g, bool replp, bool owed) {
   (void) replp;
-  return ai_evals_(ai_evals_(ai_layer_(g), cli), "(cli-line cmdline 0)"); }
+  g = ai_layer_(g);
+  if (owed) g = ai_evals_(g, cli);
+  return ai_evals_(g, "(cli-line cmdline 0)"); }
 
 // with args, run the build tool (lcat / gen_data) through the CLI driver.
 // with no args, self-test: eval prel, load bao (the shell core) as a module, and run
@@ -428,16 +432,16 @@ static char const src_glaze[] = "", glaze_off[] = "", glaze_cache[] = "";
 // the session layer: boot is over, and from here the base (prel/ev, the nifs, every
 // warmed module) is never the head again, so a top-level definition lands here instead.
 // never popped -- its lifetime is the session, which is what lets a catted app's files
-// share one vocabulary. both the egg boot and the image wake converge here, and a bake
-// exits before it, so the image carries the base with no session layer on top.
-static struct ai *run_program(struct ai *g, bool replp) {
+// share one vocabulary. both the egg boot and the image wake converge here.
+// love/cli.l DEFINES rather than runs, and `cli-line` is this tail entire: the argv[0]
+// verb door, the positional rail, the repl, the stdin drink. the isatty answer is the
+// only thing C still owns. the bake below carries it compiled, so `owed` is the egg
+// lane alone -- a wake that re-evals it pays a 2 KB compile to reach two names it has.
+static struct ai *run_program(struct ai *g, bool replp, bool owed) {
   if (replp) raw_mode();
   g = ai_layer_(g);
   if (getenv("LOVE_NO_GLAZE")) g = ai_evals_(g, glaze_off);
-  // love/cli.l DEFINES rather than runs, and `cli-line` is this tail entire: the argv[0]
-  // verb door, the positional rail, the repl, the stdin drink. the isatty answer is the
-  // only thing C still owns.
-  g = ai_evals_(g, cli);
+  if (owed) g = ai_evals_(g, cli);
   return ai_evals_(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
 
 // read-eval one .l file into the booting session, loudly: a bake's cat has no shell help,
@@ -520,11 +524,15 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
 
   if (bake) {                                            // the bake verb: snapshot the post-warm heap, then exit
     if (bake_load && !ai_ok(g = bake_eval_file(g, bake_load))) return g;
+    // the CLI driver rides the image too, last so it sits over the crew exactly as the
+    // session-layer eval it replaces did. pure definition: cli-line reads argv and the
+    // verb registry when CALLED, so nothing of this session is folded in.
+    g = ai_evals_(g, cli);
     g = ai_evals_(g, glaze_cache);
     int rc = *bake ? image_dump(g, bake) : image_bake(g);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
-  return run_program(g, !argp && isatty(STDIN_FILENO)); }
+  return run_program(g, !argp && isatty(STDIN_FILENO), 1); }
 #endif
 
 ai_noinline static struct ai *argv_chain(struct ai *g, char const **v, int argc, int skip) {
@@ -708,7 +716,7 @@ int main(int argc, char const **argv) {
       if (ai_ok(g)) ai_core_of(g)->sp++; }
     if (!bake) g = stdin_take(g);
     // an egg warm, or a woken image straight to the program -- the wake skips the warm
-    g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO))
+    g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO), 0)
                         : boot(g, argp, bake, bake_load);
   }
   if (ai_code_of(g) == ai_status_scare) ai_scare_face_(g);

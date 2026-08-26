@@ -608,6 +608,28 @@
                         (sdir? st) ((a + f) + ("/\n" + (mctree (p + "/"))))
                         (: r (uread p) ((a + f) + ("\n" + (? (two? r) <>r "") + "\n"))))))
            "" (sort (readdir d)))
+   ; the same walk with the stats where the bytes go -- a stat per member against
+   ; mctree's 1.2 MB of reads. it moves whenever an edit does, which is all a key needs.
+   (mcshape d)
+    (foldl (\ a f (: p (d + f)
+                     st (stat p)
+                     (? !(two? st) a
+                        (sdir? st) ((a + f) + ("/\n" + (mcshape (p + "/"))))
+                        ((a + f) + ("\n" + show st + "\n")))))
+           "" (sort (readdir d)))
+   ; the toolchain sources' digest, memoized under that shape -- mccid's law, one rung up
+   ; from a file: the bytes are the identity and a stat says when to go read them. a touch
+   ; re-reads and lands on the same digest, so a stale generation costs one pass.
+   (mcsrcid home)
+    (: d (mcdir ())
+       k (? (string? d) (sha256 ("moon-src 1\n" + (mcshape (home + "include/"))
+                                 + (mcshape (home + "lib/")))) ())
+       hit (? (string? k) (mcget d (k + ".cid") "cid1 ") ())
+       _ (? (two? hit) (utime (d + k + ".cid") (clock ())) 0)   ; the sweep orders by use
+       (? (two? hit) (snip <>hit 5 69)
+          (: h (sha256 ((mctree (home + "include/")) + (mctree (home + "lib/"))))
+             _ (? (string? k) (mcput d (k + ".cid") ("cid1 " + h + "\n")) 0)
+             h)))
    ; ⚠ the exe's PATH rides beside its CONTENT: two worktrees hold the same
    ; cwd-relative include paths, and only the seat tells their headers apart.
    ; the image is the ONE this session woke, which main.c pins as `love-image`.
@@ -629,7 +651,7 @@
                              (im = "<baked>") ["<baked>"]
                              [[im (mccid im)]]))
               (? (string? d) ((mcims d) + (mcims (d + "../lib/love/"))) ()))
-       src (? (two? ims) ((mctree (home + "include/")) + (mctree (home + "lib/"))) "")
+       src (? (two? ims) (mcsrcid home) "")
        ; the ablation knob compiles a DIFFERENT runtime, so it is part of the identity;
        ; unset stays out so every standing key survives
        ab (: s (getenv "MOON_ABLATE") (? (string? s && 0 < tally s) ("\nabl " + s) ""))
