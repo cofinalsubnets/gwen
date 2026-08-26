@@ -28,7 +28,7 @@ pd_fpu = -mfloat-abi=hard -mfpu=fpv5-sp-d16 -D__FPU_USED=1
 pd_mcflags = -mthumb -mcpu=cortex-m7 $(pd_fpu)
 pd_incdir = -I. -Icore -I$(o) -I$(R) -I$(R)/out/lib -I$(R)/crew/quay -I$(pd_sdk)/C_API
 # ai_data_section=0: the sentinel tiling src/love.h's ai_typ reads needs the link to
-# place love_data.NN, and this seat links through the SDK's own link_map.ld --
+# place love.data.NN, and this seat links through the SDK's own link_map.ld --
 # not ours to write a block into. src/love.h asks the sentinels by name here.
 pd_defs = -DTARGET_PLAYDATE=1 -DTARGET_EXTENSION=1 -Dai_data_section=0
 pd_cpflags = $(pd_mcflags) $(pd_opt) $(pd_defs) -std=gnu2x -ffreestanding \

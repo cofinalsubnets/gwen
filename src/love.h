@@ -236,19 +236,19 @@ struct ai {
 
 struct ai_def { char const *n; intptr_t x; };
 
-// host nif auto-registration: AiNif("name", fn) lands the entry in the ai_nifs section
-// and boot drains [__start_ai_nifs, __stop_ai_nifs) through ai_defn, so an app adds nifs
+// host nif auto-registration: AiNif("name", fn) lands the entry in the love_nifs section
+// and boot drains [__start_love_nifs, __stop_love_nifs) through ai_defn, so an app adds nifs
 // in its own host/<app>.c. no linker script -- the toolchain defines the bracket symbols.
 // AiModNifs("mod", table) is the module twin: one row per (module, def table), so an
 // app's nifs register under its module and (module 'mod ..) text reopens the same one.
 struct ai_mod { char const *mod; struct ai_def const *defs; uintptr_t n; };
-extern struct ai_def const __start_ai_nifs[], __stop_ai_nifs[];
-extern struct ai_mod const __start_ai_mods[], __stop_ai_mods[];
+extern struct ai_def const __start_love_nifs[], __stop_love_nifs[];
+extern struct ai_mod const __start_love_mods[], __stop_love_mods[];
 #define AiNif(nm, fn) \
-  static struct ai_def const __attribute__((section("ai_nifs"), used)) \
+  static struct ai_def const __attribute__((section("love_nifs"), used)) \
     _ainif_##fn = { (nm), (intptr_t) (fn) }
 #define AiModNifs(m, tab) \
-  static struct ai_mod const __attribute__((section("ai_mods"), used)) \
+  static struct ai_mod const __attribute__((section("love_mods"), used)) \
     _aimod_##tab = { (m), (tab), sizeof(tab)/sizeof*(tab) }
 
 // port vtable -- what a device owes, and nothing else. a NULL slot means no method

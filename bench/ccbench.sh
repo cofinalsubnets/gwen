@@ -92,8 +92,8 @@ fi
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
 CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/core -I$R/out/lib"
 # mk/common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
-# sentinels' tiling IS src/love.h's ai_typ, and ld left to itself keeps each love_data.N an
-# orphan in first-encountered order -- gcc emits love_data.7 first, so lvm_str lands
+# sentinels' tiling IS src/love.h's ai_typ, and ld left to itself keeps each love.data.N an
+# orphan in first-encountered order -- gcc emits love.data.7 first, so lvm_str lands
 # below lvm_sym and every string reads as a closure.
 LDFLAGS="-Wl,-T,$R/src/love_data.ld"
 

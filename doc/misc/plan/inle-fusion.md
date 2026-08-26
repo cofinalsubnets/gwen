@@ -17,8 +17,8 @@ callable inside the kernel, which is what lets more of the crew run there.
 ## where it stands
 
 - **rung 0** (`4d0106ed`) -- one nif registration mechanism. `kmain.c`'s `defs[]`
-  rides the `ai_nifs` section and the kernel drains `[__start_ai_nifs,
-  __stop_ai_nifs)` like `src/main.c:1291` does. Three lines of code; it is the
+  rides the `love_nifs` section and the kernel drains `[__start_love_nifs,
+  __stop_love_nifs)` like `src/main.c:1291` does. Three lines of code; it is the
   gate for everything else, because the image indexes host nifs BY POSITION in
   that section.
 - **the syscall seam** (`67ab3584`, `46417cf5`) -- `src/sys.c` answers
@@ -188,11 +188,11 @@ host-only TUs): FOUR symbols remain defined on both sides -- `ai_fd_close`,
   hosted static pie (ASLR kept -- the binary's one code-reuse mitigation, with
   tls/inflate/the reader as real C surfaces); metal boots a file DERIVED from
   it. the ET_EXEC-everywhere alternative was priced and declined for the ASLR
-  loss; the ai_rela machinery stays, so it remains reachable.
+  loss; the love_rela machinery stays, so it remains reachable.
 - C2 ✅ the kernel build IS the host's link: one `mooncc -pie` over one object
   set (main.c and the whole host surface aboard), and `tools/kproject.l`
   PROJECTS it for the doors -- every PT_LOAD re-based at the kernel base, the
-  ai_rela table applied there (the law `__ai_reloc` runs at a hosted start,
+  love_rela table applied there (the law `__ai_reloc` runs at a hosted start,
   run ahead of time), boot.o laid and patched below the image (its 32-bit PVH
   stub carries abs32 sites a pie cannot slide -- the one object that stays out
   of the link), `k_image_top` patched into the file where the flat link's

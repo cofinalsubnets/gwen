@@ -1790,9 +1790,9 @@ static bool cbinit(void) {
 // the kernel's OWN nifs ride ai_knifs, a section apart (plan C2, the artifact
 // unification): the one binary is also the hosted love, whose book must not
 // carry reset, fault, the disk or the virt doors -- machinery that would
-// misbehave under an OS rather than refuse. kmain drains ai_nifs (the whole
+// misbehave under an OS rather than refuse. kmain drains love_nifs (the whole
 // posix surface) and then this bracket, so the kernel book carries both; the
-// hosted main drains ai_nifs alone and never sees these. the linker
+// hosted main drains love_nifs alone and never sees these. the linker
 // synthesizes the bracket for any named lane, so no registration line exists
 // anywhere. ⚠ INDEXED BY POSITION like its sibling, so this order is part of
 // an image's contract -- append, do not insert.
@@ -1896,14 +1896,14 @@ void kmain(void) {
 #endif
   // the nif drains re-pin over a woken book too (the host's law, main.c): the
   // section rides this binary, so the addresses are the image's own.
-  g = ai_defn(g, __start_ai_nifs,
-              (uintptr_t)(__stop_ai_nifs - __start_ai_nifs), 0);
+  g = ai_defn(g, __start_love_nifs,
+              (uintptr_t)(__stop_love_nifs - __start_love_nifs), 0);
   // ..then the kernel's own bracket, so a kernel row wins any name it shares
   g = ai_defn(g, __start_ai_knifs,
               (uintptr_t)(__stop_ai_knifs - __start_ai_knifs), 0);
   // ..and the module tables, one ai_defn per row (an app's nifs land under its
   // module; over a woken image the drain refreshes the registry's rows)
-  for (struct ai_mod const *mt = __start_ai_mods; mt < __stop_ai_mods; mt++)
+  for (struct ai_mod const *mt = __start_love_mods; mt < __stop_love_mods; mt++)
     g = ai_defn(g, mt->defs, mt->n, mt->mod);
   // BOUND the generational collector to the device's RAM (the Appel knob): without it the nursery's
   // copy-overhead resizer grows unbounded and gen_major's worst-case (all-survive) sizing then asks

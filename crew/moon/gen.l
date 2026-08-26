@@ -7420,7 +7420,7 @@
    ; imgforms extras bssforms rodataforms) | 'bad, extras being ((name forms ro?) ..), one per
    ; OTHER named section -- ro? saying the section may go read-only (xro?, below).
    ; a __attribute__((section(NAME))) global lays in a stream of its own. three streams have a
-   ; meaning the writer knows: `ai_nifs` needs the linker's __start_/__stop_ bracket around a
+   ; meaning the writer knows: `love_nifs` needs the linker's __start_/__stop_ bracket around a
    ; packed run for main()'s boot drain, `.image` must be LAST so `love bake` can grow it at the
    ; tail, and `.data` takes an unattributed global. every OTHER name carries through to the .o as
    ; a real section -- a part reads its .vectors at a fixed address, and ⚠ DECLARATION ORDER is
@@ -7469,7 +7469,7 @@
               ; an aligned(N) global lands ON its boundary: this pad places it within the stream,
               ; and the .o's section header carries the max N so the linker grants the same grain.
               ; the two SPECIAL streams are packed by construction and take no pad.
-              an (? (member? want '("ai_nifs" ".love_image")) 0 (peep (g 'aligns) <gs 0))
+              an (? (member? want '("love_nifs" ".love.image")) 0 (peep (g 'aligns) <gs 0))
               ; the cause rides a PIN, not a puts: cgdata's callers thread a bare 'bad through a
               ; dozen (bad? x) joins and a gripe is not one, so gfns's tail mints it from the pin
               (? (zm = 'r && !roq) (globs >gs want zm acc)
@@ -7509,7 +7509,7 @@
        ; the OTHER section names, first-seen in declaration order
        xnames (: (go gs acc) (? !(two? gs) (rev acc)
                                 (: s (strm <gs)
-                                   (go >gs (? (member? s '(".data" ".rodata" "ai_nifs" ".love_image") ||
+                                   (go >gs (? (member? s '(".data" ".rodata" "love_nifs" ".love.image") ||
                                                member? s acc)
                                               acc (s >< acc)))))
                  (go (rev (g 'globs)) ()))
@@ -7524,8 +7524,8 @@
           rs (? (bad? rg) 'bad (globs (rev (g 'statics)) ".rodata" () ()))
           cg (? (bad? rg || bad? rs) 'bad (globs (rev (g 'globs)) ".data" 'r ()))
           cs (? (bad? cg) 'bad (globs (rev (g 'statics)) ".data" 'r ()))
-          nb (? (bad? cg || bad? cs) 'bad (globs (rev (g 'globs)) "ai_nifs" () ()))
-          ib (? (bad? nb) 'bad (globs (rev (g 'globs)) ".love_image" () ()))
+          nb (? (bad? cg || bad? cs) 'bad (globs (rev (g 'globs)) "love_nifs" () ()))
+          ib (? (bad? nb) 'bad (globs (rev (g 'globs)) ".love.image" () ()))
           xb (? (bad? ib) 'bad
                 (map (\ nm [nm (globs (rev (g 'globs)) nm () ()) (xro? nm)]) xnames))
           (? (foldl (\ a x (a || bad? x)) () [gb sb zg zs rg rs cg cs nb ib xb]) 'bad
@@ -7705,7 +7705,7 @@
                                    >q (lay1 nm))))))
            ; ⚠ THE SECTIONED BODIES FIRST, and in DECLARATION ORDER. where the
            ; members of a named section land is the program's business, never
-           ; ours: love.c's data sentinels each take their own love_data.N at a
+           ; ours: love.c's data sentinels each take their own love.data.N at a
            ; fixed stride, and ai_typ reads a kind by DIVIDING the offset. the
            ; worklist lays a root's callees before the next root, so driving
            ; these through it tiles them in discovery order and every heap
@@ -7775,7 +7775,7 @@
              [1 (crt0 + <>r + <>>>>>dat + <dat + <>dat + <>>>>dat)])))   ; so the nif stream just rides along
    ; the RELOCATABLE OBJECT view: text and data split, plus the DEFINED function names (global
    ; FUNC symbols, statics excluded -- they stay LOCAL, love.h's inline helpers land in every TU),
-   ; the global-variable names, and the ai_nifs stream -- the .o emitter turns the rest into a
+   ; the global-variable names, and the love_nifs stream -- the .o emitter turns the rest into a
    ; symbol table + relocations. the DEFINED static functions ride the tail as lnames, laid as
    ; LOCAL FUNC symbols so nm/gdb/vmret see real function boundaries.
    (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs) | ()
@@ -7786,7 +7786,7 @@
              svars (two? xtra ? <>xtra {})
              sects (two? xtra ? <>>xtra {})
              (loc? nm) (!(id? (peep svars nm 'no) 'no) ||
-                        peep sects nm () = "ai_nifs")     ; a nif entry is static by shape; any OTHER
+                        peep sects nm () = "love_nifs")     ; a nif entry is static by shape; any OTHER
                                                                  ; named section stays exported (.image is read by symbol)
              als (? (two? xtra && 3 < #xtra) (nthr xtra 3) {})
              fnames (: (go fs acc) (? !(two? fs) (rev acc)

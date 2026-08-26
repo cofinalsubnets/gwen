@@ -81,7 +81,7 @@ section headers rather than a build flag, so neither lane is told which it is, a
 lays `.image` anywhere else is refused loudly with the flag it wants.
 
 For the mooncc lane the bytes are a real section too: `.image` is a fourth stream through
-cgdata → objelf → the `image` lane in link.l, beside `ai_nifs` — the other named section whose
+cgdata → objelf → the `image` lane in link.l, beside `love_nifs` — the other named section whose
 whole point is WHERE it lands.
 
 ## core/host split

@@ -1,8 +1,8 @@
 ; crew/holo/link.l -- a static ELF LINKER over obj.l's relocatable objects (the
 ; toolchain ladder, rung 3): read each .o (the section shape obj.l lays -- .text /
-; .data / ai_nifs + symtab + RELA, or REL at 32 bits -- ld-read takes either ELF
+; .data / love_nifs + symtab + RELA, or REL at 32 bits -- ld-read takes either ELF
 ; class off the field table below), resolve every symbol across the set
-; (strong over weak; __start_/__stop_ai_nifs synthesized over the packed nif
+; (strong over weak; __start_/__stop_love_nifs synthesized over the packed nif
 ; region), lay the sections at the classic ET_EXEC base, apply the relocations
 ; (R_64 an absolute S+A; PC32/PLT32 both the pc-relative S+A-P once the link is
 ; static), and wrap the bytes in elf.l's one-segment executable header. entry
@@ -162,7 +162,7 @@
    ; sections (.text.unlikely, .rodata.str1.1, .data.rel.ro.local) and every
    ; piece of a lane lands in the same run of the image. one RWX segment maps
    ; the whole thing, so .rodata and .data.rel.ro are data that nothing writes.
-   ; ai_nifs is ours and exact -- it is a packed array with a bracket, not a lane.
+   ; love_nifs is ours and exact -- it is a packed array with a bracket, not a lane.
    (ld-pre nm p) (: n (tally p) ((tally nm >= n) && (snip nm 0 n = p)))
    ; the unwinder's tables: .eh_frame on the 64-bit targets, .ARM.exidx (its own
    ; section TYPE) plus the .ARM.extab it points into on arm -- and gcc splits each
@@ -191,8 +191,8 @@
        ((nm = ".text") || ld-pre nm ".text.") 'text
        ((nm = ".rodata") || ld-pre nm ".rodata.") 'rodata
        ((nm = ".data") || ld-pre nm ".data.") 'data
-       (nm = "ai_nifs") 'nifs
-       (nm = ".love_image") 'image
+       (nm = "love_nifs") 'nifs
+       (nm = ".love.image") 'image
        ; the KERNEL lanes (ldkern's names): the boot stub's page tables and
        ; bring-up ladder, and the PVH note qemu reads to find the 32-bit entry.
        ; a hosted object carries neither.
@@ -376,8 +376,8 @@
 
    ; -- ARCHIVES. the noms no object defines but the LINKER lays: a driver over any
    ; door here answers for these, so a ledger must not go looking for them in a .a.
-   ldsynth '("__start_ai_nifs" "__stop_ai_nifs" "__start_ai_rela" "__stop_ai_rela"
-             "__start_ai_mods" "__stop_ai_mods"
+   ldsynth '("__start_love_nifs" "__stop_love_nifs" "__start_love_rela" "__stop_love_rela"
+             "__start_love_mods" "__stop_love_mods"
              "__data_start__" "__data_end__" "__data_load__"
              "__bss_start__" "__bss_end__" "__load_size__")
    (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs), global noms
@@ -612,10 +612,10 @@
    (ldres glo n0 n1 r0 r1 xt nm)
     (: r (peep glo nm ())
        (? (two? r) <r
-          (nm = "__start_ai_nifs") n0
-          (nm = "__stop_ai_nifs") n1
-          (nm = "__start_ai_rela") r0
-          (nm = "__stop_ai_rela") r1
+          (nm = "__start_love_nifs") n0
+          (nm = "__stop_love_nifs") n1
+          (nm = "__start_love_rela") r0
+          (nm = "__stop_love_rela") r1
           (: z (tally nm)
              x (? ((8 < z) && (snip nm 0 8 = "__start_"))
                   (: v (peep xt (intern (snip nm 8 z)) ()) (? (two? v) [<v] ()))
@@ -862,7 +862,7 @@
    ; data -- plus a fourth for .image when the set carries one (see below).
    ; pie: emit ET_DYN laid at base 0 (the kernel biases it to a random high
    ; address), collect every abs64 site into a trailing offset table bracketed
-   ; by __start_/__stop_ai_rela, and let nolibc's startup add the load base to
+   ; by __start_/__stop_love_rela, and let nolibc's startup add the load base to
    ; each -- the classic static-PIE self-relocation, our own toolchain end to end.
    ; org: () takes the default base (pie 0 / elf-base); a number lays the image
    ; THERE -- the bare-metal lane (qemu -M virt wants its RAM base, 0x80000000),
@@ -878,8 +878,8 @@
    ; on every byte they EMIT. the base moves with a release, which both generations
    ; share (love0 is stamped $(love_base)+bootstrap for exactly this). the full id
    ; is in love-version, in .rodata, for a reader who wants the commit.
-   ; readme: plain text for whoever OPENS this file, laid in `.README` beside .comment and
-   ; mapped by nothing. `readelf -p .README` prints it and `strings` finds it. It is the one
+   ; readme: plain text for whoever OPENS this file, laid in `.love.README` beside .comment and
+   ; mapped by nothing. `readelf -p .love.README` prints it and `strings` finds it. It is the one
    ; annotation that pays for itself at any size: the source is already in the artifact, so
    ; what a reader lacks is not more data but a page telling them where to stand. "" lays none.
    (ldlink target pie org srcs prod readme)
@@ -960,7 +960,7 @@
        ; the same program; nm, objdump and gdb read exactly this. we describe the
        ; image as the five lanes we laid it in, so a symbol lands in the section
        ; it actually lives in and `nm` classifies it T/R/D/B without guessing.
-       ; and EVERY loaded byte gets a covering header (ai_rela names the -pie
+       ; and EVERY loaded byte gets a covering header (love_rela names the -pie
        ; table): binutils strip rebuilds a file FROM its sections, so an orphan
        ; gap comes back as zeros -- the relocator's table gone, the stripped
        ; binary a segfault at the first unrebased pointer.
@@ -969,15 +969,14 @@
        ; ⚠ .comment goes LAST so no index moves: e_shstrndx and .symtab's sh_link
        ; are written down as 10 and 9, and a section spliced in ahead would silently
        ; point both at the wrong table.
-       ; ⚠ AND ai_nifs KEEPS ITS UNDOTTED NAME while its neighbours are .love_*: GNU ld
-       ; synthesizes __start_X/__stop_X only where X is a C IDENTIFIER, and love.h has to
-       ; SPELL those two in C -- `extern struct ai_def const __start_ai_nifs[]`. A dot makes
-       ; the name unwritable (gcc: expected ';' before '.'), the encap goes unsynthesized,
-       ; and the gcc-built love0 drains no nifs at all. .love_rela is dotted because nothing
-       ; declares it: our linker INVENTS that section, and ldsynth defines its bracket by
-       ; hand, so the section name and the symbol name are free of each other there.
-       shstr (o-strtab '(".text" ".rodata" ".data" "ai_nifs" ".love_rela" ".bss" ".love_image"
-                         ".symtab" ".strtab" ".shstrtab" ".comment" ".README" ".note.netbsd.ident"))
+       ; ⚠ THE OBJECT SAYS love_nifs AND THE BINARY SAYS .love.nifs -- the split IS the rule.
+       ; GNU ld synthesizes __start_X/__stop_X only where X is a C IDENTIFIER and love.h
+       ; spells that pair in C, so an OBJECT must carry the undotted name or the gcc-built
+       ; love0 drains no nifs at all. ldres defines the pair here by hand off the laid
+       ; extent and owes the output name nothing -- the freedom .love.rela already has,
+       ; that one being a section our linker invents outright.
+       shstr (o-strtab '(".text" ".rodata" ".data" ".love.nifs" ".love.rela" ".bss" ".love.image"
+                         ".symtab" ".strtab" ".shstrtab" ".comment" ".love.README" ".note.netbsd.ident"))
        (snm k) (at <>shstr k)
        symo (ld-align 8 endf) symz (tally <st)
        stro (symo + symz) strz (tally <>st)
@@ -994,28 +993,28 @@
                     (ld-shdr (snm 1) 1 2 o0 (o0 - base) (d0 - o0) 0 0 16 0)
                     (ld-shdr (snm 2) 1 3 d0 (d0 - base) (<ed - d0) 0 0 16 0)
                     (ld-shdr (snm 3) 1 3 <ed (<ed - base) (<en - <ed) 0 0 16 0)
-                    (ld-shdr (snm 4) 1 2 r0 (r0 - base) (r1 - r0) 0 0 16 0)          ; ai_rela, the -pie table (empty non-pie)
+                    (ld-shdr (snm 4) 1 2 r0 (r0 - base) (r1 - r0) 0 0 16 0)          ; love_rela, the -pie table (empty non-pie)
                     (ld-shdr (snm 5) 8 3 r1 (r1 - base) (bend - r1) 0 0 16 0)        ; NOBITS: an offset, no bytes
                     (ld-shdr (snm 6) 1 3 iaddr ioff isz 0 0 16 0)                    ; .image, the grow slot -- its own segment
                     (ld-shdr (snm 7) 2 0 0 symo symz 9 (at st 2) 8 24)               ; link=.strtab info=first global
                     (ld-shdr (snm 8) 3 0 0 stro strz 0 0 1 0)
                     (ld-shdr (snm 9) 3 0 0 ssto sstz 0 0 1 0)
                     (ld-shdr (snm 10) 1 48 0 cmto cmtz 0 0 1 1)                     ; .comment: MERGE|STRINGS, no alloc
-                    (? (0 < rdmz) (ld-shdr (snm 11) 1 32 0 rdmo rdmz 0 0 1 0) ())    ; .README: STRINGS, no alloc
+                    (? (0 < rdmz) (ld-shdr (snm 11) 1 32 0 rdmo rdmz 0 0 1 0) ())    ; .love.README: STRINGS, no alloc
                     (? nb? (ld-shdr (snm 12) 7 2 (base + nbo) nbo 24 0 0 4 0) ())])   ; SHT_NOTE, alloc: strip keeps it
        ; W^X: segment one is the header and the code, READ+EXECUTE; segment two the
-       ; literals, READ; segment three .data through ai_rela, running out to bss in memsz
+       ; literals, READ; segment three .data through love_rela, running out to bss in memsz
        ; alone, READ+WRITE; a fourth carries the image when there is one, RW (a heap
        ; snapshot is read and rebased, never entered). each meets the next exactly on a
        ; page -- every lane's header absorbs its own pad -- so no loaded byte belongs to
        ; neither, and no page belongs to two.
        ; ⚠ this holds only because no relocation site lands in text or rodata: the -pie
        ; table is abs64 sites, and mooncc addresses text pc-relative, so every site is in
-       ; .data or ai_nifs. a lane that ever needs to WRITE code has to say so with its own
+       ; .data or love_nifs. a lane that ever needs to WRITE code has to say so with its own
        ; segment -- and rodata's promise is cgdata's, made one layer down.
        ; ⚠ the ELF header rides the executable segment: 232 bytes of mostly-zero struct,
        ; the price of not spending a whole page to hold it alone.
-       ; ⚠ ai_rela is read-only in truth and rides the writable segment anyway -- it is
+       ; ⚠ love_rela is read-only in truth and rides the writable segment anyway -- it is
        ; laid past the nifs, and moving it above d0 would reorder the emit for 13k.
        ; ⚠ bake_tail asks that .image END its segment and that no LOAD live above it --
        ; both hold by construction here.
@@ -1161,7 +1160,7 @@
    ; MCU linker script writes by hand. moon.l's ldsynth lists them.
    ; ⚠ no -pie: a freestanding board image has nothing to slide.
    ld-lanenames (ld-cls '((text ".text") (rodata ".rodata") (data ".data")
-                          (nifs "ai_nifs") (bss ".bss") (image ".love_image")))
+                          (nifs ".love.nifs") (bss ".bss") (image ".love.image")))
    (ld-lanenm l) (: r (peep ld-lanenames l ()) (? (two? r) <r (string l)))
    ; a lane's HOME across the set -- what its sections' own flags said it travels
    ; with (ld-home). a lane the linker knows by name is its own home.

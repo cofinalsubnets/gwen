@@ -386,7 +386,7 @@
    ; build the whole .o image. textforms/dataforms/nifforms/imgforms are cgen-obj's
    ; split IR -- the two named streams are the ones where the ADDRESS is the point
    ; and a symbol alone cannot say it: nifforms are the AiNif registry entries,
-   ; laid in their own `ai_nifs` section so the linker's __start_/__stop_ bracket
+   ; laid in their own `love_nifs` section so the linker's __start_/__stop_ bracket
    ; symbols bound them, and imgforms the `.image` bake slot, which link.l lays LAST
    ; of all so `love bake` can grow it at the tail (src/image.c). funcnames the
    ; DEFINED functions (global FUNC symbols), globnames the global variables (global
@@ -398,7 +398,7 @@
    ; emits (.boot, .note.pvh, the 2 KiB-aligned vector table).
    ; the five DESCRIPTORS are their own binding because a compiler has a sixth
    ; kind of stream to add to them: a global wearing __attribute__((section(..)))
-   ; with a name that is neither ai_nifs nor .image (a part's .vectors, which the
+   ; with a name that is neither love_nifs nor .image (a part's .vectors, which the
    ; core reads before an instruction runs). moon.l appends those and
    ; calls objsecs itself; everything else takes the five and nothing more.
    ; ⚠ .bss is NOBITS (8): its size rides the header and its zeros ride NOTHING, so
@@ -412,8 +412,8 @@
      [".rodata" 1 2 (o-dalign rodataforms) rodataforms]
      [".data"   1 3 (o-dalign dataforms) dataforms]
      [".bss"    8 3 (o-dalign bssforms) bssforms]
-     ["ai_nifs" 1 3 8 nifforms]
-     [".love_image"  1 3 16 imgforms]]
+     ["love_nifs" 1 3 8 nifforms]
+     [".love.image"  1 3 16 imgforms]]
    ; a named section a COMPILER emits: PROGBITS on the widest grain its own globals
    ; ask for, allocated, and writable unless ro says the compiler found every global
    ; in it const and reloc-free. the descriptor a hand-written lay needs is its own
@@ -437,7 +437,7 @@
         [".rodata" 1 2 4 rodataforms]
         [".data"   1 3 4 dataforms]
         [".bss"    8 3 4 bssforms]
-        ["ai_nifs" 1 3 4 nifforms]])
+        ["love_nifs" 1 3 4 nifforms]])
 
    (objelf target0 textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)
     (: target (arch-nom target0)

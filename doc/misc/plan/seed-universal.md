@@ -42,12 +42,12 @@ cosmocc story is already true — just Linux-and-one-ISA-shaped.
 
 ## the walls, named
 
-- **the heap image.** `.love_image` is 7.1 MB of the 11.8 MB artifact,
+- **the heap image.** `.love.image` is 7.1 MB of the 11.8 MB artifact,
   arch-stamped, anchor-stamped, meaningful only inside the exact binary that
   baked it — and the bake is a *run* of the binary (dist_cross warms a foreign
   twin under qemu-user). Every universality strategy hits this first: N images,
   an arch-neutral image format, or egg-boot (~230 ms and the glaze bake lost).
-- **bake_tail's layout contract.** `.love_image` must end the highest PT_LOAD;
+- **bake_tail's layout contract.** `.love.image` must end the highest PT_LOAD;
   the bake self-rewrites in place. A polyglot prefix or self-assimilating loader
   perturbs exactly this.
 - **macOS.** No Mach-O emitter, image.c is Linux-only, and Apple silicon makes a

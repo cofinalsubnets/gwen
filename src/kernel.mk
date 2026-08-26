@@ -110,7 +110,7 @@ kernel: $(k_elf)
 # THE LINK IS THE HOST'S OWN (plan C2): one mooncc -pie over the whole object
 # set, the same lane that links out/host/love. what the doors eat is the
 # PROJECTION of that pie -- tools/kproject.l re-bases every PT_LOAD at the
-# kernel base, applies the ai_rela table there (the law nolibc's __ai_reloc
+# kernel base, applies the love_rela table there (the law nolibc's __ai_reloc
 # runs at a hosted start, run ahead of time), lays and patches boot.o below
 # the image, writes k_image_top, and emits the flat ELF all three doors have
 # always booted -- the note, the entry by symbol, paddr = vaddr.

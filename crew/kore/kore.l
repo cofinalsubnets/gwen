@@ -161,7 +161,7 @@
            (<a = "-pie")   (go >a fs o 1 org tgt rd)
            (<a = "-t")     (? (two? >a) (go >>a fs o pie org (intern <>a) rd) (die "ld: -t wants a target"))
            (<a = "-Ttext") (? (two? >a) (go >>a fs o pie (num <>a) tgt rd) (die "ld: -Ttext wants an address"))
-           ; --readme FILE: plain text into `.README`, for whoever opens the output
+           ; --readme FILE: plain text into `.love.README`, for whoever opens the output
            (<a = "--readme") (? (two? >a)
                                 (: t (uread <>a) (? (two? t) (go >>a fs o pie org tgt <>t)
                                                     (die ("ld: cannot open " + <>a))))

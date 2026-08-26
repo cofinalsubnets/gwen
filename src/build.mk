@@ -8,7 +8,7 @@
 ho = out/host$(hsuf)
 h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 # host_c (mk/common.mk): the per-app host-nif files, auto-registered via AiNif. linked
-# directly into the binary, never via liblove.a, so the ai_nifs section is not
+# directly into the binary, never via liblove.a, so the love_nifs section is not
 # archive-collected. drop a src/<app>.c in and it builds -- no rule edit.
 host_o = $(host_c:$(R)/%.c=$(ho)/%.o)
 # love0 and the lib tools ride this too, HCC or not.
@@ -31,7 +31,7 @@ hcc = LOVE_NO_IMAGE= $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(
 # 0x2000000 clears .bss with room to grow and is page-aligned, which the loader's
 # offset/vaddr congruence needs; an overlap is a loud ld error. holo lays the same shape
 # its own way, so both toolchains bake alike.
-image_ldflags = -Wl,--section-start=.love_image=0x2000000
+image_ldflags = -Wl,--section-start=.love.image=0x2000000
 # .hostcc -- the tree's compiler+link identity, content-stamped (cmp keeps the mtime when
 # nothing moved). every host object and the link depend on it, so an in-place flavor flip
 # rebuilds the tree instead of relinking mixed-libc objects.
@@ -261,7 +261,7 @@ nolibc_src = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
 # does, the blob riding .rodata well below it.
 # -freadme rides only this link, so test_fixpoint's relink of $(moon_o) needs
 # no mirror of it. assets/readme.bin is the page a reader lands on --
-# `readelf -p .README`, mapped by nothing.
+# `readelf -p .love.README`, mapped by nothing.
 # $(kart_o), the SHIPPED KERNEL's objects (src/kernel.mk owns the list and
 # their rules): the artifact is the fused binary now (plan C2) -- what boots
 # on metal is tools/kproject.l's projection of exactly this file.

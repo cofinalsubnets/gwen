@@ -82,7 +82,7 @@ uintptr_t image_objsize(struct ai *g, union u *p) {
  if (in_data(p->ap)) return image_datasize(p, p);
  word *term = (word*) ttag(g, p);                                // thread: scan to terminator (production)
  return (uintptr_t)(term - (word*) p) + 1; }
-// the host nif slice: [__start_ai_nifs, __stop_ai_nifs) is a link-order table whose length
+// the host nif slice: [__start_love_nifs, __stop_love_nifs) is a link-order table whose length
 // is a runtime quantity, and the token layout wants a compile-time one -- so the index space
 // reserves a fixed slice and only the occupied prefix is ever spelled. a host nif's value is
 // the bare fn (AiNif stores it raw), so without this lane every app nif rode as an absolute.
@@ -91,7 +91,7 @@ uintptr_t image_objsize(struct ai *g, union u *p) {
 // differs is a different binary and its symbol gap says so.
 #define ImageNHost 256u
 static ai_inline uintptr_t image_nhost(void) {
- uintptr_t n = (uintptr_t)(__stop_ai_nifs - __start_ai_nifs);
+ uintptr_t n = (uintptr_t)(__stop_love_nifs - __start_love_nifs);
  return n < ImageNHost ? n : ImageNHost; }
 // bidirectional lvm_* table: index <-> address. supplemental table 0..E-1, ai_def1 E.., then
 // the host slice last so existing indices keep their meaning.
@@ -101,7 +101,7 @@ static intptr_t image_ap_index(intptr_t ap) {
  for (uintptr_t j = 0; j < ai_def1_n; j++)
   if (ai_def1[j].x == ap) return (intptr_t)(countof(image_extra_aps) + j);
  for (uintptr_t k = 0, n = image_nhost(); k < n; k++)
-  if (__start_ai_nifs[k].x == ap)
+  if (__start_love_nifs[k].x == ap)
    return (intptr_t)(countof(image_extra_aps) + ai_def1_n + k);
  return -1; }
 static ai_inline intptr_t image_ap_resolve(intptr_t idx) {
@@ -109,7 +109,7 @@ static ai_inline intptr_t image_ap_resolve(intptr_t idx) {
  if (idx < (intptr_t) e) return (intptr_t) image_extra_aps[idx];
  if (idx < (intptr_t)(e + d)) return ai_def1[idx - e].x;
  { uintptr_t k = (uintptr_t) idx - e - d;                    // the host slice; a short roster reads 0
-   return k < image_nhost() ? __start_ai_nifs[k].x : 0; } }
+   return k < image_nhost() ? __start_love_nifs[k].x : 0; } }
 // the bare-fn lane: a compiled thread embeds a nif's fn directly; it is reachable
 // symbolically as the code slot of its ai_def1 cell (cell[0], or cell[2] under lvm_cur)
 static intptr_t image_fn_slot(word const *cell) {
@@ -119,14 +119,14 @@ intptr_t image_fn_index(intptr_t v) {
   word const *c = (word const*) ai_def1[j].x;
   if (image_fn_slot(c) == v) return (intptr_t) j; }
  for (uintptr_t k = 0, n = image_nhost(); k < n; k++) {
-  word const *c = (word const*) __start_ai_nifs[k].x;
+  word const *c = (word const*) __start_love_nifs[k].x;
   if (image_fn_slot(c) == v) return (intptr_t)(ai_def1_n + k); }
  return -1; }
 static intptr_t image_fn_resolve(intptr_t j) {
  uintptr_t d = ai_def1_n;
  if (j < (intptr_t) d) return image_fn_slot((word const*) ai_def1[j].x);
  { uintptr_t k = (uintptr_t) j - d;                          // the host slice; a short roster reads 0
-   return k < image_nhost() ? image_fn_slot((word const*) __start_ai_nifs[k].x) : 0; } }
+   return k < image_nhost() ? image_fn_slot((word const*) __start_love_nifs[k].x) : 0; } }
 // the out-of-pool immortals: (), "", the std ports, NULL (a mid-eval dump meets it
 // in an undressed rbuf/wbuf), map_gap appended last so existing indices stay stable
 // every port vtable belongs here: a port's head carries its vt, so an imaged

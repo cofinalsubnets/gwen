@@ -114,7 +114,7 @@
       '(static)]
 
    ; --- the same roster, laid for the LINKER ---------------------------------------
-   ; enum d is a slot index: love.c lays each sentinel in its own love_data.N, love.h
+   ; enum d is a slot index: love.c lays each sentinel in its own love.data.N, love.h
    ; reads a value's rep as arithmetic on the ap, and ld has to be told that tiling.
    ; the stride is the seat's, not the tree's -- a script tiling tighter than its seat
    ; believes answers slot 0 for every value, in silence. tiling looser is loud: a body
@@ -152,7 +152,7 @@
    mx-nl (string 10)
    (mx-tile base stride p)                        ; one KEEP per rep, each slot pinned
     (: (go i) (? (i = tally mx-reps) ""
-                 (p + "KEEP(*(love_data." + show i + "))  . = " + base + " + "
+                 (p + "KEEP(*(love.data." + show i + "))  . = " + base + " + "
                     + (show (stride * (i + 1))) + ";" + mx-nl + go (i + 1)))
        (go 0))
    ; the host link's -T fragment, laid whole
@@ -166,7 +166,7 @@
         + "   symbols here are the ASSERT's. holo needs no script at all: it lays each" + mx-nl
         + "   section on the grain the object declares, which is this same tiling. */" + mx-nl
         + "SECTIONS {" + mx-nl
-        + "  .love_data : ALIGN(" + (show s) + ") {" + mx-nl
+        + "  .love.data : ALIGN(" + (show s) + ") {" + mx-nl
         + "    __start_love_data = .;" + mx-nl
         + (mx-tile "__start_love_data" s "    ")
         + "    __stop_love_data = .;" + mx-nl + "  }" + mx-nl + "} INSERT AFTER .text;" + mx-nl

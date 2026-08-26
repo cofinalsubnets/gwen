@@ -688,8 +688,8 @@ int main(int argc, char const **argv) {
     g = argv_chain(g, argv, argc, 0);               // cmdline, first: it ends up deeper
     g = argv_chain(g, argv, argc, skip); }          // argv, on top -- sp[0]
   if (ai_ok(g)) {
-    g = ai_defn(g, __start_ai_nifs, __stop_ai_nifs - __start_ai_nifs, 0);
-    for (struct ai_mod const *mt = __start_ai_mods; mt < __stop_ai_mods; mt++)
+    g = ai_defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs, 0);
+    for (struct ai_mod const *mt = __start_love_mods; mt < __stop_love_mods; mt++)
       g = ai_defn(g, mt->defs, mt->n, mt->mod);
     if (!bake) {
       g = ai_defv(g, "argv");

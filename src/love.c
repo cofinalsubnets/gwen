@@ -1370,14 +1370,14 @@ uintptr_t ai_tray_bytes(struct ai_tray *v) {
 
 // these are love_int.h's data-apply shims: one TU has to hold the body.
 #if ai_data_section
-// the slot is the kind. each sentinel lays in its own input section love_data.N,
+// the slot is the kind. each sentinel lays in its own input section love.data.N,
 // N its enum d value, on a grain of ai_data_stride -- so a run of one-fn sections
 // tiles at exactly that, and ai_typ is one divide on (ap - lvm_sym) with in_data one
 // unsigned compare (love.h). ld is told the tiling outright, in scripts mx.l lays
 // from the same roster enum d comes from; holo needs no telling -- it lays each
 // section on the grain the object declares, which is the same thing.
 #define DSENT(nn, name, handler) \
- __attribute__((section("love_data." #nn), used, aligned(ai_data_stride))) \
+ __attribute__((section("love.data." #nn), used, aligned(ai_data_stride))) \
  lvm(name) { ai_musttail return Ap(handler, g); }
 DSENT(0,  lvm_sym,     data_sym_apply)
 DSENT(1,  lvm_nom,     data_sym_apply)

@@ -1,7 +1,7 @@
 ; tools/kproject.l -- the metal projection (plan C2). the artifact is ONE
 ; hosted -pie love; a boot door eats a fixed-address image. this tool derives
 ; the second from the first: re-base every PT_LOAD at the kernel base, apply
-; the ai_rela table there (the same law nolibc's __ai_reloc runs at a hosted
+; the love_rela table there (the same law nolibc's __ai_reloc runs at a hosted
 ; start -- run ahead of time, since on metal nobody is there to run it), lay
 ; and patch boot.o below the image, write k_image_top into the file, and emit
 ; the flat ELF the doors have always eaten. cat after crew/holo/{elf,obj,link}.l:
@@ -41,8 +41,8 @@
       (sname i) (ld-cstr pie (shstro + rle32 pie (sho i)))
       (shfind nm) ((: (go i) (? (shnum <= i) (scare 'kproject-section nm)
                                 (sname i = nm) i (go (i + 1)))) 1)
-      relo (: x (shfind ".love_rela") (rle64 pie (sho x + 24)))
-      relz (: x (shfind ".love_rela") (rle64 pie (sho x + 32)))
+      relo (: x (shfind ".love.rela") (rle64 pie (sho x + 24)))
+      relz (: x (shfind ".love.rela") (rle64 pie (sho x + 32)))
       symo (: x (shfind ".symtab") (rle64 pie (sho x + 24)))
       symz (: x (shfind ".symtab") (rle64 pie (sho x + 32)))
       syminf (: x (shfind ".symtab") (rle32 pie (sho x + 44)))
@@ -90,7 +90,7 @@
                (? (two? r) <r (scare 'kproject-entry entnm)))
       cx [glo b0 b0 b0 b0 () 0 () () (ld-extents objs)]
 
-      ; --- the patch list: every ai_rela site slides by bias, and k_image_top
+      ; --- the patch list: every love_rela site slides by bias, and k_image_top
       ; takes the image's far edge -- ascending, for the one-pass surgery below
       ; (the table already lays ascending; the walk reverses it back)
       (ins s l) (? !(two? l) [s]

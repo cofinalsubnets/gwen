@@ -105,14 +105,14 @@ static unsigned long __ai_bias(void) {
 
 /* ---- -pie self-relocation. The linker (crew/holo/link.l) laid the exe at base 0
  * and left every abs64 data pointer holding its base-0 offset, plus a table of
- * those sites bracketed by __start_/__stop_ai_rela. Add the real load base to each
+ * those sites bracketed by __start_/__stop_love_rela. Add the real load base to each
  * -- the whole of static-PIE relocation, no dynamic loader. Must run before any
  * such pointer is dereferenced (top of __ai_start). An ET_EXEC binary links an
  * EMPTY table (start == stop), so this is a no-op there. ---- */
-extern long __start_ai_rela[], __stop_ai_rela[];
+extern long __start_love_rela[], __stop_love_rela[];
 static void __ai_reloc(void) {
   unsigned long bias = __ai_bias();
-  for (long *p = __start_ai_rela; p < __stop_ai_rela; p++)
+  for (long *p = __start_love_rela; p < __stop_love_rela; p++)
     *(unsigned long *) (bias + (unsigned long) *p) += bias; }
 
 /* ---- dl_iterate_phdr off the auxv (AT_PHDR/AT_PHNUM): one callback covers "the

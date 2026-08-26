@@ -409,21 +409,21 @@ moonrun "$ho/.wklib.o" -o "$ho/.lnk3" > /dev/null 2>&1 && "$ho/.lnk3"; a=$?
 moonrun "$ho/.wklib.o" "$ho/.wkstr2.o" -o "$ho/.lnk4" > /dev/null 2>&1 && "$ho/.lnk4"; a=$?
 [ $a -eq 42 ] || fail "mooncc-link weak override (got $a want 42)"
 
-# the ai_nifs bracket: two TUs packed into one section, __start_/__stop_ synthesized
+# the love_nifs bracket: two TUs packed into one section, __start_/__stop_ synthesized
 cat > "$ho/.nf1.c" <<'EOF'
 typedef struct { char *n; long v; } ent;
-__attribute__((section("ai_nifs"))) ent e1 = { "a", 30 };
+__attribute__((section("love_nifs"))) ent e1 = { "a", 30 };
 EOF
 cat > "$ho/.nf2.c" <<'EOF'
 typedef struct { char *n; long v; } ent;
-__attribute__((section("ai_nifs"))) ent e2 = { "b", 12 };
-extern ent __start_ai_nifs[];
-extern ent __stop_ai_nifs[];
-int main(){ long s=0; for (ent *p=__start_ai_nifs; p<__stop_ai_nifs; p++) s+=p->v; return (int)s; }
+__attribute__((section("love_nifs"))) ent e2 = { "b", 12 };
+extern ent __start_love_nifs[];
+extern ent __stop_love_nifs[];
+int main(){ long s=0; for (ent *p=__start_love_nifs; p<__stop_love_nifs; p++) s+=p->v; return (int)s; }
 EOF
-moonrun "$ho/.nf2.c" "$ho/.nf1.c" -o "$ho/.lnk5" > /dev/null 2>&1 || fail "mooncc link ai_nifs"
+moonrun "$ho/.nf2.c" "$ho/.nf1.c" -o "$ho/.lnk5" > /dev/null 2>&1 || fail "mooncc link love_nifs"
 "$ho/.lnk5"; a=$?
-[ $a -eq 42 ] || fail "ai_nifs bracket walk (two TUs packed + __start_/__stop_ synthesized, got $a want 42)"
+[ $a -eq 42 ] || fail "love_nifs bracket walk (two TUs packed + __start_/__stop_ synthesized, got $a want 42)"
 
 # a COMPILER-NAMED section -- one the linker has no word for. it becomes its own
 # lane and stays WHOLE: the two TUs' entries land adjacent, in the order given.
@@ -569,7 +569,7 @@ for s in "R rotbl" "R romsg" "D mutp" "D fnp" "D wtbl" "B rozero"; do
     || fail "const lane: '$s' is not where it belongs ($(grep " ${s#* }\$" "$ho/.ro.nm"))"
 done
 
-echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, ai_nifs brackets, named-section lanes + their const/writable flag homes, const globals to .rodata, a FOREIGN gcc .o whole, a symbol table nm/gdb read, a .comment naming every producer) ok"
+echo "mooncc: cc (laws + return-42 + a $(ls test/cc/*.c | wc -l)-program gcc battery + .o link/interop + -I/-D/-o + multi-input -c + inline asm on both compiler lanes + SysV varargs cross-toolchain + weak override + callee-saved rbx + guaranteed sibcalls + 16-byte stack alignment + our own static linker: multi-.o/.c link, weak strong-over, love_nifs brackets, named-section lanes + their const/writable flag homes, const globals to .rodata, a FOREIGN gcc .o whole, a symbol table nm/gdb read, a .comment naming every producer) ok"
 
 
 # ------------------------------------------------ the warm compiler

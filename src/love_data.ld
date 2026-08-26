@@ -6,17 +6,17 @@
    symbols here are the ASSERT's. holo needs no script at all: it lays each
    section on the grain the object declares, which is this same tiling. */
 SECTIONS {
-  .love_data : ALIGN(16) {
+  .love.data : ALIGN(16) {
     __start_love_data = .;
-    KEEP(*(love_data.0))  . = __start_love_data + 16;
-    KEEP(*(love_data.1))  . = __start_love_data + 32;
-    KEEP(*(love_data.2))  . = __start_love_data + 48;
-    KEEP(*(love_data.3))  . = __start_love_data + 64;
-    KEEP(*(love_data.4))  . = __start_love_data + 80;
-    KEEP(*(love_data.5))  . = __start_love_data + 96;
-    KEEP(*(love_data.6))  . = __start_love_data + 112;
-    KEEP(*(love_data.7))  . = __start_love_data + 128;
-    KEEP(*(love_data.8))  . = __start_love_data + 144;
+    KEEP(*(love.data.0))  . = __start_love_data + 16;
+    KEEP(*(love.data.1))  . = __start_love_data + 32;
+    KEEP(*(love.data.2))  . = __start_love_data + 48;
+    KEEP(*(love.data.3))  . = __start_love_data + 64;
+    KEEP(*(love.data.4))  . = __start_love_data + 80;
+    KEEP(*(love.data.5))  . = __start_love_data + 96;
+    KEEP(*(love.data.6))  . = __start_love_data + 112;
+    KEEP(*(love.data.7))  . = __start_love_data + 128;
+    KEEP(*(love.data.8))  . = __start_love_data + 144;
     __stop_love_data = .;
   }
 } INSERT AFTER .text;

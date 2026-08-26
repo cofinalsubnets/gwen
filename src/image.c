@@ -121,7 +121,7 @@ int image_dump(struct ai *g, char const *path) {
 // bake grows it: nothing is pre-allocated and there is no ceiling; this stub
 // exists only to give the section an address.
 #define ReserveWords 2u
-__attribute__((section(".love_image"))) uint64_t ai_baked_image[ReserveWords] = {1};
+__attribute__((section(".love.image"))) uint64_t ai_baked_image[ReserveWords] = {1};
 uintptr_t ai_baked_image_len = ReserveWords * 8u;
 // and the stub's size is a lie gcc believes: ReserveWords is 2 because the bake grows
 // the object, so every read past the second word is out of bounds of the declaration and
@@ -184,7 +184,7 @@ static int bake_tail(struct ai *g, int src, char const *tmp, void const *buf, ui
       != (ssize_t) sh[eh.e_shstrndx].sh_size) { rc = -6; goto out; }
   str[sh[eh.e_shstrndx].sh_size] = 0;
   for (size_t i = 1; i < nsh; i++)
-    if (sh[i].sh_name < sh[eh.e_shstrndx].sh_size && !strcmp(str + sh[i].sh_name, ".love_image")) { si = i; break; }
+    if (sh[i].sh_name < sh[eh.e_shstrndx].sh_size && !strcmp(str + sh[i].sh_name, ".love.image")) { si = i; break; }
   if (!si) goto out;                              // no .image section at all
   // the blob goes exactly where the section already sits -- the offset never moves, so
   // the loader's offset/vaddr congruence is inherited rather than recomputed, and a

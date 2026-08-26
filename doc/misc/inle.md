@@ -54,7 +54,7 @@ Three mappings, all of them already half-built:
 
 ⚠ **The kernel links no `host/*.c` yet, and that is a rung rather than a rule** — `k_shared_c`
 is love.c + am.c + quay + libc. The nif MECHANISM is no longer a difference: `kmain.c`'s
-`defs[]` rides the `ai_nifs` section and the kernel drains `[__start_ai_nifs, __stop_ai_nifs)`
+`defs[]` rides the `love_nifs` section and the kernel drains `[__start_love_nifs, __stop_love_nifs)`
 exactly as `src/main.c` does, so a `host/<app>.c` added to this build registers itself with
 no edit. What is still written fresh is the nif BODIES, and `doc/misc/plan/inle-fusion.md` is the
 plan for retiring that: `src/sys.c` answers `__ai_sys`, so nolibc — and everything written

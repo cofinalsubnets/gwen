@@ -2,7 +2,7 @@
 // owns allocation and lifetime (the GC moves and reclaims the screen like any value)
 // and the C side stays a pure byte machine re-derived from the cask on every call.
 //
-// the BODIES only. registration is each seat's own trick -- the host's ai_nifs
+// the BODIES only. registration is each seat's own trick -- the host's love_nifs
 // section glob (src/cb.c), the kernel's defs[] table, the playdate's own -- so this
 // file names no seat and links nothing but the engine beside it.
 //

@@ -416,7 +416,7 @@
        ps (cparse-d <>pp tgt dia)             ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        _ (? (okv? ps) () (ccdie ps src ("cc: parse error in " + src)))
        ps)
-   ; a relocatable object: text/data/.bss/ai_nifs/.image sections + symbols + relocations
+   ; a relocatable object: text/data/.bss/love_nifs/.image sections + symbols + relocations
    ; -- the bytes (`-c` writes them; the link path feeds them to ldlink).
    ; both targets: obj.l picks the reloc vocabulary by tgt.
    ; ..plus one section per OTHER __attribute__((section(NAME))) name the TU
@@ -1059,7 +1059,7 @@
              ; needs a way to say don't. gcc's -fno-inline-functions is the same word.
              ((a = "-fno-inline") || (a = "-fno-inline-functions"))
               (flags r (pin t 'ni 1))
-             ; -freadme=FILE -- plain text into the output's `.README` section, mapped by
+             ; -freadme=FILE -- plain text into the output's `.love.README` section, mapped by
              ; nothing, for whoever OPENS the binary. The source is already in our artifact,
              ; so what a reader lacks is not more data but a page telling them where to stand.
              ; ⚠ a LINK flag: with -c there is no output ELF to carry it and it is ignored.
