@@ -382,7 +382,11 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
 // the full love: raw terminal mode for the interactive REPL (love0 never needs
 // it -- a build tool / self-test is non-interactive); the CLI driver is the
 // canonicalized lcat header.
-#if defined(__x86_64__) || defined(__aarch64__)
+// ⚠ AND ai_tco: the glaze emits the TAIL-THREADED lvm shape (g, Ip, Hp, Sp), so a
+// trampoline build calling into it jumps with the wrong ABI -- `bake` walked into
+// unmapped memory out of ai_eval. the arch answers whether a JIT exists; ai_tco
+// answers whether this vm can call one.
+#if (defined(__x86_64__) || defined(__aarch64__)) && ai_tco
 #define AiGlazed 1                                      // the native JIT exists on this arch
 #endif
 // the tty is one terminal, so its cooked baseline and its atexit live in one
