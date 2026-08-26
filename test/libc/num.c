@@ -115,9 +115,17 @@ int main(void)
 	   thing am_strtod exists to get right. --- */
 	{ char *e;
 	  double d;
+	  /* ..and C99 7.20.1.3's HEX lane, where the exponent is optional and the
+	     significand is already binary: the ties and the subnormal floor are the
+	     rows that would catch a rounding slip, and 0x / 0xg back up to the "0"
+	     alone, leaving the x -- which is what the endptr column pins. */
 	  char const *cases[] = { "0.3", "1.5", "-2.25", "1e10", "1e-10", "3.14159265358979",
 	                          "0.1", "123456789.123456789", "5e-324", "1.7976931348623157e308",
-	                          "0", "-0.0", "  42.5xyz", "nope", 0 };
+	                          "0", "-0.0", "  42.5xyz", "nope",
+	                          "0x1p4", "0x1.8p1", "-0x1p-1", "0x10", "0x1P+2", "0x1p4xyz",
+	                          "0x1p-1022", "0x1p-1074", "0x1p-1075", "0x1.8p-1075",
+	                          "0x1.fffffffffffffp+1023", "0x1p1024", "0x", "0xg",
+	                          "0x0.0000000000001p-1022", "-0x0p0", 0 };
 	  for (int i = 0; cases[i]; i++) {
 		union { double d; unsigned long u; } bits;
 		errno = 0;

@@ -454,11 +454,67 @@ static int am_dgcmp(unsigned char const *a, int na, int sh, int sticky,
   int da = i >= sh ? a[i - sh] : 0;
   if (da != b[i]) return da < b[i] ? -1 : 1; }
  return sticky ? 1 : 0; }
+// a hex float is EXACT by construction -- its significand is already binary, so
+// there is no decimal->binary search here at all: collect the digits, round once.
+// m keeps up to 60 bits and a sticky bit carries the rest, which is enough --
+// digits below the 53rd can break a tie but never create one.
+static double am_hexflo(uint64_t m, int e2, int sticky, int sign) {
+ if (!m) return sign > 0 ? 0.0 : -0.0;
+ while (!(m >> 63)) m <<= 1, e2--;               // normalize: MSB to bit 63
+ int E = e2 + 63;                                // value in [2^E, 2^(E+1))
+ if (E > 1023)  return sign > 0 ? DInf : -DInf;
+ if (E < -1080) return sign > 0 ? 0.0 : -0.0;    // below half the last subnormal
+ int sub = E < -1022, sh = sub ? 11 + (-1022 - E) : 11;   // bits to drop
+ uint64_t sig;
+ if (sh > 64) sig = 0;
+ else if (sh == 64) sig = (m > ((uint64_t) 1 << 63) || sticky) ? 1 : 0;
+ else {
+  uint64_t lost = m & (((uint64_t) 1 << sh) - 1), half = (uint64_t) 1 << (sh - 1);
+  sig = m >> sh;
+  if (lost > half || (lost == half && (sticky || (sig & 1)))) sig++; }
+ // ⚠ the subnormal encoding runs CONTINUOUSLY into the normals: a sig that
+ // rounded up to 2^52 reads as exponent field 1, mantissa 0 -- the smallest
+ // normal -- so the raw word is already the answer and needs no special case.
+ if (sub) { double d = mkd(sig); return sign > 0 ? d : -d; }
+ if (sig >> 53) sig >>= 1, E++;                  // the all-ones carry
+ if (E > 1023) return sign > 0 ? DInf : -DInf;
+ double d = mkd(((uint64_t) (E + 1023) << 52) | (sig & (((uint64_t) 1 << 52) - 1)));
+ return sign > 0 ? d : -d; }
 double am_strtod(char const *s, char **end) {
  char const *p = s;
  int sign = 1;
  if (*p == '-') sign = -1, p++;
  else if (*p == '+') p++;
+ // 0x H.H [p+-D] (C99 7.20.1.3): the exponent is optional HERE, where a source
+ // literal must carry one. a bare 0x matches no digit and falls through, so the
+ // decimal lane below takes its "0" and leaves the x -- an honest symbol still.
+ if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
+  char const *q = p + 2;
+  uint64_t hm = 0;
+  int he = 0, hst = 0, hany = 0, hpt = 0;
+  for (;; q++) {
+   int d;
+   if (*q == '.' && !hpt) { hpt = 1; continue; }
+   if (*q >= '0' && *q <= '9') d = *q - '0';
+   else if (*q >= 'a' && *q <= 'f') d = *q - 'a' + 10;
+   else if (*q >= 'A' && *q <= 'F') d = *q - 'A' + 10;
+   else break;
+   hany = 1;
+   if (hpt) he -= 4;
+   if (hm >> 60) hst |= d != 0, he += 4;         // full: the digit is scale and sticky
+   else hm = (hm << 4) | (uint64_t) d; }
+  if (hany) {
+   if (end) *end = (char*) q;
+   if (*q == 'p' || *q == 'P') {
+    char const *r = q + 1;
+    int es = 1, pv = 0;
+    if (*r == '-') es = -1, r++;
+    else if (*r == '+') r++;
+    if ('0' <= *r && *r <= '9') {
+     while ('0' <= *r && *r <= '9') { if (pv < 100000) pv = pv * 10 + (*r - '0'); r++; }
+     he += es * pv;
+     if (end) *end = (char*) r; } }
+   return am_hexflo(hm, he, hst, sign); } }
  // significant digits: up to 780 kept exactly (din, MSB collected then
  // reversed -- correct rounding can genuinely need ~768 digits; a mere sticky
  // bit cannot carry a truncated tail's MAGNITUDE through a mid-comparison,

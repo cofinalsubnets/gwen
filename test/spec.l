@@ -149,6 +149,15 @@
  ; ... and the READ side is correctly rounded too (am_strtod, the printer's twin
  ; in the math floor -- every frontend, no glibc): neighbor literals stay distinct
  (? word !(0.3 = 0.30000000000000004) 1) (? word (0.5 = 0.49999999999999999999) 1)
+ ; ..and C99's HEX lane rides the same reader. it is EXACT by construction -- the
+ ; significand is already binary -- so a hex spelling and its decimal twin are ONE
+ ; double, and the rows that would catch a rounding slip are the subnormal floor
+ ; and the exact TIE just under it, which goes to even and so goes to nothing.
+ (? word (0x1p4 = 16.0) 1) (? word (0x1.8p1 = 3.0) 1) (? word (-0x1p-1 = -0.5) 1)
+ (? word (0x1p-1074 = 5e-324) 1) (? word (0x1p-1075 = 0.0) 1)
+ (? word (0x1.8p-1075 = 5e-324) 1)                      ; past the tie, it rounds up
+ (? word (0x1.fffffffffffffp+1023 = 1.7976931348623157e308) 1)
+ (0x10 = 16) (nom? '0x)                    ; 0x10 is the INTEGER lane; a bare 0x a symbol
  ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nom? 'inf) (nom? 'nan) (nom? 'ieee-nan)
  ; bignum // and % ride Knuth-D long division, whose 128/64 step is one `divq` on x86-64 and a
  ; soft divide elsewhere; `show` on a big divides too (the decimal printer), so it checks the same lane.
