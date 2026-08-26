@@ -7,6 +7,8 @@
  *
  * Every check contributes 1, so the exit code IS the number that passed. */
 
+#include <float.h>
+
 extern int printf(const char *, ...);
 
 union endian { int i; char c[4]; };
@@ -44,6 +46,12 @@ int main(void)
 	r += 1;                           /* gcc's long double is its own */
 #endif
 	r += __FLT_RADIX__ == 2 && __DBL_DIG__ == 15;
+	/* <float.h> must tell the SAME story as the predefines -- nothing checked
+	 * that before, and the header drifted to an x87 long double this compiler
+	 * has no lane for, handing out an LDBL_MAX that overflowed to infinity. */
+	r += LDBL_MANT_DIG == __LDBL_MANT_DIG__ && DBL_MANT_DIG == __DBL_MANT_DIG__
+	     && FLT_MANT_DIG == __FLT_MANT_DIG__;
+	r += LDBL_MAX / 2 < LDBL_MAX && DBL_MAX / 2 < DBL_MAX;   /* both FINITE */
 #ifdef __LP64__
 	r += sizeof(long) == 8 && sizeof(void *) == 8;
 #else
