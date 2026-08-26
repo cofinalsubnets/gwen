@@ -77,22 +77,22 @@
    (fassign s el rv) (fasg (peep s 'fx ()) el rv)
    ; --- clause DB (lisp side: initial load + reduction; aru/wnu live in fx) --------
    (fadd s lits)                                            ; append [size, lits..] to the arena; -> cid (word offset)
-    (: n (tally lits) fx (peep s 'fx ()) aru (getw fx 4)
+    (: n #lits fx (s 'fx) aru (getw fx 4)
        _ (fens s 'ar (8 * (aru + (n + 1))))
-       ar (peep s 'ar ())
+       ar (s 'ar)
        _ (putw ar aru n)
        _ (foldl (\ j el (: _ (putw ar j el) (j + 1))) (aru + 1) lits)
        _ (putw fx 4 (aru + (n + 1))) aru)
    (fclits s cid)                                           ; the clause's encoded literals, as a list
-    (: ar (peep s 'ar ()) n (getw ar cid)
-       ((: (go j acc) (? (j < (cid + 1)) acc (go (j - 1) (getw ar j >< acc)))) (cid + n) ()))
+    (: ar (s 'ar) n (getw ar cid)
+       ((: (go j acc) (j < cid + 1 ? acc (go (j - 1) (getw ar j >< acc)))) (cid + n) ()))
    (fwatch s cid el)                                        ; push a watch node [cid -> wh[el] list]
-    (: fx (peep s 'fx ()) wnu (getw fx 5) _ (fens s 'wn (8 * (wnu + 2)))
-       wn (peep s 'wn ()) who (peep s 'who 0)
+    (: fx (s 'fx) wnu (getw fx 5) _ (fens s 'wn (8 * (wnu + 2)))
+       wn (s 'wn) who (peep s 'who 0)
        _ (putw wn wnu cid) _ (putw wn (wnu + 1) (getw fx (who + el)))
        _ (putw fx (who + el) wnu) (putw fx 5 (wnu + 2)))
    (fenq s el rv)                                           ; level-0 fact: assign if free, flag bad if already false
-    (: m (flv s el) (? (m = 1) 0 (m = -1) (pin s 'bad 1) (: _ (fassign s el rv) 0)))
+    (: m (flv s el) (? (m = 1) 0 (m = -1) (pin s 'bad 1) (fassign s el rv, 0)))
    (fload s c0)                                             ; a source clause (signed lits) into the DB + watches
     (? (1 = taut? c0) 0
        (: c (dedup-lits c0)
@@ -711,20 +711,19 @@
     ; every real var -- the ascending scan keeps the FIRST max), popped clean.
     (: s (tablet 0) nv ((: (go k) (? (k >= nvars) k (go (2 * k)))) 16)
        fx (cask (8 * (seo-of nv + (nv + 1))))
-       _ (putw fx 3 nv) _ (putw fx 4 2) _ (putw fx 5 2) _ (putw fx 6 256)
-       _ (pin s 'nvars nv) _ (pin s 'fx fx)
-       _ (pin s 'lvo (lvo-of nv)) _ (pin s 'rso (rso-of nv)) _ (pin s 'who (who-of nv)) _ (pin s 'vao (vao-of nv))
-       _ (pin s 'ar (cask 4096)) _ (pin s 'wn (cask 4096))  ; words 0-1 of each reserved: 0 stays "none"
-       _ (pin s 'bad 0)
-       _ (pin s 'nconf 0) _ (pin s 'rnum 1) _ (pin s 'climit (peep fru0 () 400)) _ (pin s 'rew 0)
-       _ (pin s 'mode 0) _ (pin s 'mconf 0) _ (pin s 'mbudget (peep fst0 () 10000)) _ (pin s 'sclimit 2000)
-       _ (pin s 'btop 0) _ (pin s 'bph (cask (8 * (nv + 1))))
-       _ (pin s 'learnts ()) _ (pin s 'nl 0) _ (pin s 'maxl (peep fmaxl0 () 2000))
+       _ (putw fx 3 nv, putw fx 4 2, putw fx 5 2, putw fx 6 256)
+       _ (pins s 'nvars nv 'fx fx
+          'lvo (lvo-of nv) 'rso (rso-of nv) 'who (who-of nv) 'vao (vao-of nv)
+          'ar (cask 4096) 'wn (cask 4096)  ; words 0-1 of each reserved: 0 stays "none"
+          'bad 0 'nconf 0 'rnum 1 'climit (peep fru0 () 400) 'rew 0
+          'mode 0 'mconf 0 'mbudget (peep fst0 () 10000) 'sclimit 2000
+          'btop 0 'bph (cask (8 * (nv + 1)))
+          'learnts () 'nl 0 'maxl (peep fmaxl0 () 2000))
        ks (fbcpk nv)
        use (two? ks && (0 = peep fknob () 0))
-       _ (pin s 'bcp  (? use <ks fbcp3))
-       _ (pin s 'conf (? use <>ks fconf3))
-       _ (pin s 'dec  (? use <>>ks fdec3))
+       _ (pins s 'bcp  (use ? <ks fbcp3)
+                 'conf (use ? <>ks fconf3)
+                 'dec  (use ? <>>ks fdec3))
        _ (foldl (\ _ c (fload s c)) 0 formula) s)
    ; --- the cold path: restarts, decay, learnt-DB reduction (lisp side) -----------
    (fbackjump s lvl)                                        ; pop + unassign above lvl (restarts: lvl = 0)
@@ -732,10 +731,10 @@
        vao (peep s 'vao 0) pho (pho-of nv)
        nt ((: (go t)
               (? (t = 0) 0
-                 (: el (getw fx (8 + (t - 1))) v (el >> 1)
+                 (: el (getw fx (8 + t - 1)) v (el >> 1)
                     (? (getw fx (lvo + v) > lvl)
-                       (: _ (putw fx (pho + v) (1 + (el & 1)))
-                          _ (putw fx (vao + v) 0) _ (putw fx (lvo + v) 0) _ (putw fx (rso + v) 0)
+                       (putw fx (pho + v) (1 + (el & 1)),
+                        putw fx (vao + v) 0, putw fx (lvo + v) 0, putw fx (rso + v) 0,
                           (go (t - 1)))
                        t))))
            (getw fx 0))
@@ -777,12 +776,12 @@
    ; grows -- dead slabs leak until the solve ends, the price of O(1)-amortized
    ; reduction (fens doubles, so the growth stays geometric).
    (freduce s)
-    (: fx (peep s 'fx ()) rso (peep s 'rso 0) ar (peep s 'ar ())
-       ls (peep s 'learnts ())
-       srt (sortby (\ a b (>a <= >b)) (filter (\ p (>p > 3)) ls))
-       nk (tally srt // 2)
+    (: fx (s 'fx) rso (peep s 'rso 0) ar (s 'ar)
+       ls (s 'learnts)
+       srt (sortby (a \ b \ >a <= >b) (filter (p \ >p > 3) ls))
+       nk (#srt // 2)
        dead (tablet 0)
-       _ (foldl (\ i p (: _ (? (i >= nk) (pin dead <p 1) 0) (i + 1))) 0 srt)
+       _ (foldl (\ i p (i >= nk ? (pin dead <p 1), i + 1)) 0 srt)
        _ ((: (zr t) (? (t >= getw fx 0) 0
               (: v (getw fx (8 + t) >> 1) _ (putw fx (rso + v) 0) (zr (t + 1))))) 0)
        ; the tombstone stashes the slab's true length at cid+1 (nothing reads a dead
@@ -793,7 +792,7 @@
                             _ (? (hot? j) (fdsay j "d " (map fdlit (fclits s cid))) 0)
                             _ (putw ar cid 0) _ (putw ar (cid + 1) n) 0)) 0 (keys dead))
        nl (filter (\ p (0 = peep dead <p 0)) ls)
-       _ (pin s 'learnts nl) _ (pin s 'nl (tally nl))
+       _ (pin s 'learnts nl) _ (pin s 'nl #nl)
        ; the cap grows LINEARLY: geometric (x3/2 per reduce) compounds to an unbounded
        ; DB on 100k-conflict runs -- watch lists balloon and bcp relives the pre-tombstone
        ; disease (uuf250: 101s geometric vs 31s linear).
@@ -915,8 +914,8 @@
                                (pin s 'climit sc))
                             0)
                        (? (0 = peep s 'bad 0) (loop st2) 'unsat))     ; a compaction can prove UNSAT (all-false at level 0)
-                 (: v ((peep s 'dec ()) fx)
-                    (? (v = 0) 'sat (loop st)))))) (wheel 42)))
+                 (: v (s 'dec  fx)
+                    (v = 0 ? 'sat (loop st)))))) (wheel 42)))
    (fextract s nvars) (: fx (peep s 'fx ()) vao (peep s 'vao 0)
                          (map (\ v (v >< (? (0 = (getw fx (vao + v) & 1)) 1 -1))) (rng 1 (nvars + 1))))
    ; --- BVA: bounded variable ADDITION (clause factoring), the preprocessing pass ---
@@ -971,38 +970,37 @@
        _ (putw bx2 11 0) _ (putw bx2 12 0) _ (putw bx2 13 0)
        (? (1 = getw bx2 7)
           ((: (bld q cnt tail)                              ; build M_cls: live, in-band, walk order
-              (? (q = 0) (: _ (putw bx2 12 cnt) cnt)
+              (q = 0 ? (putw bx2 12 cnt, cnt)
                  (: did (getw bo2 q) qn (getw bo2 (q + 1))
                     n2 (getw ba2 did)
-                    ok (? (n2 < 2) 0
-                          ((: (ofr j) (? (j > (did + n2)) 1
-                                (: e2 (getw ba2 j)
-                                   (? ((e2 < lo) || e2 > hi) 0 (ofr (j + 1))))))
-                           (did + 1)))
-                    (? (0 = ok) (bld qn cnt tail)
+                    ok (n2 >= 2 &&
+                        (: (ofr j) (j > did + n2 || lo <= getw ba2 j <= hi && ofr (j + 1)))
+                        (did + 1))
+                    (!ok ? (bld qn cnt tail)
                        (: p (getw bx2 3) _ (putw bx2 3 (p + 2))
-                          _ (putw bp2 p did) _ (putw bp2 (p + 1) 0)
-                          _ (? (tail = 0) (putw bx2 13 p) (putw bp2 (tail + 1) p))
-                          (bld qn (cnt + 1) p))))))
+                        (putw bp2 p did, putw bp2 (p + 1) 0,
+                         tail = 0 ? (putw bx2 13 p) (putw bp2 (tail + 1) p),
+                         bld qn (cnt + 1) p))))))
            (getw bx2 (hho + l)) 0 0)
           (: (mrg cid did n)                                ; the ONE key of d beyond c\{l}, -1 if none
               ((: (go i j x)
-                  (? (i > (cid + n))
-                     (? (x > 0) (? (j > (did + n)) x -1)
-                        (j = (did + n)) (getw ba2 j) -1)
+                  (? (i > cid + n)
+                     (? (x > 0)         (j > did + n ? x -1)
+                        (j = did + n) (getw ba2 j)
+                        -1)
                      (: ci (getw ba2 i)
                         (? (ci = l) (go (i + 1) j x)
-                           (j > (did + n)) -1
+                           (j > did + n) -1
                            (: cj (getw ba2 j)
                               (? (ci = cj) (go (i + 1) (j + 1) x)
-                                 (cj < ci) (? (x > 0) -1 (go i (j + 1) cj))
+                                 (cj < ci) (x > 0 ? -1 (go i (j + 1) cj))
                                  -1))))))
                (cid + 1) (did + 1) 0)
              (bmk2 cid n)                                   ; fewest-occurrence lit of the clause, l aside
               ((: (go j k kc)
-                  (? (j > (cid + n)) k
+                  (? (j > cid + n) k
                      (: e2 (getw ba2 j)
-                        (? (e2 = l) (go (j + 1) k kc)
+                        (e2 = l ? (go (j + 1) k kc)
                            (: ec (getw bx2 (oco + e2))
                               (? (ec < kc) (go (j + 1) e2 ec) (go (j + 1) k kc)))))))
                (cid + 1) 0 2147483647)
@@ -1017,7 +1015,7 @@
                                      (did = cid) 0
                                      (: m (mrg cid did n)
                                         (? (m < 0) 0
-                                           ((m < lo) || m > hi) 0
+                                           (m < lo || m > hi) 0
                                            (1 = getw bx2 (mlo + m)) 0
                                            (act cid m))))
                                 (ow qn))))
@@ -1039,17 +1037,16 @@
                                          (putw bx2 13 p))))))
                    bk)))))
    (fbva formula nvars)                                     ; -> (formula2 . nvars2), equisatisfiable
-    (: NB ((12 * ((: (bkt k) (? (k >= nvars) k (bkt (2 * k)))) 16)) + 256)
-       s2 ((2 * NB) + 2)
+    (: NB (12 * (: (bkt k) (k >= nvars ? k (bkt (2 * k)))) 16 + 256)
+       s2 (2 * NB + 2)
        HHO 24  OCO (HHO + s2)  LCO (OCO + s2)  PCO (LCO + s2)  MLO (PCO + s2)
        fo (peep fbvac0 () 0)
-       LO (? (1 = fo) (NB - nvars) 0)                       ; the ORIGINAL-variable key band
-       HI (? (1 = fo) (NB + nvars) (4 * NB))                ; (sentinels: everything passes)
+       LO (1 = fo ? (NB - nvars) 0)                       ; the ORIGINAL-variable key band
+       HI (1 = fo ? (NB + nvars) (4 * NB))                ; (sentinels: everything passes)
        bx (cask (8 * (MLO + s2)))
-       b (tablet 0)
-       _ (putw bx 0 2) _ (putw bx 1 2) _ (putw bx 2 nvars) _ (putw bx 3 2)
-       _ (putw bx 8 LO) _ (putw bx 9 HI) _ (putw bx 10 NB)
-       _ (pin b 'ba (cask 8192)) _ (pin b 'bo (cask 8192)) _ (pin b 'bp (cask 4096))
+       b {'ba (cask 8192) 'bo (cask 8192) 'bp (cask 4096)}
+       _ (putw bx 0 2, putw bx 1 2, putw bx 2 nvars, putw bx 3 2,
+          putw bx 8 LO, putw bx 9 HI, putw bx 10 NB)
        ks (fbvagk NB)
        gstep (? (two? ks && (0 = peep fknob () 0)) <ks fbvag3)
        (bcl ar cid)                                         ; the clause back out, sorted signed lits
@@ -1071,25 +1068,23 @@
               (: e (map (\ s (s + NB)) c) n (tally e)
                  (? (whole? (feq e n)) 0
                     (: _ (fens b 'ba (8 * (getw bx 0 + (n + 1))))
-                       ar (peep b 'ba ()) cid (getw bx 0)
+                       ar (b 'ba ) cid (getw bx 0)
                        _ (putw ar cid n)
-                       _ (foldl (\ j el (: _ (putw ar j el) (j + 1))) (cid + 1) e)
+                       _ (foldl (\ j el (putw ar j el, j + 1)) (cid + 1) e)
                        _ (putw bx 0 (cid + (n + 1)))
-                       _ (foldl (\ _ el
-                            (: _ (fens b 'bo (8 * (getw bx 1 + 2)))
-                               bo (peep b 'bo ()) p (getw bx 1)
-                               _ (putw bo p cid) _ (putw bo (p + 1) (getw bx (HHO + el)))
-                               _ (putw bx (HHO + el) p) _ (putw bx 1 (p + 2))
-                               _ (putw bx (OCO + el) (1 + getw bx (OCO + el))) 0))
-                          0 e)
-                       _ (? (n < 2) 0
-                            (foldl (\ _ el (: _ (putw bx (LCO + el) (1 + getw bx (LCO + el))) 0)) 0 e))
+                       _ (each e (\ el
+                          (fens b 'bo (8 * (getw bx 1 + 2)),
+                           : bo (b 'bo) p (getw bx 1)
+                           (putw bo p cid, putw bo (p + 1) (getw bx (HHO + el)),
+                            putw bx (HHO + el) p,    putw bx 1 (p + 2),
+                            putw bx (OCO + el) (1 + getw bx (OCO + el))))))
+                       _ (n >= 2 ? (each e (\ el (putw bx (LCO + el) (1 + getw bx (LCO + el))))))
                        1)))))
        (delc cid)
         (: ar (peep b 'ba ()) n (getw ar cid)
            (? (n = 0) 0
               (: _ (? (n < 2) 0                             ; units were never counted
-                      ((: (dr j) (? (j > (cid + n)) 0
+                      ((: (dr j) (? (j > cid + n) 0
                             (: e2 (getw ar j)
                                _ (putw bx (LCO + e2) (getw bx (LCO + e2) - 1)) (dr (j + 1)))))
                        (cid + 1)))
@@ -1202,6 +1197,12 @@
     (: _ (pin fknob () 1) a (fcdcl f n) _ (pin fknob () 0) b (fcdcl f n)
        (? (id? a 'unsat) (id? b 'unsat) (!(id? b 'unsat) && sat? b f)))
 
+   (fbvaboth f n)                                           ; the BVA PASS itself, kernel vs twin.
+    (: _ (pin fknob () 1) a (fbva f n)                      ; fboth compares VERDICTS, and a verdict
+       _ (pin fknob () 0) b (fbva f n) (a = b))              ; survives a wrong transform -- an
+                                                             ; equisatisfiable formula still solves.
+                                                             ; this compares the transform itself.
+
    ; --- the in-gate DRAT checker: RUP + RAT on the first literal, a from-scratch
    ; reimplementation of the CHECKING side (shares nothing with the emitter but
    ; fd-parse's inverse relation to fdsay). naive O(lines * db) unit propagation --
@@ -1214,8 +1215,8 @@
               (: ch (txt i)
                  (? (ch = 100) (go (i + 1) 1 0 0 lits steps)
                     (ch = 45) (go (i + 1) tag 0 -1 lits steps)
-                    ((ch >= 48) && (ch <= 57))
-                       (go (i + 1) tag ((10 * num) + (ch - 48)) (? (sgn = 0) 1 sgn) lits steps)
+                    (48 <= ch <= 57)
+                     (go (i + 1) tag (10 * num + ch - 48) (sgn = 0 ? 1 sgn) lits steps)
                     (sgn = 0) (go (i + 1) tag 0 0 lits steps)
                     (: v (num * sgn)
                        (? (v = 0) (go (i + 1) 0 0 0 () ((tag >< rev lits) >< steps))
@@ -1223,7 +1224,7 @@
         0 0 0 0 () ()))
    (fd-up db asg)                                           ; propagate units over asg; -> 1 conflict / 0 fixpoint
     ((: (pass rest ch)
-        (? (atom? rest) (? (ch = 1) (pass db 0) 0)
+        (? (atom? rest) (ch @ 1 (pass db 0) 0)
            (: r ((: (scan c sat un)
                     (? (atom? c) (? (sat = 1) 'sat (? (atom? un) 'conf un))
                        (: l <c
@@ -1233,11 +1234,11 @@
                  <rest 0 ())
               (? (id? r 'conf) 1
                  (id? r 'sat) (pass >rest ch)
-                 (atom? >r) (: _ (pin asg <r 1) (pass >rest 1))
+                 (atom? >r) (pin asg <r 1, pass >rest 1)
                  (pass >rest ch)))))
      db 0)
    (fd-rup? db c)                                           ; does the negation propagate to a conflict?
-    (: asg (tablet 0) _ (foldl (\ _ l (: _ (pin asg (neg l) 1) 0)) 0 c) (fd-up db asg))
+    (fd-up db (foldl (a \ l \ pin a (neg l) 1) {} c))
    (fd-rat? db c)                                           ; RAT on <c: every resolvent taut or RUP
     (? (atom? c) 0
        (: p <c
@@ -1256,8 +1257,8 @@
         (? (atom? ps) 0
            (: st <ps c >st
               (? (1 = <st) (go (fd-del db c) >ps)
-                 (: ok (? (1 = fd-rup? db c) 1 (fd-rat? db c))
-                    (? (0 = ok) 0
+                 (: ok (1 = fd-rup? db c || fd-rat? db c)
+                    (? !ok 0
                        (atom? c) 1
                        (go (c >< db) >ps)))))))
      (map dedup-lits f) proof)
@@ -1282,6 +1283,11 @@
     (fboth (cyclic 14) 14)
     (fboth (php 4) (php-vars 4))
     (fboth (php 5) (php-vars 5))
+    ; ..and the BVA TRANSFORM agrees, not just the verdict it leads to (php reaches
+    ; fbvag3's build mode ~50-100 times; cyclic exercises the no-factoring exit).
+    (fbvaboth (php 4) (php-vars 4))
+    (fbvaboth (php 5) (php-vars 5))
+    (fbvaboth (cyclic 14) 14)
     ; pigeonhole PHP(5): UNSAT + resolution-hard (learning, restarts, arena growth end to end)
     (id? (fcdcl (php 5) (php-vars 5)) 'unsat)
     ; DRAT: an UNSAT solve's emitted proof re-checks against the ORIGINAL formula --

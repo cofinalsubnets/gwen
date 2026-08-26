@@ -13,14 +13,14 @@
    ; -- the parser combinators (eps/lit/span/alt/seq/seqs/skip/many + the lenient runner runp) come from
    ;    love/peg.l via the (use 'peg) above -- shared with cook, not re-derived here.
    ; -- character classes + the signed-integer leaf --
-   (ws? c)   ((= c 32) || (= c 9) || (= c 13) || (= c 10))          ; space/tab/CR/LF
-   (dig? c)  ((< 47 c) && (< c 58))                                 ; '0'..'9'
-   (notnl? c) !(= c 10)
-   (str->nat ds) ((: (g i a) (? (< i (tally ds)) (g (+ i 1) (+ (* a 10) (- (ds i) 48))) a)) 0 0)
-   pint (\ s y n                                            ; an optional '-' then >=1 digits -> (the int); fail otherwise
-          (: t (tally s) neg ((< 0 t) && (= (s 0) 45)) j0 (? neg 1 0)
-             j ((: (g i) (? ((< i t) && dig? (s i)) (g (+ i 1)) i)) j0)
-             (? (= j j0) (n s) (: v (str->nat (snip s j0 j)) (y (snip s j t) ((? neg (- 0 v) v) >< ()))))))
+   (ws? c)   (c @ (32 || 9 || 13 || 10) 1 0)     ; space/tab/CR/LF -- a ?-name owes a BIT
+   (dig? c)  (47 < c < 58)                 ; '0'..'9'
+   (notnl? c) (c != 10)
+   (str->nat ds) ((: (g i a) (i >= #ds ? a (g (i + 1) (a * 10 + ds i - 48)))) 0 0)
+   (pint s y n)                                            ; an optional '-' then >=1 digits -> (the int); fail otherwise
+    (: t #s neg (0 < t && s 0 = 45) j0 ?neg
+       j (: (g i) (i < t && dig? (s i) ? (g (i + 1)) i) (g j0))
+     (j = j0 ? (n s) (: v (str->nat (snip s j0 j)) (y (snip s j t) [(neg ? -v v)]))))
    ; -- the DIMACS grammar --
    ws        (skip (span ws?))                              ; a (possibly empty) whitespace run
    cline     (seq (lit "c") (span notnl?))                  ; a 'c' comment: 'c' + rest of line (the newline is ws)
@@ -28,14 +28,12 @@
    header    (seqs [ws (lit "p") ws (lit "cnf") ws pint ws pint])     ; -> ("p" "cnf" nvars nclauses)
    body      (many (seq ws pint))                           ; -> all body integers (lits + 0 terminators)
    cnf       (seqs [pre header body])                       ; -> ("p" "cnf" nvars nclauses . ints)
-   (nthl l k) (? (= k 0) <l (nthl >l (- k 1)))
-   (dropl l k) (? (= k 0) l (dropl >l (- k 1)))
    (split0 ints)                                            ; split an int stream into clauses, dropping the 0 terminators
     ((: (g ls cur acc)
-        (? (atom? ls) (? (atom? cur) (rev acc) (rev (rev cur >< acc)))         ; flush a final un-terminated clause
-           (= <ls 0) (g >ls () (rev cur >< acc))
+        (? (atom? ls) (atom? cur ? (rev acc) (rev (rev cur >< acc)))         ; flush a final un-terminated clause
+           (<ls = 0) (g >ls () (rev cur >< acc))
            (g >ls (<ls >< cur) acc))) ints () ())
-   (dimacs text) (: p (runp cnf text) (split0 (dropl p 4) >< nthl p 2))         ; (formula . nvars)
+   (dimacs text) (: p (runp cnf text) (split0 (drop 4 p) >< p 2))         ; (formula . nvars)
 
  ; -- parse self-tests (standalone; no solver needed) --
  _ (assert
