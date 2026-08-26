@@ -35,7 +35,7 @@ love0 = out/host/love0
   test_holo test_as test_elf32 test_objcopy test_holofuzz test_glazefuzz test_encver test_lux \
   test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 \
   test_virt test_wake test_embed test_rp2040 valg disasm flame cat cata catav perf repl gdb \
-  vmret waits bench nettest lint ccdb ulp cacheclean
+  vmret waits bench nettest lint ccdb ulp
 
 # an unpacked release builds the PRODUCT: `tar xzf .. && make -C love-<ver>` has to end in a
 # seed binary, which is what whoever ran it came for. a checkout keeps the fast gate.
@@ -148,12 +148,6 @@ clean:
 	@[ -d wasm ] && $(MAKE) -C wasm clean || :
 distclean: clean
 	rm -rf dl
-# the compiler's cache lives in HOME, where ~/.love also holds what `make install` put there,
-# so `clean` must not reach it. it bounds itself (crew/moon/moon.l's mcsweep); this is the
-# door for wanting it gone anyway.
-cacheclean:
-	rm -rf $(HOME)/.love/cache
-
 # the memory lane. the corpus is a FILE ARGUMENT, never stdin: it tests stdin itself
 # (test/io.l's see/unsee roundtrip), so piping it in has those asserts eat the script they
 # ride on. `</dev/null` is what they should find.

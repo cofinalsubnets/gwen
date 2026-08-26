@@ -50,6 +50,11 @@ smoke)
                                                    || { tail -3 "$s/bare.log"; fail "the bare cc door (or it took the 28 s compile lane)"; }
   grep -q "bare door" "$s/bare.log"                || fail "bare cc: the exe did not answer"
   [ -z "$(ls -A "$s/bare/home")" ]                 || fail "bare cc: wrote into HOME ($(ls -A "$s/bare/home"))"
+  # ..and nothing in the cwd but the two files this leg accounts for. the runtime cache
+  # seats itself at out/cache/moon under a BUILD tree, so a door with no out/ must make
+  # none -- the HOME leg above cannot see that one any more.
+  [ "$(ls -A "$s/bare" | grep -vx -e home -e hi.c -e a.out | wc -l)" -eq 0 ] \
+                                                   || fail "bare cc: wrote into the cwd ($(ls -A "$s/bare"))"
   run "$dist" -e '(? (2 = (1 + 1)) (quit 0) (quit 1))' || fail "-e still evals"
 
   # --- the docs verb rides the one image -----------------------------------------

@@ -171,8 +171,9 @@ Anything without `-c` is a **link**, through `crew/holo/link.l`.
   matters. ⚠ glued only: a bare `-l` refuses, since taking it would eat the next word as a
   library name and the one after it as an input;
 - an exe link still owing strong symbols pulls the runtime **by need**, archive-fashion — nolibc
-  + the am math + the mksys leaf, compiled from the toolchain root and cached under
-  `~/.love/cache/moon/` (below), so a set carrying its own `am.o` never meets a twin;
+  + the am math + the mksys leaf, taken from the archive the binary CARRIES, or compiled from
+  the toolchain root and cached under `out/cache/moon/` (below), so a set carrying its own
+  `am.o` never meets a twin;
 - `-nostdlib`/`-nodefaultlibs`/`-ffreestanding` turn that pull off;
 - `-ffreestanding` ALSO says the standard's own word: it makes `__STDC_HOSTED__` 0, which is how
   a source asks (love.c asks it to choose the W^X mmap arena over the freestanding heap copy).
@@ -279,9 +280,22 @@ the same face.
 * **math/am.c** — our transcendentals. sqrt exact, the seven within a few ulp; `make ulp` is the
   differential gate. `-lm` appears in no link.
 
+⚠ **The CARRIED archive is asked first, and on a stock tree it is the whole answer** — the
+binary's own stamped bytes cannot be improved on by a cache entry, so the key is cut only where
+they were refused. That leaves the cache two populations: `tools/mkrt.l` cutting the carried set
+under love0, which carries none, and a toolchain edited past the stamp. Both are a checkout,
+which is why the cache seats itself at `out/` and `make clean` reaches it.
+
+⚠ **The carried archives are per-ISA and kernel-neutral.** All three are cut under `-os linux`
+and the pin does not reach the bytes: `impl.h` parts linux, freebsd and netbsd at RUN time on
+`__ai_osv`, and `os.c` — the only member with an OS predefine in it — keeps its arms under
+`#ifndef AiOsTranslate`. So a refusal here belongs to the TARGET, never the kernel: riscv has no
+translation tables, so a BSD there owes a compile that `#error`s rather than quietly linking
+linux's numbers.
+
 **The pull is cached, content-addressed, as one archive.** A member has to be compiled before the
 pull can see what it defines, so every link owing a libc nom paid for all 190 of them — ~23s of a
-cold hello-world link's ~23s. They now ride `~/.love/cache/moon/<sha>.a`, ONE archive per
+cold hello-world link's ~23s. They now ride `out/cache/moon/<sha>.a`, ONE archive per
 (compiler, target), keyed on the target, the runtime tree's whole text (headers included — an
 edited `stdio.h` changes what `nolibc.c` means) and the compiler's own identity. A warm link is
 ~0.15s. An archive and not 190 objects because the ranlib index IS the "what does this member
@@ -298,7 +312,7 @@ reads invalidated the runtime and cost a full rebuild. Hashing the compiler's `.
 instead looks tighter and is a hole: edit `gen.l`, link once before the image catches up, and the
 entry filed under the new sources holds the old image's codegen.
 No identity — a love with no image file in reach — means no cache at all. Nor is anything else
-owed it: no HOME, an unwritable directory, a mangled entry (each is checked for its archive
+owed it: no `out/`, an unwritable directory, a mangled entry (each is checked for its archive
 magic) all fall back to compiling, silently. Entries land by `rename`, so parallel links cannot
 tear one, and a miss sweeps all but the six newest generations. ⚠ **count, not age**: the rate
 is the tree's own — a day of rebuilds mints more generations than a month of use does, and a

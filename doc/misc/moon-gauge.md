@@ -229,7 +229,7 @@ test_slow, and a cross-seeded `love-aarch64` bakes and runs `love cc` under qemu
   read −0.4% while the cs borrow's `wb` denied it beside every callish loop, and +1.1%
   once the borrow was cut. When mechanisms gate each other, ablate the gater first.
 - ⚠ an ablation is part of the compiler's IDENTITY: `mcid` carries `MOON_ABLATE` in the
-  runtime-cache key (the nolibc archive under `~/.love/cache/moon` once served
+  runtime-cache key (the nolibc archive under `out/cache/moon` once served
   base-compiled members into an ablated build — a "broken" fixpoint whose only defect
   was the env-blind key). Any future config knob must join the key the same way.
 - ⚠ the mooncc ccbench lane races the ARTIFACT (its baked image keys as `"<baked>"`, so

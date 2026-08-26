@@ -42,16 +42,16 @@
    ; what `one` below reads back. no cache directory, no fan-out: the work
    ; would die with the child. a fork we asked for and did not get leaves its
    ; target to `one`, one archive slower.
-   (rt-fan rtarch cd id ts)
+   (rt-fan rtarch cd ts)
     (? !(string? cd) ()
        (: _ (flush out) _ (flush err)
-          ps (rt-kids rtarch cd id ts ())
+          ps (rt-kids rtarch ts ())
           (foldl (\ _ p (wait p)) 0 ps)))
-   (rt-kids rtarch cd id ts acc)
+   (rt-kids rtarch ts acc)
     (? !(two? ts) acc
        (: p (fork 0)
-          (? (p = 0) (: _ (rtarch cd id "crew/moon/" <ts 'linux ()) (quit 0))
-             (0 < p) (rt-kids rtarch cd id >ts (p >< acc))
+          (? (p = 0) (: _ (rtarch "crew/moon/" <ts 'linux ()) (quit 0))
+             (0 < p) (rt-kids rtarch >ts (p >< acc))
              acc)))
 
    ; one member: label len, label bytes, zero-padded so the NEXT len lands
@@ -76,13 +76,11 @@
        ; THROUGH rtarch, so the runtime cache serves a repeat build (~instant)
        ; and only a real slice or compiler change recompiles the members --
        ; without this every seed and rebake paid three full runtime compiles.
-       mcid (from 'moon 'mcid)
-       id (mcid "crew/moon/")
-       cd (? (string? id) ((from 'moon 'mcdir) ()) ())
-       _ (rt-fan rtarch cd id '(x64 arm64 riscv64))
+       cd ((from 'moon 'mcdir) ())
+       _ (rt-fan rtarch cd '(x64 arm64 riscv64))
        ; DEFLATED: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
        ; and rtcarried pays one inflate for the ISA it wants.
-       (one tgt) (: a (rtarch cd id "crew/moon/" tgt 'linux ())
+       (one tgt) (: a (rtarch "crew/moon/" tgt 'linux ())
                     _ (? (string? a) 0 (rt-die (show tgt + ": no archive (a member refused?)")))
                     z (deflate a)
                     _ (? (string? z) 0 (rt-die (show tgt + ": deflate refused the archive")))
