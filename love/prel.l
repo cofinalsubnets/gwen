@@ -818,6 +818,45 @@
 ; the LAST seal: opfix joins the other four in the g->hot_* fields, so no later rebind can reach it.
 (seal-hook 4 opfix)
 
+; --- text + sequence batteries ------------------------------------------------
+; every one of these was being re-derived per app, with drifting signatures: join
+; three ways (cook, clay, cpp), lines twice (kore/text, cook), findsub twice
+; (cook, sb/http), nth four times where list application already indexes. one copy
+; here, `sep` first so a partial application reads, and -1 for absent.
+(: (chars s) (map (\ i (s i)) ^#s)                      ; a string is an ATOM, so map needs the indices
+   (fsub s sub i)                                       ; first index >= i of sub in s, or -1
+    (? (i + #sub > #s) -1 (snip s i (i + #sub) = sub) i (fsub s sub (i + 1)))
+   (findsub s sub) (#sub = 0 ? 0 (fsub s sub 0))        ; -1 when absent
+   (has? s sub)    (0 <= findsub s sub)
+   (starts? s p)   (#p <= #s && snip s 0 #p = p ? 1 0)          ; a ?-name owes a BIT, and && gives ()
+   (ends? s p)     (#p <= #s && snip s (#s - #p) #s = p ? 1 0)
+   (join sep l)    (two? l ? (foldl (\ a x (a + sep + x)) <l >l) "")
+   (split sep s)                                        ; always >= 1 piece; "" splits nowhere
+    (: (go i) (: j (fsub s sep i)
+                 (? (#sep = 0 || j < 0) [(snip s i #s)] (snip s i j >< go (j + #sep))))
+       (go 0))
+   (replace s from to) (#from = 0 ? s (join to (split from s)))
+   (ws? c)  (c = 32 || c = 9 || c = 10 || c = 13 ? 1 0)
+   (lstrip s) (: (go i) (i < #s && ws? (s i) ? (go (i + 1)) i) (snip s (go 0) #s))
+   (rstrip s) (: (go j) (0 < j && ws? (s (j - 1)) ? (go (j - 1)) j) (snip s 0 (go #s)))
+   (strip s)  (lstrip (rstrip s))       ; NOT `trim`: that name is ev.l's port op, mopped by egg.l
+   (lines s) (split "\n" (#s && s (#s - 1) = 10 ? (snip s 0 (#s - 1)) s))
+   (words s) (: (go i st acc)                           ; whitespace RUNS, so no empty pieces
+                 (: shut (st < i ? (snip s st i >< acc) acc)
+                    (? (i >= #s) (rev shut)
+                       (ws? (s i)) (go (i + 1) (i + 1) shut)
+                       (go (i + 1) st acc)))
+                (go 0 0 ()))
+   (upper s) (string (map (\ c (97 <= c <= 122 ? (c - 32) c)) (chars s)))
+   (lower s) (string (map (\ c (65 <= c <= 90 ? (c + 32) c)) (chars s)))
+   (padl s n) (#s >= n ? s (padl (" " + s) n))
+   (padr s n) (#s >= n ? s (padr (s + " ") n))
+   (cats ls) (foldr (+) () ls)                          ; the band-general fold: net is its number case
+   (uniq l)  (: (go seen l) (? !(two? l) () (peep seen <l 0) (go seen >l)
+                              (<l >< go (pin seen <l 1) >l))
+                (go (tablet 0) l))
+   (count p l) (foldl (\ a x (p x ? (a + 1) a)) 0 l))    ; (a + 1 a) would read as a + (1 a)
+
 ; --- assert / suite: the strict checkers, baked so they work with no harness ---
 ;;; FIXME how are these used at the moment?
 (:: 'assert (\ l (>< 'do (map (\ e (list '? e 0 (list 'scare (list '\ 'assert) (list '\ e)))) l))))

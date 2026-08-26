@@ -9,13 +9,12 @@
 ; over n boolean vars x0..x(n-1), clauses (x_i | x_(i+1)) cyclically -- "no two adjacent 0s".
 ; Run: out/host/love crew/sat/kanren-count.l   ->   6726 (n=10).
 (: (boolean x) (x === 0 + x === 1)
-   (nth l k) (? (= k 0) <l (nth >l (+ k -1)))
    scount (from 'kanren 'scount)                   ; count the stream without materializing it
    st0 (from 'kanren 'st0)                         ; the empty state: substitution + constraints
    (sat n) (:
      vs (map var (map (\ i (intern (+ "x" (show i)))) (jot n)))
      bools (map boolean vs)
-     clauses (map (\ i (+ ((nth vs i) === 1) ((nth vs (% (+ i 1) n)) === 1))) (jot n))
+     clauses (map (\ i (+ ((vs i) === 1) ((vs (% (+ i 1) n)) === 1))) (jot n))
      formula (foldl (*) 1 (bools + clauses))
      (scount ((load formula) st0)))
  _ (assert (= 6726 (sat 10)))

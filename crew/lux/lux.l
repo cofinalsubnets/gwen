@@ -164,7 +164,6 @@
    _ (line ("lux: grabbed " + (show #(ktab ()) + " chords")))
 
    ; --- rendering (the layout engine answers, X obeys) ---
-   (nth l i) (i < 1 ? <l (nth >l (i - 1)))
    scrn [0 0 wpx hpx]
    (trect u) (ewmh-rect scrn wpx hpx)                                            ; the tiling rect: screen minus dock struts (sup+b flips)
 
@@ -182,17 +181,17 @@
    (render sh lay ff)                                                            ; ask the layout for placements, configure them, unmap the dropped
     (: z (wsget sh (wscur sh)) f (ff ? ff (zfoc z))                              ; ff: the float holding the keyboard, else the tiled top
        pls <(lay-tile lay (trect ()) z) placed (map cap pls)
-       _ (map (t \ (: w (nth t 0) bw (#t < 6 ? lux-border (nth t 5))     ; smartBorders sets 0 on a singleton/fullscreen
+       _ (map (t \ (: w (t 0) bw (#t < 6 ? lux-border (t 5))     ; smartBorders sets 0 on a singleton/fullscreen
                       _ (x-border s w bw)
                       _ (x-borderpix s w (w = f ? fpix npix))                  ; focusedBorderColor / normalBorderColor
-                      (x-configure s w (nth t 1) (nth t 2)                       ; the border sits OUTSIDE the frame: shave it off
-                                   (mx2 1 (nth t 3 - (2 * bw))) (mx2 1 (nth t 4 - (2 * bw)))))) pls)
+                      (x-configure s w (t 1) (t 2)                       ; the border sits OUTSIDE the frame: shave it off
+                                   (mx2 1 (t 3 - (2 * bw))) (mx2 1 (t 4 - (2 * bw)))))) pls)
        _ (map (w \ any (p \ p = w) placed ? 0 (hide! w)) (wsrow sh))       ; windows the layout dropped (Full/minimize): hide them
        _ (map (w \ map! w) placed)                                             ; (re)map placed -- a no-op on the already-mapped
        _ (map (fp \ (: w <fp fr <>fp                                             ; floating windows AT HOME HERE: place, map, raise above the tiles
                         bw (fr = scrn ? 0 lux-border)                         ; a fullscreen float (the whole screen is its rect) wears no border
                         _ (x-border s w bw) _ (x-borderpix s w (w = f ? fpix npix))
-                        _ (x-configure s w (nth fr 0) (nth fr 1) (nth fr 2) (nth fr 3))
+                        _ (x-configure s w (fr 0) (fr 1) (fr 2) (fr 3))
                         _ (map! w) (x-raise s w))) (wsvisfl sh))
        (x-flush s))
    (refocus sh) (wsfoc sh ? (x-focus s (wsfoc sh), x-flush s) 0)        ; focus the current top -- only when it is mapped/viewable
@@ -268,8 +267,8 @@
           ; --- the directional trio: the f_t hinge ---
           (wsfloating? sh fw)                                                    ; float focused: move (go) or resize (swapd/resize)
           (: r (wsrect sh fw) d (a 2) dx <d dy <>d
-             r2 (? (k = 'go) [(nth r 0 + dx) (nth r 1 + dy) (nth r 2) (nth r 3)]
-                   [(nth r 0) (nth r 1) (mx2 20 (nth r 2 + dx)) (mx2 20 (nth r 3 + dy))])
+             r2 (? (k = 'go) [(r 0 + dx) (r 1 + dy) (r 2) (r 3)]
+                   [(r 0) (r 1) (mx2 20 (r 2 + dx)) (mx2 20 (r 3 + dy))])
              (relay (wsdofloat sh fw r2) lay ffoc))
           (: dir <>a pls <(lay-tile lay (trect ()) z) tgt (nav-target pls (wsfoc sh) dir)
              (? (k = 'go) (tgt ? (relay (wsmap sh (zfocto tgt)) lay ()) (loop sh lay hist ffoc))
@@ -284,14 +283,14 @@
    ;     drag's duration -- the pointer is grabbed, the user is not spawning. ---
    (drag-rect mode g0 rx0 ry0 rx ry)
     (: dx (rx - rx0) dy (ry - ry0)
-       (? (mode = 'move) [(nth g0 0 + dx) (nth g0 1 + dy) (nth g0 2) (nth g0 3)]
-          [(nth g0 0) (nth g0 1) (mx2 40 (nth g0 2 + dx)) (mx2 40 (nth g0 3 + dy))]))
+       (? (mode = 'move) [(g0 0 + dx) (g0 1 + dy) (g0 2) (g0 3)]
+          [(g0 0) (g0 1) (mx2 40 (g0 2 + dx)) (mx2 40 (g0 3 + dy))]))
    (drag mode w g0 rx0 ry0)
     (: e (x-next s)
        (? !e g0                                                                 ; display gone: keep the start rect
           (ev-code e = 6) (: pkt (ev-raw e)                                     ; MotionNotify: reconfigure live
                                 g1 (drag-rect mode g0 rx0 ry0 (u16 pkt 20) (u16 pkt 22))
-                                _ (x-configure s w (nth g1 0) (nth g1 1) (nth g1 2) (nth g1 3)) _ (x-flush s)
+                                _ (x-configure s w (g1 0) (g1 1) (g1 2) (g1 3)) _ (x-flush s)
                                 (drag mode w g0 rx0 ry0))
           (ev-code e = 5) (: pkt (ev-raw e) (drag-rect mode g0 rx0 ry0 (u16 pkt 20) (u16 pkt 22)))     ; ButtonRelease: settle
           (drag mode w g0 rx0 ry0)))                                            ; anything else mid-drag: ignore
@@ -423,10 +422,10 @@
                    (: _ (render sh lay ffoc) _ (x-confnotify s win) _ (x-flush s)   ; real geometry (silence leaves VTE drawing a phantom grid)
                       (loop sh lay hist ffoc))
                    (: pkt (ev-raw e) mask (u16 pkt 26) g (x-getgeom s win)       ; unmanaged (pre-map): GRANT it -- a client WAITS on
-                      gx (mask & 1 ? (u16 pkt 16) (nth g 0))                   ; this configure before mapping (deny = no MapRequest,
-                      gy (mask & 2 ? (u16 pkt 18) (nth g 1))                   ; the 1x1 deadlock); fields absent from the value-mask
-                      gw (mask & 4 ? (u16 pkt 20) (nth g 2))                   ; keep their current geometry
-                      gh (mask & 8 ? (u16 pkt 22) (nth g 3))
+                      gx (mask & 1 ? (u16 pkt 16) (g 0))                   ; this configure before mapping (deny = no MapRequest,
+                      gy (mask & 2 ? (u16 pkt 18) (g 1))                   ; the 1x1 deadlock); fields absent from the value-mask
+                      gw (mask & 4 ? (u16 pkt 20) (g 2))                   ; keep their current geometry
+                      gh (mask & 8 ? (u16 pkt 22) (g 3))
                       _ (x-configure s win gx gy gw gh) _ (x-flush s)
                       sh2 (wsfloating? sh win ? (wsdofloat sh win [gx gy gw gh]) sh)    ; a FLOAT's request is granted too, and the
                       (loop sh2 lay hist ffoc)))                                 ; sheaf's rect follows it (xmonad: grant + re-float)

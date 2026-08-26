@@ -93,14 +93,6 @@
                  0 0 ())
    (endnl s)    (tally s && s (tally s - 1) = 10 ? s (s + "\n")))     ; one trailing newline, always
 
-; --- the combinators peg's set lacked ---
-(: (nope s y n) (n s)                                  ; the always-failing parser: alts' unit
-   (notp a s y n) (a s (\ _ _ (n s)) (\ _ (y s ())))     ; NEGATIVE LOOKAHEAD -- consumes nothing either way
-   (many1 a)  (seq a (many a))
-   alts   (foldr alt nope)
-   (pack a)   (pmap (\ p [p]) a)                              ; a whole payload folded to ONE element
-   (tag f a)  (pmap (\ p [(f p)]) a)                          ; ..and that element built into a node
-   (dflt a v) (alt a (pmap (\ _ [v]) eps)))                   ; a always yields ONE element, v when absent
 
 ; --- character classes ---
 (: (chr? c)  1

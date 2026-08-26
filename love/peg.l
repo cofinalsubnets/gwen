@@ -37,6 +37,15 @@
    (many a s y n) (a s
     (\ s1 p1 (many a s1 (\ s2 p2 (y s2 (p1 + p2))) (\ _ (y s1 p1))))
     (\ _ (y s ())))
+   ; --- the set the consumers kept re-deriving (crew/lapiz/lapiz.l had all of these
+   ; --- under a comment reading "the combinators peg's set lacked") ------------
+   (nope s y n) (n s)                                            ; the always-failing parser: alts' unit
+   (notp a s y n) (a s (\ _ _ (n s)) (\ _ (y s ())))              ; NEGATIVE LOOKAHEAD -- consumes nothing either way
+   (many1 a) (seq a (many a))
+   alts (foldr alt nope)
+   (pack a) (pmap (\ p [p]) a)                                   ; a whole payload folded to ONE element
+   (tag f a) (pmap (\ p [(f p)]) a)                              ; ..and that element built into a node
+   (dflt a v) (alt a (pmap (\ _ [v]) eps))                       ; a always yields ONE element, v when absent
    (parse p s) (p s (\ r x (? (0 = tally r) x ())) (\ _ ()))     ; STRICT: whole input must parse
    (runp p s)  (p s (\ r x x) (\ _ ())))                           ; LENIENT: keep the payload, ignore trailing slack
 

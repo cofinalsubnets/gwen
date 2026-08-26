@@ -33,10 +33,9 @@
    ; show/read). `kind` is 'oneshot (a real argv for `hark`) or 'service (a thunk modeling
    ; the long-running process). `restart` is 'no | 'on-fail | 'always (systemd's Restart=).
    ; `deps` is the After= list -- names that must be up before this one starts.
-   (nth l i) (? (= i 0) (cap l) (nth (cup l) (- i 1)))
    (unit name kind cmd restart deps) [name kind cmd restart deps]
-   (u-name u) (nth u 0)   (u-kind u) (nth u 1)   (u-cmd u) (nth u 2)
-   (u-restart u) (nth u 3) (u-deps u) (nth u 4)
+   (u-name u) (u 0)   (u-kind u) (u 1)   (u-cmd u) (u 2)
+   (u-restart u) (u 3) (u-deps u) (u 4)
    (find units name) (? !units ()                    ; the unit with this name, or ()
                         (? (id? (u-name (cap units)) name) (cap units)
                            (find (cup units) name)))

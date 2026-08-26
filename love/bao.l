@@ -70,7 +70,6 @@
    (want n) (member? n (names ()) ? (ev n) (\ _ ()))
    raw (want 'raw)
 
-   (revcat a b) (foldl (flip link) b a)
 
    (rdall cl acc)
     (sound cl @ 'torn m                            ; unfinished shape -> more
