@@ -686,11 +686,11 @@
    ; is the presence test. a local, so those guards read a binding and never a name.
    nifseam (from 'glaze 'nif)
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
-    (: bs (peep ((from 'holo 'assemble) 'x64 ir) 'bytes 0)   ; through the registry accessor -- holo's whole public surface
+    (: bs (peep ((from 'holo 'assemble) 'amd64 ir) 'bytes 0)   ; through the registry accessor -- holo's whole public surface
        c (cask bs)                                           ; the charlist lane fills in C
        (nifseam c fb '(\ q (q)) ar))
    (fbcpk nv)                                               ; -> (bcp conf dec), or () when they can't build
-    (? !(lit? nifseam && id? (intern love-arch) 'x64) ()
+    (? !(lit? nifseam && id? love-arch 'amd64) ()
        (: hit (peep fkers nv ())
           (? (two? hit) hit
              (: ks [(fnif (fbcp-ir nv) fbcp3 3)
@@ -699,7 +699,7 @@
                 _ (pin fkers nv ks) ks))))
    bvkers (tablet 0)                                        ; NB -> (fbvag), the grow-step kernel, one assemble per bucket
    (fbvagk NB2)
-    (? !(lit? nifseam && id? (intern love-arch) 'x64) ()
+    (? !(lit? nifseam && id? love-arch 'amd64) ()
        (: hit (peep bvkers NB2 ())
           (? (two? hit) hit
              (: ks (fnif (fbvag-ir NB2) fbvag3 4 >< ())

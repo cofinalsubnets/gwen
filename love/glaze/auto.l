@@ -24,8 +24,8 @@
 (: sfuel (tablet 0))   ; autospec's unfold-fuel -- its OWN global (a sibling-captured value-local in the letrec below misses in the hatched ev; smix re-seeds it per specialization, so the shared tablet is safe)
 (: glaze-loaded? (lit? (from 'glaze))   ; RE-LOAD detector, read BEFORE this load defglob's anything: `glaze` in the registry => the glaze is installed (the file is being cat'd on top of the baked glaze). Used at the `ev` rebind below to make a re-load IDEMPOTENT -- keep the baked glaze, don't reinstall -- so `cat auto.l prog | love` just runs prog. (Loading the compiler's own source through itself otherwise recompiles its helpers wrong; tracked separately.) ⚠ the registry, never `book`: a woken image has `book` sealed away, so the old read scared and answered "not loaded" on exactly the binary that carries the glaze.
    base-ev (: G (from 'glaze) (? G (G 'base-ev) ev))   ; the PURE interpreter, captured ONCE: first load (registry miss -> the presence guard's ()) -> ev, the interpreter; a RE-LOAD has ev=auto-ev already, so take the interpreter out of the MODULE book (else base-ev becomes the glaze and autospec's static fold re-enters it)
-   arch (intern love-arch)                ; the host CPU as the assembler target ('x64 / 'arm64); glaze loads only on these
-   x86? (id? arch 'x64)                 ; gates the still-x86-only lanes (float result, counted loops, float grids)
+   arch love-arch                         ; the host CPU as the assembler target ('amd64 / 'arm64), already a nom; glaze loads only on these
+   x86? (id? arch 'amd64)                 ; gates the still-x86-only lanes (float result, counted loops, float grids)
    ; the emitter's expression grammar over var v: var | int | arith | cmp | (? t a b)
    (exprp e v) (? (e = v)   1
                   (whole? e)  1
@@ -1273,7 +1273,7 @@
    ; compile cache makes structurally-equal closures id?-IDENTICAL, breaking love's
    ; equal-but-distinct closure semantics (!(id? (\ x E) (\ x E))). A safe creation hook
    ; needs the POST-macro opfix seam + a CODE cache (distinct cells per instance). Future.)
-   ; the lanes route to `arch` (the assembler target). on x86 (arch='x64) the FULL glaze runs. on arm64 the
+   ; the lanes route to `arch` (the assembler target). on x86 (arch='amd64) the FULL glaze runs. on arm64 the
    ; INTEGER lanes (leaf/n-ary/closure, counted loops, the mutually-recursive arith GROUP) AND the scalar
    ; FLOAT-result leaf (jitfr) are all live -- arch-parameterized and validated under qemu (`make
    ; test_arm64`, which builds tco=1 to match the native ABI: Ip/Hp/Sp in x1/x2/x3, the threaded Continue).

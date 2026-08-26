@@ -32,7 +32,7 @@ let prelude = {ai|
    (bump t) (pin t 0 (+ 1 (peep t 0 0)))
    (say s) (: _ (puts s) _ (flush out) 0)
    (chk nm want prog)
-     (: got (holo-hex 'x64 prog)
+     (: got (holo-hex 'amd64 prog)
         (? (= want got) (bump pass)
            (: _ (bump fail)
               (say (+ "FAIL " (+ nm (+ " want " (+ want (+ " got " (+ got "\n"))))))))))

@@ -15,9 +15,9 @@
 ; exit 1 on any failure; each failure names its class, IR, hex and reason.
 
 (reads (open "crew/holo/holo.l" "r"))
-(reads (open "crew/holo/x64.l" "r"))
+(reads (open "crew/holo/amd64.l" "r"))
 (reads (open "crew/holo/arm64.l" "r"))
-(reads (open "crew/holo/riscv.l" "r"))
+(reads (open "crew/holo/rv64.l" "r"))
 ; holo rides module 'holo: reading the source REGISTERS it, and the names come
 ; through the door rather than off this file's layer.
 (use 'holo)
@@ -644,9 +644,9 @@
 
  ; ---- the lanes; the 10th column names the disassembler a lane needs ----
  arches
-  [["x64" 'x64 gens-x64 (\ hx (disasm-x64 hx)) ops-comma mem-x64 (\ s (abs-x64 s)) imm-x64 1 "objdump"]
+  [["amd64" 'amd64 gens-x64 (\ hx (disasm-x64 hx)) ops-comma mem-x64 (\ s (abs-x64 s)) imm-x64 1 "objdump"]
    ["arm64" 'arm64 gens-arm (\ hx (disasm-mc hx "aarch64" "" "//" 0)) ops-arm mem-arm (\ s (abs-arm s)) imm-arm 0 "llvm-mc"]
-   ["riscv" 'riscv64 gens-rv (\ hx (disasm-mc hx "riscv64" " --mattr=+m,+f,+d,+c" "#" 1)) ops-comma mem-rv (\ s (abs-rv s)) imm-rv 0 "llvm-mc"]]
+   ["riscv" 'rv64 gens-rv (\ hx (disasm-mc hx "rv64" " --mattr=+m,+f,+d,+c" "#" 1)) ops-comma mem-rv (\ s (abs-rv s)) imm-rv 0 "llvm-mc"]]
  (tool? t) ((sh ("command -v " + t + " >/dev/null 2>&1")) = 0)
 
  fz-n (: v ("" + getenv "FUZZ_N") (? (0 < tally v) (s2i v) 8))

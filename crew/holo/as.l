@@ -1,5 +1,5 @@
 ; as -- a REAL assembler front over holo: it reads standard GNU AT&T `.s` and emits the SAME
-; byte/fixup item stream the neutral backend (crew/holo/x64.l) produces, so crew/holo/obj.l lays the
+; byte/fixup item stream the neutral backend (crew/holo/amd64.l) produces, so crew/holo/obj.l lays the
 ; relocatable `.o` and crew/holo/link.l links it -- the front tooth of the gcc-free chain, paired
 ; with link.l's `ld`. where crew/holo/text.l parses holo's OWN mnemonics over abstract registers,
 ; THIS parses real x86-64: physical registers (%rax/%eax/..), the AT&T operand grammar, the directive
@@ -13,7 +13,7 @@
 ;
 ; load AFTER holo.l + x64.l (bare, dev/test context -- the encoder primitives le32/byte/fix/modrm..
 ; are still on the global book; the eventual host path reaches them through the `holo` book):
-;   out/host/love -l crew/holo/holo.l -l crew/holo/x64.l -l crew/holo/as.l ...
+;   out/host/love -l crew/holo/holo.l -l crew/holo/amd64.l -l crew/holo/as.l ...
 
 (module 'holo
 (: ;; --- the physical register file: name -> (enc width-in-bytes). the low 8 have irregular
@@ -309,6 +309,6 @@
 
    ;; --- resolve intra-section fixups (near rel32) to final .text bytes, and the hex for goldens. ---
    (as-text src) (: st (as-lay src)
-                    (resolve (peep st 'items ()) (peep st 'labels 0) (peep backends 'x64 ()) 0))
+                    (resolve (peep st 'items ()) (peep st 'labels 0) (peep backends 'amd64 ()) 0))
    (as-hex src)  (hexs (as-text src)))
 ) ; module 'holo

@@ -13,7 +13,7 @@
 ; over a boot.o it laid itself (lib/source.l).
 
 (: (kparams arch)                       ; target, kernel base, entry symbol
-    (? (arch = "x86_64")  ['x64   0x200000   "kmain"]
+    (? (arch = "x86_64")  ['amd64   0x200000   "kmain"]
        (arch = "aarch64") ['arm64 0x40200000 "a64boot"]
        (scare 'kproject-arch arch))
    (kread p) (: r (uread p) (two? r ? [p <>r] (scare 'kproject-open p)))

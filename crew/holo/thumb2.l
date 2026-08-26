@@ -1,5 +1,5 @@
 ; thumb2 -- the ARMv7E-M (Cortex-M7) BACKEND for the neutral assembler (crew/holo/holo.l), the third
-; target. like arm64.l it pins a {lower,patch} pair (here under 'thumb2 and 'cortex-m7) and the driver,
+; target. like arm64.l it pins a {lower,patch} pair (here under 'thumb2 and 'thumb2sp) and the driver,
 ; IR forms, and byte plumbing stay untouched -- but the ISA is a different animal from aarch64 despite
 ; the shared "ARM" name. this is 32-bit Thumb-2: MIXED 16/32-bit little-endian instructions, r0..r15
 ; (r13=sp, r14=lr, r15=pc), a two-address-ish data-processing surface. every word here was checked
@@ -417,6 +417,5 @@
    _ (pin thumb2 'refix thumb-refix)
    _ (pin thumb2 'nop '(0 191))                ; the ('align n) filler unit: NOP (16-bit) bf00 LE
    _ (defbackend 'thumb2 thumb2)
-   _ (defbackend 'cortex-m7 thumb2)
-   _ (defbackend 'thumb2sp thumb2))   ; the SP-only-FPU face (playdate): same encoder, gen softens f64
+   (defbackend 'thumb2sp thumb2))   ; the SP-only-FPU face (playdate): same encoder, gen softens f64
 ) ; module 'holo

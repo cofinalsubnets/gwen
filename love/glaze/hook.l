@@ -27,7 +27,7 @@
 ; The LAWS are test/glaze-hook.l, under `make test_hook`, which drives those four names.
 (: fires {0}                                                                 ; probe counter: how many closures the hook native-backed (natjit writes, fired? reads)
    natjit
-    (: arch (intern love-arch)                                                ; the runtime CPU target ('x64 / 'arm64), evaluated at boot on the actual binary -- so the SAME baked hook.h emits x64 on the x86 host and aarch64 under qemu (mirrors auto.l's `arch`). njit-loop/njit-loop-n already close over auto.l's arch; the leaf/float/callout/group lanes below take it explicitly.
+    (: arch love-arch                                                         ; the runtime CPU target ('amd64 / 'arm64), read at boot on the actual binary -- so the SAME baked hook.h emits amd64 on the x86 host and arm64 under qemu (mirrors auto.l's `arch`). njit-loop/njit-loop-n already close over auto.l's arch; the leaf/float/callout/group lanes below take it explicitly.
                                                                             ; `assemble` below reads BARE: main.c brackets this load with (use 'holo) .. ai_unsplice_, so it folds at compile (the capture law)
    G (from 'glaze)                                                          ; the glaze MODULE -- this file is NOT in it (test_glaze re-cats this alone
    emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)     ;   over a baked binary), so every name arrives by key. cat-loads post-boot, nothing folded

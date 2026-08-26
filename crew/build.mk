@@ -25,7 +25,7 @@ korefiles =crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/k
 # (defbackend mutates holo's own table, so mooncc cross-compiles every target whichever
 # single backend the host image baked), the writers, the compiler proper, then moon.l
 # whose tail SEAT fires.
-moonfiles = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l
+moonfiles = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l crew/holo/amd64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/rv64.l crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l
 # ⚠ THE MEMBERSHIP IS AN INPUT AND MAKE CANNOT SEE IT -- the same trap $(ho)/.dist.list and
 # out/lib/corpus.list already guard. Moving a file BETWEEN these lists changes what the cat
 # holds while every file make watches keeps its mtime, so the cat is "up to date" and the image
@@ -77,7 +77,7 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             crew/vi/core.l crew/vi/vi.l \
             crew/kore/diff.l crew/kore/patch.l lib/dns.l tools/ain.l $(lushfiles) crew/kore/find.l \
             crew/cook/cook.l crew/kore/asbook.l \
-            crew/holo/x64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/riscv.l \
+            crew/holo/amd64.l crew/holo/arm64.l crew/holo/thumb2.l crew/holo/rv64.l \
             crew/holo/thumb1.l crew/holo/text.l crew/holo/elf.l crew/holo/obj.l \
             crew/holo/link.l crew/holo/copy.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
             crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/sb/merge.l \
@@ -240,12 +240,12 @@ $(dist_source): force_src $(love0)
 # which reads as the tarball rule being broken rather than this line being early.
 # ⚠ flat ifeqs, no else-chain: cook reads `else ifeq` as a bare else and drops the
 # condition, so a chain picks the wrong arch under the seed's own make.
-src_arch = x64
+src_arch = amd64
 ifeq ($(hosta),aarch64)
 src_arch = arm64
 endif
 ifeq ($(hosta),riscv64)
-src_arch = riscv64
+src_arch = rv64
 endif
 # ⚠ mksrc rides the mksys cat (kore + holo elf/obj), NOT (use 'holo): the
 # module walk resolves off a NEST, and a fresh seed tree has none. same lane
@@ -283,9 +283,11 @@ out/host/rt.o: $(rt_slice) tools/mkrt.l out/host/mooncc0.image $(love0)
 # depend on the arch mooncc runs on. gate machinery, never a product.
 # THE ROSTER, one row per arch the gate can effigy: the mooncc target, the
 # qemu-user that runs it, and the mksys leaf that lays its machine tail.
-xtgt_x86_64   = x64
+# the triple word make speaks (a cross toolchain's prefix is spelled that way) -> the
+# canonical ISA nom everything above make uses. love/prel.l's arch-canon, in make's clothes.
+xtgt_x86_64   = amd64
 xtgt_aarch64  = arm64
-xtgt_riscv64  = riscv64
+xtgt_riscv64  = rv64
 xqemu_x86_64  = qemu-x86_64
 xqemu_aarch64 = qemu-aarch64
 xqemu_riscv64 = qemu-riscv64

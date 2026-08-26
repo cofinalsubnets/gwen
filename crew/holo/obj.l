@@ -453,9 +453,9 @@
    ; (type 8) still lays its forms -- that is where its labels and its SIZE come
    ; from -- but writes no file bytes, which is the whole meaning of .bss.
    (objsecs target secs funcnames globnames wknames locnames)
-    (: a64 (member? target '(arm64 aarch64))
-       rv (member? target '(riscv64 rv64))
-       _ (? (id? target 'x64 || a64 || rv) 0 (scare 'obj-target target))
+    (: a64 (id? target 'arm64)
+       rv (id? target 'rv64)
+       _ (? (id? target 'amd64 || a64 || rv) 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds (translation-invariant). riscv's BOTH label
        ; kinds are pure byte deltas (auipc is byte pc-relative by nature -- no page
        ; math), so intra-.text la/call/jmp all resolve inside the .o.

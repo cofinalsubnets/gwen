@@ -55,8 +55,8 @@
           (catall (blocks sites ()))))
 
    ;; the COFF machine, elf.l's elf-machines in the other clothing
-   pe-machines (tabof [('x64 >< 34404) ('amd64 >< 34404)           ; 0x8664
-                       ('arm64 >< 43620) ('aarch64 >< 43620)])     ; 0xAA64
+   pe-machines (tabof [('amd64 >< 34404)                          ; 0x8664
+                       ('arm64 >< 43620)])                       ; 0xAA64
 
    ;; link a set -- ((id bytes)..), the mkefi thunk FIRST -- into a PE32+ at out.
    (pelink target srcs out)

@@ -33,7 +33,7 @@ case $target in
   arm64) name=moon-bzip2-arm64 ; tflag="-t arm64"    ; sub=moonbz2-a64
          mksys=mksys-arm64 ; backend=crew/holo/arm64.l ; run=qemu-aarch64 ; need=qemu-aarch64 ;;
   riscv64) name=moon-bzip2-riscv ; tflag="-t riscv64" ; sub=moonbz2-rv
-         mksys=mksys-riscv ; backend=crew/holo/riscv.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
+         mksys=mksys-riscv ; backend=crew/holo/rv64.l ; run=qemu-riscv64 ; need=qemu-riscv64 ;;
   *) echo "moon-bzip2.sh: unknown target $target (x64 | arm64 | riscv64)" >&2; exit 1 ;;
 esac
 

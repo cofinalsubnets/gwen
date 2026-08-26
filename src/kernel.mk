@@ -295,7 +295,7 @@ $(k_odir)/src/love.o: kcppflags += -DAiHaveVersionH
 # .boot, .note.pvh, the 2 KiB-aligned vector table, .bss -- which is what the kernel needs
 # and a compiler never emits. ⚠ the cat joins the TARGET's backend text explicitly: a
 # frontend bakes holo with the NATIVE one only, and this build must not care where it runs.
-k_be_x86_64 = x64
+k_be_x86_64 = amd64
 k_be_aarch64 = arm64
 klay_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/$(k_be_$a).l $R/crew/holo/elf.l $R/crew/holo/obj.l

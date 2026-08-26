@@ -304,7 +304,7 @@ static char const
 #include "overlay0.h"
 #include "uu0.h"
 #include "holo0.h"
-#include "x640.h"
+#include "amd640.h"
 #include "arm640.h"
 #include "bao0.h"
 #include "verbs0.h"
@@ -695,9 +695,17 @@ int main(int argc, char const **argv) {
     if (image_load_path && ai_ok(g = ai_strof(g, image_load_path))) {
       g = ai_defv(g, "love-image");
       if (ai_ok(g)) ai_core_of(g)->sp++; }
+    // `love-os`: which kernel THIS RUN met, a nom beside love-arch's. It is read off
+    // __ai_osv where nolibc probed one, and off the compile where only the compile could
+    // know -- and it is pinned HERE rather than in ai_ini because a woken image restores
+    // the book the bake wrote, which would carry the baking machine's kernel forever.
+    // ⚠ AND IT STAYS UNPINNED WHERE NOTHING CAN TELL. moon.l's host-os owes a diagnostic
+    // there, not a guess at whichever kernel we happen to have started on; a negative osv
+    // is not that case, it is inle saying we ARE the kernel.
     if (!bake) {
       char const *osn =
 #if defined(AiNolibc)
+        __ai_osv  < 0 ? "inle" :
         __ai_osv == 1 ? "linux" : __ai_osv == 2 ? "freebsd" : __ai_osv == 3 ? "netbsd" : 0;
 #elif defined(__linux__)
         "linux";
@@ -708,7 +716,7 @@ int main(int argc, char const **argv) {
 #else
         0;
 #endif
-      if (osn && ai_ok(g = ai_strof(g, osn))) {
+      if (osn && ai_ok(g = intern(ai_strof(g, osn)))) {
         g = ai_defv(g, "love-os");
         if (ai_ok(g)) ai_core_of(g)->sp++; } }
     if (image_load_path && ai_ok(g = ai_push(g, 1, putcharm((intptr_t) woke_ms)))) {

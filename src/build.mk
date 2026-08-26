@@ -212,7 +212,7 @@ endif
 # cross lay for the third ISA answered `obj-no-backend`. asbook.l first, then
 # the backends join the module, then elf/obj: asbook.l's own stated order.
 mksys_l = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
-          crew/holo/x64.l crew/holo/arm64.l crew/holo/riscv.l \
+          crew/holo/amd64.l crew/holo/arm64.l crew/holo/rv64.l \
           crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
 # pinned to out/host, like the src.o that reads it: the cat is $(mksys_l) verbatim and
 # $(mksys_l) is flavour-neutral, so one cut serves every hsuf. templated on $(ho) it would

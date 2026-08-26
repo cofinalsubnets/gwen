@@ -297,7 +297,9 @@
              (go k) (? (n <= k) k (t k < 33) k (go (k + 1)))
              e (go 0)
              (? (0 = e) d (snip t 0 e)))))
-   (u-mach _) (? (love-arch = "x64") "x86_64" (love-arch = "arm64") "aarch64" love-arch)
+   ; ⚠ THE MACHINE IS love-arch RESPELLED, and the prel owns the respelling (arch-uname):
+   ; uname says the world's word for this ISA where love-arch says ours.
+   (u-mach _) (: m (arch-mach love-arch) (? (string? m) m (string love-arch)))
    (u-join ws) (? !(two? ws) "" !(two? >ws) <ws (<ws + " " + u-join >ws))
    (uname-main as)
     (: fl (? (two? as) as '("-s"))

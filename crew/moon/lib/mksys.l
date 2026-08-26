@@ -26,10 +26,10 @@
 ; r7=r8 r8=r9 r9=r10 r10=r11 r11=r12 r12=r13 r13=r14 r14=r15.
 (module 'moon
 (use 'holo) ; objelf, the relocatable writer
-(: (mksys dst) (mksys-as 'x64 dst)
+(: (mksys dst) (mksys-as 'amd64 dst)
    (mksys-arm64 dst) (mksys-as 'arm64 dst)
-   (mksys-riscv dst) (mksys-as 'riscv64 dst)
-   (mksys-freebsd dst) (mksys-as 'x64 dst)   ; one object serves both kernels
+   (mksys-riscv dst) (mksys-as 'rv64 dst)
+   (mksys-freebsd dst) (mksys-as 'amd64 dst)   ; one object serves both kernels
    (mksys-as arch dst) (write-bytes dst (mksys-bytes arch))
    ; ⚠ THE NETBSD/AARCH64 DISPATCH TABLE. That kernel takes the syscall number
    ; from the SVC IMMEDIATE -- the number is in the INSTRUCTION -- and offers no
@@ -43,7 +43,7 @@
    (nb-tab i acc) (? (i < 0) acc (nb-tab (i - 1) (['svcn i] >< (['ret] >< acc))))
    ; the bytes alone -- moon.l's runtime pull lays sys in-memory through this
    (mksys-bytes arch)
-    (: ir (? (id? arch 'x64)
+    (: ir (? (id? arch 'amd64)
          '(
          ; -- __ai_sys: SysV args (rdi rsi rdx rcx r8 r9 [rsp+8]) -> the kernel's
          ;    (rax rdi rsi rdx r10 r8 r9). each mov reads a slot the previous one
@@ -567,7 +567,7 @@
        ; neither it nor the netbsd pair -- nothing has laid that tail, which is
        ; the whole of what impl.h's AiOsTranslate says to the C.
        (objelf arch ir ()
-               (? (id? arch 'x64)
+               (? (id? arch 'amd64)
                   '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret" "__ai_nb_sigtramp")
                   (id? arch 'arm64)
                   '("__ai_sys" "__ai_sys7" "__sigsetjmp" "siglongjmp" "__ai_sigret"

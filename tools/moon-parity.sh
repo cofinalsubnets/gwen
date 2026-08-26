@@ -54,7 +54,7 @@ d=${TMPDIR:-/tmp}/moon-parity.$$
 mkdir -p "$d"
 trap 'rm -rf "$d"' EXIT
 
-targets='x64 arm64 riscv64 thumb2 thumb2sp thumb1'
+targets='amd64 arm64 riscv64 thumb2 thumb2sp thumb1'
 
 # p LABEL SOURCE [DECLARED..] -- one feature, compiled on every target. LABEL is the
 # doc's row spelling and the join key; keep the two identical or `check` reports drift

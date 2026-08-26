@@ -28,7 +28,8 @@
           0))
    (rt-be arch)
     (? (lit? (peep (from 'holo 'backends) arch ())) 0
-       (: f ("crew/holo/" + (arch @ 'arm64 "arm64" 'riscv64 "riscv" "x64") + ".l")
+       ; the backend file IS the canonical arch word now -- one spelling, no map
+       (: f ("crew/holo/" + string arch + ".l")
           q (open f "r")
           (? q (: _ (rt-rdev (flow q)) (close q))
              (rt-die ("no backend aboard and no text at " + f)))))
@@ -67,7 +68,7 @@
    (mkrt arch dst)
     ; every ARCHIVE arch joins, not just the object's: the image bakes the
     ; native backend only, and each ISA's members ride its own obj writer
-    (: _ (rt-be 'x64) _ (rt-be 'arm64) _ (rt-be 'riscv64) _ (rt-be arch)
+    (: _ (rt-be 'amd64) _ (rt-be 'arm64) _ (rt-be 'rv64) _ (rt-be arch)
        rtcid (from 'moon 'rtcid)
        rtarch (from 'moon 'rtarch)
        objelf (from 'holo 'objelf)
@@ -77,7 +78,7 @@
        ; and only a real slice or compiler change recompiles the members --
        ; without this every seed and rebake paid three full runtime compiles.
        cd ((from 'moon 'mcdir) ())
-       _ (rt-fan rtarch cd '(x64 arm64 riscv64))
+       _ (rt-fan rtarch cd '(amd64 arm64 rv64))
        ; DEFLATED: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
        ; and rtcarried pays one inflate for the ISA it wants.
        (one tgt) (: a (rtarch "crew/moon/" tgt 'linux ())
@@ -88,20 +89,20 @@
                                 + " -> " + show (tally z) + "\n"))
                     z)
        forms ((rt-forms "id" cid)
-              + (rt-forms "x64" (one 'x64))
+              + (rt-forms "amd64" (one 'amd64))
               + (rt-forms "arm64" (one 'arm64))
-              + (rt-forms "riscv64" (one 'riscv64)))
+              + (rt-forms "rv64" (one 'rv64)))
        xs '("ai_rtgz_id" "ai_rtgz_id_len"
-            "ai_rtgz_x64" "ai_rtgz_x64_len"
+            "ai_rtgz_amd64" "ai_rtgz_amd64_len"
             "ai_rtgz_arm64" "ai_rtgz_arm64_len"
-            "ai_rtgz_riscv64" "ai_rtgz_riscv64_len")
+            "ai_rtgz_rv64" "ai_rtgz_rv64_len")
        ob (objelf arch () () () xs () () () () () forms)
        _ ((from 'holo 'write-bytes) dst ob)     ; ob is a BYTE LIST, not a string
        (say out ("MKRT\t" + dst + "\n")))
 
    (mkrt-main av)
     (: n (tally av)
-       (? (1 <= n) (mkrt (? (2 <= n) (name <>av) 'x64) <av)
+       (? (1 <= n) (mkrt (? (2 <= n) (name <>av) 'amd64) <av)
           (rt-die "usage: love wake out/host/mooncc0.image tools/mkrt.l OUT.o [ARCH]")))
 
    (mkrt-main >argv))

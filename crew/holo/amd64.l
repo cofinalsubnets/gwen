@@ -598,6 +598,5 @@
         (? !(fits8 (rel - 2)) ()
            (id? <ins 'jmp) (emit-jmp8 (at ins 1))
            (emit-br8 (at ins 1) (at ins 2)))))
-   _ (defbackend 'x64 x64)
-   _ (defbackend 'amd64 x64))
+   (defbackend 'amd64 x64))
 ) ; module 'holo

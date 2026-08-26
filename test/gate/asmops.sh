@@ -65,7 +65,7 @@ seq() {
       sub(/[ \t]*(\/\/|#[ ]).*$/, "", line)        # objdump aside comments
       gsub(/[ \t]+/, " ", line); sub(/ +$/, "", line)
       if (line == "") next
-      if (arch == "x64") {
+      if (arch == "amd64") {
         if (line !~ /^(cli|sti|hlt|ud2|int3|in[bwl]|out[bwl]|div[qlw])( |$)/ &&
             line !~ /^(rdmsr|wrmsr|cpuid|vmrun|vmload|vmsave|stgi|clgi)( |$)/ &&
             line !~ /^(vmxon|vmclear|vmptrld|vmxoff|vmlaunch)( |$)/ &&

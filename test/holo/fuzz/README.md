@@ -138,7 +138,7 @@ fails if `llvm-mc` takes neither, so a table typo cannot hide behind a skip.
 
 Status as of 2026-07-28: **910 system encodings, zero discrepancies** (743 x64, 167 arm64). The
 one deliberate divergence is `int 3`: `llvm-mc` folds it to the one-byte `CC`, holo keeps `CD 03`
-(see `crew/holo/x64.l` — `trap` is the `CC` form).
+(see `crew/holo/amd64.l` — `trap` is the `CC` form).
 
 ## Extending
 

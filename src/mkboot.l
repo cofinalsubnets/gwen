@@ -282,7 +282,7 @@
    (lay-boot dst arch) (write-bytes dst (lay-boot-bytes arch))
    (lay-boot-bytes arch)
     (? (arch = "x86_64")
-       (objsecs 'x64
+       (objsecs 'amd64
                 [[".note.pvh"  7 2 4    x-note]
                  [".boot"      1 3 4096 x-boot]
                  [".boot.text" 1 6 16   x-boot-text]

@@ -10,11 +10,11 @@ lib_h = $(patsubst love/%.l,out/lib/%.h,$(wildcard love/*.l))
 # but the HOST bakes its NATIVE one only, while love0 keeps them all so the corpus's
 # cross-arch asserts run under both its compilers. Both flavors are generated either way:
 # holo_h is the lcat header, asm0_h the sed-wrapped raw source love0 needs.
-holo_h = out/lib/holo.h  out/lib/x64.h  out/lib/arm64.h  out/lib/riscv.h
+holo_h = out/lib/holo.h  out/lib/amd64.h  out/lib/arm64.h  out/lib/rv64.h
 # holo's LINKER half is NOT baked: elf/obj/link ride the crew cat, laid at bake with the
 # glaze live. no egg carries them -- the egg's holo feeds the glaze, which emits for the
 # machine it runs on and never writes a file.
-asm0_h = out/lib/holo0.h out/lib/x640.h out/lib/arm640.h
+asm0_h = out/lib/holo0.h out/lib/amd640.h out/lib/arm640.h
 # the glaze (native JIT): raw-text headers, no lcat round-trip. Evaled ONLY before a
 # `love bake`, so a normal boot never pays the ~810 ms and the baked snapshot carries an
 # always-on JIT at zero startup. doc/misc/snapshot.md.

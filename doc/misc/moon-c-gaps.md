@@ -12,7 +12,7 @@ Probe recipe:
 ```sh
 printf 'int m(void){ return 0; }\n' >> q.c
 out/host/love mooncc \
-  -c -t x64 -o /dev/null q.c
+  -c -t amd64 -o /dev/null q.c
 ```
 
 ---
@@ -615,7 +615,7 @@ Six targets: **x64, arm64, riscv64, thumb2, thumb2sp, thumb1**. The 32-bit ones 
 the live gaps, but not all of them — two lanes are x64-only. Everything here is a **loud scare,
 never silent**.
 
-| lane | x64 | arm64 | riscv64 | thumb2 | thumb2sp | thumb1 |
+| lane | amd64 | arm64 | rv64 | thumb2 | thumb2sp | thumb1 |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | `__int128` | ✓ | — | — | — | — | — |
 | `_Complex` arithmetic | ✓ | — | — | — | — | — |

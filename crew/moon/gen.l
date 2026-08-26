@@ -434,7 +434,7 @@
     (: vp (g 'rpin)
        (? !(two? vp) (pin g 'pool (g 'pool0))
           (pin g 'pool (filter (\ r9 !(member? r9 vp)) (g 'pool0)))))
-   ; -- the TARGET seam: g 'tgt ('x64 | 'arm64 | 'thumb2) picks the ABI shapes; the IR stays
+   ; -- the TARGET seam: g 'tgt ('amd64 | 'arm64 | 'thumb2) picks the ABI shapes; the IR stays
    ; neutral. arm64 (AAPCS64): args ride r0..r7, the frame base retargets to fp (x29) at the end
    ; of build (a4ize -- r4 is x4, a CALLER-saved arg register there), bl clobbers lr so the
    ; prologue saves it. thumb2 (AAPCS32, Cortex-M7): a 32-bit WORD (wsize=4), args in r0..r3, the
@@ -445,7 +445,7 @@
    (t32? g) (member? (g 'tgt) '(thumb2 thumb2sp thumb1))   ; the 32-bit thumb ABI family (AAPCS32): ARMv7E-M + ARMv6-M share it
    (sp64? {'tgt 'thumb2sp}) 1       ; ARMv7E-M with an SP-ONLY FPU (the playdate's STM32F746): f64 arithmetic softens
    (v6m? {'tgt 'thumb1}) 1          ; ARMv6-M refinements ONLY: narrower immediates, no imm-mul, soft-divide, pop-pc epilogue
-   (rv? {'tgt 'riscv64}) 1          ; RV64IMFD (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
+   (rv? {'tgt 'rv64}) 1          ; RV64IMFD (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
    (a8? g) (a64? g || rv? g)                        ; the 8-gp-arg LP64 pair: arm64 + riscv share the AAPCS64 shapes
    (arm? g) (a64? g || t32? g || rv? g)             ; the lr-push / fp-base frame family (riscv rides it whole: fused
                                                     ; fcmp conds read gt/ge/lt/le ordered like VCMP, trap is ebreak,
@@ -496,7 +496,7 @@
    ; same bare bad, and gfns/cgdata read the pin ONLY where the function refuses outright.
    ; LAST pin wins: the deepest site reached before the unwind is the one that knows. --
    (nolane g txt) (pin g 'nolane txt, 'bad)
-   (ontgt g) (" on " + show (peep g 'tgt 'x64))      ; " on arm64" -- for a phrase whose answer turns on the target
+   (ontgt g) (" on " + show (peep g 'tgt 'amd64))      ; " on arm64" -- for a phrase whose answer turns on the target
    (no128 g) (nolane g ("no lane for 128-bit integer arithmetic" + ontgt g))   ; every d128 site, one phrase
    ; the immediate gate: x64 ALU/cmp immediates ride le32; arm64 add/sub/cmp
    ; take imm12 (a negative flips, a 24-bit value splits in the backend), the
@@ -2944,7 +2944,7 @@
            [['stsd 'r4 ro 'f0] ['stsd 'r4 (ro + 8) 'f1]])
        (mkv rt 'r0 (fs + st + [['lean 'r0 'r4 ro]])))
    (cgcx g env op a rhs)                            ; the LEFT already evaluated (a value rec)
-    (? !(id? (peep g 'tgt 'x64) 'x64)
+    (? !(id? (peep g 'tgt 'amd64) 'amd64)
         (nolane g ("no lane for C99 complex arithmetic" + ontgt g))
        (: arith (cxarith op)
           (? !(two? arith) 'bad
@@ -5715,7 +5715,7 @@
               (? (gvarr? ty)
                   (? (two? init)
                       (nolane g "a variable-length array cannot take an initializer")
-                     !(member? (peep g 'tgt 'x64) '(x64 arm64))
+                     !(member? (peep g 'tgt 'amd64) '(amd64 arm64))
                       (nolane g ("no lane for a variable-length array" + ontgt g))
                      (vone ps env2 acc p ty))
                  (: span (& (tsz g ty + 7) -8)
@@ -5941,7 +5941,7 @@
                                             (pops >l >al (spop <al + acc))
                                             (pops >l >al acc)))
                                      ; the body: text -> IR forms -> BYTES, one opaque raw
-                                     body [['raw (asmhb (peep g 'tgt 'x64) (asm-text txt))]]
+                                     body [['raw (asmhb (peep g 'tgt 'amd64) (asm-text txt))]]
                                      ; outputs: push each register, store back reverse
                                      (opush l al acc)
                                       (? !(two? l) acc
@@ -7556,7 +7556,7 @@
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
           'fns {} 'inl {} 'cgitems cgitems 'stag stbl 'sigs sigs
-          'tgt tgt 'epi (? (id? tgt 'thumb1) epi-t16 (member? tgt '(arm64 thumb2 thumb2sp riscv64)) epi-a64 epi)
+          'tgt tgt 'epi (? (id? tgt 'thumb1) epi-t16 (member? tgt '(arm64 thumb2 thumb2sp rv64)) epi-a64 epi)
           'sects (two? xtra ? <>>xtra {})
           'alias (two? xtra && 3 < #xtra ? (nthr xtra 3) {})
           'aligns (two? xtra && 4 < #xtra ? (nthr xtra 4) {})
@@ -7760,7 +7760,7 @@
    (cgen ast stbl sigs weaks xtra tgt)              ; the STATIC EXECUTABLE: _start (crt0) + text + data -> (1 forms) | () -- needs main
     (: crt0 (? (id? tgt 'arm64)
                '((call main) (li r8 93) (sys))            ; x0 already the exit code; x8 = __NR_exit (93), svc
-               (id? tgt 'riscv64)
+               (id? tgt 'rv64)
                '((call main) (li r7 94) (sys))            ; a0 already the exit code; a7 = __NR_exit_group (94), ecall
                '((call main) (mov r6 r0) (li r0 60) (sys)))
        r (cgen-core ast stbl sigs weaks xtra tgt)
