@@ -406,9 +406,12 @@
    (assert (= "[/][/tmp]\n" (cup r))))
 (: r (hark ["out/host/love" "out/host/lush" "-c" "x=$( (exit 4); echo tail); echo [$x]"])
    (assert (= "[tail]\n" (cup r))))
-; the drainer earns its keep: a body saying more than one pipe buffer would stop
-; forever against a reader that is us. a builtin's buffered bytes come first
-(: r (hark ["out/host/love" "out/host/lush" "-c" "f() { pwd; cat src/love.c; cat src/love.c; }; x=$(f); echo ${#x}"])
+; the drainer earns its keep: a body saying more than one pipe buffer (64 KiB) would
+; stop forever against a reader that is us. a builtin's buffered bytes come first.
+; ⚠ the body cats the WHOLE glob, not a named file: a source file's size is a moving
+; target -- cutting one in half used to halve this body and quietly drop the volume
+; this is here to carry.
+(: r (hark ["out/host/love" "out/host/lush" "-c" "f() { pwd; cat src/*.c; cat src/*.c; }; x=$(f); echo ${#x}"])
    t (cup r)
    (assert (< 800000 (sh-int (snip t 0 (- (tally t) 1))))))
 
