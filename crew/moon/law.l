@@ -529,18 +529,29 @@
 (: (cast src) <>(cparse <>(clex src))
    (tn ts k) (? (< k 1) <ts (tn >ts (- k 1)))
    (tn3 ts k) (: t (tn ts k) [<t <>t <>>t])   ; kind/value/line: not the slot-4 spelling
+   (tnk ts k) (: t (tn ts k) [<t <>>t])       ; kind/line, for a token whose value is pieces
+   (tnf ts k) (cflo <>(tn ts k))              ; ..and the value those pieces fold to
    irbits <>(cgn "int main() { double d = 1.0; return (int)d; }")
    (has op forms) (: (go l) (? !(two? l) () (two? <l && (= <<l op)) 1 (go >l)) (go forms))
    (assert
-      ; the lexer: a float literal is a 'flo token carrying a gem
-      (= (tn3 <>(clex "3.5") 0) ['flo 3.5 1])
-      (= (tn3 <>(clex ".25") 0) ['flo 0.25 1])
-      (= (tn3 <>(clex "1e3") 0) ['flo 1000.0 1])
-      (= (tn3 <>(clex "2.") 0) ['flo 2.0 1])
+      ; the lexer: a float literal is a 'flo token carrying the PIECES, and cflo
+      ; folds them -- so a literal nobody reads is never converted. the kind and
+      ; the fold are both law; which pieces they are is not.
+      (= (tnk <>(clex "3.5") 0) ['flo 1])       (= 3.5 (tnf <>(clex "3.5") 0))
+      (= (tnk <>(clex ".25") 0) ['flo 1])       (= 0.25 (tnf <>(clex ".25") 0))
+      (= (tnk <>(clex "1e3") 0) ['flo 1])       (= 1000.0 (tnf <>(clex "1e3") 0))
+      (= (tnk <>(clex "2.") 0) ['flo 1])        (= 2.0 (tnf <>(clex "2.") 0))
+      ; a hex float takes the same lane, and 0x1p-1074 is the smallest subnormal
+      (= (tnk <>(clex "0x1p4") 0) ['flo 1])     (= 16.0 (tnf <>(clex "0x1p4") 0))
+      (= (tnf <>(clex "0x1.8p1") 0) 3.0)
+      (= (tnf <>(clex "0x1p-1074") 0) (tnf <>(clex "4.9406564584124654e-324") 0))
+      (= (tnf <>(clex "0x1p-126") 0) (tnf <>(clex "1.1754943508222875e-38") 0))
+      ; cflo is the identity on a number: cpp mints 'flo tokens with real values
+      (= 2.5 (cflo 2.5))
       ; the imaginary suffix (i/j, either order with f/l) is its own kind
-      (= (tn3 <>(clex "1.0fi") 0) ['iflo 1.0 1])
-      (= (tn3 <>(clex "2.5if") 0) ['iflo 2.5 1])
-      (= (tn3 <>(clex ".5i") 0) ['iflo 0.5 1])
+      (= (tnk <>(clex "1.0fi") 0) ['iflo 1])    (= 1.0 (tnf <>(clex "1.0fi") 0))
+      (= (tnk <>(clex "2.5if") 0) ['iflo 1])    (= 2.5 (tnf <>(clex "2.5if") 0))
+      (= (tnk <>(clex ".5i") 0) ['iflo 1])      (= 0.5 (tnf <>(clex ".5i") 0))
       (= (tn3 <>(clex "42") 0) ['num 42 1])                 ; an integer stays 'num
       ; the parser: a double type and a 'flo primary
       (= (cast "int main() { double d = 1.5; return 0; }")

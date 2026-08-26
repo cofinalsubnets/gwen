@@ -98,8 +98,10 @@
    (mfun? ('fun >< _)) 1
 
    ; -- lex a spelling back into one token (## paste result) --
+   ; ⚠ keep the SPELLING: `spell` falls back to (show (vof t)) without it, and a
+   ; float's value is pieces, not a number.
    (relex s line)
-    (clex s @ [_ (t >< _)] (tok <t <>t line))   ; ⚠ clex answers (1 toks) -- reach INSIDE
+    (clex s @ [_ (t >< _)] [<t <>t line () s])   ; ⚠ clex answers (1 toks) -- reach INSIDE
 
    ; -- split off the first LOGICAL line (tokens sharing the head's line no.) --
    (linesplit toks) (: ln (lof <toks)

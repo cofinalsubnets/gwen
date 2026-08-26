@@ -1097,15 +1097,15 @@
              ; C11 6.4.4.1: an l/L suffix makes the constant a LONG. untyped, sizeof(1L)
              ; answered 4 and `i + 2L` computed in int -- the f-suffix row's twin
              (tkk t = 'lnum) [['cast 'long ['num (tkv t)]] >ts]
-             (tkk t = 'flo) [['flo (tkv t)] >ts]
+             (tkk t = 'flo) [['flo (cflo (tkv t))] >ts]
              ; an f suffix makes a FLOAT constant (C11 6.4.4.2) -- the cast is what
              ; narrows it, so `0.1f == 0.1` is false and sizeof(1.5f) is 4
-             (tkk t = 'flof) [['cast 'float ['flo (tkv t)]] >ts]
+             (tkk t = 'flof) [['cast 'float ['flo (cflo (tkv t))]] >ts]
              ; an imaginary literal (1.0fi, _Complex_I's spelling) is the complex
              ; constant {0, v} -- complex-double: complex FLOATS compute as
              ; doubles too (the float model), narrowing only at typed stores
              (tkk t = 'iflo)
-              [['clit '(struct "__cplx_double") ['init ['(flo 0.0) ['flo (tkv t)]]]] >ts]
+              [['clit '(struct "__cplx_double") ['init ['(flo 0.0) ['flo (cflo (tkv t))]]]] >ts]
              (tkk t = 'str) [['str (tkv t)] >ts]
              ; a WIDE literal desugars to a BOUNDED compound literal of its element
              ; type -- the init/layout machinery then lays elements, never bytes.

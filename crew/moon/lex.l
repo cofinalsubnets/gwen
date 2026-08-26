@@ -41,6 +41,34 @@
                   (go (i + 4) ((((c - 240) << 18) | ((s (i + 1) & 63) << 12) | ((s (i + 2) & 63) << 6) | (s (i + 3) & 63)) >< acc))
                  (go (i + 1) (c >< acc)))))
        (go 0 ()))
+   ; -- A FLOAT LITERAL'S VALUE, DEFERRED --------------------------------------
+   ; the lexer hands back the PIECES and this folds them, because the fold is the
+   ; expensive half and most literals never need it: every macro body is lexed
+   ; where it is DEFINED, so the predefine table and <float.h> used to pay a
+   ; correctly-rounded decimal->binary walk per literal in every TU that expanded
+   ; none of them. the pieces ride the VALUE slot, not the spelling slot, so the
+   ; rebuilds that drop a 5th cell (cpp's relex, parse's stampf) carry them anyway.
+   ; ⚠ a number passes straight through -- cpp mints 'flo tokens with real values.
+   (cfipow b p) (: (go k a) (? (k < 1) a (go (k - 1) (* a b))) (go p 1))
+   ; ⚠ NEVER (/ mant (ipow 10 k)) in FLOATS: that rounds twice, and 10^310 is an
+   ; infinity before the divide ever runs -- 1e-310 folded to 0, 1e-308 to -inf,
+   ; 1e-307 came out a ulp light, every one of them SILENT. hand the exact digits
+   ; to the READER: am_strtod under `sound` is the tree's one correctly-rounded
+   ; decimal->binary, the same one love's own literals ride, and it carries the
+   ; whole range including the subnormals. the `e` keeps the answer a gem however
+   ; integral the digits look.
+   (cfdec mant dxp) <(sound (show mant + "e" + show dxp))
+   (cflo v)
+    (? !(two? v) v
+       (id? <v 'dec) (cfdec <>v <>>v)
+       ; mant * 2^bexp is EXACT in decimal either way -- a negative binary exponent
+       ; is mant * 5^k over 10^k -- so the same reader takes this lane too, and
+       ; 0x1p-1074 stops needing a 2^1074 that no double can hold.
+       (id? <v 'hex) (: m <>v b <>>v
+                        (? (b < 0) (cfdec (* m (cfipow 5 (0 - b))) b)
+                           (cfdec (* m (cfipow 2 b)) 0)))
+       v)
+
    (clex src) (clexat src 1)
    (clexat src ln0)
     (: n (tally src)
@@ -212,18 +240,9 @@
        (in1? c) (ctbl c & 128)
        ; -- float literals: a run with a '.' or an exponent (12.5, .5, 2., 1e9,
        ; 3.14e-2, a trailing f/F/l/L consumed). digrun scans a decimal run ->
-       ; (endj value ndigits); flolit -> (endj isflo? gem-or-int). --
+       ; (endj value ndigits); flolit -> (endj isflo? pieces-or-int), the pieces
+       ; folded by cflo above only where somebody reads the constant. --
        (ipow b p) (: (go k a) (? (k < 1) a (go (k - 1) (* a b))) (go p 1))
-       ; -- the digits -> a double. ⚠ NEVER (/ mant (ipow 10 k)) in FLOATS: that
-       ; rounds twice, and 10^310 is an infinity before the divide ever runs --
-       ; 1e-310 folded to 0, 1e-308 to -inf (the 10^308 coerce landing on -0.0,
-       ; and 1/-0.0), 1e-307 came out a ulp light. every one of them SILENT, in
-       ; a compiler that was otherwise green. hand the exact digits to the
-       ; READER instead: am_strtod under `sound` is the tree's one
-       ; correctly-rounded decimal->binary, the same one love's own literals
-       ; ride, and it carries the whole range including the subnormals. the
-       ; `e` keeps the answer a gem however integral the digits look. --
-       (dec2flo mant dxp) <(sound (show mant + "e" + show dxp))
        (digrun j) (: (go k v nd) (? (k < n && dig? (src k))
                                     (go (k + 1) (10 * v + (src k - 48)) (nd + 1)) [k v nd])
                      (go j 0 0))
@@ -253,7 +272,7 @@
            ; C11 6.4.4.2: an f/F suffix makes the constant a FLOAT, not a double kept
            ; at 53 bits. the 4th element reports it; the caller picks the kind.
            fsu (? (isflo && (j2 < n) && member? (src j2) '(102 70)) 1 0)
-           val (? isflo (dec2flo mant dxp) iv)
+           val (? isflo ['dec mant dxp] iv)          ; cflo folds it, if anyone asks
            [j4 (? im 'imag isflo) val fsu])
        ; -- hex literals: 0x integer (0xff), OR a hex FLOAT 0x H.H p [+-] D (a binary
        ; exponent, base 2): 0x1.0p-53, 0x1p4, 0x.8p1. i points at the '0'. -> (endj isflo? value). --
@@ -282,12 +301,7 @@
                             [j1 0])
                  j2 <ee exp <>ee
                  bexp (exp - (* 4 fd))                        ; each fractional hex digit is 2^-4
-                 ; mant * 2^bexp is EXACT in decimal either way -- a negative
-                 ; binary exponent is mant * 5^k over 10^k -- so the same
-                 ; correctly-rounded reader takes this lane too, and 0x1p-1074
-                 ; stops needing a 2^1074 that no double can hold.
-                 val (? (bexp < 0) (dec2flo (* mant (ipow 5 (0 - bexp))) bexp)
-                        (dec2flo (* mant (ipow 2 bexp)) 0))
+                 val ['hex mant bexp]                    ; cflo folds it, if anyone asks
                  j3 (? ((j2 < n) && member? (src j2) '(102 70 108 76)) (j2 + 1) j2)
                  [j3 1 val (? ((j2 < n) && member? (src j2) '(102 70)) 1 0)])))
        (go i line acc)

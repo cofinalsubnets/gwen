@@ -16,6 +16,8 @@ extern int printf(const char *, ...);
 #define VCAT(A, ...) A##__VA_ARGS__
 #define TAIL(A, B) sink = A##B ; tail
 #define LEAD(A, B) lead = 1 ; A##B
+#define STR_(X) #X
+#define XSTR(X) STR_(X)
 
 int main(void) {
   int ok = 0;
@@ -39,6 +41,14 @@ int main(void) {
   { int sink = 0, tail = 0; TAIL(jim, bo) = 9; if (sink == 7 && tail == 9) ok++; }
   /* ..and the tokens BEFORE it do too */
   { int lead = 0, zed = 0; LEAD(zed, ) = 6;    if (lead == 1 && zed == 6) ok++; }
+
+  /* a pasted FLOAT relexes to a float, and its SPELLING has to survive the paste:
+   * the lexer hands back a float literal's PIECES rather than a converted double,
+   * so a rebuild that drops the spelling stringizes the pieces instead of the
+   * number -- [(dec 15 2)] where the answer is [1.5e3]. */
+  { double d = CAT(1.5, e3); if (d == 1500.0) ok++; }
+  { const char *s = XSTR(CAT(1.5, e3));
+    if (s[0]=='1' && s[1]=='.' && s[2]=='5' && s[3]=='e' && s[4]=='3' && s[5]==0) ok++; }
 
   printf("jim=%d jimbo=%d ok=%d\n", jim, jimbo, ok);
   return ok;
