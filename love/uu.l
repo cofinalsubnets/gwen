@@ -24,8 +24,8 @@
 ; axm macros land in this layer's macro slot and ride the boot splice.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
-(module '(uu axm bridge BRIDGE C capp chk comp conv defn defq GLOB HELPC inf kseq lof Q rejects spine
-   SRC u2 uu2l vof)
+; the surface: what `from`/`use` see. everything else is internal, a probe away.
+(module '(uu axm bridge capp chk conv defn defq GLOB HELPC lof rejects vof)
 (: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {})
 
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
@@ -36,27 +36,18 @@
    ; lof prints TERMS, so these two lines plus comp's three ('clo ..) sites are the whole
    ; representation.
    (capp cl v) (<>cl v)
-
-   (vapp f a) (f @ ('lam cl) (capp cl a) ['na f a])
-
-   (dop1 v) (v @ ('chain a _) a ['np1 v])
-   (dop2 v) (v @ ('chain _ b) b ['np2 v])
-
-   (donr P z s m)
-   (? (charm? m) (: (go k acc) (k = m ? acc (go (k + 1) (vapp (vapp s k) acc)))
-                  (go 0 z))
-      (m @ ('succ n) (vapp (vapp s n) (donr P z s n)) ['nnr P z s m]))
-
+   (vapp f a) (f @ ['lam cl] (capp cl a) ['na f a])
+   (dop1 v) (v @ ['chain a _] a ['np1 v])
+   (dop2 v) (v @ ['chain _ b] b ['np2 v])
+   (donr P z s m) (charm? m ?
+    (: (go k acc) (k = m ? acc (go (k + 1) (vapp (vapp s k) acc))) (go 0 z))
+    (m @ ['succ n] (vapp (vapp s n) (donr P z s n)) ['nnr P z s m]))
    (dobr P x y v) (v @ 'true x  'false y  ['nbr P x y v])
    (dour P x v) (v @ 'tt x ['nur P x v])
-   (docr P f g v) (v @ ('i1 a) (vapp f a)
-                        ('i2 b) (vapp g b)
-                        ['ncr P f g v])
+   (docr P f g v) (v @ ['i1 a] (vapp f a) ['i2 b] (vapp g b) ['ncr P f g v])
    (doer P v) ['ner P v]
-   (dojr P r ev) (ev @ ('refl _) r ['njr P r ev])
-
-   (vof-sym en x)
-   (assoc x en @ (_ y) y (GLOB x @ (_ y) y (scare 'uu-unbound x)))
+   (dojr P r ev) (ev @ ['refl _] r ['njr P r ev])
+   (vof-sym en x) (assq x en @ (_ y) y (GLOB x @ (_ y) y (scare 'uu-unbound x)))
 
    ; --- comp: the term walked ONCE, into a love function of the env ---
    ; every case below reads `(\ en ..)` where the old vof read the value directly, and that is
@@ -73,10 +64,10 @@
    ; ⚠ the order matters LESS than it did (once per term, not per evaluation) and is kept
    ; because compiling is itself on the hot path: chk and inf compile each subterm they visit.
    (comp t)
-   (? (charm? t) (\ en t)
-      (nom? t) (? (member? t '(UU nat bool unit empty tt true false)) (\ en t)
-                  (id? t 'zero) (\ en 0)
-                  (\ en (vof-sym en t)))
+   (? (charm? t) (en \ t)
+      (nom? t) (? (memq t '(UU nat bool unit empty tt true false)) (en \ t)
+                  (id? t 'zero) (en \ 0)
+                  (en \ vof-sym en t))
       ; A PATTERN IS THE TERM GRAMMAR, so this dispatch now reads like the header's own
       ; list of shapes. It costs the arity guards, and here they are nearly free: comp runs
       ; 14778 times over the corpus where the old vof ran 1102646, so this whole chain is
@@ -84,41 +75,39 @@
       ; never id? to a tag, so a spine falls through every arm to the else on its own -- and
       ; it is 259 of those 14778, which is not worth a branch or a second copy of the body.
       (t @
-         ('lam x b)             (: cb (comp b)
-                                 (en \ ['lam ['clo (v \ cb ([x v] >< en))]]))
-         ('succ a)              (: ca (comp a) (en \ vsucc (ca en)))
-         ('pi x A B)            (: cA (comp A) cB (comp B)
-                                 (en \ ['pi (cA en) ['clo (v \ cB ([x v] >< en))]]))
-         ('paths A a b)         (: cA (comp A) ca (comp a) cb (comp b)
+         ['lam x b]             (: cb (comp b) (en \ ['lam ['clo (v \ cb ([x v] . en))]]))
+         ['succ a]              (: ca (comp a) (en \ vsucc (ca en)))
+         ['pi x A B]            (: cA (comp A) cB (comp B)
+                                 (en \ ['pi (cA en) ['clo (v \ cB ([x v] . en))]]))
+         ['paths A a b]         (: cA (comp A) ca (comp a) cb (comp b)
                                  (en \ ['paths (cA en) (ca en) (cb en)]))
-         ('nat_rect P z s n)    (: cP (comp P) cz (comp z) cs (comp s) cn (comp n)
+         ['nat_rect P z s n]    (: cP (comp P) cz (comp z) cs (comp s) cn (comp n)
                                  (en \ donr (cP en) (cz en) (cs en) (cn en)))
-         ('tpair a b)           (: ca (comp a) cb (comp b) (en \ ['chain (ca en) (cb en)]))
-         ('idpath a)            (: ca (comp a) (en \ ['refl (ca en)]))
-         ('paths_rect P r e)    (: cP (comp P) cr (comp r) ce (comp e)
+         ['tpair a b]           (: ca (comp a) cb (comp b) (en \ ['chain (ca en) (cb en)]))
+         ['idpath a]            (: ca (comp a) (en \ ['refl (ca en)]))
+         ['paths_rect P r e]    (: cP (comp P) cr (comp r) ce (comp e)
                                  (en \ dojr (cP en) (cr en) (ce en)))
-         ('bool_rect P x y w)   (: cP (comp P) cx (comp x) cy (comp y) cw (comp w)
+         ['bool_rect P x y w]   (: cP (comp P) cx (comp x) cy (comp y) cw (comp w)
                                  (en \ dobr (cP en) (cx en) (cy en) (cw en)))
-         ('coprod A B)          (: cA (comp A) cB (comp B) (en \ ['coprod (cA en) (cB en)]))
-         ('coprod_rect P f g w) (: cP (comp P) cf (comp f) cg (comp g) cw (comp w)
+         ['coprod A B]          (: cA (comp A) cB (comp B) (en \ ['coprod (cA en) (cB en)]))
+         ['coprod_rect P f g w] (: cP (comp P) cf (comp f) cg (comp g) cw (comp w)
                                  (en \ docr (cP en) (cf en) (cg en) (cw en)))
-         ('empty_rect P e)      (: cP (comp P) ce (comp e) (en \ doer (cP en) (ce en)))
-         ('unit_rect P u x)     (: cP (comp P) cu (comp u) cx (comp x)
+         ['empty_rect P e]      (: cP (comp P) ce (comp e) (en \ doer (cP en) (ce en)))
+         ['unit_rect P u x]     (: cP (comp P) cu (comp u) cx (comp x)
                                  (en \ dour (cP en) (cu en) (cx en)))
-         ; (UU level) -> a sort value (UU0 stays the symbol UU; level may be an expr, Stage 2)
-         ('UU l)                (l = 0 ? (en \ 'UU) (en \ ['U l]))
-         ('the T u)             (comp u)                    ; the ascription is the term
-         ('let x a b)           (: ca (comp a) cb (comp b)
-                                 (en \ cb ([x (ca en)] >< en)))
-         ('total2 x A B)        (: cA (comp A) cB (comp B)
-                                 (en \ ['sig (cA en) ['clo (v \ cB ([x v] >< en))]]))
-         ('pr1 w)               (: ca (comp w) (en \ dop1 (ca en)))
-         ('pr2 w)               (: ca (comp w) (en \ dop2 (ca en)))
-         ('ii1 a)               (: ca (comp a) (en \ ['i1 (ca en)]))
-         ('ii2 b)               (: ca (comp b) (en \ ['i2 (ca en)]))
+         ['UU 0]                (en \ 'UU)
+         ['UU l]                (en \ ['U l])
+         ['the T u]             (comp u)                    ; the ascription is the term
+         ['let x a b]           (: ca (comp a) cb (comp b) (en \ cb ([x (ca en)] . en)))
+         ['total2 x A B]        (: cA (comp A) cB (comp B)
+                                 (en \ ['sig (cA en) ['clo (v \ cB ([x v] . en))]]))
+         ['pr1 w]               (: ca (comp w) (en \ dop1 (ca en)))
+         ['pr2 w]               (: ca (comp w) (en \ dop2 (ca en)))
+         ['ii1 a]               (: ca (comp a) (en \ ['i1 (ca en)]))
+         ['ii2 b]               (: ca (comp b) (en \ ['i2 (ca en)]))
          (: cf (comp <t) cas (map comp >t) (en \ spine en (cf en) cas))))
 
-   (spine en f cas) (two? cas ? (spine en (vapp f (<cas en)) >cas) f)
+   (spine en f cas) (cas @ (a . u) (spine en (vapp f (a en)) u) f)
 
    ; the old door, kept for every caller (chk, inf, the globals, test/uu.l): compile, then run.
    vof (flip comp)
@@ -129,7 +118,7 @@
    ; reaching one means unequal, and it keeps `<a` off a non-list below.
    (conv d a b)
    (? (id? a b) 1
-      (atom? a || atom? b) ()
+      (atom? a || atom? b) 0
       (<a = 'lam || <b = 'lam)
        (: fr ['nv d] (conv (d + 1) (vapp a fr) (vapp b fr)))
       (<a = 'chain && <b != 'chain)
@@ -155,28 +144,28 @@
          (GLOB x @ (g) g (scare 'uu-unbound x))))
 
    (inf-spine cx en d f as)
-   (as @ (a >< u) (f @ ('pi A q) (chk cx en d a A, inf-spine cx en d (capp q (vof en a)) u)
+   (as @ (a . u) (f @ ('pi A q) (chk cx en d a A, inf-spine cx en d (capp q (vof en a)) u)
                    (scare 'uu-not-a-pi as)) f)
 
    ; ⚠ CHECKING IS TWO SHAPES AT ONCE -- the term's and the type's -- so every arm here
    ; is an `@` inside an `@`, and the inner else is the mismatch that names both.
    (chk cx en d t T)
    (t @
-      ('lam x b)   (T @ ('pi A q) (: fr ['nv d]
-                                   (chk ([x A] >< cx) ([x fr] >< en) (d + 1) b (capp q fr)))
+      ['lam x b]   (T @ ('pi A q) (: fr ['nv d]
+                                   (chk ([x A] . cx) ([x fr] . en) (d + 1) b (capp q fr)))
                         (scare 'uu-lam-needs-pi t))
-      ('tpair a b) (T @ ('sig A q) (chk cx en d a A,
+      ['tpair a b] (T @ ['sig A q] (chk cx en d a A,
                                     chk cx en d b (capp q (vof en a)))
                         (scare 'uu-tpair-needs-total2 t))
-      ('ii1 a)     (T @ ('coprod A _) (chk cx en d a A) (scare 'uu-ii1-needs-coprod t))
-      ('ii2 b)     (T @ ('coprod _ B) (chk cx en d b B) (scare 'uu-ii2-needs-coprod t))
-      ('idpath a)  (T @ ('paths A av bv)
+      ['ii1 a]     (T @ ['coprod A _] (chk cx en d a A) (scare 'uu-ii1-needs-coprod t))
+      ['ii2 b]     (T @ ['coprod _ B] (chk cx en d b B) (scare 'uu-ii2-needs-coprod t))
+      ['idpath a]  (T @ ['paths A av bv]
                           (: v (chk cx en d a A, vof en a)
                            (conv d v av && conv d v bv || scare 'uu-idpath-mismatch t))
                         (scare 'uu-idpath-needs-paths t))
-      ('let x a b) (: Av (inf cx en d a)
+      ['let x a b] (: Av (inf cx en d a)
                       va (vof en a)
-                    (chk ([x Av] >< cx) ([x va] >< en) d b T))
+                    (chk ([x Av] . cx) ([x va] . en) d b T))
       (: Ti (inf cx en d t)
        (conv d T Ti || scare 'uu-type-mismatch t)))
 
@@ -188,66 +177,66 @@
    (? (charm? t) 'nat
       (nom? t) (inf-sym cx t)
       (t @
-         (('pi || 'total2) x A B)
+         [('pi || 'total2) x A B]
           (: fr (chk cx en d A 'UU, ['nv d])
-           (chk ([x (vof en A)] >< cx) ([x fr] >< en) (d + 1) B 'UU, 'UU))
-         ('coprod A B) (chk cx en d A 'UU, chk cx en d B 'UU, 'UU)
-         ('paths A a b)
+           (chk ([x (vof en A)] . cx) ([x fr] . en) (d + 1) B 'UU, 'UU))
+         ['coprod A B] (chk cx en d A 'UU, chk cx en d B 'UU, 'UU)
+         ['paths A a b]
           (: Av (chk cx en d A 'UU, vof en A)
            (chk cx en d a Av, chk cx en d b Av, 'UU))
-         ('succ n) (chk cx en d n 'nat, 'nat)
-         ('idpath a)
+         ['succ n] (chk cx en d n 'nat, 'nat)
+         ['idpath a]
           (: Av (inf cx en d a) v (vof en a) ['paths Av v v])
-         ('pr1 w)
-          (inf cx en d w @ ('sig A _) A (scare 'uu-pr1-needs-total2 t))
-         ('pr2 w)
-          (inf cx en d w @ ('sig _ q) (capp q (dop1 (vof en w))) (scare 'uu-pr2-needs-total2 t))
-         ('the T u)
+         ['pr1 w]
+          (inf cx en d w @ ['sig A _] A (scare 'uu-pr1-needs-total2 t))
+         ['pr2 w]
+          (inf cx en d w @ ['sig _ q] (capp q (dop1 (vof en w))) (scare 'uu-pr2-needs-total2 t))
+         ['the T u]
           (: Tv (chk cx en d T 'UU, vof en T) (chk cx en d u Tv, Tv))
-         ('let x a b)
-          (: Av (inf cx en d a) va (vof en a) (inf ([x Av] >< cx) ([x va] >< en) d b))
-         ('nat_rect P z s n)
+         ['let x a b]
+          (: Av (inf cx en d a) va (vof en a) (inf ([x Av] . cx) ([x va] . en) d b))
+         ['nat_rect P z s n]
           (: Pv (chk cx en d n 'nat,
                  chk cx en d P (vof 0 '(pi x nat UU)),
                  vof en P)
            (chk cx en d z (vapp Pv 0),
             chk cx en d s (vof [['P Pv]] '(pi k nat (pi r (P k) (P (succ k))))),
             vapp Pv (vof en n)))
-         ('bool_rect P x y w)
+         ['bool_rect P x y w]
           (: Pv (chk cx en d w 'bool,
                  chk cx en d P (vof 0 '(pi x bool UU)),
                  vof en P)
            (chk cx en d x (vapp Pv 'true),
             chk cx en d y (vapp Pv 'false),
             vapp Pv (vof en w)))
-         ('unit_rect P u w)
+         ['unit_rect P u w]
           (: Pv (chk cx en d w 'unit,
                  chk cx en d P (vof 0 '(pi x unit UU)),
                  vof en P)
            (chk cx en d u (vapp Pv 'tt),
             vapp Pv (vof en w)))
-         ('empty_rect P e)
+         ['empty_rect P e]
           (chk cx en d e 'empty,
            chk cx en d P (vof 0 '(pi x empty UU)),
            vapp (vof en P) (vof en e))
-         ('coprod_rect P f g w)
+         ['coprod_rect P f g w]
           (inf cx en d w @
-           ('coprod A B)
+           ['coprod A B]
             (: Pv (chk cx en d P (vof [['A A] ['B B]] '(pi x (coprod A B) UU)),
                    vof en P)
              (chk cx en d f (vof [['A A] ['P Pv]] '(pi a A (P (ii1 a)))),
               chk cx en d g (vof [['B B] ['P Pv]] '(pi b B (P (ii2 b)))),
               vapp Pv (vof en w)))
            (scare 'uu-coprod_rect t))
-         ('paths_rect P r e)
+         ['paths_rect P r e]
           (inf cx en d e @
-           ('paths A av bv)
+           ['paths A av bv]
             (: Pv (chk cx en d P (vof [['A A] ['a av]] '(pi b A (pi e (paths A a b) UU))),
                    vof en P)
              (chk cx en d r (vapp (vapp Pv av) ['refl av]),
               vapp (vapp Pv bv) (vof en e)))
            (scare 'uu-paths_rect t))
-         (('lam || 'tpair || 'ii1 || 'ii2)) (scare 'uu-cannot-infer t)
+         (('lam || 'tpair || 'ii1 || 'ii2) . _) (scare 'uu-cannot-infer t)
          (inf-spine cx en d (inf cx en d <t) >t))))
 
 ; --- drivers: a definition is checked then pinned; an axiom is a book entry
@@ -291,23 +280,20 @@
 ; --- niszero is (= m 0)) -- each bridge rides the SAME differential gate.
 ; --- defn feeds SRC; a defq/axm name compiles to its own neutral, exactly
 ; --- the sealed book value.
-(: Q '\
-   C ':
-   (qlit v) [Q v]
-
+(: (qlit v) ['\ v]
    (kchain a b) ['chain a b]
-   (kp1 v) (v @ ('chain a _) a ['np1 v])
-   (kp2 v) (v @ ('chain _ b) b ['np2 v])
+   (kp1 v) (v @ ['chain a _] a ['np1 v])
+   (kp2 v) (v @ ['chain _ b] b ['np2 v])
    (ksucc v) (v + 1)
    (ki1 a) ['i1 a]
    (ki2 a) ['i2 a]
    (krefl a) ['refl a]
    (knrec s z n) (: (go k acc) (k = n ? acc (go (k + 1) (s k acc))) (go 0 z))
    (kbrec x y b) (b @ 'true x y)
-   (kcrec f g v) (v @ ('i1 a) (f a) (g <>v))
+   (kcrec f g v) (v @ ['i1 a] (f a) ['i2 b] (g b))
    (kseq e r) r
 
-   (bound? x bs) (two? bs && (id? x <bs || bound? x >bs))
+   bound? memq
 
    (uglo nm)
    (CMEM nm @ (_ v) v
@@ -315,9 +301,7 @@
      (SRC nm @ (src) (: v (ev (u2 src ())) (pin CMEM nm ['hit v], v))
                ['nv nm])))
 
-   (u2app t bs)
-   (: (walk as) (two? as ? (u2 <as bs >< walk >as))
-      (u2 <t bs >< walk >t))
+   (u2app t bs) (map (a \ u2 a bs) t)
 
    ; ⚠ THE TAG DOES NOT PICK THE ORDER: nat_rect and friends take their operands
    ; the way knrec wants them, not the way the term spells them.
@@ -329,23 +313,23 @@
          (bound? t bs) t
          (qlit (uglo t)))
       (t @
-         ('lam x b)   (Q >< (x >< (u2 b (x >< bs) >< ())))
-         ('let x a b) (C >< (x >< (u2 a bs >< (u2 b (x >< bs) >< ()))))
-         ('the T u)   (u2 u bs)
-         (('pi || 'total2 || 'coprod || 'paths)) (qlit ['ty <t])
-         ('tpair a b) [(qlit kchain) (u2 a bs) (u2 b bs)]
-         ('pr1 w)     [(qlit kp1) (u2 w bs)]
-         ('pr2 w)     [(qlit kp2) (u2 w bs)]
-         ('succ n)    [(qlit ksucc) (u2 n bs)]
-         ('ii1 a)     [(qlit ki1) (u2 a bs)]
-         ('ii2 b)     [(qlit ki2) (u2 b bs)]
-         ('idpath a)  [(qlit krefl) (u2 a bs)]
-         ('nat_rect _ z s n)     [(qlit knrec) (u2 s bs) (u2 z bs) (u2 n bs)]
-         ('bool_rect _ x y w)    [(qlit kbrec) (u2 x bs) (u2 y bs) (u2 w bs)]
-         ('unit_rect _ u w)      [(qlit kseq) (u2 w bs) (u2 u bs)]
-         ('coprod_rect _ f g w)  [(qlit kcrec) (u2 f bs) (u2 g bs) (u2 w bs)]
-         ('paths_rect _ r e)     [(qlit kseq) (u2 e bs) (u2 r bs)]
-         ('empty_rect _ e)       [(qlit kseq) (u2 e bs) (qlit 'ner)]
+         ['lam x b]   ['\ x (u2 b (x . bs))]
+         ['let x a b] [': x (u2 a bs) (u2 b (x . bs))]
+         ['the T u]   (u2 u bs)
+         (('pi || 'total2 || 'coprod || 'paths) . _) (qlit ['ty <t])
+         ['tpair a b] [(qlit kchain) (u2 a bs) (u2 b bs)]
+         ['pr1 w]     [(qlit kp1) (u2 w bs)]
+         ['pr2 w]     [(qlit kp2) (u2 w bs)]
+         ['succ n]    [(qlit ksucc) (u2 n bs)]
+         ['ii1 a]     [(qlit ki1) (u2 a bs)]
+         ['ii2 b]     [(qlit ki2) (u2 b bs)]
+         ['idpath a]  [(qlit krefl) (u2 a bs)]
+         ['nat_rect _ z s n]     [(qlit knrec) (u2 s bs) (u2 z bs) (u2 n bs)]
+         ['bool_rect _ x y w]    [(qlit kbrec) (u2 x bs) (u2 y bs) (u2 w bs)]
+         ['unit_rect _ u w]      [(qlit kseq) (u2 w bs) (u2 u bs)]
+         ['coprod_rect _ f g w]  [(qlit kcrec) (u2 f bs) (u2 g bs) (u2 w bs)]
+         ['paths_rect _ r e]     [(qlit kseq) (u2 e bs) (u2 r bs)]
+         ['empty_rect _ e]       [(qlit kseq) (u2 e bs) (qlit 'ner)]
          (u2app t bs)))
 
    (uu2l t) (u2 t ())
@@ -361,9 +345,9 @@
 ; --- heads (1 defn) -- the identity's head is no macro, so no re-expansion --
 ; --- and the functions keep their names, so the baked book still serves them
 ; --- ((uu 'defn) is boot/overlay.l's door, and book calls bypass the macro).
-(: _ (:: 'defn (\ l (? (3 = (tally l)) ('(1 defn) >< l) ['scare ['\ 'uu-defn-arity] ['\ l]])))
-   _ (:: 'defq (\ l (? (3 = (tally l)) ('(1 defq) >< l) ['scare ['\ 'uu-defq-arity] ['\ l]])))
-   _ (:: 'axm  (\ l (? (2 = (tally l)) ('(1 axm) >< l) ['scare ['\ 'uu-axm-arity]  ['\ l]])))
-   0)
+(: q (map qlit)
+ (:: 'defn (l \ l @ [_ _ _] (defn . q l) (scare 'uu-defn-arity l)),
+  :: 'defq (l \ l @ [_ _ _] (defq . q l) (scare 'uu-defq-arity l)),
+  :: 'axm  (l \ l @ [_ _]   (axm  . q l) (scare 'uu-axm-arity  l))))
 
 ) ; module uu

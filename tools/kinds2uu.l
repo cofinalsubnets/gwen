@@ -76,9 +76,9 @@
 
    nl (string 10)
    (pl s) (puts (nl + s))                              ; a line, newline-led
-   (pdefn nm op close) (: _ (pl (" (defn '" + nm))     ; op = (type term); close = ) or ))
-                          _ (pl ("   '" + (show (cap op))))
-                          (pl ("   '" + (show (cap (cup op))) + close)))
+   (pdefn nm op close) (: _ (pl (" (defn " + nm))     ; op = (type term); close = ) or ))
+                          _ (pl ("   " + (show (cap op))))
+                          (pl ("   " + (show (cap (cup op))) + close)))
 
    _ (puts "; test/uukind.l -- GENERATED from doc/misc/proto/kinds.l by tools/kinds2uu.l. Do")
    _ (pl "; not edit; refresh with `make uukind`. The abstract kinds-lattice JOIN (and")

@@ -73,9 +73,9 @@
    (emit1 g)
     (: nm (g 0) fs (plift (g 1))
        _ (each (\ f (puts (+ (+ "\n ; " (string nm)) (+ "  " (show f))))) fs)
-       _ (puts (+ "\n (defn '" (+ (string nm) " 'nlist")))
+       _ (puts (+ "\n (defn " (+ (string nm) " nlist")))
        _ (each (\ f (: q (lift1 f)
-                      (puts (+ "\n   " (? (id? f (cap fs)) "'" " ")
+                      (puts (+ "\n   " " "
                              (+ "(ncons " (+ (show (q 0))
                               (+ " (ncons " (+ (show (q 1))
                                (+ " (ncons " (+ (show (q 2))

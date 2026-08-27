@@ -58,7 +58,7 @@
                              (: _ (pin seen nm 1) (line (eol j) (cnt + 1))))))))))
        (line 0 0))
 
-   ; test/uu.l: every (defn '/(defq '/(axm ' occurrence, in order, dups kept
+   ; test/uu.l: every (defn /(defq /(axm  occurrence, in order, dups kept
    (uu-names s)
     (: n (tally s)
        (lit? i t) (: k (tally t)
@@ -70,9 +70,9 @@
        (go i acc)
         (? (n <= i) (rev acc)
            (? !((s i) = 40) (go (i + 1) acc)
-              (: e (: a (lit? (i + 1) "defn '") (? (charm? a) a
-                       (: b (lit? (i + 1) "defq '") (? (charm? b) b
-                          (lit? (i + 1) "axm '")))))
+              (: e (: a (lit? (i + 1) "defn ") (? (charm? a) a
+                       (: b (lit? (i + 1) "defq ") (? (charm? b) b
+                          (lit? (i + 1) "axm ")))))
                  (? !(charm? e) (go (i + 1) acc)
                     (: b (name-end e)
                        (? (b = e) (go (i + 1) acc)

@@ -18,28 +18,28 @@
 
 ; --- the model: patch, tree, apply, validity, inverse, commute ---
 (assert
- (defn 'patch 'UU '(total2 k nat (total2 a nat nat)))
- (defn 'chg '(pi k nat (pi a nat (pi b nat patch)))
-   '(lam k (lam a (lam b (tpair k (tpair a b))))))
- (defn 'pk '(pi p patch nat) '(lam p (pr1 p)))
- (defn 'pa '(pi p patch nat) '(lam p (pr1 (pr2 p))))
- (defn 'pb '(pi p patch nat) '(lam p (pr2 (pr2 p))))
- (defn 'tree 'UU '(pi k nat nat))
- (defn 'apon '(pi t tree (pi p patch tree))
-   '(lam t (lam p (lam q (coprod_rect (lam c nat)
+ (defn patch UU (total2 k nat (total2 a nat nat)))
+ (defn chg (pi k nat (pi a nat (pi b nat patch)))
+   (lam k (lam a (lam b (tpair k (tpair a b))))))
+ (defn pk (pi p patch nat) (lam p (pr1 p)))
+ (defn pa (pi p patch nat) (lam p (pr1 (pr2 p))))
+ (defn pb (pi p patch nat) (lam p (pr2 (pr2 p))))
+ (defn tree UU (pi k nat nat))
+ (defn apon (pi t tree (pi p patch tree))
+   (lam t (lam p (lam q (coprod_rect (lam c nat)
                            (lam e (pb p))
                            (lam ne (t q))
                            (isdeceqnat q (pk p)))))))
- (defn 'valid '(pi t tree (pi p patch bool))
-   '(lam t (lam p (coprod_rect (lam c bool)
+ (defn valid (pi t tree (pi p patch bool))
+   (lam t (lam p (coprod_rect (lam c bool)
                     (lam e true)
                     (lam ne false)
                     (isdeceqnat (t (pk p)) (pa p))))))
- (defn 'invert '(pi p patch patch)
-   '(lam p (chg (pk p) (pb p) (pa p))))
- (defn 'ppair 'UU '(total2 x patch patch))
- (defn 'commute '(pi p patch (pi q patch (coprod ppair unit)))
-   '(lam p (lam q (coprod_rect (lam c (coprod ppair unit))
+ (defn invert (pi p patch patch)
+   (lam p (chg (pk p) (pb p) (pa p))))
+ (defn ppair UU (total2 x patch patch))
+ (defn commute (pi p patch (pi q patch (coprod ppair unit)))
+   (lam p (lam q (coprod_rect (lam c (coprod ppair unit))
                     (lam e (ii2 tt))
                     (lam ne (ii1 (tpair q p)))
                     (isdeceqnat (pk p) (pk q))))))
@@ -59,13 +59,13 @@
 ; --- "re-commute the carried pair", so the involution IS the algebra: commute
 ; --- q p computes straight to ii1 (p,q) once the keys are known distinct ---
 (assert
- (defn 'cmside '(pi c (coprod ppair unit) UU)
-   '(lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
- (defq 'commute-involutive
-   '(pi p patch (pi q patch (pi q2 patch (pi p2 patch
+ (defn cmside (pi c (coprod ppair unit) UU)
+   (lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
+ (defq commute-involutive
+   (pi p patch (pi q patch (pi q2 patch (pi p2 patch
       (pi h (paths (coprod ppair unit) (commute p q) (ii1 (tpair q2 p2)))
         (paths (coprod ppair unit) (commute q2 p2) (ii1 (tpair p q))))))))
-   '(lam p (lam q (lam q2 (lam p2
+   (lam p (lam q (lam q2 (lam p2
       ((coprod_rect
          (lam c (pi h (paths (coprod ppair unit)
                         (coprod_rect (lam c2 (coprod ppair unit))
@@ -112,10 +112,10 @@
 ; --- the .v does; validity opened by ONE convoy on its own decision, the main
 ; --- case abstracting BOTH apon layers' shared scrutinee at once ---
 (assert
- (defq 'invert-roundtrip
-   '(pi t tree (pi p patch (pi hv (paths bool (valid t p) true)
+ (defq invert-roundtrip
+   (pi t tree (pi p patch (pi hv (paths bool (valid t p) true)
       (pi q nat (paths nat (apon (apon t p) (invert p) q) (t q))))))
-   '(lam t (lam p
+   (lam t (lam p
       ((coprod_rect
          (lam c (pi hv (paths bool
                          (coprod_rect (lam c2 bool) (lam e2 true) (lam ne2 false) c)
@@ -150,11 +150,11 @@
 ; --- WITNESSES order-freedom. the double convoy cases each decision once,
 ; --- abstracting all its occurrences on both sides ---
 (assert
- (defq 'apon-comm
-   '(pi p patch (pi q patch (pi ne (pi e (paths nat (pk p) (pk q)) empty)
+ (defq apon-comm
+   (pi p patch (pi q patch (pi ne (pi e (paths nat (pk p) (pk q)) empty)
       (pi t tree (pi r nat
         (paths nat (apon (apon t p) q r) (apon (apon t q) p r)))))))
-   '(lam p (lam q (lam ne (lam t (lam r
+   (lam p (lam q (lam ne (lam t (lam r
       ((coprod_rect
          (lam c (paths nat
                   (coprod_rect (lam c2 nat)
@@ -193,12 +193,12 @@
               (lam ne2 (idpath (t r)))
               (isdeceqnat r (pk p)))))
          (isdeceqnat r (pk q))))))))))
- (defq 'commute-sound
-   '(pi p patch (pi q patch
+ (defq commute-sound
+   (pi p patch (pi q patch
       (pi h (paths (coprod ppair unit) (commute p q) (ii1 (tpair q p)))
         (pi t tree (pi r nat
           (paths nat (apon (apon t p) q r) (apon (apon t q) p r)))))))
-   '(lam p (lam q
+   (lam p (lam q
       ((coprod_rect
          (lam c (pi h (paths (coprod ppair unit)
                         (coprod_rect (lam c2 (coprod ppair unit))
@@ -229,29 +229,29 @@
 ; --- (unordered) patch set is a sound version identity -- the reproducibility
 ; --- tie, now machine-checked in three kernels ---
 (assert
- (defn 'pvec '(pi n nat UU)
-   '(lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 h patch r))) n)))
- (defn 'plist 'UU '(total2 n nat (pvec n)))
- (defn 'pnil 'plist '(tpair 0 tt))
- (defn 'pcons '(pi x patch (pi l plist plist))
-   '(lam x (lam l (tpair (succ (pr1 l)) (tpair x (pr2 l))))))
- (defn 'papp '(pi a plist (pi b plist plist))
-   '(lam a (lam b ((nat_rect (lam q (pi v (pvec q) plist))
+ (defn pvec (pi n nat UU)
+   (lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 h patch r))) n)))
+ (defn plist UU (total2 n nat (pvec n)))
+ (defn pnil plist (tpair 0 tt))
+ (defn pcons (pi x patch (pi l plist plist))
+   (lam x (lam l (tpair (succ (pr1 l)) (tpair x (pr2 l))))))
+ (defn papp (pi a plist (pi b plist plist))
+   (lam a (lam b ((nat_rect (lam q (pi v (pvec q) plist))
                      (lam v b)
                      (lam k (lam IH (lam v (pcons (pr1 v) (IH (pr2 v))))))
                      (pr1 a))
                    (pr2 a)))))
- (defn 'applall '(pi l plist (pi t tree tree))
-   '(lam l (lam t ((nat_rect (lam q (pi v (pvec q) (pi t2 tree tree)))
+ (defn applall (pi l plist (pi t tree tree))
+   (lam l (lam t ((nat_rect (lam q (pi v (pvec q) (pi t2 tree tree)))
                      (lam v (lam t2 t2))
                      (lam k (lam IH (lam v (lam t2 (IH (pr2 v) (apon t2 (pr1 v)))))))
                      (pr1 l))
                    (pr2 l) t))))
- (defq 'apon-ext
-   '(pi t1 tree (pi t2 tree (pi p patch
+ (defq apon-ext
+   (pi t1 tree (pi t2 tree (pi p patch
       (pi hp (pi k nat (paths nat (t1 k) (t2 k)))
         (pi r nat (paths nat (apon t1 p r) (apon t2 p r)))))))
-   '(lam t1 (lam t2 (lam p (lam hp (lam r
+   (lam t1 (lam t2 (lam p (lam hp (lam r
       ((coprod_rect
          (lam c (paths nat
                   (coprod_rect (lam c2 nat) (lam e2 (pb p)) (lam ne2 (t1 r)) c)
@@ -259,11 +259,11 @@
          (lam e (idpath (pb p)))
          (lam ne (hp r))
          (isdeceqnat r (pk p))))))))))
- (defq 'applall-ext
-   '(pi l plist (pi t1 tree (pi t2 tree
+ (defq applall-ext
+   (pi l plist (pi t1 tree (pi t2 tree
       (pi hp (pi k nat (paths nat (t1 k) (t2 k)))
         (pi r nat (paths nat (applall l t1 r) (applall l t2 r)))))))
-   '(lam l ((nat_rect
+   (lam l ((nat_rect
        (lam q (pi v (pvec q) (pi t1 tree (pi t2 tree
                 (pi hp (pi k nat (paths nat (t1 k) (t2 k)))
                   (pi r nat (paths nat (applall (tpair q v) t1 r)
@@ -274,13 +274,13 @@
              (apon-ext t1 t2 (pr1 v) hp))))))))
        (pr1 l))
      (pr2 l))))
- (defq 'applall-swap
-   '(pi p patch (pi q patch (pi ne (pi e (paths nat (pk p) (pk q)) empty)
+ (defq applall-swap
+   (pi p patch (pi q patch (pi ne (pi e (paths nat (pk p) (pk q)) empty)
       (pi pre plist (pi post plist (pi t tree (pi r nat
         (paths nat
           (applall (papp pre (pcons p (pcons q post))) t r)
           (applall (papp pre (pcons q (pcons p post))) t r)))))))))
-   '(lam p (lam q (lam ne (lam pre (lam post
+   (lam p (lam q (lam ne (lam pre (lam post
       ((nat_rect
          (lam n (pi v (pvec n) (pi t tree (pi r nat
            (paths nat
@@ -312,50 +312,50 @@
 ; --- every succ-succ step of natgtb and natminus is DEFINITIONAL, so the
 ; --- cancellation laws are one induction each, steps landing on their IH ---
 (assert
- (defq 'natlehnplusnm
-   '(pi a nat (pi b nat (paths bool (natgtb a (add a b)) false)))
-   '(lam a (lam b (nat_rect (lam q (paths bool (natgtb q (add q b)) false))
+ (defq natlehnplusnm
+   (pi a nat (pi b nat (paths bool (natgtb a (add a b)) false)))
+   (lam a (lam b (nat_rect (lam q (paths bool (natgtb q (add q b)) false))
       (idpath false)
       (lam k (lam IH IH))
       a))))
- (defq 'natlehmplusnm
-   '(pi a nat (pi b nat (paths bool (natgtb a (add b a)) false)))
-   '(lam a (lam b (nat_rect (lam q (paths bool (natgtb a (add q a)) false))
+ (defq natlehmplusnm
+   (pi a nat (pi b nat (paths bool (natgtb a (add b a)) false)))
+   (lam a (lam b (nat_rect (lam q (paths bool (natgtb a (add q a)) false))
       (isreflnatleh a)
       (lam k (lam IH (natlehsucc a (add k a) IH)))
       b))))
- (defq 'natgtbplusl
-   '(pi c nat (pi a nat (pi b nat (paths bool (natgtb (add c a) (add c b)) (natgtb a b)))))
-   '(lam c (lam a (lam b (nat_rect (lam q (paths bool (natgtb (add q a) (add q b)) (natgtb a b)))
+ (defq natgtbplusl
+   (pi c nat (pi a nat (pi b nat (paths bool (natgtb (add c a) (add c b)) (natgtb a b)))))
+   (lam c (lam a (lam b (nat_rect (lam q (paths bool (natgtb (add q a) (add q b)) (natgtb a b)))
       (idpath (natgtb a b))
       (lam k (lam IH IH))
       c)))))
- (defq 'natgtbplusr
-   '(pi a nat (pi b nat (pi c nat (paths bool (natgtb (add a c) (add b c)) (natgtb a b)))))
-   '(lam a (lam b (lam c
+ (defq natgtbplusr
+   (pi a nat (pi b nat (pi c nat (paths bool (natgtb (add a c) (add b c)) (natgtb a b)))))
+   (lam a (lam b (lam c
       (pathscomp0 bool (natgtb (add a c) (add b c)) (natgtb (add c a) (add c b)) (natgtb a b)
         (pathscomp0 bool (natgtb (add a c) (add b c)) (natgtb (add c a) (add b c)) (natgtb (add c a) (add c b))
           (maponpaths nat bool (lam w (natgtb w (add b c))) (add a c) (add c a) (natpluscomm a c))
           (maponpaths nat bool (lam w (natgtb (add c a) w)) (add b c) (add c b) (natpluscomm b c)))
         (natgtbplusl c a b))))))
- (defq 'natpluscancelminus
-   '(pi a nat (pi b nat (paths nat (natminus (add a b) b) a)))
-   '(lam a (lam b (nat_rect (lam q (paths nat (natminus (add a q) q) a))
+ (defq natpluscancelminus
+   (pi a nat (pi b nat (paths nat (natminus (add a b) b) a)))
+   (lam a (lam b (nat_rect (lam q (paths nat (natminus (add a q) q) a))
       (pathscomp0 nat (natminus (add a 0) 0) (add a 0) a (natminusn0 (add a 0)) (natplusr0 a))
       (lam k (lam IH
         (pathscomp0 nat (natminus (add a (succ k)) (succ k)) (natminus (add (succ a) k) (succ k)) a
           (maponpaths nat nat (lam w (natminus w (succ k))) (add a (succ k)) (add (succ a) k) (natplusnsm a k))
           IH)))
       b))))
- (defq 'natpluslcancelminus
-   '(pi c nat (pi x nat (paths nat (natminus (add c x) c) x)))
-   '(lam c (lam x
+ (defq natpluslcancelminus
+   (pi c nat (pi x nat (paths nat (natminus (add c x) c) x)))
+   (lam c (lam x
       (pathscomp0 nat (natminus (add c x) c) (natminus (add x c) c) x
         (maponpaths nat nat (lam w (natminus w c)) (add c x) (add x c) (natpluscomm c x))
         (natpluscancelminus x c)))))
- (defq 'natplusswap
-   '(pi a nat (pi b nat (pi c nat (paths nat (add (add a b) c) (add (add a c) b)))))
-   '(lam a (lam b (lam c
+ (defq natplusswap
+   (pi a nat (pi b nat (pi c nat (paths nat (add (add a b) c) (add (add a c) b)))))
+   (lam a (lam b (lam c
       (pathscomp0 nat (add (add a b) c) (add a (add b c)) (add (add a c) b)
         (natplusassoc a b c)
         (pathscomp0 nat (add a (add b c)) (add a (add c b)) (add (add a c) b)
@@ -369,15 +369,15 @@
 ; --- vocabulary (ltake/ldrop/lapp/lapptakedrop/ldroplen/lnil0 load before
 ; --- this file by sort order); every induction walks the vector like uulay's ---
 (assert
- (defq 'ldropnil
-   '(pi k nat (paths nlist (ldrop k nnil) nnil))
-   '(lam k (nat_rect (lam q (paths nlist (ldrop q nnil) nnil))
+ (defq ldropnil
+   (pi k nat (paths nlist (ldrop k nnil) nnil))
+   (lam k (nat_rect (lam q (paths nlist (ldrop q nnil) nnil))
       (idpath nnil)
       (lam j (lam IH (idpath nnil)))
       k)))
- (defq 'lapplen
-   '(pi a nlist (pi b nlist (paths nat (nlen (lapp a b)) (add (nlen a) (nlen b)))))
-   '(lam a (lam b ((nat_rect
+ (defq lapplen
+   (pi a nlist (pi b nlist (paths nat (nlen (lapp a b)) (add (nlen a) (nlen b)))))
+   (lam a (lam b ((nat_rect
       (lam q (pi v (nvec q) (paths nat (nlen (lapp (tpair q v) b)) (add q (nlen b)))))
       (lam v (idpath (nlen b)))
       (lam k (lam IH (lam v
@@ -385,9 +385,9 @@
           (nlen (lapp (tpair k (pr2 v)) b)) (add k (nlen b)) (IH (pr2 v))))))
       (pr1 a))
      (pr2 a)))))
- (defq 'lappassoc
-   '(pi a nlist (pi b nlist (pi c nlist (paths nlist (lapp (lapp a b) c) (lapp a (lapp b c))))))
-   '(lam a (lam b (lam c ((nat_rect
+ (defq lappassoc
+   (pi a nlist (pi b nlist (pi c nlist (paths nlist (lapp (lapp a b) c) (lapp a (lapp b c))))))
+   (lam a (lam b (lam c ((nat_rect
       (lam q (pi v (nvec q) (paths nlist (lapp (lapp (tpair q v) b) c) (lapp (tpair q v) (lapp b c)))))
       (lam v (idpath (lapp b c)))
       (lam k (lam IH (lam v
@@ -395,9 +395,9 @@
           (lapp (lapp (tpair k (pr2 v)) b) c) (lapp (tpair k (pr2 v)) (lapp b c)) (IH (pr2 v))))))
       (pr1 a))
      (pr2 a))))))
- (defq 'ltakelenapp
-   '(pi a nlist (pi b nlist (paths nlist (ltake (nlen a) (lapp a b)) a)))
-   '(lam a (lam b ((nat_rect
+ (defq ltakelenapp
+   (pi a nlist (pi b nlist (paths nlist (ltake (nlen a) (lapp a b)) a)))
+   (lam a (lam b ((nat_rect
       (lam q (pi v (nvec q) (paths nlist (ltake q (lapp (tpair q v) b)) (tpair q v))))
       (lam v (pathsinv0 nlist (tpair 0 v) nnil (lnil0 v)))
       (lam k (lam IH (lam v
@@ -405,25 +405,25 @@
           (ltake k (lapp (tpair k (pr2 v)) b)) (tpair k (pr2 v)) (IH (pr2 v))))))
       (pr1 a))
      (pr2 a)))))
- (defq 'ldroplenapp
-   '(pi a nlist (pi b nlist (paths nlist (ldrop (nlen a) (lapp a b)) b)))
-   '(lam a (lam b ((nat_rect
+ (defq ldroplenapp
+   (pi a nlist (pi b nlist (paths nlist (ldrop (nlen a) (lapp a b)) b)))
+   (lam a (lam b ((nat_rect
       (lam q (pi v (nvec q) (paths nlist (ldrop q (lapp (tpair q v) b)) b)))
       (lam v (idpath b))
       (lam k (lam IH (lam v (IH (pr2 v)))))
       (pr1 a))
      (pr2 a)))))
- (defq 'ldropplusapp
-   '(pi a nlist (pi m nat (pi b nlist (paths nlist (ldrop (add (nlen a) m) (lapp a b)) (ldrop m b)))))
-   '(lam a (lam m (lam b ((nat_rect
+ (defq ldropplusapp
+   (pi a nlist (pi m nat (pi b nlist (paths nlist (ldrop (add (nlen a) m) (lapp a b)) (ldrop m b)))))
+   (lam a (lam m (lam b ((nat_rect
       (lam q (pi v (nvec q) (paths nlist (ldrop (add q m) (lapp (tpair q v) b)) (ldrop m b))))
       (lam v (idpath (ldrop m b)))
       (lam k (lam IH (lam v (IH (pr2 v)))))
       (pr1 a))
      (pr2 a))))))
- (defq 'ltakeplusapp
-   '(pi a nlist (pi m nat (pi b nlist (paths nlist (ltake (add (nlen a) m) (lapp a b)) (lapp a (ltake m b))))))
-   '(lam a (lam m (lam b ((nat_rect
+ (defq ltakeplusapp
+   (pi a nlist (pi m nat (pi b nlist (paths nlist (ltake (add (nlen a) m) (lapp a b)) (lapp a (ltake m b))))))
+   (lam a (lam m (lam b ((nat_rect
       (lam q (pi v (nvec q) (paths nlist (ltake (add q m) (lapp (tpair q v) b)) (lapp (tpair q v) (ltake m b)))))
       (lam v (idpath (ltake m b)))
       (lam k (lam IH (lam v
@@ -431,10 +431,10 @@
           (ltake (add k m) (lapp (tpair k (pr2 v)) b)) (lapp (tpair k (pr2 v)) (ltake m b)) (IH (pr2 v))))))
       (pr1 a))
      (pr2 a))))))
- (defq 'ltakeprefix
-   '(pi j nat (pi a nlist (pi b nlist (pi h (paths bool (natgtb j (nlen a)) false)
+ (defq ltakeprefix
+   (pi j nat (pi a nlist (pi b nlist (pi h (paths bool (natgtb j (nlen a)) false)
       (paths nlist (ltake j (lapp a b)) (ltake j a))))))
-   '(lam j ((nat_rect
+   (lam j ((nat_rect
       (lam q (pi a nlist (pi b nlist (pi h (paths bool (natgtb q (nlen a)) false)
                (paths nlist (ltake q (lapp a b)) (ltake q a))))))
       (lam a (lam b (lam h (idpath nnil))))
@@ -452,10 +452,10 @@
            (pr1 a))
           (pr2 a))))))
       j))))
- (defq 'ldropprefix
-   '(pi j nat (pi a nlist (pi b nlist (pi h (paths bool (natgtb j (nlen a)) false)
+ (defq ldropprefix
+   (pi j nat (pi a nlist (pi b nlist (pi h (paths bool (natgtb j (nlen a)) false)
       (paths nlist (ldrop j (lapp a b)) (lapp (ldrop j a) b))))))
-   '(lam j ((nat_rect
+   (lam j ((nat_rect
       (lam q (pi a nlist (pi b nlist (pi h (paths bool (natgtb q (nlen a)) false)
                (paths nlist (ldrop q (lapp a b)) (lapp (ldrop q a) b))))))
       (lam a (lam b (lam h (idpath (lapp a b)))))
@@ -471,9 +471,9 @@
            (pr1 a))
           (pr2 a))))))
       j))))
- (defq 'ldropdrop
-   '(pi i nat (pi c nat (pi s nlist (paths nlist (ldrop c (ldrop i s)) (ldrop (add i c) s)))))
-   '(lam i (lam c ((nat_rect
+ (defq ldropdrop
+   (pi i nat (pi c nat (pi s nlist (paths nlist (ldrop c (ldrop i s)) (ldrop (add i c) s)))))
+   (lam i (lam c ((nat_rect
       (lam q (pi s nlist (paths nlist (ldrop c (ldrop q s)) (ldrop (add q c) s))))
       (lam s (idpath (ldrop c s)))
       (lam i2 (lam IH
@@ -484,10 +484,10 @@
            (pr1 s))
           (pr2 s)))))
       i)))))
- (defq 'ltakelen
-   '(pi i nat (pi s nlist (pi h (paths bool (natgtb i (nlen s)) false)
+ (defq ltakelen
+   (pi i nat (pi s nlist (pi h (paths bool (natgtb i (nlen s)) false)
       (paths nat (nlen (ltake i s)) i))))
-   '(lam i ((nat_rect
+   (lam i ((nat_rect
       (lam q (pi s nlist (pi h (paths bool (natgtb q (nlen s)) false)
                (paths nat (nlen (ltake q s)) q))))
       (lam s (lam h (idpath 0)))
@@ -518,21 +518,21 @@
 ; --- convoy the named-slot slice built on isdeceqnat. refusal (overlap OR
 ; --- touch: strict, the darcs seam) is the unit summand ---
 (assert
- (defn 'hunk 'UU '(total2 i nat (total2 o nlist nlist)))
- (defn 'mkh '(pi i nat (pi o nlist (pi n nlist hunk)))
-   '(lam i (lam o (lam n (tpair i (tpair o n))))))
- (defn 'hi '(pi p hunk nat) '(lam p (pr1 p)))
- (defn 'ho '(pi p hunk nlist) '(lam p (pr1 (pr2 p))))
- (defn 'hn '(pi p hunk nlist) '(lam p (pr2 (pr2 p))))
- (defn 'splice '(pi s nlist (pi i nat (pi c nat (pi n nlist nlist))))
-   '(lam s (lam i (lam c (lam n (lapp (ltake i s) (lapp n (ldrop (add i c) s))))))))
- (defn 'hap '(pi s nlist (pi p hunk nlist))
-   '(lam s (lam p (splice s (hi p) (nlen (ho p)) (hn p)))))
- (defn 'hinv '(pi p hunk hunk)
-   '(lam p (mkh (hi p) (hn p) (ho p))))
- (defn 'hpair 'UU '(total2 x hunk hunk))
- (defn 'hcommute '(pi p hunk (pi q hunk (coprod hpair unit)))
-   '(lam p (lam q
+ (defn hunk UU (total2 i nat (total2 o nlist nlist)))
+ (defn mkh (pi i nat (pi o nlist (pi n nlist hunk)))
+   (lam i (lam o (lam n (tpair i (tpair o n))))))
+ (defn hi (pi p hunk nat) (lam p (pr1 p)))
+ (defn ho (pi p hunk nlist) (lam p (pr1 (pr2 p))))
+ (defn hn (pi p hunk nlist) (lam p (pr2 (pr2 p))))
+ (defn splice (pi s nlist (pi i nat (pi c nat (pi n nlist nlist))))
+   (lam s (lam i (lam c (lam n (lapp (ltake i s) (lapp n (ldrop (add i c) s))))))))
+ (defn hap (pi s nlist (pi p hunk nlist))
+   (lam s (lam p (splice s (hi p) (nlen (ho p)) (hn p)))))
+ (defn hinv (pi p hunk hunk)
+   (lam p (mkh (hi p) (hn p) (ho p))))
+ (defn hpair UU (total2 x hunk hunk))
+ (defn hcommute (pi p hunk (pi q hunk (coprod hpair unit)))
+   (lam p (lam q
       (coprod_rect (lam c (coprod hpair unit))
         (lam g (ii1 (tpair (mkh (natminus (add (hi q) (nlen (ho p))) (nlen (hn p))) (ho q) (hn q)) p)))
         (lam g (coprod_rect (lam c2 (coprod hpair unit))
@@ -556,13 +556,13 @@
 ; --- the named-slot slice; the arithmetic is the natgtbplusr cancellation
 ; --- through natminusplusnmm's recomposition, once per branch ---
 (assert
- (defn 'hcmside '(pi c (coprod hpair unit) UU)
-   '(lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
- (defq 'hcommute-involutive
-   '(pi p hunk (pi q hunk (pi q2 hunk (pi p2 hunk
+ (defn hcmside (pi c (coprod hpair unit) UU)
+   (lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
+ (defq hcommute-involutive
+   (pi p hunk (pi q hunk (pi q2 hunk (pi p2 hunk
       (pi h (paths (coprod hpair unit) (hcommute p q) (ii1 (tpair q2 p2)))
         (paths (coprod hpair unit) (hcommute q2 p2) (ii1 (tpair p q))))))))
-   '(lam p (lam q (lam q2 (lam p2
+   (lam p (lam q (lam q2 (lam p2
       (coprod_rect
         (lam c (pi h (paths (coprod hpair unit)
                  (coprod_rect (lam cc (coprod hpair unit))
@@ -758,12 +758,12 @@
 ; --- DEFINITIONALLY take/append/drop, so the whole proof is the seams
 ; --- decomposition s = A ++ o ++ W laid twice through the fusion kit ---
 (assert
- (defq 'hinv-roundtrip
-   '(pi s nlist (pi p hunk
+ (defq hinv-roundtrip
+   (pi s nlist (pi p hunk
       (pi hb (paths bool (natgtb (add (hi p) (nlen (ho p))) (nlen s)) false)
         (pi hc (paths nlist (ltake (nlen (ho p)) (ldrop (hi p) s)) (ho p))
           (paths nlist (hap (hap s p) (hinv p)) s)))))
-   '(lam s (lam p (lam hb (lam hc
+   (lam s (lam p (lam hb (lam hc
       (let A (ltake (hi p) s)
       (let W (ldrop (add (hi p) (nlen (ho p))) s)
       (let HA (ltakelen (hi p) s
@@ -832,12 +832,12 @@
 ; --- every use is a stuck neutral. seams is the one decomposition law all the
 ; --- slices lean on: a valid (i, o) window splits s as A ++ o ++ W ---
 (assert
- (defq 'seams
-   '(pi s nlist (pi i nat (pi o nlist
+ (defq seams
+   (pi s nlist (pi i nat (pi o nlist
       (pi hb (paths bool (natgtb (add i (nlen o)) (nlen s)) false)
       (pi hc (paths nlist (ltake (nlen o) (ldrop i s)) o)
         (paths nlist s (lapp (ltake i s) (lapp o (ldrop (add i (nlen o)) s)))))))))
-   '(lam s (lam i (lam o (lam hb (lam hc
+   (lam s (lam i (lam o (lam hb (lam hc
       (pathscomp0 nlist s (lapp (ltake i s) (ldrop i s)) (lapp (ltake i s) (lapp o (ldrop (add i (nlen o)) s)))
         (pathsinv0 nlist (lapp (ltake i s) (ldrop i s)) s (lapptakedrop i s))
         (maponpaths nlist nlist (lam t (lapp (ltake i s) t)) (ldrop i s) (lapp o (ldrop (add i (nlen o)) s))
@@ -858,12 +858,12 @@
                 (ldrop (nlen o) (ldrop i s)) (ldrop (add i (nlen o)) s) (ldropdrop i (nlen o) s))))))))))))
  ; the AFTER branch's index ledger: with i + |n1| < j and the window in range,
  ; j sits |A| + (|n1| + kk) in from the patched state's seams (kk the gap)
- (defq 'after-j
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat
+ (defq after-j
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
         (paths nat j (add (nlen (ltake i s)) (add (nlen n1) (natminus j (add i (nlen n1)))))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam g (lam hb1
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam g (lam hb1
       (let A (ltake i s)
       (let kk (natminus j (add i (nlen n1)))
       (pathscomp0 nat j (add i (add (nlen n1) kk)) (add (nlen A) (add (nlen n1) kk))
@@ -879,14 +879,14 @@
             (ltakelen i s
               (istransnatleh i (add i (nlen o1)) (nlen s) (natlehnplusnm i (nlen o1)) hb1)))))))))))))))
  ; dropping j off the patched state is dropping the gap off W
- (defq 'after-drop
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat
+ (defq after-drop
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
         (paths nlist
           (ldrop j (lapp (ltake i s) (lapp n1 (ldrop (add i (nlen o1)) s))))
           (ldrop (natminus j (add i (nlen n1))) (ldrop (add i (nlen o1)) s))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam g (lam hb1
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam g (lam hb1
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let kk (natminus j (add i (nlen n1)))
@@ -903,15 +903,15 @@
           (ldropplusapp A (add (nlen n1) kk) (lapp n1 W))
           (ldropplusapp n1 kk W))))))))))))))
  ; q's context, re-read at the gap
- (defq 'after-c2
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist
+ (defq after-c2
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hc2 (paths nlist (ltake (nlen o2) (ldrop j (splice s i (nlen o1) n1))) o2)
         (paths nlist
           (ltake (nlen o2) (ldrop (natminus j (add i (nlen n1))) (ldrop (add i (nlen o1)) s)))
           o2))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam g (lam hb1 (lam hc2
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam g (lam hb1 (lam hc2
       (pathscomp0 nlist
         (ltake (nlen o2) (ldrop (natminus j (add i (nlen n1))) (ldrop (add i (nlen o1)) s)))
         (ltake (nlen o2) (ldrop j (lapp (ltake i s) (lapp n1 (ldrop (add i (nlen o1)) s)))))
@@ -925,15 +925,15 @@
             (after-drop s i o1 n1 j g hb1)))
         hc2)))))))))))
  ; q's window, in range past the gap
- (defq 'after-bk
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist
+ (defq after-bk
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hb2 (paths bool (natgtb (add j (nlen o2)) (nlen (splice s i (nlen o1) n1))) false)
         (paths bool
           (natgtb (add (natminus j (add i (nlen n1))) (nlen o2)) (nlen (ldrop (add i (nlen o1)) s)))
           false))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam g (lam hb1 (lam hb2
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam g (lam hb1 (lam hb2
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let kk (natminus j (add i (nlen n1)))
@@ -997,14 +997,14 @@
 ; --- (the ORIGINAL order's two, the RE-AIMED order's two), the re-aimed
 ; --- state's normal form, and the assembly ---
 (assert
- (defq 'after-j2v
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat
+ (defq after-j2v
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
         (paths nat
           (natminus (add j (nlen o1)) (nlen n1))
           (add (nlen (ltake i s)) (add (nlen o1) (natminus j (add i (nlen n1)))))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam g (lam hb1
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam g (lam hb1
       (let A (ltake i s)
       (let kk (natminus j (add i (nlen n1)))
       (pathscomp0 nat
@@ -1051,8 +1051,8 @@
                         (pathsinv0 nat j (add (nlen A) (add (nlen n1) kk))
                           (after-j s i o1 n1 j g hb1))))))))))
         (natpluscancelminus (add (nlen A) (add (nlen o1) kk)) (nlen n1)))))))))))))
- (defq 'after-u1
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist
+ (defq after-u1
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hc1 (paths nlist (ltake (nlen o1) (ldrop i s)) o1)
@@ -1061,7 +1061,7 @@
         (paths nlist
           (ltake (natminus (add j (nlen o1)) (nlen n1)) s)
           (lapp (ltake i s) (lapp o1 (ltake (natminus j (add i (nlen n1))) (ldrop (add i (nlen o1)) s))))))))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam g (lam hb1 (lam hc1 (lam hb2 (lam hc2
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam g (lam hb1 (lam hc1 (lam hb2 (lam hc2
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let kk (natminus j (add i (nlen n1)))
@@ -1112,8 +1112,8 @@
                 (maponpaths nlist nlist (lam t (lapp A (lapp o1 t)))
                   (ltake (nlen M) (lapp M (lapp o2 Z))) M
                   (ltakelenapp M (lapp o2 Z)))))))))))))))))))))))))
- (defq 'after-u2
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist
+ (defq after-u2
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hc1 (paths nlist (ltake (nlen o1) (ldrop i s)) o1)
@@ -1122,7 +1122,7 @@
         (paths nlist
           (ldrop (add (natminus (add j (nlen o1)) (nlen n1)) (nlen o2)) s)
           (ldrop (add (natminus j (add i (nlen n1))) (nlen o2)) (ldrop (add i (nlen o1)) s))))))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam g (lam hb1 (lam hc1 (lam hb2 (lam hc2
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam g (lam hb1 (lam hc1 (lam hb2 (lam hc2
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let kk (natminus j (add i (nlen n1)))
@@ -1188,14 +1188,14 @@
                   Z
                   (ldropplusapp M (nlen o2) (lapp o2 Z))
                   (ldroplenapp o2 Z))))))))))))))))))))))))
- (defq 'after-l1p
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat
+ (defq after-l1p
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
         (paths nlist
           (ltake j (lapp (ltake i s) (lapp n1 (ldrop (add i (nlen o1)) s))))
           (lapp (ltake i s) (lapp n1 (ltake (natminus j (add i (nlen n1))) (ldrop (add i (nlen o1)) s))))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam g (lam hb1
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam g (lam hb1
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let kk (natminus j (add i (nlen n1)))
@@ -1213,14 +1213,14 @@
           (maponpaths nlist nlist (lam t (lapp A t))
             (ltake (add (nlen n1) kk) (lapp n1 W)) (lapp n1 (ltake kk W))
             (ltakeplusapp n1 kk W)))))))))))))))
- (defq 'after-l2p
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist
+ (defq after-l2p
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
         (paths nlist
           (ldrop (add j (nlen o2)) (lapp (ltake i s) (lapp n1 (ldrop (add i (nlen o1)) s))))
           (ldrop (add (natminus j (add i (nlen n1))) (nlen o2)) (ldrop (add i (nlen o1)) s)))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam g (lam hb1
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam g (lam hb1
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let kk (natminus j (add i (nlen n1)))
@@ -1255,8 +1255,8 @@
 ; --- the re-aimed state's normal form, its two reads at p's window, and the
 ; --- assembly: both orders land A ++ n1 ++ M ++ n2 ++ Z ---
 (assert
- (defq 'after-nf2
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
+ (defq after-nf2
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hc1 (paths nlist (ltake (nlen o1) (ldrop i s)) o1)
@@ -1267,7 +1267,7 @@
           (lapp (ltake i s)
                 (lapp o1 (lapp (ltake (natminus j (add i (nlen n1))) (ldrop (add i (nlen o1)) s))
                               (lapp n2 (ldrop (add (natminus j (add i (nlen n1))) (nlen o2)) (ldrop (add i (nlen o1)) s)))))))))))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g (lam hb1 (lam hc1 (lam hb2 (lam hc2
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g (lam hb1 (lam hc1 (lam hb2 (lam hc2
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let kk (natminus j (add i (nlen n1)))
@@ -1296,8 +1296,8 @@
           (maponpaths nlist nlist (lam t (lapp A t))
             (lapp (lapp o1 M) (lapp n2 Z)) (lapp o1 (lapp M (lapp n2 Z)))
             (lappassoc o1 M (lapp n2 Z))))))))))))))))))))))))
- (defq 'after-v1
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
+ (defq after-v1
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hc1 (paths nlist (ltake (nlen o1) (ldrop i s)) o1)
@@ -1306,7 +1306,7 @@
         (paths nlist
           (ltake i (splice s (natminus (add j (nlen o1)) (nlen n1)) (nlen o2) n2))
           (ltake i s))))))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g (lam hb1 (lam hc1 (lam hb2 (lam hc2
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g (lam hb1 (lam hc1 (lam hb2 (lam hc2
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let kk (natminus j (add i (nlen n1)))
@@ -1330,8 +1330,8 @@
             (splice s j2 (nlen o2) n2) (lapp A (lapp o1 (lapp M (lapp n2 Z))))
             (after-nf2 s i o1 n1 j o2 n2 g hb1 hc1 hb2 hc2))
           (ltakelenapp A (lapp o1 (lapp M (lapp n2 Z)))))))))))))))))))))))))
- (defq 'after-v2
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
+ (defq after-v2
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hc1 (paths nlist (ltake (nlen o1) (ldrop i s)) o1)
@@ -1341,7 +1341,7 @@
           (ldrop (add i (nlen o1)) (splice s (natminus (add j (nlen o1)) (nlen n1)) (nlen o2) n2))
           (lapp (ltake (natminus j (add i (nlen n1))) (ldrop (add i (nlen o1)) s))
                 (lapp n2 (ldrop (add (natminus j (add i (nlen n1))) (nlen o2)) (ldrop (add i (nlen o1)) s)))))))))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g (lam hb1 (lam hc1 (lam hb2 (lam hc2
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g (lam hb1 (lam hc1 (lam hb2 (lam hc2
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let kk (natminus j (add i (nlen n1)))
@@ -1370,8 +1370,8 @@
             (lapp M (lapp n2 Z))
             (ldropplusapp A (nlen o1) (lapp o1 (lapp M (lapp n2 Z))))
             (ldroplenapp o1 (lapp M (lapp n2 Z)))))))))))))))))))))))))
- (defq 'splice-after-comm
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
+ (defq splice-after-comm
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
       (pi g (paths bool (natgtb j (add i (nlen n1))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hc1 (paths nlist (ltake (nlen o1) (ldrop i s)) o1)
@@ -1380,7 +1380,7 @@
         (paths nlist
           (splice (splice s i (nlen o1) n1) j (nlen o2) n2)
           (splice (splice s (natminus (add j (nlen o1)) (nlen n1)) (nlen o2) n2) i (nlen o1) n1))))))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g (lam hb1 (lam hc1 (lam hb2 (lam hc2
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g (lam hb1 (lam hc1 (lam hb2 (lam hc2
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let kk (natminus j (add i (nlen n1)))
@@ -1433,12 +1433,12 @@
 ; --- q's delta. the state decomposes B ++ o2 ++ C ++ o1 ++ W; the same sealed
 ; --- ladder, with A's own seams carrying the front half ---
 (assert
- (defq 'before-leh-ja
-   '(pi s nlist (pi i nat (pi o1 nlist (pi j nat (pi o2 nlist
+ (defq before-leh-ja
+   (pi s nlist (pi i nat (pi o1 nlist (pi j nat (pi o2 nlist
       (pi g2 (paths bool (natgtb i (add j (nlen o2))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
         (paths bool (natgtb j (nlen (ltake i s))) false))))))))
-   '(lam s (lam i (lam o1 (lam j (lam o2 (lam g2 (lam hb1
+   (lam s (lam i (lam o1 (lam j (lam o2 (lam g2 (lam hb1
       (pathscomp0 bool
         (natgtb j (nlen (ltake i s)))
         (natgtb j i)
@@ -1449,12 +1449,12 @@
         (istransnatleh j (add j (nlen o2)) i
           (natlehnplusnm j (nlen o2))
           (natlthtoleh (add j (nlen o2)) i g2)))))))))))
- (defq 'before-leh-jo
-   '(pi s nlist (pi i nat (pi o1 nlist (pi j nat (pi o2 nlist
+ (defq before-leh-jo
+   (pi s nlist (pi i nat (pi o1 nlist (pi j nat (pi o2 nlist
       (pi g2 (paths bool (natgtb i (add j (nlen o2))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
         (paths bool (natgtb (add j (nlen o2)) (nlen (ltake i s))) false))))))))
-   '(lam s (lam i (lam o1 (lam j (lam o2 (lam g2 (lam hb1
+   (lam s (lam i (lam o1 (lam j (lam o2 (lam g2 (lam hb1
       (pathscomp0 bool
         (natgtb (add j (nlen o2)) (nlen (ltake i s)))
         (natgtb (add j (nlen o2)) i)
@@ -1464,13 +1464,13 @@
             (istransnatleh i (add i (nlen o1)) (nlen s) (natlehnplusnm i (nlen o1)) hb1)))
         (natlthtoleh (add j (nlen o2)) i g2))))))))))
  ; q's context re-read on A's front: peel the appended tail twice
- (defq 'before-hca
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist
+ (defq before-hca
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist
       (pi g2 (paths bool (natgtb i (add j (nlen o2))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hc2 (paths nlist (ltake (nlen o2) (ldrop j (splice s i (nlen o1) n1))) o2)
         (paths nlist (ltake (nlen o2) (ldrop j (ltake i s))) o2))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam g2 (lam hb1 (lam hc2
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam g2 (lam hb1 (lam hc2
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (pathscomp0 nlist
@@ -1521,13 +1521,13 @@
 ; --- so conv never re-walks a take/drop tower); then the re-aimed state's
 ; --- normal form, its two reads, and the assembly ---
 (assert
- (defq 'before-i2v
-   '(pi i nat (pi j nat (pi o2 nlist (pi n2 nlist
+ (defq before-i2v
+   (pi i nat (pi j nat (pi o2 nlist (pi n2 nlist
       (pi g2 (paths bool (natgtb i (add j (nlen o2))) true)
         (paths nat
           (natminus (add i (nlen n2)) (nlen o2))
           (add j (add (nlen n2) (natminus i (add j (nlen o2)))))))))))
-   '(lam i (lam j (lam o2 (lam n2 (lam g2
+   (lam i (lam j (lam o2 (lam n2 (lam g2
       (let cc (natminus i (add j (nlen o2)))
       (pathscomp0 nat
         (natminus (add i (nlen n2)) (nlen o2))
@@ -1568,8 +1568,8 @@
                         (natminusplusnmm i (add j (nlen o2))
                           (natlthtoleh (add j (nlen o2)) i g2))))))))))
         (natpluscancelminus (add j (add (nlen n2) cc)) (nlen o2))))))))))
- (defq 'before-nfs2
-   '(pi s nlist (pi i nat (pi o1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
+ (defq before-nfs2
+   (pi s nlist (pi i nat (pi o1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
       (pi g2 (paths bool (natgtb i (add j (nlen o2))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hc1 (paths nlist (ltake (nlen o1) (ldrop i s)) o1)
@@ -1578,7 +1578,7 @@
           (lapp (ltake j (ltake i s))
                 (lapp n2 (lapp (ldrop (add j (nlen o2)) (ltake i s))
                               (lapp o1 (ldrop (add i (nlen o1)) s)))))))))))))))
-   '(lam s (lam i (lam o1 (lam j (lam o2 (lam n2 (lam g2 (lam hb1 (lam hc1
+   (lam s (lam i (lam o1 (lam j (lam o2 (lam n2 (lam g2 (lam hb1 (lam hc1
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let B (ltake j A)
@@ -1604,13 +1604,13 @@
               (seams s i o1 hb1 hc1))
             (ldropprefix (add j (nlen o2)) A (lapp o1 W)
               (before-leh-jo s i o1 j o2 g2 hb1)))))))))))))))))))
- (defq 'before-clen
-   '(pi s nlist (pi i nat (pi o1 nlist (pi j nat (pi o2 nlist
+ (defq before-clen
+   (pi s nlist (pi i nat (pi o1 nlist (pi j nat (pi o2 nlist
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
         (paths nat
           (nlen (ldrop (add j (nlen o2)) (ltake i s)))
           (natminus i (add j (nlen o2))))))))))
-   '(lam s (lam i (lam o1 (lam j (lam o2 (lam hb1
+   (lam s (lam i (lam o1 (lam j (lam o2 (lam hb1
       (pathscomp0 nat
         (nlen (ldrop (add j (nlen o2)) (ltake i s)))
         (natminus (nlen (ltake i s)) (add j (nlen o2)))
@@ -1619,8 +1619,8 @@
         (maponpaths nat nat (lam w (natminus w (add j (nlen o2)))) (nlen (ltake i s)) i
           (ltakelen i s
             (istransnatleh i (add i (nlen o1)) (nlen s) (natlehnplusnm i (nlen o1)) hb1)))))))))))
- (defq 'before-v1
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
+ (defq before-v1
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
       (pi g2 (paths bool (natgtb i (add j (nlen o2))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hc1 (paths nlist (ltake (nlen o1) (ldrop i s)) o1)
@@ -1629,7 +1629,7 @@
           (ltake (natminus (add i (nlen n2)) (nlen o2)) (splice s j (nlen o2) n2))
           (lapp (ltake j (ltake i s))
                 (lapp n2 (ldrop (add j (nlen o2)) (ltake i s))))))))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g2 (lam hb1 (lam hc1 (lam hc2
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g2 (lam hb1 (lam hc1 (lam hc2
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let B (ltake j A)
@@ -1681,8 +1681,8 @@
                 (maponpaths nlist nlist (lam t (lapp B (lapp n2 t)))
                   (ltake (nlen C) (lapp C (lapp o1 W))) C
                   (ltakelenapp C (lapp o1 W)))))))))))))))))))))))))
- (defq 'before-v2
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
+ (defq before-v2
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
       (pi g2 (paths bool (natgtb i (add j (nlen o2))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hc1 (paths nlist (ltake (nlen o1) (ldrop i s)) o1)
@@ -1690,7 +1690,7 @@
         (paths nlist
           (ldrop (add (natminus (add i (nlen n2)) (nlen o2)) (nlen o1)) (splice s j (nlen o2) n2))
           (ldrop (add i (nlen o1)) s)))))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g2 (lam hb1 (lam hc1 (lam hc2
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g2 (lam hb1 (lam hc1 (lam hc2
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let B (ltake j A)
@@ -1757,8 +1757,8 @@
                 W
                 (ldropplusapp C (nlen o1) (lapp o1 W))
                 (ldroplenapp o1 W)))))))))))))))))))))))
- (defq 'splice-before-comm
-   '(pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
+ (defq splice-before-comm
+   (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat (pi o2 nlist (pi n2 nlist
       (pi g2 (paths bool (natgtb i (add j (nlen o2))) true)
       (pi hb1 (paths bool (natgtb (add i (nlen o1)) (nlen s)) false)
       (pi hc1 (paths nlist (ltake (nlen o1) (ldrop i s)) o1)
@@ -1766,7 +1766,7 @@
         (paths nlist
           (splice (splice s i (nlen o1) n1) j (nlen o2) n2)
           (splice (splice s j (nlen o2) n2) (natminus (add i (nlen n2)) (nlen o2)) (nlen o1) n1)))))))))))))
-   '(lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g2 (lam hb1 (lam hc1 (lam hc2
+   (lam s (lam i (lam o1 (lam n1 (lam j (lam o2 (lam n2 (lam g2 (lam hb1 (lam hc1 (lam hc2
       (let A (ltake i s)
       (let W (ldrop (add i (nlen o1)) s)
       (let B (ltake j A)
@@ -1826,14 +1826,14 @@
 ; --- its splice lemma. then (L3b): states are DATA, so the frontier is one
 ; --- maponpaths -- the fold's tail rides the two-patch agreement ---
 (assert
- (defn 'hvec '(pi n nat UU)
-   '(lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 x hunk r))) n)))
- (defn 'hlist 'UU '(total2 n nat (hvec n)))
- (defn 'hnil 'hlist '(tpair 0 tt))
- (defn 'hcons '(pi x hunk (pi l hlist hlist))
-   '(lam x (lam l (tpair (succ (pr1 l)) (tpair x (pr2 l))))))
- (defn 'happl '(pi l hlist (pi s nlist nlist))
-   '(lam l (lam s ((nat_rect (lam q (pi v (hvec q) (pi s2 nlist nlist)))
+ (defn hvec (pi n nat UU)
+   (lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 x hunk r))) n)))
+ (defn hlist UU (total2 n nat (hvec n)))
+ (defn hnil hlist (tpair 0 tt))
+ (defn hcons (pi x hunk (pi l hlist hlist))
+   (lam x (lam l (tpair (succ (pr1 l)) (tpair x (pr2 l))))))
+ (defn happl (pi l hlist (pi s nlist nlist))
+   (lam l (lam s ((nat_rect (lam q (pi v (hvec q) (pi s2 nlist nlist)))
                      (lam v (lam s2 s2))
                      (lam k (lam IH (lam v (lam s2 (IH (pr2 v) (hap s2 (pr1 v)))))))
                      (pr1 l))
@@ -1844,8 +1844,8 @@
                  (ncons 1 (ncons 2 (ncons 3 (ncons 4 nnil))))))
   = (vof 0 '(ncons 7 (ncons 8 (ncons 2 (ncons 9 (ncons 4 nnil))))))))
 (assert
- (defq 'hcommute-sound
-   '(pi
+ (defq hcommute-sound
+   (pi
      p
      hunk
      (pi
@@ -1876,7 +1876,7 @@
                        hc2
                        (paths nlist (ltake (nlen (ho q)) (ldrop (hi q) (hap s p))) (ho q))
                        (paths nlist (hap (hap s p) q) (hap (hap s q2) p2))))))))))))
-   '(lam
+   (lam
      p
      (lam
        q
@@ -2119,8 +2119,8 @@
                      h)))
                (natgthorleh (hi q) (add (hi p) (nlen (hn p))))))))))))
 (assert
- (defq 'hfold-swap
-   '(pi p hunk (pi q hunk (pi q2 hunk (pi p2 hunk (pi s nlist (pi post hlist
+ (defq hfold-swap
+   (pi p hunk (pi q hunk (pi q2 hunk (pi p2 hunk (pi s nlist (pi post hlist
       (pi h (paths (coprod hpair unit) (hcommute p q) (ii1 (tpair q2 p2)))
       (pi hb1 (paths bool (natgtb (add (hi p) (nlen (ho p))) (nlen s)) false)
       (pi hc1 (paths nlist (ltake (nlen (ho p)) (ldrop (hi p) s)) (ho p))
@@ -2129,7 +2129,7 @@
         (paths nlist
           (happl (hcons p (hcons q post)) s)
           (happl (hcons q2 (hcons p2 post)) s)))))))))))))
-   '(lam p (lam q (lam q2 (lam p2 (lam s (lam post (lam h (lam hb1 (lam hc1 (lam hb2 (lam hc2
+   (lam p (lam q (lam q2 (lam p2 (lam s (lam post (lam h (lam hb1 (lam hc1 (lam hb2 (lam hc2
       (maponpaths nlist nlist (lam t (happl post t))
         (hap (hap s p) q) (hap (hap s q2) p2)
         (hcommute-sound p q q2 p2 s h hb1 hc1 hb2 hc2)))))))))))))))
@@ -2162,33 +2162,33 @@
 ; --- step (npred a, succ b) -- una/unb the two step components, niszero/
 ; --- npred the case machinery, so every branch is definitional). ---
 (assert
- (defn 'tri
-   '(pi n nat nat)
-   '(lam n (nat_rect (lam q nat) 0 (lam k (lam r (add (succ k) r))) n)))
- (defn 'npair
-   '(pi a nat (pi b nat nat))
-   '(lam a (lam b (add (tri (add a b)) b))))
- (defn 'duo
-   'UU
-   '(total2 a nat nat))
- (defn 'una
-   '(pi x nat (pi y nat nat))
-   '(lam x (lam y (bool_rect (lam c nat) (succ y) (npred x) (niszero x)))))
- (defn 'unb
-   '(pi x nat (pi y nat nat))
-   '(lam x (lam y (bool_rect (lam c nat) 0 (succ y) (niszero x)))))
- (defn 'unpair
-   '(pi n nat duo)
-   '(lam n
+ (defn tri
+   (pi n nat nat)
+   (lam n (nat_rect (lam q nat) 0 (lam k (lam r (add (succ k) r))) n)))
+ (defn npair
+   (pi a nat (pi b nat nat))
+   (lam a (lam b (add (tri (add a b)) b))))
+ (defn duo
+   UU
+   (total2 a nat nat))
+ (defn una
+   (pi x nat (pi y nat nat))
+   (lam x (lam y (bool_rect (lam c nat) (succ y) (npred x) (niszero x)))))
+ (defn unb
+   (pi x nat (pi y nat nat))
+   (lam x (lam y (bool_rect (lam c nat) 0 (succ y) (niszero x)))))
+ (defn unpair
+   (pi n nat duo)
+   (lam n
       (nat_rect (lam q duo) (tpair 0 0)
         (lam k (lam u (tpair (una (pr1 u) (pr2 u)) (unb (pr1 u) (pr2 u)))))
         n)))
- (defn 'upa
-   '(pi n nat nat)
-   '(lam n (pr1 (unpair n))))
- (defn 'upb
-   '(pi n nat nat)
-   '(lam n (pr2 (unpair n))))
+ (defn upa
+   (pi n nat nat)
+   (lam n (pr1 (unpair n))))
+ (defn upb
+   (pi n nat nat)
+   (lam n (pr2 (unpair n))))
  ; the pairing computes: the diagonal walk inverts the triangle climb
  (id? (vof 0 '0) (vof 0 '(npair 0 0)))
  (id? (vof 0 '1) (vof 0 '(npair 1 0)))
@@ -2201,9 +2201,9 @@
 ; --- interior step slides down it. npairstep fuses them through una/unb
 ; --- (each branch definitional), npairunpair closes by one induction. ---
 (assert
- (defq 'npairhead
-   '(pi b nat (paths nat (npair (succ b) 0) (succ (npair 0 b))))
-   '(lam b
+ (defq npairhead
+   (pi b nat (paths nat (npair (succ b) 0) (succ (npair 0 b))))
+   (lam b
       (maponpaths nat nat (lam w (succ w)) (add (add (add b 0) (tri (add b 0))) 0)
         (add (tri b) b)
         (pathscomp0 nat (add (add (add b 0) (tri (add b 0))) 0) (add (add b 0) (tri (add b 0)))
@@ -2212,9 +2212,9 @@
           (pathscomp0 nat (add (add b 0) (tri (add b 0))) (add b (tri b)) (add (tri b) b)
             (maponpaths nat nat (lam w (add w (tri w))) (add b 0) b (natplusr0 b))
             (natpluscomm b (tri b)))))))
- (defq 'npairdiag
-   '(pi a nat (pi b nat (paths nat (npair a (succ b)) (succ (npair (succ a) b)))))
-   '(lam a
+ (defq npairdiag
+   (pi a nat (pi b nat (paths nat (npair a (succ b)) (succ (npair (succ a) b)))))
+   (lam a
       (lam b
         (pathscomp0 nat (npair a (succ b)) (add (tri (add (succ a) b)) (succ b))
           (succ (npair (succ a) b))
@@ -2223,17 +2223,17 @@
           (maponpaths nat nat (lam w (succ w)) (add (add (add a b) (tri (add a b))) (succ b))
             (add (succ (add (add a b) (tri (add a b)))) b)
             (natplusnsm (add (add a b) (tri (add a b))) b))))))
- (defq 'npairstep
-   '(pi x nat (pi y nat (paths nat (npair (una x y) (unb x y)) (succ (npair x y)))))
-   '(lam x
+ (defq npairstep
+   (pi x nat (pi y nat (paths nat (npair (una x y) (unb x y)) (succ (npair x y)))))
+   (lam x
       (lam y
         (nat_rect (lam q (paths nat (npair (una q y) (unb q y)) (succ (npair q y))))
           (npairhead y)
           (lam k (lam IH (npairdiag k y)))
           x))))
- (defq 'npairunpair
-   '(pi n nat (paths nat (npair (upa n) (upb n)) n))
-   '(lam n
+ (defq npairunpair
+   (pi n nat (paths nat (npair (upa n) (upb n)) n))
+   (lam n
       (nat_rect (lam q (paths nat (npair (upa q) (upb q)) q)) (idpath 0)
         (lam k
           (lam IH
@@ -2253,11 +2253,11 @@
 ; --- inside), the equation convoys carrying a+b = d exactly like
 ; --- isdeceqnat's; both projections travel together in one total2. ---
 (assert
- (defq 'unpbheadu
-   '(pi d nat
+ (defq unpbheadu
+   (pi d nat
       (pi ha (paths nat (upa (npair 0 d)) 0)
         (pi hb (paths nat (upb (npair 0 d)) d) (paths nat (upa (npair (succ d) 0)) (succ d)))))
-   '(lam d
+   (lam d
       (lam ha
         (lam hb
           (pathscomp0 nat (upa (npair (succ d) 0)) (upa (succ (npair 0 d))) (succ d)
@@ -2267,20 +2267,20 @@
               (succ d)
               (maponpaths nat nat (lam w (una w (upb (npair 0 d)))) (upa (npair 0 d)) 0 ha)
               (maponpaths nat nat (lam w (una 0 w)) (upb (npair 0 d)) d hb)))))))
- (defq 'unpbheadb
-   '(pi d nat (pi ha (paths nat (upa (npair 0 d)) 0) (paths nat (upb (npair (succ d) 0)) 0)))
-   '(lam d
+ (defq unpbheadb
+   (pi d nat (pi ha (paths nat (upa (npair 0 d)) 0) (paths nat (upb (npair (succ d) 0)) 0)))
+   (lam d
       (lam ha
         (pathscomp0 nat (upb (npair (succ d) 0)) (upb (succ (npair 0 d))) 0
           (maponpaths nat nat (lam w (upb w)) (npair (succ d) 0) (succ (npair 0 d))
             (npairhead d))
           (maponpaths nat nat (lam w (unb w (upb (npair 0 d)))) (upa (npair 0 d)) 0 ha)))))
- (defq 'unpbdiagu
-   '(pi a nat
+ (defq unpbdiagu
+   (pi a nat
       (pi b nat
         (pi ha (paths nat (upa (npair (succ a) b)) (succ a))
           (paths nat (upa (npair a (succ b))) a))))
-   '(lam a
+   (lam a
       (lam b
         (lam ha
           (pathscomp0 nat (upa (npair a (succ b))) (upa (succ (npair (succ a) b))) a
@@ -2290,13 +2290,13 @@
               (upa (npair (succ a) b))
               (succ a)
               ha))))))
- (defq 'unpbdiagb
-   '(pi a nat
+ (defq unpbdiagb
+   (pi a nat
       (pi b nat
         (pi ha (paths nat (upa (npair (succ a) b)) (succ a))
           (pi hb (paths nat (upb (npair (succ a) b)) b)
             (paths nat (upb (npair a (succ b))) (succ b))))))
-   '(lam a
+   (lam a
       (lam b
         (lam ha
           (lam hb
@@ -2311,13 +2311,13 @@
                   (succ a)
                   ha)
                 (maponpaths nat nat (lam w (succ w)) (upb (npair (succ a) b)) b hb))))))))
- (defq 'unpairbeta
-   '(pi d nat
+ (defq unpairbeta
+   (pi d nat
       (pi a nat
         (pi b nat
           (pi e (paths nat (add a b) d)
             (total2 zz (paths nat (upa (npair a b)) a) (paths nat (upb (npair a b)) b))))))
-   '(lam d
+   (lam d
       (nat_rect
         (lam dq
           (pi a nat
@@ -2407,18 +2407,18 @@
                     a
                     e))))))
         d)))
- (defq 'upabeta
-   '(pi a nat (pi b nat (paths nat (upa (npair a b)) a)))
-   '(lam a (lam b (pr1 (unpairbeta (add a b) a b (idpath (add a b)))))))
- (defq 'upbbeta
-   '(pi a nat (pi b nat (paths nat (upb (npair a b)) b)))
-   '(lam a (lam b (pr2 (unpairbeta (add a b) a b (idpath (add a b)))))))
- (defq 'npairgeb
-   '(pi a nat (pi b nat (paths bool (natgtb b (npair a b)) false)))
-   '(lam a (lam b (natlehmplusnm b (tri (add a b))))))
- (defq 'upble
-   '(pi n nat (paths bool (natgtb (upb n) n) false))
-   '(lam n
+ (defq upabeta
+   (pi a nat (pi b nat (paths nat (upa (npair a b)) a)))
+   (lam a (lam b (pr1 (unpairbeta (add a b) a b (idpath (add a b)))))))
+ (defq upbbeta
+   (pi a nat (pi b nat (paths nat (upb (npair a b)) b)))
+   (lam a (lam b (pr2 (unpairbeta (add a b) a b (idpath (add a b)))))))
+ (defq npairgeb
+   (pi a nat (pi b nat (paths bool (natgtb b (npair a b)) false)))
+   (lam a (lam b (natlehmplusnm b (tri (add a b))))))
+ (defq upble
+   (pi n nat (paths bool (natgtb (upb n) n) false))
+   (lam n
       (transportf nat (lam w (paths bool (natgtb (upb n) w) false)) (npair (upa n) (upb n)) n
         (npairunpair n)
         (npairgeb (upa n) (upb n))))))
@@ -2429,16 +2429,16 @@
 ; --- the guard convoys), the house fuel pattern at nateqb's one-call-per-
 ; --- level shape. round trips sealed both ways. ---
 (assert
- (defn 'lcode
-   '(pi l nlist nat)
-   '(lam l
+ (defn lcode
+   (pi l nlist nat)
+   (lam l
       ((nat_rect (lam q (pi v (nvec q) nat)) (lam v 0)
          (lam k (lam IH (lam v (succ (npair (pr1 v) (IH (pr2 v)))))))
          (pr1 l))
         (pr2 l))))
- (defn 'ldec
-   '(pi f nat (pi m nat nlist))
-   '(lam f
+ (defn ldec
+   (pi f nat (pi m nat nlist))
+   (lam f
       (nat_rect (lam q (pi m nat nlist)) (lam m nnil)
         (lam f2
           (lam IH
@@ -2446,11 +2446,11 @@
               (bool_rect (lam c nlist) nnil (ncons (upa (npred m)) (IH (upb (npred m))))
                 (niszero m)))))
         f)))
- (defq 'ldeccode
-   '(pi l nlist
+ (defq ldeccode
+   (pi l nlist
       (pi f nat
         (pi h (paths bool (natgtb (lcode l) f) false) (paths nlist (ldec f (lcode l)) l))))
-   '(lam l
+   (lam l
       ((nat_rect
          (lam q
            (pi v (nvec q)
@@ -2515,9 +2515,9 @@
                    f)))))
          (pr1 l))
         (pr2 l))))
- (defq 'lcodedec
-   '(pi f nat (pi m nat (pi h (paths bool (natgtb m f) false) (paths nat (lcode (ldec f m)) m))))
-   '(lam f
+ (defq lcodedec
+   (pi f nat (pi m nat (pi h (paths bool (natgtb m f) false) (paths nat (lcode (ldec f m)) m))))
+   (lam f
       (nat_rect
         (lam fq
           (pi m nat (pi h (paths bool (natgtb m fq) false) (paths nat (lcode (ldec fq m)) m))))
@@ -2564,24 +2564,24 @@
 ; --- both ways and eta close from the two round trips, and nat's decidable
 ; --- equality IS the tree's -- the swal guards' Aeq, for free. ---
 (assert
- (defn 'etree
-   'UU
-   'nat)
- (defn 'enode
-   '(pi l nat (pi ks nlist etree))
-   '(lam l (lam ks (npair l (lcode ks)))))
- (defn 'elabel
-   '(pi t etree nat)
-   '(lam t (upa t)))
- (defn 'ekids
-   '(pi t etree nlist)
-   '(lam t (ldec (upb t) (upb t))))
- (defq 'elabelbeta
-   '(pi l nat (pi ks nlist (paths nat (elabel (enode l ks)) l)))
-   '(lam l (lam ks (upabeta l (lcode ks)))))
- (defq 'ekidsbeta
-   '(pi l nat (pi ks nlist (paths nlist (ekids (enode l ks)) ks)))
-   '(lam l
+ (defn etree
+   UU
+   nat)
+ (defn enode
+   (pi l nat (pi ks nlist etree))
+   (lam l (lam ks (npair l (lcode ks)))))
+ (defn elabel
+   (pi t etree nat)
+   (lam t (upa t)))
+ (defn ekids
+   (pi t etree nlist)
+   (lam t (ldec (upb t) (upb t))))
+ (defq elabelbeta
+   (pi l nat (pi ks nlist (paths nat (elabel (enode l ks)) l)))
+   (lam l (lam ks (upabeta l (lcode ks)))))
+ (defq ekidsbeta
+   (pi l nat (pi ks nlist (paths nlist (ekids (enode l ks)) ks)))
+   (lam l
       (lam ks
         (pathscomp0 nlist (ldec (upb (npair l (lcode ks))) (upb (npair l (lcode ks))))
           (ldec (lcode ks) (lcode ks))
@@ -2589,16 +2589,16 @@
           (maponpaths nat nlist (lam w (ldec w w)) (upb (npair l (lcode ks))) (lcode ks)
             (upbbeta l (lcode ks)))
           (ldeccode ks (lcode ks) (isreflnatleh (lcode ks)))))))
- (defq 'etreeeta
-   '(pi t etree (paths etree (enode (elabel t) (ekids t)) t))
-   '(lam t
+ (defq etreeeta
+   (pi t etree (paths etree (enode (elabel t) (ekids t)) t))
+   (lam t
       (pathscomp0 nat (npair (upa t) (lcode (ldec (upb t) (upb t)))) (npair (upa t) (upb t)) t
         (maponpaths nat nat (lam w (npair (upa t) w)) (lcode (ldec (upb t) (upb t))) (upb t)
           (lcodedec (upb t) (upb t) (isreflnatleh (upb t))))
         (npairunpair t))))
- (defn 'isdeceqetree
-   '(pi x etree (pi y etree (coprod (paths etree x y) (pi e (paths etree x y) empty))))
-   'isdeceqnat)
+ (defn isdeceqetree
+   (pi x etree (pi y etree (coprod (paths etree x y) (pi e (paths etree x y) empty))))
+   isdeceqnat)
  ; the tree computes: a leaf is its label's triangle, the zero leaf IS 0,
  ; and eta reads ANY nat as a node -- 5 is (enode 0 (ncons 1 nnil))
  (id? (vof 0 '28) (vof 0 '(enode 7 nnil)))
@@ -2624,12 +2624,12 @@
 ; --- nateqb closes its own diagonal, and a true verdict is an identification
 ; --- (the corpus had symm; refl + soundness complete the little theory) ---
 (assert
- (defq 'nateqbrefl
-   '(pi x nat (paths bool (nateqb x x) true))
-   '(lam x (nat_rect (lam q (paths bool (nateqb q q) true)) (idpath true) (lam k (lam IH IH)) x)))
- (defq 'nateqbtopaths
-   '(pi x nat (pi y nat (pi e (paths bool (nateqb x y) true) (paths nat x y))))
-   '(lam x
+ (defq nateqbrefl
+   (pi x nat (paths bool (nateqb x x) true))
+   (lam x (nat_rect (lam q (paths bool (nateqb q q) true)) (idpath true) (lam k (lam IH IH)) x)))
+ (defq nateqbtopaths
+   (pi x nat (pi y nat (pi e (paths bool (nateqb x y) true) (paths nat x y))))
+   (lam x
       (nat_rect (lam q (pi y nat (pi e (paths bool (nateqb q y) true) (paths nat q y))))
         (lam y
           (nat_rect (lam j (pi e (paths bool (nateqb 0 j) true) (paths nat 0 j)))
@@ -2650,27 +2650,27 @@
 ; --- (one recursive call per level, nateqb's eager-NbE shape); lay and lget
 ; --- carry the seat as a pi so it decrements alongside the walk ---
 (assert
- (defn 'occ
-   '(pi x nat (pi l nlist nat))
-   '(lam x
+ (defn occ
+   (pi x nat (pi l nlist nat))
+   (lam x
       (lam l
         ((nat_rect (lam q (pi v (nvec q) nat)) (lam v 0)
            (lam m
              (lam IH (lam v (add (bool_rect (lam c2 nat) 1 0 (nateqb (pr1 v) x)) (IH (pr2 v))))))
            (pr1 l))
           (pr2 l)))))
- (defn 'ffind
-   '(pi x nat (pi l nlist nat))
-   '(lam x
+ (defn ffind
+   (pi x nat (pi l nlist nat))
+   (lam x
       (lam l
         ((nat_rect (lam q (pi v (nvec q) nat)) (lam v 0)
            (lam m
              (lam IH (lam v (bool_rect (lam c nat) 0 (succ (IH (pr2 v))) (nateqb (pr1 v) x)))))
            (pr1 l))
           (pr2 l)))))
- (defn 'lay
-   '(pi l nlist (pi k nat (pi w nat nlist)))
-   '(lam l
+ (defn lay
+   (pi l nlist (pi k nat (pi w nat nlist)))
+   (lam l
       (lam k
         (lam w
           ((nat_rect (lam q (pi v (nvec q) (pi k2 nat nlist))) (lam v (lam k2 nnil))
@@ -2684,9 +2684,9 @@
              (pr1 l))
             (pr2 l)
             k)))))
- (defn 'lget
-   '(pi k nat (pi l nlist nat))
-   '(lam k
+ (defn lget
+   (pi k nat (pi l nlist nat))
+   (lam k
       (lam l
         ((nat_rect (lam q (pi v (nvec q) (pi k2 nat nat))) (lam v (lam k2 0))
            (lam m
@@ -2710,9 +2710,9 @@
 ; --- sides are the list, sigma-eta closes the cons); the occ movers carry
 ; --- the seat guard + the nateqb verdicts patch.v's Aeq destructs carried ---
 (assert
- (defq 'laylen
-   '(pi l nlist (pi k nat (pi w nat (paths nat (nlen (lay l k w)) (nlen l)))))
-   '(lam l
+ (defq laylen
+   (pi l nlist (pi k nat (pi w nat (paths nat (nlen (lay l k w)) (nlen l)))))
+   (lam l
       (lam k
         (lam w
           ((nat_rect
@@ -2735,12 +2735,12 @@
              (pr1 l))
             (pr2 l)
             k)))))
- (defq 'occffind
-   '(pi x nat
+ (defq occffind
+   (pi x nat
       (pi l nlist
         (pi h (paths bool (niszero (occ x l)) false)
           (paths bool (natgtb (nlen l) (ffind x l)) true))))
-   '(lam x
+   (lam x
       (lam l
         ((nat_rect
            (lam q
@@ -2769,11 +2769,11 @@
                    (nateqb (pr1 v) x)))))
            (pr1 l))
           (pr2 l)))))
- (defq 'lgetffind
-   '(pi x nat
+ (defq lgetffind
+   (pi x nat
       (pi l nlist
         (pi h (paths bool (niszero (occ x l)) false) (paths nat (lget (ffind x l) l) x))))
-   '(lam x
+   (lam x
       (lam l
         ((nat_rect
            (lam q
@@ -2806,12 +2806,12 @@
                    (idpath (nateqb (pr1 v) x))))))
            (pr1 l))
           (pr2 l)))))
- (defq 'lgetlay
-   '(pi l nlist
+ (defq lgetlay
+   (pi l nlist
       (pi k nat
         (pi w nat
           (pi h (paths bool (natgtb (nlen l) k) true) (paths nat (lget k (lay l k w)) w)))))
-   '(lam l
+   (lam l
       (lam k
         (lam w
           ((nat_rect
@@ -2839,9 +2839,9 @@
              (pr1 l))
             (pr2 l)
             k)))))
- (defq 'laylay
-   '(pi l nlist (pi k nat (pi u nat (pi w nat (paths nlist (lay (lay l k u) k w) (lay l k w))))))
-   '(lam l
+ (defq laylay
+   (pi l nlist (pi k nat (pi u nat (pi w nat (paths nlist (lay (lay l k u) k w) (lay l k w))))))
+   (lam l
       (lam k
         (lam u
           (lam w
@@ -2870,9 +2870,9 @@
                (pr1 l))
               (pr2 l)
               k))))))
- (defq 'layget
-   '(pi l nlist (pi k nat (paths nlist (lay l k (lget k l)) l)))
-   '(lam l
+ (defq layget
+   (pi l nlist (pi k nat (paths nlist (lay l k (lget k l)) l)))
+   (lam l
       (lam k
         ((nat_rect
            (lam q
@@ -2898,14 +2898,14 @@
            (pr1 l))
           (pr2 l)
           k))))
- (defq 'occlayin
-   '(pi l nlist
+ (defq occlayin
+   (pi l nlist
       (pi k nat
         (pi x nat
           (pi h (paths bool (natgtb (nlen l) k) true)
             (pi hne (paths bool (nateqb (lget k l) x) false)
               (paths nat (occ x (lay l k x)) (succ (occ x l))))))))
-   '(lam l
+   (lam l
       (lam k
         (lam x
           ((nat_rect
@@ -2977,8 +2977,8 @@
              (pr1 l))
             (pr2 l)
             k)))))
- (defq 'occlayout
-   '(pi l nlist
+ (defq occlayout
+   (pi l nlist
       (pi k nat
         (pi x nat
           (pi w nat
@@ -2986,7 +2986,7 @@
               (pi he (paths nat (lget k l) x)
                 (pi hne (paths bool (nateqb w x) false)
                   (paths nat (occ x l) (succ (occ x (lay l k w)))))))))))
-   '(lam l
+   (lam l
       (lam k
         (lam x
           (lam w
@@ -3078,13 +3078,13 @@
                (pr1 l))
               (pr2 l)
               k))))))
- (defq 'ffindlay
-   '(pi l nlist
+ (defq ffindlay
+   (pi l nlist
       (pi k nat
         (pi x nat
           (pi h0 (paths nat (occ x l) 0)
             (pi h (paths bool (natgtb (nlen l) k) true) (paths nat (ffind x (lay l k x)) k))))))
-   '(lam l
+   (lam l
       (lam k
         (lam x
           ((nat_rect
@@ -3164,10 +3164,10 @@
 ; ============================================================================
 ; --- two nat facts the re-aim arithmetic leans on ---
 (assert
- (defq 'natlehplusminus
-   '(pi i nat
+ (defq natlehplusminus
+   (pi i nat
       (pi j nat (pi h (paths bool (natgtb i j) false) (paths nat (add i (natminus j i)) j))))
-   '(lam i
+   (lam i
       (nat_rect
         (lam q
           (pi j nat (pi h (paths bool (natgtb q j) false) (paths nat (add q (natminus j q)) j))))
@@ -3188,14 +3188,14 @@
                       (maponpaths nat nat (lam z (succ z)) (add k (natminus r2 k)) r2 (IH r2 h)))))
                 j))))
         i)))
- (defq 'natminusltl
-   '(pi i nat
+ (defq natminusltl
+   (pi i nat
       (pi j nat
         (pi n nat
           (pi h1 (paths bool (natgtb i j) false)
             (pi h2 (paths bool (natgtb (add i n) j) true)
               (paths bool (natgtb n (natminus j i)) true))))))
-   '(lam i
+   (lam i
       (nat_rect
         (lam q
           (pi j nat
@@ -3232,33 +3232,33 @@
 ; --- itself -- one bool_rect on the folded guard, the payload re-aiming
 ; --- the deep edit at the survivor's seat (ffind under the four counts) ---
 (assert
- (defn 'epatch
-   'UU
-   '(total2 j nat (total2 a nat nat)))
- (defn 'mke
-   '(pi j nat (pi a nat (pi b nat epatch)))
-   '(lam j (lam a (lam b (tpair j (tpair a b))))))
- (defn 'ej
-   '(pi p epatch nat)
-   '(lam p (pr1 p)))
- (defn 'ea
-   '(pi p epatch nat)
-   '(lam p (pr1 (pr2 p))))
- (defn 'eb
-   '(pi p epatch nat)
-   '(lam p (pr2 (pr2 p))))
- (defn 'einv
-   '(pi p epatch epatch)
-   '(lam p (mke (ej p) (eb p) (ea p))))
- (defn 'spair
-   'UU
-   '(total2 x hunk epatch))
- (defn 'scmside
-   '(pi c (coprod spair unit) UU)
-   '(lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
- (defn 'swal
-   '(pi p epatch (pi s hunk (coprod spair unit)))
-   '(lam p
+ (defn epatch
+   UU
+   (total2 j nat (total2 a nat nat)))
+ (defn mke
+   (pi j nat (pi a nat (pi b nat epatch)))
+   (lam j (lam a (lam b (tpair j (tpair a b))))))
+ (defn ej
+   (pi p epatch nat)
+   (lam p (pr1 p)))
+ (defn ea
+   (pi p epatch nat)
+   (lam p (pr1 (pr2 p))))
+ (defn eb
+   (pi p epatch nat)
+   (lam p (pr2 (pr2 p))))
+ (defn einv
+   (pi p epatch epatch)
+   (lam p (mke (ej p) (eb p) (ea p))))
+ (defn spair
+   UU
+   (total2 x hunk epatch))
+ (defn scmside
+   (pi c (coprod spair unit) UU)
+   (lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
+ (defn swal
+   (pi p epatch (pi s hunk (coprod spair unit)))
+   (lam p
       (lam s
         (bool_rect (lam c (coprod spair unit))
           (ii1
@@ -3289,8 +3289,8 @@
 ; --- layget + the minus cancellations, and one maponpaths over the folded
 ; --- guard fires the tower. sealed as its own defq (the eager-NbE law) ---
 (assert
- (defq 'swal-f1
-   '(pi i nat
+ (defq swal-f1
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -3305,7 +3305,7 @@
                             (pi e7 (paths nat (occ a N) 0)
                               (pi e8 (paths bool (nateqb a b) false)
                                 (paths bool (negb (natgtb i (add i (ffind b N)))) true)))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -3323,8 +3323,8 @@
                                   (natgtb i (add i (ffind b N)))
                                   false
                                   (natlehnplusnm i (ffind b N))))))))))))))))))
- (defq 'swal-f2
-   '(pi i nat
+ (defq swal-f2
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -3342,7 +3342,7 @@
                                   (natgtb (add i (nlen (lay N (ffind b N) a)))
                                     (add i (ffind b N)))
                                   true)))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -3372,8 +3372,8 @@
                                     (natgtbplusl i (nlen N) (ffind b N))
                                     (occffind b N
                                       (maponpaths nat bool (lam z (niszero z)) (occ b N) 1 e6)))))))))))))))))))
- (defq 'swal-f3
-   '(pi i nat
+ (defq swal-f3
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -3392,7 +3392,7 @@
                                     (lget (natminus (add i (ffind b N)) i) (lay N (ffind b N) a))
                                     a)
                                   true)))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -3429,8 +3429,8 @@
                                           (maponpaths nat bool (lam z (niszero z)) (occ b N) 1
                                             e6)))))
                                   (nateqbrefl a)))))))))))))))))
- (defq 'swal-f4
-   '(pi i nat
+ (defq swal-f4
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -3445,7 +3445,7 @@
                             (pi e7 (paths nat (occ a N) 0)
                               (pi e8 (paths bool (nateqb a b) false)
                                 (paths bool (nateqb (occ a (lay N (ffind b N) a)) 1) true)))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -3480,8 +3480,8 @@
                                           (nateqbsymm b a)
                                           e8)))
                                     (maponpaths nat nat (lam z (succ z)) (occ a N) 0 e7))))))))))))))))))
- (defq 'swal-f5
-   '(pi i nat
+ (defq swal-f5
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -3496,7 +3496,7 @@
                             (pi e7 (paths nat (occ a N) 0)
                               (pi e8 (paths bool (nateqb a b) false)
                                 (paths bool (nateqb (occ b (lay N (ffind b N) a)) 0) true)))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -3527,8 +3527,8 @@
                                             (maponpaths nat bool (lam z (niszero z)) (occ b N) 1
                                               e6))
                                           e8))))))))))))))))))))
- (defq 'swal-f6
-   '(pi i nat
+ (defq swal-f6
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -3543,7 +3543,7 @@
                             (pi e7 (paths nat (occ a N) 0)
                               (pi e8 (paths bool (nateqb a b) false)
                                 (paths bool (nateqb (occ a (lay O (natminus j i) a)) 1) true)))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -3576,8 +3576,8 @@
                                           (nateqbsymm b a)
                                           e8)))
                                     (maponpaths nat nat (lam z (succ z)) (occ a O) 0 e5))))))))))))))))))
- (defq 'swal-f7
-   '(pi i nat
+ (defq swal-f7
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -3592,7 +3592,7 @@
                             (pi e7 (paths nat (occ a N) 0)
                               (pi e8 (paths bool (nateqb a b) false)
                                 (paths bool (nateqb (occ b (lay O (natminus j i) a)) 0) true)))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -3619,8 +3619,8 @@
                                           (natminusltl i j (nlen O) e1 e2)
                                           e3
                                           e8))))))))))))))))))))
- (defq 'swal-fg
-   '(pi i nat
+ (defq swal-fg
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -3649,7 +3649,7 @@
                                             (andb (nateqb (occ a (lay O (natminus j i) a)) 1)
                                               (nateqb (occ b (lay O (natminus j i) a)) 0)))))))
                                   true)))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -3826,8 +3826,8 @@
                                               true
                                               (swal-f6 i O N j a b e1 e2 e3 e4 e5 e6 e7 e8))
                                             (swal-f7 i O N j a b e1 e2 e3 e4 e5 e6 e7 e8))))))))))))))))))))))
- (defq 'swal-w1
-   '(pi i nat
+ (defq swal-w1
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -3844,7 +3844,7 @@
                                 (paths nlist
                                   (lay (lay N (ffind b N) a) (natminus (add i (ffind b N)) i) b)
                                   N)))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -3880,8 +3880,8 @@
                                             (maponpaths nat bool (lam z (niszero z)) (occ b N) 1
                                               e6))))
                                       (layget N (ffind b N))))))))))))))))))))
- (defq 'swal-w2
-   '(pi i nat
+ (defq swal-w2
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -3900,7 +3900,7 @@
                                     (ffind a (lay O (natminus j i) a))
                                     b)
                                   O)))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -3938,8 +3938,8 @@
                                         (lget (natminus j i) O)
                                         (pathsinv0 nat (lget (natminus j i) O) b e3))
                                       (layget O (natminus j i))))))))))))))))))))
- (defq 'swal-seat
-   '(pi i nat
+ (defq swal-seat
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -3954,7 +3954,7 @@
                             (pi e7 (paths nat (occ a N) 0)
                               (pi e8 (paths bool (nateqb a b) false)
                                 (paths nat (add i (ffind a (lay O (natminus j i) a))) j)))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -3977,8 +3977,8 @@
                                     (ffindlay O (natminus j i) a e5
                                       (natminusltl i j (nlen O) e1 e2)))
                                   (natlehplusminus i j e1)))))))))))))))))
- (defq 'swal-pay
-   '(pi i nat
+ (defq swal-pay
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -4003,7 +4003,7 @@
                                         b))
                                     (mke (add i (ffind a (lay O (natminus j i) a))) b a))
                                   (tpair (mkh i N O) (mke j b a)))))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -4079,8 +4079,8 @@
                                       (add i (ffind a (lay O (natminus j i) a)))
                                       j
                                       (swal-seat i O N j a b e1 e2 e3 e4 e5 e6 e7 e8)))))))))))))))))))
- (defq 'swal-core
-   '(pi i nat
+ (defq swal-core
+   (pi i nat
       (pi O nlist
         (pi N nlist
           (pi j nat
@@ -4098,7 +4098,7 @@
                                   (swal (mke (add i (ffind b N)) b a)
                                     (mkh i (lay N (ffind b N) a) (lay O (natminus j i) a)))
                                   (ii1 (tpair (mkh i N O) (mke j b a))))))))))))))))))
-   '(lam i
+   (lam i
       (lam O
         (lam N
           (lam j
@@ -4178,15 +4178,15 @@
 ; --- coprod_rect projection, and ONE transport carries the goal from the
 ; --- computed pair to the hypothesis' -- sigma-eta does the records ---
 (assert
- (defq 'swal-involutive
-   '(pi p epatch
+ (defq swal-involutive
+   (pi p epatch
       (pi s hunk
         (pi sq hunk
           (pi dq epatch
             (pi h (paths (coprod spair unit) (swal p s) (ii1 (tpair sq dq)))
               (paths (coprod spair unit) (swal (einv dq) (hinv sq))
                 (ii1 (tpair (hinv s) (einv p)))))))))
-   '(lam p
+   (lam p
       (lam s
         (lam sq
           (lam dq
@@ -4524,9 +4524,9 @@
 ; --- transitivity the head ordering needs -- each a convoy or one triple
 ; --- rect on the existing istransnatgth/isantisymmnatleh floor ---
 (assert
- (defq 'natgthtoneg
-   '(pi a nat (pi b nat (pi g (paths bool (natgtb a b) true) (paths bool (natgtb b a) false))))
-   '(lam a
+ (defq natgthtoneg
+   (pi a nat (pi b nat (pi g (paths bool (natgtb a b) true) (paths bool (natgtb b a) false))))
+   (lam a
       (lam b
         (lam g
           ((bool_rect
@@ -4540,9 +4540,9 @@
              (lam hc hc)
              (natgtb b a))
             (idpath (natgtb b a)))))))
- (defq 'natgthtoneq
-   '(pi a nat (pi b nat (pi g (paths bool (natgtb a b) true) (paths bool (nateqb a b) false))))
-   '(lam a
+ (defq natgthtoneq
+   (pi a nat (pi b nat (pi g (paths bool (natgtb a b) true) (paths bool (nateqb a b) false))))
+   (lam a
       (lam b
         (lam g
           ((bool_rect
@@ -4557,12 +4557,12 @@
              (lam hc hc)
              (nateqb a b))
             (idpath (nateqb a b)))))))
- (defq 'nattrichot
-   '(pi x nat
+ (defq nattrichot
+   (pi x nat
       (pi y nat
         (pi hne (paths bool (nateqb x y) false)
           (pi hg (paths bool (natgtb y x) false) (paths bool (natgtb x y) true)))))
-   '(lam x
+   (lam x
       (lam y
         (lam hne
           (lam hg
@@ -4580,13 +4580,13 @@
                        hne))))
                (natgtb x y))
               (idpath (natgtb x y))))))))
- (defq 'natlehgthtrans
-   '(pi h nat
+ (defq natlehgthtrans
+   (pi h nat
       (pi x nat
         (pi y nat
           (pi h1 (paths bool (natgtb h x) false)
             (pi h2 (paths bool (natgtb h y) true) (paths bool (natgtb x y) true))))))
-   '(lam h
+   (lam h
       (nat_rect
         (lam q
           (pi x nat
@@ -4625,22 +4625,22 @@
 ; --- two bounds the hull arithmetic reads; natminusswap re-associates a
 ; --- double truncated-minus through the two cancellations ---
 (assert
- (defn 'natmin
-   '(pi a nat (pi b nat nat))
-   '(lam a
+ (defn natmin
+   (pi a nat (pi b nat nat))
+   (lam a
       (nat_rect (lam q (pi b nat nat)) (lam b 0)
         (lam k (lam IH (lam b (bool_rect (lam c nat) 0 (succ (IH (npred b))) (niszero b)))))
         a)))
- (defn 'natmax
-   '(pi a nat (pi b nat nat))
-   '(lam a
+ (defn natmax
+   (pi a nat (pi b nat nat))
+   (lam a
       (nat_rect (lam q (pi b nat nat)) (lam b b)
         (lam k
           (lam IH (lam b (bool_rect (lam c nat) (succ k) (succ (IH (npred b))) (niszero b)))))
         a)))
- (defq 'natmincomm
-   '(pi a nat (pi b nat (paths nat (natmin a b) (natmin b a))))
-   '(lam a
+ (defq natmincomm
+   (pi a nat (pi b nat (paths nat (natmin a b) (natmin b a))))
+   (lam a
       (nat_rect (lam q (pi b nat (paths nat (natmin q b) (natmin b q))))
         (lam b
           (nat_rect (lam r (paths nat (natmin 0 r) (natmin r 0))) (idpath 0)
@@ -4654,9 +4654,9 @@
                   (lam r (maponpaths nat nat (lam z (succ z)) (natmin k j) (natmin j k) (IH j))))
                 b))))
         a)))
- (defq 'natmaxcomm
-   '(pi a nat (pi b nat (paths nat (natmax a b) (natmax b a))))
-   '(lam a
+ (defq natmaxcomm
+   (pi a nat (pi b nat (paths nat (natmax a b) (natmax b a))))
+   (lam a
       (nat_rect (lam q (pi b nat (paths nat (natmax q b) (natmax b q))))
         (lam b
           (nat_rect (lam r (paths nat (natmax 0 r) (natmax r 0))) (idpath 0)
@@ -4671,9 +4671,9 @@
                   (lam r (maponpaths nat nat (lam z (succ z)) (natmax k j) (natmax j k) (IH j))))
                 b))))
         a)))
- (defq 'natminlel
-   '(pi a nat (pi b nat (paths bool (natgtb (natmin a b) a) false)))
-   '(lam a
+ (defq natminlel
+   (pi a nat (pi b nat (paths bool (natgtb (natmin a b) a) false)))
+   (lam a
       (nat_rect (lam q (pi b nat (paths bool (natgtb (natmin q b) q) false)))
         (lam b
           (nat_rect (lam r (paths bool (natgtb (natmin 0 r) 0) false)) (idpath false)
@@ -4687,9 +4687,9 @@
                 (lam j (lam r (IH j)))
                 b))))
         a)))
- (defq 'natmaxgel
-   '(pi a nat (pi b nat (paths bool (natgtb a (natmax a b)) false)))
-   '(lam a
+ (defq natmaxgel
+   (pi a nat (pi b nat (paths bool (natgtb a (natmax a b)) false)))
+   (lam a
       (nat_rect (lam q (pi b nat (paths bool (natgtb q (natmax q b)) false)))
         (lam b
           (nat_rect (lam r (paths bool (natgtb 0 (natmax 0 r)) false)) (idpath false)
@@ -4703,14 +4703,14 @@
                 (lam j (lam r (IH j)))
                 b))))
         a)))
- (defq 'natminusswap
-   '(pi l nat
+ (defq natminusswap
+   (pi l nat
       (pi u nat
         (pi m nat
           (pi h1 (paths bool (natgtb l u) false)
             (pi h2 (paths bool (natgtb u m) false)
               (paths nat (add l (natminus m u)) (natminus m (natminus u l))))))))
-   '(lam l
+   (lam l
       (lam u
         (lam m
           (lam h1
@@ -4744,9 +4744,9 @@
 ; --- a short chain; comm's case tree rides the order tail exactly where
 ; --- patch.v's destructs rode lia ---
 (assert
- (defn 'cins
-   '(pi x nat (pi l nlist nlist))
-   '(lam x
+ (defn cins
+   (pi x nat (pi l nlist nlist))
+   (lam x
       (lam l
         ((nat_rect (lam q (pi v (nvec q) nlist)) (lam v (ncons x nnil))
            (lam m
@@ -4759,12 +4759,12 @@
                    (nateqb x (pr1 v))))))
            (pr1 l))
           (pr2 l)))))
- (defq 'cinsdedup
-   '(pi x nat
+ (defq cinsdedup
+   (pi x nat
       (pi h nat
         (pi t nlist
           (pi e (paths bool (nateqb x h) true) (paths nlist (cins x (ncons h t)) (ncons h t))))))
-   '(lam x
+   (lam x
       (lam h
         (lam t
           (lam e
@@ -4777,14 +4777,14 @@
               (nateqb x h)
               true
               e))))))
- (defq 'cinshead
-   '(pi x nat
+ (defq cinshead
+   (pi x nat
       (pi h nat
         (pi t nlist
           (pi e1 (paths bool (nateqb x h) false)
             (pi e2 (paths bool (natgtb h x) true)
               (paths nlist (cins x (ncons h t)) (ncons x (ncons h t))))))))
-   '(lam x
+   (lam x
       (lam h
         (lam t
           (lam e1
@@ -4807,14 +4807,14 @@
                   (natgtb h x)
                   true
                   e2))))))))
- (defq 'cinsskip
-   '(pi x nat
+ (defq cinsskip
+   (pi x nat
       (pi h nat
         (pi t nlist
           (pi e1 (paths bool (nateqb x h) false)
             (pi e2 (paths bool (natgtb h x) false)
               (paths nlist (cins x (ncons h t)) (ncons h (cins x t))))))))
-   '(lam x
+   (lam x
       (lam h
         (lam t
           (lam e1
@@ -4837,9 +4837,9 @@
                   (natgtb h x)
                   false
                   e2))))))))
- (defq 'cinsabsorb
-   '(pi x nat (pi l nlist (paths nlist (cins x (cins x l)) (cins x l))))
-   '(lam x
+ (defq cinsabsorb
+   (pi x nat (pi l nlist (paths nlist (cins x (cins x l)) (cins x l))))
+   (lam x
       (lam l
         ((nat_rect
            (lam q
@@ -4909,9 +4909,9 @@
                    (idpath (nateqb x (pr1 v)))))))
            (pr1 l))
           (pr2 l)))))
- (defq 'cinscomm
-   '(pi x nat (pi y nat (pi l nlist (paths nlist (cins x (cins y l)) (cins y (cins x l))))))
-   '(lam x
+ (defq cinscomm
+   (pi x nat (pi y nat (pi l nlist (paths nlist (cins x (cins y l)) (cins y (cins x l))))))
+   (lam x
       (lam y
         (lam l
           ((nat_rect
@@ -5554,35 +5554,35 @@
 ; --- scell packs hull base + the cins-canonical rival set. hash rides as
 ; --- a pi-bound function -- lcode instantiates it in the demos ---
 (assert
- (defn 'sseg
-   '(pi s nlist (pi i nat (pi n nat nlist)))
-   '(lam s (lam i (lam n (ltake n (ldrop i s))))))
- (defn 'ulo
-   '(pi p hunk (pi q hunk nat))
-   '(lam p (lam q (natmin (hi p) (hi q)))))
- (defn 'uhi
-   '(pi p hunk (pi q hunk nat))
-   '(lam p (lam q (natmax (add (hi p) (nlen (ho p))) (add (hi q) (nlen (ho q)))))))
- (defn 'rend
-   '(pi s nlist (pi lo nat (pi hh nat (pi r hunk nlist))))
-   '(lam s
+ (defn sseg
+   (pi s nlist (pi i nat (pi n nat nlist)))
+   (lam s (lam i (lam n (ltake n (ldrop i s))))))
+ (defn ulo
+   (pi p hunk (pi q hunk nat))
+   (lam p (lam q (natmin (hi p) (hi q)))))
+ (defn uhi
+   (pi p hunk (pi q hunk nat))
+   (lam p (lam q (natmax (add (hi p) (nlen (ho p))) (add (hi q) (nlen (ho q)))))))
+ (defn rend
+   (pi s nlist (pi lo nat (pi hh nat (pi r hunk nlist))))
+   (lam s
       (lam lo
         (lam hh
           (lam r (splice (sseg s lo (natminus hh lo)) (natminus (hi r) lo) (nlen (ho r)) (hn r)))))))
- (defn 'cell
-   'UU
-   '(total2 x nlist nlist))
- (defn 'scell
-   '(pi hash (pi l nlist nat) (pi s nlist (pi p hunk (pi q hunk cell))))
-   '(lam hash
+ (defn cell
+   UU
+   (total2 x nlist nlist))
+ (defn scell
+   (pi hash (pi l nlist nat) (pi s nlist (pi p hunk (pi q hunk cell))))
+   (lam hash
       (lam s
         (lam p
           (lam q
             (tpair (sseg s (ulo p q) (natminus (uhi p q) (ulo p q)))
               (cins (hash (rend s (ulo p q) (uhi p q) p))
                 (cins (hash (rend s (ulo p q) (uhi p q) q)) nnil))))))))
- (defq 'scell-lo
-   '(pi hash (pi l nlist nat)
+ (defq scell-lo
+   (pi hash (pi l nlist nat)
       (pi s nlist
         (pi p hunk
           (pi q hunk
@@ -5593,7 +5593,7 @@
               (tpair (sseg s (ulo q p) (natminus (uhi p q) (ulo q p)))
                 (cins (hash (rend s (ulo q p) (uhi p q) p))
                   (cins (hash (rend s (ulo q p) (uhi p q) q)) nnil))))))))
-   '(lam hash
+   (lam hash
       (lam s
         (lam p
           (lam q
@@ -5604,8 +5604,8 @@
               (ulo p q)
               (ulo q p)
               (natmincomm (hi p) (hi q))))))))
- (defq 'scell-hi
-   '(pi hash (pi l nlist nat)
+ (defq scell-hi
+   (pi hash (pi l nlist nat)
       (pi s nlist
         (pi p hunk
           (pi q hunk
@@ -5616,7 +5616,7 @@
               (tpair (sseg s (ulo q p) (natminus (uhi q p) (ulo q p)))
                 (cins (hash (rend s (ulo q p) (uhi q p) p))
                   (cins (hash (rend s (ulo q p) (uhi q p) q)) nnil))))))))
-   '(lam hash
+   (lam hash
       (lam s
         (lam p
           (lam q
@@ -5627,8 +5627,8 @@
               (uhi p q)
               (uhi q p)
               (natmaxcomm (add (hi p) (nlen (ho p))) (add (hi q) (nlen (ho q))))))))))
- (defq 'scell-riv
-   '(pi hash (pi l nlist nat)
+ (defq scell-riv
+   (pi hash (pi l nlist nat)
       (pi s nlist
         (pi p hunk
           (pi q hunk
@@ -5639,7 +5639,7 @@
               (tpair (sseg s (ulo q p) (natminus (uhi q p) (ulo q p)))
                 (cins (hash (rend s (ulo q p) (uhi q p) q))
                   (cins (hash (rend s (ulo q p) (uhi q p) p)) nnil))))))))
-   '(lam hash
+   (lam hash
       (lam s
         (lam p
           (lam q
@@ -5652,10 +5652,10 @@
               (cinscomm (hash (rend s (ulo q p) (uhi q p) p))
                 (hash (rend s (ulo q p) (uhi q p) q))
                 nnil)))))))
- (defq 'scell-comm
-   '(pi hash (pi l nlist nat)
+ (defq scell-comm
+   (pi hash (pi l nlist nat)
       (pi s nlist (pi p hunk (pi q hunk (paths cell (scell hash s p q) (scell hash s q p))))))
-   '(lam hash
+   (lam hash
       (lam s
         (lam p
           (lam q
@@ -5694,8 +5694,8 @@
 ; --- off the hull alone -- every downstream seat determinate before
 ; --- anyone resolves ---
 (assert
- (defq 'splice-pad
-   '(pi pl nlist
+ (defq splice-pad
+   (pi pl nlist
       (pi pr nlist
         (pi b nlist
           (pi n nlist
@@ -5704,7 +5704,7 @@
                 (pi h (paths bool (natgtb (add ii c) (nlen b)) false)
                   (paths nlist (lapp pl (lapp (splice b ii c n) pr))
                     (splice (lapp pl (lapp b pr)) (add (nlen pl) ii) c n)))))))))
-   '(lam pl
+   (lam pl
       (lam pr
         (lam b
           (lam n
@@ -5819,8 +5819,8 @@
                                   (ltake (add (nlen pl) ii) (lapp pl (lapp b pr)))
                                   (lapp pl (ltake ii (lapp b pr)))
                                   (ltakeplusapp pl ii (lapp b pr))))))))))))))))))
- (defq 'bubble-len
-   '(pi s nlist
+ (defq bubble-len
+   (pi s nlist
       (pi p hunk
         (pi q hunk
           (pi x nat
@@ -5828,7 +5828,7 @@
               (paths nat
                 (nlen (splice s (ulo p q) (natminus (uhi p q) (ulo p q)) (ncons x nnil)))
                 (succ (natminus (nlen s) (natminus (uhi p q) (ulo p q))))))))))
-   '(lam s
+   (lam s
       (lam p
         (lam q
           (lam x
@@ -5946,30 +5946,30 @@
 ; --- left summand), cells one rung down, so any two patterns share a depth;
 ; --- tcode lays a pattern onto the element grain the states speak ---
 (assert
- (defn 'tmleaf
-   'UU
-   '(coprod nat nat))
- (defn 'tm
-   '(pi d nat UU)
-   '(lam d (nat_rect (lam q UU) tmleaf (lam k (lam r (coprod tmleaf (total2 h r r)))) d)))
- (defn 'latom
-   '(pi n nat tmleaf)
-   '(lam n (ii1 n)))
- (defn 'lmv
-   '(pi x nat tmleaf)
-   '(lam x (ii2 x)))
- (defn 'matom
-   '(pi d nat (pi n nat (tm (succ d))))
-   '(lam d (lam n (ii1 (ii1 n)))))
- (defn 'mmv
-   '(pi d nat (pi x nat (tm (succ d))))
-   '(lam d (lam x (ii1 (ii2 x)))))
- (defn 'mcell
-   '(pi d nat (pi a (tm d) (pi b (tm d) (tm (succ d)))))
-   '(lam d (lam a (lam b (ii2 (tpair a b))))))
- (defn 'tcode
-   '(pi d nat (pi p (tm d) nat))
-   '(lam d
+ (defn tmleaf
+   UU
+   (coprod nat nat))
+ (defn tm
+   (pi d nat UU)
+   (lam d (nat_rect (lam q UU) tmleaf (lam k (lam r (coprod tmleaf (total2 h r r)))) d)))
+ (defn latom
+   (pi n nat tmleaf)
+   (lam n (ii1 n)))
+ (defn lmv
+   (pi x nat tmleaf)
+   (lam x (ii2 x)))
+ (defn matom
+   (pi d nat (pi n nat (tm (succ d))))
+   (lam d (lam n (ii1 (ii1 n)))))
+ (defn mmv
+   (pi d nat (pi x nat (tm (succ d))))
+   (lam d (lam x (ii1 (ii2 x)))))
+ (defn mcell
+   (pi d nat (pi a (tm d) (pi b (tm d) (tm (succ d)))))
+   (lam d (lam a (lam b (ii2 (tpair a b))))))
+ (defn tcode
+   (pi d nat (pi p (tm d) nat))
+   (lam d
       (nat_rect (lam q (pi p (tm q) nat))
         (lam p (coprod_rect (lam c nat) (lam n (npair 0 n)) (lam x (npair 1 x)) p))
         (lam k
@@ -5991,21 +5991,21 @@
 ; --- is occ's shape at duo grain; sqside is the option's no-confusion
 ; --- family (a miss is never a hit) ---
 (assert
- (defn 'svec
-   '(pi n nat UU)
-   '(lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 h duo r))) n)))
- (defn 'slist
-   'UU
-   '(total2 n nat (svec n)))
- (defn 'snil
-   'slist
-   '(tpair 0 tt))
- (defn 'scons
-   '(pi e duo (pi s slist slist))
-   '(lam e (lam s (tpair (succ (pr1 s)) (tpair e (pr2 s))))))
- (defn 'sasq
-   '(pi v nat (pi s slist (coprod nat unit)))
-   '(lam v
+ (defn svec
+   (pi n nat UU)
+   (lam n (nat_rect (lam q UU) unit (lam k (lam r (total2 h duo r))) n)))
+ (defn slist
+   UU
+   (total2 n nat (svec n)))
+ (defn snil
+   slist
+   (tpair 0 tt))
+ (defn scons
+   (pi e duo (pi s slist slist))
+   (lam e (lam s (tpair (succ (pr1 s)) (tpair e (pr2 s))))))
+ (defn sasq
+   (pi v nat (pi s slist (coprod nat unit)))
+   (lam v
       (lam s
         ((nat_rect (lam q (pi w (svec q) (coprod nat unit))) (lam w (ii2 tt))
            (lam k
@@ -6015,9 +6015,9 @@
                    (nateqb (pr1 (pr1 w)) v)))))
            (pr1 s))
           (pr2 s)))))
- (defn 'sqside
-   '(pi c (coprod nat unit) UU)
-   '(lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
+ (defn sqside
+   (pi c (coprod nat unit) UU)
+   (lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
  ; the lookup computes: a hit, a miss, and the shadowing head
  ((vof 0 '(ii1 7)) = (vof 0 '(sasq 1 (scons (tpair 1 7) snil))))
  ((vof 0 '(ii2 tt)) = (vof 0 '(sasq 3 (scons (tpair 1 7) snil))))
@@ -6029,9 +6029,9 @@
 ; --- the ground's kids, and npairunpair will reassemble them; mvside is
 ; --- the result option's no-confusion family ---
 (assert
- (defn 'mleaf
-   '(pi p tmleaf (pi g nat (pi s slist (coprod slist unit))))
-   '(lam p
+ (defn mleaf
+   (pi p tmleaf (pi g nat (pi s slist (coprod slist unit))))
+   (lam p
       (lam g
         (lam s
           (coprod_rect (lam c (coprod slist unit))
@@ -6043,12 +6043,12 @@
                 (lam u (ii1 (scons (tpair x g) s)))
                 (sasq x s)))
             p)))))
- (defn 'mvside
-   '(pi c (coprod slist unit) UU)
-   '(lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
- (defn 'mtch
-   '(pi d nat (pi p (tm d) (pi g nat (pi s slist (coprod slist unit)))))
-   '(lam d
+ (defn mvside
+   (pi c (coprod slist unit) UU)
+   (lam c (coprod_rect (lam x UU) (lam x empty) (lam x unit) c)))
+ (defn mtch
+   (pi d nat (pi p (tm d) (pi g nat (pi s slist (coprod slist unit)))))
+   (lam d
       (nat_rect (lam q (pi p (tm q) (pi g nat (pi s slist (coprod slist unit)))))
         (lam p (lam g (lam s (mleaf p g s))))
         (lam k
@@ -6067,16 +6067,16 @@
                         (nateqb (upa g) 2)))
                     p))))))
         d)))
- (defn 'ileaf
-   '(pi p tmleaf (pi s slist nat))
-   '(lam p
+ (defn ileaf
+   (pi p tmleaf (pi s slist nat))
+   (lam p
       (lam s
         (coprod_rect (lam c nat) (lam n (npair 0 n))
           (lam x (coprod_rect (lam c2 nat) (lam t t) (lam u (npair 1 x)) (sasq x s)))
           p))))
- (defn 'inst
-   '(pi d nat (pi p (tm d) (pi s slist nat)))
-   '(lam d
+ (defn inst
+   (pi d nat (pi p (tm d) (pi s slist nat)))
+   (lam d
       (nat_rect (lam q (pi p (tm q) (pi s slist nat))) (lam p (lam s (ileaf p s)))
         (lam k
           (lam IH
@@ -6107,8 +6107,8 @@
 ; --- decision (agreeing keys land in sqside's empty lane); the cell rung
 ; --- threads the two IHs through the remembered intermediate ---
 (assert
- (defq 'mleaf-mono
-   '(pi p tmleaf
+ (defq mleaf-mono
+   (pi p tmleaf
       (pi g nat
         (pi s slist
           (pi sf slist
@@ -6117,7 +6117,7 @@
                 (pi t nat
                   (pi ha (paths (coprod nat unit) (sasq v s) (ii1 t))
                     (paths (coprod nat unit) (sasq v sf) (ii1 t))))))))))
-   '(lam p
+   (lam p
       (lam g
         (lam s
           (lam sf
@@ -6266,8 +6266,8 @@
                    (sasq x s))
                   (idpath (sasq x s))))
               p))))))
- (defq 'mtch-mono
-   '(pi d nat
+ (defq mtch-mono
+   (pi d nat
       (pi p (tm d)
         (pi g nat
           (pi s slist
@@ -6277,7 +6277,7 @@
                   (pi t nat
                     (pi ha (paths (coprod nat unit) (sasq v s) (ii1 t))
                       (paths (coprod nat unit) (sasq v sf) (ii1 t)))))))))))
-   '(lam d
+   (lam d
       (nat_rect
         (lam q
           (pi p (tm q)
@@ -6386,8 +6386,8 @@
 ; --- npairunpair twice, and the tag verdict slid home. then the headline
 ; --- at the empty substitution ---
 (assert
- (defq 'mleaf-sound
-   '(pi p tmleaf
+ (defq mleaf-sound
+   (pi p tmleaf
       (pi g nat
         (pi s slist
           (pi sf slist
@@ -6399,7 +6399,7 @@
                       (pi h3 (paths (coprod nat unit) (sasq v sf) (ii1 t))
                         (paths (coprod nat unit) (sasq v s2) (ii1 t)))))
                   (paths nat (ileaf p s2) g))))))))
-   '(lam p
+   (lam p
       (lam g
         (lam s
           (lam sf
@@ -6541,8 +6541,8 @@
                    (sasq x s))
                   (idpath (sasq x s))))
               p))))))
- (defq 'mtch-sound-ext
-   '(pi d nat
+ (defq mtch-sound-ext
+   (pi d nat
       (pi p (tm d)
         (pi g nat
           (pi s slist
@@ -6555,7 +6555,7 @@
                         (pi h3 (paths (coprod nat unit) (sasq v sf) (ii1 t))
                           (paths (coprod nat unit) (sasq v s2) (ii1 t)))))
                     (paths nat (inst d p s2) g)))))))))
-   '(lam d
+   (lam d
       (nat_rect
         (lam q
           (pi p (tm q)
@@ -6703,14 +6703,14 @@
                           (idpath (nateqb (upa g) 2))))
                       p)))))))
         d)))
- (defq 'mtch-sound
-   '(pi d nat
+ (defq mtch-sound
+   (pi d nat
       (pi p (tm d)
         (pi g nat
           (pi sf slist
             (pi e (paths (coprod slist unit) (mtch d p g snil) (ii1 sf))
               (paths nat (inst d p sf) g))))))
-   '(lam d
+   (lam d
       (lam p
         (lam g (lam sf (lam e (mtch-sound-ext d p g snil sf e sf (lam v (lam t (lam h3 h3))))))))))
  ; the headline in the small: match, instantiate, come home
@@ -6722,13 +6722,13 @@
 ; --- prefix surgery, the rule riding unchanged; swapping the seats back
 ; --- is home -- L1 for the metavariable lane, two ldroplenapp reads ---
 (assert
- (defn 'reaim
-   '(pi a nlist (pi b nlist (pi p nlist nlist)))
-   '(lam a (lam b (lam p (lapp b (ldrop (nlen a) p))))))
- (defq 'reaim-involutive
-   '(pi a nlist
+ (defn reaim
+   (pi a nlist (pi b nlist (pi p nlist nlist)))
+   (lam a (lam b (lam p (lapp b (ldrop (nlen a) p))))))
+ (defq reaim-involutive
+   (pi a nlist
       (pi b nlist (pi w nlist (paths nlist (reaim b a (reaim a b (lapp a w))) (lapp a w)))))
-   '(lam a
+   (lam a
       (lam b
         (lam w
           (pathscomp0 nlist (lapp a (ldrop (nlen b) (lapp b (ldrop (nlen a) (lapp a w)))))
@@ -6767,22 +6767,22 @@
 ; --- the canonical identity: fold the frontier through cins; an adjacent
 ; --- swap and a stutter vanish before the fold even lands (H1 / H2) ---
 (assert
- (defn 'foldc
-   '(pi hs nlist (pi acc nlist nlist))
-   '(lam hs
+ (defn foldc
+   (pi hs nlist (pi acc nlist nlist))
+   (lam hs
       (lam acc
         ((nat_rect (lam q (pi v (nvec q) (pi s nlist nlist))) (lam v (lam s s))
            (lam k (lam IH (lam v (lam s (IH (pr2 v) (cins (pr1 v) s))))))
            (pr1 hs))
           (pr2 hs)
           acc))))
- (defn 'fid
-   '(pi hs nlist nlist)
-   '(lam hs (foldc hs nnil)))
- (defq 'foldcapp
-   '(pi a nlist
+ (defn fid
+   (pi hs nlist nlist)
+   (lam hs (foldc hs nnil)))
+ (defq foldcapp
+   (pi a nlist
       (pi b nlist (pi s nlist (paths nlist (foldc (lapp a b) s) (foldc b (foldc a s))))))
-   '(lam a
+   (lam a
       (lam b
         ((nat_rect
            (lam q
@@ -6793,14 +6793,14 @@
            (lam k (lam IH (lam v (lam s (IH (pr2 v) (cins (pr1 v) s))))))
            (pr1 a))
           (pr2 a)))))
- (defq 'fid-swap
-   '(pi pre nlist
+ (defq fid-swap
+   (pi pre nlist
       (pi x nat
         (pi y nat
           (pi post nlist
             (paths nlist (fid (lapp pre (ncons x (ncons y post))))
               (fid (lapp pre (ncons y (ncons x post)))))))))
-   '(lam pre
+   (lam pre
       (lam x
         (lam y
           (lam post
@@ -6818,12 +6818,12 @@
                 (pathsinv0 nlist (fid (lapp pre (ncons y (ncons x post))))
                   (foldc post (cins x (cins y (foldc pre nnil))))
                   (foldcapp pre (ncons y (ncons x post)) nnil)))))))))
- (defq 'fid-dup
-   '(pi pre nlist
+ (defq fid-dup
+   (pi pre nlist
       (pi x nat
         (pi post nlist
           (paths nlist (fid (lapp pre (ncons x (ncons x post)))) (fid (lapp pre (ncons x post)))))))
-   '(lam pre
+   (lam pre
       (lam x
         (lam post
           (pathscomp0 nlist (fid (lapp pre (ncons x (ncons x post))))
@@ -6845,13 +6845,13 @@
 ; --- the digest is faithful: natgtb closes its own diagonal, so a code
 ; --- decodes on its own fuel -- lcode is injective, the real digest ---
 (assert
- (defq 'natgtbnn
-   '(pi n nat (paths bool (natgtb n n) false))
-   '(lam n
+ (defq natgtbnn
+   (pi n nat (paths bool (natgtb n n) false))
+   (lam n
       (nat_rect (lam q (paths bool (natgtb q q) false)) (idpath false) (lam k (lam IH IH)) n)))
- (defq 'lcode-inj
-   '(pi x nlist (pi y nlist (pi e (paths nat (lcode x) (lcode y)) (paths nlist x y))))
-   '(lam x
+ (defq lcode-inj
+   (pi x nlist (pi y nlist (pi e (paths nat (lcode x) (lcode y)) (paths nlist x y))))
+   (lam x
       (lam y
         (lam e
           (pathscomp0 nlist x (ldec (lcode x) (lcode x)) y
@@ -6869,30 +6869,30 @@
 ; --- identity -- a version stored once is found under every presentation
 ; --- of its set, and a miss rides through to the older book ---
 (assert
- (defn 'store
-   'UU
-   '(pi k nat (coprod nat unit)))
- (defn 'repo0
-   'store
-   '(lam q (ii2 tt)))
- (defn 'skey
-   '(pi hs nlist nat)
-   '(lam hs (lcode (fid hs))))
- (defn 'sput
-   '(pi r store (pi k nat (pi u nat store)))
-   '(lam r
+ (defn store
+   UU
+   (pi k nat (coprod nat unit)))
+ (defn repo0
+   store
+   (lam q (ii2 tt)))
+ (defn skey
+   (pi hs nlist nat)
+   (lam hs (lcode (fid hs))))
+ (defn sput
+   (pi r store (pi k nat (pi u nat store)))
+   (lam r
       (lam k (lam u (lam q (bool_rect (lam c (coprod nat unit)) (ii1 u) (r q) (nateqb q k)))))))
- (defn 'sget
-   '(pi r store (pi hs nlist (coprod nat unit)))
-   '(lam r (lam hs (r (skey hs)))))
- (defq 'repo-found
-   '(pi r store
+ (defn sget
+   (pi r store (pi hs nlist (coprod nat unit)))
+   (lam r (lam hs (r (skey hs)))))
+ (defq repo-found
+   (pi r store
       (pi u nat
         (pi k1 nlist
           (pi k2 nlist
             (pi e (paths nlist (fid k1) (fid k2))
               (paths (coprod nat unit) (sget (sput r (skey k1) u) k2) (ii1 u)))))))
-   '(lam r
+   (lam r
       (lam u
         (lam k1
           (lam k2
@@ -6905,14 +6905,14 @@
                   (skey k2)
                   (maponpaths nlist nat (lam w2 (lcode w2)) (fid k1) (fid k2) e)
                   (nateqbrefl (skey k1))))))))))
- (defq 'repo-miss
-   '(pi r store
+ (defq repo-miss
+   (pi r store
       (pi u nat
         (pi k1 nat
           (pi k2 nlist
             (pi h (paths bool (nateqb (skey k2) k1) false)
               (paths (coprod nat unit) (sget (sput r k1 u) k2) (sget r k2)))))))
-   '(lam r
+   (lam r
       (lam u
         (lam k1
           (lam k2
@@ -6922,8 +6922,8 @@
                 (nateqb (skey k2) k1)
                 false
                 h)))))))
- (defq 'repo-swap
-   '(pi r store
+ (defq repo-swap
+   (pi r store
       (pi u nat
         (pi pre nlist
           (pi x nat
@@ -6933,7 +6933,7 @@
                   (sget (sput r (skey (lapp pre (ncons x (ncons y post)))) u)
                     (lapp pre (ncons y (ncons x post))))
                   (ii1 u))))))))
-   '(lam r
+   (lam r
       (lam u
         (lam pre
           (lam x
@@ -6942,8 +6942,8 @@
                 (repo-found r u (lapp pre (ncons x (ncons y post)))
                   (lapp pre (ncons y (ncons x post)))
                   (fid-swap pre x y post)))))))))
- (defq 'repo-dup
-   '(pi r store
+ (defq repo-dup
+   (pi r store
       (pi u nat
         (pi pre nlist
           (pi x nat
@@ -6952,17 +6952,17 @@
                 (sget (sput r (skey (lapp pre (ncons x (ncons x post)))) u)
                   (lapp pre (ncons x post)))
                 (ii1 u)))))))
-   '(lam r
+   (lam r
       (lam u
         (lam pre
           (lam x
             (lam post
               (repo-found r u (lapp pre (ncons x (ncons x post))) (lapp pre (ncons x post))
                 (fid-dup pre x post))))))))
- (defq 'repo-faithful
-   '(pi k1 nlist
+ (defq repo-faithful
+   (pi k1 nlist
       (pi k2 nlist (pi e (paths nat (skey k1) (skey k2)) (paths nlist (fid k1) (fid k2)))))
-   '(lam k1 (lam k2 (lam e (lcode-inj (fid k1) (fid k2) e)))))
+   (lam k1 (lam k2 (lam e (lcode-inj (fid k1) (fid k2) e)))))
  ; the repo in the small: stored under one replay, found under its swap
  ; and its stutter; a different frontier rides through to the empty repo
  ((vof 0 '(sget (sput repo0 (skey (ncons 2 (ncons 1 nnil))) 7) (ncons 1 (ncons 2 nnil))))
@@ -6994,20 +6994,20 @@
  ; (npair 2 pair) -- so the charm never meets add/tri's unfolding loop and a
  ; cell at OPEN args stays one small stuck node instead of a succ tower that
  ; duplicates the core (the difference is ~10x on this whole slice's check)
- (defn 'gka '(pi g nat nat) '(lam g (upa (upa g))))
- (defn 'gkb '(pi g nat nat) '(lam g (upb (upa g))))
- (defn 'gcell '(pi a nat (pi b nat nat)) '(lam a (lam b (npair (npair a b) 2))))
- (defq 'gkabeta
-   '(pi a nat (pi b nat (paths nat (gka (gcell a b)) a)))
-   '(lam a
+ (defn gka (pi g nat nat) (lam g (upa (upa g))))
+ (defn gkb (pi g nat nat) (lam g (upb (upa g))))
+ (defn gcell (pi a nat (pi b nat nat)) (lam a (lam b (npair (npair a b) 2))))
+ (defq gkabeta
+   (pi a nat (pi b nat (paths nat (gka (gcell a b)) a)))
+   (lam a
       (lam b
         (pathscomp0 nat (upa (upa (npair (npair a b) 2))) (upa (npair a b)) a
           (maponpaths nat nat (lam w (upa w)) (upa (npair (npair a b) 2)) (npair a b)
             (upabeta (npair a b) 2))
           (upabeta a b)))))
- (defq 'gkbbeta
-   '(pi a nat (pi b nat (paths nat (gkb (gcell a b)) b)))
-   '(lam a
+ (defq gkbbeta
+   (pi a nat (pi b nat (paths nat (gkb (gcell a b)) b)))
+   (lam a
       (lam b
         (pathscomp0 nat (upb (upa (npair (npair a b) 2))) (upb (npair a b)) b
           (maponpaths nat nat (lam w (upb w)) (upa (npair (npair a b) 2)) (npair a b)
@@ -7017,9 +7017,9 @@
  (id? (vof 0 '1) (vof 0 '(gkb (gcell 3 1)))))
 
 (assert
- (defn 'gsub
-   '(pi p nlist (pi g nat nat))
-   '(lam p
+ (defn gsub
+   (pi p nlist (pi g nat nat))
+   (lam p
       (lam g
         ((nat_rect (lam q (pi v (nvec q) (pi g2 nat nat)))
            (lam v (lam g2 g2))
@@ -7032,9 +7032,9 @@
            (pr1 p))
           (pr2 p)
           g))))
- (defn 'gput
-   '(pi p nlist (pi g nat (pi h nat nat)))
-   '(lam p
+ (defn gput
+   (pi p nlist (pi g nat (pi h nat nat)))
+   (lam p
       (lam g
         (lam h
           ((nat_rect (lam q (pi v (nvec q) (pi g2 nat nat)))
@@ -7053,8 +7053,8 @@
  1)
 
 (assert
- (defq 'gsubput-stepa
-   '(pi k nat
+ (defq gsubput-stepa
+   (pi k nat
       (pi vv (nvec k)
         (pi g nat
           (pi h nat
@@ -7062,7 +7062,7 @@
               (paths nat
                 (gsub (tpair k vv) (gka (gcell (gput (tpair k vv) (gka g) h) (gkb g))))
                 h))))))
-   '(lam k
+   (lam k
       (lam vv
         (lam g
           (lam h
@@ -7076,8 +7076,8 @@
                   (gput (tpair k vv) (gka g) h)
                   (gkabeta (gput (tpair k vv) (gka g) h) (gkb g)))
                 IH)))))))
- (defq 'gsubput-stepb
-   '(pi k nat
+ (defq gsubput-stepb
+   (pi k nat
       (pi vv (nvec k)
         (pi g nat
           (pi h nat
@@ -7085,7 +7085,7 @@
               (paths nat
                 (gsub (tpair k vv) (gkb (gcell (gka g) (gput (tpair k vv) (gkb g) h))))
                 h))))))
-   '(lam k
+   (lam k
       (lam vv
         (lam g
           (lam h
@@ -7099,9 +7099,9 @@
                   (gput (tpair k vv) (gkb g) h)
                   (gkbbeta (gka g) (gput (tpair k vv) (gkb g) h)))
                 IH)))))))
- (defq 'gsubput
-   '(pi p nlist (pi g nat (pi h nat (paths nat (gsub p (gput p g h)) h))))
-   '(lam p
+ (defq gsubput
+   (pi p nlist (pi g nat (pi h nat (paths nat (gsub p (gput p g h)) h))))
+   (lam p
       ((nat_rect
          (lam q
            (pi v (nvec q)
@@ -7138,8 +7138,8 @@
  1)
 
 (assert
- (defq 'gsubputab-stepa
-   '(pi k nat
+ (defq gsubputab-stepa
+   (pi k nat
       (pi vv (nvec k)
         (pi ra nlist
           (pi rb nlist
@@ -7153,7 +7153,7 @@
                     (gsub (lapp (tpair k vv) (ncons 1 rb))
                       (gka (gcell (gput (lapp (tpair k vv) (ncons 0 ra)) (gka g) h) (gkb g))))
                     (gsub (lapp (tpair k vv) (ncons 1 rb)) (gka g))))))))))
-   '(lam k
+   (lam k
       (lam vv
         (lam ra
           (lam rb
@@ -7172,8 +7172,8 @@
                       (gput (lapp (tpair k vv) (ncons 0 ra)) (gka g) h)
                       (gkabeta (gput (lapp (tpair k vv) (ncons 0 ra)) (gka g) h) (gkb g)))
                     IH)))))))))
- (defq 'gsubputab-stepb
-   '(pi k nat
+ (defq gsubputab-stepb
+   (pi k nat
       (pi vv (nvec k)
         (pi ra nlist
           (pi rb nlist
@@ -7187,7 +7187,7 @@
                     (gsub (lapp (tpair k vv) (ncons 1 rb))
                       (gkb (gcell (gka g) (gput (lapp (tpair k vv) (ncons 0 ra)) (gkb g) h))))
                     (gsub (lapp (tpair k vv) (ncons 1 rb)) (gkb g))))))))))
-   '(lam k
+   (lam k
       (lam vv
         (lam ra
           (lam rb
@@ -7206,8 +7206,8 @@
                       (gput (lapp (tpair k vv) (ncons 0 ra)) (gkb g) h)
                       (gkbbeta (gka g) (gput (lapp (tpair k vv) (ncons 0 ra)) (gkb g) h)))
                     IH)))))))))
- (defq 'gsubputab
-   '(pi w nlist
+ (defq gsubputab
+   (pi w nlist
       (pi ra nlist
         (pi rb nlist
           (pi g nat
@@ -7215,7 +7215,7 @@
               (paths nat
                 (gsub (lapp w (ncons 1 rb)) (gput (lapp w (ncons 0 ra)) g h))
                 (gsub (lapp w (ncons 1 rb)) g)))))))
-   '(lam w
+   (lam w
       (lam ra
         (lam rb
           ((nat_rect
@@ -7265,8 +7265,8 @@
  1)
 
 (assert
- (defq 'gsubputba-stepa
-   '(pi k nat
+ (defq gsubputba-stepa
+   (pi k nat
       (pi vv (nvec k)
         (pi ra nlist
           (pi rb nlist
@@ -7280,7 +7280,7 @@
                     (gsub (lapp (tpair k vv) (ncons 0 ra))
                       (gka (gcell (gput (lapp (tpair k vv) (ncons 1 rb)) (gka g) h) (gkb g))))
                     (gsub (lapp (tpair k vv) (ncons 0 ra)) (gka g))))))))))
-   '(lam k
+   (lam k
       (lam vv
         (lam ra
           (lam rb
@@ -7299,8 +7299,8 @@
                       (gput (lapp (tpair k vv) (ncons 1 rb)) (gka g) h)
                       (gkabeta (gput (lapp (tpair k vv) (ncons 1 rb)) (gka g) h) (gkb g)))
                     IH)))))))))
- (defq 'gsubputba-stepb
-   '(pi k nat
+ (defq gsubputba-stepb
+   (pi k nat
       (pi vv (nvec k)
         (pi ra nlist
           (pi rb nlist
@@ -7314,7 +7314,7 @@
                     (gsub (lapp (tpair k vv) (ncons 0 ra))
                       (gkb (gcell (gka g) (gput (lapp (tpair k vv) (ncons 1 rb)) (gkb g) h))))
                     (gsub (lapp (tpair k vv) (ncons 0 ra)) (gkb g))))))))))
-   '(lam k
+   (lam k
       (lam vv
         (lam ra
           (lam rb
@@ -7333,8 +7333,8 @@
                       (gput (lapp (tpair k vv) (ncons 1 rb)) (gkb g) h)
                       (gkbbeta (gka g) (gput (lapp (tpair k vv) (ncons 1 rb)) (gkb g) h)))
                     IH)))))))))
- (defq 'gsubputba
-   '(pi w nlist
+ (defq gsubputba
+   (pi w nlist
       (pi ra nlist
         (pi rb nlist
           (pi g nat
@@ -7342,7 +7342,7 @@
               (paths nat
                 (gsub (lapp w (ncons 0 ra)) (gput (lapp w (ncons 1 rb)) g h))
                 (gsub (lapp w (ncons 0 ra)) g)))))))
-   '(lam w
+   (lam w
       (lam ra
         (lam rb
           ((nat_rect
@@ -7392,38 +7392,38 @@
  1)
 
 (assert
- (defq 'gputcomm-cellz
-   '(pi A nat (pi B nat (pi ra nlist (pi rb nlist (pi x nat (pi y nat
+ (defq gputcomm-cellz
+   (pi A nat (pi B nat (pi ra nlist (pi rb nlist (pi x nat (pi y nat
       (paths nat (gcell (gka (gcell (gput ra A x) B)) (gput rb (gkb (gcell (gput ra A x) B)) y)) (gcell (gput ra (gka (gcell A (gput rb B y))) x) (gkb (gcell A (gput rb B y)))))))))))
-   '(lam A (lam B (lam ra (lam rb (lam x (lam y
+   (lam A (lam B (lam ra (lam rb (lam x (lam y
       (pathscomp0 nat (gcell (gka (gcell (gput ra A x) B)) (gput rb (gkb (gcell (gput ra A x) B)) y)) (gcell (gput ra A x) (gput rb B y)) (gcell (gput ra (gka (gcell A (gput rb B y))) x) (gkb (gcell A (gput rb B y))))
         (pathscomp0 nat (gcell (gka (gcell (gput ra A x) B)) (gput rb (gkb (gcell (gput ra A x) B)) y)) (gcell (gput ra A x) (gput rb (gkb (gcell (gput ra A x) B)) y)) (gcell (gput ra A x) (gput rb B y)) (maponpaths nat nat (lam z (gcell z (gput rb (gkb (gcell (gput ra A x) B)) y))) (gka (gcell (gput ra A x) B)) (gput ra A x) (gkabeta (gput ra A x) B)) (maponpaths nat nat (lam z (gcell (gput ra A x) (gput rb z y))) (gkb (gcell (gput ra A x) B)) B (gkbbeta (gput ra A x) B)))
         (pathsinv0 nat (gcell (gput ra (gka (gcell A (gput rb B y))) x) (gkb (gcell A (gput rb B y)))) (gcell (gput ra A x) (gput rb B y)) (pathscomp0 nat (gcell (gput ra (gka (gcell A (gput rb B y))) x) (gkb (gcell A (gput rb B y)))) (gcell (gput ra A x) (gkb (gcell A (gput rb B y)))) (gcell (gput ra A x) (gput rb B y)) (maponpaths nat nat (lam z (gcell (gput ra z x) (gkb (gcell A (gput rb B y))))) (gka (gcell A (gput rb B y))) A (gkabeta A (gput rb B y))) (maponpaths nat nat (lam z (gcell (gput ra A x) z)) (gkb (gcell A (gput rb B y))) (gput rb B y) (gkbbeta A (gput rb B y)))))))))))))
- (defq 'gputcomm-cella
-   '(pi P nat (pi Q nat (pi B nat (pi la nlist (pi lb nlist (pi x nat (pi y nat
+ (defq gputcomm-cella
+   (pi P nat (pi Q nat (pi B nat (pi la nlist (pi lb nlist (pi x nat (pi y nat
       (pi IH (paths nat (gput lb P y) (gput la Q x))
         (paths nat (gcell (gput lb (gka (gcell P B)) y) (gkb (gcell P B))) (gcell (gput la (gka (gcell Q B)) x) (gkb (gcell Q B))))))))))))
-   '(lam P (lam Q (lam B (lam la (lam lb (lam x (lam y (lam IH
+   (lam P (lam Q (lam B (lam la (lam lb (lam x (lam y (lam IH
       (pathscomp0 nat (gcell (gput lb (gka (gcell P B)) y) (gkb (gcell P B))) (gcell (gput la Q x) B) (gcell (gput la (gka (gcell Q B)) x) (gkb (gcell Q B)))
         (pathscomp0 nat (gcell (gput lb (gka (gcell P B)) y) (gkb (gcell P B))) (gcell (gput lb P y) B) (gcell (gput la Q x) B)
           (pathscomp0 nat (gcell (gput lb (gka (gcell P B)) y) (gkb (gcell P B))) (gcell (gput lb P y) (gkb (gcell P B))) (gcell (gput lb P y) B) (maponpaths nat nat (lam z (gcell (gput lb z y) (gkb (gcell P B)))) (gka (gcell P B)) P (gkabeta P B)) (maponpaths nat nat (lam z (gcell (gput lb P y) z)) (gkb (gcell P B)) B (gkbbeta P B)))
           (maponpaths nat nat (lam z (gcell z B)) (gput lb P y) (gput la Q x) IH))
         (pathsinv0 nat (gcell (gput la (gka (gcell Q B)) x) (gkb (gcell Q B))) (gcell (gput la Q x) B) (pathscomp0 nat (gcell (gput la (gka (gcell Q B)) x) (gkb (gcell Q B))) (gcell (gput la Q x) (gkb (gcell Q B))) (gcell (gput la Q x) B) (maponpaths nat nat (lam z (gcell (gput la z x) (gkb (gcell Q B)))) (gka (gcell Q B)) Q (gkabeta Q B)) (maponpaths nat nat (lam z (gcell (gput la Q x) z)) (gkb (gcell Q B)) B (gkbbeta Q B))))))))))))))
- (defq 'gputcomm-cellb
-   '(pi A nat (pi P nat (pi Q nat (pi la nlist (pi lb nlist (pi x nat (pi y nat
+ (defq gputcomm-cellb
+   (pi A nat (pi P nat (pi Q nat (pi la nlist (pi lb nlist (pi x nat (pi y nat
       (pi IH (paths nat (gput lb P y) (gput la Q x))
         (paths nat (gcell (gka (gcell A P)) (gput lb (gkb (gcell A P)) y)) (gcell (gka (gcell A Q)) (gput la (gkb (gcell A Q)) x)))))))))))
-   '(lam A (lam P (lam Q (lam la (lam lb (lam x (lam y (lam IH
+   (lam A (lam P (lam Q (lam la (lam lb (lam x (lam y (lam IH
       (pathscomp0 nat (gcell (gka (gcell A P)) (gput lb (gkb (gcell A P)) y)) (gcell A (gput la Q x)) (gcell (gka (gcell A Q)) (gput la (gkb (gcell A Q)) x))
         (pathscomp0 nat (gcell (gka (gcell A P)) (gput lb (gkb (gcell A P)) y)) (gcell A (gput lb P y)) (gcell A (gput la Q x))
           (pathscomp0 nat (gcell (gka (gcell A P)) (gput lb (gkb (gcell A P)) y)) (gcell A (gput lb (gkb (gcell A P)) y)) (gcell A (gput lb P y)) (maponpaths nat nat (lam z (gcell z (gput lb (gkb (gcell A P)) y))) (gka (gcell A P)) A (gkabeta A P)) (maponpaths nat nat (lam z (gcell A (gput lb z y))) (gkb (gcell A P)) P (gkbbeta A P)))
           (maponpaths nat nat (lam z (gcell A z)) (gput lb P y) (gput la Q x) IH))
         (pathsinv0 nat (gcell (gka (gcell A Q)) (gput la (gkb (gcell A Q)) x)) (gcell A (gput la Q x)) (pathscomp0 nat (gcell (gka (gcell A Q)) (gput la (gkb (gcell A Q)) x)) (gcell A (gput la (gkb (gcell A Q)) x)) (gcell A (gput la Q x)) (maponpaths nat nat (lam z (gcell z (gput la (gkb (gcell A Q)) x))) (gka (gcell A Q)) A (gkabeta A Q)) (maponpaths nat nat (lam z (gcell A (gput la z x))) (gkb (gcell A Q)) Q (gkbbeta A Q))))))))))))))
- (defq 'gputcomm
-   '(pi w nlist (pi ra nlist (pi rb nlist (pi g nat (pi x nat (pi y nat
+ (defq gputcomm
+   (pi w nlist (pi ra nlist (pi rb nlist (pi g nat (pi x nat (pi y nat
       (paths nat (gput (lapp w (ncons 1 rb)) (gput (lapp w (ncons 0 ra)) g x) y)
                  (gput (lapp w (ncons 0 ra)) (gput (lapp w (ncons 1 rb)) g y) x))))))))
-   '(lam w (lam ra (lam rb
+   (lam w (lam ra (lam rb
       ((nat_rect
          (lam q (pi v (nvec q) (pi g nat (pi x nat (pi y nat
            (paths nat (gput (lapp (tpair q v) (ncons 1 rb)) (gput (lapp (tpair q v) (ncons 0 ra)) g x) y)

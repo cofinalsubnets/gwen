@@ -35,7 +35,7 @@
 ;     kernel proof terms (paths over a computing join), so they export axiom-free
 ;     through tools/uu2coq.l + uu2lean.l to Rocq AND Lean alongside the uu corpus. ---
 (assert
- (defq 'kjoin-tier-wins  '(paths nat (kjoin 1 4) 4) '(idpath 4))   ; A. higher tier wins
- (defq 'kjoin-bot-unit   '(paths nat (kjoin 0 3) 3) '(idpath 3))   ; B. bot is the unit
- (defq 'kjoin-top-cap    '(paths nat (kjoin 4 5) 5) '(idpath 5))   ; C. top caps the spine
- (defq 'kjoin-str-widens '(paths nat (kjoin 6 1) 5) '(idpath 5)))  ; D. str widens to top
+ (defq kjoin-tier-wins  (paths nat (kjoin 1 4) 4) (idpath 4))   ; A. higher tier wins
+ (defq kjoin-bot-unit   (paths nat (kjoin 0 3) 3) (idpath 3))   ; B. bot is the unit
+ (defq kjoin-top-cap    (paths nat (kjoin 4 5) 5) (idpath 5))   ; C. top caps the spine
+ (defq kjoin-str-widens (paths nat (kjoin 6 1) 5) (idpath 5)))  ; D. str widens to top

@@ -443,9 +443,12 @@
  '& -46 '^ -45 '| -44                               ; bitwise, C's order
  '&& 31 '|| 30                                      ; logical, below comparison; also pat.l's guard and alternative
  '>< 25 '. 25                                       ; cons -- the loosest builder, under both its spellings
- '$ 6 '\ 5)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate), and the
-                                                    ; lambda UNDER it, so an infix lambda's body runs to the end of the form
-                                                    ; and swallows the $, as haskell's does
+ '$ 5 '\ 5)                                         ; weak apply (a $ b = (a b), haskell $; glued $x stays saturate) and
+                                                    ; the lambda, ONE band. an infix lambda's body still runs to the end of
+                                                    ; the form and swallows a $ to its right, as haskell's does -- but at
+                                                    ; equal band the right hand yields, so `\` no longer steals everything
+                                                    ; LEFT of it as its parameter: (map $ a \ f a) is (map (\ a (f a))),
+                                                    ; not a match against ($ map a). a looser `\` made that a silent trap.
  -1 (pins (tablet 0)                                ; --- ARITY -1: spaced, no bound. a left, then all of them
  '? 10 '@ 10                                        ; the CLAUSE forms: cond, and match -- every arm stays an operand
  ': 3 ':= ':)                                       ; the binder, loosest of all; := is a bare nom, so it NAMES

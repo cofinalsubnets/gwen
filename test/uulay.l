@@ -10,24 +10,24 @@
 ; --- the list vocabulary rt-tile leans on: take, drop, and placeat's window
 ; --- column (zip, keeping the left list; it truncates at the shorter) ---
 (assert
- (defn 'ltake '(pi k nat (pi l nlist nlist))
-   '(lam k ((nat_rect (lam q (pi l nlist nlist))
+ (defn ltake (pi k nat (pi l nlist nlist))
+   (lam k ((nat_rect (lam q (pi l nlist nlist))
               (lam l nnil)
               (lam j (lam IH (lam l (bool_rect (lam x nlist)
                        nnil
                        (ncons (hd0 l) (IH (tl0 l)))
                        (niszero (nlen l))))))
               k))))
- (defn 'ldrop '(pi k nat (pi l nlist nlist))
-   '(lam k ((nat_rect (lam q (pi l nlist nlist))
+ (defn ldrop (pi k nat (pi l nlist nlist))
+   (lam k ((nat_rect (lam q (pi l nlist nlist))
               (lam l l)
               (lam j (lam IH (lam l (bool_rect (lam x nlist)
                        nnil
                        (IH (tl0 l))
                        (niszero (nlen l))))))
               k))))
- (defn 'lzipl '(pi a nlist (pi b nlist nlist))
-   '(lam a (lam b ((nat_rect (lam q (pi v (nvec q) (pi b2 nlist nlist)))
+ (defn lzipl (pi a nlist (pi b nlist nlist))
+   (lam a (lam b ((nat_rect (lam q (pi v (nvec q) (pi b2 nlist nlist)))
                      (lam v (lam b2 nnil))
                      (lam k (lam IH (lam v (lam b2 (bool_rect (lam x nlist)
                               nnil
@@ -43,12 +43,12 @@
 ; --- splitv-w one per frac, padfr a length-ns frac list -- only the COUNTS
 ; --- survive the geometry erasure, and the counts are what the theorem eats ---
 (assert
- (defn 'msplitveq '(pi n nat (pi r nat nlist))
-   '(lam n (lam r (nat_rect (lam q nlist) nnil (lam j (lam IH (ncons r IH))) n))))
- (defn 'msplitvw '(pi fr nlist (pi r nat nlist))
-   '(lam fr (lam r (nat_rect (lam q nlist) nnil (lam j (lam IH (ncons r IH))) (pr1 fr)))))
- (defn 'mpadfr '(pi fr nlist (pi ns nat nlist))
-   '(lam fr (lam ns ((nat_rect (lam q (pi f nlist nlist))
+ (defn msplitveq (pi n nat (pi r nat nlist))
+   (lam n (lam r (nat_rect (lam q nlist) nnil (lam j (lam IH (ncons r IH))) n))))
+ (defn msplitvw (pi fr nlist (pi r nat nlist))
+   (lam fr (lam r (nat_rect (lam q nlist) nnil (lam j (lam IH (ncons r IH))) (pr1 fr)))))
+ (defn mpadfr (pi fr nlist (pi ns nat nlist))
+   (lam fr (lam ns ((nat_rect (lam q (pi f nlist nlist))
                        (lam f nnil)
                        (lam j (lam IH (lam f (ncons (bool_rect (lam x nat) 1 (hd0 f) (niszero (nlen f)))
                                               (IH (tl0 f))))))
@@ -61,8 +61,8 @@
 ; --- fits the master count zips into the master column; otherwise masters
 ; --- (take nm) and slaves (drop nm) zip their own strips and append ---
 (assert
- (defn 'rtwins '(pi nm nat (pi fr nlist (pi r nat (pi row nlist nlist))))
-   '(lam nm (lam fr (lam r (lam row
+ (defn rtwins (pi nm nat (pi fr nlist (pi r nat (pi row nlist nlist))))
+   (lam nm (lam fr (lam r (lam row
       (let n (nlen row)
         (bool_rect (lam x nlist)
           nnil
@@ -91,11 +91,11 @@
 ; --- the row generalized (the inner rect's own IH goes unused, nateqbsymm
 ; --- style) ---
 (assert
- (defq 'lnil0 '(pi v (nvec 0) (paths nlist (tpair 0 v) nnil))
-   '(lam v (maponpaths unit nlist (lam u (tpair 0 u)) v tt (uu-unitpath v))))
- (defq 'ldroplen
-   '(pi k nat (pi l nlist (paths nat (nlen (ldrop k l)) (natminus (nlen l) k))))
-   '(lam k ((nat_rect
+ (defq lnil0 (pi v (nvec 0) (paths nlist (tpair 0 v) nnil))
+   (lam v (maponpaths unit nlist (lam u (tpair 0 u)) v tt (uu-unitpath v))))
+ (defq ldroplen
+   (pi k nat (pi l nlist (paths nat (nlen (ldrop k l)) (natminus (nlen l) k))))
+   (lam k ((nat_rect
       (lam kq (pi l nlist (paths nat (nlen (ldrop kq l)) (natminus (nlen l) kq))))
       (lam l (pathsinv0 nat (natminus (nlen l) 0) (nlen l) (natminusn0 (nlen l))))
       (lam j (lam IH (lam l
@@ -106,9 +106,9 @@
            (pr1 l))
          (pr2 l)))))
       k))))
- (defq 'lzipltake
-   '(pi k nat (pi l nlist (pi r nat (paths nlist (lzipl (ltake k l) (msplitveq k r)) (ltake k l)))))
-   '(lam k ((nat_rect
+ (defq lzipltake
+   (pi k nat (pi l nlist (pi r nat (paths nlist (lzipl (ltake k l) (msplitveq k r)) (ltake k l)))))
+   (lam k ((nat_rect
       (lam kq (pi l nlist (pi r nat (paths nlist (lzipl (ltake kq l) (msplitveq kq r)) (ltake kq l)))))
       (lam l (lam r (idpath nnil)))
       (lam j (lam IH (lam l (lam r
@@ -123,9 +123,9 @@
              (IH (tl0 l) r))
           (niszero (nlen l)))))))
       k))))
- (defq 'lziplveq
-   '(pi a nlist (pi r nat (paths nlist (lzipl a (msplitveq (nlen a) r)) a)))
-   '(lam a (lam r ((nat_rect
+ (defq lziplveq
+   (pi a nlist (pi r nat (paths nlist (lzipl a (msplitveq (nlen a) r)) a)))
+   (lam a (lam r ((nat_rect
       (lam q (pi v (nvec q) (paths nlist (lzipl (tpair q v) (msplitveq q r)) (tpair q v))))
       (lam v (pathsinv0 nlist (tpair 0 v) nnil (lnil0 v)))
       (lam m (lam IH (lam v
@@ -135,9 +135,9 @@
            (IH (pr2 v))))))
       (pr1 a))
      (pr2 a)))))
- (defq 'lziplpadvw
-   '(pi a nlist (pi fr nlist (pi r nat (paths nlist (lzipl a (msplitvw (mpadfr fr (nlen a)) r)) a))))
-   '(lam a (lam fr (lam r ((nat_rect
+ (defq lziplpadvw
+   (pi a nlist (pi fr nlist (pi r nat (paths nlist (lzipl a (msplitvw (mpadfr fr (nlen a)) r)) a))))
+   (lam a (lam fr (lam r ((nat_rect
       (lam q (pi v (nvec q) (pi f nlist (paths nlist (lzipl (tpair q v) (msplitvw (mpadfr f q) r)) (tpair q v)))))
       (lam v (lam f (pathsinv0 nlist (tpair 0 v) nnil (lnil0 v))))
       (lam m (lam IH (lam v (lam f
@@ -147,9 +147,9 @@
            (IH (pr2 v) (tl0 f)))))))
       (pr1 a))
      (pr2 a) fr)))))
- (defq 'lapptakedrop
-   '(pi k nat (pi l nlist (paths nlist (lapp (ltake k l) (ldrop k l)) l)))
-   '(lam k ((nat_rect
+ (defq lapptakedrop
+   (pi k nat (pi l nlist (paths nlist (lapp (ltake k l) (ldrop k l)) l)))
+   (lam k ((nat_rect
       (lam kq (pi l nlist (paths nlist (lapp (ltake kq l) (ldrop kq l)) l)))
       (lam l (idpath l))
       (lam j (lam IH (lam l
@@ -175,9 +175,9 @@
 ; --- rtwinsane rides it: a duplicate-free row tiles duplicate-free -- with
 ; --- zsane, every window is placed EXACTLY once ---
 (assert
- (defq 'rtwinsrow
-   '(pi nm nat (pi fr nlist (pi r nat (pi row nlist (paths nlist (rtwins nm fr r row) row)))))
-   '(lam nm (lam fr (lam r (lam row
+ (defq rtwinsrow
+   (pi nm nat (pi fr nlist (pi r nat (pi row nlist (paths nlist (rtwins nm fr r row) row)))))
+   (lam nm (lam fr (lam r (lam row
       ((nat_rect
          (lam q (pi v (nvec q) (paths nlist (rtwins nm fr r (tpair q v)) (tpair q v))))
          (lam v (pathsinv0 nlist (tpair 0 v) nnil (lnil0 v)))
@@ -222,10 +222,10 @@
              (natgtb (succ m) nm)))))
          (pr1 row))
        (pr2 row)))))))
- (defq 'rtwinsane
-   '(pi nm nat (pi fr nlist (pi r nat (pi row nlist (pi hs (paths bool (nodupb row) true)
+ (defq rtwinsane
+   (pi nm nat (pi fr nlist (pi r nat (pi row nlist (pi hs (paths bool (nodupb row) true)
       (paths bool (nodupb (rtwins nm fr r row)) true))))))
-   '(lam nm (lam fr (lam r (lam row (lam hs
+   (lam nm (lam fr (lam r (lam row (lam hs
       (pathscomp0 bool (nodupb (rtwins nm fr r row)) (nodupb row) true
         (maponpaths nlist bool (lam t (nodupb t)) (rtwins nm fr r row) row (rtwinsrow nm fr r row))
         hs))))))))

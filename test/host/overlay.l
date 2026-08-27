@@ -140,7 +140,7 @@
 (:    cforms (map (f \ unglue (opfix f)) (forms (open "crew/lux/core.l" "r")))   ; the surface factored to the core, as above
    gens (wm2uu cforms lux-sigs)
  _ (assert (= 10 #gens))
- _ (map (g \ defn (cap g) (g 1) (g 2)) gens)   ; the kernel certifies each, in order
+ _ (map (g \ (uu 'defn) (cap g) (g 1) (g 2)) gens)   ; the FUNCTION: these args are computed
  _ (puts "overlay leg 6: translated + certified ")
 
  ; stage 4: the idpath bridges. for every op, the theorem
@@ -158,7 +158,7 @@
                  ps (cup (cap (w2-find nm cforms)))
                  ks (cap (cup sg))
                  res (w2-mty (w2-rk nm (w2-nthl sg 2)))
-                 (defn (caup (assoc nm amap))
+                 ((uu 'defn) (caup (assoc nm amap))
                    (w2-pi ps ks ['paths res (link (w2-gen nm) ps) (link (mname nm) ps)])
                    (w2-lams ps ['idpath (link (mname nm) ps)]))))
         w2-want)

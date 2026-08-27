@@ -21,8 +21,8 @@
    (emit1 g)
     (: nm (g 0) th ((g 1) ())
        _ (each (\ f (puts (+ (+ "\n ; " (string nm)) (+ "  " (show f))))) th)
-       _ (puts (+ "\n (defn '" (+ (string nm) " 'nlist")))
-       _ (each (\ f (puts (+ "\n   " (? (id? f (cap th)) "'" " ")
+       _ (puts (+ "\n (defn " (+ (string nm) " nlist")))
+       _ (each (\ f (puts (+ "\n   " " "
                            (+ "(ncons " (+ (show (opc (f 0)))
                             (+ " (ncons " (show (f 1))))))))
                th)

@@ -8,7 +8,7 @@
 
 ; --- the specification: sanity is a duplicate-free row ---
 (assert
- (defn 'zsane '(pi z stk bool) '(lam z (nodupb (zrow z)))))
+ (defn zsane (pi z stk bool) (lam z (nodupb (zrow z)))))
 
 ; --- the moves COMPUTE: rows, counts, focus motion (the wrap included),
 ; --- the master reorder, the swaps, and all four delete faces ---
@@ -49,19 +49,19 @@
 ; --- at the row's split, since zrow (zins w z) IS lapp (lrev up)
 ; --- (ncons w (ncons f dn)) by computation ---
 (assert
- (defn 'zrevrev '(pi z stk (paths stk (zrev (zrev z)) z))
-   '(lam z (idpath z)))
- (defn 'zfocins '(pi w nat (pi z stk (paths nat (zfoc (zins w z)) w)))
-   '(lam w (lam z (idpath w))))
- (defq 'zcountins
-   '(pi w nat (pi z stk (paths nat (zcount (zins w z)) (succ (zcount z)))))
-   '(lam w (lam z
+ (defn zrevrev (pi z stk (paths stk (zrev (zrev z)) z))
+   (lam z (idpath z)))
+ (defn zfocins (pi w nat (pi z stk (paths nat (zfoc (zins w z)) w)))
+   (lam w (lam z (idpath w))))
+ (defq zcountins
+   (pi w nat (pi z stk (paths nat (zcount (zins w z)) (succ (zcount z)))))
+   (lam w (lam z
       (maponpaths nat nat (lam q (succ q))
         (add (nlen (zup z)) (succ (nlen (zdn z))))
         (succ (add (nlen (zup z)) (nlen (zdn z))))
         (natplusnsm (nlen (zup z)) (nlen (zdn z)))))))
- (defq 'zinsane
-   '(pi w nat (pi z stk (pi hm (paths bool (memb w (zrow z)) false)
+ (defq zinsane
+   (pi w nat (pi z stk (pi hm (paths bool (memb w (zrow z)) false)
       (pi hs (paths bool (zsane z) true)
        (paths bool (zsane (zins w z)) true)))))
-   '(lam w (lam z (nodupmid w (ncons (zfoc z) (zdn z)) (lrev (zup z)))))))
+   (lam w (lam z (nodupmid w (ncons (zfoc z) (zdn z)) (lrev (zup z)))))))
