@@ -62,8 +62,8 @@ let prelude = {ai|
 (* footer: total count is spliced in so the verdict line is self-describing *)
 let footer n =
   Printf.sprintf {ai|])
-   _ (. "extracted-oracle: ") _ (. (show got)) _ (. " / %d ")
-   (. (? (= got %d) "PASS\n" "FAIL\n")))
+   _ (dot "extracted-oracle: ") _ (dot (show got)) _ (dot " / %d ")
+   (dot (? (= got %d) "PASS\n" "FAIL\n")))
 |ai} n n
 
 let () =

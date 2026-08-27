@@ -65,13 +65,13 @@ let ops = [|
 
 let prelude = {ai|
 (: (oline v r) (? (= (show v) r) 1
-                  (: _ (. "MISMATCH ") _ (. (show v)) _ (. " want ") _ (. r) _ (. "\n") 0))
+                  (: _ (dot "MISMATCH ") _ (dot (show v)) _ (dot " want ") _ (dot r) _ (dot "\n") 0))
    got (foldl (+) 0 [|ai}
 
 let footer n =
   Printf.sprintf {ai|])
-   _ (. "big-oracle: ") _ (. (show got)) _ (. " / %d ")
-   (. (? (= got %d) "PASS\n" "FAIL\n")))
+   _ (dot "big-oracle: ") _ (dot (show got)) _ (dot " / %d ")
+   (dot (? (= got %d) "PASS\n" "FAIL\n")))
 |ai} n n
 
 let () =
