@@ -25,6 +25,8 @@ half of the same ladder, not separate programs.
 | CLAUDE.md laws, compiled | law2uu.l -> test/uuvallaw.l | ONE spelling, both lanes |
 | love's `=` on values | veq, in test/uuval.l | structural, and the cap/cup/link laws |
 | the +/* band lattice | mx2uu.l, test/uumx*.l | LANDED in uu beside mx.v |
+| the band ALGEBRA | test/uuvalband.l | gval, ported: + and * on values |
+| the charm ceiling, () vs 0 | test/uuval.l | spec.v's V, over the finer carrier |
 | property fuzz | test/fuzz.l | keep |
 | holo encoder fuzz | test/holo/fuzz/{fuzz,sysdiff}.l | PORTED 2026-08-16; py gone |
 | vmret.l vs vmret.py differential | tools/py/ | RETIRED 2026-08-16 |
@@ -140,8 +142,7 @@ test/uuvaldiff.l now, so the three sort model -> differential -> laws.)
   translatable -- and the tool reports `no proof found` and emits 10, not 11.
   a search that rubber-stamped would not.
 
-what is still open: the assoc/dist family, which wants the band lattice AND a
-real `+`/`*` on values, where uumx today models only the dispatch.
+the assoc/dist family this section left open is test/uuvalband.l's now, below.
 
 ## the structural equality (landed)
 
@@ -229,3 +230,98 @@ what stays fuzz-only, permanently: the C primitives' agreement with the
 model -- the same gap uuwm has with the C runtime under core.l, and here the
 gap that a lane nom names the C function it says it does. the table is the
 interface; love.c is the other side of it.
+
+
+## the band algebra (landed)
+
+test/proof/rocq/spec.v had TWO value models the tree was not using together --
+`V` (net/sat/nilp over Z) and `gval` (GUnit/GNum/GSeq with gplus and gtimes) --
+both hand-written, both Rocq-only, and `gval`'s three bands typed in by hand
+where test/uumx.l DERIVES the partition from mx.l's own table. this closes both.
+
+**V, into the tower.** the two things `val` did not carry, and now does:
+
+- **the charm ceiling.** zsat is the tower's retraction and stays unbounded --
+  the round trip is a fact about the MEASURE. zsatc is what a word can hold, and
+  the three clamp laws (keeps / ceils / clamps) are stated hypothesis-free:
+  `(nmin chmax n)` IS a net that fits and `(add chmax n)` one that does not, so
+  nothing rests on a decision procedure for the bound. the width is a parameter
+  and uu names a small one; spec.v keeps the host's 2^62-1.
+- **() is not 0.** a leaf carries a TAG (`atm = coprod unit msr`), so () and the
+  number 0 net the same, read nil the same, and are still two values. this is
+  the one place love's `=` is finer than the measure it would otherwise read by,
+  and re-encoding the leaf was the whole cost -- nothing else in the model
+  wanted the bit. it also sharpened cup-total: `cup` of an atom is () now, not
+  the measure zero wearing ()'s name.
+- the COLOURS came with it (green nonneg, red below the floor, blue the floor,
+  green and blue dual not disjoint) and with them the sharpest of them:
+  **truth is POSITIVE GREEN**, `?x` iff green and not blue -- CLAUDE.md's own
+  lambda equation read as a colour. it needs the half bit, since a measure at 0
+  with its half up already ceils to 1.
+
+**gval, into uu.** test/uuvalband.l. the carrier needed no widening: after the
+tag split, `val` already HAS gval's three shapes -- aunit is GUnit, a number
+leaf is GNum, and a link spine is GSeq.
+
+- **the integers really associate.** this is what + needed and uuval did not
+  have. zadd is respelled by ITERATION (b counts the steps, each zsucc or
+  zpred): four definitional equations, where the truncated-subtraction spelling
+  computed the same sums and proved nothing. then zsucc/zpred inverse both ways,
+  the step lemmas that carry a zsucc across an argument, associativity by
+  induction on the RIGHT argument alone, and both units. the half-integers
+  follow in eight cases on the three half bits -- the carry fires wherever two
+  of them meet -- and the measures componentwise.
+- **the bands are mx.l's bands.** () is KMint, a number KCharm, a chain KChain,
+  and the cell `vadd` takes IS the lane `mxadd` dispatches to -- checked over all
+  nine pairs against the table love.c's mx.h is laid from. the model's number is
+  a numeric KIND, so kinds.l's tier lattice ranks WITHIN this one band rather
+  than competing with it: the three vocabularies cut at different depths and
+  disagree about nothing.
+- **+ and * cell for cell.** the unit on either side, numbers add, chains
+  APPEND, and a mixed band DEGENERATES -- and the net can SEE it degenerate
+  (5 + '(1 2) nets 3, not 8), which is exactly what buys associativity over the
+  whole carrier with no side conditions. append walks the left spine and
+  replaces its tail whatever the tail is, so `(link 1 2) + '(3)` is `(1 3)`,
+  which is what love answers. * has the annihilating zero on either side, the
+  |count| repeat (absolute value -- love repeats twice for -2), and the
+  cartesian, each pair a 2-list.
+- the cell laws are stated over the SHAPE the cell is about, never over its band
+  CODE: a code is a nat and a neutral one tells conv nothing, where a tree with
+  a head reduces the whole dispatch. all but the right unit are one idpath.
+- `x + ()` is a **veq** law and not a paths one: () + () answers the () the right
+  operand spells, which sits at height 0 where the left one may not.
+- **the differential runs the algebra**: love's own + and * beside vadd and vmul
+  over every ordered pair of a twelve-value corpus, compared through the net,
+  which is what sees a mixed band degenerate and what a wrong cell would move.
+
+what * cannot have here: the halves are closed under + and NOT under * (a half
+times a half is a quarter), so the multiplicative band is modelled at the
+INTEGER rung. an exact * everywhere wants the dyadic rung, which is a different
+carrier and not a lemma about this one.
+
+what + does not have yet, named rather than left to be noticed: + associates on
+the numeric band and on the unit cells, and the degeneration is what makes the
+mixed cells associate at all -- but chain+chain wants APPEND to associate, and
+append changes the depth INDEX, so the law is a veq law and its proof needs veq
+to be a congruence for vlink. that wants transitivity of veq: an induction over
+the fuel and both trees at once, the next rung and not a corollary of anything
+landed. spec.v's gplus_assoc holds the list view of the same law meanwhile.
+
+## the compose cell (landed)
+
+test/uuhom.l proved the monoid laws of `homcomp` -- love's `*` on the top band,
+prel's compose -- as a free-standing algebra about nothing in particular.
+test/uumxlaw.l now NAMES the cell it is about: `mxLcompose` is the lane at the
+hot diagonal, the mint there is the ZERO and not the monoid's unit, and the
+Church sum is the band's other lane. a dispatch edit that moved compose off that
+diagonal fails a proof rather than quietly leaving uuhom a monoid about nothing,
+and the guard fails by name if uuhom's terms are not up.
+
+## what spec.v keeps
+
+not a strong/weak pair: uuval exports back to universe-checked Rocq through
+uu2coq.l, so its theorems are available in a consistent metatheory too. what
+stays in spec.v is the WIDTH (maxcharm at the host's 2^62-1, where uu names a
+small one and proves the same three clamp laws against it), the order and colour
+facts the rest of that file leans on, and the APPEND hom, which the list view
+has and the tree view does not.

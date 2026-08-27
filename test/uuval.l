@@ -21,10 +21,10 @@
 ; above the tower sits the CHARM CEILING, the only rung with a width -- zsat is
 ; the retraction and stays unbounded, zsatc is what the word can hold -- and
 ; beside it the COLOURS, the sign structure ?x = ($x > 0) actually rests on.
-; the ARITHMETIC (zadd/radd/madd) carries no theorem: every law below is about
-; idempotence and factorisation, so a wrong zadd cannot fake one. what gates the
-; arithmetic instead is the differential in test/uuvaldiff.l, which runs love's own
-; saturate beside this model's vsat over test/law.l's corpus.
+; the laws HERE are about idempotence and factorisation, so a wrong zadd cannot
+; fake one; the algebra of + and * is test/uuvalband.l's, and what gates the
+; arithmetic in both is the differential in test/uuvaldiff.l, which runs love's
+; own saturate beside this model's vsat over test/law.l's corpus.
 ;
 ; substrate: test/uu.l (the kernel + nat vocabulary; this file loads after it by
 ; sort order). guard: fail by name if the kernel is not up.
@@ -61,23 +61,24 @@
              a)))
  (defn chmax nat 7)
  (defn zsatc (pi z zed nat) (lam z (nmin chmax (zsat z))))
+ (defn zpred (pi z zed zed)
+   (lam z (coprod_rect (lam w zed)
+             (lam n (nat_rect (lam q zed) (ii2 0) (lam k (lam r (ii1 k))) n))
+             (lam n (ii2 (succ n)))
+             z)))
+ ; addition by ITERATION -- b counts the steps, each one zsucc or zpred. the
+ ; truncated-subtraction spelling computes the same sums and proves nothing:
+ ; every law of + below reads off these four definitional equations, and
+ ; natminus has none to give.
+ (defn zaddn (pi a zed (pi n nat zed))
+   (lam a (lam n (nat_rect (lam q zed) a (lam k (lam r (zsucc r))) n))))
+ (defn zsubn (pi a zed (pi n nat zed))
+   (lam a (lam n (nat_rect (lam q zed) a (lam k (lam r (zpred r))) n))))
  (defn zadd (pi a zed (pi b zed zed))
    (lam a (lam b (coprod_rect (lam w zed)
-      (lam p (coprod_rect (lam w zed)
-                (lam q (ii1 (add p q)))
-                (lam q (bool_rect (lam x zed)
-                          (ii1 (natminus p (succ q)))
-                          (ii2 (natminus q p))
-                          (natgtb p q)))
-                b))
-      (lam p (coprod_rect (lam w zed)
-                (lam q (bool_rect (lam x zed)
-                          (ii1 (natminus q (succ p)))
-                          (ii2 (natminus p q))
-                          (natgtb q p)))
-                (lam q (ii2 (succ (add p q))))
-                b))
-      a))))
+                    (lam n (zaddn a n))
+                    (lam n (zsubn a (succ n)))
+                    b))))
  (= (vof 0 '(ii1 5)) (vof 0 '(zadd (ii1 2) (ii1 3))))
  (= (vof 0 '(ii2 0)) (vof 0 '(zadd (ii1 2) (ii2 2))))     ;  2 + (-3) = -1
  (= (vof 0 '(ii1 1)) (vof 0 '(zadd (ii2 1) (ii1 3))))     ; -2 +   3  =  1

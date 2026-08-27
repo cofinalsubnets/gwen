@@ -99,3 +99,39 @@
  (0 = (vof 0 ['veq (uv2-enc ()) (uv2-enc 0)] = 'true ? 1 0))
  (1 = (vof 0 ['veq (uv2-enc ()) (uv2-enc ())] = 'true ? 1 0)))
 
+; --- and the same differential for the BAND ALGEBRA (test/uuvalband.l): love's
+; --- own + and * beside the model's vadd and vmul, over every ordered pair of a
+; --- corpus drawn from the three bands the model carries -- (), a number, a
+; --- chain. the comparison is through the NET, which is what sees a mixed band
+; --- degenerate (5 + '(1 2) nets 3, not 8) and what a wrong cell would move.
+; --- the corpus is WHOLE by construction: * is modelled at the integer rung.
+(:
+   (uv3-add x y) (vof 0 ['vsat ['vadd (uv2-enc x) (uv2-enc y)]])
+   (uv3-mul x y) (vof 0 ['vsat ['vmul (uv2-enc x) (uv2-enc y)]])
+   uv3-corpus (list () 0 1 2 5 -1 -3 '(1 2) '(-2 1) '(1) '(3) (link 1 2))
+   (uv3-row x y)
+    (? (! (uv3-add x y = saturate (x + y)))  [x '+ y]
+       (! (uv3-mul x y = saturate (x * y)))  [x '* y]
+       ())
+   (uv3-col x l)
+    (? (atom? l) 1
+       (: b (uv3-row x <l)
+          (? (two? b)
+             (: _ (puts ("uuvalband differential FAILED: " + show <b + " " + show <>b
+                         + " " + show >>b + "\n")) 0)
+             (uv3-col x >l))))
+   (uv3-run l)
+    (? (atom? l) 1 (? (uv3-col <l uv3-corpus) (uv3-run >l) 0)))
+
+(assert
+ ; every ordered pair, both operations
+ (uv3-run uv3-corpus)
+ ; ..and it has teeth: the degeneration is visible in the net, so a cell that
+ ; kept the number instead of dropping it would not pass above
+ (3 = (uv3-add 5 '(1 2)))
+ (8 = (+ 5 (net '(1 2))))
+ (9 = (uv3-mul 3 '(1 2)))
+ (0 = (uv3-mul () '(1 2)))
+ (0 = (uv3-mul 0 '(1 2)))
+ ; the cartesian: '(1) * '(2 3) is ((1 2) (1 3)), which nets 7
+ (7 = (uv3-mul '(1) '(2 3))))
