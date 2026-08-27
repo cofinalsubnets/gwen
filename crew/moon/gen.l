@@ -135,7 +135,8 @@
    ; discipline (the old code compared physicals, so the accident counted).
    (rpeq? g a b) (id? (rp g a) (rp g b))
    ; -- the ablation knob (the pare plan's rung 0): MOON_ABLATE="tpool,cs" holds named
-   ; mechanisms empty for PRICING -- ralloc tpool cs lhome homes pcs, and pdef
+   ; mechanisms empty for PRICING -- ralloc tpool cs lhome homes pcs, pdefcs
+   ; (no cs seats for crossing chains), and pdef
    ; (promotion falls back to the hull window). read at
    ; RUN time, once per unit (a value binding folds at bake and would carry the baking
    ; session's environment). no gate rides it; unset is every mechanism on. --
@@ -4710,6 +4711,28 @@
                                              (go >l (i + 1))))
                               _ (go fs 0)
                               t))
+                   ; -- the rung-3 kit: calls by index, and the callee-saved pool a
+                   ; crossing chain may take -- only regs this fn NEVER writes (the
+                   ; caller's value rides our own save/restore pair), and never in a
+                   ; jmpr fn (a restore before an indirect exit is the dispatch's hot
+                   ; path, and the threaded VM is nothing but these).
+                   callt (: t {}
+                            (go l i) (? !(two? l) t
+                                        (: f <l
+                                           _ (? (two? f && member? <f '(call callr sys)) (pin t i 1) 0)
+                                           (go >l (i + 1))))
+                            (go fs 0))
+                   jrf (vany (\ f (two? f && id? <f 'jmpr)) fs)
+                   cswr (? (id? lot9 'no) ()
+                           (: t {}
+                              (go i) (? (n2 <= i) 0
+                                        (: _ (foldl (\ _ r (? (member? r (csregs g)) (pin t r 1) 0))
+                                                    0 (peep dft9 i ()))
+                                           (go (i + 1))))
+                              _ (go 0)
+                              t))
+                   cspool9 (? (jrf || (abl? g 'pdef) || (abl? g 'pdefcs) || id? lot9 'no) ()
+                              (filter (\ r !(peep cswr r 0)) '(r11 r12 r13 r14)))
                    taken {}                    ; index -> the seats promotion already holds
                    (pfree? tk r is9)
                     (? !(two? is9) 1
@@ -4793,16 +4816,38 @@
                                                        (pin retid b 1)))))
                                          (go >l)))
                             (? (id? lot9 'no) t (go bylo)))
+                   csut {}                     ; the cs seats promotion actually took
+                   (ctfree? r is9) (? !(two? is9) 1
+                                      (member? r (peep taken <is9 ())) ()
+                                      (ctfree? r >is9))
+                   (cstake rs is9) (? !(two? rs) () (ctfree? <rs is9) <rs (cstake >rs is9))
                    _ (? (id? lot9 'no) 0
                         (foldl (\ _ b
                                  (: nrw (foldl (\ k c9
                                                 (: S <c9 pf <>c9 ds (nthr c9 2) rus (nthr c9 3) xc (nthr c9 4)
-                                                   r (pseat taken (? (member? pf (lvgp g)) (pf >< (lvgp g)) (lvgp g)) S)
+                                                   r0 (pseat taken (? (member? pf (lvgp g)) (pf >< (lvgp g)) (lvgp g)) S)
+                                                   ; a crossing chain (every caller-saved seat fails at
+                                                   ; the call) may take a CALLEE-saved one when the loop
+                                                   ; weight pays for the save/restore pair -- freeness is
+                                                   ; taken-only there: the caller's liveness phantom (an
+                                                   ; exit owes the file back) is met by the pair itself
+                                                   ; the pair costs one save + restore per INVOCATION;
+                                                   ; the wrap it replaces cost st+ld per CROSSING. only
+                                                   ; compounding iteration counts repay it (the grant's
+                                                   ; own depth bar, at value grain): a call in the range
+                                                   ; at depth >= 2, or the crossing weight's equivalent
+                                                   r (? r0 r0
+                                                        !(two? cspool9) ()
+                                                        (: wc (foldl (\ a i (? (peep callt i 0)
+                                                                               (a + vwt spans i) a))
+                                                                     0 S)
+                                                           (? (wc < 64) () (cstake cspool9 S))))
                                                    (? !r k
                                                       ; a load whose DEST is the seat but whose extension
                                                       ; disagrees with the canonical would wreck the seat
                                                       (vany (\ u3 (id? <>u3 r && (nthr u3 2) && !(id? (nthr u3 2) xc))) rus) k
                                                       (: _ (pclaim taken r S)
+                                                         _ (? (member? r cspool9) (pin csut r 1) 0)
                                                          _ (foldl (\ _ i (pin pxm i [r xc])) 0 ds)
                                                          _ (foldl (\ _ u3 (pin pxm <u3 [r xc])) 0 rus)
                                                          (k + #ds + #rus)))))
@@ -4835,7 +4880,32 @@
                           _ (pin nmap b <pr)
                           (place >rs ([hi n <pr] >< act2) <>pr)))
                    high2 (place rows () 8)
+                   ; the cs seats' save slots, fresh below the packed high water; one
+                   ; pair serves every chain that shares the seat
+                   csused (filter (\ r (peep csut r 0)) cspool9)
+                   cslot (: t {}
+                            (go l k) (? !(two? l) t
+                                        (: _ (pin t <l (0 - (high2 + (8 * k))))
+                                           (go >l (k + 1))))
+                            (go csused 1))
+                   csaves (map (\ r ['st 'r4 (peep cslot r 0) r]) csused)
+                   csrests (map (\ r ['ld r 'r4 (peep cslot r 0)]) csused)
                    K2 ((high2 + 15) & -16)
+                   K3 (? (two? csused) (((high2 + (8 * tally csused)) + 15) & -16) K2)
+                   ; a jmp out of the label table is a sibcall; so is one to the fn's
+                   ; OWN entry label (index 0) -- a self tail call re-enters through the
+                   ; prologue, and its saves would clobber the caller's file
+                   (exit9? f) (two? f && (member? <f '(ret jmpr) ||
+                                          (id? <f 'jmp && ((peep labt <>f -1) <= 0))))
+                   (tearx? l) (? !(two? l) 0
+                                 (: f <l
+                                    (? (exit9? f) 1
+                                       !(two? f) 0
+                                       ((id? <f 'mov && id? <>f 'sp && id? <>>f 'r4) ||
+                                        (id? <f 'pop && id? <>f 'r4) ||
+                                        (id? <f 'add && id? <>f 'sp && id? <>>f 'sp) ||
+                                        (f = '(ld r3 r4 -8))) (tearx? >l)
+                                       0)))
                    (radj2 f op9)                       ; a mapped touch -> its packed spelling
                     (: X (nthr f op9)
                        o9 (obj9 slots X)
@@ -4854,19 +4924,23 @@
                                    xl (xt9 op)
                                    m9 (? (id? d r) () [['mov d r]])
                                    (? (!(xl = ()) && !(id? xl xc)) (vapp m9 [[xl d]]) m9))))))
-                   (rw l i)
+                   (rw l i inr)
                     (? !(two? l) ()
                        (: f <l
+                          t9 (? (two? csused) (tearx? l) 0)
+                          spl (? (t9 && !inr) csrests ())
                           p (? (two? f && (3 < i) && two? prom) (prw f i) 'no)
                           (? (id? p 'no)
                              (: f2 (? !(two? f) f
-                                      (i = 3) ['sub 'sp 'sp K2]
+                                      (i = 3) ['sub 'sp 'sp K3]
                                       (: bp (peep a4base <f -1)
                                          (? (0 <= bp && id? (nthr f bp) 'r4)
                                             (radj2 f (peep uoff <f -1)) f)))
-                                (f2 >< rw >l (i + 1)))
-                             (vapp p (rw >l (i + 1))))))
-                   (? ((K2 < K) || two? prom) (rw fs 0) fs))))))
+                                (? ((i = 4) && two? csused)
+                                   (vapp spl (f2 >< vapp csaves (rw >l (i + 1) t9)))
+                                   (vapp spl (f2 >< rw >l (i + 1) t9))))
+                             (vapp spl (vapp p (rw >l (i + 1) t9))))))
+                   (? ((K2 < K) || two? prom) (rw fs 0 0) fs))))))
 
    ; dead label regions: the sibcall rewrite splices its jump BEFORE a shared epilogue and leaves
    ; the label + epi standing for the other arms -- when no arm remains, the region is unreachable

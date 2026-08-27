@@ -1222,7 +1222,10 @@
       (cspair? qf 'r11)                              ; s's save/restore pair, ONCE each -- the calls never wrap it
       (cspair? qf 'r12)                              ; i's pair likewise
       (cspair? qf 'r13)                              ; ...and the inner j's
-      (member? '(cmprm r12 sp 16) qf)                ; the outer cond fuses against n's slot
+      (= 1 (tally (filter (\ f (two? f && id? <f 'cmprm && id? <>f 'r12 && id? <>>f 'sp)) qf)))
+                                                     ; the outer cond fuses against n's slot (rung 3
+                                                     ;   repacks a's cell away, so no spelled offset)
+      (cspair? qf 'r14)                              ; ...and a itself rides a cs seat now
       (member? '(add r13 r13 1) qf)                  ; the inner step is register-only
       (member? '(add r12 r12 1) qf))                 ; ...and so is i's
    ; -- slot-load elision: stld rides a whole straight-line run (a bound slot's reload
@@ -1292,7 +1295,8 @@
       (member? '(add r11 r1 r0) zpf)                 ; s's def lands in its seat
       (member? '(mov r0 r11) zpf)                    ; ...and the return reads the seat
       (= 1 (nldrg zpf 'r11))                       ; s's slot is gone: r11 reloads at its cs restore, nowhere else
-      (member? '(ld r6 sp 8) zpf)                    ; a reads its slot per iteration...
+      (member? '(ld r6 sp 8) zpf)                    ; a reads its slot per iteration (its one call
+                                                     ;   sits at depth 1: a cs pair would not repay)
       (member? '(ldx r6 r6 r12 8 0) zpf))            ; ...and the indexed arg rides it, indexed by i's home
    ; -- priced int-param homes (the leaf lane): an int param whose slot touches pay the
    ; entry cvt takes its POSITIONAL pool seat -- after the locals pick, and only while the
@@ -2027,6 +2031,77 @@
       (member? '(li r0 42) rc)                       ; full-word si promotes to its li
       !(member? '(ld r7 r4 -16) rc)))
 
+; --- cs seats per value (moon-ssa rung 3): a chain that CROSSES a call -- every
+; caller-saved seat fails at the call by construction -- takes a callee-saved
+; one when its crossings COMPOUND (a call at depth >= 2 -- one pair per
+; invocation against iterations-squared wraps): repack emits ONE save after the
+; r3 save and ONE restore before each teardown, and the per-iteration wrap
+; around the call becomes two movs. straight-line weight stays a cell, and
+; the pdefcs ablation holds the whole lane shut.
+(: gS {}
+   _ (pin gS 'slots '((-16 8)))
+   gT {}
+   _ (pin gT 'slots '((-16 8)))
+   _ (pin gT 'abl '(pdefcs))
+   fsL '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+         (li r5 7)
+         (label .O)
+         (li r9 0)
+         (label .L)
+         (st r4 -16 r5) (call g9) (ld r6 r4 -16)
+         (add r6 r6 1) (mov r5 r6)
+         (add r9 r9 1) (cmp r9 3) (br lt .L)
+         (cmp r5 99) (br lt .O)
+         (mov r0 r5)
+         (mov sp r4) (pop r4) (ret))
+   fsS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+         (li r5 7)
+         (st r4 -16 r5) (call g9) (ld r6 r4 -16)
+         (mov r0 r6)
+         (mov sp r4) (pop r4) (ret))
+   rl (repack gS fsL)
+   hl (repack gT fsL)
+   rs (repack gS fsS)
+   (assert
+      !(member? '(ld r6 r4 -16) rl)                 ; the crossing chain left the frame..
+      (member? '(mov r11 r5) rl)                    ; ..for a callee-saved seat
+      (member? '(mov r6 r11) rl)
+      (member? '(st r4 -16 r11) rl)                 ; one save, after the r3 save..
+      (member? '(ld r11 r4 -16) rl)                 ; ..one restore, before the teardown
+      (member? '(ld r6 r4 -16) hl)                  ; pdefcs: the wrap stays a wrap
+      (member? '(ld r6 r4 -16) rs)                  ; straight-line weight 2: not worth a pair
+      ; a SIB exit restores too: the peel (ld r3/mov sp/pop r4/jmp far) is one
+      ; teardown run and the restore lands at its head -- a tail-called-into fn
+      ; must see the caller's file whole (exit9? once read every sib as local)
+      ; ...and a SELF tail call is a sib like any other: the target label IS in
+      ; the fn's own table (at index 0), but the jump re-enters through the
+      ; prologue, whose saves would clobber the caller's file if the seats were
+      ; not already restored (ev.c's analyze crashed the whole artifact on this)
+      (member? '(ld r11 r4 -16)
+               (repack gS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+                            (li r5 7)
+                            (label .O)
+                            (li r9 0)
+                            (label .L)
+                            (st r4 -16 r5) (call g9) (ld r6 r4 -16)
+                            (add r6 r6 1) (mov r5 r6)
+                            (add r9 r9 1) (cmp r9 3) (br lt .L)
+                            (cmp r5 99) (br lt .O)
+                            (mov r6 r5)
+                            (ld r3 r4 -8) (mov sp r4) (pop r4) (jmp fn))))
+      (member? '(ld r11 r4 -16)
+               (repack gS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+                            (li r5 7)
+                            (label .O)
+                            (li r9 0)
+                            (label .L)
+                            (st r4 -16 r5) (call g9) (ld r6 r4 -16)
+                            (add r6 r6 1) (mov r5 r6)
+                            (add r9 r9 1) (cmp r9 3) (br lt .L)
+                            (cmp r5 99) (br lt .O)
+                            (mov r6 r5)
+                            (ld r3 r4 -8) (mov sp r4) (pop r4) (jmp far9))))))
+
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rungs 1+2, narrow rides) ok")
+(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) ok")
 (put err 10)

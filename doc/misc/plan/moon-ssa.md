@@ -134,6 +134,27 @@ until rung 6.
   by keeping name grain anywhere in this rung. alive's livtab, the numbering
   guard, and both wrap pricings retire when this holds. The 1,327 spill-class
   cells are the territory.
+  **THE CS HALF LANDED 2026-08-28**: a chain every caller-saved seat refuses
+  at its calls takes a CALLEE-saved one — per VALUE, from the pool the fn
+  never writes (r11–r14 minus the grant's), freeness taken-only (the caller's
+  liveness phantom is met by the pair itself), never in a jmpr fn. repack
+  emits the pair itself: one save after the r3 save into a fresh slot below
+  the packed high water, one restore at the head of every teardown run —
+  including SIB peels, and a fn's own entry label is a sib target too (the
+  self-tail-call bug corrupted the caller's file through the re-entered
+  saves; ev.c's analyze took the artifact down before the law pinned it).
+  The gate is the pair's economics: one save+restore per INVOCATION against
+  st+ld per CROSSING, so only compounding crossings repay — a call in the
+  range at depth ≥ 2 (crossing weight ≥ 64), value-grain twin of the grant's
+  own depth bar; at depth ≤ 1 the corpus priced the pair at +0.8% cycles and
+  refused it. Priced flat (−0.1% cycles, +0.0% insns, corpus); fires in 19
+  corpus fns (eqv_at's 44 loop wraps for 68 entry/exit pair ops the headline);
+  −19.6% frame touches total vs pre-arc; pdef still byte-identical;
+  MOON_ABLATE=pdefcs holds the lane shut for pricing.
+  STILL OPEN in this rung: split-at-calls placement (caller-saved between
+  calls, spilled exactly across) — that is interval splitting, rung 4's
+  allocator; and the wraps of GRANT-homed values (a save-shaped cs mover
+  never promotes). alive's machinery retires at rung 6, not here.
 - **rung 4 — the allocator owns locals; lpick retires.** Interval allocation
   (linear scan with splitting) over pool + cs replaces static-touch picking
   (imsort, navl, rpays 'pool). Prices against locals homes' +6.3% share: hold
