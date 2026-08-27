@@ -89,7 +89,13 @@
                        (g (cup cs) ctx 0)                 ; drop the space; ctx keeps accruing
                        (: _ (eb c) (g (cup cs) 0 0)))     ; keep it: a real boundary
                     (: _ (eb c)
-                       (g (cup cs) (? (hardb c) 0 (link c ctx)) (= c 34))))))))
+                       ; ⚠ a TERMINAL ' IS A PRIME, not a quote: `x'` is one name, so the byte
+                       ; belongs to the left token and the space after it is LOAD-BEARING. Only a
+                       ; ' at token start reaches across whitespace for its datum. Reading it as a
+                       ; boundary either way emptied ctx, so `redundant?` probed "" against the
+                       ; next form -- always equal -- and ate the space in `(ov-look env' x)`.
+                       (g (cup cs) (? (&& (hardb c) (|| (!= c 39) (atom? ctx))) 0 (link c ctx))
+                          (= c 34))))))))
         (s2cl acc) 0 0)
    _ (put out 34)                                      ; closing "
    (put out 10))
