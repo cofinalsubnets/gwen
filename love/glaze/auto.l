@@ -866,7 +866,11 @@
        (<x >< map dlower >x))
    (has-pipe? x) (? (atom? x) 0  (dquote? x) 0  (dprod? x) 1  (dfold? x) 1  (dpred? x) 1  (any has-pipe? >x))
    (defol-body b) (? (has-pipe? b) (dlower (dsimp (dforest b))) b)            ; fuse+lower a pipeline body, else leave it
-   (defol-bs bl) (? (atom? >bl) [(defol-body <bl)]                 ; trailing body
+   (defol-bs bl) (? (atom? bl) ()                                  ; ⚠ EXHAUSTED, and a body-LESS `:` ends
+                                                                   ; here: without this the next arm reads
+                                                                   ; () as a trailing body and INVENTS one,
+                                                                   ; turning a defglob into a local let
+                    (atom? >bl) [(defol-body <bl)]                 ; trailing body
                     (<bl >< (defol-body <>bl >< defol-bs >>bl)))   ; (name value ..) -> transform each value
    (defoliate form)
     (? !(has-pipe? form) form                                             ; NO pipeline anywhere -> byte-identical (every legacy form)
