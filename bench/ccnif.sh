@@ -67,7 +67,7 @@ export CCACHE_DISABLE=1
 [ "$(uname -m)" = x86_64 ] || { echo "ccnif: x86-64 only (mooncc emits x64)" >&2; exit 1; }
 
 rm -rf "$W"; mkdir -p "$W"
-inc="-Icore -Itest/libc"
+inc="-Isrc -Itest/libc"
 
 # the lanes, in report order; mooncc first so it is the numerator everywhere
 lanes="mooncc gcc-O2 clang-O2 gcc-O0"
@@ -141,10 +141,10 @@ syms() {   # "<name> <bytes>" for an object's text symbols, gap-derived, section
 }
 printf '%-16s' "file"; for l in $have; do printf '%12s' "$l"; done; echo
 for f in hash deflate inflate; do
-  printf '%-16s' "host/$f.c"
+  printf '%-16s' "src/$f.c"
   base=
   for l in $have; do
-    object "$l" "host/$f.c" "$W/$f.$l.o" > /dev/null 2>&1 \
+    object "$l" "src/$f.c" "$W/$f.$l.o" > /dev/null 2>&1 \
       || { printf '%12s' dnf; continue; }
     t=$(objdump -h "$W/$f.$l.o" | awk '$2==".text"{print strtonum("0x" $3)}')
     [ -n "$base" ] || base=$t
