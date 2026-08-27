@@ -4584,10 +4584,10 @@
              ; from, which is also the preferred seat (taking it makes that store a self-mov
              ; and it drops), and () when the first touch was a LOAD, which reads a value this
              ; cell was never given.
-             tls {}                        ; base -> ((i kind reg)..) newest-first, the chains' food
-             (touch b n i e9 k9 s9)                    ; k9: 'st | 'ld | 'no (an unpromotable shape)
+             tls {}                        ; base -> ((i op reg off)..) newest-first, the chains' food
+             (touch b n i e9 k9 s9 op9 x9)             ; k9: 'st | 'ld | 'no (an unpromotable shape)
               (: w (obs b)
-                 _ (pin tls b ([i k9 s9] >< peep tls b ()))
+                 _ (pin tls b ([i op9 s9 x9] >< peep tls b ()))
                  (pin obs b (? (two? w) [n <>w i (nthr w 3 || e9)
                                            ((nthr w 4) && !(id? k9 'no)) (nthr w 5)]
                                [n i i e9 !(id? k9 'no) (? (id? k9 'st) s9 ())])))
@@ -4628,8 +4628,11 @@
                                                    (id? <f 'ld)
                                                     (? (member? (nthr f 1) (csregs g)) 'no 'ld)
                                                    'no)
-                                                (? (id? <f 'st) (nthr f 3)
-                                                   (id? <f 'ld) (nthr f 1) ()))
+                                                (? (0 < vstw <f) (nthr f 3)
+                                                   (0 < vsiw <f) (nthr f 3)
+                                                   (0 < vldw <f) (nthr f 1)
+                                                   ())
+                                                <f X)
                                        (scan >l (i + 1) sp2))
                                    (charm? X && ((X = -8) || (0 <= X))) (scan >l (i + 1) sp2)
                                    'no))
@@ -4658,7 +4661,7 @@
                           _ (? ch2 (pin obs b [<w <r <>r (nthr w 3) (nthr w 4) (nthr w 5)]) 0)
                           (widen1 >bs (ch || ch2))))
                    _ (: (fix u) (? (widen1 bases ()) (fix ()) 0) (fix ()))
-                   ; -- PROMOTION (moon-ssa rung 1): per-DEF chains, not the hull. a
+                   ; -- PROMOTION (moon-ssa rungs 1+2): per-DEF chains, not the hull. a
                    ; candidate cell's stores group by the loads whose reaching defs join
                    ; them (val.l's vreach/vgroup); a chain takes a caller-saved seat over
                    ; its OWN live range -- the index set where the value actually rides --
@@ -4668,15 +4671,34 @@
                    ; window no longer does. one cell's crossing chain keeps its cell while
                    ; a call-free sibling promotes; the cell retires only when every touch
                    ; promoted. a load no store reaches stays a frame read (it reads a value
-                   ; the cell was never given -- unspecified either way). greedy by window
-                   ; start, chains within a cell by first def, each seat claimed over its
-                   ; set so two values never share one register.
+                   ; the cell was never given -- unspecified either way).
+                   ; NARROW cells ride too (rung 2): a cell every one of whose touches is
+                   ; the SAME width at its own base -- st/ld/ldu/si at 1/2/4/8 -- promotes
+                   ; with the extension discipline: a store canonicalizes the seat to the
+                   ; chain's first load's extension, a matching load is a plain mov, a
+                   ; mismatched one re-extends its dest, and an si def folds the extension
+                   ; at compile time into its li.
                    ; MOON_ABLATE=pdef is the HULL for pricing: one chain of every touch
-                   ; over the whole widened span, first touch a store required. --
+                   ; over the whole widened span, full-word st/ld only, first touch a
+                   ; store required -- the pre-rung compiler exactly. --
+                   (shp9 b)                    ; the cell's one touch width | 0
+                    (: (go l w) (? !(two? l) w
+                                   (: t <l op <>t rg (nthr t 2) X (nthr t 3)
+                                      w2 (? (0 < vldw op) (vldw op)
+                                            (0 < vstw op) (vstw op)
+                                            (0 < vsiw op) (vsiw op) 0)
+                                      (? ((w2 = 0) || !(X = b) || ((0 < w) && !(w = w2))) 0
+                                         ; a full-word cs mover is a save/restore in shape:
+                                         ; it never promotes (the seat cannot survive a call)
+                                         ((w2 = 8) && (0 < vldw op || 0 < vstw op)
+                                          && member? rg (csregs g)) 0
+                                         (go >l w2))))
+                       (go (peep tls b ()) 0))
                    scand (foldl (\ a b (: w (peep obs b ())
-                                          (? ((<w = 8) && !(nthr w 3) && (nthr w 4)
-                                              && (? (abl? g 'pdef) (nthr w 5) 1))
-                                             (b >< a) a)))
+                                          (? (abl? g 'pdef)
+                                             (? ((<w = 8) && !(nthr w 3) && (nthr w 4) && (nthr w 5))
+                                                (b >< a) a)
+                                             (? (!(nthr w 3) && (0 < shp9 b)) (b >< a) a))))
                                 () bases)
                    lot9 (? (two? scand) (lvout g fs) 'no)   ; index -> live-out, or the refusal
                    dft9 (? (id? lot9 'no) {}
@@ -4702,25 +4724,33 @@
                                            (pclaim tk r >is9)))
                    (span9 lo hi) (: (go i acc) (? (i < lo) acc (go (i - 1) (i >< acc))) (go hi ()))
                    succ9 (? (id? lot9 'no) {} (vsucc fs))
-                   (chains9 b)                 ; one cell -> ((S pref defs uses)..)
+                   (xt9 op) (op @ 'ld4 'sx4 'ldu4 'zx4 'ld2 'sx2 'ldu2 'zx2 'ld1 'sx1 'ldu1 'zx1 ())
+                   (pxv xc w k)                ; an si value, canonically extended at compile time
+                    (? (8 <= w) k
+                       (: m ((8 * w) 2)
+                          v (: r9 (k % m) (? (r9 < 0) (r9 + m) r9))
+                          (? (member? xc '(sx1 sx2 sx4)) (? ((m // 2) <= v) (v - m) v) v)))
+                   (chains9 b)                 ; one cell -> ((S pref defs ((use dst ext)..) xc)..)
                     (: w (peep obs b ())
                        tl (rev (peep tls b ()))
-                       sts (map (\ t <t) (filter (\ t (id? <>t 'st)) tl))
-                       lds (map (\ t <t) (filter (\ t (id? <>t 'ld)) tl))
+                       sts (map (\ t <t) (filter (\ t (0 < vstw <>t || 0 < vsiw <>t)) tl))
+                       lds (map (\ t <t) (filter (\ t (0 < vldw <>t)) tl))
+                       ot (foldl (\ t9 t (pin t9 <t <>t)) {} tl)
+                       rg9 (foldl (\ t9 t (pin t9 <t (nthr t 2))) {} tl)
+                       (rich us) (map (\ u [u (peep rg9 u ()) (xt9 (peep ot u ()))]) us)
+                       (xcof us) (? !(two? us) () (xt9 (peep ot <us ())))
                        (? (abl? g 'pdef)
-                          [[(span9 <>w <>>w) (nthr w 5) sts lds]]
+                          [[(span9 <>w <>>w) (nthr w 5) sts (rich lds) ()]]
                           !(two? sts) ()               ; no store: nothing to promote
                           !(two? >sts)                 ; ONE def: one chain, no reaching needed
                            (: lo0 <>w hi0 <>>w
-                              rg9 (foldl (\ t9 t (pin t9 <t (nthr t 2))) {} tl)
                               clv (vclive lo0 hi0 succ9 sts lds)
                               S (: (go i acc)
                                    (? (i < lo0) acc
                                       (go (i - 1) (? ((i = <sts) || 0 < peep clv i 0) (i >< acc) acc)))
                                    (go hi0 ()))
-                              [[S (peep rg9 <sts ()) sts lds]])
+                              [[S (peep rg9 <sts ()) sts (rich lds) (xcof lds)]])
                           (: lo0 <>w hi0 <>>w
-                             rg9 (foldl (\ t9 t (pin t9 <t (nthr t 2))) {} tl)
                              rt (vreach lo0 hi0 succ9 sts)
                              gps <(vgroup rt sts lds)   ; the chains; a no-def load stays a frame read
                              clv (vclive lo0 hi0 succ9 sts lds)   ; the CELL's liveness, once
@@ -4738,10 +4768,10 @@
                                                            (two? (vboth (peep rt i ()) ds)) (i >< acc)
                                                            acc)))
                                                  (go hi0 ()))
-                                            [S (peep rg9 <ds ()) ds us]))
+                                            [S (peep rg9 <ds ()) ds (rich us) (xcof us)]))
                                   gps))))
                    bylo (sortby (\ a b ((<>(peep obs a ())) < (<>(peep obs b ())))) scand)
-                   pxm {}                      ; touch index -> its seat
+                   pxm {}                      ; touch index -> (seat canonical-ext)
                    retid {}                    ; base -> every touch promoted, the cell retires
                    ; the SUBSUMPTION order, and the compile-time floor: cells the HULL
                    ; can serve take their seats first, the old way -- whole cell, one
@@ -4753,26 +4783,29 @@
                    hullw (: t {}
                             (go l) (? !(two? l) t
                                       (: b <l w (peep obs b ())
-                                         _ (? !(nthr w 5) 0
+                                         _ (? !((nthr w 4) && (nthr w 5)) 0
                                               (: S (span9 <>w <>>w)
                                                  pf (nthr w 5)
                                                  r (pseat taken (? (member? pf (lvgp g)) (pf >< (lvgp g)) (lvgp g)) S)
                                                  (? !r 0
                                                     (: _ (pclaim taken r S)
-                                                       _ (foldl (\ _ t9 (pin pxm <t9 r)) 0 (peep tls b ()))
+                                                       _ (foldl (\ _ t9 (pin pxm <t9 [r ()])) 0 (peep tls b ()))
                                                        (pin retid b 1)))))
                                          (go >l)))
                             (? (id? lot9 'no) t (go bylo)))
                    _ (? (id? lot9 'no) 0
                         (foldl (\ _ b
                                  (: nrw (foldl (\ k c9
-                                                (: S <c9 pf <>c9 ds (nthr c9 2) us (nthr c9 3)
+                                                (: S <c9 pf <>c9 ds (nthr c9 2) rus (nthr c9 3) xc (nthr c9 4)
                                                    r (pseat taken (? (member? pf (lvgp g)) (pf >< (lvgp g)) (lvgp g)) S)
                                                    (? !r k
+                                                      ; a load whose DEST is the seat but whose extension
+                                                      ; disagrees with the canonical would wreck the seat
+                                                      (vany (\ u3 (id? <>u3 r && (nthr u3 2) && !(id? (nthr u3 2) xc))) rus) k
                                                       (: _ (pclaim taken r S)
-                                                         _ (foldl (\ _ i (pin pxm i r)) 0 ds)
-                                                         _ (foldl (\ _ i (pin pxm i r)) 0 us)
-                                                         (k + #ds + #us)))))
+                                                         _ (foldl (\ _ i (pin pxm i [r xc])) 0 ds)
+                                                         _ (foldl (\ _ u3 (pin pxm <u3 [r xc])) 0 rus)
+                                                         (k + #ds + #rus)))))
                                                0 (chains9 b))
                                     (? (nrw = tally (peep tls b ())) (pin retid b 1) 0)))
                                0 (filter (\ b !(peep retid b ())) bylo)))
@@ -4808,11 +4841,19 @@
                        o9 (obj9 slots X)
                        nb (? (two? o9) (peep nmap <o9 'no9) 'no9)
                        (? !(charm? nb) f (reop f op9 (nb + (X - <o9)))))
-                   (prw f i)                           ; a promoted touch -> its register form | 'no
-                    (: r (peep pxm i ())
-                       (? !r 'no
-                          (id? <f 'st) ['mov r (nthr f 3)]
-                          ['mov (nthr f 1) r]))
+                   (prw f i)                           ; a promoted touch -> its forms (() drops whole) | 'no
+                    (: rec (peep pxm i ())
+                       (? !(two? rec) 'no
+                          (: r <rec xc <>rec op <f
+                             (? (0 < vsiw op)
+                                 [['li r (pxv xc (vsiw op) (nthr f 3))]]
+                                (0 < vstw op)
+                                 (: m9 (? (id? (nthr f 3) r) () [['mov r (nthr f 3)]])
+                                    (? (((vstw op) < 8) && !(xc = ())) (vapp m9 [[xc r]]) m9))
+                                (: d (nthr f 1)
+                                   xl (xt9 op)
+                                   m9 (? (id? d r) () [['mov d r]])
+                                   (? (!(xl = ()) && !(id? xl xc)) (vapp m9 [[xl d]]) m9))))))
                    (rw l i)
                     (? !(two? l) ()
                        (: f <l
@@ -4824,8 +4865,7 @@
                                          (? (0 <= bp && id? (nthr f bp) 'r4)
                                             (radj2 f (peep uoff <f -1)) f)))
                                 (f2 >< rw >l (i + 1)))
-                             (id? <>p <>>p) (rw >l (i + 1))   ; the seat IS the source: no mov at all
-                             (p >< rw >l (i + 1)))))
+                             (vapp p (rw >l (i + 1))))))
                    (? ((K2 < K) || two? prom) (rw fs 0) fs))))))
 
    ; dead label regions: the sibcall rewrite splices its jump BEFORE a shared epilogue and leaves

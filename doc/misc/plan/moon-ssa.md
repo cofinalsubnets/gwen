@@ -108,6 +108,22 @@ until rung 6.
   width (rezx's clean-width lattice is the model), a narrow chain promotes with
   its extension discipline. Extends rung 1's promoter; the si-fed cells stop
   being a disqualifier.
+  **LANDED 2026-08-28**: a cell whose every touch shares ONE width at its own
+  base (st/ld/ldu/si at 1/2/4/8) rides the same chains. The discipline: a
+  store canonicalizes the seat to the chain's first load's extension, a
+  matching load is a plain mov, a mismatched one re-extends its dest, an si
+  def folds the extension into its li AT COMPILE TIME — and a load whose dest
+  IS the seat with a mismatched extension refuses the seat (it would wreck
+  it). Full-word si-fed cells promote the same way (si → li). The yield on
+  top of rung 1: −1,516 frame touches (total −19.0% vs pre-arc; narrow/si
+  touches 4,674 → 3,710); census 6,434 rows. pdef still byte-identical (its
+  eligibility is untouched: full-word st/ld, first-touch store). Build row
+  +6.7% vs the hull (rung 2 adds ~1.5 points). The combined runtime price
+  (moon-ablate, rungs 1+2 vs pdef): −2.4% corpus instructions, −4.1% .text,
+  cycles inside the lottery band on BOTH sides now (+0.8 hull-slower here,
+  −1.6 there). One fn wobbled +4 touches vs
+  rung 1 on greedy seat order — still 18 under its hull count; rung 4's
+  allocator is where seat contention gets solved properly, not patched here.
 - **rung 3 — spill placement replaces the wraps.** A call-crossing value today
   pays a blanket st/ld around EVERY call in alive's statement-grain wrapset
   (goto reads the whole universe). With intervals: split at calls — register

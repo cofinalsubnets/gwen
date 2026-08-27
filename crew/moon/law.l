@@ -1759,21 +1759,22 @@
 ; constant); a value-position asn keeps it too (its answer is read).
 (: (sis fs) (tally (filter (\ f (two? f && member? <f '(si si1 si2 si4))) fs))
    (lik fs k) (tally (filter (\ f (two? f && id? <f 'li && (= <>>f k))) fs))
-   irS1 (cgn "int q(int n) { int i; i = 5; if (n) i = 6; return i + n; } int main() { return q(0) - 5; }")
+   (sivk fs k) (tally (filter (\ f (two? f && member? <f '(si si1 si2 si4) && (= (nthr f 3) k))) fs))
+   ; every local here is &-barred: an unescaped constant cell PROMOTES now (rung 2
+   ; folds its si into a li on a seat), so a law about the si LANE needs a real slot
+   irS1 (cgn "int q(int n) { int i; i = 5; if (n) i = 6; int *p = &i; return *p + n; } int main() { return q(0) - 5; }")
    irS2 (cgn "int w(int n) { int i = 7; int *p = &i; return *p + n; } int main() { return w(0) - 7; }")
-   ; b is WRITTEN so kprop leaves it: the si lane stays the one under law here
-   irS3 (cgn "int b9(int n) { _Bool b = 4; if (n > 9) b = 0; return b + n; } int main() { return b9(0) - 1; }")
+   irS3 (cgn "int b9(int n) { _Bool b = 4; if (n > 9) b = 0; _Bool *p = &b; return *p + n; } int main() { return b9(0) - 1; }")
    qf (fnf 'q <>irS1)
    wf (fnf 'w <>irS2)
    bf (fnf 'b9 <>irS3)
    (assert
       (two? irS1) (two? irS2) (two? irS3)
       (= 2 (sis qf))                                 ; i = 5 and i = 6: one si4 each
-      (member? '(si4 sp 0 5) qf)
       (= 0 (lik qf 5)) (= 0 (lik qf 6))              ; no li anywhere: the constants never ride a register
       (= 1 (sis wf)) (= 0 (lik wf 7))                ; the &-barred slotted init delivers too
-      (member? '(si1 sp 0 1) bf)                     ; bool: the LANE declines (it would store the
-      !(member? '(si1 sp 0 4) bf)))                  ;  raw 4); cvt normalizes, then the fold si's the 1
+      (= 1 (sivk bf 1))                              ; bool: the LANE declines (it would store the
+      (= 0 (sivk bf 4))))                            ;  raw 4); cvt normalizes, then the fold si's the 1
 
 ; -- unhome's pre-entry guard: H mentioned BEFORE its (mov H A) entry pair carries
 ; ANOTHER value (an arrival -- memchr's c spilled from r5 while s homed r5, and the
@@ -1995,6 +1996,37 @@
       (member? '(ld r6 r4 -16) hf)                  ; the hull: a call in the window bars it whole
       (member? '(ld r8 r4 -16) hf)))
 
+; --- narrow promotion (moon-ssa rung 2): a cell whose every touch shares one
+; width at its own base rides the same chains, wearing the extension
+; discipline -- the store canonicalizes the seat, a matching load is a plain
+; mov, and an si def folds the extension into its li at compile time. the
+; hull path (pdef) still refuses anything narrow.
+(: gN {}
+   _ (pin gN 'slots '((-16 8)))
+   gM {}
+   _ (pin gM 'slots '((-16 8)))
+   _ (pin gM 'abl '(pdef))
+   fsA '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+         (li r5 7) (st4 r4 -16 r5) (ldu4 r6 r4 -16) (mov r0 r6) (ret))
+   fsB '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+         (si4 r4 -16 -1) (ld4 r7 r4 -16) (mov r0 r7) (ret))
+   fsC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+         (si r4 -16 42) (ld r7 r4 -16) (mov r0 r7) (ret))
+   ra (repack gN fsA)
+   ha (repack gM fsA)
+   rb (repack gN fsB)
+   rc (repack gN fsC)
+   (assert
+      !(member? '(ldu4 r6 r4 -16) ra)                ; the narrow pair left the frame
+      (member? '(zx4 r5) ra)                         ; the store canonicalized its seat..
+      (member? '(mov r6 r5) ra)                      ; ..and the matching load is a mov
+      (member? '(ldu4 r6 r4 -16) ha)                 ; the hull still refuses narrow whole
+      (member? '(li r0 -1) rb)                       ; si4 -1 under a SIGNED load: the
+      (member? '(mov r7 r0) rb)                      ;   extension folded at compile time
+      !(member? '(ld4 r7 r4 -16) rb)
+      (member? '(li r0 42) rc)                       ; full-word si promotes to its li
+      !(member? '(ld r7 r4 -16) rc)))
+
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rung 1) ok")
+(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rungs 1+2, narrow rides) ok")
 (put err 10)
