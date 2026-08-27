@@ -1,29 +1,17 @@
-; coin -- the two ready-made dice, ring and monoid. a POST-EGG LAYER, not part of the
-; language: the COIN MECHANISM is C (coin/coin?/die-of/load, the KHot lane in +/*), and this
-; file is only the ergonomic constructor over it, so prel stays minimal and each frontend
-; includes the layers it wants (the host, love0, wasm and the K_TEST kernel do -- the corpus
-; asserts on both; a shipped kernel and the playdate workbench carry neither). love/prel.l
-; first -- the die is a {..} tablet.
-;
-; a COIN (coin?) is struck from a die over a payload; the die is the type descriptor (a
-; monoid/ring -- a map of slot->method); die-of reads it back. + and * dispatch through the
-; KHot lane to the die's plus/times, run over the LOADED payloads and re-struck; () stays their
-; identity for free (the mint-identity hoist sits above the +/* matrix). net/=/</show default
-; over the payload in the C core, so $/truth, value-equality, sort and the (name payload) show
-; form all work with no extra ceremony. plus/times take payloads.
+; coin -- ring and monoid, the two ready-made dice. the mechanism is C
+; (coin/coin?/die-of/load, the KHot lane in +/*); this file is only the constructor.
+; love/prel.l first -- a die is a {..} tablet.
 ; (ring 'z5 plus times) / (monoid 'z5 plus) -> a constructor: payload -> coin.
-; `-` rides slot 5 and `/` slot 8 for a die that pins them (ring/monoid pin none; love/q.l pins
-; both): unpinned, they answer (), the undefined-op law. slot 6 is the NET MODE, a fixnum:
-; absent/0 nets the payload (the hom); 1 nets by TALLY -- the count, never negative -- so a die
-; over signed content (a ledger, a polynomial) can make its coins' truth read "has any", not
-; "sums green". slot 7 truthy declares the die's coins STARS: numeral application powers them
-; through their own * (num-ap's open fork) instead of composing them as functions. slot 0 is
-; the show-name.
+; plus/times take payloads; net/=/</show default over the payload in the C core.
+;
+; the die's slots, read by the C side:
+;   0 show-name  1 plus  2 times  5 `-`  6 net mode  7 stars  8 `/`
+; an unpinned slot answers (), the undefined-op law -- so a monoid, pinning no 2, has no *.
 (module 'coin
 (: (ring name + *) (:
-    d {0 name}                                             ; the die; slot 0 = show-name
+    d {0 name}
     t *                                                    ; bound: a bare * would read as prod
-    _ (pin d 1 (\ a b (coin d (load a + load b))))         ; slot 1 = +
-    _ (? t (pin d 2 (\ a b (coin d (load a * load b)))) 0) ; slot 2 = * (a monoid has none)
+    _ (pin d 1 (\ a b (coin d (load a + load b))))
+    _ (? t (pin d 2 (\ a b (coin d (load a * load b)))) 0) ; a monoid has no times
     (coin d))                                              ; curried: payload -> coin
-   (monoid name plus) (ring name plus ())))             ; a monoid is a ring with no product
+   (monoid name plus) (ring name plus ())))
