@@ -140,8 +140,7 @@
         'zero 'nat
         'tt 'unit
         ('true || 'false) 'bool
-        (assoc x cx @ (_ T) T
-         (GLOB x @ (g) g (scare 'uu-unbound x))))
+        (assq x cx @ (_ T) T (GLOB x @ (g) g (scare 'uu-unbound x))))
 
    (inf-spine cx en d f as)
    (as @ (a . u) (f @ ('pi A q) (chk cx en d a A, inf-spine cx en d (capp q (vof en a)) u)
@@ -288,12 +287,10 @@
    (ki1 a) ['i1 a]
    (ki2 a) ['i2 a]
    (krefl a) ['refl a]
-   (knrec s z n) (: (go k acc) (k = n ? acc (go (k + 1) (s k acc))) (go 0 z))
+   (knrec s z n) (foldl (flip s) z ^n)
    (kbrec x y b) (b @ 'true x y)
    (kcrec f g v) (v @ ['i1 a] (f a) ['i2 b] (g b))
    (kseq e r) r
-
-   bound? memq
 
    (uglo nm)
    (CMEM nm @ (_ v) v
@@ -309,27 +306,27 @@
    (? (charm? t) t
       (nom? t)
       (? (id? t 'zero) 0
-         (member? t '(UU nat bool unit empty tt true false)) (qlit t)
-         (bound? t bs) t
+         (memq t '(UU nat bool unit empty tt true false)) (qlit t)
+         (memq t bs) t
          (qlit (uglo t)))
       (t @
          ['lam x b]   ['\ x (u2 b (x . bs))]
          ['let x a b] [': x (u2 a bs) (u2 b (x . bs))]
          ['the T u]   (u2 u bs)
          (('pi || 'total2 || 'coprod || 'paths) . _) (qlit ['ty <t])
-         ['tpair a b] [(qlit kchain) (u2 a bs) (u2 b bs)]
-         ['pr1 w]     [(qlit kp1) (u2 w bs)]
-         ['pr2 w]     [(qlit kp2) (u2 w bs)]
-         ['succ n]    [(qlit ksucc) (u2 n bs)]
-         ['ii1 a]     [(qlit ki1) (u2 a bs)]
-         ['ii2 b]     [(qlit ki2) (u2 b bs)]
-         ['idpath a]  [(qlit krefl) (u2 a bs)]
-         ['nat_rect _ z s n]     [(qlit knrec) (u2 s bs) (u2 z bs) (u2 n bs)]
-         ['bool_rect _ x y w]    [(qlit kbrec) (u2 x bs) (u2 y bs) (u2 w bs)]
-         ['unit_rect _ u w]      [(qlit kseq) (u2 w bs) (u2 u bs)]
-         ['coprod_rect _ f g w]  [(qlit kcrec) (u2 f bs) (u2 g bs) (u2 w bs)]
-         ['paths_rect _ r e]     [(qlit kseq) (u2 e bs) (u2 r bs)]
-         ['empty_rect _ e]       [(qlit kseq) (u2 e bs) (qlit 'ner)]
+         ['tpair a b] [kchain (u2 a bs) (u2 b bs)]
+         ['pr1 w]     [kp1 (u2 w bs)]
+         ['pr2 w]     [kp2 (u2 w bs)]
+         ['succ n]    [ksucc (u2 n bs)]
+         ['ii1 a]     [ki1 (u2 a bs)]
+         ['ii2 b]     [ki2 (u2 b bs)]
+         ['idpath a]  [krefl (u2 a bs)]
+         ['nat_rect _ z s n]     [knrec (u2 s bs) (u2 z bs) (u2 n bs)]
+         ['bool_rect _ x y w]    [kbrec (u2 x bs) (u2 y bs) (u2 w bs)]
+         ['unit_rect _ u w]      [kseq (u2 w bs) (u2 u bs)]
+         ['coprod_rect _ f g w]  [kcrec (u2 f bs) (u2 g bs) (u2 w bs)]
+         ['paths_rect _ r e]     [kseq (u2 e bs) (u2 r bs)]
+         ['empty_rect _ e]       [kseq (u2 e bs) (qlit 'ner)]
          (u2app t bs)))
 
    (uu2l t) (u2 t ())
