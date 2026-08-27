@@ -18,52 +18,53 @@
     (: subst (from 'kanren 'subst)                    ; the kanren surface, all of it through the module
        unify (from 'kanren 'unify)  ufail (from 'kanren 'ufail)
        ufail? (from 'kanren 'ufail?)  var (from 'kanren 'var)
-       (ov-nthl l n)     (? (n = 0) <l (ov-nthl >l (n - 1)))   ; nth (nthl is glaze-layer, absent here)
-       (ov-sigof sigs nm) (? (atom? sigs) () (id? nm <<sigs) <sigs (ov-sigof >sigs nm))
-       (ov-look env x)    (? (atom? env) 'bot (: p <env (? (id? x <p) >p (ov-look >env x))))
-       (ov2-var? dom d)   (nom? d && !(member? d (dom 'dice)) && !(member? d (dom 'ctors)))   ; a sig variable: not concrete, not a constructor
-       (ov2-vars dom d acc) (? (atom? d) (? (ov2-var? dom d && !(member? d acc)) (d >< acc) acc) (foldl (\ a s (ov2-vars dom s a)) acc d))
+       (ov-sigof sigs nm) (sigs @ (((aa . ua) @ a) . u) (nm == aa ? a (ov-sigof u nm)))
+       (ov-look env x) (env @ ((ap . up) . env') (x == ap ? up (ov-look env' x)) 'bot)
+       (ov2-var? dom d) (nom? d && !(member? d (dom 'dice)) && !(member? d (dom 'ctors)))   ; a sig variable: not concrete, not a constructor
+       (ov2-vars dom d acc) (atom? d ? (ov2-var? dom d && !(member? d acc) ? (d . acc) acc) (foldl (flip $ ov2-vars dom) acc d))
        (ov2-lk vm d)      (? (atom? vm) d (id? d <<vm) ><vm (ov2-lk >vm d))   ; ⚠ ><vm is GLUED: cuap, not the cons
-       (ov2-term vm d)    (? (atom? d) (ov2-lk vm d) (map (\ s (ov2-term vm s)) d))
-       (ov2-uall ps as s) (? (atom? ps) s
-                             (atom? as) s                              ; a PARTIAL application: the given prefix checked, the rest open
+       (ov2-term vm d)    (? (atom? d) (ov2-lk vm d) (map (ov2-term vm) d))
+       (ov2-uall ps as s) (? (atom? ps || atom? as) s
                              (member? <as '(top bot)) (ov2-uall >ps >as s)   ; an UNKNOWN arg is gradual: consistent with any param, binds nothing
-                             (: s1 (unify s <ps <as) (? (ufail? s1) ufail (ov2-uall >ps >as s1))))
+                             (: s1 (unify s <ps <as) (ufail? s1 ? ufail (ov2-uall >ps >as s1))))
        (ov2-inst dom sg args)                                          ; sg = (name (param-dies) result): structured caller instantiation
-        (: params <>sg result (ov-nthl sg 2)
-           vm (map (\ nm (nm >< var nm)) (ov2-vars dom (params >< result) ()))            ; one fresh logic var per sig variable
-           s  (ov2-uall (map (\ p (ov2-term vm p)) params) args '(()))   ; unify param patterns (fresh vars) vs arg dies AS-IS (a caller's rigid symbol is a constant here -- no capture)
+        (: params <>sg result <>>sg
+           vm (map (nm \ nm . var nm) (ov2-vars dom (params . result) ()))            ; one fresh logic var per sig variable
+           s  (ov2-uall (map (ov2-term vm) params) args '(()))   ; unify param patterns (fresh vars) vs arg dies AS-IS (a caller's rigid symbol is a constant here -- no capture)
            (? (ufail? s) 'clash                                        ; args contradict the params: the one hard verdict
-              (tally args != tally params) 'top                        ; partial/over-application: a closure/re-application, die unknown
-              (: r (subst s (ov2-term vm result)) nf (dom 'norm) (? (lit? nf) (nf r) r))))   ; reify + normalize (dependent index)
+              (#args != #params) 'top                        ; partial/over-application: a closure/re-application, die unknown
+              (: r (subst s (ov2-term vm result)) nf (dom 'norm) (lit? nf ? (nf r) r))))   ; reify + normalize (dependent index)
        (ov-kindof dom sigs env e)
           (? (nom? e) (ov-look env e)
-             (atom? e) ((dom 'litdie) e)
-             (: h <e as (map (\ s (ov-kindof dom sigs env s)) >e)
-                (? (member? h '(+ *)) ((dom 'tr) h <as <>as)
-                   (id? h '? && tally e = 4) ((dom 'join) <>as <>>as)
-                   (: sg (ov-sigof sigs h) (? (two? sg) (ov2-inst dom sg as) 'top)))))
+             (atom? e) (dom 'litdie e)
+             (: h <e as (map (ov-kindof dom sigs env) >e)
+                (? (member? h '(+ *)) (dom 'tr h <as <>as)
+                   (h = '? && #e = 4) (dom 'join <>as <>>as)
+                   (: sg (ov-sigof sigs h) (atom? sg ? 'top (ov2-inst dom sg as))))))
        (ov-zip ps ds)     (? (atom? ps) 0 ((<ps >< <ds) >< ov-zip >ps >ds))
-       (ov-clash dom sigs env e) (? (atom? e) 0 (: d (ov-kindof dom sigs env e) sub (catmap (\ s (ov-clash dom sigs env s)) >e)
-                                                    (? (id? d 'clash) ((e >< map (\ s (ov-kindof dom sigs env s)) >e) >< sub) sub)))   ; a clash site = (expr . operand-dies)
-       (ov-pairs bs)      (? (atom? bs) 0 (atom? >bs) 0 ((<bs >< <>bs) >< ov-pairs >>bs))
-       (ov2-okr dom bd decl) (: f (dom 'okr) (? (lit? f) (f bd decl) ((dom 'join) bd decl = decl)))   ; result acceptable? domain `okr` (dependent = up to conv/norm), else structural join
+       (ov-clash dom sigs env e) (? (atom? e) 0 (: d (ov-kindof dom sigs env e) sub (catmap (ov-clash dom sigs env) >e)
+                                                    ((d !== 'clash) ? sub ((e . map (ov-kindof dom sigs env) >e) . sub))))   ; a clash site = (expr . operand-dies)
+                                                    ; ⚠ the ternary is PARENTHESIZED: bare in a `:`
+                                                    ; element list it does not factor at all
+       (ov-pairs (a . b . c)) ((a . b) . ov-pairs c)
+       (ov2-okr dom bd decl) (: f (dom 'okr) (lit? f ? (f bd decl) (dom 'join bd decl = decl)))   ; result acceptable? domain `okr` (dependent = up to conv/norm), else structural join
        (ov-check1 dom sigs prog)
-          (catmap (\ p (: nm <<p ps ><p body >p sg (ov-sigof sigs nm)   ; ⚠ ><p GLUED: cuap
-                         (? !(two? sg) 0
-                            (: env (ov-zip ps <>sg) cl (ov-clash dom sigs env body)
-                               bd (ov-kindof dom sigs env body) decl (ov-nthl sg 2)
-                               (? (atom? cl && ov2-okr dom bd decl) 0 [(nm >< (? (atom? cl) ['result bd decl] cl))])))))
-                  (filter (\ p !(atom? <p)) (ov-pairs >prog)))
+          (catmap (p @ ((nm . ps) . body) \                          ; ⚠ PARENTHESIZE the `:`: it is
+                     (: sg (ov-sigof sigs nm)                       ; looser than `?`, so unwrapped it
+                        (two? sg ?                                  ; eats `two? sg` as a second pair
+                           (: env (ov-zip ps <>sg) cl (ov-clash dom sigs env body)
+                              bd (ov-kindof dom sigs env body) decl <>>sg
+                              (two? cl || !(ov2-okr dom bd decl) ? [(nm . (atom? cl ? ['result bd decl] cl))])))))
+                  (filter (two? * cap) (ov-pairs >prog)))
        (ov-djoin dies) (? (atom? dies) "?" (atom? >dies) (show <dies) (show <dies + " vs " + ov-djoin >dies))
-       (ov-report nm detail)                             ; detail = (result BD DECL) | ((expr . opdies) ..)
-        (? (id? <detail 'result)
-           (: _ (puts ";; overlay: ") _ (puts (string nm)) _ (puts " -- returns ") _ (puts (show <>detail)) _ (puts ", declared ") _ (puts (show (ov-nthl detail 2))) (putc 10))
-           (: site <detail _ (puts ";; overlay: ") _ (puts (string nm)) _ (puts " -- clash in ") _ (puts (show <site)) _ (puts "  (") _ (puts (ov-djoin >site)) _ (puts ")") (putc 10)))
-       (ov-reps r) (? (atom? r) 0 (: _ (ov-report <<r ><r) (ov-reps >r)))
-       (ov-run dom sigs form) (? (two? form && id? <form ':)
-                                 (: r (ov-check1 dom sigs form) (? (two? r) (ov-reps r) 0))
-                                 0)
+       (ov-report nm detail) (detail @ ; detail = (result BD DECL) | ((expr . opdies) ..)
+        ['result bd decl]
+         (puts $ ";; overlay: " + string nm + " -- returns " + show bd + ", declared " + show decl + "\n")
+        ((expr . opdies) . _)
+         (puts $ ";; overlay: " + string nm + " -- clash in " + show expr + "  (" + ov-djoin opdies + ")\n"))
+       (ov-reps ((aa . ua) . u)) (ov-report aa ua, ov-reps u)
+       (ov-run dom sigs form)
+        (form @ (': . _) (ov-check1 dom sigs form @ (r @ (_ . _)) (ov-reps r)))
      [ov-run ov-check1])                           ; the run entry + the PURE checker (internals private)
    ov-eng      <ov-both
    ov-check    <>ov-both                           ; (ov-check dom sigs form) -> () clean | ((name . detail)..) -- the report as DATA (a gate's leg)
