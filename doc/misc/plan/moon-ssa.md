@@ -70,12 +70,22 @@ until rung 6.
   implementations, one answer). No codegen change, no risk; this is the
   substrate every later rung reads. ⚠ determinism is a law here: the fixpoint's
   answer must not depend on tablet iteration order — the seed carries it.
+  **LANDED 2026-08-28**: crew/moon/val.l rides the moon module (the bake, the
+  law-lane cat); laws pin the hand shapes in law.l; `differ.sh` proved 8,200
+  rows byte-identical to the python oracle over 80 TUs, and the in-tree census
+  re-reports the gauge numbers exactly (1,954 / 1,327 / 254 / 2). The chains
+  layer already refined the census: the cell across-flag is a LINEAR span,
+  chain crossing is CFG liveness, and they disagree both ways — 527 call-free
+  chains inside across=1 cells, 495 crossing chains inside "call-free" cells.
 - **rung 1 — per-def promotion replaces the hull.** In repack's slot: a
   non-escaped cell's store-to-loads chain whose OWN interval is call-free takes
   a free seat over that interval — per-def ranges where the hull widened over
   every backedge. Must strictly subsume today's promotion (verify: every cell
-  the hull takes, this takes). The 1,954-cell pot prices it; dtb_to_kboot's
-  three-reload pointer is the hand check. Hull promotion retires.
+  the hull takes, this takes). The pot, per rung 0's chains: **2,471
+  call-free CHAINS** (1,944 in call-free cells + 527 the hull condemns), and
+  the 495 crossing chains inside "call-free" cells must NOT promote — the
+  linear flag lies both ways. dtb_to_kboot's three-reload pointer is the hand
+  check. Hull promotion retires.
 - **rung 2 — narrow values ride.** The 254 narrow/si cells: intervals carry a
   width (rezx's clean-width lattice is the model), a narrow chain promotes with
   its extension discipline. Extends rung 1's promoter; the si-fed cells stop

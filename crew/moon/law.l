@@ -3,7 +3,7 @@
 ; AST goldens, and the WHOLE IR for return-42 compared form by form. the cat
 ; (`make test_moon`):
 ;
-;   cat test/00-init.l crew/moon/floor.l crew/moon/lex.l crew/moon/parse.l crew/moon/gen.l crew/moon/law.l | out/host/love
+;   cat test/00-init.l crew/moon/floor.l crew/moon/lex.l crew/moon/parse.l crew/moon/gen.l crew/moon/val.l crew/moon/law.l | out/host/love
 ;
 ; the end-to-end (elf64, the run, the gcc differential) lives in the Makefile
 ; smoke through the real `mooncc`.
@@ -1939,6 +1939,41 @@
          (id? (coal gC '((label fn) (raw 144) (ret))) '((label fn) (raw 144) (ret)) ||
           (= (coal gC '((label fn) (raw 144) (ret))) '((label fn) (raw 144) (ret)))))))
 
+; --- the value layer (crew/moon/val.l, moon-ssa rung 0): CFG, escape census,
+; cells, dead stores, per-def chains, pinned on hand shapes. the corpus
+; differential against the python oracle is doc/misc/proto/ssagap/differ.sh.
+; the goldens themselves pin determinism: every v-list is sorted, and the
+; fixpoints are monotone unions, so no tablet order can reach an answer.
+(: fsA '((align 2) (label g) (li r5 0) (li r9 0) (label .c.0) (cmp r9 r6) (br ge .d.2)
+         (add r5 r5 r9) (label .s.1) (add r9 r9 1) (jmp .c.0) (label .d.2) (mov r0 r5) (ret))
+   flA (vfns fsA)
+   spA (vspans <><flA)
+   cB (vctx '((sub sp sp 16) (li r0 7) (st sp 8 r0) (ld r1 sp 8) (add sp sp 16) (ret)))
+   cC (vctx '((sub sp sp 16) (li r0 7) (st sp 8 r0) (add sp sp 16) (ret)))
+   cD (vctx '((sub sp sp 16) (lea r0 sp 8) (st sp 0 r1) (call g) (add sp sp 16) (ret)))
+   cE (vctx '((sub sp sp 16) (st sp 8 r0) (call g) (ld r1 sp 8) (st sp 8 r2) (ld r2 sp 8)
+              (add sp sp 16) (ret)))
+   cF (vctx '((sub sp sp 16) (st sp 0 r1) (st sp 8 r2) (ld r1 sp 0) (ld r2 sp 8)
+              (add sp sp 16) (ret)))
+   cG (vctx '((sub sp sp 16) (st sp 8 r0) (add r0 sp 8) (ld r1 sp 8) (add sp sp 16) (ret)))
+   (assert
+      (= (map (\ p <p) flA) '(g))                     ; a non-dot label opens a fn, align is glue
+      (= spA '((2 8)))                                 ; the one back edge
+      (= [(vwt spA 5) (vwt spA 10)] '(8 1))            ; in the loop 8, out 1
+      (= (vcells cB) '((0 -8 1 0 0 0 0 2 2)))          ; one full-word call-free cell
+      (= (vchains cB) '((0 -8 (2) (3) 0)))             ; its store-to-load chain
+      (= (vdead cB) ())
+      (= (vdead cC) '((2 st 1 0)))                     ; the unread store
+      (= (vchains cC) '((0 -8 (2) () 0)))              ; a chain with no reader
+      (= (peep (cD 'esc) 'sp 0) 1)                     ; lea leaks the frame..
+      (= (vcells cD) ())                               ; ..and the census refuses the space
+      (= (vcells cE) '((0 -8 1 1 0 0 0 4 4)))          ; the hull verdict: across=1..
+      (= (vchains cE) '((0 -8 (1) (3) 1) (0 -8 (4) (5) 0)))   ; ..but only ONE chain crosses
+      (= (vcells cF) '((0 -16 1 0 0 0 0 2 2) (0 -8 1 0 0 0 0 2 2)))  ; rows sort (base, space)
+      (= (vchains cF) '((0 -16 (1) (3) 0) (0 -8 (2) (4) 0)))
+      (= (vcells cG) ())                               ; an unmodeled base use: conservative skip
+      (= (vchains cG) ())))
+
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) ok")
+(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) ok")
 (put err 10)
