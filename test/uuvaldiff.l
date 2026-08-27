@@ -6,7 +6,7 @@
 ; fold, or a wrong ceil reddens `make test` even though no proof could see it.
 ;
 ; the encoding is STRUCTURAL where love's values are: a pair becomes the model's
-; link (ii2 over a tpair, both limbs lifted to a common depth), an atom becomes a
+; link (ii2 over a tpair, both limbs at the height below), an atom becomes a
 ; leaf carrying its measure. the leaf measure is read off love's own net -- that
 ; primitive is the one thing this lane cannot second-guess, the same standing gap
 ; uuwm has with the C runtime under crew/lux/core.l. what IS under test is
@@ -37,14 +37,14 @@
     (: iv (im n)                                          ; () off the complex band
        ['tpair (uv2-rea (uv2-twice n))
                (uv2-rea (id? iv () ? 0 (uv2-twice iv)))])
-   (uv2-lift t k) (k = 0 ? t (uv2-lift ['ii1 t] (k - 1)))
-   ; the tree, with its depth: a pair lifts both limbs to a common level
-   (uv2-tre x)
-    (? (two? x)
-       (: a (uv2-tre <x) b (uv2-tre >x) d (uv2-max <a <b)
-          [(d + 1) ['ii2 ['tpair (uv2-lift <>a (d - <a)) (uv2-lift <>b (d - <b))]]])
-       [0 (uv2-msr (net x))])                             ; a leaf IS its measure
-   (uv2-enc x) (: p (uv2-tre x) ['tpair <p <>p])
+   (uv2-ht x) (? (two? x) (1 + (uv2-max (uv2-ht <x) (uv2-ht >x))) 0)
+   ; the tree at a given height bound: a leaf spells the same at every height, so
+   ; the shallow limb of a pair costs nothing to raise
+   (uv2-tre x d)
+    (? (two? x) ['ii2 ['tpair (uv2-tre <x (d - 1)) (uv2-tre >x (d - 1))]]
+       (d = 0)  (uv2-msr (net x))
+       ['ii1 (uv2-msr (net x))])
+   (uv2-enc x) (: d (uv2-ht x) ['tpair d (uv2-tre x d)])
    (uv2-unz v) (v @ ['i1 n] n ['i2 n] ((0 - n) - 1) (scare 'uuval-not-an-int v))
    ; the four model lanes, each run in the kernel over the encoded value
    (uv2-sat x)  (vof 0 ['vsat (uv2-enc x)])

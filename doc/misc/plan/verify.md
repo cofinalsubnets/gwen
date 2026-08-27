@@ -23,6 +23,7 @@ half of the same ladder, not separate programs.
 | CLAUDE.md laws fuzz | test/law.l | keep; the uu leg LANDED (below) |
 | CLAUDE.md laws proof | test/uuval.l + uuvaldiff.l | the measure tower, proved |
 | CLAUDE.md laws, compiled | law2uu.l -> test/uuvallaw.l | ONE spelling, both lanes |
+| love's `=` on values | veq, in test/uuval.l | structural, and the cap/cup/link laws |
 | the +/* band lattice | mx2uu.l, test/uumx*.l | LANDED in uu beside mx.v |
 | property fuzz | test/fuzz.l | keep |
 | holo encoder fuzz | test/holo/fuzz/{fuzz,sysdiff}.l | PORTED 2026-08-16; py gone |
@@ -139,11 +140,52 @@ test/uuvaldiff.l now, so the three sort model -> differential -> laws.)
   translatable -- and the tool reports `no proof found` and emits 10, not 11.
   a search that rubber-stamped would not.
 
-what is still open: the laws the model cannot yet state. cap/cup/link-back/
-link-apart and id?-finer want a structural equality on val, which the depth
-index makes a setoid question (net is lift-invariant, so the tower never had to
-care). the assoc/dist family wants the band lattice AND a real `+`/`*` on
-values, where uumx today models only the dispatch.
+what is still open: the assoc/dist family, which wants the band lattice AND a
+real `+`/`*` on values, where uumx today models only the dispatch.
+
+## the structural equality (landed)
+
+`paths` is finer than love's `=`: the depth index on a tree is a HEIGHT BOUND,
+so one value has many spellings and identity would separate a value from its own
+padded self. **veq** is the equality love actually has, and with it the cap/cup/
+link laws land.
+
+- the ENCODING changed first, and it is the reason the rest is short. `vtre (S d)`
+  was `coprod (vtre d) (vtre d x vtre d)` -- ii1 a LIFT -- which made a node's head
+  ambiguous, cap/cup recursive, and equality a walk over two indexed trees at once.
+  it is `coprod msr (vtre d x vtre d)` now: ii1 is a LEAF, at any height. so a node
+  is unambiguously a leaf or a pair, and vtwo/vcap/vcup/vleaf read it in ONE step
+  with no recursion at all.
+- **veq** compares what a node observes -- is it a pair, its cap, its cup, its
+  measure -- down a FUEL (`succ (add du dw)`, since a step drops both heights).
+  one recursion on a nat, where a walk over two trees would be two.
+- **the link is total**, and both its limbs are padded STRUCTURALLY, the recursion
+  following the tree and never stacking a level on top of a neutral depth. that is
+  what `mx2` buys over `add`: `(mx2 0 b)` is `b` and `(mx2 (succ j) 0)` is
+  `(succ j)` DEFINITIONALLY, so a pad lands on one index from either side.
+  `(add j 0)` is stuck on a neutral j, and with `add` one limb always loses.
+- **the padding is invisible** (uv-padl-fwd/bwd, uv-padr-fwd/bwd): a value and its
+  padded self answer veq alike. that is the theorem the depth index owes -- one
+  induction on the fuel, then on the two heights, then on the tree, in both
+  argument orders since a law names its two sides in its own order.
+- the laws: cap-total, cup-total, link-back, link-apart, id?-finer and =-total,
+  all hand-proved in test/uuval.l and all CITED from test/uuvallaw.l, whose
+  obligations still come off law.l's rows. law2uu grew a third strategy for them,
+  **by the lemma the model names** -- so if a row moves, the lemma stops applying
+  and the tool says `no proof found` (checked: swapping cap and cup in link-back's
+  row drops it to 16 obligations).
+- law2uu also learned that a guard the tower CAN read (`two?`) stays, as the orb
+  it always was -- only an unreadable one erases -- and that love's `=` between
+  two VALUES is veq, not paths. 17 obligations / 40 rows now, from 11.
+- veq DISCRIMINATES, and test/uuval.l demos say so: a constant-true equality would
+  prove every law above, so `(veq (nval 2) (nval 3))` and `(veq (link a b)
+  (link b a))` are asserted FALSE beside the positives.
+- one export wrinkle worth keeping: the Rocq elaborator does a `sum_rect`'s
+  BRANCHES before it unifies the scrutinee's type, so a bare `pr2 p` on a pair the
+  branch destructures asks for a family that is still a metavariable, and the
+  unification goes higher-order. `vfst`/`vsnd` -- named projections carrying their
+  own argument type -- pin it first-order. this only bit once the leaf branch
+  stopped mentioning the subtree type.
 
 ## the band lattice, in uu (landed)
 

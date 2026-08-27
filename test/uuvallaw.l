@@ -4,14 +4,46 @@
 ; measure tower can state arrive here as uu OBLIGATIONS over test/uuval.l's
 ; model (proof). the source row prints over its term, and every proof was
 ; SEARCHED against the live kernel -- by conversion where the tower's round
-; trips are definitional, by cases on the saturated measure otherwise.
-; a band guard erases (the model has one uniform value), which makes the
-; obligation STRONGER than the row it came from, never weaker; each such row
-; names the guard it dropped. Substrate: test/uuval.l over test/uu.l.
+; trips are definitional, by cases on the saturated measure where they are
+; not, and otherwise by the lemma the model names for that row.
+; a guard the tower cannot read erases (the model has one uniform value),
+; which makes the obligation STRONGER than the row it came from, never
+; weaker; each such row names the guard it dropped. a guard it CAN read
+; stays, as the orb it always was. Substrate: test/uuval.l over test/uu.l.
 
 (assert (member? 'vof (names ())))
 
 (assert
+ ; cap-total   (\ x (? (two? x) 1 (= x (cap x))))
+ ; by the lemma the model names
+ (defq law-cap-total
+   (pi v val (paths bool (orb (vtwo v) (veq v (vcap v))) true))
+   uv-cap-total)
+ ; cup-total   (\ x (? (two? x) 1 (= () (cup x))))
+ ; by the lemma the model names
+ (defq law-cup-total
+   (pi v val (paths bool (orb (vtwo v) (veq vnilv (vcup v))) true))
+   uv-cup-total)
+ ; link-apart   (\ x (: p (>< x x) (&& (= (cap p) x) (= (cup p) x))))
+ ; by the lemma the model names
+ (defq law-link-apart
+   (pi v val (paths bool (andb (veq (vcap (vlink v v)) v) (veq (vcup (vlink v v)) v)) true))
+   uv-link-apart)
+ ; link-back   (\ x (? (two? x) (= x (link (cap x) (cup x))) 1))
+ ; by the lemma the model names
+ (defq law-link-back
+   (pi v val (paths bool (orb (negb (vtwo v)) (veq v (vlink (vcap v) (vcup v)))) true))
+   uv-link-back)
+ ; =-total   (\ x (: b (= x x) (= b 1)))
+ ; by the lemma the model names
+ (defq law-eq-total
+   (pi v val (paths nat (nbit (veq v v)) 1))
+   uv-eq-total)
+ ; id?-finer   (\ x (? (id? x x) (= x x) 1))
+ ; by the lemma the model names; the guard (id? x x) erases
+ (defq law-idq-finer
+   (pi v val (paths bool (veq v v) true))
+   uv-idq-finer)
  ; net-idem   (\ x (: n (net x) (= n (net n))))
  ; by conversion
  (defq law-net-idem
@@ -96,23 +128,17 @@
  ;   abs           the sigil lane: (= e e) after opfix
  ;   negate        the sigil lane: (= e e) after opfix
  ;   jot           the sigil lane: (= e e) after opfix
- ;   cap-total     off the model: cap
- ;   cup-total     off the model: ()
- ;   link-apart    off the model: ><
- ;   link-back     off the model: link
- ;   =-total       off the model: =
- ;   id?-finer     the sigil lane: (= e e) after opfix
  ;   ratio-rungs   off the model: a (: ..) binding the tower cannot follow
  ;   add-assoc     off the model: a (: ..) binding the tower cannot follow
  ;   mul-assoc     off the model: a (: ..) binding the tower cannot follow
- ;   mul-reassoc   off the model: a (: ..) binding the tower cannot follow
- ;   mul-count-out off the model: a (: ..) binding the tower cannot follow
- ;   mul-tally-hom off the model: a (: ..) binding the tower cannot follow
+ ;   mul-reassoc   off the model: ?
+ ;   mul-count-out off the model: ?
+ ;   mul-tally-hom off the model: ?
  ;   mul-dist      off the model: a (: ..) binding the tower cannot follow
- ;   apply-is-id   off the model: cap
+ ;   apply-is-id   off the model: $
  ;   unit-f        off the model: a (: ..) binding the tower cannot follow
  ;   curry         off the model: (+ x)
  ;   seq           off the model: a (: ..) binding the tower cannot follow
  ;   empty-form    off the model: :
 
- ; 11 obligations / 40 law rows; 3 carried by a type, 26 off the model.
+ ; 17 obligations / 40 law rows; 3 carried by a type, 20 off the model.
