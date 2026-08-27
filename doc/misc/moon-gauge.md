@@ -199,6 +199,54 @@ programs changed, riscv byte-identical (still unswept — its lane needs its own
 producer table: `rorw` sign-extends). Gates: ccarm64 150, cts_arm64 211/220, fixpoint,
 test_slow, and a cross-seeded `love-aarch64` bakes and runs `love cc` under qemu.
 
+## the SSA question, measured (2026-08-27)
+
+Would an SSA middle pay? The four bespoke passes -- cfoldir, alive, repack's
+promotion, deadst -- were measured against an SSA-grade oracle: dump every TU's
+FINAL forms (doc/misc/proto/ssagap/, 82 TUs, 1102 fns, 133k forms), rebuild the
+CFG outside the compiler, and run constant/liveness analyses to a real fixpoint.
+Whatever the oracle still finds in shipped forms is what the passes missed.
+Every count is a floor (unmodeled ops invalidate), and every category was
+spot-verified in the forms before it was written down.
+
+| residual fact              | static | loop-wt | in cfoldir's domain | + 64-bit knowns |
+|----------------------------|-------:|--------:|--------------------:|----------------:|
+| const slot reload          |    215 |   4,632 |                 143 |             179 |
+| foldable ALU on knowns     |    476 |   4,886 |                 284 |             476 |
+| mov of a known (li-able)   |    410 |   2,468 |                 375 |             405 |
+| decidable branch           |      4 |      32 |                   4 |               4 |
+| dead store                 |      2 |       9 |                   — |               — |
+
+The reading, and it is not the expected one:
+
+- **deadst and the branch folder are complete.** Two dead stores and four
+  decidable branches in the whole corpus. (A first run reported 1,045 dead
+  stores; every one but two was an outgoing-arg frame before a call -- check the
+  instrument before the compiler.)
+- **almost nothing needs SSA.** 100% of the foldable ALU and 99% of the movs
+  fall to a LINEAR pass with 64-bit knowns -- cfoldir's own shape. The gaps are
+  its fold TABLE (shl/shr/sar/not/neg/ror are blunt: `li 2; sx4; shl 1; or 1`
+  ships as four ops where the fixnum tag 5 is one li -- ev.c alone carries 149)
+  and its kmax cap (`li 0x7fffffffffffffff; neg; sub 1` materializes LONG_MIN in
+  three ops; img_wake reloads a 2^40 constant in a loop cfoldir cannot hold).
+  The fixpoint-only residue is ~36 const reloads corpus-wide.
+- **the one structural miss is promotion's convex hull.** The mem2reg census
+  (non-escaped fns, direct-touch cells only): 1,327 cells live across a call
+  (spill class -- cs-seat territory, not headroom), but **1,954 full-word cells
+  whose touch span is call-free** still ride the frame (9.9k loop-wt touches;
+  dtb_to_kboot stores a pointer once and reloads it three times in fifteen
+  straight-line forms), plus 254 narrow/si cells (11.2k loop-wt) the full-word
+  law excludes outright. The bar is the window: repack widens the packing hull
+  over every backedge, and a call anywhere in the hull fails every seat by
+  construction -- so a fifteen-form chain inside a big loop inherits the whole
+  loop's window. Per-DEF ranges (each store-to-loads chain its own interval) are
+  the SSA idea worth having; nothing else here needs the phi apparatus.
+
+So the priced answer to "generate SSA?": no -- widen cfoldir's fold table and
+knowns to 64 bits (linear, in-place, no new pass), and teach promotion per-def
+windows instead of the convex hull. Those two levers cover ~97% of what the
+oracle can see, and the second is where the loop-weighted mass is.
+
 ## how to measure
 
 - `make -C bench ccnif` per gen.l edit (~20 s, no runtime in the loop); one quiet
