@@ -641,5 +641,9 @@
    ;; reads it as a 32-bit opcode and swallows the instruction after the pad. thumb2 pads with
    ;; its 16-bit nop for the same reason. c.nop tiles every even count exactly.
    _ (pin rv 'nop '(1 0))
+   ;; the TEST DOOR: test/holo/fuzz/rvc.l checks the squeeze by EQUIVALENCE, so it needs the
+   ;; three pieces the assembler reaches through other slots or not at all -- everything else
+   ;; here stays closure-private. a gate reads `parts`; the assembler and the linker never do.
+   _ (pin rv 'parts {'rvc-of rvc-of 'rv-patch rv-patch 'rv-cbase rv-cbase})
    (defbackend 'rv64 rv))
 ) ; module 'holo

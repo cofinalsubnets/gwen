@@ -30,6 +30,14 @@
 (reads (open "crew/holo/rv64.l" "r"))
 
 (: _ (use (name "holo"))
+   ;; the rv64 backend's test door -- the squeeze, the fixup writer and the CB base. holo's
+   ;; own surface carries the rest (imm?, at, jot).
+   parts (peep (peep backends 'rv64 ()) 'parts ())
+   _ (? (tablet? parts) 0
+        (: _ (say err "FAIL test_rvc: the rv64 backend lays no `parts` door\n") (quit 1)))
+   rvc-of   (peep parts 'rvc-of ())
+   rv-patch (peep parts 'rv-patch ())
+   rv-cbase (peep parts 'rv-cbase ())
 
    tmpd "out/host"
    (sh c) (: pid (spawn ["sh" "-c" c]) (? (pid < 0) 1 (wait pid)))
