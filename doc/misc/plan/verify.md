@@ -462,3 +462,28 @@ crosses in one line, because the work is in the bridge:
 
 what did NOT change: `vtre`, `mx2`, both pads, `netd`, and every observer. the
 pinned side is a wrapper over them, which is why it cost what it did.
+
+### what it cost the fast gate, and the one line that cost most of it
+
+the corpus run went 7.0 s to 13.6 s, and then to 10.2 s once the reason was
+found. measured by ablation, in situ -- an isolated corpus tells you nothing
+here, and run-to-run noise is about 0.4 s:
+
+| block | seconds |
+|---|---|
+| uuval.l: the pinned carrier, the bridge, the homomorphism, the paths laws | +2.0 |
+| uuvalband.l: the 27 cells and append's law, each at its own shape | +1.2 |
+| **`uv-aa-paths`: ONE generic crossing over three neutral values** | **+3.4** |
+
+the last row is the whole story, and it is the rule the cells were already
+written to: state a cell law over the SHAPE it is about, never over a neutral.
+`uv-aa-paths` quantified the bridge over three arbitrary values, so conv carried
+`vadd`'s entire unreduced dispatch -- a bool_rect tree with a leaf per band pair
+-- with `pin` unfolded inside every leaf, and paid for it on both sides of the
+crossing. deleting it and letting each cell cross at its own shape, where `vadd`
+reduces before `pin` ever sees it, gave back 3.4 s for no loss of content: the
+27 cells say exactly what they said.
+
+eager NbE has now billed this arc three times -- `nmin`'s b^a fold, the flat
+225-cell mx table, and this. the shape is always the same: a term that would
+reduce on a head is handed a neutral instead.
