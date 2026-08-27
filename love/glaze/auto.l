@@ -423,8 +423,10 @@
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
           results (map plift-fn pairs)
           extradefs (foldl (\ a r (a + <>r)) () results)
+          hasbody (1 = ((tally >form) % 2))
           (? (atom? extradefs) form
-             (': >< unpair ((map cap results) + extradefs) body))))
+             (: allp ((map cap results) + extradefs)
+                (': >< (? hasbody (unpair allp body) (cbflat allp))))))) ; body-less in -> body-less out
    ; --- MAP LANE (mapfix): a group fn's param that is `peep`'d but never `tally`'d is a MAP, not a string
    ;     (strscan's `s` is BOTH peep'd and tally'd; hash's `h` is peep'd, never tally'd). Rewrite that
    ;     param's `(peep h k d)` to `(mpeep h k d)` so the emitter lays an open-addressed map probe (and
@@ -520,8 +522,10 @@
           consts (filter (\ pr (name? <pr && whole? >pr)) pairs)
           (? (atom? consts) form
              (: sub (\ e (foldl (\ b pr (subst-sym <pr >pr b)) e consts))
-                keep (filter (\ pr !(name? <pr && whole? >pr)) pairs)
-                (': >< unpair (map (\ pr (<pr >< sub >pr)) keep) (sub body))))))
+                hasbody (1 = ((tally >form) % 2))
+                keep (? hasbody (filter (\ pr !(name? <pr && whole? >pr)) pairs) pairs)  ; body-less: the const IS exported, keep it bound
+                subbed (map (\ pr (<pr >< sub >pr)) keep)
+                (': >< (? hasbody (unpair subbed (sub body)) (cbflat subbed)))))))
    ; --- HOF INLINE (dehof): inline a top-level `:`'s non-recursive lambda-CONSTANT bindings -- a plain-name
    ;     binding to a (\ ..) value, like the closure bench's twice/adder -- into every body, then `dsimp`
    ;     beta-collapses the now-LITERAL curried application. So a higher-order recurrence ((twice (adder i)) i)
@@ -582,8 +586,17 @@
           lamcs (filter (\ q !(ho-any (\ r (!(id? <r <q) && occurs? <q >r)) lamcs0)) lamcs0)
           (? (atom? lamcs) form                                                                  ; no HOF const -> leave the form for the other lanes (dsimp mangles string/cask/loop forms)
              (: sub (\ e (dsimp (foldl (\ b pr (subst-sym <pr >pr b)) e lamcs)))         ; inline each HOF lamc, then beta-collapse
-                keep (filter (\ pr !(ho-any (\ q (id? <q <(dehead pr))) lamcs)) pairs)         ; non-inlined bindings keep their RAW form (grpfix recognizes define-sugar function heads)
-                (': >< unpair (map (\ pr (<pr >< sub >pr)) keep) (sub body))))))
+                hasbody (1 = ((tally >form) % 2))
+                ; ⚠ A BODY-LESS `:` EXPORTS EVERY BINDING, so an inlined HOF const stays BOUND:
+                ; its callers are outside the form (kore's verb table names bracket-main, and
+                ; core.l holds its only other mention -- its own define). Dropping what we
+                ; inlined is dead-binding elimination, sound for a body-HAVING `:` -- a local
+                ; let, where an unreferenced binding is unobservable -- and a deletion of the
+                ; module's surface here. The inlining still lands at every call site either way.
+                keep (? hasbody (filter (\ pr !(ho-any (\ q (id? <q <(dehead pr))) lamcs)) pairs)
+                                pairs)                                                           ; non-inlined bindings keep their RAW form (grpfix recognizes define-sugar function heads)
+                subbed (map (\ pr (<pr >< sub >pr)) keep)
+                (': >< (? hasbody (unpair subbed (sub body)) (cbflat subbed)))))))
    ; --- CHURCH LOWERING (dechurch): a literal church application (N f x) -- N a small whole numeral,
    ;     f a FUNCTION (a lambda literal or a partial of a dyadic op, e.g. (+ i)) -- is f applied to x
    ;     N times: ((N f) x) = f^N(x). Lower it to the nested application at compile time:
@@ -1127,11 +1140,16 @@
      (? !(two? form0) form0
        !(id? <form0 ':) form0
        (atom? >form0) form0
-       ; DECLINE a BODY-LESS `:` (even # of forms) -- the global-leaking top-level-define form (sat.l,
-       ; the corpus, apps). ⚠ THE REBUILD IS PARITY-CLEAN NOW (defol-bs/delet/lift take cbflat, the
-       ; body-less twin of unpair) -- so the () -> globally-unbound miscompile is gone -- but the
-       ; SECOND reason stands and is not cosmetic: lifting this guard bakes a crew whose `cat-main`
-       ; is missing. The group codegen really is unverified here. Sound > fast.
+       ; DECLINE a BODY-LESS `:` -- the global-leaking top-level define (sat.l, the corpus, apps).
+       ; ⚠ ITS BINDINGS ARE THE MODULE'S SURFACE, and the lowering owes them two things a local let
+       ; is not owed. Both are PAID now: no pass appends the trailing () (cbflat is unpair's twin),
+       ; and none drops a binding for want of an internal caller -- dehof and fold-consts took 20 of
+       ; crew/kore/core.l's 81 defines on that reasoning, bracket-main among them, whose only other
+       ; mention is kore's verb table. crew/kore/core.l now walks the whole chain intact, 81 in.
+       ; ⚠ WHAT STILL BLOCKS THE LIFT IS plift's CAPTURE THREADING, a third thing: hoisting a
+       ; read-only loop out of a NESTED let drops a live local (kore's base32 `gb`) whose value the
+       ; hoisted fn still reads. That is not the leak and not the parity -- it is unverified codegen,
+       ; exactly as this comment always said, and it wants its own instrument.
        (0 = ((tally >form0) % 2)) form0
        (memo-leak? form0) form0                                                                ; a `:`-sibling map memo (fact/bell) -> interp, sound
        (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts form0))))))))))   ; lower literal church (N f x)->f^N(x), inline lambda-const HOFs to first-order, lower &&/||/min/max/abs to ?, specialize interp-over-static-data, CLOSE polynomial folds to a closed form, deforest the rest -> loops, inline value-lets, lambda-lift named-let bodies, THEN plift read-only loops out of nested lets (hash's scan) -> flat group fns
