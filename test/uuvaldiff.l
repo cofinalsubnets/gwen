@@ -37,13 +37,15 @@
     (: iv (im n)                                          ; () off the complex band
        ['tpair (uv2-rea (uv2-twice n))
                (uv2-rea (id? iv () ? 0 (uv2-twice iv)))])
+   ; a leaf wears its tag: () is the unit atom, everything else its measure
+   (uv2-atm x) (id? x () ? ['ii1 'tt] ['ii2 (uv2-msr (net x))])
    (uv2-ht x) (? (two? x) (1 + (uv2-max (uv2-ht <x) (uv2-ht >x))) 0)
    ; the tree at a given height bound: a leaf spells the same at every height, so
    ; the shallow limb of a pair costs nothing to raise
    (uv2-tre x d)
     (? (two? x) ['ii2 ['tpair (uv2-tre <x (d - 1)) (uv2-tre >x (d - 1))]]
-       (d = 0)  (uv2-msr (net x))
-       ['ii1 (uv2-msr (net x))])
+       (d = 0)  (uv2-atm x)
+       ['ii1 (uv2-atm x)])
    (uv2-enc x) (: d (uv2-ht x) ['tpair d (uv2-tre x d)])
    (uv2-unz v) (v @ ['i1 n] n ['i2 n] ((0 - n) - 1) (scare 'uuval-not-an-int v))
    ; the four model lanes, each run in the kernel over the encoded value
@@ -51,6 +53,9 @@
    (uv2-ceil x) (uv2-unz (vof 0 ['vceil (uv2-enc x)]))
    (uv2-bit x)  (vof 0 ['vbit (uv2-enc x)] = 'true ? 1 0)
    (uv2-nil x)  (vof 0 ['vnil (uv2-enc x)] = 'true ? 1 0)
+   ; ..and the clamped one, against love's own saturate held to the model's width
+   (uv2-satc x) (vof 0 ['vsatc (uv2-enc x)])
+   uv2-chmax  (vof 0 'chmax)
 
    ; test/law.l's corpus, minus the values whose measure is not a half-integer
    uv2-corpus
@@ -65,6 +70,8 @@
        (! (uv2-bit x = bit x))       [1 x 'bit]
        (! (uv2-nil x = nil? x))      [1 x 'nil?]
        (! (uv2-ceil x = ceil x))     [1 x 'ceil]
+       (! (uv2-satc x = (: c uv2-chmax s (saturate x) (s < c ? s c))))
+                                     [1 x 'satc]
        ())
    (uv2-run l)
     (? (atom? l) 1
@@ -84,4 +91,11 @@
  (3 = (uv2-ceil 2.5))
  (-2 = (uv2-ceil -2.5))
  (4 = (uv2-ceil (q 7 2)))
- (3 = (uv2-ceil (twin 3 4))))                             ; re drops the imaginary rung
+ (3 = (uv2-ceil (twin 3 4)))                              ; re drops the imaginary rung
+ ; the ceiling BITES at the model's width, which is the whole of what it says
+ (7 = (uv2-satc 9))
+ (7 = uv2-chmax)
+ ; ..and () is not 0 down here either: same net, same nil?, different value
+ (0 = (vof 0 ['veq (uv2-enc ()) (uv2-enc 0)] = 'true ? 1 0))
+ (1 = (vof 0 ['veq (uv2-enc ()) (uv2-enc ())] = 'true ? 1 0)))
+

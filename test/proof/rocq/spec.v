@@ -169,7 +169,17 @@ Proof. intros f a. exists (vapp f a). reflexivity. Qed.
    proper list's Vnil tail adds nothing and a dotted tail counts like any car.
    The complex extension (! and $ both read the REAL part alone; the
    magnitude is abs's business) needs
-   reals and is the next slice; everything here is exact over the integer net. *)
+   reals and is the next slice; everything here is exact over the integer net.
+
+   The FINER carrier is test/uuval.l's `val`, in uu: the measure there is complex
+   over half-integers rather than Z (so ceil is not the identity, and the ratio and
+   twin bands are readable), a leaf carries a tag (so () and 0 part without a
+   separate constructor), and equality is structural rather than propositional.
+   It exports back to universe-checked Rocq through tools/uu2coq.l, so the two are
+   not a strong/weak pair -- what this file keeps is the WIDTH (maxcharm at the
+   host's 2^62-1, where uu names a small one and proves the same three clamp laws
+   against it), the order and colour facts the rest of this file leans on, and the
+   APPEND hom, which the list view has and the tree view does not. *)
 
 From Stdlib Require Import ZArith Lia Permutation.
 Open Scope Z_scope.
