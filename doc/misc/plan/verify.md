@@ -363,11 +363,66 @@ has to be indexed at all, which is exactly why three of these compose.
   three shapes a value has: twenty-five are one reflexivity, because both sides
   reduce to the SAME value -- which is precisely what the degeneration buys --
   and the two carrying mathematics are the numeric cell (the measure's own
-  monoid) and the chain cell (append). the carrier is a sigma over a
-  depth-indexed tree and not a three-constructor inductive, so there is no
-  destruct to write one forall with; the cells are the same content spec.v's
-  `destruct x, y, z` covers.
+  monoid) and the chain cell (append). the cells are written out one at a
+  time because there is no VIEW lemma yet -- every value is veq-one of (), a
+  number, or a link -- and rocq's `destruct x, y, z` on gval is exactly that
+  view, free there only because gval is a declared inductive. the cells are the
+  same content that destruct covers.
 
 gated: transitivity with one hypothesis dropped is refused, the congruence given
 only its left limb is refused, and append is asserted NOT commutative -- a law
 that held of both would be holding of nothing.
+
+
+## the exact-height carrier, priced (spike, test/uuzspike.l)
+
+the equality apparatus is 385 of uuval.l's 1019 lines -- reflection 110,
+transitivity 115, the four pad lemmas 120, the link congruence 40 -- and every
+line of it exists because the index is a height BOUND, so one value has many
+spellings and paths is too fine. the spike asks what the same carrier costs
+with the index PINNED, and answers three things.
+
+**the pin is not a new type family.** the plan for this said course-of-values
+recursion, and that was wrong: within ONE index the spelling is ALREADY unique
+-- a node either shows a leaf tag or a pair and the recursion is forced -- so
+the whole multiplicity is the choice of d. `vtre`, `mx2`, `padl`, `padr` and
+`netd` all carry over VERBATIM. what arrives is the true height and a path
+saying the index is it:
+
+    zht   : pi d nat (pi t (ztre d) nat)          -- the height a tree has
+    ztight: (lam p (paths nat (zht (pr1 p) (pr2 p)) (pr1 p)))
+    zval  : (total2 p zbare (ztight p))
+
+the tightness is a path in nat, a value-level statement -- it never enters a
+type index, so `mx2` stays exactly where it already is and the transport
+worry does not arise.
+
+**conv does not get heavier.** on the kernel alone the corpus runs 0.67 s;
+with the spike's 258 lines and 38 checks, 0.68 s. uuval.l's 1019 lines cost
+0.17 s in the same measurement. the eager-NbE hazard that bit nmin and the mx
+table does not reappear -- zht folds the tree it is given and nothing else.
+
+**and the congruence really is two maponpaths.** uv-veq-link is thirty lines
+down through one pad, across by the hypothesis and back up the other, and it
+stands on the 115-line transitivity block. here:
+
+    (pathscomp0 zval (zlink u w) (zlink u2 w) (zlink u2 w2)
+       (maponpaths zval zval (lam x (zlink x w)) u u2 p)
+       (maponpaths zval zval (lam x (zlink u2 x)) w w2 q))
+
+nine lines, no induction, and the same shape gives the congruence for net --
+for ANY function, which is the whole point of paths being the equality.
+
+what the pin costs in exchange: the pad must not move the height (two
+inductions mirroring padl/padr), max needs a two-argument congruence, and the
+link must carry its own tightness. that is 69 lines against 385.
+
+gated seven ways, the first one being the point: a leaf spelled at index 1 is
+a legal value of uuval's carrier and is a TYPE ERROR here.
+
+**what is NOT priced, and would be the real work:** every law stated as
+`paths bool (veq X Y) true` restates as `paths val X Y`. that is 151 veq
+mentions in uuval.l, 95 in uuvalband.l, and six in tools/law2uu.l which
+generates uuvallaw.l. a decidable equality is still wanted for the
+differential against love's own `=`, but it becomes a derived decision
+procedure rather than the equality the laws are written in.
