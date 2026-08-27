@@ -22,6 +22,7 @@ half of the same ladder, not separate programs.
 | verified lux (uuwm) | wm2uu.l, test/uuwm*.l | keep; FRESHENED 2026-08-16 |
 | CLAUDE.md laws fuzz | test/law.l | keep; the uu leg LANDED (below) |
 | CLAUDE.md laws proof | test/uuval.l, uuvallaw.l | the measure tower, proved |
+| the +/* band lattice | mx2uu.l, test/uumx*.l | LANDED in uu beside mx.v |
 | property fuzz | test/fuzz.l | keep |
 | holo encoder fuzz | test/holo/fuzz/{fuzz,sysdiff}.l | PORTED 2026-08-16; py gone |
 | vmret.l vs vmret.py differential | tools/py/ | RETIRED 2026-08-16 |
@@ -103,14 +104,51 @@ test/law.l quantifies the laws as lambdas over a jot-generated corpus
 still open on this rung:
 
 - a lawgen tool (uuwmgen pattern) compiling test/law.l's law rows into the
-   obligations, so one spelling feeds fuzz and proof both. today the two files
-   are kept in step by hand.
+  obligations, so one spelling feeds fuzz and proof both. today the two files
+  are kept in step by hand.
 - the laws the model cannot yet state: cap/cup/link-back/link-apart and
-   id?-finer want a structural equality on val, which the depth index makes a
-   setoid question (net is lift-invariant, so the tower never had to care).
-   add-assoc / mul-assoc / mul-dist want the BAND LATTICE -- mx.l's dispatch
-   matrices, which today are modelled only in Rocq (test/proof/rocq/mx.v, from
-   tools/mx2coq.l). an mx2uu.l on the wm2uu pattern is the obvious next step.
+  id?-finer want a structural equality on val, which the depth index makes a
+  setoid question (net is lift-invariant, so the tower never had to care).
+
+## the band lattice, in uu (landed)
+
+add-assoc / mul-assoc / mul-dist rest on the BAND LATTICE, which lived only in
+Rocq (test/proof/rocq/mx.v, from tools/mx2coq.l). it lives in uu now too:
+
+- **tools/mx2uu.l** -- mx2coq's uu twin, reading THE TABLE (src/mx.l, the same
+  love datum love.c's mx.h is laid from) and deriving the band partition by the
+  same rule -- kinds grouped by row+column equality across BOTH matrices at
+  once -- so the two exports cannot disagree about what a band is.
+- **test/uumx.l** -- the generated corpus: a kind is its index in mx.l's enum
+  roster, a lane its index in appearance order, a band its class id, and the
+  square is a GRID (mvec/mlist, nvec/nlist's shape one type up). ⚠ NOT one flat
+  225-cell list indexed by arithmetic: every walk rides `npred`, which the eager
+  NbE prices at O(index), and the flat version cost the corpus 9 s where the
+  grid costs 0.4.
+- **test/uumxlaw.l** -- the laws, HAND-WRITTEN over a table nobody typed. both
+  squares factor through the band quotient; dispatch commutes up to mirror (and
+  mirror is an involution); the numeric nine are one band, KNom and KString one
+  more, KMint alone; () is the unit under + and the zero under * in every lane;
+  the diagonal reads the lattice, one add/mul pair per band; and the cells the
+  narrative names one at a time (nom+str spells, chain*chain is the cartesian
+  product, a tablet dominates everything but a mint). every proof is `idpath
+  true` over a bounded forall -- the kernel RUNS the 225-cell square, where
+  mx.v's twin closes by vm_compute.
+- planted faults, each with its positive twin: the cartesian cell is not the
+  zero, the band assignment has to be the derived one, mirror is not the
+  identity. and flipping one cell of the generated table makes the kernel refuse
+  a proof outright (uu-idpath-mismatch, exit 1).
+- gated by `make test_uumx` off the uu_corpus roster (regenerate + diff, so a
+  src/mx.l edit with no refresh reddens), and exported: all 28 mx entries
+  re-check in Rocq and Lean 4. mx.l's shape now stands in three kernels, twice
+  in Rocq by two independent roads.
+
+it also found a live bug in the exporters: uu2coq/uu2lean's silent-no-op gate
+read an absent term seat with `!`, so a legitimate `(defn nm nat 0)` -- a code
+table's first row -- reddened as MALFORMED. the seat is tested with `id? ()`
+now. nothing in the corpus had a 0-valued def before.
 
 what stays fuzz-only, permanently: the C primitives' agreement with the
-model -- the same gap uuwm has with the C runtime under core.l.
+model -- the same gap uuwm has with the C runtime under core.l, and here the
+gap that a lane nom names the C function it says it does. the table is the
+interface; love.c is the other side of it.

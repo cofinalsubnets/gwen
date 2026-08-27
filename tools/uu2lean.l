@@ -30,6 +30,8 @@
    _ (reads (open "test/uuwm.l" "r"))
    _ (reads (open "test/uuwmlaw.l" "r"))
    _ (reads (open "test/uukind.l" "r"))
+   _ (reads (open "test/uumx.l" "r"))
+   _ (reads (open "test/uumxlaw.l" "r"))
    _ (reads (open "test/uuval.l" "r"))
    _ (reads (open "test/uukindlaw.l" "r"))          ; load + CERTIFY uu's corpus (populates GLOB)
    bs (intern "\\")
@@ -58,14 +60,16 @@
                            (| (deq? F) (axq? F)) (link (entry F) acc) acc)))
                       (rev acc))
    (app2 a b) (? (two? a) (link (cap a) (app2 (cup a) b)) b)   ; NOT `cat` -- the local cat is the STRING fold
-   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (forms (open "test/uuval.l" "r")))))))))))))) ())
+   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (forms (open "test/uuval.l" "r")))))))))))))))) ())
 
    ; the SILENT-NO-OP gate (defense in depth behind uu.l's arity-door macros):
    ; a def gathered off the file must be WHOLE -- three operands; a paren slip
    ; that merges the type into the term reads () in the term seat -- and
    ; PINNED, since a partially applied defn/defq is a truthy closure that pins
-   ; nothing and paints its assert dot green. redden here instead.
-   _ (map (\ e (? (| (&& (id? (cap e) 'def) (! (e4 e)))
+   ; nothing and paints its assert dot green. redden here instead. the empty seat is
+   ; `id? ()` and not `!`: a term of 0 is a legal def (a code table's first row) and
+   ; falsy, so truthiness would redden it.
+   _ (map (\ e (? (| (&& (id? (cap e) 'def) (id? (e4 e) ()))
                      (! (peep GLOB (e2 e) 0)))
                   (: _ (puts "MALFORMED-OR-UNPINNED-DEF ") _ (puts (string (e2 e))) (quit 1))
                   0))
