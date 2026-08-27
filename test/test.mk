@@ -14,7 +14,7 @@
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
   test_holo test_as test_elf32 test_objcopy test_gz test_cpio test_forge test_distboot test_bakerep \
-  uuwm uukind uuhomgen uusplgen test_uuwm test_uukind test_uuhomgen test_uusplgen
+  uuwm uukind uuhomgen uusplgen uumx uuvallaw test_uuwm test_uukind test_uuhomgen test_uusplgen test_uumx test_uuvallaw
 
 # $m is the WARM love -- the baked image woken, what ships. a gate whose subject is
 # the egg boot spells LOVE_NO_IMAGE=1 itself; love0 is always the egg.
@@ -1040,10 +1040,15 @@ endef
 #   uuhomgen  dest.l's two code generators, on its law sites -> test/uuhomlaw.l, the destination-die laws
 #   uusplgen  spl.l's three call-site compilers (call, binding splice, substitution
 #             splice) on its samples                  -> test/uuspllaw.l, the SPLICE LICENSE
+#   uumx      love.c's +/* DISPATCH MATRICES (src/mx.l) -> test/uumxlaw.l, the band lattice
+#   uuvallaw  CLAUDE.md's LAWS off test/law.l's own rows -> proved where they stand, one
+#             spelling for the fuzz lane and the proof lane both
 $(eval $(call uu_corpus,uuwm,uuwmgen,crew/lux/core.l))
 $(eval $(call uu_corpus,uukind,kinds2uu,doc/misc/proto/kinds.l))
 $(eval $(call uu_corpus,uuhomgen,dest2uu,doc/misc/proto/dest.l))
 $(eval $(call uu_corpus,uusplgen,spl2uu,doc/misc/proto/spl.l))
+$(eval $(call uu_corpus,uumx,mx2uu,src/mx.l))
+$(eval $(call uu_corpus,uuvallaw,law2uu,test/law.l))
 # test_wake: the BAKE-THEN-WAKE ROUND TRIP, which no other gate runs -- every other lane
 # wakes an image some earlier recipe baked. A CANDIDATE COPY bakes (love.wake, ETXTBSY-proof)
 # under a timeout the wake storm cannot meet (fresh lane ~1s, storm >90s; doc/wake-storm.md).

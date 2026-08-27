@@ -1,0 +1,1019 @@
+; test/uuval.l -- LOVE'S OWN VALUES, modelled in uu: the measure tower of
+; CLAUDE.md's lambda equations ($x = ceil (re (net x)), ?x = ($x > 0)) built as
+; a STACK OF RETRACTIONS, so the laws test/law.l can only refute become theorems
+; (tools/law2uu.l compiles them off law.l's own rows into test/uuvallaw.l -- one
+; spelling, both lanes). the value universe is a binary tree of measures -- love's
+; net sums over a compound's parts and reads nothing else, so a leaf IS its
+; measure and no gem's value (hence no ieee) enters the model.
+;
+; the tower, each rung a section/retraction pair whose round trip is DEFINITIONAL:
+;
+;   bool  --nbit-->  nat  --nzed-->  zed  --zrea-->  rea  --rmsr-->  msr  --vnum--> val
+;         <-natbit-       <--zsat--       <-rceil--       <--mre---        <--vnet--
+;
+; a real is a HALF-INTEGER (z, plus a bit for +1/2): the smallest carrier closed
+; under addition on which ceil is not the identity, which is all the tower's shape
+; asks of it -- 2.5 ceils to 3 and -2.5 to -2 here, exactly as love answers.
+;
+; a leaf is not quite its measure: () and 0 net the same, read nil the same, and
+; are still two values, so the leaf carries a TAG (atm) and = reads it. that one
+; bit is what a whole layer of the model needed and nothing else in it uses.
+; the equality itself is an EQUIVALENCE here -- reflexive, and transitive off the
+; reflection of each rung's decidable equality into a path -- which is what lets
+; a link's two limbs be compared through the heights neither of them spells.
+; above the tower sits the CHARM CEILING, the only rung with a width -- zsat is
+; the retraction and stays unbounded, zsatc is what the word can hold -- and
+; beside it the COLOURS, the sign structure ?x = ($x > 0) actually rests on.
+; the laws HERE are about idempotence and factorisation, so a wrong zadd cannot
+; fake one; the algebra of + and * is test/uuvalband.l's, and what gates the
+; arithmetic in both is the differential in test/uuvaldiff.l, which runs love's
+; own saturate beside this model's vsat over test/law.l's corpus.
+;
+; substrate: test/uu.l (the kernel + nat vocabulary; this file loads after it by
+; sort order). guard: fail by name if the kernel is not up.
+(assert (member? 'vof (names ())))
+
+; --- zed: the integers, ceil's codomain. ii1 n is n, ii2 n is -(succ n) ---
+(assert
+ (defn zed UU (coprod nat nat))
+ (defn nzed (pi n nat zed) (lam n (ii1 n)))                 ; the section: a nat IS an integer
+ (defn zneg (pi n nat zed) (lam n (ii2 n)))                 ; -(n+1)
+ (defn zzero zed (ii1 0))
+ (defn zsucc (pi z zed zed)
+   (lam z (coprod_rect (lam w zed)
+             (lam n (ii1 (succ n)))
+             (lam n (nat_rect (lam q zed) (ii1 0) (lam k (lam r (ii2 k))) n))
+             z)))
+ ; the truncation to nat -- max(0,.) -- and its round trip
+ (defn zsat (pi z zed nat)
+   (lam z (coprod_rect (lam w nat) (lam n n) (lam n 0) z)))
+ ; ..and the CHARM CEILING above it. a charm is the word minus its tag bits, so
+ ; a net that will not fit lands on the edge rather than wrapping or widening
+ ; (love.c's ai_saturate). the width is a parameter and the laws below are
+ ; stated against chmax, holding at any width -- only the literal moves; a small
+ ; one keeps the ceiling in reach of a demo. zsat is the tower's retraction and
+ ; stays unbounded: the round trip is a fact about the MEASURE, the ceiling a
+ ; fact about the word it is read into, and only the second has a width.
+ ; the step CASES on b rather than folding it: conv is eager, so a nat_rect
+ ; over b would evaluate the step at every level below it and cost b^a
+ (defn nmin (pi a nat (pi b nat nat))
+   (lam a (nat_rect (lam q (pi b nat nat))
+             (lam b 0)
+             (lam j (lam IH (lam b (bool_rect (lam x nat) 0 (succ (IH (npred b)))
+                                      (niszero b)))))
+             a)))
+ (defn chmax nat 7)
+ (defn zsatc (pi z zed nat) (lam z (nmin chmax (zsat z))))
+ (defn zpred (pi z zed zed)
+   (lam z (coprod_rect (lam w zed)
+             (lam n (nat_rect (lam q zed) (ii2 0) (lam k (lam r (ii1 k))) n))
+             (lam n (ii2 (succ n)))
+             z)))
+ ; addition by ITERATION -- b counts the steps, each one zsucc or zpred. the
+ ; truncated-subtraction spelling computes the same sums and proves nothing:
+ ; every law of + below reads off these four definitional equations, and
+ ; natminus has none to give.
+ (defn zaddn (pi a zed (pi n nat zed))
+   (lam a (lam n (nat_rect (lam q zed) a (lam k (lam r (zsucc r))) n))))
+ (defn zsubn (pi a zed (pi n nat zed))
+   (lam a (lam n (nat_rect (lam q zed) a (lam k (lam r (zpred r))) n))))
+ (defn zadd (pi a zed (pi b zed zed))
+   (lam a (lam b (coprod_rect (lam w zed)
+                    (lam n (zaddn a n))
+                    (lam n (zsubn a (succ n)))
+                    b))))
+ (= (vof 0 '(ii1 5)) (vof 0 '(zadd (ii1 2) (ii1 3))))
+ (= (vof 0 '(ii2 0)) (vof 0 '(zadd (ii1 2) (ii2 2))))     ;  2 + (-3) = -1
+ (= (vof 0 '(ii1 1)) (vof 0 '(zadd (ii2 1) (ii1 3))))     ; -2 +   3  =  1
+ (= (vof 0 '(ii2 3)) (vof 0 '(zadd (ii2 1) (ii2 1))))     ; -2 + (-2) = -4
+ (= (vof 0 '(ii1 0)) (vof 0 '(zsucc (ii2 0)))))
+
+; --- rea: a real is a half-integer, z + (h ? 1/2 : 0). ceil is the carry ---
+(assert
+ (defn rea UU (total2 z zed bool))
+ (defn rmk (pi z zed (pi h bool rea)) (lam z (lam h (tpair z h))))
+ (defn zrea (pi z zed rea) (lam z (tpair z false)))         ; the section: an integer IS a real
+ (defn rceil (pi r rea zed)
+   (lam r (bool_rect (lam x zed) (zsucc (pr1 r)) (pr1 r) (pr2 r))))
+ (defn rzero rea (zrea zzero))
+ (defn radd (pi a rea (pi b rea rea))
+   (lam a (lam b (bool_rect (lam x rea)
+      (tpair (zsucc (zadd (pr1 a) (pr1 b))) false)           ; two halves carry
+      (tpair (zadd (pr1 a) (pr1 b)) (orb (pr2 a) (pr2 b)))
+      (andb (pr2 a) (pr2 b))))))
+ (= (vof 0 '(ii1 3)) (vof 0 '(rceil (rmk (ii1 2) true))))  ; ceil  2.5 =  3
+ (= (vof 0 '(ii2 1)) (vof 0 '(rceil (rmk (ii2 2) true))))  ; ceil -2.5 = -2
+ (= (vof 0 '(rmk (ii1 3) false)) (vof 0 '(radd (rmk (ii1 1) true) (rmk (ii1 1) true)))))
+
+; --- msr: the measure is COMPLEX, and re is the rung love's ceil reads ---
+(assert
+ (defn msr UU (total2 r rea rea))
+ (defn mre (pi m msr rea) (lam m (pr1 m)))
+ (defn rmsr (pi r rea msr) (lam r (tpair r rzero)))         ; the section: a real IS a measure
+ (defn mzero msr (rmsr rzero))
+ (defn madd (pi a msr (pi b msr msr))
+   (lam a (lam b (tpair (radd (pr1 a) (pr1 b)) (radd (pr2 a) (pr2 b)))))))
+
+; --- atm: what a LEAF carries. () and 0 net the same and both read nil, and
+; --- they are still not one value -- love keeps "" and () and 0 apart, and
+; --- (= () 0) is false -- so a leaf carries a TAG and not just its measure ---
+(assert
+ (defn atm UU (coprod unit msr))
+ (defn aunit atm (ii1 tt))                                  ; ()
+ (defn anum (pi m msr atm) (lam m (ii2 m)))                 ; a number IS its measure
+ (defn anet (pi a atm msr)
+   (lam a (coprod_rect (lam w msr) (lam u mzero) (lam m m) a))))
+
+; --- val: a value is a binary tree of measures, depth-indexed (nlist's trick).
+; --- at every level a node is a LEAF (ii1, carrying its measure) or a PAIR of
+; --- the level below (ii2) -- love's link. so the depth is a HEIGHT BOUND and
+; --- not a shape: a leaf spells the same at every depth, which is what makes a
+; --- node's head unambiguous and lets cap/cup/two? read it without recursing.
+; --- net folds the tree ---
+(assert
+ (defn vtre (pi d nat UU)
+   (lam d (nat_rect (lam q UU) atm (lam k (lam T (coprod atm (total2 x T T)))) d)))
+ ; the two limbs of a link, NAMED. bare pr1/pr2 would do it here, but the Rocq
+ ; export elaborates a sum_rect's branches before it unifies the scrutinee's
+ ; type, so the pair's family is still a metavariable when pr2 asks for it and
+ ; the unification goes higher-order. a named projection pins it from its own
+ ; argument type instead, which is first-order and always solvable.
+ (defn vfst (pi k nat (pi p (total2 x (vtre k) (vtre k)) (vtre k))) (lam k (lam p (pr1 p))))
+ (defn vsnd (pi k nat (pi p (total2 x (vtre k) (vtre k)) (vtre k))) (lam k (lam p (pr2 p))))
+ (defn netd (pi d nat (pi t (vtre d) msr))
+   (lam d (nat_rect (lam q (pi t (vtre q) msr))
+             (lam t (anet t))
+             (lam k (lam IH (lam t (coprod_rect (lam w msr)
+                                      (lam m (anet m))
+                                      (lam p (madd (IH (vfst k p)) (IH (vsnd k p))))
+                                      t))))
+             d)))
+ (defn val UU (total2 d nat (vtre d)))
+ (defn vnum (pi m msr val) (lam m (tpair 0 (anum m))))     ; a number, at height 0
+ (defn vnilv val (tpair 0 aunit))                           ; ..and () beside it
+ (defn vnet (pi v val msr) (lam v (netd (pr1 v) (pr2 v))))
+ ; the sections up the tower, worn as values
+ (defn rval (pi r rea val) (lam r (vnum (rmsr r))))
+ (defn zval (pi z zed val) (lam z (rval (zrea z))))
+ (defn nval (pi n nat val) (lam n (zval (nzed n))))
+ (defn nbit (pi b bool nat) (lam b (bool_rect (lam x nat) 1 0 b)))
+ (defn bval (pi b bool val) (lam b (nval (nbit b))))
+ ; --- and love's words, each the composite down from val ---
+ (defn natbit (pi n nat bool) (lam n (negb (niszero n))))   ; the bit of a saturated measure
+ (defn vre   (pi v val rea)  (lam v (mre (vnet v))))
+ (defn vceil (pi v val zed)  (lam v (rceil (vre v))))       ; love's ceil
+ (defn vsat  (pi v val nat)  (lam v (zsat (vceil v))))      ; love's saturate, $x
+ (defn vsatc (pi v val nat)  (lam v (zsatc (vceil v))))     ; ..as it lands in a charm
+ (defn vbit  (pi v val bool) (lam v (natbit (vsat v))))     ; love's bit, ?x
+ (defn vnil  (pi v val bool) (lam v (negb (vbit v))))       ; love's nil?, !x
+ ; --- the COLOURS, read off the SIGN of the measure's real part. green is the
+ ; --- kept band (what $ keeps), red the clamped half below the floor, blue the
+ ; --- floor itself. green and blue are DUAL and not disjoint: 0 is green by
+ ; --- sign and blue by measure, the overlap where green meets nothing ---
+ (defn zgreen (pi z zed bool)
+   (lam z (coprod_rect (lam w bool) (lam n true) (lam n false) z)))
+ (defn zblue (pi z zed bool)
+   (lam z (coprod_rect (lam w bool) (lam n (niszero n)) (lam n false) z)))
+ (defn vgreen (pi v val bool) (lam v (zgreen (pr1 (vre v)))))
+ (defn vred   (pi v val bool) (lam v (negb (vgreen v))))
+ ; ..a half-integer is the floor only with its half bit down
+ (defn vblue  (pi v val bool) (lam v (andb (zblue (pr1 (vre v))) (negb (pr2 (vre v)))))))
+
+; --- the retraction ladder: each rung's round trip, four of the five by idpath ---
+(assert
+ (defn uv-retract (pi A UU (pi B UU (pi s (pi a A B) (pi r (pi b B A) UU))))
+   (lam A (lam B (lam s (lam r (pi a A (paths A (r (s a)) a)))))))
+ (defq uv-net-sect  (uv-retract msr val vnum vnet)  (lam m (idpath m)))
+ (defq uv-re-sect   (uv-retract rea msr rmsr mre)   (lam r (idpath r)))
+ (defq uv-ceil-sect (uv-retract zed rea zrea rceil) (lam z (idpath z)))
+ (defq uv-sat-sect  (uv-retract nat zed nzed zsat)  (lam n (idpath n)))
+ (defq uv-bit-sect  (uv-retract bool nat nbit natbit)
+   (lam b (bool_rect (lam x (paths bool (natbit (nbit x)) x))
+            (idpath true) (idpath false) b))))
+
+; --- THE CHARM CEILING, the one rung with a WIDTH. $ is non-negative by its
+; --- type; what is left to state is that it keeps a net that fits, clamps the
+; --- negative half to 0, and lands on the edge past chmax. stated hypothesis-
+; --- free -- (nmin chmax n) IS a net that fits and (add chmax n) one that does
+; --- not -- so nothing rests on a decision procedure for the bound ---
+(assert
+ (defq uv-nmin-idem (pi a nat (pi b nat (paths nat (nmin a (nmin a b)) (nmin a b))))
+   (lam a (nat_rect (lam q (pi b nat (paths nat (nmin q (nmin q b)) (nmin q b))))
+             (lam b (idpath 0))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (paths nat (nmin (succ j) (nmin (succ j) r))
+                                             (nmin (succ j) r)))
+                   (idpath 0)
+                   (lam k (lam s (maponpaths nat nat (lam z (succ z))
+                                    (nmin j (nmin j k)) (nmin j k) (IH k))))
+                   b))))
+             a)))
+ (defq uv-nmin-add (pi a nat (pi n nat (paths nat (nmin a (add a n)) a)))
+   (lam a (nat_rect (lam q (pi n nat (paths nat (nmin q (add q n)) q)))
+             (lam n (idpath 0))
+             (lam j (lam IH (lam n (maponpaths nat nat (lam z (succ z))
+                                      (nmin j (add j n)) j (IH n)))))
+             a)))
+ ; $ keeps what fits
+ (defq uv-satc-keeps
+   (pi n nat (paths nat (zsatc (nzed (nmin chmax n))) (nmin chmax n)))
+   (lam n (uv-nmin-idem chmax n)))
+ ; ..lands on the edge past it
+ (defq uv-satc-ceils (pi n nat (paths nat (zsatc (nzed (add chmax n))) chmax))
+   (lam n (uv-nmin-add chmax n)))
+ ; ..and takes the whole negative half to 0
+ (defq uv-satc-clamps (pi n nat (paths nat (zsatc (zneg n)) 0))
+   (lam n (idpath 0)))
+ ; the agreement: below the ceiling the clamped $ IS the tower's
+ (defq uv-satc-below (pi v val (paths nat (vsatc v) (nmin chmax (vsat v))))
+   (lam v (idpath (nmin chmax (vsat v))))))
+
+; --- net is a HOMOMORPHISM: a leaf nets its measure at whatever height it sits
+; --- at, and a link sums ---
+(assert
+ (defq uv-net-leaf
+   (pi d nat (pi m atm (paths msr (netd (succ d) (ii1 m)) (anet m))))
+   (lam d (lam m (idpath (anet m)))))
+ (defq uv-net-link
+   (pi d nat (pi a (vtre d) (pi b (vtre d)
+     (paths msr (netd (succ d) (ii2 (tpair a b))) (madd (netd d a) (netd d b))))))
+   (lam d (lam a (lam b (idpath (madd (netd d a) (netd d b))))))))
+
+; --- STRUCTURAL EQUALITY. the depth is a height BOUND, so one value has many
+; --- spellings -- a leaf sits at any depth, a link pads its shallow limb -- and
+; --- `paths` is finer than love's `=`. veq compares what a node OBSERVES: is it
+; --- a pair, its cap, its cup, its measure. the recursion is on the LEFT value's
+; --- index alone and the right rides along, read one observation at a time --
+; --- which is what lets three of these compose, where a fuel derived from a PAIR
+; --- of heights gives the three sides of a transitivity three different ones.
+; --- first the measure's own equality, and the andb plumbing the proofs lean on ---
+(assert
+ (defn beqb (pi a bool (pi b bool bool))
+   (lam a (lam b (bool_rect (lam x bool) b (negb b) a))))
+ (defn zeqb (pi a zed (pi b zed bool))
+   (lam a (lam b (coprod_rect (lam w bool)
+                    (lam p (coprod_rect (lam w bool) (lam q (nateqb p q)) (lam q false) b))
+                    (lam p (coprod_rect (lam w bool) (lam q false) (lam q (nateqb p q)) b))
+                    a))))
+ (defn reqb (pi a rea (pi b rea bool))
+   (lam a (lam b (andb (zeqb (pr1 a) (pr1 b)) (beqb (pr2 a) (pr2 b))))))
+ (defn meqb (pi a msr (pi b msr bool))
+   (lam a (lam b (andb (reqb (pr1 a) (pr1 b)) (reqb (pr2 a) (pr2 b))))))
+ ; the leaf's equality reads the TAG first: () meets only (), and that is the
+ ; one place love's = is finer than the measure it would otherwise be read by
+ (defn aeqb (pi a atm (pi b atm bool))
+   (lam a (lam b (coprod_rect (lam w bool)
+                    (lam u (coprod_rect (lam w bool) (lam v true) (lam m false) b))
+                    (lam m (coprod_rect (lam w bool) (lam v false) (lam n (meqb m n)) b))
+                    a))))
+ (defq uv-andb2
+   (pi a bool (pi b bool (pi p (paths bool a true) (pi q (paths bool b true)
+      (paths bool (andb a b) true)))))
+   (lam a (lam b (lam p (lam q
+      (pathscomp0 bool (andb a b) (andb true b) true
+         (maponpaths bool bool (lam z (andb z b)) a true p)
+         (maponpaths bool bool (lam z (andb true z)) b true q)))))))
+ (defq uv-orbl (pi a bool (pi b bool (pi p (paths bool a true) (paths bool (orb a b) true))))
+   (lam a (lam b (lam p (maponpaths bool bool (lam z (orb z b)) a true p)))))
+ (defq uv-orbr (pi a bool (pi b bool (pi q (paths bool b true) (paths bool (orb a b) true))))
+   (lam a (lam b (lam q (bool_rect (lam x (paths bool (orb x b) true)) (idpath true) q a)))))
+ ; reflexivity, rung by rung. nateqb (succ k) (succ k) IS nateqb k k, so the
+ ; induction step is its own hypothesis
+ (defq uv-nateqb-refl (pi n nat (paths bool (nateqb n n) true))
+   (lam n (nat_rect (lam q (paths bool (nateqb q q) true))
+             (idpath true) (lam k (lam r r)) n)))
+ (defq uv-beqb-refl (pi b bool (paths bool (beqb b b) true))
+   (lam b (bool_rect (lam x (paths bool (beqb x x) true)) (idpath true) (idpath true) b)))
+ (defq uv-zeqb-refl (pi z zed (paths bool (zeqb z z) true))
+   (lam z (coprod_rect (lam w (paths bool (zeqb w w) true))
+             (lam p (uv-nateqb-refl p)) (lam p (uv-nateqb-refl p)) z)))
+ (defq uv-reqb-refl (pi r rea (paths bool (reqb r r) true))
+   (lam r (uv-andb2 (zeqb (pr1 r) (pr1 r)) (beqb (pr2 r) (pr2 r))
+             (uv-zeqb-refl (pr1 r)) (uv-beqb-refl (pr2 r)))))
+ (defq uv-meqb-refl (pi m msr (paths bool (meqb m m) true))
+   (lam m (uv-andb2 (reqb (pr1 m) (pr1 m)) (reqb (pr2 m) (pr2 m))
+             (uv-reqb-refl (pr1 m)) (uv-reqb-refl (pr2 m)))))
+ (defq uv-aeqb-refl (pi a atm (paths bool (aeqb a a) true))
+   (lam a (coprod_rect (lam w (paths bool (aeqb w w) true))
+             (lam u (idpath true)) (lam m (uv-meqb-refl m)) a))))
+
+; --- ..and each of them REFLECTS: an equality that answers true hands back the
+; --- path. reflexivity alone would give a preorder; this is what makes = an
+; --- equivalence, and every rung has to give it up before the tree's can ---
+(assert
+ (defq uv-pairpath
+   (pi A UU (pi B UU (pi a1 A (pi a2 A (pi b1 B (pi b2 B
+      (pi p (paths A a1 a2) (pi q (paths B b1 b2)
+         (paths (total2 x A B) (tpair a1 b1) (tpair a2 b2))))))))))
+   (lam A (lam B (lam a1 (lam a2 (lam b1 (lam b2 (lam p (lam q
+      (pathscomp0 (total2 x A B) (tpair a1 b1) (tpair a2 b1) (tpair a2 b2)
+         (maponpaths A (total2 x A B) (lam w (tpair w b1)) a1 a2 p)
+         (maponpaths B (total2 x A B) (lam w (tpair a2 w)) b1 b2 q)))))))))))
+ (defq uv-nateqb-paths
+   (pi n nat (pi m nat (pi h (paths bool (nateqb n m) true) (paths nat n m))))
+   (lam n (nat_rect
+             (lam q (pi m nat (pi h (paths bool (nateqb q m) true) (paths nat q m))))
+             (lam m (nat_rect (lam r (pi h (paths bool (nateqb 0 r) true) (paths nat 0 r)))
+                       (lam h (idpath 0))
+                       (lam k (lam s (lam h (fromempty (paths nat 0 (succ k))
+                                               (nopathsfalsetotrue h)))))
+                       m))
+             (lam j (lam IH (lam m
+                (nat_rect (lam r (pi h (paths bool (nateqb (succ j) r) true)
+                                    (paths nat (succ j) r)))
+                   (lam h (fromempty (paths nat (succ j) 0) (nopathsfalsetotrue h)))
+                   (lam k (lam s (lam h (maponpaths nat nat (lam x (succ x)) j k (IH k h)))))
+                   m))))
+             n)))
+ (defq uv-beqb-paths
+   (pi a bool (pi b bool (pi h (paths bool (beqb a b) true) (paths bool a b))))
+   (lam a (lam b (bool_rect (lam x (pi h (paths bool (beqb x b) true) (paths bool x b)))
+                    (lam h (pathsinv0 bool b true h))
+                    (lam h ((bool_rect (lam y (pi g (paths bool (negb y) true)
+                                                 (paths bool false y)))
+                               (lam g (fromempty (paths bool false true)
+                                         (nopathsfalsetotrue g)))
+                               (lam g (idpath false))
+                               b) h))
+                    a))))
+ (defq uv-zeqb-paths
+   (pi a zed (pi b zed (pi h (paths bool (zeqb a b) true) (paths zed a b))))
+   (lam a (lam b
+      (coprod_rect (lam v (pi h (paths bool (zeqb v b) true) (paths zed v b)))
+         (lam p (coprod_rect
+                   (lam v (pi h (paths bool (zeqb (ii1 p) v) true) (paths zed (ii1 p) v)))
+                   (lam q (lam h (maponpaths nat zed (lam x (ii1 x)) p q
+                                    (uv-nateqb-paths p q h))))
+                   (lam q (lam h (fromempty (paths zed (ii1 p) (ii2 q))
+                                    (nopathsfalsetotrue h))))
+                   b))
+         (lam p (coprod_rect
+                   (lam v (pi h (paths bool (zeqb (ii2 p) v) true) (paths zed (ii2 p) v)))
+                   (lam q (lam h (fromempty (paths zed (ii2 p) (ii1 q))
+                                    (nopathsfalsetotrue h))))
+                   (lam q (lam h (maponpaths nat zed (lam x (ii2 x)) p q
+                                    (uv-nateqb-paths p q h))))
+                   b))
+         a))))
+ (defq uv-reqb-paths
+   (pi a rea (pi b rea (pi h (paths bool (reqb a b) true) (paths rea a b))))
+   (lam a (lam b (lam h
+      (uv-pairpath zed bool (pr1 a) (pr1 b) (pr2 a) (pr2 b)
+         (uv-zeqb-paths (pr1 a) (pr1 b)
+            (andbtruel (zeqb (pr1 a) (pr1 b)) (beqb (pr2 a) (pr2 b)) h))
+         (uv-beqb-paths (pr2 a) (pr2 b)
+            (andbtruer (zeqb (pr1 a) (pr1 b)) (beqb (pr2 a) (pr2 b)) h)))))))
+ (defq uv-meqb-paths
+   (pi a msr (pi b msr (pi h (paths bool (meqb a b) true) (paths msr a b))))
+   (lam a (lam b (lam h
+      (uv-pairpath rea rea (pr1 a) (pr1 b) (pr2 a) (pr2 b)
+         (uv-reqb-paths (pr1 a) (pr1 b)
+            (andbtruel (reqb (pr1 a) (pr1 b)) (reqb (pr2 a) (pr2 b)) h))
+         (uv-reqb-paths (pr2 a) (pr2 b)
+            (andbtruer (reqb (pr1 a) (pr1 b)) (reqb (pr2 a) (pr2 b)) h)))))))
+ (defq uv-aeqb-paths
+   (pi a atm (pi b atm (pi h (paths bool (aeqb a b) true) (paths atm a b))))
+   (lam a (lam b
+      (coprod_rect (lam v (pi h (paths bool (aeqb v b) true) (paths atm v b)))
+         (lam u (coprod_rect
+                   (lam v (pi h (paths bool (aeqb (ii1 u) v) true) (paths atm (ii1 u) v)))
+                   (lam x (lam h (maponpaths unit atm (lam y (ii1 y)) u x
+                                    (pathscomp0 unit u tt x (uu-unitpath u)
+                                       (pathsinv0 unit x tt (uu-unitpath x))))))
+                   (lam m (lam h (fromempty (paths atm (ii1 u) (ii2 m))
+                                    (nopathsfalsetotrue h))))
+                   b))
+         (lam m (coprod_rect
+                   (lam v (pi h (paths bool (aeqb (ii2 m) v) true) (paths atm (ii2 m) v)))
+                   (lam x (lam h (fromempty (paths atm (ii2 m) (ii1 x))
+                                    (nopathsfalsetotrue h))))
+                   (lam n (lam h (maponpaths msr atm (lam y (ii2 y)) m n
+                                    (uv-meqb-paths m n h))))
+                   b))
+         a))))
+ ; a path back into an answer, and the two composed: the leaf's equality is an
+ ; equivalence, which is the whole of what the tree's transitivity leans on
+ (defq uv-aeqb-of
+   (pi a atm (pi b atm (pi p (paths atm a b) (paths bool (aeqb a b) true))))
+   (lam a (lam b (lam p
+      (pathscomp0 bool (aeqb a b) (aeqb a a) true
+         (pathsinv0 bool (aeqb a a) (aeqb a b)
+            (maponpaths atm bool (lam x (aeqb a x)) a b p))
+         (uv-aeqb-refl a))))))
+ (defq uv-aeqb-trans
+   (pi a atm (pi b atm (pi c atm (pi h1 (paths bool (aeqb a b) true)
+      (pi h2 (paths bool (aeqb b c) true) (paths bool (aeqb a c) true))))))
+   (lam a (lam b (lam c (lam h1 (lam h2
+      (uv-aeqb-of a c (pathscomp0 atm a b c (uv-aeqb-paths a b h1)
+                                            (uv-aeqb-paths b c h2))))))))))
+
+; --- the four things a node shows: whether it is a pair, its cap, its cup, and
+; --- the measure it carries when it is not. none of them recurse -- a leaf is
+; --- ii1 at every depth, so the head is read in one step ---
+(assert
+ (defn vtwod (pi d nat (pi t (vtre d) bool))
+   (lam d (nat_rect (lam q (pi t (vtre q) bool))
+             (lam t false)
+             (lam k (lam IH (lam t (coprod_rect (lam w bool) (lam m false) (lam p true) t))))
+             d)))
+ (defn vleafd (pi d nat (pi t (vtre d) atm))
+   (lam d (nat_rect (lam q (pi t (vtre q) atm))
+             (lam t t)
+             (lam k (lam IH (lam t (coprod_rect (lam w atm) (lam m m) (lam p aunit) t))))
+             d)))
+ (defn vcapd (pi d nat (pi t (vtre d) val))
+   (lam d (nat_rect (lam q (pi t (vtre q) val))
+             (lam t (tpair 0 t))                            ; an atom is its own cap
+             (lam k (lam IH (lam t (coprod_rect (lam w val)
+                                      (lam m (tpair 0 m)) (lam p (tpair k (vfst k p))) t))))
+             d)))
+ (defn vcupd (pi d nat (pi t (vtre d) val))
+   (lam d (nat_rect (lam q (pi t (vtre q) val))
+             (lam t vnilv)                                  ; ..and its cup is ()
+             (lam k (lam IH (lam t (coprod_rect (lam w val)
+                                      (lam m vnilv) (lam p (tpair k (vsnd k p))) t))))
+             d)))
+ (defn vtwo  (pi v val bool) (lam v (vtwod (pr1 v) (pr2 v))))
+ (defn vleaf (pi v val atm)  (lam v (vleafd (pr1 v) (pr2 v))))
+ (defn vcap  (pi v val val)  (lam v (vcapd (pr1 v) (pr2 v))))
+ (defn vcup  (pi v val val)  (lam v (vcupd (pr1 v) (pr2 v))))
+ ; a leaf answers the right value's HEAD and its atom; a pair asks the right for
+ ; a cap and a cup and descends. the index falls by one each step and the right
+ ; value never has to be indexed at all
+ (defn veqd (pi d nat (pi t (vtre d) (pi w val bool)))
+   (lam d (nat_rect (lam q (pi t (vtre q) (pi w val bool)))
+             (lam t (lam w (andb (negb (vtwo w)) (aeqb t (vleaf w)))))
+             (lam k (lam IH (lam t (lam w
+                (coprod_rect (lam z bool)
+                   (lam a (andb (negb (vtwo w)) (aeqb a (vleaf w))))
+                   (lam p (andb (vtwo w) (andb (IH (vfst k p) (vcap w))
+                                               (IH (vsnd k p) (vcup w)))))
+                   t)))))
+             d)))
+ (defn veq (pi u val (pi w val bool)) (lam u (lam w (veqd (pr1 u) (pr2 u) w)))))
+
+; --- LINK, and the padding it costs. two values meet at the taller height, so
+; --- the shallow limb is raised -- and BOTH limbs are raised STRUCTURALLY, the
+; --- recursion following the tree and never stacking levels on top of a neutral
+; --- depth. that is what mx2 buys: (mx2 0 b) is b and (mx2 (succ j) 0) is
+; --- (succ j) definitionally, so a pad lands on one index from either side.
+; --- `add` cannot do it -- (add j 0) is stuck on a neutral j ---
+(assert
+ (defn mx2 (pi a nat (pi b nat nat))
+   (lam a (nat_rect (lam q (pi b nat nat))
+             (lam b b)
+             (lam j (lam IH (lam b (nat_rect (lam r nat)
+                                      (succ j) (lam k (lam s (succ (IH k)))) b))))
+             a)))
+ (defn leafat (pi d nat (pi m atm (vtre d)))                  ; a leaf, at any height
+   (lam d (nat_rect (lam q (pi m atm (vtre q)))
+             (lam m m) (lam k (lam IH (lam m (ii1 m)))) d)))
+ (defn padl (pi a nat (pi b nat (pi t (vtre a) (vtre (mx2 a b)))))
+   (lam a (nat_rect (lam q (pi b nat (pi t (vtre q) (vtre (mx2 q b)))))
+             (lam b (lam m (leafat b m)))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre (succ j)) (vtre (mx2 (succ j) r))))
+                   (lam t t)
+                   (lam k (lam s (lam t
+                      (coprod_rect (lam w (vtre (succ (mx2 j k))))
+                         (lam m (ii1 m))
+                         (lam p (ii2 (tpair (IH k (vfst j p)) (IH k (vsnd j p)))))
+                         t))))
+                   b))))
+             a)))
+ (defn padr (pi a nat (pi b nat (pi t (vtre b) (vtre (mx2 a b)))))
+   (lam a (nat_rect (lam q (pi b nat (pi t (vtre b) (vtre (mx2 q b)))))
+             (lam b (lam t t))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre r) (vtre (mx2 (succ j) r))))
+                   (lam m (leafat (succ j) m))
+                   (lam k (lam s (lam t
+                      (coprod_rect (lam w (vtre (succ (mx2 j k))))
+                         (lam m (ii1 m))
+                         (lam p (ii2 (tpair (IH k (vfst k p)) (IH k (vsnd k p)))))
+                         t))))
+                   b))))
+             a)))
+ (defn vlink (pi u val (pi w val val))
+   (lam u (lam w (tpair (succ (mx2 (pr1 u) (pr1 w)))
+                        (ii2 (tpair (padl (pr1 u) (pr1 w) (pr2 u))
+                                    (padr (pr1 u) (pr1 w) (pr2 w)))))))))
+
+; --- veq is REFLEXIVE: at a leaf the right value shows no head and the same
+; --- atom, at a pair it shows both limbs one level down ---
+(assert
+ (defq uv-veq-refl (pi v val (paths bool (veq v v) true))
+   (lam v ((nat_rect (lam d (pi t (vtre d) (paths bool (veqd d t (tpair d t)) true)))
+             (lam t (uv-aeqb-refl t))
+             (lam k (lam IH (lam t
+                (coprod_rect
+                   (lam z (paths bool (veqd (succ k) z (tpair (succ k) z)) true))
+                   (lam a (uv-aeqb-refl a))
+                   (lam p (uv-andb2 (veqd k (vfst k p) (tpair k (vfst k p)))
+                                    (veqd k (vsnd k p) (tpair k (vsnd k p)))
+                                    (IH (vfst k p)) (IH (vsnd k p))))
+                   t))))
+             (pr1 v)) (pr2 v)))))
+
+; --- ..and TRANSITIVE, which reflexivity alone would not give: with the fuel
+; --- gone the three sides of a composition recurse on their own left index and
+; --- the middle value is just a value, so the induction is the plain one. what
+; --- it costs is that the middle's SHAPE has to be read -- veqd only reduces on
+; --- a head -- so each arm cases on the middle's index and tree, and the two
+; --- arms where the middle shows a head the left does not are ex falso ---
+(assert
+ ; the leaf case, shared by the base and by the step's leaf arm: the middle must
+ ; show no head, and its atom carries the equality across
+ (defq uv-leaf-trans
+   (pi a atm (pi e nat (pi s (vtre e) (pi w val
+      (pi h1 (paths bool (andb (negb (vtwo (tpair e s))) (aeqb a (vleaf (tpair e s)))) true)
+      (pi h2 (paths bool (veqd e s w) true)
+         (paths bool (andb (negb (vtwo w)) (aeqb a (vleaf w))) true)))))))
+   (lam a (lam e (nat_rect
+      (lam qe (pi s (vtre qe) (pi w val
+         (pi h1 (paths bool
+                   (andb (negb (vtwo (tpair qe s))) (aeqb a (vleaf (tpair qe s)))) true)
+         (pi h2 (paths bool (veqd qe s w) true)
+            (paths bool (andb (negb (vtwo w)) (aeqb a (vleaf w))) true))))))
+      (lam s (lam w (lam h1 (lam h2
+         (uv-andb2 (negb (vtwo w)) (aeqb a (vleaf w))
+            (andbtruel (negb (vtwo w)) (aeqb s (vleaf w)) h2)
+            (uv-aeqb-trans a s (vleaf w) h1
+               (andbtruer (negb (vtwo w)) (aeqb s (vleaf w)) h2)))))))
+      (lam j (lam IHe (lam s
+         (coprod_rect
+            (lam z (pi w val
+               (pi h1 (paths bool (andb (negb (vtwo (tpair (succ j) z)))
+                                        (aeqb a (vleaf (tpair (succ j) z)))) true)
+               (pi h2 (paths bool (veqd (succ j) z w) true)
+                  (paths bool (andb (negb (vtwo w)) (aeqb a (vleaf w))) true)))))
+            (lam x (lam w (lam h1 (lam h2
+               (uv-andb2 (negb (vtwo w)) (aeqb a (vleaf w))
+                  (andbtruel (negb (vtwo w)) (aeqb x (vleaf w)) h2)
+                  (uv-aeqb-trans a x (vleaf w) h1
+                     (andbtruer (negb (vtwo w)) (aeqb x (vleaf w)) h2)))))))
+            (lam pp (lam w (lam h1 (lam h2
+               (fromempty (paths bool (andb (negb (vtwo w)) (aeqb a (vleaf w))) true)
+                  (nopathsfalsetotrue h1))))))
+            s))))
+      e))))
+ (defq uv-veqd-trans
+   (pi d nat (pi t (vtre d) (pi e nat (pi s (vtre e) (pi w val
+      (pi h1 (paths bool (veqd d t (tpair e s)) true)
+      (pi h2 (paths bool (veqd e s w) true)
+         (paths bool (veqd d t w) true))))))))
+   (lam d (nat_rect
+      (lam qd (pi t (vtre qd) (pi e nat (pi s (vtre e) (pi w val
+         (pi h1 (paths bool (veqd qd t (tpair e s)) true)
+         (pi h2 (paths bool (veqd e s w) true)
+            (paths bool (veqd qd t w) true))))))))
+      (lam t (uv-leaf-trans t))
+      (lam k (lam IH (lam t
+         (coprod_rect
+            (lam z (pi e nat (pi s (vtre e) (pi w val
+               (pi h1 (paths bool (veqd (succ k) z (tpair e s)) true)
+               (pi h2 (paths bool (veqd e s w) true)
+                  (paths bool (veqd (succ k) z w) true)))))))
+            (lam x (uv-leaf-trans x))
+            (lam p (lam e (nat_rect
+               (lam qe (pi s (vtre qe) (pi w val
+                  (pi h1 (paths bool (veqd (succ k) (ii2 p) (tpair qe s)) true)
+                  (pi h2 (paths bool (veqd qe s w) true)
+                     (paths bool (veqd (succ k) (ii2 p) w) true))))))
+               ; the middle is a leaf where the left is a pair: nothing to carry
+               (lam s (lam w (lam h1 (lam h2
+                  (fromempty (paths bool (veqd (succ k) (ii2 p) w) true)
+                     (nopathsfalsetotrue h1))))))
+               (lam j (lam IHe (lam s
+                  (coprod_rect
+                     (lam z (pi w val
+                        (pi h1 (paths bool
+                                  (veqd (succ k) (ii2 p) (tpair (succ j) z)) true)
+                        (pi h2 (paths bool (veqd (succ j) z w) true)
+                           (paths bool (veqd (succ k) (ii2 p) w) true)))))
+                     (lam x (lam w (lam h1 (lam h2
+                        (fromempty (paths bool (veqd (succ k) (ii2 p) w) true)
+                           (nopathsfalsetotrue h1))))))
+                     ; all three are pairs: the cap and the cup compose, each by
+                     ; the hypothesis at one level down
+                     (lam q (lam w (lam h1 (lam h2
+                        (uv-andb2 (vtwo w)
+                           (andb (veqd k (vfst k p) (vcap w))
+                                 (veqd k (vsnd k p) (vcup w)))
+                           (andbtruel (vtwo w)
+                              (andb (veqd j (vfst j q) (vcap w))
+                                    (veqd j (vsnd j q) (vcup w))) h2)
+                           (uv-andb2 (veqd k (vfst k p) (vcap w))
+                                     (veqd k (vsnd k p) (vcup w))
+                              (IH (vfst k p) j (vfst j q) (vcap w)
+                                 (andbtruel (veqd k (vfst k p) (tpair j (vfst j q)))
+                                            (veqd k (vsnd k p) (tpair j (vsnd j q))) h1)
+                                 (andbtruel (veqd j (vfst j q) (vcap w))
+                                            (veqd j (vsnd j q) (vcup w))
+                                    (andbtruer (vtwo w)
+                                       (andb (veqd j (vfst j q) (vcap w))
+                                             (veqd j (vsnd j q) (vcup w))) h2)))
+                              (IH (vsnd k p) j (vsnd j q) (vcup w)
+                                 (andbtruer (veqd k (vfst k p) (tpair j (vfst j q)))
+                                            (veqd k (vsnd k p) (tpair j (vsnd j q))) h1)
+                                 (andbtruer (veqd j (vfst j q) (vcap w))
+                                            (veqd j (vsnd j q) (vcup w))
+                                    (andbtruer (vtwo w)
+                                       (andb (veqd j (vfst j q) (vcap w))
+                                             (veqd j (vsnd j q) (vcup w))) h2)))))))))
+                     s))))
+               e)))
+            t))))
+      d)))
+ (defq uv-veq-trans
+   (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
+      (pi h2 (paths bool (veq v w) true) (paths bool (veq u w) true))))))
+   (lam u (lam v (lam w (uv-veqd-trans (pr1 u) (pr2 u) (pr1 v) (pr2 v) w))))))
+
+; --- THE PADDING IS INVISIBLE. this is the theorem the depth index owes: a
+; --- value and its padded self answer veq alike, so the height a link meets at
+; --- is bookkeeping and nothing observable rests on it. the induction is on the
+; --- pad's own index a -- what makes mx2 and padl reduce -- and the case on b
+; --- and on the tree is what makes veqd reduce beside it. both argument orders,
+; --- since a law names its two sides in its own order ---
+(assert
+ (defq uv-padl-fwd
+   (pi a nat (pi b nat (pi t (vtre a)
+      (paths bool (veqd a t (tpair (mx2 a b) (padl a b t))) true))))
+   (lam a (nat_rect
+              (lam q (pi b nat (pi t (vtre q)
+                        (paths bool (veqd q t (tpair (mx2 q b) (padl q b t))) true))))
+              (lam b (lam t
+                 (nat_rect (lam r (paths bool
+                              (veqd 0 t (tpair (mx2 0 r) (padl 0 r t))) true))
+                    (uv-aeqb-refl t)
+                    (lam k (lam s (uv-aeqb-refl t)))
+                    b)))
+              (lam j (lam IH (lam b
+                 (nat_rect (lam r (pi t (vtre (succ j))
+                              (paths bool (veqd (succ j) t
+                                 (tpair (mx2 (succ j) r) (padl (succ j) r t))) true)))
+                    (lam t (uv-veq-refl (tpair (succ j) t)))
+                    (lam k (lam s (lam t
+                       (coprod_rect (lam w (paths bool
+                                      (veqd (succ j) w
+                                        (tpair (succ (mx2 j k)) (padl (succ j) (succ k) w)))
+                                      true))
+                          (lam mm (uv-aeqb-refl mm))
+                          (lam p (uv-andb2
+                                    (veqd j (vfst j p) (tpair (mx2 j k) (padl j k (vfst j p))))
+                                    (veqd j (vsnd j p) (tpair (mx2 j k) (padl j k (vsnd j p))))
+                                    (IH k (vfst j p)) (IH k (vsnd j p))))
+                          t))))
+                    b))))
+              a)))
+ (defq uv-padl-bwd
+   (pi a nat (pi b nat (pi t (vtre a)
+      (paths bool (veqd (mx2 a b) (padl a b t) (tpair a t)) true))))
+   (lam a (nat_rect
+              (lam q (pi b nat (pi t (vtre q)
+                        (paths bool (veqd (mx2 q b) (padl q b t) (tpair q t)) true))))
+              (lam b (lam t
+                 (nat_rect (lam r (paths bool
+                              (veqd (mx2 0 r) (padl 0 r t) (tpair 0 t)) true))
+                    (uv-aeqb-refl t)
+                    (lam k (lam s (uv-aeqb-refl t)))
+                    b)))
+              (lam j (lam IH (lam b
+                 (nat_rect (lam r (pi t (vtre (succ j))
+                              (paths bool (veqd (mx2 (succ j) r) (padl (succ j) r t)
+                                                (tpair (succ j) t)) true)))
+                    (lam t (uv-veq-refl (tpair (succ j) t)))
+                    (lam k (lam s (lam t
+                       (coprod_rect (lam w (paths bool
+                                      (veqd (succ (mx2 j k)) (padl (succ j) (succ k) w)
+                                            (tpair (succ j) w))
+                                      true))
+                          (lam mm (uv-aeqb-refl mm))
+                          (lam p (uv-andb2
+                                    (veqd (mx2 j k) (padl j k (vfst j p)) (tpair j (vfst j p)))
+                                    (veqd (mx2 j k) (padl j k (vsnd j p)) (tpair j (vsnd j p)))
+                                    (IH k (vfst j p)) (IH k (vsnd j p))))
+                          t))))
+                    b))))
+              a)))
+ ; the right pad's a=0 corner is where mx2 earns its keep: (mx2 0 b) is b and
+ ; (padr 0 b t) is t, so the whole corner is one reflexivity
+ (defq uv-padr-fwd
+   (pi a nat (pi b nat (pi t (vtre b)
+      (paths bool (veqd b t (tpair (mx2 a b) (padr a b t))) true))))
+   (lam a (nat_rect
+             (lam q (pi b nat (pi t (vtre b)
+                       (paths bool (veqd b t (tpair (mx2 q b) (padr q b t))) true))))
+             (lam b (lam t (uv-veq-refl (tpair b t))))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre r)
+                             (paths bool (veqd r t
+                                (tpair (mx2 (succ j) r) (padr (succ j) r t))) true)))
+                   (lam t (uv-aeqb-refl t))
+                   (lam k (lam s (lam t
+                      (coprod_rect (lam w (paths bool
+                                     (veqd (succ k) w
+                                       (tpair (succ (mx2 j k)) (padr (succ j) (succ k) w)))
+                                     true))
+                         (lam mm (uv-aeqb-refl mm))
+                         (lam p (uv-andb2
+                                   (veqd k (vfst k p) (tpair (mx2 j k) (padr j k (vfst k p))))
+                                   (veqd k (vsnd k p) (tpair (mx2 j k) (padr j k (vsnd k p))))
+                                   (IH k (vfst k p)) (IH k (vsnd k p))))
+                         t))))
+                   b))))
+             a)))
+ (defq uv-padr-bwd
+   (pi a nat (pi b nat (pi t (vtre b)
+      (paths bool (veqd (mx2 a b) (padr a b t) (tpair b t)) true))))
+   (lam a (nat_rect
+             (lam q (pi b nat (pi t (vtre b)
+                       (paths bool (veqd (mx2 q b) (padr q b t) (tpair b t)) true))))
+             (lam b (lam t (uv-veq-refl (tpair b t))))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre r)
+                             (paths bool (veqd (mx2 (succ j) r) (padr (succ j) r t)
+                                               (tpair r t)) true)))
+                   (lam t (uv-aeqb-refl t))
+                   (lam k (lam s (lam t
+                      (coprod_rect (lam w (paths bool
+                                     (veqd (succ (mx2 j k)) (padr (succ j) (succ k) w)
+                                           (tpair (succ k) w))
+                                     true))
+                         (lam mm (uv-aeqb-refl mm))
+                         (lam p (uv-andb2
+                                   (veqd (mx2 j k) (padr j k (vfst k p)) (tpair k (vfst k p)))
+                                   (veqd (mx2 j k) (padr j k (vsnd k p)) (tpair k (vsnd k p)))
+                                   (IH k (vfst k p)) (IH k (vsnd k p))))
+                         t))))
+                   b))))
+             a))))
+
+; --- THE CONGRUENCE, which is what transitivity was for: two links whose limbs
+; --- answer alike answer alike. each limb meets the other at a height neither
+; --- spells, so the proof goes down through the pad, across by the hypothesis,
+; --- and back up the other pad -- three steps that only compose because veq
+; --- composes ---
+(assert
+ (defq uv-veq-of (pi u val (pi w val (pi p (paths val u w) (paths bool (veq u w) true))))
+   (lam u (lam w (lam p
+      (pathscomp0 bool (veq u w) (veq u u) true
+         (pathsinv0 bool (veq u u) (veq u w)
+            (maponpaths val bool (lam x (veq u x)) u w p))
+         (uv-veq-refl u))))))
+ (defq uv-veq-link
+   (pi a val (pi b val (pi c val (pi d val
+      (pi ha (paths bool (veq a c) true)
+      (pi hb (paths bool (veq b d) true)
+         (paths bool (veq (vlink a b) (vlink c d)) true)))))))
+   (lam a (lam b (lam c (lam d (lam ha (lam hb
+      (uv-andb2 (vtwo (vlink c d))
+         (andb (veqd (mx2 (pr1 a) (pr1 b)) (padl (pr1 a) (pr1 b) (pr2 a))
+                     (vcap (vlink c d)))
+               (veqd (mx2 (pr1 a) (pr1 b)) (padr (pr1 a) (pr1 b) (pr2 b))
+                     (vcup (vlink c d))))
+         (idpath true)
+         (uv-andb2
+            (veqd (mx2 (pr1 a) (pr1 b)) (padl (pr1 a) (pr1 b) (pr2 a)) (vcap (vlink c d)))
+            (veqd (mx2 (pr1 a) (pr1 b)) (padr (pr1 a) (pr1 b) (pr2 b)) (vcup (vlink c d)))
+            (uv-veqd-trans (mx2 (pr1 a) (pr1 b)) (padl (pr1 a) (pr1 b) (pr2 a))
+               (pr1 c) (pr2 c)
+               (tpair (mx2 (pr1 c) (pr1 d)) (padl (pr1 c) (pr1 d) (pr2 c)))
+               (uv-veqd-trans (mx2 (pr1 a) (pr1 b)) (padl (pr1 a) (pr1 b) (pr2 a))
+                  (pr1 a) (pr2 a) c (uv-padl-bwd (pr1 a) (pr1 b) (pr2 a)) ha)
+               (uv-padl-fwd (pr1 c) (pr1 d) (pr2 c)))
+            (uv-veqd-trans (mx2 (pr1 a) (pr1 b)) (padr (pr1 a) (pr1 b) (pr2 b))
+               (pr1 d) (pr2 d)
+               (tpair (mx2 (pr1 c) (pr1 d)) (padr (pr1 c) (pr1 d) (pr2 d)))
+               (uv-veqd-trans (mx2 (pr1 a) (pr1 b)) (padr (pr1 a) (pr1 b) (pr2 b))
+                  (pr1 b) (pr2 b) d (uv-padr-bwd (pr1 a) (pr1 b) (pr2 b)) hb)
+               (uv-padr-fwd (pr1 c) (pr1 d) (pr2 d)))))))))))))
+
+; --- ..and the colours over it. the first three are the sign's own shape; the
+; --- fourth is CLAUDE.md's own lambda equation read as a colour -- truth is
+; --- POSITIVE GREEN, above the blue floor -- and it is the one that needs the
+; --- half bit, since a measure at 0 with its half up already ceils to 1 ---
+(assert
+ (defq uv-blue-green (pi v val (paths bool (orb (negb (vblue v)) (vgreen v)) true))
+   (lam v (coprod_rect (lam w (paths bool
+                          (orb (negb (andb (zblue w) (negb (pr2 (vre v))))) (zgreen w)) true))
+             (lam n (uv-orbr (negb (andb (zblue (ii1 n)) (negb (pr2 (vre v)))))
+                             (zgreen (ii1 n)) (idpath true)))
+             (lam n (idpath true))
+             (pr1 (vre v)))))
+ (defq uv-green-or-red (pi v val (paths bool (orb (vgreen v) (vred v)) true))
+   (lam v (bool_rect (lam x (paths bool (orb x (negb x)) true))
+             (idpath true) (idpath true) (vgreen v))))
+ (defq uv-green-red-apart (pi v val (paths bool (negb (andb (vgreen v) (vred v))) true))
+   (lam v (bool_rect (lam x (paths bool (negb (andb x (negb x))) true))
+             (idpath true) (idpath true) (vgreen v))))
+ ; the claim, as one bool of the two things a real is made of
+ (defn vcolq (pi z zed (pi h bool bool))
+   (lam z (lam h (beqb (natbit (zsat (rceil (rmk z h))))
+                       (andb (zgreen z) (negb (andb (zblue z) (negb h))))))))
+ (defq uv-colq (pi z zed (pi h bool (paths bool (vcolq z h) true)))
+   (lam z (coprod_rect (lam w (pi h bool (paths bool (vcolq w h) true)))
+             (lam n (nat_rect (lam q (pi h bool (paths bool (vcolq (ii1 q) h) true)))
+                       (lam h (bool_rect (lam x (paths bool (vcolq (ii1 0) x) true))
+                                 (idpath true) (idpath true) h))
+                       (lam k (lam s (lam h
+                          (bool_rect (lam x (paths bool (vcolq (ii1 (succ k)) x) true))
+                             (idpath true) (idpath true) h))))
+                       n))
+             ; the negative half splits too: zsucc (ii2 n) is stuck on a neutral n,
+             ; and it is exactly what a half bit under the floor asks for
+             (lam n (nat_rect (lam q (pi h bool (paths bool (vcolq (ii2 q) h) true)))
+                       (lam h (bool_rect (lam x (paths bool (vcolq (ii2 0) x) true))
+                                 (idpath true) (idpath true) h))
+                       (lam k (lam s (lam h
+                          (bool_rect (lam x (paths bool (vcolq (ii2 (succ k)) x) true))
+                             (idpath true) (idpath true) h))))
+                       n))
+             z)))
+ (defq uv-truth-positive-green
+   (pi v val (paths bool (beqb (vbit v) (andb (vgreen v) (negb (vblue v)))) true))
+   (lam v (uv-colq (pr1 (vre v)) (pr2 (vre v))))))
+
+; --- and the laws the equality unlocks. each is stated as test/law.l states it,
+; --- and tools/law2uu.l picks these up BY NAME -- so if a row moves and the
+; --- obligation with it, the lemma stops applying and the gate says so ---
+(assert
+ (defq uv-cap-total-d
+   (pi d nat (pi t (vtre d)
+      (paths bool (orb (vtwod d t) (veq (tpair d t) (vcapd d t))) true)))
+   (lam d (nat_rect (lam q (pi t (vtre q)
+                     (paths bool (orb (vtwod q t) (veq (tpair q t) (vcapd q t))) true)))
+             (lam t (uv-veq-refl (tpair 0 t)))
+             (lam k (lam IH (lam t
+                (coprod_rect (lam w (paths bool
+                               (orb (vtwod (succ k) w)
+                                    (veq (tpair (succ k) w) (vcapd (succ k) w))) true))
+                   (lam m (uv-aeqb-refl m))
+                   (lam p (idpath true))
+                   t))))
+             d)))
+ (defq uv-cap-total (pi v val (paths bool (orb (vtwo v) (veq v (vcap v))) true))
+   (lam v (uv-cap-total-d (pr1 v) (pr2 v))))
+ (defq uv-cup-total-d
+   (pi d nat (pi t (vtre d)
+      (paths bool (orb (vtwod d t) (veq vnilv (vcupd d t))) true)))
+   (lam d (nat_rect (lam q (pi t (vtre q)
+                     (paths bool (orb (vtwod q t) (veq vnilv (vcupd q t))) true)))
+             (lam t (uv-veq-refl vnilv))
+             (lam k (lam IH (lam t
+                (coprod_rect (lam w (paths bool
+                               (orb (vtwod (succ k) w) (veq vnilv (vcupd (succ k) w))) true))
+                   (lam m (uv-veq-refl vnilv))
+                   (lam p (idpath true))
+                   t))))
+             d)))
+ (defq uv-cup-total (pi v val (paths bool (orb (vtwo v) (veq vnilv (vcup v))) true))
+   (lam v (uv-cup-total-d (pr1 v) (pr2 v))))
+ (defq uv-link-back-d
+   (pi d nat (pi t (vtre d)
+      (paths bool (orb (negb (vtwod d t))
+                       (veq (tpair d t) (vlink (vcapd d t) (vcupd d t)))) true)))
+   (lam d (nat_rect (lam q (pi t (vtre q)
+                     (paths bool (orb (negb (vtwod q t))
+                                      (veq (tpair q t) (vlink (vcapd q t) (vcupd q t)))) true)))
+             (lam t (idpath true))
+             (lam k (lam IH (lam t
+                (coprod_rect (lam w (paths bool
+                               (orb (negb (vtwod (succ k) w))
+                                    (veq (tpair (succ k) w)
+                                         (vlink (vcapd (succ k) w) (vcupd (succ k) w)))) true))
+                   (lam m (idpath true))
+                   (lam p (uv-andb2
+                             (veqd k (vfst k p) (tpair (mx2 k k) (padl k k (vfst k p))))
+                             (veqd k (vsnd k p) (tpair (mx2 k k) (padr k k (vsnd k p))))
+                             (uv-padl-fwd k k (vfst k p))
+                             (uv-padr-fwd k k (vsnd k p))))
+                   t))))
+             d)))
+ (defq uv-link-back
+   (pi v val (paths bool (orb (negb (vtwo v)) (veq v (vlink (vcap v) (vcup v)))) true))
+   (lam v (uv-link-back-d (pr1 v) (pr2 v))))
+ ; link-apart takes no induction at all: cap and cup of (link v v) ARE the two
+ ; pads of v, and the padding lemmas answer both
+ (defq uv-link-apart
+   (pi v val (paths bool (andb (veq (vcap (vlink v v)) v) (veq (vcup (vlink v v)) v)) true))
+   (lam v (uv-andb2
+             (veq (tpair (mx2 (pr1 v) (pr1 v)) (padl (pr1 v) (pr1 v) (pr2 v)))
+                  (tpair (pr1 v) (pr2 v)))
+             (veq (tpair (mx2 (pr1 v) (pr1 v)) (padr (pr1 v) (pr1 v) (pr2 v)))
+                  (tpair (pr1 v) (pr2 v)))
+             (uv-padl-bwd (pr1 v) (pr1 v) (pr2 v))
+             (uv-padr-bwd (pr1 v) (pr1 v) (pr2 v)))))
+ ; id? is finer than =, never the converse: where id? holds, = does
+ (defq uv-idq-finer (pi v val (paths bool (veq v v) true)) uv-veq-refl)
+ ; ..and = is total, answering the charm 1 on every value
+ (defq uv-eq-total (pi v val (paths nat (nbit (veq v v)) 1))
+   (lam v (maponpaths bool nat (lam z (nbit z)) (veq v v) true (uv-veq-refl v)))))
+; --- CLAUDE.md's laws themselves are not spelled here: tools/law2uu.l compiles
+; --- them straight off test/law.l's rows into test/uuvallaw.l, so each law has ONE
+; --- spelling and both lanes read it. sat-green and bit-bool need no proof at
+; --- all: they are the TYPES -- vsat lands in nat and vbit in bool, so "a
+; --- non-negative charm" and "0 or 1" are read off the ladder rather than
+; --- checked. the demos: the tower COMPUTES ---
+(assert
+ (= (vof 0 '(ii1 3))  (vof 0 '(vceil (rval (rmk (ii1 2) true)))))   ; ceil 2.5 = 3
+ (= (vof 0 '3)        (vof 0 '(vsat  (rval (rmk (ii1 2) true)))))   ; $2.5 = 3
+ (= (vof 0 '0)        (vof 0 '(vsat  (zval (zneg 4)))))             ; $-5 = 0
+ (= (vof 0 'false)    (vof 0 '(vbit  (zval (zneg 4)))))             ; ?-5 = 0
+ (= (vof 0 'true)     (vof 0 '(vnil  (zval (zneg 4)))))             ; !-5 = 1
+ (= (vof 0 'true)     (vof 0 '(vbit  (nval 2))))
+ ; a link: (1 2) nets 3, and the pair sits one level up
+ (= (vof 0 '3)
+      (vof 0 '(vsat (tpair 1 (ii2 (tpair (anum (rmsr (zrea (nzed 1))))
+                                         (anum (rmsr (zrea (nzed 2))))))))))
+ ; (-2 1) nets -1, so it saturates to 0 and reads NIL -- the sign is the whole story
+ (= (vof 0 '0)
+      (vof 0 '(vsat (tpair 1 (ii2 (tpair (anum (rmsr (zrea (zneg 1))))
+                                         (anum (rmsr (zrea (nzed 1))))))))))
+ ; a twin: (3 ~ 4) ceils to 3 -- re drops the imaginary rung
+ (= (vof 0 '(ii1 3))
+      (vof 0 '(vceil (vnum (tpair (zrea (nzed 3)) (zrea (nzed 4)))))))
+ ; --- and veq DISCRIMINATES, which is what keeps its laws from being vacuous:
+ ; --- a constant-true equality would prove every one of them ---
+ (= (vof 0 'true)  (vof 0 '(veq (nval 2) (nval 2))))
+ (= (vof 0 'false) (vof 0 '(veq (nval 2) (nval 3))))
+ (= (vof 0 'true)  (vof 0 '(vtwo (vlink (nval 1) (nval 2)))))
+ (= (vof 0 'false) (vof 0 '(vtwo (nval 1))))
+ (= (vof 0 'false) (vof 0 '(veq (vlink (nval 1) (nval 2)) (nval 1))))
+ (= (vof 0 'false) (vof 0 '(veq (vlink (nval 1) (nval 2)) (vlink (nval 2) (nval 1)))))
+ ; cap and cup invert a link, and the padding a link costs is not observable
+ (= (vof 0 'true)  (vof 0 '(veq (vcap (vlink (nval 1) (nval 2))) (nval 1))))
+ (= (vof 0 'true)  (vof 0 '(veq (vcup (vlink (nval 1) (nval 2))) (nval 2))))
+ (= (vof 0 'true)  (vof 0 '(veq (vlink (vlink (nval 1) (nval 2)) (nval 3))
+                                (vlink (vlink (nval 1) (nval 2)) (nval 3)))))
+ ; an atom is its own cap; its cup is ()
+ (= (vof 0 'true)  (vof 0 '(veq (vcap (nval 7)) (nval 7))))
+ (= (vof 0 'true)  (vof 0 '(veq (vcup (nval 7)) vnilv)))
+ ; --- and veq COMPOSES: a value, its padded self, and the same value read back
+ ; --- out of a deeper link are three spellings, and the chain closes ---
+ (= (vof 0 'true)
+      (vof 0 '(veq (vcap (vlink (vcap (vlink (nval 1) (nval 2))) (nval 3))) (nval 1))))
+ (= (vof 0 'true)
+      (vof 0 '(veq (vlink (vcap (vlink (nval 1) (nval 2))) (nval 3))
+                   (vlink (nval 1) (nval 3)))))
+ ; ..and the congruence discriminates: one limb agreeing is not enough
+ (= (vof 0 'false)
+      (vof 0 '(veq (vlink (nval 1) (nval 2)) (vlink (nval 1) (nval 3))))))
+
+; --- the planted faults: a proof term that type-checks WHATEVER it says proves
+; --- nothing, so each load-bearing claim gets its false twin, and the kernel
+; --- must refuse that one. every negative takes its positive (test/uu.l's rule:
+; --- a term rejected for the wrong reason is not evidence). ---
+(hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
+(assert
+ ; ceil is NOT the identity on the integer part -- the rung that makes the
+ ; tower more than five copies of one retraction
+ (id? 'accepted (rejects (\ z (defn uv-ok-ceil
+    (paths zed (rceil (rmk (ii1 2) true)) (ii1 3)) (idpath (ii1 3))))))
+ (id? 'rejected (rejects (\ z (defn uv-bad-ceil
+    (paths zed (rceil (rmk (ii1 2) true)) (ii1 2)) (idpath (ii1 2))))))
+ ; the clamp bites at 0, and takes the whole negative half with it
+ (id? 'accepted (rejects (\ z (defn uv-ok-clamp (paths nat (zsat (zneg 4)) 0) (idpath 0)))))
+ (id? 'rejected (rejects (\ z (defn uv-bad-clamp (paths nat (zsat (zneg 4)) 5) (idpath 5)))))
+ ; net SUMS over a link; it does not read the head alone
+ (id? 'rejected (rejects (\ z (defq uv-bad-link
+    (pi d nat (pi a (vtre d) (pi b (vtre d)
+      (paths msr (netd (succ d) (ii2 (tpair a b))) (netd d a)))))
+    (lam d (lam a (lam b (idpath (netd d a)))))))))
+ ; and saturate is idempotent, not idempotent-up-to-one
+ (id? 'rejected (rejects (\ z (defq uv-bad-satidem
+    (pi v val (paths nat (vsat (nval (succ (vsat v)))) (vsat v)))
+    (lam v (idpath (vsat v)))))))
+ ; the TAG on the leaf: () and 0 net the same and are not the same value
+ (id? 'accepted (rejects (\ z (defn uv-ok-tag
+    (paths bool (veq vnilv (nval 0)) false) (idpath false)))))
+ (id? 'rejected (rejects (\ z (defn uv-bad-tag
+    (paths bool (veq vnilv (nval 0)) true) (idpath true)))))
+ ; ..and it is only the tag: the measure cannot tell them apart
+ (id? 'rejected (rejects (\ z (defn uv-bad-tagnet
+    (paths bool (meqb (vnet vnilv) (vnet (nval 0))) false) (idpath false)))))
+ ; the ceiling holds a net that will not fit at the edge
+ (id? 'accepted (rejects (\ z (defn uv-ok-ceiling
+    (paths nat (zsatc (nzed (add chmax 3))) chmax) (idpath chmax)))))
+ (id? 'rejected (rejects (\ z (defn uv-bad-ceiling
+    (paths nat (zsatc (nzed (add chmax 3))) (add chmax 3)) (idpath (add chmax 3))))))
+ ; and truth is green ABOVE the floor, not green alone -- 0 is both
+ (id? 'rejected (rejects (\ z (defq uv-bad-green
+    (pi v val (paths bool (beqb (vbit v) (vgreen v)) true))
+    (lam v (uv-colq (pr1 (vre v)) (pr2 (vre v))))))))
+ ; transitivity takes BOTH sides -- the left one alone says nothing about the right
+ (id? 'accepted (rejects (\ z (defq uv-ok-trans
+    (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
+       (pi h2 (paths bool (veq v w) true) (paths bool (veq u w) true))))))
+    uv-veq-trans))))
+ (id? 'rejected (rejects (\ z (defq uv-bad-trans
+    (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
+       (paths bool (veq u w) true)))))
+    (lam u (lam v (lam w (lam h1 (uv-veq-refl u)))))))))
+ ; ..and the congruence takes both limbs: a link is not read by its cap alone
+ (id? 'rejected (rejects (\ z (defq uv-bad-link-cong
+    (pi a val (pi b val (pi c val (pi d val (pi ha (paths bool (veq a c) true)
+       (paths bool (veq (vlink a b) (vlink c d)) true))))))
+    (lam a (lam b (lam c (lam d (lam ha (uv-veq-refl (vlink a b))))))))))))
+(hear test-strict)
