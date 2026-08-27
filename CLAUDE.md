@@ -77,8 +77,9 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; the working vocabulary (verified in-tree)
 ; - (show x) prints-to-string; puts/putc write; putx prints a form
 ; - sort orders numbers, symbols, strings, and lists; rev, tally (#), member?, map
-; - tablets: {} makes, (pin t k v) mutates, (peep t k dflt) reads, (t k) applies;
-;   (keys t) is UNSORTED -- sort before walking or answers drift
+; - tablets: {} makes, (pin t k v) mutates AND answers t (so foldl builds one),
+;   (peep t k dflt) reads, (t k) applies; (keys t) is UNSORTED -- sort before
+;   walking or answers drift
 ; - strings index by application: ("abc" 0) = 97; lists DON'T index that way
 ; - charm? is the number predicate; (show 'sym) spells a symbol
 ; - car/cdr are total: <() = >() = (); (= a b) across types answers 0, never dies
