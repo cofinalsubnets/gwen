@@ -17,10 +17,9 @@
 ; `quit`. that lets a caller in the same image put its own trap on and get a charm where a
 ; spawn hands it a dead process. the handler is written twice because a leave lands in
 ; either of two spans, `pre` and `run`, and the defglob has to sit between them.
-(: (charm0 x) (charm? x ? x 0)
-
- (cli-rail ln)
- (: cli2
+(: (cli-rail ln)
+ (: (charm0 x) (charm? x ? x 0)
+    cli2
  (trap (\ x
  (: (cli-leave c) (scare 'cli-leave c)
     (load1 p) (open p "r" @ '() (say err $ "love: cannot open " + p, cli-leave 1)
@@ -90,7 +89,8 @@
    () (\ a b (a == 'cli-leave ? (quit $ charm0 b) (scare a b)))))
 
  (cli-line ln tty)
-   (: V  (from 'verbs)
+   (: (charm0 x) (charm? x ? x 0)
+      V  (from 'verbs)
       up (V 'unprime)
       av (up ? (<ln . up >ln) ln)   ; the program's view: argv[0], then past the primes
       _  (ev [': 'cmdline ['\ ln] 'argv ['\ av] ])
