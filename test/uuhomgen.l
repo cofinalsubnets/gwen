@@ -13,7 +13,7 @@
  ; ds1cv  (pop r1)
  ; ds1cv  (st r1 8 r0)
  (defn ds1cv nlist
-   (ncons 1 (ncons 0 (ncons 18 (ncons 0
+    (ncons 1 (ncons 0 (ncons 18 (ncons 0
     (ncons 14 (ncons 0 (ncons 0 (ncons 0
     (ncons 0 (ncons 0 (ncons 15 (ncons 0
     (ncons 15 (ncons 2 (ncons 0 (ncons 0
@@ -21,7 +21,7 @@
     nnil)))))))))))))))))))))
  ; ds1ck  (si r9 8 7)
  (defn ds1ck nlist
-   (ncons 4 (ncons 18 (ncons 1 (ncons 15
+    (ncons 4 (ncons 18 (ncons 1 (ncons 15
     nnil)))))
  ; ds2cv  (mov r0 r8)
  ; ds2cv  (push r0)
@@ -30,7 +30,7 @@
  ; ds2cv  (add r0 r1 r0)
  ; ds2cv  (mov r8 r0)
  (defn ds2cv nlist
-   (ncons 1 (ncons 0 (ncons 16 (ncons 0
+    (ncons 1 (ncons 0 (ncons 16 (ncons 0
     (ncons 14 (ncons 0 (ncons 0 (ncons 0
     (ncons 0 (ncons 0 (ncons 3 (ncons 0
     (ncons 15 (ncons 2 (ncons 0 (ncons 0
@@ -39,7 +39,7 @@
     nnil)))))))))))))))))))))))))
  ; ds2ck  (add r8 r8 1)
  (defn ds2ck nlist
-   (ncons 5 (ncons 16 (ncons 16 (ncons 3
+    (ncons 5 (ncons 16 (ncons 16 (ncons 3
     nnil)))))
  ; ds3cv  (mov r0 r8)
  ; ds3cv  (push r0)
@@ -72,7 +72,7 @@
  ; ds3cv  (st r4 -8 r0)
  ; ds3cv  (label l3)
  (defn ds3cv nlist
-   (ncons 1 (ncons 0 (ncons 16 (ncons 0
+    (ncons 1 (ncons 0 (ncons 16 (ncons 0
     (ncons 14 (ncons 0 (ncons 0 (ncons 0
     (ncons 1 (ncons 0 (ncons 18 (ncons 0
     (ncons 15 (ncons 2 (ncons 0 (ncons 0
@@ -113,7 +113,7 @@
  ; ds3ck  (si r4 -8 0)
  ; ds3ck  (label l1)
  (defn ds3ck nlist
-   (ncons 7 (ncons 16 (ncons 18 (ncons 0
+    (ncons 7 (ncons 16 (ncons 18 (ncons 0
     (ncons 9 (ncons 3 (ncons 1 (ncons 0
     (ncons 7 (ncons 18 (ncons 7 (ncons 0
     (ncons 9 (ncons 3 (ncons 1 (ncons 0
@@ -130,7 +130,7 @@
  ; ds4cv  (call f)
  ; ds4cv  (ret)
  (defn ds4cv nlist
-   (ncons 1 (ncons 0 (ncons 16 (ncons 0
+    (ncons 1 (ncons 0 (ncons 16 (ncons 0
     (ncons 1 (ncons 12 (ncons 0 (ncons 0
     (ncons 0 (ncons 0 (ncons 7 (ncons 0
     (ncons 1 (ncons 10 (ncons 0 (ncons 0
@@ -141,7 +141,7 @@
  ; ds4ck  (li r5 3)
  ; ds4ck  (jmp f)
  (defn ds4ck nlist
-   (ncons 1 (ncons 12 (ncons 16 (ncons 0
+    (ncons 1 (ncons 12 (ncons 16 (ncons 0
     (ncons 0 (ncons 10 (ncons 7 (ncons 0
     (ncons 10 (ncons 9 (ncons 0 (ncons 0
     nnil)))))))))))))
@@ -150,7 +150,7 @@
  ; ds4cvargs  (li r0 3)
  ; ds4cvargs  (mov r5 r0)
  (defn ds4cvargs nlist
-   (ncons 1 (ncons 0 (ncons 16 (ncons 0
+    (ncons 1 (ncons 0 (ncons 16 (ncons 0
     (ncons 1 (ncons 12 (ncons 0 (ncons 0
     (ncons 0 (ncons 0 (ncons 7 (ncons 0
     (ncons 1 (ncons 10 (ncons 0 (ncons 0
@@ -158,24 +158,24 @@
  ; ds4ckargs  (mov r6 r8)
  ; ds4ckargs  (li r5 3)
  (defn ds4ckargs nlist
-   (ncons 1 (ncons 12 (ncons 16 (ncons 0
+    (ncons 1 (ncons 12 (ncons 16 (ncons 0
     (ncons 0 (ncons 10 (ncons 7 (ncons 0
     nnil)))))))))
  ; de5kcv  (li r0 7)
  (defn de5kcv nlist
-   (ncons 0 (ncons 0 (ncons 15 (ncons 0
+    (ncons 0 (ncons 0 (ncons 15 (ncons 0
     nnil)))))
  ; de5kck  (li r0 7)
  (defn de5kck nlist
-   (ncons 0 (ncons 0 (ncons 15 (ncons 0
+    (ncons 0 (ncons 0 (ncons 15 (ncons 0
     nnil)))))
  ; de5vcv  (ld r0 r4 -8)
  (defn de5vcv nlist
-   (ncons 2 (ncons 0 (ncons 8 (ncons 3
+    (ncons 2 (ncons 0 (ncons 8 (ncons 3
     nnil)))))
  ; de5vck  (ld r0 r4 -8)
  (defn de5vck nlist
-   (ncons 2 (ncons 0 (ncons 8 (ncons 3
+    (ncons 2 (ncons 0 (ncons 8 (ncons 3
     nnil)))))
  ; de5bcv  (mov r0 r9)
  ; de5bcv  (push r0)
@@ -183,7 +183,7 @@
  ; de5bcv  (pop r1)
  ; de5bcv  (add r0 r1 r0)
  (defn de5bcv nlist
-   (ncons 1 (ncons 0 (ncons 18 (ncons 0
+    (ncons 1 (ncons 0 (ncons 18 (ncons 0
     (ncons 14 (ncons 0 (ncons 0 (ncons 0
     (ncons 0 (ncons 0 (ncons 3 (ncons 0
     (ncons 15 (ncons 2 (ncons 0 (ncons 0
@@ -192,6 +192,6 @@
  ; de5bck  (mov r0 r9)
  ; de5bck  (add r0 r0 1)
  (defn de5bck nlist
-   (ncons 1 (ncons 0 (ncons 18 (ncons 0
+    (ncons 1 (ncons 0 (ncons 18 (ncons 0
     (ncons 5 (ncons 0 (ncons 0 (ncons 3
     nnil))))))))))
