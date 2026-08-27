@@ -1156,17 +1156,19 @@
      (? !(two? form0) form0
        !(id? <form0 ':) form0
        (atom? >form0) form0
-       ; ⚠ a BODY-LESS `:` is the global-leaking top-level define -- sat.l, the corpus, every crew
-       ; file -- and ITS BINDINGS ARE THE MODULE'S SURFACE, which the lowering owes three things a
-       ; local let is not owed: no pass appends the trailing () (cbflat is unpair's twin), none drops
-       ; a binding for want of an internal caller (an app's only other mention of a main is a verb
-       ; table), and none inlines a binding away without carrying its value out closed and copy-safe
-       ; (norm-let's auxclose + dcheap?).
-       ; ⚠ the chain is fed OPFIXED source, so every pass reads a call as a list with a head. On raw
-       ; source a call in infix OPERAND position (sort's `<a >< ded >a`) is a bare symbol in a run,
-       ; which subst-call walks straight past.
+       ; DECLINE a BODY-LESS `:` -- the global-leaking top-level define (sat.l, the corpus, every
+       ; crew file). It is SOUND to lower now, and measured: what survives grpfix in a crew file is
+       ; a handful of one-line integer predicates (4 of core.l's 102, 1 of amd64.l's 128), and
+       ; autogroup is all-or-nothing per form -- one surviving member ships the WHOLE file lowered,
+       ; so the definitions that did not glaze pay the lifting to carry the ones that did. That is
+       ; +13% on the bake, +3.4% on `love seed` and +0.1..0.4% on every baked crew tool, against no
+       ; workload that got faster. It comes back when grpfix's fragment reaches past integers into
+       ; the list and charlist code a crew file is made of; the lowering below is ready for it.
+       ; ⚠ srcrec above walks the SAME chain over these forms to feed the swallow, so the lowering
+       ; still has to be right for them -- the decline is a price, not a guard.
+       (0 = ((tally >form0) % 2)) form0
        (memo-leak? form0) form0                                                                ; a `:`-sibling map memo (fact/bell) -> interp, sound
-       (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix form0)))))))))))   ; lower literal church (N f x)->f^N(x), inline lambda-const HOFs to first-order, lower &&/||/min/max/abs to ?, specialize interp-over-static-data, CLOSE polynomial folds to a closed form, deforest the rest -> loops, inline value-lets, lambda-lift named-let bodies, THEN plift read-only loops out of nested lets (hash's scan) -> flat group fns
+       (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix form0)))))))))))   ; OPFIXED at the head: every pass reads a call as a list with a head, where raw source leaves one in infix operand position (sort's `<a >< ded >a`) a bare symbol in a run. lower literal church (N f x)->f^N(x), inline lambda-const HOFs to first-order, lower &&/||/min/max/abs to ?, specialize interp-over-static-data, CLOSE polynomial folds to a closed form, deforest the rest -> loops, inline value-lets, lambda-lift named-let bodies, THEN plift read-only loops out of nested lets (hash's scan) -> flat group fns
           parsed (anat-defs >form) pairs <parsed
           fns0 (filter (\ p (: nf <p (two? nf && 1 < (tally nf) && (tally nf) < 6 && all name? >nf && distinctp >nf))) pairs)   ; (name p..), 1..4 distinct sym params
           fns (swgather fns0)                                                              ; swallow: pull called globals' recorded sources in as synthetic members

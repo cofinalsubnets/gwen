@@ -434,20 +434,27 @@
     ; int64-overflowing recursion (pow2) deopts to the interp fallback -> the exact bignum (sound)
     (: rf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 25))
        (&& !(id? (autogroup rf) rf) (= 75025 (ev rf)) (= (base-ev rf) (ev rf))))
-    ; THE BODY-LESS GROUP `:` -- the global-leaking top-level-define form, sat.l's shape and every
-    ; crew file's. Body-LESS = even # of forms after `:`. It GLAZES, and the leak survives it: the
-    ; define still lands in the one global scope, and the native it lands there answers what the
-    ; interpreted twin answers. (This stood DECLINED while the lowering could not preserve the leak:
-    ; dehof/fold-consts dropped a binding for want of an internal caller, the chain appended a body,
-    ; and norm-let dropped an aux its own inline still read. All three are paid.)
-    (: bl '(: (fibl n) (? (< n 2) n (+ (fibl (- n 1)) (fibl (- n 2)))))
-       bi '(: (fibi n) (? (< n 2) n (+ (fibi (- n 1)) (fibi (- n 2)))))
-       g (autogroup bl)
-       _ (ev bl)                                       ; the leak: fibl lands as a global, natively
-       _ (base-ev bi)                                  ; the same define, interpreted
-       (&& !(id? g bl)                                 ; the body-less form is LOWERED, not declined
-           (= 75025 (ev '(fibl 25)))                   ; ... and the leaked global answers
-           (= (ev '(fibl 25)) (ev '(fibi 25)))))       ; native == its interpreted twin
+    ; A BODY-LESS group `:` -- the global-leaking top-level-define form, sat.l's shape and every
+    ; crew file's -- is DECLINED, returned UNCHANGED. Body-LESS = even # of forms after `:`. It is
+    ; SOUND to lower; it does not PAY, and auto.l's note at the decline carries the measurement.
+    ; (rf above is body-HAVING -> still glazes.)
+    (: bl '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))  (id? (autogroup bl) bl))
+    ; ..and the lowering over one has to stay right anyway: srcrec walks the SAME chain over every
+    ; body-less `:` to record it for the swallow. These two laws are what would go quiet otherwise.
+    ; norm-let INLINES a fn body's aux bindings and DROPS them, so an aux reading an earlier one has
+    ; to leave with a CLOSED value -- base32's `gc (// (* gb 8) bits)` reads `gb` -- and an aux whose
+    ; value cannot be COPIED must not leave at all: `t` here is one tablet, and an inlined (tablet 0)
+    ; would hand each of the three uses a table of its own and answer 1.
+    (: nl '(: (f b) (: gb (? (= b 6) 3 5) gc (// (* gb 8) b)
+                       (go i a) (? (< i gc) (go (+ i 1) (+ a gb)) a) (go 0 0))
+              (f 6))
+       dup '(: (f n) (: t (tablet 0)
+                        (go i a) (? (< i n) (: _ (pin t 0 (+ 1 (peep t 0 0))) (go (+ i 1) (+ a 1)))
+                                             (peep t 0 0))
+                        (go 0 0))
+               (f 3))
+       (&& (= 12 (ev nl)) (= (base-ev nl) (ev nl))      ; gc's value carries gb out with it
+           (= 3 (ev dup)) (= (base-ev dup) (ev dup))))  ; the tablet aux stays put
     (: rp '(: (p2 n) (? (< n 1) 1 (* 2 (p2 (- n 1)))) (p2 70))
        (= (base-ev rp) (ev rp)))                               ; 2^70 overflows int64 in H -> OVF deopt -> bignum
     ; MULTI-ARG recursion: tak (3 args, nested self-calls -- args survive on the machine stack) == interp
