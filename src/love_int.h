@@ -145,8 +145,8 @@ enum vop { vop_add, vop_sub, vop_mul, vop_quot, vop_rem, vop_fquot,
 // mask the shift count: C leaves count >= width undefined, and an accident is not a law
 #define shmask(n) ((uintptr_t)(n) & (8 * sizeof(intptr_t) - 1))
 word intern_checked(struct ai*, struct ai_str*);
-uintptr_t intern_reserve(struct ai*);
-uintptr_t hash(struct ai*, intptr_t);
+uintptr_t intern_reserve(struct ai*),
+          hash(struct ai*, intptr_t);
 union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
  lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, // the data sentinels; each tail-jumps to its apply handler
@@ -191,37 +191,29 @@ lvm_t lvm_kcall,
  lvm_nifx,        // ... with an extras word (value[3]+8 = Ip+32): refs a native needs beyond the twin (the callout's clos, amble's ()/globals) ride a GC-walked cell slot, so value[1] stays the plain twin and the image revert (img_nif_interp) never dereferences a pack
  lvm_resume,      // the walkable call-out resume: jump blob-base + untag(offset) after delivering the result -- the frame carries an odd charm + an out-of-pool code address, so a GC (gen_grow included) with a call-out pending walks it clean (the retB stack-interior pointer is retired)
  lvm_calloutdrive, lvm_calloutresume;   // the drive addresses as fixnums (the glaze emitter bakes them as `li Ip` immediates)
-// these carry extra operands, so they are declared apart from the plain lvm_t list
-lvm(lvm_vbin);   // the elementwise/broadcast dyadic engine (the vop rides g->b)
-lvm(lvm_bdiv_start);   // resumable long-division entry; the vop (vop_fquot / vop_rem) rides g->b
-lvm(lvm_vmap1);            // monadic math fn elementwise, e.g. (sin a-tray)
-lvm(lvm_vmap2);  // ..dyadic with broadcast, e.g. (pow a-tray a-tray)
-lvm(lvm_twin_bin);   // complex scalar lane; the vop selects add/sub/mul/quot (rem -> zero)
-lvm(lvm_cbin);   // complex-array lane: vbin's broadcast in the complex domain; `=` -> mask, ordering/% -> zero
-lvm(lvm_obin);   // object-array lane: each element op runs the promoting scalar dispatch
-// the data sentinels: each is the first word (ap) of its rep's heap objects and
-// tail-jumps straight to its apply handler -- the sentinel is the rep (enum d).
-// bodies are byte-identical, kept distinct by address (ai_noicf).
-lvm(data_num_apply); lvm(data_string_apply);
-lvm(data_sym_apply); lvm(data_pair_apply);
-lvm(lvm_sym);
-lvm(lvm_nom);
-lvm(lvm_sunbox);
-lvm(lvm_gembox);
-lvm(lvm_twinbox);
-lvm(lvm_big);
-lvm(lvm_tray);
-lvm(lvm_str);
-lvm(lvm_chain);
-lvm(lvm_tray);
-lvm(lvm_big);
-lvm(lvm_str);
-lvm(lvm_sym);
-lvm(lvm_nom);
-lvm(lvm_chain);
-lvm(lvm_gembox);
-lvm(lvm_sunbox);
-lvm(lvm_twinbox);
+// ⚠ THE ATTRIBUTES ARE THE DECLARATION: `lvm(n)` is `ai_noinline ai_noicf _lvm(n)`, so these
+// cannot fold into the plain lvm_t list above without shedding both. ai_noicf is noipa, and the
+// data sentinels below are what it is for -- see their note.
+ai_noinline ai_noicf lvm_t
+ lvm_0, lvm_add_seq, lvm_add_string, lvm_addh, lvm_arg0,
+ lvm_atype, lvm_bigp, lvm_bin_a, lvm_bin_b, lvm_bin_unit,
+ lvm_books, lvm_cap, lvm_chainp, lvm_clock, lvm_coinp,
+ lvm_cpart, lvm_cup, lvm_dieof, lvm_dig, lvm_gemp,
+ lvm_heard, lvm_hotp, lvm_math1, lvm_math2, lvm_mintp,
+ lvm_mods, lvm_mulh, lvm_myself, lvm_namep, lvm_nclock,
+ lvm_nilp, lvm_nomp, lvm_numap, lvm_packp, lvm_quo0,
+ lvm_quom1, lvm_quotn, lvm_rank, lvm_setbooks, lvm_setp,
+ lvm_strp, lvm_sunp, lvm_tabp, lvm_twinp, lvm_worn,
+ // these carry extra operands, so they are declared apart from the plain lvm_t list
+ lvm_vbin, lvm_bdiv_start, lvm_vmap1, lvm_vmap2, lvm_twin_bin, lvm_cbin, lvm_obin,
+ // the data sentinels: each is the first word (ap) of its rep's heap objects and
+ // tail-jumps straight to its apply handler -- the sentinel is the rep (enum d).
+ // bodies are byte-identical, kept distinct by address (ai_noicf).
+ data_num_apply, data_sym_apply, data_string_apply, data_pair_apply,
+ lvm_sym, lvm_nom, lvm_sunbox, lvm_gembox, lvm_twinbox,
+ lvm_big, lvm_tray, lvm_str, lvm_chain,
+ lvm_addn, lvm_band_slow, lvm_fquotn, lvm_muln,
+ lvm_remn, lvm_subn, _lvm_yieldk;
 char const *ai_nif_name(intptr_t);
 #define tray(_) ((struct ai_tray*)(_))
 #define sym(_) ((struct ai_mint*)(_))
@@ -252,9 +244,10 @@ static ai_inline word map_back(word m) { return cell(m)[1].x; }
 static ai_inline word *map_slots(word m) { return &cell(map_back(m))[3].x; }
 static ai_inline uintptr_t map_len(word m) { return getcharm(cell(map_back(m))[1].x); }
 static ai_inline uintptr_t map_cap(word m) { return getcharm(cell(map_back(m))[2].x); }
-word ai_mapget(struct ai*, word, word, word);
-word bookget(struct ai*, word, word);   // the layered global read: walks g->book (a chain of books) head-first
-word macroget(struct ai*, word);        // the layered macro read: each layer's table rides its [zero] slot
+word
+ ai_mapget(struct ai*, word, word, word),
+ bookget(struct ai*, word, word),   // the layered global read: walks g->book (a chain of books) head-first
+ macroget(struct ai*, word);        // the layered macro read: each layer's table rides its [zero] slot
 struct ai *ai_mapput(struct ai*), *map_new(struct ai*);
 // the byte ops read from a string or a cask; both resolve to a ai_str of bytes.
 static ai_inline struct ai_str *bytes_of(word x) { return caskp(x) ? cask(x)->str : str(x); }
@@ -505,9 +498,10 @@ static ai_inline bool tray_put(struct ai_tray *v, uintptr_t i, word x) {
                       : gemp(x) ? (intptr_t) gem_get(x) : sun_get(x));
  return true; }
 
-// equality comparisons inline the fast identity check
+// equality comparisons inline the fast identity check. ⚠ eqv is declared HERE, not with the
+// other bools at the tail: eql below calls it, and a caller cannot precede its declaration.
 ai_noinline bool eqv(struct ai*, word, word); // this is for checking equality of non-identical values
-bool eqv_at(struct ai*, word, word, word*); // eqv with an explicit worklist base (for re-entrant calls from the beta bridge)
+bool eqv_at(struct ai*, word, word, word*);   // eqv with an explicit worklist base (for re-entrant calls from the beta bridge)
 // eqv has no value-equality for distinct charms or distinct noms -- identity is
 // their whole equality -- so eql settles both inline and skips the noinline call
 static ai_inline bool eql(struct ai *g, word a, word b) {
@@ -690,147 +684,90 @@ struct ai; struct ai_bio; struct ai_cask; struct ai_def; struct ai_io; struct ai
 // because countof wants the array's complete type and an extern one has none.
 extern struct ai_def const *const ai_def1;
 extern uintptr_t const ai_def1_n;
-lvm(lvm_addn);
-lvm(lvm_band_slow);
-lvm(lvm_fquot);
-lvm(lvm_fquotn);
-lvm(lvm_muln);
-lvm(lvm_rem);
-lvm(lvm_remn);
-lvm(lvm_subn);
 extern union u const callout_drive[];
 extern union u const yield_c[];
-lvm(_lvm_yieldk);
 ai_noinline word abs_wmin(struct ai *g);
-ai_flo_t ai_cospi(ai_flo_t x);
-// ⚠ THE TRAILING _ IS THE POINT: this was static in the one love.c and the TU split had
-// to export it (io.c calls it), which put an INTERNAL name into the global namespace --
-// where wasm/host.c's ai_eval, the frontend's published JS export, already lived. It is
-// not in love.h and never was; the underscore is what ai_evals_/ai_layer_ already say.
-struct ai *ai_eval_(struct ai *g);
-bool ai_isbs(struct ai *g, word h);
-void *ai_libc_alloc(struct ai*g, void *p, size_t n);
-struct ai *ai_pushr(struct ai *g, uintptr_t m, uintptr_t n, va_list xs);
-intptr_t ai_saturate(struct ai *g, word x);
-ai_flo_t ai_sinpi(ai_flo_t x);
-bool ai_young(struct ai *g, word p);
-struct ai *append(struct ai *g);
 int arib_pos(word s, word l, int n);
 struct ai_bio *bio_of(struct ai *g, struct ai_io *i);
-bool bio_rpending(struct ai_bio *b);
-uintptr_t bshape_n(word a, word b);
-void bshape_put(uintptr_t *shape, uintptr_t R, word a, word b);
-void bstride(struct ai_tray *v, uintptr_t R, intptr_t *c);
-ai_noinline struct ai *c0(struct ai *g, lvm_t *y);
-ai_noinline void carg_fill(struct ai_tray *r, struct ai_tray *v);
-ai_noinline void cbin_fill(struct ai_tray *r, word a, word b, int op, bool cmp);
-void cbin_part(bool istray, struct ai_tray *v, ai_flo_t sre, ai_flo_t sim,
-                               uintptr_t o, ai_flo_t *re, ai_flo_t *im);
-bool clo_eq(struct ai *g, struct clonf *ca, struct clonf *cb, word *scratch);
-bool clo_load(struct ai *c, word v, struct clonf *o);
-bool clo_nfhash(struct ai *g, word x, uintptr_t *out);
-intptr_t cmp3(struct ai *g, word a, word b);
 size_t code_maplen(size_t codelen);
-ai_noinline void cpart_fill(struct ai_tray *r, struct ai_tray *v, int off);
-void evac_tray(struct ai *g, struct ai_gcx *X);
-union u *find_runnable(struct ai *g, union u *head, uintptr_t now, int me_live);
-bool flo_fracp(ai_flo_t x);
-word fn_arg(union u *k, int i, int nargs);
-union u *fn_base(union u *k, int *nargs);
-bool fn_partialp(union u *k);
-word fn_src(struct ai *c, union u *k, word x);
+union u
+ *find_runnable(struct ai *g, union u *head, uintptr_t now, int me_live),
+ *fn_base(union u *k, int *nargs);
 ai_noinline intptr_t gcp(struct ai *g, struct ai_gcx *X, word x);
-struct ai *gen_grow(struct ai *g, uintptr_t len1);
-struct ai *gen_major(struct ai *g, uintptr_t req0, bool *tight);
-struct ai *gen_please(struct ai *g, uintptr_t req0);
-void gen_wb(struct ai *g, word src, word p);
-void gen_wb_cell(struct ai *g, void *cl, word v);
-ai_word hot_hook(ai_word h);
-word img_nif_interp(struct img_ctx *x, word v);
-bool in_heap(struct ai *c, word x);
-word io_route(struct ai *g, word x);
-bool iop(word x);
-struct ai *ioputc(struct ai*g, int c);
-struct ai*ioputs(struct ai*g, char const *s);
-bool lam_isp(struct ai *g, word x);
-lvm(lvm_0);
-lvm(lvm_add_seq);
-lvm(lvm_add_string);
-lvm(lvm_addh);
-lvm(lvm_arg0);
-lvm(lvm_atype);
-lvm(lvm_bigp);
-lvm(lvm_bin_a);
-lvm(lvm_bin_b);
-lvm(lvm_bin_unit);
-lvm(lvm_books);
-lvm(lvm_cap);
-lvm(lvm_chainp);
-lvm(lvm_clock);
-lvm(lvm_coinp);
-lvm(lvm_cpart);
-lvm(lvm_cup);
-lvm(lvm_dieof);
-lvm(lvm_dig);
-lvm(lvm_gemp);
-lvm(lvm_heard);
-lvm(lvm_hotp);
-lvm(lvm_math1);
-lvm(lvm_math2);
-lvm(lvm_mintp);
-lvm(lvm_mods);
-lvm(lvm_mulh);
-lvm(lvm_myself);
-lvm(lvm_namep);
-lvm(lvm_nclock);
-lvm(lvm_nilp);
-lvm(lvm_nomp);
-lvm(lvm_numap);
-lvm(lvm_packp);
-lvm(lvm_quo0);
-lvm(lvm_quom1);
-lvm(lvm_quotn);
-lvm(lvm_rank);
-lvm(lvm_setbooks);
-lvm(lvm_setp);
-lvm(lvm_strp);
-lvm(lvm_sunp);
-lvm(lvm_tabp);
-lvm(lvm_twinp);
-lvm(lvm_worn);
-uintptr_t map_probe(struct ai *g, word m, word k, bool *found);
-void nat_unmap(void *p);
-uintptr_t nf_hash(struct ai *g, word x, struct arib *env, word fs, int fn, word *fv);
-bool nf_walk(struct ai *g, word a, struct arib *ra, struct clonf *ca,
-                                  word b, struct arib *rb, struct clonf *cb, word *scratch);
-word obin_elem(struct ai **fp, int op, word a, word b);
-struct ai *obin_run(struct ai *g, int op);
-void odo_step(intptr_t *idx, uintptr_t R, uintptr_t const *shape);
-struct ai *ored(struct ai *g, int kind);
+struct ai
+ *append(struct ai *g),
+ *ai_eval_(struct ai *g),
+ *ai_pushr(struct ai *g, uintptr_t m, uintptr_t n, va_list xs),
+ *c0(struct ai *g, lvm_t *y) ai_noinline,
+ *ioputc(struct ai*g, int c),
+ *ioputs(struct ai*g, char const *s),
+ *gen_grow(struct ai *g, uintptr_t len1),
+ *gen_major(struct ai *g, uintptr_t req0, bool *tight),
+ *gen_please(struct ai *g, uintptr_t req0),
+ *obin_run(struct ai *g, int op), *ored(struct ai *g, int kind), *zflush(struct ai*g), *tray_to_obj(struct ai *g, int slot);
+uintptr_t
+ bshape_n(word a, word b),
+ shash(struct ai *g, word x, struct arib *env),
+ map_probe(struct ai *g, word m, word k, bool *found),
+ nf_hash(struct ai *g, word x, struct arib *env, word fs, int fn, word *fv);
 Cata(pull);
-ai_noinline word rng_canon(struct ai *g, uint64_t r);
 struct ai_tray *rng_copy(ai_word **hp, struct ai_tray *src);
-ai_noinline void rng_seed_into(void *payload, uint64_t seed);
-bool rng_state_p(word x);
 ai_noinline uint64_t rng_step(void *payload);
 uint64_t rotl64(uint64_t x, int k);
-bool salpha(struct ai *g, word a, word b, struct arib *env);
 struct ai_str *seq_cat(struct ai *g, void *w, word a, word b);
-uintptr_t shash(struct ai *g, word x, struct arib *env);
-word *task_io(struct ai *g);
+intptr_t
+ fn_arg(union u *k, int i, int nargs),
+ *task_io(struct ai *g),
+ obin_elem(struct ai **fp, int op, word a, word b),
+ vcmp_flo(int op, ai_flo_t a, ai_flo_t b),
+ vcmp_int(int op, intptr_t a, intptr_t b),
+ img_nif_interp(struct img_ctx *x, word v),
+ io_route(struct ai *g, word x),
+ rng_canon(struct ai *g, uint64_t r) ai_noinline,
+ hot_hook(word h),
+ fn_src(struct ai *c, union u *k, word x),
+ ai_saturate(struct ai *g, word x),
+ cmp3(struct ai *g, word a, word b);
 ai_noinline bool tray_eq(struct ai *g, word a, word b);
-struct ai *tray_to_obj(struct ai *g, int slot);
-ai_noinline void twin_build_fill(struct ai_tray *r, word a, word b);
-ai_noinline void twin_fill(struct ai_twin *v, word a, word b, int vop);
-void twin_op(int vop, ai_flo_t ar, ai_flo_t ai, ai_flo_t br, ai_flo_t bi,
-                             ai_flo_t *re, ai_flo_t *im);
-void twin_parts(word x, ai_flo_t *re, ai_flo_t *im);
-ai_noinline void twin_pow_fill(struct ai_twin *v, word wbase, word zexp);
-ai_flo_t u64_to_unit(uint64_t u);
-bool val_vs_src(struct ai *g, word V, word b, struct arib *rb, struct clonf *cb, word *scratch);
-intptr_t vcmp_flo(int op, ai_flo_t a, ai_flo_t b);
-intptr_t vcmp_int(int op, intptr_t a, intptr_t b);
-ai_flo_t vop_flo(int op, ai_flo_t a, ai_flo_t b);
-bool wait_buffered(struct ai *g, lvm_t *ap, word x, int fd);
-struct ai *zflush(struct ai*g);
+void
+ *ai_libc_alloc(struct ai*g, void *p, size_t n),
+ cbin_part(bool istray, struct ai_tray *v, ai_flo_t sre, ai_flo_t sim, uintptr_t o, ai_flo_t *re, ai_flo_t *im),
+ cpart_fill(struct ai_tray *r, struct ai_tray *v, int off) ai_noinline,
+ carg_fill(struct ai_tray *r, struct ai_tray *v) ai_noinline,
+ cbin_fill(struct ai_tray *r, word a, word b, int op, bool cmp) ai_noinline,
+ bshape_put(uintptr_t *shape, uintptr_t R, word a, word b),
+ bstride(struct ai_tray *v, uintptr_t R, intptr_t *c),
+ evac_tray(struct ai *g, struct ai_gcx *X),
+ nat_unmap(void *p),
+ twin_op(int vop, ai_flo_t ar, ai_flo_t ai, ai_flo_t br, ai_flo_t bi, ai_flo_t *re, ai_flo_t *im),
+ twin_parts(word x, ai_flo_t *re, ai_flo_t *im),
+ odo_step(intptr_t *idx, uintptr_t R, uintptr_t const *shape),
+ twin_build_fill(struct ai_tray *r, word a, word b) ai_noinline,
+ twin_fill(struct ai_twin *v, word a, word b, int vop) ai_noinline,
+ twin_pow_fill(struct ai_twin *v, word wbase, word zexp) ai_noinline,
+ rng_seed_into(void *payload, uint64_t seed) ai_noinline,
+ gen_wb(struct ai *g, word src, word p),
+ gen_wb_cell(struct ai *g, void *cl, word v);
+ai_flo_t
+ u64_to_unit(uint64_t u),
+ vop_flo(int op, ai_flo_t a, ai_flo_t b),
+ ai_cospi(ai_flo_t x),
+ ai_sinpi(ai_flo_t x);
+bool
+ ai_isbs(struct ai *g, word h),
+ ai_young(struct ai *g, word p),
+ bio_rpending(struct ai_bio *b),
+ rng_state_p(word x),
+ wait_buffered(struct ai *g, lvm_t *ap, word x, int fd),
+ val_vs_src(struct ai *g, word V, word b, struct arib *rb, struct clonf *cb, word *scratch),
+ nf_walk(struct ai *g, word a, struct arib *ra, struct clonf *ca, word b, struct arib *rb, struct clonf *cb, word *scratch),
+ clo_eq(struct ai *g, struct clonf *ca, struct clonf *cb, word *scratch),
+ clo_load(struct ai *c, word v, struct clonf *o),
+ clo_nfhash(struct ai *g, word x, uintptr_t *out),
+ flo_fracp(ai_flo_t x),
+ fn_partialp(union u *k),
+ in_heap(struct ai *c, word x),
+ iop(word x),
+ lam_isp(struct ai *g, word x),
+ salpha(struct ai *g, word a, word b, struct arib *env);
 #endif

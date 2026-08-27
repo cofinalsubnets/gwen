@@ -80,9 +80,9 @@ static ai_noinline int mag_cmp(ai_limb const *a, int na, ai_limb const *b, int n
 // r = a + b. r distinct from a,b; capacity >= max(na,nb)+1. returns limb count.
 static ai_noinline int mag_add(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb) {
  if (na < nb) { ai_limb const *t = a; a = b; b = t; int u = na; na = nb; nb = u; }
- ai_dlimb c = 0; int i = 0;
- for (; i < nb; i++) { ai_dlimb s = (ai_dlimb) a[i] + b[i] + c; r[i] = (ai_limb) s; c = s >> limb_bits; }
- for (; i < na; i++) { ai_dlimb s = (ai_dlimb) a[i] + c;        r[i] = (ai_limb) s; c = s >> limb_bits; }
+ ai_dlimb s, c = 0; int i = 0;
+ for (; i < nb; i++) s = (ai_dlimb) a[i] + b[i] + c, r[i] = (ai_limb) s, c = s >> limb_bits;
+ for (; i < na; i++) s = (ai_dlimb) a[i] + c,        r[i] = (ai_limb) s, c = s >> limb_bits;
  if (c) r[i++] = (ai_limb) c;
  return i; }
 
@@ -172,7 +172,10 @@ static ai_noinline void mag_divmod(ai_limb *q, ai_limb *r,
   if (sub < 0) {                                // qhat was one too big: add back
    q[j]--;
    ai_dlimb carry = 0;
-   for (int i = 0; i < n; i++) { ai_dlimb t = (ai_dlimb) un[i+j] + vn[i] + carry; un[i+j] = (ai_limb) t; carry = t >> limb_bits; }
+   for (int i = 0; i < n; i++) {
+     ai_dlimb t = (ai_dlimb) un[i+j] + vn[i] + carry;
+     un[i+j] = (ai_limb) t;
+     carry = t >> limb_bits; }
    un[j+n] = (ai_limb) (un[j+n] + carry); } }
  for (int i = 0; i < n; i++) r[i] = s ? (un[i] >> s) | ((ai_dlimb) un[i+1] << (limb_bits - s)) : un[i]; }
 
@@ -276,19 +279,26 @@ static void mag_mul_kara(ai_limb *r, ai_limb const *a, ai_limb const *b, int n, 
  int m = n / 2, h = n - m;                           // low m limbs, high h (m or m+1) limbs
  mag_mul_kara(r,       a,     b,     m, t);           // z0 -> r[0..2m)
  mag_mul_kara(r + 2*m, a + m, b + m, h, t);           // z2 -> r[2m..2n)
- int z0n = 2*m;  while (z0n > 0 && r[z0n-1] == 0) z0n--;
- int z2n = 2*h;  while (z2n > 0 && r[2*m + z2n-1] == 0) z2n--;
+ int z0n = 2*m;
+ while (z0n > 0 && r[z0n-1] == 0) z0n--;
+ int z2n = 2*h;
+ while (z2n > 0 && r[2*m + z2n-1] == 0) z2n--;
  ai_limb *sa = t, *sb = sa + (h+1), *z1 = sb + (h+1);
  int nsa = mag_add(sa, a, m, a + m, h), nsb = mag_add(sb, b, m, b + m, h);
  mag_mul(z1, sa, nsa, sb, nsb);                       // z1 = (a0+a1)(b0+b1) on the half-size sums
- int nz1 = nsa + nsb;                       while (nz1 > 0 && z1[nz1-1] == 0) nz1--;
- nz1 = mag_sub(z1, z1, nz1, r,       z0n);  while (nz1 > 0 && z1[nz1-1] == 0) nz1--;   // z1 -= z0
- nz1 = mag_sub(z1, z1, nz1, r + 2*m, z2n);  while (nz1 > 0 && z1[nz1-1] == 0) nz1--;   // z1 -= z2
+ int nz1 = nsa + nsb;
+ while (nz1 > 0 && z1[nz1-1] == 0) nz1--;
+ nz1 = mag_sub(z1, z1, nz1, r,       z0n);
+ while (nz1 > 0 && z1[nz1-1] == 0) nz1--;   // z1 -= z0
+ nz1 = mag_sub(z1, z1, nz1, r + 2*m, z2n);
+ while (nz1 > 0 && z1[nz1-1] == 0) nz1--;   // z1 -= z2
  mag_add_off(r, 2*n, z1, nz1, m); }                  // r += z1 * B^m
 
 static int big_mul_mag(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb, ai_limb *t) {
- if (na == nb) mag_mul_kara(r, a, b, na, t); else mag_mul(r, a, na, b, nb);
- int n = na + nb; while (n > 0 && r[n-1] == 0) n--;
+ if (na == nb) mag_mul_kara(r, a, b, na, t);
+ else mag_mul(r, a, na, b, nb);
+ int n = na + nb;
+ while (n > 0 && r[n-1] == 0) n--;
  return n; }
 
 // the packed multi-precision lane for + - * / % (zero divisor screened by the
@@ -306,7 +316,8 @@ struct ai *ai_big_binop(struct ai *g, int vop) {
  ai_limb sa[wlimbs], sb[wlimbs]; ai_limb const *la, *lb; bool nega, negb;
  int nla = load_int_mag(a, sa, &la, &nega), nlb = load_int_mag(b, sb, &lb, &negb);
  ai_limb *rmag = (ai_limb*) (g->hp + res_area), *scr = rmag + bound;
- int rn = 0; bool rneg = false;
+ int rn = 0;
+ bool rneg = false;
  switch (vop) {
   case vop_add: big_addsub(rmag, &rn, &rneg, la, nla, nega, lb, nlb, negb, false); break;
   case vop_sub: big_addsub(rmag, &rn, &rneg, la, nla, nega, lb, nlb, negb, true); break;
@@ -353,9 +364,13 @@ struct ai *ai_ratio_rung(struct ai *g, int rung) {
  if (nla == 0) ;                                              // 0/d: q 0, r 0
  else if (mag_cmp(la, nla, lb, nlb) < 0) rnz = true;          // |a| < |b|: q 0, r a
  else {
-  ai_limb *q = (ai_limb*) g->hp, *rem = q + (nla - nlb + 1), *un = rem + nlb, *vn = un + (nla + 1);
+  ai_limb *q = (ai_limb*) g->hp,
+          *rem = q + (nla - nlb + 1),
+          *un = rem + nlb,
+          *vn = un + (nla + 1);
   mag_divmod(q, rem, la, nla, lb, nlb, un, vn);
-  int qn = nla - nlb + 1; while (qn > 0 && q[qn-1] == 0) qn--;
+  int qn = nla - nlb + 1;
+  while (qn > 0 && q[qn-1] == 0) qn--;
   for (int i = 0; i < nlb; i++) if (rem[i]) { rnz = true; break; }
   if (qn > wlimbs) sat = true;
   else { for (int i = 0; i < qn; i++) uq |= (uintptr_t) q[i] << (limb_bits * i);
@@ -380,18 +395,25 @@ struct ai *ai_big_quot_true(struct ai *g) {
            ws_words = b2w((size_t) (bound + work) * sizeof(ai_limb));
  if (!ai_ok(g = ai_have(g, res_area + ws_words + box_req))) return g;
  a = g->sp[0], b = g->sp[1];                     // re-fetch (ai_have may have GC'd)
- ai_limb sa[wlimbs], sb[wlimbs]; ai_limb const *la, *lb; bool nega, negb;
+ ai_limb sa[wlimbs], sb[wlimbs];
+ ai_limb const *la, *lb;
+ bool nega, negb;
  int nla = load_int_mag(a, sa, &la, &nega), nlb = load_int_mag(b, sb, &lb, &negb);
  ai_limb *rmag = (ai_limb*) (g->hp + res_area), *scr = rmag + bound;
  bool rneg = false, exact;
  int rn = 0, c = mag_cmp(la, nla, lb, nlb);
  if (c < 0) exact = (nla == 0);                  // |a| < |b|: q = 0, exact iff a == 0
  else {
-  ai_limb *q = scr, *rem = q + (nla - nlb + 1), *un = rem + nlb, *vn = un + (nla + 1);
+  ai_limb *q = scr,
+          *rem = q + (nla - nlb + 1),
+          *un = rem + nlb,
+          *vn = un + (nla + 1);
   mag_divmod(q, rem, la, nla, lb, nlb, un, vn);
-  int rr = nlb; while (rr > 0 && rem[rr-1] == 0) rr--;
+  int rr = nlb;
+  while (rr > 0 && rem[rr-1] == 0) rr--;
   exact = (rr == 0);
-  int qn = nla - nlb + 1; while (qn > 0 && q[qn-1] == 0) qn--;
+  int qn = nla - nlb + 1;
+  while (qn > 0 && q[qn-1] == 0) qn--;
   rn = mag_copy(rmag, q, qn), rneg = nega != negb; }
  if (exact) g->sp[1] = ai_big_canon(&g->hp, rmag, rn, rneg);
  else g->sp[1] = mk_gem(&g->hp, toflo(a) / toflo(b));  // a,b still valid: no GC since the re-fetch, and toflo is alloc-free
@@ -414,10 +436,13 @@ union u *as_big(ai_word **hp, word x) {
  intptr_t v = toint(x);
  bool neg = v < 0;
  uintptr_t u = neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;
- ai_limb tmp[wlimbs]; int n = 0;                                  // a machine word is wlimbs limbs
- for (int i = 0; i < wlimbs; i++) { tmp[i] = (ai_limb) (u >> (limb_bits * i)); if (tmp[i]) n = i + 1; }
+ ai_limb tmp[wlimbs];
+ int n = 0;                                  // a machine word is wlimbs limbs
+ for (int i = 0; i < wlimbs; i++) {
+   tmp[i] = (ai_limb) (u >> (limb_bits * i));
+   if (tmp[i]) n = i + 1; }
  struct ai_big *b = ini_big(big(*hp), neg ? -n : n);
- for (int i = 0; i < n; i++) b->limb[i] = tmp[i];
+ memcpy(b->limb, tmp, (size_t) n * sizeof(ai_limb));
  *hp += b2w(sizeof(struct ai_big) + (size_t) n * sizeof(ai_limb));
  return cell((word) b); }
 
@@ -434,8 +459,10 @@ static struct ai *ai_bmul_setup(struct ai *g) {
  a = g->sp[0], b = g->sp[1];                       // re-fetch (ai_have may have GC'd)
  union u *abig = as_big(&g->hp, a), *bbig = as_big(&g->hp, b), *ret = g->ip + 1;
  struct ai_str *s = ini_str(str(g->hp), rbytes);
- g->hp += sreq; memset(txt(s), 0, rbytes);
- union u *k = (union u*) g->hp; g->hp += breq;
+ g->hp += sreq;
+ memset(txt(s), 0, rbytes);
+ union u *k = (union u*) g->hp;
+ g->hp += breq;
  cask(k)->ap = lvm_cask;
  cask(k)->str = s;
  tagthread(k, Width(struct ai_cask));
@@ -478,9 +505,9 @@ static struct ai *ai_kmul_setup(struct ai *g) {
  struct ai_str *ws_s = ini_str(str(g->hp), wslimbs * sizeof(ai_limb));
  g->hp += sreq;
  ai_limb *ws = (ai_limb*) txt(ws_s);
- for (uintptr_t i = 0; i < wslimbs; i++) ws[i] = 0;       // zero everything: clean result + scratch slots
- for (int i = 0; i < n; i++) ws[a_off + i] = la[i];
- for (int i = 0; i < n; i++) ws[b_off + i] = lb[i];
+ memset(ws, 0, wslimbs * sizeof(ai_limb));
+ memcpy(ws + a_off, la, (size_t) n * sizeof(ai_limb));
+ memcpy(ws + b_off, lb, (size_t) n * sizeof(ai_limb));
  ws[0] = (ai_limb) n, ws[1] = 1, ws[2] = (ai_limb) (nega != negb), ws[3] = r_off;   // n, top=1, sign, r_off
  ai_limb *j0 = ws + jobs_off;                             // the root job: multiply a x B -> R
  j0[0] = a_off, j0[1] = b_off, j0[2] = (ai_limb) n, j0[3] = r_off, j0[4] = scr_off, j0[5] = 0;
@@ -500,13 +527,11 @@ lvm(lvm_kmul) {
  ai_limb *jobs = ws + KmulHdr;
  long budget = kmul_chunk;
  while (top > 0 && budget > 0) {
-  ws[1] = (ai_limb) top; YieldCheck();             // persist top, then a per-job yield check:
-                                                   // a once-per-dispatch check yields too rarely here
+  ws[1] = (ai_limb) top; // persist top, then a per-job yield check:
+  YieldCheck(); // a once-per-dispatch check yields too rarely here
   ai_limb *J = jobs + (uintptr_t) (top - 1) * KmulJw;
-  uintptr_t ar = J[0], br = J[1];
-  uintptr_t rr = J[3], sr = J[4];
-  int jn = (int) J[2];
-  int st = (int) J[5];
+  uintptr_t ar = J[0], br = J[1], rr = J[3], sr = J[4];
+  int jn = (int) J[2], st = (int) J[5];
   if (jn < kara_cutoff) {                                 // leaf: schoolbook jn x jn -> ws[rr..rr+2jn)
    mag_mul(ws + rr, ws + ar, jn, ws + br, jn);
    budget -= (long) jn * jn; top--; continue; }
@@ -515,10 +540,10 @@ lvm(lvm_kmul) {
    uintptr_t saO = sr, sbO = sr + (uintptr_t) (h + 1),
              z1O = sr + 2 * (uintptr_t) (h + 1), csr = sr + 4 * (uintptr_t) (h + 1);
    int ns = mag_add(ws + saO, ws + ar, m, ws + ar + m, h);            // sa = a_lo + a_hi
-   for (int i = ns; i < h + 1; i++) ws[saO + i] = 0;                  // zero-extend to exactly h+1
+   memset(ws + saO + ns, 0, (size_t) (h + 1 - ns) * sizeof(ai_limb));   // zero-extend to exactly h+1
    int nt = mag_add(ws + sbO, ws + br, m, ws + br + m, h);            // sb = b_lo + b_hi
-   for (int i = nt; i < h + 1; i++) ws[sbO + i] = 0;
-   for (int i = 0; i < 2 * (h + 1); i++) ws[z1O + i] = 0;            // clear z1's output slot
+   memset(ws + sbO + nt, 0, (size_t) (h + 1 - nt) * sizeof(ai_limb));
+   memset(ws + z1O, 0, (size_t) 2 * (h + 1) * sizeof(ai_limb));            // clear z1's output slot
    J[5] = 1;                                                          // this job combines when it returns
    ai_limb *z1J = jobs + (uintptr_t) top       * KmulJw;            // push z1 = sa*sb (pops first)
    z1J[0] = saO, z1J[1] = sbO, z1J[2] = (ai_limb) (h + 1), z1J[3] = z1O, z1J[4] = csr, z1J[5] = 0;
@@ -540,11 +565,11 @@ lvm(lvm_kmul) {
    nz1 = mag_sub(ws + z1O, ws + z1O, nz1, ws + rr + 2 * (uintptr_t) m, z2n);   // z1 -= z2
    while (nz1 > 0 && ws[z1O + (uintptr_t) nz1 - 1] == 0) nz1--;
    mag_add_off(ws + rr, 2 * jn, ws + z1O, nz1, m);                             // r += z1 * B^m
-   budget -= jn; top--; }
- }
+   budget -= jn; top--; } }
  ws[1] = (ai_limb) top;                                   // persist the stack pointer before any yield
  if (top > 0) { YieldCheck(); ai_musttail return Continue(); }
- bool neg = ws[2]; uintptr_t r_off = ws[3];               // done: ws[r_off..r_off+2n) is the product
+ bool neg = ws[2];
+ uintptr_t r_off = ws[3];               // done: ws[r_off..r_off+2n) is the product
  Have(Width(struct ai_big) + b2w(((size_t) 2 * (size_t) n + 1) * sizeof(ai_limb)));
  ws = (ai_limb*) txt(cask(Sp[0])->str);                    // re-fetch (Have may have GC'd)
  n = (int) ws[0], r_off = ws[3];
@@ -588,7 +613,9 @@ lvm(lvm_bmul) {
    rl[i+j] = (ai_limb) t, carry = t >> limb_bits; }
   rl[i+nb] = (ai_limb) carry; }
  Sp[0] = putcharm(i);                               // persist progress before any yield/GC
- if (i < na) { YieldCheck(); ai_musttail return Continue(); }
+ if (i < na) {
+   YieldCheck();
+   ai_musttail return Continue(); }
  bool neg = (sla < 0) != (slb < 0); word ret;     // done: canonicalize the product
  Have(Width(struct ai_big) + b2w((size_t) (na + nb) * sizeof(ai_limb)));
  ret = Sp[2];
@@ -596,7 +623,10 @@ lvm(lvm_bmul) {
  Pack(g);                                          // canon needs the synced g->hp (not &Hp: stack-local escapes block the sibcall)
  word res = ai_big_canon(&g->hp, rmag, na + nb, neg);
  Unpack(g);
- Sp += 4; Sp[0] = res; Ip = cell(ret); ai_musttail return Continue(); }
+ Sp += 4;
+ Sp[0] = res;
+ Ip = cell(ret);
+ ai_musttail return Continue(); }
 
 // --- resumable long division (lvm_bmul's divmod twin): normalize once into a
 // pinned workspace [hdr | vn | un | q], grind the Knuth-D loop in chunks,
@@ -618,8 +648,8 @@ static struct ai *ai_bdiv_setup(struct ai *g, int which) {
  int m = load_int_mag(a, sa, &la, &nega), n = load_int_mag(b, sb, &lb, &negb);
  struct ai_str *ws_s = ini_str(str(g->hp), wslimbs * sizeof(ai_limb));
  g->hp += sreq;
- ai_limb *ws = (ai_limb*) txt(ws_s);
- ai_limb *vn = ws + BdivHdr, *un = vn + n, *q = un + (m + 1);
+ ai_limb *ws = (ai_limb*) txt(ws_s),
+         *vn = ws + BdivHdr, *un = vn + n, *q = un + (m + 1);
  int s = limb_clz(lb[n-1]);                           // normalize so v[n-1]'s top bit is set
  for (int i = n-1; i > 0; i--) vn[i] = (lb[i] << s) | (s ? (ai_dlimb) lb[i-1] >> (limb_bits - s) : 0);
  vn[0] = lb[0] << s;
@@ -657,9 +687,9 @@ lvm(lvm_bdiv) {
  int m = (int) ws[0], n = (int) ws[1], s = (int) ws[2], which = (int) ws[3];
  bool nega = ws[4], negb = ws[5];
  ai_limb *vn = ws + BdivHdr, *un = vn + n, *q = un + (m + 1);
- int j = (int) getcharm(Sp[0]);
  ai_dlimb const B = limb_base;
- int steps = max(1, (int) (bdiv_chunk / (uintptr_t) n));
+ int j = (int) getcharm(Sp[0]),
+     steps = max(1, (int) (bdiv_chunk / (uintptr_t) n));
  for (int c = 0; c < steps && j >= 0; c++, j--) {      // one Knuth-D quotient limb per iteration
   ai_limb rr;
   ai_dlimb qhat = div128by64(un[j+n], un[j+n-1], vn[n-1], &rr), rhat = rr;
@@ -696,7 +726,10 @@ lvm(lvm_bdiv) {
   res = ai_big_canon(&g->hp, vn, n, rneg); }
  else res = ai_big_canon(&g->hp, q, m - n + 1, rneg);
  Unpack(g);
- Sp += 2; Sp[0] = res; Ip = cell(ret); ai_musttail return Continue(); }
+ Sp += 2;
+ Sp[0] = res;
+ Ip = cell(ret);
+ ai_musttail return Continue(); }
 
 // --- reader / printer -------------------------------------------------------
 
@@ -828,9 +861,9 @@ lvm(lvm_asum) {
   struct ai_tray *v = tray(x); uintptr_t n = tray_nelem(v);  // K=4 accumulators (see aprod)
   ai_flo_t *fp = tray_data(v);                   // read all parts before Have (no alloc here)
   ai_flo_t a0=0,b0=0, a1=0,b1=0, a2=0,b2=0, a3=0,b3=0; uintptr_t j = 0;
-  for (; j + 4 <= n; j += 4) {
-   a0 += fp[2*j];   b0 += fp[2*j+1]; a1 += fp[2*j+2]; b1 += fp[2*j+3];
-   a2 += fp[2*j+4]; b2 += fp[2*j+5]; a3 += fp[2*j+6]; b3 += fp[2*j+7]; }
+  for (; j + 4 <= n; j += 4)
+   a0 += fp[2*j],   b0 += fp[2*j+1], a1 += fp[2*j+2], b1 += fp[2*j+3],
+   a2 += fp[2*j+4], b2 += fp[2*j+5], a3 += fp[2*j+6], b3 += fp[2*j+7];
   for (; j < n; j++) a0 += fp[2*j], b0 += fp[2*j+1];
   ai_flo_t sr = (a0+a1)+(a2+a3), si = (b0+b1)+(b2+b3);
   Have(twin_req);
@@ -856,25 +889,27 @@ lvm(lvm_aprod) {
  word x = Sp[0];
  if (!packp(x)) ai_musttail return Next(1);
  if (tray(x)->type == ai_O) {
-  Pack(g); g = ored(g, 1);
-  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+  Pack(g);
+  if (!ai_ok(g = ored(g, 1))) ai_musttail return Ap(_lvm_ghelp, g);
   ai_musttail return Resume(); }
  if (tray(x)->type == ai_C) {                   // complex product -> a complex box
   // K=4 independent accumulators break the multiply latency chain (~3x);
   // reassociation is sound -- fp differs only in last-bit rounding per grouping
-  struct ai_tray *v = tray(x); uintptr_t n = tray_nelem(v);
-  ai_flo_t *fp = tray_data(v);
-  ai_flo_t r0=1,i0=0, r1=1,i1=0, r2=1,i2=0, r3=1,i3=0, t; uintptr_t j = 0;
-  for (; j + 4 <= n; j += 4) {
-   t = r0*fp[2*j]  -i0*fp[2*j+1]; i0 = r0*fp[2*j+1]+i0*fp[2*j];   r0 = t;
-   t = r1*fp[2*j+2]-i1*fp[2*j+3]; i1 = r1*fp[2*j+3]+i1*fp[2*j+2]; r1 = t;
-   t = r2*fp[2*j+4]-i2*fp[2*j+5]; i2 = r2*fp[2*j+5]+i2*fp[2*j+4]; r2 = t;
-   t = r3*fp[2*j+6]-i3*fp[2*j+7]; i3 = r3*fp[2*j+7]+i3*fp[2*j+6]; r3 = t; }
-  for (; j < n; j++) { t = r0*fp[2*j]-i0*fp[2*j+1]; i0 = r0*fp[2*j+1]+i0*fp[2*j]; r0 = t; }
-  ai_flo_t ra = r0*r1-i0*i1, ia = r0*i1+i0*r1, rb = r2*r3-i2*i3, ib = r2*i3+i2*r3;
-  ai_flo_t pr = ra*rb-ia*ib, pi = ra*ib+ia*rb;
+  struct ai_tray *v = tray(x);
+  uintptr_t n = tray_nelem(v);
+  ai_flo_t *fp = tray_data(v),
+           r0=1,i0=0, r1=1,i1=0, r2=1,i2=0, r3=1,i3=0, t; uintptr_t j = 0;
+  for (; j + 4 <= n; j += 4)
+   t = r0*fp[2*j]  -i0*fp[2*j+1], i0 = r0*fp[2*j+1]+i0*fp[2*j],   r0 = t,
+   t = r1*fp[2*j+2]-i1*fp[2*j+3], i1 = r1*fp[2*j+3]+i1*fp[2*j+2], r1 = t,
+   t = r2*fp[2*j+4]-i2*fp[2*j+5], i2 = r2*fp[2*j+5]+i2*fp[2*j+4], r2 = t,
+   t = r3*fp[2*j+6]-i3*fp[2*j+7], i3 = r3*fp[2*j+7]+i3*fp[2*j+6], r3 = t;
+  for (; j < n; j++) t = r0*fp[2*j]-i0*fp[2*j+1], i0 = r0*fp[2*j+1]+i0*fp[2*j], r0 = t;
+  ai_flo_t ra = r0*r1-i0*i1, ia = r0*i1+i0*r1, rb = r2*r3-i2*i3, ib = r2*i3+i2*r3,
+           pr = ra*rb-ia*ib, pi = ra*ib+ia*rb;
   Have(twin_req);
-  Sp[0] = mk_twin(&Hp, pr, pi); ai_musttail return Next(1); }
+  Sp[0] = mk_twin(&Hp, pr, pi);
+  ai_musttail return Next(1); }
  struct ai_tray *v = tray(x);
  uintptr_t n = tray_nelem(v);
  bool fdom = v->type >= ai_R; word _res;
@@ -899,12 +934,12 @@ static lvm(lvm_aextreme) {
  if (!packp(x)) return Next(1);
  if (tray(x)->type == ai_O) {
   Pack(g); g = ored(g, kind);
-  if (!ai_ok(g)) return Ap(_lvm_ghelp, g);
-  return Resume(); }
- if (tray(x)->type == ai_C) return Answer(ZeroPoint);   // complex: unordered
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+  ai_musttail return Resume(); }
+ if (tray(x)->type == ai_C) ai_musttail return Answer(ZeroPoint);   // complex: unordered
  struct ai_tray *v = tray(x);
  uintptr_t n = tray_nelem(v);
- if (!n) return Answer(ZeroPoint);
+ if (!n) ai_musttail return Answer(ZeroPoint);
  bool fdom = v->type >= ai_R, ismax = kind == 2; word _res;
  Have(box_req); v = tray(Sp[0]);
  // K=4 running extremes break the latency chain; exact (selects an existing element)
@@ -930,9 +965,9 @@ static lvm(lvm_aextreme) {
   if (ismax?m2>m0:m2<m0) m0=m2;
   if (ismax?m3>m0:m3<m0) m0=m3;
   emit_int(_res, m0); }
- return Answer(_res); }
-lvm(lvm_max) { { g->b = (ai_word) (2); ai_musttail return Ap(lvm_aextreme, g); } }
-lvm(lvm_min) { { g->b = (ai_word) (3); ai_musttail return Ap(lvm_aextreme, g); } }
+ ai_musttail return Answer(_res); }
+lvm(lvm_max) { g->b = (ai_word) 2; ai_musttail return Ap(lvm_aextreme, g); }
+lvm(lvm_min) { g->b = (ai_word) 3; ai_musttail return Ap(lvm_aextreme, g); }
 
 // aall: the bool conjunction reduction ("no zero element"; empty -> vacuously
 // true; scalar -> identity). the disjunction is just `len`.
@@ -974,8 +1009,8 @@ lvm(lvm_outer) {
  va = tray(Sp[0]), vb = tray(Sp[1]);          // re-read post-Have
  struct ai_tray *r = (struct ai_tray*) Hp; Hp += b2w(bytes);
  ini_tray(r, rt, rank);
- for (uintptr_t i = 0; i < va->rank; i++) r->shape[i] = va->shape[i];
- for (uintptr_t i = 0; i < vb->rank; i++) r->shape[va->rank + i] = vb->shape[i];
+ memcpy(r->shape, va->shape, va->rank * sizeof *r->shape);
+ memcpy(r->shape + va->rank, vb->shape, vb->rank * sizeof *r->shape);
  if (fdom) { ai_flo_t *rp = tray_data(r);
   for (uintptr_t i = 0; i < M; i++) { ai_flo_t av = tray_get_flo(va, i);
    for (uintptr_t j = 0; j < N; j++) rp[i*N+j] = av * tray_get_flo(vb, j); } }
@@ -1027,12 +1062,12 @@ lvm(lvm_inner) {
  if (fdom) { ai_flo_t *C = tray_data(r);
   ai_flo_t *Ad = tray_data(va), *Bd = tray_data(vb);
   intptr_t *Ai = tray_data(va), *Bi = tray_data(vb);
-  for (uintptr_t p = 0; p < n; p++) C[p] = 0;
+  memset(C, 0, n * ai_T[rt]);
   for (uintptr_t i = 0; i < M; i++)
    for (uintptr_t l = 0; l < K; l++) { ai_flo_t av = ar ? Ad[i*K+l] : (ai_flo_t) Ai[i*K+l];
     for (uintptr_t j = 0; j < N; j++) C[i*N+j] += av * (br ? Bd[l*N+j] : (ai_flo_t) Bi[l*N+j]); } }
  else { intptr_t *C = tray_data(r), *A = tray_data(va), *B = tray_data(vb);
-  for (uintptr_t p = 0; p < n; p++) C[p] = 0;
+  memset(C, 0, n * ai_T[rt]);
   for (uintptr_t i = 0; i < M; i++)
    for (uintptr_t l = 0; l < K; l++) { intptr_t av = A[i*K+l];
     for (uintptr_t j = 0; j < N; j++) C[i*N+j] = (intptr_t)((uintptr_t)C[i*N+j] + (uintptr_t)av * (uintptr_t)B[l*N+j]); } }
@@ -1164,6 +1199,7 @@ ai_inline bool ratio_ifit(word x, int64_t *v) {
  bool neg = b->slen < 0;
  if (m > (uint64_t) INT64_MAX + neg) return false;
  return *v = (int64_t) (neg ? 0 - m : m), true; }
+
 ai_inline bool ratio_iview(word x, int64_t *n, int64_t *d) {
  if (coinp(x)) { word p = coin_load(x);
   if (!chainp(p) || !chainp(B(p))) return false;
@@ -1194,8 +1230,8 @@ static ai_inline bool ratio_xcmp(int64_t n1, int64_t d1, int64_t n2, int64_t d2,
           lhi, llo, rhi, rlo;
  ratio_mag_mul(la, lb, &lhi, &llo);
  ratio_mag_mul(ra, rb, &rhi, &rlo);
- bool zl = !(lhi | llo), zr = !(rhi | rlo);
- bool sl = !zl && ((n1 < 0) != (d2 < 0)), sr = !zr && ((n2 < 0) != (d1 < 0));
+ bool zl = !(lhi | llo), zr = !(rhi | rlo),
+      sl = !zl && ((n1 < 0) != (d2 < 0)), sr = !zr && ((n2 < 0) != (d1 < 0));
  intptr_t cl;                                     // -1/0/1 of l - r, signs first then magnitudes
  if (sl != sr) cl = sl ? -1 : 1;
  else { intptr_t cm = lhi != rhi ? (lhi < rhi ? -1 : 1) : llo != rlo ? (llo < rlo ? -1 : 1) : 0;
@@ -1395,45 +1431,44 @@ static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, boo
  // contiguous monotype fast path: no broadcasting, so the odometer and dispatch
  // vanish -- raw pointers, the op hoisted once, a body the compiler vectorizes.
  // mixed/bignum/broadcast falls through to the general loop; results bit-identical.
- { bool cmpf = op >= vop_lt,
-        aok = !atray || tray_nelem(va) == n, bok = !btray || tray_nelem(vb) == n,
-        nobig = !((!atray && bigp(a)) || (!btray && bigp(b)));
-   if (aok && bok && nobig) {
-    if (fdom && (!atray || va->type == ai_R) && (!btray || vb->type == ai_R)) {
-     ai_flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b);
-     ai_flo_t *ap = atray ? (ai_flo_t*) tray_data(va) : 0, *bp = btray ? (ai_flo_t*) tray_data(vb) : 0;
-     if (cmpf) { intptr_t *rp = (intptr_t*) tray_data(r);
-      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = atray?ap[p]:sa, bv = btray?bp[p]:sb; rp[p] = (E)?1:0; } } while (0)
-      switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
-        case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return; case vop_eq: VBF(av==bv); return; }
-      #undef VBF
-     } else { ai_flo_t *rp = (ai_flo_t*) tray_data(r);
-      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = atray?ap[p]:sa, bv = btray?bp[p]:sb; rp[p] = (E); } } while (0)
-      switch (op) { case vop_add: VBF(av+bv); return; case vop_sub: VBF(av-bv); return;
-        case vop_mul: VBF(av*bv); return; case vop_quot: VBF(av/bv); return;
-        case vop_fquot: VBF(ai_trunc(av/bv)); return; case vop_rem: VBF(ai_fmod(av,bv)); return; }
-      #undef VBF
-     }
-    } else if (!fdom && (!atray || va->type == ai_Z) && (!btray || vb->type == ai_Z)) {
-     intptr_t sia = atray ? 0 : (charmp(a) ? (intptr_t) getcharm(a) : sun_get(a)),
-              sib = btray ? 0 : (charmp(b) ? (intptr_t) getcharm(b) : sun_get(b)),
-              *ap = atray ? (intptr_t*) tray_data(va) : 0, *bp = btray ? (intptr_t*) tray_data(vb) : 0,
-              *rp = (intptr_t*) tray_data(r);   // r is ai_Z for both int-arith and the mask
-     if (cmpf) {
-      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = atray?ap[p]:sia, bv = btray?bp[p]:sib; rp[p] = (E)?1:0; } } while (0)
-      switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
-        case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return; case vop_eq: VBF(av==bv); return; }
-      #undef VBF
-     } else {
-      #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = atray?ap[p]:sia, bv = btray?bp[p]:sib; rp[p] = (E); } } while (0)
-      switch (op) {
-        case vop_add: VBF((intptr_t)((uintptr_t)av+(uintptr_t)bv)); return;
-        case vop_sub: VBF((intptr_t)((uintptr_t)av-(uintptr_t)bv)); return;
-        case vop_mul: VBF((intptr_t)((uintptr_t)av*(uintptr_t)bv)); return;
-        case vop_quot: case vop_fquot: VBF((bv==0||(av==INTPTR_MIN&&bv==-1))?0:av/bv); return;
-        case vop_rem: VBF((bv==0||(av==INTPTR_MIN&&bv==-1))?0:av%bv); return; }
-      #undef VBF
-     } } } }
+ bool cmpf = op >= vop_lt,
+      aok = !atray || tray_nelem(va) == n, bok = !btray || tray_nelem(vb) == n,
+      nobig = !((!atray && bigp(a)) || (!btray && bigp(b)));
+ if (aok && bok && nobig) {
+  if (fdom && (!atray || va->type == ai_R) && (!btray || vb->type == ai_R)) {
+   ai_flo_t sa = atray ? 0 : toflo(a), sb = btray ? 0 : toflo(b);
+   ai_flo_t *ap = atray ? (ai_flo_t*) tray_data(va) : 0, *bp = btray ? (ai_flo_t*) tray_data(vb) : 0;
+   if (cmpf) { intptr_t *rp = (intptr_t*) tray_data(r);
+    #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = atray?ap[p]:sa, bv = btray?bp[p]:sb; rp[p] = (E)?1:0; } } while (0)
+    switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
+      case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return; case vop_eq: VBF(av==bv); return; }
+    #undef VBF
+   } else { ai_flo_t *rp = (ai_flo_t*) tray_data(r);
+    #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { ai_flo_t av = atray?ap[p]:sa, bv = btray?bp[p]:sb; rp[p] = (E); } } while (0)
+    switch (op) { case vop_add: VBF(av+bv); return; case vop_sub: VBF(av-bv); return;
+      case vop_mul: VBF(av*bv); return; case vop_quot: VBF(av/bv); return;
+      case vop_fquot: VBF(ai_trunc(av/bv)); return; case vop_rem: VBF(ai_fmod(av,bv)); return; }
+    #undef VBF
+   }
+  } else if (!fdom && (!atray || va->type == ai_Z) && (!btray || vb->type == ai_Z)) {
+   intptr_t sia = atray ? 0 : (charmp(a) ? (intptr_t) getcharm(a) : sun_get(a)),
+            sib = btray ? 0 : (charmp(b) ? (intptr_t) getcharm(b) : sun_get(b)),
+            *ap = atray ? (intptr_t*) tray_data(va) : 0, *bp = btray ? (intptr_t*) tray_data(vb) : 0,
+            *rp = (intptr_t*) tray_data(r);   // r is ai_Z for both int-arith and the mask
+   if (cmpf) {
+    #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = atray?ap[p]:sia, bv = btray?bp[p]:sib; rp[p] = (E)?1:0; } } while (0)
+    switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
+      case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return; case vop_eq: VBF(av==bv); return; }
+    #undef VBF
+   } else {
+    #define VBF(E) do { for (uintptr_t p = 0; p < n; p++) { intptr_t av = atray?ap[p]:sia, bv = btray?bp[p]:sib; rp[p] = (E); } } while (0)
+    switch (op) {
+      case vop_add: VBF((intptr_t)((uintptr_t)av+(uintptr_t)bv)); return;
+      case vop_sub: VBF((intptr_t)((uintptr_t)av-(uintptr_t)bv)); return;
+      case vop_mul: VBF((intptr_t)((uintptr_t)av*(uintptr_t)bv)); return;
+      case vop_quot: case vop_fquot: VBF((bv==0||(av==INTPTR_MIN&&bv==-1))?0:av/bv); return;
+      case vop_rem: VBF((bv==0||(av==INTPTR_MIN&&bv==-1))?0:av%bv); return; } } } }
+    #undef VBF
  intptr_t ca[maxrank], cb[maxrank], idx[maxrank];
  for (uintptr_t j = 0; j < R; j++) idx[j] = 0;
  bstride(va, R, ca), bstride(vb, R, cb);
@@ -1561,4 +1596,3 @@ lvm(lvm_vmap2) {
  bshape_put(r->shape, R, a, b);
  vmap2_fill(r, a, b, fn);
  return Push(word(r)); }
-
