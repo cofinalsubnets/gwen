@@ -49,39 +49,34 @@
    ; the `:` of a closing `:]` at-or-after j -> (1 j) | (). the presence wrapper,
    ; not a bare index: a `:]` can legitimately sit at 0 and 0 nets blue
    (recend p n j)
-    (? (n <= (j + 1)) ()
+    (? (n <= j + 1) ()
        (p j = 58 && p (j + 1) = 93) [1 j]
        (recend p n (j + 1)))
    ; a class body at i (past [ and any ^): `first` keeps a leading ] literal.
    ; answers (items j) | (), items an ([lo hi]..). ONE scanner, both dialects --
    ; POSIX spells the bracket expression the same in BRE and ERE
-   (recitems p n i first acc)
-    (? (n <= i) ()
-       (: c (p i)
-          (? (c = 93 && !first) [acc (i + 1)]
-             (c = 91 && (i + 1) < n && p (i + 1) = 58)
-              (recend p n (i + 2) @ [_ e]
-                (assoc (snip p (i + 2) e) cnames @ (_ >< rs)
-                  (recitems p n (e + 2) 0 (cat rs acc))
-                  ())
-                ())
-             ((i + 2) < n && p (i + 1) = 45 && !(p (i + 2) = 93))
-              (recitems p n (i + 3) 0 ([c (p (i + 2))] >< acc))
-             (recitems p n (i + 1) 0 ([c c] >< acc)))))
+   (recitems p n i first acc) (n > i ? (: c (p i)
+    (? (c = 93 && !first) [acc (i + 1)]
+       (c = 91 && i + 1 < n && p (i + 1) = 58)
+        (recend p n (i + 2) @ [_ e]
+          (assoc (snip p (i + 2) e) cnames @
+           (_ . rs) (recitems p n (e + 2) 0 (cat rs acc))))
+       (i + 2 < n && p (i + 1) = 45 && p (i + 2) != 93)
+        (recitems p n (i + 3) 0 ([c (p (i + 2))] . acc))
+       (recitems p n (i + 1) 0 ([c c] . acc)))))
 
    ; -- the parser, both dialects: pattern text -> (1 nodes ngroups) | () --
    (reparse p ere?)
-    (: n (tally p)
+    (: n #p
        ; THE ONE SEAM between the dialects: ( ) | { } + ? are bare in ERE and
        ; \-escaped in BRE, so they are asked for here and nowhere else. * . [ ^ $
        ; are bare in both and are read straight off the byte.
-       bw (? ere? 1 2)
-       (esc? i ch) (? ere? (i < n && p i = ch)
-                       ((i + 1) < n && p i = 92 && p (i + 1) = ch))
+       bw (ere? ? 1 2)
+       ; ⚠ AN IF/ELSE, NOT (ere? && bare) || escaped: the || falls through to the
+       ; BRE arm whenever ERE's own test fails, and `\(` is a LITERAL paren in ERE
+       (esc? i ch) (ere? ? (i < n && p i = ch) (i + 1 < n && p i = 92 && p (i + 1) = ch))
        (dig? c) (48 <= c <= 57)
-       (rnum i v got) (? (i < n && dig? (p i)) (rnum (i + 1) ((v * 10) + (p i - 48)) 1)
-                         got [1 v i]
-                         ())
+       (rnum i v got) (? (i < n && dig? (p i)) (rnum (i + 1) (v * 10 + p i - 48) 1) got [1 v i])
        ; the interval body at i (past the opening brace) -> (lo hi j) | (), j past
        ; the close. {n} is (n n), {n,} unbounded, {n,m} both ends
        (rivl i)
@@ -89,20 +84,18 @@
            (rnum i 0 0 @ [_ lo j]
              (? (clo j) [lo lo (j + bw)]
                 (j < n && p j = 44)
-                 (rnum (j + 1) 0 0 @ [_ hi j2] (? (clo j2) [lo hi (j2 + bw)] ())
-                                    (? (clo (j + 1)) [lo () (j + 1 + bw)] ()))
-                ())
-             ()))
+                 (rnum (j + 1) 0 0 @ [_ hi j2] (clo j2 ? [lo hi (j2 + bw)])
+                                    (clo (j + 1) ? [lo () (j + 1 + bw)])))))
        ; can a repeat land? nothing repeats an anchor or an empty head
        (repable acc) (two? acc && !(member? <<acc '(bol eol)))
        ; where it cannot: BRE keeps the sigil as a literal charm, ERE drops it
        (nofit i acc lvl gi c w)
         (? ere? (pseq (i + w) acc lvl gi)
-           (pseq (i + w) (['chr c] >< acc) lvl gi))
+           (pseq (i + w) (['chr c] . acc) lvl gi))
        ; a brace that never closes, and a `)` with nothing open: literal in ERE,
        ; malformed in BRE
        (loose i acc lvl gi c w)
-        (? ere? (pseq (i + w) (['chr c] >< acc) lvl gi) ())
+        (? ere? (pseq (i + w) (['chr c] . acc) lvl gi) ())
        ; one alternative: stops at the bar, the group close, or the end. acc is
        ; reversed; lvl counts open groups, gi the groups seen (their ( order
        ; numbers them). answers (nodes j gi why), why = end | close | bar
@@ -114,13 +107,12 @@
            (esc? i 40)
             (: g2 (gi + 1)
                (palt (i + bw) (lvl + 1) g2 @ [nds j g 'close]
-                 (pseq j (['grp g2 nds] >< acc) lvl g)
-                 ()))
+                 (pseq j (['grp g2 nds] . acc) lvl g)))
            (esc? i 43) (? (repable acc)
-                          (pseq (i + bw) (['rep <acc 1 ()] >< >acc) lvl gi)
+                          (pseq (i + bw) (['rep <acc 1 ()] . >acc) lvl gi)
                           (nofit i acc lvl gi 43 bw))
            (esc? i 63) (? (repable acc)
-                          (pseq (i + bw) (['rep <acc 0 1] >< >acc) lvl gi)
+                          (pseq (i + bw) (['rep <acc 0 1] . >acc) lvl gi)
                           (nofit i acc lvl gi 63 bw))
            ; ⚠ the ERE drop is of the WHOLE {n,m}, which is why rivl runs first even
            ; when nothing can be repeated: skipping just the brace leaves `2}` behind
@@ -128,29 +120,28 @@
            (esc? i 123)
             (rivl (i + bw) @ [lo hi j]
               (? (hi && lo > hi) ()                    ; {3,2}: malformed in both
-                 (repable acc) (pseq j (['rep <acc lo hi] >< >acc) lvl gi)
+                 (repable acc) (pseq j (['rep <acc lo hi] . >acc) lvl gi)
                  ere? (pseq j acc lvl gi)
                  (nofit i acc lvl gi 123 bw))
               (loose i acc lvl gi 123 bw))
            (: c (p i)
               (? (c = 42) (? (repable acc)
-                             (pseq (i + 1) (['rep <acc 0 ()] >< >acc) lvl gi)
+                             (pseq (i + 1) (['rep <acc 0 ()] . >acc) lvl gi)
                              (nofit i acc lvl gi 42 1))
                  (c = 46) (pseq (i + 1) ('(any) >< acc) lvl gi)
-                 (c = 94 && (ere? || i = 0)) (pseq (i + 1) ('(bol) >< acc) lvl gi)
-                 (c = 36 && (ere? || (i + 1) = n)) (pseq (i + 1) ('(eol) >< acc) lvl gi)
+                 (c = 94 && (ere? || i = 0)) (pseq (i + 1) ('(bol) . acc) lvl gi)
+                 (c = 36 && (ere? || i + 1 = n)) (pseq (i + 1) ('(eol) . acc) lvl gi)
                  (c = 91)
                   (: j (i + 1)
-                     neg ((j < n) && (p j = 94))
+                     neg (j < n && p j = 94)
                      (recitems p n (? neg (j + 1) j) 1 () @ [items j2]
-                       (pseq j2 (['cls (? neg 1 0) items] >< acc) lvl gi)
-                       ()))
+                       (pseq j2 (['cls (? neg 1 0) items] . acc) lvl gi)))
                  (c = 92)
-                  (? (n <= (i + 1)) ()
+                  (n <= i + 1 ? ()
                      (: d (p (i + 1))
-                        (? (49 <= d <= 57) ()          ; backrefs: refused, both dialects
-                           (pseq (i + 2) (['chr d] >< acc) lvl gi))))
-                 (pseq (i + 1) (['chr c] >< acc) lvl gi))))
+                        (49 <= d <= 57 ? () ; backrefs: refused, both dialects
+                           (pseq (i + 2) (['chr d] . acc) lvl gi))))
+                 (pseq (i + 1) (['chr c] . acc) lvl gi))))
        ; the alternation above the sequence: branches joined by the bar, kept FLAT
        ; in one ['alt ..] node so a three-way reads as three branches
        (palt i lvl gi)
@@ -159,8 +150,7 @@
               (: acc2 (nds >< acc)
                  (? (why = 'bar) (go j2 g2 acc2)
                     (: brs (rev acc2)
-                       [(? (two? >brs) [['alt brs]] <brs) j2 g2 why])))
-              ())
+                       [(two? >brs ? [['alt brs]] <brs) j2 g2 why]))))
            (go i gi ()))
        (palt 0 0 0 @ [nds _ g 'end] [1 nds g] ()))
    (rebre p) (reparse p ())
@@ -168,11 +158,12 @@
 
    ; -- case folding, as an AST pass: -i never reaches the matcher --
    ; the other case of a letter, or () for anything else
-   (recase c) (? (65 <= c <= 90) (c + 32) (97 <= c <= 122) (c - 32) ())
+   (recase c) (? (65 <= c <= 90) (c + 32) (97 <= c <= 122) (c - 32))
    ; the part of [lo hi] lying in [a b], shifted by d -- how a range gains its mirror
    (rovl lo hi a b d)
-    (: x (? (lo < a) a lo) y (? (b < hi) b hi)
-       (? (x <= y) [[(x + d) (y + d)]] ()))
+    (: x (lo < a ? a lo)
+       y (b < hi ? b hi)
+     (x <= y ? [[(x + d) (y + d)]]))
    (refoldr rs)
     (catmap (\ [lo hi] (cat (rovl lo hi 97 122 -32) (rovl lo hi 65 90 32))) rs)
    ; a literal becomes the two-charm class, a class gains its mirror ranges, and
@@ -200,21 +191,19 @@
     (ns @ (nd >< rest)
        (: n (tally s)
           (step j) (rem rest s j sp k)          ; the tail, one charm on
-          (nd @ ['chr c]      (? (i < n && s i = c) (step (i + 1)) ())
-                ['any]        (? (i < n) (step (i + 1)) ())
-                ['cls neg rs] (? (i < n && rcls neg rs (s i)) (step (i + 1)) ())
-                ['bol]        (? (i = 0) (step i) ())
-                ['eol]        (? (i = n) (step i) ())
+          (nd @ ['chr c]      (i < n && s i = c ? (step (i + 1)))
+                ['any]        (i < n ? (step (i + 1)))
+                ['cls neg rs] (i < n && rcls neg rs (s i) ? (step (i + 1)))
+                ['bol]        (i = 0 ? (step i))
+                ['eol]        (i = n ? (step i))
                 ['grp gi sub] (rem sub s i sp
-                                   (\ j sp2 (rem rest s j ([gi i j] >< sp2) k)))
+                               (\ j sp2 (rem rest s j ([gi i j] . sp2) k)))
                 ; alternation: the branches in order on the winning path. the CPS
                 ; is the whole implementation -- try one with the tail as its
                 ; onward, and a branch that fails answers () so the next is asked
                 ['alt brs] (: (try bs)
-                               (bs @ (b >< more)
-                                 (: r (rem b s i sp (\ j sp2 (rem rest s j sp2 k)))
-                                    (? r r (try more)))
-                                 ())
+                               (bs @ (b . more)
+                                 (rem b s i sp (\ j sp2 (rem rest s j sp2 k)) || try more))
                               (try brs))
                 ['rep a lo hi] (rrep a lo hi rest s i sp k 0)))
        (k i sp))
@@ -225,10 +214,10 @@
    ; refused, and the outer's lo=1 is never met: GNU matches every line there and
    ; we matched only the ones with an a. (the seeded fuzz found it, not a human.)
    (rrep a lo hi rest s i sp k cnt)
-    (: more (? (!hi || (cnt < hi))
+    (: more (? (!hi || cnt < hi)
                (rem [a] s i sp
-                    (\ j sp2 (? (j = i) (? (cnt < lo) (rem rest s j sp2 k) ())
-                                 (rrep a lo hi rest s j sp2 k (cnt + 1)))))
+                    (\ j sp2 (j = i ? (cnt < lo ? (rem rest s j sp2 k))
+                              (rrep a lo hi rest s j sp2 k (cnt + 1)))))
                ())
        (? more more
           (cnt < lo) ()
@@ -236,11 +225,9 @@
    ; the boolean face: does s contain a match anywhere. the continuation answers
    ; (1 j), never (j): a match ending at 0 would net blue and read as absence
    (rehas ns s)
-    (: n (tally s)
-       (from i) (? (rem ns s i () (\ j sp [1 j]))
-                   1
-                   (i < n) (from (i + 1))
-                   ())
+    (: n #s
+       (from i) (? (rem ns s i () (\ j sp [1 j])) 1
+                   (i < n) (from (i + 1)))
        (from 0))
    ; the leftmost span at-or-after i: (1 start end spans) | () -- uread's success
    ; shape, since the empty match at 0 is the span (0 0), blue by measure. greedy
@@ -253,8 +240,8 @@
    ; "a._c_" is word-bounded at "a" and not at the greedy "a.", and the outside
    ; filter calls that line a miss where GNU calls it a hit
    (refindp ns s i p)
-    (: n (tally s)
-       (from j) (rem ns s j () (\ e sp (? (p j e) [1 e sp] ())) @ [_ e sp] [1 j e sp]
+    (: n #s
+       (from j) (rem ns s j () (\ e sp (p j e ? [1 e sp])) @ [_ e sp] [1 j e sp]
                   (? (j < n) (from (j + 1)) ()))
        (from i))
    (refind ns s i) (refindp ns s i (\ a b 1))
