@@ -135,7 +135,8 @@
    ; discipline (the old code compared physicals, so the accident counted).
    (rpeq? g a b) (id? (rp g a) (rp g b))
    ; -- the ablation knob (the pare plan's rung 0): MOON_ABLATE="tpool,cs" holds named
-   ; mechanisms empty for PRICING -- ralloc tpool cs lhome homes pcs, alloc
+   ; mechanisms empty for PRICING -- ralloc tpool cs lhome homes pcs, pcell
+   ; (param cells fall back to the wrapped-home/cs-grant lanes), alloc
    ; (locals homes fall back to lpick's static pick), pdefcs
    ; (no cs seats for crossing chains), and pdef
    ; (promotion falls back to the hull window). read at
@@ -7719,23 +7720,26 @@
        irf (? (bad? ir1) 'bad
           ((hm || lh || two? ride || two? ih0) && !(g 'fesc) && !(hascall? ir1))
            (leaf ride)
-          ; calls remain: home + spill where reads beat the wraps -- FN-WIDE, all homable params
-          ; or none. ⚠ per-param verdicts were measured BOTH ways and lost: pruning a "losing"
-          ; home inside a gated fn is 7/8 slower (its wraps hide behind a call that is already
-          ; there), and adding zero-cross homes outside the gate is 8/8 slower (the regen trades
-          ; pool registers for homes, and returning unhomed ones collides with the ride policy).
-          ; TWO pricings, either licenses: the flat count (call-light overall), or the PATH price
-          ; pmax + ncw -- an invocation pays wraps only at the calls its one path passes (the hot
-          ; dispatch fleet: many calls, all in exclusive cold arms), plus in-loop calls at
-          ; alive's per-iteration weight, plus one mov per home that differs from its arrival.
-          (: nc (ncalls ir1 0) nh (nhomable params 0 0)
+          ; calls remain: the param cells stay CELLS (moon-ssa rung 5) and repack's
+          ; per-value chains place them -- caller-saved over call-free ranges, a cs
+          ; seat where crossings compound, the frame exactly across calls. the
+          ; fn-wide wrapped-home and cs-grant lanes below are the OLD answer, kept
+          ; under MOON_ABLATE=pcell (and the pdef/pdefcs/alloc worlds, which predate
+          ; the chains): ablating them on the rung-4 tree measured -1.6% cycles at
+          ; +2.1% insns -- the wrap pair's latency chain at every call costs more
+          ; than the forwarded slot traffic it consolidates, now that the chains
+          ; recover the call-free part. ⚠ the old lanes' own laws stand where they
+          ; run: fn-wide all or none (per-param verdicts measured BOTH ways and
+          ; lost), two pricings for pp, the whole-set seat gate for pcs.
+          (: old8 (abl? g 'pcell || abl? g 'alloc || abl? g 'pdefcs || abl? g 'pdef)
+             nc (ncalls ir1 0) nh (nhomable params 0 0)
              nr (nreads ir1 (pslots <>sp1 ()) 0)
              em (homefold g params 0 0
                  (\ n2 i9 p9 (? (homable? <>p9 &&
                                  !(id? (nthr (argr g) i9) (homereg i9))) (n2 + 1) n2)))
              ; per invocation, nh homes at the caller-saved rate: the flat count, or the PATH
              ; price (only the calls one path passes, plus in-loop calls at alive's weight)
-             pp (hm && (nh * rcost 'home nc < nr ||
+             pp (old8 && hm && (nh * rcost 'home nc < nr ||
                         (two? av && nh * rcost 'home (pmax ir1 + nthr av 4) + em < nr)))
              ; the cs-home grant: the homes take callee-saved seats and the per-call wraps
              ; retire for one save + a reload per EXIT (the epilogue rides every ret) --
@@ -7745,7 +7749,7 @@
                                  (go9 >l (? (two? <l && id? <<l 'ret) (n9 + 1) n9)))
                    (go9 ir1 0))
              nra (nrac ir1 (pslots <>sp1 ()))
-             pcs (? (hm && !(abl? g 'pcs) && (0 < nh) && (nh <= tally free9) &&
+             pcs (? (old8 && hm && !(abl? g 'pcs) && (0 < nh) && (nh <= tally free9) &&
                      (0 < pmin ir1) &&
                      ; per invocation, nh homes at the SEAT rate -- no wraps, one save and a
                      ; reload per exit -- and every path must call, or the entry work earns nothing

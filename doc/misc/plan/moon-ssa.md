@@ -202,6 +202,38 @@ until rung 6.
 - **rung 5 — params join; the ride loop retires.** Arrivals are interval defs
   at entry; ride/shadow/pcs become allocation outcomes. The leaf lane's
   shrink-retry and its guards delete.
+  **LANDED 2026-08-27, reshaped by its own measurement.** The pricing came
+  first and falsified the premise: on the rung-4 tree, ablating the
+  call-bearing param lanes reads −1.6% cycles at +2.1% insns — and the
+  counters say it plainly (the ablated binary carries MORE branch and icache
+  misses and still wins: the wrap pair's latency chain at every call costs
+  more than the forwarded slot traffic it consolidates, now that the chains
+  recover the call-free ranges). pcs alone prices +0.2% — nothing; rung 3's
+  per-value cs seats already own the crossing case. So there was nothing left
+  to unify INTO the allocator: rung 5 lands as rung 3's promised milestone
+  arriving through the params — pp (the fn-wide wrapped homes) and pcs (the
+  all-or-none seat grant) are KNOB-ONLY now (MOON_ABLATE=pcell restores them;
+  the pdef/pdefcs/alloc worlds keep them for parity), and a param cell stays
+  a CELL that repack places per value: caller-saved over call-free ranges, a
+  cs seat where crossings compound, the frame exactly across calls. Priced:
+  restoring the lanes costs +1.7% cycles / −1.9% insns / −2.0% .text; the
+  census: loop-weighted frame traffic −10.2% (the retiring wraps sat IN
+  loops — inf_run alone −18.5k weighted), static +1,886 and forms +2.2% (the
+  returning slot traffic sits at depth 0–1); the change is BIMODAL (275 fns
+  slightly up, 56 down big) — recorded for rung 6's exact placement. Build
+  row −2–3%: a fn whose only homes were param lanes skips the regen. Both
+  wrap pricings (the flat count and the path price) retire from the default
+  path with their lane; alive stays as the interval provider. Laws: the
+  pp/pcs faces pinned under the knob (setenv round-trips, x64 and a64), a
+  default-face law (the entry spill precedes every ALU op, where the old
+  lane computed on the arrivals and spilled at the call), and the leaf-lane
+  laws untouched.
+  STILL OPEN → rung 6: the ride loop (its blocker is pass-2 staging scratch —
+  the shuttle pair is protocol, not allocatable, so propose-verify is forced
+  until emission is virtual); ihset and the leaf-lane homes stand (call-free
+  fns, no wraps — the lanes the measurement left standing); and the
+  bimodality's other half, the df_hlens-shaped fns where a fn-wide home
+  beats the chains on staging-busy long ranges.
 - **rung 6 — one build; the regen dance retires.** Emission targets virtual
   registers for homable scalars from the start; slots only for escaped and
   aggregate objects; the allocator assigns everything. deopt, rgon, the

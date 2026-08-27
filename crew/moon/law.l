@@ -1199,6 +1199,10 @@
                                           (n + 1) n))))
                  (go fs 0))
    pre9 "long g(long x); "
+   ; ⚠ the wrapped-home and cs-grant lanes are KNOB-ONLY since moon-ssa rung 5
+   ; (param cells ride repack's chains by default; MOON_ABLATE=pcell restores
+   ; the lanes, and these laws pin that face -- the setenv round-trip below)
+   _ (setenv "MOON_ABLATE" "pcell")
    irD (cgn (pre9 + "long f(long a, long b) { long s = a+b+a*b+a-b; g(1); return s+1; } int main() { return f(20, 22); }"))
    irL (cgn (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }"))
    irS (cgn (pre9 + "long q(long a, long b) { long s = a+b+a*b+a-b; g(1); { long a = s; s = a+1; } return s+2; } int main() { return q(20, 22); }"))
@@ -1230,6 +1234,22 @@
       (cspair? qf 'r14)                              ; ...and a itself rides a cs seat now
       (member? '(add r11 r11 1) qf)                  ; the inner step is register-only
       (member? '(add r13 r13 1) qf))                 ; ...and so is i's
+   _ (setenv "MOON_ABLATE" ())
+   ; ...and the DEFAULT face: no home -- the params spill at ENTRY (the first arg
+   ; store precedes every ALU op) where the old lane computed on the arrivals and
+   ; spilled only at the call; the cells are repack's to place from here
+   (fsti fs rg) (: (go l i) (? !(two? l) 99
+                               (two? <l && (= <<l 'st) && (= (nthr <l 3) rg)) i
+                               (go >l (i + 1)))
+                   (go fs 0))
+   (falu fs) (: (go l i) (? !(two? l) 99
+                             (two? <l && member? <<l '(add imul sub) && !(= <><l 'sp)) i
+                             (go >l (i + 1)))
+                 (go fs 0))
+   hdf (fnf 'h <>(cgn (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }")))
+   _ (assert
+      ((falu hdf) < 99)                              ; the shape is real...
+      ((fsti hdf 'r6) < (falu hdf)))                 ; ...entry spill first, compute off the slots
    ; -- slot-load elision: stld rides a whole straight-line run (a bound slot's reload
    ; forwards from the register until a redef, an overlapping store, a label, or a bar).
    irE (cgn (pre9 + "long f2(long *p) { long a = p[0]; if (a & 1) return a; return g(a); } int main() { return f2((long*)0); }"))
@@ -1441,6 +1461,8 @@
                                           (n + 1) n))))
                  (go fs 0))
    pre9 "long g(long x); "
+   ; the a64 homes are the same knob-only lane (moon-ssa rung 5)
+   _ (setenv "MOON_ABLATE" "pcell")
    irDa (cgna (pre9 + "long f(long a, long b) { long s = a+b+a*b+a-b; g(1); return s+1; } int main() { return f(20, 22); }"))
    irLa (cgna (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }"))
    irOa (cgna "static long f9(long a, long b, long c, long d, long e, long f, long g2, long h, long i) { return a+h+i; } long q(long a) { return f9(a,2,3,4,5,6,7,8,9) - 17; } int main() { return (int)(q(1) + 24); }")
@@ -1465,7 +1487,8 @@
       (member? '(cmp r6 r0) <>irBa)                  ; ...and the cond compares off the reload
       (member? '(add r5 r5 r9) <>irBa)               ; s accumulates 3-address (i*i in r9)
       (member? '(add r6 r6 1) <>irBa)                ; the loop counter i ALSO homes (r6): its
-      (= 0 (wrapsa <>irBa))))                        ; ++ no longer leans its own slot. zero wraps
+      (= 0 (wrapsa <>irBa)))
+   _ (setenv "MOON_ABLATE" ()))                      ; ++ no longer leans its own slot. zero wraps
 
 ; -- register-bound branch splices: a call-free cbinl predicate reads its args from
 ; REGISTERS. a var arg over a pinned/homed local ALIASES that register (zero forms);
@@ -2134,5 +2157,5 @@ int main() { return 0; }"
       (= 3 (tally (csset fJ2)))))                    ; the knob: one seat each
 
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) ok")
+(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) + the param-cell default and its pcell face (rung 5) ok")
 (put err 10)
