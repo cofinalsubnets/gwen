@@ -543,7 +543,7 @@ ai_noinline static struct ai *argv_chain(struct ai *g, char const **v, int argc,
   int n = 0;
   if (argc > 0) g = ai_strof(g, v[0]), n++;                  // argv[0] is always the program
   for (int i = 1 + skip; i < argc; i++) g = ai_strof(g, v[i]), n++;
-  for (g = ai_push(g, 1, ai_zero); n--; g = gxr(g));
+  for (g = ai_push(g, 1, ZeroPoint); n--; g = gxr(g));   // () terminates, as a love list does
   return g; }
 
 #if !defined(LoveBoot) && !defined(__wasm__)

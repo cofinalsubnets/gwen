@@ -43,7 +43,7 @@
      "  -h, --help        print this help and exit\n" +
      "  --                end of options; the rest are files\n" +
      "verbs: " + (vwords * sort * keys $ from 'verbs 'tab) + "\n")
-    (need h t) (atom? t ? (say err $ "love: " + h + " needs an argument", cli-leave 2))
+    (need h '()) (say err $ "love: " + h + " needs an argument", cli-leave 2)
     K 1024 M 1048576 G 1073741824
     wordsz (charm? G ? 8 4)             ; 2^30 is a charm only where a fixnum is 62-bit
     ; validate here: a bad value reaching `tune` writes a non-Z tray, which the nif refuses
