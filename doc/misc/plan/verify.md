@@ -20,7 +20,8 @@ half of the same ladder, not separate programs.
 | rocq export | uu2coq.l, spec2coq.l, mx2coq.l | keep: export leg |
 | lean export | uu2lean.l | keep: export leg |
 | verified lux (uuwm) | wm2uu.l, test/uuwm*.l | keep; FRESHENED 2026-08-16 |
-| CLAUDE.md laws fuzz | test/law.l | keep; grows a uu leg (below) |
+| CLAUDE.md laws fuzz | test/law.l | keep; the uu leg LANDED (below) |
+| CLAUDE.md laws proof | test/uuval.l, uuvallaw.l | the measure tower, proved |
 | property fuzz | test/fuzz.l | keep |
 | holo encoder fuzz | test/holo/fuzz/{fuzz,sysdiff}.l | PORTED 2026-08-16; py gone |
 | vmret.l vs vmret.py differential | tools/py/ | RETIRED 2026-08-16 |
@@ -65,19 +66,51 @@ list wears [..] and (list ..) and nothing else. the backtick is an ordinary
 name character in both readers now (p1's class table, p0's ioread1sym), so
 lint's constructor set, vi's syntax table and libra's doc all lost a row.
 
-## next rung: the CLAUDE.md laws get a proof leg
+## the rung that landed: the CLAUDE.md laws got a proof leg
 
-test/law.l already quantifies the laws as lambdas over a jot-generated corpus
-(refutation only, and it says so). the proof leg mirrors uuwm:
+test/law.l quantifies the laws as lambdas over a jot-generated corpus
+(refutation only, and it says so). the proof leg now stands beside it:
 
-1. a VALUE MODEL in the uu substrate: an inductive val (the seven preamble
-   inductives suffice -- nlist precedent) and the measure tower over it with
-   codomain a SIGN TRICHOTOMY (neg/zero/pos). the laws never consume a gem's
-   value, only the sign of its measure, so ieee never enters the model.
-2. the retraction laws (sat-idem, bit-idem, sat-ceil, bit-sat, nil?-bit)
-   proved of the model in uu; exported to rocq/lean for free.
-3. a lawgen tool (uuwmgen pattern) compiling test/law.l's law rows into the
-   obligations, so one spelling feeds fuzz and proof both.
+- **test/uuval.l** -- the VALUE MODEL. a value is a binary tree of measures,
+  depth-indexed the way nlist is (vtre by nat_rect; ii1 lifts, ii2 links), and
+  the measure tower is a STACK OF RETRACTIONS: bool -> nat -> zed -> rea -> msr
+  -> val, each rung a section whose round trip is definitional. so net-idem,
+  re-idem, ceil-idem, sat-idem, sat-net, sat-ceil, ceil-net and bit-idem are
+  idpaths, and bit-sat / nil?-bit / bit-nil are three-line rects. sat-green and
+  bit-bool are not proved at all -- they are the TYPES of vsat and vbit.
+- the carrier is the HALF-INTEGERS (an integer plus a bit): the smallest thing
+  closed under addition on which ceil is not the identity, which is all the
+  tower's shape asks. no ieee, and no gem value, enters -- as planned.
+- the ARITHMETIC (zadd/radd/madd) carries no theorem, deliberately: the laws are
+  about idempotence and factorisation, so a wrong zadd cannot fake one. planting
+  a fault in zadd reddens the demos and the differential and leaves every proof
+  term green -- which is why the differential exists.
+- **test/uuvallaw.l** -- the DIFFERENTIAL. love's own saturate/bit/nil?/ceil run
+  beside the model's vsat/vbit/vnil/vceil over an encoding of law.l's corpus
+  (33 values across every band: charm, gem, ratio, twin, charlist, symbol,
+  array, tablet, jot, nested lists). a pair encodes as the model's link, an atom
+  as a leaf carrying its measure -- so the fold, re, ceil, the clamp and the bit
+  are all under test. the leaf measure is read off love's own `net`: that one
+  primitive is the standing gap, the same one uuwm has with the C runtime.
+- **test/uuval.l's planted faults** -- rejects rows, each with its positive
+  twin: ceil is not the identity on the integer part, the clamp bites at 0, net
+  sums over a link rather than reading the head, saturate is not idempotent one
+  step off. the kernel refuses all four.
+- the exporters carry it: tools/uu2coq.l and uu2lean.l list test/uuval.l, so
+  all twenty uv-* entries re-check in Rocq (axiom-free, universe-checked -- the
+  filter uu's type-in-type kernel lacks) and in Lean 4, no sorryAx.
+
+still open on this rung:
+
+- a lawgen tool (uuwmgen pattern) compiling test/law.l's law rows into the
+   obligations, so one spelling feeds fuzz and proof both. today the two files
+   are kept in step by hand.
+- the laws the model cannot yet state: cap/cup/link-back/link-apart and
+   id?-finer want a structural equality on val, which the depth index makes a
+   setoid question (net is lift-invariant, so the tower never had to care).
+   add-assoc / mul-assoc / mul-dist want the BAND LATTICE -- mx.l's dispatch
+   matrices, which today are modelled only in Rocq (test/proof/rocq/mx.v, from
+   tools/mx2coq.l). an mx2uu.l on the wm2uu pattern is the obvious next step.
 
 what stays fuzz-only, permanently: the C primitives' agreement with the
 model -- the same gap uuwm has with the C runtime under core.l.
