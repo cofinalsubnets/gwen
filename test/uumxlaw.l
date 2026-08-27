@@ -117,6 +117,27 @@
      true)
    (idpath true)))
 
+; --- THE COMPOSE CELL: which cell of this table test/uuhom.l is about. that file
+; --- proves the monoid laws of homcomp -- love's `*` on the top band, prel's
+; --- compose -- as a free-standing algebra; here the lane is NAMED, so a
+; --- dispatch edit that moved compose off the hot diagonal, or made the mint a
+; --- unit there instead of the zero, fails a proof rather than quietly leaving
+; --- uuhom a monoid about nothing. the guard fails by name if uuhom's terms are
+; --- not up: they load earlier by sort order and the citation must not dangle ---
+(assert (two? (peep GLOB 'homcomp 0))
+        (two? (peep GLOB 'hom-assoc 0))
+        (two? (peep GLOB 'idfun 0)))
+(assert
+ (defn mxLcompose nat mxLmulh)                     ; the lane uuhom's homcomp spells
+ (defq mx-compose-diag (paths nat (mxmul mxKHot mxKHot) mxLcompose) (idpath mxLcompose))
+ ; ..and the mint at that cell is the ZERO, not the monoid's unit. uuhom's unit is
+ ; idfun, itself a lambda and so a KHot -- it rides the compose lane like any other
+ (defq mx-compose-zero (paths nat (mxmul mxKHot mxKMint) mxL0) (idpath mxL0))
+ ; the Church SUM is the band's other lane: uuhom's monoid is the multiplicative
+ ; half of a two-operation band, and the two lanes are distinct
+ (defq mx-church-add-diag (paths nat (mxadd mxKHot mxKHot) mxLaddh) (idpath mxLaddh))
+ (defq mx-church-lanes-apart (paths bool (nateqb mxLaddh mxLcompose) false) (idpath false)))
+
 ; --- the planted faults. a bounded forall that came back `true` for the wrong
 ; --- reason -- an empty range, a lookup that fell off its table -- would paint
 ; --- every theorem above green, so each load-bearing claim gets its false twin
@@ -138,5 +159,14 @@
  ; and mirror is not the identity: the positional pair really does trade places
  (id? 'rejected (rejects (\ z (defq mx-bad-mirror
     (paths bool (mxsq (lam a (lam b (nateqb (mxadd a b) (mxadd b a))))) true)
-    (idpath true))))))
+    (idpath true)))))
+ ; the compose cell is the MUL lane, not the Church sum -- a band with one
+ ; operation would make uuhom's monoid the whole story, and it is half of it
+ (id? 'accepted (rejects (\ z (defq mx-ok-compose
+    (paths nat (mxmul mxKHot mxKHot) mxLmulh) (idpath mxLmulh)))))
+ (id? 'rejected (rejects (\ z (defq mx-bad-compose
+    (paths nat (mxmul mxKHot mxKHot) mxLaddh) (idpath mxLaddh)))))
+ ; ..and the mint annihilates there rather than uniting
+ (id? 'rejected (rejects (\ z (defq mx-bad-compose-unit
+    (paths nat (mxmul mxKHot mxKMint) mxLmulh) (idpath mxLmulh))))))
 (hear test-strict)
