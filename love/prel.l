@@ -192,6 +192,8 @@
    (fraction x) (% x 1)
    neg negate recip reciprocal frac fraction        ; the short spellings (`sat` is up top, before saturate's users)
    (bit x) (nil? (nil? x))
+   == id?
+   (!== a b) (nil? (== a b))
    ; a star is the fixpoint of net. id?, not `=`: a number comes back unchanged where a tray's
    ; net is a fresh sum, so star? and galaxy? stay disjoint.
    (star? x) (id? x (net x))
@@ -454,7 +456,7 @@
  ': 3 ':= ':)                                       ; the binder, loosest of all; := is a bare nom, so it NAMES
                                                     ; `:` and takes its band -- an alias cannot drift from it
  -2 (pins (tablet 0)                                ; --- ARITY -2: spaced, and it CHAINS. a left and a right, but
- '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40)))          ; a same-band neighbour JOINS the run instead of nesting
+ '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40 '== 40 '!== 40)))          ; a same-band neighbour JOINS the run instead of nesting
  ; ⚠ the SPACED rows are NOMS: the sigil IS the name there, so a binding of it is visible in
  ; the text that uses it. the GLUED lane holds VALUES instead -- `<x` is the function `cap`, not
  ; the word -- because that link is NOT visible, and a local `cap` would silently re-aim every
@@ -659,8 +661,7 @@
    (op-climb g h out pend)
     (? (&& (two? pend) (&& (< (op-frd (cap pend)) 1)
                            (? h (<= g (op-frband (cap pend))) (< g (op-frband (cap pend))))))
-       (: r (op-del (op-fold (cap pend)) out (cup pend)) (op-climb g h (cap r) (cup r)))
-       (>< out pend))
+       (: r (op-del (op-fold (cap pend)) out (cup pend)) (op-climb g h (cap r) (cup r))) (>< out pend))
    ; drain at end of list: fold every pending frame innermost-out
    (op-drain out pend)
     (? (atom? pend) (rev out)
