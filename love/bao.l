@@ -3,21 +3,19 @@
 ; line reader (edraw/edln/edlnc) that lush drives.
 
 (module '(bao read reads forms shell welp edraw bao edln edlnc)
-(: (read s)
-   (: r (sound (? (hot? s) (flow s) s))
-      (? (two? r) (ev <r) 0)))
+(: (read s) (sound (hot? s ? (flow s) s) @ (x) (ev x)))
 ; reads: the stream shell -- reads and evals every form of a port, the value the last
 ; form's; ev late-binds ((ev 'ev r)) so one definition drives both of love0's passes.
 ; the two endings differ: a clean end comes between forms, `torn` inside one -- and torn
 ; is a scare, the reader having drunk for itself and found the end.
 (: (reads p)
    (: (walk cl z) (sound cl @ 'torn (scare 'unfinished-form p)
-                              (a >< b) (walk b (ev 'ev a))
+                              (a . b) (walk b (ev 'ev a))
                               z)
       ; the shared lane, for `in`: gulp for speed, hold nothing across an eval. box slot 0 counts
       ; every byte drawn off p, so the walk can put the port where it belongs. no window on purpose:
       ; a straddling `;` comment would end one cleanly and the next reads the prose as code.
-      box (tablet 0)
+      box {}
       (drew u) (peep box 0 0)
       ; absolute, not relative -- p is already behind us, so a plain (unchug p rem) re-reads the run
       (drop n) (unchug p (n - inhand p))     ; the port to n pending; we hold the rest
@@ -26,9 +24,9 @@
        (see p @ -1 () c
         (: _ (unsee p c)
            t (chug p)
-           _ (pin box 0 (drew () + tally t))
-           (go k l) (? (0 >= k) l (: j (k - 1) (go j (t j >< l))))
-         (go (tally t) (once (\ u (feed ()))))))
+           _ (pin box 0 (drew () + #t))
+           (go k l) (0 >= k ? l (: j (k - 1) (go j (t j . l))))
+         (go #t (once (\ u (feed ()))))))
       ; consumed, forwards and by identity. never (tally >r) -- the residue is lazy, so that
       ; forces the whole rest; and force at every step, or a plain `cup` walk stops dead at a
       ; gulp boundary and spins on () forever. `once` memoizes, so re-forcing is free.
@@ -41,39 +39,39 @@
       (step cl walked z)
        (sound cl @
          'torn (scare 'unfinished-form p)
-         (a >< b) (: k (upto cl b 0)
-                     w2 (walked + k)
-                     rem (drew () - w2)
-                     ; one byte short on purpose -- the byte-exact lane runs one ahead, and test_stdincorpus diffs it
-                     _ (drop (0 < rem ? (rem - 1) 0))
-                     h (inhand p)
-                     v (ev 'ev a)
-                     (h = inhand p ? (drop 0, step b w2 v)
-                                     (start (two? b ? [<b]) v)))
+         (a . b) (: k (upto cl b 0)
+                    w2 (walked + k)
+                    rem (drew () - w2)
+                    ; one byte short on purpose -- the byte-exact lane runs one ahead, and test_stdincorpus diffs it
+                    _ (drop (0 < rem ? (rem - 1) 0))
+                    h (inhand p)
+                    v (ev 'ev a)
+                    (h = inhand p ? (drop 0, step b w2 v)
+                                    (start (two? b ? [<b]) v)))
          (drop 0, z))
-      (start pre z) (: c (see p)
-                       (? (= c -1) (? (two? pre) (walk pre z) z)
-                          (: _ (unsee p c)
-                             (? (nil? (inhand p)) (walk (cat pre (trickle p)) z)
-                                (: _ (pin box 0 (tally pre))
-                                   (step (cat pre (feed ())) 0 z))))))
+      (start pre z)
+       (see p @
+        -1 (atom? pre ? z (walk pre z))
+        c (unsee p c,
+           inhand p ? (pin box 0 #pre, step (cat pre (feed ())) 0 z)
+                      (walk (cat pre (trickle p)) z)))
       ; never rebind `in` -- this identity folded at egg-compile, so a fresh port fails it in silence
       (? (id? p in) (start () 0) (walk (flow p) 0))))
 (: (forms p)
    ((: (g cl acc) (sound cl @ 'torn (scare 'unfinished-form p)
-                              (a >< b) (g b (a >< acc))
+                              (a . b) (g b (a . acc))
                               (rev acc)))
     (flow p) ()))
 
 (: m (nom 0) eofsym (nom 0)
 
-   (want n) (member? n (names ()) ? (ev n) (\ _ ()))
+   (want n) (member? n (names ()) ? (ev n) ())
    raw (want 'raw)
 
 
    (rdall cl acc)
     (sound cl @ 'torn m                            ; unfinished shape -> more
-                (a >< b) (rdall b (a >< acc))
+                (a . b) (rdall b (a . acc))
                 (rev acc))                         ; a clean end -> the datums, in order
    (parseall cl)
     (rdall cl () @ ^m  m                           ; unfinished shape
@@ -84,18 +82,18 @@
 
    ; intersperse a list of charlists with newlines, in order
    (joinln ls)
-    (ls @ (a >< b) (two? b ? (a + (10 >< joinln b)) a))
+    (ls @ (a . b) (atom? b ? a (a + (10 . joinln b))))
 
    ; flatten the editor state into one charlist suitable for parseall
    (flatten u l r d)
-     (joinln (revcat u (revcat l r >< d)))
+     (joinln (revcat u (revcat l r . d)))
 
    ; walk xs forward taking n chars into acc (reversed); when done
    ; call k with (rev (take n xs)) and (drop n xs). stops cleanly at
    ; end-of-xs even if n exceeds the list length.
    (splitat k acc n xs)
-     (? (two? xs && 0 < n) (splitat k (<xs >< acc) (n - 1) >xs)
-        (k acc xs))
+    (xs @ ((ax . ux) && 0 < n) (splitat k (ax . acc) (n - 1) ux)
+     (k acc xs))
 
    ; map non-printables to space; otherwise pass through
    (prc c) (putc $ 32 <= c < 127 ? c 32)
@@ -103,21 +101,21 @@
    ; line editor buffer zipper arguments
    ; u up (reversed), l left (reversed), r right, d down
    (edleft k u l r d)
-     (? (two? l) (k u >l (<l >< r) d)
-        (two? u) (k >u (rev <u) () (revcat l r >< d))
-        (k u l r d))
+    (l @ (al . ul) (k u ul (al . r) d)
+     (u @ (au . uu) (k uu (rev au) () (revcat l r . d))
+      (k u l r d)))
    (edright k u l r d)
-     (? (two? r) (k u (<r >< l) >r d)
-        (two? d) (k (revcat l r >< u) () <d >d)
-        (k u l r d))
+    (r @ (ar . ur) (k u (ar . l) ur d)
+     (d @ (ad . ud) (k (revcat l r . u) () ad ud)
+      (k u l r d)))
    (edbsp k u l r d)
-     (? (two? l) (k u >l r d)
-        (two? u) (k >u (rev <u) r d)
-        (k u l r d))
+    (l @ (_ . ul) (k u ul r d)
+     (u @ (au . uu) (k uu (rev au) r d)
+      (k u l r d)))
    (eddel k u l r d)
-     (? (two? r) (k u l >r d)
-        (two? d) (k u l <d >d)
-        (k u l r d))
+    (r @ (_ . ur) (k u l ur d)
+     (d @ (ad . ud) (k u l ad ud)
+      (k u l r d)))
    (edhome k u l r d) (k u () (revcat l r) d)
    (edend  k u l r d) (k u (revcat r l) () d)
 
@@ -125,30 +123,26 @@
    ; the topmost line / end of the bottommost line. on a single-line
    ; buffer they degenerate to edhome / edend.
    (edtop k u l r d)
-     (? (two? u) (: ru (rev u)
-                  (k () () <ru (>ru + (revcat l r >< d))))
-        (k u () (revcat l r) d))
+    (rev u @ (au . uu) (k () () au (uu + (revcat l r . d)))
+     (k u () (revcat l r) d))
    (edbot k u l r d)
-     (? (two? d) (: rd (rev d)
-                  (k (>rd + (revcat l r >< u)) (revcat <rd ()) () ()))
-        (k u (revcat r l) () d))
+    (rev d @ (ad . ud) (k (ud + (revcat l r . u)) (revcat ad ()) () ())
+     (k u (revcat r l) () d))
    (edup k u l r d)
-     (? (two? u) (splitat (\ lz rr (k >u lz rr (revcat l r >< d)))
-                          () (tally l) <u)
-        (k u l r d))
+    (u @ (au . uu)(splitat (\ lz rr (k uu lz rr (revcat l r . d))) () #l au)
+     (k u l r d))
    (eddown k u l r d)
-     (? (two? d) (splitat (\ lz rr (k (revcat l r >< u) lz rr >d))
-                          () (tally l) <d)
-        (k u l r d))
+    (d @ (ad . ud) (splitat (\ lz rr (k (revcat l r . u) lz rr ud)) () #l ad)
+     (k u l r d))
 
    ; --- history zipper ---
 
    ; pack the buffer's four halves into one slot for history storage.
-   (mkframe u l r d) (u >< l >< r >< d)
+   (mkframe u l r d) (u . l . r . d)
 
    ; if cur holds a pristine recall, restore it at its slot in hu;
    ; called before any mutating edit so the original survives.
-   (detach hu cur) (two? cur ? (cur >< hu) hu)
+   (detach hu cur) (two? cur ? (cur . hu) hu)
 
    (emptybuf u l r d) (!u && !l && !r && !d)
    (parses u l r d)   (two? (parseall (flatten u l r d)))
@@ -161,19 +155,19 @@
    (uphist k u l r d hu hd cur)
      (? (two? hu)
         (: e <hu
-           nhd (? (emptybuf u l r d) hd (mkframe u l r d >< hd))
+           nhd (? (emptybuf u l r d) hd (mkframe u l r d . hd))
            (k <e <>e <>>e >>>e >hu nhd e))
         (two? cur && parses u l r d)
-        (: nhd (mkframe u l r d >< hd)
+        (: nhd (mkframe u l r d . hd)
            (k () () () () hu nhd ()))
         (k u l r d hu hd cur))
    (downhist k u l r d hu hd cur)
      (? (two? hd)
         (: e <hd
-           nhu (? (emptybuf u l r d) hu (mkframe u l r d >< hu))
+           nhu (? (emptybuf u l r d) hu (mkframe u l r d . hu))
            (k <e <>e <>>e >>>e nhu >hd e))
         (two? cur && parses u l r d)
-        (: nhu (mkframe u l r d >< hu)
+        (: nhu (mkframe u l r d . hu)
            (k () () () () nhu hd ()))
         (k u l r d hu hd cur))
 
@@ -244,12 +238,12 @@
               -7 eofsym
               ; enter cashes the buffer as long as it parses complete
               10 (parseall (flatten u l r d) @
-                  ^m (loop npra (rev l >< u) () r d (detach hu cur) hd ())
+                  ^m (loop npra (rev l . u) () r d (detach hu cur) hd ())
                   vs (two? d ? (csi (tally d) 66) (),
                       putc 10,
                       [vs (!vs ? (revcat hd (detach hu cur))
-                           (take 100 (mkframe u l r d >< revcat hd (detach hu cur)))) ]))
-              (c && 0 < c) (loop npra u (c >< l) r d (detach hu cur) hd ())
+                           (take 100 (mkframe u l r d . revcat hd (detach hu cur)))) ]))
+              (c && 0 < c) (loop npra u (c . l) r d (detach hu cur) hd ())
               -1 (edleft  kloop u l r d)
               -2 (edright kloop u l r d)
               -3 (edbsp   kedit u l r d)
@@ -280,7 +274,7 @@
    ; shell via (shell 0), which calls (repl 0 0).
    (repl hu hd)
     (edline hu hd @ ^eofsym 0
-                    (vs >< nhu >< nhd) (each vs (\ v (do_eval v, putc 10)), repl nhu nhd))
+                    (vs . nhu . nhd) (each vs (\ v (do_eval v, putc 10)), repl nhu nhd))
 
    ; no-op () returning scare handler
    (welp a b) ()
@@ -326,7 +320,7 @@
            (bev ip @
             -7 eofsym
             10 (putc 10, revcat l r)
-            (c && 0 < c) (loop (c >< l) r)            ; insert a printable
+            (c && 0 < c) (loop (c . l) r)            ; insert a printable
             -1 (edleft  km () l r ())
             -2 (edright km () l r ())
             -3 (edbsp   km () l r ())
@@ -349,31 +343,28 @@
                   (loop (rev ln) () ni nd))
 
              (bev ip @ -7 'eof
-                10 (: _ (putc 10)
-                            ln (revcat l r)
-                            nh (? !ln hist (take 100 (ln >< hist)))
-                            (ln >< nh))
-                (c && 0 < c) (loop (c >< l) r i draft)
-                -12 (: _ (puts "^C") _ (putc 10) (() >< hist))   ; ^C: abandon the line, hist untouched
+                10 (: ln (putc 10, revcat l r)
+                      nh (!ln ? hist (take 100 (ln . hist)))
+                    (ln . nh))
+                (c && 0 < c) (loop (c . l) r i draft)
+                -12 (puts "^C\n", () . hist)   ; ^C: abandon the line, hist untouched
                 -13
                   (? !comp (loop l r i draft)
                      (: t (comp (revcat l ()))
                         (? !(two? t) (loop l r i draft)
-                           (: l2 (foldl (\ a ch (ch >< a)) l <t)
+                           (: l2 (foldl (a \ ch \ ch . a) l <t)
                               cs >t
-                              _ (? (two? cs && two? >cs)
-                                   (putc 10,
-                                    puts $ foldl (\ a s (? (tally a) (a + "  " + s) s)) "" cs,
-                                    putc 10))
-                              (loop l2 r i draft)))))
+                            (two? cs && two? >cs ?
+                              (puts $ "\n" + foldl (a \ s \ 0 = #a ? s (a + "  " + s)) "" cs + "\n"),
+                             loop l2 r i draft)))))
                 -1 (edleft  km () l r ())
                 -2 (edright km () l r ())
                 -3 (edbsp   km () l r ())
                 -4 (eddel   km () l r ())
                 -5 (edhome  km () l r ())
                 -6 (edend   km () l r ())
-                -8 (recall (? (i < hn) (i + 1) i))   ; up: older
-                -9 (recall (? (0 < i) (i - 1) i))    ; down: newer
+                -8 (recall (i >= hn ? i (i + 1)))   ; up: older
+                -9 (recall (0 >= i  ? i (i - 1)))    ; down: newer
                 (loop l r i draft)))
         (loop () () 0 ()))
    (edln ip pr hist) (edlnc ip pr hist ())
