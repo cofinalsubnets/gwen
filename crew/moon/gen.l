@@ -135,7 +135,8 @@
    ; discipline (the old code compared physicals, so the accident counted).
    (rpeq? g a b) (id? (rp g a) (rp g b))
    ; -- the ablation knob (the pare plan's rung 0): MOON_ABLATE="tpool,cs" holds named
-   ; mechanisms empty for PRICING -- ralloc tpool cs lhome homes pcs. read at
+   ; mechanisms empty for PRICING -- ralloc tpool cs lhome homes pcs, and pdef
+   ; (promotion falls back to the hull window). read at
    ; RUN time, once per unit (a value binding folds at bake and would carry the baking
    ; session's environment). no gate rides it; unset is every mechanism on. --
    (ablenv _)
@@ -4583,8 +4584,10 @@
              ; from, which is also the preferred seat (taking it makes that store a self-mov
              ; and it drops), and () when the first touch was a LOAD, which reads a value this
              ; cell was never given.
+             tls {}                        ; base -> ((i kind reg)..) newest-first, the chains' food
              (touch b n i e9 k9 s9)                    ; k9: 'st | 'ld | 'no (an unpromotable shape)
               (: w (obs b)
+                 _ (pin tls b ([i k9 s9] >< peep tls b ()))
                  (pin obs b (? (two? w) [n <>w i (nthr w 3 || e9)
                                            ((nthr w 4) && !(id? k9 'no)) (nthr w 5)]
                                [n i i e9 !(id? k9 'no) (? (id? k9 'st) s9 ())])))
@@ -4625,7 +4628,8 @@
                                                    (id? <f 'ld)
                                                     (? (member? (nthr f 1) (csregs g)) 'no 'ld)
                                                    'no)
-                                                (? (id? <f 'st) (nthr f 3) ()))
+                                                (? (id? <f 'st) (nthr f 3)
+                                                   (id? <f 'ld) (nthr f 1) ()))
                                        (scan >l (i + 1) sp2))
                                    (charm? X && ((X = -8) || (0 <= X))) (scan >l (i + 1) sp2)
                                    'no))
@@ -4654,20 +4658,25 @@
                           _ (? ch2 (pin obs b [<w <r <>r (nthr w 3) (nthr w 4) (nthr w 5)]) 0)
                           (widen1 >bs (ch || ch2))))
                    _ (: (fix u) (? (widen1 bases ()) (fix ()) 0) (fix ()))
-                   ; -- PROMOTION: an object whose every touch is a full-word ld/st at its own
-                   ; base, whose address never escapes, and which is written before it is read,
-                   ; is a candidate for a REGISTER instead of a cell. It takes one when some
-                   ; caller-saved seat is free across its widened window -- free meaning live-out
-                   ; nowhere in the range and defined nowhere in it, which a call fails by
-                   ; construction (a call defines the whole caller-saved file). Then the stores
-                   ; become defs, the loads uses, and the cell never places. ⚠ the window is the
-                   ; PACKING hull, and it is sound here for the same reason it is sound there:
-                   ; convex over form indices, widened over every backedge it meets, so no path
-                   ; leaves the range and returns unseen. Greedy by window start, each seat
-                   ; claimed over its range so two promotions can never share one register. --
+                   ; -- PROMOTION (moon-ssa rung 1): per-DEF chains, not the hull. a
+                   ; candidate cell's stores group by the loads whose reaching defs join
+                   ; them (val.l's vreach/vgroup); a chain takes a caller-saved seat over
+                   ; its OWN live range -- the index set where the value actually rides --
+                   ; free meaning live-out nowhere in the set and defined nowhere in it,
+                   ; which a call inside the RANGE still fails by construction (it defines
+                   ; the whole caller-saved file) while a call merely inside the widened
+                   ; window no longer does. one cell's crossing chain keeps its cell while
+                   ; a call-free sibling promotes; the cell retires only when every touch
+                   ; promoted. a load no store reaches stays a frame read (it reads a value
+                   ; the cell was never given -- unspecified either way). greedy by window
+                   ; start, chains within a cell by first def, each seat claimed over its
+                   ; set so two values never share one register.
+                   ; MOON_ABLATE=pdef is the HULL for pricing: one chain of every touch
+                   ; over the whole widened span, first touch a store required. --
                    scand (foldl (\ a b (: w (peep obs b ())
-                                          (? ((<w = 8) && !(nthr w 3) && (nthr w 4) && (nthr w 5))
-                                             ([<>w <>>w b (nthr w 5)] >< a) a)))
+                                          (? ((<w = 8) && !(nthr w 3) && (nthr w 4)
+                                              && (? (abl? g 'pdef) (nthr w 5) 1))
+                                             (b >< a) a)))
                                 () bases)
                    lot9 (? (two? scand) (lvout g fs) 'no)   ; index -> live-out, or the refusal
                    dft9 (? (id? lot9 'no) {}
@@ -4680,29 +4689,97 @@
                               _ (go fs 0)
                               t))
                    taken {}                    ; index -> the seats promotion already holds
-                   (pfree? r lo hi)
-                    (: (go i) (? (hi < i) 1
-                                 (member? r (peep lot9 i ())) ()
-                                 (member? r (peep dft9 i ())) ()
-                                 (member? r (peep taken i ())) ()
-                                 (go (i + 1)))
-                       (go lo))
-                   (pseat rs lo hi) (? !(two? rs) () (pfree? <rs lo hi) <rs (pseat >rs lo hi))
-                   (pclaim r lo hi) (: (go i) (? (hi < i) 0
-                                                 (: _ (pin taken i (r >< peep taken i ()))
-                                                    (go (i + 1))))
-                                       (go lo))
-                   pmap {}                     ; base -> the register it lives in
+                   (pfree? tk r is9)
+                    (? !(two? is9) 1
+                       (: i <is9
+                          (? (member? r (peep lot9 i ())) ()
+                             (member? r (peep dft9 i ())) ()
+                             (member? r (peep tk i ())) ()
+                             (pfree? tk r >is9))))
+                   (pseat tk rs is9) (? !(two? rs) () (pfree? tk <rs is9) <rs (pseat tk >rs is9))
+                   (pclaim tk r is9) (? !(two? is9) 0
+                                        (: _ (pin tk <is9 (r >< peep tk <is9 ()))
+                                           (pclaim tk r >is9)))
+                   (span9 lo hi) (: (go i acc) (? (i < lo) acc (go (i - 1) (i >< acc))) (go hi ()))
+                   succ9 (? (id? lot9 'no) {} (vsucc fs))
+                   (chains9 b)                 ; one cell -> ((S pref defs uses)..)
+                    (: w (peep obs b ())
+                       tl (rev (peep tls b ()))
+                       sts (map (\ t <t) (filter (\ t (id? <>t 'st)) tl))
+                       lds (map (\ t <t) (filter (\ t (id? <>t 'ld)) tl))
+                       (? (abl? g 'pdef)
+                          [[(span9 <>w <>>w) (nthr w 5) sts lds]]
+                          !(two? sts) ()               ; no store: nothing to promote
+                          !(two? >sts)                 ; ONE def: one chain, no reaching needed
+                           (: lo0 <>w hi0 <>>w
+                              rg9 (foldl (\ t9 t (pin t9 <t (nthr t 2))) {} tl)
+                              clv (vclive lo0 hi0 succ9 sts lds)
+                              S (: (go i acc)
+                                   (? (i < lo0) acc
+                                      (go (i - 1) (? ((i = <sts) || 0 < peep clv i 0) (i >< acc) acc)))
+                                   (go hi0 ()))
+                              [[S (peep rg9 <sts ()) sts lds]])
+                          (: lo0 <>w hi0 <>>w
+                             rg9 (foldl (\ t9 t (pin t9 <t (nthr t 2))) {} tl)
+                             rt (vreach lo0 hi0 succ9 sts)
+                             gps <(vgroup rt sts lds)   ; the chains; a no-def load stays a frame read
+                             clv (vclive lo0 hi0 succ9 sts lds)   ; the CELL's liveness, once
+                             st9 (foldl (\ t d (pin t d 1)) {} sts)
+                             (map (\ gp (: ds <gp us <>gp
+                                            dt9 (foldl (\ t d (pin t d 1)) {} ds)
+                                            ; live out of i AND a chain def reaching out of i:
+                                            ; this chain's value rides the edge
+                                            S (: (go i acc)
+                                                 (? (i < lo0) acc
+                                                    (go (i - 1)
+                                                        (? (peep dt9 i 0) (i >< acc)
+                                                           !(0 < peep clv i 0) acc
+                                                           (peep st9 i 0) acc
+                                                           (two? (vboth (peep rt i ()) ds)) (i >< acc)
+                                                           acc)))
+                                                 (go hi0 ()))
+                                            [S (peep rg9 <ds ()) ds us]))
+                                  gps))))
+                   bylo (sortby (\ a b ((<>(peep obs a ())) < (<>(peep obs b ())))) scand)
+                   pxm {}                      ; touch index -> its seat
+                   retid {}                    ; base -> every touch promoted, the cell retires
+                   ; the SUBSUMPTION order, and the compile-time floor: cells the HULL
+                   ; can serve take their seats first, the old way -- whole cell, one
+                   ; seat, the span claimed -- with no chain analysis at all. only the
+                   ; cells the hull refuses pay for per-def chains, and a per-def claim
+                   ; is a subset of a hull claim, so every cell the hull takes still
+                   ; fits by construction. under pdef the rest-pass falls back to the
+                   ; hull shape too and this is exactly the old pass.
+                   hullw (: t {}
+                            (go l) (? !(two? l) t
+                                      (: b <l w (peep obs b ())
+                                         _ (? !(nthr w 5) 0
+                                              (: S (span9 <>w <>>w)
+                                                 pf (nthr w 5)
+                                                 r (pseat taken (? (member? pf (lvgp g)) (pf >< (lvgp g)) (lvgp g)) S)
+                                                 (? !r 0
+                                                    (: _ (pclaim taken r S)
+                                                       _ (foldl (\ _ t9 (pin pxm <t9 r)) 0 (peep tls b ()))
+                                                       (pin retid b 1)))))
+                                         (go >l)))
+                            (? (id? lot9 'no) t (go bylo)))
                    _ (? (id? lot9 'no) 0
-                        (foldl (\ _ c (: lo <c hi <>c b (nthr c 2)
-                                         pf (nthr c 3)          ; the first store's own source
-                                         r (pseat (? (member? pf (lvgp g)) (pf >< (lvgp g)) (lvgp g)) lo hi)
-                                         (? r (: _ (pclaim r lo hi) (pin pmap b r)) 0)))
-                               0 (sortby (\ a b (<a < <b)) scand)))
-                   prom (keys pmap)
+                        (foldl (\ _ b
+                                 (: nrw (foldl (\ k c9
+                                                (: S <c9 pf <>c9 ds (nthr c9 2) us (nthr c9 3)
+                                                   r (pseat taken (? (member? pf (lvgp g)) (pf >< (lvgp g)) (lvgp g)) S)
+                                                   (? !r k
+                                                      (: _ (pclaim taken r S)
+                                                         _ (foldl (\ _ i (pin pxm i r)) 0 ds)
+                                                         _ (foldl (\ _ i (pin pxm i r)) 0 us)
+                                                         (k + #ds + #us)))))
+                                               0 (chains9 b))
+                                    (? (nrw = tally (peep tls b ())) (pin retid b 1) 0)))
+                               0 (filter (\ b !(peep retid b ())) bylo)))
+                   prom (keys pxm)
                    rows (sortby (\ a b (<a < <b))
                                 (map (\ b (: w (peep obs b ()) [<>w b <w <>>w]))
-                                     (filter (\ b !(peep pmap b ())) bases)))
+                                     (filter (\ b !(peep retid b ())) bases)))
                    free {}                     ; the retired 8-byte cells
                    nmap {}                     ; base -> its packed seat
                    (ret1 act lo)                       ; act ((hi n nb)..) -> the still-live rest
@@ -4731,18 +4808,15 @@
                        o9 (obj9 slots X)
                        nb (? (two? o9) (peep nmap <o9 'no9) 'no9)
                        (? !(charm? nb) f (reop f op9 (nb + (X - <o9)))))
-                   (prw f)                             ; a promoted touch -> its register form | 'no
-                    (: bp (peep a4base <f -1)
-                       o9 (? (0 <= bp && id? (nthr f bp) 'r4)
-                             (obj9 slots (nthr f (peep uoff <f -1))) ())
-                       r (? (two? o9) (peep pmap <o9 ()) ())
+                   (prw f i)                           ; a promoted touch -> its register form | 'no
+                    (: r (peep pxm i ())
                        (? !r 'no
                           (id? <f 'st) ['mov r (nthr f 3)]
                           ['mov (nthr f 1) r]))
                    (rw l i)
                     (? !(two? l) ()
                        (: f <l
-                          p (? (two? f && (3 < i) && two? prom) (prw f) 'no)
+                          p (? (two? f && (3 < i) && two? prom) (prw f i) 'no)
                           (? (id? p 'no)
                              (: f2 (? !(two? f) f
                                       (i = 3) ['sub 'sp 'sp K2]

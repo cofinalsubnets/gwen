@@ -86,6 +86,24 @@ until rung 6.
   the 495 crossing chains inside "call-free" cells must NOT promote — the
   linear flag lies both ways. dtb_to_kboot's three-reload pointer is the hand
   check. Hull promotion retires.
+  **LANDED 2026-08-28**: repack's promotion is per-def chains (val.l's
+  vreach/vgroup/vclive, window-bounded, over repack's own touch record); a
+  chain's seat is checked over its live-range SET, so a call in the hull but
+  outside the range no longer bars it, and a cell retires only when every
+  touch promoted. Subsumption held BY CONSTRUCTION and doubles as the
+  compile-time floor: cells the hull can serve promote the old way first
+  (whole cell, span claim, no analysis), and only the hull's refusals pay
+  for chains — single-def cells skip reaching entirely. `MOON_ABLATE=pdef`
+  IS the hull, proven byte-identical to the pre-change compiler over all 80
+  TUs. The yield: **−13.9% frame touches** (29,876 → 25,722), −2,210 forms,
+  371 fns improved, 0 regressed, 107 frames shrunk (one grew 16 B by parity
+  padding); the rung-0 census after: 6,640 rows where 8,200 stood. The
+  price (moon-ablate base vs pdef + the counter protocol): **−2.5% corpus
+  instructions, −3.4% .text, −1.1% cycles on the direct sha256sum row**;
+  corpus cycles read +1.6/+0.1/−0.5 across interleaved samples — the layout
+  lottery, not a delta (branch-misses favor per-def). Compile time: **+5.2%
+  on the whole-src build row** (+6% on ev.c, the worst TU) — priced, carried,
+  and rung 6's payback target.
 - **rung 2 — narrow values ride.** The 254 narrow/si cells: intervals carry a
   width (rezx's clean-width lattice is the model), a narrow chain promotes with
   its extension discipline. Extends rung 1's promoter; the si-fed cells stop

@@ -3,7 +3,7 @@
 ; AST goldens, and the WHOLE IR for return-42 compared form by form. the cat
 ; (`make test_moon`):
 ;
-;   cat test/00-init.l crew/moon/floor.l crew/moon/lex.l crew/moon/parse.l crew/moon/gen.l crew/moon/val.l crew/moon/law.l | out/host/love
+;   cat test/00-init.l crew/moon/floor.l crew/moon/lex.l crew/moon/parse.l crew/moon/val.l crew/moon/gen.l crew/moon/law.l | out/host/love
 ;
 ; the end-to-end (elf64, the run, the gcc differential) lives in the Makefile
 ; smoke through the real `mooncc`.
@@ -1974,6 +1974,27 @@
       (= (vcells cG) ())                               ; an unmodeled base use: conservative skip
       (= (vchains cG) ())))
 
+; --- per-def promotion (moon-ssa rung 1), on hand forms straight through repack:
+; one cell, two lifetimes -- the first crosses a call and keeps its frame cell,
+; the second promotes onto its own range (the store self-drops into its seat);
+; the hull path (the pdef ablation) refuses the whole cell for the one call.
+(: gR {}
+   _ (pin gR 'slots '((-16 8)))
+   gH {}
+   _ (pin gH 'slots '((-16 8)))
+   _ (pin gH 'abl '(pdef))
+   fs '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+        (li r5 7) (st r4 -16 r5) (call g9) (ld r6 r4 -16) (mov r0 r6)
+        (li r7 9) (st r4 -16 r7) (ld r8 r4 -16) (add r0 r0 r8) (ret))
+   rf (repack gR fs)
+   hf (repack gH fs)
+   (assert
+      (member? '(ld r6 r4 -16) rf)                  ; the crossing chain keeps its cell
+      !(member? '(ld r8 r4 -16) rf)                 ; the call-free chain left the frame..
+      (member? '(mov r8 r7) rf)                     ; ..its load reads the seat, the store dropped
+      (member? '(ld r6 r4 -16) hf)                  ; the hull: a call in the window bars it whole
+      (member? '(ld r8 r4 -16) hf)))
+
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) ok")
+(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rung 1) ok")
 (put err 10)

@@ -326,9 +326,76 @@
                        (row (i - 1) ([i <f (vwt spans i) (near i)] >< acc)))))))
        (row (n - 1) ()))
 
-   ; -- per-def chains: each cell's stores grouped by the loads that join them
-   ; (a load with two reaching defs merges chains -- the phi seam), and the
-   ; call-crossing verdict per CHAIN, not per hull. [sb base defs uses cross]
+   ; -- reaching defs at cell grain: rt i -> the defs (a sorted subset of dfs)
+   ; reaching INTO i, over the index window [lo, hi] (a repack hull is such a
+   ; window: no path leaves it and returns unseen). forward fixpoint; unions.
+   (vreach lo hi succ dfs)
+    (: rt {}
+       dt (foldl (\ t d (pin t d 1)) {} dfs)
+       (step chg i)
+        (? (hi < i) chg
+           (: rout (? (peep dt i 0) [i] (peep rt i ()))
+              c2 (: (push l ch)
+                    (? !(two? l) ch
+                       (: j <l
+                          (? ((j < lo) || (hi < j)) (push >l ch)
+                             (: old (peep rt j ()) nu (vun old rout)
+                                _ (pin rt j nu)
+                                (push >l (tally nu = tally old ? ch 1))))))
+                    (push (peep succ i ()) chg))
+              (step c2 (i + 1))))
+       (fix _) (? (0 < step 0 lo) (fix 0) rt)
+       (fix 0))
+
+   ; -- chain grouping: defs merge when one load's reaching set joins them (the
+   ; phi seam). [((defs uses)..) nodefs], chains keyed ascending by first def.
+   (vgroup rt dfs uss)
+    (: uf {}
+       (find x) (: p (peep uf x x) (? (p = x) x (find p)))
+       (uni a b) (: ra (find a) rb (find b)
+                    (? (ra = rb) 0 (ra < rb) (pin uf rb ra) (pin uf ra rb)))
+       _ (: (g l2) (? !(two? l2) 0
+                      (: u <l2 rin (peep rt u ())
+                         _ (? (two? rin)
+                              (: (g2 m) (? !(two? m) 0 (: _ (uni <rin <m) (g2 >m)))
+                                 (g2 >rin))
+                              0)
+                         (g >l2)))
+            (g uss))
+       gt {}
+       _ (: (g l2) (? !(two? l2) 0
+                      (: d2 <l2 r2 (find d2)
+                         _ (pin gt r2 (vapp (peep gt r2 ()) [d2]))
+                         (g >l2)))
+            (g dfs))
+       ut {}
+       nod (: (g l2 a) (? !(two? l2) (rev a)
+                          (: u <l2 rin (peep rt u ())
+                             (? !(two? rin) (g >l2 (u >< a))
+                                (: r2 (find <rin)
+                                   _ (pin ut r2 (vapp (peep ut r2 ()) [u]))
+                                   (g >l2 a)))))
+              (g uss ()))
+       [(map (\ r2 [(peep gt r2 ()) (peep ut r2 ())]) (sort (keys gt))) nod])
+
+   ; -- one value's boolean liveness at cell grain over [lo, hi]: kills at the
+   ; stores, uses at the loads. answers i -> live OUT of i.
+   (vclive lo hi succ kills uses)
+    (: lo9 {}
+       ut (foldl (\ t u (pin t u 1)) {} uses)
+       kt (foldl (\ t k (pin t k 1)) {} kills)
+       (lin i) (? (peep ut i 0) 1 (peep kt i 0) 0 (peep lo9 i 0))
+       (sweep chg i)
+        (? (i < lo) chg
+           (: o (: (go ss) (? !(two? ss) 0 (0 < lin <ss) 1 (go >ss)) (go (peep succ i ())))
+              old (peep lo9 i 0)
+              _ (pin lo9 i o)
+              (sweep (? (o = old) chg 1) (i - 1))))
+       (fix _) (? (0 < sweep 0 hi) (fix 0) lo9)
+       (fix 0))
+
+   ; -- per-def chains: each cell's stores grouped by the loads that join them,
+   ; and the call-crossing verdict per CHAIN, not per hull. [sb base defs uses cross]
    (vchains ctx)
     (: n (ctx 'n) succ (ctx 'succ) lv (ctx 'lv) ci (ctx 'ci)
        (out ss seed)
@@ -336,58 +403,17 @@
            !(two? ss) seed
            (: s (peep lv <ss ())
               (? (vall? s) 'all (out >ss (vun seed s)))))
-       (reach dfs)
-        (: rt {}
-           (step chg i)
-            (? (n <= i) chg
-               (: rout (? (member? i dfs) [i] (peep rt i ()))
-                  c2 (: (push l ch)
-                        (? !(two? l) ch
-                           (: j <l old (peep rt j ()) nu (vun old rout)
-                              _ (pin rt j nu)
-                              (push >l (tally nu = tally old ? ch 1))))
-                        (push (peep succ i ()) chg))
-                  (step c2 (i + 1))))
-           (fix _) (? (0 < step 0 0) (fix 0) rt)
-           (fix 0))
        (cell1 cl acc)
         (: sb <cl base <>cl
            dfs (vat 9 cl) uss (vat 10 cl)
-           rt (reach dfs)
-           uf {}
-           (find x) (: p (peep uf x x) (? (p = x) x (find p)))
-           (uni a b) (: ra (find a) rb (find b)
-                        (? (ra = rb) 0 (ra < rb) (pin uf rb ra) (pin uf ra rb)))
-           _ (: (g l2) (? !(two? l2) 0
-                          (: u <l2 rin (peep rt u ())
-                             _ (? (two? rin)
-                                  (: (g2 m) (? !(two? m) 0 (: _ (uni <rin <m) (g2 >m)))
-                                     (g2 >rin))
-                                  0)
-                             (g >l2)))
-                (g uss))
-           gt {}
-           _ (: (g l2) (? !(two? l2) 0
-                          (: d2 <l2 r2 (find d2)
-                             _ (pin gt r2 (vapp (peep gt r2 ()) [d2]))
-                             (g >l2)))
-                (g dfs))
-           ut {}
-           nod (: (g l2 a) (? !(two? l2) (rev a)
-                              (: u <l2 rin (peep rt u ())
-                                 (? !(two? rin) (g >l2 (u >< a))
-                                    (: r2 (find <rin)
-                                       _ (pin ut r2 (vapp (peep ut r2 ()) [u]))
-                                       (g >l2 a)))))
-                  (g uss ()))
+           rt (vreach 0 (n - 1) succ dfs)
+           gn (vgroup rt dfs uss)
+           nod <>gn
            cbytes (vbytes (vspc sb) base 8)
            (celllive? cx) (: o (out (peep succ cx ()) ())
                              (? (vall? o) 1 (two? (vboth o cbytes)) 1 0))
            (cross ds) (vany (\ cx (two? (vboth (peep rt cx ()) ds) && celllive? cx)) ci)
-           rows (: (g l2 a) (? !(two? l2) (rev a)
-                               (: r2 <l2 ds (peep gt r2 ())
-                                  (g >l2 ([sb base ds (peep ut r2 ()) (cross ds ? 1 0)] >< a))))
-                   (g (sort (keys gt)) ()))
+           rows (map (\ gp [sb base <gp <>gp (cross <gp ? 1 0)]) <gn)
            (vapp acc (vapp rows (? (two? nod) [[sb base () nod 0]] ()))))
        (go l acc) (? !(two? l) acc (go >l (cell1 <l acc)))
        (go (ctx 'cls) ()))
