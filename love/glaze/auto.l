@@ -341,7 +341,8 @@
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
           results (map lift-pair pairs)
           allpairs ((map cap results) + (foldl (\ a r (a + <>r)) () results))            ; rewritten originals ++ all the lifted defs
-          (': >< unpair allpairs body)))
+          hasbody (1 = ((tally >form) % 2))
+          (': >< (? hasbody (unpair allpairs body) (cbflat allpairs)))))                       ; body-less in, body-less out
    ; --- PARTIAL LIFT (plift): hoist a READ-ONLY loop fn OUT of a fn's nested `:` body, all the way to the
    ;     TOP level, threading its lexical captures (the enclosing fn's params + the nested value-bindings it
    ;     reads) as LEADING params -- so a read loop buried among ALLOCATING siblings surfaces as a top-level
@@ -655,7 +656,9 @@
    (delet form)                                                                              ; inline value-lets in every fn body of a `:`
     (? !(two? form && id? <form ': && !(atom? >form)) form
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
-          (': >< unpair (map (\ pr (<pr >< (? (two? <pr) (delet-body >pr) >pr))) pairs) body)))
+          hasbody (1 = ((tally >form) % 2))                                               ; as delet-body reads it: EVEN is body-LESS
+          pairs2 (map (\ pr (<pr >< (? (two? <pr) (delet-body >pr) >pr))) pairs)
+          (': >< (? hasbody (unpair pairs2 body) (cbflat pairs2)))))                      ; cbflat keeps a body-less `:` body-less
    ; --- BOOLEANS & CLAMPS (debool): lower &&/||/abs to the `?`-fragment the glaze already compiles --
    ;     exact, value-preserving rewrites (verified): (&& a b)=(? a b 0), (|| a b)=(? a a (? b b 0)),
    ;     (abs x)=(? (x < 0) (0 - x) x). The &&/|| forms bake in the floor-clamp semantics (a false `&&`
@@ -1124,13 +1127,11 @@
      (? !(two? form0) form0
        !(id? <form0 ':) form0
        (atom? >form0) form0
-       ; DECLINE a BODY-LESS `:` (even # of forms) -- the global-leaking top-level-define form (sat.l, the
-       ; corpus, apps). The lift pipeline rebuilds the `:` and can't faithfully preserve the leak (it
-       ; appends a () body -> the natives go globally UNBOUND -> (() x)=const-1=1, a SILENT miscompile),
-       ; and the group codegen is unverified in that context. Interp is correct; the benches that matter
-       ; (fib/tak/primes) are body-HAVING (they call their fns locally inside the bench `:`) so they still
-       ; glaze. Sound > fast: never hand back a wrong answer. (The real cure is explicit global-binding
-       ; syntax instead of the parity-of-`:` leak convention; until then, decline.)
+       ; DECLINE a BODY-LESS `:` (even # of forms) -- the global-leaking top-level-define form (sat.l,
+       ; the corpus, apps). ⚠ THE REBUILD IS PARITY-CLEAN NOW (defol-bs/delet/lift take cbflat, the
+       ; body-less twin of unpair) -- so the () -> globally-unbound miscompile is gone -- but the
+       ; SECOND reason stands and is not cosmetic: lifting this guard bakes a crew whose `cat-main`
+       ; is missing. The group codegen really is unverified here. Sound > fast.
        (0 = ((tally >form0) % 2)) form0
        (memo-leak? form0) form0                                                                ; a `:`-sibling map memo (fact/bell) -> interp, sound
        (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts form0))))))))))   ; lower literal church (N f x)->f^N(x), inline lambda-const HOFs to first-order, lower &&/||/min/max/abs to ?, specialize interp-over-static-data, CLOSE polynomial folds to a closed form, deforest the rest -> loops, inline value-lets, lambda-lift named-let bodies, THEN plift read-only loops out of nested lets (hash's scan) -> flat group fns
