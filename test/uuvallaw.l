@@ -9,7 +9,10 @@
 ; a guard the tower cannot read erases (the model has one uniform value),
 ; which makes the obligation STRONGER than the row it came from, never
 ; weaker; each such row names the guard it dropped. a guard it CAN read
-; stays, as the orb it always was. Substrate: test/uuval.l over test/uu.l.
+; stays, as the orb it always was. a val-rung claim is veq's -- a guarded row
+; needs a DECIDABLE claim, and a path is not a bool -- and where the guard
+; erased the row gets its PATHS twin over the pinned carrier beside it, by
+; uuval.l's bridge. Substrate: test/uuval.l over test/uu.l.
 
 (assert (member? 'vof (names ())))
 
@@ -44,6 +47,10 @@
  (defq law-idq-finer
    (pi v val (paths bool (veq v v) true))
    uv-idq-finer)
+ ; ..and the same law over the PINNED carrier, by the bridge
+ (defq law-idq-finer-p
+   (pi v val (paths pval (pin v) (pin v)))
+   (lam v (uv-veq-paths v v (law-idq-finer v))))
  ; net-idem   (\ x (: n (net x) (= n (net n))))
  ; by conversion
  (defq law-net-idem

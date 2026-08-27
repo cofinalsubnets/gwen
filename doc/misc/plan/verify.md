@@ -374,15 +374,15 @@ only its left limb is refused, and append is asserted NOT commutative -- a law
 that held of both would be holding of nothing.
 
 
-## the exact-height carrier, priced (spike, test/uuzspike.l)
+## the pinned carrier, and the bridge (landed)
 
 the equality apparatus is 385 of uuval.l's 1019 lines -- reflection 110,
 transitivity 115, the four pad lemmas 120, the link congruence 40 -- and every
 line of it exists because the index is a height BOUND, so one value has many
-spellings and paths is too fine. the spike asks what the same carrier costs
-with the index PINNED, and answers three things.
+spellings and paths is too fine. this asks what the same carrier costs with the
+index PINNED, and answers three things.
 
-**the pin is not a new type family.** the plan for this said course-of-values
+**the pin is not a new type family.** the plan said course-of-values
 recursion, and that was wrong: within ONE index the spelling is ALREADY unique
 -- a node either shows a leaf tag or a pair and the recursion is forced -- so
 the whole multiplicity is the choice of d. `vtre`, `mx2`, `padl`, `padr` and
@@ -398,7 +398,7 @@ type index, so `mx2` stays exactly where it already is and the transport
 worry does not arise.
 
 **conv does not get heavier.** on the kernel alone the corpus runs 0.67 s;
-with the spike's 258 lines and 38 checks, 0.68 s. uuval.l's 1019 lines cost
+with the pinned block alone, 0.68 s. uuval.l's 1019 lines cost
 0.17 s in the same measurement. the eager-NbE hazard that bit nmin and the mx
 table does not reappear -- zht folds the tree it is given and nothing else.
 
@@ -417,12 +417,48 @@ what the pin costs in exchange: the pad must not move the height (two
 inductions mirroring padl/padr), max needs a two-argument congruence, and the
 link must carry its own tightness. that is 69 lines against 385.
 
-gated seven ways, the first one being the point: a leaf spelled at index 1 is
-a legal value of uuval's carrier and is a TYPE ERROR here.
+gated: the pin does not move the net, the bridge below is refused with one
+half dropped, and -- the point -- a leaf spelled at index 1 is a legal value of
+uuval's carrier and a TYPE ERROR as a pinned one.
 
-**what is NOT priced, and would be the real work:** every law stated as
-`paths bool (veq X Y) true` restates as `paths val X Y`. that is 151 veq
-mentions in uuval.l, 95 in uuvalband.l, and six in tools/law2uu.l which
-generates uuvallaw.l. a decidable equality is still wanted for the
-differential against love's own `=`, but it becomes a derived decision
-procedure rather than the equality the laws are written in.
+### what the spike got wrong about the restatement
+
+the spike measured the carrier, the link and the congruence. it did not measure
+the OBSERVERS, and the observers are where the bill is: `paths`, unlike veq,
+cannot ignore the index, so `vcap` must hand back a limb at ITS height and the
+cap/cup laws need the pad INVERTED. that wants the tighten/pad round trip, and
+with it max-associativity, pad-composition in four flavours, and a transport in
+every statement -- some six hundred lines to replace three hundred and eighty
+five, with the whole model rewritten under it.
+
+so the carrier was not swapped. it was ADDED, beside the one that was there,
+with a bridge between them:
+
+    uv-veq-paths : veq u w = true  ->  paths pval (pin u) (pin w)      SOUND
+    uv-paths-veq : paths pval (pin u) (pin w)  ->  veq u w = true      COMPLETE
+
+which is a better answer than the swap. veq was DEFINED and nothing said it was
+the right relation; now love's `=` on values is proved to be exactly equality of
+normal forms on a canonical carrier -- a decision procedure with a specification,
+where before it was a specification with nothing behind it. and every law
+crosses in one line, because the work is in the bridge:
+
+- **pin is a homomorphism**: `pin (vlink a b) = plink (pin a) (pin b)`, the two
+  leaf constructors pin on the nose, and `pnet (pin v) = vnet v` -- so pinning
+  is a change of spelling and not of meaning. that last one is gated by a false
+  twin; a normaliser that moved the net would carry every law to a different
+  carrier.
+- **the six cited laws** get paths twins in uuval.l. their SHAPES change, and
+  that is the interesting part: an orb that carried a side condition becomes the
+  side condition itself, and `=`-total -- which said the equality answers 1 --
+  becomes the statement that veq DECIDES the equality. that is what a law reads
+  like once its equality is an equality.
+- **all twenty-seven associativity cells** get paths twins in uuvalband.l, each
+  one line through the bridge, plus the right unit and append's own law. `+`
+  associates over the whole carrier as an EQUALITY now, not as a decision.
+- **tools/law2uu.l emits the twin mechanically** wherever a row's claim is an
+  unguarded val-rung `=`. the guarded rows keep veq and must: an orb takes a
+  bool, and a path is not one. that is stated in the generated header.
+
+what did NOT change: `vtre`, `mx2`, both pads, `netd`, and every observer. the
+pinned side is a wrapper over them, which is why it cost what it did.

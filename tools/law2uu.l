@@ -270,7 +270,10 @@
    _ (pl "; a guard the tower cannot read erases (the model has one uniform value),")
    _ (pl "; which makes the obligation STRONGER than the row it came from, never")
    _ (pl "; weaker; each such row names the guard it dropped. a guard it CAN read")
-   _ (pl "; stays, as the orb it always was. Substrate: test/uuval.l over test/uu.l.")
+   _ (pl "; stays, as the orb it always was. a val-rung claim is veq's -- a guarded row
+; needs a DECIDABLE claim, and a path is not a bool -- and where the guard
+; erased the row gets its PATHS twin over the pinned carrier beside it, by
+; uuval.l's bridge. Substrate: test/uuval.l over test/uu.l.")
    _ (pl "")
    _ (pl "(assert (member? 'vof (names ())))")
    _ (pl "")
@@ -288,12 +291,30 @@
    (howof d) (? (id? (at d 4) 'conv)  "by conversion"
                 (id? (at d 4) 'cases) "by cases on the saturated measure"
                 "by the lemma the model names")
+   ; a val-rung claim is veq's, because a GUARDED row needs a decidable one --
+   ; an orb takes a bool and a path is not one. where the guard erased and the
+   ; claim stands alone, the bridge restates it over the pinned carrier, which
+   ; is mechanical: the same law, as an equality rather than a decision.
+   (veqclaim? ty)
+    (: c (at ty 3)
+       ((tally c) = 4 && id? (at c 0) 'paths && id? (at c 1) 'bool
+        && id? (at c 3) 'true
+        && (: q (at c 2) (two? q && (tally q) = 3 && id? (at q 0) 'veq))))
+   (twinof d)
+    (? (! (veqclaim? (at d 2))) 0
+       (: q (at (at (at d 2) 3) 2) ta (at q 1) tb (at q 2)
+          g (intern ("law-" + (qstrip (show (at d 0)))))
+          _ (pl " ; ..and the same law over the PINNED carrier, by the bridge")
+          _ (pl (" (defq law-" + (qstrip (show (at d 0))) + "-p"))
+          _ (pl ("   " + (show ['pi 'v 'val ['paths 'pval ['pin ta] ['pin tb]]])))
+          (pl ("   " + (show ['lam 'v ['uv-veq-paths ta tb [g 'v]]]) + ")"))))
    _ (map (\ d (: _ (pl (join [" ; " (show (at d 0)) "   " (srcof d)]))
                   _ (pl (join [" ; " (howof d)
                                (? (id? (at d 5) ()) "" ("; the guard " + (at d 5) + " erases"))]))
                   _ (pl (" (defq law-" + (qstrip (show (at d 0)))))
                   _ (pl ("   " + (show (at d 2))))
-                  (pl (proofof d))))
+                  _ (pl (proofof d))
+                  (twinof d)))
           proved)
    _ (pl ")")
    _ (pl "")

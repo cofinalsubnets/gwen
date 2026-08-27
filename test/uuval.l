@@ -21,6 +21,11 @@
 ; the equality itself is an EQUIVALENCE here -- reflexive, and transitive off the
 ; reflection of each rung's decidable equality into a path -- which is what lets
 ; a link's two limbs be compared through the heights neither of them spells.
+; and beside it sits the PINNED carrier, the same trees with the index tied to
+; the height, where the spelling is unique and `paths` is the equality. the two
+; are bridged both ways: veq answers true exactly when the two values pin to the
+; same one, so love's = is a decision procedure for paths and every law can be
+; read either way. the laws below are given in both.
 ; above the tower sits the CHARM CEILING, the only rung with a width -- zsat is
 ; the retraction and stays unbounded, zsatc is what the word can hold -- and
 ; beside it the COLOURS, the sign structure ?x = ($x > 0) actually rests on.
@@ -790,6 +795,391 @@
                   (pr1 b) (pr2 b) d (uv-padr-bwd (pr1 a) (pr1 b) (pr2 b)) hb)
                (uv-padr-fwd (pr1 c) (pr1 d) (pr2 d)))))))))))))
 
+; --- THE PINNED CARRIER, and the bridge to veq. everything above reads the
+; --- depth as a BOUND, which is why the equality is veq and not paths: one
+; --- value has many spellings and paths tells them apart. pin the index to the
+; --- height a tree actually HAS and the spelling is unique -- within one index
+; --- it always was, a node showing a leaf tag or a pair with nothing to choose,
+; --- so the whole multiplicity was the choice of d. what that buys is `paths`
+; --- as the equality, and paths is a congruence for every function for free.
+; --- the tightness is a path in nat, hence a proposition, hence invisible to
+; --- equality; the tree family, mx2 and both pads carry over UNCHANGED ---
+(assert
+ (defn pht (pi d nat (pi t (vtre d) nat))
+   (lam d (nat_rect (lam q (pi t (vtre q) nat))
+             (lam t 0)
+             (lam k (lam IH (lam t (coprod_rect (lam w nat)
+                                      (lam a 0)
+                                      (lam p (succ (mx2 (IH (vfst k p)) (IH (vsnd k p)))))
+                                      t))))
+             d)))
+ (defn ptight (pi p val UU) (lam p (paths nat (pht (pr1 p) (pr2 p)) (pr1 p))))
+ (defn pval UU (total2 p val (ptight p)))
+ (defn pleaf (pi a atm pval) (lam a (tpair (tpair 0 a) (idpath 0))))
+ (defn pnum (pi m msr pval) (lam m (pleaf (anum m))))
+ (defn pnilv pval (pleaf aunit))
+ (defn pnet (pi x pval msr) (lam x (vnet (pr1 x)))))
+
+; --- what the pin costs: the pad must not move the height. two inductions with
+; --- the pads' own shape, and a two-argument congruence for the max ---
+(assert
+ (defq uv-mx2-cong
+   (pi a nat (pi a2 nat (pi b nat (pi b2 nat
+      (pi p (paths nat a a2) (pi q (paths nat b b2)
+         (paths nat (mx2 a b) (mx2 a2 b2))))))))
+   (lam a (lam a2 (lam b (lam b2 (lam p (lam q
+      (pathscomp0 nat (mx2 a b) (mx2 a2 b) (mx2 a2 b2)
+         (maponpaths nat nat (lam w (mx2 w b)) a a2 p)
+         (maponpaths nat nat (lam w (mx2 a2 w)) b b2 q)))))))))
+ (defq uv-pht-leafat (pi d nat (pi m atm (paths nat (pht d (leafat d m)) 0)))
+   (lam d (nat_rect (lam q (pi m atm (paths nat (pht q (leafat q m)) 0)))
+             (lam m (idpath 0))
+             (lam k (lam IH (lam m (idpath 0))))
+             d)))
+ (defq uv-pht-padl
+   (pi a nat (pi b nat (pi t (vtre a)
+      (paths nat (pht (mx2 a b) (padl a b t)) (pht a t)))))
+   (lam a (nat_rect (lam q (pi b nat (pi t (vtre q)
+                              (paths nat (pht (mx2 q b) (padl q b t)) (pht q t)))))
+             (lam b (lam m (uv-pht-leafat b m)))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre (succ j))
+                             (paths nat (pht (mx2 (succ j) r) (padl (succ j) r t))
+                                        (pht (succ j) t))))
+                   (lam t (idpath (pht (succ j) t)))
+                   (lam k (lam s (lam t
+                      (coprod_rect
+                         (lam w (paths nat (pht (succ (mx2 j k)) (padl (succ j) (succ k) w))
+                                           (pht (succ j) w)))
+                         (lam m (idpath 0))
+                         (lam p ((maponpaths nat nat (lam x (succ x))
+                                   (mx2 (pht (mx2 j k) (padl j k (vfst j p)))
+                                        (pht (mx2 j k) (padl j k (vsnd j p))))
+                                   (mx2 (pht j (vfst j p)) (pht j (vsnd j p))))
+                                 (uv-mx2-cong
+                                    (pht (mx2 j k) (padl j k (vfst j p))) (pht j (vfst j p))
+                                    (pht (mx2 j k) (padl j k (vsnd j p))) (pht j (vsnd j p))
+                                    (IH k (vfst j p)) (IH k (vsnd j p)))))
+                         t))))
+                   b))))
+             a)))
+ (defq uv-pht-padr
+   (pi a nat (pi b nat (pi t (vtre b)
+      (paths nat (pht (mx2 a b) (padr a b t)) (pht b t)))))
+   (lam a (nat_rect (lam q (pi b nat (pi t (vtre b)
+                              (paths nat (pht (mx2 q b) (padr q b t)) (pht b t)))))
+             (lam b (lam t (idpath (pht b t))))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre r)
+                             (paths nat (pht (mx2 (succ j) r) (padr (succ j) r t))
+                                        (pht r t))))
+                   (lam m (uv-pht-leafat (succ j) m))
+                   (lam k (lam s (lam t
+                      (coprod_rect
+                         (lam w (paths nat (pht (succ (mx2 j k)) (padr (succ j) (succ k) w))
+                                           (pht (succ k) w)))
+                         (lam m (idpath 0))
+                         (lam p ((maponpaths nat nat (lam x (succ x))
+                                   (mx2 (pht (mx2 j k) (padr j k (vfst k p)))
+                                        (pht (mx2 j k) (padr j k (vsnd k p))))
+                                   (mx2 (pht k (vfst k p)) (pht k (vsnd k p))))
+                                 (uv-mx2-cong
+                                    (pht (mx2 j k) (padr j k (vfst k p))) (pht k (vfst k p))
+                                    (pht (mx2 j k) (padr j k (vsnd k p))) (pht k (vsnd k p))
+                                    (IH k (vfst k p)) (IH k (vsnd k p)))))
+                         t))))
+                   b))))
+             a))))
+
+; --- and so the link, carrying its own tightness. this is the SAME vlink one
+; --- level down -- the pinned link is a wrapper, not a second construction ---
+(assert
+ (defq uv-ptight-link
+   (pi a nat (pi b nat (pi t (vtre a) (pi s (vtre b)
+      (pi h1 (paths nat (pht a t) a) (pi h2 (paths nat (pht b s) b)
+         (paths nat (pht (succ (mx2 a b)) (ii2 (tpair (padl a b t) (padr a b s))))
+                    (succ (mx2 a b)))))))))
+   (lam a (lam b (lam t (lam s (lam h1 (lam h2
+      ((maponpaths nat nat (lam x (succ x))
+          (mx2 (pht (mx2 a b) (padl a b t)) (pht (mx2 a b) (padr a b s)))
+          (mx2 a b))
+       (uv-mx2-cong (pht (mx2 a b) (padl a b t)) a
+                    (pht (mx2 a b) (padr a b s)) b
+                    (pathscomp0 nat (pht (mx2 a b) (padl a b t)) (pht a t) a
+                       (uv-pht-padl a b t) h1)
+                    (pathscomp0 nat (pht (mx2 a b) (padr a b s)) (pht b s) b
+                       (uv-pht-padr a b s) h2))))))))))
+ (defn plink (pi u pval (pi w pval pval))
+   (lam u (lam w (tpair (vlink (pr1 u) (pr1 w))
+                        (uv-ptight-link (pr1 (pr1 u)) (pr1 (pr1 w))
+                                        (pr2 (pr1 u)) (pr2 (pr1 w))
+                                        (pr2 u) (pr2 w)))))))
+
+; --- the tightness is a PROP, so two pinned values agree as soon as their trees
+; --- do -- and THAT is what makes paths the right equality here. the payoff is
+; --- the next two: uv-veq-link is thirty lines down through one pad, across by
+; --- the hypothesis and back up the other, standing on transitivity; here the
+; --- congruence is two maponpaths, and the same shape gives it for net, and for
+; --- any function at all ---
+(assert
+ (defq uv-propirr (pi X UU (pi i (isaprop X) (pi x X (pi y X (paths X x y)))))
+   (lam X (lam i (lam x (lam y (pr1 (i x y)))))))
+ (defq uv-ptightirr
+   (pi p val (pi h1 (ptight p) (pi h2 (ptight p) (paths (ptight p) h1 h2))))
+   (lam p (lam h1 (lam h2
+      (uv-propirr (paths nat (pht (pr1 p) (pr2 p)) (pr1 p))
+         (isasetnat (pht (pr1 p) (pr2 p)) (pr1 p)) h1 h2)))))
+ (defq uv-pvalpath
+   (pi u pval (pi w pval (pi e (paths val (pr1 u) (pr1 w)) (paths pval u w))))
+   (lam u (lam w (lam e
+      (total2_paths_f val ptight u w e
+         (uv-ptightirr (pr1 w)
+            (transportf val ptight (pr1 u) (pr1 w) e (pr2 u))
+            (pr2 w)))))))
+ (defq uv-plink-cong
+   (pi u pval (pi u2 pval (pi w pval (pi w2 pval
+      (pi p (paths pval u u2) (pi q (paths pval w w2)
+         (paths pval (plink u w) (plink u2 w2))))))))
+   (lam u (lam u2 (lam w (lam w2 (lam p (lam q
+      (pathscomp0 pval (plink u w) (plink u2 w) (plink u2 w2)
+         (maponpaths pval pval (lam x (plink x w)) u u2 p)
+         (maponpaths pval pval (lam x (plink u2 x)) w w2 q)))))))))
+ (defq uv-pnet-cong
+   (pi u pval (pi w pval (pi p (paths pval u w) (paths msr (pnet u) (pnet w)))))
+   (lam u (lam w (lam p (maponpaths pval msr pnet u w p))))))
+
+; --- PIN: read a value at its own height. the recursion is through plink
+; --- itself, so nothing here has to tighten a tree by hand ---
+(assert
+ (defn ppin (pi d nat (pi t (vtre d) pval))
+   (lam d (nat_rect (lam q (pi t (vtre q) pval))
+             (lam t (pleaf t))
+             (lam k (lam IH (lam t (coprod_rect (lam w pval)
+                                      (lam m (pleaf m))
+                                      (lam p (plink (IH (vfst k p)) (IH (vsnd k p))))
+                                      t))))
+             d)))
+ (defn pin (pi v val pval) (lam v (ppin (pr1 v) (pr2 v))))
+ (defq uv-negbtrue (pi b bool (pi h (paths bool (negb b) true) (paths bool b false)))
+   (lam b (bool_rect (lam x (pi h (paths bool (negb x) true) (paths bool x false)))
+             (lam h (fromempty (paths bool true false) (nopathsfalsetotrue h)))
+             (lam h (idpath false))
+             b)))
+ ; a value showing no head pins to its atom, and one showing a head pins to the
+ ; link of its limbs -- both by computation, which is what pin is for
+ (defq uv-ppin-leaf
+   (pi w val (pi h (paths bool (vtwo w) false) (paths pval (pin w) (pleaf (vleaf w)))))
+   (lam w ((nat_rect
+              (lam q (pi t (vtre q) (pi h (paths bool (vtwo (tpair q t)) false)
+                        (paths pval (pin (tpair q t)) (pleaf (vleaf (tpair q t)))))))
+              (lam t (lam h (idpath (pleaf t))))
+              (lam k (lam IH (lam t
+                 (coprod_rect
+                    (lam z (pi h (paths bool (vtwo (tpair (succ k) z)) false)
+                              (paths pval (pin (tpair (succ k) z))
+                                          (pleaf (vleaf (tpair (succ k) z))))))
+                    (lam m (lam h (idpath (pleaf m))))
+                    (lam p (lam h (fromempty
+                              (paths pval (pin (tpair (succ k) (ii2 p)))
+                                          (pleaf (vleaf (tpair (succ k) (ii2 p)))))
+                              (nopathsfalsetotrue (pathsinv0 bool true false h)))))
+                    t))))
+              (pr1 w)) (pr2 w))))
+ (defq uv-ppin-two
+   (pi w val (pi h (paths bool (vtwo w) true)
+      (paths pval (pin w) (plink (pin (vcap w)) (pin (vcup w))))))
+   (lam w ((nat_rect
+              (lam q (pi t (vtre q) (pi h (paths bool (vtwo (tpair q t)) true)
+                        (paths pval (pin (tpair q t))
+                           (plink (pin (vcap (tpair q t))) (pin (vcup (tpair q t))))))))
+              (lam t (lam h (fromempty
+                        (paths pval (pin (tpair 0 t))
+                           (plink (pin (vcap (tpair 0 t))) (pin (vcup (tpair 0 t)))))
+                        (nopathsfalsetotrue h))))
+              (lam k (lam IH (lam t
+                 (coprod_rect
+                    (lam z (pi h (paths bool (vtwo (tpair (succ k) z)) true)
+                              (paths pval (pin (tpair (succ k) z))
+                                 (plink (pin (vcap (tpair (succ k) z)))
+                                        (pin (vcup (tpair (succ k) z)))))))
+                    (lam m (lam h (fromempty
+                              (paths pval (pin (tpair (succ k) (ii1 m)))
+                                 (plink (pin (vcap (tpair (succ k) (ii1 m))))
+                                        (pin (vcup (tpair (succ k) (ii1 m))))))
+                              (nopathsfalsetotrue h))))
+                    (lam p (lam h (idpath (plink (ppin k (vfst k p)) (ppin k (vsnd k p))))))
+                    t))))
+              (pr1 w)) (pr2 w)))))
+
+; --- THE BRIDGE. veq was DEFINED, not derived: nothing above says it is the
+; --- right relation. this says it -- love's = on values answers true exactly
+; --- when the two pin to the same value -- so veq is a decision procedure for
+; --- paths on the pinned carrier, sound and complete, and every law stated with
+; --- one can be stated with the other ---
+(assert
+ (defq uv-leaf-pin
+   (pi a atm (pi w val (pi h (paths bool (andb (negb (vtwo w)) (aeqb a (vleaf w))) true)
+      (paths pval (pleaf a) (pin w)))))
+   (lam a (lam w (lam h
+      (pathscomp0 pval (pleaf a) (pleaf (vleaf w)) (pin w)
+         (maponpaths atm pval pleaf a (vleaf w)
+            (uv-aeqb-paths a (vleaf w)
+               (andbtruer (negb (vtwo w)) (aeqb a (vleaf w)) h)))
+         (pathsinv0 pval (pin w) (pleaf (vleaf w))
+            (uv-ppin-leaf w
+               (uv-negbtrue (vtwo w)
+                  (andbtruel (negb (vtwo w)) (aeqb a (vleaf w)) h)))))))))
+ (defq uv-veqd-pin
+   (pi d nat (pi t (vtre d) (pi w val (pi h (paths bool (veqd d t w) true)
+      (paths pval (ppin d t) (pin w))))))
+   (lam d (nat_rect
+             (lam q (pi t (vtre q) (pi w val (pi h (paths bool (veqd q t w) true)
+                       (paths pval (ppin q t) (pin w))))))
+             (lam t (uv-leaf-pin t))
+             (lam k (lam IH (lam t
+                (coprod_rect
+                   (lam z (pi w val (pi h (paths bool (veqd (succ k) z w) true)
+                             (paths pval (ppin (succ k) z) (pin w)))))
+                   (lam a (uv-leaf-pin a))
+                   (lam p (lam w (lam h
+                      (pathscomp0 pval
+                         (plink (ppin k (vfst k p)) (ppin k (vsnd k p)))
+                         (plink (pin (vcap w)) (pin (vcup w)))
+                         (pin w)
+                         (uv-plink-cong (ppin k (vfst k p)) (pin (vcap w))
+                                        (ppin k (vsnd k p)) (pin (vcup w))
+                            (IH (vfst k p) (vcap w)
+                               (andbtruel (veqd k (vfst k p) (vcap w))
+                                          (veqd k (vsnd k p) (vcup w))
+                                  (andbtruer (vtwo w)
+                                     (andb (veqd k (vfst k p) (vcap w))
+                                           (veqd k (vsnd k p) (vcup w))) h)))
+                            (IH (vsnd k p) (vcup w)
+                               (andbtruer (veqd k (vfst k p) (vcap w))
+                                          (veqd k (vsnd k p) (vcup w))
+                                  (andbtruer (vtwo w)
+                                     (andb (veqd k (vfst k p) (vcap w))
+                                           (veqd k (vsnd k p) (vcup w))) h))))
+                         (pathsinv0 pval (pin w) (plink (pin (vcap w)) (pin (vcup w)))
+                            (uv-ppin-two w
+                               (andbtruel (vtwo w)
+                                  (andb (veqd k (vfst k p) (vcap w))
+                                        (veqd k (vsnd k p) (vcup w))) h)))))))
+                   t))))
+             d)))
+ ; ..and back. a value and its normal form answer veq alike -- both ways round,
+ ; since a law names its two sides in its own order -- and then the path between
+ ; two normal forms carries across by veq's own transitivity
+ (defq uv-pinback-fwd
+   (pi d nat (pi t (vtre d) (paths bool (veqd d t (pr1 (ppin d t))) true)))
+   (lam d (nat_rect
+             (lam q (pi t (vtre q) (paths bool (veqd q t (pr1 (ppin q t))) true)))
+             (lam t (uv-aeqb-refl t))
+             (lam k (lam IH (lam t
+                (coprod_rect
+                   (lam z (paths bool (veqd (succ k) z (pr1 (ppin (succ k) z))) true))
+                   (lam m (uv-aeqb-refl m))
+                   (lam p (uv-andb2
+                             (veqd k (vfst k p)
+                                (vcap (vlink (pr1 (ppin k (vfst k p)))
+                                             (pr1 (ppin k (vsnd k p))))))
+                             (veqd k (vsnd k p)
+                                (vcup (vlink (pr1 (ppin k (vfst k p)))
+                                             (pr1 (ppin k (vsnd k p))))))
+                             (uv-veqd-trans k (vfst k p)
+                                (pr1 (pr1 (ppin k (vfst k p))))
+                                (pr2 (pr1 (ppin k (vfst k p))))
+                                (vcap (vlink (pr1 (ppin k (vfst k p)))
+                                             (pr1 (ppin k (vsnd k p)))))
+                                (IH (vfst k p))
+                                (uv-padl-fwd (pr1 (pr1 (ppin k (vfst k p))))
+                                             (pr1 (pr1 (ppin k (vsnd k p))))
+                                             (pr2 (pr1 (ppin k (vfst k p))))))
+                             (uv-veqd-trans k (vsnd k p)
+                                (pr1 (pr1 (ppin k (vsnd k p))))
+                                (pr2 (pr1 (ppin k (vsnd k p))))
+                                (vcup (vlink (pr1 (ppin k (vfst k p)))
+                                             (pr1 (ppin k (vsnd k p)))))
+                                (IH (vsnd k p))
+                                (uv-padr-fwd (pr1 (pr1 (ppin k (vfst k p))))
+                                             (pr1 (pr1 (ppin k (vsnd k p))))
+                                             (pr2 (pr1 (ppin k (vsnd k p))))))))
+                   t))))
+             d)))
+ (defq uv-pinback-bwd
+   (pi d nat (pi t (vtre d)
+      (paths bool (veqd (pr1 (pr1 (ppin d t))) (pr2 (pr1 (ppin d t))) (tpair d t)) true)))
+   (lam d (nat_rect
+             (lam q (pi t (vtre q)
+                (paths bool (veqd (pr1 (pr1 (ppin q t))) (pr2 (pr1 (ppin q t)))
+                                  (tpair q t)) true)))
+             (lam t (uv-aeqb-refl t))
+             (lam k (lam IH (lam t
+                (coprod_rect
+                   (lam z (paths bool (veqd (pr1 (pr1 (ppin (succ k) z)))
+                                            (pr2 (pr1 (ppin (succ k) z)))
+                                            (tpair (succ k) z)) true))
+                   (lam m (uv-aeqb-refl m))
+                   (lam p (uv-andb2
+                             (veqd (mx2 (pr1 (pr1 (ppin k (vfst k p))))
+                                        (pr1 (pr1 (ppin k (vsnd k p)))))
+                                   (padl (pr1 (pr1 (ppin k (vfst k p))))
+                                         (pr1 (pr1 (ppin k (vsnd k p))))
+                                         (pr2 (pr1 (ppin k (vfst k p)))))
+                                   (tpair k (vfst k p)))
+                             (veqd (mx2 (pr1 (pr1 (ppin k (vfst k p))))
+                                        (pr1 (pr1 (ppin k (vsnd k p)))))
+                                   (padr (pr1 (pr1 (ppin k (vfst k p))))
+                                         (pr1 (pr1 (ppin k (vsnd k p))))
+                                         (pr2 (pr1 (ppin k (vsnd k p)))))
+                                   (tpair k (vsnd k p)))
+                             (uv-veqd-trans
+                                (mx2 (pr1 (pr1 (ppin k (vfst k p))))
+                                     (pr1 (pr1 (ppin k (vsnd k p)))))
+                                (padl (pr1 (pr1 (ppin k (vfst k p))))
+                                      (pr1 (pr1 (ppin k (vsnd k p))))
+                                      (pr2 (pr1 (ppin k (vfst k p)))))
+                                (pr1 (pr1 (ppin k (vfst k p))))
+                                (pr2 (pr1 (ppin k (vfst k p))))
+                                (tpair k (vfst k p))
+                                (uv-padl-bwd (pr1 (pr1 (ppin k (vfst k p))))
+                                             (pr1 (pr1 (ppin k (vsnd k p))))
+                                             (pr2 (pr1 (ppin k (vfst k p)))))
+                                (IH (vfst k p)))
+                             (uv-veqd-trans
+                                (mx2 (pr1 (pr1 (ppin k (vfst k p))))
+                                     (pr1 (pr1 (ppin k (vsnd k p)))))
+                                (padr (pr1 (pr1 (ppin k (vfst k p))))
+                                      (pr1 (pr1 (ppin k (vsnd k p))))
+                                      (pr2 (pr1 (ppin k (vsnd k p)))))
+                                (pr1 (pr1 (ppin k (vsnd k p))))
+                                (pr2 (pr1 (ppin k (vsnd k p))))
+                                (tpair k (vsnd k p))
+                                (uv-padr-bwd (pr1 (pr1 (ppin k (vfst k p))))
+                                             (pr1 (pr1 (ppin k (vsnd k p))))
+                                             (pr2 (pr1 (ppin k (vsnd k p)))))
+                                (IH (vsnd k p)))))
+                   t))))
+             d)))
+ (defq uv-veq-pin (pi v val (paths bool (veq v (pr1 (pin v))) true))
+   (lam v (uv-pinback-fwd (pr1 v) (pr2 v))))
+ (defq uv-pin-veq (pi v val (paths bool (veq (pr1 (pin v)) v) true))
+   (lam v (uv-pinback-bwd (pr1 v) (pr2 v))))
+ ; SOUND: what veq accepts, paths accepts
+ (defq uv-veq-paths
+   (pi u val (pi w val (pi h (paths bool (veq u w) true) (paths pval (pin u) (pin w)))))
+   (lam u (lam w (uv-veqd-pin (pr1 u) (pr2 u) w))))
+ ; COMPLETE: what paths accepts, veq accepts
+ (defq uv-paths-veq
+   (pi u val (pi w val (pi h (paths pval (pin u) (pin w)) (paths bool (veq u w) true))))
+   (lam u (lam w (lam h
+      (uv-veq-trans u (pr1 (pin u)) w
+         (uv-veq-pin u)
+         (uv-veq-trans (pr1 (pin u)) (pr1 (pin w)) w
+            (uv-veq-of (pr1 (pin u)) (pr1 (pin w))
+               (maponpaths pval val (lam x (pr1 x)) (pin u) (pin w) h))
+            (uv-pin-veq w))))))))
+
 ; --- ..and the colours over it. the first three are the sign's own shape; the
 ; --- fourth is CLAUDE.md's own lambda equation read as a colour -- truth is
 ; --- POSITIVE GREEN, above the blue floor -- and it is the one that needs the
@@ -910,6 +1300,225 @@
  ; ..and = is total, answering the charm 1 on every value
  (defq uv-eq-total (pi v val (paths nat (nbit (veq v v)) 1))
    (lam v (maponpaths bool nat (lam z (nbit z)) (veq v v) true (uv-veq-refl v)))))
+; --- PIN IS A HOMOMORPHISM, which is what lets a law cross the bridge without
+; --- being re-proved: the pinned link of two pinned values IS the pin of their
+; --- link, the two leaf constructors pin on the nose, and the NET is untouched
+; --- -- so pinning is a change of spelling and not of meaning ---
+(assert
+ (defq uv-madd2
+   (pi a msr (pi a2 msr (pi b msr (pi b2 msr
+      (pi p (paths msr a a2) (pi q (paths msr b b2)
+         (paths msr (madd a b) (madd a2 b2))))))))
+   (lam a (lam a2 (lam b (lam b2 (lam p (lam q
+      (pathscomp0 msr (madd a b) (madd a2 b) (madd a2 b2)
+         (maponpaths msr msr (lam w (madd w b)) a a2 p)
+         (maponpaths msr msr (lam w (madd a2 w)) b b2 q)))))))))
+ (defq uv-netd-padl
+   (pi a nat (pi b nat (pi t (vtre a)
+      (paths msr (netd (mx2 a b) (padl a b t)) (netd a t)))))
+   (lam a (nat_rect (lam q (pi b nat (pi t (vtre q)
+                              (paths msr (netd (mx2 q b) (padl q b t)) (netd q t)))))
+             (lam b (lam t
+                (nat_rect (lam r (paths msr (netd (mx2 0 r) (padl 0 r t)) (netd 0 t)))
+                   (idpath (anet t))
+                   (lam k (lam s (idpath (anet t))))
+                   b)))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre (succ j))
+                             (paths msr (netd (mx2 (succ j) r) (padl (succ j) r t))
+                                        (netd (succ j) t))))
+                   (lam t (idpath (netd (succ j) t)))
+                   (lam k (lam s (lam t
+                      (coprod_rect
+                         (lam w (paths msr (netd (succ (mx2 j k)) (padl (succ j) (succ k) w))
+                                           (netd (succ j) w)))
+                         (lam m (idpath (anet m)))
+                         (lam p (uv-madd2
+                                   (netd (mx2 j k) (padl j k (vfst j p))) (netd j (vfst j p))
+                                   (netd (mx2 j k) (padl j k (vsnd j p))) (netd j (vsnd j p))
+                                   (IH k (vfst j p)) (IH k (vsnd j p))))
+                         t))))
+                   b))))
+             a)))
+ (defq uv-netd-padr
+   (pi a nat (pi b nat (pi t (vtre b)
+      (paths msr (netd (mx2 a b) (padr a b t)) (netd b t)))))
+   (lam a (nat_rect (lam q (pi b nat (pi t (vtre b)
+                              (paths msr (netd (mx2 q b) (padr q b t)) (netd b t)))))
+             (lam b (lam t (idpath (netd b t))))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre r)
+                             (paths msr (netd (mx2 (succ j) r) (padr (succ j) r t))
+                                        (netd r t))))
+                   (lam t (idpath (anet t)))
+                   (lam k (lam s (lam t
+                      (coprod_rect
+                         (lam w (paths msr (netd (succ (mx2 j k)) (padr (succ j) (succ k) w))
+                                           (netd (succ k) w)))
+                         (lam m (idpath (anet m)))
+                         (lam p (uv-madd2
+                                   (netd (mx2 j k) (padr j k (vfst k p))) (netd k (vfst k p))
+                                   (netd (mx2 j k) (padr j k (vsnd k p))) (netd k (vsnd k p))
+                                   (IH k (vfst k p)) (IH k (vsnd k p))))
+                         t))))
+                   b))))
+             a)))
+ (defq uv-ppin-padl
+   (pi a nat (pi b nat (pi t (vtre a)
+      (paths pval (ppin (mx2 a b) (padl a b t)) (ppin a t)))))
+   (lam a (nat_rect (lam q (pi b nat (pi t (vtre q)
+                              (paths pval (ppin (mx2 q b) (padl q b t)) (ppin q t)))))
+             (lam b (lam t
+                (nat_rect (lam r (paths pval (ppin (mx2 0 r) (padl 0 r t)) (ppin 0 t)))
+                   (idpath (pleaf t))
+                   (lam k (lam s (idpath (pleaf t))))
+                   b)))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre (succ j))
+                             (paths pval (ppin (mx2 (succ j) r) (padl (succ j) r t))
+                                         (ppin (succ j) t))))
+                   (lam t (idpath (ppin (succ j) t)))
+                   (lam k (lam s (lam t
+                      (coprod_rect
+                         (lam w (paths pval
+                                   (ppin (succ (mx2 j k)) (padl (succ j) (succ k) w))
+                                   (ppin (succ j) w)))
+                         (lam m (idpath (pleaf m)))
+                         (lam p (uv-plink-cong
+                                   (ppin (mx2 j k) (padl j k (vfst j p))) (ppin j (vfst j p))
+                                   (ppin (mx2 j k) (padl j k (vsnd j p))) (ppin j (vsnd j p))
+                                   (IH k (vfst j p)) (IH k (vsnd j p))))
+                         t))))
+                   b))))
+             a)))
+ (defq uv-ppin-padr
+   (pi a nat (pi b nat (pi t (vtre b)
+      (paths pval (ppin (mx2 a b) (padr a b t)) (ppin b t)))))
+   (lam a (nat_rect (lam q (pi b nat (pi t (vtre b)
+                              (paths pval (ppin (mx2 q b) (padr q b t)) (ppin b t)))))
+             (lam b (lam t (idpath (ppin b t))))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre r)
+                             (paths pval (ppin (mx2 (succ j) r) (padr (succ j) r t))
+                                         (ppin r t))))
+                   (lam t (idpath (pleaf t)))
+                   (lam k (lam s (lam t
+                      (coprod_rect
+                         (lam w (paths pval
+                                   (ppin (succ (mx2 j k)) (padr (succ j) (succ k) w))
+                                   (ppin (succ k) w)))
+                         (lam m (idpath (pleaf m)))
+                         (lam p (uv-plink-cong
+                                   (ppin (mx2 j k) (padr j k (vfst k p))) (ppin k (vfst k p))
+                                   (ppin (mx2 j k) (padr j k (vsnd k p))) (ppin k (vsnd k p))
+                                   (IH k (vfst k p)) (IH k (vsnd k p))))
+                         t))))
+                   b))))
+             a)))
+ (defq uv-pin-link
+   (pi a val (pi b val (paths pval (pin (vlink a b)) (plink (pin a) (pin b)))))
+   (lam a (lam b (uv-plink-cong
+      (ppin (mx2 (pr1 a) (pr1 b)) (padl (pr1 a) (pr1 b) (pr2 a))) (pin a)
+      (ppin (mx2 (pr1 a) (pr1 b)) (padr (pr1 a) (pr1 b) (pr2 b))) (pin b)
+      (uv-ppin-padl (pr1 a) (pr1 b) (pr2 a))
+      (uv-ppin-padr (pr1 a) (pr1 b) (pr2 b))))))
+ (defq uv-pin-num (pi m msr (paths pval (pin (vnum m)) (pnum m))) (lam m (idpath (pnum m))))
+ (defq uv-pin-nil (paths pval (pin vnilv) pnilv) (idpath pnilv))
+ (defq uv-pin-net (pi v val (paths msr (pnet (pin v)) (vnet v)))
+   (lam v ((nat_rect (lam q (pi t (vtre q) (paths msr (pnet (pin (tpair q t))) (netd q t))))
+             (lam t (idpath (anet t)))
+             (lam k (lam IH (lam t
+                (coprod_rect (lam w (paths msr (pnet (pin (tpair (succ k) w)))
+                                               (netd (succ k) w)))
+                   (lam m (idpath (anet m)))
+                   (lam p (uv-madd2
+                             (netd (mx2 (pr1 (pr1 (ppin k (vfst k p))))
+                                        (pr1 (pr1 (ppin k (vsnd k p)))))
+                                   (padl (pr1 (pr1 (ppin k (vfst k p))))
+                                         (pr1 (pr1 (ppin k (vsnd k p))))
+                                         (pr2 (pr1 (ppin k (vfst k p))))))
+                             (netd k (vfst k p))
+                             (netd (mx2 (pr1 (pr1 (ppin k (vfst k p))))
+                                        (pr1 (pr1 (ppin k (vsnd k p)))))
+                                   (padr (pr1 (pr1 (ppin k (vfst k p))))
+                                         (pr1 (pr1 (ppin k (vsnd k p))))
+                                         (pr2 (pr1 (ppin k (vsnd k p))))))
+                             (netd k (vsnd k p))
+                             (pathscomp0 msr
+                                (netd (mx2 (pr1 (pr1 (ppin k (vfst k p))))
+                                           (pr1 (pr1 (ppin k (vsnd k p)))))
+                                      (padl (pr1 (pr1 (ppin k (vfst k p))))
+                                            (pr1 (pr1 (ppin k (vsnd k p))))
+                                            (pr2 (pr1 (ppin k (vfst k p))))))
+                                (pnet (ppin k (vfst k p)))
+                                (netd k (vfst k p))
+                                (uv-netd-padl (pr1 (pr1 (ppin k (vfst k p))))
+                                              (pr1 (pr1 (ppin k (vsnd k p))))
+                                              (pr2 (pr1 (ppin k (vfst k p)))))
+                                (IH (vfst k p)))
+                             (pathscomp0 msr
+                                (netd (mx2 (pr1 (pr1 (ppin k (vfst k p))))
+                                           (pr1 (pr1 (ppin k (vsnd k p)))))
+                                      (padr (pr1 (pr1 (ppin k (vfst k p))))
+                                            (pr1 (pr1 (ppin k (vsnd k p))))
+                                            (pr2 (pr1 (ppin k (vsnd k p))))))
+                                (pnet (ppin k (vsnd k p)))
+                                (netd k (vsnd k p))
+                                (uv-netd-padr (pr1 (pr1 (ppin k (vfst k p))))
+                                              (pr1 (pr1 (ppin k (vsnd k p))))
+                                              (pr2 (pr1 (ppin k (vsnd k p)))))
+                                (IH (vsnd k p)))))
+                   t))))
+             (pr1 v)) (pr2 v)))))
+
+; --- and the six laws again, over paths. each is the bridge applied to the veq
+; --- law above it -- one line, because the bridge is where the work went. the
+; --- SHAPES change: an orb that carried a side condition becomes the side
+; --- condition itself, and totality becomes the statement that veq DECIDES the
+; --- equality. that is what a law reads like once its equality is an equality
+; --- and not a decision procedure ---
+(assert
+ (defq uv-orbfalse
+   (pi a bool (pi b bool (pi h (paths bool a false) (pi g (paths bool (orb a b) true)
+      (paths bool b true)))))
+   (lam a (lam b (lam h (lam g
+      (pathscomp0 bool b (orb a b) true
+         (pathsinv0 bool (orb a b) b (maponpaths bool bool (lam z (orb z b)) a false h))
+         g))))))
+ ; an atom IS its own cap
+ (defq uv-pcap-total
+   (pi v val (pi h (paths bool (vtwo v) false) (paths pval (pin v) (pin (vcap v)))))
+   (lam v (lam h (uv-veq-paths v (vcap v)
+      (uv-orbfalse (vtwo v) (veq v (vcap v)) h (uv-cap-total v))))))
+ ; ..and its cup is ()
+ (defq uv-pcup-total
+   (pi v val (pi h (paths bool (vtwo v) false) (paths pval pnilv (pin (vcup v)))))
+   (lam v (lam h (uv-veq-paths vnilv (vcup v)
+      (uv-orbfalse (vtwo v) (veq vnilv (vcup v)) h (uv-cup-total v))))))
+ ; a pair is the link of what it shows
+ (defq uv-plink-back
+   (pi v val (pi h (paths bool (vtwo v) true)
+      (paths pval (pin v) (plink (pin (vcap v)) (pin (vcup v))))))
+   (lam v (lam h (uv-ppin-two v h))))
+ ; ..and a link shows back what it was given, both limbs
+ (defq uv-plink-cap (pi v val (paths pval (pin (vcap (vlink v v))) (pin v)))
+   (lam v (uv-veq-paths (vcap (vlink v v)) v
+      (andbtruel (veq (vcap (vlink v v)) v) (veq (vcup (vlink v v)) v)
+         (uv-link-apart v)))))
+ (defq uv-plink-cup (pi v val (paths pval (pin (vcup (vlink v v))) (pin v)))
+   (lam v (uv-veq-paths (vcup (vlink v v)) v
+      (andbtruer (veq (vcap (vlink v v)) v) (veq (vcup (vlink v v)) v)
+         (uv-link-apart v)))))
+ ; id? is finer than =, never the converse: where id? holds, = does -- and over
+ ; paths that is reflexivity, with nothing left to decide
+ (defq uv-pidq-finer (pi x pval (paths pval x x)) (lam x (idpath x)))
+ ; ..and = is TOTAL: it answers the charm 1 on every pair the paths agree on,
+ ; which is the completeness half of the bridge worn as a law
+ (defq uv-peq-total
+   (pi u val (pi w val (pi h (paths pval (pin u) (pin w)) (paths nat (nbit (veq u w)) 1))))
+   (lam u (lam w (lam h (maponpaths bool nat (lam z (nbit z)) (veq u w) true
+                           (uv-paths-veq u w h)))))))
+
 ; --- CLAUDE.md's laws themselves are not spelled here: tools/law2uu.l compiles
 ; --- them straight off test/law.l's rows into test/uuvallaw.l, so each law has ONE
 ; --- spelling and both lanes read it. sat-green and bit-bool need no proof at
@@ -959,7 +1568,24 @@
                    (vlink (nval 1) (nval 3)))))
  ; ..and the congruence discriminates: one limb agreeing is not enough
  (= (vof 0 'false)
-      (vof 0 '(veq (vlink (nval 1) (nval 2)) (vlink (nval 1) (nval 3))))))
+      (vof 0 '(veq (vlink (nval 1) (nval 2)) (vlink (nval 1) (nval 3)))))
+ ; --- and the PINNED carrier: the index a value carries is the height it has,
+ ; --- where the unpinned one carries whatever height it was met at ---
+ (= (vof 0 '0) (vof 0 '(pr1 (pr1 (pin (nval 7))))))
+ (= (vof 0 '1) (vof 0 '(pr1 (pr1 (pin (vlink (nval 1) (nval 2)))))))
+ (= (vof 0 '2) (vof 0 '(pr1 (pr1 (pin (vlink (vlink (nval 1) (nval 2)) (nval 3)))))))
+ ; the cup of that link is the number 3, met at height 1 and living at 0
+ (= (vof 0 '1) (vof 0 '(pr1 (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3))))))
+ (= (vof 0 '0)
+      (vof 0 '(pr1 (pr1 (pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3))))))))
+ ; ..and the two spellings net the same, which is what makes pin a change of
+ ; spelling and not of meaning
+ (= (vof 0 '(vnet (nval 3)))
+      (vof 0 '(pnet (pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3)))))))
+ ; the bridge, computed: what veq accepts the pinned values agree on
+ (= (vof 0 'true) (vof 0 '(veq (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3))) (nval 3))))
+ (= (vof 0 '(pin (nval 3)))
+      (vof 0 '(pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3)))))))
 
 ; --- the planted faults: a proof term that type-checks WHATEVER it says proves
 ; --- nothing, so each load-bearing claim gets its false twin, and the kernel
@@ -1015,5 +1641,25 @@
  (id? 'rejected (rejects (\ z (defq uv-bad-link-cong
     (pi a val (pi b val (pi c val (pi d val (pi ha (paths bool (veq a c) true)
        (paths bool (veq (vlink a b) (vlink c d)) true))))))
-    (lam a (lam b (lam c (lam d (lam ha (uv-veq-refl (vlink a b))))))))))))
+    (lam a (lam b (lam c (lam d (lam ha (uv-veq-refl (vlink a b)))))))))))
+ ; the PIN does not move the net: a normaliser that did would be worthless, and
+ ; every law crossing the bridge would be crossing to a different carrier
+ (id? 'accepted (rejects (\ z (defq uv-ok-pinnet
+    (pi v val (paths msr (pnet (pin v)) (vnet v))) uv-pin-net))))
+ (id? 'rejected (rejects (\ z (defq uv-bad-pinnet
+    (pi v val (paths msr (pnet (pin v)) mzero)) uv-pin-net))))
+ ; ..and the bridge goes BOTH ways: soundness alone leaves veq free to accept
+ ; more than paths does, which is exactly the thing a decision procedure owes
+ (id? 'accepted (rejects (\ z (defq uv-ok-bridge
+    (pi u val (pi w val (pi h (paths pval (pin u) (pin w)) (paths bool (veq u w) true))))
+    uv-paths-veq))))
+ (id? 'rejected (rejects (\ z (defq uv-bad-bridge
+    (pi u val (pi w val (paths bool (veq u w) true)))
+    (lam u (lam w (uv-veq-refl u)))))))
+ ; and a leaf spelled at height 1 is a legal VALUE and not a legal pinned one --
+ ; the many-spellings defect, turned into a type error
+ (id? 'accepted (rejects (\ z (defn uv-ok-pin pval
+    (tpair (tpair 0 (anum (rmsr (zrea (nzed 7))))) (idpath 0))))))
+ (id? 'rejected (rejects (\ z (defn uv-bad-pin pval
+    (tpair (tpair 1 (ii1 (anum (rmsr (zrea (nzed 7)))))) (idpath 1)))))))
 (hear test-strict)
