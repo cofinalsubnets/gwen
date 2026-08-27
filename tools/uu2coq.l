@@ -31,6 +31,7 @@
    _ (reads (open "test/uumx.l" "r"))
    _ (reads (open "test/uumxlaw.l" "r"))
    _ (reads (open "test/uuval.l" "r"))
+   _ (reads (open "test/uuvallaw.l" "r"))
    _ (reads (open "test/uukindlaw.l" "r"))          ; load + CERTIFY uu's corpus (populates GLOB)
    bs (intern "\\")
    (unq x) (? (&& (two? x) (id? (cap x) bs)) (cap (cup x)) x)   ; strip one ' (reads shows quote as (\ ..))
@@ -56,7 +57,7 @@
                            (| (deq? F) (axq? F)) (link (entry F) acc) acc)))
                       (rev acc))
    (app2 a b) (? (two? a) (link (cap a) (app2 (cup a) b)) b)   ; NOT `cat` -- the local cat is the STRING fold
-   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (forms (open "test/uuval.l" "r")))))))))))))))) ())
+   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (forms (open "test/uuvallaw.l" "r"))))))))))))))))) ())
 
    ; the SILENT-NO-OP gate (defense in depth behind uu.l's arity-door macros):
    ; a def gathered off the file must be WHOLE -- three operands; a paren slip

@@ -21,7 +21,8 @@ half of the same ladder, not separate programs.
 | lean export | uu2lean.l | keep: export leg |
 | verified lux (uuwm) | wm2uu.l, test/uuwm*.l | keep; FRESHENED 2026-08-16 |
 | CLAUDE.md laws fuzz | test/law.l | keep; the uu leg LANDED (below) |
-| CLAUDE.md laws proof | test/uuval.l, uuvallaw.l | the measure tower, proved |
+| CLAUDE.md laws proof | test/uuval.l + uuvaldiff.l | the measure tower, proved |
+| CLAUDE.md laws, compiled | law2uu.l -> test/uuvallaw.l | ONE spelling, both lanes |
 | the +/* band lattice | mx2uu.l, test/uumx*.l | LANDED in uu beside mx.v |
 | property fuzz | test/fuzz.l | keep |
 | holo encoder fuzz | test/holo/fuzz/{fuzz,sysdiff}.l | PORTED 2026-08-16; py gone |
@@ -86,7 +87,7 @@ test/law.l quantifies the laws as lambdas over a jot-generated corpus
   about idempotence and factorisation, so a wrong zadd cannot fake one. planting
   a fault in zadd reddens the demos and the differential and leaves every proof
   term green -- which is why the differential exists.
-- **test/uuvallaw.l** -- the DIFFERENTIAL. love's own saturate/bit/nil?/ceil run
+- **test/uuvaldiff.l** -- the DIFFERENTIAL. love's own saturate/bit/nil?/ceil run
   beside the model's vsat/vbit/vnil/vceil over an encoding of law.l's corpus
   (33 values across every band: charm, gem, ratio, twin, charlist, symbol,
   array, tablet, jot, nested lists). a pair encodes as the model's link, an atom
@@ -97,18 +98,52 @@ test/law.l quantifies the laws as lambdas over a jot-generated corpus
   twin: ceil is not the identity on the integer part, the clamp bites at 0, net
   sums over a link rather than reading the head, saturate is not idempotent one
   step off. the kernel refuses all four.
-- the exporters carry it: tools/uu2coq.l and uu2lean.l list test/uuval.l, so
-  all twenty uv-* entries re-check in Rocq (axiom-free, universe-checked -- the
-  filter uu's type-in-type kernel lacks) and in Lean 4, no sorryAx.
+- the exporters carry it: tools/uu2coq.l and uu2lean.l list test/uuval.l and
+  test/uuvallaw.l, so every uv-* and law-* entry re-checks in Rocq (axiom-free,
+  universe-checked -- the filter uu's type-in-type kernel lacks) and in Lean 4,
+  no sorryAx.
 
-still open on this rung:
+## the lawgen (landed)
 
-- a lawgen tool (uuwmgen pattern) compiling test/law.l's law rows into the
-  obligations, so one spelling feeds fuzz and proof both. today the two files
-  are kept in step by hand.
-- the laws the model cannot yet state: cap/cup/link-back/link-apart and
-  id?-finer want a structural equality on val, which the depth index makes a
-  setoid question (net is lift-invariant, so the tower never had to care).
+the last of the three: **tools/law2uu.l** reads test/law.l's rows AS DATA and
+compiles the ones the tower can state into test/uuvallaw.l. a law is spelled
+once now -- edit the row in law.l and the obligation moves with it, `make
+test_uuvallaw` regenerates and diffs, and the proof is found again. the
+hand-written twins that used to sit in test/uuval.l are gone; that file keeps
+the model, the retraction ladder, net's homomorphism and the planted faults,
+and nothing else. (the old test/uuvallaw.l, the differential, is
+test/uuvaldiff.l now, so the three sort model -> differential -> laws.)
+
+- the lift is KIND-DIRECTED BY THE TOWER ITSELF. every expression has a level in
+  bool -- nat -- zed -- rea -- msr -- val; a word fixes the level it wants and
+  the level it answers; an argument at the wrong level is coerced along the
+  sections going up and the retractions going down. so `(net (net x))`, whose
+  inner net answers a measure where the outer wants a value, lifts to
+  `(vnet (vnum (vnet v)))` with no rule of its own. crew/lux/sigs.l is wm2uu's
+  oracle; here the tower is its own.
+- the PROOF IS SEARCHED, not transcribed: the tool loads the kernel and the
+  model and runs defq. by conversion first -- `(lam v (idpath LHS))`, which
+  seven of the eleven take -- then by cases on the saturated measure, a nat_rect
+  on `(vsat v)` whose motive is THE SAME TRANSLATION run at v := (nval n) and
+  whose arms are it at (nval 0) and (nval (succ k)). `(vsat (nval n))` is n, so
+  the motive at `(vsat v)` converts back to the obligation.
+- a band guard erases (`(? (coin? x) 1 e)`), the way core.l's ()-lane erases
+  under wm2uu -- the model has one uniform value, so the obligation is STRONGER
+  than the row, and each such row names the guard it dropped.
+- 11 obligations / 40 rows; 3 are carried by a TYPE (sat-green, bit-bool and
+  nil?-total are range checks the tower's codomain already answers) and 26 are
+  off the model, each listed with the word that stopped it. the eight glued
+  rows read `(= e e)` after opfix -- they are surface laws about a sigil and its
+  word, and the model has no sigils.
+- gated on a planted fault: rewriting bit-idem's row to `?x = !?x` -- false but
+  translatable -- and the tool reports `no proof found` and emits 10, not 11.
+  a search that rubber-stamped would not.
+
+what is still open: the laws the model cannot yet state. cap/cup/link-back/
+link-apart and id?-finer want a structural equality on val, which the depth
+index makes a setoid question (net is lift-invariant, so the tower never had to
+care). the assoc/dist family wants the band lattice AND a real `+`/`*` on
+values, where uumx today models only the dispatch.
 
 ## the band lattice, in uu (landed)
 

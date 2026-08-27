@@ -1,9 +1,10 @@
 ; test/uuval.l -- LOVE'S OWN VALUES, modelled in uu: the measure tower of
 ; CLAUDE.md's lambda equations ($x = ceil (re (net x)), ?x = ($x > 0)) built as
-; a STACK OF RETRACTIONS, so the laws test/law.l can only refute are theorems
-; here. the value universe is a binary tree of measures -- love's net sums over
-; a compound's parts and reads nothing else, so a leaf IS its measure and no
-; gem's value (hence no ieee) enters the model.
+; a STACK OF RETRACTIONS, so the laws test/law.l can only refute become theorems
+; (tools/law2uu.l compiles them off law.l's own rows into test/uuvallaw.l -- one
+; spelling, both lanes). the value universe is a binary tree of measures -- love's
+; net sums over a compound's parts and reads nothing else, so a leaf IS its
+; measure and no gem's value (hence no ieee) enters the model.
 ;
 ; the tower, each rung a section/retraction pair whose round trip is DEFINITIONAL:
 ;
@@ -15,7 +16,7 @@
 ; asks of it -- 2.5 ceils to 3 and -2.5 to -2 here, exactly as love answers.
 ; the ARITHMETIC (zadd/radd/madd) carries no theorem: every law below is about
 ; idempotence and factorisation, so a wrong zadd cannot fake one. what gates the
-; arithmetic instead is the differential in test/uuvallaw.l, which runs love's own
+; arithmetic instead is the differential in test/uuvaldiff.l, which runs love's own
 ; saturate beside this model's vsat over test/law.l's corpus.
 ;
 ; substrate: test/uu.l (the kernel + nat vocabulary; this file loads after it by
@@ -137,48 +138,12 @@
      (paths msr (netd (succ d) (ii2 (tpair a b))) (madd (netd d a) (netd d b))))))
    (lam d (lam a (lam b (idpath (madd (netd d a) (netd d b))))))))
 
-; --- CLAUDE.md's laws, the ones test/law.l can only refute ---
-(assert
- (defq uv-negbinv (pi b bool (paths bool (negb (negb b)) b))
-   (lam b (bool_rect (lam x (paths bool (negb (negb x)) x))
-            (idpath true) (idpath false) b)))
- ; net-idem: +x = +(+x) -- the net of a net is that net
- (defq uv-net-idem (pi v val (paths msr (vnet (vnum (vnet v))) (vnet v)))
-   (lam v (idpath (vnet v))))
- ; re-idem, ceil-idem: each rung is idempotent on its own image
- (defq uv-re-idem (pi v val (paths rea (mre (rmsr (vre v))) (vre v)))
-   (lam v (idpath (vre v))))
- (defq uv-ceil-idem (pi v val (paths zed (rceil (zrea (vceil v))) (vceil v)))
-   (lam v (idpath (vceil v))))
- ; sat-net: $ factors through the net -- one clamp, at the end
- (defq uv-sat-net (pi v val (paths nat (vsat (vnum (vnet v))) (vsat v)))
-   (lam v (idpath (vsat v))))
- ; sat-idem: $x = $$x
- (defq uv-sat-idem (pi v val (paths nat (vsat (nval (vsat v))) (vsat v)))
-   (lam v (idpath (vsat v))))
- ; bit-idem: ?x = ??x
- (defq uv-bit-idem (pi v val (paths bool (vbit (bval (vbit v))) (vbit v)))
-   (lam v (uv-bit-sect (vbit v))))
- ; sat-ceil: saturate IS ceil with the floor raised to 0
- (defq uv-sat-ceil (pi v val (paths nat (vsat v) (zsat (vceil v))))
-   (lam v (idpath (vsat v))))
- ; ceil-net: ceil retracts the measure -- love reads ceil off the net's real part
- (defq uv-ceil-net (pi v val (paths zed (vceil v) (rceil (mre (vnet v)))))
-   (lam v (idpath (vceil v))))
- ; bit-sat: bit IS saturate with the ceiling lowered to 1
- (defq uv-bit-sat (pi v val (paths bool (vbit v) (natgtb (vsat v) 0)))
-   (lam v (nat_rect (lam q (paths bool (natbit q) (natgtb q 0)))
-            (idpath false) (lam k (lam r (idpath true))) (vsat v))))
- ; nil?-bit: nil? is the bit's complement, so it reads $x = 0
- (defq uv-nil-bit (pi v val (paths bool (vnil v) (niszero (vsat v))))
-   (lam v (uv-negbinv (niszero (vsat v)))))
- ; bit-nil: ..and the bit is nil?'s own double negation
- (defq uv-bit-nil (pi v val (paths bool (vbit v) (negb (vnil v))))
-   (lam v (pathsinv0 bool (negb (negb (vbit v))) (vbit v) (uv-negbinv (vbit v))))))
-
-; --- sat-green and bit-bool need no proof: they are the TYPES. vsat lands in
-; --- nat and vbit in bool, so "a non-negative charm" and "0 or 1" are read off
-; --- the ladder rather than checked. the demos: the tower COMPUTES ---
+; --- CLAUDE.md's laws themselves are not spelled here: tools/law2uu.l compiles
+; --- them straight off test/law.l's rows into test/uuvallaw.l, so each law has ONE
+; --- spelling and both lanes read it. sat-green and bit-bool need no proof at
+; --- all: they are the TYPES -- vsat lands in nat and vbit in bool, so "a
+; --- non-negative charm" and "0 or 1" are read off the ladder rather than
+; --- checked. the demos: the tower COMPUTES ---
 (assert
  (= (vof 0 '(ii1 3))  (vof 0 '(vceil (rval (rmk (ii1 2) true)))))   ; ceil 2.5 = 3
  (= (vof 0 '3)        (vof 0 '(vsat  (rval (rmk (ii1 2) true)))))   ; $2.5 = 3
