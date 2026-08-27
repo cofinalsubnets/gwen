@@ -6631,8 +6631,67 @@
            (pin g 'fesc (), pin g 'strs strs0, 'no)   ; real call's arg lane wraps it, bind cannot): keep the caller lean
           (mkv rt 'r0 (<>br + ibd + [['label ilb9]]))))
 
+   ; -- AST constant propagation: the CONST bind worn by a declared local. a scalar local
+   ; declared ONCE from an initializer that folds, never assigned, never &-taken, and
+   ; shadowing nothing (param, global, fn) reads as its cast-coated literal everywhere --
+   ; no slot, no reload, no pool claim -- and its decl pair drops. an asm body blinds the
+   ; pass (an output could write it unseen); the shadow gates hold because a read before
+   ; the decl would be the OUTER name's. rounds to a fixpoint: a folded local may be
+   ; another's initializer. --
+   (kprop g f)
+    (: items <><>>>f
+       dcl {} tak {} wrt {} st {}
+       (cen x c9)                                   ; one walk: the censuses + the decl pairs seen
+        (? !(two? x) c9
+           (: c8 (x @ ('addr ('var nm)) (pin tak nm 1, c9)
+                     (('asn || 'post) ('var nm)) (pin wrt nm 1, c9)
+                     ('asm >< _) (pin st 'asm 1, c9)
+                     (('decl || 'sdecl) ps)
+                      (: (dn l a) (? !(two? l) a
+                                     (: _ (pin dcl <<l (1 + peep dcl <<l 0))
+                                        (dn >l (? (<x = 'decl && two? >><l) (<l >< a) a))))
+                         (dn ps c9))
+                     c9)
+              c8 (cen <x c8)
+              (cen >x c8)))
+       cds (cen items ())
+       pns (: (go l a) (? !(two? l) a (go >l (<<l >< a))) (go <>>f))
+       (kok nm ty init)
+        (? (st 'asm) ()
+           !(member? ty '(bool char uchar short ushort int uint long ulong)) ()
+           !(1 = peep dcl nm 0) ()
+           (tak nm || wrt nm) ()
+           (member? nm pns) ()
+           (two? (peep (g 'glob) nm 0)) ()
+           (g 'fns nm) ()
+           (: v (: kc (knum g init)
+                   (? (two? kc) <kc
+                      (: lv (litv init) (? (two? lv) <lv 'no))))
+              (? !(charm? v) ()
+                 (: cv (cnum g ['cast ty ['num v]])
+                    (two? cv ? ['cast ty ['num <cv]])))))
+       sbs (: t {}
+              (go l) (? !(two? l) t
+                        (: p <l
+                           kb (kok <p <>p <>>p)
+                           _ (two? kb ? (pin t <p kb))
+                           (go >l)))
+              (go cds))
+       (sub x)
+        (? !(two? x) x
+           (x @ ('var nm) (: k (peep sbs nm ()) (? (two? k) k x))
+               ('decl ps)
+                ['decl (: (dp l) (? !(two? l) ()
+                                    (two? (peep sbs <<l ()) ? (dp >l)
+                                       ((sub <l) >< dp >l)))
+                          (dp ps))]
+               ((sub <x) >< sub >x)))
+       (? !(two? (keys sbs)) f
+          (kprop g ([<f <>f <>>f] + (['blk (sub items)] >< >>>>f)))))
+
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
-    (: params <>>f
+    (: f (kprop g f)
+       params <>>f
        _ (fnreset g)                                 ; the whole per-fn pin record wiped (one roster)
        ; v6-M has no FPU registers at all: the f0/f1/f15 fiction lives in three 8-byte frame CELLS
        ; allocated up front, and soften rewrites every f-op onto them

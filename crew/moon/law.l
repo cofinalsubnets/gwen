@@ -303,6 +303,14 @@
       !(member? '(call rec) <>(cgn "int rec(int n){ if(n==0) return 5; return rec(n-1); } int main(){ return rec(3); }"))
       ; a frame-escaping fn keeps the plain call (the address outlives the frame)
       (member? '(call g) <>(cgn "int g(int*p){ return *p; } int h(int n){ int x=n; return g(&x); } int main(){ return h(3); }"))
+      ; kprop: a write-once constant local reads as its literal and its slot vanishes --
+      ; a write or a taken address keeps the slot (the store stays), and the chain folds whole
+      (= (fnf 'f <>(cgn "long f(void) { long w = 8; return w; } int main() { return (int)f(); }"))
+         '((li r0 8) (ret)))
+      (: fs (fnf 'f <>(cgn "int use(long *p); long f(void) { long w = 8; use(&w); return w; } int main() { return (int)f(); }"))
+         (two? (filter (\ f9 (two? f9 && member? <f9 '(si st))) fs)))
+      (= (fnf 'f <>(cgn "long f(void) { long a = 8; long b = a; long c = a + b; return c * b; } int main() { return (int)f(); }"))
+         '((li r0 128) (ret)))
       ; a STATEMENT-position attribute run skips (fallthrough..) -- except musttail, which
       ; is OWED now: the annotation rides the ret's PRE slot, marks the call, and sibs
       ; spells the jump or the compile refuses -- never a silent fallback to a plain call
@@ -1753,7 +1761,8 @@
    (lik fs k) (tally (filter (\ f (two? f && id? <f 'li && (= <>>f k))) fs))
    irS1 (cgn "int q(int n) { int i; i = 5; if (n) i = 6; return i + n; } int main() { return q(0) - 5; }")
    irS2 (cgn "int w(int n) { int i = 7; int *p = &i; return *p + n; } int main() { return w(0) - 7; }")
-   irS3 (cgn "int b9(int n) { _Bool b = 4; return b + n; } int main() { return b9(0) - 1; }")
+   ; b is WRITTEN so kprop leaves it: the si lane stays the one under law here
+   irS3 (cgn "int b9(int n) { _Bool b = 4; if (n > 9) b = 0; return b + n; } int main() { return b9(0) - 1; }")
    qf (fnf 'q <>irS1)
    wf (fnf 'w <>irS2)
    bf (fnf 'b9 <>irS3)

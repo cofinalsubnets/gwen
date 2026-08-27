@@ -46,10 +46,11 @@ One entry there was already built twice.
   `test/cc/152-rotate.c` on three targets, and the fixpoint. The re-fill answered the
   confound: sha256 4.23× → 2.90×, chacha 5.80× → 3.59×, every rotate-free row inside
   noise — **both hypotheses were true, each owning a row**, and the pair reads array vs
-  scalar again. The landing fill's tables are in moon-gauge's history (d52aea0a). Still
-  open from this rung's teardown, the named next lever: an inlined body does not
-  constant-propagate,
-  so hash.c's rotates ride `%cl` off a frame slot where gcc folds an immediate.
+  scalar again. The landing fill's tables are in moon-gauge's history (d52aea0a). The
+  teardown's named lever — an inlined body does not constant-propagate — landed in two
+  halves: the CONST bind (088fb2f6) substitutes a literal argument into the splice, and
+  kprop folds a write-once constant local at the AST. hash.c's rotates read immediates
+  now; the one `%cl` left is md5's runtime table rotate, which no compiler folds.
 - **rung 2 — price the six separately. LANDED 2026-08-23**, the pre-cut table is in
   moon-gauge's history (e2cea5c3); the current one is its *what the residency layer is
   worth*. The payers: locals homes +6.3% cycles, the cs grant +5.0%, the operand pool
