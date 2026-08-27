@@ -317,14 +317,22 @@
    ; norm-let: a fn body (: aux.. (g q..) GBODY (g inits..)) -- a let with VALUE aux bindings + ONE local
    ; fn + a CALL result -- normalizes to the named-let ((: (g q..) GBODY[aux inlined]) inits..) lift handles.
    ; strscan's strhash (: n (tally s) (go i h) .. (go 0 0)) is exactly this (n=(tally s) inlined into go).
+   ; ⚠ the normalization DROPS the aux bindings, so each leaves with its value -- and an aux value
+   ;   may read an aux before it (base32's `gc (// (* gb 8) bits)` reads `gb`). auxclose closes the
+   ;   values against each other left to right, delet-go's discipline, so no name rides out on
+   ;   another's value. Every use is a COPY, so only a dcheap? value goes: a call would recompute at
+   ;   each use, and an allocating one (`o (jug 0)`) would hand each use a buffer of its own.
+   (auxclose aps) (foldl (\ acc ap (acc + [(<ap >< (foldl (\ b q (subst-sym <q >q b)) >ap acc))])) () aps)
+   (auxinl aps x) (foldl (\ b ap (subst-sym <ap >ap b)) x (auxclose aps))
    (norm-let body)
     (? !(two? body && id? <body ': && !(atom? >body)) body
        (: parsed (anat-defs >body) pairs <parsed result <>parsed
           fnps (filter (\ pr (two? <pr)) pairs) auxps (filter (\ pr !(two? <pr)) pairs)
           (? !(1 = (tally fnps) && two? result) body                                         ; need exactly one local fn + a call result
+             !(all (\ ap (dcheap? >ap)) auxps) body                                          ; a call-valued aux does not copy -> leave the let alone
              (: g <<<fnps q ><<fnps gbody ><fnps
                 (? !(id? <result g && (tally >result) = (tally q)) body            ; result must be (g inits..) matching arity
-                   (: inl (\ x (foldl (\ b ap (subst-sym <ap >ap b)) x auxps))            ; inline every aux name -> its value
+                   (: inl (\ x (auxinl auxps x))                                             ; inline every aux name -> its closed value
                       ((': >< ((g >< q) >< (inl gbody >< ()))) >< map inl >result)))))))
    (lift-pair p)                                                                                  ; (nameform . body) -> (rewritten-pair newdefs)
     (: nf <p pbody (norm-let >p)
@@ -381,7 +389,7 @@
       pinpr (afind (\ b (: v >b (two? v && id? <v 'pin && id? <>v H))) binds)
       pv >pinpr K (opd pv 1) V (opd pv 2)
       others (filter (\ b !(id? b pinpr)) binds)
-      inl (\ e (foldl (\ acc ob (subst-sym <ob >ob acc)) e others))                    ; inline the pure value-binds (e.g. k)
+      inl (\ e (auxinl others e))                                                     ; inline the pure value-binds (e.g. k), closed against each other
       nc (map (\ x (? (id? x H) ['pin H (inl K) (inl V)] x)) (subst-call g gn fv call))          ; (gn fv.. STEP) with H's slot threaded as (pin H k v) -- pin writes AND returns H, threading the map
       ['? (subst-call g gn fv COND) nc 0])                                                       ; base -> 0 (the map result is discarded -- bumpok?)
    (other-use? nm self ipairs ibody) (occurs? nm ibody || any (\ pr (!(id? pr self) && occurs? nm >pr)) ipairs)   ; nm used outside its own binding?
@@ -687,8 +695,16 @@
    (dbor as)  (? (atom? as) 0  !(dcheap? <as) ('|| >< as)                             ; (|| a R..) = (? a a (|| R..)); a dup'd, so guard
                  ['? <as <as (dbor >as)])
    (dbabs x) (? !(dcheap? x) ['abs x] ['? ['< x 0] ['- 0 x] x])                           ; (abs x) = (? (x < 0) (0 - x) x)
+   ; ⚠ an `@` clause's ODD operands are PATTERNS, not expressions: `(b && lx-ws? b)` there is a
+   ;   GUARD -- pattern `b`, guard `(lx-ws? b)` -- and `?` is the pattern compiler's other spelling
+   ;   of a guard, (? g.. pat), which reads the operands the other way round. So a lowered `&&` in a
+   ;   pattern asks for `b` before `b` binds, matches nothing, and says nothing. Bodies lower; a
+   ;   pattern stays verbatim, the guard expressions inside it included.
+   (dbarms cs) (? (atom? cs) ()  (atom? >cs) [(debool <cs)]                     ; pat body .. [trailing default]
+                  (<cs >< ((debool <>cs) >< dbarms >>cs)))
    (debool e)                                                                                   ; recursively lower &&/||/abs to ?
     (? (atom? e) e  (dquote? e) e
+       (two? e && id? <e '@ && two? >e) ('@ >< ((debool <>e) >< dbarms >>e))
        (: y (map debool e) h (opword <y) as >y                    ; lower operands first (bottom-up); opword names a glued VALUE head
           (? (id? h '&&) (dband as)  (id? h '||) (dbor as)
              (id? h 'abs && 1 = (tally as)) (dbabs <as)  y)))
@@ -1117,7 +1133,7 @@
    (swfnpair? pr) (: nf <pr (two? nf && 1 < (tally nf) && (tally nf) < 6 && all name? >nf && distinctp >nf))
    (srcrec form0) (? ((two? form0) && (id? <form0 ':) && !(atom? >form0)
                     && (0 = ((tally >form0) % 2)))                                   ; body-less `:` only -> a GLOBAL-leaking define
-      (: low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts form0))))))))))   ; autogroup's FULL lowering: church/HOF/&& + structural (lift/loops/value-lets)
+      (: low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix form0)))))))))))   ; autogroup's FULL lowering: church/HOF/&& + structural (lift/loops/value-lets)
          (foldl (\ _ pr (? (swfnpair? pr) (pin srcreg <<pr (><pr >< >pr)) ())) () <(anat-defs >low))) ())
    (swuniq l) (? (atom? l) () (member? <l >l) (swuniq >l) (<l >< swuniq >l))
    (swbnds e) (map (\ p (? (two? <p) <<p <p)) <(anat-defs >e))                       ; a `:`'s binding names
@@ -1140,19 +1156,17 @@
      (? !(two? form0) form0
        !(id? <form0 ':) form0
        (atom? >form0) form0
-       ; DECLINE a BODY-LESS `:` -- the global-leaking top-level define (sat.l, the corpus, apps).
-       ; ⚠ ITS BINDINGS ARE THE MODULE'S SURFACE, and the lowering owes them two things a local let
-       ; is not owed. Both are PAID now: no pass appends the trailing () (cbflat is unpair's twin),
-       ; and none drops a binding for want of an internal caller -- dehof and fold-consts took 20 of
-       ; crew/kore/core.l's 81 defines on that reasoning, bracket-main among them, whose only other
-       ; mention is kore's verb table. crew/kore/core.l now walks the whole chain intact, 81 in.
-       ; ⚠ WHAT STILL BLOCKS THE LIFT IS plift's CAPTURE THREADING, a third thing: hoisting a
-       ; read-only loop out of a NESTED let drops a live local (kore's base32 `gb`) whose value the
-       ; hoisted fn still reads. That is not the leak and not the parity -- it is unverified codegen,
-       ; exactly as this comment always said, and it wants its own instrument.
-       (0 = ((tally >form0) % 2)) form0
+       ; ⚠ a BODY-LESS `:` is the global-leaking top-level define -- sat.l, the corpus, every crew
+       ; file -- and ITS BINDINGS ARE THE MODULE'S SURFACE, which the lowering owes three things a
+       ; local let is not owed: no pass appends the trailing () (cbflat is unpair's twin), none drops
+       ; a binding for want of an internal caller (an app's only other mention of a main is a verb
+       ; table), and none inlines a binding away without carrying its value out closed and copy-safe
+       ; (norm-let's auxclose + dcheap?).
+       ; ⚠ the chain is fed OPFIXED source, so every pass reads a call as a list with a head. On raw
+       ; source a call in infix OPERAND position (sort's `<a >< ded >a`) is a bare symbol in a run,
+       ; which subst-call walks straight past.
        (memo-leak? form0) form0                                                                ; a `:`-sibling map memo (fact/bell) -> interp, sound
-       (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts form0))))))))))   ; lower literal church (N f x)->f^N(x), inline lambda-const HOFs to first-order, lower &&/||/min/max/abs to ?, specialize interp-over-static-data, CLOSE polynomial folds to a closed form, deforest the rest -> loops, inline value-lets, lambda-lift named-let bodies, THEN plift read-only loops out of nested lets (hash's scan) -> flat group fns
+       (: form (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix form0)))))))))))   ; lower literal church (N f x)->f^N(x), inline lambda-const HOFs to first-order, lower &&/||/min/max/abs to ?, specialize interp-over-static-data, CLOSE polynomial folds to a closed form, deforest the rest -> loops, inline value-lets, lambda-lift named-let bodies, THEN plift read-only loops out of nested lets (hash's scan) -> flat group fns
           parsed (anat-defs >form) pairs <parsed
           fns0 (filter (\ p (: nf <p (two? nf && 1 < (tally nf) && (tally nf) < 6 && all name? >nf && distinctp >nf))) pairs)   ; (name p..), 1..4 distinct sym params
           fns (swgather fns0)                                                              ; swallow: pull called globals' recorded sources in as synthetic members

@@ -434,11 +434,20 @@
     ; int64-overflowing recursion (pow2) deopts to the interp fallback -> the exact bignum (sound)
     (: rf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 25))
        (&& !(id? (autogroup rf) rf) (= 75025 (ev rf)) (= (base-ev rf) (ev rf))))
-    ; SOUNDNESS REGRESSION: a BODY-LESS group `:` (the global-leaking top-level-define form -- sat.l's
-    ; shape) is DECLINED (returned UNCHANGED), NOT glazed. The lift pipeline can't preserve the leak, so
-    ; glazing it would silently miscompile the leaked globals to const-1 (broke sat.l's cdcl under the
-    ; image). Body-LESS = even # of forms after `:`. (rf above is body-HAVING -> still glazes.)
-    (: bl '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))  (id? (autogroup bl) bl))
+    ; THE BODY-LESS GROUP `:` -- the global-leaking top-level-define form, sat.l's shape and every
+    ; crew file's. Body-LESS = even # of forms after `:`. It GLAZES, and the leak survives it: the
+    ; define still lands in the one global scope, and the native it lands there answers what the
+    ; interpreted twin answers. (This stood DECLINED while the lowering could not preserve the leak:
+    ; dehof/fold-consts dropped a binding for want of an internal caller, the chain appended a body,
+    ; and norm-let dropped an aux its own inline still read. All three are paid.)
+    (: bl '(: (fibl n) (? (< n 2) n (+ (fibl (- n 1)) (fibl (- n 2)))))
+       bi '(: (fibi n) (? (< n 2) n (+ (fibi (- n 1)) (fibi (- n 2)))))
+       g (autogroup bl)
+       _ (ev bl)                                       ; the leak: fibl lands as a global, natively
+       _ (base-ev bi)                                  ; the same define, interpreted
+       (&& !(id? g bl)                                 ; the body-less form is LOWERED, not declined
+           (= 75025 (ev '(fibl 25)))                   ; ... and the leaked global answers
+           (= (ev '(fibl 25)) (ev '(fibi 25)))))       ; native == its interpreted twin
     (: rp '(: (p2 n) (? (< n 1) 1 (* 2 (p2 (- n 1)))) (p2 70))
        (= (base-ev rp) (ev rp)))                               ; 2^70 overflows int64 in H -> OVF deopt -> bignum
     ; MULTI-ARG recursion: tak (3 args, nested self-calls -- args survive on the machine stack) == interp
