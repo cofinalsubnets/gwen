@@ -20,15 +20,15 @@
 ; a verb takes the args AFTER its name and ANSWERS A STATUS CHARM; the rail quits with it.
 ; that is kore's convention and it is why `love kore sed ..` nests.
 (module '(verbs any? bn dash fire get prime scan seat seatof tab unprime word)
-(: tab (tablet 0)
-   (get k)   (peep tab k 0)
-   (bn p)    (: n (tally p)
-                (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
+(: tab {}
+   get tab
+   (bn p)    (: n #p
+                (go k r) (k < n ? (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
                 (go 0 0))
-   (dotl? w) (: n (tally w) ?((2 < n) && (snip w (n - 2) n = ".l")))   ; ⚠ glued ?( : && answers () for a false LEFT
-   (sl? w)   (: n (tally w) (go i) (? (n <= i) 0 (w i = 47) 1 (go (i + 1))) (go 0))
-   (word w)  (? ((sl? w) || (dotl? w)) () (get (intern w)))
-   (seat p)  (get (intern (bn p)))
+   (dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
+   (sl? w)   (: n #w (go i) (? (n <= i) 0 (w i = 47) 1 (go (i + 1))) (go 0))
+   (word w)  (sl? w || dotl? w ? () (get (name w)))
+   seat  (get * name * bn)
    ; the PRIME verbs. wake and bake are parsed in C before any love runs, and by physics, not
    ; habit: wake decides WHICH heap (image_load precedes ai_ini), and bake must snapshot before
    ; run_program pushes the session layer -- `leave` is mopped, so a love-level bake could not
@@ -36,18 +36,19 @@
    ; answers for help and the shadow rule, and so a misplaced one is an honest error instead of
    ; falling through to "run the file named bake".
    (prime nm) (\ as (: _ (say err ("love: " + string nm + " must lead the command line"
-                                   + " -- it is read before the session exists"))
-                       _ (put err 10) 2))
-   _ (pin tab 'wake (prime 'wake))
-   _ (pin tab 'bake (prime 'bake))
+                                   + " -- it is read before the session exists\n"))
+                       2))
+   _ (pins tab 'wake (prime 'wake) 'bake (prime 'bake))
    ; `love verbs` -- the table naming itself, one per line for a pipe where -h's blob is for
    ; a human. sorted: a tablet's key order is its own business and would read like a change.
    (vsort ws) (? (atom? ws) ws
                  (: p <ws r (vsort >ws)
-                    (ins x l) (? (atom? l) [x] (string x < string <l) (x >< l) (<l >< ins x >l))
+                    (ins x l) (? (atom? l) [x] (string x < string <l) (x . l) (<l . ins x >l))
                     (ins p r)))
-   _ (pin tab 'verbs (\ as (: _ (map (\ k (: _ (puts (string k)) (putc 10))) (vsort (keys tab)))
-                              _ (flush out) 0)))
+   (putln k) (puts (string k), putc 10)
+   _ (pin tab 'verbs (\ as (map putln * vsort $ keys tab,
+                            flush out,
+                            0)))
 
    ; --- the SEAT SCAN, the third door ---
    ; a file that IS the program seats itself: `love crew/moon/moon.l foo.c`, the installed
@@ -66,21 +67,20 @@
    ; honest answer: nothing was typed, nothing seats, and the feet go quiet without scaring.
    ; the seat WORD rides back because a multi-name app reads it: lush's login dash, an
    ; applet symlink. ⚠ () means "not seated", the presence answer -- ask it with two?.
-   (dash w)    (? ((0 < tally w) && (w 0 = 45)) (snip w 1 (tally w)) w)   ; -sh: login(1)'s mark
-   (any? w ws) (? (atom? ws) 0 ((<ws = w) || (any? w >ws)))
+   (dash w)    (0 < tally w && w 0 = 45 ? (snip w 1 (tally w)) w)   ; -sh: login(1)'s mark
+   (any? w (a . u)) (a = w || any? w u)
    (mine? ws w) (any? (dash (bn w)) ws)
    ; the primes lead, and they are the COMMAND LINE's word, never the program's -- step
    ; over them so `love wake IMAGE app ..` seats app. wake always carries its path; bake
    ; may, and a bake with none seats nobody anyway (it exits before a session exists).
-   (unprime a) (? !(two? a) a
-                  ((<a = "wake") || (<a = "bake")) (? (two? >a) >>a ())
+   (unprime a) (? (atom? a) a
+                  (<a = "wake" || <a = "bake") >>a
                   a)
-   (seatof ws a) (? !(two? a) ()
-                    (<a = "-l") (? (two? >a)                     ; a preload NAMED for me seats
-                                   (? (mine? ws <>a) (<>a >< >>a) (seatof ws >>a))   ; me -- the shebang's lane
-                                   ())
-                    (mine? ws <a) (<a >< >a)
-                    ())                                          ; seats someone else: not me
+   ; no arm answers () -- seats someone else, not me
+   (seatof ws a) (? (atom? a) ()
+                    (<a = "-l") (two? >a ?                     ; a preload NAMED for me seats
+                                 (mine? ws <>a ? (<>a . >>a) (seatof ws >>a)))  ; me -- the shebang's lane
+                    (mine? ws <a) (<a . >a))
    (scan ws a) (seatof ws (unprime a))
    (fire ws)   (scan ws (? (member? 'cmdline (names ())) >cmdline ())))
 

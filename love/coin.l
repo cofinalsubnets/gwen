@@ -20,11 +20,10 @@
 ; through their own * (num-ap's open fork) instead of composing them as functions. slot 0 is
 ; the show-name.
 (module 'coin
-(: (ring name plus times) (:
-      d {0 name}                                                 ; the die; slot 0 = show-name
-      _ (pin d 1 (\ a b (coin d (plus (load a) (load b)))))      ; slot 1 = +
-      _ (? times (pin d 2 (\ a b (coin d (times (load a) (load b))))) 0)  ; slot 2 = * (a monoid has none)
-      (\ p (coin d p)))                                          ; the ctor: payload -> coin
-   (monoid name plus) (ring name plus 0))                        ; a monoid is a ring with no product
-
-) ; module coin
+(: (ring name + *) (:
+    d {0 name}                                             ; the die; slot 0 = show-name
+    t *                                                    ; bound: a bare * would read as prod
+    _ (pin d 1 (\ a b (coin d (load a + load b))))         ; slot 1 = +
+    _ (? t (pin d 2 (\ a b (coin d (load a * load b)))) 0) ; slot 2 = * (a monoid has none)
+    (coin d))                                              ; curried: payload -> coin
+   (monoid name plus) (ring name plus ())))             ; a monoid is a ring with no product

@@ -26,23 +26,23 @@
    residual rewrite s_app scount slist smap sno sole s_plus s_star st0 stake subst sun
    sX tie ufail ufail? unify untie var var? walk)
 (: (dict_has d k) (: (loop k ks vs) (? (two? ks) (? (k = <ks) vs (loop k >ks >vs))) (loop k <d >d))
-   (dict_set d k v) ((k >< <d) >< v >< >d)
+   (dict_set d k v) ((k . <d) . v . >d)
    empty_dict '(())
    has_s dict_has
    ext_s dict_set
    (mintp x) (mint? x)
-   (var x) (x >< nom 0)                         ; (label . fresh-nom) -- identity by the nom
+   (var x) (x . nom 0)                         ; (label . fresh-nom) -- identity by the nom
    ; ⚠ the TAIL is the nom, and the test says so: a nom sitting anywhere ELSE in a term
    ; -- an atom under `tie`, say -- is data, not a variable. (not &&: it answers () for a
    ; false LEFT, and a predicate owes a bit.)
-   (var? x) (? (two? x) (mintp >x) 0)
+   (var? x) (? (two? x) (mint? >x) 0)
    (walk s u) (? (nil? (var? u)) u (: t (has_s s u) (? (two? t) (walk s <t) u)))
    ufail (nom 0)
    (ufail? x) (id? x ufail)
    ; a BINDER, and the whole nominal half: the abstraction is a love lambda, so
    ; alpha-equivalence is the LANGUAGE's (= on closures is alpha + structural) and
    ; instantiation is application -- nothing to swap, rename, or capture.
-   (tie f) ('tie >< f)
+   (tie f) ('tie . f)
    (tie? t) (? (two? t) (id? <t 'tie) 0)
    (untie t a) (>t a)                            ; open the binder at a
    (unify s u v) (: x (walk s u) y (walk s v)       ; PURE: a substitution, or ufail
@@ -54,7 +54,7 @@
         ufail))
    (subst s t) (? (var? t) (: w (walk s t) (? (var? w) w (subst s w)))   ; instantiate a template under s
                   (tie? t) (tie (\ a (subst s (untie t a))))             ; under a binder: at its opening
-                  (two? t) (subst s <t >< subst s >t)
+                  (two? t) (subst s <t . subst s >t)
                   t)
    (rewrite pat tpl x) (: r (unify '(()) pat x) (? (ufail? r) x (subst r tpl)))   ; pattern -> template, or x unchanged
 
@@ -63,10 +63,10 @@
    ; which keeps its signature and its purity. a constraint is (kind . payload),
    ; re-verified against the whole store after every successful unification
    ; (cKanren's design); an unconstrained search never leaves the (nil? c) door.
-   st0 (empty_dict >< ())
+   st0 (empty_dict . ())
    (unify_all s p) (? (two? p) (: r (unify s <<p ><p) (? (ufail? r) ufail (unify_all r >p))) s)
    ; the bindings r has and s does not, as a (u . v) list -- ext_s prepends, so they lead
-   (residual r s) (: (go k ks vs acc) (? k (go (k - 1) >ks >vs ((<ks >< <vs) >< acc)) acc)
+   (residual r s) (: (go k ks vs acc) (? k (go (k - 1) >ks >vs ((<ks . <vs) . acc)) acc)
                      (go ((tally <r) - (tally <s)) <r >r ()))
    ; does x occur in the (walked) term t? a tie is opened at a FRESH nom, which is
    ; exactly what freshness means: an outer atom is never the bound one.
@@ -80,55 +80,46 @@
                     (two? t) (? (closed? s (walk s <t)) (closed? s (walk s >t)) 0)
                     1)
    ; one constraint against s -> 'drop (satisfied for good), ufail (violated), or itself
-   (vet1 s c) (: k <c
-     (? (id? k 'dif) (: r (unify_all s >c)                    ; unify the prefix on a copy and read it three ways
-                        (? (ufail? r) 'drop                   ;   can never hold -> nothing left to watch
-                           (: q (residual r s)                ;   holds with no new binding -> violated
-                              (? (two? q) ('dif >< q) ufail))))
-        (id? k 'abs) (: x (walk s <>c) t (walk s >>c)         ; absento, and nominal freshness by the same door
-                        (? (inside s x t) ufail
-                           (closed? s t) 'drop
-                           ('abs >< x >< t)))
-        (id? k 'apt) (: w (walk s >>c)                        ; a type constraint over any predicate
-                        (? (var? w) ('apt >< <>c >< w)
-                           (<>c w) 'drop
-                           ufail))
-        c))
-   (vet s c) (? (nil? c) c
-     (: (go cs) (? (two? cs)
-                   (: r (vet1 s <cs)
-                      (? (ufail? r) ufail
-                         (: t (go >cs)
-                            (? (ufail? t) ufail
-                               (id? r 'drop) t
-                               (r >< t)))))
-                   ())
-        (go c)))
-   (con st c) (: d (vet <st c) (? (ufail? d) ufail (<st >< d)))   ; a state with c added, or ufail
+   (vet1 s c)
+    (<c @ 'dif (: r (unify_all s >c)                    ; unify the prefix on a copy and read it three ways
+                (ufail? r ? 'drop                   ;   can never hold -> nothing left to watch
+                 (: q (residual r s)                ;   holds with no new binding -> violated
+                  (two? q ? ('dif . q) ufail))))
+          'abs (: x (walk s <>c) t (walk s >>c)         ; absento, and nominal freshness by the same door
+                (? (inside s x t) ufail
+                   (closed? s t) 'drop
+                   ('abs . x . t)))
+          'apt (: w (walk s >>c)                        ; a type constraint over any predicate
+                (? (var? w) ('apt . <>c . w)
+                   (<>c w) 'drop
+                   ufail))
+          c)
+   (vet s)
+    (: (go (a . u)) (vet1 s a @ ^ufail ufail r (: t (go u) (t == ufail || r == 'drop ? t (r . t)))) go)
+   (con st c) (: d (vet <st c) (? (ufail? d) ufail (<st . d)))   ; a state with c added, or ufail
 
    ; --- streams: a COLIST, love's lazy list (love/p1.l's shape) --------------
-   ; () is empty, (x >< s) is mature, a thunk is immature -- three shapes told
+   ; () is empty, (x . s) is mature, a thunk is immature -- three shapes told
    ; apart by lit?/two?, which is canonical microkanren written in love's own
    ; idiom. (the church encoding this replaces spent no type test and paid for it
    ; in closures -- three per step -- for 26-35% more instructions on every shape
    ; measured. doc/misc/kanren.md carries the numbers.)
    sno ()
-   (sX x s) (x >< s)
-   (sun x) (x >< ())
-   (s_plus s t) (s @ (f && (lit? f)) (\ _ (s_plus t (f ())))       ; interleave (disj): the SWAP is the fairness
-                     (x >< r)       (x >< s_plus r t)
+   (sX x s) (x . s)
+   (sun x) [x]
+   (s_plus s t) (s @ (f && lit? f) (s_plus t * f)       ; interleave (disj): the SWAP is the fairness
+                     (x . r)       (x . s_plus r t)
                      t)
-   (s_star s g) (s @ (f && (lit? f)) (\ _ (s_star (f ()) g))       ; bind (conj)
-                     (x >< r)       (s_plus (g x) (s_star r g))
-                     ())
-   (s_app s t)  (s @ (f && (lit? f)) (\ _ (s_app (f ()) t))        ; ORDERED disj: no swap, so the left side runs
-                     (x >< r)       (x >< s_app r t)              ; dry first. ⚠ incomplete by construction --
+   (s_star s g) (s @ (f && lit? f) (_ \ s_star (f _) g)       ; bind (conj)
+                     (x . r)       (s_plus (g x) (s_star r g)))
+   (s_app s t)  (s @ (f && lit? f) (_ \ s_app (f _) t)        ; ORDERED disj: no swap, so the left side runs
+                     (x . r)       (x . s_app r t)              ; dry first. ⚠ incomplete by construction --
                      t)                                          ; that is the point, and every use owes the word
-   (sfire s) (s @ (f && (lit? f)) (sfire (f ())) s)                ; force to a mature shape: () or a cons
-   (stake i s) (? (nil? i) () (: m (sfire s) (? (two? m) (<m >< stake (i - 1) >m))))
-   (smap f s) (s @ (g && (lit? g)) (\ _ (smap f (g ()))) (x >< r) (f x >< smap f r) ())
+   (sfire s) (lit? s ? (sfire (s ())) s)                ; force to a mature shape: () or a cons
+   (stake i s) (i @ 0 () (sfire s @ (a . u) (a . stake (i - 1) u)))
+   (smap f s) (s @ (g && lit? g) (_ \ smap f (g _)) (x . r) (f x . smap f r) ())
    (sfold f z s) (: m (sfire s) (? (two? m) (f <m (sfold f z >m)) z))
-   slist (sfold link ())
+   slist (sfold (.) ())
    (scount s) (: (go a s) (: m (sfire s) (? (two? m) (go (a + 1) >m) a)) (go 0 s))
 
    ; --- goals ----------------------------------------------------------------
@@ -138,11 +129,11 @@
    ; a bare goal or a rel-wrapped one.
    (conj2 a b) (: g (load a) h (load b) (\ st (s_star (g st) h)))
    (disj2 a b) (: g (load a) h (load b) (\ st (s_plus (g st) (h st))))
-   yea (\ st (sun st))                               ; the goal that holds, once
-   nay (\ st ())                                     ; the goal that never does
+   yea sun                               ; the goal that holds, once
+   nay ()                                ; the goal that never does
    (est u v st) (: r (unify <st u v)
-                   (? (ufail? r) ()
-                      (: c (vet r >st) (? (ufail? c) () (sun (r >< c))))))
+                   (ufail? r ? ()
+                    (: c (vet r >st) (? (ufail? c) () (sun (r . c))))))
    ; DISEQUALITY: unify on a copy and read the outcome three ways -- ufail means
    ; the two can never be equal and there is nothing to remember; no new binding
    ; means they ARE equal, so the goal fails; anything else keeps the residual
@@ -150,13 +141,13 @@
    (dif u v st) (: r (unify <st u v)
                    (? (ufail? r) (sun st)
                       (: p (residual r <st)
-                         (? (two? p) (: t (con st (('dif >< p) >< >st)) (? (ufail? t) () (sun t)))
+                         (? (two? p) (: t (con st (('dif . p) . >st)) (? (ufail? t) () (sun t)))
                             ()))))
    ; ABSENTO, and nominal freshness by the same machinery: x occurs nowhere in t,
    ; now or ever. for a nom x under `tie` this IS alphaKanren's a # t.
-   (absent x t st) (: r (con st (('abs >< x >< t) >< >st)) (? (ufail? r) () (sun r)))
+   (absent x t st) (: r (con st (('abs . x . t) . >st)) (? (ufail? r) () (sun r)))
    ; a TYPE constraint over any predicate -- symbolo/numbero and their kin in one goal
-   (apt p x st) (: r (con st (('apt >< p >< x) >< >st)) (? (ufail? r) () (sun r)))
+   (apt p x st) (: r (con st (('apt . p . x) . >st)) (? (ufail? r) () (sun r)))
    ; --- the extra-logical three. `ifte` is the primitive (the soft cut): if c
    ; holds at all, t runs over EVERY answer of c and e is dropped. `sole` commits
    ; to the first answer. `naf` is negation as FAILURE -- it answers "not proved",
@@ -171,19 +162,19 @@
      (var? u) (: t (has_s s u)
                  (? (atom? t) u
                     (member? u path) ['mu <u]
-                    (walk_star s <t (u >< path))))
+                    (walk_star s <t (u . path))))
      (tie? u) (: a (nom 0) ['tie a (walk_star s (untie u a) path)])
-     (two? u) (walk_star s <u path >< walk_star s >u  path)
+     (two? u) (walk_star s <u path . walk_star s >u  path)
      u)
     ; the noms an answer carries -- a tie's binder, an atom a relation minted -- are
     ; RENAMED a1 a2 .. in first-sight order, so an answer reads back and compares.
     (noms t acc) (? (var? t) acc
-                    (mintp t) (? (member? t acc) acc (t >< acc))
+                    (mint? t) (? (member? t acc) acc (t . acc))
                     (two? t) (noms >t (noms <t acc))
                     acc)
     (renom d t) (? (var? t) t
-                   (mintp t) (: v (dict_has d t) (? (two? v) <v t))
-                   (two? t) (renom d <t >< renom d >t)
+                   (mint? t) (: v (dict_has d t) (? (two? v) <v t))
+                   (two? t) (renom d <t . renom d >t)
                    t)
     (dename t) (: ns (rev (noms t ()))
                   (? (two? ns)
@@ -215,6 +206,6 @@
 (:: 'zz (\ x (: s (nom 0) u (nom 0) x2 <x ['\ s u [x2 s]])))   ; delay a goal: the curried tail IS the thunk
 (:: '&&& (\ xs (foldl (\ a b [conj2 a b]) <xs >xs)))   ; conj of goals -- the ring's *
 (:: '||| (\ xs (foldl (\ a b [disj2 a b]) <xs >xs)))   ; disj of goals -- the ring's +
-(:: '\\\ (\ a (('\ >< a) >< map (\ a [var ['\ a]]) (init a))))                         ; lambda w/ fresh logic vars
+(:: '\\\ (\ a (('\ . a) . map (\ a [var ['\ a]]) (init a))))                         ; lambda w/ fresh logic vars
 
 ) ; module kanren
