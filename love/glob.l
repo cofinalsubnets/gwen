@@ -16,31 +16,28 @@
 
 (module '(glob match fmatch anyglob ones)
 (: (anyglob t)
-     (: n (tally t)
-        (go i) (? (i = n) 0
-                  (: b (t i) (? (|| (b = 42) (b = 63) (b = 91)) 1 (go (i + 1)))))
+     (: n #t
+        (go i) (i != n && (t i @ (42 || 63 || 91) 1 (go (i + 1))))
         (go 0))
-   (ones k) (? (k < 1) "" ((ones (k - 1)) + "1"))
-   (match p s) (fmatch p (ones (tally p)) s)
+   (ones k) (k < 1 ? "" (ones (k - 1) + "1"))
+   (match p s) (fmatch p (ones #p) s)
    (fmatch p m s)
-   (: np (tally p) ns (tally s)
-      (act? i) ((i < (tally m)) && ((m i) = 49))
+   (: np #p ns #s
+      (act? i) (i < #m && m i = 49)
       ; [..] at i against (s j) -> (hit . j-past-class) | () unterminated
       (cls i j)
-        (: neg (((i + 1) < np) && (((p (i + 1)) = 33) || ((p (i + 1)) = 94)))
+        (: neg (i + 1 < np && (p (i + 1) = 33 || p (i + 1) = 94))
            st (? neg (i + 2) (i + 1))
-           (fnd k first hit)
-             (? (k = np) ()
-                (: b (p k)
-                   (? ((b = 93) && !first) (hit >< (k + 1))
-                      (&& ((k + 2) < np) ((p (k + 1)) = 45) !((p (k + 2)) = 93))
-                        (fnd (k + 3) 0 (hit || ((b <= (s j)) && ((s j) <= (p (k + 2))))))
-                      (fnd (k + 1) 0 (hit || (b = (s j)))))))
+           (fnd k first hit) (k != np ?  (: b (p k)
+            (? (b = 93 && !first) (hit . (k + 1))
+               (k + 2 < np && p (k + 1) = 45 && p (k + 2) != 93)
+                (fnd (k + 3) 0 (hit || b <= s j && s j <= p (k + 2)))
+               (fnd (k + 1) 0 (hit || b = s j)))))
            r (fnd st 1 0)
            ; ⚠ presence is `two?`, never truth. a class that MISSES answers
            ; (0 . past), and net drops an improper tail, so a falsy r would read
            ; as "no class here" -- which negation then never gets to invert.
-           (? !(two? r) () ((? neg !<r <r) >< >r)))
+           (two? r ? ((neg ? !<r <r) . >r)))
       (fm i j)
         (? (i = np) (j = ns)
            (: b (p i)
@@ -51,8 +48,7 @@
                    (: c (cls i j)
                       (? !(two? c) (((s j) = 91) && fm (i + 1) (j + 1))  ; lone [ is itself
                          (<c && fm >c (j + 1))))
-                 ((j < ns) && ((s j) = b)) (fm (i + 1) (j + 1))
-                 0)))
+                 (j < ns && s j = b) (fm (i + 1) (j + 1)))))
       (bit (fm 0 0))))
 
 ) ; module glob
