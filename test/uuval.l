@@ -18,6 +18,9 @@
 ; a leaf is not quite its measure: () and 0 net the same, read nil the same, and
 ; are still two values, so the leaf carries a TAG (atm) and = reads it. that one
 ; bit is what a whole layer of the model needed and nothing else in it uses.
+; the equality itself is an EQUIVALENCE here -- reflexive, and transitive off the
+; reflection of each rung's decidable equality into a path -- which is what lets
+; a link's two limbs be compared through the heights neither of them spells.
 ; above the tower sits the CHARM CEILING, the only rung with a width -- zsat is
 ; the retraction and stays unbounded, zsatc is what the word can hold -- and
 ; beside it the COLOURS, the sign structure ?x = ($x > 0) actually rests on.
@@ -238,10 +241,12 @@
 
 ; --- STRUCTURAL EQUALITY. the depth is a height BOUND, so one value has many
 ; --- spellings -- a leaf sits at any depth, a link pads its shallow limb -- and
-; --- `paths` is finer than love's `=`. veq compares what a node OBSERVES (is it
-; --- a pair, its cap, its cup, its measure) down a FUEL, which is ONE recursion
-; --- where a walk over two depth-indexed trees would be two. first the measure's
-; --- own equality, and the andb/orb plumbing every proof below leans on ---
+; --- `paths` is finer than love's `=`. veq compares what a node OBSERVES: is it
+; --- a pair, its cap, its cup, its measure. the recursion is on the LEFT value's
+; --- index alone and the right rides along, read one observation at a time --
+; --- which is what lets three of these compose, where a fuel derived from a PAIR
+; --- of heights gives the three sides of a transitivity three different ones.
+; --- first the measure's own equality, and the andb plumbing the proofs lean on ---
 (assert
  (defn beqb (pi a bool (pi b bool bool))
    (lam a (lam b (bool_rect (lam x bool) b (negb b) a))))
@@ -292,6 +297,116 @@
    (lam a (coprod_rect (lam w (paths bool (aeqb w w) true))
              (lam u (idpath true)) (lam m (uv-meqb-refl m)) a))))
 
+; --- ..and each of them REFLECTS: an equality that answers true hands back the
+; --- path. reflexivity alone would give a preorder; this is what makes = an
+; --- equivalence, and every rung has to give it up before the tree's can ---
+(assert
+ (defq uv-pairpath
+   (pi A UU (pi B UU (pi a1 A (pi a2 A (pi b1 B (pi b2 B
+      (pi p (paths A a1 a2) (pi q (paths B b1 b2)
+         (paths (total2 x A B) (tpair a1 b1) (tpair a2 b2))))))))))
+   (lam A (lam B (lam a1 (lam a2 (lam b1 (lam b2 (lam p (lam q
+      (pathscomp0 (total2 x A B) (tpair a1 b1) (tpair a2 b1) (tpair a2 b2)
+         (maponpaths A (total2 x A B) (lam w (tpair w b1)) a1 a2 p)
+         (maponpaths B (total2 x A B) (lam w (tpair a2 w)) b1 b2 q)))))))))))
+ (defq uv-nateqb-paths
+   (pi n nat (pi m nat (pi h (paths bool (nateqb n m) true) (paths nat n m))))
+   (lam n (nat_rect
+             (lam q (pi m nat (pi h (paths bool (nateqb q m) true) (paths nat q m))))
+             (lam m (nat_rect (lam r (pi h (paths bool (nateqb 0 r) true) (paths nat 0 r)))
+                       (lam h (idpath 0))
+                       (lam k (lam s (lam h (fromempty (paths nat 0 (succ k))
+                                               (nopathsfalsetotrue h)))))
+                       m))
+             (lam j (lam IH (lam m
+                (nat_rect (lam r (pi h (paths bool (nateqb (succ j) r) true)
+                                    (paths nat (succ j) r)))
+                   (lam h (fromempty (paths nat (succ j) 0) (nopathsfalsetotrue h)))
+                   (lam k (lam s (lam h (maponpaths nat nat (lam x (succ x)) j k (IH k h)))))
+                   m))))
+             n)))
+ (defq uv-beqb-paths
+   (pi a bool (pi b bool (pi h (paths bool (beqb a b) true) (paths bool a b))))
+   (lam a (lam b (bool_rect (lam x (pi h (paths bool (beqb x b) true) (paths bool x b)))
+                    (lam h (pathsinv0 bool b true h))
+                    (lam h ((bool_rect (lam y (pi g (paths bool (negb y) true)
+                                                 (paths bool false y)))
+                               (lam g (fromempty (paths bool false true)
+                                         (nopathsfalsetotrue g)))
+                               (lam g (idpath false))
+                               b) h))
+                    a))))
+ (defq uv-zeqb-paths
+   (pi a zed (pi b zed (pi h (paths bool (zeqb a b) true) (paths zed a b))))
+   (lam a (lam b
+      (coprod_rect (lam v (pi h (paths bool (zeqb v b) true) (paths zed v b)))
+         (lam p (coprod_rect
+                   (lam v (pi h (paths bool (zeqb (ii1 p) v) true) (paths zed (ii1 p) v)))
+                   (lam q (lam h (maponpaths nat zed (lam x (ii1 x)) p q
+                                    (uv-nateqb-paths p q h))))
+                   (lam q (lam h (fromempty (paths zed (ii1 p) (ii2 q))
+                                    (nopathsfalsetotrue h))))
+                   b))
+         (lam p (coprod_rect
+                   (lam v (pi h (paths bool (zeqb (ii2 p) v) true) (paths zed (ii2 p) v)))
+                   (lam q (lam h (fromempty (paths zed (ii2 p) (ii1 q))
+                                    (nopathsfalsetotrue h))))
+                   (lam q (lam h (maponpaths nat zed (lam x (ii2 x)) p q
+                                    (uv-nateqb-paths p q h))))
+                   b))
+         a))))
+ (defq uv-reqb-paths
+   (pi a rea (pi b rea (pi h (paths bool (reqb a b) true) (paths rea a b))))
+   (lam a (lam b (lam h
+      (uv-pairpath zed bool (pr1 a) (pr1 b) (pr2 a) (pr2 b)
+         (uv-zeqb-paths (pr1 a) (pr1 b)
+            (andbtruel (zeqb (pr1 a) (pr1 b)) (beqb (pr2 a) (pr2 b)) h))
+         (uv-beqb-paths (pr2 a) (pr2 b)
+            (andbtruer (zeqb (pr1 a) (pr1 b)) (beqb (pr2 a) (pr2 b)) h)))))))
+ (defq uv-meqb-paths
+   (pi a msr (pi b msr (pi h (paths bool (meqb a b) true) (paths msr a b))))
+   (lam a (lam b (lam h
+      (uv-pairpath rea rea (pr1 a) (pr1 b) (pr2 a) (pr2 b)
+         (uv-reqb-paths (pr1 a) (pr1 b)
+            (andbtruel (reqb (pr1 a) (pr1 b)) (reqb (pr2 a) (pr2 b)) h))
+         (uv-reqb-paths (pr2 a) (pr2 b)
+            (andbtruer (reqb (pr1 a) (pr1 b)) (reqb (pr2 a) (pr2 b)) h)))))))
+ (defq uv-aeqb-paths
+   (pi a atm (pi b atm (pi h (paths bool (aeqb a b) true) (paths atm a b))))
+   (lam a (lam b
+      (coprod_rect (lam v (pi h (paths bool (aeqb v b) true) (paths atm v b)))
+         (lam u (coprod_rect
+                   (lam v (pi h (paths bool (aeqb (ii1 u) v) true) (paths atm (ii1 u) v)))
+                   (lam x (lam h (maponpaths unit atm (lam y (ii1 y)) u x
+                                    (pathscomp0 unit u tt x (uu-unitpath u)
+                                       (pathsinv0 unit x tt (uu-unitpath x))))))
+                   (lam m (lam h (fromempty (paths atm (ii1 u) (ii2 m))
+                                    (nopathsfalsetotrue h))))
+                   b))
+         (lam m (coprod_rect
+                   (lam v (pi h (paths bool (aeqb (ii2 m) v) true) (paths atm (ii2 m) v)))
+                   (lam x (lam h (fromempty (paths atm (ii2 m) (ii1 x))
+                                    (nopathsfalsetotrue h))))
+                   (lam n (lam h (maponpaths msr atm (lam y (ii2 y)) m n
+                                    (uv-meqb-paths m n h))))
+                   b))
+         a))))
+ ; a path back into an answer, and the two composed: the leaf's equality is an
+ ; equivalence, which is the whole of what the tree's transitivity leans on
+ (defq uv-aeqb-of
+   (pi a atm (pi b atm (pi p (paths atm a b) (paths bool (aeqb a b) true))))
+   (lam a (lam b (lam p
+      (pathscomp0 bool (aeqb a b) (aeqb a a) true
+         (pathsinv0 bool (aeqb a a) (aeqb a b)
+            (maponpaths atm bool (lam x (aeqb a x)) a b p))
+         (uv-aeqb-refl a))))))
+ (defq uv-aeqb-trans
+   (pi a atm (pi b atm (pi c atm (pi h1 (paths bool (aeqb a b) true)
+      (pi h2 (paths bool (aeqb b c) true) (paths bool (aeqb a c) true))))))
+   (lam a (lam b (lam c (lam h1 (lam h2
+      (uv-aeqb-of a c (pathscomp0 atm a b c (uv-aeqb-paths a b h1)
+                                            (uv-aeqb-paths b c h2))))))))))
+
 ; --- the four things a node shows: whether it is a pair, its cap, its cup, and
 ; --- the measure it carries when it is not. none of them recurse -- a leaf is
 ; --- ii1 at every depth, so the head is read in one step ---
@@ -322,19 +437,20 @@
  (defn vleaf (pi v val atm)  (lam v (vleafd (pr1 v) (pr2 v))))
  (defn vcap  (pi v val val)  (lam v (vcapd (pr1 v) (pr2 v))))
  (defn vcup  (pi v val val)  (lam v (vcupd (pr1 v) (pr2 v))))
- (defn veqf (pi n nat (pi u val (pi w val bool)))
-   (lam n (nat_rect (lam q (pi u val (pi w val bool)))
-             (lam u (lam w true))
-             (lam k (lam IH (lam u (lam w
-                (bool_rect (lam x bool)
-                   (andb (vtwo w) (andb (IH (vcap u) (vcap w)) (IH (vcup u) (vcup w))))
-                   (andb (negb (vtwo w)) (aeqb (vleaf u) (vleaf w)))
-                   (vtwo u))))))
-             n)))
- ; the fuel two values need is bounded by their heights: a step drops both by at
- ; least one, and the succ is what keeps two leaves from going unread
- (defn veq (pi u val (pi w val bool))
-   (lam u (lam w (veqf (succ (add (pr1 u) (pr1 w))) u w)))))
+ ; a leaf answers the right value's HEAD and its atom; a pair asks the right for
+ ; a cap and a cup and descends. the index falls by one each step and the right
+ ; value never has to be indexed at all
+ (defn veqd (pi d nat (pi t (vtre d) (pi w val bool)))
+   (lam d (nat_rect (lam q (pi t (vtre q) (pi w val bool)))
+             (lam t (lam w (andb (negb (vtwo w)) (aeqb t (vleaf w)))))
+             (lam k (lam IH (lam t (lam w
+                (coprod_rect (lam z bool)
+                   (lam a (andb (negb (vtwo w)) (aeqb a (vleaf w))))
+                   (lam p (andb (vtwo w) (andb (IH (vfst k p) (vcap w))
+                                               (IH (vsnd k p) (vcup w)))))
+                   t)))))
+             d)))
+ (defn veq (pi u val (pi w val bool)) (lam u (lam w (veqd (pr1 u) (pr2 u) w)))))
 
 ; --- LINK, and the padding it costs. two values meet at the taller height, so
 ; --- the shallow limb is raised -- and BOTH limbs are raised STRUCTURALLY, the
@@ -383,187 +499,296 @@
                         (ii2 (tpair (padl (pr1 u) (pr1 w) (pr2 u))
                                     (padr (pr1 u) (pr1 w) (pr2 w)))))))))
 
-; --- veq is REFLEXIVE at every fuel: the head test abstracts to one bool, and
-; --- both arms answer it ---
+; --- veq is REFLEXIVE: at a leaf the right value shows no head and the same
+; --- atom, at a pair it shows both limbs one level down ---
 (assert
- (defq uv-veqf-refl (pi n nat (pi v val (paths bool (veqf n v v) true)))
-   (lam n (nat_rect (lam q (pi v val (paths bool (veqf q v v) true)))
-             (lam v (idpath true))
-             (lam k (lam IH (lam v
-                (bool_rect (lam x (paths bool
-                             (bool_rect (lam y bool)
-                                (andb x (andb (veqf k (vcap v) (vcap v))
-                                              (veqf k (vcup v) (vcup v))))
-                                (andb (negb x) (aeqb (vleaf v) (vleaf v)))
-                                x)
-                             true))
-                   (uv-andb2 (veqf k (vcap v) (vcap v)) (veqf k (vcup v) (vcup v))
-                             (IH (vcap v)) (IH (vcup v)))
-                   (uv-aeqb-refl (vleaf v))
-                   (vtwo v)))))
-             n)))
  (defq uv-veq-refl (pi v val (paths bool (veq v v) true))
-   (lam v (uv-veqf-refl (succ (add (pr1 v) (pr1 v))) v))))
+   (lam v ((nat_rect (lam d (pi t (vtre d) (paths bool (veqd d t (tpair d t)) true)))
+             (lam t (uv-aeqb-refl t))
+             (lam k (lam IH (lam t
+                (coprod_rect
+                   (lam z (paths bool (veqd (succ k) z (tpair (succ k) z)) true))
+                   (lam a (uv-aeqb-refl a))
+                   (lam p (uv-andb2 (veqd k (vfst k p) (tpair k (vfst k p)))
+                                    (veqd k (vsnd k p) (tpair k (vsnd k p)))
+                                    (IH (vfst k p)) (IH (vsnd k p))))
+                   t))))
+             (pr1 v)) (pr2 v)))))
 
+; --- ..and TRANSITIVE, which reflexivity alone would not give: with the fuel
+; --- gone the three sides of a composition recurse on their own left index and
+; --- the middle value is just a value, so the induction is the plain one. what
+; --- it costs is that the middle's SHAPE has to be read -- veqd only reduces on
+; --- a head -- so each arm cases on the middle's index and tree, and the two
+; --- arms where the middle shows a head the left does not are ex falso ---
+(assert
+ ; the leaf case, shared by the base and by the step's leaf arm: the middle must
+ ; show no head, and its atom carries the equality across
+ (defq uv-leaf-trans
+   (pi a atm (pi e nat (pi s (vtre e) (pi w val
+      (pi h1 (paths bool (andb (negb (vtwo (tpair e s))) (aeqb a (vleaf (tpair e s)))) true)
+      (pi h2 (paths bool (veqd e s w) true)
+         (paths bool (andb (negb (vtwo w)) (aeqb a (vleaf w))) true)))))))
+   (lam a (lam e (nat_rect
+      (lam qe (pi s (vtre qe) (pi w val
+         (pi h1 (paths bool
+                   (andb (negb (vtwo (tpair qe s))) (aeqb a (vleaf (tpair qe s)))) true)
+         (pi h2 (paths bool (veqd qe s w) true)
+            (paths bool (andb (negb (vtwo w)) (aeqb a (vleaf w))) true))))))
+      (lam s (lam w (lam h1 (lam h2
+         (uv-andb2 (negb (vtwo w)) (aeqb a (vleaf w))
+            (andbtruel (negb (vtwo w)) (aeqb s (vleaf w)) h2)
+            (uv-aeqb-trans a s (vleaf w) h1
+               (andbtruer (negb (vtwo w)) (aeqb s (vleaf w)) h2)))))))
+      (lam j (lam IHe (lam s
+         (coprod_rect
+            (lam z (pi w val
+               (pi h1 (paths bool (andb (negb (vtwo (tpair (succ j) z)))
+                                        (aeqb a (vleaf (tpair (succ j) z)))) true)
+               (pi h2 (paths bool (veqd (succ j) z w) true)
+                  (paths bool (andb (negb (vtwo w)) (aeqb a (vleaf w))) true)))))
+            (lam x (lam w (lam h1 (lam h2
+               (uv-andb2 (negb (vtwo w)) (aeqb a (vleaf w))
+                  (andbtruel (negb (vtwo w)) (aeqb x (vleaf w)) h2)
+                  (uv-aeqb-trans a x (vleaf w) h1
+                     (andbtruer (negb (vtwo w)) (aeqb x (vleaf w)) h2)))))))
+            (lam pp (lam w (lam h1 (lam h2
+               (fromempty (paths bool (andb (negb (vtwo w)) (aeqb a (vleaf w))) true)
+                  (nopathsfalsetotrue h1))))))
+            s))))
+      e))))
+ (defq uv-veqd-trans
+   (pi d nat (pi t (vtre d) (pi e nat (pi s (vtre e) (pi w val
+      (pi h1 (paths bool (veqd d t (tpair e s)) true)
+      (pi h2 (paths bool (veqd e s w) true)
+         (paths bool (veqd d t w) true))))))))
+   (lam d (nat_rect
+      (lam qd (pi t (vtre qd) (pi e nat (pi s (vtre e) (pi w val
+         (pi h1 (paths bool (veqd qd t (tpair e s)) true)
+         (pi h2 (paths bool (veqd e s w) true)
+            (paths bool (veqd qd t w) true))))))))
+      (lam t (uv-leaf-trans t))
+      (lam k (lam IH (lam t
+         (coprod_rect
+            (lam z (pi e nat (pi s (vtre e) (pi w val
+               (pi h1 (paths bool (veqd (succ k) z (tpair e s)) true)
+               (pi h2 (paths bool (veqd e s w) true)
+                  (paths bool (veqd (succ k) z w) true)))))))
+            (lam x (uv-leaf-trans x))
+            (lam p (lam e (nat_rect
+               (lam qe (pi s (vtre qe) (pi w val
+                  (pi h1 (paths bool (veqd (succ k) (ii2 p) (tpair qe s)) true)
+                  (pi h2 (paths bool (veqd qe s w) true)
+                     (paths bool (veqd (succ k) (ii2 p) w) true))))))
+               ; the middle is a leaf where the left is a pair: nothing to carry
+               (lam s (lam w (lam h1 (lam h2
+                  (fromempty (paths bool (veqd (succ k) (ii2 p) w) true)
+                     (nopathsfalsetotrue h1))))))
+               (lam j (lam IHe (lam s
+                  (coprod_rect
+                     (lam z (pi w val
+                        (pi h1 (paths bool
+                                  (veqd (succ k) (ii2 p) (tpair (succ j) z)) true)
+                        (pi h2 (paths bool (veqd (succ j) z w) true)
+                           (paths bool (veqd (succ k) (ii2 p) w) true)))))
+                     (lam x (lam w (lam h1 (lam h2
+                        (fromempty (paths bool (veqd (succ k) (ii2 p) w) true)
+                           (nopathsfalsetotrue h1))))))
+                     ; all three are pairs: the cap and the cup compose, each by
+                     ; the hypothesis at one level down
+                     (lam q (lam w (lam h1 (lam h2
+                        (uv-andb2 (vtwo w)
+                           (andb (veqd k (vfst k p) (vcap w))
+                                 (veqd k (vsnd k p) (vcup w)))
+                           (andbtruel (vtwo w)
+                              (andb (veqd j (vfst j q) (vcap w))
+                                    (veqd j (vsnd j q) (vcup w))) h2)
+                           (uv-andb2 (veqd k (vfst k p) (vcap w))
+                                     (veqd k (vsnd k p) (vcup w))
+                              (IH (vfst k p) j (vfst j q) (vcap w)
+                                 (andbtruel (veqd k (vfst k p) (tpair j (vfst j q)))
+                                            (veqd k (vsnd k p) (tpair j (vsnd j q))) h1)
+                                 (andbtruel (veqd j (vfst j q) (vcap w))
+                                            (veqd j (vsnd j q) (vcup w))
+                                    (andbtruer (vtwo w)
+                                       (andb (veqd j (vfst j q) (vcap w))
+                                             (veqd j (vsnd j q) (vcup w))) h2)))
+                              (IH (vsnd k p) j (vsnd j q) (vcup w)
+                                 (andbtruer (veqd k (vfst k p) (tpair j (vfst j q)))
+                                            (veqd k (vsnd k p) (tpair j (vsnd j q))) h1)
+                                 (andbtruer (veqd j (vfst j q) (vcap w))
+                                            (veqd j (vsnd j q) (vcup w))
+                                    (andbtruer (vtwo w)
+                                       (andb (veqd j (vfst j q) (vcap w))
+                                             (veqd j (vsnd j q) (vcup w))) h2)))))))))
+                     s))))
+               e)))
+            t))))
+      d)))
+ (defq uv-veq-trans
+   (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
+      (pi h2 (paths bool (veq v w) true) (paths bool (veq u w) true))))))
+   (lam u (lam v (lam w (uv-veqd-trans (pr1 u) (pr2 u) (pr1 v) (pr2 v) w))))))
 
 ; --- THE PADDING IS INVISIBLE. this is the theorem the depth index owes: a
 ; --- value and its padded self answer veq alike, so the height a link meets at
-; --- is bookkeeping and nothing observable rests on it. one induction on the
-; --- FUEL, then on the two heights, then on the tree -- and both argument
-; --- orders, since a law names its two sides in its own order ---
+; --- is bookkeeping and nothing observable rests on it. the induction is on the
+; --- pad's own index a -- what makes mx2 and padl reduce -- and the case on b
+; --- and on the tree is what makes veqd reduce beside it. both argument orders,
+; --- since a law names its two sides in its own order ---
 (assert
  (defq uv-padl-fwd
-   (pi n nat (pi a nat (pi b nat (pi t (vtre a)
-      (paths bool (veqf n (tpair a t) (tpair (mx2 a b) (padl a b t))) true)))))
-   (lam n (nat_rect (lam q (pi a nat (pi b nat (pi t (vtre a)
-                      (paths bool (veqf q (tpair a t) (tpair (mx2 a b) (padl a b t))) true)))))
-             (lam a (lam b (lam t (idpath true))))
-             (lam m (lam IHn (lam a
-                (nat_rect (lam qa (pi b nat (pi t (vtre qa)
-                             (paths bool (veqf (succ m) (tpair qa t)
-                                           (tpair (mx2 qa b) (padl qa b t))) true))))
-                   (lam b (lam t
-                      (nat_rect (lam r (paths bool (veqf (succ m) (tpair 0 t)
-                                          (tpair (mx2 0 r) (padl 0 r t))) true))
-                         (uv-veqf-refl (succ m) (tpair 0 t))
-                         (lam k (lam s (uv-aeqb-refl t)))
-                         b)))
-                   (lam j (lam IHa (lam b
-                      (nat_rect (lam r (pi t (vtre (succ j))
-                                   (paths bool (veqf (succ m) (tpair (succ j) t)
-                                     (tpair (mx2 (succ j) r) (padl (succ j) r t))) true)))
-                         (lam t (uv-veqf-refl (succ m) (tpair (succ j) t)))
-                         (lam k (lam s (lam t
-                            (coprod_rect (lam w (paths bool
-                                           (veqf (succ m) (tpair (succ j) w)
-                                             (tpair (succ (mx2 j k))
-                                                    (padl (succ j) (succ k) w))) true))
-                               (lam mm (uv-aeqb-refl mm))
-                               (lam p (uv-andb2
-                                         (veqf m (tpair j (vfst j p))
-                                               (tpair (mx2 j k) (padl j k (vfst j p))))
-                                         (veqf m (tpair j (vsnd j p))
-                                               (tpair (mx2 j k) (padl j k (vsnd j p))))
-                                         (IHn j k (vfst j p)) (IHn j k (vsnd j p))))
-                               t))))
-                         b))))
-                   a))))
-             n)))
+   (pi a nat (pi b nat (pi t (vtre a)
+      (paths bool (veqd a t (tpair (mx2 a b) (padl a b t))) true))))
+   (lam a (nat_rect
+              (lam q (pi b nat (pi t (vtre q)
+                        (paths bool (veqd q t (tpair (mx2 q b) (padl q b t))) true))))
+              (lam b (lam t
+                 (nat_rect (lam r (paths bool
+                              (veqd 0 t (tpair (mx2 0 r) (padl 0 r t))) true))
+                    (uv-aeqb-refl t)
+                    (lam k (lam s (uv-aeqb-refl t)))
+                    b)))
+              (lam j (lam IH (lam b
+                 (nat_rect (lam r (pi t (vtre (succ j))
+                              (paths bool (veqd (succ j) t
+                                 (tpair (mx2 (succ j) r) (padl (succ j) r t))) true)))
+                    (lam t (uv-veq-refl (tpair (succ j) t)))
+                    (lam k (lam s (lam t
+                       (coprod_rect (lam w (paths bool
+                                      (veqd (succ j) w
+                                        (tpair (succ (mx2 j k)) (padl (succ j) (succ k) w)))
+                                      true))
+                          (lam mm (uv-aeqb-refl mm))
+                          (lam p (uv-andb2
+                                    (veqd j (vfst j p) (tpair (mx2 j k) (padl j k (vfst j p))))
+                                    (veqd j (vsnd j p) (tpair (mx2 j k) (padl j k (vsnd j p))))
+                                    (IH k (vfst j p)) (IH k (vsnd j p))))
+                          t))))
+                    b))))
+              a)))
  (defq uv-padl-bwd
-   (pi n nat (pi a nat (pi b nat (pi t (vtre a)
-      (paths bool (veqf n (tpair (mx2 a b) (padl a b t)) (tpair a t)) true)))))
-   (lam n (nat_rect (lam q (pi a nat (pi b nat (pi t (vtre a)
-                      (paths bool (veqf q (tpair (mx2 a b) (padl a b t)) (tpair a t)) true)))))
-             (lam a (lam b (lam t (idpath true))))
-             (lam m (lam IHn (lam a
-                (nat_rect (lam qa (pi b nat (pi t (vtre qa)
-                             (paths bool (veqf (succ m) (tpair (mx2 qa b) (padl qa b t))
-                                           (tpair qa t)) true))))
-                   (lam b (lam t
-                      (nat_rect (lam r (paths bool (veqf (succ m)
-                                          (tpair (mx2 0 r) (padl 0 r t)) (tpair 0 t)) true))
-                         (uv-veqf-refl (succ m) (tpair 0 t))
-                         (lam k (lam s (uv-aeqb-refl t)))
-                         b)))
-                   (lam j (lam IHa (lam b
-                      (nat_rect (lam r (pi t (vtre (succ j))
-                                   (paths bool (veqf (succ m)
-                                     (tpair (mx2 (succ j) r) (padl (succ j) r t))
-                                     (tpair (succ j) t)) true)))
-                         (lam t (uv-veqf-refl (succ m) (tpair (succ j) t)))
-                         (lam k (lam s (lam t
-                            (coprod_rect (lam w (paths bool
-                                           (veqf (succ m)
-                                             (tpair (succ (mx2 j k))
-                                                    (padl (succ j) (succ k) w))
-                                             (tpair (succ j) w)) true))
-                               (lam mm (uv-aeqb-refl mm))
-                               (lam p (uv-andb2
-                                         (veqf m (tpair (mx2 j k) (padl j k (vfst j p)))
-                                               (tpair j (vfst j p)))
-                                         (veqf m (tpair (mx2 j k) (padl j k (vsnd j p)))
-                                               (tpair j (vsnd j p)))
-                                         (IHn j k (vfst j p)) (IHn j k (vsnd j p))))
-                               t))))
-                         b))))
-                   a))))
-             n)))
+   (pi a nat (pi b nat (pi t (vtre a)
+      (paths bool (veqd (mx2 a b) (padl a b t) (tpair a t)) true))))
+   (lam a (nat_rect
+              (lam q (pi b nat (pi t (vtre q)
+                        (paths bool (veqd (mx2 q b) (padl q b t) (tpair q t)) true))))
+              (lam b (lam t
+                 (nat_rect (lam r (paths bool
+                              (veqd (mx2 0 r) (padl 0 r t) (tpair 0 t)) true))
+                    (uv-aeqb-refl t)
+                    (lam k (lam s (uv-aeqb-refl t)))
+                    b)))
+              (lam j (lam IH (lam b
+                 (nat_rect (lam r (pi t (vtre (succ j))
+                              (paths bool (veqd (mx2 (succ j) r) (padl (succ j) r t)
+                                                (tpair (succ j) t)) true)))
+                    (lam t (uv-veq-refl (tpair (succ j) t)))
+                    (lam k (lam s (lam t
+                       (coprod_rect (lam w (paths bool
+                                      (veqd (succ (mx2 j k)) (padl (succ j) (succ k) w)
+                                            (tpair (succ j) w))
+                                      true))
+                          (lam mm (uv-aeqb-refl mm))
+                          (lam p (uv-andb2
+                                    (veqd (mx2 j k) (padl j k (vfst j p)) (tpair j (vfst j p)))
+                                    (veqd (mx2 j k) (padl j k (vsnd j p)) (tpair j (vsnd j p)))
+                                    (IH k (vfst j p)) (IH k (vsnd j p))))
+                          t))))
+                    b))))
+              a)))
+ ; the right pad's a=0 corner is where mx2 earns its keep: (mx2 0 b) is b and
+ ; (padr 0 b t) is t, so the whole corner is one reflexivity
  (defq uv-padr-fwd
-   (pi n nat (pi a nat (pi b nat (pi t (vtre b)
-      (paths bool (veqf n (tpair b t) (tpair (mx2 a b) (padr a b t))) true)))))
-   (lam n (nat_rect (lam q (pi a nat (pi b nat (pi t (vtre b)
-                      (paths bool (veqf q (tpair b t) (tpair (mx2 a b) (padr a b t))) true)))))
-             (lam a (lam b (lam t (idpath true))))
-             (lam m (lam IHn (lam a
-                (nat_rect (lam qa (pi b nat (pi t (vtre b)
-                             (paths bool (veqf (succ m) (tpair b t)
-                                           (tpair (mx2 qa b) (padr qa b t))) true))))
-                   (lam b (lam t (uv-veqf-refl (succ m) (tpair b t))))
-                   (lam j (lam IHa (lam b
-                      (nat_rect (lam r (pi t (vtre r)
-                                   (paths bool (veqf (succ m) (tpair r t)
-                                     (tpair (mx2 (succ j) r) (padr (succ j) r t))) true)))
-                         (lam t (uv-aeqb-refl t))
-                         (lam k (lam s (lam t
-                            (coprod_rect (lam w (paths bool
-                                           (veqf (succ m) (tpair (succ k) w)
-                                             (tpair (succ (mx2 j k))
-                                                    (padr (succ j) (succ k) w))) true))
-                               (lam mm (uv-aeqb-refl mm))
-                               (lam p (uv-andb2
-                                         (veqf m (tpair k (vfst k p))
-                                               (tpair (mx2 j k) (padr j k (vfst k p))))
-                                         (veqf m (tpair k (vsnd k p))
-                                               (tpair (mx2 j k) (padr j k (vsnd k p))))
-                                         (IHn j k (vfst k p)) (IHn j k (vsnd k p))))
-                               t))))
-                         b))))
-                   a))))
-             n)))
+   (pi a nat (pi b nat (pi t (vtre b)
+      (paths bool (veqd b t (tpair (mx2 a b) (padr a b t))) true))))
+   (lam a (nat_rect
+             (lam q (pi b nat (pi t (vtre b)
+                       (paths bool (veqd b t (tpair (mx2 q b) (padr q b t))) true))))
+             (lam b (lam t (uv-veq-refl (tpair b t))))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre r)
+                             (paths bool (veqd r t
+                                (tpair (mx2 (succ j) r) (padr (succ j) r t))) true)))
+                   (lam t (uv-aeqb-refl t))
+                   (lam k (lam s (lam t
+                      (coprod_rect (lam w (paths bool
+                                     (veqd (succ k) w
+                                       (tpair (succ (mx2 j k)) (padr (succ j) (succ k) w)))
+                                     true))
+                         (lam mm (uv-aeqb-refl mm))
+                         (lam p (uv-andb2
+                                   (veqd k (vfst k p) (tpair (mx2 j k) (padr j k (vfst k p))))
+                                   (veqd k (vsnd k p) (tpair (mx2 j k) (padr j k (vsnd k p))))
+                                   (IH k (vfst k p)) (IH k (vsnd k p))))
+                         t))))
+                   b))))
+             a)))
  (defq uv-padr-bwd
-   (pi n nat (pi a nat (pi b nat (pi t (vtre b)
-      (paths bool (veqf n (tpair (mx2 a b) (padr a b t)) (tpair b t)) true)))))
-   (lam n (nat_rect (lam q (pi a nat (pi b nat (pi t (vtre b)
-                      (paths bool (veqf q (tpair (mx2 a b) (padr a b t)) (tpair b t)) true)))))
-             (lam a (lam b (lam t (idpath true))))
-             (lam m (lam IHn (lam a
-                (nat_rect (lam qa (pi b nat (pi t (vtre b)
-                             (paths bool (veqf (succ m) (tpair (mx2 qa b) (padr qa b t))
-                                           (tpair b t)) true))))
-                   (lam b (lam t (uv-veqf-refl (succ m) (tpair b t))))
-                   (lam j (lam IHa (lam b
-                      (nat_rect (lam r (pi t (vtre r)
-                                   (paths bool (veqf (succ m)
-                                     (tpair (mx2 (succ j) r) (padr (succ j) r t))
-                                     (tpair r t)) true)))
-                         (lam t (uv-aeqb-refl t))
-                         (lam k (lam s (lam t
-                            (coprod_rect (lam w (paths bool
-                                           (veqf (succ m)
-                                             (tpair (succ (mx2 j k))
-                                                    (padr (succ j) (succ k) w))
-                                             (tpair (succ k) w)) true))
-                               (lam mm (uv-aeqb-refl mm))
-                               (lam p (uv-andb2
-                                         (veqf m (tpair (mx2 j k) (padr j k (vfst k p)))
-                                               (tpair k (vfst k p)))
-                                         (veqf m (tpair (mx2 j k) (padr j k (vsnd k p)))
-                                               (tpair k (vsnd k p)))
-                                         (IHn j k (vfst k p)) (IHn j k (vsnd k p))))
-                               t))))
-                         b))))
-                   a))))
-             n))))
+   (pi a nat (pi b nat (pi t (vtre b)
+      (paths bool (veqd (mx2 a b) (padr a b t) (tpair b t)) true))))
+   (lam a (nat_rect
+             (lam q (pi b nat (pi t (vtre b)
+                       (paths bool (veqd (mx2 q b) (padr q b t) (tpair b t)) true))))
+             (lam b (lam t (uv-veq-refl (tpair b t))))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre r)
+                             (paths bool (veqd (mx2 (succ j) r) (padr (succ j) r t)
+                                               (tpair r t)) true)))
+                   (lam t (uv-aeqb-refl t))
+                   (lam k (lam s (lam t
+                      (coprod_rect (lam w (paths bool
+                                     (veqd (succ (mx2 j k)) (padr (succ j) (succ k) w)
+                                           (tpair (succ k) w))
+                                     true))
+                         (lam mm (uv-aeqb-refl mm))
+                         (lam p (uv-andb2
+                                   (veqd (mx2 j k) (padr j k (vfst k p)) (tpair k (vfst k p)))
+                                   (veqd (mx2 j k) (padr j k (vsnd k p)) (tpair k (vsnd k p)))
+                                   (IH k (vfst k p)) (IH k (vsnd k p))))
+                         t))))
+                   b))))
+             a))))
 
-; --- THE NOTHING SURFACE. () and 0 are two masks of one nothing -- both net 0,
-; --- both read nil -- and they are still not one value. the tag on the leaf is
-; --- what buys the third line, and nothing else in the model needed it ---
+; --- THE CONGRUENCE, which is what transitivity was for: two links whose limbs
+; --- answer alike answer alike. each limb meets the other at a height neither
+; --- spells, so the proof goes down through the pad, across by the hypothesis,
+; --- and back up the other pad -- three steps that only compose because veq
+; --- composes ---
 (assert
- (defq uv-nil-nothing (paths bool (vnil vnilv) true) (idpath true))
- (defq uv-zero-nothing (paths bool (vnil (nval 0)) true) (idpath true))
- (defq uv-nil-ne-zero (paths bool (veq vnilv (nval 0)) false) (idpath false))
- ; ..and the measure cannot tell them apart, which is why = has to
- (defq uv-nil-net-zero (paths msr (vnet vnilv) (vnet (nval 0))) (idpath mzero)))
+ (defq uv-veq-of (pi u val (pi w val (pi p (paths val u w) (paths bool (veq u w) true))))
+   (lam u (lam w (lam p
+      (pathscomp0 bool (veq u w) (veq u u) true
+         (pathsinv0 bool (veq u u) (veq u w)
+            (maponpaths val bool (lam x (veq u x)) u w p))
+         (uv-veq-refl u))))))
+ (defq uv-veq-link
+   (pi a val (pi b val (pi c val (pi d val
+      (pi ha (paths bool (veq a c) true)
+      (pi hb (paths bool (veq b d) true)
+         (paths bool (veq (vlink a b) (vlink c d)) true)))))))
+   (lam a (lam b (lam c (lam d (lam ha (lam hb
+      (uv-andb2 (vtwo (vlink c d))
+         (andb (veqd (mx2 (pr1 a) (pr1 b)) (padl (pr1 a) (pr1 b) (pr2 a))
+                     (vcap (vlink c d)))
+               (veqd (mx2 (pr1 a) (pr1 b)) (padr (pr1 a) (pr1 b) (pr2 b))
+                     (vcup (vlink c d))))
+         (idpath true)
+         (uv-andb2
+            (veqd (mx2 (pr1 a) (pr1 b)) (padl (pr1 a) (pr1 b) (pr2 a)) (vcap (vlink c d)))
+            (veqd (mx2 (pr1 a) (pr1 b)) (padr (pr1 a) (pr1 b) (pr2 b)) (vcup (vlink c d)))
+            (uv-veqd-trans (mx2 (pr1 a) (pr1 b)) (padl (pr1 a) (pr1 b) (pr2 a))
+               (pr1 c) (pr2 c)
+               (tpair (mx2 (pr1 c) (pr1 d)) (padl (pr1 c) (pr1 d) (pr2 c)))
+               (uv-veqd-trans (mx2 (pr1 a) (pr1 b)) (padl (pr1 a) (pr1 b) (pr2 a))
+                  (pr1 a) (pr2 a) c (uv-padl-bwd (pr1 a) (pr1 b) (pr2 a)) ha)
+               (uv-padl-fwd (pr1 c) (pr1 d) (pr2 c)))
+            (uv-veqd-trans (mx2 (pr1 a) (pr1 b)) (padr (pr1 a) (pr1 b) (pr2 b))
+               (pr1 d) (pr2 d)
+               (tpair (mx2 (pr1 c) (pr1 d)) (padr (pr1 c) (pr1 d) (pr2 d)))
+               (uv-veqd-trans (mx2 (pr1 a) (pr1 b)) (padr (pr1 a) (pr1 b) (pr2 b))
+                  (pr1 b) (pr2 b) d (uv-padr-bwd (pr1 a) (pr1 b) (pr2 b)) hb)
+               (uv-padr-fwd (pr1 c) (pr1 d) (pr2 d)))))))))))))
 
 ; --- ..and the colours over it. the first three are the sign's own shape; the
 ; --- fourth is CLAUDE.md's own lambda equation read as a colour -- truth is
@@ -660,12 +885,10 @@
                                          (vlink (vcapd (succ k) w) (vcupd (succ k) w)))) true))
                    (lam m (idpath true))
                    (lam p (uv-andb2
-                             (veqf (succ (add k (succ (mx2 k k))))
-                                   (tpair k (vfst k p)) (tpair (mx2 k k) (padl k k (vfst k p))))
-                             (veqf (succ (add k (succ (mx2 k k))))
-                                   (tpair k (vsnd k p)) (tpair (mx2 k k) (padr k k (vsnd k p))))
-                             (uv-padl-fwd (succ (add k (succ (mx2 k k)))) k k (vfst k p))
-                             (uv-padr-fwd (succ (add k (succ (mx2 k k)))) k k (vsnd k p))))
+                             (veqd k (vfst k p) (tpair (mx2 k k) (padl k k (vfst k p))))
+                             (veqd k (vsnd k p) (tpair (mx2 k k) (padr k k (vsnd k p))))
+                             (uv-padl-fwd k k (vfst k p))
+                             (uv-padr-fwd k k (vsnd k p))))
                    t))))
              d)))
  (defq uv-link-back
@@ -680,8 +903,8 @@
                   (tpair (pr1 v) (pr2 v)))
              (veq (tpair (mx2 (pr1 v) (pr1 v)) (padr (pr1 v) (pr1 v) (pr2 v)))
                   (tpair (pr1 v) (pr2 v)))
-             (uv-padl-bwd (succ (add (mx2 (pr1 v) (pr1 v)) (pr1 v))) (pr1 v) (pr1 v) (pr2 v))
-             (uv-padr-bwd (succ (add (mx2 (pr1 v) (pr1 v)) (pr1 v))) (pr1 v) (pr1 v) (pr2 v)))))
+             (uv-padl-bwd (pr1 v) (pr1 v) (pr2 v))
+             (uv-padr-bwd (pr1 v) (pr1 v) (pr2 v)))))
  ; id? is finer than =, never the converse: where id? holds, = does
  (defq uv-idq-finer (pi v val (paths bool (veq v v) true)) uv-veq-refl)
  ; ..and = is total, answering the charm 1 on every value
@@ -726,7 +949,17 @@
                                 (vlink (vlink (nval 1) (nval 2)) (nval 3)))))
  ; an atom is its own cap; its cup is ()
  (= (vof 0 'true)  (vof 0 '(veq (vcap (nval 7)) (nval 7))))
- (= (vof 0 'true)  (vof 0 '(veq (vcup (nval 7)) vnilv))))
+ (= (vof 0 'true)  (vof 0 '(veq (vcup (nval 7)) vnilv)))
+ ; --- and veq COMPOSES: a value, its padded self, and the same value read back
+ ; --- out of a deeper link are three spellings, and the chain closes ---
+ (= (vof 0 'true)
+      (vof 0 '(veq (vcap (vlink (vcap (vlink (nval 1) (nval 2))) (nval 3))) (nval 1))))
+ (= (vof 0 'true)
+      (vof 0 '(veq (vlink (vcap (vlink (nval 1) (nval 2))) (nval 3))
+                   (vlink (nval 1) (nval 3)))))
+ ; ..and the congruence discriminates: one limb agreeing is not enough
+ (= (vof 0 'false)
+      (vof 0 '(veq (vlink (nval 1) (nval 2)) (vlink (nval 1) (nval 3))))))
 
 ; --- the planted faults: a proof term that type-checks WHATEVER it says proves
 ; --- nothing, so each load-bearing claim gets its false twin, and the kernel
@@ -768,5 +1001,19 @@
  ; and truth is green ABOVE the floor, not green alone -- 0 is both
  (id? 'rejected (rejects (\ z (defq uv-bad-green
     (pi v val (paths bool (beqb (vbit v) (vgreen v)) true))
-    (lam v (uv-colq (pr1 (vre v)) (pr2 (vre v)))))))))
+    (lam v (uv-colq (pr1 (vre v)) (pr2 (vre v))))))))
+ ; transitivity takes BOTH sides -- the left one alone says nothing about the right
+ (id? 'accepted (rejects (\ z (defq uv-ok-trans
+    (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
+       (pi h2 (paths bool (veq v w) true) (paths bool (veq u w) true))))))
+    uv-veq-trans))))
+ (id? 'rejected (rejects (\ z (defq uv-bad-trans
+    (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
+       (paths bool (veq u w) true)))))
+    (lam u (lam v (lam w (lam h1 (uv-veq-refl u)))))))))
+ ; ..and the congruence takes both limbs: a link is not read by its cap alone
+ (id? 'rejected (rejects (\ z (defq uv-bad-link-cong
+    (pi a val (pi b val (pi c val (pi d val (pi ha (paths bool (veq a c) true)
+       (paths bool (veq (vlink a b) (vlink c d)) true))))))
+    (lam a (lam b (lam c (lam d (lam ha (uv-veq-refl (vlink a b))))))))))))
 (hear test-strict)

@@ -18,7 +18,9 @@
 ; what + needs that uuval did not: the integers really associate. that is the
 ; first block, and it is why uuval respells zadd by ITERATION -- the four
 ; definitional equations below are the whole proof, and the truncated-
-; subtraction spelling has none of them.
+; subtraction spelling has none of them. the chain band needs one more thing --
+; that APPEND associates -- and that needs the pad to be invisible to append and
+; veq to compose, which is why uuval's equality is an equivalence.
 ;
 ; substrate: test/uu.l and test/uuval.l (both load before this by sort order).
 (assert (member? 'vof (names ())) (two? (peep GLOB 'vlink 0)))
@@ -155,18 +157,6 @@
                             (uv-zsucc-pred (zadd a (ii2 k)))))))
                    n))
          b)))))
-
-; --- a path between pairs, from a path in each component. the carriers below are
-; --- all non-dependent total2, so one helper serves rea and msr both ---
-(assert
- (defq uv-pairpath
-   (pi A UU (pi B UU (pi a1 A (pi a2 A (pi b1 B (pi b2 B
-      (pi p (paths A a1 a2) (pi q (paths B b1 b2)
-         (paths (total2 x A B) (tpair a1 b1) (tpair a2 b2))))))))))
-   (lam A (lam B (lam a1 (lam a2 (lam b1 (lam b2 (lam p (lam q
-      (pathscomp0 (total2 x A B) (tpair a1 b1) (tpair a2 b1) (tpair a2 b2)
-         (maponpaths A (total2 x A B) (lam w (tpair w b1)) a1 a2 p)
-         (maponpaths B (total2 x A B) (lam w (tpair a2 w)) b1 b2 q))))))))))))
 
 ; --- the three integer shapes the carry asks for, named once so the eight cases
 ; --- below read as the case analysis they are ---
@@ -358,6 +348,110 @@
  (= (vof 0 'true) (vof 0 '(veq (vadd (vlink (nval 1) (nval 2)) (vlink (nval 3) vnilv))
                                (vlink (nval 1) (vlink (nval 3) vnilv))))))
 
+; --- APPEND ASSOCIATES, modulo veq. this is the law the depth index made hard:
+; --- a link meets its limbs at a height neither spells, so appending on the left
+; --- pads what appending on the right does not. the pad is invisible to append
+; --- for the same reason it is invisible to veq -- one induction each -- and the
+; --- three-way composition is what veq's transitivity is for ---
+(assert
+ (defq uv-vapp-padl
+   (pi a nat (pi b nat (pi t (vtre a) (pi w val
+      (paths bool (veq (vappd (mx2 a b) (padl a b t) w) (vappd a t w)) true)))))
+   (lam a (nat_rect
+             (lam q (pi b nat (pi t (vtre q) (pi w val
+                       (paths bool (veq (vappd (mx2 q b) (padl q b t) w)
+                                        (vappd q t w)) true)))))
+             (lam b (lam t (lam w
+                (nat_rect (lam r (paths bool
+                             (veq (vappd (mx2 0 r) (padl 0 r t) w) (vappd 0 t w)) true))
+                   (uv-veq-refl w)
+                   (lam k (lam sk (uv-veq-refl w)))
+                   b))))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre (succ j)) (pi w val
+                             (paths bool (veq (vappd (mx2 (succ j) r) (padl (succ j) r t) w)
+                                              (vappd (succ j) t w)) true))))
+                   (lam t (lam w (uv-veq-refl (vappd (succ j) t w))))
+                   (lam k (lam sk (lam t (lam w
+                      (coprod_rect (lam z (paths bool
+                                     (veq (vappd (succ (mx2 j k)) (padl (succ j) (succ k) z) w)
+                                          (vappd (succ j) z w)) true))
+                         (lam m (uv-veq-refl w))
+                         (lam pp (uv-veq-link
+                                    (tpair (mx2 j k) (padl j k (vfst j pp)))
+                                    (vappd (mx2 j k) (padl j k (vsnd j pp)) w)
+                                    (tpair j (vfst j pp))
+                                    (vappd j (vsnd j pp) w)
+                                    (uv-padl-bwd j k (vfst j pp))
+                                    (IH k (vsnd j pp) w)))
+                         t)))))
+                   b))))
+             a)))
+ (defq uv-vapp-padr
+   (pi a nat (pi b nat (pi t (vtre b) (pi w val
+      (paths bool (veq (vappd (mx2 a b) (padr a b t) w) (vappd b t w)) true)))))
+   (lam a (nat_rect
+             (lam q (pi b nat (pi t (vtre b) (pi w val
+                       (paths bool (veq (vappd (mx2 q b) (padr q b t) w)
+                                        (vappd b t w)) true)))))
+             (lam b (lam t (lam w (uv-veq-refl (vappd b t w)))))
+             (lam j (lam IH (lam b
+                (nat_rect (lam r (pi t (vtre r) (pi w val
+                             (paths bool (veq (vappd (mx2 (succ j) r) (padr (succ j) r t) w)
+                                              (vappd r t w)) true))))
+                   (lam t (lam w (uv-veq-refl w)))
+                   (lam k (lam sk (lam t (lam w
+                      (coprod_rect (lam z (paths bool
+                                     (veq (vappd (succ (mx2 j k)) (padr (succ j) (succ k) z) w)
+                                          (vappd (succ k) z w)) true))
+                         (lam m (uv-veq-refl w))
+                         (lam pp (uv-veq-link
+                                    (tpair (mx2 j k) (padr j k (vfst k pp)))
+                                    (vappd (mx2 j k) (padr j k (vsnd k pp)) w)
+                                    (tpair k (vfst k pp))
+                                    (vappd k (vsnd k pp) w)
+                                    (uv-padr-bwd j k (vfst k pp))
+                                    (IH k (vsnd k pp) w)))
+                         t)))))
+                   b))))
+             a)))
+ ; ..and so append associates: the left spine is walked once either way, and what
+ ; differs is only the height the middle result was built at
+ (defq uv-vapp-assoc
+   (pi d nat (pi t (vtre d) (pi v val (pi w val
+      (paths bool (veq (vapp (vappd d t v) w) (vappd d t (vapp v w))) true)))))
+   (lam d (nat_rect
+             (lam q (pi t (vtre q) (pi v val (pi w val
+                       (paths bool (veq (vapp (vappd q t v) w)
+                                        (vappd q t (vapp v w))) true)))))
+             (lam t (lam v (lam w (uv-veq-refl (vapp v w)))))
+             (lam k (lam IH (lam t
+                (coprod_rect (lam z (pi v val (pi w val
+                               (paths bool (veq (vapp (vappd (succ k) z v) w)
+                                                (vappd (succ k) z (vapp v w))) true))))
+                   (lam m (lam v (lam w (uv-veq-refl (vapp v w)))))
+                   (lam p (lam v (lam w
+                      (uv-veq-link
+                         (tpair (mx2 k (pr1 (vappd k (vsnd k p) v)))
+                                (padl k (pr1 (vappd k (vsnd k p) v)) (vfst k p)))
+                         (vappd (mx2 k (pr1 (vappd k (vsnd k p) v)))
+                                (padr k (pr1 (vappd k (vsnd k p) v))
+                                      (pr2 (vappd k (vsnd k p) v))) w)
+                         (tpair k (vfst k p))
+                         (vappd k (vsnd k p) (vapp v w))
+                         (uv-padl-bwd k (pr1 (vappd k (vsnd k p) v)) (vfst k p))
+                         (uv-veq-trans
+                            (vappd (mx2 k (pr1 (vappd k (vsnd k p) v)))
+                                   (padr k (pr1 (vappd k (vsnd k p) v))
+                                         (pr2 (vappd k (vsnd k p) v))) w)
+                            (vapp (vappd k (vsnd k p) v) w)
+                            (vappd k (vsnd k p) (vapp v w))
+                            (uv-vapp-padr k (pr1 (vappd k (vsnd k p) v))
+                                            (pr2 (vappd k (vsnd k p) v)) w)
+                            (IH (vsnd k p) v w))))))
+                   t))))
+             d))))
+
 ; --- THE BRIDGE: the model's three bands ARE three of mx.l's kinds, and the cell
 ; --- vadd takes is the lane mx.l's `+` matrix dispatches to. nine pairs, checked
 ; --- against the table love.c's mx.h is laid from, so a dispatch edit that moved
@@ -451,6 +545,104 @@
    (pi a val (pi b val (pi c val (pi d val
       (paths val (vadd (vlink a b) (vlink c d)) (vapp (vlink a b) (vlink c d)))))))
    (lam a (lam b (lam c (lam d (idpath (vapp (vlink a b) (vlink c d)))))))))
+
+; --- AND SO + ASSOCIATES, cell by cell over the three shapes a value has. the
+; --- carrier is a sigma over a depth-indexed tree and not a three-constructor
+; --- inductive, so there is no destruct to write one forall with: what stands in
+; --- for it is the twenty-seven cells, which is the same content spec.v's
+; --- `destruct x, y, z` covers. twenty-five of them are one reflexivity -- both
+; --- sides reduce to the SAME value, which is exactly what the DEGENERATION
+; --- buys -- and the two that carry mathematics are the numeric cell (the
+; --- measure's own monoid) and the chain cell (append) ---
+(assert
+ (defn uv-aa (pi u val (pi v val (pi w val UU)))
+   (lam u (lam v (lam w
+      (paths bool (veq (vadd (vadd u v) w) (vadd u (vadd v w))) true)))))
+ (defq uv-aa-uuu
+   (uv-aa vnilv vnilv vnilv)
+   (uv-veq-refl vnilv))
+ (defq uv-aa-uun
+   (pi c msr (uv-aa vnilv vnilv (vnum c)))
+   (lam c (uv-veq-refl (vnum c))))
+ (defq uv-aa-uus
+   (pi e val (pi f val (uv-aa vnilv vnilv (vlink e f))))
+   (lam e (lam f (uv-veq-refl (vlink e f)))))
+ (defq uv-aa-unu
+   (pi b msr (uv-aa vnilv (vnum b) vnilv))
+   (lam b (uv-veq-refl (vnum b))))
+ (defq uv-aa-unn
+   (pi b msr (pi c msr (uv-aa vnilv (vnum b) (vnum c))))
+   (lam b (lam c (uv-veq-refl (vnum (madd b c))))))
+ (defq uv-aa-uns
+   (pi b msr (pi e val (pi f val (uv-aa vnilv (vnum b) (vlink e f)))))
+   (lam b (lam e (lam f (uv-veq-refl (vlink e f))))))
+ (defq uv-aa-usu
+   (pi c val (pi d val (uv-aa vnilv (vlink c d) vnilv)))
+   (lam c (lam d (uv-veq-refl (vlink c d)))))
+ (defq uv-aa-usn
+   (pi c val (pi d val (pi e msr (uv-aa vnilv (vlink c d) (vnum e)))))
+   (lam c (lam d (lam e (uv-veq-refl (vlink c d))))))
+ (defq uv-aa-uss
+   (pi c val (pi d val (pi e val (pi f val (uv-aa vnilv (vlink c d) (vlink e f))))))
+   (lam c (lam d (lam e (lam f (uv-veq-refl (vapp (vlink c d) (vlink e f))))))))
+ (defq uv-aa-nuu
+   (pi a msr (uv-aa (vnum a) vnilv vnilv))
+   (lam a (uv-veq-refl (vnum a))))
+ (defq uv-aa-nun
+   (pi a msr (pi c msr (uv-aa (vnum a) vnilv (vnum c))))
+   (lam a (lam c (uv-veq-refl (vnum (madd a c))))))
+ (defq uv-aa-nus
+   (pi a msr (pi e val (pi f val (uv-aa (vnum a) vnilv (vlink e f)))))
+   (lam a (lam e (lam f (uv-veq-refl (vlink e f))))))
+ (defq uv-aa-nnu
+   (pi a msr (pi b msr (uv-aa (vnum a) (vnum b) vnilv)))
+   (lam a (lam b (uv-veq-refl (vnum (madd a b))))))
+ (defq uv-aa-nnn
+   (pi a msr (pi b msr (pi c msr (uv-aa (vnum a) (vnum b) (vnum c)))))
+   (lam a (lam b (lam c
+      (uv-veq-of (vnum (madd (madd a b) c)) (vnum (madd a (madd b c)))
+         (maponpaths msr val (lam x (vnum x))
+            (madd (madd a b) c) (madd a (madd b c)) (uv-madd-assoc a b c)))))))
+ (defq uv-aa-nns
+   (pi a msr (pi b msr (pi e val (pi f val (uv-aa (vnum a) (vnum b) (vlink e f))))))
+   (lam a (lam b (lam e (lam f (uv-veq-refl (vlink e f)))))))
+ (defq uv-aa-nsu
+   (pi a msr (pi c val (pi d val (uv-aa (vnum a) (vlink c d) vnilv))))
+   (lam a (lam c (lam d (uv-veq-refl (vlink c d))))))
+ (defq uv-aa-nsn
+   (pi a msr (pi c val (pi d val (pi e msr (uv-aa (vnum a) (vlink c d) (vnum e))))))
+   (lam a (lam c (lam d (lam e (uv-veq-refl (vlink c d)))))))
+ (defq uv-aa-nss
+   (pi a msr (pi c val (pi d val (pi e val (pi f val (uv-aa (vnum a) (vlink c d) (vlink e f)))))))
+   (lam a (lam c (lam d (lam e (lam f (uv-veq-refl (vapp (vlink c d) (vlink e f)))))))))
+ (defq uv-aa-suu
+   (pi a val (pi b val (uv-aa (vlink a b) vnilv vnilv)))
+   (lam a (lam b (uv-veq-refl (vlink a b)))))
+ (defq uv-aa-sun
+   (pi a val (pi b val (pi e msr (uv-aa (vlink a b) vnilv (vnum e)))))
+   (lam a (lam b (lam e (uv-veq-refl (vlink a b))))))
+ (defq uv-aa-sus
+   (pi a val (pi b val (pi e val (pi f val (uv-aa (vlink a b) vnilv (vlink e f))))))
+   (lam a (lam b (lam e (lam f (uv-veq-refl (vapp (vlink a b) (vlink e f))))))))
+ (defq uv-aa-snu
+   (pi a val (pi b val (pi c msr (uv-aa (vlink a b) (vnum c) vnilv))))
+   (lam a (lam b (lam c (uv-veq-refl (vlink a b))))))
+ (defq uv-aa-snn
+   (pi a val (pi b val (pi c msr (pi e msr (uv-aa (vlink a b) (vnum c) (vnum e))))))
+   (lam a (lam b (lam c (lam e (uv-veq-refl (vlink a b)))))))
+ (defq uv-aa-sns
+   (pi a val (pi b val (pi c msr (pi e val (pi f val (uv-aa (vlink a b) (vnum c) (vlink e f)))))))
+   (lam a (lam b (lam c (lam e (lam f (uv-veq-refl (vapp (vlink a b) (vlink e f)))))))))
+ (defq uv-aa-ssu
+   (pi a val (pi b val (pi c val (pi d val (uv-aa (vlink a b) (vlink c d) vnilv)))))
+   (lam a (lam b (lam c (lam d (uv-veq-refl (vapp (vlink a b) (vlink c d))))))))
+ (defq uv-aa-ssn
+   (pi a val (pi b val (pi c val (pi d val (pi e msr (uv-aa (vlink a b) (vlink c d) (vnum e)))))))
+   (lam a (lam b (lam c (lam d (lam e (uv-veq-refl (vapp (vlink a b) (vlink c d)))))))))
+ (defq uv-aa-sss
+   (pi a val (pi b val (pi c val (pi d val (pi e val (pi f val (uv-aa (vlink a b) (vlink c d) (vlink e f))))))))
+   (lam a (lam b (lam c (lam d (lam e (lam f
+      (uv-vapp-assoc (pr1 (vlink a b)) (pr2 (vlink a b)) (vlink c d) (vlink e f))))))))))
 
 ; --- * over the same carrier. the halves are closed under + and NOT under *
 ; --- (a half times a half is a quarter), so the multiplicative band is modelled
@@ -582,16 +774,41 @@
  (= (vof 0 'false) (vof 0 '(veq (vmul (nval 2) (vlink (nval 1) vnilv))
                                 (vlink (nval 1) vnilv)))))
 
-; --- WHAT IS NOT PROVED HERE, named rather than left to be noticed: + associates
-; --- on the numeric band (uv-vadd-num-assoc, off the measure's own monoid) and
-; --- on the unit cells, and the degeneration is what makes the mixed cells
-; --- associate at all -- but chain+chain wants append to associate, and append
-; --- changes the depth INDEX, so the law is a veq law and its proof needs veq to
-; --- be a congruence for vlink. that wants transitivity of veq: an induction over
-; --- the fuel and both trees at once, which is the next rung and not a corollary
-; --- of anything above. spec.v's gplus_assoc holds the list view of the same law
-; --- meanwhile, and the differential in test/uuvaldiff.l runs every ordered pair
-; --- of a twelve-value corpus through both operations against love itself.
+; --- and + associating, computed. the append is the interesting one: the two
+; --- bracketings build the SAME chain at different heights, which is the whole
+; --- of what the law says and the whole of what veq is for ---
+(assert
+ (= (vof 0 'true)
+      (vof 0 '(veq (vadd (vadd (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
+                         (vlink (nval 3) vnilv))
+                   (vadd (vlink (nval 1) vnilv)
+                         (vadd (vlink (nval 2) vnilv) (vlink (nval 3) vnilv))))))
+ ; ..and the two bracketings really do differ as TREES: veq sees past the height
+ (= (vof 0 'false)
+      (vof 0 '(veq (vadd (vadd (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
+                         (vlink (nval 3) vnilv))
+                   (vlink (nval 1) vnilv))))
+ ; append is not commutative, so the associativity above is not a constant
+ (= (vof 0 'false)
+      (vof 0 '(veq (vapp (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
+                   (vapp (vlink (nval 2) vnilv) (vlink (nval 1) vnilv)))))
+ ; the mixed cells associate by DEGENERATION: both sides answer the chain
+ (= (vof 0 'true)
+      (vof 0 '(veq (vadd (vadd (nval 5) (vlink (nval 1) vnilv)) (nval 7))
+                   (vadd (nval 5) (vadd (vlink (nval 1) vnilv) (nval 7))))))
+ (= (vof 0 'true)
+      (vof 0 '(veq (vadd (vadd (nval 5) (vlink (nval 1) vnilv)) (nval 7))
+                   (vlink (nval 1) vnilv)))))
+
+; --- WHAT IS NOT PROVED HERE, named rather than left to be noticed. + is done:
+; --- every cell associates, chain+chain included. * is not -- its numeric cell
+; --- sits at the integer rung (see above), the |count| action wants smul's
+; --- homomorphism over that rung, and the cartesian associates only up to the
+; --- canonical reassociation, which is a statement about ORDER that veq is too
+; --- coarse to make. spec.v holds gtimes_assoc_seq1/2/3 and mul-reassoc holds
+; --- the order seam meanwhile, and the differential in test/uuvaldiff.l runs
+; --- every ordered pair of a twelve-value corpus through both operations
+; --- against love itself.
 
 ; --- the planted faults: a proof term that type-checks WHATEVER it says proves
 ; --- nothing, so each load-bearing claim gets its false twin and the kernel must
@@ -625,5 +842,17 @@
  (id? 'accepted (rejects (\ z (defn uv-ok-lane
     (paths nat (mxadd mxKChain mxKCharm) mxLbin_a) (idpath mxLbin_a)))))
  (id? 'rejected (rejects (\ z (defn uv-bad-lane
-    (paths nat (mxadd mxKChain mxKCharm) mxLbin_b) (idpath mxLbin_b))))))
+    (paths nat (mxadd mxKChain mxKCharm) mxLbin_b) (idpath mxLbin_b)))))
+ ; append associates and does NOT commute -- a law that held of both would be
+ ; holding of nothing
+ (id? 'rejected (rejects (\ z (defq uv-bad-app-comm
+    (pi d nat (pi t (vtre d) (pi v val
+       (paths bool (veq (vappd d t v) (vapp v (tpair d t))) true))))
+    (lam d (lam t (lam v (uv-veq-refl (vappd d t v)))))))))
+ ; ..and the pad really is invisible to it: an append onto a padded spine is the
+ ; append onto the spine, which is the step the associativity leans on
+ (id? 'accepted (rejects (\ z (defq uv-ok-app-pad
+    (pi a nat (pi b nat (pi t (vtre a) (pi w val
+       (paths bool (veq (vappd (mx2 a b) (padl a b t) w) (vappd a t w)) true)))))
+    uv-vapp-padl)))))
 (hear test-strict)

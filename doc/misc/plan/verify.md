@@ -23,7 +23,7 @@ half of the same ladder, not separate programs.
 | CLAUDE.md laws fuzz | test/law.l | keep; the uu leg LANDED (below) |
 | CLAUDE.md laws proof | test/uuval.l + uuvaldiff.l | the measure tower, proved |
 | CLAUDE.md laws, compiled | law2uu.l -> test/uuvallaw.l | ONE spelling, both lanes |
-| love's `=` on values | veq, in test/uuval.l | structural, and the cap/cup/link laws |
+| love's `=` on values | veq, in test/uuval.l | structural, and an EQUIVALENCE |
 | the +/* band lattice | mx2uu.l, test/uumx*.l | LANDED in uu beside mx.v |
 | the band ALGEBRA | test/uuvalband.l | gval, ported: + and * on values |
 | the charm ceiling, () vs 0 | test/uuval.l | spec.v's V, over the finer carrier |
@@ -299,13 +299,13 @@ times a half is a quarter), so the multiplicative band is modelled at the
 INTEGER rung. an exact * everywhere wants the dyadic rung, which is a different
 carrier and not a lemma about this one.
 
-what + does not have yet, named rather than left to be noticed: + associates on
-the numeric band and on the unit cells, and the degeneration is what makes the
-mixed cells associate at all -- but chain+chain wants APPEND to associate, and
-append changes the depth INDEX, so the law is a veq law and its proof needs veq
-to be a congruence for vlink. that wants transitivity of veq: an induction over
-the fuel and both trees at once, the next rung and not a corollary of anything
-landed. spec.v's gplus_assoc holds the list view of the same law meanwhile.
++ associates over the whole carrier now, chain+chain included -- see the
+transitivity rung below, which is what it was waiting on. what * does not have:
+its numeric cell sits at the integer rung, the |count| action wants smul's
+homomorphism over that rung, and the cartesian associates only up to the
+canonical reassociation, which is a statement about ORDER that veq is too
+coarse to make. spec.v holds gtimes_assoc_seq1/2/3 and law.l's mul-reassoc
+holds the order seam meanwhile.
 
 ## the compose cell (landed)
 
@@ -325,3 +325,49 @@ stays in spec.v is the WIDTH (maxcharm at the host's 2^62-1, where uu names a
 small one and proves the same three clamp laws against it), the order and colour
 facts the rest of that file leans on, and the APPEND hom, which the list view
 has and the tree view does not.
+
+
+## the equality is an equivalence (landed)
+
+veq was reflexive and nothing else, which is a preorder and not an equality --
+and the missing half was the one every consequence needed. what stood in the way
+was the FUEL: veq ran down `succ (add du dw)`, a number derived from a PAIR of
+heights, so the three sides of a composition carried three different ones and
+`veqf n u v` said nothing about `veqf m u w`.
+
+**the fuel is gone.** veqd recurses on the LEFT value's index alone and the right
+rides along, read one observation at a time -- is it a pair, its cap, its cup,
+its atom. that is a structural recursion, it needs no bound, and it made every
+proof already standing SHORTER: the four padding lemmas each dropped a level of
+induction, and the link laws lost their fuel arithmetic. the right value never
+has to be indexed at all, which is exactly why three of these compose.
+
+- **each rung REFLECTS.** nateqb, beqb, zeqb, reqb, meqb and aeqb each hand back
+  a path when they answer true. reflexivity alone gives a preorder; this is what
+  makes `=` an equivalence, and every rung had to give it up before the tree's
+  could. the two impossible crossings (a unit against a number, ii1 against ii2)
+  are ex falso through the kernel's own `nopathsfalsetotrue`.
+- **transitivity** is then the plain induction, with one cost: the MIDDLE value's
+  shape has to be read, since veqd only reduces on a head. so each arm cases on
+  the middle's index and tree, and the two arms where the middle shows a head the
+  left does not are ex falso. the leaf case is shared by the base and the step.
+- **the congruence** `uv-veq-link` is what transitivity was for: two links whose
+  limbs answer alike answer alike. each limb meets the other at a height neither
+  spells, so the proof goes down through the pad, across by the hypothesis, and
+  back up the other pad -- three steps that only compose because veq composes.
+- **the pad is invisible to APPEND** for the same reason it is invisible to veq,
+  one induction each -- and then **append associates**, modulo veq. the left
+  spine is walked once either way; what differs is only the height the middle
+  result was built at.
+- **and so + associates over the whole carrier.** twenty-seven cells over the
+  three shapes a value has: twenty-five are one reflexivity, because both sides
+  reduce to the SAME value -- which is precisely what the degeneration buys --
+  and the two carrying mathematics are the numeric cell (the measure's own
+  monoid) and the chain cell (append). the carrier is a sigma over a
+  depth-indexed tree and not a three-constructor inductive, so there is no
+  destruct to write one forall with; the cells are the same content spec.v's
+  `destruct x, y, z` covers.
+
+gated: transitivity with one hypothesis dropped is refused, the congruence given
+only its left limb is refused, and append is asserted NOT commutative -- a law
+that held of both would be holding of nothing.
