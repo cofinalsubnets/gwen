@@ -35,8 +35,8 @@
    (tkk t) <t (tkv t) <>t
    ; ⚠ the value is a GUARD: a nom in a pattern is a fresh BINDER, so a second
    ; `s` there would shadow the parameter rather than demand the two agree.
-   (tp? ('p v) s) ?(v = s)
-   (tkw? ('kw v) k) ?(v = k)
+   (tp? ('p . v . _) s) ?(v = s)
+   (tkw? ('kw . v . _) k) ?(v = k)
    ; -- where a refusal stood --
    ; cpp hands the SPANS -- ((index file)..), which file each stretch of the
    ; flat stream came from -- on a marker token at the stream's head, laid by

@@ -420,7 +420,7 @@
    ; ⚠ a C name is a STRING here, so the compare is `=` -- `id?` answers false for every
    ; distinct one, and a scan that never matches is a gate that isn't there.
    (wrs? nm e)
-    (e @ (('asn || 'post) ('var ^nm)) 1
+    (e @ (('asn || 'post) . ('var ^nm) . _) 1
      (: (go (a >< u)) (wrs? nm a || go u) (go e)))
    ; how hard does the body lean on this param? reads weighted x8 per loop level (the alive
    ; pass's convention) -- the price of a whole-body park is paid in reloads saved.
@@ -876,7 +876,7 @@
                    ('regw x) ['regw x y]    ; a d128 pair home: (lo hi)
                    ('glob x) ['glo x y]
                    ['loc h y]))
-          (peep (g 'glob) name 0 @ (a b) ['glo a b] 'bad)))
+          (peep (g 'glob) name 0 @ (a . b . _) ['glo a b] 'bad)))
    ; a targetable LEAF re-emitted straight into register rX -> forms | 'no. leaves are PURE (no
    ; strs pin, no argpos), so discarding the r0 emission and re-aiming costs nothing. a homed
    ; param never lands here (its tuple already rides its home register, zero forms).
@@ -1585,7 +1585,7 @@
    (sfd g env e)
     (? (id? <e 'deref) (afd g env e)
        !(id? <e 'dot) ()
-       (: (dotv? x) (x @ ('var nm) nm  ('dot b) (dotv? b)  ())
+       (: (dotv? x) (x @ ('var nm) nm  ('dot . b . _) (dotv? b)  ())
           nm (dotv? e)
           (? !nm ()
              (: en (vent g env nm)
@@ -2963,14 +2963,14 @@
    ; a rotl count rides negated (both ISAs read the count mod W). --
    (rotp? e)                                        ; pure: safe to evaluate ONCE for the source's twice
     (e @ ((k >< _) && member? k '(num flo flof str var)) 1
-         ((k x) && member? k '(deref dot moor addr)) (rotp? x)
+         ((k . x . _) && member? k '(deref dot moor addr)) (rotp? x)
          ('cast _ x) (rotp? x)
          ('bin _ a b) (rotp? a && rotp? b)
          ('un _ x) (rotp? x)
          ())
    (rotty g env e)                                  ; the operand's declared type, by static peek
     (e @ ('var nm) (: en (vent g env nm) (? (bad? en) () <>>en))
-         ('cast ty) ty
+         ('cast . ty . _) ty
          ('deref p) (: t (rotty g env p) (? (ptr? t) <>t (arr? t) <>t ()))
          ('bin op x y && member? op '(+ -))         ; index arithmetic keeps the ptr/arr side's type
           (: a (rotty g env x)
@@ -5971,7 +5971,7 @@
          ('if _ thn els) [thn els]
          ('if _ thn) [thn]
          ('while _ body) [body]
-         ('do body) [body]
+         ('do . body . _) [body]
          ('for ini _ _ body && two? ini && member? <ini '(decl sdecl)) [ini body]
          ('for _ _ _ body) [body]
          ('switch _ items) items)
@@ -6066,7 +6066,7 @@
         (? !(two? e) [s2 nc]
            (e @ ('var nm) [(? (member? nm univ) (sadd s2 nm) s2) nc]
                 ((k >< _) && member? k '(num flo str szof)) [s2 nc]
-                ((k x) && member? k '(dot deref addr post vastart vaend vaarg)) (erd x s2 nc)
+                ((k . x . _) && member? k '(dot deref addr post vastart vaend vaarg)) (erd x s2 nc)
                 ((k _ x) && member? k '(un cast)) (erd x s2 nc)
                 ('asn dst rhs) (: r (erd rhs s2 nc)
                                   (? (<dst = 'var) r (erd dst <r <>r)))
@@ -6089,7 +6089,7 @@
        (ust s acc)
         (s @ ('blk items) (ustl items acc)
              ('expr e9) <(erd e9 acc 0)
-             ('ret rv) (? (two? rv) <(erd rv acc 0) acc)
+             ('ret . rv . _) (? (two? rv) <(erd rv acc 0) acc)
              (('decl || 'sdecl) ps) (ustp ps acc)
              ('if cnd thn els) (: a1 <(erd cnd acc 0) a2 (ust thn a1) (ust els a2))
              ('if cnd thn) (: a1 <(erd cnd acc 0) (ust thn a1))
@@ -6097,7 +6097,7 @@
              ('do body cnd) (ust body <(erd cnd acc 0))
              ('for ini cnd stp body)
               (: a1 (ini @ (('decl || 'sdecl) ps) (ustp ps acc)
-                           (_ x) <(erd x acc 0)
+                           (_ . x . _) <(erd x acc 0)
                            acc)
                  a2 (? (two? cnd) <(erd cnd a1 0) a1)
                  a3 (? (two? stp) <(erd stp a2 0) a2)
@@ -6125,7 +6125,7 @@
            (s @
               ('blk items) (: in (litems items out brk cnt w9) sq (tick ()) _ (spn sq in) in)
               ('expr e9)
-               (: kv (e9 @ ('asn ('var v) && member? v univ) v ())
+               (: kv (e9 @ (('asn . ('var v) . _) && member? v univ) v ())
                   r (erd e9 () 0)
                   in (sun (? kv (sdel out kv) out) <r)
                   ; ⚠ the KILL rides the record too: a name born in a call-bearing statement is
@@ -6134,7 +6134,7 @@
                   sq (tick ()) _ (rec sq (sun (sun in out) (? kv [kv] ())) (* <>r w9)
                                       (? (1 < w9) (* <>r w9) 0))
                   in)
-              ('ret rv)
+              ('ret . rv . _)
                (: r (? (two? rv) (erd rv () 0) '(() 0))
                   sq (tick ()) _ (rec sq <r (* <>r w9) (? (1 < w9) (* <>r w9) 0))
                   <r)
@@ -6182,7 +6182,7 @@
                   ri (? (two? ini && !(member? <ini '(decl sdecl)))
                         (erd <>ini () 0) '(() 0))
                   kv8 (? (two? ini && !(member? <ini '(decl sdecl)))
-                         (<>ini @ ('asn ('var v) && member? v univ) v ())
+                         (<>ini @ (('asn . ('var v) . _) && member? v univ) v ())
                          ())
                   in (? !(two? ini) seed
                         (member? <ini '(decl sdecl)) (lst ini seed () () w9)   ; ticks (cgdecl does); kill applies; runs ONCE
@@ -6498,7 +6498,7 @@
                  (noinl? <x || noinl? >x))
    (oneret? (i >< u))                                  ; decls* + one trailing `return expr` (the b2w shape)
     (i @ ('decl >< _) (oneret? u)
-         ('ret rv && two? rv) !(two? u))
+         (('ret . rv . _) && two? rv) !(two? u))
    (inlok? f sig aln)                               ; aln: __attribute__((always_inline)) -- the author's word waives the size gate
     (: rt (? (two? sig) <sig 'long)
        items <><>>>f
@@ -6644,7 +6644,7 @@
        (cen x c9)                                   ; one walk: the censuses + the decl pairs seen
         (? !(two? x) c9
            (: c8 (x @ ('addr ('var nm)) (pin tak nm 1, c9)
-                     (('asn || 'post) ('var nm)) (pin wrt nm 1, c9)
+                     (('asn || 'post) . ('var nm) . _) (pin wrt nm 1, c9)
                      ('asm >< _) (pin st 'asm 1, c9)
                      (('decl || 'sdecl) ps)
                       (: (dn l a) (? !(two? l) a
@@ -6960,7 +6960,7 @@
        ; so a callee only ever sees its own ABI registers. a &param deopts the regen to ir1. --
        (homereg gpi) (nthr (hregs g) gpi)
        (homes? ps gpi) (0 < nhomable ps gpi 0)      ; does any gp param qualify for a register home?
-       (anyop? (f >< u) op) (f @ (^op) 1 (anyop? u op))
+       (anyop? (f >< u) op) (f @ (^op . _) 1 (anyop? u op))
        (hascall? fs) (anyop? fs 'call || anyop? fs 'callr)
        ; the non-leaf PAYOFF gate: homing saves one frame load per param READ but costs a
        ; spill+reload PER HOME around every remaining call -- worth it only where reads dominate.

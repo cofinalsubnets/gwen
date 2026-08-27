@@ -359,7 +359,7 @@
         ('lbl l) (line (? (n < 1) 0 (n - 1)) (l + ":"))
         ('case v) (line (? (n < 1) 0 (n - 1)) ("case " + (charm? v ? (show v) (ce v 0)) + ":"))
         ['dflt] (line (? (n < 1) 0 (n - 1)) "default:")
-        ('if _ _) (cif s n "")
+        ('if . _ . _ . _) (cif s n "")
         ('while c b) (copen n "" ("while (" + ce c 0 + ")") b + cclose n b "")
         ('do b c) (copen n "" "do" b + cclose n b (" while (" + ce c 0 + ");"))
         ; all three clauses empty is `for (;;)`, where the general join would lay

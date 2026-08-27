@@ -3,7 +3,7 @@
 ; line reader (edraw/edln/edlnc) that lush drives.
 
 (module '(bao read reads forms shell welp edraw bao edln edlnc)
-(: (read s) (sound (hot? s ? (flow s) s) @ (x) (ev x)))
+(: (read s) (sound (hot? s ? (flow s) s) @ (x . _) (ev x)))
 ; reads: the stream shell -- reads and evals every form of a port, the value the last
 ; form's; ev late-binds ((ev 'ev r)) so one definition drives both of love0's passes.
 ; the two endings differ: a clean end comes between forms, `torn` inside one -- and torn

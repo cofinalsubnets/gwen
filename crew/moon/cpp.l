@@ -63,9 +63,9 @@
    (idt? ('id >< _)) 1
    ; ⚠ the value is a GUARD, never a second pattern variable: `(pv? ('p v) v)` rebinds
    ; v rather than demanding the two agree, so it answered 1 for every punctuator.
-   (idv? ('id v) s) ?(v = s)
-   (pv? ('p v) s) ?(v = s)
-   (kwv? ('kw v) s) ?(v = s)
+   (idv? ('id . v . _) s) ?(v = s)
+   (pv? ('p . v . _) s) ?(v = s)
+   (kwv? ('kw . v . _) s) ?(v = s)
    (addhide t hs)                                   ; union hs into t's hideset
     [(kof t) (vof t) (lof t) (dedup (hof t + hs)) (sof t)]
    (dedup l) (: (go l seen) (? !(two? l) ()
@@ -424,7 +424,7 @@
    ; macs is a MUTABLE tablet (so #define/#undef persist and includes share it);
    ; cond is a stack of (active taken line) frames; buf accumulates active code
    ; tokens, flushed (expanded) whenever a directive or EOF interrupts. --
-   (dirname t) (t @ ('kw q) (show q) (_ q) q) ; #if/#else lex as keywords -> their text
+   (dirname t) (t @ ('kw . q . _) (show q) (_ . q . _) q) ; #if/#else lex as keywords -> their text
    ; the refusal channel: a gripe, which the driver locates.
    ; gripeat mints one at the directive that failed; gripein stamps the file on
    ; the way out of an #include, which lexed from its OWN line 1.

@@ -1260,10 +1260,10 @@
    ; (nom access) pairs its body binds, and the GUARDS, which are neither.
    (pw p v)
      (? (nom? p) (? (= p '_) wnil [() [[p v]] ()])
-        (id? p ()) wnil                                      ; () is the form at ZERO: it asks nothing
+        (id? p ()) (wts [['id? () v]])                        ; () is the empty list, and asks for it
         (! (link? p)) (wts [['= p v]])
         (: h (opword <p) as >p                     ; opfix's glued heads are VALUES; opword names them
-           (? (= h '?) (? (! (two? as)) (wrest p '_ v)        ; a GUARD: (? g1 .. gn pat), or (? g)
+           (? (= h '?) (? (! (two? as)) (wlist p v)           ; a GUARD: (? g1 .. gn pat), or (? g)
                           (! (two? >as)) (wgd <as)           ; ..one operand IS the lone guard
                           (wq as v))                         ; ..else every one but the last guards
               ; THE GUARD, in the spelling a hand reaches for: (c && 0 < c) is (? (0 < c) c).
@@ -1296,25 +1296,25 @@
                  bss (map (\ d <>d) ds)
                  uni (foldl (\ u bs (adds u (map cap bs))) () bss)
                  [[('|| >< ts)] (map (\ n [n (pick n bss ts)]) uni) ()])
-              (= h '\) (? (two? >as) (wrest p '_ v) (wts (weq <as v)))   ; (\ x b) is a LAMBDA, a form
+              (= h '\) (? (two? >as) (wlist p v) (wts (weq <as v)))      ; (\ x b) is a LAMBDA, a form
               (= h 'list) (wlist as v)
               (h = '>< || h = '.) (? (= 2 (tally as))              ; ONE tag, two spellings; prefix
                                                                    ; `link` is the function, not a tag
                                         (wcat (wts [['two? v]])
                                               (wcat (pw <as ['cap v]) (pw <>as ['cup v])))
-                                        (wrest p '_ v))
-              (= h '+) (? (! (= 2 (tally as))) (wrest p '_ v)   ; a SPLIT: the left run, then the rest
+                                        (wlist p v))
+              (= h '+) (? (! (= 2 (tally as))) (wlist p v)      ; a SPLIT: the left run, then the rest
                           (: l <as t <>as
                              (? (? (link? l) (= <l 'list) ()) (wrest >l t v)
                                 ; ⚠ `+` is LEFT-handed, so ([a b] + [c] + t) arrives as a + whose
                                 ; LEFT is a +. cat is associative and so is the split: re-associate
                                 ; right and the ordinary rule reads it. this is the multi-split.
                                 (? (link? l) (= <l '+) ()) (pw ['+ <>l ['+ <>>l t]] v)
-                                (wrest p '_ v))))
+                                (wlist p v))))
               (= h 'hash) (wcat (wts [['tablet? v]]) (wkv as v))
               (= h 'tuple) (wcat (wts [['tray? v] ['= (tally as) ['tally v]]])
                                  (widx as v 0))
-              (wrest p '_ v))))                            ; UNTAGGED: the form's own shape, lax
+              (wlist p v))))                               ; UNTAGGED: the form's own shape, exact
    (wq as v) (? (two? >as) (wcat (wgd <as) (wq >as v)) (pw <as v))   ; guards, then the shape
    ; a nom's access across an alternative. ⚠ THE FIRST BRANCH THAT MATCHES WINS, and it
    ; supplies EVERY nom -- one it does not bind reads (), it does not fall through to a

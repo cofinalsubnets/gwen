@@ -140,7 +140,7 @@
         'zero 'nat
         'tt 'unit
         ('true || 'false) 'bool
-        (assq x cx @ (_ T) T (GLOB x @ (g) g (scare 'uu-unbound x))))
+        (assq x cx @ (_ T) T (GLOB x @ (g . _) g (scare 'uu-unbound x))))
 
    (inf-spine cx en d f as)
    (as @ (a . u) (f @ ('pi A q) (chk cx en d a A, inf-spine cx en d (capp q (vof en a)) u)

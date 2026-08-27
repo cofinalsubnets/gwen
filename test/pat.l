@@ -146,18 +146,21 @@
  ('(7 ()) = (@ ['k 7] ['k (a || [a b])] [a b] 'n))
  ('(7 8) = (@ ['k [7 8]] ['k ([a b] || a)] [a b] 'n))
  ('((7 8) ()) = (@ ['k [7 8]] ['k (a || [a b])] [a b] 'n))   ; ..`a` fits first, so `a` it is
- ; --- PARENS ARE THE FORM: the shape of a chain, LAX on the tail. brackets are the
- ; list and stay exact, so [a b c] is three and (a b c) is three OR MORE.
+ ; --- PARENS ARE THE FORM, and EXACT on the tail the way brackets always were:
+ ; (a b c) is three and so is [a b c]. `.` is how a tail says it will take more.
  (4 = (@ '(1 2 3) (a b c) (a + c)))
- ('one = (@ '(1 2 3) (a) 'one 'no))                 ; ..shorter fits: the tail is not asked about
- ('two = (@ '(1 2 3) (a b) 'two 'no))
- ('no = (@ '(1 2) (a b c) 'three 'no))              ; ..but it is still AT LEAST, never fewer
+ ('no = (@ '(1 2 3) (a) 'one 'no))                  ; ..shorter does not fit
+ ('no = (@ '(1 2 3) (a b) 'two 'no))
+ ('one = (@ '(1 2 3) (a . _) 'one 'no))             ; ..the tail, asked for out loud
+ ('two = (@ '(1 2 3) (a . b . _) 'two 'no))         ; ..and `.` is right-handed, so it nests
+ ('no = (@ '(1 2) (a b c) 'three 'no))              ; ..fewer never fit either way
  ('no = (@ 5 (a b) 'chain 'no))                     ; ..and a non-chain is not a form
- ('x = (@ '(lam x b extra) ('lam n _) n 'no))       ; ..which is the whole point: a term's tag+args
- ('no = (@ '(pi x b) ('lam n _) n 'no))
- (3 = (@ '(1 2 3) [a b c] c 0))                     ; ..the bracket next to it, still exact
+ ('no = (@ '(lam x b extra) ('lam n _) n 'no))      ; ..a term's tag+args, counted
+ ('x = (@ '(lam x b extra) ('lam . n . _) n 'no))   ; ..or with room left for the rest
+ ('no = (@ '(pi x b) ('lam . n . _) n 'no))
+ (3 = (@ '(1 2 3) [a b c] c 0))                     ; ..the bracket beside it reads the same
  (0 = (@ '(1 2 3 4) [a b c] c 0))
- ; ..(X..) IS ([X..] + _), so `+` is only for a tail you want to NAME
+ ; ..(X..) IS [X..], so `+` is for a tail you want to NAME
  ('(3 4) = (@ '(1 2 3 4) ([a b] + t) t 'no))
  ; ..and `+` is LEFT-handed, so a multi-split arrives as a + whose left is a +: cat is
  ; associative and so is this -- ([a b] + [c] + t) is three runs, the last one named.
@@ -167,11 +170,12 @@
  ; --- guards STACK without nesting: every operand but the last is a condition
  (4 = (@ '(1 2 3) (? (1 < 2) (2 < 3) (a b c)) (a + c) 'no))
  ('no = (@ '(1 2 3) (? (1 < 2) (3 < 2) (a b c)) (a + c) 'no))
- ; ..and the pair bottoms out consistently: [] is the LIST at zero, exactly the empty
- ; chain; () is the FORM at zero, which asks nothing and so fits ANYTHING, like `_`.
- ('any = (@ 5 () 'any 'no)) ('any = (@ '(1 2) () 'any 'no)) ('any = (@ () () 'any 'no))
+ ; ..and the pair bottoms out consistently: [] is the LIST at zero and () is the FORM
+ ; at zero, and both are the empty chain and fit nothing else. `_` is the don't-care.
+ ('no = (@ 5 () 'any 'no)) ('no = (@ '(1 2) () 'any 'no)) ('any = (@ () () 'any 'no))
+ ('any = (@ 5 _ 'any 'no)) ('any = (@ '(1 2) _ 'any 'no)) ('any = (@ () _ 'any 'no))
  ('empty = (@ () [] 'empty 'no)) ('no = (@ '(1) [] 'empty 'no)) ('no = (@ 5 [] 'empty 'no))
- (1 = (@ '(1 2) [a ()] a 'no))                     ; ..so () is the don't-care in a position
+ (1 = (@ '(1 2) [a _] a 'no))                      ; .._ is the don't-care in a position
  ; --- AND-patterns, the dual of ||: both must fit. `&` says it too.
  ('(lam x b) = (@ '(lam x b) (v @ ['lam p q]) v 'no))   ; ..name the whole, take it apart
  ('b = (@ '(lam x b) (v @ ['lam p q]) q 'no))
@@ -218,7 +222,7 @@
  ('up = ((\ (? (a < b) [a b]) 'up) '(1 2)))              ; ..guards compose
  (() = ((\ (? (a < b) [a b]) 'up) '(2 1)))
  ('q = ((\ (['lam x] || ['pi x]) x) '(pi q)))            ; ..so do alternatives
- ('z = ((\ ('lam n _) n) '(lam z b extra)))              ; ..and the lax form
+ ('z = ((\ ('lam . n . _) n) '(lam z b extra)))          ; ..and a tail
  ; ..an inner param still shadows: the rewrite is a binder, not a splice
  (9 = (((\ [a b] (\ a a)) '(1 2)) 9))
  ; ..a define-sugar binder is one too, at every level of a curried one. POSITION 0 is the
