@@ -135,7 +135,8 @@
    ; discipline (the old code compared physicals, so the accident counted).
    (rpeq? g a b) (id? (rp g a) (rp g b))
    ; -- the ablation knob (the pare plan's rung 0): MOON_ABLATE="tpool,cs" holds named
-   ; mechanisms empty for PRICING -- ralloc tpool cs lhome homes pcs, pdefcs
+   ; mechanisms empty for PRICING -- ralloc tpool cs lhome homes pcs, alloc
+   ; (locals homes fall back to lpick's static pick), pdefcs
    ; (no cs seats for crossing chains), and pdef
    ; (promotion falls back to the hull window). read at
    ; RUN time, once per unit (a value binding folds at bake and would carry the baking
@@ -7487,6 +7488,119 @@
             [(mk cs hp9 <kpk)
              (dropn hp9 (tally cs))
              <>kpk]))
+       ; -- the allocator (moon-ssa rung 4): locals homes placed over INTERVALS.
+       ; a candidate carries alive's tick span (spa); one scan places pool + cs,
+       ; and two names whose spans are DISJOINT share a seat -- capacity is
+       ; intervals, not names, and one pair serves every name on a cs seat. the
+       ; eligibility and the priced gates are lpick's own (a caller-saved seat
+       ; needs zero crossings, a callee-saved one pays 'bor), and so is the RAW
+       ; rank: a home's value is what repack cannot recover downstream, and raw
+       ; touches track the long-lived names only this channel can seat -- the
+       ; loop-weighted rank measured WORSE (it drains seats to deep short-lived
+       ; locals repack promotes anyway), so weight only breaks ties. answers as
+       ; lpick answers; MOON_ABLATE=alloc (and pdef, pdefcs) restores the pick.
+       (lalloc ir1x crs uv spa9 hp9)
+        (: nc (ncalls ir1x 0)
+           (free? nm) (member? nm uv && (peep crs nm 0 = 0))
+           lt (leaoffs ir1x {})
+           navl (#hp9 - 2)
+           (firstn l n) (? (atom? l || n < 1) () (<l >< firstn >l (n - 1)))
+           pfile (firstn hp9 navl)
+           kp (cspool g)
+           ; loop spans over ir1x, one per header label (lpick's shape; vwt reads them)
+           spans (: labi {}
+                    (gi (f >< u) i) (two? f && <f = 'label ? (pin labi <>f i),
+                                     gi u (i + 1))
+                    _ (gi ir1x 0)
+                    reach {}
+                    (go l i)
+                     (? !(two? l) ()
+                        (: f <l
+                           tgt (? !(two? f) ()
+                                  (<f = 'jmp) <>f
+                                  (<f = 'br) <>>f)
+                           ti (? tgt (peep labi tgt -1) -1)
+                           _ (? (0 <= ti < i)
+                              (: b (peep reach ti -1) (b < i ? (pin reach ti i))))
+                           (go >l (i + 1))))
+                    _ (go ir1x 0)
+                    (mks ts acc) (? !(two? ts) acc
+                                    (mks >ts ([<ts (peep reach <ts 0)] >< acc)))
+                    (mks (keys reach) ()))
+           (wnt fs off i n)                    ; the slot's loop-weighted touch count
+            (? !(two? fs) n
+               (: f2 <fs
+                  hit (? !(two? f2) ()
+                         (member? <f2 ldops9) (<>>f2 = fb9 && <>>>f2 = off)
+                         (member? <f2 gstops) (<>f2 = fb9 && <>>f2 = off))
+                  (wnt >fs off (i + 1) (? hit (n + vwt spans i) n))))
+           nx9 (: (go9 l n9) (? !(two? l) n9
+                              (go9 >l (two? <l && id? <<l 'ret ? (n9 + 1) n9)))
+                  (go9 ir1x 0))
+           ; candidates off the locals record: (tc wtc sq span width pool? cs?) -- a ()
+           ; span never shares (a shadowed name has no per-name liveness to trust).
+           ; the rank is lpick's own RAW count first -- long-lived names accumulate
+           ; touches, and they are the ones only this channel can seat (a short
+           ; call-free range promotes in repack anyway) -- then scalars before a
+           ; pair (two seats), the loop weight, and the seq makes it total
+           cands (: (walk rs acc)
+                     (? !(two? rs) acc
+                        (: e2 <rs sq <e2 off <>e2 ty <>>e2 nm <>>>e2
+                           (? (lt off) (walk >rs acc)
+                              (: tc (ntouch ir1x off 0)
+                                 d1 (d128? ty)
+                                 pok (? d1 () (rpays? 'pool (? (free? nm) 0 nc) tc))
+                                 cok (2 < tc && rpays? 'bor nx9 tc)
+                                 (? !(pok || cok) (walk >rs acc)
+                                    (walk >rs ([tc (wnt ir1x off 0 0) sq
+                                                (? (member? nm uv) (peep spa9 nm ()) ())
+                                                (? d1 2 1) pok cok] >< acc)))))))
+                    (walk (g 'lrec) ()))
+           byw (sortby (\ a b (? (<b < <a) 1 (<a < <b) ()
+                                  ((nthr a 4) < (nthr b 4)) 1 ((nthr b 4) < (nthr a 4)) ()
+                                  (<>b < <>a) 1 (<>a < <>b) ()
+                                  (<>>a < <>>b)))
+                       cands)
+           occ {}                             ; seat -> its occupants' spans, 'x exclusive
+           (fits? r sp)
+            (: o (peep occ r ())
+               (? (id? o 'x) ()
+                  !(two? o) 1
+                  !(two? sp) ()
+                  (: (dj l) (? !(two? l) 1
+                               (: s <l ((<>s < <sp) || (<>sp < <s) ? (dj >l) ())))
+                     (dj o))))
+           (claim r sp) (pin occ r (? !(two? sp) 'x
+                                      (: o (peep occ r ()) (? (two? o) (sp >< o) [sp]))))
+           (seat1 file sp) (? !(two? file) ()
+                              (fits? <file sp) <file
+                              (seat1 >file sp))
+           (seat2 file sp)                    ; a d128 pair: two seats, both fitting
+            (: r1 (seat1 file sp)
+               (? !r1 ()
+                  (: r2 (seat1 (filter (\ q !(id? q r1)) file) sp)
+                     (? r2 [r1 r2] ()))))
+           lh {} pw {} cw {}
+           _ (foldl
+              (\ _ c
+                (: sq (nthr c 2) sp (nthr c 3) w2 (nthr c 4) pok (nthr c 5) cok (nthr c 6)
+                   r (? pok (seat1 pfile sp) ())
+                   (? r (: _ (claim r sp) _ (pin pw r 1) (pin lh sq r))
+                      !cok 0
+                      (w2 = 2)
+                       (: p2 (seat2 kp sp)
+                          (? !(two? p2) 0
+                             (: _ (claim <p2 sp) _ (claim <>p2 sp)
+                                _ (pin cw <p2 1) _ (pin cw <>p2 1)
+                                (pin lh sq p2))))
+                      (: r2 (seat1 kp sp)
+                         (? !r2 0
+                            (: _ (claim r2 sp) _ (pin cw r2 1) (pin lh sq r2)))))))
+              0 byw)
+           pused (filter (\ q (peep pw q 0)) hp9)
+           cu0 (filter (\ q (peep cw q 0)) kp)
+           (? (two? pused || two? cu0)
+              [lh (filter (\ q !(member? q pused)) hp9) cu0]))
        n0 (peep g 'n 0) strs0 (g 'strs)             ; snapshot the accumulators for a possible regen
        ; ⚠ the operand pool is EMPTY on t32: AAPCS32 keeps r4-r11 callee-saved and the thumb2
        ; frame saves only lr+fp, while r0-r3/r12 are args and scratch -- there is no free
@@ -7547,7 +7661,10 @@
        ; homes (lpick), int-param homes (ihset), the pool left after both, the cs homes
        ; taken. both lanes mint it here; regen consumes it whole. --
        (seats rd hp9 wi)
-        (: lr (av && !(abl? g 'lhome) ? (lpick ir1 <>av <>>av hp9))
+        (: oldp (abl? g 'alloc || abl? g 'pdefcs || abl? g 'pdef)
+           lr (? !(av && !(abl? g 'lhome)) ()
+                 oldp (lpick ir1 <>av <>>av hp9)
+                 (lalloc ir1 <>av <>>av (nthr av 5) hp9))
            lp (two? lr ? <>lr hp9)
            ih (? wi (ihset rd lp) [() lp])
            [(two? lr ? <lr) <ih <>ih (two? lr (nthr lr 2))])

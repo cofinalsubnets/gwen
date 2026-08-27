@@ -159,6 +159,46 @@ until rung 6.
   (linear scan with splitting) over pool + cs replaces static-touch picking
   (imsort, navl, rpays 'pool). Prices against locals homes' +6.3% share: hold
   or beat.
+  **LANDED 2026-08-27**: gen.l's lalloc replaces lpick's two raw-count walks
+  in the SAME channel (the regen delivers, as before) — one hottest-first scan
+  over pool + cs, candidates off the locals record, intervals from alive's spa
+  (the tick-span leg, pre-laid at rung 3). The capacity win is SHARING: two
+  names whose spans are disjoint ride one seat (sound because the kill rides
+  alive's record — a span covers its defining statement, so disjoint hulls
+  never coexist); lvm_mul_rep seats nine locals where the static pick managed
+  four, one save/restore pair per seat however many names ride it. Census over
+  the 86-TU dump: −226 static frame touches, −0.56% loop-weighted, 48 fns
+  improve / 11 regress (all small). pdef stays byte-identical to the pre-arc
+  hull; MOON_ABLATE=alloc IS the rung-3 compiler, byte-identical — the
+  regression instrument. law.l pins the sharing shape (two call-crossing
+  block locals, one pair; the setenv round-trip pins the knob's face) and
+  eight goldens re-subjected (assignment order churned identities only).
+  ⚠ THE MEASUREMENT THAT RESHAPED THE RUNG: ablating lhome on the rungs-1-3
+  tree still costs +9.3% cycles / +9.5% insns — repack CANNOT recover the
+  channel's value post-choice, because a regen home REMOVES its register from
+  the staging pool (free fn-wide by construction) where a post-choice pass can
+  only harvest what staging left idle. So the channel stays until rung 6; what
+  retires is the pick. Splitting is likewise emission-grain (an env binding is
+  fn-wide per name) and waits for the one-build.
+  ⚠ THE RANK FINDING, measured and REFUSED: pure loop-weighted ranking priced
+  WORSE (+0.6% weighted census) — it drains seats to deep-loop SHORT-LIVED
+  locals (df_hlens's insertion-sort b, d, p) that repack's chains already
+  serve post-choice, starving the long-lived crossing ones (nl, top, ii) only
+  this channel can seat. lpick's raw count was accidentally right — raw
+  touches correlate with long-livedness — and the accident is now the
+  discipline: raw count primary, scalars before a pair on ties (mag_divmod: a
+  d128 spending two seats must not win a tie), the loop weight breaks what
+  remains, the seq makes it total. The exact version of "value of a home =
+  weighted touches MINUS what repack recovers downstream" needs the one-build,
+  where there is no downstream.
+  The price (moon-ablate, 3 samples, same run): ablating the allocator back to
+  lpick reads +0.5% cycles / -0.1% insns / .text byte-equal -- the rung holds
+  the locals share and nominally buys half a point of cycles, inside the +-0.7%
+  floor; the census meters carry the direction. The build row is flat (clean
+  artifact builds 75.5/77.6 s against 75.4/78.3 s). test_slow green through
+  the seed fixpoint -- after one false FIXPOINT NOT OK from a torn artifact
+  (knob-flavored timing builds left in out/host; the compiler itself proved
+  deterministic across processes and across the seed's own binary).
 - **rung 5 — params join; the ride loop retires.** Arrivals are interval defs
   at entry; ride/shadow/pcs become allocation outcomes. The leaf lane's
   shrink-retry and its guards delete.
