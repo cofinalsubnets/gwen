@@ -1,13 +1,13 @@
 ; --- lush 🐚 the glob -- fnmatch + pathname expansion, pure love ---
-; NO BRACKETS HERE: the runtime supplies the layer (see job.l for the cat law).
+; no brackets here: the runtime supplies the layer (see job.l for the cat law).
 ; no libc glob anywhere (L1/L2 won't have one): readdir + stat are the whole
 ; substrate. patterns travel as (text . mask) -- the mask a parallel string of
-; '1'/'0' bytes, '1' where the char came in UNQUOTED (glob-live), '0' where a
+; '1'/'0' bytes, '1' where the char came in unquoted (glob-live), '0' where a
 ; quote shielded it ('*' matches a literal star) -- absence-of-specialness
 ; carried out of band, the quoting law made byte-addressable.
 ;   the matcher itself is love/glob.l -- fmatch / match / anyglob / ones,
 ;   bound back to their sh- names below so every reader here is unchanged.
-;   (sh-globby? t m)       -> any LIVE * ? [ under the mask
+;   (sh-globby? t m)       -> any live * ? [ under the mask
 ;   (sh-glob t m)          -> sorted matching paths | () (caller keeps the word)
 ; the dotfile law lives at the directory scan: a leading . matches only a
 ; pattern that spells the . itself.
@@ -43,7 +43,7 @@
            (sort (gwalk (? abs ["/"] [""]) cs))))
    ; walk: prefixes are "" (cwd) / "x/" (always /-tailed); a live component
    ; scans its directory, a dead one appends + stats (the path must EXIST)
-   ; ⚠ presence by two?, never !: ("") is a real prefix list netting 0
+   ; presence by two?, never !: ("") is a real prefix list netting 0
    (gwalk pfxs cs)
      (? !(two? pfxs) ()
         (: c <cs ct <c cm >c rest >cs
@@ -51,8 +51,8 @@
                   (catmap (\ d (gmatches d ct cm)) pfxs)
                   (catmap (\ d (: p (d + ct) (? (two? (stat p)) [p] ()))) pfxs))
            (? !(two? rest) nxt (gwalk (map (\ p (p + "/")) nxt) rest))))
-   ; ⚠ SORTED, the posix law for expansion -- and readdir's raw order is the
-   ; FILESYSTEM'S (ext4 hashes, ufs appends), so an unsorted glob leaks the
+   ; sorted, the posix law for expansion -- and readdir's raw order is the
+   ; filesystem's (ext4 hashes, ufs appends), so an unsorted glob leaks the
    ; disk into anything built over it.
    (gmatches d ct cm)
      (: names (readdir (? (tally d) d "."))

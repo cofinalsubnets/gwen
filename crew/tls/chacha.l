@@ -1,32 +1,32 @@
-; crew/tls/chacha.l -- chacha20 (rfc 8439), in the WORD LANE.
+; crew/tls/chacha.l -- chacha20 (rfc 8439), in the word lane.
 ;
 ; the cipher is add / xor / rotate on 32-bit words, which is exactly what a z-tray
 ; is: contiguous limbs, fixed-width two's complement, `+ - *` wrapping, the bitwise
 ; five broadcasting elementwise (test/spec.l's WIDTH LAW). so there is no C here --
-; the arithmetic love already has IS the cipher's arithmetic.
+; the arithmetic love already has is the cipher's arithmetic.
 ;
-; the shape that makes it fast enough to be worth doing: VECTORISE ACROSS BLOCKS,
-; not across the state. each of the 16 state words becomes a GALAXY of n cells --
+; the shape that makes it fast enough to be worth doing: vectorise across blocks,
+; not across the state. each of the 16 state words becomes a galaxy of n cells --
 ; one cell per block in flight -- so a quarter-round is pure elementwise work and
-; NO PERMUTATION IS EVER NEEDED. the diagonal round differs from the column round
-; only in WHICH galaxies it names, which is a list index, not a data movement.
+; no permutation is ever needed. the diagonal round differs from the column round
+; only in which galaxies it names, which is a list index, not a data movement.
 ; the counter word is the one that varies down a galaxy: ctr + (iota n).
 ;
 ; ~2 MB/s at any batch width from 256 blocks up (the plateau is the lane's
 ; per-cell cost, ~14ns, not per-op overhead) -- ample for a handshake and for
 ; sb's pulls. the serving path has the C twin instead: src/tls.c's `chacha20`
-; nif, which sits BEHIND this interface. this file stays the oracle, and
+; nif, which sits behind this interface. this file stays the oracle, and
 ; test/host/tlsc.l holds the twin to it -- never the other way round.
 ; crew/tls/bench.l prints the two side by side.
 ;
-; ⚠ THE ONE-SCOPE LAW EATS THIS CIPHER IF YOU LET IT. a body-having `:` is one
+; the one-scope law eats this cipher if you let it. a body-having `:` is one
 ; scope, so a quarter-round written the obvious way --
 ;   (: a (& (a + b) m32) d (rotl (d ^ a) 16) ..)
-; -- has `(a + b)` read the INNER `a`, before its pin: the missing condition, which
+; -- has `(a + b)` read the inner `a`, before its pin: the missing condition, which
 ; is the zero point, which is 0. every round then computes nothing and cc-block
-; hands back its own input. love SAYS SO now (";; missing a" -- ab0fd92e taught
+; hands back its own input. love says so now (";; missing a" -- ab0fd92e taught
 ; file mode to surface a pre-pin read, the same hour-eating trap met from the
-; reader's side), but the value is still 0 and the cipher still RUNS: a scare
+; reader's side), but the value is still 0 and the cipher still runs: a scare
 ; nobody reads is a cipher encrypting with nothing. fresh names per step, always.
 (:
    m32 4294967295
@@ -86,7 +86,7 @@
      (w32 (le32 nonce 0) n) (w32 (le32 nonce 4) n) (w32 (le32 nonce 8) n)]
 
    ; the keystream for n blocks, as a 64n-byte string. the galaxies hold word w for
-   ; EVERY block, so the emit order is block-major: for each block, its 16 words,
+   ; every block, so the emit order is block-major: for each block, its 16 words,
    ; each little-endian.
    (cc-stream key nonce ctr n)
     (: out (cc-block (cc-init key nonce ctr n))
@@ -104,6 +104,6 @@
    ; block `ctr` on. answers a string of the same length.
    (cc-xor key nonce ctr txt)
     (: n #txt
-       nb ((n + 63) // 64)          ; ⚠ the parens: `//` binds TIGHTER than `+`
+       nb ((n + 63) // 64)          ; the parens: `//` binds tighter than `+`
        ks (cc-stream key nonce ctr nb)
        (bytes n (i \ txt i ^ ks i))))

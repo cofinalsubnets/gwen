@@ -1,11 +1,11 @@
 ; --- lush 🐚 the lexer -- one line (or a joined continuation) to tokens ---
-; NO BRACKETS HERE: the runtime supplies the layer (see job.l for the cat law).
+; no brackets here: the runtime supplies the layer (see job.l for the cat law).
 ;
 ; (sh-lex s) -> (1 . tokens) | ('more . why) -- 'more is the PS2 protocol: an
 ; unfinished shape (open quote, open $( ), trailing \, a heredoc still owed
 ; its body) asks the caller for another line; join with "\n" and re-lex the
 ; whole buffer. tokens:
-;   ('w . segs)          a WORD as a segment list, quote structure kept:
+;   ('w . segs)          a word as a segment list, quote structure kept:
 ;     ('lit . s)           unquoted run (glob chars live, $ already carved out)
 ;     ('sq . s)            '..' literal
 ;     ('dq . inner)        ".." -- inner is lit/var/sub/vop segs, splitting off
@@ -14,21 +14,21 @@
 ;                          colonless four), "#" "##" "%" "%%", "len" (${#x});
 ;                          text raw, expanded at eval through sh-dollarize
 ;     ('sub . text)        $( text ) or `text`, run at expansion time
-;     ('lov . text)        ${( form )}: a LOVE form, evaluated at expansion time
+;     ('lov . text)        ${( form )}: a love form, evaluated at expansion time
 ;                          in this image. `text` is the parenthesized datum, the
-;                          reader's own extent (sh-lovep). ONE field always --
+;                          reader's own extent (sh-lovep). one field always --
 ;                          never IFS-split, never globbed, quiet like "${x}"
 ;   ('op . o)            | || & && ; ;; ( ) and "nl" (a newline is a separator,
 ;                        NOT whitespace)
 ;   ('rd . (ion . o))    a redirect: < > >> >& <& glued or spaced; ion is the
-;                        io-number OUT OF BAND -- () default, (n) attached.
-;                        a HEREDOC lexes as op "<h" whose target word IS the
+;                        io-number out of band -- () default, (n) attached.
+;                        a heredoc lexes as op "<h" whose target word is the
 ;                        body: << collects the following lines to the delimiter
 ;                        and rewrites -- 'EOF' body lands ('sq . body), a bare
 ;                        EOF body ('dq . (sh-dollarize body)) so $ expands and
 ;                        nothing splits; <<- strips leading tabs. eval feeds
 ;                        the target through a pipe (the "<h" lane in rdmap).
-; a # at a word START kills the rest of the line; \X is X literal;
+; a # at a word start kills the rest of the line; \X is X literal;
 ; \<newline> vanishes (the join law); "" keeps \ escapes for $ ` " \ only.
 
 (module 'lush
@@ -43,20 +43,20 @@
    (sh-alook al k) (al @ (e >< r) (<e = k ? >e (sh-alook r k)))
 
    ; --- the $-machinery, top level (heredoc bodies + vop words re-enter it) ---
-   ; ⚠ a (payload . j) answer is read by KIND (two?), NEVER by truth. The payload
-   ; may be EMPTY -- "" , `` , a heredoc owed no lines -- and an empty one nets
+   ; a (payload . j) answer is read by kind (two?), never by truth. The payload
+   ; may be empty -- "" , `` , a heredoc owed no lines -- and an empty one nets
    ; zero with the improper tail out of the sum, so the whole pair reads red: `!r`
    ; then calls a finished parse unfinished and asks PS2 for a line nobody owes.
    ; An index answer (sh-subp, sh-brace) is past its opener, so it cannot be 0.
-   ; ⚠ THE TWO SCANNERS BELOW STEP OVER A ${( .. )}, they never scan through one.
-   ; A love body runs on love's lexical law -- a ' is a sigil, not a quote -- so a
+   ; the two scanners below step over A ${( .. )}, they never scan through one.
+   ; a love body runs on love's lexical law -- a ' is a sigil, not a quote -- so a
    ; shell-quoting walk would open a string at the sigil and take the $( ) or the
    ; ${ } to the wrong end, or to none. Handing the span to sh-lovep keeps the
    ; nesting counts honest ({ and } skipped together, ( and ) with them). Inside
    ; '..' nothing expands, so the arm sits after that guard and never fires there.
    (sh-love3? s n i) (i + 2 < n && s i = 36 && s (i + 1) = 123 && s (i + 2) = 40)
    ; $( body ): balanced parens, blind to quoted ones -> j past ) | ()
-   ; ⚠ a per-byte loop, so it repeats its own name rather than close over the
+   ; a per-byte loop, so it repeats its own name rather than close over the
    ; state in a helper -- the cost note lives on `lx` at the foot of this file
    (sh-subp s n i depth q pe)
      (? (i = n) ()
@@ -74,7 +74,7 @@
                    41 (depth = 1 ? (i + 1) (sh-subp s n (i + 1) (depth - 1) 0 0))
                       (sh-subp s n (i + 1) depth 0 0)))))
    ; $(( .. )): the arithmetic extent. i is past the two ( -- scan to the ) that
-   ; closes the INNER one, then demand a ) hard after it. ⚠ the demand is the whole
+   ; closes the INNER one, then demand a ) hard after it. the demand is the whole
    ; test: `$((cd a) && b)` is a command substitution whose first word opens a
    ; subshell, and POSIX says a real arithmetic expansion writes `$( (a) )` to say
    ; the other thing. So a failed match is not an error, it is the other reading.
@@ -91,7 +91,7 @@
            (92 && i + 1 < n && sh-btesc? (s (i + 1)))
             (sh-bt s n (i + 2) (acc + string (s (i + 1))))
            b (sh-bt s n (i + 1) (acc + string b))))
-   ; ${(FORM)}: the LOVE arm. i is at the ( -- and THE READER IS THE SCANNER.
+   ; ${(FORM)}: the love arm. i is at the ( -- and THE READER IS THE SCANNER.
    ; `sound` speaks love's lexical law, which no shell scanner does: a ' is a
    ; sigil and not a quote, a ; runs to the line's end, a ) inside a "" is text,
    ; and { [ ] \ all read as themselves. What it leaves unread measures the
@@ -162,7 +162,7 @@
                         (? !e 'unterm
                            (: sg (sh-vopp (snip s (i + 1) (e - 1)))
                               (? !sg 'unterm (sg >< e))))))
-                (? (sh-digit? b) (spec (string b))   ; $0-9, ONE digit (the POSIX law)
+                (? (sh-digit? b) (spec (string b))   ; $0-9, one digit (the POSIX law)
                    (sh-name1? b)
                      (: (go j) (j < n && sh-name? (s j) ? (go (j + 1)) j)
                         e (go i) (('var >< snip s i e) >< e))
@@ -176,7 +176,7 @@
            (: b (s i)
               (? (b = 92 && (i + 1) < n && sh-btesc? (s (i + 1)))
                    (go (i + 2) (cur + string (s (i + 1))) segs)
-                 ; ⚠ 'dollar FIRST: a bare $ answers ('dollar . i), which a plain
+                 ; 'dollar first: a bare $ answers ('dollar . i), which a plain
                  ; pair pattern would take for a segment and splice as one
                  (b = 36) (sh-dol s n (i + 1) @
                            ('dollar >< j) (go j (cur + "$") segs)
@@ -187,7 +187,7 @@
                                     (go (i + 1) (cur + string b) segs))
                  (go (i + 1) (cur + string b) segs))))
         (go 0 "" ()))
-   ; vop word text -> segs, QUOTE-AWARE: ${x:-"a b"} carries its quotes as
+   ; vop word text -> segs, quote-aware: ${x:-"a b"} carries its quotes as
    ; quotes ('sq/'dq segments), so use-time removal is free and a quoted glob
    ; char masks inert in ${v#pat}. heredoc bodies stay on sh-dollarize (no
    ; quote removal there). an unterminated quote falls back to a literal char.
@@ -292,9 +292,9 @@
                                        (sg >< j) (dq j "" (sg >< addl cur segs)))
               96 (sh-bt s n (i + 1) "" @ (t >< j) (dq j "" (('sub >< t) >< addl cur segs)))
               b (dq (i + 1) (cur + string b) segs)))
-      ; hq/bods/k are the HEREDOC state, and only the << arms move them.
-      ; ⚠ NO PER-STEP HELPER CLOSURES IN THIS LOOP OR IN sh-subp / sh-brace,
-      ; however much one would shorten these call tails. Each runs once per BYTE,
+      ; hq/bods/k are the heredoc state, and only the << arms move them.
+      ; no per-step helper closures in this loop or in sh-subp / sh-brace,
+      ; however much one would shorten these call tails. Each runs once per byte,
       ; and a `:`-bound lambda in the body is built and dropped on every pass:
       ; four of them here measured +57% instructions over a whole lex. The state
       ; rides in the parameters, which is why `op2` takes nine of them.
@@ -313,7 +313,7 @@
                          (coll (i + 1) (sh-rev hq) bods @
                           (j >< bs) (lx j "" 0 () tks () bs k)
                                     ('more >< 'heredoc)))))
-               ; a comment runs to the END OF ITS LINE, never the end of the
+               ; a comment runs to the end of its line, never the end of the
                ; input -- the buffer is multi-line whenever PS2/'more gathered
                ; (the nl itself still lexes, so heredoc bodies keep collecting)
                (35 && !started)

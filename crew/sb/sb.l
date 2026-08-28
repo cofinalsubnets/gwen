@@ -14,7 +14,7 @@
 ;   snap             the recorded state -- ((PATH CHASH PATCHID) ..) path-sorted
 ;   ignore           optional: one path prefix per line, atop (".sb" ".git" "out")
 ;
-; a hunk is the PROVEN named-slot patch (test/patch.l's chg): slot = the path,
+; a hunk is the proven named-slot patch (test/patch.l's chg): slot = the path,
 ; context = the old content hash, value = the new -- () for absent (a birth or a
 ; death). patches touching disjoint paths commute (L3a), so sync's union needs
 ; no order; removal is a new patch whose hunk goes to () (the inverse-patch law:
@@ -25,15 +25,15 @@
 ; loads after crew/kore/text.l (lines) + crew/kore/diff.l (udiff) in the svalbard
 ; cat -- the floors ride module 'kore, read here through the scoped use. every
 ; lane rides module 'sb: the engine binds in the module, never the cat's scope;
-; the SEAT form at the tail is the only thing that fires as a program.
+; the seat form at the tail is the only thing that fires as a program.
 (module 'sb
 (use 'kore)
 (:
    ; --- files ---
-   ; presence is the (1 _) wrapper, content is always a string: an EMPTY file
+   ; presence is the (1 _) wrapper, content is always a string: an empty file
    ; slurps to () -- the zero point -- and `+ ""` folds it back onto the shared
    ; identity, so a 0-byte file hashes honestly instead of to ().
-   ; the port is MINDED, not closed at the tail: a torn read raises, and the close has
+   ; the port is minded, not closed at the tail: a torn read raises, and the close has
    ; to ride that way out too or the fd sits until a major compact.
    (look p) (: q (open p "r")                                            ; (1 text) | ()
                  (? q (mind (\ _ (: s (slurp q) [1 (s + "")])) () (\ _ (close q))) ()))
@@ -49,7 +49,7 @@
    (mk _) (: _ (mkdir ".sb" 493) _ (mkdir ".sb/blob" 493) _ (mkdir ".sb/patch" 493) ())
    (snap _) (form ".sb/snap")                            ; ((path chash pid) ..) sorted
    (tips _) (form ".sb/tips")                            ; (id ..)
-   ; the PATCH-SET ID: the name of a head DAG state. the tips are a SET -- sort
+   ; the patch-set ID: the name of a head DAG state. the tips are a set -- sort
    ; before hashing, or the same head reads two ways.
    (psid tp) (sha256 (show (sort tp)))
    (blob h) (: t (look (".sb/blob/" + h)) (? (two? t) <>t ()))
@@ -61,11 +61,11 @@
                    (go >f))
 
    ; --- ignores: one rule a line in .sb/ignore, over the built-ins. a rule holding
-   ;     * ? [ is a GLOB against the WHOLE relative path -- `*` crosses `/`, so
+   ;     * ? [ is a glob against the whole relative path -- `*` crosses `/`, so
    ;     `*.vo` catches one at any depth and wants no basename rule of its own.
-   ;     every other rule is a path PREFIX at a SEGMENT boundary: `out` takes out
+   ;     every other rule is a path prefix at a segment boundary: `out` takes out
    ;     and out/host/love, never output. blank lines and # comments are skipped.
-   ;     ⚠ tools/selfpack.l reads these too, so the dist cut and the walk agree.
+   ;     tools/selfpack.l reads these too, so the dist cut and the walk agree.
    igs0 '(".sb" ".git" "out")
    ig-glob? (from 'glob 'anyglob)
    ig-match (from 'glob 'match)
@@ -94,7 +94,7 @@
                        (go >m acc))))))
        (go es acc))
 
-   ; --- the scan: working tree vs snap -> the hunks, path-sorted. PURE (no
+   ; --- the scan: working tree vs snap -> the hunks, path-sorted. pure (no
    ;     blob writes); a hunk is (path old new), old/new content hashes | () ---
    (h1 p e)                                                   ; one path vs its snap entry|()
     (: t (look p)
@@ -212,7 +212,7 @@
 
    ; --- sync: union a peer nest's store. blobs + patches are immutable and
    ;     content-addressed, so the union is just "copy what's missing"; then
-   ;     re-derive tips + snap from the WHOLE patch set (order-free -- the DAG is
+   ;     re-derive tips + snap from the whole patch set (order-free -- the DAG is
    ;     a pure function of its patches) and materialize the merged snap onto a
    ;     clean working tree. peer = a directory holding a .sb/ (a peer or a
    ;     cutting); same-path divergence warns and the topo-latest write wins ---
@@ -234,14 +234,14 @@
                        (lay (td + h) <>t) (go >m (n + 1) bad)
                        (go >m n (bad + 1)))))))
        (go (readdir fd) 0 0))
-   ; bring THIS nest to the state a GIVEN patch set implies: re-derive tips +
+   ; bring this nest to the state a given patch set implies: re-derive tips +
    ; snap over those ids and materialize. cwd-relative, so it settles whichever
    ; nest we stand in -- both ends of a sync run it, over the whole store. the
-   ; ids are a PARAMETER because the tree is a pure function of a patch SET, so
+   ; ids are a parameter because the tree is a pure function of a patch set, so
    ; realizing a subset is the same fold with a shorter list -- which is all
    ; `apply` is. answers (npatches nfiles conflicts)
    ; the divergence report a settle owes its caller: a clean merge is news, a
-   ; marker is a stop. answers how many are UNRESOLVED, so the caller's exit code
+   ; marker is a stop. answers how many are unresolved, so the caller's exit code
    ; can say so -- sync and apply both settle, so both tell it the same way.
    (tell cfs)
     (: (go m n) (? !(two? m) n
@@ -255,9 +255,9 @@
        _ (lay ".sb/tips" (show (derive-tips ids)))
        dr (derive-snap ids)
        newsnap <dr
-       ; the derive replays the WHOLE set every time, so a merge settled long ago
+       ; the derive replays the whole set every time, so a merge settled long ago
        ; recomputes and would be announced forever: a clean merge is news only
-       ; when it moved the file THIS time. an unresolved conflict always is.
+       ; when it moved the file this time. an unresolved conflict always is.
        ix (: (go m t) (? (two? m) (: _ (pin t <<m <><m) (go >m t)) t))
        op (ix oldsnap (tablet 0)) np (ix newsnap (tablet 0))
        cfs (filter (\ e ((0 < <>e) || !(peep op <e () = peep np <e ()))) <>dr)
@@ -289,12 +289,12 @@
                  (pass (acc + b)))))
        (pass ()))
    ; --- a diverged write: two patches wrote one path from a shared base. the
-   ;     base is FREE -- the incoming hunk names the content hash it expected --
+   ;     base is free -- the incoming hunk names the content hash it expected --
    ;     so the three-way merge has all three sides in the store and most
    ;     divergence resolves itself (crew/sb/merge.l). answers
    ;     (chash nconflicts note): nconflicts 0 is a clean merge, and the note is
-   ;     what the report tells. a side that is ABSENT (a delete meeting an edit)
-   ;     or BINARY cannot line-merge: keep the CONTENT, never the deletion, and
+   ;     what the report tells. a side that is absent (a delete meeting an edit)
+   ;     or binary cannot line-merge: keep the content, never the deletion, and
    ;     call it a conflict -- the loser stays addressable in the store ---
    (bin? s) (: n (tally s) (go i) (? (n <= i) 0 (s i = 0) 1 (go (i + 1))) (go 0))
    (sh h) (? h (snip h 0 12) "()")
@@ -356,18 +356,18 @@
               (: p <<m (? (peep np p 0) (go >m n) (: _ (unlink p) (go >m (n + 1))))))
             (go oldsnap 0))
        (w + d))
-   ; --- the http remote: PULL ONLY. the store is content-addressed and
+   ; --- the http remote: pull only. the store is content-addressed and
    ;     immutable, so a remote is a plain static file tree and every fetch is a
-   ;     cacheable GET on a name we already know, sha256-verified on arrival.
+   ;     cacheable get on a name we already know, sha256-verified on arrival.
    ;
-   ;     there is no listing endpoint and none is needed: A PATCH IS
-   ;     SELF-DESCRIBING. start at /tips, and each patch names its `deps` (the
+   ;     there is no listing endpoint and none is needed: a patch is
+   ;     self-describing. start at /tips, and each patch names its `deps` (the
    ;     DAG edges) and its `hunks` (the blob hashes), so the whole reachable
    ;     store is discovered by walking what we have already read. that falls out
    ;     of the format rather than being added to it, and it means the far side
-   ;     runs NOTHING -- any static host is a complete remote.
+   ;     runs nothing -- any static host is a complete remote.
    ;
-   ;     push would need PUT or an endpoint, so a URL peer is read-only. that is
+   ;     push would need put or an endpoint, so a URL peer is read-only. that is
    ;     not a new case: sync already degrades to pull-only and says so when a
    ;     peer will not take a write ---
    (pull-http base)
@@ -397,7 +397,7 @@
                     f (getpatch id)
                     (? !(two? f) (walk >ids 0)
                        (: hs (fld f 'hunks)
-                          ; ⚠ FETCH FIRST, THEN COMBINE. `&&` short-circuits, so
+                          ; fetch first, then combine. `&&` short-circuits, so
                           ; folding the calls into the accumulator would stop
                           ; fetching the moment one object failed -- a partial
                           ; pull that then blames every later object for missing.
@@ -436,12 +436,12 @@
                    _ (say err "sb: pulled only -- an http remote takes no push\n")
                    (? (<r && (0 = nleft) && (0 = nref)) <st 0))))))
 
-   ; sync is the EXCHANGE, and an exchange has two ends: pull what the peer has
-   ; that we lack, push what we have that it lacks, then settle BOTH nests. the
+   ; sync is the exchange, and an exchange has two ends: pull what the peer has
+   ; that we lack, push what we have that it lacks, then settle both nests. the
    ; derive is a pure function of the patch set, so two nests over one union land
    ; on the same snap -- after a sync the trees are identical, which is the whole
    ; "distribution == cloning" claim made good. the peer's half needs its tree
-   ; CLEAN and writable; when it is not we still pull (always safe) and say so,
+   ; clean and writable; when it is not we still pull (always safe) and say so,
    ; leaving the peer's store untouched rather than half-fed.
    (sb-sync peer)
     (? (url? peer) (sync-url peer)
@@ -449,9 +449,9 @@
        (? (0 < dirty ())
           (: _ (say err "sb: working tree has changes; record or revert first\n") 0)
           (: home (cwd 0)
-             ; chdir answers () on success and -errno on failure -- BOTH nil, and
-             ; () even sorts BELOW 0, so neither `!` nor `< 0` tells them apart.
-             ; the failure is a CHARM; the success is the zero point.
+             ; chdir answers () on success and -errno on failure -- both nil, and
+             ; () even sorts below 0, so neither `!` nor `< 0` tells them apart.
+             ; the failure is a charm; the success is the zero point.
              pd (: c (chdir peer)
                    (? (charm? c) -1
                       (: _ (mk ()) d (dirty ()) _ (chdir home) d)))
@@ -491,15 +491,15 @@
                         (say err "sb: a banked name is immutable, so each nest kept its own -- rename one, then sync\n"))
                    (? (pushed && (0 = nleft) && (0 = nref)) <st 0)))))))
 
-   ; --- apply: realize a dep-consistent SUBSET of the store into the working
-   ;     tree. this is git's checkout AND its cherry-pick, which are one act here:
-   ;     the tree is a pure function of a patch SET, so "the state as of P" and
+   ; --- apply: realize a dep-consistent subset of the store into the working
+   ;     tree. this is git's checkout and its cherry-pick, which are one act here:
+   ;     the tree is a pure function of a patch set, so "the state as of P" and
    ;     "what I have plus P" differ only in the set you name -- there is no
    ;     replay-a-diff-onto-a-foreign-state step to conflict. a patch may not
-   ;     travel without the patches that wrote its context, so the DEP CLOSURE
+   ;     travel without the patches that wrote its context, so the DEP closure
    ;     comes along automatically: naming a subset that leaves a dep behind would
-   ;     otherwise DROP it silently (topo only readies a patch whose deps are all
-   ;     present). apply is a VIEW -- the store never shrinks, and the next sync
+   ;     otherwise drop it silently (topo only readies a patch whose deps are all
+   ;     present). apply is a view -- the store never shrinks, and the next sync
    ;     re-derives the whole union. to remove a patch for good you `undo` it,
    ;     which grows an inverse rather than forgetting ---
    (idpfx pfx)                                                   ; one patch from a prefix | ()
@@ -508,7 +508,7 @@
        (? (1 = tally hits) <hits
           !(two? hits) (: _ (say err ("sb: no ref or patch matches " + pfx + "\n")) ())
           (: _ (say err ("sb: " + show (tally hits) + " patches match " + pfx + "\n")) ())))
-   (idsof a)                                                     ; a REF -> its whole tip set;
+   (idsof a)                                                     ; a ref -> its whole tip set;
     (: r (refof a)                                               ; else one patch from a prefix
        (? (two? r) r (: i (idpfx a) (? i [i] ()))))
    (closure ids)                                                 ; ids + every dep, transitively
@@ -544,34 +544,34 @@
    ; --- bank: freeze the current head under a NAME -- an immutable release, the
    ;     unit you propagate. git's tag.
    ;
-   ;     ⚠ hatch.md asks for a SINGLE-TIP head here ("reconcile tips before
+   ;     hatch.md asks for a single-tip head here ("reconcile tips before
    ;     cutting a release") and that is git thinking that does not survive this
-   ;     model. deps are PER PATH, so a patch only depends on what it TOUCHED --
+   ;     model. deps are per PATH, so a patch only depends on what it touched --
    ;     an independent birth is never depended upon and stays maximal forever.
    ;     three tips is what ordinary parallel work looks like, not a fork to be
    ;     repaired, and the only way to collapse them is to write a patch touching
    ;     every path every tip touched, i.e. to edit files to appease the check.
-   ;     so a ref freezes the TIP SET, which is the head DAG state whatever its
+   ;     so a ref freezes the tip set, which is the head DAG state whatever its
    ;     shape -- exactly what psid hashes, and it never
    ;     demanded one tip either.
    ;
-   ;     a banked name is IMMUTABLE: re-banking at the same head is a no-op, at a
+   ;     a banked name is immutable: re-banking at the same head is a no-op, at a
    ;     different head an error. the dep closure derives the patch set from the
    ;     tips, so `apply NAME` realizes the release and needs nothing stored but
-   ;     the tips. refs TRAVEL: sync unions them by name, which is what makes a
+   ;     the tips. refs travel: sync unions them by name, which is what makes a
    ;     release the unit you propagate rather than a local bookmark ---
    (refs _) (form ".sb/refs")                                  ; ((name (id..) time)..) | ()
    (refof nm) (refof-in (refs ()) nm)
-   ; --- the ref exchange. a ref is a single FILE, not a content-addressed one,
+   ; --- the ref exchange. a ref is a single file, not a content-addressed one,
    ;     so sync cannot gap-fill it the way it does blobs and patches: it has to
-   ;     UNION by name. a name both nests banked to the SAME head is one entry --
-   ;     idempotent, the ordinary case. a name banked to DIFFERENT heads is a
+   ;     union by name. a name both nests banked to the same head is one entry --
+   ;     idempotent, the ordinary case. a name banked to different heads is a
    ;     genuine human error, since a banked name is immutable and neither nest
-   ;     may unilaterally repoint the other's: so each side KEEPS ITS OWN and the
+   ;     may unilaterally repoint the other's: so each side keeps its own and the
    ;     clash is reported. the union is therefore per-side, not one merged set
    ;     written to both -- writing one set would silently drop a real release.
    ;     answers (merged nclash) ---
-   (refadd base extra loud)                                     ; loud: only ONE side tells it
+   (refadd base extra loud)                                     ; loud: only one side tells it
     (: (go m acc n)
         (? !(two? m) [(sort acc) n]
            (: e <m mine (refof-in base <e)
@@ -602,22 +602,22 @@
                                   + (? (1 = tally tp) "" "s") + " -- " + sh <tp + "\n"))
                          1)))))))
 
-   ; --- undo: add the INVERSE patch. removal is growth here, never deletion --
+   ; --- undo: add the inverse patch. removal is growth here, never deletion --
    ;     the patch stays, its dependents stay valid, and the store only gets
    ;     bigger, which is what keeps releases inclusion-ordered (R0 <= R1 <= R2)
    ;     and "upgrade = move to a superset" well-defined. so undo is git's
    ;     `revert`, never its `reset`.
    ;
-   ;     it works through the WORKING TREE and hands off to `record`: put every
+   ;     it works through the working tree and hands off to `record`: put every
    ;     path P touched back the way P found it, then record that. record then
    ;     computes deps, blobs and tips against reality, so the inverse is a patch
    ;     like any other and needs no special case anywhere downstream.
    ;
-   ;     the interesting case is a path that MOVED ON since P wrote it. undoing
+   ;     the interesting case is a path that moved on since P wrote it. undoing
    ;     wholesale would silently discard the later work (a hunk is file-grain,
    ;     so P's hunk IS the whole file). instead it is a three-way merge, and the
-   ;     three sides are already named: base = what P WROTE, ours = what the path
-   ;     holds NOW, theirs = what P REPLACED. that keeps the later edits and lifts
+   ;     three sides are already named: base = what P wrote, ours = what the path
+   ;     holds now, theirs = what P replaced. that keeps the later edits and lifts
    ;     out P's, which is what a revert means; a true overlap lands in markers ---
    (sb-undo args)
     (: _ (mk ())
@@ -631,12 +631,12 @@
                    nc (: (go m n)
                           (? !(two? m) n
                              (: h <m p <h pold <>h pnew <>>h
-                                cur (peep sn p ())             ; the index maps path -> chash DIRECTLY
+                                cur (peep sn p ())             ; the index maps path -> chash directly
                                 (? (cur = pnew)                ; P still owns the path: a clean lift
                                    (: _ (? !pold (unlink p)
                                            (: _ (mkparents p) (lay p (blob pold))))
                                       (go >m n))
-                                   ; it moved on -- merge P's write OUT of what is there now
+                                   ; it moved on -- merge P's write out of what is there now
                                    (: bw (bl pnew) ow (bl cur) tw (bl pold)
                                       (? !(two? bw && two? ow && two? tw)
                                          (: _ (say err ("sb: CONFLICT on " + p
@@ -697,12 +697,12 @@ usage: sb VERB ..
              (usage ()))))
 )
 
-; the SEAT (cook.l's shape): fire sb-main iff this file -- or the installed
+; the seat (cook.l's shape): fire sb-main iff this file -- or the installed
 ; `sb` binary -- sits in the program seat of the real command line (the
-; positional program or a -l preload), taking the args AFTER the seat. cmdline
+; positional program or a -l preload), taking the args after the seat. cmdline
 ; is the full C argv, never rebound, so the read is the same in both load orders
 ; and the cat stays quiet under any other name -- which is why the gate can cat
-; this file and have nothing fire. sb-main reads BARE: the module's layer holds
+; this file and have nothing fire. sb-main reads bare: the module's layer holds
 ; this file's binds and is still the head when this form compiles. body-having:
 ; the seat leaks nothing.
 (: _ (pins (from 'verbs 'tab) 'sb sb-main)

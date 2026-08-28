@@ -8,36 +8,36 @@
 ; execs `love -l <this-file> Cookfile [ticket]`: the -l loads cook, then Cookfile runs.
 ;
 ; (this tool was first written as tools/bake.l; it was renamed to crew/cook/cook.l so
-; the file name does not collide with the OTHER, unrelated sense of "bake" in this
+; the file name does not collide with the other, unrelated sense of "bake" in this
 ; tree -- baking the heap image / the egg (love/egg.l), the array-perf bake. the
-; build VERB here is `cook`; "bake" is reserved for the egg. the messages this tool
+; build verb here is `cook`; "bake" is reserved for the egg. the messages this tool
 ; prints are prefixed `cook:` for the same reason.)
 ;
 ; an item is brought up to date by first prepping its prerequisites up to date
-; (depth first), then -- if the item is missing or OLDER than any prerequisite --
+; (depth first), then -- if the item is missing or older than any prerequisite --
 ; running its recipe. that is the whole of make's idea; the rest is bookkeeping.
 ;
 ; a recipe is registered with (recipe item ingredients steps):
-;   item -- a filename STRING (an artifact on disk) or a PHONY SYMBOL ('all,
+;   item -- a filename string (an artifact on disk) or a PHONY symbol ('all,
 ;             'clean ..). a phony item owns no file, so it has no age and so
 ;             always runs, cascading a rebuild to everything that needs it.
 ;   ingredients -- a list of prerequisite items (strings and/or symbols).
-;   steps  -- a list of STEPS. each step is either an argv list of strings, run as
-;             a subprocess via the host `hark` nif, or a THUNK (any lit?), called as
+;   steps  -- a list of steps. each step is either an argv list of strings, run as
+;             a subprocess via the host `hark` nif, or a thunk (any lit?), called as
 ;             (step 0) for its effect. an empty step list is legal (a pure aggregate).
 ;
 ; file ages come from stat(1) -- love has no stat nif, but it has `hark`, and that
-; is enough. a missing file and a phony item both read as the ZERO POINT (nil):
-; ageless, hence ancient, hence always rebuilt. the FIRST recipe declared is the
+; is enough. a missing file and a phony item both read as the zero point (nil):
+; ageless, hence ancient, hence always rebuilt. the first recipe declared is the
 ; default ticket, exactly as in make. drive it with (cook item) -- to cook an item
 ; is to prep it up to date by following its recipe over fresh ingredients.
 ;
-; usage:  cook [-f FILE] [--emit] [recipe ..]  (with the symlink installed)
-;     or:  love -l crew/cook/cook.l [-f FILE] [recipe ..]
+; usage:  cook [-f file] [--emit] [recipe ..]  (with the symlink installed)
+;     or:  love -l crew/cook/cook.l [-f file] [recipe ..]
 ; A Cookfile is ordinary love source that lays out the recipes (recipe ..) then
 ; drives them: (cook-all 0) builds every recipe named on the command line (or the
-; default when none), and (cook (ticket 0)) builds just the first. cook can ALSO
-; read a real Makefile directly: ONLY a file NAMED like one (Makefile, makefile,
+; default when none), and (cook (ticket 0)) builds just the first. cook can also
+; read a real Makefile directly: only a file named like one (Makefile, makefile,
 ; GNUmakefile, *.mk -- makefilep) is read as make; every other recipe file (Cards.l,
 ; Cookfile, or a -f FILE) is love source. See "importing a Makefile" at the foot of
 ; this file. The first rule is the default ticket either way.
@@ -74,20 +74,20 @@
    ; "a b c" from ("a" "b" "c"); "" from the empty list.
    (join sep l) (? (two? l) (foldl (\ a x (a + sep + x)) <l >l) "")
 
-   ; register one card, MERGING with any prior card for the same item: ingredients
-   ; and order-only prereqs accumulate, and a later NON-EMPTY recipe wins (as make
+   ; register one card, merging with any prior card for the same item: ingredients
+   ; and order-only prereqs accumulate, and a later non-empty recipe wins (as make
    ; does -- e.g. an explicit "prereqs only" rule that adds a dependency to a target
    ; whose recipe comes from a pattern rule). The first item ever registered is the
    ; default ticket. card = (ingredients orderonly . steps); orderonly prereqs are
    ; built-if-missing but never make a target stale (make's `| prereqs`).
-   ; ⚠ the merge DEDUPES. a prerequisite named twice is named once (make agrees), and
+   ; the merge dedupes. a prerequisite named twice is named once (make agrees), and
    ; without that a caller who re-registers the same recipe grows the card without bound:
    ; papel's dev server calls `build` per source change, and its index card climbed 28
    ; ingredients per rebuild -- 2828 after a hundred -- which `prep` then walks every pass.
    ; unbounded memory and quadratic time, from a tool that looked idle.
    (adds a b) (foldl (\ acc x (? (member? x acc) acc (acc + [x]))) a b)
    ; a Cookfile is written on one seat and read on another, so its paths name the
-   ; seat symbolically: a LEADING $HOME or $PWD opens here, at registration. step
+   ; seat symbolically: a leading $HOME or $PWD opens here, at registration. step
    ; strings want none of this -- sh -c expands them itself. a non-string item is
    ; a phony symbol ('all, 'install) and rides through untouched.
    (unpre w tok val)
@@ -105,7 +105,7 @@
                                    (? (two? steps) steps >>prev))))
          (: _ (pin cards at (ins >< (ors >< steps)))
              _ (? (peep check 0 0) 0 (pin check 0 at)) at)))
-   ; a DOUBLE-COLON target is the one place a second recipe does not replace the first:
+   ; a double-colon target is the one place a second recipe does not replace the first:
    ; make runs every `tgt:: ..` rule's steps, in the order written. reg's own rule -- a
    ; later recipe wins -- is `:`'s, and stays.
    ; the targets carrying a target-specific variable -- see classify. recur asks.
@@ -118,7 +118,7 @@
    ; the public Cookfile API: (recipe item ingredients steps) -- no order-only prereqs.
    (recipe item ingredients steps) (reg item ingredients 0 steps)
 
-   ; the modification time of an item in NANOSECONDS (one charm, the stat nif's
+   ; the modification time of an item in nanoseconds (one charm, the stat nif's
    ; fourth element -- sub-millisecond, so two writes inside one tick still order),
    ; or () (the zero point) when it has none: a phony symbol, or a file that is
    ; not on disk. (this WAS stat(1) through a shell, batch-cached against the ~2N
@@ -129,9 +129,9 @@
 ; --- prepping an item up to date ---------------------------------------------
 ; one cook call carries two books: `done` memoizes each item's settled age so a
 ; shared prerequisite is visited once, and `shipped` records the items whose recipe
-; actually CHANGED the file this pass (its mtime advanced), so a rebuilt prerequisite
+; actually changed the file this pass (its mtime advanced), so a rebuilt prerequisite
 ; forces its dependents even when the clock granularity would hide it -- but a recipe
-; that re-runs without touching its output (the love_version.h cmp idiom) does NOT
+; that re-runs without touching its output (the love_version.h cmp idiom) does not
 ; cascade, matching make's mtime-only decision.
 
 (: (prep item done shipped pending)
@@ -143,7 +143,7 @@
       ; prereq-only card, else nothing (a source leaf).
       ; presence is tested with `two?` (a card is a chain), never net-truthiness:
       ; a card of all-empty parts -- (() ()) -- nets 0 (blue), so (? card ..) would
-      ; wrongly read it absent. A phony aggregate with no prereqs is exactly that.
+      ; wrongly read it absent. a phony aggregate with no prereqs is exactly that.
       (: exr (peep cards item 'none)
          ex (? (two? exr) exr 0)
          f (peep pgen 0 ())
@@ -151,8 +151,8 @@
               (: g (? f (f item) 0) (? (two? g) g ex)))
          (? (two? r)
             ; item has a card: prep every prerequisite up to date, then decide.
-            ; ⚠ PREPPING AND LANDING ARE TWO PASSES, and that is the whole of -j:
-            ; prep leaves a stale prerequisite's recipe RUNNING, so the next one's
+            ; prepping and landing are two passes, and that is the whole of -j:
+            ; prep leaves a stale prerequisite's recipe running, so the next one's
             ; subtree starts beside it; only then does the second pass wait, because
             ; an age cannot be read off a file still being written. at -j1 nothing is
             ; ever left running and the two passes read as the one walk they were.
@@ -189,7 +189,7 @@
       _ (pin done item nw)
       nw)
 
-   ; a prerequisite's job must LAND before its age can be read. () for an item that
+   ; a prerequisite's job must land before its age can be read. () for an item that
    ; never took one, which is every item at -j1.
    (jobland item done shipped pending)
    (: v (peep pending item 0)
@@ -199,8 +199,8 @@
             _ (? (0 = st) 0 (jobdie item st))
             (settle item <>v >>v done shipped))))
 
-   ; run a recipe: each step in order. ⚠ first, the one make feature we can see is
-   ; wanted HERE and cannot give: a variable scoped to this target (classify's 'tvar).
+   ; run a recipe: each step in order. first, the one make feature we can see is
+   ; wanted here and cannot give: a variable scoped to this target (classify's 'tvar).
    ; Refusing at parse would refuse a Makefile over a scope no build ever enters.
    (recur item steps)
    (: k (unseat item)
@@ -213,28 +213,28 @@
       (each steps (\ step (step1 step))))
 
    ; --- the job pool (-j N) --------------------------------------------------
-   ; a stale recipe runs in a FORKED CHILD -- the fork nif, no exec: the child owns a
+   ; a stale recipe runs in a forked child -- the fork nif, no exec: the child owns a
    ; copy of this heap and runs the recipe exactly as a serial cook would, thunk steps
    ; and the in-image shell door included, then quits with its verdict. So a job's only
    ; outputs are the files it wrote and the status it answered, which is already make's
-   ; whole contract for a recipe. ⚠ AND THAT IS WHY A THUNK STEP'S HEAP EFFECT DOES NOT
-   ; SURVIVE -j: it lands in the child. A Cookfile that builds by mutating cook's own
+   ; whole contract for a recipe. and that is why a thunk step's heap effect does not
+   ; survive -j: it lands in the child. A Cookfile that builds by mutating cook's own
    ; tables wants -j1, and gets it by default.
-   ; ⚠ green threads (twirl) would not do here. They are cooperative, so where the
-   ; in-image door is live -- lush as /bin/sh, the distro -- the compile runs IN this
-   ; process and N tasks would take turns on one core. A fork is parallel in both worlds.
-   ; ⚠ and every name here is job-prefixed on purpose: this scope leaks into the same
+   ; green threads (twirl) would not do here. They are cooperative, so where the
+   ; in-image door is live -- lush as /bin/sh, the distro -- the compile runs in this
+   ; process and N tasks would take turns on one core. a fork is parallel in both worlds.
+   ; and every name here is job-prefixed on purpose: this scope leaks into the same
    ; layer the expander walks, where `join` and `start` already mean other things.
    (jobw _) (: n (peep jobs 0 1) (? (0 < n) n 1))
 
-   ; an (exec ..) step REPLACES the process, so a recipe carrying one can never be a
+   ; an (exec ..) step replaces the process, so a recipe carrying one can never be a
    ; job: the child would be replaced and cook would carry on as if it had run.
    (jobforkable? steps) (!(any (\ s (two? s && (<s = 'exec))) steps))
 
    ; start item's recipe. answers the job's pid when one took it -- the caller must
    ; land it before reading the item's age -- or 0 when it ran here and is done.
-   ; ⚠ the serial lane DRAINS FIRST: a recipe run here calls herald, which waits on
-   ; its own child, and `glean` reaps ANY child -- so the two must never be in the air
+   ; the serial lane drains first: a recipe run here calls herald, which waits on
+   ; its own child, and `glean` reaps any child -- so the two must never be in the air
    ; at once. a fork we asked for and did not get runs the recipe here, one job narrower.
    (jobstart item steps)
    (? (!(two? steps)) 0                                     ; a pure aggregate runs nothing: no job, and no drain either
@@ -256,7 +256,7 @@
          (: _ (rest 1) (jobreap 0))))
 
    ; this pid's status, reaping as needed. a pid that is neither filed nor running was
-   ; reaped by something that is not this pool, and its verdict is GONE -- which is not
+   ; reaped by something that is not this pool, and its verdict is gone -- which is not
    ; a green one, so it is said rather than assumed.
    (jobwait p)
    (: v (peep verdicts p 'no)
@@ -268,7 +268,7 @@
    (jobdrain _) (? (0 < $running) (: _ (jobreap 0) (jobdrain 0)) 0)
 
    ; a job came home red. the child already printed which command failed and with what
-   ; status; this adds the ITEM, which is the half that goes missing when jobs
+   ; status; this adds the item, which is the half that goes missing when jobs
    ; interleave, and says nothing about a number -- the child's exit is not the
    ; command's. outstanding jobs are let finish first, as make does: a half-written
    ; file left behind by a kill would read as up to date on the next run.
@@ -277,9 +277,9 @@
       _ (say err ("cook: the recipe for " + show item + " failed"))
       _ (put err 10) (quit ec))
 
-   ; one step. a list HEADED BY THE SYMBOL `exec` -- (exec PROG ARGS..) -- is an
-   ; INTERACTIVE step: it runs via the `exec` nif, which REPLACES cook and inherits
-   ; the terminal, so the child (the repl, gdb, qemu) drives the real tty. A plain
+   ; one step. a list headed by the symbol `exec` -- (exec PROG ARGS..) -- is an
+   ; interactive step: it runs via the `exec` nif, which replaces cook and inherits
+   ; the terminal, so the child (the repl, gdb, qemu) drives the real tty. a plain
    ; list of strings is an argv subprocess -- streamed, but on a pipe with /dev/null
    ; stdin, so it still cannot be interactive; any other lit? is a thunk.
    (step1 step)
@@ -289,7 +289,7 @@
       0)
 
    ; an interactive step: exec the argv, replacing this process (tty inherited).
-   ; the exec nif returns only on FAILURE -- then an errno fixnum -- so anything
+   ; the exec nif returns only on failure -- then an errno fixnum -- so anything
    ; past it is the error path. exec is terminal by nature (the repl never returns),
    ; so cook's "cooked X" summary is correctly never reached.
    (do-exec argv)
@@ -297,7 +297,7 @@
        _ (exec argv)
        _ (say err ("cook: cannot exec " + join " " argv)) _ (put err 10) (quit 1))
 
-   ; run one argv: echo it, run it STREAMING its output (herald relays each chunk as
+   ; run one argv: echo it, run it streaming its output (herald relays each chunk as
    ; it arrives, so a long step is not silent until it exits), abort on failure.
    ; The flush is load-bearing: herald writes the child's bytes past the `out`
    ; buffer, so an unflushed echo would land after them.
@@ -312,12 +312,12 @@
           (: _ (say err ("cook: cannot run " + join " " step))
              _ (put err 10) (quit 1))))
 
-   ; the IN-IMAGE shell, decided once and kept. lush rides the same cats cook does
+   ; the in-image shell, decided once and kept. lush rides the same cats cook does
    ; (kore's, the dist artifact's), so when the shell we would spawn is the binary we
-   ; are already running, the recipe line can run HERE -- one image wake for a whole
+   ; are already running, the recipe line can run here -- one image wake for a whole
    ; make instead of one per line, and every other tool in this image (mooncc above
    ; all) is then in-image too, so a CC=mooncc build stops paying a wake per TU.
-   ; ⚠ asked through the MODULE, never by a bare reference: cook runs standalone
+   ; asked through the module, never by a bare reference: cook runs standalone
    ; as well (`love -l crew/cook/cook.l`), where lush's engine is not aboard and
    ; the from-reads answer () -- the spawn lane, unchanged. the policy --
    ; "would spawning this land on us?" -- is lush's, not ours.
@@ -330,7 +330,7 @@
              f)))
 
    ; run one make recipe line (via SHELL -c, default sh), make-style: echo the
-   ; RAW command (the expanded line, not the shell wrapper) unless @ silent, STREAM its
+   ; raw command (the expanded line, not the shell wrapper) unless @ silent, stream its
    ; stdout as it is produced, and on a nonzero exit either carry on (- ignore,
    ; with a note to err) or abort. The Makefile path's analogue of `shell`, and
    ; the one that carries a recursive $(MAKE) -- the whole reason it must stream.
@@ -350,7 +350,7 @@
 
 ; --- the entry points ----------------------------------------------------------
 
-; prep item up to date, QUIETLY, and answer the tablet of items whose recipe actually
+; prep item up to date, quietly, and answer the tablet of items whose recipe actually
 ; advanced their file. `cook` prints a verdict off it; a caller that wants the number
 ; takes `$` of it (papel's build does).
 (: (prepped item)
@@ -368,13 +368,13 @@
             (: _ (puts ("cook: " + show item + " is already up to date")) (putc 10)))))
 
    ; resolve a command-line word to an item: the bare string when it names a file
-   ; recipe, the interned symbol when it names a phony one, else the DEFAULT -- the
+   ; recipe, the interned symbol when it names a phony one, else the default -- the
    ; first recipe declared. an unknown word thus quietly cooks the default, as make's
    ; trailing target does when nothing matches.
    (pick a) (? (peep cards a 0) a
               (: s (intern a) (? (peep cards s 0) s (peep check 0 ()))))
 
-   ; the ticket to build: the FIRST recipe word named on the command line (the
+   ; the ticket to build: the first recipe word named on the command line (the
    ; `tickets` box, filled by the dispatch from the non-flag args), else the default.
    ; (ticket 0) reads it live, so a Cookfile's own (cook (ticket 0)) sees the args.
    (ticket _) (: ts (peep tickets 0 ()) (? (two? ts) (pick <ts) (peep check 0 ())))
@@ -387,7 +387,7 @@
 ; --- importing a Makefile ------------------------------------------------------
 ; cook reads a Cookfile (ordinary love source) -- but it can also read a real
 ; Makefile directly, the same dependency idea wearing make's notation. The reader
-; is built on the PARSER COMBINATORS (after the gw.js style) now shared from the
+; is built on the parser combinators (after the gw.js style) now shared from the
 ; love/peg.l: a parser is (\ s y n) over a string s, with a success
 ; continuation y = rest parsed and a failure continuation n = rest; the parsed
 ; payload is a list that `seq` concatenates. love has no regex, so the leaves are
@@ -396,36 +396,36 @@
 ; compatible: recursive $(VAR) expansion and substitution refs, the common
 ; functions ($(shell)/$(wildcard)/$(dir)/$(patsubst)/$(filter)/...), ifeq/ifdef
 ; conditionals, `include`, the = := ?= += flavors, pattern + static-pattern rules,
-; order-only prereqs, and the $@ $< $^ $* automatics. Each recipe LINE runs via
+; order-only prereqs, and the $@ $< $^ $* automatics. Each recipe line runs via
 ; ("sh" "-c" line). See test/host/cook.l.
 ;
-; $(wildcard) prefers PURE LOVE: lush's glob (crew/lush/glob.l, the mask law)
+; $(wildcard) prefers pure love: lush's glob (crew/lush/glob.l, the mask law)
 ; over readdir/stat -- no /bin/sh underneath, so `kore make` globs before a
 ; shell exists. the glob rides module 'lush: a cat carrying the lush parts
 ; (kore's) registered it already, and a standalone -l load registers it off
-; lib/lush/glob.l on the cwd, HERE, before cook-glob folds its from-read.
+; lib/lush/glob.l on the cwd, here, before cook-glob folds its from-read.
 ; where neither lands (a dev binary on a foreign cwd -- no lib/ to walk),
 ; globw below keeps the POSIX shell-out lane.
 (? (tablet? (from 'lush)) 0
    (two? (stat "lib/lush/glob.l")) (use 'lush/glob)   ; the wrapped file registers module 'lush
    0)
-; cook-glob: the pathname glob, a CLOSURE when lush's glob is aboard, () when
+; cook-glob: the pathname glob, a closure when lush's glob is aboard, () when
 ; not (the importer then keeps its POSIX shell-out lane). the glob rides
 ; module 'lush now, so the door is a from-read -- a miss answers ().
 (: cook-glob (: g (from 'lush 'sh-glob) o (from 'lush 'sh-ones)
                 (? ((lit? g) && (lit? o)) (\ pat (g pat (o (tally pat)))) ())))
 
-; The whole importer lives in ONE body-having `:`, so none of its many helper
+; The whole importer lives in one body-having `:`, so none of its many helper
 ; names leak to the global scope. The form reads outer globals (the peg
-; combinators, recipe, cook, ticket, the prel) freely; its body ANSWERS cook-main
+; combinators, recipe, cook, ticket, the prel) freely; its body answers cook-main
 ; (args -> the whole job, exiting via quit). The outer `_`-holder form (cli.l's own
-; trick) leaks cook-main as the ONE public -- the multi-call `kore` (crew/kore/kore.l)
-; calls it as `make` -- and the SEAT at the bottom fires it only when this very
+; trick) leaks cook-main as the one public -- the multi-call `kore` (crew/kore/kore.l)
+; calls it as `make` -- and the seat at the bottom fires it only when this very
 ; file was invoked (the installed `cook` symlink, a -l preload, or positional).
 (: _ (:
    ; --emit mode: a 1-cell box (0 = off). when set, expand-steps emits a
    ; serializable ("sh" "-c" cmd) argv step instead of a sh-line thunk, so the
-   ; resolved cards can be SHOWN back as a Cookfile (see emit-cookfile below).
+   ; resolved cards can be shown back as a Cookfile (see emit-cookfile below).
    emitp (tablet 0)
 
    ; -- the combinators (eps/lit/one/span/alt/seq/seqs/opt/skip/pmap/many/parse) come from love/peg.l,
@@ -436,9 +436,9 @@
    (digitp c)   ((48 <= c) && (c <= 57))
    (alphap c)   (((65 <= c) && (c <= 90)) || ((97 <= c) && (c <= 122)))
    (namech c)   (alphap c || digitp c || (c = 95) || (c = 46))
-   ; notcolon ADMITS whitespace: a rule's target text runs to the first colon,
+   ; notcolon admits whitespace: a rule's target text runs to the first colon,
    ; and `a.out b.out: src` is one rule with two targets -- excluding blanks here
-   ; made every multi-target rule classify as 'skip, SILENTLY, and the built
+   ; made every multi-target rule classify as 'skip, silently, and the built
    ; tree masked it (an existing output is a source leaf). assignP runs first,
    ; so assignment lines never reach this span.
    (notcolon c) !(c = 58)
@@ -458,10 +458,10 @@
     0 0 0)
 
    ; -- a Makefile is read line by line; first fold \<newline> continuations --
-   ; ⚠ TWO RULES, because make has two. OFF a recipe, `<ws>*\<newline><ws>*` is ONE
-   ; SPACE and the whitespace either side goes with it. IN a recipe the join is the
+   ; two rules, because make has two. off a recipe, `<ws>*\<newline><ws>*` is one
+   ; space and the whitespace either side goes with it. in a recipe the join is the
    ; SHELL's: the backslash-newline goes entirely, nothing stands in its place, and
-   ; only the continuation's leading TAB is eaten. A recipe is decided by the FIRST
+   ; only the continuation's leading TAB is eaten. a recipe is decided by the first
    ; physical line of the logical one, so the flag survives every fold.
    (rtws s) (: i ((: (g j) (? ((0 < j) && ((s (j - 1) = 32) || (s (j - 1) = 9))) (g (j - 1)) j))
                   (tally s))
@@ -492,7 +492,7 @@
    (lastl l) (? (two? >l) (lastl >l) <l)
    ; `sub` is snip with the ends ordered: "" when start >= end.
    (sub s a b) (? (a < b) (snip s a b) "")
-   ; strip a make comment (an unescaped #) from a NON-recipe line; \# is a literal #.
+   ; strip a make comment (an unescaped #) from a non-recipe line; \# is a literal #.
    (strip-comment l)
    ((: (g i acc)
        (? (i >= tally l) acc
@@ -529,7 +529,7 @@
    ; | (inc TEXT) | (ifeq|ifneq|ifdef|ifndef|else REST) | (endif) | (skip).
    (recipep l)  ((0 < tally l) && (l 0 = 9))
    ; parse a recipe body: strip a leading run of @ - + line modifiers (and any
-   ; interspersed whitespace), RECORDING whether @ (silent) and - (ignore-error)
+   ; interspersed whitespace), recording whether @ (silent) and - (ignore-error)
    ; appeared. -> (silent ignore . body). + (force) is a no-op here -- cook has no
    ; dry-run mode -- so it is stripped without a flag. (64 = @, 45 = -, 43 = +.)
    (parse-mods s)
@@ -552,10 +552,10 @@
                   (w = "override") (: a (parse assignP rest) (? (two? a) ('oassign >< a) '(skip)))
                   (w = "export") (: a (parse assignP rest)
                                     (? (two? a) ('xassign >< a) ['xname (trim rest)]))
-                  ; a lone $(..) line -- the WHOLE line, its closer LAST: make expands
+                  ; a lone $(..) line -- the whole line, its closer last: make expands
                   ; it, so its side effect fires. `$(error ..)` is a guard, and a guard
                   ; cook walks past is worse than no guard. classify has no variable
-                  ; table, so the loop does the work. ⚠ a line that merely BEGINS with
+                  ; table, so the loop does the work. a line that merely begins with
                   ; $( is an ordinary rule or assignment named by a variable, and stays
                   ; one -- `$(outs): %.out: %.in` is a static pattern rule.
                   ((1 < tally tt) && (tt 0 = 36)
@@ -573,13 +573,13 @@
                   (: a (parse assignP t)
                      (? (two? a) ('assign >< a)
                         (: r (parse ruleP t)
-                           ; `tgts: NAME op VALUE` is a TARGET-SPECIFIC variable, and its
-                           ; prerequisite half is an assignment. cook keeps ONE variable
+                           ; `tgts: NAME op VALUE` is a target-specific variable, and its
+                           ; prerequisite half is an assignment. cook keeps one variable
                            ; table and cannot scope one to a target -- and read as a rule
                            ; the line invents a prerequisite named for the variable, which
                            ; is how `no recipe to make "kcppflags"` reads. So it is
                            ; recorded against its targets, and refuses only if one is
-                           ; ever REMADE: a scope nothing enters changes no build.
+                           ; ever remade: a scope nothing enters changes no build.
                            (? !(two? r) '(skip)
                               (two? (parse assignP <>r)) ['tvar <r]
                               ('rule >< r))))))))))
@@ -639,9 +639,9 @@
    ; $(wildcard), native both ways: lush's glob (cook-glob -- classes, multi-
    ; segment patterns, the mask law) when it is aboard; else glob1 below -- a
    ; word with no * or ? is an existence test; otherwise the
-   ; LAST path segment is the pattern (the tree's globs are all leaf-shaped), matched
+   ; last path segment is the pattern (the tree's globs are all leaf-shaped), matched
    ; over readdir -- * a run, ? one char, a leading . only by an explicit . -- and the
-   ; matches SORTED under their directory prefix (glob(3) order, what sh gave before).
+   ; matches sorted under their directory prefix (glob(3) order, what sh gave before).
    (globch s) ((: (g i) (? (i >= tally s) 0 ((s i = 42) || (s i = 63) || g (1 + i)))) 0)
    (gmatch p s)
    ((: (m i j)
@@ -668,7 +668,7 @@
                    ((: (g j) (? (j > sl) (? (w (j - 1) = 46) (j - 1) (g (j - 1))) (tally w))) (tally w)))
    (fbase w) (: dot (flastdot w) (? (dot < tally w) (sub w 0 dot) w))
    (fsuf w)  (: dot (flastdot w) (? (dot < tally w) (sub w dot (tally w)) ""))
-   ; make's $(abspath): rooted on the cwd, then LEXICALLY cleaned -- no repeated
+   ; make's $(abspath): rooted on the cwd, then lexically cleaned -- no repeated
    ; separators, no . or .. components (.. pops a segment; no filesystem asked).
    (segs s) ((: (g i st acc) (? (i >= tally s) (rev (? (st < i) (snip s st i >< acc) acc))
                                 (? (s i = 47) (g (1 + i) (1 + i) (? (st < i) (snip s st i >< acc) acc))
@@ -716,11 +716,11 @@
                "subst" "filter" "filter-out" "sort" "strip" "if" "or" "and"
                "addprefix" "addsuffix" "firstword" "lastword" "word" "words"
                "abspath" "realpath" "call" "origin"
-               ; ⚠ A NAME OFF THIS LIST IS A VARIABLE -- `$(foo bar)` reads a variable of that
+               ; A NAME off this list is a variable -- `$(foo bar)` reads a variable of that
                ; name and answers empty, which is make's own rule, and it stays.
                "findstring" "join" "wordlist" "foreach" "value" "flavor"
                "error" "warning" "info")
-   ; ..but a name MAKE implements and we do not is not that case, and answering empty
+   ; ..but a name make implements and we do not is not that case, and answering empty
    ; there is not fidelity: make never takes the variable branch for these, so an empty
    ; answer is a rule quietly not existing -- and no output diff can see a target that
    ; was never made. These refuse instead. The list is GNU's roster minus ours, so it is
@@ -729,7 +729,7 @@
    (cook-gap what)
     (: _ (say err ("cook: " + what + " is a GNU make feature cook does not implement.  Stop."))
        _ (put err 10) (quit 2))
-   ; $(call fn,a,..): bind $0 (the name) and $1.. to the EXPANDED args, expand
+   ; $(call fn,a,..): bind $0 (the name) and $1.. to the expanded args, expand
    ; fn's body, put the old bindings back (a shadowed outer $1 survives).
    (fn-call args as d)
    (: fname (trim (peep args 0 ""))
@@ -745,7 +745,7 @@
    (apply-func nm at as d)
    (: ex1 (\ x (expand x as (1 + d)))
       argl (\ _ (map ex1 (splittop at 44)))     ; comma-split + expand (most funcs); 44 = ,
-      rawl (\ _ (splittop at 44))               ; comma-split, NOT expanded (if/or/and)
+      rawl (\ _ (splittop at 44))               ; comma-split, not expanded (if/or/and)
       (? (nm = "shell")     (fn-shell (shname as) (ex1 at))
          (nm = "wildcard")  (join " " (catmap globw (split-ws (ex1 at))))
          (nm = "dir")       (join " " (map fdir (split-ws (ex1 at))))
@@ -782,13 +782,13 @@
                                old (peep as v "")
                                r (join " " (map (\ w (: _ (pin as v w) (ex1 body)))
                                                 (split-ws (ex1 (peep a 1 "")))))
-                               _ (pin as v old)              ; ⚠ put the outer binding back
+                               _ (pin as v old)              ; put the outer binding back
                                r)
-         ; value/flavor read the variable WITHOUT expanding it -- the one pair that must not ex1
+         ; value/flavor read the variable without expanding it -- the one pair that must not ex1
          (nm = "value")     (peep as (trim (ex1 at)) "")
          (nm = "flavor")    (: o (peep origins (trim (ex1 at)) "undefined")
                                (? (o = "undefined") "undefined" (peep flavors (trim (ex1 at)) "recursive")))
-         ; the DIAGNOSTICS. silence here was the costly one: a guard spelled $(error ..) simply
+         ; the diagnostics. silence here was the costly one: a guard spelled $(error ..) simply
          ; vanished, so a makefile that meant to refuse built on with an empty variable.
          (nm = "info")      (: _ (puts (ex1 at)) _ (putc 10) "")
          (nm = "warning")   (: _ (say err ("cook: " + ex1 at)) _ (put err 10) "")
@@ -825,22 +825,22 @@
                 (g (1 + i) (acc + string (s i))))))
        0 ""))
    (expand-words ws as) (catmap (\ w (split-ws (expand w as 0))) ws)
-   ; a recipe LINE that begins with the shell `exec` builtin is an INTERACTIVE
+   ; a recipe line that begins with the shell `exec` builtin is an interactive
    ; line: `exec <cmd>` replaces the shell, so make already runs it on the real
    ; tty -- and cook honours the same convention, running it through the exec nif
    ; (the `(exec ..)` step) rather than capturing it via `hark`. So one notation --
-   ; `exec` -- marks the repl / gdb / qemu targets interactive in BOTH builders.
+   ; `exec` -- marks the repl / gdb / qemu targets interactive in both builders.
    (starts? s pre) ((tally pre <= tally s) && (pre = snip s 0 (tally pre)))
    (execp cmd) (: t (ltrim cmd)
                   (starts? t "exec" && ((4 = tally t) || chws (t 4))))
    ; build a recipe's argv steps, pinning the automatic vars into the table first.
    ; build a card's steps. each raw is (silent ignore . body) from recipe-parse;
-   ; expand the body NOW (the $@/$</$^/$* automatics are live in `as` at this
+   ; expand the body now (the $@/$</$^/$* automatics are live in `as` at this
    ; point, and get re-pinned per item) and close over the expanded command in a
    ; thunk that runs it make-style via sh-line, carrying the @/- flags. An
    ; exec-prefixed line instead becomes an (exec "sh" "-c" cmd) interactive step
    ; (serialized as such under --emit, run via the exec nif otherwise).
-   ; the shell a recipe line rides. .SHELLFLAGS is a plain make VARIABLE, so it is
+   ; the shell a recipe line rides. .SHELLFLAGS is a plain make variable, so it is
    ; already in `as` (the .DEFAULT_GOAL precedent); its default is make's own -c.
    (shflags as) (: f (trim (peep as ".SHELLFLAGS" ""))
                    (? (0 < tally f) (split-ws f) '("-c")))
@@ -850,7 +850,7 @@
    ; ..and SHELL picks the shell itself (a Makefile saying SHELL := lush runs
    ; its recipes -- and its $(shell) calls -- under lush), default sh.
    (shname as) (: s (trim (peep as "SHELL" "")) (? (0 < tally s) s "sh"))
-   ; ⚠ a PHONY item is a SYMBOL, not a string (mk-item interns it) -- and an automatic
+   ; a PHONY item is a symbol, not a string (mk-item interns it) -- and an automatic
    ; must read as the NAME either way. lua's top Makefile is `all: $(PLAT)` with the
    ; platforms phony and `cd src && $(MAKE) $@`; unconverted, $@ expands to nothing and
    ; the recursive make is handed an empty target. @F already knew this; @, < and ^ did
@@ -859,8 +859,8 @@
    (expand-steps raws t pr stem as)
    (: pt (map itext pr)
        td (date t)
-       ; $?: the prerequisites NEWER than the target -- all of them when the target is
-       ; not on disk, which is make's answer for a phony and for a first build. A phony
+       ; $?: the prerequisites newer than the target -- all of them when the target is
+       ; not on disk, which is make's answer for a phony and for a first build. a phony
        ; prerequisite counts as newer whatever the clock says: it is remade every pass.
        nwr (filter (\ x (? (nom? x) 1 (: xd (date x) (? !td (? xd 1 0) (? xd (xd > td) 0))))) pr)
        _ (pins as "@" (itext t) "<" (? (two? pt) <pt "") "^" (join " " pt) "*" stem)
@@ -869,19 +869,19 @@
        fl (shflags as)
        sn (shname as)
        quiet? (0 < tally (peep as ".SILENT" ""))
-       ; make reads the @/-/+ modifiers AFTER expansion too (the $(Q)-as-@
+       ; make reads the @/-/+ modifiers after expansion too (the $(Q)-as-@
        ; verbose-build idiom; mk/lib.mk's lcat_h leads with @ from inside the
-       ; variable) -- so re-strip the EXPANDED line and fold its flags in.
-       ; ⚠ EXPAND ONCE, and keep the whole parse. Both the oneshell test below and the
+       ; variable) -- so re-strip the expanded line and fold its flags in.
+       ; expand once, and keep the whole parse. Both the oneshell test below and the
        ; per-line lane want the expanded text, and expanding twice ran every $(shell ..)
-       ; in a recipe TWICE -- the side effects included, and silently, since only the
+       ; in a recipe twice -- the side effects included, and silently, since only the
        ; second run's value was ever used.
        exs (map (\ raw (parse-mods (expand >>raw as 0))) raws)
        cmds (map (\ e >>e) exs)
-       ; .ONESHELL: the WHOLE recipe rides ONE shell, so a recipe reads as a script
+       ; .ONESHELL: the whole recipe rides one shell, so a recipe reads as a script
        ; instead of a run of \-joined lines. make's rule -- the @/- modifiers of the
-       ; FIRST line govern the lot. ⚠ with plain -c only the LAST line's status is
-       ; checked, so a failing middle line passes SILENTLY; a oneshell Makefile wants
+       ; first line govern the lot. with plain -c only the last line's status is
+       ; checked, so a failing middle line passes silently; a oneshell Makefile wants
        ; .SHELLFLAGS := -ec, and that is the shape this tree's own Makefile sets.
        ; An `exec` line still wants a process of its own (it REPLACES cook to inherit
        ; the tty), so a recipe carrying one stays per-line.
@@ -909,7 +909,7 @@
 
    ; -- conditionals & assignment ops over the variable table `as` --
    (unquote-str s) (? ((tally s >= 2) && ((s 0 = 34) || (s 0 = 39))) (snip s 1 (tally s - 1)) s)
-   (cond-args rest)            ; ifeq/ifneq REST -> (arg1 . arg2)
+   (cond-args rest)            ; ifeq/ifneq rest -> (arg1 . arg2)
    (: t (trim rest)
       (? ((0 < tally t) && (t 0 = 40))
          (: cl (findclose t 1 40 41) parts (splittop (snip t 1 cl) 44)
@@ -926,7 +926,7 @@
    (assign1 as nm op val ov)
    (? (!ov && (peep origins nm "undefined" = "command line")) 0
       (: v (trim val)
-         ; ⚠ the FLAVOR rides beside the origin: an expanded `:=` and a stored `=` are the
+         ; the flavor rides beside the origin: an expanded `:=` and a stored `=` are the
          ; same text afterwards, so nothing in the value itself can answer $(flavor).
          (org f) (: _ (pin origins nm (? ov "override" "file")) (pin flavors nm f))
          (? (op = "!=")  (: _ (pin as nm (fn-shell (shname as) (expand v as 0))) (org "simple"))
@@ -947,7 +947,7 @@
    (finalize cur) (<cur >< (<>cur >< rev >>cur))
    (flushr cur rules) (? cur (finalize cur >< rules) rules)
    (mkrule c)                  ; -> (TGTS-text PREREQS-text . STEPS-rev); split off an inline ; recipe
-   ; ⚠ THE RECIPE IS EVERYTHING PAST THE FIRST `;`, semicolons included: `a:;x ; y` is one
+   ; the recipe is everything past the first `;`, semicolons included: `a:;x ; y` is one
    ; recipe line the shell splits, not two fields. taking split-field 2 alone dropped every
    ; command after the second `;` -- silently, since what remained still ran.
    (: prr (r2 c) sc (splittop prr 59)
@@ -977,10 +977,10 @@
                                     (loop rest (flushr cur rules) 0 cond))
                 ; conditionals thread `cur` (do NOT flush): a top-level rule is
                 ; already flushed by the blank line before a conditional, while a
-                ; conditional INSIDE a recipe block gates its lines via `on` above.
+                ; conditional inside a recipe block gates its lines via `on` above.
                 (k = 'defassign) (: _ (? on (do-assign as (r1 c) "=" (r2 c)) 0)
                                     (loop rest (flushr cur rules) 0 cond))
-                ; a target-specific variable: remember WHICH targets, so recur can
+                ; a target-specific variable: remember which targets, so recur can
                 ; refuse if one is remade. the value is never wanted -- cook has no
                 ; scope to put it in, and a half-applied one would be the silence.
                 (k = 'tvar) (: _ (? on (each (split-ws (expand (r1 c) as 0))
@@ -999,7 +999,7 @@
                 (loop rest (flushr cur rules) 0 cond)))))
     cls 0 0 0)
 
-   ; `$(eval TEXT)` ALONE ON A LINE: expand TEXT, then parse it -- the splice `include`
+   ; `$(eval TEXT)` alone on a line: expand TEXT, then parse it -- the splice `include`
    ; already does, with a string where the file was. Nested inside an expression it cannot
    ; work at all, since expand answers a string and cannot reach the rule list, and
    ; gapnames refuses it there rather than dropping it.
@@ -1008,7 +1008,7 @@
                  && (snip s 2 6 = "eval") && (chws (s 6))
                  && ((findclose s 2 (s 1) (? (s 1 = 40) 41 125)) = (n - 1))))
    (eval-args s) (ltrim (snip s 6 (tally s - 1)))
-   ; a define block is a MULTI-LINE recursive assignment whose body must survive VERBATIM:
+   ; a define block is a multi-line recursive assignment whose body must survive verbatim:
    ; classify strips comments, trims, and reads a tab-led line as a recipe, and a body
    ; forbids all three. so the walk takes those lines itself and hands classify the rest.
    (text-lines src)
@@ -1030,11 +1030,11 @@
    (slurp-of path) (: q (open path "r") (? q (slurp q) (: _ (say err ("cook: cannot read " + path)) _ (put err 10) (quit 1))))
    (file-lines ip) (text-lines (slurp-of ip))
 
-   ; seed the variable table the way make does: the ENVIRONMENT first (every
+   ; seed the variable table the way make does: the environment first (every
    ; NAME=value, origin "environment" -- $(HOME) and friends expand for real),
    ; then the builtin defaults for whatever the environment left unsaid, then
    ; the command line's VAR=VAL words, whose origin silences file assignments.
-   ; `.POSIX:` is not decoration: it changes make's own DEFAULTS, CC to c99 and CFLAGS
+   ; `.POSIX:` is not decoration: it changes make's own defaults, CC to c99 and CFLAGS
    ; to -O1 (every suckless Makefile opens with it, and st's whole build reads them
    ; through STCFLAGS). read off the raw source, since the defaults are seeded before
    ; a single rule is parsed -- and as defaults, so a file's own CC= still wins.
@@ -1044,7 +1044,7 @@
         (lines src))
    (seed-defaults as px)
    (: _ (each (keys origins) (\ k (pull origins k 0)))       ; a fresh provenance per import
-      ; ..EXCEPT SHELL: make's documented exception -- the user's login shell
+      ; ..except SHELL: make's documented exception -- the user's login shell
       ; must never become the recipe shell (only a Makefile's own SHELL= does)
       _ (each (environ 0)
               (\ e (: i (findc e 0 61)                       ; 61 = =
@@ -1063,16 +1063,16 @@
               (\ pr (: _ (pin as <pr >pr) (pin origins <pr "command line"))))
       as)
 
-   ; make's OLD-STYLE suffix rules, the form every suckless Makefile is written in:
-   ; `.c.o:` IS `%.o: %.c`, and a single `.c:` is `%: %.c`. answers (tgtpat srcpat),
-   ; or 0 when the target is not one. ⚠ keyed on the SUFFIX LIST, not on "starts with
+   ; make's old-style suffix rules, the form every suckless Makefile is written in:
+   ; `.c.o:` is `%.o: %.c`, and a single `.c:` is `%: %.c`. answers (tgtpat srcpat),
+   ; or 0 when the target is not one. keyed on the suffix list, not on "starts with
    ; a dot": .PHONY would otherwise read as a single-suffix rule the moment somebody
-   ; hung a recipe off it. and ⚠ it must be recognized at all -- the dot-target drop
+   ; hung a recipe off it. and it must be recognized at all -- the dot-target drop
    ; eats these in silence, which is worse than not having suffix rules, because the
-   ; builtin %.o: %.c then compiles the file with DEFAULT flags instead of the ones
+   ; builtin %.o: %.c then compiles the file with default flags instead of the ones
    ; the Makefile spent its whole config.mk computing (st, exactly).
    sufs '("c" "cc" "C" "cpp" "S" "s" "o" "a" "h" "y" "l" "f" "F" "p" "r" "m" "sh")
-   ; ..and the list a Makefile SAYS, which is the whole point of `.SUFFIXES`: bare, it
+   ; ..and the list a Makefile says, which is the whole point of `.SUFFIXES`: bare, it
    ; clears; with prerequisites, it adds. Held in a box because sufpat is asked per rule
    ; and the declaration may be any line above. sufs is the seed, make's own default.
    sufbox (tablet 0)
@@ -1093,10 +1093,10 @@
    (splitbar ws) ((: (g l acc) (? !(two? l) (rev acc >< 0)
                        (? (<l = "|") (rev acc >< >l) (g >l (<l >< acc))))) ws 0)
 
-   ; parse a Makefile and REGISTER its rules. .PHONY members become phony SYMBOLS;
-   ; every other item a file STRING. A rule line is one of: a STATIC pattern rule
-   ; (targets: tgtpat: prereqpats), an implicit PATTERN rule (a % target -> stored
-   ; for prep-time resolution), or a NORMAL rule. The first registered is the ticket.
+   ; parse a Makefile and register its rules. .PHONY members become phony symbols;
+   ; every other item a file string. a rule line is one of: a static pattern rule
+   ; (targets: tgtpat: prereqpats), an implicit pattern rule (a % target -> stored
+   ; for prep-time resolution), or a normal rule. The first registered is the ticket.
    (register-makefile src)
    (: as (seed-defaults (tablet 0) (posixp src))
       rules (build (text-lines src) as)
@@ -1104,11 +1104,11 @@
                _ (each rules (\ r (: tg (expand-words [<r] as)
                     (? (any (\ t (t = ".PHONY")) tg)
                        (each (expand-words [<>r] as) (\ p (pin ps p 1))) 0)))) ps)
-      ; .ONESHELL is a TARGET, not a variable, but what it governs is recipe
+      ; .ONESHELL is a target, not a variable, but what it governs is recipe
       ; expansion -- so record it where expand-steps already looks: `as`.
       _ (each rules (\ r (? (any (\ t (t = ".ONESHELL")) (expand-words [<r] as))
                             (pin as ".ONESHELL" "1") 0)))
-      ; `.SUFFIXES:` bare EMPTIES the vocabulary, and each one after it adds -- read in
+      ; `.SUFFIXES:` bare empties the vocabulary, and each one after it adds -- read in
       ; file order, before any rule asks sufpat, or a rule above its own declaration
       ; would be judged by the defaults.
       _ (each rules (\ r (? (any (\ t (t = ".SUFFIXES")) (expand-words [<r] as))
@@ -1118,7 +1118,7 @@
                                                                           (snip w 1 (tally w)) w)) ws))
                                   (pin sufbox 0 ())))
                             0)))
-      ; .SILENT with NO prerequisites quiets every recipe -- the whole-file form, which
+      ; .silent with no prerequisites quiets every recipe -- the whole-file form, which
       ; is the one anybody writes. Named prerequisites quiet only those targets, and
       ; that wants a per-target ask expand-steps has no room for yet.
       _ (each rules (\ r (? ((any (\ t (t = ".SILENT")) (expand-words [<r] as))
@@ -1148,20 +1148,20 @@
                        ; implicit pattern rule, or normal rule
                        (: sb (splitbar (expand-words [prtext] as)) prs <sb oos >sb
                           (? (any haspct tgts)
-                             ; ⚠ an EMPTY recipe is make's CANCELLATION idiom ("an empty recipe
+                             ; an empty recipe is make's cancellation idiom ("an empty recipe
                              ; unmakes the rule"). we carry no lex builtin, so cancelling is
                              ; registering nothing. (a cancellation over OUR builtpats has no
                              ; consumer yet; it would filter there.)
                              (? !(two? raws) 0
                                 (each tgts (\ t (? (haspct t) (pin patbox 0 ([t prs oos raws] >< peep patbox 0 0)) 0))))
-                             ; ⚠ the automatics read the target's WHOLE prerequisite list,
+                             ; the automatics read the target's whole prerequisite list,
                              ; which an earlier line may have stated and this one not repeat:
                              ;   a.out: a.c
                              ;   a.out b.out: ; cc $<
-                             ; make expands $</$^ when the recipe RUNS, against everything
+                             ; make expands $</$^ when the recipe runs, against everything
                              ; merged; cook expands here, so it asks the card already
                              ; registered before adding this line's own words. (prereqs
-                             ; arriving AFTER their recipe still read short -- that one wants
+                             ; arriving after their recipe still read short -- that one wants
                              ; expansion deferred to prep, a bigger change than this.)
                              (each tgts (\ t (: it (mk-item t) ps (map mk-item prs)
                                                 all (adds <(peep cards (unseat it) '(())) ps)
@@ -1172,16 +1172,16 @@
       dg (trim (peep as ".DEFAULT_GOAL" ""))
       _ (? (0 < tally dg) (pin check 0 (mk-item dg)) 0)
       patlist (peep patbox 0 0)
-      ; make's BUILTIN implicit rules -- the database a Makefile never has to state,
+      ; make's builtin implicit rules -- the database a Makefile never has to state,
       ; and the reason lua 5.4 writes recipes for three of its 34 objects and leaves
       ; the rest to the tool. same shape as a file's own pattern: (tgtpat prs oos raws).
-      ; ⚠ TWO fences, and both are load-bearing. tried only AFTER the file's patterns,
+      ; two fences, and both are load-bearing. tried only after the file's patterns,
       ; so a Makefile that states its own %.o: %.c still wins outright. and taken only
-      ; when the stem-source EXISTS: `%: %.c` matches literally every word, so a phony
+      ; when the stem-source exists: `%: %.c` matches literally every word, so a phony
       ; `all` that carries prereqs but no recipe of its own would otherwise resolve to
       ; a link of `all.c` and fail asking for a file nobody ever mentioned.
-      ; ⚠ a raw recipe line is (silent ignore . text), what parse-mods answers -- so
-      ; the builtins are built THROUGH it rather than written as bare strings, and go
+      ; a raw recipe line is (silent ignore . text), what parse-mods answers -- so
+      ; the builtins are built through it rather than written as bare strings, and go
       ; down the one door the file's own recipes take. a plain string here reads as a
       ; recipe of no lines: the card resolves, nothing runs, and the miss surfaces
       ; later wearing somebody else's name.
@@ -1190,24 +1190,24 @@
        (list (bpat "%.o" '("%.c") "$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<")
              (bpat "%.o" '("%.S") "$(CC) $(ASFLAGS) $(CPPFLAGS) -c -o $@ $<")
              (bpat "%.o" '("%.s") "$(AS) $(ASFLAGS) -o $@ $<"))
-      ; ⚠ make's MATCH-ANYTHING builtins -- `%: %.c` and `%: %.o` -- are deliberately
-      ; NOT here. they match every target there is, and GNU only dares them under
+      ; make's match-anything builtins -- `%: %.c` and `%: %.o` -- are deliberately
+      ; not here. they match every target there is, and GNU only dares them under
       ; conditions this resolver does not model (it will not apply one to a target
       ; that already has any rule, nor to an intermediate). without those conditions
       ; `%: %.o` hijacks a real link: this tree's own `out/host/love` has love.o
-      ; sitting right there, so the builtin links THAT ALONE and the host objects and
+      ; sitting right there, so the builtin links that alone and the host objects and
       ; the math floor never reach the command -- a wall of undefined references from
       ; a rule nobody wrote. the narrow %.o: rules above cannot do that: their target
       ; must already end in .o.
       (psrc p item) (: stem <(pmatch <p item) prs <>p (? (two? prs) (stemsub <prs stem) ""))
-      ; ⚠ A PATTERN WHOSE SOURCE CANNOT BE HAD DOES NOT APPLY -- make rejects it and
+      ; a pattern whose source cannot be had does not apply -- make rejects it and
       ; tries the next, and with none left the target is a source leaf that is
       ; already on disk. Taking one as a last resort demands a file nobody makes:
       ; `%.c: %.l` (mk/common.mk cancels make's lex rule, since this tree is full of
       ; `<name>.l` beside `<name>.c`) had cook asking for core/love.l. "Can be had"
       ; is exists-or-has-a-card -- no intermediates, per the note above.
       (phave? p item) (: s (psrc p item) (|| (exists? s) (two? (peep cards s ()))))
-      (best-of ms item)        ; the shortest stem among the patterns that APPLY
+      (best-of ms item)        ; the shortest stem among the patterns that apply
       (: ok (filter (\ p (phave? p item)) ms)
          (? !(two? ok) 0
             (foldl (\ b p (? !b p (? (tally <(pmatch <p item) < tally <(pmatch <b item)) p b))) 0 ok)))
@@ -1228,17 +1228,17 @@
             0))
       (pin pgen 0 resolve))
 
-   ; -- emit: serialize the RESOLVED cards back as a Cookfile ------------------
+   ; -- emit: serialize the resolved cards back as a Cookfile ------------------
    ; after register-makefile (with emitp set) the cards hold concrete, fully
    ; expanded items and ("sh" "-c" cmd) steps. We walk the dependency graph from
-   ; every root -- the default ticket FIRST (so it stays the default in the output),
+   ; every root -- the default ticket first (so it stays the default in the output),
    ; then every other registered card -- resolving pattern rules to concrete cards
    ; exactly as prep does, and print each as a (recipe ..) / (reg ..) form. A
    ; pattern-only target with no card prints nothing (a source leaf).
    (qshow x) ("'" + show x)                  ; a quoted datum literal: 'all, '("a" b)
-   ; the emitted Cookfile must not carry THIS seat's nest, or it installs into a
+   ; the emitted Cookfile must not carry this seat's nest, or it installs into a
    ; home nobody else has: write $HOME and $PWD back over the resolved prefixes.
-   ; ⚠ the cwd goes FIRST -- it usually sits UNDER the home, and a $HOME pass
+   ; the cwd goes first -- it usually sits under the home, and a $HOME pass
    ; would hide it from the $PWD one. `reg` opens both again at the far end.
    (seat w)
    (? (string? w)
@@ -1289,16 +1289,16 @@
    ; the love-recipe names, and there are only these: a Cards.l, a Cookfile, or
    ; anything else spelled .l.
    (lovefilep p) (: b (mk-base p) (mk-ends p ".l" || (b = "Cookfile")))
-   ; ⚠ -f NAMES THE MAKEFILE, whatever it is called -- make's does. Asking
+   ; -f names the makefile, whatever it is called -- make's does. Asking
    ; makefilep of an explicit -f meant `cook -f build.rules` read a Makefile as
-   ; LOVE SOURCE, and love's complaint about the first line (`;; missing CC`)
+   ; love source, and love's complaint about the first line (`;; missing CC`)
    ; reads as a broken build file rather than as cook looking at the wrong
-   ; language. DISCOVERY still needs the name to tell it what it found; a -f
+   ; language. discovery still needs the name to tell it what it found; a -f
    ; already did, and only a love-recipe name argues back.
    (asmake? p explicit?) (? explicit? !(lovefilep p) (makefilep p))
 
-   ; the build file may be named explicitly (the first arg word) or DISCOVERED in
-   ; the cwd; the SEAT at the bottom already stripped the program head + -l chain.
+   ; the build file may be named explicitly (the first arg word) or discovered in
+   ; the cwd; the seat at the bottom already stripped the program head + -l chain.
    (exists? p) (: q (open p "r") (? q 1 0))     ; a one-shot probe (the fd dies with the process)
    ; discovery precedence: a love-native recipe file wins over a Makefile -- a
    ; legacy Cards.l first, then a Cookfile, then a Makefile. Only a Makefile-named
@@ -1324,7 +1324,7 @@
        _ (clear-cards 0)
        _ (say err ("cook: " + ck + " regenerated from " + mk)) (put err 10))
    ; when a Cookfile and a Makefile both sit in the cwd and the Makefile is the
-   ; NEWER of the two, refresh the Cookfile from it before discovery picks it up;
+   ; newer of the two, refresh the Cookfile from it before discovery picks it up;
    ; otherwise the Cookfile is preferred as-is. (date is () for a missing file.)
    (autoregen _)
    (: tm (date "Makefile") tc (date "Cookfile")
@@ -1334,18 +1334,18 @@
    ; cook owns its own arg parse over the rebound argv (cli.l stops at the first
    ; non-flag; cook reads the rest via mk-args). Like make, it takes flags in any
    ; order and treats every non-flag word as a recipe to build:
-   ;   -f, --file FILE   the build file (a Makefile or a Cookfile); else discovered
-   ;   -j, --jobs N      run up to N recipes at once (default 1). N is REQUIRED -- a
+   ;   -f, --file file   the build file (a Makefile or a Cookfile); else discovered
+   ;   -j, --jobs N      run up to N recipes at once (default 1). N is required -- a
    ;                     bare -j is make's "unlimited", and one translation unit here
    ;                     peaks at 2.3 GB, so the number is the caller's to say.
-   ;                     ⚠ the width does not travel: there is no jobserver, so a
+   ;                     the width does not travel: there is no jobserver, so a
    ;                     recursive $(MAKE) runs at -j1 unless its own line says otherwise.
    ;   --emit            transpile a Makefile to a resolved Cookfile on stdout, then exit
    ;   -h, --help, help  print usage and exit
    ;   -v, --version, version   print the version and exit
-   ;   RECIPE ...        the items to cook (default: the first recipe declared)
+   ;   recipe ...        the items to cook (default: the first recipe declared)
    ; for back-compat with `cook <Makefile> [recipe]`, when no -f is given a first
-   ; positional word that names an existing file MAY be the build file -- but only where
+   ; positional word that names an existing file may be the build file -- but only where
    ; discovery would find nothing else, or where the word is the very file it would find.
    ; everywhere else a positional is a recipe, whether or not a file of that name exists.
    ; with -f, every positional word is a recipe.
@@ -1402,12 +1402,12 @@
    ; imported and its recipes cooked; a Cookfile is read and evaluated -- it drives
    ; cook itself, the ticket read live by (ticket 0) from the tickets box.
    ;
-   ; it SPLICES ITS OWN LAYER first, and owns that for every caller (the seat, kore's
-   ; dispatcher, a host embedding cook): a Cookfile is love source read at RUNTIME, so
+   ; it splices its own layer first, and owns that for every caller (the seat, kore's
+   ; dispatcher, a host embedding cook): a Cookfile is love source read at runtime, so
    ; its bare (recipe ..) (cook-all 0) (ticket 0) only resolve on the module walk. one
    ; (use 'cook), at the one place that needs it -- a caller just needs the closure.
    (cook-main as)
-   (: _ (? (lit? (from 'cook)) (use 'cook) 0)   ; splice my REGISTERED self if I am one (the module
+   (: _ (? (lit? (from 'cook)) (use 'cook) 0)   ; splice my registered self if I am one (the module
                                                 ; path); riding a cat, my names already walk -- the
                                                 ; presence guard keeps the loader out of it
       opt (parse-args as)
@@ -1420,8 +1420,8 @@
       pos (peep opt 'pos ())
       xf (peep opt 'file 0)                                       ; an explicit -f file (0 if none)
       _ (? (xf && !(exists? xf)) (: _ (say err ("cook: cannot open " + xf)) _ (put err 10) (quit 1)) 0)
-      ; ⚠ A POSITIONAL IS A RECIPE wherever discovery can name the build file itself.
-      ; taking any existing file meant `cook prog` read `prog` AS THE BUILD FILE the moment
+      ; a positional is a recipe wherever discovery can name the build file itself.
+      ; taking any existing file meant `cook prog` read `prog` as the build file the moment
       ; a previous run had made one -- no rules in it, no tickets, exit 0 having built
       ; nothing, and the goal you named going silently unbuilt. the back-compat form is
       ; kept for the case it was written for: a build file discovery cannot find.
@@ -1456,14 +1456,14 @@
 
    cook-main _)
 
-; the SEAT (tools/ain.l's shape): fire cook-main iff this very file -- or the
+; the seat (tools/ain.l's shape): fire cook-main iff this very file -- or the
 ; installed `cook` symlink -- sits in the program seat of the real command line
-; (positional program or a -l preload), taking the args AFTER the seat. cmdline
+; (positional program or a -l preload), taking the args after the seat. cmdline
 ; is the full C argv, never rebound, so the read is the same in both load
 ; orders; inside the multi-call `kore` nothing matches and kore's dispatcher calls
 ; cook-main itself. body-having: the seat machinery leaks nothing.
 ;
-; cook-main reads BARE: the module's layer holds this file's binds and is still
+; cook-main reads bare: the module's layer holds this file's binds and is still
 ; the head here. cook-main splices its registered self when called from outside.
 (: _ (pins (from 'verbs 'tab) 'cook cook-main)
    s ((from 'verbs 'fire) ["cook" "cook.l"])

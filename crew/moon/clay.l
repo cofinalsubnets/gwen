@@ -33,7 +33,7 @@
 ;   (sdef TAG FIELDS)                  a struct/union definition, which it can never emit
 ;   (named "lvm_t")   (const t)        type forms with no cparse counterpart
 ;   (arr t EXPR)                       a symbolic bound -- cparse folds these to numbers,
-;   (didx EXPR val)                    a generator wants to say [KCharm], not [2]
+;   (didx EXPR val)                    a generator wants to say [kcharm], not [2]
 ;   (chr 92)                           a character literal, which cparse folds to a number
 ;   (note "text")                      a comment, authored, never captured
 ;   (cpp-def NAME [BODY])              the preprocessor, likewise never captured
@@ -48,10 +48,10 @@
 ; the lexer, so neither ever comes back from a parse. doc/misc/clay.md prices the capture
 ; side and says why the architecture conditionals cannot be folded away instead.
 ;   (cpp-def NAME [BODY])  NAME a spelling, carrying its own parameter list where it has
-;                          one ("countof(_)"), which is what cpp reads. BODY absent is a
+;                          one ("countof(_)"), which is what cpp reads. body absent is a
 ;                          bare `#define` -- presence is the arity, never the value.
-;   (cpp-if ARMS [ELSE])   ARMS is ((cond items)..): the first arm `#if`, the rest
-;                          `#elif`, ELSE the `#else` items. items are top-level forms at
+;   (cpp-if ARMS [ELSE])   arms is ((cond items)..): the first arm `#if`, the rest
+;                          `#elif`, else the `#else` items. items are top-level forms at
 ;                          column 0, so a cpp-if nests inside one as love.h's do.
 ; a #define's body is tokens, not an expression: a spelling rides through verbatim,
 ; while a clay expression renders at the tightest context and parenthesizes itself,
@@ -61,7 +61,7 @@
    ; --- the small vocabulary this file stands on ---------------------------------
    ; defined here rather than taken from moon, which is what lets clay load alone.
    ; lex.l's copies sit in a different module layer and cannot clobber these.
-   ; ⚠ `el` has no caller left IN THIS FILE and is not dead: (use 'clay) splices it, and
+   ; `el` has no caller left in this file and is not dead: (use 'clay) splices it, and
    ; src/mx.l and src/nifs.l -- the generators behind mx.h, kinds.h and nifs.h -- read it.
    (el l i) (? (i < 1) <l (el >l (i - 1)))
    join (foldl (+) "")
@@ -282,8 +282,8 @@
    ; the shower's one layout rule: a nested initializer breaks the line and a flat
    ; one does not, so a 16x16 matrix comes out a row per line with no threshold to tune
    (cinitv x) (two? x && member? <x '(dfield didx) ? <>>x x)
-   ; ⚠ a FUNCTION binding, not the point-free `cnested? (any ..)`: a `name value` pair
-   ; is BUILT where it stands, and the shower's mutually recursive group compiles as one
+   ; a function binding, not the point-free `cnested? (any ..)`: a `name value` pair
+   ; is built where it stands, and the shower's mutually recursive group compiles as one
    ; unit at cty-dtor above -- a value this far down is still an empty cell when the group
    ; that reads it is compiled. `(name args)` defers, and defers unconditionally.
    (cnested? l) (any (x \ cinitv x @ ('init . _) 1) l)
@@ -350,7 +350,7 @@
         ['lbl l] (line (n < 1 ? 0 (n - 1)) (l + ":"))
         ['case v] (line (n < 1 ? 0 (n - 1)) ("case " + (charm? v ? (show v) (ce v 0)) + ":"))
         ['dflt] (line (n < 1 ? 0 (n - 1)) "default:")
-        ('if . _ . _ . _) (cif s n "")     ; ⚠ LAX: `if 2 3`, and cif reads the else itself
+        ('if . _ . _ . _) (cif s n "")     ; lax: `if 2 3`, and cif reads the else itself
         ['while c b] (copen n "" ("while (" + ce c 0 + ")") b + cclose n b "")
         ['do b c] (copen n "" "do" b + cclose n b (" while (" + ce c 0 + ");"))
         ; all three clauses empty is `for (;;)`, where the general join would lay

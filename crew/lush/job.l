@@ -4,7 +4,7 @@
 ; module in cat order (job eval line main) -- each part a body-less `:` binding
 ; into the module, so later parts read earlier ones. the shell story is main.l's.
 ;
-; v3 (doc/misc/posix.md step 4): JOB CONTROL. the shell IGNORES the tty's job
+; v3 (doc/misc/posix.md step 4): job control. the shell ignores the tty's job
 ; signals (installed in (sh _), main.l; spawn's child side resets them to
 ; default), so ^C/^Z reach only the foreground command. a ^Z stop comes back
 ; from `wait` as 256+sig (above every exit status) and the job parks in
@@ -24,7 +24,7 @@
    sh-tty {0}                                  ; 1 = interactive: jobs get their own pgrp + the tty
    sh-login {0}                                ; 1 = a login shell (--login, or a -argv0 seat): profiles read
    ; interactive spawns lead a fresh process group (pg 0) and the first stage takes
-   ; the terminal (fg 1) -- a job in its OWN group is what makes ^Z real (a stop to
+   ; the terminal (fg 1) -- a job in its own group is what makes ^Z real (a stop to
    ; an orphaned group is discarded, and the shell's group is orphaned under a
    ; nested session). the cooked/non-tty lane keeps the legacy in-shell pgrp (-1).
    (sh-pgm _) (? (sh-tty ()) 0 (0 - 1))
@@ -37,28 +37,28 @@
    sh-vars (tablet 0)                          ; shell variables (name -> value; export promotes)
    sh-funcs (tablet 0)                         ; functions (name -> the PLANNED body)
    ; --- trap: the action for a condition, and the door it leaves through -------
-   ; sh-traps holds CONDITION -> action text. sh-runtrap is the evaluator, pinned
+   ; sh-traps holds condition -> action text. sh-runtrap is the evaluator, pinned
    ; by eval.l at load the way word.l's sh-subeval is -- job compiles first, and
    ; the action is shell source that only eval can read.
-   ; ⚠ ONCE. sh-trapped guards the EXIT action against an `exit` inside it, which
+   ; once. sh-trapped guards the exit action against an `exit` inside it, which
    ; would otherwise re-enter sh-leave and run the cleanup a second time.
-   ; EXIT leaves through here; a signal condition rides the sigfd lane below.
+   ; exit leaves through here; a signal condition rides the sigfd lane below.
    sh-traps (tablet 0)
    sh-runtrap {0}
    sh-trapped {0}
-   ; --- the signal lane: a trapped condition, DELIVERED ------------------------
+   ; --- the signal lane: a trapped condition, delivered ------------------------
    ; sigfd blocks the signals it watches and queues them to an fd, so a caught INT
    ; stops being a death and becomes a datum to read.
-   ; ⚠ ARMED ONLY WHILE A SIGNAL TRAP EXISTS. With none -- every script in this
+   ; armed only while a signal trap exists. With none -- every script in this
    ; tree but two -- the shell blocks nothing and this lane is one () test on the
    ; way past, so the ordinary command path is the one it always was.
-   ; ⚠ AND DRAINED, NEVER PARKED ON. `wait` is a 1ms POLL that yields (read its
+   ; and drained, never parked on. `wait` is a 1ms poll that yields (read its
    ; nif), so the shell is never asleep inside a syscall and a non-blocking
    ; sigtake between polls sees the signal without a second wait set to merge.
    ; That hands us POSIX's rule for free -- the action runs when the foreground
-   ; command COMPLETES -- and ^C reaches the child too, whose own mask sig_dfl_job
+   ; command completes -- and ^C reaches the child too, whose own mask sig_dfl_job
    ; cleared, so the wait it is inside ends on its own.
-   ; ⚠ THE NUMBERS ARE LINUX'S, like sig-int and sig-tstp above. The low ones are
+   ; the numbers are LINUX'S, like sig-int and sig-tstp above. The low ones are
    ; every kernel's; USR1 USR2 CHLD TSTP are not, and want the ISA/OS table the
    ; day this rides a BSD.
    sh-sigport {0}                              ; the signalfd port, or 0
@@ -72,13 +72,13 @@
      ((: (g l) (? !(two? l) ()
                   (: e <l (? (<>e = n) <e (g >l)))))
       sh-signums)
-   ; every trapped condition that is a signal -- EXIT leaves by its own door
+   ; every trapped condition that is a signal -- exit leaves by its own door
    (sh-sigconds _) (filter (\ k !(k = "EXIT")) (keys sh-traps))
-   ; ⚠ A SIGNAL IGNORED ON ENTRY CANNOT BE TRAPPED (POSIX), and no error is owed
+   ; a signal ignored on entry cannot be trapped (POSIX), and no error is owed
    ; for trying. The everyday way a script gets one is the caller's `&`: a shell
    ; backgrounded without job control starts with INT and QUIT set to SIG_IGN, and
    ; a `trap .. INT` in it must stay off -- the caller has already said this job
-   ; does not answer ^C. Snapshotted ONCE at sh-main, before the interactive entry
+   ; does not answer ^C. Snapshotted once at sh-main, before the interactive entry
    ; sets ignores of its own, or the shell would read its own hand as the caller's.
    sh-igno {0}
    (sh-snapign _)
@@ -86,7 +86,7 @@
           (filter (\ nm (: n (sh-signum nm) (n && (sigign? n))))
                   (map cap sh-signums)))
    (sh-ignored? nm) (: l (sh-igno ()) (? (two? l) (any (\ k (k = nm)) l) 0))
-   ; ⚠ CLEAR, THEN ARM. sigfd's sigprocmask is a SIG_BLOCK and accumulates, and
+   ; clear, then arm. sigfd's sigprocmask is a SIG_BLOCK and accumulates, and
    ; closing the fd does not unblock: after `trap - INT` the signal would stay
    ; blocked with nothing left reading it, which is a shell that cannot be
    ; interrupted at all. So the mask is emptied first and the live set re-blocked.
@@ -102,7 +102,7 @@
      (: _ (? (sh-sigport ()) (close (sh-sigport ())) 0)
         _ (pin sh-sigport () 0) _ (sigclear 0) 0)
    ; read every queued signal and run what each one traps. the action's own status
-   ; does not become $? -- the command's does, exactly as at the EXIT door.
+   ; does not become $? -- the command's does, exactly as at the exit door.
    (sh-fire-sig n)
      (: nm (sh-signame n)
         a (? (string? nm) (peep sh-traps nm "") "")
@@ -116,9 +116,9 @@
                         (? !(two? ev) 0
                            (: _ (sh-fire-sig (cap ev)) (g 0)))))
             0)))
-   ; ⚠ THE STATUS IS THE ONE THE SHELL WAS LEAVING WITH. POSIX says the action
+   ; the status is the one the SHELL was leaving with. POSIX says the action
    ; runs with $? as it stood, and the shell still exits on that -- `false` under
-   ; an EXIT trap is still a 1, however well the cleanup went. Only an explicit
+   ; an exit trap is still a 1, however well the cleanup went. Only an explicit
    ; `exit` inside the action changes it, and that one leaves through sh-leave.
    (sh-fire-exit _)
      (: a (peep sh-traps "EXIT" "")
@@ -133,27 +133,27 @@
    sh-arg0 {0}                                 ; $0 (the script path, or the shell)
    sh-eflag {0} sh-uflag {0} sh-xflag {0}      ; set -e / -u / -x
    sh-lastbg {0}                               ; $!: the last background pid
-   ; ⚠ AMBIENT on purpose, never a parameter: the guard is a dynamic extent every
+   ; ambient on purpose, never a parameter: the guard is a dynamic extent every
    ; re-entry reads -- a function body, `eval`, a dot-file, and the forks under a
    ; pipeline stage and a $( ) body (those two take it by memory copy). a plan
    ; parameter would have to cross word.l's expansion. test/host/sh.l pins it.
    sh-noe {0}                                  ; errexit guard depth (conds, && || arms)
-   ; ⚠ ambient for the same reason: the forkless $( ) captures this shell is
-   ; INSIDE, innermost first, each a (read-end . drainer) pair -- empty when none,
+   ; ambient for the same reason: the forkless $( ) captures this shell is
+   ; inside, innermost first, each a (read-end . drainer) pair -- empty when none,
    ; and that emptiness is the question `exit` asks (inside one it may not reach
    ; `quit`: it folds to ('xit . st), which nothing catches but the capture).
-   ; ⚠ A FORK UNDER ONE INHERITS THE DRAINER TASK, and a child draining its
+   ; a fork under one inherits the drainer task, and a child draining its
    ; parent's capture eats the bytes and then blocks the whole child on a pipe
    ; only its parent can end. so a fork shuts each one down first thing
    ; (sh-dropcaps), and a `( )` under a capture does not fork at all (sh-subsh).
    sh-subfds {0}
-   sh-online {0}                               ; nesting depth of sh-oneline: a line run HERE for a
+   sh-online {0}                               ; nesting depth of sh-oneline: a line run here for a
                                                ; caller in this image, so `exit` ends the line not us
-   ; ⚠ THE EXIT DOORS, and there are three: `exit`, errexit (sh-echk) and set -u on
-   ; an unset name. all three END THE SHELL -- and which shell that is depends on
+   ; the exit doors, and there are three: `exit`, errexit (sh-echk) and set -u on
+   ; an unset name. all three end the SHELL -- and which shell that is depends on
    ; where we stand. innermost first: under a $( ) capture it is the capture, and the
    ; pair is what the plan machinery already rides out; under an sh-oneline it is the
-   ; LINE, and the caller lives on in this image -- by SCARE, because set -u fires
+   ; line, and the caller lives on in this image -- by scare, because set -u fires
    ; from a word expansion whose value is a string, with no pair to hand back.
    ; otherwise it is the process, as it always was. one rule said once, so a fourth
    ; door cannot drift away from it.
@@ -201,7 +201,7 @@
    (sh-reapbg _)
      (: r (glean 0) (? (two? r) (: _ (sh-bgnote <r) (sh-reapbg 0)) 0))
    ; job addressing: "fg 2" by number, bare "fg" the latest
-   ; string membership: member? tests IDENTITY (uninterned strings never hit)
+   ; string membership: member? tests identity (uninterned strings never hit)
    (sh-smem? x l) (? !(two? l) 0 (? (x = <l) 1 (sh-smem? x >l)))
    (sh-int s) (sh-intl s 0 0)
    (sh-intl s i a) (? (i = (tally s)) a (sh-intl s (i + 1) ((a * 10) + ((s i) - 48))))

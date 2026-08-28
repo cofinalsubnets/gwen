@@ -1,7 +1,7 @@
 ; --- lush 🐚 -- the love shell ---
 ; a cowrie who lives on the quay among lux and the rest of the pulchritude:
 ; a real (Unix) command shell in love. reads a line, runs real programs via
-; spawn + wait -- inherited stdio, so output is LIVE and the command owns the
+; spawn + wait -- inherited stdio, so output is live and the command owns the
 ; terminal (not captured like `run`). this is also the shell init execs on the
 ; distro console (mk/distro.mk cats the parts to /lib/sh.l): the pid1 story
 ; end to end (init -> lush -> real programs). it rides the src/posix.c
@@ -26,7 +26,7 @@
      (? (two? (stat path))
         (: p (open path "r") _ (sh-lines p "") _ (close p) 0)
         0)
-   ; a LOGIN shell (--login, or a dash-led seat name) reads /etc/profile then
+   ; a login shell (--login, or a dash-led seat name) reads /etc/profile then
    ; ~/.profile, whatever mode it runs in; interactive shells layer $ENV (else
    ; ~/.lushrc) on top, in (sh _) below. the chsh story lives in doc/lush.md.
    (sh-profiles _)
@@ -34,11 +34,11 @@
         (? (sh-login ())
            (: _ (sh-src "/etc/profile") (sh-src (("" + (getenv "HOME")) + "/.profile")))
            0))
-   ; job.l's exit door runs the EXIT action, and it is one file too early to know
+   ; job.l's exit door runs the exit action, and it is one file too early to know
    ; what a shell line is -- the same distance word.l keeps from sh-cmdsub, and
-   ; the same box answer. ⚠ BUT NOT THE SAME PIN. sh-subeval takes the bare name
+   ; the same box answer. but not the same pin. sh-subeval takes the bare name
    ; sh-cmdsub because eval.l can read it where it stands; sh-line it cannot, since
-   ; reading a name BUILDS it and sh-line and sh-eval-top call each other. HERE the
+   ; reading a name builds it and sh-line and sh-eval-top call each other. here the
    ; name is an ordinary export of a module already loaded, and reads like one.
    (sh-armtrap _) (pin sh-runtrap () (\ src (sh-line src)))
    ; the script lane rides eval.l's sh-lines ('more gathers continuations,
@@ -60,7 +60,7 @@
         _ (sh-fire-exit 0) (quit (sh-status ())))
    ; the flag word: c e u x, bundled or apart. `sh -ec CMD` is what a Makefile's
    ; .SHELLFLAGS writes and what every shell takes, so a bundle is not a courtesy --
-   ; without it lush cannot BE the SHELL of a make. answers (1 c? rest) with e/u/x
+   ; without it lush cannot be the SHELL of a make. answers (1 c? rest) with e/u/x
    ; already pinned, or () when a letter is not ours (then the word is not a flag).
    (sh-flagw a rest)
      (: n (tally a)
@@ -73,7 +73,7 @@
                            ())))
         (go 1 0))
    (sh-main args)
-     (: _ (sh-snapign 0)                        ; FIRST: what our caller had turned off
+     (: _ (sh-snapign 0)                        ; first: what our caller had turned off
         (? !args (sh 0)
         (: a <args
            (? (a = "--login") (: _ (pin sh-login () 1) (sh-main >args))
@@ -88,9 +88,9 @@
               (sh-file a >args)))))
    ; the interactive entry: ignore the tty's job signals (children reset them),
    ; then probe with (raw 1): () = a tty (interactive), an errno = not a tty
-   ; (the cooked fallback). interactively: hear lush-help as the floor IF no
+   ; (the cooked fallback). interactively: hear lush-help as the floor if no
    ; help is heard yet (the bao door), source the profiles (login only) then
-   ; $ENV else ~/.lushrc cooked -- AFTER the floor lands, so a broken rc scares
+   ; $ENV else ~/.lushrc cooked -- after the floor lands, so a broken rc scares
    ; back to the prompt instead of killing the shell -- and seed the recall from
    ; ~/.lush_history. ^D / `exit` ends the shell.
    (sh _) (: _ (signal sig-int 1) _ (signal sig-quit 1) _ (signal sig-tstp 1)
@@ -105,14 +105,14 @@
                    (sh-loop "" (sh-histload 0)))
                 (: _ (sh-profiles 0) (sh-cooked "")))))
 
-; --- the SEAT (kiosko's): fire only when this file IS the program -- the catted
+; --- the seat (kiosko's): fire only when this file is the program -- the catted
 ; bin (`lush ..`), an sh-named symlink to it, or a -l load of the assembly.
 ; `cmdline` is the raw C argv and is never rebound, so the read is
 ; order-independent inside any cat; crew/init/boot.l's `-l /lib/sh.l -e "(sh 0)"`
 ; lane stays quiet here ("sh.l" is deliberately NOT a me? name) and fires
 ; through its -e instead.
-; a dash-led basename (-lush, -sh: login(1)'s mark) seats us too and makes a LOGIN
-; shell -- the scan strips the dash to match and hands the RAW word back, which is
+; a dash-led basename (-lush, -sh: login(1)'s mark) seats us too and makes a login
+; shell -- the scan strips the dash to match and hands the raw word back, which is
 ; the whole reason it hands one back. (the env -S shebang usually eats the dash, so
 ; --login is the reliable door, doc/lush.md.)
 (: _ (pins (from 'verbs 'tab) 'sh sh-main 'lush sh-main)

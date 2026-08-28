@@ -1,63 +1,63 @@
-; lapiz -- the document lens: SURFACES over one middle. markdown, html and roff(man).
+; lapiz -- the document lens: surfaces over one middle. markdown, html and roff(man).
 ;
-; a markdown file and an html file can say the same thing; a LENS is the pair of maps that
+; a markdown file and an html file can say the same thing; a lens is the pair of maps that
 ; carries each to the other and back without drift. lapiz gets that by refusing to translate
-; directly: there is ONE middle -- a plain love AST -- and a READER and a SHOWER per surface,
+; directly: there is one middle -- a plain love AST -- and a reader and a shower per surface,
 ;
 ;     markdown --mdread--> AST --htshow--> html      (and every other pairing, from the
 ;     html     --htread--> AST --rfshow--> roff       same six functions -- see `convert`)
 ;     roff     --rfread--> AST --mdshow--> markdown
 ;
-; so md->ht is just (htshow (mdread s)). three surfaces make SIX conversions and there is no
+; so md->ht is just (htshow (mdread s)). three surfaces make six conversions and there is no
 ; pairwise code for any of them: a conversion is one surface's reader and another's shower, so
 ; the `surfaces` table is the whole of it and a fourth adds a row. roff was added third and
-; touched neither of the others -- except where it SHOULD, by pressing two nodes the middle was
+; touched neither of the others -- except where it should, by pressing two nodes the middle was
 ; missing (meta, deflist), which then made markdown and html richer too. that is the trade a
 ; surface is allowed to ask for; anything else it must do alone.
 ;
-; both readers are built from the PARSER COMBINATORS in love/peg.l (a parser
+; both readers are built from the parser combinators in love/peg.l (a parser
 ; is (\ s y n): a string s, a success continuation y = (rest payload), a failure continuation
 ; n = rest; payloads are lists that `seq` concatenates -- love has no regex, so the leaves are
 ; `lit`, `one` and `span`). cook and sat/dimacs share that same set; lapiz adds the handful it
 ; lacked -- `notp` (NEGATIVE LOOKAHEAD, the thing a block grammar needs: "a paragraph line is one
-; that starts no other block"), `nope`/`alts`, `many1`, and the two that build a NODE out of a
+; that starts no other block"), `nope`/`alts`, `many1`, and the two that build a node out of a
 ; flat payload -- `pack` (fold a whole payload down to one element) and `tag` (..and make it one).
 ;
 ; --- the lens laws (test/host/lapiz.l proves them) ---
-;   1. the AST is the FIXED POINT of each surface:  (mdread (mdshow a)) = a
+;   1. the AST is the fixed point of each surface:  (mdread (mdshow a)) = a
 ;                                                   (htread (htshow a)) = a
-;   2. so each surface round-trips through the other, up to NORMALIZATION:
-;        (ht->md (md->ht s)) = s   for s already normal,   and both norms are IDEMPOTENT.
+;   2. so each surface round-trips through the other, up to normalization:
+;        (ht->md (md->ht s)) = s   for s already normal,   and both norms are idempotent.
 ; law 1 is the strong one -- it says neither shower loses anything its reader wants, which is
-; exactly "the two surfaces are views of one value"; law 2 falls out of it. NORMAL means what a
+; exactly "the two surfaces are views of one value"; law 2 falls out of it. normal means what a
 ; shower emits: paragraphs on one line, `-` bullets, ``` fences, one blank line between blocks.
-; reading is therefore a RETRACTION (many markdowns, one AST) and showing a SECTION of it -- a
+; reading is therefore a retraction (many markdowns, one AST) and showing a section of it -- a
 ; lens, not an isomorphism, and the laws say which half is which. a new surface owes law 1 and
 ; nothing more; that is what keeps its arrival from touching any other.
 ;
-; and the markdown reader is TOTAL: every line of input lands in some block. `starter`
+; and the markdown reader is total: every line of input lands in some block. `starter`
 ; claims more lines than the blocks it names can parse (a `---` that is not a rule, a
 ; `:   ` with no term over it), and a block loop that stopped at one of those dropped the
 ; whole rest of the document in silence -- so the last alternative takes one line as a
 ; paragraph. it cannot fire on what a shower writes, so law 1 does not feel it.
 ;
 ; --- the middle ---
-; a doc is a list of BLOCKS:
+; a doc is a list of blocks:
 ;   ('meta ((key value) ..))  ('head N inl)  ('para inl)  ('fence lang text)  ('quote doc)
 ;   ('bullets (inl ..))  ('numbers (inl ..))  ('deflist ((term-inl body-inl) ..))  ('rule)
-; an inl is a list of SPANS:
+; an inl is a list of spans:
 ;   ('text s)  ('em inl)  ('strong inl)  ('code s)  ('link inl url)
-; ('meta ..) is document-level and lives at the HEAD of the doc (markdown spells it as front
+; ('meta ..) is document-level and lives at the head of the doc (markdown spells it as front
 ; matter, and a `---` anywhere else is a rule); its keys are the canonical five, always all
 ; five, absent ones empty -- see `mnorm`.
-; a doc is NORMAL when no two texts are adjacent in an inl (`mrg`) and no two lists of one kind
+; a doc is normal when no two texts are adjacent in an inl (`mrg`) and no two lists of one kind
 ; are adjacent in the doc (`bmrg`); every reader lands on that. without it law 1 fails on an AST
 ; that reads the same through every surface but is spelled two ways. and every list here ends in
-; the UNIT: a 0 tail is a fossil, and `=` tells the two terminators apart, so a single fossil
+; the unit: a 0 tail is a fossil, and `=` tells the two terminators apart, so a single fossil
 ; fails law 1 on nothing but the nil.
 ;
-; --- the roff DOMAIN ---
-; roff's man macros are a SMALLER surface, and saying where is part of the job. law 1 holds on
+; --- the roff domain ---
+; roff's man macros are a smaller surface, and saying where is part of the job. law 1 holds on
 ; man-page-shaped docs: meta, head 1-2, para, fence with an empty language, quote, bullets,
 ; numbers, deflist, and text/strong/em/code inline. outside that rfshow stays total and rfread
 ; normalizes in four ways, each one asserted by the gate rather than left to be found:
@@ -65,7 +65,7 @@
 ;   (.EX/.EE has no slot), a rule vanishes (man pages have none), and a link flattens to its
 ;   text with the url trailing in \(la..\(ra -- the man idiom for one.
 
-; NO BRACKETS HERE: the runtime supplies the layer. a consumer says (use 'lapiz)
+; no brackets here: the runtime supplies the layer. a consumer says (use 'lapiz)
 ; (lib/lapiz.l) or hands the loader this file's path ((use "crew/lapiz/lapiz.l") --
 ; papel's want does), and reads bare down the splice, or reaches one member through
 ; the accessor: (from 'lapiz 'md->ht). the six faces are
@@ -104,11 +104,11 @@
    (spec? c) (member? c '(92 42 96 91 93))                     ; \ * ` [ ] -- where an inline span can start
    (ord? c)  !(spec? c))
 
-; --- the meta record: document-level fields, one CANONICAL shape ---
+; --- the meta record: document-level fields, one canonical shape ---
 ; every reader runs `mnorm`, so a meta block always carries the same five keys in the same
-; order, absent ones empty. That is what lets a shower emit only the fields that are FILLED
+; order, absent ones empty. That is what lets a shower emit only the fields that are filled
 ; and still round-trip: the reader fills the rest back in with "". Values are single-line.
-; ⚠ the key is INTERNED, not `nom`ed: `nom` mints a FRESH symbol that is neither `id?` nor
+; the key is interned, not `nom`ed: `nom` mints a fresh symbol that is neither `id?` nor
 ; `=` to the literal of the same spelling, so a meta read from one surface would compare
 ; unequal to the same meta read from another -- law 1 failing on the key, not the value.
 (: metakeys '(title section date source manual)
@@ -116,11 +116,11 @@
    (mnorm kvs)  (map (\ k [k (mget kvs k)]) metakeys)
    mfilled (filter (tally * caup)))
 
-; --- the roff glyph table, read BOTH ways: rfread decodes \(em to the character, rq encodes
-; it back. so it must be a BIJECTION -- no two names may share a character, which is why the
+; --- the roff glyph table, read both ways: rfread decodes \(em to the character, rq encodes
+; it back. so it must be a bijection -- no two names may share a character, which is why the
 ; three quote escapes (\(aq \(oq \(cq, all an apostrophe) are absent. encoding matters: groff
 ; reads its input as latin-1 unless preconv ran, so a raw UTF-8 character in the source
-; renders as MOJIBAKE, not as itself.
+; renders as mojibake, not as itself.
 (: rglyphs '(("em" "—") ("en" "–") ("bu" "•") ("la" "⟨") ("ra" "⟩") ("mi" "−"))
    (glyph n)   ((: (g l) (? (atom? l) ("\\(" + n) (<<l = n) <><l (g >l))) rglyphs)
    (rqat s i)  ((: (g l) (? (atom? l) ()                       ; does a glyph start at i? -> (name len)
@@ -128,13 +128,13 @@
                              (i + n <= tally s && gl = snip s i (i + n) ? [<<l n] (g >l)))))
                 rglyphs))
 
-; --- normalizing an inl: adjacent texts are ONE text (the AST is the fixed point, so this matters) ---
-(: (mrg l) (? (atom? l) () (: h <l (id? <h 'text && 0 = tally <>h)) (mrg >l)     ; a \& contributes an EMPTY text: drop it
+; --- normalizing an inl: adjacent texts are one text (the AST is the fixed point, so this matters) ---
+(: (mrg l) (? (atom? l) () (: h <l (id? <h 'text && 0 = tally <>h)) (mrg >l)     ; a \& contributes an empty text: drop it
               (atom? >l) (<l >< ())
               (: a <l b <>l
                (id? <a 'text && id? <b 'text ? (mrg (['text (<>a + <>b)] >< >>l))
                 (a >< mrg >l))))
-   ; ..and the same at BLOCK level: two adjacent lists of one kind are ONE list. markdown's
+   ; ..and the same at block level: two adjacent lists of one kind are one list. markdown's
    ; own loose-list rule says so (`- a` blank `- b` is one list), html would spell them as two
    ; <ul>s, and roff cannot separate two `.TP` runs at all -- so the normal form is "no two
    ; adjacent bullets/numbers/deflists" and every reader lands on it. Without this the roff
@@ -168,7 +168,7 @@
    (mdinls stop) (pmap mrg (many (seq (notp (lit stop)) mdspan)))   ; spans up to a closer
    mdinl        (runp (pmap mrg (many mdspan))))
 
-; blocks. every one of these is entered at the START OF A LINE and eats its own newline.
+; blocks. every one of these is entered at the start of a line and eats its own newline.
 (: eol       (skip (opt (lit "\n")))
    blankline (skip (seqs [(span sp?) (lit "\n")]))
    headmark  (seqs [(lit "#") (span hash?) (lit " ")])
@@ -184,20 +184,20 @@
                      (seqs [(skip (lit "```")) (span nonl?) eol (pack (many f-line))
                             (skip (lit "```")) (skip (span nonl?)) eol]))
    q-line  (seqs [(skip (lit ">")) (skip (opt (lit " "))) (span nonl?) (lit "\n")])
-   b-quote (tag (\ p ['quote (mdread (strcat <p))]) (pack (many1 q-line)))   ; the doc reads ITSELF
-   ; a list item and its LAZY CONTINUATION: a wrapped item is ONE item. a line
+   b-quote (tag (\ p ['quote (mdread (strcat <p))]) (pack (many1 q-line)))   ; the doc reads itself
+   ; a list item and its lazy continuation: a wrapped item is one item. a line
    ; that is neither blank nor a block opener belongs to the item above it --
    ; markdown's own rule, and `p-line` is already the exact test, so the two
    ; readings of "what continues a block" cannot drift. the leading whitespace is
-   ; the WRAP's and not the text's, so it goes; the lines join with one space, the
-   ; way a paragraph's do. ⚠ law 1 is untouched by this: mdshow writes an item on
-   ; ONE line and a blank line between blocks, so nothing a shower emits is ever
+   ; the wrap's and not the text's, so it goes; the lines join with one space, the
+   ; way a paragraph's do. law 1 is untouched by this: mdshow writes an item on
+   ; one line and a blank line between blocks, so nothing a shower emits is ever
    ; read as a continuation, and the fixed point holds for both spellings.
    (litrim s) ((: (g i) (i < tally s && sp? (s i) ? (g (i + 1)) (snip s i (tally s)))) 0)
    (lazyj p)  (joins (map litrim p) " ")
-   ; a paragraph line must be neither blank nor a block opener -- and must eat A CHARACTER
+   ; a paragraph line must be neither blank nor a block opener -- and must eat a character
    ; (`one nonl?` before the span), else `many` spins forever on the empty tail.
-   (p-line s y n)  ((tag (\ p (strcat p))                      ; ..`tag` does the wrapping; f yields the ELEMENT
+   (p-line s y n)  ((tag (\ p (strcat p))                      ; ..`tag` does the wrapping; f yields the element
                          (seqs [(notp blankline) (notp starter) (one nonl?) (span nonl?) eol])) s y n)
    u-item  (tag lazyj (seqs [(skip (lit "- ")) (span nonl?) eol (many p-line)]))
    o-item  (tag lazyj (seqs [(skip (one dig?)) (skip (span dig?)) (skip (lit ". "))
@@ -213,21 +213,21 @@
    d-item    (tag (\ p [(mdinl <p) (mdinl <>p)]) (seq d-term d-body))
    b-deflist (tag (\ p ['deflist p]) (many1 d-item))
    (b-para s y n)  ((tag (\ p ['para (mdinl (joins p " "))]) (many1 p-line)) s y n)
-   ; ⚠ THE LAST RESORT, and it is what makes mdread TOTAL: a line every block above
+   ; the last resort, and it is what makes mdread total: a line every block above
    ; refused. `starter` claims more lines than the blocks it names can parse -- a
    ; `--- text ---` rule that is not a rule, a `:   ` body with no term over it --
    ; and `p-line` then refuses them too, so the block loop used to STOP there and
    ; drop the whole rest of the document in silence. no error, a shorter page, and
-   ; nothing to notice it by. this takes exactly ONE line as a paragraph and lets
+   ; nothing to notice it by. this takes exactly one line as a paragraph and lets
    ; the loop go on, so no input can vanish.
-   ; ⚠ it cannot fire on anything a SHOWER writes -- mdshow shields a paragraph
+   ; it cannot fire on anything a shower writes -- mdshow shields a paragraph
    ; whose text would re-read as a block opener, closes every fence, and puts a
-   ; blank line between blocks -- so law 1 does not feel it. it fires on HAND
-   ; WRITTEN markdown alone, which is exactly where the loss was.
+   ; blank line between blocks -- so law 1 does not feel it. it fires on hand
+   ; written markdown alone, which is exactly where the loss was.
    b-line  (tag (\ p ['para (mdinl (strcat p))]) (seqs [(one nonl?) (span nonl?) eol]))
    mdblock (seqs [(skip (many blankline))
                   (alts [b-rule b-head b-fence b-quote b-bullets b-numbers b-deflist b-para b-line])])
-   ; YAML-ish FRONT MATTER, the markdown face of the meta block: head-only (a `---` fence
+   ; yaml-ish front matter, the markdown face of the meta block: head-only (a `---` fence
    ; anywhere else is a rule), so it is read before the block loop and shown before it.
    kvline (tag (\ p [(name <p) <>p])
                (seqs [(span (\ c (nonl? c && c != 58))) (skip (lit ": ")) (span nonl?) eol]))
@@ -245,7 +245,7 @@
                   'em ("*" + mdi <>x + "*")
                   'link ("[" + mdi <>x + "](" + <>>x + ")")
                   "")
-   ; a paragraph whose first characters would re-read as another block wears ONE backslash --
+   ; a paragraph whose first characters would re-read as another block wears one backslash --
    ; the escape leaf takes it back off, so law 1 survives a paragraph that starts "- " or "# ".
    (shield s) (two? (runp starter (endnl s)) ? ("\\" + s) s)
    (qpre s)   (strcat (map (ln \ tally ln ? ("> " + ln + "\n") ">\n") (splitnl s)))
@@ -336,10 +336,10 @@
    (htread t) (bmrg (runp (seqs [(many h-block) hws]) t)))
 
 ; ---------------------------------------------------------------- roff (man), show
-; the third surface, and a SMALLER one: roff's man macros carry sections two deep, literal
-; blocks with no language, and no rule or hyperlink at all. so the ROFF DOMAIN is the
+; the third surface, and a smaller one: roff's man macros carry sections two deep, literal
+; blocks with no language, and no rule or hyperlink at all. so the ROFF domain is the
 ; man-page-shaped docs -- meta, head 1-2, para, fence with empty lang, quote, bullets,
-; numbers, deflist; text/strong/em/code inline. Law 1 holds THERE. Outside it rfshow stays
+; numbers, deflist; text/strong/em/code inline. Law 1 holds there. Outside it rfshow stays
 ; total and rfread normalizes in four stated ways, each asserted by the gate rather than
 ; left to be discovered: head >=3 lands at 2, a fence language is dropped, a rule vanishes,
 ; and a link flattens to its text with the url in \(la..\(ra (the man idiom for one).
@@ -350,7 +350,7 @@
                        (: c (s i) (g (i + 1) (acc + (c @ 92 "\\e" 45 "\\-" (string c)))))))))
            0 "")
    (rline s) (tally s && (s 0 = 46 || s 0 = 39) ? ("\\&" + s) s)       ; a leading . or ' is text
-   ; roff DOUBLE-SPACES after a period that ends an input line, so a paragraph emitted as one
+   ; roff double-spaces after a period that ends an input line, so a paragraph emitted as one
    ; long line loses its sentence spacing. break it one sentence per line -- the idiomatic man
    ; source shape, and lossless: the reader fills the lines back with a single space.
    (rsent s) ((: (g i st acc)
@@ -361,7 +361,7 @@
    (rfill s) (strcat (map (ln \ ln + "\n") (rsent s)))
    (rfi l)  (strcat (map rfi1 l))
    (rfi1 x) (<x @ 'text   (rq <>x)
-                  'code   ("\\f(CR" + rq <>x + "\\fR")     ; CR, not the deprecated CW: groff warns on that
+                  'code   ("\\f(CR" + rq <>x + "\\fR")     ; cr, not the deprecated cw: groff warns on that
                   'strong ("\\fB" + rfi <>x + "\\fR")
                   'em     ("\\fI" + rfi <>x + "\\fR")
                   'link   (rfi <>x + " \\(la" + rq <>>x + "\\(ra")
@@ -373,7 +373,7 @@
                  'head    ((<>x < 2 ? ".SH " ".SS ") + rfi <>>x + "\n")
                  'para    (".PP\n" + rfill (rfi <>x))
                  'fence   (".EX\n" + strcat (map (ln \ rline (rq ln) + "\n") (splitnl <>>x)) + ".EE\n")
-                 'quote   (".PP\n.RS\n" + rfshow <>x + ".RE\n")   ; the .PP spaces the display
+                 'quote   (".PP\n.RS\n" + rfshow <>x + ".RE\n")   ; the .pp spaces the display
                  'bullets (strcat (map (i \ ".IP \\(bu 2\n" + rline (rfi i) + "\n") <>x))
                  'numbers (rnums <>x 1)
                  'deflist (rdefs <>x)
@@ -381,12 +381,12 @@
    (rfshow d) (strcat (map rfb d)))
 
 ; ---------------------------------------------------------------- roff (man), read
-; roff FILLS, and that shapes this whole half: consecutive input lines join with a SPACE,
-; a font macro's arguments join with NOTHING (the alternating .BR/.RB/.IR/.RI) or with a
-; space (.B/.I) -- all three probed under groff, not remembered. so a PARAGRAPH is a RUN of
+; roff fills, and that shapes this whole half: consecutive input lines join with a space,
+; a font macro's arguments join with nothing (the alternating .BR/.RB/.IR/.RI) or with a
+; space (.B/.I) -- all three probed under groff, not remembered. so a paragraph is a run of
 ; lines, each contributing an inl fragment, and the block macros are what end a run. that is
 ; why this reader is line-oriented where the html one is tag-oriented: the surface is. it
-; reads the MACRO forms a hand-written page uses (.B/.I/.BR/.RB/.IR/.RI), not just the inline
+; reads the macro forms a hand-written page uses (.B/.I/.BR/.RB/.IR/.RI), not just the inline
 ; escapes rfshow emits -- doc/*.md were converted from hand-written pages by this reader.
 (: rfesc? (!= 92)                                       ; ordinary inline text runs to the next \
    rclose    (alts [(lit "\\fR") (lit "\\fP")])                ; \fP is "previous font" -- same thing here
@@ -403,7 +403,7 @@
    ; surface gives an unclaimed sigil. Without it the reader stops dead at the first one.
    rchar   (tag (\ p ['text (string <p)]) (one chr?))
    rcode   (tag (\ p ['code (plain <p)])
-           (seqs [(skip (alts [(lit "\\f(CR") (lit "\\f(CW")]))   ; CW is groff-deprecated, still read
+           (seqs [(skip (alts [(lit "\\f(CR") (lit "\\f(CW")]))   ; cw is groff-deprecated, still read
                   (pack (many (seq (notp rclose) (alts [resc rtext rchar])))) (skip rclose)]))
    ; the font cycle (span -> strong/em -> rfont -> rinls -> span) rides eta-expanded parsers
    (rfont o t) (tag (\ p [t <p]) (seqs [(skip (lit o)) (pack rinls) (skip rclose)]))
@@ -414,7 +414,7 @@
    rfinl       (mrg * (runp (many rspan)))
    rplain      (plain * mrg * runp (many (alts [resc rtext rchar]))))   ; escapes only, no fonts
 
-; the font MACROS: which fonts to cycle through, and whether the arguments take a space.
+; the font macros: which fonts to cycle through, and whether the arguments take a space.
 (: (rargs s)                                                  ; a macro's arguments, bare or "quoted"
    ((: (g i acc)
        (? (i >= tally s) (rev acc)
@@ -451,11 +451,11 @@
    r-th   (tag (\ p ['meta (mnorm (zipm metakeys (rargs <p)))]) (rmacl ".TH"))
    r-sh   (tag (\ p ['head 1 (rfinl (joins (rargs <p) " "))]) (rmacl ".SH"))
    r-ss   (tag (\ p ['head 2 (rfinl (joins (rargs <p) " "))]) (rmacl ".SS"))
-   ; a .PP with no filled run behind it is an EMPTY paragraph (the pages use one to space a
+   ; a .pp with no filled run behind it is an empty paragraph (the pages use one to space a
    ; display); `opt` gives it an empty payload, so it contributes no block at all.
    r-pp   (seqs [(skip (alts [(lit ".PP") (lit ".LP")])) (skip (span nonl?)) (skip (lit "\n"))
                  (opt (tag (\ p ['para <p]) r-filled))])
-   r-para (tag (\ p ['para <p]) r-filled)      ; text with no .PP -- after a .SH
+   r-para (tag (\ p ['para <p]) r-filled)      ; text with no .pp -- after a .SH
    r-tp   (tag (\ p [<p <>p])
                (seqs [(skip (lit ".TP")) (skip (span nonl?)) (skip (lit "\n")) r-fline r-filled]))
    r-dl   (tag (\ p ['deflist p]) (many1 r-tp))
@@ -469,7 +469,7 @@
                       (skip (alts [(lit ".EE") (lit ".fi")])) (skip (span nonl?)) (skip (lit "\n"))]))
    r-br    (skip (seqs [(lit ".br") (span nonl?) (lit "\n")]))   ; a break ends the run
    r-blank (skip (seqs [(span sp?) (lit "\n")]))
-   ; .RS recurses into the block loop, so it sits with it and stays eta-expanded
+   ; .rs recurses into the block loop, so it sits with it and stays eta-expanded
    (r-rs s y n) ((tag (\ p ['quote p])
                       (seqs [(skip (lit ".RS")) (skip (span nonl?)) (skip (lit "\n"))
                              (many r-block) (skip (lit ".RE")) (skip (span nonl?)) (skip (lit "\n"))])) s y n)

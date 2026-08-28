@@ -1,12 +1,12 @@
 ; --- lush 🐚 the word -- expansion: segments to fields ---
-; NO BRACKETS HERE: the runtime supplies the layer (see job.l for the cat law).
+; no brackets here: the runtime supplies the layer (see job.l for the cat law).
 ;
-; (sh-fields segs) -> the FIELDS a word becomes, POSIX order: tilde, then
-; parameter/command substitution, then IFS field splitting -- ONLY over
+; (sh-fields segs) -> the fields a word becomes, POSIX order: tilde, then
+; parameter/command substitution, then IFS field splitting -- only over
 ; expansion output, never literal text -- then glob, then quote removal (free:
 ; quotes never entered the text). a field grows as a run list ((text . live?)..)
 ; so quoting survives to the glob (glob.l's mask law); `seen` carries the
-; empty-word law out of band. parameters resolve shell vars (sh-vars) OVER the
+; empty-word law out of band. parameters resolve shell vars (sh-vars) over the
 ; environment; the positionals and specials ($@ $* $# $? $$ $0-9) live here,
 ; and "$@" in quotes fields one positional each (the passthrough law).
 ; ${x:-y} and kin ride ('vop . (name op text)) -- text re-enters through
@@ -22,22 +22,22 @@
    (sh-runsub x) (sh-chomp ("" + ((sh-subeval ()) x)))
 
    ; --- the love lane: a form's answer, and that answer as shell text -----------
-   ; lush IS love, so the evaluator is aboard and nothing is spawned.
+   ; lush is love, so the evaluator is aboard and nothing is spawned.
    ; (sh-loveval src) -> (1 . value) | ('err . (name . value)), cli.l's -e law:
-   ; every top-level datum off the string, MANY folding to one application (so
+   ; every top-level datum off the string, many folding to one application (so
    ; infix reads) and one staying as it is; 'torn is an unfinished shape. the run
    ; sits under a trap in urun's posture, so a bad form is a condition handed back
    ; and never a dead shell -- the torn case wears one too, so both render at one
-   ; door. ⚠ a RAISE is what a trap catches: a form calling `quit` still ends the
+   ; door. a raise is what a trap catches: a form calling `quit` still ends the
    ; process, exactly as `exit` does.
    (sh-loveval src)
      (: m (nom 0)                                 ; a fresh nom: 'torn, id?-safe
         (rdl x acc) (sound x @ 'torn       m
                                (d >< rest) (rdl rest (d >< acc))
                                _           (sh-rev acc))
-        ; ⚠ ^m, the PIN: a bare `m` in a pattern would BIND and take every answer.
+        ; ^m, the pin: a bare `m` in a pattern would bind and take every answer.
         ; the nom is read from outside and the arm asks for that value alone.
-        ; ⚠ [] is the EMPTY CHAIN, exactly; a `()` arm would fit anything (pat.l)
+        ; [] is the empty chain, exactly; a `()` arm would fit anything (pat.l)
         (trap (\ _ (rdl src () @ ^m ('err >< ('unfinished-form >< src))
                                  [] (1 >< ())
                                  ds (1 >< (ev 'ev (two? >ds ? ds <ds)))))
@@ -46,19 +46,19 @@
    (sh-lovesay c)                                 ; a love condition, on err, status 1
      (: _ (say err "lush: love: ") _ (print err <c) _ (say err " ")
         _ (print err >c) _ (put err 10) _ (flush err) 1)
-   ; a love value as shell text: a string IS its bytes, anything else prints in
+   ; a love value as shell text: a string is its bytes, anything else prints in
    ; love notation -- so a string round-trips usable and a list reads back sayable
    (sh-lovetext v) (? (string? v) v (show v))
    ; ${(FORM)} at expansion: the text, or "" and a word on err. a bad form is an
-   ; EMPTY expansion, never a torn word -- the seg is already lexed by the time we
+   ; empty expansion, never a torn word -- the seg is already lexed by the time we
    ; are here, so there is no line to fail and the shell has to stay sayable
    (sh-lovseg src)
      (sh-loveval src @ ('err >< c) (: _ (sh-lovesay c) "")
                       (_ >< v)     (sh-lovetext v)
                       _            "")
 
-   ; --- parameters: shell vars over env; specials; presence OUT OF BAND --------
-   ; (sh-vget nm) -> () unset | (1 . value) -- a tablet hit is a STRING (maybe
+   ; --- parameters: shell vars over env; specials; presence out of band --------
+   ; (sh-vget nm) -> () unset | (1 . value) -- a tablet hit is a string (maybe
    ; ""), the miss the (); string? tells them apart where net cannot
    (sh-vget nm)
      (? (nm = "?") (1 >< show (sh-status ()))
@@ -89,13 +89,13 @@
 
    ; --- $(( .. )): POSIX shell arithmetic --------------------------------------
    ; signed integer expressions over shell variables, with C's operators and C's
-   ; precedence. ONE precedence-climbing walk (ar-bin asks itself for the level
+   ; precedence. one precedence-climbing walk (ar-bin asks itself for the level
    ; above) rather than a function per rung. Every step answers (value . index
    ; past) or () for "not that", so a bad expression unwinds without a raise and
    ; exactly one message is said.
-   ; ⚠ A NAME'S VALUE IS ARITHMETIC TEXT, not a number: `x=1+1` makes $((x*2))
+   ; A NAME'S VALUE is arithmetic TEXT, not a number: `x=1+1` makes $((x*2))
    ; four. Hence the depth cap -- `a=b; b=a` would otherwise never land.
-   ; ⚠ AND NOTHING HERE ASKS ? OF A VALUE. love's truth is the SIGN, so -1 is
+   ; and nothing here asks ? of A VALUE. love's truth is the sign, so -1 is
    ; false and `(? b ..)` would read a negative divisor as a zero one. Every test
    ; below is written against `= 0`, and that is not a style choice.
    arerr (tablet 0)                             ; a said complaint: the top stays quiet
@@ -103,9 +103,9 @@
    (ar-bad msg) (: _ (pin arerr 0 1)
                     _ (? (peep arlive 0 1) (say err ("lush: arithmetic: " + msg + "\n")) 0)
                     ())
-   ; a RUNTIME complaint -- a value only this evaluation could know is wrong. In a
+   ; a runtime complaint -- a value only this evaluation could know is wrong. In a
    ; branch that did not take, there is no such value: `x != 0 && 100 / x` must
-   ; not divide. A SYNTAX complaint still fires there, because bash reads both
+   ; not divide. a syntax complaint still fires there, because bash reads both
    ; sides even where it runs one.
    (ar-rt msg) (peep arlive 0 1 ? (ar-bad msg) 0)
    (ar-dead th) (: old (peep arlive 0 1) _ (pin arlive 0 0)
@@ -142,7 +142,7 @@
         (? (0 = tally t) 0 (d = 0) (ar-bad "name nesting too deep") (ar-eval t (d - 1))))
    (ar-store nm v) (: _ (sh-setvar nm (show v)) v)
    ; --- the operators. love truncates // toward zero, which is C's division; >>
-   ; is C's arithmetic shift and wants the FLOOR, so it is spelled out.
+   ; is C's arithmetic shift and wants the floor, so it is spelled out.
    (ar-fdiv a b) (: q (a // b) (q * b = a ? q (a < 0 ? (q - 1) q)))
    (ar-apply o a b)
      (? (o = "+") (a + b)   (o = "-") (a - b)   (o = "*") (a * b)
@@ -156,9 +156,9 @@
         (o = "&") (a & b) (o = "^") (a ^ b) (o = "|") (a | b)
         (o = "**") (b < 0 ? (ar-rt "negative exponent") (b a))
         (ar-bad ("unknown operator " + o)))
-   ; tightest LAST, and the master list is longest-first so `<<` is never read as
+   ; tightest last, and the master list is longest-first so `<<` is never read as
    ; a `<` at the comparison rung.
-   ; ⚠ ** is the one rung that associates RIGHT (2**3**2 is 512, not 64), and the
+   ; ** is the one rung that associates right (2**3**2 is 512, not 64), and the
    ; only non-POSIX operator here -- bash and ksh both have it, and leaving it out
    ; would make a working script a syntax error rather than a portable one.
    arlv '(("||") ("&&") ("|") ("^") ("&") ("==" "!=") ("<=" ">=" "<" ">")
@@ -166,7 +166,7 @@
    arops '("**" "<<" ">>" "<=" ">=" "==" "!=" "&&" "||" "+" "-" "*" "/" "%"
            "<" ">" "&" "^" "|")
    (ar-op s n i) (foldl (\ a t (? (string? a) a (ar-at s n i t) t a)) () arops)
-   ; the assignment operators, longest first. ⚠ a lone = only when the next byte
+   ; the assignment operators, longest first. a lone = only when the next byte
    ; is not one, or `a == b` would assign.
    arasn '("<<=" ">>=" "*=" "/=" "%=" "+=" "-=" "&=" "^=" "|=")
    (ar-asnop s n i)
@@ -205,7 +205,7 @@
    (ar-bin s n i k d)
      (? (k >= tally arlv) (ar-un s n i d)
         (: r (ar-bin s n i (1 + k) d) (? !(two? r) () (ar-more s n r k d))))
-   ; one more operator at THIS rung, left-associating. && and || do not evaluate
+   ; one more operator at this rung, left-associating. && and || do not evaluate
    ; the side they do not need -- `x = 0 || 1 / x` is the whole reason.
    (ar-more s n r k d)
      (: j (ar-ws s n >r)
@@ -269,12 +269,12 @@
      (: n (tally src)
         r (ar-expr src n 0 d)
         (? !(two? r) () (: j (ar-ws src n >r) (j < n ? (ar-bad "trailing text") <r))))
-   ; ('ari . text) -> the value as shell text. A bad expression says so and stands
-   ; for NOTHING: "" carries the mistake into the next command, and an empty word
+   ; ('ari . text) -> the value as shell text. a bad expression says so and stands
+   ; for nothing: "" carries the mistake into the next command, and an empty word
    ; is at least a word a `[ ]` will complain about. 0 would just be wrong quietly.
-   ; ⚠ THE TEXT EXPANDS FIRST (POSIX): parameter and command substitution run over
+   ; the TEXT expands first (POSIX): parameter and command substitution run over
    ; it before a single operator is read, so `$(( $(wc -c < f) % 512 ))` is one
-   ; expression and not a syntax error. A bare name is left alone by that pass and
+   ; expression and not a syntax error. a bare name is left alone by that pass and
    ; reaches ar-vval as itself, which is how `$((n * 2))` still means n.
    (sh-arith src)
      (: _ (pin arerr 0 0) _ (pin arlive 0 1)
@@ -285,7 +285,7 @@
               "")))
 
    ; --- ${name<op>text}: the word text re-enters through sh-wordize ------------
-   (sh-textof segs)                             ; segs -> ONE string (no split/glob)
+   (sh-textof segs)                             ; segs -> one string (no split/glob)
      (foldl (\ a sg (: k <sg
                        (+ a (? (id? k 'lit) >sg
                                (id? k 'sq) >sg
@@ -391,11 +391,11 @@
         k <sg v >sg
         (? (id? k 'lit) [d (addrun r v 1) 1]
            (id? k 'sq)  [d (addrun r v 0) 1]
-           ; ${(..)} is ONE field, quiet like "${x}": a love answer is a value,
+           ; ${(..)} is one field, quiet like "${x}": a love answer is a value,
            ; not a chomped byte stream, so nothing here splits it on IFS or reads
            ; it for glob chars. splitting can be bought later; unsplitting cannot.
            (id? k 'lov) [d (addrun r (sh-lovseg v) 0) 1]
-           ; "": a real (seen) field even empty -- EXCEPT a lone "$@" over zero
+           ; "": a real (seen) field even empty -- except a lone "$@" over zero
            ; positionals, which contributes nothing (dqat's glue lane sets seen)
            (id? k 'dq)  (dqat v [d r (? (two? v) sn 1)])
            (id? k 'var) (: t (sh-vval v) (spl t 0 (tally t) d r sn))

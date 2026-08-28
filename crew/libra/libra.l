@@ -4,9 +4,9 @@
 ; lifts its header out as a document. one scanner (lib/lint.l) under both, so the
 ; gate and the doc lifter can never disagree about what a paren or a comment is.
 ;
-; usage:  libra FILE ..      weigh them: balance is the default verb, so a bare
+; usage:  libra file ..      weigh them: balance is the default verb, so a bare
 ;                            file list is the whole command
-;         libra doc FILE     its header as a document -- md, -ht html, -rf man
+;         libra doc file     its header as a document -- md, -ht html, -rf man
 ;     or: love -l crew/libra/libra.l ..
 ;
 ; settings come from lib/salt.l -- ~/.love/etc/libra.l, then ./.libra.l over it.
@@ -38,7 +38,7 @@
    ; --- the verbs ------------------------------------------------------------
    (rdf p) (: q (open p "r") (? q (: t (slurp q) _ (close q) [1 t]) ()))
 
-   ; BALANCE ALONE fails. the other rules SPEAK -- an editing aid, read by hand --
+   ; balance alone fails. the other rules speak -- an editing aid, read by hand --
    ; and nothing promotes one, so libra never refuses a file over a habit.
    (fatal? w) (id? <>>>w 'balance)
    (tally-fatal ws) (foldl (\ a w (? (fatal? w) (a + 1) a)) 0 ws)
@@ -88,7 +88,7 @@
 
    ; the prose is taken as written; three of its habits carry structure markdown
    ; would fill flat -- a `--- name ---` banner is a heading, an indented run is a
-   ; fence because its alignment is the content, and a leading ⚠ is bolded.
+   ; fence because its alignment is the content, and a leading is bolded.
    (dind s) (: n (tally s) (g i) (? ((i < n) && ((s i = 32) || (s i = 9))) (g (i + 1)) i) (g 0))
    (ddashy? c) ((c = 45) || (c = 32))
    ; `--- name ------------` -> [1 "name"]; dashes both sides are marker and padding

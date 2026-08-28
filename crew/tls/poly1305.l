@@ -3,23 +3,23 @@
 ; the arithmetic is a polynomial evaluated mod 2^130 - 5: for each 16-byte block,
 ; h = (h + block) * r, and the tag is h + s. love has bignums and `%`, so the
 ; whole thing would fit in ten lines -- and would leak `r` through the timing of
-; every multiply and every reduction. `r` is SECRET and a forged tag is the whole
-; game, so this takes the long road instead: FIVE 26-BIT LIMBS, the shape
+; every multiply and every reduction. `r` is secret and a forged tag is the whole
+; game, so this takes the long road instead: five 26-bit limbs, the shape
 ; poly1305-donna wears, where the modulus is folded into the multiply as *5 and
 ; the reduction is a fixed carry chain with no branch and no division.
 ;
-; ⚠ THE MAGNITUDE BOUND IS THE INVARIANT, and it is what makes this both correct
+; the magnitude bound is the invariant, and it is what makes this both correct
 ; and constant-time. every limb stays under 2^26, so a product is under 2^52 and
-; the five-term sum under 2^57 -- inside a CHARM, where love's `*` and `+` are
+; the five-term sum under 2^57 -- inside a charm, where love's `*` and `+` are
 ; exact (nothing to wrap) and single-tier (nothing promotes to a sun or a big).
-; the bound depends only on the SHAPE of the sum, never on the values, so the
+; the bound depends only on the shape of the sum, never on the values, so the
 ; tier is data-independent and so is the cost. widen a limb and you lose both at
 ; once, silently: the arithmetic would still be right, and the timing would start
 ; talking. re-derive the bound before changing any mask here.
 ;
-; ⚠ and the final conditional subtract is a MASK, never a `?`. `(>> j4 63)` is
+; and the final conditional subtract is a mask, never a `?`. `(>> j4 63)` is
 ; -1 when h < p and 0 otherwise (`>>` is arithmetic, so it propagates the sign),
-; so both branches are always computed and one is selected by AND/OR. a `?` here
+; so both branches are always computed and one is selected by and/or. a `?` here
 ; would be a branch on the accumulator, which is a branch on the message and the
 ; key together.
 ;
@@ -30,7 +30,7 @@
    hib 16777216                              ; 2^24, the high bit a full block carries
 
    ; --- the key: r clamped into five limbs, s left as four words ------------------
-   ; the masks ARE rfc 8439 §2.5.1's clamp (r &= 0x0ffffffc0ffffffc0ffffffc0fffffff),
+   ; the masks are rfc 8439 §2.5.1's clamp (r &= 0x0ffffffc0ffffffc0ffffffc0fffffff),
    ; folded into the split so no separate clamping step can be forgotten.
    (po-r key)
     (: t0 (le32 key 0) t1 (le32 key 4) t2 (le32 key 8) t3 (le32 key 12)
@@ -86,7 +86,7 @@
        a4 (h4 + c3) c4 (a4 >> 26) i4 (a4 & m26)
        a0 (h0 + c4 * 5) c0 (a0 >> 26) i0 (a0 & m26)
        j1 (i1 + c0)
-       ; g = h - p, computed as h + 5 - 2^130. j4 goes NEGATIVE exactly when h < p.
+       ; g = h - p, computed as h + 5 - 2^130. j4 goes negative exactly when h < p.
        b0 (i0 + 5)  k0 (b0 >> 26) n0 (b0 & m26)
        b1 (j1 + k0) k1 (b1 >> 26) n1 (b1 & m26)
        b2 (i2 + k1) k2 (b2 >> 26) n2 (b2 & m26)
