@@ -282,7 +282,7 @@ $(moon_d)/k_q_%.o: $R/crew/quay/%.c $(moon0_dep)
 $(moon_d)/kvec.o: $(ko)/$(hosta)/mkvec.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $(boot_love) -l $< -n -e '(lay-vec "$@" "$(hosta)")' && test -s $@
+	@LOVE_NO_IMAGE= $(boot_love) -l $< -q -e '(lay-vec "$@" "$(hosta)")' && test -s $@
 $(ho)/love $(ho)/love.cand: $(kart_o)
 
 # l.o carries the version string; recompile it when the id changes. ⚠ the -D is what MAKES
@@ -342,7 +342,7 @@ $(xd)/mkvec.l: $R/src/mkvec.l $(xklay_l)
 $(xd)/kvec.o: $(xd)/mkvec.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $(boot_love) -l $< -n -e '(lay-vec "$@" "$(xa)")' && test -s $@
+	@LOVE_NO_IMAGE= $(boot_love) -l $< -q -e '(lay-vec "$@" "$(xa)")' && test -s $@
 $(xd)/love: $(xkart_o)
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
@@ -350,7 +350,7 @@ $(xd)/love: $(xkart_o)
 $(k_lay_o) $(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m -l $< -n -e '(lay-$* "$@" "$a")' && test -s $@
+	@$m -l $< -q -e '(lay-$* "$@" "$a")' && test -s $@
 
 # the machine tail rides the host's own cat (flavour-neutral, one cut for every
 # consumer); only the entry names the arch.
@@ -359,7 +359,7 @@ k_mksys_aarch64 = mksys-arm64
 $(k_tail_o): out/host/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m -l out/host/.mksys-cat.l -n -e "((from 'moon '$(k_mksys_$a)) \"$@\")" && test -s $@
+	@$m -l out/host/.mksys-cat.l -q -e "((from 'moon '$(k_mksys_$a)) \"$@\")" && test -s $@
 
 # --- qemu run targets ------------------------------------------------
 # KVM where the host offers it: TCG costs 6x on the boot (22s to the prompt against

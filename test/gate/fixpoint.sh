@@ -93,7 +93,7 @@ if [ -n "$gate_arch_c" ]; then
     esac
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
   done
-  LOVE_NO_IMAGE=1 "$d/love1" -l "out/free/$ha/mkvec.l" -n -e "(lay-vec \"$d/kvec.o\" \"$ha\")" \
+  LOVE_NO_IMAGE=1 "$d/love1" -l "out/free/$ha/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$ha\")" \
     || fail "love1 lay-vec"
   test -s "$d/kvec.o" || fail "love1 lay-vec laid an empty kvec.o"
 fi

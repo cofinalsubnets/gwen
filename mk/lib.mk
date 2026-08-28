@@ -102,5 +102,16 @@ out/lib/love_version.h: $(R)/VERSION
 	@printf '#define AiVersion "%s"\n' "$$(cat $(R)/VERSION)" > $@
 	@echo 'SH	'$@
 
+# the page a reader lands on -- `readelf -p .love.README` -- IS the command line's own
+# answer, so the two cannot drift: `love -v -h`, spelled as the two halves it prints.
+# love0 is what answers, because the readme is an input to the link that builds love and
+# only the bootstrap exists that early. the version comes off VERSION rather than out of
+# love0, which pins its own to "bootstrap"; the verb line is still love0's short roster.
+out/lib/readme.bin: $(love0) $(R)/love/cli.l $(R)/VERSION
+	@mkdir -p out/lib
+	@printf 'love %s\n' "$$(cat $(R)/VERSION)" > $@
+	@$(love0) -h </dev/null >> $@
+	@echo 'LOVE	'$@
+
 # the lcat'd headers are PRODUCED BY running love0, so re-lay them whenever it moves.
 $(lib_h) $(holo_h) out/lib/rune.h: $(love0)

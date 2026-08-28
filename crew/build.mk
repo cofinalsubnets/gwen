@@ -339,7 +339,7 @@ $(xd)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
 $(xd)/sys.o: out/host/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p $(dir $@)
-	@$(love0) -l out/host/.mksys-cat.l -n -e "((from 'moon '$(xmksys)) \"$@\")" && test -s $@
+	@$(love0) -l out/host/.mksys-cat.l -q -e "((from 'moon '$(xmksys)) \"$@\")" && test -s $@
 
 # ==== the fat container (seed-universal U1) ====
 # the twin SEED: the x-lane link wearing the artifact's clothes -- its own src
@@ -352,9 +352,9 @@ $(xd)/rt.o: $(rt_slice) tools/mkrt.l out/host/mooncc0.image $(love0)
 # artifact is fused, so an egg without them is not the binary the far machine
 # rebuilds. src/kernel.mk owns the list and the prereq line; a recipe expands
 # late, so reading it here is enough.
-$(xd)/love: $(xobjs) $(xd)/src.o $(xd)/rt.o assets/readme.bin
+$(xd)/love: $(xobjs) $(xd)/src.o $(xd)/rt.o out/lib/readme.bin
 	@echo 'MOON	'$@
-	@$(moonx) -pie $(xobjs) $(xkart_o) $(xd)/src.o $(xd)/rt.o -freadme=assets/readme.bin -o $@
+	@$(moonx) -pie $(xobjs) $(xkart_o) $(xd)/src.o $(xd)/rt.o -freadme=out/lib/readme.bin -o $@
 # dist-fat -- OPT-IN: ONE file, both texts, behind fatpack's sh prefix and its
 # content-named cache under ~/.love/fat. the native member rides baked; the
 # twin is an egg until U1.2 moves the bake to the extraction.

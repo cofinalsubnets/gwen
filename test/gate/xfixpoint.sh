@@ -65,7 +65,7 @@ for f in crew/moon/lib/math/*.c; do
   b=$(basename "$f" .c)
   moon1 -Icrew/moon/lib/math -Icrew/moon/include -c "$f" "$d/m_$b.o" || fail "love1 mooncc -c $f"
 done
-LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -n -e "((from 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
+LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((from 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
 
 # the kernel the artifact carries (src/kernel.mk's $(xkart_o)), rebuilt native
@@ -82,7 +82,7 @@ if [ -n "$gate_arch_c" ]; then
     esac
     moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
   done
-  LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$xd/mkvec.l" -n -e "(lay-vec \"$d/kvec.o\" \"$xa\")" \
+  LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$xd/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$xa\")" \
     || fail "love1 lay-vec"
   test -s "$d/kvec.o" || fail "love1 lay-vec laid an empty kvec.o"
 fi

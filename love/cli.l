@@ -12,7 +12,7 @@
 ; without it ev takes the value apart as a form to run. argv reaches the program's view
 ; before (run ()) fires, which a loaded program reads.
 ;
-; the exit door: every leave -- -v, -h, a bad -m, a missing operand, an unopenable file, a
+; the exit door: every leave -- a bad -m, a missing operand, an unopenable file, a
 ; torn -e, a verb's own status -- scares 'cli-leave, and the trap handler is the only
 ; `quit`. that lets a caller in the same image put its own trap on and get a charm where a
 ; spawn hands it a dead process. the handler is written twice because a leave lands in
@@ -30,19 +30,20 @@
                                (rev acc))
        (rdl s () @ ^m (say err "love: -e: unfinished form", cli-leave 2)
                    (d @ (a . u)) (ev $ atom? u ? a d))) ; many datums fold to one application
-    (bye s) (puts s, putc 10, flush out, cli-leave 0)
+    (say1 s) (puts s, putc 10)             ; -v and -h each print and keep walking argv
     (version _) ("love " + love-version)   ; _ arg: love has no nullary calls
-    (vwords (a . u)) (u @ (_ . _) (string a + " " + vwords u) (string a))
     (usage _)
-    ("usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-n] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]\n" +
+    ("usage: love [wake IMAGE] [-l FILE] [-e EXPR] [-q] [-m SIZE] [-v] [-h] [--] [VERB|FILE] [ARG ...]\n" +
      "  -l, --load FILE   preload FILE (read-eval) before the program\n" +
      "  -e, --eval EXPR   eval EXPR as one expression (infix works), print the answer\n" +
-     "  -n, --silent      with -e: do not print the answer\n" +
+     "  -q, --quiet       with -e: do not print the answer\n" +
      "  -m  --memory N    max heap in {k,m,g} default = 0m = unlimited\n" +
-     "  -v, --version     print the version and exit\n" +
-     "  -h, --help        print this help and exit\n" +
-     "  --                end of options; the rest are files\n" +
-     "verbs: " + (vwords * sort * keys $ from 'verbs 'tab) + "\n")
+     "  -v, --version     print the version\n" +
+     "  -h, --help        print this help\n" +
+     "  --                end of options; the rest are files, and none of them is stdin\n" +
+     "with no arguments at all love reads stdin; with arguments and no program it stops\n" +
+     "when the command line runs out, so -v and -h compose and neither is terminal.\n" +
+     "`love verbs` names the verbs this binary carries.\n")
     (need h '()) (say err $ "love: " + h + " needs an argument", cli-leave 2)
     K 1024 M 1048576 G 1073741824
     wordsz (charm? G ? 8 4)             ; 2^30 is a charm only where a fixnum is 62-bit
@@ -60,27 +61,33 @@
                    (v * (u || M) // wordsz)
                    (say err $ "love: " + h + ": not a size: " + s,
                     cli-leave 2)))
-    (pre a) (a @ (h . t)            ; -> (kind . rest): 'eval code.args / 'verb fn.args / 'file prog.args / 'stdin
+    ; -> (kind . rest): 'eval code.args / 'verb fn.args / 'file prog.args / 'stdin / 'none.
+    ; 'none is the command line running out with no program named: -v and -h are not
+    ; terminal, so `love -v -h` prints both, reaches the end, and leaves 0.
+    (pre a) (a @ (h . t)
       (h @ ("-l" || "--load")    (need h t, load1 <t, pre >t)
-           ("-v" || "--version") (bye (version 0))
-           ("-h" || "--help")    (bye (usage 0))
+           ("-v" || "--version") (say1 (version 0), pre t)
+           ("-h" || "--help")    (say1 (usage 0), pre t)
            ("-e" || "--eval")    (need h t, 'eval . t)
-           ("-n" || "--silent")  (pre t @ ('eval . r) ('evalq . r) r r)
+           ("-q" || "--quiet")   (pre t @ ('eval . r) ('evalq . r) r r)
            ; slot 0 of a fresh `tune` read, so the other knobs ride and the last -m wins. it
            ; lands at the next collection: the opening pool was sized before argv was read.
            ("-m" || "--memory")  (need h t, tune (pin (tune ()) 0 (size h <t)), pre >t)
            "--"                 (t @ (_ . _) ('file . t) '(stdin))
            (from 'verbs 'word h @ '() ('file . a) f ('verb . f . a)))
-      '(stdin))
-    p (pre >ln)                      ; runs -l preloads + -v/-h + -m; the program kind
+      '(none))
+    ; stdin is the answer to an EMPTY command line, or to `--` with nothing after it --
+    ; never to a line that carried flags and named no program.
+    p (two? >ln ? (pre >ln) '(stdin))   ; runs -l preloads + -v/-h + -m; the program kind
     k <p
     av (k @ ('eval || 'evalq || 'verb) >>p >p)   ; the program's view of argv
     run (\ _
       (k @ 'eval  (puts * show $ eval1 <>p, putc 10)  ; -e answers out loud through `show`, the
-           'evalq (eval1 <>p)         ; repl's face, not dot's raw one; -n mutes
+           'evalq (eval1 <>p)         ; repl's face, not dot's raw one; -q mutes
            'verb  (: r (<>p >>>p)     ; a verb takes the args after its name and answers a status,
                      (cli-leave $ charm0 r))  ; out the one door
            'file  (load1 <>p)
+           'none  ()                  ; the flags did their printing; leaving is the answer
            (reads in)))
     [av run]))
        () (\ a b (a == 'cli-leave ? (quit $ charm0 b) (scare a b))))

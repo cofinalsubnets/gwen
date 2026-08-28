@@ -235,7 +235,7 @@ out/host/.mksys-cat.l: $(mksys_l) out/host/.mksys-cat.list
 $(moon_d)/sys.o: out/host/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(boot_love) -l out/host/.mksys-cat.l -n -e "((from 'moon '$(mksys_e)) \"$@\")" && test -s $@
+	@LOVE_NO_IMAGE= $(boot_love) -l out/host/.mksys-cat.l -q -e "((from 'moon '$(mksys_e)) \"$@\")" && test -s $@
 ifneq ($(HCC),)
 # the HCC flavor is a foreign-cc differential, not the artifact: it links no
 # source blob and no readme ($(hcc) knows neither), and dist refuses it.
@@ -260,15 +260,15 @@ nolibc_src = $(wildcard crew/moon/lib/nolibc/*.c crew/moon/lib/nolibc/*.h \
 # grow it at the tail (src/image.c's bake_tail refuses otherwise), which it
 # does, the blob riding .rodata well below it.
 # -freadme rides only this link, so test_fixpoint's relink of $(moon_o) needs
-# no mirror of it. assets/readme.bin is the page a reader lands on --
+# no mirror of it. out/lib/readme.bin is the page a reader lands on --
 # `readelf -p .love.README`, mapped by nothing.
 # $(kart_o), the SHIPPED KERNEL's objects (src/kernel.mk owns the list and
 # their rules): the artifact is the fused binary now (plan C2) -- what boots
 # on metal is tools/kproject.l's projection of exactly this file.
-$(ho)/love $(ho)/love.cand: $(moon_o) out/host/src.o out/host/rt.o assets/readme.bin $(nolibc_src)
+$(ho)/love $(ho)/love.cand: $(moon_o) out/host/src.o out/host/rt.o out/lib/readme.bin $(nolibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_o) out/host/src.o out/host/rt.o -freadme=assets/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_o) out/host/src.o out/host/rt.o -freadme=out/lib/readme.bin -o $@
 endif
 
 # the man pages are written in doc/*.md and generated here through the lapiz lens: one

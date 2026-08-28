@@ -41,10 +41,16 @@ try() {
 # the lanes that WORK answer 0
 try 0 3        -e '1 + 2'
 try 0 262144   -e '2 3 4'                 # the tower: many datums fold to one application
-try 0 ''       -n -e '1 + 2'              # -n mutes the print and keeps the 0
+try 0 ''       -q -e '1 + 2'              # -q mutes the print and keeps the 0
 try 0 usage    -h
 try 0 'love '  -v
 try 0 1        -m 8m -e 1
+# -v and -h are NOT terminal and NOT exclusive: each prints, the walk carries on, and
+# the line running out with no program named is the 0. this is what readme.bin is cut
+# from, so a regression here silently rewrites the page baked into the binary.
+try 0 usage    -v -h                      # both, in the order given
+try 0 'love '  -h -v
+try 0 3        -v -e '1 + 2'              # a flag before a program does not eat it
 
 # ..and every failure lane answers ITS OWN number, which is the whole gate
 try 2 'not a size'        -m zz -e 1
