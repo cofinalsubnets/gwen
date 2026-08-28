@@ -436,6 +436,23 @@ until rung 6.
   archive differs and shifts every address after it. Judge parity by the
   meter and the section fingerprint, not the file hash.
 
+  the mag_mul +93M residual is EXPLAINED, not fixed: the two int length
+  params arrive in r2/r4 and the int-ride lane refuses both (r2 is a quad
+  arrival and the d128 body bars pq9; r4 fails the pool test), so they stay
+  cells and the inner loop-bound check pays one ldrsw per iteration
+  (+73.6M) where the dance homed them to x12/x14. The candidate lever — an
+  int param VACATING to a home seat with its entry sxtw, the way pointers
+  vacate — is a new verdict arm that would move x64 output too: a priced
+  decision on both ISAs, parked here.
+
+  rv64 pricing is BLOCKED before it starts: the hosted cross binary
+  (`make xa=riscv64 out/x-riscv64/love`) refuses in BOTH worlds on a
+  pre-existing gap — "no lane for a variable-length array on rv64"
+  (src/image.c image_bake) — so there is no corpus lane to meter. The
+  rv64 flip decision waits on that lane (or on choosing a smaller
+  representative corpus that runs under qemu-riscv64), not on the
+  allocator.
+
 ## the standing constraints (read before building)
 
 - the staging quad r0–r3 belongs to expression staging through rung 5; the
