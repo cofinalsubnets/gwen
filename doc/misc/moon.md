@@ -43,7 +43,7 @@ The dialect is not "C11-ish" by taste — it is what the target demands:
 ## the architecture
 
 `crew/moon/`, the kore discipline: pure engines with law files, a thin driver, one gate per
-piece. ~11k lines of love.
+piece. ~14k lines of love (law.l beside them).
 
 * **floor.l** — the C type floor: the laws that are neither syntax nor codegen (the type shapes,
   `tysz`/`tyalign`, and the typing door — promotions and the usual arithmetic conversions),
@@ -77,7 +77,7 @@ piece. ~11k lines of love.
   `('rmw ...)` reuse every store lane there is without evaluating its target twice. The ALU
   stays 64-bit —
   sound because signed overflow is UB — and widths bite only at memory and casts. This is also
-  where the register story lives.
+  where the register story lives (its own section below).
 * **clay.l** — C as love data (doc/misc/clay.md).
 * **stage.l** — the pipeline's stages, typed: each pass's signature (input stage → output
   stage). The moon gate checks gen.l *as data* against it, so a new pass declares its sig there
@@ -346,6 +346,46 @@ argv/envp/auxv before main — no link-time flag anywhere, the weak machinery IS
   so it is gated directly (`test_moon`'s `g=id(fork())` program).
 * ⚠ **rbx (holo r3) is callee-saved** and every function owns frame slot -8 for it; the gate
   links a mooncc callee against an `-O2` caller holding a loop bound live in ebx.
+
+## the register story (the one build)
+
+One world on every target since 2026-08-28 (the moon-ssa arc, closed): every seating
+decision is made ONCE, on the AST, before any machine form exists — then one build per
+function under those seats.
+
+* **alive** — the single analysis. Per-statement liveness (the wrapsets), call
+  crossings split hard/soft (a soft site costs its callee's TRANSITIVE hard count —
+  a spliced body brings its memcpys; a musttail never splices, the contract owes the
+  jump), the fn-level hard count as a PATH MAXIMUM (if takes its heavier arm, loops
+  weigh ×8), read/touch censuses for ranking, and the protocol-quiet and d128 flags.
+  One answer tuple feeds everything below.
+* **upar** — the param verdicts. A home-register identity rides free; an arrival
+  rides where staging can never clobber it (the arrival leaves the pool); a
+  protocol-quiet body lets a quad arrival (r0-r3) ride; an int/uint param rides its
+  arrival with one entry cvt while the file stays deep. d128 material refuses every
+  verdict on the ISA whose mul/div pin the rax:rdx pair — a 3-operand d128 ISA
+  keeps its verdicts.
+* **ulloc** — the locals allocator. Raw mention counts rank (the loop weight breaks
+  ties), disjoint spans share a seat, a name crossing a HARD call never takes a
+  caller-saved seat, and a pool floor keeps expressions from going dry.
+* **ubuild** — one build under the seats. The quad re-read (`qclob?`) verifies every
+  ridden r0-r3 arrival against the built forms — its only legitimate def is its own
+  entry cvt — and demotes ONCE on a surprise; the numbering guards (statement and
+  decl ticks against alive's totals) bare the whole build instead of guessing. A
+  memory sret and varargs take the bare spill build (one build there too, no seats).
+* **the armed shadow** — every home reserves a spill slot, but the wrap attaches at
+  call EMISSION, filtered by the statement's wrapset: a spliced call never wraps,
+  and a home dead across a call keeps its register.
+* **after the build** — sibcall (a musttail is owed its jump), the IR sweeps
+  (in-build on x64; a64 sweeps at the post-choice seam where the frame base is
+  settled fp, and `tailst` peels the dead straight-line stores a musttail leaves
+  behind), repack's per-def chains (x64: a store-to-loads chain promotes over its
+  OWN range, so one cell's call-free chain leaves the frame while its crossing
+  sibling keeps the cell), frame elision, and the cs upkeep.
+
+The economics that shaped this are doc/misc/moon-gauge.md (the two halves buy
+different things: the pool half buys cycles with instructions, the cs half buys
+latency at flat count); the arc that built it is doc/misc/plan/moon-ssa.md.
 
 ## sibcalls, and the flat stack
 

@@ -24,25 +24,29 @@ inflate and checks with crc32, every svalbard id is a sha256. They also span the
 shapes: crc32 carries no array across its loop, inflate is branches and a table, sha256
 is a 64-word array beside eight scalars.
 
-## the differentials (2026-08-23, x86-64, static musl on the native lanes)
+## the differentials (2026-08-28, x86-64, static musl on the native lanes)
 
-One quiet `make -C bench ccbench` fill, the shipped artifact on the mooncc lane:
+One quiet `make -C bench ccbench` fill, the shipped artifact (the one-build world) on
+the mooncc lane. ⚠ absolute ms are not comparable to older fills — the corpus grew with
+the merged suite and the inflate workload changed; the RATIOS are the record:
 
 | row | mooncc | gcc-musl | clang-musl | /gcc | /clang |
 |---|---:|---:|---:|---:|---:|
-| build | 18,336.3 ms | 9,970.7 | 6,208.9 | 1.84× | 2.95× |
-| corpus | 2,938.8 ms | 2,431.0 | 2,423.3 | **1.21×** | 1.21× |
-| chacha20 | 727.4 ms | 289.2 | 187.5 | **2.52×** | 3.88× |
-| poly1305 | 1,241.7 ms | 1,304.3 | 778.3 | **0.95×** | 1.60× |
-| inflate | 598.8 ms | 358.8 | 296.9 | 1.67× | 2.02× |
-| crc32 | 599.2 ms | 394.7 | 454.0 | 1.52× | 1.32× |
-| sha256 | 1,009.0 ms | 309.7 | 353.7 | **3.26×** | 2.85× |
+| build | 18,003.0 ms | 10,141.6 | 6,416.6 | 1.78× | 2.81× |
+| corpus | 5,200.1 ms | 4,434.4 | 4,597.4 | **1.17×** | **1.13×** |
+| chacha20 | 685.0 ms | 283.2 | 190.9 | 2.42× | 3.59× |
+| poly1305 | 1,153.4 ms | 1,340.5 | 791.8 | **0.86×** | 1.46× |
+| inflate | 98.0 ms | 55.2 | 57.2 | 1.78× | 1.71× |
+| crc32 | 583.3 ms | 408.9 | 436.0 | 1.43× | 1.34× |
+| sha256 | 784.0 ms | 304.4 | 352.4 | 2.58× | 2.22× |
 
-**poly1305 beats gcc.** ⚠ and clang is 15% slower than gcc on crc32 while much faster on
-poly — two optimizing compilers disagreeing by that much on adjacent rows is the scale of
-noise-plus-real-difference to hold in mind before reading a mooncc move of the same size.
+**poly1305 beats gcc by 14% now** (0.95× → 0.86×), the corpus tightened from 1.21× to
+1.17×/1.13×, and sha256 came down 3.26× → 2.58× across the SSA arc (the 2026-08-23
+fill is this section's git history). ⚠ two optimizing compilers still disagree by ~7%
+on adjacent rows (crc32) — that is the scale of noise-plus-real-difference to hold in
+mind before reading a mooncc move of the same size.
 
-## the same floors compiled STRAIGHT (ccnif, 2026-08-23)
+## the same floors compiled STRAIGHT (ccnif, 2026-08-28)
 
 `make -C bench ccnif` builds src/hash.c, src/deflate.c, src/inflate.c with every lane
 and reads them three ways — answers (a divergence is a miscompile, the only thing in the
@@ -51,15 +55,19 @@ the loop; ~20 s, so it is the per-edit instrument where ccbench is the per-rung 
 
 | ms (median of 5) | mooncc | gcc -O2 | clang -O2 | gcc -O0 |
 |---|---:|---:|---:|---:|
-| sha256 | 230 | 76 (3.03×) | 84 (2.74×) | 382 (0.60×) |
-| md5 | 76 | 45 (1.69×) | 50 (1.52×) | 138 (0.55×) |
-| crc32 | 17 | 12 (1.42×) | 13 (1.31×) | 23 (0.74×) |
-| cksum | 18 | 13 (1.38×) | 13 (1.38×) | 23 (0.78×) |
-| deflate | 200 | 130 (1.54×) | 136 (1.47×) | 322 (0.62×) |
-| inflate | 27 | 17 (1.59×) | 16 (1.69×) | 41 (0.66×) |
+| sha256 | 224 | 89 (2.52×) | 101 (2.22×) | 447 (0.50×) |
+| md5 | 88 | 52 (1.69×) | 57 (1.54×) | 163 (0.54×) |
+| crc32 | 18 | 14 (1.29×) | 16 (1.12×) | 27 (0.67×) |
+| cksum | 19 | 16 (1.19×) | 16 (1.19×) | 27 (0.70×) |
+| deflate | 208 | 153 (1.36×) | 159 (1.31×) | 378 (0.55×) |
+| inflate | 29 | 20 (1.45×) | 18 (1.61×) | 47 (0.62×) |
 
-mooncc beats gcc -O0 on every row. .text whole-file (mooncc/gcc-O2/clang-O2): hash.c
-10,326/9,636/8,187 · deflate.c 10,587/9,749/15,259 · inflate.c 11,799/6,821/10,281.
+(2026-08-28, the one-build world.) mooncc beats gcc -O0 on every row, and every ratio
+tightened across the SSA arc — sha256 3.03× → 2.52×, crc32 1.42× → 1.29×, cksum
+1.38× → 1.19×, deflate 1.54× → 1.36× (the 2026-08-23 fill is this section's git
+history). .text whole-file (mooncc/gcc-O2/clang-O2): hash.c 9,284/9,636/8,187 ·
+deflate.c 9,727/9,749/15,259 · inflate.c 10,605/6,837/10,296 — **mooncc's hash.c and
+deflate.c are smaller than gcc -O2's now**.
 
 ⚠ **only the whole-file .text number is a sound total** — gcc and clang inline statics out
 of existence (hash.c is 45 functions under mooncc, 34 under gcc), so summing shared names
@@ -68,7 +76,7 @@ prints per-function ratios instead, worst first; `sha_block` stays the widest ce
 clang's bytes beside the 3.03× clock — the static and dynamic readings name the same
 function).
 
-## where the build's ~18 s goes (measured 2026-08-22)
+## where the build's ~18 s goes (measured 2026-08-22, before love.c split into seven TUs — the shape holds, the per-file split is finer now)
 
 Direct per-step timing, not subtraction: `src/love.c` is 68% of the build, and 88% of
 that one compile is codegen (`cgen-obj`) — lex+cpp+parse 10%, object write 2%. The perf
@@ -82,27 +90,28 @@ codegen contain a CALL, and the splicer deletes dispatch *between* the ops of on
 there is no machine form for "enter an arbitrary closure". gen.l is calls almost all the
 way down; whatever pays its 11.5 s down, it is not that lane.
 
-## what the residency layer is worth (2026-08-23, the cut tree)
+## what the residency layer is worth (2026-08-28, the one-build world)
 
-`tools/moon-ablate.sh`, whole roster in one run, same-run base, quiet box (floor ±0.7%
-cycles). The cost of ABLATING a mechanism is what the mechanism buys:
+`tools/moon-ablate.sh`, whole roster in one run, same-run base, quiet box. The roster is
+the three surviving knobs — the fine-grained ones (lhome/homes/pcs and the old worlds)
+retired with the dance, and the one build owns their work. The cost of ABLATING a
+mechanism is what the mechanism buys:
 
 | ablated | cycles | insns | .text |
 |---|---:|---:|---:|
-| ralloc (operand pool dry) | +7.4% | +13.8% | +3.7% |
-| tpool (pool + homes) | +11.7% | +15.0% | +6.7% |
-| cs (callee-saved seats) | +8.6% | +2.8% | +3.0% |
-| lhome (locals homes) | +11.4% | +8.1% | +3.7% |
-| homes (param homes) | +0.9% | +1.0% | +1.5% |
-| pcs (param cs seats) | +1.1% | −0.0% | ±0 |
-| **tpool,cs (D: no residency)** | **+17.2%** | **+23.0%** | **+11.9%** |
+| ralloc (operand pool dry) | +2.7% | +7.2% | +2.0% |
+| tpool (pool + all seats) | +1.8% | +14.0% | +6.1% |
+| cs (callee-saved grants) | −2.4% | +1.1% | +2.7% |
+| **tpool,cs (no residency)** | **+4.7%** | **+20.6%** | **+10.1%** |
 
-Every knob pays. The vmap and the cs borrow are not in this table because they priced at
-or below zero and were **deleted** (rung 3, commits ee076adc + 8a53b06b — the vmap's
-census read −2.9% cycles and the cut banked it; the borrow's grant was provably empty and
-its one live effect was vetoing pcs). The survivors then absorbed the deleted mechanisms'
-work: lhome's insn price tripled across the cuts (+2.9% → +8.1%) because the homes carry
-the loop locals the keeps used to.
+⚠ read the INSNS column: each conf is a different binary, so the cycle column wears the
+cross-layout lottery (±4% — the how-to-measure section), and cs's −2.4% cycles beside
++1.1% insns is that lottery, not a finding. What the table says against the old world's
+(git history; +17.2% cycles / +23.0% insns for the whole layer then): the layer's
+instruction price holds (+20.6%) while its measured cycle price fell — the one build's
+seats sit where the old world's post-hoc mechanisms had to buy their way back in. The
+pre-cut history (vmap and csbor deleted at ≤0, lhome/homes/pcs priced separately) is
+this section's git history and the pare plan's rungs 2–5.
 
 ⚠ **the two halves have opposite economics, and it is the file's central finding**: the
 pool/homes half buys cycles with instruction count (B: +15% insns for its cycles, IPC
@@ -137,10 +146,10 @@ marginal (ablated-in) instructions retire at far above the baseline IPC, and wha
 when residency leaves is the load-queue stall — memory latency, not issue width. Cycles,
 on both ccbench rows, for anything claiming a speed effect.
 
-## the levers, read from today's emission (2026-08-23)
+## landed levers (2026-08-23, kept as method)
 
-Where the remaining ratios live, from disassembly of the current binaries — each lever
-names the evidence that prices it:
+Three finds from disassembly-first pricing — each names the evidence that funded it,
+and together they are the method the forward path below inherits:
 
 1. **inline const-prop — LANDED 2026-08-23 (the CONST bind).** An inlined body used to
    materialize every argument to a frame slot, constants included: sha_block's spliced
@@ -168,22 +177,58 @@ names the evidence that prices it:
    required zexts (after 64-bit ALU) stand. cc_block 619 → 486 insns; sha256
    204 → **195 ms** (2.57× gcc), crc32 1.42× → 1.33×, cksum 1.38× → 1.23×; .text
    −8,192 B. "Free on Zen" was wrong — same-register 32-bit movs are not eliminated.
-4. **chacha's residual is the rung-6 shape, not a gen.l rung.** cc_block's 16-word state
-   gets zero residency: 269 of 619 instructions touch the frame, every element op a
-   load-op-store round trip. The mechanism that chased this (the vmap) priced negative
-   and is deleted; the pare plan's answer is the flat.l valve — a hand kernel in holo's
-   neutral IR, built on demand, not another thousand lines of gen.l.
+4. **chacha's residual is the valve's shape, not a gen.l rung.** cc_block's 16-word state
+   gets zero residency: the element ops are load-op-store round trips. The mechanism that
+   chased this (the vmap) priced negative and is deleted; the pare plan's answer is the
+   flat.l valve — a hand kernel in holo's neutral IR, built on demand, not another
+   thousand lines of gen.l.
+
+## the path forward
+
+**Codegen quality**, each lever with the evidence that prices it (largest first is not
+the order — cheapest-instrument-first is):
+
+1. **cfoldir's 64-bit knowns + fold table** — the SSA oracle's residue: ~476 foldable
+   ALU ops and ~405 li-able movs corpus-wide, 100%/99% reachable by a LINEAR pass in
+   cfoldir's own shape (the "SSA question" section). The one funded coda item.
+2. **the int-vacate lever** — an int param taking a home seat with its entry sxtw/cvt,
+   the way pointers vacate. Prices on BOTH ISAs (it moves x64 output): a64's mag_mul
+   pays +73.6M exact insns today for its refused length params (the ldrsw per trip);
+   x64's int-heavy fleet is unexplored. The moon-ssa ledger carries the mechanism sketch.
+3. **the x64 rung-6 residuals**, recorded in the moon-ssa ledger: the gcp-class
+   path-frequency miss (~0.8% insns — the classifier's path maximum is static, and a
+   cold-if fn whose hot path never calls still refuses rides), the dead-home-def sweep,
+   the arg-seat aim declining onto armed homes, and the quad-vacate mov in tail fns.
+4. **the rv64 sweep port** — riscv is the one ELF target whose CHOSEN ir is unswept;
+   its rezx wants a producer table of its own (`rorw` SIGN-extends, the a64 table is
+   wrong as-is). Priced by the exact meter, which rv64 now has.
+5. **the flat.l valve** for the array-kernel shapes (chacha's 16-word state) — the
+   standing answer whenever a shape cannot be closed without another thousand lines.
+
+**Internal design**, the questions the cut left open:
+
+- **sweeps inside the arm build?** The post-choice seam was held by the deleted
+  rankers; only the fp-settling reason remains. Moving the a64 sweeps in-build would
+  simplify the pipeline to ONE sweep seam — priced by the exact meter, expect near-zero.
+- **alive's numbering discipline** — the livtab keys on statement ticks that must match
+  the build's walk exactly (the drift guards bare the build when they don't). A
+  structural key (the statement node itself) would retire the guard; cheap to try, easy
+  to falsify.
+- **repack's chains beyond x64** — a64/rv64 get tailst's straight-line peel but not the
+  per-def promotion; the exact meter prices whether the general chains pay there.
+- **the wasm relooper** (doc/misc/plan/moon-wasm.md) — its own plan; the one build
+  removed nothing it needs and the residency story it must NOT pay for is now one
+  mechanism instead of five.
 
 ## the arm64 lane rides the sweeps (2026-08-23)
 
 The sweep chain reaches arm64 — at the POST-CHOICE seam (before deadlab), not inside
-build. The seam is the whole design: the rankers price ir1 as built (nreads/ntouch), and
-an in-build sweep starves them — nreads on swept ir1 fell below the home gate and irDa's
-params shipped as slot traffic instead of homes, worse than either the old homed or the
-new swept shape. Post-choice, every pricing decision is exactly as before and the CHOSEN
-ir gets cleaned: pipeline output was the raw forms; it is now the swept forms with homes
-intact. On x64 the sweeps stay inside build — that regime is what the whole census
-priced, and 153/153 battery programs are byte-identical across this change.
+build. The seam was chosen because the old world's rankers priced ir1 as built and an
+in-build sweep starved them; the rankers are deleted now (the cut rung), so the seam is
+held by its second reason — the frame base is settled fp there (pre-a4ize an r4 is also
+the 5th argument) — and "sweeps inside the arm build" is an OPEN internal-design
+question, priced by the exact meter whenever someone wants it. On x64 the sweeps stay
+inside build.
 
 What moved: the passes took the target (`cfoldir g` / `stld g` / `addrfold g`), the frame
 base is `(fbase g)` (fp past a4ize — pre-a4ize an r4 is also the 5th argument, so the
@@ -242,15 +287,31 @@ The reading, and it is not the expected one:
   loop's window. Per-DEF ranges (each store-to-loads chain its own interval) are
   the SSA idea worth having; nothing else here needs the phi apparatus.
 
-So the priced answer to "generate SSA?": no -- widen cfoldir's fold table and
-knowns to 64 bits (linear, in-place, no new pass), and teach promotion per-def
-windows instead of the convex hull. Those two levers cover ~97% of what the
-oracle can see, and the second is where the loop-weighted mass is.
+So the priced answer to "generate SSA?" was no -- widen cfoldir's fold table
+and knowns to 64 bits (linear, in-place, no new pass), and teach promotion
+per-def windows instead of the convex hull. **The second lever is LANDED**: the
+SSA arc's rungs 1-3 gave repack per-def chains (full-word, narrow, and cs
+seats), and the arc went on to replace the whole two-build dance with the one
+build (doc/misc/plan/moon-ssa.md, closed 2026-08-28). The first lever --
+cfoldir's 64-bit knowns and fold table -- is still the open coda, priced at
+~476 folds + ~405 movs corpus-wide by this oracle.
 
 ## how to measure
 
 - `make -C bench ccnif` per gen.l edit (~20 s, no runtime in the loop); one quiet
   `make -C bench ccbench` fill per rung. Both cipher rows and the corpus, never one row.
+- **the exact meter (a64/rv64)**: a ~40-line qemu TCG plugin counts guest instructions
+  per translation block (inline adds into chunked scoreboards; PC→symbol through nm and
+  the PIE bias from `qemu_plugin_entry_code()`), deterministic to ~5ppm — no cycles
+  lottery, no sampling skid. `LOVE_NO_IMAGE=1 qemu-<arch> -plugin insnpc.so love <
+  corpus.l`, per-world binaries via `MOON_ABLATE=... make xa=<arch> out/x-<arch>/love`
+  (⚠ `love seed ARCH` drops the env; ⚠ rm the x-dir between worlds — env changes touch
+  no mtimes). It refused the first a64 flip that forms and .text had approved, and its
+  per-symbol attribution put the whole regression in two functions. ⚠ pin the TREE
+  STATE: a binary built before a merge wears different semantics, and the mask it wears
+  is a miscompile's. ⚠ a whole-artifact byte or .text compare can never close across a
+  source edit (the carried source moves every address) — diff disassembly MNEMONICS and
+  expect only the address-formers to move.
 - ⚠ ±4% is the floor on a ccbench wall-clock ratio, and **cross-fill clocks lie past it**:
   a row moved +12% against the previous day's fill with byte-identical machine code, and
   crc32 (untouched by the change) moved +4.5% the same way. When a cut's rows move, diff

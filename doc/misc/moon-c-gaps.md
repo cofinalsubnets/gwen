@@ -183,8 +183,8 @@ Four of them carry an edge worth knowing:
   asks the linker for the same boundary. ⚠ on a **local or a struct member it is still
   skipped in silence** — the row below.
 
-- **variable-length arrays** ride x64 and arm64 only; every other target says `no lane for a
-  variable-length array on <tgt>`. ⚠ a VLA with an *initializer* refuses everywhere
+- **variable-length arrays** ride x64, arm64 and riscv64; the thumb family says `no lane
+  for a variable-length array on <tgt>`. ⚠ a VLA with an *initializer* refuses everywhere
   (`parse error near =`) — C's own rule, not a gap. `__builtin_alloca` is absent on every
   target, so a VLA is the only dynamic frame allocation here.
 - **wide and prefixed literals** desugar to a *bounded compound literal* of the element type

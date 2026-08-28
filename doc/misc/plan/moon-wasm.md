@@ -22,7 +22,8 @@ address-assigning driver. Wasm breaks each assumption that driver rests on:
   (C `goto`, case labels at depth); wasm demands structured control flow. A
   relooper — or a dispatch-loop fallback — has no analogue anywhere in the tree.
 - **no registers.** Wasm has typed locals; the accumulator protocol and the whole
-  residency layer (vmap, homes, cs pool, the recovery passes) model a 16-register
+  residency layer (the one build's seats -- upar/ulloc off alive -- the pool,
+  and the cs grants) model a 16-register
   file with a callee-saved contract that stops meaning anything. And locals are
   not addressable, so the r4 frame decision inverts into an escape analysis
   (love.c takes addresses of locals via alloca 42 times). ⚠ the residency half of

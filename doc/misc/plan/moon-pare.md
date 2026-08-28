@@ -1,5 +1,12 @@
 # plan: paring gen.l back
 
+**ARC CLOSED.** Every rung landed or closed by observation; the flat.l valve
+(rung 6) is the standing release pattern. The knob roster below then shrank
+again when the SSA arc's cut rung deleted the dance (doc/misc/plan/moon-ssa.md):
+MOON_ABLATE keeps `ralloc tpool cs` only. Kept as the record of how the layer
+was priced.
+
+
 `crew/moon/gen.l` went 4,150 → 8,532 lines between 2026-07-19 and 2026-08-16, and the
 corpus row did not move across that span (1.21× clang on 2026-08-11, 1.19× on 2026-08-16).
 That reads as a month spent for nothing, and it is not what happened — chacha went ~23× →

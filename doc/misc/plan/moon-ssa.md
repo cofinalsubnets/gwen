@@ -1,8 +1,16 @@
 # the SSA backend — one allocator over exact ranges
 
+**ARC CLOSED 2026-08-28.** Rungs 0–7 landed, the one build is the only world on
+every target, and the cut rung deleted the dance (the closing entries below).
+The living design is doc/misc/moon.md's register story; the living measurements
+and the forward levers are doc/misc/moon-gauge.md. This file is the arc's
+chronological ledger — read the memory's arc-docs law: a mid-file "open" is
+usually resolved by a later entry.
+
 Drafted 2026-08-27, chosen (revisable). The measurement that funds it is
 doc/misc/moon-gauge.md "the SSA question, measured" (the oracle lives in
-doc/misc/proto/ssagap/); the history it answers is doc/moon-regalloc.md.
+doc/misc/proto/ssagap/); the history it answers is the archived regalloc
+ledger (`git show 14dc955c~1:doc/moon-regalloc.md`).
 
 ## why this arc
 

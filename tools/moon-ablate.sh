@@ -6,7 +6,7 @@
 # subtracted, median of N), and .text bytes. Deltas against the base row.
 #   sh tools/moon-ablate.sh [samples] [conf ..]
 # no confs: base ralloc tpool cs tpool,cs -- the gauge's A/B/C/D points.
-# knob names: ralloc tpool cs lhome homes pcs pdefcs pdef (gen.l's ablenv).
+# knob names: ralloc tpool cs (gen.l's ablenv; the old worlds' knobs retired with the dance).
 set -u
 R=$(cd "$(dirname "$0")/.." && pwd)
 cd "$R" || exit 1

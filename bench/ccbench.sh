@@ -90,7 +90,15 @@ fi
 # codegen or speed factor. Keeping it would bench a compiler's warning set, not its
 # throughput -- gcc's -Wall flags a benign construct in src/love.c (-Wmisleading-indentation)
 # that clang doesn't, and that shouldn't scratch it from a SPEED race.
-CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/core -I$R/out/lib"
+CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dai_tco=1 -fpic -I$ho -I$R -I$R/src -I$R/out/lib"
+# the hosted TU roster, mk/common.mk's spelling: love.c is seven files now, and
+# src/ is one folder -- the host set is what is left after the love, kernel and
+# per-ISA lanes take theirs
+love_tu="love ev io map snap num arr"
+host_cs=$(for f in "$R"/src/*.c; do b=$(basename "$f" .c)
+  case " $love_tu kmain sys blk doom " in *" $b "*) continue;; esac
+  case "$b" in x86_64_*|aarch64_*|uefi_*) continue;; esac
+  printf '%s\n' "$f"; done)
 # mk/common.mk's $(data_ld), which a bench link owes exactly as a host link does: the data
 # sentinels' tiling IS src/love.h's ai_typ, and ld left to itself keeps each love.data.N an
 # orphan in first-encountered order -- gcc emits love.data.7 first, so lvm_str lands
@@ -104,17 +112,18 @@ wall() { t0=$(date +%s.%N); ( eval "$1" ) >/dev/null 2>&1; t1=$(date +%s.%N)
 med() { i=0; while [ "$i" -lt "$SAMPLES" ]; do wall "$1"; echo; i=$((i+1)); done \
         | sort -n | awk '{v[NR]=$0} END{print v[int((NR+1)/2)]}'; }
 
-# -- gcc / clang: the ordinary lane. Compile the liblove.a translation units (src/love.c +
-#    am.c) and the host/*.c glob (main.c carries the egg), then link the objects. --
+# -- gcc / clang: the ordinary lane. Compile the love TUs + am.c and the host set
+#    (main.c carries the egg), then link the objects. --
 build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<binname>
   cc=$1; bin=$2; xf=$3; od=$WORK/o-$(basename "$bin")   # o- prefix: $bin itself lives in $WORK
   rm -rf "$od"; mkdir -p "$od/host"
   ( cd "$R" || exit 1
-    $cc $CFLAGS $xf -c src/love.c                    -o "$od/love.o" || exit 1
+    for b in $love_tu; do
+      $cc $CFLAGS $xf -c "src/$b.c" -o "$od/$b.o" || exit 1; done
     $cc $CFLAGS $xf -c crew/moon/lib/math/am.c -o "$od/am.o" || exit 1
-    for f in host/*.c; do b=$(basename "$f" .c)
+    for f in $host_cs; do b=$(basename "$f" .c)
       $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
-    $cc $CFLAGS $xf $LDFLAGS -o "$bin" "$od"/love.o "$od"/am.o "$od"/host/*.o ) || return 1
+    $cc $CFLAGS $xf $LDFLAGS -o "$bin" "$od"/*.o "$od"/host/*.o ) || return 1
 }
 
 # -- mooncc: the WHOLE toolchain in love, verbatim from `make test_raw`. mooncc -c each
@@ -139,9 +148,10 @@ mc() { env LOVE_NO_IMAGE= "$SEED" mooncc "$@"; }
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
-    mc -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c src/love.c "$od/love.o" || exit 1
-    for f in host/*.c; do b=$(basename "$f" .c)
-      mc -D ai_tco=1 -Iout/host -I. -Icore -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
+    for b in $love_tu; do
+      mc -D ai_tco=1 -D AiHaveVersionH -Iout/host -I. -Isrc -Iout/lib -c "src/$b.c" "$od/$b.o" || exit 1; done
+    for f in $host_cs; do b=$(basename "$f" .c)
+      mc -D ai_tco=1 -D AiHaveVersionH -Iout/host -I. -Isrc -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
     # no nolibc object: the link owes its symbols and the driver supplies them
     # member by need, so the dead areas never arrive. ⚠ ccsize/ccdead therefore
     # read mooncc's libc off the BINARY's complement, not off a nolibc.o.
