@@ -45,15 +45,15 @@
 ; module and splices it. a module already registered (the gate, a host embedding) is
 ; left alone. `root` and `bn` are exactly the kind of name a leak makes dangerous, and
 ; they stay wherever this file's layer is -- never orth.
-(: (bn p)   (: n (tally p)
+(: (bn p)   (: n #p
                (go k r) (k < n ? (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
                (go 0 0))
-   (dirof p) (: n (tally p)
+   (dirof p) (: n #p
                 (go k r) (k < n ? (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p 0 r))
                 (go 0 0))
-   (findme (a >< u)) ; the word that named this file, if any
+   (findme (a . u)) ; the word that named this file, if any
     (bn a @ ("papel" || "papel.l") a (findme u))
-   (up p) (: n (tally p) (0 < n ? (dirof (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
+   (up p) (: n #p (0 < n ? (dirof (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
    ; ..and follow a SYMLINK to it. `papel` installs the way cook does, as a link on PATH
    ; pointing at this source file, so the name we were invoked by lives in ~/.local/bin
    ; and the siblings do not. readlink is what turns the link back into the source tree.
@@ -85,10 +85,10 @@
 ; --- little utils (papel's own: it leans on lapiz for DOCUMENTS, not for lists) --------
 (: (strcat l)    (foldl (+) "" l)
    (joins l sp)  (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
-   (ends? s t)   (: n (tally s) m (tally t) ((m <= n) && (snip s (n - m) n = t)))
-   (sub? s t)    (: n (tally s) m (tally t)
+   (ends? s t)   (: n #s m #t ((m <= n) && (snip s (n - m) n = t)))
+   (sub? s t)    (: n #s m #t
                     ((: (g i) (? ((i + m) <= n) (? (snip s i (i + m) = t) 1 (g (i + 1))) 0)) 0))
-   (base p)      (: n (tally p)
+   (base p)      (: n #p
                     (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
                     (go 0 0))
    (numof s)     ((: (g i acc) (? ((i < tally s) && (48 <= s i) && (s i <= 57))
@@ -102,7 +102,7 @@
    ; care which -- a real failure surfaces at the first open for writing). it walks the
    ; path rather than splitting it, so a LEADING SLASH survives: splitting on / and
    ; rejoining quietly turns /tmp/x into tmp/x, and the whole build then writes nowhere.
-   (mkdirp p)    (: n (tally p)
+   (mkdirp p)    (: n #p
                     (go i) (? (i < n) (: _ (? ((0 < i) && (p i = 47)) (mkdir (snip p 0 i) 493) 0)
                                           (go (i + 1)))
                               (? (0 < n) (mkdir p 493) 0))
@@ -119,7 +119,7 @@
                                        (? ((c = 45) && (prev = 45)) (g (i + 1) acc c)
                                           (g (i + 1) (acc + string c) c)))
                                     acc)) 0 "" 0)
-   (trimd s)  (: n (tally s)
+   (trimd s)  (: n #s
                  a ((: (f i) (? ((i < n) && (s i = 45)) (f (i + 1)) i)) 0)
                  b ((: (f i) (? ((a < i) && (s (i - 1) = 45)) (f (i - 1)) i)) n)
                  (snip s a b))
@@ -150,7 +150,7 @@
                               k (peep seen s0 0)
                               sn (? (0 < k) (s0 + "-" + show k) s0)
                               _ (pin seen s0 (k + 1))
-                              (g >l seen ([<>b sn lab] >< acc)))
+                              (g >l seen ([<>b sn lab] . acc)))
                            (g >l seen acc)))))
                d (tablet 0) ())
    ; the title: the first head-1, else the meta `title`, else the caller's fallback.
@@ -160,7 +160,7 @@
                          (0 < tally mt) mt
                          dflt))
    ; the blurb: the first paragraph, clipped on a word boundary. () when the page has none.
-   (clip s n) (: t (tally s)
+   (clip s n) (: t #s
                  (? (t <= n) s
                     (: b ((: (f i) (? ((0 < i) && !(s (i - 1) = 32)) (f (i - 1)) i)) n)
                        (snip s 0 (? (0 < b) (b - 1) n) + "..."))))
@@ -197,8 +197,8 @@
    (pshow d hs) ((: (g l hs acc)
                     (? !(two? l) (joins (rev acc) "\n")
                        (: b <l
-                          (? (head? b) (g >l >hs (hhead <(<hs) (<>(<hs)) <>>b >< acc))
-                             (g >l hs (htb b >< acc))))))
+                          (? (head? b) (g >l >hs (hhead <(<hs) (<>(<hs)) <>>b . acc))
+                             (g >l hs (htb b . acc))))))
                  d hs ())
    ; the toc: the same heads, minus the one that became the title. a page with fewer than
    ; two of them gets none -- a one-item contents is furniture, not navigation.
@@ -319,7 +319,7 @@ table{border-collapse:collapse}
       self (peep conf 'self "")
       dep (stat self ? [self])
       dsts (map (s \ out + "/" + outname s) srcs)
-      _ (each srcs (s \ recipe (out + "/" + outname s) (s >< dep)
+      _ (each srcs (s \ recipe (out + "/" + outname s) (s . dep)
                          [(_ \ render conf known s (out + "/" + outname s))]))
       sheet (out + "/papel.css")
       _ (recipe sheet dep [(_ \ spitf sheet css)])

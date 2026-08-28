@@ -38,28 +38,28 @@
                    (: mp <p1 mq <p2
                       (? (mkey mp = mkey mq)
                          (: c (cnorm (mco mp + mco mq)) r (padd >p1 >p2)
-                            (c = 0 ? r ((c >< mkey mp) >< r)))
+                            (c = 0 ? r ((c . mkey mp) . r)))
                          (keylt (mkey mq) (mkey mp))
-                         (mp >< padd >p1 p2)
-                         (mq >< padd p1 >p2))))
-   (pneg p) (map (mm \ -(mco mm) >< mkey mm) p)
+                         (mp . padd >p1 p2)
+                         (mq . padd p1 >p2))))
+   (pneg p) (map (mm \ -(mco mm) . mkey mm) p)
    (psub p1 p2) (padd p1 (pneg p2))
-   (zadd a b) (tally a ? ((<a + <b) >< zadd >a >b))
-   (mmul a b) (cnorm (mco a * mco b) >< zadd (mkey a) (mkey b))
-   (mrow a p2) (tally p2 ? (mmul a <p2 >< mrow a >p2))
+   (zadd a b) (tally a ? ((<a + <b) . zadd >a >b))
+   (mmul a b) (cnorm (mco a * mco b) . zadd (mkey a) (mkey b))
+   (mrow a p2) (tally p2 ? (mmul a <p2 . mrow a >p2))
    (pmul p1 p2) (? (0 = tally p1) () (padd (mrow <p1 p2) (pmul >p1 p2)))
-   (setn l n x) (n = 0 ? (x >< >l) (<l >< setn >l (n - 1) x))
-   (deln l n) (n = 0 ? >l (<l >< deln >l (n - 1)))
-   (zeros n) (n = 0 ? () (0 >< zeros (n - 1)))
-   (pconst n c) (: k (cnorm c) (? (k = 0) () [(k >< zeros n)]))
-   (pvar n k) [(1 >< setn (zeros n) k 1)])
+   (setn l n x) (n = 0 ? (x . >l) (<l . setn >l (n - 1) x))
+   (deln l n) (n = 0 ? >l (<l . deln >l (n - 1)))
+   (zeros n) (n = 0 ? () (0 . zeros (n - 1)))
+   (pconst n c) (: k (cnorm c) (? (k = 0) () [(k . zeros n)]))
+   (pvar n k) [(1 . setn (zeros n) k 1)])
 
 ; --- the derivative and the determinant ------------------------------------
 ; pd differentiates monomial by monomial (padd of singletons keeps the
 ; canonical order); pdet expands along the first row, minors by deln.
 (: (pd p v) (tally p ?
              (: mm <p e (mkey mm v) r (pd >p v)
-              (e = 0 ? r (padd [(cnorm (mco mm * e) >< setn (mkey mm) v (e - 1))] r))))
+              (e = 0 ? r (padd [(cnorm (mco mm * e) . setn (mkey mm) v (e - 1))] r))))
    (pdet rows) (? (1 = tally rows) <<rows
                   (: (go r0 j sg)
                       (tally r0 ?
@@ -81,8 +81,8 @@
    (pdeg p) <(mkey <p)
    (pmonic p) (? (0 = tally p) ()
                  (: v (cinv (mco <p))
-                    (map (m \ cnorm (v * mco m) >< mkey m) p)))
-   (pquo a b) [(cnorm (mco <a * cinv (mco <b)) >< [(pdeg a - pdeg b)])]
+                    (map (m \ cnorm (v * mco m) . mkey m) p)))
+   (pquo a b) [(cnorm (mco <a * cinv (mco <b)) . [(pdeg a - pdeg b)])]
    (pmod a b) (? (0 = tally a) ()
                  (pdeg a < pdeg b) a
                  (pmod (psub a (pmul (pquo a b) b)) b))
@@ -96,7 +96,7 @@
                (go w y) (0 != pdeg w ?
                          (: z (psub y (pd w 0))
                             a (pgcd w z)
-                          (a >< go (pquot w a) (pquot z a))))
+                          (a . go (pquot w a) (pquot z a))))
                (? (0 = tally f || 0 = pdeg f) ()
                 (: g (pgcd f (pd f 0))
                  (go (pquot f g) (pquot (pd f 0) g))))))
@@ -112,13 +112,13 @@
 ; re-primitivized). a degree-0 remainder means coprime in x -- the 1 poly.
 ; the answer is content-gcd times primitive-gcd, lex-lead normalized to 1
 ; by pmonic. both faces load, answers raw, as with pgcd.
-(: (ksub a b) (tally a ? ((<a - <b) >< ksub >a >b))
-   (mcof p k) (map (m \ mco m >< >(mkey m))
+(: (ksub a b) (tally a ? ((<a - <b) . ksub >a >b))
+   (mcof p k) (map (m \ mco m . >(mkey m))
                    (filter (m \ k = <(mkey m)) p))
-   (mlift c k) (map (m \ mco m >< k >< mkey m) c)
+   (mlift c k) (map (m \ mco m . k . mkey m) c)
    (me1s p) (? (0 = tally p) ()
                (: e <(mkey <p)
-                  (e >< me1s (filter (\ m !(e = <(mkey m))) >p))))
+                  (e . me1s (filter (\ m !(e = <(mkey m))) >p))))
    (mdiv f d) (? (0 = tally f) ()
                  (: t [(link (cnorm (mco <f * cinv (mco <d)))
                              (ksub (mkey <f) (mkey <d)))]
@@ -136,7 +136,7 @@
    (mgcd a b) (: x (load a) y (load b)
                  (go f g) (: r (mprem f g)
                              (? (0 = tally r) g
-                                (0 = pdeg r) (pconst (tally (mkey <g)) 1)
+                                (0 = pdeg r) (pconst #(mkey <g) 1)
                                 (go g (mpp r))))
                  (? (0 = tally x) (pmonic y)
                     (0 = tally y) (pmonic x)
@@ -159,21 +159,21 @@
 (: (pden c) (coin? c ? <>(load c) 1)
    (pint f) (: cs (filter (m \ coin? (mco m)) f)
              (0 = tally cs ? f
-              (pint (pmul [(pden (mco <cs) >< '(0))] f))))
+              (pint (pmul [(pden (mco <cs) . '(0))] f))))
    (divs n) (: m (n < 0 ? -n n)
                (go i acc) (? (i * i > m) acc
                              (0 = (m % i))
-                             (go (i + 1) (i >< (cnorm (q m i) >< acc)))
+                             (go (i + 1) (i . (cnorm (q m i) . acc)))
                              (go (i + 1) acc))
                (go 1 ()))
    (flat ls) (tally ls ? (<ls + flat >ls))
    (peval f r) (0 = tally f ? 0
                 (cnorm ((mco <f * ((<(mkey <f)) r)) + peval >f r)))
    (plast f) (0 = tally >f ? <f (plast >f))
-   (plin r) (r = 0 ? [(1 >< '(1))] [(1 >< '(1)) (cnorm (0 - r) >< '(0))])
+   (plin r) (r = 0 ? [(1 . '(1))] [(1 . '(1)) (cnorm (0 - r) . '(0))])
    (rroots f) (: g (pint f)
                  (? ((0 = tally g) || (0 = pdeg g)) ()
-                    (0 < <(mkey (plast g))) (0 >< rroots (pquot g [(1 >< '(1))]))
+                    (0 < <(mkey (plast g))) (0 . rroots (pquot g [(1 . '(1))]))
                     (: cds (: ns (divs (mco (plast g)))
                               ds (divs (mco <g))
                               rs (flat (map (nn \ map (dd \ cnorm (q nn dd)) ds) ns))
@@ -181,7 +181,7 @@
                        (go cs h acc)
                        (? (0 = tally cs) acc
                           (0 < pdeg h && 0 = peval h <cs)
-                          (go >cs (pquot h (plin <cs)) (<cs >< acc))
+                          (go >cs (pquot h (plin <cs)) (<cs . acc))
                           (go >cs h acc))
                        (sort (go cds g ())))))
    (proots p) (: fs (psff (load p))
@@ -207,12 +207,12 @@
    (zcen m x) (: r (zmod m x) (m < (r + r) ? (r - m) r))
    (vtrim v) (tally v ?
               (: r (vtrim >v)
-               (0 = tally r && 0 = <v ? () (<v >< r))))
+               (0 = tally r && 0 = <v ? () (<v . r))))
    (vpadn n v) (v + ((n - tally v) (link 0) ()))
    (fvshift k v) (k (link 0) v)
    (fvadd m a b) (vtrim (: (go a b) (? (0 = tally a) b
                                        (0 = tally b) a
-                                       (zmod m (<a + <b) >< go >a >b))
+                                       (zmod m (<a + <b) . go >a >b))
                            (go a b)))
    (fvneg m a) (map (\ x (zmod m (0 - x))) a)
    (fvsub m a b) (fvadd m a (fvneg m b))
@@ -241,15 +241,15 @@
                         [<e3 <>>e3
                          (fvsub m <>e3 (fvmul m <dm <>>e3))]))
    (fder m v) (vtrim (: (go l i) (tally l ?
-                                  (zmod m (<l * i) >< go >l (i + 1)))
+                                  (zmod m (<l * i) . go >l (i + 1)))
                       (go >v 1)))
-   (ivadd a b) (? (0 = tally a) b (0 = tally b) a (<a + <b >< ivadd >a >b))
+   (ivadd a b) (? (0 = tally a) b (0 = tally b) a (<a + <b . ivadd >a >b))
    (ivneg a) (map negate a)
    (ivsub a b) (vtrim (ivadd a (ivneg b)))
    (ivscale c v) (map (x \ c * x) v)
    (ivmul a b) (tally a ?
                 (ivadd (ivscale <a b) (fvshift 1 (ivmul >a b))))
-   (rng a b) (a <= b ? (a >< rng (a + 1) b))
+   (rng a b) (a <= b ? (a . rng (a + 1) b))
    (lat l i) (i = 0 ? <l (lat >l (i - 1)))
    (tovec f) (: n (pdeg f)
                 (co i) (: ms (filter (m2 \ i = <(mkey m2)) f)
@@ -257,28 +257,28 @@
                 (map co (rng 0 n)))
    (topoly v) (: (go l i acc)
                   (0 = tally l ? acc
-                   (go >l (i + 1) (0 = <l ? acc ((<l >< [i]) >< acc))))
+                   (go >l (i + 1) (0 = <l ? acc ((<l . [i]) . acc))))
                (go v 0 ()))
    (mflip rs) (? (0 = tally <rs) ()
-                 (map (\ r <r) rs >< mflip (map (\ r >r) rs)))
+                 (map (\ r <r) rs . mflip (map (\ r >r) rs)))
    (msubI m rs) (: (dec r i) (: (go l k)
                                 (? (0 = tally l) ()
                                    (link (? (k = i) (zmod m (<l - 1)) <l)
                                          (go >l (k + 1))))
                                 (go r 0))
                    (go2 l i) (? (0 = tally l) ()
-                                (dec <l i >< go2 >l (i + 1)))
+                                (dec <l i . go2 >l (i + 1)))
                    (go2 rs 0))
    (rref m n rows) (: (rowsc c r) (map (\ x (zmod m (c * x))) r)
                       (rowsub a b) (: (go a b) (? (0 = tally a) ()
-                                                  (zmod m (<a - <b) >< go >a >b))
+                                                  (zmod m (<a - <b) . go >a >b))
                                       (go a b))
                       (go col rs done pivs)
                       (? (col = n) [done pivs]
                          (: hits (filter (r \ 0 != lat r col) rs)
                             (? (0 = tally hits) (go (col + 1) rs done pivs)
                                (: pv <hits
-                                  rest (: (d1 l) (tally l ?  (<l = pv ? >l (<l >< d1 >l)))
+                                  rest (: (d1 l) (tally l ?  (<l = pv ? >l (<l . d1 >l)))
                                         (d1 rs))
                                   pvn (rowsc (finv m (lat pv col)) pv)
                                   (relim r) (: c (lat r col)
@@ -319,8 +319,8 @@
                rp (rref p n (msubI p (mflip (rows 0 '(1) ()))))
                vs (nullsp p n <rp <>rp)
                (? (1 = tally vs) [f]
-                  (bsplit p (tally vs) (map vtrim vs) [f])))
-   (ltake n l) (? (n = 0) () (<l >< ltake (n - 1) >l))
+                  (bsplit p #vs (map vtrim vs) [f])))
+   (ltake n l) (? (n = 0) () (<l . ltake (n - 1) >l))
    (ldrop n l) (? (n = 0) l (ldrop (n - 1) >l))
    (hl2 P p f g h) (: gp (vtrim (map (\ c (zmod p c)) g))
                       hp (vtrim (map (\ c (zmod p c)) h))
@@ -339,7 +339,7 @@
                       (go p (vtrim g) (vtrim h)))
    (hliftn P p f gs)
    (? (1 = tally gs) [(vtrim (map (c \ zmod P c) f))]
-      (: t (tally gs)
+      (: t #gs
          hn (cnorm (q (t - (t % 2)) 2))
          ga (ltake hn gs)
          gb (ldrop hn gs)
@@ -348,16 +348,16 @@
    (combs s l) (? (s = 0) '(())
                   (0 = tally l) ()
                   (map (link <l) (combs (s - 1) >l) + combs s >l))
-   (drop1 x l) (? (0 = tally l) () (? (<l = x) >l (<l >< drop1 x >l)))
+   (drop1 x l) (? (0 = tally l) () (? (<l = x) >l (<l . drop1 x >l)))
    (lminus l xs) (? (0 = tally xs) l (lminus (drop1 <xs l) >xs))
    (zrec s P F ls acc)
-    (s + s > tally ls ? (0 = pdeg F ? acc (F >< acc))
+    (s + s > tally ls ? (0 = pdeg F ? acc (F . acc))
      (: (try cs) (tally cs ?
                   (: cand (topoly (map (c \ zcen P c) (fvprod P <cs)))
                    (0 = tally (pmod F cand) ? [cand <cs] (try >cs))))
         h (try (combs s ls))
         (0 = tally h ? (zrec (s + 1) P F ls acc)
-         (zrec 1 P (pquot F <h) (lminus ls <>h) (<h >< acc)))))
+         (zrec 1 P (pquot F <h) (lminus ls <>h) (<h . acc)))))
    primes '(3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59)
    (pickp F ps) (? (0 = tally ps) ()
                    (: pp <ps
@@ -391,7 +391,7 @@
                                (link (? (e = n) 1 (mco m2 * ((n - 1 - e) L)))
                                      (mkey m2))))
                       g)
-   (msub2 G L) (map (m2 \ cnorm (mco m2 * <(mkey m2) L) >< mkey m2) G)
+   (msub2 G L) (map (m2 \ cnorm (mco m2 * <(mkey m2) L) . mkey m2) G)
    (ufac x) (: c (mco <x)
                (dstrip g rs) (? (0 = tally rs) g
                                 (dstrip (pquot g (plin <rs)) >rs))
@@ -403,7 +403,7 @@
                               (flat (map (\ z (i (link z) ())) one)
                                + go (i + 1) >r)))
                (? (c = 1) (go 1 (psff x))
-                  (pconst 1 c >< go 1 (psff x)))))
+                  (pconst 1 c . go 1 (psff x)))))
 
 ; --- bivariate factorization: monic in x, hensel in y ------------------------
 ; the first multivariate rung: f(x y) MONIC IN X (so no y-content exists and
@@ -423,22 +423,22 @@
                                 (go >l (? (m2 < e) e m2))))
                (go f 0))
    (ytrunc K f) (filter (\ m2 (<>(mkey m2) < K)) f)
-   (a2to1 f) (map (m2 \ mco m2 >< [<(mkey m2)]) f)
-   (a1to2 k g) (map (m2 \ mco m2 >< [<(mkey m2) k]) g)
-   (xco2 f k) (map (m2 \ mco m2 >< [<(mkey m2)])
+   (a2to1 f) (map (m2 \ mco m2 . [<(mkey m2)]) f)
+   (a1to2 k g) (map (m2 \ mco m2 . [<(mkey m2) k]) g)
+   (xco2 f k) (map (m2 \ mco m2 . [<(mkey m2)])
                    (filter (m2 \ k = <>(mkey m2)) f))
    (yevat f aa) (? (0 = tally f) ()
                    (: c (cnorm (mco <f * ((<>(mkey <f)) aa)))
                       r (yevat >f aa)
-                      (? (c = 0) r (padd [(c >< [<(mkey <f)])] r))))
-   (a1y2 g) (map (\ m2 (mco m2 >< [0 <(mkey m2)])) g)
-   (a2y1 f) (map (\ m2 (mco m2 >< [<>(mkey m2)])) f)
-   (lpow k L) (k (pmul L) [(1 >< '(0))])
+                      (? (c = 0) r (padd [(c . [<(mkey <f)])] r))))
+   (a1y2 g) (map (\ m2 (mco m2 . [0 <(mkey m2)])) g)
+   (a2y1 f) (map (\ m2 (mco m2 . [<>(mkey m2)])) f)
+   (lpow k L) (k (pmul L) [(1 . '(0))])
    (ysub f aa) (? (aa = 0) f
-                (: yp [(1 >< '(0 1)) (aa >< '(0 0))]
-                   one [(1 >< '(0 0))]
+                (: yp [(1 . '(0 1)) (aa . '(0 0))]
+                   one [(1 . '(0 0))]
                    (go l) (? (0 = tally l) ()
-                             (padd (pmul [(mco <l >< [<(mkey <l) 0])]
+                             (padd (pmul [(mco <l . [<(mkey <l) 0])]
                                          ((<>(mkey <l)) (pmul yp) one))
                                    (go >l)))
                    (go f)))
@@ -449,14 +449,14 @@
                        (go (psub u (pmul t2 d)) (padd t2 qq))))
                  (go f ()))
    (pegcd a b) (? (0 = tally b)
-                  (: c (cinv (mco <a)) [(pmonic a) [(c >< '(0))] ()])
+                  (: c (cinv (mco <a)) [(pmonic a) [(c . '(0))] ()])
                   (: qq (pquot a b)
                      e3 (pegcd b (pmod a b))
                    [<e3 <>(>e3) (psub <>e3 (pmul qq <>(>e3)))]))
    (msff f) (: (go w y) (? (0 = pdeg w) ()
                            (: z (psub y (pd w 0))
                               a2 (mgcd w z)
-                              (a2 >< go (mdiv w a2) (mdiv z a2))))
+                              (a2 . go (mdiv w a2) (mdiv z a2))))
                (? (0 = tally f || 0 = pdeg f) ()
                 (: g (mgcd f (pd f 0))
                    (go (mdiv f g) (mdiv (pd f 0) g)))))
@@ -474,7 +474,7 @@
                                (padd hh (a1to2 k w)))))
                      (go 1 (a1to2 0 G) (a1to2 0 H)))
    (hliftn2 K g us) (? (1 = tally us) [(ytrunc K g)]
-                       (: t2 (tally us)
+                       (: t2 #us
                           hn (cnorm (q (t2 - (% t2 2)) 2))
                           ua (ltake hn us)
                           ub (ldrop hn us)
@@ -482,7 +482,7 @@
                           gh (hl22 K g (prodl ua) (prodl ub))
                           (hliftn2 K <gh ua + hliftn2 K <>gh ub)))
    (zrec2 s K g ls acc)
-   (? (s + s > tally ls) (0 = pdeg g ? acc (g >< acc))
+   (? (s + s > tally ls) (0 = pdeg g ? acc (g . acc))
       (: (prod2 l) (1 = tally l ? <l (ytrunc K (pmul <l (prod2 >l))))
          (try cs) (tally cs ?
                    (: cand (ytrunc K (prod2 <cs))
@@ -490,7 +490,7 @@
                     (0 = tally <>dm ? [cand <cs <dm] (try >cs))))
          h (try (combs s ls))
          (0 = tally h ? (zrec2 (s + 1) K g ls acc)
-          (zrec2 1 K <>(>h) (lminus ls <>h) (<h >< acc)))))
+          (zrec2 1 K <>(>h) (lminus ls <>h) (<h . acc)))))
    (zfac2 f) (? (0 = mdegy f)
                 (map (a1to2 0) (pfac (a2to1 f)))
                 (: (pick as) (? (0 = tally as) ()
@@ -507,10 +507,10 @@
                                fs (zrec2 1 K g (hliftn2 K g us) ())
                                (map (z \ ysub z -a) fs)))))))
    (zfac2g f) (: L (mcof f (pdeg f))
-                 (? (L = [(1 >< '(0))]) (zfac2 f)
+                 (? (L = [(1 . '(0))]) (zfac2 f)
                     (: n (pdeg f)
                        (bsub es) (? (0 = tally es) ()
-                                    (padd (mlift (? (<es = n) [(1 >< '(0))]
+                                    (padd (mlift (? (<es = n) [(1 . '(0))]
                                                     (pmul (mcof f <es)
                                                           (lpow ((n - 1) - <es) L)))
                                                  <es)
@@ -534,7 +534,7 @@
                               + go (i + 1) >r)))
                 all (yfs + go 1 (msff pp))
                 cst (cnorm (mco <x * cinv (lcs all)))
-                (? (cst = 1) all (pconst 2 cst >< all)))
+                (? (cst = 1) all (pconst 2 cst . all)))
 ; --- n variables: kronecker packs onto the bivariate engine ------------------
 ; the last rung. vpack folds the LAST variable into the one before it --
 ; the substitution y -> Y^D, z -> Y with D past the last variable's degree,
@@ -550,12 +550,12 @@
 ; leading constant squares the product, as everywhere. this trades eez's
 ; staged lifting for degree growth in the image -- exact and complete
 ; either way, and the honest choice at this scale.
-   (mrg D k) (0 = tally >>k ? [((<k * D) + <>k)] (<k >< mrg D >k))
-   (vpack x D) (map (m2 \ mco m2 >< mrg D (mkey m2)) x)
+   (mrg D k) (0 = tally >>k ? [((<k * D) + <>k)] (<k . mrg D >k))
+   (vpack x D) (map (m2 \ mco m2 . mrg D (mkey m2)) x)
    (vunpk g D) (map (\ m2 (: (go l) (0 = tally >l ?
                                      [(cnorm (q (<l - (<l % D)) D)) (<l % D)]
-                                     (<l >< go >l))
-                           (mco m2 >< go (mkey m2)))) g)
+                                     (<l . go >l))
+                           (mco m2 . go (mkey m2)))) g)
    (lastk k) (? (0 = tally >k) <k (lastk >k))
    (mdeglast x) (: (go l m2) (? (0 = tally l) m2
                                 (: e (lastk (mkey <l))
@@ -569,11 +569,11 @@
                    (: t2 [(link (cnorm (mco <u * cinv (mco <d)))
                                 (ksub (mkey <u) (mkey <d)))]
                       (go (psub u (pmul t2 d)) (padd t2 qq) rr))
-                   (go >u qq (padd [(mco <u >< mkey <u)] rr)))
+                   (go >u qq (padd [(mco <u . mkey <u)] rr)))
                 (go f () ()))
    (mprod l) (1 = tally l ? <l (pmul <l (mprod >l)))
    (nrec s D x ls acc)
-   (? (s + s > tally ls) (kz1? x ? acc (pmonic x >< acc))
+   (? (s + s > tally ls) (kz1? x ? acc (pmonic x . acc))
       (: (try cs) (tally cs ?
                      (: pp (mprod <cs) cand (vunpk pp D)
                       (vpack cand D != pp ? (try >cs)
@@ -581,13 +581,13 @@
                         (0 = tally <>dm ? [cand <cs <dm] (try >cs))))))
          h (try (combs s ls))
          (? (0 = tally h) (nrec (s + 1) D x ls acc)
-            (nrec 1 D <>(>h) (lminus ls <>h) (<h >< acc)))))
+            (nrec 1 D <>(>h) (lminus ls <>h) (<h . acc)))))
    (mfacn x) (: D (mdeglast x + 1)
                 fs (pfac (vpack x D))
                 out (nrec 1 D x (filter (\ g !(kz1? g)) fs) ())
                 cst (cnorm (mco <x * cinv (lcs out)))
                 (? (cst = 1) out
-                   (pconst (tally (mkey <x)) cst >< out)))
+                   (pconst #(mkey <x) cst . out)))
    (pfac p2) (: x (load p2)
                 (? (0 = tally x) ()
                    (1 = tally (mkey <x)) (0 = pdeg x ? [x] (ufac x))
@@ -615,8 +615,8 @@
 ; old !v gate read -1 as the zero poly, so (+ p -1) dropped its constant.
 (: polyd {0 'poly 6 1 7 1}
    (polyish? v) (? (id? v ()) 1 (0 = v) 1 (two? v) (two? <v) 0)
-   (arity v) (tally (mkey <v))
-   (pok? v w) (? (polyish? v) 1 (star? v) (polyish? w ? (tally w)))
+   (arity v) #(mkey <v)
+   (pok? v w) (? (polyish? v) 1 (star? v) (polyish? w ? #w))
    (plift v w) (? (polyish? v) v (pconst (arity w) v))
    (pmeth f a b) (: x (load a) y (load b)
                   (? (pok? x y && pok? y x) (coin polyd (f (plift x y) (plift y x)))))
@@ -641,18 +641,18 @@
 (: (mulfold l) (1 = tally l ? <l ['* <l (mulfold >l)])
    (mfacts key syms) (? (0 = tally key) ()
                         (0 = <key) (mfacts >key >syms)
-                        (1 = <key) (<syms >< mfacts >key >syms)
-                        (['** <syms <key] >< mfacts >key >syms))
+                        (1 = <key) (<syms . mfacts >key >syms)
+                        (['** <syms <key] . mfacts >key >syms))
    (mterm m syms) (: fs (mfacts (mkey m) syms) c (mco m)
                      (? (0 = tally fs) c
                         (c = 1) (mulfold fs)
-                        (mulfold (c >< fs))))
+                        (mulfold (c . fs))))
    (psum pp syms) (? (0 = tally pp) 0
                      (1 = tally pp) (mterm <pp syms)
                      ['+ (mterm <pp syms) (psum >pp syms)])
    (pemit p syms) (psum (load p) syms)
-   (snocl l x) (0 = tally l ? [x] (<l >< snocl >l x))
-   (pfn p syms) (ev ('\ >< snocl syms (pemit p syms))))
+   (snocl l x) (0 = tally l ? [x] (<l . snocl >l x))
+   (pfn p syms) (ev ('\ . snocl syms (pemit p syms))))
 
 ; --- the matcher: rules over terms, riding the kanren unifier ---------------
 ; a TERM is core source -- a star, a symbol, or a folded dyadic form ('+ a b),
@@ -680,9 +680,9 @@
                    (<<ps = v) ><ps
                    (vlook v >ps))
    (mark ps t) (? (nom? t) (vlook t ps || t)
-                  (two? t) (mark ps <t >< mark ps >t)
+                  (two? t) (mark ps <t . mark ps >t)
                   t)
-   (grule vs pat tpl g) (: ps (map (\ s (s >< var s)) vs)
+   (grule vs pat tpl g) (: ps (map (\ s (s . var s)) vs)
                          [(mark ps pat) (mark ps tpl) g (map (\ pr >pr) ps)])
    (rule vs pat tpl) (grule vs pat tpl 0)
    (gpass? rl r) (: g (rl 2)
@@ -877,8 +877,8 @@
                   [t])
    (tkey t) (nom? t ? ("0" + show t) ("1" + show t))
    (tins lt x ys) (? (0 = tally ys) [x]
-                     (lt x <ys) (x >< ys)
-                     (<ys >< tins lt x >ys))
+                     (lt x <ys) (x . ys)
+                     (<ys . tins lt x >ys))
    (tsort lt xs) (tally xs ? (tins lt <xs (tsort lt >xs)))
    (csplit t) (? (nom? t) [1 t]
                  (star? t) [t 1]
@@ -892,8 +892,8 @@
    (cmerge ps) (? (0 = tally ps) ()
                   (0 = tally >ps) ps
                   (: p <ps r <>ps
-                     (<>p = <>r ? (cmerge ([(cnorm (<p + <r)) <>p] >< >>ps))
-                                  (p >< cmerge >ps))))
+                     (<>p = <>r ? (cmerge ([(cnorm (<p + <r)) <>p] . >>ps))
+                                  (p . cmerge >ps))))
    (cone p) (: c <p u <>p (? (u = 1) c (c = 1) u ['* c u]))
    (refold o xs) (1 = tally xs ? <xs [o <xs (refold o >xs)])
    (vks t) (? (nom? t) [(show t)]
@@ -904,7 +904,7 @@
               [(show t)])
    (tcat l) (0 = tally l ? "" (<l + tcat >l))
    (vkey t) (tcat (tsort (\ a b (a < b)) (vks t)))
-   (slt p r) (: da (tally (vks <>p)) db (tally (vks <>r))
+   (slt p r) (: da #(vks <>p) db #(vks <>r)
                 (? (db < da) 1 (da < db) 0 (vkey <>p < vkey <>r)))
    (tsum t) (: ps (cmerge (tsort slt (sflat 1 t)))
                ks (filter (p \ <p != 0) ps)
@@ -932,7 +932,7 @@
                 us (map eone (cmerge (tsort (\ p r (tkey <>p < tkey <>r))
                                             (map esplit
                                                  (filter (\ f !(star? f)) gs)))))
-                (femit k) (k = 1 ? (refold '* us) (refold '* (k >< us)))
+                (femit k) (k = 1 ? (refold '* us) (refold '* (k . us)))
                 (? (0 = tally us) c
                    (c = 0) 0
                    (c < 0) ['- 0 (femit (cnorm (0 - c)))]
@@ -1015,21 +1015,21 @@
                 !(two? t) t
                 (infix3? t) (: g (glook <t uband) h (hlook <t uband)
                              (uxs <>t (? h g (g + 1)) + [<t] + uxs <>(>t) (? h (g + 1) g)))
-                (uxw <t >< map uxw >t)))
+                (uxw <t . map uxw >t)))
 
 ; --- the field Q[x]/(m) ----------------------------------------------------
 (: (vmax a b) (? (a < b) b a)
    (vpad v n) (? (n = 0) ()
-                 (0 = tally v) (q 0 1 >< vpad () (n - 1))
-                 (<v >< vpad >v (n - 1)))
-   (vzip a b) (? (0 = tally a) () ((<a + <b) >< vzip >a >b))
-   (vadd a b) (: n (vmax (tally a) (tally b)) (vzip (vpad a n) (vpad b n)))
+                 (0 = tally v) (q 0 1 . vpad () (n - 1))
+                 (<v . vpad >v (n - 1)))
+   (vzip a b) (? (0 = tally a) () ((<a + <b) . vzip >a >b))
+   (vadd a b) (: n (vmax #a #b) (vzip (vpad a n) (vpad b n)))
    (vscale c v) (map (* c) v)
-   (vshift v n) (? (n = 0) v (q 0 1 >< vshift v (n - 1)))
+   (vshift v n) (? (n = 0) v (q 0 1 . vshift v (n - 1)))
    (vmul a b) (? (0 = tally a) () (vadd (vscale <a b) (vshift (vmul >a b) 1)))
    (vlast v) (? (1 = tally v) <v (vlast >v))
-   (vinit v) (? (1 = tally v) () (<v >< vinit >v))
-   (vrem xd v) (? (tally v < tally xd + 1) (vpad v (tally xd))
+   (vinit v) (? (1 = tally v) () (<v . vinit >v))
+   (vrem xd v) (? (tally v < tally xd + 1) (vpad v #xd)
                   (vrem xd (vadd (vinit v)
                                  (vshift (vscale (vlast v) xd) (tally v - (tally xd + 1))))))
    (kmul xd a b) (vrem xd (vmul a b))

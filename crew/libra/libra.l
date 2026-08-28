@@ -22,12 +22,12 @@
 
 (:
    ; --- lines ----------------------------------------------------------------
-   (ltrim s) (: n (tally s)
+   (ltrim s) (: n #s
                 (g i) (? ((i < n) && ((s i = 32) || (s i = 9))) (g (i + 1)) (snip s i n))
                 (g 0))
-   (linesof s) (: n (tally s)
-                  (g i st acc) (? (n <= i) (rev (snip s st n >< acc))
-                                  (s i = 10) (g (i + 1) (i + 1) (snip s st i >< acc))
+   (linesof s) (: n #s
+                  (g i st acc) (? (n <= i) (rev (snip s st n . acc))
+                                  (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
                                   (g (i + 1) st acc))
                   (g 0 0 ()))
 
@@ -67,11 +67,11 @@
    (dblank? s) !(0 < tally (ltrim s))
    ; one leading space off, so `;   foo` keeps the display's two and a bare `;`
    ; is the blank line it looks like
-   (dbody s) (: n (tally s) (? ((0 < n) && (s 0 = 32)) (snip s 1 n) s))
+   (dbody s) (: n #s (? ((0 < n) && (s 0 = 32)) (snip s 1 n) s))
    (dcmts src) (: t (tablet 0) _ (each (lint-cmts src) (\ c (pin t <c c))) t)
    (dalone ln c) (: k (<>c - 1)
                     (? (dblank? (snip ln 0 k)) [1 (snip ln 0 k + dbody <>>c)] ()))
-   (drtrim l) (? !(two? l) () (: r (drtrim >l) (? ((two? r) || !(dblank? <l)) (<l >< r) ())))
+   (drtrim l) (? !(two? l) () (: r (drtrim >l) (? ((two? r) || !(dblank? <l)) (<l . r) ())))
 
    ; a `#!` line is a seat, not a sentence -- six crew tools open with one
    (ldoc-head src)
@@ -80,46 +80,46 @@
         (? !(two? ls) (drtrim (rev acc))
            (: c (peep t k ())
               a (? (two? c) (dalone <ls c) ())      ; the line's own sentence, if it is one
-              (? !(two? a) (? (dblank? <ls) (g >ls (k + 1) ("" >< acc))
+              (? !(two? a) (? (dblank? <ls) (g >ls (k + 1) ("" . acc))
                                (drtrim (rev acc))) ; ..else this line is code: the header ends
                  (id? <>>>c 'bang) (g >ls (k + 1) acc)             ; the seat line says nothing
-                 (g >ls (k + 1) (<>a >< acc)))))
+                 (g >ls (k + 1) (<>a . acc)))))
        (g (linesof src) 1 ()))
 
    ; the prose is taken as written; three of its habits carry structure markdown
    ; would fill flat -- a `--- name ---` banner is a heading, an indented run is a
    ; fence because its alignment is the content, and a leading is bolded.
-   (dind s) (: n (tally s) (g i) (? ((i < n) && ((s i = 32) || (s i = 9))) (g (i + 1)) i) (g 0))
+   (dind s) (: n #s (g i) (? ((i < n) && ((s i = 32) || (s i = 9))) (g (i + 1)) i) (g 0))
    (ddashy? c) ((c = 45) || (c = 32))
    ; `--- name ------------` -> [1 "name"]; dashes both sides are marker and padding
    (dbanner s)
-    (: n (tally s)
+    (: n #s
        (? !((3 <= n) && (snip s 0 3 = "---")) ()
           (: a ((: (f i) (? ((i < n) && (ddashy? (s i))) (f (i + 1)) i)) 0)
              b ((: (f j) (? ((a < j) && (ddashy? (s (j - 1)))) (f (j - 1)) j)) n)
              (? (a < b) [1 (snip s a b)] ()))))
-   (dstarts? s t) (: n (tally s) m (tally t) ((m <= n) && (snip s 0 m = t)))
-   (ditem? s) (: n (tally s)
+   (dstarts? s t) (: n #s m #t ((m <= n) && (snip s 0 m = t)))
+   (ditem? s) (: n #s
                  (((2 <= n) && (snip s 0 2 = "- "))
                   || ((3 <= n) && ((47 < s 0) && (s 0 < 58) && (snip s 1 3 = ". ")))))
    ; the marker in bold; a hazard is a paragraph and only its first line wears it
-   (dwarn s) (? (dstarts? s "⚠ ") ("**⚠**" + snip s 3 (tally s)) s)
+   (dwarn s) (? (dstarts? s "⚠ ") ("**⚠**" + snip s 3 #s) s)
    ; ..and it starts one -- a hazard jammed against the prose above it would
    ; otherwise fill into that paragraph, glyph and all
-   (dnl2? s) (: n (tally s) (? (n < 2) (n = 0) ((s (n - 1) = 10) && (s (n - 2) = 10))))
+   (dnl2? s) (: n #s (? (n < 2) (n = 0) ((s (n - 1) = 10) && (s (n - 2) = 10))))
    (dbreak acc s) (? (&& (dstarts? s "⚠ ") !(dnl2? acc)) (acc + "\n") acc)
 
    ; a display: the run of indented lines at the head of ls, and what is left.
    (dtake ls)
     (: (g l acc) (? (!(two? l) || (dblank? <l) || !(0 < dind <l)) [(rev acc) l]
-                    (g >l (<l >< acc)))
+                    (g >l (<l . acc)))
        (g ls ()))
    ; ..fenced, dedented by its own least indent: the alignment inside a display is
    ; the content, the margin in front of it is not
    (dmin a b) (? (a < b) a b)
    (dfence ls)
-    (: k (foldl (\ a s (? (dblank? s) a (dmin a (dind s)))) (tally <ls) ls)
-       ("```\n" + foldl (+) "" (map (\ s ((snip s (dmin k (tally s)) (tally s)) + "\n")) ls)
+    (: k (foldl (\ a s (? (dblank? s) a (dmin a (dind s)))) #<ls ls)
+       ("```\n" + foldl (+) "" (map (\ s ((snip s (dmin k #s) #s) + "\n")) ls)
         + "```\n"))
 
    ; the header as markdown text; lapiz decides what a document is, and every
@@ -133,7 +133,7 @@
               (? (dblank? s)         (go >ls 0 (acc + "\n"))
                  (two? b)            (go >ls 0 (acc + "## " + <>b + "\n"))
                  (dstarts? s "usage:")
-                  (: r (dtake >ls) (go <>r 0 (acc + dfence (s >< <r))))
+                  (: r (dtake >ls) (go <>r 0 (acc + dfence (s . <r))))
                  (&& (0 < dind s) li) (go >ls 1 (acc + s + "\n"))
                  (0 < dind s)        (: r (dtake ls) (go <>r 0 (acc + dfence <r)))
                  (ditem? s)          (go >ls 1 (acc + dwarn s + "\n"))

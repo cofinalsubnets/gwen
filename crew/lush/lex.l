@@ -40,7 +40,7 @@
         (go 0))
    (sh-name? b) (sh-digit? b || sh-name1? b)
    (sh-name1? b) (65 <= b < 91 || 97 <= b < 123 || b = 95)
-   (sh-alook al k) (al @ (e >< r) (<e = k ? >e (sh-alook r k)))
+   (sh-alook al k) (al @ (e . r) (<e = k ? >e (sh-alook r k)))
 
    ; --- the $-machinery, top level (heredoc bodies + vop words re-enter it) ---
    ; a (payload . j) answer is read by kind (two?), never by truth. The payload
@@ -87,7 +87,7 @@
    ; `...` -> (text . j-past) | ()
    (sh-btesc? b) (b = 96 || b = 92 || b = 36)
    (sh-bt s n i acc) (i != n ?
-    (s i @ 96 (acc >< (i + 1))
+    (s i @ 96 (acc . (i + 1))
            (92 && i + 1 < n && sh-btesc? (s (i + 1)))
             (sh-bt s n (i + 2) (acc + string (s (i + 1))))
            b (sh-bt s n (i + 1) (acc + string b))))
@@ -101,11 +101,11 @@
    (sh-lovews s n k) (k < n && lx-ws? (s k) ? (sh-lovews s n (k + 1)) k)
    (sh-lovep s n i)
     (sound (snip s i n) @
-     (_ >< rest)
+     (_ . rest)
       (: k (n - #rest)                  ; past the datum, in s's own index
          j (sh-lovews s n k)
          (? (n <= j) 'torn
-            (s j = 125) (snip s i k >< j + 1)))
+            (s j = 125) (snip s i k . j + 1)))
      'torn)                                   ; 'torn, and a bodyless () with it
    ; ${ ... }: to the matching }, blind to quoted braces -> j past } | ()
    (sh-brace s n i depth q) (i != n ? (: b (s i) (?
@@ -126,51 +126,51 @@
      (: n #c
         (dbl? i b) (i + 1 < n && c (i + 1) = b)             ; ## or %% at i
         (? !n ()
-           (c 0 = 35 && 1 < n) ('vop >< [(snip c 1 n) "len" ""])            ; ${#x}
-           (: nm (? (sh-vspec1? (c 0)) (string (c 0) >< 1)
+           (c 0 = 35 && 1 < n) ('vop . [(snip c 1 n) "len" ""])            ; ${#x}
+           (: nm (? (sh-vspec1? (c 0)) (string (c 0) . 1)
                     (sh-name1? (c 0))
                       (: (go i) (i < n && sh-name? (c i) ? (go (i + 1)) i)
-                         j (go 1) (snip c 0 j >< j))
+                         j (go 1) (snip c 0 j . j))
                     ())
-              (nm @ (name >< i)
-                 (? (i = n) ('var >< name)
+              (nm @ (name . i)
+                 (? (i = n) ('var . name)
                     (: b (c i)
                        op (? (b = 58 && i + 1 < n && sh-vopcol? (c (i + 1)))
-                              (":" + string (c (i + 1)) >< i + 2)
-                             (sh-vopcol? b)  (string b >< i + 1)
-                             (b = 35) (dbl? i 35 ? ("##" >< i + 2) ("#" >< i + 1))
-                             (b = 37) (dbl? i 37 ? ("%%" >< i + 2) ("%" >< i + 1)))
-                       (op @ (o >< j) ('vop >< [name o (snip c j n)]))))))))
+                              (":" + string (c (i + 1)) . i + 2)
+                             (sh-vopcol? b)  (string b . i + 1)
+                             (b = 35) (dbl? i 35 ? ("##" . i + 2) ("#" . i + 1))
+                             (b = 37) (dbl? i 37 ? ("%%" . i + 2) ("%" . i + 1)))
+                       (op @ (o . j) ('vop . [name o (snip c j n)]))))))))
    ; a $-form at i (past the $) -> (seg . j) | ('dollar . i) literal | 'unterm
    (sh-dol s n i)
-     (? (i = n) ('dollar >< i)
+     (? (i = n) ('dollar . i)
         (: b (s i)
-           (spec nm) (('var >< nm) >< i + 1)    ; the one-byte specials, $? $@ ..
+           (spec nm) (('var . nm) . i + 1)    ; the one-byte specials, $? $@ ..
            (b @ 63 (spec "?") 64 (spec "@") 42 (spec "*")
                 35 (spec "#") 36 (spec "$") 33 (spec "!")
                 40 (: ar (i + 1 < n && s (i + 1) = 40 ? (sh-arip s n (i + 2) 0))
-                    (charm? ar ? (('ari >< snip s (i + 2) ar) >< ar + 2)
+                    (charm? ar ? (('ari . snip s (i + 2) ar) . ar + 2)
                        (: e (sh-subp s n (i + 1) 1 0 0)
-                          (? !e 'unterm (('sub >< snip s (i + 1) (e - 1)) >< e)))))
+                          (? !e 'unterm (('sub . snip s (i + 1) (e - 1)) . e)))))
                 ; ${( -- the love arm takes the extent off the READER, never off
                 ; sh-brace, which counts a } inside a love "" or after a ; and would
                 ; cut the form in the wrong place
                 123 (i + 1 < n && s (i + 1) = 40 ?
                      (: r (sh-lovep s n (i + 1))
-                        (atom? r ? 'unterm (('lov >< <r) >< >r)))
+                        (atom? r ? 'unterm (('lov . <r) . >r)))
                      (: e (sh-brace s n (i + 1) 1 0)
                         (? !e 'unterm
                            (: sg (sh-vopp (snip s (i + 1) (e - 1)))
-                              (? !sg 'unterm (sg >< e))))))
+                              (? !sg 'unterm (sg . e))))))
                 (? (sh-digit? b) (spec (string b))   ; $0-9, one digit (the POSIX law)
                    (sh-name1? b)
                      (: (go j) (j < n && sh-name? (s j) ? (go (j + 1)) j)
-                        e (go i) (('var >< snip s i e) >< e))
-                   ('dollar >< i)))))
+                        e (go i) (('var . snip s i e) . e))
+                   ('dollar . i)))))
    ; a bare text (heredoc body, vop word) -> segs, $ and ` live, \ escapes $ ` \
    (sh-dollarize s)
      (: n #s
-        (addl cur segs) (#cur ? (('lit >< cur) >< segs) segs)
+        (addl cur segs) (#cur ? (('lit . cur) . segs) segs)
         (go i cur segs)
           (? (i = n) (sh-rev (addl cur segs))
            (: b (s i)
@@ -179,11 +179,11 @@
                  ; 'dollar first: a bare $ answers ('dollar . i), which a plain
                  ; pair pattern would take for a segment and splice as one
                  (b = 36) (sh-dol s n (i + 1) @
-                           ('dollar >< j) (go j (cur + "$") segs)
-                           (sg >< j)      (go j "" (sg >< addl cur segs))
+                           ('dollar . j) (go j (cur + "$") segs)
+                           (sg . j)      (go j "" (sg . addl cur segs))
                                           (go (i + 1) (cur + "$") segs))
                  (b = 96) (sh-bt s n (i + 1) "" @
-                           (t >< j) (go j "" (('sub >< t) >< addl cur segs))
+                           (t . j) (go j "" (('sub . t) . addl cur segs))
                                     (go (i + 1) (cur + string b) segs))
                  (go (i + 1) (cur + string b) segs))))
         (go 0 "" ()))
@@ -193,40 +193,40 @@
    ; quote removal there). an unterminated quote falls back to a literal char.
    (sh-wordize s)
      (: n #s
-        (addl cur segs) (#cur ? (('lit >< cur) >< segs) segs)
+        (addl cur segs) (#cur ? (('lit . cur) . segs) segs)
         ; ".." inner: $ ` live, \ escapes $ ` \ ", " closes -> (segs . j) | ()
         (dq i cur segs)
           (? (i = n) ()
              (: b (s i)
-                (? (b = 34) (sh-rev (addl cur segs) >< i + 1)
+                (? (b = 34) (sh-rev (addl cur segs) . i + 1)
                    (b = 92 && i + 1 < n && (sh-btesc? (s (i + 1)) || s (i + 1) = 34))
                      (dq (i + 2) (cur + string (s (i + 1))) segs)
                    (b = 36) (sh-dol s n (i + 1) @
-                             ('dollar >< j) (dq j (cur + "$") segs)
-                             (sg >< j)      (dq j "" (sg >< addl cur segs))
+                             ('dollar . j) (dq j (cur + "$") segs)
+                             (sg . j)      (dq j "" (sg . addl cur segs))
                                             (dq (i + 1) (cur + "$") segs))
                    (b = 96) (sh-bt s n (i + 1) "" @
-                             (t >< j) (dq j "" (('sub >< t) >< addl cur segs))
+                             (t . j) (dq j "" (('sub . t) . addl cur segs))
                                       (dq (i + 1) (cur + string b) segs))
                    (dq (i + 1) (cur + string b) segs))))
         (go i cur segs)
           (? (i = n) (sh-rev (addl cur segs))
              (: b (s i)
                 (? (b = 39) (: (cl j acc) (? (j = n) (go (i + 1) (cur + string b) segs)
-                                             (s j = 39) (go (j + 1) "" (('sq >< acc) >< addl cur segs))
+                                             (s j = 39) (go (j + 1) "" (('sq . acc) . addl cur segs))
                                              (cl (j + 1) (acc + string (s j))))
                               (cl (i + 1) ""))
                    (b = 34) (dq (i + 1) "" () @
-                             (inner >< j) (go j "" (('dq >< inner) >< addl cur segs))
+                             (inner . j) (go j "" (('dq . inner) . addl cur segs))
                                           (go (i + 1) (cur + string b) segs))
                    (b = 92 && (i + 1) < n)
                      (go (i + 2) (cur + string (s (i + 1))) segs)
                    (b = 36) (sh-dol s n (i + 1) @
-                             ('dollar >< j) (go j (cur + "$") segs)
-                             (sg >< j)      (go j "" (sg >< addl cur segs))
+                             ('dollar . j) (go j (cur + "$") segs)
+                             (sg . j)      (go j "" (sg . addl cur segs))
                                             (go (i + 1) (cur + "$") segs))
                    (b = 96) (sh-bt s n (i + 1) "" @
-                             (t >< j) (go j "" (('sub >< t) >< addl cur segs))
+                             (t . j) (go j "" (('sub . t) . addl cur segs))
                                       (go (i + 1) (cur + string b) segs))
                    (go (i + 1) (cur + string b) segs))))
         (go 0 "" ()))
@@ -239,14 +239,14 @@
         (: b (s i)
            (? (b = 39 || b = 34)
                 (: (go j acc) (? (j = n) ()
-                                 (s j = b) (1 >< acc >< j + 1)
+                                 (s j = b) (1 . acc . j + 1)
                                  (go (j + 1) (acc + string (s j))))
                    (go (i + 1) ""))
               (: (bare? x) !(lx-ws? x || member? x '(10 124 38 59 60 62 40 41))
                  (go j acc) ((j < n && bare? (s j)) ? (go (j + 1) (acc + string (s j)))
-                                                      (acc >< j))
+                                                      (acc . j))
                  r (go i "")
-                 (#<r ? (0 >< r))))))
+                 (#<r ? (0 . r))))))
    (sh-tabstrip l) (: (go i) (i < #l && l i = 9 ? (go (i + 1)) i)
                       (snip l (go 0) #l))
    (sh-lineend s n j) (: (go i) (i = n || s i = 10 ? i (go (i + 1))) (go j))
@@ -258,39 +258,39 @@
                 line (snip s j2 e)
                 l2 (strip ? (sh-tabstrip line) line)
                 nj (e < n ? (e + 1) e)
-                (? (l2 = delim) (acc >< nj)
+                (? (l2 = delim) (acc . nj)
                    (e = n) ()                          ; last line, no newline, not it
                    (go nj (acc + (l2 + "\n"))))))
         (go j ""))
 
    (sh-lex s)
    (: n #s
-      (addl cur segs) (#cur ? (('lit >< cur) >< segs) segs)
+      (addl cur segs) (#cur ? (('lit . cur) . segs) segs)
       (fw cur started segs toks)                    ; flush the word in progress
         (: sg (addl cur segs)
-           (started || two? sg ? (('w >< sh-rev sg) >< toks) toks))
+           (started || two? sg ? (('w . sh-rev sg) . toks) toks))
       ; substitute each heredoc placeholder word with its collected body
       (fixw t bods)
         (id? <t 'w && two? >t && id? <<>t 'hd ?
          (: e (sh-alook bods ><>t)
-          ('w >< (<e ? [('sq >< >e)] [('dq >< sh-dollarize >e)])))
+          ('w . (<e ? [('sq . >e)] [('dq . sh-dollarize >e)])))
          t)
       (fin toks hq bods)
-        (two? hq ? ('more >< 'heredoc)
-                   (1 >< map (t \ fixw t bods) (sh-rev toks)))
+        (two? hq ? ('more . 'heredoc)
+                   (1 . map (t \ fixw t bods) (sh-rev toks)))
       ; '...' -> index of the closing quote | ()
       (sq j) (? (j = n) () (s j = 39) j (sq (j + 1)))
       (esc? b) (member? b '(34 36 92 96))
       (peek? i b) (i + 1 < n && s (i + 1) = b)
       ; ".." -> (segs . j-past) | () unfinished
       (dq i cur segs) (i != n ?
-       (s i @ 34 (sh-rev (addl cur segs) >< i + 1)
+       (s i @ 34 (sh-rev (addl cur segs) . i + 1)
               (92 && peek? i 10) (dq (i + 2) cur segs)
               (92 && i + 1 < n && esc? (s (i + 1)))
                (dq (i + 2) (cur + string (s (i + 1))) segs)
-              36 (sh-dol s n (i + 1) @ ('dollar >< j) (dq j (cur + "$") segs)
-                                       (sg >< j) (dq j "" (sg >< addl cur segs)))
-              96 (sh-bt s n (i + 1) "" @ (t >< j) (dq j "" (('sub >< t) >< addl cur segs)))
+              36 (sh-dol s n (i + 1) @ ('dollar . j) (dq j (cur + "$") segs)
+                                       (sg . j) (dq j "" (sg . addl cur segs)))
+              96 (sh-bt s n (i + 1) "" @ (t . j) (dq j "" (('sub . t) . addl cur segs)))
               b (dq (i + 1) (cur + string b) segs)))
       ; hq/bods/k are the heredoc state, and only the << arms move them.
       ; no per-step helper closures in this loop or in sh-subp / sh-brace,
@@ -299,20 +299,20 @@
       ; four of them here measured +57% instructions over a whole lex. The state
       ; rides in the parameters, which is why `op2` takes nine of them.
       (op2 i cur started segs toks hq bods k o adv)  ; flush + emit an operator
-        (lx (i + adv) "" 0 () (('op >< o) >< fw cur started segs toks) hq bods k)
+        (lx (i + adv) "" 0 () (('op . o) . fw cur started segs toks) hq bods k)
       (lx i cur started segs toks hq bods k)
         (i = n ? (fin (fw cur started segs toks) hq bods)
          (s i @ (b && lx-ws? b) (lx (i + 1) "" 0 () (fw cur started segs toks) hq bods k)
-               10 (: tks (('op >< "nl") >< fw cur started segs toks)
+               10 (: tks (('op . "nl") . fw cur started segs toks)
                    (? !(two? hq) (lx (i + 1) "" 0 () tks hq bods k)
                       (: (coll j q bs)                 ; owed bodies, in arrival order
-                           (q @ (h >< rest)
-                              (sh-hdlines s n j (sh-nth h 1) (sh-nth h 3) @ (body >< j2)
-                                 (coll j2 rest ((sh-nth h 0 >< (sh-nth h 2 >< body)) >< bs)))
-                              (j >< bs))
+                           (q @ (h . rest)
+                              (sh-hdlines s n j (sh-nth h 1) (sh-nth h 3) @ (body . j2)
+                                 (coll j2 rest ((sh-nth h 0 . (sh-nth h 2 . body)) . bs)))
+                              (j . bs))
                          (coll (i + 1) (sh-rev hq) bods @
-                          (j >< bs) (lx j "" 0 () tks () bs k)
-                                    ('more >< 'heredoc)))))
+                          (j . bs) (lx j "" 0 () tks () bs k)
+                                    ('more . 'heredoc)))))
                ; a comment runs to the end of its line, never the end of the
                ; input -- the buffer is multi-line whenever PS2/'more gathered
                ; (the nl itself still lexes, so heredoc bodies keep collecting)
@@ -320,19 +320,19 @@
                  (: (sk j) ((j < n && !(s j = 10)) ? (sk (j + 1)) j)
                     (lx (sk (i + 1)) "" 0 () toks hq bods k))
                39 (: j (sq (i + 1))
-                   (? !j ('more >< 'quote)
-                    (lx (j + 1) "" 1 (('sq >< snip s (i + 1) j) >< addl cur segs) toks hq bods k)))
+                   (? !j ('more . 'quote)
+                    (lx (j + 1) "" 1 (('sq . snip s (i + 1) j) . addl cur segs) toks hq bods k)))
                34 (dq (i + 1) "" () @
-                   (inner >< j) (lx j "" 1 (('dq >< inner) >< addl cur segs) toks hq bods k)
-                   ('more >< 'quote))
+                   (inner . j) (lx j "" 1 (('dq . inner) . addl cur segs) toks hq bods k)
+                   ('more . 'quote))
                36 (sh-dol s n (i + 1) @
-                   ('dollar >< j) (lx j (cur + "$") 1 segs toks hq bods k)
-                   (sg >< j) (lx j "" 1 (sg >< addl cur segs) toks hq bods k)
-                   ('more >< 'sub))
+                   ('dollar . j) (lx j (cur + "$") 1 segs toks hq bods k)
+                   (sg . j) (lx j "" 1 (sg . addl cur segs) toks hq bods k)
+                   ('more . 'sub))
                96 (sh-bt s n (i + 1) "" @
-                   (t >< j) (lx j "" 1 (('sub >< t) >< addl cur segs) toks hq bods k)
-                   ('more >< 'sub))
-               92 (? (i + 1 = n) ('more >< 'cont)
+                   (t . j) (lx j "" 1 (('sub . t) . addl cur segs) toks hq bods k)
+                   ('more . 'sub))
+               92 (? (i + 1 = n) ('more . 'cont)
                      (s (i + 1) = 10) (lx (i + 2) cur started segs toks hq bods k)
                      (lx (i + 2) (cur + string (s (i + 1))) 1 segs toks hq bods k))
                (b @ (60 || 62))
@@ -341,16 +341,16 @@
                     o (b = 62 ? (? (peek? i 62) ">>" (peek? i 38) ">&" ">")
                                 (? (peek? i 60) "<<" (peek? i 38) "<&" "<"))
                     (? !(o = "<<")
-                       (lx (i + #o) "" 0 () (('rd >< (ion >< o)) >< tks) hq bods k)
+                       (lx (i + #o) "" 0 () (('rd . (ion . o)) . tks) hq bods k)
                        (: strip ((i + 2) < n && s (i + 2) = 45)
                           (skip j2) ((j2 < n && lx-ws? (s j2)) ? (skip (j2 + 1)) j2)
                           j2 (skip (i + (strip ? 3 2)))
                           dl (sh-hddelim s n j2)
-                          (? !dl ('more >< 'heredoc)
+                          (? !dl ('more . 'heredoc)
                              (lx >>dl "" 0 ()
-                                 (('w >< [('hd >< k)])
-                                  >< (('rd >< (ion >< "<h")) >< tks))
-                                 [k (strip ? 1 0) <dl <>dl >< hq]
+                                 (('w . [('hd . k)])
+                                  . (('rd . (ion . "<h")) . tks))
+                                 [k (strip ? 1 0) <dl <>dl . hq]
                                  bods (k + 1))))))
                ; || && ;; each double their own byte, so one peek serves all three
                (b @ (124 || 38 || 59))

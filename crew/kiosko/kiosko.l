@@ -39,9 +39,9 @@
 (: (strcat l)   (foldl (+) "" l)
    (joins l sp) (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
    (ends? s t)  (: n #s m #t (m <= n && snip s (n - m) n = t))
-   (splits s c) ((: (g i st acc) (? (i < tally s) (? (s i = c) (g (i + 1) (i + 1) (snip s st i >< acc))
+   (splits s c) ((: (g i st acc) (? (i < tally s) (? (s i = c) (g (i + 1) (i + 1) (snip s st i . acc))
                                                        (g (i + 1) st acc))
-                                    (rev (snip s st (tally s) >< acc)))) 0 0 ())
+                                    (rev (snip s st #s . acc)))) 0 0 ())
    (dir? p)     (two? (readdir p))
    (fsize p)    (: st (stat p) (? (two? st) <st ()))
    ; fsize answers () for missing and 0 for empty, and both are nil -- so it
@@ -340,7 +340,7 @@ usage: kiosko [-p PORT] [-q] [DIR]
    (: _ (? (lit? (from 'kiosko)) (use 'kiosko))   ; splice my registered self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
       box {'port 8080 'root "."}
-      (loop (w >< r))
+      (loop (w . r))
         (w @ ("-p" || "--port") (need w r, pin box 'port (numof <r), loop >r)
              ("-q" || "--quiet") (pin box 'quiet 1, loop r)
              ("-h" || "--help")  (usage 0)

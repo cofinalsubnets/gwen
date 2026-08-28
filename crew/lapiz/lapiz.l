@@ -86,9 +86,9 @@
 (: strcat   (foldl (+) "")
    (joins l sp) (? !(two? l) "" !(two? >l) <l (<l + sp + joins >l sp))
    (rep s n)    (? (n < 1) "" (s + rep s (n - 1)))
-   (splitnl s)  ((: (g i st acc) (? (i < tally s) (? (s i = 10) (g (i + 1) (i + 1) (snip s st i >< acc))
+   (splitnl s)  ((: (g i st acc) (? (i < tally s) (? (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
                                                       (g (i + 1) st acc))
-                                    (st < i) (rev (snip s st i >< acc))
+                                    (st < i) (rev (snip s st i . acc))
                                     (rev acc)))
                  0 0 ())
    (endnl s)    (tally s && s (tally s - 1) = 10 ? s (s + "\n")))     ; one trailing newline, always
@@ -124,16 +124,16 @@
 (: rglyphs '(("em" "—") ("en" "–") ("bu" "•") ("la" "⟨") ("ra" "⟩") ("mi" "−"))
    (glyph n)   ((: (g l) (? (atom? l) ("\\(" + n) (<<l = n) <><l (g >l))) rglyphs)
    (rqat s i)  ((: (g l) (? (atom? l) ()                       ; does a glyph start at i? -> (name len)
-                            (: gl <><l n (tally gl)
+                            (: gl <><l n #gl
                              (i + n <= tally s && gl = snip s i (i + n) ? [<<l n] (g >l)))))
                 rglyphs))
 
 ; --- normalizing an inl: adjacent texts are one text (the AST is the fixed point, so this matters) ---
 (: (mrg l) (? (atom? l) () (: h <l (id? <h 'text && 0 = tally <>h)) (mrg >l)     ; a \& contributes an empty text: drop it
-              (atom? >l) (<l >< ())
+              (atom? >l) (<l . ())
               (: a <l b <>l
-               (id? <a 'text && id? <b 'text ? (mrg (['text (<>a + <>b)] >< >>l))
-                (a >< mrg >l))))
+               (id? <a 'text && id? <b 'text ? (mrg (['text (<>a + <>b)] . >>l))
+                (a . mrg >l))))
    ; ..and the same at block level: two adjacent lists of one kind are one list. markdown's
    ; own loose-list rule says so (`- a` blank `- b` is one list), html would spell them as two
    ; <ul>s, and roff cannot separate two `.TP` runs at all -- so the normal form is "no two
@@ -141,14 +141,14 @@
    ; surface silently merges a pair that the markdown surface kept apart, and law 1 fails on
    ; a document that looks right in all three.
    (bmrg l) (? (atom? l) ()
-               (atom? >l) (<l >< ())
+               (atom? >l) (<l . ())
                (: a <l b <>l
                   (? (id? <a <b && member? <a '(bullets numbers deflist))
-                     (bmrg ([<a (<>a + <>b)] >< >>l))
-                     (a >< bmrg >l))))
+                     (bmrg ([<a (<>a + <>b)] . >>l))
+                     (a . bmrg >l))))
    plain (strcat * map caup)                        ; an inl of pure texts back to a string
-   (dpair (a >< b >< c)) ([a b] >< dpair c)             ; a flat t/b payload into pairs
-   (zipm (a >< b) (c >< d)) ([a c] >< zipm b d))
+   (dpair (a . b . c)) ([a b] . dpair c)             ; a flat t/b payload into pairs
+   (zipm (a . b) (c . d)) ([a c] . zipm b d))
 
 ; ---------------------------------------------------------------- markdown, read
 ; inline. the text leaf stops at every sigil, so a construct is never swallowed; a sigil that
@@ -193,7 +193,7 @@
    ; way a paragraph's do. law 1 is untouched by this: mdshow writes an item on
    ; one line and a blank line between blocks, so nothing a shower emits is ever
    ; read as a continuation, and the fixed point holds for both spellings.
-   (litrim s) ((: (g i) (i < tally s && sp? (s i) ? (g (i + 1)) (snip s i (tally s)))) 0)
+   (litrim s) ((: (g i) (i < tally s && sp? (s i) ? (g (i + 1)) (snip s i #s))) 0)
    (lazyj p)  (joins (map litrim p) " ")
    ; a paragraph line must be neither blank nor a block opener -- and must eat a character
    ; (`one nonl?` before the span), else `many` spins forever on the empty tail.
@@ -354,9 +354,9 @@
    ; long line loses its sentence spacing. break it one sentence per line -- the idiomatic man
    ; source shape, and lossless: the reader fills the lines back with a single space.
    (rsent s) ((: (g i st acc)
-                 (? !(i < tally s) (revcat (rline (snip s st i) >< acc) ())
+                 (? !(i < tally s) (revcat (rline (snip s st i) . acc) ())
                     (s i = 46 && i + 1 < tally s && s (i + 1) = 32)
-                     (g (i + 2) (i + 2) (rline (snip s st (i + 1)) >< acc))
+                     (g (i + 2) (i + 2) (rline (snip s st (i + 1)) . acc))
                     (g (i + 1) st acc))) 0 0 ())
    (rfill s) (strcat (map (ln \ ln + "\n") (rsent s)))
    (rfi l)  (strcat (map rfi1 l))
@@ -420,9 +420,9 @@
        (? (i >= tally s) (rev acc)
           (s i = 32) (g (i + 1) acc)
           (s i = 34) (: j ((: (h k) (k < tally s && s k != 34 ? (h (k + 1)) k)) (i + 1))
-                      (g (j + 1) (snip s (i + 1) j >< acc)))
+                      (g (j + 1) (snip s (i + 1) j . acc)))
           (: j ((: (h k) (k < tally s && s k != 32 ? (h (k + 1)) k)) i)
-           (g j (snip s i j >< acc))))) 0 ())
+           (g j (snip s i j . acc))))) 0 ())
    fontmacs '((".BR" (strong text) 0) (".RB" (text strong) 0) (".IR" (em text) 0)
               (".RI" (text em) 0) (".SB" (strong) 1) (".SM" (text) 1) (".B" (strong) 1) (".I" (em) 1))
    (macinfo m) ((: (g l) (? (atom? l) () (<<l = m) (>(<l)) (g >l))) fontmacs)
@@ -435,7 +435,7 @@
                                (h + (? sp '((text " ")) ()) + (argls >as fs (i + 1) sp)))))
    (imacl line) (: a (rargs line) m (? (two? a) <a "") info (macinfo m)
                  (atom? info ?  (rfinl line)
-                  (mrg (argls (rargs (snip line (tally m) (tally line))) <info <>info 0))))
+                  (mrg (argls (rargs (snip line #m #line)) <info <>info 0))))
    (linl line)  (tally line && line 0 = 46 ? (imacl line) (rfinl line)))
 
 ; the block layer: a run of fill lines is a paragraph, a block macro ends it.
@@ -445,7 +445,7 @@
    (rmacl m) (seqs [(skip (lit m)) (skip (span sp?)) (span nonl?) (skip (lit "\n"))])
    (r-fline s y n)  ((tag (\ p (linl (strcat p)))
                           (seqs [(notp blockmac) (one nonl?) (span nonl?) (skip (lit "\n"))])) s y n)
-   (joinfr (a >< u)) (atom? u ? a (a + '((text " ")) + (joinfr u)))
+   (joinfr (a . u)) (atom? u ? a (a + '((text " ")) + (joinfr u)))
    r-filled (tag (mrg * joinfr) (many1 r-fline))
 
    r-th   (tag (\ p ['meta (mnorm (zipm metakeys (rargs <p)))]) (rmacl ".TH"))

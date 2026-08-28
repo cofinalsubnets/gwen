@@ -15,7 +15,7 @@
 ; (sh-rev sh-nth sh-int sh-unwords) and the shell state (sh-jobs sh-status sh-tty).
 
 (module 'lush
-(: (sh-rev l) (foldl (\ a x (x >< a)) () l)
+(: (sh-rev l) (foldl (\ a x (x . a)) () l)
    (sh-nth l i) (? (i = 0) <l (sh-nth >l (i - 1)))
 
    sig-int 2 sig-quit 3 sig-tstp 20 sig-cont 18 sig-ttou 22 sig-ttin 21
@@ -106,7 +106,7 @@
    (sh-fire-sig n)
      (: nm (sh-signame n)
         a (? (string? nm) (peep sh-traps nm "") "")
-        (? (tally a)
+        (? #a
            (: st (sh-status ()) _ ((sh-runtrap ()) a) _ (pin sh-status () st) 0)
            0))
    (sh-sigdrain _)
@@ -122,7 +122,7 @@
    ; `exit` inside the action changes it, and that one leaves through sh-leave.
    (sh-fire-exit _)
      (: a (peep sh-traps "EXIT" "")
-        (? ((0 = (sh-trapped ())) && (tally a))
+        (? ((0 = (sh-trapped ())) && #a)
            (: st (sh-status ())
               _ (pin sh-trapped () 1)
               _ ((sh-runtrap ()) a)
@@ -158,7 +158,7 @@
    ; otherwise it is the process, as it always was. one rule said once, so a fourth
    ; door cannot drift away from it.
    (sh-leave st)
-     (? (sh-subfds ()) ('xit >< st)
+     (? (sh-subfds ()) ('xit . st)
         (0 < (sh-online ())) (scare 'sh-exit st)
         (: _ (sh-fire-exit 0) (quit st)))
    sh-retf {0}                                 ; a top-level `return` landed: sh-lines stops its file (dot-return)
@@ -168,7 +168,7 @@
    (sh-getline port) (: c (see port) (? (c < 0) 'eof (c = 10) "" ((string c) + (sh-rest port))))
    (sh-rest port)    (: c (see port) (? (c < 0) ""   (c = 10) "" ((string c) + (sh-rest port))))
 
-   (sh-unwords ws) (foldl (\ a w (? (tally a) ((a + " ") + w) w)) "" ws)
+   (sh-unwords ws) (foldl (\ a w (? #a ((a + " ") + w) w)) "" ws)
    (sh-addjob pids state cmd)
      (: n (1 + (sh-njob ())) _ (pin sh-njob () n) _ (pin sh-jobs n [pids state cmd]) n)
    (sh-jobline n j)
@@ -187,7 +187,7 @@
            0))
    ; background bookkeeping: drain glean at each prompt; a reaped pid leaves its job,
    ; an emptied job prints done and goes
-   (sh-unpid l p) (? !l () (? (<l = p) >l (<l >< sh-unpid >l p)))
+   (sh-unpid l p) (? !l () (? (<l = p) >l (<l . sh-unpid >l p)))
    (sh-bgnote pid)
      (each (keys sh-jobs)
        (\ n (: j (sh-jobs n)
@@ -204,7 +204,7 @@
    ; string membership: member? tests identity (uninterned strings never hit)
    (sh-smem? x l) (? !(two? l) 0 (? (x = <l) 1 (sh-smem? x >l)))
    (sh-int s) (sh-intl s 0 0)
-   (sh-intl s i a) (? (i = (tally s)) a (sh-intl s (i + 1) ((a * 10) + ((s i) - 48))))
+   (sh-intl s i a) (? (i = #s) a (sh-intl s (i + 1) ((a * 10) + ((s i) - 48))))
    (sh-lastjob _) (foldl (\ a k (? (a < k) k a)) 0 (keys sh-jobs))
    (sh-jobn argv) (? >argv (sh-int <>argv) (sh-lastjob 0))
    (sh-fg n)

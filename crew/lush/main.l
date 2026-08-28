@@ -63,7 +63,7 @@
    ; without it lush cannot be the SHELL of a make. answers (1 c? rest) with e/u/x
    ; already pinned, or () when a letter is not ours (then the word is not a flag).
    (sh-flagw a rest)
-     (: n (tally a)
+     (: n #a
         (go k c?) (? (n <= k) [1 c? rest]
                      (: ch (a k)
                         (? (ch = 99) (go (k + 1) 1)
@@ -77,7 +77,7 @@
         (? !args (sh 0)
         (: a <args
            (? (a = "--login") (: _ (pin sh-login () 1) (sh-main >args))
-              ((1 < (tally a)) && ((a 0) = 45))
+              ((1 < #a) && ((a 0) = 45))
                 (: fw (sh-flagw a >args)
                    (? !(two? fw) (sh-file a >args)          ; a letter not ours: a name
                       (sh-nth fw 1)
@@ -100,7 +100,7 @@
                 (: _ (? !(heard ()) (hear lush-help))
                    _ (pin sh-tty () 1)
                    erc ("" + (getenv "ENV"))
-                   rc (? (tally erc) erc (("" + (getenv "HOME")) + "/.lushrc"))
+                   rc (? #erc erc (("" + (getenv "HOME")) + "/.lushrc"))
                    _ (raw 0) _ (sh-profiles 0) _ (sh-src rc) _ (raw 1)
                    (sh-loop "" (sh-histload 0)))
                 (: _ (sh-profiles 0) (sh-cooked "")))))
@@ -116,7 +116,7 @@
 ; the whole reason it hands one back. (the env -S shebang usually eats the dash, so
 ; --login is the reliable door, doc/lush.md.)
 (: _ (pins (from 'verbs 'tab) 'sh sh-main 'lush sh-main)
-   (bn p) (: n (tally p)
+   (bn p) (: n #p
              (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) (snip p r n))
              (go 0 0))
    s ((from 'verbs 'fire) ["lush" "lush.l" "sh"])

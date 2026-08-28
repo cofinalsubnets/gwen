@@ -311,12 +311,12 @@
    (line n s) (pad n + s + nl)
    ; the only node that prints as prose: one `//` per line, so a paragraph keeps shape
    (cnote n txt)
-    (: (one1 s) (? (tally s) ("// " + s) "//")     ; no trailing space on a blank line
+    (: (one1 s) (? #s ("// " + s) "//")     ; no trailing space on a blank line
        (go acc cur l)
         (? !(two? l) (acc + line n (one1 cur))
            (: c <l (? (c = 10) (go (acc + line n (one1 cur)) "" >l)
                       (go acc (cur + string c) >l))))
-       (go "" "" (map txt (jot (tally txt)))))
+       (go "" "" (map txt (jot #txt))))
    ; --- braces, K&R, the way love.c writes them ----------------------------------
    ; copen lays a header line and the body under it; cclose lays the closer, and its
    ; tail is what lets `}` keep company -- ` else` and ` while (c);` hang off the same
@@ -327,7 +327,7 @@
        (line n (pre + hdr) + cstmt s (n + 1)))
    (cclose n s tail)
     (? (blk? s) (line n ("}" + tail))
-       (? (tally tail) (line n tail) ""))
+       (? #tail (line n tail) ""))
 
    ; a case/dflt marker sits inline in a switch's flat item list, fallthrough being
    ; the list, so it outdents by one against the statements it labels

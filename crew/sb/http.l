@@ -20,7 +20,7 @@
 (:
    ; "80" -> 80. `int` is a truncation, not a parser, so digits are ours.
    (digits s)
-    (: n (tally s)
+    (: n #s
        (go i a) (? (n <= i) (? (0 < n) a ())
                    (: c (s i)
                       (? ((47 < c) && (c < 58)) (go (i + 1) ((a * 10) + (c - 48))) ())))
@@ -30,7 +30,7 @@
    ; positions -- headers sit in the first few KB and a whole-body scan would be
    ; O(n*m) for nothing. -1 when absent.
    (findsub s sub from cap)
-    (: n (tally s) m (tally sub) lim (? ((n - m) < cap) (n - m) cap)
+    (: n #s m #sub lim (? ((n - m) < cap) (n - m) cap)
        (go i) (? (lim < i) -1
                  (snip s i (i + m) = sub) i
                  (go (i + 1)))
@@ -40,12 +40,12 @@
    ; "http://host[:port]/path" -> (host port path) | ()
    (url-split u)
     (? !(url? u) ()
-       (: r (snip u 7 (tally u)) m (tally r)
+       (: r (snip u 7 #u) m #r
           (sl i) (? (m <= i) m (r i = 47) i (sl (i + 1)))
           k (sl 0)
           auth (snip r 0 k)
           path (? (k < m) (snip r k m) "/")
-          a (tally auth)
+          a #auth
           (cn i) (? (a <= i) -1 (auth i = 58) i (cn (i + 1)))
           c (cn 0)
           host (? (c < 0) auth (snip auth 0 c))
@@ -67,7 +67,7 @@
                 (: k (findsub r "\r\n\r\n" 0 8192)
                    (? (k < 0) ()
                       (: head (snip r 0 k)
-                         body (snip r (k + 4) (tally r))
+                         body (snip r (k + 4) #r)
                          sp (findsub head " " 0 64)
                          code (? (sp < 0) () (digits (snip head (sp + 1) (sp + 4))))
                          (? code [code body] ()))))))))

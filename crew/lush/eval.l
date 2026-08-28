@@ -17,11 +17,11 @@
 
 (module 'lush
 (: ; export NAME=VAL -> setenv; export NAME promotes the shell var
-   (sh-eqpos s i) (? (i = (tally s)) () (? ((s i) = 61) i (sh-eqpos s (i + 1))))
+   (sh-eqpos s i) (? (i = #s) () (? ((s i) = 61) i (sh-eqpos s (i + 1))))
    (sh-export w)
      (: p (sh-eqpos w 0)
         (? !p (setenv w (sh-vval w))
-           (setenv (snip w 0 p) (snip w (p + 1) (tally w)))))
+           (setenv (snip w 0 p) (snip w (p + 1) #w))))
 
    (cmderr msg) (: _ (say err ("lush: " + (msg + "\n"))) _ (pin sh-status () 1) 1)
    ; the exec is the child's, and a child that cannot exec has no voice: it can
@@ -35,7 +35,7 @@
    ; the child and in the parent after spawn; writes ((wfd . body)..) are
    ; heredoc feeds -- the parent pours and closes them after the spawn.
    (dfd ion d) (? (two? ion) <ion d)
-   (rderr opens msg) (: _ (each opens fdclose) ('err >< msg))
+   (rderr opens msg) (: _ (each opens fdclose) ('err . msg))
    (sh-rdmap rs) (rdm rs () () ())
    (rdm rs fdmap opens writes)
      (? !rs [1 (sh-rev fdmap) opens writes]
@@ -44,24 +44,24 @@
               (: pp (pipe 0)
                  (? (charm? pp) (rderr opens "cannot pipe")
                     (rdm >rs
-                         ((dfd ion 0 >< <pp) >< fdmap)
-                         (<pp >< opens)
-                         ((>pp >< sh-textof (sh-nth r 2)) >< writes))))
+                         ((dfd ion 0 . <pp) . fdmap)
+                         (<pp . opens)
+                         ((>pp . sh-textof (sh-nth r 2)) . writes))))
               (: tf (sh-fields (sh-nth r 2))
                  (? (!(two? tf) || two? >tf) (rderr opens "ambiguous redirect")
                     (: t <tf
                        (? (op = "<")
                             (: fd (openfd t 0)
                                (? (fd < 0) (rderr opens (t + ": cannot open"))
-                                  (rdm >rs ((dfd ion 0 >< fd) >< fdmap) (fd >< opens) writes)))
+                                  (rdm >rs ((dfd ion 0 . fd) . fdmap) (fd . opens) writes)))
                           ((op = ">") || (op = ">>"))
                             (: fd (openfd t (? (op = ">") 1 2))
                                (? (fd < 0) (rderr opens (t + ": cannot open"))
-                                  (rdm >rs ((dfd ion 1 >< fd) >< fdmap) (fd >< opens) writes)))
+                                  (rdm >rs ((dfd ion 1 . fd) . fdmap) (fd . opens) writes)))
                           ((op = ">&") || (op = "<&"))
                             (: d (dfd ion (? (op = "<&") 0 1))
-                               (? (t = "-") (rdm >rs ((d >< ()) >< fdmap) opens writes)
-                                  (sh-digits? t) (rdm >rs ((d >< sh-int t) >< fdmap) opens writes)
+                               (? (t = "-") (rdm >rs ((d . ()) . fdmap) opens writes)
+                                  (sh-digits? t) (rdm >rs ((d . sh-int t) . fdmap) opens writes)
                                   (rderr opens (t + ": bad fd"))))
                           (rderr opens (op + ": unsupported")))))))))
    (sh-hwrite wrs)
@@ -69,7 +69,7 @@
 
    ; --- assignments: NAME=value words at the head -------------------------------
    (sh-asnname? s)
-     (: n (tally s)
+     (: n #s
         (? !n 0 !(sh-name1? (s 0)) 0
            (: (go i) (? (i = n) 1 (? (sh-name? (s i)) (go (i + 1)) 0)) (go 1))))
    (sh-asn? segs)
@@ -80,18 +80,18 @@
                  (? !p ()
                     !(sh-asnname? (snip t 0 p)) ()
                     (link (snip t 0 p)
-                          (: rest (snip t (p + 1) (tally t))
-                             (? (tally rest) (('lit >< rest) >< >segs) >segs))))))))
+                          (: rest (snip t (p + 1) #t)
+                             (? #rest (('lit . rest) . >segs) >segs))))))))
    (sh-peel ws acc)
      (? (two? ws)
         (: a (sh-asn? <ws)
-           (? (two? a) (sh-peel >ws (a >< acc)) (sh-rev acc >< ws)))
-        (sh-rev acc >< ws))
+           (? (two? a) (sh-peel >ws (a . acc)) (sh-rev acc . ws)))
+        (sh-rev acc . ws))
    (sh-doasn a) (sh-setvar <a (sh-textof >a))
    (sh-tmpset a)                                ; temporary env around one command
      (: nm <a old (getenv nm)
         _ (setenv nm (sh-textof >a))
-        (nm >< old))
+        (nm . old))
    (sh-tmprestore e) (setenv <e >e)             ; () old unsets -- the absence lane
 
    ; --- the in-image lane: a tool whose main rides this image -------------------
@@ -152,12 +152,12 @@
    sh-imgalias '(("mooncc" "moon-run" "moon") ("cc" "moon-run" "moon") ("kore" "kore-main")
                  ("[" "bracket-main") ("objcopy" "objcopy" "holo"))
    (sh-pathdirs _)
-     (: p ("" + (getenv "PATH")) n (tally p)
-        (go from k acc) (? (n <= k) (sh-rev (snip p from k >< acc))
-                           ((p k) = 58) (go (k + 1) (k + 1) (snip p from k >< acc))
+     (: p ("" + (getenv "PATH")) n #p
+        (go from k acc) (? (n <= k) (sh-rev (snip p from k . acc))
+                           ((p k) = 58) (go (k + 1) (k + 1) (snip p from k . acc))
                            (go from (k + 1) acc))
         (go 0 0 ()))
-   (sh-slashed? w) (: n (tally w)
+   (sh-slashed? w) (: n #w
                       (go k) (? (n <= k) 0 ((w k) = 47) 1 (go (k + 1)))
                       (go 0))
    ; asked at the call: the kernel bakes this file and carries no host nif, where a
@@ -167,12 +167,12 @@
    (sh-whichp w)                                ; PATH's winner for w -> (1 path), or ()
      (? (sh-slashed? w) (? (two? (stat w)) [1 w] ())
         (: (go l) (? !(two? l) ()
-                     (: d (? (tally <l) <l ".") p (d + ("/" + w))
+                     (: d (? #<l <l ".") p (d + ("/" + w))
                         (? (two? (stat p)) [1 p] (go >l))))
            (go (sh-pathdirs ()))))
    (sh-onpath? w)                               ; is PATH's winner for w this binary
      (: (go l) (? !(two? l) 0
-                  (: d (? (tally <l) <l ".") p (d + ("/" + w))
+                  (: d (? #<l <l ".") p (d + ("/" + w))
                      (? (two? (stat p)) (sh-self? p) (go >l))))
         (go (sh-pathdirs ())))
    ; would spawning this word land on the binary we are already running? the one
@@ -213,7 +213,7 @@
    ; that never evaluated cli.l (the kernel, whose seat has no selfpath either), so
    ; the lane is dormant there and the task shim keeps the spawn.
    sh-forkc (tablet 0)                          ; word -> 1 | 0, decided once
-   (sh-dotl? w) (: n (tally w) ?((2 < n) && (snip w (n - 2) n = ".l")))
+   (sh-dotl? w) (: n #w ?((2 < n) && (snip w (n - 2) n = ".l")))
    (sh-cliline _) (? (member? 'cli-line (names ())) (ev 'cli-line) ())   ; a bare global, read at the call
    (sh-forkask w) (? (|| (sh-slashed? w) (sh-dotl? w)) 0
                      (&& (sh-cliline ()) (sh-ours? w)) 1
@@ -244,7 +244,7 @@
      (: args2 (? (two? args && (<args = "-r")) >args args)
         nms (? (two? args2) args2 ["REPLY"])
         ln (sh-getline in)
-        (? (id? ln 'eof) 1 (: _ (sh-readset nms ln 0 (tally ln)) 0)))
+        (? (id? ln 'eof) 1 (: _ (sh-readset nms ln 0 #ln) 0)))
    (sh-readset nms ln i n)
      (: i2 (skifs ln i n)
         (? !(two? >nms) (sh-setvar <nms (sh-rtrim (snip ln i2 n)))
@@ -253,14 +253,14 @@
               (sh-readset >nms ln j n))))
    (sh-rtrim s)
      (: (go k) (? ((0 < k) && sh-ifs? (s (k - 1))) (go (k - 1)) (snip s 0 k))
-        (go (tally s)))
+        (go #s))
    (sh-setb args)
      (? !(two? args) 0
         (: a <args
            (? (a = "--") (: _ (pin sh-pos () >args) 0)
-              ((1 < (tally a)) && (((a 0) = 45) || ((a 0) = 43)))
+              ((1 < #a) && (((a 0) = 45) || ((a 0) = 43)))
                 (: on (? ((a 0) = 45) 1 0)
-                   (go i) (? (i = (tally a)) (sh-setb >args)
+                   (go i) (? (i = #a) (sh-setb >args)
                              (: b (a i)
                                 _ (? (b = 101) (pin sh-eflag () on)
                                      (b = 117) (pin sh-uflag () on)
@@ -286,7 +286,7 @@
    ; row: sh-cond normalises before anything is stored.
    (sh-cond w)
      (: u (sh-upper w)
-        v (? ((tally u) > 3 && (snip u 0 3) = "SIG") (snip u 3 (tally u)) u)
+        v (? (#u > 3 && (snip u 0 3) = "SIG") (snip u 3 #u) u)
         (? (v = "0") "EXIT" v))
    (sh-upper s)                                 ; an index walk: foldl does not take a string
      ((: (g i acc)
@@ -320,13 +320,13 @@
                     (: _ (each conds
                                (\ w (: c (sh-cond w)
                                        (? (sh-ignored? c) 0
-                                          (tally act) (pin sh-traps c act)
+                                          #act (pin sh-traps c act)
                                           (pull sh-traps c 0)))))
                        0))))))
    (sh-localb args)
      (: _ (each args (\ w (: p (sh-eqpos w 0)
                              (? !p (pin sh-vars w "")
-                                (pin sh-vars (snip w 0 p) (snip w (p + 1) (tally w)))))))
+                                (pin sh-vars (snip w 0 p) (snip w (p + 1) #w))))))
         0)
    (sh-waitb args)                              ; wait [pid..] -> the last one's status
      (? (two? args)
@@ -353,7 +353,7 @@
    (sh-loveb args)
      (: q ((two? args) && (<args = "-n"))
         src (sh-unwords (? q >args args))
-        (? !(tally src) 0
+        (? !#src 0
            (: r (sh-loveval src)
               (? (id? <r 'err) (sh-lovesay >r)
                  (: v >r
@@ -403,16 +403,16 @@
            (cmd = "unset") (: _ (each >argv
                                       (\ nm (: _ (pull sh-vars nm 0) (setenv nm ())))) 0)
            (cmd = "eval") (: c (sh-unwords >argv)
-                             (? (tally c)
+                             (? #c
                                 (: r (sh-line c) (? (two? r) (cmderr "eval: unexpected eof") r))
                                 0))
            (cmd = "ev")   (sh-loveb >argv)
            (cmd = ".")    (sh-dotb >argv)
            (cmd = "local") (sh-localb >argv)
            (cmd = "wait") (sh-waitb >argv)
-           (cmd = "break") ('brk >< (? >argv (sh-int <>argv) 1))
-           (cmd = "continue") ('cnt >< (? >argv (sh-int <>argv) 1))
-           (cmd = "return") ('ret >< (? >argv (sh-int <>argv) (sh-status ())))
+           (cmd = "break") ('brk . (? >argv (sh-int <>argv) 1))
+           (cmd = "continue") ('cnt . (? >argv (sh-int <>argv) 1))
+           (cmd = "return") ('ret . (? >argv (sh-int <>argv) (sh-status ())))
            'nope))
 
    ; --- the function book -------------------------------------------------------
@@ -422,8 +422,8 @@
    (sh-fn? nm) !(id? sh-nofn (sh-fnof nm))
 
    ; --- stage expansion + the spawn engines ------------------------------------
-   (sh-makepipes n) (? (n < 1) () (pipe 0 >< sh-makepipes (n - 1)))
-   (sh-flat ps) (? !ps () (<<ps >< (><ps >< sh-flat >ps)))
+   (sh-makepipes n) (? (n < 1) () (pipe 0 . sh-makepipes (n - 1)))
+   (sh-flat ps) (? !ps () (<<ps . (><ps . sh-flat >ps)))
    ; a stage: ('x argv fdmap opens writes) spawns; ('a ast () () ()) forks --
    ; compounds, builtins, functions and assignment-bearing commands all fork
    ; (the child re-expands, so its env sees its own assignments)
@@ -431,16 +431,16 @@
      (? !cmds [1 (sh-rev acc)]
         (: c <cmds
            (? !(id? <c 'cmd)
-              (sh-stagex >cmds ['a c () () () >< acc])
+              (sh-stagex >cmds ['a c () () () . acc])
               (: pk (sh-peel (sh-nth c 1) ())
                  argv (catmap sh-fields >pk)
                  (? (|| (two? <pk) !(two? argv)
                         (sh-bi? <argv) (sh-fn? <argv))
-                    (sh-stagex >cmds ['a c () () () >< acc])
+                    (sh-stagex >cmds ['a c () () () . acc])
                     (: rm (sh-rdmap (sh-nth c 2))
                        (? (id? <rm 'err) (: _ (stclean acc) rm)
                           (sh-stagex >cmds
-                                     ['x argv (sh-nth rm 1) (sh-nth rm 2) (sh-nth rm 3) >< acc]))))))))
+                                     ['x argv (sh-nth rm 1) (sh-nth rm 2) (sh-nth rm 3) . acc]))))))))
    (stclean acc) (each acc (\ st (each (sh-nth st 3) fdclose)))
    ; spawn one stage: external -> spawnmap; anything else -> fork, the child
    ; lays the pipe map on itself (dup2), closes the plumbing, evals, quits
@@ -499,12 +499,12 @@
    (sh-spawnst sts pipes allclose lastout i last pg fg pids)
      (? !sts (sh-rev pids)
         (: st <sts
-           base (+ (? (0 < i) [(0 >< <(sh-nth pipes (i - 1)))] ())
-                   (? (i < last) [(1 >< >(sh-nth pipes i))]
-                      (? (lastout < 0) () [(1 >< lastout)])))
+           base (+ (? (0 < i) [(0 . <(sh-nth pipes (i - 1)))] ())
+                   (? (i < last) [(1 . >(sh-nth pipes i))]
+                      (? (lastout < 0) () [(1 . lastout)])))
            pid (sh-spawn1 st base allclose pg (? (i = 0) fg 0))
            (sh-spawnst >sts pipes allclose lastout (i + 1) last
-                       (? (pg < 0) pg (? (i = 0) pid pg)) fg (pid >< pids))))
+                       (? (pg < 0) pg (? (i = 0) pid pg)) fg (pid . pids))))
    (sh-echk st)
      (? (&& (charm? st) !(st = 0) (sh-eflag ()) (0 = (sh-noe ())) !(sh-tty ()))
         (sh-leave st) st)
@@ -512,7 +512,7 @@
      (: sx (sh-stagex cmds ())
         (? (id? <sx 'err) (cmderr >sx)
            (: sts (sh-nth sx 1)
-              n ((tally sts) - 1)
+              n (#sts - 1)
               pipes (sh-makepipes n)
               pfds (sh-flat pipes)
               ofds (catmap (\ st (sh-nth st 3)) sts)
@@ -554,7 +554,7 @@
            (? (id? <rm 'err) (cmderr >rm)
               (: fdmap (sh-nth rm 1) opens (sh-nth rm 2) wrs (sh-nth rm 3)
                  _ (sh-hwrite wrs)
-                 saves (map (\ e (<e >< dup <e)) fdmap)
+                 saves (map (\ e (<e . dup <e)) fdmap)
                  _ (each fdmap (\ e (? (charm? >e) (dup2 >e <e)
                                        (fdclose <e))))
                  _ (each opens fdclose)
@@ -643,7 +643,7 @@
               (id? k 'cmd)  (: pk (sh-peel (sh-nth a 1) ()) rs (sh-nth a 2)
                                (\ _ (sh-simple pk rs)))
               (id? k 'if)
-                (: cls (map (\ c (sh-plan <c >< sh-plan >c)) (sh-nth a 1))
+                (: cls (map (\ c (sh-plan <c . sh-plan >c)) (sh-nth a 1))
                    els (? (two? (sh-nth a 2)) (sh-plan (sh-nth a 2)) sh-zero)
                    (\ _ (sh-if cls els)))
               (id? k 'while)
@@ -683,8 +683,8 @@
                  (: b (body ())
                     (? (two? b)
                        (: kk <b nn >b
-                          (? (id? kk 'brk) (? (1 < nn) ('brk >< (nn - 1)) (sh-zero ()))
-                             (id? kk 'cnt) (? (1 < nn) ('cnt >< (nn - 1))
+                          (? (id? kk 'brk) (? (1 < nn) ('brk . (nn - 1)) (sh-zero ()))
+                             (id? kk 'cnt) (? (1 < nn) ('cnt . (nn - 1))
                                               (sh-wloop inv cond body last))
                              b))
                        (sh-wloop inv cond body b)))))))
@@ -694,8 +694,8 @@
            b (body ())
            (? (two? b)
               (: kk <b nn >b
-                 (? (id? kk 'brk) (? (1 < nn) ('brk >< (nn - 1)) (sh-zero ()))
-                    (id? kk 'cnt) (? (1 < nn) ('cnt >< (nn - 1)) (sh-floop nm >fs body last))
+                 (? (id? kk 'brk) (? (1 < nn) ('brk . (nn - 1)) (sh-zero ()))
+                    (id? kk 'cnt) (? (1 < nn) ('cnt . (nn - 1)) (sh-floop nm >fs body last))
                     b))
               (sh-floop nm >fs body b))))
    (sh-anymatch t pats)
@@ -737,7 +737,7 @@
         (? (id? <rm 'err) (cmderr >rm)
            (: fdmap (sh-nth rm 1) opens (sh-nth rm 2) wrs (sh-nth rm 3)
               _ (sh-hwrite wrs)                       ; a heredoc body fits the pipe
-              saves (map (\ e (<e >< dup <e)) fdmap)
+              saves (map (\ e (<e . dup <e)) fdmap)
               _ (each fdmap (\ e (? (charm? >e) (dup2 >e <e)
                                     (fdclose <e))))
               _ (each opens fdclose)
@@ -754,12 +754,12 @@
         sx (sh-stagex cmds ())
         (? (id? <sx 'err) (: _ (cmderr >sx) ())
            (: sts (sh-nth sx 1)
-              n ((tally sts) - 1)
+              n (#sts - 1)
               pipes (sh-makepipes n)
               pfds (sh-flat pipes)
               ofds (catmap (\ st (sh-nth st 3)) sts)
               wrs (catmap (\ st (sh-nth st 4)) sts)
-              allclose (wfd >< (pfds + (ofds + (map cap wrs))))
+              allclose (wfd . (pfds + (ofds + (map cap wrs))))
               pids (sh-spawnst sts pipes allclose wfd 0 n (0 - 1) 0 ())
               _ (each (pfds + ofds) fdclose)
               _ (sh-hwrite wrs)
@@ -787,7 +787,7 @@
         (: h <w
            (? !(id? <h 'lit) ()
               (: t >h
-                 (? (!(tally t) || ((t 0) = 126) || sh-anyglob t) () t)))))
+                 (? (!#t || ((t 0) = 126) || sh-anyglob t) () t)))))
    (sh-cmdname a)                              ; a 'cmd's bare name, or () if it has none to read
      (: pk (sh-peel (sh-nth a 1) ())
         (? (two? <pk) ()                       ; assignments want a subshell
@@ -858,7 +858,7 @@
         _ (each (keys sh-traps) (\ k (pull sh-traps k 0)))
         _ (sh-disarm 0)
         0)
-   (sh-tabsnap t) (map (\ k (k >< (t k))) (keys t))
+   (sh-tabsnap t) (map (\ k (k . (t k))) (keys t))
    (sh-tabback t sn)
      (: _ (each (keys t) (\ k (pull t k 0)))
         _ (each sn (\ e (pin t <e >e)))
@@ -871,7 +871,7 @@
                                      (setenv (? !p e (snip e 0 p)) ())))))
               _ (each old (\ e (: p (sh-eqpos e 0)
                                   (? !p 0
-                                     (setenv (snip e 0 p) (snip e (p + 1) (tally e)))))))
+                                     (setenv (snip e 0 p) (snip e (p + 1) #e))))))
               0)))
    (sh-subsave _)
      [(cwd 0) (sh-tabsnap sh-vars) (sh-tabsnap sh-funcs) (sh-pos ()) (sh-arg0 ())
@@ -903,7 +903,7 @@
    (sh-oneflags fl)                            ; ("-ec") -> (1 e u x) | () not ours
      (: (go l e u x)
          (? !(two? l) [1 e u x]
-            (: w <l n (tally w)
+            (: w <l n #w
                (? (|| (n < 2) !((w 0) = 45)) ()
                   (: (ch k e2 u2 x2)
                       (? (n <= k) (go >l e2 u2 x2)
@@ -950,7 +950,7 @@
               sv (dup 1)
               _ (dup2 wfd 1)
               caps (sh-subfds ())
-              _ (pin sh-subfds () ((rfd >< d) >< caps))
+              _ (pin sh-subfds () ((rfd . d) . caps))
               snap (sh-subsave ())
               ; the whole seat is minded: nothing here is reclaimed by anything else.
               ; sv and wfd are raw fds -- fdclose is the only door, and a port's
@@ -1008,10 +1008,10 @@
    (sh-lines port buf)
      (: line (sh-getline port)
         (? (id? line 'eof)
-           (? (tally buf)
+           (? #buf
               (: _ (say err "lush: unexpected eof\n") _ (pin sh-status () 2) 0)
               0)
-           (: full (? (tally buf) (buf + ("\n" + line)) line)
+           (: full (? #buf (buf + ("\n" + line)) line)
               r (sh-line full)
               ; a signal that arrived while no child was up has nobody to end its
               ; wait, so the line boundary is the other place it is read

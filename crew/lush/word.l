@@ -18,7 +18,7 @@
    (sh-ifs? b) (|| (b = 32) (b = 9) (b = 10))
    (sh-chomp t)
      (: (go k) (? ((0 < k) && ((t (k - 1)) = 10)) (go (k - 1)) (snip t 0 k))
-        (go (tally t)))
+        (go #t))
    (sh-runsub x) (sh-chomp ("" + ((sh-subeval ()) x)))
 
    ; --- the love lane: a form's answer, and that answer as shell text -----------
@@ -33,16 +33,16 @@
    (sh-loveval src)
      (: m (nom 0)                                 ; a fresh nom: 'torn, id?-safe
         (rdl x acc) (sound x @ 'torn       m
-                               (d >< rest) (rdl rest (d >< acc))
+                               (d . rest) (rdl rest (d . acc))
                                _           (sh-rev acc))
         ; ^m, the pin: a bare `m` in a pattern would bind and take every answer.
         ; the nom is read from outside and the arm asks for that value alone.
         ; [] is the empty chain, exactly; a `()` arm would fit anything (pat.l)
-        (trap (\ _ (rdl src () @ ^m ('err >< ('unfinished-form >< src))
-                                 [] (1 >< ())
-                                 ds (1 >< (ev 'ev (two? >ds ? ds <ds)))))
+        (trap (\ _ (rdl src () @ ^m ('err . ('unfinished-form . src))
+                                 [] (1 . ())
+                                 ds (1 . (ev 'ev (two? >ds ? ds <ds)))))
               ()
-              (\ a b ('err >< (a >< b)))))
+              (\ a b ('err . (a . b)))))
    (sh-lovesay c)                                 ; a love condition, on err, status 1
      (: _ (say err "lush: love: ") _ (print err <c) _ (say err " ")
         _ (print err >c) _ (put err 10) _ (flush err) 1)
@@ -53,29 +53,29 @@
    ; empty expansion, never a torn word -- the seg is already lexed by the time we
    ; are here, so there is no line to fail and the shell has to stay sayable
    (sh-lovseg src)
-     (sh-loveval src @ ('err >< c) (: _ (sh-lovesay c) "")
-                      (_ >< v)     (sh-lovetext v)
+     (sh-loveval src @ ('err . c) (: _ (sh-lovesay c) "")
+                      (_ . v)     (sh-lovetext v)
                       _            "")
 
    ; --- parameters: shell vars over env; specials; presence out of band --------
    ; (sh-vget nm) -> () unset | (1 . value) -- a tablet hit is a string (maybe
    ; ""), the miss the (); string? tells them apart where net cannot
    (sh-vget nm)
-     (? (nm = "?") (1 >< show (sh-status ()))
-        (nm = "#") (1 >< show (tally (sh-pos ())))
-        (nm = "$") (1 >< show (getpid 0))
-        (nm = "!") (1 >< show (sh-lastbg ()))
-        (nm = "0") (1 >< ("" + (sh-arg0 ())))
-        ((nm = "@") || (nm = "*")) (1 >< sh-unwords (sh-pos ()))
+     (? (nm = "?") (1 . show (sh-status ()))
+        (nm = "#") (1 . show #(sh-pos ()))
+        (nm = "$") (1 . show (getpid 0))
+        (nm = "!") (1 . show (sh-lastbg ()))
+        (nm = "0") (1 . ("" + (sh-arg0 ())))
+        ((nm = "@") || (nm = "*")) (1 . sh-unwords (sh-pos ()))
         (sh-digits? nm)
           (: (go l k)
                (? !(two? l) ()
-                  (k = 1) (1 >< <l)
+                  (k = 1) (1 . <l)
                   (go >l (k - 1)))
              (go (sh-pos ()) (sh-int nm)))
         (: v (peep sh-vars nm ())
-           (? (string? v) (1 >< v)
-              (: e (getenv nm) (? (string? e) (1 >< e) ())))))
+           (? (string? v) (1 . v)
+              (: e (getenv nm) (? (string? e) (1 . e) ())))))
    (sh-vval nm)
      (: g (sh-vget nm)
         (? (two? g) >g
@@ -111,7 +111,7 @@
    (ar-dead th) (: old (peep arlive 0 1) _ (pin arlive 0 0)
                    v (th ()) _ (pin arlive 0 old) v)
    (ar-ws s n i) (i < n && (s i = 32 || s i = 9 || s i = 10) ? (ar-ws s n (1 + i)) i)
-   (ar-at s n i t) (: m (tally t) ((i + m) <= n && (snip s i (i + m)) = t))
+   (ar-at s n i t) (: m #t ((i + m) <= n && (snip s i (i + m)) = t))
    (ar-nth l k) (? !(two? l) () (k = 0) <l (ar-nth >l (k - 1)))
    (ar-has? l t) (any (\ x (x = t)) l)
    ; --- numbers: 0x hex, leading-0 octal, else decimal
@@ -123,7 +123,7 @@
    (ar-digs s n i base acc any?)
      (? (i < n && (ar-dig? (s i) base))
         (ar-digs s n (1 + i) base ((acc * base) + (ar-hexv (s i))) 1)
-        (any? ? (acc >< i) ()))
+        (any? ? (acc . i) ()))
    (ar-num s n i)
      (? ((1 + i) < n && s i = 48 && (s (1 + i) = 120 || s (1 + i) = 88))
           (ar-digs s n (2 + i) 16 0 0)
@@ -133,7 +133,7 @@
    (ar-name s n i)
      (? (i < n && sh-name1? (s i))
         (: (go j) (j < n && sh-name? (s j) ? (go (1 + j)) j)
-           e (go i) ((snip s i e) >< e))
+           e (go i) ((snip s i e) . e))
         ())
    ; a name's value, as a number. unset or empty is 0 -- which is what makes the
    ; `n=$((n + 1))` tally work on its first pass.
@@ -171,8 +171,8 @@
    arasn '("<<=" ">>=" "*=" "/=" "%=" "+=" "-=" "&=" "^=" "|=")
    (ar-asnop s n i)
      (: r (foldl (\ a t (? (string? a) a (ar-at s n i t) t a)) () arasn)
-        (? (string? r) (r >< (i + tally r))
-           (i < n && s i = 61 && !((1 + i) < n && s (1 + i) = 61)) ("=" >< (1 + i))
+        (? (string? r) (r . (i + tally r))
+           (i < n && s i = 61 && !((1 + i) < n && s (1 + i) = 61)) ("=" . (1 + i))
            ()))
    ; --- the walk
    (ar-expr s n i d)
@@ -184,11 +184,11 @@
               (? !(two? op) (ar-cond s n i0 d)
                  (: r (ar-expr s n >op d)
                     (? !(two? r) ()
-                       (<op = "=") ((ar-store <nv <r) >< >r)
+                       (<op = "=") ((ar-store <nv <r) . >r)
                        (: cur (ar-vval <nv d)
                           (? !(charm? cur) ()
-                             (: v (ar-apply (snip <op 0 ((tally <op) - 1)) cur <r)
-                                (charm? v ? ((ar-store <nv v) >< >r) ()))))))))))
+                             (: v (ar-apply (snip <op 0 (#<op - 1)) cur <r)
+                                (charm? v ? ((ar-store <nv v) . >r) ()))))))))))
    (ar-cond s n i d)
      (: r (ar-bin s n i 0 d)
         (? !(two? r) ()
@@ -201,7 +201,7 @@
                           (? !(j2 < n && s j2 = 58) (ar-bad "? without :")
                              (: b (c ? (ar-dead (\ _ (ar-cond s n (1 + j2) d)))
                                        (ar-cond s n (1 + j2) d))
-                                (? !(two? b) () ((c ? <a <b) >< >b)))))))))))
+                                (? !(two? b) () ((c ? <a <b) . >b)))))))))))
    (ar-bin s n i k d)
      (? (k >= tally arlv) (ar-un s n i d)
         (: r (ar-bin s n i (1 + k) d) (? !(two? r) () (ar-more s n r k d))))
@@ -224,15 +224,15 @@
                          dead? (o = "&&" ? 0 1)
                          (<rr = 0 ? 0 1))
                     (? !(charm? v) ()
-                       rt? (v >< >rr)           ; the RHS already took the whole tail
-                       (ar-more s n (v >< >rr) k d)))))))
+                       rt? (v . >rr)           ; the RHS already took the whole tail
+                       (ar-more s n (v . >rr) k d)))))))
    (ar-un s n i d)
      (: i2 (ar-ws s n i)
         (? (n <= i2) ()
            (ar-at s n i2 "++") (ar-step s n (2 + i2) 1 d)
            (ar-at s n i2 "--") (ar-step s n (2 + i2) (0 - 1) d)
            (: b (s i2)
-              neg (\ f (: r (ar-un s n (1 + i2) d) (two? r ? ((f <r) >< >r) ())))
+              neg (\ f (: r (ar-un s n (1 + i2) d) (two? r ? ((f <r) . >r) ())))
               (? (b = 45) (neg (\ v (0 - v)))
                  (b = 43) (ar-un s n (1 + i2) d)
                  (b = 33) (neg (\ v (v = 0 ? 1 0)))
@@ -244,7 +244,7 @@
      (: nv (ar-name s n (ar-ws s n i))
         (? !(two? nv) (ar-bad "++ wants a name")
            (: cur (ar-vval <nv d)
-              (charm? cur ? ((ar-store <nv (cur + by)) >< >nv) ()))))
+              (charm? cur ? ((ar-store <nv (cur + by)) . >nv) ()))))
    (ar-prim s n i d)
      (: i2 (ar-ws s n i)
         (? (n <= i2) (ar-bad "expression ends early")
@@ -252,21 +252,21 @@
              (: r (ar-expr s n (1 + i2) d)
                 (? !(two? r) ()
                    (: j (ar-ws s n >r)
-                      (? (j < n && s j = 41) (<r >< (1 + j)) (ar-bad "( without )")))))
+                      (? (j < n && s j = 41) (<r . (1 + j)) (ar-bad "( without )")))))
            (sh-digit? (s i2)) (: r (ar-num s n i2) (two? r ? r (ar-bad "bad number")))
            (sh-name1? (s i2))
              (: nv (ar-name s n i2)
                 j (ar-ws s n >nv)
                 (? (ar-at s n j "++") (ar-post <nv 1 d (2 + j))
                    (ar-at s n j "--") (ar-post <nv (0 - 1) d (2 + j))
-                   (: v (ar-vval <nv d) (charm? v ? (v >< >nv) ()))))
+                   (: v (ar-vval <nv d) (charm? v ? (v . >nv) ()))))
            (ar-bad ("unexpected " + (string (s i2))))))
    (ar-post nm by d j)
      (: cur (ar-vval nm d)
-        (? !(charm? cur) () (: _ (ar-store nm (cur + by)) (cur >< j))))
+        (? !(charm? cur) () (: _ (ar-store nm (cur + by)) (cur . j))))
    ; the whole text, and nothing left over
    (ar-eval src d)
-     (: n (tally src)
+     (: n #src
         r (ar-expr src n 0 d)
         (? !(two? r) () (: j (ar-ws src n >r) (j < n ? (ar-bad "trailing text") <r))))
    ; ('ari . text) -> the value as shell text. a bad expression says so and stands
@@ -300,17 +300,17 @@
    (sh-voptext text) (sh-textof (sh-wordize text))
    (sh-vopseg sg) (: p >sg (sh-vop (sh-nth p 0) (sh-nth p 1) (sh-nth p 2)))
    (sh-vop nm op text)
-     (? (op = "len") (show (tally (sh-vval nm)))
+     (? (op = "len") (show #(sh-vval nm))
         (: g (sh-vget nm)
            set? (two? g)
            v (? set? >g "")
            colon (tally op && ((op 0) = 58))
            use? (? colon (set? && tally v) set?)
-           o (? colon (snip op 1 (tally op)) op)
+           o (? colon (snip op 1 #op) op)
            (? (o = "-") (? use? v (sh-voptext text))
               (o = "=") (? use? v (: t (sh-voptext text) _ (sh-setvar nm t) t))
               (o = "?") (? use? v
-                           (: _ (say err ("lush: " + (nm + (": " + (? (tally text) text "parameter not set")))))
+                           (: _ (say err ("lush: " + (nm + (": " + (? #text text "parameter not set")))))
                               _ (put err 10)
                               (? (sh-tty ()) "" (sh-leave 2))))
               (o = "+") (? use? (sh-voptext text) "")
@@ -328,11 +328,11 @@
                             (id? k 'lov) (sh-lovseg >sg)
                             "")
                        live (? (id? k 'sq || id? k 'dq || id? k 'lov) "0" "1")
-                       ((<a + t) >< (>a + (sh-mrep (tally t) live)))))
-            ("" >< "") segs)
+                       ((<a + t) . (>a + (sh-mrep #t live)))))
+            ("" . "") segs)
    (sh-vstrip v o text)
      (: pw (sh-patmask (sh-wordize text))
-        pt <pw pm >pw n (tally v)
+        pt <pw pm >pw n #v
         (? (o = "#")  (: (go i) (? (n < i) v
                                    (? (sh-fmatch pt pm (snip v 0 i)) (snip v i n) (go (i + 1))))
                          (go 0))
@@ -350,8 +350,8 @@
    ; --- the field machinery -----------------------------------------------------
    ; field state: (done runs seen) -- done finished fields (rev), runs the
    ; field in progress (rev run list), seen "this field exists"
-   (addrun runs t a) (? (tally t) ((t >< a) >< runs) runs)
-   (closef done runs seen) (? seen (runs >< done) done)
+   (addrun runs t a) (? #t ((t . a) . runs) runs)
+   (closef done runs seen) (? seen (runs . done) done)
    (skifs t i n) (? ((i < n) && sh-ifs? (t i)) (skifs t (i + 1) n) i)
    (chunk t i n) (? ((i < n) && !(sh-ifs? (t i))) (chunk t (i + 1) n) i)
    ; split expansion output on IFS: chunks join the field, runs of IFS close it
@@ -371,7 +371,7 @@
               (: ps (sh-pos ())
                  st2 (? !(two? ps) st
                         (foldl (\ a p (: dd (sh-nth a 0) rr (sh-nth a 1) sn2 (sh-nth a 2)
-                                         (? sn2 [(rr >< dd) (addrun () p 0) 1]
+                                         (? sn2 [(rr . dd) (addrun () p 0) 1]
                                             [dd (addrun () p 0) 1])))
                                [d (addrun r (? (two? ps) <ps "") 0) 1]
                                >ps))
@@ -398,10 +398,10 @@
            ; "": a real (seen) field even empty -- except a lone "$@" over zero
            ; positionals, which contributes nothing (dqat's glue lane sets seen)
            (id? k 'dq)  (dqat v [d r (? (two? v) sn 1)])
-           (id? k 'var) (: t (sh-vval v) (spl t 0 (tally t) d r sn))
-           (id? k 'vop) (: t (sh-vopseg sg) (spl t 0 (tally t) d r sn))
-           (id? k 'sub) (: t (sh-runsub v) (spl t 0 (tally t) d r sn))
-           (id? k 'ari) (: t (sh-arith v) (spl t 0 (tally t) d r sn))
+           (id? k 'var) (: t (sh-vval v) (spl t 0 #t d r sn))
+           (id? k 'vop) (: t (sh-vopseg sg) (spl t 0 #t d r sn))
+           (id? k 'sub) (: t (sh-runsub v) (spl t 0 #t d r sn))
+           (id? k 'ari) (: t (sh-arith v) (spl t 0 #t d r sn))
            st))
    (wsegs segs st) (? !segs st (wsegs >segs (wseg <segs st)))
 
@@ -409,10 +409,10 @@
    ; the rest of the run stays live so ~/*.l still globs
    (sh-tilde segs)
      (? (&& (two? segs) (id? <<segs 'lit)
-            (tally ><segs) ((><segs 0) = 126))
+            #><segs ((><segs 0) = 126))
         (: t ><segs h ("" + (getenv "HOME"))
-           (? (t = "~") (('sq >< h) >< >segs)
-              ((t 1) = 47) (('sq >< h) >< (('lit >< snip t 1 (tally t)) >< >segs))
+           (? (t = "~") (('sq . h) . >segs)
+              ((t 1) = 47) (('sq . h) . (('lit . snip t 1 #t) . >segs))
               segs))
         segs)
 
@@ -424,7 +424,7 @@
         t (foldl (\ a r (a + <r)) "" rs)
         gb (foldl (\ a r (? a a (>r && sh-anyglob <r))) 0 rs)
         (? gb
-           (: m (foldl (\ a r (a + (sh-mrep (tally <r) (? >r "1" "0")))) "" rs)
+           (: m (foldl (\ a r (a + (sh-mrep #<r (? >r "1" "0")))) "" rs)
               g (sh-glob t m)
               (? g g [t]))
            [t]))

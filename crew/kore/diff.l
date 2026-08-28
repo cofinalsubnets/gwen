@@ -39,11 +39,11 @@
        _ (pin tr d vd)
        (? (two? r) r (dfwd ax bx n m vd (d + 1) tr)))
    ; the leading snake back to the origin: everything left is kept
-   (dkeeps ax x acc) (? (0 < x) (dkeeps ax (x - 1) (['keep (ax (x - 1))] >< acc)) acc)
+   (dkeeps ax x acc) (? (0 < x) (dkeeps ax (x - 1) (['keep (ax (x - 1))] . acc)) acc)
    ; rewind one snake from (x y) toward (px py), prepending keeps; answers (x y acc)
    (dsnakeb ax x y px py acc)
     (? ((px < x) && (py < y))
-       (dsnakeb ax (x - 1) (y - 1) px py (['keep (ax (x - 1))] >< acc))
+       (dsnakeb ax (x - 1) (y - 1) px py (['keep (ax (x - 1))] . acc))
        [x y acc])
    ; walk the trace back from (n m) at round dd, emitting the script front-first: rewind
    ; the round's snake, then the one edit that opened it (down took b's line, right a's)
@@ -56,11 +56,11 @@
           px (peep vp pk 0)
           py (px - pk)
           acc2 <>>(dsnakeb ax x y px py acc)
-          (? dn (dback ax bx tr (dd - 1) px py (['add (bx py)] >< acc2))
-             (dback ax bx tr (dd - 1) px py (['del (ax px)] >< acc2)))))
+          (? dn (dback ax bx tr (dd - 1) px py (['add (bx py)] . acc2))
+             (dback ax bx tr (dd - 1) px py (['del (ax px)] . acc2)))))
    ; the entry: the shortest edit script from a to b
    (myers a b)
-    (: ax (dindex a) bx (dindex b) n (tally a) m (tally b)
+    (: ax (dindex a) bx (dindex b) n #a m #b
        v0 {1 0}
        tr (tablet 0)
        r (dfwd ax bx n m v0 0 tr)
@@ -68,7 +68,7 @@
    ; the script read three ways: the old list, the new list, the edit distance
    (dold s) (map caup (filter (\ o !(<o = 'add)) s))
    (dnew s) (map caup (filter (\ o !(<o = 'del)) s))
-   (dcost s) (tally (filter (\ o !(<o = 'keep)) s)))
+   (dcost s) #(filter (\ o !(<o = 'keep)) s))
 
 ; --- patience: the anchoring layer over myers (Bram Cohen). same script shape, so the
 ; projection laws carry over verbatim -- what changes is the SHAPE of the hunks: anchor
@@ -97,12 +97,12 @@
        (goa m i acc) (? (two? m)
                         (: e <m j (peep bj e -1)            ; -1 the absence face: j = 0 is a real seat
                            (? (j < 0) (goa >m (i + 1) acc)
-                              (goa >m (i + 1) ([i j e] >< acc))))
+                              (goa >m (i + 1) ([i j e] . acc))))
                         (rev acc))
        (goa a 0 ()))
    ; the longest increasing subsequence of the j's (the i's already ascend): O(k^2) DP
    (dlis ps)
-    (: n (tally ps) pt (dindex ps)
+    (: n #ps pt (dindex ps)
        (jof t) <>(pt t)
        ln (tablet 0) pv (tablet 0)
        (gos t s bl bp)                                            ; best chain ending at t
@@ -114,12 +114,12 @@
        (gom t best bt) (? (n <= t) bt                             ; the longest chain's tail
                           (: c (peep ln t 0)
                              (? (best < c) (gom (t + 1) c t) (gom (t + 1) best bt))))
-       (gob t acc) (? (t < 0) acc (gob (peep pv t -1) (pt t >< acc)))
+       (gob t acc) (? (t < 0) acc (gob (peep pv t -1) (pt t . acc)))
        (gob (gom 0 0 -1) ()))
    ; peel the common prefix; answers (a' b' keeps), the keeps REVERSED
    (dpre a b ks)
     (? (&& (two? a) (two? b) (<a = <b))
-       (dpre >a >b (['keep <a] >< ks))
+       (dpre >a >b (['keep <a] . ks))
        [a b ks])
    ; split at the anchors: each between-segment recurses (uniqueness reappears locally
    ; once the outer context is cut away), each anchor lands as a keep
@@ -151,15 +151,15 @@
     (: (go m i j acc)
         (? (two? m)
            (: op <<m
-              (? (op = 'keep) (go >m (i + 1) (j + 1) ((<m + [i j]) >< acc))
-                 (op = 'del) (go >m (i + 1) j ((<m + [i j]) >< acc))
-                 (go >m i (j + 1) ((<m + [i j]) >< acc))))
+              (? (op = 'keep) (go >m (i + 1) (j + 1) ((<m + [i j]) . acc))
+                 (op = 'del) (go >m (i + 1) j ((<m + [i j]) . acc))
+                 (go >m i (j + 1) ((<m + [i j]) . acc))))
            (rev acc))
        (go s 1 1 ()))
    (eop e) <e (eln e) <>e                               ; the tagged entry's four seats
    (eoi e) <>>e (enj e) <>>>e
    (dspan p m acc) (? (two? m && p <m)                       ; the maximal p-prefix; answers (span rest)
-                      (dspan p >m (<m >< acc))
+                      (dspan p >m (<m . acc))
                       [(rev acc) m])
    (lastn c l) (? (c < tally l) (drop (tally l - c) l) l)
    (uhunks s c)
@@ -169,8 +169,8 @@
        change? (\ e !(<e = 'keep))
        (rng l n) (? (n = 1) (show l) (show l + "," + show n))       ; ",1" stays silent, the GNU face
        (emit h)                                                   ; one hunk: the @@ header, then the lines
-        (: no (tally (filter (\ e !(eop e = 'add)) h))
-           nn (tally (filter (\ e !(eop e = 'del)) h))
+        (: no #(filter (\ e !(eop e = 'add)) h)
+           nn #(filter (\ e !(eop e = 'del)) h)
            e0 <h
            ol (? (no = 0) (eoi e0 - 1) (eoi e0))
            nl (? (nn = 0) (enj e0 - 1) (enj e0))

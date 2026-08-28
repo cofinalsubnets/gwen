@@ -18,7 +18,7 @@
    sh-match (from 'glob 'match)       ; stay -- word.l, eval.l, line.l, cook and kore's
    sh-ones (from 'glob 'ones)         ; find all read them, some through (from 'lush ..)
    (sh-globby? t m)
-     (: n (tally t)
+     (: n #t
         (go i) (? (i = n) 0
                   (: b (t i)
                      (? (((m i) = 49) && (|| (b = 42) (b = 63) (b = 91))) 1 (go (i + 1)))))
@@ -28,16 +28,16 @@
    ; (core `rev`, not job.l's sh-rev: this part stands ALONE -- cook includes
    ; just the glob via (use 'lush/glob) for $(wildcard))
    (sh-psplit t m)
-     (: n (tally t)
+     (: n #t
         (go i st acc)
-          (? (i = n) (rev ((snip t st i >< snip m st i) >< acc))
+          (? (i = n) (rev ((snip t st i . snip m st i) . acc))
              (? ((t i) = 47)
-                (go (i + 1) (i + 1) ((snip t st i >< snip m st i) >< acc))
+                (go (i + 1) (i + 1) ((snip t st i . snip m st i) . acc))
                 (go (i + 1) st acc)))
         (go 0 0 ()))
    (sh-glob t m)
      (: comps (sh-psplit t m)
-        abs (two? comps && !(tally <<comps))
+        abs (two? comps && !#<<comps)
         cs (? abs >comps comps)
         (? !cs ()                                   ; the pattern was just "/"
            (sort (gwalk (? abs ["/"] [""]) cs))))
@@ -55,7 +55,7 @@
    ; filesystem's (ext4 hashes, ufs appends), so an unsorted glob leaks the
    ; disk into anything built over it.
    (gmatches d ct cm)
-     (: names (readdir (? (tally d) d "."))
+     (: names (readdir (? #d d "."))
         dot (tally ct && ((ct 0) = 46))
         (map (\ nm (d + nm))
              (sort (filter (\ nm ((dot || !((nm 0) = 46)) && sh-fmatch ct cm nm))
