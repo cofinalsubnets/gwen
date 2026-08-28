@@ -8,7 +8,7 @@
 ; choices. a decode oracle checks meaning, not layout.
 ;
 ; knobs ride the environment: FUZZ_N (per class, default 8), FUZZ_SEED, FUZZ_ARCH
-; (x64|arm64|riscv, default all three). run from the repo root:
+; (amd64|arm64|riscv -- holo's own names, default all three). run from the repo root:
 ;
 ;   out/host/love test/holo/fuzz/fuzz.l
 ;
@@ -176,8 +176,9 @@
         (: in (snip op (a + 1) b)
            ; the scaled index: REG*S
            st (idx-of in "*")
-           ix () sc 1
-           _ 0
+           ; ⚠ ix/sc take their values from r BELOW and nowhere else: a `:` binds a
+           ; repeated name ONCE, at its FIRST spelling, so an earlier ix/sc here would
+           ; be the whole answer and the scaled index would read as absent.
            r (? (charm? st)
                 (: ib (: (bk i) (? ((0 < i) && (: c (in (i - 1)) ((digit? c) || ((97 <= c) && (c <= 122))))) (bk (i - 1)) i) (bk st))
                    ixs (snip in ib st) scs (snip in (st + 1) (st + 2))
@@ -682,7 +683,12 @@
                       <>r))
      (foldl (\ a cl (a + class cl)) 0 gens))
 
- lanes (? (0 < tally fz-arch) (filter (\ r (<r = fz-arch)) arches) arches)
+ ; ⚠ a FUZZ_ARCH no lane answers to REFUSES: filtering to nothing would run zero
+ ; classes, print "all classes green" and exit 0 -- a spelling mistake reading as a pass.
+ lanes (? (0 < tally fz-arch)
+           (: ls (filter (\ r (<r = fz-arch)) arches)
+              (? (two? ls) ls (scare 'fuzz-arch fz-arch)))
+           arches)
  bad (foldl (\ a r (? (tool? (nthl r 9)) (a + run-lane r)
                       (: _ (puts ("  (" + <r + " skipped: no " + nthl r 9 + ")\n")) a)))
             0 lanes)
