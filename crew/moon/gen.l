@@ -154,12 +154,12 @@
                  (go i (j + 1) acc))
              (go 0 0 ()))))
    (abl? g nm) (member? nm (g 'abl))
-   ; the one-build world (moon-ssa rung 6, the x64 DEFAULT): any old-world knob
-   ; keeps the dance byte-identically, and so does a non-x64 target until rung 7
-   ; calibrates it -- MOON_ABLATE=uni opts a remaining ISA in for that work.
-   ; alive's widened universe and repack's paired-cs reuse ride exactly this
-   ; world -- the three gates must never drift apart.
-   (uniw? g) ((!(a64? g || t32? g || rv? g) || abl? g 'uni) &&
+   ; the one-build world (moon-ssa rungs 6+7, the x64 AND a64 DEFAULT): any
+   ; old-world knob keeps the dance byte-identically, and so does t32/rv until
+   ; rung 7 calibrates them -- MOON_ABLATE=uni opts a remaining ISA in for that
+   ; work. alive's widened universe and repack's paired-cs reuse ride exactly
+   ; this world -- the three gates must never drift apart.
+   (uniw? g) ((!(t32? g || rv? g) || abl? g 'uni) &&
               !(abl? g 'obuild || abl? g 'pcell || abl? g 'alloc ||
                 abl? g 'pdefcs || abl? g 'pdef))
    (ralloc g) (? !(abl? g 'ralloc)
@@ -4360,6 +4360,28 @@
    ; slot map (g 'slots) names the whole OBJECT under it, and every granule of an
    ; address-taken object stays live (a derived pointer reads and writes unseen); an lea no
    ; object claims bars the fn whole. a store's newly-dead feeding li sweeps in the same pass.
+   ; a frame store that rides straight-line to the fn's exit -- only register
+   ; work, stores, and the epilogue between -- writes a value nothing reads: the
+   ; frame dies at the ret/jmpr. the sib rewrite leaves exactly this where a
+   ; musttail's wrap spilled (skiprel took the reloads); repack's chains retire
+   ; the x64 twin, so this rides the a64 sweep seam only.
+   (tailst g fs)
+    (: fb (fbase g)
+       (calm? f) (member? <f '(mov lea li sx4 zx4 pop label align) ||
+                  member? <f stops9 || member? <f siops ||
+                  (member? <f '(add sub) && id? <>f 'sp))
+       (dead? l) (? !(two? l) ()
+                    (: f <l
+                       (? !(two? f) (dead? >l)
+                          (member? <f '(ret jmpr)) 1
+                          (calm? f) (dead? >l)
+                          ())))
+       (go l) (? !(two? l) ()
+                 (: f <l
+                    (? (two? f && (<f = 'st) && id? <>f fb && dead? >l)
+                       (go >l)
+                       (f >< go >l))))
+       (go fs))
    (deadst g fs)
     (: used {} esc {}
        fb (fbase g)
@@ -7931,16 +7953,17 @@
         (: uv <>>av9 crh9 (nthr av9 6) rdc9 (nthr av9 7)
            lf9 ((nthr av9 15) <= 2)                  ; leaf-SHAPED: at most two cold hard crossings (see ulloc)
            pq9 (qk && nthr av9 16)                    ; protocol-quiet: nothing in the body writes a quad
-           wd9 (nthr av9 17)                          ; d128 material: the wide kit owns the file
+           wd9 ((nthr av9 17) &&                      ; d128 material: the wide kit owns the file --
+                !(a64? g || t32? g || rv? g))         ; on x64, whose mul/div pin the rax:rdx pair
            (homefold g params 0 [() () () #tpool]
             (\ a4 gpi p9
               (: nm <p9 pty <>p9
                  A (nthr (argr g) gpi)
                  nv (nthr a4 3)                       ; the file's running depth (homes and rides drain it)
-                 ; d128 material refuses every verdict: the wide-pair park needs
-                 ; the very registers a ride or a vacate would occupy, and the
-                 ; spilled params are what FREE them (mag_divmod's cells doubled
-                 ; the one time pointer rides were let through)
+                 ; d128 material refuses every verdict where the pair park exists:
+                 ; x64's mul/div pin rax:rdx, and the spilled params are what FREE
+                 ; them (mag_divmod's cells doubled the one time pointer rides were
+                 ; let through). a 3-operand d128 ISA keeps its verdicts.
                  ok (lf9 && !wd9 && member? nm uv && ((peep crh9 nm 0) <= 2))
                  (? (ok && homable? pty)
                     (? (id? A (homereg gpi)) [<a4 (gpi >< <>a4) (nthr a4 2) (nv - 1)]
@@ -8058,11 +8081,11 @@
        ; gp 1. the ret lane reads g 'sret back; fnreset holds the neutral.
        srt (? (two? sig) <sig 'long)
        sr6f (sretm? g srt)
-       ; -- the one build (moon-ssa rung 6, the x64 DEFAULT): seats from alive,
-       ; one build per fn, the dance retired to MOON_ABLATE=obuild (and the
-       ; other old-world knobs). a memory sret and varargs keep the old path
-       ; either way (it already builds them once), and the other ISAs keep the
-       ; dance until rung 7 calibrates them (uniw?'s law).
+       ; -- the one build (moon-ssa rungs 6+7, the x64 and a64 DEFAULT): seats
+       ; from alive, one build per fn, the dance retired to MOON_ABLATE=obuild
+       ; (and the other old-world knobs). a memory sret and varargs keep the
+       ; old path either way (it already builds them once), and t32/rv keep
+       ; the dance until rung 7 calibrates them (uniw?'s law).
        uni9 ((uniw? g) && !(sr6f || vararg))
        _ (? sr6f (pin g 'sret (ntmp g 'long)) ())
        sp1 (? uni9 ()
@@ -8224,6 +8247,7 @@
        ; ir1, before deadlab (cfoldir's fold-throughs strand labels for it). cmpfuse stays
        ; home: no memory-operand compare off x64.
        (swp irx) (? !(a64? g) irx
+                    (tailst g
                     (deadst g
                      (deaddef
                      (addrfold g
@@ -8233,7 +8257,7 @@
                      (spmerge
                      (deaddef
                      (deadcell g
-                     (cfoldir g irx)))))))))))
+                     (cfoldir g irx))))))))))))
        (? (bad? irf) irf (cskeep g (unhome g (jr0 (unframe g (coal g (repack g (deadlab (swp irf))))))))))
 
    ; the data tail: globals in declaration order, then the string table -> (dataforms nifforms

@@ -389,6 +389,53 @@ until rung 6.
   per-symbol attribution under the exact meter — and re-calibrate against
   it the way lvm_cur's hunt calibrated x64.
 
+  **THE A64 CHASE 2026-08-28 — the meter re-reads −0.40%: the one build now
+  beats the dance on a64.** The per-symbol instrument (r7q/insnpc.c: one
+  scoreboard slot per TB, inline adds, PC→nm through the PIE bias from
+  `qemu_plugin_entry_code()`) put the ENTIRE +2.0% in two functions —
+  mag_mul +400M and lvm_cond +219M — everything else netting to noise, with
+  real wins under them (lvm_sub −97M, lvm_add −48M). Two mechanisms, both
+  x64 laws misapplied or missing on a64:
+  - **wd9 is the pair park's law, and the pair park is x64's.** mag_mul's
+    d128 inner loop (73.6M trips) paid 4 extra insns/trip reloading params
+    wd9 had spilled — but a64's d128 is `mul`/`umulh`, 3-operand, nothing
+    pinned. wd9 now refuses verdicts only where mul/div pin rax:rdx (upar's
+    gate: `!(a64? || t32? || rv?)`); alive still records the neutral fact.
+  - **the dead musttail spill run.** The per-statement wrapset is live-IN
+    (sound at statement grain: a value read after an interior call must
+    wrap), so every ISA emits the home spills before a musttail's call —
+    skiprel peels the reloads, and on x64 repack's per-def chains retire the
+    store side (a store no load joins promotes to a self-mov and drops).
+    repack bails on arm, so a64 kept them: 4 dead stores × 52.5M on
+    lvm_cond's dispatch tail alone. The fix is `tailst` at the a64 sweep
+    seam: a frame store that rides straight-line to the fn's exit — only
+    register work, stores, and the epilogue between, labels allowed (a join
+    cannot read a slot this path just wrote), any branch OUT ends the
+    window — is dead by construction. Both a64 worlds share the seam, so
+    the parity instrument holds; x64's lane is untouched byte-for-byte.
+  Re-measured at matched corpus: dance 55.145G → uni 54.926G exact guest
+  insns (−0.40%; tailst moved the dance itself −0.001%). lvm_cond now −142M
+  vs the dance, mag_mul +93M residual. Gates: test, ccarm64 153/153,
+  cts_arm64 211/220, ccriscv 150/150, thumb2 battery — all at reference.
+  ⚠ attribution caveat: the LAST text symbol swallows the post-text islands
+  (lvm_chain "+105M" is veneer/island code differing between layouts, not
+  lvm_chain — it is one branch in both worlds). All three instruments now
+  agree for the first time (forms −1391, .text −0.58%, insns −0.40%); the
+  flip itself awaits the word.
+
+  **FLIPPED 2026-08-28: the one build is the a64 DEFAULT too** (uniw? now
+  bars only t32/rv until their calibration; MOON_ABLATE=obuild keeps the
+  a64 dance byte-identically in-world). Parity of the flip itself: the
+  default cross binary answers the exact meter within 5.7ppm of the
+  calibrated uni world (54.9261G vs 54.9258G), the data/bss fingerprint
+  matches the uni world exactly, and gates sit at reference (test ×3,
+  ccarm64 153/153, cts_arm64 211/220, test_slow + seed fixpoint). ⚠ a
+  byte-compare across the flip CANNOT close: MOON_ABLATE=uni opts EVERY
+  remaining ISA in, so a pre-flip uni cross binary carries rv64-uni rt
+  members where the default keeps rv64 on the dance — the embedded rt
+  archive differs and shifts every address after it. Judge parity by the
+  meter and the section fingerprint, not the file hash.
+
 ## the standing constraints (read before building)
 
 - the staging quad r0–r3 belongs to expression staging through rung 5; the
