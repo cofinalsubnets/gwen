@@ -1008,9 +1008,9 @@ $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $m
 
 # --- the initrd ------------------------------------------------------
 # lib/*.l baked per-file into .rodata as {path, bytes, len} rows (tools/lcatfs.l), which
-# the ramfs in kmain.c serves reads off. Paths are baked RELATIVE, exactly as the walk
-# asks: prel tries lib/<x>.l off the cwd, so `use` finds these the moment `open` sits in
-# defs[]. ⚠ the .list stamp is corpus.list's idiom -- a wildcard aggregate leaves every
+# the ramfs in kmain.c serves reads off. Paths are baked RELATIVE, exactly as the readers
+# spell them: test/kernel's disk.l and ramfs.l say (use "lib/fat.l") and (use "lib/json.l"),
+# which the ramfs answers the moment `open` sits in defs[]. ⚠ the .list stamp is corpus.list's idiom -- a wildcard aggregate leaves every
 # remaining prereq older than the target when a file is DELETED, and make bakes the ghost.
 kfs = $(sort $(wildcard $R/lib/*.l))
 force_kfs_list: ;

@@ -1,1 +1,0 @@
-../crew/cook/cook.l

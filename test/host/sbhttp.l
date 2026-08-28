@@ -13,7 +13,7 @@
 ; endpoint, and the walk discovers everything by reading what it already fetched
 ; -- /tips names the heads, each patch names its `deps` and its `hunks`. an
 ; EMPTY blob rides through too, which is the case that found kiosko's 404.
-(use 'sb)                                 ; the loader: lib/sb.l assembles the whole stack
+(use 'sb)                                 ; the baked module: the whole stack, spliced
 (use 'kiosko)
 
 (: SD (from 'sb)

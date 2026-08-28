@@ -1,1 +1,0 @@
-../../crew/lush/word.l

@@ -4,9 +4,8 @@
 ; (sha256, readdir, chdir), so it stays OFF the corpus like the other hostnif
 ; tests. the make target clears the sandbox first; cwd is the repo root, and
 ; everything here happens inside out/host/.sbtest.
-; the use below LOADS svalbard (lib/sb.l assembles the whole stack) and splices
-; it under the session layer: every internal reads bare, and the test's own
-; helpers stay above in the session.
+; the use below splices svalbard under the session layer: every internal reads
+; bare, and the test's own helpers stay above in the session.
 (use 'sb)
 (use 'kore)          ; sb splices the text floor below itself, so the session must ask for it too
 

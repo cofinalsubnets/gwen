@@ -69,8 +69,8 @@
        (go 15 ()))
 
    ; --- getting bytes in and out ---------------------------------------------------
-   ; le32 / le32! are the shared byte floor (crew/tls/bytes.l), included into this
-   ; same head by lib/tls.l before this file.
+   ; le32 / le32! are the shared byte floor (crew/tls/bytes.l), which rides module 'tls
+   ; as this file does -- lib/tls.l loads it first.
 
    (ones n) (1 + 0 * iota n)            ; the n-cell galaxy of 1s -- the broadcaster
    (w32 v n) (v * ones n)                 ; a scalar, spread down n cells
