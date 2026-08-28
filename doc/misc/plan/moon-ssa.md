@@ -445,7 +445,26 @@ until rung 6.
   vacate — is a new verdict arm that would move x64 output too: a priced
   decision on both ISAs, parked here.
 
-  rv64 pricing is BLOCKED before it starts: the hosted cross binary
+  rv64 pricing LANDED 2026-08-28, unblocked by the VLA lane: the first
+  hosted rv64 love builds and runs the full corpus in both worlds, and the
+  exact meter reads the one build at **−6.28% guest insns vs the dance**
+  (85.29G vs 91.01G, qemu-riscv64, strict-law corpus). The win dwarfs a64's
+  because the rv dance never homed a param (nhome 0 — spill-all was the
+  baseline); mag_mul alone recovers −2.55G (no d128 lane on rv64, so wd9
+  never fires and every param rides). Regression tail is noise (largest
+  lvm_add +22M). The corpus instrument moved with the tree: the frozen copy
+  asserted the LAX paren law and fails post-aecbc19a binaries — corpus-x
+  splices the current test/pat.l in verbatim, and corpus-xrv drops the
+  natjit section (no jit ISA binds the hook). The rv64 flip awaits the
+  word. The a64 flip REVALIDATED post-merge on the same instrument: the
+  merged tree (the exact-paren pat arc, ff at 09:11) reads the a64 default
+  −0.30% vs obuild on corpus-x, both worlds passing the strict-law suite —
+  the pre-merge morning's binaries were all LAX-law (built before the ff),
+  which briefly wore the mask of an a64 miscompile until the reflog told it:
+  a cross-tree-state comparison, not a bug. Same-tree-state is now part of
+  the meter's discipline.
+
+  (superseded) rv64 pricing was BLOCKED before it started: the hosted cross binary
   (`make xa=riscv64 out/x-riscv64/love`) refuses in BOTH worlds on a
   pre-existing gap — "no lane for a variable-length array on rv64"
   (src/image.c image_bake) — so there is no corpus lane to meter. The
