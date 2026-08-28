@@ -366,7 +366,11 @@ until rung 6.
   moon-tar/gzip-arm64 build+run+roundtrip. arm64check.sh fails on BOTH
   worlds — the local cross-gcc predates musttail (environmental, recorded).
   THE A64 FLIP still wants dynamic pricing on silicon (pi.lan) or an explicit
-  census+gates decision like the sweeps arc took; rv64/t32 untouched.
+  census+gates decision like the sweeps arc took. rv64/t32 under the knob are
+  BEHAVIORALLY GREEN too (ccriscv 150/150, cts_riscv 210/220 — the corpus
+  reference — and thumb2's differential battery runs on qemu Cortex-M7), so
+  the pure-upside claim is validated, not just predicted; their calibration
+  and flips remain open.
 
 ## the standing constraints (read before building)
 
