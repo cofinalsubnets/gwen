@@ -67,6 +67,22 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; - (+ 2 3 4) = ((+ 2 3) 4) = (5 4) = 1024: no varargs
 ; - (1 +) = (+ 1): no sections
 ; - gem? (3 / 2) = 1: / gives a float; // for int
+; - (-17 % 8) = -1: % and // truncate toward zero; hand-roll floor-mod
+; - (map < l) passes a comparison partial, not car; car as a function is (x \ <x)
+; - a lambda parameter sharing a name with a LATER non-lambda sibling binding
+;   in the same (: ..) raises "missing X" (the forward-binding trap)
+; - a mid-letrec assert binds to _, or it becomes define-sugar and never runs
+; - in a catted module file `name value` builds at bake, `(name args)` defers
+
+; the working vocabulary (verified in-tree)
+; - (show x) prints-to-string; puts/putc write; putx prints a form
+; - sort orders numbers, symbols, strings, and lists; rev, tally (#), member?, map
+; - tablets: {} makes, (pin t k v) mutates AND answers t (so foldl builds one),
+;   (peep t k dflt) reads, (t k) applies; (keys t) is UNSORTED -- sort before
+;   walking or answers drift
+; - strings index by application: ("abc" 0) = 97; lists DON'T index that way
+; - charm? is the number predicate; (show 'sym) spells a symbol
+; - car/cdr are total: <() = >() = (); (= a b) across types answers 0, never dies
 
 ; booleans
 ; love's exact booleans are {0,1}. however any value can be

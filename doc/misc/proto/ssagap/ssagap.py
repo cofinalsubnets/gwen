@@ -438,7 +438,7 @@ def analyze_dead(name,body,esc):
             near_call = any(isinstance(body[k],list) and body[k] and body[k][0] in ('call','callr')
                             for k in range(i+1,min(i+6,n)))
             dead.append((i,op,f,weight(spans,i),near_call))
-    return dead
+    return dead,livein,succ
 
 # ---------- mem2reg census ----------
 def analyze_promo(name,body,esc):
@@ -490,6 +490,132 @@ def analyze_promo(name,body,esc):
         out.append((base,fullword,across,sifed,narrow,multi,len(allts),wsum))
     return out
 
+
+# ---------- the rung-0 differential (val.l's twin): shared touch walk ----------
+def touch_walk(body):
+    touches=collections.defaultdict(list); bad=set(); cur=0; ci=[]
+    for i,f in enumerate(body):
+        if not (isinstance(f,list) and f): continue
+        op=f[0]
+        if op in ALU3 and f[1]=='sp' and f[2]=='sp' and isinstance(f[3],int):
+            cur += (f[3] if op=='add' else -f[3]); continue
+        if op=='push': cur-=8; continue
+        if op=='pop': cur+=8; continue
+        if op in LOADS and isinstance(f[2],str) and f[2] in BASES and isinstance(f[3],int):
+            touches[(f[2],cur+f[3],LOADS[op])].append((i,op)); continue
+        if op in STORES and isinstance(f[1],str) and f[1] in BASES and isinstance(f[2],int):
+            touches[(f[1],cur+f[2],STORES[op])].append((i,op)); continue
+        if op in SIS and isinstance(f[1],str) and f[1] in BASES and isinstance(f[2],int):
+            touches[(f[1],cur+f[2],SIS[op])].append((i,op)); continue
+        if op in ('ldsd','stsd','ldss','stss'):
+            b=f[2] if op[0]=='l' else f[1]; o=f[3] if op[0]=='l' else f[2]
+            if isinstance(b,str) and b in BASES and isinstance(o,int): bad.add((b,cur+o))
+            continue
+        if mentions_base(f) and op not in ('label','jmp','br','ret','call','li','mov','cmp','test','la'):
+            return None
+        if op in ('call','callr','sys'): ci.append(i)
+    return touches,bad,ci
+
+def cell_records(body,esc,spans):
+    tw=touch_walk(body)
+    if tw is None: return []
+    touches,bad,ci=tw
+    cells=collections.defaultdict(list)
+    for (sp0,off,w),ts in touches.items():
+        cells[(sp0,off-(off%8))].append((off,w,ts))
+    out=[]
+    for (sp0,base) in sorted(cells, key=lambda k:(k[1], 0 if k[0]=='sp' else 1)):
+        lst=cells[(sp0,base)]
+        if sp0 in esc: continue
+        if any((sp0,o) in bad for o,w,ts in lst): continue
+        allts=sorted(t for o,w,ts in lst for t,_ in ts)
+        widths={w for o,w,ts in lst}; offs={o for o,w,ts in lst}
+        sifed=any(op in SIS for o,w,ts in lst for _,op in ts)
+        fullword=widths=={8} and len(offs)==1 and not sifed
+        narrow=len(offs)==1 and not fullword and len(widths)==1
+        multi=len(offs)>1
+        lo,hi=allts[0],allts[-1]
+        across=any(lo<c<hi for c in ci)
+        wsum=sum(weight(spans,i) for o,w,ts in lst for i,_ in ts)
+        defs=sorted(i for o,w,ts in lst for i,op in ts if op in STORES or op in SIS)
+        uses=sorted(i for o,w,ts in lst for i,op in ts if op in LOADS)
+        out.append(dict(sb=0 if sp0=='sp' else 1,base=base,space=sp0,full=int(fullword),
+                        across=int(across),si=int(sifed),nar=int(narrow),multi=int(multi),
+                        nt=len(allts),w=wsum,defs=defs,uses=uses))
+    return out
+
+def analyze_chains(body,esc,livein,succ,cells,ci):
+    n=len(body); rows=[]; ALL=('ALL',)
+    def liveout(c_):
+        o=set()
+        for j in succ[c_]:
+            s=livein[j]
+            if s is None: continue
+            if ALL in s: return 'all'
+            o|=s
+        return o
+    for c in cells:
+        dfs=c['defs']; uss=c['uses']; dset=set(dfs)
+        rt=[set() for _ in range(n)]
+        changed=True
+        while changed:
+            changed=False
+            for i in range(n):
+                rout={i} if i in dset else rt[i]
+                for j in succ[i]:
+                    if not (rout<=rt[j]):
+                        rt[j]=rt[j]|rout; changed=True
+        parent={d:d for d in dfs}
+        def find(x):
+            while parent[x]!=x: x=parent[x]
+            return x
+        def uni(a,b):
+            ra,rb=find(a),find(b)
+            if ra==rb: return
+            if ra<rb: parent[rb]=ra
+            else: parent[ra]=rb
+        nod=[]
+        for u in uss:
+            rin=sorted(rt[u]&dset)
+            if not rin: nod.append(u); continue
+            for d in rin[1:]: uni(rin[0],d)
+        groups={}
+        for d in dfs: groups.setdefault(find(d),[]).append(d)
+        usesby={}
+        for u in uss:
+            rin=sorted(rt[u]&dset)
+            if rin: usesby.setdefault(find(rin[0]),[]).append(u)
+        cbytes={(c['space'],c['base']+k) for k in range(8)}
+        def cross(ds):
+            dss=set(ds)
+            for cc in ci:
+                if rt[cc]&dss:
+                    o=liveout(cc)
+                    if o=='all' or (o&cbytes): return 1
+            return 0
+        for r in sorted(groups):
+            rows.append((c['sb'],c['base'],sorted(groups[r]),sorted(usesby.get(r,[])),cross(groups[r])))
+        if nod: rows.append((c['sb'],c['base'],[],sorted(nod),0))
+    return rows
+
+def rows_main(path):
+    tus=load(path)
+    for tu,forms in tus.items():
+        for name,body in split_fns(forms):
+            esc=escape_scan(body)
+            spans=loop_spans(body)
+            dead,livein,succ=analyze_dead(name,body,esc)
+            tw=touch_walk(body)
+            cells=cell_records(body,esc,spans)
+            ci=tw[2] if tw is not None else []
+            for c in cells:
+                print(f'(C "{tu}" {name} {c["sb"]} {c["base"]} {c["full"]} {c["across"]} {c["si"]} {c["nar"]} {c["multi"]} {c["nt"]} {c["w"]})')
+            for i,op,f,w,near in dead:
+                print(f'(D "{tu}" {name} {i} {op} {w} {int(near)})')
+            for sb,base,ds,us,cr in analyze_chains(body,esc,livein,succ,cells,ci):
+                dss=' '.join(map(str,ds)); uss=' '.join(map(str,us))
+                print(f'(H "{tu}" {name} {sb} {base} ({dss}) ({uss}) {cr})')
+
 def main():
     tus=load(sys.argv[1])
     G=collections.Counter(); GW=collections.Counter()
@@ -517,7 +643,7 @@ def main():
                 L[kind]+=1; LW[kind]+=w
             for i,kind,detail,w in lw:
                 LN[kind]+=1; LNW[kind]+=w
-            for i,op,f,w,near in analyze_dead(name,body,esc):
+            for i,op,f,w,near in analyze_dead(name,body,esc)[0]:
                 dead_n+=1; dead_w+=w
                 if near: dead_wrap+=1
                 pertu[tu]['dead-store']+=1
@@ -553,4 +679,5 @@ def main():
         c=pertu[tu]
         print(f"{sum(c.values()):6d}  {tu}  {dict(c)}")
 
-main()
+if len(sys.argv)>2 and sys.argv[2]=='--rows': rows_main(sys.argv[1])
+else: main()

@@ -3,7 +3,7 @@
 ; AST goldens, and the WHOLE IR for return-42 compared form by form. the cat
 ; (`make test_moon`):
 ;
-;   cat test/00-init.l crew/moon/floor.l crew/moon/lex.l crew/moon/parse.l crew/moon/gen.l crew/moon/law.l | out/host/love
+;   cat test/00-init.l crew/moon/floor.l crew/moon/lex.l crew/moon/parse.l crew/moon/val.l crew/moon/gen.l crew/moon/law.l | out/host/love
 ;
 ; the end-to-end (elf64, the run, the gcc differential) lives in the Makefile
 ; smoke through the real `mooncc`.
@@ -309,8 +309,12 @@
          '((li r0 8) (ret)))
       (: fs (fnf 'f <>(cgn "int use(long *p); long f(void) { long w = 8; use(&w); return w; } int main() { return (int)f(); }"))
          (two? (filter (\ f9 (two? f9 && member? <f9 '(si st))) fs)))
-      (= (fnf 'f <>(cgn "long f(void) { long a = 8; long b = a; long c = a + b; return c * b; } int main() { return (int)f(); }"))
-         '((li r0 128) (ret)))
+      ; the chain still folds whole under the one build; a homed link may leave
+      ; one dead li behind (no dead-home-def sweep yet) but no memory ever opens
+      (: fs (fnf 'f <>(cgn "long f(void) { long a = 8; long b = a; long c = a + b; return c * b; } int main() { return (int)f(); }"))
+         (member? '(li r0 128) fs &&
+          (0 = splds fs) &&
+          !(two? (filter (\ f9 (two? f9 && member? <f9 '(si st ld imul add))) fs))))
       ; a STATEMENT-position attribute run skips (fallthrough..) -- except musttail, which
       ; is OWED now: the annotation rides the ret's PRE slot, marks the call, and sibs
       ; spells the jump or the compile refuses -- never a silent fallback to a plain call
@@ -1199,6 +1203,10 @@
                                           (n + 1) n))))
                  (go fs 0))
    pre9 "long g(long x); "
+   ; ⚠ the wrapped-home and cs-grant lanes are KNOB-ONLY since moon-ssa rung 5
+   ; (param cells ride repack's chains by default; MOON_ABLATE=pcell restores
+   ; the lanes, and these laws pin that face -- the setenv round-trip below)
+   _ (setenv "MOON_ABLATE" "pcell")
    irD (cgn (pre9 + "long f(long a, long b) { long s = a+b+a*b+a-b; g(1); return s+1; } int main() { return f(20, 22); }"))
    irL (cgn (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }"))
    irS (cgn (pre9 + "long q(long a, long b) { long s = a+b+a*b+a-b; g(1); { long a = s; s = a+1; } return s+2; } int main() { return q(20, 22); }"))
@@ -1213,27 +1221,49 @@
    ; -- callee-saved locals (the cs lane): a local touched under NESTED loops (depth >= 2)
    ; homes on r11..r14 (machine r12-r15) even while it CROSSES calls -- the callee preserves
    ; the register, so the home takes no wrap; the price is one save/restore pair in the
-   ; owner's frame, and only compounding iteration counts repay it. here s, i and the inner
-   ; j ride r11/r12/r13 through g(j) unwrapped; the params keep their slots.
+   ; owner's frame, and only compounding iteration counts repay it. here j, s and i ride
+   ; r11/r12/r13 (rung 4 seats hottest-first, the loop weight breaking the raw-count
+   ; tie: the inner j outweighs s outweighs i) through g(j) unwrapped; the params keep
+   ; their slots.
    irQ (cgn (pre9 + "long ql(long a, long n) { long s = 0; long i = 0; while (i < n) { long j = 0; while (j < n) { s = s + g(j) + a; j = j + 1; } i = i + 1; } return s; } int main() { return ql(3, 4); }"))
    qf (fnf 'ql <>irQ)
    _ (assert
       (two? irQ)
-      (cspair? qf 'r11)                              ; s's save/restore pair, ONCE each -- the calls never wrap it
-      (cspair? qf 'r12)                              ; i's pair likewise
-      (cspair? qf 'r13)                              ; ...and the inner j's
-      (member? '(cmprm r12 sp 16) qf)                ; the outer cond fuses against n's slot
-      (member? '(add r13 r13 1) qf)                  ; the inner step is register-only
-      (member? '(add r12 r12 1) qf))                 ; ...and so is i's
+      (cspair? qf 'r11)                              ; j's save/restore pair, ONCE each -- the calls never wrap it
+      (cspair? qf 'r12)                              ; s's pair likewise
+      (cspair? qf 'r13)                              ; ...and i's
+      (= 1 (tally (filter (\ f (two? f && id? <f 'cmprm && id? <>f 'r13 && id? <>>f 'sp)) qf)))
+                                                     ; the outer cond fuses against n's slot (rung 3
+                                                     ;   repacks a's cell away, so no spelled offset)
+      (cspair? qf 'r14)                              ; ...and a itself rides a cs seat now
+      (member? '(add r11 r11 1) qf)                  ; the inner step is register-only
+      (member? '(add r13 r13 1) qf))                 ; ...and so is i's
+   _ (setenv "MOON_ABLATE" ())
+   ; ...and the DEFAULT face: no home -- the params spill at ENTRY (the first arg
+   ; store precedes every ALU op) where the old lane computed on the arrivals and
+   ; spilled only at the call; the cells are repack's to place from here
+   (fsti fs rg) (: (go l i) (? !(two? l) 99
+                               (two? <l && (= <<l 'st) && (= (nthr <l 3) rg)) i
+                               (go >l (i + 1)))
+                   (go fs 0))
+   (falu fs) (: (go l i) (? !(two? l) 99
+                             (two? <l && member? <<l '(add imul sub) && !(= <><l 'sp)) i
+                             (go >l (i + 1)))
+                 (go fs 0))
+   hdf (fnf 'h <>(cgn (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }")))
+   _ (assert
+      ((falu hdf) < 99)                              ; the shape is real...
+      ((fsti hdf 'r6) < (falu hdf)))                 ; ...entry spill first, compute off the slots
    ; -- slot-load elision: stld rides a whole straight-line run (a bound slot's reload
    ; forwards from the register until a redef, an overlapping store, a label, or a bar).
    irE (cgn (pre9 + "long f2(long *p) { long a = p[0]; if (a & 1) return a; return g(a); } int main() { return f2((long*)0); }"))
    irF (cgn (pre9 + "long q2(long *p) { long a = p[0]; g(a); return a + (a >> 3); } int main() { return q2((long*)0); }"))
    _ (assert
       (two? irE) (two? irF)
-      ; the deref lands on the protocol and rides it -- slot-free, frameless
-      (member? '(ld r0 r6 0) (fnf 'f2 <>irE))
-      (member? '(test r0 1) (fnf 'f2 <>irE))
+      ; the deref lands in a's pool home and rides it -- slot-free, frameless
+      ; (the tail g(a) is a sibcall, so the one build reads f2 as leaf-shaped)
+      (member? '(ld r5 r6 0) (fnf 'f2 <>irE))
+      (member? '(test r5 1) (fnf 'f2 <>irE))
       (= 0 (splds (fnf 'f2 <>irE)))
       ; a crosses the call (one wrap reload), then the second read FORWARDS: one sp load total
       (= 1 (splds (fnf 'q2 <>irF))))
@@ -1251,30 +1281,30 @@
       (= 0 (occh (fnf 'w <>irW) 'a128))
       (= 1 (occh (fnf 'v <>irX) 'mw128r))            ; the mul's right is callish-free: parked
       (= 1 (occh (fnf 'v <>irX) 'a128)))             ; the add's right CALLS: the cell holds through it
-   ; -- the leaf cs overflow: a call-free fn whose param homes drank the operand pool
-   ; (five homable params here) overflows its depth>=2 locals onto the cs pool -- the
-   ; save/restore pair rides the leaf lane's regen too (the ride regen passes the cs regs
-   ; through), and the loop nest runs register-only.
+   ; -- the leaf cs overflow: a call-free fn whose param rides drank the operand pool
+   ; (five homable params here) overflows what the file cannot seat onto the cs pool,
+   ; and the loop nest runs register-only.
    irY (cgn "long lf(long *r, long *a, long na, long *b, long nb) { long s = 0; for (long i = 0; i < na; i++) { for (long j = 0; j < nb; j++) { s = s + a[i] * b[j] + r[i+j]; } } return s; } int main() { return 0; }")
    yf (fnf 'lf <>irY)
    _ (assert
       (two? irY)
-      (cspair? yf 'r11)                              ; s saves (prologue), homes r11, restores (epilogue)
-      (member? '(add r12 r12 1) yf)                  ; i steps on its home, register-only
-      (member? '(add r13 r13 1) yf)                  ; j likewise
-      (= 3 (splds yf)))                              ; the ONLY sp loads are the three restores
+      (cspair? yf 'r12)                              ; s saves (prologue), homes r12, restores (epilogue)
+      (member? '(add r11 r11 1) yf)                  ; i steps on its cs home, register-only
+      (member? '(add r9 r9 1) yf)                    ; j rides the pool -- no pair owed at all
+      (= 2 (splds yf)))                              ; the ONLY sp loads are the two restores
    ; -- canonical int homing: an int/uint LOCAL homes (lhomable?), and the home always holds
    ; the EXTENDED value -- every def re-narrows (sx4/zx4), so reads are zero forms and 32-bit
    ; wrap holds. an int PARAM homes only by RIDING its arrival (one entry cvt, no pool
-   ; register): here na rides r2; nb's ride is dropped by the soundness re-read (r7 turns
-   ; scratch) and it keeps its SLOT -- never a pool home.
+   ; register): here na rides its quad arrival r2 (the body is protocol-quiet, so nothing
+   ; can write it -- ubuild's re-read verifies) and nb rides r7.
    irZ (cgn "long g2(long *r, long *a, int na, long *b, int nb) { long s = 0; for (int i = 0; i < na; i++) { for (int j = 0; j < nb; j++) { s = s + a[i] * b[j]; } } return s; } int main() { return 0; }")
    zf (fnf 'g2 <>irZ)
    _ (assert
       (two? irZ)
       (member? '(sx4 r2) zf)                         ; na rides its arrival, canonicalized once
       (member? '(cmp r12 r2) zf)                     ; ...and the bound compare reads it register-register
-      (wrapon? 'r7 zf)                               ; nb's dropped ride lands in its slot
+      (member? '(sx4 r7) zf)                         ; nb rides too -- no slot, no wrap
+      (member? '(cmp r9 r7) zf)                      ; ...the inner bound register-register as well
       (member? '(sx4 r12) zf)                        ; i's defs re-narrow: the home stays canonical
       (member? '(add r12 r12 1) zf)                  ; i on its cs home
       (= 2 (splds zf)))                              ; full-word sp loads: only the two cs restores
@@ -1289,18 +1319,18 @@
    ; loop never touches its slot and the return reads the seat; the pointer param a
    ; reloads per iteration
    _ (assert
-      (member? '(add r11 r1 r0) zpf)                 ; s's def lands in its seat
-      (member? '(mov r0 r11) zpf)                    ; ...and the return reads the seat
-      (= 1 (nldrg zpf 'r11))                       ; s's slot is gone: r11 reloads at its cs restore, nowhere else
-      (member? '(ld r6 sp 8) zpf)                    ; a reads its slot per iteration...
-      (member? '(ldx r6 r6 r12 8 0) zpf))            ; ...and the indexed arg rides it, indexed by i's home
-   ; -- priced int-param homes (the leaf lane): an int param whose slot touches pay the
-   ; entry cvt takes its POSITIONAL pool seat -- after the locals pick, and only while the
-   ; pool stays deep (>= 2 free after the take). f4: n homes its own arrival seat (one sx4,
-   ; no mov, the slot never opens -- the fn runs bare); f5: four pointer homes + the picked
-   ; locals leave the pool at two, so the hot n keeps its slot (the mag_mul discipline:
-   ; the unpriced version drank the pool and reopened the d128 stack cell); f6: a read-free
-   ; param earns nothing.
+      (member? '(add r12 r1 r0) zpf)                 ; s's def lands in its seat
+      (member? '(mov r0 r12) zpf)                    ; ...and the return reads the seat
+      (= 1 (nldrg zpf 'r12))                       ; s's slot is gone: r12 reloads at its cs restore, nowhere else
+      (member? '(ld r6 sp 8) zpf)                    ; a reads its slot per iteration (its one call
+                                                     ;   sits at depth 1: a cs pair would not repay)
+      (member? '(ldx r6 r6 r11 8 0) zpf))            ; ...and the indexed arg rides it, indexed by i's home
+   ; -- priced int-param rides: an int param read at least once RIDES its arrival (one
+   ; entry cvt, no pool register minted), and only while the file stays deep (>= 2 left
+   ; after the take -- the mag_mul discipline). f4: n rides its arrival (one sx4, the slot
+   ; never opens, the fn runs bare); f5: the four pointers ride r6/r5 and the quads r2/r1
+   ; (protocol-quiet body), so n rides r7 and the loop compares register-register; f6: a
+   ; read-free param earns nothing.
    irIH (cgn "long f4(long *a, int n) { return a[n] + a[0]; } int main() { return 0; }")
    ihf (fnf 'f4 <>irIH)
    irIP (cgn "long f5(long *a, long *b, long *c, long *d, int n) { long s = 0; for (int i = 0; i < n; i++) { s = s + a[i] + b[i] + c[i] + d[i]; } return s; } int main() { return 0; }")
@@ -1313,7 +1343,8 @@
       (member? '(ldx r9 r6 r5 8 0) ihf)              ; ...and indexes register-resident, delivered
                                                      ;    straight to the bin die's park (no r0 hop)
       (= 0 (splds ihf))                              ; no slot traffic at all: f4 runs bare
-      (spillrd? ipf 'r7 'ld4 'r0)                    ; f5: n spills (the pool ends at two), the loop re-reads the slot
+      (member? '(sx4 r7) ipf)                        ; f5: n rides r7, canonicalized once
+      (member? '(cmp r9 r7) ipf)                     ; ...and the bound compare never opens a slot
       !(member? '(sx4 r5) idf))                      ; a read-free param earns nothing
    ; -- d128 LOCALS home as CS PAIRS: a loop-carried __int128 local takes (lo hi) off the
    ; cs pool (callee-saved: call-safe, no wraps, and no operand-pool pressure -- the wpk
@@ -1396,10 +1427,10 @@
 (: irB (cgn "long g(long x); long f(long n) { g(n); long s = 0; long i = 0; while (i < n) { s = s + i*i; i = i + 1; } return s; } int main() { return f(4); }")
    (assert
       (two? irB)
-      (member? '(cmprm r9 sp 0) <>irB)                ; the cond fuses against n's slot
-      (member? '(imul r10 r9 r9) <>irB)               ; i*i on the home, 3-address
-      (member? '(add r5 r5 r10) <>irB)                ; s accumulates in its home
-      (member? '(add r9 r9 1) <>irB)))                ; i++ is ONE add on the home
+      (member? '(cmprm r6 sp 0) <>irB)                ; the cond fuses against n's slot
+      (member? '(imul r9 r6 r6) <>irB)                ; i*i on the home, 3-address
+      (member? '(add r5 r5 r9) <>irB)                 ; s accumulates in its home
+      (member? '(add r6 r6 1) <>irB)))                ; i++ is ONE add on the home
 
 ; -- arm64 homing (stage D): the same alive machinery rides AAPCS64. homes come
 ; off r10..r14 (caller-saved, never an argument register -- every home takes a
@@ -1435,6 +1466,8 @@
                                           (n + 1) n))))
                  (go fs 0))
    pre9 "long g(long x); "
+   ; the a64 homes are the same knob-only lane (moon-ssa rung 5)
+   _ (setenv "MOON_ABLATE" "pcell")
    irDa (cgna (pre9 + "long f(long a, long b) { long s = a+b+a*b+a-b; g(1); return s+1; } int main() { return f(20, 22); }"))
    irLa (cgna (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }"))
    irOa (cgna "static long f9(long a, long b, long c, long d, long e, long f, long g2, long h, long i) { return a+h+i; } long q(long a) { return f9(a,2,3,4,5,6,7,8,9) - 17; } int main() { return (int)(q(1) + 24); }")
@@ -1453,13 +1486,14 @@
       !(ldat <>irOa 'sp 48)
       !(ldat <>irOa 'fp 32)                          ; no fp read survives in a frameless leaf
       (= 0 (hmovs <>irKa))                           ; born-at-a-call locals keep their slots
-      (member? '(li r6 0) <>irBa)                    ; the free local s homes and its init
-      !(member? '(mov r6 r0) <>irBa)                 ;  DELIVERS there (the die: no r0 bridge)
+      (member? '(li r5 0) <>irBa)                    ; the free local s homes and its init
+      !(member? '(mov r5 r0) <>irBa)                 ;  DELIVERS there (the die: no r0 bridge)
       (member? '(ld r0 fp -16) <>irBa)               ; n reloads per iteration (no cross-call pin)
-      (member? '(cmp r5 r0) <>irBa)                  ; ...and the cond compares off the reload
-      (member? '(add r6 r6 r9) <>irBa)               ; s accumulates 3-address (i*i in r9)
-      (member? '(add r5 r5 1) <>irBa)                ; the loop counter i ALSO homes (r5): its
-      (= 0 (wrapsa <>irBa))))                        ; ++ no longer leans its own slot. zero wraps
+      (member? '(cmp r6 r0) <>irBa)                  ; ...and the cond compares off the reload
+      (member? '(add r5 r5 r9) <>irBa)               ; s accumulates 3-address (i*i in r9)
+      (member? '(add r6 r6 1) <>irBa)                ; the loop counter i ALSO homes (r6): its
+      (= 0 (wrapsa <>irBa)))
+   _ (setenv "MOON_ABLATE" ()))                      ; ++ no longer leans its own slot. zero wraps
 
 ; -- register-bound branch splices: a call-free cbinl predicate reads its args from
 ; REGISTERS. a var arg over a pinned/homed local ALIASES that register (zero forms);
@@ -1472,14 +1506,14 @@
       (two? irU)
       (member? '(cmp r6 2) uf)                       ; x aliases a's ride: the compare reads r6
       (member? '(cmp r6 r5) uf)                      ; ...and n's ride r5 -- no temp anywhere
-      (member? '(cmp r10 2) uf)                      ; the second splice aliases s's home
-      (member? '(cmp r10 r6) uf)
+      (member? '(cmp r9 2) uf)                       ; the second splice aliases s's home
+      (member? '(cmp r9 r6) uf)
       (= 0 (splds uf)))                              ; the whole fn runs slot-free
    irP (cgn (pre9 + "long pk(long a, long n) { long s = 0; for (long i = 0; i < n; i++) { if (inr(a + i, n)) s += i; } return s; } int main() { return pk(1, 6); }"))
    pf (fnf 'pk <>irP)
    _ (assert
       (two? irP)
-      (member? '(add r7 r6 r10) pf)                  ; the expression arg lands its park r7...
+      (member? '(add r7 r6 r9) pf)                   ; the expression arg lands its park r7...
       (member? '(cmp r7 r5) pf)                      ; ...and the body compares park vs alias
       (= 0 (splds pf)))
    ; the VALUE splice aliases too (its multi-return body reads lo straight from n's ride);
@@ -1759,21 +1793,24 @@
 ; constant); a value-position asn keeps it too (its answer is read).
 (: (sis fs) (tally (filter (\ f (two? f && member? <f '(si si1 si2 si4))) fs))
    (lik fs k) (tally (filter (\ f (two? f && id? <f 'li && (= <>>f k))) fs))
-   irS1 (cgn "int q(int n) { int i; i = 5; if (n) i = 6; return i + n; } int main() { return q(0) - 5; }")
-   irS2 (cgn "int w(int n) { int i = 7; int *p = &i; return *p + n; } int main() { return w(0) - 7; }")
-   ; b is WRITTEN so kprop leaves it: the si lane stays the one under law here
-   irS3 (cgn "int b9(int n) { _Bool b = 4; if (n > 9) b = 0; return b + n; } int main() { return b9(0) - 1; }")
+   (sivk fs k) (tally (filter (\ f (two? f && member? <f '(si si1 si2 si4) && (= (nthr f 3) k))) fs))
+   ; every local here ESCAPES through a call: a merely &-taken local promotes now
+   ; (the address never leaves, so rung 2 folds its si into a li on a seat, and the
+   ; one build homes it outright) -- a law about the si LANE needs a slot no
+   ; analysis can close, and only a departing address guarantees one
+   irS1 (cgn "void e9(int*); int q(int n) { int i; i = 5; if (n) i = 6; e9(&i); return i + n; } int main() { return q(0) - 5; }")
+   irS2 (cgn "void e9(int*); int w(int n) { int i = 7; e9(&i); return i + n; } int main() { return w(0) - 7; }")
+   irS3 (cgn "void e9(_Bool*); int b9(int n) { _Bool b = 4; if (n > 9) b = 0; e9(&b); return b + n; } int main() { return b9(0) - 1; }")
    qf (fnf 'q <>irS1)
    wf (fnf 'w <>irS2)
    bf (fnf 'b9 <>irS3)
    (assert
       (two? irS1) (two? irS2) (two? irS3)
       (= 2 (sis qf))                                 ; i = 5 and i = 6: one si4 each
-      (member? '(si4 sp 0 5) qf)
       (= 0 (lik qf 5)) (= 0 (lik qf 6))              ; no li anywhere: the constants never ride a register
       (= 1 (sis wf)) (= 0 (lik wf 7))                ; the &-barred slotted init delivers too
-      (member? '(si1 sp 0 1) bf)                     ; bool: the LANE declines (it would store the
-      !(member? '(si1 sp 0 4) bf)))                  ;  raw 4); cvt normalizes, then the fold si's the 1
+      (= 1 (sivk bf 1))                              ; bool: the LANE declines (it would store the
+      (= 0 (sivk bf 4))))                            ;  raw 4); cvt normalizes, then the fold si's the 1
 
 ; -- unhome's pre-entry guard: H mentioned BEFORE its (mov H A) entry pair carries
 ; ANOTHER value (an arrival -- memchr's c spilled from r5 while s homed r5, and the
@@ -1822,10 +1859,10 @@
       (two? irC1)
       (member? '(ld r5 r6 8) c2)                     ; p->size delivered straight to its seat
       (= 0 (cells c2)) (= 0 (movs c2))               ; no cell, no husk: ld/li/jmp is the whole call
-      (member? '(ld r6 r6 0) ca)                     ; the FIRST cell arg delivers -- even onto its
-      (= 0 (cells ca))                               ;   own base's riding home; the second reads
-      (member? '(ld r0 r6 8) ca)                     ;   through the face and RIDES r0 across the
-      (member? '(mov r5 r0) ca)                      ;   first's delivery -- no cell at all
+      (member? '(ld r0 r6 0) ca)                     ; the FIRST cell arg reads through the face and
+      (= 0 (cells ca))                               ;   pays a mov (the aim declines onto p's ARMED
+      (member? '(ld r0 r6 8) ca)                     ;   home -- a one-build residual); still no cell
+      (member? '(mov r5 r0) ca)                      ;   anywhere: ld/mov/ld/mov/jmp is the whole call
       !(member? '(ld r6 r5 0) ci)                    ; an indirect call BARS the aim: neither arg
       !(member? '(ld r5 r5 8) ci)                    ;   is delivered onto its seat, so both must
       (= 2 (tally (filter (\ f (two? f && id? <f 'ld && !(id? <>>f 'sp))) ci)))  ; stage -- two loads
@@ -1939,6 +1976,193 @@
          (id? (coal gC '((label fn) (raw 144) (ret))) '((label fn) (raw 144) (ret)) ||
           (= (coal gC '((label fn) (raw 144) (ret))) '((label fn) (raw 144) (ret)))))))
 
+; --- the value layer (crew/moon/val.l, moon-ssa rung 0): CFG, escape census,
+; cells, dead stores, per-def chains, pinned on hand shapes. the corpus
+; differential against the python oracle is doc/misc/proto/ssagap/differ.sh.
+; the goldens themselves pin determinism: every v-list is sorted, and the
+; fixpoints are monotone unions, so no tablet order can reach an answer.
+(: fsA '((align 2) (label g) (li r5 0) (li r9 0) (label .c.0) (cmp r9 r6) (br ge .d.2)
+         (add r5 r5 r9) (label .s.1) (add r9 r9 1) (jmp .c.0) (label .d.2) (mov r0 r5) (ret))
+   flA (vfns fsA)
+   spA (vspans <><flA)
+   cB (vctx '((sub sp sp 16) (li r0 7) (st sp 8 r0) (ld r1 sp 8) (add sp sp 16) (ret)))
+   cC (vctx '((sub sp sp 16) (li r0 7) (st sp 8 r0) (add sp sp 16) (ret)))
+   cD (vctx '((sub sp sp 16) (lea r0 sp 8) (st sp 0 r1) (call g) (add sp sp 16) (ret)))
+   cE (vctx '((sub sp sp 16) (st sp 8 r0) (call g) (ld r1 sp 8) (st sp 8 r2) (ld r2 sp 8)
+              (add sp sp 16) (ret)))
+   cF (vctx '((sub sp sp 16) (st sp 0 r1) (st sp 8 r2) (ld r1 sp 0) (ld r2 sp 8)
+              (add sp sp 16) (ret)))
+   cG (vctx '((sub sp sp 16) (st sp 8 r0) (add r0 sp 8) (ld r1 sp 8) (add sp sp 16) (ret)))
+   (assert
+      (= (map (\ p <p) flA) '(g))                     ; a non-dot label opens a fn, align is glue
+      (= spA '((2 8)))                                 ; the one back edge
+      (= [(vwt spA 5) (vwt spA 10)] '(8 1))            ; in the loop 8, out 1
+      (= (vcells cB) '((0 -8 1 0 0 0 0 2 2)))          ; one full-word call-free cell
+      (= (vchains cB) '((0 -8 (2) (3) 0)))             ; its store-to-load chain
+      (= (vdead cB) ())
+      (= (vdead cC) '((2 st 1 0)))                     ; the unread store
+      (= (vchains cC) '((0 -8 (2) () 0)))              ; a chain with no reader
+      (= (peep (cD 'esc) 'sp 0) 1)                     ; lea leaks the frame..
+      (= (vcells cD) ())                               ; ..and the census refuses the space
+      (= (vcells cE) '((0 -8 1 1 0 0 0 4 4)))          ; the hull verdict: across=1..
+      (= (vchains cE) '((0 -8 (1) (3) 1) (0 -8 (4) (5) 0)))   ; ..but only ONE chain crosses
+      (= (vcells cF) '((0 -16 1 0 0 0 0 2 2) (0 -8 1 0 0 0 0 2 2)))  ; rows sort (base, space)
+      (= (vchains cF) '((0 -16 (1) (3) 0) (0 -8 (2) (4) 0)))
+      (= (vcells cG) ())                               ; an unmodeled base use: conservative skip
+      (= (vchains cG) ())))
+
+; --- per-def promotion (moon-ssa rung 1), on hand forms straight through repack:
+; one cell, two lifetimes -- the first crosses a call and keeps its frame cell,
+; the second promotes onto its own range (the store self-drops into its seat);
+; the hull path (the pdef ablation) refuses the whole cell for the one call.
+(: gR {}
+   _ (pin gR 'slots '((-16 8)))
+   gH {}
+   _ (pin gH 'slots '((-16 8)))
+   _ (pin gH 'abl '(pdef))
+   fs '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+        (li r5 7) (st r4 -16 r5) (call g9) (ld r6 r4 -16) (mov r0 r6)
+        (li r7 9) (st r4 -16 r7) (ld r8 r4 -16) (add r0 r0 r8) (ret))
+   rf (repack gR fs)
+   hf (repack gH fs)
+   (assert
+      (member? '(ld r6 r4 -16) rf)                  ; the crossing chain keeps its cell
+      !(member? '(ld r8 r4 -16) rf)                 ; the call-free chain left the frame..
+      (member? '(mov r8 r7) rf)                     ; ..its load reads the seat, the store dropped
+      (member? '(ld r6 r4 -16) hf)                  ; the hull: a call in the window bars it whole
+      (member? '(ld r8 r4 -16) hf)))
+
+; --- narrow promotion (moon-ssa rung 2): a cell whose every touch shares one
+; width at its own base rides the same chains, wearing the extension
+; discipline -- the store canonicalizes the seat, a matching load is a plain
+; mov, and an si def folds the extension into its li at compile time. the
+; hull path (pdef) still refuses anything narrow.
+(: gN {}
+   _ (pin gN 'slots '((-16 8)))
+   gM {}
+   _ (pin gM 'slots '((-16 8)))
+   _ (pin gM 'abl '(pdef))
+   fsA '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+         (li r5 7) (st4 r4 -16 r5) (ldu4 r6 r4 -16) (mov r0 r6) (ret))
+   fsB '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+         (si4 r4 -16 -1) (ld4 r7 r4 -16) (mov r0 r7) (ret))
+   fsC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+         (si r4 -16 42) (ld r7 r4 -16) (mov r0 r7) (ret))
+   ra (repack gN fsA)
+   ha (repack gM fsA)
+   rb (repack gN fsB)
+   rc (repack gN fsC)
+   (assert
+      !(member? '(ldu4 r6 r4 -16) ra)                ; the narrow pair left the frame
+      (member? '(zx4 r5) ra)                         ; the store canonicalized its seat..
+      (member? '(mov r6 r5) ra)                      ; ..and the matching load is a mov
+      (member? '(ldu4 r6 r4 -16) ha)                 ; the hull still refuses narrow whole
+      (member? '(li r0 -1) rb)                       ; si4 -1 under a SIGNED load: the
+      (member? '(mov r7 r0) rb)                      ;   extension folded at compile time
+      !(member? '(ld4 r7 r4 -16) rb)
+      (member? '(li r0 42) rc)                       ; full-word si promotes to its li
+      !(member? '(ld r7 r4 -16) rc)))
+
+; --- cs seats per value (moon-ssa rung 3): a chain that CROSSES a call -- every
+; caller-saved seat fails at the call by construction -- takes a callee-saved
+; one when its crossings COMPOUND (a call at depth >= 2 -- one pair per
+; invocation against iterations-squared wraps): repack emits ONE save after the
+; r3 save and ONE restore before each teardown, and the per-iteration wrap
+; around the call becomes two movs. straight-line weight stays a cell, and
+; the pdefcs ablation holds the whole lane shut.
+(: gS {}
+   _ (pin gS 'slots '((-16 8)))
+   gT {}
+   _ (pin gT 'slots '((-16 8)))
+   _ (pin gT 'abl '(pdefcs))
+   fsL '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+         (li r5 7)
+         (label .O)
+         (li r9 0)
+         (label .L)
+         (st r4 -16 r5) (call g9) (ld r6 r4 -16)
+         (add r6 r6 1) (mov r5 r6)
+         (add r9 r9 1) (cmp r9 3) (br lt .L)
+         (cmp r5 99) (br lt .O)
+         (mov r0 r5)
+         (mov sp r4) (pop r4) (ret))
+   fsS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+         (li r5 7)
+         (st r4 -16 r5) (call g9) (ld r6 r4 -16)
+         (mov r0 r6)
+         (mov sp r4) (pop r4) (ret))
+   rl (repack gS fsL)
+   hl (repack gT fsL)
+   rs (repack gS fsS)
+   (assert
+      !(member? '(ld r6 r4 -16) rl)                 ; the crossing chain left the frame..
+      (member? '(mov r11 r5) rl)                    ; ..for a callee-saved seat
+      (member? '(mov r6 r11) rl)
+      (member? '(st r4 -16 r11) rl)                 ; one save, after the r3 save..
+      (member? '(ld r11 r4 -16) rl)                 ; ..one restore, before the teardown
+      (member? '(ld r6 r4 -16) hl)                  ; pdefcs: the wrap stays a wrap
+      (member? '(ld r6 r4 -16) rs)                  ; straight-line weight 2: not worth a pair
+      ; a SIB exit restores too: the peel (ld r3/mov sp/pop r4/jmp far) is one
+      ; teardown run and the restore lands at its head -- a tail-called-into fn
+      ; must see the caller's file whole (exit9? once read every sib as local)
+      ; ...and a SELF tail call is a sib like any other: the target label IS in
+      ; the fn's own table (at index 0), but the jump re-enters through the
+      ; prologue, whose saves would clobber the caller's file if the seats were
+      ; not already restored (ev.c's analyze crashed the whole artifact on this)
+      (member? '(ld r11 r4 -16)
+               (repack gS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+                            (li r5 7)
+                            (label .O)
+                            (li r9 0)
+                            (label .L)
+                            (st r4 -16 r5) (call g9) (ld r6 r4 -16)
+                            (add r6 r6 1) (mov r5 r6)
+                            (add r9 r9 1) (cmp r9 3) (br lt .L)
+                            (cmp r5 99) (br lt .O)
+                            (mov r6 r5)
+                            (ld r3 r4 -8) (mov sp r4) (pop r4) (jmp fn))))
+      (member? '(ld r11 r4 -16)
+               (repack gS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+                            (li r5 7)
+                            (label .O)
+                            (li r9 0)
+                            (label .L)
+                            (st r4 -16 r5) (call g9) (ld r6 r4 -16)
+                            (add r6 r6 1) (mov r5 r6)
+                            (add r9 r9 1) (cmp r9 3) (br lt .L)
+                            (cmp r5 99) (br lt .O)
+                            (mov r6 r5)
+                            (ld r3 r4 -8) (mov sp r4) (pop r4) (jmp far9))))))
+
+; --- the allocator owns locals (moon-ssa rung 4): locals homes are placed by
+; INTERVAL -- lpick's raw-touch rank stands (a long-lived name is the one only
+; the regen channel can seat; short call-free ranges promote in repack anyway),
+; and two names whose alive spans are DISJOINT share one seat. here a and b
+; each cross calls (callee-saved material) and never overlap: one pair serves
+; both, s keeps its own -- two distinct callee-saved regs where the static
+; pick spent three. MOON_ABLATE=alloc restores lpick (byte-identical, the
+; corpus instrument holds it); the setenv round-trip pins the knob's face.
+(: srcJ "long g(long);
+long f(long n) {
+  long s = 0;
+  { long a = n + 3; s += g(a) + a * 2 + g(a + s) + a; }
+  { long b = n + 5; s += g(b) + b * 2 + g(b + s) + b; }
+  return s;
+}
+int main() { return 0; }"
+   (csset fs) (: t (foldl (\ t9 f9 (? (two? f9 && id? <f9 'st && id? <>f9 'sp &&
+                                        member? (nthr f9 3) '(r11 r12 r13 r14))
+                                       (pin t9 (nthr f9 3) 1) t9))
+                          {} fs)
+                  (keys t))
+   fJ (fnf 'f <>(cgn srcJ))
+   _ (setenv "MOON_ABLATE" "alloc")
+   fJ2 (fnf 'f <>(cgn srcJ))
+   _ (setenv "MOON_ABLATE" ())
+   (assert
+      (= 2 (tally (csset fJ)))                       ; shared: a and b ride one seat
+      (= 3 (tally (csset fJ2)))))                    ; the knob: one seat each
+
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) ok")
+(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) + the param-cell default and its pcell face (rung 5) + the one-build default and its rides (rung 6) ok")
 (put err 10)
