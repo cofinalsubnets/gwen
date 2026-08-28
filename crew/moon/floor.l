@@ -8,11 +8,11 @@
 (module 'moon
 (:
    ; -- the type shapes --
-   (ptr? ('ptr >< _)) 1
-   (arr? ('arr >< _)) 1
-   (fn? ('fn >< _)) 1                     ; ('fn ret?) -- a function; decays to its address
-   (stru? ('struct >< _)) 1
-   (bitf? ('bitfield >< _)) 1             ; (bitfield uty bitoff width); its lvalue is a UNIT address
+   (ptr? ('ptr . _)) 1
+   (arr? ('arr . _)) 1
+   (fn? ('fn . _)) 1                     ; ('fn ret?) -- a function; decays to its address
+   (stru? ('struct . _)) 1
+   (bitf? ('bitfield . _)) 1             ; (bitfield uty bitoff width); its lvalue is a UNIT address
    (cplxty? ty) (stru? ty && member? <>ty '("__cplx_double" "__cplx_float"))   ; a seeded complex
 
    ; -- sizes and alignment. w is the machine word in BYTES (4 on the 32-bit thumb ABI, 8
@@ -27,19 +27,19 @@
        (arr? ty) (* <>>ty (tysz w stag <>ty))
        (stru? ty) <>(peep stag <>ty 0)
        (bitf? ty) (tysz w stag <>ty)       ; the unit's size (a bitfield rides its declared type)
-       ((ty = 'char) || (ty = 'uchar) || (ty = 'bool)) 1
-       ((ty = 'short) || (ty = 'ushort)) 2
-       ((ty = 'int) || (ty = 'uint) || (ty = 'float)) 4
-       ((ty = 'llong) || (ty = 'ullong) || (ty = 'double)) 8   ; 8-byte on EVERY target (t32's word is 4)
-       ((ty = 'i128) || (ty = 'u128)) 16
-       w)
+       (ty @ ('char || 'uchar || 'bool) 1
+             ('short || 'ushort) 2
+             ('int || 'uint || 'float) 4
+             ('llong || 'ullong || 'double) 8  ; 8-byte on EVERY target (t32's word is 4)
+             ('i128 || 'u128) 16
+             w))
    (tyalign w stag ty)
     (? (ptr? ty) w
        (arr? ty) (tyalign w stag <>ty)
        (stru? ty) <>>(peep stag <>ty 0)
        (bitf? ty) (tyalign w stag <>ty)
        (tysz w stag ty))
-   (aup n a) (& (n + (a - 1)) (0 - a))     ; round n up to alignment a
+   (aup n a) ((n + (a - 1)) & -a)     ; round n up to alignment a
 
    ; -- the typing door: C's promotion and conversion law spelled ONCE -- integer promotions
    ; (C11 6.3.1.1) and the usual arithmetic conversions (6.3.1.8). parse's arithmetic lanes
@@ -49,26 +49,24 @@
    (parith? ty) (? (bitf? ty) 1
                    (member? ty '(bool char uchar short ushort int uint long ulong
                                  llong ullong i128 u128 float double)))
-   (trank ty) (? (member? ty '(i128 u128)) 4
-                 ((ty = 'llong) || (ty = 'ullong)) 3
-                 ((ty = 'long) || (ty = 'ulong)) 2 1)
+   (trank ty) (ty @ ('i128 || 'u128) 4 ('llong || 'ullong) 3 ('long || 'ulong) 2 1)
    (tusg? ty) (member? ty '(uchar ushort uint ulong ullong u128))
-   (tusg ty) (? (ty = 'int) 'uint (ty = 'long) 'ulong
-                (ty = 'llong) 'ullong (ty = 'i128) 'u128 ty)
-   (tw w64 ty) (: r (trank ty) (? (r = 1) 4 (r = 2) (? w64 8 4) (r = 3) 8 16))
+   (tusg ty) (ty @ 'int 'uint 'long 'ulong 'llong 'ullong 'i128 'u128 ty)
+   (tw w64 ty) (: r (trank ty) (r = 1 ? 4 (r = 2) (? w64 8 4) (r = 3) 8 16))
    (pprom ty) (? (bitf? ty) (pprom <>ty)              ; a bitfield promotes as its unit
                  (member? ty '(bool char uchar short ushort)) 'int
                  ty)
    (puac w64 ta tb)
-    (? ((ta = 'double) || (tb = 'double)) 'double
-       ((ta = 'float) || (tb = 'float)) 'float
-       (: a (pprom ta) b (pprom tb)
-          (? (a = b) a
-             (: ua (tusg? a) ub (tusg? b)
-                (? ((ua && ub) || (!ua && !ub)) (? (trank a < trank b) b a)   ; same signedness: higher rank
-                   (: u (? ua a b) s (? ua b a)     ; one of each: the unsigned one, the signed one
-                      (? (trank s <= trank u) u     ; unsigned rank >= signed: unsigned wins
-                         (tw w64 u < tw w64 s) s    ; signed strictly wider: it represents all of u
-                         (tusg s))))))))            ; same width: the signed one's unsigned twin
-   (tdecay ty) (? (arr? ty) ['ptr <>ty] ty))
+    ; ⚠ EITHER operand decides, so this reads both and cannot be an @ over ta alone
+    (? (ta = 'double || tb = 'double) 'double
+       (ta = 'float || tb = 'float) 'float
+     (: a (pprom ta) b (pprom tb)
+      (a = b ? a
+       (: ua (tusg? a) ub (tusg? b)
+        (ua && ub || !ua && !ub ? (trank a < trank b ? b a)   ; same signedness: higher rank
+         (: u (? ua a b) s (? ua b a)     ; one of each: the unsigned one, the signed one
+            (? (trank s <= trank u) u     ; unsigned rank >= signed: unsigned wins
+               (tw w64 u < tw w64 s) s    ; signed strictly wider: it represents all of u
+               (tusg s))))))))            ; same width: the signed one's unsigned twin
+   (tdecay ty) (arr? ty ? ['ptr <>ty] ty))
 ) ; module 'moon
