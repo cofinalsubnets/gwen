@@ -29,8 +29,8 @@
 ; host-only (screen/scribe + tether/gather + raw/winsize ride host/*.c), so
 ; berth never joins the corpus; the moor core needs no tty and is smoke-
 ; tested end to end over a real pty by test/host/berth.l.
-(use 'wharf)
-(use 'limn)
+(use "lib/wharf.l")
+(use "lib/limn.l")
 
 (:
  ; --- the moor: pump the master through the screen until the child hangs up.

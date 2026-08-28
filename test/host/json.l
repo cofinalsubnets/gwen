@@ -4,7 +4,7 @@
 ; standalone from the repo root:
 ;   cat test/00-init.l test/host/json.l | out/host/love
 
-(use 'json)
+(use "lib/json.l")
 
 (: (json-rt s) (: r (json-read s) (? (two? r) (json-show <>r) 'no-parse)))
 

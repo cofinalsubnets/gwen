@@ -19,11 +19,11 @@
 ; the field is given not by m but by XD -- x^d rewritten as an element --
 ; so reduction folds top powers down with no division anywhere.
 
-; NO BRACKETS HERE: the runtime supplies the layer. a consumer says
-; (use 'rune) -- the loader finds this file (lib/rune.l on the host, the
-; baked source a device registered) and loads it as one fresh layer, leave
-; registers it, the splice serves the bare names; or reaches one member
-; through the accessor, (from 'rune 'deriv).
+; NO BRACKETS HERE: the runtime supplies the layer. a consumer hands the loader
+; this file's path ((use "crew/rune/rune.l")) and it loads as one fresh layer,
+; leave registers it, the splice serves the bare names -- or, where a device
+; baked the source, (use 'rune) answers off that registration; or one member
+; comes through the accessor, (from 'rune 'deriv).
 
 ; --- the polynomial ring ---------------------------------------------------
 (: (mco m) <m

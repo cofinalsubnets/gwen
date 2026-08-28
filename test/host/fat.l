@@ -4,7 +4,7 @@
 ; run standalone from the repo root:
 ;   cat test/00-init.l test/host/fat.l | out/host/love
 
-(use 'fat)
+(use "lib/fat.l")
 
 ; the device: 70000 sectors in one cask. rd answers fresh strings, wr pours.
 (: img (cask (* 70000 512))

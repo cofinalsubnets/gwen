@@ -219,6 +219,47 @@ walk they used to need. loader.l's seat laws flipped to retirement laws --
 fixture where the rungs looked, the use scares no-module under trap, nothing
 registers.
 
+**Rung 4 -- the walk retires. CLIMBED.** `libsrc` is gone: a NAME is a miss
+unless something registered it, with a file of that name sitting in `lib/`.
+Callers write the path out -- 40 sites -- and the slashed include went with the
+walk, so crew/tls's three parts took the `(module 'tls` wrap sb and lush
+already wore. `lib/` is now a directory like any other; its seven crew
+symlinks and three subfolders have no user left in the tree, and only the
+K_TEST ramfs (`kfs`, a `lib/*.l` wildcard) still keys on the name.
+
+What the walk was actually carrying, measured before removing it (a `say err`
+in libsrc, then the gate set): ten names on a hosted love -- clay elfsec fat
+forge json limn papel rune tls wharf -- and nothing else. Everything else in
+`lib/` already answered off the registry. The nine hits that recurred in every
+gate were ONE recipe: selfpack under love0, which has no image, so everything
+it touches walks.
+
+- **the mark is the PATH, not the basename.** The string lane opened with "is a
+  module named for this file's basename registered? then splice it and skip the
+  read" -- which is a cache keyed on the wrong thing the moment several files
+  register one module, which is the normal shape here (sb's parts, lush's
+  eight, tls's three). `(use "crew/sb/sb.l")` after merge.l had registered `'sb`
+  never opened the file, so selfpack lost `ign?`, `sp-keep?` said keep, and the
+  cut packed `out/` and its own previous tarball: 478 MB where 2.7 MB was due.
+  ⚠ THE BUILD STAYED GREEN -- exit 0, the entry count plausible; only the
+  20-minute deflate made it visible. Read the artifact, not the exit code.
+  The same short-circuit also defeated papel's `want`, whose whole point is to
+  read the tree's own sibling over a baked older copy of it.
+- **a bare wrapper does not register.** `enter nm` .. `leave` registered the
+  wrapper unconditionally, so a file that wrapped itself in `(module 'kore ..)`
+  left an empty tablet standing under its basename -- a later `(use 'text)`
+  answering with nothing. The wrapper is kept only when it holds a nom of its
+  own; `t` is read after the eval, so it covers both claims on the name (the
+  file's, and a module that already stood there) and the pull fires only when
+  neither exists.
+- **`love bake` snapshots a FRESH EGG, not this session.** The image load is
+  guarded by `!bake` (src/main.c), so a user-baked image carries the fourteen
+  core modules and no crew; the shipped image is `bake -l $(ho)/.dist-cat.l`.
+  test_seat's "under a wake" case had been resting on the walk to hand libra
+  its `lint` and `salt` -- true before this rung too, and invisible because the
+  cwd had a `lib/`. The gate bakes with the cat now, which wakes the shape love
+  actually ships.
+
 ## ⚠ traps this plan already knows
 
 - **splice, not nest.** A `(: ..)` in VALUE position binds locals (mx-h's nl2).

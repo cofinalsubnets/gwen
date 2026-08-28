@@ -25,6 +25,7 @@
 ;
 ; src/tls.c's `poly1305` nif is the C twin, the same five limbs and the same
 ; mask; test/host/tlsc.l holds it to this file, crew/tls/bench.l times both.
+(module 'tls
 (:
    m26 67108863                              ; 2^26 - 1, one limb
    hib 16777216                              ; 2^24, the high bit a full block carries
@@ -128,3 +129,5 @@
                 pad (bytes 16 (j \ j < rem && msg (o + j) || j = rem))
                 (po-mul (po-absorb hf pad 0 0) r)))
        (po-fin ht key)))
+
+) ; module 'tls

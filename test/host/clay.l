@@ -14,7 +14,7 @@
 ; run standalone from the repo root:
 ;   cat test/00-init.l test/host/clay.l | out/host/love
 
-(use 'clay)
+(use "crew/moon/clay.l")
 
 (: cs (from 'clay 'clay-show)
    cok (from 'clay 'clay-ok?)

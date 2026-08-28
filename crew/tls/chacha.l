@@ -28,6 +28,7 @@
 ; file mode to surface a pre-pin read, the same hour-eating trap met from the
 ; reader's side), but the value is still 0 and the cipher still runs: a scare
 ; nobody reads is a cipher encrypting with nothing. fresh names per step, always.
+(module 'tls
 (:
    m32 4294967295
 
@@ -107,3 +108,5 @@
        nb ((n + 63) // 64)          ; the parens: `//` binds tighter than `+`
        ks (cc-stream key nonce ctr nb)
        (bytes n (i \ txt i ^ ks i))))
+
+) ; module 'tls

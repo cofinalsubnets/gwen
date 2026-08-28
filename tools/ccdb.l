@@ -15,7 +15,7 @@
 ; .c files, so nothing here asks a version control system what the tree holds. what it
 ; writes carries absolute paths, so it is this machine's and rides in no archive.
 (use 'tar)
-(use 'json)
+(use "lib/json.l")
 
 (: root (cwd 0)
    (inc p) ("-I" + root + p)

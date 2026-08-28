@@ -20,7 +20,7 @@
             !(disk-write 3 "abc")               ; not whole sectors: refused
             !(disk-read 0 0))
          ())))
-(use 'fat)
+(use "lib/fat.l")
 (: dev (fat-disk ())
    (? (! (two? dev)) ()
       (: f0 (fat-mount dev)

@@ -9,7 +9,7 @@
 ;
 ; the vocabulary under test is rectangles in CELLS: (id row col rows cols), origins
 ; 0-based, and a bar is (dir row col len) with dir 'across or 'down.
-(use 'wharf)
+(use "lib/wharf.l")
 
 ; --- the two standing laws, checked rather than trusted ---
 ; spans are half-open, so a zero-extent berth is inside everything and overlaps

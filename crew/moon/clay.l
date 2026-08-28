@@ -3,7 +3,7 @@
 ; love table rather than transcribed by hand. the plan, the ranked slate and the
 ; gates are doc/misc/clay.md.
 ;
-; a registered module: (use 'clay), then clay-show / clay-ok? / clay-tags. nothing
+; a registered module: (use "crew/moon/clay.l"), then clay-show / clay-ok? / clay-tags. nothing
 ; here depends on the rest of moon -- a shower is pure AST -> text -- so a generator
 ; can take clay without the lexer, the preprocessor and the parser.
 ;
@@ -61,7 +61,7 @@
    ; --- the small vocabulary this file stands on ---------------------------------
    ; defined here rather than taken from moon, which is what lets clay load alone.
    ; lex.l's copies sit in a different module layer and cannot clobber these.
-   ; `el` has no caller left in this file and is not dead: (use 'clay) splices it, and
+   ; `el` has no caller left in this file and is not dead: a use splices it, and
    ; src/mx.l and src/nifs.l -- the generators behind mx.h, kinds.h and nifs.h -- read it.
    (el l i) (? (i < 1) <l (el >l (i - 1)))
    join (foldl (+) "")

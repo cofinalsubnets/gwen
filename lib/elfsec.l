@@ -1,4 +1,4 @@
-; lib/elfsec.l -- a named section's bytes out of any ELF, on any machine. `(use 'elfsec)`:
+; lib/elfsec.l -- a named section's bytes out of any ELF, on any machine. `(use "lib/elfsec.l")`:
 ;
 ;   (elfsec path nm) -> (1 bytes) | ()      the section named nm, or () for no file / no section
 ;

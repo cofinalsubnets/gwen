@@ -369,7 +369,7 @@
    (gz-finder n)
     (? (n < gz-floor) gz-find
        (peep gz-forged 0 ()) (peep gz-forged 0 ())
-       (: v (trap (\ _ (: _ (use 'forge)
+       (: v (trap (\ _ (: _ (use "lib/forge.l")
                           putx (from 'forge 'forge-putx)
                           fit  (from 'forge 'forge-fit)
                           of   (from 'forge 'forge-of)

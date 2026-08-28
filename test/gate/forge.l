@@ -19,7 +19,7 @@
 ; decline gracefully -- that is the design -- but a gate whose subject never installed reads
 ; exactly like a gate that passed. Where the seam is genuinely absent the roster still has to
 ; answer, so the twins are exercised either way and only the native count is required.
-(: _ (use 'forge)
+(: _ (use "lib/forge.l")
    (die m) (: _ (say err ("forge-gate: " + m + "\n")) _ (flush err) (quit 1))
    fitted (forge-fit 0)
    _ (say out ("forge: " + show fitted + " kernel(s) fitted, "

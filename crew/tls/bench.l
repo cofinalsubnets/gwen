@@ -14,7 +14,7 @@
 ;
 ; not a gate: it prints numbers, it asserts nothing. run it by hand --
 ;   out/host/love crew/tls/bench.l
-(use 'tls)
+(use "lib/tls.l")
 
 (:
    size 65536                                      ; 64 KiB, 1024 chacha blocks

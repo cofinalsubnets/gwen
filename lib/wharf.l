@@ -3,7 +3,7 @@
 ; never pixels -- berth seats them with \e[r;cH, the kernel console multiplies them by
 ; the font's width and height, and neither has to know what the other does with them.
 ; cells are the only currency both speak, and the one `gaze` already answers in.
-; `(use 'wharf)`.
+; `(use "lib/wharf.l")`.
 ;
 ; a plan is a binary tree. a leaf is a berth's id; a node is one split:
 ;

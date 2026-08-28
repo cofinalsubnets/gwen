@@ -12,7 +12,7 @@
 ; touching any other. run:
 ;   cat test/00-init.l test/host/lapiz.l | out/host/love
 
-(use 'lapiz)                                ; the loader: lib/lapiz.l, one layer, registered, spliced
+(use 'lapiz)                                ; the baked module, spliced
 
 ; --- the module seam: lapiz registered, the splice + accessor both reach -------
 (assert

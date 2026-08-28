@@ -19,7 +19,7 @@
 ;
 ; run:  cat test/00-init.l test/host/kiosko.l | out/host/love
 
-(use 'kiosko)                                 ; the loader: lib/kiosko.l, one layer, registered, spliced
+(use 'kiosko)                                 ; the baked module, spliced
 
 (assert
  (member? 'kiosko (from ()))

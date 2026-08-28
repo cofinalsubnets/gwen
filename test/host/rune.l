@@ -12,7 +12,7 @@
 ;
 ;   cat test/00-init.l test/host/rune.l | out/host/love
 
-(use 'rune)                               ; the loader: lib/rune.l, one layer, registered, spliced
+(use "crew/rune/rune.l")                  ; the loader: one layer, registered, spliced
 
 ; --- the module seam: rune registered, the splice + accessor both reach ----
 (assert

@@ -4,7 +4,7 @@
 ; edit this file, not nifs.h -- make relays it from here, off the mx_gen roster in
 ; test/test.mk. `make mx` refreshes by hand, test_clay diffs.
 (:
-   _ (use 'clay)
+   _ (use "crew/moon/clay.l")
 
    ; --- the nifs. one row per (C symbol, love name, arity, impl). arity is a shape,
    ; not a number the C reads: 1 runs the op straight, 2..5 curry on lvm_cur first.

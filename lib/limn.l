@@ -2,7 +2,7 @@
 ; the third piece of the pane story and the one every seat needs -- cb says what is
 ; in a grid (bytes in, cells out), lib/wharf.l says where the rectangle is, and this
 ; says a grid's cells at an origin. cells are the currency all three speak.
-; `(use 'limn)`.
+; `(use "lib/limn.l")`.
 ;
 ; it takes a grid and an origin, never a plan and never a harbour: the bars come in as
 ; wharf-bars' list, so nothing here knows what a berth or a buffer is, and one painter

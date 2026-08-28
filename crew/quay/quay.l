@@ -8,7 +8,7 @@
 ; ⚠ static, and included ONLY by the two seats that index it: a header carrying a
 ; DEFINITION cannot ride a shared one (two TUs, one symbol), and a static table in a
 ; header no TU reads sits unread under -Werror. mx.h keeps the same rule.
-(: _ (use 'clay)
+(: _ (use "crew/moon/clay.l")
    (q-at l k) (? (k = 0) <l (q-at >l (k - 1)))
    ; 0..15: the standard sixteen, as xterm sets them
    q-base '(0 8388608 32768 8421376 128 8388736 32896 12632256

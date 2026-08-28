@@ -3,6 +3,7 @@
 ; tls is a protocol of byte runs, and love's string is a byte run, so these are the four
 ; conversions that keep turning up: a little-endian word out of a string, a little-endian
 ; word into a cask, a big-endian pair for the record header, and hex for the tests.
+(module 'tls
 (:
    ; a little-endian 32-bit word off a string at byte offset i. an absent byte reads the
    ; zero point, so a short input is a quiet one -- callers check the length, never this.
@@ -37,3 +38,5 @@
     (: (nib c) (c < 58 ? (c - 48) (c - 87))
        n (#h // 2)
        (bytes n (i \ (nib (h (i * 2)) << 4) | nib (h (i * 2 + 1))))))
+
+) ; module 'tls

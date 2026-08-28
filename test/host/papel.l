@@ -24,7 +24,7 @@
 
 ; --- the module seam: three modules, and papel adds nothing to the book ----------
 (: parse-before (member? 'parse (names ()))  ; the book BEFORE the load, for the leak delta
- _ (use 'papel)                              ; the loader: lib/papel.l -- papel wants lapiz + cook itself
+ _ (use "crew/papel/papel.l")                ; the loader: papel wants lapiz + cook itself
  (assert
   (member? 'papel (from ()))
   (member? 'lapiz (from ()))

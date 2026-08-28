@@ -43,7 +43,7 @@
 ; this file. The first rule is the default ticket either way.
 
 ; the wrap: every lane rides module 'cook. a consumer says (use 'cook)
-; (lib/cook.l) or probes (from 'cook 'recipe); riding a cat (kore's), the wrap
+; (the baked module) or probes (from 'cook 'recipe); riding a cat (kore's), the wrap
 ; registers the same module, so the ~30 globals (`join` `date` `check` `shell`
 ; among them) stay off the cat's session layer too. a path load composes: the
 ; loader keeps a file's own registration over its wrapper layer (prel's t re-pin).
@@ -402,12 +402,11 @@
 ; $(wildcard) prefers pure love: lush's glob (crew/lush/glob.l, the mask law)
 ; over readdir/stat -- no /bin/sh underneath, so `kore make` globs before a
 ; shell exists. the glob rides module 'lush: a cat carrying the lush parts
-; (kore's) registered it already, and a standalone -l load registers it off
-; lib/lush/glob.l on the cwd, here, before cook-glob folds its from-read.
-; where neither lands (a dev binary on a foreign cwd -- no lib/ to walk),
-; globw below keeps the POSIX shell-out lane.
+; (kore's) registered it already, and a standalone -l load reads the file by
+; name, here, before cook-glob folds its from-read. where neither lands (a dev
+; binary run outside the tree), globw below keeps the POSIX shell-out lane.
 (? (tablet? (from 'lush)) 0
-   (two? (stat "lib/lush/glob.l")) (use 'lush/glob)   ; the wrapped file registers module 'lush
+   (two? (stat "crew/lush/glob.l")) (use "crew/lush/glob.l")  ; the wrapped file registers module 'lush
    0)
 ; cook-glob: the pathname glob, a closure when lush's glob is aboard, () when
 ; not (the importer then keeps its POSIX shell-out lane). the glob rides

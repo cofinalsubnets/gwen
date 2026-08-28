@@ -25,8 +25,8 @@
         (go 0))
 
    ; pattern -> components split on / (every /, quoted or not, is a path break)
-   ; (core `rev`, not job.l's sh-rev: this part stands ALONE -- cook includes
-   ; just the glob via (use 'lush/glob) for $(wildcard))
+   ; (core `rev`, not job.l's sh-rev: this part stands ALONE -- cook loads
+   ; just the glob, by path, for $(wildcard))
    (sh-psplit t m)
      (: n #t
         (go i st acc)

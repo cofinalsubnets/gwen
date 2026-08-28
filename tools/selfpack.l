@@ -29,9 +29,23 @@
 ; 293 MB and about half the time. The cut below still reads each file once, and
 ; it is the cut that writes the sidecar, so what .sha names is always the archive
 ; that was written and never the pass that only looked.
-(use 'tar)
-(use 'gz)
-(use 'sb)   ; for the ignore law only -- .sb/ignore is sb's file
+; named as PATHS, not module names, because love0 has no image to carry them: it is
+; gcc-built from the love/*.l headers alone, so `(use 'tar)` under it has no registered
+; tablet to find and the loader has no business inventing one. each file's own
+; (module 'nm ..) head registers it as it loads, which is all a later `use` needs.
+; the order is the dependency order: kore's text+diff floor under sb, dns under sb's http.
+;
+; a path, never `-l`: `-l FILE` whose basename names a verb SEATS it (love/verbs.l's
+; seatof -- the installed shebang's lane), so `-l crew/sb/sb.l` runs sb instead of
+; loading it. `use` on a string touches no command line.
+(use "lib/tar.l")
+(use "lib/gz.l")
+(use "crew/kore/text.l")
+(use "crew/kore/diff.l")
+(use "crew/sb/merge.l")
+(use "lib/dns.l")
+(use "crew/sb/http.l")
+(use "crew/sb/sb.l")   ; for the ignore law only -- .sb/ignore is sb's file
 
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)
    (sp-read p) (: q (open p "r") (? q (: s (slurp q) _ (close q) [1 (s + "")]) ()))

@@ -1,6 +1,6 @@
 ; lib/forge.l -- nifs written in love. a kernel is a crew/holo IR program plus an honest
 ; interpreted twin. forge assembles the program for the cpu it is running on and installs it
-; through the `nif` seam; the twin is what runs everywhere the native cannot. `(use 'forge)`:
+; through the `nif` seam; the twin is what runs everywhere the native cannot. `(use "lib/forge.l")`:
 ;
 ;   (forge-put nom arity mkir twin) -> register one kernel; mkir is a thunk, twin the fallback
 ;   (forge-fit ())                  -> assemble + install the whole roster -> the fitted count

@@ -61,10 +61,9 @@
            tgt (me ? (readlink me || me))
          (tgt ? (up (dirof tgt)) "crew/"))                           ; crew/papel/papel.l -> crew/
    ; want: the sibling module, wherever this papel lives -- beside this file in
-   ; the source tree (root came off our own seat), else by NAME through the
-   ; loader's walk (an installed love's nest: ~/.love/lib/love/<nm>.l). the tree
-   ; lane probes first, so a tree papel running under an installed love reads
-   ; its OWN siblings, never the nest's older copies.
+   ; the source tree (root came off our own seat), else by NAME off the registry
+   ; an installed love baked. the tree lane probes first, so a tree papel running
+   ; under an installed love reads its OWN siblings, never the baked older copies.
    (want nm f) (? (from nm) 1
                   (: q (open (root + f) "r")
                      (? q (: _ (close q) _ (use (root + f)) 1)

@@ -21,7 +21,7 @@
 ;
 ; run:  cat test/00-init.l test/host/tls.l | out/host/love
 
-(use 'tls)
+(use "lib/tls.l")
 
 (assert
  (member? 'tls (from ()))

@@ -53,5 +53,5 @@
 ; no baked ai_libs table on this seat, only in the initrd. ⚠ it also reads the
 ; scratch back through the COMPILER, so it is the restore above proving itself byte
 ; for byte; it has to stay after those laws.
-(use 'json)
+(use "lib/json.l")
 (assert (member? 'json-read (names ())))

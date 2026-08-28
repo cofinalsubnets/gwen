@@ -7,7 +7,7 @@
 ;
 ; the vocabulary under test: a grid of cb cells in, escapes out. origins are
 ; 0-based going in and 1-based on the wire, which is the one conversion here.
-(use 'limn)
+(use "lib/limn.l")
 
 ; `sub?` is each gate's own here (test/host/berth.l carries the same three lines) --
 ; it SEARCHES from i; `at?` is the exact-position twin, which is what counting wants

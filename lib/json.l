@@ -1,7 +1,7 @@
 ; lib/json.l -- json, so love can speak to things that are not love. it is the wire
 ; format the outside world settled on (language servers, http apis, sway's ipc), and
 ; nothing about it is lovely; this file is the translation desk, nothing more.
-; `(use 'json)`, then json-read and json-show.
+; `(use "lib/json.l")`, then json-read and json-show.
 ;
 ; the mapping, a bijection in both directions:
 ;   null    <-> json-null       a coin, like the booleans -- see the notes below

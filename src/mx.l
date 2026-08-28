@@ -87,7 +87,7 @@
    mx-mul (mx-grid mx-mul-of)
 
    ; --- the C, through clay ------------------------------------------------------
-   _ (use 'clay)
+   _ (use "crew/moon/clay.l")
    ; lvm_t *const <nm>[KN][KN] -- arrays of const POINTERS, a different type from a
    ; const array of pointers, so clay places the const on the declarator not the base.
    mx-ty '(arr (arr (const (ptr (named "lvm_t"))) KN) KN)

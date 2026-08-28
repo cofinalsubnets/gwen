@@ -26,7 +26,7 @@
 ; ⚠ A VACUOUS PASS IS A FAIL, the clay gate's lesson: a run where nothing parsed and
 ; nothing refused proved nothing. the floors below are explicit.
 (:
-   _ (use 'clay)
+   _ (use "crew/moon/clay.l")
    _ (use 'moon)                       ; the front end (clex/cpp/cparse-t) is module 'moon
    _ (use 'kore)                       ; uread below is the u-floor's
    cshow (from 'clay 'clay-show)

@@ -335,12 +335,19 @@
    _ (:: 'cond ifx) _ (:: 'if ifx)
    _ (:: 'quote lamx) _ (:: 'lambda lamx))
 
-; --- the loader: use-on-miss ------------------------------------------------
-; the `use` up top splices a registered module; here it also loads one it lacks, off the
-; filesystem walk. a load is one fresh layer: enter, read-eval, leave registers.
-; a slashed name includes into the current head instead; a string is an explicit path.
-; `open` is captured by peep, so a fs-less frontend holds () there and every miss is a miss --
-; which is right: what such a frontend bakes, it evals at boot, and the registry answers first.
+; --- the loader: use on a path ------------------------------------------------
+; the `use` up top splices a module the runtime already holds; here it also loads one
+; from a PATH the caller writes out. the loader invents no path of its own, so a NAME
+; it lacks is a miss and the splice raises by name: what a frontend baked, and what a
+; cat registered, is the whole of what a name can mean.
+; a load is one fresh layer: enter, read-eval, leave registers it under the file's
+; basename -- and a file that made its own (module nm ..) keeps THAT registration, the
+; wrapper going out with the name it never wrote to.
+; the same path twice reads once, and the PATH is what marks it: a basename cannot,
+; because several files register one module (sb's parts, lush's, tls's) and a name-keyed
+; mark would drop every part after the first. it also reads what it is pointed at -- a
+; tree's own file over a baked older copy of it, which is what papel's want asks for.
+; `open` is captured by peep, so a fs-less frontend holds () there and every path misses.
 (: use
    (: prior use
       ; read-eval every form of a module source; a torn form scares.
@@ -351,39 +358,33 @@
                                  (id? r 'torn) (scare 'unfinished-form q)
                                  0)))
                 (flow q))
-      (slashy? s) ((: (go i) (? (< i (tally s)) (? (= 47 (peep s i 0)) 1 (go (+ i 1))) 0)) 0)
+      ; a layer holding no nom of its own is not a module: the file wrapped itself in a
+      ; (module nm ..) and registered elsewhere. the charm keys (0 the macros, 31337 the
+      ; parent chain) sit in every layer and are not noms.
+      (bare? t) ((: (go ks) (? (two? ks) (? (nom? (cap ks)) 0 (go (cup ks))) 1)) (keys t))
       (mname s) (: n (tally s)
                    b ((: (go k r) (? (< k n) (go (+ k 1) (? (= 47 (peep s k 0)) (+ k 1) r)) r)) 0 0)
                    e (? (? (< 2 (- n b)) (= ".l" (snip s (- n 2) n)) 0) (- n 2) n)
                    (intern (snip s b e)))
       fsopen (peep book 'open ())      ; the host's open nif, by peep -- see above
-      ; the walk: lib/ off the cwd, and only that -- the dev tree's lane, kept for a tree
-      ; and its tools (papel's want, the gates); it retires when the tree stops being
-      ; special. the SEAT rungs (<seat>/../lib/, its love/ subfolder -- the nest and FHS
-      ; shapes) retired with the modules arc: an artifact's modules are baked or
-      ; image-carried, never found beside the binary. a BAKED module is not found at all:
-      ; it declares itself in the text its frontend evals at boot, so it is registered
-      ; before anything asks and the walk never sees the name.
-      (libsrc nm) (? (nil? fsopen) ()
-                     (fsopen (+ "lib/" (+ (string nm) ".l")) "r"))
       (\ m (? (tablet? m) (prior m)
               (string? m)
               (: nm (mname m)
-                 (? (tablet? (peep (mods ()) nm ())) (prior nm)
+                 (? (peep (mods ()) m ()) (prior nm)          ; read already -- the path is the mark
                     (: q (? (nil? fsopen) () (fsopen m "r"))
                        (? (nil? q) (prior m)
                           ; a file whose own (module nm ..) registered wins: keep ITS tablet
                           ; over the loader's wrapper layer, which leave would pin over it.
-                          (: _ (enter nm) _ (rdev q) t (peep (mods ()) nm ()) _ (leave ())
+                          ; the mark goes down BEFORE the read, so a file naming itself stops.
+                          ; t is read after the eval, so it holds either claim on the name --
+                          ; the file's, or a module that already stood there. a bare wrapper
+                          ; with neither is no module: pull the name and answer ().
+                          (: _ (pin (mods ()) m 1)
+                             _ (enter nm) _ (rdev q) t (peep (mods ()) nm ()) w (leave ())
                              _ (? (nil? t) 0 (pin (mods ()) nm t))
-                             (prior nm))))))
-              (tablet? (peep (mods ()) m ())) (prior m)
-              (: q (libsrc m)
-                 (? (nil? (port? q)) (prior m)                ; no file: let the splice raise by name
-                    (slashy? (string m)) (: _ (rdev q) ())
-                    (: _ (enter m) _ (rdev q) t (peep (mods ()) m ()) _ (leave ())
-                       _ (? (nil? t) 0 (pin (mods ()) m t))
-                       (prior m))))))))
+                             (? (&& (nil? t) (bare? w)) (: _ (pull (mods ()) nm 0) ())
+                                (prior nm)))))))
+              (prior m)))))
 
 ; --- module: filesystem-free definition --------------------------------------
 ; (module 'nm form ..): open nm's layer -- the REGISTERED tablet on a reopen, a
