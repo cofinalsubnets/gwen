@@ -112,23 +112,23 @@
                    b   <>ip
                    (? (b = a) ()                       ; a sign with no digits is nothing
                       (: fd (? (&& (b < n) ((s b) = 46)) (jdigits s (b + 1) n) ())
-                         c  (? (two? fd) <>fd b)
-                         fv (? (two? fd) <fd 0)
-                         fl (? (two? fd) (c - (b + 1)) 0)
-                         ee (&& (c < n) (member? (s c) '(101 69)))
-                         ex (? ee (jexp s (c + 1) n) ())
-                         d  (? (two? ex) <>ex c)
-                         (? (&& (two? fd) (fl = 0)) ()   ; "1." is not json
-                            (&& ee (! (two? ex)))     ()   ; "1e" is not json either
-                            (: sgn (? neg -1 1)
-                               (? (&& (fl = 0) (! ee))
+                         c  (two? fd ? <>fd b)
+                         fv (two? fd ? <fd 0)
+                         fl (two? fd ? (c - (b + 1)) 0)
+                         ee (c < n && member? (s c) '(101 69))
+                         ex (ee && jexp s (c + 1) n)
+                         d  (two? ex ? <>ex c)
+                         (? (two? fd && fl = 0) ()   ; "1." is not json
+                            (ee && atom? ex)     ()   ; "1e" is not json either
+                            (: sgn (neg ? -1 1)
+                               (? (fl = 0 &&  !ee)
                                   [(sgn * iv) d]
-                                  (: mant ((iv * (fl 10)) + fv)
-                                     base (((1.0 * sgn) * mant) / (fl 10))
-                                     (? (two? ex) [(base * (jpow10 <ex)) d]
-                                        [base d]))))))))
+                                  (: mant (iv * fl 10 + fv)
+                                     base (1.0 * sgn * mant / fl 10)
+                                     (two? ex ? [(base * (jpow10 <ex)) d]
+                                                [base d]))))))))
 
-   (jlit? s i n w) (: e (i + (tally w)) (&& (e <= n) ((snip s i e) = w)))
+   (jlit? s i n w) (i + #w @ e (e <= n && snip s i e = w))
 
    (jlit s i n) (? (jlit? s i n "true")  [json-true (i + 4)]
                    (jlit? s i n "false") [json-false (i + 5)]
@@ -136,16 +136,14 @@
                    (jnum s i n))
 
    (jarr s i n) (: a (jws s (i + 1) n)
-                   (? (&& (a < n) ((s a) = 93)) [() (a + 1)]
-                      ((: (go k acc)
-                          (: r (jval s k n)
-                             (? (! (two? r)) ()
-                                (: e (jws s <>r n)
-                                   (? (! (e < n))    ()
-                                      ((s e) = 44)   (go (e + 1) (link <r acc))
-                                      ((s e) = 93)   [(rev (link <r acc)) (e + 1)]
-                                      ())))))
-                       a ())))
+                   (a < n && s a = 93 ? [() (a + 1)]
+                    (:- (go a ()) (go k acc)
+                     (: r (jval s k n)
+                      (two? r ?
+                       (: e (jws s <>r n)
+                        (? (e >= n)   ()
+                           (s e = 44) (go (e + 1) (<r . acc))
+                           (s e = 93) [(rev (<r . acc)) (e + 1)])))))))
 
    ; a later duplicate key wins, which is what pin does and what every other reader does.
    (jobj s i n) (: a (jws s (i + 1) n)
@@ -176,7 +174,7 @@
                     (? (two? r) (: e (jws s <>r n) (? (e < n) () [1 <r]))))
 
    ; --- writing --------------------------------------------------------------------
-   (jhexd v) (string (? (v < 10) (48 + v) (87 + v)))
+   (jhexd v) (string (v + (v < 10 ? 48 87)))
 
    ; bytes >= 128 ride out untouched: love strings are byte strings and json is utf-8, so
    ; already-utf-8 text is already right. only the seven named escapes and the control
