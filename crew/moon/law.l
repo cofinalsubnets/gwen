@@ -1253,7 +1253,10 @@
    hdf (fnf 'h <>(cgn (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }")))
    _ (assert
       ((falu hdf) < 99)                              ; the shape is real...
-      ((fsti hdf 'r6) < (falu hdf)))                 ; ...entry spill first, compute off the slots
+      ; one cold call leaves the fn leaf-shaped (the path maximum), so the
+      ; params RIDE and s computes on the arrivals FIRST; the armed shadow
+      ; spills exactly at the call, not at entry
+      ((falu hdf) < (fsti hdf 'r6)))
    ; -- slot-load elision: stld rides a whole straight-line run (a bound slot's reload
    ; forwards from the register until a redef, an overlapping store, a label, or a bar).
    irE (cgn (pre9 + "long f2(long *p) { long a = p[0]; if (a & 1) return a; return g(a); } int main() { return f2((long*)0); }"))
@@ -1356,8 +1359,10 @@
       (two? irV)
       (member? '(mov r11 r0) vf)                     ; c's write lands its lo home...
       (member? '(mov r12 r2) vf)                     ; ...and its hi
-      (member? '(a128r r10 r7) vf)                   ; the combine reads the parked twins
-      (= 2 (splds vf))))                             ; full-word sp loads: only the two cs restores
+      (member? '(m128r r7 r8) vf)                    ; the mul rides the parked twins -- the
+      (member? '(a128r r9 r10) vf)                   ;   machine-stack cell never opens, and the
+                                                     ;   combine reads its own park
+      (= 4 (splds vf))))                             ; full-word sp loads: a's two wd9-spill reloads + the cs restores
 
 ; -- the callee-saved contract (cskeep): every cgn above already compiles under it --
 ; a breach REFUSES at emission -- so these laws probe the checker itself. the dirty
@@ -1418,19 +1423,20 @@
       (= 1 (peep mlog 'musttail-not-a-tail 0))
       (= 1 (peep mlog 'musttail-escape 0))))
 
-; -- free locals (zero-crossing, stage B1): a local never live across any
-; call homes even in a CALL-HAVING fn -- the call-then-hot-loop shape runs
-; its loop body all-register. s rides r5 (hpool front past the reserve) and
-; i r9; the loop's imul/adds are 3-address on the homes, no slot traffic --
-; and n, whose pin the call killed, re-enters by SEED (r10), so the cond
-; runs register-register and the body touches no memory at all.
+; -- free locals and a priced crossing (stage B1): one cold depth-0 call
+; leaves the fn leaf-SHAPED (the path maximum prices it at one wrap pair),
+; so n rides its arrival -- spilled once at the call by the armed shadow,
+; reloaded once after -- and the hot loop runs register-register end to end:
+; no slot is touched inside it.
 (: irB (cgn "long g(long x); long f(long n) { g(n); long s = 0; long i = 0; while (i < n) { s = s + i*i; i = i + 1; } return s; } int main() { return f(4); }")
    (assert
       (two? irB)
-      (member? '(cmprm r6 sp 0) <>irB)                ; the cond fuses against n's slot
-      (member? '(imul r9 r6 r6) <>irB)                ; i*i on the home, 3-address
-      (member? '(add r5 r5 r9) <>irB)                 ; s accumulates in its home
-      (member? '(add r6 r6 1) <>irB)))                ; i++ is ONE add on the home
+      (member? '(st sp 0 r6) <>irB)                   ; the wrap's one save, at the call
+      (member? '(ld r6 sp 0) <>irB)                   ; ...and its one reload after
+      (member? '(cmp r5 r6) <>irB)                    ; the cond runs register-register
+      (member? '(imul r10 r5 r5) <>irB)               ; i*i on the home, 3-address
+      (member? '(add r9 r9 r10) <>irB)                ; s accumulates in its home
+      (member? '(add r5 r5 1) <>irB)))                ; i++ is ONE add on the home
 
 ; -- arm64 homing (stage D): the same alive machinery rides AAPCS64. homes come
 ; off r10..r14 (caller-saved, never an argument register -- every home takes a
@@ -1840,10 +1846,10 @@
       (member? '(ld r9 r6 8) ef)
       (member? '(cmprm r9 r5 8) ef)
       (= 0 (brid ef))                                ; no (mov X r0) bridge anywhere
-      (member? ['cmpm 'sp (sof hf 'st 'r0) 'r0] hf)  ; a callish right bars the aim: the cell stands
-                                                     ;   (the PARK is r0's own slot -- with the spush
-                                                     ;   cells mapped repack pools it with the param's)
-      (member? ['ld4 'r0 'sp (sof hf 'st 'r6)] hf)))  ; ...and the left keeps r0 (no wasted park)
+      (member? ['cmpm 'sp (sof hf 'st 'r6) 'r0] hf)))  ; a callish right bars the aim: the left's
+                                                     ;   cell stands (x rides r6 now, so the cell
+                                                     ;   is fed by its wrap store) and the compare
+                                                     ;   fuses against it with the call's r0 right
 
 ; -- the destination die reaches the arg seats (the third lane): the register group emits
 ; right-to-left, so the FIRST cell arg evaluates last and nothing after it writes its seat

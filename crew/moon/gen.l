@@ -156,9 +156,10 @@
    (abl? g nm) (member? nm (g 'abl))
    ; the one-build world (moon-ssa rung 6, the x64 DEFAULT): any old-world knob
    ; keeps the dance byte-identically, and so does a non-x64 target until rung 7
-   ; calibrates it. alive's widened universe and repack's paired-cs reuse ride
-   ; exactly this world -- the three gates must never drift apart.
-   (uniw? g) (!(a64? g || t32? g || rv? g) &&
+   ; calibrates it -- MOON_ABLATE=uni opts a remaining ISA in for that work.
+   ; alive's widened universe and repack's paired-cs reuse ride exactly this
+   ; world -- the three gates must never drift apart.
+   (uniw? g) ((!(a64? g || t32? g || rv? g) || abl? g 'uni) &&
               !(abl? g 'obuild || abl? g 'pcell || abl? g 'alloc ||
                 abl? g 'pdefcs || abl? g 'pdef))
    (ralloc g) (? !(abl? g 'ralloc)
@@ -6221,12 +6222,54 @@
        ; registration, so membership means the site will very likely splice);
        ; the armed shadow covers the rare decline soundly
        (soft? nm) (two? (g 'inl nm))
+       ; ...but a spliced BODY carries its own hard calls into the caller
+       ; (seq_cat brings memcpy), so a soft site costs the callee's transitive
+       ; count -- plain nhcl on the body: a splice's returns become jumps, so
+       ; its calls never tail in the caller. memoized, cycles floor at 0.
+       nhmo {}
+       (nhin nm) (: c9 (peep nhmo nm 'no)
+                    (? !(id? c9 'no) c9
+                       (: _ (pin nhmo nm 0)
+                          n2 (pmxl <><>>>(g 'inl nm) 1 ())
+                          _ (pin nhmo nm n2)
+                          n2)))
+       ; the fn-level hard count is a PATH MAXIMUM (the pmax lesson): dynamics
+       ; pay one path's calls, so an if takes its heavier arm and only loop
+       ; weight multiplies; a goto escapes structure and answers a bar. tc9:
+       ; ret-tails carve only at fn grain -- inside a splice body (nhin) a
+       ; ret-position call computes a VALUE and jumps, so it counts whole.
+       (pmxl l w tc9) (? !(two? l) 0 (+ (pmx <l w tc9) (pmxl >l w tc9)))
+       (pmx s w tc9)
+        (? !(two? s) 0
+           (s @ ('blk items2) (pmxl items2 w tc9)
+                ('expr e9) (* (nhc e9) w)
+                ('ret >< rs) (: rv2 (? (two? rs) <rs ())
+                               (* (? tc9 (nhcr rv2 (1 < tally rs)) (nhc rv2)) w))
+                ('decl ps) (* (: (hs l) (? !(two? l) 0 (+ (nhc <>><l) (hs >l))) (hs ps)) w)
+                ('sdecl >< _) 0
+                ('if >< cnd >< thn >< er)
+                 (: a2 (pmx thn w tc9) b2 (? (two? <er) (pmx <er w tc9) 0)
+                    ((* (nhc cnd) w) + (? (a2 < b2) b2 a2)))
+                ('while cnd body) (: w8 (8 * w) ((* (nhc cnd) w8) + pmx body w8 tc9))
+                ('do body cnd) (: w8 (8 * w) ((* (nhc cnd) w8) + pmx body w8 tc9))
+                ('for ini cnd stp body)
+                 (: w8 (8 * w)
+                    ((? (two? ini && member? <ini '(decl sdecl)) (pmx ini w tc9)
+                        (two? ini) (* (nhc <>ini) w) 0) +
+                     (? (two? cnd) (* (nhc cnd) w8) 0) +
+                     (? (two? stp) (* (nhc stp) w8) 0) +
+                     pmx body w8 tc9))
+                ('switch ce items2) ((* (nhc ce) w) + pmxl items2 w tc9)   ; fallthrough: arms sum (conservative)
+                (('case || 'dflt) >< _) 0
+                ('goto >< _) 99
+                ('asm >< _) 99
+                0))
        ; the one build homes int locals like the dance's slot walk did, so its
        ; universe widens to lhomable -- the dance's own reading stays homable
        ; (its lalloc free?-gate keys on this set, byte-held under the knobs)
        wide9 (uniw? g)
        (nhc e) (? !(two? e) 0
-                  (e @ ('call ('var nm) as) ((? (soft? nm) 0 1) + nhcl as)
+                  (e @ ('call ('var nm) as) ((? (soft? nm) (nhin nm) 1) + nhcl as)
                        ('call fh as) (1 + (nhc fh) + nhcl as)
                        ('szof >< _) 0
                        (nhcl e)))
@@ -6234,12 +6277,19 @@
        ; jump, and a home is dead at its own return either way -- so the last
        ; call of a comma spine, each ternary arm, and a cast's operand harden
        ; nothing; only calls evaluated BEFORE them do
-       (nhcr e) (? !(two? e) 0
-                   (e @ ('call fh as) ((nhc fh) + nhcl as)
-                        ('comma a b) ((nhc a) + nhcr b)
-                        ('cond c a b) ((nhc c) + nhcr a + nhcr b)
-                        ((k _ x) && member? k '(un cast)) (nhcr x)
-                        (nhc e)))
+       ; ⚠ only a call that stays a CALL sibcalls free: a plain soft tail
+       ; SPLICES (the inlret door) and the spliced body's own hard calls land
+       ; inside this frame (gcp's ret-ternary splices both copy fns and their
+       ; memcpys cross it) -- but a MUSTTAIL site never splices (the contract
+       ; owes the jump), so the VM's fleet rides free under mt9
+       (nhcr e mt9)
+        (? !(two? e) 0
+           (e @ ('call ('var nm) as && soft? nm) ((? mt9 0 (nhin nm)) + nhcl as)
+                ('call fh as) ((nhc fh) + nhcl as)
+                ('comma a b) ((nhc a) + nhcr b mt9)
+                ('cond c a b) ((nhc c) + nhcr a mt9 + nhcr b mt9)
+                ((k _ x) && member? k '(un cast)) (nhcr x mt9)
+                (nhc e)))
        ; protocol dirt: a call (its splice's staging owns r0-r3), div/mod (the
        ; r0:r2 protocol), a variable shift (the count rides r1), a d128 cast
        ; (the wide kit rides r0:r2). a fn with NONE of these anywhere may ride
@@ -6429,15 +6479,17 @@
                   sq (tick ()) _ (rec sq (sun (sun in out) (? kv [kv] ())) (* <>r w9)
                                       (? (1 < w9) (* <>r w9) 0) (* (nhc e9) w9))
                   in)
-              ('ret . rv . _)
-               (: r (? (two? rv) (erd rv () 0) '(() 0))
+              ('ret >< rs)
+               (: rv (? (two? rs) <rs ())
+                  mt9 (1 < tally rs)                 ; clay's (ret e PRE): presence is the arity
+                  r (? (two? rv) (erd rv () 0) '(() 0))
                   _ (pin n9 'nx (1 + peep n9 'nx 0))
                   ; a TAIL call never crosses its own arguments -- they die AT it,
                   ; and nothing lives after a return -- so only calls INSIDE the
                   ; head or the args harden this statement (the VM's tail-forward
                   ; dispatch fleet rides this: return (*fp)(a, b) crosses nothing)
                   sq (tick ()) _ (rec sq <r (* <>r w9) (? (1 < w9) (* <>r w9) 0)
-                                      (* (nhcr rv) w9))
+                                      (* (nhcr rv mt9) w9))
                   <r)
               ('decl ps)
                (: pr (dpairs (rev ps) out 0)
@@ -6544,7 +6596,7 @@
           [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0) spa
            crh rdc rdt sqm (peep n9 'nx 0)
            (peep n9 'asm 0) (peep n9 'vla 0) (peep n9 'sq 0) tak
-           (peep n9 'nhc 0) (? pq9 1 ()) (? wd9 1 ())] ()))
+           (pmxl items 1 1) (? pq9 1 ()) (? wd9 1 ())] ()))
    ; the alive pass's forward twin: cgstmt/cgdecl/cgsdecl entries tick this counter and pin the
    ; statement's wrapset (g 'stwrap) off g 'livtab -- a miss pins 'all, the blanket wrap. an
    ; inline splice neither ticks nor re-pins: it compiles under its statement's set.
@@ -7768,7 +7820,7 @@
         (: uv <>>av9 spa9 (nthr av9 5) crs9 <>av9
            crh9 (nthr av9 6) rdc9 (nthr av9 7) rdt9 (nthr av9 8) sqm9 (nthr av9 9)
            tak9 (nthr av9 14)
-           lf9 (0 = nthr av9 15)                     ; leaf-shaped: every call is soft
+           lf9 ((nthr av9 15) <= 2)                  ; leaf-SHAPED: at most two cold hard crossings fn-wide (a loop crossing weighs 8+ and refuses; the armed shadow prices each at one wrap pair)
            ; exits: the AST ret count, floored -- sibcalls eat rets in emission so
            ; this reads STRICT, and strict is the safe side (the chains catch what
            ; a refused fn-wide seat leaves, at range grain)
@@ -7877,7 +7929,7 @@
        ; armed shadow. a hard-crossing param stays a cell (rung 5's economics).
        (upar av9 qk)
         (: uv <>>av9 crh9 (nthr av9 6) rdc9 (nthr av9 7)
-           lf9 (0 = nthr av9 15)                     ; leaf-shaped: no hard call anywhere
+           lf9 ((nthr av9 15) <= 2)                  ; leaf-SHAPED: at most two cold hard crossings (see ulloc)
            pq9 (qk && nthr av9 16)                    ; protocol-quiet: nothing in the body writes a quad
            wd9 (nthr av9 17)                          ; d128 material: the wide kit owns the file
            (homefold g params 0 [() () () #tpool]
@@ -7885,7 +7937,11 @@
               (: nm <p9 pty <>p9
                  A (nthr (argr g) gpi)
                  nv (nthr a4 3)                       ; the file's running depth (homes and rides drain it)
-                 ok (lf9 && member? nm uv && (peep crh9 nm 0 = 0))
+                 ; d128 material refuses every verdict: the wide-pair park needs
+                 ; the very registers a ride or a vacate would occupy, and the
+                 ; spilled params are what FREE them (mag_divmod's cells doubled
+                 ; the one time pointer rides were let through)
+                 ok (lf9 && !wd9 && member? nm uv && ((peep crh9 nm 0) <= 2))
                  (? (ok && homable? pty)
                     (? (id? A (homereg gpi)) [<a4 (gpi >< <>a4) (nthr a4 2) (nv - 1)]
                        (a4rider? A) [<a4 (gpi >< <>a4) (nthr a4 2) nv]
