@@ -1,9 +1,8 @@
-; lib/hueweb.l -- the .l syntax as a STYLESHEET and as painted html, out of
-; crew/vi/hue.l's class table and crew/vi/config.l's theme. the THIRD reader of
-; that one table: the painter in crew/vi/core.l's vframe, the vim syntax
-; (tools/hue2vim.l), and this. nothing here knows what a comment or a sigil is
-; -- it asks hue, the way the other two do, so a class added to that table arrives
-; in all three without anyone being told.
+; lib/hueweb.l -- the .l syntax as a stylesheet and as painted html, out of
+; crew/vi/hue.l's class table and crew/vi/config.l's theme. the third reader of that
+; one table: the painter in crew/vi/core.l's vframe, the vim syntax (tools/hue2vim.l),
+; and this. nothing here knows what a comment or a sigil is -- it asks hue, the way the
+; other two do, so a class added to that table arrives in all three unannounced.
 ;
 ;   (hw-css)             the stylesheet: one rule per class, the frame, and just
 ;                        enough prose styling for a rendered document -- `love
@@ -11,64 +10,61 @@
 ;   (hw-body path src)   that source as a <pre>, one span per line
 ;   (hw-page ttl hrefs home body)   ..in a page, with its stylesheets and a home link
 ;
-; the SPLIT the theme already makes is what makes this cheap. hue.l says "a
-; comment is a Comment"; crew/vi/config.l says "in molokayo a Comment is
-; #75715E". the vim generator uses the first half and leaves the colour to the
-; reader's colorscheme; a web page has no colorscheme, so this joins both and the
-; page wears the editor's theme by construction.
+; the split the theme already makes is what makes this cheap. hue.l says "a comment is
+; a Comment"; crew/vi/config.l says "in molokayo a Comment is #75715E". the vim
+; generator uses the first half and leaves the colour to the reader's colorscheme; a
+; web page has no colorscheme, so this joins both and the page wears the editor's
+; theme by construction.
 ;
-; ⚠ THE RUNS ARE SPARSE. hue-lex answers only the spans it CLAIMS -- a name in no
-; vocabulary is in no run at all -- so the emitter fills the gaps with plain text
-; rather than assuming the runs tile the line. and it carries `in`, the
-; string-open state, from each line to the next, or a multi-line literal (papel's
-; forty-line css) paints as code from its second line on.
+; the runs are sparse: hue-lex answers only the spans it claims, so the emitter fills
+; the gaps with plain text rather than assuming they tile the line. and it carries
+; `in`, the string-open state, from each line to the next, or a multi-line literal
+; (papel's forty-line css) paints as code from its second line on.
 ;
-; ⚠ NO PAPEL HERE, and that is what makes `love serve` possible: hue.l, config.l
-; and kiosko are already in the artifact (crew/build.mk's distfiles) and papel is
-; not. so the page template is this file's own, small and self-contained, rather
-; than borrowed from the site generator -- and the seed can paint its own source
-; with nothing on the box.
+; no papel here, and that is what makes `love serve` possible: hue.l, config.l and
+; kiosko are already in the artifact (the Makefile's distfiles) and papel is not. so
+; the page template is this file's own, small and self-contained, and the seed can
+; paint its own source with nothing on the box.
 ;
-; ⚠ AND THE VOCABULARY IS THE HOST'S. the word lanes ask `names`, `macros` and
-; `values` of the running binary, so under LOVE_NO_IMAGE (the egg boot) the answer
-; is the compiler's own internals rather than the language that shipped. a
-; generator writing files must clear it, the way the syntax rule does.
-; ⚠ hue rides MODULE 'vi. the images that cat crew/vi/{config,hue}.l registered
-; it (the files' own wraps); a tool outside those images says
-; (use "crew/vi/config.l") and (use "crew/vi/hue.l") first -- the wraps register
-; the same module. the use below sits INSIDE this module, so it splices vi for
-; this file's compile alone: at the top level of a catted file it would hand the
-; whole session vi's ninety-odd names.
+; the vocabulary is the host's: the word lanes ask `names`, `macros` and `values` of
+; the running binary, so under LOVE_NO_IMAGE (the egg boot) the answer is the
+; compiler's own internals rather than the language that shipped -- a generator
+; writing files must clear it, the way the syntax rule does.
+;
+; hue rides module 'vi. the images that cat crew/vi/{config,hue}.l registered it; a
+; tool outside those images says (use "crew/vi/config.l") and (use "crew/vi/hue.l")
+; first. the use below sits inside this module, so it splices vi for this file's
+; compile alone: at a catted file's top level it would hand the session vi's ninety
+; -odd names.
 (module (hueweb hw-css hw-body hw-page)
 (use 'vi)
 (:
-   (hw-nth l k) (? (k = 0) <l (hw-nth >l (k - 1)))
    (hw-cat l)   (foldl (+) "" l)
    ; the three characters html cannot hear otherwise
-   (hw-q s) ((: (g i acc) (? (i < tally s)
-                              (: c (s i)
-                                 (g (i + 1) (acc + (? (c = 38) "&amp;" (c = 60) "&lt;"
-                                                      (c = 62) "&gt;" (string c)))))
-                              acc)) 0 "")
-   ; ⚠ the final newline ENDS the last line, it does not open another: a file of N
-   ; lines that ends in one would otherwise paint an N+1'th empty row, with a line
-   ; number under the last line of the file.
-   (hw-lines s) ((: (g i st acc) (? !(i < tally s) (? (st < i) (rev (snip s st i >< acc)) (rev acc))
-                                    (s i = 10)     (g (i + 1) (i + 1) (snip s st i >< acc))
+   (hw-q s) (:- (g 0 "")
+                (g i acc) (? (i < #s)
+                             (: c (s i)
+                                (g (i + 1) (acc + (? (c = 38) "&amp;" (c = 60) "&lt;"
+                                                     (c = 62) "&gt;" (string c)))))
+                             acc))
+   ; the final newline ends the last line, it does not open another: a file of n lines
+   ; that ends in one would otherwise paint an n+1'th empty row.
+   (hw-lines s) (:- (g 0 0 ())
+                    (g i st acc) (? !(i < #s) (st < i ? (rev (snip s st i . acc)) (rev acc))
+                                    (s i = 10) (g (i + 1) (i + 1) (snip s st i . acc))
                                     (g (i + 1) st acc)))
-                 0 0 ())
 
    ; --- the stylesheet -------------------------------------------------------
-   ; one rule per CLASS, coloured by the GROUP that class names. a class whose
+   ; one rule per class, coloured by the group that class names. a class whose
    ; group the theme does not carry gets no rule at all rather than a guess.
-   (hw-row g) ((: (f l) (? !(two? l) () (id? <(<l) g) <l (f >l))) hue-theme)
-   (hw-faces l) (hw-cat (map (\ f (? (id? f 'bold) ";font-weight:700"
-                                     (id? f 'italic) ";font-style:italic" "")) l))
+   (hw-row g) (:- (f hue-theme) (f l) (? (atom? l) () (id? <<l g) <l (f >l)))
+   (hw-faces l) (hw-cat (map (f \ ? (id? f 'bold) ";font-weight:700"
+                                    (id? f 'italic) ";font-style:italic" "") l))
    (hw-rule r) (: t (hw-row (hue-grp r))
                   (? !(two? t) ""
-                     (".hue .l-" + (string (hue-cls r)) + "{color:" + (hw-nth t 2)
-                      + (hw-faces (hw-nth t 3)) + "}\n")))
-   ; the frame: a slab to sit on, and LINE NUMBERS out of a css counter -- so the
+                     (".hue .l-" + string (hue-cls r) + "{color:" + (t 2)
+                      + hw-faces (t 3) + "}\n")))
+   ; the frame: a slab to sit on, and line numbers out of a css counter -- so the
    ; markup carries one span per line and no number, and selecting the code copies
    ; the code alone. the page's own colours answer to the reader's theme; the
    ; syntax colours are molokayo either way, which is what the editor shows.
@@ -103,15 +99,15 @@ hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
    (hw-css _) (hw-frame + hw-cat (map hw-rule hue-classes))
 
    ; --- one file, painted ----------------------------------------------------
-   ; a line becomes its runs, in order, with the UNCLAIMED gaps between them kept
+   ; a line becomes its runs, in order, with the unclaimed gaps between them kept
    ; as plain text. `in` rides from line to line for the string carry.
-   (hw-span c a b s) ("<span class=\"l-" + (string c) + "\">" + hw-q (snip s a b) + "</span>")
+   (hw-span c a b s) ("<span class=\"l-" + string c + "\">" + hw-q (snip s a b) + "</span>")
    (hw-paint bk s in)
    (: r (hue-lex bk s in 1)
       (go rs i acc)
-       (? !(two? rs) [(acc + hw-q (snip s i (tally s))) <>r]
-          (: u <rs c <u a <>u b <>>u
-             (go >rs b (acc + hw-q (snip s i a) + hw-span c a b s))))
+       (? !(two? rs) [(acc + hw-q (snip s i #s)) <>r]
+          (<rs @ [c a b]
+           (go >rs b (acc + hw-q (snip s i a) + hw-span c a b s))))
       (go <r 0 ""))
    (hw-body path src)
    (: bk (hue-book 0)
@@ -130,8 +126,8 @@ hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
    ("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
     + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
     + "<title>" + hw-q ttl + "</title>\n"
-    + hw-cat (map (\ h ("<link rel=\"stylesheet\" href=\"" + hw-q h + "\">\n")) hrefs)
+    + hw-cat (map (h \ "<link rel=\"stylesheet\" href=\"" + hw-q h + "\">\n") hrefs)
     + "</head>\n<body>\n"
-    + (? (0 < tally home) ("<header><a href=\"" + hw-q home + "\">love</a></header>\n") "")
+    + (0 < #home ? ("<header><a href=\"" + hw-q home + "\">love</a></header>\n") "")
     + "<main>\n<article>\n" + body + "\n</article>\n</main>\n</body>\n</html>\n"))
 ) ; module hueweb
