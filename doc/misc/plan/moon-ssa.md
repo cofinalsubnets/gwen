@@ -309,6 +309,32 @@ until rung 6.
   build time (one build for 90/117 fns), regresses nowhere measured —
   proposal is to flip after test_slow clears on a quiet tree (owed for this
   commit AND the landing commit).
+
+  **FLIPPED 2026-08-28: the one build is the x64 DEFAULT (uniw?'s law in
+  gen.l); the dance retires behind MOON_ABLATE=obuild (byte-identical, like
+  pcell/alloc/pdefcs/pdef before it), and the other ISAs keep the dance
+  until rung 7 calibrates them.** Restoring the dance now costs +1.0% corpus
+  insns, +0.4% cycles, +0.7% .text. The flip was NOT free — test_moon's laws
+  caught three real mechanism gaps the corpus number had hidden, and the
+  laws were held, not weakened: (a) INT-PARAM RIDES — the old leaf lane rode
+  an int arrival with one entry cvt; upar grew the lane (read at least once,
+  file kept two deep after the take, NEVER beside d128 material — the wd9
+  flag; the one unguarded attempt reopened mag_mul's inner-loop stack cell
+  at +1.07G insns, the exact failure the "mag_mul discipline" comment
+  memorializes). (b) QUAD RIDES — a protocol-quiet body (pq9: no call, no
+  div/mod, no variable shift, no d128 anywhere) rides r0-r3 arrivals; since
+  staging owns the quads, ubuild re-reads the built forms (rdsp defs) and
+  one demoted rebuild covers a surprise (the dance's soundness re-read at fn
+  grain). (c) escape-strength promotion — a merely &-taken local now
+  promotes whole (the address never leaves), so the si-lane laws needed
+  subjects whose address DEPARTS through a call. Re-subjected law faces are
+  equal or better everywhere (zf: both int params ride and j left its cs
+  pair for the pool; yf: two restores where three stood; irB/ipf/ihf/f2
+  register-resident). RESIDUALS, recorded not hidden: a fully-folded homed
+  local leaves one dead li (no dead-home-def sweep yet); the arg-seat aim
+  declines onto an armed home (ca pays two movs, cells still zero); the
+  quad-vacate mov survives coalesce in lvm_tapn/lvm_argcup (tail-call fns
+  are not protocol-quiet, so their quads vacate).
 - **rung 7 — the other ISAs.** a64 next (its pool and sweeps differ; the a64
   sweep chain reads the chosen ir). Then the pure upside: rv64 and t32 have
   nhome=0 TODAY — locals in registers for the first time on riscv's t0..t3

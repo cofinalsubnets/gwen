@@ -135,8 +135,7 @@
    ; discipline (the old code compared physicals, so the accident counted).
    (rpeq? g a b) (id? (rp g a) (rp g b))
    ; -- the ablation knob (the pare plan's rung 0): MOON_ABLATE="tpool,cs" holds named
-   ; mechanisms empty for PRICING -- ralloc tpool cs lhome homes pcs, uni
-   ; (INVERSE, opt-in: RUNS the rung-6 one-build candidate), obuild
+   ; mechanisms empty for PRICING -- ralloc tpool cs lhome homes pcs, obuild
    ; (the one build falls back to the ir1+regen dance), pcell
    ; (param cells fall back to the wrapped-home/cs-grant lanes), alloc
    ; (locals homes fall back to lpick's static pick), pdefcs
@@ -155,6 +154,13 @@
                  (go i (j + 1) acc))
              (go 0 0 ()))))
    (abl? g nm) (member? nm (g 'abl))
+   ; the one-build world (moon-ssa rung 6, the x64 DEFAULT): any old-world knob
+   ; keeps the dance byte-identically, and so does a non-x64 target until rung 7
+   ; calibrates it. alive's widened universe and repack's paired-cs reuse ride
+   ; exactly this world -- the three gates must never drift apart.
+   (uniw? g) (!(a64? g || t32? g || rv? g) &&
+              !(abl? g 'obuild || abl? g 'pcell || abl? g 'alloc ||
+                abl? g 'pdefcs || abl? g 'pdef))
    (ralloc g) (? !(abl? g 'ralloc)
                (g 'pool @ (r9 >< u)
                 ; ⚠ armor: a pinned reg on the free list is the free-list/pin split
@@ -4742,9 +4748,7 @@
                    ; a chain may ride its dead ranges under plain liveness freeness,
                    ; and no new pair is owed -- the fn's own restore covers the exit.
                    ; old worlds keep the blanket exclusion (the parity instruments).
-                   csprd (? (jrf || id? lot9 'no || !(abl? g 'uni) ||
-                             (abl? g 'obuild) || (abl? g 'pcell) || (abl? g 'alloc) ||
-                             (abl? g 'pdefcs) || (abl? g 'pdef)) ()
+                   csprd (? (jrf || id? lot9 'no || !(uniw? g)) ()
                             (: t9 {}
                                (go l i) (? (!(two? l) || 12 < i) 0
                                            (: f9 <l
@@ -6220,9 +6224,7 @@
        ; the one build homes int locals like the dance's slot walk did, so its
        ; universe widens to lhomable -- the dance's own reading stays homable
        ; (its lalloc free?-gate keys on this set, byte-held under the knobs)
-       wide9 ((abl? g 'uni) &&
-              !(abl? g 'obuild || abl? g 'pcell || abl? g 'alloc ||
-                abl? g 'pdefcs || abl? g 'pdef))
+       wide9 (uniw? g)
        (nhc e) (? !(two? e) 0
                   (e @ ('call ('var nm) as) ((? (soft? nm) 0 1) + nhcl as)
                        ('call fh as) (1 + (nhc fh) + nhcl as)
@@ -6238,6 +6240,21 @@
                         ('cond c a b) ((nhc c) + nhcr a + nhcr b)
                         ((k _ x) && member? k '(un cast)) (nhcr x)
                         (nhc e)))
+       ; protocol dirt: a call (its splice's staging owns r0-r3), div/mod (the
+       ; r0:r2 protocol), a variable shift (the count rides r1), a d128 cast
+       ; (the wide kit rides r0:r2). a fn with NONE of these anywhere may ride
+       ; a quad arrival -- nothing in its body can write the register
+       (pdt e) (? !(two? e) 0
+                  (e @ ('szof >< _) 0
+                       ('call >< _) 1
+                       ('asm >< _) 1
+                       ('bin op a b && member? op '(/ %)) (1 + pdt a + pdt b)
+                       ('bin op a b && member? op '(shl shr) &&
+                        !(two? b && id? <b 'num)) (1 + pdt a + pdt b)
+                       ('cast ty x) ((? (d128? ty) 1 0) + pdt x)
+                       (pdtl e)))
+       (pdtl l) (? !(two? l) 0
+                   ((? (two? <l) (pdt <l) 0) + pdtl >l))
        ; the touch counters (rank food): every universe mention is a touch --
        ; read or write, as ir1's slot counter saw them -- raw and loop-weighted
        (bump9 nm w) (: _ (pin rdc nm (1 + peep rdc nm 0))
@@ -6298,7 +6315,9 @@
                     (: _ (pin dcl <<ps (1 + peep dcl <<ps 0))
                        (pdcl >ps)))
        ; -- the universe: the homable gp walk for the param NAMES, plus the locals --
-       (pgo ps gpi acc) (homefold g ps gpi acc (\ a2 i9 p9 (? (homable? <>p9) (<p9 >< a2) a2)))
+       (pgo ps gpi acc) (homefold g ps gpi acc
+                          (\ a2 i9 p9 (? (? wide9 (lhomable? <>p9) (homable? <>p9))
+                                         (<p9 >< a2) a2)))
        _ (pdcl params)
        _ (prel items)
        _ (pexl items)
@@ -6503,11 +6522,29 @@
        _ (pin n9 'q (peep n9 'n 0))
        _ (litems items () () () 1)
        _ (rdn items 1)
+       ; d128 material anywhere: the wide-pair park rides two POOL registers per
+       ; op (the cell never opens while they hold), so no ride may drain the
+       ; file here -- mag_mul's inner loop reopened its stack cell the one time
+       ; this was let through
+       (wdc e) (? !(two? e) ()
+                  (id? <e 'szof) ()
+                  (id? <e 'cast && d128? <>e) 1
+                  (: (go l) (? !(two? l) ()
+                               (two? <l && wdc <l) 1
+                               (go >l))
+                     (go e)))
+       wd9 ((: (go i) (? ((peep n9 'sq 0) < i) ()
+                         (: e2 (peep sqm i ())
+                            (? (two? e2 && d128? <>e2) 1 (go (i + 1)))))
+            (go 1)) ||
+            (: (go l) (? !(two? l) () (d128? <><l) 1 (go >l)) (go params)) ||
+            (wdc items))
+       pq9 ((0 = pdtl items) && !wd9)
        (? (0 = peep n9 'q 0)
           [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0) spa
            crh rdc rdt sqm (peep n9 'nx 0)
            (peep n9 'asm 0) (peep n9 'vla 0) (peep n9 'sq 0) tak
-           (peep n9 'nhc 0)] ()))
+           (peep n9 'nhc 0) (? pq9 1 ()) (? wd9 1 ())] ()))
    ; the alive pass's forward twin: cgstmt/cgdecl/cgsdecl entries tick this counter and pin the
    ; statement's wrapset (g 'stwrap) off g 'livtab -- a miss pins 'all, the blanket wrap. an
    ; inline splice neither ticks nor re-pins: it compiles under its statement's set.
@@ -7838,67 +7875,121 @@
        ; pool so staging can never clobber it; a protocol-quad arrival pays the
        ; one mov to its positional seat instead) -- and every home wears the
        ; armed shadow. a hard-crossing param stays a cell (rung 5's economics).
-       (upar av9)
-        (: uv <>>av9 crh9 (nthr av9 6)
+       (upar av9 qk)
+        (: uv <>>av9 crh9 (nthr av9 6) rdc9 (nthr av9 7)
            lf9 (0 = nthr av9 15)                     ; leaf-shaped: no hard call anywhere
-           (homefold g params 0 [() () ()]
-            (\ a3 gpi p9
+           pq9 (qk && nthr av9 16)                    ; protocol-quiet: nothing in the body writes a quad
+           wd9 (nthr av9 17)                          ; d128 material: the wide kit owns the file
+           (homefold g params 0 [() () () #tpool]
+            (\ a4 gpi p9
               (: nm <p9 pty <>p9
                  A (nthr (argr g) gpi)
-                 (? !(lf9 && homable? pty && member? nm uv && (peep crh9 nm 0 = 0)) a3
-                    (id? A (homereg gpi)) [<a3 (gpi >< <>a3) (nthr a3 2)]
-                    (a4rider? A) [<a3 (gpi >< <>a3) (nthr a3 2)]
-                    (member? A '(r0 r1 r2 r3)) [<a3 (gpi >< <>a3) (nthr a3 2)]
-                    [(gpi >< <a3) <>a3
-                     (? (member? A tpool) (A >< nthr a3 2) (nthr a3 2))])))))
+                 nv (nthr a4 3)                       ; the file's running depth (homes and rides drain it)
+                 ok (lf9 && member? nm uv && (peep crh9 nm 0 = 0))
+                 (? (ok && homable? pty)
+                    (? (id? A (homereg gpi)) [<a4 (gpi >< <>a4) (nthr a4 2) (nv - 1)]
+                       (a4rider? A) [<a4 (gpi >< <>a4) (nthr a4 2) nv]
+                       (member? A '(r0 r1 r2 r3))
+                        ; a protocol-quiet body cannot clobber a quad, so it rides
+                        ; free (ubuild re-checks the built forms and bares on a
+                        ; surprise def); a dirty body vacates to the positional seat
+                        (? pq9 [(gpi >< <a4) <>a4 (nthr a4 2) nv]
+                           [<a4 (gpi >< <>a4) (nthr a4 2) (nv - 1)])
+                       [(gpi >< <a4) <>a4
+                        (? (member? A tpool) (A >< nthr a4 2) (nthr a4 2))
+                        (? (member? A tpool) (nv - 1) nv)])
+                    ; an int/uint param RIDES its arrival (one entry cvt, no pool
+                    ; register minted) -- read at least once (a read-free param
+                    ; earns nothing), never beside d128 material (the wide-pair
+                    ; park owns the file: the mag_mul discipline), and only while
+                    ; the file stays deep, two left after the take
+                    (ok && lhomable? pty && (0 < peep rdc9 nm 0) && !wd9 &&
+                     member? A tpool && 3 <= nv)
+                     [(gpi >< <a4) <>a4 (A >< nthr a4 2) (nv - 1)]
+                    (ok && lhomable? pty && (0 < peep rdc9 nm 0) &&
+                     pq9 && member? A '(r0 r1 r2 r3))
+                     [(gpi >< <a4) <>a4 (nthr a4 2) nv]
+                    a4)))))
        ; -- the ONE build (moon-ssa rung 6): alive feeds the seats and the build
        ; runs once; the dance survives as the rare BARE fallback (a 'bad build,
        ; or a drifted tick or decl count -- either would misalign livtab or the
        ; home hook, so the rebuild takes no seats at all) and behind the knobs.
+       ; the quad-ride verification: a ridden r0-r3 arrival's only legitimate
+       ; def is its own entry cvt -- any other def (a staged park, a protocol
+       ; op) falsifies the prediction; control forms carry no defs, and a form
+       ; rdsp cannot read counts as a hit (conservative)
+       (qclob? fs qrr)
+        (? !(two? qrr) ()
+           (: (go l) (? !(two? l) ()
+                        (: f9 <l
+                           (? (!(two? f9) ||
+                               member? <f9 '(sx4 zx4 label align br jmp jmpr ret)) (go >l)
+                              (: rd (rdsp f9)
+                                 (? (id? rd 'bar) 1
+                                    (: (hit l2) (? !(two? l2) ()
+                                                   (member? <l2 qrr) 1
+                                                   (hit >l2))
+                                       (? (hit <>rd) 1 (go >l))))))))
+              (go fs)))
        (ubuild av9)
         (: ok9 (two? av9 && !(nthr av9 11) && !(nthr av9 12))   ; no asm, no vla
-           pv (? ok9 (upar av9) '(() () ()))
-           rides <pv phs <>pv excl (nthr pv 2)
-           uh9 (map (\ k (homereg k)) phs)
-           pool2 (filter (\ q !(member? q uh9 || member? q excl)) tpool)
-           bl9 (? !ok9 ()
-                  (: crh9 (nthr av9 6) rdc9 (nthr av9 7) rdt9 (nthr av9 8)
-                     (homefold g params 0 ()
-                      (\ a2 gpi p9
-                        (: nm <p9
-                           wt (peep rdt9 nm 0)
-                           (? (homable? <>p9 && (0 < peep crh9 nm 0) && (64 <= wt))
-                              ([(peep rdc9 nm 0) wt] >< a2) a2))))))
-           lr (? ok9 (ulloc av9 pool2 bl9) ())
-           lh9 (? (two? lr) <lr {})
-           lp9 (? (two? lr) <>lr pool2)
-           cu0 (? (two? lr) (nthr lr 2) ())
-           e0 (peep g 'epi epi)
-           ; ⚠ no reset before the FIRST attempt: nothing has run since cgfn's
-           ; entry -- and the VLA prep's pointer/size slots live in this frame
-           ; state (the old world never regened a VLA fn, so they always
-           ; survived; a reset here re-deals their offsets under them)
-           _ (pins g 'pool0 lp9 'pool lp9)
-           _ (rgset g lh9 av9)
-           _ (? (two? cu0)
-                (: sv (map (\ r9 ['st 'r4 (nslot g 8) r9]) cu0)
-                   _ (pin g 'cssv sv)
-                   (pin g 'epi (map (\ f9 ['ld (nthr f9 3) 'r4 (nthr f9 2)]) sv + e0)))
-                ())
-           ; empty grants take the bare () policy: no policy bar can fire, so a
-           ; VLA or wide-param fn without grants builds ONCE like it always did
-           spu (spill (? (two? rides || two? phs) ['uni rides phs] ()) params 0 0 0 () ())
-           spu (? (two? vzf) [(<spu + vzf) <>spu] spu)
-           irU (build spu)
-           _ (pins (rgreset g) 'cssv () 'epi e0)
-           (? (bad? irU ||
-               (two? av9 && !(peep g 'lsq 0 = nthr av9 3)) ||
-               !(peep g 'dseq 0 = (? (two? av9) (nthr av9 13) (peep g 'dseq 0))))
-              (: _ (pins (fnreset g) 'n n0 'strs strs0 'pool0 tpool 'pool tpool)
-                 sb (spill () params 0 0 0 () ())
-                 sb (? (two? vzf) [(<sb + vzf) <>sb] sb)
-                 (build sb))
-              irU))
+           ; one attempt per quad policy: ride first, and if the built forms
+           ; show staging took a ridden register, demote the quads to their
+           ; positional seats and build once more (the dance's soundness
+           ; re-read at fn grain -- attempt () has no quad rides to fail)
+           (attempt qk)
+            (: pv (? ok9 (upar av9 qk) '(() () ()))
+               rides <pv phs <>pv excl (nthr pv 2)
+               uh9 (map (\ k (homereg k)) phs)
+               pool2 (filter (\ q !(member? q uh9 || member? q excl)) tpool)
+               bl9 (? !ok9 ()
+                      (: crh9 (nthr av9 6) rdc9 (nthr av9 7) rdt9 (nthr av9 8)
+                         (homefold g params 0 ()
+                          (\ a2 gpi p9
+                            (: nm <p9
+                               wt (peep rdt9 nm 0)
+                               (? (homable? <>p9 && (0 < peep crh9 nm 0) && (64 <= wt))
+                                  ([(peep rdc9 nm 0) wt] >< a2) a2))))))
+               lr (? ok9 (ulloc av9 pool2 bl9) ())
+               lh9 (? (two? lr) <lr {})
+               lp9 (? (two? lr) <>lr pool2)
+               cu0 (? (two? lr) (nthr lr 2) ())
+               e0 (peep g 'epi epi)
+               ; ⚠ no reset before the FIRST attempt: nothing has run since cgfn's
+               ; entry -- and the VLA prep's pointer/size slots live in this frame
+               ; state (the old world never regened a VLA fn, so they always
+               ; survived; a reset here re-deals their offsets under them). a
+               ; RETRY resets like the bare fallback (ok9 already barred VLAs
+               ; from every path that can retry)
+               _ (pins g 'pool0 lp9 'pool lp9)
+               _ (rgset g lh9 av9)
+               _ (? (two? cu0)
+                    (: sv (map (\ r9 ['st 'r4 (nslot g 8) r9]) cu0)
+                       _ (pin g 'cssv sv)
+                       (pin g 'epi (map (\ f9 ['ld (nthr f9 3) 'r4 (nthr f9 2)]) sv + e0)))
+                    ())
+               ; empty grants take the bare () policy: no policy bar can fire, so a
+               ; VLA or wide-param fn without grants builds ONCE like it always did
+               spu (spill (? (two? rides || two? phs) ['uni rides phs] ()) params 0 0 0 () ())
+               spu (? (two? vzf) [(<spu + vzf) <>spu] spu)
+               irU (build spu)
+               _ (pins (rgreset g) 'cssv () 'epi e0)
+               qrr (: (go l) (? !(two? l) ()
+                                (: A (nthr (argr g) <l)
+                                   (? (member? A '(r0 r1 r2 r3)) (A >< go >l) (go >l))))
+                      (go rides))
+               (? (qk && two? qrr && qclob? irU qrr)
+                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'pool0 tpool 'pool tpool)
+                     (attempt ()))
+                  (bad? irU ||
+                   (two? av9 && !(peep g 'lsq 0 = nthr av9 3)) ||
+                   !(peep g 'dseq 0 = (? (two? av9) (nthr av9 13) (peep g 'dseq 0))))
+                  (: _ (pins (fnreset g) 'n n0 'strs strs0 'pool0 tpool 'pool tpool)
+                     sb (spill () params 0 0 0 () ())
+                     sb (? (two? vzf) [(<sb + vzf) <>sb] sb)
+                     (build sb))
+                  irU))
+           (attempt 1))
        n0 (peep g 'n 0) strs0 (g 'strs)             ; snapshot the accumulators for a possible regen
        ; ⚠ the operand pool is EMPTY on t32: AAPCS32 keeps r4-r11 callee-saved and the thumb2
        ; frame saves only lr+fp, while r0-r3/r12 are args and scratch -- there is no free
@@ -7911,16 +8002,12 @@
        ; gp 1. the ret lane reads g 'sret back; fnreset holds the neutral.
        srt (? (two? sig) <sig 'long)
        sr6f (sretm? g srt)
-       ; -- the one-build gate (moon-ssa rung 6, OPT-IN): MOON_ABLATE=uni RUNS the
-       ; one build -- an inverse knob, deliberately: the machinery self-hosts and
-       ; passes every behavioral gate, but the AST-side seat calibration does not
-       ; yet hold rung 5's line (the plan's rung-6 entry carries the map), so the
-       ; flip is not earned and the dance stays the default. a memory sret and
-       ; varargs keep the old path either way (it already builds them once).
-       uni9 ((abl? g 'uni) &&
-             !(abl? g 'obuild || abl? g 'pcell || abl? g 'alloc ||
-               abl? g 'pdefcs || abl? g 'pdef) &&
-             !(sr6f || vararg))
+       ; -- the one build (moon-ssa rung 6, the x64 DEFAULT): seats from alive,
+       ; one build per fn, the dance retired to MOON_ABLATE=obuild (and the
+       ; other old-world knobs). a memory sret and varargs keep the old path
+       ; either way (it already builds them once), and the other ISAs keep the
+       ; dance until rung 7 calibrates them (uniw?'s law).
+       uni9 ((uniw? g) && !(sr6f || vararg))
        _ (? sr6f (pin g 'sret (ntmp g 'long)) ())
        sp1 (? uni9 ()
               (vararg && a64? g) (vaspill-a64 params)
