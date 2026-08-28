@@ -283,6 +283,32 @@ until rung 6.
   Landed on parity + laws + make test + the gcc battery; test_slow is owed on
   the next quiet tree (a concurrent holo/link refactor rode the shared tree
   at land time and owns the fixpoint until it settles).
+
+  **CALIBRATED 2026-08-27 (the same night): corpus insns −1.0%, cycles −0.4%
+  (floor), .text equal — the one build now BEATS the dance on the corpus and
+  reads −135 forms on ev.c.** Per-symbol dynamic diffing was the instrument
+  that named every mechanism, four fixes: (a) a return's TAIL POSITION is
+  what the sibcall pass makes it — the comma spine's last call, each ternary
+  arm, a cast's operand (nhcr in alive's ret lane; lvm_cur went from 94
+  forms with every param spilled to 75, half the whole dynamic gap in one
+  fix). (b) int locals join the universe (lhomable, uni-gated as wide9 — the
+  dance's slot walk always homed them; alive's homable-only universe blinded
+  ulloc's pool arm to them). (c) ulloc's file keeps ONE grantable seat when
+  the reserve of two would starve it — pool2 already lost the param homes,
+  and lvm_ret was buying a cs frame in a 10-insn fn for want of r7 (it now
+  emits 10 forms against the dance's 11). (d) touch counts key by NAME, so a
+  shadowed name's sites conflate — ai_net's four `i`/`s` redeclarations each
+  bought an exclusive cs seat off the conflated total; site-averaging over
+  sqm restored slots (ai_net +44 → 0). TRIED AND REVERTED: a loop-weighted
+  bar on the cs lane (lpick's nested-loop law — refused lvm_yield_sw's good
+  seats, +31 forms; the dance's rpays 'bor has no such bar), and quad
+  arrivals as cells for repack's chains (the chains do NOT promote them in
+  the uni world — the fleet spilled, +194 forms; the phs vacate mov is the
+  accepted residual, one entry mov in lvm_tapn/lvm_argcup that coalesce
+  removes in lvm_ret but not there). THE FLIP: pays on the corpus and on
+  build time (one build for 90/117 fns), regresses nowhere measured —
+  proposal is to flip after test_slow clears on a quiet tree (owed for this
+  commit AND the landing commit).
 - **rung 7 — the other ISAs.** a64 next (its pool and sweeps differ; the a64
   sweep chain reads the chosen ir). Then the pure upside: rv64 and t32 have
   nhome=0 TODAY — locals in registers for the first time on riscv's t0..t3
