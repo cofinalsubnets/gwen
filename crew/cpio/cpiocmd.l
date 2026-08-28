@@ -1,4 +1,4 @@
-; lib/cpiocmd.l -- `love cpio`: the three copy modes over lib/cpio.l's newc wire.
+; crew/cpio/cpiocmd.l -- `love cpio`: the three copy modes over lib/cpio.l's newc wire.
 ;
 ;   find . | love cpio -o [-H newc] [-O F] [-v] [--quiet] > A.cpio   copy-out
 ;   love cpio -i [-d] [-u] [-v] [-I F] [--quiet] < A.cpio            copy-in

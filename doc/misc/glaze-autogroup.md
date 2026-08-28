@@ -29,7 +29,7 @@ sub (\ e (dsimp (foldl (\ b pr (subst-sym <pr >pr b)) e lamcs)))
 
 A value substituted for a *later* lamc still names an *earlier* one — already spent in
 the fold, so never rewritten inside that text, and its binding already dropped. On
-lib/source.l six bindings left the form (`src-head src-lay-tgz src-lay-love src-lay
+crew/source/source.l six bindings left the form (`src-head src-lay-tgz src-lay-love src-lay
 src-ccworks? src-farm`) while `src-lay-love` was still called from `source-main`. The
 name then resolved against the book: `;; missing src-lay-love`.
 
@@ -84,7 +84,7 @@ and instrumenting every `ana_v` return lane gives byte-identical traces for the 
 and the working session. One flag names the lane in a single run:
 
 ```sh
-LOVE_NO_GLAZE=1 love -l probe.l -l lib/gz.l -l lib/tar.l -l lib/source.l \
+LOVE_NO_GLAZE=1 love -l probe.l -l lib/gz.l -l lib/tar.l -l crew/source/source.l \
   -e "((peep (from 'verbs 'tab) 'src 0) (list \"/tmp/lay\"))"
 ```
 

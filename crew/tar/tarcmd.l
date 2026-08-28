@@ -1,4 +1,4 @@
-; lib/tarcmd.l -- `love tar`, tar's own flag spelling over lib/tar.l + lib/gz.l.
+; crew/tar/tarcmd.l -- `love tar`, tar's own flag spelling over lib/tar.l + lib/gz.l.
 ;
 ;   love tar czf A.tar.gz DIR     pack DIR's contents (paths relative)
 ;   love tar xzf A.tar.gz [DIR]   unpack into DIR (default ".")

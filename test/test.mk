@@ -373,7 +373,7 @@ test_dist: $(ho)/love.baked
 # running one's bytes (`love seed`). Minutes -- a whole bootstrap -- and the claim the
 # product makes, so it rides the slow gate. The scratch stays on a red for the autopsy.
 # ⚠ WHAT ONLY THIS GATE SAYS: the DEFAULT lane, where the seed probes for an ambient cc
-# that works and DEFERS to it (lib/source.l). test_distboot runs `love seed` too, but with
+# that works and DEFERS to it (crew/source/source.l). test_distboot runs `love seed` too, but with
 # every compiler poisoned, so it takes the fallback and can never exercise the deference.
 # That deference is the diverse-double-compiling leg -- a foreign compiler holding the
 # scaffold, the one thing a self build cannot say -- and it stopped working for eleven

@@ -36,7 +36,7 @@ Present natively — roughly **19 of ~85 chapter-8 packages**, several partial:
 
 coreutils (`kore`, 85 tools / 88 names, GNU-byte-identical smokes, `make test_kore`) ·
 bash (`lush`) · sed · grep · diffutils (diff, cmp) · make (`cook`) · tar (`lib/tar.l`,
-ustar both ways, `love tar`) · gzip (`lib/gz.l`, and `lib/gzcmd.l` wears GNU's flags
+ustar both ways, `love tar`) · gzip (`lib/gz.l`, and `crew/gz/gzcmd.l` wears GNU's flags
 as `love gzip` / `gunzip` / `zcat`) · cpio (`lib/cpio.l` newc, `love cpio`) · zlib ·
 vim (`crew/vi`) · sysvinit
 (`crew/init/boot.l` as `/init`) · openssl-ish (`crew/tls`) · nc (`tools/ain.l`) ·
@@ -134,7 +134,7 @@ The gap between those two numbers is entirely *other people's build systems*.
   Left deliberately: fmt, pr, csplit, ptx and numfmt (each its own layout language),
   dir/vdir (they are `ls -C`/`ls -l`), shuf (a seed decision first), the sha1/sha512
   family (src/hash.c carries three digests), and who/users/logname (no utmp).
-- **rung 1c — gzip's face — BUILT.** `lib/gzcmd.l`: `love gzip`, `love gunzip` and
+- **rung 1c — gzip's face — BUILT.** `crew/gz/gzcmd.l`: `love gzip`, `love gunzip` and
   `love zcat`, GNU's flag spelling (`-cdfklnNqrtv`, `-1..-9`, `-S SUF`, the long forms)
   over lib/gz.l's two doors, registered as verbs the way `love tar` is. The in-place
   replace carries the mode and the mtime; `-l`'s listing is byte-identical to GNU's,
@@ -176,7 +176,7 @@ The gap between those two numbers is entirely *other people's build systems*.
 - **rung 2 — cpio, and the distro cuts itself — BUILT.** `lib/cpio.l` is the SVR4 newc
   wire (pack, unpack, scatter) over lib/tar.l's own entries — the walk that fills them
   is about a file and not about a format, which is why the second wire is short — and
-  `lib/cpiocmd.l` is `love cpio` (`-o -i -t`, `-H newc`, `-d -u -v`, `-F/-I/-O`,
+  `crew/cpio/cpiocmd.l` is `love cpio` (`-o -i -t`, `-H newc`, `-d -u -v`, `-F/-I/-O`,
   `--quiet`, the block count). `mk/distro.mk` now cuts the initramfs with
   **kore's find, our cpio and our gzip**, and `make distro-smoke` boots that image
   under qemu: love is pid 1, /proc is mounted, the kore userland answers. The wart at

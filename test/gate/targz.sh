@@ -128,7 +128,7 @@ EOF
 done
 echo "  OK gzip container both ways (text, incompressible, empty; -9 dynamic codes read)"
 
-# ---- 4. the COMMAND faces: gzip, gunzip, zcat (lib/gzcmd.l) -----------------
+# ---- 4. the command faces: gzip, gunzip, zcat (crew/gz/gzcmd.l) --------------
 # the engine is section 3's; what is asked here is the FACE -- the suffix rules, the
 # in-place replace, the mode and the mtime carried across, the flags and the statuses.
 c="$w/cmd"; mkdir -p "$c"

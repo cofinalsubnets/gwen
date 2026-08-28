@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/cpio.sh -- lib/cpio.l + lib/cpiocmd.l against the program they replace.
+# test/gate/cpio.sh -- lib/cpio.l + crew/cpio/cpiocmd.l against the program they replace.
 #
 # The newc archive is what the kernel unpacks an initramfs from, and `make
 # distro-initramfs` is the caller: `find | cpio -o -H newc | gzip -9`, all three of

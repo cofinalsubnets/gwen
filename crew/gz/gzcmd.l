@@ -1,4 +1,4 @@
-; lib/gzcmd.l -- `love gzip`, `love gunzip` and `love zcat`: GNU's flag spelling over
+; crew/gz/gzcmd.l -- `love gzip`, `love gunzip` and `love zcat`: GNU's flag spelling over
 ; lib/gz.l's two doors. gz.l is the codec; this file is the face -- the options, the
 ; suffix rules, and the in-place replace that carries the mode and the mtime across.
 ;

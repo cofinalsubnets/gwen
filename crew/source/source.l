@@ -1,4 +1,4 @@
-; the wrap: see lib/tarcmd.l -- `use` splices into the current layer, so the two asks
+; the wrap: see crew/tar/tarcmd.l -- `use` splices into the current layer, so the two asks
 ; need a layer of this file's own rather than the dist cat's. the seed's lay reads the
 ; carried archive through both, and rode that cat's leak to reach them before.
 (module 'source

@@ -13,7 +13,7 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 # toolchain by being there, so a plain `make` preferred it over the machine's own compiler
 # -- the weaker claim, picked by a file existing. Which mode a build is in belongs to
 # whoever DRIVES it. A bare make has no love, so it can only mean the ambient cc, which is
-# what $(CC) already says. A love driving (lib/source.l's `seed`) knows its own selfpath
+# what $(CC) already says. A love driving (crew/source/source.l's `seed`) knows its own selfpath
 # and names CC outright: a working ambient cc where it probed one -- the STRONGER claim,
 # since a foreign compiler holding the scaffold is the one thing a self build cannot say
 # -- and its own mooncc where it did not. Nothing here needs to ask.
@@ -338,7 +338,7 @@ $(ho)/src/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 # (mk/common.mk says why). one link rule, two names -- `love` and the candidate.
 # ⚠ ONE SHAPE, and it was two: a love laid beside the tree compiled it directly, so love0,
 # mooncc0.image and the sed-laid 0.h twins were never made there. Nothing lays one now
-# (lib/source.l), so the self-host circle is always there to break and love0 always wakes
+# (crew/source/source.l), so the self-host circle is always there to break and love0 always wakes
 # mooncc0.image to break it. $(CC) builds love0 -- the ambient compiler, or whatever a
 # driving love named -- and mooncc builds every object after it.
 # boot_love: whoever runs a build-time .l tool. every such site asks by this name rather
@@ -537,8 +537,8 @@ distfiles = crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/
             crew/holo/link.l crew/holo/copy.l crew/moon/floor.l crew/moon/lex.l crew/moon/cpp.l crew/moon/parse.l \
             crew/moon/val.l crew/moon/gen.l crew/moon/lib/mksys.l crew/moon/moon.l crew/kore/kore.l crew/sb/merge.l \
             crew/sb/http.l crew/sb/sb.l crew/kiosko/kiosko.l \
-            lib/gz.l lib/tar.l lib/tarcmd.l lib/gzcmd.l lib/cpio.l lib/cpiocmd.l \
-            lib/source.l crew/lapiz/lapiz.l \
+            lib/gz.l lib/tar.l crew/tar/tarcmd.l crew/gz/gzcmd.l lib/cpio.l \
+            crew/cpio/cpiocmd.l crew/source/source.l crew/lapiz/lapiz.l \
             lib/salt.l crew/libra/libra.l lib/hueweb.l lib/serve.l
 # ⚠ THE MEMBERSHIP IS AN INPUT, and make cannot see it. Adding a file to distfiles
 # changes what the artifact CARRIES while every file make watches keeps its mtime, so
@@ -597,7 +597,7 @@ out/lib/distlist.h: Makefile
 # a third leg of every release gate to keep honest.
 #
 # The archive is OURS end to end -- lib/tar.l and lib/gz.l -- so cutting a release
-# needs neither `tar` nor `gzip` on the box, and lib/gzcmd.l wears their flags for a
+# needs neither `tar` nor `gzip` on the box, and crew/gz/gzcmd.l wears their flags for a
 # hand. Our coder costs every block three ways and writes the cheapest; it lands a
 # few percent above `gzip -9` (lib/gz.l carries the numbers).
 #

@@ -105,7 +105,7 @@ selfd=$(echo "$w"/self/love-*/)
 [ ! -e "$selfd/bin" ] || fail "'love source' laid a bin/ -- the tree is source, nothing else"
 # ⚠ THE BARE LINK, not `love seed`: the verb runs `make dist`, which BAKES, and leg 3
 # compares this against leg 1's unbaked out/host/love. So the target is named here and CC
-# with it -- which is the seed verb's own fallback spelled by hand (lib/source.l names
+# with it -- which is the seed verb's own fallback spelled by hand (crew/source/source.l names
 # `<selfpath> mooncc` where its probe finds no cc that works), and the same claim: this
 # tree builds with no ambient compiler anywhere.
 ( cd "$selfd" && PATH="$w/nocc:$PATH" LOVE_NO_IMAGE= \
@@ -139,7 +139,7 @@ fi
 # ⚠ PATH IS THE POISON DIR ALONE, not $w/nocc:$PATH. src-cc walks every PATH entry for
 # each of cc/gcc/clang, so a prepended poison leaves the machine's real /usr/bin/cc
 # reachable and the probe rightly takes it -- the fallback would never fire. The farm
-# (lib/source.l) supplies make/sh/sed and the rest out of the binary itself.
+# (crew/source/source.l) supplies make/sh/sed and the rest out of the binary itself.
 # ⚠ it seeds a FRESH tree rather than rebuilding $selfd, which leg 3 compared: nothing
 # here disturbs that artifact, and this leg no longer has to run after it.
 #
